@@ -1,0 +1,67 @@
+.picker-search {
+  width: 100%;
+  padding: 0.6rem 0.8rem;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 0.88rem;
+  margin-bottom: 0.6rem;
+}
+
+.picker-search:focus {
+  outline: none;
+  border-color: var(--violet);
+}
+
+.pokemon-picker-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.pokemon-picker-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  border: 1px solid transparent;
+  background: var(--surface-2);
+  padding: 0.55rem 0.75rem;
+  border-radius: 10px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.pokemon-picker-item:hover {
+  border-color: var(--violet);
+  background: var(--violet-soft);
+}
+
+.pokemon-picker-name {
+  font-weight: 600;
+  font-size: 0.9rem;
+  min-width: 5.5em;
+}
+
+.pokemon-picker-types {
+  display: flex;
+  gap: 0.3rem;
+  flex: 1;
+}
+
+.pokemon-picker-mega {
+  font-size: 0.68rem;
+  color: var(--violet);
+  font-weight: 600;
+}
+
+.pokemon-picker-empty {
+  padding: 1rem;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}

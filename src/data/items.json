@@ -1,0 +1,518 @@
+[
+  {
+    "id": "리자몽나이트X",
+    "name": "리자몽나이트X",
+    "description": "",
+    "category": "mega-stone"
+  },
+  {
+    "id": "리자몽나이트Y",
+    "name": "리자몽나이트Y",
+    "description": "",
+    "category": "mega-stone"
+  },
+  {
+    "id": "거북왕나이트",
+    "name": "거북왕나이트",
+    "description": "",
+    "category": "mega-stone"
+  },
+  {
+    "id": "이상해꽃나이트",
+    "name": "이상해꽃나이트",
+    "description": "",
+    "category": "mega-stone"
+  },
+  {
+    "id": "팬텀나이트",
+    "name": "팬텀나이트",
+    "description": "",
+    "category": "mega-stone"
+  },
+  {
+    "id": "가디안나이트",
+    "name": "가디안나이트",
+    "description": "",
+    "category": "mega-stone"
+  },
+  {
+    "id": "메타그로스나이트",
+    "name": "메타그로스나이트",
+    "description": "",
+    "category": "mega-stone"
+  },
+  {
+    "id": "한카리아스나이트",
+    "name": "한카리아스나이트",
+    "description": "",
+    "category": "mega-stone"
+  },
+  {
+    "id": "마기라스나이트",
+    "name": "마기라스나이트",
+    "description": "",
+    "category": "mega-stone"
+  },
+  {
+    "id": "루카리오나이트",
+    "name": "루카리오나이트",
+    "description": "",
+    "category": "mega-stone"
+  },
+  {
+    "id": "핫삼나이트",
+    "name": "핫삼나이트",
+    "description": "",
+    "category": "mega-stone"
+  },
+  {
+    "id": "대짱이나이트",
+    "name": "대짱이나이트",
+    "description": "",
+    "category": "mega-stone"
+  },
+  {
+    "id": "이어롭나이트",
+    "name": "이어롭나이트",
+    "description": "",
+    "category": "mega-stone"
+  },
+  {
+    "id": "하양허브",
+    "name": "하양허브",
+    "description": "능력이 떨어지면 원래대로 되돌린다. 한 번 사용하면 그 대전 중에는 사라진다.",
+    "category": "held-item"
+  },
+  {
+    "id": "구애스카프",
+    "name": "구애스카프",
+    "description": "스피드가 1.5배가 되지만, 한번 기술을 사용하면 교체하기 전까지 그 기술만 사용할 수 있다.",
+    "category": "held-item"
+  },
+  {
+    "id": "전기구슬",
+    "name": "전기구슬",
+    "description": "피카츄의 공격, 특수공격이 2배가 된다.",
+    "category": "held-item"
+  },
+  {
+    "id": "기합의띠",
+    "name": "기합의띠",
+    "description": "HP가 꽉 찼을 때 일격에 기절할 듯한 기술로 데미지를 입으면 HP를 1 남기고 버틴다. 한 번 사용하면 그 대전 중에는 사라진다.",
+    "category": "held-item"
+  },
+  {
+    "id": "기합의머리띠",
+    "name": "기합의머리띠",
+    "description": "기절할 듯한 기술로 데미지를 입으면 10% 확률로 HP를 1 남기고 버틴다.",
+    "category": "held-item"
+  },
+  {
+    "id": "먹다남은음식",
+    "name": "먹다남은음식",
+    "description": "턴 종료 시 최대 HP의 1/6만큼 회복한다.",
+    "category": "held-item"
+  },
+  {
+    "id": "큰뿌리",
+    "name": "큰뿌리",
+    "description": "HP를 흡수하는 기술의 회복량이 1.3배가 된다. 뿌리박기, 힘흡수 등도 1.3배가 된다.",
+    "category": "held-item"
+  },
+  {
+    "id": "조개껍질방울",
+    "name": "조개껍질방울",
+    "description": "기술로 데미지를 주었을 때 그 데미지의 1/8만큼 자신의 HP를 회복한다.",
+    "category": "held-item"
+  },
+  {
+    "id": "멘탈허브",
+    "name": "멘탈허브",
+    "description": "헤롱헤롱·도발·연속 불가·기술봉인·회복봉인·앙코르 상태를 회복한다. 한 번 사용하면 그 대전 중에는 사라진다.",
+    "category": "held-item"
+  },
+  {
+    "id": "반짝가루",
+    "name": "반짝가루",
+    "description": "상대가 자신에게 사용하는 기술의 명중률이 0.9배가 된다.",
+    "category": "held-item"
+  },
+  {
+    "id": "광각렌즈",
+    "name": "광각렌즈",
+    "description": "자신이 사용하는 기술의 명중률이 1.1배가 된다.",
+    "category": "held-item"
+  },
+  {
+    "id": "포커스렌즈",
+    "name": "포커스렌즈",
+    "description": "상대보다 행동 순서가 늦으면, 자신이 사용하는 기술의 명중률이 1.2배가 된다.",
+    "category": "held-item"
+  },
+  {
+    "id": "선제공격손톱",
+    "name": "선제공격손톱",
+    "description": "20% 확률로, 우선도가 같은 기술 중에서 가장 먼저 행동한다.",
+    "category": "held-item"
+  },
+  {
+    "id": "왕의징표석",
+    "name": "왕의징표석",
+    "description": "기술로 데미지를 주었을 때 10% 확률로 상대를 풀죽게 한다.",
+    "category": "held-item"
+  },
+  {
+    "id": "검은철구",
+    "name": "검은철구",
+    "description": "스피드가 1/2이 된다. 땅에 있지 않은 포켓몬도 땅 위에 있는 것으로 취급되어, 땅타입 기술과 압정뿌리기·독압정·끈적끈적네트의 효과를 받는다.",
+    "category": "held-item"
+  },
+  {
+    "id": "초점렌즈",
+    "name": "초점렌즈",
+    "description": "급소율이 1랭크 상승한다.",
+    "category": "held-item"
+  },
+  {
+    "id": "아름다운허물",
+    "name": "아름다운허물",
+    "description": "교체를 방해하는 효과를 무시하고 다른 지닌 포켓몬과 교체할 수 있게 된다.",
+    "category": "held-item"
+  },
+  {
+    "id": "생명의구슬",
+    "name": "생명의구슬",
+    "description": "기술의 위력이 1.3배가 되지만, 공격이 성공할 때마다 최대 HP의 1/10만큼 HP가 줄어든다.",
+    "category": "held-item"
+  },
+  {
+    "id": "힘의머리띠",
+    "name": "힘의머리띠",
+    "description": "물리 기술의 위력이 1.1배가 된다.",
+    "category": "held-item"
+  },
+  {
+    "id": "박식안경",
+    "name": "박식안경",
+    "description": "특수 기술의 위력이 1.1배가 된다.",
+    "category": "held-item"
+  },
+  {
+    "id": "달인의띠",
+    "name": "달인의띠",
+    "description": "사용한 기술의 효과가 굉장했을 때 위력이 1.2배가 된다.",
+    "category": "held-item"
+  },
+  {
+    "id": "메트로놈",
+    "name": "메트로놈",
+    "description": "같은 기술을 연속 사용하면 위력이 오른다. 2회 연속 시 1.2배, 3회 연속 시 1.4배, 최대 2배까지 상승하며 멈추면 원래대로 돌아온다.",
+    "category": "held-item"
+  },
+  {
+    "id": "실크스카프",
+    "name": "실크스카프",
+    "description": "노말타입 기술의 위력이 1.2배가 된다.",
+    "category": "held-item"
+  },
+  {
+    "id": "기적의씨",
+    "name": "기적의씨",
+    "description": "풀타입 기술의 위력이 1.2배가 된다.",
+    "category": "held-item"
+  },
+  {
+    "id": "목탄",
+    "name": "목탄",
+    "description": "불꽃타입 기술의 위력이 1.2배가 된다.",
+    "category": "held-item"
+  },
+  {
+    "id": "신비의물방울",
+    "name": "신비의물방울",
+    "description": "물타입 기술의 위력이 1.2배가 된다.",
+    "category": "held-item"
+  },
+  {
+    "id": "자석",
+    "name": "자석",
+    "description": "전기타입 기술의 위력이 1.2배가 된다.",
+    "category": "held-item"
+  },
+  {
+    "id": "은빛가루",
+    "name": "은빛가루",
+    "description": "벌레타입 기술의 위력이 1.2배가 된다.",
+    "category": "held-item"
+  },
+  {
+    "id": "예리한부리",
+    "name": "예리한부리",
+    "description": "비행타입 기술의 위력이 1.2배가 된다.",
+    "category": "held-item"
+  },
+  {
+    "id": "딱딱한돌",
+    "name": "딱딱한돌",
+    "description": "바위타입 기술의 위력이 1.2배가 된다.",
+    "category": "held-item"
+  },
+  {
+    "id": "독바늘",
+    "name": "독바늘",
+    "description": "독타입 기술의 위력이 1.2배가 된다.",
+    "category": "held-item"
+  },
+  {
+    "id": "부드러운모래",
+    "name": "부드러운모래",
+    "description": "땅타입 기술의 위력이 1.2배가 된다.",
+    "category": "held-item"
+  },
+  {
+    "id": "녹지않는얼음",
+    "name": "녹지않는얼음",
+    "description": "얼음타입 기술의 위력이 1.2배가 된다.",
+    "category": "held-item"
+  },
+  {
+    "id": "검은띠",
+    "name": "검은띠",
+    "description": "격투타입 기술의 위력이 1.2배가 된다.",
+    "category": "held-item"
+  },
+  {
+    "id": "휘어진스푼",
+    "name": "휘어진스푼",
+    "description": "에스퍼타입 기술의 위력이 1.2배가 된다.",
+    "category": "held-item"
+  },
+  {
+    "id": "저주의부적",
+    "name": "저주의부적",
+    "description": "고스트타입 기술의 위력이 1.2배가 된다.",
+    "category": "held-item"
+  },
+  {
+    "id": "용의이빨",
+    "name": "용의이빨",
+    "description": "드래곤타입 기술의 위력이 1.2배가 된다.",
+    "category": "held-item"
+  },
+  {
+    "id": "검은안경",
+    "name": "검은안경",
+    "description": "악타입 기술의 위력이 1.2배가 된다.",
+    "category": "held-item"
+  },
+  {
+    "id": "금속코트",
+    "name": "금속코트",
+    "description": "강철타입 기술의 위력이 1.2배가 된다.",
+    "category": "held-item"
+  },
+  {
+    "id": "요정의깃털",
+    "name": "요정의깃털",
+    "description": "페어리타입 기술의 위력이 1.2배가 된다.",
+    "category": "held-item"
+  },
+  {
+    "id": "빛의점토",
+    "name": "빛의점토",
+    "description": "빛의장막·리플렉터·오로라베일의 지속 시간이 3턴 증가한다. (총 8턴)",
+    "category": "held-item"
+  },
+  {
+    "id": "뜨거운바위",
+    "name": "뜨거운바위",
+    "description": "기술이나 특성으로 쾌청 상태를 만들었을 때 지속 시간이 3턴 증가한다. (총 8턴)",
+    "category": "held-item"
+  },
+  {
+    "id": "차가운바위",
+    "name": "차가운바위",
+    "description": "기술이나 특성으로 눈 상태를 만들었을 때 지속 시간이 3턴 증가한다. (총 8턴)",
+    "category": "held-item"
+  },
+  {
+    "id": "보송보송바위",
+    "name": "보송보송바위",
+    "description": "기술이나 특성으로 모래바람 상태를 만들었을 때 지속 시간이 3턴 증가한다. (총 8턴)",
+    "category": "held-item"
+  },
+  {
+    "id": "축축한바위",
+    "name": "축축한바위",
+    "description": "기술이나 특성으로 비 상태를 만들었을 때 지속 시간이 3턴 증가한다. (총 8턴)",
+    "category": "held-item"
+  },
+  {
+    "id": "리샘열매",
+    "name": "리샘열매",
+    "description": "모든 상태이상(마비·화상·독·잠듦·얼음·혼란)을 회복한다.",
+    "category": "held-item"
+  },
+  {
+    "id": "버치열매",
+    "name": "버치열매",
+    "description": "마비 상태를 회복한다.",
+    "category": "held-item"
+  },
+  {
+    "id": "유루열매",
+    "name": "유루열매",
+    "description": "잠듦 상태를 회복한다.",
+    "category": "held-item"
+  },
+  {
+    "id": "복슝열매",
+    "name": "복슝열매",
+    "description": "독 상태를 회복한다.",
+    "category": "held-item"
+  },
+  {
+    "id": "복분열매",
+    "name": "복분열매",
+    "description": "화상 상태를 회복한다.",
+    "category": "held-item"
+  },
+  {
+    "id": "배리열매",
+    "name": "배리열매",
+    "description": "얼음 상태를 회복한다.",
+    "category": "held-item"
+  },
+  {
+    "id": "시몬열매",
+    "name": "시몬열매",
+    "description": "혼란 상태를 회복한다.",
+    "category": "held-item"
+  },
+  {
+    "id": "자뭉열매",
+    "name": "자뭉열매",
+    "description": "체력이 최대 HP의 1/2 이하일 때, 최대 체력의 1/4을 회복한다.",
+    "category": "held-item"
+  },
+  {
+    "id": "과사열매",
+    "name": "과사열매",
+    "description": "PP가 0인 기술의 PP를 10 회복한다.",
+    "category": "held-item"
+  },
+  {
+    "id": "오랭열매",
+    "name": "오랭열매",
+    "description": "체력이 최대 HP의 1/2 이하일 때 체력을 10 회복한다.",
+    "category": "held-item"
+  },
+  {
+    "id": "카리열매",
+    "name": "카리열매",
+    "description": "자신에게 효과가 굉장한 노말타입 기술의 위력을 반감시킨다.",
+    "category": "held-item"
+  },
+  {
+    "id": "린드열매",
+    "name": "린드열매",
+    "description": "자신에게 효과가 굉장한 풀타입 기술의 위력을 반감시킨다.",
+    "category": "held-item"
+  },
+  {
+    "id": "오카열매",
+    "name": "오카열매",
+    "description": "자신에게 효과가 굉장한 불꽃타입 기술의 위력을 반감시킨다.",
+    "category": "held-item"
+  },
+  {
+    "id": "꼬시개열매",
+    "name": "꼬시개열매",
+    "description": "자신에게 효과가 굉장한 물타입 기술의 위력을 반감시킨다.",
+    "category": "held-item"
+  },
+  {
+    "id": "초나열매",
+    "name": "초나열매",
+    "description": "자신에게 효과가 굉장한 전기타입 기술의 위력을 반감시킨다.",
+    "category": "held-item"
+  },
+  {
+    "id": "리체열매",
+    "name": "리체열매",
+    "description": "자신에게 효과가 굉장한 벌레타입 기술의 위력을 반감시킨다.",
+    "category": "held-item"
+  },
+  {
+    "id": "바코열매",
+    "name": "바코열매",
+    "description": "자신에게 효과가 굉장한 비행타입 기술의 위력을 반감시킨다.",
+    "category": "held-item"
+  },
+  {
+    "id": "루미열매",
+    "name": "루미열매",
+    "description": "자신에게 효과가 굉장한 바위타입 기술의 위력을 반감시킨다.",
+    "category": "held-item"
+  },
+  {
+    "id": "으름열매",
+    "name": "으름열매",
+    "description": "자신에게 효과가 굉장한 독타입 기술의 위력을 반감시킨다.",
+    "category": "held-item"
+  },
+  {
+    "id": "슈캐열매",
+    "name": "슈캐열매",
+    "description": "자신에게 효과가 굉장한 땅타입 기술의 위력을 반감시킨다.",
+    "category": "held-item"
+  },
+  {
+    "id": "플카열매",
+    "name": "플카열매",
+    "description": "자신에게 효과가 굉장한 얼음타입 기술의 위력을 반감시킨다.",
+    "category": "held-item"
+  },
+  {
+    "id": "로플열매",
+    "name": "로플열매",
+    "description": "자신에게 효과가 굉장한 격투타입 기술의 위력을 반감시킨다.",
+    "category": "held-item"
+  },
+  {
+    "id": "야파열매",
+    "name": "야파열매",
+    "description": "자신에게 효과가 굉장한 에스퍼타입 기술의 위력을 반감시킨다.",
+    "category": "held-item"
+  },
+  {
+    "id": "수불열매",
+    "name": "수불열매",
+    "description": "자신에게 효과가 굉장한 고스트타입 기술의 위력을 반감시킨다.",
+    "category": "held-item"
+  },
+  {
+    "id": "하반열매",
+    "name": "하반열매",
+    "description": "자신에게 효과가 굉장한 드래곤타입 기술의 위력을 반감시킨다.",
+    "category": "held-item"
+  },
+  {
+    "id": "마코열매",
+    "name": "마코열매",
+    "description": "자신에게 효과가 굉장한 악타입 기술의 위력을 반감시킨다.",
+    "category": "held-item"
+  },
+  {
+    "id": "바리비열매",
+    "name": "바리비열매",
+    "description": "자신에게 효과가 굉장한 강철타입 기술의 위력을 반감시킨다.",
+    "category": "held-item"
+  },
+  {
+    "id": "로셀열매",
+    "name": "로셀열매",
+    "description": "자신에게 효과가 굉장한 페어리타입 기술의 위력을 반감시킨다.",
+    "category": "held-item"
+  }
+]

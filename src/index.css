@@ -1,0 +1,117 @@
+:root {
+  --bg: #f4f2f9;
+  --surface: #ffffff;
+  --surface-2: #ece8f5;
+  --border: #ddd7ea;
+  --text: #211f2e;
+  --text-muted: #6d6880;
+
+  --violet: #6d54d6;
+  --violet-soft: #efeafb;
+  --blue: #4f8ef7;
+  --gradient: linear-gradient(135deg, var(--violet), var(--blue));
+
+  --shadow-sm: 0 1px 2px rgba(30, 20, 60, 0.06);
+  --shadow-md: 0 10px 30px rgba(30, 20, 60, 0.1);
+
+  --danger: #c1382c;
+  --danger-bg: #fbe2dd;
+  --danger-strong: #d1453a;
+  --safe: #2f7a4f;
+  --safe-bg: #e0f2e6;
+
+  --sans: 'Noto Sans KR', 'Pretendard', system-ui, -apple-system, sans-serif;
+  --display: 'Rajdhani', var(--sans);
+
+  color-scheme: light dark;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --bg: #121121;
+    --surface: #1c1a2b;
+    --surface-2: #242138;
+    --border: #332e4a;
+    --text: #ece9f7;
+    --text-muted: #9992b3;
+
+    --violet: #9384f2;
+    --violet-soft: #292347;
+    --blue: #6ea8ff;
+
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow-md: 0 10px 30px rgba(0, 0, 0, 0.4);
+
+    --danger: #ef8478;
+    --danger-bg: #3a231f;
+    --danger-strong: #d1453a;
+    --safe: #7bcf9c;
+    --safe-bg: #1f3428;
+  }
+}
+
+:root[data-theme='dark'] {
+  --bg: #121121;
+  --surface: #1c1a2b;
+  --surface-2: #242138;
+  --border: #332e4a;
+  --text: #ece9f7;
+  --text-muted: #9992b3;
+
+  --violet: #9384f2;
+  --violet-soft: #292347;
+  --blue: #6ea8ff;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 10px 30px rgba(0, 0, 0, 0.4);
+
+  --danger: #ef8478;
+  --danger-bg: #3a231f;
+  --danger-strong: #d1453a;
+  --safe: #7bcf9c;
+  --safe-bg: #1f3428;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+#root {
+  min-height: 100svh;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--display);
+  font-weight: 700;
+  margin: 0;
+  letter-spacing: 0.01em;
+}
+
+button {
+  font-family: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--violet);
+  outline-offset: 2px;
+}

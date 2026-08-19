@@ -1,0 +1,3302 @@
+[
+  {
+    "id": "불꽃세례",
+    "name": "불꽃세례",
+    "type": "불꽃",
+    "category": "physical",
+    "power": 120,
+    "accuracy": 100,
+    "pp": 15,
+    "effect": "사용자도 준 데미지의 1/3만큼 반동을 입는다. 10% 확률로 상대를 화상 상태로 만든다."
+  },
+  {
+    "id": "날개치기",
+    "name": "날개치기",
+    "type": "비행",
+    "category": "physical",
+    "power": 60,
+    "accuracy": 100,
+    "pp": 35,
+    "effect": ""
+  },
+  {
+    "id": "전광석화",
+    "name": "전광석화",
+    "type": "노말",
+    "category": "physical",
+    "power": 40,
+    "accuracy": 100,
+    "pp": 20,
+    "effect": "우선도 +1. 항상 먼저 나간다."
+  },
+  {
+    "id": "이판사판태클",
+    "name": "이판사판태클",
+    "type": "노말",
+    "category": "physical",
+    "power": 120,
+    "accuracy": 100,
+    "pp": 16,
+    "effect": ""
+  },
+  {
+    "id": "불대문자",
+    "name": "불대문자",
+    "type": "불꽃",
+    "category": "special",
+    "power": 110,
+    "accuracy": 85,
+    "pp": 8,
+    "effect": "10% 확률로 상대를 화상 상태로 만든다."
+  },
+  {
+    "id": "화염방사",
+    "name": "화염방사",
+    "type": "불꽃",
+    "category": "special",
+    "power": 90,
+    "accuracy": 100,
+    "pp": 16,
+    "effect": "10% 확률로 상대를 화상 상태로 만든다."
+  },
+  {
+    "id": "에어슬래시",
+    "name": "에어슬래시",
+    "type": "비행",
+    "category": "special",
+    "power": 75,
+    "accuracy": 95,
+    "pp": 16,
+    "effect": "30% 확률로 상대를 풀죽게 만든다."
+  },
+  {
+    "id": "솔라빔",
+    "name": "솔라빔",
+    "type": "풀",
+    "category": "special",
+    "power": 120,
+    "accuracy": 100,
+    "pp": 12,
+    "effect": "1턴째 빛을 모으고 2턴째 발사한다. 맑음 날씨에서는 1턴만에 발동한다."
+  },
+  {
+    "id": "용의춤",
+    "name": "용의춤",
+    "type": "드래곤",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 20,
+    "effect": "자신의 공격과 스피드를 1랭크씩 올린다."
+  },
+  {
+    "id": "드래곤클로",
+    "name": "드래곤클로",
+    "type": "드래곤",
+    "category": "physical",
+    "power": 80,
+    "accuracy": 100,
+    "pp": 16,
+    "effect": ""
+  },
+  {
+    "id": "드래곤테일",
+    "name": "드래곤테일",
+    "type": "드래곤",
+    "category": "physical",
+    "power": 60,
+    "accuracy": 90,
+    "pp": 12,
+    "effect": "우선도 -6. 명중 시 상대를 강제로 교체시킨다."
+  },
+  {
+    "id": "기합구슬",
+    "name": "기합구슬",
+    "type": "격투",
+    "category": "special",
+    "power": 120,
+    "accuracy": 70,
+    "pp": 8,
+    "effect": ""
+  },
+  {
+    "id": "깨물어부수기",
+    "name": "깨물어부수기",
+    "type": "악",
+    "category": "physical",
+    "power": 80,
+    "accuracy": 100,
+    "pp": 16,
+    "effect": "20% 확률로 상대의 방어를 1랭크 낮춘다."
+  },
+  {
+    "id": "깨트리기",
+    "name": "깨트리기",
+    "type": "격투",
+    "category": "physical",
+    "power": 75,
+    "accuracy": 100,
+    "pp": 16,
+    "effect": ""
+  },
+  {
+    "id": "냉동빔",
+    "name": "냉동빔",
+    "type": "얼음",
+    "category": "special",
+    "power": 90,
+    "accuracy": 100,
+    "pp": 12,
+    "effect": "10% 확률로 상대를 얼린다."
+  },
+  {
+    "id": "눈사태",
+    "name": "눈사태",
+    "type": "얼음",
+    "category": "physical",
+    "power": 60,
+    "accuracy": 100,
+    "pp": 12,
+    "effect": "우선도 -4. 이번 턴에 먼저 데미지를 입었다면 위력이 2배가 된다."
+  },
+  {
+    "id": "다이빙",
+    "name": "다이빙",
+    "type": "물",
+    "category": "physical",
+    "power": 80,
+    "accuracy": 100,
+    "pp": 12,
+    "effect": "1턴째 물속으로 잠수해 회피하고, 2턴째 공격한다."
+  },
+  {
+    "id": "대지의 파동",
+    "name": "대지의 파동",
+    "type": "노말",
+    "category": "special",
+    "power": 50,
+    "accuracy": 100,
+    "pp": 10,
+    "effect": ""
+  },
+  {
+    "id": "돌림노래",
+    "name": "돌림노래",
+    "type": "노말",
+    "category": "special",
+    "power": 60,
+    "accuracy": 100,
+    "pp": 16,
+    "effect": "같은 턴에 아군이 먼저 사용했다면 위력이 2배가 된다."
+  },
+  {
+    "id": "러스터캐논",
+    "name": "러스터캐논",
+    "type": "강철",
+    "category": "special",
+    "power": 80,
+    "accuracy": 100,
+    "pp": 12,
+    "effect": ""
+  },
+  {
+    "id": "개척하기",
+    "name": "개척하기",
+    "type": "풀",
+    "category": "physical",
+    "power": 50,
+    "accuracy": 100,
+    "pp": 20,
+    "effect": ""
+  },
+  {
+    "id": "고민씨",
+    "name": "고민씨",
+    "type": "풀",
+    "category": "status",
+    "power": null,
+    "accuracy": 100,
+    "pp": 12,
+    "effect": "상대의 특성을 '불면'으로 바꿔 잠들지 못하게 한다."
+  },
+  {
+    "id": "광합성",
+    "name": "광합성",
+    "type": "풀",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 8,
+    "effect": "자신의 체력을 회복한다. 날씨에 따라 회복량이 달라진다."
+  },
+  {
+    "id": "꽃잎댄스",
+    "name": "꽃잎댄스",
+    "type": "풀",
+    "category": "special",
+    "power": 120,
+    "accuracy": 100,
+    "pp": 12,
+    "effect": "2~3턴 연속으로 사용한 뒤 혼란 상태가 된다."
+  },
+  {
+    "id": "기가드레인",
+    "name": "기가드레인",
+    "type": "풀",
+    "category": "special",
+    "power": 75,
+    "accuracy": 100,
+    "pp": 12,
+    "effect": "준 데미지의 절반만큼 자신의 체력을 회복한다."
+  },
+  {
+    "id": "대지의힘",
+    "name": "대지의힘",
+    "type": "땅",
+    "category": "special",
+    "power": 90,
+    "accuracy": 100,
+    "pp": 12,
+    "effect": ""
+  },
+  {
+    "id": "대타출동",
+    "name": "대타출동",
+    "type": "노말",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 12,
+    "effect": ""
+  },
+  {
+    "id": "오물폭탄",
+    "name": "오물폭탄",
+    "type": "독",
+    "category": "special",
+    "power": 90,
+    "accuracy": 100,
+    "pp": 12,
+    "effect": "30% 확률로 상대를 독 상태로 만든다."
+  },
+  {
+    "id": "독찌르기",
+    "name": "독찌르기",
+    "type": "독",
+    "category": "physical",
+    "power": 80,
+    "accuracy": 100,
+    "pp": 20,
+    "effect": "30% 확률로 상대를 독 상태로 만든다."
+  },
+  {
+    "id": "섀도볼",
+    "name": "섀도볼",
+    "type": "고스트",
+    "category": "special",
+    "power": 80,
+    "accuracy": 100,
+    "pp": 16,
+    "effect": "20% 확률로 상대의 특방을 1랭크 낮춘다."
+  },
+  {
+    "id": "맹독",
+    "name": "맹독",
+    "type": "독",
+    "category": "status",
+    "power": null,
+    "accuracy": 90,
+    "pp": 12,
+    "effect": "상대를 맹독 상태로 만든다. 턴이 지날수록 데미지가 누적된다."
+  },
+  {
+    "id": "고스트다이브",
+    "name": "고스트다이브",
+    "type": "고스트",
+    "category": "physical",
+    "power": 90,
+    "accuracy": 100,
+    "pp": 12,
+    "effect": "1턴째 숨어서 회피하고, 2턴째 상대의 방어를 무시하고 공격한다."
+  },
+  {
+    "id": "길동무",
+    "name": "길동무",
+    "type": "고스트",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 8,
+    "effect": "사용 후 자신이 이번 턴에 쓰러지면 상대도 같이 쓰러뜨린다."
+  },
+  {
+    "id": "나이트헤드",
+    "name": "나이트헤드",
+    "type": "고스트",
+    "category": "special",
+    "power": null,
+    "accuracy": 100,
+    "pp": 15,
+    "effect": "사용자의 레벨만큼 고정 데미지를 준다."
+  },
+  {
+    "id": "냉동펀치",
+    "name": "냉동펀치",
+    "type": "얼음",
+    "category": "physical",
+    "power": 75,
+    "accuracy": 100,
+    "pp": 16,
+    "effect": "10% 확률로 상대를 얼린다."
+  },
+  {
+    "id": "매지컬샤인",
+    "name": "매지컬샤인",
+    "type": "페어리",
+    "category": "special",
+    "power": 80,
+    "accuracy": 100,
+    "pp": 12,
+    "effect": ""
+  },
+  {
+    "id": "하이퍼보이스",
+    "name": "하이퍼보이스",
+    "type": "노말",
+    "category": "special",
+    "power": 90,
+    "accuracy": 100,
+    "pp": 12,
+    "effect": ""
+  },
+  {
+    "id": "사이코키네시스",
+    "name": "사이코키네시스",
+    "type": "에스퍼",
+    "category": "special",
+    "power": 90,
+    "accuracy": 100,
+    "pp": 12,
+    "effect": "10% 확률로 상대의 특방을 1랭크 낮춘다."
+  },
+  {
+    "id": "희망사항",
+    "name": "희망사항",
+    "type": "노말",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 12,
+    "effect": "사용한 다음 턴에 체력의 절반을 회복한다."
+  },
+  {
+    "id": "기가임팩트",
+    "name": "기가임팩트",
+    "type": "노말",
+    "category": "physical",
+    "power": 150,
+    "accuracy": 90,
+    "pp": 8,
+    "effect": "사용한 다음 턴에는 움직일 수 없다."
+  },
+  {
+    "id": "문포스",
+    "name": "문포스",
+    "type": "페어리",
+    "category": "special",
+    "power": 95,
+    "accuracy": 100,
+    "pp": 16,
+    "effect": "30% 확률로 상대의 특공을 1랭크 낮춘다."
+  },
+  {
+    "id": "명상",
+    "name": "명상",
+    "type": "에스퍼",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 20,
+    "effect": "자신의 특공과 특방을 1랭크씩 올린다."
+  },
+  {
+    "id": "사이코쇼크",
+    "name": "사이코쇼크",
+    "type": "에스퍼",
+    "category": "special",
+    "power": 80,
+    "accuracy": 100,
+    "pp": 12,
+    "effect": "상대의 방어 능력치를 기준으로 데미지를 계산한다."
+  },
+  {
+    "id": "애교부리기",
+    "name": "애교부리기",
+    "type": "페어리",
+    "category": "status",
+    "power": null,
+    "accuracy": 100,
+    "pp": 20,
+    "effect": "상대의 공격을 2랭크 낮춘다."
+  },
+  {
+    "id": "고속이동",
+    "name": "고속이동",
+    "type": "에스퍼",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 20,
+    "effect": "자신의 스피드를 2랭크 올린다."
+  },
+  {
+    "id": "지진",
+    "name": "지진",
+    "type": "땅",
+    "category": "physical",
+    "power": 100,
+    "accuracy": 100,
+    "pp": 12,
+    "effect": "땅속에 숨은 상대에게는 위력이 2배가 된다."
+  },
+  {
+    "id": "대폭팔",
+    "name": "대폭팔",
+    "type": "노말",
+    "category": "physical",
+    "power": 250,
+    "accuracy": 100,
+    "pp": 5,
+    "effect": "사용자는 반드시 기절한다."
+  },
+  {
+    "id": "번개펀치",
+    "name": "번개펀치",
+    "type": "전기",
+    "category": "physical",
+    "power": 75,
+    "accuracy": 100,
+    "pp": 16,
+    "effect": "10% 확률로 상대를 마비시킨다."
+  },
+  {
+    "id": "사념의박치기",
+    "name": "사념의박치기",
+    "type": "에스퍼",
+    "category": "physical",
+    "power": 80,
+    "accuracy": 90,
+    "pp": 16,
+    "effect": "20% 확률로 상대를 풀죽게 만든다."
+  },
+  {
+    "id": "사이코노이즈",
+    "name": "사이코노이즈",
+    "type": "에스퍼",
+    "category": "special",
+    "power": 75,
+    "accuracy": 100,
+    "pp": 12,
+    "effect": "맞은 상대는 이번 전투 중 회복 기술이나 회복 특성으로 체력을 회복할 수 없다."
+  },
+  {
+    "id": "섀도클로",
+    "name": "섀도클로",
+    "type": "고스트",
+    "category": "physical",
+    "power": 70,
+    "accuracy": 100,
+    "pp": 16,
+    "effect": "급소에 맞을 확률이 높다."
+  },
+  {
+    "id": "섀도펀치",
+    "name": "섀도펀치",
+    "type": "고스트",
+    "category": "physical",
+    "power": 60,
+    "accuracy": null,
+    "pp": 20,
+    "effect": "반드시 명중한다."
+  },
+  {
+    "id": "스텔스록",
+    "name": "스텔스록",
+    "type": "바위",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 20,
+    "effect": "상대 진영에 설치. 이후 등장하는 포켓몬은 교체될 때 데미지를 입는다."
+  },
+  {
+    "id": "스톤샤워",
+    "name": "스톤샤워",
+    "type": "바위",
+    "category": "physical",
+    "power": 75,
+    "accuracy": 90,
+    "pp": 12,
+    "effect": ""
+  },
+  {
+    "id": "스톤에지",
+    "name": "스톤에지",
+    "type": "바위",
+    "category": "physical",
+    "power": 100,
+    "accuracy": 80,
+    "pp": 8,
+    "effect": "급소에 맞을 확률이 높다."
+  },
+  {
+    "id": "아이언헤드",
+    "name": "아이언헤드",
+    "type": "강철",
+    "category": "physical",
+    "power": 80,
+    "accuracy": 100,
+    "pp": 16,
+    "effect": "30% 확률로 상대를 풀죽게 만든다."
+  },
+  {
+    "id": "스케일샷",
+    "name": "스케일샷",
+    "type": "드래곤",
+    "category": "physical",
+    "power": 25,
+    "accuracy": 90,
+    "pp": 20,
+    "effect": "2~5회 연속 공격. 사용 후 자신의 방어가 낮아지고 스피드가 올라간다."
+  },
+  {
+    "id": "드래곤다이브",
+    "name": "드래곤다이브",
+    "type": "드래곤",
+    "category": "physical",
+    "power": 100,
+    "accuracy": 75,
+    "pp": 12,
+    "effect": ""
+  },
+  {
+    "id": "칼춤",
+    "name": "칼춤",
+    "type": "노말",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 20,
+    "effect": "자신의 공격을 2랭크 올린다."
+  },
+  {
+    "id": "아이언테일",
+    "name": "아이언테일",
+    "type": "강철",
+    "category": "physical",
+    "power": 100,
+    "accuracy": 75,
+    "pp": 16,
+    "effect": "30% 확률로 상대의 방어를 1랭크 낮춘다."
+  },
+  {
+    "id": "아쿠아브레이크",
+    "name": "아쿠아브레이크",
+    "type": "물",
+    "category": "physical",
+    "power": 85,
+    "accuracy": 100,
+    "pp": 12,
+    "effect": "20% 확률로 상대의 방어를 1랭크 낮춘다."
+  },
+  {
+    "id": "역린",
+    "name": "역린",
+    "type": "드래곤",
+    "category": "physical",
+    "power": 120,
+    "accuracy": 100,
+    "pp": 12,
+    "effect": "2~3턴 연속으로 사용한 뒤 혼란 상태가 된다."
+  },
+  {
+    "id": "용성군",
+    "name": "용성군",
+    "type": "드래곤",
+    "category": "special",
+    "power": 130,
+    "accuracy": 90,
+    "pp": 8,
+    "effect": "사용 후 자신의 특공이 2랭크 낮아진다."
+  },
+  {
+    "id": "용의파동",
+    "name": "용의파동",
+    "type": "드래곤",
+    "category": "special",
+    "power": 85,
+    "accuracy": 100,
+    "pp": 12,
+    "effect": ""
+  },
+  {
+    "id": "승부굳히기",
+    "name": "승부굳히기",
+    "type": "악",
+    "category": "physical",
+    "power": 60,
+    "accuracy": 100,
+    "pp": 12,
+    "effect": ""
+  },
+  {
+    "id": "탁쳐서떨구기",
+    "name": "탁쳐서떨구기",
+    "type": "악",
+    "category": "physical",
+    "power": 65,
+    "accuracy": 100,
+    "pp": 20,
+    "effect": "상대가 도구를 지니고 있으면 위력이 올라가고, 명중 시 그 도구를 떨어뜨린다."
+  },
+  {
+    "id": "원시의힘",
+    "name": "원시의힘",
+    "type": "바위",
+    "category": "special",
+    "power": 60,
+    "accuracy": 100,
+    "pp": 8,
+    "effect": "10% 확률로 자신의 모든 능력치가 1랭크씩 오른다."
+  },
+  {
+    "id": "겁나는얼굴",
+    "name": "겁나는얼굴",
+    "type": "노말",
+    "category": "status",
+    "power": null,
+    "accuracy": 100,
+    "pp": 12,
+    "effect": "상대의 스피드를 2랭크 낮춘다."
+  },
+  {
+    "id": "구멍파기",
+    "name": "구멍파기",
+    "type": "땅",
+    "category": "physical",
+    "power": 80,
+    "accuracy": 100,
+    "pp": 12,
+    "effect": "1턴째 땅속으로 숨고, 2턴째 공격한다."
+  },
+  {
+    "id": "금속음",
+    "name": "금속음",
+    "type": "강철",
+    "category": "status",
+    "power": null,
+    "accuracy": 85,
+    "pp": 20,
+    "effect": "상대의 특방을 2랭크 낮춘다."
+  },
+  {
+    "id": "기선제압",
+    "name": "기선제압",
+    "type": "격투",
+    "category": "physical",
+    "power": 65,
+    "accuracy": 100,
+    "pp": 16,
+    "effect": "상대가 이번 턴 변화기를 사용하려 하면 실패시킨다."
+  },
+  {
+    "id": "나쁜음모",
+    "name": "나쁜음모",
+    "type": "악",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 20,
+    "effect": "자신의 특공을 2랭크 올린다."
+  },
+  {
+    "id": "내던지기",
+    "name": "내던지기",
+    "type": "악",
+    "category": "physical",
+    "power": null,
+    "accuracy": 100,
+    "pp": 12,
+    "effect": "지니고 있는 도구를 던져 공격한다. 위력은 도구에 따라 달라진다."
+  },
+  {
+    "id": "도우미",
+    "name": "도우미",
+    "type": "노말",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 20,
+    "effect": "이번 턴 아군이 사용하는 기술의 위력을 1.5배로 올린다."
+  },
+  {
+    "id": "드레인펀치",
+    "name": "드레인펀치",
+    "type": "격투",
+    "category": "physical",
+    "power": 75,
+    "accuracy": 100,
+    "pp": 12,
+    "effect": "준 데미지의 절반만큼 자신의 체력을 회복한다."
+  },
+  {
+    "id": "땅고르기",
+    "name": "땅고르기",
+    "type": "땅",
+    "category": "physical",
+    "power": 60,
+    "accuracy": 100,
+    "pp": 20,
+    "effect": "100% 확률로 상대의 스피드를 1랭크 낮춘다."
+  },
+  {
+    "id": "로킥",
+    "name": "로킥",
+    "type": "격투",
+    "category": "physical",
+    "power": 65,
+    "accuracy": 100,
+    "pp": 20,
+    "effect": "상대의 몸무게가 무거울수록 위력이 커진다."
+  },
+  {
+    "id": "메가톤킥",
+    "name": "메가톤킥",
+    "type": "노말",
+    "category": "physical",
+    "power": 120,
+    "accuracy": 75,
+    "pp": 8,
+    "effect": "급소에 맞을 확률이 높다."
+  },
+  {
+    "id": "목숨걸기",
+    "name": "목숨걸기",
+    "type": "격투",
+    "category": "special",
+    "power": null,
+    "accuracy": 100,
+    "pp": 8,
+    "effect": "상대의 체력을 자신과 같은 비율까지 깎는다."
+  },
+  {
+    "id": "물기",
+    "name": "물기",
+    "type": "악",
+    "category": "physical",
+    "power": 60,
+    "accuracy": 100,
+    "pp": 20,
+    "effect": "30% 확률로 상대를 풀죽게 만든다."
+  },
+  {
+    "id": "물의파동",
+    "name": "물의파동",
+    "type": "물",
+    "category": "special",
+    "power": 60,
+    "accuracy": 100,
+    "pp": 20,
+    "effect": "20% 확률로 상대를 혼란시킨다."
+  },
+  {
+    "id": "방어",
+    "name": "방어",
+    "type": "노말",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 8,
+    "effect": "이번 턴 상대의 공격을 대부분 막아낸다."
+  },
+  {
+    "id": "배대뒤치기",
+    "name": "배대뒤치기",
+    "type": "격투",
+    "category": "physical",
+    "power": 60,
+    "accuracy": 90,
+    "pp": 12,
+    "effect": "체력을 절반 소모하고 자신의 공격을 최대로 올린다."
+  },
+  {
+    "id": "버티기",
+    "name": "버티기",
+    "type": "노말",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 12,
+    "effect": "이번 턴 쓰러지지 않고 체력을 1 남긴다."
+  },
+  {
+    "id": "벌크업",
+    "name": "벌크업",
+    "type": "격투",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 20,
+    "effect": "자신의 공격과 방어를 1랭크씩 올린다."
+  },
+  {
+    "id": "보복",
+    "name": "보복",
+    "type": "악",
+    "category": "physical",
+    "power": 50,
+    "accuracy": 100,
+    "pp": 12,
+    "effect": "상대가 이번 턴 자신보다 나중에 움직였다면 위력이 2배가 된다."
+  },
+  {
+    "id": "본러시",
+    "name": "본러시",
+    "type": "땅",
+    "category": "physical",
+    "power": 30,
+    "accuracy": 90,
+    "pp": 12,
+    "effect": "2~5회 연속 공격."
+  },
+  {
+    "id": "불릿펀치",
+    "name": "불릿펀치",
+    "type": "강철",
+    "category": "physical",
+    "power": 40,
+    "accuracy": 100,
+    "pp": 20,
+    "effect": "우선도 +1. 항상 먼저 나간다."
+  },
+  {
+    "id": "블레이즈킥",
+    "name": "블레이즈킥",
+    "type": "불꽃",
+    "category": "physical",
+    "power": 85,
+    "accuracy": 90,
+    "pp": 12,
+    "effect": "급소에 맞을 확률이 높고, 10% 확률로 화상 상태로 만든다."
+  },
+  {
+    "id": "비바라기",
+    "name": "비바라기",
+    "type": "물",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 8,
+    "effect": "5턴간 날씨를 비로 바꾼다."
+  },
+  {
+    "id": "신속",
+    "name": "신속",
+    "type": "노말",
+    "category": "physical",
+    "power": 80,
+    "accuracy": 100,
+    "pp": 8,
+    "effect": "우선도 +2. 항상 먼저 나간다."
+  },
+  {
+    "id": "싫은소리",
+    "name": "싫은소리",
+    "type": "노말",
+    "category": "status",
+    "power": null,
+    "accuracy": 85,
+    "pp": 20,
+    "effect": "상대의 특공을 1랭크 낮춘다."
+  },
+  {
+    "id": "악의파동",
+    "name": "악의파동",
+    "type": "악",
+    "category": "special",
+    "power": 80,
+    "accuracy": 100,
+    "pp": 16,
+    "effect": "20% 확률로 상대를 풀죽게 만든다."
+  },
+  {
+    "id": "울부짖기",
+    "name": "울부짖기",
+    "type": "노말",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 20,
+    "effect": "자신의 공격을 1랭크 올린다."
+  },
+  {
+    "id": "인파이트",
+    "name": "인파이트",
+    "type": "격투",
+    "category": "physical",
+    "power": 120,
+    "accuracy": 100,
+    "pp": 8,
+    "effect": "사용 후 자신의 방어와 특방이 1랭크씩 낮아진다."
+  },
+  {
+    "id": "잠꼬대",
+    "name": "잠꼬대",
+    "type": "노말",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 12,
+    "effect": "잠든 상태에서만 사용 가능. 배운 기술 중 하나를 무작위로 사용한다."
+  },
+  {
+    "id": "잠자기",
+    "name": "잠자기",
+    "type": "에스퍼",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 8,
+    "effect": "체력과 상태이상을 모두 회복하고 2턴간 잠든다."
+  },
+  {
+    "id": "제비반환",
+    "name": "제비반환",
+    "type": "비행",
+    "category": "physical",
+    "power": 60,
+    "accuracy": null,
+    "pp": 20,
+    "effect": "반드시 명중한다."
+  },
+  {
+    "id": "진공파",
+    "name": "진공파",
+    "type": "격투",
+    "category": "special",
+    "power": 40,
+    "accuracy": 100,
+    "pp": 20,
+    "effect": "우선도 +1. 항상 먼저 나간다."
+  },
+  {
+    "id": "철벽",
+    "name": "철벽",
+    "type": "강철",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 16,
+    "effect": "자신의 방어를 2랭크 올린다."
+  },
+  {
+    "id": "치유파동",
+    "name": "치유파동",
+    "type": "에스퍼",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 12,
+    "effect": "상대의 체력을 절반만큼 회복시킨다."
+  },
+  {
+    "id": "카운터",
+    "name": "카운터",
+    "type": "격투",
+    "category": "physical",
+    "power": null,
+    "accuracy": 100,
+    "pp": 20,
+    "effect": "이번 턴 받은 물리 데미지의 2배로 반격한다."
+  },
+  {
+    "id": "코골기",
+    "name": "코골기",
+    "type": "노말",
+    "category": "special",
+    "power": 50,
+    "accuracy": 100,
+    "pp": 16,
+    "effect": "잠든 상태에서만 사용 가능. 30% 확률로 상대를 풀죽게 만든다."
+  },
+  {
+    "id": "코멧펀치",
+    "name": "코멧펀치",
+    "type": "강철",
+    "category": "physical",
+    "power": 90,
+    "accuracy": 90,
+    "pp": 12,
+    "effect": "2~5회 연속 공격."
+  },
+  {
+    "id": "쾌청",
+    "name": "쾌청",
+    "type": "불꽃",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 8,
+    "effect": "5턴간 날씨를 맑음으로 바꾼다."
+  },
+  {
+    "id": "크로스촙",
+    "name": "크로스촙",
+    "type": "격투",
+    "category": "physical",
+    "power": 100,
+    "accuracy": 80,
+    "pp": 8,
+    "effect": "급소에 맞을 확률이 높다."
+  },
+  {
+    "id": "파괴광선",
+    "name": "파괴광선",
+    "type": "노말",
+    "category": "special",
+    "power": 150,
+    "accuracy": 90,
+    "pp": 8,
+    "effect": "사용한 다음 턴은 움직일 수 없다."
+  },
+  {
+    "id": "파동탄",
+    "name": "파동탄",
+    "type": "격투",
+    "category": "special",
+    "power": 80,
+    "accuracy": null,
+    "pp": 20,
+    "effect": "반드시 명중한다."
+  },
+  {
+    "id": "판별",
+    "name": "판별",
+    "type": "격투",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 8,
+    "effect": "이번 턴 상대의 공격을 대부분 막아낸다."
+  },
+  {
+    "id": "패스트가드",
+    "name": "패스트가드",
+    "type": "격투",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 16,
+    "effect": "우선도 +3. 아군을 이번 턴 우선도 기술로부터 보호한다."
+  },
+  {
+    "id": "페인트",
+    "name": "페인트",
+    "type": "노말",
+    "category": "physical",
+    "power": 30,
+    "accuracy": 100,
+    "pp": 12,
+    "effect": "방어나 카운터 등으로 막고 있는 상대에게도 명중한다."
+  },
+  {
+    "id": "흉내쟁이",
+    "name": "흉내쟁이",
+    "type": "노말",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 20,
+    "effect": "상대가 직전에 사용한 기술을 배워서 사용한다."
+  },
+  {
+    "id": "힘껏펀치",
+    "name": "힘껏펀치",
+    "type": "격투",
+    "category": "physical",
+    "power": 150,
+    "accuracy": 100,
+    "pp": 20,
+    "effect": ""
+  },
+  {
+    "id": "객기",
+    "name": "객기",
+    "type": "노말",
+    "category": "physical",
+    "power": 70,
+    "accuracy": 100,
+    "pp": 20,
+    "effect": "TODO: 타입/카테고리/위력/명중/PP 확인 필요"
+  },
+  {
+    "id": "기사회생",
+    "name": "기사회생",
+    "type": "격투",
+    "category": "physical",
+    "power": null,
+    "accuracy": 100,
+    "pp": 16,
+    "effect": "TODO: 타입/카테고리/위력/명중/PP 확인 필요"
+  },
+  {
+    "id": "기충전",
+    "name": "기충전",
+    "type": "노말",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 20,
+    "effect": "TODO: 타입/카테고리/위력/명중/PP 확인 필요"
+  },
+  {
+    "id": "누르기",
+    "name": "누르기",
+    "type": "노말",
+    "category": "physical",
+    "power": 85,
+    "accuracy": 100,
+    "pp": 16,
+    "effect": "TODO: 타입/카테고리/위력/명중/PP 확인 필요"
+  },
+  {
+    "id": "멀리짖기",
+    "name": "멀리짖기",
+    "type": "노말",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 20,
+    "effect": "TODO: 타입/카테고리/위력/명중/PP 확인 필요"
+  },
+  {
+    "id": "무릎차기",
+    "name": "무릎차기",
+    "type": "격투",
+    "category": "physical",
+    "power": 130,
+    "accuracy": 90,
+    "pp": 12,
+    "effect": "TODO: 타입/카테고리/위력/명중/PP 확인 필요"
+  },
+  {
+    "id": "생명의물방울",
+    "name": "생명의물방울",
+    "type": "물",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 12,
+    "effect": "TODO: 타입/카테고리/위력/명중/PP 확인 필요"
+  },
+  {
+    "id": "안다리걸기",
+    "name": "안다리걸기",
+    "type": "격투",
+    "category": "physical",
+    "power": null,
+    "accuracy": 100,
+    "pp": 20,
+    "effect": "TODO: 타입/카테고리/위력/명중/PP 확인 필요"
+  },
+  {
+    "id": "암석봉인",
+    "name": "암석봉인",
+    "type": "바위",
+    "category": "physical",
+    "power": 60,
+    "accuracy": 95,
+    "pp": 16,
+    "effect": "TODO: 타입/카테고리/위력/명중/PP 확인 필요"
+  },
+  {
+    "id": "자기암시",
+    "name": "자기암시",
+    "type": "노말",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 12,
+    "effect": "TODO: 타입/카테고리/위력/명중/PP 확인 필요"
+  },
+  {
+    "id": "철제광선",
+    "name": "철제광선",
+    "type": "강철",
+    "category": "special",
+    "power": 140,
+    "accuracy": 95,
+    "pp": 8,
+    "effect": "TODO: 타입/카테고리/위력/명중/PP 확인 필요"
+  },
+  {
+    "id": "코칭",
+    "name": "코칭",
+    "type": "격투",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 12,
+    "effect": "TODO: 타입/카테고리/위력/명중/PP 확인 필요"
+  },
+  {
+    "id": "강철날개",
+    "name": "강철날개",
+    "type": "강철",
+    "category": "physical",
+    "power": 70,
+    "accuracy": 90,
+    "pp": 20,
+    "effect": "10% 확률로 자신의 방어가 1랭크 오른다."
+  },
+  {
+    "id": "그림자분신",
+    "name": "그림자분신",
+    "type": "노말",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 16,
+    "effect": "자신의 회피율을 1랭크 올린다."
+  },
+  {
+    "id": "깜짝베기",
+    "name": "깜짝베기",
+    "type": "악",
+    "category": "physical",
+    "power": 70,
+    "accuracy": 100,
+    "pp": 20,
+    "effect": "반드시 명중한다."
+  },
+  {
+    "id": "날개쉬기",
+    "name": "날개쉬기",
+    "type": "비행",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 8,
+    "effect": "체력의 절반을 회복한다. 이번 턴 동안 비행 타입이 사라진다."
+  },
+  {
+    "id": "달려들기",
+    "name": "달려들기",
+    "type": "벌레",
+    "category": "physical",
+    "power": 50,
+    "accuracy": 100,
+    "pp": 20,
+    "effect": ""
+  },
+  {
+    "id": "더블어택",
+    "name": "더블어택",
+    "type": "노말",
+    "category": "physical",
+    "power": 35,
+    "accuracy": 90,
+    "pp": 12,
+    "effect": "2회 연속 공격."
+  },
+  {
+    "id": "더블윙",
+    "name": "더블윙",
+    "type": "비행",
+    "category": "physical",
+    "power": 40,
+    "accuracy": 90,
+    "pp": 12,
+    "effect": "2회 연속 공격."
+  },
+  {
+    "id": "덤벼들기",
+    "name": "덤벼들기",
+    "type": "벌레",
+    "category": "physical",
+    "power": 80,
+    "accuracy": 100,
+    "pp": 16,
+    "effect": "TODO: 타입/카테고리/위력/명중/PP 확인 필요"
+  },
+  {
+    "id": "도둑질",
+    "name": "도둑질",
+    "type": "악",
+    "category": "physical",
+    "power": 60,
+    "accuracy": 100,
+    "pp": 20,
+    "effect": "상대가 도구를 지니고 있으면 명중 시 그 도구를 빼앗는다."
+  },
+  {
+    "id": "모래바람",
+    "name": "모래바람",
+    "type": "바위",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 8,
+    "effect": "5턴간 날씨를 모래바람으로 바꾼다."
+  },
+  {
+    "id": "배턴터치",
+    "name": "배턴터치",
+    "type": "노말",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 20,
+    "effect": "자신의 능력 변화를 유지한 채 다른 포켓몬으로 교체한다."
+  },
+  {
+    "id": "벌레먹기",
+    "name": "벌레먹기",
+    "type": "벌레",
+    "category": "physical",
+    "power": 60,
+    "accuracy": 100,
+    "pp": 20,
+    "effect": "상대가 지닌 나무열매를 먹어 그 효과를 얻는다."
+  },
+  {
+    "id": "벌레의야단법석",
+    "name": "벌레의야단법석",
+    "type": "벌레",
+    "category": "special",
+    "power": 90,
+    "accuracy": 100,
+    "pp": 12,
+    "effect": "10% 확률로 상대의 특방을 1랭크 낮춘다."
+  },
+  {
+    "id": "벌레의저항",
+    "name": "벌레의저항",
+    "type": "벌레",
+    "category": "special",
+    "power": 50,
+    "accuracy": 100,
+    "pp": 20,
+    "effect": "100% 확률로 상대의 특공을 1랭크 낮춘다."
+  },
+  {
+    "id": "빛의장막",
+    "name": "빛의장막",
+    "type": "에스퍼",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 20,
+    "effect": "5턴간 아군이 받는 특수 데미지를 절반으로 줄인다."
+  },
+  {
+    "id": "사이코커터",
+    "name": "사이코커터",
+    "type": "에스퍼",
+    "category": "physical",
+    "power": 70,
+    "accuracy": 100,
+    "pp": 20,
+    "effect": "급소에 맞을 확률이 높다."
+  },
+  {
+    "id": "세차게휘두르기",
+    "name": "세차게휘두르기",
+    "type": "악",
+    "category": "physical",
+    "power": 60,
+    "accuracy": 100,
+    "pp": 20,
+    "effect": "TODO: 타입/카테고리/위력/명중/PP 확인 필요"
+  },
+  {
+    "id": "순풍",
+    "name": "순풍",
+    "type": "비행",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 16,
+    "effect": "4턴간 아군의 스피드를 2배로 만든다."
+  },
+  {
+    "id": "시저크로스",
+    "name": "시저크로스",
+    "type": "벌레",
+    "category": "physical",
+    "power": 80,
+    "accuracy": 100,
+    "pp": 16,
+    "effect": ""
+  },
+  {
+    "id": "안개제거",
+    "name": "안개제거",
+    "type": "비행",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 16,
+    "effect": "양 진영의 설치물을 제거하고 상대의 회피율을 1랭크 낮춘다."
+  },
+  {
+    "id": "애크러뱃",
+    "name": "애크러뱃",
+    "type": "비행",
+    "category": "physical",
+    "power": 55,
+    "accuracy": 100,
+    "pp": 16,
+    "effect": "도구를 지니고 있지 않으면 위력이 2배가 된다."
+  },
+  {
+    "id": "엄습하는일격",
+    "name": "엄습하는일격",
+    "type": "벌레",
+    "category": "physical",
+    "power": 70,
+    "accuracy": 90,
+    "pp": 12,
+    "effect": "TODO: 타입/카테고리/위력/명중/PP 확인 필요"
+  },
+  {
+    "id": "엄청난힘",
+    "name": "엄청난힘",
+    "type": "격투",
+    "category": "physical",
+    "power": 120,
+    "accuracy": 100,
+    "pp": 8,
+    "effect": "사용 후 자신의 공격과 방어가 1랭크씩 낮아진다."
+  },
+  {
+    "id": "에어커터",
+    "name": "에어커터",
+    "type": "비행",
+    "category": "special",
+    "power": 60,
+    "accuracy": 95,
+    "pp": 20,
+    "effect": "급소에 맞을 확률이 높다."
+  },
+  {
+    "id": "유턴",
+    "name": "유턴",
+    "type": "벌레",
+    "category": "physical",
+    "power": 70,
+    "accuracy": 100,
+    "pp": 20,
+    "effect": "사용한 뒤 다른 포켓몬으로 교체한다."
+  },
+  {
+    "id": "저주",
+    "name": "저주",
+    "type": "고스트",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 12,
+    "effect": "고스트 타입이면 체력을 소모해 상대를 저주 상태로 만든다."
+  },
+  {
+    "id": "하드프레스",
+    "name": "하드프레스",
+    "type": "강철",
+    "category": "physical",
+    "power": null,
+    "accuracy": 100,
+    "pp": 12,
+    "effect": "TODO: 타입/카테고리/위력/명중/PP 확인 필요"
+  },
+  {
+    "id": "10만마력",
+    "name": "10만마력",
+    "type": "땅",
+    "category": "physical",
+    "power": 95,
+    "accuracy": 95,
+    "pp": 12,
+    "effect": "TODO: 타입/카테고리/위력/명중/PP 확인 필요"
+  },
+  {
+    "id": "눈보라",
+    "name": "눈보라",
+    "type": "얼음",
+    "category": "special",
+    "power": 110,
+    "accuracy": 70,
+    "pp": 8,
+    "effect": "10% 확률로 상대를 얼린다."
+  },
+  {
+    "id": "망각술",
+    "name": "망각술",
+    "type": "에스퍼",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 20,
+    "effect": "자신의 특방을 2랭크 올린다."
+  },
+  {
+    "id": "머드샷",
+    "name": "머드샷",
+    "type": "땅",
+    "category": "special",
+    "power": 55,
+    "accuracy": 95,
+    "pp": 16,
+    "effect": "100% 확률로 상대의 스피드를 1랭크 낮춘다."
+  },
+  {
+    "id": "모래지옥",
+    "name": "모래지옥",
+    "type": "땅",
+    "category": "physical",
+    "power": 35,
+    "accuracy": 85,
+    "pp": 16,
+    "effect": "여러 턴 동안 상대를 속박해 데미지를 준다."
+  },
+  {
+    "id": "미러코트",
+    "name": "미러코트",
+    "type": "에스퍼",
+    "category": "special",
+    "power": null,
+    "accuracy": 100,
+    "pp": 20,
+    "effect": "이번 턴 받은 특수 데미지의 2배로 반격한다."
+  },
+  {
+    "id": "바다회오리",
+    "name": "바다회오리",
+    "type": "물",
+    "category": "special",
+    "power": 35,
+    "accuracy": 85,
+    "pp": 16,
+    "effect": "여러 턴 동안 상대를 속박해 데미지를 준다."
+  },
+  {
+    "id": "바디프레스",
+    "name": "바디프레스",
+    "type": "격투",
+    "category": "physical",
+    "power": 80,
+    "accuracy": 100,
+    "pp": 12,
+    "effect": "공격력 대신 자신의 방어력으로 데미지를 계산한다."
+  },
+  {
+    "id": "분함의발구르기",
+    "name": "분함의발구르기",
+    "type": "땅",
+    "category": "physical",
+    "power": 75,
+    "accuracy": 100,
+    "pp": 12,
+    "effect": "직전에 자신의 기술이 실패했다면 위력이 2배가 된다."
+  },
+  {
+    "id": "소란피기",
+    "name": "소란피기",
+    "type": "노말",
+    "category": "special",
+    "power": 90,
+    "accuracy": 100,
+    "pp": 12,
+    "effect": "3턴간 계속 사용하며, 주변의 잠든 포켓몬을 깨운다."
+  },
+  {
+    "id": "아쿠아링",
+    "name": "아쿠아링",
+    "type": "물",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 20,
+    "effect": "매 턴 자신의 체력을 조금씩 회복한다."
+  },
+  {
+    "id": "암해머",
+    "name": "암해머",
+    "type": "격투",
+    "category": "physical",
+    "power": 100,
+    "accuracy": 90,
+    "pp": 12,
+    "effect": "TODO: 타입/카테고리/위력/명중/PP 확인 필요"
+  },
+  {
+    "id": "얼어붙은바람",
+    "name": "얼어붙은바람",
+    "type": "얼음",
+    "category": "special",
+    "power": 55,
+    "accuracy": 95,
+    "pp": 16,
+    "effect": "물 타입 상대에게 효과가 굉장하다."
+  },
+  {
+    "id": "오물웨이브",
+    "name": "오물웨이브",
+    "type": "독",
+    "category": "special",
+    "power": 95,
+    "accuracy": 100,
+    "pp": 12,
+    "effect": "10% 확률로 상대를 독 상태로 만든다."
+  },
+  {
+    "id": "와이드가드",
+    "name": "와이드가드",
+    "type": "바위",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 12,
+    "effect": "우선도 +3. 이번 턴 아군을 전체공격 기술로부터 보호한다."
+  },
+  {
+    "id": "웨더볼",
+    "name": "웨더볼",
+    "type": "노말",
+    "category": "special",
+    "power": 50,
+    "accuracy": 100,
+    "pp": 12,
+    "effect": "날씨에 따라 타입과 위력이 변한다."
+  },
+  {
+    "id": "웨이브태클",
+    "name": "웨이브태클",
+    "type": "물",
+    "category": "physical",
+    "power": 120,
+    "accuracy": 100,
+    "pp": 12,
+    "effect": "사용자도 준 데미지의 1/3만큼 반동을 입는다."
+  },
+  {
+    "id": "죽기살기",
+    "name": "죽기살기",
+    "type": "노말",
+    "category": "physical",
+    "power": null,
+    "accuracy": 100,
+    "pp": 8,
+    "effect": "TODO: 타입/카테고리/위력/명중/PP 확인 필요"
+  },
+  {
+    "id": "진흙뿌리기",
+    "name": "진흙뿌리기",
+    "type": "땅",
+    "category": "special",
+    "power": 20,
+    "accuracy": 100,
+    "pp": 12,
+    "effect": "100% 확률로 상대의 명중률을 1랭크 낮춘다."
+  },
+  {
+    "id": "찬물끼얹기",
+    "name": "찬물끼얹기",
+    "type": "물",
+    "category": "special",
+    "power": 50,
+    "accuracy": 100,
+    "pp": 20,
+    "effect": "30% 확률로 상대를 화상 상태로 만든다."
+  },
+  {
+    "id": "퀵턴",
+    "name": "퀵턴",
+    "type": "물",
+    "category": "physical",
+    "power": 60,
+    "accuracy": 100,
+    "pp": 20,
+    "effect": "TODO: 타입/카테고리/위력/명중/PP 확인 필요"
+  },
+  {
+    "id": "탁류",
+    "name": "탁류",
+    "type": "물",
+    "category": "special",
+    "power": 90,
+    "accuracy": 85,
+    "pp": 12,
+    "effect": "30% 확률로 상대의 명중률을 1랭크 낮춘다."
+  },
+  {
+    "id": "파도타기",
+    "name": "파도타기",
+    "type": "물",
+    "category": "special",
+    "power": 90,
+    "accuracy": 100,
+    "pp": 16,
+    "effect": ""
+  },
+  {
+    "id": "폭포오르기",
+    "name": "폭포오르기",
+    "type": "물",
+    "category": "physical",
+    "power": 80,
+    "accuracy": 100,
+    "pp": 16,
+    "effect": "20% 확률로 상대를 풀죽게 만든다."
+  },
+  {
+    "id": "하이드로캐논",
+    "name": "하이드로캐논",
+    "type": "물",
+    "category": "special",
+    "power": 150,
+    "accuracy": 90,
+    "pp": 8,
+    "effect": "사용한 다음 턴은 움직일 수 없다."
+  },
+  {
+    "id": "하이드로펌프",
+    "name": "하이드로펌프",
+    "type": "물",
+    "category": "special",
+    "power": 110,
+    "accuracy": 80,
+    "pp": 8,
+    "effect": ""
+  },
+  {
+    "id": "하품",
+    "name": "하품",
+    "type": "노말",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 12,
+    "effect": "다음 턴 상대를 잠들게 한다."
+  },
+  {
+    "id": "떨어뜨리기",
+    "name": "떨어뜨리기",
+    "type": "바위",
+    "category": "physical",
+    "power": 50,
+    "accuracy": 100,
+    "pp": 16,
+    "effect": "공중에 떠 있는 상대도 지상으로 떨어뜨려 명중시킨다."
+  },
+  {
+    "id": "공중날기",
+    "name": "공중날기",
+    "type": "비행",
+    "category": "physical",
+    "power": 90,
+    "accuracy": 95,
+    "pp": 16,
+    "effect": "1턴째 하늘로 날아올라 회피하고, 2턴째 공격한다."
+  },
+  {
+    "id": "깃털댄스",
+    "name": "깃털댄스",
+    "type": "비행",
+    "category": "status",
+    "power": null,
+    "accuracy": 100,
+    "pp": 16,
+    "effect": "상대의 공격을 2랭크 낮춘다."
+  },
+  {
+    "id": "꿀꺽",
+    "name": "꿀꺽",
+    "type": "노말",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 12,
+    "effect": "TODO: 타입/카테고리/위력/명중/PP 확인 필요"
+  },
+  {
+    "id": "더스트슈트",
+    "name": "더스트슈트",
+    "type": "독",
+    "category": "physical",
+    "power": 120,
+    "accuracy": 80,
+    "pp": 8,
+    "effect": "TODO: 타입/카테고리/위력/명중/PP 확인 필요"
+  },
+  {
+    "id": "물붓기",
+    "name": "물붓기",
+    "type": "물",
+    "category": "status",
+    "power": null,
+    "accuracy": 100,
+    "pp": 20,
+    "effect": "TODO: 타입/카테고리/위력/명중/PP 확인 필요"
+  },
+  {
+    "id": "브레이브버드",
+    "name": "브레이브버드",
+    "type": "비행",
+    "category": "physical",
+    "power": 120,
+    "accuracy": 100,
+    "pp": 16,
+    "effect": "사용자도 준 데미지의 1/3만큼 반동을 입는다."
+  },
+  {
+    "id": "비축하기",
+    "name": "비축하기",
+    "type": "노말",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 12,
+    "effect": "자신의 방어와 특방이 조금씩 오른다. 최대 3회까지 쌓인다."
+  },
+  {
+    "id": "설경",
+    "name": "설경",
+    "type": "얼음",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 8,
+    "effect": "5턴간 날씨를 눈으로 바꾼다."
+  },
+  {
+    "id": "씨폭탄",
+    "name": "씨폭탄",
+    "type": "풀",
+    "category": "physical",
+    "power": 80,
+    "accuracy": 100,
+    "pp": 16,
+    "effect": ""
+  },
+  {
+    "id": "토해내기",
+    "name": "토해내기",
+    "type": "노말",
+    "category": "special",
+    "power": null,
+    "accuracy": 100,
+    "pp": 12,
+    "effect": "비축하기로 쌓아둔 만큼 위력이 커진다. 사용하면 쌓인 것이 사라진다."
+  },
+  {
+    "id": "폭풍",
+    "name": "폭풍",
+    "type": "비행",
+    "category": "special",
+    "power": 110,
+    "accuracy": 70,
+    "pp": 12,
+    "effect": "30% 확률로 상대를 혼란시킨다."
+  },
+  {
+    "id": "10만볼트",
+    "name": "10만볼트",
+    "type": "전기",
+    "category": "special",
+    "power": 90,
+    "accuracy": 100,
+    "pp": 16,
+    "effect": "10% 확률로 상대를 마비시킨다."
+  },
+  {
+    "id": "거짓울음",
+    "name": "거짓울음",
+    "type": "악",
+    "category": "status",
+    "power": null,
+    "accuracy": 100,
+    "pp": 20,
+    "effect": "상대의 특방을 2랭크 낮춘다."
+  },
+  {
+    "id": "당신먼저",
+    "name": "당신먼저",
+    "type": "노말",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 16,
+    "effect": "상대를 이번 턴에 즉시 행동하게 만든다."
+  },
+  {
+    "id": "동료만들기",
+    "name": "동료만들기",
+    "type": "노말",
+    "category": "status",
+    "power": null,
+    "accuracy": 100,
+    "pp": 16,
+    "effect": "이번 턴 상대의 공격을 자신에게 유도한다."
+  },
+  {
+    "id": "드레인키스",
+    "name": "드레인키스",
+    "type": "페어리",
+    "category": "special",
+    "power": 50,
+    "accuracy": 100,
+    "pp": 12,
+    "effect": "준 데미지의 4분의 3만큼 자신의 체력을 회복한다."
+  },
+  {
+    "id": "뛰어오르기",
+    "name": "뛰어오르기",
+    "type": "비행",
+    "category": "physical",
+    "power": 85,
+    "accuracy": 85,
+    "pp": 8,
+    "effect": "1턴째 하늘로 뛰어올라 회피하고, 2턴째 공격한다. 30% 확률로 마비시킨다."
+  },
+  {
+    "id": "마하펀치",
+    "name": "마하펀치",
+    "type": "격투",
+    "category": "physical",
+    "power": 40,
+    "accuracy": 100,
+    "pp": 20,
+    "effect": "우선도 +1. 항상 먼저 나간다."
+  },
+  {
+    "id": "바꿔치기",
+    "name": "바꿔치기",
+    "type": "악",
+    "category": "status",
+    "power": null,
+    "accuracy": 100,
+    "pp": 12,
+    "effect": "상대와 서로 지닌 도구를 교환한다."
+  },
+  {
+    "id": "바둥바둥",
+    "name": "바둥바둥",
+    "type": "노말",
+    "category": "physical",
+    "power": null,
+    "accuracy": 100,
+    "pp": 16,
+    "effect": "자신의 체력이 낮을수록 위력이 커진다."
+  },
+  {
+    "id": "번개",
+    "name": "번개",
+    "type": "전기",
+    "category": "special",
+    "power": 110,
+    "accuracy": 70,
+    "pp": 12,
+    "effect": "30% 확률로 상대를 마비시킨다."
+  },
+  {
+    "id": "부추기기",
+    "name": "부추기기",
+    "type": "악",
+    "category": "status",
+    "power": null,
+    "accuracy": 100,
+    "pp": 16,
+    "effect": "상대가 이번 전투에서 변화기를 사용할 수 없게 만든다."
+  },
+  {
+    "id": "불꽃펀치",
+    "name": "불꽃펀치",
+    "type": "불꽃",
+    "category": "physical",
+    "power": 75,
+    "accuracy": 100,
+    "pp": 16,
+    "effect": "10% 확률로 상대를 화상 상태로 만든다."
+  },
+  {
+    "id": "속이기",
+    "name": "속이기",
+    "type": "노말",
+    "category": "physical",
+    "power": 40,
+    "accuracy": 100,
+    "pp": 12,
+    "effect": "상대와 서로 지닌 도구를 교환한다."
+  },
+  {
+    "id": "앙코르",
+    "name": "앙코르",
+    "type": "노말",
+    "category": "status",
+    "power": null,
+    "accuracy": 100,
+    "pp": 8,
+    "effect": "상대가 방금 사용한 기술만 반복해서 사용하게 만든다."
+  },
+  {
+    "id": "전기자석파",
+    "name": "전기자석파",
+    "type": "전기",
+    "category": "status",
+    "power": null,
+    "accuracy": 90,
+    "pp": 20,
+    "effect": "상대를 마비 상태로 만든다."
+  },
+  {
+    "id": "천사의키스",
+    "name": "천사의키스",
+    "type": "페어리",
+    "category": "status",
+    "power": null,
+    "accuracy": 75,
+    "pp": 12,
+    "effect": "상대를 혼란 상태로 만든다."
+  },
+  {
+    "id": "초롱초롱눈동자",
+    "name": "초롱초롱눈동자",
+    "type": "페어리",
+    "category": "status",
+    "power": null,
+    "accuracy": 100,
+    "pp": 20,
+    "effect": "우선도 +1. 상대의 공격을 1랭크 낮춘다."
+  },
+  {
+    "id": "치근거리기",
+    "name": "치근거리기",
+    "type": "페어리",
+    "category": "physical",
+    "power": 90,
+    "accuracy": 90,
+    "pp": 12,
+    "effect": "10% 확률로 상대의 공격을 1랭크 낮춘다."
+  },
+  {
+    "id": "치유소원",
+    "name": "치유소원",
+    "type": "에스퍼",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 12,
+    "effect": "사용자는 기절하지만, 다음에 나오는 아군의 체력과 상태이상을 완전히 회복시킨다."
+  },
+  {
+    "id": "코스믹파워",
+    "name": "코스믹파워",
+    "type": "에스퍼",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 20,
+    "effect": "자신의 방어와 특방을 1랭크씩 올린다."
+  },
+  {
+    "id": "코튼가드",
+    "name": "코튼가드",
+    "type": "풀",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 12,
+    "effect": "자신의 방어를 3랭크 올린다."
+  },
+  {
+    "id": "트리플악셀",
+    "name": "트리플악셀",
+    "type": "얼음",
+    "category": "physical",
+    "power": 20,
+    "accuracy": 90,
+    "pp": 12,
+    "effect": "3회 연속 공격하며, 맞을 때마다 위력이 커진다."
+  },
+  {
+    "id": "폭발펀치",
+    "name": "폭발펀치",
+    "type": "격투",
+    "category": "physical",
+    "power": 100,
+    "accuracy": 50,
+    "pp": 8,
+    "effect": "100% 확률로 상대를 혼란시킨다."
+  },
+  {
+    "id": "풀묶기",
+    "name": "풀묶기",
+    "type": "풀",
+    "category": "special",
+    "power": null,
+    "accuracy": 100,
+    "pp": 20,
+    "effect": "상대의 몸무게가 무거울수록 위력이 커진다."
+  },
+  {
+    "id": "헤롱헤롱",
+    "name": "헤롱헤롱",
+    "type": "노말",
+    "category": "status",
+    "power": null,
+    "accuracy": 100,
+    "pp": 16,
+    "effect": "이성인 상대를 헤롱헤롱 상태로 만들어 가끔 기술을 사용하지 못하게 한다."
+  },
+  {
+    "id": "흔들흔들댄스",
+    "name": "흔들흔들댄스",
+    "type": "노말",
+    "category": "status",
+    "power": null,
+    "accuracy": 100,
+    "pp": 20,
+    "effect": "장소에 있는 모든 포켓몬(자신 포함)을 혼란시킨다."
+  },
+  {
+    "id": "간지르기",
+    "name": "간지르기",
+    "type": "노말",
+    "category": "status",
+    "power": null,
+    "accuracy": 100,
+    "pp": 20,
+    "effect": "상대의 공격과 방어를 1랭크씩 낮춘다."
+  },
+  {
+    "id": "그래스슬라이더",
+    "name": "그래스슬라이더",
+    "type": "풀",
+    "category": "physical",
+    "power": 55,
+    "accuracy": 100,
+    "pp": 20,
+    "effect": "그래스필드 상태일 때 우선도 +1이 된다."
+  },
+  {
+    "id": "그래스필드",
+    "name": "그래스필드",
+    "type": "풀",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 12,
+    "effect": "5턴간 필드를 그래스필드로 바꾼다."
+  },
+  {
+    "id": "도발",
+    "name": "도발",
+    "type": "악",
+    "category": "status",
+    "power": null,
+    "accuracy": 100,
+    "pp": 20,
+    "effect": "TODO: 부추기기와 같은 기술인지 확인 필요. 별개라면 타입/카테고리/위력/명중/PP 확인 필요"
+  },
+  {
+    "id": "독가루",
+    "name": "독가루",
+    "type": "독",
+    "category": "status",
+    "power": null,
+    "accuracy": 75,
+    "pp": 20,
+    "effect": "상대를 독 상태로 만든다."
+  },
+  {
+    "id": "목화포자",
+    "name": "목화포자",
+    "type": "풀",
+    "category": "status",
+    "power": null,
+    "accuracy": 100,
+    "pp": 20,
+    "effect": "상대의 스피드를 2랭크 낮춘다."
+  },
+  {
+    "id": "미스트필드",
+    "name": "미스트필드",
+    "type": "페어리",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 12,
+    "effect": "5턴간 필드를 미스트필드로 바꾼다."
+  },
+  {
+    "id": "성장",
+    "name": "성장",
+    "type": "풀",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 20,
+    "effect": "자신의 공격과 특공을 1랭크(맑음 날씨에서는 2랭크) 올린다."
+  },
+  {
+    "id": "신비의부적",
+    "name": "신비의부적",
+    "type": "노말",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 20,
+    "effect": "TODO: 타입/카테고리/위력/명중/PP 확인 필요"
+  },
+  {
+    "id": "씨뿌리기",
+    "name": "씨뿌리기",
+    "type": "풀",
+    "category": "status",
+    "power": null,
+    "accuracy": 90,
+    "pp": 12,
+    "effect": "매 턴 상대의 체력을 흡수해 자신이 회복한다."
+  },
+  {
+    "id": "에너지볼",
+    "name": "에너지볼",
+    "type": "풀",
+    "category": "special",
+    "power": 90,
+    "accuracy": 100,
+    "pp": 12,
+    "effect": "10% 확률로 상대의 특방을 1랭크 낮춘다."
+  },
+  {
+    "id": "저리가루",
+    "name": "저리가루",
+    "type": "풀",
+    "category": "status",
+    "power": null,
+    "accuracy": 75,
+    "pp": 20,
+    "effect": "상대를 마비 상태로 만든다."
+  },
+  {
+    "id": "집단구타",
+    "name": "집단구타",
+    "type": "악",
+    "category": "physical",
+    "power": null,
+    "accuracy": 100,
+    "pp": 12,
+    "effect": "파티의 포켓몬이 순서대로 한 번씩 공격한다."
+  },
+  {
+    "id": "추억의선물",
+    "name": "추억의선물",
+    "type": "악",
+    "category": "status",
+    "power": null,
+    "accuracy": 100,
+    "pp": 12,
+    "effect": "사용자는 기절하지만, 상대의 공격과 특공을 2랭크씩 낮춘다."
+  },
+  {
+    "id": "트릭룸",
+    "name": "트릭룸",
+    "type": "에스퍼",
+    "category": "status",
+    "power": null,
+    "accuracy": 100,
+    "pp": 12,
+    "effect": "5턴간 스피드가 낮은 포켓몬부터 먼저 행동한다."
+  },
+  {
+    "id": "가드스왑",
+    "name": "가드스왑",
+    "type": "에스퍼",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 12,
+    "effect": "자신과 상대의 방어·특방 랭크 변화를 서로 교환한다."
+  },
+  {
+    "id": "검은눈빛",
+    "name": "검은눈빛",
+    "type": "노말",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 8,
+    "effect": "상대를 도망치거나 교체하지 못하게 만든다."
+  },
+  {
+    "id": "달빛",
+    "name": "달빛",
+    "type": "페어리",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 8,
+    "effect": "체력을 회복한다. 날씨에 따라 회복량이 달라진다."
+  },
+  {
+    "id": "리플렉터",
+    "name": "리플렉터",
+    "type": "에스퍼",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 20,
+    "effect": "5턴간 아군이 받는 물리 데미지를 절반으로 줄인다."
+  },
+  {
+    "id": "매혹의보이스",
+    "name": "매혹의보이스",
+    "type": "페어리",
+    "category": "special",
+    "power": 80,
+    "accuracy": 100,
+    "pp": 12,
+    "effect": "반드시 명중한다."
+  },
+  {
+    "id": "바크아웃",
+    "name": "바크아웃",
+    "type": "악",
+    "category": "special",
+    "power": 55,
+    "accuracy": 95,
+    "pp": 16,
+    "effect": "TODO: 타입/카테고리/위력/명중/PP 확인 필요"
+  },
+  {
+    "id": "분풀이",
+    "name": "분풀이",
+    "type": "악",
+    "category": "physical",
+    "power": 75,
+    "accuracy": 100,
+    "pp": 8,
+    "effect": "직전에 아군이 쓰러졌다면 위력이 2배가 된다."
+  },
+  {
+    "id": "비장의무기",
+    "name": "비장의무기",
+    "type": "노말",
+    "category": "physical",
+    "power": 140,
+    "accuracy": 100,
+    "pp": 8,
+    "effect": "남은 PP가 적을수록 위력이 커진다."
+  },
+  {
+    "id": "뽐내기",
+    "name": "뽐내기",
+    "type": "노말",
+    "category": "status",
+    "power": null,
+    "accuracy": 85,
+    "pp": 16,
+    "effect": "상대의 공격을 2랭크 올리고 혼란 상태로 만든다."
+  },
+  {
+    "id": "속임수",
+    "name": "속임수",
+    "type": "악",
+    "category": "physical",
+    "power": 95,
+    "accuracy": 100,
+    "pp": 16,
+    "effect": "TODO: 속이기(에스퍼, 도구 교환)와 같은 기술인지 확인 필요. 별개라면 타입/카테고리/위력/명중/PP 확인 필요"
+  },
+  {
+    "id": "스킬스왑",
+    "name": "스킬스왑",
+    "type": "에스퍼",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 12,
+    "effect": "상대와 서로의 특성을 교환한다."
+  },
+  {
+    "id": "어시스트파워",
+    "name": "어시스트파워",
+    "type": "에스퍼",
+    "category": "special",
+    "power": 20,
+    "accuracy": 100,
+    "pp": 12,
+    "effect": "TODO: 타입/카테고리/위력/명중/PP 확인 필요"
+  },
+  {
+    "id": "원한",
+    "name": "원한",
+    "type": "고스트",
+    "category": "status",
+    "power": null,
+    "accuracy": 100,
+    "pp": 12,
+    "effect": "사용자가 이번 턴 쓰러지면 상대가 방금 사용한 기술의 PP를 모두 소진시킨다."
+  },
+  {
+    "id": "이상한빛",
+    "name": "이상한빛",
+    "type": "고스트",
+    "category": "status",
+    "power": null,
+    "accuracy": 100,
+    "pp": 12,
+    "effect": "상대를 혼란 상태로 만든다."
+  },
+  {
+    "id": "지옥찌르기",
+    "name": "지옥찌르기",
+    "type": "악",
+    "category": "physical",
+    "power": 80,
+    "accuracy": 100,
+    "pp": 16,
+    "effect": "TODO: 타입/카테고리/위력/명중/PP 확인 필요"
+  },
+  {
+    "id": "탐내기",
+    "name": "탐내기",
+    "type": "노말",
+    "category": "physical",
+    "power": 60,
+    "accuracy": 100,
+    "pp": 20,
+    "effect": "상대가 도구를 지니고 있으면 명중 시 그 도구를 빼앗는다."
+  },
+  {
+    "id": "트집",
+    "name": "트집",
+    "type": "악",
+    "category": "status",
+    "power": null,
+    "accuracy": 100,
+    "pp": 16,
+    "effect": "상대가 방금 사용한 기술의 PP를 4 감소시킨다."
+  },
+  {
+    "id": "니트로차지",
+    "name": "니트로차지",
+    "type": "불꽃",
+    "category": "physical",
+    "power": 50,
+    "accuracy": 100,
+    "pp": 20,
+    "effect": "TODO: 타입/카테고리/위력/명중/PP 확인 필요"
+  },
+  {
+    "id": "도깨비불",
+    "name": "도깨비불",
+    "type": "불꽃",
+    "category": "status",
+    "power": null,
+    "accuracy": 85,
+    "pp": 16,
+    "effect": "상대를 화상 상태로 만든다."
+  },
+  {
+    "id": "매지컬플레임",
+    "name": "매지컬플레임",
+    "type": "불꽃",
+    "category": "special",
+    "power": 75,
+    "accuracy": 100,
+    "pp": 12,
+    "effect": "100% 확률로 상대의 특공을 1랭크 낮춘다."
+  },
+  {
+    "id": "메테오빔",
+    "name": "메테오빔",
+    "type": "바위",
+    "category": "special",
+    "power": 120,
+    "accuracy": 90,
+    "pp": 12,
+    "effect": "1턴째 자신의 특공을 올리고, 2턴째 공격한다."
+  },
+  {
+    "id": "분연",
+    "name": "분연",
+    "type": "불꽃",
+    "category": "special",
+    "power": 80,
+    "accuracy": 100,
+    "pp": 16,
+    "effect": "TODO: 타입/카테고리/위력/명중/PP 확인 필요"
+  },
+  {
+    "id": "불사르기",
+    "name": "불사르기",
+    "type": "불꽃",
+    "category": "special",
+    "power": 130,
+    "accuracy": 100,
+    "pp": 8,
+    "effect": "사용 후 자신은 불꽃 타입을 잃는다."
+  },
+  {
+    "id": "사슬묶기",
+    "name": "사슬묶기",
+    "type": "노말",
+    "category": "status",
+    "power": null,
+    "accuracy": 100,
+    "pp": 20,
+    "effect": "TODO: 타입/카테고리/위력/명중/PP 확인 필요"
+  },
+  {
+    "id": "사이드체인지",
+    "name": "사이드체인지",
+    "type": "에스퍼",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 16,
+    "effect": "양 진영에 설치된 필드 효과를 서로 교환한다."
+  },
+  {
+    "id": "사이코필드",
+    "name": "사이코필드",
+    "type": "에스퍼",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 12,
+    "effect": "5턴간 필드를 사이코필드로 바꾼다."
+  },
+  {
+    "id": "아머캐논",
+    "name": "아머캐논",
+    "type": "불꽃",
+    "category": "special",
+    "power": 120,
+    "accuracy": 100,
+    "pp": 8,
+    "effect": "사용 후 자신의 방어와 특방이 1랭크씩 낮아진다."
+  },
+  {
+    "id": "애시드봄",
+    "name": "애시드봄",
+    "type": "독",
+    "category": "special",
+    "power": 40,
+    "accuracy": 100,
+    "pp": 20,
+    "effect": "100% 확률로 상대의 특방을 2랭크 낮춘다."
+  },
+  {
+    "id": "열사의대지",
+    "name": "열사의대지",
+    "type": "땅",
+    "category": "special",
+    "power": 70,
+    "accuracy": 100,
+    "pp": 12,
+    "effect": "30% 확률로 상대를 화상 상태로 만든다."
+  },
+  {
+    "id": "열풍",
+    "name": "열풍",
+    "type": "불꽃",
+    "category": "special",
+    "power": 95,
+    "accuracy": 90,
+    "pp": 12,
+    "effect": "10% 확률로 상대를 화상 상태로 만든다."
+  },
+  {
+    "id": "오버히트",
+    "name": "오버히트",
+    "type": "불꽃",
+    "category": "special",
+    "power": 130,
+    "accuracy": 90,
+    "pp": 8,
+    "effect": "사용 후 자신의 특공이 2랭크 낮아진다."
+  },
+  {
+    "id": "와이드포스",
+    "name": "와이드포스",
+    "type": "에스퍼",
+    "category": "special",
+    "power": 80,
+    "accuracy": 100,
+    "pp": 12,
+    "effect": "사이코필드 상태일 때 위력이 커진다."
+  },
+  {
+    "id": "클리어스모그",
+    "name": "클리어스모그",
+    "type": "독",
+    "category": "special",
+    "power": 50,
+    "accuracy": null,
+    "pp": 16,
+    "effect": "상대의 능력 랭크 변화를 전부 원래대로 되돌린다."
+  },
+  {
+    "id": "트릭",
+    "name": "트릭",
+    "type": "에스퍼",
+    "category": "status",
+    "power": null,
+    "accuracy": 100,
+    "pp": 10,
+    "effect": "상대와 서로 지닌 도구를 교환한다."
+  },
+  {
+    "id": "플레어드라이브",
+    "name": "플레어드라이브",
+    "type": "불꽃",
+    "category": "physical",
+    "power": 120,
+    "accuracy": 100,
+    "pp": 16,
+    "effect": "TODO: 불꽃세례와 같은 기술인지 확인 필요. 별개라면 타입/카테고리/위력/명중/PP 확인 필요"
+  },
+  {
+    "id": "회오리불꽃",
+    "name": "회오리불꽃",
+    "type": "불꽃",
+    "category": "special",
+    "power": 35,
+    "accuracy": 85,
+    "pp": 16,
+    "effect": "여러 턴 동안 상대를 속박해 데미지를 준다."
+  },
+  {
+    "id": "병상첨병",
+    "name": "병상첨병",
+    "type": "고스트",
+    "category": "special",
+    "power": 65,
+    "accuracy": 100,
+    "pp": 12,
+    "effect": "TODO: 타입/카테고리/위력/명중/PP 확인 필요"
+  },
+  {
+    "id": "솔라블레이드",
+    "name": "솔라블레이드",
+    "type": "풀",
+    "category": "physical",
+    "power": 125,
+    "accuracy": 100,
+    "pp": 12,
+    "effect": "1턴째 빛을 모으고 2턴째 공격한다. 맑음 날씨에서는 1턴만에 발동한다."
+  },
+  {
+    "id": "야습",
+    "name": "야습",
+    "type": "고스트",
+    "category": "physical",
+    "power": 40,
+    "accuracy": 100,
+    "pp": 20,
+    "effect": "우선도 +1. 항상 먼저 나간다."
+  },
+  {
+    "id": "원념의칼",
+    "name": "원념의칼",
+    "type": "불꽃",
+    "category": "physical",
+    "power": 90,
+    "accuracy": 100,
+    "pp": 12,
+    "effect": "준 데미지의 절반만큼 자신의 체력을 회복한다."
+  },
+  {
+    "id": "폴터가이스트",
+    "name": "폴터가이스트",
+    "type": "고스트",
+    "category": "physical",
+    "power": 110,
+    "accuracy": 90,
+    "pp": 8,
+    "effect": "상대가 도구를 지니고 있지 않으면 실패한다."
+  },
+  {
+    "id": "노래하기",
+    "name": "노래하기",
+    "type": "노말",
+    "category": "status",
+    "power": null,
+    "accuracy": 55,
+    "pp": 16,
+    "effect": "상대를 잠들게 한다."
+  },
+  {
+    "id": "멸망의노래",
+    "name": "멸망의노래",
+    "type": "노말",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 8,
+    "effect": "노래를 들은 포켓몬은 3턴 후 기절한다."
+  },
+  {
+    "id": "물거품아리아",
+    "name": "물거품아리아",
+    "type": "물",
+    "category": "special",
+    "power": 90,
+    "accuracy": 100,
+    "pp": 12,
+    "effect": "명중한 상대의 화상 상태를 치료한다."
+  },
+  {
+    "id": "미스트버스트",
+    "name": "미스트버스트",
+    "type": "페어리",
+    "category": "special",
+    "power": 100,
+    "accuracy": 100,
+    "pp": 8,
+    "effect": "미스트필드 상태일 때 위력이 커진다."
+  },
+  {
+    "id": "아이스스피너",
+    "name": "아이스스피너",
+    "type": "얼음",
+    "category": "physical",
+    "power": 80,
+    "accuracy": 100,
+    "pp": 16,
+    "effect": "필드 효과를 없앤다."
+  },
+  {
+    "id": "아쿠아제트",
+    "name": "아쿠아제트",
+    "type": "물",
+    "category": "physical",
+    "power": 40,
+    "accuracy": 100,
+    "pp": 20,
+    "effect": "우선도 +1. 항상 먼저 나간다."
+  },
+  {
+    "id": "원더룸",
+    "name": "원더룸",
+    "type": "에스퍼",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 12,
+    "effect": "5턴간 모든 포켓몬의 방어와 특방 능력치를 서로 바꾼다."
+  },
+  {
+    "id": "흑안개",
+    "name": "흑안개",
+    "type": "얼음",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 20,
+    "effect": "필드에 있는 모든 포켓몬의 능력 랭크 변화를 초기화한다."
+  },
+  {
+    "id": "기습",
+    "name": "기습",
+    "type": "악",
+    "category": "physical",
+    "power": 70,
+    "accuracy": 100,
+    "pp": 8,
+    "effect": "TODO: 깜짝베기와 같은 기술인지 확인 필요. 별개라면 타입/카테고리/위력/명중/PP 확인 필요"
+  },
+  {
+    "id": "꽃가루경단",
+    "name": "꽃가루경단",
+    "type": "벌레",
+    "category": "special",
+    "power": 90,
+    "accuracy": 100,
+    "pp": 16,
+    "effect": "아군에게 사용하면 체력을 회복시킨다."
+  },
+  {
+    "id": "꽃보라",
+    "name": "꽃보라",
+    "type": "풀",
+    "category": "physical",
+    "power": 90,
+    "accuracy": 100,
+    "pp": 16,
+    "effect": ""
+  },
+  {
+    "id": "독압정",
+    "name": "독압정",
+    "type": "독",
+    "category": "status",
+    "power": null,
+    "accuracy": 90,
+    "pp": 20,
+    "effect": "상대 진영에 설치. 이후 등장하는 포켓몬은 교체될 때 독 상태가 된다."
+  },
+  {
+    "id": "리프스톰",
+    "name": "리프스톰",
+    "type": "풀",
+    "category": "special",
+    "power": 130,
+    "accuracy": 90,
+    "pp": 8,
+    "effect": "사용 후 자신의 특공이 2랭크 낮아진다."
+  },
+  {
+    "id": "씨기관총",
+    "name": "씨기관총",
+    "type": "풀",
+    "category": "physical",
+    "power": 25,
+    "accuracy": 100,
+    "pp": 20,
+    "effect": "2~5회 연속 공격."
+  },
+  {
+    "id": "압정뿌리기",
+    "name": "압정뿌리기",
+    "type": "땅",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 20,
+    "effect": "상대 진영에 설치. 이후 등장하는 포켓몬은 교체될 때 데미지를 입는다."
+  },
+  {
+    "id": "트릭플라워",
+    "name": "트릭플라워",
+    "type": "풀",
+    "category": "physical",
+    "power": 70,
+    "accuracy": null,
+    "pp": 12,
+    "effect": "반드시 급소에 맞는다."
+  },
+  {
+    "id": "파워젬",
+    "name": "파워젬",
+    "type": "바위",
+    "category": "special",
+    "power": 80,
+    "accuracy": 100,
+    "pp": 20,
+    "effect": ""
+  },
+  {
+    "id": "하드플랜트",
+    "name": "하드플랜트",
+    "type": "풀",
+    "category": "special",
+    "power": 150,
+    "accuracy": 90,
+    "pp": 8,
+    "effect": "사용한 다음 턴은 움직일 수 없다."
+  },
+  {
+    "id": "드래곤옐",
+    "name": "드래곤옐",
+    "type": "드래곤",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 16,
+    "effect": ""
+  },
+  {
+    "id": "배북",
+    "name": "배북",
+    "type": "노말",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 12,
+    "effect": ""
+  },
+  {
+    "id": "불꽃엄니",
+    "name": "불꽃엄니",
+    "type": "불꽃",
+    "category": "physical",
+    "power": 65,
+    "accuracy": 95,
+    "pp": 16,
+    "effect": ""
+  },
+  {
+    "id": "블라스트번",
+    "name": "블라스트번",
+    "type": "불꽃",
+    "category": "special",
+    "power": 150,
+    "accuracy": 90,
+    "pp": 8,
+    "effect": ""
+  },
+  {
+    "id": "연옥",
+    "name": "연옥",
+    "type": "불꽃",
+    "category": "special",
+    "power": 100,
+    "accuracy": 50,
+    "pp": 8,
+    "effect": ""
+  },
+  {
+    "id": "열불내기",
+    "name": "열불내기",
+    "type": "불꽃",
+    "category": "physical",
+    "power": 75,
+    "accuracy": 100,
+    "pp": 12,
+    "effect": ""
+  },
+  {
+    "id": "와이드브레이커",
+    "name": "와이드브레이커",
+    "type": "드래곤",
+    "category": "physical",
+    "power": 60,
+    "accuracy": 100,
+    "pp": 16,
+    "effect": ""
+  },
+  {
+    "id": "히트스탬프",
+    "name": "히트스탬프",
+    "type": "불꽃",
+    "category": "physical",
+    "power": null,
+    "accuracy": 100,
+    "pp": 12,
+    "effect": ""
+  },
+  {
+    "id": "고속스핀",
+    "name": "고속스핀",
+    "type": "노말",
+    "category": "physical",
+    "power": 50,
+    "accuracy": 100,
+    "pp": 20,
+    "effect": ""
+  },
+  {
+    "id": "껍질깨기",
+    "name": "껍질깨기",
+    "type": "노말",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 16,
+    "effect": ""
+  },
+  {
+    "id": "대지의파동",
+    "name": "대지의파동",
+    "type": "노말",
+    "category": "special",
+    "power": 50,
+    "accuracy": 100,
+    "pp": 12,
+    "effect": ""
+  },
+  {
+    "id": "아쿠아테일",
+    "name": "아쿠아테일",
+    "type": "물",
+    "category": "physical",
+    "power": 90,
+    "accuracy": 90,
+    "pp": 12,
+    "effect": ""
+  },
+  {
+    "id": "자이로볼",
+    "name": "자이로볼",
+    "type": "강철",
+    "category": "physical",
+    "power": null,
+    "accuracy": 100,
+    "pp": 8,
+    "effect": ""
+  },
+  {
+    "id": "해수스파우팅",
+    "name": "해수스파우팅",
+    "type": "물",
+    "category": "special",
+    "power": 150,
+    "accuracy": 100,
+    "pp": 8,
+    "effect": ""
+  },
+  {
+    "id": "달콤한향기",
+    "name": "달콤한향기",
+    "type": "노말",
+    "category": "status",
+    "power": null,
+    "accuracy": 100,
+    "pp": 20,
+    "effect": ""
+  },
+  {
+    "id": "베놈쇼크",
+    "name": "베놈쇼크",
+    "type": "독",
+    "category": "special",
+    "power": 65,
+    "accuracy": 100,
+    "pp": 12,
+    "effect": ""
+  },
+  {
+    "id": "뿌리박기",
+    "name": "뿌리박기",
+    "type": "풀",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 20,
+    "effect": ""
+  },
+  {
+    "id": "수면가루",
+    "name": "수면가루",
+    "type": "풀",
+    "category": "status",
+    "power": null,
+    "accuracy": 75,
+    "pp": 16,
+    "effect": ""
+  },
+  {
+    "id": "파워휩",
+    "name": "파워휩",
+    "type": "풀",
+    "category": "physical",
+    "power": 120,
+    "accuracy": 85,
+    "pp": 12,
+    "effect": ""
+  },
+  {
+    "id": "미러타입",
+    "name": "미러타입",
+    "type": "노말",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 16,
+    "effect": ""
+  },
+  {
+    "id": "봉인",
+    "name": "봉인",
+    "type": "에스퍼",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 12,
+    "effect": ""
+  },
+  {
+    "id": "부식가스",
+    "name": "부식가스",
+    "type": "독",
+    "category": "status",
+    "power": null,
+    "accuracy": 100,
+    "pp": 20,
+    "effect": ""
+  },
+  {
+    "id": "아픔나누기",
+    "name": "아픔나누기",
+    "type": "노말",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 20,
+    "effect": ""
+  },
+  {
+    "id": "자폭",
+    "name": "자폭",
+    "type": "노말",
+    "category": "physical",
+    "power": 200,
+    "accuracy": 100,
+    "pp": 8,
+    "effect": ""
+  },
+  {
+    "id": "최면술",
+    "name": "최면술",
+    "type": "에스퍼",
+    "category": "status",
+    "power": null,
+    "accuracy": 60,
+    "pp": 20,
+    "effect": ""
+  },
+  {
+    "id": "매직룸",
+    "name": "매직룸",
+    "type": "에스퍼",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 12,
+    "effect": ""
+  },
+  {
+    "id": "미래예지",
+    "name": "미래예지",
+    "type": "에스퍼",
+    "category": "special",
+    "power": 120,
+    "accuracy": 100,
+    "pp": 12,
+    "effect": ""
+  },
+  {
+    "id": "중력",
+    "name": "중력",
+    "type": "에스퍼",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 8,
+    "effect": ""
+  },
+  {
+    "id": "차지빔",
+    "name": "차지빔",
+    "type": "전기",
+    "category": "special",
+    "power": 50,
+    "accuracy": 90,
+    "pp": 12,
+    "effect": ""
+  },
+  {
+    "id": "파워스왑",
+    "name": "파워스왑",
+    "type": "에스퍼",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 12,
+    "effect": ""
+  },
+  {
+    "id": "대폭발",
+    "name": "대폭발",
+    "type": "노말",
+    "category": "physical",
+    "power": 250,
+    "accuracy": 100,
+    "pp": 8,
+    "effect": ""
+  },
+  {
+    "id": "사이코팽",
+    "name": "사이코팽",
+    "type": "에스퍼",
+    "category": "physical",
+    "power": 85,
+    "accuracy": 100,
+    "pp": 12,
+    "effect": ""
+  },
+  {
+    "id": "아이언롤러",
+    "name": "아이언롤러",
+    "type": "강철",
+    "category": "physical",
+    "power": 130,
+    "accuracy": 100,
+    "pp": 8,
+    "effect": ""
+  },
+  {
+    "id": "전자부유",
+    "name": "전자부유",
+    "type": "전기",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 12,
+    "effect": ""
+  },
+  {
+    "id": "난동부리기",
+    "name": "난동부리기",
+    "type": "노말",
+    "category": "physical",
+    "power": 120,
+    "accuracy": 100,
+    "pp": 12,
+    "effect": ""
+  },
+  {
+    "id": "번개엄니",
+    "name": "번개엄니",
+    "type": "전기",
+    "category": "physical",
+    "power": 65,
+    "accuracy": 95,
+    "pp": 16,
+    "effect": ""
+  },
+  {
+    "id": "록블라스트",
+    "name": "록블라스트",
+    "type": "바위",
+    "category": "physical",
+    "power": 25,
+    "accuracy": 90,
+    "pp": 12,
+    "effect": ""
+  },
+  {
+    "id": "얼음엄니",
+    "name": "얼음엄니",
+    "type": "얼음",
+    "category": "physical",
+    "power": 65,
+    "accuracy": 95,
+    "pp": 16,
+    "effect": ""
+  },
+  {
+    "id": "헤비봄버",
+    "name": "헤비봄버",
+    "type": "강철",
+    "category": "physical",
+    "power": null,
+    "accuracy": 100,
+    "pp": 12,
+    "effect": ""
+  }
+]

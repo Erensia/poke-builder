@@ -1,0 +1,95 @@
+.party-board {
+  width: 100%;
+  max-width: 560px;
+}
+
+.party-board-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.1rem;
+}
+
+.party-board-header h2 {
+  font-size: 1.3rem;
+  margin-bottom: 0.3rem;
+}
+
+.party-board-header p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  max-width: 34ch;
+}
+
+.party-board-header-right {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-shrink: 0;
+}
+
+.party-board-count {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 0.9rem;
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  background: var(--gradient);
+  color: #fff;
+  white-space: nowrap;
+}
+
+.party-board-autosave {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.party-board-reset {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.76rem;
+  font-weight: 500;
+  padding: 0.32rem 0.65rem;
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.party-board-reset:hover:not(:disabled) {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.party-board-reset:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.party-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+/* 2열(오른쪽 컬럼)을 살짝 아래로 내려서 리듬감을 준다 */
+.party-grid > *:nth-child(2n) {
+  transform: translateY(15px);
+}
+
+@media (max-width: 520px) {
+  .party-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .party-grid > *:nth-child(2n) {
+    transform: none;
+  }
+
+  .party-board-autosave {
+    display: none;
+  }
+}

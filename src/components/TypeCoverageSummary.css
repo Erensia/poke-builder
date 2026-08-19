@@ -1,0 +1,148 @@
+.type-coverage {
+  width: 100%;
+  max-width: 560px;
+  margin-top: 2rem;
+}
+
+.type-coverage-header h2 {
+  font-size: 1.15rem;
+  margin-bottom: 0.3rem;
+}
+
+.type-coverage-header p {
+  margin: 0 0 1rem;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  max-width: 44ch;
+}
+
+.type-coverage-empty {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  padding: 1rem 0;
+}
+
+.type-coverage-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  gap: 0.5rem;
+}
+
+.type-coverage-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.35rem;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: 10px;
+  padding: 0.5rem 0.55rem;
+  cursor: pointer;
+  text-align: left;
+}
+
+.type-coverage-cell:hover,
+.type-coverage-cell.is-open {
+  border-color: var(--violet);
+}
+
+.type-coverage-cell:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.type-coverage-badge {
+  display: inline-flex;
+  font-size: 0.66rem;
+  font-weight: 600;
+  color: #fff;
+  padding: 0.1rem 0.45rem;
+  border-radius: 5px;
+}
+
+.type-coverage-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.cnt {
+  font-size: 0.66rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  padding: 0.05rem 0.35rem;
+  border-radius: 5px;
+}
+
+.cnt-quad {
+  color: #fff;
+  background: var(--danger-strong);
+}
+
+.cnt-weak {
+  color: var(--danger);
+  background: var(--danger-bg);
+}
+
+.cnt-resist {
+  color: var(--safe);
+  background: var(--safe-bg);
+}
+
+.cnt-quadresist {
+  color: #fff;
+  background: var(--safe);
+}
+
+.cnt-immune {
+  color: var(--text-muted);
+  background: var(--surface-2);
+}
+
+.cnt-neutral {
+  color: var(--text-muted);
+}
+
+.type-coverage-detail {
+  margin-top: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 0.9rem 1rem;
+  background: var(--surface);
+}
+
+.type-coverage-detail h3 {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  margin-bottom: 0.6rem;
+}
+
+.type-coverage-detail-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.type-coverage-detail-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.82rem;
+  padding: 0.3rem 0.1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.type-coverage-detail-list li:last-child {
+  border-bottom: none;
+}
+
+.type-coverage-form-tag {
+  color: var(--violet);
+  font-size: 0.72rem;
+  font-weight: 600;
+}
