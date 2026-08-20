@@ -1,5 +1,9 @@
 .sidebar {
-  width: 220px;
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 100vh;
+  width: 64px;
   flex-shrink: 0;
   background: var(--surface);
   border-right: 1px solid var(--border);
@@ -7,13 +11,24 @@
   flex-direction: column;
   gap: 2rem;
   padding: 1.5rem 1rem;
+  overflow: hidden;
+  z-index: 20;
+  transition: width 0.22s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.22s ease;
+}
+
+.sidebar.is-expanded {
+  width: 220px;
+  box-shadow: 0 8px 28px rgba(20, 16, 40, 0.14);
 }
 
 .sidebar-logo {
   display: flex;
   align-items: center;
   gap: 0.6rem;
-  padding: 0 0.4rem;
+  /* 예전엔 좌우 0.4rem 패딩이 있었는데, 접힌 레일의 안쪽 폭(32px)보다 로고 박스(30px)+패딩이
+     더 넓어서 로고가 오른쪽으로 밀려 nav 아이콘들과 중심이 안 맞았다. 패딩을 없애 nav 아이콘과
+     같은 기준(레일 중앙)에 맞춘다. */
+  padding: 0;
 }
 
 .sidebar-logo-mark {
@@ -36,6 +51,17 @@
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
+  white-space: nowrap;
+  max-width: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: opacity 0.15s ease, max-width 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.sidebar.is-expanded .sidebar-logo-text {
+  max-width: 160px;
+  opacity: 1;
+  transition: opacity 0.15s ease 0.08s, max-width 0.22s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .sidebar-logo-text small {
@@ -54,19 +80,34 @@
 }
 
 .sidebar-nav-item {
+  /* 아이콘을 라벨과 같은 flex 줄에 두면, 접혔을 때 레일 폭(32px)보다 "아이콘+간격+패딩"이 더
+     넓어서 아이콘 일부가 강조 배경(버튼 자기 폭) 바깥으로 삐져나가 하이라이트가 잘려 보였다.
+     아이콘을 절대위치로 완전히 분리해서 폭 계산과 무관하게 항상 같은 자리에 고정한다. */
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 0.65rem;
+  /* 높이를 내용(라벨의 숨겨진 줄 높이 등)에 맡기지 않고 고정해야 모든 항목의 강조 배경 높이가
+     똑같아진다. */
+  height: 2.5rem;
   border: none;
   background: transparent;
   color: var(--text-muted);
   font-size: 0.88rem;
   font-weight: 500;
-  padding: 0.6rem 0.7rem;
+  /* 접혔을 때는 레일 안쪽 폭(31px)에 맞춰 좌우 패딩을 작게 — 2.3rem처럼 큰 왼쪽 패딩을
+     상시로 걸어두면 그 패딩값 자체가 좁은 레일 폭을 넘어버려서 버튼(=강조 배경) 박스가
+     부모보다 넓어지고, 그 튀어나온 부분이 사이드바의 overflow:hidden에 잘려 보인다. */
+  padding: 0 0.7rem;
   border-radius: 9px;
   text-align: left;
   cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease;
+  transition: background 0.15s ease, color 0.15s ease,
+    padding-left 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 펼쳐졌을 때만 라벨이 들어갈 자리를 왼쪽 패딩으로 확보한다 (188px 폭이라 여유 있음) */
+.sidebar.is-expanded .sidebar-nav-item {
+  padding-left: 2.3rem;
 }
 
 .sidebar-nav-item:not(:disabled):hover {
@@ -86,21 +127,33 @@
 }
 
 .sidebar-nav-icon {
-  font-size: 0.95rem;
+  /* 레일이 접혔을 때(64px, 안쪽 콘텐츠 폭 32px) 정중앙에 오도록 고정 오프셋 */
+  position: absolute;
+  left: 0.4rem;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 1.2rem;
-  text-align: center;
+  height: 1.2rem;
 }
 
-@media (max-width: 760px) {
-  .sidebar {
-    width: 72px;
-    padding: 1.25rem 0.5rem;
-  }
-  .sidebar-logo-text,
-  .sidebar-nav-item span + * {
-    display: none;
-  }
-  .sidebar-nav-item {
-    justify-content: center;
-  }
+.sidebar-nav-icon svg {
+  width: 100%;
+  height: 100%;
+}
+
+.sidebar-nav-label {
+  white-space: nowrap;
+  max-width: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: opacity 0.15s ease, max-width 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.sidebar.is-expanded .sidebar-nav-label {
+  max-width: 160px;
+  opacity: 1;
+  transition: opacity 0.15s ease 0.08s, max-width 0.22s cubic-bezier(0.4, 0, 0.2, 1);
 }

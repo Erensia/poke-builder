@@ -19,6 +19,8 @@
   --danger-strong: #d1453a;
   --safe: #2f7a4f;
   --safe-bg: #e0f2e6;
+  --warn: #a06a12;
+  --warn-bg: #f5e6c8;
 
   --sans: 'Noto Sans KR', 'Pretendard', system-ui, -apple-system, sans-serif;
   --display: 'Rajdhani', var(--sans);
@@ -51,6 +53,8 @@
     --danger-strong: #d1453a;
     --safe: #7bcf9c;
     --safe-bg: #1f3428;
+    --warn: #e0b656;
+    --warn-bg: #3a2f18;
   }
 }
 

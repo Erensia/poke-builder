@@ -7,7 +7,8 @@
     "power": 120,
     "accuracy": 100,
     "pp": 15,
-    "effect": "사용자도 준 데미지의 1/3만큼 반동을 입는다. 10% 확률로 상대를 화상 상태로 만든다."
+    "effect": "사용자도 준 데미지의 1/3만큼 반동을 입는다. 10% 확률로 상대를 화상 상태로 만든다.",
+    "priority": 0
   },
   {
     "id": "날개치기",
@@ -17,7 +18,8 @@
     "power": 60,
     "accuracy": 100,
     "pp": 35,
-    "effect": ""
+    "effect": "",
+    "priority": 0
   },
   {
     "id": "전광석화",
@@ -27,7 +29,9 @@
     "power": 40,
     "accuracy": 100,
     "pp": 20,
-    "effect": "우선도 +1. 항상 먼저 나간다."
+    "priority": 1,
+    "effect": "우선도 +1. 항상 먼저 나간다.",
+    "makesContact": true
   },
   {
     "id": "이판사판태클",
@@ -37,7 +41,9 @@
     "power": 120,
     "accuracy": 100,
     "pp": 16,
-    "effect": ""
+    "priority": 0,
+    "effect": "",
+    "makesContact": true
   },
   {
     "id": "불대문자",
@@ -47,7 +53,9 @@
     "power": 110,
     "accuracy": 85,
     "pp": 8,
-    "effect": "10% 확률로 상대를 화상 상태로 만든다."
+    "priority": 0,
+    "effect": "10% 확률로 상대를 화상 상태로 만든다.",
+    "makesContact": false
   },
   {
     "id": "화염방사",
@@ -57,7 +65,9 @@
     "power": 90,
     "accuracy": 100,
     "pp": 16,
-    "effect": "10% 확률로 상대를 화상 상태로 만든다."
+    "priority": 0,
+    "effect": "10% 확률로 상대를 화상 상태로 만든다.",
+    "makesContact": false
   },
   {
     "id": "에어슬래시",
@@ -67,7 +77,12 @@
     "power": 75,
     "accuracy": 95,
     "pp": 16,
-    "effect": "30% 확률로 상대를 풀죽게 만든다."
+    "priority": 0,
+    "effect": "30% 확률로 상대를 풀죽게 만든다.",
+    "classification": [
+      "베기"
+    ],
+    "makesContact": false
   },
   {
     "id": "솔라빔",
@@ -77,7 +92,9 @@
     "power": 120,
     "accuracy": 100,
     "pp": 12,
-    "effect": "1턴째 빛을 모으고 2턴째 발사한다. 맑음 날씨에서는 1턴만에 발동한다."
+    "priority": 0,
+    "effect": "1턴째 빛을 모으고 2턴째 발사한다. 맑음 날씨에서는 1턴만에 발동한다.",
+    "makesContact": false
   },
   {
     "id": "용의춤",
@@ -87,7 +104,24 @@
     "power": null,
     "accuracy": null,
     "pp": 20,
-    "effect": "자신의 공격과 스피드를 1랭크씩 올린다."
+    "priority": 0,
+    "effect": "자신의 공격과 스피드를 1랭크씩 올린다.",
+    "statChanges": [
+      {
+        "target": "self",
+        "stat": "atk",
+        "delta": 1
+      },
+      {
+        "target": "self",
+        "stat": "spe",
+        "delta": 1
+      }
+    ],
+    "classification": [
+      "춤"
+    ],
+    "makesContact": false
   },
   {
     "id": "드래곤클로",
@@ -97,7 +131,12 @@
     "power": 80,
     "accuracy": 100,
     "pp": 16,
-    "effect": ""
+    "priority": 0,
+    "effect": "",
+    "classification": [
+      "베기"
+    ],
+    "makesContact": true
   },
   {
     "id": "드래곤테일",
@@ -107,7 +146,9 @@
     "power": 60,
     "accuracy": 90,
     "pp": 12,
-    "effect": "우선도 -6. 명중 시 상대를 강제로 교체시킨다."
+    "priority": -6,
+    "effect": "우선도 -6. 명중 시 상대를 강제로 교체시킨다.",
+    "makesContact": true
   },
   {
     "id": "기합구슬",
@@ -117,7 +158,12 @@
     "power": 120,
     "accuracy": 70,
     "pp": 8,
-    "effect": ""
+    "priority": 0,
+    "effect": "",
+    "classification": [
+      "구슬/폭탄"
+    ],
+    "makesContact": false
   },
   {
     "id": "깨물어부수기",
@@ -127,7 +173,12 @@
     "power": 80,
     "accuracy": 100,
     "pp": 16,
-    "effect": "20% 확률로 상대의 방어를 1랭크 낮춘다."
+    "priority": 0,
+    "effect": "20% 확률로 상대의 방어를 1랭크 낮춘다.",
+    "classification": [
+      "물기"
+    ],
+    "makesContact": true
   },
   {
     "id": "깨트리기",
@@ -137,7 +188,9 @@
     "power": 75,
     "accuracy": 100,
     "pp": 16,
-    "effect": ""
+    "priority": 0,
+    "effect": "",
+    "makesContact": true
   },
   {
     "id": "냉동빔",
@@ -147,7 +200,9 @@
     "power": 90,
     "accuracy": 100,
     "pp": 12,
-    "effect": "10% 확률로 상대를 얼린다."
+    "priority": 0,
+    "effect": "10% 확률로 상대를 얼린다.",
+    "makesContact": false
   },
   {
     "id": "눈사태",
@@ -157,7 +212,9 @@
     "power": 60,
     "accuracy": 100,
     "pp": 12,
-    "effect": "우선도 -4. 이번 턴에 먼저 데미지를 입었다면 위력이 2배가 된다."
+    "priority": 0,
+    "effect": "우선도 -4. 이번 턴에 먼저 데미지를 입었다면 위력이 2배가 된다.",
+    "makesContact": true
   },
   {
     "id": "다이빙",
@@ -167,7 +224,9 @@
     "power": 80,
     "accuracy": 100,
     "pp": 12,
-    "effect": "1턴째 물속으로 잠수해 회피하고, 2턴째 공격한다."
+    "priority": 0,
+    "effect": "1턴째 물속으로 잠수해 회피하고, 2턴째 공격한다.",
+    "makesContact": true
   },
   {
     "id": "대지의 파동",
@@ -177,7 +236,8 @@
     "power": 50,
     "accuracy": 100,
     "pp": 10,
-    "effect": ""
+    "effect": "",
+    "priority": 0
   },
   {
     "id": "돌림노래",
@@ -187,7 +247,12 @@
     "power": 60,
     "accuracy": 100,
     "pp": 16,
-    "effect": "같은 턴에 아군이 먼저 사용했다면 위력이 2배가 된다."
+    "priority": 0,
+    "effect": "같은 턴에 아군이 먼저 사용했다면 위력이 2배가 된다.",
+    "classification": [
+      "소리"
+    ],
+    "makesContact": false
   },
   {
     "id": "러스터캐논",
@@ -197,7 +262,9 @@
     "power": 80,
     "accuracy": 100,
     "pp": 12,
-    "effect": ""
+    "priority": 0,
+    "effect": "",
+    "makesContact": false
   },
   {
     "id": "개척하기",
@@ -207,7 +274,9 @@
     "power": 50,
     "accuracy": 100,
     "pp": 20,
-    "effect": ""
+    "priority": 0,
+    "effect": "",
+    "makesContact": true
   },
   {
     "id": "고민씨",
@@ -217,7 +286,9 @@
     "power": null,
     "accuracy": 100,
     "pp": 12,
-    "effect": "상대의 특성을 '불면'으로 바꿔 잠들지 못하게 한다."
+    "priority": 0,
+    "effect": "상대의 특성을 '불면'으로 바꿔 잠들지 못하게 한다.",
+    "makesContact": false
   },
   {
     "id": "광합성",
@@ -227,7 +298,9 @@
     "power": null,
     "accuracy": null,
     "pp": 8,
-    "effect": "자신의 체력을 회복한다. 날씨에 따라 회복량이 달라진다."
+    "priority": 0,
+    "effect": "자신의 체력을 회복한다. 날씨에 따라 회복량이 달라진다.",
+    "makesContact": false
   },
   {
     "id": "꽃잎댄스",
@@ -237,7 +310,12 @@
     "power": 120,
     "accuracy": 100,
     "pp": 12,
-    "effect": "2~3턴 연속으로 사용한 뒤 혼란 상태가 된다."
+    "priority": 0,
+    "effect": "2~3턴 연속으로 사용한 뒤 혼란 상태가 된다.",
+    "classification": [
+      "춤"
+    ],
+    "makesContact": true
   },
   {
     "id": "기가드레인",
@@ -247,7 +325,9 @@
     "power": 75,
     "accuracy": 100,
     "pp": 12,
-    "effect": "준 데미지의 절반만큼 자신의 체력을 회복한다."
+    "priority": 0,
+    "effect": "준 데미지의 절반만큼 자신의 체력을 회복한다.",
+    "makesContact": false
   },
   {
     "id": "대지의힘",
@@ -257,7 +337,9 @@
     "power": 90,
     "accuracy": 100,
     "pp": 12,
-    "effect": ""
+    "priority": 0,
+    "effect": "",
+    "makesContact": false
   },
   {
     "id": "대타출동",
@@ -267,7 +349,9 @@
     "power": null,
     "accuracy": null,
     "pp": 12,
-    "effect": ""
+    "priority": 0,
+    "effect": "",
+    "makesContact": false
   },
   {
     "id": "오물폭탄",
@@ -277,7 +361,12 @@
     "power": 90,
     "accuracy": 100,
     "pp": 12,
-    "effect": "30% 확률로 상대를 독 상태로 만든다."
+    "priority": 0,
+    "effect": "30% 확률로 상대를 독 상태로 만든다.",
+    "classification": [
+      "구슬/폭탄"
+    ],
+    "makesContact": false
   },
   {
     "id": "독찌르기",
@@ -287,7 +376,9 @@
     "power": 80,
     "accuracy": 100,
     "pp": 20,
-    "effect": "30% 확률로 상대를 독 상태로 만든다."
+    "priority": 0,
+    "effect": "30% 확률로 상대를 독 상태로 만든다.",
+    "makesContact": true
   },
   {
     "id": "섀도볼",
@@ -297,7 +388,12 @@
     "power": 80,
     "accuracy": 100,
     "pp": 16,
-    "effect": "20% 확률로 상대의 특방을 1랭크 낮춘다."
+    "priority": 0,
+    "effect": "20% 확률로 상대의 특방을 1랭크 낮춘다.",
+    "classification": [
+      "구슬/폭탄"
+    ],
+    "makesContact": false
   },
   {
     "id": "맹독",
@@ -307,7 +403,9 @@
     "power": null,
     "accuracy": 90,
     "pp": 12,
-    "effect": "상대를 맹독 상태로 만든다. 턴이 지날수록 데미지가 누적된다."
+    "priority": 0,
+    "effect": "상대를 맹독 상태로 만든다. 턴이 지날수록 데미지가 누적된다.",
+    "makesContact": false
   },
   {
     "id": "고스트다이브",
@@ -317,7 +415,9 @@
     "power": 90,
     "accuracy": 100,
     "pp": 12,
-    "effect": "1턴째 숨어서 회피하고, 2턴째 상대의 방어를 무시하고 공격한다."
+    "priority": 0,
+    "effect": "1턴째 숨어서 회피하고, 2턴째 상대의 방어를 무시하고 공격한다.",
+    "makesContact": true
   },
   {
     "id": "길동무",
@@ -327,7 +427,9 @@
     "power": null,
     "accuracy": null,
     "pp": 8,
-    "effect": "사용 후 자신이 이번 턴에 쓰러지면 상대도 같이 쓰러뜨린다."
+    "priority": 0,
+    "effect": "사용 후 자신이 이번 턴에 쓰러지면 상대도 같이 쓰러뜨린다.",
+    "makesContact": false
   },
   {
     "id": "나이트헤드",
@@ -336,8 +438,10 @@
     "category": "special",
     "power": null,
     "accuracy": 100,
-    "pp": 15,
-    "effect": "사용자의 레벨만큼 고정 데미지를 준다."
+    "pp": 16,
+    "priority": 0,
+    "effect": "사용자의 레벨만큼 고정 데미지를 준다.",
+    "makesContact": false
   },
   {
     "id": "냉동펀치",
@@ -347,7 +451,12 @@
     "power": 75,
     "accuracy": 100,
     "pp": 16,
-    "effect": "10% 확률로 상대를 얼린다."
+    "priority": 0,
+    "effect": "10% 확률로 상대를 얼린다.",
+    "classification": [
+      "펀치"
+    ],
+    "makesContact": true
   },
   {
     "id": "매지컬샤인",
@@ -357,7 +466,9 @@
     "power": 80,
     "accuracy": 100,
     "pp": 12,
-    "effect": ""
+    "priority": 0,
+    "effect": "",
+    "makesContact": false
   },
   {
     "id": "하이퍼보이스",
@@ -367,7 +478,12 @@
     "power": 90,
     "accuracy": 100,
     "pp": 12,
-    "effect": ""
+    "priority": 0,
+    "effect": "",
+    "classification": [
+      "소리"
+    ],
+    "makesContact": false
   },
   {
     "id": "사이코키네시스",
@@ -377,7 +493,9 @@
     "power": 90,
     "accuracy": 100,
     "pp": 12,
-    "effect": "10% 확률로 상대의 특방을 1랭크 낮춘다."
+    "priority": 0,
+    "effect": "10% 확률로 상대의 특방을 1랭크 낮춘다.",
+    "makesContact": false
   },
   {
     "id": "희망사항",
@@ -387,7 +505,9 @@
     "power": null,
     "accuracy": null,
     "pp": 12,
-    "effect": "사용한 다음 턴에 체력의 절반을 회복한다."
+    "priority": 0,
+    "effect": "사용한 다음 턴에 체력의 절반을 회복한다.",
+    "makesContact": false
   },
   {
     "id": "기가임팩트",
@@ -397,7 +517,9 @@
     "power": 150,
     "accuracy": 90,
     "pp": 8,
-    "effect": "사용한 다음 턴에는 움직일 수 없다."
+    "priority": 0,
+    "effect": "사용한 다음 턴에는 움직일 수 없다.",
+    "makesContact": true
   },
   {
     "id": "문포스",
@@ -407,7 +529,9 @@
     "power": 95,
     "accuracy": 100,
     "pp": 16,
-    "effect": "30% 확률로 상대의 특공을 1랭크 낮춘다."
+    "priority": 0,
+    "effect": "30% 확률로 상대의 특공을 1랭크 낮춘다.",
+    "makesContact": false
   },
   {
     "id": "명상",
@@ -417,7 +541,21 @@
     "power": null,
     "accuracy": null,
     "pp": 20,
-    "effect": "자신의 특공과 특방을 1랭크씩 올린다."
+    "priority": 0,
+    "effect": "자신의 특공과 특방을 1랭크씩 올린다.",
+    "statChanges": [
+      {
+        "target": "self",
+        "stat": "spa",
+        "delta": 1
+      },
+      {
+        "target": "self",
+        "stat": "spd",
+        "delta": 1
+      }
+    ],
+    "makesContact": false
   },
   {
     "id": "사이코쇼크",
@@ -427,7 +565,9 @@
     "power": 80,
     "accuracy": 100,
     "pp": 12,
-    "effect": "상대의 방어 능력치를 기준으로 데미지를 계산한다."
+    "priority": 0,
+    "effect": "상대의 방어 능력치를 기준으로 데미지를 계산한다.",
+    "makesContact": false
   },
   {
     "id": "애교부리기",
@@ -437,7 +577,16 @@
     "power": null,
     "accuracy": 100,
     "pp": 20,
-    "effect": "상대의 공격을 2랭크 낮춘다."
+    "priority": 0,
+    "effect": "상대의 공격을 2랭크 낮춘다.",
+    "statChanges": [
+      {
+        "target": "opponent",
+        "stat": "atk",
+        "delta": -2
+      }
+    ],
+    "makesContact": false
   },
   {
     "id": "고속이동",
@@ -447,7 +596,16 @@
     "power": null,
     "accuracy": null,
     "pp": 20,
-    "effect": "자신의 스피드를 2랭크 올린다."
+    "priority": 0,
+    "effect": "자신의 스피드를 2랭크 올린다.",
+    "statChanges": [
+      {
+        "target": "self",
+        "stat": "spe",
+        "delta": 2
+      }
+    ],
+    "makesContact": false
   },
   {
     "id": "지진",
@@ -457,7 +615,9 @@
     "power": 100,
     "accuracy": 100,
     "pp": 12,
-    "effect": "땅속에 숨은 상대에게는 위력이 2배가 된다."
+    "priority": 0,
+    "effect": "땅속에 숨은 상대에게는 위력이 2배가 된다.",
+    "makesContact": false
   },
   {
     "id": "대폭팔",
@@ -467,7 +627,8 @@
     "power": 250,
     "accuracy": 100,
     "pp": 5,
-    "effect": "사용자는 반드시 기절한다."
+    "effect": "사용자는 반드시 기절한다.",
+    "priority": 0
   },
   {
     "id": "번개펀치",
@@ -477,7 +638,12 @@
     "power": 75,
     "accuracy": 100,
     "pp": 16,
-    "effect": "10% 확률로 상대를 마비시킨다."
+    "priority": 0,
+    "effect": "10% 확률로 상대를 마비시킨다.",
+    "classification": [
+      "펀치"
+    ],
+    "makesContact": true
   },
   {
     "id": "사념의박치기",
@@ -487,7 +653,9 @@
     "power": 80,
     "accuracy": 90,
     "pp": 16,
-    "effect": "20% 확률로 상대를 풀죽게 만든다."
+    "priority": 0,
+    "effect": "20% 확률로 상대를 풀죽게 만든다.",
+    "makesContact": true
   },
   {
     "id": "사이코노이즈",
@@ -497,7 +665,12 @@
     "power": 75,
     "accuracy": 100,
     "pp": 12,
-    "effect": "맞은 상대는 이번 전투 중 회복 기술이나 회복 특성으로 체력을 회복할 수 없다."
+    "priority": 0,
+    "effect": "맞은 상대는 이번 전투 중 회복 기술이나 회복 특성으로 체력을 회복할 수 없다.",
+    "classification": [
+      "소리"
+    ],
+    "makesContact": false
   },
   {
     "id": "섀도클로",
@@ -507,7 +680,12 @@
     "power": 70,
     "accuracy": 100,
     "pp": 16,
-    "effect": "급소에 맞을 확률이 높다."
+    "priority": 0,
+    "effect": "급소에 맞을 확률이 높다.",
+    "classification": [
+      "베기"
+    ],
+    "makesContact": true
   },
   {
     "id": "섀도펀치",
@@ -517,7 +695,12 @@
     "power": 60,
     "accuracy": null,
     "pp": 20,
-    "effect": "반드시 명중한다."
+    "priority": 0,
+    "effect": "반드시 명중한다.",
+    "classification": [
+      "펀치"
+    ],
+    "makesContact": true
   },
   {
     "id": "스텔스록",
@@ -527,7 +710,9 @@
     "power": null,
     "accuracy": null,
     "pp": 20,
-    "effect": "상대 진영에 설치. 이후 등장하는 포켓몬은 교체될 때 데미지를 입는다."
+    "priority": 0,
+    "effect": "상대 진영에 설치. 이후 등장하는 포켓몬은 교체될 때 데미지를 입는다.",
+    "makesContact": false
   },
   {
     "id": "스톤샤워",
@@ -537,7 +722,9 @@
     "power": 75,
     "accuracy": 90,
     "pp": 12,
-    "effect": ""
+    "priority": 0,
+    "effect": "",
+    "makesContact": false
   },
   {
     "id": "스톤에지",
@@ -547,7 +734,9 @@
     "power": 100,
     "accuracy": 80,
     "pp": 8,
-    "effect": "급소에 맞을 확률이 높다."
+    "priority": 0,
+    "effect": "급소에 맞을 확률이 높다.",
+    "makesContact": false
   },
   {
     "id": "아이언헤드",
@@ -557,7 +746,9 @@
     "power": 80,
     "accuracy": 100,
     "pp": 16,
-    "effect": "30% 확률로 상대를 풀죽게 만든다."
+    "priority": 0,
+    "effect": "30% 확률로 상대를 풀죽게 만든다.",
+    "makesContact": true
   },
   {
     "id": "스케일샷",
@@ -567,7 +758,23 @@
     "power": 25,
     "accuracy": 90,
     "pp": 20,
-    "effect": "2~5회 연속 공격. 사용 후 자신의 방어가 낮아지고 스피드가 올라간다."
+    "priority": 0,
+    "effect": "2~5회 연속 공격(2/3회 각 35%, 4/5회 각 15% 확률). 다 때리고 나면 적중 여부와 무관하게 자신의 방어가 1랭크 낮아지고 스피드가 1랭크 오른다.",
+    "statChanges": [
+      {
+        "target": "self",
+        "stat": "def",
+        "delta": -1
+      },
+      {
+        "target": "self",
+        "stat": "spe",
+        "delta": 1
+      }
+    ],
+    "makesContact": false,
+    "minHits": 2,
+    "maxHits": 5
   },
   {
     "id": "드래곤다이브",
@@ -577,7 +784,9 @@
     "power": 100,
     "accuracy": 75,
     "pp": 12,
-    "effect": ""
+    "priority": 0,
+    "effect": "",
+    "makesContact": true
   },
   {
     "id": "칼춤",
@@ -587,7 +796,19 @@
     "power": null,
     "accuracy": null,
     "pp": 20,
-    "effect": "자신의 공격을 2랭크 올린다."
+    "priority": 0,
+    "effect": "자신의 공격을 2랭크 올린다.",
+    "statChanges": [
+      {
+        "target": "self",
+        "stat": "atk",
+        "delta": 2
+      }
+    ],
+    "classification": [
+      "춤"
+    ],
+    "makesContact": false
   },
   {
     "id": "아이언테일",
@@ -597,7 +818,9 @@
     "power": 100,
     "accuracy": 75,
     "pp": 16,
-    "effect": "30% 확률로 상대의 방어를 1랭크 낮춘다."
+    "priority": 0,
+    "effect": "30% 확률로 상대의 방어를 1랭크 낮춘다.",
+    "makesContact": true
   },
   {
     "id": "아쿠아브레이크",
@@ -607,7 +830,9 @@
     "power": 85,
     "accuracy": 100,
     "pp": 12,
-    "effect": "20% 확률로 상대의 방어를 1랭크 낮춘다."
+    "priority": 0,
+    "effect": "20% 확률로 상대의 방어를 1랭크 낮춘다.",
+    "makesContact": true
   },
   {
     "id": "역린",
@@ -617,7 +842,9 @@
     "power": 120,
     "accuracy": 100,
     "pp": 12,
-    "effect": "2~3턴 연속으로 사용한 뒤 혼란 상태가 된다."
+    "priority": 0,
+    "effect": "2~3턴 연속으로 사용한 뒤 혼란 상태가 된다.",
+    "makesContact": true
   },
   {
     "id": "용성군",
@@ -627,7 +854,9 @@
     "power": 130,
     "accuracy": 90,
     "pp": 8,
-    "effect": "사용 후 자신의 특공이 2랭크 낮아진다."
+    "priority": 0,
+    "effect": "사용 후 자신의 특공이 2랭크 낮아진다.",
+    "makesContact": false
   },
   {
     "id": "용의파동",
@@ -637,7 +866,12 @@
     "power": 85,
     "accuracy": 100,
     "pp": 12,
-    "effect": ""
+    "priority": 0,
+    "effect": "",
+    "classification": [
+      "파동"
+    ],
+    "makesContact": false
   },
   {
     "id": "승부굳히기",
@@ -647,7 +881,9 @@
     "power": 60,
     "accuracy": 100,
     "pp": 12,
-    "effect": ""
+    "priority": 0,
+    "effect": "",
+    "makesContact": false
   },
   {
     "id": "탁쳐서떨구기",
@@ -657,7 +893,9 @@
     "power": 65,
     "accuracy": 100,
     "pp": 20,
-    "effect": "상대가 도구를 지니고 있으면 위력이 올라가고, 명중 시 그 도구를 떨어뜨린다."
+    "priority": 0,
+    "effect": "상대가 도구를 지니고 있으면 위력이 올라가고, 명중 시 그 도구를 떨어뜨린다.",
+    "makesContact": true
   },
   {
     "id": "원시의힘",
@@ -667,7 +905,9 @@
     "power": 60,
     "accuracy": 100,
     "pp": 8,
-    "effect": "10% 확률로 자신의 모든 능력치가 1랭크씩 오른다."
+    "priority": 0,
+    "effect": "10% 확률로 자신의 모든 능력치가 1랭크씩 오른다.",
+    "makesContact": false
   },
   {
     "id": "겁나는얼굴",
@@ -677,7 +917,16 @@
     "power": null,
     "accuracy": 100,
     "pp": 12,
-    "effect": "상대의 스피드를 2랭크 낮춘다."
+    "priority": 0,
+    "effect": "상대의 스피드를 2랭크 낮춘다.",
+    "statChanges": [
+      {
+        "target": "opponent",
+        "stat": "spe",
+        "delta": -2
+      }
+    ],
+    "makesContact": false
   },
   {
     "id": "구멍파기",
@@ -687,7 +936,9 @@
     "power": 80,
     "accuracy": 100,
     "pp": 12,
-    "effect": "1턴째 땅속으로 숨고, 2턴째 공격한다."
+    "priority": 0,
+    "effect": "1턴째 땅속으로 숨고, 2턴째 공격한다.",
+    "makesContact": true
   },
   {
     "id": "금속음",
@@ -697,7 +948,19 @@
     "power": null,
     "accuracy": 85,
     "pp": 20,
-    "effect": "상대의 특방을 2랭크 낮춘다."
+    "priority": 0,
+    "effect": "상대의 특방을 2랭크 낮춘다.",
+    "statChanges": [
+      {
+        "target": "opponent",
+        "stat": "spd",
+        "delta": -2
+      }
+    ],
+    "classification": [
+      "소리"
+    ],
+    "makesContact": false
   },
   {
     "id": "기선제압",
@@ -707,7 +970,9 @@
     "power": 65,
     "accuracy": 100,
     "pp": 16,
-    "effect": "상대가 이번 턴 변화기를 사용하려 하면 실패시킨다."
+    "priority": 3,
+    "effect": "상대가 이번 턴 변화기를 사용하려 하면 실패시킨다.",
+    "makesContact": true
   },
   {
     "id": "나쁜음모",
@@ -717,7 +982,16 @@
     "power": null,
     "accuracy": null,
     "pp": 20,
-    "effect": "자신의 특공을 2랭크 올린다."
+    "priority": 0,
+    "effect": "자신의 특공을 2랭크 올린다.",
+    "statChanges": [
+      {
+        "target": "self",
+        "stat": "spa",
+        "delta": 2
+      }
+    ],
+    "makesContact": false
   },
   {
     "id": "내던지기",
@@ -727,7 +1001,9 @@
     "power": null,
     "accuracy": 100,
     "pp": 12,
-    "effect": "지니고 있는 도구를 던져 공격한다. 위력은 도구에 따라 달라진다."
+    "priority": 0,
+    "effect": "지니고 있는 도구를 던져 공격한다. 위력은 도구에 따라 달라진다.",
+    "makesContact": false
   },
   {
     "id": "도우미",
@@ -737,7 +1013,9 @@
     "power": null,
     "accuracy": null,
     "pp": 20,
-    "effect": "이번 턴 아군이 사용하는 기술의 위력을 1.5배로 올린다."
+    "priority": 5,
+    "effect": "이번 턴 아군이 사용하는 기술의 위력을 1.5배로 올린다.",
+    "makesContact": false
   },
   {
     "id": "드레인펀치",
@@ -747,7 +1025,12 @@
     "power": 75,
     "accuracy": 100,
     "pp": 12,
-    "effect": "준 데미지의 절반만큼 자신의 체력을 회복한다."
+    "priority": 0,
+    "effect": "준 데미지의 절반만큼 자신의 체력을 회복한다.",
+    "classification": [
+      "펀치"
+    ],
+    "makesContact": true
   },
   {
     "id": "땅고르기",
@@ -757,7 +1040,9 @@
     "power": 60,
     "accuracy": 100,
     "pp": 20,
-    "effect": "100% 확률로 상대의 스피드를 1랭크 낮춘다."
+    "priority": 0,
+    "effect": "100% 확률로 상대의 스피드를 1랭크 낮춘다.",
+    "makesContact": false
   },
   {
     "id": "로킥",
@@ -767,7 +1052,9 @@
     "power": 65,
     "accuracy": 100,
     "pp": 20,
-    "effect": "상대의 몸무게가 무거울수록 위력이 커진다."
+    "priority": 0,
+    "effect": "상대의 몸무게가 무거울수록 위력이 커진다.",
+    "makesContact": true
   },
   {
     "id": "메가톤킥",
@@ -777,7 +1064,9 @@
     "power": 120,
     "accuracy": 75,
     "pp": 8,
-    "effect": "급소에 맞을 확률이 높다."
+    "priority": 0,
+    "effect": "급소에 맞을 확률이 높다.",
+    "makesContact": true
   },
   {
     "id": "목숨걸기",
@@ -787,7 +1076,9 @@
     "power": null,
     "accuracy": 100,
     "pp": 8,
-    "effect": "상대의 체력을 자신과 같은 비율까지 깎는다."
+    "priority": 0,
+    "effect": "상대의 체력을 자신과 같은 비율까지 깎는다.",
+    "makesContact": true
   },
   {
     "id": "물기",
@@ -797,7 +1088,12 @@
     "power": 60,
     "accuracy": 100,
     "pp": 20,
-    "effect": "30% 확률로 상대를 풀죽게 만든다."
+    "priority": 0,
+    "effect": "30% 확률로 상대를 풀죽게 만든다.",
+    "classification": [
+      "물기"
+    ],
+    "makesContact": true
   },
   {
     "id": "물의파동",
@@ -807,7 +1103,12 @@
     "power": 60,
     "accuracy": 100,
     "pp": 20,
-    "effect": "20% 확률로 상대를 혼란시킨다."
+    "priority": 0,
+    "effect": "20% 확률로 상대를 혼란시킨다.",
+    "classification": [
+      "파동"
+    ],
+    "makesContact": false
   },
   {
     "id": "방어",
@@ -817,7 +1118,9 @@
     "power": null,
     "accuracy": null,
     "pp": 8,
-    "effect": "이번 턴 상대의 공격을 대부분 막아낸다."
+    "priority": 4,
+    "effect": "이번 턴 상대의 공격을 대부분 막아낸다.",
+    "makesContact": false
   },
   {
     "id": "배대뒤치기",
@@ -827,7 +1130,9 @@
     "power": 60,
     "accuracy": 90,
     "pp": 12,
-    "effect": "체력을 절반 소모하고 자신의 공격을 최대로 올린다."
+    "priority": -6,
+    "effect": "체력을 절반 소모하고 자신의 공격을 최대로 올린다.",
+    "makesContact": true
   },
   {
     "id": "버티기",
@@ -837,7 +1142,9 @@
     "power": null,
     "accuracy": null,
     "pp": 12,
-    "effect": "이번 턴 쓰러지지 않고 체력을 1 남긴다."
+    "priority": 4,
+    "effect": "이번 턴 쓰러지지 않고 체력을 1 남긴다.",
+    "makesContact": false
   },
   {
     "id": "벌크업",
@@ -847,7 +1154,21 @@
     "power": null,
     "accuracy": null,
     "pp": 20,
-    "effect": "자신의 공격과 방어를 1랭크씩 올린다."
+    "priority": 0,
+    "effect": "자신의 공격과 방어를 1랭크씩 올린다.",
+    "statChanges": [
+      {
+        "target": "self",
+        "stat": "atk",
+        "delta": 1
+      },
+      {
+        "target": "self",
+        "stat": "def",
+        "delta": 1
+      }
+    ],
+    "makesContact": false
   },
   {
     "id": "보복",
@@ -857,7 +1178,9 @@
     "power": 50,
     "accuracy": 100,
     "pp": 12,
-    "effect": "상대가 이번 턴 자신보다 나중에 움직였다면 위력이 2배가 된다."
+    "priority": 0,
+    "effect": "상대가 이번 턴 자신보다 나중에 움직였다면 위력이 2배가 된다.",
+    "makesContact": true
   },
   {
     "id": "본러시",
@@ -867,7 +1190,11 @@
     "power": 30,
     "accuracy": 90,
     "pp": 12,
-    "effect": "2~5회 연속 공격."
+    "priority": 0,
+    "effect": "2~5회 연속 공격. (2/3회 각 35%, 4/5회 각 15% 확률. 명중 여부는 첫 타에서만 판정)",
+    "makesContact": false,
+    "minHits": 2,
+    "maxHits": 5
   },
   {
     "id": "불릿펀치",
@@ -877,7 +1204,12 @@
     "power": 40,
     "accuracy": 100,
     "pp": 20,
-    "effect": "우선도 +1. 항상 먼저 나간다."
+    "priority": 1,
+    "effect": "우선도 +1. 항상 먼저 나간다.",
+    "classification": [
+      "펀치"
+    ],
+    "makesContact": true
   },
   {
     "id": "블레이즈킥",
@@ -887,7 +1219,9 @@
     "power": 85,
     "accuracy": 90,
     "pp": 12,
-    "effect": "급소에 맞을 확률이 높고, 10% 확률로 화상 상태로 만든다."
+    "priority": 0,
+    "effect": "급소에 맞을 확률이 높고, 10% 확률로 화상 상태로 만든다.",
+    "makesContact": true
   },
   {
     "id": "비바라기",
@@ -897,7 +1231,9 @@
     "power": null,
     "accuracy": null,
     "pp": 8,
-    "effect": "5턴간 날씨를 비로 바꾼다."
+    "priority": 0,
+    "effect": "5턴간 날씨를 비로 바꾼다.",
+    "makesContact": false
   },
   {
     "id": "신속",
@@ -907,7 +1243,9 @@
     "power": 80,
     "accuracy": 100,
     "pp": 8,
-    "effect": "우선도 +2. 항상 먼저 나간다."
+    "priority": 2,
+    "effect": "우선도 +2. 항상 먼저 나간다.",
+    "makesContact": true
   },
   {
     "id": "싫은소리",
@@ -917,7 +1255,19 @@
     "power": null,
     "accuracy": 85,
     "pp": 20,
-    "effect": "상대의 특공을 1랭크 낮춘다."
+    "priority": 0,
+    "effect": "상대의 방어를 2랭크 낮춘다.",
+    "statChanges": [
+      {
+        "target": "opponent",
+        "stat": "def",
+        "delta": -2
+      }
+    ],
+    "classification": [
+      "소리"
+    ],
+    "makesContact": false
   },
   {
     "id": "악의파동",
@@ -927,7 +1277,12 @@
     "power": 80,
     "accuracy": 100,
     "pp": 16,
-    "effect": "20% 확률로 상대를 풀죽게 만든다."
+    "priority": 0,
+    "effect": "20% 확률로 상대를 풀죽게 만든다.",
+    "classification": [
+      "파동"
+    ],
+    "makesContact": false
   },
   {
     "id": "울부짖기",
@@ -937,7 +1292,12 @@
     "power": null,
     "accuracy": null,
     "pp": 20,
-    "effect": "자신의 공격을 1랭크 올린다."
+    "priority": -6,
+    "effect": "자신의 공격을 1랭크 올린다.",
+    "classification": [
+      "소리"
+    ],
+    "makesContact": false
   },
   {
     "id": "인파이트",
@@ -947,7 +1307,9 @@
     "power": 120,
     "accuracy": 100,
     "pp": 8,
-    "effect": "사용 후 자신의 방어와 특방이 1랭크씩 낮아진다."
+    "priority": 0,
+    "effect": "사용 후 자신의 방어와 특방이 1랭크씩 낮아진다.",
+    "makesContact": true
   },
   {
     "id": "잠꼬대",
@@ -957,7 +1319,9 @@
     "power": null,
     "accuracy": null,
     "pp": 12,
-    "effect": "잠든 상태에서만 사용 가능. 배운 기술 중 하나를 무작위로 사용한다."
+    "priority": 0,
+    "effect": "잠든 상태에서만 사용 가능. 배운 기술 중 하나를 무작위로 사용한다.",
+    "makesContact": false
   },
   {
     "id": "잠자기",
@@ -967,7 +1331,9 @@
     "power": null,
     "accuracy": null,
     "pp": 8,
-    "effect": "체력과 상태이상을 모두 회복하고 2턴간 잠든다."
+    "priority": 0,
+    "effect": "체력과 상태이상을 모두 회복하고 2턴간 잠든다.",
+    "makesContact": false
   },
   {
     "id": "제비반환",
@@ -977,7 +1343,12 @@
     "power": 60,
     "accuracy": null,
     "pp": 20,
-    "effect": "반드시 명중한다."
+    "priority": 0,
+    "effect": "반드시 명중한다.",
+    "classification": [
+      "베기"
+    ],
+    "makesContact": true
   },
   {
     "id": "진공파",
@@ -987,7 +1358,9 @@
     "power": 40,
     "accuracy": 100,
     "pp": 20,
-    "effect": "우선도 +1. 항상 먼저 나간다."
+    "priority": 1,
+    "effect": "우선도 +1. 항상 먼저 나간다.",
+    "makesContact": false
   },
   {
     "id": "철벽",
@@ -997,7 +1370,16 @@
     "power": null,
     "accuracy": null,
     "pp": 16,
-    "effect": "자신의 방어를 2랭크 올린다."
+    "priority": 0,
+    "effect": "자신의 방어를 2랭크 올린다.",
+    "statChanges": [
+      {
+        "target": "self",
+        "stat": "def",
+        "delta": 2
+      }
+    ],
+    "makesContact": false
   },
   {
     "id": "치유파동",
@@ -1007,7 +1389,12 @@
     "power": null,
     "accuracy": null,
     "pp": 12,
-    "effect": "상대의 체력을 절반만큼 회복시킨다."
+    "priority": 0,
+    "effect": "상대의 체력을 절반만큼 회복시킨다.",
+    "classification": [
+      "파동"
+    ],
+    "makesContact": false
   },
   {
     "id": "카운터",
@@ -1017,7 +1404,9 @@
     "power": null,
     "accuracy": 100,
     "pp": 20,
-    "effect": "이번 턴 받은 물리 데미지의 2배로 반격한다."
+    "priority": -5,
+    "effect": "이번 턴 받은 물리 데미지의 2배로 반격한다.",
+    "makesContact": true
   },
   {
     "id": "코골기",
@@ -1027,7 +1416,12 @@
     "power": 50,
     "accuracy": 100,
     "pp": 16,
-    "effect": "잠든 상태에서만 사용 가능. 30% 확률로 상대를 풀죽게 만든다."
+    "priority": 0,
+    "effect": "잠든 상태에서만 사용 가능. 30% 확률로 상대를 풀죽게 만든다.",
+    "classification": [
+      "소리"
+    ],
+    "makesContact": false
   },
   {
     "id": "코멧펀치",
@@ -1037,7 +1431,12 @@
     "power": 90,
     "accuracy": 90,
     "pp": 12,
-    "effect": "2~5회 연속 공격."
+    "priority": 0,
+    "effect": "2~5회 연속 공격.",
+    "classification": [
+      "펀치"
+    ],
+    "makesContact": true
   },
   {
     "id": "쾌청",
@@ -1047,7 +1446,9 @@
     "power": null,
     "accuracy": null,
     "pp": 8,
-    "effect": "5턴간 날씨를 맑음으로 바꾼다."
+    "priority": 0,
+    "effect": "5턴간 날씨를 맑음으로 바꾼다.",
+    "makesContact": false
   },
   {
     "id": "크로스촙",
@@ -1057,7 +1458,9 @@
     "power": 100,
     "accuracy": 80,
     "pp": 8,
-    "effect": "급소에 맞을 확률이 높다."
+    "priority": 0,
+    "effect": "급소에 맞을 확률이 높다.",
+    "makesContact": true
   },
   {
     "id": "파괴광선",
@@ -1067,7 +1470,9 @@
     "power": 150,
     "accuracy": 90,
     "pp": 8,
-    "effect": "사용한 다음 턴은 움직일 수 없다."
+    "priority": 0,
+    "effect": "사용한 다음 턴은 움직일 수 없다.",
+    "makesContact": false
   },
   {
     "id": "파동탄",
@@ -1077,7 +1482,13 @@
     "power": 80,
     "accuracy": null,
     "pp": 20,
-    "effect": "반드시 명중한다."
+    "priority": 0,
+    "effect": "반드시 명중한다.",
+    "classification": [
+      "구슬/폭탄",
+      "파동"
+    ],
+    "makesContact": false
   },
   {
     "id": "판별",
@@ -1087,7 +1498,9 @@
     "power": null,
     "accuracy": null,
     "pp": 8,
-    "effect": "이번 턴 상대의 공격을 대부분 막아낸다."
+    "priority": 4,
+    "effect": "이번 턴 상대의 공격을 대부분 막아낸다.",
+    "makesContact": false
   },
   {
     "id": "패스트가드",
@@ -1097,7 +1510,9 @@
     "power": null,
     "accuracy": null,
     "pp": 16,
-    "effect": "우선도 +3. 아군을 이번 턴 우선도 기술로부터 보호한다."
+    "priority": 3,
+    "effect": "우선도 +3. 아군을 이번 턴 우선도 기술로부터 보호한다.",
+    "makesContact": false
   },
   {
     "id": "페인트",
@@ -1107,7 +1522,9 @@
     "power": 30,
     "accuracy": 100,
     "pp": 12,
-    "effect": "방어나 카운터 등으로 막고 있는 상대에게도 명중한다."
+    "priority": 2,
+    "effect": "방어나 카운터 등으로 막고 있는 상대에게도 명중한다.",
+    "makesContact": false
   },
   {
     "id": "흉내쟁이",
@@ -1117,7 +1534,9 @@
     "power": null,
     "accuracy": null,
     "pp": 20,
-    "effect": "상대가 직전에 사용한 기술을 배워서 사용한다."
+    "priority": 0,
+    "effect": "상대가 직전에 사용한 기술을 배워서 사용한다.",
+    "makesContact": false
   },
   {
     "id": "힘껏펀치",
@@ -1127,7 +1546,12 @@
     "power": 150,
     "accuracy": 100,
     "pp": 20,
-    "effect": ""
+    "priority": -3,
+    "effect": "",
+    "classification": [
+      "펀치"
+    ],
+    "makesContact": true
   },
   {
     "id": "객기",
@@ -1137,7 +1561,9 @@
     "power": 70,
     "accuracy": 100,
     "pp": 20,
-    "effect": "TODO: 타입/카테고리/위력/명중/PP 확인 필요"
+    "priority": 0,
+    "effect": "",
+    "makesContact": true
   },
   {
     "id": "기사회생",
@@ -1147,7 +1573,9 @@
     "power": null,
     "accuracy": 100,
     "pp": 16,
-    "effect": "TODO: 타입/카테고리/위력/명중/PP 확인 필요"
+    "priority": 0,
+    "effect": "",
+    "makesContact": true
   },
   {
     "id": "기충전",
@@ -1157,7 +1585,9 @@
     "power": null,
     "accuracy": null,
     "pp": 20,
-    "effect": "TODO: 타입/카테고리/위력/명중/PP 확인 필요"
+    "priority": 0,
+    "effect": "자신의 급소율을 2랭크 올린다. (급소율은 statChanges로 표현되지 않는 스탯이라 stat stage 계산에는 반영되지 않음)",
+    "makesContact": false
   },
   {
     "id": "누르기",
@@ -1167,7 +1597,9 @@
     "power": 85,
     "accuracy": 100,
     "pp": 16,
-    "effect": "TODO: 타입/카테고리/위력/명중/PP 확인 필요"
+    "priority": 0,
+    "effect": "",
+    "makesContact": true
   },
   {
     "id": "멀리짖기",
@@ -1177,7 +1609,19 @@
     "power": null,
     "accuracy": null,
     "pp": 20,
-    "effect": "TODO: 타입/카테고리/위력/명중/PP 확인 필요"
+    "priority": 0,
+    "effect": "자신의 공격을 1랭크 올린다. (8세대부터는 더블배틀에서 사용 시 아군 전원도 함께 1랭크 오름)",
+    "statChanges": [
+      {
+        "target": "self",
+        "stat": "atk",
+        "delta": 1
+      }
+    ],
+    "classification": [
+      "소리"
+    ],
+    "makesContact": false
   },
   {
     "id": "무릎차기",
@@ -1187,7 +1631,9 @@
     "power": 130,
     "accuracy": 90,
     "pp": 12,
-    "effect": "TODO: 타입/카테고리/위력/명중/PP 확인 필요"
+    "priority": 0,
+    "effect": "",
+    "makesContact": true
   },
   {
     "id": "생명의물방울",
@@ -1197,7 +1643,9 @@
     "power": null,
     "accuracy": null,
     "pp": 12,
-    "effect": "TODO: 타입/카테고리/위력/명중/PP 확인 필요"
+    "priority": 0,
+    "effect": "",
+    "makesContact": false
   },
   {
     "id": "안다리걸기",
@@ -1207,7 +1655,9 @@
     "power": null,
     "accuracy": 100,
     "pp": 20,
-    "effect": "TODO: 타입/카테고리/위력/명중/PP 확인 필요"
+    "priority": 0,
+    "effect": "",
+    "makesContact": true
   },
   {
     "id": "암석봉인",
@@ -1217,7 +1667,9 @@
     "power": 60,
     "accuracy": 95,
     "pp": 16,
-    "effect": "TODO: 타입/카테고리/위력/명중/PP 확인 필요"
+    "priority": 0,
+    "effect": "",
+    "makesContact": false
   },
   {
     "id": "자기암시",
@@ -1227,7 +1679,9 @@
     "power": null,
     "accuracy": null,
     "pp": 12,
-    "effect": "TODO: 타입/카테고리/위력/명중/PP 확인 필요"
+    "priority": 0,
+    "effect": "고정 수치가 아니라, 사용 시점에서 상대의 랭크 변화 상태를 그대로 복사해 자신에게 적용한다.",
+    "makesContact": false
   },
   {
     "id": "철제광선",
@@ -1237,7 +1691,9 @@
     "power": 140,
     "accuracy": 95,
     "pp": 8,
-    "effect": "TODO: 타입/카테고리/위력/명중/PP 확인 필요"
+    "priority": 0,
+    "effect": "",
+    "makesContact": false
   },
   {
     "id": "코칭",
@@ -1247,7 +1703,9 @@
     "power": null,
     "accuracy": null,
     "pp": 12,
-    "effect": "TODO: 타입/카테고리/위력/명중/PP 확인 필요"
+    "priority": 0,
+    "effect": "자신을 제외한 아군 전원의 공격과 방어를 1랭크씩 올린다. 자신에게는 효과가 없다(단식전에서는 사실상 무효과).",
+    "makesContact": false
   },
   {
     "id": "강철날개",
@@ -1257,7 +1715,9 @@
     "power": 70,
     "accuracy": 90,
     "pp": 20,
-    "effect": "10% 확률로 자신의 방어가 1랭크 오른다."
+    "priority": 0,
+    "effect": "10% 확률로 자신의 방어가 1랭크 오른다.",
+    "makesContact": true
   },
   {
     "id": "그림자분신",
@@ -1267,7 +1727,9 @@
     "power": null,
     "accuracy": null,
     "pp": 16,
-    "effect": "자신의 회피율을 1랭크 올린다."
+    "priority": 0,
+    "effect": "자신의 회피율을 1랭크 올린다.",
+    "makesContact": false
   },
   {
     "id": "깜짝베기",
@@ -1277,7 +1739,12 @@
     "power": 70,
     "accuracy": 100,
     "pp": 20,
-    "effect": "반드시 명중한다."
+    "priority": 0,
+    "effect": "반드시 명중한다.",
+    "classification": [
+      "베기"
+    ],
+    "makesContact": true
   },
   {
     "id": "날개쉬기",
@@ -1287,7 +1754,9 @@
     "power": null,
     "accuracy": null,
     "pp": 8,
-    "effect": "체력의 절반을 회복한다. 이번 턴 동안 비행 타입이 사라진다."
+    "priority": 0,
+    "effect": "체력의 절반을 회복한다. 이번 턴 동안 비행 타입이 사라진다.",
+    "makesContact": false
   },
   {
     "id": "달려들기",
@@ -1297,7 +1766,9 @@
     "power": 50,
     "accuracy": 100,
     "pp": 20,
-    "effect": ""
+    "priority": 0,
+    "effect": "",
+    "makesContact": true
   },
   {
     "id": "더블어택",
@@ -1307,7 +1778,11 @@
     "power": 35,
     "accuracy": 90,
     "pp": 12,
-    "effect": "2회 연속 공격."
+    "priority": 0,
+    "effect": "2회 연속 공격. (명중 여부는 첫 타에서만 판정)",
+    "makesContact": true,
+    "minHits": 2,
+    "maxHits": 2
   },
   {
     "id": "더블윙",
@@ -1317,7 +1792,11 @@
     "power": 40,
     "accuracy": 90,
     "pp": 12,
-    "effect": "2회 연속 공격."
+    "priority": 0,
+    "effect": "2회 연속 공격. (명중 여부는 첫 타에서만 판정)",
+    "makesContact": true,
+    "minHits": 2,
+    "maxHits": 2
   },
   {
     "id": "덤벼들기",
@@ -1327,7 +1806,9 @@
     "power": 80,
     "accuracy": 100,
     "pp": 16,
-    "effect": "TODO: 타입/카테고리/위력/명중/PP 확인 필요"
+    "priority": 0,
+    "effect": "",
+    "makesContact": true
   },
   {
     "id": "도둑질",
@@ -1337,7 +1818,9 @@
     "power": 60,
     "accuracy": 100,
     "pp": 20,
-    "effect": "상대가 도구를 지니고 있으면 명중 시 그 도구를 빼앗는다."
+    "priority": 0,
+    "effect": "상대가 도구를 지니고 있으면 명중 시 그 도구를 빼앗는다.",
+    "makesContact": true
   },
   {
     "id": "모래바람",
@@ -1347,7 +1830,12 @@
     "power": null,
     "accuracy": null,
     "pp": 8,
-    "effect": "5턴간 날씨를 모래바람으로 바꾼다."
+    "priority": 0,
+    "effect": "5턴간 날씨를 모래바람으로 바꾼다.",
+    "classification": [
+      "바람"
+    ],
+    "makesContact": false
   },
   {
     "id": "배턴터치",
@@ -1357,7 +1845,9 @@
     "power": null,
     "accuracy": null,
     "pp": 20,
-    "effect": "자신의 능력 변화를 유지한 채 다른 포켓몬으로 교체한다."
+    "priority": 0,
+    "effect": "자신의 능력 변화를 유지한 채 다른 포켓몬으로 교체한다.",
+    "makesContact": false
   },
   {
     "id": "벌레먹기",
@@ -1367,7 +1857,9 @@
     "power": 60,
     "accuracy": 100,
     "pp": 20,
-    "effect": "상대가 지닌 나무열매를 먹어 그 효과를 얻는다."
+    "priority": 0,
+    "effect": "상대가 지닌 나무열매를 먹어 그 효과를 얻는다.",
+    "makesContact": true
   },
   {
     "id": "벌레의야단법석",
@@ -1377,7 +1869,12 @@
     "power": 90,
     "accuracy": 100,
     "pp": 12,
-    "effect": "10% 확률로 상대의 특방을 1랭크 낮춘다."
+    "priority": 0,
+    "effect": "10% 확률로 상대의 특방을 1랭크 낮춘다.",
+    "classification": [
+      "소리"
+    ],
+    "makesContact": false
   },
   {
     "id": "벌레의저항",
@@ -1387,7 +1884,9 @@
     "power": 50,
     "accuracy": 100,
     "pp": 20,
-    "effect": "100% 확률로 상대의 특공을 1랭크 낮춘다."
+    "priority": 0,
+    "effect": "100% 확률로 상대의 특공을 1랭크 낮춘다.",
+    "makesContact": false
   },
   {
     "id": "빛의장막",
@@ -1397,7 +1896,9 @@
     "power": null,
     "accuracy": null,
     "pp": 20,
-    "effect": "5턴간 아군이 받는 특수 데미지를 절반으로 줄인다."
+    "priority": 0,
+    "effect": "5턴간 아군이 받는 특수 데미지를 절반으로 줄인다.",
+    "makesContact": false
   },
   {
     "id": "사이코커터",
@@ -1407,7 +1908,12 @@
     "power": 70,
     "accuracy": 100,
     "pp": 20,
-    "effect": "급소에 맞을 확률이 높다."
+    "priority": 0,
+    "effect": "급소에 맞을 확률이 높다.",
+    "classification": [
+      "베기"
+    ],
+    "makesContact": false
   },
   {
     "id": "세차게휘두르기",
@@ -1417,7 +1923,9 @@
     "power": 60,
     "accuracy": 100,
     "pp": 20,
-    "effect": "TODO: 타입/카테고리/위력/명중/PP 확인 필요"
+    "priority": 0,
+    "effect": "",
+    "makesContact": true
   },
   {
     "id": "순풍",
@@ -1427,7 +1935,12 @@
     "power": null,
     "accuracy": null,
     "pp": 16,
-    "effect": "4턴간 아군의 스피드를 2배로 만든다."
+    "priority": 0,
+    "effect": "4턴간 아군의 스피드를 2배로 만든다.",
+    "classification": [
+      "바람"
+    ],
+    "makesContact": false
   },
   {
     "id": "시저크로스",
@@ -1437,7 +1950,12 @@
     "power": 80,
     "accuracy": 100,
     "pp": 16,
-    "effect": ""
+    "priority": 0,
+    "effect": "",
+    "classification": [
+      "베기"
+    ],
+    "makesContact": true
   },
   {
     "id": "안개제거",
@@ -1447,7 +1965,9 @@
     "power": null,
     "accuracy": null,
     "pp": 16,
-    "effect": "양 진영의 설치물을 제거하고 상대의 회피율을 1랭크 낮춘다."
+    "priority": 0,
+    "effect": "양 진영의 설치물을 제거하고 상대의 회피율을 1랭크 낮춘다.",
+    "makesContact": false
   },
   {
     "id": "애크러뱃",
@@ -1457,7 +1977,9 @@
     "power": 55,
     "accuracy": 100,
     "pp": 16,
-    "effect": "도구를 지니고 있지 않으면 위력이 2배가 된다."
+    "priority": 0,
+    "effect": "도구를 지니고 있지 않으면 위력이 2배가 된다.",
+    "makesContact": true
   },
   {
     "id": "엄습하는일격",
@@ -1467,7 +1989,9 @@
     "power": 70,
     "accuracy": 90,
     "pp": 12,
-    "effect": "TODO: 타입/카테고리/위력/명중/PP 확인 필요"
+    "priority": 0,
+    "effect": "",
+    "makesContact": true
   },
   {
     "id": "엄청난힘",
@@ -1477,7 +2001,9 @@
     "power": 120,
     "accuracy": 100,
     "pp": 8,
-    "effect": "사용 후 자신의 공격과 방어가 1랭크씩 낮아진다."
+    "priority": 0,
+    "effect": "사용 후 자신의 공격과 방어가 1랭크씩 낮아진다.",
+    "makesContact": true
   },
   {
     "id": "에어커터",
@@ -1487,7 +2013,12 @@
     "power": 60,
     "accuracy": 95,
     "pp": 20,
-    "effect": "급소에 맞을 확률이 높다."
+    "priority": 0,
+    "effect": "급소에 맞을 확률이 높다.",
+    "classification": [
+      "베기"
+    ],
+    "makesContact": false
   },
   {
     "id": "유턴",
@@ -1497,7 +2028,9 @@
     "power": 70,
     "accuracy": 100,
     "pp": 20,
-    "effect": "사용한 뒤 다른 포켓몬으로 교체한다."
+    "priority": 0,
+    "effect": "사용한 뒤 다른 포켓몬으로 교체한다.",
+    "makesContact": true
   },
   {
     "id": "저주",
@@ -1507,7 +2040,29 @@
     "power": null,
     "accuracy": null,
     "pp": 12,
-    "effect": "고스트 타입이면 체력을 소모해 상대를 저주 상태로 만든다."
+    "priority": 0,
+    "effect": "고스트 타입이면 자신의 최대 HP 절반을 소모해 상대를 저주 상태로 만들고(매 턴 상대 최대 HP 1/4 데미지), 고스트 타입이 아니면 자신의 공격과 방어를 1랭크씩 올리는 대신 스피드가 1랭크 떨어진다.",
+    "statChanges": [
+      {
+        "target": "self",
+        "stat": "atk",
+        "delta": 1,
+        "userIsNotType": "고스트"
+      },
+      {
+        "target": "self",
+        "stat": "def",
+        "delta": 1,
+        "userIsNotType": "고스트"
+      },
+      {
+        "target": "self",
+        "stat": "spe",
+        "delta": -1,
+        "userIsNotType": "고스트"
+      }
+    ],
+    "makesContact": false
   },
   {
     "id": "하드프레스",
@@ -1517,7 +2072,9 @@
     "power": null,
     "accuracy": 100,
     "pp": 12,
-    "effect": "TODO: 타입/카테고리/위력/명중/PP 확인 필요"
+    "priority": 0,
+    "effect": "",
+    "makesContact": true
   },
   {
     "id": "10만마력",
@@ -1527,7 +2084,9 @@
     "power": 95,
     "accuracy": 95,
     "pp": 12,
-    "effect": "TODO: 타입/카테고리/위력/명중/PP 확인 필요"
+    "priority": 0,
+    "effect": "",
+    "makesContact": true
   },
   {
     "id": "눈보라",
@@ -1537,7 +2096,12 @@
     "power": 110,
     "accuracy": 70,
     "pp": 8,
-    "effect": "10% 확률로 상대를 얼린다."
+    "priority": 0,
+    "effect": "10% 확률로 상대를 얼린다.",
+    "classification": [
+      "바람"
+    ],
+    "makesContact": false
   },
   {
     "id": "망각술",
@@ -1547,7 +2111,16 @@
     "power": null,
     "accuracy": null,
     "pp": 20,
-    "effect": "자신의 특방을 2랭크 올린다."
+    "priority": 0,
+    "effect": "자신의 특방을 2랭크 올린다.",
+    "statChanges": [
+      {
+        "target": "self",
+        "stat": "spd",
+        "delta": 2
+      }
+    ],
+    "makesContact": false
   },
   {
     "id": "머드샷",
@@ -1557,7 +2130,9 @@
     "power": 55,
     "accuracy": 95,
     "pp": 16,
-    "effect": "100% 확률로 상대의 스피드를 1랭크 낮춘다."
+    "priority": 0,
+    "effect": "100% 확률로 상대의 스피드를 1랭크 낮춘다.",
+    "makesContact": false
   },
   {
     "id": "모래지옥",
@@ -1567,7 +2142,9 @@
     "power": 35,
     "accuracy": 85,
     "pp": 16,
-    "effect": "여러 턴 동안 상대를 속박해 데미지를 준다."
+    "priority": 0,
+    "effect": "여러 턴 동안 상대를 속박해 데미지를 준다.",
+    "makesContact": false
   },
   {
     "id": "미러코트",
@@ -1577,7 +2154,9 @@
     "power": null,
     "accuracy": 100,
     "pp": 20,
-    "effect": "이번 턴 받은 특수 데미지의 2배로 반격한다."
+    "priority": -5,
+    "effect": "이번 턴 받은 특수 데미지의 2배로 반격한다.",
+    "makesContact": false
   },
   {
     "id": "바다회오리",
@@ -1587,7 +2166,9 @@
     "power": 35,
     "accuracy": 85,
     "pp": 16,
-    "effect": "여러 턴 동안 상대를 속박해 데미지를 준다."
+    "priority": 0,
+    "effect": "여러 턴 동안 상대를 속박해 데미지를 준다.",
+    "makesContact": false
   },
   {
     "id": "바디프레스",
@@ -1597,7 +2178,9 @@
     "power": 80,
     "accuracy": 100,
     "pp": 12,
-    "effect": "공격력 대신 자신의 방어력으로 데미지를 계산한다."
+    "priority": 0,
+    "effect": "공격력 대신 자신의 방어력으로 데미지를 계산한다.",
+    "makesContact": true
   },
   {
     "id": "분함의발구르기",
@@ -1607,7 +2190,9 @@
     "power": 75,
     "accuracy": 100,
     "pp": 12,
-    "effect": "직전에 자신의 기술이 실패했다면 위력이 2배가 된다."
+    "priority": 0,
+    "effect": "직전에 자신의 기술이 실패했다면 위력이 2배가 된다.",
+    "makesContact": true
   },
   {
     "id": "소란피기",
@@ -1617,7 +2202,12 @@
     "power": 90,
     "accuracy": 100,
     "pp": 12,
-    "effect": "3턴간 계속 사용하며, 주변의 잠든 포켓몬을 깨운다."
+    "priority": 0,
+    "effect": "3턴간 계속 사용하며, 주변의 잠든 포켓몬을 깨운다.",
+    "classification": [
+      "소리"
+    ],
+    "makesContact": false
   },
   {
     "id": "아쿠아링",
@@ -1627,7 +2217,9 @@
     "power": null,
     "accuracy": null,
     "pp": 20,
-    "effect": "매 턴 자신의 체력을 조금씩 회복한다."
+    "priority": 0,
+    "effect": "매 턴 자신의 체력을 조금씩 회복한다.",
+    "makesContact": false
   },
   {
     "id": "암해머",
@@ -1637,7 +2229,9 @@
     "power": 100,
     "accuracy": 90,
     "pp": 12,
-    "effect": "TODO: 타입/카테고리/위력/명중/PP 확인 필요"
+    "priority": 0,
+    "effect": "",
+    "makesContact": true
   },
   {
     "id": "얼어붙은바람",
@@ -1647,7 +2241,12 @@
     "power": 55,
     "accuracy": 95,
     "pp": 16,
-    "effect": "물 타입 상대에게 효과가 굉장하다."
+    "priority": 0,
+    "effect": "물 타입 상대에게 효과가 굉장하다.",
+    "classification": [
+      "바람"
+    ],
+    "makesContact": false
   },
   {
     "id": "오물웨이브",
@@ -1657,7 +2256,9 @@
     "power": 95,
     "accuracy": 100,
     "pp": 12,
-    "effect": "10% 확률로 상대를 독 상태로 만든다."
+    "priority": 0,
+    "effect": "10% 확률로 상대를 독 상태로 만든다.",
+    "makesContact": false
   },
   {
     "id": "와이드가드",
@@ -1667,7 +2268,9 @@
     "power": null,
     "accuracy": null,
     "pp": 12,
-    "effect": "우선도 +3. 이번 턴 아군을 전체공격 기술로부터 보호한다."
+    "priority": 3,
+    "effect": "우선도 +3. 이번 턴 아군을 전체공격 기술로부터 보호한다.",
+    "makesContact": false
   },
   {
     "id": "웨더볼",
@@ -1677,7 +2280,12 @@
     "power": 50,
     "accuracy": 100,
     "pp": 12,
-    "effect": "날씨에 따라 타입과 위력이 변한다."
+    "priority": 0,
+    "effect": "날씨에 따라 타입과 위력이 변한다.",
+    "classification": [
+      "구슬/폭탄"
+    ],
+    "makesContact": false
   },
   {
     "id": "웨이브태클",
@@ -1687,7 +2295,9 @@
     "power": 120,
     "accuracy": 100,
     "pp": 12,
-    "effect": "사용자도 준 데미지의 1/3만큼 반동을 입는다."
+    "priority": 0,
+    "effect": "사용자도 준 데미지의 1/3만큼 반동을 입는다.",
+    "makesContact": true
   },
   {
     "id": "죽기살기",
@@ -1697,7 +2307,9 @@
     "power": null,
     "accuracy": 100,
     "pp": 8,
-    "effect": "TODO: 타입/카테고리/위력/명중/PP 확인 필요"
+    "priority": 0,
+    "effect": "",
+    "makesContact": true
   },
   {
     "id": "진흙뿌리기",
@@ -1707,7 +2319,9 @@
     "power": 20,
     "accuracy": 100,
     "pp": 12,
-    "effect": "100% 확률로 상대의 명중률을 1랭크 낮춘다."
+    "priority": 0,
+    "effect": "100% 확률로 상대의 명중률을 1랭크 낮춘다.",
+    "makesContact": false
   },
   {
     "id": "찬물끼얹기",
@@ -1717,7 +2331,9 @@
     "power": 50,
     "accuracy": 100,
     "pp": 20,
-    "effect": "30% 확률로 상대를 화상 상태로 만든다."
+    "priority": 0,
+    "effect": "30% 확률로 상대를 화상 상태로 만든다.",
+    "makesContact": false
   },
   {
     "id": "퀵턴",
@@ -1727,7 +2343,9 @@
     "power": 60,
     "accuracy": 100,
     "pp": 20,
-    "effect": "TODO: 타입/카테고리/위력/명중/PP 확인 필요"
+    "priority": 0,
+    "effect": "",
+    "makesContact": true
   },
   {
     "id": "탁류",
@@ -1737,7 +2355,9 @@
     "power": 90,
     "accuracy": 85,
     "pp": 12,
-    "effect": "30% 확률로 상대의 명중률을 1랭크 낮춘다."
+    "priority": 0,
+    "effect": "30% 확률로 상대의 명중률을 1랭크 낮춘다.",
+    "makesContact": false
   },
   {
     "id": "파도타기",
@@ -1747,7 +2367,9 @@
     "power": 90,
     "accuracy": 100,
     "pp": 16,
-    "effect": ""
+    "priority": 0,
+    "effect": "",
+    "makesContact": false
   },
   {
     "id": "폭포오르기",
@@ -1757,7 +2379,9 @@
     "power": 80,
     "accuracy": 100,
     "pp": 16,
-    "effect": "20% 확률로 상대를 풀죽게 만든다."
+    "priority": 0,
+    "effect": "20% 확률로 상대를 풀죽게 만든다.",
+    "makesContact": true
   },
   {
     "id": "하이드로캐논",
@@ -1767,7 +2391,9 @@
     "power": 150,
     "accuracy": 90,
     "pp": 8,
-    "effect": "사용한 다음 턴은 움직일 수 없다."
+    "priority": 0,
+    "effect": "사용한 다음 턴은 움직일 수 없다.",
+    "makesContact": false
   },
   {
     "id": "하이드로펌프",
@@ -1777,7 +2403,9 @@
     "power": 110,
     "accuracy": 80,
     "pp": 8,
-    "effect": ""
+    "priority": 0,
+    "effect": "",
+    "makesContact": false
   },
   {
     "id": "하품",
@@ -1787,7 +2415,9 @@
     "power": null,
     "accuracy": null,
     "pp": 12,
-    "effect": "다음 턴 상대를 잠들게 한다."
+    "priority": 0,
+    "effect": "다음 턴 상대를 잠들게 한다.",
+    "makesContact": false
   },
   {
     "id": "떨어뜨리기",
@@ -1797,7 +2427,9 @@
     "power": 50,
     "accuracy": 100,
     "pp": 16,
-    "effect": "공중에 떠 있는 상대도 지상으로 떨어뜨려 명중시킨다."
+    "priority": 0,
+    "effect": "공중에 떠 있는 상대도 지상으로 떨어뜨려 명중시킨다.",
+    "makesContact": false
   },
   {
     "id": "공중날기",
@@ -1807,7 +2439,9 @@
     "power": 90,
     "accuracy": 95,
     "pp": 16,
-    "effect": "1턴째 하늘로 날아올라 회피하고, 2턴째 공격한다."
+    "priority": 0,
+    "effect": "1턴째 하늘로 날아올라 회피하고, 2턴째 공격한다.",
+    "makesContact": true
   },
   {
     "id": "깃털댄스",
@@ -1817,7 +2451,12 @@
     "power": null,
     "accuracy": 100,
     "pp": 16,
-    "effect": "상대의 공격을 2랭크 낮춘다."
+    "priority": 0,
+    "effect": "상대의 공격을 2랭크 낮춘다.",
+    "classification": [
+      "춤"
+    ],
+    "makesContact": false
   },
   {
     "id": "꿀꺽",
@@ -1827,7 +2466,9 @@
     "power": null,
     "accuracy": null,
     "pp": 12,
-    "effect": "TODO: 타입/카테고리/위력/명중/PP 확인 필요"
+    "priority": 0,
+    "effect": "",
+    "makesContact": false
   },
   {
     "id": "더스트슈트",
@@ -1837,7 +2478,9 @@
     "power": 120,
     "accuracy": 80,
     "pp": 8,
-    "effect": "TODO: 타입/카테고리/위력/명중/PP 확인 필요"
+    "priority": 0,
+    "effect": "",
+    "makesContact": false
   },
   {
     "id": "물붓기",
@@ -1847,7 +2490,9 @@
     "power": null,
     "accuracy": 100,
     "pp": 20,
-    "effect": "TODO: 타입/카테고리/위력/명중/PP 확인 필요"
+    "priority": 0,
+    "effect": "",
+    "makesContact": false
   },
   {
     "id": "브레이브버드",
@@ -1857,7 +2502,9 @@
     "power": 120,
     "accuracy": 100,
     "pp": 16,
-    "effect": "사용자도 준 데미지의 1/3만큼 반동을 입는다."
+    "priority": 0,
+    "effect": "사용자도 준 데미지의 1/3만큼 반동을 입는다.",
+    "makesContact": true
   },
   {
     "id": "비축하기",
@@ -1867,7 +2514,9 @@
     "power": null,
     "accuracy": null,
     "pp": 12,
-    "effect": "자신의 방어와 특방이 조금씩 오른다. 최대 3회까지 쌓인다."
+    "priority": 0,
+    "effect": "자신의 방어와 특방이 조금씩 오른다. 최대 3회까지 쌓인다.",
+    "makesContact": false
   },
   {
     "id": "설경",
@@ -1877,7 +2526,9 @@
     "power": null,
     "accuracy": null,
     "pp": 8,
-    "effect": "5턴간 날씨를 눈으로 바꾼다."
+    "priority": 0,
+    "effect": "5턴간 날씨를 눈으로 바꾼다.",
+    "makesContact": false
   },
   {
     "id": "씨폭탄",
@@ -1887,7 +2538,12 @@
     "power": 80,
     "accuracy": 100,
     "pp": 16,
-    "effect": ""
+    "priority": 0,
+    "effect": "",
+    "classification": [
+      "구슬/폭탄"
+    ],
+    "makesContact": false
   },
   {
     "id": "토해내기",
@@ -1897,7 +2553,9 @@
     "power": null,
     "accuracy": 100,
     "pp": 12,
-    "effect": "비축하기로 쌓아둔 만큼 위력이 커진다. 사용하면 쌓인 것이 사라진다."
+    "priority": 0,
+    "effect": "비축하기로 쌓아둔 만큼 위력이 커진다. 사용하면 쌓인 것이 사라진다.",
+    "makesContact": false
   },
   {
     "id": "폭풍",
@@ -1907,7 +2565,12 @@
     "power": 110,
     "accuracy": 70,
     "pp": 12,
-    "effect": "30% 확률로 상대를 혼란시킨다."
+    "priority": 0,
+    "effect": "30% 확률로 상대를 혼란시킨다.",
+    "classification": [
+      "바람"
+    ],
+    "makesContact": false
   },
   {
     "id": "10만볼트",
@@ -1917,7 +2580,9 @@
     "power": 90,
     "accuracy": 100,
     "pp": 16,
-    "effect": "10% 확률로 상대를 마비시킨다."
+    "priority": 0,
+    "effect": "10% 확률로 상대를 마비시킨다.",
+    "makesContact": false
   },
   {
     "id": "거짓울음",
@@ -1927,7 +2592,16 @@
     "power": null,
     "accuracy": 100,
     "pp": 20,
-    "effect": "상대의 특방을 2랭크 낮춘다."
+    "priority": 0,
+    "effect": "상대의 특방을 2랭크 낮춘다.",
+    "statChanges": [
+      {
+        "target": "opponent",
+        "stat": "spd",
+        "delta": -2
+      }
+    ],
+    "makesContact": false
   },
   {
     "id": "당신먼저",
@@ -1937,7 +2611,9 @@
     "power": null,
     "accuracy": null,
     "pp": 16,
-    "effect": "상대를 이번 턴에 즉시 행동하게 만든다."
+    "priority": 0,
+    "effect": "상대를 이번 턴에 즉시 행동하게 만든다.",
+    "makesContact": false
   },
   {
     "id": "동료만들기",
@@ -1947,7 +2623,9 @@
     "power": null,
     "accuracy": 100,
     "pp": 16,
-    "effect": "이번 턴 상대의 공격을 자신에게 유도한다."
+    "priority": 0,
+    "effect": "이번 턴 상대의 공격을 자신에게 유도한다.",
+    "makesContact": false
   },
   {
     "id": "드레인키스",
@@ -1957,7 +2635,9 @@
     "power": 50,
     "accuracy": 100,
     "pp": 12,
-    "effect": "준 데미지의 4분의 3만큼 자신의 체력을 회복한다."
+    "priority": 0,
+    "effect": "준 데미지의 4분의 3만큼 자신의 체력을 회복한다.",
+    "makesContact": true
   },
   {
     "id": "뛰어오르기",
@@ -1967,7 +2647,9 @@
     "power": 85,
     "accuracy": 85,
     "pp": 8,
-    "effect": "1턴째 하늘로 뛰어올라 회피하고, 2턴째 공격한다. 30% 확률로 마비시킨다."
+    "priority": 0,
+    "effect": "1턴째 하늘로 뛰어올라 회피하고, 2턴째 공격한다. 30% 확률로 마비시킨다.",
+    "makesContact": true
   },
   {
     "id": "마하펀치",
@@ -1977,7 +2659,12 @@
     "power": 40,
     "accuracy": 100,
     "pp": 20,
-    "effect": "우선도 +1. 항상 먼저 나간다."
+    "priority": 1,
+    "effect": "우선도 +1. 항상 먼저 나간다.",
+    "classification": [
+      "펀치"
+    ],
+    "makesContact": true
   },
   {
     "id": "바꿔치기",
@@ -1987,7 +2674,9 @@
     "power": null,
     "accuracy": 100,
     "pp": 12,
-    "effect": "상대와 서로 지닌 도구를 교환한다."
+    "priority": 0,
+    "effect": "상대와 서로 지닌 도구를 교환한다.",
+    "makesContact": false
   },
   {
     "id": "바둥바둥",
@@ -1997,7 +2686,9 @@
     "power": null,
     "accuracy": 100,
     "pp": 16,
-    "effect": "자신의 체력이 낮을수록 위력이 커진다."
+    "priority": 0,
+    "effect": "자신의 체력이 낮을수록 위력이 커진다.",
+    "makesContact": true
   },
   {
     "id": "번개",
@@ -2007,7 +2698,9 @@
     "power": 110,
     "accuracy": 70,
     "pp": 12,
-    "effect": "30% 확률로 상대를 마비시킨다."
+    "priority": 0,
+    "effect": "30% 확률로 상대를 마비시킨다.",
+    "makesContact": false
   },
   {
     "id": "부추기기",
@@ -2017,7 +2710,16 @@
     "power": null,
     "accuracy": 100,
     "pp": 16,
-    "effect": "상대가 이번 전투에서 변화기를 사용할 수 없게 만든다."
+    "priority": 0,
+    "effect": "상대의 특공을 1랭크 올리는 대신 혼란 상태로 만든다.",
+    "statChanges": [
+      {
+        "target": "opponent",
+        "stat": "spa",
+        "delta": 1
+      }
+    ],
+    "makesContact": false
   },
   {
     "id": "불꽃펀치",
@@ -2027,7 +2729,12 @@
     "power": 75,
     "accuracy": 100,
     "pp": 16,
-    "effect": "10% 확률로 상대를 화상 상태로 만든다."
+    "priority": 0,
+    "effect": "10% 확률로 상대를 화상 상태로 만든다.",
+    "classification": [
+      "펀치"
+    ],
+    "makesContact": true
   },
   {
     "id": "속이기",
@@ -2037,7 +2744,9 @@
     "power": 40,
     "accuracy": 100,
     "pp": 12,
-    "effect": "상대와 서로 지닌 도구를 교환한다."
+    "priority": 3,
+    "effect": "상대와 서로 지닌 도구를 교환한다.",
+    "makesContact": true
   },
   {
     "id": "앙코르",
@@ -2047,7 +2756,9 @@
     "power": null,
     "accuracy": 100,
     "pp": 8,
-    "effect": "상대가 방금 사용한 기술만 반복해서 사용하게 만든다."
+    "priority": 0,
+    "effect": "상대가 방금 사용한 기술만 반복해서 사용하게 만든다.",
+    "makesContact": false
   },
   {
     "id": "전기자석파",
@@ -2057,7 +2768,9 @@
     "power": null,
     "accuracy": 90,
     "pp": 20,
-    "effect": "상대를 마비 상태로 만든다."
+    "priority": 0,
+    "effect": "상대를 마비 상태로 만든다.",
+    "makesContact": false
   },
   {
     "id": "천사의키스",
@@ -2067,7 +2780,9 @@
     "power": null,
     "accuracy": 75,
     "pp": 12,
-    "effect": "상대를 혼란 상태로 만든다."
+    "priority": 0,
+    "effect": "상대를 혼란 상태로 만든다.",
+    "makesContact": false
   },
   {
     "id": "초롱초롱눈동자",
@@ -2077,7 +2792,16 @@
     "power": null,
     "accuracy": 100,
     "pp": 20,
-    "effect": "우선도 +1. 상대의 공격을 1랭크 낮춘다."
+    "priority": 1,
+    "effect": "우선도 +1. 상대의 공격을 1랭크 낮춘다.",
+    "statChanges": [
+      {
+        "target": "opponent",
+        "stat": "atk",
+        "delta": -1
+      }
+    ],
+    "makesContact": false
   },
   {
     "id": "치근거리기",
@@ -2087,7 +2811,9 @@
     "power": 90,
     "accuracy": 90,
     "pp": 12,
-    "effect": "10% 확률로 상대의 공격을 1랭크 낮춘다."
+    "priority": 0,
+    "effect": "10% 확률로 상대의 공격을 1랭크 낮춘다.",
+    "makesContact": true
   },
   {
     "id": "치유소원",
@@ -2097,7 +2823,9 @@
     "power": null,
     "accuracy": null,
     "pp": 12,
-    "effect": "사용자는 기절하지만, 다음에 나오는 아군의 체력과 상태이상을 완전히 회복시킨다."
+    "priority": 0,
+    "effect": "사용자는 기절하지만, 다음에 나오는 아군의 체력과 상태이상을 완전히 회복시킨다.",
+    "makesContact": false
   },
   {
     "id": "코스믹파워",
@@ -2107,7 +2835,21 @@
     "power": null,
     "accuracy": null,
     "pp": 20,
-    "effect": "자신의 방어와 특방을 1랭크씩 올린다."
+    "priority": 0,
+    "effect": "자신의 방어와 특방을 1랭크씩 올린다.",
+    "statChanges": [
+      {
+        "target": "self",
+        "stat": "def",
+        "delta": 1
+      },
+      {
+        "target": "self",
+        "stat": "spd",
+        "delta": 1
+      }
+    ],
+    "makesContact": false
   },
   {
     "id": "코튼가드",
@@ -2117,7 +2859,16 @@
     "power": null,
     "accuracy": null,
     "pp": 12,
-    "effect": "자신의 방어를 3랭크 올린다."
+    "priority": 0,
+    "effect": "자신의 방어를 3랭크 올린다.",
+    "statChanges": [
+      {
+        "target": "self",
+        "stat": "def",
+        "delta": 3
+      }
+    ],
+    "makesContact": false
   },
   {
     "id": "트리플악셀",
@@ -2127,7 +2878,16 @@
     "power": 20,
     "accuracy": 90,
     "pp": 12,
-    "effect": "3회 연속 공격하며, 맞을 때마다 위력이 커진다."
+    "priority": 0,
+    "effect": "3회 연속 공격하며, 맞을 때마다 위력이 커진다. (다른 연속기와 달리 타수마다 명중 여부를 판정하며, 빗나가면 그 시점에서 중단된다)",
+    "makesContact": true,
+    "multiHitPowers": [
+      20,
+      40,
+      60
+    ],
+    "minHits": 1,
+    "maxHits": 3
   },
   {
     "id": "폭발펀치",
@@ -2137,7 +2897,12 @@
     "power": 100,
     "accuracy": 50,
     "pp": 8,
-    "effect": "100% 확률로 상대를 혼란시킨다."
+    "priority": 0,
+    "effect": "100% 확률로 상대를 혼란시킨다.",
+    "classification": [
+      "펀치"
+    ],
+    "makesContact": true
   },
   {
     "id": "풀묶기",
@@ -2147,7 +2912,9 @@
     "power": null,
     "accuracy": 100,
     "pp": 20,
-    "effect": "상대의 몸무게가 무거울수록 위력이 커진다."
+    "priority": 0,
+    "effect": "상대의 몸무게가 무거울수록 위력이 커진다.",
+    "makesContact": true
   },
   {
     "id": "헤롱헤롱",
@@ -2157,7 +2924,9 @@
     "power": null,
     "accuracy": 100,
     "pp": 16,
-    "effect": "이성인 상대를 헤롱헤롱 상태로 만들어 가끔 기술을 사용하지 못하게 한다."
+    "priority": 0,
+    "effect": "이성인 상대를 헤롱헤롱 상태로 만들어 가끔 기술을 사용하지 못하게 한다.",
+    "makesContact": false
   },
   {
     "id": "흔들흔들댄스",
@@ -2167,7 +2936,12 @@
     "power": null,
     "accuracy": 100,
     "pp": 20,
-    "effect": "장소에 있는 모든 포켓몬(자신 포함)을 혼란시킨다."
+    "priority": 0,
+    "effect": "장소에 있는 모든 포켓몬(자신 포함)을 혼란시킨다.",
+    "classification": [
+      "춤"
+    ],
+    "makesContact": false
   },
   {
     "id": "간지르기",
@@ -2177,7 +2951,21 @@
     "power": null,
     "accuracy": 100,
     "pp": 20,
-    "effect": "상대의 공격과 방어를 1랭크씩 낮춘다."
+    "priority": 0,
+    "effect": "상대의 공격과 방어를 1랭크씩 낮춘다.",
+    "statChanges": [
+      {
+        "target": "opponent",
+        "stat": "atk",
+        "delta": -1
+      },
+      {
+        "target": "opponent",
+        "stat": "def",
+        "delta": -1
+      }
+    ],
+    "makesContact": false
   },
   {
     "id": "그래스슬라이더",
@@ -2187,7 +2975,9 @@
     "power": 55,
     "accuracy": 100,
     "pp": 20,
-    "effect": "그래스필드 상태일 때 우선도 +1이 된다."
+    "priority": 0,
+    "effect": "그래스필드 상태일 때 우선도 +1이 된다.",
+    "makesContact": true
   },
   {
     "id": "그래스필드",
@@ -2197,7 +2987,9 @@
     "power": null,
     "accuracy": null,
     "pp": 12,
-    "effect": "5턴간 필드를 그래스필드로 바꾼다."
+    "priority": 0,
+    "effect": "5턴간 필드를 그래스필드로 바꾼다.",
+    "makesContact": false
   },
   {
     "id": "도발",
@@ -2207,7 +2999,9 @@
     "power": null,
     "accuracy": 100,
     "pp": 20,
-    "effect": "TODO: 부추기기와 같은 기술인지 확인 필요. 별개라면 타입/카테고리/위력/명중/PP 확인 필요"
+    "priority": 0,
+    "effect": "",
+    "makesContact": false
   },
   {
     "id": "독가루",
@@ -2217,7 +3011,9 @@
     "power": null,
     "accuracy": 75,
     "pp": 20,
-    "effect": "상대를 독 상태로 만든다."
+    "priority": 0,
+    "effect": "상대를 독 상태로 만든다.",
+    "makesContact": false
   },
   {
     "id": "목화포자",
@@ -2227,7 +3023,16 @@
     "power": null,
     "accuracy": 100,
     "pp": 20,
-    "effect": "상대의 스피드를 2랭크 낮춘다."
+    "priority": 0,
+    "effect": "상대의 스피드를 2랭크 낮춘다.",
+    "statChanges": [
+      {
+        "target": "opponent",
+        "stat": "spe",
+        "delta": -2
+      }
+    ],
+    "makesContact": false
   },
   {
     "id": "미스트필드",
@@ -2237,7 +3042,9 @@
     "power": null,
     "accuracy": null,
     "pp": 12,
-    "effect": "5턴간 필드를 미스트필드로 바꾼다."
+    "priority": 0,
+    "effect": "5턴간 필드를 미스트필드로 바꾼다.",
+    "makesContact": false
   },
   {
     "id": "성장",
@@ -2247,7 +3054,21 @@
     "power": null,
     "accuracy": null,
     "pp": 20,
-    "effect": "자신의 공격과 특공을 1랭크(맑음 날씨에서는 2랭크) 올린다."
+    "priority": 0,
+    "effect": "자신의 공격과 특공을 1랭크(맑음 날씨에서는 2랭크) 올린다.",
+    "statChanges": [
+      {
+        "target": "self",
+        "stat": "atk",
+        "delta": 1
+      },
+      {
+        "target": "self",
+        "stat": "spa",
+        "delta": 1
+      }
+    ],
+    "makesContact": false
   },
   {
     "id": "신비의부적",
@@ -2257,7 +3078,9 @@
     "power": null,
     "accuracy": null,
     "pp": 20,
-    "effect": "TODO: 타입/카테고리/위력/명중/PP 확인 필요"
+    "priority": 0,
+    "effect": "",
+    "makesContact": false
   },
   {
     "id": "씨뿌리기",
@@ -2267,7 +3090,9 @@
     "power": null,
     "accuracy": 90,
     "pp": 12,
-    "effect": "매 턴 상대의 체력을 흡수해 자신이 회복한다."
+    "priority": 0,
+    "effect": "매 턴 상대의 체력을 흡수해 자신이 회복한다.",
+    "makesContact": false
   },
   {
     "id": "에너지볼",
@@ -2277,7 +3102,12 @@
     "power": 90,
     "accuracy": 100,
     "pp": 12,
-    "effect": "10% 확률로 상대의 특방을 1랭크 낮춘다."
+    "priority": 0,
+    "effect": "10% 확률로 상대의 특방을 1랭크 낮춘다.",
+    "classification": [
+      "구슬/폭탄"
+    ],
+    "makesContact": false
   },
   {
     "id": "저리가루",
@@ -2287,7 +3117,9 @@
     "power": null,
     "accuracy": 75,
     "pp": 20,
-    "effect": "상대를 마비 상태로 만든다."
+    "priority": 0,
+    "effect": "상대를 마비 상태로 만든다.",
+    "makesContact": false
   },
   {
     "id": "집단구타",
@@ -2297,7 +3129,10 @@
     "power": null,
     "accuracy": 100,
     "pp": 12,
-    "effect": "파티의 포켓몬이 순서대로 한 번씩 공격한다."
+    "priority": 0,
+    "effect": "파티에 있는 포켓몬(자신 포함, 기절/알 제외)이 순서대로 한 번씩 공격한다. 최대 6회이며, 타수별 위력은 고정값이 아니라 참가하는 각 포켓몬의 공격 종족값을 기반으로 매번 계산된다.",
+    "makesContact": false,
+    "maxHits": 6
   },
   {
     "id": "추억의선물",
@@ -2307,7 +3142,21 @@
     "power": null,
     "accuracy": 100,
     "pp": 12,
-    "effect": "사용자는 기절하지만, 상대의 공격과 특공을 2랭크씩 낮춘다."
+    "priority": 0,
+    "effect": "사용자는 기절하지만, 상대의 공격과 특공을 2랭크씩 낮춘다.",
+    "statChanges": [
+      {
+        "target": "opponent",
+        "stat": "atk",
+        "delta": -2
+      },
+      {
+        "target": "opponent",
+        "stat": "spa",
+        "delta": -2
+      }
+    ],
+    "makesContact": false
   },
   {
     "id": "트릭룸",
@@ -2317,7 +3166,9 @@
     "power": null,
     "accuracy": 100,
     "pp": 12,
-    "effect": "5턴간 스피드가 낮은 포켓몬부터 먼저 행동한다."
+    "priority": 0,
+    "effect": "5턴간 스피드가 낮은 포켓몬부터 먼저 행동한다.",
+    "makesContact": false
   },
   {
     "id": "가드스왑",
@@ -2327,7 +3178,9 @@
     "power": null,
     "accuracy": null,
     "pp": 12,
-    "effect": "자신과 상대의 방어·특방 랭크 변화를 서로 교환한다."
+    "priority": 0,
+    "effect": "자신과 상대의 방어·특방 랭크 변화를 서로 교환한다.",
+    "makesContact": false
   },
   {
     "id": "검은눈빛",
@@ -2337,7 +3190,9 @@
     "power": null,
     "accuracy": null,
     "pp": 8,
-    "effect": "상대를 도망치거나 교체하지 못하게 만든다."
+    "priority": 0,
+    "effect": "상대를 도망치거나 교체하지 못하게 만든다.",
+    "makesContact": false
   },
   {
     "id": "달빛",
@@ -2347,7 +3202,9 @@
     "power": null,
     "accuracy": null,
     "pp": 8,
-    "effect": "체력을 회복한다. 날씨에 따라 회복량이 달라진다."
+    "priority": 0,
+    "effect": "체력을 회복한다. 날씨에 따라 회복량이 달라진다.",
+    "makesContact": false
   },
   {
     "id": "리플렉터",
@@ -2357,7 +3214,9 @@
     "power": null,
     "accuracy": null,
     "pp": 20,
-    "effect": "5턴간 아군이 받는 물리 데미지를 절반으로 줄인다."
+    "priority": 0,
+    "effect": "5턴간 아군이 받는 물리 데미지를 절반으로 줄인다.",
+    "makesContact": false
   },
   {
     "id": "매혹의보이스",
@@ -2367,7 +3226,12 @@
     "power": 80,
     "accuracy": 100,
     "pp": 12,
-    "effect": "반드시 명중한다."
+    "priority": 0,
+    "effect": "반드시 명중한다.",
+    "classification": [
+      "소리"
+    ],
+    "makesContact": false
   },
   {
     "id": "바크아웃",
@@ -2377,7 +3241,12 @@
     "power": 55,
     "accuracy": 95,
     "pp": 16,
-    "effect": "TODO: 타입/카테고리/위력/명중/PP 확인 필요"
+    "priority": 0,
+    "effect": "",
+    "classification": [
+      "소리"
+    ],
+    "makesContact": false
   },
   {
     "id": "분풀이",
@@ -2387,7 +3256,9 @@
     "power": 75,
     "accuracy": 100,
     "pp": 8,
-    "effect": "직전에 아군이 쓰러졌다면 위력이 2배가 된다."
+    "priority": 0,
+    "effect": "직전에 아군이 쓰러졌다면 위력이 2배가 된다.",
+    "makesContact": true
   },
   {
     "id": "비장의무기",
@@ -2397,7 +3268,9 @@
     "power": 140,
     "accuracy": 100,
     "pp": 8,
-    "effect": "남은 PP가 적을수록 위력이 커진다."
+    "priority": 0,
+    "effect": "남은 PP가 적을수록 위력이 커진다.",
+    "makesContact": true
   },
   {
     "id": "뽐내기",
@@ -2407,7 +3280,16 @@
     "power": null,
     "accuracy": 85,
     "pp": 16,
-    "effect": "상대의 공격을 2랭크 올리고 혼란 상태로 만든다."
+    "priority": 0,
+    "effect": "상대의 공격을 2랭크 올리고 혼란 상태로 만든다.",
+    "statChanges": [
+      {
+        "target": "opponent",
+        "stat": "atk",
+        "delta": 2
+      }
+    ],
+    "makesContact": false
   },
   {
     "id": "속임수",
@@ -2417,7 +3299,9 @@
     "power": 95,
     "accuracy": 100,
     "pp": 16,
-    "effect": "TODO: 속이기(에스퍼, 도구 교환)와 같은 기술인지 확인 필요. 별개라면 타입/카테고리/위력/명중/PP 확인 필요"
+    "priority": 0,
+    "effect": "",
+    "makesContact": true
   },
   {
     "id": "스킬스왑",
@@ -2427,7 +3311,9 @@
     "power": null,
     "accuracy": null,
     "pp": 12,
-    "effect": "상대와 서로의 특성을 교환한다."
+    "priority": 0,
+    "effect": "상대와 서로의 특성을 교환한다.",
+    "makesContact": false
   },
   {
     "id": "어시스트파워",
@@ -2437,7 +3323,9 @@
     "power": 20,
     "accuracy": 100,
     "pp": 12,
-    "effect": "TODO: 타입/카테고리/위력/명중/PP 확인 필요"
+    "priority": 0,
+    "effect": "",
+    "makesContact": false
   },
   {
     "id": "원한",
@@ -2447,7 +3335,9 @@
     "power": null,
     "accuracy": 100,
     "pp": 12,
-    "effect": "사용자가 이번 턴 쓰러지면 상대가 방금 사용한 기술의 PP를 모두 소진시킨다."
+    "priority": 0,
+    "effect": "사용자가 이번 턴 쓰러지면 상대가 방금 사용한 기술의 PP를 모두 소진시킨다.",
+    "makesContact": false
   },
   {
     "id": "이상한빛",
@@ -2457,7 +3347,9 @@
     "power": null,
     "accuracy": 100,
     "pp": 12,
-    "effect": "상대를 혼란 상태로 만든다."
+    "priority": 0,
+    "effect": "상대를 혼란 상태로 만든다.",
+    "makesContact": false
   },
   {
     "id": "지옥찌르기",
@@ -2467,7 +3359,9 @@
     "power": 80,
     "accuracy": 100,
     "pp": 16,
-    "effect": "TODO: 타입/카테고리/위력/명중/PP 확인 필요"
+    "priority": 0,
+    "effect": "",
+    "makesContact": true
   },
   {
     "id": "탐내기",
@@ -2477,7 +3371,9 @@
     "power": 60,
     "accuracy": 100,
     "pp": 20,
-    "effect": "상대가 도구를 지니고 있으면 명중 시 그 도구를 빼앗는다."
+    "priority": 0,
+    "effect": "상대가 도구를 지니고 있으면 명중 시 그 도구를 빼앗는다.",
+    "makesContact": true
   },
   {
     "id": "트집",
@@ -2487,7 +3383,9 @@
     "power": null,
     "accuracy": 100,
     "pp": 16,
-    "effect": "상대가 방금 사용한 기술의 PP를 4 감소시킨다."
+    "priority": 0,
+    "effect": "상대가 방금 사용한 기술의 PP를 4 감소시킨다.",
+    "makesContact": false
   },
   {
     "id": "니트로차지",
@@ -2497,7 +3395,9 @@
     "power": 50,
     "accuracy": 100,
     "pp": 20,
-    "effect": "TODO: 타입/카테고리/위력/명중/PP 확인 필요"
+    "priority": 0,
+    "effect": "",
+    "makesContact": true
   },
   {
     "id": "도깨비불",
@@ -2507,7 +3407,9 @@
     "power": null,
     "accuracy": 85,
     "pp": 16,
-    "effect": "상대를 화상 상태로 만든다."
+    "priority": 0,
+    "effect": "상대를 화상 상태로 만든다.",
+    "makesContact": false
   },
   {
     "id": "매지컬플레임",
@@ -2517,7 +3419,9 @@
     "power": 75,
     "accuracy": 100,
     "pp": 12,
-    "effect": "100% 확률로 상대의 특공을 1랭크 낮춘다."
+    "priority": 0,
+    "effect": "100% 확률로 상대의 특공을 1랭크 낮춘다.",
+    "makesContact": false
   },
   {
     "id": "메테오빔",
@@ -2527,7 +3431,9 @@
     "power": 120,
     "accuracy": 90,
     "pp": 12,
-    "effect": "1턴째 자신의 특공을 올리고, 2턴째 공격한다."
+    "priority": 0,
+    "effect": "1턴째 자신의 특공을 올리고, 2턴째 공격한다.",
+    "makesContact": false
   },
   {
     "id": "분연",
@@ -2537,7 +3443,9 @@
     "power": 80,
     "accuracy": 100,
     "pp": 16,
-    "effect": "TODO: 타입/카테고리/위력/명중/PP 확인 필요"
+    "priority": 0,
+    "effect": "",
+    "makesContact": false
   },
   {
     "id": "불사르기",
@@ -2547,7 +3455,9 @@
     "power": 130,
     "accuracy": 100,
     "pp": 8,
-    "effect": "사용 후 자신은 불꽃 타입을 잃는다."
+    "priority": 0,
+    "effect": "사용 후 자신은 불꽃 타입을 잃는다.",
+    "makesContact": false
   },
   {
     "id": "사슬묶기",
@@ -2557,7 +3467,9 @@
     "power": null,
     "accuracy": 100,
     "pp": 20,
-    "effect": "TODO: 타입/카테고리/위력/명중/PP 확인 필요"
+    "priority": 0,
+    "effect": "",
+    "makesContact": false
   },
   {
     "id": "사이드체인지",
@@ -2567,7 +3479,9 @@
     "power": null,
     "accuracy": null,
     "pp": 16,
-    "effect": "양 진영에 설치된 필드 효과를 서로 교환한다."
+    "priority": 2,
+    "effect": "양 진영에 설치된 필드 효과를 서로 교환한다.",
+    "makesContact": false
   },
   {
     "id": "사이코필드",
@@ -2577,7 +3491,9 @@
     "power": null,
     "accuracy": null,
     "pp": 12,
-    "effect": "5턴간 필드를 사이코필드로 바꾼다."
+    "priority": 0,
+    "effect": "5턴간 필드를 사이코필드로 바꾼다.",
+    "makesContact": false
   },
   {
     "id": "아머캐논",
@@ -2587,7 +3503,9 @@
     "power": 120,
     "accuracy": 100,
     "pp": 8,
-    "effect": "사용 후 자신의 방어와 특방이 1랭크씩 낮아진다."
+    "priority": 0,
+    "effect": "사용 후 자신의 방어와 특방이 1랭크씩 낮아진다.",
+    "makesContact": false
   },
   {
     "id": "애시드봄",
@@ -2597,7 +3515,12 @@
     "power": 40,
     "accuracy": 100,
     "pp": 20,
-    "effect": "100% 확률로 상대의 특방을 2랭크 낮춘다."
+    "priority": 0,
+    "effect": "100% 확률로 상대의 특방을 2랭크 낮춘다.",
+    "classification": [
+      "구슬/폭탄"
+    ],
+    "makesContact": false
   },
   {
     "id": "열사의대지",
@@ -2607,7 +3530,9 @@
     "power": 70,
     "accuracy": 100,
     "pp": 12,
-    "effect": "30% 확률로 상대를 화상 상태로 만든다."
+    "priority": 0,
+    "effect": "30% 확률로 상대를 화상 상태로 만든다.",
+    "makesContact": false
   },
   {
     "id": "열풍",
@@ -2617,7 +3542,12 @@
     "power": 95,
     "accuracy": 90,
     "pp": 12,
-    "effect": "10% 확률로 상대를 화상 상태로 만든다."
+    "priority": 0,
+    "effect": "10% 확률로 상대를 화상 상태로 만든다.",
+    "classification": [
+      "바람"
+    ],
+    "makesContact": false
   },
   {
     "id": "오버히트",
@@ -2627,7 +3557,9 @@
     "power": 130,
     "accuracy": 90,
     "pp": 8,
-    "effect": "사용 후 자신의 특공이 2랭크 낮아진다."
+    "priority": 0,
+    "effect": "사용 후 자신의 특공이 2랭크 낮아진다.",
+    "makesContact": false
   },
   {
     "id": "와이드포스",
@@ -2637,7 +3569,9 @@
     "power": 80,
     "accuracy": 100,
     "pp": 12,
-    "effect": "사이코필드 상태일 때 위력이 커진다."
+    "priority": 0,
+    "effect": "사이코필드 상태일 때 위력이 커진다.",
+    "makesContact": false
   },
   {
     "id": "클리어스모그",
@@ -2647,7 +3581,9 @@
     "power": 50,
     "accuracy": null,
     "pp": 16,
-    "effect": "상대의 능력 랭크 변화를 전부 원래대로 되돌린다."
+    "priority": 0,
+    "effect": "상대의 능력 랭크 변화를 전부 원래대로 되돌린다.",
+    "makesContact": false
   },
   {
     "id": "트릭",
@@ -2655,9 +3591,11 @@
     "type": "에스퍼",
     "category": "status",
     "power": null,
-    "accuracy": 100,
-    "pp": 10,
-    "effect": "상대와 서로 지닌 도구를 교환한다."
+    "accuracy": null,
+    "pp": 8,
+    "priority": 0,
+    "effect": "상대와 서로 지닌 도구를 교환한다.",
+    "makesContact": false
   },
   {
     "id": "플레어드라이브",
@@ -2667,7 +3605,9 @@
     "power": 120,
     "accuracy": 100,
     "pp": 16,
-    "effect": "TODO: 불꽃세례와 같은 기술인지 확인 필요. 별개라면 타입/카테고리/위력/명중/PP 확인 필요"
+    "priority": 0,
+    "effect": "",
+    "makesContact": true
   },
   {
     "id": "회오리불꽃",
@@ -2677,7 +3617,9 @@
     "power": 35,
     "accuracy": 85,
     "pp": 16,
-    "effect": "여러 턴 동안 상대를 속박해 데미지를 준다."
+    "priority": 0,
+    "effect": "여러 턴 동안 상대를 속박해 데미지를 준다.",
+    "makesContact": false
   },
   {
     "id": "병상첨병",
@@ -2687,7 +3629,9 @@
     "power": 65,
     "accuracy": 100,
     "pp": 12,
-    "effect": "TODO: 타입/카테고리/위력/명중/PP 확인 필요"
+    "priority": 0,
+    "effect": "",
+    "makesContact": false
   },
   {
     "id": "솔라블레이드",
@@ -2697,7 +3641,12 @@
     "power": 125,
     "accuracy": 100,
     "pp": 12,
-    "effect": "1턴째 빛을 모으고 2턴째 공격한다. 맑음 날씨에서는 1턴만에 발동한다."
+    "priority": 0,
+    "effect": "1턴째 빛을 모으고 2턴째 공격한다. 맑음 날씨에서는 1턴만에 발동한다.",
+    "classification": [
+      "베기"
+    ],
+    "makesContact": true
   },
   {
     "id": "야습",
@@ -2707,7 +3656,9 @@
     "power": 40,
     "accuracy": 100,
     "pp": 20,
-    "effect": "우선도 +1. 항상 먼저 나간다."
+    "priority": 1,
+    "effect": "우선도 +1. 항상 먼저 나간다.",
+    "makesContact": true
   },
   {
     "id": "원념의칼",
@@ -2717,7 +3668,12 @@
     "power": 90,
     "accuracy": 100,
     "pp": 12,
-    "effect": "준 데미지의 절반만큼 자신의 체력을 회복한다."
+    "priority": 0,
+    "effect": "준 데미지의 절반만큼 자신의 체력을 회복한다.",
+    "classification": [
+      "베기"
+    ],
+    "makesContact": true
   },
   {
     "id": "폴터가이스트",
@@ -2727,7 +3683,9 @@
     "power": 110,
     "accuracy": 90,
     "pp": 8,
-    "effect": "상대가 도구를 지니고 있지 않으면 실패한다."
+    "priority": 0,
+    "effect": "상대가 도구를 지니고 있지 않으면 실패한다.",
+    "makesContact": false
   },
   {
     "id": "노래하기",
@@ -2737,7 +3695,12 @@
     "power": null,
     "accuracy": 55,
     "pp": 16,
-    "effect": "상대를 잠들게 한다."
+    "priority": 0,
+    "effect": "상대를 잠들게 한다.",
+    "classification": [
+      "소리"
+    ],
+    "makesContact": false
   },
   {
     "id": "멸망의노래",
@@ -2747,7 +3710,12 @@
     "power": null,
     "accuracy": null,
     "pp": 8,
-    "effect": "노래를 들은 포켓몬은 3턴 후 기절한다."
+    "priority": 0,
+    "effect": "노래를 들은 포켓몬은 3턴 후 기절한다.",
+    "classification": [
+      "소리"
+    ],
+    "makesContact": false
   },
   {
     "id": "물거품아리아",
@@ -2757,7 +3725,12 @@
     "power": 90,
     "accuracy": 100,
     "pp": 12,
-    "effect": "명중한 상대의 화상 상태를 치료한다."
+    "priority": 0,
+    "effect": "명중한 상대의 화상 상태를 치료한다.",
+    "classification": [
+      "소리"
+    ],
+    "makesContact": false
   },
   {
     "id": "미스트버스트",
@@ -2767,7 +3740,9 @@
     "power": 100,
     "accuracy": 100,
     "pp": 8,
-    "effect": "미스트필드 상태일 때 위력이 커진다."
+    "priority": 0,
+    "effect": "미스트필드 상태일 때 위력이 커진다.",
+    "makesContact": false
   },
   {
     "id": "아이스스피너",
@@ -2777,7 +3752,9 @@
     "power": 80,
     "accuracy": 100,
     "pp": 16,
-    "effect": "필드 효과를 없앤다."
+    "priority": 0,
+    "effect": "필드 효과를 없앤다.",
+    "makesContact": true
   },
   {
     "id": "아쿠아제트",
@@ -2787,7 +3764,9 @@
     "power": 40,
     "accuracy": 100,
     "pp": 20,
-    "effect": "우선도 +1. 항상 먼저 나간다."
+    "priority": 1,
+    "effect": "우선도 +1. 항상 먼저 나간다.",
+    "makesContact": true
   },
   {
     "id": "원더룸",
@@ -2797,7 +3776,9 @@
     "power": null,
     "accuracy": null,
     "pp": 12,
-    "effect": "5턴간 모든 포켓몬의 방어와 특방 능력치를 서로 바꾼다."
+    "priority": 0,
+    "effect": "5턴간 모든 포켓몬의 방어와 특방 능력치를 서로 바꾼다.",
+    "makesContact": false
   },
   {
     "id": "흑안개",
@@ -2807,7 +3788,9 @@
     "power": null,
     "accuracy": null,
     "pp": 20,
-    "effect": "필드에 있는 모든 포켓몬의 능력 랭크 변화를 초기화한다."
+    "priority": 0,
+    "effect": "필드에 있는 모든 포켓몬의 능력 랭크 변화를 초기화한다.",
+    "makesContact": false
   },
   {
     "id": "기습",
@@ -2817,7 +3800,9 @@
     "power": 70,
     "accuracy": 100,
     "pp": 8,
-    "effect": "TODO: 깜짝베기와 같은 기술인지 확인 필요. 별개라면 타입/카테고리/위력/명중/PP 확인 필요"
+    "priority": 1,
+    "effect": "",
+    "makesContact": true
   },
   {
     "id": "꽃가루경단",
@@ -2827,7 +3812,12 @@
     "power": 90,
     "accuracy": 100,
     "pp": 16,
-    "effect": "아군에게 사용하면 체력을 회복시킨다."
+    "priority": 0,
+    "effect": "아군에게 사용하면 체력을 회복시킨다.",
+    "classification": [
+      "구슬/폭탄"
+    ],
+    "makesContact": false
   },
   {
     "id": "꽃보라",
@@ -2837,7 +3827,12 @@
     "power": 90,
     "accuracy": 100,
     "pp": 16,
-    "effect": ""
+    "priority": 0,
+    "effect": "",
+    "classification": [
+      "바람"
+    ],
+    "makesContact": false
   },
   {
     "id": "독압정",
@@ -2847,7 +3842,9 @@
     "power": null,
     "accuracy": 90,
     "pp": 20,
-    "effect": "상대 진영에 설치. 이후 등장하는 포켓몬은 교체될 때 독 상태가 된다."
+    "priority": 0,
+    "effect": "상대 진영에 설치. 이후 등장하는 포켓몬은 교체될 때 독 상태가 된다.",
+    "makesContact": false
   },
   {
     "id": "리프스톰",
@@ -2857,7 +3854,9 @@
     "power": 130,
     "accuracy": 90,
     "pp": 8,
-    "effect": "사용 후 자신의 특공이 2랭크 낮아진다."
+    "priority": 0,
+    "effect": "사용 후 자신의 특공이 2랭크 낮아진다.",
+    "makesContact": false
   },
   {
     "id": "씨기관총",
@@ -2867,7 +3866,14 @@
     "power": 25,
     "accuracy": 100,
     "pp": 20,
-    "effect": "2~5회 연속 공격."
+    "priority": 0,
+    "effect": "2~5회 연속 공격. (2/3회 각 35%, 4/5회 각 15% 확률. 명중 여부는 첫 타에서만 판정)",
+    "classification": [
+      "구슬/폭탄"
+    ],
+    "makesContact": false,
+    "minHits": 2,
+    "maxHits": 5
   },
   {
     "id": "압정뿌리기",
@@ -2877,7 +3883,9 @@
     "power": null,
     "accuracy": null,
     "pp": 20,
-    "effect": "상대 진영에 설치. 이후 등장하는 포켓몬은 교체될 때 데미지를 입는다."
+    "priority": 0,
+    "effect": "상대 진영에 설치. 이후 등장하는 포켓몬은 교체될 때 데미지를 입는다.",
+    "makesContact": false
   },
   {
     "id": "트릭플라워",
@@ -2887,7 +3895,9 @@
     "power": 70,
     "accuracy": null,
     "pp": 12,
-    "effect": "반드시 급소에 맞는다."
+    "priority": 0,
+    "effect": "반드시 급소에 맞는다.",
+    "makesContact": false
   },
   {
     "id": "파워젬",
@@ -2897,7 +3907,9 @@
     "power": 80,
     "accuracy": 100,
     "pp": 20,
-    "effect": ""
+    "priority": 0,
+    "effect": "",
+    "makesContact": false
   },
   {
     "id": "하드플랜트",
@@ -2907,7 +3919,9 @@
     "power": 150,
     "accuracy": 90,
     "pp": 8,
-    "effect": "사용한 다음 턴은 움직일 수 없다."
+    "priority": 0,
+    "effect": "사용한 다음 턴은 움직일 수 없다.",
+    "makesContact": false
   },
   {
     "id": "드래곤옐",
@@ -2917,7 +3931,12 @@
     "power": null,
     "accuracy": null,
     "pp": 16,
-    "effect": ""
+    "priority": 0,
+    "effect": "자신을 제외한 아군 전원의 급소율을 1랭크 올린다(아군이 드래곤 타입이면 2랭크). 자신에게는 효과가 없다(단식전에서는 사실상 무효과).",
+    "classification": [
+      "소리"
+    ],
+    "makesContact": false
   },
   {
     "id": "배북",
@@ -2927,7 +3946,16 @@
     "power": null,
     "accuracy": null,
     "pp": 12,
-    "effect": ""
+    "priority": 0,
+    "effect": "자신의 최대 HP 절반을 소모하고, 공격 랭크를 현재 상태와 무관하게 무조건 최대(+6)로 끌어올린다. 현재 HP가 최대 HP 절반 미만이면 사용에 실패한다.",
+    "statChanges": [
+      {
+        "target": "self",
+        "stat": "atk",
+        "setTo": 6
+      }
+    ],
+    "makesContact": false
   },
   {
     "id": "불꽃엄니",
@@ -2937,7 +3965,12 @@
     "power": 65,
     "accuracy": 95,
     "pp": 16,
-    "effect": ""
+    "priority": 0,
+    "effect": "",
+    "classification": [
+      "물기"
+    ],
+    "makesContact": true
   },
   {
     "id": "블라스트번",
@@ -2947,7 +3980,9 @@
     "power": 150,
     "accuracy": 90,
     "pp": 8,
-    "effect": ""
+    "priority": 0,
+    "effect": "",
+    "makesContact": false
   },
   {
     "id": "연옥",
@@ -2957,7 +3992,9 @@
     "power": 100,
     "accuracy": 50,
     "pp": 8,
-    "effect": ""
+    "priority": 0,
+    "effect": "",
+    "makesContact": false
   },
   {
     "id": "열불내기",
@@ -2967,7 +4004,9 @@
     "power": 75,
     "accuracy": 100,
     "pp": 12,
-    "effect": ""
+    "priority": 0,
+    "effect": "",
+    "makesContact": true
   },
   {
     "id": "와이드브레이커",
@@ -2977,7 +4016,9 @@
     "power": 60,
     "accuracy": 100,
     "pp": 16,
-    "effect": ""
+    "priority": 0,
+    "effect": "",
+    "makesContact": true
   },
   {
     "id": "히트스탬프",
@@ -2987,7 +4028,9 @@
     "power": null,
     "accuracy": 100,
     "pp": 12,
-    "effect": ""
+    "priority": 0,
+    "effect": "",
+    "makesContact": false
   },
   {
     "id": "고속스핀",
@@ -2997,7 +4040,9 @@
     "power": 50,
     "accuracy": 100,
     "pp": 20,
-    "effect": ""
+    "priority": 0,
+    "effect": "",
+    "makesContact": false
   },
   {
     "id": "껍질깨기",
@@ -3007,7 +4052,36 @@
     "power": null,
     "accuracy": null,
     "pp": 16,
-    "effect": ""
+    "priority": 0,
+    "effect": "자신의 공격과 특공, 스피드를 2랭크씩 올리는 대신 방어와 특방이 1랭크씩 낮아진다.",
+    "statChanges": [
+      {
+        "target": "self",
+        "stat": "atk",
+        "delta": 2
+      },
+      {
+        "target": "self",
+        "stat": "def",
+        "delta": -1
+      },
+      {
+        "target": "self",
+        "stat": "spa",
+        "delta": 2
+      },
+      {
+        "target": "self",
+        "stat": "spd",
+        "delta": -1
+      },
+      {
+        "target": "self",
+        "stat": "spe",
+        "delta": 2
+      }
+    ],
+    "makesContact": false
   },
   {
     "id": "대지의파동",
@@ -3017,7 +4091,12 @@
     "power": 50,
     "accuracy": 100,
     "pp": 12,
-    "effect": ""
+    "priority": 0,
+    "effect": "",
+    "classification": [
+      "파동"
+    ],
+    "makesContact": false
   },
   {
     "id": "아쿠아테일",
@@ -3027,7 +4106,9 @@
     "power": 90,
     "accuracy": 90,
     "pp": 12,
-    "effect": ""
+    "priority": 0,
+    "effect": "",
+    "makesContact": true
   },
   {
     "id": "자이로볼",
@@ -3037,7 +4118,12 @@
     "power": null,
     "accuracy": 100,
     "pp": 8,
-    "effect": ""
+    "priority": 0,
+    "effect": "",
+    "classification": [
+      "구슬/폭탄"
+    ],
+    "makesContact": true
   },
   {
     "id": "해수스파우팅",
@@ -3047,7 +4133,9 @@
     "power": 150,
     "accuracy": 100,
     "pp": 8,
-    "effect": ""
+    "priority": 0,
+    "effect": "",
+    "makesContact": false
   },
   {
     "id": "달콤한향기",
@@ -3057,7 +4145,9 @@
     "power": null,
     "accuracy": 100,
     "pp": 20,
-    "effect": ""
+    "priority": 0,
+    "effect": "",
+    "makesContact": false
   },
   {
     "id": "베놈쇼크",
@@ -3067,7 +4157,9 @@
     "power": 65,
     "accuracy": 100,
     "pp": 12,
-    "effect": ""
+    "priority": 0,
+    "effect": "",
+    "makesContact": false
   },
   {
     "id": "뿌리박기",
@@ -3077,7 +4169,9 @@
     "power": null,
     "accuracy": null,
     "pp": 20,
-    "effect": ""
+    "priority": 0,
+    "effect": "",
+    "makesContact": false
   },
   {
     "id": "수면가루",
@@ -3087,7 +4181,9 @@
     "power": null,
     "accuracy": 75,
     "pp": 16,
-    "effect": ""
+    "priority": 0,
+    "effect": "",
+    "makesContact": false
   },
   {
     "id": "파워휩",
@@ -3097,7 +4193,9 @@
     "power": 120,
     "accuracy": 85,
     "pp": 12,
-    "effect": ""
+    "priority": 0,
+    "effect": "",
+    "makesContact": true
   },
   {
     "id": "미러타입",
@@ -3107,7 +4205,9 @@
     "power": null,
     "accuracy": null,
     "pp": 16,
-    "effect": ""
+    "priority": 0,
+    "effect": "",
+    "makesContact": false
   },
   {
     "id": "봉인",
@@ -3117,7 +4217,9 @@
     "power": null,
     "accuracy": null,
     "pp": 12,
-    "effect": ""
+    "priority": 0,
+    "effect": "",
+    "makesContact": false
   },
   {
     "id": "부식가스",
@@ -3127,7 +4229,9 @@
     "power": null,
     "accuracy": 100,
     "pp": 20,
-    "effect": ""
+    "priority": 0,
+    "effect": "",
+    "makesContact": false
   },
   {
     "id": "아픔나누기",
@@ -3137,7 +4241,9 @@
     "power": null,
     "accuracy": null,
     "pp": 20,
-    "effect": ""
+    "priority": 0,
+    "effect": "",
+    "makesContact": false
   },
   {
     "id": "자폭",
@@ -3147,7 +4253,9 @@
     "power": 200,
     "accuracy": 100,
     "pp": 8,
-    "effect": ""
+    "priority": 0,
+    "effect": "",
+    "makesContact": false
   },
   {
     "id": "최면술",
@@ -3157,7 +4265,9 @@
     "power": null,
     "accuracy": 60,
     "pp": 20,
-    "effect": ""
+    "priority": 0,
+    "effect": "",
+    "makesContact": false
   },
   {
     "id": "매직룸",
@@ -3167,7 +4277,9 @@
     "power": null,
     "accuracy": null,
     "pp": 12,
-    "effect": ""
+    "priority": 0,
+    "effect": "",
+    "makesContact": false
   },
   {
     "id": "미래예지",
@@ -3177,7 +4289,9 @@
     "power": 120,
     "accuracy": 100,
     "pp": 12,
-    "effect": ""
+    "priority": 0,
+    "effect": "",
+    "makesContact": false
   },
   {
     "id": "중력",
@@ -3187,7 +4301,9 @@
     "power": null,
     "accuracy": null,
     "pp": 8,
-    "effect": ""
+    "priority": 0,
+    "effect": "",
+    "makesContact": false
   },
   {
     "id": "차지빔",
@@ -3197,7 +4313,9 @@
     "power": 50,
     "accuracy": 90,
     "pp": 12,
-    "effect": ""
+    "priority": 0,
+    "effect": "",
+    "makesContact": false
   },
   {
     "id": "파워스왑",
@@ -3207,7 +4325,9 @@
     "power": null,
     "accuracy": null,
     "pp": 12,
-    "effect": ""
+    "priority": 0,
+    "effect": "",
+    "makesContact": false
   },
   {
     "id": "대폭발",
@@ -3217,7 +4337,9 @@
     "power": 250,
     "accuracy": 100,
     "pp": 8,
-    "effect": ""
+    "priority": 0,
+    "effect": "",
+    "makesContact": false
   },
   {
     "id": "사이코팽",
@@ -3227,7 +4349,12 @@
     "power": 85,
     "accuracy": 100,
     "pp": 12,
-    "effect": ""
+    "priority": 0,
+    "effect": "",
+    "classification": [
+      "물기"
+    ],
+    "makesContact": true
   },
   {
     "id": "아이언롤러",
@@ -3237,7 +4364,9 @@
     "power": 130,
     "accuracy": 100,
     "pp": 8,
-    "effect": ""
+    "priority": 0,
+    "effect": "",
+    "makesContact": true
   },
   {
     "id": "전자부유",
@@ -3247,7 +4376,9 @@
     "power": null,
     "accuracy": null,
     "pp": 12,
-    "effect": ""
+    "priority": 0,
+    "effect": "",
+    "makesContact": false
   },
   {
     "id": "난동부리기",
@@ -3257,7 +4388,9 @@
     "power": 120,
     "accuracy": 100,
     "pp": 12,
-    "effect": ""
+    "priority": 0,
+    "effect": "",
+    "makesContact": true
   },
   {
     "id": "번개엄니",
@@ -3267,7 +4400,12 @@
     "power": 65,
     "accuracy": 95,
     "pp": 16,
-    "effect": ""
+    "priority": 0,
+    "effect": "",
+    "classification": [
+      "물기"
+    ],
+    "makesContact": true
   },
   {
     "id": "록블라스트",
@@ -3277,7 +4415,11 @@
     "power": 25,
     "accuracy": 90,
     "pp": 12,
-    "effect": ""
+    "priority": 0,
+    "effect": "2~5회 연속 공격. (2/3회 각 35%, 4/5회 각 15% 확률. 명중 여부는 첫 타에서만 판정)",
+    "makesContact": false,
+    "minHits": 2,
+    "maxHits": 5
   },
   {
     "id": "얼음엄니",
@@ -3287,7 +4429,12 @@
     "power": 65,
     "accuracy": 95,
     "pp": 16,
-    "effect": ""
+    "priority": 0,
+    "effect": "",
+    "classification": [
+      "물기"
+    ],
+    "makesContact": true
   },
   {
     "id": "헤비봄버",
@@ -3297,6 +4444,78 @@
     "power": null,
     "accuracy": 100,
     "pp": 12,
-    "effect": ""
+    "priority": 0,
+    "effect": "",
+    "makesContact": true
+  },
+  {
+    "id": "게으름피우기",
+    "name": "게으름피우기",
+    "type": "노말",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 8,
+    "priority": 0,
+    "effect": "자신의 최대 체력을 절반 회복한다.",
+    "makesContact": false
+  },
+  {
+    "id": "트림",
+    "name": "트림",
+    "type": "독",
+    "category": "special",
+    "power": 120,
+    "accuracy": 90,
+    "pp": 12,
+    "priority": 0,
+    "effect": "지니고 있던 나무열매를 먹은 뒤에만 사용할 수 있다.",
+    "makesContact": true
+  },
+  {
+    "id": "플레어송",
+    "name": "플레어송",
+    "type": "불꽃",
+    "category": "special",
+    "power": 80,
+    "accuracy": 100,
+    "pp": 12,
+    "priority": 0,
+    "effect": "명중하면 자신의 특수공격이 1랭크 오른다.",
+    "statChanges": [
+      {
+        "target": "self",
+        "stat": "spa",
+        "delta": 1
+      }
+    ],
+    "classification": [
+      "소리"
+    ],
+    "makesContact": false
+  },
+  {
+    "id": "양날박치기",
+    "name": "양날박치기",
+    "type": "바위",
+    "category": "physical",
+    "power": 150,
+    "accuracy": 80,
+    "pp": 8,
+    "priority": 0,
+    "effect": "준 데미지의 1/3만큼 자신도 반동 데미지를 입는다.",
+    "makesContact": true
+  },
+  {
+    "id": "트라이어택",
+    "name": "트라이어택",
+    "type": "노말",
+    "category": "physical",
+    "power": 80,
+    "accuracy": 100,
+    "pp": 12,
+    "priority": 0,
+    "effect": "20% 확률로 상대를 화상·마비·냉동 중 하나의 상태로 만든다.",
+    "makesContact": false
   }
 ]

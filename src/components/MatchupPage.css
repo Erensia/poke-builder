@@ -1,0 +1,60 @@
+.matchup-page {
+  width: 100%;
+  max-width: 740px;
+}
+
+.matchup-page-header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  margin-bottom: 1.4rem;
+}
+
+.matchup-page-header h2 {
+  font-size: 1.3rem;
+  margin-bottom: 0.3rem;
+}
+
+.matchup-page-header p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  max-width: 42ch;
+}
+
+/* 좌: 내 포켓몬 / 가운데: 판정 / 우: 상대 포켓몬(15px 아래로 오프셋) — 파티 빌더 2열 리듬과 동일 */
+.matchup-board {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 1rem;
+}
+
+.matchup-board > .matchup-slot:last-child {
+  margin-top: 15px;
+}
+
+.matchup-verdict-row {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding-top: 3.2rem;
+  flex-shrink: 0;
+  width: 130px;
+}
+
+@media (max-width: 760px) {
+  .matchup-board {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .matchup-board > .matchup-slot:last-child {
+    margin-top: 0;
+  }
+
+  .matchup-verdict-row {
+    padding-top: 0;
+  }
+}

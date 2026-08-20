@@ -1,10 +1,9 @@
 .app-shell {
-  display: flex;
   min-height: 100svh;
 }
 
 .app-main {
-  flex: 1;
+  margin-left: 64px;
   padding: 2rem clamp(1.25rem, 4vw, 3rem);
   display: flex;
   justify-content: center;

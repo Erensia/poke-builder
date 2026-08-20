@@ -1,0 +1,28 @@
+[
+  { "id": "외로움", "name": "외로움", "increased": "atk", "decreased": "def" },
+  { "id": "고집", "name": "고집", "increased": "atk", "decreased": "spa" },
+  { "id": "개구쟁이", "name": "개구쟁이", "increased": "atk", "decreased": "spd" },
+  { "id": "용감", "name": "용감", "increased": "atk", "decreased": "spe" },
+
+  { "id": "대담", "name": "대담", "increased": "def", "decreased": "atk" },
+  { "id": "장난꾸러기", "name": "장난꾸러기", "increased": "def", "decreased": "spa" },
+  { "id": "촐랑", "name": "촐랑", "increased": "def", "decreased": "spd" },
+  { "id": "무사태평", "name": "무사태평", "increased": "def", "decreased": "spe" },
+
+  { "id": "조심", "name": "조심", "increased": "spa", "decreased": "atk" },
+  { "id": "의젓", "name": "의젓", "increased": "spa", "decreased": "def" },
+  { "id": "덜렁", "name": "덜렁", "increased": "spa", "decreased": "spd" },
+  { "id": "냉정", "name": "냉정", "increased": "spa", "decreased": "spe" },
+
+  { "id": "차분", "name": "차분", "increased": "spd", "decreased": "atk" },
+  { "id": "얌전", "name": "얌전", "increased": "spd", "decreased": "def" },
+  { "id": "건방", "name": "건방", "increased": "spd", "decreased": "spa" },
+  { "id": "신중", "name": "신중", "increased": "spd", "decreased": "spe" },
+
+  { "id": "겁쟁이", "name": "겁쟁이", "increased": "spe", "decreased": "atk" },
+  { "id": "성급", "name": "성급", "increased": "spe", "decreased": "def" },
+  { "id": "명랑", "name": "명랑", "increased": "spe", "decreased": "spa" },
+  { "id": "천진난만", "name": "천진난만", "increased": "spe", "decreased": "spd" },
+
+  { "id": "성실", "name": "성실", "increased": null, "decreased": null }
+]

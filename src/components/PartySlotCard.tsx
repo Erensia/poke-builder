@@ -1,6 +1,8 @@
 import type { PartySlot } from "../types/party";
-import { getPokemon, getMove, getAbility, getItem } from "../lib/data";
+import { getPokemon, getMove, getAbility, getItem, getNature } from "../lib/data";
 import { getEffectiveForm } from "../lib/pokemonForm";
+import { computeRealStats, totalAbilityPoints } from "../lib/statCalculator";
+import { computeBulkPower } from "../lib/battlePower";
 import { TypeBadge } from "./TypeBadge";
 import { TYPE_COLORS } from "../lib/typeColors";
 import "./PartySlotCard.css";
@@ -13,6 +15,8 @@ interface PartySlotCardProps {
   onPickMove: (moveIndex: 0 | 1 | 2 | 3) => void;
   onPickAbility: () => void;
   onPickItem: () => void;
+  onPickNature: () => void;
+  onPickPoints: () => void;
 }
 
 export function PartySlotCard({
@@ -23,6 +27,8 @@ export function PartySlotCard({
   onPickMove,
   onPickAbility,
   onPickItem,
+  onPickNature,
+  onPickPoints,
 }: PartySlotCardProps) {
   const pokemon = slot ? getPokemon(slot.pokemonId) : undefined;
 
@@ -42,6 +48,10 @@ export function PartySlotCard({
   const avatarGradient = `linear-gradient(135deg, ${TYPE_COLORS[form.types[0]]}, ${
     TYPE_COLORS[form.types[1] ?? form.types[0]]
   })`;
+  // 파티 빌더는 랭크 개념이 없으니 0랭크 기준 내구력만 참고용으로 보여준다
+  const realStats = computeRealStats(form.baseStats, slot!.points, slot!.nature);
+  const bulkPhysical = computeBulkPower(realStats, "physical");
+  const bulkSpecial = computeBulkPower(realStats, "special");
 
   return (
     <div className="party-slot party-slot-filled">
@@ -98,6 +108,27 @@ export function PartySlotCard({
             {slot!.item ? getItem(slot!.item)?.name : "미지정"}
           </span>
         </button>
+        <button type="button" className="party-meta-pip" onClick={onPickNature}>
+          <span className="party-meta-label">성격</span>
+          <span className="party-meta-value">
+            {slot!.nature ? getNature(slot!.nature)?.name : "미지정"}
+          </span>
+        </button>
+        <button type="button" className="party-meta-pip" onClick={onPickPoints}>
+          <span className="party-meta-label">포인트</span>
+          <span className="party-meta-value">{totalAbilityPoints(slot!.points)} / 66</span>
+        </button>
+      </div>
+
+      <div className="party-slot-bulk">
+        <div className="party-bulk-item">
+          <span className="party-bulk-label">물리내구</span>
+          <span className="party-bulk-value">{Math.round(bulkPhysical).toLocaleString()}</span>
+        </div>
+        <div className="party-bulk-item">
+          <span className="party-bulk-label">특수내구</span>
+          <span className="party-bulk-value">{Math.round(bulkSpecial).toLocaleString()}</span>
+        </div>
       </div>
     </div>
   );

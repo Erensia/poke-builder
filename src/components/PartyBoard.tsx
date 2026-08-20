@@ -4,9 +4,12 @@ import { PokemonPickerModal } from "./PokemonPickerModal";
 import { MovePickerModal } from "./MovePickerModal";
 import { AbilityPickerModal } from "./AbilityPickerModal";
 import { ItemPickerModal } from "./ItemPickerModal";
+import { NaturePickerModal } from "./NaturePickerModal";
+import { PointsEditorModal } from "./PointsEditorModal";
 import { TypeCoverageSummary } from "./TypeCoverageSummary";
 import { useParty } from "../hooks/useParty";
 import { getPokemon } from "../lib/data";
+import { getEffectiveForm } from "../lib/pokemonForm";
 import "./PartyBoard.css";
 
 type PickerState =
@@ -14,10 +17,23 @@ type PickerState =
   | { kind: "move"; slotIndex: number; moveIndex: 0 | 1 | 2 | 3 }
   | { kind: "ability"; slotIndex: number }
   | { kind: "item"; slotIndex: number }
+  | { kind: "nature"; slotIndex: number }
+  | { kind: "points"; slotIndex: number }
   | null;
 
 export function PartyBoard() {
-  const { slots, setPokemon, clearSlot, setMove, setAbility, setItem, resetParty } = useParty();
+  const {
+    slots,
+    setPokemon,
+    clearSlot,
+    setMove,
+    setAbility,
+    setItem,
+    setNature,
+    setPoint,
+    stepPoint,
+    resetParty,
+  } = useParty();
   const [picker, setPicker] = useState<PickerState>(null);
 
   const filledCount = slots.filter((s) => s !== null).length;
@@ -61,6 +77,8 @@ export function PartyBoard() {
             onPickMove={(moveIndex) => setPicker({ kind: "move", slotIndex: i, moveIndex })}
             onPickAbility={() => setPicker({ kind: "ability", slotIndex: i })}
             onPickItem={() => setPicker({ kind: "item", slotIndex: i })}
+            onPickNature={() => setPicker({ kind: "nature", slotIndex: i })}
+            onPickPoints={() => setPicker({ kind: "points", slotIndex: i })}
           />
         ))}
       </div>
@@ -139,6 +157,45 @@ export function PartyBoard() {
                 setItem(picker.slotIndex, null);
                 setPicker(null);
               }}
+            />
+          );
+        })()}
+
+      {picker?.kind === "nature" &&
+        (() => {
+          const slot = slots[picker.slotIndex];
+          if (!slot) return null;
+          return (
+            <NaturePickerModal
+              currentNatureId={slot.nature}
+              onClose={() => setPicker(null)}
+              onSelect={(natureId) => {
+                setNature(picker.slotIndex, natureId);
+                setPicker(null);
+              }}
+              onClear={() => {
+                setNature(picker.slotIndex, null);
+                setPicker(null);
+              }}
+            />
+          );
+        })()}
+
+      {picker?.kind === "points" &&
+        (() => {
+          const slot = slots[picker.slotIndex];
+          const pokemon = slot ? getPokemon(slot.pokemonId) : undefined;
+          if (!slot || !pokemon) return null;
+          const form = getEffectiveForm(pokemon, slot);
+          return (
+            <PointsEditorModal
+              pokemonName={pokemon.name}
+              baseStats={form.baseStats}
+              points={slot.points}
+              natureId={slot.nature}
+              onClose={() => setPicker(null)}
+              onChange={(stat, value) => setPoint(picker.slotIndex, stat, value)}
+              onStep={(stat, delta) => stepPoint(picker.slotIndex, stat, delta)}
             />
           );
         })()}

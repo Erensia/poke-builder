@@ -5,7 +5,7 @@
   border-radius: 14px;
   box-shadow: var(--shadow-sm);
   padding: 0.7rem 0.8rem;
-  min-height: 148px;
+  min-height: 178px;
   transition: box-shadow 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
 }
 
@@ -221,6 +221,37 @@
 
 .party-meta-value {
   font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.party-slot-bulk {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.3rem;
+}
+
+.party-bulk-item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.3rem;
+  background: var(--surface-2);
+  border-radius: 7px;
+  padding: 0.28rem 0.5rem;
+  font-size: 0.68rem;
+  min-width: 0;
+}
+
+.party-bulk-label {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.party-bulk-value {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

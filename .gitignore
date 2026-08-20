@@ -12,6 +12,12 @@ dist
 dist-ssr
 *.local
 
+# 데이터 파싱 작업 중 저장소 루트에 남는 임시 스크래치 파일 방지
+/out.txt
+/out2.txt
+/*.scratch.json
+/scratchpad_*.json
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

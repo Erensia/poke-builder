@@ -1,7 +1,12 @@
 import type { Pokemon, MegaEvolution } from "../types/pokemon";
-import type { PartySlot } from "../types/party";
 import type { PokemonType } from "../types/pokemon-type";
 import type { BaseStats } from "../types/stats";
+
+/** getEffectiveForm이 실제로 필요로 하는 부분만 뽑은 형태. PartySlot이나 MatchupSlot 둘 다 만족한다 */
+export interface FormSource {
+  item: string | null;
+  activeMegaForm?: string;
+}
 
 export interface EffectiveForm {
   /** 메가진화 상태면 해당 폼, 아니면 undefined */
@@ -22,7 +27,7 @@ export function findMegaFormByStone(
 }
 
 /** 슬롯의 도구/activeMegaForm을 반영한 실제 타입·종족값을 계산한다 */
-export function getEffectiveForm(pokemon: Pokemon, slot: PartySlot): EffectiveForm {
+export function getEffectiveForm(pokemon: Pokemon, slot: FormSource): EffectiveForm {
   const mega =
     pokemon.megaEvolutions?.find((m) => m.form === slot.activeMegaForm) ??
     findMegaFormByStone(pokemon, slot.item);

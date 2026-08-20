@@ -12,7 +12,16 @@
   {
     "id": "단단한발톱",
     "name": "단단한발톱",
-    "description": "접촉하는(직접 공격) 기술의 위력이 1.3배 상승한다."
+    "description": "접촉하는(직접 공격) 기술의 위력이 1.3배 상승한다.",
+    "modifiers": [
+      {
+        "scope": "offense",
+        "multiplier": 1.3,
+        "condition": {
+          "makesContact": true
+        }
+      }
+    ]
   },
   {
     "id": "가뭄",
@@ -32,7 +41,18 @@
   {
     "id": "메가런처",
     "name": "메가런처",
-    "description": "파동계 기술의 위력이 50% 증가한다(치유파동은 회복량이 75%로 증가)."
+    "description": "파동계 기술의 위력이 50% 증가한다(치유파동은 회복량이 75%로 증가).",
+    "modifiers": [
+      {
+        "scope": "offense",
+        "multiplier": 1.5,
+        "condition": {
+          "moveClassificationIn": [
+            "파동"
+          ]
+        }
+      }
+    ]
   },
   {
     "id": "심록",
@@ -47,7 +67,19 @@
   {
     "id": "두꺼운지방",
     "name": "두꺼운지방",
-    "description": "불꽃타입과 얼음타입 기술로 받는 데미지가 절반으로 줄어든다."
+    "description": "불꽃타입과 얼음타입 기술로 받는 데미지가 절반으로 줄어든다.",
+    "modifiers": [
+      {
+        "scope": "defense",
+        "multiplier": 2,
+        "condition": {
+          "moveTypeIn": [
+            "불꽃",
+            "얼음"
+          ]
+        }
+      }
+    ]
   },
   {
     "id": "저주받은바디",
@@ -77,7 +109,19 @@
   {
     "id": "페어리스킨",
     "name": "페어리스킨",
-    "description": "노말타입 기술이 페어리타입으로 바뀌며 위력이 1.2배가 된다."
+    "description": "노말타입 기술이 페어리타입으로 바뀌며 위력이 1.2배가 된다.",
+    "modifiers": [
+      {
+        "scope": "offense",
+        "multiplier": 1.2,
+        "condition": {
+          "moveTypeIn": [
+            "노말"
+          ]
+        },
+        "overrideMoveType": "페어리"
+      }
+    ]
   },
   {
     "id": "클리어바디",
@@ -97,12 +141,26 @@
   {
     "id": "까칠한피부",
     "name": "까칠한피부",
-    "description": "접촉해 온 상대에게 데미지를 입힌다."
+    "description": "접촉기로 공격해 온 상대의 최대 HP 1/8만큼 데미지를 입힌다."
   },
   {
     "id": "모래의힘",
     "name": "모래의힘",
-    "description": "모래바람 상태일 때 땅·바위·강철타입 기술의 위력이 1.3배가 되며, 모래바람 데미지를 받지 않는다."
+    "description": "모래바람 상태일 때 땅·바위·강철타입 기술의 위력이 1.3배가 되며, 모래바람 데미지를 받지 않는다.",
+    "modifiers": [
+      {
+        "scope": "offense",
+        "multiplier": 1.3,
+        "condition": {
+          "moveTypeIn": [
+            "땅",
+            "바위",
+            "강철"
+          ],
+          "weatherIs": "모래바람"
+        }
+      }
+    ]
   },
   {
     "id": "모래날림",
@@ -132,12 +190,22 @@
   {
     "id": "적응력",
     "name": "적응력",
-    "description": "자신과 같은 타입 기술을 사용할 때 자속보정이 1.5배가 아닌 2.0배로 적용된다."
+    "description": "자신과 같은 타입 기술을 사용할 때 자속보정이 1.5배가 아닌 2.0배로 적용된다.",
+    "stabOverride": 2
   },
   {
     "id": "테크니션",
     "name": "테크니션",
-    "description": "위력 60 이하인 기술의 위력이 1.5배로 올라간다."
+    "description": "위력 60 이하인 기술의 위력이 1.5배로 올라간다.",
+    "modifiers": [
+      {
+        "scope": "offense",
+        "multiplier": 1.5,
+        "condition": {
+          "movePowerAtMost": 60
+        }
+      }
+    ]
   },
   {
     "id": "습기",
@@ -213,5 +281,15 @@
     "id": "변환자재",
     "name": "변환자재",
     "description": "배틀에 나올 때마다 단 한 번, 자신이 사용한 기술과 같은 타입으로 자신의 타입이 변화한다."
+  },
+  {
+    "id": "천진",
+    "name": "천진",
+    "description": "공격·방어 시 상대의 능력 랭크 변화를 무시하고 데미지를 계산한다."
+  },
+  {
+    "id": "부유",
+    "name": "부유",
+    "description": "땅타입 기술을 전부 무효화한다."
   }
 ]

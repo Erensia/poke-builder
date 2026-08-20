@@ -1,8 +1,14 @@
 import { useEffect, useState } from "react";
-import type { PartySlot } from "../types/party";
+import type { AbilityPoints, PartySlot } from "../types/party";
+import { EMPTY_ABILITY_POINTS } from "../types/party";
 import { getPokemon } from "../lib/data";
 import { findMegaFormByStone } from "../lib/pokemonForm";
 import { loadParty, saveParty, clearSavedParty } from "../lib/storage";
+import {
+  MAX_ABILITY_POINTS_PER_STAT,
+  MAX_ABILITY_POINTS_TOTAL,
+  totalAbilityPoints,
+} from "../lib/statCalculator";
 
 export type PartySlots = [
   PartySlot | null,
@@ -21,6 +27,8 @@ function emptySlot(pokemonId: string): PartySlot {
     moves: [null, null, null, null],
     ability: null,
     item: null,
+    nature: null,
+    points: { ...EMPTY_ABILITY_POINTS },
   };
 }
 
@@ -92,5 +100,65 @@ export function useParty() {
     });
   }
 
-  return { slots, setPokemon, clearSlot, setMove, setAbility, setItem, resetParty };
+  function setNature(slotIndex: number, natureId: string | null) {
+    setSlots((prev) => {
+      const slot = prev[slotIndex];
+      if (!slot) return prev;
+      const next = [...prev] as PartySlots;
+      next[slotIndex] = { ...slot, nature: natureId };
+      return next;
+    });
+  }
+
+  /** 합산 66 / 스탯당 32를 넘지 않도록 클램프해서 능력 포인트 한 스탯을 절대값으로 설정한다 (직접 입력용) */
+  function setPoint(slotIndex: number, stat: keyof AbilityPoints, value: number) {
+    setSlots((prev) => {
+      const slot = prev[slotIndex];
+      if (!slot) return prev;
+      const clampedValue = Math.max(0, value);
+      const restTotal = totalAbilityPoints(slot.points) - slot.points[stat];
+      const maxForStat = Math.min(
+        MAX_ABILITY_POINTS_PER_STAT,
+        MAX_ABILITY_POINTS_TOTAL - restTotal,
+      );
+      const next = [...prev] as PartySlots;
+      next[slotIndex] = {
+        ...slot,
+        points: { ...slot.points, [stat]: Math.min(clampedValue, maxForStat) },
+      };
+      return next;
+    });
+  }
+
+  /** 이전 상태를 기준으로 증감시킨다 (버튼용) — 빠르게 연속 클릭해도 각 클릭이 누락되지 않는다 */
+  function stepPoint(slotIndex: number, stat: keyof AbilityPoints, delta: number) {
+    setSlots((prev) => {
+      const slot = prev[slotIndex];
+      if (!slot) return prev;
+      const currentValue = slot.points[stat];
+      const restTotal = totalAbilityPoints(slot.points) - currentValue;
+      const maxForStat = Math.min(
+        MAX_ABILITY_POINTS_PER_STAT,
+        MAX_ABILITY_POINTS_TOTAL - restTotal,
+      );
+      const nextValue = Math.min(Math.max(0, currentValue + delta), maxForStat);
+      if (nextValue === currentValue) return prev;
+      const next = [...prev] as PartySlots;
+      next[slotIndex] = { ...slot, points: { ...slot.points, [stat]: nextValue } };
+      return next;
+    });
+  }
+
+  return {
+    slots,
+    setPokemon,
+    clearSlot,
+    setMove,
+    setAbility,
+    setItem,
+    setNature,
+    setPoint,
+    stepPoint,
+    resetParty,
+  };
 }

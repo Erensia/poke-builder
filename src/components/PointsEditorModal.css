@@ -1,0 +1,93 @@
+.points-remaining {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  background: var(--surface-2);
+  border-radius: 10px;
+  padding: 0.6rem 0.9rem;
+  margin-bottom: 0.8rem;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.points-remaining strong {
+  font-family: var(--display);
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.points-remaining strong.is-zero {
+  color: var(--violet);
+}
+
+.points-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.points-row {
+  display: grid;
+  grid-template-columns: 3.4em auto 3.6em auto 1fr;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--surface-2);
+  border-radius: 10px;
+  padding: 0.4rem 0.6rem;
+}
+
+.points-label {
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.points-step {
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.9rem;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.points-step:hover:not(:disabled) {
+  border-color: var(--violet);
+  color: var(--violet);
+}
+
+.points-step:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.points-input {
+  width: 3.6em;
+  text-align: center;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+  padding: 0.3rem 0;
+}
+
+.points-input:focus {
+  outline: none;
+  border-color: var(--violet);
+}
+
+.points-real {
+  text-align: right;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
