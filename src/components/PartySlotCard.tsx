@@ -1,6 +1,6 @@
 import type { PartySlot } from "../types/party";
 import { getPokemon, getMove, getAbility, getItem, getNature } from "../lib/data";
-import { getEffectiveForm } from "../lib/pokemonForm";
+import { getEffectiveForm, megaBadgeLabel } from "../lib/pokemonForm";
 import { computeRealStats, totalAbilityPoints } from "../lib/statCalculator";
 import { computeBulkPower } from "../lib/battlePower";
 import { TypeBadge } from "./TypeBadge";
@@ -67,7 +67,7 @@ export function PartySlotCard({
         <span className="party-slot-info">
           <span className="party-slot-name">
             {pokemon.name}
-            {form.mega && <span className="party-slot-mega-tag">메가</span>}
+            {form.mega && <span className="party-slot-mega-tag">{megaBadgeLabel(form.mega)}</span>}
           </span>
           <span className="party-slot-types">
             {form.types.map((t) => (

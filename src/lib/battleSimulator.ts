@@ -1,5 +1,6 @@
 import type { Move } from "../types/move";
 import type { WeatherKind } from "../types/weather";
+import type { FieldKind } from "../types/field";
 import type { PokemonType } from "../types/pokemon-type";
 import {
   NEUTRAL_ACCURACY_STAGES,
@@ -17,7 +18,7 @@ import {
   type VolatileConditionState,
 } from "../types/status";
 import { getPokemon, getAbility } from "./data";
-import { getEffectiveForm } from "./pokemonForm";
+import { getEffectiveForm, getEffectiveAbilityId } from "./pokemonForm";
 import { computeRealStats } from "./statCalculator";
 import { applyMoveStatChanges } from "./statStages";
 import {
@@ -45,6 +46,15 @@ import {
 } from "./volatileConditions";
 import { resolveMoveContext } from "./moveContext";
 import { computeDamage } from "./battlePower";
+import { getWeatherDamageMultiplier } from "./weatherEffects";
+import {
+  FIELD_DURATION,
+  computeFieldEndOfTurnHeal,
+  getFieldDamageMultiplier,
+  isConfusionBlockedByField,
+  isPriorityMoveBlockedByField,
+  isStatusBlockedByField,
+} from "./fieldEffects";
 import { compareTurnOrder } from "./turnOrder";
 import type { BaseStats } from "../types/stats";
 import type { EvaluatorSlot } from "./matchupEvaluator";
@@ -87,6 +97,12 @@ export const STRUGGLE_MOVE: Move = {
 export interface BattleFighterState {
   slot: EvaluatorSlot;
   types: PokemonType[];
+  /**
+   * 실제로 판정에 쓰는 특성 id. 메가진화 중이면 slot.ability와 무관하게 항상 그 메가폼 고유
+   * 특성으로 고정된다(getEffectiveAbilityId) — 메가리자몽Y는 항상 가뭄, 메가리자몽X는 항상
+   * 단단한발톱. slot.ability를 직접 쓰면 메가 특성이 무시되는 버그가 있어 이 필드로 분리했다.
+   */
+  effectiveAbilityId: string | null;
   realStats: BaseStats;
   currentHp: number;
   maxHp: number;
@@ -106,7 +122,12 @@ export interface BattleState {
   a: BattleFighterState;
   b: BattleFighterState;
   weather?: WeatherKind;
+  field?: FieldKind;
+  /** 필드가 사라지기까지 남은 턴 수. field가 없으면 의미 없음 */
+  fieldTurnsRemaining?: number;
   turnNumber: number;
+  /** 배틀 시작 시점에 특성으로 날씨가 자동으로 바뀌었으면("○○의 잔비!") 그 안내 문구 */
+  entryAnnouncements: string[];
 }
 
 export type FighterKey = "a" | "b";
@@ -130,6 +151,7 @@ export function createFighterState(slot: EvaluatorSlot, moves: Move[]): BattleFi
   return {
     slot,
     types: form.types,
+    effectiveAbilityId: getEffectiveAbilityId(form, slot.ability),
     realStats,
     currentHp: realStats.hp,
     maxHp: realStats.hp,
@@ -142,6 +164,48 @@ export function createFighterState(slot: EvaluatorSlot, moves: Move[]): BattleFi
   };
 }
 
+/** "비"/"쾌청"처럼 자음 받침 유무에 따라 "로"/"으로" 조사를 자동 판별한다 */
+function roEuro(name: string): "로" | "으로" {
+  const lastChar = name.at(-1);
+  if (!lastChar) return "로";
+  const code = lastChar.charCodeAt(0) - 0xac00;
+  if (code < 0 || code > 11171) return "로";
+  return code % 28 === 0 ? "로" : "으로";
+}
+
+/**
+ * 사용자가 날씨를 직접 고르지 않았을 때, 양쪽 특성(가뭄/잔비/모래날림 등 setsWeather)을 확인해서
+ * 배틀 시작과 동시에 날씨를 자동으로 바꾼다. 양쪽 다 날씨 특성이면 실효 스피드가 빠른 쪽이 이긴다
+ * (참고할 다른 기준이 없어 간이화한 규칙 — Phase 3 문서 "확인 필요" 항목).
+ */
+function resolveEntryWeather(
+  aSlot: EvaluatorSlot,
+  aFighter: BattleFighterState,
+  bSlot: EvaluatorSlot,
+  bFighter: BattleFighterState,
+  manualWeather: WeatherKind | undefined,
+): { weather: WeatherKind | undefined; announcements: string[] } {
+  if (manualWeather) return { weather: manualWeather, announcements: [] };
+
+  const aAbility = aFighter.effectiveAbilityId ? getAbility(aFighter.effectiveAbilityId) : undefined;
+  const bAbility = bFighter.effectiveAbilityId ? getAbility(bFighter.effectiveAbilityId) : undefined;
+  if (!aAbility?.setsWeather && !bAbility?.setsWeather) {
+    return { weather: manualWeather, announcements: [] };
+  }
+
+  const aWins =
+    !!aAbility?.setsWeather && (!bAbility?.setsWeather || aFighter.realStats.spe >= bFighter.realStats.spe);
+  const winnerSlot = aWins ? aSlot : bSlot;
+  const winnerAbility = (aWins ? aAbility : bAbility)!;
+  const weather = winnerAbility.setsWeather!;
+  const pokemonName = getPokemon(winnerSlot.pokemonId)?.name ?? "포켓몬";
+
+  return {
+    weather,
+    announcements: [`${pokemonName}의 ${winnerAbility.name}! 날씨가 ${weather}${roEuro(weather)} 바뀌었다!`],
+  };
+}
+
 export function createBattleState(
   a: EvaluatorSlot,
   aMoves: Move[],
@@ -149,11 +213,16 @@ export function createBattleState(
   bMoves: Move[],
   weather?: WeatherKind,
 ): BattleState {
+  const fighterA = createFighterState(a, aMoves);
+  const fighterB = createFighterState(b, bMoves);
+  const { weather: resolvedWeather, announcements } = resolveEntryWeather(a, fighterA, b, fighterB, weather);
+
   return {
-    a: createFighterState(a, aMoves),
-    b: createFighterState(b, bMoves),
-    weather,
+    a: fighterA,
+    b: fighterB,
+    weather: resolvedWeather,
     turnNumber: 0,
+    entryAnnouncements: announcements,
   };
 }
 
@@ -167,7 +236,7 @@ export function hasUsableMove(fighter: BattleFighterState): boolean {
 }
 
 /** 이번 턴 행동이 왜 못 나갔는지. 있으면 hit/damage 등은 의미 없다 */
-export type ActionBlockReason = "status" | "flinch" | "recharge" | "confusion";
+export type ActionBlockReason = "status" | "flinch" | "recharge" | "confusion" | "psychicFieldPriority";
 
 /** 한 번의 기술 사용 결과 로그 */
 export interface ActionLogEntry {
@@ -190,6 +259,10 @@ export interface ActionLogEntry {
   fainted: boolean;
   /** 혼란 자멸로 스스로 쓰러졌으면 true */
   selfFainted: boolean;
+  /** 이 행동으로 필드가 새로 깔렸으면(그래스필드 등) 채워진다 */
+  setField?: FieldKind;
+  /** 필드 기술을 썼지만 이미 다른 필드가 깔려있어서 실패했으면 true */
+  fieldSetFailed?: boolean;
 }
 
 /** 턴 종료 시 상태이상 데미지 로그 */
@@ -198,6 +271,8 @@ export interface EndOfTurnLogEntry {
   damage: number;
   remainingHp: number;
   fainted: boolean;
+  /** 그래스필드 회복이면 damage가 음수(회복량)로 채워지는 대신, 이 필드로 회복량을 명시한다 */
+  fieldHeal?: number;
 }
 
 export interface TurnResult {
@@ -211,6 +286,12 @@ export interface TurnResult {
    * 자신도 같이 기절하거나, 턴 종료 상태이상 데미지로 양쪽이 동시에 0이 되면 "draw".
    */
   winner?: FighterKey | "draw";
+  /** 이번 턴이 끝난 시점의 필드 상태. 필드가 없으면 undefined */
+  field?: FieldKind;
+  /** field가 있을 때, 다음 턴을 포함해 앞으로 몇 턴 더 지속되는지 (0이 되면 이번 턴에 사라짐) */
+  fieldTurnsRemaining?: number;
+  /** 이번 턴에 필드가 5턴을 다 채우고 사라졌으면 true */
+  fieldExpired?: boolean;
 }
 
 function isFainted(fighter: BattleFighterState): boolean {
@@ -279,6 +360,11 @@ function resolveAction(
     return blocked("recharge");
   }
 
+  // 2-1) 사이코필드: 우선도 +1 이상인 기술로 상대를 노리면 그 기술 자체가 실패한다
+  if (isPriorityMoveBlockedByField(state.field, move.priority)) {
+    return blocked("psychicFieldPriority");
+  }
+
   // 3) 혼란: 매 행동 판정마다 지속 턴수를 소모하고, 1/3 확률로 자멸(물리 40위력 자가타격)한다.
   // 자멸하면 이번 턴은 그걸로 끝 — 원래 쓰려던 기술은 실행되지 않는다.
   if (hasVolatile(attacker.volatile, "confusion")) {
@@ -293,8 +379,8 @@ function resolveAction(
     }
   }
 
-  const attackerAbility = attacker.slot.ability ? getAbility(attacker.slot.ability) : undefined;
-  const defenderAbility = defender.slot.ability ? getAbility(defender.slot.ability) : undefined;
+  const attackerAbility = attacker.effectiveAbilityId ? getAbility(attacker.effectiveAbilityId) : undefined;
+  const defenderAbility = defender.effectiveAbilityId ? getAbility(defender.effectiveAbilityId) : undefined;
 
   // evaluateSlotMatchup(1턴 스냅샷 판정)과 같은 로직을 공유 — 특성 배율/타입 변경/자속/상대 상성
   const { effectiveMove, abilityOffenseMultiplier, abilityDefenseMultiplier, stabMultiplier, typeEffectiveness } =
@@ -358,9 +444,14 @@ function resolveAction(
       ignoreBurnPenalty,
     );
 
+    const weatherMultiplier = getWeatherDamageMultiplier(state.weather, effectiveMove.type);
+    const fieldMultiplier = getFieldDamageMultiplier(state.field, effectiveMove.type);
+
     const result = computeDamage(attacker.realStats, defender.realStats, attacker.types, effectiveMove, {
       typeEffectiveness,
       abilityMultiplier: abilityOffenseMultiplier * statusAttackMultiplier,
+      weatherMultiplier,
+      fieldMultiplier,
       stabMultiplier,
       attackerStages: attacker.stages,
       defenderStages: defender.stages,
@@ -411,6 +502,7 @@ function resolveAction(
   if (effectiveMove.inflictsStatus) {
     for (const effect of effectiveMove.inflictsStatus) {
       if (isImmuneToStatus(effect.status, defender.types)) continue;
+      if (isStatusBlockedByField(state.field, effect.status)) continue;
       const chance = effect.chance !== undefined ? effect.chance / 100 : 1;
       if (random() < chance) {
         const before = defender.status.condition;
@@ -424,6 +516,7 @@ function resolveAction(
   let inflictedVolatile: VolatileCondition | undefined;
   if (effectiveMove.inflictsVolatile) {
     for (const effect of effectiveMove.inflictsVolatile) {
+      if (effect.volatile === "confusion" && isConfusionBlockedByField(state.field)) continue;
       const chance = effect.chance !== undefined ? effect.chance / 100 : 1;
       if (random() >= chance) continue;
       if (effect.target === "self") {
@@ -432,6 +525,18 @@ function resolveAction(
         defender.volatile = inflictVolatile(defender.volatile, effect.volatile, random);
       }
       inflictedVolatile = effect.volatile;
+    }
+  }
+
+  // 필드 설치: 이미 다른(또는 같은) 필드가 깔려있으면 실패한다 — 필드를 쓸 때마다 지속 턴수가
+  // 갱신되던 버그 수정. 기존 필드가 다 사라지기 전까지는 필드 기술 자체가 실패해야 한다.
+  let fieldSetFailed = false;
+  if (effectiveMove.setsField) {
+    if (state.field) {
+      fieldSetFailed = true;
+    } else {
+      state.field = effectiveMove.setsField;
+      state.fieldTurnsRemaining = FIELD_DURATION;
     }
   }
 
@@ -447,6 +552,8 @@ function resolveAction(
     attackerRemainingHp: attacker.currentHp,
     inflictedStatus,
     inflictedVolatile,
+    setField: fieldSetFailed ? undefined : effectiveMove.setsField,
+    fieldSetFailed,
     fainted: isFainted(defender),
     selfFainted: isFainted(attacker),
   };
@@ -474,7 +581,10 @@ export function runTurn(
     a: cloneFighter(prevState.a),
     b: cloneFighter(prevState.b),
     weather: prevState.weather,
+    field: prevState.field,
+    fieldTurnsRemaining: prevState.fieldTurnsRemaining,
     turnNumber: prevState.turnNumber + 1,
+    entryAnnouncements: prevState.entryAnnouncements,
   };
 
   const speedA = state.a.realStats.spe * computeStatusSpeedMultiplier(state.a.status.condition);
@@ -512,10 +622,18 @@ export function runTurn(
   const endOfTurn: EndOfTurnLogEntry[] = [];
 
   // winner가 이미 액션 중 자폭 콤보로 정해졌으면, 배틀이 그 시점에 끝난 것이니
-  // 턴 종료 상태이상 데미지는 더 진행하지 않는다(실제 게임에서도 배틀이 이미 끝났다).
+  // 턴 종료 회복/상태이상 데미지는 더 진행하지 않는다(실제 게임에서도 배틀이 이미 끝났다).
   if (!winner && !isFainted(state.a) && !isFainted(state.b)) {
     for (const key of (["a", "b"] as const)) {
       const fighter = state[key];
+
+      // 그래스필드: 매 턴 종료 시 최대 HP 1/16 회복
+      const fieldHeal = computeFieldEndOfTurnHeal(state.field, fighter.maxHp);
+      if (fieldHeal > 0) {
+        fighter.currentHp = Math.min(fighter.maxHp, fighter.currentHp + fieldHeal);
+        endOfTurn.push({ actor: key, damage: 0, remainingHp: fighter.currentHp, fainted: false, fieldHeal });
+      }
+
       if (!fighter.status.condition) continue;
       const damage = computeStatusEndOfTurnDamage(fighter.status, fighter.maxHp);
       fighter.currentHp = Math.max(0, fighter.currentHp - damage);
@@ -532,5 +650,28 @@ export function runTurn(
     else if (isFainted(state.b)) winner = "a";
   }
 
-  return { nextState: state, result: { turnNumber: state.turnNumber, order, actions, endOfTurn, winner } };
+  // 필드 지속 턴 카운트다운. 0이 되면 이번 턴을 끝으로 필드가 사라진다.
+  let fieldExpired = false;
+  if (state.field && state.fieldTurnsRemaining !== undefined) {
+    state.fieldTurnsRemaining -= 1;
+    if (state.fieldTurnsRemaining <= 0) {
+      state.field = undefined;
+      state.fieldTurnsRemaining = undefined;
+      fieldExpired = true;
+    }
+  }
+
+  return {
+    nextState: state,
+    result: {
+      turnNumber: state.turnNumber,
+      order,
+      actions,
+      endOfTurn,
+      winner,
+      field: state.field,
+      fieldTurnsRemaining: state.fieldTurnsRemaining,
+      fieldExpired,
+    },
+  };
 }

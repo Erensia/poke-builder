@@ -1,6 +1,6 @@
 import type { MatchupSlot } from "../types/matchup";
 import { getPokemon, getMove, getAbility, getItem, getNature } from "../lib/data";
-import { getEffectiveForm } from "../lib/pokemonForm";
+import { getEffectiveForm, megaBadgeLabel } from "../lib/pokemonForm";
 import { computeRealStats } from "../lib/statCalculator";
 import { totalAbilityPoints } from "../lib/statCalculator";
 import { TypeBadge } from "./TypeBadge";
@@ -85,7 +85,7 @@ export function MatchupSlotCard({
         <span className="matchup-slot-info">
           <span className="matchup-slot-name">
             {pokemon.name}
-            {form.mega && <span className="matchup-slot-mega-tag">메가</span>}
+            {form.mega && <span className="matchup-slot-mega-tag">{megaBadgeLabel(form.mega)}</span>}
           </span>
           <span className="matchup-slot-types">
             {form.types.map((t) => (

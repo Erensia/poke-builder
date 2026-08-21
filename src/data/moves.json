@@ -3185,7 +3185,8 @@
     "pp": 12,
     "priority": 0,
     "effect": "5턴간 필드를 그래스필드로 바꾼다.",
-    "makesContact": false
+    "makesContact": false,
+    "setsField": "그래스필드"
   },
   {
     "id": "도발",
@@ -3245,7 +3246,8 @@
     "pp": 12,
     "priority": 0,
     "effect": "5턴간 필드를 미스트필드로 바꾼다.",
-    "makesContact": false
+    "makesContact": false,
+    "setsField": "미스트필드"
   },
   {
     "id": "성장",
@@ -3722,7 +3724,21 @@
     "pp": 12,
     "priority": 0,
     "effect": "5턴간 필드를 사이코필드로 바꾼다.",
-    "makesContact": false
+    "makesContact": false,
+    "setsField": "사이코필드"
+  },
+  {
+    "id": "일렉트릭필드",
+    "name": "일렉트릭필드",
+    "type": "전기",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 12,
+    "priority": 0,
+    "effect": "5턴간 필드를 일렉트릭필드로 바꾼다.",
+    "makesContact": false,
+    "setsField": "일렉트릭필드"
   },
   {
     "id": "아머캐논",

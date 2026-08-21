@@ -71,6 +71,35 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 1.2rem;
+  padding: 0.7rem;
+  border-radius: 16px;
+  transition: background 0.3s ease;
+}
+
+/* 날씨/필드가 적용 중일 때 배틀 보드 위에 뜨는 안내 배지. 두 칸짜리 grid를 그대로 넘어가야 해서 span */
+.battle-environment-tags {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.battle-environment-tag {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.2rem 0.7rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.battle-entry-announcements {
+  background: var(--surface-2);
+  border-radius: 8px;
+  padding: 0.5rem 0.8rem;
+  font-size: 0.82rem;
+  color: var(--text-muted);
 }
 
 .battle-fighter {

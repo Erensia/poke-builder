@@ -46,3 +46,21 @@ export function getEffectiveForm(pokemon: Pokemon, slot: FormSource): EffectiveF
     formLabel: null,
   };
 }
+
+/**
+ * 실제로 판정에 써야 할 특성 id. 메가진화 중이면 유저가 고른 slot.ability와 무관하게
+ * 항상 그 메가폼 고유 특성(예: 메가리자몽Y=가뭄, 메가리자몽X=단단한발톱)으로 고정된다 — 본가 규칙.
+ * 메가진화가 아니면 그대로 slot.ability.
+ */
+export function getEffectiveAbilityId(form: EffectiveForm, slotAbility: string | null): string | null {
+  return form.mega ? form.mega.ability : slotAbility;
+}
+
+/**
+ * 메가 배지에 쓸 라벨. 리자몽처럼 메가진화가 2개 이상이라 폼 이름이 "리자몽-메가X"/"리자몽-메가Y"인
+ * 경우 지닌 메가스톤을 봐야만 X인지 Y인지 알 수 있다는 피드백에 따라, 폼 이름 뒤쪽("메가X")을
+ * 그대로 배지에 노출한다. 메가진화가 1개뿐인 포켓몬은 폼 이름이 "이상해꽃-메가"라 그냥 "메가"로 나온다.
+ */
+export function megaBadgeLabel(mega: MegaEvolution): string {
+  return mega.form.split("-").at(-1) ?? "메가";
+}

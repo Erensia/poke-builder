@@ -9,8 +9,10 @@ import { NaturePickerModal } from "./NaturePickerModal";
 import { PointsEditorModal } from "./PointsEditorModal";
 import { useBattleSetup } from "../hooks/useBattleSetup";
 import { getPokemon, getMove } from "../lib/data";
-import { getEffectiveForm } from "../lib/pokemonForm";
-import { TYPE_COLORS } from "../lib/typeColors";
+import { getEffectiveForm, megaBadgeLabel } from "../lib/pokemonForm";
+import { TYPE_COLORS, typeColorRgba } from "../lib/typeColors";
+import { WEATHER_ACCENT_TYPE } from "../lib/weatherEffects";
+import { FIELD_DISPLAY_TYPE } from "../lib/fieldEffects";
 import {
   createBattleState,
   hasUsableMove,
@@ -45,6 +47,23 @@ const STATUS_LABELS: Record<StatusCondition, string> = {
 };
 
 const VOLATILE_LABELS = { flinch: "풀죽음", recharge: "반동", confusion: "혼란" } as const;
+
+/**
+ * 날씨/필드가 적용 중인지 배경색으로 알 수 있게 해달라는 요청 반영 — 날씨는 강화하는 타입 색(비=물,
+ * 모래바람=바위, 눈=얼음, 쾌청=불꽃), 필드는 필드 자신의 타입 색(그래스=풀 등)을 낮은 불투명도로 섞는다.
+ * 둘 다 있으면 좌우 그라데이션으로, 하나만 있으면 단색 틴트로, 둘 다 없으면 기본(투명) 배경.
+ */
+function battleBoardBackground(state: BattleState): string | undefined {
+  const weatherColor = state.weather ? TYPE_COLORS[WEATHER_ACCENT_TYPE[state.weather]] : undefined;
+  const fieldColor = state.field ? TYPE_COLORS[FIELD_DISPLAY_TYPE[state.field]] : undefined;
+
+  if (weatherColor && fieldColor) {
+    return `linear-gradient(135deg, ${typeColorRgba(weatherColor, 0.16)}, ${typeColorRgba(fieldColor, 0.16)})`;
+  }
+  if (weatherColor) return typeColorRgba(weatherColor, 0.14);
+  if (fieldColor) return typeColorRgba(fieldColor, 0.14);
+  return undefined;
+}
 
 function fighterLabel(state: BattleState, key: FighterKey): string {
   const pokemon = getPokemon(state[key].slot.pokemonId);
@@ -169,7 +188,17 @@ export function BattleLogPage() {
 
       {battleState && (
         <>
-          <div className="battle-board">
+          <div className="battle-board" style={{ background: battleBoardBackground(battleState) }}>
+            {(battleState.weather || battleState.field) && (
+              <div className="battle-environment-tags">
+                {battleState.weather && <span className="battle-environment-tag">날씨: {battleState.weather}</span>}
+                {battleState.field && (
+                  <span className="battle-environment-tag">
+                    필드: {battleState.field} (앞으로 {battleState.fieldTurnsRemaining}턴)
+                  </span>
+                )}
+              </div>
+            )}
             {(["a", "b"] as const).map((side) => {
               const fighter = battleState[side];
               const pokemon = getPokemon(fighter.slot.pokemonId);
@@ -191,7 +220,7 @@ export function BattleLogPage() {
                   <div className="battle-fighter-head">
                     <span className="battle-fighter-name">
                       {pokemon.name}
-                      {form.mega && <span className="battle-fighter-mega-tag">메가</span>}
+                      {form.mega && <span className="battle-fighter-mega-tag">{megaBadgeLabel(form.mega)}</span>}
                       {fighter.currentHp <= 0 && <span className="battle-fighter-fainted"> (기절)</span>}
                     </span>
                     <div className="battle-status-tags">
@@ -261,6 +290,14 @@ export function BattleLogPage() {
             })}
           </div>
 
+          {battleState.entryAnnouncements.length > 0 && (
+            <div className="battle-entry-announcements">
+              {battleState.entryAnnouncements.map((text, i) => (
+                <div key={i}>{text}</div>
+              ))}
+            </div>
+          )}
+
           {winner ? (
             <div className={`battle-result-banner${winner === "draw" ? " is-draw" : ""}`}>
               {winner === "draw" ? "🤝 무승부! 양쪽 다 기절했어요" : `🏆 ${fighterLabel(battleState, winner)} 승리!`}
@@ -301,6 +338,7 @@ export function BattleLogPage() {
                         {action.blockedReason === "recharge" && " — 반동으로 행동 불가"}
                         {action.blockedReason === "confusion" &&
                           ` — 혼란으로 자멸! (${action.selfDamage} 데미지)`}
+                        {action.blockedReason === "psychicFieldPriority" && " — 사이코필드에 막혀 실패"}
                         {!action.blockedReason && !action.hit && " — 빗나감"}
                         {!action.blockedReason && action.hit && action.damage > 0 && (
                           <>
@@ -314,6 +352,12 @@ export function BattleLogPage() {
                         )}
                         {!action.blockedReason && action.hit && action.inflictedVolatile && (
                           <> · {VOLATILE_LABELS[action.inflictedVolatile]}!</>
+                        )}
+                        {!action.blockedReason && action.hit && action.setField && (
+                          <> · {action.setField} 설치!</>
+                        )}
+                        {!action.blockedReason && action.hit && action.fieldSetFailed && (
+                          <> · 이미 필드가 있어 실패!</>
                         )}
                       </div>
                       {/* 발버둥 반동은 상대 데미지와 별개의 수치라 자기 줄로 분리 */}
@@ -344,10 +388,26 @@ export function BattleLogPage() {
                 })}
                 {turn.endOfTurn.map((e, i) => (
                   <div key={i} className="battle-turn-line is-muted">
-                    {fighterLabel(battleState, e.actor)} 상태이상 데미지 {e.damage} (남은 HP {e.remainingHp})
-                    {e.fainted && " · 기절!"}
+                    {e.fieldHeal ? (
+                      <>
+                        {fighterLabel(battleState, e.actor)} 그래스필드로 {e.fieldHeal} 회복 (남은 HP {e.remainingHp})
+                      </>
+                    ) : (
+                      <>
+                        {fighterLabel(battleState, e.actor)} 상태이상 데미지 {e.damage} (남은 HP {e.remainingHp})
+                        {e.fainted && " · 기절!"}
+                      </>
+                    )}
                   </div>
                 ))}
+                {turn.field && (
+                  <div className="battle-turn-line is-muted">
+                    필드: {turn.field} (앞으로 {turn.fieldTurnsRemaining}턴 뒤 소멸)
+                  </div>
+                )}
+                {turn.fieldExpired && (
+                  <div className="battle-turn-line is-muted">필드가 사라졌다!</div>
+                )}
                 {turn.winner && (
                   <div className="battle-turn-line is-winner">
                     {turn.winner === "draw"

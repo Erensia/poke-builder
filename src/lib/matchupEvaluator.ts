@@ -2,7 +2,7 @@ import type { AbilityPoints } from "../types/party";
 import type { Move } from "../types/move";
 import type { WeatherKind } from "../types/weather";
 import { getPokemon, getAbility } from "./data";
-import { getEffectiveForm, type FormSource } from "./pokemonForm";
+import { getEffectiveForm, getEffectiveAbilityId, type FormSource } from "./pokemonForm";
 import { computeRealStats } from "./statCalculator";
 import { applyMoveStatChanges } from "./statStages";
 import { resolveMoveContext } from "./moveContext";
@@ -86,8 +86,10 @@ export function evaluateSlotMatchup(
 
   const attackerForm = getEffectiveForm(attackerPokemon, attackerSlot);
   const defenderForm = getEffectiveForm(defenderPokemon, defenderSlot);
-  const attackerAbility = attackerSlot.ability ? getAbility(attackerSlot.ability) : undefined;
-  const defenderAbility = defenderSlot.ability ? getAbility(defenderSlot.ability) : undefined;
+  const attackerEffectiveAbilityId = getEffectiveAbilityId(attackerForm, attackerSlot.ability);
+  const defenderEffectiveAbilityId = getEffectiveAbilityId(defenderForm, defenderSlot.ability);
+  const attackerAbility = attackerEffectiveAbilityId ? getAbility(attackerEffectiveAbilityId) : undefined;
+  const defenderAbility = defenderEffectiveAbilityId ? getAbility(defenderEffectiveAbilityId) : undefined;
 
   const attackerRealStats = computeRealStats(
     attackerForm.baseStats,

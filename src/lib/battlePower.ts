@@ -28,6 +28,8 @@ export interface OffensePowerOptions {
   itemMultiplier?: number;
   /** 날씨로 인한 배율 */
   weatherMultiplier?: number;
+  /** 필드(그래스/미스트/사이코/일렉트릭)로 인한 배율 */
+  fieldMultiplier?: number;
   /** 공격자의 현재 랭크 상태. 기술 카테고리에 맞춰 공격/특공 랭크를 자동으로 골라 쓴다 */
   attackerStages?: StatStages;
   /** 자속보정 배율. 기본 1.5, 적응력이면 2.0 (resolveStabMultiplier로 구한다) */
@@ -51,6 +53,7 @@ export function computeOffensePower(
     abilityMultiplier = 1,
     itemMultiplier = 1,
     weatherMultiplier = 1,
+    fieldMultiplier = 1,
     attackerStages = NEUTRAL_STAGES,
     stabMultiplier = 1.5,
   } = options;
@@ -68,6 +71,7 @@ export function computeOffensePower(
     abilityMultiplier *
     itemMultiplier *
     weatherMultiplier *
+    fieldMultiplier *
     rankMultiplier
   );
 }
@@ -171,6 +175,8 @@ export interface DamageOptions {
   abilityMultiplier?: number;
   itemMultiplier?: number;
   weatherMultiplier?: number;
+  /** 필드(그래스/미스트/사이코/일렉트릭)로 인한 배율. 날씨와 별개 축이라 곱셈 슬롯을 따로 둔다 */
+  fieldMultiplier?: number;
   attackerStages?: StatStages;
   defenderStages?: StatStages;
   /** 자속보정 배율. 기본 1.5, 적응력이면 2.0 */
@@ -211,6 +217,7 @@ export function computeDamage(
     abilityMultiplier = 1,
     itemMultiplier = 1,
     weatherMultiplier = 1,
+    fieldMultiplier = 1,
     attackerStages = NEUTRAL_STAGES,
     defenderStages = NEUTRAL_STAGES,
     stabMultiplier = 1.5,
@@ -240,6 +247,7 @@ export function computeDamage(
       abilityMultiplier *
       itemMultiplier *
       weatherMultiplier *
+      fieldMultiplier *
       critMultiplier *
       randomRoll) /
     bulkMultiplier;

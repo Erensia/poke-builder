@@ -32,4 +32,6 @@ export interface Ability {
   modifiers?: AbilityModifier[];
   /** 자속보정 배율 자체를 바꾸는 특성 전용 (적응력: 1.5 → 2.0) */
   stabOverride?: number;
+  /** 가뭄/잔비/모래날림처럼 등장하면 날씨를 바꾸는 특성만 채운다 */
+  setsWeather?: WeatherKind;
 }

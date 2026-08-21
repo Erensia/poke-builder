@@ -21,3 +21,11 @@ export const TYPE_COLORS: Record<PokemonType, string> = {
   강철: "#8b98a8",
   페어리: "#e08fbb",
 };
+
+/** TYPE_COLORS의 hex 값을 낮은 불투명도로 바꿔서 배경 틴트 등에 쓸 수 있게 한다 */
+export function typeColorRgba(hex: string, alpha: number): string {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}

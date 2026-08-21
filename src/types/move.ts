@@ -1,6 +1,7 @@
 import type { PokemonType } from "./pokemon-type";
 import type { EffectStatKey } from "./battleStats";
 import type { StatusInflictEffect, VolatileInflictEffect } from "./status";
+import type { FieldKind } from "./field";
 
 export type MoveCategory = "physical" | "special" | "status";
 
@@ -85,4 +86,6 @@ export interface Move {
    * 타입 상성 면역(0배)만은 그대로 존중한다.
    */
   fixedDamage?: number;
+  /** 그래스필드/미스트필드/사이코필드/일렉트릭필드처럼 필드를 새로 까는 기술만 채운다 */
+  setsField?: FieldKind;
 }
