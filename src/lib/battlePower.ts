@@ -147,3 +147,108 @@ export function evaluateMatchup(offensePower: number, bulkPower: number): Matchu
   if (offensePower >= threshold(POSSIBLE_2HIT_DIVISOR)) return "random-2hit";
   return "needs-3hit-plus";
 }
+
+/**
+ * 챔피언스는 랭크전 기준 레벨 50 고정 (Phase 2 기획 문서에서 리서치로 확인).
+ * 본가 데미지 공식의 레벨 항 floor(2×Level/5 + 2)에 50을 대입하면 22로 고정된다.
+ * evaluateMatchup의 0.374/0.411/0.44 상수도 이 22가 전제된 값이라 서로 정합적이다.
+ */
+export const LEVEL_50_TERM = Math.floor((2 * 50) / 5 + 2);
+
+/** 데미지 난수(damage roll)의 최저/최고값. 실제로는 이 사이 16단계 중 하나가 뽑힌다 */
+export const MIN_DAMAGE_ROLL = 0.85;
+export const MAX_DAMAGE_ROLL = 1.0;
+
+/**
+ * ⚠️ 급소 데미지 배율은 챔피언스 실측값이 아직 미확인 — 우선 본가 값(1.5배)을 그대로 쓴다.
+ * 급소가 랭크 하락을 무시하는지(본가 규칙) 여부도 미확인이라, 우선은 그 규칙을 그대로 적용한다.
+ * 착수 후 실제 값으로 확인되면 이 상수만 바꾸면 된다.
+ */
+const CRITICAL_DAMAGE_MULTIPLIER = 1.5;
+
+export interface DamageOptions {
+  typeEffectiveness?: number;
+  abilityMultiplier?: number;
+  itemMultiplier?: number;
+  weatherMultiplier?: number;
+  attackerStages?: StatStages;
+  defenderStages?: StatStages;
+  /** 자속보정 배율. 기본 1.5, 적응력이면 2.0 */
+  stabMultiplier?: number;
+  /** 방어 관련 특성/도구 배율 (두꺼운지방 등). computeBulkPower의 bulkMultiplier와 같은 값 — 데미지는 반대로 나눈다 */
+  bulkMultiplier?: number;
+  /** 급소 여부. true면 급소 배율을 곱하고, 방어측 랭크 상승/공격측 랭크 하락은 무시한다(본가 규칙) */
+  isCritical?: boolean;
+  /** 0.85~1.00 사이 데미지 난수. 생략하면 1.00(최고값)으로 계산 — 최저/평균을 보고 싶으면 명시적으로 넘긴다 */
+  randomRoll?: number;
+}
+
+export interface DamageResult {
+  /** 실제 데미지 정수값 */
+  damage: number;
+  /** 방어측 최대 HP 대비 비율 (0~1 초과 가능) */
+  damagePercent: number;
+}
+
+/**
+ * 레벨 50 고정 전제로 실제 데미지 숫자와 %HP까지 계산하는 상세 공식.
+ * evaluateMatchup(결정력 vs 내구력 비율로 5단계만 판정)과 달리, 대전 로그에 "47%의 데미지를
+ * 입었다" 같은 문구를 넣을 때 필요한 실제 숫자를 낸다. status 기술이면 null.
+ *
+ * 공식: floor(floor(LEVEL_50_TERM × 위력 × 공격/방어) ÷ 50 + 2) × (자속×상성×특성×도구×날씨×급소×난수÷방어배율)
+ */
+export function computeDamage(
+  attackerRealStats: BaseStats,
+  defenderRealStats: BaseStats,
+  attackerTypes: PokemonType[],
+  move: Move,
+  options: DamageOptions = {},
+): DamageResult | null {
+  if (move.power === null || move.category === "status" || move.category === null) return null;
+
+  const {
+    typeEffectiveness = 1,
+    abilityMultiplier = 1,
+    itemMultiplier = 1,
+    weatherMultiplier = 1,
+    attackerStages = NEUTRAL_STAGES,
+    defenderStages = NEUTRAL_STAGES,
+    stabMultiplier = 1.5,
+    bulkMultiplier = 1,
+    isCritical = false,
+    randomRoll = MAX_DAMAGE_ROLL,
+  } = options;
+
+  const isPhysical = move.category === "physical";
+  const attackStage = isPhysical ? attackerStages.atk : attackerStages.spa;
+  const defenseStage = isPhysical ? defenderStages.def : defenderStages.spd;
+  // 급소 맞으면 공격측에 불리한(음수) 랭크와 방어측에 유리한(양수) 랭크를 무시한다 (본가 규칙, 미확인 — 위 주석 참고)
+  const attackMultiplier = rankStageMultiplier(isCritical ? Math.max(0, attackStage) : attackStage);
+  const defenseMultiplier = rankStageMultiplier(isCritical ? Math.min(0, defenseStage) : defenseStage);
+
+  const attackStat = (isPhysical ? attackerRealStats.atk : attackerRealStats.spa) * attackMultiplier;
+  const defenseStat = (isPhysical ? defenderRealStats.def : defenderRealStats.spd) * defenseMultiplier;
+
+  const stab = move.type && attackerTypes.includes(move.type) ? stabMultiplier : 1;
+  const critMultiplier = isCritical ? CRITICAL_DAMAGE_MULTIPLIER : 1;
+
+  const base = Math.floor(Math.floor((LEVEL_50_TERM * move.power * attackStat) / defenseStat) / 50) + 2;
+
+  const modifier =
+    (stab *
+      typeEffectiveness *
+      abilityMultiplier *
+      itemMultiplier *
+      weatherMultiplier *
+      critMultiplier *
+      randomRoll) /
+    bulkMultiplier;
+
+  // 타입 상성 0배(면역)면 데미지도 반드시 0이어야 한다 — 아래 최소 1 보정은 면역이 아닌 경우에만 적용
+  const damage = typeEffectiveness === 0 ? 0 : Math.max(1, Math.floor(base * modifier));
+
+  return {
+    damage,
+    damagePercent: damage / defenderRealStats.hp,
+  };
+}

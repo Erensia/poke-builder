@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from "react";
 import "./Sidebar.css";
 
-export type AppView = "party" | "matchup";
+export type AppView = "party" | "matchup" | "battle-log";
 
 // 유니코드 글자 아이콘(⬡⚔▤≡)은 폰트마다 그려지는 실제 위치(광학 중심)가 제각각이라
 // 박스를 아무리 맞춰도 어긋나 보일 수 있다. viewBox가 고정된 SVG로 바꿔서 확실히 정렬한다.
@@ -39,6 +39,17 @@ function IconGrid() {
   );
 }
 
+function IconScroll() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M8 21h12a2 2 0 0 0 2-2v-2H10v2a2 2 0 1 1-4 0V5a2 2 0 1 0-4 0v3h4" />
+      <path d="M19 17V5a2 2 0 0 0-2-2H4" />
+      <path d="M15 8h-5" />
+      <path d="M15 12h-5" />
+    </svg>
+  );
+}
+
 function IconList() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -55,6 +66,7 @@ function IconList() {
 const NAV_ITEMS: { label: string; icon: ReactNode; view: AppView | null }[] = [
   { label: "파티 빌더", icon: <IconHexagon />, view: "party" },
   { label: "결정력 & 내구력", icon: <IconSwords />, view: "matchup" },
+  { label: "대전 로그", icon: <IconScroll />, view: "battle-log" },
   { label: "포켓몬 도감", icon: <IconGrid />, view: null },
   { label: "기술표", icon: <IconList />, view: null },
 ];

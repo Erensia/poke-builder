@@ -1,0 +1,342 @@
+.battle-log-page {
+  width: 100%;
+  /* PartyBoard(740px)·MatchupPage(740px)와 폭을 통일 (Phase 2.5) — 이전엔 지정이 없어서
+     app-main의 justify-content:center에 의해 콘텐츠 크기만큼만 차지했다 */
+  max-width: 740px;
+  padding: 1.5rem 2rem 3rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.2rem;
+}
+
+.battle-log-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.battle-log-header h2 {
+  font-family: var(--display);
+  margin: 0 0 0.3rem;
+}
+
+.battle-log-header p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  max-width: 60ch;
+}
+
+/* 이전엔 grid 1fr 1fr로 두 카드가 740px 전체를 꽉 채워서 결정력&내구력 페이지(카드 폭 280px 고정,
+   가운데 정렬)보다 훨씬 커 보였다 — 같은 화면 비율이 되도록 matchup-board와 동일하게
+   flex+가운데 정렬 + 카드 폭 고정으로 바꾼다 (사용자 확인, 스크린샷 비교) */
+.battle-setup-board {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 1.2rem;
+}
+
+.battle-setup-board .party-slot {
+  width: 300px;
+  flex-shrink: 0;
+}
+
+.battle-setup-board > :last-child {
+  margin-top: 15px;
+}
+
+.battle-start-button {
+  align-self: flex-start;
+  background: var(--gradient);
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  padding: 0.65rem 1.4rem;
+  font-weight: 700;
+  font-size: 0.95rem;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+}
+
+.battle-start-button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.battle-board {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.2rem;
+}
+
+.battle-fighter {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 0.9rem 1rem;
+  box-shadow: var(--shadow-sm);
+}
+
+.battle-fighter-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.4rem;
+}
+
+.battle-fighter-name {
+  font-weight: 700;
+}
+
+.battle-fighter-fainted {
+  color: var(--danger);
+  font-weight: 700;
+}
+
+.battle-fighter-mega-tag {
+  font-family: var(--display);
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: #fff;
+  background: var(--gradient);
+  padding: 0.05rem 0.35rem;
+  border-radius: 4px;
+  margin-left: 0.35rem;
+}
+
+.battle-status-tags {
+  display: flex;
+  gap: 0.3rem;
+  flex-wrap: wrap;
+}
+
+.battle-status-tag {
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+}
+
+.battle-status-tag.is-major {
+  background: var(--warn-bg);
+  color: var(--warn);
+}
+
+.battle-status-tag.is-volatile {
+  background: var(--violet-soft);
+  color: var(--violet);
+}
+
+.battle-hp-bar {
+  width: 100%;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  overflow: hidden;
+  margin-bottom: 0.2rem;
+}
+
+.battle-hp-fill {
+  height: 100%;
+  background: var(--safe);
+  transition: width 0.2s ease;
+}
+
+.battle-hp-fill.is-warn {
+  background: var(--warn);
+}
+
+.battle-hp-fill.is-danger {
+  background: var(--danger);
+}
+
+.battle-hp-numbers {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-bottom: 0.6rem;
+}
+
+.battle-real-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.3rem;
+  margin-bottom: 0.6rem;
+}
+
+.battle-real-stat-item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.3rem;
+  background: var(--surface-2);
+  border-radius: 7px;
+  padding: 0.22rem 0.45rem;
+  font-size: 0.68rem;
+  min-width: 0;
+}
+
+.battle-real-stat-label {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.battle-real-stat-value {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.battle-move-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.4rem;
+}
+
+.battle-move-button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.1rem;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.4rem 0.55rem;
+  cursor: pointer;
+  text-align: left;
+}
+
+.battle-move-button.is-selected {
+  border-color: var(--violet);
+  background: var(--violet-soft);
+}
+
+.battle-move-button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* 셋업 카드의 party-move-pip.has-type와 동일한 톤. 배경색은 인라인 style로 타입별 색을 받는다 */
+.battle-move-button.has-type {
+  border-color: transparent;
+  color: #fff;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.25);
+}
+
+/* 타입 배경색(인라인 style)은 그대로 두고 선택 표시만 링으로 얹는다.
+   인라인 style이 background를 이미 고정하므로 여기선 background를 건드리지 않는다 */
+.battle-move-button.has-type.is-selected {
+  border-color: transparent;
+  box-shadow: 0 0 0 2px var(--violet);
+}
+
+.battle-move-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.battle-move-pp {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+.battle-move-button.has-type .battle-move-pp {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.battle-struggle-notice {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  background: var(--surface-2);
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  padding: 0.55rem 0.7rem;
+  text-align: center;
+}
+
+.battle-result-banner {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  background: var(--safe-bg);
+  color: var(--safe);
+  border-radius: 10px;
+  padding: 0.7rem 1rem;
+  font-weight: 700;
+}
+
+.battle-result-banner.is-draw {
+  background: var(--surface-2);
+  color: var(--text-muted);
+}
+
+.battle-reset-button {
+  background: none;
+  border: 1px solid currentColor;
+  border-radius: 8px;
+  padding: 0.3rem 0.8rem;
+  color: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.battle-turn-log {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.battle-turn-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.6rem 0.9rem;
+}
+
+.battle-turn-title {
+  font-weight: 700;
+  font-size: 0.85rem;
+  margin-bottom: 0.3rem;
+  color: var(--text-muted);
+}
+
+.battle-turn-line {
+  font-size: 0.88rem;
+  line-height: 1.6;
+}
+
+.battle-turn-line.is-muted {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+.battle-turn-line.is-winner {
+  color: var(--safe);
+  font-weight: 700;
+}
+
+.battle-turn-line.is-fainted {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+@media (max-width: 860px) {
+  .battle-board {
+    grid-template-columns: 1fr;
+  }
+  .battle-setup-board {
+    flex-direction: column;
+    align-items: center;
+  }
+  .battle-setup-board .party-slot {
+    width: 100%;
+    max-width: 300px;
+  }
+  .battle-setup-board > :last-child {
+    margin-top: 0;
+  }
+}

@@ -1,6 +1,7 @@
 .party-board {
   width: 100%;
-  max-width: 560px;
+  /* MatchupPage(740px)와 BattleLogPage(740px)에 맞춰 폭을 통일 (Phase 2.5) */
+  max-width: 740px;
 }
 
 .party-board-header {

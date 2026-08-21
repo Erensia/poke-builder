@@ -1,4 +1,4 @@
-import { NEUTRAL_STAGES, type BattleStatKey, type StatStages } from "../types/battleStats";
+import { NEUTRAL_STAGES, isBattleStatKey, type BattleStatKey, type StatStages } from "../types/battleStats";
 import type { Move } from "../types/move";
 import type { PokemonType } from "../types/pokemon-type";
 
@@ -47,6 +47,9 @@ export function applyMoveStatChanges(
   let next = stages;
   for (const effect of move.statChanges) {
     if (effect.target !== target) continue;
+    // 명중/회피/급소율 대상 효과는 이 함수(5스탯 StatStages)가 아니라
+    // applyMoveAccuracyEvasionChanges / applyMoveCritStageChanges(lib/accuracyCrit.ts)가 처리한다
+    if (!isBattleStatKey(effect.stat)) continue;
     if (effect.chance !== undefined && !includeChanceBased) continue;
 
     if (effect.userIsType !== undefined) {

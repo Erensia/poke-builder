@@ -8,7 +8,13 @@
     "accuracy": 100,
     "pp": 15,
     "effect": "사용자도 준 데미지의 1/3만큼 반동을 입는다. 10% 확률로 상대를 화상 상태로 만든다.",
-    "priority": 0
+    "priority": 0,
+    "inflictsStatus": [
+      {
+        "status": "burn",
+        "chance": 10
+      }
+    ]
   },
   {
     "id": "날개치기",
@@ -55,7 +61,13 @@
     "pp": 8,
     "priority": 0,
     "effect": "10% 확률로 상대를 화상 상태로 만든다.",
-    "makesContact": false
+    "makesContact": false,
+    "inflictsStatus": [
+      {
+        "status": "burn",
+        "chance": 10
+      }
+    ]
   },
   {
     "id": "화염방사",
@@ -67,7 +79,13 @@
     "pp": 16,
     "priority": 0,
     "effect": "10% 확률로 상대를 화상 상태로 만든다.",
-    "makesContact": false
+    "makesContact": false,
+    "inflictsStatus": [
+      {
+        "status": "burn",
+        "chance": 10
+      }
+    ]
   },
   {
     "id": "에어슬래시",
@@ -79,6 +97,9 @@
     "pp": 16,
     "priority": 0,
     "effect": "30% 확률로 상대를 풀죽게 만든다.",
+    "inflictsVolatile": [
+      { "volatile": "flinch", "target": "opponent", "chance": 30 }
+    ],
     "classification": [
       "베기"
     ],
@@ -202,7 +223,13 @@
     "pp": 12,
     "priority": 0,
     "effect": "10% 확률로 상대를 얼린다.",
-    "makesContact": false
+    "makesContact": false,
+    "inflictsStatus": [
+      {
+        "status": "freeze",
+        "chance": 10
+      }
+    ]
   },
   {
     "id": "눈사태",
@@ -366,7 +393,13 @@
     "classification": [
       "구슬/폭탄"
     ],
-    "makesContact": false
+    "makesContact": false,
+    "inflictsStatus": [
+      {
+        "status": "poison",
+        "chance": 30
+      }
+    ]
   },
   {
     "id": "독찌르기",
@@ -378,7 +411,13 @@
     "pp": 20,
     "priority": 0,
     "effect": "30% 확률로 상대를 독 상태로 만든다.",
-    "makesContact": true
+    "makesContact": true,
+    "inflictsStatus": [
+      {
+        "status": "poison",
+        "chance": 30
+      }
+    ]
   },
   {
     "id": "섀도볼",
@@ -405,7 +444,12 @@
     "pp": 12,
     "priority": 0,
     "effect": "상대를 맹독 상태로 만든다. 턴이 지날수록 데미지가 누적된다.",
-    "makesContact": false
+    "makesContact": false,
+    "inflictsStatus": [
+      {
+        "status": "badly-poisoned"
+      }
+    ]
   },
   {
     "id": "고스트다이브",
@@ -440,7 +484,8 @@
     "accuracy": 100,
     "pp": 16,
     "priority": 0,
-    "effect": "사용자의 레벨만큼 고정 데미지를 준다.",
+    "effect": "사용자의 레벨만큼 고정 데미지를 준다. (챔피언스는 레벨 50 고정이라 항상 50 고정 데미지)",
+    "fixedDamage": 50,
     "makesContact": false
   },
   {
@@ -456,7 +501,13 @@
     "classification": [
       "펀치"
     ],
-    "makesContact": true
+    "makesContact": true,
+    "inflictsStatus": [
+      {
+        "status": "freeze",
+        "chance": 10
+      }
+    ]
   },
   {
     "id": "매지컬샤인",
@@ -519,6 +570,9 @@
     "pp": 8,
     "priority": 0,
     "effect": "사용한 다음 턴에는 움직일 수 없다.",
+    "inflictsVolatile": [
+      { "volatile": "recharge", "target": "self" }
+    ],
     "makesContact": true
   },
   {
@@ -620,17 +674,6 @@
     "makesContact": false
   },
   {
-    "id": "대폭팔",
-    "name": "대폭팔",
-    "type": "노말",
-    "category": "physical",
-    "power": 250,
-    "accuracy": 100,
-    "pp": 5,
-    "effect": "사용자는 반드시 기절한다.",
-    "priority": 0
-  },
-  {
     "id": "번개펀치",
     "name": "번개펀치",
     "type": "전기",
@@ -643,7 +686,13 @@
     "classification": [
       "펀치"
     ],
-    "makesContact": true
+    "makesContact": true,
+    "inflictsStatus": [
+      {
+        "status": "paralysis",
+        "chance": 10
+      }
+    ]
   },
   {
     "id": "사념의박치기",
@@ -655,6 +704,9 @@
     "pp": 16,
     "priority": 0,
     "effect": "20% 확률로 상대를 풀죽게 만든다.",
+    "inflictsVolatile": [
+      { "volatile": "flinch", "target": "opponent", "chance": 20 }
+    ],
     "makesContact": true
   },
   {
@@ -748,6 +800,9 @@
     "pp": 16,
     "priority": 0,
     "effect": "30% 확률로 상대를 풀죽게 만든다.",
+    "inflictsVolatile": [
+      { "volatile": "flinch", "target": "opponent", "chance": 30 }
+    ],
     "makesContact": true
   },
   {
@@ -1090,6 +1145,9 @@
     "pp": 20,
     "priority": 0,
     "effect": "30% 확률로 상대를 풀죽게 만든다.",
+    "inflictsVolatile": [
+      { "volatile": "flinch", "target": "opponent", "chance": 30 }
+    ],
     "classification": [
       "물기"
     ],
@@ -1108,7 +1166,14 @@
     "classification": [
       "파동"
     ],
-    "makesContact": false
+    "makesContact": false,
+    "inflictsVolatile": [
+      {
+        "volatile": "confusion",
+        "target": "opponent",
+        "chance": 20
+      }
+    ]
   },
   {
     "id": "방어",
@@ -1221,7 +1286,13 @@
     "pp": 12,
     "priority": 0,
     "effect": "급소에 맞을 확률이 높고, 10% 확률로 화상 상태로 만든다.",
-    "makesContact": true
+    "makesContact": true,
+    "inflictsStatus": [
+      {
+        "status": "burn",
+        "chance": 10
+      }
+    ]
   },
   {
     "id": "비바라기",
@@ -1279,6 +1350,9 @@
     "pp": 16,
     "priority": 0,
     "effect": "20% 확률로 상대를 풀죽게 만든다.",
+    "inflictsVolatile": [
+      { "volatile": "flinch", "target": "opponent", "chance": 20 }
+    ],
     "classification": [
       "파동"
     ],
@@ -1418,6 +1492,9 @@
     "pp": 16,
     "priority": 0,
     "effect": "잠든 상태에서만 사용 가능. 30% 확률로 상대를 풀죽게 만든다.",
+    "inflictsVolatile": [
+      { "volatile": "flinch", "target": "opponent", "chance": 30 }
+    ],
     "classification": [
       "소리"
     ],
@@ -1472,6 +1549,9 @@
     "pp": 8,
     "priority": 0,
     "effect": "사용한 다음 턴은 움직일 수 없다.",
+    "inflictsVolatile": [
+      { "volatile": "recharge", "target": "self" }
+    ],
     "makesContact": false
   },
   {
@@ -1586,7 +1666,10 @@
     "accuracy": null,
     "pp": 20,
     "priority": 0,
-    "effect": "자신의 급소율을 2랭크 올린다. (급소율은 statChanges로 표현되지 않는 스탯이라 stat stage 계산에는 반영되지 않음)",
+    "effect": "자신의 급소율을 2랭크 올린다.",
+    "statChanges": [
+      { "target": "self", "stat": "critStage", "delta": 2 }
+    ],
     "makesContact": false
   },
   {
@@ -1599,7 +1682,13 @@
     "pp": 16,
     "priority": 0,
     "effect": "",
-    "makesContact": true
+    "makesContact": true,
+    "inflictsStatus": [
+      {
+        "status": "paralysis",
+        "chance": 30
+      }
+    ]
   },
   {
     "id": "멀리짖기",
@@ -1729,6 +1818,9 @@
     "pp": 16,
     "priority": 0,
     "effect": "자신의 회피율을 1랭크 올린다.",
+    "statChanges": [
+      { "target": "self", "stat": "evasion", "delta": 1 }
+    ],
     "makesContact": false
   },
   {
@@ -1967,7 +2059,14 @@
     "pp": 16,
     "priority": 0,
     "effect": "양 진영의 설치물을 제거하고 상대의 회피율을 1랭크 낮춘다.",
-    "makesContact": false
+    "makesContact": false,
+    "statChanges": [
+      {
+        "target": "opponent",
+        "stat": "evasion",
+        "delta": -1
+      }
+    ]
   },
   {
     "id": "애크러뱃",
@@ -2101,7 +2200,13 @@
     "classification": [
       "바람"
     ],
-    "makesContact": false
+    "makesContact": false,
+    "inflictsStatus": [
+      {
+        "status": "freeze",
+        "chance": 10
+      }
+    ]
   },
   {
     "id": "망각술",
@@ -2258,7 +2363,13 @@
     "pp": 12,
     "priority": 0,
     "effect": "10% 확률로 상대를 독 상태로 만든다.",
-    "makesContact": false
+    "makesContact": false,
+    "inflictsStatus": [
+      {
+        "status": "poison",
+        "chance": 10
+      }
+    ]
   },
   {
     "id": "와이드가드",
@@ -2333,7 +2444,13 @@
     "pp": 20,
     "priority": 0,
     "effect": "30% 확률로 상대를 화상 상태로 만든다.",
-    "makesContact": false
+    "makesContact": false,
+    "inflictsStatus": [
+      {
+        "status": "burn",
+        "chance": 30
+      }
+    ]
   },
   {
     "id": "퀵턴",
@@ -2381,6 +2498,9 @@
     "pp": 16,
     "priority": 0,
     "effect": "20% 확률로 상대를 풀죽게 만든다.",
+    "inflictsVolatile": [
+      { "volatile": "flinch", "target": "opponent", "chance": 20 }
+    ],
     "makesContact": true
   },
   {
@@ -2393,6 +2513,9 @@
     "pp": 8,
     "priority": 0,
     "effect": "사용한 다음 턴은 움직일 수 없다.",
+    "inflictsVolatile": [
+      { "volatile": "recharge", "target": "self" }
+    ],
     "makesContact": false
   },
   {
@@ -2480,7 +2603,13 @@
     "pp": 8,
     "priority": 0,
     "effect": "",
-    "makesContact": false
+    "makesContact": false,
+    "inflictsStatus": [
+      {
+        "status": "poison",
+        "chance": 30
+      }
+    ]
   },
   {
     "id": "물붓기",
@@ -2570,7 +2699,14 @@
     "classification": [
       "바람"
     ],
-    "makesContact": false
+    "makesContact": false,
+    "inflictsVolatile": [
+      {
+        "volatile": "confusion",
+        "target": "opponent",
+        "chance": 30
+      }
+    ]
   },
   {
     "id": "10만볼트",
@@ -2582,7 +2718,13 @@
     "pp": 16,
     "priority": 0,
     "effect": "10% 확률로 상대를 마비시킨다.",
-    "makesContact": false
+    "makesContact": false,
+    "inflictsStatus": [
+      {
+        "status": "paralysis",
+        "chance": 10
+      }
+    ]
   },
   {
     "id": "거짓울음",
@@ -2649,7 +2791,13 @@
     "pp": 8,
     "priority": 0,
     "effect": "1턴째 하늘로 뛰어올라 회피하고, 2턴째 공격한다. 30% 확률로 마비시킨다.",
-    "makesContact": true
+    "makesContact": true,
+    "inflictsStatus": [
+      {
+        "status": "paralysis",
+        "chance": 30
+      }
+    ]
   },
   {
     "id": "마하펀치",
@@ -2700,7 +2848,13 @@
     "pp": 12,
     "priority": 0,
     "effect": "30% 확률로 상대를 마비시킨다.",
-    "makesContact": false
+    "makesContact": false,
+    "inflictsStatus": [
+      {
+        "status": "paralysis",
+        "chance": 30
+      }
+    ]
   },
   {
     "id": "부추기기",
@@ -2719,7 +2873,13 @@
         "delta": 1
       }
     ],
-    "makesContact": false
+    "makesContact": false,
+    "inflictsVolatile": [
+      {
+        "volatile": "confusion",
+        "target": "opponent"
+      }
+    ]
   },
   {
     "id": "불꽃펀치",
@@ -2734,7 +2894,13 @@
     "classification": [
       "펀치"
     ],
-    "makesContact": true
+    "makesContact": true,
+    "inflictsStatus": [
+      {
+        "status": "burn",
+        "chance": 10
+      }
+    ]
   },
   {
     "id": "속이기",
@@ -2745,7 +2911,10 @@
     "accuracy": 100,
     "pp": 12,
     "priority": 3,
-    "effect": "상대와 서로 지닌 도구를 교환한다.",
+    "effect": "반드시 상대를 풀죽게 만든다. (등장 후 첫 턴에만 사용 가능 — 사용 조건은 스키마 밖, 풀죽음 부분만 태깅)",
+    "inflictsVolatile": [
+      { "volatile": "flinch", "target": "opponent" }
+    ],
     "makesContact": true
   },
   {
@@ -2770,7 +2939,12 @@
     "pp": 20,
     "priority": 0,
     "effect": "상대를 마비 상태로 만든다.",
-    "makesContact": false
+    "makesContact": false,
+    "inflictsStatus": [
+      {
+        "status": "paralysis"
+      }
+    ]
   },
   {
     "id": "천사의키스",
@@ -2782,7 +2956,13 @@
     "pp": 12,
     "priority": 0,
     "effect": "상대를 혼란 상태로 만든다.",
-    "makesContact": false
+    "makesContact": false,
+    "inflictsVolatile": [
+      {
+        "volatile": "confusion",
+        "target": "opponent"
+      }
+    ]
   },
   {
     "id": "초롱초롱눈동자",
@@ -2902,7 +3082,13 @@
     "classification": [
       "펀치"
     ],
-    "makesContact": true
+    "makesContact": true,
+    "inflictsVolatile": [
+      {
+        "volatile": "confusion",
+        "target": "opponent"
+      }
+    ]
   },
   {
     "id": "풀묶기",
@@ -2941,7 +3127,17 @@
     "classification": [
       "춤"
     ],
-    "makesContact": false
+    "makesContact": false,
+    "inflictsVolatile": [
+      {
+        "volatile": "confusion",
+        "target": "self"
+      },
+      {
+        "volatile": "confusion",
+        "target": "opponent"
+      }
+    ]
   },
   {
     "id": "간지르기",
@@ -3013,7 +3209,12 @@
     "pp": 20,
     "priority": 0,
     "effect": "상대를 독 상태로 만든다.",
-    "makesContact": false
+    "makesContact": false,
+    "inflictsStatus": [
+      {
+        "status": "poison"
+      }
+    ]
   },
   {
     "id": "목화포자",
@@ -3119,7 +3320,12 @@
     "pp": 20,
     "priority": 0,
     "effect": "상대를 마비 상태로 만든다.",
-    "makesContact": false
+    "makesContact": false,
+    "inflictsStatus": [
+      {
+        "status": "paralysis"
+      }
+    ]
   },
   {
     "id": "집단구타",
@@ -3289,7 +3495,13 @@
         "delta": 2
       }
     ],
-    "makesContact": false
+    "makesContact": false,
+    "inflictsVolatile": [
+      {
+        "volatile": "confusion",
+        "target": "opponent"
+      }
+    ]
   },
   {
     "id": "속임수",
@@ -3349,7 +3561,13 @@
     "pp": 12,
     "priority": 0,
     "effect": "상대를 혼란 상태로 만든다.",
-    "makesContact": false
+    "makesContact": false,
+    "inflictsVolatile": [
+      {
+        "volatile": "confusion",
+        "target": "opponent"
+      }
+    ]
   },
   {
     "id": "지옥찌르기",
@@ -3409,7 +3627,12 @@
     "pp": 16,
     "priority": 0,
     "effect": "상대를 화상 상태로 만든다.",
-    "makesContact": false
+    "makesContact": false,
+    "inflictsStatus": [
+      {
+        "status": "burn"
+      }
+    ]
   },
   {
     "id": "매지컬플레임",
@@ -3445,7 +3668,13 @@
     "pp": 16,
     "priority": 0,
     "effect": "",
-    "makesContact": false
+    "makesContact": false,
+    "inflictsStatus": [
+      {
+        "status": "burn",
+        "chance": 30
+      }
+    ]
   },
   {
     "id": "불사르기",
@@ -3532,7 +3761,13 @@
     "pp": 12,
     "priority": 0,
     "effect": "30% 확률로 상대를 화상 상태로 만든다.",
-    "makesContact": false
+    "makesContact": false,
+    "inflictsStatus": [
+      {
+        "status": "burn",
+        "chance": 30
+      }
+    ]
   },
   {
     "id": "열풍",
@@ -3547,7 +3782,13 @@
     "classification": [
       "바람"
     ],
-    "makesContact": false
+    "makesContact": false,
+    "inflictsStatus": [
+      {
+        "status": "burn",
+        "chance": 10
+      }
+    ]
   },
   {
     "id": "오버히트",
@@ -3700,7 +3941,12 @@
     "classification": [
       "소리"
     ],
-    "makesContact": false
+    "makesContact": false,
+    "inflictsStatus": [
+      {
+        "status": "sleep"
+      }
+    ]
   },
   {
     "id": "멸망의노래",
@@ -3921,6 +4167,9 @@
     "pp": 8,
     "priority": 0,
     "effect": "사용한 다음 턴은 움직일 수 없다.",
+    "inflictsVolatile": [
+      { "volatile": "recharge", "target": "self" }
+    ],
     "makesContact": false
   },
   {
@@ -3970,7 +4219,13 @@
     "classification": [
       "물기"
     ],
-    "makesContact": true
+    "makesContact": true,
+    "inflictsStatus": [
+      {
+        "status": "burn",
+        "chance": 10
+      }
+    ]
   },
   {
     "id": "블라스트번",
@@ -3994,7 +4249,12 @@
     "pp": 8,
     "priority": 0,
     "effect": "",
-    "makesContact": false
+    "makesContact": false,
+    "inflictsStatus": [
+      {
+        "status": "burn"
+      }
+    ]
   },
   {
     "id": "열불내기",
@@ -4146,8 +4406,15 @@
     "accuracy": 100,
     "pp": 20,
     "priority": 0,
-    "effect": "",
-    "makesContact": false
+    "effect": "상대의 회피율을 2랭크 낮춘다.",
+    "makesContact": false,
+    "statChanges": [
+      {
+        "target": "opponent",
+        "stat": "evasion",
+        "delta": -2
+      }
+    ]
   },
   {
     "id": "베놈쇼크",
@@ -4183,7 +4450,12 @@
     "pp": 16,
     "priority": 0,
     "effect": "",
-    "makesContact": false
+    "makesContact": false,
+    "inflictsStatus": [
+      {
+        "status": "sleep"
+      }
+    ]
   },
   {
     "id": "파워휩",
@@ -4254,7 +4526,8 @@
     "accuracy": 100,
     "pp": 8,
     "priority": 0,
-    "effect": "",
+    "effect": "사용자는 반드시 기절한다.",
+    "selfFaints": true,
     "makesContact": false
   },
   {
@@ -4267,7 +4540,12 @@
     "pp": 20,
     "priority": 0,
     "effect": "",
-    "makesContact": false
+    "makesContact": false,
+    "inflictsStatus": [
+      {
+        "status": "sleep"
+      }
+    ]
   },
   {
     "id": "매직룸",
@@ -4338,7 +4616,8 @@
     "accuracy": 100,
     "pp": 8,
     "priority": 0,
-    "effect": "",
+    "effect": "사용자는 반드시 기절한다.",
+    "selfFaints": true,
     "makesContact": false
   },
   {
@@ -4405,7 +4684,13 @@
     "classification": [
       "물기"
     ],
-    "makesContact": true
+    "makesContact": true,
+    "inflictsStatus": [
+      {
+        "status": "paralysis",
+        "chance": 10
+      }
+    ]
   },
   {
     "id": "록블라스트",
@@ -4430,11 +4715,17 @@
     "accuracy": 95,
     "pp": 16,
     "priority": 0,
-    "effect": "",
+    "effect": "10% 확률로 상대를 얼린다.",
     "classification": [
       "물기"
     ],
-    "makesContact": true
+    "makesContact": true,
+    "inflictsStatus": [
+      {
+        "status": "freeze",
+        "chance": 10
+      }
+    ]
   },
   {
     "id": "헤비봄버",
@@ -4516,6 +4807,95 @@
     "pp": 12,
     "priority": 0,
     "effect": "20% 확률로 상대를 화상·마비·냉동 중 하나의 상태로 만든다.",
+    "makesContact": false,
+    "inflictsStatus": [
+      {
+        "status": "paralysis",
+        "chance": 6.67
+      },
+      {
+        "status": "burn",
+        "chance": 6.67
+      },
+      {
+        "status": "freeze",
+        "chance": 6.67
+      }
+    ]
+  },
+  {
+    "id": "메탈버스트",
+    "name": "메탈버스트",
+    "type": "강철",
+    "category": "physical",
+    "power": null,
+    "accuracy": 100,
+    "pp": 10,
+    "priority": -3,
+    "effect": "이번 턴 받은 데미지(물리든 특수든)의 1.5배로 반격한다.",
     "makesContact": false
+  },
+  {
+    "id": "일렉트로빔",
+    "name": "일렉트로빔",
+    "type": "전기",
+    "category": "special",
+    "power": 130,
+    "accuracy": 100,
+    "pp": 12,
+    "priority": 0,
+    "effect": "1턴째 자신의 특공을 올리고, 2턴째 공격한다. 비가 내리면 1턴만에 발동한다.",
+    "makesContact": false
+  },
+  {
+    "id": "기어오르기",
+    "name": "기어오르기",
+    "type": "악",
+    "category": "physical",
+    "power": 20,
+    "accuracy": 100,
+    "pp": 12,
+    "priority": 0,
+    "effect": "위력 = 20 + (20 × 자신의 랭크가 오른 능력치 합계). 랭크가 오른 게 없으면 기본 위력 20.",
+    "makesContact": true
+  },
+  {
+    "id": "불새",
+    "name": "불새",
+    "type": "비행",
+    "category": "physical",
+    "power": 140,
+    "accuracy": 90,
+    "pp": 8,
+    "priority": 0,
+    "effect": "급소에 맞을 확률이 높다. 1턴째 하늘로 날아올라 모습을 감추고, 2턴째 공격한다. 30% 확률로 상대를 풀죽게 만든다.",
+    "inflictsVolatile": [
+      { "volatile": "flinch", "target": "opponent", "chance": 30 }
+    ],
+    "makesContact": true
+  },
+  {
+    "id": "쪼아대기",
+    "name": "쪼아대기",
+    "type": "비행",
+    "category": "physical",
+    "power": 60,
+    "accuracy": 100,
+    "pp": 20,
+    "priority": 0,
+    "effect": "",
+    "makesContact": true
+  },
+  {
+    "id": "회전부리",
+    "name": "회전부리",
+    "type": "비행",
+    "category": "physical",
+    "power": 80,
+    "accuracy": 100,
+    "pp": 20,
+    "priority": 0,
+    "effect": "",
+    "makesContact": true
   }
 ]

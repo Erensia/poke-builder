@@ -9,6 +9,7 @@ Pokémon Champions 파티 빌더 — 6슬롯 파티를 구성하고 타입 상�
 - **타입 상성 요약**: 파티 전체가 18타입 공격에 얼마나 약한지/버티는지 한눈에 보여주고, 타입 칸을 클릭하면 어떤 포켓몬이 해당되는지 드릴다운
 - **성격·능력포인트 편집**: 챔피언스 전용 실수치 공식(레벨/개체값 없음)으로 계산, 스탯당 최대 32/합산 66 포인트 배분
 - **결정력 & 내구력 매치업**: 내 포켓몬과 상대 포켓몬·기술을 고르면 확정 1타 ~ 3타 이상까지 5단계로 판정. 랭크 상태·날씨·특성 배율·다단히트 기술(×1/×2/×3)까지 반영
+- **대전 로그(다중 턴 시뮬레이션)**: 양쪽 포켓몬을 편성하고 매 턴 기술을 직접 골라가며 여러 턴짜리 가상 대전을 진행. 우선도·실효 스피드(동속 랜덤) 기반 턴 순서, 레벨 50 기준 실제 데미지·%HP, 명중/회피율·급소율, 화상·독·맹독·마비·잠듦·얼음 상태이상과 풀죽음·반동·혼란 같은 행동방해 효과, 근성/객기의 화상 예외까지 반영해 턴별 로그로 보여줌
 - **로컬 자동 저장**: 편성 내용이 브라우저에 자동 저장되고 새로고침해도 복원됨
 
 ## 데이터 규모
@@ -36,23 +37,29 @@ npm run dev
 
 ```
 src/
-├─ types/        Pokemon, Move, Ability, Item, Party, Nature, Matchup, BattleStats 등 도메인 타입
+├─ types/        Pokemon, Move, Ability, Item, Party, Nature, Matchup, BattleStats, Status 등 도메인 타입
 ├─ data/         pokemon.json, moves.json, abilities.json, items.json, natures.json, typeChart.json
-├─ lib/          데이터 조회, 타입 상성 계산, 메가폼 계산, 파티 상성 집계, 실수치/결정력/내구력 계산,
-│                특성 배율, 랭크 상태, 로컬 저장
-├─ hooks/        useParty.ts(파티 상태), useMatchup.ts(매치업 화면 상태)
+├─ lib/          데이터 조회, 타입 상성 계산, 메가폼 계산, 파티 상성 집계, 실수치/결정력/내구력/상세 데미지 계산,
+│                특성 배율(moveContext로 통합), 랭크 상태, 명중/회피/급소 계산, 턴 순서, 상태이상/행동방해,
+│                다중 턴 배틀 시뮬레이터(battleSimulator), 로컬 저장
+├─ hooks/        useParty.ts(파티 상태), useMatchup.ts(매치업 화면 상태), useBattleSetup.ts(대전 로그 셋업 상태)
 └─ components/   Sidebar, PartyBoard, PartySlotCard, TypeCoverageSummary, MatchupPage,
-                 MatchupSlotCard, VerdictBadge, WeatherPicker, *PickerModal, PointsEditorModal,
-                 StageEditorModal 등
+                 MatchupSlotCard, VerdictBadge, WeatherPicker, BattleLogPage, BattleSetupCard,
+                 *PickerModal, PointsEditorModal, StageEditorModal 등
 ```
 
 ## 문서
 
 - [docs/phase1-review.md](docs/phase1-review.md) — Phase 1 회고: 목표 대비 결과, 데이터 소스 변화, 확정된 아키텍처 결정, 알려진 갭, Phase 2 제안
 - [docs/phase1.5-review.md](docs/phase1.5-review.md) — Phase 1.5 회고: 데이터 완성(우선도·랭크변화·다단히트 등), 챔피언스 전용 능력치·결정력·내구력 계산 엔진, 매치업 UI, 사이드바 리디자인
+- [docs/phase2-plan.md](docs/phase2-plan.md) — Phase 2 기획: 턴 순서 계산, 회피율/급소율·상세 데미지 공식 등 스키마 갭, 다중 턴 시뮬레이션 엔진, 대전 로그 UI
+- [docs/phase2.5-plan.md](docs/phase2.5-plan.md) — Phase 2.5 기획: 페이지 폭 불일치·대전 로그 메가진화 표시 버그 수정, 회피율/급소율/풀죽음/반동 데이터 태깅
+- [docs/phase3-plan.md](docs/phase3-plan.md) — Phase 3 기획: 반동 데미지·다단히트·2턴 차지기 등 신규 스키마, 날씨/도구 배율 배선 누락 등 세부 보강 목록
 
 ## 로드맵
 
 - ✅ Phase 1: 파티 빌더 MVP
 - ✅ Phase 1.5: 데이터 완성 + 결정력·내구력 계산 엔진 & 매치업 화면
-- ⏳ Phase 2: 전투 시뮬레이터 (턴 순서 계산, 다중 턴 대전 로그)
+- ✅ Phase 2: 전투 시뮬레이터 — 턴 순서, 상세 데미지 공식, 명중/회피/급소, 상태이상·행동방해, 다중 턴 대전 로그 화면
+- ⏳ Phase 2.5: UI 폭 통일, 대전 로그 메가진화 표시 버그, 회피율/급소율/풀죽음/반동 데이터 태깅
+- 🔲 Phase 3: 신규 스키마 필요한 세부 메커니즘 (반동 데미지, 다단히트, 2턴 차지기, 날씨/도구 배율 배선 등)

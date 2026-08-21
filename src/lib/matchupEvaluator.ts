@@ -4,9 +4,8 @@ import type { WeatherKind } from "../types/weather";
 import { getPokemon, getAbility } from "./data";
 import { getEffectiveForm, type FormSource } from "./pokemonForm";
 import { computeRealStats } from "./statCalculator";
-import { getEffectiveness } from "./typeEffectiveness";
 import { applyMoveStatChanges } from "./statStages";
-import { resolveAbilityOffense, resolveAbilityDefense, resolveStabMultiplier } from "./abilityModifiers";
+import { resolveMoveContext } from "./moveContext";
 import { NEUTRAL_STAGES, type StatStages } from "../types/battleStats";
 import {
   computeOffensePower,
@@ -109,19 +108,15 @@ export function evaluateSlotMatchup(
     ? applyMoveStatChanges(baseDefenderStages, move, "opponent", { userTypes: attackerForm.types })
     : baseDefenderStages;
 
-  // 공격측 특성(테크니션/모래의힘/메가런처/페어리스킨 등)이 이 기술에 주는 배율 + 타입 변경
-  const abilityOffense = resolveAbilityOffense(attackerAbility, move, weather);
-  const effectiveMove = abilityOffense.overrideMoveType
-    ? { ...move, type: abilityOffense.overrideMoveType }
-    : move;
-  const stabMultiplier = resolveStabMultiplier(attackerAbility);
-
-  // 방어측 특성(두꺼운지방 등)이 이 기술을 받을 때 주는 배율
-  const abilityDefense = resolveAbilityDefense(defenderAbility, effectiveMove);
-
-  const typeEffectiveness = effectiveMove.type
-    ? getEffectiveness(effectiveMove.type, defenderForm.types)
-    : 1;
+  // 특성 배율(공격측 테크니션/모래의힘/메가런처/페어리스킨, 방어측 두꺼운지방 등) + 타입 변경 +
+  // 자속 + 상대 타입 상성을 한 번에 계산 — battleSimulator의 resolveAction과 공유하는 로직
+  const {
+    effectiveMove,
+    abilityOffenseMultiplier,
+    abilityDefenseMultiplier: abilityDefense,
+    stabMultiplier,
+    typeEffectiveness,
+  } = resolveMoveContext(attackerAbility, move, defenderForm.types, defenderAbility, weather);
 
   // 트리플악셀처럼 다단히트 기술이면, 특성/타입 조건 판정은 원래 기술(1타 위력) 기준으로 이미
   // 끝났으니 여기서만 선택한 타수까지의 위력을 합산해서 결정력 계산에 쓸 위력으로 바꿔치기한다.
@@ -136,7 +131,7 @@ export function evaluateSlotMatchup(
   // 상대 타입 상성을 곱하기 전의 결정력. offensePower는 여기에 typeEffectiveness만 곱한 값이라
   // 매번 다시 계산하는 대신 이 값에 typeEffectiveness를 곱해서 구한다.
   const rawOffensePower = computeOffensePower(attackerRealStats, attackerForm.types, effectiveMoveWithHits, {
-    abilityMultiplier: manualAbilityMultiplier ?? abilityOffense.multiplier,
+    abilityMultiplier: manualAbilityMultiplier ?? abilityOffenseMultiplier,
     itemMultiplier,
     weatherMultiplier,
     attackerStages,
