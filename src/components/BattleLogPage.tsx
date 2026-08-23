@@ -132,9 +132,13 @@ export function BattleLogPage() {
     // 남은 PP가 있는 기술이 하나도 없으면(4개 다 0) 선택 없이 발버둥을 자동으로 낸다.
     const aStruggling = !hasUsableMove(battleState.a);
     const bStruggling = !hasUsableMove(battleState.b);
-    if ((!aStruggling && !selected.a) || (!bStruggling && !selected.b)) return;
-    const moveA = aStruggling ? STRUGGLE_MOVE : getMove(selected.a!);
-    const moveB = bStruggling ? STRUGGLE_MOVE : getMove(selected.b!);
+    // 공중날기 등 차지 기술 2턴째는 준비해둔 기술이 선택 여부와 무관하게 자동으로 나가므로
+    // 이 턴엔 수동 선택을 요구하지 않는다 — resolveAction이 어차피 이 값을 무시하고 강제한다.
+    const aCharging = battleState.a.chargingMoveId !== undefined;
+    const bCharging = battleState.b.chargingMoveId !== undefined;
+    if ((!aStruggling && !aCharging && !selected.a) || (!bStruggling && !bCharging && !selected.b)) return;
+    const moveA = aStruggling ? STRUGGLE_MOVE : aCharging ? getMove(battleState.a.chargingMoveId!) : getMove(selected.a!);
+    const moveB = bStruggling ? STRUGGLE_MOVE : bCharging ? getMove(battleState.b.chargingMoveId!) : getMove(selected.b!);
     if (!moveA || !moveB) return;
     const { nextState, result } = runTurn(battleState, moveA, moveB);
     setBattleState(nextState);
@@ -255,11 +259,22 @@ export function BattleLogPage() {
                     ))}
                   </div>
 
-                  {hasUsableMove(fighter) ? (
+                  {fighter.chargingMoveId ? (
+                    // 공중날기 등 차지 기술 1턴째를 막 썼다 — 다음 턴 이 기술이 선택 없이 자동으로 나간다
+                    <div className="battle-struggle-notice">
+                      {getMove(fighter.chargingMoveId)?.name ?? "기술"} 준비 중 — 다음 턴 자동으로 발동돼요!
+                    </div>
+                  ) : hasUsableMove(fighter) ? (
                     <div className="battle-move-grid">
                       {moves.map((move) => {
                         const pp = fighter.remainingPp[move.id] ?? move.pp;
-                        const disabled = pp <= 0 || fighter.currentHp <= 0 || !!winner;
+                        // 코골기(잠든 상태 전용)/속이기(첫 턴 전용)처럼 사용 조건이 있는 기술은
+                        // 조건을 못 채우면 아예 선택하지 못하게 막는다 — resolveAction의 usageCondition
+                        // 판정과 동일한 조건을 UI에서도 미리 확인한다.
+                        const usageConditionUnmet =
+                          (move.usageCondition === "sleep-only" && fighter.status.condition !== "sleep") ||
+                          (move.usageCondition === "first-turn-only" && battleState.turnNumber !== 0);
+                        const disabled = pp <= 0 || fighter.currentHp <= 0 || !!winner || usageConditionUnmet;
                         // 셋업 카드의 party-move-pip와 동일하게 기술 타입 배경색을 입힌다.
                         const moveColor = move.type ? TYPE_COLORS[move.type] : undefined;
                         return (
@@ -271,6 +286,13 @@ export function BattleLogPage() {
                             }`}
                             style={moveColor ? { background: moveColor } : undefined}
                             disabled={disabled}
+                            title={
+                              usageConditionUnmet
+                                ? move.usageCondition === "sleep-only"
+                                  ? "잠든 상태에서만 사용 가능"
+                                  : "등장 후 첫 턴에만 사용 가능"
+                                : undefined
+                            }
                             onClick={() => setSelected((prev) => ({ ...prev, [side]: move.id }))}
                           >
                             <span className="battle-move-name">{move.name}</span>
@@ -310,7 +332,8 @@ export function BattleLogPage() {
               type="button"
               className="battle-start-button"
               disabled={
-                (hasUsableMove(battleState.a) && !selected.a) || (hasUsableMove(battleState.b) && !selected.b)
+                (hasUsableMove(battleState.a) && battleState.a.chargingMoveId === undefined && !selected.a) ||
+                (hasUsableMove(battleState.b) && battleState.b.chargingMoveId === undefined && !selected.b)
               }
               onClick={playTurn}
             >
@@ -339,12 +362,21 @@ export function BattleLogPage() {
                         {action.blockedReason === "confusion" &&
                           ` — 혼란으로 자멸! (${action.selfDamage} 데미지)`}
                         {action.blockedReason === "psychicFieldPriority" && " — 사이코필드에 막혀 실패"}
-                        {!action.blockedReason && !action.hit && " — 빗나감"}
+                        {action.blockedReason === "usageCondition" && " — 사용 조건이 맞지 않아 실패"}
+                        {!action.blockedReason && action.charging && " — 준비 중! 다음 턴 발동된다"}
+                        {!action.blockedReason && !action.charging && action.evadedByCharge && " — 무적 상태라 빗나감"}
+                        {!action.blockedReason && !action.charging && !action.evadedByCharge && !action.hit && " — 빗나감"}
                         {!action.blockedReason && action.hit && action.damage > 0 && (
                           <>
                             {" "}
-                            — {action.critical && "급소! "}
+                            {/* 다단히트가 아닐 때만 "급소!"를 단일 판정으로 표시 — 다단히트는
+                                타수마다 급소를 따로 판정해서 "하나라도 급소"라는 뜻이 다르므로
+                                뒤의 "(급소 포함)" 표기로 대신한다 */}
+                            — {action.hitCount === undefined && action.critical && "급소! "}
                             {action.damage} 데미지 ({(action.damagePercent * 100).toFixed(1)}%)
+                            {action.hitCount !== undefined && (
+                              <> · {action.hitCount}타 명중{action.critical && " (급소 포함)"}</>
+                            )}
                           </>
                         )}
                         {!action.blockedReason && action.hit && action.inflictedStatus && (
@@ -365,6 +397,14 @@ export function BattleLogPage() {
                         <div className="battle-turn-line is-muted">
                           {actorName}
                           {eunNeun(actorName)} 반동으로 {action.selfDamage} 데미지를 입었다
+                        </div>
+                      )}
+                      {/* 불꽃세례·웨이브태클 등 recoilFraction 기술의 반동. 발버둥과 계산 기준이
+                          달라 별도 필드(recoilDamage)로 표시한다 */}
+                      {!action.blockedReason && action.recoilDamage > 0 && (
+                        <div className="battle-turn-line is-muted">
+                          {actorName}
+                          {eunNeun(actorName)} 반동으로 {action.recoilDamage} 데미지를 입었다
                         </div>
                       )}
                       {/* 상대가 쓰러졌는지 여부 — 데미지 수치와 분리된 별도 상태 줄 */}

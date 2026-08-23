@@ -2,6 +2,10 @@ import type { PokemonType } from "./pokemon-type";
 import type { EffectStatKey } from "./battleStats";
 import type { StatusInflictEffect, VolatileInflictEffect } from "./status";
 import type { FieldKind } from "./field";
+import type { WeatherKind } from "./weather";
+
+/** 2턴 차지 기술이 준비 턴 동안 숨는 방식. bypassesHiding이 이 값을 포함한 기술만 예외적으로 맞힐 수 있다 */
+export type ChargeHideType = "underground" | "sky" | "underwater" | "hidden";
 
 export type MoveCategory = "physical" | "special" | "status";
 
@@ -88,4 +92,52 @@ export interface Move {
   fixedDamage?: number;
   /** 그래스필드/미스트필드/사이코필드/일렉트릭필드처럼 필드를 새로 까는 기술만 채운다 */
   setsField?: FieldKind;
+  /**
+   * 불꽃세례·웨이브태클·브레이브버드·양날박치기처럼 준 데미지의 일정 비율만큼 사용자도 반동
+   * 데미지를 입는 기술만 채운다(예: 1/3). 상대에게 준 데미지가 0(면역 등)이면 반동도 0이다 —
+   * 발버둥의 "최대 HP의 1/4 고정 반동"과는 계산 기준이 다르므로 별도 필드로 분리했다.
+   */
+  recoilFraction?: number;
+  /**
+   * 섀도클로·스톤에지·메가톤킥·블레이즈킥·크로스촙·사이코커터·에어커터처럼 "급소에 맞을 확률이
+   * 높다"(하이 크리티컬)고 표시된 기술만 채운다. statChanges의 critStage 랭크업(기충전 등)과
+   * 달리 지속 효과가 아니라 이 기술을 쓰는 순간에만 급소율에 +1단계를 임시로 얹는다.
+   */
+  highCritRatio?: boolean;
+  /** 트릭플라워처럼 반드시 급소에 맞는 기술만 채운다. */
+  alwaysCrit?: boolean;
+  /**
+   * 특정 조건에서만 사용할 수 있는 기술만 채운다. "sleep-only"(코골기 — 잠든 상태에서만, 그리고
+   * 그 잠듦 자체가 본가처럼 이 기술의 사용을 막지 않는 예외 취급),
+   * "first-turn-only"(속이기 — 등장 후 첫 턴에만. 1v1 시뮬레이터엔 교체가 없어 배틀의 1턴째로 취급).
+   * 조건을 안 채우면 battleSimulator가 blockedReason: "usageCondition"으로 실패시킨다.
+   */
+  usageCondition?: "sleep-only" | "first-turn-only";
+  /**
+   * 공중날기·구멍파기·다이빙·고스트다이브·뛰어오르기·솔라빔처럼 "1턴째 준비, 2턴째 실제 발동"하는
+   * 차지 기술만 채운다. 준비 턴에는 데미지 없이 이 기술 사용만 기록되고, 다음 턴 자동으로
+   * 재실행된다(PP는 준비 턴에 1번만 소모).
+   */
+  chargeTurn?: boolean;
+  /**
+   * 준비 턴 동안 숨는 방식(공중날기=sky, 구멍파기=underground, 다이빙=underwater,
+   * 고스트다이브=hidden). 있으면 그동안 대부분의 기술이 빗나가고, bypassesHiding에 이 값이
+   * 포함된 기술만 예외적으로 맞힐 수 있다. 솔라빔처럼 숨지 않고 그냥 준비만 하는 기술은
+   * 생략(무적 없음 — 준비 턴에도 평소처럼 맞을 수 있다).
+   */
+  chargeHideType?: ChargeHideType;
+  /** 솔라빔처럼 특정 날씨(쾌청)면 준비 턴 없이 1턴만에 발동하는 기술만 채운다. */
+  chargeSkipWeather?: WeatherKind;
+  /**
+   * 지진·땅고르기(구멍파기의 underground 무적을 뚫음), 번개·폭풍(공중날기·뛰어오르기의 sky
+   * 무적을 뚫음), 파도타기(다이빙의 underwater 무적을 뚫음)처럼 상대의 차지 기술 준비 턴
+   * 무적을 예외적으로 맞힐 수 있는 기술만 채운다.
+   */
+  bypassesHiding?: ChargeHideType[];
+  /**
+   * 지진(구멍파기 무적을 뚫을 때)·파도타기(다이빙 무적을 뚫을 때)처럼, 숨은 상대를 실제로
+   * 맞혔을 때 위력이 배가되는 예외 기술만 채운다(effect 텍스트에 명시). 번개·폭풍처럼 그냥
+   * 맞히기만 하고 배율은 없는 예외 기술은 생략(1배로 취급).
+   */
+  hidingBypassMultiplier?: number;
 }

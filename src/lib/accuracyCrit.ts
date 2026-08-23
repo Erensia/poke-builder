@@ -50,17 +50,25 @@ export function computeHitChance(
 
 /**
  * 급소율 단계별 확률표. 급소율은 -6~+6 랭크가 아니라 0~3의 별도 카운터로,
- * 3단계에서 100%(필중 급소)에 도달한다. (사용자 확인)
+ * 3단계에서 100%(필중 급소)에 도달한다.
+ * 0단계는 1/24(4.17%) — 본가(1/16)와 다른 챔피언스 고유 수치. Phase 2에서 1/16으로
+ * 잘못 기록했던 걸 사용자가 실제 자료로 정정(Phase 3, 1-2 작업 중 확인).
  */
 const CRIT_CHANCE_TABLE: Record<CritStage, number> = {
-  0: 1 / 16,
+  0: 1 / 24,
   1: 1 / 8,
   2: 1 / 2,
   3: 1,
 };
 
-export function critChance(stage: CritStage = NEUTRAL_CRIT_STAGE): number {
-  return CRIT_CHANCE_TABLE[clampCritStage(stage)];
+/**
+ * 급소율 단계별 확률. highCritRatio는 섀도클로·스톤에지 등 "급소에 맞을 확률이 높다"고
+ * 표시된 기술 전용 — 지속 랭크 변화가 아니라 그 기술을 쓸 때만 급소율 카운터에 +1단계를
+ * 임시로 얹는 일회성 보정이라 stage 자체를 건드리지 않고 이 함수 안에서만 반영한다.
+ */
+export function critChance(stage: CritStage = NEUTRAL_CRIT_STAGE, highCritRatio = false): number {
+  const effectiveStage = clampCritStage(stage + (highCritRatio ? 1 : 0));
+  return CRIT_CHANCE_TABLE[effectiveStage];
 }
 
 export interface ApplyStatusStagesOptions {

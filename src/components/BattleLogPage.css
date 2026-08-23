@@ -1,9 +1,9 @@
 .battle-log-page {
   width: 100%;
-  /* PartyBoard(740px)·MatchupPage(740px)와 폭을 통일 (Phase 2.5) — 이전엔 지정이 없어서
-     app-main의 justify-content:center에 의해 콘텐츠 크기만큼만 차지했다 */
+  /* PartyBoard(740px)·MatchupPage(740px)와 폭을 통일 (Phase 2.5). app-main이 이미
+     2rem 안팎의 패딩을 주므로 여기서 별도 padding을 더하지 않는다 — 예전엔 padding이
+     추가로 붙어서 대전 로그 타이틀만 다른 페이지 타이틀보다 오른쪽/아래로 밀려 보였다 */
   max-width: 740px;
-  padding: 1.5rem 2rem 3rem;
   display: flex;
   flex-direction: column;
   gap: 1.2rem;
@@ -19,6 +19,7 @@
 
 .battle-log-header h2 {
   font-family: var(--display);
+  font-size: 1.3rem;
   margin: 0 0 0.3rem;
 }
 
