@@ -234,15 +234,25 @@ function roEuro(name: string): "로" | "으로" {
 }
 
 /**
+ * 이 날씨에 맞는 바위(뜨거운바위 등)를 지닌 쪽이 있으면 그 보너스 턴수를, 없으면 0을 반환한다.
+ * 양쪽 다 지닐 일은 없지만(도구는 하나씩) 방어적으로 둘 다 확인해서 더 큰 쪽을 쓴다.
+ */
+function weatherRockBonus(weather: WeatherKind, aSlot: EvaluatorSlot, bSlot: EvaluatorSlot): number {
+  const aItem = aSlot.item ? getItem(aSlot.item) : undefined;
+  const bItem = bSlot.item ? getItem(bSlot.item) : undefined;
+  const aBonus = aItem?.weatherDurationBonus?.weather === weather ? aItem.weatherDurationBonus.bonus : 0;
+  const bBonus = bItem?.weatherDurationBonus?.weather === weather ? bItem.weatherDurationBonus.bonus : 0;
+  return Math.max(aBonus, bBonus);
+}
+
+/**
  * 사용자가 날씨를 직접 고르지 않았을 때, 양쪽 특성(가뭄/잔비/모래날림 등 setsWeather)을 확인해서
  * 배틀 시작과 동시에 날씨를 자동으로 바꾼다. 양쪽 다 날씨 특성이면 실효 스피드가 빠른 쪽이 이긴다
  * (참고할 다른 기준이 없어 간이화한 규칙 — Phase 3 문서 "확인 필요" 항목).
  *
- * 이렇게 걸린 날씨(특성이든, 사용자가 수동으로 고른 것이든)는 지속 턴수가 없다(무제한) — 본가에서
- * 날씨 특성은 그 포켓몬이 필드에 있는 한 계속 유지되는 게 실제 규칙이고, 1v1이라 교체가 없으니
- * 사실상 배틀이 끝날 때까지 유지된다. createBattleState가 BattleState.weatherTurnsRemaining을
- * 여기서 건드리지 않고 undefined로 남겨두는 이유. 기술로 날씨를 새로 걸면(Move.setsWeather) 그때는
- * resolveAction에서 유한 턴수(WEATHER_DURATION)로 덮어써서 카운트다운이 시작된다.
+ * 챔피언스는 특성으로 걸리든 사용자가 수동으로 고르든 날씨에 5턴 카운트다운이 있다(사용자 확인 —
+ * 본가와 달리 날씨 특성이 무제한 지속이 아님). 그래서 여기서도 기술로 걸 때(resolveAction의
+ * Move.setsWeather 처리)와 똑같이 WEATHER_DURATION(+바위 보너스)을 turnsRemaining으로 채운다.
  */
 function resolveEntryWeather(
   aSlot: EvaluatorSlot,
@@ -250,13 +260,19 @@ function resolveEntryWeather(
   bSlot: EvaluatorSlot,
   bFighter: BattleFighterState,
   manualWeather: WeatherKind | undefined,
-): { weather: WeatherKind | undefined; announcements: string[] } {
-  if (manualWeather) return { weather: manualWeather, announcements: [] };
+): { weather: WeatherKind | undefined; weatherTurnsRemaining: number | undefined; announcements: string[] } {
+  if (manualWeather) {
+    return {
+      weather: manualWeather,
+      weatherTurnsRemaining: WEATHER_DURATION + weatherRockBonus(manualWeather, aSlot, bSlot),
+      announcements: [],
+    };
+  }
 
   const aAbility = aFighter.effectiveAbilityId ? getAbility(aFighter.effectiveAbilityId) : undefined;
   const bAbility = bFighter.effectiveAbilityId ? getAbility(bFighter.effectiveAbilityId) : undefined;
   if (!aAbility?.setsWeather && !bAbility?.setsWeather) {
-    return { weather: manualWeather, announcements: [] };
+    return { weather: manualWeather, weatherTurnsRemaining: undefined, announcements: [] };
   }
 
   const aWins =
@@ -268,6 +284,7 @@ function resolveEntryWeather(
 
   return {
     weather,
+    weatherTurnsRemaining: WEATHER_DURATION + weatherRockBonus(weather, aSlot, bSlot),
     announcements: [`${pokemonName}의 ${winnerAbility.name}! 날씨가 ${weather}${roEuro(weather)} 바뀌었다!`],
   };
 }
@@ -281,12 +298,17 @@ export function createBattleState(
 ): BattleState {
   const fighterA = createFighterState(a, aMoves);
   const fighterB = createFighterState(b, bMoves);
-  const { weather: resolvedWeather, announcements } = resolveEntryWeather(a, fighterA, b, fighterB, weather);
+  const {
+    weather: resolvedWeather,
+    weatherTurnsRemaining,
+    announcements,
+  } = resolveEntryWeather(a, fighterA, b, fighterB, weather);
 
   return {
     a: fighterA,
     b: fighterB,
     weather: resolvedWeather,
+    weatherTurnsRemaining,
     turnNumber: 0,
     entryAnnouncements: announcements,
   };
@@ -459,7 +481,7 @@ export interface TurnResult {
   trickRoomExpired?: boolean;
   /**
    * 이번 턴이 끝난 시점에 날씨가 유한 지속시간으로 걸려있으면(기술로 걸었으면) 앞으로 몇 턴
-   * 더 지속되는지. 특성/수동 선택으로 걸린 무제한 날씨면 항상 undefined(카운트다운 자체가 없음).
+   * 더 지속되는지. 날씨가 아예 없으면(weather도 undefined) 이 값도 undefined.
    */
   weatherTurnsRemaining?: number;
   /** 이번 턴에 날씨가 지속시간을 다 채우고 사라졌으면 true */
@@ -1072,8 +1094,8 @@ function resolveAction(
   }
 
   // 날씨 변화 기술(비바라기 등): 필드/트릭룸과 달리 이미 다른(또는 같은) 날씨가 있어도 실패하지
-  // 않고 항상 덮어쓴다 — 실패라는 개념 자체가 없다(본가 규칙). 특성/수동 선택으로 걸린 날씨는
-  // weatherTurnsRemaining이 undefined(무제한)인데, 기술로 걸면 여기서 유한 턴수로 바뀐다.
+  // 않고 항상 덮어쓴다 — 실패라는 개념 자체가 없다(본가 규칙). 지속시간은 특성/수동 선택으로
+  // 걸렸을 때와 마찬가지로 WEATHER_DURATION(+바위 보너스)으로 다시 채워진다(카운트다운 초기화).
   if (effectiveMove.setsWeather) {
     state.weather = effectiveMove.setsWeather;
     const rockBonus =
@@ -1434,8 +1456,8 @@ export function runTurn(
     }
   }
 
-  // 날씨도 같은 방식으로 카운트다운하되, weatherTurnsRemaining이 애초에 undefined면(특성/수동
-  // 선택으로 걸린 무제한 날씨) 건드리지 않는다 — 기술로 걸어야만 유한 턴수가 생긴다.
+  // 날씨도 같은 방식으로 카운트다운한다. weatherTurnsRemaining은 날씨가 아예 없을 때만
+  // undefined이고, 특성/수동/기술 어느 경로로 걸렸든 항상 유한 턴수를 갖는다(챔피언스 규칙).
   let weatherExpired = false;
   if (state.weatherTurnsRemaining !== undefined) {
     state.weatherTurnsRemaining -= 1;

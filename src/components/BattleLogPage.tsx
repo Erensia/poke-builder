@@ -252,10 +252,7 @@ export function BattleLogPage() {
               <div className="battle-environment-tags">
                 {battleState.weather && (
                   <span className="battle-environment-tag">
-                    날씨: {battleState.weather}{" "}
-                    {battleState.weatherTurnsRemaining !== undefined
-                      ? `(앞으로 ${battleState.weatherTurnsRemaining}턴)`
-                      : "(무제한)"}
+                    날씨: {battleState.weather} (앞으로 {battleState.weatherTurnsRemaining}턴)
                   </span>
                 )}
                 {battleState.field && (
