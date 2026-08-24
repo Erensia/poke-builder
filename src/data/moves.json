@@ -4975,5 +4975,186 @@
     "priority": 0,
     "effect": "",
     "makesContact": true
+  },
+  {
+    "id": "괴전파",
+    "name": "괴전파",
+    "type": "전기",
+    "category": "status",
+    "power": null,
+    "accuracy": 100,
+    "pp": 16,
+    "priority": 0,
+    "effect": "이상한 전파를 발사해서 상대의 특수공격을 크게 떨어뜨린다.",
+    "statChanges": [
+      { "target": "opponent", "stat": "spa", "delta": -2 }
+    ],
+    "makesContact": false
+  },
+  {
+    "id": "라이징볼트",
+    "name": "라이징볼트",
+    "type": "전기",
+    "category": "special",
+    "power": 70,
+    "accuracy": 100,
+    "pp": 20,
+    "priority": 0,
+    "effect": "지면에서 올라오는 전격으로 공격한다. 상대가 일렉트릭필드 위에 있으면 위력이 2배가 된다.",
+    "makesContact": false
+  },
+  {
+    "id": "방전",
+    "name": "방전",
+    "type": "전기",
+    "category": "special",
+    "power": 80,
+    "accuracy": 100,
+    "pp": 16,
+    "priority": 0,
+    "effect": "전격을 두르고 주위에 방전한다. 30% 확률로 상대를 마비 상태로 만든다.",
+    "inflictsStatus": [
+      { "status": "paralysis", "chance": 30 }
+    ],
+    "makesContact": false
+  },
+  {
+    "id": "볼부비부비",
+    "name": "볼부비부비",
+    "type": "전기",
+    "category": "physical",
+    "power": 20,
+    "accuracy": 100,
+    "pp": 20,
+    "priority": 0,
+    "effect": "볼을 비벼서 전기 충격을 준다. 상대를 반드시 마비 상태로 만든다.",
+    "inflictsStatus": [
+      { "status": "paralysis" }
+    ],
+    "makesContact": true
+  },
+  {
+    "id": "볼트체인지",
+    "name": "볼트체인지",
+    "type": "전기",
+    "category": "special",
+    "power": 70,
+    "accuracy": 100,
+    "pp": 20,
+    "priority": 0,
+    "effect": "공격한 뒤 굉장한 스피드로 돌아와서 교대 포켓몬과 교체한다.",
+    "makesContact": false
+  },
+  {
+    "id": "볼트태클",
+    "name": "볼트태클",
+    "type": "전기",
+    "category": "physical",
+    "power": 120,
+    "accuracy": 100,
+    "pp": 16,
+    "priority": 0,
+    "effect": "전격을 두르고 돌진한다. 사용자도 준 데미지의 1/3만큼 반동을 입는다. 10% 확률로 상대를 마비 상태로 만든다.",
+    "recoilFraction": 0.3333333333333333,
+    "inflictsStatus": [
+      { "status": "paralysis", "chance": 10 }
+    ],
+    "makesContact": true
+  },
+  {
+    "id": "와일드볼트",
+    "name": "와일드볼트",
+    "type": "전기",
+    "category": "physical",
+    "power": 90,
+    "accuracy": 100,
+    "pp": 16,
+    "priority": 0,
+    "effect": "격렬한 전류를 두르고 몸으로 부딪친다. 사용자도 준 데미지의 1/4만큼 반동을 입는다.",
+    "recoilFraction": 0.25,
+    "makesContact": true
+  },
+  {
+    "id": "일렉트릭네트",
+    "name": "일렉트릭네트",
+    "type": "전기",
+    "category": "special",
+    "power": 55,
+    "accuracy": 95,
+    "pp": 16,
+    "priority": 0,
+    "effect": "전기가 흐르는 그물로 상대를 잡아 공격한다. 상대의 스피드를 떨어뜨린다.",
+    "statChanges": [
+      { "target": "opponent", "stat": "spe", "delta": -1 }
+    ],
+    "makesContact": false
+  },
+  {
+    "id": "일렉트릭볼",
+    "name": "일렉트릭볼",
+    "type": "전기",
+    "category": "special",
+    "power": null,
+    "accuracy": 100,
+    "pp": 12,
+    "priority": 0,
+    "effect": "전기 덩어리로 공격한다. 상대보다 스피드가 빠를수록 위력이 올라간다(고정 위력 없음).",
+    "classification": ["구슬/폭탄"],
+    "makesContact": false
+  },
+  {
+    "id": "전자포",
+    "name": "전자포",
+    "type": "전기",
+    "category": "special",
+    "power": 120,
+    "accuracy": 50,
+    "pp": 8,
+    "priority": 0,
+    "effect": "전기 덩어리를 발사한다. 명중하면 반드시 상대를 마비 상태로 만든다.",
+    "inflictsStatus": [
+      { "status": "paralysis" }
+    ],
+    "makesContact": false
+  },
+  {
+    "id": "충전",
+    "name": "충전",
+    "type": "전기",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 20,
+    "priority": 0,
+    "effect": "다음 턴에 쓸 전기타입 기술의 위력이 2배가 된다. 자신의 특수방어가 1랭크 오른다.",
+    "statChanges": [
+      { "target": "self", "stat": "spd", "delta": 1 }
+    ],
+    "makesContact": false
+  },
+  {
+    "id": "김밥말이",
+    "name": "김밥말이",
+    "type": "노말",
+    "category": "physical",
+    "power": 15,
+    "accuracy": 90,
+    "pp": 20,
+    "priority": 0,
+    "effect": "긴 몸이나 덩굴을 사용해 4~5턴 동안 상대를 휘감아 공격한다.",
+    "makesContact": true
+  },
+  {
+    "id": "날려버리기",
+    "name": "날려버리기",
+    "type": "노말",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 20,
+    "priority": -6,
+    "effect": "상대를 날려버려서 강제로 교대시킨다.",
+    "classification": ["바람"],
+    "makesContact": false
   }
 ]

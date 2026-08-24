@@ -78,6 +78,24 @@
     "category": "mega-stone"
   },
   {
+    "id": "라이츄나이트X",
+    "name": "라이츄나이트X",
+    "description": "",
+    "category": "mega-stone"
+  },
+  {
+    "id": "라이츄나이트Y",
+    "name": "라이츄나이트Y",
+    "description": "",
+    "category": "mega-stone"
+  },
+  {
+    "id": "망나뇽나이트",
+    "name": "망나뇽나이트",
+    "description": "",
+    "category": "mega-stone"
+  },
+  {
     "id": "하양허브",
     "name": "하양허브",
     "description": "능력이 떨어지면 원래대로 되돌린다. 한 번 사용하면 그 대전 중에는 사라진다.",
