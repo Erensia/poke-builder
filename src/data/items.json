@@ -96,6 +96,42 @@
     "category": "mega-stone"
   },
   {
+    "id": "캥카나이트",
+    "name": "캥카나이트",
+    "description": "",
+    "category": "mega-stone"
+  },
+  {
+    "id": "마폭시나이트",
+    "name": "마폭시나이트",
+    "description": "",
+    "category": "mega-stone"
+  },
+  {
+    "id": "입치트나이트",
+    "name": "입치트나이트",
+    "description": "",
+    "category": "mega-stone"
+  },
+  {
+    "id": "곤율거니나이트",
+    "name": "곤율거니나이트",
+    "description": "",
+    "category": "mega-stone"
+  },
+  {
+    "id": "몰드류나이트",
+    "name": "몰드류나이트",
+    "description": "",
+    "category": "mega-stone"
+  },
+  {
+    "id": "나무킹나이트",
+    "name": "나무킹나이트",
+    "description": "",
+    "category": "mega-stone"
+  },
+  {
     "id": "하양허브",
     "name": "하양허브",
     "description": "능력이 떨어지면 원래대로 되돌린다. 한 번 사용하면 그 대전 중에는 사라진다.",
