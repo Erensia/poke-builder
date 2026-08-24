@@ -5480,5 +5480,17 @@
     "classification": ["베기"],
     "makesContact": true,
     "inflictsStatus": [{ "status": "poison", "chance": 10 }]
+  },
+  {
+    "id": "성묘",
+    "name": "성묘",
+    "type": "고스트",
+    "category": "physical",
+    "power": 50,
+    "accuracy": 100,
+    "pp": 10,
+    "priority": 0,
+    "effect": "쓰러진 같은 편 포켓몬 1마리당 위력이 50씩 오른다(1v1 시뮬레이터에는 동료가 없어 항상 기본 위력 50으로 계산).",
+    "makesContact": false
   }
 ]
