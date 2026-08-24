@@ -43,6 +43,30 @@ export function getItemOffenseMultiplier(
  * bulkMultiplier는 데미지 공식에서 나누는 값이라, 데미지를 반으로 줄이려면 2를 반환해야 한다.
  * 실제로 소모됐는지는 consumed로 알려준다 — 호출부가 BattleFighterState.itemConsumed를 갱신해야 한다.
  */
+/**
+ * 명중률 전용 배율 배선 — 랭크(accuracyStages)와 별개로 곱하는 특성/도구 배율 중 도구 쪽.
+ * 광각렌즈(공격측, 항상)·포커스렌즈(공격측, 이번 턴 상대보다 늦게 움직일 때만)·반짝가루(방어측,
+ * 상대가 자신에게 쓰는 기술 한정)를 전부 곱해서 반환한다 — 한 포켓몬이 이 셋을 동시에 지닐 순
+ * 없지만(도구는 1개), 공격측 도구와 방어측 도구가 같은 판정에 동시에 걸리는 경우는 있어서 곱한다.
+ */
+export function getItemAccuracyMultiplier(
+  attackerItem: Item | undefined,
+  defenderItem: Item | undefined,
+  attackerMovesSecond: boolean,
+): number {
+  let multiplier = 1;
+  if (attackerItem?.accuracyMultiplier) {
+    multiplier *= attackerItem.accuracyMultiplier;
+  }
+  if (attackerItem?.accuracyMultiplierWhenMovingSecond && attackerMovesSecond) {
+    multiplier *= attackerItem.accuracyMultiplierWhenMovingSecond;
+  }
+  if (defenderItem?.opponentAccuracyMultiplier) {
+    multiplier *= defenderItem.opponentAccuracyMultiplier;
+  }
+  return multiplier;
+}
+
 export function getBerryDefenseResult(
   item: Item | undefined,
   moveType: string | null,

@@ -25,4 +25,10 @@ export interface Item {
    * 반감시키고 소모된다(대전 중 1회용). 방어측 아이템이라 offense가 아니라 defense multiplier로 적용.
    */
   resistsSuperEffectiveType?: PokemonType;
+  /** 광각렌즈: 자신이 사용하는 기술의 명중률에 항상 곱하는 배율(1.1) */
+  accuracyMultiplier?: number;
+  /** 반짝가루: 상대가 자신에게 사용하는 기술의 명중률에 곱하는 배율(0.9) — 방어측 아이템 */
+  opponentAccuracyMultiplier?: number;
+  /** 포커스렌즈: 상대보다 행동 순서가 늦게 움직인 턴에 한해 자신이 사용하는 기술의 명중률에 곱하는 배율(1.2) */
+  accuracyMultiplierWhenMovingSecond?: number;
 }

@@ -55,7 +55,7 @@ import {
   isPriorityMoveBlockedByField,
   isStatusBlockedByField,
 } from "./fieldEffects";
-import { getBerryDefenseResult, getItemOffenseMultiplier } from "./itemEffects";
+import { getBerryDefenseResult, getItemOffenseMultiplier, getItemAccuracyMultiplier } from "./itemEffects";
 import { compareTurnOrder } from "./turnOrder";
 import type { BaseStats } from "../types/stats";
 import type { EvaluatorSlot } from "./matchupEvaluator";
@@ -388,6 +388,7 @@ function resolveAction(
   actorKey: FighterKey,
   move: Move,
   random: () => number,
+  movesSecond: boolean,
 ): ActionLogEntry {
   const defenderKey = opponentKey(actorKey);
   const attacker = state[actorKey];
@@ -534,8 +535,9 @@ function resolveAction(
   attacker.lastMoveStreak = attacker.lastMoveId === effectiveMove.id ? (attacker.lastMoveStreak ?? 1) + 1 : 1;
   attacker.lastMoveId = effectiveMove.id;
 
-  // 반짝가루/모래숨기 같은 명중률 전용 특성·도구 배율은 아직 데이터 구조가 없어 1로 고정 (TODO: 데이터 보강)
-  const accuracyExtraMultiplier = 1;
+  // 반짝가루(방어측 0.9배)·광각렌즈(공격측 1.1배)·포커스렌즈(공격측, 늦게 움직일 때 1.2배).
+  // 모래숨기 같은 특성 쪽 배율은 아직 없음 (TODO: 특성 데이터 보강)
+  const accuracyExtraMultiplier = getItemAccuracyMultiplier(attackerItem, defenderItem, movesSecond);
   const hitChance = computeHitChance(
     effectiveMove.accuracy,
     attacker.accuracyStages.accuracy,
@@ -898,7 +900,9 @@ export function runTurn(
   for (const key of order) {
     if (isFainted(state[key])) continue; // 이미 쓰러진 쪽은 행동 못 함
     if (isFainted(state[opponentKey(key)])) break; // 상대가 이미 쓰러졌으면 더 진행할 필요 없음
-    const action = resolveAction(state, key, moves[key], random);
+    // 포커스렌즈 판정용 — 이번 턴 order 기준으로 상대보다 늦게 움직이는 쪽인지
+    const movesSecond = order[1] === key;
+    const action = resolveAction(state, key, moves[key], random, movesSecond);
     actions.push(action);
 
     // 발버둥 반동이나 자폭류로 "상대를 쓰러뜨리면서 자신도 같이 쓰러지는" 행동 하나 안에서는

@@ -135,19 +135,22 @@
     "id": "반짝가루",
     "name": "반짝가루",
     "description": "상대가 자신에게 사용하는 기술의 명중률이 0.9배가 된다.",
-    "category": "held-item"
+    "category": "held-item",
+    "opponentAccuracyMultiplier": 0.9
   },
   {
     "id": "광각렌즈",
     "name": "광각렌즈",
     "description": "자신이 사용하는 기술의 명중률이 1.1배가 된다.",
-    "category": "held-item"
+    "category": "held-item",
+    "accuracyMultiplier": 1.1
   },
   {
     "id": "포커스렌즈",
     "name": "포커스렌즈",
     "description": "상대보다 행동 순서가 늦으면, 자신이 사용하는 기술의 명중률이 1.2배가 된다.",
-    "category": "held-item"
+    "category": "held-item",
+    "accuracyMultiplierWhenMovingSecond": 1.2
   },
   {
     "id": "선제공격손톱",
