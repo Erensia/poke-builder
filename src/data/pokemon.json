@@ -2126,7 +2126,7 @@
   {
     "id": "브리두라스",
     "name": "브리두라스",
-    "types": ["드래곤", "얼음"],
+    "types": ["드래곤", "강철"],
     "baseStats": { "hp": 90, "atk": 105, "def": 130, "spa": 125, "spd": 65, "spe": 85 },
     "abilities": ["지구력", "옹골참"],
     "hiddenAbility": "굳건한신념",

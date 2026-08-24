@@ -300,15 +300,14 @@ export function BattleLogPage() {
                     <div className="battle-move-grid">
                       {moves.map((move) => {
                         const pp = fighter.remainingPp[move.id] ?? move.pp;
-                        // 코골기(잠든 상태 전용)는 조건을 못 채우면 아예 선택하지 못하게 막는다 —
-                        // resolveAction의 usageCondition 판정과 동일한 조건을 UI에서도 미리 확인한다.
-                        // 속이기(첫 턴 전용)는 반대로 첫 턴이 지나도 선택은 그대로 허용해서, 실제로
-                        // 눌러보면 resolveAction이 "사용 조건이 맞지 않아 실패"로 처리하는 걸 로그에서
-                        // 보여준다 — 조건을 못 채운다고 버튼 자체를 숨기지 않는다는 사용자 확인.
+                        // 실제 배틀에서도 조건을 안 채웠다고 기술 자체를 못 내는 건 아니고, 내봤자
+                        // 실패하는 것뿐이다(사용자 확인) — 코골기(잠든 상태 전용)·속이기(첫 턴 전용)
+                        // 둘 다 조건 불충족이어도 버튼은 그대로 선택 가능하게 두고, resolveAction이
+                        // "usageCondition"으로 실패 처리하는 걸 로그에서 그대로 보여준다.
                         const sleepConditionUnmet = move.usageCondition === "sleep-only" && fighter.status.condition !== "sleep";
                         const firstTurnConditionUnmet =
                           move.usageCondition === "first-turn-only" && battleState.turnNumber !== 0;
-                        const disabled = pp <= 0 || fighter.currentHp <= 0 || !!winner || sleepConditionUnmet;
+                        const disabled = pp <= 0 || fighter.currentHp <= 0 || !!winner;
                         // 셋업 카드의 party-move-pip와 동일하게 기술 타입 배경색을 입힌다.
                         const moveColor = move.type ? TYPE_COLORS[move.type] : undefined;
                         return (
@@ -322,7 +321,7 @@ export function BattleLogPage() {
                             disabled={disabled}
                             title={
                               sleepConditionUnmet
-                                ? "잠든 상태에서만 사용 가능"
+                                ? "잠든 상태에서만 사용 가능 — 지금 쓰면 실패해요"
                                 : firstTurnConditionUnmet
                                   ? "등장 후 첫 턴에만 사용 가능 — 지금 쓰면 실패해요"
                                   : undefined
