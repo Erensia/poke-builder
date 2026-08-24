@@ -60,6 +60,8 @@ const VOLATILE_LABELS = {
 /** 액션 로그 한 줄 안에 "OO 발동!"으로 뭉뚱그리기보다 전용 문구를 따로 쓰는 volatile들 */
 const VOLATILES_WITH_DEDICATED_LOG_LINE = new Set(["drowsy", "wish"]);
 
+const SCREEN_LABELS = { reflect: "리플렉터", lightScreen: "빛의장막" } as const;
+
 /**
  * 날씨/필드가 적용 중인지 배경색으로 알 수 있게 해달라는 요청 반영 — 날씨는 강화하는 타입 색(비=물,
  * 모래바람=바위, 눈=얼음, 쾌청=불꽃), 필드는 필드 자신의 타입 색(그래스=풀 등)을 낮은 불투명도로 섞는다.
@@ -248,7 +250,14 @@ export function BattleLogPage() {
           <div className="battle-board" style={{ background: battleBoardBackground(battleState) }}>
             {(battleState.weather || battleState.field || battleState.trickRoomTurnsRemaining !== undefined) && (
               <div className="battle-environment-tags">
-                {battleState.weather && <span className="battle-environment-tag">날씨: {battleState.weather}</span>}
+                {battleState.weather && (
+                  <span className="battle-environment-tag">
+                    날씨: {battleState.weather}{" "}
+                    {battleState.weatherTurnsRemaining !== undefined
+                      ? `(앞으로 ${battleState.weatherTurnsRemaining}턴)`
+                      : "(무제한)"}
+                  </span>
+                )}
                 {battleState.field && (
                   <span className="battle-environment-tag">
                     필드: {battleState.field} (앞으로 {battleState.fieldTurnsRemaining}턴)
@@ -294,6 +303,13 @@ export function BattleLogPage() {
                           {VOLATILE_LABELS[v]}
                         </span>
                       ))}
+                      {(Object.keys(fighter.screens) as ("reflect" | "lightScreen")[])
+                        .filter((s) => fighter.screens[s] !== undefined)
+                        .map((s) => (
+                          <span key={s} className="battle-status-tag is-volatile">
+                            {SCREEN_LABELS[s]} {fighter.screens[s]}턴
+                          </span>
+                        ))}
                     </div>
                   </div>
                   <div className="battle-hp-bar">
@@ -458,6 +474,19 @@ export function BattleLogPage() {
                         )}
                         {!action.blockedReason && action.hit && action.trickRoomSetFailed && (
                           <> · 이미 트릭룸이 있어 실패!</>
+                        )}
+                        {!action.blockedReason && action.hit && action.setWeather && (
+                          <>
+                            {" "}
+                            · 날씨가 {action.setWeather}
+                            {roEuro(action.setWeather)} 바뀌었다!
+                          </>
+                        )}
+                        {!action.blockedReason && action.hit && action.setScreen && (
+                          <> · {SCREEN_LABELS[action.setScreen]} 설치!</>
+                        )}
+                        {!action.blockedReason && action.hit && action.screenSetFailed && (
+                          <> · 이미 {SCREEN_LABELS[action.move.setsScreen!]}이(가) 있어 실패!</>
                         )}
                         {!action.blockedReason && action.hit && !!action.healedAmount && (
                           <>
@@ -666,6 +695,19 @@ export function BattleLogPage() {
                 {turn.trickRoomExpired && (
                   <div className="battle-turn-line is-muted">트릭룸이 해제됐다!</div>
                 )}
+                {turn.weatherTurnsRemaining !== undefined && (
+                  <div className="battle-turn-line is-muted">
+                    날씨: 앞으로 {turn.weatherTurnsRemaining}턴 뒤 소멸
+                  </div>
+                )}
+                {turn.weatherExpired && (
+                  <div className="battle-turn-line is-muted">날씨가 원래대로 돌아갔다!</div>
+                )}
+                {turn.expiredScreens.map((e, i) => (
+                  <div key={i} className="battle-turn-line is-muted">
+                    {fighterLabel(battleState, e.actor)}의 {SCREEN_LABELS[e.screen]}이(가) 사라졌다!
+                  </div>
+                ))}
                 {turn.winner && (
                   <div className="battle-turn-line is-winner">
                     {turn.winner === "draw"

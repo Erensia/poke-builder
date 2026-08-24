@@ -1,6 +1,7 @@
 import type { PokemonType } from "./pokemon-type";
 import type { MoveCategory } from "./move";
 import type { StatusCondition } from "./status";
+import type { WeatherKind } from "./weather";
 
 export type ItemCategory = "mega-stone" | "held-item";
 
@@ -60,4 +61,11 @@ export interface Item {
   curesStatusOnInflict?: StatusCondition[];
   /** 시몬열매: 혼란에 걸리는 순간(주 상태이상이 아니라 VolatileCondition) 자동으로 풀고 소모된다 */
   curesConfusionOnInflict?: boolean;
+  /**
+   * 날씨 연장 바위 4종(뜨거운바위·차가운바위·보송보송바위·축축한바위) — 이 도구를 지닌 쪽이
+   * 이 날씨를 기술/특성으로 만들면 지속시간이 bonus만큼 늘어난다(기본 5턴 + 3 = 8턴).
+   */
+  weatherDurationBonus?: { weather: WeatherKind; bonus: number };
+  /** 빛의점토: 리플렉터/빛의장막 지속시간이 이만큼 늘어난다(기본 5턴 + 3 = 8턴) */
+  screenDurationBonus?: number;
 }

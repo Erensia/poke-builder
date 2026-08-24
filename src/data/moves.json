@@ -1325,7 +1325,8 @@
     "pp": 8,
     "priority": 0,
     "effect": "5턴간 날씨를 비로 바꾼다.",
-    "makesContact": false
+    "makesContact": false,
+    "setsWeather": "비"
   },
   {
     "id": "신속",
@@ -1550,7 +1551,8 @@
     "pp": 8,
     "priority": 0,
     "effect": "5턴간 날씨를 맑음으로 바꾼다.",
-    "makesContact": false
+    "makesContact": false,
+    "setsWeather": "쾌청"
   },
   {
     "id": "크로스촙",
@@ -1954,7 +1956,8 @@
     "classification": [
       "바람"
     ],
-    "makesContact": false
+    "makesContact": false,
+    "setsWeather": "모래바람"
   },
   {
     "id": "배턴터치",
@@ -2017,7 +2020,8 @@
     "pp": 20,
     "priority": 0,
     "effect": "5턴간 아군이 받는 특수 데미지를 절반으로 줄인다.",
-    "makesContact": false
+    "makesContact": false,
+    "setsScreen": "lightScreen"
   },
   {
     "id": "사이코커터",
@@ -2694,7 +2698,8 @@
     "pp": 8,
     "priority": 0,
     "effect": "5턴간 날씨를 눈으로 바꾼다.",
-    "makesContact": false
+    "makesContact": false,
+    "setsWeather": "눈"
   },
   {
     "id": "씨폭탄",
@@ -3470,7 +3475,8 @@
     "pp": 20,
     "priority": 0,
     "effect": "5턴간 아군이 받는 물리 데미지를 절반으로 줄인다.",
-    "makesContact": false
+    "makesContact": false,
+    "setsScreen": "reflect"
   },
   {
     "id": "매혹의보이스",

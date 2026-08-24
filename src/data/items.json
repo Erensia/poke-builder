@@ -414,31 +414,36 @@
     "id": "빛의점토",
     "name": "빛의점토",
     "description": "빛의장막·리플렉터·오로라베일의 지속 시간이 3턴 증가한다. (총 8턴)",
-    "category": "held-item"
+    "category": "held-item",
+    "screenDurationBonus": 3
   },
   {
     "id": "뜨거운바위",
     "name": "뜨거운바위",
     "description": "기술이나 특성으로 쾌청 상태를 만들었을 때 지속 시간이 3턴 증가한다. (총 8턴)",
-    "category": "held-item"
+    "category": "held-item",
+    "weatherDurationBonus": { "weather": "쾌청", "bonus": 3 }
   },
   {
     "id": "차가운바위",
     "name": "차가운바위",
     "description": "기술이나 특성으로 눈 상태를 만들었을 때 지속 시간이 3턴 증가한다. (총 8턴)",
-    "category": "held-item"
+    "category": "held-item",
+    "weatherDurationBonus": { "weather": "눈", "bonus": 3 }
   },
   {
     "id": "보송보송바위",
     "name": "보송보송바위",
     "description": "기술이나 특성으로 모래바람 상태를 만들었을 때 지속 시간이 3턴 증가한다. (총 8턴)",
-    "category": "held-item"
+    "category": "held-item",
+    "weatherDurationBonus": { "weather": "모래바람", "bonus": 3 }
   },
   {
     "id": "축축한바위",
     "name": "축축한바위",
     "description": "기술이나 특성으로 비 상태를 만들었을 때 지속 시간이 3턴 증가한다. (총 8턴)",
-    "category": "held-item"
+    "category": "held-item",
+    "weatherDurationBonus": { "weather": "비", "bonus": 3 }
   },
   {
     "id": "리샘열매",

@@ -75,6 +75,12 @@ const MIN_DAMAGE_ROLL = 0.85;
 /** 트릭룸 지속 턴 수. 필드(FIELD_DURATION)와 같은 5턴 */
 const TRICK_ROOM_DURATION = 5;
 
+/** 날씨 기본 지속 턴 수(뜨거운바위 등 맞는 바위를 지녔으면 +3 = 8턴) */
+const WEATHER_DURATION = 5;
+
+/** 리플렉터/빛의장막 기본 지속 턴 수(빛의점토를 지녔으면 +3 = 8턴) */
+const SCREEN_DURATION = 5;
+
 /**
  * 록블라스트류(2~5회, multiHitPowers 없는 다단히트)의 타수를 확률표대로 뽑는다.
  * 록블라스트/독침/봉인구슬 등 moves.json에 이미 적힌 확률(2/3회 각 35%, 4/5회 각 15%) 기준.
@@ -159,6 +165,11 @@ export interface BattleFighterState {
   lastMoveStreak?: number;
   /** 나무열매(카리열매 등)처럼 대전 중 1회만 발동하는 지닌 도구를 이미 썼으면 true */
   itemConsumed?: boolean;
+  /**
+   * 리플렉터(물리)/빛의장막(특수) — 이 포켓몬 쪽에 걸려있는 스크린과 각각의 남은 턴 수.
+   * "아군이 받는 데미지 감소"라 1v1에서는 이 포켓몬 자신이 상대 공격을 맞을 때 적용된다.
+   */
+  screens: Partial<Record<"reflect" | "lightScreen", number>>;
 }
 
 /** 두 포켓몬(a/b)을 마주 세운 배틀 상태 */
@@ -166,6 +177,8 @@ export interface BattleState {
   a: BattleFighterState;
   b: BattleFighterState;
   weather?: WeatherKind;
+  /** 날씨가 사라지기까지 남은 턴 수. weather가 없으면 의미 없음 */
+  weatherTurnsRemaining?: number;
   field?: FieldKind;
   /** 필드가 사라지기까지 남은 턴 수. field가 없으면 의미 없음 */
   fieldTurnsRemaining?: number;
@@ -207,6 +220,7 @@ export function createFighterState(slot: EvaluatorSlot, moves: Move[]): BattleFi
     status: { ...NO_STATUS_CONDITION },
     volatile: { active: { ...NO_VOLATILE_CONDITIONS.active } },
     remainingPp: Object.fromEntries(moves.map((m) => [m.id, m.pp])),
+    screens: {},
   };
 }
 
@@ -223,6 +237,12 @@ function roEuro(name: string): "로" | "으로" {
  * 사용자가 날씨를 직접 고르지 않았을 때, 양쪽 특성(가뭄/잔비/모래날림 등 setsWeather)을 확인해서
  * 배틀 시작과 동시에 날씨를 자동으로 바꾼다. 양쪽 다 날씨 특성이면 실효 스피드가 빠른 쪽이 이긴다
  * (참고할 다른 기준이 없어 간이화한 규칙 — Phase 3 문서 "확인 필요" 항목).
+ *
+ * 이렇게 걸린 날씨(특성이든, 사용자가 수동으로 고른 것이든)는 지속 턴수가 없다(무제한) — 본가에서
+ * 날씨 특성은 그 포켓몬이 필드에 있는 한 계속 유지되는 게 실제 규칙이고, 1v1이라 교체가 없으니
+ * 사실상 배틀이 끝날 때까지 유지된다. createBattleState가 BattleState.weatherTurnsRemaining을
+ * 여기서 건드리지 않고 undefined로 남겨두는 이유. 기술로 날씨를 새로 걸면(Move.setsWeather) 그때는
+ * resolveAction에서 유한 턴수(WEATHER_DURATION)로 덮어써서 카운트다운이 시작된다.
  */
 function resolveEntryWeather(
   aSlot: EvaluatorSlot,
@@ -328,6 +348,12 @@ export interface ActionLogEntry {
   setTrickRoom?: boolean;
   /** 트릭룸을 썼지만 이미 걸려있어서 실패했으면 true */
   trickRoomSetFailed?: boolean;
+  /** 이 행동으로 날씨가 바뀌었으면(비바라기 등) 그 날씨. 실패라는 개념이 없어 항상 성공 시 채워진다 */
+  setWeather?: WeatherKind;
+  /** 이 행동으로 리플렉터/빛의장막이 자신 쪽에 새로 걸렸으면 채워진다 */
+  setScreen?: "reflect" | "lightScreen";
+  /** 리플렉터/빛의장막을 썼지만 이미 같은 스크린이 걸려있어서 실패했으면 true */
+  screenSetFailed?: boolean;
   /**
    * 불꽃세례·웨이브태클·브레이브버드·양날박치기(Move.recoilFraction)로 입은 반동 데미지.
    * selfDamage(혼란 자멸/발버둥 반동)와는 계산 기준이 달라 별도 필드로 분리했다 — 준 데미지가
@@ -431,6 +457,15 @@ export interface TurnResult {
   trickRoomTurnsRemaining?: number;
   /** 이번 턴에 트릭룸이 5턴을 다 채우고 사라졌으면 true */
   trickRoomExpired?: boolean;
+  /**
+   * 이번 턴이 끝난 시점에 날씨가 유한 지속시간으로 걸려있으면(기술로 걸었으면) 앞으로 몇 턴
+   * 더 지속되는지. 특성/수동 선택으로 걸린 무제한 날씨면 항상 undefined(카운트다운 자체가 없음).
+   */
+  weatherTurnsRemaining?: number;
+  /** 이번 턴에 날씨가 지속시간을 다 채우고 사라졌으면 true */
+  weatherExpired?: boolean;
+  /** 이번 턴에 사라진 스크린(리플렉터/빛의장막) 목록 — 양쪽에 동시에 걸려있을 수 있어 배열 */
+  expiredScreens: { actor: FighterKey; screen: "reflect" | "lightScreen" }[];
 }
 
 function isFainted(fighter: BattleFighterState): boolean {
@@ -445,6 +480,7 @@ function cloneFighter(fighter: BattleFighterState): BattleFighterState {
     status: { ...fighter.status },
     volatile: { active: { ...fighter.volatile.active } },
     remainingPp: { ...fighter.remainingPp },
+    screens: { ...fighter.screens },
   };
 }
 
@@ -716,6 +752,11 @@ function resolveAction(
       berryReducedDamageItemName = defenderItem?.name;
     }
 
+    // 리플렉터(물리)/빛의장막(특수): 방어측 자기 스크린이 걸려있으면 데미지 반감. 급소는
+    // 스크린을 무시한다(본가 규칙) — bulkMultiplier는 나눗셈이라 2를 곱하면 절반이 된다.
+    const screenType = effectiveMove.category === "physical" ? "reflect" : "lightScreen";
+    const screenMultiplier = !critical && defender.screens[screenType] !== undefined ? 2 : 1;
+
     const result = computeDamage(attacker.realStats, defender.realStats, attacker.types, hitMove, {
       typeEffectiveness,
       abilityMultiplier: abilityOffenseMultiplier * statusAttackMultiplier * hidingBypassMultiplier,
@@ -725,7 +766,7 @@ function resolveAction(
       stabMultiplier,
       attackerStages: attacker.stages,
       defenderStages: defender.stages,
-      bulkMultiplier: abilityDefenseMultiplier * berryResult.bulkMultiplier,
+      bulkMultiplier: abilityDefenseMultiplier * berryResult.bulkMultiplier * screenMultiplier,
       isCritical: critical,
       randomRoll: MIN_DAMAGE_ROLL + random() * (1 - MIN_DAMAGE_ROLL),
     });
@@ -1030,6 +1071,30 @@ function resolveAction(
     }
   }
 
+  // 날씨 변화 기술(비바라기 등): 필드/트릭룸과 달리 이미 다른(또는 같은) 날씨가 있어도 실패하지
+  // 않고 항상 덮어쓴다 — 실패라는 개념 자체가 없다(본가 규칙). 특성/수동 선택으로 걸린 날씨는
+  // weatherTurnsRemaining이 undefined(무제한)인데, 기술로 걸면 여기서 유한 턴수로 바뀐다.
+  if (effectiveMove.setsWeather) {
+    state.weather = effectiveMove.setsWeather;
+    const rockBonus =
+      attackerItem?.weatherDurationBonus?.weather === effectiveMove.setsWeather
+        ? attackerItem.weatherDurationBonus.bonus
+        : 0;
+    state.weatherTurnsRemaining = WEATHER_DURATION + rockBonus;
+  }
+
+  // 리플렉터/빛의장막: 자신 쪽에 이미 같은 스크린이 걸려있으면 실패(필드/트릭룸과 같은 패턴).
+  // 빛의점토를 지녔으면 지속시간이 늘어난다.
+  let screenSetFailed = false;
+  if (effectiveMove.setsScreen) {
+    if (attacker.screens[effectiveMove.setsScreen] !== undefined) {
+      screenSetFailed = true;
+    } else {
+      const screenBonus = attackerItem?.screenDurationBonus ?? 0;
+      attacker.screens = { ...attacker.screens, [effectiveMove.setsScreen]: SCREEN_DURATION + screenBonus };
+    }
+  }
+
   // 자뭉열매/오랭열매: 이번 행동으로 생긴 모든 HP 변화(피격/반동/회복 등)가 끝난 뒤, 체력이 최대
   // HP 1/2 이하인 쪽(공격자든 방어자든)이 있으면 자동 발동한다. attacker를 먼저 확인하는 순서는
   // 임의지만, 도구는 각자 한 개씩만 지니므로 서로 간섭하지 않는다.
@@ -1082,6 +1147,9 @@ function resolveAction(
     fieldSetFailed,
     setTrickRoom: trickRoomSetFailed ? undefined : effectiveMove.setsTrickRoom,
     trickRoomSetFailed,
+    setWeather: effectiveMove.setsWeather,
+    setScreen: screenSetFailed ? undefined : effectiveMove.setsScreen,
+    screenSetFailed,
     fainted: isFainted(defender),
     selfFainted: isFainted(attacker),
     recoilDamage,
@@ -1129,6 +1197,7 @@ export function runTurn(
     a: cloneFighter(prevState.a),
     b: cloneFighter(prevState.b),
     weather: prevState.weather,
+    weatherTurnsRemaining: prevState.weatherTurnsRemaining,
     field: prevState.field,
     fieldTurnsRemaining: prevState.fieldTurnsRemaining,
     trickRoomTurnsRemaining: prevState.trickRoomTurnsRemaining,
@@ -1365,6 +1434,35 @@ export function runTurn(
     }
   }
 
+  // 날씨도 같은 방식으로 카운트다운하되, weatherTurnsRemaining이 애초에 undefined면(특성/수동
+  // 선택으로 걸린 무제한 날씨) 건드리지 않는다 — 기술로 걸어야만 유한 턴수가 생긴다.
+  let weatherExpired = false;
+  if (state.weatherTurnsRemaining !== undefined) {
+    state.weatherTurnsRemaining -= 1;
+    if (state.weatherTurnsRemaining <= 0) {
+      state.weather = undefined;
+      state.weatherTurnsRemaining = undefined;
+      weatherExpired = true;
+    }
+  }
+
+  // 리플렉터/빛의장막은 필드/날씨와 달리 "양쪽 다 따로" 걸릴 수 있어 각자 카운트다운한다.
+  const expiredScreens: { actor: FighterKey; screen: "reflect" | "lightScreen" }[] = [];
+  for (const key of (["a", "b"] as const)) {
+    const fighter = state[key];
+    for (const screenType of ["reflect", "lightScreen"] as const) {
+      const remaining = fighter.screens[screenType];
+      if (remaining === undefined) continue;
+      const next = remaining - 1;
+      if (next <= 0) {
+        fighter.screens = { ...fighter.screens, [screenType]: undefined };
+        expiredScreens.push({ actor: key, screen: screenType });
+      } else {
+        fighter.screens = { ...fighter.screens, [screenType]: next };
+      }
+    }
+  }
+
   return {
     nextState: state,
     result: {
@@ -1378,6 +1476,9 @@ export function runTurn(
       fieldExpired,
       trickRoomTurnsRemaining: state.trickRoomTurnsRemaining,
       trickRoomExpired,
+      weatherTurnsRemaining: state.weatherTurnsRemaining,
+      weatherExpired,
+      expiredScreens,
     },
   };
 }
