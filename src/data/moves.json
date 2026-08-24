@@ -3407,7 +3407,8 @@
     "pp": 12,
     "priority": 0,
     "effect": "5턴간 스피드가 낮은 포켓몬부터 먼저 행동한다.",
-    "makesContact": false
+    "makesContact": false,
+    "setsTrickRoom": true
   },
   {
     "id": "가드스왑",

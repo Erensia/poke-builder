@@ -63,6 +63,9 @@ import type { EvaluatorSlot } from "./matchupEvaluator";
 /** 데미지 난수 하한. computeDamage의 randomRoll에 매턴 0.85~1.00 사이 값을 뽑아 넘길 때 쓴다 */
 const MIN_DAMAGE_ROLL = 0.85;
 
+/** 트릭룸 지속 턴 수. 필드(FIELD_DURATION)와 같은 5턴 */
+const TRICK_ROOM_DURATION = 5;
+
 /**
  * 록블라스트류(2~5회, multiHitPowers 없는 다단히트)의 타수를 확률표대로 뽑는다.
  * 록블라스트/독침/봉인구슬 등 moves.json에 이미 적힌 확률(2/3회 각 35%, 4/5회 각 15%) 기준.
@@ -157,6 +160,8 @@ export interface BattleState {
   field?: FieldKind;
   /** 필드가 사라지기까지 남은 턴 수. field가 없으면 의미 없음 */
   fieldTurnsRemaining?: number;
+  /** 트릭룸이 해제되기까지 남은 턴 수. 트릭룸이 안 걸려있으면 undefined */
+  trickRoomTurnsRemaining?: number;
   turnNumber: number;
   /** 배틀 시작 시점에 특성으로 날씨가 자동으로 바뀌었으면("○○의 잔비!") 그 안내 문구 */
   entryAnnouncements: string[];
@@ -310,6 +315,10 @@ export interface ActionLogEntry {
   setField?: FieldKind;
   /** 필드 기술을 썼지만 이미 다른 필드가 깔려있어서 실패했으면 true */
   fieldSetFailed?: boolean;
+  /** 이 행동으로 트릭룸이 새로 걸렸으면 true */
+  setTrickRoom?: boolean;
+  /** 트릭룸을 썼지만 이미 걸려있어서 실패했으면 true */
+  trickRoomSetFailed?: boolean;
   /**
    * 불꽃세례·웨이브태클·브레이브버드·양날박치기(Move.recoilFraction)로 입은 반동 데미지.
    * selfDamage(혼란 자멸/발버둥 반동)와는 계산 기준이 달라 별도 필드로 분리했다 — 준 데미지가
@@ -361,6 +370,10 @@ export interface TurnResult {
   fieldTurnsRemaining?: number;
   /** 이번 턴에 필드가 5턴을 다 채우고 사라졌으면 true */
   fieldExpired?: boolean;
+  /** 이번 턴이 끝난 시점에 트릭룸이 걸려있으면, 앞으로 몇 턴 더 지속되는지 */
+  trickRoomTurnsRemaining?: number;
+  /** 이번 턴에 트릭룸이 5턴을 다 채우고 사라졌으면 true */
+  trickRoomExpired?: boolean;
 }
 
 function isFainted(fighter: BattleFighterState): boolean {
@@ -827,6 +840,17 @@ function resolveAction(
     }
   }
 
+  // 트릭룸도 필드와 같은 이유로 이미 걸려있으면 재사용 시 실패 처리한다(지속 턴수 갱신 방지) —
+  // 다만 아직 아무 효과도 안 걸린 채로 게임이 끝나는 극단적 경우는 없으니 별 문제 없음.
+  let trickRoomSetFailed = false;
+  if (effectiveMove.setsTrickRoom) {
+    if (state.trickRoomTurnsRemaining !== undefined) {
+      trickRoomSetFailed = true;
+    } else {
+      state.trickRoomTurnsRemaining = TRICK_ROOM_DURATION;
+    }
+  }
+
   return {
     actor: actorKey,
     move,
@@ -843,6 +867,8 @@ function resolveAction(
     curedStatusTarget,
     setField: fieldSetFailed ? undefined : effectiveMove.setsField,
     fieldSetFailed,
+    setTrickRoom: trickRoomSetFailed ? undefined : effectiveMove.setsTrickRoom,
+    trickRoomSetFailed,
     fainted: isFainted(defender),
     selfFainted: isFainted(attacker),
     recoilDamage,
@@ -877,6 +903,7 @@ export function runTurn(
     weather: prevState.weather,
     field: prevState.field,
     fieldTurnsRemaining: prevState.fieldTurnsRemaining,
+    trickRoomTurnsRemaining: prevState.trickRoomTurnsRemaining,
     turnNumber: prevState.turnNumber + 1,
     entryAnnouncements: prevState.entryAnnouncements,
   };
@@ -884,11 +911,16 @@ export function runTurn(
   const speedA = state.a.realStats.spe * computeStatusSpeedMultiplier(state.a.status.condition);
   const speedB = state.b.realStats.spe * computeStatusSpeedMultiplier(state.b.status.condition);
 
+  // 트릭룸 판정은 이번 턴이 시작된 시점(=아직 이번 턴 행동을 하나도 반영하지 않은 상태)의 값을
+  // 쓴다 — 이번 턴에 트릭룸을 새로 걸어도 그 즉시 같은 턴의 순서 계산에는 영향을 주지 않는다
+  // (본가 규칙: 순서는 행동 전에 이미 정해짐).
+  const trickRoomActive = state.trickRoomTurnsRemaining !== undefined;
   const firstIsA =
     compareTurnOrder(
       { realSpeed: speedA, move: moveA, stages: state.a.stages },
       { realSpeed: speedB, move: moveB, stages: state.b.stages },
       random,
+      trickRoomActive,
     ) === 0;
 
   const order: [FighterKey, FighterKey] = firstIsA ? ["a", "b"] : ["b", "a"];
@@ -991,6 +1023,16 @@ export function runTurn(
     }
   }
 
+  // 트릭룸도 같은 방식으로 카운트다운한다.
+  let trickRoomExpired = false;
+  if (state.trickRoomTurnsRemaining !== undefined) {
+    state.trickRoomTurnsRemaining -= 1;
+    if (state.trickRoomTurnsRemaining <= 0) {
+      state.trickRoomTurnsRemaining = undefined;
+      trickRoomExpired = true;
+    }
+  }
+
   return {
     nextState: state,
     result: {
@@ -1002,6 +1044,8 @@ export function runTurn(
       field: state.field,
       fieldTurnsRemaining: state.fieldTurnsRemaining,
       fieldExpired,
+      trickRoomTurnsRemaining: state.trickRoomTurnsRemaining,
+      trickRoomExpired,
     },
   };
 }

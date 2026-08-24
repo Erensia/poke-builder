@@ -234,12 +234,17 @@ export function BattleLogPage() {
       {battleState && (
         <>
           <div className="battle-board" style={{ background: battleBoardBackground(battleState) }}>
-            {(battleState.weather || battleState.field) && (
+            {(battleState.weather || battleState.field || battleState.trickRoomTurnsRemaining !== undefined) && (
               <div className="battle-environment-tags">
                 {battleState.weather && <span className="battle-environment-tag">날씨: {battleState.weather}</span>}
                 {battleState.field && (
                   <span className="battle-environment-tag">
                     필드: {battleState.field} (앞으로 {battleState.fieldTurnsRemaining}턴)
+                  </span>
+                )}
+                {battleState.trickRoomTurnsRemaining !== undefined && (
+                  <span className="battle-environment-tag">
+                    트릭룸 (앞으로 {battleState.trickRoomTurnsRemaining}턴)
                   </span>
                 )}
               </div>
@@ -430,6 +435,12 @@ export function BattleLogPage() {
                         {!action.blockedReason && action.hit && action.fieldSetFailed && (
                           <> · 이미 필드가 있어 실패!</>
                         )}
+                        {!action.blockedReason && action.hit && action.setTrickRoom && (
+                          <> · 트릭룸 발동!</>
+                        )}
+                        {!action.blockedReason && action.hit && action.trickRoomSetFailed && (
+                          <> · 이미 트릭룸이 있어 실패!</>
+                        )}
                       </div>
                       {/* 마비/잠듦/얼음으로 이번 턴 행동이 막혔으면(단순 "상태이상으로 행동 불가"가
                           아니라) 매턴 효과가 발동한 것과 같은 의미라 트리거 문구를 그대로 쓴다 */}
@@ -541,6 +552,14 @@ export function BattleLogPage() {
                 )}
                 {turn.fieldExpired && (
                   <div className="battle-turn-line is-muted">필드가 사라졌다!</div>
+                )}
+                {turn.trickRoomTurnsRemaining !== undefined && (
+                  <div className="battle-turn-line is-muted">
+                    트릭룸: 앞으로 {turn.trickRoomTurnsRemaining}턴 뒤 해제
+                  </div>
+                )}
+                {turn.trickRoomExpired && (
+                  <div className="battle-turn-line is-muted">트릭룸이 해제됐다!</div>
                 )}
                 {turn.winner && (
                   <div className="battle-turn-line is-winner">
