@@ -156,4 +156,41 @@ export interface Move {
    * 나무위키 기준 원래 10개 기술이 있지만, 지금 로스터에 데이터가 있는 건 3개뿐(나머지는 후속 보강).
    */
   thawsUserOnUse?: boolean;
+  /**
+   * 광합성·달빛처럼 날씨에 따라 회복량이 달라지는 즉시 회복기만 채운다(사용자 확인 공식:
+   * 쾌청 2/3, 날씨 없음 1/2, 그 외 날씨(비/모래바람/싸라기눈) 1/4 — 전부 최대 HP 기준).
+   * healsFraction과는 배타적으로 쓴다.
+   */
+  healsWeatherDependent?: boolean;
+  /**
+   * 날개쉬기·게으름피우기처럼 날씨와 무관하게 고정 비율만큼 즉시 회복하는 기술, 또는
+   * 치유파동처럼 상대를 회복시키는 기술(healsTarget: "opponent")만 채운다. 최대 HP 기준 비율.
+   */
+  healsFraction?: number;
+  /** healsFraction/healsWeatherDependent의 회복 대상. 생략하면 self(자신) */
+  healsTarget?: "self" | "opponent";
+  /**
+   * 잠자기 전용. 명중 시(항상 필중) 자신의 체력을 완전히 회복하고, 기존 상태이상을 무엇이든
+   * 지우고 정확히 2턴간 무조건 잠재운다(statusConditions.inflictRestSleep). curesStatus나
+   * inflictsStatus의 일반 규칙(이미 상태이상이 있으면 안 걸림)과는 다른 별도 경로라 전용
+   * 필드로 분리했다.
+   */
+  restSleep?: boolean;
+  /**
+   * 기가드레인·드레인펀치·드레인키스·원념의칼처럼 이번 공격으로 준 데미지의 일정 비율만큼
+   * 사용자가 회복하는 기술만 채운다(예: 1/2, 드레인키스는 3/4). recoilFraction의 회복 버전 —
+   * 데미지가 0(면역 등)이면 회복도 0. 큰뿌리(Item.drainHealMultiplier)를 지녔으면 1.3배.
+   */
+  drainFraction?: number;
+  /**
+   * 뿌리박기(ingrain)·아쿠아링(aquaRing)처럼 "걸려있는 동안 매 턴 종료 시 최대 HP 1/16을
+   * 회복"하는 지속 효과를 자신에게 거는 기술만 채운다. 이미 걸려있으면 재사용 시 실패.
+   * 큰뿌리를 지녔으면 회복량이 1.3배가 된다.
+   */
+  setsRegenVolatile?: "ingrain" | "aquaRing";
+  /**
+   * 씨뿌리기 전용. 상대에게 leechSeed를 걸어 매 턴 종료 시 상대가 최대 HP 1/8을 잃고 자신이
+   * 그만큼(자신이 큰뿌리를 지녔으면 1.3배) 회복하게 한다. 상대가 이미 걸려있으면 실패.
+   */
+  setsLeechSeed?: boolean;
 }

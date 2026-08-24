@@ -16,15 +16,27 @@ export const CONFUSION_SELF_HIT_CHANCE = 1 / 3;
 export const CONFUSION_SELF_HIT_POWER = 40;
 
 /**
- * 졸음(하품) 지속 턴수: 고정 2. 건 시점의 턴 종료에서 2→1로 한 번 소모되고(아직 무산),
- * 그 다음 턴 종료에서 1→0이 되는 시점에 실제로 잠듦을 시도한다 — "맞은 다음 턴 종료" 규칙.
+ * 졸음(하품)·희망사항 지속 턴수: 고정 2. 건 시점의 턴 종료에서 2→1로 한 번 소모되고(아직 무산),
+ * 그 다음 턴 종료에서 1→0이 되는 시점에 실제로 잠듦/회복을 시도한다 — "맞은/쓴 다음 턴 종료" 규칙.
  */
 const DROWSY_DURATION = 2;
+const WISH_DURATION = 2;
+
+/**
+ * 뿌리박기·아쿠아링·씨뿌리기는 턴 카운터로 소모되지 않고 배틀이 끝날 때까지 유지된다(교체가
+ * 없는 1v1이라 "교체 시 해제"도 해당 없음) — consumeVolatileTurn을 아예 호출하지 않으므로
+ * 이 값 자체는 의미 없지만, hasVolatile 판정용으로 유효한 엔트리는 있어야 해서 큰 값을 넣는다.
+ */
+const PERSISTENT_UNTIL_BATTLE_END = 999;
 
 /** 풀죽음/반동은 고정 1턴만 지속 (사용자 확인) */
 function defaultDuration(volatile: VolatileCondition, random: () => number): number {
   if (volatile === "confusion") return rollConfusionDuration(random);
   if (volatile === "drowsy") return DROWSY_DURATION;
+  if (volatile === "wish") return WISH_DURATION;
+  if (volatile === "ingrain" || volatile === "aquaRing" || volatile === "leechSeed") {
+    return PERSISTENT_UNTIL_BATTLE_END;
+  }
   return 1;
 }
 

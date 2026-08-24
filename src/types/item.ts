@@ -1,5 +1,6 @@
 import type { PokemonType } from "./pokemon-type";
 import type { MoveCategory } from "./move";
+import type { StatusCondition } from "./status";
 
 export type ItemCategory = "mega-stone" | "held-item";
 
@@ -31,4 +32,32 @@ export interface Item {
   opponentAccuracyMultiplier?: number;
   /** 포커스렌즈: 상대보다 행동 순서가 늦게 움직인 턴에 한해 자신이 사용하는 기술의 명중률에 곱하는 배율(1.2) */
   accuracyMultiplierWhenMovingSecond?: number;
+  /**
+   * 먹다남은음식: 턴 종료 시(생존해 있으면 항상) 최대 HP를 이 값으로 나눈(내림) 만큼 회복(1/6 → 6).
+   * 1/6·1/8·1/4처럼 딱 안 떨어지는 분수를 부동소수점 배율로 저장하면 floor 계산에서 오차가
+   * 날 수 있어, 분수 계열 회복량은 전부 "나눌 값(분모)"으로 저장하고 Math.floor(maxHp / n)로 계산한다.
+   */
+  endOfTurnHealDenominator?: number;
+  /**
+   * 큰뿌리: 흡수 계열(Move.drainFraction) 기술·뿌리박기/아쿠아링(setsRegenVolatile)·
+   * 씨뿌리기(setsLeechSeed)로 회복하는 양에 곱하는 배율(1.3). 회복 "받는" 쪽이 이 도구를
+   * 지녔을 때만 적용 — 씨뿌리기는 회복하는 쪽(시드를 심은 반대편)의 도구를 본다.
+   */
+  drainHealMultiplier?: number;
+  /** 조개껍질방울: 기술로 데미지를 준 만큼을 이 값으로 나눈(내림) 만큼 자신도 회복(1/8 → 8). 흡수기(drainFraction)와 별개 축 */
+  damageDealtHealDenominator?: number;
+  /** 자뭉열매: 체력이 최대 HP 1/2 이하가 되면(1회) 최대 HP를 이 값으로 나눈(내림) 만큼 자동 회복 후 소모(1/4 → 4) */
+  healsBelowHalfHpDenominator?: number;
+  /** 오랭열매: 체력이 최대 HP 1/2 이하가 되면(1회) 고정 수치(10)만큼 자동 회복 후 소모 */
+  healsBelowHalfHpFlat?: number;
+  /** 과사열매: 사용한 기술의 PP가 0이 되면(1회) 그 기술의 PP를 이 수치(10, 최대 PP 한도 내)만큼 자동 회복 후 소모 */
+  restoresPpOnZero?: number;
+  /**
+   * 리샘열매(전체)·버치열매(마비)·유루열매(잠듦)·복슝열매(독/맹독)·복분열매(화상)·배리열매(얼음) —
+   * 이 목록에 있는 주 상태이상에 걸리는 "그 순간"(명중 시점) 자동으로 치료하고 소모된다.
+   * curesStatus(치료 기술)와 달리 트리거가 "걸리는 순간"이라는 점이 다르다. 생략하면 전부(리샘열매).
+   */
+  curesStatusOnInflict?: StatusCondition[];
+  /** 시몬열매: 혼란에 걸리는 순간(주 상태이상이 아니라 VolatileCondition) 자동으로 풀고 소모된다 */
+  curesConfusionOnInflict?: boolean;
 }

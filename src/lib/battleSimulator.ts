@@ -34,6 +34,7 @@ import {
   computeStatusEndOfTurnDamage,
   computeStatusSpeedMultiplier,
   ignoresBurnAttackPenalty,
+  inflictRestSleep,
   inflictStatus,
   isImmuneToStatus,
 } from "./statusConditions";
@@ -46,7 +47,7 @@ import {
 } from "./volatileConditions";
 import { resolveMoveContext } from "./moveContext";
 import { computeDamage } from "./battlePower";
-import { getWeatherDamageMultiplier } from "./weatherEffects";
+import { getWeatherDamageMultiplier, computeWeatherHealFraction } from "./weatherEffects";
 import {
   FIELD_DURATION,
   computeFieldEndOfTurnHeal,
@@ -55,7 +56,15 @@ import {
   isPriorityMoveBlockedByField,
   isStatusBlockedByField,
 } from "./fieldEffects";
-import { getBerryDefenseResult, getItemOffenseMultiplier, getItemAccuracyMultiplier } from "./itemEffects";
+import {
+  getBerryDefenseResult,
+  getItemOffenseMultiplier,
+  getItemAccuracyMultiplier,
+  getDrainHealMultiplier,
+  getStatusCureBerryResult,
+  getConfusionCureBerryResult,
+  getHpThresholdBerryHeal,
+} from "./itemEffects";
 import { compareTurnOrder } from "./turnOrder";
 import type { BaseStats } from "../types/stats";
 import type { EvaluatorSlot } from "./matchupEvaluator";
@@ -337,6 +346,36 @@ export interface ActionLogEntry {
   itemRecoilItemName?: string;
   /** 나무열매(카리열매 등)로 이번 피격 데미지가 반감됐으면 그 나무열매 이름 */
   berryReducedDamageItemName?: string;
+  /** 과사열매: 이번 행동으로 PP가 0이 된 기술의 PP를 복구했으면 그 도구 이름 */
+  leppaRestoredPpItemName?: string;
+  /** 흡수기(Move.drainFraction)로 회복한 양(큰뿌리 배율 반영 후) */
+  drainHealAmount?: number;
+  /** 조개껍질방울로 회복한 양 */
+  shellBellHealAmount?: number;
+  /** 즉시 회복형 변화기(광합성·달빛·날개쉬기·게으름피우기·치유파동)로 회복한 양 */
+  healedAmount?: number;
+  /** healedAmount가 누구에게 적용됐는지 */
+  healedTarget?: "self" | "opponent";
+  /** 잠자기로 실제로 잠들었으면 true (잠들자마자 상태이상 치료 나무열매로 즉시 깼으면 false) */
+  restSlept?: boolean;
+  /** 이 행동으로 뿌리박기/아쿠아링이 새로 걸렸으면 채워진다 */
+  setRegenVolatile?: "ingrain" | "aquaRing";
+  /** 뿌리박기/아쿠아링을 썼지만 이미 걸려있어서 실패했으면 true */
+  regenSetFailed?: boolean;
+  /** 이 행동으로 씨뿌리기가 상대에게 걸렸으면 true */
+  setLeechSeed?: boolean;
+  /** 씨뿌리기를 썼지만 상대가 이미 걸려있어서 실패했으면 true */
+  leechSeedSetFailed?: boolean;
+  /** 상태이상/혼란 즉시치료 나무열매(리샘·버치·유루·복슝·복분·배리·시몬)가 발동했으면 그 도구 이름 */
+  statusCureBerryItemName?: string;
+  /** 자뭉열매/오랭열매가 공격자에게 발동해 회복한 양 */
+  attackerBerryHealAmount?: number;
+  /** attackerBerryHealAmount를 준 도구 이름 */
+  attackerBerryHealItemName?: string;
+  /** 자뭉열매/오랭열매가 방어자에게 발동해 회복한 양 */
+  defenderBerryHealAmount?: number;
+  /** defenderBerryHealAmount를 준 도구 이름 */
+  defenderBerryHealItemName?: string;
 }
 
 /** 턴 종료 시 상태이상 데미지 로그 */
@@ -351,6 +390,24 @@ export interface EndOfTurnLogEntry {
   inflictedDelayedStatus?: StatusConditionState["condition"];
   /** damage가 상태이상 매턴 데미지일 때(독/맹독/화상) 어떤 상태이상인지 — UI가 문구를 골라 쓰는 데 필요 */
   statusCondition?: StatusConditionState["condition"];
+  /** 먹다남은음식으로 회복했으면 그 회복량 */
+  itemHeal?: number;
+  /** itemHeal을 준 도구 이름 */
+  itemHealItemName?: string;
+  /** 뿌리박기/아쿠아링으로 회복했으면 그 회복량(큰뿌리 배율 반영 후) */
+  regenHeal?: number;
+  /** regenHeal이 어느 지속 효과에서 왔는지 */
+  regenSource?: "ingrain" | "aquaRing";
+  /** 씨뿌리기로 이번 턴 잃은 HP(씨앗이 걸린 쪽의 로그) */
+  leechSeedDamage?: number;
+  /** 씨뿌리기로 상대에게서 흡수해 회복한 양(시드를 심은 쪽의 로그, 큰뿌리 배율 반영 후) */
+  leechSeedHealAmount?: number;
+  /** 희망사항이 발동해 회복한 양 */
+  wishHeal?: number;
+  /** 자뭉열매/오랭열매가 턴 종료 시점에 발동해 회복한 양 */
+  berryHeal?: number;
+  /** berryHeal을 준 도구 이름 */
+  berryHealItemName?: string;
 }
 
 export interface TurnResult {
@@ -418,8 +475,19 @@ function resolveAction(
   }
 
   // PP 소모는 행동 여부와 무관하게 발생(단, 차지 기술 2턴째는 위에서 이미 스킵 처리)
+  let leppaRestoredPpItemName: string | undefined;
   if (!releasingCharge && attacker.remainingPp[move.id] !== undefined) {
-    attacker.remainingPp[move.id] = Math.max(0, attacker.remainingPp[move.id] - 1);
+    const ppBefore = attacker.remainingPp[move.id];
+    attacker.remainingPp[move.id] = Math.max(0, ppBefore - 1);
+    // 과사열매: 이번 사용으로 PP가 정확히 0이 됐을 때(원래 0이던 걸 또 쓴 게 아니라)만 발동한다.
+    if (ppBefore > 0 && attacker.remainingPp[move.id] === 0 && !attacker.itemConsumed) {
+      const itemForPp = attacker.slot.item ? getItem(attacker.slot.item) : undefined;
+      if (itemForPp?.restoresPpOnZero) {
+        attacker.remainingPp[move.id] = Math.min(move.pp, itemForPp.restoresPpOnZero);
+        attacker.itemConsumed = true;
+        leppaRestoredPpItemName = itemForPp.name;
+      }
+    }
   }
 
   const blocked = (
@@ -440,6 +508,7 @@ function resolveAction(
     fainted: false,
     selfFainted: isFainted(attacker),
     recoilDamage: 0,
+    leppaRestoredPpItemName,
     ...extra,
   });
 
@@ -529,6 +598,7 @@ function resolveAction(
         selfFainted: false,
         recoilDamage: 0,
         charging: true,
+        leppaRestoredPpItemName,
       };
     }
   }
@@ -585,6 +655,7 @@ function resolveAction(
       selfFainted: isFainted(attacker),
       recoilDamage: 0,
       evadedByCharge,
+      leppaRestoredPpItemName,
     };
   }
 
@@ -730,6 +801,23 @@ function resolveAction(
     itemRecoilItemName = attackerItem.name;
   }
 
+  // 흡수기(기가드레인·드레인펀치·드레인키스·원념의칼): 준 데미지의 일정 비율만큼 회복.
+  // 큰뿌리를 지녔으면 회복량이 1.3배. recoil의 정반대 축이라 recoilDamage와 별도로 관리한다.
+  let drainHealAmount = 0;
+  if (isDamaging && damage > 0 && effectiveMove.drainFraction !== undefined) {
+    drainHealAmount = Math.floor(
+      damage * effectiveMove.drainFraction * getDrainHealMultiplier(attackerItem),
+    );
+    attacker.currentHp = Math.min(attacker.maxHp, attacker.currentHp + drainHealAmount);
+  }
+
+  // 조개껍질방울: 준 데미지의 1/8만큼 회복. 흡수기와는 별개 축이라 같은 행동에서 동시에 발동할 수 있다.
+  let shellBellHealAmount = 0;
+  if (isDamaging && damage > 0 && attackerItem?.damageDealtHealDenominator) {
+    shellBellHealAmount = Math.floor(damage / attackerItem.damageDealtHealDenominator);
+    attacker.currentHp = Math.min(attacker.maxHp, attacker.currentHp + shellBellHealAmount);
+  }
+
   // 자폭류(대폭발 등): 명중했으면 반드시 데미지를 먼저 입힌 "다음" 사용자가 기절한다.
   // 순서가 중요하다 — 이 데미지로 상대가 이미 쓰러졌다면, 실제 게임처럼 "상대를 먼저 쓰러뜨린 뒤
   // 반동으로 자신도 쓰러진 것"으로 취급되어야 승자 판정(runTurn)이 이 행동의 주체를 승자로 잡는다.
@@ -772,6 +860,23 @@ function resolveAction(
     }
   }
 
+  // 상태이상 치료 관련 상태(물거품아리아 등 치료 기술, 불꽃 피격 해동, 잠듦/얼음 자연 해제,
+  // 잠자기, 상태이상 즉시치료 나무열매)를 전부 여기 한 변수에 모은다 — 아래에서 순서대로 채워진다.
+  let curedStatus: StatusConditionState["condition"] | undefined;
+  let curedStatusTarget: "self" | "opponent" | undefined;
+
+  // 상태이상 즉시치료 나무열매(리샘·버치·유루·복슝·복분·배리): 걸리는 "그 순간" 치료하고 소모된다.
+  // itemConsumed는 나무열매 18종(타입내성)과 같은 축을 공유하므로(도구 1개=1회용), 이미 다른
+  // 나무열매 효과가 이번 배틀에서 소모됐으면 발동하지 않는다.
+  let statusCureBerryItemName: string | undefined;
+  if (inflictedStatus && getStatusCureBerryResult(defenderItem, inflictedStatus, defender.itemConsumed ?? false)) {
+    defender.status = { ...NO_STATUS_CONDITION };
+    defender.itemConsumed = true;
+    statusCureBerryItemName = defenderItem!.name;
+    curedStatus = inflictedStatus;
+    curedStatusTarget = "opponent";
+  }
+
   let inflictedVolatile: VolatileCondition | undefined;
   if (effectiveMove.inflictsVolatile) {
     for (const effect of effectiveMove.inflictsVolatile) {
@@ -782,6 +887,8 @@ function resolveAction(
       if (effect.volatile === "drowsy" && (target.status.condition || hasVolatile(target.volatile, "drowsy"))) {
         continue;
       }
+      // 희망사항: 이미 예약돼 있으면 재사용 실패(본가 규칙 — 필드/트릭룸과 같은 패턴)
+      if (effect.volatile === "wish" && hasVolatile(target.volatile, "wish")) continue;
       const chance = effect.chance !== undefined ? effect.chance / 100 : 1;
       if (random() >= chance) continue;
       if (effect.target === "self") {
@@ -790,13 +897,23 @@ function resolveAction(
         defender.volatile = inflictVolatile(defender.volatile, effect.volatile, random);
       }
       inflictedVolatile = effect.volatile;
+
+      // 시몬열매: 혼란에 걸리는 순간 치료하고 소모된다
+      if (effect.volatile === "confusion") {
+        const targetItem = effect.target === "self" ? attackerItem : defenderItem;
+        if (getConfusionCureBerryResult(targetItem, target.itemConsumed ?? false)) {
+          target.volatile = { active: { ...target.volatile.active } };
+          delete target.volatile.active.confusion;
+          target.itemConsumed = true;
+          statusCureBerryItemName = targetItem!.name;
+          inflictedVolatile = undefined;
+        }
+      }
     }
   }
 
   // 상태이상 치료: 물거품아리아처럼 명중 시 대상의 주 상태이상을 없앤다(inflictsStatus의 반대 방향).
   // status가 지정돼 있으면(물거품아리아=화상) 그 상태일 때만 치료 — 다른 상태이상은 안 지운다.
-  let curedStatus: StatusConditionState["condition"] | undefined;
-  let curedStatusTarget: "self" | "opponent" | undefined;
   if (effectiveMove.curesStatus) {
     const { target: cureTarget, status: cureStatus } = effectiveMove.curesStatus;
     const target = cureTarget === "self" ? attacker : defender;
@@ -828,6 +945,68 @@ function resolveAction(
     curedStatusTarget = "self";
   }
 
+  // 잠자기: 명중(항상 필중)하면 기존 상태이상이 뭐든 지우고 체력을 완전히 회복한 뒤 정확히 2턴간
+  // 무조건 재운다 — curesStatus/inflictsStatus의 일반 규칙(이미 상태이상이 있으면 못 걺)과는
+  // 다른 별도 경로라 여기서 직접 덮어쓴다. curedStatus 로그는 재우기 전 상태이상이 있었을 때만 채운다.
+  let restSlept = false;
+  if (effectiveMove.restSleep) {
+    if (attacker.status.condition) {
+      curedStatus = attacker.status.condition;
+      curedStatusTarget = "self";
+    }
+    attacker.currentHp = attacker.maxHp;
+    attacker.status = inflictRestSleep();
+    restSlept = true;
+
+    // 리샘열매/유루열매 등을 지닌 채로 잠자기를 쓰면, 회복은 이미 끝난 채로 그 즉시 잠듦만
+    // 치료된다(본가 실제 상호작용 — 잠자기 자체가 낭비되지만 회복은 유효하다).
+    if (getStatusCureBerryResult(attackerItem, "sleep", attacker.itemConsumed ?? false)) {
+      attacker.status = { ...NO_STATUS_CONDITION };
+      attacker.itemConsumed = true;
+      statusCureBerryItemName = attackerItem!.name;
+      curedStatus = "sleep";
+      curedStatusTarget = "self";
+      restSlept = false;
+    }
+  }
+
+  // 즉시 회복형 변화기: 광합성/달빛(날씨 의존)·날개쉬기/게으름피우기(고정 50%)·치유파동(상대 50%).
+  // 잠자기는 위에서 이미 별도 처리했으니 여기선 건드리지 않는다.
+  let healedAmount = 0;
+  let healedTarget: "self" | "opponent" | undefined;
+  if (!effectiveMove.restSleep && (effectiveMove.healsFraction !== undefined || effectiveMove.healsWeatherDependent)) {
+    healedTarget = effectiveMove.healsTarget ?? "self";
+    const healTarget = healedTarget === "self" ? attacker : defender;
+    const fraction = effectiveMove.healsWeatherDependent
+      ? computeWeatherHealFraction(state.weather)
+      : effectiveMove.healsFraction!;
+    healedAmount = Math.min(
+      healTarget.maxHp - healTarget.currentHp,
+      Math.floor(healTarget.maxHp * fraction),
+    );
+    healTarget.currentHp += healedAmount;
+  }
+
+  // 뿌리박기/아쿠아링: 이미 걸려있으면 재사용 실패(지속 효과 중복 방지, 필드/트릭룸과 같은 패턴).
+  let regenSetFailed = false;
+  if (effectiveMove.setsRegenVolatile) {
+    if (hasVolatile(attacker.volatile, effectiveMove.setsRegenVolatile)) {
+      regenSetFailed = true;
+    } else {
+      attacker.volatile = inflictVolatile(attacker.volatile, effectiveMove.setsRegenVolatile, random);
+    }
+  }
+
+  // 씨뿌리기: 상대가 이미 씨앗이 박혀있으면 실패.
+  let leechSeedSetFailed = false;
+  if (effectiveMove.setsLeechSeed) {
+    if (hasVolatile(defender.volatile, "leechSeed")) {
+      leechSeedSetFailed = true;
+    } else {
+      defender.volatile = inflictVolatile(defender.volatile, "leechSeed", random);
+    }
+  }
+
   // 필드 설치: 이미 다른(또는 같은) 필드가 깔려있으면 실패한다 — 필드를 쓸 때마다 지속 턴수가
   // 갱신되던 버그 수정. 기존 필드가 다 사라지기 전까지는 필드 기술 자체가 실패해야 한다.
   let fieldSetFailed = false;
@@ -848,6 +1027,40 @@ function resolveAction(
       trickRoomSetFailed = true;
     } else {
       state.trickRoomTurnsRemaining = TRICK_ROOM_DURATION;
+    }
+  }
+
+  // 자뭉열매/오랭열매: 이번 행동으로 생긴 모든 HP 변화(피격/반동/회복 등)가 끝난 뒤, 체력이 최대
+  // HP 1/2 이하인 쪽(공격자든 방어자든)이 있으면 자동 발동한다. attacker를 먼저 확인하는 순서는
+  // 임의지만, 도구는 각자 한 개씩만 지니므로 서로 간섭하지 않는다.
+  let attackerBerryHealAmount = 0;
+  let attackerBerryHealItemName: string | undefined;
+  if (!isFainted(attacker)) {
+    attackerBerryHealAmount = getHpThresholdBerryHeal(
+      attackerItem,
+      attacker.currentHp,
+      attacker.maxHp,
+      attacker.itemConsumed ?? false,
+    );
+    if (attackerBerryHealAmount > 0) {
+      attacker.currentHp = Math.min(attacker.maxHp, attacker.currentHp + attackerBerryHealAmount);
+      attacker.itemConsumed = true;
+      attackerBerryHealItemName = attackerItem!.name;
+    }
+  }
+  let defenderBerryHealAmount = 0;
+  let defenderBerryHealItemName: string | undefined;
+  if (!isFainted(defender)) {
+    defenderBerryHealAmount = getHpThresholdBerryHeal(
+      defenderItem,
+      defender.currentHp,
+      defender.maxHp,
+      defender.itemConsumed ?? false,
+    );
+    if (defenderBerryHealAmount > 0) {
+      defender.currentHp = Math.min(defender.maxHp, defender.currentHp + defenderBerryHealAmount);
+      defender.itemConsumed = true;
+      defenderBerryHealItemName = defenderItem!.name;
     }
   }
 
@@ -876,6 +1089,21 @@ function resolveAction(
     itemRecoilDamage: itemRecoilDamage || undefined,
     itemRecoilItemName,
     berryReducedDamageItemName,
+    leppaRestoredPpItemName,
+    drainHealAmount: drainHealAmount || undefined,
+    shellBellHealAmount: shellBellHealAmount || undefined,
+    healedAmount: healedAmount || undefined,
+    healedTarget,
+    restSlept,
+    setRegenVolatile: regenSetFailed ? undefined : effectiveMove.setsRegenVolatile,
+    regenSetFailed,
+    setLeechSeed: leechSeedSetFailed ? undefined : effectiveMove.setsLeechSeed,
+    leechSeedSetFailed,
+    statusCureBerryItemName,
+    attackerBerryHealAmount: attackerBerryHealAmount || undefined,
+    attackerBerryHealItemName,
+    defenderBerryHealAmount: defenderBerryHealAmount || undefined,
+    defenderBerryHealItemName,
   };
 }
 
@@ -962,6 +1190,90 @@ export function runTurn(
         endOfTurn.push({ actor: key, damage: 0, remainingHp: fighter.currentHp, fainted: false, fieldHeal });
       }
 
+      const fighterItem = fighter.slot.item ? getItem(fighter.slot.item) : undefined;
+
+      // 먹다남은음식: 턴 종료 시 항상(생존해 있으면) 최대 HP의 1/6 회복
+      if (fighterItem?.endOfTurnHealDenominator) {
+        const itemHeal = Math.min(
+          fighter.maxHp - fighter.currentHp,
+          Math.floor(fighter.maxHp / fighterItem.endOfTurnHealDenominator),
+        );
+        if (itemHeal > 0) {
+          fighter.currentHp += itemHeal;
+          endOfTurn.push({
+            actor: key,
+            damage: 0,
+            remainingHp: fighter.currentHp,
+            fainted: false,
+            itemHeal,
+            itemHealItemName: fighterItem.name,
+          });
+        }
+      }
+
+      // 뿌리박기/아쿠아링: 걸려있는 동안 매 턴 종료 시 최대 HP 1/16 회복(큰뿌리 소지 시 1.3배)
+      const regenSource = hasVolatile(fighter.volatile, "ingrain")
+        ? "ingrain"
+        : hasVolatile(fighter.volatile, "aquaRing")
+          ? "aquaRing"
+          : undefined;
+      if (regenSource) {
+        const regenHeal = Math.min(
+          fighter.maxHp - fighter.currentHp,
+          Math.floor((fighter.maxHp / 16) * getDrainHealMultiplier(fighterItem)),
+        );
+        if (regenHeal > 0) {
+          fighter.currentHp += regenHeal;
+          endOfTurn.push({ actor: key, damage: 0, remainingHp: fighter.currentHp, fainted: false, regenHeal, regenSource });
+        }
+      }
+
+      // 씨뿌리기: 걸린 쪽은 매 턴 종료 시 최대 HP 1/8을 잃고, 상대가 그만큼(+상대의 큰뿌리 배율)
+      // 회복한다. 상대가 이미 기절해 있으면(동시에 둘 다 씨앗이 걸린 극단적 경우 등) 회복은 스킵.
+      if (hasVolatile(fighter.volatile, "leechSeed")) {
+        const seedDamage = Math.min(fighter.currentHp, Math.floor(fighter.maxHp / 8));
+        fighter.currentHp -= seedDamage;
+        endOfTurn.push({
+          actor: key,
+          damage: 0,
+          remainingHp: fighter.currentHp,
+          fainted: isFainted(fighter),
+          leechSeedDamage: seedDamage,
+        });
+        const healer = state[opponentKey(key)];
+        if (seedDamage > 0 && !isFainted(healer)) {
+          const healerItem = healer.slot.item ? getItem(healer.slot.item) : undefined;
+          const leechSeedHealAmount = Math.min(
+            healer.maxHp - healer.currentHp,
+            Math.floor(seedDamage * getDrainHealMultiplier(healerItem)),
+          );
+          if (leechSeedHealAmount > 0) {
+            healer.currentHp += leechSeedHealAmount;
+            endOfTurn.push({
+              actor: opponentKey(key),
+              damage: 0,
+              remainingHp: healer.currentHp,
+              fainted: false,
+              leechSeedHealAmount,
+            });
+          }
+        }
+      }
+
+      // 희망사항: drowsy와 같은 2턴 카운터 패턴 — 쓴 다음 턴 종료에 최대 HP 절반을 회복한다.
+      const wishEntry = fighter.volatile.active.wish;
+      if (wishEntry) {
+        const triggersNow = wishEntry.turnsRemaining <= 1;
+        fighter.volatile = consumeVolatileTurn(fighter.volatile, "wish");
+        if (triggersNow && !isFainted(fighter)) {
+          const wishHeal = Math.min(fighter.maxHp - fighter.currentHp, Math.floor(fighter.maxHp * 0.5));
+          if (wishHeal > 0) {
+            fighter.currentHp += wishHeal;
+            endOfTurn.push({ actor: key, damage: 0, remainingHp: fighter.currentHp, fainted: false, wishHeal });
+          }
+        }
+      }
+
       // 하품(졸음): 2턴 카운터가 1(=이번이 마지막 소모)이면 이번 턴 종료에 실제로 잠듦을 시도한다.
       // 그 사이 다른 상태이상이 걸렸거나 타입/필드로 잠듦 면역이 생겼으면 조용히 무산된다(본가 규칙).
       const drowsyEntry = fighter.volatile.active.drowsy;
@@ -985,21 +1297,41 @@ export function runTurn(
         }
       }
 
-      if (!fighter.status.condition) continue;
-      const statusCondition = fighter.status.condition;
-      const damage = computeStatusEndOfTurnDamage(fighter.status, fighter.maxHp);
-      fighter.currentHp = Math.max(0, fighter.currentHp - damage);
-      fighter.status = advanceStatusTurn(fighter.status);
-      // 잠듦/얼음/마비는 매턴 데미지가 없다(항상 0) — "상태이상 데미지 0"만 찍는 무의미한 줄을
-      // 막기 위해 실제로 데미지가 있을 때만 로그에 남긴다.
-      if (damage > 0) {
-        endOfTurn.push({
-          actor: key,
-          damage,
-          remainingHp: fighter.currentHp,
-          fainted: isFainted(fighter),
-          statusCondition,
-        });
+      if (fighter.status.condition) {
+        const statusCondition = fighter.status.condition;
+        const damage = computeStatusEndOfTurnDamage(fighter.status, fighter.maxHp);
+        fighter.currentHp = Math.max(0, fighter.currentHp - damage);
+        fighter.status = advanceStatusTurn(fighter.status);
+        // 잠듦/얼음/마비는 매턴 데미지가 없다(항상 0) — "상태이상 데미지 0"만 찍는 무의미한 줄을
+        // 막기 위해 실제로 데미지가 있을 때만 로그에 남긴다.
+        if (damage > 0) {
+          endOfTurn.push({
+            actor: key,
+            damage,
+            remainingHp: fighter.currentHp,
+            fainted: isFainted(fighter),
+            statusCondition,
+          });
+        }
+      }
+
+      // 자뭉열매/오랭열매: 턴 종료 시점까지의 모든 HP 변화(필드 회복/먹다남은음식/씨뿌리기/상태이상
+      // 데미지 등)가 끝난 뒤에도 다시 한번 확인한다 — 액션 중엔 안 걸렸다가 턴 종료 데미지로
+      // 뒤늦게 1/2 이하가 되는 경우를 놓치지 않기 위해서다.
+      if (!isFainted(fighter)) {
+        const berryHeal = getHpThresholdBerryHeal(fighterItem, fighter.currentHp, fighter.maxHp, fighter.itemConsumed ?? false);
+        if (berryHeal > 0) {
+          fighter.currentHp = Math.min(fighter.maxHp, fighter.currentHp + berryHeal);
+          fighter.itemConsumed = true;
+          endOfTurn.push({
+            actor: key,
+            damage: 0,
+            remainingHp: fighter.currentHp,
+            fainted: false,
+            berryHeal,
+            berryHealItemName: fighterItem!.name,
+          });
+        }
       }
     }
   }

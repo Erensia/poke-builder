@@ -1,5 +1,6 @@
 import type { Item } from "../types/item";
 import type { Move } from "../types/move";
+import type { StatusCondition } from "../types/status";
 
 /** 메트로놈: 연속 같은 기술 스트릭에 따른 위력 배율. streak=1(첫 사용)이면 아직 보너스 없음(1배) */
 function consecutiveSameMoveMultiplier(item: Item | undefined, streak: number): number {
@@ -65,6 +66,45 @@ export function getItemAccuracyMultiplier(
     multiplier *= defenderItem.opponentAccuracyMultiplier;
   }
   return multiplier;
+}
+
+/** 큰뿌리(Item.drainHealMultiplier)가 없으면 1배 그대로 */
+export function getDrainHealMultiplier(item: Item | undefined): number {
+  return item?.drainHealMultiplier ?? 1;
+}
+
+/**
+ * 리샘열매 등 7종 — 대상이 이 도구가 커버하는 주 상태이상에 걸리는 "그 순간" 치료하고 소모된다.
+ * 이미 소모됐거나, 상태이상이 없거나, 이 도구가 커버하는 상태이상이 아니면 아무 일도 없다.
+ */
+export function getStatusCureBerryResult(
+  item: Item | undefined,
+  status: StatusCondition | null,
+  alreadyConsumed: boolean,
+): boolean {
+  if (alreadyConsumed || !status || !item?.curesStatusOnInflict) return false;
+  return item.curesStatusOnInflict.includes(status);
+}
+
+/** 시몬열매 — 혼란에 걸리는 순간 치료하고 소모된다 */
+export function getConfusionCureBerryResult(item: Item | undefined, alreadyConsumed: boolean): boolean {
+  return !alreadyConsumed && !!item?.curesConfusionOnInflict;
+}
+
+/**
+ * 자뭉열매(1/4 회복)·오랭열매(고정 10 회복) — 체력이 최대 HP 1/2 이하가 되면 1회 자동 발동한다.
+ * 두 도구 다 healsBelowHalfHp* 계열 필드 중 하나만 갖고 있어서 겹칠 일은 없다.
+ */
+export function getHpThresholdBerryHeal(
+  item: Item | undefined,
+  currentHp: number,
+  maxHp: number,
+  alreadyConsumed: boolean,
+): number {
+  if (alreadyConsumed || currentHp <= 0 || currentHp > maxHp / 2) return 0;
+  if (item?.healsBelowHalfHpDenominator) return Math.floor(maxHp / item.healsBelowHalfHpDenominator);
+  if (item?.healsBelowHalfHpFlat) return item.healsBelowHalfHpFlat;
+  return 0;
 }
 
 export function getBerryDefenseResult(

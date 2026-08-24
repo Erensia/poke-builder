@@ -40,6 +40,15 @@ export function cureStatus(): StatusConditionState {
 }
 
 /**
+ * 잠자기(Move.restSleep) 전용 — 일반 inflictStatus와 달리 기존 상태이상이 있어도 그대로
+ * 덮어쓴다(본가 규칙: 잠자기는 기존 상태이상을 전부 치료하고 그 대신 재운다). isRestSleep
+ * 마커를 남겨서 checkStatusActionBlock이 확률 스케줄 대신 고정 2턴 스케줄을 쓰게 한다.
+ */
+export function inflictRestSleep(): StatusConditionState {
+  return { condition: "sleep", turnsElapsed: 1, isRestSleep: true };
+}
+
+/**
  * 맹독의 매턴 증가 카운터만 여기서 늘린다(턴 종료 시 호출). 잠듦/얼음의 해제 판정 카운터는
  * checkStatusActionBlock 쪽에서 판정할 때마다 자체적으로 늘리므로 여기서 건드리지 않는다 —
  * 안 그러면 잠듦/얼음 턴 카운트가 두 번 늘어난다.
@@ -114,7 +123,9 @@ export function checkStatusActionBlock(
   }
 
   if (state.condition === "sleep") {
-    const wakeChance = state.turnsElapsed >= 3 ? 1 : (SLEEP_WAKE_CHANCE_BY_TURN[state.turnsElapsed] ?? 0);
+    // 잠자기(Move.restSleep)로 걸린 잠듦은 확률 스케줄을 무시하고 정확히 2턴간 무조건 잠들었다가
+    // 3턴째 무조건 깬다 — 일반 잠듦의 "2턴째 33% 확률로 깰 수 있음"이 적용되지 않는다.
+    const wakeChance = state.turnsElapsed >= 3 ? 1 : state.isRestSleep ? 0 : (SLEEP_WAKE_CHANCE_BY_TURN[state.turnsElapsed] ?? 0);
     if (random() < wakeChance) return { blocked: false, nextState: cureStatus() };
     return { blocked: true, nextState: { ...state, turnsElapsed: state.turnsElapsed + 1 } };
   }
