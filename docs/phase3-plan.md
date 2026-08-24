@@ -102,9 +102,10 @@ Phase 2 문서에서 흔들흔들댄스/기가임팩트류를 묶어서 `recharg
 
 - **지난번(§6-3)에 고친 메가진화 특성 미반영 버그와는 다른 버그**였다 — `getEffectiveAbilityId`가 메가진화 중 `배짱`을 올바르게 골라내는 것 자체는 이미 정상이었고, `배짱`이 골라진 뒤에도 그 효과(면역 무시)를 계산에 반영하는 로직이 애초에 없었던 것.
 - `Ability.bypassesImmunityForTypes?: PokemonType[]` 필드 추가, `배짱`에 `["노말", "격투"]` 태깅
-- `moveContext.ts`의 `typeEffectiveness` 계산 뒤에 "0배(면역)이고 공격 기술 타입이 이 목록에 있으면 1배로 덮어쓴다"는 분기 추가 — 반감/2배 관계는 그대로 존중(배짱은 면역만 없앨 뿐 배율 자체는 안 건드리는 본가 규칙)
+- **1차 구현이 부정확했음 — 사용자가 재차 지적해서 정정**: 처음엔 "전체 배율이 0이면 통째로 1로 덮어쓴다"고 짰는데, 이러면 2타입 상대(예: 고스트/독)에서 다른 쪽 타입의 반감/약점 관계까지 같이 뭉개진다. 정확한 규칙은 "면역을 준 그 타입 쪽 배율 요인만 1로 무시하고, 다른 타입의 배율은 그대로 곱한다" — 예: 고스트/독에게 격투 기술 → 고스트의 면역(0)만 무시되고 독의 반감(0.5)은 남아 최종 **0.5배**, 고스트/악에게 격투 기술이면 악의 약점(2)이 남아 **2배**. `typeEffectiveness.ts`의 `getEffectiveness()`에 `{ bypassImmunity }` 옵션을 추가해서 `defending.reduce()` 안에서 방어 타입마다 개별 배율(0이면 1로 무시, 아니면 그대로)을 곱하도록 고쳤다 — 전체 결과를 사후에 덮어쓰는 대신 애초에 타입별로 정확히 계산
+- `moveContext.ts`는 이제 `getEffectiveness(effectiveMove.type, defenderTypes, { bypassImmunity })`를 호출하기만 하면 됨(공격측 특성이 `bypassesImmunityForTypes`에 이 기술 타입을 포함하는지만 확인)
 - `resolveMoveContext`는 대전 로그(`battleSimulator.ts`)와 매치업 화면(`matchupEvaluator.ts`)이 공유하는 함수라 양쪽 다 자동으로 고쳐졌다
-- 검증(tsx 스크립트): 메가이어롭(배짱)의 전광석화(노말) → 팬텀(고스트/독) 68 데미지로 정상 명중, 배짱 없는 기본 이어롭으로는 그대로 0데미지(면역 유지) 확인
+- 검증(tsx 스크립트): `getEffectiveness("격투", ["고스트","독"], {bypassImmunity:true})` → 0.5, `getEffectiveness("격투", ["고스트","악"], {bypassImmunity:true})` → 2, `getEffectiveness("노말", ["고스트","독"], {bypassImmunity:true})` → 1 전부 확인. 실제 대전 엔진으로도 메가이어롭(배짱)의 드레인펀치(격투) → 팬텀(고스트/독) 63 데미지(0.5배 반영, 이전 노말기술 68 데미지 대비 절반 수준)로 정상 반영 확인
 
 ### 1-7. 다단히트 기술 — ✅ 완료
 
