@@ -9,6 +9,7 @@
     "pp": 15,
     "effect": "사용자도 준 데미지의 1/3만큼 반동을 입는다. 10% 확률로 상대를 화상 상태로 만든다.",
     "priority": 0,
+    "recoilFraction": 0.3333333333333333,
     "inflictsStatus": [
       {
         "status": "burn",
@@ -115,6 +116,8 @@
     "pp": 12,
     "priority": 0,
     "effect": "1턴째 빛을 모으고 2턴째 발사한다. 맑음 날씨에서는 1턴만에 발동한다.",
+    "chargeTurn": true,
+    "chargeSkipWeather": "쾌청",
     "makesContact": false
   },
   {
@@ -253,6 +256,8 @@
     "pp": 12,
     "priority": 0,
     "effect": "1턴째 물속으로 잠수해 회피하고, 2턴째 공격한다.",
+    "chargeTurn": true,
+    "chargeHideType": "underwater",
     "makesContact": true
   },
   {
@@ -461,6 +466,8 @@
     "pp": 12,
     "priority": 0,
     "effect": "1턴째 숨어서 회피하고, 2턴째 상대의 방어를 무시하고 공격한다.",
+    "chargeTurn": true,
+    "chargeHideType": "hidden",
     "makesContact": true
   },
   {
@@ -671,6 +678,8 @@
     "pp": 12,
     "priority": 0,
     "effect": "땅속에 숨은 상대에게는 위력이 2배가 된다.",
+    "bypassesHiding": ["underground"],
+    "hidingBypassMultiplier": 2,
     "makesContact": false
   },
   {
@@ -734,6 +743,7 @@
     "pp": 16,
     "priority": 0,
     "effect": "급소에 맞을 확률이 높다.",
+    "highCritRatio": true,
     "classification": [
       "베기"
     ],
@@ -788,6 +798,7 @@
     "pp": 8,
     "priority": 0,
     "effect": "급소에 맞을 확률이 높다.",
+    "highCritRatio": true,
     "makesContact": false
   },
   {
@@ -993,6 +1004,8 @@
     "pp": 12,
     "priority": 0,
     "effect": "1턴째 땅속으로 숨고, 2턴째 공격한다.",
+    "chargeTurn": true,
+    "chargeHideType": "underground",
     "makesContact": true
   },
   {
@@ -1121,6 +1134,7 @@
     "pp": 8,
     "priority": 0,
     "effect": "급소에 맞을 확률이 높다.",
+    "highCritRatio": true,
     "makesContact": true
   },
   {
@@ -1286,6 +1300,7 @@
     "pp": 12,
     "priority": 0,
     "effect": "급소에 맞을 확률이 높고, 10% 확률로 화상 상태로 만든다.",
+    "highCritRatio": true,
     "makesContact": true,
     "inflictsStatus": [
       {
@@ -1394,7 +1409,7 @@
     "accuracy": null,
     "pp": 12,
     "priority": 0,
-    "effect": "잠든 상태에서만 사용 가능. 배운 기술 중 하나를 무작위로 사용한다.",
+    "effect": "잠든 상태에서만 사용 가능. 배운 기술 중 하나를 무작위로 사용한다. (\"무작위로 다른 기술을 대신 사용\"하는 로직 자체가 엔진에 없어 usageCondition 태깅 보류 — 후속 작업)",
     "makesContact": false
   },
   {
@@ -1492,6 +1507,7 @@
     "pp": 16,
     "priority": 0,
     "effect": "잠든 상태에서만 사용 가능. 30% 확률로 상대를 풀죽게 만든다.",
+    "usageCondition": "sleep-only",
     "inflictsVolatile": [
       { "volatile": "flinch", "target": "opponent", "chance": 30 }
     ],
@@ -1537,6 +1553,7 @@
     "pp": 8,
     "priority": 0,
     "effect": "급소에 맞을 확률이 높다.",
+    "highCritRatio": true,
     "makesContact": true
   },
   {
@@ -1654,7 +1671,7 @@
     "accuracy": 100,
     "pp": 16,
     "priority": 0,
-    "effect": "",
+    "effect": "자신의 체력이 낮을수록 위력이 커진다.",
     "makesContact": true
   },
   {
@@ -1745,7 +1762,7 @@
     "accuracy": 100,
     "pp": 20,
     "priority": 0,
-    "effect": "",
+    "effect": "상대의 몸무게가 무거울수록 위력이 커진다.",
     "makesContact": true
   },
   {
@@ -2002,6 +2019,7 @@
     "pp": 20,
     "priority": 0,
     "effect": "급소에 맞을 확률이 높다.",
+    "highCritRatio": true,
     "classification": [
       "베기"
     ],
@@ -2114,6 +2132,7 @@
     "pp": 20,
     "priority": 0,
     "effect": "급소에 맞을 확률이 높다.",
+    "highCritRatio": true,
     "classification": [
       "베기"
     ],
@@ -2408,6 +2427,7 @@
     "pp": 12,
     "priority": 0,
     "effect": "사용자도 준 데미지의 1/3만큼 반동을 입는다.",
+    "recoilFraction": 0.3333333333333333,
     "makesContact": true
   },
   {
@@ -2419,7 +2439,7 @@
     "accuracy": 100,
     "pp": 8,
     "priority": 0,
-    "effect": "",
+    "effect": "자신의 체력이 낮을수록 위력이 커진다.",
     "makesContact": true
   },
   {
@@ -2485,7 +2505,9 @@
     "accuracy": 100,
     "pp": 16,
     "priority": 0,
-    "effect": "",
+    "effect": "물속에 숨은 상대에게는 위력이 2배가 된다.",
+    "bypassesHiding": ["underwater"],
+    "hidingBypassMultiplier": 2,
     "makesContact": false
   },
   {
@@ -2540,7 +2562,8 @@
     "pp": 12,
     "priority": 0,
     "effect": "다음 턴 상대를 잠들게 한다.",
-    "makesContact": false
+    "makesContact": false,
+    "inflictsVolatile": [{ "volatile": "drowsy", "target": "opponent" }]
   },
   {
     "id": "떨어뜨리기",
@@ -2564,6 +2587,8 @@
     "pp": 16,
     "priority": 0,
     "effect": "1턴째 하늘로 날아올라 회피하고, 2턴째 공격한다.",
+    "chargeTurn": true,
+    "chargeHideType": "sky",
     "makesContact": true
   },
   {
@@ -2633,6 +2658,7 @@
     "pp": 16,
     "priority": 0,
     "effect": "사용자도 준 데미지의 1/3만큼 반동을 입는다.",
+    "recoilFraction": 0.3333333333333333,
     "makesContact": true
   },
   {
@@ -2695,7 +2721,8 @@
     "accuracy": 70,
     "pp": 12,
     "priority": 0,
-    "effect": "30% 확률로 상대를 혼란시킨다.",
+    "effect": "30% 확률로 상대를 혼란시킨다. 하늘로 회피 중인 상대에게도 명중한다.",
+    "bypassesHiding": ["sky"],
     "classification": [
       "바람"
     ],
@@ -2791,6 +2818,8 @@
     "pp": 8,
     "priority": 0,
     "effect": "1턴째 하늘로 뛰어올라 회피하고, 2턴째 공격한다. 30% 확률로 마비시킨다.",
+    "chargeTurn": true,
+    "chargeHideType": "sky",
     "makesContact": true,
     "inflictsStatus": [
       {
@@ -2847,7 +2876,8 @@
     "accuracy": 70,
     "pp": 12,
     "priority": 0,
-    "effect": "30% 확률로 상대를 마비시킨다.",
+    "effect": "30% 확률로 상대를 마비시킨다. 하늘로 회피 중인 상대에게도 명중한다.",
+    "bypassesHiding": ["sky"],
     "makesContact": false,
     "inflictsStatus": [
       {
@@ -2911,7 +2941,8 @@
     "accuracy": 100,
     "pp": 12,
     "priority": 3,
-    "effect": "반드시 상대를 풀죽게 만든다. (등장 후 첫 턴에만 사용 가능 — 사용 조건은 스키마 밖, 풀죽음 부분만 태깅)",
+    "effect": "반드시 상대를 풀죽게 만든다. 등장 후 첫 턴에만 사용 가능.",
+    "usageCondition": "first-turn-only",
     "inflictsVolatile": [
       { "volatile": "flinch", "target": "opponent" }
     ],
@@ -3687,8 +3718,9 @@
     "accuracy": 100,
     "pp": 8,
     "priority": 0,
-    "effect": "사용 후 자신은 불꽃 타입을 잃는다.",
-    "makesContact": false
+    "effect": "사용 후 자신은 불꽃 타입을 잃는다. 사용 직전 사용자의 얼음 상태를 치유한다.",
+    "makesContact": false,
+    "thawsUserOnUse": true
   },
   {
     "id": "사슬묶기",
@@ -3776,14 +3808,15 @@
     "accuracy": 100,
     "pp": 12,
     "priority": 0,
-    "effect": "30% 확률로 상대를 화상 상태로 만든다.",
+    "effect": "30% 확률로 상대를 화상 상태로 만든다. 사용 직전 사용자의 얼음 상태를 치유한다.",
     "makesContact": false,
     "inflictsStatus": [
       {
         "status": "burn",
         "chance": 30
       }
-    ]
+    ],
+    "thawsUserOnUse": true
   },
   {
     "id": "열풍",
@@ -3863,8 +3896,10 @@
     "accuracy": 100,
     "pp": 16,
     "priority": 0,
-    "effect": "",
-    "makesContact": true
+    "effect": "사용자도 준 데미지의 1/3만큼 반동을 입는다. 사용 직전 사용자의 얼음 상태를 치유한다.",
+    "makesContact": true,
+    "recoilFraction": 0.3333333333333333,
+    "thawsUserOnUse": true
   },
   {
     "id": "회오리불꽃",
@@ -3992,7 +4027,8 @@
     "classification": [
       "소리"
     ],
-    "makesContact": false
+    "makesContact": false,
+    "curesStatus": { "target": "opponent", "status": "burn" }
   },
   {
     "id": "미스트버스트",
@@ -4159,6 +4195,7 @@
     "pp": 12,
     "priority": 0,
     "effect": "반드시 급소에 맞는다.",
+    "alwaysCrit": true,
     "makesContact": false
   },
   {
@@ -4305,7 +4342,7 @@
     "accuracy": 100,
     "pp": 12,
     "priority": 0,
-    "effect": "",
+    "effect": "자신의 몸무게가 상대보다 무거울수록 위력이 커진다.",
     "makesContact": false
   },
   {
@@ -4395,7 +4432,7 @@
     "accuracy": 100,
     "pp": 8,
     "priority": 0,
-    "effect": "",
+    "effect": "자신의 스피드가 상대보다 느릴수록 위력이 커진다.",
     "classification": [
       "구슬/폭탄"
     ],
@@ -4752,7 +4789,7 @@
     "accuracy": 100,
     "pp": 12,
     "priority": 0,
-    "effect": "",
+    "effect": "자신의 몸무게가 상대보다 무거울수록 위력이 커진다.",
     "makesContact": true
   },
   {
@@ -4811,6 +4848,7 @@
     "pp": 8,
     "priority": 0,
     "effect": "준 데미지의 1/3만큼 자신도 반동 데미지를 입는다.",
+    "recoilFraction": 0.3333333333333333,
     "makesContact": true
   },
   {

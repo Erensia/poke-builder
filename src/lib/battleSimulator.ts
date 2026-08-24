@@ -17,7 +17,7 @@ import {
   type VolatileCondition,
   type VolatileConditionState,
 } from "../types/status";
-import { getPokemon, getAbility } from "./data";
+import { getPokemon, getAbility, getMove, getItem } from "./data";
 import { getEffectiveForm, getEffectiveAbilityId } from "./pokemonForm";
 import { computeRealStats } from "./statCalculator";
 import { applyMoveStatChanges } from "./statStages";
@@ -55,12 +55,32 @@ import {
   isPriorityMoveBlockedByField,
   isStatusBlockedByField,
 } from "./fieldEffects";
+import { getBerryDefenseResult, getItemOffenseMultiplier } from "./itemEffects";
 import { compareTurnOrder } from "./turnOrder";
 import type { BaseStats } from "../types/stats";
 import type { EvaluatorSlot } from "./matchupEvaluator";
 
 /** 데미지 난수 하한. computeDamage의 randomRoll에 매턴 0.85~1.00 사이 값을 뽑아 넘길 때 쓴다 */
 const MIN_DAMAGE_ROLL = 0.85;
+
+/**
+ * 록블라스트류(2~5회, multiHitPowers 없는 다단히트)의 타수를 확률표대로 뽑는다.
+ * 록블라스트/독침/봉인구슬 등 moves.json에 이미 적힌 확률(2/3회 각 35%, 4/5회 각 15%) 기준.
+ * minHits===maxHits(더블어택 등 고정 2타)면 확률 없이 그대로 그 값을 쓴다.
+ * 2~5 외의 범위는 지금 로스터에 없어서, 혹시 생기면 균등분포로 근사한다(문서에 기록).
+ */
+function rollMultiHitCount(minHits: number, maxHits: number, random: () => number): number {
+  if (minHits === maxHits) return minHits;
+  if (minHits === 2 && maxHits === 5) {
+    const r = random();
+    if (r < 0.35) return 2;
+    if (r < 0.7) return 3;
+    if (r < 0.85) return 4;
+    return 5;
+  }
+  const range = maxHits - minHits + 1;
+  return minHits + Math.floor(random() * range);
+}
 
 /** 혼란 자멸 데미지 계산용 가짜 기술. 타입 없음(자속 안 붙음)·물리·위력 40으로 자기 자신을 타격한다 */
 const CONFUSION_SELF_HIT_MOVE: Move = {
@@ -115,6 +135,18 @@ export interface BattleFighterState {
   volatile: VolatileConditionState;
   /** move id → 남은 PP */
   remainingPp: Record<string, number>;
+  /**
+   * 공중날기 등 2턴 차지 기술(Move.chargeTurn)의 준비 턴을 쓰는 중이면 그 기술 id.
+   * 다음 턴 이 기술이 선택 여부와 무관하게 자동으로 재실행되고, chargeHideType이 있으면
+   * bypassesHiding 예외 기술 외엔 전부 빗나간다(무적). 준비 중이 아니면 undefined.
+   */
+  chargingMoveId?: string;
+  /** 메트로놈(연속 같은 기술 위력 증가)용 — 직전에 실제로 사용한 기술 id. 없으면 아직 없음 */
+  lastMoveId?: string;
+  /** lastMoveId와 같은 기술을 몇 번 연속으로 썼는지(첫 사용=1). 메트로놈 배율 계산에 쓴다 */
+  lastMoveStreak?: number;
+  /** 나무열매(카리열매 등)처럼 대전 중 1회만 발동하는 지닌 도구를 이미 썼으면 true */
+  itemConsumed?: boolean;
 }
 
 /** 두 포켓몬(a/b)을 마주 세운 배틀 상태 */
@@ -236,7 +268,13 @@ export function hasUsableMove(fighter: BattleFighterState): boolean {
 }
 
 /** 이번 턴 행동이 왜 못 나갔는지. 있으면 hit/damage 등은 의미 없다 */
-export type ActionBlockReason = "status" | "flinch" | "recharge" | "confusion" | "psychicFieldPriority";
+export type ActionBlockReason =
+  | "status"
+  | "flinch"
+  | "recharge"
+  | "confusion"
+  | "psychicFieldPriority"
+  | "usageCondition";
 
 /** 한 번의 기술 사용 결과 로그 */
 export interface ActionLogEntry {
@@ -244,6 +282,8 @@ export interface ActionLogEntry {
   move: Move;
   /** 주 상태이상(잠듦/얼음/마비)이나 행동방해(풀죽음/반동/혼란 자멸)로 기술을 못 썼으면 채워진다 */
   blockedReason?: ActionBlockReason;
+  /** blockedReason이 "status"일 때, 정확히 어떤 상태이상 때문인지(마비/잠듦/얼음) — UI가 "몸이 저려서"/"쿨쿨 잠들어"/"얼어 버려서" 문구를 골라 쓰는 데 필요 */
+  blockedByStatus?: StatusConditionState["condition"];
   /** 회피/빗나감 여부. 필중기는 항상 true. blockedReason이 있으면 의미 없음 */
   hit: boolean;
   critical: boolean;
@@ -255,6 +295,13 @@ export interface ActionLogEntry {
   attackerRemainingHp: number;
   inflictedStatus?: StatusConditionState["condition"];
   inflictedVolatile?: VolatileCondition;
+  /**
+   * 상태이상이 나았으면(물거품아리아 등 치료 기술, 불꽃타입 데미지 기술의 해동, 잠듦/얼음의
+   * 자연 해제, thawsUserOnUse 기술 사용) 그 상태이상 종류. curedStatusTarget으로 누구의 상태인지 구분.
+   */
+  curedStatus?: StatusConditionState["condition"];
+  /** curedStatus가 누구에게 일어났는지 — "self"면 이 행동의 actor, "opponent"면 상대 */
+  curedStatusTarget?: "self" | "opponent";
   /** 이 행동으로 defender가 쓰러졌으면 true */
   fainted: boolean;
   /** 혼란 자멸로 스스로 쓰러졌으면 true */
@@ -263,6 +310,24 @@ export interface ActionLogEntry {
   setField?: FieldKind;
   /** 필드 기술을 썼지만 이미 다른 필드가 깔려있어서 실패했으면 true */
   fieldSetFailed?: boolean;
+  /**
+   * 불꽃세례·웨이브태클·브레이브버드·양날박치기(Move.recoilFraction)로 입은 반동 데미지.
+   * selfDamage(혼란 자멸/발버둥 반동)와는 계산 기준이 달라 별도 필드로 분리했다 — 준 데미지가
+   * 0(면역 등)이면 반동도 자연히 0.
+   */
+  recoilDamage: number;
+  /** 트리플악셀·록블라스트 등 다단히트 기술만 채운다 — 실제로 명중해서 데미지를 낸 타수 */
+  hitCount?: number;
+  /** 공중날기 등 차지 기술의 준비 턴(1턴째)이면 true — 데미지 없이 "숨었다"만 기록 */
+  charging?: boolean;
+  /** 상대가 차지 기술로 무적인 동안 그 무적을 못 뚫는 기술을 써서 빗나갔으면 true */
+  evadedByCharge?: boolean;
+  /** 생명의구슬처럼 도구 때문에 입은 반동 데미지(최대 HP 비율 고정) — recoilDamage와 계산 기준이 달라 분리 */
+  itemRecoilDamage?: number;
+  /** itemRecoilDamage를 준 도구 이름(UI 문구용) */
+  itemRecoilItemName?: string;
+  /** 나무열매(카리열매 등)로 이번 피격 데미지가 반감됐으면 그 나무열매 이름 */
+  berryReducedDamageItemName?: string;
 }
 
 /** 턴 종료 시 상태이상 데미지 로그 */
@@ -273,6 +338,10 @@ export interface EndOfTurnLogEntry {
   fainted: boolean;
   /** 그래스필드 회복이면 damage가 음수(회복량)로 채워지는 대신, 이 필드로 회복량을 명시한다 */
   fieldHeal?: number;
+  /** 하품(졸음) 2턴 카운터가 다 돼서 이번 턴 종료 시 실제로 잠들었으면 채워진다 */
+  inflictedDelayedStatus?: StatusConditionState["condition"];
+  /** damage가 상태이상 매턴 데미지일 때(독/맹독/화상) 어떤 상태이상인지 — UI가 문구를 골라 쓰는 데 필요 */
+  statusCondition?: StatusConditionState["condition"];
 }
 
 export interface TurnResult {
@@ -324,12 +393,26 @@ function resolveAction(
   const attacker = state[actorKey];
   const defender = state[defenderKey];
 
-  // PP 소모는 행동 여부와 무관하게 발생
-  if (attacker.remainingPp[move.id] !== undefined) {
+  // 차지 기술 2턴째: 준비 턴에 저장해둔 기술을 이번 턴 실제로 고른 기술과 무관하게 강제로
+  // 재실행한다(본가 규칙 — UI에서도 이 경우 선택을 요구하지 않는다). PP는 준비 턴에 이미
+  // 소모했으니 여기선 다시 깎지 않는다.
+  const releasingCharge = attacker.chargingMoveId !== undefined;
+  if (releasingCharge) {
+    const storedMove = getMove(attacker.chargingMoveId!);
+    if (storedMove) move = storedMove;
+    attacker.chargingMoveId = undefined;
+  }
+
+  // PP 소모는 행동 여부와 무관하게 발생(단, 차지 기술 2턴째는 위에서 이미 스킵 처리)
+  if (!releasingCharge && attacker.remainingPp[move.id] !== undefined) {
     attacker.remainingPp[move.id] = Math.max(0, attacker.remainingPp[move.id] - 1);
   }
 
-  const blocked = (reason: ActionBlockReason, selfDamage = 0): ActionLogEntry => ({
+  const blocked = (
+    reason: ActionBlockReason,
+    selfDamage = 0,
+    extra?: Partial<ActionLogEntry>,
+  ): ActionLogEntry => ({
     actor: actorKey,
     move,
     blockedReason: reason,
@@ -342,13 +425,45 @@ function resolveAction(
     attackerRemainingHp: attacker.currentHp,
     fainted: false,
     selfFainted: isFainted(attacker),
+    recoilDamage: 0,
+    ...extra,
   });
+
+  // 0) 사용 조건이 있는 기술(코골기=잠든 상태 전용, 속이기=첫 턴 전용). 상태이상/행동방해
+  // 판정보다 먼저 확인한다 — 조건 자체를 못 채우면 애초에 시도조차 안 한 것으로 취급.
+  // 첫 턴 전용은 1v1 시뮬레이터에 교체가 없으니 배틀 전체의 1턴째로 취급한다.
+  if (move.usageCondition === "first-turn-only" && state.turnNumber !== 1) {
+    return blocked("usageCondition");
+  }
 
   // 1) 주 상태이상(잠듦/얼음/마비)으로 행동 자체가 막히는지. 잠듦/얼음은 이 판정 안에서
   // 자체 해제 카운터가 갱신되므로 결과를 attacker.status에 반드시 반영해야 한다.
-  const statusCheck = checkStatusActionBlock(attacker.status, random);
-  attacker.status = statusCheck.nextState;
-  if (statusCheck.blocked) return blocked("status");
+  // 코골기처럼 "잠든 상태에서만" 쓸 수 있는 기술은 본가에서 잠듦이 행동을 막는 예외라,
+  // 일반 잠듦 차단을 건너뛰고 별도로 처리한다 — 해제 판정/카운터 자체는 그대로 진행시킨다.
+  const preActionStatus = attacker.status.condition;
+  let selfCuredStatus: StatusConditionState["condition"] | undefined;
+
+  // 1-1) 불사르기·열사의대지·플레어드라이브 등 "사용 직전 사용자의 얼음 상태를 치유한다" 기술은
+  // 매턴 해제 확률 판정 없이 무조건 먼저 해동된 뒤 기술이 정상적으로 나간다.
+  if (attacker.status.condition === "freeze" && move.thawsUserOnUse) {
+    attacker.status = { ...NO_STATUS_CONDITION };
+    selfCuredStatus = "freeze";
+  } else if (move.usageCondition === "sleep-only") {
+    if (attacker.status.condition !== "sleep") return blocked("usageCondition");
+    const wakeCheck = checkStatusActionBlock(attacker.status, random);
+    attacker.status = wakeCheck.nextState;
+    // 이 판정으로 잠에서 깼다면 이번 턴은 이미 깬 상태이므로 사용 조건이 깨진 것으로 처리한다.
+    if (attacker.status.condition !== "sleep") return blocked("usageCondition");
+  } else {
+    const statusCheck = checkStatusActionBlock(attacker.status, random);
+    attacker.status = statusCheck.nextState;
+    if (statusCheck.blocked) return blocked("status", 0, { blockedByStatus: preActionStatus ?? undefined });
+    // 잠듦/얼음이 이번 판정에서 자연 해제됐으면(매턴 확률 스케줄) 로그에 남긴다 — 물거품아리아 같은
+    // 명시적 치료(curesStatus)와는 다른 경로라 여기서 별도로 잡아야 한다.
+    if ((preActionStatus === "sleep" || preActionStatus === "freeze") && !attacker.status.condition) {
+      selfCuredStatus = preActionStatus;
+    }
+  }
 
   // 2) 풀죽음/반동: 1턴짜리 행동방해. 걸려있으면 이번 턴 소모하고 못 움직인다
   if (hasVolatile(attacker.volatile, "flinch")) {
@@ -379,12 +494,45 @@ function resolveAction(
     }
   }
 
+  // 4) 차지 기술 1턴째(공중날기 등): 준비만 하고 이번 턴엔 데미지를 주지 않는다. 맑음 날씨의
+  // 솔라빔처럼 chargeSkipWeather가 현재 날씨와 일치하면 준비 없이 곧장 2턴째처럼 실행한다.
+  // releasingCharge면 이미 2턴째(위에서 move를 저장된 기술로 바꿔치기했음)라 여기 안 들어온다.
+  if (move.chargeTurn && !releasingCharge) {
+    const skipsCharge = move.chargeSkipWeather !== undefined && state.weather === move.chargeSkipWeather;
+    if (!skipsCharge) {
+      attacker.chargingMoveId = move.id;
+      return {
+        actor: actorKey,
+        move,
+        hit: true,
+        critical: false,
+        damage: 0,
+        damagePercent: 0,
+        defenderRemainingHp: defender.currentHp,
+        selfDamage: 0,
+        attackerRemainingHp: attacker.currentHp,
+        fainted: false,
+        selfFainted: false,
+        recoilDamage: 0,
+        charging: true,
+      };
+    }
+  }
+
   const attackerAbility = attacker.effectiveAbilityId ? getAbility(attacker.effectiveAbilityId) : undefined;
   const defenderAbility = defender.effectiveAbilityId ? getAbility(defender.effectiveAbilityId) : undefined;
+  const attackerItem = attacker.slot.item ? getItem(attacker.slot.item) : undefined;
+  const defenderItem = defender.slot.item ? getItem(defender.slot.item) : undefined;
 
   // evaluateSlotMatchup(1턴 스냅샷 판정)과 같은 로직을 공유 — 특성 배율/타입 변경/자속/상대 상성
   const { effectiveMove, abilityOffenseMultiplier, abilityDefenseMultiplier, stabMultiplier, typeEffectiveness } =
     resolveMoveContext(attackerAbility, move, defender.types, defenderAbility, state.weather);
+
+  // 메트로놈(연속 같은 기술 위력 증가)용 스트릭 갱신 — 여기까지 왔다는 건 앞의 모든 행동방해
+  // 판정(상태이상/풀죽음/반동/혼란/차지 등)을 통과해서 실제로 이 기술을 쓴다는 뜻이라, 명중 여부와
+  // 무관하게 여기서 갱신한다(본가 규칙 — 빗나가도 스트릭은 유지되고, 다른 기술을 쓰면 끊긴다).
+  attacker.lastMoveStreak = attacker.lastMoveId === effectiveMove.id ? (attacker.lastMoveStreak ?? 1) + 1 : 1;
+  attacker.lastMoveId = effectiveMove.id;
 
   // 반짝가루/모래숨기 같은 명중률 전용 특성·도구 배율은 아직 데이터 구조가 없어 1로 고정 (TODO: 데이터 보강)
   const accuracyExtraMultiplier = 1;
@@ -394,7 +542,13 @@ function resolveAction(
     defender.accuracyStages.evasion,
     accuracyExtraMultiplier,
   );
-  const hit = hitChance === null ? true : random() < hitChance;
+
+  // 상대가 차지 기술 준비 턴(공중날기 등)으로 무적인 동안엔, bypassesHiding에 이 무적 종류가
+  // 포함된 기술이 아닌 이상 조건 없이 빗나간다 — 명중률 굴림 자체를 건너뛴다.
+  const defenderHideType = defender.chargingMoveId ? getMove(defender.chargingMoveId)?.chargeHideType : undefined;
+  const evadedByCharge = !!defenderHideType && !(effectiveMove.bypassesHiding ?? []).includes(defenderHideType);
+
+  const hit = evadedByCharge ? false : hitChance === null ? true : random() < hitChance;
 
   if (!hit) {
     // 자폭류(대폭발 등)는 빗나가도 사용자가 반드시 기절한다 (본가 규칙). 데미지가 아예 없는
@@ -414,6 +568,8 @@ function resolveAction(
       attackerRemainingHp: attacker.currentHp,
       fainted: false,
       selfFainted: isFainted(attacker),
+      recoilDamage: 0,
+      evadedByCharge,
     };
   }
 
@@ -425,9 +581,70 @@ function resolveAction(
   const isDamaging =
     effectiveMove.category !== "status" &&
     (effectiveMove.power !== null || effectiveMove.fixedDamage !== undefined);
+  // 나무열매(카리열매 등)가 이번 행동 중 발동했으면 그 나무열매 이름 — resolveHit 클로저 안에서 채운다
+  let berryReducedDamageItemName: string | undefined;
   let damage = 0;
   let damagePercent = 0;
   let isCritical = false;
+  // 트리플악셀처럼 여러 타로 나뉘는 기술만 채운다 — 실제로 명중해서 데미지를 낸 타수.
+  let hitCount: number | undefined;
+
+  // 지진이 땅속의 구멍파기를, 파도타기가 물속의 다이빙을 실제로 맞혔을 때의 위력 배가.
+  // evadedByCharge가 false인데 defenderHideType이 있다는 건 bypassesHiding 예외로 명중했다는 뜻.
+  const hidingBypassMultiplier =
+    defenderHideType && !evadedByCharge ? (effectiveMove.hidingBypassMultiplier ?? 1) : 1;
+
+  /**
+   * 한 번의 "타격"에 대한 급소 판정 + 데미지 계산. 다단히트 기술은 이걸 타수만큼 반복 호출해서
+   * 급소를 타수마다 따로 굴린다(사용자 확인) — highCritRatio/alwaysCrit는 항상 원본 기술
+   * (effectiveMove) 기준으로 판정하고, hitMove는 트리플악셀처럼 타수별 위력만 다를 때 쓴다.
+   */
+  function resolveHit(hitMove: Move): { damage: number; isCritical: boolean } {
+    const critical =
+      effectiveMove.alwaysCrit || random() < critChance(attacker.critStage, effectiveMove.highCritRatio);
+    const ignoreBurnPenalty = ignoresBurnAttackPenalty(attackerAbility?.id, effectiveMove.id);
+    const statusAttackMultiplier = computeStatusAttackMultiplier(
+      attacker.status.condition,
+      effectiveMove.category,
+      ignoreBurnPenalty,
+    );
+    const weatherMultiplier = getWeatherDamageMultiplier(state.weather, effectiveMove.type);
+    const fieldMultiplier = getFieldDamageMultiplier(state.field, effectiveMove.type);
+    const itemMultiplier = getItemOffenseMultiplier(
+      attackerItem,
+      effectiveMove,
+      typeEffectiveness,
+      attacker.lastMoveStreak ?? 1,
+    );
+    // 나무열매(카리열매 등): 이 피격이 조건(타입 일치 + 효과가 굉장함)을 채우면 데미지를
+    // 절반으로 줄이고 대전 중 1회만 발동하도록 소모 처리한다. 다단히트면 첫 타에서만 소모되고,
+    // 이후 타수는 이미 소모된 상태라 다시 발동하지 않는다.
+    const berryResult = getBerryDefenseResult(
+      defenderItem,
+      effectiveMove.type,
+      typeEffectiveness,
+      defender.itemConsumed ?? false,
+    );
+    if (berryResult.consumed) {
+      defender.itemConsumed = true;
+      berryReducedDamageItemName = defenderItem?.name;
+    }
+
+    const result = computeDamage(attacker.realStats, defender.realStats, attacker.types, hitMove, {
+      typeEffectiveness,
+      abilityMultiplier: abilityOffenseMultiplier * statusAttackMultiplier * hidingBypassMultiplier,
+      weatherMultiplier,
+      fieldMultiplier,
+      itemMultiplier,
+      stabMultiplier,
+      attackerStages: attacker.stages,
+      defenderStages: defender.stages,
+      bulkMultiplier: abilityDefenseMultiplier * berryResult.bulkMultiplier,
+      isCritical: critical,
+      randomRoll: MIN_DAMAGE_ROLL + random() * (1 - MIN_DAMAGE_ROLL),
+    });
+    return { damage: result?.damage ?? 0, isCritical: critical };
+  }
 
   if (isDamaging && effectiveMove.fixedDamage !== undefined) {
     // 나이트헤드류: 방어/랭크/특성/도구/급소를 전부 무시하고 고정 수치만 깎는다.
@@ -435,33 +652,40 @@ function resolveAction(
     damage = typeEffectiveness === 0 ? 0 : effectiveMove.fixedDamage;
     damagePercent = damage / defender.realStats.hp;
     defender.currentHp = Math.max(0, defender.currentHp - damage);
+  } else if (isDamaging && effectiveMove.minHits !== undefined && effectiveMove.maxHits !== undefined) {
+    // 다단히트: 명중 판정은 이미 위(첫 타 기준)에서 끝났으니 여기부턴 최소 1타는 맞은 상태로
+    // 시작한다. 록블라스트류(multiHitPowers 없음)는 첫 타만 명중 판정하고 나머지는 자동 명중,
+    // 트리플악셀(multiHitPowers 있음)은 타수마다 따로 명중을 판정해서 빗나가면 그 시점에서
+    // 중단된다 — moves.json의 effect 텍스트에 이미 명시된 구분(사용자 확인). 급소는 다단히트
+    // 종류와 무관하게 항상 타수마다 따로 판정한다(사용자 확인).
+    const perHitAccuracyCheck = effectiveMove.multiHitPowers !== undefined;
+    const totalHits = perHitAccuracyCheck
+      ? effectiveMove.maxHits
+      : rollMultiHitCount(effectiveMove.minHits, effectiveMove.maxHits, random);
+
+    let landed = 0;
+    for (let i = 0; i < totalHits; i++) {
+      if (i > 0 && perHitAccuracyCheck) {
+        const stillHits = hitChance === null ? true : random() < hitChance;
+        if (!stillHits) break;
+      }
+      const hitPower = effectiveMove.multiHitPowers?.[i] ?? effectiveMove.power;
+      if (hitPower === null || hitPower === undefined) break;
+      const hitMove = effectiveMove.multiHitPowers ? { ...effectiveMove, power: hitPower } : effectiveMove;
+      const hitResult = resolveHit(hitMove);
+      damage += hitResult.damage;
+      if (hitResult.isCritical) isCritical = true;
+      landed += 1;
+      defender.currentHp = Math.max(0, defender.currentHp - hitResult.damage);
+      if (isFainted(defender)) break; // 상대가 쓰러지면 남은 타수는 진행하지 않는다
+    }
+    damagePercent = damage / defender.realStats.hp;
+    hitCount = landed;
   } else if (isDamaging) {
-    isCritical = random() < critChance(attacker.critStage);
-    const ignoreBurnPenalty = ignoresBurnAttackPenalty(attackerAbility?.id, effectiveMove.id);
-    const statusAttackMultiplier = computeStatusAttackMultiplier(
-      attacker.status.condition,
-      effectiveMove.category,
-      ignoreBurnPenalty,
-    );
-
-    const weatherMultiplier = getWeatherDamageMultiplier(state.weather, effectiveMove.type);
-    const fieldMultiplier = getFieldDamageMultiplier(state.field, effectiveMove.type);
-
-    const result = computeDamage(attacker.realStats, defender.realStats, attacker.types, effectiveMove, {
-      typeEffectiveness,
-      abilityMultiplier: abilityOffenseMultiplier * statusAttackMultiplier,
-      weatherMultiplier,
-      fieldMultiplier,
-      stabMultiplier,
-      attackerStages: attacker.stages,
-      defenderStages: defender.stages,
-      bulkMultiplier: abilityDefenseMultiplier,
-      isCritical,
-      randomRoll: MIN_DAMAGE_ROLL + random() * (1 - MIN_DAMAGE_ROLL),
-    });
-
-    damage = result?.damage ?? 0;
-    damagePercent = result?.damagePercent ?? 0;
+    const hitResult = resolveHit(effectiveMove);
+    damage = hitResult.damage;
+    isCritical = hitResult.isCritical;
+    damagePercent = damage / defender.realStats.hp;
     defender.currentHp = Math.max(0, defender.currentHp - damage);
   }
 
@@ -471,6 +695,24 @@ function resolveAction(
   if (move.id === STRUGGLE_MOVE.id) {
     selfDamage = Math.floor(attacker.maxHp / 4);
     attacker.currentHp = Math.max(0, attacker.currentHp - selfDamage);
+  }
+
+  // 반동(recoil): 불꽃세례·웨이브태클·브레이브버드·양날박치기. 상대에게 준 데미지(damage)의
+  // 일정 비율만큼 사용자도 입는다 — damage가 0(면역 등)이면 반동도 자연히 0이 된다.
+  let recoilDamage = 0;
+  if (effectiveMove.recoilFraction !== undefined && damage > 0) {
+    recoilDamage = Math.floor(damage * effectiveMove.recoilFraction);
+    attacker.currentHp = Math.max(0, attacker.currentHp - recoilDamage);
+  }
+
+  // 생명의구슬: 데미지를 실제로 준(damage > 0) 공격이 성공할 때마다 최대 HP의 1/10만큼 자신도
+  // 반동을 입는다 — 다단히트도 타수 수와 무관하게 이번 행동에 한 번만 적용(본가 규칙).
+  let itemRecoilDamage = 0;
+  let itemRecoilItemName: string | undefined;
+  if (isDamaging && damage > 0 && attackerItem?.selfRecoilFractionOfMaxHp) {
+    itemRecoilDamage = Math.floor(attacker.maxHp * attackerItem.selfRecoilFractionOfMaxHp);
+    attacker.currentHp = Math.max(0, attacker.currentHp - itemRecoilDamage);
+    itemRecoilItemName = attackerItem.name;
   }
 
   // 자폭류(대폭발 등): 명중했으면 반드시 데미지를 먼저 입힌 "다음" 사용자가 기절한다.
@@ -503,6 +745,8 @@ function resolveAction(
     for (const effect of effectiveMove.inflictsStatus) {
       if (isImmuneToStatus(effect.status, defender.types)) continue;
       if (isStatusBlockedByField(state.field, effect.status)) continue;
+      // 쾌청(강한 햇살) 날씨에서는 얼음 상태에 걸리지 않는다 — 타입 면역과는 다른 축이라 별도 확인
+      if (effect.status === "freeze" && state.weather === "쾌청") continue;
       const chance = effect.chance !== undefined ? effect.chance / 100 : 1;
       if (random() < chance) {
         const before = defender.status.condition;
@@ -517,6 +761,12 @@ function resolveAction(
   if (effectiveMove.inflictsVolatile) {
     for (const effect of effectiveMove.inflictsVolatile) {
       if (effect.volatile === "confusion" && isConfusionBlockedByField(state.field)) continue;
+      const target = effect.target === "self" ? attacker : defender;
+      // 하품(졸음): 대상이 이미 다른 주 상태이상이거나 이미 졸음 상태면 실패한다(본가 규칙) —
+      // 실제 잠듦 여부(타입/필드 면역)는 2턴 뒤 트리거 시점에 따로 확인한다.
+      if (effect.volatile === "drowsy" && (target.status.condition || hasVolatile(target.volatile, "drowsy"))) {
+        continue;
+      }
       const chance = effect.chance !== undefined ? effect.chance / 100 : 1;
       if (random() >= chance) continue;
       if (effect.target === "self") {
@@ -526,6 +776,41 @@ function resolveAction(
       }
       inflictedVolatile = effect.volatile;
     }
+  }
+
+  // 상태이상 치료: 물거품아리아처럼 명중 시 대상의 주 상태이상을 없앤다(inflictsStatus의 반대 방향).
+  // status가 지정돼 있으면(물거품아리아=화상) 그 상태일 때만 치료 — 다른 상태이상은 안 지운다.
+  let curedStatus: StatusConditionState["condition"] | undefined;
+  let curedStatusTarget: "self" | "opponent" | undefined;
+  if (effectiveMove.curesStatus) {
+    const { target: cureTarget, status: cureStatus } = effectiveMove.curesStatus;
+    const target = cureTarget === "self" ? attacker : defender;
+    if (target.status.condition && (!cureStatus || target.status.condition === cureStatus)) {
+      curedStatus = target.status.condition;
+      curedStatusTarget = cureTarget;
+      target.status = { ...NO_STATUS_CONDITION };
+    }
+  }
+
+  // 얼음 상태의 상대가 불꽃타입 "데미지" 기술(물리/특수)에 맞으면 해제 확률(매턴 25%)과 무관하게
+  // 즉시 해동된다 — 본가 규칙. 도깨비불처럼 변화기(status)는 타입이 불꽃이어도 해동시키지 않는다
+  // (사용자 확인). curesStatus처럼 특정 기술만 태깅하는 게 아니라 "불꽃타입 데미지 기술이면 전부"
+  // 적용되는 일반 규칙이라 별도로 둔다.
+  if (
+    effectiveMove.type === "불꽃" &&
+    effectiveMove.category !== "status" &&
+    defender.status.condition === "freeze"
+  ) {
+    curedStatus = "freeze";
+    curedStatusTarget = "opponent";
+    defender.status = { ...NO_STATUS_CONDITION };
+  }
+
+  // 이번 행동에서 자신의 상태이상이 자연 해제(잠듦/얼음) 또는 강제 해동(thawsUserOnUse)됐으면
+  // 그쪽을 우선한다 — 위 두 케이스(치료 기술/불꽃 피격)와 동시에 발생하는 건 극히 드문 경우다.
+  if (selfCuredStatus) {
+    curedStatus = selfCuredStatus;
+    curedStatusTarget = "self";
   }
 
   // 필드 설치: 이미 다른(또는 같은) 필드가 깔려있으면 실패한다 — 필드를 쓸 때마다 지속 턴수가
@@ -552,10 +837,17 @@ function resolveAction(
     attackerRemainingHp: attacker.currentHp,
     inflictedStatus,
     inflictedVolatile,
+    curedStatus,
+    curedStatusTarget,
     setField: fieldSetFailed ? undefined : effectiveMove.setsField,
     fieldSetFailed,
     fainted: isFainted(defender),
     selfFainted: isFainted(attacker),
+    recoilDamage,
+    hitCount,
+    itemRecoilDamage: itemRecoilDamage || undefined,
+    itemRecoilItemName,
+    berryReducedDamageItemName,
   };
 }
 
@@ -634,11 +926,45 @@ export function runTurn(
         endOfTurn.push({ actor: key, damage: 0, remainingHp: fighter.currentHp, fainted: false, fieldHeal });
       }
 
+      // 하품(졸음): 2턴 카운터가 1(=이번이 마지막 소모)이면 이번 턴 종료에 실제로 잠듦을 시도한다.
+      // 그 사이 다른 상태이상이 걸렸거나 타입/필드로 잠듦 면역이 생겼으면 조용히 무산된다(본가 규칙).
+      const drowsyEntry = fighter.volatile.active.drowsy;
+      if (drowsyEntry) {
+        const triggersNow = drowsyEntry.turnsRemaining <= 1;
+        fighter.volatile = consumeVolatileTurn(fighter.volatile, "drowsy");
+        if (
+          triggersNow &&
+          !fighter.status.condition &&
+          !isImmuneToStatus("sleep", fighter.types) &&
+          !isStatusBlockedByField(state.field, "sleep")
+        ) {
+          fighter.status = inflictStatus(fighter.status, "sleep");
+          endOfTurn.push({
+            actor: key,
+            damage: 0,
+            remainingHp: fighter.currentHp,
+            fainted: false,
+            inflictedDelayedStatus: "sleep",
+          });
+        }
+      }
+
       if (!fighter.status.condition) continue;
+      const statusCondition = fighter.status.condition;
       const damage = computeStatusEndOfTurnDamage(fighter.status, fighter.maxHp);
       fighter.currentHp = Math.max(0, fighter.currentHp - damage);
       fighter.status = advanceStatusTurn(fighter.status);
-      endOfTurn.push({ actor: key, damage, remainingHp: fighter.currentHp, fainted: isFainted(fighter) });
+      // 잠듦/얼음/마비는 매턴 데미지가 없다(항상 0) — "상태이상 데미지 0"만 찍는 무의미한 줄을
+      // 막기 위해 실제로 데미지가 있을 때만 로그에 남긴다.
+      if (damage > 0) {
+        endOfTurn.push({
+          actor: key,
+          damage,
+          remainingHp: fighter.currentHp,
+          fainted: isFainted(fighter),
+          statusCondition,
+        });
+      }
     }
   }
 

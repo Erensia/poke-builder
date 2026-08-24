@@ -46,7 +46,7 @@ const STATUS_LABELS: Record<StatusCondition, string> = {
   sleep: "잠듦",
 };
 
-const VOLATILE_LABELS = { flinch: "풀죽음", recharge: "반동", confusion: "혼란" } as const;
+const VOLATILE_LABELS = { flinch: "풀죽음", recharge: "반동", confusion: "혼란", drowsy: "졸음" } as const;
 
 /**
  * 날씨/필드가 적용 중인지 배경색으로 알 수 있게 해달라는 요청 반영 — 날씨는 강화하는 타입 색(비=물,
@@ -81,6 +81,47 @@ function eunNeun(name: string): "은" | "는" {
   if (code < 0 || code > 11171) return "는";
   return code % 28 === 0 ? "는" : "은";
 }
+
+/** "카리열매로"/"먹다남은음식으로"처럼 자음 받침 유무에 따라 "로"/"으로" 조사를 자동 판별한다 */
+function roEuro(name: string): "로" | "으로" {
+  const lastChar = name.at(-1);
+  if (!lastChar) return "로";
+  const code = lastChar.charCodeAt(0) - 0xac00;
+  if (code < 0 || code > 11171) return "로";
+  return code % 28 === 0 ? "로" : "으로";
+}
+
+/**
+ * 상태이상 3단계 문구(사용자 확정 텍스트): 걸렸을 때(onset) → 매턴 효과가 발동했을 때(trigger,
+ * 독/맹독/화상은 데미지 틱, 마비/잠듦/얼음은 이번 턴 행동이 막혔다는 뜻) → 해제됐을 때(cure).
+ * "의"/"을" 같은 상태이상 이름 쪽 조사는 고정이라 그대로 박아뒀고, 포켓몬 이름 쪽만 eunNeun으로 판별한다.
+ */
+const STATUS_ONSET_TEXT: Record<StatusCondition, (name: string) => string> = {
+  poison: (name) => `${name}의 몸에 독이 퍼졌다!`,
+  "badly-poisoned": (name) => `${name}의 몸에 맹독이 퍼졌다!`,
+  burn: (name) => `${name}${eunNeun(name)} 화상을 입었다!`,
+  paralysis: (name) => `${name}${eunNeun(name)} 마비되어 기술이 나오기 어려워졌다!`,
+  sleep: (name) => `${name}${eunNeun(name)} 잠들어 버렸다!`,
+  freeze: (name) => `${name}${eunNeun(name)} 얼어붙었다!`,
+};
+
+const STATUS_TRIGGER_TEXT: Record<StatusCondition, (name: string) => string> = {
+  poison: (name) => `${name}${eunNeun(name)} 독에 의한 데미지를 입었다!`,
+  "badly-poisoned": (name) => `${name}${eunNeun(name)} 맹독에 의한 데미지를 입었다!`,
+  burn: (name) => `${name}${eunNeun(name)} 화상 데미지를 입었다!`,
+  paralysis: (name) => `${name}${eunNeun(name)} 몸이 저려서 움직일 수 없다!`,
+  sleep: (name) => `${name}${eunNeun(name)} 쿨쿨 잠들어 있다.`,
+  freeze: (name) => `${name}${eunNeun(name)} 얼어 버려서 움직일 수 없다!`,
+};
+
+const STATUS_CURE_TEXT: Record<StatusCondition, (name: string) => string> = {
+  poison: (name) => `${name}의 독이 나았다!`,
+  "badly-poisoned": (name) => `${name}의 맹독이 나았다!`,
+  burn: (name) => `${name}의 화상이 나았다!`,
+  paralysis: (name) => `${name}의 몸저림이 풀렸다!`,
+  sleep: (name) => `${name}의 눈을 떴다!`,
+  freeze: (name) => `${name}의 얼음이 녹았다!`,
+};
 
 /** 대전 중 실능치 패널에 표시할 6개 스탯을 표 순서(HP·공격·방어·특공·특방·스피드)대로 나열 */
 const REAL_STAT_LABELS: { key: keyof BaseStats; label: string }[] = [
@@ -132,9 +173,13 @@ export function BattleLogPage() {
     // 남은 PP가 있는 기술이 하나도 없으면(4개 다 0) 선택 없이 발버둥을 자동으로 낸다.
     const aStruggling = !hasUsableMove(battleState.a);
     const bStruggling = !hasUsableMove(battleState.b);
-    if ((!aStruggling && !selected.a) || (!bStruggling && !selected.b)) return;
-    const moveA = aStruggling ? STRUGGLE_MOVE : getMove(selected.a!);
-    const moveB = bStruggling ? STRUGGLE_MOVE : getMove(selected.b!);
+    // 공중날기 등 차지 기술 2턴째는 준비해둔 기술이 선택 여부와 무관하게 자동으로 나가므로
+    // 이 턴엔 수동 선택을 요구하지 않는다 — resolveAction이 어차피 이 값을 무시하고 강제한다.
+    const aCharging = battleState.a.chargingMoveId !== undefined;
+    const bCharging = battleState.b.chargingMoveId !== undefined;
+    if ((!aStruggling && !aCharging && !selected.a) || (!bStruggling && !bCharging && !selected.b)) return;
+    const moveA = aStruggling ? STRUGGLE_MOVE : aCharging ? getMove(battleState.a.chargingMoveId!) : getMove(selected.a!);
+    const moveB = bStruggling ? STRUGGLE_MOVE : bCharging ? getMove(battleState.b.chargingMoveId!) : getMove(selected.b!);
     if (!moveA || !moveB) return;
     const { nextState, result } = runTurn(battleState, moveA, moveB);
     setBattleState(nextState);
@@ -255,10 +300,22 @@ export function BattleLogPage() {
                     ))}
                   </div>
 
-                  {hasUsableMove(fighter) ? (
+                  {fighter.chargingMoveId ? (
+                    // 공중날기 등 차지 기술 1턴째를 막 썼다 — 다음 턴 이 기술이 선택 없이 자동으로 나간다
+                    <div className="battle-struggle-notice">
+                      {getMove(fighter.chargingMoveId)?.name ?? "기술"} 준비 중 — 다음 턴 자동으로 발동돼요!
+                    </div>
+                  ) : hasUsableMove(fighter) ? (
                     <div className="battle-move-grid">
                       {moves.map((move) => {
                         const pp = fighter.remainingPp[move.id] ?? move.pp;
+                        // 실제 배틀에서도 조건을 안 채웠다고 기술 자체를 못 내는 건 아니고, 내봤자
+                        // 실패하는 것뿐이다(사용자 확인) — 코골기(잠든 상태 전용)·속이기(첫 턴 전용)
+                        // 둘 다 조건 불충족이어도 버튼은 그대로 선택 가능하게 두고, resolveAction이
+                        // "usageCondition"으로 실패 처리하는 걸 로그에서 그대로 보여준다.
+                        const sleepConditionUnmet = move.usageCondition === "sleep-only" && fighter.status.condition !== "sleep";
+                        const firstTurnConditionUnmet =
+                          move.usageCondition === "first-turn-only" && battleState.turnNumber !== 0;
                         const disabled = pp <= 0 || fighter.currentHp <= 0 || !!winner;
                         // 셋업 카드의 party-move-pip와 동일하게 기술 타입 배경색을 입힌다.
                         const moveColor = move.type ? TYPE_COLORS[move.type] : undefined;
@@ -271,6 +328,13 @@ export function BattleLogPage() {
                             }`}
                             style={moveColor ? { background: moveColor } : undefined}
                             disabled={disabled}
+                            title={
+                              sleepConditionUnmet
+                                ? "잠든 상태에서만 사용 가능 — 지금 쓰면 실패해요"
+                                : firstTurnConditionUnmet
+                                  ? "등장 후 첫 턴에만 사용 가능 — 지금 쓰면 실패해요"
+                                  : undefined
+                            }
                             onClick={() => setSelected((prev) => ({ ...prev, [side]: move.id }))}
                           >
                             <span className="battle-move-name">{move.name}</span>
@@ -310,7 +374,8 @@ export function BattleLogPage() {
               type="button"
               className="battle-start-button"
               disabled={
-                (hasUsableMove(battleState.a) && !selected.a) || (hasUsableMove(battleState.b) && !selected.b)
+                (hasUsableMove(battleState.a) && battleState.a.chargingMoveId === undefined && !selected.a) ||
+                (hasUsableMove(battleState.b) && battleState.b.chargingMoveId === undefined && !selected.b)
               }
               onClick={playTurn}
             >
@@ -333,24 +398,30 @@ export function BattleLogPage() {
                           기절 같은 "상태"는 아래에서 별도 줄로 분리한다. */}
                       <div className="battle-turn-line">
                         <strong>{actorName}</strong>의 {action.move.name}
-                        {action.blockedReason === "status" && " — 상태이상으로 행동 불가"}
+                        {action.blockedReason === "usageCondition" && "!"}
+                        {action.blockedReason === "status" && action.blockedByStatus === undefined && " — 상태이상으로 행동 불가"}
                         {action.blockedReason === "flinch" && " — 풀죽어서 행동 불가"}
                         {action.blockedReason === "recharge" && " — 반동으로 행동 불가"}
                         {action.blockedReason === "confusion" &&
                           ` — 혼란으로 자멸! (${action.selfDamage} 데미지)`}
                         {action.blockedReason === "psychicFieldPriority" && " — 사이코필드에 막혀 실패"}
-                        {!action.blockedReason && !action.hit && " — 빗나감"}
+                        {!action.blockedReason && action.charging && " — 준비 중! 다음 턴 발동된다"}
+                        {!action.blockedReason && !action.charging && action.evadedByCharge && " — 무적 상태라 빗나감"}
+                        {!action.blockedReason && !action.charging && !action.evadedByCharge && !action.hit && " — 빗나감"}
                         {!action.blockedReason && action.hit && action.damage > 0 && (
                           <>
                             {" "}
-                            — {action.critical && "급소! "}
+                            {/* 다단히트가 아닐 때만 "급소!"를 단일 판정으로 표시 — 다단히트는
+                                타수마다 급소를 따로 판정해서 "하나라도 급소"라는 뜻이 다르므로
+                                뒤의 "(급소 포함)" 표기로 대신한다 */}
+                            — {action.hitCount === undefined && action.critical && "급소! "}
                             {action.damage} 데미지 ({(action.damagePercent * 100).toFixed(1)}%)
+                            {action.hitCount !== undefined && (
+                              <> · {action.hitCount}타 명중{action.critical && " (급소 포함)"}</>
+                            )}
                           </>
                         )}
-                        {!action.blockedReason && action.hit && action.inflictedStatus && (
-                          <> · {STATUS_LABELS[action.inflictedStatus]} 상태!</>
-                        )}
-                        {!action.blockedReason && action.hit && action.inflictedVolatile && (
+                        {!action.blockedReason && action.hit && action.inflictedVolatile && action.inflictedVolatile !== "drowsy" && (
                           <> · {VOLATILE_LABELS[action.inflictedVolatile]}!</>
                         )}
                         {!action.blockedReason && action.hit && action.setField && (
@@ -360,11 +431,66 @@ export function BattleLogPage() {
                           <> · 이미 필드가 있어 실패!</>
                         )}
                       </div>
+                      {/* 마비/잠듦/얼음으로 이번 턴 행동이 막혔으면(단순 "상태이상으로 행동 불가"가
+                          아니라) 매턴 효과가 발동한 것과 같은 의미라 트리거 문구를 그대로 쓴다 */}
+                      {action.blockedReason === "status" && action.blockedByStatus && (
+                        <div className="battle-turn-line is-muted">
+                          {STATUS_TRIGGER_TEXT[action.blockedByStatus](actorName)}
+                        </div>
+                      )}
+                      {/* 속이기(첫 턴 전용)처럼 사용 조건을 못 채워 실패했을 때 — 메인 줄은
+                          "OO의 속이기!"로만 끝내고, 실패 여부는 이 별도 줄로 알려준다 */}
+                      {action.blockedReason === "usageCondition" && (
+                        <div className="battle-turn-line is-muted">
+                          {actorName}의 {action.move.name}{eunNeun(action.move.name)} 실패했다!
+                        </div>
+                      )}
+                      {/* 상태이상에 새로 걸렸을 때(onset) — 항상 상대가 대상(기존 관례) */}
+                      {!action.blockedReason && action.hit && action.inflictedStatus && (
+                        <div className="battle-turn-line is-muted">
+                          {STATUS_ONSET_TEXT[action.inflictedStatus](defenderName)}
+                        </div>
+                      )}
+                      {/* 하품(졸음) 유도 — 실제로 잠드는 건 2턴 뒤라 onset 문구와 다르게 "유도했다"로 표현 */}
+                      {!action.blockedReason && action.hit && action.inflictedVolatile === "drowsy" && (
+                        <div className="battle-turn-line is-muted">상대 {defenderName}의 졸음을 유도했다!</div>
+                      )}
+                      {/* 상태이상이 나았을 때(cure) — curedStatusTarget으로 자신/상대 구분 */}
+                      {!action.blockedReason && action.hit && action.curedStatus && (
+                        <div className="battle-turn-line is-muted">
+                          {STATUS_CURE_TEXT[action.curedStatus](
+                            action.curedStatusTarget === "self" ? actorName : defenderName,
+                          )}
+                        </div>
+                      )}
                       {/* 발버둥 반동은 상대 데미지와 별개의 수치라 자기 줄로 분리 */}
                       {!action.blockedReason && action.move.id === STRUGGLE_MOVE.id && action.selfDamage > 0 && (
                         <div className="battle-turn-line is-muted">
                           {actorName}
                           {eunNeun(actorName)} 반동으로 {action.selfDamage} 데미지를 입었다
+                        </div>
+                      )}
+                      {/* 불꽃세례·웨이브태클 등 recoilFraction 기술의 반동. 발버둥과 계산 기준이
+                          달라 별도 필드(recoilDamage)로 표시한다 */}
+                      {!action.blockedReason && action.recoilDamage > 0 && (
+                        <div className="battle-turn-line is-muted">
+                          {actorName}
+                          {eunNeun(actorName)} 반동으로 {action.recoilDamage} 데미지를 입었다
+                        </div>
+                      )}
+                      {/* 생명의구슬처럼 도구가 주는 반동 — 데미지 기준 반동(recoilDamage)과 달리
+                          최대 HP 비율 고정이라 별도 필드(itemRecoilDamage)로 표시한다 */}
+                      {!action.blockedReason && !!action.itemRecoilDamage && (
+                        <div className="battle-turn-line is-muted">
+                          {actorName}
+                          {eunNeun(actorName)} {action.itemRecoilItemName}의 반동으로 {action.itemRecoilDamage} 데미지를 입었다
+                        </div>
+                      )}
+                      {/* 나무열매(카리열매 등)로 이번 피격 데미지가 반감됐으면 알려준다 */}
+                      {!action.blockedReason && action.berryReducedDamageItemName && (
+                        <div className="battle-turn-line is-muted">
+                          {defenderName}의 {action.berryReducedDamageItemName}
+                          {roEuro(action.berryReducedDamageItemName)} 데미지가 절반으로 줄었다!
                         </div>
                       )}
                       {/* 상대가 쓰러졌는지 여부 — 데미지 수치와 분리된 별도 상태 줄 */}
@@ -391,6 +517,14 @@ export function BattleLogPage() {
                     {e.fieldHeal ? (
                       <>
                         {fighterLabel(battleState, e.actor)} 그래스필드로 {e.fieldHeal} 회복 (남은 HP {e.remainingHp})
+                      </>
+                    ) : e.inflictedDelayedStatus ? (
+                      STATUS_ONSET_TEXT[e.inflictedDelayedStatus](fighterLabel(battleState, e.actor))
+                    ) : e.statusCondition ? (
+                      <>
+                        {STATUS_TRIGGER_TEXT[e.statusCondition](fighterLabel(battleState, e.actor))} (남은 HP{" "}
+                        {e.remainingHp})
+                        {e.fainted && " · 기절!"}
                       </>
                     ) : (
                       <>

@@ -36,8 +36,11 @@ export const NO_STATUS_CONDITION: StatusConditionState = { condition: null, turn
  *  - recharge(반동): 기가임팩트류 기술을 쓴 다음 턴 행동 불가. 자기 자신에게 스스로 거는 효과
  *  - confusion(혼란): 1~4턴 지속(사용자 확인). 매 행동 판정마다 33% 확률로 자멸
  *    (물리 40위력으로 자기 자신을 타격, 타입 상성·자속 없음)
+ *  - drowsy(졸음): 하품 전용. 건 시점엔 아무 일도 없고, 2턴 카운터가 0이 되는 시점(=하품을
+ *    맞은 다음 턴 종료)에 잠듦을 시도한다 — 그 시점에 이미 다른 상태이상이거나 타입/필드로
+ *    잠듦 면역이면 무산된다. flinch/recharge처럼 행동을 막는 효과가 아니라 턴 종료 처리 전용.
  */
-export type VolatileCondition = "flinch" | "recharge" | "confusion";
+export type VolatileCondition = "flinch" | "recharge" | "confusion" | "drowsy";
 
 /** 기술이 상대(또는 자신)에게 행동방해 효과를 걸 때 쓰는 정보 */
 export interface VolatileInflictEffect {

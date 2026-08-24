@@ -15,12 +15,17 @@ const FREEZE_THAW_CHANCE = 0.25;
 const BADLY_POISONED_MAX_TURNS = 15;
 
 /**
- * 타입에 따른 상태이상 면역. 지금 확정된 건 "전기 타입은 마비 안 걸림"(누르기 기술표에서 확인) 하나뿐 —
- * 화상/독의 타입 면역(본가는 불꽃 타입 화상 면역, 독/강철 타입 독 면역)은 챔피언스에서 아직 미확인이라
- * 넣지 않았다. 확인되면 여기에 추가한다.
+ * 타입에 따른 상태이상 면역 (사용자 확인): 전기=마비, 독/강철=독·맹독, 불꽃=화상, 얼음=얼음 면역.
+ * 쾌청 날씨의 얼음 면역(타입이 아니라 날씨 조건)은 별도 — battleSimulator.ts의 inflictsStatus 처리에서
+ * state.weather === "쾌청"이면 얼음을 걸지 않도록 따로 분기한다(이 함수는 타입 기준 면역만 다룸).
  */
 export function isImmuneToStatus(status: StatusCondition, defenderTypes: PokemonType[]): boolean {
   if (status === "paralysis" && defenderTypes.includes("전기")) return true;
+  if ((status === "poison" || status === "badly-poisoned") && (defenderTypes.includes("독") || defenderTypes.includes("강철"))) {
+    return true;
+  }
+  if (status === "burn" && defenderTypes.includes("불꽃")) return true;
+  if (status === "freeze" && defenderTypes.includes("얼음")) return true;
   return false;
 }
 

@@ -36,7 +36,14 @@ export function resolveMoveContext(
   const effectiveMove = abilityOffense.overrideMoveType ? { ...move, type: abilityOffense.overrideMoveType } : move;
   const abilityDefenseMultiplier = resolveAbilityDefense(defenderAbility, effectiveMove);
   const stabMultiplier = resolveStabMultiplier(attackerAbility);
-  const typeEffectiveness = effectiveMove.type ? getEffectiveness(effectiveMove.type, defenderTypes) : 1;
+
+  // 배짱처럼 특정 타입의 면역만 무시하는 특성. 방어측이 2타입이면 면역을 준 타입 쪽 배율만
+  // 1로 무시되고, 다른 타입의 반감/약점 배율은 그대로 곱해진다(getEffectiveness에 위임 —
+  // 예: 고스트/독에게 격투 → 0.5배, 고스트/악에게 격투 → 2배. 전체를 1배로 뭉개면 안 됨).
+  const bypassImmunity = !!(effectiveMove.type && attackerAbility?.bypassesImmunityForTypes?.includes(effectiveMove.type));
+  const typeEffectiveness = effectiveMove.type
+    ? getEffectiveness(effectiveMove.type, defenderTypes, { bypassImmunity })
+    : 1;
 
   return {
     effectiveMove,
