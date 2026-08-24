@@ -3718,8 +3718,9 @@
     "accuracy": 100,
     "pp": 8,
     "priority": 0,
-    "effect": "사용 후 자신은 불꽃 타입을 잃는다.",
-    "makesContact": false
+    "effect": "사용 후 자신은 불꽃 타입을 잃는다. 사용 직전 사용자의 얼음 상태를 치유한다.",
+    "makesContact": false,
+    "thawsUserOnUse": true
   },
   {
     "id": "사슬묶기",
@@ -3807,14 +3808,15 @@
     "accuracy": 100,
     "pp": 12,
     "priority": 0,
-    "effect": "30% 확률로 상대를 화상 상태로 만든다.",
+    "effect": "30% 확률로 상대를 화상 상태로 만든다. 사용 직전 사용자의 얼음 상태를 치유한다.",
     "makesContact": false,
     "inflictsStatus": [
       {
         "status": "burn",
         "chance": 30
       }
-    ]
+    ],
+    "thawsUserOnUse": true
   },
   {
     "id": "열풍",
@@ -3894,8 +3896,10 @@
     "accuracy": 100,
     "pp": 16,
     "priority": 0,
-    "effect": "",
-    "makesContact": true
+    "effect": "사용자도 준 데미지의 1/3만큼 반동을 입는다. 사용 직전 사용자의 얼음 상태를 치유한다.",
+    "makesContact": true,
+    "recoilFraction": 0.3333333333333333,
+    "thawsUserOnUse": true
   },
   {
     "id": "회오리불꽃",

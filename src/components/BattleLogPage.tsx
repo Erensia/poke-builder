@@ -82,6 +82,38 @@ function eunNeun(name: string): "은" | "는" {
   return code % 28 === 0 ? "는" : "은";
 }
 
+/**
+ * 상태이상 3단계 문구(사용자 확정 텍스트): 걸렸을 때(onset) → 매턴 효과가 발동했을 때(trigger,
+ * 독/맹독/화상은 데미지 틱, 마비/잠듦/얼음은 이번 턴 행동이 막혔다는 뜻) → 해제됐을 때(cure).
+ * "의"/"을" 같은 상태이상 이름 쪽 조사는 고정이라 그대로 박아뒀고, 포켓몬 이름 쪽만 eunNeun으로 판별한다.
+ */
+const STATUS_ONSET_TEXT: Record<StatusCondition, (name: string) => string> = {
+  poison: (name) => `${name}의 몸에 독이 퍼졌다!`,
+  "badly-poisoned": (name) => `${name}의 몸에 맹독이 퍼졌다!`,
+  burn: (name) => `${name}${eunNeun(name)} 화상을 입었다!`,
+  paralysis: (name) => `${name}${eunNeun(name)} 마비되어 기술이 나오기 어려워졌다!`,
+  sleep: (name) => `${name}${eunNeun(name)} 잠들어 버렸다!`,
+  freeze: (name) => `${name}${eunNeun(name)} 얼어붙었다!`,
+};
+
+const STATUS_TRIGGER_TEXT: Record<StatusCondition, (name: string) => string> = {
+  poison: (name) => `${name}${eunNeun(name)} 독에 의한 데미지를 입었다!`,
+  "badly-poisoned": (name) => `${name}${eunNeun(name)} 맹독에 의한 데미지를 입었다!`,
+  burn: (name) => `${name}${eunNeun(name)} 화상 데미지를 입었다!`,
+  paralysis: (name) => `${name}${eunNeun(name)} 몸이 저려서 움직일 수 없다!`,
+  sleep: (name) => `${name}${eunNeun(name)} 쿨쿨 잠들어 있다.`,
+  freeze: (name) => `${name}${eunNeun(name)} 얼어 버려서 움직일 수 없다!`,
+};
+
+const STATUS_CURE_TEXT: Record<StatusCondition, (name: string) => string> = {
+  poison: (name) => `${name}의 독이 나았다!`,
+  "badly-poisoned": (name) => `${name}의 맹독이 나았다!`,
+  burn: (name) => `${name}의 화상이 나았다!`,
+  paralysis: (name) => `${name}의 몸저림이 풀렸다!`,
+  sleep: (name) => `${name}의 눈을 떴다!`,
+  freeze: (name) => `${name}의 얼음이 녹았다!`,
+};
+
 /** 대전 중 실능치 패널에 표시할 6개 스탯을 표 순서(HP·공격·방어·특공·특방·스피드)대로 나열 */
 const REAL_STAT_LABELS: { key: keyof BaseStats; label: string }[] = [
   { key: "hp", label: "HP" },
@@ -356,7 +388,7 @@ export function BattleLogPage() {
                           기절 같은 "상태"는 아래에서 별도 줄로 분리한다. */}
                       <div className="battle-turn-line">
                         <strong>{actorName}</strong>의 {action.move.name}
-                        {action.blockedReason === "status" && " — 상태이상으로 행동 불가"}
+                        {action.blockedReason === "status" && action.blockedByStatus === undefined && " — 상태이상으로 행동 불가"}
                         {action.blockedReason === "flinch" && " — 풀죽어서 행동 불가"}
                         {action.blockedReason === "recharge" && " — 반동으로 행동 불가"}
                         {action.blockedReason === "confusion" &&
@@ -379,14 +411,8 @@ export function BattleLogPage() {
                             )}
                           </>
                         )}
-                        {!action.blockedReason && action.hit && action.inflictedStatus && (
-                          <> · {STATUS_LABELS[action.inflictedStatus]} 상태!</>
-                        )}
                         {!action.blockedReason && action.hit && action.inflictedVolatile && (
                           <> · {VOLATILE_LABELS[action.inflictedVolatile]}!</>
-                        )}
-                        {!action.blockedReason && action.hit && action.curedStatus && (
-                          <> · {action.curedStatus === "freeze" ? "해동!" : `${STATUS_LABELS[action.curedStatus]} 치료!`}</>
                         )}
                         {!action.blockedReason && action.hit && action.setField && (
                           <> · {action.setField} 설치!</>
@@ -395,6 +421,27 @@ export function BattleLogPage() {
                           <> · 이미 필드가 있어 실패!</>
                         )}
                       </div>
+                      {/* 마비/잠듦/얼음으로 이번 턴 행동이 막혔으면(단순 "상태이상으로 행동 불가"가
+                          아니라) 매턴 효과가 발동한 것과 같은 의미라 트리거 문구를 그대로 쓴다 */}
+                      {action.blockedReason === "status" && action.blockedByStatus && (
+                        <div className="battle-turn-line is-muted">
+                          {STATUS_TRIGGER_TEXT[action.blockedByStatus](actorName)}
+                        </div>
+                      )}
+                      {/* 상태이상에 새로 걸렸을 때(onset) — 항상 상대가 대상(기존 관례) */}
+                      {!action.blockedReason && action.hit && action.inflictedStatus && (
+                        <div className="battle-turn-line is-muted">
+                          {STATUS_ONSET_TEXT[action.inflictedStatus](defenderName)}
+                        </div>
+                      )}
+                      {/* 상태이상이 나았을 때(cure) — curedStatusTarget으로 자신/상대 구분 */}
+                      {!action.blockedReason && action.hit && action.curedStatus && (
+                        <div className="battle-turn-line is-muted">
+                          {STATUS_CURE_TEXT[action.curedStatus](
+                            action.curedStatusTarget === "self" ? actorName : defenderName,
+                          )}
+                        </div>
+                      )}
                       {/* 발버둥 반동은 상대 데미지와 별개의 수치라 자기 줄로 분리 */}
                       {!action.blockedReason && action.move.id === STRUGGLE_MOVE.id && action.selfDamage > 0 && (
                         <div className="battle-turn-line is-muted">
@@ -436,10 +483,12 @@ export function BattleLogPage() {
                         {fighterLabel(battleState, e.actor)} 그래스필드로 {e.fieldHeal} 회복 (남은 HP {e.remainingHp})
                       </>
                     ) : e.inflictedDelayedStatus ? (
+                      STATUS_ONSET_TEXT[e.inflictedDelayedStatus](fighterLabel(battleState, e.actor))
+                    ) : e.statusCondition ? (
                       <>
-                        {fighterLabel(battleState, e.actor)}
-                        {eunNeun(fighterLabel(battleState, e.actor))} 하품 때문에{" "}
-                        {STATUS_LABELS[e.inflictedDelayedStatus]} 상태가 됐다
+                        {STATUS_TRIGGER_TEXT[e.statusCondition](fighterLabel(battleState, e.actor))} (남은 HP{" "}
+                        {e.remainingHp})
+                        {e.fainted && " · 기절!"}
                       </>
                     ) : (
                       <>

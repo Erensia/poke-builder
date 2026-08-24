@@ -275,6 +275,8 @@ export interface ActionLogEntry {
   move: Move;
   /** 주 상태이상(잠듦/얼음/마비)이나 행동방해(풀죽음/반동/혼란 자멸)로 기술을 못 썼으면 채워진다 */
   blockedReason?: ActionBlockReason;
+  /** blockedReason이 "status"일 때, 정확히 어떤 상태이상 때문인지(마비/잠듦/얼음) — UI가 "몸이 저려서"/"쿨쿨 잠들어"/"얼어 버려서" 문구를 골라 쓰는 데 필요 */
+  blockedByStatus?: StatusConditionState["condition"];
   /** 회피/빗나감 여부. 필중기는 항상 true. blockedReason이 있으면 의미 없음 */
   hit: boolean;
   critical: boolean;
@@ -286,8 +288,13 @@ export interface ActionLogEntry {
   attackerRemainingHp: number;
   inflictedStatus?: StatusConditionState["condition"];
   inflictedVolatile?: VolatileCondition;
-  /** 물거품아리아처럼 명중 시 상대(또는 자신)의 주 상태이상을 없앴으면 그 상태이상 종류 */
+  /**
+   * 상태이상이 나았으면(물거품아리아 등 치료 기술, 불꽃타입 데미지 기술의 해동, 잠듦/얼음의
+   * 자연 해제, thawsUserOnUse 기술 사용) 그 상태이상 종류. curedStatusTarget으로 누구의 상태인지 구분.
+   */
   curedStatus?: StatusConditionState["condition"];
+  /** curedStatus가 누구에게 일어났는지 — "self"면 이 행동의 actor, "opponent"면 상대 */
+  curedStatusTarget?: "self" | "opponent";
   /** 이 행동으로 defender가 쓰러졌으면 true */
   fainted: boolean;
   /** 혼란 자멸로 스스로 쓰러졌으면 true */
@@ -320,6 +327,8 @@ export interface EndOfTurnLogEntry {
   fieldHeal?: number;
   /** 하품(졸음) 2턴 카운터가 다 돼서 이번 턴 종료 시 실제로 잠들었으면 채워진다 */
   inflictedDelayedStatus?: StatusConditionState["condition"];
+  /** damage가 상태이상 매턴 데미지일 때(독/맹독/화상) 어떤 상태이상인지 — UI가 문구를 골라 쓰는 데 필요 */
+  statusCondition?: StatusConditionState["condition"];
 }
 
 export interface TurnResult {
@@ -386,7 +395,11 @@ function resolveAction(
     attacker.remainingPp[move.id] = Math.max(0, attacker.remainingPp[move.id] - 1);
   }
 
-  const blocked = (reason: ActionBlockReason, selfDamage = 0): ActionLogEntry => ({
+  const blocked = (
+    reason: ActionBlockReason,
+    selfDamage = 0,
+    extra?: Partial<ActionLogEntry>,
+  ): ActionLogEntry => ({
     actor: actorKey,
     move,
     blockedReason: reason,
@@ -400,6 +413,7 @@ function resolveAction(
     fainted: false,
     selfFainted: isFainted(attacker),
     recoilDamage: 0,
+    ...extra,
   });
 
   // 0) 사용 조건이 있는 기술(코골기=잠든 상태 전용, 속이기=첫 턴 전용). 상태이상/행동방해
@@ -413,7 +427,15 @@ function resolveAction(
   // 자체 해제 카운터가 갱신되므로 결과를 attacker.status에 반드시 반영해야 한다.
   // 코골기처럼 "잠든 상태에서만" 쓸 수 있는 기술은 본가에서 잠듦이 행동을 막는 예외라,
   // 일반 잠듦 차단을 건너뛰고 별도로 처리한다 — 해제 판정/카운터 자체는 그대로 진행시킨다.
-  if (move.usageCondition === "sleep-only") {
+  const preActionStatus = attacker.status.condition;
+  let selfCuredStatus: StatusConditionState["condition"] | undefined;
+
+  // 1-1) 불사르기·열사의대지·플레어드라이브 등 "사용 직전 사용자의 얼음 상태를 치유한다" 기술은
+  // 매턴 해제 확률 판정 없이 무조건 먼저 해동된 뒤 기술이 정상적으로 나간다.
+  if (attacker.status.condition === "freeze" && move.thawsUserOnUse) {
+    attacker.status = { ...NO_STATUS_CONDITION };
+    selfCuredStatus = "freeze";
+  } else if (move.usageCondition === "sleep-only") {
     if (attacker.status.condition !== "sleep") return blocked("usageCondition");
     const wakeCheck = checkStatusActionBlock(attacker.status, random);
     attacker.status = wakeCheck.nextState;
@@ -422,7 +444,12 @@ function resolveAction(
   } else {
     const statusCheck = checkStatusActionBlock(attacker.status, random);
     attacker.status = statusCheck.nextState;
-    if (statusCheck.blocked) return blocked("status");
+    if (statusCheck.blocked) return blocked("status", 0, { blockedByStatus: preActionStatus ?? undefined });
+    // 잠듦/얼음이 이번 판정에서 자연 해제됐으면(매턴 확률 스케줄) 로그에 남긴다 — 물거품아리아 같은
+    // 명시적 치료(curesStatus)와는 다른 경로라 여기서 별도로 잡아야 한다.
+    if ((preActionStatus === "sleep" || preActionStatus === "freeze") && !attacker.status.condition) {
+      selfCuredStatus = preActionStatus;
+    }
   }
 
   // 2) 풀죽음/반동: 1턴짜리 행동방해. 걸려있으면 이번 턴 소모하고 못 움직인다
@@ -665,6 +692,8 @@ function resolveAction(
     for (const effect of effectiveMove.inflictsStatus) {
       if (isImmuneToStatus(effect.status, defender.types)) continue;
       if (isStatusBlockedByField(state.field, effect.status)) continue;
+      // 쾌청(강한 햇살) 날씨에서는 얼음 상태에 걸리지 않는다 — 타입 면역과는 다른 축이라 별도 확인
+      if (effect.status === "freeze" && state.weather === "쾌청") continue;
       const chance = effect.chance !== undefined ? effect.chance / 100 : 1;
       if (random() < chance) {
         const before = defender.status.condition;
@@ -699,21 +728,36 @@ function resolveAction(
   // 상태이상 치료: 물거품아리아처럼 명중 시 대상의 주 상태이상을 없앤다(inflictsStatus의 반대 방향).
   // status가 지정돼 있으면(물거품아리아=화상) 그 상태일 때만 치료 — 다른 상태이상은 안 지운다.
   let curedStatus: StatusConditionState["condition"] | undefined;
+  let curedStatusTarget: "self" | "opponent" | undefined;
   if (effectiveMove.curesStatus) {
     const { target: cureTarget, status: cureStatus } = effectiveMove.curesStatus;
     const target = cureTarget === "self" ? attacker : defender;
     if (target.status.condition && (!cureStatus || target.status.condition === cureStatus)) {
       curedStatus = target.status.condition;
+      curedStatusTarget = cureTarget;
       target.status = { ...NO_STATUS_CONDITION };
     }
   }
 
-  // 얼음 상태의 상대가 불꽃타입 기술에 맞으면(화상 걸리는 기술이든 순수 데미지 기술이든 종류 무관)
-  // 해제 확률(매턴 25%)과 무관하게 즉시 해동된다 — 본가 규칙. curesStatus처럼 특정 기술만 태깅하는
-  // 게 아니라 "불꽃타입 기술이면 전부" 적용되는 일반 규칙이라 별도로 둔다.
-  if (effectiveMove.type === "불꽃" && defender.status.condition === "freeze") {
+  // 얼음 상태의 상대가 불꽃타입 "데미지" 기술(물리/특수)에 맞으면 해제 확률(매턴 25%)과 무관하게
+  // 즉시 해동된다 — 본가 규칙. 도깨비불처럼 변화기(status)는 타입이 불꽃이어도 해동시키지 않는다
+  // (사용자 확인). curesStatus처럼 특정 기술만 태깅하는 게 아니라 "불꽃타입 데미지 기술이면 전부"
+  // 적용되는 일반 규칙이라 별도로 둔다.
+  if (
+    effectiveMove.type === "불꽃" &&
+    effectiveMove.category !== "status" &&
+    defender.status.condition === "freeze"
+  ) {
     curedStatus = "freeze";
+    curedStatusTarget = "opponent";
     defender.status = { ...NO_STATUS_CONDITION };
+  }
+
+  // 이번 행동에서 자신의 상태이상이 자연 해제(잠듦/얼음) 또는 강제 해동(thawsUserOnUse)됐으면
+  // 그쪽을 우선한다 — 위 두 케이스(치료 기술/불꽃 피격)와 동시에 발생하는 건 극히 드문 경우다.
+  if (selfCuredStatus) {
+    curedStatus = selfCuredStatus;
+    curedStatusTarget = "self";
   }
 
   // 필드 설치: 이미 다른(또는 같은) 필드가 깔려있으면 실패한다 — 필드를 쓸 때마다 지속 턴수가
@@ -741,6 +785,7 @@ function resolveAction(
     inflictedStatus,
     inflictedVolatile,
     curedStatus,
+    curedStatusTarget,
     setField: fieldSetFailed ? undefined : effectiveMove.setsField,
     fieldSetFailed,
     fainted: isFainted(defender),
@@ -849,13 +894,20 @@ export function runTurn(
       }
 
       if (!fighter.status.condition) continue;
+      const statusCondition = fighter.status.condition;
       const damage = computeStatusEndOfTurnDamage(fighter.status, fighter.maxHp);
       fighter.currentHp = Math.max(0, fighter.currentHp - damage);
       fighter.status = advanceStatusTurn(fighter.status);
       // 잠듦/얼음/마비는 매턴 데미지가 없다(항상 0) — "상태이상 데미지 0"만 찍는 무의미한 줄을
       // 막기 위해 실제로 데미지가 있을 때만 로그에 남긴다.
       if (damage > 0) {
-        endOfTurn.push({ actor: key, damage, remainingHp: fighter.currentHp, fainted: isFainted(fighter) });
+        endOfTurn.push({
+          actor: key,
+          damage,
+          remainingHp: fighter.currentHp,
+          fainted: isFainted(fighter),
+          statusCondition,
+        });
       }
     }
   }
