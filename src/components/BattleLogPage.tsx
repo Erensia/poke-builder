@@ -411,7 +411,7 @@ export function BattleLogPage() {
                             )}
                           </>
                         )}
-                        {!action.blockedReason && action.hit && action.inflictedVolatile && (
+                        {!action.blockedReason && action.hit && action.inflictedVolatile && action.inflictedVolatile !== "drowsy" && (
                           <> · {VOLATILE_LABELS[action.inflictedVolatile]}!</>
                         )}
                         {!action.blockedReason && action.hit && action.setField && (
@@ -433,6 +433,10 @@ export function BattleLogPage() {
                         <div className="battle-turn-line is-muted">
                           {STATUS_ONSET_TEXT[action.inflictedStatus](defenderName)}
                         </div>
+                      )}
+                      {/* 하품(졸음) 유도 — 실제로 잠드는 건 2턴 뒤라 onset 문구와 다르게 "유도했다"로 표현 */}
+                      {!action.blockedReason && action.hit && action.inflictedVolatile === "drowsy" && (
+                        <div className="battle-turn-line is-muted">상대 {defenderName}의 졸음을 유도했다!</div>
                       )}
                       {/* 상태이상이 나았을 때(cure) — curedStatusTarget으로 자신/상대 구분 */}
                       {!action.blockedReason && action.hit && action.curedStatus && (
