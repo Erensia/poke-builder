@@ -386,7 +386,7 @@ export function BattleLogPage() {
                           <> · {VOLATILE_LABELS[action.inflictedVolatile]}!</>
                         )}
                         {!action.blockedReason && action.hit && action.curedStatus && (
-                          <> · {STATUS_LABELS[action.curedStatus]} 치료!</>
+                          <> · {action.curedStatus === "freeze" ? "해동!" : `${STATUS_LABELS[action.curedStatus]} 치료!`}</>
                         )}
                         {!action.blockedReason && action.hit && action.setField && (
                           <> · {action.setField} 설치!</>

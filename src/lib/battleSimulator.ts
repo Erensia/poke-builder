@@ -708,6 +708,14 @@ function resolveAction(
     }
   }
 
+  // 얼음 상태의 상대가 불꽃타입 기술에 맞으면(화상 걸리는 기술이든 순수 데미지 기술이든 종류 무관)
+  // 해제 확률(매턴 25%)과 무관하게 즉시 해동된다 — 본가 규칙. curesStatus처럼 특정 기술만 태깅하는
+  // 게 아니라 "불꽃타입 기술이면 전부" 적용되는 일반 규칙이라 별도로 둔다.
+  if (effectiveMove.type === "불꽃" && defender.status.condition === "freeze") {
+    curedStatus = "freeze";
+    defender.status = { ...NO_STATUS_CONDITION };
+  }
+
   // 필드 설치: 이미 다른(또는 같은) 필드가 깔려있으면 실패한다 — 필드를 쓸 때마다 지속 턴수가
   // 갱신되던 버그 수정. 기존 필드가 다 사라지기 전까지는 필드 기술 자체가 실패해야 한다.
   let fieldSetFailed = false;
