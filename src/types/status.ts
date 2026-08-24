@@ -25,6 +25,12 @@ export interface StatusConditionState {
    *  - 화상/독/마비: 사용하지 않음(항상 0)
    */
   turnsElapsed: number;
+  /**
+   * 잠자기(Move.restSleep)로 걸린 잠듦이면 true. 일반 잠듦은 checkStatusActionBlock의 확률
+   * 스케줄(1턴째 0%→2턴째 33%→3턴째 100%)을 따르지만, 잠자기는 "정확히 2턴간 무조건 잠들고
+   * 3턴째 무조건 깬다"는 본가 고유 규칙이라 이 값이 true면 2턴째 해제 확률도 0%로 강제한다.
+   */
+  isRestSleep?: boolean;
 }
 
 export const NO_STATUS_CONDITION: StatusConditionState = { condition: null, turnsElapsed: 0 };
@@ -39,8 +45,24 @@ export const NO_STATUS_CONDITION: StatusConditionState = { condition: null, turn
  *  - drowsy(졸음): 하품 전용. 건 시점엔 아무 일도 없고, 2턴 카운터가 0이 되는 시점(=하품을
  *    맞은 다음 턴 종료)에 잠듦을 시도한다 — 그 시점에 이미 다른 상태이상이거나 타입/필드로
  *    잠듦 면역이면 무산된다. flinch/recharge처럼 행동을 막는 효과가 아니라 턴 종료 처리 전용.
+ *  - wish(희망사항): 건 시점엔 아무 일도 없고, drowsy와 같은 2턴 카운터가 0이 되는 시점(=쓴
+ *    다음 턴 종료)에 자신의 최대 HP 절반을 회복한다. 1v1이라 "그 자리에 있는 포켓몬"이 항상
+ *    사용자 자신이라 교체 시나리오는 고려하지 않는다.
+ *  - ingrain(뿌리박기)/aquaRing(아쿠아링): 걸려있는 동안 매 턴 종료 시 최대 HP 1/16을 회복한다.
+ *    턴 카운터로 소모되지 않고(교체가 없는 1v1이라 배틀이 끝날 때까지 유지), 큰뿌리를 지녔으면
+ *    회복량이 1.3배가 된다(itemEffects.getDrainHealMultiplier).
+ *  - leechSeed(씨뿌리기): 걸린 쪽은 매 턴 종료 시 최대 HP 1/8을 잃고, 상대가 그만큼(+큰뿌리
+ *    소지 시 1.3배) 회복한다. ingrain/aquaRing과 마찬가지로 턴 카운터 없이 배틀 끝까지 유지.
  */
-export type VolatileCondition = "flinch" | "recharge" | "confusion" | "drowsy";
+export type VolatileCondition =
+  | "flinch"
+  | "recharge"
+  | "confusion"
+  | "drowsy"
+  | "wish"
+  | "ingrain"
+  | "aquaRing"
+  | "leechSeed";
 
 /** 기술이 상대(또는 자신)에게 행동방해 효과를 걸 때 쓰는 정보 */
 export interface VolatileInflictEffect {

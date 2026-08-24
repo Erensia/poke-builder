@@ -332,7 +332,8 @@
     "pp": 8,
     "priority": 0,
     "effect": "자신의 체력을 회복한다. 날씨에 따라 회복량이 달라진다.",
-    "makesContact": false
+    "makesContact": false,
+    "healsWeatherDependent": true
   },
   {
     "id": "꽃잎댄스",
@@ -359,7 +360,8 @@
     "pp": 12,
     "priority": 0,
     "effect": "준 데미지의 절반만큼 자신의 체력을 회복한다.",
-    "makesContact": false
+    "makesContact": false,
+    "drainFraction": 0.5
   },
   {
     "id": "대지의힘",
@@ -565,7 +567,10 @@
     "pp": 12,
     "priority": 0,
     "effect": "사용한 다음 턴에 체력의 절반을 회복한다.",
-    "makesContact": false
+    "makesContact": false,
+    "inflictsVolatile": [
+      { "volatile": "wish", "target": "self" }
+    ]
   },
   {
     "id": "기가임팩트",
@@ -1095,6 +1100,7 @@
     "pp": 12,
     "priority": 0,
     "effect": "준 데미지의 절반만큼 자신의 체력을 회복한다.",
+    "drainFraction": 0.5,
     "classification": [
       "펀치"
     ],
@@ -1319,7 +1325,8 @@
     "pp": 8,
     "priority": 0,
     "effect": "5턴간 날씨를 비로 바꾼다.",
-    "makesContact": false
+    "makesContact": false,
+    "setsWeather": "비"
   },
   {
     "id": "신속",
@@ -1422,7 +1429,8 @@
     "pp": 8,
     "priority": 0,
     "effect": "체력과 상태이상을 모두 회복하고 2턴간 잠든다.",
-    "makesContact": false
+    "makesContact": false,
+    "restSleep": true
   },
   {
     "id": "제비반환",
@@ -1483,7 +1491,9 @@
     "classification": [
       "파동"
     ],
-    "makesContact": false
+    "makesContact": false,
+    "healsFraction": 0.5,
+    "healsTarget": "opponent"
   },
   {
     "id": "카운터",
@@ -1541,7 +1551,8 @@
     "pp": 8,
     "priority": 0,
     "effect": "5턴간 날씨를 맑음으로 바꾼다.",
-    "makesContact": false
+    "makesContact": false,
+    "setsWeather": "쾌청"
   },
   {
     "id": "크로스촙",
@@ -1865,7 +1876,8 @@
     "pp": 8,
     "priority": 0,
     "effect": "체력의 절반을 회복한다. 이번 턴 동안 비행 타입이 사라진다.",
-    "makesContact": false
+    "makesContact": false,
+    "healsFraction": 0.5
   },
   {
     "id": "달려들기",
@@ -1944,7 +1956,8 @@
     "classification": [
       "바람"
     ],
-    "makesContact": false
+    "makesContact": false,
+    "setsWeather": "모래바람"
   },
   {
     "id": "배턴터치",
@@ -2007,7 +2020,8 @@
     "pp": 20,
     "priority": 0,
     "effect": "5턴간 아군이 받는 특수 데미지를 절반으로 줄인다.",
-    "makesContact": false
+    "makesContact": false,
+    "setsScreen": "lightScreen"
   },
   {
     "id": "사이코커터",
@@ -2343,7 +2357,8 @@
     "pp": 20,
     "priority": 0,
     "effect": "매 턴 자신의 체력을 조금씩 회복한다.",
-    "makesContact": false
+    "makesContact": false,
+    "setsRegenVolatile": "aquaRing"
   },
   {
     "id": "암해머",
@@ -2683,7 +2698,8 @@
     "pp": 8,
     "priority": 0,
     "effect": "5턴간 날씨를 눈으로 바꾼다.",
-    "makesContact": false
+    "makesContact": false,
+    "setsWeather": "눈"
   },
   {
     "id": "씨폭탄",
@@ -2806,7 +2822,8 @@
     "pp": 12,
     "priority": 0,
     "effect": "준 데미지의 4분의 3만큼 자신의 체력을 회복한다.",
-    "makesContact": true
+    "makesContact": true,
+    "drainFraction": 0.75
   },
   {
     "id": "뛰어오르기",
@@ -3326,7 +3343,8 @@
     "pp": 12,
     "priority": 0,
     "effect": "매 턴 상대의 체력을 흡수해 자신이 회복한다.",
-    "makesContact": false
+    "makesContact": false,
+    "setsLeechSeed": true
   },
   {
     "id": "에너지볼",
@@ -3407,7 +3425,8 @@
     "pp": 12,
     "priority": 0,
     "effect": "5턴간 스피드가 낮은 포켓몬부터 먼저 행동한다.",
-    "makesContact": false
+    "makesContact": false,
+    "setsTrickRoom": true
   },
   {
     "id": "가드스왑",
@@ -3443,7 +3462,8 @@
     "pp": 8,
     "priority": 0,
     "effect": "체력을 회복한다. 날씨에 따라 회복량이 달라진다.",
-    "makesContact": false
+    "makesContact": false,
+    "healsWeatherDependent": true
   },
   {
     "id": "리플렉터",
@@ -3455,7 +3475,8 @@
     "pp": 20,
     "priority": 0,
     "effect": "5턴간 아군이 받는 물리 데미지를 절반으로 줄인다.",
-    "makesContact": false
+    "makesContact": false,
+    "setsScreen": "reflect"
   },
   {
     "id": "매혹의보이스",
@@ -3965,7 +3986,8 @@
     "classification": [
       "베기"
     ],
-    "makesContact": true
+    "makesContact": true,
+    "drainFraction": 0.5
   },
   {
     "id": "폴터가이스트",
@@ -4490,8 +4512,9 @@
     "accuracy": null,
     "pp": 20,
     "priority": 0,
-    "effect": "",
-    "makesContact": false
+    "effect": "매 턴 자신의 체력을 조금씩 회복한다. 상대를 교체하기 전까지 지속된다.",
+    "makesContact": false,
+    "setsRegenVolatile": "ingrain"
   },
   {
     "id": "수면가루",
@@ -4802,7 +4825,8 @@
     "pp": 8,
     "priority": 0,
     "effect": "자신의 최대 체력을 절반 회복한다.",
-    "makesContact": false
+    "makesContact": false,
+    "healsFraction": 0.5
   },
   {
     "id": "트림",

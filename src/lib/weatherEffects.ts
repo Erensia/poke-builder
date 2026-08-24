@@ -33,3 +33,13 @@ export function getWeatherDamageMultiplier(
   }
   return 1;
 }
+
+/**
+ * 광합성·달빛(Move.healsWeatherDependent) 전용 회복 비율. 본가 공식 그대로: 쾌청 2/3,
+ * 날씨 없음 1/2, 그 외 날씨(비/모래바람/눈)는 1/4 — 전부 최대 HP 기준.
+ */
+export function computeWeatherHealFraction(weather: WeatherKind | undefined): number {
+  if (weather === "쾌청") return 2 / 3;
+  if (!weather) return 1 / 2;
+  return 1 / 4;
+}

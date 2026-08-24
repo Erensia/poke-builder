@@ -1,6 +1,6 @@
 import type { PartySlot } from "../types/party";
 import { getPokemon, getMove, getAbility, getItem, getNature } from "../lib/data";
-import { getEffectiveForm, megaBadgeLabel } from "../lib/pokemonForm";
+import { getEffectiveForm, getEffectiveAbilityId, megaBadgeLabel } from "../lib/pokemonForm";
 import { computeRealStats, totalAbilityPoints } from "../lib/statCalculator";
 import { computeBulkPower } from "../lib/battlePower";
 import { TypeBadge } from "./TypeBadge";
@@ -99,7 +99,13 @@ export function PartySlotCard({
         <button type="button" className="party-meta-pip" onClick={onPickAbility}>
           <span className="party-meta-label">특성</span>
           <span className="party-meta-value">
-            {slot!.ability ? getAbility(slot!.ability)?.name : "미지정"}
+            {(() => {
+              // 메가진화 중이면 slot.ability와 무관하게 항상 그 메가폼 고유 특성으로 고정된다
+              // (getEffectiveAbilityId) — 표시도 실제 적용되는 값을 따라가야 유저가 고른 값과
+              // 안 맞아 보이는 혼란이 없다.
+              const effectiveAbilityId = getEffectiveAbilityId(form, slot!.ability);
+              return effectiveAbilityId ? getAbility(effectiveAbilityId)?.name : "미지정";
+            })()}
           </span>
         </button>
         <button type="button" className="party-meta-pip" onClick={onPickItem}>

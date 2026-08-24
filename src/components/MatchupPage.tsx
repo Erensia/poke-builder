@@ -130,6 +130,7 @@ export function MatchupPage() {
           return (
             <AbilityPickerModal
               pokemon={pokemon}
+              slot={sideOf(picker.side).slot}
               currentAbilityId={sideOf(picker.side).slot.ability}
               onClose={() => setPicker(null)}
               onSelect={(abilityId) => {

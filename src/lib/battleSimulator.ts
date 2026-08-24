@@ -34,6 +34,7 @@ import {
   computeStatusEndOfTurnDamage,
   computeStatusSpeedMultiplier,
   ignoresBurnAttackPenalty,
+  inflictRestSleep,
   inflictStatus,
   isImmuneToStatus,
 } from "./statusConditions";
@@ -46,7 +47,7 @@ import {
 } from "./volatileConditions";
 import { resolveMoveContext } from "./moveContext";
 import { computeDamage } from "./battlePower";
-import { getWeatherDamageMultiplier } from "./weatherEffects";
+import { getWeatherDamageMultiplier, computeWeatherHealFraction } from "./weatherEffects";
 import {
   FIELD_DURATION,
   computeFieldEndOfTurnHeal,
@@ -55,13 +56,30 @@ import {
   isPriorityMoveBlockedByField,
   isStatusBlockedByField,
 } from "./fieldEffects";
-import { getBerryDefenseResult, getItemOffenseMultiplier } from "./itemEffects";
+import {
+  getBerryDefenseResult,
+  getItemOffenseMultiplier,
+  getItemAccuracyMultiplier,
+  getDrainHealMultiplier,
+  getStatusCureBerryResult,
+  getConfusionCureBerryResult,
+  getHpThresholdBerryHeal,
+} from "./itemEffects";
 import { compareTurnOrder } from "./turnOrder";
 import type { BaseStats } from "../types/stats";
 import type { EvaluatorSlot } from "./matchupEvaluator";
 
 /** 데미지 난수 하한. computeDamage의 randomRoll에 매턴 0.85~1.00 사이 값을 뽑아 넘길 때 쓴다 */
 const MIN_DAMAGE_ROLL = 0.85;
+
+/** 트릭룸 지속 턴 수. 필드(FIELD_DURATION)와 같은 5턴 */
+const TRICK_ROOM_DURATION = 5;
+
+/** 날씨 기본 지속 턴 수(뜨거운바위 등 맞는 바위를 지녔으면 +3 = 8턴) */
+const WEATHER_DURATION = 5;
+
+/** 리플렉터/빛의장막 기본 지속 턴 수(빛의점토를 지녔으면 +3 = 8턴) */
+const SCREEN_DURATION = 5;
 
 /**
  * 록블라스트류(2~5회, multiHitPowers 없는 다단히트)의 타수를 확률표대로 뽑는다.
@@ -147,6 +165,11 @@ export interface BattleFighterState {
   lastMoveStreak?: number;
   /** 나무열매(카리열매 등)처럼 대전 중 1회만 발동하는 지닌 도구를 이미 썼으면 true */
   itemConsumed?: boolean;
+  /**
+   * 리플렉터(물리)/빛의장막(특수) — 이 포켓몬 쪽에 걸려있는 스크린과 각각의 남은 턴 수.
+   * "아군이 받는 데미지 감소"라 1v1에서는 이 포켓몬 자신이 상대 공격을 맞을 때 적용된다.
+   */
+  screens: Partial<Record<"reflect" | "lightScreen", number>>;
 }
 
 /** 두 포켓몬(a/b)을 마주 세운 배틀 상태 */
@@ -154,9 +177,13 @@ export interface BattleState {
   a: BattleFighterState;
   b: BattleFighterState;
   weather?: WeatherKind;
+  /** 날씨가 사라지기까지 남은 턴 수. weather가 없으면 의미 없음 */
+  weatherTurnsRemaining?: number;
   field?: FieldKind;
   /** 필드가 사라지기까지 남은 턴 수. field가 없으면 의미 없음 */
   fieldTurnsRemaining?: number;
+  /** 트릭룸이 해제되기까지 남은 턴 수. 트릭룸이 안 걸려있으면 undefined */
+  trickRoomTurnsRemaining?: number;
   turnNumber: number;
   /** 배틀 시작 시점에 특성으로 날씨가 자동으로 바뀌었으면("○○의 잔비!") 그 안내 문구 */
   entryAnnouncements: string[];
@@ -193,6 +220,7 @@ export function createFighterState(slot: EvaluatorSlot, moves: Move[]): BattleFi
     status: { ...NO_STATUS_CONDITION },
     volatile: { active: { ...NO_VOLATILE_CONDITIONS.active } },
     remainingPp: Object.fromEntries(moves.map((m) => [m.id, m.pp])),
+    screens: {},
   };
 }
 
@@ -206,9 +234,25 @@ function roEuro(name: string): "로" | "으로" {
 }
 
 /**
+ * 이 날씨에 맞는 바위(뜨거운바위 등)를 지닌 쪽이 있으면 그 보너스 턴수를, 없으면 0을 반환한다.
+ * 양쪽 다 지닐 일은 없지만(도구는 하나씩) 방어적으로 둘 다 확인해서 더 큰 쪽을 쓴다.
+ */
+function weatherRockBonus(weather: WeatherKind, aSlot: EvaluatorSlot, bSlot: EvaluatorSlot): number {
+  const aItem = aSlot.item ? getItem(aSlot.item) : undefined;
+  const bItem = bSlot.item ? getItem(bSlot.item) : undefined;
+  const aBonus = aItem?.weatherDurationBonus?.weather === weather ? aItem.weatherDurationBonus.bonus : 0;
+  const bBonus = bItem?.weatherDurationBonus?.weather === weather ? bItem.weatherDurationBonus.bonus : 0;
+  return Math.max(aBonus, bBonus);
+}
+
+/**
  * 사용자가 날씨를 직접 고르지 않았을 때, 양쪽 특성(가뭄/잔비/모래날림 등 setsWeather)을 확인해서
  * 배틀 시작과 동시에 날씨를 자동으로 바꾼다. 양쪽 다 날씨 특성이면 실효 스피드가 빠른 쪽이 이긴다
  * (참고할 다른 기준이 없어 간이화한 규칙 — Phase 3 문서 "확인 필요" 항목).
+ *
+ * 챔피언스는 특성으로 걸리든 사용자가 수동으로 고르든 날씨에 5턴 카운트다운이 있다(사용자 확인 —
+ * 본가와 달리 날씨 특성이 무제한 지속이 아님). 그래서 여기서도 기술로 걸 때(resolveAction의
+ * Move.setsWeather 처리)와 똑같이 WEATHER_DURATION(+바위 보너스)을 turnsRemaining으로 채운다.
  */
 function resolveEntryWeather(
   aSlot: EvaluatorSlot,
@@ -216,13 +260,19 @@ function resolveEntryWeather(
   bSlot: EvaluatorSlot,
   bFighter: BattleFighterState,
   manualWeather: WeatherKind | undefined,
-): { weather: WeatherKind | undefined; announcements: string[] } {
-  if (manualWeather) return { weather: manualWeather, announcements: [] };
+): { weather: WeatherKind | undefined; weatherTurnsRemaining: number | undefined; announcements: string[] } {
+  if (manualWeather) {
+    return {
+      weather: manualWeather,
+      weatherTurnsRemaining: WEATHER_DURATION + weatherRockBonus(manualWeather, aSlot, bSlot),
+      announcements: [],
+    };
+  }
 
   const aAbility = aFighter.effectiveAbilityId ? getAbility(aFighter.effectiveAbilityId) : undefined;
   const bAbility = bFighter.effectiveAbilityId ? getAbility(bFighter.effectiveAbilityId) : undefined;
   if (!aAbility?.setsWeather && !bAbility?.setsWeather) {
-    return { weather: manualWeather, announcements: [] };
+    return { weather: manualWeather, weatherTurnsRemaining: undefined, announcements: [] };
   }
 
   const aWins =
@@ -234,6 +284,7 @@ function resolveEntryWeather(
 
   return {
     weather,
+    weatherTurnsRemaining: WEATHER_DURATION + weatherRockBonus(weather, aSlot, bSlot),
     announcements: [`${pokemonName}의 ${winnerAbility.name}! 날씨가 ${weather}${roEuro(weather)} 바뀌었다!`],
   };
 }
@@ -247,12 +298,17 @@ export function createBattleState(
 ): BattleState {
   const fighterA = createFighterState(a, aMoves);
   const fighterB = createFighterState(b, bMoves);
-  const { weather: resolvedWeather, announcements } = resolveEntryWeather(a, fighterA, b, fighterB, weather);
+  const {
+    weather: resolvedWeather,
+    weatherTurnsRemaining,
+    announcements,
+  } = resolveEntryWeather(a, fighterA, b, fighterB, weather);
 
   return {
     a: fighterA,
     b: fighterB,
     weather: resolvedWeather,
+    weatherTurnsRemaining,
     turnNumber: 0,
     entryAnnouncements: announcements,
   };
@@ -310,6 +366,16 @@ export interface ActionLogEntry {
   setField?: FieldKind;
   /** 필드 기술을 썼지만 이미 다른 필드가 깔려있어서 실패했으면 true */
   fieldSetFailed?: boolean;
+  /** 이 행동으로 트릭룸이 새로 걸렸으면 true */
+  setTrickRoom?: boolean;
+  /** 트릭룸을 썼지만 이미 걸려있어서 실패했으면 true */
+  trickRoomSetFailed?: boolean;
+  /** 이 행동으로 날씨가 바뀌었으면(비바라기 등) 그 날씨. 실패라는 개념이 없어 항상 성공 시 채워진다 */
+  setWeather?: WeatherKind;
+  /** 이 행동으로 리플렉터/빛의장막이 자신 쪽에 새로 걸렸으면 채워진다 */
+  setScreen?: "reflect" | "lightScreen";
+  /** 리플렉터/빛의장막을 썼지만 이미 같은 스크린이 걸려있어서 실패했으면 true */
+  screenSetFailed?: boolean;
   /**
    * 불꽃세례·웨이브태클·브레이브버드·양날박치기(Move.recoilFraction)로 입은 반동 데미지.
    * selfDamage(혼란 자멸/발버둥 반동)와는 계산 기준이 달라 별도 필드로 분리했다 — 준 데미지가
@@ -328,6 +394,36 @@ export interface ActionLogEntry {
   itemRecoilItemName?: string;
   /** 나무열매(카리열매 등)로 이번 피격 데미지가 반감됐으면 그 나무열매 이름 */
   berryReducedDamageItemName?: string;
+  /** 과사열매: 이번 행동으로 PP가 0이 된 기술의 PP를 복구했으면 그 도구 이름 */
+  leppaRestoredPpItemName?: string;
+  /** 흡수기(Move.drainFraction)로 회복한 양(큰뿌리 배율 반영 후) */
+  drainHealAmount?: number;
+  /** 조개껍질방울로 회복한 양 */
+  shellBellHealAmount?: number;
+  /** 즉시 회복형 변화기(광합성·달빛·날개쉬기·게으름피우기·치유파동)로 회복한 양 */
+  healedAmount?: number;
+  /** healedAmount가 누구에게 적용됐는지 */
+  healedTarget?: "self" | "opponent";
+  /** 잠자기로 실제로 잠들었으면 true (잠들자마자 상태이상 치료 나무열매로 즉시 깼으면 false) */
+  restSlept?: boolean;
+  /** 이 행동으로 뿌리박기/아쿠아링이 새로 걸렸으면 채워진다 */
+  setRegenVolatile?: "ingrain" | "aquaRing";
+  /** 뿌리박기/아쿠아링을 썼지만 이미 걸려있어서 실패했으면 true */
+  regenSetFailed?: boolean;
+  /** 이 행동으로 씨뿌리기가 상대에게 걸렸으면 true */
+  setLeechSeed?: boolean;
+  /** 씨뿌리기를 썼지만 상대가 이미 걸려있어서 실패했으면 true */
+  leechSeedSetFailed?: boolean;
+  /** 상태이상/혼란 즉시치료 나무열매(리샘·버치·유루·복슝·복분·배리·시몬)가 발동했으면 그 도구 이름 */
+  statusCureBerryItemName?: string;
+  /** 자뭉열매/오랭열매가 공격자에게 발동해 회복한 양 */
+  attackerBerryHealAmount?: number;
+  /** attackerBerryHealAmount를 준 도구 이름 */
+  attackerBerryHealItemName?: string;
+  /** 자뭉열매/오랭열매가 방어자에게 발동해 회복한 양 */
+  defenderBerryHealAmount?: number;
+  /** defenderBerryHealAmount를 준 도구 이름 */
+  defenderBerryHealItemName?: string;
 }
 
 /** 턴 종료 시 상태이상 데미지 로그 */
@@ -342,6 +438,24 @@ export interface EndOfTurnLogEntry {
   inflictedDelayedStatus?: StatusConditionState["condition"];
   /** damage가 상태이상 매턴 데미지일 때(독/맹독/화상) 어떤 상태이상인지 — UI가 문구를 골라 쓰는 데 필요 */
   statusCondition?: StatusConditionState["condition"];
+  /** 먹다남은음식으로 회복했으면 그 회복량 */
+  itemHeal?: number;
+  /** itemHeal을 준 도구 이름 */
+  itemHealItemName?: string;
+  /** 뿌리박기/아쿠아링으로 회복했으면 그 회복량(큰뿌리 배율 반영 후) */
+  regenHeal?: number;
+  /** regenHeal이 어느 지속 효과에서 왔는지 */
+  regenSource?: "ingrain" | "aquaRing";
+  /** 씨뿌리기로 이번 턴 잃은 HP(씨앗이 걸린 쪽의 로그) */
+  leechSeedDamage?: number;
+  /** 씨뿌리기로 상대에게서 흡수해 회복한 양(시드를 심은 쪽의 로그, 큰뿌리 배율 반영 후) */
+  leechSeedHealAmount?: number;
+  /** 희망사항이 발동해 회복한 양 */
+  wishHeal?: number;
+  /** 자뭉열매/오랭열매가 턴 종료 시점에 발동해 회복한 양 */
+  berryHeal?: number;
+  /** berryHeal을 준 도구 이름 */
+  berryHealItemName?: string;
 }
 
 export interface TurnResult {
@@ -361,6 +475,19 @@ export interface TurnResult {
   fieldTurnsRemaining?: number;
   /** 이번 턴에 필드가 5턴을 다 채우고 사라졌으면 true */
   fieldExpired?: boolean;
+  /** 이번 턴이 끝난 시점에 트릭룸이 걸려있으면, 앞으로 몇 턴 더 지속되는지 */
+  trickRoomTurnsRemaining?: number;
+  /** 이번 턴에 트릭룸이 5턴을 다 채우고 사라졌으면 true */
+  trickRoomExpired?: boolean;
+  /**
+   * 이번 턴이 끝난 시점에 날씨가 유한 지속시간으로 걸려있으면(기술로 걸었으면) 앞으로 몇 턴
+   * 더 지속되는지. 날씨가 아예 없으면(weather도 undefined) 이 값도 undefined.
+   */
+  weatherTurnsRemaining?: number;
+  /** 이번 턴에 날씨가 지속시간을 다 채우고 사라졌으면 true */
+  weatherExpired?: boolean;
+  /** 이번 턴에 사라진 스크린(리플렉터/빛의장막) 목록 — 양쪽에 동시에 걸려있을 수 있어 배열 */
+  expiredScreens: { actor: FighterKey; screen: "reflect" | "lightScreen" }[];
 }
 
 function isFainted(fighter: BattleFighterState): boolean {
@@ -375,6 +502,7 @@ function cloneFighter(fighter: BattleFighterState): BattleFighterState {
     status: { ...fighter.status },
     volatile: { active: { ...fighter.volatile.active } },
     remainingPp: { ...fighter.remainingPp },
+    screens: { ...fighter.screens },
   };
 }
 
@@ -388,6 +516,7 @@ function resolveAction(
   actorKey: FighterKey,
   move: Move,
   random: () => number,
+  movesSecond: boolean,
 ): ActionLogEntry {
   const defenderKey = opponentKey(actorKey);
   const attacker = state[actorKey];
@@ -404,8 +533,19 @@ function resolveAction(
   }
 
   // PP 소모는 행동 여부와 무관하게 발생(단, 차지 기술 2턴째는 위에서 이미 스킵 처리)
+  let leppaRestoredPpItemName: string | undefined;
   if (!releasingCharge && attacker.remainingPp[move.id] !== undefined) {
-    attacker.remainingPp[move.id] = Math.max(0, attacker.remainingPp[move.id] - 1);
+    const ppBefore = attacker.remainingPp[move.id];
+    attacker.remainingPp[move.id] = Math.max(0, ppBefore - 1);
+    // 과사열매: 이번 사용으로 PP가 정확히 0이 됐을 때(원래 0이던 걸 또 쓴 게 아니라)만 발동한다.
+    if (ppBefore > 0 && attacker.remainingPp[move.id] === 0 && !attacker.itemConsumed) {
+      const itemForPp = attacker.slot.item ? getItem(attacker.slot.item) : undefined;
+      if (itemForPp?.restoresPpOnZero) {
+        attacker.remainingPp[move.id] = Math.min(move.pp, itemForPp.restoresPpOnZero);
+        attacker.itemConsumed = true;
+        leppaRestoredPpItemName = itemForPp.name;
+      }
+    }
   }
 
   const blocked = (
@@ -426,6 +566,7 @@ function resolveAction(
     fainted: false,
     selfFainted: isFainted(attacker),
     recoilDamage: 0,
+    leppaRestoredPpItemName,
     ...extra,
   });
 
@@ -515,6 +656,7 @@ function resolveAction(
         selfFainted: false,
         recoilDamage: 0,
         charging: true,
+        leppaRestoredPpItemName,
       };
     }
   }
@@ -534,8 +676,9 @@ function resolveAction(
   attacker.lastMoveStreak = attacker.lastMoveId === effectiveMove.id ? (attacker.lastMoveStreak ?? 1) + 1 : 1;
   attacker.lastMoveId = effectiveMove.id;
 
-  // 반짝가루/모래숨기 같은 명중률 전용 특성·도구 배율은 아직 데이터 구조가 없어 1로 고정 (TODO: 데이터 보강)
-  const accuracyExtraMultiplier = 1;
+  // 반짝가루(방어측 0.9배)·광각렌즈(공격측 1.1배)·포커스렌즈(공격측, 늦게 움직일 때 1.2배).
+  // 모래숨기 같은 특성 쪽 배율은 아직 없음 (TODO: 특성 데이터 보강)
+  const accuracyExtraMultiplier = getItemAccuracyMultiplier(attackerItem, defenderItem, movesSecond);
   const hitChance = computeHitChance(
     effectiveMove.accuracy,
     attacker.accuracyStages.accuracy,
@@ -570,6 +713,7 @@ function resolveAction(
       selfFainted: isFainted(attacker),
       recoilDamage: 0,
       evadedByCharge,
+      leppaRestoredPpItemName,
     };
   }
 
@@ -630,6 +774,11 @@ function resolveAction(
       berryReducedDamageItemName = defenderItem?.name;
     }
 
+    // 리플렉터(물리)/빛의장막(특수): 방어측 자기 스크린이 걸려있으면 데미지 반감. 급소는
+    // 스크린을 무시한다(본가 규칙) — bulkMultiplier는 나눗셈이라 2를 곱하면 절반이 된다.
+    const screenType = effectiveMove.category === "physical" ? "reflect" : "lightScreen";
+    const screenMultiplier = !critical && defender.screens[screenType] !== undefined ? 2 : 1;
+
     const result = computeDamage(attacker.realStats, defender.realStats, attacker.types, hitMove, {
       typeEffectiveness,
       abilityMultiplier: abilityOffenseMultiplier * statusAttackMultiplier * hidingBypassMultiplier,
@@ -639,7 +788,7 @@ function resolveAction(
       stabMultiplier,
       attackerStages: attacker.stages,
       defenderStages: defender.stages,
-      bulkMultiplier: abilityDefenseMultiplier * berryResult.bulkMultiplier,
+      bulkMultiplier: abilityDefenseMultiplier * berryResult.bulkMultiplier * screenMultiplier,
       isCritical: critical,
       randomRoll: MIN_DAMAGE_ROLL + random() * (1 - MIN_DAMAGE_ROLL),
     });
@@ -715,6 +864,23 @@ function resolveAction(
     itemRecoilItemName = attackerItem.name;
   }
 
+  // 흡수기(기가드레인·드레인펀치·드레인키스·원념의칼): 준 데미지의 일정 비율만큼 회복.
+  // 큰뿌리를 지녔으면 회복량이 1.3배. recoil의 정반대 축이라 recoilDamage와 별도로 관리한다.
+  let drainHealAmount = 0;
+  if (isDamaging && damage > 0 && effectiveMove.drainFraction !== undefined) {
+    drainHealAmount = Math.floor(
+      damage * effectiveMove.drainFraction * getDrainHealMultiplier(attackerItem),
+    );
+    attacker.currentHp = Math.min(attacker.maxHp, attacker.currentHp + drainHealAmount);
+  }
+
+  // 조개껍질방울: 준 데미지의 1/8만큼 회복. 흡수기와는 별개 축이라 같은 행동에서 동시에 발동할 수 있다.
+  let shellBellHealAmount = 0;
+  if (isDamaging && damage > 0 && attackerItem?.damageDealtHealDenominator) {
+    shellBellHealAmount = Math.floor(damage / attackerItem.damageDealtHealDenominator);
+    attacker.currentHp = Math.min(attacker.maxHp, attacker.currentHp + shellBellHealAmount);
+  }
+
   // 자폭류(대폭발 등): 명중했으면 반드시 데미지를 먼저 입힌 "다음" 사용자가 기절한다.
   // 순서가 중요하다 — 이 데미지로 상대가 이미 쓰러졌다면, 실제 게임처럼 "상대를 먼저 쓰러뜨린 뒤
   // 반동으로 자신도 쓰러진 것"으로 취급되어야 승자 판정(runTurn)이 이 행동의 주체를 승자로 잡는다.
@@ -757,6 +923,23 @@ function resolveAction(
     }
   }
 
+  // 상태이상 치료 관련 상태(물거품아리아 등 치료 기술, 불꽃 피격 해동, 잠듦/얼음 자연 해제,
+  // 잠자기, 상태이상 즉시치료 나무열매)를 전부 여기 한 변수에 모은다 — 아래에서 순서대로 채워진다.
+  let curedStatus: StatusConditionState["condition"] | undefined;
+  let curedStatusTarget: "self" | "opponent" | undefined;
+
+  // 상태이상 즉시치료 나무열매(리샘·버치·유루·복슝·복분·배리): 걸리는 "그 순간" 치료하고 소모된다.
+  // itemConsumed는 나무열매 18종(타입내성)과 같은 축을 공유하므로(도구 1개=1회용), 이미 다른
+  // 나무열매 효과가 이번 배틀에서 소모됐으면 발동하지 않는다.
+  let statusCureBerryItemName: string | undefined;
+  if (inflictedStatus && getStatusCureBerryResult(defenderItem, inflictedStatus, defender.itemConsumed ?? false)) {
+    defender.status = { ...NO_STATUS_CONDITION };
+    defender.itemConsumed = true;
+    statusCureBerryItemName = defenderItem!.name;
+    curedStatus = inflictedStatus;
+    curedStatusTarget = "opponent";
+  }
+
   let inflictedVolatile: VolatileCondition | undefined;
   if (effectiveMove.inflictsVolatile) {
     for (const effect of effectiveMove.inflictsVolatile) {
@@ -767,6 +950,8 @@ function resolveAction(
       if (effect.volatile === "drowsy" && (target.status.condition || hasVolatile(target.volatile, "drowsy"))) {
         continue;
       }
+      // 희망사항: 이미 예약돼 있으면 재사용 실패(본가 규칙 — 필드/트릭룸과 같은 패턴)
+      if (effect.volatile === "wish" && hasVolatile(target.volatile, "wish")) continue;
       const chance = effect.chance !== undefined ? effect.chance / 100 : 1;
       if (random() >= chance) continue;
       if (effect.target === "self") {
@@ -775,13 +960,23 @@ function resolveAction(
         defender.volatile = inflictVolatile(defender.volatile, effect.volatile, random);
       }
       inflictedVolatile = effect.volatile;
+
+      // 시몬열매: 혼란에 걸리는 순간 치료하고 소모된다
+      if (effect.volatile === "confusion") {
+        const targetItem = effect.target === "self" ? attackerItem : defenderItem;
+        if (getConfusionCureBerryResult(targetItem, target.itemConsumed ?? false)) {
+          target.volatile = { active: { ...target.volatile.active } };
+          delete target.volatile.active.confusion;
+          target.itemConsumed = true;
+          statusCureBerryItemName = targetItem!.name;
+          inflictedVolatile = undefined;
+        }
+      }
     }
   }
 
   // 상태이상 치료: 물거품아리아처럼 명중 시 대상의 주 상태이상을 없앤다(inflictsStatus의 반대 방향).
   // status가 지정돼 있으면(물거품아리아=화상) 그 상태일 때만 치료 — 다른 상태이상은 안 지운다.
-  let curedStatus: StatusConditionState["condition"] | undefined;
-  let curedStatusTarget: "self" | "opponent" | undefined;
   if (effectiveMove.curesStatus) {
     const { target: cureTarget, status: cureStatus } = effectiveMove.curesStatus;
     const target = cureTarget === "self" ? attacker : defender;
@@ -813,6 +1008,68 @@ function resolveAction(
     curedStatusTarget = "self";
   }
 
+  // 잠자기: 명중(항상 필중)하면 기존 상태이상이 뭐든 지우고 체력을 완전히 회복한 뒤 정확히 2턴간
+  // 무조건 재운다 — curesStatus/inflictsStatus의 일반 규칙(이미 상태이상이 있으면 못 걺)과는
+  // 다른 별도 경로라 여기서 직접 덮어쓴다. curedStatus 로그는 재우기 전 상태이상이 있었을 때만 채운다.
+  let restSlept = false;
+  if (effectiveMove.restSleep) {
+    if (attacker.status.condition) {
+      curedStatus = attacker.status.condition;
+      curedStatusTarget = "self";
+    }
+    attacker.currentHp = attacker.maxHp;
+    attacker.status = inflictRestSleep();
+    restSlept = true;
+
+    // 리샘열매/유루열매 등을 지닌 채로 잠자기를 쓰면, 회복은 이미 끝난 채로 그 즉시 잠듦만
+    // 치료된다(본가 실제 상호작용 — 잠자기 자체가 낭비되지만 회복은 유효하다).
+    if (getStatusCureBerryResult(attackerItem, "sleep", attacker.itemConsumed ?? false)) {
+      attacker.status = { ...NO_STATUS_CONDITION };
+      attacker.itemConsumed = true;
+      statusCureBerryItemName = attackerItem!.name;
+      curedStatus = "sleep";
+      curedStatusTarget = "self";
+      restSlept = false;
+    }
+  }
+
+  // 즉시 회복형 변화기: 광합성/달빛(날씨 의존)·날개쉬기/게으름피우기(고정 50%)·치유파동(상대 50%).
+  // 잠자기는 위에서 이미 별도 처리했으니 여기선 건드리지 않는다.
+  let healedAmount = 0;
+  let healedTarget: "self" | "opponent" | undefined;
+  if (!effectiveMove.restSleep && (effectiveMove.healsFraction !== undefined || effectiveMove.healsWeatherDependent)) {
+    healedTarget = effectiveMove.healsTarget ?? "self";
+    const healTarget = healedTarget === "self" ? attacker : defender;
+    const fraction = effectiveMove.healsWeatherDependent
+      ? computeWeatherHealFraction(state.weather)
+      : effectiveMove.healsFraction!;
+    healedAmount = Math.min(
+      healTarget.maxHp - healTarget.currentHp,
+      Math.floor(healTarget.maxHp * fraction),
+    );
+    healTarget.currentHp += healedAmount;
+  }
+
+  // 뿌리박기/아쿠아링: 이미 걸려있으면 재사용 실패(지속 효과 중복 방지, 필드/트릭룸과 같은 패턴).
+  let regenSetFailed = false;
+  if (effectiveMove.setsRegenVolatile) {
+    if (hasVolatile(attacker.volatile, effectiveMove.setsRegenVolatile)) {
+      regenSetFailed = true;
+    } else {
+      attacker.volatile = inflictVolatile(attacker.volatile, effectiveMove.setsRegenVolatile, random);
+    }
+  }
+
+  // 씨뿌리기: 상대가 이미 씨앗이 박혀있으면 실패.
+  let leechSeedSetFailed = false;
+  if (effectiveMove.setsLeechSeed) {
+    if (hasVolatile(defender.volatile, "leechSeed")) {
+      leechSeedSetFailed = true;
+    } else {
+      defender.volatile = inflictVolatile(defender.volatile, "leechSeed", random);
+    }
+  }
+
   // 필드 설치: 이미 다른(또는 같은) 필드가 깔려있으면 실패한다 — 필드를 쓸 때마다 지속 턴수가
   // 갱신되던 버그 수정. 기존 필드가 다 사라지기 전까지는 필드 기술 자체가 실패해야 한다.
   let fieldSetFailed = false;
@@ -822,6 +1079,75 @@ function resolveAction(
     } else {
       state.field = effectiveMove.setsField;
       state.fieldTurnsRemaining = FIELD_DURATION;
+    }
+  }
+
+  // 트릭룸도 필드와 같은 이유로 이미 걸려있으면 재사용 시 실패 처리한다(지속 턴수 갱신 방지) —
+  // 다만 아직 아무 효과도 안 걸린 채로 게임이 끝나는 극단적 경우는 없으니 별 문제 없음.
+  let trickRoomSetFailed = false;
+  if (effectiveMove.setsTrickRoom) {
+    if (state.trickRoomTurnsRemaining !== undefined) {
+      trickRoomSetFailed = true;
+    } else {
+      state.trickRoomTurnsRemaining = TRICK_ROOM_DURATION;
+    }
+  }
+
+  // 날씨 변화 기술(비바라기 등): 필드/트릭룸과 달리 이미 다른(또는 같은) 날씨가 있어도 실패하지
+  // 않고 항상 덮어쓴다 — 실패라는 개념 자체가 없다(본가 규칙). 지속시간은 특성/수동 선택으로
+  // 걸렸을 때와 마찬가지로 WEATHER_DURATION(+바위 보너스)으로 다시 채워진다(카운트다운 초기화).
+  if (effectiveMove.setsWeather) {
+    state.weather = effectiveMove.setsWeather;
+    const rockBonus =
+      attackerItem?.weatherDurationBonus?.weather === effectiveMove.setsWeather
+        ? attackerItem.weatherDurationBonus.bonus
+        : 0;
+    state.weatherTurnsRemaining = WEATHER_DURATION + rockBonus;
+  }
+
+  // 리플렉터/빛의장막: 자신 쪽에 이미 같은 스크린이 걸려있으면 실패(필드/트릭룸과 같은 패턴).
+  // 빛의점토를 지녔으면 지속시간이 늘어난다.
+  let screenSetFailed = false;
+  if (effectiveMove.setsScreen) {
+    if (attacker.screens[effectiveMove.setsScreen] !== undefined) {
+      screenSetFailed = true;
+    } else {
+      const screenBonus = attackerItem?.screenDurationBonus ?? 0;
+      attacker.screens = { ...attacker.screens, [effectiveMove.setsScreen]: SCREEN_DURATION + screenBonus };
+    }
+  }
+
+  // 자뭉열매/오랭열매: 이번 행동으로 생긴 모든 HP 변화(피격/반동/회복 등)가 끝난 뒤, 체력이 최대
+  // HP 1/2 이하인 쪽(공격자든 방어자든)이 있으면 자동 발동한다. attacker를 먼저 확인하는 순서는
+  // 임의지만, 도구는 각자 한 개씩만 지니므로 서로 간섭하지 않는다.
+  let attackerBerryHealAmount = 0;
+  let attackerBerryHealItemName: string | undefined;
+  if (!isFainted(attacker)) {
+    attackerBerryHealAmount = getHpThresholdBerryHeal(
+      attackerItem,
+      attacker.currentHp,
+      attacker.maxHp,
+      attacker.itemConsumed ?? false,
+    );
+    if (attackerBerryHealAmount > 0) {
+      attacker.currentHp = Math.min(attacker.maxHp, attacker.currentHp + attackerBerryHealAmount);
+      attacker.itemConsumed = true;
+      attackerBerryHealItemName = attackerItem!.name;
+    }
+  }
+  let defenderBerryHealAmount = 0;
+  let defenderBerryHealItemName: string | undefined;
+  if (!isFainted(defender)) {
+    defenderBerryHealAmount = getHpThresholdBerryHeal(
+      defenderItem,
+      defender.currentHp,
+      defender.maxHp,
+      defender.itemConsumed ?? false,
+    );
+    if (defenderBerryHealAmount > 0) {
+      defender.currentHp = Math.min(defender.maxHp, defender.currentHp + defenderBerryHealAmount);
+      defender.itemConsumed = true;
+      defenderBerryHealItemName = defenderItem!.name;
     }
   }
 
@@ -841,6 +1167,11 @@ function resolveAction(
     curedStatusTarget,
     setField: fieldSetFailed ? undefined : effectiveMove.setsField,
     fieldSetFailed,
+    setTrickRoom: trickRoomSetFailed ? undefined : effectiveMove.setsTrickRoom,
+    trickRoomSetFailed,
+    setWeather: effectiveMove.setsWeather,
+    setScreen: screenSetFailed ? undefined : effectiveMove.setsScreen,
+    screenSetFailed,
     fainted: isFainted(defender),
     selfFainted: isFainted(attacker),
     recoilDamage,
@@ -848,6 +1179,21 @@ function resolveAction(
     itemRecoilDamage: itemRecoilDamage || undefined,
     itemRecoilItemName,
     berryReducedDamageItemName,
+    leppaRestoredPpItemName,
+    drainHealAmount: drainHealAmount || undefined,
+    shellBellHealAmount: shellBellHealAmount || undefined,
+    healedAmount: healedAmount || undefined,
+    healedTarget,
+    restSlept,
+    setRegenVolatile: regenSetFailed ? undefined : effectiveMove.setsRegenVolatile,
+    regenSetFailed,
+    setLeechSeed: leechSeedSetFailed ? undefined : effectiveMove.setsLeechSeed,
+    leechSeedSetFailed,
+    statusCureBerryItemName,
+    attackerBerryHealAmount: attackerBerryHealAmount || undefined,
+    attackerBerryHealItemName,
+    defenderBerryHealAmount: defenderBerryHealAmount || undefined,
+    defenderBerryHealItemName,
   };
 }
 
@@ -873,8 +1219,10 @@ export function runTurn(
     a: cloneFighter(prevState.a),
     b: cloneFighter(prevState.b),
     weather: prevState.weather,
+    weatherTurnsRemaining: prevState.weatherTurnsRemaining,
     field: prevState.field,
     fieldTurnsRemaining: prevState.fieldTurnsRemaining,
+    trickRoomTurnsRemaining: prevState.trickRoomTurnsRemaining,
     turnNumber: prevState.turnNumber + 1,
     entryAnnouncements: prevState.entryAnnouncements,
   };
@@ -882,11 +1230,16 @@ export function runTurn(
   const speedA = state.a.realStats.spe * computeStatusSpeedMultiplier(state.a.status.condition);
   const speedB = state.b.realStats.spe * computeStatusSpeedMultiplier(state.b.status.condition);
 
+  // 트릭룸 판정은 이번 턴이 시작된 시점(=아직 이번 턴 행동을 하나도 반영하지 않은 상태)의 값을
+  // 쓴다 — 이번 턴에 트릭룸을 새로 걸어도 그 즉시 같은 턴의 순서 계산에는 영향을 주지 않는다
+  // (본가 규칙: 순서는 행동 전에 이미 정해짐).
+  const trickRoomActive = state.trickRoomTurnsRemaining !== undefined;
   const firstIsA =
     compareTurnOrder(
       { realSpeed: speedA, move: moveA, stages: state.a.stages },
       { realSpeed: speedB, move: moveB, stages: state.b.stages },
       random,
+      trickRoomActive,
     ) === 0;
 
   const order: [FighterKey, FighterKey] = firstIsA ? ["a", "b"] : ["b", "a"];
@@ -898,7 +1251,9 @@ export function runTurn(
   for (const key of order) {
     if (isFainted(state[key])) continue; // 이미 쓰러진 쪽은 행동 못 함
     if (isFainted(state[opponentKey(key)])) break; // 상대가 이미 쓰러졌으면 더 진행할 필요 없음
-    const action = resolveAction(state, key, moves[key], random);
+    // 포커스렌즈 판정용 — 이번 턴 order 기준으로 상대보다 늦게 움직이는 쪽인지
+    const movesSecond = order[1] === key;
+    const action = resolveAction(state, key, moves[key], random, movesSecond);
     actions.push(action);
 
     // 발버둥 반동이나 자폭류로 "상대를 쓰러뜨리면서 자신도 같이 쓰러지는" 행동 하나 안에서는
@@ -926,6 +1281,90 @@ export function runTurn(
         endOfTurn.push({ actor: key, damage: 0, remainingHp: fighter.currentHp, fainted: false, fieldHeal });
       }
 
+      const fighterItem = fighter.slot.item ? getItem(fighter.slot.item) : undefined;
+
+      // 먹다남은음식: 턴 종료 시 항상(생존해 있으면) 최대 HP의 1/6 회복
+      if (fighterItem?.endOfTurnHealDenominator) {
+        const itemHeal = Math.min(
+          fighter.maxHp - fighter.currentHp,
+          Math.floor(fighter.maxHp / fighterItem.endOfTurnHealDenominator),
+        );
+        if (itemHeal > 0) {
+          fighter.currentHp += itemHeal;
+          endOfTurn.push({
+            actor: key,
+            damage: 0,
+            remainingHp: fighter.currentHp,
+            fainted: false,
+            itemHeal,
+            itemHealItemName: fighterItem.name,
+          });
+        }
+      }
+
+      // 뿌리박기/아쿠아링: 걸려있는 동안 매 턴 종료 시 최대 HP 1/16 회복(큰뿌리 소지 시 1.3배)
+      const regenSource = hasVolatile(fighter.volatile, "ingrain")
+        ? "ingrain"
+        : hasVolatile(fighter.volatile, "aquaRing")
+          ? "aquaRing"
+          : undefined;
+      if (regenSource) {
+        const regenHeal = Math.min(
+          fighter.maxHp - fighter.currentHp,
+          Math.floor((fighter.maxHp / 16) * getDrainHealMultiplier(fighterItem)),
+        );
+        if (regenHeal > 0) {
+          fighter.currentHp += regenHeal;
+          endOfTurn.push({ actor: key, damage: 0, remainingHp: fighter.currentHp, fainted: false, regenHeal, regenSource });
+        }
+      }
+
+      // 씨뿌리기: 걸린 쪽은 매 턴 종료 시 최대 HP 1/8을 잃고, 상대가 그만큼(+상대의 큰뿌리 배율)
+      // 회복한다. 상대가 이미 기절해 있으면(동시에 둘 다 씨앗이 걸린 극단적 경우 등) 회복은 스킵.
+      if (hasVolatile(fighter.volatile, "leechSeed")) {
+        const seedDamage = Math.min(fighter.currentHp, Math.floor(fighter.maxHp / 8));
+        fighter.currentHp -= seedDamage;
+        endOfTurn.push({
+          actor: key,
+          damage: 0,
+          remainingHp: fighter.currentHp,
+          fainted: isFainted(fighter),
+          leechSeedDamage: seedDamage,
+        });
+        const healer = state[opponentKey(key)];
+        if (seedDamage > 0 && !isFainted(healer)) {
+          const healerItem = healer.slot.item ? getItem(healer.slot.item) : undefined;
+          const leechSeedHealAmount = Math.min(
+            healer.maxHp - healer.currentHp,
+            Math.floor(seedDamage * getDrainHealMultiplier(healerItem)),
+          );
+          if (leechSeedHealAmount > 0) {
+            healer.currentHp += leechSeedHealAmount;
+            endOfTurn.push({
+              actor: opponentKey(key),
+              damage: 0,
+              remainingHp: healer.currentHp,
+              fainted: false,
+              leechSeedHealAmount,
+            });
+          }
+        }
+      }
+
+      // 희망사항: drowsy와 같은 2턴 카운터 패턴 — 쓴 다음 턴 종료에 최대 HP 절반을 회복한다.
+      const wishEntry = fighter.volatile.active.wish;
+      if (wishEntry) {
+        const triggersNow = wishEntry.turnsRemaining <= 1;
+        fighter.volatile = consumeVolatileTurn(fighter.volatile, "wish");
+        if (triggersNow && !isFainted(fighter)) {
+          const wishHeal = Math.min(fighter.maxHp - fighter.currentHp, Math.floor(fighter.maxHp * 0.5));
+          if (wishHeal > 0) {
+            fighter.currentHp += wishHeal;
+            endOfTurn.push({ actor: key, damage: 0, remainingHp: fighter.currentHp, fainted: false, wishHeal });
+          }
+        }
+      }
+
       // 하품(졸음): 2턴 카운터가 1(=이번이 마지막 소모)이면 이번 턴 종료에 실제로 잠듦을 시도한다.
       // 그 사이 다른 상태이상이 걸렸거나 타입/필드로 잠듦 면역이 생겼으면 조용히 무산된다(본가 규칙).
       const drowsyEntry = fighter.volatile.active.drowsy;
@@ -949,21 +1388,41 @@ export function runTurn(
         }
       }
 
-      if (!fighter.status.condition) continue;
-      const statusCondition = fighter.status.condition;
-      const damage = computeStatusEndOfTurnDamage(fighter.status, fighter.maxHp);
-      fighter.currentHp = Math.max(0, fighter.currentHp - damage);
-      fighter.status = advanceStatusTurn(fighter.status);
-      // 잠듦/얼음/마비는 매턴 데미지가 없다(항상 0) — "상태이상 데미지 0"만 찍는 무의미한 줄을
-      // 막기 위해 실제로 데미지가 있을 때만 로그에 남긴다.
-      if (damage > 0) {
-        endOfTurn.push({
-          actor: key,
-          damage,
-          remainingHp: fighter.currentHp,
-          fainted: isFainted(fighter),
-          statusCondition,
-        });
+      if (fighter.status.condition) {
+        const statusCondition = fighter.status.condition;
+        const damage = computeStatusEndOfTurnDamage(fighter.status, fighter.maxHp);
+        fighter.currentHp = Math.max(0, fighter.currentHp - damage);
+        fighter.status = advanceStatusTurn(fighter.status);
+        // 잠듦/얼음/마비는 매턴 데미지가 없다(항상 0) — "상태이상 데미지 0"만 찍는 무의미한 줄을
+        // 막기 위해 실제로 데미지가 있을 때만 로그에 남긴다.
+        if (damage > 0) {
+          endOfTurn.push({
+            actor: key,
+            damage,
+            remainingHp: fighter.currentHp,
+            fainted: isFainted(fighter),
+            statusCondition,
+          });
+        }
+      }
+
+      // 자뭉열매/오랭열매: 턴 종료 시점까지의 모든 HP 변화(필드 회복/먹다남은음식/씨뿌리기/상태이상
+      // 데미지 등)가 끝난 뒤에도 다시 한번 확인한다 — 액션 중엔 안 걸렸다가 턴 종료 데미지로
+      // 뒤늦게 1/2 이하가 되는 경우를 놓치지 않기 위해서다.
+      if (!isFainted(fighter)) {
+        const berryHeal = getHpThresholdBerryHeal(fighterItem, fighter.currentHp, fighter.maxHp, fighter.itemConsumed ?? false);
+        if (berryHeal > 0) {
+          fighter.currentHp = Math.min(fighter.maxHp, fighter.currentHp + berryHeal);
+          fighter.itemConsumed = true;
+          endOfTurn.push({
+            actor: key,
+            damage: 0,
+            remainingHp: fighter.currentHp,
+            fainted: false,
+            berryHeal,
+            berryHealItemName: fighterItem!.name,
+          });
+        }
       }
     }
   }
@@ -987,6 +1446,45 @@ export function runTurn(
     }
   }
 
+  // 트릭룸도 같은 방식으로 카운트다운한다.
+  let trickRoomExpired = false;
+  if (state.trickRoomTurnsRemaining !== undefined) {
+    state.trickRoomTurnsRemaining -= 1;
+    if (state.trickRoomTurnsRemaining <= 0) {
+      state.trickRoomTurnsRemaining = undefined;
+      trickRoomExpired = true;
+    }
+  }
+
+  // 날씨도 같은 방식으로 카운트다운한다. weatherTurnsRemaining은 날씨가 아예 없을 때만
+  // undefined이고, 특성/수동/기술 어느 경로로 걸렸든 항상 유한 턴수를 갖는다(챔피언스 규칙).
+  let weatherExpired = false;
+  if (state.weatherTurnsRemaining !== undefined) {
+    state.weatherTurnsRemaining -= 1;
+    if (state.weatherTurnsRemaining <= 0) {
+      state.weather = undefined;
+      state.weatherTurnsRemaining = undefined;
+      weatherExpired = true;
+    }
+  }
+
+  // 리플렉터/빛의장막은 필드/날씨와 달리 "양쪽 다 따로" 걸릴 수 있어 각자 카운트다운한다.
+  const expiredScreens: { actor: FighterKey; screen: "reflect" | "lightScreen" }[] = [];
+  for (const key of (["a", "b"] as const)) {
+    const fighter = state[key];
+    for (const screenType of ["reflect", "lightScreen"] as const) {
+      const remaining = fighter.screens[screenType];
+      if (remaining === undefined) continue;
+      const next = remaining - 1;
+      if (next <= 0) {
+        fighter.screens = { ...fighter.screens, [screenType]: undefined };
+        expiredScreens.push({ actor: key, screen: screenType });
+      } else {
+        fighter.screens = { ...fighter.screens, [screenType]: next };
+      }
+    }
+  }
+
   return {
     nextState: state,
     result: {
@@ -998,6 +1496,11 @@ export function runTurn(
       field: state.field,
       fieldTurnsRemaining: state.fieldTurnsRemaining,
       fieldExpired,
+      trickRoomTurnsRemaining: state.trickRoomTurnsRemaining,
+      trickRoomExpired,
+      weatherTurnsRemaining: state.weatherTurnsRemaining,
+      weatherExpired,
+      expiredScreens,
     },
   };
 }

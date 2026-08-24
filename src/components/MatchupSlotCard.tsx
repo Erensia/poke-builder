@@ -1,6 +1,6 @@
 import type { MatchupSlot } from "../types/matchup";
 import { getPokemon, getMove, getAbility, getItem, getNature } from "../lib/data";
-import { getEffectiveForm, megaBadgeLabel } from "../lib/pokemonForm";
+import { getEffectiveForm, getEffectiveAbilityId, megaBadgeLabel } from "../lib/pokemonForm";
 import { computeRealStats } from "../lib/statCalculator";
 import { totalAbilityPoints } from "../lib/statCalculator";
 import { TypeBadge } from "./TypeBadge";
@@ -108,7 +108,10 @@ export function MatchupSlotCard({
         <button type="button" className="matchup-meta-pip" onClick={onPickAbility}>
           <span className="matchup-meta-label">특성</span>
           <span className="matchup-meta-value">
-            {slot.ability ? getAbility(slot.ability)?.name : "미지정"}
+            {(() => {
+              const effectiveAbilityId = getEffectiveAbilityId(form, slot.ability);
+              return effectiveAbilityId ? getAbility(effectiveAbilityId)?.name : "미지정";
+            })()}
           </span>
         </button>
         <button type="button" className="matchup-meta-pip" onClick={onPickItem}>

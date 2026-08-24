@@ -62,3 +62,18 @@
   text-align: right;
   white-space: nowrap;
 }
+
+.move-picker-locked-notice {
+  margin: 0;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.move-picker-locked-notice strong {
+  color: var(--text);
+}

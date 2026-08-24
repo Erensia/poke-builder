@@ -46,7 +46,21 @@ const STATUS_LABELS: Record<StatusCondition, string> = {
   sleep: "잠듦",
 };
 
-const VOLATILE_LABELS = { flinch: "풀죽음", recharge: "반동", confusion: "혼란", drowsy: "졸음" } as const;
+const VOLATILE_LABELS = {
+  flinch: "풀죽음",
+  recharge: "반동",
+  confusion: "혼란",
+  drowsy: "졸음",
+  wish: "희망사항",
+  ingrain: "뿌리박기",
+  aquaRing: "아쿠아링",
+  leechSeed: "씨앗",
+} as const;
+
+/** 액션 로그 한 줄 안에 "OO 발동!"으로 뭉뚱그리기보다 전용 문구를 따로 쓰는 volatile들 */
+const VOLATILES_WITH_DEDICATED_LOG_LINE = new Set(["drowsy", "wish"]);
+
+const SCREEN_LABELS = { reflect: "리플렉터", lightScreen: "빛의장막" } as const;
 
 /**
  * 날씨/필드가 적용 중인지 배경색으로 알 수 있게 해달라는 요청 반영 — 날씨는 강화하는 타입 색(비=물,
@@ -234,12 +248,21 @@ export function BattleLogPage() {
       {battleState && (
         <>
           <div className="battle-board" style={{ background: battleBoardBackground(battleState) }}>
-            {(battleState.weather || battleState.field) && (
+            {(battleState.weather || battleState.field || battleState.trickRoomTurnsRemaining !== undefined) && (
               <div className="battle-environment-tags">
-                {battleState.weather && <span className="battle-environment-tag">날씨: {battleState.weather}</span>}
+                {battleState.weather && (
+                  <span className="battle-environment-tag">
+                    날씨: {battleState.weather} (앞으로 {battleState.weatherTurnsRemaining}턴)
+                  </span>
+                )}
                 {battleState.field && (
                   <span className="battle-environment-tag">
                     필드: {battleState.field} (앞으로 {battleState.fieldTurnsRemaining}턴)
+                  </span>
+                )}
+                {battleState.trickRoomTurnsRemaining !== undefined && (
+                  <span className="battle-environment-tag">
+                    트릭룸 (앞으로 {battleState.trickRoomTurnsRemaining}턴)
                   </span>
                 )}
               </div>
@@ -277,6 +300,13 @@ export function BattleLogPage() {
                           {VOLATILE_LABELS[v]}
                         </span>
                       ))}
+                      {(Object.keys(fighter.screens) as ("reflect" | "lightScreen")[])
+                        .filter((s) => fighter.screens[s] !== undefined)
+                        .map((s) => (
+                          <span key={s} className="battle-status-tag is-volatile">
+                            {SCREEN_LABELS[s]} {fighter.screens[s]}턴
+                          </span>
+                        ))}
                     </div>
                   </div>
                   <div className="battle-hp-bar">
@@ -421,14 +451,63 @@ export function BattleLogPage() {
                             )}
                           </>
                         )}
-                        {!action.blockedReason && action.hit && action.inflictedVolatile && action.inflictedVolatile !== "drowsy" && (
-                          <> · {VOLATILE_LABELS[action.inflictedVolatile]}!</>
+                        {!action.blockedReason &&
+                          action.hit &&
+                          action.inflictedVolatile &&
+                          !VOLATILES_WITH_DEDICATED_LOG_LINE.has(action.inflictedVolatile) && (
+                            <> · {VOLATILE_LABELS[action.inflictedVolatile]}!</>
+                          )}
+                        {!action.blockedReason && action.hit && action.inflictedVolatile === "wish" && (
+                          <> · 희망사항 발동 준비!</>
                         )}
                         {!action.blockedReason && action.hit && action.setField && (
                           <> · {action.setField} 설치!</>
                         )}
                         {!action.blockedReason && action.hit && action.fieldSetFailed && (
                           <> · 이미 필드가 있어 실패!</>
+                        )}
+                        {!action.blockedReason && action.hit && action.setTrickRoom && (
+                          <> · 트릭룸 발동!</>
+                        )}
+                        {!action.blockedReason && action.hit && action.trickRoomSetFailed && (
+                          <> · 이미 트릭룸이 있어 실패!</>
+                        )}
+                        {!action.blockedReason && action.hit && action.setWeather && (
+                          <>
+                            {" "}
+                            · 날씨가 {action.setWeather}
+                            {roEuro(action.setWeather)} 바뀌었다!
+                          </>
+                        )}
+                        {!action.blockedReason && action.hit && action.setScreen && (
+                          <> · {SCREEN_LABELS[action.setScreen]} 설치!</>
+                        )}
+                        {!action.blockedReason && action.hit && action.screenSetFailed && (
+                          <> · 이미 {SCREEN_LABELS[action.move.setsScreen!]}이(가) 있어 실패!</>
+                        )}
+                        {!action.blockedReason && action.hit && !!action.healedAmount && (
+                          <>
+                            {" "}
+                            · {action.healedTarget === "opponent" ? defenderName : actorName}
+                            {roEuro(action.healedTarget === "opponent" ? defenderName : actorName)} 체력을{" "}
+                            {action.healedAmount} 회복했다!
+                          </>
+                        )}
+                        {!action.blockedReason && action.hit && action.restSlept && <> · 잠들었다!</>}
+                        {!action.blockedReason && action.hit && !!action.drainHealAmount && (
+                          <> · 체력을 {action.drainHealAmount} 흡수했다!</>
+                        )}
+                        {!action.blockedReason && action.hit && action.setRegenVolatile && (
+                          <> · {VOLATILE_LABELS[action.setRegenVolatile]} 발동!</>
+                        )}
+                        {!action.blockedReason && action.hit && action.regenSetFailed && (
+                          <> · 이미 걸려있어 실패!</>
+                        )}
+                        {!action.blockedReason && action.hit && action.setLeechSeed && (
+                          <> · 씨앗을 심었다!</>
+                        )}
+                        {!action.blockedReason && action.hit && action.leechSeedSetFailed && (
+                          <> · 이미 씨앗이 심어져 있어 실패!</>
                         )}
                       </div>
                       {/* 마비/잠듦/얼음으로 이번 턴 행동이 막혔으면(단순 "상태이상으로 행동 불가"가
@@ -493,6 +572,38 @@ export function BattleLogPage() {
                           {roEuro(action.berryReducedDamageItemName)} 데미지가 절반으로 줄었다!
                         </div>
                       )}
+                      {/* 조개껍질방울 — 흡수기(drainHealAmount)와 별개 축이라 따로 표시 */}
+                      {!action.blockedReason && !!action.shellBellHealAmount && (
+                        <div className="battle-turn-line is-muted">
+                          {actorName}의 조개껍질방울로 체력을 {action.shellBellHealAmount} 회복했다!
+                        </div>
+                      )}
+                      {/* 과사열매 — PP 0이 된 기술을 즉시 복구 */}
+                      {!action.blockedReason && action.leppaRestoredPpItemName && (
+                        <div className="battle-turn-line is-muted">
+                          {actorName}의 {action.leppaRestoredPpItemName}
+                          {roEuro(action.leppaRestoredPpItemName)} {action.move.name}의 PP를 회복시켰다!
+                        </div>
+                      )}
+                      {/* 상태이상/혼란 즉시치료 나무열매 — curedStatus 문구와 별개로 "어떤 도구가 발동했는지"만 알려준다 */}
+                      {!action.blockedReason && action.statusCureBerryItemName && (
+                        <div className="battle-turn-line is-muted">
+                          {action.statusCureBerryItemName}이(가) 발동했다!
+                        </div>
+                      )}
+                      {/* 자뭉열매/오랭열매 — 공격자/방어자 중 발동한 쪽만 표시 */}
+                      {!action.blockedReason && !!action.attackerBerryHealAmount && (
+                        <div className="battle-turn-line is-muted">
+                          {actorName}의 {action.attackerBerryHealItemName}
+                          {roEuro(action.attackerBerryHealItemName ?? "")} 체력을 {action.attackerBerryHealAmount} 회복했다!
+                        </div>
+                      )}
+                      {!action.blockedReason && !!action.defenderBerryHealAmount && (
+                        <div className="battle-turn-line is-muted">
+                          {defenderName}의 {action.defenderBerryHealItemName}
+                          {roEuro(action.defenderBerryHealItemName ?? "")} 체력을 {action.defenderBerryHealAmount} 회복했다!
+                        </div>
+                      )}
                       {/* 상대가 쓰러졌는지 여부 — 데미지 수치와 분리된 별도 상태 줄 */}
                       {!action.blockedReason && action.fainted && (
                         <div className="battle-turn-line is-fainted">
@@ -518,6 +629,37 @@ export function BattleLogPage() {
                       <>
                         {fighterLabel(battleState, e.actor)} 그래스필드로 {e.fieldHeal} 회복 (남은 HP {e.remainingHp})
                       </>
+                    ) : e.itemHeal ? (
+                      <>
+                        {fighterLabel(battleState, e.actor)}의 {e.itemHealItemName}로 {e.itemHeal} 회복 (남은 HP{" "}
+                        {e.remainingHp})
+                      </>
+                    ) : e.regenHeal ? (
+                      <>
+                        {fighterLabel(battleState, e.actor)}
+                        {e.regenSource && VOLATILE_LABELS[e.regenSource]}로 {e.regenHeal} 회복 (남은 HP {e.remainingHp})
+                      </>
+                    ) : e.leechSeedDamage ? (
+                      <>
+                        {fighterLabel(battleState, e.actor)}의 씨앗이 체력을 {e.leechSeedDamage} 흡수했다 (남은 HP{" "}
+                        {e.remainingHp})
+                        {e.fainted && " · 기절!"}
+                      </>
+                    ) : e.leechSeedHealAmount ? (
+                      <>
+                        {fighterLabel(battleState, e.actor)}가 씨앗으로 체력을 {e.leechSeedHealAmount} 회복 (남은 HP{" "}
+                        {e.remainingHp})
+                      </>
+                    ) : e.wishHeal ? (
+                      <>
+                        {fighterLabel(battleState, e.actor)}의 희망사항으로 체력을 {e.wishHeal} 회복 (남은 HP{" "}
+                        {e.remainingHp})
+                      </>
+                    ) : e.berryHeal ? (
+                      <>
+                        {fighterLabel(battleState, e.actor)}의 {e.berryHealItemName}로 {e.berryHeal} 회복 (남은 HP{" "}
+                        {e.remainingHp})
+                      </>
                     ) : e.inflictedDelayedStatus ? (
                       STATUS_ONSET_TEXT[e.inflictedDelayedStatus](fighterLabel(battleState, e.actor))
                     ) : e.statusCondition ? (
@@ -542,6 +684,27 @@ export function BattleLogPage() {
                 {turn.fieldExpired && (
                   <div className="battle-turn-line is-muted">필드가 사라졌다!</div>
                 )}
+                {turn.trickRoomTurnsRemaining !== undefined && (
+                  <div className="battle-turn-line is-muted">
+                    트릭룸: 앞으로 {turn.trickRoomTurnsRemaining}턴 뒤 해제
+                  </div>
+                )}
+                {turn.trickRoomExpired && (
+                  <div className="battle-turn-line is-muted">트릭룸이 해제됐다!</div>
+                )}
+                {turn.weatherTurnsRemaining !== undefined && (
+                  <div className="battle-turn-line is-muted">
+                    날씨: 앞으로 {turn.weatherTurnsRemaining}턴 뒤 소멸
+                  </div>
+                )}
+                {turn.weatherExpired && (
+                  <div className="battle-turn-line is-muted">날씨가 원래대로 돌아갔다!</div>
+                )}
+                {turn.expiredScreens.map((e, i) => (
+                  <div key={i} className="battle-turn-line is-muted">
+                    {fighterLabel(battleState, e.actor)}의 {SCREEN_LABELS[e.screen]}이(가) 사라졌다!
+                  </div>
+                ))}
                 {turn.winner && (
                   <div className="battle-turn-line is-winner">
                     {turn.winner === "draw"
@@ -568,11 +731,13 @@ export function BattleLogPage() {
       {picker?.kind === "ability" &&
         (() => {
           const pokemon = pokemonOf(picker.side);
-          if (!pokemon) return null;
+          const slot = sideOf(picker.side).slot;
+          if (!pokemon || !slot) return null;
           return (
             <AbilityPickerModal
               pokemon={pokemon}
-              currentAbilityId={sideOf(picker.side).slot?.ability ?? null}
+              slot={slot}
+              currentAbilityId={slot.ability}
               onClose={() => setPicker(null)}
               onSelect={(abilityId) => {
                 sideOf(picker.side).setAbility(abilityId);

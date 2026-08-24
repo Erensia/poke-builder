@@ -16,9 +16,10 @@ export interface TurnOrderActor {
 
 /**
  * 두 행동자 중 어느 쪽이 먼저 움직이는지 비교한다.
- * 1. 기술 우선도(priority)가 다르면 높은 쪽이 먼저.
+ * 1. 기술 우선도(priority)가 다르면 높은 쪽이 먼저 — 트릭룸 중에도 우선도는 그대로 존중된다(본가 규칙).
  * 2. 우선도가 같으면 실효 스피드(랭크 반영, computeEffectiveSpeed)가 높은 쪽이 먼저.
- * 3. 그것도 완전히 같으면(동속) 50% 확률로 랜덤 — 사용자 확인된 챔피언스 규칙.
+ *    trickRoomActive면 이 비교 방향만 뒤집혀 스피드가 낮은 쪽이 먼저 움직인다.
+ * 3. 그것도 완전히 같으면(동속) 50% 확률로 랜덤 — 사용자 확인된 챔피언스 규칙(트릭룸 중에도 동일).
  *
  * random은 기본 Math.random이지만, 테스트에서 결과를 고정하고 싶을 때 주입할 수 있게 열어둔다.
  * 반환값 0: a가 먼저, 1: b가 먼저.
@@ -27,6 +28,7 @@ export function compareTurnOrder(
   a: TurnOrderActor,
   b: TurnOrderActor,
   random: () => number = Math.random,
+  trickRoomActive = false,
 ): 0 | 1 {
   if (a.move.priority !== b.move.priority) {
     return a.move.priority > b.move.priority ? 0 : 1;
@@ -35,7 +37,9 @@ export function compareTurnOrder(
   const speedA = computeEffectiveSpeed(a.realSpeed, a.stages ?? NEUTRAL_STAGES);
   const speedB = computeEffectiveSpeed(b.realSpeed, b.stages ?? NEUTRAL_STAGES);
   if (speedA !== speedB) {
-    return speedA > speedB ? 0 : 1;
+    const aIsFaster = speedA > speedB;
+    const aGoesFirst = trickRoomActive ? !aIsFaster : aIsFaster;
+    return aGoesFirst ? 0 : 1;
   }
 
   // 완전 동속: 50% 랜덤
@@ -50,6 +54,7 @@ export function resolveTurnOrder<T extends TurnOrderActor>(
   a: T,
   b: T,
   random: () => number = Math.random,
+  trickRoomActive = false,
 ): [T, T] {
-  return compareTurnOrder(a, b, random) === 0 ? [a, b] : [b, a];
+  return compareTurnOrder(a, b, random, trickRoomActive) === 0 ? [a, b] : [b, a];
 }
