@@ -300,13 +300,15 @@ export function BattleLogPage() {
                     <div className="battle-move-grid">
                       {moves.map((move) => {
                         const pp = fighter.remainingPp[move.id] ?? move.pp;
-                        // 코골기(잠든 상태 전용)/속이기(첫 턴 전용)처럼 사용 조건이 있는 기술은
-                        // 조건을 못 채우면 아예 선택하지 못하게 막는다 — resolveAction의 usageCondition
-                        // 판정과 동일한 조건을 UI에서도 미리 확인한다.
-                        const usageConditionUnmet =
-                          (move.usageCondition === "sleep-only" && fighter.status.condition !== "sleep") ||
-                          (move.usageCondition === "first-turn-only" && battleState.turnNumber !== 0);
-                        const disabled = pp <= 0 || fighter.currentHp <= 0 || !!winner || usageConditionUnmet;
+                        // 코골기(잠든 상태 전용)는 조건을 못 채우면 아예 선택하지 못하게 막는다 —
+                        // resolveAction의 usageCondition 판정과 동일한 조건을 UI에서도 미리 확인한다.
+                        // 속이기(첫 턴 전용)는 반대로 첫 턴이 지나도 선택은 그대로 허용해서, 실제로
+                        // 눌러보면 resolveAction이 "사용 조건이 맞지 않아 실패"로 처리하는 걸 로그에서
+                        // 보여준다 — 조건을 못 채운다고 버튼 자체를 숨기지 않는다는 사용자 확인.
+                        const sleepConditionUnmet = move.usageCondition === "sleep-only" && fighter.status.condition !== "sleep";
+                        const firstTurnConditionUnmet =
+                          move.usageCondition === "first-turn-only" && battleState.turnNumber !== 0;
+                        const disabled = pp <= 0 || fighter.currentHp <= 0 || !!winner || sleepConditionUnmet;
                         // 셋업 카드의 party-move-pip와 동일하게 기술 타입 배경색을 입힌다.
                         const moveColor = move.type ? TYPE_COLORS[move.type] : undefined;
                         return (
@@ -319,11 +321,11 @@ export function BattleLogPage() {
                             style={moveColor ? { background: moveColor } : undefined}
                             disabled={disabled}
                             title={
-                              usageConditionUnmet
-                                ? move.usageCondition === "sleep-only"
-                                  ? "잠든 상태에서만 사용 가능"
-                                  : "등장 후 첫 턴에만 사용 가능"
-                                : undefined
+                              sleepConditionUnmet
+                                ? "잠든 상태에서만 사용 가능"
+                                : firstTurnConditionUnmet
+                                  ? "등장 후 첫 턴에만 사용 가능 — 지금 쓰면 실패해요"
+                                  : undefined
                             }
                             onClick={() => setSelected((prev) => ({ ...prev, [side]: move.id }))}
                           >
