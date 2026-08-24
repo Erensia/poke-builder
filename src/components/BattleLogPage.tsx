@@ -390,13 +390,13 @@ export function BattleLogPage() {
                           기절 같은 "상태"는 아래에서 별도 줄로 분리한다. */}
                       <div className="battle-turn-line">
                         <strong>{actorName}</strong>의 {action.move.name}
+                        {action.blockedReason === "usageCondition" && "!"}
                         {action.blockedReason === "status" && action.blockedByStatus === undefined && " — 상태이상으로 행동 불가"}
                         {action.blockedReason === "flinch" && " — 풀죽어서 행동 불가"}
                         {action.blockedReason === "recharge" && " — 반동으로 행동 불가"}
                         {action.blockedReason === "confusion" &&
                           ` — 혼란으로 자멸! (${action.selfDamage} 데미지)`}
                         {action.blockedReason === "psychicFieldPriority" && " — 사이코필드에 막혀 실패"}
-                        {action.blockedReason === "usageCondition" && " — 사용 조건이 맞지 않아 실패"}
                         {!action.blockedReason && action.charging && " — 준비 중! 다음 턴 발동된다"}
                         {!action.blockedReason && !action.charging && action.evadedByCharge && " — 무적 상태라 빗나감"}
                         {!action.blockedReason && !action.charging && !action.evadedByCharge && !action.hit && " — 빗나감"}
@@ -428,6 +428,13 @@ export function BattleLogPage() {
                       {action.blockedReason === "status" && action.blockedByStatus && (
                         <div className="battle-turn-line is-muted">
                           {STATUS_TRIGGER_TEXT[action.blockedByStatus](actorName)}
+                        </div>
+                      )}
+                      {/* 속이기(첫 턴 전용)처럼 사용 조건을 못 채워 실패했을 때 — 메인 줄은
+                          "OO의 속이기!"로만 끝내고, 실패 여부는 이 별도 줄로 알려준다 */}
+                      {action.blockedReason === "usageCondition" && (
+                        <div className="battle-turn-line is-muted">
+                          {actorName}의 {action.move.name}{eunNeun(action.move.name)} 실패했다!
                         </div>
                       )}
                       {/* 상태이상에 새로 걸렸을 때(onset) — 항상 상대가 대상(기존 관례) */}
