@@ -734,11 +734,13 @@ export function BattleLogPage() {
       {picker?.kind === "ability" &&
         (() => {
           const pokemon = pokemonOf(picker.side);
-          if (!pokemon) return null;
+          const slot = sideOf(picker.side).slot;
+          if (!pokemon || !slot) return null;
           return (
             <AbilityPickerModal
               pokemon={pokemon}
-              currentAbilityId={sideOf(picker.side).slot?.ability ?? null}
+              slot={slot}
+              currentAbilityId={slot.ability}
               onClose={() => setPicker(null)}
               onSelect={(abilityId) => {
                 sideOf(picker.side).setAbility(abilityId);

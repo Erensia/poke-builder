@@ -125,6 +125,7 @@ export function PartyBoard() {
           return (
             <AbilityPickerModal
               pokemon={pokemon}
+              slot={slot}
               currentAbilityId={slot.ability}
               onClose={() => setPicker(null)}
               onSelect={(abilityId) => {
