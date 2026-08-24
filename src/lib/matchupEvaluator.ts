@@ -1,7 +1,8 @@
 import type { AbilityPoints } from "../types/party";
 import type { Move } from "../types/move";
 import type { WeatherKind } from "../types/weather";
-import { getPokemon, getAbility } from "./data";
+import { getPokemon, getAbility, getItem } from "./data";
+import { getBerryDefenseResult, getItemOffenseMultiplier } from "./itemEffects";
 import { getEffectiveForm, getEffectiveAbilityId, type FormSource } from "./pokemonForm";
 import { computeRealStats } from "./statCalculator";
 import { applyMoveStatChanges } from "./statStages";
@@ -130,11 +131,18 @@ export function evaluateSlotMatchup(
         }
       : effectiveMove;
 
+  // 지닌 도구 배율: 직접 지정한 값이 없으면 실제 장착한 도구에서 자동으로 구한다.
+  // 메트로놈(연속 사용 보너스)은 매치업 화면이 여러 턴 이력이 없는 1턴 스냅샷이라 스트릭=1(보너스 없음)로 고정.
+  const attackerItem = attackerSlot.item ? getItem(attackerSlot.item) : undefined;
+  const defenderItem = defenderSlot.item ? getItem(defenderSlot.item) : undefined;
+  const autoItemMultiplier = getItemOffenseMultiplier(attackerItem, effectiveMove, typeEffectiveness, 1);
+  const berryResult = getBerryDefenseResult(defenderItem, effectiveMove.type, typeEffectiveness, false);
+
   // 상대 타입 상성을 곱하기 전의 결정력. offensePower는 여기에 typeEffectiveness만 곱한 값이라
   // 매번 다시 계산하는 대신 이 값에 typeEffectiveness를 곱해서 구한다.
   const rawOffensePower = computeOffensePower(attackerRealStats, attackerForm.types, effectiveMoveWithHits, {
     abilityMultiplier: manualAbilityMultiplier ?? abilityOffenseMultiplier,
-    itemMultiplier,
+    itemMultiplier: itemMultiplier ?? autoItemMultiplier,
     weatherMultiplier,
     attackerStages,
     stabMultiplier,
@@ -144,7 +152,7 @@ export function evaluateSlotMatchup(
 
   const bulkPower = computeBulkPower(defenderRealStats, move.category, {
     defenderStages,
-    bulkMultiplier: manualBulkMultiplier ?? abilityDefense,
+    bulkMultiplier: manualBulkMultiplier ?? abilityDefense * berryResult.bulkMultiplier,
   });
 
   return {

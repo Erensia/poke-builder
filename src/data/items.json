@@ -183,139 +183,226 @@
     "id": "생명의구슬",
     "name": "생명의구슬",
     "description": "기술의 위력이 1.3배가 되지만, 공격이 성공할 때마다 최대 HP의 1/10만큼 HP가 줄어든다.",
-    "category": "held-item"
+    "category": "held-item",
+    "powerMultiplier": 1.3,
+    "selfRecoilFractionOfMaxHp": 0.1
   },
   {
     "id": "힘의머리띠",
     "name": "힘의머리띠",
     "description": "물리 기술의 위력이 1.1배가 된다.",
-    "category": "held-item"
+    "category": "held-item",
+    "moveCategoryMultiplier": {
+      "category": "physical",
+      "multiplier": 1.1
+    }
   },
   {
     "id": "박식안경",
     "name": "박식안경",
     "description": "특수 기술의 위력이 1.1배가 된다.",
-    "category": "held-item"
+    "category": "held-item",
+    "moveCategoryMultiplier": {
+      "category": "special",
+      "multiplier": 1.1
+    }
   },
   {
     "id": "달인의띠",
     "name": "달인의띠",
     "description": "사용한 기술의 효과가 굉장했을 때 위력이 1.2배가 된다.",
-    "category": "held-item"
+    "category": "held-item",
+    "superEffectiveMultiplier": 1.2
   },
   {
     "id": "메트로놈",
     "name": "메트로놈",
     "description": "같은 기술을 연속 사용하면 위력이 오른다. 2회 연속 시 1.2배, 3회 연속 시 1.4배, 최대 2배까지 상승하며 멈추면 원래대로 돌아온다.",
-    "category": "held-item"
+    "category": "held-item",
+    "consecutiveSameMoveMultiplier": {
+      "perStreak": 0.2,
+      "max": 2
+    }
   },
   {
     "id": "실크스카프",
     "name": "실크스카프",
     "description": "노말타입 기술의 위력이 1.2배가 된다.",
-    "category": "held-item"
+    "category": "held-item",
+    "moveTypeMultiplier": {
+      "type": "노말",
+      "multiplier": 1.2
+    }
   },
   {
     "id": "기적의씨",
     "name": "기적의씨",
     "description": "풀타입 기술의 위력이 1.2배가 된다.",
-    "category": "held-item"
+    "category": "held-item",
+    "moveTypeMultiplier": {
+      "type": "풀",
+      "multiplier": 1.2
+    }
   },
   {
     "id": "목탄",
     "name": "목탄",
     "description": "불꽃타입 기술의 위력이 1.2배가 된다.",
-    "category": "held-item"
+    "category": "held-item",
+    "moveTypeMultiplier": {
+      "type": "불꽃",
+      "multiplier": 1.2
+    }
   },
   {
     "id": "신비의물방울",
     "name": "신비의물방울",
     "description": "물타입 기술의 위력이 1.2배가 된다.",
-    "category": "held-item"
+    "category": "held-item",
+    "moveTypeMultiplier": {
+      "type": "물",
+      "multiplier": 1.2
+    }
   },
   {
     "id": "자석",
     "name": "자석",
     "description": "전기타입 기술의 위력이 1.2배가 된다.",
-    "category": "held-item"
+    "category": "held-item",
+    "moveTypeMultiplier": {
+      "type": "전기",
+      "multiplier": 1.2
+    }
   },
   {
     "id": "은빛가루",
     "name": "은빛가루",
     "description": "벌레타입 기술의 위력이 1.2배가 된다.",
-    "category": "held-item"
+    "category": "held-item",
+    "moveTypeMultiplier": {
+      "type": "벌레",
+      "multiplier": 1.2
+    }
   },
   {
     "id": "예리한부리",
     "name": "예리한부리",
     "description": "비행타입 기술의 위력이 1.2배가 된다.",
-    "category": "held-item"
+    "category": "held-item",
+    "moveTypeMultiplier": {
+      "type": "비행",
+      "multiplier": 1.2
+    }
   },
   {
     "id": "딱딱한돌",
     "name": "딱딱한돌",
     "description": "바위타입 기술의 위력이 1.2배가 된다.",
-    "category": "held-item"
+    "category": "held-item",
+    "moveTypeMultiplier": {
+      "type": "바위",
+      "multiplier": 1.2
+    }
   },
   {
     "id": "독바늘",
     "name": "독바늘",
     "description": "독타입 기술의 위력이 1.2배가 된다.",
-    "category": "held-item"
+    "category": "held-item",
+    "moveTypeMultiplier": {
+      "type": "독",
+      "multiplier": 1.2
+    }
   },
   {
     "id": "부드러운모래",
     "name": "부드러운모래",
     "description": "땅타입 기술의 위력이 1.2배가 된다.",
-    "category": "held-item"
+    "category": "held-item",
+    "moveTypeMultiplier": {
+      "type": "땅",
+      "multiplier": 1.2
+    }
   },
   {
     "id": "녹지않는얼음",
     "name": "녹지않는얼음",
     "description": "얼음타입 기술의 위력이 1.2배가 된다.",
-    "category": "held-item"
+    "category": "held-item",
+    "moveTypeMultiplier": {
+      "type": "얼음",
+      "multiplier": 1.2
+    }
   },
   {
     "id": "검은띠",
     "name": "검은띠",
     "description": "격투타입 기술의 위력이 1.2배가 된다.",
-    "category": "held-item"
+    "category": "held-item",
+    "moveTypeMultiplier": {
+      "type": "격투",
+      "multiplier": 1.2
+    }
   },
   {
     "id": "휘어진스푼",
     "name": "휘어진스푼",
     "description": "에스퍼타입 기술의 위력이 1.2배가 된다.",
-    "category": "held-item"
+    "category": "held-item",
+    "moveTypeMultiplier": {
+      "type": "에스퍼",
+      "multiplier": 1.2
+    }
   },
   {
     "id": "저주의부적",
     "name": "저주의부적",
     "description": "고스트타입 기술의 위력이 1.2배가 된다.",
-    "category": "held-item"
+    "category": "held-item",
+    "moveTypeMultiplier": {
+      "type": "고스트",
+      "multiplier": 1.2
+    }
   },
   {
     "id": "용의이빨",
     "name": "용의이빨",
     "description": "드래곤타입 기술의 위력이 1.2배가 된다.",
-    "category": "held-item"
+    "category": "held-item",
+    "moveTypeMultiplier": {
+      "type": "드래곤",
+      "multiplier": 1.2
+    }
   },
   {
     "id": "검은안경",
     "name": "검은안경",
     "description": "악타입 기술의 위력이 1.2배가 된다.",
-    "category": "held-item"
+    "category": "held-item",
+    "moveTypeMultiplier": {
+      "type": "악",
+      "multiplier": 1.2
+    }
   },
   {
     "id": "금속코트",
     "name": "금속코트",
     "description": "강철타입 기술의 위력이 1.2배가 된다.",
-    "category": "held-item"
+    "category": "held-item",
+    "moveTypeMultiplier": {
+      "type": "강철",
+      "multiplier": 1.2
+    }
   },
   {
     "id": "요정의깃털",
     "name": "요정의깃털",
     "description": "페어리타입 기술의 위력이 1.2배가 된다.",
-    "category": "held-item"
+    "category": "held-item",
+    "moveTypeMultiplier": {
+      "type": "페어리",
+      "multiplier": 1.2
+    }
   },
   {
     "id": "빛의점토",
@@ -411,108 +498,126 @@
     "id": "카리열매",
     "name": "카리열매",
     "description": "자신에게 효과가 굉장한 노말타입 기술의 위력을 반감시킨다.",
-    "category": "held-item"
+    "category": "held-item",
+    "resistsSuperEffectiveType": "노말"
   },
   {
     "id": "린드열매",
     "name": "린드열매",
     "description": "자신에게 효과가 굉장한 풀타입 기술의 위력을 반감시킨다.",
-    "category": "held-item"
+    "category": "held-item",
+    "resistsSuperEffectiveType": "풀"
   },
   {
     "id": "오카열매",
     "name": "오카열매",
     "description": "자신에게 효과가 굉장한 불꽃타입 기술의 위력을 반감시킨다.",
-    "category": "held-item"
+    "category": "held-item",
+    "resistsSuperEffectiveType": "불꽃"
   },
   {
     "id": "꼬시개열매",
     "name": "꼬시개열매",
     "description": "자신에게 효과가 굉장한 물타입 기술의 위력을 반감시킨다.",
-    "category": "held-item"
+    "category": "held-item",
+    "resistsSuperEffectiveType": "물"
   },
   {
     "id": "초나열매",
     "name": "초나열매",
     "description": "자신에게 효과가 굉장한 전기타입 기술의 위력을 반감시킨다.",
-    "category": "held-item"
+    "category": "held-item",
+    "resistsSuperEffectiveType": "전기"
   },
   {
     "id": "리체열매",
     "name": "리체열매",
     "description": "자신에게 효과가 굉장한 벌레타입 기술의 위력을 반감시킨다.",
-    "category": "held-item"
+    "category": "held-item",
+    "resistsSuperEffectiveType": "벌레"
   },
   {
     "id": "바코열매",
     "name": "바코열매",
     "description": "자신에게 효과가 굉장한 비행타입 기술의 위력을 반감시킨다.",
-    "category": "held-item"
+    "category": "held-item",
+    "resistsSuperEffectiveType": "비행"
   },
   {
     "id": "루미열매",
     "name": "루미열매",
     "description": "자신에게 효과가 굉장한 바위타입 기술의 위력을 반감시킨다.",
-    "category": "held-item"
+    "category": "held-item",
+    "resistsSuperEffectiveType": "바위"
   },
   {
     "id": "으름열매",
     "name": "으름열매",
     "description": "자신에게 효과가 굉장한 독타입 기술의 위력을 반감시킨다.",
-    "category": "held-item"
+    "category": "held-item",
+    "resistsSuperEffectiveType": "독"
   },
   {
     "id": "슈캐열매",
     "name": "슈캐열매",
     "description": "자신에게 효과가 굉장한 땅타입 기술의 위력을 반감시킨다.",
-    "category": "held-item"
+    "category": "held-item",
+    "resistsSuperEffectiveType": "땅"
   },
   {
     "id": "플카열매",
     "name": "플카열매",
     "description": "자신에게 효과가 굉장한 얼음타입 기술의 위력을 반감시킨다.",
-    "category": "held-item"
+    "category": "held-item",
+    "resistsSuperEffectiveType": "얼음"
   },
   {
     "id": "로플열매",
     "name": "로플열매",
     "description": "자신에게 효과가 굉장한 격투타입 기술의 위력을 반감시킨다.",
-    "category": "held-item"
+    "category": "held-item",
+    "resistsSuperEffectiveType": "격투"
   },
   {
     "id": "야파열매",
     "name": "야파열매",
     "description": "자신에게 효과가 굉장한 에스퍼타입 기술의 위력을 반감시킨다.",
-    "category": "held-item"
+    "category": "held-item",
+    "resistsSuperEffectiveType": "에스퍼"
   },
   {
     "id": "수불열매",
     "name": "수불열매",
     "description": "자신에게 효과가 굉장한 고스트타입 기술의 위력을 반감시킨다.",
-    "category": "held-item"
+    "category": "held-item",
+    "resistsSuperEffectiveType": "고스트"
   },
   {
     "id": "하반열매",
     "name": "하반열매",
     "description": "자신에게 효과가 굉장한 드래곤타입 기술의 위력을 반감시킨다.",
-    "category": "held-item"
+    "category": "held-item",
+    "resistsSuperEffectiveType": "드래곤"
   },
   {
     "id": "마코열매",
     "name": "마코열매",
     "description": "자신에게 효과가 굉장한 악타입 기술의 위력을 반감시킨다.",
-    "category": "held-item"
+    "category": "held-item",
+    "resistsSuperEffectiveType": "악"
   },
   {
     "id": "바리비열매",
     "name": "바리비열매",
     "description": "자신에게 효과가 굉장한 강철타입 기술의 위력을 반감시킨다.",
-    "category": "held-item"
+    "category": "held-item",
+    "resistsSuperEffectiveType": "강철"
   },
   {
     "id": "로셀열매",
     "name": "로셀열매",
     "description": "자신에게 효과가 굉장한 페어리타입 기술의 위력을 반감시킨다.",
-    "category": "held-item"
+    "category": "held-item",
+    "resistsSuperEffectiveType": "페어리"
   }
 ]

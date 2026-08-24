@@ -82,6 +82,15 @@ function eunNeun(name: string): "은" | "는" {
   return code % 28 === 0 ? "는" : "은";
 }
 
+/** "카리열매로"/"먹다남은음식으로"처럼 자음 받침 유무에 따라 "로"/"으로" 조사를 자동 판별한다 */
+function roEuro(name: string): "로" | "으로" {
+  const lastChar = name.at(-1);
+  if (!lastChar) return "로";
+  const code = lastChar.charCodeAt(0) - 0xac00;
+  if (code < 0 || code > 11171) return "로";
+  return code % 28 === 0 ? "로" : "으로";
+}
+
 /**
  * 상태이상 3단계 문구(사용자 확정 텍스트): 걸렸을 때(onset) → 매턴 효과가 발동했을 때(trigger,
  * 독/맹독/화상은 데미지 틱, 마비/잠듦/얼음은 이번 턴 행동이 막혔다는 뜻) → 해제됐을 때(cure).
@@ -467,6 +476,21 @@ export function BattleLogPage() {
                         <div className="battle-turn-line is-muted">
                           {actorName}
                           {eunNeun(actorName)} 반동으로 {action.recoilDamage} 데미지를 입었다
+                        </div>
+                      )}
+                      {/* 생명의구슬처럼 도구가 주는 반동 — 데미지 기준 반동(recoilDamage)과 달리
+                          최대 HP 비율 고정이라 별도 필드(itemRecoilDamage)로 표시한다 */}
+                      {!action.blockedReason && !!action.itemRecoilDamage && (
+                        <div className="battle-turn-line is-muted">
+                          {actorName}
+                          {eunNeun(actorName)} {action.itemRecoilItemName}의 반동으로 {action.itemRecoilDamage} 데미지를 입었다
+                        </div>
+                      )}
+                      {/* 나무열매(카리열매 등)로 이번 피격 데미지가 반감됐으면 알려준다 */}
+                      {!action.blockedReason && action.berryReducedDamageItemName && (
+                        <div className="battle-turn-line is-muted">
+                          {defenderName}의 {action.berryReducedDamageItemName}
+                          {roEuro(action.berryReducedDamageItemName)} 데미지가 절반으로 줄었다!
                         </div>
                       )}
                       {/* 상대가 쓰러졌는지 여부 — 데미지 수치와 분리된 별도 상태 줄 */}

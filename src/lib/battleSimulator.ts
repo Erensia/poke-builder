@@ -17,7 +17,7 @@ import {
   type VolatileCondition,
   type VolatileConditionState,
 } from "../types/status";
-import { getPokemon, getAbility, getMove } from "./data";
+import { getPokemon, getAbility, getMove, getItem } from "./data";
 import { getEffectiveForm, getEffectiveAbilityId } from "./pokemonForm";
 import { computeRealStats } from "./statCalculator";
 import { applyMoveStatChanges } from "./statStages";
@@ -55,6 +55,7 @@ import {
   isPriorityMoveBlockedByField,
   isStatusBlockedByField,
 } from "./fieldEffects";
+import { getBerryDefenseResult, getItemOffenseMultiplier } from "./itemEffects";
 import { compareTurnOrder } from "./turnOrder";
 import type { BaseStats } from "../types/stats";
 import type { EvaluatorSlot } from "./matchupEvaluator";
@@ -140,6 +141,12 @@ export interface BattleFighterState {
    * bypassesHiding 예외 기술 외엔 전부 빗나간다(무적). 준비 중이 아니면 undefined.
    */
   chargingMoveId?: string;
+  /** 메트로놈(연속 같은 기술 위력 증가)용 — 직전에 실제로 사용한 기술 id. 없으면 아직 없음 */
+  lastMoveId?: string;
+  /** lastMoveId와 같은 기술을 몇 번 연속으로 썼는지(첫 사용=1). 메트로놈 배율 계산에 쓴다 */
+  lastMoveStreak?: number;
+  /** 나무열매(카리열매 등)처럼 대전 중 1회만 발동하는 지닌 도구를 이미 썼으면 true */
+  itemConsumed?: boolean;
 }
 
 /** 두 포켓몬(a/b)을 마주 세운 배틀 상태 */
@@ -315,6 +322,12 @@ export interface ActionLogEntry {
   charging?: boolean;
   /** 상대가 차지 기술로 무적인 동안 그 무적을 못 뚫는 기술을 써서 빗나갔으면 true */
   evadedByCharge?: boolean;
+  /** 생명의구슬처럼 도구 때문에 입은 반동 데미지(최대 HP 비율 고정) — recoilDamage와 계산 기준이 달라 분리 */
+  itemRecoilDamage?: number;
+  /** itemRecoilDamage를 준 도구 이름(UI 문구용) */
+  itemRecoilItemName?: string;
+  /** 나무열매(카리열매 등)로 이번 피격 데미지가 반감됐으면 그 나무열매 이름 */
+  berryReducedDamageItemName?: string;
 }
 
 /** 턴 종료 시 상태이상 데미지 로그 */
@@ -508,10 +521,18 @@ function resolveAction(
 
   const attackerAbility = attacker.effectiveAbilityId ? getAbility(attacker.effectiveAbilityId) : undefined;
   const defenderAbility = defender.effectiveAbilityId ? getAbility(defender.effectiveAbilityId) : undefined;
+  const attackerItem = attacker.slot.item ? getItem(attacker.slot.item) : undefined;
+  const defenderItem = defender.slot.item ? getItem(defender.slot.item) : undefined;
 
   // evaluateSlotMatchup(1턴 스냅샷 판정)과 같은 로직을 공유 — 특성 배율/타입 변경/자속/상대 상성
   const { effectiveMove, abilityOffenseMultiplier, abilityDefenseMultiplier, stabMultiplier, typeEffectiveness } =
     resolveMoveContext(attackerAbility, move, defender.types, defenderAbility, state.weather);
+
+  // 메트로놈(연속 같은 기술 위력 증가)용 스트릭 갱신 — 여기까지 왔다는 건 앞의 모든 행동방해
+  // 판정(상태이상/풀죽음/반동/혼란/차지 등)을 통과해서 실제로 이 기술을 쓴다는 뜻이라, 명중 여부와
+  // 무관하게 여기서 갱신한다(본가 규칙 — 빗나가도 스트릭은 유지되고, 다른 기술을 쓰면 끊긴다).
+  attacker.lastMoveStreak = attacker.lastMoveId === effectiveMove.id ? (attacker.lastMoveStreak ?? 1) + 1 : 1;
+  attacker.lastMoveId = effectiveMove.id;
 
   // 반짝가루/모래숨기 같은 명중률 전용 특성·도구 배율은 아직 데이터 구조가 없어 1로 고정 (TODO: 데이터 보강)
   const accuracyExtraMultiplier = 1;
@@ -560,6 +581,8 @@ function resolveAction(
   const isDamaging =
     effectiveMove.category !== "status" &&
     (effectiveMove.power !== null || effectiveMove.fixedDamage !== undefined);
+  // 나무열매(카리열매 등)가 이번 행동 중 발동했으면 그 나무열매 이름 — resolveHit 클로저 안에서 채운다
+  let berryReducedDamageItemName: string | undefined;
   let damage = 0;
   let damagePercent = 0;
   let isCritical = false;
@@ -587,16 +610,36 @@ function resolveAction(
     );
     const weatherMultiplier = getWeatherDamageMultiplier(state.weather, effectiveMove.type);
     const fieldMultiplier = getFieldDamageMultiplier(state.field, effectiveMove.type);
+    const itemMultiplier = getItemOffenseMultiplier(
+      attackerItem,
+      effectiveMove,
+      typeEffectiveness,
+      attacker.lastMoveStreak ?? 1,
+    );
+    // 나무열매(카리열매 등): 이 피격이 조건(타입 일치 + 효과가 굉장함)을 채우면 데미지를
+    // 절반으로 줄이고 대전 중 1회만 발동하도록 소모 처리한다. 다단히트면 첫 타에서만 소모되고,
+    // 이후 타수는 이미 소모된 상태라 다시 발동하지 않는다.
+    const berryResult = getBerryDefenseResult(
+      defenderItem,
+      effectiveMove.type,
+      typeEffectiveness,
+      defender.itemConsumed ?? false,
+    );
+    if (berryResult.consumed) {
+      defender.itemConsumed = true;
+      berryReducedDamageItemName = defenderItem?.name;
+    }
 
     const result = computeDamage(attacker.realStats, defender.realStats, attacker.types, hitMove, {
       typeEffectiveness,
       abilityMultiplier: abilityOffenseMultiplier * statusAttackMultiplier * hidingBypassMultiplier,
       weatherMultiplier,
       fieldMultiplier,
+      itemMultiplier,
       stabMultiplier,
       attackerStages: attacker.stages,
       defenderStages: defender.stages,
-      bulkMultiplier: abilityDefenseMultiplier,
+      bulkMultiplier: abilityDefenseMultiplier * berryResult.bulkMultiplier,
       isCritical: critical,
       randomRoll: MIN_DAMAGE_ROLL + random() * (1 - MIN_DAMAGE_ROLL),
     });
@@ -660,6 +703,16 @@ function resolveAction(
   if (effectiveMove.recoilFraction !== undefined && damage > 0) {
     recoilDamage = Math.floor(damage * effectiveMove.recoilFraction);
     attacker.currentHp = Math.max(0, attacker.currentHp - recoilDamage);
+  }
+
+  // 생명의구슬: 데미지를 실제로 준(damage > 0) 공격이 성공할 때마다 최대 HP의 1/10만큼 자신도
+  // 반동을 입는다 — 다단히트도 타수 수와 무관하게 이번 행동에 한 번만 적용(본가 규칙).
+  let itemRecoilDamage = 0;
+  let itemRecoilItemName: string | undefined;
+  if (isDamaging && damage > 0 && attackerItem?.selfRecoilFractionOfMaxHp) {
+    itemRecoilDamage = Math.floor(attacker.maxHp * attackerItem.selfRecoilFractionOfMaxHp);
+    attacker.currentHp = Math.max(0, attacker.currentHp - itemRecoilDamage);
+    itemRecoilItemName = attackerItem.name;
   }
 
   // 자폭류(대폭발 등): 명중했으면 반드시 데미지를 먼저 입힌 "다음" 사용자가 기절한다.
@@ -792,6 +845,9 @@ function resolveAction(
     selfFainted: isFainted(attacker),
     recoilDamage,
     hitCount,
+    itemRecoilDamage: itemRecoilDamage || undefined,
+    itemRecoilItemName,
+    berryReducedDamageItemName,
   };
 }
 
