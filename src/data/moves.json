@@ -2562,7 +2562,8 @@
     "pp": 12,
     "priority": 0,
     "effect": "다음 턴 상대를 잠들게 한다.",
-    "makesContact": false
+    "makesContact": false,
+    "inflictsVolatile": [{ "volatile": "drowsy", "target": "opponent" }]
   },
   {
     "id": "떨어뜨리기",
@@ -4022,7 +4023,8 @@
     "classification": [
       "소리"
     ],
-    "makesContact": false
+    "makesContact": false,
+    "curesStatus": { "target": "opponent", "status": "burn" }
   },
   {
     "id": "미스트버스트",

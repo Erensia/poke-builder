@@ -286,6 +286,8 @@ export interface ActionLogEntry {
   attackerRemainingHp: number;
   inflictedStatus?: StatusConditionState["condition"];
   inflictedVolatile?: VolatileCondition;
+  /** 물거품아리아처럼 명중 시 상대(또는 자신)의 주 상태이상을 없앴으면 그 상태이상 종류 */
+  curedStatus?: StatusConditionState["condition"];
   /** 이 행동으로 defender가 쓰러졌으면 true */
   fainted: boolean;
   /** 혼란 자멸로 스스로 쓰러졌으면 true */
@@ -316,6 +318,8 @@ export interface EndOfTurnLogEntry {
   fainted: boolean;
   /** 그래스필드 회복이면 damage가 음수(회복량)로 채워지는 대신, 이 필드로 회복량을 명시한다 */
   fieldHeal?: number;
+  /** 하품(졸음) 2턴 카운터가 다 돼서 이번 턴 종료 시 실제로 잠들었으면 채워진다 */
+  inflictedDelayedStatus?: StatusConditionState["condition"];
 }
 
 export interface TurnResult {
@@ -675,6 +679,12 @@ function resolveAction(
   if (effectiveMove.inflictsVolatile) {
     for (const effect of effectiveMove.inflictsVolatile) {
       if (effect.volatile === "confusion" && isConfusionBlockedByField(state.field)) continue;
+      const target = effect.target === "self" ? attacker : defender;
+      // 하품(졸음): 대상이 이미 다른 주 상태이상이거나 이미 졸음 상태면 실패한다(본가 규칙) —
+      // 실제 잠듦 여부(타입/필드 면역)는 2턴 뒤 트리거 시점에 따로 확인한다.
+      if (effect.volatile === "drowsy" && (target.status.condition || hasVolatile(target.volatile, "drowsy"))) {
+        continue;
+      }
       const chance = effect.chance !== undefined ? effect.chance / 100 : 1;
       if (random() >= chance) continue;
       if (effect.target === "self") {
@@ -683,6 +693,18 @@ function resolveAction(
         defender.volatile = inflictVolatile(defender.volatile, effect.volatile, random);
       }
       inflictedVolatile = effect.volatile;
+    }
+  }
+
+  // 상태이상 치료: 물거품아리아처럼 명중 시 대상의 주 상태이상을 없앤다(inflictsStatus의 반대 방향).
+  // status가 지정돼 있으면(물거품아리아=화상) 그 상태일 때만 치료 — 다른 상태이상은 안 지운다.
+  let curedStatus: StatusConditionState["condition"] | undefined;
+  if (effectiveMove.curesStatus) {
+    const { target: cureTarget, status: cureStatus } = effectiveMove.curesStatus;
+    const target = cureTarget === "self" ? attacker : defender;
+    if (target.status.condition && (!cureStatus || target.status.condition === cureStatus)) {
+      curedStatus = target.status.condition;
+      target.status = { ...NO_STATUS_CONDITION };
     }
   }
 
@@ -710,6 +732,7 @@ function resolveAction(
     attackerRemainingHp: attacker.currentHp,
     inflictedStatus,
     inflictedVolatile,
+    curedStatus,
     setField: fieldSetFailed ? undefined : effectiveMove.setsField,
     fieldSetFailed,
     fainted: isFainted(defender),
@@ -794,11 +817,38 @@ export function runTurn(
         endOfTurn.push({ actor: key, damage: 0, remainingHp: fighter.currentHp, fainted: false, fieldHeal });
       }
 
+      // 하품(졸음): 2턴 카운터가 1(=이번이 마지막 소모)이면 이번 턴 종료에 실제로 잠듦을 시도한다.
+      // 그 사이 다른 상태이상이 걸렸거나 타입/필드로 잠듦 면역이 생겼으면 조용히 무산된다(본가 규칙).
+      const drowsyEntry = fighter.volatile.active.drowsy;
+      if (drowsyEntry) {
+        const triggersNow = drowsyEntry.turnsRemaining <= 1;
+        fighter.volatile = consumeVolatileTurn(fighter.volatile, "drowsy");
+        if (
+          triggersNow &&
+          !fighter.status.condition &&
+          !isImmuneToStatus("sleep", fighter.types) &&
+          !isStatusBlockedByField(state.field, "sleep")
+        ) {
+          fighter.status = inflictStatus(fighter.status, "sleep");
+          endOfTurn.push({
+            actor: key,
+            damage: 0,
+            remainingHp: fighter.currentHp,
+            fainted: false,
+            inflictedDelayedStatus: "sleep",
+          });
+        }
+      }
+
       if (!fighter.status.condition) continue;
       const damage = computeStatusEndOfTurnDamage(fighter.status, fighter.maxHp);
       fighter.currentHp = Math.max(0, fighter.currentHp - damage);
       fighter.status = advanceStatusTurn(fighter.status);
-      endOfTurn.push({ actor: key, damage, remainingHp: fighter.currentHp, fainted: isFainted(fighter) });
+      // 잠듦/얼음/마비는 매턴 데미지가 없다(항상 0) — "상태이상 데미지 0"만 찍는 무의미한 줄을
+      // 막기 위해 실제로 데미지가 있을 때만 로그에 남긴다.
+      if (damage > 0) {
+        endOfTurn.push({ actor: key, damage, remainingHp: fighter.currentHp, fainted: isFainted(fighter) });
+      }
     }
   }
 

@@ -15,9 +15,17 @@ export const CONFUSION_SELF_HIT_CHANCE = 1 / 3;
 /** 혼란 자멸 데미지 계산에 쓰는 위력. 타입 상성·자속 없이 물리 공식 그대로 자기 자신에게 적용한다 */
 export const CONFUSION_SELF_HIT_POWER = 40;
 
+/**
+ * 졸음(하품) 지속 턴수: 고정 2. 건 시점의 턴 종료에서 2→1로 한 번 소모되고(아직 무산),
+ * 그 다음 턴 종료에서 1→0이 되는 시점에 실제로 잠듦을 시도한다 — "맞은 다음 턴 종료" 규칙.
+ */
+const DROWSY_DURATION = 2;
+
 /** 풀죽음/반동은 고정 1턴만 지속 (사용자 확인) */
 function defaultDuration(volatile: VolatileCondition, random: () => number): number {
-  return volatile === "confusion" ? rollConfusionDuration(random) : 1;
+  if (volatile === "confusion") return rollConfusionDuration(random);
+  if (volatile === "drowsy") return DROWSY_DURATION;
+  return 1;
 }
 
 /** 새 행동방해 효과를 건다. 이미 같은 효과가 걸려 있으면 지속 턴수를 새로 굴려 덮어쓴다 */

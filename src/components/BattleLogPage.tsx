@@ -46,7 +46,7 @@ const STATUS_LABELS: Record<StatusCondition, string> = {
   sleep: "잠듦",
 };
 
-const VOLATILE_LABELS = { flinch: "풀죽음", recharge: "반동", confusion: "혼란" } as const;
+const VOLATILE_LABELS = { flinch: "풀죽음", recharge: "반동", confusion: "혼란", drowsy: "졸음" } as const;
 
 /**
  * 날씨/필드가 적용 중인지 배경색으로 알 수 있게 해달라는 요청 반영 — 날씨는 강화하는 타입 색(비=물,
@@ -385,6 +385,9 @@ export function BattleLogPage() {
                         {!action.blockedReason && action.hit && action.inflictedVolatile && (
                           <> · {VOLATILE_LABELS[action.inflictedVolatile]}!</>
                         )}
+                        {!action.blockedReason && action.hit && action.curedStatus && (
+                          <> · {STATUS_LABELS[action.curedStatus]} 치료!</>
+                        )}
                         {!action.blockedReason && action.hit && action.setField && (
                           <> · {action.setField} 설치!</>
                         )}
@@ -431,6 +434,12 @@ export function BattleLogPage() {
                     {e.fieldHeal ? (
                       <>
                         {fighterLabel(battleState, e.actor)} 그래스필드로 {e.fieldHeal} 회복 (남은 HP {e.remainingHp})
+                      </>
+                    ) : e.inflictedDelayedStatus ? (
+                      <>
+                        {fighterLabel(battleState, e.actor)}
+                        {eunNeun(fighterLabel(battleState, e.actor))} 하품 때문에{" "}
+                        {STATUS_LABELS[e.inflictedDelayedStatus]} 상태가 됐다
                       </>
                     ) : (
                       <>

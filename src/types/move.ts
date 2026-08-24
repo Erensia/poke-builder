@@ -1,6 +1,6 @@
 import type { PokemonType } from "./pokemon-type";
 import type { EffectStatKey } from "./battleStats";
-import type { StatusInflictEffect, VolatileInflictEffect } from "./status";
+import type { StatusCondition, StatusInflictEffect, VolatileInflictEffect } from "./status";
 import type { FieldKind } from "./field";
 import type { WeatherKind } from "./weather";
 
@@ -140,4 +140,11 @@ export interface Move {
    * 맞히기만 하고 배율은 없는 예외 기술은 생략(1배로 취급).
    */
   hidingBypassMultiplier?: number;
+  /**
+   * 물거품아리아처럼 명중 시 상대(또는 자신)의 주 상태이상을 없애는 기술만 채운다.
+   * inflictsStatus(거는 것)와 반대 방향 — 이미 걸린 상태이상이 없으면 아무 일도 없다.
+   * status를 채우면 그 상태이상일 때만 치료한다(물거품아리아=화상 한정). 생략하면 어떤
+   * 주 상태이상이든 치료(잠자기처럼 "전부 회복"인 경우용 — 아직 태깅된 기술은 없음).
+   */
+  curesStatus?: { target: "self" | "opponent"; status?: StatusCondition };
 }
