@@ -358,6 +358,13 @@
   border: 1.5px solid var(--border);
   background: var(--surface-2);
   color: var(--text);
+  cursor: pointer;
+}
+
+.pokedex-move-chip:hover {
+  border-color: var(--violet);
+  background: var(--violet-soft);
+  color: var(--violet);
 }
 
 @media (max-width: 760px) {

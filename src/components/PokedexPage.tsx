@@ -62,7 +62,7 @@ function MegaBlock({ mega }: { mega: MegaEvolution }) {
   );
 }
 
-function PokedexDetail({ pokemon }: { pokemon: Pokemon }) {
+function PokedexDetail({ pokemon, onSelectMove }: { pokemon: Pokemon; onSelectMove: (moveId: string) => void }) {
   const normalAbilities = pokemon.abilities
     .map((id) => getAbility(id))
     .filter((a): a is NonNullable<typeof a> => !!a);
@@ -130,9 +130,15 @@ function PokedexDetail({ pokemon }: { pokemon: Pokemon }) {
             const move = getMove(moveId);
             const color = move?.type ? TYPE_COLORS[move.type] : undefined;
             return (
-              <span key={moveId} className="pokedex-move-chip" style={color ? { borderColor: color } : undefined}>
+              <button
+                key={moveId}
+                type="button"
+                className="pokedex-move-chip"
+                style={color ? { borderColor: color } : undefined}
+                onClick={() => onSelectMove(moveId)}
+              >
                 {move?.name ?? moveId}
-              </span>
+              </button>
             );
           })}
         </div>
@@ -141,7 +147,12 @@ function PokedexDetail({ pokemon }: { pokemon: Pokemon }) {
   );
 }
 
-export function PokedexPage() {
+interface PokedexPageProps {
+  /** 기술 칩을 눌렀을 때 기술표 페이지로 넘어가는 콜백. App이 뷰 전환과 스크롤 대상 전달을 담당한다 */
+  onSelectMove: (moveId: string) => void;
+}
+
+export function PokedexPage({ onSelectMove }: PokedexPageProps) {
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string>(POKEMON[0]?.id ?? "");
 
@@ -191,7 +202,11 @@ export function PokedexPage() {
         </div>
 
         <div className="pokedex-detail-panel">
-          {selected ? <PokedexDetail pokemon={selected} /> : <div className="pokedex-detail-empty">포켓몬을 선택하세요.</div>}
+          {selected ? (
+            <PokedexDetail pokemon={selected} onSelectMove={onSelectMove} />
+          ) : (
+            <div className="pokedex-detail-empty">포켓몬을 선택하세요.</div>
+          )}
         </div>
       </div>
     </section>

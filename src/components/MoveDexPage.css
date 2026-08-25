@@ -1,0 +1,225 @@
+.movedex-page {
+  width: 100%;
+  max-width: 980px;
+}
+
+.movedex-page-header {
+  margin-bottom: 1.2rem;
+}
+
+.movedex-page-header h2 {
+  font-size: 1.3rem;
+  margin-bottom: 0.3rem;
+}
+
+.movedex-page-header p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+
+/* 컨트롤 바 */
+
+.movedex-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-bottom: 0.6rem;
+}
+
+.movedex-search {
+  flex: 1;
+  min-width: 12em;
+  padding: 0.55rem 0.75rem;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 0.85rem;
+}
+
+.movedex-search:focus,
+.movedex-type-select:focus {
+  outline: none;
+  border-color: var(--violet);
+}
+
+.movedex-type-select {
+  padding: 0.55rem 0.75rem;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 0.85rem;
+}
+
+.movedex-category-tabs {
+  display: flex;
+  gap: 0.3rem;
+  background: var(--surface-2);
+  border-radius: 10px;
+  padding: 0.25rem;
+}
+
+.movedex-category-tab {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 0.35rem 0.7rem;
+  border-radius: 7px;
+  cursor: pointer;
+}
+
+.movedex-category-tab:hover {
+  color: var(--text);
+}
+
+.movedex-category-tab.is-active {
+  background: var(--surface);
+  color: var(--violet);
+  box-shadow: var(--shadow-sm);
+}
+
+.movedex-count {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  margin-bottom: 0.5rem;
+}
+
+/* 표 */
+
+.movedex-table {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+.movedex-row {
+  display: grid;
+  grid-template-columns: 1fr 5em 3.4em 4.4em 3.6em 3em 3.8em 2.8em;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.55rem 0.9rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.movedex-head-row {
+  position: sticky;
+  top: 0;
+  background: var(--surface-2);
+  z-index: 1;
+}
+
+.movedex-cell {
+  font-size: 0.82rem;
+  min-width: 0;
+}
+
+.movedex-th {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-weight: 700;
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  text-align: left;
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.movedex-th:hover {
+  color: var(--text);
+}
+
+.movedex-th.is-active {
+  color: var(--violet);
+}
+
+.movedex-sort-arrow {
+  font-size: 0.6rem;
+}
+
+.movedex-cell-contact,
+.movedex-cell-cat {
+  color: var(--text-muted);
+}
+
+.movedex-cell-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.movedex-cell-num.is-priority {
+  color: var(--violet);
+  font-weight: 700;
+}
+
+.movedex-cell-name {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.movedex-name {
+  font-weight: 600;
+  font-size: 0.86rem;
+}
+
+.movedex-classification {
+  font-size: 0.7rem;
+  color: var(--violet);
+}
+
+.movedex-effect {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.76rem;
+  line-height: 1.4;
+}
+
+.movedex-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 640px;
+  overflow-y: auto;
+}
+
+.movedex-list .movedex-row:last-child {
+  border-bottom: none;
+}
+
+.movedex-list .movedex-row:hover {
+  background: var(--surface-2);
+}
+
+.movedex-row.is-highlighted {
+  background: var(--violet-soft);
+  outline: 2px solid var(--violet);
+  outline-offset: -2px;
+}
+
+.movedex-empty {
+  padding: 2rem;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+@media (max-width: 760px) {
+  .movedex-table {
+    overflow-x: auto;
+  }
+
+  .movedex-row {
+    min-width: 640px;
+  }
+}

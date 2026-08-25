@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from "react";
 import "./Sidebar.css";
 
-export type AppView = "party" | "matchup" | "battle-log" | "pokedex";
+export type AppView = "party" | "matchup" | "battle-log" | "pokedex" | "movedex";
 
 // 유니코드 글자 아이콘(⬡⚔▤≡)은 폰트마다 그려지는 실제 위치(광학 중심)가 제각각이라
 // 박스를 아무리 맞춰도 어긋나 보일 수 있다. viewBox가 고정된 SVG로 바꿔서 확실히 정렬한다.
@@ -68,7 +68,7 @@ const NAV_ITEMS: { label: string; icon: ReactNode; view: AppView | null }[] = [
   { label: "결정력 & 내구력", icon: <IconSwords />, view: "matchup" },
   { label: "대전 로그", icon: <IconScroll />, view: "battle-log" },
   { label: "포켓몬 도감", icon: <IconGrid />, view: "pokedex" },
-  { label: "기술표", icon: <IconList />, view: null },
+  { label: "기술표", icon: <IconList />, view: "movedex" },
 ];
 
 interface SidebarProps {
