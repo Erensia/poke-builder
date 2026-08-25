@@ -3210,6 +3210,7 @@
     "pp": 20,
     "priority": 0,
     "effect": "그래스필드 상태일 때 우선도 +1이 된다.",
+    "priorityBoostInField": { "field": "그래스필드", "delta": 1 },
     "makesContact": true
   },
   {
@@ -3871,6 +3872,7 @@
     "pp": 12,
     "priority": 0,
     "effect": "사이코필드 상태일 때 위력이 커진다.",
+    "powerMultiplierInField": { "field": "사이코필드", "multiplier": 1.5 },
     "makesContact": false
   },
   {
@@ -4051,6 +4053,7 @@
     "pp": 8,
     "priority": 0,
     "effect": "미스트필드 상태일 때 위력이 커진다.",
+    "powerMultiplierInField": { "field": "미스트필드", "multiplier": 1.5 },
     "makesContact": false
   },
   {
@@ -4416,7 +4419,8 @@
     "accuracy": 100,
     "pp": 10,
     "priority": 0,
-    "effect": "",
+    "effect": "필드가 있으면 그 필드에 맞는 타입으로 바뀌고 위력이 2배가 된다.",
+    "fieldPulse": true,
     "classification": [
       "파동"
     ],
@@ -4709,7 +4713,9 @@
     "accuracy": 100,
     "pp": 8,
     "priority": 0,
-    "effect": "",
+    "effect": "필드를 파괴한다. 필드가 없으면 실패한다.",
+    "usageCondition": "field-required",
+    "destroysField": true,
     "makesContact": true
   },
   {
@@ -4990,6 +4996,7 @@
     "pp": 20,
     "priority": 0,
     "effect": "지면에서 올라오는 전격으로 공격한다. 상대가 일렉트릭필드 위에 있으면 위력이 2배가 된다.",
+    "powerMultiplierInField": { "field": "일렉트릭필드", "multiplier": 2 },
     "makesContact": false
   },
   {

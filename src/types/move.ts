@@ -111,10 +111,30 @@ export interface Move {
   /**
    * 특정 조건에서만 사용할 수 있는 기술만 채운다. "sleep-only"(코골기 — 잠든 상태에서만, 그리고
    * 그 잠듦 자체가 본가처럼 이 기술의 사용을 막지 않는 예외 취급),
-   * "first-turn-only"(속이기 — 등장 후 첫 턴에만. 1v1 시뮬레이터엔 교체가 없어 배틀의 1턴째로 취급).
+   * "first-turn-only"(속이기 — 등장 후 첫 턴에만. 1v1 시뮬레이터엔 교체가 없어 배틀의 1턴째로 취급),
+   * "field-required"(아이언롤러 — 활성화된 필드가 하나도 없으면 실패).
    * 조건을 안 채우면 battleSimulator가 blockedReason: "usageCondition"으로 실패시킨다.
    */
-  usageCondition?: "sleep-only" | "first-turn-only";
+  usageCondition?: "sleep-only" | "first-turn-only" | "field-required";
+  /**
+   * 그래스슬라이더 전용. 이 필드가 활성 상태면 기술의 우선도가 delta만큼 오른다(그 외 상황엔
+   * priority 값 그대로). 사이코필드의 "우선도 기술 차단"과는 필드가 서로 배타적이라(동시에
+   * 활성화될 수 없음) 겹칠 일이 없다.
+   */
+  priorityBoostInField?: { field: FieldKind; delta: number };
+  /**
+   * 미스트버스트(미스트필드)·와이드포스(사이코필드)·라이징볼트(일렉트릭필드)처럼, 지정한 필드가
+   * 활성 상태일 때 위력에 곱해지는 배율만 채운다. 필드 타입 자체가 위력을 올리는 getFieldDamageMultiplier
+   * (자속처럼 타입 일치 시 1.3배)와는 별개 축 — 이쪽은 기술 고유의 "이 필드에서만 강해짐" 효과다.
+   */
+  powerMultiplierInField?: { field: FieldKind; multiplier: number };
+  /**
+   * 대지의파동(Terrain Pulse) 전용. 필드가 활성 상태면 기술의 실제 타입이 그 필드의 표시 타입
+   * (FIELD_DISPLAY_TYPE)으로 바뀌고 위력이 2배가 된다. 필드가 없으면 원본 그대로(노말타입 50).
+   */
+  fieldPulse?: boolean;
+  /** 아이언롤러(Steel Roller) 전용. 명중하면 활성화된 필드를 제거한다. */
+  destroysField?: boolean;
   /**
    * 공중날기·구멍파기·다이빙·고스트다이브·뛰어오르기·솔라빔처럼 "1턴째 준비, 2턴째 실제 발동"하는
    * 차지 기술만 채운다. 준비 턴에는 데미지 없이 이 기술 사용만 기록되고, 다음 턴 자동으로

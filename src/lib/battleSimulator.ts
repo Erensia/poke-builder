@@ -50,8 +50,11 @@ import { computeDamage } from "./battlePower";
 import { getWeatherDamageMultiplier, computeWeatherHealFraction } from "./weatherEffects";
 import {
   FIELD_DURATION,
+  applyFieldPulse,
   computeFieldEndOfTurnHeal,
+  getFieldAdjustedPriority,
   getFieldDamageMultiplier,
+  getFieldPowerMultiplier,
   isConfusionBlockedByField,
   isPriorityMoveBlockedByField,
   isStatusBlockedByField,
@@ -366,6 +369,8 @@ export interface ActionLogEntry {
   setField?: FieldKind;
   /** 필드 기술을 썼지만 이미 다른 필드가 깔려있어서 실패했으면 true */
   fieldSetFailed?: boolean;
+  /** 아이언롤러처럼 필드를 파괴하는 기술이 명중해서 활성 필드가 없어졌으면, 없어지기 직전의 필드 종류 */
+  destroyedField?: FieldKind;
   /** 이 행동으로 트릭룸이 새로 걸렸으면 true */
   setTrickRoom?: boolean;
   /** 트릭룸을 썼지만 이미 걸려있어서 실패했으면 true */
@@ -576,6 +581,10 @@ function resolveAction(
   if (move.usageCondition === "first-turn-only" && state.turnNumber !== 1) {
     return blocked("usageCondition");
   }
+  // 아이언롤러: 활성화된 필드가 하나도 없으면 실패한다(본가 규칙)
+  if (move.usageCondition === "field-required" && !state.field) {
+    return blocked("usageCondition");
+  }
 
   // 1) 주 상태이상(잠듦/얼음/마비)으로 행동 자체가 막히는지. 잠듦/얼음은 이 판정 안에서
   // 자체 해제 카운터가 갱신되므로 결과를 attacker.status에 반드시 반영해야 한다.
@@ -666,9 +675,22 @@ function resolveAction(
   const attackerItem = attacker.slot.item ? getItem(attacker.slot.item) : undefined;
   const defenderItem = defender.slot.item ? getItem(defender.slot.item) : undefined;
 
+  // 필드 조건부 타입/위력 변경(대지의파동=fieldPulse, 미스트버스트·와이드포스·라이징볼트=
+  // powerMultiplierInField)을 특성 배율 계산보다 먼저 반영한다 — 타입이 바뀐 상태여야
+  // resolveMoveContext 안의 상성 계산(getEffectiveness)에도 바뀐 타입이 들어간다. 둘 중
+  // 한 기술이 두 속성을 동시에 갖는 경우는 없어서(대지의파동만 fieldPulse, 나머지 셋만
+  // powerMultiplierInField) 순서·중복 곱셈 걱정 없이 그냥 합쳐도 안전하다.
+  const fieldPulse = applyFieldPulse(move, state.field);
+  const fieldPowerMultiplier = getFieldPowerMultiplier(move, state.field);
+  const fieldAdjustedMove: Move = {
+    ...move,
+    type: fieldPulse.type,
+    power: fieldPulse.power === null ? null : Math.round(fieldPulse.power * fieldPowerMultiplier),
+  };
+
   // evaluateSlotMatchup(1턴 스냅샷 판정)과 같은 로직을 공유 — 특성 배율/타입 변경/자속/상대 상성
   const { effectiveMove, abilityOffenseMultiplier, abilityDefenseMultiplier, stabMultiplier, typeEffectiveness } =
-    resolveMoveContext(attackerAbility, move, defender.types, defenderAbility, state.weather);
+    resolveMoveContext(attackerAbility, fieldAdjustedMove, defender.types, defenderAbility, state.weather);
 
   // 메트로놈(연속 같은 기술 위력 증가)용 스트릭 갱신 — 여기까지 왔다는 건 앞의 모든 행동방해
   // 판정(상태이상/풀죽음/반동/혼란/차지 등)을 통과해서 실제로 이 기술을 쓴다는 뜻이라, 명중 여부와
@@ -1082,6 +1104,15 @@ function resolveAction(
     }
   }
 
+  // 아이언롤러: 명중하면 활성 필드를 제거한다. usageCondition: "field-required"로 필드가 없으면
+  // 애초에 이 지점까지 오지 못하니(맨 위에서 이미 실패 처리), 여기선 있는 필드를 지우기만 하면 된다.
+  let destroyedField: FieldKind | undefined;
+  if (effectiveMove.destroysField && state.field) {
+    destroyedField = state.field;
+    state.field = undefined;
+    state.fieldTurnsRemaining = undefined;
+  }
+
   // 트릭룸도 필드와 같은 이유로 이미 걸려있으면 재사용 시 실패 처리한다(지속 턴수 갱신 방지) —
   // 다만 아직 아무 효과도 안 걸린 채로 게임이 끝나는 극단적 경우는 없으니 별 문제 없음.
   let trickRoomSetFailed = false;
@@ -1167,6 +1198,7 @@ function resolveAction(
     curedStatusTarget,
     setField: fieldSetFailed ? undefined : effectiveMove.setsField,
     fieldSetFailed,
+    destroyedField,
     setTrickRoom: trickRoomSetFailed ? undefined : effectiveMove.setsTrickRoom,
     trickRoomSetFailed,
     setWeather: effectiveMove.setsWeather,
@@ -1234,10 +1266,15 @@ export function runTurn(
   // 쓴다 — 이번 턴에 트릭룸을 새로 걸어도 그 즉시 같은 턴의 순서 계산에는 영향을 주지 않는다
   // (본가 규칙: 순서는 행동 전에 이미 정해짐).
   const trickRoomActive = state.trickRoomTurnsRemaining !== undefined;
+  // 그래스슬라이더처럼 필드 조건부로 우선도가 오르는 기술은, 순서를 정하는 이 시점의 필드
+  // 상태(=이번 턴 시작 시점)를 기준으로 반영한다. compareTurnOrder는 move.priority만 보므로
+  // 우선도만 조정한 얕은 복사본을 넘긴다.
+  const priorityAdjustedMoveA = { ...moveA, priority: getFieldAdjustedPriority(moveA, state.field) };
+  const priorityAdjustedMoveB = { ...moveB, priority: getFieldAdjustedPriority(moveB, state.field) };
   const firstIsA =
     compareTurnOrder(
-      { realSpeed: speedA, move: moveA, stages: state.a.stages },
-      { realSpeed: speedB, move: moveB, stages: state.b.stages },
+      { realSpeed: speedA, move: priorityAdjustedMoveA, stages: state.a.stages },
+      { realSpeed: speedB, move: priorityAdjustedMoveB, stages: state.b.stages },
       random,
       trickRoomActive,
     ) === 0;

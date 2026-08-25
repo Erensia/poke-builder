@@ -346,6 +346,7 @@ export function BattleLogPage() {
                         const sleepConditionUnmet = move.usageCondition === "sleep-only" && fighter.status.condition !== "sleep";
                         const firstTurnConditionUnmet =
                           move.usageCondition === "first-turn-only" && battleState.turnNumber !== 0;
+                        const fieldConditionUnmet = move.usageCondition === "field-required" && !battleState.field;
                         const disabled = pp <= 0 || fighter.currentHp <= 0 || !!winner;
                         // 셋업 카드의 party-move-pip와 동일하게 기술 타입 배경색을 입힌다.
                         const moveColor = move.type ? TYPE_COLORS[move.type] : undefined;
@@ -363,7 +364,9 @@ export function BattleLogPage() {
                                 ? "잠든 상태에서만 사용 가능 — 지금 쓰면 실패해요"
                                 : firstTurnConditionUnmet
                                   ? "등장 후 첫 턴에만 사용 가능 — 지금 쓰면 실패해요"
-                                  : undefined
+                                  : fieldConditionUnmet
+                                    ? "필드가 있을 때만 사용 가능 — 지금 쓰면 실패해요"
+                                    : undefined
                             }
                             onClick={() => setSelected((prev) => ({ ...prev, [side]: move.id }))}
                           >
@@ -465,6 +468,9 @@ export function BattleLogPage() {
                         )}
                         {!action.blockedReason && action.hit && action.fieldSetFailed && (
                           <> · 이미 필드가 있어 실패!</>
+                        )}
+                        {!action.blockedReason && action.hit && action.destroyedField && (
+                          <> · {action.destroyedField} 파괴!</>
                         )}
                         {!action.blockedReason && action.hit && action.setTrickRoom && (
                           <> · 트릭룸 발동!</>
