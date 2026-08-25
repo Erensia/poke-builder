@@ -5488,5 +5488,88 @@
     "priority": 0,
     "effect": "쓰러진 같은 편 포켓몬 1마리당 위력이 50씩 오른다(1v1 시뮬레이터에는 동료가 없어 항상 기본 위력 50으로 계산).",
     "makesContact": false
+  },
+  {
+    "id": "스위프뺨치기",
+    "name": "스위프뺨치기",
+    "type": "노말",
+    "category": "physical",
+    "power": 25,
+    "accuracy": 85,
+    "pp": 12,
+    "priority": 0,
+    "effect": "2~5회 동안 연속으로 쓴다.",
+    "makesContact": true,
+    "minHits": 2,
+    "maxHits": 5
+  },
+  {
+    "id": "신통력",
+    "name": "신통력",
+    "type": "에스퍼",
+    "category": "special",
+    "power": 80,
+    "accuracy": 100,
+    "pp": 20,
+    "priority": 0,
+    "effect": "10% 확률로 상대를 풀죽게 만든다.",
+    "inflictsVolatile": [
+      {
+        "volatile": "flinch",
+        "target": "opponent",
+        "chance": 10
+      }
+    ],
+    "makesContact": false
+  },
+  {
+    "id": "고드름침",
+    "name": "고드름침",
+    "type": "얼음",
+    "category": "physical",
+    "power": 25,
+    "accuracy": 100,
+    "pp": 20,
+    "priority": 0,
+    "effect": "2~5회 동안 연속으로 쓴다.",
+    "makesContact": false,
+    "minHits": 2,
+    "maxHits": 5
+  },
+  {
+    "id": "얼음뭉치",
+    "name": "얼음뭉치",
+    "type": "얼음",
+    "category": "physical",
+    "power": 40,
+    "accuracy": 100,
+    "pp": 20,
+    "priority": 1,
+    "effect": "반드시 선제공격을 할 수 있다.",
+    "makesContact": false
+  },
+  {
+    "id": "오로라베일",
+    "name": "오로라베일",
+    "type": "얼음",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 20,
+    "priority": 0,
+    "effect": "5턴 동안 오로라 베일을 펼쳐 상대로부터 받는 물리·특수공격 데미지를 절반으로 줄인다. 싸라기눈(눈) 상태일 때만 사용할 수 있다(사용조건·양쪽 카테고리 동시경감 로직은 아직 미구현 — 효과 텍스트만).",
+    "makesContact": false
+  },
+  {
+    "id": "프리즈드라이",
+    "name": "프리즈드라이",
+    "type": "얼음",
+    "category": "special",
+    "power": 70,
+    "accuracy": 100,
+    "pp": 20,
+    "priority": 0,
+    "effect": "물타입 포켓몬에게는 상성과 무관하게 효과가 굉장하다(타입 상성 오버라이드는 아직 미구현 — 효과 텍스트만). Champions에서는 얼음 상태이상 부여 효과가 삭제됨.",
+    "makesContact": false
   }
 ]
