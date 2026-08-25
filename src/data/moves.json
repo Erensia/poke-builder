@@ -261,17 +261,6 @@
     "makesContact": true
   },
   {
-    "id": "대지의 파동",
-    "name": "대지의 파동",
-    "type": "노말",
-    "category": "special",
-    "power": 50,
-    "accuracy": 100,
-    "pp": 10,
-    "effect": "",
-    "priority": 0
-  },
-  {
     "id": "돌림노래",
     "name": "돌림노래",
     "type": "노말",
@@ -4425,7 +4414,7 @@
     "category": "special",
     "power": 50,
     "accuracy": 100,
-    "pp": 12,
+    "pp": 10,
     "priority": 0,
     "effect": "",
     "classification": [
