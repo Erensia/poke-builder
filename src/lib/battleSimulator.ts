@@ -17,6 +17,7 @@ import {
   type VolatileCondition,
   type VolatileConditionState,
 } from "../types/status";
+import type { Ability } from "../types/ability";
 import { getPokemon, getAbility, getMove, getItem } from "./data";
 import { getEffectiveForm, getEffectiveAbilityId } from "./pokemonForm";
 import { computeRealStats } from "./statCalculator";
@@ -256,8 +257,13 @@ function weatherRockBonus(weather: WeatherKind, aSlot: EvaluatorSlot, bSlot: Eva
 
 /**
  * 사용자가 날씨를 직접 고르지 않았을 때, 양쪽 특성(가뭄/잔비/모래날림 등 setsWeather)을 확인해서
- * 배틀 시작과 동시에 날씨를 자동으로 바꾼다. 양쪽 다 날씨 특성이면 실효 스피드가 빠른 쪽이 이긴다
- * (참고할 다른 기준이 없어 간이화한 규칙 — Phase 3 문서 "확인 필요" 항목).
+ * 배틀 시작과 동시에 날씨를 자동으로 바꾼다.
+ *
+ * 양쪽 다 날씨 특성이면 실효 스피드가 빠른 쪽부터 순서대로 발동한다(사용자 확인) — "우선권"이
+ * 있는 게 아니라 그냥 둘 다 발동하는데, 날씨 기술/특성은 이미 다른 날씨가 있어도 실패하지 않고
+ * 항상 덮어쓰는 규칙(resolveAction의 Move.setsWeather 처리와 동일)이라, 나중에(=스피드가 느린
+ * 쪽이) 발동하는 쪽의 날씨가 결국 최종적으로 남는다. 로그에도 두 특성이 순서대로 발동하는 걸
+ * 그대로 보여준다.
  *
  * 챔피언스는 특성으로 걸리든 사용자가 수동으로 고르든 날씨에 5턴 카운트다운이 있다(사용자 확인 —
  * 본가와 달리 날씨 특성이 무제한 지속이 아님). 그래서 여기서도 기술로 걸 때(resolveAction의
@@ -284,17 +290,37 @@ function resolveEntryWeather(
     return { weather: manualWeather, weatherTurnsRemaining: undefined, announcements: [] };
   }
 
-  const aWins =
-    !!aAbility?.setsWeather && (!bAbility?.setsWeather || aFighter.realStats.spe >= bFighter.realStats.spe);
+  const announce = (slot: EvaluatorSlot, ability: Ability, weather: WeatherKind) => {
+    const pokemonName = getPokemon(slot.pokemonId)?.name ?? "포켓몬";
+    return `${pokemonName}의 ${ability.name}! 날씨가 ${weather}${roEuro(weather)} 바뀌었다!`;
+  };
+
+  if (aAbility?.setsWeather && bAbility?.setsWeather) {
+    // 둘 다 날씨 특성 보유: 스피드가 빠른 쪽부터 순서대로 발동하고, 나중에(느린 쪽이) 발동하는
+    // 날씨가 덮어써서 최종적으로 남는다.
+    const aFaster = aFighter.realStats.spe >= bFighter.realStats.spe;
+    const [firstSlot, firstAbility] = aFaster ? ([aSlot, aAbility] as const) : ([bSlot, bAbility] as const);
+    const [secondSlot, secondAbility] = aFaster ? ([bSlot, bAbility] as const) : ([aSlot, aAbility] as const);
+    const weather = secondAbility.setsWeather!;
+    return {
+      weather,
+      weatherTurnsRemaining: WEATHER_DURATION + weatherRockBonus(weather, aSlot, bSlot),
+      announcements: [
+        announce(firstSlot, firstAbility, firstAbility.setsWeather!),
+        announce(secondSlot, secondAbility, weather),
+      ],
+    };
+  }
+
+  const aWins = !!aAbility?.setsWeather;
   const winnerSlot = aWins ? aSlot : bSlot;
   const winnerAbility = (aWins ? aAbility : bAbility)!;
   const weather = winnerAbility.setsWeather!;
-  const pokemonName = getPokemon(winnerSlot.pokemonId)?.name ?? "포켓몬";
 
   return {
     weather,
     weatherTurnsRemaining: WEATHER_DURATION + weatherRockBonus(weather, aSlot, bSlot),
-    announcements: [`${pokemonName}의 ${winnerAbility.name}! 날씨가 ${weather}${roEuro(weather)} 바뀌었다!`],
+    announcements: [announce(winnerSlot, winnerAbility, weather)],
   };
 }
 
