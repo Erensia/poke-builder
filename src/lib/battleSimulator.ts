@@ -21,7 +21,8 @@ import type { Ability } from "../types/ability";
 import { getPokemon, getAbility, getMove, getItem } from "./data";
 import { getEffectiveForm, getEffectiveAbilityId } from "./pokemonForm";
 import { computeRealStats } from "./statCalculator";
-import { applyMoveStatChanges, clampStagesToNonNegative } from "./statStages";
+import { applyMoveStatChanges, applyStageDelta, clampStagesToNonNegative } from "./statStages";
+import { hitTriggerMatchesMove } from "./abilityHitTriggers";
 import {
   applyMoveAccuracyEvasionChanges,
   applyMoveCritStageChanges,
@@ -467,6 +468,18 @@ export interface ActionLogEntry {
   defenderBerryHealAmount?: number;
   /** defenderBerryHealAmount를 준 도구 이름 */
   defenderBerryHealItemName?: string;
+  /** 정전기/불꽃몸처럼 방어측 특성이 발동해 공격자에게 주 상태이상을 걸었으면 그 상태이상 */
+  abilityInflictedStatusOnAttacker?: StatusConditionState["condition"];
+  /** abilityInflictedStatusOnAttacker를 건 특성 이름 */
+  abilityInflictedStatusAbilityName?: string;
+  /** 까칠한피부처럼 방어측 특성이 발동해 공격자에게 고정 데미지를 줬으면 그 양 */
+  abilityDamageToAttacker?: number;
+  /** abilityDamageToAttacker를 준 특성 이름 */
+  abilityDamageAbilityName?: string;
+  /** 저주받은바디처럼 방어측 특성이 발동해 공격자가 방금 쓴 기술을 봉인(PP 0)했으면 그 기술 이름 */
+  abilityDisabledMoveName?: string;
+  /** abilityDisabledMoveName을 봉인시킨 특성 이름 */
+  abilityDisableAbilityName?: string;
 }
 
 /** 턴 종료 시 상태이상 데미지 로그 */
@@ -1275,6 +1288,44 @@ function resolveAction(
     }
   }
 
+  // 방어측 접촉/피격 트리거 특성(정전기·불꽃몸·까칠한피부·깨어진갑옷·저주받은바디 — Phase 5 §1).
+  // 데미지를 실제로 준(damage > 0) 피격에만 판정한다 — 면역(0배)이나 빗나감이면 애초에 damage가 0.
+  let abilityInflictedStatusOnAttacker: StatusConditionState["condition"] | undefined;
+  let abilityInflictedStatusAbilityName: string | undefined;
+  let abilityDamageToAttacker = 0;
+  let abilityDamageAbilityName: string | undefined;
+  let abilityDisabledMoveName: string | undefined;
+  let abilityDisableAbilityName: string | undefined;
+  if (isDamaging && damage > 0 && defenderAbility?.hitTrigger && !isFainted(attacker)) {
+    const trigger = defenderAbility.hitTrigger;
+    const chance = trigger.chance !== undefined ? trigger.chance / 100 : 1;
+    if (hitTriggerMatchesMove(trigger, effectiveMove) && random() < chance) {
+      if (trigger.inflictsStatusOnAttacker && !isImmuneToStatus(trigger.inflictsStatusOnAttacker, attacker.types)) {
+        const before = attacker.status.condition;
+        attacker.status = inflictStatus(attacker.status, trigger.inflictsStatusOnAttacker);
+        if (attacker.status.condition !== before) {
+          abilityInflictedStatusOnAttacker = attacker.status.condition;
+          abilityInflictedStatusAbilityName = defenderAbility.name;
+        }
+      }
+      if (trigger.damagesAttackerFraction) {
+        abilityDamageToAttacker = Math.floor(attacker.maxHp * trigger.damagesAttackerFraction);
+        attacker.currentHp = Math.max(0, attacker.currentHp - abilityDamageToAttacker);
+        abilityDamageAbilityName = defenderAbility.name;
+      }
+      if (trigger.selfStatChanges) {
+        for (const change of trigger.selfStatChanges) {
+          defender.stages = applyStageDelta(defender.stages, change.stat, change.delta);
+        }
+      }
+      if (trigger.disablesAttackerMove && attacker.remainingPp[move.id] !== undefined) {
+        attacker.remainingPp[move.id] = 0;
+        abilityDisabledMoveName = move.name;
+        abilityDisableAbilityName = defenderAbility.name;
+      }
+    }
+  }
+
   return {
     actor: actorKey,
     move,
@@ -1322,6 +1373,12 @@ function resolveAction(
     attackerBerryHealItemName,
     defenderBerryHealAmount: defenderBerryHealAmount || undefined,
     defenderBerryHealItemName,
+    abilityInflictedStatusOnAttacker,
+    abilityInflictedStatusAbilityName,
+    abilityDamageToAttacker: abilityDamageToAttacker || undefined,
+    abilityDamageAbilityName,
+    abilityDisabledMoveName,
+    abilityDisableAbilityName,
   };
 }
 

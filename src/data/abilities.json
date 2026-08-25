@@ -85,7 +85,12 @@
   {
     "id": "저주받은바디",
     "name": "저주받은바디",
-    "description": "공격을 받으면 30%의 확률로 상대가 방금 사용한 기술을 사슬묶기(PP 0) 상태로 만든다."
+    "description": "공격을 받으면 30%의 확률로 상대가 방금 사용한 기술을 사슬묶기(PP 0) 상태로 만든다.",
+    "hitTrigger": {
+      "on": "damaging",
+      "chance": 30,
+      "disablesAttackerMove": true
+    }
   },
   {
     "id": "그림자밟기",
@@ -142,7 +147,11 @@
   {
     "id": "까칠한피부",
     "name": "까칠한피부",
-    "description": "접촉기로 공격해 온 상대의 최대 HP 1/8만큼 데미지를 입힌다."
+    "description": "접촉기로 공격해 온 상대의 최대 HP 1/8만큼 데미지를 입힌다.",
+    "hitTrigger": {
+      "on": "contact",
+      "damagesAttackerFraction": 0.125
+    }
   },
   {
     "id": "모래의힘",
@@ -274,7 +283,14 @@
   {
     "id": "깨어진갑옷",
     "name": "깨어진갑옷",
-    "description": "물리 공격을 받으면 방어가 1랭크 떨어지고 스피드가 2랭크 상승한다."
+    "description": "물리 공격을 받으면 방어가 1랭크 떨어지고 스피드가 2랭크 상승한다.",
+    "hitTrigger": {
+      "on": "physical",
+      "selfStatChanges": [
+        { "stat": "def", "delta": -1 },
+        { "stat": "spe", "delta": 2 }
+      ]
+    }
   },
   {
     "id": "촉촉보이스",
@@ -324,7 +340,12 @@
   {
     "id": "정전기",
     "name": "정전기",
-    "description": "물리 접촉을 받으면 30%의 확률로 상대를 마비 상태로 만든다."
+    "description": "물리 접촉을 받으면 30%의 확률로 상대를 마비 상태로 만든다.",
+    "hitTrigger": {
+      "on": "physicalContact",
+      "chance": 30,
+      "inflictsStatusOnAttacker": "paralysis"
+    }
   },
   {
     "id": "피뢰침",
@@ -349,7 +370,12 @@
   {
     "id": "불꽃몸",
     "name": "불꽃몸",
-    "description": "물리 접촉을 받으면 30%의 확률로 상대를 화상 상태로 만든다."
+    "description": "물리 접촉을 받으면 30%의 확률로 상대를 화상 상태로 만든다.",
+    "hitTrigger": {
+      "on": "physicalContact",
+      "chance": 30,
+      "inflictsStatusOnAttacker": "burn"
+    }
   },
   {
     "id": "이상한비늘",

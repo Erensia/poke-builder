@@ -595,6 +595,26 @@ export function BattleLogPage() {
                           )}
                         </div>
                       )}
+                      {/* 방어측 접촉/피격 트리거 특성(정전기·불꽃몸=상태이상, 까칠한피부=고정 데미지,
+                          저주받은바디=PP 봉인) — 전부 defenderName의 특성이 actorName(공격자)에게 발동한다 */}
+                      {!action.blockedReason && action.abilityInflictedStatusOnAttacker && (
+                        <div className="battle-turn-line is-muted">
+                          {defenderName}의 {action.abilityInflictedStatusAbilityName}!{" "}
+                          {STATUS_ONSET_TEXT[action.abilityInflictedStatusOnAttacker](actorName)}
+                        </div>
+                      )}
+                      {!action.blockedReason && !!action.abilityDamageToAttacker && (
+                        <div className="battle-turn-line is-muted">
+                          {defenderName}의 {action.abilityDamageAbilityName}! {actorName}
+                          {eunNeun(actorName)} {action.abilityDamageToAttacker} 데미지를 입었다
+                        </div>
+                      )}
+                      {!action.blockedReason && action.abilityDisabledMoveName && (
+                        <div className="battle-turn-line is-muted">
+                          {defenderName}의 {action.abilityDisableAbilityName}! {actorName}의{" "}
+                          {action.abilityDisabledMoveName}이(가) 봉인되었다!
+                        </div>
+                      )}
                       {/* 발버둥 반동은 상대 데미지와 별개의 수치라 자기 줄로 분리 */}
                       {!action.blockedReason && action.move.id === STRUGGLE_MOVE.id && action.selfDamage > 0 && (
                         <div className="battle-turn-line is-muted">
