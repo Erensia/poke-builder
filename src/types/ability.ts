@@ -122,4 +122,10 @@ export interface Ability {
   hitTrigger?: AbilityHitTrigger;
   /** 특정 타입 기술을 완전히 무효화하는 특성만 채운다(타오르는불꽃·피뢰침) */
   absorbsType?: AbilityTypeAbsorb;
+  /**
+   * 옹골참: 최대 HP 상태에서 기절할 데미지를 받으면 HP 1을 남기고 버틴다. 기합의띠
+   * (Item.survivesLethalAtFullHpOnce)와 조건은 똑같지만, 도구와 달리 소모되지 않아 대전 중
+   * 몇 번이든(그때마다 다시 풀피여야) 반복 발동한다.
+   */
+  survivesLethalAtFullHp?: boolean;
 }

@@ -373,7 +373,8 @@
   {
     "id": "옹골참",
     "name": "옹골참",
-    "description": "일격필살기가 통하지 않으며, 최대 HP 상태에서는 한 번의 공격으로 기절하지 않고 HP 1이 남는다."
+    "description": "일격필살기가 통하지 않으며, 최대 HP 상태에서는 한 번의 공격으로 기절하지 않고 HP 1이 남는다.",
+    "survivesLethalAtFullHp": true
   },
   {
     "id": "굳건한신념",

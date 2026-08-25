@@ -699,6 +699,14 @@ export function BattleLogPage() {
                           {roEuro(action.enduredItemName)} 버텼다! (HP 1)
                         </div>
                       )}
+                      {/* 옹골참 — 기합의띠와 같은 문구지만 도구가 아니라 특성이 버텨줬을 때 */}
+                      {!action.blockedReason && action.enduredAbilityName && (
+                        <div className="battle-turn-line is-muted">
+                          {defenderName}
+                          {eunNeun(defenderName)} {action.enduredAbilityName}
+                          {roEuro(action.enduredAbilityName)} 버텼다! (HP 1)
+                        </div>
+                      )}
                       {/* 하양허브 — 자신/상대 어느 쪽에서 발동했는지 따로 표시 */}
                       {!action.blockedReason && action.restoredStatsSelfItemName && (
                         <div className="battle-turn-line is-muted">

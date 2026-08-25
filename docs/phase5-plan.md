@@ -21,7 +21,8 @@ abilities.json은 처음 발견 당시(라이츄 추가 시점) 54개였지만 �
 |---|---|---|
 | ~~HP 1/3 이하 자기 타입 위력 1.5배~~ | `AbilityModifierCondition.attackerHpAtMostFraction` 신설 — **완료** | ~~맹화~~, ~~급류~~, ~~심록~~, ~~벌레의알림~~ |
 | ~~HP 가득 찬 상태 조건부 방어 배율~~ | `AbilityModifierCondition.defenderHpIsFull` 신설 — **완료** | ~~멀티스케일~~ |
-| 날씨 조건부 스탯 배율/회복 | `modifiers`의 `weatherIs`는 있지만 스탯 배율·회복은 별도 로직 필요 | 선파워, 엽록소, 쓱쓱, 모래숨기(회피), 옹골참, 젖은접시, 모래헤치기 |
+| 날씨 조건부 스탯 배율/회복 | `modifiers`의 `weatherIs`는 있지만 스탯 배율·회복은 별도 로직 필요 | 선파워, 엽록소, 쓱쓱, 모래숨기(회피), 젖은접시, 모래헤치기 |
+| ~~최대 HP 상태에서 기절 방지~~ | `Ability.survivesLethalAtFullHp` 신설(기합의띠와 조건 동일, 소모 없음) — **완료** | ~~옹골참~~ |
 | ~~자신 상태이상 조건부 배율~~ | `AbilityModifierCondition.defenderHasStatusCondition` + `moveCategoryIn` 신설 — **완료** | ~~이상한비늘~~ |
 | ~~접촉 피격 시 발동(확률부 상태이상/데미지/랭크변화)~~ | `Ability.hitTrigger`(`abilityHitTriggers.ts`) 신설 — **5/6 완료** | ~~정전기~~, ~~저주받은바디~~, ~~까칠한피부~~, 헤롱헤롱바디(보류), ~~깨어진갑옷~~, ~~불꽃몸~~ |
 | ~~특정 타입 기술 피격 시 발동~~ | `hitTrigger.moveTypeIn`(정의의마음·지구력) + `Ability.absorbsType` 신설(타오르는불꽃·피뢰침) — **완료** | ~~정의의마음~~, ~~타오르는불꽃~~, ~~지구력~~, ~~피뢰침~~ |
@@ -68,6 +69,8 @@ abilities.json은 처음 발견 당시(라이츄 추가 시점) 54개였지만 �
 **"자신 상태이상 조건부 배율" — 완료.** `AbilityModifierCondition.defenderHasStatusCondition`을 신설해 멀티스케일과 같은 패턴으로 배선(기본값 `false` — 매치업 페이지는 상태이상 없음 취급). 다만 이상한비늘은 본가에서 "방어 실수치"만 올리는 특성이라 특수 데미지엔 영향이 없어야 하는데, 기존 `AbilityModifierCondition`엔 기술 카테고리(물리/특수)로 거를 조건이 없었다(`moveClassificationIn`은 베기/펀치 같은 별개 태그 축) — `moveCategoryIn`을 새로 추가해 `["physical"]`로 제한. 밀로틱(이상한비늘) 스모크 테스트로 물리기 화상 상태 18→12(정확히 1.5배 방어) 데미지 감소, 특수기는 화상 여부와 무관하게 17로 동일함을 확인.
 
 **"상태이상 해제 확률 수정" — 완료.** `checkStatusActionBlock`(`statusConditions.ts`)에 `hasEarlyBird` 파라미터를 신설해 잠듦 해제 스케줄 조회 시 `turnsElapsed`에 +1을 해서 스케줄 전체를 한 턴씩 앞당긴다(일반 잠듦: 0%→33%→100%였던 걸 33%→100%로, 잠자기의 고정 2턴도 1턴으로). `resolveAction`(`battleSimulator.ts`)에서 `attacker.effectiveAbilityId === "일찍기상"` 여부를 상태이상 판정보다 먼저(원래 `attackerAbility` 조회 지점보다 위에서) 로컬로 계산해 넘긴다. 캥카(일찍기상)가 실제 로스터에 있음. 유닛 스모크 테스트로 일반 잠듦(1턴째 33% 적용 확인)·잠자기(2턴→1턴으로 단축 확인) 둘 다 검증.
+
+**"최대 HP 상태에서 기절 방지"(옹골참) — 완료.** 착수해보니 이 문서의 "날씨 조건부 스탯 배율/회복" 분류가 틀렸다 — 옹골참 원문 설명("일격필살기가 통하지 않으며, 최대 HP 상태에서는 한 번의 공격으로 기절하지 않고 HP 1이 남는다")엔 날씨가 전혀 없다(지구력 오분류와 같은 패턴). 실제로는 기합의띠(`Item.survivesLethalAtFullHpOnce`)와 조건이 완전히 같아서, `Ability.survivesLethalAtFullHp`를 신설하고 `battleSimulator.ts`의 기존 `applyEndurance` 판정에 도구 판정이 실패했을 때(또는 도구가 없을 때) 이어서 체크하는 방식으로 얹었다. 도구와 다른 점은 소모되지 않는다는 것뿐이라(매번 다시 풀피인지만 확인) 코드도 그만큼 단순하다. 일격필살기(고정 즉사기) 자체는 이 로스터/시뮬레이터에 아예 없어서 그 부분은 처음부터 적용 대상이 없다. `enduredAbilityName` 필드와 로그 문구(기합의띠와 동일 패턴)도 같이 추가. 브리두라스(옹골참) 스모크 테스트로 풀피일 때만 HP 1로 버티고, 풀피가 아니거나 특성이 다르면 정상적으로 기절함을 확인.
 
 (발견 경위: Phase 4.5 §1 라이츄 추가 작업 중 abilities.json 전수 점검. 이후 로스터가 더 늘어난 걸 반영해 이 문서를 쓰면서 재점검함)
 

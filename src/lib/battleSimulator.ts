@@ -429,6 +429,8 @@ export interface ActionLogEntry {
   recoilDamage: number;
   /** 기합의띠·기합의머리띠 덕분에 기절할 데미지를 버티고 HP 1로 남았으면 그 도구 이름 */
   enduredItemName?: string;
+  /** 옹골참 덕분에 기절할 데미지를 버티고 HP 1로 남았으면 그 특성 이름 */
+  enduredAbilityName?: string;
   /** 하양허브 — 이번 행동의 주체(자신) 쪽에서 발동했으면 그 도구 이름 */
   restoredStatsSelfItemName?: string;
   /** 하양허브 — 상대 쪽에서 발동했으면 그 도구 이름 */
@@ -955,6 +957,7 @@ function resolveAction(
   // 다단히트 루프 안에서 타수마다 호출되므로, 한 타에서 버텨도 다음 타에서 다시 죽을 수 있고
   // (기합의머리띠는 매번 재판정, 기합의띠는 이미 소모돼 두 번은 못 버팀) 그건 본가와 동일하다.
   let enduredItemName: string | undefined;
+  let enduredAbilityName: string | undefined;
   function applyEndurance(preHp: number): void {
     if (defender.currentHp > 0 || preHp <= 0) return;
     const result = getEnduranceResult(defenderItem, preHp, defender.maxHp, defender.itemConsumed ?? false, random);
@@ -962,6 +965,12 @@ function resolveAction(
       defender.currentHp = 1;
       enduredItemName = defenderItem?.name;
       if (result.consumes) defender.itemConsumed = true;
+      return;
+    }
+    // 옹골참: 기합의띠와 조건은 같지만(최대 HP 상태) 소모되지 않아 매번 다시 판정한다.
+    if (defenderAbility?.survivesLethalAtFullHp && preHp === defender.maxHp) {
+      defender.currentHp = 1;
+      enduredAbilityName = defenderAbility.name;
     }
   }
 
@@ -1437,6 +1446,7 @@ function resolveAction(
     selfFainted: isFainted(attacker),
     recoilDamage,
     enduredItemName,
+    enduredAbilityName,
     restoredStatsSelfItemName,
     restoredStatsOpponentItemName,
     hitCount,
