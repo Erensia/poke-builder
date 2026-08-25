@@ -1454,6 +1454,14 @@ function resolveAction(
     }
   }
 
+  // 자기과신: 자신의 데미지로 상대를 실제로 쓰러뜨렸을 때만 발동. resolveAction은 상대가 이미
+  // 쓰러진 상태로는 호출되지 않으므로(runTurn의 break), 여기서 isFainted(defender)가 true라면
+  // 이번 행동 중에 쓰러진 것이다 — 데미지를 준 경우로 한정해 상태이상/씨뿌리기 등 무관한 원인은 제외.
+  if (isDamaging && damage > 0 && isFainted(defender) && attackerAbility?.boostsStatOnKo) {
+    const boost = attackerAbility.boostsStatOnKo;
+    attacker.stages = applyStageDelta(attacker.stages, boost.stat, boost.delta);
+  }
+
   return {
     actor: actorKey,
     move,

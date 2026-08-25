@@ -164,4 +164,6 @@ export interface Ability {
    * 붙는다(불굴의마음: 스피드 +1, 본가 "오기"와 동일 수치로 채움 — 원문에 배율이 없어 표준값 사용).
    */
   boostsStatOnFlinch?: AbilityStatBoost;
+  /** 자기과신: 자신이 데미지를 줘서 상대를 쓰러뜨릴 때마다 이 랭크변화가 붙는다(공격 +1). */
+  boostsStatOnKo?: AbilityStatBoost;
 }

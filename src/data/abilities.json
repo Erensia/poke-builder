@@ -523,7 +523,8 @@
   {
     "id": "자기과신",
     "name": "자기과신",
-    "description": "다른 포켓몬을 쓰러뜨릴 때마다 공격이 1랭크 상승한다."
+    "description": "다른 포켓몬을 쓰러뜨릴 때마다 공격이 1랭크 상승한다.",
+    "boostsStatOnKo": { "stat": "atk", "delta": 1 }
   },
   {
     "id": "모래헤치기",
