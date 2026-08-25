@@ -2,6 +2,7 @@ import type { Move } from "../types/move";
 import type { WeatherKind } from "../types/weather";
 import type { FieldKind } from "../types/field";
 import type { PokemonType } from "../types/pokemon-type";
+import type { StanceChangeForms } from "../types/pokemon";
 import {
   NEUTRAL_ACCURACY_STAGES,
   NEUTRAL_CRIT_STAGE,
@@ -188,6 +189,10 @@ export interface BattleFighterState {
    * 정적 데이터(Ability.absorbsType)만으로는 "발동한 적 있는지"를 표현할 수 없어 런타임 상태로 분리했다.
    */
   ownMoveTypeBoosts: Partial<Record<PokemonType, number>>;
+  /** 킬가르도(배틀스위치)만 채운다 — 두 폼의 종족값 세트와 실드폼 복귀 전용 기술 id */
+  stanceChangeForms?: StanceChangeForms;
+  /** stanceChangeForms가 있을 때만 의미 있음. 등장 시 항상 "shield"로 시작한다 */
+  currentStanceForm?: "shield" | "blade";
 }
 
 /** 두 포켓몬(a/b)을 마주 세운 배틀 상태 */
@@ -223,6 +228,9 @@ export function createFighterState(slot: EvaluatorSlot, moves: Move[]): BattleFi
   if (!pokemon) throw new Error(`알 수 없는 포켓몬: ${slot.pokemonId}`);
 
   const form = getEffectiveForm(pokemon, slot);
+  // 킬가르도(배틀스위치): pokemon.baseStats에 이미 실드폼 수치를 그대로 채워뒀으므로, 등장 시점
+  // 실수치는 별도 분기 없이 그대로 계산된다 — currentForm/stanceChangeForms만 같이 들고 다니다가
+  // resolveAction에서 기술 카테고리에 따라 필요할 때 realStats를 다시 계산한다.
   const realStats = computeRealStats(form.baseStats, slot.points, slot.nature);
 
   return {
@@ -240,6 +248,8 @@ export function createFighterState(slot: EvaluatorSlot, moves: Move[]): BattleFi
     remainingPp: Object.fromEntries(moves.map((m) => [m.id, m.pp])),
     screens: {},
     ownMoveTypeBoosts: {},
+    stanceChangeForms: pokemon.stanceChangeForms,
+    currentStanceForm: pokemon.stanceChangeForms ? "shield" : undefined,
   };
 }
 
@@ -815,6 +825,26 @@ function resolveAction(
   // 무관하게 여기서 갱신한다(본가 규칙 — 빗나가도 스트릭은 유지되고, 다른 기술을 쓰면 끊긴다).
   attacker.lastMoveStreak = attacker.lastMoveId === effectiveMove.id ? (attacker.lastMoveStreak ?? 1) + 1 : 1;
   attacker.lastMoveId = effectiveMove.id;
+
+  // 배틀스위치(킬가르도): 여기까지 왔다는 건 이번 기술을 실제로 사용한다는 뜻이라(위 lastMoveStreak
+  // 주석과 동일한 근거), 명중 여부와 무관하게 폼이 바뀐다 — 데미지 기술이면 블레이드폼(공격/특공↑),
+  // 킹실드(revertMoveId)를 쓰면 실드폼으로 되돌아간다. 그 외 변화기는 폼을 유지한다(본가 규칙 —
+  // 킹실드만 실드폼 복귀 트리거고 다른 변화기는 폼에 영향 없음). 이 스탯 재계산은 데미지 계산보다
+  // 먼저 일어나야 이번 공격 자체에 새 폼의 실수치가 반영된다.
+  if (attacker.stanceChangeForms) {
+    const forms = attacker.stanceChangeForms;
+    const nextForm: "shield" | "blade" =
+      effectiveMove.id === forms.revertMoveId
+        ? "shield"
+        : effectiveMove.category !== "status"
+          ? "blade"
+          : (attacker.currentStanceForm ?? "shield");
+    if (nextForm !== attacker.currentStanceForm) {
+      const nextBaseStats = nextForm === "blade" ? forms.bladeBaseStats : forms.shieldBaseStats;
+      attacker.realStats = computeRealStats(nextBaseStats, attacker.slot.points, attacker.slot.nature);
+      attacker.currentStanceForm = nextForm;
+    }
+  }
 
   // 반짝가루(방어측 0.9배)·광각렌즈(공격측 1.1배)·포커스렌즈(공격측, 늦게 움직일 때 1.2배)·
   // 모래숨기(방어측, 날씨 조건부 0.8배)를 전부 한 배율로 곱한다.

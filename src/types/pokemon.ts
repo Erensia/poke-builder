@@ -11,6 +11,19 @@ export interface MegaEvolution {
   ability: string;
 }
 
+/**
+ * 킬가르도(배틀스위치) 전용 — 실드폼/블레이드폼 두 종족값 세트. 타입·특성·HP·스피드는 두 폼이
+ * 동일하고(킬가르도: 강철/고스트, HP 60, 스피드 60 고정) 공격/방어/특공/특방만 서로 뒤바뀐다.
+ * `Pokemon.baseStats`에는 실드폼(등장 시 기본 폼) 수치를 그대로 채운다 — 매치업 페이지처럼
+ * "현재 폼" 개념이 없는 1턴 스냅샷에서는 항상 실드폼 기준으로 보여진다.
+ */
+export interface StanceChangeForms {
+  shieldBaseStats: BaseStats;
+  bladeBaseStats: BaseStats;
+  /** 이 기술을 사용하면(명중 여부 무관, 사용 자체로) 블레이드폼이어도 실드폼으로 되돌아간다 */
+  revertMoveId: string;
+}
+
 export interface Pokemon {
   id: string;
   name: string;
@@ -20,5 +33,7 @@ export interface Pokemon {
   hiddenAbility?: string;
   /** 메가진화가 없으면 생략. 2종 이상 가진 포켓몬은 배열 원소를 늘린다. */
   megaEvolutions?: MegaEvolution[];
+  /** 킬가르도(배틀스위치)처럼 배틀 중 기술 카테고리에 따라 폼이 바뀌는 포켓몬만 채운다 */
+  stanceChangeForms?: StanceChangeForms;
   learnset: string[];
 }

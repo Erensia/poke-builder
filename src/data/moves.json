@@ -5585,5 +5585,68 @@
     "effect": "대량의 코인을 날려서 공격한다. 사용한 자신의 특수공격이 2랭크 떨어진다. (일반 시리즈에서는 배틀 후 돈을 획득)",
     "statChanges": [{ "target": "self", "stat": "spa", "delta": -2 }],
     "makesContact": false
+  },
+  {
+    "id": "블록",
+    "name": "블록",
+    "type": "노말",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 8,
+    "priority": 0,
+    "effect": "양팔을 벌려 막아서서 상대의 도주로를 가로막아 도망치거나 교체할 수 없게 한다. (1v1 시뮬레이터엔 교체 개념이 없어 이 트래핑 효과는 적용 대상이 없음 — 효과 텍스트만)",
+    "makesContact": false
+  },
+  {
+    "id": "성스러운칼",
+    "name": "성스러운칼",
+    "type": "격투",
+    "category": "physical",
+    "power": 90,
+    "accuracy": 100,
+    "pp": 16,
+    "priority": 0,
+    "effect": "긴 뿔로 베어 공격한다. 상대의 방어·특수방어·회피율 랭크 변화를 무시하고 데미지를 준다. (랭크변화 무시 로직은 천진과 같은 축이라 아직 미구현 — 효과 텍스트만, Phase 5 §1 잔여 항목)",
+    "classification": ["베기"],
+    "makesContact": true
+  },
+  {
+    "id": "킹실드",
+    "name": "킹실드",
+    "type": "강철",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 8,
+    "priority": 4,
+    "effect": "상대의 공격 기술을 막으면서 방어 태세를 갖춘다. 접촉기로 막으면 상대의 공격이 1랭크 하락한다. 연속 사용 시 성공률이 50%씩 감소한다. (방어류 기술의 실제 차단 로직 자체가 이 시뮬레이터에 아직 없어 그 부분은 효과 텍스트만 — 단, 킬가르도가 사용하면 배틀스위치로 실드폼 전환은 실제로 반영됨)",
+    "makesContact": false
+  },
+  {
+    "id": "파워트릭",
+    "name": "파워트릭",
+    "type": "에스퍼",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 12,
+    "priority": 0,
+    "effect": "초능력으로 자신의 공격과 방어 수치를 서로 맞바꾼다. (스탯 교환 로직 미구현 — 효과 텍스트만)",
+    "makesContact": false
+  },
+  {
+    "id": "물수리검",
+    "name": "물수리검",
+    "type": "물",
+    "category": "special",
+    "power": 15,
+    "accuracy": 100,
+    "pp": 20,
+    "priority": 1,
+    "effect": "점액으로 만든 수리검을 연속으로 던져 공격하는 선제(+1) 기술이다. 2~5회 연속 히트.",
+    "makesContact": false,
+    "minHits": 2,
+    "maxHits": 5
   }
 ]
