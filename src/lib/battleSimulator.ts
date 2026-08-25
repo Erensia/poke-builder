@@ -806,6 +806,17 @@ function resolveAction(
   // 트리플악셀처럼 여러 타로 나뉘는 기술만 채운다 — 실제로 명중해서 데미지를 낸 타수.
   let hitCount: number | undefined;
 
+  // 방어측 접촉/피격 트리거 특성(정전기·불꽃몸·까칠한피부·깨어진갑옷·저주받은바디 — Phase 5 §1).
+  // 트리플악셀·록블라스트 같은 다단히트 기술은 타수마다 별도로 판정해야 한다(본가 규칙 — 록키헬멧
+  // 등 동일 축의 도구도 다단히트 매 타마다 발동) — 그래서 총합 damage가 아니라 아래 triggerAbilityHitEffect를
+  // 각 히트 직후(fixedDamage/단일타는 1회, 다단히트는 루프 안에서 타수만큼) 호출해서 채운다.
+  let abilityInflictedStatusOnAttacker: StatusConditionState["condition"] | undefined;
+  let abilityInflictedStatusAbilityName: string | undefined;
+  let abilityDamageToAttacker = 0;
+  let abilityDamageAbilityName: string | undefined;
+  let abilityDisabledMoveName: string | undefined;
+  let abilityDisableAbilityName: string | undefined;
+
   // 지진이 땅속의 구멍파기를, 파도타기가 물속의 다이빙을 실제로 맞혔을 때의 위력 배가.
   // evadedByCharge가 false인데 defenderHideType이 있다는 건 bypassesHiding 예외로 명중했다는 뜻.
   const hidingBypassMultiplier =
@@ -885,6 +896,46 @@ function resolveAction(
     }
   }
 
+  /**
+   * 방어측 hitTrigger 특성 한 번의 "타격"에 대한 판정. 다단히트 기술은 타수마다 이 함수를
+   * 다시 호출해서 확률(chance)을 매번 새로 굴린다 — 정전기/불꽃몸이 트리플악셀 3타에 각각
+   * 별도로 마비/화상을 노릴 수 있고, 까칠한피부/저주받은바디도 타수만큼 반복 발동한다.
+   * hitDamage가 0(면역 등)이면 애초에 판정하지 않는다. 공격자가 이미 기절했으면(예: 앞선
+   * 타에서 까칠한피부 반동으로 죽었으면) 더 이상 판정하지 않는다.
+   */
+  function triggerAbilityHitEffect(hitDamage: number): void {
+    if (hitDamage <= 0 || isFainted(attacker)) return;
+    const trigger = defenderAbility?.hitTrigger;
+    if (!trigger) return;
+    const chance = trigger.chance !== undefined ? trigger.chance / 100 : 1;
+    if (!hitTriggerMatchesMove(trigger, effectiveMove) || random() >= chance) return;
+
+    if (trigger.inflictsStatusOnAttacker && !isImmuneToStatus(trigger.inflictsStatusOnAttacker, attacker.types)) {
+      const before = attacker.status.condition;
+      attacker.status = inflictStatus(attacker.status, trigger.inflictsStatusOnAttacker);
+      if (attacker.status.condition !== before) {
+        abilityInflictedStatusOnAttacker = attacker.status.condition;
+        abilityInflictedStatusAbilityName = defenderAbility!.name;
+      }
+    }
+    if (trigger.damagesAttackerFraction) {
+      const amount = Math.floor(attacker.maxHp * trigger.damagesAttackerFraction);
+      attacker.currentHp = Math.max(0, attacker.currentHp - amount);
+      abilityDamageToAttacker += amount;
+      abilityDamageAbilityName = defenderAbility!.name;
+    }
+    if (trigger.selfStatChanges) {
+      for (const change of trigger.selfStatChanges) {
+        defender.stages = applyStageDelta(defender.stages, change.stat, change.delta);
+      }
+    }
+    if (trigger.disablesAttackerMove && attacker.remainingPp[move.id] !== undefined) {
+      attacker.remainingPp[move.id] = 0;
+      abilityDisabledMoveName = move.name;
+      abilityDisableAbilityName = defenderAbility!.name;
+    }
+  }
+
   if (isDamaging && effectiveMove.fixedDamage !== undefined) {
     // 나이트헤드류: 방어/랭크/특성/도구/급소를 전부 무시하고 고정 수치만 깎는다.
     // 타입 상성 면역(0배)만은 그대로 존중 — 반감/2배는 적용하지 않는다.
@@ -894,6 +945,7 @@ function resolveAction(
       const preHp = defender.currentHp;
       defender.currentHp = Math.max(0, defender.currentHp - damage);
       applyEndurance(preHp);
+      triggerAbilityHitEffect(damage);
     }
   } else if (isDamaging && effectiveMove.minHits !== undefined && effectiveMove.maxHits !== undefined) {
     // 다단히트: 명중 판정은 이미 위(첫 타 기준)에서 끝났으니 여기부턴 최소 1타는 맞은 상태로
@@ -922,6 +974,7 @@ function resolveAction(
       const preHp = defender.currentHp;
       defender.currentHp = Math.max(0, defender.currentHp - hitResult.damage);
       applyEndurance(preHp);
+      triggerAbilityHitEffect(hitResult.damage);
       if (isFainted(defender)) break; // 상대가 쓰러지면 남은 타수는 진행하지 않는다
     }
     damagePercent = damage / defender.realStats.hp;
@@ -934,6 +987,7 @@ function resolveAction(
     const preHp = defender.currentHp;
     defender.currentHp = Math.max(0, defender.currentHp - damage);
     applyEndurance(preHp);
+    triggerAbilityHitEffect(damage);
   }
 
   // 발버둥 반동: 필중이라 항상 이 지점까지 오고, 명중/기절 여부와 무관하게 사용자가
@@ -1285,44 +1339,6 @@ function resolveAction(
       defender.currentHp = Math.min(defender.maxHp, defender.currentHp + defenderBerryHealAmount);
       defender.itemConsumed = true;
       defenderBerryHealItemName = defenderItem!.name;
-    }
-  }
-
-  // 방어측 접촉/피격 트리거 특성(정전기·불꽃몸·까칠한피부·깨어진갑옷·저주받은바디 — Phase 5 §1).
-  // 데미지를 실제로 준(damage > 0) 피격에만 판정한다 — 면역(0배)이나 빗나감이면 애초에 damage가 0.
-  let abilityInflictedStatusOnAttacker: StatusConditionState["condition"] | undefined;
-  let abilityInflictedStatusAbilityName: string | undefined;
-  let abilityDamageToAttacker = 0;
-  let abilityDamageAbilityName: string | undefined;
-  let abilityDisabledMoveName: string | undefined;
-  let abilityDisableAbilityName: string | undefined;
-  if (isDamaging && damage > 0 && defenderAbility?.hitTrigger && !isFainted(attacker)) {
-    const trigger = defenderAbility.hitTrigger;
-    const chance = trigger.chance !== undefined ? trigger.chance / 100 : 1;
-    if (hitTriggerMatchesMove(trigger, effectiveMove) && random() < chance) {
-      if (trigger.inflictsStatusOnAttacker && !isImmuneToStatus(trigger.inflictsStatusOnAttacker, attacker.types)) {
-        const before = attacker.status.condition;
-        attacker.status = inflictStatus(attacker.status, trigger.inflictsStatusOnAttacker);
-        if (attacker.status.condition !== before) {
-          abilityInflictedStatusOnAttacker = attacker.status.condition;
-          abilityInflictedStatusAbilityName = defenderAbility.name;
-        }
-      }
-      if (trigger.damagesAttackerFraction) {
-        abilityDamageToAttacker = Math.floor(attacker.maxHp * trigger.damagesAttackerFraction);
-        attacker.currentHp = Math.max(0, attacker.currentHp - abilityDamageToAttacker);
-        abilityDamageAbilityName = defenderAbility.name;
-      }
-      if (trigger.selfStatChanges) {
-        for (const change of trigger.selfStatChanges) {
-          defender.stages = applyStageDelta(defender.stages, change.stat, change.delta);
-        }
-      }
-      if (trigger.disablesAttackerMove && attacker.remainingPp[move.id] !== undefined) {
-        attacker.remainingPp[move.id] = 0;
-        abilityDisabledMoveName = move.name;
-        abilityDisableAbilityName = defenderAbility.name;
-      }
     }
   }
 
