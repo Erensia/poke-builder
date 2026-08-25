@@ -7,6 +7,7 @@ import {
   NEUTRAL_CRIT_STAGE,
   NEUTRAL_STAGES,
   type AccuracyEvasionStages,
+  type BattleStatKey,
   type CritStage,
   type StatStages,
 } from "../types/battleStats";
@@ -1128,8 +1129,26 @@ function resolveAction(
 
   // 기술 자신의 랭크/명중회피/급소 변화 적용 (칼춤, 그림자분신, 기충전 등).
   // attacker/defender는 state.a/state.b를 그대로 참조하고 있어 여기서 바꾼 값이 state에도 반영된다.
+  const attackerStagesBeforeMoveChange = attacker.stages;
+  const defenderStagesBeforeMoveChange = defender.stages;
   attacker.stages = applyMoveStatChanges(attacker.stages, effectiveMove, "self", { userTypes: attacker.types });
   defender.stages = applyMoveStatChanges(defender.stages, effectiveMove, "opponent", { userTypes: attacker.types });
+
+  // 승기: 자신의 능력치가 실제로 하락했으면(이미 -6으로 클램프돼 변화가 없었던 건 제외) 그
+  // 즉시 지정된 랭크가 오른다. 자기 기술로 자기 스탯을 내렸든(공격측), 상대 기술로 스탯이
+  // 내려갔든(방어측) 둘 다 같은 방식으로 판정한다 — 각자 자기 자신의 stages before/after만 비교.
+  function applyCompetitiveBoost(
+    fighter: BattleFighterState,
+    ability: Ability | undefined,
+    before: StatStages,
+  ): void {
+    const boost = ability?.boostsStatOnOwnStatDrop;
+    if (!boost) return;
+    const dropped = (Object.keys(fighter.stages) as BattleStatKey[]).some((stat) => fighter.stages[stat] < before[stat]);
+    if (dropped) fighter.stages = applyStageDelta(fighter.stages, boost.stat, boost.delta);
+  }
+  applyCompetitiveBoost(attacker, attackerAbility, attackerStagesBeforeMoveChange);
+  applyCompetitiveBoost(defender, defenderAbility, defenderStagesBeforeMoveChange);
 
   // 하양허브: 방금 반영된 랭크 중 마이너스가 하나라도 있으면(자신이 스스로 내렸든, 상대 기술로
   // 내려갔든) 그 즉시 마이너스 랭크만 전부 0으로 되돌리고 소모된다. 양쪽 다 이 도구를 지녔고
@@ -1241,6 +1260,13 @@ function resolveAction(
   ) {
     defender.volatile = inflictVolatile(defender.volatile, "flinch", random);
     inflictedVolatile = "flinch";
+  }
+
+  // 불굴의마음: 이번 행동에서 풀죽음이 걸렸으면(기술 자체든 왕의징표석이든, 둘 다 위에서
+  // 이미 defender.volatile에 반영됨) 그 즉시 지정된 랭크가 오른다.
+  if (inflictedVolatile === "flinch" && defenderAbility?.boostsStatOnFlinch) {
+    const boost = defenderAbility.boostsStatOnFlinch;
+    defender.stages = applyStageDelta(defender.stages, boost.stat, boost.delta);
   }
 
   // 상태이상 치료: 물거품아리아처럼 명중 시 대상의 주 상태이상을 없앤다(inflictsStatus의 반대 방향).

@@ -4,6 +4,12 @@ import type { WeatherKind } from "./weather";
 import type { BattleStatKey } from "./battleStats";
 import type { StatusCondition } from "./status";
 
+/** 랭크를 이만큼(stat, delta) 바꾼다는 짧은 서술 — 여러 특성이 같은 모양을 재사용한다 */
+export interface AbilityStatBoost {
+  stat: BattleStatKey;
+  delta: number;
+}
+
 export interface AbilityModifierCondition {
   /** 이 위력 이하인 기술만 (테크니션: 60) */
   movePowerAtMost?: number;
@@ -146,4 +152,16 @@ export interface Ability {
    * 곱해진다 — 랭크 기반 회피율(accuracyStages.evasion)과는 별개 축이라 중첩 가능.
    */
   weatherOpponentAccuracyMultiplier?: { weather: WeatherKind; multiplier: number };
+  /**
+   * 승기: 자신의 능력치가(무엇이든, 자기 기술 자기 랭크변화든 상대 기술로 내려갔든) 하락하면
+   * 그 즉시 이 랭크변화가 붙는다(승기: 특공 +2). battleSimulator.ts가 자신/상대 양쪽
+   * statChanges 적용 전후로 랭크를 비교해서 실제로 내려간 스탯이 하나라도 있을 때만 발동시킨다
+   * (이미 -6으로 클램프돼 있어 실질적으로 변화가 없었으면 발동하지 않음).
+   */
+  boostsStatOnOwnStatDrop?: AbilityStatBoost;
+  /**
+   * 불굴의마음: 풀죽음 상태가 될 때마다(원문 그대로 — 어느 기술/도구로 걸렸든) 이 랭크변화가
+   * 붙는다(불굴의마음: 스피드 +1, 본가 "오기"와 동일 수치로 채움 — 원문에 배율이 없어 표준값 사용).
+   */
+  boostsStatOnFlinch?: AbilityStatBoost;
 }

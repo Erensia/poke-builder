@@ -229,7 +229,8 @@
   {
     "id": "불굴의마음",
     "name": "불굴의마음",
-    "description": "풀죽음 상태가 될 때마다 스피드가 올라간다."
+    "description": "풀죽음 상태가 될 때마다 스피드가 올라간다.",
+    "boostsStatOnFlinch": { "stat": "spe", "delta": 1 }
   },
   {
     "id": "정신력",
@@ -476,7 +477,8 @@
   {
     "id": "승기",
     "name": "승기",
-    "description": "자신의 능력치가 하락하면 특수공격이 2랭크 상승한다."
+    "description": "자신의 능력치가 하락하면 특수공격이 2랭크 상승한다.",
+    "boostsStatOnOwnStatDrop": { "stat": "spa", "delta": 2 }
   },
   {
     "id": "일찍기상",
