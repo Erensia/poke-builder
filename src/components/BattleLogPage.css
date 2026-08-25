@@ -68,6 +68,17 @@
   cursor: not-allowed;
 }
 
+/* 구애스카프 잠금 위반으로 턴 진행이 막혔을 때 뜨는 경고 문구 */
+.battle-lock-warning {
+  margin-top: 0.5rem;
+  padding: 0.55rem 0.8rem;
+  border-radius: 10px;
+  background: var(--danger-bg);
+  color: var(--danger);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
 .battle-board {
   display: grid;
   grid-template-columns: 1fr 1fr;

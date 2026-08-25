@@ -68,4 +68,50 @@ export interface Item {
   weatherDurationBonus?: { weather: WeatherKind; bonus: number };
   /** 빛의점토: 리플렉터/빛의장막 지속시간이 이만큼 늘어난다(기본 5턴 + 3 = 8턴) */
   screenDurationBonus?: number;
+  /**
+   * 하양허브: 지닌 쪽의 랭크가 하나라도 마이너스면(자신이 스스로 내렸든, 상대가 내렸든) 그 즉시
+   * 마이너스 랭크를 전부 0으로 되돌리고 소모된다(대전 중 1회). 플러스 랭크는 건드리지 않는다.
+   */
+  restoresLoweredStatsOnce?: boolean;
+  /**
+   * 기합의띠: 최대 HP 상태에서 기절할 정도의 데미지를 받으면 HP 1을 남기고 버틴다(대전 중 1회,
+   * 발동하면 소모). survivesLethalChance(기합의머리띠, 확률부·무제한)와는 조건이 달라 별도 필드.
+   */
+  survivesLethalAtFullHpOnce?: boolean;
+  /**
+   * 기합의머리띠: 기절할 정도의 데미지를 받을 때마다 이 확률(%)로 HP 1을 남기고 버틴다.
+   * 기합의띠와 달리 최대 HP 조건이 없고 소모되지도 않아(재사용 가능) 매번 새로 판정한다.
+   */
+  survivesLethalChance?: number;
+  /**
+   * 선제공격손톱: 이 확률(%)로 같은 우선도 안에서 실효 스피드와 무관하게 무조건 먼저 행동한다.
+   * 우선도 자체가 다르면(더 높은 쪽) 이 효과와 무관하게 그쪽이 먼저 — turnOrder에서 우선도 비교
+   * 뒤, 스피드 비교 전에 판정한다.
+   */
+  quickClawChance?: number;
+  /**
+   * 왕의징표석: 데미지를 주는 데 성공하면 이 확률(%)로 상대에게 추가로 풀죽음을 건다. 기술 자체의
+   * inflictsVolatile(flinch) 확률과는 완전히 별개 판정이라 두 확률이 동시에 걸려도 각자 독립적으로
+   * 판정되고(둘 다 실패해도, 둘 중 하나만 성공해도, 결과는 "풀죽음 1회"로 동일하게 보인다).
+   */
+  extraFlinchChance?: number;
+  /** 초점렌즈: 급소율 랭크(0~3)에 항상 더해지는 보너스. 기충전 등으로 오른 랭크와 합산된다 */
+  critStageBonus?: number;
+  /**
+   * 구애스카프(1.5)·검은철구(0.5) — 실효 스피드 계산에 곱하는 배율. 상태이상(마비 등) 배율과는
+   * 별도로 곱해진다.
+   */
+  speedMultiplier?: number;
+  /**
+   * 검은철구: 땅타입 기술에 대한 타입 면역(부유 특성·비행타입 등)을 무시하고 맞는다("의사 땅타입
+   * 부여"). 배짱(Ability.bypassesImmunityForTypes)의 방어측 버전 — 공격측이 아니라 이 도구를
+   * 지닌 방어측 스스로 자기 면역을 없앤다는 점만 다르다. 반감/2배 관계는 그대로 존중(면역만 무시).
+   */
+  groundsHolder?: boolean;
+  /**
+   * 구애스카프: 대전 중 처음 실제로 사용한 기술로 이후 계속 고정된다. 판정 엔진(battleSimulator)이
+   * 아니라 BattleLogPage의 턴 진행 버튼이 UI 단에서 막는 방식으로 구현되어 있어, 이 필드는
+   * "이 도구가 잠금 대상인지"를 판별하는 플래그로만 쓰인다.
+   */
+  locksFirstMoveUsed?: boolean;
 }
