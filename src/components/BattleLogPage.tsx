@@ -783,6 +783,11 @@ export function BattleLogPage() {
                       </>
                     ) : e.inflictedDelayedStatus ? (
                       STATUS_ONSET_TEXT[e.inflictedDelayedStatus](fighterLabel(battleState, e.actor))
+                    ) : e.abilityCuredStatus ? (
+                      <>
+                        {fighterLabel(battleState, e.actor)}의 {e.abilityCuredStatusAbilityName}!{" "}
+                        {STATUS_CURE_TEXT[e.abilityCuredStatus](fighterLabel(battleState, e.actor))}
+                      </>
                     ) : e.statusCondition ? (
                       <>
                         {STATUS_TRIGGER_TEXT[e.statusCondition](fighterLabel(battleState, e.actor))} (남은 HP{" "}

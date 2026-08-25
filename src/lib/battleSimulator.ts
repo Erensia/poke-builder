@@ -506,6 +506,10 @@ export interface EndOfTurnLogEntry {
   fieldHeal?: number;
   /** 하품(졸음) 2턴 카운터가 다 돼서 이번 턴 종료 시 실제로 잠들었으면 채워진다 */
   inflictedDelayedStatus?: StatusConditionState["condition"];
+  /** 탈피처럼 턴 종료 시 특성으로 자신의 상태이상이 나았으면 그 상태이상 */
+  abilityCuredStatus?: StatusConditionState["condition"];
+  /** abilityCuredStatus를 치료한 특성 이름 */
+  abilityCuredStatusAbilityName?: string;
   /** damage가 상태이상 매턴 데미지일 때(독/맹독/화상) 어떤 상태이상인지 — UI가 문구를 골라 쓰는 데 필요 */
   statusCondition?: StatusConditionState["condition"];
   /** 먹다남은음식으로 회복했으면 그 회복량 */
@@ -1826,6 +1830,23 @@ export function runTurn(
             remainingHp: fighter.currentHp,
             fainted: isFainted(fighter),
             statusCondition,
+          });
+        }
+      }
+
+      // 탈피: 턴 종료 시점(=위 상태이상 데미지 틱까지 끝난 뒤)에 이 확률로 자신의 주 상태이상을
+      // 치료한다. 이미 기절했으면 발동할 이유가 없다.
+      if (fighter.status.condition && fighterAbility?.curesOwnStatusChance && !isFainted(fighter)) {
+        if (random() * 100 < fighterAbility.curesOwnStatusChance) {
+          const abilityCuredStatus = fighter.status.condition;
+          fighter.status = { ...NO_STATUS_CONDITION };
+          endOfTurn.push({
+            actor: key,
+            damage: 0,
+            remainingHp: fighter.currentHp,
+            fainted: false,
+            abilityCuredStatus,
+            abilityCuredStatusAbilityName: fighterAbility.name,
           });
         }
       }

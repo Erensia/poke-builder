@@ -31,7 +31,7 @@ abilities.json은 처음 발견 당시(라이츄 추가 시점) 54개였지만 �
 | ~~타입 면역 부여~~ | `Ability.grantsImmunityToTypes` 신설 — **완료**(피뢰침은 §1 앞부분에서 `absorbsType`으로 이미 처리됨, 이 항목은 중복 표기였음) | ~~부유~~, ~~피뢰침(중복 표기)~~ |
 | ~~상태이상/랭크 면역·반사·전이~~ | `isImmuneToStatus` 확장, `Ability.immuneToFlinch`·`blocksOpponentStatDropsForStats`·`reflectsOpponentStatDrops`·`reflectsStatusToOpponent` 신설 — **완료** | ~~유연, 정신력, 싱크로, 클리어바디, 미러아머, 괴력집게~~ |
 | ~~상태이상 해제 확률 수정~~ | `checkStatusActionBlock`에 `hasEarlyBird` 파라미터 신설 — **완료** | ~~일찍기상~~ |
-| 턴 종료 시 확률부 자가 치료 | 매 턴 종료 처리에 훅 추가 | 탈피 |
+| ~~턴 종료 시 확률부 자가 치료~~ | `Ability.curesOwnStatusChance` 신설 — **완료** | ~~탈피~~ |
 | 명중률/회피율 특수 규칙 | `accuracyCrit.ts` 확장 | 날카로운눈, 노가드 |
 | 등장 시 1회 발동(필드/스탯변화/특성복사 등) | `setsWeather`와 같은 패턴으로 `setsField`·`entryStatChange` 등 신설 | 일렉트릭메이커, 트레이스, 긴장감, 습기, 그림자밟기, 위협 |
 | 우선도 조작 | `Move.priority`와 별개로 특성발 우선도 가산 필요 — Phase 4.5 §4에서 선제공격손톱(도구)으로 비슷한 우선도 개입을 이미 구현해봤으니 참고 가능 | 짖궂은마음 |
@@ -92,6 +92,8 @@ abilities.json은 처음 발견 당시(라이츄 추가 시점) 54개였지만 �
 - **클리어바디(전체)·괴력집게(공격만)·미러아머(반사)**: `Ability.blocksOpponentStatDropsForStats`(막을 스탯 목록)·`reflectsOpponentStatDrops`(반사 여부) 신설. `applyMoveStatChanges(defender.stages, move, "opponent", ...)` 적용 직후 before/after를 스탯별로 비교해서 실제로 내려간 스탯만 골라, 막을 스탯이면 원래 값으로 되돌리고 반사 특성이면 원래 값으로 되돌린 뒤 그만큼을 공격측에게 그대로 적용하는 방식으로 구현했다 — 개별 스탯 변화 이벤트마다 훅을 심는 대신 결과를 diff하는 접근이라 `userIsType` 조건부 효과 등 기존 `applyMoveStatChanges`의 로직을 그대로 재사용할 수 있었다. 이 보정은 승기(§1 앞부분)의 전후 비교보다 먼저 실행되게 순서를 잡아서, 미러아머로 반사된 하락이 반사 대상(공격측)의 승기에도 정확히 반영된다.
 - **싱크로**(상태이상 전이): `Ability.reflectsStatusToOpponent` 신설. 정전기 등 hitTrigger와 "방어측 특성이 공격측에게 상태이상을 건다"는 결과가 동일해서 기존 `abilityInflictedStatusOnAttacker` 필드와 로그 문구를 그대로 재사용했다(한 포켓몬이 두 특성을 동시에 가질 수 없어 충돌 없음).
 - 이어롭(유연)·루카리오(정신력)·메타그로스(클리어바디)·입치트(괴력집게)·아머까오(미러아머)·가디안(싱크로) 6개 전부 스모크 테스트로 확인 — 첫 시도에서 공격측/방어측이 같은 기술을 서로에게 쓰는 대칭 테스트라 결과가 헷갈려서(순서상 먼저 움직인 쪽 효과가 반대쪽에 적용됨), 방어측에 무해한 placebo 기술(명상)을 쓰도록 테스트를 고쳐서 재검증함.
+
+**"턴 종료 시 확률부 자가 치료"(탈피) — 완료.** `Ability.curesOwnStatusChance`(%) 신설, 턴 종료 처리 루프의 상태이상 데미지 틱 바로 다음(먹다남은음식류의 회복 블록들과 같은 자리)에 확률 판정을 추가했다. `EndOfTurnLogEntry`에 `abilityCuredStatus`/`abilityCuredStatusAbilityName` 필드와 로그 문구(기존 `STATUS_CURE_TEXT` 재사용)도 같이 추가. 곤율거니(탈피)로 화상 상태에서 낮은 확률 롤(치료됨)·높은 확률 롤(유지됨)·특성 없음(항상 유지) 셋 다 확인.
 
 (발견 경위: Phase 4.5 §1 라이츄 추가 작업 중 abilities.json 전수 점검. 이후 로스터가 더 늘어난 걸 반영해 이 문서를 쓰면서 재점검함)
 

@@ -200,4 +200,6 @@ export interface Ability {
    * 조용히 무산된다(기존 isImmuneToStatus 재사용).
    */
   reflectsStatusToOpponent?: StatusCondition[];
+  /** 탈피: 턴 종료 시 이 확률(%)로 자신의 주 상태이상을 치료한다. */
+  curesOwnStatusChance?: number;
 }
