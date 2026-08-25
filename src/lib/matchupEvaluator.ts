@@ -111,6 +111,11 @@ export function evaluateSlotMatchup(
     ? applyMoveStatChanges(baseDefenderStages, move, "opponent", { userTypes: attackerForm.types })
     : baseDefenderStages;
 
+  // 지닌 도구: 직접 지정한 배율이 없으면 실제 장착한 도구에서 자동으로 구한다. defenderItem은
+  // resolveMoveContext의 검은철구(땅타입 면역 무시) 판정에도 필요해서 여기서 먼저 구해둔다.
+  const attackerItem = attackerSlot.item ? getItem(attackerSlot.item) : undefined;
+  const defenderItem = defenderSlot.item ? getItem(defenderSlot.item) : undefined;
+
   // 특성 배율(공격측 테크니션/모래의힘/메가런처/페어리스킨, 방어측 두꺼운지방 등) + 타입 변경 +
   // 자속 + 상대 타입 상성을 한 번에 계산 — battleSimulator의 resolveAction과 공유하는 로직
   const {
@@ -119,7 +124,7 @@ export function evaluateSlotMatchup(
     abilityDefenseMultiplier: abilityDefense,
     stabMultiplier,
     typeEffectiveness,
-  } = resolveMoveContext(attackerAbility, move, defenderForm.types, defenderAbility, weather);
+  } = resolveMoveContext(attackerAbility, move, defenderForm.types, defenderAbility, weather, defenderItem);
 
   // 트리플악셀처럼 다단히트 기술이면, 특성/타입 조건 판정은 원래 기술(1타 위력) 기준으로 이미
   // 끝났으니 여기서만 선택한 타수까지의 위력을 합산해서 결정력 계산에 쓸 위력으로 바꿔치기한다.
@@ -131,10 +136,7 @@ export function evaluateSlotMatchup(
         }
       : effectiveMove;
 
-  // 지닌 도구 배율: 직접 지정한 값이 없으면 실제 장착한 도구에서 자동으로 구한다.
   // 메트로놈(연속 사용 보너스)은 매치업 화면이 여러 턴 이력이 없는 1턴 스냅샷이라 스트릭=1(보너스 없음)로 고정.
-  const attackerItem = attackerSlot.item ? getItem(attackerSlot.item) : undefined;
-  const defenderItem = defenderSlot.item ? getItem(defenderSlot.item) : undefined;
   const autoItemMultiplier = getItemOffenseMultiplier(attackerItem, effectiveMove, typeEffectiveness, 1);
   const berryResult = getBerryDefenseResult(defenderItem, effectiveMove.type, typeEffectiveness, false);
 

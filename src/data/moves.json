@@ -261,17 +261,6 @@
     "makesContact": true
   },
   {
-    "id": "대지의 파동",
-    "name": "대지의 파동",
-    "type": "노말",
-    "category": "special",
-    "power": 50,
-    "accuracy": 100,
-    "pp": 10,
-    "effect": "",
-    "priority": 0
-  },
-  {
     "id": "돌림노래",
     "name": "돌림노래",
     "type": "노말",
@@ -384,7 +373,7 @@
     "accuracy": null,
     "pp": 12,
     "priority": 0,
-    "effect": "",
+    "effect": "자신의 HP를 조금 깎아서 분신을 만든다. 분신은 자신의 대타가 된다.",
     "makesContact": false
   },
   {
@@ -1761,7 +1750,7 @@
     "accuracy": null,
     "pp": 12,
     "priority": 0,
-    "effect": "",
+    "effect": "신비한 물을 흩뿌려서 자신과 배틀에 나와 있는 같은 편의 HP를 회복한다.",
     "makesContact": false
   },
   {
@@ -2630,7 +2619,7 @@
     "accuracy": null,
     "pp": 12,
     "priority": 0,
-    "effect": "",
+    "effect": "비축된 힘을 꿀꺽해서 자신의 HP를 회복한다. 비축된 만큼 회복한다.",
     "makesContact": false
   },
   {
@@ -2660,7 +2649,7 @@
     "accuracy": 100,
     "pp": 20,
     "priority": 0,
-    "effect": "",
+    "effect": "많은 물을 끼얹어서 상대를 물타입으로 바꾼다.",
     "makesContact": false
   },
   {
@@ -3221,6 +3210,7 @@
     "pp": 20,
     "priority": 0,
     "effect": "그래스필드 상태일 때 우선도 +1이 된다.",
+    "priorityBoostInField": { "field": "그래스필드", "delta": 1 },
     "makesContact": true
   },
   {
@@ -3245,7 +3235,7 @@
     "accuracy": 100,
     "pp": 20,
     "priority": 0,
-    "effect": "",
+    "effect": "상대를 화나게 한다. 3턴 동안 상대는 데미지를 주는 기술밖에 쓸 수 없게 된다.",
     "makesContact": false
   },
   {
@@ -3330,7 +3320,7 @@
     "accuracy": null,
     "pp": 20,
     "priority": 0,
-    "effect": "",
+    "effect": "5턴 동안 이상한 힘의 보호를 받아 상태 이상이 되지 않는다.",
     "makesContact": false
   },
   {
@@ -3752,7 +3742,7 @@
     "accuracy": 100,
     "pp": 20,
     "priority": 0,
-    "effect": "",
+    "effect": "상대의 움직임을 막아 바로 전에 쓴 기술을 잠시 동안 사용할 수 없게 만든다.",
     "makesContact": false
   },
   {
@@ -3882,6 +3872,7 @@
     "pp": 12,
     "priority": 0,
     "effect": "사이코필드 상태일 때 위력이 커진다.",
+    "powerMultiplierInField": { "field": "사이코필드", "multiplier": 1.5 },
     "makesContact": false
   },
   {
@@ -4062,6 +4053,7 @@
     "pp": 8,
     "priority": 0,
     "effect": "미스트필드 상태일 때 위력이 커진다.",
+    "powerMultiplierInField": { "field": "미스트필드", "multiplier": 1.5 },
     "makesContact": false
   },
   {
@@ -4425,9 +4417,10 @@
     "category": "special",
     "power": 50,
     "accuracy": 100,
-    "pp": 12,
+    "pp": 10,
     "priority": 0,
-    "effect": "",
+    "effect": "필드가 있으면 그 필드에 맞는 타입으로 바뀌고 위력이 2배가 된다.",
+    "fieldPulse": true,
     "classification": [
       "파동"
     ],
@@ -4525,7 +4518,7 @@
     "accuracy": 75,
     "pp": 16,
     "priority": 0,
-    "effect": "",
+    "effect": "잠이 오는 가루를 많이 흩뿌려서 상대를 잠듦 상태로 만든다.",
     "makesContact": false,
     "inflictsStatus": [
       {
@@ -4554,7 +4547,7 @@
     "accuracy": null,
     "pp": 16,
     "priority": 0,
-    "effect": "",
+    "effect": "상대의 타입을 반사해서 자신도 똑같은 타입이 된다.",
     "makesContact": false
   },
   {
@@ -4566,7 +4559,7 @@
     "accuracy": null,
     "pp": 12,
     "priority": 0,
-    "effect": "",
+    "effect": "상대가 자신과 같은 기술을 기억하고 있으면 상대만 그 기술을 사용할 수 없게 한다.",
     "makesContact": false
   },
   {
@@ -4578,7 +4571,7 @@
     "accuracy": 100,
     "pp": 20,
     "priority": 0,
-    "effect": "",
+    "effect": "주위에 있는 모든 것을 강력한 산성 가스로 뒤덮어서 지니고 있는 도구를 녹여버린다.",
     "makesContact": false
   },
   {
@@ -4590,7 +4583,7 @@
     "accuracy": null,
     "pp": 20,
     "priority": 0,
-    "effect": "",
+    "effect": "자신의 HP와 상대의 HP를 합친 것을 자신과 상대가 사이좋게 나눈다.",
     "makesContact": false
   },
   {
@@ -4615,7 +4608,7 @@
     "accuracy": 60,
     "pp": 20,
     "priority": 0,
-    "effect": "",
+    "effect": "졸음을 유도하는 암시를 걸어서 상대를 잠듦 상태로 만든다.",
     "makesContact": false,
     "inflictsStatus": [
       {
@@ -4632,7 +4625,7 @@
     "accuracy": null,
     "pp": 12,
     "priority": 0,
-    "effect": "",
+    "effect": "이상한 공간을 만든다. 5턴 동안 모든 포켓몬의 도구의 효과가 사라진다.",
     "makesContact": false
   },
   {
@@ -4656,7 +4649,7 @@
     "accuracy": null,
     "pp": 8,
     "priority": 0,
-    "effect": "",
+    "effect": "5턴 동안 부유나 비행타입에 땅타입의 기술이 맞게 된다. 공중으로 나는 기술도 사용할 수 없다.",
     "makesContact": false
   },
   {
@@ -4680,7 +4673,7 @@
     "accuracy": null,
     "pp": 12,
     "priority": 0,
-    "effect": "",
+    "effect": "초능력으로 자신과 상대의 공격과 특수공격의 능력 변화를 교체한다.",
     "makesContact": false
   },
   {
@@ -4720,7 +4713,9 @@
     "accuracy": 100,
     "pp": 8,
     "priority": 0,
-    "effect": "",
+    "effect": "필드를 파괴한다. 필드가 없으면 실패한다.",
+    "usageCondition": "field-required",
+    "destroysField": true,
     "makesContact": true
   },
   {
@@ -4732,7 +4727,7 @@
     "accuracy": null,
     "pp": 12,
     "priority": 0,
-    "effect": "",
+    "effect": "전기로 만든 자력의 힘으로 허공에 뜬다. 5턴 동안 부유할 수 있다.",
     "makesContact": false
   },
   {
@@ -4975,5 +4970,523 @@
     "priority": 0,
     "effect": "",
     "makesContact": true
+  },
+  {
+    "id": "괴전파",
+    "name": "괴전파",
+    "type": "전기",
+    "category": "status",
+    "power": null,
+    "accuracy": 100,
+    "pp": 16,
+    "priority": 0,
+    "effect": "이상한 전파를 발사해서 상대의 특수공격을 크게 떨어뜨린다.",
+    "statChanges": [
+      { "target": "opponent", "stat": "spa", "delta": -2 }
+    ],
+    "makesContact": false
+  },
+  {
+    "id": "라이징볼트",
+    "name": "라이징볼트",
+    "type": "전기",
+    "category": "special",
+    "power": 70,
+    "accuracy": 100,
+    "pp": 20,
+    "priority": 0,
+    "effect": "지면에서 올라오는 전격으로 공격한다. 상대가 일렉트릭필드 위에 있으면 위력이 2배가 된다.",
+    "powerMultiplierInField": { "field": "일렉트릭필드", "multiplier": 2 },
+    "makesContact": false
+  },
+  {
+    "id": "방전",
+    "name": "방전",
+    "type": "전기",
+    "category": "special",
+    "power": 80,
+    "accuracy": 100,
+    "pp": 16,
+    "priority": 0,
+    "effect": "전격을 두르고 주위에 방전한다. 30% 확률로 상대를 마비 상태로 만든다.",
+    "inflictsStatus": [
+      { "status": "paralysis", "chance": 30 }
+    ],
+    "makesContact": false
+  },
+  {
+    "id": "볼부비부비",
+    "name": "볼부비부비",
+    "type": "전기",
+    "category": "physical",
+    "power": 20,
+    "accuracy": 100,
+    "pp": 20,
+    "priority": 0,
+    "effect": "볼을 비벼서 전기 충격을 준다. 상대를 반드시 마비 상태로 만든다.",
+    "inflictsStatus": [
+      { "status": "paralysis" }
+    ],
+    "makesContact": true
+  },
+  {
+    "id": "볼트체인지",
+    "name": "볼트체인지",
+    "type": "전기",
+    "category": "special",
+    "power": 70,
+    "accuracy": 100,
+    "pp": 20,
+    "priority": 0,
+    "effect": "공격한 뒤 굉장한 스피드로 돌아와서 교대 포켓몬과 교체한다.",
+    "makesContact": false
+  },
+  {
+    "id": "볼트태클",
+    "name": "볼트태클",
+    "type": "전기",
+    "category": "physical",
+    "power": 120,
+    "accuracy": 100,
+    "pp": 16,
+    "priority": 0,
+    "effect": "전격을 두르고 돌진한다. 사용자도 준 데미지의 1/3만큼 반동을 입는다. 10% 확률로 상대를 마비 상태로 만든다.",
+    "recoilFraction": 0.3333333333333333,
+    "inflictsStatus": [
+      { "status": "paralysis", "chance": 10 }
+    ],
+    "makesContact": true
+  },
+  {
+    "id": "와일드볼트",
+    "name": "와일드볼트",
+    "type": "전기",
+    "category": "physical",
+    "power": 90,
+    "accuracy": 100,
+    "pp": 16,
+    "priority": 0,
+    "effect": "격렬한 전류를 두르고 몸으로 부딪친다. 사용자도 준 데미지의 1/4만큼 반동을 입는다.",
+    "recoilFraction": 0.25,
+    "makesContact": true
+  },
+  {
+    "id": "일렉트릭네트",
+    "name": "일렉트릭네트",
+    "type": "전기",
+    "category": "special",
+    "power": 55,
+    "accuracy": 95,
+    "pp": 16,
+    "priority": 0,
+    "effect": "전기가 흐르는 그물로 상대를 잡아 공격한다. 상대의 스피드를 떨어뜨린다.",
+    "statChanges": [
+      { "target": "opponent", "stat": "spe", "delta": -1 }
+    ],
+    "makesContact": false
+  },
+  {
+    "id": "일렉트릭볼",
+    "name": "일렉트릭볼",
+    "type": "전기",
+    "category": "special",
+    "power": null,
+    "accuracy": 100,
+    "pp": 12,
+    "priority": 0,
+    "effect": "전기 덩어리로 공격한다. 상대보다 스피드가 빠를수록 위력이 올라간다(고정 위력 없음).",
+    "classification": ["구슬/폭탄"],
+    "makesContact": false
+  },
+  {
+    "id": "전자포",
+    "name": "전자포",
+    "type": "전기",
+    "category": "special",
+    "power": 120,
+    "accuracy": 50,
+    "pp": 8,
+    "priority": 0,
+    "effect": "전기 덩어리를 발사한다. 명중하면 반드시 상대를 마비 상태로 만든다.",
+    "inflictsStatus": [
+      { "status": "paralysis" }
+    ],
+    "makesContact": false
+  },
+  {
+    "id": "충전",
+    "name": "충전",
+    "type": "전기",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 20,
+    "priority": 0,
+    "effect": "다음 턴에 쓸 전기타입 기술의 위력이 2배가 된다. 자신의 특수방어가 1랭크 오른다.",
+    "statChanges": [
+      { "target": "self", "stat": "spd", "delta": 1 }
+    ],
+    "makesContact": false
+  },
+  {
+    "id": "김밥말이",
+    "name": "김밥말이",
+    "type": "노말",
+    "category": "physical",
+    "power": 15,
+    "accuracy": 90,
+    "pp": 20,
+    "priority": 0,
+    "effect": "긴 몸이나 덩굴을 사용해 4~5턴 동안 상대를 휘감아 공격한다.",
+    "makesContact": true
+  },
+  {
+    "id": "날려버리기",
+    "name": "날려버리기",
+    "type": "노말",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 20,
+    "priority": -6,
+    "effect": "상대를 날려버려서 강제로 교대시킨다.",
+    "classification": ["바람"],
+    "makesContact": false
+  },
+  {
+    "id": "나비춤",
+    "name": "나비춤",
+    "type": "벌레",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 20,
+    "priority": 0,
+    "effect": "자신의 특공, 특방, 스피드를 1랭크씩 올린다.",
+    "statChanges": [
+      { "target": "self", "stat": "spa", "delta": 1 },
+      { "target": "self", "stat": "spd", "delta": 1 },
+      { "target": "self", "stat": "spe", "delta": 1 }
+    ],
+    "classification": ["춤"],
+    "makesContact": false
+  },
+  {
+    "id": "분노가루",
+    "name": "분노가루",
+    "type": "벌레",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 20,
+    "priority": 2,
+    "effect": "이번 턴 상대의 단일 대상 공격을 자신에게 유도한다.",
+    "makesContact": false
+  },
+  {
+    "id": "불꽃춤",
+    "name": "불꽃춤",
+    "type": "불꽃",
+    "category": "special",
+    "power": 80,
+    "accuracy": 100,
+    "pp": 12,
+    "priority": 0,
+    "effect": "50% 확률로 자신의 특공이 1랭크 오른다.",
+    "statChanges": [
+      { "target": "self", "stat": "spa", "delta": 1, "chance": 50 }
+    ],
+    "classification": ["춤"],
+    "makesContact": false
+  },
+  {
+    "id": "실뿜기",
+    "name": "실뿜기",
+    "type": "벌레",
+    "category": "status",
+    "power": null,
+    "accuracy": 95,
+    "pp": 20,
+    "priority": 0,
+    "effect": "상대의 스피드를 2랭크 낮춘다.",
+    "statChanges": [
+      { "target": "opponent", "stat": "spe", "delta": -2 }
+    ],
+    "makesContact": false
+  },
+  {
+    "id": "아침햇살",
+    "name": "아침햇살",
+    "type": "노말",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 8,
+    "priority": 0,
+    "effect": "자신의 체력을 회복한다. 날씨에 따라 회복량이 달라진다.",
+    "makesContact": false,
+    "healsWeatherDependent": true
+  },
+  {
+    "id": "흡혈",
+    "name": "흡혈",
+    "type": "벌레",
+    "category": "physical",
+    "power": 80,
+    "accuracy": 100,
+    "pp": 12,
+    "priority": 0,
+    "effect": "준 데미지의 절반만큼 자신의 체력을 회복한다.",
+    "drainFraction": 0.5,
+    "makesContact": true
+  },
+  {
+    "id": "대격분",
+    "name": "대격분",
+    "type": "불꽃",
+    "category": "physical",
+    "power": 120,
+    "accuracy": 100,
+    "pp": 12,
+    "priority": 0,
+    "effect": "",
+    "makesContact": true
+  },
+  {
+    "id": "질투의불꽃",
+    "name": "질투의불꽃",
+    "type": "불꽃",
+    "category": "special",
+    "power": 70,
+    "accuracy": 100,
+    "pp": 8,
+    "priority": 0,
+    "effect": "이번 턴에 상대의 능력치가 올랐다면 위력이 2배가 되고 반드시 화상을 입힌다.",
+    "makesContact": false
+  },
+  {
+    "id": "HP회복",
+    "name": "HP회복",
+    "type": "노말",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 8,
+    "priority": 0,
+    "effect": "자신의 최대 HP 절반만큼 회복한다.",
+    "makesContact": false,
+    "healsFraction": 0.5
+  },
+  {
+    "id": "똬리틀기",
+    "name": "똬리틀기",
+    "type": "독",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 20,
+    "priority": 0,
+    "effect": "자신의 공격, 방어, 명중률을 1랭크씩 올린다.",
+    "statChanges": [
+      { "target": "self", "stat": "atk", "delta": 1 },
+      { "target": "self", "stat": "def", "delta": 1 },
+      { "target": "self", "stat": "accuracy", "delta": 1 }
+    ],
+    "makesContact": false
+  },
+  {
+    "id": "열탕",
+    "name": "열탕",
+    "type": "물",
+    "category": "special",
+    "power": 80,
+    "accuracy": 100,
+    "pp": 16,
+    "priority": 0,
+    "effect": "30% 확률로 상대를 화상 상태로 만든다. 사용 시 자신과 상대의 얼음 상태를 치료한다.",
+    "makesContact": false,
+    "inflictsStatus": [{ "status": "burn", "chance": 30 }],
+    "curesStatus": { "target": "opponent", "status": "freeze" },
+    "thawsUserOnUse": true
+  },
+  {
+    "id": "역할",
+    "name": "역할",
+    "type": "에스퍼",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 12,
+    "priority": 0,
+    "effect": "자신의 특성을 상대의 특성과 같게 만든다.",
+    "makesContact": false
+  },
+  {
+    "id": "맹독엄니",
+    "name": "맹독엄니",
+    "type": "독",
+    "category": "physical",
+    "power": 50,
+    "accuracy": 100,
+    "pp": 16,
+    "priority": 0,
+    "effect": "50% 확률로 상대를 맹독 상태로 만든다.",
+    "classification": ["물기"],
+    "makesContact": true,
+    "inflictsStatus": [{ "status": "badly-poisoned", "chance": 50 }]
+  },
+  {
+    "id": "지구던지기",
+    "name": "지구던지기",
+    "type": "격투",
+    "category": "physical",
+    "power": null,
+    "accuracy": 100,
+    "pp": 20,
+    "priority": 0,
+    "effect": "사용자의 레벨만큼 고정 데미지를 준다. (챔피언스는 레벨 50 고정이라 항상 50 고정 데미지)",
+    "fixedDamage": 50,
+    "makesContact": false
+  },
+  {
+    "id": "분노의앞니",
+    "name": "분노의앞니",
+    "type": "노말",
+    "category": "physical",
+    "power": null,
+    "accuracy": 90,
+    "pp": 12,
+    "priority": 0,
+    "effect": "상대의 남은 HP 절반만큼 데미지를 준다(최소 1).",
+    "makesContact": true
+  },
+  {
+    "id": "드릴라이너",
+    "name": "드릴라이너",
+    "type": "땅",
+    "category": "physical",
+    "power": 80,
+    "accuracy": 95,
+    "pp": 12,
+    "priority": 0,
+    "effect": "급소에 맞을 확률이 높다.",
+    "highCritRatio": true,
+    "makesContact": true
+  },
+  {
+    "id": "땅가르기",
+    "name": "땅가르기",
+    "type": "땅",
+    "category": "physical",
+    "power": null,
+    "accuracy": 30,
+    "pp": 8,
+    "priority": 0,
+    "effect": "명중하면 상대를 즉시 기절시킨다. 명중률은 30%+(자신 레벨-상대 레벨)%이나, 챔피언스는 레벨 50 고정이라 항상 30%다.",
+    "makesContact": false
+  },
+  {
+    "id": "메가혼",
+    "name": "메가혼",
+    "type": "벌레",
+    "category": "physical",
+    "power": 120,
+    "accuracy": 85,
+    "pp": 12,
+    "priority": 0,
+    "effect": "",
+    "makesContact": true
+  },
+  {
+    "id": "브레이크클로",
+    "name": "브레이크클로",
+    "type": "노말",
+    "category": "physical",
+    "power": 75,
+    "accuracy": 95,
+    "pp": 12,
+    "priority": 0,
+    "effect": "50% 확률로 상대의 방어를 1랭크 낮춘다.",
+    "statChanges": [
+      { "target": "opponent", "stat": "def", "delta": -1, "chance": 50 }
+    ],
+    "makesContact": true
+  },
+  {
+    "id": "뿔드릴",
+    "name": "뿔드릴",
+    "type": "노말",
+    "category": "physical",
+    "power": null,
+    "accuracy": 30,
+    "pp": 8,
+    "priority": 0,
+    "effect": "명중하면 상대를 즉시 기절시킨다. 명중률 공식은 땅가르기와 동일하며, 챔피언스는 레벨 50 고정이라 항상 30%다.",
+    "makesContact": true
+  },
+  {
+    "id": "스마트혼",
+    "name": "스마트혼",
+    "type": "강철",
+    "category": "physical",
+    "power": 70,
+    "accuracy": null,
+    "pp": 12,
+    "priority": 0,
+    "effect": "상대가 숨은 상태가 아니면 반드시 명중한다.",
+    "makesContact": true
+  },
+  {
+    "id": "꼬리자르기",
+    "name": "꼬리자르기",
+    "type": "노말",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 12,
+    "priority": 0,
+    "effect": "자신 최대 HP의 절반을 소모해 대타를 만들고 뒤의 포켓몬과 강제로 교체한다.",
+    "makesContact": false
+  },
+  {
+    "id": "리프블레이드",
+    "name": "리프블레이드",
+    "type": "풀",
+    "category": "physical",
+    "power": 90,
+    "accuracy": 100,
+    "pp": 16,
+    "priority": 0,
+    "effect": "급소에 맞을 확률이 높다.",
+    "highCritRatio": true,
+    "classification": ["베기"],
+    "makesContact": true
+  },
+  {
+    "id": "크로스포이즌",
+    "name": "크로스포이즌",
+    "type": "독",
+    "category": "physical",
+    "power": 70,
+    "accuracy": 100,
+    "pp": 20,
+    "priority": 0,
+    "effect": "급소에 맞을 확률이 높다. 10% 확률로 상대를 독 상태로 만든다.",
+    "highCritRatio": true,
+    "classification": ["베기"],
+    "makesContact": true,
+    "inflictsStatus": [{ "status": "poison", "chance": 10 }]
+  },
+  {
+    "id": "성묘",
+    "name": "성묘",
+    "type": "고스트",
+    "category": "physical",
+    "power": 50,
+    "accuracy": 100,
+    "pp": 10,
+    "priority": 0,
+    "effect": "쓰러진 같은 편 포켓몬 1마리당 위력이 50씩 오른다(1v1 시뮬레이터에는 동료가 없어 항상 기본 위력 50으로 계산).",
+    "makesContact": false
   }
 ]

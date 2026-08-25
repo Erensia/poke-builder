@@ -8,7 +8,7 @@ import { ItemPickerModal } from "./ItemPickerModal";
 import { NaturePickerModal } from "./NaturePickerModal";
 import { PointsEditorModal } from "./PointsEditorModal";
 import { useBattleSetup } from "../hooks/useBattleSetup";
-import { getPokemon, getMove } from "../lib/data";
+import { getPokemon, getMove, getItem } from "../lib/data";
 import { getEffectiveForm, megaBadgeLabel } from "../lib/pokemonForm";
 import { TYPE_COLORS, typeColorRgba } from "../lib/typeColors";
 import { WEATHER_ACCENT_TYPE } from "../lib/weatherEffects";
@@ -153,12 +153,31 @@ export function BattleLogPage() {
   const [battleState, setBattleState] = useState<BattleState | null>(null);
   const [log, setLog] = useState<TurnResult[]>([]);
   const [selected, setSelected] = useState<{ a: string | null; b: string | null }>({ a: null, b: null });
+  // 구애스카프 잠금 위반으로 턴 진행이 막혔을 때 보여줄 경고 문구. 선택이 바뀌거나 턴이 정상
+  // 진행되면 지운다.
+  const [lockWarning, setLockWarning] = useState<string | null>(null);
 
   const sideOf = (side: Side) => (side === "a" ? setup.a : setup.b);
   const pokemonOf = (side: Side) => {
     const slot = sideOf(side).slot;
     return slot ? getPokemon(slot.pokemonId) : undefined;
   };
+
+  /**
+   * 구애스카프: 이 쪽이 그 도구를 지녔고, 로그에 이미 이 쪽이 실제로 쓴 기술이 있으면 그 첫 기술
+   * id로 잠긴다. 판정 엔진(battleSimulator)이 아니라 이 화면의 턴 진행 버튼이 UI 단에서 막는
+   * 방식이라, 잠긴 기술 id를 여기서 로그를 훑어 매번 다시 구한다(별도 상태로 안 들고 다닌다).
+   */
+  function choiceLockedMoveId(side: Side): string | null {
+    const itemId = sideOf(side).slot?.item;
+    const item = itemId ? getItem(itemId) : undefined;
+    if (!item?.locksFirstMoveUsed) return null;
+    for (const turn of log) {
+      const action = turn.actions.find((a) => a.actor === side);
+      if (action) return action.move.id;
+    }
+    return null;
+  }
 
   const canStart =
     setup.a.slot !== null &&
@@ -174,16 +193,19 @@ export function BattleLogPage() {
     setBattleState(state);
     setLog([]);
     setSelected({ a: null, b: null });
+    setLockWarning(null);
   }
 
   function resetToSetup() {
     setBattleState(null);
     setLog([]);
     setSelected({ a: null, b: null });
+    setLockWarning(null);
   }
 
   function playTurn() {
     if (!battleState) return;
+    setLockWarning(null);
     // 남은 PP가 있는 기술이 하나도 없으면(4개 다 0) 선택 없이 발버둥을 자동으로 낸다.
     const aStruggling = !hasUsableMove(battleState.a);
     const bStruggling = !hasUsableMove(battleState.b);
@@ -192,6 +214,20 @@ export function BattleLogPage() {
     const aCharging = battleState.a.chargingMoveId !== undefined;
     const bCharging = battleState.b.chargingMoveId !== undefined;
     if ((!aStruggling && !aCharging && !selected.a) || (!bStruggling && !bCharging && !selected.b)) return;
+
+    // 구애스카프 잠금 확인: 발버둥/차지 계속은 애초에 "선택"이 아니라서 대상이 아니다. 이미 잠긴
+    // 기술과 다른 걸 골랐으면 턴 자체를 진행시키지 않고 경고만 띄운다.
+    for (const side of ["a", "b"] as const) {
+      const chosen = side === "a" ? (!aStruggling && !aCharging ? selected.a : null) : !bStruggling && !bCharging ? selected.b : null;
+      const locked = chosen ? choiceLockedMoveId(side) : null;
+      if (locked && chosen !== locked) {
+        const lockedMoveName = getMove(locked)?.name ?? "그 기술";
+        const pokemonName = pokemonOf(side)?.name ?? "포켓몬";
+        setLockWarning(`${pokemonName}${eunNeun(pokemonName)} 구애스카프 때문에 ${lockedMoveName}만 사용할 수 있어요.`);
+        return;
+      }
+    }
+
     const moveA = aStruggling ? STRUGGLE_MOVE : aCharging ? getMove(battleState.a.chargingMoveId!) : getMove(selected.a!);
     const moveB = bStruggling ? STRUGGLE_MOVE : bCharging ? getMove(battleState.b.chargingMoveId!) : getMove(selected.b!);
     if (!moveA || !moveB) return;
@@ -282,6 +318,8 @@ export function BattleLogPage() {
                 .filter((id): id is string => id !== null)
                 .map((id) => getMove(id))
                 .filter((m): m is NonNullable<typeof m> => m !== undefined);
+              // 구애스카프: 이미 잠긴 기술이 있으면(대전 시작 후 첫 사용 이후) 그 id를 미리 구해둔다
+              const lockedMoveId = choiceLockedMoveId(side);
 
               return (
                 <div key={side} className={`battle-fighter battle-fighter-${side}`}>
@@ -346,6 +384,8 @@ export function BattleLogPage() {
                         const sleepConditionUnmet = move.usageCondition === "sleep-only" && fighter.status.condition !== "sleep";
                         const firstTurnConditionUnmet =
                           move.usageCondition === "first-turn-only" && battleState.turnNumber !== 0;
+                        const fieldConditionUnmet = move.usageCondition === "field-required" && !battleState.field;
+                        const choiceLocked = lockedMoveId !== null && move.id !== lockedMoveId;
                         const disabled = pp <= 0 || fighter.currentHp <= 0 || !!winner;
                         // 셋업 카드의 party-move-pip와 동일하게 기술 타입 배경색을 입힌다.
                         const moveColor = move.type ? TYPE_COLORS[move.type] : undefined;
@@ -363,9 +403,16 @@ export function BattleLogPage() {
                                 ? "잠든 상태에서만 사용 가능 — 지금 쓰면 실패해요"
                                 : firstTurnConditionUnmet
                                   ? "등장 후 첫 턴에만 사용 가능 — 지금 쓰면 실패해요"
-                                  : undefined
+                                  : fieldConditionUnmet
+                                    ? "필드가 있을 때만 사용 가능 — 지금 쓰면 실패해요"
+                                    : choiceLocked
+                                      ? "구애스카프 때문에 이 기술은 지금 선택할 수 없어요"
+                                      : undefined
                             }
-                            onClick={() => setSelected((prev) => ({ ...prev, [side]: move.id }))}
+                            onClick={() => {
+                              setLockWarning(null);
+                              setSelected((prev) => ({ ...prev, [side]: move.id }));
+                            }}
                           >
                             <span className="battle-move-name">{move.name}</span>
                             <span className="battle-move-pp">
@@ -400,17 +447,20 @@ export function BattleLogPage() {
               </button>
             </div>
           ) : (
-            <button
-              type="button"
-              className="battle-start-button"
-              disabled={
-                (hasUsableMove(battleState.a) && battleState.a.chargingMoveId === undefined && !selected.a) ||
-                (hasUsableMove(battleState.b) && battleState.b.chargingMoveId === undefined && !selected.b)
-              }
-              onClick={playTurn}
-            >
-              턴 진행
-            </button>
+            <>
+              <button
+                type="button"
+                className="battle-start-button"
+                disabled={
+                  (hasUsableMove(battleState.a) && battleState.a.chargingMoveId === undefined && !selected.a) ||
+                  (hasUsableMove(battleState.b) && battleState.b.chargingMoveId === undefined && !selected.b)
+                }
+                onClick={playTurn}
+              >
+                턴 진행
+              </button>
+              {lockWarning && <div className="battle-lock-warning">{lockWarning}</div>}
+            </>
           )}
 
           <div className="battle-turn-log">
@@ -465,6 +515,9 @@ export function BattleLogPage() {
                         )}
                         {!action.blockedReason && action.hit && action.fieldSetFailed && (
                           <> · 이미 필드가 있어 실패!</>
+                        )}
+                        {!action.blockedReason && action.hit && action.destroyedField && (
+                          <> · {action.destroyedField} 파괴!</>
                         )}
                         {!action.blockedReason && action.hit && action.setTrickRoom && (
                           <> · 트릭룸 발동!</>
@@ -602,6 +655,27 @@ export function BattleLogPage() {
                         <div className="battle-turn-line is-muted">
                           {defenderName}의 {action.defenderBerryHealItemName}
                           {roEuro(action.defenderBerryHealItemName ?? "")} 체력을 {action.defenderBerryHealAmount} 회복했다!
+                        </div>
+                      )}
+                      {/* 기합의띠·기합의머리띠 — 기절할 데미지를 버티고 HP 1로 남았을 때 */}
+                      {!action.blockedReason && action.enduredItemName && (
+                        <div className="battle-turn-line is-muted">
+                          {defenderName}
+                          {eunNeun(defenderName)} {action.enduredItemName}
+                          {roEuro(action.enduredItemName)} 버텼다! (HP 1)
+                        </div>
+                      )}
+                      {/* 하양허브 — 자신/상대 어느 쪽에서 발동했는지 따로 표시 */}
+                      {!action.blockedReason && action.restoredStatsSelfItemName && (
+                        <div className="battle-turn-line is-muted">
+                          {actorName}의 {action.restoredStatsSelfItemName}
+                          {roEuro(action.restoredStatsSelfItemName)} 떨어진 능력을 원래대로 되돌렸다!
+                        </div>
+                      )}
+                      {!action.blockedReason && action.restoredStatsOpponentItemName && (
+                        <div className="battle-turn-line is-muted">
+                          {defenderName}의 {action.restoredStatsOpponentItemName}
+                          {roEuro(action.restoredStatsOpponentItemName)} 떨어진 능력을 원래대로 되돌렸다!
                         </div>
                       )}
                       {/* 상대가 쓰러졌는지 여부 — 데미지 수치와 분리된 별도 상태 줄 */}

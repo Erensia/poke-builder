@@ -1,6 +1,7 @@
 import type { Item } from "../types/item";
 import type { Move } from "../types/move";
 import type { StatusCondition } from "../types/status";
+import type { StatStages } from "../types/battleStats";
 
 /** 메트로놈: 연속 같은 기술 스트릭에 따른 위력 배율. streak=1(첫 사용)이면 아직 보너스 없음(1배) */
 function consecutiveSameMoveMultiplier(item: Item | undefined, streak: number): number {
@@ -118,4 +119,55 @@ export function getBerryDefenseResult(
     return { bulkMultiplier: 1, consumed: false };
   }
   return { bulkMultiplier: 2, consumed: true };
+}
+
+/** 하양허브: 지닌 쪽의 랭크가 하나라도 마이너스면(자신이 내렸든 상대가 내렸든) 발동 후보가 된다 */
+export function shouldTriggerWhiteHerb(
+  item: Item | undefined,
+  stages: StatStages,
+  alreadyConsumed: boolean,
+): boolean {
+  if (alreadyConsumed || !item?.restoresLoweredStatsOnce) return false;
+  return Object.values(stages).some((v) => v < 0);
+}
+
+/**
+ * 기합의띠(최대 HP 상태에서만, 1회)·기합의머리띠(조건 없이 매번 확률) 판정. 이번 데미지로
+ * 정확히(또는 그 이상) 기절할 상황에서만 호출한다 — preHp는 이번 데미지를 받기 직전 HP.
+ * survives면 호출부가 currentHp를 1로 clamp해야 하고, consumes면 itemConsumed를 세워야 한다.
+ */
+export function getEnduranceResult(
+  item: Item | undefined,
+  preHp: number,
+  maxHp: number,
+  alreadyConsumed: boolean,
+  random: () => number,
+): { survives: boolean; consumes: boolean } {
+  if (item?.survivesLethalAtFullHpOnce && !alreadyConsumed && preHp === maxHp) {
+    return { survives: true, consumes: true };
+  }
+  if (item?.survivesLethalChance && random() * 100 < item.survivesLethalChance) {
+    return { survives: true, consumes: false };
+  }
+  return { survives: false, consumes: false };
+}
+
+/** 왕의징표석: 데미지를 주는 데 성공하면 이 확률로 상대에게 추가 풀죽음을 건다(기술 자체 확률과 별개) */
+export function getExtraFlinchTriggered(item: Item | undefined, random: () => number): boolean {
+  return !!item?.extraFlinchChance && random() * 100 < item.extraFlinchChance;
+}
+
+/** 선제공격손톱: 같은 우선도 안에서 이 확률로 스피드와 무관하게 무조건 선공한다 */
+export function getQuickClawTriggered(item: Item | undefined, random: () => number): boolean {
+  return !!item?.quickClawChance && random() * 100 < item.quickClawChance;
+}
+
+/** 구애스카프(1.5)·검은철구(0.5) 등 실효 스피드 배율. 없으면 1배 */
+export function getItemSpeedMultiplier(item: Item | undefined): number {
+  return item?.speedMultiplier ?? 1;
+}
+
+/** 초점렌즈: 급소율 랭크에 항상 더해지는 보너스. 없으면 0 */
+export function getItemCritStageBonus(item: Item | undefined): number {
+  return item?.critStageBonus ?? 0;
 }

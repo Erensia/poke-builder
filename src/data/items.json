@@ -78,16 +78,73 @@
     "category": "mega-stone"
   },
   {
+    "id": "라이츄나이트X",
+    "name": "라이츄나이트X",
+    "description": "",
+    "category": "mega-stone"
+  },
+  {
+    "id": "라이츄나이트Y",
+    "name": "라이츄나이트Y",
+    "description": "",
+    "category": "mega-stone"
+  },
+  {
+    "id": "망나뇽나이트",
+    "name": "망나뇽나이트",
+    "description": "",
+    "category": "mega-stone"
+  },
+  {
+    "id": "캥카나이트",
+    "name": "캥카나이트",
+    "description": "",
+    "category": "mega-stone"
+  },
+  {
+    "id": "마폭시나이트",
+    "name": "마폭시나이트",
+    "description": "",
+    "category": "mega-stone"
+  },
+  {
+    "id": "입치트나이트",
+    "name": "입치트나이트",
+    "description": "",
+    "category": "mega-stone"
+  },
+  {
+    "id": "곤율거니나이트",
+    "name": "곤율거니나이트",
+    "description": "",
+    "category": "mega-stone"
+  },
+  {
+    "id": "몰드류나이트",
+    "name": "몰드류나이트",
+    "description": "",
+    "category": "mega-stone"
+  },
+  {
+    "id": "나무킹나이트",
+    "name": "나무킹나이트",
+    "description": "",
+    "category": "mega-stone"
+  },
+  {
     "id": "하양허브",
     "name": "하양허브",
     "description": "능력이 떨어지면 원래대로 되돌린다. 한 번 사용하면 그 대전 중에는 사라진다.",
-    "category": "held-item"
+    "category": "held-item",
+    "restoresLoweredStatsOnce": true
   },
   {
     "id": "구애스카프",
     "name": "구애스카프",
     "description": "스피드가 1.5배가 되지만, 한번 기술을 사용하면 교체하기 전까지 그 기술만 사용할 수 있다.",
-    "category": "held-item"
+    "category": "held-item",
+    "speedMultiplier": 1.5,
+    "locksFirstMoveUsed": true
   },
   {
     "id": "전기구슬",
@@ -99,13 +156,15 @@
     "id": "기합의띠",
     "name": "기합의띠",
     "description": "HP가 꽉 찼을 때 일격에 기절할 듯한 기술로 데미지를 입으면 HP를 1 남기고 버틴다. 한 번 사용하면 그 대전 중에는 사라진다.",
-    "category": "held-item"
+    "category": "held-item",
+    "survivesLethalAtFullHpOnce": true
   },
   {
     "id": "기합의머리띠",
     "name": "기합의머리띠",
     "description": "기절할 듯한 기술로 데미지를 입으면 10% 확률로 HP를 1 남기고 버틴다.",
-    "category": "held-item"
+    "category": "held-item",
+    "survivesLethalChance": 10
   },
   {
     "id": "먹다남은음식",
@@ -159,25 +218,30 @@
     "id": "선제공격손톱",
     "name": "선제공격손톱",
     "description": "20% 확률로, 우선도가 같은 기술 중에서 가장 먼저 행동한다.",
-    "category": "held-item"
+    "category": "held-item",
+    "quickClawChance": 20
   },
   {
     "id": "왕의징표석",
     "name": "왕의징표석",
     "description": "기술로 데미지를 주었을 때 10% 확률로 상대를 풀죽게 한다.",
-    "category": "held-item"
+    "category": "held-item",
+    "extraFlinchChance": 10
   },
   {
     "id": "검은철구",
     "name": "검은철구",
     "description": "스피드가 1/2이 된다. 땅에 있지 않은 포켓몬도 땅 위에 있는 것으로 취급되어, 땅타입 기술과 압정뿌리기·독압정·끈적끈적네트의 효과를 받는다.",
-    "category": "held-item"
+    "category": "held-item",
+    "speedMultiplier": 0.5,
+    "groundsHolder": true
   },
   {
     "id": "초점렌즈",
     "name": "초점렌즈",
     "description": "급소율이 1랭크 상승한다.",
-    "category": "held-item"
+    "category": "held-item",
+    "critStageBonus": 1
   },
   {
     "id": "아름다운허물",

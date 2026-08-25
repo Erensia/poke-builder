@@ -1,6 +1,7 @@
 import type { PokemonType } from "../types/pokemon-type";
 import type { FieldKind } from "../types/field";
 import type { StatusCondition } from "../types/status";
+import type { Move } from "../types/move";
 
 /** 필드는 전부 5턴 지속 (그라운드코트로 8턴까지 늘어나는 건 아직 도구 배율처럼 스키마 밖) */
 export const FIELD_DURATION = 5;
@@ -50,4 +51,32 @@ export function isPriorityMoveBlockedByField(field: FieldKind | undefined, prior
 /** 그래스필드일 때 턴 종료 시 최대 HP의 1/16을 회복한다 */
 export function computeFieldEndOfTurnHeal(field: FieldKind | undefined, maxHp: number): number {
   return field === "그래스필드" ? Math.floor(maxHp / 16) : 0;
+}
+
+/** 그래스슬라이더처럼 특정 필드에서만 우선도가 오르는 기술의 실제 우선도(조건 안 맞으면 원래 priority) */
+export function getFieldAdjustedPriority(move: Move, field: FieldKind | undefined): number {
+  if (move.priorityBoostInField && field === move.priorityBoostInField.field) {
+    return move.priority + move.priorityBoostInField.delta;
+  }
+  return move.priority;
+}
+
+/** 미스트버스트·와이드포스·라이징볼트처럼 특정 필드에서 위력이 배가되는 기술의 배율(조건 안 맞으면 1) */
+export function getFieldPowerMultiplier(move: Move, field: FieldKind | undefined): number {
+  if (move.powerMultiplierInField && field === move.powerMultiplierInField.field) {
+    return move.powerMultiplierInField.multiplier;
+  }
+  return 1;
+}
+
+/**
+ * 대지의파동(fieldPulse) 전용. 필드가 활성 상태면 그 필드의 표시 타입으로 바뀌고 위력이 2배가
+ * 된다. fieldPulse가 없거나 필드가 없으면 원본 타입/위력을 그대로 돌려준다.
+ */
+export function applyFieldPulse(
+  move: Move,
+  field: FieldKind | undefined,
+): { type: PokemonType | null; power: number | null } {
+  if (!move.fieldPulse || !field) return { type: move.type, power: move.power };
+  return { type: FIELD_DISPLAY_TYPE[field], power: move.power === null ? null : move.power * 2 };
 }

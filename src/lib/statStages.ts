@@ -23,6 +23,11 @@ export function resetStages(): StatStages {
   return { ...NEUTRAL_STAGES };
 }
 
+/** 하양허브: 마이너스 랭크만 0으로 되돌린다. 플러스 랭크는 그대로 둔다(resetStages와 다른 점) */
+export function clampStagesToNonNegative(stages: StatStages): StatStages {
+  return Object.fromEntries(Object.entries(stages).map(([key, value]) => [key, Math.max(0, value)])) as StatStages;
+}
+
 export interface ApplyMoveStatChangesOptions {
   /** 조건부 효과(저주 등) 판정에 쓸, 기술을 사용한 쪽의 실제 타입 */
   userTypes?: PokemonType[];

@@ -17,10 +17,11 @@ import {
   type VolatileCondition,
   type VolatileConditionState,
 } from "../types/status";
+import type { Ability } from "../types/ability";
 import { getPokemon, getAbility, getMove, getItem } from "./data";
 import { getEffectiveForm, getEffectiveAbilityId } from "./pokemonForm";
 import { computeRealStats } from "./statCalculator";
-import { applyMoveStatChanges } from "./statStages";
+import { applyMoveStatChanges, clampStagesToNonNegative } from "./statStages";
 import {
   applyMoveAccuracyEvasionChanges,
   applyMoveCritStageChanges,
@@ -50,8 +51,11 @@ import { computeDamage } from "./battlePower";
 import { getWeatherDamageMultiplier, computeWeatherHealFraction } from "./weatherEffects";
 import {
   FIELD_DURATION,
+  applyFieldPulse,
   computeFieldEndOfTurnHeal,
+  getFieldAdjustedPriority,
   getFieldDamageMultiplier,
+  getFieldPowerMultiplier,
   isConfusionBlockedByField,
   isPriorityMoveBlockedByField,
   isStatusBlockedByField,
@@ -64,6 +68,12 @@ import {
   getStatusCureBerryResult,
   getConfusionCureBerryResult,
   getHpThresholdBerryHeal,
+  shouldTriggerWhiteHerb,
+  getEnduranceResult,
+  getExtraFlinchTriggered,
+  getQuickClawTriggered,
+  getItemSpeedMultiplier,
+  getItemCritStageBonus,
 } from "./itemEffects";
 import { compareTurnOrder } from "./turnOrder";
 import type { BaseStats } from "../types/stats";
@@ -247,8 +257,13 @@ function weatherRockBonus(weather: WeatherKind, aSlot: EvaluatorSlot, bSlot: Eva
 
 /**
  * 사용자가 날씨를 직접 고르지 않았을 때, 양쪽 특성(가뭄/잔비/모래날림 등 setsWeather)을 확인해서
- * 배틀 시작과 동시에 날씨를 자동으로 바꾼다. 양쪽 다 날씨 특성이면 실효 스피드가 빠른 쪽이 이긴다
- * (참고할 다른 기준이 없어 간이화한 규칙 — Phase 3 문서 "확인 필요" 항목).
+ * 배틀 시작과 동시에 날씨를 자동으로 바꾼다.
+ *
+ * 양쪽 다 날씨 특성이면 실효 스피드가 빠른 쪽부터 순서대로 발동한다(사용자 확인) — "우선권"이
+ * 있는 게 아니라 그냥 둘 다 발동하는데, 날씨 기술/특성은 이미 다른 날씨가 있어도 실패하지 않고
+ * 항상 덮어쓰는 규칙(resolveAction의 Move.setsWeather 처리와 동일)이라, 나중에(=스피드가 느린
+ * 쪽이) 발동하는 쪽의 날씨가 결국 최종적으로 남는다. 로그에도 두 특성이 순서대로 발동하는 걸
+ * 그대로 보여준다.
  *
  * 챔피언스는 특성으로 걸리든 사용자가 수동으로 고르든 날씨에 5턴 카운트다운이 있다(사용자 확인 —
  * 본가와 달리 날씨 특성이 무제한 지속이 아님). 그래서 여기서도 기술로 걸 때(resolveAction의
@@ -275,17 +290,37 @@ function resolveEntryWeather(
     return { weather: manualWeather, weatherTurnsRemaining: undefined, announcements: [] };
   }
 
-  const aWins =
-    !!aAbility?.setsWeather && (!bAbility?.setsWeather || aFighter.realStats.spe >= bFighter.realStats.spe);
+  const announce = (slot: EvaluatorSlot, ability: Ability, weather: WeatherKind) => {
+    const pokemonName = getPokemon(slot.pokemonId)?.name ?? "포켓몬";
+    return `${pokemonName}의 ${ability.name}! 날씨가 ${weather}${roEuro(weather)} 바뀌었다!`;
+  };
+
+  if (aAbility?.setsWeather && bAbility?.setsWeather) {
+    // 둘 다 날씨 특성 보유: 스피드가 빠른 쪽부터 순서대로 발동하고, 나중에(느린 쪽이) 발동하는
+    // 날씨가 덮어써서 최종적으로 남는다.
+    const aFaster = aFighter.realStats.spe >= bFighter.realStats.spe;
+    const [firstSlot, firstAbility] = aFaster ? ([aSlot, aAbility] as const) : ([bSlot, bAbility] as const);
+    const [secondSlot, secondAbility] = aFaster ? ([bSlot, bAbility] as const) : ([aSlot, aAbility] as const);
+    const weather = secondAbility.setsWeather!;
+    return {
+      weather,
+      weatherTurnsRemaining: WEATHER_DURATION + weatherRockBonus(weather, aSlot, bSlot),
+      announcements: [
+        announce(firstSlot, firstAbility, firstAbility.setsWeather!),
+        announce(secondSlot, secondAbility, weather),
+      ],
+    };
+  }
+
+  const aWins = !!aAbility?.setsWeather;
   const winnerSlot = aWins ? aSlot : bSlot;
   const winnerAbility = (aWins ? aAbility : bAbility)!;
   const weather = winnerAbility.setsWeather!;
-  const pokemonName = getPokemon(winnerSlot.pokemonId)?.name ?? "포켓몬";
 
   return {
     weather,
     weatherTurnsRemaining: WEATHER_DURATION + weatherRockBonus(weather, aSlot, bSlot),
-    announcements: [`${pokemonName}의 ${winnerAbility.name}! 날씨가 ${weather}${roEuro(weather)} 바뀌었다!`],
+    announcements: [announce(winnerSlot, winnerAbility, weather)],
   };
 }
 
@@ -366,6 +401,8 @@ export interface ActionLogEntry {
   setField?: FieldKind;
   /** 필드 기술을 썼지만 이미 다른 필드가 깔려있어서 실패했으면 true */
   fieldSetFailed?: boolean;
+  /** 아이언롤러처럼 필드를 파괴하는 기술이 명중해서 활성 필드가 없어졌으면, 없어지기 직전의 필드 종류 */
+  destroyedField?: FieldKind;
   /** 이 행동으로 트릭룸이 새로 걸렸으면 true */
   setTrickRoom?: boolean;
   /** 트릭룸을 썼지만 이미 걸려있어서 실패했으면 true */
@@ -382,6 +419,12 @@ export interface ActionLogEntry {
    * 0(면역 등)이면 반동도 자연히 0.
    */
   recoilDamage: number;
+  /** 기합의띠·기합의머리띠 덕분에 기절할 데미지를 버티고 HP 1로 남았으면 그 도구 이름 */
+  enduredItemName?: string;
+  /** 하양허브 — 이번 행동의 주체(자신) 쪽에서 발동했으면 그 도구 이름 */
+  restoredStatsSelfItemName?: string;
+  /** 하양허브 — 상대 쪽에서 발동했으면 그 도구 이름 */
+  restoredStatsOpponentItemName?: string;
   /** 트리플악셀·록블라스트 등 다단히트 기술만 채운다 — 실제로 명중해서 데미지를 낸 타수 */
   hitCount?: number;
   /** 공중날기 등 차지 기술의 준비 턴(1턴째)이면 true — 데미지 없이 "숨었다"만 기록 */
@@ -576,6 +619,10 @@ function resolveAction(
   if (move.usageCondition === "first-turn-only" && state.turnNumber !== 1) {
     return blocked("usageCondition");
   }
+  // 아이언롤러: 활성화된 필드가 하나도 없으면 실패한다(본가 규칙)
+  if (move.usageCondition === "field-required" && !state.field) {
+    return blocked("usageCondition");
+  }
 
   // 1) 주 상태이상(잠듦/얼음/마비)으로 행동 자체가 막히는지. 잠듦/얼음은 이 판정 안에서
   // 자체 해제 카운터가 갱신되므로 결과를 attacker.status에 반드시 반영해야 한다.
@@ -666,9 +713,22 @@ function resolveAction(
   const attackerItem = attacker.slot.item ? getItem(attacker.slot.item) : undefined;
   const defenderItem = defender.slot.item ? getItem(defender.slot.item) : undefined;
 
+  // 필드 조건부 타입/위력 변경(대지의파동=fieldPulse, 미스트버스트·와이드포스·라이징볼트=
+  // powerMultiplierInField)을 특성 배율 계산보다 먼저 반영한다 — 타입이 바뀐 상태여야
+  // resolveMoveContext 안의 상성 계산(getEffectiveness)에도 바뀐 타입이 들어간다. 둘 중
+  // 한 기술이 두 속성을 동시에 갖는 경우는 없어서(대지의파동만 fieldPulse, 나머지 셋만
+  // powerMultiplierInField) 순서·중복 곱셈 걱정 없이 그냥 합쳐도 안전하다.
+  const fieldPulse = applyFieldPulse(move, state.field);
+  const fieldPowerMultiplier = getFieldPowerMultiplier(move, state.field);
+  const fieldAdjustedMove: Move = {
+    ...move,
+    type: fieldPulse.type,
+    power: fieldPulse.power === null ? null : Math.round(fieldPulse.power * fieldPowerMultiplier),
+  };
+
   // evaluateSlotMatchup(1턴 스냅샷 판정)과 같은 로직을 공유 — 특성 배율/타입 변경/자속/상대 상성
   const { effectiveMove, abilityOffenseMultiplier, abilityDefenseMultiplier, stabMultiplier, typeEffectiveness } =
-    resolveMoveContext(attackerAbility, move, defender.types, defenderAbility, state.weather);
+    resolveMoveContext(attackerAbility, fieldAdjustedMove, defender.types, defenderAbility, state.weather, defenderItem);
 
   // 메트로놈(연속 같은 기술 위력 증가)용 스트릭 갱신 — 여기까지 왔다는 건 앞의 모든 행동방해
   // 판정(상태이상/풀죽음/반동/혼란/차지 등)을 통과해서 실제로 이 기술을 쓴다는 뜻이라, 명중 여부와
@@ -745,7 +805,8 @@ function resolveAction(
    */
   function resolveHit(hitMove: Move): { damage: number; isCritical: boolean } {
     const critical =
-      effectiveMove.alwaysCrit || random() < critChance(attacker.critStage, effectiveMove.highCritRatio);
+      effectiveMove.alwaysCrit ||
+      random() < critChance(attacker.critStage + getItemCritStageBonus(attackerItem), effectiveMove.highCritRatio);
     const ignoreBurnPenalty = ignoresBurnAttackPenalty(attackerAbility?.id, effectiveMove.id);
     const statusAttackMultiplier = computeStatusAttackMultiplier(
       attacker.status.condition,
@@ -795,12 +856,32 @@ function resolveAction(
     return { damage: result?.damage ?? 0, isCritical: critical };
   }
 
+  // 기합의띠(최대 HP 상태에서만, 1회)·기합의머리띠(조건 없이 매번 확률): 이번 데미지로 정확히
+  // 기절했을 때만(currentHp가 0이 됐을 때만) 판정 대상이 된다. preHp는 이번 데미지를 받기
+  // 직전 HP — 기합의띠의 "최대 HP 상태" 조건과 애초에 죽어있던 게 아니었는지 확인에 쓴다.
+  // 다단히트 루프 안에서 타수마다 호출되므로, 한 타에서 버텨도 다음 타에서 다시 죽을 수 있고
+  // (기합의머리띠는 매번 재판정, 기합의띠는 이미 소모돼 두 번은 못 버팀) 그건 본가와 동일하다.
+  let enduredItemName: string | undefined;
+  function applyEndurance(preHp: number): void {
+    if (defender.currentHp > 0 || preHp <= 0) return;
+    const result = getEnduranceResult(defenderItem, preHp, defender.maxHp, defender.itemConsumed ?? false, random);
+    if (result.survives) {
+      defender.currentHp = 1;
+      enduredItemName = defenderItem?.name;
+      if (result.consumes) defender.itemConsumed = true;
+    }
+  }
+
   if (isDamaging && effectiveMove.fixedDamage !== undefined) {
     // 나이트헤드류: 방어/랭크/특성/도구/급소를 전부 무시하고 고정 수치만 깎는다.
     // 타입 상성 면역(0배)만은 그대로 존중 — 반감/2배는 적용하지 않는다.
     damage = typeEffectiveness === 0 ? 0 : effectiveMove.fixedDamage;
     damagePercent = damage / defender.realStats.hp;
-    defender.currentHp = Math.max(0, defender.currentHp - damage);
+    {
+      const preHp = defender.currentHp;
+      defender.currentHp = Math.max(0, defender.currentHp - damage);
+      applyEndurance(preHp);
+    }
   } else if (isDamaging && effectiveMove.minHits !== undefined && effectiveMove.maxHits !== undefined) {
     // 다단히트: 명중 판정은 이미 위(첫 타 기준)에서 끝났으니 여기부턴 최소 1타는 맞은 상태로
     // 시작한다. 록블라스트류(multiHitPowers 없음)는 첫 타만 명중 판정하고 나머지는 자동 명중,
@@ -825,7 +906,9 @@ function resolveAction(
       damage += hitResult.damage;
       if (hitResult.isCritical) isCritical = true;
       landed += 1;
+      const preHp = defender.currentHp;
       defender.currentHp = Math.max(0, defender.currentHp - hitResult.damage);
+      applyEndurance(preHp);
       if (isFainted(defender)) break; // 상대가 쓰러지면 남은 타수는 진행하지 않는다
     }
     damagePercent = damage / defender.realStats.hp;
@@ -835,7 +918,9 @@ function resolveAction(
     damage = hitResult.damage;
     isCritical = hitResult.isCritical;
     damagePercent = damage / defender.realStats.hp;
+    const preHp = defender.currentHp;
     defender.currentHp = Math.max(0, defender.currentHp - damage);
+    applyEndurance(preHp);
   }
 
   // 발버둥 반동: 필중이라 항상 이 지점까지 오고, 명중/기절 여부와 무관하게 사용자가
@@ -892,6 +977,22 @@ function resolveAction(
   // attacker/defender는 state.a/state.b를 그대로 참조하고 있어 여기서 바꾼 값이 state에도 반영된다.
   attacker.stages = applyMoveStatChanges(attacker.stages, effectiveMove, "self", { userTypes: attacker.types });
   defender.stages = applyMoveStatChanges(defender.stages, effectiveMove, "opponent", { userTypes: attacker.types });
+
+  // 하양허브: 방금 반영된 랭크 중 마이너스가 하나라도 있으면(자신이 스스로 내렸든, 상대 기술로
+  // 내려갔든) 그 즉시 마이너스 랭크만 전부 0으로 되돌리고 소모된다. 양쪽 다 이 도구를 지녔고
+  // 같은 턴에 둘 다 마이너스가 됐으면(드문 경우) 둘 다 독립적으로 발동한다.
+  let restoredStatsSelfItemName: string | undefined;
+  let restoredStatsOpponentItemName: string | undefined;
+  if (shouldTriggerWhiteHerb(attackerItem, attacker.stages, attacker.itemConsumed ?? false)) {
+    attacker.stages = clampStagesToNonNegative(attacker.stages);
+    attacker.itemConsumed = true;
+    restoredStatsSelfItemName = attackerItem?.name;
+  }
+  if (shouldTriggerWhiteHerb(defenderItem, defender.stages, defender.itemConsumed ?? false)) {
+    defender.stages = clampStagesToNonNegative(defender.stages);
+    defender.itemConsumed = true;
+    restoredStatsOpponentItemName = defenderItem?.name;
+  }
 
   attacker.accuracyStages = applyMoveAccuracyEvasionChanges(attacker.accuracyStages, effectiveMove, "self", {
     userTypes: attacker.types,
@@ -973,6 +1074,20 @@ function resolveAction(
         }
       }
     }
+  }
+
+  // 왕의징표석: 데미지를 주는 데 성공하면 이 확률로 상대에게 추가 풀죽음을 건다. 기술 자체의
+  // 풀죽음 확률(있다면)과는 완전히 별개 판정이라, 기술이 이미 풀죽음을 걸었으면 중복으로 다시
+  // 걸 필요가 없다(로그에 "풀죽음!"이 두 번 찍히는 것만 방지 — 결과 자체는 어차피 동일).
+  if (
+    isDamaging &&
+    damage > 0 &&
+    inflictedVolatile !== "flinch" &&
+    !isFainted(defender) &&
+    getExtraFlinchTriggered(attackerItem, random)
+  ) {
+    defender.volatile = inflictVolatile(defender.volatile, "flinch", random);
+    inflictedVolatile = "flinch";
   }
 
   // 상태이상 치료: 물거품아리아처럼 명중 시 대상의 주 상태이상을 없앤다(inflictsStatus의 반대 방향).
@@ -1082,6 +1197,15 @@ function resolveAction(
     }
   }
 
+  // 아이언롤러: 명중하면 활성 필드를 제거한다. usageCondition: "field-required"로 필드가 없으면
+  // 애초에 이 지점까지 오지 못하니(맨 위에서 이미 실패 처리), 여기선 있는 필드를 지우기만 하면 된다.
+  let destroyedField: FieldKind | undefined;
+  if (effectiveMove.destroysField && state.field) {
+    destroyedField = state.field;
+    state.field = undefined;
+    state.fieldTurnsRemaining = undefined;
+  }
+
   // 트릭룸도 필드와 같은 이유로 이미 걸려있으면 재사용 시 실패 처리한다(지속 턴수 갱신 방지) —
   // 다만 아직 아무 효과도 안 걸린 채로 게임이 끝나는 극단적 경우는 없으니 별 문제 없음.
   let trickRoomSetFailed = false;
@@ -1167,6 +1291,7 @@ function resolveAction(
     curedStatusTarget,
     setField: fieldSetFailed ? undefined : effectiveMove.setsField,
     fieldSetFailed,
+    destroyedField,
     setTrickRoom: trickRoomSetFailed ? undefined : effectiveMove.setsTrickRoom,
     trickRoomSetFailed,
     setWeather: effectiveMove.setsWeather,
@@ -1175,6 +1300,9 @@ function resolveAction(
     fainted: isFainted(defender),
     selfFainted: isFainted(attacker),
     recoilDamage,
+    enduredItemName,
+    restoredStatsSelfItemName,
+    restoredStatsOpponentItemName,
     hitCount,
     itemRecoilDamage: itemRecoilDamage || undefined,
     itemRecoilItemName,
@@ -1227,20 +1355,41 @@ export function runTurn(
     entryAnnouncements: prevState.entryAnnouncements,
   };
 
-  const speedA = state.a.realStats.spe * computeStatusSpeedMultiplier(state.a.status.condition);
-  const speedB = state.b.realStats.spe * computeStatusSpeedMultiplier(state.b.status.condition);
+  const aItem = state.a.slot.item ? getItem(state.a.slot.item) : undefined;
+  const bItem = state.b.slot.item ? getItem(state.b.slot.item) : undefined;
+  // 구애스카프(1.5)·검은철구(0.5) — 상태이상 배율과 별개로 곱해진다
+  const speedA =
+    state.a.realStats.spe * computeStatusSpeedMultiplier(state.a.status.condition) * getItemSpeedMultiplier(aItem);
+  const speedB =
+    state.b.realStats.spe * computeStatusSpeedMultiplier(state.b.status.condition) * getItemSpeedMultiplier(bItem);
 
   // 트릭룸 판정은 이번 턴이 시작된 시점(=아직 이번 턴 행동을 하나도 반영하지 않은 상태)의 값을
   // 쓴다 — 이번 턴에 트릭룸을 새로 걸어도 그 즉시 같은 턴의 순서 계산에는 영향을 주지 않는다
   // (본가 규칙: 순서는 행동 전에 이미 정해짐).
   const trickRoomActive = state.trickRoomTurnsRemaining !== undefined;
-  const firstIsA =
-    compareTurnOrder(
-      { realSpeed: speedA, move: moveA, stages: state.a.stages },
-      { realSpeed: speedB, move: moveB, stages: state.b.stages },
-      random,
-      trickRoomActive,
-    ) === 0;
+  // 그래스슬라이더처럼 필드 조건부로 우선도가 오르는 기술은, 순서를 정하는 이 시점의 필드
+  // 상태(=이번 턴 시작 시점)를 기준으로 반영한다. compareTurnOrder는 move.priority만 보므로
+  // 우선도만 조정한 얕은 복사본을 넘긴다.
+  const priorityAdjustedMoveA = { ...moveA, priority: getFieldAdjustedPriority(moveA, state.field) };
+  const priorityAdjustedMoveB = { ...moveB, priority: getFieldAdjustedPriority(moveB, state.field) };
+
+  // 선제공격손톱: 실제 우선도가 같을 때만 끼어든다(더 높은 우선도는 이 효과와 무관하게 항상 이김).
+  // 양쪽 다 발동하면(둘 다 이 도구를 지녔고 둘 다 확률에 성공) 서로 상쇄되어 정상적인 스피드
+  // 비교로 넘어간다 — 어느 한쪽만 발동했을 때만 그쪽이 확정으로 먼저 움직인다.
+  const priorityTied = priorityAdjustedMoveA.priority === priorityAdjustedMoveB.priority;
+  const aQuickClaw = priorityTied && getQuickClawTriggered(aItem, random);
+  const bQuickClaw = priorityTied && getQuickClawTriggered(bItem, random);
+  const quickClawWinner: FighterKey | undefined =
+    aQuickClaw && !bQuickClaw ? "a" : bQuickClaw && !aQuickClaw ? "b" : undefined;
+
+  const firstIsA = quickClawWinner
+    ? quickClawWinner === "a"
+    : compareTurnOrder(
+        { realSpeed: speedA, move: priorityAdjustedMoveA, stages: state.a.stages },
+        { realSpeed: speedB, move: priorityAdjustedMoveB, stages: state.b.stages },
+        random,
+        trickRoomActive,
+      ) === 0;
 
   const order: [FighterKey, FighterKey] = firstIsA ? ["a", "b"] : ["b", "a"];
   const moves: Record<FighterKey, Move> = { a: moveA, b: moveB };
