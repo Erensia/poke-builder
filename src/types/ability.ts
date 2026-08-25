@@ -166,4 +166,12 @@ export interface Ability {
   boostsStatOnFlinch?: AbilityStatBoost;
   /** 자기과신: 자신이 데미지를 줘서 상대를 쓰러뜨릴 때마다 이 랭크변화가 붙는다(공격 +1). */
   boostsStatOnKo?: AbilityStatBoost;
+  /**
+   * 부유: 이 타입 목록의 기술을 완전히 무효화한다(부유=[땅]). `bypassesImmunityForTypes`
+   * (공격측이 상대의 원래 타입 면역을 무시)의 반대 방향으로, 방어측이 원래 없던 면역을 스스로
+   * 얻는다 — absorbsType과 달리 랭크업 등 부가 이득은 없는 순수 면역이다. 검은철구
+   * (Item.groundsHolder)나 미래의 틀깨기류(공격측이 방어측 특성 자체를 무시)로 뚫릴 수 있어야
+   * 해서, moveContext.ts는 기존 bypassImmunity 판정이 참이면 이 필드를 무시한다.
+   */
+  grantsImmunityToTypes?: PokemonType[];
 }

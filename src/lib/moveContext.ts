@@ -65,11 +65,20 @@ export function resolveMoveContext(
   // 기술도 흡수). 틀깨기류(공격측이 방어측 특성 자체를 무시)는 아직 이 로스터에 없어 충돌을
   // 고려하지 않았다(Phase 5 §1 잔여 항목, 나중에 붙이면 여기서 우선순위를 다시 봐야 함).
   const absorbedByDefenderAbility = !!(effectiveMove.type && effectiveMove.type === defenderAbility?.absorbsType?.type);
+  // 부유: 방어측이 원래 없던 면역을 스스로 얻는다(bypassImmunity와 반대 방향). bypassImmunity가
+  // 이미 참이면(배짱류·검은철구) 이 면역은 뚫린 것으로 취급 — 위 두 경로가 이 필드보다 우선한다.
+  const grantsImmunity = !!(
+    effectiveMove.type &&
+    defenderAbility?.grantsImmunityToTypes?.includes(effectiveMove.type) &&
+    !bypassImmunity
+  );
   const typeEffectiveness = absorbedByDefenderAbility
     ? 0
-    : effectiveMove.type
-      ? getEffectiveness(effectiveMove.type, defenderTypes, { bypassImmunity })
-      : 1;
+    : grantsImmunity
+      ? 0
+      : effectiveMove.type
+        ? getEffectiveness(effectiveMove.type, defenderTypes, { bypassImmunity })
+        : 1;
 
   return {
     effectiveMove,

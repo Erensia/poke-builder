@@ -374,7 +374,8 @@
   {
     "id": "부유",
     "name": "부유",
-    "description": "땅타입 기술을 전부 무효화한다."
+    "description": "땅타입 기술을 전부 무효화한다.",
+    "grantsImmunityToTypes": ["땅"]
   },
   {
     "id": "지구력",
