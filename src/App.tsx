@@ -3,6 +3,7 @@ import { Sidebar, type AppView } from "./components/Sidebar";
 import { PartyBoard } from "./components/PartyBoard";
 import { MatchupPage } from "./components/MatchupPage";
 import { BattleLogPage } from "./components/BattleLogPage";
+import { PokedexPage } from "./components/PokedexPage";
 import "./App.css";
 
 function App() {
@@ -15,6 +16,7 @@ function App() {
         {view === "party" && <PartyBoard />}
         {view === "matchup" && <MatchupPage />}
         {view === "battle-log" && <BattleLogPage />}
+        {view === "pokedex" && <PokedexPage />}
       </main>
     </div>
   );
