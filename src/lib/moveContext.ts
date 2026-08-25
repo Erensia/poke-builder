@@ -37,10 +37,12 @@ export function resolveMoveContext(
   defenderItem?: Item,
   /** 맹화·급류·심록·벌레의알림(HP 1/3 이하 조건)용. 안 넘기면 풀피로 간주(매치업 페이지 기본값) */
   attackerHpFraction?: number,
+  /** 멀티스케일(HP 풀피 조건)용. 안 넘기면 풀피로 간주(매치업 페이지 기본값) */
+  defenderHpIsFull = true,
 ): MoveContext {
   const abilityOffense = resolveAbilityOffense(attackerAbility, move, weather, attackerHpFraction);
   const effectiveMove = abilityOffense.overrideMoveType ? { ...move, type: abilityOffense.overrideMoveType } : move;
-  const abilityDefenseMultiplier = resolveAbilityDefense(defenderAbility, effectiveMove);
+  const abilityDefenseMultiplier = resolveAbilityDefense(defenderAbility, effectiveMove, defenderHpIsFull);
   const stabMultiplier = resolveStabMultiplier(attackerAbility);
 
   // 배짱처럼 특정 타입의 면역만 무시하는 특성(공격측)이거나, 검은철구처럼 방어측이 스스로 땅타입

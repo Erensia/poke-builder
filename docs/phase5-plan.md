@@ -20,7 +20,7 @@ abilities.json은 처음 발견 당시(라이츄 추가 시점) 54개였지만 �
 | 유형 | 필요한 확장 지점 | 해당 특성 |
 |---|---|---|
 | ~~HP 1/3 이하 자기 타입 위력 1.5배~~ | `AbilityModifierCondition.attackerHpAtMostFraction` 신설 — **완료** | ~~맹화~~, ~~급류~~, ~~심록~~, ~~벌레의알림~~ |
-| HP 가득 찬 상태 조건부 방어 배율 | 방어측에 `hpIsFull` 같은 조건 신설 | 멀티스케일 |
+| ~~HP 가득 찬 상태 조건부 방어 배율~~ | `AbilityModifierCondition.defenderHpIsFull` 신설 — **완료** | ~~멀티스케일~~ |
 | 날씨 조건부 스탯 배율/회복 | `modifiers`의 `weatherIs`는 있지만 스탯 배율·회복은 별도 로직 필요 | 선파워, 엽록소, 쓱쓱, 모래숨기(회피), 옹골참, 젖은접시, 모래헤치기 |
 | 자신 상태이상 조건부 배율 | `selfStatusIs` 같은 조건 신설 | 이상한비늘 |
 | ~~접촉 피격 시 발동(확률부 상태이상/데미지/랭크변화)~~ | `Ability.hitTrigger`(`abilityHitTriggers.ts`) 신설 — **5/6 완료** | ~~정전기~~, ~~저주받은바디~~, ~~까칠한피부~~, 헤롱헤롱바디(보류), ~~깨어진갑옷~~, ~~불꽃몸~~ |
@@ -62,6 +62,8 @@ abilities.json은 처음 발견 당시(라이츄 추가 시점) 54개였지만 �
 - 스모크 테스트로 넷 다 확인: 정의의마음 atk+1, 지구력 def+1, 타오르는불꽃 피격 데미지 0 + 이후 화염방사 위력 1.5배 반영, 피뢰침 피격 데미지 0 + spa+1.
 
 **"HP 1/3 이하 자기 타입 위력 1.5배" — 완료.** `AbilityModifierCondition`에 `attackerHpAtMostFraction`을 신설하고 `resolveAbilityOffense`/`resolveMoveContext`에 `attackerHpFraction` 파라미터를 관통시켰다. `battleSimulator.ts`는 `attacker.currentHp / attacker.maxHp`를 실제로 넘기고, 매치업 페이지(`evaluateSlotMatchup`)는 "현재 HP" 개념이 없는 1턴 스냅샷이라 인자를 안 넘겨 기본값 1(풀피)로 처리된다 — 즉 이 넷은 매치업 페이지에서는 항상 비활성. 맹화 스모크 테스트로 풀피 26 데미지 → HP 30% 39 데미지(정확히 1.5배, 같은 난수로 고정해서 확인)까지 검증.
+
+**"HP 가득 찬 상태 조건부 방어 배율" — 완료.** `AbilityModifierCondition.defenderHpIsFull`을 신설하고 `resolveAbilityDefense`/`resolveMoveContext`에 `defenderHpIsFull` 파라미터(기본값 `true`)를 관통시켰다. `battleSimulator.ts`는 `defender.currentHp === defender.maxHp`를 실제로 넘기고, 매치업 페이지는 attackerHpAtMostFraction과 반대로 기본값이 `true`라 항상 발동한 것으로 취급된다(1턴 스냅샷이 곧 "등장 직후 풀피" 가정과 자연히 맞아떨어짐). 망나뇽(히든어빌리티 멀티스케일) 스모크 테스트로 풀피 7 데미지 vs 비풀피 15 데미지(정확히 절반)까지 확인.
 
 (발견 경위: Phase 4.5 §1 라이츄 추가 작업 중 abilities.json 전수 점검. 이후 로스터가 더 늘어난 걸 반영해 이 문서를 쓰면서 재점검함)
 

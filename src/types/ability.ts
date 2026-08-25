@@ -22,6 +22,13 @@ export interface AbilityModifierCondition {
    * attacker.currentHp/maxHp를 실제로 넘겨준다.
    */
   attackerHpAtMostFraction?: number;
+  /**
+   * 방어측 현재 HP가 최대 HP와 정확히 같을 때(=풀피)만(멀티스케일). 매치업 페이지
+   * (evaluateSlotMatchup)는 "현재 HP" 개념이 없는 1턴 스냅샷이라 항상 풀피로 간주해서
+   * 이 조건은 거기서는 항상 발동한다 — attackerHpAtMostFraction과 반대 방향의 기본값이다.
+   * 배틀 시뮬레이터(battleSimulator.ts)에서만 defender.currentHp === defender.maxHp를 실제로 넘겨준다.
+   */
+  defenderHpIsFull?: boolean;
 }
 
 export interface AbilityModifier {

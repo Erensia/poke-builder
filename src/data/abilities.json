@@ -422,7 +422,16 @@
   {
     "id": "멀티스케일",
     "name": "멀티스케일",
-    "description": "HP가 가득 찬 상태에서 공격을 받으면 데미지가 절반으로 줄어든다."
+    "description": "HP가 가득 찬 상태에서 공격을 받으면 데미지가 절반으로 줄어든다.",
+    "modifiers": [
+      {
+        "scope": "defense",
+        "multiplier": 2,
+        "condition": {
+          "defenderHpIsFull": true
+        }
+      }
+    ]
   },
   {
     "id": "불꽃몸",

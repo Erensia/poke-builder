@@ -8,6 +8,7 @@ function conditionMatches(
   move: Move,
   weather?: WeatherKind,
   attackerHpFraction = 1,
+  defenderHpIsFull = true,
 ): boolean {
   if (!condition) return true;
   if (condition.movePowerAtMost !== undefined) {
@@ -28,6 +29,9 @@ function conditionMatches(
   }
   if (condition.attackerHpAtMostFraction !== undefined) {
     if (attackerHpFraction > condition.attackerHpAtMostFraction) return false;
+  }
+  if (condition.defenderHpIsFull !== undefined) {
+    if (condition.defenderHpIsFull !== defenderHpIsFull) return false;
   }
   return true;
 }
@@ -61,13 +65,17 @@ export function resolveAbilityOffense(
   return result;
 }
 
-/** 방어측 특성이 (이 기술로 맞을 때) 주는 배율을 계산한다. 두꺼운지방처럼 내구력에 곱해서 쓴다 */
-export function resolveAbilityDefense(ability: Ability | undefined, move: Move): number {
+/**
+ * 방어측 특성이 (이 기술로 맞을 때) 주는 배율을 계산한다. 두꺼운지방처럼 내구력에 곱해서 쓴다.
+ * defenderHpIsFull(멀티스케일용)은 안 넘기면 true(풀피)로 간주한다 — 매치업 페이지는 "현재 HP"
+ * 개념이 없는 1턴 스냅샷이라 항상 풀피 취급, 배틀 시뮬레이터만 실제 HP를 넘겨준다.
+ */
+export function resolveAbilityDefense(ability: Ability | undefined, move: Move, defenderHpIsFull = true): number {
   if (!ability?.modifiers) return 1;
   let multiplier = 1;
   for (const modifier of ability.modifiers) {
     if (modifier.scope !== "defense") continue;
-    if (!conditionMatches(modifier.condition, move, undefined)) continue;
+    if (!conditionMatches(modifier.condition, move, undefined, 1, defenderHpIsFull)) continue;
     multiplier *= modifier.multiplier;
   }
   return multiplier;
