@@ -1,5 +1,5 @@
 import type { PokemonType } from "./pokemon-type";
-import type { MoveClassification } from "./move";
+import type { MoveClassification, MoveCategory } from "./move";
 import type { WeatherKind } from "./weather";
 import type { BattleStatKey } from "./battleStats";
 import type { StatusCondition } from "./status";
@@ -11,6 +11,11 @@ export interface AbilityModifierCondition {
   moveTypeIn?: PokemonType[];
   /** 기술 분류 태그가 이 목록과 하나라도 겹칠 때만 (메가런처: 파동) */
   moveClassificationIn?: MoveClassification[];
+  /**
+   * 기술 카테고리가 이 목록에 있을 때만 (이상한비늘: physical — 본가에서 방어 실수치만 올리는
+   * 특성이라 방어 스탯이 관여하는 물리 데미지에만 영향을 준다. 특수 데미지는 특방을 쓰므로 무관).
+   */
+  moveCategoryIn?: MoveCategory[];
   /** 이 날씨일 때만 (모래의힘: 모래바람) */
   weatherIs?: WeatherKind;
   /** 접촉기일 때만 (단단한발톱) */
@@ -29,6 +34,14 @@ export interface AbilityModifierCondition {
    * 배틀 시뮬레이터(battleSimulator.ts)에서만 defender.currentHp === defender.maxHp를 실제로 넘겨준다.
    */
   defenderHpIsFull?: boolean;
+  /**
+   * 방어측이 주 상태이상(화상/마비/독/잠듦/얼음 중 하나)에 걸려 있을 때만(이상한비늘). 매치업
+   * 페이지(evaluateSlotMatchup)는 "현재 상태이상" 개념이 없는 1턴 스냅샷이라 항상 상태이상 없음
+   * (false)으로 간주해서 이 조건은 거기서는 발동하지 않는다 — defenderHpIsFull과 반대 방향의
+   * 기본값이다. 배틀 시뮬레이터(battleSimulator.ts)에서만 defender.status.condition !== null을
+   * 실제로 넘겨준다.
+   */
+  defenderHasStatusCondition?: boolean;
 }
 
 export interface AbilityModifier {

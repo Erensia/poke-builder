@@ -22,7 +22,7 @@ abilities.json은 처음 발견 당시(라이츄 추가 시점) 54개였지만 �
 | ~~HP 1/3 이하 자기 타입 위력 1.5배~~ | `AbilityModifierCondition.attackerHpAtMostFraction` 신설 — **완료** | ~~맹화~~, ~~급류~~, ~~심록~~, ~~벌레의알림~~ |
 | ~~HP 가득 찬 상태 조건부 방어 배율~~ | `AbilityModifierCondition.defenderHpIsFull` 신설 — **완료** | ~~멀티스케일~~ |
 | 날씨 조건부 스탯 배율/회복 | `modifiers`의 `weatherIs`는 있지만 스탯 배율·회복은 별도 로직 필요 | 선파워, 엽록소, 쓱쓱, 모래숨기(회피), 옹골참, 젖은접시, 모래헤치기 |
-| 자신 상태이상 조건부 배율 | `selfStatusIs` 같은 조건 신설 | 이상한비늘 |
+| ~~자신 상태이상 조건부 배율~~ | `AbilityModifierCondition.defenderHasStatusCondition` + `moveCategoryIn` 신설 — **완료** | ~~이상한비늘~~ |
 | ~~접촉 피격 시 발동(확률부 상태이상/데미지/랭크변화)~~ | `Ability.hitTrigger`(`abilityHitTriggers.ts`) 신설 — **5/6 완료** | ~~정전기~~, ~~저주받은바디~~, ~~까칠한피부~~, 헤롱헤롱바디(보류), ~~깨어진갑옷~~, ~~불꽃몸~~ |
 | ~~특정 타입 기술 피격 시 발동~~ | `hitTrigger.moveTypeIn`(정의의마음·지구력) + `Ability.absorbsType` 신설(타오르는불꽃·피뢰침) — **완료** | ~~정의의마음~~, ~~타오르는불꽃~~, ~~지구력~~, ~~피뢰침~~ |
 | 자신 랭크 하락/풀죽음 시 발동 | 방어측 트리거 훅(스탯 하락·풀죽음 감지) | 승기, 불굴의마음 |
@@ -64,6 +64,8 @@ abilities.json은 처음 발견 당시(라이츄 추가 시점) 54개였지만 �
 **"HP 1/3 이하 자기 타입 위력 1.5배" — 완료.** `AbilityModifierCondition`에 `attackerHpAtMostFraction`을 신설하고 `resolveAbilityOffense`/`resolveMoveContext`에 `attackerHpFraction` 파라미터를 관통시켰다. `battleSimulator.ts`는 `attacker.currentHp / attacker.maxHp`를 실제로 넘기고, 매치업 페이지(`evaluateSlotMatchup`)는 "현재 HP" 개념이 없는 1턴 스냅샷이라 인자를 안 넘겨 기본값 1(풀피)로 처리된다 — 즉 이 넷은 매치업 페이지에서는 항상 비활성. 맹화 스모크 테스트로 풀피 26 데미지 → HP 30% 39 데미지(정확히 1.5배, 같은 난수로 고정해서 확인)까지 검증.
 
 **"HP 가득 찬 상태 조건부 방어 배율" — 완료.** `AbilityModifierCondition.defenderHpIsFull`을 신설하고 `resolveAbilityDefense`/`resolveMoveContext`에 `defenderHpIsFull` 파라미터(기본값 `true`)를 관통시켰다. `battleSimulator.ts`는 `defender.currentHp === defender.maxHp`를 실제로 넘기고, 매치업 페이지는 attackerHpAtMostFraction과 반대로 기본값이 `true`라 항상 발동한 것으로 취급된다(1턴 스냅샷이 곧 "등장 직후 풀피" 가정과 자연히 맞아떨어짐). 망나뇽(히든어빌리티 멀티스케일) 스모크 테스트로 풀피 7 데미지 vs 비풀피 15 데미지(정확히 절반)까지 확인.
+
+**"자신 상태이상 조건부 배율" — 완료.** `AbilityModifierCondition.defenderHasStatusCondition`을 신설해 멀티스케일과 같은 패턴으로 배선(기본값 `false` — 매치업 페이지는 상태이상 없음 취급). 다만 이상한비늘은 본가에서 "방어 실수치"만 올리는 특성이라 특수 데미지엔 영향이 없어야 하는데, 기존 `AbilityModifierCondition`엔 기술 카테고리(물리/특수)로 거를 조건이 없었다(`moveClassificationIn`은 베기/펀치 같은 별개 태그 축) — `moveCategoryIn`을 새로 추가해 `["physical"]`로 제한. 밀로틱(이상한비늘) 스모크 테스트로 물리기 화상 상태 18→12(정확히 1.5배 방어) 데미지 감소, 특수기는 화상 여부와 무관하게 17로 동일함을 확인.
 
 (발견 경위: Phase 4.5 §1 라이츄 추가 작업 중 abilities.json 전수 점검. 이후 로스터가 더 늘어난 걸 반영해 이 문서를 쓰면서 재점검함)
 

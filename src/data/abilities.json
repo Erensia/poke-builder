@@ -446,7 +446,17 @@
   {
     "id": "이상한비늘",
     "name": "이상한비늘",
-    "description": "상태이상에 걸리면 방어가 1.5배로 상승한다."
+    "description": "상태이상에 걸리면 방어가 1.5배로 상승한다.",
+    "modifiers": [
+      {
+        "scope": "defense",
+        "multiplier": 1.5,
+        "condition": {
+          "moveCategoryIn": ["physical"],
+          "defenderHasStatusCondition": true
+        }
+      }
+    ]
   },
   {
     "id": "승기",

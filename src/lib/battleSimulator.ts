@@ -780,6 +780,7 @@ function resolveAction(
     defenderItem,
     attacker.currentHp / attacker.maxHp,
     defender.currentHp === defender.maxHp,
+    defender.status.condition !== null,
   );
 
   // 타오르는불꽃 발동 이후로 자신(=현재 공격자)이 쓰는 그 타입 기술의 위력이 올라있으면 반영.

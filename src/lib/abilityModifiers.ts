@@ -9,6 +9,7 @@ function conditionMatches(
   weather?: WeatherKind,
   attackerHpFraction = 1,
   defenderHpIsFull = true,
+  defenderHasStatusCondition = false,
 ): boolean {
   if (!condition) return true;
   if (condition.movePowerAtMost !== undefined) {
@@ -21,6 +22,9 @@ function conditionMatches(
     const tags = move.classification ?? [];
     if (!condition.moveClassificationIn.some((t) => tags.includes(t))) return false;
   }
+  if (condition.moveCategoryIn !== undefined) {
+    if (!move.category || !condition.moveCategoryIn.includes(move.category)) return false;
+  }
   if (condition.weatherIs !== undefined) {
     if (weather !== condition.weatherIs) return false;
   }
@@ -32,6 +36,9 @@ function conditionMatches(
   }
   if (condition.defenderHpIsFull !== undefined) {
     if (condition.defenderHpIsFull !== defenderHpIsFull) return false;
+  }
+  if (condition.defenderHasStatusCondition !== undefined) {
+    if (condition.defenderHasStatusCondition !== defenderHasStatusCondition) return false;
   }
   return true;
 }
@@ -70,12 +77,17 @@ export function resolveAbilityOffense(
  * defenderHpIsFull(멀티스케일용)은 안 넘기면 true(풀피)로 간주한다 — 매치업 페이지는 "현재 HP"
  * 개념이 없는 1턴 스냅샷이라 항상 풀피 취급, 배틀 시뮬레이터만 실제 HP를 넘겨준다.
  */
-export function resolveAbilityDefense(ability: Ability | undefined, move: Move, defenderHpIsFull = true): number {
+export function resolveAbilityDefense(
+  ability: Ability | undefined,
+  move: Move,
+  defenderHpIsFull = true,
+  defenderHasStatusCondition = false,
+): number {
   if (!ability?.modifiers) return 1;
   let multiplier = 1;
   for (const modifier of ability.modifiers) {
     if (modifier.scope !== "defense") continue;
-    if (!conditionMatches(modifier.condition, move, undefined, 1, defenderHpIsFull)) continue;
+    if (!conditionMatches(modifier.condition, move, undefined, 1, defenderHpIsFull, defenderHasStatusCondition)) continue;
     multiplier *= modifier.multiplier;
   }
   return multiplier;

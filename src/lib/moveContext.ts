@@ -39,10 +39,17 @@ export function resolveMoveContext(
   attackerHpFraction?: number,
   /** 멀티스케일(HP 풀피 조건)용. 안 넘기면 풀피로 간주(매치업 페이지 기본값) */
   defenderHpIsFull = true,
+  /** 이상한비늘(상태이상 조건)용. 안 넘기면 상태이상 없음으로 간주(매치업 페이지 기본값) */
+  defenderHasStatusCondition = false,
 ): MoveContext {
   const abilityOffense = resolveAbilityOffense(attackerAbility, move, weather, attackerHpFraction);
   const effectiveMove = abilityOffense.overrideMoveType ? { ...move, type: abilityOffense.overrideMoveType } : move;
-  const abilityDefenseMultiplier = resolveAbilityDefense(defenderAbility, effectiveMove, defenderHpIsFull);
+  const abilityDefenseMultiplier = resolveAbilityDefense(
+    defenderAbility,
+    effectiveMove,
+    defenderHpIsFull,
+    defenderHasStatusCondition,
+  );
   const stabMultiplier = resolveStabMultiplier(attackerAbility);
 
   // 배짱처럼 특정 타입의 면역만 무시하는 특성(공격측)이거나, 검은철구처럼 방어측이 스스로 땅타입
