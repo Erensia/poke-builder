@@ -142,7 +142,8 @@
   {
     "id": "싱크로",
     "name": "싱크로",
-    "description": "자신이 독·마비·화상 상태가 되면 그 상태를 상대에게도 옮긴다."
+    "description": "자신이 독·마비·화상 상태가 되면 그 상태를 상대에게도 옮긴다.",
+    "reflectsStatusToOpponent": ["poison", "badly-poisoned", "paralysis", "burn"]
   },
   {
     "id": "트레이스",
@@ -174,7 +175,8 @@
   {
     "id": "클리어바디",
     "name": "클리어바디",
-    "description": "상대의 기술이나 특성으로 자신의 능력치가 떨어지지 않는다."
+    "description": "상대의 기술이나 특성으로 자신의 능력치가 떨어지지 않는다.",
+    "blocksOpponentStatDropsForStats": ["atk", "def", "spa", "spd", "spe"]
   },
   {
     "id": "라이트메탈",
@@ -235,7 +237,8 @@
   {
     "id": "정신력",
     "name": "정신력",
-    "description": "풀죽음 상태가 되지 않으며, 위협의 효과를 받지 않는다."
+    "description": "풀죽음 상태가 되지 않으며, 위협의 효과를 받지 않는다.",
+    "immuneToFlinch": true
   },
   {
     "id": "정의의마음",
@@ -297,7 +300,8 @@
   {
     "id": "유연",
     "name": "유연",
-    "description": "마비 상태가 되지 않는다."
+    "description": "마비 상태가 되지 않는다.",
+    "immuneToStatuses": ["paralysis"]
   },
   {
     "id": "배짱",
@@ -405,7 +409,8 @@
   {
     "id": "미러아머",
     "name": "미러아머",
-    "description": "능력 랭크를 떨어뜨리는 효과를 받으면, 그 효과를 건 상대에게 그대로 반사한다."
+    "description": "능력 랭크를 떨어뜨리는 효과를 받으면, 그 효과를 건 상대에게 그대로 반사한다.",
+    "reflectsOpponentStatDrops": true
   },
   {
     "id": "정전기",
@@ -499,7 +504,8 @@
   {
     "id": "괴력집게",
     "name": "괴력집게",
-    "description": "상대의 기술이나 특성으로 자신의 공격이 떨어지지 않는다."
+    "description": "상대의 기술이나 특성으로 자신의 공격이 떨어지지 않는다.",
+    "blocksOpponentStatDropsForStats": ["atk"]
   },
   {
     "id": "위협",

@@ -997,7 +997,10 @@ function resolveAction(
     const chance = trigger.chance !== undefined ? trigger.chance / 100 : 1;
     if (!hitTriggerMatchesMove(trigger, effectiveMove) || random() >= chance) return;
 
-    if (trigger.inflictsStatusOnAttacker && !isImmuneToStatus(trigger.inflictsStatusOnAttacker, attacker.types)) {
+    if (
+      trigger.inflictsStatusOnAttacker &&
+      !isImmuneToStatus(trigger.inflictsStatusOnAttacker, attacker.types, attackerAbility?.immuneToStatuses)
+    ) {
       const before = attacker.status.condition;
       attacker.status = inflictStatus(attacker.status, trigger.inflictsStatusOnAttacker);
       if (attacker.status.condition !== before) {
@@ -1134,6 +1137,25 @@ function resolveAction(
   attacker.stages = applyMoveStatChanges(attacker.stages, effectiveMove, "self", { userTypes: attacker.types });
   defender.stages = applyMoveStatChanges(defender.stages, effectiveMove, "opponent", { userTypes: attacker.types });
 
+  // 클리어바디(전체)·괴력집게(공격만)·미러아머(반사): 방금 적용된 opponent 랭크변화 중 실제로
+  // 내려간 스탯만(-6 클램프로 변화가 없었던 건 자연히 제외) 골라서, 막을 스탯이면 원래 값으로
+  // 되돌리고, 반사 특성이면 원래 값으로 되돌린 뒤 그만큼을 공격측에게 대신 적용한다. "상대의
+  // 기술로" 내려간 것만 대상이라 방금 위에서 적용한 opponent 방향 변화만 비교하면 충분하다.
+  const blockedStats = defenderAbility?.blocksOpponentStatDropsForStats;
+  const reflects = defenderAbility?.reflectsOpponentStatDrops;
+  if (blockedStats || reflects) {
+    for (const stat of Object.keys(defender.stages) as BattleStatKey[]) {
+      const dropAmount = defenderStagesBeforeMoveChange[stat] - defender.stages[stat];
+      if (dropAmount <= 0) continue;
+      if (reflects) {
+        defender.stages = { ...defender.stages, [stat]: defenderStagesBeforeMoveChange[stat] };
+        attacker.stages = applyStageDelta(attacker.stages, stat, -dropAmount);
+      } else if (blockedStats?.includes(stat)) {
+        defender.stages = { ...defender.stages, [stat]: defenderStagesBeforeMoveChange[stat] };
+      }
+    }
+  }
+
   // 승기: 자신의 능력치가 실제로 하락했으면(이미 -6으로 클램프돼 변화가 없었던 건 제외) 그
   // 즉시 지정된 랭크가 오른다. 자기 기술로 자기 스탯을 내렸든(공격측), 상대 기술로 스탯이
   // 내려갔든(방어측) 둘 다 같은 방식으로 판정한다 — 각자 자기 자신의 stages before/after만 비교.
@@ -1182,7 +1204,7 @@ function resolveAction(
   let inflictedStatus: StatusConditionState["condition"] | undefined;
   if (effectiveMove.inflictsStatus) {
     for (const effect of effectiveMove.inflictsStatus) {
-      if (isImmuneToStatus(effect.status, defender.types)) continue;
+      if (isImmuneToStatus(effect.status, defender.types, defenderAbility?.immuneToStatuses)) continue;
       if (isStatusBlockedByField(state.field, effect.status)) continue;
       // 쾌청(강한 햇살) 날씨에서는 얼음 상태에 걸리지 않는다 — 타입 면역과는 다른 축이라 별도 확인
       if (effect.status === "freeze" && state.weather === "쾌청") continue;
@@ -1193,6 +1215,25 @@ function resolveAction(
         if (defender.status.condition !== before) inflictedStatus = defender.status.condition;
         break; // 주 상태이상은 한 번에 하나만 걸린다 (중첩 없음)
       }
+    }
+  }
+
+  // 싱크로: 이번 행동으로 방어측이 지정된 상태이상에 걸렸으면(원인은 이 블록 — 상대 기술) 그
+  // 즉시 공격측에게도 같은 상태이상을 건다. abilityInflictedStatusOnAttacker는 정전기/불꽃몸
+  // hitTrigger와 같은 필드를 재사용한다 — "방어측 특성이 공격측에게 상태이상을 걸었다"는 점에서
+  // 의미가 동일하고, 한 포켓몬이 두 특성을 동시에 가질 수 없어 충돌하지 않는다.
+  if (
+    inflictedStatus &&
+    defenderAbility?.reflectsStatusToOpponent?.includes(inflictedStatus) &&
+    !isImmuneToStatus(inflictedStatus, attacker.types, attackerAbility?.immuneToStatuses) &&
+    !isStatusBlockedByField(state.field, inflictedStatus) &&
+    !(inflictedStatus === "freeze" && state.weather === "쾌청")
+  ) {
+    const beforeAttackerStatus = attacker.status.condition;
+    attacker.status = inflictStatus(attacker.status, inflictedStatus);
+    if (attacker.status.condition !== beforeAttackerStatus) {
+      abilityInflictedStatusOnAttacker = attacker.status.condition;
+      abilityInflictedStatusAbilityName = defenderAbility.name;
     }
   }
 
@@ -1217,6 +1258,8 @@ function resolveAction(
   if (effectiveMove.inflictsVolatile) {
     for (const effect of effectiveMove.inflictsVolatile) {
       if (effect.volatile === "confusion" && isConfusionBlockedByField(state.field)) continue;
+      // 정신력: 풀죽음 자체에 면역이라 발동 시도 자체가 무산된다(본가 규칙 — 확률 판정까지 가지 않음)
+      if (effect.volatile === "flinch" && effect.target !== "self" && defenderAbility?.immuneToFlinch) continue;
       const target = effect.target === "self" ? attacker : defender;
       // 하품(졸음): 대상이 이미 다른 주 상태이상이거나 이미 졸음 상태면 실패한다(본가 규칙) —
       // 실제 잠듦 여부(타입/필드 면역)는 2턴 뒤 트리거 시점에 따로 확인한다.
@@ -1256,6 +1299,7 @@ function resolveAction(
     damage > 0 &&
     inflictedVolatile !== "flinch" &&
     !isFainted(defender) &&
+    !defenderAbility?.immuneToFlinch &&
     getExtraFlinchTriggered(attackerItem, random)
   ) {
     defender.volatile = inflictVolatile(defender.volatile, "flinch", random);
@@ -1754,7 +1798,7 @@ export function runTurn(
         if (
           triggersNow &&
           !fighter.status.condition &&
-          !isImmuneToStatus("sleep", fighter.types) &&
+          !isImmuneToStatus("sleep", fighter.types, fighterAbility?.immuneToStatuses) &&
           !isStatusBlockedByField(state.field, "sleep")
         ) {
           fighter.status = inflictStatus(fighter.status, "sleep");

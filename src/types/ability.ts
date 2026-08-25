@@ -174,4 +174,30 @@ export interface Ability {
    * 해서, moveContext.ts는 기존 bypassImmunity 판정이 참이면 이 필드를 무시한다.
    */
   grantsImmunityToTypes?: PokemonType[];
+  /** 유연: 이 상태이상 목록에 면역이다(타입 기반 면역과 별개 축). 유연=["paralysis"] */
+  immuneToStatuses?: StatusCondition[];
+  /**
+   * 정신력: 풀죽음에 면역이다. 원문에 "위협의 효과를 받지 않는다"도 있지만 위협(등장 시 효과)
+   * 자체가 이 로스터에 아직 없어 그 절반은 적용 대상이 없다.
+   */
+  immuneToFlinch?: boolean;
+  /**
+   * 클리어바디(전체)·괴력집게(공격만)처럼 상대의 기술로 자신의 능력치가 떨어지는 걸 막는다.
+   * 비워두면(undefined) 이 특성은 아무 스탯도 막지 않는다. 클리어바디는 5스탯 전부,
+   * 괴력집게는 `["atk"]`만 채운다. 자기 기술로 자기 스탯을 내리는 것(칼춤 등)은 막지 않는다 —
+   * "상대의 기술이나 특성으로"라는 원문 조건 그대로.
+   */
+  blocksOpponentStatDropsForStats?: BattleStatKey[];
+  /**
+   * 미러아머: 상대의 기술로 자신의 능력치가 떨어지려 하면, 자신은 그대로 두고 그 하락을 상대에게
+   * 똑같이 되돌려준다(클리어바디처럼 "막기만" 하는 게 아니라 "반사"). blocksOpponentStatDropsForStats와
+   * 동시에 채우지 않는다 — 하나의 특성은 막거나 반사하거나 둘 중 하나.
+   */
+  reflectsOpponentStatDrops?: boolean;
+  /**
+   * 싱크로: 자신이 이 목록의 상태이상에 걸리면(원인 무관 — 상대 기술이든 상대 특성이든) 그 즉시
+   * 원인 제공자(이번 행동의 공격측)에게도 같은 상태이상을 건다. 상대가 타입/특성으로 면역이면
+   * 조용히 무산된다(기존 isImmuneToStatus 재사용).
+   */
+  reflectsStatusToOpponent?: StatusCondition[];
 }

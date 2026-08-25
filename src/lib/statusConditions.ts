@@ -19,7 +19,13 @@ const BADLY_POISONED_MAX_TURNS = 15;
  * 쾌청 날씨의 얼음 면역(타입이 아니라 날씨 조건)은 별도 — battleSimulator.ts의 inflictsStatus 처리에서
  * state.weather === "쾌청"이면 얼음을 걸지 않도록 따로 분기한다(이 함수는 타입 기준 면역만 다룸).
  */
-export function isImmuneToStatus(status: StatusCondition, defenderTypes: PokemonType[]): boolean {
+export function isImmuneToStatus(
+  status: StatusCondition,
+  defenderTypes: PokemonType[],
+  /** 유연(마비)처럼 특성으로 특정 상태이상 자체에 면역인 경우(타입 면역과는 별개 축) */
+  abilityImmuneStatuses?: StatusCondition[],
+): boolean {
+  if (abilityImmuneStatuses?.includes(status)) return true;
   if (status === "paralysis" && defenderTypes.includes("전기")) return true;
   if ((status === "poison" || status === "badly-poisoned") && (defenderTypes.includes("독") || defenderTypes.includes("강철"))) {
     return true;
