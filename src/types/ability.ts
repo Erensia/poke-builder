@@ -208,4 +208,11 @@ export interface Ability {
   ignoresOpponentEvasionBoost?: boolean;
   /** 노가드: 자신이 관여하는 모든 기술(자신이 쓰든, 자신이 맞든)이 명중률/회피율과 무관하게 반드시 명중한다. */
   alwaysHits?: boolean;
+  /**
+   * 황금몸: 상대가 사용하는 변화기(카테고리 status)의 효과가 자신에게 걸리지 않는다. 상태이상
+   * 부여·행동방해(풀죽음 등, target이 "opponent"인 것만)·랭크/명중회피/급소 하락이 전부 무산된다.
+   * 필드 전역 효과(날씨·필드·트릭룸)나 상대가 자기 자신에게 거는 효과(자기 스탯 상승, 반동 예약)는
+   * "이 포켓몬을 겨냥한" 게 아니라서 영향받지 않는다.
+   */
+  blocksOpponentStatusMoveEffects?: boolean;
 }

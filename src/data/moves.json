@@ -5572,5 +5572,18 @@
     "priority": 0,
     "effect": "물타입 포켓몬에게는 상성과 무관하게 효과가 굉장하다(타입 상성 오버라이드는 아직 미구현 — 효과 텍스트만). Champions에서는 얼음 상태이상 부여 효과가 삭제됨.",
     "makesContact": false
+  },
+  {
+    "id": "골드러시",
+    "name": "골드러시",
+    "type": "강철",
+    "category": "special",
+    "power": 120,
+    "accuracy": 95,
+    "pp": 8,
+    "priority": 0,
+    "effect": "대량의 코인을 날려서 공격한다. 사용한 자신의 특수공격이 2랭크 떨어진다. (일반 시리즈에서는 배틀 후 돈을 획득)",
+    "statChanges": [{ "target": "self", "stat": "spa", "delta": -2 }],
+    "makesContact": false
   }
 ]

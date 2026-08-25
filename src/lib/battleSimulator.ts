@@ -765,6 +765,13 @@ function resolveAction(
   const attackerItem = attacker.slot.item ? getItem(attacker.slot.item) : undefined;
   const defenderItem = defender.slot.item ? getItem(defender.slot.item) : undefined;
 
+  // 황금몸: 상대(공격측)가 변화기(카테고리 status)를 쓸 때, 그 기술이 "자신(=defender)을 직접
+  // 겨냥하는" 효과(상태이상 부여·행동방해·랭크/명중회피/급소 하락)만 전부 무산시킨다. 필드
+  // 전역 효과(날씨·필드·트릭룸)나 공격측 자신을 향한 효과(자기 스탯 상승, 자기 스크린 설치)는
+  // "이 포켓몬을 겨냥한" 게 아니라서 그대로 적용된다 — 아래 각 opponent 방향 적용 지점에서만
+  // 이 플래그로 건너뛴다.
+  const blockedByGoodAsGold = move.category === "status" && !!defenderAbility?.blocksOpponentStatusMoveEffects;
+
   // 필드 조건부 타입/위력 변경(대지의파동=fieldPulse, 미스트버스트·와이드포스·라이징볼트=
   // powerMultiplierInField)을 특성 배율 계산보다 먼저 반영한다 — 타입이 바뀐 상태여야
   // resolveMoveContext 안의 상성 계산(getEffectiveness)에도 바뀐 타입이 들어간다. 둘 중
@@ -1149,7 +1156,9 @@ function resolveAction(
   const attackerStagesBeforeMoveChange = attacker.stages;
   const defenderStagesBeforeMoveChange = defender.stages;
   attacker.stages = applyMoveStatChanges(attacker.stages, effectiveMove, "self", { userTypes: attacker.types });
-  defender.stages = applyMoveStatChanges(defender.stages, effectiveMove, "opponent", { userTypes: attacker.types });
+  defender.stages = blockedByGoodAsGold
+    ? defender.stages
+    : applyMoveStatChanges(defender.stages, effectiveMove, "opponent", { userTypes: attacker.types });
 
   // 클리어바디(전체)·괴력집게(공격만)·미러아머(반사): 방금 적용된 opponent 랭크변화 중 실제로
   // 내려간 스탯만(-6 클램프로 변화가 없었던 건 자연히 제외) 골라서, 막을 스탯이면 원래 값으로
@@ -1206,9 +1215,11 @@ function resolveAction(
     userTypes: attacker.types,
   });
   const defenderAccuracyBeforeChange = defender.accuracyStages.accuracy;
-  defender.accuracyStages = applyMoveAccuracyEvasionChanges(defender.accuracyStages, effectiveMove, "opponent", {
-    userTypes: attacker.types,
-  });
+  defender.accuracyStages = blockedByGoodAsGold
+    ? defender.accuracyStages
+    : applyMoveAccuracyEvasionChanges(defender.accuracyStages, effectiveMove, "opponent", {
+        userTypes: attacker.types,
+      });
   // 날카로운눈: 상대(공격측)의 기술로 자신의 명중률이 떨어지는 걸 막는다. 회피율 변화는 이
   // 축과 무관해서(원문이 "명중률을 떨어뜨릴 수 없다"까지만) 건드리지 않는다.
   if (defenderAbility?.blocksOpponentAccuracyDrops && defender.accuracyStages.accuracy < defenderAccuracyBeforeChange) {
@@ -1217,12 +1228,14 @@ function resolveAction(
   attacker.critStage = applyMoveCritStageChanges(attacker.critStage, effectiveMove, "self", {
     userTypes: attacker.types,
   });
-  defender.critStage = applyMoveCritStageChanges(defender.critStage, effectiveMove, "opponent", {
-    userTypes: attacker.types,
-  });
+  defender.critStage = blockedByGoodAsGold
+    ? defender.critStage
+    : applyMoveCritStageChanges(defender.critStage, effectiveMove, "opponent", {
+        userTypes: attacker.types,
+      });
 
   let inflictedStatus: StatusConditionState["condition"] | undefined;
-  if (effectiveMove.inflictsStatus) {
+  if (!blockedByGoodAsGold && effectiveMove.inflictsStatus) {
     for (const effect of effectiveMove.inflictsStatus) {
       if (isImmuneToStatus(effect.status, defender.types, defenderAbility?.immuneToStatuses)) continue;
       if (isStatusBlockedByField(state.field, effect.status)) continue;
@@ -1280,6 +1293,9 @@ function resolveAction(
       if (effect.volatile === "confusion" && isConfusionBlockedByField(state.field)) continue;
       // 정신력: 풀죽음 자체에 면역이라 발동 시도 자체가 무산된다(본가 규칙 — 확률 판정까지 가지 않음)
       if (effect.volatile === "flinch" && effect.target !== "self" && defenderAbility?.immuneToFlinch) continue;
+      // 황금몸: 상대(공격측)를 향한 변화기 효과만 막는다 — target이 "self"(공격측 자신에게
+      // 거는 것, 예: 반동/하품 예약)면 이 포켓몬을 겨냥한 게 아니라서 그대로 진행된다.
+      if (effect.target !== "self" && blockedByGoodAsGold) continue;
       const target = effect.target === "self" ? attacker : defender;
       // 하품(졸음): 대상이 이미 다른 주 상태이상이거나 이미 졸음 상태면 실패한다(본가 규칙) —
       // 실제 잠듦 여부(타입/필드 면역)는 2턴 뒤 트리거 시점에 따로 확인한다.
