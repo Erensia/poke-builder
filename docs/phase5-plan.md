@@ -32,7 +32,7 @@ abilities.json은 처음 발견 당시(라이츄 추가 시점) 54개였지만 �
 | ~~상태이상/랭크 면역·반사·전이~~ | `isImmuneToStatus` 확장, `Ability.immuneToFlinch`·`blocksOpponentStatDropsForStats`·`reflectsOpponentStatDrops`·`reflectsStatusToOpponent` 신설 — **완료** | ~~유연, 정신력, 싱크로, 클리어바디, 미러아머, 괴력집게~~ |
 | ~~상태이상 해제 확률 수정~~ | `checkStatusActionBlock`에 `hasEarlyBird` 파라미터 신설 — **완료** | ~~일찍기상~~ |
 | ~~턴 종료 시 확률부 자가 치료~~ | `Ability.curesOwnStatusChance` 신설 — **완료** | ~~탈피~~ |
-| 명중률/회피율 특수 규칙 | `accuracyCrit.ts` 확장 | 날카로운눈, 노가드 |
+| ~~명중률/회피율 특수 규칙~~ | `Ability.blocksOpponentAccuracyDrops`·`ignoresOpponentEvasionBoost`·`alwaysHits` 신설 — **완료** | ~~날카로운눈, 노가드~~ |
 | 등장 시 1회 발동(필드/스탯변화/특성복사 등) | `setsWeather`와 같은 패턴으로 `setsField`·`entryStatChange` 등 신설 | 일렉트릭메이커, 트레이스, 긴장감, 습기, 그림자밟기, 위협 |
 | 우선도 조작 | `Move.priority`와 별개로 특성발 우선도 가산 필요 — Phase 4.5 §4에서 선제공격손톱(도구)으로 비슷한 우선도 개입을 이미 구현해봤으니 참고 가능 | 짖궂은마음 |
 | 벽/대타 무시 | `setsScreen` 방어 로직에 예외 추가 | 틈새포착 |
@@ -94,6 +94,11 @@ abilities.json은 처음 발견 당시(라이츄 추가 시점) 54개였지만 �
 - 이어롭(유연)·루카리오(정신력)·메타그로스(클리어바디)·입치트(괴력집게)·아머까오(미러아머)·가디안(싱크로) 6개 전부 스모크 테스트로 확인 — 첫 시도에서 공격측/방어측이 같은 기술을 서로에게 쓰는 대칭 테스트라 결과가 헷갈려서(순서상 먼저 움직인 쪽 효과가 반대쪽에 적용됨), 방어측에 무해한 placebo 기술(명상)을 쓰도록 테스트를 고쳐서 재검증함.
 
 **"턴 종료 시 확률부 자가 치료"(탈피) — 완료.** `Ability.curesOwnStatusChance`(%) 신설, 턴 종료 처리 루프의 상태이상 데미지 틱 바로 다음(먹다남은음식류의 회복 블록들과 같은 자리)에 확률 판정을 추가했다. `EndOfTurnLogEntry`에 `abilityCuredStatus`/`abilityCuredStatusAbilityName` 필드와 로그 문구(기존 `STATUS_CURE_TEXT` 재사용)도 같이 추가. 곤율거니(탈피)로 화상 상태에서 낮은 확률 롤(치료됨)·높은 확률 롤(유지됨)·특성 없음(항상 유지) 셋 다 확인.
+
+**"명중률/회피율 특수 규칙" — 완료.** `accuracyCrit.ts` 자체는 건드리지 않고 `battleSimulator.ts`의 호출부만 확장했다:
+- **날카로운눈**(상대가 명중률을 못 내림 + 상대 회피율 무시): `blocksOpponentAccuracyDrops`는 승기/클리어바디와 같은 before/after 비교 패턴(단, accuracyStages는 `AccuracyEvasionStages`라 5스탯용 `applyMoveStatChanges`가 아니라 `applyMoveAccuracyEvasionChanges`가 대상). `ignoresOpponentEvasionBoost`는 `computeHitChance`에 넘기는 `defenderEvasionStage`를 `Math.min(evasion, 0)`으로 클램프해서 "상승분만 무시, 마이너스 회피율은 그대로 페널티로 적용"하는 본가 규칙을 그대로 재현했다.
+- **노가드**(자신이 관여하는 모든 기술이 반드시 명중): `alwaysHits`가 공격측이든 방어측이든 있으면 `hitChance`를 필중기와 같은 `null` 센티널로 강제한다.
+- 패리퍼(날카로운눈)로 회피율 +6인 상대에게도 명중률 그대로 적용되는 것, 합성 테스트 기술로 상대의 명중률 하락을 막는 것, 임의로 부여한 노가드로 낮은 명중률(90) 기술이 불리한 롤에서도 항상 맞는 것까지 확인 — 노가드는 현재 로스터에 보유 포켓몬이 없고, 상대 명중률을 낮추는 기술도 로스터에 아직 없어서 둘 다 합성 데이터로 검증했다(구현 자체는 이미 실전에서 쓸 수 있는 상태).
 
 (발견 경위: Phase 4.5 §1 라이츄 추가 작업 중 abilities.json 전수 점검. 이후 로스터가 더 늘어난 걸 반영해 이 문서를 쓰면서 재점검함)
 

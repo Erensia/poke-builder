@@ -816,12 +816,22 @@ function resolveAction(
     weatherAccuracyBoost && weatherAccuracyBoost.weather === state.weather ? weatherAccuracyBoost.multiplier : 1;
   const accuracyExtraMultiplier =
     getItemAccuracyMultiplier(attackerItem, defenderItem, movesSecond) * abilityAccuracyMultiplier;
-  const hitChance = computeHitChance(
-    effectiveMove.accuracy,
-    attacker.accuracyStages.accuracy,
-    defender.accuracyStages.evasion,
-    accuracyExtraMultiplier,
-  );
+  // 날카로운눈: 공격측이 이 특성이면 상대의 회피율 상승분을 무시한다(원문 "상대의 회피율을
+  // 무시하고 공격한다") — 다만 회피율이 마이너스인 경우(오히려 공격측에게 유리)는 그대로
+  // 존중한다. 0 이하로 클램프하지 않고 min(evasion, 0)만 적용하면 두 조건을 동시에 만족한다.
+  const effectiveDefenderEvasion = attackerAbility?.ignoresOpponentEvasionBoost
+    ? Math.min(defender.accuracyStages.evasion, 0)
+    : defender.accuracyStages.evasion;
+  const hitChance =
+    // 노가드: 어느 한쪽이라도 지녔으면 이번 공격은 명중률/회피율과 무관하게 반드시 명중한다.
+    attackerAbility?.alwaysHits || defenderAbility?.alwaysHits
+      ? null
+      : computeHitChance(
+          effectiveMove.accuracy,
+          attacker.accuracyStages.accuracy,
+          effectiveDefenderEvasion,
+          accuracyExtraMultiplier,
+        );
 
   // 상대가 차지 기술 준비 턴(공중날기 등)으로 무적인 동안엔, bypassesHiding에 이 무적 종류가
   // 포함된 기술이 아닌 이상 조건 없이 빗나간다 — 명중률 굴림 자체를 건너뛴다.
@@ -1195,9 +1205,15 @@ function resolveAction(
   attacker.accuracyStages = applyMoveAccuracyEvasionChanges(attacker.accuracyStages, effectiveMove, "self", {
     userTypes: attacker.types,
   });
+  const defenderAccuracyBeforeChange = defender.accuracyStages.accuracy;
   defender.accuracyStages = applyMoveAccuracyEvasionChanges(defender.accuracyStages, effectiveMove, "opponent", {
     userTypes: attacker.types,
   });
+  // 날카로운눈: 상대(공격측)의 기술로 자신의 명중률이 떨어지는 걸 막는다. 회피율 변화는 이
+  // 축과 무관해서(원문이 "명중률을 떨어뜨릴 수 없다"까지만) 건드리지 않는다.
+  if (defenderAbility?.blocksOpponentAccuracyDrops && defender.accuracyStages.accuracy < defenderAccuracyBeforeChange) {
+    defender.accuracyStages = { ...defender.accuracyStages, accuracy: defenderAccuracyBeforeChange };
+  }
   attacker.critStage = applyMoveCritStageChanges(attacker.critStage, effectiveMove, "self", {
     userTypes: attacker.types,
   });

@@ -202,4 +202,10 @@ export interface Ability {
   reflectsStatusToOpponent?: StatusCondition[];
   /** 탈피: 턴 종료 시 이 확률(%)로 자신의 주 상태이상을 치료한다. */
   curesOwnStatusChance?: number;
+  /** 날카로운눈: 상대의 기술로 자신의 명중률이 떨어지지 않는다. */
+  blocksOpponentAccuracyDrops?: boolean;
+  /** 날카로운눈: 공격할 때 상대의 회피율 "상승분"을 무시한다(마이너스 회피율은 그대로 존중). */
+  ignoresOpponentEvasionBoost?: boolean;
+  /** 노가드: 자신이 관여하는 모든 기술(자신이 쓰든, 자신이 맞든)이 명중률/회피율과 무관하게 반드시 명중한다. */
+  alwaysHits?: boolean;
 }
