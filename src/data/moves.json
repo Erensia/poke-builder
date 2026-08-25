@@ -4113,8 +4113,9 @@
     "accuracy": 100,
     "pp": 8,
     "priority": 1,
-    "effect": "",
-    "makesContact": true
+    "effect": "상대가 이번 턴 데미지 기술을 내지 않았거나 자신보다 먼저 움직이면 실패한다.",
+    "makesContact": true,
+    "usageCondition": "opponent-damaging-move-only"
   },
   {
     "id": "꽃가루경단",

@@ -112,10 +112,13 @@ export interface Move {
    * 특정 조건에서만 사용할 수 있는 기술만 채운다. "sleep-only"(코골기 — 잠든 상태에서만, 그리고
    * 그 잠듦 자체가 본가처럼 이 기술의 사용을 막지 않는 예외 취급),
    * "first-turn-only"(속이기 — 등장 후 첫 턴에만. 1v1 시뮬레이터엔 교체가 없어 배틀의 1턴째로 취급),
-   * "field-required"(아이언롤러 — 활성화된 필드가 하나도 없으면 실패).
+   * "field-required"(아이언롤러 — 활성화된 필드가 하나도 없으면 실패),
+   * "opponent-damaging-move-only"(기습 — 상대가 이번 턴 데미지 기술(물리/특수)을 선택하지 않았거나,
+   * 자신이 상대보다 늦게 움직이면 실패. 두 조건 모두 "동시 비공개 선택" 특성상 행동 실행 시점에만
+   * 판정 가능해 UI에서 사전 경고를 줄 수 없다).
    * 조건을 안 채우면 battleSimulator가 blockedReason: "usageCondition"으로 실패시킨다.
    */
-  usageCondition?: "sleep-only" | "first-turn-only" | "field-required";
+  usageCondition?: "sleep-only" | "first-turn-only" | "field-required" | "opponent-damaging-move-only";
   /**
    * 그래스슬라이더 전용. 이 필드가 활성 상태면 기술의 우선도가 delta만큼 오른다(그 외 상황엔
    * priority 값 그대로). 사이코필드의 "우선도 기술 차단"과는 필드가 서로 배타적이라(동시에

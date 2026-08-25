@@ -386,6 +386,9 @@ export function BattleLogPage() {
                         const firstTurnConditionUnmet =
                           move.usageCondition === "first-turn-only" && battleState.turnNumber !== 0;
                         const fieldConditionUnmet = move.usageCondition === "field-required" && !battleState.field;
+                        // 기습은 상대가 이번 턴 뭘 낼지(동시 비공개 선택이라) 미리 알 수 없어 다른
+                        // usageCondition처럼 "지금 조건 충족 여부"를 판정할 수 없다 — 매번 고정 안내만 띄운다.
+                        const suckerPunchHint = move.usageCondition === "opponent-damaging-move-only";
                         const choiceLocked = lockedMoveId !== null && move.id !== lockedMoveId;
                         const disabled = pp <= 0 || fighter.currentHp <= 0 || !!winner;
                         // 셋업 카드의 party-move-pip와 동일하게 기술 타입 배경색을 입힌다.
@@ -406,7 +409,9 @@ export function BattleLogPage() {
                                   ? "등장 후 첫 턴에만 사용 가능 — 지금 쓰면 실패해요"
                                   : fieldConditionUnmet
                                     ? "필드가 있을 때만 사용 가능 — 지금 쓰면 실패해요"
-                                    : choiceLocked
+                                    : suckerPunchHint
+                                      ? "상대보다 먼저 움직이면서, 상대가 데미지 기술을 낼 때만 성공해요"
+                                      : choiceLocked
                                       ? "구애스카프 때문에 이 기술은 지금 선택할 수 없어요"
                                       : undefined
                             }

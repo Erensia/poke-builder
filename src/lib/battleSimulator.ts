@@ -585,6 +585,7 @@ function resolveAction(
   move: Move,
   random: () => number,
   movesSecond: boolean,
+  defenderMove: Move,
 ): ActionLogEntry {
   const defenderKey = opponentKey(actorKey);
   const attacker = state[actorKey];
@@ -646,6 +647,17 @@ function resolveAction(
   }
   // 아이언롤러: 활성화된 필드가 하나도 없으면 실패한다(본가 규칙)
   if (move.usageCondition === "field-required" && !state.field) {
+    return blocked("usageCondition");
+  }
+  // 기습: 상대보다 먼저 움직이지 않으면(movesSecond) 실패, 상대가 이번 턴 고른 기술이
+  // 데미지 기술(물리/특수)이 아니면(=변화기를 냈거나, 자기 자신의 usageCondition 미충족 등으로
+  // 어차피 데미지를 안 낼 예정이면) 실패한다. 본가 규칙과 동일하게 defenderMove의 category만
+  // 보고 판정 — 상대가 상태이상으로 실제 행동에 실패할지 여부까지는 반영하지 않는다(동시 비공개
+  // 선택 방식이라 이 시뮬레이터 구조상 그 정보까지 반영하려면 판정 순서 자체를 바꿔야 함).
+  if (
+    move.usageCondition === "opponent-damaging-move-only" &&
+    (movesSecond || (defenderMove.category !== "physical" && defenderMove.category !== "special"))
+  ) {
     return blocked("usageCondition");
   }
 
@@ -1528,7 +1540,7 @@ export function runTurn(
     if (isFainted(state[opponentKey(key)])) break; // 상대가 이미 쓰러졌으면 더 진행할 필요 없음
     // 포커스렌즈 판정용 — 이번 턴 order 기준으로 상대보다 늦게 움직이는 쪽인지
     const movesSecond = order[1] === key;
-    const action = resolveAction(state, key, moves[key], random, movesSecond);
+    const action = resolveAction(state, key, moves[key], random, movesSecond, moves[opponentKey(key)]);
     actions.push(action);
 
     // 발버둥 반동이나 자폭류로 "상대를 쓰러뜨리면서 자신도 같이 쓰러지는" 행동 하나 안에서는
