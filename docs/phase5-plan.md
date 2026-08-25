@@ -29,7 +29,7 @@ abilities.json은 처음 발견 당시(라이츄 추가 시점) 54개였지만 �
 | 상대를 쓰러뜨릴 때 발동 | 공격측 KO 트리거 훅 | 자기과신 |
 | 타입 면역 부여 | `bypassesImmunityForTypes`(면역 무시, 공격측)의 반대 방향 — 방어측 스스로 면역을 얻는 경로가 아직 없음. 단, Phase 4.5 §4에서 검은철구(`Item.groundsHolder`)로 "방어측 도구가 스스로 면역을 무시하는" 경로는 이미 한 번 만들어봤으니 그 패턴을 참고 | 부유, 피뢰침(중복 표기, 무효화+랭크업 둘 다 필요) |
 | 상태이상/랭크 면역·반사·전이 | 상태이상/랭크 판정 훅 필요 | 유연, 정신력, 싱크로, 클리어바디, 미러아머, 괴력집게 |
-| 상태이상 해제 확률 수정 | `statusConditions.ts`의 해제 스케줄(잠듦 등) 확장 | 일찍기상 |
+| ~~상태이상 해제 확률 수정~~ | `checkStatusActionBlock`에 `hasEarlyBird` 파라미터 신설 — **완료** | ~~일찍기상~~ |
 | 턴 종료 시 확률부 자가 치료 | 매 턴 종료 처리에 훅 추가 | 탈피 |
 | 명중률/회피율 특수 규칙 | `accuracyCrit.ts` 확장 | 날카로운눈, 노가드 |
 | 등장 시 1회 발동(필드/스탯변화/특성복사 등) | `setsWeather`와 같은 패턴으로 `setsField`·`entryStatChange` 등 신설 | 일렉트릭메이커, 트레이스, 긴장감, 습기, 그림자밟기, 위협 |
@@ -66,6 +66,8 @@ abilities.json은 처음 발견 당시(라이츄 추가 시점) 54개였지만 �
 **"HP 가득 찬 상태 조건부 방어 배율" — 완료.** `AbilityModifierCondition.defenderHpIsFull`을 신설하고 `resolveAbilityDefense`/`resolveMoveContext`에 `defenderHpIsFull` 파라미터(기본값 `true`)를 관통시켰다. `battleSimulator.ts`는 `defender.currentHp === defender.maxHp`를 실제로 넘기고, 매치업 페이지는 attackerHpAtMostFraction과 반대로 기본값이 `true`라 항상 발동한 것으로 취급된다(1턴 스냅샷이 곧 "등장 직후 풀피" 가정과 자연히 맞아떨어짐). 망나뇽(히든어빌리티 멀티스케일) 스모크 테스트로 풀피 7 데미지 vs 비풀피 15 데미지(정확히 절반)까지 확인.
 
 **"자신 상태이상 조건부 배율" — 완료.** `AbilityModifierCondition.defenderHasStatusCondition`을 신설해 멀티스케일과 같은 패턴으로 배선(기본값 `false` — 매치업 페이지는 상태이상 없음 취급). 다만 이상한비늘은 본가에서 "방어 실수치"만 올리는 특성이라 특수 데미지엔 영향이 없어야 하는데, 기존 `AbilityModifierCondition`엔 기술 카테고리(물리/특수)로 거를 조건이 없었다(`moveClassificationIn`은 베기/펀치 같은 별개 태그 축) — `moveCategoryIn`을 새로 추가해 `["physical"]`로 제한. 밀로틱(이상한비늘) 스모크 테스트로 물리기 화상 상태 18→12(정확히 1.5배 방어) 데미지 감소, 특수기는 화상 여부와 무관하게 17로 동일함을 확인.
+
+**"상태이상 해제 확률 수정" — 완료.** `checkStatusActionBlock`(`statusConditions.ts`)에 `hasEarlyBird` 파라미터를 신설해 잠듦 해제 스케줄 조회 시 `turnsElapsed`에 +1을 해서 스케줄 전체를 한 턴씩 앞당긴다(일반 잠듦: 0%→33%→100%였던 걸 33%→100%로, 잠자기의 고정 2턴도 1턴으로). `resolveAction`(`battleSimulator.ts`)에서 `attacker.effectiveAbilityId === "일찍기상"` 여부를 상태이상 판정보다 먼저(원래 `attackerAbility` 조회 지점보다 위에서) 로컬로 계산해 넘긴다. 캥카(일찍기상)가 실제 로스터에 있음. 유닛 스모크 테스트로 일반 잠듦(1턴째 33% 적용 확인)·잠자기(2턴→1턴으로 단축 확인) 둘 다 검증.
 
 (발견 경위: Phase 4.5 §1 라이츄 추가 작업 중 abilities.json 전수 점검. 이후 로스터가 더 늘어난 걸 반영해 이 문서를 쓰면서 재점검함)
 

@@ -601,6 +601,10 @@ function resolveAction(
     attacker.chargingMoveId = undefined;
   }
 
+  // 일찍기상(잠듦 해제 확률 스케줄에 필요)은 상태이상 판정이 이 아래(0번 사용조건 이후)에서
+  // 바로 일어나서, 아래쪽에서 별도로 조회하는 attackerAbility보다 먼저 필요하다.
+  const attackerHasEarlyBird = attacker.effectiveAbilityId === "일찍기상";
+
   // PP 소모는 행동 여부와 무관하게 발생(단, 차지 기술 2턴째는 위에서 이미 스킵 처리)
   let leppaRestoredPpItemName: string | undefined;
   if (!releasingCharge && attacker.remainingPp[move.id] !== undefined) {
@@ -675,12 +679,12 @@ function resolveAction(
     selfCuredStatus = "freeze";
   } else if (move.usageCondition === "sleep-only") {
     if (attacker.status.condition !== "sleep") return blocked("usageCondition");
-    const wakeCheck = checkStatusActionBlock(attacker.status, random);
+    const wakeCheck = checkStatusActionBlock(attacker.status, random, attackerHasEarlyBird);
     attacker.status = wakeCheck.nextState;
     // 이 판정으로 잠에서 깼다면 이번 턴은 이미 깬 상태이므로 사용 조건이 깨진 것으로 처리한다.
     if (attacker.status.condition !== "sleep") return blocked("usageCondition");
   } else {
-    const statusCheck = checkStatusActionBlock(attacker.status, random);
+    const statusCheck = checkStatusActionBlock(attacker.status, random, attackerHasEarlyBird);
     attacker.status = statusCheck.nextState;
     if (statusCheck.blocked) return blocked("status", 0, { blockedByStatus: preActionStatus ?? undefined });
     // 잠듦/얼음이 이번 판정에서 자연 해제됐으면(매턴 확률 스케줄) 로그에 남긴다 — 물거품아리아 같은

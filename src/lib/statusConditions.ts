@@ -113,10 +113,16 @@ export interface StatusActionCheckResult {
  *  - 잠듦: 1턴째 0%→2턴째 33%→3턴째 100% 스케줄로 해제 판정. 안 풀리면 turnsElapsed를 늘려서 반환
  *  - 얼음: 매턴 25%, 3턴째부터 100%로 동일한 방식
  *  - 그 외(화상/독/맹독/없음): 절대 막지 않음
+ *
+ * hasEarlyBird(일찍기상)면 잠듦 스케줄 전체를 한 턴씩 앞당긴다 — turnsElapsed를 조회/비교할 때
+ * +1을 해서 "원래 2턴째에 볼 33%"를 1턴째에, "원래 3턴째의 강제 해제"를 2턴째에 적용하는 식으로
+ * 스케줄을 압축한다. 잠자기(isRestSleep, 원래 무조건 2턴)도 이 압축을 그대로 적용해 1턴 만에 깬다
+ * — 잠자기 자체가 이 함수 밖(inflictRestSleep)에서 걸리므로 매개변수만 있으면 별도 분기 불필요.
  */
 export function checkStatusActionBlock(
   state: StatusConditionState,
   random: () => number = Math.random,
+  hasEarlyBird = false,
 ): StatusActionCheckResult {
   if (state.condition === "paralysis") {
     return { blocked: random() < PARALYSIS_ACTION_FAIL_CHANCE, nextState: state };
@@ -125,7 +131,9 @@ export function checkStatusActionBlock(
   if (state.condition === "sleep") {
     // 잠자기(Move.restSleep)로 걸린 잠듦은 확률 스케줄을 무시하고 정확히 2턴간 무조건 잠들었다가
     // 3턴째 무조건 깬다 — 일반 잠듦의 "2턴째 33% 확률로 깰 수 있음"이 적용되지 않는다.
-    const wakeChance = state.turnsElapsed >= 3 ? 1 : state.isRestSleep ? 0 : (SLEEP_WAKE_CHANCE_BY_TURN[state.turnsElapsed] ?? 0);
+    const effectiveTurnsElapsed = hasEarlyBird ? state.turnsElapsed + 1 : state.turnsElapsed;
+    const wakeChance =
+      effectiveTurnsElapsed >= 3 ? 1 : state.isRestSleep ? 0 : (SLEEP_WAKE_CHANCE_BY_TURN[effectiveTurnsElapsed] ?? 0);
     if (random() < wakeChance) return { blocked: false, nextState: cureStatus() };
     return { blocked: true, nextState: { ...state, turnsElapsed: state.turnsElapsed + 1 } };
   }
