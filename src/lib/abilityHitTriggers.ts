@@ -6,6 +6,7 @@ import type { Move } from "../types/move";
  * battleSimulator.ts가 별도로 굴린다 — 이 함수는 "발동 자격이 있는 기술인지"만 본다.
  */
 export function hitTriggerMatchesMove(trigger: AbilityHitTrigger, move: Move): boolean {
+  if (trigger.moveTypeIn && (!move.type || !trigger.moveTypeIn.includes(move.type))) return false;
   const makesContact = move.makesContact ?? false;
   switch (trigger.on) {
     case "physicalContact":

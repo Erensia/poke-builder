@@ -181,6 +181,12 @@ export interface BattleFighterState {
    * "아군이 받는 데미지 감소"라 1v1에서는 이 포켓몬 자신이 상대 공격을 맞을 때 적용된다.
    */
   screens: Partial<Record<"reflect" | "lightScreen", number>>;
+  /**
+   * 타오르는불꽃처럼 "이 타입 기술을 무효화한 이후로 자신이 쓰는 그 타입 기술 위력이 오른다"는
+   * 특성이 실제로 발동한 적 있으면 그 배수가 채워진다(교체가 없는 1v1이라 배틀 끝까지 유지).
+   * 정적 데이터(Ability.absorbsType)만으로는 "발동한 적 있는지"를 표현할 수 없어 런타임 상태로 분리했다.
+   */
+  ownMoveTypeBoosts: Partial<Record<PokemonType, number>>;
 }
 
 /** 두 포켓몬(a/b)을 마주 세운 배틀 상태 */
@@ -232,6 +238,7 @@ export function createFighterState(slot: EvaluatorSlot, moves: Move[]): BattleFi
     volatile: { active: { ...NO_VOLATILE_CONDITIONS.active } },
     remainingPp: Object.fromEntries(moves.map((m) => [m.id, m.pp])),
     screens: {},
+    ownMoveTypeBoosts: {},
   };
 }
 
@@ -480,6 +487,10 @@ export interface ActionLogEntry {
   abilityDisabledMoveName?: string;
   /** abilityDisabledMoveName을 봉인시킨 특성 이름 */
   abilityDisableAbilityName?: string;
+  /** 타오르는불꽃/피뢰침처럼 방어측 특성이 이 기술의 타입을 통째로 무효화했으면 그 타입 */
+  abilityAbsorbedMoveType?: PokemonType;
+  /** abilityAbsorbedMoveType을 무효화한 특성 이름 */
+  abilityAbsorbAbilityName?: string;
 }
 
 /** 턴 종료 시 상태이상 데미지 로그 */
@@ -559,6 +570,7 @@ function cloneFighter(fighter: BattleFighterState): BattleFighterState {
     volatile: { active: { ...fighter.volatile.active } },
     remainingPp: { ...fighter.remainingPp },
     screens: { ...fighter.screens },
+    ownMoveTypeBoosts: { ...fighter.ownMoveTypeBoosts },
   };
 }
 
@@ -740,8 +752,27 @@ function resolveAction(
   };
 
   // evaluateSlotMatchup(1턴 스냅샷 판정)과 같은 로직을 공유 — 특성 배율/타입 변경/자속/상대 상성
-  const { effectiveMove, abilityOffenseMultiplier, abilityDefenseMultiplier, stabMultiplier, typeEffectiveness } =
-    resolveMoveContext(attackerAbility, fieldAdjustedMove, defender.types, defenderAbility, state.weather, defenderItem);
+  const {
+    effectiveMove,
+    abilityOffenseMultiplier,
+    abilityDefenseMultiplier,
+    stabMultiplier,
+    typeEffectiveness,
+    absorbedByDefenderAbility,
+  } = resolveMoveContext(
+    attackerAbility,
+    fieldAdjustedMove,
+    defender.types,
+    defenderAbility,
+    state.weather,
+    defenderItem,
+    attacker.currentHp / attacker.maxHp,
+  );
+
+  // 타오르는불꽃 발동 이후로 자신(=현재 공격자)이 쓰는 그 타입 기술의 위력이 올라있으면 반영.
+  // 절대 타입이 null인 기술(발버둥 등)은 boosts 조회 자체를 건너뛴다.
+  const ownMoveTypeBoostMultiplier =
+    (effectiveMove.type ? attacker.ownMoveTypeBoosts[effectiveMove.type] : undefined) ?? 1;
 
   // 메트로놈(연속 같은 기술 위력 증가)용 스트릭 갱신 — 여기까지 왔다는 건 앞의 모든 행동방해
   // 판정(상태이상/풀죽음/반동/혼란/차지 등)을 통과해서 실제로 이 기술을 쓴다는 뜻이라, 명중 여부와
@@ -788,6 +819,25 @@ function resolveAction(
       evadedByCharge,
       leppaRestoredPpItemName,
     };
+  }
+
+  // 타오르는불꽃/피뢰침: 명중한 시점에 카테고리 무관(상태이상 기술도 포함)으로 발동한다 — 위에서
+  // 이미 typeEffectiveness를 0으로 덮어써놨으니 데미지 계산 쪽은 자연히 0이 되고, 여기서는
+  // 그 즉시 랭크 변화 + (있다면) 자기 타입 기술 위력 상승 플래그만 별도로 적용하면 된다.
+  let abilityAbsorbedMoveType: PokemonType | undefined;
+  let abilityAbsorbAbilityName: string | undefined;
+  if (absorbedByDefenderAbility && defenderAbility?.absorbsType) {
+    const absorb = defenderAbility.absorbsType;
+    abilityAbsorbedMoveType = absorb.type;
+    abilityAbsorbAbilityName = defenderAbility.name;
+    if (absorb.selfStatChanges) {
+      for (const change of absorb.selfStatChanges) {
+        defender.stages = applyStageDelta(defender.stages, change.stat, change.delta);
+      }
+    }
+    if (absorb.boostsOwnMoveTypeMultiplier) {
+      defender.ownMoveTypeBoosts = { ...defender.ownMoveTypeBoosts, [absorb.type]: absorb.boostsOwnMoveTypeMultiplier };
+    }
   }
 
   // status 기술(도깨비불·최면술 등 위력 없는 변화기)은 데미지 계산을 건너뛴다.
@@ -866,7 +916,8 @@ function resolveAction(
 
     const result = computeDamage(attacker.realStats, defender.realStats, attacker.types, hitMove, {
       typeEffectiveness,
-      abilityMultiplier: abilityOffenseMultiplier * statusAttackMultiplier * hidingBypassMultiplier,
+      abilityMultiplier:
+        abilityOffenseMultiplier * statusAttackMultiplier * hidingBypassMultiplier * ownMoveTypeBoostMultiplier,
       weatherMultiplier,
       fieldMultiplier,
       itemMultiplier,
@@ -1395,6 +1446,8 @@ function resolveAction(
     abilityDamageAbilityName,
     abilityDisabledMoveName,
     abilityDisableAbilityName,
+    abilityAbsorbedMoveType,
+    abilityAbsorbAbilityName,
   };
 }
 

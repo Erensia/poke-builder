@@ -24,6 +24,8 @@ export interface MoveContext {
   stabMultiplier: number;
   /** 상대 타입 상성 배율 (0/0.25/0.5/1/2/4). 기술에 타입이 없으면(필드기 등) 1 */
   typeEffectiveness: number;
+  /** 타오르는불꽃/피뢰침처럼 방어측 특성(absorbsType)이 이 기술 타입을 통째로 무효화했으면 true */
+  absorbedByDefenderAbility: boolean;
 }
 
 export function resolveMoveContext(
@@ -33,8 +35,10 @@ export function resolveMoveContext(
   defenderAbility: Ability | undefined,
   weather?: WeatherKind,
   defenderItem?: Item,
+  /** 맹화·급류·심록·벌레의알림(HP 1/3 이하 조건)용. 안 넘기면 풀피로 간주(매치업 페이지 기본값) */
+  attackerHpFraction?: number,
 ): MoveContext {
-  const abilityOffense = resolveAbilityOffense(attackerAbility, move, weather);
+  const abilityOffense = resolveAbilityOffense(attackerAbility, move, weather, attackerHpFraction);
   const effectiveMove = abilityOffense.overrideMoveType ? { ...move, type: abilityOffense.overrideMoveType } : move;
   const abilityDefenseMultiplier = resolveAbilityDefense(defenderAbility, effectiveMove);
   const stabMultiplier = resolveStabMultiplier(attackerAbility);
@@ -46,9 +50,17 @@ export function resolveMoveContext(
   const bypassImmunity =
     !!(effectiveMove.type && attackerAbility?.bypassesImmunityForTypes?.includes(effectiveMove.type)) ||
     (effectiveMove.type === "땅" && !!defenderItem?.groundsHolder);
-  const typeEffectiveness = effectiveMove.type
-    ? getEffectiveness(effectiveMove.type, defenderTypes, { bypassImmunity })
-    : 1;
+
+  // 타오르는불꽃/피뢰침: bypassImmunity(공격측이 상대 면역을 무시)와 정반대로, 방어측이 원래
+  // 없던 면역을 스스로 얻는다. 상성표를 거치지 않고 무조건 0배로 덮어쓴다 — 카테고리 무관(상태이상
+  // 기술도 흡수). 틀깨기류(공격측이 방어측 특성 자체를 무시)는 아직 이 로스터에 없어 충돌을
+  // 고려하지 않았다(Phase 5 §1 잔여 항목, 나중에 붙이면 여기서 우선순위를 다시 봐야 함).
+  const absorbedByDefenderAbility = !!(effectiveMove.type && effectiveMove.type === defenderAbility?.absorbsType?.type);
+  const typeEffectiveness = absorbedByDefenderAbility
+    ? 0
+    : effectiveMove.type
+      ? getEffectiveness(effectiveMove.type, defenderTypes, { bypassImmunity })
+      : 1;
 
   return {
     effectiveMove,
@@ -56,5 +68,6 @@ export function resolveMoveContext(
     abilityDefenseMultiplier,
     stabMultiplier,
     typeEffectiveness,
+    absorbedByDefenderAbility,
   };
 }

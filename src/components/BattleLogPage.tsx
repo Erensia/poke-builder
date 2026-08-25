@@ -24,6 +24,7 @@ import {
   type TurnResult,
 } from "../lib/battleSimulator";
 import type { StatusCondition } from "../types/status";
+import { typeLabel } from "../types/pokemon-type";
 import type { BaseStats } from "../types/stats";
 import "./BattleLogPage.css";
 
@@ -613,6 +614,14 @@ export function BattleLogPage() {
                         <div className="battle-turn-line is-muted">
                           {defenderName}의 {action.abilityDisableAbilityName}! {actorName}의{" "}
                           {action.abilityDisabledMoveName}이(가) 봉인되었다!
+                        </div>
+                      )}
+                      {/* 타오르는불꽃/피뢰침 — 해당 타입 기술을 통째로 무효화(데미지는 이미 0으로
+                          찍혀있어 별도 표시가 없으면 "그냥 약해서 0"인지 구분이 안 되니 전용 문구로 알려준다) */}
+                      {!action.blockedReason && action.abilityAbsorbedMoveType && (
+                        <div className="battle-turn-line is-muted">
+                          {defenderName}의 {action.abilityAbsorbAbilityName}! {typeLabel(action.abilityAbsorbedMoveType)}
+                          {eunNeun(typeLabel(action.abilityAbsorbedMoveType))} 전혀 효과가 없었다!
                         </div>
                       )}
                       {/* 발버둥 반동은 상대 데미지와 별개의 수치라 자기 줄로 분리 */}

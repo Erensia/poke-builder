@@ -2,7 +2,17 @@
   {
     "id": "맹화",
     "name": "맹화",
-    "description": "체력이 1/3 이하로 떨어지면 불꽃타입 기술의 위력이 1.5배가 된다."
+    "description": "체력이 1/3 이하로 떨어지면 불꽃타입 기술의 위력이 1.5배가 된다.",
+    "modifiers": [
+      {
+        "scope": "offense",
+        "multiplier": 1.5,
+        "condition": {
+          "moveTypeIn": ["불꽃"],
+          "attackerHpAtMostFraction": 0.3333333333333333
+        }
+      }
+    ]
   },
   {
     "id": "선파워",
@@ -32,7 +42,17 @@
   {
     "id": "급류",
     "name": "급류",
-    "description": "체력이 1/3 이하로 떨어지면 물타입 기술의 위력이 1.5배가 된다."
+    "description": "체력이 1/3 이하로 떨어지면 물타입 기술의 위력이 1.5배가 된다.",
+    "modifiers": [
+      {
+        "scope": "offense",
+        "multiplier": 1.5,
+        "condition": {
+          "moveTypeIn": ["물"],
+          "attackerHpAtMostFraction": 0.3333333333333333
+        }
+      }
+    ]
   },
   {
     "id": "젖은접시",
@@ -58,7 +78,17 @@
   {
     "id": "심록",
     "name": "심록",
-    "description": "체력이 1/3 이하로 떨어지면 풀타입 기술의 위력이 1.5배가 된다."
+    "description": "체력이 1/3 이하로 떨어지면 풀타입 기술의 위력이 1.5배가 된다.",
+    "modifiers": [
+      {
+        "scope": "offense",
+        "multiplier": 1.5,
+        "condition": {
+          "moveTypeIn": ["풀"],
+          "attackerHpAtMostFraction": 0.3333333333333333
+        }
+      }
+    ]
   },
   {
     "id": "엽록소",
@@ -196,7 +226,12 @@
   {
     "id": "정의의마음",
     "name": "정의의마음",
-    "description": "악타입 기술을 맞으면 공격이 1랭크 상승한다."
+    "description": "악타입 기술을 맞으면 공격이 1랭크 상승한다.",
+    "hitTrigger": {
+      "on": "damaging",
+      "moveTypeIn": ["악"],
+      "selfStatChanges": [{ "stat": "atk", "delta": 1 }]
+    }
   },
   {
     "id": "적응력",
@@ -258,7 +293,17 @@
   {
     "id": "벌레의알림",
     "name": "벌레의알림",
-    "description": "체력이 1/3 이하로 떨어지면 벌레타입 기술의 위력이 1.5배가 된다."
+    "description": "체력이 1/3 이하로 떨어지면 벌레타입 기술의 위력이 1.5배가 된다.",
+    "modifiers": [
+      {
+        "scope": "offense",
+        "multiplier": 1.5,
+        "condition": {
+          "moveTypeIn": ["벌레"],
+          "attackerHpAtMostFraction": 0.3333333333333333
+        }
+      }
+    ]
   },
   {
     "id": "날카로운눈",
@@ -278,7 +323,11 @@
   {
     "id": "타오르는불꽃",
     "name": "타오르는불꽃",
-    "description": "불꽃타입 기술로 공격받으면 이후 자신이 사용하는 불꽃타입 기술의 위력이 1.5배가 된다."
+    "description": "불꽃타입 기술로 공격받으면 이후 자신이 사용하는 불꽃타입 기술의 위력이 1.5배가 된다.",
+    "absorbsType": {
+      "type": "불꽃",
+      "boostsOwnMoveTypeMultiplier": 1.5
+    }
   },
   {
     "id": "깨어진갑옷",
@@ -315,7 +364,11 @@
   {
     "id": "지구력",
     "name": "지구력",
-    "description": "상대에게 데미지를 받으면 방어가 1랭크 상승한다."
+    "description": "상대에게 데미지를 받으면 방어가 1랭크 상승한다.",
+    "hitTrigger": {
+      "on": "damaging",
+      "selfStatChanges": [{ "stat": "def", "delta": 1 }]
+    }
   },
   {
     "id": "옹골참",
@@ -350,7 +403,11 @@
   {
     "id": "피뢰침",
     "name": "피뢰침",
-    "description": "전기타입 기술을 자신에게 모두 끌어들여 대신 맞고, 그 기술로는 데미지를 입지 않으며 오히려 특수공격이 1랭크 상승한다."
+    "description": "전기타입 기술을 자신에게 모두 끌어들여 대신 맞고, 그 기술로는 데미지를 입지 않으며 오히려 특수공격이 1랭크 상승한다. (1v1 시뮬레이터엔 끌어들일 아군이 없어 '자신이 맞으면 무효화 + 특공 상승'만 반영)",
+    "absorbsType": {
+      "type": "전기",
+      "selfStatChanges": [{ "stat": "spa", "delta": 1 }]
+    }
   },
   {
     "id": "일렉트릭메이커",
