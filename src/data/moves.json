@@ -373,7 +373,7 @@
     "accuracy": null,
     "pp": 12,
     "priority": 0,
-    "effect": "",
+    "effect": "자신의 HP를 조금 깎아서 분신을 만든다. 분신은 자신의 대타가 된다.",
     "makesContact": false
   },
   {
@@ -1750,7 +1750,7 @@
     "accuracy": null,
     "pp": 12,
     "priority": 0,
-    "effect": "",
+    "effect": "신비한 물을 흩뿌려서 자신과 배틀에 나와 있는 같은 편의 HP를 회복한다.",
     "makesContact": false
   },
   {
@@ -2619,7 +2619,7 @@
     "accuracy": null,
     "pp": 12,
     "priority": 0,
-    "effect": "",
+    "effect": "비축된 힘을 꿀꺽해서 자신의 HP를 회복한다. 비축된 만큼 회복한다.",
     "makesContact": false
   },
   {
@@ -2649,7 +2649,7 @@
     "accuracy": 100,
     "pp": 20,
     "priority": 0,
-    "effect": "",
+    "effect": "많은 물을 끼얹어서 상대를 물타입으로 바꾼다.",
     "makesContact": false
   },
   {
@@ -3235,7 +3235,7 @@
     "accuracy": 100,
     "pp": 20,
     "priority": 0,
-    "effect": "",
+    "effect": "상대를 화나게 한다. 3턴 동안 상대는 데미지를 주는 기술밖에 쓸 수 없게 된다.",
     "makesContact": false
   },
   {
@@ -3320,7 +3320,7 @@
     "accuracy": null,
     "pp": 20,
     "priority": 0,
-    "effect": "",
+    "effect": "5턴 동안 이상한 힘의 보호를 받아 상태 이상이 되지 않는다.",
     "makesContact": false
   },
   {
@@ -3742,7 +3742,7 @@
     "accuracy": 100,
     "pp": 20,
     "priority": 0,
-    "effect": "",
+    "effect": "상대의 움직임을 막아 바로 전에 쓴 기술을 잠시 동안 사용할 수 없게 만든다.",
     "makesContact": false
   },
   {
@@ -4518,7 +4518,7 @@
     "accuracy": 75,
     "pp": 16,
     "priority": 0,
-    "effect": "",
+    "effect": "잠이 오는 가루를 많이 흩뿌려서 상대를 잠듦 상태로 만든다.",
     "makesContact": false,
     "inflictsStatus": [
       {
@@ -4547,7 +4547,7 @@
     "accuracy": null,
     "pp": 16,
     "priority": 0,
-    "effect": "",
+    "effect": "상대의 타입을 반사해서 자신도 똑같은 타입이 된다.",
     "makesContact": false
   },
   {
@@ -4559,7 +4559,7 @@
     "accuracy": null,
     "pp": 12,
     "priority": 0,
-    "effect": "",
+    "effect": "상대가 자신과 같은 기술을 기억하고 있으면 상대만 그 기술을 사용할 수 없게 한다.",
     "makesContact": false
   },
   {
@@ -4571,7 +4571,7 @@
     "accuracy": 100,
     "pp": 20,
     "priority": 0,
-    "effect": "",
+    "effect": "주위에 있는 모든 것을 강력한 산성 가스로 뒤덮어서 지니고 있는 도구를 녹여버린다.",
     "makesContact": false
   },
   {
@@ -4583,7 +4583,7 @@
     "accuracy": null,
     "pp": 20,
     "priority": 0,
-    "effect": "",
+    "effect": "자신의 HP와 상대의 HP를 합친 것을 자신과 상대가 사이좋게 나눈다.",
     "makesContact": false
   },
   {
@@ -4608,7 +4608,7 @@
     "accuracy": 60,
     "pp": 20,
     "priority": 0,
-    "effect": "",
+    "effect": "졸음을 유도하는 암시를 걸어서 상대를 잠듦 상태로 만든다.",
     "makesContact": false,
     "inflictsStatus": [
       {
@@ -4625,7 +4625,7 @@
     "accuracy": null,
     "pp": 12,
     "priority": 0,
-    "effect": "",
+    "effect": "이상한 공간을 만든다. 5턴 동안 모든 포켓몬의 도구의 효과가 사라진다.",
     "makesContact": false
   },
   {
@@ -4649,7 +4649,7 @@
     "accuracy": null,
     "pp": 8,
     "priority": 0,
-    "effect": "",
+    "effect": "5턴 동안 부유나 비행타입에 땅타입의 기술이 맞게 된다. 공중으로 나는 기술도 사용할 수 없다.",
     "makesContact": false
   },
   {
@@ -4673,7 +4673,7 @@
     "accuracy": null,
     "pp": 12,
     "priority": 0,
-    "effect": "",
+    "effect": "초능력으로 자신과 상대의 공격과 특수공격의 능력 변화를 교체한다.",
     "makesContact": false
   },
   {
@@ -4727,7 +4727,7 @@
     "accuracy": null,
     "pp": 12,
     "priority": 0,
-    "effect": "",
+    "effect": "전기로 만든 자력의 힘으로 허공에 뜬다. 5턴 동안 부유할 수 있다.",
     "makesContact": false
   },
   {
