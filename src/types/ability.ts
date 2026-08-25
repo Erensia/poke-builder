@@ -128,4 +128,22 @@ export interface Ability {
    * 몇 번이든(그때마다 다시 풀피여야) 반복 발동한다.
    */
   survivesLethalAtFullHp?: boolean;
+  /**
+   * 엽록소(쾌청)·쓱쓱(비)·모래헤치기(모래바람)처럼 특정 날씨일 때 스피드가 배로 뛰는 특성만
+   * 채운다. 구애스카프(Item.speedMultiplier)와 같은 축에서 곱해진다.
+   */
+  weatherSpeedMultiplier?: { weather: WeatherKind; multiplier: number };
+  /**
+   * 젖은접시처럼 특정 날씨가 활성화된 동안 매 턴 종료 시 최대 HP의 1/denominator를 회복하는
+   * 특성만 채운다(먹다남은음식과 같은 축이지만 날씨 조건이 붙는다). 선파워는 원문 설명("쾌청
+   * 상태일 때 특수공격이 1.5배로 증가한다")에 본가의 "매턴 HP 1/8 소모" 페널티가 아예 없어서,
+   * 그 페널티는 이 로스터에서 구현하지 않는다 — offense modifier(moveCategoryIn: ["special"])만으로 충분.
+   */
+  weatherEndOfTurnHealDenominator?: { weather: WeatherKind; denominator: number };
+  /**
+   * 모래숨기: 특정 날씨 동안 상대의 명중률에 곱해지는 배율(회피율 20% 상승 = 상대 명중률
+   * 0.8배와 동치). 반짝가루(Item.opponentAccuracyMultiplier)와 같은 축으로, extraMultiplier에
+   * 곱해진다 — 랭크 기반 회피율(accuracyStages.evasion)과는 별개 축이라 중첩 가능.
+   */
+  weatherOpponentAccuracyMultiplier?: { weather: WeatherKind; multiplier: number };
 }

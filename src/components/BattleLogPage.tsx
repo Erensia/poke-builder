@@ -750,6 +750,11 @@ export function BattleLogPage() {
                         {fighterLabel(battleState, e.actor)}의 {e.itemHealItemName}로 {e.itemHeal} 회복 (남은 HP{" "}
                         {e.remainingHp})
                       </>
+                    ) : e.abilityWeatherHeal ? (
+                      <>
+                        {fighterLabel(battleState, e.actor)}의 {e.abilityWeatherHealAbilityName}로{" "}
+                        {e.abilityWeatherHeal} 회복 (남은 HP {e.remainingHp})
+                      </>
                     ) : e.regenHeal ? (
                       <>
                         {fighterLabel(battleState, e.actor)}

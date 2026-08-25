@@ -17,7 +17,17 @@
   {
     "id": "선파워",
     "name": "선파워",
-    "description": "쾌청(강한 햇살) 상태일 때 특수공격이 1.5배로 증가한다."
+    "description": "쾌청(강한 햇살) 상태일 때 특수공격이 1.5배로 증가한다.",
+    "modifiers": [
+      {
+        "scope": "offense",
+        "multiplier": 1.5,
+        "condition": {
+          "moveCategoryIn": ["special"],
+          "weatherIs": "쾌청"
+        }
+      }
+    ]
   },
   {
     "id": "단단한발톱",
@@ -57,7 +67,8 @@
   {
     "id": "젖은접시",
     "name": "젖은접시",
-    "description": "비가 내리는 동안 매턴 최대 HP의 1/16을 회복한다."
+    "description": "비가 내리는 동안 매턴 최대 HP의 1/16을 회복한다.",
+    "weatherEndOfTurnHealDenominator": { "weather": "비", "denominator": 16 }
   },
   {
     "id": "메가런처",
@@ -93,7 +104,8 @@
   {
     "id": "엽록소",
     "name": "엽록소",
-    "description": "강한 햇살 상태일 때 스피드가 2배로 상승한다."
+    "description": "강한 햇살 상태일 때 스피드가 2배로 상승한다.",
+    "weatherSpeedMultiplier": { "weather": "쾌청", "multiplier": 2 }
   },
   {
     "id": "두꺼운지방",
@@ -172,7 +184,8 @@
   {
     "id": "모래숨기",
     "name": "모래숨기",
-    "description": "모래바람이 부는 동안 회피율이 20% 올라간다."
+    "description": "모래바람이 부는 동안 회피율이 20% 올라간다.",
+    "weatherOpponentAccuracyMultiplier": { "weather": "모래바람", "multiplier": 0.8 }
   },
   {
     "id": "까칠한피부",
@@ -261,7 +274,8 @@
   {
     "id": "쓱쓱",
     "name": "쓱쓱",
-    "description": "비가 내리는 동안 스피드가 2배로 올라간다."
+    "description": "비가 내리는 동안 스피드가 2배로 올라간다.",
+    "weatherSpeedMultiplier": { "weather": "비", "multiplier": 2 }
   },
   {
     "id": "잔비",
@@ -512,7 +526,8 @@
   {
     "id": "모래헤치기",
     "name": "모래헤치기",
-    "description": "모래바람 상태일 때 스피드가 2배가 된다."
+    "description": "모래바람 상태일 때 스피드가 2배가 된다.",
+    "weatherSpeedMultiplier": { "weather": "모래바람", "multiplier": 2 }
   },
   {
     "id": "틀깨기",

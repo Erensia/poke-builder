@@ -511,6 +511,10 @@ export interface EndOfTurnLogEntry {
   itemHeal?: number;
   /** itemHeal을 준 도구 이름 */
   itemHealItemName?: string;
+  /** 젖은접시처럼 날씨 조건부로 회복하는 특성이 준 회복량 */
+  abilityWeatherHeal?: number;
+  /** abilityWeatherHeal을 준 특성 이름 */
+  abilityWeatherHealAbilityName?: string;
   /** 뿌리박기/아쿠아링으로 회복했으면 그 회복량(큰뿌리 배율 반영 후) */
   regenHeal?: number;
   /** regenHeal이 어느 지속 효과에서 왔는지 */
@@ -800,9 +804,13 @@ function resolveAction(
   attacker.lastMoveStreak = attacker.lastMoveId === effectiveMove.id ? (attacker.lastMoveStreak ?? 1) + 1 : 1;
   attacker.lastMoveId = effectiveMove.id;
 
-  // 반짝가루(방어측 0.9배)·광각렌즈(공격측 1.1배)·포커스렌즈(공격측, 늦게 움직일 때 1.2배).
-  // 모래숨기 같은 특성 쪽 배율은 아직 없음 (TODO: 특성 데이터 보강)
-  const accuracyExtraMultiplier = getItemAccuracyMultiplier(attackerItem, defenderItem, movesSecond);
+  // 반짝가루(방어측 0.9배)·광각렌즈(공격측 1.1배)·포커스렌즈(공격측, 늦게 움직일 때 1.2배)·
+  // 모래숨기(방어측, 날씨 조건부 0.8배)를 전부 한 배율로 곱한다.
+  const weatherAccuracyBoost = defenderAbility?.weatherOpponentAccuracyMultiplier;
+  const abilityAccuracyMultiplier =
+    weatherAccuracyBoost && weatherAccuracyBoost.weather === state.weather ? weatherAccuracyBoost.multiplier : 1;
+  const accuracyExtraMultiplier =
+    getItemAccuracyMultiplier(attackerItem, defenderItem, movesSecond) * abilityAccuracyMultiplier;
   const hitChance = computeHitChance(
     effectiveMove.accuracy,
     attacker.accuracyStages.accuracy,
@@ -1511,11 +1519,24 @@ export function runTurn(
 
   const aItem = state.a.slot.item ? getItem(state.a.slot.item) : undefined;
   const bItem = state.b.slot.item ? getItem(state.b.slot.item) : undefined;
+  const aAbilityForSpeed = state.a.effectiveAbilityId ? getAbility(state.a.effectiveAbilityId) : undefined;
+  const bAbilityForSpeed = state.b.effectiveAbilityId ? getAbility(state.b.effectiveAbilityId) : undefined;
+  // 엽록소·쓱쓱·모래헤치기: 날씨가 일치할 때만 곱해진다(그 외엔 1)
+  const getWeatherSpeedMultiplier = (ability: Ability | undefined): number => {
+    const boost = ability?.weatherSpeedMultiplier;
+    return boost && boost.weather === state.weather ? boost.multiplier : 1;
+  };
   // 구애스카프(1.5)·검은철구(0.5) — 상태이상 배율과 별개로 곱해진다
   const speedA =
-    state.a.realStats.spe * computeStatusSpeedMultiplier(state.a.status.condition) * getItemSpeedMultiplier(aItem);
+    state.a.realStats.spe *
+    computeStatusSpeedMultiplier(state.a.status.condition) *
+    getItemSpeedMultiplier(aItem) *
+    getWeatherSpeedMultiplier(aAbilityForSpeed);
   const speedB =
-    state.b.realStats.spe * computeStatusSpeedMultiplier(state.b.status.condition) * getItemSpeedMultiplier(bItem);
+    state.b.realStats.spe *
+    computeStatusSpeedMultiplier(state.b.status.condition) *
+    getItemSpeedMultiplier(bItem) *
+    getWeatherSpeedMultiplier(bAbilityForSpeed);
 
   // 트릭룸 판정은 이번 턴이 시작된 시점(=아직 이번 턴 행동을 하나도 반영하지 않은 상태)의 값을
   // 쓴다 — 이번 턴에 트릭룸을 새로 걸어도 그 즉시 같은 턴의 순서 계산에는 영향을 주지 않는다
@@ -1601,6 +1622,28 @@ export function runTurn(
             fainted: false,
             itemHeal,
             itemHealItemName: fighterItem.name,
+          });
+        }
+      }
+
+      // 젖은접시: 이 특성을 지닌 쪽은 날씨가 조건과 일치하는 동안 매 턴 종료 시 최대 HP의
+      // 1/denominator 회복. 먹다남은음식과 별개 축이라 같은 턴에 둘 다 발동할 수 있다.
+      const fighterAbility = fighter.effectiveAbilityId ? getAbility(fighter.effectiveAbilityId) : undefined;
+      const weatherHealBoost = fighterAbility?.weatherEndOfTurnHealDenominator;
+      if (weatherHealBoost && weatherHealBoost.weather === state.weather) {
+        const abilityWeatherHeal = Math.min(
+          fighter.maxHp - fighter.currentHp,
+          Math.floor(fighter.maxHp / weatherHealBoost.denominator),
+        );
+        if (abilityWeatherHeal > 0) {
+          fighter.currentHp += abilityWeatherHeal;
+          endOfTurn.push({
+            actor: key,
+            damage: 0,
+            remainingHp: fighter.currentHp,
+            fainted: false,
+            abilityWeatherHeal,
+            abilityWeatherHealAbilityName: fighterAbility!.name,
           });
         }
       }
