@@ -34,6 +34,11 @@ function useBattleSetupSlot() {
     setSlot(null);
   }
 
+  /** 샘플(빌드) 프리셋 불러오기(Phase 6 §1-3) — 이 슬롯을 통째로 덮어쓴다 */
+  function loadSlot(nextSlot: PartySlot) {
+    setSlot(nextSlot);
+  }
+
   function setMove(moveIndex: 0 | 1 | 2 | 3, moveId: string | null) {
     setSlot((prev) => {
       if (!prev) return prev;
@@ -87,7 +92,19 @@ function useBattleSetupSlot() {
     });
   }
 
-  return { slot, setPokemon, clearPokemon, setMove, setAbility, setItem, setNature, toggleGender, setPoint, stepPoint };
+  return {
+    slot,
+    setPokemon,
+    clearPokemon,
+    loadSlot,
+    setMove,
+    setAbility,
+    setItem,
+    setNature,
+    toggleGender,
+    setPoint,
+    stepPoint,
+  };
 }
 
 export function useBattleSetup() {

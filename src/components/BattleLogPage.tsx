@@ -7,7 +7,9 @@ import { AbilityPickerModal } from "./AbilityPickerModal";
 import { ItemPickerModal } from "./ItemPickerModal";
 import { NaturePickerModal } from "./NaturePickerModal";
 import { PointsEditorModal } from "./PointsEditorModal";
+import { SlotPresetsModal } from "./SlotPresetsModal";
 import { useBattleSetup } from "../hooks/useBattleSetup";
+import { useSlotPresets } from "../hooks/useSlotPresets";
 import { getPokemon, getMove, getItem } from "../lib/data";
 import { getEffectiveForm, megaBadgeLabel } from "../lib/pokemonForm";
 import { TYPE_COLORS, typeColorRgba } from "../lib/typeColors";
@@ -36,6 +38,7 @@ type PickerState =
   | { kind: "nature"; side: Side }
   | { kind: "points"; side: Side }
   | { kind: "move"; side: Side; moveIndex: 0 | 1 | 2 | 3 }
+  | { kind: "slotPresets"; side: Side }
   | null;
 
 const STATUS_LABELS: Record<StatusCondition, string> = {
@@ -163,6 +166,7 @@ const REAL_STAT_LABELS: { key: keyof BaseStats; label: string }[] = [
 
 export function BattleLogPage() {
   const setup = useBattleSetup();
+  const slotPresets = useSlotPresets();
   const [picker, setPicker] = useState<PickerState>(null);
   const [battleState, setBattleState] = useState<BattleState | null>(null);
   const [log, setLog] = useState<TurnResult[]>([]);
@@ -176,6 +180,15 @@ export function BattleLogPage() {
     const slot = sideOf(side).slot;
     return slot ? getPokemon(slot.pokemonId) : undefined;
   };
+
+  function handleSaveSlotAsSample(side: Side) {
+    const slot = sideOf(side).slot;
+    if (!slot) return;
+    const pokemon = getPokemon(slot.pokemonId);
+    const name = window.prompt("이 빌드를 저장할 이름을 입력하세요.", pokemon?.name ?? "");
+    if (name === null) return;
+    slotPresets.savePreset(name, slot);
+  }
 
   /**
    * 구애스카프: 이 쪽이 그 도구를 지녔고, 로그에 이미 이 쪽이 실제로 쓴 기술이 있으면 그 첫 기술
@@ -308,6 +321,9 @@ export function BattleLogPage() {
               onPickNature={() => setPicker({ kind: "nature", side: "a" })}
               onPickPoints={() => setPicker({ kind: "points", side: "a" })}
               onToggleGender={setup.a.toggleGender}
+              hasSamples={slotPresets.presets.length > 0}
+              onSaveAsSample={() => handleSaveSlotAsSample("a")}
+              onOpenSamplePicker={() => setPicker({ kind: "slotPresets", side: "a" })}
             />
             <BattleSetupCard
               label="상대 포켓몬"
@@ -320,6 +336,9 @@ export function BattleLogPage() {
               onPickNature={() => setPicker({ kind: "nature", side: "b" })}
               onPickPoints={() => setPicker({ kind: "points", side: "b" })}
               onToggleGender={setup.b.toggleGender}
+              hasSamples={slotPresets.presets.length > 0}
+              onSaveAsSample={() => handleSaveSlotAsSample("b")}
+              onOpenSamplePicker={() => setPicker({ kind: "slotPresets", side: "b" })}
             />
           </div>
           <button type="button" className="battle-start-button" disabled={!canStart} onClick={startBattle}>
@@ -1124,6 +1143,17 @@ export function BattleLogPage() {
             />
           );
         })()}
+
+      {picker?.kind === "slotPresets" && (
+        <SlotPresetsModal
+          presets={slotPresets.presets}
+          slotIsFilled={sideOf(picker.side).slot !== null}
+          onClose={() => setPicker(null)}
+          onLoad={(preset) => sideOf(picker.side).loadSlot(preset.slot)}
+          onRename={slotPresets.renamePreset}
+          onDelete={slotPresets.deletePreset}
+        />
+      )}
     </section>
   );
 }
