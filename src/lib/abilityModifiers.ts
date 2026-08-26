@@ -107,3 +107,47 @@ export function getAbilityPriorityBoost(move: Move, ability: Ability | undefined
   if (ability?.statusMovePriorityBoost && move.category === "status") return ability.statusMovePriorityBoost;
   return 0;
 }
+
+/**
+ * 틀깨기가 절대 무시할 수 없는 특성 목록(본가 데이터, 세대를 거치며 계속 추가돼 지금은 이 정도로
+ * 확정됐다 — 사용자 제공). 이 로스터에 아직 없는 이름도 향후 로스터 확장을 대비해 전부 넣어뒀다.
+ * 정전기·불꽃몸·까칠한피부·깨어진갑옷·저주받은바디·긴장감·매지션·헤롱헤롱바디·싱크로·지구력
+ * 처럼 이 목록에 없는 "반격/트리거형" 특성은 전부 틀깨기에 무시당한다.
+ */
+export const MOLD_BREAKER_IMMUNE_ABILITY_NAMES = new Set([
+  // 4세대부터
+  "갈지자걸음", "건조피부", "괴력집게", "날카로운눈", "내열", "눈숨기", "단순", "두꺼운지방", "둔감",
+  "리프가드", "마그마의무장", "마이페이스", "마중물", "면역", "모래숨기", "방음", "부유", "불가사의부적",
+  "불면", "수의베일", "습기", "옹골참", "유연", "의기양양", "이상한비늘", "인분", "저수", "전기엔진",
+  "전투무장", "점착", "정신력", "조가비갑옷", "천진", "축전", "클리어바디", "타오르는불꽃", "플라워기프트",
+  "피뢰침", "필터", "하드록", "하얀연기", "흡반",
+  // 5세대부터
+  "라이트메탈", "매직미러", "멀티스케일", "미라클스킨", "부풀린가슴", "심술꾸러기", "초식", "텔레파시",
+  "프렌드가드", "헤비메탈",
+  // 6세대부터
+  "다크오라", "방진", "방탄", "스위트베일", "아로마베일", "오라브레이크", "퍼코트", "페어리오라", "플라워베일",
+  // 7세대부터
+  "비비드바디", "탈", "복슬복슬", "여왕의위엄", "수포",
+  // 8세대부터
+  "미러아머", "아이스페이스", "얼음인분", "파스텔베일", "펑크록",
+  // 9세대부터
+  "테일아머", "흙먹기", "황금몸", "정화의소금", "노릇노릇바디", "바람타기",
+  // 특성이 아니라 도구/기술의 "무효화 무시 불가" 축이지만 참고용으로 같이 기록된 것들
+  "리밋실드", "매직가드", "메탈프로텍트", "스펙터가드", "절대안깸", "프리즘아머",
+]);
+
+/**
+ * 틀깨기(공격측)를 반영해 "이번 공격에서 실제로 계산에 쓸" 방어측 특성을 돌려준다. 공격측이
+ * 틀깨기가 아니거나, 방어측 특성이 예외 목록에 있으면 원래 특성 그대로 돌려준다 — 그 외에는
+ * 방어측 특성이 아예 없는 것처럼(undefined) 취급한다. 이 함수가 돌려준 값을 defenderAbility로
+ * 그대로 사용하면 modifiers·absorbsType·grantsImmunityToTypes·hitTrigger·blocksOpponent* 등
+ * 방어측 특성을 참조하는 코드 전부가 자동으로 틀깨기를 반영하게 된다.
+ */
+export function resolveEffectiveDefenderAbility(
+  attackerAbility: Ability | undefined,
+  defenderAbility: Ability | undefined,
+): Ability | undefined {
+  if (!attackerAbility?.bypassesDefensiveAbilities) return defenderAbility;
+  if (defenderAbility && MOLD_BREAKER_IMMUNE_ABILITY_NAMES.has(defenderAbility.name)) return defenderAbility;
+  return undefined;
+}

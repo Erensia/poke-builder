@@ -25,7 +25,7 @@ import { getEffectiveForm, getEffectiveAbilityId } from "./pokemonForm";
 import { computeRealStats } from "./statCalculator";
 import { applyMoveStatChanges, applyStageDelta, clampStagesToNonNegative } from "./statStages";
 import { hitTriggerMatchesMove } from "./abilityHitTriggers";
-import { getAbilityPriorityBoost } from "./abilityModifiers";
+import { getAbilityPriorityBoost, resolveEffectiveDefenderAbility } from "./abilityModifiers";
 import {
   applyMoveAccuracyEvasionChanges,
   applyMoveCritStageChanges,
@@ -294,6 +294,22 @@ function eulReul(name: string): "을" | "를" {
   const code = lastChar.charCodeAt(0) - 0xac00;
   if (code < 0 || code > 11171) return "를";
   return code % 28 === 0 ? "를" : "을";
+}
+
+/**
+ * 우격다짐(부가효과 무효화 + 위력 1.3배)이 적용될 "부가 효과가 있는 데미지 기술"인지 판정한다.
+ * 사용자 확인 기준: 상대에게 해로운 효과(상태이상/행동방해/랭크다운) 또는 자신에게 이로운 효과
+ * (자기 랭크업)만 부가 효과로 친다 — 자신에게 해로운 디메리트(반동·자기 랭크다운 등)는 부가
+ * 효과가 아니라서 이 판정에 안 걸리고 그대로 유지된다. 데미지가 없는 순수 변화기는 본가에서도
+ * 우격다짐 적용 대상이 아니다.
+ */
+function hasSheerForceSecondaryEffect(move: Move): boolean {
+  if (move.power === null && move.fixedDamage === undefined) return false;
+  if (move.inflictsStatus && move.inflictsStatus.length > 0) return true; // 이 스키마에서 대상은 항상 상대
+  if (move.inflictsVolatile?.some((v) => v.target === "opponent")) return true;
+  if (move.statChanges?.some((s) => s.target === "opponent")) return true;
+  if (move.statChanges?.some((s) => s.target === "self" && (s.delta ?? 0) > 0)) return true;
+  return false;
 }
 
 /**
@@ -610,6 +626,8 @@ export interface ActionLogEntry {
   encoreSetFailed?: boolean;
   /** 파워트릭으로 자신의 두 실수치를 맞바꿨으면 그 기술 이름 */
   swappedStatsMoveName?: string;
+  /** 우격다짐(또는 같은 축의 특성)이 이번 기술의 부가효과를 없애고 위력을 올렸으면 그 특성 이름 */
+  sheerForceAbilityName?: string;
   /** 이 행동(상대를 공격)으로 상대의 대타가 이번 타격에 깨졌으면 true */
   substituteBroke?: boolean;
   /** 이 행동의 데미지가 상대의 대타로 흡수됐으면(=본체 HP는 그대로) true */
@@ -780,7 +798,18 @@ function resolveAction(
   // 먼저 필요해서, attackerAbility/defenderAbility 전체를 원래보다 앞당겨 여기서 구해둔다.
   const attackerHasEarlyBird = attacker.effectiveAbilityId === "일찍기상";
   const attackerAbility = attacker.effectiveAbilityId ? getAbility(attacker.effectiveAbilityId) : undefined;
-  const defenderAbility = defender.effectiveAbilityId ? getAbility(defender.effectiveAbilityId) : undefined;
+  const rawDefenderAbility = defender.effectiveAbilityId ? getAbility(defender.effectiveAbilityId) : undefined;
+  // 틀깨기: 공격측이 이 특성이면 예외 목록에 없는 한 방어측 특성 전체를 무효화한다 — 이 지점에서
+  // 한 번만 치환해두면 modifiers·absorbsType·hitTrigger·blocksOpponentStatDropsForStats 등
+  // defenderAbility를 참조하는 아래 코드 전부가 자동으로 반영된다.
+  const defenderAbility = resolveEffectiveDefenderAbility(attackerAbility, rawDefenderAbility);
+
+  // 긴장감: "이 특성을 가진 쪽의 상대"가 나무열매를 못 쓴다 — 방향이 헷갈리기 쉬운데, 내(공격측)
+  // 나무열매가 막히는 건 상대(방어측)가 긴장감을 가졌을 때고, 상대(방어측) 나무열매가 막히는 건
+  // 내(공격측)가 긴장감을 가졌을 때다. defenderAbility는 이미 틀깨기가 반영된 값이라(긴장감은
+  // 틀깨기 예외 목록에 없음), 틀깨기 소유자가 공격하면 상대의 긴장감도 자연히 무시된다.
+  const attackerBerriesBlocked = !!defenderAbility?.preventsOpponentBerries;
+  const defenderBerriesBlocked = !!attackerAbility?.preventsOpponentBerries;
 
   // PP 소모는 행동 여부와 무관하게 발생(단, 차지 기술 2턴째는 위에서 이미 스킵 처리)
   let leppaRestoredPpItemName: string | undefined;
@@ -788,8 +817,16 @@ function resolveAction(
     const ppBefore = attacker.remainingPp[move.id];
     attacker.remainingPp[move.id] = Math.max(0, ppBefore - 1);
     // 과사열매: 이번 사용으로 PP가 정확히 0이 됐을 때(원래 0이던 걸 또 쓴 게 아니라)만 발동한다.
-    if (ppBefore > 0 && attacker.remainingPp[move.id] === 0 && !attacker.itemConsumed && !attackerAbility?.disablesOwnItemEffects) {
+    if (
+      ppBefore > 0 &&
+      attacker.remainingPp[move.id] === 0 &&
+      !attacker.itemConsumed &&
+      !attackerAbility?.disablesOwnItemEffects &&
+      !defenderBerriesBlocked
+    ) {
       const itemForPp = attacker.slot.item ? getItem(attacker.slot.item) : undefined;
+      // 과사열매도 나무열매라 긴장감에 막힌다(위 조건에서 이미 확인) — restoresPpOnZero 자체가
+      // 나무열매 전용 필드라 별도 태그 없이도 이 게이트 하나로 충분하다.
       if (itemForPp?.restoresPpOnZero) {
         attacker.remainingPp[move.id] = Math.min(move.pp, itemForPp.restoresPpOnZero);
         attacker.itemConsumed = true;
@@ -1025,7 +1062,7 @@ function resolveAction(
 
   // evaluateSlotMatchup(1턴 스냅샷 판정)과 같은 로직을 공유 — 특성 배율/타입 변경/자속/상대 상성
   const {
-    effectiveMove,
+    effectiveMove: contextEffectiveMove,
     abilityOffenseMultiplier,
     abilityDefenseMultiplier,
     stabMultiplier,
@@ -1042,6 +1079,32 @@ function resolveAction(
     defender.currentHp === defender.maxHp,
     defender.status.condition !== null,
   );
+
+  // 우격다짐: 데미지 기술에 "상대에게 해로운"(상태이상/행동방해/랭크다운) 또는 "자신에게 이로운"
+  // (자기 랭크업) 부가 효과가 있으면 그 효과를 전부 없애는 대신 위력에 배수를 곱한다. 반동
+  // (recoilFraction)·자기 디메리트(자기 랭크다운·행동불능 예약 등)는 "부가 효과"가 아니라서
+  // 손대지 않는다 — 플레어드라이브가 반동은 그대로 받으면서 화상만 사라지고 위력이 오르는 것과
+  // 같은 축(사용자 확인). 급소율(highCritRatio)도 버프/디버프가 아니라 대상이 아니다.
+  let effectiveMove = contextEffectiveMove;
+  let sheerForceAbilityName: string | undefined;
+  if (attackerAbility?.tradesSecondaryEffectForPower && hasSheerForceSecondaryEffect(effectiveMove)) {
+    effectiveMove = {
+      ...effectiveMove,
+      power:
+        effectiveMove.power !== null
+          ? Math.round(effectiveMove.power * attackerAbility.tradesSecondaryEffectForPower)
+          : effectiveMove.power,
+      inflictsStatus: undefined,
+      // target: "self"인 항목(반동성 자기 예약 등)은 그대로 두고, 상대를 향한 것만 제거한다.
+      inflictsVolatile: effectiveMove.inflictsVolatile?.filter((v) => v.target !== "opponent"),
+      // 상대 랭크다운(target: opponent)과 자기 랭크업(target: self, delta > 0)만 제거 — 자기
+      // 랭크다운(디메리트)은 "부가 효과"가 아니라서 그대로 유지된다.
+      statChanges: effectiveMove.statChanges?.filter(
+        (s) => !(s.target === "opponent" || (s.target === "self" && (s.delta ?? 0) > 0)),
+      ),
+    };
+    sheerForceAbilityName = attackerAbility.name;
+  }
 
   // 타오르는불꽃 발동 이후로 자신(=현재 공격자)이 쓰는 그 타입 기술의 위력이 올라있으면 반영.
   // 절대 타입이 null인 기술(발버둥 등)은 boosts 조회 자체를 건너뛴다.
@@ -1225,7 +1288,7 @@ function resolveAction(
     // 절반으로 줄이고 대전 중 1회만 발동하도록 소모 처리한다. 다단히트면 첫 타에서만 소모되고,
     // 이후 타수는 이미 소모된 상태라 다시 발동하지 않는다.
     const berryResult = getBerryDefenseResult(
-      defenderItem,
+      defenderBerriesBlocked ? undefined : defenderItem,
       effectiveMove.type,
       typeEffectiveness,
       defender.itemConsumed ?? false,
@@ -1652,7 +1715,11 @@ function resolveAction(
   // itemConsumed는 나무열매 18종(타입내성)과 같은 축을 공유하므로(도구 1개=1회용), 이미 다른
   // 나무열매 효과가 이번 배틀에서 소모됐으면 발동하지 않는다.
   let statusCureBerryItemName: string | undefined;
-  if (inflictedStatus && getStatusCureBerryResult(defenderItem, inflictedStatus, defender.itemConsumed ?? false)) {
+  if (
+    inflictedStatus &&
+    !defenderBerriesBlocked &&
+    getStatusCureBerryResult(defenderItem, inflictedStatus, defender.itemConsumed ?? false)
+  ) {
     defender.status = { ...NO_STATUS_CONDITION };
     defender.itemConsumed = true;
     statusCureBerryItemName = defenderItem!.name;
@@ -1688,7 +1755,8 @@ function resolveAction(
 
       // 시몬열매: 혼란에 걸리는 순간 치료하고 소모된다
       if (effect.volatile === "confusion") {
-        const targetItem = effect.target === "self" ? attackerItem : defenderItem;
+        const targetBerriesBlocked = effect.target === "self" ? attackerBerriesBlocked : defenderBerriesBlocked;
+        const targetItem = targetBerriesBlocked ? undefined : effect.target === "self" ? attackerItem : defenderItem;
         if (getConfusionCureBerryResult(targetItem, target.itemConsumed ?? false)) {
           target.volatile = { active: { ...target.volatile.active } };
           delete target.volatile.active.confusion;
@@ -1770,7 +1838,7 @@ function resolveAction(
 
     // 리샘열매/유루열매 등을 지닌 채로 잠자기를 쓰면, 회복은 이미 끝난 채로 그 즉시 잠듦만
     // 치료된다(본가 실제 상호작용 — 잠자기 자체가 낭비되지만 회복은 유효하다).
-    if (getStatusCureBerryResult(attackerItem, "sleep", attacker.itemConsumed ?? false)) {
+    if (!attackerBerriesBlocked && getStatusCureBerryResult(attackerItem, "sleep", attacker.itemConsumed ?? false)) {
       attacker.status = { ...NO_STATUS_CONDITION };
       attacker.itemConsumed = true;
       statusCureBerryItemName = attackerItem!.name;
@@ -1953,7 +2021,7 @@ function resolveAction(
   // 임의지만, 도구는 각자 한 개씩만 지니므로 서로 간섭하지 않는다.
   let attackerBerryHealAmount = 0;
   let attackerBerryHealItemName: string | undefined;
-  if (!isFainted(attacker)) {
+  if (!isFainted(attacker) && !attackerBerriesBlocked) {
     attackerBerryHealAmount = getHpThresholdBerryHeal(
       attackerItem,
       attacker.currentHp,
@@ -1968,7 +2036,7 @@ function resolveAction(
   }
   let defenderBerryHealAmount = 0;
   let defenderBerryHealItemName: string | undefined;
-  if (!isFainted(defender)) {
+  if (!isFainted(defender) && !defenderBerriesBlocked) {
     defenderBerryHealAmount = getHpThresholdBerryHeal(
       defenderItem,
       defender.currentHp,
@@ -2040,6 +2108,7 @@ function resolveAction(
     setEncoreMoveName,
     encoreSetFailed,
     swappedStatsMoveName,
+    sheerForceAbilityName,
     substituteBroke,
     hitSubstitute,
     protectSucceeded,
@@ -2213,6 +2282,12 @@ export function runTurn(
         : fighter.slot.item
           ? getItem(fighter.slot.item)
           : undefined;
+      // 긴장감: 상대가 이 특성이면 이 포켓몬의 나무열매(자뭉열매/오랭열매 등)가 막힌다 —
+      // 먹다남은음식은 나무열매가 아니라서 이 플래그와 무관하게 그대로 발동한다.
+      const opponentAbilityForItem = state[opponentKey(key)].effectiveAbilityId
+        ? getAbility(state[opponentKey(key)].effectiveAbilityId!)
+        : undefined;
+      const fighterBerriesBlocked = !!opponentAbilityForItem?.preventsOpponentBerries;
 
       // 먹다남은음식: 턴 종료 시 항상(생존해 있으면) 최대 HP의 1/6 회복
       if (fighterItem?.endOfTurnHealDenominator) {
@@ -2384,7 +2459,7 @@ export function runTurn(
       // 자뭉열매/오랭열매: 턴 종료 시점까지의 모든 HP 변화(필드 회복/먹다남은음식/씨뿌리기/상태이상
       // 데미지 등)가 끝난 뒤에도 다시 한번 확인한다 — 액션 중엔 안 걸렸다가 턴 종료 데미지로
       // 뒤늦게 1/2 이하가 되는 경우를 놓치지 않기 위해서다.
-      if (!isFainted(fighter)) {
+      if (!isFainted(fighter) && !fighterBerriesBlocked) {
         const berryHeal = getHpThresholdBerryHeal(fighterItem, fighter.currentHp, fighter.maxHp, fighter.itemConsumed ?? false);
         if (berryHeal > 0) {
           fighter.currentHp = Math.min(fighter.maxHp, fighter.currentHp + berryHeal);

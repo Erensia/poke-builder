@@ -637,6 +637,9 @@ export function BattleLogPage() {
                         {!action.blockedReason && action.hit && action.swappedStatsMoveName && (
                           <> · 공격과 방어 수치가 서로 바뀌었다!</>
                         )}
+                        {!action.blockedReason && action.hit && action.sheerForceAbilityName && (
+                          <> · {action.sheerForceAbilityName} 발동! 부가 효과 대신 위력이 올랐다!</>
+                        )}
                       </div>
                       {/* 마비/잠듦/얼음으로 이번 턴 행동이 막혔으면(단순 "상태이상으로 행동 불가"가
                           아니라) 매턴 효과가 발동한 것과 같은 의미라 트리거 문구를 그대로 쓴다 */}
