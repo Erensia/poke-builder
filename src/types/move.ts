@@ -1,5 +1,5 @@
 import type { PokemonType } from "./pokemon-type";
-import type { EffectStatKey } from "./battleStats";
+import type { EffectStatKey, BattleStatKey } from "./battleStats";
 import type { StatusCondition, StatusInflictEffect, VolatileInflictEffect } from "./status";
 import type { FieldKind } from "./field";
 import type { WeatherKind } from "./weather";
@@ -240,4 +240,19 @@ export interface Move {
    * 0 이하가 되거나 자신이 기절하면) 실패한다.
    */
   setsSubstitute?: boolean;
+  /**
+   * 방어/판별/버티기/킹실드(=방어류) 공통 태그. 이 필드가 있는 기술은 전부 같은 계열로 묶여
+   * 연속 성공 횟수(BattleFighterState.protectStreak)를 공유한다 — 성공할 때마다 다음 시도의
+   * 성공 확률이 (1/3)^streak로 줄어들고, 계열이 아닌 다른 기술을 쓰거나 실패하면 0으로 리셋된다.
+   *  - "block"(방어/판별/킹실드): 성공하면 이번 턴 상대의 공격(카테고리 무관 — 상태이상 기술도
+   *    포함)을 완전히 무효화한다.
+   *  - "endure"(버티기): 막지는 않고, 데미지는 그대로 받되 이번 턴만큼은 HP가 1 밑으로 내려가지
+   *    않는다(기합의띠·옹골참과 조건은 다르지만 결과는 같은 축).
+   */
+  protectEffect?: "block" | "endure";
+  /**
+   * 킹실드 전용. protectEffect: "block"이 성공해서 상대의 접촉기를 막았을 때, 그 공격자에게
+   * 추가로 거는 랭크변화(공격 -1). 접촉기가 아니면 막았어도 이 효과는 붙지 않는다.
+   */
+  protectContactPenalty?: { stat: BattleStatKey; delta: number };
 }

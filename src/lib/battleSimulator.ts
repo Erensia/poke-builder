@@ -200,6 +200,23 @@ export interface BattleFighterState {
    * (resolveAction의 blockedBySubstitute 참고).
    */
   substituteHp?: number;
+  /**
+   * 이번 턴에 방어류(방어/판별/버티기/킹실드) 기술이 성공적으로 발동했으면 채워진다. 같은 턴
+   * 나중에 움직이는 상대의 공격을 이 값에 따라 처리한 뒤, runTurn이 매 턴 시작 시 항상
+   * 지워서 다음 턴엔 남아있지 않게 한다(1턴짜리 효과).
+   */
+  activeProtect?: {
+    effect: "block" | "endure";
+    /** 로그 문구용 — 실제로 성공시킨 기술 이름(방어/판별/버티기/킹실드 중 하나) */
+    moveName: string;
+    /** 킹실드가 접촉기를 막았을 때만 채워서 아래에서 상대에게 적용한다 */
+    contactPenalty?: { stat: BattleStatKey; delta: number };
+  };
+  /**
+   * 방어류 기술의 연속 성공 횟수. 다음 시도 성공 확률은 (1/3)^protectStreak. 계열이 아닌
+   * 다른 기술을 쓰거나 이번 시도가 실패하면 0으로 리셋된다(undefined와 0은 동일하게 취급).
+   */
+  protectStreak?: number;
 }
 
 /** 두 포켓몬(a/b)을 마주 세운 배틀 상태 */
@@ -493,6 +510,16 @@ export interface ActionLogEntry {
   substituteBroke?: boolean;
   /** 이 행동의 데미지가 상대의 대타로 흡수됐으면(=본체 HP는 그대로) true */
   hitSubstitute?: boolean;
+  /** 방어류(방어/판별/버티기/킹실드) 기술이 이번에 성공적으로 발동했으면 true */
+  protectSucceeded?: boolean;
+  /** 방어류 기술을 썼지만 연속 사용 확률 판정에 실패했으면 true (streak는 0으로 리셋됨) */
+  protectFailed?: boolean;
+  /** 이 행동(공격)이 상대의 방어류 기술에 완전히 막혔으면 그 기술 이름 */
+  blockedByProtectMoveName?: string;
+  /** 방어류 버티기로 이번 데미지를 버티고 HP 1로 남았으면 그 기술 이름 */
+  enduredProtectMoveName?: string;
+  /** 킹실드가 접촉기를 막아 공격측에게 랭크변화(공격 -1)를 걸었으면 그 기술 이름 */
+  protectContactPenaltyMoveName?: string;
   /** 상태이상/혼란 즉시치료 나무열매(리샘·버치·유루·복슝·복분·배리·시몬)가 발동했으면 그 도구 이름 */
   statusCureBerryItemName?: string;
   /** 자뭉열매/오랭열매가 공격자에게 발동해 회복한 양 */
@@ -804,7 +831,14 @@ function resolveAction(
   // 카테고리 무관(데미지기든 변화기든)으로 전부 무산된다 — 황금몸과 달리 status 기술로 한정하지
   // 않는다. 데미지 자체는 무산이 아니라 대타 HP로 흡수(아래 resolveHit 계열에서 별도 처리).
   const blockedBySubstitute = defender.substituteHp !== undefined && !(move.classification ?? []).includes("소리");
-  const opponentEffectsBlocked = blockedByGoodAsGold || blockedBySubstitute;
+
+  // 방어/판별/킹실드(protectEffect: "block"): 이번 턴 상대의 공격을 카테고리 무관으로 완전히
+  // 무효화한다 — 대타와 달리 데미지를 어디로도 흡수하지 않고 그냥 0으로 만든다(아래 canDealDamage).
+  // 버티기(protectEffect: "endure")는 막는 게 아니라 applyEndurance에서 별도로 처리하므로 여기
+  // 포함하지 않는다.
+  const blockedByProtect = defender.activeProtect?.effect === "block";
+  const blockedByProtectMoveName = blockedByProtect ? defender.activeProtect?.moveName : undefined;
+  const opponentEffectsBlocked = blockedByGoodAsGold || blockedBySubstitute || blockedByProtect;
 
   // 필드 조건부 타입/위력 변경(대지의파동=fieldPulse, 미스트버스트·와이드포스·라이징볼트=
   // powerMultiplierInField)을 특성 배율 계산보다 먼저 반영한다 — 타입이 바뀐 상태여야
@@ -944,6 +978,15 @@ function resolveAction(
     }
   }
 
+  // 킹실드: 접촉기를 막아냈을 때만 공격측에게 추가 랭크변화(공격 -1)를 건다. 막지 못했거나
+  // (blockedByProtect === false) 접촉기가 아니면 붙지 않는다.
+  let protectContactPenaltyMoveName: string | undefined;
+  if (blockedByProtect && defender.activeProtect?.contactPenalty && (effectiveMove.makesContact ?? false)) {
+    const penalty = defender.activeProtect.contactPenalty;
+    attacker.stages = applyStageDelta(attacker.stages, penalty.stat, penalty.delta);
+    protectContactPenaltyMoveName = defender.activeProtect.moveName;
+  }
+
   // status 기술(도깨비불·최면술 등 위력 없는 변화기)은 데미지 계산을 건너뛴다.
   // 예전엔 여기서 바로 return 해버려서 이런 기술들의 랭크변화/상태이상 부여가 전혀 발동하지 않는
   // 버그가 있었다 — 명중만 하면 데미지 유무와 무관하게 아래 효과 적용까지 항상 도달해야 한다.
@@ -1042,6 +1085,7 @@ function resolveAction(
   // (기합의머리띠는 매번 재판정, 기합의띠는 이미 소모돼 두 번은 못 버팀) 그건 본가와 동일하다.
   let enduredItemName: string | undefined;
   let enduredAbilityName: string | undefined;
+  let enduredProtectMoveName: string | undefined;
   function applyEndurance(preHp: number): void {
     if (defender.currentHp > 0 || preHp <= 0) return;
     const result = getEnduranceResult(defenderItem, preHp, defender.maxHp, defender.itemConsumed ?? false, random);
@@ -1055,6 +1099,14 @@ function resolveAction(
     if (defenderAbility?.survivesLethalAtFullHp && preHp === defender.maxHp) {
       defender.currentHp = 1;
       enduredAbilityName = defenderAbility.name;
+      return;
+    }
+    // 버티기(protectEffect: "endure"): 기합의띠·옹골참과 달리 풀피 조건 없이 이번 턴엔
+    // 무조건 버틴다 — 방어류 공용 성공 확률(protectStreak)로 이미 발동 여부가 갈렸으니
+    // 여기 도달했다는 건 이번 턴 발동에 성공했다는 뜻이다.
+    if (defender.activeProtect?.effect === "endure") {
+      defender.currentHp = 1;
+      enduredProtectMoveName = defender.activeProtect.moveName;
     }
   }
 
@@ -1121,7 +1173,9 @@ function resolveAction(
     }
   }
 
-  if (isDamaging && effectiveMove.fixedDamage !== undefined) {
+  // 방어/판별/킹실드가 성공했으면 데미지 계산 자체를 건너뛴다(대타처럼 흡수하는 게 아니라
+  // 그냥 0으로 만든다) — 아래 세 분기 전부 이 가드로 묶는다.
+  if (isDamaging && !blockedByProtect && effectiveMove.fixedDamage !== undefined) {
     // 나이트헤드류: 방어/랭크/특성/도구/급소를 전부 무시하고 고정 수치만 깎는다.
     // 타입 상성 면역(0배)만은 그대로 존중 — 반감/2배는 적용하지 않는다.
     damage = typeEffectiveness === 0 ? 0 : effectiveMove.fixedDamage;
@@ -1132,7 +1186,7 @@ function resolveAction(
       applyEndurance(preHp);
       triggerAbilityHitEffect(damage);
     }
-  } else if (isDamaging && effectiveMove.minHits !== undefined && effectiveMove.maxHits !== undefined) {
+  } else if (isDamaging && !blockedByProtect && effectiveMove.minHits !== undefined && effectiveMove.maxHits !== undefined) {
     // 다단히트: 명중 판정은 이미 위(첫 타 기준)에서 끝났으니 여기부턴 최소 1타는 맞은 상태로
     // 시작한다. 록블라스트류(multiHitPowers 없음)는 첫 타만 명중 판정하고 나머지는 자동 명중,
     // 트리플악셀(multiHitPowers 있음)은 타수마다 따로 명중을 판정해서 빗나가면 그 시점에서
@@ -1164,7 +1218,7 @@ function resolveAction(
     }
     damagePercent = damage / defender.realStats.hp;
     hitCount = landed;
-  } else if (isDamaging) {
+  } else if (isDamaging && !blockedByProtect) {
     const hitResult = resolveHit(effectiveMove);
     damage = hitResult.damage;
     isCritical = hitResult.isCritical;
@@ -1541,6 +1595,32 @@ function resolveAction(
     }
   }
 
+  // 방어류(방어/판별/버티기/킹실드): 연속 성공 횟수(protectStreak)에 따라 성공 확률이
+  // (1/3)^streak로 줄어든다. 성공하면 streak를 늘리고 이번 턴 activeProtect를 세운다.
+  // 실패하면 streak를 0으로 리셋한다. 방어류가 아닌 다른 기술을 실제로 썼을 때도(여기 도달했다는
+  // 건 상태이상/풀죽음 등으로 막히지 않고 정상 실행됐다는 뜻) streak를 0으로 리셋한다 —
+  // "계열이 아닌 다른 기술을 쓰면 초기화" 규칙.
+  let protectSucceeded = false;
+  let protectFailed = false;
+  if (effectiveMove.protectEffect) {
+    const streak = attacker.protectStreak ?? 0;
+    const successChance = Math.pow(1 / 3, streak);
+    if (random() < successChance) {
+      attacker.protectStreak = streak + 1;
+      attacker.activeProtect = {
+        effect: effectiveMove.protectEffect,
+        moveName: effectiveMove.name,
+        contactPenalty: effectiveMove.protectContactPenalty,
+      };
+      protectSucceeded = true;
+    } else {
+      attacker.protectStreak = 0;
+      protectFailed = true;
+    }
+  } else {
+    attacker.protectStreak = 0;
+  }
+
   // 필드 설치: 이미 다른(또는 같은) 필드가 깔려있으면 실패한다 — 필드를 쓸 때마다 지속 턴수가
   // 갱신되던 버그 수정. 기존 필드가 다 사라지기 전까지는 필드 기술 자체가 실패해야 한다.
   let fieldSetFailed = false;
@@ -1686,6 +1766,11 @@ function resolveAction(
     substituteSetFailed,
     substituteBroke,
     hitSubstitute,
+    protectSucceeded,
+    protectFailed,
+    blockedByProtectMoveName,
+    enduredProtectMoveName,
+    protectContactPenaltyMoveName,
     statusCureBerryItemName,
     attackerBerryHealAmount: attackerBerryHealAmount || undefined,
     attackerBerryHealItemName,
@@ -1732,6 +1817,12 @@ export function runTurn(
     turnNumber: prevState.turnNumber + 1,
     entryAnnouncements: prevState.entryAnnouncements,
   };
+
+  // 방어류(방어/판별/버티기/킹실드)는 "이번 턴 한정" 효과라 매 턴 시작 시 항상 지운다 —
+  // 지난 턴에 세운 게 이번 턴까지 남아있으면 안 된다. 연속 성공 스트릭(protectStreak)은
+  // 반대로 배틀 끝까지 유지되는 값이라 여기서 건드리지 않는다.
+  state.a.activeProtect = undefined;
+  state.b.activeProtect = undefined;
 
   const aItem = state.a.slot.item ? getItem(state.a.slot.item) : undefined;
   const bItem = state.b.slot.item ? getItem(state.b.slot.item) : undefined;

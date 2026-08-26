@@ -725,6 +725,40 @@ export function BattleLogPage() {
                           {roEuro(action.enduredAbilityName)} 버텼다! (HP 1)
                         </div>
                       )}
+                      {/* 버티기 — 기합의띠/옹골참과 같은 문구지만 방어류 기술이 버텨줬을 때 */}
+                      {!action.blockedReason && action.enduredProtectMoveName && (
+                        <div className="battle-turn-line is-muted">
+                          {defenderName}
+                          {eunNeun(defenderName)} {action.enduredProtectMoveName}
+                          {roEuro(action.enduredProtectMoveName)} 버텼다! (HP 1)
+                        </div>
+                      )}
+                      {/* 방어/판별/킹실드 — 자신의 시도가 이번에 성공했는지/실패했는지 */}
+                      {!action.blockedReason && action.protectSucceeded && (
+                        <div className="battle-turn-line is-muted">
+                          {actorName}
+                          {eunNeun(actorName)} {action.move.name}로 몸을 지켰다!
+                        </div>
+                      )}
+                      {!action.blockedReason && action.protectFailed && (
+                        <div className="battle-turn-line is-muted">
+                          {actorName}의 {action.move.name}{eunNeun(action.move.name)} 실패했다!
+                        </div>
+                      )}
+                      {/* 공격이 상대의 방어류 기술에 완전히 막혔을 때 — 이 행동(공격측)의 로그에 표시 */}
+                      {!action.blockedReason && action.blockedByProtectMoveName && (
+                        <div className="battle-turn-line is-muted">
+                          {defenderName}의 {action.blockedByProtectMoveName}
+                          {roEuro(action.blockedByProtectMoveName)} 막혔다!
+                        </div>
+                      )}
+                      {/* 킹실드 — 접촉기를 막아내 공격측의 공격이 떨어졌을 때 */}
+                      {!action.blockedReason && action.protectContactPenaltyMoveName && (
+                        <div className="battle-turn-line is-muted">
+                          {actorName}
+                          {eunNeun(actorName)} 접촉한 반동으로 공격이 떨어졌다!
+                        </div>
+                      )}
                       {/* 하양허브 — 자신/상대 어느 쪽에서 발동했는지 따로 표시 */}
                       {!action.blockedReason && action.restoredStatsSelfItemName && (
                         <div className="battle-turn-line is-muted">
