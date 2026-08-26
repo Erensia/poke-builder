@@ -301,6 +301,11 @@ export interface Ability {
    * 배율"이 아니라 "그 이후부터 계속"이라는 조건이 있어 정적 배율(weatherSpeedMultiplier 등)만
    * 으로는 표현이 안 돼서, BattleFighterState.unburdenActive라는 별도 런타임 플래그로
    * 한 번 켜지면 배틀 끝까지 유지되도록 추적한다(ownMoveTypeBoosts와 같은 패턴).
+   *
+   * 본가에서는 정확히는 "교체하기 전까지" 유지되고 교체하면 초기화되는데, 이 시뮬레이터는
+   * 교체가 없는 1v1이라 "교체 전까지"와 "배틀이 끝날 때까지"가 사실상 같은 조건이 된다(교체
+   * 이벤트 자체가 없어 초기화될 일이 없음) — 타오르는불꽃(absorbsType.boostsOwnMoveTypeMultiplier)이
+   * 배틀 끝까지 유지되는 것과 같은 이유.
    */
   doublesSpeedOnItemLoss?: boolean;
 }

@@ -191,7 +191,9 @@ export interface BattleFighterState {
   currentItemId: string | null;
   /**
    * 곡예: 도구를 잃은 순간 한 번 켜지면 배틀이 끝날 때까지 계속 유지되는 플래그(ownMoveTypeBoosts와
-   * 같은 패턴) — 이후 스피드 계산에서 이 값이 true면 항상 2배를 곱한다.
+   * 같은 패턴) — 이후 스피드 계산에서 이 값이 true면 항상 2배를 곱한다. 본가는 "교체하기 전까지"
+   * 유지고 교체하면 초기화되지만, 이 시뮬레이터는 교체가 없는 1v1이라 "배틀 끝까지"로 취급해도
+   * 동일하다(Ability.doublesSpeedOnItemLoss 참고).
    */
   unburdenActive?: boolean;
   /**
