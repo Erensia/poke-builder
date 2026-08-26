@@ -193,6 +193,13 @@ export interface BattleFighterState {
   stanceChangeForms?: StanceChangeForms;
   /** stanceChangeForms가 있을 때만 의미 있음. 등장 시 항상 "shield"로 시작한다 */
   currentStanceForm?: "shield" | "blade";
+  /**
+   * 대타출동으로 세운 대타의 남은 HP. undefined면 대타가 없는 상태. 대타가 있는 동안 상대
+   * 기술의 데미지는(소리 계열 제외) 이 값에서 깎이고 실제 currentHp는 건드리지 않으며,
+   * opponent 방향 부가효과(상태이상·랭크/명중회피/급소 하락·행동방해)도 전부 무산된다
+   * (resolveAction의 blockedBySubstitute 참고).
+   */
+  substituteHp?: number;
 }
 
 /** 두 포켓몬(a/b)을 마주 세운 배틀 상태 */
@@ -478,6 +485,14 @@ export interface ActionLogEntry {
   setLeechSeed?: boolean;
   /** 씨뿌리기를 썼지만 상대가 이미 걸려있어서 실패했으면 true */
   leechSeedSetFailed?: boolean;
+  /** 이 행동으로 대타가 새로 세워졌으면 true */
+  setSubstitute?: boolean;
+  /** 대타출동을 썼지만 이미 대타가 있거나 HP가 부족해서 실패했으면 true */
+  substituteSetFailed?: boolean;
+  /** 이 행동(상대를 공격)으로 상대의 대타가 이번 타격에 깨졌으면 true */
+  substituteBroke?: boolean;
+  /** 이 행동의 데미지가 상대의 대타로 흡수됐으면(=본체 HP는 그대로) true */
+  hitSubstitute?: boolean;
   /** 상태이상/혼란 즉시치료 나무열매(리샘·버치·유루·복슝·복분·배리·시몬)가 발동했으면 그 도구 이름 */
   statusCureBerryItemName?: string;
   /** 자뭉열매/오랭열매가 공격자에게 발동해 회복한 양 */
@@ -784,6 +799,13 @@ function resolveAction(
   // 이 플래그로 건너뛴다.
   const blockedByGoodAsGold = move.category === "status" && !!defenderAbility?.blocksOpponentStatusMoveEffects;
 
+  // 대타출동: 방어측이 대타를 세운 상태면, 소리 계열(돌림노래 등 classification "소리") 기술을
+  // 제외한 모든 기술의 "opponent 방향" 부가효과(상태이상·랭크/명중회피/급소 하락·행동방해)가
+  // 카테고리 무관(데미지기든 변화기든)으로 전부 무산된다 — 황금몸과 달리 status 기술로 한정하지
+  // 않는다. 데미지 자체는 무산이 아니라 대타 HP로 흡수(아래 resolveHit 계열에서 별도 처리).
+  const blockedBySubstitute = defender.substituteHp !== undefined && !(move.classification ?? []).includes("소리");
+  const opponentEffectsBlocked = blockedByGoodAsGold || blockedBySubstitute;
+
   // 필드 조건부 타입/위력 변경(대지의파동=fieldPulse, 미스트버스트·와이드포스·라이징볼트=
   // powerMultiplierInField)을 특성 배율 계산보다 먼저 반영한다 — 타입이 바뀐 상태여야
   // resolveMoveContext 안의 상성 계산(getEffectiveness)에도 바뀐 타입이 들어간다. 둘 중
@@ -1036,15 +1058,35 @@ function resolveAction(
     }
   }
 
+  // 대타출동: blockedBySubstitute(=대타가 있고 소리 계열이 아님)면 데미지를 실제 HP가 아니라
+  // 대타 HP에서 깎는다. 대타 HP를 넘는 초과분은 그냥 사라진다(본가 규칙 — 실제 HP로 안 넘어옴).
+  // 대타가 이번 타격으로 다 깎였으면 그 즉시 사라지고, 다단히트 루프는 이 시점에서 멈춰야 한다
+  // (기절과 같은 축 — substituteBroke를 그 판정에 같이 쓴다).
+  let substituteBroke = false;
+  let hitSubstitute = false;
+  function applyDamageToDefender(amount: number): void {
+    if (blockedBySubstitute && defender.substituteHp !== undefined) {
+      hitSubstitute = true;
+      defender.substituteHp = Math.max(0, defender.substituteHp - amount);
+      if (defender.substituteHp <= 0) {
+        defender.substituteHp = undefined;
+        substituteBroke = true;
+      }
+      return;
+    }
+    defender.currentHp = Math.max(0, defender.currentHp - amount);
+  }
+
   /**
    * 방어측 hitTrigger 특성 한 번의 "타격"에 대한 판정. 다단히트 기술은 타수마다 이 함수를
    * 다시 호출해서 확률(chance)을 매번 새로 굴린다 — 정전기/불꽃몸이 트리플악셀 3타에 각각
    * 별도로 마비/화상을 노릴 수 있고, 까칠한피부/저주받은바디도 타수만큼 반복 발동한다.
    * hitDamage가 0(면역 등)이면 애초에 판정하지 않는다. 공격자가 이미 기절했으면(예: 앞선
-   * 타에서 까칠한피부 반동으로 죽었으면) 더 이상 판정하지 않는다.
+   * 타에서 까칠한피부 반동으로 죽었으면) 더 이상 판정하지 않는다. 대타를 맞혔을 때도 발동하지
+   * 않는다 — 본가 규칙: 접촉은 대타(인형)에 닿은 것이라 실제 상대에게 닿은 게 아니다.
    */
   function triggerAbilityHitEffect(hitDamage: number): void {
-    if (hitDamage <= 0 || isFainted(attacker)) return;
+    if (hitDamage <= 0 || isFainted(attacker) || blockedBySubstitute) return;
     const trigger = defenderAbility?.hitTrigger;
     if (!trigger) return;
     const chance = trigger.chance !== undefined ? trigger.chance / 100 : 1;
@@ -1086,7 +1128,7 @@ function resolveAction(
     damagePercent = damage / defender.realStats.hp;
     {
       const preHp = defender.currentHp;
-      defender.currentHp = Math.max(0, defender.currentHp - damage);
+      applyDamageToDefender(damage);
       applyEndurance(preHp);
       triggerAbilityHitEffect(damage);
     }
@@ -1115,10 +1157,10 @@ function resolveAction(
       if (hitResult.isCritical) isCritical = true;
       landed += 1;
       const preHp = defender.currentHp;
-      defender.currentHp = Math.max(0, defender.currentHp - hitResult.damage);
+      applyDamageToDefender(hitResult.damage);
       applyEndurance(preHp);
       triggerAbilityHitEffect(hitResult.damage);
-      if (isFainted(defender)) break; // 상대가 쓰러지면 남은 타수는 진행하지 않는다
+      if (isFainted(defender) || substituteBroke) break; // 상대가 쓰러지거나 대타가 깨지면 남은 타수는 진행하지 않는다
     }
     damagePercent = damage / defender.realStats.hp;
     hitCount = landed;
@@ -1128,7 +1170,7 @@ function resolveAction(
     isCritical = hitResult.isCritical;
     damagePercent = damage / defender.realStats.hp;
     const preHp = defender.currentHp;
-    defender.currentHp = Math.max(0, defender.currentHp - damage);
+    applyDamageToDefender(damage);
     applyEndurance(preHp);
     triggerAbilityHitEffect(damage);
   }
@@ -1188,7 +1230,7 @@ function resolveAction(
   const attackerStagesBeforeMoveChange = attacker.stages;
   const defenderStagesBeforeMoveChange = defender.stages;
   attacker.stages = applyMoveStatChanges(attacker.stages, effectiveMove, "self", { userTypes: attacker.types });
-  defender.stages = blockedByGoodAsGold
+  defender.stages = opponentEffectsBlocked
     ? defender.stages
     : applyMoveStatChanges(defender.stages, effectiveMove, "opponent", { userTypes: attacker.types });
 
@@ -1247,7 +1289,7 @@ function resolveAction(
     userTypes: attacker.types,
   });
   const defenderAccuracyBeforeChange = defender.accuracyStages.accuracy;
-  defender.accuracyStages = blockedByGoodAsGold
+  defender.accuracyStages = opponentEffectsBlocked
     ? defender.accuracyStages
     : applyMoveAccuracyEvasionChanges(defender.accuracyStages, effectiveMove, "opponent", {
         userTypes: attacker.types,
@@ -1260,7 +1302,7 @@ function resolveAction(
   attacker.critStage = applyMoveCritStageChanges(attacker.critStage, effectiveMove, "self", {
     userTypes: attacker.types,
   });
-  defender.critStage = blockedByGoodAsGold
+  defender.critStage = opponentEffectsBlocked
     ? defender.critStage
     : applyMoveCritStageChanges(defender.critStage, effectiveMove, "opponent", {
         userTypes: attacker.types,
@@ -1277,7 +1319,7 @@ function resolveAction(
   }
 
   let inflictedStatus: StatusConditionState["condition"] | undefined;
-  if (!blockedByGoodAsGold && effectiveMove.inflictsStatus) {
+  if (!opponentEffectsBlocked && effectiveMove.inflictsStatus) {
     for (const effect of effectiveMove.inflictsStatus) {
       if (isImmuneToStatus(effect.status, defender.types, defenderAbility?.immuneToStatuses)) continue;
       if (isStatusBlockedByField(state.field, effect.status)) continue;
@@ -1337,7 +1379,7 @@ function resolveAction(
       if (effect.volatile === "flinch" && effect.target !== "self" && defenderAbility?.immuneToFlinch) continue;
       // 황금몸: 상대(공격측)를 향한 변화기 효과만 막는다 — target이 "self"(공격측 자신에게
       // 거는 것, 예: 반동/하품 예약)면 이 포켓몬을 겨냥한 게 아니라서 그대로 진행된다.
-      if (effect.target !== "self" && blockedByGoodAsGold) continue;
+      if (effect.target !== "self" && opponentEffectsBlocked) continue;
       const target = effect.target === "self" ? attacker : defender;
       // 하품(졸음): 대상이 이미 다른 주 상태이상이거나 이미 졸음 상태면 실패한다(본가 규칙) —
       // 실제 잠듦 여부(타입/필드 면역)는 2턴 뒤 트리거 시점에 따로 확인한다.
@@ -1486,6 +1528,19 @@ function resolveAction(
     }
   }
 
+  // 대타출동: 이미 대타가 있거나, 최대 HP 1/4보다 현재 HP가 많지 않으면(=쓰면 자신이 기절하거나
+  // 대타 HP가 0 이하가 되는 경우) 실패한다. 성공하면 그 즉시 HP를 깎고 같은 양만큼의 대타를 세운다.
+  let substituteSetFailed = false;
+  if (effectiveMove.setsSubstitute) {
+    const substituteCost = Math.floor(attacker.maxHp / 4);
+    if (attacker.substituteHp !== undefined || attacker.currentHp <= substituteCost) {
+      substituteSetFailed = true;
+    } else {
+      attacker.currentHp -= substituteCost;
+      attacker.substituteHp = substituteCost;
+    }
+  }
+
   // 필드 설치: 이미 다른(또는 같은) 필드가 깔려있으면 실패한다 — 필드를 쓸 때마다 지속 턴수가
   // 갱신되던 버그 수정. 기존 필드가 다 사라지기 전까지는 필드 기술 자체가 실패해야 한다.
   let fieldSetFailed = false;
@@ -1627,6 +1682,10 @@ function resolveAction(
     regenSetFailed,
     setLeechSeed: leechSeedSetFailed ? undefined : effectiveMove.setsLeechSeed,
     leechSeedSetFailed,
+    setSubstitute: substituteSetFailed ? undefined : effectiveMove.setsSubstitute,
+    substituteSetFailed,
+    substituteBroke,
+    hitSubstitute,
     statusCureBerryItemName,
     attackerBerryHealAmount: attackerBerryHealAmount || undefined,
     attackerBerryHealItemName,

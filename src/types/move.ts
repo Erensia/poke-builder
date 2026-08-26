@@ -234,4 +234,10 @@ export interface Move {
    * 본가에서 별개 축이라 건드리지 않는다.
    */
   resetsAllStages?: boolean;
+  /**
+   * 대타출동 전용. 명중과 무관하게(항상 자기 자신 대상) 최대 HP 1/4를 깎아 그만큼의 HP를 가진
+   * 대타를 세운다. 이미 대타가 있거나, 최대 HP 1/4보다 현재 HP가 많지 않으면(=써도 대타 HP가
+   * 0 이하가 되거나 자신이 기절하면) 실패한다.
+   */
+  setsSubstitute?: boolean;
 }

@@ -346,6 +346,9 @@ export function BattleLogPage() {
                             {SCREEN_LABELS[s]} {fighter.screens[s]}턴
                           </span>
                         ))}
+                      {fighter.substituteHp !== undefined && (
+                        <span className="battle-status-tag is-volatile">대타 HP {fighter.substituteHp}</span>
+                      )}
                     </div>
                   </div>
                   <div className="battle-hp-bar">
@@ -568,6 +571,10 @@ export function BattleLogPage() {
                         {!action.blockedReason && action.hit && action.leechSeedSetFailed && (
                           <> · 이미 씨앗이 심어져 있어 실패!</>
                         )}
+                        {!action.blockedReason && action.hit && action.setSubstitute && <> · 대타를 세웠다!</>}
+                        {!action.blockedReason && action.hit && action.substituteSetFailed && (
+                          <> · 이미 대타가 있거나 HP가 부족해 실패!</>
+                        )}
                       </div>
                       {/* 마비/잠듦/얼음으로 이번 턴 행동이 막혔으면(단순 "상태이상으로 행동 불가"가
                           아니라) 매턴 효과가 발동한 것과 같은 의미라 트리거 문구를 그대로 쓴다 */}
@@ -627,6 +634,13 @@ export function BattleLogPage() {
                         <div className="battle-turn-line is-muted">
                           {defenderName}의 {action.abilityAbsorbAbilityName}! {typeLabel(action.abilityAbsorbedMoveType)}
                           {eunNeun(typeLabel(action.abilityAbsorbedMoveType))} 전혀 효과가 없었다!
+                        </div>
+                      )}
+                      {/* 대타출동 — 데미지가 본체가 아니라 대타로 들어갔을 때 알려준다. 깨졌는지 아직
+                          버티는지에 따라 문구를 분기(접촉/특성 트리거가 발동하지 않는 이유이기도 함) */}
+                      {!action.blockedReason && action.hitSubstitute && (
+                        <div className="battle-turn-line is-muted">
+                          {action.substituteBroke ? "대타가 깨졌다!" : "대타가 대신 맞았다!"}
                         </div>
                       )}
                       {/* 흑안개 — 자신/상대 구분 없이 양쪽 다 초기화되는 유일한 랭크변화 효과라 전용 문구로 알려준다 */}

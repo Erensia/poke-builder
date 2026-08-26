@@ -374,7 +374,8 @@
     "pp": 12,
     "priority": 0,
     "effect": "자신의 HP를 조금 깎아서 분신을 만든다. 분신은 자신의 대타가 된다.",
-    "makesContact": false
+    "makesContact": false,
+    "setsSubstitute": true
   },
   {
     "id": "오물폭탄",
