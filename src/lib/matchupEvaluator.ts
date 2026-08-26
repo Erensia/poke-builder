@@ -7,6 +7,7 @@ import { getEffectiveForm, getEffectiveAbilityId, type FormSource } from "./poke
 import { computeRealStats } from "./statCalculator";
 import { applyMoveStatChanges } from "./statStages";
 import { resolveMoveContext } from "./moveContext";
+import { resolveEffectiveDefenderAbility } from "./abilityModifiers";
 import { NEUTRAL_STAGES, type StatStages } from "../types/battleStats";
 import {
   computeOffensePower,
@@ -90,7 +91,9 @@ export function evaluateSlotMatchup(
   const attackerEffectiveAbilityId = getEffectiveAbilityId(attackerForm, attackerSlot.ability);
   const defenderEffectiveAbilityId = getEffectiveAbilityId(defenderForm, defenderSlot.ability);
   const attackerAbility = attackerEffectiveAbilityId ? getAbility(attackerEffectiveAbilityId) : undefined;
-  const defenderAbility = defenderEffectiveAbilityId ? getAbility(defenderEffectiveAbilityId) : undefined;
+  const rawDefenderAbility = defenderEffectiveAbilityId ? getAbility(defenderEffectiveAbilityId) : undefined;
+  // 틀깨기: 매치업 페이지(1턴 스냅샷)도 배틀 시뮬레이터와 동일하게 반영한다.
+  const defenderAbility = resolveEffectiveDefenderAbility(attackerAbility, rawDefenderAbility);
 
   const attackerRealStats = computeRealStats(
     attackerForm.baseStats,

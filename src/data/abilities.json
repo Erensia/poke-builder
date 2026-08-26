@@ -2,12 +2,32 @@
   {
     "id": "맹화",
     "name": "맹화",
-    "description": "체력이 1/3 이하로 떨어지면 불꽃타입 기술의 위력이 1.5배가 된다."
+    "description": "체력이 1/3 이하로 떨어지면 불꽃타입 기술의 위력이 1.5배가 된다.",
+    "modifiers": [
+      {
+        "scope": "offense",
+        "multiplier": 1.5,
+        "condition": {
+          "moveTypeIn": ["불꽃"],
+          "attackerHpAtMostFraction": 0.3333333333333333
+        }
+      }
+    ]
   },
   {
     "id": "선파워",
     "name": "선파워",
-    "description": "쾌청(강한 햇살) 상태일 때 특수공격이 1.5배로 증가한다."
+    "description": "쾌청(강한 햇살) 상태일 때 특수공격이 1.5배로 증가한다.",
+    "modifiers": [
+      {
+        "scope": "offense",
+        "multiplier": 1.5,
+        "condition": {
+          "moveCategoryIn": ["special"],
+          "weatherIs": "쾌청"
+        }
+      }
+    ]
   },
   {
     "id": "단단한발톱",
@@ -32,12 +52,23 @@
   {
     "id": "급류",
     "name": "급류",
-    "description": "체력이 1/3 이하로 떨어지면 물타입 기술의 위력이 1.5배가 된다."
+    "description": "체력이 1/3 이하로 떨어지면 물타입 기술의 위력이 1.5배가 된다.",
+    "modifiers": [
+      {
+        "scope": "offense",
+        "multiplier": 1.5,
+        "condition": {
+          "moveTypeIn": ["물"],
+          "attackerHpAtMostFraction": 0.3333333333333333
+        }
+      }
+    ]
   },
   {
     "id": "젖은접시",
     "name": "젖은접시",
-    "description": "비가 내리는 동안 매턴 최대 HP의 1/16을 회복한다."
+    "description": "비가 내리는 동안 매턴 최대 HP의 1/16을 회복한다.",
+    "weatherEndOfTurnHealDenominator": { "weather": "비", "denominator": 16 }
   },
   {
     "id": "메가런처",
@@ -58,12 +89,23 @@
   {
     "id": "심록",
     "name": "심록",
-    "description": "체력이 1/3 이하로 떨어지면 풀타입 기술의 위력이 1.5배가 된다."
+    "description": "체력이 1/3 이하로 떨어지면 풀타입 기술의 위력이 1.5배가 된다.",
+    "modifiers": [
+      {
+        "scope": "offense",
+        "multiplier": 1.5,
+        "condition": {
+          "moveTypeIn": ["풀"],
+          "attackerHpAtMostFraction": 0.3333333333333333
+        }
+      }
+    ]
   },
   {
     "id": "엽록소",
     "name": "엽록소",
-    "description": "강한 햇살 상태일 때 스피드가 2배로 상승한다."
+    "description": "강한 햇살 상태일 때 스피드가 2배로 상승한다.",
+    "weatherSpeedMultiplier": { "weather": "쾌청", "multiplier": 2 }
   },
   {
     "id": "두꺼운지방",
@@ -85,7 +127,12 @@
   {
     "id": "저주받은바디",
     "name": "저주받은바디",
-    "description": "공격을 받으면 30%의 확률로 상대가 방금 사용한 기술을 사슬묶기(PP 0) 상태로 만든다."
+    "description": "공격을 받으면 30%의 확률로 상대가 방금 사용한 기술을 사슬묶기(PP 0) 상태로 만든다.",
+    "hitTrigger": {
+      "on": "damaging",
+      "chance": 30,
+      "disablesAttackerMove": true
+    }
   },
   {
     "id": "그림자밟기",
@@ -95,12 +142,14 @@
   {
     "id": "싱크로",
     "name": "싱크로",
-    "description": "자신이 독·마비·화상 상태가 되면 그 상태를 상대에게도 옮긴다."
+    "description": "자신이 독·마비·화상 상태가 되면 그 상태를 상대에게도 옮긴다.",
+    "reflectsStatusToOpponent": ["poison", "badly-poisoned", "paralysis", "burn"]
   },
   {
     "id": "트레이스",
     "name": "트레이스",
-    "description": "배틀에 등장하면 상대 포켓몬과 같은 특성으로 바뀐다."
+    "description": "배틀에 등장하면 상대 포켓몬과 같은 특성으로 바뀐다.",
+    "copiesOpponentAbilityOnEntry": true
   },
   {
     "id": "텔레파시",
@@ -127,7 +176,8 @@
   {
     "id": "클리어바디",
     "name": "클리어바디",
-    "description": "상대의 기술이나 특성으로 자신의 능력치가 떨어지지 않는다."
+    "description": "상대의 기술이나 특성으로 자신의 능력치가 떨어지지 않는다.",
+    "blocksOpponentStatDropsForStats": ["atk", "def", "spa", "spd", "spe"]
   },
   {
     "id": "라이트메탈",
@@ -137,12 +187,17 @@
   {
     "id": "모래숨기",
     "name": "모래숨기",
-    "description": "모래바람이 부는 동안 회피율이 20% 올라간다."
+    "description": "모래바람이 부는 동안 회피율이 20% 올라간다.",
+    "weatherOpponentAccuracyMultiplier": { "weather": "모래바람", "multiplier": 0.8 }
   },
   {
     "id": "까칠한피부",
     "name": "까칠한피부",
-    "description": "접촉기로 공격해 온 상대의 최대 HP 1/8만큼 데미지를 입힌다."
+    "description": "접촉기로 공격해 온 상대의 최대 HP 1/8만큼 데미지를 입힌다.",
+    "hitTrigger": {
+      "on": "contact",
+      "damagesAttackerFraction": 0.125
+    }
   },
   {
     "id": "모래의힘",
@@ -172,22 +227,30 @@
   {
     "id": "긴장감",
     "name": "긴장감",
-    "description": "배틀에 등장하면 상대가 나무열매를 사용하지 못하게 한다."
+    "description": "배틀에 등장하면 상대가 나무열매를 사용하지 못하게 한다.",
+    "preventsOpponentBerries": true
   },
   {
     "id": "불굴의마음",
     "name": "불굴의마음",
-    "description": "풀죽음 상태가 될 때마다 스피드가 올라간다."
+    "description": "풀죽음 상태가 될 때마다 스피드가 올라간다.",
+    "boostsStatOnFlinch": { "stat": "spe", "delta": 1 }
   },
   {
     "id": "정신력",
     "name": "정신력",
-    "description": "풀죽음 상태가 되지 않으며, 위협의 효과를 받지 않는다."
+    "description": "풀죽음 상태가 되지 않으며, 위협의 효과를 받지 않는다.",
+    "immuneToFlinch": true
   },
   {
     "id": "정의의마음",
     "name": "정의의마음",
-    "description": "악타입 기술을 맞으면 공격이 1랭크 상승한다."
+    "description": "악타입 기술을 맞으면 공격이 1랭크 상승한다.",
+    "hitTrigger": {
+      "on": "damaging",
+      "moveTypeIn": ["악"],
+      "selfStatChanges": [{ "stat": "atk", "delta": 1 }]
+    }
   },
   {
     "id": "적응력",
@@ -212,12 +275,14 @@
   {
     "id": "습기",
     "name": "습기",
-    "description": "필드의 누구도 자폭·대폭발 같은 자폭기를 사용할 수 없게 한다."
+    "description": "필드의 누구도 자폭·대폭발 같은 자폭기를 사용할 수 없게 한다.",
+    "preventsSelfFaintMoves": true
   },
   {
     "id": "쓱쓱",
     "name": "쓱쓱",
-    "description": "비가 내리는 동안 스피드가 2배로 올라간다."
+    "description": "비가 내리는 동안 스피드가 2배로 올라간다.",
+    "weatherSpeedMultiplier": { "weather": "비", "multiplier": 2 }
   },
   {
     "id": "잔비",
@@ -233,12 +298,14 @@
   {
     "id": "서투름",
     "name": "서투름",
-    "description": "지니고 있는 도구의 효과를 사용할 수 없게 된다."
+    "description": "지니고 있는 도구의 효과를 사용할 수 없게 된다.",
+    "disablesOwnItemEffects": true
   },
   {
     "id": "유연",
     "name": "유연",
-    "description": "마비 상태가 되지 않는다."
+    "description": "마비 상태가 되지 않는다.",
+    "immuneToStatuses": ["paralysis"]
   },
   {
     "id": "배짱",
@@ -249,62 +316,103 @@
   {
     "id": "벌레의알림",
     "name": "벌레의알림",
-    "description": "체력이 1/3 이하로 떨어지면 벌레타입 기술의 위력이 1.5배가 된다."
+    "description": "체력이 1/3 이하로 떨어지면 벌레타입 기술의 위력이 1.5배가 된다.",
+    "modifiers": [
+      {
+        "scope": "offense",
+        "multiplier": 1.5,
+        "condition": {
+          "moveTypeIn": ["벌레"],
+          "attackerHpAtMostFraction": 0.3333333333333333
+        }
+      }
+    ]
   },
   {
     "id": "날카로운눈",
     "name": "날카로운눈",
-    "description": "상대가 명중률을 떨어뜨릴 수 없고, 상대의 회피율을 무시하고 공격한다."
+    "description": "상대가 명중률을 떨어뜨릴 수 없고, 상대의 회피율을 무시하고 공격한다.",
+    "blocksOpponentAccuracyDrops": true,
+    "ignoresOpponentEvasionBoost": true
   },
   {
     "id": "틈새포착",
     "name": "틈새포착",
-    "description": "상대의 벽(리플렉터 등)이나 대타출동을 무시하고 공격한다."
+    "description": "상대의 벽(리플렉터 등)이나 대타출동을 무시하고 공격한다.",
+    "bypassesScreensAndSubstitute": true
   },
   {
     "id": "짖궂은마음",
     "name": "짖궂은마음",
-    "description": "변화기술의 우선도가 +1이 된다."
+    "description": "변화기술의 우선도가 +1이 된다.",
+    "statusMovePriorityBoost": 1
   },
   {
     "id": "타오르는불꽃",
     "name": "타오르는불꽃",
-    "description": "불꽃타입 기술로 공격받으면 이후 자신이 사용하는 불꽃타입 기술의 위력이 1.5배가 된다."
+    "description": "불꽃타입 기술로 공격받으면 이후 자신이 사용하는 불꽃타입 기술의 위력이 1.5배가 된다.",
+    "absorbsType": {
+      "type": "불꽃",
+      "boostsOwnMoveTypeMultiplier": 1.5
+    }
   },
   {
     "id": "깨어진갑옷",
     "name": "깨어진갑옷",
-    "description": "물리 공격을 받으면 방어가 1랭크 떨어지고 스피드가 2랭크 상승한다."
+    "description": "물리 공격을 받으면 방어가 1랭크 떨어지고 스피드가 2랭크 상승한다.",
+    "hitTrigger": {
+      "on": "physical",
+      "selfStatChanges": [
+        { "stat": "def", "delta": -1 },
+        { "stat": "spe", "delta": 2 }
+      ]
+    }
   },
   {
     "id": "촉촉보이스",
     "name": "촉촉보이스",
-    "description": "노래하기·하이퍼보이스 등 모든 소리 기술이 물타입으로 바뀐다."
+    "description": "노래하기·하이퍼보이스 등 모든 소리 기술이 물타입으로 바뀐다.",
+    "modifiers": [
+      {
+        "scope": "offense",
+        "multiplier": 1,
+        "condition": { "moveClassificationIn": ["소리"] },
+        "overrideMoveType": "물"
+      }
+    ]
   },
   {
     "id": "변환자재",
     "name": "변환자재",
-    "description": "배틀에 나올 때마다 단 한 번, 자신이 사용한 기술과 같은 타입으로 자신의 타입이 변화한다."
+    "description": "기술을 낼 때마다 그 기술과 같은 타입으로 자신의 타입이 변화한다. (실제로 타입이 바뀌어서 이후 방어에도 반영된다)",
+    "changesUserTypeToMoveType": true
   },
   {
     "id": "천진",
     "name": "천진",
-    "description": "공격·방어 시 상대의 능력 랭크 변화를 무시하고 데미지를 계산한다."
+    "description": "공격·방어 시 상대의 능력 랭크 변화를 무시하고 데미지를 계산한다.",
+    "ignoresOpponentStatStagesInDamage": true
   },
   {
     "id": "부유",
     "name": "부유",
-    "description": "땅타입 기술을 전부 무효화한다."
+    "description": "땅타입 기술을 전부 무효화한다.",
+    "grantsImmunityToTypes": ["땅"]
   },
   {
     "id": "지구력",
     "name": "지구력",
-    "description": "상대에게 데미지를 받으면 방어가 1랭크 상승한다."
+    "description": "상대에게 데미지를 받으면 방어가 1랭크 상승한다.",
+    "hitTrigger": {
+      "on": "damaging",
+      "selfStatChanges": [{ "stat": "def", "delta": 1 }]
+    }
   },
   {
     "id": "옹골참",
     "name": "옹골참",
-    "description": "일격필살기가 통하지 않으며, 최대 HP 상태에서는 한 번의 공격으로 기절하지 않고 HP 1이 남는다."
+    "description": "일격필살기가 통하지 않으며, 최대 HP 상태에서는 한 번의 공격으로 기절하지 않고 HP 1이 남는다.",
+    "survivesLethalAtFullHp": true
   },
   {
     "id": "굳건한신념",
@@ -314,52 +422,90 @@
   {
     "id": "프레셔",
     "name": "프레셔",
-    "description": "상대가 이 포켓몬에게 기술을 사용하면 PP를 1 추가로 소모시킨다."
+    "description": "상대가 이 포켓몬에게 기술을 사용하면 PP를 1 추가로 소모시킨다.",
+    "extraPpCostWhenTargeted": 1
   },
   {
     "id": "미러아머",
     "name": "미러아머",
-    "description": "능력 랭크를 떨어뜨리는 효과를 받으면, 그 효과를 건 상대에게 그대로 반사한다."
+    "description": "능력 랭크를 떨어뜨리는 효과를 받으면, 그 효과를 건 상대에게 그대로 반사한다.",
+    "reflectsOpponentStatDrops": true
   },
   {
     "id": "정전기",
     "name": "정전기",
-    "description": "물리 접촉을 받으면 30%의 확률로 상대를 마비 상태로 만든다."
+    "description": "물리 접촉을 받으면 30%의 확률로 상대를 마비 상태로 만든다.",
+    "hitTrigger": {
+      "on": "physicalContact",
+      "chance": 30,
+      "inflictsStatusOnAttacker": "paralysis"
+    }
   },
   {
     "id": "피뢰침",
     "name": "피뢰침",
-    "description": "전기타입 기술을 자신에게 모두 끌어들여 대신 맞고, 그 기술로는 데미지를 입지 않으며 오히려 특수공격이 1랭크 상승한다."
+    "description": "전기타입 기술을 자신에게 모두 끌어들여 대신 맞고, 그 기술로는 데미지를 입지 않으며 오히려 특수공격이 1랭크 상승한다. (1v1 시뮬레이터엔 끌어들일 아군이 없어 '자신이 맞으면 무효화 + 특공 상승'만 반영)",
+    "absorbsType": {
+      "type": "전기",
+      "selfStatChanges": [{ "stat": "spa", "delta": 1 }]
+    }
   },
   {
     "id": "일렉트릭메이커",
     "name": "일렉트릭메이커",
-    "description": "배틀에 등장하면 일렉트릭필드를 5턴 동안 펼친다."
+    "description": "배틀에 등장하면 일렉트릭필드를 5턴 동안 펼친다.",
+    "setsFieldOnEntry": "일렉트릭필드"
   },
   {
     "id": "노가드",
     "name": "노가드",
-    "description": "자신과 상대가 서로 사용하는 기술이 회피율·명중률에 관계없이 반드시 명중한다."
+    "description": "자신과 상대가 서로 사용하는 기술이 회피율·명중률에 관계없이 반드시 명중한다.",
+    "alwaysHits": true
   },
   {
     "id": "멀티스케일",
     "name": "멀티스케일",
-    "description": "HP가 가득 찬 상태에서 공격을 받으면 데미지가 절반으로 줄어든다."
+    "description": "HP가 가득 찬 상태에서 공격을 받으면 데미지가 절반으로 줄어든다.",
+    "modifiers": [
+      {
+        "scope": "defense",
+        "multiplier": 2,
+        "condition": {
+          "defenderHpIsFull": true
+        }
+      }
+    ]
   },
   {
     "id": "불꽃몸",
     "name": "불꽃몸",
-    "description": "물리 접촉을 받으면 30%의 확률로 상대를 화상 상태로 만든다."
+    "description": "물리 접촉을 받으면 30%의 확률로 상대를 화상 상태로 만든다.",
+    "hitTrigger": {
+      "on": "physicalContact",
+      "chance": 30,
+      "inflictsStatusOnAttacker": "burn"
+    }
   },
   {
     "id": "이상한비늘",
     "name": "이상한비늘",
-    "description": "상태이상에 걸리면 방어가 1.5배로 상승한다."
+    "description": "상태이상에 걸리면 방어가 1.5배로 상승한다.",
+    "modifiers": [
+      {
+        "scope": "defense",
+        "multiplier": 1.5,
+        "condition": {
+          "moveCategoryIn": ["physical"],
+          "defenderHasStatusCondition": true
+        }
+      }
+    ]
   },
   {
     "id": "승기",
     "name": "승기",
-    "description": "자신의 능력치가 하락하면 특수공격이 2랭크 상승한다."
+    "description": "자신의 능력치가 하락하면 특수공격이 2랭크 상승한다.",
+    "boostsStatOnOwnStatDrop": { "stat": "spa", "delta": 2 }
   },
   {
     "id": "일찍기상",
@@ -369,62 +515,80 @@
   {
     "id": "부자유친",
     "name": "부자유친",
-    "description": "공격 기술을 사용한 후 위력 0.25배로 한 번 더 공격한다."
+    "description": "공격 기술을 사용한 후 위력 0.25배로 한 번 더 공격한다.",
+    "followUpHitPowerMultiplier": 0.25
   },
   {
     "id": "매지션",
     "name": "매지션",
-    "description": "기술을 맞힌 상대가 지닌 도구를 빼앗는다."
+    "description": "기술을 맞힌 상대가 지닌 도구를 빼앗는다. (자신이 이미 도구를 지녔으면 발동하지 않는다)",
+    "stealsItemOnDamagingHit": true
   },
   {
     "id": "괴력집게",
     "name": "괴력집게",
-    "description": "상대의 기술이나 특성으로 자신의 공격이 떨어지지 않는다."
+    "description": "상대의 기술이나 특성으로 자신의 공격이 떨어지지 않는다.",
+    "blocksOpponentStatDropsForStats": ["atk"]
   },
   {
     "id": "위협",
     "name": "위협",
-    "description": "배틀에 등장하면 상대방의 공격을 1랭크 낮춘다."
+    "description": "배틀에 등장하면 상대방의 공격을 1랭크 낮춘다.",
+    "lowersOpponentStatOnEntry": { "stat": "atk", "delta": -1 }
   },
   {
     "id": "우격다짐",
     "name": "우격다짐",
-    "description": "부가 효과가 있는 기술을 사용하면 부가 효과는 발동되지 않는 대신 위력이 1.3배가 된다."
+    "description": "부가 효과가 있는 기술을 사용하면 부가 효과는 발동되지 않는 대신 위력이 1.3배가 된다. (자신에게 해로운 디메리트인 반동·자기 랭크다운은 부가 효과가 아니라서 그대로 유지된다)",
+    "tradesSecondaryEffectForPower": 1.3
   },
   {
     "id": "천하장사",
     "name": "천하장사",
-    "description": "물리 기술의 위력이 2배가 된다."
+    "description": "물리 기술의 위력이 2배가 된다.",
+    "modifiers": [
+      {
+        "scope": "offense",
+        "multiplier": 2,
+        "condition": { "moveCategoryIn": ["physical"] }
+      }
+    ]
   },
   {
     "id": "탈피",
     "name": "탈피",
-    "description": "턴이 끝날 때마다 1/3의 확률로 상태이상을 치료한다."
+    "description": "턴이 끝날 때마다 1/3의 확률로 상태이상을 치료한다.",
+    "curesOwnStatusChance": 33.33
   },
   {
     "id": "자기과신",
     "name": "자기과신",
-    "description": "다른 포켓몬을 쓰러뜨릴 때마다 공격이 1랭크 상승한다."
+    "description": "다른 포켓몬을 쓰러뜨릴 때마다 공격이 1랭크 상승한다.",
+    "boostsStatOnKo": { "stat": "atk", "delta": 1 }
   },
   {
     "id": "모래헤치기",
     "name": "모래헤치기",
-    "description": "모래바람 상태일 때 스피드가 2배가 된다."
+    "description": "모래바람 상태일 때 스피드가 2배가 된다.",
+    "weatherSpeedMultiplier": { "weather": "모래바람", "multiplier": 2 }
   },
   {
     "id": "틀깨기",
     "name": "틀깨기",
-    "description": "상대의 방어적 특성 효과를 무시하고 공격한다."
+    "description": "상대의 방어적 특성 효과를 무시하고 공격한다. (단, 멀티스케일·부유·클리어바디·천진·유연·저수·타오르는불꽃·피뢰침·황금몸 등 본가에서 예외로 확정된 특성들은 여전히 무시할 수 없다)",
+    "bypassesDefensiveAbilities": true
   },
   {
     "id": "관통드릴",
     "name": "관통드릴",
-    "description": "접촉 기술을 사용하면 상대의 방어 효과를 무시하고 최소 1/4의 데미지를 입힐 수 있다."
+    "description": "접촉 기술을 사용하면 상대의 방어 효과를 무시하고 최소 1/4의 데미지를 입힐 수 있다.",
+    "contactIgnoresDefenseBoostAndGuaranteesMinDamageFraction": 0.25
   },
   {
     "id": "곡예",
     "name": "곡예",
-    "description": "장착한 도구가 소모되거나 없어지면 스피드가 2배로 상승한다."
+    "description": "장착한 도구가 소모되거나 없어지면 스피드가 2배로 상승한다. (한 번 발동하면 배틀이 끝날 때까지 유지된다)",
+    "doublesSpeedOnItemLoss": true
   },
   {
     "id": "철주먹",
@@ -439,5 +603,58 @@
         }
       }
     ]
+  },
+  {
+    "id": "눈숨기",
+    "name": "눈숨기",
+    "description": "싸라기눈(눈)이 내리는 동안 회피율이 20% 올라간다.",
+    "weatherOpponentAccuracyMultiplier": {
+      "weather": "눈",
+      "multiplier": 0.8
+    }
+  },
+  {
+    "id": "눈퍼뜨리기",
+    "name": "눈퍼뜨리기",
+    "description": "배틀에 등장하면 날씨를 싸라기눈(눈) 상태로 바꾼다(5턴 지속).",
+    "setsWeather": "눈"
+  },
+  {
+    "id": "배틀스위치",
+    "name": "배틀스위치",
+    "description": "공격 기술을 사용하면 블레이드폼(공격·특공↑)으로, 킹실드 사용이나 교체 시 실드폼(방어·특방↑)으로 폼체인지한다."
+  },
+  {
+    "id": "황금몸",
+    "name": "황금몸",
+    "description": "다른 포켓몬이 사용하는 변화기(상태이상 기술 포함)의 대상이 되지 않는다.",
+    "blocksOpponentStatusMoveEffects": true
+  },
+  {
+    "id": "수포",
+    "name": "수포",
+    "description": "자신을 향한 불꽃타입 기술의 위력을 절반으로 줄이며, 화상 상태가 되지 않는다. 자신이 사용하는 물타입 기술의 위력은 2배가 된다.",
+    "modifiers": [
+      {
+        "scope": "defense",
+        "multiplier": 2,
+        "condition": { "moveTypeIn": ["불꽃"] }
+      },
+      {
+        "scope": "offense",
+        "multiplier": 2,
+        "condition": { "moveTypeIn": ["물"] }
+      }
+    ],
+    "immuneToStatuses": ["burn"]
+  },
+  {
+    "id": "저수",
+    "name": "저수",
+    "description": "물타입 기술을 맞으면 데미지를 받지 않고 최대 HP의 1/4을 회복한다.",
+    "absorbsType": {
+      "type": "물",
+      "healsFraction": 0.25
+    }
   }
 ]

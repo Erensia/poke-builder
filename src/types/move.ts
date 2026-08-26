@@ -1,5 +1,5 @@
 import type { PokemonType } from "./pokemon-type";
-import type { EffectStatKey } from "./battleStats";
+import type { EffectStatKey, BattleStatKey } from "./battleStats";
 import type { StatusCondition, StatusInflictEffect, VolatileInflictEffect } from "./status";
 import type { FieldKind } from "./field";
 import type { WeatherKind } from "./weather";
@@ -112,10 +112,21 @@ export interface Move {
    * 특정 조건에서만 사용할 수 있는 기술만 채운다. "sleep-only"(코골기 — 잠든 상태에서만, 그리고
    * 그 잠듦 자체가 본가처럼 이 기술의 사용을 막지 않는 예외 취급),
    * "first-turn-only"(속이기 — 등장 후 첫 턴에만. 1v1 시뮬레이터엔 교체가 없어 배틀의 1턴째로 취급),
-   * "field-required"(아이언롤러 — 활성화된 필드가 하나도 없으면 실패).
+   * "field-required"(아이언롤러 — 활성화된 필드가 하나도 없으면 실패),
+   * "opponent-damaging-move-only"(기습 — 상대가 이번 턴 데미지 기술(물리/특수)을 선택하지 않았거나,
+   * 자신이 상대보다 늦게 움직이면 실패. 두 조건 모두 "동시 비공개 선택" 특성상 행동 실행 시점에만
+   * 판정 가능해 UI에서 사전 경고를 줄 수 없다),
+   * "weather-required"(오로라베일 — 현재 날씨가 requiresWeather와 다르면 실패).
    * 조건을 안 채우면 battleSimulator가 blockedReason: "usageCondition"으로 실패시킨다.
    */
-  usageCondition?: "sleep-only" | "first-turn-only" | "field-required";
+  usageCondition?:
+    | "sleep-only"
+    | "first-turn-only"
+    | "field-required"
+    | "opponent-damaging-move-only"
+    | "weather-required";
+  /** usageCondition: "weather-required"일 때만 의미 있음 — 이 날씨가 아니면 사용 자체가 실패한다(오로라베일=눈) */
+  requiresWeather?: WeatherKind;
   /**
    * 그래스슬라이더 전용. 이 필드가 활성 상태면 기술의 우선도가 delta만큼 오른다(그 외 상황엔
    * priority 값 그대로). 사이코필드의 "우선도 기술 차단"과는 필드가 서로 배타적이라(동시에
@@ -220,9 +231,85 @@ export interface Move {
    */
   setsWeather?: WeatherKind;
   /**
-   * 리플렉터(물리 반감)·빛의장막(특수 반감)처럼 자신 쪽에 5턴짜리 데미지 경감 스크린을 치는
-   * 기술만 채운다. 이미 같은 스크린이 걸려있으면 실패(필드/트릭룸과 같은 패턴). 빛의점토를
-   * 지녔으면 8턴. 급소 공격은 스크린을 무시한다(본가 규칙).
+   * 리플렉터(물리 반감)·빛의장막(특수 반감)·오로라베일(물리·특수 둘 다 반감, "auroraVeil")처럼
+   * 자신 쪽에 5턴짜리 데미지 경감 스크린을 치는 기술만 채운다. 이미 같은 스크린이 걸려있으면
+   * 실패(필드/트릭룸과 같은 패턴). 빛의점토를 지녔으면 8턴. 급소 공격은 스크린을 무시한다(본가 규칙).
    */
-  setsScreen?: "reflect" | "lightScreen";
+  setsScreen?: "reflect" | "lightScreen" | "auroraVeil";
+  /**
+   * 흑안개처럼 명중 시 양쪽(자신+상대)의 능력 랭크 변화를 전부 초기화하는 기술만 채운다.
+   * 5스탯(공격/방어/특공/특방/스피드)과 명중률/회피율 랭크까지 리셋하고, 급소율(critStage)은
+   * 본가에서 별개 축이라 건드리지 않는다.
+   */
+  resetsAllStages?: boolean;
+  /**
+   * 대타출동 전용. 명중과 무관하게(항상 자기 자신 대상) 최대 HP 1/4를 깎아 그만큼의 HP를 가진
+   * 대타를 세운다. 이미 대타가 있거나, 최대 HP 1/4보다 현재 HP가 많지 않으면(=써도 대타 HP가
+   * 0 이하가 되거나 자신이 기절하면) 실패한다.
+   */
+  setsSubstitute?: boolean;
+  /**
+   * 사슬묶기 전용. 명중 시 상대가 "바로 직전에 쓴 기술"(defender.lastMoveId) 하나를 대상으로
+   * 지정해 그 기술만 사용 불가로 만든다("disable" volatile). 상대가 아직 아무 기술도 쓴 적이
+   * 없으면(lastMoveId 없음) 또는 이미 disable이 걸려 있으면 실패한다.
+   */
+  setsDisable?: boolean;
+  /**
+   * 앙코르 전용. 명중 시 상대가 "바로 직전에 쓴 기술"(defender.lastMoveId)만 강제로 반복하게
+   * 만든다("encore" volatile, disable과 정반대 방향). 상대가 아직 아무 기술도 쓴 적이 없으면
+   * 또는 이미 encore가 걸려 있으면 실패한다.
+   */
+  setsEncore?: boolean;
+  /**
+   * 방어/판별/버티기/킹실드(=방어류) 공통 태그. 이 필드가 있는 기술은 전부 같은 계열로 묶여
+   * 연속 성공 횟수(BattleFighterState.protectStreak)를 공유한다 — 성공할 때마다 다음 시도의
+   * 성공 확률이 (1/3)^streak로 줄어들고, 계열이 아닌 다른 기술을 쓰거나 실패하면 0으로 리셋된다.
+   *  - "block"(방어/판별/킹실드): 성공하면 이번 턴 상대의 공격(카테고리 무관 — 상태이상 기술도
+   *    포함)을 완전히 무효화한다.
+   *  - "endure"(버티기): 막지는 않고, 데미지는 그대로 받되 이번 턴만큼은 HP가 1 밑으로 내려가지
+   *    않는다(기합의띠·옹골참과 조건은 다르지만 결과는 같은 축).
+   */
+  protectEffect?: "block" | "endure";
+  /**
+   * 킹실드 전용. protectEffect: "block"이 성공해서 상대의 접촉기를 막았을 때, 그 공격자에게
+   * 추가로 거는 랭크변화(공격 -1). 접촉기가 아니면 막았어도 이 효과는 붙지 않는다.
+   */
+  protectContactPenalty?: { stat: BattleStatKey; delta: number };
+  /**
+   * 파워트릭 전용. 명중 시(항상 자기 자신 대상) 이 두 스탯의 실수치를 그 자리에서 서로 맞바꾼다
+   * (파워트릭=["atk","def"]). 노력치/성격 보정이 이미 반영된 BattleFighterState.realStats를
+   * 직접 스왑하는 것뿐이라 별도 재계산이 필요 없다 — 킬가르도 배틀스위치가 폼 전환 시
+   * realStats를 직접 교체하는 것과 같은 패턴.
+   */
+  swapsOwnStats?: [BattleStatKey, BattleStatKey];
+  /**
+   * 프리즈드라이 전용. 상대가 이 타입이면 통상 상성표를 무시하고 타입 상성 배율을 이 값으로
+   * 강제 오버라이드한다(프리즈드라이=물타입 상대에게 2배). 방어측이 타입 면역을 이미 스스로
+   * 얻은 경우(absorbsType·grantsImmunityToTypes)엔 면역이 우선이라 이 오버라이드는 적용되지
+   * 않는다 — moveContext.ts에서 면역 판정 다음에 확인한다.
+   */
+  overridesTypeEffectivenessFor?: { type: PokemonType; effectiveness: number };
+  /**
+   * 고스트다이브 전용. "상대의 방어를 무시하고 공격한다"는 원문은 방어 실수치가 아니라
+   * 방어류(방어/판별/버티기/킹실드, Move.protectEffect) 기술의 차단 자체를 뜻한다(사용자 확인) —
+   * 틈새포착(Ability.bypassesScreensAndSubstitute)이 스크린/대타를 무시하는 것과 같은 결의
+   * "방어류 무시" 축. 이 필드가 있으면 blockedByProtect 판정 자체를 건너뛰어 상대의 방어/판별/
+   * 버티기/킹실드에 막히지 않고 명중·데미지 계산까지 그대로 진행한다.
+   */
+  bypassesProtect?: boolean;
+  /**
+   * 성스러운칼 전용. 데미지 계산에서 상대(방어측)의 능력 랭크 변화(상승분·하락분 전부)를
+   * 무시한다 — Ability.ignoresOpponentStatStagesInDamage(천진)와 정확히 같은 축이지만 특성이
+   * 아니라 기술 단위 효과라는 점만 다르다(둘 중 하나만 있어도 발동, 중첩 시 자연히 무해).
+   */
+  ignoresDefenderStatStagesInDamage?: boolean;
+  /**
+   * 잠꼬대 전용. usageCondition: "sleep-only" 게이트를 통과한 뒤(=실제로 잠든 채 이 기술을
+   * 선택했다는 뜻), 이 기술 자신 대신 자신이 배운 다른 기술 중 하나를 무작위로 대신 발동시킨다
+   * (본가 규칙, 사용자 확인). 후보에서 제외되는 것: 잠꼬대 자신, 차지 기술(chargeTurn — 2턴짜리
+   * 기술을 대신 낼 수 없음), usageCondition이 있는 기술(코골기·속이기·아이언롤러·오로라베일·
+   * 기습처럼 별도 발동 조건이 있는 변화기·기술 — "일부 변화기 제외"에 해당). PP는 잠꼬대 자신만
+   * 이미 소모했고 대신 나가는 기술의 PP는 깎지 않는다(본가와 동일).
+   */
+  callsRandomLearnedMove?: boolean;
 }

@@ -24,6 +24,7 @@ import {
   type TurnResult,
 } from "../lib/battleSimulator";
 import type { StatusCondition } from "../types/status";
+import { typeLabel } from "../types/pokemon-type";
 import type { BaseStats } from "../types/stats";
 import "./BattleLogPage.css";
 
@@ -55,12 +56,15 @@ const VOLATILE_LABELS = {
   ingrain: "뿌리박기",
   aquaRing: "아쿠아링",
   leechSeed: "씨앗",
+  taunt: "도발",
+  disable: "사슬묶기",
+  encore: "앙코르",
 } as const;
 
 /** 액션 로그 한 줄 안에 "OO 발동!"으로 뭉뚱그리기보다 전용 문구를 따로 쓰는 volatile들 */
 const VOLATILES_WITH_DEDICATED_LOG_LINE = new Set(["drowsy", "wish"]);
 
-const SCREEN_LABELS = { reflect: "리플렉터", lightScreen: "빛의장막" } as const;
+const SCREEN_LABELS = { reflect: "리플렉터", lightScreen: "빛의장막", auroraVeil: "오로라베일" } as const;
 
 /**
  * 날씨/필드가 적용 중인지 배경색으로 알 수 있게 해달라는 요청 반영 — 날씨는 강화하는 타입 색(비=물,
@@ -103,6 +107,15 @@ function roEuro(name: string): "로" | "으로" {
   const code = lastChar.charCodeAt(0) - 0xac00;
   if (code < 0 || code > 11171) return "로";
   return code % 28 === 0 ? "로" : "으로";
+}
+
+/** "구애스카프를"/"압도적힘을"처럼 자음 받침 유무에 따라 "을"/"를" 조사를 자동 판별한다(매지션 강탈 로그용) */
+function eulReul(name: string): "을" | "를" {
+  const lastChar = name.at(-1);
+  if (!lastChar) return "를";
+  const code = lastChar.charCodeAt(0) - 0xac00;
+  if (code < 0 || code > 11171) return "를";
+  return code % 28 === 0 ? "를" : "을";
 }
 
 /**
@@ -179,6 +192,31 @@ export function BattleLogPage() {
     return null;
   }
 
+  /**
+   * 도발/사슬묶기/앙코르: 이 쪽이 지금 이 기술을 고르면 왜 안 되는지(있다면) 문구로 돌려준다.
+   * 구애스카프(choiceLockedMoveId)와 달리 판정 엔진(battleSimulator)의 volatile 상태를 그대로
+   * 읽는다 — 로그를 다시 훑을 필요 없이 battleState에 이미 반영돼있다.
+   */
+  function moveRestrictionMessage(side: Side, moveId: string): string | null {
+    if (!battleState) return null;
+    const fighter = battleState[side];
+    const pokemonName = pokemonOf(side)?.name ?? "포켓몬";
+    if (fighter.volatile.active.taunt && getMove(moveId)?.category === "status") {
+      return `${pokemonName}${eunNeun(pokemonName)} 도발에 걸려 변화기를 사용할 수 없어요.`;
+    }
+    const disableEntry = fighter.volatile.active.disable;
+    if (disableEntry && disableEntry.moveId === moveId) {
+      const disabledName = getMove(moveId)?.name ?? "그 기술";
+      return `${disabledName}${eunNeun(disabledName)} 사슬묶기에 걸려 사용할 수 없어요.`;
+    }
+    const encoreEntry = fighter.volatile.active.encore;
+    if (encoreEntry?.moveId && encoreEntry.moveId !== moveId) {
+      const forcedName = getMove(encoreEntry.moveId)?.name ?? "그 기술";
+      return `${pokemonName}${eunNeun(pokemonName)} 앙코르 때문에 ${forcedName}만 사용할 수 있어요.`;
+    }
+    return null;
+  }
+
   const canStart =
     setup.a.slot !== null &&
     setup.b.slot !== null &&
@@ -224,6 +262,12 @@ export function BattleLogPage() {
         const lockedMoveName = getMove(locked)?.name ?? "그 기술";
         const pokemonName = pokemonOf(side)?.name ?? "포켓몬";
         setLockWarning(`${pokemonName}${eunNeun(pokemonName)} 구애스카프 때문에 ${lockedMoveName}만 사용할 수 있어요.`);
+        return;
+      }
+      // 도발/사슬묶기/앙코르도 같은 방식으로 확인 — 선택 자체는 막지 않고 진행만 경고로 저지한다.
+      const restriction = chosen ? moveRestrictionMessage(side, chosen) : null;
+      if (restriction) {
+        setLockWarning(restriction);
         return;
       }
     }
@@ -333,18 +377,31 @@ export function BattleLogPage() {
                       {fighter.status.condition && (
                         <span className="battle-status-tag is-major">{STATUS_LABELS[fighter.status.condition]}</span>
                       )}
-                      {(Object.keys(fighter.volatile.active) as (keyof typeof VOLATILE_LABELS)[]).map((v) => (
-                        <span key={v} className="battle-status-tag is-volatile">
-                          {VOLATILE_LABELS[v]}
-                        </span>
-                      ))}
-                      {(Object.keys(fighter.screens) as ("reflect" | "lightScreen")[])
+                      {(Object.keys(fighter.volatile.active) as (keyof typeof VOLATILE_LABELS)[]).map((v) => {
+                        // 사슬묶기/앙코르는 대상 기술 이름까지 같이 보여줘야 어떤 기술이
+                        // 막혔는지/강제됐는지 알 수 있다.
+                        const moveId = fighter.volatile.active[v]?.moveId;
+                        const moveName = moveId ? getMove(moveId)?.name : undefined;
+                        return (
+                          <span key={v} className="battle-status-tag is-volatile">
+                            {VOLATILE_LABELS[v]}
+                            {moveName && `(${moveName})`}
+                          </span>
+                        );
+                      })}
+                      {(Object.keys(fighter.screens) as ("reflect" | "lightScreen" | "auroraVeil")[])
                         .filter((s) => fighter.screens[s] !== undefined)
                         .map((s) => (
                           <span key={s} className="battle-status-tag is-volatile">
                             {SCREEN_LABELS[s]} {fighter.screens[s]}턴
                           </span>
                         ))}
+                      {fighter.substituteHp !== undefined && (
+                        <span className="battle-status-tag is-volatile">대타 HP {fighter.substituteHp}</span>
+                      )}
+                      {fighter.unburdenActive && (
+                        <span className="battle-status-tag is-volatile">곡예(스피드 2배)</span>
+                      )}
                     </div>
                   </div>
                   <div className="battle-hp-bar">
@@ -385,7 +442,13 @@ export function BattleLogPage() {
                         const firstTurnConditionUnmet =
                           move.usageCondition === "first-turn-only" && battleState.turnNumber !== 0;
                         const fieldConditionUnmet = move.usageCondition === "field-required" && !battleState.field;
+                        const weatherConditionUnmet =
+                          move.usageCondition === "weather-required" && battleState.weather !== move.requiresWeather;
+                        // 기습은 상대가 이번 턴 뭘 낼지(동시 비공개 선택이라) 미리 알 수 없어 다른
+                        // usageCondition처럼 "지금 조건 충족 여부"를 판정할 수 없다 — 매번 고정 안내만 띄운다.
+                        const suckerPunchHint = move.usageCondition === "opponent-damaging-move-only";
                         const choiceLocked = lockedMoveId !== null && move.id !== lockedMoveId;
+                        const restrictionMsg = moveRestrictionMessage(side, move.id);
                         const disabled = pp <= 0 || fighter.currentHp <= 0 || !!winner;
                         // 셋업 카드의 party-move-pip와 동일하게 기술 타입 배경색을 입힌다.
                         const moveColor = move.type ? TYPE_COLORS[move.type] : undefined;
@@ -405,9 +468,13 @@ export function BattleLogPage() {
                                   ? "등장 후 첫 턴에만 사용 가능 — 지금 쓰면 실패해요"
                                   : fieldConditionUnmet
                                     ? "필드가 있을 때만 사용 가능 — 지금 쓰면 실패해요"
-                                    : choiceLocked
+                                    : weatherConditionUnmet
+                                      ? `${move.requiresWeather} 날씨일 때만 사용 가능 — 지금 쓰면 실패해요`
+                                      : suckerPunchHint
+                                      ? "상대보다 먼저 움직이면서, 상대가 데미지 기술을 낼 때만 성공해요"
+                                      : choiceLocked
                                       ? "구애스카프 때문에 이 기술은 지금 선택할 수 없어요"
-                                      : undefined
+                                      : restrictionMsg ?? undefined
                             }
                             onClick={() => {
                               setLockWarning(null);
@@ -478,7 +545,9 @@ export function BattleLogPage() {
                           기절 같은 "상태"는 아래에서 별도 줄로 분리한다. */}
                       <div className="battle-turn-line">
                         <strong>{actorName}</strong>의 {action.move.name}
+                        {action.sleepTalkCalledMoveName && " (잠꼬대로 냈다!)"}
                         {action.blockedReason === "usageCondition" && "!"}
+                        {action.blockedReason === "moveRestricted" && "!"}
                         {action.blockedReason === "status" && action.blockedByStatus === undefined && " — 상태이상으로 행동 불가"}
                         {action.blockedReason === "flinch" && " — 풀죽어서 행동 불가"}
                         {action.blockedReason === "recharge" && " — 반동으로 행동 불가"}
@@ -562,6 +631,44 @@ export function BattleLogPage() {
                         {!action.blockedReason && action.hit && action.leechSeedSetFailed && (
                           <> · 이미 씨앗이 심어져 있어 실패!</>
                         )}
+                        {!action.blockedReason && action.hit && action.setSubstitute && <> · 대타를 세웠다!</>}
+                        {!action.blockedReason && action.hit && action.substituteSetFailed && (
+                          <> · 이미 대타가 있거나 HP가 부족해 실패!</>
+                        )}
+                        {!action.blockedReason && action.hit && action.setDisabledMoveName && (
+                          <> · {action.setDisabledMoveName} 봉인!</>
+                        )}
+                        {!action.blockedReason && action.hit && action.disableSetFailed && (
+                          <> · 상대가 아직 기술을 안 썼거나 이미 걸려있어 실패!</>
+                        )}
+                        {!action.blockedReason && action.hit && action.setEncoreMoveName && (
+                          <> · {action.setEncoreMoveName}만 반복하게 됨!</>
+                        )}
+                        {!action.blockedReason && action.hit && action.encoreSetFailed && (
+                          <> · 상대가 아직 기술을 안 썼거나 이미 걸려있어 실패!</>
+                        )}
+                        {!action.blockedReason && action.hit && action.swappedStatsMoveName && (
+                          <> · 공격과 방어 수치가 서로 바뀌었다!</>
+                        )}
+                        {!action.blockedReason && action.hit && action.sheerForceAbilityName && (
+                          <> · {action.sheerForceAbilityName} 발동! 부가 효과 대신 위력이 올랐다!</>
+                        )}
+                        {!action.blockedReason && action.hit && action.stolenItemName && (
+                          <> · 매지션 발동! 상대의 {action.stolenItemName}{eulReul(action.stolenItemName)} 빼앗았다!</>
+                        )}
+                        {!action.blockedReason && action.hit && action.unburdenSelfAbilityName && (
+                          <> · {action.unburdenSelfAbilityName} 발동! 스피드가 2배로 올랐다!</>
+                        )}
+                        {!action.blockedReason && action.hit && action.unburdenOpponentAbilityName && (
+                          <> · 상대의 {action.unburdenOpponentAbilityName} 발동! 상대의 스피드가 2배로 올랐다!</>
+                        )}
+                        {!action.blockedReason && action.changedOwnTypeTo && (
+                          <>
+                            {" "}
+                            · {action.changedOwnTypeAbilityName} 발동! 타입이 {action.changedOwnTypeTo}
+                            {roEuro(action.changedOwnTypeTo)} 바뀌었다!
+                          </>
+                        )}
                       </div>
                       {/* 마비/잠듦/얼음으로 이번 턴 행동이 막혔으면(단순 "상태이상으로 행동 불가"가
                           아니라) 매턴 효과가 발동한 것과 같은 의미라 트리거 문구를 그대로 쓴다 */}
@@ -575,6 +682,17 @@ export function BattleLogPage() {
                       {action.blockedReason === "usageCondition" && (
                         <div className="battle-turn-line is-muted">
                           {actorName}의 {action.move.name}{eunNeun(action.move.name)} 실패했다!
+                        </div>
+                      )}
+                      {/* 도발/사슬묶기/앙코르로 이번 선택 자체가 막혔을 때 — 어떤 제약 때문인지 구분해서 보여준다 */}
+                      {action.blockedReason === "moveRestricted" && (
+                        <div className="battle-turn-line is-muted">
+                          {action.moveRestrictionKind === "taunt" &&
+                            `${actorName}은(는) 도발에 걸려 변화기를 쓸 수 없다!`}
+                          {action.moveRestrictionKind === "disable" &&
+                            `${actorName}의 ${action.move.name}${eunNeun(action.move.name)} 사슬묶기에 봉인돼있다!`}
+                          {action.moveRestrictionKind === "encore" &&
+                            `${actorName}은(는) 앙코르 때문에 이 기술을 쓸 수 없다!`}
                         </div>
                       )}
                       {/* 상태이상에 새로 걸렸을 때(onset) — 항상 상대가 대상(기존 관례) */}
@@ -594,6 +712,46 @@ export function BattleLogPage() {
                             action.curedStatusTarget === "self" ? actorName : defenderName,
                           )}
                         </div>
+                      )}
+                      {/* 방어측 접촉/피격 트리거 특성(정전기·불꽃몸=상태이상, 까칠한피부=고정 데미지,
+                          저주받은바디=PP 봉인) — 전부 defenderName의 특성이 actorName(공격자)에게 발동한다 */}
+                      {!action.blockedReason && action.abilityInflictedStatusOnAttacker && (
+                        <div className="battle-turn-line is-muted">
+                          {defenderName}의 {action.abilityInflictedStatusAbilityName}!{" "}
+                          {STATUS_ONSET_TEXT[action.abilityInflictedStatusOnAttacker](actorName)}
+                        </div>
+                      )}
+                      {!action.blockedReason && !!action.abilityDamageToAttacker && (
+                        <div className="battle-turn-line is-muted">
+                          {defenderName}의 {action.abilityDamageAbilityName}! {actorName}
+                          {eunNeun(actorName)} {action.abilityDamageToAttacker} 데미지를 입었다
+                        </div>
+                      )}
+                      {!action.blockedReason && action.abilityDisabledMoveName && (
+                        <div className="battle-turn-line is-muted">
+                          {defenderName}의 {action.abilityDisableAbilityName}! {actorName}의{" "}
+                          {action.abilityDisabledMoveName}이(가) 봉인되었다!
+                        </div>
+                      )}
+                      {/* 타오르는불꽃/피뢰침 — 해당 타입 기술을 통째로 무효화(데미지는 이미 0으로
+                          찍혀있어 별도 표시가 없으면 "그냥 약해서 0"인지 구분이 안 되니 전용 문구로 알려준다) */}
+                      {!action.blockedReason && action.abilityAbsorbedMoveType && (
+                        <div className="battle-turn-line is-muted">
+                          {defenderName}의 {action.abilityAbsorbAbilityName}! {typeLabel(action.abilityAbsorbedMoveType)}
+                          {eunNeun(typeLabel(action.abilityAbsorbedMoveType))} 전혀 효과가 없었다!
+                          {!!action.abilityAbsorbHealAmount && <> 체력을 {action.abilityAbsorbHealAmount} 회복했다!</>}
+                        </div>
+                      )}
+                      {/* 대타출동 — 데미지가 본체가 아니라 대타로 들어갔을 때 알려준다. 깨졌는지 아직
+                          버티는지에 따라 문구를 분기(접촉/특성 트리거가 발동하지 않는 이유이기도 함) */}
+                      {!action.blockedReason && action.hitSubstitute && (
+                        <div className="battle-turn-line is-muted">
+                          {action.substituteBroke ? "대타가 깨졌다!" : "대타가 대신 맞았다!"}
+                        </div>
+                      )}
+                      {/* 흑안개 — 자신/상대 구분 없이 양쪽 다 초기화되는 유일한 랭크변화 효과라 전용 문구로 알려준다 */}
+                      {!action.blockedReason && action.resetAllStages && (
+                        <div className="battle-turn-line is-muted">양쪽의 능력 변화가 전부 원래대로 돌아갔다!</div>
                       )}
                       {/* 발버둥 반동은 상대 데미지와 별개의 수치라 자기 줄로 분리 */}
                       {!action.blockedReason && action.move.id === STRUGGLE_MOVE.id && action.selfDamage > 0 && (
@@ -665,6 +823,48 @@ export function BattleLogPage() {
                           {roEuro(action.enduredItemName)} 버텼다! (HP 1)
                         </div>
                       )}
+                      {/* 옹골참 — 기합의띠와 같은 문구지만 도구가 아니라 특성이 버텨줬을 때 */}
+                      {!action.blockedReason && action.enduredAbilityName && (
+                        <div className="battle-turn-line is-muted">
+                          {defenderName}
+                          {eunNeun(defenderName)} {action.enduredAbilityName}
+                          {roEuro(action.enduredAbilityName)} 버텼다! (HP 1)
+                        </div>
+                      )}
+                      {/* 버티기 — 기합의띠/옹골참과 같은 문구지만 방어류 기술이 버텨줬을 때 */}
+                      {!action.blockedReason && action.enduredProtectMoveName && (
+                        <div className="battle-turn-line is-muted">
+                          {defenderName}
+                          {eunNeun(defenderName)} {action.enduredProtectMoveName}
+                          {roEuro(action.enduredProtectMoveName)} 버텼다! (HP 1)
+                        </div>
+                      )}
+                      {/* 방어/판별/킹실드 — 자신의 시도가 이번에 성공했는지/실패했는지 */}
+                      {!action.blockedReason && action.protectSucceeded && (
+                        <div className="battle-turn-line is-muted">
+                          {actorName}
+                          {eunNeun(actorName)} {action.move.name}로 몸을 지켰다!
+                        </div>
+                      )}
+                      {!action.blockedReason && action.protectFailed && (
+                        <div className="battle-turn-line is-muted">
+                          {actorName}의 {action.move.name}{eunNeun(action.move.name)} 실패했다!
+                        </div>
+                      )}
+                      {/* 공격이 상대의 방어류 기술에 완전히 막혔을 때 — 이 행동(공격측)의 로그에 표시 */}
+                      {!action.blockedReason && action.blockedByProtectMoveName && (
+                        <div className="battle-turn-line is-muted">
+                          {defenderName}의 {action.blockedByProtectMoveName}
+                          {roEuro(action.blockedByProtectMoveName)} 막혔다!
+                        </div>
+                      )}
+                      {/* 킹실드 — 접촉기를 막아내 공격측의 공격이 떨어졌을 때 */}
+                      {!action.blockedReason && action.protectContactPenaltyMoveName && (
+                        <div className="battle-turn-line is-muted">
+                          {actorName}
+                          {eunNeun(actorName)} 접촉한 반동으로 공격이 떨어졌다!
+                        </div>
+                      )}
                       {/* 하양허브 — 자신/상대 어느 쪽에서 발동했는지 따로 표시 */}
                       {!action.blockedReason && action.restoredStatsSelfItemName && (
                         <div className="battle-turn-line is-muted">
@@ -708,6 +908,11 @@ export function BattleLogPage() {
                         {fighterLabel(battleState, e.actor)}의 {e.itemHealItemName}로 {e.itemHeal} 회복 (남은 HP{" "}
                         {e.remainingHp})
                       </>
+                    ) : e.abilityWeatherHeal ? (
+                      <>
+                        {fighterLabel(battleState, e.actor)}의 {e.abilityWeatherHealAbilityName}로{" "}
+                        {e.abilityWeatherHeal} 회복 (남은 HP {e.remainingHp})
+                      </>
                     ) : e.regenHeal ? (
                       <>
                         {fighterLabel(battleState, e.actor)}
@@ -736,6 +941,11 @@ export function BattleLogPage() {
                       </>
                     ) : e.inflictedDelayedStatus ? (
                       STATUS_ONSET_TEXT[e.inflictedDelayedStatus](fighterLabel(battleState, e.actor))
+                    ) : e.abilityCuredStatus ? (
+                      <>
+                        {fighterLabel(battleState, e.actor)}의 {e.abilityCuredStatusAbilityName}!{" "}
+                        {STATUS_CURE_TEXT[e.abilityCuredStatus](fighterLabel(battleState, e.actor))}
+                      </>
                     ) : e.statusCondition ? (
                       <>
                         {STATUS_TRIGGER_TEXT[e.statusCondition](fighterLabel(battleState, e.actor))} (남은 HP{" "}

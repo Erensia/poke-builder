@@ -22,6 +22,13 @@ export const CONFUSION_SELF_HIT_POWER = 40;
 const DROWSY_DURATION = 2;
 const WISH_DURATION = 2;
 
+/** 도발 지속 턴수(사용자 확인 — 효과 텍스트에 명시) */
+const TAUNT_DURATION = 3;
+/** 사슬묶기 지속 턴수(본가 기준값 — 이 프로젝트 효과 텍스트엔 정확한 수치가 없어 그대로 사용) */
+const DISABLE_DURATION = 4;
+/** 앙코르 지속 턴수(본가 기준값 — 위와 동일한 이유) */
+const ENCORE_DURATION = 3;
+
 /**
  * 뿌리박기·아쿠아링·씨뿌리기는 턴 카운터로 소모되지 않고 배틀이 끝날 때까지 유지된다(교체가
  * 없는 1v1이라 "교체 시 해제"도 해당 없음) — consumeVolatileTurn을 아예 호출하지 않으므로
@@ -37,23 +44,35 @@ function defaultDuration(volatile: VolatileCondition, random: () => number): num
   if (volatile === "ingrain" || volatile === "aquaRing" || volatile === "leechSeed") {
     return PERSISTENT_UNTIL_BATTLE_END;
   }
+  if (volatile === "taunt") return TAUNT_DURATION;
+  if (volatile === "disable") return DISABLE_DURATION;
+  if (volatile === "encore") return ENCORE_DURATION;
   return 1;
 }
 
-/** 새 행동방해 효과를 건다. 이미 같은 효과가 걸려 있으면 지속 턴수를 새로 굴려 덮어쓴다 */
+/**
+ * 새 행동방해 효과를 건다. 이미 같은 효과가 걸려 있으면 지속 턴수를 새로 굴려 덮어쓴다.
+ * moveId는 사슬묶기(막힌 기술)·앙코르(강제된 기술)에서만 쓰인다 — 그 외 volatile은 무시된다.
+ */
 export function inflictVolatile(
   state: VolatileConditionState,
   volatile: VolatileCondition,
   random: () => number = Math.random,
+  moveId?: string,
 ): VolatileConditionState {
-  return { active: { ...state.active, [volatile]: { turnsRemaining: defaultDuration(volatile, random) } } };
+  return {
+    active: { ...state.active, [volatile]: { turnsRemaining: defaultDuration(volatile, random), moveId } },
+  };
 }
 
 export function hasVolatile(state: VolatileConditionState, volatile: VolatileCondition): boolean {
   return state.active[volatile] !== undefined;
 }
 
-/** 판정에 썼으니 남은 턴수를 1 줄인다. 0 이하가 되면 그 효과를 제거한다 */
+/**
+ * 판정에 썼으니 남은 턴수를 1 줄인다. 0 이하가 되면 그 효과를 제거한다.
+ * moveId(사슬묶기/앙코르)는 턴수와 무관한 값이라 갱신 시에도 그대로 들고 다닌다.
+ */
 export function consumeVolatileTurn(
   state: VolatileConditionState,
   volatile: VolatileCondition,
@@ -65,7 +84,7 @@ export function consumeVolatileTurn(
   if (entry.turnsRemaining <= 1) {
     delete active[volatile];
   } else {
-    active[volatile] = { turnsRemaining: entry.turnsRemaining - 1 };
+    active[volatile] = { turnsRemaining: entry.turnsRemaining - 1, moveId: entry.moveId };
   }
   return { active };
 }

@@ -374,7 +374,8 @@
     "pp": 12,
     "priority": 0,
     "effect": "자신의 HP를 조금 깎아서 분신을 만든다. 분신은 자신의 대타가 된다.",
-    "makesContact": false
+    "makesContact": false,
+    "setsSubstitute": true
   },
   {
     "id": "오물폭탄",
@@ -456,10 +457,11 @@
     "accuracy": 100,
     "pp": 12,
     "priority": 0,
-    "effect": "1턴째 숨어서 회피하고, 2턴째 상대의 방어를 무시하고 공격한다.",
+    "effect": "1턴째 숨어서 회피하고, 2턴째 상대의 방어(방어/판별/킹실드 등 방어류 기술)를 무시하고 공격한다.",
     "chargeTurn": true,
     "chargeHideType": "hidden",
-    "makesContact": true
+    "makesContact": true,
+    "bypassesProtect": true
   },
   {
     "id": "길동무",
@@ -1193,8 +1195,9 @@
     "accuracy": null,
     "pp": 8,
     "priority": 4,
-    "effect": "이번 턴 상대의 공격을 대부분 막아낸다.",
-    "makesContact": false
+    "effect": "이번 턴 상대의 공격을 완전히 막아낸다. 연속으로 쓰면(판별·버티기·킹실드 포함, 계열 공유) 성공 확률이 100%→1/3→1/9→1/27로 급격히 줄어든다.",
+    "makesContact": false,
+    "protectEffect": "block"
   },
   {
     "id": "배대뒤치기",
@@ -1217,8 +1220,9 @@
     "accuracy": null,
     "pp": 12,
     "priority": 4,
-    "effect": "이번 턴 쓰러지지 않고 체력을 1 남긴다.",
-    "makesContact": false
+    "effect": "이번 턴 쓰러지지 않고 체력을 1 남긴다. 연속으로 쓰면(방어·판별·킹실드 포함, 계열 공유) 성공 확률이 100%→1/3→1/9→1/27로 급격히 줄어든다.",
+    "makesContact": false,
+    "protectEffect": "endure"
   },
   {
     "id": "벌크업",
@@ -1405,8 +1409,10 @@
     "accuracy": null,
     "pp": 12,
     "priority": 0,
-    "effect": "잠든 상태에서만 사용 가능. 배운 기술 중 하나를 무작위로 사용한다. (\"무작위로 다른 기술을 대신 사용\"하는 로직 자체가 엔진에 없어 usageCondition 태깅 보류 — 후속 작업)",
-    "makesContact": false
+    "effect": "잠든 상태에서만 사용 가능. 배운 기술 중 하나를 무작위로 사용한다.",
+    "makesContact": false,
+    "usageCondition": "sleep-only",
+    "callsRandomLearnedMove": true
   },
   {
     "id": "잠자기",
@@ -1596,8 +1602,9 @@
     "accuracy": null,
     "pp": 8,
     "priority": 4,
-    "effect": "이번 턴 상대의 공격을 대부분 막아낸다.",
-    "makesContact": false
+    "effect": "이번 턴 상대의 공격을 완전히 막아낸다. 연속으로 쓰면(방어·버티기·킹실드 포함, 계열 공유) 성공 확률이 100%→1/3→1/9→1/27로 급격히 줄어든다.",
+    "makesContact": false,
+    "protectEffect": "block"
   },
   {
     "id": "패스트가드",
@@ -2963,8 +2970,9 @@
     "accuracy": 100,
     "pp": 8,
     "priority": 0,
-    "effect": "상대가 방금 사용한 기술만 반복해서 사용하게 만든다.",
-    "makesContact": false
+    "effect": "상대가 방금 사용한 기술만 3턴간 반복해서 사용하게 만든다. 상대가 아직 기술을 쓴 적이 없으면 실패한다.",
+    "makesContact": false,
+    "setsEncore": true
   },
   {
     "id": "전기자석파",
@@ -3236,7 +3244,8 @@
     "pp": 20,
     "priority": 0,
     "effect": "상대를 화나게 한다. 3턴 동안 상대는 데미지를 주는 기술밖에 쓸 수 없게 된다.",
-    "makesContact": false
+    "makesContact": false,
+    "inflictsVolatile": [{ "volatile": "taunt", "target": "opponent" }]
   },
   {
     "id": "독가루",
@@ -3742,8 +3751,9 @@
     "accuracy": 100,
     "pp": 20,
     "priority": 0,
-    "effect": "상대의 움직임을 막아 바로 전에 쓴 기술을 잠시 동안 사용할 수 없게 만든다.",
-    "makesContact": false
+    "effect": "상대의 움직임을 막아 바로 전에 쓴 기술을 4턴간 사용할 수 없게 만든다. 상대가 아직 기술을 쓴 적이 없으면 실패한다.",
+    "makesContact": false,
+    "setsDisable": true
   },
   {
     "id": "사이드체인지",
@@ -4102,7 +4112,8 @@
     "pp": 20,
     "priority": 0,
     "effect": "필드에 있는 모든 포켓몬의 능력 랭크 변화를 초기화한다.",
-    "makesContact": false
+    "makesContact": false,
+    "resetsAllStages": true
   },
   {
     "id": "기습",
@@ -4113,8 +4124,9 @@
     "accuracy": 100,
     "pp": 8,
     "priority": 1,
-    "effect": "",
-    "makesContact": true
+    "effect": "상대가 이번 턴 데미지 기술을 내지 않았거나 자신보다 먼저 움직이면 실패한다.",
+    "makesContact": true,
+    "usageCondition": "opponent-damaging-move-only"
   },
   {
     "id": "꽃가루경단",
@@ -5487,6 +5499,209 @@
     "pp": 10,
     "priority": 0,
     "effect": "쓰러진 같은 편 포켓몬 1마리당 위력이 50씩 오른다(1v1 시뮬레이터에는 동료가 없어 항상 기본 위력 50으로 계산).",
+    "makesContact": false
+  },
+  {
+    "id": "스위프뺨치기",
+    "name": "스위프뺨치기",
+    "type": "노말",
+    "category": "physical",
+    "power": 25,
+    "accuracy": 85,
+    "pp": 12,
+    "priority": 0,
+    "effect": "2~5회 동안 연속으로 쓴다.",
+    "makesContact": true,
+    "minHits": 2,
+    "maxHits": 5
+  },
+  {
+    "id": "신통력",
+    "name": "신통력",
+    "type": "에스퍼",
+    "category": "special",
+    "power": 80,
+    "accuracy": 100,
+    "pp": 20,
+    "priority": 0,
+    "effect": "10% 확률로 상대를 풀죽게 만든다.",
+    "inflictsVolatile": [
+      {
+        "volatile": "flinch",
+        "target": "opponent",
+        "chance": 10
+      }
+    ],
+    "makesContact": false
+  },
+  {
+    "id": "고드름침",
+    "name": "고드름침",
+    "type": "얼음",
+    "category": "physical",
+    "power": 25,
+    "accuracy": 100,
+    "pp": 20,
+    "priority": 0,
+    "effect": "2~5회 동안 연속으로 쓴다.",
+    "makesContact": false,
+    "minHits": 2,
+    "maxHits": 5
+  },
+  {
+    "id": "얼음뭉치",
+    "name": "얼음뭉치",
+    "type": "얼음",
+    "category": "physical",
+    "power": 40,
+    "accuracy": 100,
+    "pp": 20,
+    "priority": 1,
+    "effect": "반드시 선제공격을 할 수 있다.",
+    "makesContact": false
+  },
+  {
+    "id": "오로라베일",
+    "name": "오로라베일",
+    "type": "얼음",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 20,
+    "priority": 0,
+    "effect": "5턴 동안 오로라 베일을 펼쳐 상대로부터 받는 물리·특수공격 데미지를 절반으로 줄인다. 싸라기눈(눈) 상태일 때만 사용할 수 있다.",
+    "makesContact": false,
+    "setsScreen": "auroraVeil",
+    "usageCondition": "weather-required",
+    "requiresWeather": "눈"
+  },
+  {
+    "id": "프리즈드라이",
+    "name": "프리즈드라이",
+    "type": "얼음",
+    "category": "special",
+    "power": 70,
+    "accuracy": 100,
+    "pp": 20,
+    "priority": 0,
+    "effect": "물타입 포켓몬에게는 상성과 무관하게 효과가 굉장하다. Champions에서는 얼음 상태이상 부여 효과가 삭제됨.",
+    "makesContact": false,
+    "overridesTypeEffectivenessFor": { "type": "물", "effectiveness": 2 }
+  },
+  {
+    "id": "골드러시",
+    "name": "골드러시",
+    "type": "강철",
+    "category": "special",
+    "power": 120,
+    "accuracy": 95,
+    "pp": 8,
+    "priority": 0,
+    "effect": "대량의 코인을 날려서 공격한다. 사용한 자신의 특수공격이 2랭크 떨어진다. (일반 시리즈에서는 배틀 후 돈을 획득)",
+    "statChanges": [{ "target": "self", "stat": "spa", "delta": -2 }],
+    "makesContact": false
+  },
+  {
+    "id": "블록",
+    "name": "블록",
+    "type": "노말",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 8,
+    "priority": 0,
+    "effect": "양팔을 벌려 막아서서 상대의 도주로를 가로막아 도망치거나 교체할 수 없게 한다. (1v1 시뮬레이터엔 교체 개념이 없어 이 트래핑 효과는 적용 대상이 없음 — 효과 텍스트만)",
+    "makesContact": false
+  },
+  {
+    "id": "성스러운칼",
+    "name": "성스러운칼",
+    "type": "격투",
+    "category": "physical",
+    "power": 90,
+    "accuracy": 100,
+    "pp": 16,
+    "priority": 0,
+    "effect": "긴 뿔로 베어 공격한다. 상대의 방어·특수방어·회피율 랭크 변화를 무시하고 데미지를 준다.",
+    "classification": ["베기"],
+    "makesContact": true,
+    "ignoresDefenderStatStagesInDamage": true
+  },
+  {
+    "id": "킹실드",
+    "name": "킹실드",
+    "type": "강철",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 8,
+    "priority": 4,
+    "effect": "상대의 공격 기술을 완전히 막으면서 방어 태세를 갖춘다. 접촉기로 막으면 상대의 공격이 1랭크 하락한다. 연속으로 쓰면(방어·판별·버티기 포함, 계열 공유) 성공 확률이 100%→1/3→1/9→1/27로 급격히 줄어든다(이전에 '50%씩 감소'로 잘못 적혀있던 걸 방어류 공용 확률표로 정정). 킬가르도가 사용하면 배틀스위치로 실드폼 전환도 함께 반영된다.",
+    "makesContact": false,
+    "protectEffect": "block",
+    "protectContactPenalty": { "stat": "atk", "delta": -1 }
+  },
+  {
+    "id": "파워트릭",
+    "name": "파워트릭",
+    "type": "에스퍼",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 12,
+    "priority": 0,
+    "effect": "초능력으로 자신의 공격과 방어 수치를 서로 맞바꾼다.",
+    "makesContact": false,
+    "swapsOwnStats": ["atk", "def"]
+  },
+  {
+    "id": "물수리검",
+    "name": "물수리검",
+    "type": "물",
+    "category": "special",
+    "power": 15,
+    "accuracy": 100,
+    "pp": 20,
+    "priority": 1,
+    "effect": "점액으로 만든 수리검을 연속으로 던져 공격하는 선제(+1) 기술이다. 2~5회 연속 히트.",
+    "makesContact": false,
+    "minHits": 2,
+    "maxHits": 5
+  },
+  {
+    "id": "끈적끈적네트",
+    "name": "끈적끈적네트",
+    "type": "벌레",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 20,
+    "priority": 0,
+    "effect": "상대의 주위에 끈적끈적한 네트를 둘러 펼쳐서 교체되어 나오는 상대의 스피드를 떨어뜨린다. 엔트리 해저드류라 교체가 없는 1v1 시뮬레이터에는 적용 대상이 없다(효과 텍스트만).",
+    "makesContact": false
+  },
+  {
+    "id": "엉겨붙기",
+    "name": "엉겨붙기",
+    "type": "벌레",
+    "category": "special",
+    "power": 20,
+    "accuracy": 100,
+    "pp": 20,
+    "priority": 0,
+    "effect": "4~5턴 동안 상대에게 엉겨 붙어서 공격한다. 그동안 상대는 도망갈 수 없다(모래지옥류와 같은 '조이기' 축 — 여러 턴 지속 구속 데미지 로직 자체가 아직 없어 효과 텍스트만).",
+    "makesContact": true
+  },
+  {
+    "id": "파워셰어",
+    "name": "파워셰어",
+    "type": "에스퍼",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 12,
+    "priority": 0,
+    "effect": "초능력으로 자신과 상대의 공격과 특수공격 능력치를 더해서 반으로 나눈다(파워트릭류와 같은 '실수치 조작' 축 — 실수치를 직접 갈아치우는 로직 자체가 아직 없어 효과 텍스트만).",
     "makesContact": false
   }
 ]

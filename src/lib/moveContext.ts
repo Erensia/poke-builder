@@ -24,6 +24,8 @@ export interface MoveContext {
   stabMultiplier: number;
   /** 상대 타입 상성 배율 (0/0.25/0.5/1/2/4). 기술에 타입이 없으면(필드기 등) 1 */
   typeEffectiveness: number;
+  /** 타오르는불꽃/피뢰침처럼 방어측 특성(absorbsType)이 이 기술 타입을 통째로 무효화했으면 true */
+  absorbedByDefenderAbility: boolean;
 }
 
 export function resolveMoveContext(
@@ -33,10 +35,21 @@ export function resolveMoveContext(
   defenderAbility: Ability | undefined,
   weather?: WeatherKind,
   defenderItem?: Item,
+  /** 맹화·급류·심록·벌레의알림(HP 1/3 이하 조건)용. 안 넘기면 풀피로 간주(매치업 페이지 기본값) */
+  attackerHpFraction?: number,
+  /** 멀티스케일(HP 풀피 조건)용. 안 넘기면 풀피로 간주(매치업 페이지 기본값) */
+  defenderHpIsFull = true,
+  /** 이상한비늘(상태이상 조건)용. 안 넘기면 상태이상 없음으로 간주(매치업 페이지 기본값) */
+  defenderHasStatusCondition = false,
 ): MoveContext {
-  const abilityOffense = resolveAbilityOffense(attackerAbility, move, weather);
+  const abilityOffense = resolveAbilityOffense(attackerAbility, move, weather, attackerHpFraction);
   const effectiveMove = abilityOffense.overrideMoveType ? { ...move, type: abilityOffense.overrideMoveType } : move;
-  const abilityDefenseMultiplier = resolveAbilityDefense(defenderAbility, effectiveMove);
+  const abilityDefenseMultiplier = resolveAbilityDefense(
+    defenderAbility,
+    effectiveMove,
+    defenderHpIsFull,
+    defenderHasStatusCondition,
+  );
   const stabMultiplier = resolveStabMultiplier(attackerAbility);
 
   // 배짱처럼 특정 타입의 면역만 무시하는 특성(공격측)이거나, 검은철구처럼 방어측이 스스로 땅타입
@@ -46,9 +59,39 @@ export function resolveMoveContext(
   const bypassImmunity =
     !!(effectiveMove.type && attackerAbility?.bypassesImmunityForTypes?.includes(effectiveMove.type)) ||
     (effectiveMove.type === "땅" && !!defenderItem?.groundsHolder);
-  const typeEffectiveness = effectiveMove.type
-    ? getEffectiveness(effectiveMove.type, defenderTypes, { bypassImmunity })
-    : 1;
+
+  // 타오르는불꽃/피뢰침: bypassImmunity(공격측이 상대 면역을 무시)와 정반대로, 방어측이 원래
+  // 없던 면역을 스스로 얻는다. 상성표를 거치지 않고 무조건 0배로 덮어쓴다 — 카테고리 무관(상태이상
+  // 기술도 흡수). 틀깨기류(공격측이 방어측 특성 자체를 무시)는 아직 이 로스터에 없어 충돌을
+  // 고려하지 않았다(Phase 5 §1 잔여 항목, 나중에 붙이면 여기서 우선순위를 다시 봐야 함).
+  const absorbedByDefenderAbility = !!(effectiveMove.type && effectiveMove.type === defenderAbility?.absorbsType?.type);
+  // 부유: 방어측이 원래 없던 면역을 스스로 얻는다(bypassImmunity와 반대 방향). bypassImmunity가
+  // 이미 참이면(배짱류·검은철구) 이 면역은 뚫린 것으로 취급 — 위 두 경로가 이 필드보다 우선한다.
+  const grantsImmunity = !!(
+    effectiveMove.type &&
+    defenderAbility?.grantsImmunityToTypes?.includes(effectiveMove.type) &&
+    !bypassImmunity
+  );
+  // 프리즈드라이: 상대가 이 타입이면 상성표를 무시하고 강제로 이 배율을 쓴다. 단, 방어측이
+  // 스스로 얻은 완전 면역(absorbsType·grantsImmunityToTypes)이 이미 걸려있으면 면역이 우선이다
+  // — 저수 같은 특성을 가진 물타입 상대에게 프리즈드라이를 써도 여전히 무효화돼야 한다.
+  const typeEffectivenessOverride =
+    !absorbedByDefenderAbility &&
+    !grantsImmunity &&
+    effectiveMove.overridesTypeEffectivenessFor &&
+    defenderTypes.includes(effectiveMove.overridesTypeEffectivenessFor.type)
+      ? effectiveMove.overridesTypeEffectivenessFor.effectiveness
+      : undefined;
+
+  const typeEffectiveness = absorbedByDefenderAbility
+    ? 0
+    : grantsImmunity
+      ? 0
+      : typeEffectivenessOverride !== undefined
+        ? typeEffectivenessOverride
+        : effectiveMove.type
+          ? getEffectiveness(effectiveMove.type, defenderTypes, { bypassImmunity })
+          : 1;
 
   return {
     effectiveMove,
@@ -56,5 +99,6 @@ export function resolveMoveContext(
     abilityDefenseMultiplier,
     stabMultiplier,
     typeEffectiveness,
+    absorbedByDefenderAbility,
   };
 }
