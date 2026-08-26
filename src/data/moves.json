@@ -4102,7 +4102,8 @@
     "pp": 20,
     "priority": 0,
     "effect": "필드에 있는 모든 포켓몬의 능력 랭크 변화를 초기화한다.",
-    "makesContact": false
+    "makesContact": false,
+    "resetsAllStages": true
   },
   {
     "id": "기습",

@@ -504,6 +504,8 @@ export interface ActionLogEntry {
   abilityAbsorbedMoveType?: PokemonType;
   /** abilityAbsorbedMoveType을 무효화한 특성 이름 */
   abilityAbsorbAbilityName?: string;
+  /** 흑안개처럼 이 행동으로 양쪽의 능력 랭크 변화가 전부 초기화됐으면 true */
+  resetAllStages?: boolean;
 }
 
 /** 턴 종료 시 상태이상 데미지 로그 */
@@ -1264,6 +1266,16 @@ function resolveAction(
         userTypes: attacker.types,
       });
 
+  // 흑안개: 명중하면 양쪽의 5스탯 랭크 + 명중률/회피율 랭크를 전부 초기화한다. 급소율(critStage)은
+  // 본가에서 별개 축이라 건드리지 않는다. 자신/상대 구분이 의미 없는(둘 다 리셋되는) 유일한
+  // statChanges류 효과라 별도 필드로 분리했다.
+  if (effectiveMove.resetsAllStages) {
+    attacker.stages = { ...NEUTRAL_STAGES };
+    defender.stages = { ...NEUTRAL_STAGES };
+    attacker.accuracyStages = { ...NEUTRAL_ACCURACY_STAGES };
+    defender.accuracyStages = { ...NEUTRAL_ACCURACY_STAGES };
+  }
+
   let inflictedStatus: StatusConditionState["condition"] | undefined;
   if (!blockedByGoodAsGold && effectiveMove.inflictsStatus) {
     for (const effect of effectiveMove.inflictsStatus) {
@@ -1628,6 +1640,7 @@ function resolveAction(
     abilityDisableAbilityName,
     abilityAbsorbedMoveType,
     abilityAbsorbAbilityName,
+    resetAllStages: effectiveMove.resetsAllStages || undefined,
   };
 }
 

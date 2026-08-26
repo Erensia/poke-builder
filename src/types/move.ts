@@ -228,4 +228,10 @@ export interface Move {
    * 지녔으면 8턴. 급소 공격은 스크린을 무시한다(본가 규칙).
    */
   setsScreen?: "reflect" | "lightScreen";
+  /**
+   * 흑안개처럼 명중 시 양쪽(자신+상대)의 능력 랭크 변화를 전부 초기화하는 기술만 채운다.
+   * 5스탯(공격/방어/특공/특방/스피드)과 명중률/회피율 랭크까지 리셋하고, 급소율(critStage)은
+   * 본가에서 별개 축이라 건드리지 않는다.
+   */
+  resetsAllStages?: boolean;
 }

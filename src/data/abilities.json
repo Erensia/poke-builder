@@ -575,7 +575,11 @@
   {
     "id": "눈숨기",
     "name": "눈숨기",
-    "description": "싸라기눈(눈)이 내리는 동안 회피율이 20% 올라간다."
+    "description": "싸라기눈(눈)이 내리는 동안 회피율이 20% 올라간다.",
+    "weatherOpponentAccuracyMultiplier": {
+      "weather": "눈",
+      "multiplier": 0.8
+    }
   },
   {
     "id": "눈퍼뜨리기",

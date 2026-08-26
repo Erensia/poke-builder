@@ -629,6 +629,10 @@ export function BattleLogPage() {
                           {eunNeun(typeLabel(action.abilityAbsorbedMoveType))} 전혀 효과가 없었다!
                         </div>
                       )}
+                      {/* 흑안개 — 자신/상대 구분 없이 양쪽 다 초기화되는 유일한 랭크변화 효과라 전용 문구로 알려준다 */}
+                      {!action.blockedReason && action.resetAllStages && (
+                        <div className="battle-turn-line is-muted">양쪽의 능력 변화가 전부 원래대로 돌아갔다!</div>
+                      )}
                       {/* 발버둥 반동은 상대 데미지와 별개의 수치라 자기 줄로 분리 */}
                       {!action.blockedReason && action.move.id === STRUGGLE_MOVE.id && action.selfDamage > 0 && (
                         <div className="battle-turn-line is-muted">
