@@ -711,6 +711,12 @@ export interface ActionLogEntry {
   unburdenSelfAbilityName?: string;
   /** 곡예 — 이번 행동으로 상대의 도구가 사라져서 발동했으면 그 특성 이름 */
   unburdenOpponentAbilityName?: string;
+  /** 잠꼬대로 대신 발동시킨 기술 이름(잠꼬대 자신이 아니라 이 이름이 실제로 나간 기술) */
+  sleepTalkCalledMoveName?: string;
+  /** 변환자재로 자신의 타입이 이번 기술의 타입으로 바뀌었으면 그 타입 */
+  changedOwnTypeTo?: PokemonType;
+  /** changedOwnTypeTo를 발동시킨 특성 이름 */
+  changedOwnTypeAbilityName?: string;
 }
 
 /** 턴 종료 시 상태이상 데미지 로그 */
@@ -1049,6 +1055,25 @@ function resolveAction(
     }
   }
 
+  // 잠꼬대: 여기까지 왔다는 건 잠든 채로 이 기술을 실제로 선택했다는 뜻(usageCondition 게이트를
+  // 이미 통과) — 이 시점부터는 잠꼬대 자신 대신 자신이 배운 다른 기술 중 하나를 무작위로 대신
+  // 발동시킨다. PP는 잠꼬대 자신만 이미 위에서 소모했고, 대신 나가는 기술의 PP는 건드리지 않는다
+  // (본가와 동일). 이 아래로는 move가 그 대신 나간 기술을 가리키므로, 특성 배율/자속/타입상성/
+  // 우선도 등 이후의 모든 판정이 자동으로 그 기술 기준으로 이뤄진다.
+  let sleepTalkCalledMoveName: string | undefined;
+  if (move.callsRandomLearnedMove) {
+    const candidates = Object.keys(attacker.remainingPp)
+      .map((id) => getMove(id))
+      .filter((m): m is Move => !!m && m.id !== move.id && !m.chargeTurn && !m.usageCondition);
+    if (candidates.length === 0) {
+      // 배운 기술이 잠꼬대 하나뿐이거나 전부 제외 대상이면 대신 낼 기술이 없어 실패한다.
+      return blocked("usageCondition");
+    }
+    const chosen = candidates[Math.floor(random() * candidates.length)];
+    sleepTalkCalledMoveName = chosen.name;
+    move = chosen;
+  }
+
   // 서투름: 자기 자신의 도구 전투 효과가 무효화된다 — 실제로 지녔는지와 무관하게 이 시점부터는
   // 아예 안 지닌 것처럼 취급한다(메가스톤에 의한 폼 변화는 pokemonForm.ts의 별도 축이라 영향 없음).
   const attackerItem = attackerAbility?.disablesOwnItemEffects
@@ -1083,7 +1108,9 @@ function resolveAction(
   // 무효화한다 — 대타와 달리 데미지를 어디로도 흡수하지 않고 그냥 0으로 만든다(아래 canDealDamage).
   // 버티기(protectEffect: "endure")는 막는 게 아니라 applyEndurance에서 별도로 처리하므로 여기
   // 포함하지 않는다.
-  const blockedByProtect = defender.activeProtect?.effect === "block";
+  // 고스트다이브: "방어를 무시" = 방어류(protectEffect) 차단 자체를 뚫는다는 뜻(사용자 확인) — 실제
+  // 방어 실수치와는 무관해서 여기서 판정 자체를 건너뛴다(틈새포착이 스크린/대타를 뚫는 것과 같은 결).
+  const blockedByProtect = !move.bypassesProtect && defender.activeProtect?.effect === "block";
   const blockedByProtectMoveName = blockedByProtect ? defender.activeProtect?.moveName : undefined;
   const opponentEffectsBlocked = blockedByGoodAsGold || blockedBySubstitute || blockedByProtect;
 
@@ -1177,6 +1204,19 @@ function resolveAction(
     }
   }
 
+  // 변환자재: 위와 같은 이유(여기까지 왔다는 건 실제로 이 기술을 쓴다는 뜻)로, 명중 여부와 무관하게
+  // 자신의 타입이 이 기술의 타입으로 바뀐다(사용자 확인 — 실제로 타입이 바뀌어서 이후 턴 방어에도
+  // 반영된다). attacker.types를 그 자리에서 통째로 갈아치우는 것뿐이라 이후 이 값을 읽는 모든
+  // 곳(이번 턴의 자속 판정은 물론, 다음 턴 이 포켓몬이 방어측이 될 때 defender.types로 쓰이는 것
+  // 까지)에 자동으로 반영된다. 발버둥처럼 타입이 없는(null) 기술은 바뀌지 않는다(본가와 동일).
+  let changedOwnTypeTo: PokemonType | undefined;
+  let changedOwnTypeAbilityName: string | undefined;
+  if (attackerAbility?.changesUserTypeToMoveType && effectiveMove.type) {
+    attacker.types = [effectiveMove.type];
+    changedOwnTypeTo = effectiveMove.type;
+    changedOwnTypeAbilityName = attackerAbility.name;
+  }
+
   // 반짝가루(방어측 0.9배)·광각렌즈(공격측 1.1배)·포커스렌즈(공격측, 늦게 움직일 때 1.2배)·
   // 모래숨기(방어측, 날씨 조건부 0.8배)를 전부 한 배율로 곱한다.
   const weatherAccuracyBoost = defenderAbility?.weatherOpponentAccuracyMultiplier;
@@ -1187,9 +1227,13 @@ function resolveAction(
   // 날카로운눈: 공격측이 이 특성이면 상대의 회피율 상승분을 무시한다(원문 "상대의 회피율을
   // 무시하고 공격한다") — 다만 회피율이 마이너스인 경우(오히려 공격측에게 유리)는 그대로
   // 존중한다. 0 이하로 클램프하지 않고 min(evasion, 0)만 적용하면 두 조건을 동시에 만족한다.
+  // 성스러운칼은 원문이 방어/특방과 나란히 "회피율 랭크 변화를 무시"라고 못박아서 날카로운눈과
+  // 달리 방향 구분 없이 완전히 0으로 취급한다(천진식 전면 무시와 같은 결).
   const effectiveDefenderEvasion = attackerAbility?.ignoresOpponentEvasionBoost
     ? Math.min(defender.accuracyStages.evasion, 0)
-    : defender.accuracyStages.evasion;
+    : effectiveMove.ignoresDefenderStatStagesInDamage
+      ? 0
+      : defender.accuracyStages.evasion;
   const hitChance =
     // 노가드: 어느 한쪽이라도 지녔으면 이번 공격은 명중률/회피율과 무관하게 반드시 명중한다.
     attackerAbility?.alwaysHits || defenderAbility?.alwaysHits
@@ -1355,7 +1399,11 @@ function resolveAction(
     const contactIgnoresDefenseBoost =
       (effectiveMove.makesContact ?? false) &&
       attackerAbility?.contactIgnoresDefenseBoostAndGuaranteesMinDamageFraction !== undefined;
-    const baseDefenderStages = attackerAbility?.ignoresOpponentStatStagesInDamage ? NEUTRAL_STAGES : defender.stages;
+    // 성스러운칼: 천진(특성)과 정확히 같은 축이지만 기술 단위 효과라 여기서 같이 확인한다.
+    const baseDefenderStages =
+      attackerAbility?.ignoresOpponentStatStagesInDamage || effectiveMove.ignoresDefenderStatStagesInDamage
+        ? NEUTRAL_STAGES
+        : defender.stages;
     const defenderStagesForDamage =
       contactIgnoresDefenseBoost && baseDefenderStages[contactDefenseStat] > 0
         ? { ...baseDefenderStages, [contactDefenseStat]: 0 }
@@ -2220,6 +2268,9 @@ function resolveAction(
     stolenItemName,
     unburdenSelfAbilityName,
     unburdenOpponentAbilityName,
+    sleepTalkCalledMoveName,
+    changedOwnTypeTo,
+    changedOwnTypeAbilityName,
   };
 }
 

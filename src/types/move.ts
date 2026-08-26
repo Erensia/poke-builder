@@ -289,4 +289,27 @@ export interface Move {
    * 않는다 — moveContext.ts에서 면역 판정 다음에 확인한다.
    */
   overridesTypeEffectivenessFor?: { type: PokemonType; effectiveness: number };
+  /**
+   * 고스트다이브 전용. "상대의 방어를 무시하고 공격한다"는 원문은 방어 실수치가 아니라
+   * 방어류(방어/판별/버티기/킹실드, Move.protectEffect) 기술의 차단 자체를 뜻한다(사용자 확인) —
+   * 틈새포착(Ability.bypassesScreensAndSubstitute)이 스크린/대타를 무시하는 것과 같은 결의
+   * "방어류 무시" 축. 이 필드가 있으면 blockedByProtect 판정 자체를 건너뛰어 상대의 방어/판별/
+   * 버티기/킹실드에 막히지 않고 명중·데미지 계산까지 그대로 진행한다.
+   */
+  bypassesProtect?: boolean;
+  /**
+   * 성스러운칼 전용. 데미지 계산에서 상대(방어측)의 능력 랭크 변화(상승분·하락분 전부)를
+   * 무시한다 — Ability.ignoresOpponentStatStagesInDamage(천진)와 정확히 같은 축이지만 특성이
+   * 아니라 기술 단위 효과라는 점만 다르다(둘 중 하나만 있어도 발동, 중첩 시 자연히 무해).
+   */
+  ignoresDefenderStatStagesInDamage?: boolean;
+  /**
+   * 잠꼬대 전용. usageCondition: "sleep-only" 게이트를 통과한 뒤(=실제로 잠든 채 이 기술을
+   * 선택했다는 뜻), 이 기술 자신 대신 자신이 배운 다른 기술 중 하나를 무작위로 대신 발동시킨다
+   * (본가 규칙, 사용자 확인). 후보에서 제외되는 것: 잠꼬대 자신, 차지 기술(chargeTurn — 2턴짜리
+   * 기술을 대신 낼 수 없음), usageCondition이 있는 기술(코골기·속이기·아이언롤러·오로라베일·
+   * 기습처럼 별도 발동 조건이 있는 변화기·기술 — "일부 변화기 제외"에 해당). PP는 잠꼬대 자신만
+   * 이미 소모했고 대신 나가는 기술의 PP는 깎지 않는다(본가와 동일).
+   */
+  callsRandomLearnedMove?: boolean;
 }

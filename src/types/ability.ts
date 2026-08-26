@@ -308,4 +308,12 @@ export interface Ability {
    * 배틀 끝까지 유지되는 것과 같은 이유.
    */
   doublesSpeedOnItemLoss?: boolean;
+  /**
+   * 변환자재: 기술을 실제로 쓸 때마다(명중 여부·카테고리 무관, 타입이 없는 발버둥 등은 예외)
+   * 그 기술과 같은 타입으로 자신의 타입이 바뀐다(사용자 확인 — "배틀에 나올 때 단 한 번"이 아니라
+   * 기술을 낼 때마다 매번). BattleFighterState.types를 그 자리에서 실제로 갈아치우기 때문에,
+   * 이번 턴 자속 판정뿐 아니라 다음 턴 이 포켓몬이 방어측이 될 때(타입 상성 계산)까지 전부
+   * 새 타입이 반영된다.
+   */
+  changesUserTypeToMoveType?: boolean;
 }

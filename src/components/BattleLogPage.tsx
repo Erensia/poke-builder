@@ -545,6 +545,7 @@ export function BattleLogPage() {
                           기절 같은 "상태"는 아래에서 별도 줄로 분리한다. */}
                       <div className="battle-turn-line">
                         <strong>{actorName}</strong>의 {action.move.name}
+                        {action.sleepTalkCalledMoveName && " (잠꼬대로 냈다!)"}
                         {action.blockedReason === "usageCondition" && "!"}
                         {action.blockedReason === "moveRestricted" && "!"}
                         {action.blockedReason === "status" && action.blockedByStatus === undefined && " — 상태이상으로 행동 불가"}
@@ -660,6 +661,13 @@ export function BattleLogPage() {
                         )}
                         {!action.blockedReason && action.hit && action.unburdenOpponentAbilityName && (
                           <> · 상대의 {action.unburdenOpponentAbilityName} 발동! 상대의 스피드가 2배로 올랐다!</>
+                        )}
+                        {!action.blockedReason && action.changedOwnTypeTo && (
+                          <>
+                            {" "}
+                            · {action.changedOwnTypeAbilityName} 발동! 타입이 {action.changedOwnTypeTo}
+                            {roEuro(action.changedOwnTypeTo)} 바뀌었다!
+                          </>
                         )}
                       </div>
                       {/* 마비/잠듦/얼음으로 이번 턴 행동이 막혔으면(단순 "상태이상으로 행동 불가"가

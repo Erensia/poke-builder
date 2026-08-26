@@ -457,10 +457,11 @@
     "accuracy": 100,
     "pp": 12,
     "priority": 0,
-    "effect": "1턴째 숨어서 회피하고, 2턴째 상대의 방어를 무시하고 공격한다.",
+    "effect": "1턴째 숨어서 회피하고, 2턴째 상대의 방어(방어/판별/킹실드 등 방어류 기술)를 무시하고 공격한다.",
     "chargeTurn": true,
     "chargeHideType": "hidden",
-    "makesContact": true
+    "makesContact": true,
+    "bypassesProtect": true
   },
   {
     "id": "길동무",
@@ -1408,8 +1409,10 @@
     "accuracy": null,
     "pp": 12,
     "priority": 0,
-    "effect": "잠든 상태에서만 사용 가능. 배운 기술 중 하나를 무작위로 사용한다. (\"무작위로 다른 기술을 대신 사용\"하는 로직 자체가 엔진에 없어 usageCondition 태깅 보류 — 후속 작업)",
-    "makesContact": false
+    "effect": "잠든 상태에서만 사용 가능. 배운 기술 중 하나를 무작위로 사용한다.",
+    "makesContact": false,
+    "usageCondition": "sleep-only",
+    "callsRandomLearnedMove": true
   },
   {
     "id": "잠자기",
@@ -5619,9 +5622,10 @@
     "accuracy": 100,
     "pp": 16,
     "priority": 0,
-    "effect": "긴 뿔로 베어 공격한다. 상대의 방어·특수방어·회피율 랭크 변화를 무시하고 데미지를 준다. (랭크변화 무시 로직은 천진과 같은 축이라 아직 미구현 — 효과 텍스트만, Phase 5 §1 잔여 항목)",
+    "effect": "긴 뿔로 베어 공격한다. 상대의 방어·특수방어·회피율 랭크 변화를 무시하고 데미지를 준다.",
     "classification": ["베기"],
-    "makesContact": true
+    "makesContact": true,
+    "ignoresDefenderStatStagesInDamage": true
   },
   {
     "id": "킹실드",
