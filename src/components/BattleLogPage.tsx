@@ -109,6 +109,15 @@ function roEuro(name: string): "로" | "으로" {
   return code % 28 === 0 ? "로" : "으로";
 }
 
+/** "구애스카프를"/"압도적힘을"처럼 자음 받침 유무에 따라 "을"/"를" 조사를 자동 판별한다(매지션 강탈 로그용) */
+function eulReul(name: string): "을" | "를" {
+  const lastChar = name.at(-1);
+  if (!lastChar) return "를";
+  const code = lastChar.charCodeAt(0) - 0xac00;
+  if (code < 0 || code > 11171) return "를";
+  return code % 28 === 0 ? "를" : "을";
+}
+
 /**
  * 상태이상 3단계 문구(사용자 확정 텍스트): 걸렸을 때(onset) → 매턴 효과가 발동했을 때(trigger,
  * 독/맹독/화상은 데미지 틱, 마비/잠듦/얼음은 이번 턴 행동이 막혔다는 뜻) → 해제됐을 때(cure).
@@ -390,6 +399,9 @@ export function BattleLogPage() {
                       {fighter.substituteHp !== undefined && (
                         <span className="battle-status-tag is-volatile">대타 HP {fighter.substituteHp}</span>
                       )}
+                      {fighter.unburdenActive && (
+                        <span className="battle-status-tag is-volatile">곡예(스피드 2배)</span>
+                      )}
                     </div>
                   </div>
                   <div className="battle-hp-bar">
@@ -639,6 +651,15 @@ export function BattleLogPage() {
                         )}
                         {!action.blockedReason && action.hit && action.sheerForceAbilityName && (
                           <> · {action.sheerForceAbilityName} 발동! 부가 효과 대신 위력이 올랐다!</>
+                        )}
+                        {!action.blockedReason && action.hit && action.stolenItemName && (
+                          <> · 매지션 발동! 상대의 {action.stolenItemName}{eulReul(action.stolenItemName)} 빼앗았다!</>
+                        )}
+                        {!action.blockedReason && action.hit && action.unburdenSelfAbilityName && (
+                          <> · {action.unburdenSelfAbilityName} 발동! 스피드가 2배로 올랐다!</>
+                        )}
+                        {!action.blockedReason && action.hit && action.unburdenOpponentAbilityName && (
+                          <> · 상대의 {action.unburdenOpponentAbilityName} 발동! 상대의 스피드가 2배로 올랐다!</>
                         )}
                       </div>
                       {/* 마비/잠듦/얼음으로 이번 턴 행동이 막혔으면(단순 "상태이상으로 행동 불가"가

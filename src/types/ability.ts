@@ -285,4 +285,22 @@ export interface Ability {
    * 등)까지는 반영하지 않았다.
    */
   tradesSecondaryEffectForPower?: number;
+  /**
+   * 매지션: 데미지를 주는 기술로 상대를 실제로 맞혔을 때, 자신이 무도구 상태면 그 자리에서
+   * 상대가 지닌 도구를 빼앗는다(자신은 그 도구를 얻고, 상대는 무도구가 된다). 자신이 이미
+   * 도구를 지녔으면 발동하지 않는다(본가 규칙 — "자신이 도구를 갖고 있지 않으면"). 이 프로젝트의
+   * 파티 슬롯 원본(slot.item)은 그대로 두고, BattleFighterState.currentItemId(배틀 중 실제로
+   * 지닌 도구를 추적하는 런타임 필드)만 갈아치운다 — 도구 강탈은 파티 구성이 아니라 이 배틀
+   * 한정 상태 변화이기 때문. 매치업 페이지(1턴 스냅샷)는 도구 강탈이 일어날 "이전 턴"이 없는
+   * 구조라 적용하지 않는다.
+   */
+  stealsItemOnDamagingHit?: boolean;
+  /**
+   * 곡예: 지닌 도구가 소모되거나(나무열매 등 1회용 효과 발동) 매지션 등에게 빼앗겨 없어지는
+   * "그 순간" 발동해서, 이후 배틀이 끝날 때까지 스피드가 2배로 유지된다. 특성 자체엔 "상시
+   * 배율"이 아니라 "그 이후부터 계속"이라는 조건이 있어 정적 배율(weatherSpeedMultiplier 등)만
+   * 으로는 표현이 안 돼서, BattleFighterState.unburdenActive라는 별도 런타임 플래그로
+   * 한 번 켜지면 배틀 끝까지 유지되도록 추적한다(ownMoveTypeBoosts와 같은 패턴).
+   */
+  doublesSpeedOnItemLoss?: boolean;
 }

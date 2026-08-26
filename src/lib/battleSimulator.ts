@@ -180,6 +180,21 @@ export interface BattleFighterState {
   /** 나무열매(카리열매 등)처럼 대전 중 1회만 발동하는 지닌 도구를 이미 썼으면 true */
   itemConsumed?: boolean;
   /**
+   * 배틀 중 실제로 지닌 도구 id. slot.item(파티 원본, 절대 안 바뀜)과 분리된 런타임 상태로,
+   * 매지션(도구 강탈)·곡예(도구 상실 감지)가 도입되면서 "지금 이 순간 실제로 지닌 도구"를
+   * 표현할 축이 필요해 신설했다. createFighterState에서 slot.item으로 초기화되고, 이후
+   * 도구가 1회용 효과로 소모되거나(consumeItem 헬퍼) 매지션에게 빼앗기면 null이 된다.
+   * attackerItem/defenderItem 등 전투 중 도구 효과를 읽는 모든 지점은 slot.item이 아니라
+   * 이 필드를 기준으로 삼는다(단, 매치업 페이지의 1턴 스냅샷은 예외 — 이전 턴이 없으니
+   * slot.item을 그대로 쓴다).
+   */
+  currentItemId: string | null;
+  /**
+   * 곡예: 도구를 잃은 순간 한 번 켜지면 배틀이 끝날 때까지 계속 유지되는 플래그(ownMoveTypeBoosts와
+   * 같은 패턴) — 이후 스피드 계산에서 이 값이 true면 항상 2배를 곱한다.
+   */
+  unburdenActive?: boolean;
+  /**
    * 리플렉터(물리)/빛의장막(특수) — 이 포켓몬 쪽에 걸려있는 스크린과 각각의 남은 턴 수.
    * "아군이 받는 데미지 감소"라 1v1에서는 이 포켓몬 자신이 상대 공격을 맞을 때 적용된다.
    */
@@ -271,6 +286,7 @@ export function createFighterState(slot: EvaluatorSlot, moves: Move[]): BattleFi
     status: { ...NO_STATUS_CONDITION },
     volatile: { active: { ...NO_VOLATILE_CONDITIONS.active } },
     remainingPp: Object.fromEntries(moves.map((m) => [m.id, m.pp])),
+    currentItemId: slot.item ?? null,
     screens: {},
     ownMoveTypeBoosts: {},
     stanceChangeForms: pokemon.stanceChangeForms,
@@ -310,6 +326,17 @@ function hasSheerForceSecondaryEffect(move: Move): boolean {
   if (move.statChanges?.some((s) => s.target === "opponent")) return true;
   if (move.statChanges?.some((s) => s.target === "self" && (s.delta ?? 0) > 0)) return true;
   return false;
+}
+
+/**
+ * 1회용 도구(나무열매·하양허브 등)가 이번에 소모됐음을 기록한다. itemConsumed(같은 도구 재발동
+ * 방지)와 currentItemId(곡예가 "도구를 잃음"을 판정하는 기준)를 항상 같이 갱신해야 해서 헬퍼로
+ * 묶었다 — 둘 중 하나만 갱신하면 곡예가 오작동한다(예: itemConsumed만 세팅하면 나무열매를 쓴
+ * 뒤에도 currentItemId가 그대로 남아있어 곡예가 영영 발동하지 않는다).
+ */
+function consumeItem(fighter: BattleFighterState): void {
+  fighter.itemConsumed = true;
+  fighter.currentItemId = null;
 }
 
 /**
@@ -676,6 +703,12 @@ export interface ActionLogEntry {
   abilityAbsorbHealAmount?: number;
   /** 흑안개처럼 이 행동으로 양쪽의 능력 랭크 변화가 전부 초기화됐으면 true */
   resetAllStages?: boolean;
+  /** 매지션으로 이번 행동에서 상대에게 빼앗은 도구 이름 */
+  stolenItemName?: string;
+  /** 곡예 — 이번 행동으로 자신(행동 주체)의 도구가 사라져서 발동했으면 그 특성 이름 */
+  unburdenSelfAbilityName?: string;
+  /** 곡예 — 이번 행동으로 상대의 도구가 사라져서 발동했으면 그 특성 이름 */
+  unburdenOpponentAbilityName?: string;
 }
 
 /** 턴 종료 시 상태이상 데미지 로그 */
@@ -811,6 +844,11 @@ function resolveAction(
   const attackerBerriesBlocked = !!defenderAbility?.preventsOpponentBerries;
   const defenderBerriesBlocked = !!attackerAbility?.preventsOpponentBerries;
 
+  // 곡예: "도구를 잃은 순간" 발동 여부를 판정하려면 이번 행동 시작 시점의 currentItemId를
+  // 미리 기억해둬야 한다(행동 도중 나무열매 소모나 매지션 강탈로 값이 바뀔 수 있어서).
+  const attackerItemIdBeforeAction = attacker.currentItemId;
+  const defenderItemIdBeforeAction = defender.currentItemId;
+
   // PP 소모는 행동 여부와 무관하게 발생(단, 차지 기술 2턴째는 위에서 이미 스킵 처리)
   let leppaRestoredPpItemName: string | undefined;
   if (!releasingCharge && attacker.remainingPp[move.id] !== undefined) {
@@ -824,12 +862,12 @@ function resolveAction(
       !attackerAbility?.disablesOwnItemEffects &&
       !defenderBerriesBlocked
     ) {
-      const itemForPp = attacker.slot.item ? getItem(attacker.slot.item) : undefined;
+      const itemForPp = attacker.currentItemId ? getItem(attacker.currentItemId) : undefined;
       // 과사열매도 나무열매라 긴장감에 막힌다(위 조건에서 이미 확인) — restoresPpOnZero 자체가
       // 나무열매 전용 필드라 별도 태그 없이도 이 게이트 하나로 충분하다.
       if (itemForPp?.restoresPpOnZero) {
         attacker.remainingPp[move.id] = Math.min(move.pp, itemForPp.restoresPpOnZero);
-        attacker.itemConsumed = true;
+        consumeItem(attacker);
         leppaRestoredPpItemName = itemForPp.name;
       }
     }
@@ -1013,13 +1051,13 @@ function resolveAction(
   // 아예 안 지닌 것처럼 취급한다(메가스톤에 의한 폼 변화는 pokemonForm.ts의 별도 축이라 영향 없음).
   const attackerItem = attackerAbility?.disablesOwnItemEffects
     ? undefined
-    : attacker.slot.item
-      ? getItem(attacker.slot.item)
+    : attacker.currentItemId
+      ? getItem(attacker.currentItemId)
       : undefined;
   const defenderItem = defenderAbility?.disablesOwnItemEffects
     ? undefined
-    : defender.slot.item
-      ? getItem(defender.slot.item)
+    : defender.currentItemId
+      ? getItem(defender.currentItemId)
       : undefined;
 
   // 황금몸: 상대(공격측)가 변화기(카테고리 status)를 쓸 때, 그 기술이 "자신(=defender)을 직접
@@ -1294,7 +1332,7 @@ function resolveAction(
       defender.itemConsumed ?? false,
     );
     if (berryResult.consumed) {
-      defender.itemConsumed = true;
+      consumeItem(defender);
       berryReducedDamageItemName = defenderItem?.name;
     }
 
@@ -1364,7 +1402,7 @@ function resolveAction(
     if (result.survives) {
       defender.currentHp = 1;
       enduredItemName = defenderItem?.name;
-      if (result.consumes) defender.itemConsumed = true;
+      if (result.consumes) consumeItem(defender);
       return;
     }
     // 옹골참: 기합의띠와 조건은 같지만(최대 HP 상태) 소모되지 않아 매번 다시 판정한다.
@@ -1570,6 +1608,26 @@ function resolveAction(
     attacker.currentHp = Math.min(attacker.maxHp, attacker.currentHp + shellBellHealAmount);
   }
 
+  // 매지션: 데미지를 실제로 준(damage > 0) 공격이 명중했고, 자신이 무도구 상태(currentItemId
+  // 없음)면 그 자리에서 상대가 지닌 도구를 빼앗는다. 자신이 이미 도구를 지녔으면 발동하지
+  // 않고(본가 규칙), 상대도 무도구면 훔칠 게 없어 조용히 아무 일도 안 일어난다. 대타가 대신
+  // 맞았을 때는 상대의 "실제 소지품"과 무관한 인형에 닿은 것이므로 훔치지 않는다.
+  let stolenItemName: string | undefined;
+  if (
+    isDamaging &&
+    damage > 0 &&
+    !hitSubstitute &&
+    attackerAbility?.stealsItemOnDamagingHit &&
+    !attacker.currentItemId &&
+    defender.currentItemId
+  ) {
+    const stolenItem = getItem(defender.currentItemId);
+    stolenItemName = stolenItem?.name;
+    attacker.currentItemId = defender.currentItemId;
+    attacker.itemConsumed = false; // 새로 얻은 도구라 이전 소모 이력과 무관하게 다시 쓸 수 있다
+    defender.currentItemId = null;
+  }
+
   // 자폭류(대폭발 등): 명중했으면 반드시 데미지를 먼저 입힌 "다음" 사용자가 기절한다.
   // 순서가 중요하다 — 이 데미지로 상대가 이미 쓰러졌다면, 실제 게임처럼 "상대를 먼저 쓰러뜨린 뒤
   // 반동으로 자신도 쓰러진 것"으로 취급되어야 승자 판정(runTurn)이 이 행동의 주체를 승자로 잡는다.
@@ -1628,12 +1686,12 @@ function resolveAction(
   let restoredStatsOpponentItemName: string | undefined;
   if (shouldTriggerWhiteHerb(attackerItem, attacker.stages, attacker.itemConsumed ?? false)) {
     attacker.stages = clampStagesToNonNegative(attacker.stages);
-    attacker.itemConsumed = true;
+    consumeItem(attacker);
     restoredStatsSelfItemName = attackerItem?.name;
   }
   if (shouldTriggerWhiteHerb(defenderItem, defender.stages, defender.itemConsumed ?? false)) {
     defender.stages = clampStagesToNonNegative(defender.stages);
-    defender.itemConsumed = true;
+    consumeItem(defender);
     restoredStatsOpponentItemName = defenderItem?.name;
   }
 
@@ -1721,7 +1779,7 @@ function resolveAction(
     getStatusCureBerryResult(defenderItem, inflictedStatus, defender.itemConsumed ?? false)
   ) {
     defender.status = { ...NO_STATUS_CONDITION };
-    defender.itemConsumed = true;
+    consumeItem(defender);
     statusCureBerryItemName = defenderItem!.name;
     curedStatus = inflictedStatus;
     curedStatusTarget = "opponent";
@@ -1760,7 +1818,7 @@ function resolveAction(
         if (getConfusionCureBerryResult(targetItem, target.itemConsumed ?? false)) {
           target.volatile = { active: { ...target.volatile.active } };
           delete target.volatile.active.confusion;
-          target.itemConsumed = true;
+          consumeItem(target);
           statusCureBerryItemName = targetItem!.name;
           inflictedVolatile = undefined;
         }
@@ -1840,7 +1898,7 @@ function resolveAction(
     // 치료된다(본가 실제 상호작용 — 잠자기 자체가 낭비되지만 회복은 유효하다).
     if (!attackerBerriesBlocked && getStatusCureBerryResult(attackerItem, "sleep", attacker.itemConsumed ?? false)) {
       attacker.status = { ...NO_STATUS_CONDITION };
-      attacker.itemConsumed = true;
+      consumeItem(attacker);
       statusCureBerryItemName = attackerItem!.name;
       curedStatus = "sleep";
       curedStatusTarget = "self";
@@ -2030,7 +2088,7 @@ function resolveAction(
     );
     if (attackerBerryHealAmount > 0) {
       attacker.currentHp = Math.min(attacker.maxHp, attacker.currentHp + attackerBerryHealAmount);
-      attacker.itemConsumed = true;
+      consumeItem(attacker);
       attackerBerryHealItemName = attackerItem!.name;
     }
   }
@@ -2045,7 +2103,7 @@ function resolveAction(
     );
     if (defenderBerryHealAmount > 0) {
       defender.currentHp = Math.min(defender.maxHp, defender.currentHp + defenderBerryHealAmount);
-      defender.itemConsumed = true;
+      consumeItem(defender);
       defenderBerryHealItemName = defenderItem!.name;
     }
   }
@@ -2056,6 +2114,30 @@ function resolveAction(
   if (isDamaging && damage > 0 && isFainted(defender) && attackerAbility?.boostsStatOnKo) {
     const boost = attackerAbility.boostsStatOnKo;
     attacker.stages = applyStageDelta(attacker.stages, boost.stat, boost.delta);
+  }
+
+  // 곡예: 이번 행동 도중 도구가 있었다가(전) 없어졌으면(후 — 나무열매 소모든 매지션에게
+  // 강탈당했든 원인 무관) 그 즉시 한 번만 발동해서 배틀 끝까지 스피드 2배를 유지한다. 이미
+  // 발동했으면(unburdenActive) 다시 판정하지 않는다.
+  let unburdenSelfAbilityName: string | undefined;
+  if (
+    attackerAbility?.doublesSpeedOnItemLoss &&
+    !attacker.unburdenActive &&
+    attackerItemIdBeforeAction !== null &&
+    attacker.currentItemId === null
+  ) {
+    attacker.unburdenActive = true;
+    unburdenSelfAbilityName = attackerAbility.name;
+  }
+  let unburdenOpponentAbilityName: string | undefined;
+  if (
+    defenderAbility?.doublesSpeedOnItemLoss &&
+    !defender.unburdenActive &&
+    defenderItemIdBeforeAction !== null &&
+    defender.currentItemId === null
+  ) {
+    defender.unburdenActive = true;
+    unburdenOpponentAbilityName = defenderAbility.name;
   }
 
   return {
@@ -2133,6 +2215,9 @@ function resolveAction(
     abilityAbsorbAbilityName,
     abilityAbsorbHealAmount: abilityAbsorbHealAmount || undefined,
     resetAllStages: effectiveMove.resetsAllStages || undefined,
+    stolenItemName,
+    unburdenSelfAbilityName,
+    unburdenOpponentAbilityName,
   };
 }
 
@@ -2177,13 +2262,13 @@ export function runTurn(
   // 서투름: 구애스카프 등 스피드 관련 도구 효과도 예외 없이 무효화된다.
   const aItem = aAbilityForSpeed?.disablesOwnItemEffects
     ? undefined
-    : state.a.slot.item
-      ? getItem(state.a.slot.item)
+    : state.a.currentItemId
+      ? getItem(state.a.currentItemId)
       : undefined;
   const bItem = bAbilityForSpeed?.disablesOwnItemEffects
     ? undefined
-    : state.b.slot.item
-      ? getItem(state.b.slot.item)
+    : state.b.currentItemId
+      ? getItem(state.b.currentItemId)
       : undefined;
   // 엽록소·쓱쓱·모래헤치기: 날씨가 일치할 때만 곱해진다(그 외엔 1)
   const getWeatherSpeedMultiplier = (ability: Ability | undefined): number => {
@@ -2191,16 +2276,19 @@ export function runTurn(
     return boost && boost.weather === state.weather ? boost.multiplier : 1;
   };
   // 구애스카프(1.5)·검은철구(0.5) — 상태이상 배율과 별개로 곱해진다
+  // 곡예: 도구를 잃은 뒤로 배틀 끝까지 유지되는 2배 배율(unburdenActive)도 여기서 같이 곱한다.
   const speedA =
     state.a.realStats.spe *
     computeStatusSpeedMultiplier(state.a.status.condition) *
     getItemSpeedMultiplier(aItem) *
-    getWeatherSpeedMultiplier(aAbilityForSpeed);
+    getWeatherSpeedMultiplier(aAbilityForSpeed) *
+    (state.a.unburdenActive ? 2 : 1);
   const speedB =
     state.b.realStats.spe *
     computeStatusSpeedMultiplier(state.b.status.condition) *
     getItemSpeedMultiplier(bItem) *
-    getWeatherSpeedMultiplier(bAbilityForSpeed);
+    getWeatherSpeedMultiplier(bAbilityForSpeed) *
+    (state.b.unburdenActive ? 2 : 1);
 
   // 트릭룸 판정은 이번 턴이 시작된 시점(=아직 이번 턴 행동을 하나도 반영하지 않은 상태)의 값을
   // 쓴다 — 이번 턴에 트릭룸을 새로 걸어도 그 즉시 같은 턴의 순서 계산에는 영향을 주지 않는다
@@ -2279,8 +2367,8 @@ export function runTurn(
       const fighterAbilityForItem = fighter.effectiveAbilityId ? getAbility(fighter.effectiveAbilityId) : undefined;
       const fighterItem = fighterAbilityForItem?.disablesOwnItemEffects
         ? undefined
-        : fighter.slot.item
-          ? getItem(fighter.slot.item)
+        : fighter.currentItemId
+          ? getItem(fighter.currentItemId)
           : undefined;
       // 긴장감: 상대가 이 특성이면 이 포켓몬의 나무열매(자뭉열매/오랭열매 등)가 막힌다 —
       // 먹다남은음식은 나무열매가 아니라서 이 플래그와 무관하게 그대로 발동한다.
@@ -2364,8 +2452,8 @@ export function runTurn(
           const healerAbilityForItem = healer.effectiveAbilityId ? getAbility(healer.effectiveAbilityId) : undefined;
           const healerItem = healerAbilityForItem?.disablesOwnItemEffects
             ? undefined
-            : healer.slot.item
-              ? getItem(healer.slot.item)
+            : healer.currentItemId
+              ? getItem(healer.currentItemId)
               : undefined;
           const leechSeedHealAmount = Math.min(
             healer.maxHp - healer.currentHp,
@@ -2463,7 +2551,7 @@ export function runTurn(
         const berryHeal = getHpThresholdBerryHeal(fighterItem, fighter.currentHp, fighter.maxHp, fighter.itemConsumed ?? false);
         if (berryHeal > 0) {
           fighter.currentHp = Math.min(fighter.maxHp, fighter.currentHp + berryHeal);
-          fighter.itemConsumed = true;
+          consumeItem(fighter);
           endOfTurn.push({
             actor: key,
             damage: 0,

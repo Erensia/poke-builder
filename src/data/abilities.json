@@ -520,7 +520,8 @@
   {
     "id": "매지션",
     "name": "매지션",
-    "description": "기술을 맞힌 상대가 지닌 도구를 빼앗는다."
+    "description": "기술을 맞힌 상대가 지닌 도구를 빼앗는다. (자신이 이미 도구를 지녔으면 발동하지 않는다)",
+    "stealsItemOnDamagingHit": true
   },
   {
     "id": "괴력집게",
@@ -585,7 +586,8 @@
   {
     "id": "곡예",
     "name": "곡예",
-    "description": "장착한 도구가 소모되거나 없어지면 스피드가 2배로 상승한다."
+    "description": "장착한 도구가 소모되거나 없어지면 스피드가 2배로 상승한다. (한 번 발동하면 배틀이 끝날 때까지 유지된다)",
+    "doublesSpeedOnItemLoss": true
   },
   {
     "id": "철주먹",
