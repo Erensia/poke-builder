@@ -1,6 +1,7 @@
 import type { PokemonType } from "./pokemon-type";
 import type { MoveClassification, MoveCategory } from "./move";
 import type { WeatherKind } from "./weather";
+import type { FieldKind } from "./field";
 import type { BattleStatKey } from "./battleStats";
 import type { StatusCondition } from "./status";
 
@@ -215,4 +216,54 @@ export interface Ability {
    * "이 포켓몬을 겨냥한" 게 아니라서 영향받지 않는다.
    */
   blocksOpponentStatusMoveEffects?: boolean;
+  /**
+   * 위협: 배틀에 등장하면(=createBattleState 시점) 상대의 이 스탯을 즉시 낮춘다(위협: atk, -1).
+   * 가뭄류(setsWeather)와 같은 "등장 시 1회" 축이지만 날씨가 아니라 상대 랭크를 직접 건드리는
+   * 경우라 별도 필드로 분리했다. resolveEntryAbilityEffects에서 적용한다.
+   */
+  lowersOpponentStatOnEntry?: { stat: BattleStatKey; delta: number };
+  /** 일렉트릭메이커: 배틀에 등장하면 이 필드를 편다(이미 다른 필드가 있으면 실패). */
+  setsFieldOnEntry?: FieldKind;
+  /**
+   * 트레이스: 배틀에 등장하면 상대의 특성을 그대로 복사해 이후 자신의 effectiveAbilityId가
+   * 상대 것과 같아진다. 실제 게임처럼 일부 특성(다중특성·자기 자신 등)을 복사 제외하는 예외
+   * 목록은 없다 — 그런 특성을 복사해도 이 시뮬레이터에서는 대부분 조용히 아무 효과가 없다
+   * (예: 배틀스위치는 Pokemon.stanceChangeForms가 있어야 실제로 발동하는데, 특성만 복사해서는
+   * 그 데이터가 안 따라오므로 자연히 무해하다).
+   */
+  copiesOpponentAbilityOnEntry?: boolean;
+  /** 긴장감: 상대가 나무열매(도구)를 전혀 사용하지 못하게 한다. */
+  preventsOpponentBerries?: boolean;
+  /**
+   * 습기: 자신이나 상대 중 누구든 이 특성이 있으면, 자폭류 기술(Move.selfFaints)을 양쪽 다
+   * 사용할 수 없다(usageCondition과 같은 "시도 자체가 막힘" 축).
+   */
+  preventsSelfFaintMoves?: boolean;
+  /** 짖궂은마음: 자신이 쓰는 변화기(카테고리 status)의 우선도를 이 값만큼 올린다(사이코필드 차단 판정에도 반영). */
+  statusMovePriorityBoost?: number;
+  /** 틈새포착: 자신이 공격할 때 상대의 스크린(리플렉터/빛의장막)과 대타출동을 전부 무시한다. */
+  bypassesScreensAndSubstitute?: boolean;
+  /**
+   * 천진: 데미지 계산에서 상대의 능력 랭크 변화를 전부 무시한다 — 공격할 때는 상대(방어측)의
+   * 방어/특방 랭크를, 공격받을 때는 상대(공격측)의 공격/특공 랭크를 항상 0랭크로 취급한다.
+   * 원문("공격·방어 시 상대의 능력 랭크 변화를 무시")대로 등장 시 1회가 아니라 상시 발동 —
+   * 매 데미지 계산마다 이 특성을 가진 쪽 기준으로 상대 쪽 랭크만 무시한다.
+   */
+  ignoresOpponentStatStagesInDamage?: boolean;
+  /** 부자유친: 데미지를 준 공격 직후, 같은 기술로 이 배율만큼의 위력으로 추가타를 한 번 더 날린다. */
+  followUpHitPowerMultiplier?: number;
+  /**
+   * 관통드릴: 접촉기를 쓸 때 상대의 방어/특방 랭크 "상승분"을 무시하고(마이너스는 그대로 페널티로
+   * 적용 — 날카로운눈의 회피율 처리와 같은 패턴), 최종 데미지가 상대 최대 HP의 이 비율보다
+   * 낮으면 그 비율만큼으로 끌어올린다(최소 데미지 보장).
+   */
+  contactIgnoresDefenseBoostAndGuaranteesMinDamageFraction?: number;
+  /** 프레셔: 상대가 이 포켓몬을 대상으로 기술을 쓸 때마다 PP를 이 값만큼 추가로 더 소모시킨다. */
+  extraPpCostWhenTargeted?: number;
+  /**
+   * 서투름: 자신이 지닌 도구의 전투 효과(나무열매·초식보정·스크린지속 등 attackerItem/defenderItem
+   * 기반 전부)가 무효화된다. 메가스톤에 의한 폼 변화는 도구 "효과"가 아니라 별도 축(pokemonForm.ts)
+   * 이라 영향받지 않는다 — 실제 게임과 동일.
+   */
+  disablesOwnItemEffects?: boolean;
 }

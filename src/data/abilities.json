@@ -148,7 +148,8 @@
   {
     "id": "트레이스",
     "name": "트레이스",
-    "description": "배틀에 등장하면 상대 포켓몬과 같은 특성으로 바뀐다."
+    "description": "배틀에 등장하면 상대 포켓몬과 같은 특성으로 바뀐다.",
+    "copiesOpponentAbilityOnEntry": true
   },
   {
     "id": "텔레파시",
@@ -226,7 +227,8 @@
   {
     "id": "긴장감",
     "name": "긴장감",
-    "description": "배틀에 등장하면 상대가 나무열매를 사용하지 못하게 한다."
+    "description": "배틀에 등장하면 상대가 나무열매를 사용하지 못하게 한다.",
+    "preventsOpponentBerries": true
   },
   {
     "id": "불굴의마음",
@@ -273,7 +275,8 @@
   {
     "id": "습기",
     "name": "습기",
-    "description": "필드의 누구도 자폭·대폭발 같은 자폭기를 사용할 수 없게 한다."
+    "description": "필드의 누구도 자폭·대폭발 같은 자폭기를 사용할 수 없게 한다.",
+    "preventsSelfFaintMoves": true
   },
   {
     "id": "쓱쓱",
@@ -295,7 +298,8 @@
   {
     "id": "서투름",
     "name": "서투름",
-    "description": "지니고 있는 도구의 효과를 사용할 수 없게 된다."
+    "description": "지니고 있는 도구의 효과를 사용할 수 없게 된다.",
+    "disablesOwnItemEffects": true
   },
   {
     "id": "유연",
@@ -334,12 +338,14 @@
   {
     "id": "틈새포착",
     "name": "틈새포착",
-    "description": "상대의 벽(리플렉터 등)이나 대타출동을 무시하고 공격한다."
+    "description": "상대의 벽(리플렉터 등)이나 대타출동을 무시하고 공격한다.",
+    "bypassesScreensAndSubstitute": true
   },
   {
     "id": "짖궂은마음",
     "name": "짖궂은마음",
-    "description": "변화기술의 우선도가 +1이 된다."
+    "description": "변화기술의 우선도가 +1이 된다.",
+    "statusMovePriorityBoost": 1
   },
   {
     "id": "타오르는불꽃",
@@ -365,7 +371,15 @@
   {
     "id": "촉촉보이스",
     "name": "촉촉보이스",
-    "description": "노래하기·하이퍼보이스 등 모든 소리 기술이 물타입으로 바뀐다."
+    "description": "노래하기·하이퍼보이스 등 모든 소리 기술이 물타입으로 바뀐다.",
+    "modifiers": [
+      {
+        "scope": "offense",
+        "multiplier": 1,
+        "condition": { "moveClassificationIn": ["소리"] },
+        "overrideMoveType": "물"
+      }
+    ]
   },
   {
     "id": "변환자재",
@@ -375,7 +389,8 @@
   {
     "id": "천진",
     "name": "천진",
-    "description": "공격·방어 시 상대의 능력 랭크 변화를 무시하고 데미지를 계산한다."
+    "description": "공격·방어 시 상대의 능력 랭크 변화를 무시하고 데미지를 계산한다.",
+    "ignoresOpponentStatStagesInDamage": true
   },
   {
     "id": "부유",
@@ -406,7 +421,8 @@
   {
     "id": "프레셔",
     "name": "프레셔",
-    "description": "상대가 이 포켓몬에게 기술을 사용하면 PP를 1 추가로 소모시킨다."
+    "description": "상대가 이 포켓몬에게 기술을 사용하면 PP를 1 추가로 소모시킨다.",
+    "extraPpCostWhenTargeted": 1
   },
   {
     "id": "미러아머",
@@ -436,7 +452,8 @@
   {
     "id": "일렉트릭메이커",
     "name": "일렉트릭메이커",
-    "description": "배틀에 등장하면 일렉트릭필드를 5턴 동안 펼친다."
+    "description": "배틀에 등장하면 일렉트릭필드를 5턴 동안 펼친다.",
+    "setsFieldOnEntry": "일렉트릭필드"
   },
   {
     "id": "노가드",
@@ -497,7 +514,8 @@
   {
     "id": "부자유친",
     "name": "부자유친",
-    "description": "공격 기술을 사용한 후 위력 0.25배로 한 번 더 공격한다."
+    "description": "공격 기술을 사용한 후 위력 0.25배로 한 번 더 공격한다.",
+    "followUpHitPowerMultiplier": 0.25
   },
   {
     "id": "매지션",
@@ -513,7 +531,8 @@
   {
     "id": "위협",
     "name": "위협",
-    "description": "배틀에 등장하면 상대방의 공격을 1랭크 낮춘다."
+    "description": "배틀에 등장하면 상대방의 공격을 1랭크 낮춘다.",
+    "lowersOpponentStatOnEntry": { "stat": "atk", "delta": -1 }
   },
   {
     "id": "우격다짐",
@@ -523,7 +542,14 @@
   {
     "id": "천하장사",
     "name": "천하장사",
-    "description": "물리 기술의 위력이 2배가 된다."
+    "description": "물리 기술의 위력이 2배가 된다.",
+    "modifiers": [
+      {
+        "scope": "offense",
+        "multiplier": 2,
+        "condition": { "moveCategoryIn": ["physical"] }
+      }
+    ]
   },
   {
     "id": "탈피",
@@ -551,7 +577,8 @@
   {
     "id": "관통드릴",
     "name": "관통드릴",
-    "description": "접촉 기술을 사용하면 상대의 방어 효과를 무시하고 최소 1/4의 데미지를 입힐 수 있다."
+    "description": "접촉 기술을 사용하면 상대의 방어 효과를 무시하고 최소 1/4의 데미지를 입힐 수 있다.",
+    "contactIgnoresDefenseBoostAndGuaranteesMinDamageFraction": 0.25
   },
   {
     "id": "곡예",
