@@ -18,6 +18,12 @@ interface PartySlotCardProps {
   onPickNature: () => void;
   onPickPoints: () => void;
   onToggleGender: () => void;
+  /** 저장된 샘플(빌드)이 하나라도 있는지 — Phase 6 §1-3, 없으면 버튼 자체를 숨긴다 */
+  hasSamples: boolean;
+  /** 이 슬롯을 이름 붙여 샘플로 저장 */
+  onSaveAsSample: () => void;
+  /** 저장된 샘플 목록에서 이 슬롯에 불러올 것을 고르는 모달 열기 */
+  onOpenSamplePicker: () => void;
 }
 
 export function PartySlotCard({
@@ -31,18 +37,28 @@ export function PartySlotCard({
   onPickNature,
   onPickPoints,
   onToggleGender,
+  hasSamples,
+  onSaveAsSample,
+  onOpenSamplePicker,
 }: PartySlotCardProps) {
   const pokemon = slot ? getPokemon(slot.pokemonId) : undefined;
 
   if (!pokemon) {
     return (
-      <button type="button" className="party-slot party-slot-empty" onClick={onPickPokemon}>
+      <div className="party-slot party-slot-empty">
         <span className="party-slot-num">{index + 1}</span>
-        <span className="party-slot-plus" aria-hidden="true">
-          +
-        </span>
-        <span className="party-slot-empty-label">포켓몬 선택</span>
-      </button>
+        <button type="button" className="party-slot-empty-main" onClick={onPickPokemon}>
+          <span className="party-slot-plus" aria-hidden="true">
+            +
+          </span>
+          <span className="party-slot-empty-label">포켓몬 선택</span>
+        </button>
+        {hasSamples && (
+          <button type="button" className="party-slot-sample-link" onClick={onOpenSamplePicker}>
+            저장된 샘플에서 불러오기
+          </button>
+        )}
+      </div>
     );
   }
 
@@ -58,6 +74,15 @@ export function PartySlotCard({
   return (
     <div className="party-slot party-slot-filled">
       <span className="party-slot-num">{index + 1}</span>
+      <button
+        type="button"
+        className="party-slot-save-sample"
+        onClick={onSaveAsSample}
+        aria-label="이 빌드를 샘플로 저장"
+        title="이 빌드를 샘플로 저장"
+      >
+        💾
+      </button>
       <button type="button" className="party-slot-clear" onClick={onClearPokemon} aria-label="슬롯 비우기">
         ✕
       </button>

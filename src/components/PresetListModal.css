@@ -1,0 +1,112 @@
+.preset-save-row {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.8rem;
+}
+
+.preset-save-input {
+  flex: 1;
+  padding: 0.55rem 0.75rem;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 0.85rem;
+}
+
+.preset-save-input:focus {
+  outline: none;
+  border-color: var(--violet);
+}
+
+.preset-save-button {
+  border: none;
+  background: var(--gradient);
+  color: #fff;
+  font-weight: 600;
+  font-size: 0.82rem;
+  padding: 0 1rem;
+  border-radius: 10px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.preset-save-button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.preset-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.preset-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  padding: 0.55rem 0.7rem;
+  border-radius: 10px;
+}
+
+.preset-item-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.preset-item-name {
+  font-weight: 600;
+  font-size: 0.88rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.preset-item-meta {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+}
+
+.preset-item-actions {
+  display: flex;
+  gap: 0.3rem;
+  flex-shrink: 0;
+}
+
+.preset-item-actions button {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  font-size: 0.72rem;
+  font-weight: 500;
+  padding: 0.3rem 0.55rem;
+  border-radius: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.preset-item-actions button:hover {
+  border-color: var(--violet);
+  color: var(--violet);
+}
+
+.preset-item-actions button.is-danger:hover {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.preset-list-empty {
+  padding: 1rem;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}

@@ -6,8 +6,12 @@ import { AbilityPickerModal } from "./AbilityPickerModal";
 import { ItemPickerModal } from "./ItemPickerModal";
 import { NaturePickerModal } from "./NaturePickerModal";
 import { PointsEditorModal } from "./PointsEditorModal";
+import { PartyPresetsModal } from "./PartyPresetsModal";
+import { SlotPresetsModal } from "./SlotPresetsModal";
 import { TypeCoverageSummary } from "./TypeCoverageSummary";
 import { useParty } from "../hooks/useParty";
+import { usePartyPresets } from "../hooks/usePartyPresets";
+import { useSlotPresets } from "../hooks/useSlotPresets";
 import { getPokemon } from "../lib/data";
 import { getEffectiveForm } from "../lib/pokemonForm";
 import "./PartyBoard.css";
@@ -19,6 +23,7 @@ type PickerState =
   | { kind: "item"; slotIndex: number }
   | { kind: "nature"; slotIndex: number }
   | { kind: "points"; slotIndex: number }
+  | { kind: "slotPresets"; slotIndex: number }
   | null;
 
 export function PartyBoard() {
@@ -34,8 +39,22 @@ export function PartyBoard() {
     setPoint,
     stepPoint,
     resetParty,
+    loadSlots,
+    loadSlot,
   } = useParty();
+  const partyPresets = usePartyPresets();
+  const slotPresets = useSlotPresets();
   const [picker, setPicker] = useState<PickerState>(null);
+  const [showPartyPresets, setShowPartyPresets] = useState(false);
+
+  function handleSaveSlotAsSample(index: number) {
+    const slot = slots[index];
+    if (!slot) return;
+    const pokemon = getPokemon(slot.pokemonId);
+    const name = window.prompt("이 빌드를 저장할 이름을 입력하세요.", pokemon?.name ?? "");
+    if (name === null) return;
+    slotPresets.savePreset(name, slot);
+  }
 
   const filledCount = slots.filter((s) => s !== null).length;
 
@@ -56,6 +75,13 @@ export function PartyBoard() {
         <div className="party-board-header-right">
           <span className="party-board-count">{filledCount} / 6</span>
           <span className="party-board-autosave">브라우저에 자동 저장됨</span>
+          <button
+            type="button"
+            className="party-board-reset"
+            onClick={() => setShowPartyPresets(true)}
+          >
+            저장된 파티
+          </button>
           <button
             type="button"
             className="party-board-reset"
@@ -80,6 +106,9 @@ export function PartyBoard() {
             onPickItem={() => setPicker({ kind: "item", slotIndex: i })}
             onPickNature={() => setPicker({ kind: "nature", slotIndex: i })}
             onPickPoints={() => setPicker({ kind: "points", slotIndex: i })}
+            hasSamples={slotPresets.presets.length > 0}
+            onSaveAsSample={() => handleSaveSlotAsSample(i)}
+            onOpenSamplePicker={() => setPicker({ kind: "slotPresets", slotIndex: i })}
             onToggleGender={() => toggleGender(i)}
           />
         ))}
@@ -202,6 +231,28 @@ export function PartyBoard() {
             />
           );
         })()}
+
+      {picker?.kind === "slotPresets" && (
+        <SlotPresetsModal
+          presets={slotPresets.presets}
+          slotIsFilled={slots[picker.slotIndex] !== null}
+          onClose={() => setPicker(null)}
+          onLoad={(preset) => loadSlot(picker.slotIndex, preset.slot)}
+          onRename={slotPresets.renamePreset}
+          onDelete={slotPresets.deletePreset}
+        />
+      )}
+
+      {showPartyPresets && (
+        <PartyPresetsModal
+          presets={partyPresets.presets}
+          onClose={() => setShowPartyPresets(false)}
+          onSaveCurrent={(name) => partyPresets.savePreset(name, slots)}
+          onLoad={(preset) => loadSlots(preset.slots)}
+          onRename={partyPresets.renamePreset}
+          onDelete={partyPresets.deletePreset}
+        />
+      )}
     </section>
   );
 }

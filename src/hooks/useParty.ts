@@ -45,6 +45,20 @@ export function useParty() {
     setSlots(EMPTY_SLOTS);
   }
 
+  /** 파티 프리셋 불러오기(Phase 6 §1-2) — 현재 편성 6슬롯을 통째로 덮어쓴다 */
+  function loadSlots(nextSlots: PartySlots) {
+    setSlots(nextSlots);
+  }
+
+  /** 샘플(빌드) 프리셋 불러오기(Phase 6 §1-3) — 슬롯 하나만 통째로 덮어쓴다 */
+  function loadSlot(index: number, slot: PartySlot) {
+    setSlots((prev) => {
+      const next = [...prev] as PartySlots;
+      next[index] = slot;
+      return next;
+    });
+  }
+
   function setPokemon(index: number, pokemonId: string) {
     setSlots((prev) => {
       const next = [...prev] as PartySlots;
@@ -172,5 +186,7 @@ export function useParty() {
     setPoint,
     stepPoint,
     resetParty,
+    loadSlots,
+    loadSlot,
   };
 }
