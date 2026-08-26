@@ -918,10 +918,11 @@ function resolveAction(
     if (restrictionBlockedKind) return blocked("moveRestricted", 0, { moveRestrictionKind: restrictionBlockedKind });
   }
 
-  // 2-1) 사이코필드: 우선도 +1 이상인 기술로 상대를 노리면 그 기술 자체가 실패한다.
-  // 짖궂은마음으로 변화기 우선도가 올라간 경우도 반영해야 해서 원본 우선도가 아니라
-  // 특성 보정을 더한 실제 우선도로 판정한다.
-  if (isPriorityMoveBlockedByField(state.field, move.priority + getAbilityPriorityBoost(move, attackerAbility))) {
+  // 2-1) 사이코필드: 우선도 +1 이상인 기술이 "상대를 겨냥"하면 그 기술 자체가 실패한다.
+  // 짖궂은마음으로 변화기 우선도가 올라간 경우도 반영해야 해서 원본 우선도가 아니라 특성
+  // 보정을 더한 실제 우선도로 판정한다 — 단, 순풍·리플렉터·빛의장막처럼 상대를 겨냥하지 않는
+  // 변화기는 우선도가 올라가 있어도 막히지 않는다(isOpponentTargetingMove가 그 축을 가른다).
+  if (isPriorityMoveBlockedByField(state.field, move.priority + getAbilityPriorityBoost(move, attackerAbility), move)) {
     return blocked("psychicFieldPriority");
   }
 

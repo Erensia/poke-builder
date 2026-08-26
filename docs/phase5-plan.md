@@ -196,6 +196,7 @@ abilities.json은 처음 발견 당시(라이츄 추가 시점) 54개였지만 �
 **습기**: "등장 시 발동"이 아니라 "필드에 있는 동안 상시 적용되는 사용 조건"이라 엔트리 훅 대신 기존 `usageCondition` 판정과 같은 자리(0번)에 `Ability.preventsSelfFaintMoves` 체크를 추가했다. 자신·상대 어느 쪽이 가졌든 `move.selfFaints` 기술 자체가 실패 처리된다.
 
 **짖궂은마음**: `abilityModifiers.ts`에 `getAbilityPriorityBoost(move, ability)` 신설(필드의 `getFieldAdjustedPriority`와 같은 델타 패턴). `runTurn`의 턴 순서 계산과 `resolveAction`의 사이코필드 우선도 차단 판정 둘 다에 반영 — 짖궂은마음으로 우선도가 올라간 변화기도 사이코필드에 막혀야 하기 때문.
+- **수정(사용자 지적, 2026-08-26)**: 위 구현이 "우선도 +1 이상이면 무조건 막힌다"로만 짜여있었는데, 실제로는 사이코필드가 "상대를 겨냥하는" 우선도 기술만 막고 순풍·리플렉터·빛의장막처럼 자신/필드 전역에만 적용되는 변화기는(우선도가 짖궂은마음으로 올라가 있어도) 막지 않는다. `fieldEffects.ts`에 `isOpponentTargetingMove(move)`를 신설해 `inflictsStatus`·`inflictsVolatile(target:"opponent")`·`statChanges(target:"opponent")`·`setsLeechSeed`·`setsDisable`·`setsEncore`·`curesStatus(target:"opponent")`·`healsTarget:"opponent"` 중 하나라도 있거나 카테고리가 `status`가 아니면(데미지 기술은 항상 상대를 노림) "상대를 겨냥함"으로 판정하고, `isPriorityMoveBlockedByField`가 이 판정까지 같이 확인하도록 시그니처를 확장했다. 리플렉터(자기 대상)는 사이코필드에서도 정상 발동, 도발(상대 겨냥)은 정상 차단되는 것까지 스모크 테스트로 확인.
 
 **틈새포착**: `Ability.bypassesScreensAndSubstitute` 신설. 기존 대타출동의 `blockedBySubstitute` 조건에 `&& !attackerAbility?.bypassesScreensAndSubstitute`를 추가하고, 스크린 반감 배율 계산에도 같은 조건을 얹어 리플렉터/빛의장막을 무시하도록 확장 — 새 인프라 없이 §1에서 이미 만든 두 축에 조건만 추가하면 끝났다.
 

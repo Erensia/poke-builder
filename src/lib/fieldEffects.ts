@@ -43,9 +43,32 @@ export function isConfusionBlockedByField(field: FieldKind | undefined): boolean
   return field === "미스트필드";
 }
 
-/** 사이코필드: 우선도 +1 이상인 기술이 상대를 노리면 그 기술 자체가 실패한다 */
-export function isPriorityMoveBlockedByField(field: FieldKind | undefined, priority: number): boolean {
-  return field === "사이코필드" && priority >= 1;
+/**
+ * 이 기술이 "상대(방어측)를 향한" 효과를 하나라도 가졌는지. 사이코필드 우선도 차단이 정확히
+ * 이 축으로 갈린다 — 순풍/리플렉터/빛의장막처럼 자신(또는 필드 전역)에게만 적용되는 기술은
+ * 우선도가 올라가 있어도(짖궂은마음 등) 사이코필드에 막히지 않는다(사용자 확인). 데미지 기술은
+ * 항상 상대를 노리므로 카테고리만으로 먼저 걸러진다.
+ */
+function isOpponentTargetingMove(move: Move): boolean {
+  if (move.category !== "status") return true;
+  if (move.inflictsStatus && move.inflictsStatus.length > 0) return true; // 이 스키마에서 대상은 항상 상대
+  if (move.inflictsVolatile?.some((v) => v.target === "opponent")) return true;
+  if (move.statChanges?.some((s) => s.target === "opponent")) return true;
+  if (move.setsLeechSeed) return true;
+  if (move.setsDisable || move.setsEncore) return true;
+  if (move.curesStatus?.target === "opponent") return true;
+  if (move.healsTarget === "opponent") return true;
+  return false;
+}
+
+/**
+ * 사이코필드: 우선도 +1 이상인 기술이 상대를 노리면 그 기술 자체가 실패한다. 짖궂은마음처럼
+ * 특성으로 우선도가 올라간 변화기라도, 그 기술 자체가 상대를 겨냥하지 않으면(순풍·리플렉터·
+ * 빛의장막 등 자신/필드 전역 효과) 막히지 않는다(사용자 확인 — Phase 5 §4-3에서 우선도만 보고
+ * 막던 걸 정정).
+ */
+export function isPriorityMoveBlockedByField(field: FieldKind | undefined, priority: number, move: Move): boolean {
+  return field === "사이코필드" && priority >= 1 && isOpponentTargetingMove(move);
 }
 
 /** 그래스필드일 때 턴 종료 시 최대 HP의 1/16을 회복한다 */
