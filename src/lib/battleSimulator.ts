@@ -183,7 +183,7 @@ export interface BattleFighterState {
    * 리플렉터(물리)/빛의장막(특수) — 이 포켓몬 쪽에 걸려있는 스크린과 각각의 남은 턴 수.
    * "아군이 받는 데미지 감소"라 1v1에서는 이 포켓몬 자신이 상대 공격을 맞을 때 적용된다.
    */
-  screens: Partial<Record<"reflect" | "lightScreen", number>>;
+  screens: Partial<Record<"reflect" | "lightScreen" | "auroraVeil", number>>;
   /**
    * 타오르는불꽃처럼 "이 타입 기술을 무효화한 이후로 자신이 쓰는 그 타입 기술 위력이 오른다"는
    * 특성이 실제로 발동한 적 있으면 그 배수가 채워진다(교체가 없는 1v1이라 배틀 끝까지 유지).
@@ -547,7 +547,7 @@ export interface ActionLogEntry {
   /** 이 행동으로 날씨가 바뀌었으면(비바라기 등) 그 날씨. 실패라는 개념이 없어 항상 성공 시 채워진다 */
   setWeather?: WeatherKind;
   /** 이 행동으로 리플렉터/빛의장막이 자신 쪽에 새로 걸렸으면 채워진다 */
-  setScreen?: "reflect" | "lightScreen";
+  setScreen?: "reflect" | "lightScreen" | "auroraVeil";
   /** 리플렉터/빛의장막을 썼지만 이미 같은 스크린이 걸려있어서 실패했으면 true */
   screenSetFailed?: boolean;
   /**
@@ -608,6 +608,8 @@ export interface ActionLogEntry {
   setEncoreMoveName?: string;
   /** 앙코르를 썼지만 상대가 아직 기술을 안 썼거나 이미 걸려있어서 실패했으면 true */
   encoreSetFailed?: boolean;
+  /** 파워트릭으로 자신의 두 실수치를 맞바꿨으면 그 기술 이름 */
+  swappedStatsMoveName?: string;
   /** 이 행동(상대를 공격)으로 상대의 대타가 이번 타격에 깨졌으면 true */
   substituteBroke?: boolean;
   /** 이 행동의 데미지가 상대의 대타로 흡수됐으면(=본체 HP는 그대로) true */
@@ -727,7 +729,7 @@ export interface TurnResult {
   /** 이번 턴에 날씨가 지속시간을 다 채우고 사라졌으면 true */
   weatherExpired?: boolean;
   /** 이번 턴에 사라진 스크린(리플렉터/빛의장막) 목록 — 양쪽에 동시에 걸려있을 수 있어 배열 */
-  expiredScreens: { actor: FighterKey; screen: "reflect" | "lightScreen" }[];
+  expiredScreens: { actor: FighterKey; screen: "reflect" | "lightScreen" | "auroraVeil" }[];
 }
 
 function isFainted(fighter: BattleFighterState): boolean {
@@ -837,6 +839,10 @@ function resolveAction(
   }
   // 아이언롤러: 활성화된 필드가 하나도 없으면 실패한다(본가 규칙)
   if (move.usageCondition === "field-required" && !state.field) {
+    return blocked("usageCondition");
+  }
+  // 오로라베일: 지정된 날씨(눈)가 아니면 실패한다
+  if (move.usageCondition === "weather-required" && state.weather !== move.requiresWeather) {
     return blocked("usageCondition");
   }
   // 기습: 상대보다 먼저 움직이지 않으면(movesSecond) 실패, 상대가 이번 턴 고른 기술이
@@ -1229,14 +1235,15 @@ function resolveAction(
       berryReducedDamageItemName = defenderItem?.name;
     }
 
-    // 리플렉터(물리)/빛의장막(특수): 방어측 자기 스크린이 걸려있으면 데미지 반감. 급소는
-    // 스크린을 무시한다(본가 규칙) — bulkMultiplier는 나눗셈이라 2를 곱하면 절반이 된다.
-    // 틈새포착이면 스크린 자체를 아예 무시한다(급소 판정과 별개로 항상 1배).
+    // 리플렉터(물리)/빛의장막(특수)/오로라베일(물리·특수 둘 다): 방어측 자기 스크린이 걸려있으면
+    // 데미지 반감. 급소는 스크린을 무시한다(본가 규칙) — bulkMultiplier는 나눗셈이라 2를 곱하면
+    // 절반이 된다. 틈새포착이면 스크린 자체를 아예 무시한다(급소 판정과 별개로 항상 1배).
+    // 오로라베일은 카테고리 전용 스크린과 별개 축이라 둘 다 걸려있으면 곱으로 중첩된다.
     const screenType = effectiveMove.category === "physical" ? "reflect" : "lightScreen";
-    const screenMultiplier =
-      !attackerAbility?.bypassesScreensAndSubstitute && !critical && defender.screens[screenType] !== undefined
-        ? 2
-        : 1;
+    const screenBypassed = !!attackerAbility?.bypassesScreensAndSubstitute || critical;
+    const categoryScreenActive = !screenBypassed && defender.screens[screenType] !== undefined;
+    const auroraVeilActive = !screenBypassed && defender.screens.auroraVeil !== undefined;
+    const screenMultiplier = (categoryScreenActive ? 2 : 1) * (auroraVeilActive ? 2 : 1);
 
     // 관통드릴: 접촉기일 때만 상대 방어/특방 랭크의 "상승분"을 무시한다(날카로운눈의 회피율
     // 처리와 같은 패턴 — 마이너스 랭크는 그대로 페널티로 받는다). 천진(전부 무시)과 겹치면
@@ -1849,6 +1856,16 @@ function resolveAction(
     }
   }
 
+  // 파워트릭: 명중 시(항상 자기 자신 대상) 두 실수치를 그 자리에서 맞바꾼다. 킬가르도
+  // 배틀스위치가 폼 전환 시 realStats를 직접 교체하는 것과 같은 패턴이라 재계산이 필요 없다.
+  let swappedStatsMoveName: string | undefined;
+  if (effectiveMove.swapsOwnStats) {
+    const [statA, statB] = effectiveMove.swapsOwnStats;
+    const valueA = attacker.realStats[statA];
+    attacker.realStats = { ...attacker.realStats, [statA]: attacker.realStats[statB], [statB]: valueA };
+    swappedStatsMoveName = effectiveMove.name;
+  }
+
   // 방어류(방어/판별/버티기/킹실드): 연속 성공 횟수(protectStreak)에 따라 성공 확률이
   // (1/3)^streak로 줄어든다. 성공하면 streak를 늘리고 이번 턴 activeProtect를 세운다.
   // 실패하면 streak를 0으로 리셋한다. 방어류가 아닌 다른 기술을 실제로 썼을 때도(여기 도달했다는
@@ -2022,6 +2039,7 @@ function resolveAction(
     disableSetFailed,
     setEncoreMoveName,
     encoreSetFailed,
+    swappedStatsMoveName,
     substituteBroke,
     hitSubstitute,
     protectSucceeded,
@@ -2426,10 +2444,10 @@ export function runTurn(
   }
 
   // 리플렉터/빛의장막은 필드/날씨와 달리 "양쪽 다 따로" 걸릴 수 있어 각자 카운트다운한다.
-  const expiredScreens: { actor: FighterKey; screen: "reflect" | "lightScreen" }[] = [];
+  const expiredScreens: { actor: FighterKey; screen: "reflect" | "lightScreen" | "auroraVeil" }[] = [];
   for (const key of (["a", "b"] as const)) {
     const fighter = state[key];
-    for (const screenType of ["reflect", "lightScreen"] as const) {
+    for (const screenType of ["reflect", "lightScreen", "auroraVeil"] as const) {
       const remaining = fighter.screens[screenType];
       if (remaining === undefined) continue;
       const next = remaining - 1;

@@ -5566,8 +5566,11 @@
     "accuracy": null,
     "pp": 20,
     "priority": 0,
-    "effect": "5턴 동안 오로라 베일을 펼쳐 상대로부터 받는 물리·특수공격 데미지를 절반으로 줄인다. 싸라기눈(눈) 상태일 때만 사용할 수 있다(사용조건·양쪽 카테고리 동시경감 로직은 아직 미구현 — 효과 텍스트만).",
-    "makesContact": false
+    "effect": "5턴 동안 오로라 베일을 펼쳐 상대로부터 받는 물리·특수공격 데미지를 절반으로 줄인다. 싸라기눈(눈) 상태일 때만 사용할 수 있다.",
+    "makesContact": false,
+    "setsScreen": "auroraVeil",
+    "usageCondition": "weather-required",
+    "requiresWeather": "눈"
   },
   {
     "id": "프리즈드라이",
@@ -5578,8 +5581,9 @@
     "accuracy": 100,
     "pp": 20,
     "priority": 0,
-    "effect": "물타입 포켓몬에게는 상성과 무관하게 효과가 굉장하다(타입 상성 오버라이드는 아직 미구현 — 효과 텍스트만). Champions에서는 얼음 상태이상 부여 효과가 삭제됨.",
-    "makesContact": false
+    "effect": "물타입 포켓몬에게는 상성과 무관하게 효과가 굉장하다. Champions에서는 얼음 상태이상 부여 효과가 삭제됨.",
+    "makesContact": false,
+    "overridesTypeEffectivenessFor": { "type": "물", "effectiveness": 2 }
   },
   {
     "id": "골드러시",
@@ -5642,8 +5646,9 @@
     "accuracy": null,
     "pp": 12,
     "priority": 0,
-    "effect": "초능력으로 자신의 공격과 방어 수치를 서로 맞바꾼다. (스탯 교환 로직 미구현 — 효과 텍스트만)",
-    "makesContact": false
+    "effect": "초능력으로 자신의 공격과 방어 수치를 서로 맞바꾼다.",
+    "makesContact": false,
+    "swapsOwnStats": ["atk", "def"]
   },
   {
     "id": "물수리검",

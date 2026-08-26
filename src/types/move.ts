@@ -115,10 +115,18 @@ export interface Move {
    * "field-required"(아이언롤러 — 활성화된 필드가 하나도 없으면 실패),
    * "opponent-damaging-move-only"(기습 — 상대가 이번 턴 데미지 기술(물리/특수)을 선택하지 않았거나,
    * 자신이 상대보다 늦게 움직이면 실패. 두 조건 모두 "동시 비공개 선택" 특성상 행동 실행 시점에만
-   * 판정 가능해 UI에서 사전 경고를 줄 수 없다).
+   * 판정 가능해 UI에서 사전 경고를 줄 수 없다),
+   * "weather-required"(오로라베일 — 현재 날씨가 requiresWeather와 다르면 실패).
    * 조건을 안 채우면 battleSimulator가 blockedReason: "usageCondition"으로 실패시킨다.
    */
-  usageCondition?: "sleep-only" | "first-turn-only" | "field-required" | "opponent-damaging-move-only";
+  usageCondition?:
+    | "sleep-only"
+    | "first-turn-only"
+    | "field-required"
+    | "opponent-damaging-move-only"
+    | "weather-required";
+  /** usageCondition: "weather-required"일 때만 의미 있음 — 이 날씨가 아니면 사용 자체가 실패한다(오로라베일=눈) */
+  requiresWeather?: WeatherKind;
   /**
    * 그래스슬라이더 전용. 이 필드가 활성 상태면 기술의 우선도가 delta만큼 오른다(그 외 상황엔
    * priority 값 그대로). 사이코필드의 "우선도 기술 차단"과는 필드가 서로 배타적이라(동시에
@@ -223,11 +231,11 @@ export interface Move {
    */
   setsWeather?: WeatherKind;
   /**
-   * 리플렉터(물리 반감)·빛의장막(특수 반감)처럼 자신 쪽에 5턴짜리 데미지 경감 스크린을 치는
-   * 기술만 채운다. 이미 같은 스크린이 걸려있으면 실패(필드/트릭룸과 같은 패턴). 빛의점토를
-   * 지녔으면 8턴. 급소 공격은 스크린을 무시한다(본가 규칙).
+   * 리플렉터(물리 반감)·빛의장막(특수 반감)·오로라베일(물리·특수 둘 다 반감, "auroraVeil")처럼
+   * 자신 쪽에 5턴짜리 데미지 경감 스크린을 치는 기술만 채운다. 이미 같은 스크린이 걸려있으면
+   * 실패(필드/트릭룸과 같은 패턴). 빛의점토를 지녔으면 8턴. 급소 공격은 스크린을 무시한다(본가 규칙).
    */
-  setsScreen?: "reflect" | "lightScreen";
+  setsScreen?: "reflect" | "lightScreen" | "auroraVeil";
   /**
    * 흑안개처럼 명중 시 양쪽(자신+상대)의 능력 랭크 변화를 전부 초기화하는 기술만 채운다.
    * 5스탯(공격/방어/특공/특방/스피드)과 명중률/회피율 랭크까지 리셋하고, 급소율(critStage)은
@@ -267,4 +275,18 @@ export interface Move {
    * 추가로 거는 랭크변화(공격 -1). 접촉기가 아니면 막았어도 이 효과는 붙지 않는다.
    */
   protectContactPenalty?: { stat: BattleStatKey; delta: number };
+  /**
+   * 파워트릭 전용. 명중 시(항상 자기 자신 대상) 이 두 스탯의 실수치를 그 자리에서 서로 맞바꾼다
+   * (파워트릭=["atk","def"]). 노력치/성격 보정이 이미 반영된 BattleFighterState.realStats를
+   * 직접 스왑하는 것뿐이라 별도 재계산이 필요 없다 — 킬가르도 배틀스위치가 폼 전환 시
+   * realStats를 직접 교체하는 것과 같은 패턴.
+   */
+  swapsOwnStats?: [BattleStatKey, BattleStatKey];
+  /**
+   * 프리즈드라이 전용. 상대가 이 타입이면 통상 상성표를 무시하고 타입 상성 배율을 이 값으로
+   * 강제 오버라이드한다(프리즈드라이=물타입 상대에게 2배). 방어측이 타입 면역을 이미 스스로
+   * 얻은 경우(absorbsType·grantsImmunityToTypes)엔 면역이 우선이라 이 오버라이드는 적용되지
+   * 않는다 — moveContext.ts에서 면역 판정 다음에 확인한다.
+   */
+  overridesTypeEffectivenessFor?: { type: PokemonType; effectiveness: number };
 }

@@ -64,7 +64,7 @@ const VOLATILE_LABELS = {
 /** 액션 로그 한 줄 안에 "OO 발동!"으로 뭉뚱그리기보다 전용 문구를 따로 쓰는 volatile들 */
 const VOLATILES_WITH_DEDICATED_LOG_LINE = new Set(["drowsy", "wish"]);
 
-const SCREEN_LABELS = { reflect: "리플렉터", lightScreen: "빛의장막" } as const;
+const SCREEN_LABELS = { reflect: "리플렉터", lightScreen: "빛의장막", auroraVeil: "오로라베일" } as const;
 
 /**
  * 날씨/필드가 적용 중인지 배경색으로 알 수 있게 해달라는 요청 반영 — 날씨는 강화하는 타입 색(비=물,
@@ -380,7 +380,7 @@ export function BattleLogPage() {
                           </span>
                         );
                       })}
-                      {(Object.keys(fighter.screens) as ("reflect" | "lightScreen")[])
+                      {(Object.keys(fighter.screens) as ("reflect" | "lightScreen" | "auroraVeil")[])
                         .filter((s) => fighter.screens[s] !== undefined)
                         .map((s) => (
                           <span key={s} className="battle-status-tag is-volatile">
@@ -430,6 +430,8 @@ export function BattleLogPage() {
                         const firstTurnConditionUnmet =
                           move.usageCondition === "first-turn-only" && battleState.turnNumber !== 0;
                         const fieldConditionUnmet = move.usageCondition === "field-required" && !battleState.field;
+                        const weatherConditionUnmet =
+                          move.usageCondition === "weather-required" && battleState.weather !== move.requiresWeather;
                         // 기습은 상대가 이번 턴 뭘 낼지(동시 비공개 선택이라) 미리 알 수 없어 다른
                         // usageCondition처럼 "지금 조건 충족 여부"를 판정할 수 없다 — 매번 고정 안내만 띄운다.
                         const suckerPunchHint = move.usageCondition === "opponent-damaging-move-only";
@@ -454,7 +456,9 @@ export function BattleLogPage() {
                                   ? "등장 후 첫 턴에만 사용 가능 — 지금 쓰면 실패해요"
                                   : fieldConditionUnmet
                                     ? "필드가 있을 때만 사용 가능 — 지금 쓰면 실패해요"
-                                    : suckerPunchHint
+                                    : weatherConditionUnmet
+                                      ? `${move.requiresWeather} 날씨일 때만 사용 가능 — 지금 쓰면 실패해요`
+                                      : suckerPunchHint
                                       ? "상대보다 먼저 움직이면서, 상대가 데미지 기술을 낼 때만 성공해요"
                                       : choiceLocked
                                       ? "구애스카프 때문에 이 기술은 지금 선택할 수 없어요"
@@ -629,6 +633,9 @@ export function BattleLogPage() {
                         )}
                         {!action.blockedReason && action.hit && action.encoreSetFailed && (
                           <> · 상대가 아직 기술을 안 썼거나 이미 걸려있어 실패!</>
+                        )}
+                        {!action.blockedReason && action.hit && action.swappedStatsMoveName && (
+                          <> · 공격과 방어 수치가 서로 바뀌었다!</>
                         )}
                       </div>
                       {/* 마비/잠듦/얼음으로 이번 턴 행동이 막혔으면(단순 "상태이상으로 행동 불가"가

@@ -72,13 +72,26 @@ export function resolveMoveContext(
     defenderAbility?.grantsImmunityToTypes?.includes(effectiveMove.type) &&
     !bypassImmunity
   );
+  // 프리즈드라이: 상대가 이 타입이면 상성표를 무시하고 강제로 이 배율을 쓴다. 단, 방어측이
+  // 스스로 얻은 완전 면역(absorbsType·grantsImmunityToTypes)이 이미 걸려있으면 면역이 우선이다
+  // — 저수 같은 특성을 가진 물타입 상대에게 프리즈드라이를 써도 여전히 무효화돼야 한다.
+  const typeEffectivenessOverride =
+    !absorbedByDefenderAbility &&
+    !grantsImmunity &&
+    effectiveMove.overridesTypeEffectivenessFor &&
+    defenderTypes.includes(effectiveMove.overridesTypeEffectivenessFor.type)
+      ? effectiveMove.overridesTypeEffectivenessFor.effectiveness
+      : undefined;
+
   const typeEffectiveness = absorbedByDefenderAbility
     ? 0
     : grantsImmunity
       ? 0
-      : effectiveMove.type
-        ? getEffectiveness(effectiveMove.type, defenderTypes, { bypassImmunity })
-        : 1;
+      : typeEffectivenessOverride !== undefined
+        ? typeEffectivenessOverride
+        : effectiveMove.type
+          ? getEffectiveness(effectiveMove.type, defenderTypes, { bypassImmunity })
+          : 1;
 
   return {
     effectiveMove,
