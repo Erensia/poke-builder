@@ -53,6 +53,13 @@ export const NO_STATUS_CONDITION: StatusConditionState = { condition: null, turn
  *    회복량이 1.3배가 된다(itemEffects.getDrainHealMultiplier).
  *  - leechSeed(씨뿌리기): 걸린 쪽은 매 턴 종료 시 최대 HP 1/8을 잃고, 상대가 그만큼(+큰뿌리
  *    소지 시 1.3배) 회복한다. ingrain/aquaRing과 마찬가지로 턴 카운터 없이 배틀 끝까지 유지.
+ *  - taunt(도발): 3턴 동안 변화기(카테고리 status)를 선택할 수 없다. 매 턴 이 포켓몬이 행동을
+ *    시도하는 시점(resolveAction)에 지속 턴수가 1씩 줄어든다.
+ *  - disable(사슬묶기): 4턴 동안 걸린 시점의 "상대가 바로 직전에 쓴 기술" 하나만 선택할 수
+ *    없다(VolatileConditionEntry.moveId에 그 기술 id를 저장). 사용자 제공 자료에 정확한
+ *    지속시간이 없어 본가 기준값(4턴)을 그대로 썼다.
+ *  - encore(앙코르): 3턴 동안 걸린 시점의 "상대가 바로 직전에 쓴 기술"만 강제로 반복해야 한다
+ *    (disable과 정반대 방향 — moveId에 강제할 기술 id를 저장). 지속시간도 본가 기준값(3턴).
  */
 export type VolatileCondition =
   | "flinch"
@@ -62,7 +69,10 @@ export type VolatileCondition =
   | "wish"
   | "ingrain"
   | "aquaRing"
-  | "leechSeed";
+  | "leechSeed"
+  | "taunt"
+  | "disable"
+  | "encore";
 
 /** 기술이 상대(또는 자신)에게 행동방해 효과를 걸 때 쓰는 정보 */
 export interface VolatileInflictEffect {
@@ -75,6 +85,8 @@ export interface VolatileInflictEffect {
 export interface VolatileConditionEntry {
   /** 이번 판정 이후 몇 턴 더 남았는지. 0 이하가 되면 제거된다 */
   turnsRemaining: number;
+  /** 사슬묶기(막힌 기술)·앙코르(강제된 기술) 전용 — 대상 기술 id. 그 외 volatile은 사용하지 않는다 */
+  moveId?: string;
 }
 
 /** 배틀 중 한 포켓몬이 실제로 걸려있는 행동방해 효과들. 여러 개가 동시에 active일 수 있다 */

@@ -2967,8 +2967,9 @@
     "accuracy": 100,
     "pp": 8,
     "priority": 0,
-    "effect": "상대가 방금 사용한 기술만 반복해서 사용하게 만든다.",
-    "makesContact": false
+    "effect": "상대가 방금 사용한 기술만 3턴간 반복해서 사용하게 만든다. 상대가 아직 기술을 쓴 적이 없으면 실패한다.",
+    "makesContact": false,
+    "setsEncore": true
   },
   {
     "id": "전기자석파",
@@ -3240,7 +3241,8 @@
     "pp": 20,
     "priority": 0,
     "effect": "상대를 화나게 한다. 3턴 동안 상대는 데미지를 주는 기술밖에 쓸 수 없게 된다.",
-    "makesContact": false
+    "makesContact": false,
+    "inflictsVolatile": [{ "volatile": "taunt", "target": "opponent" }]
   },
   {
     "id": "독가루",
@@ -3746,8 +3748,9 @@
     "accuracy": 100,
     "pp": 20,
     "priority": 0,
-    "effect": "상대의 움직임을 막아 바로 전에 쓴 기술을 잠시 동안 사용할 수 없게 만든다.",
-    "makesContact": false
+    "effect": "상대의 움직임을 막아 바로 전에 쓴 기술을 4턴간 사용할 수 없게 만든다. 상대가 아직 기술을 쓴 적이 없으면 실패한다.",
+    "makesContact": false,
+    "setsDisable": true
   },
   {
     "id": "사이드체인지",

@@ -499,7 +499,8 @@ export type ActionBlockReason =
   | "recharge"
   | "confusion"
   | "psychicFieldPriority"
-  | "usageCondition";
+  | "usageCondition"
+  | "moveRestricted";
 
 /** 한 번의 기술 사용 결과 로그 */
 export interface ActionLogEntry {
@@ -509,6 +510,8 @@ export interface ActionLogEntry {
   blockedReason?: ActionBlockReason;
   /** blockedReason이 "status"일 때, 정확히 어떤 상태이상 때문인지(마비/잠듦/얼음) — UI가 "몸이 저려서"/"쿨쿨 잠들어"/"얼어 버려서" 문구를 골라 쓰는 데 필요 */
   blockedByStatus?: StatusConditionState["condition"];
+  /** blockedReason이 "moveRestricted"일 때, 도발/사슬묶기/앙코르 중 무엇 때문에 막혔는지 */
+  moveRestrictionKind?: "taunt" | "disable" | "encore";
   /** 회피/빗나감 여부. 필중기는 항상 true. blockedReason이 있으면 의미 없음 */
   hit: boolean;
   critical: boolean;
@@ -597,6 +600,14 @@ export interface ActionLogEntry {
   setSubstitute?: boolean;
   /** 대타출동을 썼지만 이미 대타가 있거나 HP가 부족해서 실패했으면 true */
   substituteSetFailed?: boolean;
+  /** 사슬묶기로 상대의 이 기술이 봉인됐으면 그 기술 이름 */
+  setDisabledMoveName?: string;
+  /** 사슬묶기를 썼지만 상대가 아직 기술을 안 썼거나 이미 걸려있어서 실패했으면 true */
+  disableSetFailed?: boolean;
+  /** 앙코르로 상대가 이 기술만 반복하게 됐으면 그 기술 이름 */
+  setEncoreMoveName?: string;
+  /** 앙코르를 썼지만 상대가 아직 기술을 안 썼거나 이미 걸려있어서 실패했으면 true */
+  encoreSetFailed?: boolean;
   /** 이 행동(상대를 공격)으로 상대의 대타가 이번 타격에 깨졌으면 true */
   substituteBroke?: boolean;
   /** 이 행동의 데미지가 상대의 대타로 흡수됐으면(=본체 HP는 그대로) true */
@@ -881,6 +892,30 @@ function resolveAction(
   if (hasVolatile(attacker.volatile, "recharge")) {
     attacker.volatile = consumeVolatileTurn(attacker.volatile, "recharge");
     return blocked("recharge");
+  }
+
+  // 2-0) 도발/사슬묶기/앙코르: 이번 턴 고른 기술이 제약을 어기면 실패한다. 차지 기술 2턴째
+  // (releasingCharge)는 지난 턴에 이미 확정된 선택이라 이 판정에서 제외한다. 지속 턴수는
+  // 막혔는지 여부와 무관하게 전부 이 시점에 1씩 줄어든다(자기 차례마다 한 번씩만 판정되므로
+  // 자연히 턴당 1회 소모) — 여러 제약이 동시에 걸려있어도 전부 소모시킨 뒤 첫 번째로 걸린
+  // 이유(도발 > 사슬묶기 > 앙코르 순)만 대표로 보고한다.
+  if (!releasingCharge) {
+    let restrictionBlockedKind: "taunt" | "disable" | "encore" | undefined;
+    if (hasVolatile(attacker.volatile, "taunt")) {
+      if (move.category === "status") restrictionBlockedKind = "taunt";
+      attacker.volatile = consumeVolatileTurn(attacker.volatile, "taunt");
+    }
+    const disableEntry = attacker.volatile.active.disable;
+    if (disableEntry) {
+      if (disableEntry.moveId === move.id) restrictionBlockedKind ??= "disable";
+      attacker.volatile = consumeVolatileTurn(attacker.volatile, "disable");
+    }
+    const encoreEntry = attacker.volatile.active.encore;
+    if (encoreEntry) {
+      if (encoreEntry.moveId !== move.id) restrictionBlockedKind ??= "encore";
+      attacker.volatile = consumeVolatileTurn(attacker.volatile, "encore");
+    }
+    if (restrictionBlockedKind) return blocked("moveRestricted", 0, { moveRestrictionKind: restrictionBlockedKind });
   }
 
   // 2-1) 사이코필드: 우선도 +1 이상인 기술로 상대를 노리면 그 기술 자체가 실패한다.
@@ -1787,6 +1822,32 @@ function resolveAction(
     }
   }
 
+  // 사슬묶기: 상대가 "바로 직전에 쓴 기술"(defender.lastMoveId) 하나를 4턴간 봉인한다.
+  // 상대가 아직 아무 기술도 안 썼거나(등장 직후) 이미 disable이 걸려있으면 실패한다.
+  let setDisabledMoveName: string | undefined;
+  let disableSetFailed = false;
+  if (effectiveMove.setsDisable) {
+    if (!defender.lastMoveId || hasVolatile(defender.volatile, "disable")) {
+      disableSetFailed = true;
+    } else {
+      defender.volatile = inflictVolatile(defender.volatile, "disable", random, defender.lastMoveId);
+      setDisabledMoveName = getMove(defender.lastMoveId)?.name;
+    }
+  }
+
+  // 앙코르: 상대가 "바로 직전에 쓴 기술"만 3턴간 강제로 반복하게 만든다(사슬묶기의 반대 방향).
+  // 마찬가지로 상대가 아직 아무 기술도 안 썼거나 이미 encore가 걸려있으면 실패한다.
+  let setEncoreMoveName: string | undefined;
+  let encoreSetFailed = false;
+  if (effectiveMove.setsEncore) {
+    if (!defender.lastMoveId || hasVolatile(defender.volatile, "encore")) {
+      encoreSetFailed = true;
+    } else {
+      defender.volatile = inflictVolatile(defender.volatile, "encore", random, defender.lastMoveId);
+      setEncoreMoveName = getMove(defender.lastMoveId)?.name;
+    }
+  }
+
   // 방어류(방어/판별/버티기/킹실드): 연속 성공 횟수(protectStreak)에 따라 성공 확률이
   // (1/3)^streak로 줄어든다. 성공하면 streak를 늘리고 이번 턴 activeProtect를 세운다.
   // 실패하면 streak를 0으로 리셋한다. 방어류가 아닌 다른 기술을 실제로 썼을 때도(여기 도달했다는
@@ -1956,6 +2017,10 @@ function resolveAction(
     leechSeedSetFailed,
     setSubstitute: substituteSetFailed ? undefined : effectiveMove.setsSubstitute,
     substituteSetFailed,
+    setDisabledMoveName,
+    disableSetFailed,
+    setEncoreMoveName,
+    encoreSetFailed,
     substituteBroke,
     hitSubstitute,
     protectSucceeded,

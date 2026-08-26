@@ -241,6 +241,18 @@ export interface Move {
    */
   setsSubstitute?: boolean;
   /**
+   * 사슬묶기 전용. 명중 시 상대가 "바로 직전에 쓴 기술"(defender.lastMoveId) 하나를 대상으로
+   * 지정해 그 기술만 사용 불가로 만든다("disable" volatile). 상대가 아직 아무 기술도 쓴 적이
+   * 없으면(lastMoveId 없음) 또는 이미 disable이 걸려 있으면 실패한다.
+   */
+  setsDisable?: boolean;
+  /**
+   * 앙코르 전용. 명중 시 상대가 "바로 직전에 쓴 기술"(defender.lastMoveId)만 강제로 반복하게
+   * 만든다("encore" volatile, disable과 정반대 방향). 상대가 아직 아무 기술도 쓴 적이 없으면
+   * 또는 이미 encore가 걸려 있으면 실패한다.
+   */
+  setsEncore?: boolean;
+  /**
    * 방어/판별/버티기/킹실드(=방어류) 공통 태그. 이 필드가 있는 기술은 전부 같은 계열로 묶여
    * 연속 성공 횟수(BattleFighterState.protectStreak)를 공유한다 — 성공할 때마다 다음 시도의
    * 성공 확률이 (1/3)^streak로 줄어들고, 계열이 아닌 다른 기술을 쓰거나 실패하면 0으로 리셋된다.

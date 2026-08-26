@@ -56,6 +56,9 @@ const VOLATILE_LABELS = {
   ingrain: "뿌리박기",
   aquaRing: "아쿠아링",
   leechSeed: "씨앗",
+  taunt: "도발",
+  disable: "사슬묶기",
+  encore: "앙코르",
 } as const;
 
 /** 액션 로그 한 줄 안에 "OO 발동!"으로 뭉뚱그리기보다 전용 문구를 따로 쓰는 volatile들 */
@@ -180,6 +183,31 @@ export function BattleLogPage() {
     return null;
   }
 
+  /**
+   * 도발/사슬묶기/앙코르: 이 쪽이 지금 이 기술을 고르면 왜 안 되는지(있다면) 문구로 돌려준다.
+   * 구애스카프(choiceLockedMoveId)와 달리 판정 엔진(battleSimulator)의 volatile 상태를 그대로
+   * 읽는다 — 로그를 다시 훑을 필요 없이 battleState에 이미 반영돼있다.
+   */
+  function moveRestrictionMessage(side: Side, moveId: string): string | null {
+    if (!battleState) return null;
+    const fighter = battleState[side];
+    const pokemonName = pokemonOf(side)?.name ?? "포켓몬";
+    if (fighter.volatile.active.taunt && getMove(moveId)?.category === "status") {
+      return `${pokemonName}${eunNeun(pokemonName)} 도발에 걸려 변화기를 사용할 수 없어요.`;
+    }
+    const disableEntry = fighter.volatile.active.disable;
+    if (disableEntry && disableEntry.moveId === moveId) {
+      const disabledName = getMove(moveId)?.name ?? "그 기술";
+      return `${disabledName}${eunNeun(disabledName)} 사슬묶기에 걸려 사용할 수 없어요.`;
+    }
+    const encoreEntry = fighter.volatile.active.encore;
+    if (encoreEntry?.moveId && encoreEntry.moveId !== moveId) {
+      const forcedName = getMove(encoreEntry.moveId)?.name ?? "그 기술";
+      return `${pokemonName}${eunNeun(pokemonName)} 앙코르 때문에 ${forcedName}만 사용할 수 있어요.`;
+    }
+    return null;
+  }
+
   const canStart =
     setup.a.slot !== null &&
     setup.b.slot !== null &&
@@ -225,6 +253,12 @@ export function BattleLogPage() {
         const lockedMoveName = getMove(locked)?.name ?? "그 기술";
         const pokemonName = pokemonOf(side)?.name ?? "포켓몬";
         setLockWarning(`${pokemonName}${eunNeun(pokemonName)} 구애스카프 때문에 ${lockedMoveName}만 사용할 수 있어요.`);
+        return;
+      }
+      // 도발/사슬묶기/앙코르도 같은 방식으로 확인 — 선택 자체는 막지 않고 진행만 경고로 저지한다.
+      const restriction = chosen ? moveRestrictionMessage(side, chosen) : null;
+      if (restriction) {
+        setLockWarning(restriction);
         return;
       }
     }
@@ -334,11 +368,18 @@ export function BattleLogPage() {
                       {fighter.status.condition && (
                         <span className="battle-status-tag is-major">{STATUS_LABELS[fighter.status.condition]}</span>
                       )}
-                      {(Object.keys(fighter.volatile.active) as (keyof typeof VOLATILE_LABELS)[]).map((v) => (
-                        <span key={v} className="battle-status-tag is-volatile">
-                          {VOLATILE_LABELS[v]}
-                        </span>
-                      ))}
+                      {(Object.keys(fighter.volatile.active) as (keyof typeof VOLATILE_LABELS)[]).map((v) => {
+                        // 사슬묶기/앙코르는 대상 기술 이름까지 같이 보여줘야 어떤 기술이
+                        // 막혔는지/강제됐는지 알 수 있다.
+                        const moveId = fighter.volatile.active[v]?.moveId;
+                        const moveName = moveId ? getMove(moveId)?.name : undefined;
+                        return (
+                          <span key={v} className="battle-status-tag is-volatile">
+                            {VOLATILE_LABELS[v]}
+                            {moveName && `(${moveName})`}
+                          </span>
+                        );
+                      })}
                       {(Object.keys(fighter.screens) as ("reflect" | "lightScreen")[])
                         .filter((s) => fighter.screens[s] !== undefined)
                         .map((s) => (
@@ -393,6 +434,7 @@ export function BattleLogPage() {
                         // usageCondition처럼 "지금 조건 충족 여부"를 판정할 수 없다 — 매번 고정 안내만 띄운다.
                         const suckerPunchHint = move.usageCondition === "opponent-damaging-move-only";
                         const choiceLocked = lockedMoveId !== null && move.id !== lockedMoveId;
+                        const restrictionMsg = moveRestrictionMessage(side, move.id);
                         const disabled = pp <= 0 || fighter.currentHp <= 0 || !!winner;
                         // 셋업 카드의 party-move-pip와 동일하게 기술 타입 배경색을 입힌다.
                         const moveColor = move.type ? TYPE_COLORS[move.type] : undefined;
@@ -416,7 +458,7 @@ export function BattleLogPage() {
                                       ? "상대보다 먼저 움직이면서, 상대가 데미지 기술을 낼 때만 성공해요"
                                       : choiceLocked
                                       ? "구애스카프 때문에 이 기술은 지금 선택할 수 없어요"
-                                      : undefined
+                                      : restrictionMsg ?? undefined
                             }
                             onClick={() => {
                               setLockWarning(null);
@@ -488,6 +530,7 @@ export function BattleLogPage() {
                       <div className="battle-turn-line">
                         <strong>{actorName}</strong>의 {action.move.name}
                         {action.blockedReason === "usageCondition" && "!"}
+                        {action.blockedReason === "moveRestricted" && "!"}
                         {action.blockedReason === "status" && action.blockedByStatus === undefined && " — 상태이상으로 행동 불가"}
                         {action.blockedReason === "flinch" && " — 풀죽어서 행동 불가"}
                         {action.blockedReason === "recharge" && " — 반동으로 행동 불가"}
@@ -575,6 +618,18 @@ export function BattleLogPage() {
                         {!action.blockedReason && action.hit && action.substituteSetFailed && (
                           <> · 이미 대타가 있거나 HP가 부족해 실패!</>
                         )}
+                        {!action.blockedReason && action.hit && action.setDisabledMoveName && (
+                          <> · {action.setDisabledMoveName} 봉인!</>
+                        )}
+                        {!action.blockedReason && action.hit && action.disableSetFailed && (
+                          <> · 상대가 아직 기술을 안 썼거나 이미 걸려있어 실패!</>
+                        )}
+                        {!action.blockedReason && action.hit && action.setEncoreMoveName && (
+                          <> · {action.setEncoreMoveName}만 반복하게 됨!</>
+                        )}
+                        {!action.blockedReason && action.hit && action.encoreSetFailed && (
+                          <> · 상대가 아직 기술을 안 썼거나 이미 걸려있어 실패!</>
+                        )}
                       </div>
                       {/* 마비/잠듦/얼음으로 이번 턴 행동이 막혔으면(단순 "상태이상으로 행동 불가"가
                           아니라) 매턴 효과가 발동한 것과 같은 의미라 트리거 문구를 그대로 쓴다 */}
@@ -588,6 +643,17 @@ export function BattleLogPage() {
                       {action.blockedReason === "usageCondition" && (
                         <div className="battle-turn-line is-muted">
                           {actorName}의 {action.move.name}{eunNeun(action.move.name)} 실패했다!
+                        </div>
+                      )}
+                      {/* 도발/사슬묶기/앙코르로 이번 선택 자체가 막혔을 때 — 어떤 제약 때문인지 구분해서 보여준다 */}
+                      {action.blockedReason === "moveRestricted" && (
+                        <div className="battle-turn-line is-muted">
+                          {action.moveRestrictionKind === "taunt" &&
+                            `${actorName}은(는) 도발에 걸려 변화기를 쓸 수 없다!`}
+                          {action.moveRestrictionKind === "disable" &&
+                            `${actorName}의 ${action.move.name}${eunNeun(action.move.name)} 사슬묶기에 봉인돼있다!`}
+                          {action.moveRestrictionKind === "encore" &&
+                            `${actorName}은(는) 앙코르 때문에 이 기술을 쓸 수 없다!`}
                         </div>
                       )}
                       {/* 상태이상에 새로 걸렸을 때(onset) — 항상 상대가 대상(기존 관례) */}
