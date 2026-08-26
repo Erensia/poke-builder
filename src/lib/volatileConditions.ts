@@ -15,6 +15,9 @@ export const CONFUSION_SELF_HIT_CHANCE = 1 / 3;
 /** 혼란 자멸 데미지 계산에 쓰는 위력. 타입 상성·자속 없이 물리 공식 그대로 자기 자신에게 적용한다 */
 export const CONFUSION_SELF_HIT_POWER = 40;
 
+/** 헤롱헤롱(매혹): 걸려있는 동안 매 행동 판정마다 이 확률로 그 턴 행동을 통째로 못 한다(본가 고정 50%) */
+export const ATTRACT_ACTION_BLOCK_CHANCE = 0.5;
+
 /**
  * 졸음(하품)·희망사항 지속 턴수: 고정 2. 건 시점의 턴 종료에서 2→1로 한 번 소모되고(아직 무산),
  * 그 다음 턴 종료에서 1→0이 되는 시점에 실제로 잠듦/회복을 시도한다 — "맞은/쓴 다음 턴 종료" 규칙.
@@ -41,7 +44,12 @@ function defaultDuration(volatile: VolatileCondition, random: () => number): num
   if (volatile === "confusion") return rollConfusionDuration(random);
   if (volatile === "drowsy") return DROWSY_DURATION;
   if (volatile === "wish") return WISH_DURATION;
-  if (volatile === "ingrain" || volatile === "aquaRing" || volatile === "leechSeed") {
+  if (
+    volatile === "ingrain" ||
+    volatile === "aquaRing" ||
+    volatile === "leechSeed" ||
+    volatile === "attract"
+  ) {
     return PERSISTENT_UNTIL_BATTLE_END;
   }
   if (volatile === "taunt") return TAUNT_DURATION;

@@ -1,6 +1,6 @@
 import type { PartySlot } from "../types/party";
 import { getPokemon, getMove, getAbility, getItem, getNature } from "../lib/data";
-import { getEffectiveForm, getEffectiveAbilityId, megaBadgeLabel } from "../lib/pokemonForm";
+import { getEffectiveForm, getEffectiveAbilityId, genderLabel, megaBadgeLabel } from "../lib/pokemonForm";
 import { computeRealStats, totalAbilityPoints } from "../lib/statCalculator";
 import { computeBulkPower } from "../lib/battlePower";
 import { TypeBadge } from "./TypeBadge";
@@ -17,6 +17,7 @@ interface PartySlotCardProps {
   onPickItem: () => void;
   onPickNature: () => void;
   onPickPoints: () => void;
+  onToggleGender: () => void;
 }
 
 export function PartySlotCard({
@@ -29,6 +30,7 @@ export function PartySlotCard({
   onPickItem,
   onPickNature,
   onPickPoints,
+  onToggleGender,
 }: PartySlotCardProps) {
   const pokemon = slot ? getPokemon(slot.pokemonId) : undefined;
 
@@ -124,6 +126,13 @@ export function PartySlotCard({
           <span className="party-meta-label">포인트</span>
           <span className="party-meta-value">{totalAbilityPoints(slot!.points)} / 66</span>
         </button>
+        {/* 종족 성별이 양성 다 가능("both")할 때만 노출 — 단일성별/무성별 종은 고를 게 없어 아예 숨긴다 */}
+        {pokemon.genderCategory === "both" && (
+          <button type="button" className="party-meta-pip" onClick={onToggleGender}>
+            <span className="party-meta-label">성별</span>
+            <span className="party-meta-value">{genderLabel(slot!.gender ?? "male")}</span>
+          </button>
+        )}
       </div>
 
       <div className="party-slot-bulk">

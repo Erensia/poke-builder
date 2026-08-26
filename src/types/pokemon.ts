@@ -24,6 +24,20 @@ export interface StanceChangeForms {
   revertMoveId: string;
 }
 
+/** 파티 슬롯에 실제로 배정되는 성별. 무성별은 이 타입이 아니라 null로 표현한다(getEffectiveGender 참고) */
+export type PokemonGender = "male" | "female";
+
+/**
+ * 종족 단위 성별 분포 카테고리(헤롱헤롱/헤롱헤롱바디 구현에 필요, Phase 6 §1-1 — 사용자 확정
+ * 2026-08-26: 배틀마다 랜덤 배정하지 않고, "both"인 종만 파티 슬롯에서 사용자가 직접 고른다):
+ *  - "both": 수컷/암컷 둘 다 존재(비율 무관 — 87.5:12.5 같은 극단적 혼합도 포함). 슬롯의 gender
+ *    필드로 사용자가 고르고, 미지정이면 수컷을 기본값으로 취급한다(getEffectiveGender).
+ *  - "male-only" / "female-only": 그 종은 항상 그 성별 하나로 고정. 슬롯의 gender와 무관하다.
+ *  - "genderless": 성별 개념이 없음(강철/에스퍼 무생물 모티브, 전설 등). 헤롱헤롱류는 이 종에
+ *    아예 걸리지 않는다.
+ */
+export type PokemonGenderCategory = "both" | "male-only" | "female-only" | "genderless";
+
 export interface Pokemon {
   id: string;
   name: string;
@@ -35,5 +49,7 @@ export interface Pokemon {
   megaEvolutions?: MegaEvolution[];
   /** 킬가르도(배틀스위치)처럼 배틀 중 기술 카테고리에 따라 폼이 바뀌는 포켓몬만 채운다 */
   stanceChangeForms?: StanceChangeForms;
+  /** 본가 기준 성별 분포 카테고리. 헤롱헤롱(매혹)·헤롱헤롱바디 판정에 쓴다 */
+  genderCategory: PokemonGenderCategory;
   learnset: string[];
 }

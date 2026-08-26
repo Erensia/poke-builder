@@ -1,6 +1,6 @@
 import type { PartySlot } from "../types/party";
 import { getPokemon, getMove, getAbility, getItem, getNature } from "../lib/data";
-import { getEffectiveForm, getEffectiveAbilityId, megaBadgeLabel } from "../lib/pokemonForm";
+import { getEffectiveForm, getEffectiveAbilityId, genderLabel, megaBadgeLabel } from "../lib/pokemonForm";
 import { computeRealStats, totalAbilityPoints } from "../lib/statCalculator";
 import { computeBulkPower } from "../lib/battlePower";
 import { TypeBadge } from "./TypeBadge";
@@ -17,6 +17,7 @@ interface BattleSetupCardProps {
   onPickItem: () => void;
   onPickNature: () => void;
   onPickPoints: () => void;
+  onToggleGender: () => void;
 }
 
 /**
@@ -33,6 +34,7 @@ export function BattleSetupCard({
   onPickItem,
   onPickNature,
   onPickPoints,
+  onToggleGender,
 }: BattleSetupCardProps) {
   const pokemon = slot ? getPokemon(slot.pokemonId) : undefined;
 
@@ -120,6 +122,12 @@ export function BattleSetupCard({
           <span className="party-meta-label">포인트</span>
           <span className="party-meta-value">{totalAbilityPoints(slot!.points)} / 66</span>
         </button>
+        {pokemon.genderCategory === "both" && (
+          <button type="button" className="party-meta-pip" onClick={onToggleGender}>
+            <span className="party-meta-label">성별</span>
+            <span className="party-meta-value">{genderLabel(slot!.gender ?? "male")}</span>
+          </button>
+        )}
       </div>
 
       <div className="party-slot-bulk">

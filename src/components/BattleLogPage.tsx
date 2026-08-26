@@ -59,6 +59,7 @@ const VOLATILE_LABELS = {
   taunt: "도발",
   disable: "사슬묶기",
   encore: "앙코르",
+  attract: "헤롱헤롱",
 } as const;
 
 /** 액션 로그 한 줄 안에 "OO 발동!"으로 뭉뚱그리기보다 전용 문구를 따로 쓰는 volatile들 */
@@ -306,6 +307,7 @@ export function BattleLogPage() {
               onPickItem={() => setPicker({ kind: "item", side: "a" })}
               onPickNature={() => setPicker({ kind: "nature", side: "a" })}
               onPickPoints={() => setPicker({ kind: "points", side: "a" })}
+              onToggleGender={setup.a.toggleGender}
             />
             <BattleSetupCard
               label="상대 포켓몬"
@@ -317,6 +319,7 @@ export function BattleLogPage() {
               onPickItem={() => setPicker({ kind: "item", side: "b" })}
               onPickNature={() => setPicker({ kind: "nature", side: "b" })}
               onPickPoints={() => setPicker({ kind: "points", side: "b" })}
+              onToggleGender={setup.b.toggleGender}
             />
           </div>
           <button type="button" className="battle-start-button" disabled={!canStart} onClick={startBattle}>
@@ -553,6 +556,7 @@ export function BattleLogPage() {
                         {action.blockedReason === "recharge" && " — 반동으로 행동 불가"}
                         {action.blockedReason === "confusion" &&
                           ` — 혼란으로 자멸! (${action.selfDamage} 데미지)`}
+                        {action.blockedReason === "attract" && " — 헤롱헤롱에 빠져 행동 불가"}
                         {action.blockedReason === "psychicFieldPriority" && " — 사이코필드에 막혀 실패"}
                         {!action.blockedReason && action.charging && " — 준비 중! 다음 턴 발동된다"}
                         {!action.blockedReason && !action.charging && action.evadedByCharge && " — 무적 상태라 빗나감"}
@@ -719,6 +723,14 @@ export function BattleLogPage() {
                         <div className="battle-turn-line is-muted">
                           {defenderName}의 {action.abilityInflictedStatusAbilityName}!{" "}
                           {STATUS_ONSET_TEXT[action.abilityInflictedStatusOnAttacker](actorName)}
+                        </div>
+                      )}
+                      {/* 헤롱헤롱바디 — 접촉해 온 공격자가 이성이면 방어측 특성이 발동해 공격자에게 걸린다 */}
+                      {!action.blockedReason && action.abilityInflictedVolatileOnAttacker && (
+                        <div className="battle-turn-line is-muted">
+                          {defenderName}의 {action.abilityInflictedVolatileAbilityName}! {actorName}
+                          {eunNeun(actorName)} {VOLATILE_LABELS[action.abilityInflictedVolatileOnAttacker]} 상태가
+                          되었다!
                         </div>
                       )}
                       {!action.blockedReason && !!action.abilityDamageToAttacker && (

@@ -3,7 +3,7 @@ import type { MoveClassification, MoveCategory } from "./move";
 import type { WeatherKind } from "./weather";
 import type { FieldKind } from "./field";
 import type { BattleStatKey } from "./battleStats";
-import type { StatusCondition } from "./status";
+import type { StatusCondition, VolatileCondition } from "./status";
 
 /** 랭크를 이만큼(stat, delta) 바꾼다는 짧은 서술 — 여러 특성이 같은 모양을 재사용한다 */
 export interface AbilityStatBoost {
@@ -80,6 +80,13 @@ export interface AbilityHitTrigger {
   chance?: number;
   /** 공격자에게 이 주 상태이상을 건다(정전기=마비, 불꽃몸=화상). 타입 면역·중첩 규칙은 기존 inflictStatus/isImmuneToStatus를 그대로 재사용 */
   inflictsStatusOnAttacker?: StatusCondition;
+  /** 공격자에게 이 행동방해(volatile) 효과를 건다(헤롱헤롱바디=attract) */
+  inflictsVolatileOnAttacker?: VolatileCondition;
+  /**
+   * inflictsVolatileOnAttacker가 attract일 때만 의미 있음 — 방어측(이 특성 소유자)과 공격측이
+   * 이성 관계일 때만(getEffectiveGender 기준) 발동한다. 무성별이거나 동성이면 조용히 무산된다.
+   */
+  requiresOppositeGender?: boolean;
   /** 공격자에게 자신(방어측)의 최대 HP 이 비율만큼 고정 데미지를 준다(까칠한피부: 1/8 = 0.125) */
   damagesAttackerFraction?: number;
   /** 자신(방어측)의 랭크를 이 목록만큼 바꾼다(깨어진갑옷: 방어 -1, 스피드 +2) */

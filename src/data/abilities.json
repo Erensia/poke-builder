@@ -293,7 +293,13 @@
   {
     "id": "헤롱헤롱바디",
     "name": "헤롱헤롱바디",
-    "description": "접촉해 온 상대를 30%의 확률로 헤롱헤롱 상태로 만든다."
+    "description": "접촉해 온 상대를 30%의 확률로 헤롱헤롱 상태로 만든다.",
+    "hitTrigger": {
+      "on": "contact",
+      "chance": 30,
+      "inflictsVolatileOnAttacker": "attract",
+      "requiresOppositeGender": true
+    }
   },
   {
     "id": "서투름",

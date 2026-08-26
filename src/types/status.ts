@@ -60,6 +60,11 @@ export const NO_STATUS_CONDITION: StatusConditionState = { condition: null, turn
  *    지속시간이 없어 본가 기준값(4턴)을 그대로 썼다.
  *  - encore(앙코르): 3턴 동안 걸린 시점의 "상대가 바로 직전에 쓴 기술"만 강제로 반복해야 한다
  *    (disable과 정반대 방향 — moveId에 강제할 기술 id를 저장). 지속시간도 본가 기준값(3턴).
+ *  - attract(헤롱헤롱): ingrain/aquaRing/leechSeed와 같은 "배틀 끝까지 유지"형 — 1v1이라 교체로
+ *    해제될 일이 없다. 걸려있는 동안 매 행동 판정마다 50% 확률로 그 턴 행동을 통째로 못 한다
+ *    (마비와 같은 확률 축이지만 별도 상태이상이 아니라 volatile — 본가에서도 주 상태이상과는
+ *    별개 슬롯이라 마비 등과 동시에 걸릴 수 있다). resolveAction에서 이성 관계 판정
+ *    (getEffectiveGender)까지 확인한 뒤에만 걸린다.
  */
 export type VolatileCondition =
   | "flinch"
@@ -72,7 +77,8 @@ export type VolatileCondition =
   | "leechSeed"
   | "taunt"
   | "disable"
-  | "encore";
+  | "encore"
+  | "attract";
 
 /** 기술이 상대(또는 자신)에게 행동방해 효과를 걸 때 쓰는 정보 */
 export interface VolatileInflictEffect {

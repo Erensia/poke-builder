@@ -1,4 +1,5 @@
 import type { StatKey } from "./nature";
+import type { PokemonGender } from "./pokemon";
 
 /** 챔피언스식 능력 포인트. 6스탯 합산 최대 66. (본가 노력치의 축약판, 레벨/개체값 개념은 없음) */
 export type AbilityPoints = Record<StatKey, number>;
@@ -24,6 +25,12 @@ export interface PartySlot {
   nature: string | null;
   /** 6스탯에 분배한 능력 포인트. 합산 66 이하 */
   points: AbilityPoints;
+  /**
+   * 사용자가 직접 고른 성별. 종족 성별 카테고리가 "both"(양성 가능)일 때만 의미가 있고, 그 외
+   * 카테고리(단일성별/무성별)는 이 값과 무관하게 항상 종족 카테고리를 따른다(getEffectiveGender).
+   * 미지정이면 수컷을 기본값으로 취급한다(Phase 6 §1-1 — 사용자 확정 2026-08-26).
+   */
+  gender?: PokemonGender;
 }
 
 export interface Party {

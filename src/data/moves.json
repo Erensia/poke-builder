@@ -3157,7 +3157,8 @@
     "pp": 16,
     "priority": 0,
     "effect": "이성인 상대를 헤롱헤롱 상태로 만들어 가끔 기술을 사용하지 못하게 한다.",
-    "makesContact": false
+    "makesContact": false,
+    "inflictsVolatile": [{ "volatile": "attract", "target": "opponent" }]
   },
   {
     "id": "흔들흔들댄스",

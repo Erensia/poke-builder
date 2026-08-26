@@ -2,7 +2,7 @@ import type { Move } from "../types/move";
 import type { WeatherKind } from "../types/weather";
 import type { FieldKind } from "../types/field";
 import type { PokemonType } from "../types/pokemon-type";
-import type { StanceChangeForms } from "../types/pokemon";
+import type { StanceChangeForms, PokemonGender } from "../types/pokemon";
 import {
   NEUTRAL_ACCURACY_STAGES,
   NEUTRAL_CRIT_STAGE,
@@ -21,7 +21,7 @@ import {
 } from "../types/status";
 import type { Ability } from "../types/ability";
 import { getPokemon, getAbility, getMove, getItem } from "./data";
-import { getEffectiveForm, getEffectiveAbilityId } from "./pokemonForm";
+import { getEffectiveForm, getEffectiveAbilityId, getEffectiveGender } from "./pokemonForm";
 import { computeRealStats } from "./statCalculator";
 import { applyMoveStatChanges, applyStageDelta, clampStagesToNonNegative } from "./statStages";
 import { hitTriggerMatchesMove } from "./abilityHitTriggers";
@@ -44,6 +44,7 @@ import {
   isImmuneToStatus,
 } from "./statusConditions";
 import {
+  ATTRACT_ACTION_BLOCK_CHANCE,
   CONFUSION_SELF_HIT_CHANCE,
   CONFUSION_SELF_HIT_POWER,
   consumeVolatileTurn,
@@ -149,6 +150,11 @@ export const STRUGGLE_MOVE: Move = {
 export interface BattleFighterState {
   slot: EvaluatorSlot;
   types: PokemonType[];
+  /**
+   * 실제로 판정에 쓰는 성별(getEffectiveGender로 등장 시점에 한 번만 계산 — 배틀 중 바뀌지
+   * 않는다). 무성별 종은 null. 헤롱헤롱(매혹)·헤롱헤롱바디가 이성 관계를 확인할 때 쓴다.
+   */
+  gender: PokemonGender | null;
   /**
    * 실제로 판정에 쓰는 특성 id. 메가진화 중이면 slot.ability와 무관하게 항상 그 메가폼 고유
    * 특성으로 고정된다(getEffectiveAbilityId) — 메가리자몽Y는 항상 가뭄, 메가리자몽X는 항상
@@ -278,6 +284,7 @@ export function createFighterState(slot: EvaluatorSlot, moves: Move[]): BattleFi
   return {
     slot,
     types: form.types,
+    gender: getEffectiveGender(pokemon, slot),
     effectiveAbilityId: getEffectiveAbilityId(form, slot.ability),
     realStats,
     currentHp: realStats.hp,
@@ -543,6 +550,7 @@ export type ActionBlockReason =
   | "flinch"
   | "recharge"
   | "confusion"
+  | "attract"
   | "psychicFieldPriority"
   | "usageCondition"
   | "moveRestricted";
@@ -689,6 +697,10 @@ export interface ActionLogEntry {
   abilityInflictedStatusOnAttacker?: StatusConditionState["condition"];
   /** abilityInflictedStatusOnAttacker를 건 특성 이름 */
   abilityInflictedStatusAbilityName?: string;
+  /** 헤롱헤롱바디처럼 방어측 특성이 발동해 공격자에게 행동방해(volatile)를 걸었으면 그 종류 */
+  abilityInflictedVolatileOnAttacker?: VolatileCondition;
+  /** abilityInflictedVolatileOnAttacker를 건 특성 이름 */
+  abilityInflictedVolatileAbilityName?: string;
   /** 까칠한피부처럼 방어측 특성이 발동해 공격자에게 고정 데미지를 줬으면 그 양 */
   abilityDamageToAttacker?: number;
   /** abilityDamageToAttacker를 준 특성 이름 */
@@ -1029,6 +1041,13 @@ function resolveAction(
     }
   }
 
+  // 3-1) 헤롱헤롱(매혹): ingrain/leechSeed와 같은 "배틀 끝까지 유지"형이라 턴수를 소모하지 않는다
+  // (consumeVolatileTurn 호출 없음 — 교체가 없는 1v1이라 해제될 계기가 없음). 걸려있는 동안 매
+  // 행동 판정마다 50% 확률로 그 턴 행동을 통째로 못 한다.
+  if (hasVolatile(attacker.volatile, "attract") && random() < ATTRACT_ACTION_BLOCK_CHANCE) {
+    return blocked("attract");
+  }
+
   // 4) 차지 기술 1턴째(공중날기 등): 준비만 하고 이번 턴엔 데미지를 주지 않는다. 맑음 날씨의
   // 솔라빔처럼 chargeSkipWeather가 현재 날씨와 일치하면 준비 없이 곧장 2턴째처럼 실행한다.
   // releasingCharge면 이미 2턴째(위에서 move를 저장된 기술로 바꿔치기했음)라 여기 안 들어온다.
@@ -1335,6 +1354,8 @@ function resolveAction(
   // 각 히트 직후(fixedDamage/단일타는 1회, 다단히트는 루프 안에서 타수만큼) 호출해서 채운다.
   let abilityInflictedStatusOnAttacker: StatusConditionState["condition"] | undefined;
   let abilityInflictedStatusAbilityName: string | undefined;
+  let abilityInflictedVolatileOnAttacker: VolatileCondition | undefined;
+  let abilityInflictedVolatileAbilityName: string | undefined;
   let abilityDamageToAttacker = 0;
   let abilityDamageAbilityName: string | undefined;
   let abilityDisabledMoveName: string | undefined;
@@ -1514,6 +1535,17 @@ function resolveAction(
         abilityInflictedStatusOnAttacker = attacker.status.condition;
         abilityInflictedStatusAbilityName = defenderAbility!.name;
       }
+    }
+    // 헤롱헤롱바디: 접촉해 온 공격자와 이성 관계일 때만(무성별이거나 동성이면 조용히 무산) 공격자에게
+    // 헤롱헤롱을 건다. 이미 헤롱헤롱 상태면 본가처럼 재발동하지 않는다.
+    if (
+      trigger.inflictsVolatileOnAttacker &&
+      !(trigger.requiresOppositeGender && (attacker.gender === null || defender.gender === null || attacker.gender === defender.gender)) &&
+      !hasVolatile(attacker.volatile, trigger.inflictsVolatileOnAttacker)
+    ) {
+      attacker.volatile = inflictVolatile(attacker.volatile, trigger.inflictsVolatileOnAttacker, random);
+      abilityInflictedVolatileOnAttacker = trigger.inflictsVolatileOnAttacker;
+      abilityInflictedVolatileAbilityName = defenderAbility!.name;
     }
     if (trigger.damagesAttackerFraction) {
       const amount = Math.floor(attacker.maxHp * trigger.damagesAttackerFraction);
@@ -1852,6 +1884,20 @@ function resolveAction(
       }
       // 희망사항: 이미 예약돼 있으면 재사용 실패(본가 규칙 — 필드/트릭룸과 같은 패턴)
       if (effect.volatile === "wish" && hasVolatile(target.volatile, "wish")) continue;
+      // 헤롱헤롱: 이미 헤롱헤롱 상태거나(재사용 실패, drowsy/wish와 같은 패턴), 대상 또는
+      // 거는 쪽이 무성별이거나 둘이 동성이면(getEffectiveGender 기준) 조용히 무산된다 — 본가에서도
+      // 이 경우 "But it failed!"로 아무 효과 없이 끝난다.
+      if (effect.volatile === "attract") {
+        const inflicter = effect.target === "self" ? defender : attacker;
+        if (
+          hasVolatile(target.volatile, "attract") ||
+          target.gender === null ||
+          inflicter.gender === null ||
+          target.gender === inflicter.gender
+        ) {
+          continue;
+        }
+      }
       const chance = effect.chance !== undefined ? effect.chance / 100 : 1;
       if (random() >= chance) continue;
       if (effect.target === "self") {
@@ -2257,6 +2303,8 @@ function resolveAction(
     defenderBerryHealItemName,
     abilityInflictedStatusOnAttacker,
     abilityInflictedStatusAbilityName,
+    abilityInflictedVolatileOnAttacker,
+    abilityInflictedVolatileAbilityName,
     abilityDamageToAttacker: abilityDamageToAttacker || undefined,
     abilityDamageAbilityName,
     abilityDisabledMoveName,

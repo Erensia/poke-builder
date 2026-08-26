@@ -60,6 +60,11 @@ function useBattleSetupSlot() {
     setSlot((prev) => (prev ? { ...prev, nature: natureId } : prev));
   }
 
+  /** 수컷/암컷을 바로 뒤집는다(미지정이면 수컷을 기본값으로 취급해서 그 반대인 암컷으로) */
+  function toggleGender() {
+    setSlot((prev) => (prev ? { ...prev, gender: (prev.gender ?? "male") === "male" ? "female" : "male" } : prev));
+  }
+
   function setPoint(stat: keyof AbilityPoints, value: number) {
     setSlot((prev) => {
       if (!prev) return prev;
@@ -82,7 +87,7 @@ function useBattleSetupSlot() {
     });
   }
 
-  return { slot, setPokemon, clearPokemon, setMove, setAbility, setItem, setNature, setPoint, stepPoint };
+  return { slot, setPokemon, clearPokemon, setMove, setAbility, setItem, setNature, toggleGender, setPoint, stepPoint };
 }
 
 export function useBattleSetup() {

@@ -30,6 +30,7 @@ export function PartyBoard() {
     setAbility,
     setItem,
     setNature,
+    toggleGender,
     setPoint,
     stepPoint,
     resetParty,
@@ -79,6 +80,7 @@ export function PartyBoard() {
             onPickItem={() => setPicker({ kind: "item", slotIndex: i })}
             onPickNature={() => setPicker({ kind: "nature", slotIndex: i })}
             onPickPoints={() => setPicker({ kind: "points", slotIndex: i })}
+            onToggleGender={() => toggleGender(i)}
           />
         ))}
       </div>
