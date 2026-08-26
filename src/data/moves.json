@@ -5655,5 +5655,41 @@
     "makesContact": false,
     "minHits": 2,
     "maxHits": 5
+  },
+  {
+    "id": "끈적끈적네트",
+    "name": "끈적끈적네트",
+    "type": "벌레",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 20,
+    "priority": 0,
+    "effect": "상대의 주위에 끈적끈적한 네트를 둘러 펼쳐서 교체되어 나오는 상대의 스피드를 떨어뜨린다. 엔트리 해저드류라 교체가 없는 1v1 시뮬레이터에는 적용 대상이 없다(효과 텍스트만).",
+    "makesContact": false
+  },
+  {
+    "id": "엉겨붙기",
+    "name": "엉겨붙기",
+    "type": "벌레",
+    "category": "special",
+    "power": 20,
+    "accuracy": 100,
+    "pp": 20,
+    "priority": 0,
+    "effect": "4~5턴 동안 상대에게 엉겨 붙어서 공격한다. 그동안 상대는 도망갈 수 없다(모래지옥류와 같은 '조이기' 축 — 여러 턴 지속 구속 데미지 로직 자체가 아직 없어 효과 텍스트만).",
+    "makesContact": true
+  },
+  {
+    "id": "파워셰어",
+    "name": "파워셰어",
+    "type": "에스퍼",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 12,
+    "priority": 0,
+    "effect": "초능력으로 자신과 상대의 공격과 특수공격 능력치를 더해서 반으로 나눈다(파워트릭류와 같은 '실수치 조작' 축 — 실수치를 직접 갈아치우는 로직 자체가 아직 없어 효과 텍스트만).",
+    "makesContact": false
   }
 ]

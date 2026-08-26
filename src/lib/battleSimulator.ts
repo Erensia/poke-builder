@@ -641,6 +641,8 @@ export interface ActionLogEntry {
   abilityAbsorbedMoveType?: PokemonType;
   /** abilityAbsorbedMoveType을 무효화한 특성 이름 */
   abilityAbsorbAbilityName?: string;
+  /** 저수처럼 absorbsType이 랭크업 대신 회복을 줄 때, 그 회복량 */
+  abilityAbsorbHealAmount?: number;
   /** 흑안개처럼 이 행동으로 양쪽의 능력 랭크 변화가 전부 초기화됐으면 true */
   resetAllStages?: boolean;
 }
@@ -1090,6 +1092,7 @@ function resolveAction(
   // 그 즉시 랭크 변화 + (있다면) 자기 타입 기술 위력 상승 플래그만 별도로 적용하면 된다.
   let abilityAbsorbedMoveType: PokemonType | undefined;
   let abilityAbsorbAbilityName: string | undefined;
+  let abilityAbsorbHealAmount = 0;
   if (absorbedByDefenderAbility && defenderAbility?.absorbsType) {
     const absorb = defenderAbility.absorbsType;
     abilityAbsorbedMoveType = absorb.type;
@@ -1101,6 +1104,14 @@ function resolveAction(
     }
     if (absorb.boostsOwnMoveTypeMultiplier) {
       defender.ownMoveTypeBoosts = { ...defender.ownMoveTypeBoosts, [absorb.type]: absorb.boostsOwnMoveTypeMultiplier };
+    }
+    // 저수: 랭크업 대신 무효화한 그 즉시 최대 HP 비율만큼 회복한다.
+    if (absorb.healsFraction) {
+      abilityAbsorbHealAmount = Math.min(
+        defender.maxHp - defender.currentHp,
+        Math.floor(defender.maxHp * absorb.healsFraction),
+      );
+      defender.currentHp += abilityAbsorbHealAmount;
     }
   }
 
@@ -1967,6 +1978,7 @@ function resolveAction(
     abilityDisableAbilityName,
     abilityAbsorbedMoveType,
     abilityAbsorbAbilityName,
+    abilityAbsorbHealAmount: abilityAbsorbHealAmount || undefined,
     resetAllStages: effectiveMove.resetsAllStages || undefined,
   };
 }

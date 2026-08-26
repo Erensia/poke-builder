@@ -624,5 +624,32 @@
     "name": "황금몸",
     "description": "다른 포켓몬이 사용하는 변화기(상태이상 기술 포함)의 대상이 되지 않는다.",
     "blocksOpponentStatusMoveEffects": true
+  },
+  {
+    "id": "수포",
+    "name": "수포",
+    "description": "자신을 향한 불꽃타입 기술의 위력을 절반으로 줄이며, 화상 상태가 되지 않는다. 자신이 사용하는 물타입 기술의 위력은 2배가 된다.",
+    "modifiers": [
+      {
+        "scope": "defense",
+        "multiplier": 2,
+        "condition": { "moveTypeIn": ["불꽃"] }
+      },
+      {
+        "scope": "offense",
+        "multiplier": 2,
+        "condition": { "moveTypeIn": ["물"] }
+      }
+    ],
+    "immuneToStatuses": ["burn"]
+  },
+  {
+    "id": "저수",
+    "name": "저수",
+    "description": "물타입 기술을 맞으면 데미지를 받지 않고 최대 HP의 1/4을 회복한다.",
+    "absorbsType": {
+      "type": "물",
+      "healsFraction": 0.25
+    }
   }
 ]

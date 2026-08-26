@@ -634,6 +634,7 @@ export function BattleLogPage() {
                         <div className="battle-turn-line is-muted">
                           {defenderName}의 {action.abilityAbsorbAbilityName}! {typeLabel(action.abilityAbsorbedMoveType)}
                           {eunNeun(typeLabel(action.abilityAbsorbedMoveType))} 전혀 효과가 없었다!
+                          {!!action.abilityAbsorbHealAmount && <> 체력을 {action.abilityAbsorbHealAmount} 회복했다!</>}
                         </div>
                       )}
                       {/* 대타출동 — 데미지가 본체가 아니라 대타로 들어갔을 때 알려준다. 깨졌는지 아직

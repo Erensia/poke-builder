@@ -107,6 +107,8 @@ export interface AbilityTypeAbsorb {
    * AbilityModifier로는 "배틀 중 발동한 적 있는지"를 표현할 수 없어 별도 필드로 분리했다.
    */
   boostsOwnMoveTypeMultiplier?: number;
+  /** 저수처럼, 무효화한 그 즉시 자신의 최대 HP 이 비율만큼 회복한다(1/4). 랭크업 대신 회복인 케이스. */
+  healsFraction?: number;
 }
 
 export interface Ability {
