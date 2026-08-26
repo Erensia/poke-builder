@@ -1640,7 +1640,8 @@
     "pp": 20,
     "priority": 0,
     "effect": "상대가 직전에 사용한 기술을 배워서 사용한다.",
-    "makesContact": false
+    "makesContact": false,
+    "excludedFromSleepTalk": true
   },
   {
     "id": "힘껏펀치",
@@ -3710,7 +3711,8 @@
     "pp": 12,
     "priority": 0,
     "effect": "1턴째 자신의 특공을 올리고, 2턴째 공격한다.",
-    "makesContact": false
+    "makesContact": false,
+    "chargeTurn": true
   },
   {
     "id": "분연",
@@ -4846,7 +4848,8 @@
     "pp": 12,
     "priority": 0,
     "effect": "지니고 있던 나무열매를 먹은 뒤에만 사용할 수 있다.",
-    "makesContact": true
+    "makesContact": true,
+    "excludedFromSleepTalk": true
   },
   {
     "id": "플레어송",

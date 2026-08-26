@@ -197,7 +197,8 @@
     "id": "멘탈허브",
     "name": "멘탈허브",
     "description": "헤롱헤롱·도발·연속 불가·기술봉인·회복봉인·앙코르 상태를 회복한다. 한 번 사용하면 그 대전 중에는 사라진다.",
-    "category": "held-item"
+    "category": "held-item",
+    "curesMentalVolatilesOnInflict": true
   },
   {
     "id": "반짝가루",

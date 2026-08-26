@@ -72,6 +72,7 @@ import {
   getDrainHealMultiplier,
   getStatusCureBerryResult,
   getConfusionCureBerryResult,
+  getMentalHerbCureResult,
   getHpThresholdBerryHeal,
   shouldTriggerWhiteHerb,
   getEnduranceResult,
@@ -1083,7 +1084,10 @@ function resolveAction(
   if (move.callsRandomLearnedMove) {
     const candidates = Object.keys(attacker.remainingPp)
       .map((id) => getMove(id))
-      .filter((m): m is Move => !!m && m.id !== move.id && !m.chargeTurn && !m.usageCondition);
+      .filter(
+        (m): m is Move =>
+          !!m && m.id !== move.id && !m.chargeTurn && !m.usageCondition && !m.excludedFromSleepTalk,
+      );
     if (candidates.length === 0) {
       // 배운 기술이 잠꼬대 하나뿐이거나 전부 제외 대상이면 대신 낼 기술이 없어 실패한다.
       return blocked("usageCondition");
@@ -1497,6 +1501,10 @@ function resolveAction(
   // (기절과 같은 축 — substituteBroke를 그 판정에 같이 쓴다).
   let substituteBroke = false;
   let hitSubstitute = false;
+  // 도구 발동 시 UI에 표시할 이름(상태이상/혼란/헤롱헤롱/도발/사슬묶기/앙코르 즉시치료 나무열매·
+  // 멘탈허브 등) — triggerAbilityHitEffect(헤롱헤롱바디)가 이 변수를 참조하므로 그 정의보다
+  // 앞에 선언해야 한다(TDZ 회피).
+  let statusCureBerryItemName: string | undefined;
   function applyDamageToDefender(amount: number): void {
     if (blockedBySubstitute && defender.substituteHp !== undefined) {
       hitSubstitute = true;
@@ -1546,6 +1554,15 @@ function resolveAction(
       attacker.volatile = inflictVolatile(attacker.volatile, trigger.inflictsVolatileOnAttacker, random);
       abilityInflictedVolatileOnAttacker = trigger.inflictsVolatileOnAttacker;
       abilityInflictedVolatileAbilityName = defenderAbility!.name;
+      // 멘탈허브: 헤롱헤롱바디로 걸린 헤롱헤롱도 걸리는 순간 치료하고 소모된다.
+      if (getMentalHerbCureResult(attackerItem, attacker.itemConsumed ?? false)) {
+        attacker.volatile = { active: { ...attacker.volatile.active } };
+        delete attacker.volatile.active[trigger.inflictsVolatileOnAttacker];
+        consumeItem(attacker);
+        statusCureBerryItemName = attackerItem!.name;
+        abilityInflictedVolatileOnAttacker = undefined;
+        abilityInflictedVolatileAbilityName = undefined;
+      }
     }
     if (trigger.damagesAttackerFraction) {
       const amount = Math.floor(attacker.maxHp * trigger.damagesAttackerFraction);
@@ -1665,9 +1682,12 @@ function resolveAction(
 
   // 생명의구슬: 데미지를 실제로 준(damage > 0) 공격이 성공할 때마다 최대 HP의 1/10만큼 자신도
   // 반동을 입는다 — 다단히트도 타수 수와 무관하게 이번 행동에 한 번만 적용(본가 규칙).
+  // 단, 이번 기술에서 우격다짐(sheerForceAbilityName)이 실제로 발동했다면 생명의구슬 반동은
+  // 면제된다 — 본가에서 확인된 특수 상호작용(Bulbapedia: Sheer Force negates Life Orb recoil).
+  // 위력 상승·아이템 데미지 보너스는 그대로 받으면서 반동만 사라진다.
   let itemRecoilDamage = 0;
   let itemRecoilItemName: string | undefined;
-  if (isDamaging && damage > 0 && attackerItem?.selfRecoilFractionOfMaxHp) {
+  if (isDamaging && damage > 0 && attackerItem?.selfRecoilFractionOfMaxHp && !sheerForceAbilityName) {
     itemRecoilDamage = Math.floor(attacker.maxHp * attackerItem.selfRecoilFractionOfMaxHp);
     attacker.currentHp = Math.max(0, attacker.currentHp - itemRecoilDamage);
     itemRecoilItemName = attackerItem.name;
@@ -1854,7 +1874,6 @@ function resolveAction(
   // 상태이상 즉시치료 나무열매(리샘·버치·유루·복슝·복분·배리): 걸리는 "그 순간" 치료하고 소모된다.
   // itemConsumed는 나무열매 18종(타입내성)과 같은 축을 공유하므로(도구 1개=1회용), 이미 다른
   // 나무열매 효과가 이번 배틀에서 소모됐으면 발동하지 않는다.
-  let statusCureBerryItemName: string | undefined;
   if (
     inflictedStatus &&
     !defenderBerriesBlocked &&
@@ -1914,6 +1933,19 @@ function resolveAction(
         if (getConfusionCureBerryResult(targetItem, target.itemConsumed ?? false)) {
           target.volatile = { active: { ...target.volatile.active } };
           delete target.volatile.active.confusion;
+          consumeItem(target);
+          statusCureBerryItemName = targetItem!.name;
+          inflictedVolatile = undefined;
+        }
+      }
+
+      // 멘탈허브: 헤롱헤롱/도발이 걸리는 순간 치료하고 소모된다. 나무열매가 아니라 긴장감
+      // (berriesBlocked)의 영향을 받지 않는다.
+      if (effect.volatile === "attract" || effect.volatile === "taunt") {
+        const targetItem = effect.target === "self" ? attackerItem : defenderItem;
+        if (getMentalHerbCureResult(targetItem, target.itemConsumed ?? false)) {
+          target.volatile = { active: { ...target.volatile.active } };
+          delete target.volatile.active[effect.volatile];
           consumeItem(target);
           statusCureBerryItemName = targetItem!.name;
           inflictedVolatile = undefined;
@@ -2062,6 +2094,14 @@ function resolveAction(
     } else {
       defender.volatile = inflictVolatile(defender.volatile, "disable", random, defender.lastMoveId);
       setDisabledMoveName = getMove(defender.lastMoveId)?.name;
+      // 멘탈허브: 사슬묶기가 걸리는 순간 치료하고 소모된다.
+      if (getMentalHerbCureResult(defenderItem, defender.itemConsumed ?? false)) {
+        defender.volatile = { active: { ...defender.volatile.active } };
+        delete defender.volatile.active.disable;
+        consumeItem(defender);
+        statusCureBerryItemName = defenderItem!.name;
+        setDisabledMoveName = undefined;
+      }
     }
   }
 
@@ -2075,6 +2115,14 @@ function resolveAction(
     } else {
       defender.volatile = inflictVolatile(defender.volatile, "encore", random, defender.lastMoveId);
       setEncoreMoveName = getMove(defender.lastMoveId)?.name;
+      // 멘탈허브: 앙코르가 걸리는 순간 치료하고 소모된다.
+      if (getMentalHerbCureResult(defenderItem, defender.itemConsumed ?? false)) {
+        defender.volatile = { active: { ...defender.volatile.active } };
+        delete defender.volatile.active.encore;
+        consumeItem(defender);
+        statusCureBerryItemName = defenderItem!.name;
+        setEncoreMoveName = undefined;
+      }
     }
   }
 

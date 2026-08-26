@@ -62,6 +62,7 @@ src/
 - [docs/phase4.5-plan.md](docs/phase4.5-plan.md) — Phase 4.5 기획: 포켓몬 로스터 확장, 사이드 메뉴(포켓몬 도감·기술표) 활성화, Phase 4 이월 백로그
 - [docs/phase5-plan.md](docs/phase5-plan.md) — Phase 5 기획(완료): 특성 전투 로직 대거 확장(70여 종), 방어류 기술 차단, 도구 강탈/상실, 상대 기술 선택 제약, 포켓몬 로스터 확장(42종)
 - [docs/phase6-plan.md](docs/phase6-plan.md) — Phase 6 기획: 헤롱헤롱 성별 데이터, 샘플파티/샘플 저장, 로그 UI 정비 + MVP 완성도 다듬기(데이터/기능 재점검, 버그 수정, UI 개선)
+- [docs/phase6.5-plan.md](docs/phase6.5-plan.md) — Phase 6.5 기획: 매치업(결정력 & 내구력) 페이지에 "이전 턴 가정" 토글 4종 + 스피드 비교 신설
 
 ## 로드맵
 
@@ -74,3 +75,4 @@ src/
 - ✅ Phase 4.5: 포켓몬 로스터 확장(일렉트릭필드 학습 포켓몬 포함), 사이드 메뉴(포켓몬 도감·기술표) 활성화, 필드 개별 기술 상호작용, 도구 개별 효과 (자세한 목록: [docs/phase4.5-plan.md](docs/phase4.5-plan.md))
 - ✅ Phase 5: 특성 전투 로직 대거 확장(방어적 특성·접촉 피격 시 발동·타입 흡수 등 70여 종), 방어류 기술(방어/판별/버티기/킹실드) 차단+연속실패, 도구 강탈/상실(매지션·곡예), 상대 기술 선택 제약(도발·사슬묶기·앙코르), 포켓몬 로스터 확장(42종) ([docs/phase5-plan.md](docs/phase5-plan.md))
 - 🔲 Phase 6: 헤롱헤롱 성별 데이터, 샘플파티/샘플 저장 기능, 대전 로그 UI 문구 정비, MVP 완성도 다듬기(데이터·기능 재점검, 버그 수정, UI 개선) ([docs/phase6-plan.md](docs/phase6-plan.md))
+- 🔲 Phase 6.5: 매치업(결정력 & 내구력) 페이지 개선 — "이전 턴 가정" 토글 4종(도구 강탈·곡예 스피드 2배·고스트다이브 방어류 무시), 스피드 비교 신설 ([docs/phase6.5-plan.md](docs/phase6.5-plan.md))
