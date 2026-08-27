@@ -780,6 +780,14 @@ export function BattleLogPage() {
                           {action.substituteBroke ? "대타가 깨졌다!" : "대타가 대신 맞았다!"}
                         </div>
                       )}
+                      {/* 탈(Disguise) — 데미지를 통째로 무효화하고 그 반동으로 벗겨지며 데미지를 입는다.
+                          다단히트 나머지 타수는 이 필드 없이 정상적으로 데미지가 들어간다(첫 타만 무효화). */}
+                      {!action.blockedReason && action.hitNegatedByAbilityName && (
+                        <div className="battle-turn-line is-muted">
+                          {defenderName}의 {action.hitNegatedByAbilityName}! 공격이 무효화되었다! {defenderName}
+                          {eunNeun(defenderName)} 반동으로 {action.disguiseRecoilDamage} 데미지를 입었다!
+                        </div>
+                      )}
                       {/* 흑안개 — 자신/상대 구분 없이 양쪽 다 초기화되는 유일한 랭크변화 효과라 전용 문구로 알려준다 */}
                       {!action.blockedReason && action.resetAllStages && (
                         <div className="battle-turn-line is-muted">양쪽의 능력 변화가 전부 원래대로 돌아갔다!</div>
@@ -982,6 +990,10 @@ export function BattleLogPage() {
                         {STATUS_TRIGGER_TEXT[e.statusCondition](fighterLabel(battleState, e.actor))} (남은 HP{" "}
                         {e.remainingHp})
                         {e.fainted && " · 기절!"}
+                      </>
+                    ) : e.speedBoostAbilityName ? (
+                      <>
+                        {fighterLabel(battleState, e.actor)}의 {e.speedBoostAbilityName}! 스피드가 올라갔다!
                       </>
                     ) : (
                       <>

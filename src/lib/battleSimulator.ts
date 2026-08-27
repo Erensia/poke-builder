@@ -204,6 +204,11 @@ export interface BattleFighterState {
    */
   unburdenActive?: boolean;
   /**
+   * 탈(Disguise): 배틀 중 이 특성으로 한 번이라도 데미지를 무효화했으면(=탈이 벗겨졌으면) true —
+   * unburdenActive와 같은 패턴으로 배틀 끝까지 유지되는 플래그. 이후로는 정상적으로 데미지를 받는다.
+   */
+  disguiseBroken?: boolean;
+  /**
    * 리플렉터(물리)/빛의장막(특수) — 이 포켓몬 쪽에 걸려있는 스크린과 각각의 남은 턴 수.
    * "아군이 받는 데미지 감소"라 1v1에서는 이 포켓몬 자신이 상대 공격을 맞을 때 적용된다.
    */
@@ -730,6 +735,10 @@ export interface ActionLogEntry {
   changedOwnTypeTo?: PokemonType;
   /** changedOwnTypeTo를 발동시킨 특성 이름 */
   changedOwnTypeAbilityName?: string;
+  /** 탈(Disguise)처럼 방어측 특성이 이번 데미지를 통째로 무효화했으면 그 특성 이름 */
+  hitNegatedByAbilityName?: string;
+  /** hitNegatedByAbilityName이 발동하며(=탈이 벗겨지며) 방어측이 입은 반동 데미지 */
+  disguiseRecoilDamage?: number;
 }
 
 /** 턴 종료 시 상태이상 데미지 로그 */
@@ -770,6 +779,8 @@ export interface EndOfTurnLogEntry {
   berryHeal?: number;
   /** berryHeal을 준 도구 이름 */
   berryHealItemName?: string;
+  /** 가속(Speed Boost)처럼 턴 종료 시 특성으로 스피드가 1랭크 상승했으면 그 특성 이름 */
+  speedBoostAbilityName?: string;
 }
 
 export interface TurnResult {
@@ -1516,6 +1527,9 @@ function resolveAction(
   // 멘탈허브 등) — triggerAbilityHitEffect(헤롱헤롱바디)가 이 변수를 참조하므로 그 정의보다
   // 앞에 선언해야 한다(TDZ 회피).
   let statusCureBerryItemName: string | undefined;
+  // 탈(Disguise): 배틀 중 처음 데미지를 입는 순간에만 발동(disguiseBroken이 아직 false일 때).
+  let hitNegatedByAbilityName: string | undefined;
+  let disguiseRecoilDamage: number | undefined;
   function applyDamageToDefender(amount: number): void {
     if (blockedBySubstitute && defender.substituteHp !== undefined) {
       hitSubstitute = true;
@@ -1524,6 +1538,16 @@ function resolveAction(
         defender.substituteHp = undefined;
         substituteBroke = true;
       }
+      return;
+    }
+    // 탈: 대타를 맞힌 게 아니라 실제로 HP를 깎으려는 순간에만 판정한다(대타가 있는 동안은
+    // 애초에 위 분기에서 return하므로 여기 안 옴). 다단히트는 첫 타에서만 발동하고, 벗겨진
+    // 뒤의 나머지 타수는 이 블록을 건너뛰어 정상적으로 실제 HP를 깎는다(disguiseBroken=true).
+    if (amount > 0 && defenderAbility?.negatesFirstHitThenRecoils && !defender.disguiseBroken) {
+      defender.disguiseBroken = true;
+      hitNegatedByAbilityName = defenderAbility.name;
+      disguiseRecoilDamage = Math.floor(defender.maxHp * defenderAbility.negatesFirstHitThenRecoils.recoilFraction);
+      defender.currentHp = Math.max(0, defender.currentHp - disguiseRecoilDamage);
       return;
     }
     defender.currentHp = Math.max(0, defender.currentHp - amount);
@@ -2348,6 +2372,8 @@ function resolveAction(
     sheerForceAbilityName,
     substituteBroke,
     hitSubstitute,
+    hitNegatedByAbilityName,
+    disguiseRecoilDamage,
     protectSucceeded,
     protectFailed,
     blockedByProtectMoveName,
@@ -2702,6 +2728,20 @@ export function runTurn(
             abilityCuredStatusAbilityName: fighterAbility.name,
           });
         }
+      }
+
+      // 가속(Speed Boost): 매 턴 종료 시 스피드 1랭크 상승. 본가 규칙(교체로 나온 턴엔 발동 안 함)에
+      // 맞춰 배틀 첫 턴(turnNumber === 1)은 건너뛴다 — 이 시뮬레이터는 교체가 없어 turnNumber 1이
+      // 곧 "등장한 턴"이다. 기절했으면(이 턴 데미지로 방금 쓰러졌어도) 발동하지 않는다.
+      if (fighterAbility?.boostsSpeedEachTurnEnd && state.turnNumber > 1 && !isFainted(fighter)) {
+        fighter.stages = applyStageDelta(fighter.stages, "spe", 1);
+        endOfTurn.push({
+          actor: key,
+          damage: 0,
+          remainingHp: fighter.currentHp,
+          fainted: false,
+          speedBoostAbilityName: fighterAbility.name,
+        });
       }
 
       // 자뭉열매/오랭열매: 턴 종료 시점까지의 모든 HP 변화(필드 회복/먹다남은음식/씨뿌리기/상태이상
