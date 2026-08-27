@@ -728,6 +728,10 @@ export interface ActionLogEntry {
   abilityDisabledMoveName?: string;
   /** abilityDisabledMoveName을 봉인시킨 특성 이름 */
   abilityDisableAbilityName?: string;
+  /** 지구력처럼 방어측 특성이 피격 시 자기 랭크를 올렸으면 그 특성 이름 */
+  abilityRaisedDefenderStatsAbilityName?: string;
+  /** abilityRaisedDefenderStatsAbilityName이 올린 스탯·폭 */
+  abilityRaisedDefenderStats?: { stat: BattleStatKey; delta: number }[];
   /** 타오르는불꽃/피뢰침처럼 방어측 특성이 이 기술의 타입을 통째로 무효화했으면 그 타입 */
   abilityAbsorbedMoveType?: PokemonType;
   /** abilityAbsorbedMoveType을 무효화한 특성 이름 */
@@ -1413,6 +1417,9 @@ function resolveAction(
   let abilityDamageAbilityName: string | undefined;
   let abilityDisabledMoveName: string | undefined;
   let abilityDisableAbilityName: string | undefined;
+  // 지구력처럼 방어측 특성이 피격 시 자기 랭크를 올렸을 때(Phase 6.5 §6-2 ③). 다단히트면 타수만큼 누적.
+  let abilityRaisedDefenderStatsAbilityName: string | undefined;
+  const abilityRaisedDefenderStats: { stat: BattleStatKey; delta: number }[] = [];
 
   // 지진이 땅속의 구멍파기를, 파도타기가 물속의 다이빙을 실제로 맞혔을 때의 위력 배가.
   // evadedByCharge가 false인데 defenderHideType이 있다는 건 bypassesHiding 예외로 명중했다는 뜻.
@@ -1652,7 +1659,16 @@ function resolveAction(
     }
     if (trigger.selfStatChanges) {
       for (const change of trigger.selfStatChanges) {
+        const before = defender.stages[change.stat];
         defender.stages = applyStageDelta(defender.stages, change.stat, change.delta);
+        const after = defender.stages[change.stat];
+        // 실제로 오른 것만 로그에 남긴다(이미 +6이라 그대로면 조용히 무산). 다단히트면 폭 누적.
+        if (after > before) {
+          abilityRaisedDefenderStatsAbilityName = defenderAbility!.name;
+          const existing = abilityRaisedDefenderStats.find((s) => s.stat === change.stat);
+          if (existing) existing.delta += after - before;
+          else abilityRaisedDefenderStats.push({ stat: change.stat, delta: after - before });
+        }
       }
     }
     if (trigger.disablesAttackerMove && attacker.remainingPp[move.id] !== undefined) {
@@ -2477,6 +2493,8 @@ function resolveAction(
     abilityDamageAbilityName,
     abilityDisabledMoveName,
     abilityDisableAbilityName,
+    abilityRaisedDefenderStatsAbilityName,
+    abilityRaisedDefenderStats: abilityRaisedDefenderStats.length ? abilityRaisedDefenderStats : undefined,
     abilityAbsorbedMoveType,
     abilityAbsorbAbilityName,
     abilityAbsorbHealAmount: abilityAbsorbHealAmount || undefined,

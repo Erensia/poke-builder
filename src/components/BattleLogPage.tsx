@@ -794,6 +794,25 @@ export function BattleLogPage() {
                           {action.abilityDisabledMoveName}이(가) 봉인되었다!
                         </div>
                       )}
+                      {/* 지구력 등 — 피격 시 방어측 특성이 자기 랭크를 올렸을 때(Phase 6.5 §6-2 ③) */}
+                      {!action.blockedReason &&
+                        action.abilityRaisedDefenderStats &&
+                        action.abilityRaisedDefenderStats.length > 0 &&
+                        (() => {
+                          const joined = action.abilityRaisedDefenderStats
+                            .map((s) => STAT_LABELS[s.stat])
+                            .join(", ");
+                          const maxDelta = Math.max(
+                            ...action.abilityRaisedDefenderStats.map((s) => s.delta),
+                          );
+                          return (
+                            <div className="battle-turn-line is-muted">
+                              {defenderName}의 {action.abilityRaisedDefenderStatsAbilityName}!{" "}
+                              {defenderName}의 {joined}
+                              {iGa(joined)} {stageRiseAdverb(maxDelta)}올라갔다!
+                            </div>
+                          );
+                        })()}
                       {/* 타오르는불꽃/피뢰침 — 해당 타입 기술을 통째로 무효화(데미지는 이미 0으로
                           찍혀있어 별도 표시가 없으면 "그냥 약해서 0"인지 구분이 안 되니 전용 문구로 알려준다) */}
                       {!action.blockedReason && action.abilityAbsorbedMoveType && (
