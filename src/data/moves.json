@@ -353,6 +353,19 @@
     "drainFraction": 0.5
   },
   {
+    "id": "우드해머",
+    "name": "우드해머",
+    "type": "풀",
+    "category": "physical",
+    "power": 120,
+    "accuracy": 100,
+    "pp": 15,
+    "priority": 0,
+    "effect": "준 데미지의 1/3만큼 자신도 반동 데미지를 입는다.",
+    "recoilFraction": 0.3333333333333333,
+    "makesContact": true
+  },
+  {
     "id": "대지의힘",
     "name": "대지의힘",
     "type": "땅",
@@ -472,8 +485,9 @@
     "accuracy": null,
     "pp": 8,
     "priority": 0,
-    "effect": "사용 후 자신이 이번 턴에 쓰러지면 상대도 같이 쓰러뜨린다.",
-    "makesContact": false
+    "effect": "사용 후 자신이 쓰러지면 상대도 같이 쓰러뜨린다. 방어류와 같은 공식으로 연속 사용 시 성공 확률이 줄어든다.",
+    "makesContact": false,
+    "protectEffect": "destinyBond"
   },
   {
     "id": "나이트헤드",
@@ -1640,7 +1654,8 @@
     "pp": 20,
     "priority": 0,
     "effect": "상대가 직전에 사용한 기술을 배워서 사용한다.",
-    "makesContact": false
+    "makesContact": false,
+    "excludedFromSleepTalk": true
   },
   {
     "id": "힘껏펀치",
@@ -3157,7 +3172,8 @@
     "pp": 16,
     "priority": 0,
     "effect": "이성인 상대를 헤롱헤롱 상태로 만들어 가끔 기술을 사용하지 못하게 한다.",
-    "makesContact": false
+    "makesContact": false,
+    "inflictsVolatile": [{ "volatile": "attract", "target": "opponent" }]
   },
   {
     "id": "흔들흔들댄스",
@@ -3709,7 +3725,9 @@
     "pp": 12,
     "priority": 0,
     "effect": "1턴째 자신의 특공을 올리고, 2턴째 공격한다.",
-    "makesContact": false
+    "makesContact": false,
+    "chargeTurn": true,
+    "chargeStatChanges": [{ "target": "self", "stat": "spa", "delta": 1 }]
   },
   {
     "id": "분연",
@@ -4845,7 +4863,8 @@
     "pp": 12,
     "priority": 0,
     "effect": "지니고 있던 나무열매를 먹은 뒤에만 사용할 수 있다.",
-    "makesContact": true
+    "makesContact": true,
+    "excludedFromSleepTalk": true
   },
   {
     "id": "플레어송",
@@ -4930,7 +4949,10 @@
     "pp": 12,
     "priority": 0,
     "effect": "1턴째 자신의 특공을 올리고, 2턴째 공격한다. 비가 내리면 1턴만에 발동한다.",
-    "makesContact": false
+    "makesContact": false,
+    "chargeTurn": true,
+    "chargeSkipWeather": "비",
+    "chargeStatChanges": [{ "target": "self", "stat": "spa", "delta": 1 }]
   },
   {
     "id": "기어오르기",

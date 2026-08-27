@@ -1,6 +1,6 @@
 import type { PartySlot } from "../types/party";
 import { getPokemon, getMove, getAbility, getItem, getNature } from "../lib/data";
-import { getEffectiveForm, getEffectiveAbilityId, megaBadgeLabel } from "../lib/pokemonForm";
+import { getEffectiveForm, getEffectiveAbilityId, genderLabel, megaBadgeLabel } from "../lib/pokemonForm";
 import { computeRealStats, totalAbilityPoints } from "../lib/statCalculator";
 import { computeBulkPower } from "../lib/battlePower";
 import { TypeBadge } from "./TypeBadge";
@@ -17,11 +17,19 @@ interface BattleSetupCardProps {
   onPickItem: () => void;
   onPickNature: () => void;
   onPickPoints: () => void;
+  onToggleGender: () => void;
+  /** 저장된 샘플(빌드)이 하나라도 있는지 — Phase 6 §1-3, 없으면 버튼 자체를 숨긴다 */
+  hasSamples: boolean;
+  /** 이 슬롯을 이름 붙여 샘플로 저장 */
+  onSaveAsSample: () => void;
+  /** 저장된 샘플 목록에서 이 슬롯에 불러올 것을 고르는 모달 열기 */
+  onOpenSamplePicker: () => void;
 }
 
 /**
  * 대전 로그 화면의 셋업 카드. PartySlotCard와 거의 같은 구조(포켓몬 + 기술 4개 + 특성/도구/성격/포인트)라
  * 같은 CSS(PartySlotCard.css)를 그대로 재사용한다 — 인덱스 번호 대신 "내 포켓몬"/"상대 포켓몬" 라벨을 쓰는 것만 다르다.
+ * 샘플(빌드) 저장/불러오기도 파티 편성 화면과 같은 저장소(useSlotPresets)를 공유한다.
  */
 export function BattleSetupCard({
   label,
@@ -33,18 +41,29 @@ export function BattleSetupCard({
   onPickItem,
   onPickNature,
   onPickPoints,
+  onToggleGender,
+  hasSamples,
+  onSaveAsSample,
+  onOpenSamplePicker,
 }: BattleSetupCardProps) {
   const pokemon = slot ? getPokemon(slot.pokemonId) : undefined;
 
   if (!pokemon) {
     return (
-      <button type="button" className="party-slot party-slot-empty" onClick={onPickPokemon}>
+      <div className="party-slot party-slot-empty">
         <span className="party-slot-num">{label}</span>
-        <span className="party-slot-plus" aria-hidden="true">
-          +
-        </span>
-        <span className="party-slot-empty-label">포켓몬 선택</span>
-      </button>
+        <button type="button" className="party-slot-empty-main" onClick={onPickPokemon}>
+          <span className="party-slot-plus" aria-hidden="true">
+            +
+          </span>
+          <span className="party-slot-empty-label">포켓몬 선택</span>
+        </button>
+        {hasSamples && (
+          <button type="button" className="party-slot-sample-link" onClick={onOpenSamplePicker}>
+            저장된 샘플에서 불러오기
+          </button>
+        )}
+      </div>
     );
   }
 
@@ -59,6 +78,15 @@ export function BattleSetupCard({
   return (
     <div className="party-slot party-slot-filled">
       <span className="party-slot-num">{label}</span>
+      <button
+        type="button"
+        className="party-slot-save-sample"
+        onClick={onSaveAsSample}
+        aria-label="이 빌드를 샘플로 저장"
+        title="이 빌드를 샘플로 저장"
+      >
+        💾
+      </button>
       <button type="button" className="party-slot-clear" onClick={onClearPokemon} aria-label="슬롯 비우기">
         ✕
       </button>
@@ -120,6 +148,12 @@ export function BattleSetupCard({
           <span className="party-meta-label">포인트</span>
           <span className="party-meta-value">{totalAbilityPoints(slot!.points)} / 66</span>
         </button>
+        {pokemon.genderCategory === "both" && (
+          <button type="button" className="party-meta-pip" onClick={onToggleGender}>
+            <span className="party-meta-label">성별</span>
+            <span className="party-meta-value">{genderLabel(slot!.gender ?? "male")}</span>
+          </button>
+        )}
       </div>
 
       <div className="party-slot-bulk">

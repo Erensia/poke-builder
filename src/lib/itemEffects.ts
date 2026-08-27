@@ -93,6 +93,15 @@ export function getConfusionCureBerryResult(item: Item | undefined, alreadyConsu
 }
 
 /**
+ * 멘탈허브 — 헤롱헤롱·도발·사슬묶기·앙코르 중 하나가 걸리는 순간 치료하고 소모된다.
+ * 시몬열매(혼란)와 완전히 같은 축이지만 나무열매가 아니라 별도 도구라 긴장감(preventsOpponentBerries)의
+ * 영향을 받지 않는다 — 호출부에서 나무열매 차단 플래그와 무관하게 이 함수만 확인한다.
+ */
+export function getMentalHerbCureResult(item: Item | undefined, alreadyConsumed: boolean): boolean {
+  return !alreadyConsumed && !!item?.curesMentalVolatilesOnInflict;
+}
+
+/**
  * 자뭉열매(1/4 회복)·오랭열매(고정 10 회복) — 체력이 최대 HP 1/2 이하가 되면 1회 자동 발동한다.
  * 두 도구 다 healsBelowHalfHp* 계열 필드 중 하나만 갖고 있어서 겹칠 일은 없다.
  */

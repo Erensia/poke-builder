@@ -45,6 +45,20 @@ export function useParty() {
     setSlots(EMPTY_SLOTS);
   }
 
+  /** 파티 프리셋 불러오기(Phase 6 §1-2) — 현재 편성 6슬롯을 통째로 덮어쓴다 */
+  function loadSlots(nextSlots: PartySlots) {
+    setSlots(nextSlots);
+  }
+
+  /** 샘플(빌드) 프리셋 불러오기(Phase 6 §1-3) — 슬롯 하나만 통째로 덮어쓴다 */
+  function loadSlot(index: number, slot: PartySlot) {
+    setSlots((prev) => {
+      const next = [...prev] as PartySlots;
+      next[index] = slot;
+      return next;
+    });
+  }
+
   function setPokemon(index: number, pokemonId: string) {
     setSlots((prev) => {
       const next = [...prev] as PartySlots;
@@ -110,6 +124,17 @@ export function useParty() {
     });
   }
 
+  /** 수컷/암컷을 바로 뒤집는다(미지정이면 수컷을 기본값으로 취급해서 그 반대인 암컷으로) */
+  function toggleGender(slotIndex: number) {
+    setSlots((prev) => {
+      const slot = prev[slotIndex];
+      if (!slot) return prev;
+      const next = [...prev] as PartySlots;
+      next[slotIndex] = { ...slot, gender: (slot.gender ?? "male") === "male" ? "female" : "male" };
+      return next;
+    });
+  }
+
   /** 합산 66 / 스탯당 32를 넘지 않도록 클램프해서 능력 포인트 한 스탯을 절대값으로 설정한다 (직접 입력용) */
   function setPoint(slotIndex: number, stat: keyof AbilityPoints, value: number) {
     setSlots((prev) => {
@@ -157,8 +182,11 @@ export function useParty() {
     setAbility,
     setItem,
     setNature,
+    toggleGender,
     setPoint,
     stepPoint,
     resetParty,
+    loadSlots,
+    loadSlot,
   };
 }

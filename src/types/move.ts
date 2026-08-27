@@ -162,6 +162,14 @@ export interface Move {
   /** 솔라빔처럼 특정 날씨(쾌청)면 준비 턴 없이 1턴만에 발동하는 기술만 채운다. */
   chargeSkipWeather?: WeatherKind;
   /**
+   * 메테오빔·일렉트로빔처럼 "1턴째(준비 선언 시점)에 자신의 능력치가 오르는" 차지 기술만 채운다.
+   * chargeSkipWeather로 준비 턴 자체가 생략되는 경우(예: 일렉트로빔+비)에도 "이 기술을 쓴 턴"은
+   * 여전히 1턴째이므로 동일하게 적용된다 — statChanges와 별도 필드로 분리한 이유는, statChanges는
+   * (일반적인 자기 강화기처럼) 실제 공격이 나가는 턴에 적용되는 필드라 2턴째(공격 턴)에 다시
+   * 적용되면 안 되기 때문이다.
+   */
+  chargeStatChanges?: StatChangeEffect[];
+  /**
    * 지진·땅고르기(구멍파기의 underground 무적을 뚫음), 번개·폭풍(공중날기·뛰어오르기의 sky
    * 무적을 뚫음), 파도타기(다이빙의 underwater 무적을 뚫음)처럼 상대의 차지 기술 준비 턴
    * 무적을 예외적으로 맞힐 수 있는 기술만 채운다.
@@ -268,8 +276,12 @@ export interface Move {
    *    포함)을 완전히 무효화한다.
    *  - "endure"(버티기): 막지는 않고, 데미지는 그대로 받되 이번 턴만큼은 HP가 1 밑으로 내려가지
    *    않는다(기합의띠·옹골참과 조건은 다르지만 결과는 같은 축).
+   *  - "destinyBond"(길동무): 막지 않는다 — 성공하면 자신을 "길동무 예약" 상태로 만들 뿐이고,
+   *    activeProtect(매 턴 시작 시 초기화)가 아니라 BattleFighterState.destinyBondArmed(자신의
+   *    다음 행동 전까지 유지)로 별도 추적한다. 본가에서 Gen 7부터 방어류와 같은 연속 성공 확률
+   *    공식((1/3)^streak)을 공유해서 이 프로젝트도 protectStreak를 그대로 재사용한다.
    */
-  protectEffect?: "block" | "endure";
+  protectEffect?: "block" | "endure" | "destinyBond";
   /**
    * 킹실드 전용. protectEffect: "block"이 성공해서 상대의 접촉기를 막았을 때, 그 공격자에게
    * 추가로 거는 랭크변화(공격 -1). 접촉기가 아니면 막았어도 이 효과는 붙지 않는다.
@@ -308,8 +320,16 @@ export interface Move {
    * 선택했다는 뜻), 이 기술 자신 대신 자신이 배운 다른 기술 중 하나를 무작위로 대신 발동시킨다
    * (본가 규칙, 사용자 확인). 후보에서 제외되는 것: 잠꼬대 자신, 차지 기술(chargeTurn — 2턴짜리
    * 기술을 대신 낼 수 없음), usageCondition이 있는 기술(코골기·속이기·아이언롤러·오로라베일·
-   * 기습처럼 별도 발동 조건이 있는 변화기·기술 — "일부 변화기 제외"에 해당). PP는 잠꼬대 자신만
-   * 이미 소모했고 대신 나가는 기술의 PP는 깎지 않는다(본가와 동일).
+   * 기습처럼 별도 발동 조건이 있는 변화기·기술 — "일부 변화기 제외"에 해당), excludedFromSleepTalk가
+   * true인 기술(트림·흉내쟁이처럼 위 두 축으로 안 걸러지는 본가 고유 제외 목록). PP는 잠꼬대
+   * 자신만 이미 소모했고 대신 나가는 기술의 PP는 깎지 않는다(본가와 동일).
    */
   callsRandomLearnedMove?: boolean;
+  /**
+   * 잠꼬대 후보에서 제외해야 하지만 chargeTurn·usageCondition 어느 쪽으로도 안 걸러지는 기술
+   * (본가 고유 규칙). 트림(나무열매를 먹은 적이 있어야 하는데 그 조건 자체가 usageCondition으로
+   * 구조화돼 있지 않음), 흉내쟁이(상대가 직전에 쓴 기술을 그대로 베끼는 기술이라 "잠꼬대가 대신
+   * 낸 기술"이라는 개념 자체가 성립하지 않음) 둘 다 본가에서 잠꼬대 후보 목록에 없다.
+   */
+  excludedFromSleepTalk?: boolean;
 }

@@ -293,7 +293,13 @@
   {
     "id": "헤롱헤롱바디",
     "name": "헤롱헤롱바디",
-    "description": "접촉해 온 상대를 30%의 확률로 헤롱헤롱 상태로 만든다."
+    "description": "접촉해 온 상대를 30%의 확률로 헤롱헤롱 상태로 만든다.",
+    "hitTrigger": {
+      "on": "contact",
+      "chance": 30,
+      "inflictsVolatileOnAttacker": "attract",
+      "requiresOppositeGender": true
+    }
   },
   {
     "id": "서투름",
@@ -656,5 +662,17 @@
       "type": "물",
       "healsFraction": 0.25
     }
+  },
+  {
+    "id": "탈",
+    "name": "탈",
+    "description": "몸을 덮는 탈로 데미지를 주는 공격을 1회 무효화한다. 탈이 벗겨지면 최대 HP의 1/8만큼 데미지를 입는다.",
+    "negatesFirstHitThenRecoils": { "recoilFraction": 0.125 }
+  },
+  {
+    "id": "가속",
+    "name": "가속",
+    "description": "매 턴마다 스피드가 1랭크 상승한다. 단, 포켓몬 교체로 나온 턴에는 발동되지 않는다. 대신 기절해서 나왔다면 발동된다.",
+    "boostsSpeedEachTurnEnd": true
   }
 ]

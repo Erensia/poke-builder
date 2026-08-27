@@ -1,4 +1,5 @@
 import type { AbilityPoints } from "../types/party";
+import type { PokemonGender } from "../types/pokemon";
 import type { Move } from "../types/move";
 import type { WeatherKind } from "../types/weather";
 import { getPokemon, getAbility, getItem } from "./data";
@@ -46,6 +47,12 @@ export interface EvaluatorSlot extends FormSource {
   ability: string | null;
   nature: string | null;
   points: AbilityPoints;
+  /**
+   * 헤롱헤롱류 판정에만 쓰는 성별(getEffectiveGender). 매치업 페이지(evaluateSlotMatchup)는
+   * 1턴 스냅샷이라 이 필드를 아예 참조하지 않고, createFighterState(배틀 시뮬레이터)만 읽는다 —
+   * 그래도 이 인터페이스에 선언해둬야 구조적 타이핑상 slot.gender에 접근할 수 있다.
+   */
+  gender?: PokemonGender;
 }
 
 export interface SlotMatchupResult {

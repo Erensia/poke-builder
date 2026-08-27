@@ -1,0 +1,261 @@
+.itemdex-page {
+  width: 100%;
+  max-width: 980px;
+}
+
+.itemdex-page-header {
+  margin-bottom: 1.2rem;
+}
+
+.itemdex-page-header h2 {
+  font-size: 1.3rem;
+  margin-bottom: 0.3rem;
+}
+
+.itemdex-page-header p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+
+.itemdex-board {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+/* 목록 패널 — 포켓몬 도감(PokedexPage)과 동일한 레이아웃 패턴 */
+
+.itemdex-list-panel {
+  width: 250px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 0.75rem;
+  box-shadow: var(--shadow-sm);
+  max-height: 680px;
+}
+
+.itemdex-search {
+  width: 100%;
+  padding: 0.55rem 0.75rem;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 0.85rem;
+  flex-shrink: 0;
+}
+
+.itemdex-search:focus {
+  outline: none;
+  border-color: var(--violet);
+}
+
+.itemdex-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  overflow-y: auto;
+}
+
+.itemdex-list-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  border: 1px solid transparent;
+  background: transparent;
+  padding: 0.4rem 0.5rem;
+  border-radius: 10px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.itemdex-list-item:hover {
+  background: var(--surface-2);
+}
+
+.itemdex-list-item.is-active {
+  border-color: var(--violet);
+  background: var(--violet-soft);
+}
+
+.itemdex-list-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.itemdex-list-mega {
+  font-size: 0.65rem;
+  color: var(--violet);
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.itemdex-list-empty {
+  padding: 1rem;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+/* 상세 패널 */
+
+.itemdex-detail-panel {
+  flex: 1;
+  min-width: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 1.25rem 1.4rem;
+  box-shadow: var(--shadow-sm);
+}
+
+.itemdex-detail-empty {
+  color: var(--text-muted);
+  text-align: center;
+  padding: 3rem 0;
+  font-size: 0.9rem;
+}
+
+.itemdex-detail-head {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  margin-bottom: 1.3rem;
+}
+
+.itemdex-detail-avatar {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-weight: 700;
+  font-size: 1.35rem;
+  font-family: var(--display);
+  background: var(--gradient);
+}
+
+.itemdex-detail-head h3 {
+  font-size: 1.15rem;
+  margin-bottom: 0.35rem;
+}
+
+.itemdex-category-badge {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.1rem 0.5rem;
+  border-radius: 6px;
+  border: 1px solid var(--violet);
+  color: var(--violet);
+}
+
+.itemdex-detail-section {
+  margin-bottom: 1.3rem;
+}
+
+.itemdex-detail-section:last-child {
+  margin-bottom: 0;
+}
+
+.itemdex-detail-section h4 {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  margin-bottom: 0.6rem;
+}
+
+.itemdex-description {
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.55;
+}
+
+.itemdex-description-empty {
+  color: var(--text-muted);
+}
+
+/* 메가진화 정보 */
+
+.itemdex-mega-block {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 0.8rem 0.9rem;
+  background: var(--violet-soft);
+}
+
+.itemdex-mega-head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.itemdex-mega-pokemon {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.itemdex-mega-tag {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--violet);
+  border: 1px solid var(--violet);
+  border-radius: 6px;
+  padding: 0.1rem 0.45rem;
+}
+
+.itemdex-mega-types {
+  display: flex;
+  gap: 0.3rem;
+}
+
+.itemdex-mega-ability {
+  margin-top: 0.65rem;
+  font-size: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.itemdex-meta-label {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.itemdex-ability-desc {
+  margin: 0.3rem 0 0;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+@media (max-width: 760px) {
+  .itemdex-board {
+    flex-direction: column;
+  }
+
+  .itemdex-list-panel {
+    width: 100%;
+    max-height: 320px;
+  }
+}

@@ -54,6 +54,7 @@
         "ability": "가뭄"
       }
     ],
+    "genderCategory": "both",
     "learnset": [
       "강철날개",
       "객기",
@@ -165,6 +166,7 @@
         "ability": "메가런처"
       }
     ],
+    "genderCategory": "both",
     "learnset": [
       "객기",
       "겁나는얼굴",
@@ -279,6 +281,7 @@
         "ability": "두꺼운지방"
       }
     ],
+    "genderCategory": "both",
     "learnset": [
       "개척하기",
       "객기",
@@ -376,6 +379,7 @@
         "ability": "그림자밟기"
       }
     ],
+    "genderCategory": "both",
     "learnset": [
       "10만볼트",
       "객기",
@@ -494,6 +498,7 @@
         "ability": "페어리스킨"
       }
     ],
+    "genderCategory": "both",
     "learnset": [
       "10만볼트",
       "가드스왑",
@@ -615,6 +620,7 @@
         "ability": "단단한발톱"
       }
     ],
+    "genderCategory": "genderless",
     "learnset": [
       "개척하기",
       "객기",
@@ -724,6 +730,7 @@
         "ability": "모래의힘"
       }
     ],
+    "genderCategory": "both",
     "learnset": [
       "객기",
       "겁나는얼굴",
@@ -823,6 +830,7 @@
         "ability": "모래날림"
       }
     ],
+    "genderCategory": "both",
     "learnset": [
       "10만마력",
       "10만볼트",
@@ -957,6 +965,7 @@
         "ability": "적응력"
       }
     ],
+    "genderCategory": "both",
     "learnset": [
       "개척하기",
       "객기",
@@ -1082,6 +1091,7 @@
         "ability": "테크니션"
       }
     ],
+    "genderCategory": "both",
     "learnset": [
       "강철날개",
       "개척하기",
@@ -1187,6 +1197,7 @@
         "ability": "쓱쓱"
       }
     ],
+    "genderCategory": "both",
     "learnset": [
       "10만마력",
       "객기",
@@ -1287,6 +1298,7 @@
       "날카로운눈"
     ],
     "hiddenAbility": "젖은접시",
+    "genderCategory": "both",
     "learnset": [
       "강철날개",
       "객기",
@@ -1381,6 +1393,7 @@
         "ability": "배짱"
       }
     ],
+    "genderCategory": "both",
     "learnset": [
       "10만볼트",
       "개척하기",
@@ -1480,6 +1493,7 @@
       "짖궂은마음"
     ],
     "hiddenAbility": "엽록소",
+    "genderCategory": "both",
     "learnset": [
       "간지르기",
       "객기",
@@ -1551,6 +1565,7 @@
       "싱크로"
     ],
     "hiddenAbility": "정신력",
+    "genderCategory": "both",
     "learnset": [
       "가드스왑",
       "간지르기",
@@ -1640,6 +1655,7 @@
       "타오르는불꽃"
     ],
     "hiddenAbility": "깨어진갑옷",
+    "genderCategory": "both",
     "learnset": [
       "객기",
       "기합구슬",
@@ -1717,6 +1733,7 @@
       "타오르는불꽃"
     ],
     "hiddenAbility": "깨어진갑옷",
+    "genderCategory": "both",
     "learnset": [
       "객기",
       "고스트다이브",
@@ -1794,6 +1811,7 @@
       "급류"
     ],
     "hiddenAbility": "촉촉보이스",
+    "genderCategory": "both",
     "learnset": [
       "객기",
       "기가임팩트",
@@ -1879,6 +1897,7 @@
       "심록"
     ],
     "hiddenAbility": "변환자재",
+    "genderCategory": "both",
     "learnset": [
       "개척하기",
       "객기",
@@ -1966,6 +1985,7 @@
       "맹화"
     ],
     "hiddenAbility": "천진",
+    "genderCategory": "both",
     "learnset": [
       "객기",
       "겁나는얼굴",
@@ -2042,6 +2062,7 @@
     "abilities": [
       "부유"
     ],
+    "genderCategory": "both",
     "learnset": [
       "강철날개",
       "객기",
@@ -2130,6 +2151,7 @@
     "baseStats": { "hp": 90, "atk": 105, "def": 130, "spa": 125, "spd": 65, "spe": 85 },
     "abilities": ["지구력", "옹골참"],
     "hiddenAbility": "굳건한신념",
+    "genderCategory": "both",
     "learnset": [
       "10만볼트",
       "객기",
@@ -2191,6 +2213,7 @@
     "baseStats": { "hp": 98, "atk": 87, "def": 105, "spa": 53, "spd": 85, "spe": 67 },
     "abilities": ["프레셔", "긴장감"],
     "hiddenAbility": "미러아머",
+    "genderCategory": "both",
     "learnset": [
       "강철날개",
       "객기",
@@ -2293,6 +2316,7 @@
         "ability": "노가드"
       }
     ],
+    "genderCategory": "both",
     "learnset": [
       "10만볼트",
       "간지르기",
@@ -2392,6 +2416,7 @@
         "ability": "멀티스케일"
       }
     ],
+    "genderCategory": "both",
     "learnset": [
       "10만볼트",
       "강철날개",
@@ -2485,6 +2510,7 @@
     "baseStats": { "hp": 85, "atk": 60, "def": 65, "spa": 135, "spd": 105, "spe": 100 },
     "abilities": ["불꽃몸"],
     "hiddenAbility": "벌레의알림",
+    "genderCategory": "both",
     "learnset": [
       "개척하기",
       "객기",
@@ -2552,6 +2578,7 @@
     "baseStats": { "hp": 76, "atk": 104, "def": 71, "spa": 104, "spd": 71, "spe": 108 },
     "abilities": ["맹화"],
     "hiddenAbility": "철주먹",
+    "genderCategory": "both",
     "learnset": [
       "객기",
       "거짓울음",
@@ -2659,6 +2686,7 @@
         "ability": "부자유친"
       }
     ],
+    "genderCategory": "female-only",
     "learnset": [
       "10만볼트",
       "객기",
@@ -2735,6 +2763,7 @@
     "baseStats": { "hp": 95, "atk": 60, "def": 79, "spa": 100, "spd": 125, "spe": 81 },
     "abilities": ["이상한비늘", "승기"],
     "hiddenAbility": "헤롱헤롱바디",
+    "genderCategory": "both",
     "learnset": [
       "HP회복",
       "간지르기",
@@ -2815,6 +2844,7 @@
         "ability": "부유"
       }
     ],
+    "genderCategory": "both",
     "learnset": [
       "객기",
       "고속이동",
@@ -2905,6 +2935,7 @@
         "ability": "천하장사"
       }
     ],
+    "genderCategory": "both",
     "learnset": [
       "가드스왑",
       "간지르기",
@@ -2994,6 +3025,7 @@
         "ability": "위협"
       }
     ],
+    "genderCategory": "both",
     "learnset": [
       "개척하기",
       "객기",
@@ -3095,6 +3127,7 @@
         "ability": "관통드릴"
       }
     ],
+    "genderCategory": "both",
     "learnset": [
       "10만마력",
       "객기",
@@ -3167,6 +3200,7 @@
         "ability": "피뢰침"
       }
     ],
+    "genderCategory": "both",
     "learnset": [
       "개척하기",
       "객기",
@@ -3254,6 +3288,7 @@
     "baseStats": { "hp": 108, "atk": 112, "def": 118, "spa": 68, "spd": 72, "spe": 47 },
     "abilities": ["모래날림"],
     "hiddenAbility": "모래의힘",
+    "genderCategory": "both",
     "learnset": [
       "10만마력",
       "객기",
@@ -3322,6 +3357,7 @@
     },
     "abilities": ["쓱쓱", "적응력"],
     "hiddenAbility": "틀깨기",
+    "genderCategory": "both",
     "learnset": [
       "객기",
       "겁나는얼굴",
@@ -3388,6 +3424,7 @@
     },
     "abilities": ["타오르는불꽃"],
     "hiddenAbility": "가뭄",
+    "genderCategory": "both",
     "learnset": [
       "객기",
       "거짓울음",
@@ -3472,6 +3509,7 @@
     },
     "abilities": ["눈숨기"],
     "hiddenAbility": "눈퍼뜨리기",
+    "genderCategory": "both",
     "learnset": [
       "객기",
       "거짓울음",
@@ -3545,6 +3583,7 @@
     "types": ["강철", "고스트"],
     "baseStats": { "hp": 87, "atk": 60, "def": 95, "spa": 133, "spd": 91, "spe": 84 },
     "abilities": ["황금몸"],
+    "genderCategory": "genderless",
     "learnset": [
       "10만볼트",
       "HP회복",
@@ -3601,6 +3640,7 @@
       "bladeBaseStats": { "hp": 60, "atk": 140, "def": 50, "spa": 140, "spd": 50, "spe": 60 },
       "revertMoveId": "킹실드"
     },
+    "genderCategory": "both",
     "learnset": [
       "객기",
       "금속음",
@@ -3665,6 +3705,7 @@
         "ability": "변환자재"
       }
     ],
+    "genderCategory": "both",
     "learnset": [
       "개척하기",
       "객기",
@@ -3746,6 +3787,7 @@
     },
     "abilities": ["수포"],
     "hiddenAbility": "저수",
+    "genderCategory": "both",
     "learnset": [
       "개척하기",
       "객기",
@@ -3798,6 +3840,183 @@
       "하이드로펌프",
       "헤롱헤롱",
       "흡혈"
+    ]
+  },
+  {
+    "id": "따라큐",
+    "name": "따라큐",
+    "types": ["고스트", "페어리"],
+    "baseStats": {
+      "hp": 55,
+      "atk": 90,
+      "def": 80,
+      "spa": 50,
+      "spd": 105,
+      "spe": 96
+    },
+    "abilities": ["탈"],
+    "genderCategory": "both",
+    "learnset": [
+      "10만볼트",
+      "개척하기",
+      "객기",
+      "고스트다이브",
+      "그림자분신",
+      "기가드레인",
+      "기가임팩트",
+      "길동무",
+      "깜짝베기",
+      "나이트헤드",
+      "내던지기",
+      "달려들기",
+      "대타출동",
+      "도깨비불",
+      "도둑질",
+      "도발",
+      "돌림노래",
+      "드레인키스",
+      "드레인펀치",
+      "매지컬샤인",
+      "매직룸",
+      "미스트필드",
+      "방어",
+      "버티기",
+      "번개",
+      "벌크업",
+      "병상첨병",
+      "보복",
+      "비바라기",
+      "빛의장막",
+      "사이코키네시스",
+      "섀도볼",
+      "섀도클로",
+      "시저크로스",
+      "신비의부적",
+      "싫은소리",
+      "아픔나누기",
+      "악의파동",
+      "애교부리기",
+      "야습",
+      "우드해머",
+      "원한",
+      "이상한빛",
+      "자기암시",
+      "잠꼬대",
+      "잠자기",
+      "저주",
+      "전기자석파",
+      "질투의불꽃",
+      "집단구타",
+      "초롱초롱눈동자",
+      "치근거리기",
+      "칼춤",
+      "코골기",
+      "쾌청",
+      "트릭",
+      "트릭룸",
+      "파괴광선",
+      "흉내쟁이",
+      "흡혈"
+    ]
+  },
+  {
+    "id": "번치코",
+    "name": "번치코",
+    "types": ["불꽃", "격투"],
+    "baseStats": {
+      "hp": 80,
+      "atk": 120,
+      "def": 70,
+      "spa": 110,
+      "spd": 70,
+      "spe": 80
+    },
+    "abilities": ["맹화"],
+    "hiddenAbility": "가속",
+    "genderCategory": "both",
+    "megaEvolutions": [
+      {
+        "form": "번치코-메가",
+        "megaStone": "번치코나이트",
+        "types": ["불꽃", "격투"],
+        "baseStats": {
+          "hp": 80,
+          "atk": 160,
+          "def": 80,
+          "spa": 130,
+          "spd": 80,
+          "spe": 100
+        },
+        "ability": "가속"
+      }
+    ],
+    "learnset": [
+      "객기",
+      "고속이동",
+      "구멍파기",
+      "기가임팩트",
+      "기합구슬",
+      "깃털댄스",
+      "깜짝베기",
+      "깨트리기",
+      "내던지기",
+      "누르기",
+      "니트로차지",
+      "대타출동",
+      "도깨비불",
+      "도둑질",
+      "도우미",
+      "독찌르기",
+      "돌림노래",
+      "땅고르기",
+      "뛰어오르기",
+      "로킥",
+      "메가톤킥",
+      "버티기",
+      "번개펀치",
+      "벌크업",
+      "불꽃펀치",
+      "불대문자",
+      "브레이브버드",
+      "브레이크클로",
+      "블라스트번",
+      "블레이즈킥",
+      "비장의무기",
+      "섀도클로",
+      "소란피기",
+      "솔라빔",
+      "스톤샤워",
+      "스톤에지",
+      "승부굳히기",
+      "애크러뱃",
+      "엄청난힘",
+      "열불내기",
+      "열사의대지",
+      "열풍",
+      "오버히트",
+      "울부짖기",
+      "유턴",
+      "이판사판태클",
+      "인파이트",
+      "잠꼬대",
+      "잠자기",
+      "저주",
+      "전광석화",
+      "제비반환",
+      "지진",
+      "진공파",
+      "진흙뿌리기",
+      "쾌청",
+      "탁쳐서떨구기",
+      "파괴광선",
+      "파동탄",
+      "판별",
+      "페인트",
+      "플레어드라이브",
+      "화염방사",
+      "회오리불꽃",
+      "히트스탬프",
+      "힘껏펀치"
     ]
   }
 ]

@@ -10,6 +10,12 @@ interface ItemPickerModalProps {
   onSelect: (itemId: string) => void;
   onClear: () => void;
   onClose: () => void;
+  /**
+   * 이미 파티의 다른 슬롯이 지니고 있는 도구 id 목록(현재 편집 중인 슬롯 자신은 제외하고 넘겨야
+   * 함) — Phase 6 중복 방지: 같은 도구를 파티 내 1마리만 지닐 수 있다(본가 규칙). 없으면
+   * (undefined) 아무도 막지 않는다.
+   */
+  usedItemIds?: string[];
 }
 
 export function ItemPickerModal({
@@ -18,8 +24,10 @@ export function ItemPickerModal({
   onSelect,
   onClear,
   onClose,
+  usedItemIds,
 }: ItemPickerModalProps) {
   const [query, setQuery] = useState("");
+  const usedSet = new Set(usedItemIds);
 
   const ownStoneIds = new Set((pokemon.megaEvolutions ?? []).map((m) => m.megaStone));
 
@@ -46,16 +54,22 @@ export function ItemPickerModal({
         {filtered.map((item) => {
           const active = item.id === currentItemId;
           const isOwn = ownStoneIds.has(item.id);
+          const isTaken = usedSet.has(item.id);
           return (
             <li key={item.id}>
               <button
                 type="button"
-                className={`move-picker-item${active ? " is-used" : ""}`}
+                className={`move-picker-item${active ? " is-used" : ""}${isTaken ? " is-taken" : ""}`}
                 style={{ gridTemplateColumns: "1fr auto" }}
+                disabled={isTaken}
                 onClick={() => onSelect(item.id)}
               >
                 <span className="move-picker-name">{item.name}</span>
-                {isOwn && <span className="move-picker-cat">전용 메가스톤</span>}
+                {isTaken ? (
+                  <span className="move-picker-cat">다른 슬롯에 있음</span>
+                ) : (
+                  isOwn && <span className="move-picker-cat">전용 메가스톤</span>
+                )}
               </button>
             </li>
           );

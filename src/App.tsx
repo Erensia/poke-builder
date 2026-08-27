@@ -5,6 +5,7 @@ import { MatchupPage } from "./components/MatchupPage";
 import { BattleLogPage } from "./components/BattleLogPage";
 import { PokedexPage } from "./components/PokedexPage";
 import { MoveDexPage } from "./components/MoveDexPage";
+import { ItemDexPage } from "./components/ItemDexPage";
 import "./App.css";
 
 function App() {
@@ -31,6 +32,7 @@ function App() {
         {view === "movedex" && (
           <MoveDexPage initialMoveId={pendingMoveId} onInitialMoveConsumed={() => setPendingMoveId(null)} />
         )}
+        {view === "itemdex" && <ItemDexPage />}
       </main>
     </div>
   );

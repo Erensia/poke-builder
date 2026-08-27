@@ -1,4 +1,4 @@
-import type { Pokemon, MegaEvolution } from "../types/pokemon";
+import type { Pokemon, MegaEvolution, PokemonGender } from "../types/pokemon";
 import type { PokemonType } from "../types/pokemon-type";
 import type { BaseStats } from "../types/stats";
 
@@ -54,6 +54,36 @@ export function getEffectiveForm(pokemon: Pokemon, slot: FormSource): EffectiveF
  */
 export function getEffectiveAbilityId(form: EffectiveForm, slotAbility: string | null): string | null {
   return form.mega ? form.mega.ability : slotAbility;
+}
+
+/** getEffectiveGender가 실제로 필요로 하는 부분만 뽑은 형태. PartySlot이나 MatchupSlot 둘 다 만족한다 */
+export interface GenderSource {
+  gender?: PokemonGender;
+}
+
+/**
+ * 실제로 판정에 써야 할 성별. 종족 성별 카테고리가 단일성별/무성별이면 슬롯의 gender와 무관하게
+ * 항상 그 값으로 고정되고("both"가 아니면 유저가 고를 수 없음 — UI에서도 그 종은 성별 픽 자체를
+ * 숨긴다), "both"일 때만 슬롯이 고른 값을 쓰며 미지정이면 수컷을 기본값으로 취급한다(Phase 6
+ * §1-1 — 사용자 확정 2026-08-26). 무성별은 null로 표현 — 헤롱헤롱류는 이 값이 null이면 아예
+ * 성립하지 않는다.
+ */
+export function getEffectiveGender(pokemon: Pokemon, slot: GenderSource): PokemonGender | null {
+  switch (pokemon.genderCategory) {
+    case "male-only":
+      return "male";
+    case "female-only":
+      return "female";
+    case "genderless":
+      return null;
+    case "both":
+      return slot.gender ?? "male";
+  }
+}
+
+/** 성별 값의 표시 라벨("수컷"/"암컷") — 파티 편성 UI와 대전 로그 문구에서 함께 쓴다 */
+export function genderLabel(gender: PokemonGender): "수컷" | "암컷" {
+  return gender === "female" ? "암컷" : "수컷";
 }
 
 /**

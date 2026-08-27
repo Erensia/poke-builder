@@ -27,6 +27,10 @@ interface MatchupSlotCardProps {
   onPickPoints: () => void;
   onPickStages: () => void;
   onPickMove?: () => void;
+  /** 저장된 샘플(빌드)이 하나라도 있는지 — Phase 6 §1-3, 없으면 버튼 자체를 숨긴다 */
+  hasSamples: boolean;
+  /** 저장된 샘플 목록에서 이 슬롯에 불러올 것을 고르는 모달 열기(불러오기 전용 — 저장 없음) */
+  onOpenSamplePicker: () => void;
 }
 
 export function MatchupSlotCard({
@@ -47,18 +51,27 @@ export function MatchupSlotCard({
   onPickPoints,
   onPickStages,
   onPickMove,
+  hasSamples,
+  onOpenSamplePicker,
 }: MatchupSlotCardProps) {
   const pokemon = slot.pokemonId ? getPokemon(slot.pokemonId) : undefined;
 
   if (!pokemon) {
     return (
-      <button type="button" className="matchup-slot matchup-slot-empty" onClick={onPickPokemon}>
+      <div className="matchup-slot matchup-slot-empty">
         <span className="matchup-slot-label">{label}</span>
-        <span className="matchup-slot-plus" aria-hidden="true">
-          +
-        </span>
-        <span className="matchup-slot-empty-text">포켓몬 선택</span>
-      </button>
+        <button type="button" className="matchup-slot-empty-main" onClick={onPickPokemon}>
+          <span className="matchup-slot-plus" aria-hidden="true">
+            +
+          </span>
+          <span className="matchup-slot-empty-text">포켓몬 선택</span>
+        </button>
+        {hasSamples && (
+          <button type="button" className="matchup-slot-sample-link" onClick={onOpenSamplePicker}>
+            저장된 샘플에서 불러오기
+          </button>
+        )}
+      </div>
     );
   }
 

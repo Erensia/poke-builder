@@ -3,7 +3,7 @@ import type { MoveClassification, MoveCategory } from "./move";
 import type { WeatherKind } from "./weather";
 import type { FieldKind } from "./field";
 import type { BattleStatKey } from "./battleStats";
-import type { StatusCondition } from "./status";
+import type { StatusCondition, VolatileCondition } from "./status";
 
 /** 랭크를 이만큼(stat, delta) 바꾼다는 짧은 서술 — 여러 특성이 같은 모양을 재사용한다 */
 export interface AbilityStatBoost {
@@ -80,6 +80,13 @@ export interface AbilityHitTrigger {
   chance?: number;
   /** 공격자에게 이 주 상태이상을 건다(정전기=마비, 불꽃몸=화상). 타입 면역·중첩 규칙은 기존 inflictStatus/isImmuneToStatus를 그대로 재사용 */
   inflictsStatusOnAttacker?: StatusCondition;
+  /** 공격자에게 이 행동방해(volatile) 효과를 건다(헤롱헤롱바디=attract) */
+  inflictsVolatileOnAttacker?: VolatileCondition;
+  /**
+   * inflictsVolatileOnAttacker가 attract일 때만 의미 있음 — 방어측(이 특성 소유자)과 공격측이
+   * 이성 관계일 때만(getEffectiveGender 기준) 발동한다. 무성별이거나 동성이면 조용히 무산된다.
+   */
+  requiresOppositeGender?: boolean;
   /** 공격자에게 자신(방어측)의 최대 HP 이 비율만큼 고정 데미지를 준다(까칠한피부: 1/8 = 0.125) */
   damagesAttackerFraction?: number;
   /** 자신(방어측)의 랭크를 이 목록만큼 바꾼다(깨어진갑옷: 방어 -1, 스피드 +2) */
@@ -254,6 +261,20 @@ export interface Ability {
   ignoresOpponentStatStagesInDamage?: boolean;
   /** 부자유친: 데미지를 준 공격 직후, 같은 기술로 이 배율만큼의 위력으로 추가타를 한 번 더 날린다. */
   followUpHitPowerMultiplier?: number;
+  /**
+   * 탈(Disguise): 배틀 중 처음으로 데미지를 입는 순간(다단히트라면 그 첫 타만) 데미지를 통째로
+   * 무효화하고, 그 즉시 최대 HP의 이 비율만큼 반동 데미지를 자신이 입는다(Bulbapedia 확인 —
+   * 8세대부터 벗겨지는 즉시 적용, 다단히트 나머지 타수는 정상적으로 맞음). 상태이상 등 데미지 외
+   * 부가 효과는 막지 않는다. 한 번 벗겨지면 배틀 끝까지 다시 발동하지 않는다(BattleFighterState.
+   * disguiseBroken으로 추적) — 이 프로젝트는 교체가 없는 1v1이라 "복귀 시 재생성" 축은 해당 없음.
+   */
+  negatesFirstHitThenRecoils?: { recoilFraction: number };
+  /**
+   * 가속(Speed Boost): 매 턴 종료 시 스피드가 1랭크 상승한다. 본가에서는 "포켓몬 교체로 나온
+   * 턴에는 발동 안 함"이 규칙이라, 이 시뮬레이터에서는 배틀 첫 턴(state.turnNumber === 1)에는
+   * 적용하지 않고 그 다음 턴부터 매 턴 종료 시 적용한다.
+   */
+  boostsSpeedEachTurnEnd?: boolean;
   /**
    * 관통드릴: 접촉기를 쓸 때 상대의 방어/특방 랭크 "상승분"을 무시하고(마이너스는 그대로 페널티로
    * 적용 — 날카로운눈의 회피율 처리와 같은 패턴), 최종 데미지가 상대 최대 HP의 이 비율보다

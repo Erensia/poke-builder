@@ -48,6 +48,16 @@
   opacity: 0.5;
 }
 
+.move-picker-item.is-taken {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.move-picker-item.is-taken:hover {
+  border-color: transparent;
+  background: var(--surface-2);
+}
+
 .move-picker-name {
   font-weight: 600;
   white-space: nowrap;

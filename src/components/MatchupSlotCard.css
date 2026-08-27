@@ -31,11 +31,20 @@
   border-style: dashed;
   background: var(--surface-2);
   color: var(--text-muted);
+}
+
+.matchup-slot-empty-main {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+  border: none;
+  background: transparent;
+  color: inherit;
   cursor: pointer;
 }
 
-.matchup-slot-empty:hover {
-  border-color: var(--violet);
+.matchup-slot-empty-main:hover {
   color: var(--violet);
 }
 
@@ -48,6 +57,20 @@
 .matchup-slot-empty-text {
   font-size: 0.8rem;
   font-weight: 500;
+}
+
+.matchup-slot-sample-link {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.68rem;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0;
+}
+
+.matchup-slot-sample-link:hover {
+  color: var(--violet);
 }
 
 /* Filled state */

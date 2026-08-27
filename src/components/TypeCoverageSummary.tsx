@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { PartySlots } from "../hooks/useParty";
 import { computeTypeCoverage, getPartyMembers } from "../lib/partyAnalysis";
 import { getEffectiveness } from "../lib/typeEffectiveness";
@@ -12,6 +12,7 @@ interface TypeCoverageSummaryProps {
 
 export function TypeCoverageSummary({ slots }: TypeCoverageSummaryProps) {
   const [openType, setOpenType] = useState<PokemonType | null>(null);
+  const detailRef = useRef<HTMLDivElement>(null);
   const cells = computeTypeCoverage(slots);
   const hasAnyMember = slots.some((s) => s !== null);
 
@@ -24,11 +25,19 @@ export function TypeCoverageSummary({ slots }: TypeCoverageSummaryProps) {
       .filter((d) => d.mult !== 1)
       .sort((a, b) => b.mult - a.mult);
 
+  // 타입 칸을 누르면 하단에 상세 패널이 새로 생기거나 내용(높이)이 바뀐다 — 이전에 골라둔 타입보다
+  // 파티원이 더 많이 걸리는 타입으로 바꾸면 패널이 더 길어지는데, 그때도 항상 패널 끝까지(페이지
+  // 가장 아래까지) 스크롤되도록 매번 openType이 바뀔 때마다 새로 계산해서 스크롤한다.
+  useEffect(() => {
+    if (!openType) return;
+    detailRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [openType, openDetail?.length]);
+
   return (
     <section className="type-coverage">
       <header className="type-coverage-header">
         <h2>타입 상성 요약</h2>
-        <p>공격 타입별로 파티가 얼마나 약한지/버티는지 한눈에 봅니다. 칸을 누르면 어떤 포켓몬이 해당되는지 보여줍니다.</p>
+        <p>현재 파티의 약점 타입을 한눈에 볼 수 있습니다. 타입을 선택하면 어떤 포켓몬이 해당되는지 보여줍니다.</p>
       </header>
 
       {!hasAnyMember ? (
@@ -66,12 +75,12 @@ export function TypeCoverageSummary({ slots }: TypeCoverageSummaryProps) {
       )}
 
       {openType && openDetail && (
-        <div className="type-coverage-detail">
+        <div className="type-coverage-detail" ref={detailRef}>
           <h3>
             <span className="type-coverage-badge" style={{ background: TYPE_COLORS[openType] }}>
               {openType}
             </span>
-            공격에 대한 파티원 반응
+            기술에 대한 포켓몬 상성
           </h3>
           {openDetail.length === 0 ? (
             <p className="type-coverage-empty">모두 등배(×1)로 받습니다.</p>

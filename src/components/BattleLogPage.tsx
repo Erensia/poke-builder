@@ -7,7 +7,9 @@ import { AbilityPickerModal } from "./AbilityPickerModal";
 import { ItemPickerModal } from "./ItemPickerModal";
 import { NaturePickerModal } from "./NaturePickerModal";
 import { PointsEditorModal } from "./PointsEditorModal";
+import { SlotPresetsModal } from "./SlotPresetsModal";
 import { useBattleSetup } from "../hooks/useBattleSetup";
+import { useSlotPresets } from "../hooks/useSlotPresets";
 import { getPokemon, getMove, getItem } from "../lib/data";
 import { getEffectiveForm, megaBadgeLabel } from "../lib/pokemonForm";
 import { TYPE_COLORS, typeColorRgba } from "../lib/typeColors";
@@ -36,6 +38,7 @@ type PickerState =
   | { kind: "nature"; side: Side }
   | { kind: "points"; side: Side }
   | { kind: "move"; side: Side; moveIndex: 0 | 1 | 2 | 3 }
+  | { kind: "slotPresets"; side: Side }
   | null;
 
 const STATUS_LABELS: Record<StatusCondition, string> = {
@@ -59,6 +62,7 @@ const VOLATILE_LABELS = {
   taunt: "도발",
   disable: "사슬묶기",
   encore: "앙코르",
+  attract: "헤롱헤롱",
 } as const;
 
 /** 액션 로그 한 줄 안에 "OO 발동!"으로 뭉뚱그리기보다 전용 문구를 따로 쓰는 volatile들 */
@@ -162,6 +166,7 @@ const REAL_STAT_LABELS: { key: keyof BaseStats; label: string }[] = [
 
 export function BattleLogPage() {
   const setup = useBattleSetup();
+  const slotPresets = useSlotPresets();
   const [picker, setPicker] = useState<PickerState>(null);
   const [battleState, setBattleState] = useState<BattleState | null>(null);
   const [log, setLog] = useState<TurnResult[]>([]);
@@ -175,6 +180,15 @@ export function BattleLogPage() {
     const slot = sideOf(side).slot;
     return slot ? getPokemon(slot.pokemonId) : undefined;
   };
+
+  function handleSaveSlotAsSample(side: Side) {
+    const slot = sideOf(side).slot;
+    if (!slot) return;
+    const pokemon = getPokemon(slot.pokemonId);
+    const name = window.prompt("이 빌드를 저장할 이름을 입력하세요.", pokemon?.name ?? "");
+    if (name === null) return;
+    slotPresets.savePreset(name, slot);
+  }
 
   /**
    * 구애스카프: 이 쪽이 그 도구를 지녔고, 로그에 이미 이 쪽이 실제로 쓴 기술이 있으면 그 첫 기술
@@ -306,6 +320,10 @@ export function BattleLogPage() {
               onPickItem={() => setPicker({ kind: "item", side: "a" })}
               onPickNature={() => setPicker({ kind: "nature", side: "a" })}
               onPickPoints={() => setPicker({ kind: "points", side: "a" })}
+              onToggleGender={setup.a.toggleGender}
+              hasSamples={slotPresets.presets.length > 0}
+              onSaveAsSample={() => handleSaveSlotAsSample("a")}
+              onOpenSamplePicker={() => setPicker({ kind: "slotPresets", side: "a" })}
             />
             <BattleSetupCard
               label="상대 포켓몬"
@@ -317,6 +335,10 @@ export function BattleLogPage() {
               onPickItem={() => setPicker({ kind: "item", side: "b" })}
               onPickNature={() => setPicker({ kind: "nature", side: "b" })}
               onPickPoints={() => setPicker({ kind: "points", side: "b" })}
+              onToggleGender={setup.b.toggleGender}
+              hasSamples={slotPresets.presets.length > 0}
+              onSaveAsSample={() => handleSaveSlotAsSample("b")}
+              onOpenSamplePicker={() => setPicker({ kind: "slotPresets", side: "b" })}
             />
           </div>
           <button type="button" className="battle-start-button" disabled={!canStart} onClick={startBattle}>
@@ -553,6 +575,7 @@ export function BattleLogPage() {
                         {action.blockedReason === "recharge" && " — 반동으로 행동 불가"}
                         {action.blockedReason === "confusion" &&
                           ` — 혼란으로 자멸! (${action.selfDamage} 데미지)`}
+                        {action.blockedReason === "attract" && " — 헤롱헤롱에 빠져 행동 불가"}
                         {action.blockedReason === "psychicFieldPriority" && " — 사이코필드에 막혀 실패"}
                         {!action.blockedReason && action.charging && " — 준비 중! 다음 턴 발동된다"}
                         {!action.blockedReason && !action.charging && action.evadedByCharge && " — 무적 상태라 빗나감"}
@@ -721,6 +744,14 @@ export function BattleLogPage() {
                           {STATUS_ONSET_TEXT[action.abilityInflictedStatusOnAttacker](actorName)}
                         </div>
                       )}
+                      {/* 헤롱헤롱바디 — 접촉해 온 공격자가 이성이면 방어측 특성이 발동해 공격자에게 걸린다 */}
+                      {!action.blockedReason && action.abilityInflictedVolatileOnAttacker && (
+                        <div className="battle-turn-line is-muted">
+                          {defenderName}의 {action.abilityInflictedVolatileAbilityName}! {actorName}
+                          {eunNeun(actorName)} {VOLATILE_LABELS[action.abilityInflictedVolatileOnAttacker]} 상태가
+                          되었다!
+                        </div>
+                      )}
                       {!action.blockedReason && !!action.abilityDamageToAttacker && (
                         <div className="battle-turn-line is-muted">
                           {defenderName}의 {action.abilityDamageAbilityName}! {actorName}
@@ -747,6 +778,14 @@ export function BattleLogPage() {
                       {!action.blockedReason && action.hitSubstitute && (
                         <div className="battle-turn-line is-muted">
                           {action.substituteBroke ? "대타가 깨졌다!" : "대타가 대신 맞았다!"}
+                        </div>
+                      )}
+                      {/* 탈(Disguise) — 데미지를 통째로 무효화하고 그 반동으로 벗겨지며 데미지를 입는다.
+                          다단히트 나머지 타수는 이 필드 없이 정상적으로 데미지가 들어간다(첫 타만 무효화). */}
+                      {!action.blockedReason && action.hitNegatedByAbilityName && (
+                        <div className="battle-turn-line is-muted">
+                          {defenderName}의 {action.hitNegatedByAbilityName}! 공격이 무효화되었다! {defenderName}
+                          {eunNeun(defenderName)} 반동으로 {action.disguiseRecoilDamage} 데미지를 입었다!
                         </div>
                       )}
                       {/* 흑안개 — 자신/상대 구분 없이 양쪽 다 초기화되는 유일한 랭크변화 효과라 전용 문구로 알려준다 */}
@@ -839,11 +878,17 @@ export function BattleLogPage() {
                           {roEuro(action.enduredProtectMoveName)} 버텼다! (HP 1)
                         </div>
                       )}
-                      {/* 방어/판별/킹실드 — 자신의 시도가 이번에 성공했는지/실패했는지 */}
-                      {!action.blockedReason && action.protectSucceeded && (
+                      {/* 방어/판별/킹실드 — 자신의 시도가 이번에 성공했는지/실패했는지. 길동무는 "몸을
+                          지키는" 효과가 아니라(막지 않음) 전용 문구로 따로 표시한다(바로 아래). */}
+                      {!action.blockedReason && action.protectSucceeded && action.move.protectEffect !== "destinyBond" && (
                         <div className="battle-turn-line is-muted">
                           {actorName}
                           {eunNeun(actorName)} {action.move.name}로 몸을 지켰다!
+                        </div>
+                      )}
+                      {!action.blockedReason && action.protectSucceeded && action.move.protectEffect === "destinyBond" && (
+                        <div className="battle-turn-line is-muted">
+                          {actorName}는 상대를 길동무로 삼으려 한다!
                         </div>
                       )}
                       {!action.blockedReason && action.protectFailed && (
@@ -885,13 +930,17 @@ export function BattleLogPage() {
                           {eunNeun(defenderName)} 쓰러졌다
                         </div>
                       )}
-                      {/* 자신이 쓰러졌는지 여부(자폭류·발버둥 반동·혼란 자멸) — 원인이 된 기술명을 그대로 붙인다 */}
+                      {/* 자신이 쓰러졌는지 여부(자폭류·발버둥 반동·혼란 자멸·상대의 길동무) — 원인을 그대로 붙인다 */}
                       {action.selfFainted && (
                         <div className="battle-turn-line is-fainted">
                           {actorName}
                           {eunNeun(actorName)}{" "}
-                          {action.blockedReason === "confusion" ? "혼란으로 인한 데미지" : `${action.move.name}의 여파`}로
-                          쓰러졌다
+                          {action.triggeredDestinyBond
+                            ? `${defenderName}의 길동무`
+                            : action.blockedReason === "confusion"
+                              ? "혼란으로 인한 데미지"
+                              : `${action.move.name}의 여파`}
+                          로 쓰러졌다
                         </div>
                       )}
                     </div>
@@ -951,6 +1000,10 @@ export function BattleLogPage() {
                         {STATUS_TRIGGER_TEXT[e.statusCondition](fighterLabel(battleState, e.actor))} (남은 HP{" "}
                         {e.remainingHp})
                         {e.fainted && " · 기절!"}
+                      </>
+                    ) : e.speedBoostAbilityName ? (
+                      <>
+                        {fighterLabel(battleState, e.actor)}의 {e.speedBoostAbilityName}! 스피드가 올라갔다!
                       </>
                     ) : (
                       <>
@@ -1112,6 +1165,17 @@ export function BattleLogPage() {
             />
           );
         })()}
+
+      {picker?.kind === "slotPresets" && (
+        <SlotPresetsModal
+          presets={slotPresets.presets}
+          slotIsFilled={sideOf(picker.side).slot !== null}
+          onClose={() => setPicker(null)}
+          onLoad={(preset) => sideOf(picker.side).loadSlot(preset.slot)}
+          onRename={slotPresets.renamePreset}
+          onDelete={slotPresets.deletePreset}
+        />
+      )}
     </section>
   );
 }

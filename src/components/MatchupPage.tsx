@@ -9,7 +9,9 @@ import { ItemPickerModal } from "./ItemPickerModal";
 import { NaturePickerModal } from "./NaturePickerModal";
 import { PointsEditorModal } from "./PointsEditorModal";
 import { StageEditorModal } from "./StageEditorModal";
+import { SlotPresetsModal } from "./SlotPresetsModal";
 import { useMatchup } from "../hooks/useMatchup";
+import { useSlotPresets } from "../hooks/useSlotPresets";
 import { getPokemon, getMove } from "../lib/data";
 import { getEffectiveForm } from "../lib/pokemonForm";
 import { computeRealStats } from "../lib/statCalculator";
@@ -26,10 +28,12 @@ type PickerState =
   | { kind: "points"; side: Side }
   | { kind: "stages"; side: Side }
   | { kind: "move" }
+  | { kind: "slotPresets"; side: Side }
   | null;
 
 export function MatchupPage() {
   const { attacker, defender, weather, setWeather } = useMatchup();
+  const slotPresets = useSlotPresets();
   const [picker, setPicker] = useState<PickerState>(null);
 
   const sideOf = (side: Side) => (side === "attacker" ? attacker : defender);
@@ -91,6 +95,8 @@ export function MatchupPage() {
           onPickPoints={() => setPicker({ kind: "points", side: "attacker" })}
           onPickStages={() => setPicker({ kind: "stages", side: "attacker" })}
           onPickMove={() => setPicker({ kind: "move" })}
+          hasSamples={slotPresets.presets.length > 0}
+          onOpenSamplePicker={() => setPicker({ kind: "slotPresets", side: "attacker" })}
         />
 
         <div className="matchup-verdict-row">
@@ -110,6 +116,8 @@ export function MatchupPage() {
           onPickNature={() => setPicker({ kind: "nature", side: "defender" })}
           onPickPoints={() => setPicker({ kind: "points", side: "defender" })}
           onPickStages={() => setPicker({ kind: "stages", side: "defender" })}
+          hasSamples={slotPresets.presets.length > 0}
+          onOpenSamplePicker={() => setPicker({ kind: "slotPresets", side: "defender" })}
         />
       </div>
 
@@ -239,6 +247,17 @@ export function MatchupPage() {
             }}
           />
         ))()}
+
+      {picker?.kind === "slotPresets" && (
+        <SlotPresetsModal
+          presets={slotPresets.presets}
+          slotIsFilled={sideOf(picker.side).slot.pokemonId !== null}
+          onClose={() => setPicker(null)}
+          onLoad={(preset) => sideOf(picker.side).loadFromPartySlot(preset.slot)}
+          onRename={slotPresets.renamePreset}
+          onDelete={slotPresets.deletePreset}
+        />
+      )}
     </section>
   );
 }

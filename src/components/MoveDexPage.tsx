@@ -168,9 +168,22 @@ export function MoveDexPage({ initialMoveId, onInitialMoveConsumed }: MoveDexPag
             >
               <div className="movedex-cell movedex-cell-name">
                 <span className="movedex-name">{m.name}</span>
-                {m.classification && m.classification.length > 0 && (
-                  <span className="movedex-classification">{m.classification.join(" · ")}</span>
-                )}
+                {(() => {
+                  // 연속 공격 태그(Phase 6 §2-2, 사용자 1차 정리) — minHits/maxHits가 있는 다단히트
+                  // 기술만 "연속 N회"(고정)나 "연속 N~M회"(가변)로 표시. classification 배열과는
+                  // 별개 축(특성 상호작용용이 아니라 순수 표시용)이라 데이터에 추가하지 않고 여기서
+                  // 즉석으로 계산해 같은 줄에 붙인다.
+                  const multiHitLabel =
+                    m.minHits !== undefined && m.maxHits !== undefined
+                      ? m.minHits === m.maxHits
+                        ? `연속 ${m.minHits}회`
+                        : `연속 ${m.minHits}~${m.maxHits}회`
+                      : undefined;
+                  const tags = [...(m.classification ?? []), ...(multiHitLabel ? [multiHitLabel] : [])];
+                  return (
+                    tags.length > 0 && <span className="movedex-classification">{tags.join(" · ")}</span>
+                  );
+                })()}
                 {m.effect && <p className="movedex-effect">{m.effect}</p>}
               </div>
               <span className="movedex-cell">{m.type ? <TypeBadge type={m.type} /> : "—"}</span>

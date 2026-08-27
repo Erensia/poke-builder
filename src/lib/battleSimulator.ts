@@ -2,7 +2,7 @@ import type { Move } from "../types/move";
 import type { WeatherKind } from "../types/weather";
 import type { FieldKind } from "../types/field";
 import type { PokemonType } from "../types/pokemon-type";
-import type { StanceChangeForms } from "../types/pokemon";
+import type { StanceChangeForms, PokemonGender } from "../types/pokemon";
 import {
   NEUTRAL_ACCURACY_STAGES,
   NEUTRAL_CRIT_STAGE,
@@ -21,7 +21,7 @@ import {
 } from "../types/status";
 import type { Ability } from "../types/ability";
 import { getPokemon, getAbility, getMove, getItem } from "./data";
-import { getEffectiveForm, getEffectiveAbilityId } from "./pokemonForm";
+import { getEffectiveForm, getEffectiveAbilityId, getEffectiveGender } from "./pokemonForm";
 import { computeRealStats } from "./statCalculator";
 import { applyMoveStatChanges, applyStageDelta, clampStagesToNonNegative } from "./statStages";
 import { hitTriggerMatchesMove } from "./abilityHitTriggers";
@@ -44,6 +44,7 @@ import {
   isImmuneToStatus,
 } from "./statusConditions";
 import {
+  ATTRACT_ACTION_BLOCK_CHANCE,
   CONFUSION_SELF_HIT_CHANCE,
   CONFUSION_SELF_HIT_POWER,
   consumeVolatileTurn,
@@ -71,6 +72,7 @@ import {
   getDrainHealMultiplier,
   getStatusCureBerryResult,
   getConfusionCureBerryResult,
+  getMentalHerbCureResult,
   getHpThresholdBerryHeal,
   shouldTriggerWhiteHerb,
   getEnduranceResult,
@@ -150,6 +152,11 @@ export interface BattleFighterState {
   slot: EvaluatorSlot;
   types: PokemonType[];
   /**
+   * 실제로 판정에 쓰는 성별(getEffectiveGender로 등장 시점에 한 번만 계산 — 배틀 중 바뀌지
+   * 않는다). 무성별 종은 null. 헤롱헤롱(매혹)·헤롱헤롱바디가 이성 관계를 확인할 때 쓴다.
+   */
+  gender: PokemonGender | null;
+  /**
    * 실제로 판정에 쓰는 특성 id. 메가진화 중이면 slot.ability와 무관하게 항상 그 메가폼 고유
    * 특성으로 고정된다(getEffectiveAbilityId) — 메가리자몽Y는 항상 가뭄, 메가리자몽X는 항상
    * 단단한발톱. slot.ability를 직접 쓰면 메가 특성이 무시되는 버그가 있어 이 필드로 분리했다.
@@ -196,6 +203,18 @@ export interface BattleFighterState {
    * 동일하다(Ability.doublesSpeedOnItemLoss 참고).
    */
   unburdenActive?: boolean;
+  /**
+   * 탈(Disguise): 배틀 중 이 특성으로 한 번이라도 데미지를 무효화했으면(=탈이 벗겨졌으면) true —
+   * unburdenActive와 같은 패턴으로 배틀 끝까지 유지되는 플래그. 이후로는 정상적으로 데미지를 받는다.
+   */
+  disguiseBroken?: boolean;
+  /**
+   * 길동무: 이번 시전이 성공해서 "이번 턴(또는 이후 턴에) 직접 공격으로 쓰러지면 상대도 같이
+   * 쓰러뜨린다" 예약이 걸려있으면 true. activeProtect와 달리 매 턴 시작 시 초기화되지 않고,
+   * 이 포켓몬 자신의 다음 행동이 시작되는 시점(resolveAction 최상단)에 지워진다 — "다음 자신의
+   * 턴이 오면(행동불능인 턴 포함) 예약이 사라진다"는 본가 규칙과 대응.
+   */
+  destinyBondArmed?: boolean;
   /**
    * 리플렉터(물리)/빛의장막(특수) — 이 포켓몬 쪽에 걸려있는 스크린과 각각의 남은 턴 수.
    * "아군이 받는 데미지 감소"라 1v1에서는 이 포켓몬 자신이 상대 공격을 맞을 때 적용된다.
@@ -278,6 +297,7 @@ export function createFighterState(slot: EvaluatorSlot, moves: Move[]): BattleFi
   return {
     slot,
     types: form.types,
+    gender: getEffectiveGender(pokemon, slot),
     effectiveAbilityId: getEffectiveAbilityId(form, slot.ability),
     realStats,
     currentHp: realStats.hp,
@@ -543,6 +563,7 @@ export type ActionBlockReason =
   | "flinch"
   | "recharge"
   | "confusion"
+  | "attract"
   | "psychicFieldPriority"
   | "usageCondition"
   | "moveRestricted";
@@ -689,6 +710,10 @@ export interface ActionLogEntry {
   abilityInflictedStatusOnAttacker?: StatusConditionState["condition"];
   /** abilityInflictedStatusOnAttacker를 건 특성 이름 */
   abilityInflictedStatusAbilityName?: string;
+  /** 헤롱헤롱바디처럼 방어측 특성이 발동해 공격자에게 행동방해(volatile)를 걸었으면 그 종류 */
+  abilityInflictedVolatileOnAttacker?: VolatileCondition;
+  /** abilityInflictedVolatileOnAttacker를 건 특성 이름 */
+  abilityInflictedVolatileAbilityName?: string;
   /** 까칠한피부처럼 방어측 특성이 발동해 공격자에게 고정 데미지를 줬으면 그 양 */
   abilityDamageToAttacker?: number;
   /** abilityDamageToAttacker를 준 특성 이름 */
@@ -717,6 +742,16 @@ export interface ActionLogEntry {
   changedOwnTypeTo?: PokemonType;
   /** changedOwnTypeTo를 발동시킨 특성 이름 */
   changedOwnTypeAbilityName?: string;
+  /** 탈(Disguise)처럼 방어측 특성이 이번 데미지를 통째로 무효화했으면 그 특성 이름 */
+  hitNegatedByAbilityName?: string;
+  /** hitNegatedByAbilityName이 발동하며(=탈이 벗겨지며) 방어측이 입은 반동 데미지 */
+  disguiseRecoilDamage?: number;
+  /**
+   * 길동무: 이 행동(공격측의 공격)으로 상대가 쓰러졌는데, 상대가 길동무 예약 상태였어서
+   * 공격측도 같이 쓰러졌으면 true. fainted/selfFainted 둘 다 이미 true로 채워지지만, UI가
+   * "왜 같이 쓰러졌는지" 전용 문구를 보여줄 수 있게 별도 플래그로 남긴다.
+   */
+  triggeredDestinyBond?: boolean;
 }
 
 /** 턴 종료 시 상태이상 데미지 로그 */
@@ -757,6 +792,8 @@ export interface EndOfTurnLogEntry {
   berryHeal?: number;
   /** berryHeal을 준 도구 이름 */
   berryHealItemName?: string;
+  /** 가속(Speed Boost)처럼 턴 종료 시 특성으로 스피드가 1랭크 상승했으면 그 특성 이름 */
+  speedBoostAbilityName?: string;
 }
 
 export interface TurnResult {
@@ -824,6 +861,11 @@ function resolveAction(
   const defenderKey = opponentKey(actorKey);
   const attacker = state[actorKey];
   const defender = state[defenderKey];
+
+  // 길동무: "다음 자신의 턴이 오면(행동불능인 턴 포함) 예약이 사라진다"는 본가 규칙 — 이 공격자의
+  // 이번 턴 처리가 막 시작된 시점에 지난 턴 걸어둔 예약을 무조건 지운다. 이번 턴 다시 길동무를
+  // 걸면(아래 protectEffect 판정 성공 시) 새로 켠다.
+  attacker.destinyBondArmed = false;
 
   // 차지 기술 2턴째: 준비 턴에 저장해둔 기술을 이번 턴 실제로 고른 기술과 무관하게 강제로
   // 재실행한다(본가 규칙 — UI에서도 이 경우 선택을 요구하지 않는다). PP는 준비 턴에 이미
@@ -1029,10 +1071,28 @@ function resolveAction(
     }
   }
 
+  // 3-1) 헤롱헤롱(매혹): ingrain/leechSeed와 같은 "배틀 끝까지 유지"형이라 턴수를 소모하지 않는다
+  // (consumeVolatileTurn 호출 없음 — 교체가 없는 1v1이라 해제될 계기가 없음). 걸려있는 동안 매
+  // 행동 판정마다 50% 확률로 그 턴 행동을 통째로 못 한다.
+  if (hasVolatile(attacker.volatile, "attract") && random() < ATTRACT_ACTION_BLOCK_CHANCE) {
+    return blocked("attract");
+  }
+
   // 4) 차지 기술 1턴째(공중날기 등): 준비만 하고 이번 턴엔 데미지를 주지 않는다. 맑음 날씨의
   // 솔라빔처럼 chargeSkipWeather가 현재 날씨와 일치하면 준비 없이 곧장 2턴째처럼 실행한다.
   // releasingCharge면 이미 2턴째(위에서 move를 저장된 기술로 바꿔치기했음)라 여기 안 들어온다.
   if (move.chargeTurn && !releasingCharge) {
+    // 메테오빔·일렉트로빔: 능력치 상승은 "이 기술을 쓴 턴"(=1턴째, 준비 선언 시점) 기준이라
+    // chargeSkipWeather로 준비 턴 자체가 생략되는 경우(비 오는 일렉트로빔)에도 여기서 적용한다.
+    // move.statChanges(2턴째 공격 판정에서 쓰는 필드)와 겹치지 않게 별도 필드로 받는다.
+    if (move.chargeStatChanges) {
+      attacker.stages = applyMoveStatChanges(
+        attacker.stages,
+        { ...move, statChanges: move.chargeStatChanges },
+        "self",
+        { userTypes: attacker.types },
+      );
+    }
     const skipsCharge = move.chargeSkipWeather !== undefined && state.weather === move.chargeSkipWeather;
     if (!skipsCharge) {
       attacker.chargingMoveId = move.id;
@@ -1064,7 +1124,10 @@ function resolveAction(
   if (move.callsRandomLearnedMove) {
     const candidates = Object.keys(attacker.remainingPp)
       .map((id) => getMove(id))
-      .filter((m): m is Move => !!m && m.id !== move.id && !m.chargeTurn && !m.usageCondition);
+      .filter(
+        (m): m is Move =>
+          !!m && m.id !== move.id && !m.chargeTurn && !m.usageCondition && !m.excludedFromSleepTalk,
+      );
     if (candidates.length === 0) {
       // 배운 기술이 잠꼬대 하나뿐이거나 전부 제외 대상이면 대신 낼 기술이 없어 실패한다.
       return blocked("usageCondition");
@@ -1335,6 +1398,8 @@ function resolveAction(
   // 각 히트 직후(fixedDamage/단일타는 1회, 다단히트는 루프 안에서 타수만큼) 호출해서 채운다.
   let abilityInflictedStatusOnAttacker: StatusConditionState["condition"] | undefined;
   let abilityInflictedStatusAbilityName: string | undefined;
+  let abilityInflictedVolatileOnAttacker: VolatileCondition | undefined;
+  let abilityInflictedVolatileAbilityName: string | undefined;
   let abilityDamageToAttacker = 0;
   let abilityDamageAbilityName: string | undefined;
   let abilityDisabledMoveName: string | undefined;
@@ -1476,6 +1541,17 @@ function resolveAction(
   // (기절과 같은 축 — substituteBroke를 그 판정에 같이 쓴다).
   let substituteBroke = false;
   let hitSubstitute = false;
+  // 도구 발동 시 UI에 표시할 이름(상태이상/혼란/헤롱헤롱/도발/사슬묶기/앙코르 즉시치료 나무열매·
+  // 멘탈허브 등) — triggerAbilityHitEffect(헤롱헤롱바디)가 이 변수를 참조하므로 그 정의보다
+  // 앞에 선언해야 한다(TDZ 회피).
+  let statusCureBerryItemName: string | undefined;
+  // 탈(Disguise): 배틀 중 처음 데미지를 입는 순간에만 발동(disguiseBroken이 아직 false일 때).
+  let hitNegatedByAbilityName: string | undefined;
+  let disguiseRecoilDamage: number | undefined;
+  // 길동무: 데미지 적용 직후 판정하지만, 기합의띠/옹골참/버티기(applyEndurance)로 HP 1로 버텨낸
+  // 경우는 애초에 안 쓰러진 것이므로 발동하면 안 된다 — applyEndurance까지 다 끝난 뒤에 판정해야
+  // 한다(checkDestinyBond를 별도 호출로 분리한 이유). 다단히트 도중 이미 발동했으면 재판정 안 함.
+  let destinyBondTriggered = false;
   function applyDamageToDefender(amount: number): void {
     if (blockedBySubstitute && defender.substituteHp !== undefined) {
       hitSubstitute = true;
@@ -1486,7 +1562,31 @@ function resolveAction(
       }
       return;
     }
+    // 탈: 대타를 맞힌 게 아니라 실제로 HP를 깎으려는 순간에만 판정한다(대타가 있는 동안은
+    // 애초에 위 분기에서 return하므로 여기 안 옴). 다단히트는 첫 타에서만 발동하고, 벗겨진
+    // 뒤의 나머지 타수는 이 블록을 건너뛰어 정상적으로 실제 HP를 깎는다(disguiseBroken=true).
+    if (amount > 0 && defenderAbility?.negatesFirstHitThenRecoils && !defender.disguiseBroken) {
+      defender.disguiseBroken = true;
+      hitNegatedByAbilityName = defenderAbility.name;
+      disguiseRecoilDamage = Math.floor(defender.maxHp * defenderAbility.negatesFirstHitThenRecoils.recoilFraction);
+      defender.currentHp = Math.max(0, defender.currentHp - disguiseRecoilDamage);
+      return;
+    }
     defender.currentHp = Math.max(0, defender.currentHp - amount);
+  }
+
+  /**
+   * 길동무: applyDamageToDefender + applyEndurance까지 끝난 뒤(=기합의띠·옹골참·버티기로도 못
+   * 버티고 실제로 쓰러졌는지가 확정된 뒤) 호출한다. 상대(defender)가 길동무 예약 상태였는데
+   * 이번 공격으로 실제 기절했으면, 공격자(attacker)도 그 자리에서 같이 기절시킨다 — 간접
+   * 데미지(상태이상·씨뿌리기 등)는 이 함수를 거치는 데미지 경로 자체가 아니라서 자연히 대상이
+   * 아니다(본가 규칙과 일치).
+   */
+  function checkDestinyBond(): void {
+    if (destinyBondTriggered || defender.currentHp > 0 || !defender.destinyBondArmed) return;
+    attacker.currentHp = 0;
+    defender.destinyBondArmed = false;
+    destinyBondTriggered = true;
   }
 
   /**
@@ -1513,6 +1613,26 @@ function resolveAction(
       if (attacker.status.condition !== before) {
         abilityInflictedStatusOnAttacker = attacker.status.condition;
         abilityInflictedStatusAbilityName = defenderAbility!.name;
+      }
+    }
+    // 헤롱헤롱바디: 접촉해 온 공격자와 이성 관계일 때만(무성별이거나 동성이면 조용히 무산) 공격자에게
+    // 헤롱헤롱을 건다. 이미 헤롱헤롱 상태면 본가처럼 재발동하지 않는다.
+    if (
+      trigger.inflictsVolatileOnAttacker &&
+      !(trigger.requiresOppositeGender && (attacker.gender === null || defender.gender === null || attacker.gender === defender.gender)) &&
+      !hasVolatile(attacker.volatile, trigger.inflictsVolatileOnAttacker)
+    ) {
+      attacker.volatile = inflictVolatile(attacker.volatile, trigger.inflictsVolatileOnAttacker, random);
+      abilityInflictedVolatileOnAttacker = trigger.inflictsVolatileOnAttacker;
+      abilityInflictedVolatileAbilityName = defenderAbility!.name;
+      // 멘탈허브: 헤롱헤롱바디로 걸린 헤롱헤롱도 걸리는 순간 치료하고 소모된다.
+      if (getMentalHerbCureResult(attackerItem, attacker.itemConsumed ?? false)) {
+        attacker.volatile = { active: { ...attacker.volatile.active } };
+        delete attacker.volatile.active[trigger.inflictsVolatileOnAttacker];
+        consumeItem(attacker);
+        statusCureBerryItemName = attackerItem!.name;
+        abilityInflictedVolatileOnAttacker = undefined;
+        abilityInflictedVolatileAbilityName = undefined;
       }
     }
     if (trigger.damagesAttackerFraction) {
@@ -1633,9 +1753,12 @@ function resolveAction(
 
   // 생명의구슬: 데미지를 실제로 준(damage > 0) 공격이 성공할 때마다 최대 HP의 1/10만큼 자신도
   // 반동을 입는다 — 다단히트도 타수 수와 무관하게 이번 행동에 한 번만 적용(본가 규칙).
+  // 단, 이번 기술에서 우격다짐(sheerForceAbilityName)이 실제로 발동했다면 생명의구슬 반동은
+  // 면제된다 — 본가에서 확인된 특수 상호작용(Bulbapedia: Sheer Force negates Life Orb recoil).
+  // 위력 상승·아이템 데미지 보너스는 그대로 받으면서 반동만 사라진다.
   let itemRecoilDamage = 0;
   let itemRecoilItemName: string | undefined;
-  if (isDamaging && damage > 0 && attackerItem?.selfRecoilFractionOfMaxHp) {
+  if (isDamaging && damage > 0 && attackerItem?.selfRecoilFractionOfMaxHp && !sheerForceAbilityName) {
     itemRecoilDamage = Math.floor(attacker.maxHp * attackerItem.selfRecoilFractionOfMaxHp);
     attacker.currentHp = Math.max(0, attacker.currentHp - itemRecoilDamage);
     itemRecoilItemName = attackerItem.name;
@@ -1684,6 +1807,13 @@ function resolveAction(
   if (effectiveMove.selfFaints) {
     attacker.currentHp = 0;
   }
+
+  // 길동무: 생명의구슬 반동/흡수기 회복/조개껍질방울 등 공격측 HP에 영향을 주는 후처리가 전부
+  // 끝난 뒤에 마지막으로 판정한다 — 상대를 쓰러뜨리며 동시에 흡수기로 회복했더라도, 길동무는
+  // "HP를 깎는" 효과가 아니라 그 자리에서 확정적으로 기절시키는 효과라 이후 회복을 무시해야
+  // 한다(=먼저 판정하면 나중 회복이 되살리는 버그가 생김). 다단히트/부자유친 추가타 중 어느 타가
+  // 상대를 쓰러뜨렸든 이 시점의 defender.currentHp/destinyBondArmed만 보면 되므로 한 번으로 충분.
+  checkDestinyBond();
 
   // 기술 자신의 랭크/명중회피/급소 변화 적용 (칼춤, 그림자분신, 기충전 등).
   // attacker/defender는 state.a/state.b를 그대로 참조하고 있어 여기서 바꾼 값이 state에도 반영된다.
@@ -1822,7 +1952,6 @@ function resolveAction(
   // 상태이상 즉시치료 나무열매(리샘·버치·유루·복슝·복분·배리): 걸리는 "그 순간" 치료하고 소모된다.
   // itemConsumed는 나무열매 18종(타입내성)과 같은 축을 공유하므로(도구 1개=1회용), 이미 다른
   // 나무열매 효과가 이번 배틀에서 소모됐으면 발동하지 않는다.
-  let statusCureBerryItemName: string | undefined;
   if (
     inflictedStatus &&
     !defenderBerriesBlocked &&
@@ -1852,6 +1981,20 @@ function resolveAction(
       }
       // 희망사항: 이미 예약돼 있으면 재사용 실패(본가 규칙 — 필드/트릭룸과 같은 패턴)
       if (effect.volatile === "wish" && hasVolatile(target.volatile, "wish")) continue;
+      // 헤롱헤롱: 이미 헤롱헤롱 상태거나(재사용 실패, drowsy/wish와 같은 패턴), 대상 또는
+      // 거는 쪽이 무성별이거나 둘이 동성이면(getEffectiveGender 기준) 조용히 무산된다 — 본가에서도
+      // 이 경우 "But it failed!"로 아무 효과 없이 끝난다.
+      if (effect.volatile === "attract") {
+        const inflicter = effect.target === "self" ? defender : attacker;
+        if (
+          hasVolatile(target.volatile, "attract") ||
+          target.gender === null ||
+          inflicter.gender === null ||
+          target.gender === inflicter.gender
+        ) {
+          continue;
+        }
+      }
       const chance = effect.chance !== undefined ? effect.chance / 100 : 1;
       if (random() >= chance) continue;
       if (effect.target === "self") {
@@ -1868,6 +2011,19 @@ function resolveAction(
         if (getConfusionCureBerryResult(targetItem, target.itemConsumed ?? false)) {
           target.volatile = { active: { ...target.volatile.active } };
           delete target.volatile.active.confusion;
+          consumeItem(target);
+          statusCureBerryItemName = targetItem!.name;
+          inflictedVolatile = undefined;
+        }
+      }
+
+      // 멘탈허브: 헤롱헤롱/도발이 걸리는 순간 치료하고 소모된다. 나무열매가 아니라 긴장감
+      // (berriesBlocked)의 영향을 받지 않는다.
+      if (effect.volatile === "attract" || effect.volatile === "taunt") {
+        const targetItem = effect.target === "self" ? attackerItem : defenderItem;
+        if (getMentalHerbCureResult(targetItem, target.itemConsumed ?? false)) {
+          target.volatile = { active: { ...target.volatile.active } };
+          delete target.volatile.active[effect.volatile];
           consumeItem(target);
           statusCureBerryItemName = targetItem!.name;
           inflictedVolatile = undefined;
@@ -2016,6 +2172,14 @@ function resolveAction(
     } else {
       defender.volatile = inflictVolatile(defender.volatile, "disable", random, defender.lastMoveId);
       setDisabledMoveName = getMove(defender.lastMoveId)?.name;
+      // 멘탈허브: 사슬묶기가 걸리는 순간 치료하고 소모된다.
+      if (getMentalHerbCureResult(defenderItem, defender.itemConsumed ?? false)) {
+        defender.volatile = { active: { ...defender.volatile.active } };
+        delete defender.volatile.active.disable;
+        consumeItem(defender);
+        statusCureBerryItemName = defenderItem!.name;
+        setDisabledMoveName = undefined;
+      }
     }
   }
 
@@ -2029,6 +2193,14 @@ function resolveAction(
     } else {
       defender.volatile = inflictVolatile(defender.volatile, "encore", random, defender.lastMoveId);
       setEncoreMoveName = getMove(defender.lastMoveId)?.name;
+      // 멘탈허브: 앙코르가 걸리는 순간 치료하고 소모된다.
+      if (getMentalHerbCureResult(defenderItem, defender.itemConsumed ?? false)) {
+        defender.volatile = { active: { ...defender.volatile.active } };
+        delete defender.volatile.active.encore;
+        consumeItem(defender);
+        statusCureBerryItemName = defenderItem!.name;
+        setEncoreMoveName = undefined;
+      }
     }
   }
 
@@ -2054,12 +2226,18 @@ function resolveAction(
     const successChance = Math.pow(1 / 3, streak);
     if (random() < successChance) {
       attacker.protectStreak = streak + 1;
-      attacker.activeProtect = {
-        effect: effectiveMove.protectEffect,
-        moveName: effectiveMove.name,
-        contactPenalty: effectiveMove.protectContactPenalty,
-      };
       protectSucceeded = true;
+      // 길동무는 activeProtect(매 턴 시작 시 초기화)가 아니라 destinyBondArmed(자신의 다음
+      // 행동 전까지 유지)로 별도 추적한다 — 이번 턴 상대 공격을 막는 게 아니기 때문.
+      if (effectiveMove.protectEffect === "destinyBond") {
+        attacker.destinyBondArmed = true;
+      } else {
+        attacker.activeProtect = {
+          effect: effectiveMove.protectEffect,
+          moveName: effectiveMove.name,
+          contactPenalty: effectiveMove.protectContactPenalty,
+        };
+      }
     } else {
       attacker.protectStreak = 0;
       protectFailed = true;
@@ -2243,6 +2421,9 @@ function resolveAction(
     sheerForceAbilityName,
     substituteBroke,
     hitSubstitute,
+    hitNegatedByAbilityName,
+    disguiseRecoilDamage,
+    triggeredDestinyBond: destinyBondTriggered || undefined,
     protectSucceeded,
     protectFailed,
     blockedByProtectMoveName,
@@ -2257,6 +2438,8 @@ function resolveAction(
     defenderBerryHealItemName,
     abilityInflictedStatusOnAttacker,
     abilityInflictedStatusAbilityName,
+    abilityInflictedVolatileOnAttacker,
+    abilityInflictedVolatileAbilityName,
     abilityDamageToAttacker: abilityDamageToAttacker || undefined,
     abilityDamageAbilityName,
     abilityDisabledMoveName,
@@ -2595,6 +2778,20 @@ export function runTurn(
             abilityCuredStatusAbilityName: fighterAbility.name,
           });
         }
+      }
+
+      // 가속(Speed Boost): 매 턴 종료 시 스피드 1랭크 상승. 본가 규칙(교체로 나온 턴엔 발동 안 함)에
+      // 맞춰 배틀 첫 턴(turnNumber === 1)은 건너뛴다 — 이 시뮬레이터는 교체가 없어 turnNumber 1이
+      // 곧 "등장한 턴"이다. 기절했으면(이 턴 데미지로 방금 쓰러졌어도) 발동하지 않는다.
+      if (fighterAbility?.boostsSpeedEachTurnEnd && state.turnNumber > 1 && !isFainted(fighter)) {
+        fighter.stages = applyStageDelta(fighter.stages, "spe", 1);
+        endOfTurn.push({
+          actor: key,
+          damage: 0,
+          remainingHp: fighter.currentHp,
+          fainted: false,
+          speedBoostAbilityName: fighterAbility.name,
+        });
       }
 
       // 자뭉열매/오랭열매: 턴 종료 시점까지의 모든 HP 변화(필드 회복/먹다남은음식/씨뿌리기/상태이상
