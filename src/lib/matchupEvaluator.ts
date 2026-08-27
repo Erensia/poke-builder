@@ -52,6 +52,12 @@ export interface SlotMatchupOptions {
   weatherMultiplier?: number;
   fieldMultiplier?: number;
   bulkMultiplier?: number;
+  /**
+   * 방어측에 걸린 스크린 가정(Phase 6.5 §5). 해당 카테고리 데미지가 절반이 된다 —
+   * reflect=물리, lightScreen=특수, auroraVeil=둘 다. battleSimulator의 screenMultiplier를 미러하고,
+   * 공격측이 틈새포착(bypassesScreensAndSubstitute)이면 무시된다.
+   */
+  screen?: "reflect" | "lightScreen" | "auroraVeil";
 }
 
 /** evaluateSlotMatchup이 실제로 필요로 하는 최소 형태. PartySlot과 MatchupSlot 둘 다 만족한다 */
@@ -105,6 +111,7 @@ export function evaluateSlotMatchup(
     weatherMultiplier: manualWeatherMultiplier,
     fieldMultiplier: manualFieldMultiplier,
     bulkMultiplier: manualBulkMultiplier,
+    screen,
     multiHitCount,
   } = options;
 
@@ -231,9 +238,22 @@ export function evaluateSlotMatchup(
   if (rawOffensePower === null) return null;
   const offensePower = rawOffensePower * typeEffectiveness;
 
+  // 스크린(리플렉터/빛의장막/오로라베일): 해당 카테고리 데미지 절반 = 내구력 2배.
+  // battleSimulator resolveAction의 screenMultiplier와 동일 — 틈새포착이면 무시.
+  const screenBypassed = !!attackerAbility?.bypassesScreensAndSubstitute;
+  const screenMultiplier =
+    screenBypassed || !screen
+      ? 1
+      : screen === "auroraVeil" ||
+          (screen === "reflect" && move.category === "physical") ||
+          (screen === "lightScreen" && move.category === "special")
+        ? 2
+        : 1;
+
   const bulkPower = computeBulkPower(defenderRealStats, move.category, {
     defenderStages,
-    bulkMultiplier: manualBulkMultiplier ?? abilityDefense * berryResult.bulkMultiplier,
+    bulkMultiplier:
+      (manualBulkMultiplier ?? abilityDefense * berryResult.bulkMultiplier) * screenMultiplier,
   });
 
   return {

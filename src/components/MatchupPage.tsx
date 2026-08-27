@@ -96,6 +96,7 @@ export function MatchupPage() {
         multiHitCount: attacker.slot.multiHitCount,
         attackerStages: attacker.slot.stages,
         defenderStages: defender.slot.stages,
+        screen: defender.slot.screen,
       },
     );
   }, [attackerPokemon, defenderPokemon, effAttackerSlot, effDefenderSlot, effMove, attacker.slot, defender.slot, weather, field]);
@@ -180,6 +181,7 @@ export function MatchupPage() {
           onToggleItemStolen={defender.setItemStolen}
           onToggleUnburden={defender.setUnburdenAssumed}
           onToggleParalysis={defender.setParalysisAssumed}
+          onSetScreen={defender.setScreen}
         />
       </div>
 

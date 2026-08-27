@@ -42,6 +42,8 @@ interface MatchupSlotCardProps {
   moveIsGraveVisit?: boolean;
   /** 공격 슬롯 전용 — 성묘 배율(쓰러진 동료 수) 선택 */
   onSetGraveVisit?: (count: 0 | 1 | 2) => void;
+  /** 방어 슬롯 전용 — 이 슬롯에 걸린 스크린 가정(리플렉터/빛의장막/오로라베일) */
+  onSetScreen?: (screen: MatchupSlot["screen"]) => void;
 }
 
 export function MatchupSlotCard({
@@ -69,6 +71,7 @@ export function MatchupSlotCard({
   onToggleParalysis,
   moveIsGraveVisit,
   onSetGraveVisit,
+  onSetScreen,
 }: MatchupSlotCardProps) {
   const pokemon = slot.pokemonId ? getPokemon(slot.pokemonId) : undefined;
 
@@ -233,6 +236,30 @@ export function MatchupSlotCard({
                   onClick={() => onSetGraveVisit(n)}
                 >
                   {n}마리
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        {role === "defender" && onSetScreen && (
+          <div className="matchup-assume-grave">
+            <span className="matchup-assume-grave-label">스크린</span>
+            <div className="matchup-hitcount-row">
+              {(
+                [
+                  [undefined, "없음"],
+                  ["reflect", "리플렉터"],
+                  ["lightScreen", "빛의장막"],
+                  ["auroraVeil", "오로라베일"],
+                ] as const
+              ).map(([value, text]) => (
+                <button
+                  key={text}
+                  type="button"
+                  className={`matchup-hitcount-pip${(slot.screen ?? undefined) === value ? " is-active" : ""}`}
+                  onClick={() => onSetScreen(value)}
+                >
+                  {text}
                 </button>
               ))}
             </div>

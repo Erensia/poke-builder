@@ -105,6 +105,10 @@ function useMatchupSlot() {
     setSlot((prev) => ({ ...prev, paralysisAssumed: value }));
   }
 
+  function setScreen(value: MatchupSlot["screen"]) {
+    setSlot((prev) => ({ ...prev, screen: value }));
+  }
+
   function setGraveVisitFaintedAllies(count: 0 | 1 | 2) {
     setSlot((prev) => ({ ...prev, graveVisitFaintedAllies: count }));
   }
@@ -156,6 +160,7 @@ function useMatchupSlot() {
     setItemStolen,
     setUnburdenAssumed,
     setParalysisAssumed,
+    setScreen,
     setGraveVisitFaintedAllies,
     setPoint,
     stepPoint,

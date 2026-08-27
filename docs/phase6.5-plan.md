@@ -60,6 +60,7 @@ Phase 5에서 특성/기술 로직을 워낙 많이(70종 넘게) 새로 붙이�
 - ~~**성묘 배율 x0/x1/x2 토글**~~ — **완료(2026-08-27)**. §1(이전 턴 가정 토글)에 편입해 구현(`graveVisitFaintedAllies`, 위력 50/100/150).
 - ~~**부자유친이 결정력에 미반영**~~ — **완료(2026-08-27)**. `evaluateSlotMatchup`에서 공격측 특성이 `followUpHitPowerMultiplier`를 가지면(단일타·비고정데미지 기술 한정) 위력 `+ round(위력 × mult)`로 추가타를 합산. 엔진 조건과 동일.
 - ~~**다단히트(2~5회) 결정력 세부 표시**~~ — **완료(2026-08-27)**. `minHits`/`maxHits` 기술(록블라스트류, `multiHitPowers` 없음)도 x2~x5 타수 pill을 띄우고, `evaluateSlotMatchup`이 `위력 × 선택 타수`(min~max로 클램프)로 결정력을 계산. 고정 타수(더블어택 등 min===max)는 pill 없이 항상 반영.
+- ~~**스크린(리플렉터·빛의장막·오로라베일) 가정**~~ — **완료(2026-08-27, 사용자 요청)**. 방어(상대) 슬롯 카드에 `없음/리플렉터/빛의장막/오로라베일` pill 신설(`MatchupSlot.screen`, `useMatchup.setScreen`). `evaluateSlotMatchup`이 `SlotMatchupOptions.screen`을 받아 해당 카테고리 데미지를 절반으로(내구력 ×2) — `battleSimulator` resolveAction의 `screenMultiplier` 미러(reflect=물리, lightScreen=특수, auroraVeil=둘 다). 두꺼운지방·열매 등 기존 내구 배율과 **곱**으로 합쳐지고(덮어쓰기 아님), 공격측이 틈새포착(`bypassesScreensAndSubstitute`)이면 무시. 스피드 비교엔 영향 없음. 방어측 카드의 기본 물리/특수내구 칩은 "raw 기준값"이라 스크린을 반영하지 않는다(결정력·타수 판정에만 반영).
 
 ## 6. 대전 로그 페이지 추가 정비 후보
 

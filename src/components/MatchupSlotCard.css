@@ -305,6 +305,7 @@
 
 .matchup-hitcount-row {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.3rem;
 }
 
@@ -364,7 +365,7 @@
 
 .matchup-assume-grave {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 0.4rem;
 }
 

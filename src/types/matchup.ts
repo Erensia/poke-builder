@@ -27,6 +27,11 @@ export interface MatchupSlot {
   unburdenAssumed?: boolean;
   /** 마비 상태라고 가정 — 이 슬롯의 실효 스피드를 0.5배로 계산(스피드 비교 전용) */
   paralysisAssumed?: boolean;
+  /**
+   * Phase 6.5 §5 — 이 슬롯(방어측)에 스크린이 걸려 있다고 가정. 받는 데미지가 절반이 된다.
+   * 리플렉터=물리, 빛의장막=특수, 오로라베일=물리·특수 둘 다. 없으면 undefined(=지금까지와 동일).
+   */
+  screen?: "reflect" | "lightScreen" | "auroraVeil";
   /** 성묘 배율(공격 슬롯 전용, 선택한 기술이 성묘일 때만). 쓰러진 같은 편 수 가정 — 위력 50/100/150 */
   graveVisitFaintedAllies?: 0 | 1 | 2;
 }
