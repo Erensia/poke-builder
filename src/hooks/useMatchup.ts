@@ -25,6 +25,7 @@ export const EMPTY_MATCHUP_SLOT: MatchupSlot = {
   moveId: null,
   itemStolenFromOpponent: false,
   unburdenAssumed: false,
+  paralysisAssumed: false,
   graveVisitFaintedAllies: 0,
 };
 
@@ -100,6 +101,10 @@ function useMatchupSlot() {
     setSlot((prev) => ({ ...prev, unburdenAssumed: value }));
   }
 
+  function setParalysisAssumed(value: boolean) {
+    setSlot((prev) => ({ ...prev, paralysisAssumed: value }));
+  }
+
   function setGraveVisitFaintedAllies(count: 0 | 1 | 2) {
     setSlot((prev) => ({ ...prev, graveVisitFaintedAllies: count }));
   }
@@ -150,6 +155,7 @@ function useMatchupSlot() {
     setMultiHitCount,
     setItemStolen,
     setUnburdenAssumed,
+    setParalysisAssumed,
     setGraveVisitFaintedAllies,
     setPoint,
     stepPoint,
@@ -163,6 +169,8 @@ export function useMatchup() {
   const defender = useMatchupSlot();
   const [weather, setWeather] = useState<WeatherKind | null>(null);
   const [field, setField] = useState<FieldKind | null>(null);
+  /** Phase 6.5 §2 — 트릭룸이 걸려 있다고 가정(스피드 비교 전용, 느린 쪽이 먼저 움직임) */
+  const [trickRoom, setTrickRoom] = useState(false);
 
-  return { attacker, defender, weather, setWeather, field, setField };
+  return { attacker, defender, weather, setWeather, field, setField, trickRoom, setTrickRoom };
 }

@@ -25,6 +25,8 @@ export interface MatchupSlot {
   itemStolenFromOpponent?: boolean;
   /** 곡예(Unburden) 발동 후라고 가정 — 이 슬롯의 실효 스피드를 2배로 계산 */
   unburdenAssumed?: boolean;
+  /** 마비 상태라고 가정 — 이 슬롯의 실효 스피드를 0.5배로 계산(스피드 비교 전용) */
+  paralysisAssumed?: boolean;
   /** 성묘 배율(공격 슬롯 전용, 선택한 기술이 성묘일 때만). 쓰러진 같은 편 수 가정 — 위력 50/100/150 */
   graveVisitFaintedAllies?: 0 | 1 | 2;
 }

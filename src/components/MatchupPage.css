@@ -85,6 +85,25 @@
   color: var(--text);
 }
 
+.matchup-speed-note {
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+/* 스피드 비교 행 + 트릭룸 토글을 한 덩어리로 */
+.matchup-speed-block {
+  margin-top: 1rem;
+}
+
+.matchup-speed-block .matchup-speed-row {
+  margin-top: 0;
+}
+
+.matchup-speed-trickroom {
+  justify-content: center;
+  margin-top: 0.5rem;
+}
+
 @media (max-width: 760px) {
   .matchup-board {
     flex-direction: column;

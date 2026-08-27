@@ -36,6 +36,8 @@ interface MatchupSlotCardProps {
   onToggleItemStolen: (value: boolean) => void;
   /** Phase 6.5 §1 — "곡예(Unburden) 발동 후 = 스피드 2배" 가정 토글 */
   onToggleUnburden: (value: boolean) => void;
+  /** Phase 6.5 §2 — "마비 상태 = 스피드 0.5배" 가정 토글(스피드 비교에만 반영) */
+  onToggleParalysis: (value: boolean) => void;
   /** 공격 슬롯 전용 — 선택한 기술이 성묘인지 (아니면 성묘 배율 토글을 숨긴다) */
   moveIsGraveVisit?: boolean;
   /** 공격 슬롯 전용 — 성묘 배율(쓰러진 동료 수) 선택 */
@@ -64,6 +66,7 @@ export function MatchupSlotCard({
   onOpenSamplePicker,
   onToggleItemStolen,
   onToggleUnburden,
+  onToggleParalysis,
   moveIsGraveVisit,
   onSetGraveVisit,
 }: MatchupSlotCardProps) {
@@ -202,6 +205,14 @@ export function MatchupSlotCard({
             onChange={(e) => onToggleUnburden(e.target.checked)}
           />
           <span>곡예 발동(스피드 2배) 가정</span>
+        </label>
+        <label className="matchup-assume-toggle">
+          <input
+            type="checkbox"
+            checked={!!slot.paralysisAssumed}
+            onChange={(e) => onToggleParalysis(e.target.checked)}
+          />
+          <span>마비 상태(스피드 0.5배) 가정</span>
         </label>
         {slot.itemStolenFromOpponent && (
           <p className="matchup-assume-hint">

@@ -34,7 +34,8 @@ type PickerState =
   | null;
 
 export function MatchupPage() {
-  const { attacker, defender, weather, setWeather, field, setField } = useMatchup();
+  const { attacker, defender, weather, setWeather, field, setField, trickRoom, setTrickRoom } =
+    useMatchup();
   const slotPresets = useSlotPresets();
   const [picker, setPicker] = useState<PickerState>(null);
 
@@ -109,11 +110,14 @@ export function MatchupPage() {
         weather: weather ?? undefined,
         attackerUnburden: attacker.slot.unburdenAssumed,
         defenderUnburden: defender.slot.unburdenAssumed,
+        attackerParalyzed: attacker.slot.paralysisAssumed,
+        defenderParalyzed: defender.slot.paralysisAssumed,
+        trickRoom,
         attackerStages: attacker.slot.stages,
         defenderStages: defender.slot.stages,
       },
     );
-  }, [attackerPokemon, defenderPokemon, effAttackerSlot, effDefenderSlot, attacker.slot, defender.slot, weather]);
+  }, [attackerPokemon, defenderPokemon, effAttackerSlot, effDefenderSlot, attacker.slot, defender.slot, weather, trickRoom]);
 
   return (
     <section className="matchup-page">
@@ -149,6 +153,7 @@ export function MatchupPage() {
           onOpenSamplePicker={() => setPicker({ kind: "slotPresets", side: "attacker" })}
           onToggleItemStolen={attacker.setItemStolen}
           onToggleUnburden={attacker.setUnburdenAssumed}
+          onToggleParalysis={attacker.setParalysisAssumed}
           moveIsGraveVisit={attackerMove?.id === "성묘"}
           onSetGraveVisit={attacker.setGraveVisitFaintedAllies}
         />
@@ -174,24 +179,38 @@ export function MatchupPage() {
           onOpenSamplePicker={() => setPicker({ kind: "slotPresets", side: "defender" })}
           onToggleItemStolen={defender.setItemStolen}
           onToggleUnburden={defender.setUnburdenAssumed}
+          onToggleParalysis={defender.setParalysisAssumed}
         />
       </div>
 
       {speedResult && (
-        <div className="matchup-speed-row">
-          <span className="matchup-speed-side">
-            내 포켓몬 <strong>{Math.round(speedResult.attackerSpeed).toLocaleString()}</strong>
-          </span>
-          <span className="matchup-speed-verdict">
-            {speedResult.firstMover === "tie"
-              ? "동속 — 선공은 랜덤"
-              : speedResult.firstMover === "attacker"
-                ? "⚡ 내 포켓몬이 먼저 움직여요"
-                : "⚡ 상대가 먼저 움직여요"}
-          </span>
-          <span className="matchup-speed-side">
-            상대 <strong>{Math.round(speedResult.defenderSpeed).toLocaleString()}</strong>
-          </span>
+        <div className="matchup-speed-block">
+          <div className="matchup-speed-row">
+            <span className="matchup-speed-side">
+              내 포켓몬 <strong>{Math.round(speedResult.attackerSpeed).toLocaleString()}</strong>
+            </span>
+            <span className="matchup-speed-verdict">
+              {speedResult.firstMover === "tie"
+                ? "동속 — 선공은 랜덤"
+                : speedResult.firstMover === "attacker"
+                  ? "⚡ 내 포켓몬이 먼저 움직여요"
+                  : "⚡ 상대가 먼저 움직여요"}
+              {speedResult.trickRoom && speedResult.firstMover !== "tie" && (
+                <span className="matchup-speed-note"> (트릭룸)</span>
+              )}
+            </span>
+            <span className="matchup-speed-side">
+              상대 <strong>{Math.round(speedResult.defenderSpeed).toLocaleString()}</strong>
+            </span>
+          </div>
+          <label className="matchup-assume-toggle matchup-speed-trickroom">
+            <input
+              type="checkbox"
+              checked={trickRoom}
+              onChange={(e) => setTrickRoom(e.target.checked)}
+            />
+            <span>트릭룸 가정 (느린 쪽이 먼저)</span>
+          </label>
         </div>
       )}
 

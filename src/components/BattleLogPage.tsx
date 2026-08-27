@@ -811,23 +811,36 @@ export function BattleLogPage() {
                           {action.abilityDisabledMoveName}이(가) 봉인되었다!
                         </div>
                       )}
-                      {/* 지구력 등 — 피격 시 방어측 특성이 자기 랭크를 올렸을 때(Phase 6.5 §6-2 ③) */}
+                      {/* 지구력·깨어진갑옷 등 — 피격 시 방어측 특성이 자기 랭크를 바꿨을 때
+                          (Phase 6.5 §6-2 ③ / §6-1). 깨어진갑옷은 방어↓·스피드↑가 같이 오므로 줄을 나눠 낸다.
+                          내림 줄에서 특성 이름을 한 번 알리고, 오름 줄은 이름 없이 결과만. */}
                       {!action.blockedReason &&
-                        action.abilityRaisedDefenderStats &&
-                        action.abilityRaisedDefenderStats.length > 0 &&
+                        ((action.abilityLoweredDefenderStats?.length ?? 0) > 0 ||
+                          (action.abilityRaisedDefenderStats?.length ?? 0) > 0) &&
                         (() => {
-                          const joined = action.abilityRaisedDefenderStats
-                            .map((s) => STAT_LABELS[s.stat])
-                            .join(", ");
-                          const maxDelta = Math.max(
-                            ...action.abilityRaisedDefenderStats.map((s) => s.delta),
-                          );
+                          const lowered = action.abilityLoweredDefenderStats ?? [];
+                          const raised = action.abilityRaisedDefenderStats ?? [];
+                          const abilityName = action.abilityRaisedDefenderStatsAbilityName;
+                          const loweredJoined = lowered.map((s) => STAT_LABELS[s.stat]).join(", ");
+                          const raisedJoined = raised.map((s) => STAT_LABELS[s.stat]).join(", ");
                           return (
-                            <div className="battle-turn-line is-muted">
-                              {defenderName}의 {action.abilityRaisedDefenderStatsAbilityName}!{" "}
-                              {defenderName}의 {joined}
-                              {iGa(joined)} {stageRiseAdverb(maxDelta)}올라갔다!
-                            </div>
+                            <>
+                              {lowered.length > 0 && (
+                                <div className="battle-turn-line is-muted">
+                                  {defenderName}의 {abilityName}! {defenderName}의 {loweredJoined}
+                                  {iGa(loweredJoined)}{" "}
+                                  {stageRiseAdverb(Math.max(...lowered.map((s) => s.delta)))}내려갔다!
+                                </div>
+                              )}
+                              {raised.length > 0 && (
+                                <div className="battle-turn-line is-muted">
+                                  {lowered.length === 0 && <>{defenderName}의 {abilityName}! </>}
+                                  {defenderName}의 {raisedJoined}
+                                  {iGa(raisedJoined)}{" "}
+                                  {stageRiseAdverb(Math.max(...raised.map((s) => s.delta)))}올라갔다!
+                                </div>
+                              )}
+                            </>
                           );
                         })()}
                       {/* 타오르는불꽃/피뢰침 — 해당 타입 기술을 통째로 무효화(데미지는 이미 0으로

@@ -738,10 +738,12 @@ export interface ActionLogEntry {
   abilityDisabledMoveName?: string;
   /** abilityDisabledMoveName을 봉인시킨 특성 이름 */
   abilityDisableAbilityName?: string;
-  /** 지구력처럼 방어측 특성이 피격 시 자기 랭크를 올렸으면 그 특성 이름 */
+  /** 지구력·깨어진갑옷처럼 방어측 특성이 피격 시 자기 랭크를 바꿨으면 그 특성 이름 */
   abilityRaisedDefenderStatsAbilityName?: string;
   /** abilityRaisedDefenderStatsAbilityName이 올린 스탯·폭 */
   abilityRaisedDefenderStats?: { stat: BattleStatKey; delta: number }[];
+  /** 깨어진갑옷처럼 같은 발동에서 내려간 스탯·폭(delta는 내려간 칸 수, 양수). 랭크업과 별도 줄로 표시 */
+  abilityLoweredDefenderStats?: { stat: BattleStatKey; delta: number }[];
   /** 타오르는불꽃/피뢰침처럼 방어측 특성이 이 기술의 타입을 통째로 무효화했으면 그 타입 */
   abilityAbsorbedMoveType?: PokemonType;
   /** abilityAbsorbedMoveType을 무효화한 특성 이름 */
@@ -1427,9 +1429,11 @@ function resolveAction(
   let abilityDamageAbilityName: string | undefined;
   let abilityDisabledMoveName: string | undefined;
   let abilityDisableAbilityName: string | undefined;
-  // 지구력처럼 방어측 특성이 피격 시 자기 랭크를 올렸을 때(Phase 6.5 §6-2 ③). 다단히트면 타수만큼 누적.
+  // 지구력·깨어진갑옷처럼 방어측 특성이 피격 시 자기 랭크를 바꿨을 때(Phase 6.5 §6-2 ③ / §6-1).
+  // 다단히트면 타수만큼 누적. 오른 스탯과 내려간 스탯을 나눠 담아 로그도 별도 줄로 낸다.
   let abilityRaisedDefenderStatsAbilityName: string | undefined;
   const abilityRaisedDefenderStats: { stat: BattleStatKey; delta: number }[] = [];
+  const abilityLoweredDefenderStats: { stat: BattleStatKey; delta: number }[] = [];
 
   // 지진이 땅속의 구멍파기를, 파도타기가 물속의 다이빙을 실제로 맞혔을 때의 위력 배가.
   // evadedByCharge가 false인데 defenderHideType이 있다는 건 bypassesHiding 예외로 명중했다는 뜻.
@@ -1672,12 +1676,15 @@ function resolveAction(
         const before = defender.stages[change.stat];
         defender.stages = applyStageDelta(defender.stages, change.stat, change.delta);
         const after = defender.stages[change.stat];
-        // 실제로 오른 것만 로그에 남긴다(이미 +6이라 그대로면 조용히 무산). 다단히트면 폭 누적.
-        if (after > before) {
+        // 실제로 변한 것만 로그에 남긴다(이미 상·하한이라 그대로면 조용히 무산). 다단히트면 폭 누적.
+        // 깨어진갑옷은 한 번 발동에 방어 -1 / 스피드 +2가 같이 오므로 오름·내림을 각자 담는다.
+        if (after !== before) {
           abilityRaisedDefenderStatsAbilityName = defenderAbility!.name;
-          const existing = abilityRaisedDefenderStats.find((s) => s.stat === change.stat);
-          if (existing) existing.delta += after - before;
-          else abilityRaisedDefenderStats.push({ stat: change.stat, delta: after - before });
+          const bucket = after > before ? abilityRaisedDefenderStats : abilityLoweredDefenderStats;
+          const magnitude = Math.abs(after - before);
+          const existing = bucket.find((s) => s.stat === change.stat);
+          if (existing) existing.delta += magnitude;
+          else bucket.push({ stat: change.stat, delta: magnitude });
         }
       }
     }
@@ -2520,6 +2527,7 @@ function resolveAction(
     abilityDisableAbilityName,
     abilityRaisedDefenderStatsAbilityName,
     abilityRaisedDefenderStats: abilityRaisedDefenderStats.length ? abilityRaisedDefenderStats : undefined,
+    abilityLoweredDefenderStats: abilityLoweredDefenderStats.length ? abilityLoweredDefenderStats : undefined,
     abilityAbsorbedMoveType,
     abilityAbsorbAbilityName,
     abilityAbsorbHealAmount: abilityAbsorbHealAmount || undefined,

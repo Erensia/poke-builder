@@ -250,6 +250,8 @@ export interface SpeedMatchupResult {
   defenderSpeed: number;
   /** 우선도가 같다는 전제에서 어느 쪽이 먼저 움직이는지. 완전 동속이면 "tie" */
   firstMover: "attacker" | "defender" | "tie";
+  /** 트릭룸 가정이 켜져 순서가 뒤집힌 상태로 판정했으면 true (UI 표기용) */
+  trickRoom: boolean;
 }
 
 export interface SpeedMatchupOptions {
@@ -257,6 +259,11 @@ export interface SpeedMatchupOptions {
   /** 곡예(Unburden) 발동 후라고 가정 — 해당 측 스피드 2배 */
   attackerUnburden?: boolean;
   defenderUnburden?: boolean;
+  /** 마비 상태라고 가정 — 해당 측 스피드 0.5배(battleSimulator의 computeStatusSpeedMultiplier 미러) */
+  attackerParalyzed?: boolean;
+  defenderParalyzed?: boolean;
+  /** 트릭룸이 걸려 있다고 가정 — 우선도가 같을 때 느린 쪽이 먼저 움직인다(동속은 그대로 랜덤) */
+  trickRoom?: boolean;
   /** 누적된 랭크 상태. 기본은 전부 0랭크 */
   attackerStages?: StatStages;
   defenderStages?: StatStages;
@@ -264,9 +271,9 @@ export interface SpeedMatchupOptions {
 
 /**
  * 양쪽 슬롯의 실효 스피드를 비교해 어느 쪽이 먼저 움직이는지 판정한다(Phase 6.5 §2).
- * battleSimulator의 runTurn 스피드 공식(realStats.spe × 도구배율 × 날씨특성배율 × 곡예 2배,
- * 그 뒤 스피드 랭크 반영)을 그대로 미러한다. 매치업 페이지엔 상태이상/트릭룸/필드 개념이
- * 없어 마비 0.5배·트릭룸 역전·선제공격손톱은 반영하지 않는다.
+ * battleSimulator의 runTurn 스피드 공식(realStats.spe × 도구배율 × 날씨특성배율 × 마비 0.5배 ×
+ * 곡예 2배, 그 뒤 스피드 랭크 반영)을 그대로 미러한다. 마비·트릭룸은 매치업 페이지에 상태 개념이
+ * 없어 "가정 토글"(options.attackerParalyzed 등)로만 들어온다. 선제공격손톱은 랜덤이라 반영하지 않는다.
  * 포켓몬을 찾을 수 없으면 null.
  */
 export function evaluateSpeedMatchup(
@@ -282,6 +289,9 @@ export function evaluateSpeedMatchup(
     weather,
     attackerUnburden,
     defenderUnburden,
+    attackerParalyzed,
+    defenderParalyzed,
+    trickRoom = false,
     attackerStages = NEUTRAL_STAGES,
     defenderStages = NEUTRAL_STAGES,
   } = options;
@@ -291,6 +301,7 @@ export function evaluateSpeedMatchup(
     pokemon: NonNullable<ReturnType<typeof getPokemon>>,
     stages: StatStages,
     unburden: boolean,
+    paralyzed: boolean,
   ): number => {
     const form = getEffectiveForm(pokemon, slot);
     const realStats = computeRealStats(form.baseStats, slot.points, slot.nature);
@@ -303,17 +314,22 @@ export function evaluateSpeedMatchup(
       realStats.spe *
       getItemSpeedMultiplier(item) *
       weatherSpeedMultiplier *
+      (paralyzed ? 0.5 : 1) *
       (unburden ? 2 : 1);
     return computeEffectiveSpeed(base, stages);
   };
 
-  const attackerSpeed = speedOf(attackerSlot, attackerPokemon, attackerStages, !!attackerUnburden);
-  const defenderSpeed = speedOf(defenderSlot, defenderPokemon, defenderStages, !!defenderUnburden);
+  const attackerSpeed = speedOf(attackerSlot, attackerPokemon, attackerStages, !!attackerUnburden, !!attackerParalyzed);
+  const defenderSpeed = speedOf(defenderSlot, defenderPokemon, defenderStages, !!defenderUnburden, !!defenderParalyzed);
 
-  return {
-    attackerSpeed,
-    defenderSpeed,
-    firstMover:
-      attackerSpeed === defenderSpeed ? "tie" : attackerSpeed > defenderSpeed ? "attacker" : "defender",
-  };
+  let firstMover: SpeedMatchupResult["firstMover"];
+  if (attackerSpeed === defenderSpeed) {
+    firstMover = "tie";
+  } else {
+    const attackerFaster = attackerSpeed > defenderSpeed;
+    // 트릭룸이면 비교 방향만 뒤집힌다(turnOrder.compareTurnOrder와 동일).
+    firstMover = (trickRoom ? !attackerFaster : attackerFaster) ? "attacker" : "defender";
+  }
+
+  return { attackerSpeed, defenderSpeed, firstMover, trickRoom };
 }
