@@ -119,6 +119,10 @@ export function PartyBoard() {
       {picker?.kind === "pokemon" && (
         <PokemonPickerModal
           onClose={() => setPicker(null)}
+          usedPokemonIds={slots
+            .filter((_, i) => i !== picker.slotIndex)
+            .map((s) => s?.pokemonId)
+            .filter((id): id is string => id !== undefined)}
           onSelect={(pokemonId) => {
             setPokemon(picker.slotIndex, pokemonId);
             setPicker(null);
@@ -180,6 +184,10 @@ export function PartyBoard() {
             <ItemPickerModal
               pokemon={pokemon}
               currentItemId={slot.item}
+              usedItemIds={slots
+                .filter((_, i) => i !== picker.slotIndex)
+                .map((s) => s?.item)
+                .filter((id): id is string => !!id)}
               onClose={() => setPicker(null)}
               onSelect={(itemId) => {
                 setItem(picker.slotIndex, itemId);
