@@ -70,7 +70,7 @@ export function PartyBoard() {
       <header className="party-board-header">
         <div>
           <h2>파티 편성</h2>
-          <p>슬롯을 눌러 포켓몬을 배치하고, 기술 칸을 눌러 4개까지 기술을 채워보세요.</p>
+          <p>63싱글배틀의 파티를 편성해보세요!</p>
         </div>
         <div className="party-board-header-right">
           <span className="party-board-count">{filledCount} / 6</span>
