@@ -3,6 +3,7 @@ import { getPokemon, getMove, getAbility, getItem, getNature } from "../lib/data
 import { getEffectiveForm, getEffectiveAbilityId, megaBadgeLabel } from "../lib/pokemonForm";
 import { computeRealStats } from "../lib/statCalculator";
 import { totalAbilityPoints } from "../lib/statCalculator";
+import { rankStageMultiplier } from "../lib/battlePower";
 import { TypeBadge } from "./TypeBadge";
 import { STAT_ORDER, STAT_LABELS } from "../lib/statLabels";
 import { TYPE_COLORS } from "../lib/typeColors";
@@ -120,13 +121,34 @@ export function MatchupSlotCard({
         </span>
       </button>
 
+      {/* 실능치 칩 — 랭크 변화(칼춤·위협 등)를 반영한 값을 보여준다. 결정력/내구력/스피드 계산은
+          이미 stages를 반영하고 있었는데 이 표시만 포인트 분배 고정값이라 안 따라가고 있었다(Phase 6.5 §5).
+          도구(구애머리띠 등)·특성(가속 등)은 계산식 배율이거나 턴마다 변하는 값이라 여기 칩에는 넣지 않는다. */}
       <div className="matchup-stat-row">
-        {STAT_ORDER.map((stat) => (
-          <div className="matchup-stat-chip" key={stat}>
-            <span className="matchup-stat-label">{STAT_LABELS[stat]}</span>
-            <span className="matchup-stat-value">{realStats[stat]}</span>
-          </div>
-        ))}
+        {STAT_ORDER.map((stat) => {
+          const base = realStats[stat];
+          const stage = stat === "hp" ? 0 : slot.stages[stat];
+          const effective = stage === 0 ? base : Math.round(base * rankStageMultiplier(stage));
+          return (
+            <div
+              className={`matchup-stat-chip${
+                stage > 0 ? " is-boosted" : stage < 0 ? " is-lowered" : ""
+              }`}
+              key={stat}
+            >
+              <span className="matchup-stat-label">{STAT_LABELS[stat]}</span>
+              <span
+                className="matchup-stat-value"
+                title={stage !== 0 ? `기본 ${base} (${stage > 0 ? "+" : ""}${stage}랭크)` : undefined}
+              >
+                {effective}
+                {stage !== 0 && (
+                  <span className="matchup-stat-stage">{stage > 0 ? `+${stage}` : stage}</span>
+                )}
+              </span>
+            </div>
+          );
+        })}
       </div>
 
       <div className="matchup-meta-row">
@@ -234,6 +256,32 @@ export function MatchupSlotCard({
               })}
             </div>
           )}
+          {/* 록블라스트·스케일샷류(minHits~maxHits, 타수별 위력 동일) — x2~x5 결정력 비교(Phase 6.5 §5).
+              고정 타수(더블어택 등 min===max)는 선택지가 없으니 행을 띄우지 않는다(계산엔 항상 반영). */}
+          {move &&
+            !move.multiHitPowers &&
+            move.minHits !== undefined &&
+            move.maxHits !== undefined &&
+            move.minHits !== move.maxHits &&
+            onSetMultiHitCount &&
+            (() => {
+              const lo = move.minHits;
+              const hi = move.maxHits;
+              return (
+                <div className="matchup-hitcount-row">
+                  {Array.from({ length: hi - lo + 1 }, (_, i) => lo + i).map((hits) => (
+                    <button
+                      key={hits}
+                      type="button"
+                      className={`matchup-hitcount-pip${multiHitCount === hits ? " is-active" : ""}`}
+                      onClick={() => onSetMultiHitCount(hits)}
+                    >
+                      ×{hits}
+                    </button>
+                  ))}
+                </div>
+              );
+            })()}
           {move && rawOffensePower !== undefined && rawOffensePower !== null && (
             <div className="matchup-power-readout">
               결정력 <span className="matchup-power-caveat">(상대 타입 반영)</span>{" "}

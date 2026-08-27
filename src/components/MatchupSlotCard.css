@@ -190,6 +190,26 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Phase 6.5 §5 — 랭크 변화가 반영된 실능치 칩 강조 */
+.matchup-stat-chip.is-boosted {
+  background: var(--violet-soft);
+}
+
+.matchup-stat-chip.is-boosted .matchup-stat-value {
+  color: var(--violet);
+}
+
+.matchup-stat-chip.is-lowered .matchup-stat-value {
+  color: var(--text-muted);
+}
+
+.matchup-stat-stage {
+  font-size: 0.6rem;
+  font-weight: 700;
+  margin-left: 0.15rem;
+  vertical-align: super;
+}
+
 .matchup-meta-row {
   display: grid;
   grid-template-columns: repeat(2, 1fr);

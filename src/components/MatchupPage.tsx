@@ -117,7 +117,7 @@ export function MatchupPage() {
       <header className="matchup-page-header">
         <div>
           <h2>결정력 &amp; 내구력</h2>
-          <p>내 포켓몬과 상대 포켓몬을 고르고, 기술까지 선택하면 몇 타에 끝나는지 판정해드려요.</p>
+          <p>내 포켓몬과 상대 포켓몬을 고르고, 기술을 선택하면 타수 판정을 확인할 수 있습니다.</p>
         </div>
         <WeatherPicker weather={weather} onChange={setWeather} />
       </header>

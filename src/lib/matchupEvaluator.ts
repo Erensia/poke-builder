@@ -137,15 +137,46 @@ export function evaluateSlotMatchup(
     typeEffectiveness,
   } = resolveMoveContext(attackerAbility, move, defenderForm.types, defenderAbility, weather, defenderItem);
 
-  // 트리플악셀처럼 다단히트 기술이면, 특성/타입 조건 판정은 원래 기술(1타 위력) 기준으로 이미
-  // 끝났으니 여기서만 선택한 타수까지의 위력을 합산해서 결정력 계산에 쓸 위력으로 바꿔치기한다.
-  const effectiveMoveWithHits =
-    move.multiHitPowers && multiHitCount
+  // 다단히트 기술이면, 특성/타입 조건 판정은 원래 기술(1타 위력) 기준으로 이미 끝났으니 여기서만
+  // 선택한 타수까지의 위력을 합산해서 결정력 계산에 쓸 위력으로 바꿔치기한다.
+  //  - 트리플악셀류(multiHitPowers): 타수별 위력이 다르므로 배열을 잘라 합산.
+  //  - 록블라스트/스케일샷류(minHits~maxHits, multiHitPowers 없음): 매 타 위력이 동일하므로 위력 × 타수.
+  const effectiveMoveWithHits = (() => {
+    if (move.multiHitPowers && multiHitCount) {
+      return {
+        ...effectiveMove,
+        power: move.multiHitPowers.slice(0, multiHitCount).reduce((sum, p) => sum + p, 0),
+      };
+    }
+    if (
+      move.minHits !== undefined &&
+      move.maxHits !== undefined &&
+      multiHitCount &&
+      effectiveMove.power !== null
+    ) {
+      const clampedHits = Math.max(move.minHits, Math.min(move.maxHits, multiHitCount));
+      return { ...effectiveMove, power: effectiveMove.power * clampedHits };
+    }
+    return effectiveMove;
+  })();
+
+  // 부자유친: 단일타 데미지 기술이 데미지를 준 직후 위력 × mult 짜리 추가타가 한 번 더 나간다
+  // (battleSimulator와 동일 조건 — 다단히트·고정데미지는 제외). 매치업은 1턴 스냅샷이라 "추가타까지
+  // 다 맞은" 상황으로 보고 결정력 위력에 합산한다. 추가타 위력은 엔진과 똑같이 round(위력 × mult).
+  const followUpMultiplier = attackerAbility?.followUpHitPowerMultiplier;
+  const effectiveMoveFinal =
+    followUpMultiplier !== undefined &&
+    !move.multiHitPowers &&
+    move.minHits === undefined &&
+    move.fixedDamage === undefined &&
+    effectiveMoveWithHits.power !== null
       ? {
-          ...effectiveMove,
-          power: move.multiHitPowers.slice(0, multiHitCount).reduce((sum, p) => sum + p, 0),
+          ...effectiveMoveWithHits,
+          power:
+            effectiveMoveWithHits.power +
+            Math.round(effectiveMoveWithHits.power * followUpMultiplier),
         }
-      : effectiveMove;
+      : effectiveMoveWithHits;
 
   // 메트로놈(연속 사용 보너스)은 매치업 화면이 여러 턴 이력이 없는 1턴 스냅샷이라 스트릭=1(보너스 없음)로 고정.
   const autoItemMultiplier = getItemOffenseMultiplier(attackerItem, effectiveMove, typeEffectiveness, 1);
@@ -153,7 +184,7 @@ export function evaluateSlotMatchup(
 
   // 상대 타입 상성을 곱하기 전의 결정력. offensePower는 여기에 typeEffectiveness만 곱한 값이라
   // 매번 다시 계산하는 대신 이 값에 typeEffectiveness를 곱해서 구한다.
-  const rawOffensePower = computeOffensePower(attackerRealStats, attackerForm.types, effectiveMoveWithHits, {
+  const rawOffensePower = computeOffensePower(attackerRealStats, attackerForm.types, effectiveMoveFinal, {
     abilityMultiplier: manualAbilityMultiplier ?? abilityOffenseMultiplier,
     itemMultiplier: itemMultiplier ?? autoItemMultiplier,
     weatherMultiplier,

@@ -78,7 +78,11 @@ function useMatchupSlot() {
   function setMove(moveId: string | null) {
     setSlot((prev) => {
       const move = moveId ? getMove(moveId) : undefined;
-      const multiHitCount = move?.multiHitPowers ? move.multiHitPowers.length : undefined;
+      const multiHitCount = move?.multiHitPowers
+        ? move.multiHitPowers.length
+        : move?.minHits !== undefined && move?.maxHits !== undefined
+          ? move.maxHits
+          : undefined;
       return { ...prev, moveId, multiHitCount };
     });
   }
