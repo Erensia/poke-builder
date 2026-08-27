@@ -571,22 +571,22 @@ export function BattleLogPage() {
                         {action.blockedReason === "usageCondition" && "!"}
                         {action.blockedReason === "moveRestricted" && "!"}
                         {action.blockedReason === "status" && action.blockedByStatus === undefined && " — 상태이상으로 행동 불가"}
-                        {action.blockedReason === "flinch" && " — 풀죽어서 행동 불가"}
-                        {action.blockedReason === "recharge" && " — 반동으로 행동 불가"}
+                        {action.blockedReason === "flinch" && " — 풀이 죽어서 움직일 수 없었다!"}
+                        {action.blockedReason === "recharge" && " — 반동으로 움직일 수 없었다!"}
                         {action.blockedReason === "confusion" &&
-                          ` — 혼란으로 자멸! (${action.selfDamage} 데미지)`}
+                          ` — 자기자신을 공격했다! (${action.selfDamage} 데미지)`}
                         {action.blockedReason === "attract" && " — 헤롱헤롱에 빠져 행동 불가"}
                         {action.blockedReason === "psychicFieldPriority" && " — 사이코필드에 막혀 실패"}
                         {!action.blockedReason && action.charging && " — 준비 중! 다음 턴 발동된다"}
                         {!action.blockedReason && !action.charging && action.evadedByCharge && " — 무적 상태라 빗나감"}
-                        {!action.blockedReason && !action.charging && !action.evadedByCharge && !action.hit && " — 빗나감"}
+                        {!action.blockedReason && !action.charging && !action.evadedByCharge && !action.hit && " — 빗나갔다!"}
                         {!action.blockedReason && action.hit && action.damage > 0 && (
                           <>
                             {" "}
                             {/* 다단히트가 아닐 때만 "급소!"를 단일 판정으로 표시 — 다단히트는
                                 타수마다 급소를 따로 판정해서 "하나라도 급소"라는 뜻이 다르므로
                                 뒤의 "(급소 포함)" 표기로 대신한다 */}
-                            — {action.hitCount === undefined && action.critical && "급소! "}
+                            — {action.hitCount === undefined && action.critical && "급소에 맞았다! "}
                             {action.damage} 데미지 ({(action.damagePercent * 100).toFixed(1)}%)
                             {action.hitCount !== undefined && (
                               <> · {action.hitCount}타 명중{action.critical && " (급소 포함)"}</>
@@ -600,7 +600,7 @@ export function BattleLogPage() {
                             <> · {VOLATILE_LABELS[action.inflictedVolatile]}!</>
                           )}
                         {!action.blockedReason && action.hit && action.inflictedVolatile === "wish" && (
-                          <> · 희망사항 발동 준비!</>
+                          <> · 희망사항!</>
                         )}
                         {!action.blockedReason && action.hit && action.setField && (
                           <> · {action.setField} 설치!</>
@@ -665,7 +665,7 @@ export function BattleLogPage() {
                           <> · 상대가 아직 기술을 안 썼거나 이미 걸려있어 실패!</>
                         )}
                         {!action.blockedReason && action.hit && action.setEncoreMoveName && (
-                          <> · {action.setEncoreMoveName}만 반복하게 됨!</>
+                          <> · {action.setEncoreMoveName}밖에 쓸 수 없다!</>
                         )}
                         {!action.blockedReason && action.hit && action.encoreSetFailed && (
                           <> · 상대가 아직 기술을 안 썼거나 이미 걸려있어 실패!</>
@@ -777,7 +777,7 @@ export function BattleLogPage() {
                           버티는지에 따라 문구를 분기(접촉/특성 트리거가 발동하지 않는 이유이기도 함) */}
                       {!action.blockedReason && action.hitSubstitute && (
                         <div className="battle-turn-line is-muted">
-                          {action.substituteBroke ? "대타가 깨졌다!" : "대타가 대신 맞았다!"}
+                          {action.substituteBroke ? "대타는 사라졌다!" : "대타가 대신 맞았다!"}
                         </div>
                       )}
                       {/* 탈(Disguise) — 데미지를 통째로 무효화하고 그 반동으로 벗겨지며 데미지를 입는다.
@@ -1045,7 +1045,7 @@ export function BattleLogPage() {
                 {turn.winner && (
                   <div className="battle-turn-line is-winner">
                     {turn.winner === "draw"
-                      ? "🤝 무승부! 양쪽 다 기절했어요"
+                      ? "🤝 무승부!"
                       : `🏆 ${fighterLabel(battleState, turn.winner)} 승리!`}
                   </div>
                 )}
