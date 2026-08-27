@@ -276,8 +276,12 @@ export interface Move {
    *    포함)을 완전히 무효화한다.
    *  - "endure"(버티기): 막지는 않고, 데미지는 그대로 받되 이번 턴만큼은 HP가 1 밑으로 내려가지
    *    않는다(기합의띠·옹골참과 조건은 다르지만 결과는 같은 축).
+   *  - "destinyBond"(길동무): 막지 않는다 — 성공하면 자신을 "길동무 예약" 상태로 만들 뿐이고,
+   *    activeProtect(매 턴 시작 시 초기화)가 아니라 BattleFighterState.destinyBondArmed(자신의
+   *    다음 행동 전까지 유지)로 별도 추적한다. 본가에서 Gen 7부터 방어류와 같은 연속 성공 확률
+   *    공식((1/3)^streak)을 공유해서 이 프로젝트도 protectStreak를 그대로 재사용한다.
    */
-  protectEffect?: "block" | "endure";
+  protectEffect?: "block" | "endure" | "destinyBond";
   /**
    * 킹실드 전용. protectEffect: "block"이 성공해서 상대의 접촉기를 막았을 때, 그 공격자에게
    * 추가로 거는 랭크변화(공격 -1). 접촉기가 아니면 막았어도 이 효과는 붙지 않는다.

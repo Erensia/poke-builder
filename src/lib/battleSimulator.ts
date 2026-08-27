@@ -209,6 +209,13 @@ export interface BattleFighterState {
    */
   disguiseBroken?: boolean;
   /**
+   * 길동무: 이번 시전이 성공해서 "이번 턴(또는 이후 턴에) 직접 공격으로 쓰러지면 상대도 같이
+   * 쓰러뜨린다" 예약이 걸려있으면 true. activeProtect와 달리 매 턴 시작 시 초기화되지 않고,
+   * 이 포켓몬 자신의 다음 행동이 시작되는 시점(resolveAction 최상단)에 지워진다 — "다음 자신의
+   * 턴이 오면(행동불능인 턴 포함) 예약이 사라진다"는 본가 규칙과 대응.
+   */
+  destinyBondArmed?: boolean;
+  /**
    * 리플렉터(물리)/빛의장막(특수) — 이 포켓몬 쪽에 걸려있는 스크린과 각각의 남은 턴 수.
    * "아군이 받는 데미지 감소"라 1v1에서는 이 포켓몬 자신이 상대 공격을 맞을 때 적용된다.
    */
@@ -739,6 +746,12 @@ export interface ActionLogEntry {
   hitNegatedByAbilityName?: string;
   /** hitNegatedByAbilityName이 발동하며(=탈이 벗겨지며) 방어측이 입은 반동 데미지 */
   disguiseRecoilDamage?: number;
+  /**
+   * 길동무: 이 행동(공격측의 공격)으로 상대가 쓰러졌는데, 상대가 길동무 예약 상태였어서
+   * 공격측도 같이 쓰러졌으면 true. fainted/selfFainted 둘 다 이미 true로 채워지지만, UI가
+   * "왜 같이 쓰러졌는지" 전용 문구를 보여줄 수 있게 별도 플래그로 남긴다.
+   */
+  triggeredDestinyBond?: boolean;
 }
 
 /** 턴 종료 시 상태이상 데미지 로그 */
@@ -848,6 +861,11 @@ function resolveAction(
   const defenderKey = opponentKey(actorKey);
   const attacker = state[actorKey];
   const defender = state[defenderKey];
+
+  // 길동무: "다음 자신의 턴이 오면(행동불능인 턴 포함) 예약이 사라진다"는 본가 규칙 — 이 공격자의
+  // 이번 턴 처리가 막 시작된 시점에 지난 턴 걸어둔 예약을 무조건 지운다. 이번 턴 다시 길동무를
+  // 걸면(아래 protectEffect 판정 성공 시) 새로 켠다.
+  attacker.destinyBondArmed = false;
 
   // 차지 기술 2턴째: 준비 턴에 저장해둔 기술을 이번 턴 실제로 고른 기술과 무관하게 강제로
   // 재실행한다(본가 규칙 — UI에서도 이 경우 선택을 요구하지 않는다). PP는 준비 턴에 이미
@@ -1530,6 +1548,10 @@ function resolveAction(
   // 탈(Disguise): 배틀 중 처음 데미지를 입는 순간에만 발동(disguiseBroken이 아직 false일 때).
   let hitNegatedByAbilityName: string | undefined;
   let disguiseRecoilDamage: number | undefined;
+  // 길동무: 데미지 적용 직후 판정하지만, 기합의띠/옹골참/버티기(applyEndurance)로 HP 1로 버텨낸
+  // 경우는 애초에 안 쓰러진 것이므로 발동하면 안 된다 — applyEndurance까지 다 끝난 뒤에 판정해야
+  // 한다(checkDestinyBond를 별도 호출로 분리한 이유). 다단히트 도중 이미 발동했으면 재판정 안 함.
+  let destinyBondTriggered = false;
   function applyDamageToDefender(amount: number): void {
     if (blockedBySubstitute && defender.substituteHp !== undefined) {
       hitSubstitute = true;
@@ -1551,6 +1573,20 @@ function resolveAction(
       return;
     }
     defender.currentHp = Math.max(0, defender.currentHp - amount);
+  }
+
+  /**
+   * 길동무: applyDamageToDefender + applyEndurance까지 끝난 뒤(=기합의띠·옹골참·버티기로도 못
+   * 버티고 실제로 쓰러졌는지가 확정된 뒤) 호출한다. 상대(defender)가 길동무 예약 상태였는데
+   * 이번 공격으로 실제 기절했으면, 공격자(attacker)도 그 자리에서 같이 기절시킨다 — 간접
+   * 데미지(상태이상·씨뿌리기 등)는 이 함수를 거치는 데미지 경로 자체가 아니라서 자연히 대상이
+   * 아니다(본가 규칙과 일치).
+   */
+  function checkDestinyBond(): void {
+    if (destinyBondTriggered || defender.currentHp > 0 || !defender.destinyBondArmed) return;
+    attacker.currentHp = 0;
+    defender.destinyBondArmed = false;
+    destinyBondTriggered = true;
   }
 
   /**
@@ -1771,6 +1807,13 @@ function resolveAction(
   if (effectiveMove.selfFaints) {
     attacker.currentHp = 0;
   }
+
+  // 길동무: 생명의구슬 반동/흡수기 회복/조개껍질방울 등 공격측 HP에 영향을 주는 후처리가 전부
+  // 끝난 뒤에 마지막으로 판정한다 — 상대를 쓰러뜨리며 동시에 흡수기로 회복했더라도, 길동무는
+  // "HP를 깎는" 효과가 아니라 그 자리에서 확정적으로 기절시키는 효과라 이후 회복을 무시해야
+  // 한다(=먼저 판정하면 나중 회복이 되살리는 버그가 생김). 다단히트/부자유친 추가타 중 어느 타가
+  // 상대를 쓰러뜨렸든 이 시점의 defender.currentHp/destinyBondArmed만 보면 되므로 한 번으로 충분.
+  checkDestinyBond();
 
   // 기술 자신의 랭크/명중회피/급소 변화 적용 (칼춤, 그림자분신, 기충전 등).
   // attacker/defender는 state.a/state.b를 그대로 참조하고 있어 여기서 바꾼 값이 state에도 반영된다.
@@ -2183,12 +2226,18 @@ function resolveAction(
     const successChance = Math.pow(1 / 3, streak);
     if (random() < successChance) {
       attacker.protectStreak = streak + 1;
-      attacker.activeProtect = {
-        effect: effectiveMove.protectEffect,
-        moveName: effectiveMove.name,
-        contactPenalty: effectiveMove.protectContactPenalty,
-      };
       protectSucceeded = true;
+      // 길동무는 activeProtect(매 턴 시작 시 초기화)가 아니라 destinyBondArmed(자신의 다음
+      // 행동 전까지 유지)로 별도 추적한다 — 이번 턴 상대 공격을 막는 게 아니기 때문.
+      if (effectiveMove.protectEffect === "destinyBond") {
+        attacker.destinyBondArmed = true;
+      } else {
+        attacker.activeProtect = {
+          effect: effectiveMove.protectEffect,
+          moveName: effectiveMove.name,
+          contactPenalty: effectiveMove.protectContactPenalty,
+        };
+      }
     } else {
       attacker.protectStreak = 0;
       protectFailed = true;
@@ -2374,6 +2423,7 @@ function resolveAction(
     hitSubstitute,
     hitNegatedByAbilityName,
     disguiseRecoilDamage,
+    triggeredDestinyBond: destinyBondTriggered || undefined,
     protectSucceeded,
     protectFailed,
     blockedByProtectMoveName,

@@ -485,8 +485,9 @@
     "accuracy": null,
     "pp": 8,
     "priority": 0,
-    "effect": "사용 후 자신이 이번 턴에 쓰러지면 상대도 같이 쓰러뜨린다.",
-    "makesContact": false
+    "effect": "사용 후 자신이 쓰러지면 상대도 같이 쓰러뜨린다. 방어류와 같은 공식으로 연속 사용 시 성공 확률이 줄어든다.",
+    "makesContact": false,
+    "protectEffect": "destinyBond"
   },
   {
     "id": "나이트헤드",

@@ -878,11 +878,17 @@ export function BattleLogPage() {
                           {roEuro(action.enduredProtectMoveName)} 버텼다! (HP 1)
                         </div>
                       )}
-                      {/* 방어/판별/킹실드 — 자신의 시도가 이번에 성공했는지/실패했는지 */}
-                      {!action.blockedReason && action.protectSucceeded && (
+                      {/* 방어/판별/킹실드 — 자신의 시도가 이번에 성공했는지/실패했는지. 길동무는 "몸을
+                          지키는" 효과가 아니라(막지 않음) 전용 문구로 따로 표시한다(바로 아래). */}
+                      {!action.blockedReason && action.protectSucceeded && action.move.protectEffect !== "destinyBond" && (
                         <div className="battle-turn-line is-muted">
                           {actorName}
                           {eunNeun(actorName)} {action.move.name}로 몸을 지켰다!
+                        </div>
+                      )}
+                      {!action.blockedReason && action.protectSucceeded && action.move.protectEffect === "destinyBond" && (
+                        <div className="battle-turn-line is-muted">
+                          {actorName}는 상대를 길동무로 삼으려 한다!
                         </div>
                       )}
                       {!action.blockedReason && action.protectFailed && (
@@ -924,13 +930,17 @@ export function BattleLogPage() {
                           {eunNeun(defenderName)} 쓰러졌다
                         </div>
                       )}
-                      {/* 자신이 쓰러졌는지 여부(자폭류·발버둥 반동·혼란 자멸) — 원인이 된 기술명을 그대로 붙인다 */}
+                      {/* 자신이 쓰러졌는지 여부(자폭류·발버둥 반동·혼란 자멸·상대의 길동무) — 원인을 그대로 붙인다 */}
                       {action.selfFainted && (
                         <div className="battle-turn-line is-fainted">
                           {actorName}
                           {eunNeun(actorName)}{" "}
-                          {action.blockedReason === "confusion" ? "혼란으로 인한 데미지" : `${action.move.name}의 여파`}로
-                          쓰러졌다
+                          {action.triggeredDestinyBond
+                            ? `${defenderName}의 길동무`
+                            : action.blockedReason === "confusion"
+                              ? "혼란으로 인한 데미지"
+                              : `${action.move.name}의 여파`}
+                          로 쓰러졌다
                         </div>
                       )}
                     </div>
