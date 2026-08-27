@@ -16,7 +16,7 @@ import { getPokemon, getMove } from "../lib/data";
 import { getEffectiveForm } from "../lib/pokemonForm";
 import { computeRealStats } from "../lib/statCalculator";
 import { computeBulkPower } from "../lib/battlePower";
-import { evaluateSlotMatchup } from "../lib/matchupEvaluator";
+import { evaluateSlotMatchup, evaluateSpeedMatchup } from "../lib/matchupEvaluator";
 import "./MatchupPage.css";
 
 type Side = "attacker" | "defender";
@@ -52,13 +52,41 @@ export function MatchupPage() {
     return { physical, special };
   }, [defenderPokemon, defender.slot]);
 
+  // Phase 6.5 §1 — "이전 턴 가정" 토글 반영. 도구 강탈 토글이 켜진 슬롯은 상대 도구를 장착한
+  // 것으로, 상대 슬롯은 무도구로 계산한다(양쪽 다 켜졌으면 공격 슬롯 우선). 성묘 배율은 위력만 바꾼다.
+  const { effAttackerSlot, effDefenderSlot, effMove } = useMemo(() => {
+    const stealBy = attacker.slot.itemStolenFromOpponent
+      ? "attacker"
+      : defender.slot.itemStolenFromOpponent
+        ? "defender"
+        : null;
+    return {
+      effAttackerSlot:
+        stealBy === "attacker"
+          ? { ...attacker.slot, item: defender.slot.item }
+          : stealBy === "defender"
+            ? { ...attacker.slot, item: null }
+            : attacker.slot,
+      effDefenderSlot:
+        stealBy === "defender"
+          ? { ...defender.slot, item: attacker.slot.item }
+          : stealBy === "attacker"
+            ? { ...defender.slot, item: null }
+            : defender.slot,
+      effMove:
+        attackerMove && attackerMove.id === "성묘" && attacker.slot.graveVisitFaintedAllies
+          ? { ...attackerMove, power: 50 + 50 * attacker.slot.graveVisitFaintedAllies }
+          : attackerMove,
+    };
+  }, [attacker.slot, defender.slot, attackerMove]);
+
   // 양쪽 다 준비되고 기술까지 골랐을 때: 정확한 결정력/내구력/판정
   const fullResult = useMemo(() => {
-    if (!attackerPokemon || !defenderPokemon || !attackerMove) return null;
+    if (!attackerPokemon || !defenderPokemon || !effMove) return null;
     return evaluateSlotMatchup(
-      { ...attacker.slot, pokemonId: attackerPokemon.id },
-      attackerMove,
-      { ...defender.slot, pokemonId: defenderPokemon.id },
+      { ...effAttackerSlot, pokemonId: attackerPokemon.id },
+      effMove,
+      { ...effDefenderSlot, pokemonId: defenderPokemon.id },
       {
         weather: weather ?? undefined,
         multiHitCount: attacker.slot.multiHitCount,
@@ -66,7 +94,23 @@ export function MatchupPage() {
         defenderStages: defender.slot.stages,
       },
     );
-  }, [attackerPokemon, defenderPokemon, attackerMove, attacker.slot, defender.slot, weather]);
+  }, [attackerPokemon, defenderPokemon, effAttackerSlot, effDefenderSlot, effMove, attacker.slot, defender.slot, weather]);
+
+  // 스피드 비교(Phase 6.5 §2) — 포켓몬 둘 다 골랐으면 기술 선택과 무관하게 계산
+  const speedResult = useMemo(() => {
+    if (!attackerPokemon || !defenderPokemon) return null;
+    return evaluateSpeedMatchup(
+      { ...effAttackerSlot, pokemonId: attackerPokemon.id },
+      { ...effDefenderSlot, pokemonId: defenderPokemon.id },
+      {
+        weather: weather ?? undefined,
+        attackerUnburden: attacker.slot.unburdenAssumed,
+        defenderUnburden: defender.slot.unburdenAssumed,
+        attackerStages: attacker.slot.stages,
+        defenderStages: defender.slot.stages,
+      },
+    );
+  }, [attackerPokemon, defenderPokemon, effAttackerSlot, effDefenderSlot, attacker.slot, defender.slot, weather]);
 
   return (
     <section className="matchup-page">
@@ -97,6 +141,10 @@ export function MatchupPage() {
           onPickMove={() => setPicker({ kind: "move" })}
           hasSamples={slotPresets.presets.length > 0}
           onOpenSamplePicker={() => setPicker({ kind: "slotPresets", side: "attacker" })}
+          onToggleItemStolen={attacker.setItemStolen}
+          onToggleUnburden={attacker.setUnburdenAssumed}
+          moveIsGraveVisit={attackerMove?.id === "성묘"}
+          onSetGraveVisit={attacker.setGraveVisitFaintedAllies}
         />
 
         <div className="matchup-verdict-row">
@@ -118,8 +166,28 @@ export function MatchupPage() {
           onPickStages={() => setPicker({ kind: "stages", side: "defender" })}
           hasSamples={slotPresets.presets.length > 0}
           onOpenSamplePicker={() => setPicker({ kind: "slotPresets", side: "defender" })}
+          onToggleItemStolen={defender.setItemStolen}
+          onToggleUnburden={defender.setUnburdenAssumed}
         />
       </div>
+
+      {speedResult && (
+        <div className="matchup-speed-row">
+          <span className="matchup-speed-side">
+            내 포켓몬 <strong>{Math.round(speedResult.attackerSpeed).toLocaleString()}</strong>
+          </span>
+          <span className="matchup-speed-verdict">
+            {speedResult.firstMover === "tie"
+              ? "동속 — 선공은 랜덤"
+              : speedResult.firstMover === "attacker"
+                ? "⚡ 내 포켓몬이 먼저 움직여요"
+                : "⚡ 상대가 먼저 움직여요"}
+          </span>
+          <span className="matchup-speed-side">
+            상대 <strong>{Math.round(speedResult.defenderSpeed).toLocaleString()}</strong>
+          </span>
+        </div>
+      )}
 
       {picker?.kind === "pokemon" && (
         <PokemonPickerModal

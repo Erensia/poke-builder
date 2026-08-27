@@ -45,6 +45,35 @@
   width: 130px;
 }
 
+/* Phase 6.5 §2 — 스피드 비교 행 */
+.matchup-speed-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-top: 1rem;
+  padding: 0.6rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-2);
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.matchup-speed-side strong {
+  font-family: var(--display);
+  font-size: 1.05rem;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  margin-left: 0.25rem;
+}
+
+.matchup-speed-verdict {
+  font-weight: 600;
+  color: var(--text);
+}
+
 @media (max-width: 760px) {
   .matchup-board {
     flex-direction: column;

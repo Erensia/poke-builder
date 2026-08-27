@@ -22,6 +22,9 @@ export const EMPTY_MATCHUP_SLOT: MatchupSlot = {
   points: { ...EMPTY_ABILITY_POINTS },
   stages: { ...NEUTRAL_STAGES },
   moveId: null,
+  itemStolenFromOpponent: false,
+  unburdenAssumed: false,
+  graveVisitFaintedAllies: 0,
 };
 
 function useMatchupSlot() {
@@ -84,6 +87,18 @@ function useMatchupSlot() {
     setSlot((prev) => ({ ...prev, multiHitCount: count }));
   }
 
+  function setItemStolen(value: boolean) {
+    setSlot((prev) => ({ ...prev, itemStolenFromOpponent: value }));
+  }
+
+  function setUnburdenAssumed(value: boolean) {
+    setSlot((prev) => ({ ...prev, unburdenAssumed: value }));
+  }
+
+  function setGraveVisitFaintedAllies(count: 0 | 1 | 2) {
+    setSlot((prev) => ({ ...prev, graveVisitFaintedAllies: count }));
+  }
+
   function setPoint(stat: keyof AbilityPoints, value: number) {
     setSlot((prev) => {
       const clampedValue = Math.max(0, value);
@@ -128,6 +143,9 @@ function useMatchupSlot() {
     setNature,
     setMove,
     setMultiHitCount,
+    setItemStolen,
+    setUnburdenAssumed,
+    setGraveVisitFaintedAllies,
     setPoint,
     stepPoint,
     setStageValue,

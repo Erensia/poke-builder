@@ -3,7 +3,7 @@ import type { PokemonGender } from "../types/pokemon";
 import type { Move } from "../types/move";
 import type { WeatherKind } from "../types/weather";
 import { getPokemon, getAbility, getItem } from "./data";
-import { getBerryDefenseResult, getItemOffenseMultiplier } from "./itemEffects";
+import { getBerryDefenseResult, getItemOffenseMultiplier, getItemSpeedMultiplier } from "./itemEffects";
 import { getEffectiveForm, getEffectiveAbilityId, type FormSource } from "./pokemonForm";
 import { computeRealStats } from "./statCalculator";
 import { applyMoveStatChanges } from "./statStages";
@@ -13,6 +13,7 @@ import { NEUTRAL_STAGES, type StatStages } from "../types/battleStats";
 import {
   computeOffensePower,
   computeBulkPower,
+  computeEffectiveSpeed,
   evaluateMatchup,
   type MatchupVerdict,
 } from "./battlePower";
@@ -172,5 +173,79 @@ export function evaluateSlotMatchup(
     rawOffensePower,
     bulkPower,
     verdict: evaluateMatchup(offensePower, bulkPower),
+  };
+}
+
+export interface SpeedMatchupResult {
+  /** 스피드 랭크까지 반영한 실효 스피드 (반올림 전) */
+  attackerSpeed: number;
+  defenderSpeed: number;
+  /** 우선도가 같다는 전제에서 어느 쪽이 먼저 움직이는지. 완전 동속이면 "tie" */
+  firstMover: "attacker" | "defender" | "tie";
+}
+
+export interface SpeedMatchupOptions {
+  weather?: WeatherKind;
+  /** 곡예(Unburden) 발동 후라고 가정 — 해당 측 스피드 2배 */
+  attackerUnburden?: boolean;
+  defenderUnburden?: boolean;
+  /** 누적된 랭크 상태. 기본은 전부 0랭크 */
+  attackerStages?: StatStages;
+  defenderStages?: StatStages;
+}
+
+/**
+ * 양쪽 슬롯의 실효 스피드를 비교해 어느 쪽이 먼저 움직이는지 판정한다(Phase 6.5 §2).
+ * battleSimulator의 runTurn 스피드 공식(realStats.spe × 도구배율 × 날씨특성배율 × 곡예 2배,
+ * 그 뒤 스피드 랭크 반영)을 그대로 미러한다. 매치업 페이지엔 상태이상/트릭룸/필드 개념이
+ * 없어 마비 0.5배·트릭룸 역전·선제공격손톱은 반영하지 않는다.
+ * 포켓몬을 찾을 수 없으면 null.
+ */
+export function evaluateSpeedMatchup(
+  attackerSlot: EvaluatorSlot,
+  defenderSlot: EvaluatorSlot,
+  options: SpeedMatchupOptions = {},
+): SpeedMatchupResult | null {
+  const attackerPokemon = getPokemon(attackerSlot.pokemonId);
+  const defenderPokemon = getPokemon(defenderSlot.pokemonId);
+  if (!attackerPokemon || !defenderPokemon) return null;
+
+  const {
+    weather,
+    attackerUnburden,
+    defenderUnburden,
+    attackerStages = NEUTRAL_STAGES,
+    defenderStages = NEUTRAL_STAGES,
+  } = options;
+
+  const speedOf = (
+    slot: EvaluatorSlot,
+    pokemon: NonNullable<ReturnType<typeof getPokemon>>,
+    stages: StatStages,
+    unburden: boolean,
+  ): number => {
+    const form = getEffectiveForm(pokemon, slot);
+    const realStats = computeRealStats(form.baseStats, slot.points, slot.nature);
+    const item = slot.item ? getItem(slot.item) : undefined;
+    const effectiveAbilityId = getEffectiveAbilityId(form, slot.ability);
+    const ability = effectiveAbilityId ? getAbility(effectiveAbilityId) : undefined;
+    const weatherBoost = ability?.weatherSpeedMultiplier;
+    const weatherSpeedMultiplier = weatherBoost && weatherBoost.weather === weather ? weatherBoost.multiplier : 1;
+    const base =
+      realStats.spe *
+      getItemSpeedMultiplier(item) *
+      weatherSpeedMultiplier *
+      (unburden ? 2 : 1);
+    return computeEffectiveSpeed(base, stages);
+  };
+
+  const attackerSpeed = speedOf(attackerSlot, attackerPokemon, attackerStages, !!attackerUnburden);
+  const defenderSpeed = speedOf(defenderSlot, defenderPokemon, defenderStages, !!defenderUnburden);
+
+  return {
+    attackerSpeed,
+    defenderSpeed,
+    firstMover:
+      attackerSpeed === defenderSpeed ? "tie" : attackerSpeed > defenderSpeed ? "attacker" : "defender",
   };
 }

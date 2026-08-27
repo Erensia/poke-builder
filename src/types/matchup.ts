@@ -17,4 +17,14 @@ export interface MatchupSlot {
    * 단일 위력 기술이거나 아직 안 골랐으면 undefined.
    */
   multiHitCount?: number;
+  /**
+   * Phase 6.5 §1 — "이전 턴 가정" 토글. 매치업 페이지는 1턴 스냅샷이라 직전 턴 상황에
+   * 의존하는 축을 직접 켜고 끄게 한다. 전부 off/0이면 지금까지와 동일한 계산.
+   */
+  /** 이 슬롯이 매지션/곡예로 상대 도구를 강탈했다고 가정 — 이 슬롯이 상대 도구를 장착하고 상대는 무도구가 된다 */
+  itemStolenFromOpponent?: boolean;
+  /** 곡예(Unburden) 발동 후라고 가정 — 이 슬롯의 실효 스피드를 2배로 계산 */
+  unburdenAssumed?: boolean;
+  /** 성묘 배율(공격 슬롯 전용, 선택한 기술이 성묘일 때만). 쓰러진 같은 편 수 가정 — 위력 50/100/150 */
+  graveVisitFaintedAllies?: 0 | 1 | 2;
 }

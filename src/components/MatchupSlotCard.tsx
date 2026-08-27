@@ -31,6 +31,14 @@ interface MatchupSlotCardProps {
   hasSamples: boolean;
   /** 저장된 샘플 목록에서 이 슬롯에 불러올 것을 고르는 모달 열기(불러오기 전용 — 저장 없음) */
   onOpenSamplePicker: () => void;
+  /** Phase 6.5 §1 — "이 슬롯이 매지션/곡예로 상대 도구를 강탈했다" 가정 토글 */
+  onToggleItemStolen: (value: boolean) => void;
+  /** Phase 6.5 §1 — "곡예(Unburden) 발동 후 = 스피드 2배" 가정 토글 */
+  onToggleUnburden: (value: boolean) => void;
+  /** 공격 슬롯 전용 — 선택한 기술이 성묘인지 (아니면 성묘 배율 토글을 숨긴다) */
+  moveIsGraveVisit?: boolean;
+  /** 공격 슬롯 전용 — 성묘 배율(쓰러진 동료 수) 선택 */
+  onSetGraveVisit?: (count: 0 | 1 | 2) => void;
 }
 
 export function MatchupSlotCard({
@@ -53,6 +61,10 @@ export function MatchupSlotCard({
   onPickMove,
   hasSamples,
   onOpenSamplePicker,
+  onToggleItemStolen,
+  onToggleUnburden,
+  moveIsGraveVisit,
+  onSetGraveVisit,
 }: MatchupSlotCardProps) {
   const pokemon = slot.pokemonId ? getPokemon(slot.pokemonId) : undefined;
 
@@ -149,6 +161,50 @@ export function MatchupSlotCard({
             {activeStageCount > 0 ? `${activeStageCount}개 변경` : "0랭크"}
           </span>
         </button>
+      </div>
+
+      {/* Phase 6.5 §1 — "이전 턴 가정" 토글. 켜기 전까지는 지금까지와 동일한 계산 */}
+      <div className="matchup-assume-section">
+        <label className="matchup-assume-toggle">
+          <input
+            type="checkbox"
+            checked={!!slot.itemStolenFromOpponent}
+            onChange={(e) => onToggleItemStolen(e.target.checked)}
+          />
+          <span>상대 도구 강탈 가정</span>
+        </label>
+        <label className="matchup-assume-toggle">
+          <input
+            type="checkbox"
+            checked={!!slot.unburdenAssumed}
+            onChange={(e) => onToggleUnburden(e.target.checked)}
+          />
+          <span>곡예 발동(스피드 2배) 가정</span>
+        </label>
+        {slot.itemStolenFromOpponent && (
+          <p className="matchup-assume-hint">
+            {slot.item
+              ? "이 슬롯의 도구는 무시하고 상대 도구를 가져온 것으로 계산합니다(강탈은 무도구 상태에서 성립)."
+              : "상대 도구를 가져온 것으로, 상대는 무도구로 계산합니다."}
+          </p>
+        )}
+        {role === "attacker" && moveIsGraveVisit && onSetGraveVisit && (
+          <div className="matchup-assume-grave">
+            <span className="matchup-assume-grave-label">쓰러진 동료</span>
+            <div className="matchup-hitcount-row">
+              {([0, 1, 2] as const).map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  className={`matchup-hitcount-pip${(slot.graveVisitFaintedAllies ?? 0) === n ? " is-active" : ""}`}
+                  onClick={() => onSetGraveVisit(n)}
+                >
+                  {n}마리
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {role === "attacker" && (

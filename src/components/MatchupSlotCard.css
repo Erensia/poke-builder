@@ -309,3 +309,47 @@
   background: var(--violet-soft);
   color: var(--violet);
 }
+
+/* Phase 6.5 §1 — "이전 턴 가정" 토글 */
+.matchup-assume-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding-top: 0.5rem;
+  margin-top: 0.1rem;
+  border-top: 1px dashed var(--border);
+}
+
+.matchup-assume-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.matchup-assume-toggle input {
+  cursor: pointer;
+  accent-color: var(--violet);
+  margin: 0;
+}
+
+.matchup-assume-hint {
+  margin: 0;
+  font-size: 0.66rem;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+
+.matchup-assume-grave {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.matchup-assume-grave-label {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
