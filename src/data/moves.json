@@ -784,7 +784,8 @@
     "pp": 20,
     "priority": 0,
     "effect": "상대 진영에 설치. 이후 등장하는 포켓몬은 교체될 때 데미지를 입는다.",
-    "makesContact": false
+    "makesContact": false,
+    "setsHazard": "stealthRock"
   },
   {
     "id": "스톤샤워",

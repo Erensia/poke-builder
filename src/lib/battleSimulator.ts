@@ -270,6 +270,11 @@ export interface BattleState {
   fieldTurnsRemaining?: number;
   /** 트릭룸이 해제되기까지 남은 턴 수. 트릭룸이 안 걸려있으면 undefined */
   trickRoomTurnsRemaining?: number;
+  /**
+   * 진영별 스텔스록 설치 여부. 한 번 깔리면 배틀 끝까지 영구 유지된다(Phase 6.5 §6-2 ④).
+   * 교체 개념이 없어 "등장 데미지"는 아직 없고, 로그·환경 UI 표시용 상태값이다.
+   */
+  stealthRock: { a: boolean; b: boolean };
   turnNumber: number;
   /** 배틀 시작 시점에 특성으로 날씨가 자동으로 바뀌었으면("○○의 잔비!") 그 안내 문구 */
   entryAnnouncements: string[];
@@ -545,6 +550,7 @@ export function createBattleState(
     weatherTurnsRemaining,
     field: entryField,
     fieldTurnsRemaining,
+    stealthRock: { a: false, b: false },
     turnNumber: 0,
     entryAnnouncements: [...weatherAnnouncements, ...abilityAnnouncements],
   };
@@ -606,6 +612,10 @@ export interface ActionLogEntry {
   setField?: FieldKind;
   /** 필드 기술을 썼지만 이미 다른 필드가 깔려있어서 실패했으면 true */
   fieldSetFailed?: boolean;
+  /** 스텔스록을 어느 진영에 깔았으면 그 진영 키(a/b). 로그 문구용 */
+  stealthRockSetForSide?: FighterKey;
+  /** 스텔스록을 깔려 했으나 이미 그 진영에 깔려 있어 실패했으면 true */
+  hazardSetFailed?: boolean;
   /** 아이언롤러처럼 필드를 파괴하는 기술이 명중해서 활성 필드가 없어졌으면, 없어지기 직전의 필드 종류 */
   destroyedField?: FieldKind;
   /** 이 행동으로 트릭룸이 새로 걸렸으면 true */
@@ -2305,6 +2315,19 @@ function resolveAction(
     }
   }
 
+  // 스텔스록: 상대 진영에 설치한다. 이미 그 진영에 깔려 있으면 실패한다(사용자 확인). 매직미러
+  // 반사는 아직 특성 자체가 없어 후속 조사 항목으로 분리(Phase 6.5 §8) — 지금은 항상 상대 진영에 깔린다.
+  let stealthRockSetForSide: FighterKey | undefined;
+  let hazardSetFailed = false;
+  if (effectiveMove.setsHazard === "stealthRock") {
+    if (state.stealthRock[defenderKey]) {
+      hazardSetFailed = true;
+    } else {
+      state.stealthRock[defenderKey] = true;
+      stealthRockSetForSide = defenderKey;
+    }
+  }
+
   // 아이언롤러: 명중하면 활성 필드를 제거한다. usageCondition: "field-required"로 필드가 없으면
   // 애초에 이 지점까지 오지 못하니(맨 위에서 이미 실패 처리), 여기선 있는 필드를 지우기만 하면 된다.
   let destroyedField: FieldKind | undefined;
@@ -2431,6 +2454,8 @@ function resolveAction(
     curedStatusTarget,
     setField: fieldSetFailed ? undefined : effectiveMove.setsField,
     fieldSetFailed,
+    stealthRockSetForSide,
+    hazardSetFailed,
     destroyedField,
     setTrickRoom: trickRoomSetFailed ? undefined : effectiveMove.setsTrickRoom,
     trickRoomSetFailed,
@@ -2534,6 +2559,7 @@ export function runTurn(
     field: prevState.field,
     fieldTurnsRemaining: prevState.fieldTurnsRemaining,
     trickRoomTurnsRemaining: prevState.trickRoomTurnsRemaining,
+    stealthRock: { ...prevState.stealthRock },
     turnNumber: prevState.turnNumber + 1,
     entryAnnouncements: prevState.entryAnnouncements,
   };

@@ -92,6 +92,11 @@ export interface Move {
   fixedDamage?: number;
   /** 그래스필드/미스트필드/사이코필드/일렉트릭필드처럼 필드를 새로 까는 기술만 채운다 */
   setsField?: FieldKind;
+  /**
+   * 스텔스록처럼 상대 진영에 설치물을 까는 기술만 채운다. 현행 시뮬레이터는 교체가 없어 "등장 시
+   * 데미지"는 미구현 — 설치 상태와 로그·환경 UI 표시만 반영한다(Phase 6.5 §6-2 ④, 나머지는 §8).
+   */
+  setsHazard?: "stealthRock";
   /** 트릭룸: 5턴간 우선도가 같으면 스피드가 느린 쪽이 먼저 움직이도록 순서를 뒤집는 기술만 채운다 */
   setsTrickRoom?: boolean;
   /**

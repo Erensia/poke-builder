@@ -355,7 +355,11 @@ export function BattleLogPage() {
       {battleState && (
         <>
           <div className="battle-board" style={{ background: battleBoardBackground(battleState) }}>
-            {(battleState.weather || battleState.field || battleState.trickRoomTurnsRemaining !== undefined) && (
+            {(battleState.weather ||
+              battleState.field ||
+              battleState.trickRoomTurnsRemaining !== undefined ||
+              battleState.stealthRock.a ||
+              battleState.stealthRock.b) && (
               <div className="battle-environment-tags">
                 {battleState.weather && (
                   <span className="battle-environment-tag">
@@ -371,6 +375,13 @@ export function BattleLogPage() {
                   <span className="battle-environment-tag">
                     트릭룸 (앞으로 {battleState.trickRoomTurnsRemaining}턴)
                   </span>
+                )}
+                {(["a", "b"] as const).map((side) =>
+                  battleState.stealthRock[side] ? (
+                    <span key={`sr-${side}`} className="battle-environment-tag">
+                      {fighterLabel(battleState, side)} 진영: 뾰족한 바위(스텔스록)
+                    </span>
+                  ) : null,
                 )}
               </div>
             )}
@@ -637,6 +648,12 @@ export function BattleLogPage() {
                         )}
                         {!action.blockedReason && action.hit && action.fieldSetFailed && (
                           <> · 이미 필드가 있어 실패!</>
+                        )}
+                        {!action.blockedReason && action.hit && action.stealthRockSetForSide && (
+                          <> · 상대 편 필드에 뾰족한 바위가 깔렸다!</>
+                        )}
+                        {!action.blockedReason && action.hit && action.hazardSetFailed && (
+                          <> · 이미 뾰족한 바위가 깔려 있어 실패!</>
                         )}
                         {!action.blockedReason && action.hit && action.destroyedField && (
                           <> · {action.destroyedField} 파괴!</>
