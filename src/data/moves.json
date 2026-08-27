@@ -3712,7 +3712,8 @@
     "priority": 0,
     "effect": "1턴째 자신의 특공을 올리고, 2턴째 공격한다.",
     "makesContact": false,
-    "chargeTurn": true
+    "chargeTurn": true,
+    "chargeStatChanges": [{ "target": "self", "stat": "spa", "delta": 1 }]
   },
   {
     "id": "분연",
@@ -4934,7 +4935,10 @@
     "pp": 12,
     "priority": 0,
     "effect": "1턴째 자신의 특공을 올리고, 2턴째 공격한다. 비가 내리면 1턴만에 발동한다.",
-    "makesContact": false
+    "makesContact": false,
+    "chargeTurn": true,
+    "chargeSkipWeather": "비",
+    "chargeStatChanges": [{ "target": "self", "stat": "spa", "delta": 1 }]
   },
   {
     "id": "기어오르기",
