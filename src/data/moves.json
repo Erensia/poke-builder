@@ -353,6 +353,19 @@
     "drainFraction": 0.5
   },
   {
+    "id": "우드해머",
+    "name": "우드해머",
+    "type": "풀",
+    "category": "physical",
+    "power": 120,
+    "accuracy": 100,
+    "pp": 15,
+    "priority": 0,
+    "effect": "준 데미지의 1/3만큼 자신도 반동 데미지를 입는다.",
+    "recoilFraction": 0.3333333333333333,
+    "makesContact": true
+  },
+  {
     "id": "대지의힘",
     "name": "대지의힘",
     "type": "땅",
