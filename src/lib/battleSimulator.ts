@@ -7,6 +7,7 @@ import {
   NEUTRAL_ACCURACY_STAGES,
   NEUTRAL_CRIT_STAGE,
   NEUTRAL_STAGES,
+  isBattleStatKey,
   type AccuracyEvasionStages,
   type BattleStatKey,
   type CritStage,
@@ -62,6 +63,7 @@ import {
   getFieldDamageMultiplier,
   getFieldPowerMultiplier,
   isConfusionBlockedByField,
+  isOpponentTargetingMove,
   isPriorityMoveBlockedByField,
   isStatusBlockedByField,
 } from "./fieldEffects";
@@ -684,8 +686,12 @@ export interface ActionLogEntry {
   hitSubstitute?: boolean;
   /** 방어류(방어/판별/버티기/킹실드) 기술이 이번에 성공적으로 발동했으면 true */
   protectSucceeded?: boolean;
-  /** 방어류 기술을 썼지만 연속 사용 확률 판정에 실패했으면 true (streak는 0으로 리셋됨) */
+  /** 방어류 기술을 썼지만 실패했으면 true (연속 사용 확률 판정 실패, 또는 상대가 막을 것을 안 냄). streak는 0으로 리셋됨 */
   protectFailed?: boolean;
+  /** 이 기술로 사용자 자신의 랭크가 실제로 오른 것(칼춤 등). 렌더에서 "OO의 X가 (크게) 올라갔다!" */
+  selfStatRises?: { stat: BattleStatKey; delta: number }[];
+  /** 랭크업을 시도했지만 이미 +6이라 오르지 않은 스탯. "OO의 X는 더 이상 올라가지 않는다!" */
+  selfStatsAtMax?: BattleStatKey[];
   /** 이 행동(공격)이 상대의 방어류 기술에 완전히 막혔으면 그 기술 이름 */
   blockedByProtectMoveName?: string;
   /** 방어류 버티기로 이번 데미지를 버티고 HP 1로 남았으면 그 기술 이름 */
@@ -1174,7 +1180,10 @@ function resolveAction(
   // 고스트다이브: "방어를 무시" = 방어류(protectEffect) 차단 자체를 뚫는다는 뜻(사용자 확인) — 실제
   // 방어 실수치와는 무관해서 여기서 판정 자체를 건너뛴다(틈새포착이 스크린/대타를 뚫는 것과 같은 결).
   const blockedByProtect = !move.bypassesProtect && defender.activeProtect?.effect === "block";
-  const blockedByProtectMoveName = blockedByProtect ? defender.activeProtect?.moveName : undefined;
+  // "방어로 막혔다!" 문구는 실제로 상대를 겨냥한 기술이 막혔을 때만 — 칼춤·나쁜음모처럼 자기
+  // 대상 랭크업/자기 회복기는 방어와 무관하게 그대로 발동하므로 "막혔다"가 아니다(Phase 6.5 §6-2 ⑦).
+  const blockedByProtectMoveName =
+    blockedByProtect && isOpponentTargetingMove(move) ? defender.activeProtect?.moveName : undefined;
   const opponentEffectsBlocked = blockedByGoodAsGold || blockedBySubstitute || blockedByProtect;
 
   // 필드 조건부 타입/위력 변경(대지의파동=fieldPulse, 미스트버스트·와이드포스·라이징볼트=
@@ -1824,6 +1833,20 @@ function resolveAction(
     ? defender.stages
     : applyMoveStatChanges(defender.stages, effectiveMove, "opponent", { userTypes: attacker.types });
 
+  // 랭크업 결과 문구용(Phase 6.5 §6-2 ⑥⑦, §6-3): 이 기술이 사용자 자신의 랭크를 실제로 올린 것과,
+  // 올리려 했으나 이미 +6이라 막힌 것을 각각 모은다. 확정 랭크업만 대상 — 확률 부가효과(chance)와
+  // 자기 랭크다운 디메리트(delta ≤ 0), 명중/회피/급소는 제외. 승기·하양허브 등 뒤 후처리 전에 측정.
+  const selfStatRises: { stat: BattleStatKey; delta: number }[] = [];
+  const selfStatsAtMax: BattleStatKey[] = [];
+  for (const sc of effectiveMove.statChanges ?? []) {
+    if (sc.target !== "self" || sc.chance !== undefined) continue;
+    if (!isBattleStatKey(sc.stat) || (sc.delta ?? 0) <= 0) continue;
+    const before = attackerStagesBeforeMoveChange[sc.stat];
+    const after = attacker.stages[sc.stat];
+    if (after > before) selfStatRises.push({ stat: sc.stat, delta: after - before });
+    else if (before >= 6) selfStatsAtMax.push(sc.stat);
+  }
+
   // 클리어바디(전체)·괴력집게(공격만)·미러아머(반사): 방금 적용된 opponent 랭크변화 중 실제로
   // 내려간 스탯만(-6 클램프로 변화가 없었던 건 자연히 제외) 골라서, 막을 스탯이면 원래 값으로
   // 되돌리고, 반사 특성이면 원래 값으로 되돌린 뒤 그만큼을 공격측에게 대신 적용한다. "상대의
@@ -2224,7 +2247,15 @@ function resolveAction(
   if (effectiveMove.protectEffect) {
     const streak = attacker.protectStreak ?? 0;
     const successChance = Math.pow(1 / 3, streak);
-    if (random() < successChance) {
+    // 상대가 이번 턴 낸 게 방어로 막을 수 있는 것(공격기 또는 상대를 겨냥한 변화기)이 아니면
+    // — 칼춤·나쁜음모 같은 자기 대상 랭크업, 자기 회복기 등 — "막을 게 없어" 실패로 처리한다
+    // (사용자 확인, Phase 6.5 §6-2 ⑦). 길동무는 애초에 이번 턴 상대를 막는 효과가 아니라 제외.
+    const nothingToBlock =
+      effectiveMove.protectEffect !== "destinyBond" && !isOpponentTargetingMove(defenderMove);
+    if (nothingToBlock) {
+      attacker.protectStreak = 0;
+      protectFailed = true;
+    } else if (random() < successChance) {
       attacker.protectStreak = streak + 1;
       protectSucceeded = true;
       // 길동무는 activeProtect(매 턴 시작 시 초기화)가 아니라 destinyBondArmed(자신의 다음
@@ -2426,6 +2457,8 @@ function resolveAction(
     triggeredDestinyBond: destinyBondTriggered || undefined,
     protectSucceeded,
     protectFailed,
+    selfStatRises: selfStatRises.length ? selfStatRises : undefined,
+    selfStatsAtMax: selfStatsAtMax.length ? selfStatsAtMax : undefined,
     blockedByProtectMoveName,
     enduredProtectMoveName,
     protectContactPenaltyMoveName,

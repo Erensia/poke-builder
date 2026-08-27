@@ -15,6 +15,7 @@ import { getEffectiveForm, megaBadgeLabel } from "../lib/pokemonForm";
 import { TYPE_COLORS } from "../lib/typeColors";
 import { environmentTintBackground } from "../lib/environmentBackground";
 import { rankStageMultiplier } from "../lib/battlePower";
+import { STAT_LABELS } from "../lib/statLabels";
 import {
   createBattleState,
   hasUsableMove,
@@ -108,6 +109,22 @@ function eulReul(name: string): "을" | "를" {
   const code = lastChar.charCodeAt(0) - 0xac00;
   if (code < 0 || code > 11171) return "를";
   return code % 28 === 0 ? "를" : "을";
+}
+
+/** "공격이"/"스피드가"처럼 마지막 글자 받침 유무로 "이"/"가" 주격 조사를 자동 판별한다(랭크업 결과 문구용) */
+function iGa(name: string): "이" | "가" {
+  const lastChar = name.at(-1);
+  if (!lastChar) return "가";
+  const code = lastChar.charCodeAt(0) - 0xac00;
+  if (code < 0 || code > 11171) return "가";
+  return code % 28 === 0 ? "가" : "이";
+}
+
+/** 랭크 상승폭 → 본가식 수식어. 1랭크는 수식어 없음, 2랭크 "크게", 3랭크 이상 "아주 크게" */
+function stageRiseAdverb(delta: number): string {
+  if (delta >= 3) return "아주 크게 ";
+  if (delta === 2) return "크게 ";
+  return "";
 }
 
 /**
@@ -890,6 +907,37 @@ export function BattleLogPage() {
                           {defenderName}
                           {eunNeun(defenderName)} {action.enduredProtectMoveName}
                           {roEuro(action.enduredProtectMoveName)} 버텼다! (HP 1)
+                        </div>
+                      )}
+                      {/* 랭크업 기술 결과 — "OO의 공격이 크게 올라갔다!". 같은 폭으로 오른 스탯은 쉼표로
+                          묶어 한 줄로 낸다(Phase 6.5 §6-2 ⑥⑦, §6-3). */}
+                      {!action.blockedReason &&
+                        action.selfStatRises &&
+                        action.selfStatRises.length > 0 &&
+                        (() => {
+                          const byDelta = new Map<number, string[]>();
+                          for (const r of action.selfStatRises) {
+                            const labels = byDelta.get(r.delta) ?? [];
+                            labels.push(STAT_LABELS[r.stat]);
+                            byDelta.set(r.delta, labels);
+                          }
+                          return [...byDelta.entries()].map(([delta, labels]) => {
+                            const joined = labels.join(", ");
+                            return (
+                              <div key={`rise-${delta}`} className="battle-turn-line is-muted">
+                                {actorName}의 {joined}
+                                {iGa(joined)} {stageRiseAdverb(delta)}올라갔다!
+                              </div>
+                            );
+                          });
+                        })()}
+                      {/* 랭크업 상한 — 이미 +6이라 한 칸도 못 올랐을 때 */}
+                      {!action.blockedReason && action.selfStatsAtMax && action.selfStatsAtMax.length > 0 && (
+                        <div className="battle-turn-line is-muted">
+                          {actorName}의{" "}
+                          {action.selfStatsAtMax.map((s) => STAT_LABELS[s]).join(", ")}
+                          {eunNeun(action.selfStatsAtMax.map((s) => STAT_LABELS[s]).join(", "))} 더 이상 올라가지
+                          않는다!
                         </div>
                       )}
                       {/* 방어/판별/킹실드 — 자신의 시도가 이번에 성공했는지/실패했는지. 길동무는 "몸을

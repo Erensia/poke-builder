@@ -49,7 +49,7 @@ export function isConfusionBlockedByField(field: FieldKind | undefined): boolean
  * 우선도가 올라가 있어도(짖궂은마음 등) 사이코필드에 막히지 않는다(사용자 확인). 데미지 기술은
  * 항상 상대를 노리므로 카테고리만으로 먼저 걸러진다.
  */
-function isOpponentTargetingMove(move: Move): boolean {
+export function isOpponentTargetingMove(move: Move): boolean {
   if (move.category !== "status") return true;
   if (move.inflictsStatus && move.inflictsStatus.length > 0) return true; // 이 스키마에서 대상은 항상 상대
   if (move.inflictsVolatile?.some((v) => v.target === "opponent")) return true;
