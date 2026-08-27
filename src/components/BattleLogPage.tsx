@@ -12,9 +12,8 @@ import { useBattleSetup } from "../hooks/useBattleSetup";
 import { useSlotPresets } from "../hooks/useSlotPresets";
 import { getPokemon, getMove, getItem } from "../lib/data";
 import { getEffectiveForm, megaBadgeLabel } from "../lib/pokemonForm";
-import { TYPE_COLORS, typeColorRgba } from "../lib/typeColors";
-import { WEATHER_ACCENT_TYPE } from "../lib/weatherEffects";
-import { FIELD_DISPLAY_TYPE } from "../lib/fieldEffects";
+import { TYPE_COLORS } from "../lib/typeColors";
+import { environmentTintBackground } from "../lib/environmentBackground";
 import {
   createBattleState,
   hasUsableMove,
@@ -70,21 +69,9 @@ const VOLATILES_WITH_DEDICATED_LOG_LINE = new Set(["drowsy", "wish"]);
 
 const SCREEN_LABELS = { reflect: "리플렉터", lightScreen: "빛의장막", auroraVeil: "오로라베일" } as const;
 
-/**
- * 날씨/필드가 적용 중인지 배경색으로 알 수 있게 해달라는 요청 반영 — 날씨는 강화하는 타입 색(비=물,
- * 모래바람=바위, 눈=얼음, 쾌청=불꽃), 필드는 필드 자신의 타입 색(그래스=풀 등)을 낮은 불투명도로 섞는다.
- * 둘 다 있으면 좌우 그라데이션으로, 하나만 있으면 단색 틴트로, 둘 다 없으면 기본(투명) 배경.
- */
+/** 날씨/필드 배경 틴트 — 매치업 페이지와 공유하는 environmentTintBackground에 위임한다. */
 function battleBoardBackground(state: BattleState): string | undefined {
-  const weatherColor = state.weather ? TYPE_COLORS[WEATHER_ACCENT_TYPE[state.weather]] : undefined;
-  const fieldColor = state.field ? TYPE_COLORS[FIELD_DISPLAY_TYPE[state.field]] : undefined;
-
-  if (weatherColor && fieldColor) {
-    return `linear-gradient(135deg, ${typeColorRgba(weatherColor, 0.16)}, ${typeColorRgba(fieldColor, 0.16)})`;
-  }
-  if (weatherColor) return typeColorRgba(weatherColor, 0.14);
-  if (fieldColor) return typeColorRgba(fieldColor, 0.14);
-  return undefined;
+  return environmentTintBackground(state.weather, state.field);
 }
 
 function fighterLabel(state: BattleState, key: FighterKey): string {

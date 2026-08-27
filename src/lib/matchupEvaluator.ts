@@ -2,11 +2,14 @@ import type { AbilityPoints } from "../types/party";
 import type { PokemonGender } from "../types/pokemon";
 import type { Move } from "../types/move";
 import type { WeatherKind } from "../types/weather";
+import type { FieldKind } from "../types/field";
 import { getPokemon, getAbility, getItem } from "./data";
 import { getBerryDefenseResult, getItemOffenseMultiplier, getItemSpeedMultiplier } from "./itemEffects";
 import { getEffectiveForm, getEffectiveAbilityId, type FormSource } from "./pokemonForm";
 import { computeRealStats } from "./statCalculator";
 import { applyMoveStatChanges } from "./statStages";
+import { getWeatherDamageMultiplier } from "./weatherEffects";
+import { applyFieldPulse, getFieldPowerMultiplier, getFieldDamageMultiplier } from "./fieldEffects";
 import { resolveMoveContext } from "./moveContext";
 import { resolveEffectiveDefenderAbility } from "./abilityModifiers";
 import { NEUTRAL_STAGES, type StatStages } from "../types/battleStats";
@@ -30,8 +33,16 @@ export interface SlotMatchupOptions {
    * move.multiHitPowers가 있을 때만 의미가 있고, 해당 타수까지의 위력을 합산해서 쓴다.
    */
   multiHitCount?: number;
-  /** 현재 날씨. 모래의힘처럼 날씨 조건부 특성 판정에 쓴다 */
+  /**
+   * 현재 날씨. 모래의힘처럼 날씨 조건부 특성 판정에 쓰고, 날씨 데미지 배율(비=물 1.5배,
+   * 쾌청=불꽃 1.5배·물 0.5배 등)도 자동으로 반영한다.
+   */
   weather?: WeatherKind;
+  /**
+   * 현재 필드. 그래스/사이코/일렉트릭필드의 해당 타입 1.3배, 미스트필드의 드래곤 0.5배,
+   * 대지의파동(필드 타입/위력 변경)·미스트버스트류(필드 위력 배가)까지 반영한다.
+   */
+  field?: FieldKind;
   /**
    * 직접 지정하면 특성에서 자동으로 구한 배율 대신 이 값을 그대로 쓴다.
    * (특성이 아직 구조화 안 됐거나, 임의로 배율을 실험해보고 싶을 때)
@@ -39,6 +50,7 @@ export interface SlotMatchupOptions {
   abilityMultiplier?: number;
   itemMultiplier?: number;
   weatherMultiplier?: number;
+  fieldMultiplier?: number;
   bulkMultiplier?: number;
 }
 
@@ -87,9 +99,11 @@ export function evaluateSlotMatchup(
     defenderStages: baseDefenderStages = NEUTRAL_STAGES,
     applyMoveOwnStatChanges = true,
     weather,
+    field,
     abilityMultiplier: manualAbilityMultiplier,
     itemMultiplier,
-    weatherMultiplier,
+    weatherMultiplier: manualWeatherMultiplier,
+    fieldMultiplier: manualFieldMultiplier,
     bulkMultiplier: manualBulkMultiplier,
     multiHitCount,
   } = options;
@@ -127,6 +141,17 @@ export function evaluateSlotMatchup(
   const attackerItem = attackerSlot.item ? getItem(attackerSlot.item) : undefined;
   const defenderItem = defenderSlot.item ? getItem(defenderSlot.item) : undefined;
 
+  // 필드 조건부 타입/위력 변경(대지의파동=fieldPulse, 미스트버스트·와이드포스·라이징볼트=
+  // powerMultiplierInField)을 특성 배율 계산보다 먼저 반영한다 — 타입이 바뀐 상태여야 아래
+  // resolveMoveContext의 상성 계산에도 바뀐 타입이 들어간다(battleSimulator와 같은 순서).
+  const fieldPulse = applyFieldPulse(move, field);
+  const fieldPowerMultiplier = getFieldPowerMultiplier(move, field);
+  const fieldAdjustedMove: Move = {
+    ...move,
+    type: fieldPulse.type,
+    power: fieldPulse.power === null ? null : Math.round(fieldPulse.power * fieldPowerMultiplier),
+  };
+
   // 특성 배율(공격측 테크니션/모래의힘/메가런처/페어리스킨, 방어측 두꺼운지방 등) + 타입 변경 +
   // 자속 + 상대 타입 상성을 한 번에 계산 — battleSimulator의 resolveAction과 공유하는 로직
   const {
@@ -135,7 +160,14 @@ export function evaluateSlotMatchup(
     abilityDefenseMultiplier: abilityDefense,
     stabMultiplier,
     typeEffectiveness,
-  } = resolveMoveContext(attackerAbility, move, defenderForm.types, defenderAbility, weather, defenderItem);
+  } = resolveMoveContext(
+    attackerAbility,
+    fieldAdjustedMove,
+    defenderForm.types,
+    defenderAbility,
+    weather,
+    defenderItem,
+  );
 
   // 다단히트 기술이면, 특성/타입 조건 판정은 원래 기술(1타 위력) 기준으로 이미 끝났으니 여기서만
   // 선택한 타수까지의 위력을 합산해서 결정력 계산에 쓸 위력으로 바꿔치기한다.
@@ -182,12 +214,17 @@ export function evaluateSlotMatchup(
   const autoItemMultiplier = getItemOffenseMultiplier(attackerItem, effectiveMove, typeEffectiveness, 1);
   const berryResult = getBerryDefenseResult(defenderItem, effectiveMove.type, typeEffectiveness, false);
 
+  // 날씨/필드 데미지 배율은 (타입 변경까지 끝난) effectiveMove.type 기준으로 구한다 — battleSimulator와 동일.
+  const autoWeatherDamageMultiplier = getWeatherDamageMultiplier(weather, effectiveMove.type);
+  const autoFieldDamageMultiplier = getFieldDamageMultiplier(field, effectiveMove.type);
+
   // 상대 타입 상성을 곱하기 전의 결정력. offensePower는 여기에 typeEffectiveness만 곱한 값이라
   // 매번 다시 계산하는 대신 이 값에 typeEffectiveness를 곱해서 구한다.
   const rawOffensePower = computeOffensePower(attackerRealStats, attackerForm.types, effectiveMoveFinal, {
     abilityMultiplier: manualAbilityMultiplier ?? abilityOffenseMultiplier,
     itemMultiplier: itemMultiplier ?? autoItemMultiplier,
-    weatherMultiplier,
+    weatherMultiplier: manualWeatherMultiplier ?? autoWeatherDamageMultiplier,
+    fieldMultiplier: manualFieldMultiplier ?? autoFieldDamageMultiplier,
     attackerStages,
     stabMultiplier,
   });

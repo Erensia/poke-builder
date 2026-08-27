@@ -3,6 +3,7 @@ import type { MatchupSlot } from "../types/matchup";
 import type { AbilityPoints, PartySlot } from "../types/party";
 import type { BattleStatKey } from "../types/battleStats";
 import type { WeatherKind } from "../types/weather";
+import type { FieldKind } from "../types/field";
 import { EMPTY_ABILITY_POINTS } from "../types/party";
 import { NEUTRAL_STAGES } from "../types/battleStats";
 import { getMove, getPokemon } from "../lib/data";
@@ -161,6 +162,7 @@ export function useMatchup() {
   const attacker = useMatchupSlot();
   const defender = useMatchupSlot();
   const [weather, setWeather] = useState<WeatherKind | null>(null);
+  const [field, setField] = useState<FieldKind | null>(null);
 
-  return { attacker, defender, weather, setWeather };
+  return { attacker, defender, weather, setWeather, field, setField };
 }

@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { MatchupSlotCard } from "./MatchupSlotCard";
 import { VerdictBadge } from "./VerdictBadge";
 import { WeatherPicker } from "./WeatherPicker";
+import { FieldPicker } from "./FieldPicker";
 import { PokemonPickerModal } from "./PokemonPickerModal";
 import { MovePickerModal } from "./MovePickerModal";
 import { AbilityPickerModal } from "./AbilityPickerModal";
@@ -16,6 +17,7 @@ import { getPokemon, getMove } from "../lib/data";
 import { getEffectiveForm } from "../lib/pokemonForm";
 import { computeRealStats } from "../lib/statCalculator";
 import { computeBulkPower } from "../lib/battlePower";
+import { environmentTintBackground } from "../lib/environmentBackground";
 import { evaluateSlotMatchup, evaluateSpeedMatchup } from "../lib/matchupEvaluator";
 import "./MatchupPage.css";
 
@@ -32,7 +34,7 @@ type PickerState =
   | null;
 
 export function MatchupPage() {
-  const { attacker, defender, weather, setWeather } = useMatchup();
+  const { attacker, defender, weather, setWeather, field, setField } = useMatchup();
   const slotPresets = useSlotPresets();
   const [picker, setPicker] = useState<PickerState>(null);
 
@@ -89,12 +91,13 @@ export function MatchupPage() {
       { ...effDefenderSlot, pokemonId: defenderPokemon.id },
       {
         weather: weather ?? undefined,
+        field: field ?? undefined,
         multiHitCount: attacker.slot.multiHitCount,
         attackerStages: attacker.slot.stages,
         defenderStages: defender.slot.stages,
       },
     );
-  }, [attackerPokemon, defenderPokemon, effAttackerSlot, effDefenderSlot, effMove, attacker.slot, defender.slot, weather]);
+  }, [attackerPokemon, defenderPokemon, effAttackerSlot, effDefenderSlot, effMove, attacker.slot, defender.slot, weather, field]);
 
   // 스피드 비교(Phase 6.5 §2) — 포켓몬 둘 다 골랐으면 기술 선택과 무관하게 계산
   const speedResult = useMemo(() => {
@@ -119,10 +122,13 @@ export function MatchupPage() {
           <h2>결정력 &amp; 내구력</h2>
           <p>내 포켓몬과 상대 포켓몬을 고르고, 기술을 선택하면 타수 판정을 확인할 수 있습니다.</p>
         </div>
-        <WeatherPicker weather={weather} onChange={setWeather} />
+        <div className="matchup-env-pickers">
+          <WeatherPicker weather={weather} onChange={setWeather} />
+          <FieldPicker field={field} onChange={setField} />
+        </div>
       </header>
 
-      <div className="matchup-board">
+      <div className="matchup-board" style={{ background: environmentTintBackground(weather, field) }}>
         <MatchupSlotCard
           role="attacker"
           label="내 포켓몬"
