@@ -14,6 +14,7 @@ import { getPokemon, getMove, getItem } from "../lib/data";
 import { getEffectiveForm, megaBadgeLabel } from "../lib/pokemonForm";
 import { TYPE_COLORS } from "../lib/typeColors";
 import { environmentTintBackground } from "../lib/environmentBackground";
+import { rankStageMultiplier } from "../lib/battlePower";
 import {
   createBattleState,
   hasUsableMove,
@@ -424,14 +425,39 @@ export function BattleLogPage() {
                   </div>
 
                   {/* 대전 중엔 셋업 카드가 안 보여서 내가 맞춘 능력치를 확인할 방법이 없었다는 피드백 반영 —
-                      HP·공격·방어·특공·특방·스피드 실능치를 배틀 보드에도 그대로 노출한다 */}
+                      HP·공격·방어·특공·특방·스피드 실능치를 배틀 보드에도 그대로 노출한다. 칼춤·위협 등
+                      랭크 변화는 턴 진행 중 이 표시에 즉시 반영한다(Phase 6.5 §6-2 ⑧) — HP는 랭크 대상이 아님. */}
                   <div className="battle-real-stats">
-                    {REAL_STAT_LABELS.map(({ key, label }) => (
-                      <div key={key} className="battle-real-stat-item">
-                        <span className="battle-real-stat-label">{label}</span>
-                        <span className="battle-real-stat-value">{Math.round(fighter.realStats[key])}</span>
-                      </div>
-                    ))}
+                    {REAL_STAT_LABELS.map(({ key, label }) => {
+                      const base = fighter.realStats[key];
+                      const stage = key === "hp" ? 0 : fighter.stages[key];
+                      const effective = stage === 0 ? base : Math.round(base * rankStageMultiplier(stage));
+                      return (
+                        <div
+                          key={key}
+                          className={`battle-real-stat-item${
+                            stage > 0 ? " is-boosted" : stage < 0 ? " is-lowered" : ""
+                          }`}
+                        >
+                          <span className="battle-real-stat-label">{label}</span>
+                          <span
+                            className="battle-real-stat-value"
+                            title={
+                              stage !== 0
+                                ? `기본 ${Math.round(base)} (${stage > 0 ? "+" : ""}${stage}랭크)`
+                                : undefined
+                            }
+                          >
+                            {Math.round(effective)}
+                            {stage !== 0 && (
+                              <span className="battle-real-stat-stage">
+                                {stage > 0 ? `+${stage}` : stage}
+                              </span>
+                            )}
+                          </span>
+                        </div>
+                      );
+                    })}
                   </div>
 
                   {fighter.chargingMoveId ? (
@@ -771,7 +797,8 @@ export function BattleLogPage() {
                           다단히트 나머지 타수는 이 필드 없이 정상적으로 데미지가 들어간다(첫 타만 무효화). */}
                       {!action.blockedReason && action.hitNegatedByAbilityName && (
                         <div className="battle-turn-line is-muted">
-                          {defenderName}의 {action.hitNegatedByAbilityName}! 공격이 무효화되었다! {defenderName}
+                          {defenderName}의 {action.hitNegatedByAbilityName}! {defenderName}의 정체가 드러났다!{" "}
+                          {defenderName}
                           {eunNeun(defenderName)} 반동으로 {action.disguiseRecoilDamage} 데미지를 입었다!
                         </div>
                       )}

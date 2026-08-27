@@ -232,6 +232,26 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Phase 6.5 §6-2 ⑧ — 랭크 변화가 반영된 실능치 강조 (매치업 페이지 실능치 칩과 같은 톤) */
+.battle-real-stat-item.is-boosted {
+  background: var(--violet-soft);
+}
+
+.battle-real-stat-item.is-boosted .battle-real-stat-value {
+  color: var(--violet);
+}
+
+.battle-real-stat-item.is-lowered .battle-real-stat-value {
+  color: var(--text-muted);
+}
+
+.battle-real-stat-stage {
+  font-size: 0.58rem;
+  font-weight: 700;
+  margin-left: 0.12rem;
+  vertical-align: super;
+}
+
 .battle-move-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;

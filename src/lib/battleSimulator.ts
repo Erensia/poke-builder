@@ -2780,10 +2780,12 @@ export function runTurn(
         }
       }
 
-      // 가속(Speed Boost): 매 턴 종료 시 스피드 1랭크 상승. 본가 규칙(교체로 나온 턴엔 발동 안 함)에
-      // 맞춰 배틀 첫 턴(turnNumber === 1)은 건너뛴다 — 이 시뮬레이터는 교체가 없어 turnNumber 1이
-      // 곧 "등장한 턴"이다. 기절했으면(이 턴 데미지로 방금 쓰러졌어도) 발동하지 않는다.
-      if (fighterAbility?.boostsSpeedEachTurnEnd && state.turnNumber > 1 && !isFainted(fighter)) {
+      // 가속(Speed Boost): 매 턴 종료 시 스피드 1랭크 상승. 본가는 "교체로 나온 턴"엔 발동하지
+      // 않지만, 이 시뮬레이터는 교체가 없는 1대1 대면 전용이라 첫 턴도 "등장한 턴"이 아니다 —
+      // 그래서 첫 턴 종료부터 발동시킨다(사용자 확인, Phase 6.5 §6-2 ①). 파티 선출·교체가
+      // 도입되면 그때 "교체로 나온 턴" 예외를 되살린다. 기절했으면(이 턴 데미지로 방금 쓰러졌어도)
+      // 발동하지 않는다.
+      if (fighterAbility?.boostsSpeedEachTurnEnd && !isFainted(fighter)) {
         fighter.stages = applyStageDelta(fighter.stages, "spe", 1);
         endOfTurn.push({
           actor: key,
