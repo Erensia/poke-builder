@@ -253,6 +253,67 @@
   color: var(--text);
 }
 
+/* 방어 상성 */
+
+.pokedex-defense-empty {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+
+.pokedex-defense-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.pokedex-defense-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.pokedex-defense-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.1rem 0.5rem;
+  border-radius: 6px;
+  flex-shrink: 0;
+  width: 4.6em;
+  text-align: center;
+}
+
+.pokedex-defense-label.is-quad {
+  color: #fff;
+  background: var(--danger-strong);
+}
+
+.pokedex-defense-label.is-weak {
+  color: var(--danger);
+  background: var(--danger-bg);
+}
+
+.pokedex-defense-label.is-resist {
+  color: var(--safe);
+  background: var(--safe-bg);
+}
+
+.pokedex-defense-label.is-quadresist {
+  color: #fff;
+  background: var(--safe);
+}
+
+.pokedex-defense-label.is-immune {
+  color: var(--text-muted);
+  background: var(--surface-2);
+}
+
+.pokedex-defense-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
 /* 특성 */
 
 .pokedex-ability-list {

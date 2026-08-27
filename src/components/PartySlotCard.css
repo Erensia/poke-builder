@@ -108,7 +108,8 @@
 .party-slot-save-sample {
   position: absolute;
   top: 0.5rem;
-  right: 1.75rem;
+  /* 슬롯 삭제(✕) 버튼과 너무 붙어 보여서 5px 더 띄운다(사용자 1차 정리, Phase 6 §2-2) */
+  right: calc(1.75rem + 5px);
   width: 20px;
   height: 20px;
   border-radius: 50%;

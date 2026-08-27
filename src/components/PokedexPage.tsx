@@ -4,6 +4,8 @@ import { TypeBadge } from "./TypeBadge";
 import { TYPE_COLORS } from "../lib/typeColors";
 import { STAT_LABELS, STAT_ORDER } from "../lib/statLabels";
 import { megaBadgeLabel } from "../lib/pokemonForm";
+import { getDefensiveProfile } from "../lib/typeEffectiveness";
+import { POKEMON_TYPES, type PokemonType } from "../types/pokemon-type";
 import type { Pokemon, MegaEvolution } from "../types/pokemon";
 import type { BaseStats } from "../types/stats";
 import "./PokedexPage.css";
@@ -36,6 +38,51 @@ function StatBars({ stats }: { stats: BaseStats }) {
         <span>총합</span>
         <strong>{total}</strong>
       </div>
+    </div>
+  );
+}
+
+/**
+ * 방어 상성 타입 표기(Phase 6 §2-2, 사용자 1차 정리) — 이 포켓몬의 두 타입 조합이 각 공격
+ * 타입에 대해 갖는 배율을 등배(×1)를 제외하고 약점부터 면역까지 그룹으로 묶어 보여준다.
+ * lib/typeEffectiveness.ts의 getDefensiveProfile을 그대로 재사용(파티 빌더의 타입 상성 요약
+ * 컴포넌트와 같은 하위 재료) — 메가진화 폼별 타입 변화는 이 섹션의 범위 밖(기본 폼 기준).
+ */
+function DefensiveProfile({ types }: { types: PokemonType[] }) {
+  const profile = getDefensiveProfile(types);
+  const groups: { label: string; className: string; types: PokemonType[] }[] = [
+    { label: "4배 약점", className: "quad", types: [] },
+    { label: "2배 약점", className: "weak", types: [] },
+    { label: "½ 저항", className: "resist", types: [] },
+    { label: "¼ 저항", className: "quadresist", types: [] },
+    { label: "면역", className: "immune", types: [] },
+  ];
+  for (const type of POKEMON_TYPES) {
+    const mult = profile[type];
+    if (mult === 4) groups[0].types.push(type);
+    else if (mult === 2) groups[1].types.push(type);
+    else if (mult === 0.5) groups[2].types.push(type);
+    else if (mult === 0.25) groups[3].types.push(type);
+    else if (mult === 0) groups[4].types.push(type);
+  }
+  const nonEmpty = groups.filter((g) => g.types.length > 0);
+
+  if (nonEmpty.length === 0) {
+    return <p className="pokedex-defense-empty">모든 타입을 등배(×1)로 받습니다.</p>;
+  }
+
+  return (
+    <div className="pokedex-defense-groups">
+      {nonEmpty.map((g) => (
+        <div className="pokedex-defense-row" key={g.label}>
+          <span className={`pokedex-defense-label is-${g.className}`}>{g.label}</span>
+          <span className="pokedex-defense-badges">
+            {g.types.map((t) => (
+              <TypeBadge key={t} type={t} />
+            ))}
+          </span>
+        </div>
+      ))}
     </div>
   );
 }
@@ -87,6 +134,11 @@ function PokedexDetail({ pokemon, onSelectMove }: { pokemon: Pokemon; onSelectMo
       <section className="pokedex-detail-section">
         <h4>종족값</h4>
         <StatBars stats={pokemon.baseStats} />
+      </section>
+
+      <section className="pokedex-detail-section">
+        <h4>방어 상성</h4>
+        <DefensiveProfile types={pokemon.types} />
       </section>
 
       <section className="pokedex-detail-section">
