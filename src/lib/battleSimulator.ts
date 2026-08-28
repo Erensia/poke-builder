@@ -642,6 +642,17 @@ export interface ActionLogEntry {
   curedStatus?: StatusConditionState["condition"];
   /** curedStatus가 누구에게 일어났는지 — "self"면 이 행동의 actor, "opponent"면 상대 */
   curedStatusTarget?: "self" | "opponent";
+  /**
+   * 잠듦/얼음이 "이번 행동 시작 시점"에 자연 해제(또는 thawsUserOnUse로 강제 해동)됐으면 그 상태.
+   * 움직이기 전 상태 판정이므로 로그에서 기술 줄보다 **먼저** 렌더한다. curedStatus(치료기·피격
+   * 해동 등 행동 이후에 일어나는 것들)와 별도 축.
+   */
+  selfWokeBeforeMove?: StatusConditionState["condition"];
+  /**
+   * 상대가 대타를 세운 상태라 이번 기술이 본체에 전혀 닿지 못하고 통째로 막혔으면 그 기술 이름
+   * (소리 기술 제외). 데미지 기술이 대타를 실제로 깎은 경우는 hitSubstitute로 따로 표시.
+   */
+  blockedBySubstituteMoveName?: string;
   /** 이 행동으로 defender가 쓰러졌으면 true */
   fainted: boolean;
   /** 혼란 자멸로 스스로 쓰러졌으면 true */
@@ -2430,12 +2441,10 @@ function resolveAction(
     defender.status = { ...NO_STATUS_CONDITION };
   }
 
-  // 이번 행동에서 자신의 상태이상이 자연 해제(잠듦/얼음) 또는 강제 해동(thawsUserOnUse)됐으면
-  // 그쪽을 우선한다 — 위 두 케이스(치료 기술/불꽃 피격)와 동시에 발생하는 건 극히 드문 경우다.
-  if (selfCuredStatus) {
-    curedStatus = selfCuredStatus;
-    curedStatusTarget = "self";
-  }
+  // 이번 행동 시작 시점에 자신의 잠듦/얼음이 자연 해제(또는 thawsUserOnUse 강제 해동)됐으면
+  // 별도 필드로 넘긴다 — 로그에서 기술 줄보다 먼저 렌더해야 하므로 curedStatus(행동 이후에
+  // 일어나는 것들)와 섞지 않는다.
+  const selfWokeBeforeMove = selfCuredStatus;
 
   // 잠자기: 명중(항상 필중)하면 기존 상태이상이 뭐든 지우고 체력을 완전히 회복한 뒤 정확히 2턴간
   // 무조건 재운다 — curesStatus/inflictsStatus의 일반 규칙(이미 상태이상이 있으면 못 걺)과는
@@ -2776,6 +2785,11 @@ function resolveAction(
     unburdenOpponentAbilityName = defenderAbility.name;
   }
 
+  // 대타에 통째로 막힘: 상대를 겨냥한 기술인데 대타를 실제로 깎지도(hitSubstitute) 못했으면
+  // (= 변화기이거나 데미지 0), 본체엔 아무 일도 안 일어난 것이라 "실패" 문구를 낸다.
+  const blockedBySubstituteMoveName =
+    blockedBySubstitute && !hitSubstitute && isOpponentTargetingMove(effectiveMove) ? effectiveMove.name : undefined;
+
   return {
     actor: actorKey,
     move,
@@ -2804,6 +2818,8 @@ function resolveAction(
     perishSongFailed: perishSongFailed || undefined,
     curedStatus,
     curedStatusTarget,
+    selfWokeBeforeMove,
+    blockedBySubstituteMoveName,
     setField: fieldSetFailed ? undefined : effectiveMove.setsField,
     fieldSetFailed,
     stealthRockSetForSide,

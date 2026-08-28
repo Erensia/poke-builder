@@ -165,7 +165,7 @@ const STATUS_CURE_TEXT: Record<StatusCondition, (name: string) => string> = {
   "badly-poisoned": (name) => `${name}의 맹독이 나았다!`,
   burn: (name) => `${name}의 화상이 나았다!`,
   paralysis: (name) => `${name}의 몸저림이 풀렸다!`,
-  sleep: (name) => `${name}의 눈을 떴다!`,
+  sleep: (name) => `${name}${eunNeun(name)} 눈을 떴다!`,
   freeze: (name) => `${name}의 얼음이 녹았다!`,
 };
 
@@ -632,6 +632,13 @@ export function BattleLogPage() {
                   const defenderName = fighterLabel(battleState, opponentKey(action.actor));
                   return (
                     <div key={i}>
+                      {/* 움직이기 전 상태 판정 — 잠듦/얼음이 이번 행동 시작 시점에 풀렸으면 기술 줄보다
+                          먼저 알려준다("잠든 포켓몬은 눈을 떴다!" 순서). */}
+                      {action.selfWokeBeforeMove && (
+                        <div className="battle-turn-line is-muted">
+                          {STATUS_CURE_TEXT[action.selfWokeBeforeMove](actorName)}
+                        </div>
+                      )}
                       {/* 메인 라인: 누가 무슨 기술을 써서 어떻게 됐는지("빗나감"/데미지 수치)까지만.
                           기절 같은 "상태"는 아래에서 별도 줄로 분리한다. */}
                       <div className="battle-turn-line">
@@ -940,11 +947,20 @@ export function BattleLogPage() {
                           {defenderName}의 {action.secondaryBlockedByAbilityName}! 추가 효과를 받지 않는다!
                         </div>
                       )}
-                      {/* 대타출동 — 데미지가 본체가 아니라 대타로 들어갔을 때 알려준다. 깨졌는지 아직
-                          버티는지에 따라 문구를 분기(접촉/특성 트리거가 발동하지 않는 이유이기도 함) */}
+                      {/* 대타출동 — 대타가 깨졌으면 그것만 알리고, 깨지지 않고 버텼으면(=본체엔 아무
+                          변화 없음) 소리 기술을 제외한 기술은 "실패했다!"로 표기. */}
                       {!action.blockedReason && action.hitSubstitute && (
                         <div className="battle-turn-line is-muted">
-                          {action.substituteBroke ? "대타는 사라졌다!" : "대타가 대신 맞았다!"}
+                          {action.substituteBroke
+                            ? "대타는 사라졌다!"
+                            : `${actorName}의 ${action.move.name}${eunNeun(action.move.name)} 실패했다!`}
+                        </div>
+                      )}
+                      {/* 변화기 등이 대타에 통째로 막혔을 때(데미지 자체가 없어 hitSubstitute가 안 뜸) */}
+                      {!action.blockedReason && action.blockedBySubstituteMoveName && (
+                        <div className="battle-turn-line is-muted">
+                          {actorName}의 {action.blockedBySubstituteMoveName}
+                          {eunNeun(action.blockedBySubstituteMoveName)} 실패했다!
                         </div>
                       )}
                       {/* 탈(Disguise) — 데미지를 통째로 무효화하고 그 반동으로 벗겨지며 데미지를 입는다.
