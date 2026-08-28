@@ -18,7 +18,8 @@ export type MoveClassification =
   | "소리"
   | "파동"
   | "춤"
-  | "바람";
+  | "바람"
+  | "가루";
 
 export interface StatChangeEffect {
   target: "self" | "opponent";

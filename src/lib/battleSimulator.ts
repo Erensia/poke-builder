@@ -653,6 +653,8 @@ export interface ActionLogEntry {
    * (소리 기술 제외). 데미지 기술이 대타를 실제로 깎은 경우는 hitSubstitute로 따로 표시.
    */
   blockedBySubstituteMoveName?: string;
+  /** 가루/포자 기술을 풀타입 상대에게 써서 통하지 않았으면 그 기술 이름 */
+  powderBlockedMoveName?: string;
   /** 이 행동으로 defender가 쓰러졌으면 true */
   fainted: boolean;
   /** 혼란 자멸로 스스로 쓰러졌으면 true */
@@ -1297,6 +1299,11 @@ function resolveAction(
     !(move.classification ?? []).includes("소리") &&
     !attackerAbility?.bypassesScreensAndSubstitute;
 
+  // 가루/포자 기술(수면가루·저리가루·독가루·목화포자·분노가루)은 풀타입 포켓몬에게 통하지 않는다
+  // (본가 규칙 — 타입 면역과 같은 축). 방진 특성·방진고글 도구도 막지만 포챔스 로스터엔 없어 생략.
+  const blockedByPowderImmunity =
+    (move.classification ?? []).includes("가루") && defender.types.includes("풀");
+
   // 방어/판별/킹실드(protectEffect: "block"): 이번 턴 상대의 공격을 카테고리 무관으로 완전히
   // 무효화한다 — 대타와 달리 데미지를 어디로도 흡수하지 않고 그냥 0으로 만든다(아래 canDealDamage).
   // 버티기(protectEffect: "endure")는 막는 게 아니라 applyEndurance에서 별도로 처리하므로 여기
@@ -1308,7 +1315,8 @@ function resolveAction(
   // 대상 랭크업/자기 회복기는 방어와 무관하게 그대로 발동하므로 "막혔다"가 아니다(Phase 6.5 §6-2 ⑦).
   const blockedByProtectMoveName =
     blockedByProtect && isOpponentTargetingMove(move) ? defender.activeProtect?.moveName : undefined;
-  const opponentEffectsBlocked = blockedByGoodAsGold || blockedBySubstitute || blockedByProtect;
+  const opponentEffectsBlocked =
+    blockedByGoodAsGold || blockedBySubstitute || blockedByProtect || blockedByPowderImmunity;
 
   // 매직미러: 방어측이 이 특성을 지녔고(틀깨기면 위에서 defenderAbility가 이미 undefined), 이번
   // 기술이 방어측을 겨냥하는 status 변화기이며 반사 제외(notReflectable — 고스트 저주·추억의선물·
@@ -2789,6 +2797,7 @@ function resolveAction(
   // (= 변화기이거나 데미지 0), 본체엔 아무 일도 안 일어난 것이라 "실패" 문구를 낸다.
   const blockedBySubstituteMoveName =
     blockedBySubstitute && !hitSubstitute && isOpponentTargetingMove(effectiveMove) ? effectiveMove.name : undefined;
+  const powderBlockedMoveName = blockedByPowderImmunity ? effectiveMove.name : undefined;
 
   return {
     actor: actorKey,
@@ -2820,6 +2829,7 @@ function resolveAction(
     curedStatusTarget,
     selfWokeBeforeMove,
     blockedBySubstituteMoveName,
+    powderBlockedMoveName,
     setField: fieldSetFailed ? undefined : effectiveMove.setsField,
     fieldSetFailed,
     stealthRockSetForSide,

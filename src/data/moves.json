@@ -3283,7 +3283,8 @@
     "accuracy": 75,
     "pp": 20,
     "priority": 0,
-    "effect": "상대를 독 상태로 만든다.",
+    "effect": "상대를 독 상태로 만든다. 풀타입 포켓몬에게는 통하지 않는다.",
+    "classification": ["가루"],
     "makesContact": false,
     "inflictsStatus": [
       {
@@ -3300,7 +3301,8 @@
     "accuracy": 100,
     "pp": 20,
     "priority": 0,
-    "effect": "상대의 스피드를 2랭크 낮춘다.",
+    "effect": "상대의 스피드를 2랭크 낮춘다. 풀타입 포켓몬에게는 통하지 않는다.",
+    "classification": ["가루"],
     "statChanges": [
       {
         "target": "opponent",
@@ -3396,7 +3398,8 @@
     "accuracy": 75,
     "pp": 20,
     "priority": 0,
-    "effect": "상대를 마비 상태로 만든다.",
+    "effect": "상대를 마비 상태로 만든다. 풀타입 포켓몬에게는 통하지 않는다.",
+    "classification": ["가루"],
     "makesContact": false,
     "inflictsStatus": [
       {
@@ -4562,7 +4565,8 @@
     "accuracy": 75,
     "pp": 16,
     "priority": 0,
-    "effect": "잠이 오는 가루를 많이 흩뿌려서 상대를 잠듦 상태로 만든다.",
+    "effect": "잠이 오는 가루를 많이 흩뿌려서 상대를 잠듦 상태로 만든다. 풀타입 포켓몬에게는 통하지 않는다.",
+    "classification": ["가루"],
     "makesContact": false,
     "inflictsStatus": [
       {
@@ -5228,7 +5232,8 @@
     "accuracy": null,
     "pp": 20,
     "priority": 2,
-    "effect": "이번 턴 상대의 단일 대상 공격을 자신에게 유도한다.",
+    "effect": "이번 턴 상대의 단일 대상 공격을 자신에게 유도한다. 풀타입 포켓몬에게는 통하지 않는다.",
+    "classification": ["가루"],
     "makesContact": false
   },
   {

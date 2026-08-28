@@ -962,6 +962,14 @@ export function BattleLogPage() {
                           {eunNeun(action.blockedBySubstituteMoveName)} 실패했다!
                         </div>
                       )}
+                      {/* 가루/포자 기술을 풀타입 상대에게 썼을 때 */}
+                      {!action.blockedReason && action.powderBlockedMoveName && (
+                        <div className="battle-turn-line is-muted">
+                          {defenderName}
+                          {eunNeun(defenderName)} 풀타입이라 {action.powderBlockedMoveName}
+                          {eunNeun(action.powderBlockedMoveName)} 통하지 않는다!
+                        </div>
+                      )}
                       {/* 탈(Disguise) — 데미지를 통째로 무효화하고 그 반동으로 벗겨지며 데미지를 입는다.
                           다단히트 나머지 타수는 이 필드 없이 정상적으로 데미지가 들어간다(첫 타만 무효화). */}
                       {!action.blockedReason && action.hitNegatedByAbilityName && (
