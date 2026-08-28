@@ -947,16 +947,15 @@ export function BattleLogPage() {
                           {defenderName}의 {action.secondaryBlockedByAbilityName}! 추가 효과를 받지 않는다!
                         </div>
                       )}
-                      {/* 대타출동 — 대타가 깨졌으면 그것만 알리고, 깨지지 않고 버텼으면(=본체엔 아무
-                          변화 없음) 소리 기술을 제외한 기술은 "실패했다!"로 표기. */}
+                      {/* 대타출동 — 데미지 기술이 대타로 들어갔을 때. 깨졌는지 버텼는지에 따라 분기
+                          (접촉/특성 트리거가 발동하지 않는 이유이기도 함). */}
                       {!action.blockedReason && action.hitSubstitute && (
                         <div className="battle-turn-line is-muted">
-                          {action.substituteBroke
-                            ? "대타는 사라졌다!"
-                            : `${actorName}의 ${action.move.name}${eunNeun(action.move.name)} 실패했다!`}
+                          {action.substituteBroke ? "대타는 사라졌다!" : "대타가 대신 맞았다!"}
                         </div>
                       )}
-                      {/* 변화기 등이 대타에 통째로 막혔을 때(데미지 자체가 없어 hitSubstitute가 안 뜸) */}
+                      {/* 변화기 등이 대타에 통째로 막혀 본체에 아무것도 못 했을 때
+                          (데미지 자체가 없어 hitSubstitute가 안 뜸) — 소리 기술 제외. */}
                       {!action.blockedReason && action.blockedBySubstituteMoveName && (
                         <div className="battle-turn-line is-muted">
                           {actorName}의 {action.blockedBySubstituteMoveName}
