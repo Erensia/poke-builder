@@ -356,6 +356,13 @@ export interface Move {
    */
   counters?: "physical" | "special";
   /**
+   * 멸망의노래(Perish Song): 명중하면 장에 있는 양쪽 포켓몬 모두에게 멸망 카운트 3을 건다.
+   * 매 턴 종료 시 3→2→1→0으로 줄고, 0에서 다음 감소 시점에 HP가 0이 되어 기절한다. 방어·대타·
+   * 황금몸을 무시하고, 방음(Ability.blocksSound) 특성 포켓몬과 발동 시점에 공중날기/구멍파기 등으로
+   * 다른 장소 취급인 포켓몬에게는 카운트가 시작되지 않는다. 소리 기술(classification "소리").
+   */
+  setsPerishSong?: boolean;
+  /**
    * 성스러운칼 전용. 데미지 계산에서 상대(방어측)의 능력 랭크 변화(상승분·하락분 전부)를
    * 무시한다 — Ability.ignoresOpponentStatStagesInDamage(천진)와 정확히 같은 축이지만 특성이
    * 아니라 기술 단위 효과라는 점만 다르다(둘 중 하나만 있어도 발동, 중첩 시 자연히 무해).

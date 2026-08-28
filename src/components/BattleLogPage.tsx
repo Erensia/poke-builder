@@ -989,6 +989,15 @@ export function BattleLogPage() {
                       {!action.blockedReason && action.counterFailed && (
                         <div className="battle-turn-line is-muted">{actorName}의 {action.move.name} - 그러나 실패했다!</div>
                       )}
+                      {/* F-4 멸망의노래 */}
+                      {!action.blockedReason && action.perishSongStarted && (
+                        <div className="battle-turn-line is-muted">
+                          노래를 들은 모두가 3턴 후에 쓰러진다!
+                        </div>
+                      )}
+                      {!action.blockedReason && action.perishSongFailed && (
+                        <div className="battle-turn-line is-muted">{actorName}의 {action.move.name} - 그러나 실패했다!</div>
+                      )}
                       {/* E-1 떨어뜨리기 등 상대 차징 캔슬 */}
                       {!action.blockedReason && action.canceledTargetChargeMoveName && (
                         <div className="battle-turn-line is-muted">
@@ -1284,6 +1293,15 @@ export function BattleLogPage() {
                         {fighterLabel(battleState, e.actor)}
                         {eunNeun(fighterLabel(battleState, e.actor))} 모래바람에 시달리고 있다! {e.damage} 데미지 (남은
                         HP {e.remainingHp}){e.fainted && " · 기절!"}
+                      </>
+                    ) : e.perishFainted ? (
+                      <>
+                        {fighterLabel(battleState, e.actor)}
+                        {eunNeun(fighterLabel(battleState, e.actor))} 멸망의 노래 카운트가 0이 되어 쓰러졌다!
+                      </>
+                    ) : e.perishCount !== undefined ? (
+                      <>
+                        {fighterLabel(battleState, e.actor)}의 멸망의 노래 카운트: {e.perishCount}
                       </>
                     ) : e.inflictedDelayedStatus ? (
                       STATUS_ONSET_TEXT[e.inflictedDelayedStatus](fighterLabel(battleState, e.actor))

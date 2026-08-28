@@ -4061,12 +4061,13 @@
     "accuracy": null,
     "pp": 8,
     "priority": 0,
-    "effect": "노래를 들은 포켓몬은 3턴 후 기절한다.",
+    "effect": "노래를 들은 포켓몬은 3턴 후 기절한다. 방어·대타·황금몸을 무시하지만 방음 특성에는 통하지 않는다.",
     "classification": [
       "소리"
     ],
     "makesContact": false,
-    "notReflectable": true
+    "notReflectable": true,
+    "setsPerishSong": true
   },
   {
     "id": "물거품아리아",

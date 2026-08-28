@@ -53,7 +53,7 @@ import {
   inflictVolatile,
 } from "./volatileConditions";
 import { resolveMoveContext } from "./moveContext";
-import { computeDamage } from "./battlePower";
+import { computeDamage, rankStageMultiplier } from "./battlePower";
 import { getWeatherDamageMultiplier, computeWeatherHealFraction } from "./weatherEffects";
 import {
   FIELD_DURATION,
@@ -191,6 +191,11 @@ export interface BattleFighterState {
    * runTurn이 0으로 초기화한다. 대타로 흡수된 데미지는 포함하지 않는다.
    */
   damageTakenThisTurn?: { physical: number; special: number };
+  /**
+   * 멸망의노래 카운트(F-4). 걸리면 3, 매 턴 종료 시 로그를 찍고 1씩 줄어들며, 0에서 다음 감소
+   * 시점에 HP가 0이 된다. undefined면 안 걸린 상태.
+   */
+  perishCount?: number;
   /** 나무열매(카리열매 등)처럼 대전 중 1회만 발동하는 지닌 도구를 이미 썼으면 true */
   itemConsumed?: boolean;
   /**
@@ -776,6 +781,10 @@ export interface ActionLogEntry {
   counterDamage?: number;
   /** 미러코트/카운터가 실패했으면(받은 데미지 없음·상대 면역 타입) true */
   counterFailed?: boolean;
+  /** 멸망의노래가 이번에 새로 걸렸으면 true */
+  perishSongStarted?: boolean;
+  /** 멸망의노래를 썼지만 양쪽 다 이미 카운트 중이라 실패했으면 true */
+  perishSongFailed?: boolean;
   /** 이 행동(공격)이 상대의 방어류 기술에 완전히 막혔으면 그 기술 이름 */
   blockedByProtectMoveName?: string;
   /** 방어류 버티기로 이번 데미지를 버티고 HP 1로 남았으면 그 기술 이름 */
@@ -894,6 +903,10 @@ export interface EndOfTurnLogEntry {
   speedBoostAtCap?: boolean;
   /** 모래바람 틱 데미지면 true (damage에 실제 수치) — §1 F-3 */
   sandstormDamage?: boolean;
+  /** 멸망의노래 카운트 안내(F-4) — 이번 턴 종료 시점의 남은 카운트(3→2→1) */
+  perishCount?: number;
+  /** 멸망의노래 카운트가 0에 도달해 이번 턴 종료에 쓰러졌으면 true */
+  perishFainted?: boolean;
 }
 
 export interface TurnResult {
@@ -2634,6 +2647,25 @@ function resolveAction(
     [attackerItem, defenderItem] = [defenderItem, attackerItem];
   }
 
+  // 멸망의노래(setsPerishSong, F-4): 장에 있는 양쪽에게 멸망 카운트 3을 건다. 방어·대타·황금몸을
+  // 무시하므로 opponentEffectsBlocked로 게이팅하지 않는다. 방음(blocksSound) 특성이나 발동 시점에
+  // 차징(공중날기·구멍파기 등)으로 다른 장소 취급인 포켓몬에겐 카운트가 시작되지 않는다.
+  // 양쪽 다 이미 카운트 중이면 재사용 실패.
+  let perishSongStarted = false;
+  let perishSongFailed = false;
+  if (effectiveMove.setsPerishSong) {
+    const attackerEligible = attacker.perishCount === undefined && !attackerAbility?.blocksSound;
+    const defenderEligible =
+      defender.perishCount === undefined && !defenderAbility?.blocksSound && defender.chargingMoveId === undefined;
+    if (!attackerEligible && !defenderEligible) {
+      perishSongFailed = true;
+    } else {
+      if (attackerEligible) attacker.perishCount = 3;
+      if (defenderEligible) defender.perishCount = 3;
+      perishSongStarted = true;
+    }
+  }
+
   // 아이언롤러: 명중하면 활성 필드를 제거한다. usageCondition: "field-required"로 필드가 없으면
   // 애초에 이 지점까지 오지 못하니(맨 위에서 이미 실패 처리), 여기선 있는 필드를 지우기만 하면 된다.
   let destroyedField: FieldKind | undefined;
@@ -2768,6 +2800,8 @@ function resolveAction(
     endeavorDamage: endeavorDamage || undefined,
     counterDamage: counterDamage || undefined,
     counterFailed: counterFailed || undefined,
+    perishSongStarted: perishSongStarted || undefined,
+    perishSongFailed: perishSongFailed || undefined,
     curedStatus,
     curedStatusTarget,
     setField: fieldSetFailed ? undefined : effectiveMove.setsField,
@@ -2987,12 +3021,33 @@ export function runTurn(
   }
 
   const endOfTurn: EndOfTurnLogEntry[] = [];
+  // 멸망의노래로 이번 턴 종료에 쓰러진 쪽(F-4) — 양쪽 다면 스피드 느린 쪽이 승리한다.
+  const perishFaintedKeys = new Set<FighterKey>();
 
   // winner가 이미 액션 중 자폭 콤보로 정해졌으면, 배틀이 그 시점에 끝난 것이니
   // 턴 종료 회복/상태이상 데미지는 더 진행하지 않는다(실제 게임에서도 배틀이 이미 끝났다).
   if (!winner && !isFainted(state.a) && !isFainted(state.b)) {
     for (const key of (["a", "b"] as const)) {
       const fighter = state[key];
+
+      // 멸망의노래 카운트(F-4): 매 턴 종료 시 현재 카운트를 로그로 찍고 1 줄인다. 0에서
+      // 다음 감소 시점에 HP가 0이 된다("3턴 후 기절" = 건 턴 포함 4번째 턴 종료).
+      if (fighter.perishCount !== undefined && !isFainted(fighter)) {
+        if (fighter.perishCount <= 0) {
+          fighter.currentHp = 0;
+          perishFaintedKeys.add(key);
+          endOfTurn.push({ actor: key, damage: 0, remainingHp: 0, fainted: true, perishFainted: true });
+          continue; // 이미 쓰러졌으니 이 포켓몬의 나머지 턴 종료 처리(회복 등)는 건너뛴다
+        }
+        endOfTurn.push({
+          actor: key,
+          damage: 0,
+          remainingHp: fighter.currentHp,
+          fainted: false,
+          perishCount: fighter.perishCount,
+        });
+        fighter.perishCount -= 1;
+      }
 
       // 그래스필드: 매 턴 종료 시 최대 HP 1/16 회복
       const fieldHeal = computeFieldEndOfTurnHeal(state.field, fighter.maxHp);
@@ -3247,6 +3302,14 @@ export function runTurn(
         }
       }
     }
+  }
+
+  // 멸망의노래로 양쪽이 동시에 쓰러졌으면 무승부가 아니라 스피드가 느린 쪽이 승리한다(F-4) —
+  // 빠른 쪽이 먼저 쓰러지는 것으로 취급. 랭크 반영 실효 스피드로 비교(트릭룸은 무관).
+  if (!winner && perishFaintedKeys.size === 2) {
+    const effSpeedA = speedA * rankStageMultiplier(state.a.stages.spe);
+    const effSpeedB = speedB * rankStageMultiplier(state.b.stages.spe);
+    winner = effSpeedA <= effSpeedB ? "a" : "b";
   }
 
   // 턴 종료 상태이상 데미지로 양쪽이 동시에 0이 되는 경우만 진짜 무승부로 남는다 — 이건 어느 한

@@ -216,6 +216,11 @@ export interface Ability {
    */
   blocksSecondaryEffects?: boolean;
   /**
+   * 방음(Soundproof): 소리 기술(classification "소리" — 돌림노래·멸망의노래·하이퍼보이스 등)이
+   * 자신에게 통하지 않는다. 현재 포챔스 로스터엔 이 특성 보유 포켓몬이 없어 데이터는 비어 있다.
+   */
+  blocksSound?: boolean;
+  /**
    * 클리어바디(전체)·괴력집게(공격만)처럼 상대의 기술로 자신의 능력치가 떨어지는 걸 막는다.
    * 비워두면(undefined) 이 특성은 아무 스탯도 막지 않는다. 클리어바디는 5스탯 전부,
    * 괴력집게는 `["atk"]`만 채운다. 자기 기술로 자기 스탯을 내리는 것(칼춤 등)은 막지 않는다 —
