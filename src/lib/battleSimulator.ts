@@ -353,6 +353,9 @@ function eulReul(name: string): "을" | "를" {
  * 인분(Ability.blocksSecondaryEffects)은 자기 대상 효과엔 관심이 없어(상대에게 오는 것만 막음)
  * 그 부분만 범위가 다르다. 데미지가 없는 순수 변화기는 양쪽 다 적용 대상이 아니다.
  */
+/** 모래바람 틱 데미지 면제 특성(모래 관련) — §1 F-3. 매직가드는 negatesIndirectDamage로 별도 처리. */
+const SANDSTORM_IMMUNE_ABILITY_NAMES = new Set(["모래숨기", "모래의힘", "모래날림", "모래헤치기"]);
+
 /**
  * 기사회생(Reversal) 위력표. 사용자 현재 HP 비율(%)로 갈린다 — 사용자 제공 수치(F-2).
  * 71~100 → 20 / 36~70 → 40 / 21~35 → 80 / 11~20 → 100 / 5~10 → 150 / 1~4 → 200.
@@ -880,6 +883,8 @@ export interface EndOfTurnLogEntry {
   speedBoostAbilityName?: string;
   /** speedBoostAbilityName이 있는데 이미 스피드 +6이라 실제로는 안 올랐으면 true — "더 이상 올라가지 않는다!" 문구용 */
   speedBoostAtCap?: boolean;
+  /** 모래바람 틱 데미지면 true (damage에 실제 수치) — §1 F-3 */
+  sandstormDamage?: boolean;
 }
 
 export interface TurnResult {
@@ -2514,49 +2519,48 @@ function resolveAction(
     swappedStatsMoveName = effectiveMove.name;
   }
 
-  // 방어류(방어/판별/버티기/킹실드): 연속 성공 횟수(protectStreak)에 따라 성공 확률이
-  // (1/3)^streak로 줄어든다. 성공하면 streak를 늘리고 이번 턴 activeProtect를 세운다.
-  // 실패하면 streak를 0으로 리셋한다. 방어류가 아닌 다른 기술을 실제로 썼을 때도(여기 도달했다는
-  // 건 상태이상/풀죽음 등으로 막히지 않고 정상 실행됐다는 뜻) streak를 0으로 리셋한다 —
-  // "계열이 아닌 다른 기술을 쓰면 초기화" 규칙.
+  // 방어류(방어/판별/버티기/킹실드): 연속 사용 횟수(protectStreak)에 따라 이번 턴 실제로 발동할
+  // 확률이 (1/3)^streak로 줄어든다. 직전에 실패했거나 이력이 없으면(streak 0) 확률 1 = 무조건 발동.
+  //
+  // §1 G (2차 지시 반영): 굴림에 성공하면 무조건 "방어태세에 들어갔다!"(protectStanceEntered)를 낸다.
+  // 그 뒤 상대가 이번 턴 낸 기술이 "이 포켓몬을 겨냥"했으면 실제로 막은 것 → "몸을 지켜냈다!"
+  // (protectSucceeded), 자기 대상 기술(칼춤·철벽 등)이라 막을 게 없었으면 → "방어는 실패했다!"
+  // (protectFailed). 굴림에 실패하면(연속 사용) 태세 진입 없이 바로 "방어는 실패했다!"만.
+  // 버티기(endure)·길동무(destinyBond)는 별도 문구 축이라 protectStanceEntered에서 제외.
   let protectSucceeded = false;
   let protectFailed = false;
-  // §1 G: 방어/판별/킹실드(protectEffect === "block")는 성공/실패와 무관하게 "방어태세에 들어갔다!"를
-  // 먼저 낸다. 그 뒤 상대 기술이 자신을 겨냥했으면 "몸을 지켰다!"(protectSucceeded), 아니면
-  // "방어는 실패했다!"(protectFailed). 버티기/길동무는 별도 문구라 제외.
   let protectStanceEntered = false;
   // 매직미러 반사 중이면(bounceActive) attacker/defender가 맞바뀐 상태라 이 방어류 블록을 통째로
   // 건너뛴다 — 되돌린 기술은 반사한 쪽(현재 attacker)의 방어 행동이 아니므로 protectStreak도
   // 건드리면 안 된다.
   if (effectiveMove.protectEffect && !bounceActive) {
-    protectStanceEntered = effectiveMove.protectEffect === "block";
     const streak = attacker.protectStreak ?? 0;
     const successChance = Math.pow(1 / 3, streak);
-    // 상대가 이번 턴 낸 게 방어로 막을 수 있는 것(공격기 또는 상대를 겨냥한 변화기)이 아니면
-    // — 칼춤·나쁜음모 같은 자기 대상 랭크업, 자기 회복기 등 — "막을 게 없어" 실패로 처리한다
-    // (사용자 확인, Phase 6.5 §6-2 ⑦). 길동무는 애초에 이번 턴 상대를 막는 효과가 아니라 제외.
-    const nothingToBlock =
-      effectiveMove.protectEffect !== "destinyBond" && !isOpponentTargetingMove(defenderMove);
-    if (nothingToBlock) {
+    const rollPassed = random() < successChance;
+    const targetedSelf =
+      effectiveMove.protectEffect === "destinyBond" || isOpponentTargetingMove(defenderMove);
+    if (!rollPassed) {
+      // 연속 사용 굴림 실패 — 태세 진입도 없이 그대로 실패.
       attacker.protectStreak = 0;
       protectFailed = true;
-    } else if (random() < successChance) {
+    } else {
       attacker.protectStreak = streak + 1;
-      protectSucceeded = true;
+      protectStanceEntered = effectiveMove.protectEffect === "block";
       // 길동무는 activeProtect(매 턴 시작 시 초기화)가 아니라 destinyBondArmed(자신의 다음
       // 행동 전까지 유지)로 별도 추적한다 — 이번 턴 상대 공격을 막는 게 아니기 때문.
       if (effectiveMove.protectEffect === "destinyBond") {
         attacker.destinyBondArmed = true;
+        protectSucceeded = true;
       } else {
         attacker.activeProtect = {
           effect: effectiveMove.protectEffect,
           moveName: effectiveMove.name,
           contactPenalty: effectiveMove.protectContactPenalty,
         };
+        // 태세엔 들어갔지만 상대가 자기 대상 기술만 냈으면 "막을 게 없어" 실패로 표기.
+        if (targetedSelf) protectSucceeded = true;
+        else protectFailed = true;
       }
-    } else {
-      attacker.protectStreak = 0;
-      protectFailed = true;
     }
   } else if (!bounceActive) {
     attacker.protectStreak = 0;
@@ -3103,6 +3107,29 @@ export function runTurn(
             remainingHp: fighter.currentHp,
             fainted: false,
             inflictedDelayedStatus: "sleep",
+          });
+        }
+      }
+
+      // 모래바람 틱 데미지(§1 F-3): 바위/땅/강철 타입이 아니면 매 턴 종료 시 최대 HP 1/16.
+      // 매직가드·모래 관련 특성(모래숨기/모래의힘/모래날림/모래헤치기) 보유 시 면제.
+      // (본가의 방진 특성·방진고글 도구는 포챔스에 없어 제외. 싸라기눈 틱도 없음.)
+      if (
+        state.weather === "모래바람" &&
+        !isFainted(fighter) &&
+        !fighter.types.some((t) => t === "바위" || t === "땅" || t === "강철") &&
+        !fighterAbility?.negatesIndirectDamage &&
+        !SANDSTORM_IMMUNE_ABILITY_NAMES.has(fighterAbility?.name ?? "")
+      ) {
+        const sandDamage = Math.min(fighter.currentHp, Math.floor(fighter.maxHp / 16));
+        fighter.currentHp -= sandDamage;
+        if (sandDamage > 0) {
+          endOfTurn.push({
+            actor: key,
+            damage: sandDamage,
+            remainingHp: fighter.currentHp,
+            fainted: isFainted(fighter),
+            sandstormDamage: true,
           });
         }
       }

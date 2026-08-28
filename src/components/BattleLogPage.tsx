@@ -1140,7 +1140,7 @@ export function BattleLogPage() {
                       {!action.blockedReason && action.protectStanceEntered && action.protectSucceeded && (
                         <div className="battle-turn-line is-muted">
                           {actorName}
-                          {eunNeun(actorName)} 공격으로부터 몸을 지켰다!
+                          {eunNeun(actorName)} 공격으로부터 몸을 지켜냈다!
                         </div>
                       )}
                       {!action.blockedReason && action.protectStanceEntered && action.protectFailed && (
@@ -1268,6 +1268,12 @@ export function BattleLogPage() {
                       <>
                         {fighterLabel(battleState, e.actor)}의 {e.berryHealItemName}로 {e.berryHeal} 회복 (남은 HP{" "}
                         {e.remainingHp})
+                      </>
+                    ) : e.sandstormDamage ? (
+                      <>
+                        {fighterLabel(battleState, e.actor)}
+                        {eunNeun(fighterLabel(battleState, e.actor))} 모래바람에 시달리고 있다! {e.damage} 데미지 (남은
+                        HP {e.remainingHp}){e.fainted && " · 기절!"}
                       </>
                     ) : e.inflictedDelayedStatus ? (
                       STATUS_ONSET_TEXT[e.inflictedDelayedStatus](fighterLabel(battleState, e.actor))
