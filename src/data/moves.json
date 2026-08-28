@@ -1694,7 +1694,8 @@
     "accuracy": 100,
     "pp": 16,
     "priority": 0,
-    "effect": "자신의 체력이 낮을수록 위력이 커진다.",
+    "effect": "힘을 쥐어짜서 공격한다. 자신의 HP가 적을수록 위력이 올라간다(HP 71~100%=20, 36~70%=40, 21~35%=80, 11~20%=100, 5~10%=150, 1~4%=200).",
+    "reversalPower": true,
     "makesContact": true
   },
   {
@@ -1761,7 +1762,8 @@
     "accuracy": 90,
     "pp": 12,
     "priority": 0,
-    "effect": "",
+    "effect": "빗나가거나 상대가 방어류 기술로 막거나 타입 면역으로 무효화하면, 사용자는 최대 HP의 1/2만큼 반동 데미지를 입는다.",
+    "crashFraction": 0.5,
     "makesContact": true
   },
   {
@@ -1821,7 +1823,8 @@
     "accuracy": 95,
     "pp": 8,
     "priority": 0,
-    "effect": "",
+    "effect": "사용하면 명중·빗나감과 무관하게 사용자가 최대 HP의 1/2만큼 데미지를 입는다.",
+    "selfDamageFractionOnUse": 0.5,
     "makesContact": false
   },
   {
@@ -2467,7 +2470,8 @@
     "accuracy": 100,
     "pp": 8,
     "priority": 0,
-    "effect": "자신의 체력이 낮을수록 위력이 커진다.",
+    "effect": "명중하면 상대의 현재 HP를 사용자의 현재 HP와 같아질 때까지 깎는다(상대 HP가 더 많을 때만).",
+    "setsTargetHpToUserHp": true,
     "makesContact": true
   },
   {
@@ -2602,7 +2606,9 @@
     "accuracy": 100,
     "pp": 16,
     "priority": 0,
-    "effect": "공중에 떠 있는 상대도 지상으로 떨어뜨려 명중시킨다.",
+    "effect": "공중에 떠 있는(공중날기·뛰어오르기 등) 상대도 지상으로 떨어뜨려 명중시키고, 그 차징 기술을 캔슬시킨다.",
+    "bypassesHiding": ["sky"],
+    "cancelsTargetCharge": true,
     "makesContact": false
   },
   {
@@ -2906,8 +2912,9 @@
     "accuracy": 70,
     "pp": 12,
     "priority": 0,
-    "effect": "30% 확률로 상대를 마비시킨다. 하늘로 회피 중인 상대에게도 명중한다.",
+    "effect": "30% 확률로 상대를 마비시킨다. 하늘로 회피 중인 상대에게는 위력이 2배가 되며 명중한다.",
     "bypassesHiding": ["sky"],
+    "hidingBypassMultiplier": 2,
     "makesContact": false,
     "inflictsStatus": [
       {

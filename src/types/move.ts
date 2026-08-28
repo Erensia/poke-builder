@@ -322,6 +322,33 @@ export interface Move {
    */
   notReflectable?: boolean;
   /**
+   * 떨어뜨리기(Smack Down)처럼, 차지 기술 준비 턴(공중날기 등)으로 무적인 상대에게 명중하면
+   * 그 즉시 상대의 차징을 캔슬시키는 기술. bypassesHiding에 해당 무적 종류를 넣어 명중까지
+   * 시키고, 여기서 defender.chargingMoveId를 지운다(§1 E-1).
+   */
+  cancelsTargetCharge?: boolean;
+  /**
+   * 무릎차기처럼 "빗나가거나·방어류에 막히거나·타입 면역으로 무효화되면" 사용자가 최대 HP의
+   * 이 비율만큼(내림) 반동 데미지를 입는 기술(무릎차기=0.5). 전용 문구
+   * "OO은(는) 의욕이 넘쳐 땅에 부딪혔다!". recoilFraction(준 데미지 기준)과 계산축이 다르다.
+   */
+  crashFraction?: number;
+  /**
+   * 철제광선처럼 명중·빗나감과 무관하게 "사용하는 순간" 사용자가 최대 HP의 이 비율만큼(내림)
+   * 데미지를 입는 기술(철제광선=0.5).
+   */
+  selfDamageFractionOnUse?: number;
+  /**
+   * 죽기살기(Endeavor): 명중하면 상대의 현재 HP를 사용자의 현재 HP와 같게 만든다(상대 HP가
+   * 사용자보다 많을 때만 — 적으면 아무 일도 없다). 데미지·상성·랭크 전부 무시.
+   */
+  setsTargetHpToUserHp?: boolean;
+  /**
+   * 기사회생(Reversal): 사용자의 현재 HP 비율에 따라 위력이 달라지는 기술. power는 이 표의
+   * 최고값과 무관하게 null로 두고, 이 플래그가 있으면 battleSimulator가 HP 비율로 위력을 정한다.
+   */
+  reversalPower?: boolean;
+  /**
    * 성스러운칼 전용. 데미지 계산에서 상대(방어측)의 능력 랭크 변화(상승분·하락분 전부)를
    * 무시한다 — Ability.ignoresOpponentStatStagesInDamage(천진)와 정확히 같은 축이지만 특성이
    * 아니라 기술 단위 효과라는 점만 다르다(둘 중 하나만 있어도 발동, 중첩 시 자연히 무해).

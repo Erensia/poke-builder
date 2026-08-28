@@ -353,6 +353,21 @@ function eulReul(name: string): "을" | "를" {
  * 인분(Ability.blocksSecondaryEffects)은 자기 대상 효과엔 관심이 없어(상대에게 오는 것만 막음)
  * 그 부분만 범위가 다르다. 데미지가 없는 순수 변화기는 양쪽 다 적용 대상이 아니다.
  */
+/**
+ * 기사회생(Reversal) 위력표. 사용자 현재 HP 비율(%)로 갈린다 — 사용자 제공 수치(F-2).
+ * 71~100 → 20 / 36~70 → 40 / 21~35 → 80 / 11~20 → 100 / 5~10 → 150 / 1~4 → 200.
+ * (경계는 백분율 내림 기준 — 예: 35.9%는 "35 이하" 구간이 아니라 "36 이상"으로 본다.)
+ */
+function reversalPowerFromHp(currentHp: number, maxHp: number): number {
+  const pct = (currentHp / maxHp) * 100;
+  if (pct > 70) return 20;
+  if (pct > 35) return 40;
+  if (pct > 20) return 80;
+  if (pct > 10) return 100;
+  if (pct > 4) return 150;
+  return 200;
+}
+
 function hasSheerForceSecondaryEffect(move: Move): boolean {
   if (move.power === null && move.fixedDamage === undefined) return false;
   if (move.inflictsStatus && move.inflictsStatus.length > 0) return true; // 이 스키마에서 대상은 항상 상대
@@ -737,6 +752,18 @@ export interface ActionLogEntry {
    * (블래키가 이미 맹독인 번치코에게 맹독 재시전 등). "그러나 실패했다!" 문구용.
    */
   statusInflictFailed?: boolean;
+  /** 미러아머(reflectsOpponentStatDrops)가 이번 기술의 상대 랭크다운을 시전자에게 되받아쳤으면 그 특성 이름 */
+  reflectedStatDropAbilityName?: string;
+  /** reflectedStatDropAbilityName이 되돌린 랭크다운(시전자에게 적용된 것) — stat·폭(양수) */
+  reflectedStatDrops?: { stat: BattleStatKey; delta: number }[];
+  /** 무릎차기 등 crashFraction 기술이 빗나가거나/막히거나/무효화돼 사용자가 입은 반동 데미지 */
+  crashDamage?: number;
+  /** 철제광선 등 selfDamageFractionOnUse 기술이 "사용하는 순간" 사용자가 입은 데미지 */
+  selfDamageOnUse?: number;
+  /** 떨어뜨리기 등 cancelsTargetCharge 기술이 상대의 차징(공중날기 등)을 캔슬시켰으면 그 기술 이름 */
+  canceledTargetChargeMoveName?: string;
+  /** 죽기살기(Endeavor)가 상대 HP를 사용자 HP와 같게 깎았으면, 실제로 깎은 양 */
+  endeavorDamage?: number;
   /** 이 행동(공격)이 상대의 방어류 기술에 완전히 막혔으면 그 기술 이름 */
   blockedByProtectMoveName?: string;
   /** 방어류 버티기로 이번 데미지를 버티고 HP 1로 남았으면 그 기술 이름 */
@@ -1317,6 +1344,11 @@ function resolveAction(
     sheerForceAbilityName = attackerAbility.name;
   }
 
+  // 기사회생(Reversal, F-2): power가 null인 채로 오고, 사용자의 현재 HP 비율에 따라 위력이 정해진다.
+  if (effectiveMove.reversalPower) {
+    effectiveMove = { ...effectiveMove, power: reversalPowerFromHp(attacker.currentHp, attacker.maxHp) };
+  }
+
   // 타오르는불꽃 발동 이후로 자신(=현재 공격자)이 쓰는 그 타입 기술의 위력이 올라있으면 반영.
   // 절대 타입이 null인 기술(발버둥 등)은 boosts 조회 자체를 건너뛴다.
   const ownMoveTypeBoostMultiplier =
@@ -1392,8 +1424,13 @@ function resolveAction(
 
   // 상대가 차지 기술 준비 턴(공중날기 등)으로 무적인 동안엔, bypassesHiding에 이 무적 종류가
   // 포함된 기술이 아닌 이상 조건 없이 빗나간다 — 명중률 굴림 자체를 건너뛴다.
+  // 단, 상대를 겨냥하지 않는 기술(칼춤·방어·광합성 등 자기 대상)은 애초에 "빗나갈" 대상이 아니라서
+  // 무적과 무관하게 정상 발동한다(§1 E-1 버그 수정).
   const defenderHideType = defender.chargingMoveId ? getMove(defender.chargingMoveId)?.chargeHideType : undefined;
-  const evadedByCharge = !!defenderHideType && !(effectiveMove.bypassesHiding ?? []).includes(defenderHideType);
+  const evadedByCharge =
+    !!defenderHideType &&
+    !(effectiveMove.bypassesHiding ?? []).includes(defenderHideType) &&
+    isOpponentTargetingMove(effectiveMove);
 
   // 매직미러로 되돌릴 기술은 명중 굴림을 건너뛴다(반사는 빗나가지 않는다).
   const hit = bouncedByMagicMirror
@@ -1404,11 +1441,24 @@ function resolveAction(
         ? true
         : random() < hitChance;
 
+  // 철제광선: "사용하는 순간" 명중·빗나감과 무관하게 사용자가 최대 HP의 절반을 잃는다(E-3).
+  let selfDamageOnUse = 0;
+  if (effectiveMove.selfDamageFractionOnUse !== undefined) {
+    selfDamageOnUse = Math.floor(attacker.maxHp * effectiveMove.selfDamageFractionOnUse);
+    attacker.currentHp = Math.max(0, attacker.currentHp - selfDamageOnUse);
+  }
+
   if (!hit) {
     // 자폭류(대폭발 등)는 빗나가도 사용자가 반드시 기절한다 (본가 규칙). 데미지가 아예 없는
     // 경로라 승자 판정에 영향을 줄 순서 문제도 없다 — 그냥 여기서 바로 처리해도 된다.
     if (effectiveMove.selfFaints) {
       attacker.currentHp = 0;
+    }
+    // 무릎차기: 빗나가면 사용자가 최대 HP 절반을 잃는다(E-2). "의욕이 넘쳐 땅에 부딪혔다!"
+    let crashDamage = 0;
+    if (effectiveMove.crashFraction !== undefined) {
+      crashDamage = Math.floor(attacker.maxHp * effectiveMove.crashFraction);
+      attacker.currentHp = Math.max(0, attacker.currentHp - crashDamage);
     }
     return {
       actor: actorKey,
@@ -1425,6 +1475,8 @@ function resolveAction(
       selfFainted: isFainted(attacker),
       recoilDamage: 0,
       evadedByCharge,
+      crashDamage: crashDamage || undefined,
+      selfDamageOnUse: selfDamageOnUse || undefined,
       leppaRestoredPpItemName,
     };
   }
@@ -1818,6 +1870,42 @@ function resolveAction(
     triggerAbilityHitEffect(damage);
   }
 
+  // 죽기살기(Endeavor, E-5): 데미지 계산이 없는(power null) 기술이라 위 분기에 안 걸린다.
+  // 상대 HP를 사용자의 현재 HP와 같게 깎는다 — 상대가 더 많을 때만, 대타가 있으면 무효(단순화),
+  // 노말→고스트 면역이면 typeEffectiveness가 0이라 스킵.
+  let endeavorDamage = 0;
+  if (
+    effectiveMove.setsTargetHpToUserHp &&
+    !blockedByProtect &&
+    typeEffectiveness !== 0 &&
+    defender.substituteHp === undefined &&
+    defender.currentHp > attacker.currentHp
+  ) {
+    endeavorDamage = defender.currentHp - attacker.currentHp;
+    defender.currentHp = attacker.currentHp;
+    damage = endeavorDamage;
+    damagePercent = endeavorDamage / defender.maxHp;
+  }
+
+  // 무릎차기(crashFraction, E-2): 명중은 했지만 방어류에 막혔거나 타입 면역(격투→고스트)으로
+  // 무효화됐으면 사용자가 최대 HP의 절반을 잃는다. 대타에 흡수된 경우는 "맞은" 것이라 제외.
+  let crashDamage = 0;
+  if (
+    effectiveMove.crashFraction !== undefined &&
+    !hitSubstitute &&
+    (blockedByProtect || typeEffectiveness === 0)
+  ) {
+    crashDamage = Math.floor(attacker.maxHp * effectiveMove.crashFraction);
+    attacker.currentHp = Math.max(0, attacker.currentHp - crashDamage);
+  }
+
+  // 떨어뜨리기(cancelsTargetCharge, E-1): 공중날기 등으로 무적인 상대에게 명중하면 그 차징을 캔슬.
+  let canceledTargetChargeMoveName: string | undefined;
+  if (effectiveMove.cancelsTargetCharge && defender.chargingMoveId && damage > 0) {
+    canceledTargetChargeMoveName = getMove(defender.chargingMoveId)?.name;
+    defender.chargingMoveId = undefined;
+  }
+
   // 부자유친: 단일타 기술이 실제로 데미지를 준 뒤(다단히트/고정데미지는 제외 — 본가에서도 이미
   // 여러 번 때리는 기술과는 안 겹침), 같은 컨텍스트로 위력만 배율만큼 줄인 추가타를 한 번 더
   // 날린다. 첫 타로 이미 상대가 쓰러졌으면 추가타는 나가지 않는다.
@@ -1997,13 +2085,24 @@ function resolveAction(
   // 기술로" 내려간 것만 대상이라 방금 위에서 적용한 opponent 방향 변화만 비교하면 충분하다.
   const blockedStats = defenderAbility?.blocksOpponentStatDropsForStats;
   const reflects = defenderAbility?.reflectsOpponentStatDrops;
+  // 미러아머 반사 문구용(E-4): 실제로 시전자(attacker)에게 되돌아간 랭크다운을 모은다. 특성/변화기
+  // 랭크다운뿐 아니라 데미지 기술의 부가 랭크다운(브레이크클로 등)도 rolledStatChanges에 반영돼
+  // 있어 여기서 같은 방식으로 잡힌다.
+  let reflectedStatDropAbilityName: string | undefined;
+  const reflectedStatDrops: { stat: BattleStatKey; delta: number }[] = [];
   if (blockedStats || reflects) {
     for (const stat of Object.keys(defender.stages) as BattleStatKey[]) {
       const dropAmount = defenderStagesBeforeMoveChange[stat] - defender.stages[stat];
       if (dropAmount <= 0) continue;
       if (reflects) {
         defender.stages = { ...defender.stages, [stat]: defenderStagesBeforeMoveChange[stat] };
+        const attackerBefore = attacker.stages[stat];
         attacker.stages = applyStageDelta(attacker.stages, stat, -dropAmount);
+        const applied = attackerBefore - attacker.stages[stat];
+        if (applied > 0) {
+          reflectedStatDropAbilityName = defenderAbility!.name;
+          reflectedStatDrops.push({ stat, delta: applied });
+        }
       } else if (blockedStats?.includes(stat)) {
         defender.stages = { ...defender.stages, [stat]: defenderStagesBeforeMoveChange[stat] };
       }
@@ -2625,6 +2724,12 @@ function resolveAction(
     opponentStatDrops: opponentStatDrops.length > 0 ? opponentStatDrops : undefined,
     statusInflictFailed: statusInflictFailed || undefined,
     protectStanceEntered: protectStanceEntered || undefined,
+    reflectedStatDropAbilityName,
+    reflectedStatDrops: reflectedStatDrops.length > 0 ? reflectedStatDrops : undefined,
+    crashDamage: crashDamage || undefined,
+    selfDamageOnUse: selfDamageOnUse || undefined,
+    canceledTargetChargeMoveName,
+    endeavorDamage: endeavorDamage || undefined,
     curedStatus,
     curedStatusTarget,
     setField: fieldSetFailed ? undefined : effectiveMove.setsField,

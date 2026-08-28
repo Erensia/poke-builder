@@ -965,6 +965,53 @@ export function BattleLogPage() {
                           {eunNeun(actorName)} {action.itemRecoilItemName}의 반동으로 {action.itemRecoilDamage} 데미지를 입었다
                         </div>
                       )}
+                      {/* E-2 무릎차기 반동 (빗나감·방어류·타입면역) */}
+                      {!!action.crashDamage && (
+                        <div className="battle-turn-line is-muted">
+                          {actorName}
+                          {eunNeun(actorName)} 의욕이 넘쳐 땅에 부딪혔다!
+                        </div>
+                      )}
+                      {/* E-3 철제광선 등 "사용하는 순간" 자해 */}
+                      {!!action.selfDamageOnUse && (
+                        <div className="battle-turn-line is-muted">
+                          {actorName}
+                          {eunNeun(actorName)} {action.move.name}의 반동으로 {action.selfDamageOnUse} 데미지를 입었다
+                        </div>
+                      )}
+                      {/* E-1 떨어뜨리기 등 상대 차징 캔슬 */}
+                      {!action.blockedReason && action.canceledTargetChargeMoveName && (
+                        <div className="battle-turn-line is-muted">
+                          {defenderName}
+                          {eunNeun(defenderName)} 땅으로 떨어져 {action.canceledTargetChargeMoveName}
+                          {iGa(action.canceledTargetChargeMoveName)} 캔슬됐다!
+                        </div>
+                      )}
+                      {/* E-4 미러아머 — 능력 다운 효과 반사 */}
+                      {!action.blockedReason && action.reflectedStatDropAbilityName && action.reflectedStatDrops && (
+                        <>
+                          <div className="battle-turn-line is-muted">
+                            {defenderName}의 {action.reflectedStatDropAbilityName}! 능력을 떨어뜨리는 효과를 되받아쳤다!
+                          </div>
+                          {(() => {
+                            const byDelta = new Map<number, string[]>();
+                            for (const d of action.reflectedStatDrops) {
+                              const labels = byDelta.get(d.delta) ?? [];
+                              labels.push(STAT_LABELS[d.stat]);
+                              byDelta.set(d.delta, labels);
+                            }
+                            return [...byDelta.entries()].map(([delta, labels]) => {
+                              const joined = labels.join(", ");
+                              return (
+                                <div key={`refl-${delta}`} className="battle-turn-line is-muted">
+                                  {actorName}의 {joined}
+                                  {iGa(joined)} {stageRiseAdverb(delta)}떨어졌다!
+                                </div>
+                              );
+                            });
+                          })()}
+                        </>
+                      )}
                       {/* 나무열매(카리열매 등)로 이번 피격 데미지가 반감됐으면 알려준다 */}
                       {!action.blockedReason && action.berryReducedDamageItemName && (
                         <div className="battle-turn-line is-muted">
