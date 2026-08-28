@@ -21,6 +21,7 @@ export function PartyPresetsModal({
   onDelete,
 }: PartyPresetsModalProps) {
   const [newName, setNewName] = useState("");
+  const [query, setQuery] = useState("");
 
   function handleSaveCurrent() {
     const trimmed = newName.trim();
@@ -48,7 +49,10 @@ export function PartyPresetsModal({
     }
   }
 
-  const sorted = [...presets].sort((a, b) => b.savedAt - a.savedAt);
+  const q = query.trim().toLowerCase();
+  const sorted = [...presets]
+    .sort((a, b) => b.savedAt - a.savedAt)
+    .filter((preset) => !q || preset.name.toLowerCase().includes(q));
 
   return (
     <Modal title="저장된 파티" onClose={onClose}>
@@ -73,6 +77,14 @@ export function PartyPresetsModal({
           저장
         </button>
       </div>
+
+      <input
+        type="text"
+        className="preset-search-input"
+        placeholder="파티 이름으로 검색"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+      />
 
       <ul className="preset-list">
         {sorted.map((preset) => {
@@ -99,7 +111,11 @@ export function PartyPresetsModal({
             </li>
           );
         })}
-        {sorted.length === 0 && <li className="preset-list-empty">저장된 파티가 없습니다.</li>}
+        {sorted.length === 0 && (
+          <li className="preset-list-empty">
+            {q ? "검색 결과가 없습니다." : "저장된 파티가 없습니다."}
+          </li>
+        )}
       </ul>
     </Modal>
   );

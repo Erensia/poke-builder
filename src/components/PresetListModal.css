@@ -19,6 +19,23 @@
   border-color: var(--violet);
 }
 
+.preset-search-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.55rem 0.75rem;
+  margin-bottom: 0.6rem;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 0.85rem;
+}
+
+.preset-search-input:focus {
+  outline: none;
+  border-color: var(--violet);
+}
+
 .preset-save-button {
   border: none;
   background: var(--gradient);

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Modal } from "./Modal";
 import type { SlotPreset } from "../types/party";
 import { getPokemon } from "../lib/data";
@@ -41,10 +42,27 @@ export function SlotPresetsModal({
     }
   }
 
-  const sorted = [...presets].sort((a, b) => b.savedAt - a.savedAt);
+  const [query, setQuery] = useState("");
+
+  const q = query.trim().toLowerCase();
+  const sorted = [...presets]
+    .sort((a, b) => b.savedAt - a.savedAt)
+    .filter((preset) => {
+      if (!q) return true;
+      const pokemonName = getPokemon(preset.slot.pokemonId)?.name ?? preset.slot.pokemonId;
+      return preset.name.toLowerCase().includes(q) || pokemonName.toLowerCase().includes(q);
+    });
 
   return (
     <Modal title="저장된 샘플에서 불러오기" onClose={onClose}>
+      <input
+        type="text"
+        className="preset-search-input"
+        placeholder="이름 · 포켓몬으로 검색"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        autoFocus
+      />
       <ul className="preset-list">
         {sorted.map((preset) => {
           const pokemon = getPokemon(preset.slot.pokemonId);
@@ -70,7 +88,11 @@ export function SlotPresetsModal({
             </li>
           );
         })}
-        {sorted.length === 0 && <li className="preset-list-empty">저장된 샘플이 없습니다.</li>}
+        {sorted.length === 0 && (
+          <li className="preset-list-empty">
+            {q ? "검색 결과가 없습니다." : "저장된 샘플이 없습니다."}
+          </li>
+        )}
       </ul>
     </Modal>
   );
