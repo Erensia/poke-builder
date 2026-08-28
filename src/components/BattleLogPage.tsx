@@ -222,6 +222,19 @@ export function BattleLogPage() {
   }
 
   /**
+   * 이번 턴 이 쪽이 발버둥을 자동으로 내야 하는지. PP 남은 기술이 하나도 없거나(hasUsableMove),
+   * 구애류 도구로 특정 기술에 잠겼는데 그 기술의 PP가 0이 됐으면(다른 기술 PP가 남아 있어도
+   * 잠금 때문에 못 씀) 발버둥이 나간다.
+   */
+  function isStruggling(side: Side): boolean {
+    if (!battleState) return false;
+    const fighter = battleState[side];
+    if (!hasUsableMove(fighter)) return true;
+    const locked = choiceLockedMoveId(side);
+    return locked !== null && (fighter.remainingPp[locked] ?? 0) <= 0;
+  }
+
+  /**
    * 도발/사슬묶기/앙코르: 이 쪽이 지금 이 기술을 고르면 왜 안 되는지(있다면) 문구로 돌려준다.
    * 구애스카프(choiceLockedMoveId)와 달리 판정 엔진(battleSimulator)의 volatile 상태를 그대로
    * 읽는다 — 로그를 다시 훑을 필요 없이 battleState에 이미 반영돼있다.
@@ -273,9 +286,9 @@ export function BattleLogPage() {
   function playTurn() {
     if (!battleState) return;
     setLockWarning(null);
-    // 남은 PP가 있는 기술이 하나도 없으면(4개 다 0) 선택 없이 발버둥을 자동으로 낸다.
-    const aStruggling = !hasUsableMove(battleState.a);
-    const bStruggling = !hasUsableMove(battleState.b);
+    // PP 남은 기술이 없거나(4개 다 0), 구애류 도구로 잠긴 기술의 PP가 0이면 선택 없이 발버둥.
+    const aStruggling = isStruggling("a");
+    const bStruggling = isStruggling("b");
     // 공중날기 등 차지 기술 2턴째는 준비해둔 기술이 선택 여부와 무관하게 자동으로 나가므로
     // 이 턴엔 수동 선택을 요구하지 않는다 — resolveAction이 어차피 이 값을 무시하고 강제한다.
     const aCharging = battleState.a.chargingMoveId !== undefined;
@@ -503,7 +516,7 @@ export function BattleLogPage() {
                     <div className="battle-struggle-notice">
                       {getMove(fighter.chargingMoveId)?.name ?? "기술"} 준비 중 — 다음 턴 자동으로 발동돼요!
                     </div>
-                  ) : hasUsableMove(fighter) ? (
+                  ) : !isStruggling(side) ? (
                     <div className="battle-move-grid">
                       {moves.map((move) => {
                         const pp = fighter.remainingPp[move.id] ?? move.pp;
@@ -563,8 +576,13 @@ export function BattleLogPage() {
                       })}
                     </div>
                   ) : (
-                    // 4개 기술 PP가 전부 0 — 선택할 게 없으니 발버둥이 자동으로 나간다는 걸 알려준다
-                    <div className="battle-struggle-notice">사용 가능한 기술이 없어요 — 발버둥이 자동으로 나갑니다!</div>
+                    // PP가 전부 0이거나, 구애류 도구로 잠긴 기술의 PP가 0 — 낼 수 있는 기술이
+                    // 없으니 발버둥이 자동으로 나간다는 걸 알려준다
+                    <div className="battle-struggle-notice">
+                      {hasUsableMove(fighter)
+                        ? "구애류 도구로 잠긴 기술의 PP가 다 됐어요 — 발버둥이 자동으로 나갑니다!"
+                        : "사용 가능한 기술이 없어요 — 발버둥이 자동으로 나갑니다!"}
+                    </div>
                   )}
                 </div>
               );
@@ -592,8 +610,8 @@ export function BattleLogPage() {
                 type="button"
                 className="battle-start-button"
                 disabled={
-                  (hasUsableMove(battleState.a) && battleState.a.chargingMoveId === undefined && !selected.a) ||
-                  (hasUsableMove(battleState.b) && battleState.b.chargingMoveId === undefined && !selected.b)
+                  (!isStruggling("a") && battleState.a.chargingMoveId === undefined && !selected.a) ||
+                  (!isStruggling("b") && battleState.b.chargingMoveId === undefined && !selected.b)
                 }
                 onClick={playTurn}
               >
