@@ -342,11 +342,16 @@ function eulReul(name: string): "을" | "를" {
 }
 
 /**
- * 우격다짐(부가효과 무효화 + 위력 1.3배)이 적용될 "부가 효과가 있는 데미지 기술"인지 판정한다.
- * 사용자 확인 기준: 상대에게 해로운 효과(상태이상/행동방해/랭크다운) 또는 자신에게 이로운 효과
- * (자기 랭크업)만 부가 효과로 친다 — 자신에게 해로운 디메리트(반동·자기 랭크다운 등)는 부가
- * 효과가 아니라서 이 판정에 안 걸리고 그대로 유지된다. 데미지가 없는 순수 변화기는 본가에서도
- * 우격다짐 적용 대상이 아니다.
+ * 우격다짐(추가효과 무효화 + 위력 1.3배)이 적용될 "추가효과가 있는 데미지 기술"인지 판정한다.
+ *
+ * ── 추가효과(追加効果 / secondary effect)의 정의 (이 프로젝트 단일 기준) ──
+ * 데미지 기술(category !== "status")이 상대에게 딸려 거는 상태이상·행동방해·랭크변화. 확률(chance)
+ * 유무와 무관하다 — 연옥 100% 화상·일렉트릭네트 100% 스피드↓도 추가효과다. 변화기(도깨비불 등)의
+ * 효과는 주효과라 제외, 자기 대상 효과(반동·자기 랭크다운)도 제외.
+ *
+ * 우격다짐은 여기에 더해 "자기 랭크업"(차지빔 자기 특공↑ 등)까지 추가효과로 쳐서 같이 제거한다 —
+ * 인분(Ability.blocksSecondaryEffects)은 자기 대상 효과엔 관심이 없어(상대에게 오는 것만 막음)
+ * 그 부분만 범위가 다르다. 데미지가 없는 순수 변화기는 양쪽 다 적용 대상이 아니다.
  */
 function hasSheerForceSecondaryEffect(move: Move): boolean {
   if (move.power === null && move.fixedDamage === undefined) return false;
@@ -616,6 +621,19 @@ export interface ActionLogEntry {
   stealthRockSetForSide?: FighterKey;
   /** 스텔스록을 깔려 했으나 이미 그 진영에 깔려 있어 실패했으면 true */
   hazardSetFailed?: boolean;
+  /**
+   * 매직미러로 이 변화기가 시전자에게 되돌아갔으면 그 기술 이름. 이 플래그가 있으면 아래
+   * inflictedStatus·inflictedVolatile·statChanges 등 "상대 방향" 효과는 실제로는 시전자(actor)
+   * 본인에게 적용된 것이라, 로그 렌더에서 주어를 뒤집어야 한다.
+   */
+  bouncedMoveName?: string;
+  /** 매직미러 반사를 일으킨 특성 이름(매직미러) — 로그 문구용 */
+  bouncedByAbilityName?: string;
+  /**
+   * 인분처럼 방어측 특성이 이 기술의 추가효과를 무산시켰으면 그 특성 이름. 실제로 무산된 추가효과가
+   * 하나라도 있을 때만 채워진다(추가효과가 없는 기술엔 안 뜬다).
+   */
+  secondaryBlockedByAbilityName?: string;
   /** 아이언롤러처럼 필드를 파괴하는 기술이 명중해서 활성 필드가 없어졌으면, 없어지기 직전의 필드 종류 */
   destroyedField?: FieldKind;
   /** 이 행동으로 트릭룸이 새로 걸렸으면 true */
@@ -881,8 +899,9 @@ function resolveAction(
   defenderMove: Move,
 ): ActionLogEntry {
   const defenderKey = opponentKey(actorKey);
-  const attacker = state[actorKey];
-  const defender = state[defenderKey];
+  // 매직미러 반사 구간에서만 이 바인딩들을 통째로 맞바꾼다(let). 그 외에는 사실상 const처럼 쓰인다.
+  let attacker = state[actorKey];
+  let defender = state[defenderKey];
 
   // 길동무: "다음 자신의 턴이 오면(행동불능인 턴 포함) 예약이 사라진다"는 본가 규칙 — 이 공격자의
   // 이번 턴 처리가 막 시작된 시점에 지난 턴 걸어둔 예약을 무조건 지운다. 이번 턴 다시 길동무를
@@ -902,12 +921,14 @@ function resolveAction(
   // 일찍기상(잠듦 해제 확률 스케줄에 필요)·습기(자폭기 차단, 아래 0번)는 상태이상 판정보다도
   // 먼저 필요해서, attackerAbility/defenderAbility 전체를 원래보다 앞당겨 여기서 구해둔다.
   const attackerHasEarlyBird = attacker.effectiveAbilityId === "일찍기상";
-  const attackerAbility = attacker.effectiveAbilityId ? getAbility(attacker.effectiveAbilityId) : undefined;
+  // attackerAbility/defenderAbility도 매직미러 반사 구간에서 attacker/defender와 함께 맞바뀐다(let).
+  let attackerAbility = attacker.effectiveAbilityId ? getAbility(attacker.effectiveAbilityId) : undefined;
   const rawDefenderAbility = defender.effectiveAbilityId ? getAbility(defender.effectiveAbilityId) : undefined;
   // 틀깨기: 공격측이 이 특성이면 예외 목록에 없는 한 방어측 특성 전체를 무효화한다 — 이 지점에서
   // 한 번만 치환해두면 modifiers·absorbsType·hitTrigger·blocksOpponentStatDropsForStats 등
-  // defenderAbility를 참조하는 아래 코드 전부가 자동으로 반영된다.
-  const defenderAbility = resolveEffectiveDefenderAbility(attackerAbility, rawDefenderAbility);
+  // defenderAbility를 참조하는 아래 코드 전부가 자동으로 반영된다. (매직미러도 이 예외 목록에서
+  // 빠져 있어, 공격측이 틀깨기면 여기서 defenderAbility가 undefined가 되고 반사도 자연히 무산된다.)
+  let defenderAbility = resolveEffectiveDefenderAbility(attackerAbility, rawDefenderAbility);
 
   // 긴장감: "이 특성을 가진 쪽의 상대"가 나무열매를 못 쓴다 — 방향이 헷갈리기 쉬운데, 내(공격측)
   // 나무열매가 막히는 건 상대(방어측)가 긴장감을 가졌을 때고, 상대(방어측) 나무열매가 막히는 건
@@ -1161,12 +1182,13 @@ function resolveAction(
 
   // 서투름: 자기 자신의 도구 전투 효과가 무효화된다 — 실제로 지녔는지와 무관하게 이 시점부터는
   // 아예 안 지닌 것처럼 취급한다(메가스톤에 의한 폼 변화는 pokemonForm.ts의 별도 축이라 영향 없음).
-  const attackerItem = attackerAbility?.disablesOwnItemEffects
+  // attackerItem/defenderItem도 매직미러 반사 구간에서 함께 맞바뀐다(let).
+  let attackerItem = attackerAbility?.disablesOwnItemEffects
     ? undefined
     : attacker.currentItemId
       ? getItem(attacker.currentItemId)
       : undefined;
-  const defenderItem = defenderAbility?.disablesOwnItemEffects
+  let defenderItem = defenderAbility?.disablesOwnItemEffects
     ? undefined
     : defender.currentItemId
       ? getItem(defender.currentItemId)
@@ -1201,6 +1223,19 @@ function resolveAction(
   const blockedByProtectMoveName =
     blockedByProtect && isOpponentTargetingMove(move) ? defender.activeProtect?.moveName : undefined;
   const opponentEffectsBlocked = blockedByGoodAsGold || blockedBySubstitute || blockedByProtect;
+
+  // 매직미러: 방어측이 이 특성을 지녔고(틀깨기면 위에서 defenderAbility가 이미 undefined), 이번
+  // 기술이 방어측을 겨냥하는 status 변화기이며 반사 제외(notReflectable — 고스트 저주·추억의선물·
+  // 멸망의노래·흔들흔들댄스)가 아니면, 이 기술을 시전자에게 되돌린다. setsHazard(스텔스록)는
+  // isOpponentTargetingMove가 잡지 않아 따로 OR로 포함한다. 되돌린 기술은 빗나가지 않고(아래 hit
+  // 강제), "방어측 방향 효과" 블록 진입 직전에 공격/방어 바인딩을 통째로 맞바꿔 원래 시전자에게
+  // 효과가 그대로 꽂히게 한다.
+  const bouncedByMagicMirror =
+    !opponentEffectsBlocked &&
+    move.category === "status" &&
+    !move.notReflectable &&
+    !!defenderAbility?.reflectsOpponentStatusMoves &&
+    (isOpponentTargetingMove(move) || !!move.setsHazard);
 
   // 필드 조건부 타입/위력 변경(대지의파동=fieldPulse, 미스트버스트·와이드포스·라이징볼트=
   // powerMultiplierInField)을 특성 배율 계산보다 먼저 반영한다 — 타입이 바뀐 상태여야
@@ -1306,10 +1341,11 @@ function resolveAction(
   }
 
   // 반짝가루(방어측 0.9배)·광각렌즈(공격측 1.1배)·포커스렌즈(공격측, 늦게 움직일 때 1.2배)·
-  // 모래숨기(방어측, 날씨 조건부 0.8배)를 전부 한 배율로 곱한다.
+  // 모래숨기(방어측, 날씨 조건부 0.8배)·복안(공격측 1.3배)을 전부 한 배율로 곱한다.
   const weatherAccuracyBoost = defenderAbility?.weatherOpponentAccuracyMultiplier;
   const abilityAccuracyMultiplier =
-    weatherAccuracyBoost && weatherAccuracyBoost.weather === state.weather ? weatherAccuracyBoost.multiplier : 1;
+    (weatherAccuracyBoost && weatherAccuracyBoost.weather === state.weather ? weatherAccuracyBoost.multiplier : 1) *
+    (attackerAbility?.userAccuracyMultiplier ?? 1);
   const accuracyExtraMultiplier =
     getItemAccuracyMultiplier(attackerItem, defenderItem, movesSecond) * abilityAccuracyMultiplier;
   // 날카로운눈: 공격측이 이 특성이면 상대의 회피율 상승분을 무시한다(원문 "상대의 회피율을
@@ -1338,7 +1374,14 @@ function resolveAction(
   const defenderHideType = defender.chargingMoveId ? getMove(defender.chargingMoveId)?.chargeHideType : undefined;
   const evadedByCharge = !!defenderHideType && !(effectiveMove.bypassesHiding ?? []).includes(defenderHideType);
 
-  const hit = evadedByCharge ? false : hitChance === null ? true : random() < hitChance;
+  // 매직미러로 되돌릴 기술은 명중 굴림을 건너뛴다(반사는 빗나가지 않는다).
+  const hit = bouncedByMagicMirror
+    ? true
+    : evadedByCharge
+      ? false
+      : hitChance === null
+        ? true
+        : random() < hitChance;
 
   if (!hit) {
     // 자폭류(대폭발 등)는 빗나가도 사용자가 반드시 기절한다 (본가 규칙). 데미지가 아예 없는
@@ -1665,7 +1708,9 @@ function resolveAction(
         abilityInflictedVolatileAbilityName = undefined;
       }
     }
-    if (trigger.damagesAttackerFraction) {
+    // 매직가드: 까칠한피부·유폭류가 공격자에게 되돌리는 접촉 반사 데미지는 "공격기 데미지"가
+    // 아니라서 무효화된다(공격자가 매직가드일 때).
+    if (trigger.damagesAttackerFraction && !attackerAbility?.negatesIndirectDamage) {
       const amount = Math.floor(attacker.maxHp * trigger.damagesAttackerFraction);
       attacker.currentHp = Math.max(0, attacker.currentHp - amount);
       abilityDamageToAttacker += amount;
@@ -1787,8 +1832,9 @@ function resolveAction(
 
   // 반동(recoil): 불꽃세례·웨이브태클·브레이브버드·양날박치기. 상대에게 준 데미지(damage)의
   // 일정 비율만큼 사용자도 입는다 — damage가 0(면역 등)이면 반동도 자연히 0이 된다.
+  // 매직가드: 반동기(recoilFraction)의 반동은 "공격기 데미지"가 아니라서 무효화된다.
   let recoilDamage = 0;
-  if (effectiveMove.recoilFraction !== undefined && damage > 0) {
+  if (effectiveMove.recoilFraction !== undefined && damage > 0 && !attackerAbility?.negatesIndirectDamage) {
     recoilDamage = Math.floor(damage * effectiveMove.recoilFraction);
     attacker.currentHp = Math.max(0, attacker.currentHp - recoilDamage);
   }
@@ -1800,7 +1846,14 @@ function resolveAction(
   // 위력 상승·아이템 데미지 보너스는 그대로 받으면서 반동만 사라진다.
   let itemRecoilDamage = 0;
   let itemRecoilItemName: string | undefined;
-  if (isDamaging && damage > 0 && attackerItem?.selfRecoilFractionOfMaxHp && !sheerForceAbilityName) {
+  // 매직가드: 생명의구슬 반동도 무효화한다(위력·데미지 보너스는 그대로 — 우격다짐과 같은 결).
+  if (
+    isDamaging &&
+    damage > 0 &&
+    attackerItem?.selfRecoilFractionOfMaxHp &&
+    !sheerForceAbilityName &&
+    !attackerAbility?.negatesIndirectDamage
+  ) {
     itemRecoilDamage = Math.floor(attacker.maxHp * attackerItem.selfRecoilFractionOfMaxHp);
     attacker.currentHp = Math.max(0, attacker.currentHp - itemRecoilDamage);
     itemRecoilItemName = attackerItem.name;
@@ -1857,14 +1910,50 @@ function resolveAction(
   // 상대를 쓰러뜨렸든 이 시점의 defender.currentHp/destinyBondArmed만 보면 되므로 한 번으로 충분.
   checkDestinyBond();
 
+  // ── 매직미러 반사 구간 시작 ──
+  // 여기서부터 스텔스록 설치까지의 "방어측 방향" 효과 블록에 한해 공격/방어 바인딩을 맞바꾼다.
+  // 되돌린 기술은 원래 시전자(이제 defender) 기준으로 상태이상 면역·조사·도구·승기까지 전부
+  // 재평가된다. 블록이 끝나면 곧바로 원위치하며, 로그·후처리는 원래 방향 기준으로 돌아간다.
+  // status 카테고리라 데미지 경로(resolveHit 등)는 이 지점 이전에 이미 no-op으로 끝나 있다.
+  let bounceActive = false;
+  let bouncedMoveName: string | undefined;
+  let bouncedByAbilityName: string | undefined;
+  if (bouncedByMagicMirror) {
+    bounceActive = true;
+    bouncedMoveName = move.name;
+    bouncedByAbilityName = defenderAbility!.name;
+    [attacker, defender] = [defender, attacker];
+    [attackerAbility, defenderAbility] = [defenderAbility, attackerAbility];
+    [attackerItem, defenderItem] = [defenderItem, attackerItem];
+  }
+
+  // 인분(Shield Dust): 방어측이 이 특성이면, 데미지 기술이 방어측에게 딸려 거는 추가효과
+  // (상태이상·행동방해·랭크변화 — chance 유무 무관)를 전부 무산시킨다. 변화기 주효과와 자기 대상
+  // 효과는 대상이 아니다. hasSheerForceSecondaryEffect(우격다짐)와 같은 "추가효과" 정의를 공유.
+  const secondaryEffectsBlockedByAbility =
+    effectiveMove.category !== "status" && !!defenderAbility?.blocksSecondaryEffects;
+  let secondaryBlockedByAbilityName: string | undefined;
+
   // 기술 자신의 랭크/명중회피/급소 변화 적용 (칼춤, 그림자분신, 기충전 등).
   // attacker/defender는 state.a/state.b를 그대로 참조하고 있어 여기서 바꾼 값이 state에도 반영된다.
   const attackerStagesBeforeMoveChange = attacker.stages;
   const defenderStagesBeforeMoveChange = defender.stages;
-  attacker.stages = applyMoveStatChanges(attacker.stages, effectiveMove, "self", { userTypes: attacker.types });
+  // 확률부(chance) statChanges는 여기서 굴려서 통과한 항목만 남긴다(확정은 그대로). 인분이면
+  // 상대 대상 항목은 굴림 없이 통째로 제거한다. 예전엔 applyMoveStatChanges가 chance를 굴리지
+  // 않고 100%로 적용하던 버그가 있었다(불꽃춤 자기 특공↑ 50%·브레이크클로 상대 방어↓ 50%).
+  const rolledStatChanges = effectiveMove.statChanges?.filter((sc) => {
+    if (secondaryEffectsBlockedByAbility && sc.target === "opponent") {
+      // 방어/대타/황금몸으로 이미 통째로 막힌 경우엔 "인분" 문구를 따로 낼 필요가 없다.
+      if (!opponentEffectsBlocked) secondaryBlockedByAbilityName = defenderAbility!.name;
+      return false;
+    }
+    return sc.chance === undefined || random() * 100 < sc.chance;
+  });
+  const statChangeMove: Move = { ...effectiveMove, statChanges: rolledStatChanges };
+  attacker.stages = applyMoveStatChanges(attacker.stages, statChangeMove, "self", { userTypes: attacker.types });
   defender.stages = opponentEffectsBlocked
     ? defender.stages
-    : applyMoveStatChanges(defender.stages, effectiveMove, "opponent", { userTypes: attacker.types });
+    : applyMoveStatChanges(defender.stages, statChangeMove, "opponent", { userTypes: attacker.types });
 
   // 랭크업 결과 문구용(Phase 6.5 §6-2 ⑥⑦, §6-3): 이 기술이 사용자 자신의 랭크를 실제로 올린 것과,
   // 올리려 했으나 이미 +6이라 막힌 것을 각각 모은다. 확정 랭크업만 대상 — 확률 부가효과(chance)와
@@ -1965,7 +2054,12 @@ function resolveAction(
   }
 
   let inflictedStatus: StatusConditionState["condition"] | undefined;
-  if (!opponentEffectsBlocked && effectiveMove.inflictsStatus) {
+  if (secondaryEffectsBlockedByAbility && effectiveMove.inflictsStatus && !opponentEffectsBlocked) {
+    // 인분: 데미지 기술이 거는 상태이상(화염방사 화상·연옥 100% 화상·볼부비부비 마비 등)은
+    // 전부 추가효과라 무산된다. 변화기(도깨비불 등)의 상태이상은 secondaryEffectsBlockedByAbility가
+    // false라 이 분기에 오지 않는다.
+    secondaryBlockedByAbilityName = defenderAbility!.name;
+  } else if (!opponentEffectsBlocked && effectiveMove.inflictsStatus) {
     for (const effect of effectiveMove.inflictsStatus) {
       if (isImmuneToStatus(effect.status, defender.types, defenderAbility?.immuneToStatuses)) continue;
       if (isStatusBlockedByField(state.field, effect.status)) continue;
@@ -2029,6 +2123,11 @@ function resolveAction(
       // 황금몸: 상대(공격측)를 향한 변화기 효과만 막는다 — target이 "self"(공격측 자신에게
       // 거는 것, 예: 반동/하품 예약)면 이 포켓몬을 겨냥한 게 아니라서 그대로 진행된다.
       if (effect.target !== "self" && opponentEffectsBlocked) continue;
+      // 인분: 데미지 기술이 상대에게 거는 행동방해(아이언헤드 풀죽음·물의파동 혼란 등)도 추가효과.
+      if (effect.target !== "self" && secondaryEffectsBlockedByAbility) {
+        secondaryBlockedByAbilityName = defenderAbility!.name;
+        continue;
+      }
       const target = effect.target === "self" ? attacker : defender;
       // 하품(졸음): 대상이 이미 다른 주 상태이상이거나 이미 졸음 상태면 실패한다(본가 규칙) —
       // 실제 잠듦 여부(타입/필드 면역)는 2턴 뒤 트리거 시점에 따로 확인한다.
@@ -2099,8 +2198,13 @@ function resolveAction(
     !defenderAbility?.immuneToFlinch &&
     getExtraFlinchTriggered(attackerItem, random)
   ) {
-    defender.volatile = inflictVolatile(defender.volatile, "flinch", random);
-    inflictedVolatile = "flinch";
+    if (defenderAbility?.blocksSecondaryEffects) {
+      // 인분: 왕의징표석이 얹는 추가 풀죽음도 추가효과라 무산된다(굴림은 이미 소비 — 결과만 버린다).
+      secondaryBlockedByAbilityName = defenderAbility.name;
+    } else {
+      defender.volatile = inflictVolatile(defender.volatile, "flinch", random);
+      inflictedVolatile = "flinch";
+    }
   }
 
   // 불굴의마음: 이번 행동에서 풀죽음이 걸렸으면(기술 자체든 왕의징표석이든, 둘 다 위에서
@@ -2277,7 +2381,10 @@ function resolveAction(
   // "계열이 아닌 다른 기술을 쓰면 초기화" 규칙.
   let protectSucceeded = false;
   let protectFailed = false;
-  if (effectiveMove.protectEffect) {
+  // 매직미러 반사 중이면(bounceActive) attacker/defender가 맞바뀐 상태라 이 방어류 블록을 통째로
+  // 건너뛴다 — 되돌린 기술은 반사한 쪽(현재 attacker)의 방어 행동이 아니므로 protectStreak도
+  // 건드리면 안 된다.
+  if (effectiveMove.protectEffect && !bounceActive) {
     const streak = attacker.protectStreak ?? 0;
     const successChance = Math.pow(1 / 3, streak);
     // 상대가 이번 턴 낸 게 방어로 막을 수 있는 것(공격기 또는 상대를 겨냥한 변화기)이 아니면
@@ -2306,7 +2413,7 @@ function resolveAction(
       attacker.protectStreak = 0;
       protectFailed = true;
     }
-  } else {
+  } else if (!bounceActive) {
     attacker.protectStreak = 0;
   }
 
@@ -2322,17 +2429,28 @@ function resolveAction(
     }
   }
 
-  // 스텔스록: 상대 진영에 설치한다. 이미 그 진영에 깔려 있으면 실패한다(사용자 확인). 매직미러
-  // 반사는 아직 특성 자체가 없어 후속 조사 항목으로 분리(Phase 6.5 §8) — 지금은 항상 상대 진영에 깔린다.
+  // 스텔스록: 상대 진영에 설치한다. 이미 그 진영에 깔려 있으면 실패한다(사용자 확인).
+  // 매직미러 반사 중이면 바인딩이 맞바뀌어 있으므로 설치 대상 진영은 defenderKey가 아니라
+  // 원래 시전자 쪽(actorKey)이다. (교체가 없는 현행 엔진에선 등장 데미지가 없어 실질 효과는
+  // "어느 진영 플래그가 켜지나"뿐이지만, 방향은 맞게 기록해 둔다.)
   let stealthRockSetForSide: FighterKey | undefined;
   let hazardSetFailed = false;
   if (effectiveMove.setsHazard === "stealthRock") {
-    if (state.stealthRock[defenderKey]) {
+    const hazardSide = bounceActive ? actorKey : defenderKey;
+    if (state.stealthRock[hazardSide]) {
       hazardSetFailed = true;
     } else {
-      state.stealthRock[defenderKey] = true;
-      stealthRockSetForSide = defenderKey;
+      state.stealthRock[hazardSide] = true;
+      stealthRockSetForSide = hazardSide;
     }
+  }
+
+  // ── 매직미러 반사 구간 끝 ── 바인딩을 원위치한다. 이후 로그·나무열매·매지션·폼 전환 등
+  // 후처리는 전부 원래 공격/방어 방향 기준으로 돌아간다.
+  if (bounceActive) {
+    [attacker, defender] = [defender, attacker];
+    [attackerAbility, defenderAbility] = [defenderAbility, attackerAbility];
+    [attackerItem, defenderItem] = [defenderItem, attackerItem];
   }
 
   // 아이언롤러: 명중하면 활성 필드를 제거한다. usageCondition: "field-required"로 필드가 없으면
@@ -2463,6 +2581,9 @@ function resolveAction(
     fieldSetFailed,
     stealthRockSetForSide,
     hazardSetFailed,
+    bouncedMoveName,
+    bouncedByAbilityName,
+    secondaryBlockedByAbilityName,
     destroyedField,
     setTrickRoom: trickRoomSetFailed ? undefined : effectiveMove.setsTrickRoom,
     trickRoomSetFailed,
@@ -2758,7 +2879,8 @@ export function runTurn(
 
       // 씨뿌리기: 걸린 쪽은 매 턴 종료 시 최대 HP 1/8을 잃고, 상대가 그만큼(+상대의 큰뿌리 배율)
       // 회복한다. 상대가 이미 기절해 있으면(동시에 둘 다 씨앗이 걸린 극단적 경우 등) 회복은 스킵.
-      if (hasVolatile(fighter.volatile, "leechSeed")) {
+      // 매직가드: 걸린 쪽이 매직가드면 HP를 잃지 않고, 따라서 상대 회복도 없다(본가 규칙).
+      if (hasVolatile(fighter.volatile, "leechSeed") && !fighterAbility?.negatesIndirectDamage) {
         const seedDamage = Math.min(fighter.currentHp, Math.floor(fighter.maxHp / 8));
         fighter.currentHp -= seedDamage;
         endOfTurn.push({
@@ -2832,7 +2954,11 @@ export function runTurn(
 
       if (fighter.status.condition) {
         const statusCondition = fighter.status.condition;
-        const damage = computeStatusEndOfTurnDamage(fighter.status, fighter.maxHp);
+        // 매직가드: 독·맹독·화상의 지속 데미지만 0으로 막는다 — 상태이상에 "걸린" 상태 자체와
+        // 맹독 카운터 누적(advanceStatusTurn)은 그대로 진행된다.
+        const damage = fighterAbility?.negatesIndirectDamage
+          ? 0
+          : computeStatusEndOfTurnDamage(fighter.status, fighter.maxHp);
         fighter.currentHp = Math.max(0, fighter.currentHp - damage);
         fighter.status = advanceStatusTurn(fighter.status);
         // 잠듦/얼음/마비는 매턴 데미지가 없다(항상 0) — "상태이상 데미지 0"만 찍는 무의미한 줄을

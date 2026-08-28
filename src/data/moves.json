@@ -2206,7 +2206,8 @@
         "userIsNotType": "고스트"
       }
     ],
-    "makesContact": false
+    "makesContact": false,
+    "notReflectable": true
   },
   {
     "id": "하드프레스",
@@ -3190,6 +3191,7 @@
       "춤"
     ],
     "makesContact": false,
+    "notReflectable": true,
     "inflictsVolatile": [
       {
         "volatile": "confusion",
@@ -3429,7 +3431,8 @@
         "delta": -2
       }
     ],
-    "makesContact": false
+    "makesContact": false,
+    "notReflectable": true
   },
   {
     "id": "트릭룸",
@@ -4054,7 +4057,8 @@
     "classification": [
       "소리"
     ],
-    "makesContact": false
+    "makesContact": false,
+    "notReflectable": true
   },
   {
     "id": "물거품아리아",
@@ -5756,6 +5760,43 @@
         "delta": -1
       }
     ],
+    "makesContact": false
+  },
+  {
+    "id": "눈물그렁그렁",
+    "name": "눈물그렁그렁",
+    "type": "노말",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 20,
+    "priority": 0,
+    "effect": "눈물을 그렁그렁거려 상대의 전의를 상실하게 한다. 상대의 공격과 특수공격이 1랭크 떨어진다.",
+    "statChanges": [
+      {
+        "target": "opponent",
+        "stat": "atk",
+        "delta": -1
+      },
+      {
+        "target": "opponent",
+        "stat": "spa",
+        "delta": -1
+      }
+    ],
+    "makesContact": false
+  },
+  {
+    "id": "파멸의빛",
+    "name": "파멸의빛",
+    "type": "페어리",
+    "category": "special",
+    "power": 140,
+    "accuracy": 90,
+    "pp": 5,
+    "priority": 0,
+    "effect": "영원의 꽃의 파워를 빌려서 강력한 광선을 쏜다. 자신도 상대에게 준 데미지의 1/2만큼 반동 피해를 받는다.",
+    "recoilFraction": 0.5,
     "makesContact": false
   }
 ]

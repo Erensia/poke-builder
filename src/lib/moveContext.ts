@@ -44,6 +44,17 @@ export function resolveMoveContext(
 ): MoveContext {
   const abilityOffense = resolveAbilityOffense(attackerAbility, move, weather, attackerHpFraction);
   const effectiveMove = abilityOffense.overrideMoveType ? { ...move, type: abilityOffense.overrideMoveType } : move;
+
+  // 페어리오라(오라): 공격측·방어측 중 한쪽이라도 이 특성을 지녔고, 이 기술의 (타입 변경 반영 후)
+  // 타입이 오라 타입과 같으면 위력 배율을 추가로 곱한다. 양쪽이 서로 다른 오라를 지녀도 타입만
+  // 맞으면 각자 적용 — 곱으로 중첩한다.
+  const auraMultiplier = effectiveMove.type
+    ? [attackerAbility, defenderAbility].reduce(
+        (acc, a) =>
+          a?.auraMoveTypeMultiplier?.type === effectiveMove.type ? acc * a.auraMoveTypeMultiplier.multiplier : acc,
+        1,
+      )
+    : 1;
   const abilityDefenseMultiplier = resolveAbilityDefense(
     defenderAbility,
     effectiveMove,
@@ -95,7 +106,7 @@ export function resolveMoveContext(
 
   return {
     effectiveMove,
-    abilityOffenseMultiplier: abilityOffense.multiplier,
+    abilityOffenseMultiplier: abilityOffense.multiplier * auraMultiplier,
     abilityDefenseMultiplier,
     stabMultiplier,
     typeEffectiveness,

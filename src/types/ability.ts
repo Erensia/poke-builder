@@ -163,6 +163,20 @@ export interface Ability {
    */
   weatherOpponentAccuracyMultiplier?: { weather: WeatherKind; multiplier: number };
   /**
+   * 복안: 자신이 쓰는 기술의 명중률에 곱해지는 배율(복안=1.3). weatherOpponentAccuracyMultiplier
+   * (모래숨기, 방어측)와 같은 extraMultiplier 축이지만 방향이 반대 — 공격측이 지녔을 때 자기
+   * 명중률을 올린다. 필중기(accuracy=null)는 computeHitChance가 그대로 null을 돌려줘 영향 없음.
+   */
+  userAccuracyMultiplier?: number;
+  /**
+   * 페어리오라(오라): 필드에 있는 아무 포켓몬(자신이든 상대든)이 이 특성을 지녔으면, 해당 타입
+   * (페어리오라=페어리) 기술 전체의 위력에 이 배율이 곱해진다 — 공격측/방어측 어느 쪽이 지녔는지
+   * 무관한 "장 전체" 효과라 modifiers(공격측 전용)로는 표현할 수 없어 별도 필드로 뒀다.
+   * resolveMoveContext가 attackerAbility·defenderAbility 양쪽을 보고 offense 배율에 합친다.
+   * (본가 오라브레이크는 이 로스터에 대상이 없어 미구현.)
+   */
+  auraMoveTypeMultiplier?: { type: PokemonType; multiplier: number };
+  /**
    * 승기: 자신의 능력치가(무엇이든, 자기 기술 자기 랭크변화든 상대 기술로 내려갔든) 하락하면
    * 그 즉시 이 랭크변화가 붙는다(승기: 특공 +2). battleSimulator.ts가 자신/상대 양쪽
    * statChanges 적용 전후로 랭크를 비교해서 실제로 내려간 스탯이 하나라도 있을 때만 발동시킨다
@@ -192,6 +206,16 @@ export interface Ability {
    */
   immuneToFlinch?: boolean;
   /**
+   * 인분(Shield Dust): 자신에게 올 "추가효과"를 전부 무산시킨다. 추가효과의 정의 —
+   * 데미지 기술(category !== "status")이 상대(자신)에게 딸려 거는 상태이상·행동방해·랭크변화.
+   * 확률(chance) 유무와 무관하다(연옥 100% 화상·일렉트릭네트 100% 스피드↓도 추가효과).
+   * 막지 않는 것: 변화기(도깨비불·전기자석파 등)의 주효과, 자기 대상 효과(반동·자기 랭크변화).
+   * 왕의징표석(도구발 추가 풀죽음)도 이 특성이 막는다.
+   * battleSimulator에서 hasSheerForceSecondaryEffect(우격다짐)와 같은 "추가효과" 정의를 공유하되,
+   * 우격다짐은 여기에 자기 랭크업까지 얹어 제거 후 위력을 올리는 공격측 특성이라는 점만 다르다.
+   */
+  blocksSecondaryEffects?: boolean;
+  /**
    * 클리어바디(전체)·괴력집게(공격만)처럼 상대의 기술로 자신의 능력치가 떨어지는 걸 막는다.
    * 비워두면(undefined) 이 특성은 아무 스탯도 막지 않는다. 클리어바디는 5스탯 전부,
    * 괴력집게는 `["atk"]`만 채운다. 자기 기술로 자기 스탯을 내리는 것(칼춤 등)은 막지 않는다 —
@@ -212,6 +236,15 @@ export interface Ability {
   reflectsStatusToOpponent?: StatusCondition[];
   /** 탈피: 턴 종료 시 이 확률(%)로 자신의 주 상태이상을 치료한다. */
   curesOwnStatusChance?: number;
+  /**
+   * 매직가드: 상대의 공격기 데미지 이외의 "부가 피해"를 전부 무효화한다. 이 엔진에 실재하는 피해원
+   * 기준으로 — 상태이상(독·맹독·화상) 지속 데미지, 씨뿌리기, 반동기(recoilFraction)·발버둥 반동,
+   * 생명의구슬 반동, 까칠한피부류 접촉 반사 데미지(damagesAttackerFraction)를 막는다.
+   * 막지 않는 것: 직접 공격 데미지, 화상의 물리 위력 감소, 혼란 자멸(본가에서도 매직가드가 못 막음),
+   * 상태이상에 "걸리는" 것 자체(HP만 안 깎임). 스텔스록은 현재 HP 피해 로직이 없어 대상 없음 —
+   * 훗날 설치물 등장 데미지가 생기면 그 지점도 이 플래그로 함께 막아야 한다.
+   */
+  negatesIndirectDamage?: boolean;
   /** 날카로운눈: 상대의 기술로 자신의 명중률이 떨어지지 않는다. */
   blocksOpponentAccuracyDrops?: boolean;
   /** 날카로운눈: 공격할 때 상대의 회피율 "상승분"을 무시한다(마이너스 회피율은 그대로 존중). */
@@ -225,6 +258,15 @@ export interface Ability {
    * "이 포켓몬을 겨냥한" 게 아니라서 영향받지 않는다.
    */
   blocksOpponentStatusMoveEffects?: boolean;
+  /**
+   * 매직미러: 상대가 자신을 겨냥해 쓴 "좋지 않은 변화기"(status 카테고리 + isOpponentTargetingMove)를
+   * 그 자리에서 시전자에게 되돌린다. 되돌린 기술은 빗나가지 않고, 시전자 기준으로 효과가 다시
+   * 평가된다(타입 면역·조사 등 전부 시전자 것으로). 반사 제외: notReflectable 플래그가 붙은
+   * 기술(고스트 저주·추억의선물·멸망의노래·흔들흔들댄스), 도구·특성 효과, 데미지기.
+   * 틀깨기(공격측)에는 무시당한다 — MOLD_BREAKER_IMMUNE_ABILITY_NAMES에서 제외돼 있어
+   * resolveEffectiveDefenderAbility가 자동으로 이 특성을 무효화한다.
+   */
+  reflectsOpponentStatusMoves?: boolean;
   /**
    * 위협: 배틀에 등장하면(=createBattleState 시점) 상대의 이 스탯을 즉시 낮춘다(위협: atk, -1).
    * 가뭄류(setsWeather)와 같은 "등장 시 1회" 축이지만 날씨가 아니라 상대 랭크를 직접 건드리는

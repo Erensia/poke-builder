@@ -609,6 +609,9 @@ export function BattleLogPage() {
                       <div className="battle-turn-line">
                         <strong>{actorName}</strong>의 {action.move.name}
                         {action.sleepTalkCalledMoveName && " (잠꼬대로 냈다!)"}
+                        {action.bouncedMoveName && (
+                          <> — {defenderName}의 {action.bouncedByAbilityName}! 기술이 되돌아왔다!</>
+                        )}
                         {action.blockedReason === "usageCondition" && "!"}
                         {action.blockedReason === "moveRestricted" && "!"}
                         {action.blockedReason === "status" && action.blockedByStatus === undefined && " — 상태이상으로 행동 불가"}
@@ -650,7 +653,13 @@ export function BattleLogPage() {
                           <> · 이미 필드가 있어 실패!</>
                         )}
                         {!action.blockedReason && action.hit && action.stealthRockSetForSide && (
-                          <> · 상대 편 필드에 뾰족한 바위가 깔렸다!</>
+                          <>
+                            {" "}
+                            ·{" "}
+                            {action.bouncedMoveName
+                              ? "뾰족한 바위가 되돌아와 시전자 쪽 필드에 깔렸다!"
+                              : "상대 편 필드에 뾰족한 바위가 깔렸다!"}
+                          </>
                         )}
                         {!action.blockedReason && action.hit && action.hazardSetFailed && (
                           <> · 이미 뾰족한 바위가 깔려 있어 실패!</>
@@ -765,15 +774,22 @@ export function BattleLogPage() {
                             `${actorName}은(는) 앙코르 때문에 이 기술을 쓸 수 없다!`}
                         </div>
                       )}
-                      {/* 상태이상에 새로 걸렸을 때(onset) — 항상 상대가 대상(기존 관례) */}
+                      {/* 상태이상에 새로 걸렸을 때(onset) — 보통 상대가 대상이지만, 매직미러로 되돌아온
+                          경우(bouncedMoveName)엔 시전자(actor) 자신에게 걸린 것이다 */}
                       {!action.blockedReason && action.hit && action.inflictedStatus && (
                         <div className="battle-turn-line is-muted">
-                          {STATUS_ONSET_TEXT[action.inflictedStatus](defenderName)}
+                          {STATUS_ONSET_TEXT[action.inflictedStatus](
+                            action.bouncedMoveName ? actorName : defenderName,
+                          )}
                         </div>
                       )}
                       {/* 하품(졸음) 유도 — 실제로 잠드는 건 2턴 뒤라 onset 문구와 다르게 "유도했다"로 표현 */}
                       {!action.blockedReason && action.hit && action.inflictedVolatile === "drowsy" && (
-                        <div className="battle-turn-line is-muted">상대 {defenderName}의 졸음을 유도했다!</div>
+                        <div className="battle-turn-line is-muted">
+                          {action.bouncedMoveName
+                            ? `${actorName}의 졸음을 유도했다!`
+                            : `상대 ${defenderName}의 졸음을 유도했다!`}
+                        </div>
                       )}
                       {/* 상태이상이 나았을 때(cure) — curedStatusTarget으로 자신/상대 구분 */}
                       {!action.blockedReason && action.hit && action.curedStatus && (
@@ -850,6 +866,13 @@ export function BattleLogPage() {
                           {defenderName}의 {action.abilityAbsorbAbilityName}! {typeLabel(action.abilityAbsorbedMoveType)}
                           {eunNeun(typeLabel(action.abilityAbsorbedMoveType))} 전혀 효과가 없었다!
                           {!!action.abilityAbsorbHealAmount && <> 체력을 {action.abilityAbsorbHealAmount} 회복했다!</>}
+                        </div>
+                      )}
+                      {/* 인분 — 데미지 기술의 추가효과(상태이상·풀죽음·랭크하락·왕의징표석 풀죽음)를
+                          무산시켰을 때. 실제로 무산된 게 있을 때만 채워진다 */}
+                      {!action.blockedReason && action.secondaryBlockedByAbilityName && (
+                        <div className="battle-turn-line is-muted">
+                          {defenderName}의 {action.secondaryBlockedByAbilityName}! 추가 효과를 받지 않는다!
                         </div>
                       )}
                       {/* 대타출동 — 데미지가 본체가 아니라 대타로 들어갔을 때 알려준다. 깨졌는지 아직

@@ -315,6 +315,13 @@ export interface Move {
    */
   bypassesProtect?: boolean;
   /**
+   * 매직미러(Ability.reflectsOpponentStatusMoves)로 되돌릴 수 없는 변화기에 표시한다. 본가 기준
+   * 반사 예외 — 고스트 타입의 저주, 추억의선물, 화면 전체 판정인 멸망의노래·흔들흔들댄스 등.
+   * (바꿔치기·트릭·스킬스왑처럼 isOpponentTargetingMove가 애초에 false인 기술은 이 플래그 없이도
+   * 반사 대상에서 자연히 빠진다.)
+   */
+  notReflectable?: boolean;
+  /**
    * 성스러운칼 전용. 데미지 계산에서 상대(방어측)의 능력 랭크 변화(상승분·하락분 전부)를
    * 무시한다 — Ability.ignoresOpponentStatStagesInDamage(천진)와 정확히 같은 축이지만 특성이
    * 아니라 기술 단위 효과라는 점만 다르다(둘 중 하나만 있어도 발동, 중첩 시 자연히 무해).
