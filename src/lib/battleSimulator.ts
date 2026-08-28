@@ -596,6 +596,11 @@ export interface ActionLogEntry {
   critical: boolean;
   damage: number;
   damagePercent: number;
+  /**
+   * 이 기술의 상대 타입 상성 배율(0 / 0.25 / 0.5 / 1 / 2 / 4). 변화기·타입 없는 기술은 1.
+   * UI가 "효과가 굉장했다!/별로인 듯하다.../효과가 없는 듯하다..." 문구를 고르는 데 쓴다.
+   */
+  typeEffectiveness: number;
   defenderRemainingHp: number;
   /** 스스로 입은 데미지. 혼란 자멸(blockedReason === "confusion") 또는 발버둥 반동(move.id === STRUGGLE_MOVE.id)일 때만 0보다 크다 */
   selfDamage: number;
@@ -712,7 +717,9 @@ export interface ActionLogEntry {
   substituteBroke?: boolean;
   /** 이 행동의 데미지가 상대의 대타로 흡수됐으면(=본체 HP는 그대로) true */
   hitSubstitute?: boolean;
-  /** 방어류(방어/판별/버티기/킹실드) 기술이 이번에 성공적으로 발동했으면 true */
+  /** 방어류(방어/판별/버티기/킹실드) 기술을 실제로 써서 "방어태세에 들어갔다" — 성공/실패와 무관하게 발동 자체. */
+  protectStanceEntered?: boolean;
+  /** 방어류(방어/판별/버티기/킹실드) 기술이 이번에 성공적으로 발동했으면 true (상대의 자신을 겨냥한 공격을 실제로 막음) */
   protectSucceeded?: boolean;
   /** 방어류 기술을 썼지만 실패했으면 true (연속 사용 확률 판정 실패, 또는 상대가 막을 것을 안 냄). streak는 0으로 리셋됨 */
   protectFailed?: boolean;
@@ -720,6 +727,16 @@ export interface ActionLogEntry {
   selfStatRises?: { stat: BattleStatKey; delta: number }[];
   /** 랭크업을 시도했지만 이미 +6이라 오르지 않은 스탯. "OO의 X는 더 이상 올라가지 않는다!" */
   selfStatsAtMax?: BattleStatKey[];
+  /**
+   * 이 기술로 상대의 랭크가 실제로 내려간 것(거짓울음·브레이크클로 등). delta는 내려간 칸 수(양수).
+   * selfStatRises와 대칭 — 렌더에서 "[상대]의 X가 (크게) 떨어졌다!". 확정 하락만(확률 부가효과 제외).
+   */
+  opponentStatDrops?: { stat: BattleStatKey; delta: number }[];
+  /**
+   * 이미 걸린 상태이상에 같은/다른 주 상태이상 기술을 써서 아무 변화가 없었으면 true
+   * (블래키가 이미 맹독인 번치코에게 맹독 재시전 등). "그러나 실패했다!" 문구용.
+   */
+  statusInflictFailed?: boolean;
   /** 이 행동(공격)이 상대의 방어류 기술에 완전히 막혔으면 그 기술 이름 */
   blockedByProtectMoveName?: string;
   /** 방어류 버티기로 이번 데미지를 버티고 HP 1로 남았으면 그 기술 이름 */
@@ -834,6 +851,8 @@ export interface EndOfTurnLogEntry {
   berryHealItemName?: string;
   /** 가속(Speed Boost)처럼 턴 종료 시 특성으로 스피드가 1랭크 상승했으면 그 특성 이름 */
   speedBoostAbilityName?: string;
+  /** speedBoostAbilityName이 있는데 이미 스피드 +6이라 실제로는 안 올랐으면 true — "더 이상 올라가지 않는다!" 문구용 */
+  speedBoostAtCap?: boolean;
 }
 
 export interface TurnResult {
@@ -988,6 +1007,7 @@ function resolveAction(
     critical: false,
     damage: 0,
     damagePercent: 0,
+    typeEffectiveness: 1,
     defenderRemainingHp: defender.currentHp,
     selfDamage,
     attackerRemainingHp: attacker.currentHp,
@@ -1146,6 +1166,7 @@ function resolveAction(
         critical: false,
         damage: 0,
         damagePercent: 0,
+        typeEffectiveness: 1,
         defenderRemainingHp: defender.currentHp,
         selfDamage: 0,
         attackerRemainingHp: attacker.currentHp,
@@ -1396,6 +1417,7 @@ function resolveAction(
       critical: false,
       damage: 0,
       damagePercent: 0,
+      typeEffectiveness,
       defenderRemainingHp: defender.currentHp,
       selfDamage: 0,
       attackerRemainingHp: attacker.currentHp,
@@ -2020,6 +2042,21 @@ function resolveAction(
     restoredStatsOpponentItemName = defenderItem?.name;
   }
 
+  // 상대 랭크다운 결과 문구용(§1 C-6): 이 기술이 실제로 상대 랭크를 내린 것만 모은다. 최종
+  // defender.stages 기준이라 클리어바디로 막혔거나 미러아머로 반사됐거나 하양허브로 되돌아간
+  // 경우엔 net 변화가 0이라 자연히 제외된다. selfStatRises와 대칭 — 확정 하락만(확률 부가효과는
+  // rolledStatChanges 단계에서 이미 굴려져 통과한 것만 남아 있고, 실제 하락분으로 판정).
+  const opponentStatDrops: { stat: BattleStatKey; delta: number }[] = [];
+  if (!opponentEffectsBlocked) {
+    const seen = new Set<BattleStatKey>();
+    for (const sc of rolledStatChanges ?? []) {
+      if (sc.target !== "opponent" || !isBattleStatKey(sc.stat) || seen.has(sc.stat)) continue;
+      seen.add(sc.stat);
+      const drop = defenderStagesBeforeMoveChange[sc.stat] - defender.stages[sc.stat];
+      if (drop > 0) opponentStatDrops.push({ stat: sc.stat, delta: drop });
+    }
+  }
+
   attacker.accuracyStages = applyMoveAccuracyEvasionChanges(attacker.accuracyStages, effectiveMove, "self", {
     userTypes: attacker.types,
   });
@@ -2054,6 +2091,9 @@ function resolveAction(
   }
 
   let inflictedStatus: StatusConditionState["condition"] | undefined;
+  // 이미 걸린 상태이상 때문에 상태이상 전용 변화기(맹독·도깨비불 등)가 아무 변화도 못 냈으면 true.
+  // C-8: "블래키의 맹독 - 그러나 실패했다!". 데미지 기술의 부가 상태이상은 그냥 안 걸린 것뿐이라 대상 아님.
+  let statusInflictFailed = false;
   if (secondaryEffectsBlockedByAbility && effectiveMove.inflictsStatus && !opponentEffectsBlocked) {
     // 인분: 데미지 기술이 거는 상태이상(화염방사 화상·연옥 100% 화상·볼부비부비 마비 등)은
     // 전부 추가효과라 무산된다. 변화기(도깨비불 등)의 상태이상은 secondaryEffectsBlockedByAbility가
@@ -2070,6 +2110,7 @@ function resolveAction(
         const before = defender.status.condition;
         defender.status = inflictStatus(defender.status, effect.status);
         if (defender.status.condition !== before) inflictedStatus = defender.status.condition;
+        else if (effectiveMove.category === "status" && effect.chance === undefined) statusInflictFailed = true;
         break; // 주 상태이상은 한 번에 하나만 걸린다 (중첩 없음)
       }
     }
@@ -2381,10 +2422,15 @@ function resolveAction(
   // "계열이 아닌 다른 기술을 쓰면 초기화" 규칙.
   let protectSucceeded = false;
   let protectFailed = false;
+  // §1 G: 방어/판별/킹실드(protectEffect === "block")는 성공/실패와 무관하게 "방어태세에 들어갔다!"를
+  // 먼저 낸다. 그 뒤 상대 기술이 자신을 겨냥했으면 "몸을 지켰다!"(protectSucceeded), 아니면
+  // "방어는 실패했다!"(protectFailed). 버티기/길동무는 별도 문구라 제외.
+  let protectStanceEntered = false;
   // 매직미러 반사 중이면(bounceActive) attacker/defender가 맞바뀐 상태라 이 방어류 블록을 통째로
   // 건너뛴다 — 되돌린 기술은 반사한 쪽(현재 attacker)의 방어 행동이 아니므로 protectStreak도
   // 건드리면 안 된다.
   if (effectiveMove.protectEffect && !bounceActive) {
+    protectStanceEntered = effectiveMove.protectEffect === "block";
     const streak = attacker.protectStreak ?? 0;
     const successChance = Math.pow(1 / 3, streak);
     // 상대가 이번 턴 낸 게 방어로 막을 수 있는 것(공격기 또는 상대를 겨냥한 변화기)이 아니면
@@ -2570,11 +2616,15 @@ function resolveAction(
     critical: isCritical,
     damage,
     damagePercent,
+    typeEffectiveness,
     defenderRemainingHp: defender.currentHp,
     selfDamage,
     attackerRemainingHp: attacker.currentHp,
     inflictedStatus,
     inflictedVolatile,
+    opponentStatDrops: opponentStatDrops.length > 0 ? opponentStatDrops : undefined,
+    statusInflictFailed: statusInflictFailed || undefined,
+    protectStanceEntered: protectStanceEntered || undefined,
     curedStatus,
     curedStatusTarget,
     setField: fieldSetFailed ? undefined : effectiveMove.setsField,
@@ -2997,6 +3047,7 @@ export function runTurn(
       // 도입되면 그때 "교체로 나온 턴" 예외를 되살린다. 기절했으면(이 턴 데미지로 방금 쓰러졌어도)
       // 발동하지 않는다.
       if (fighterAbility?.boostsSpeedEachTurnEnd && !isFainted(fighter)) {
+        const speBefore = fighter.stages.spe;
         fighter.stages = applyStageDelta(fighter.stages, "spe", 1);
         endOfTurn.push({
           actor: key,
@@ -3004,6 +3055,7 @@ export function runTurn(
           remainingHp: fighter.currentHp,
           fainted: false,
           speedBoostAbilityName: fighterAbility.name,
+          speedBoostAtCap: fighter.stages.spe === speBefore || undefined,
         });
       }
 
