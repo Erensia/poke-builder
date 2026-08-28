@@ -124,6 +124,16 @@ Phase 5에서 특성/기술 로직을 70종 넘게 새로 붙이면서 `BattleLo
 
 Phase 6.5 §6-2 ⑦("막을 게 없으면 streak 0 리셋")은 이 지시로 대체 — 태세엔 들어가되 verdict만 실패.
 
+#### H. 3차 플레이테스트 추가 발견 (2026-08-28)
+
+전 그룹 완료 후 이어진 플레이로 추가된 항목. 각각 별도 커밋.
+
+- **H-1 구애류 도구 발버둥**: `locksFirstMoveUsed`(구애스카프 등) 도구로 잠긴 기술의 PP가 0이 되면, 다른 기술에 PP가 남아 있어도 선택할 수 없어 턴 진행이 막혔다. → BattleLogPage `isStruggling(side)` 헬퍼 신설(`!hasUsableMove` OR 잠긴 기술 PP 0) → 선택 없이 `STRUGGLE_MOVE` 자동 진행. UI 배선만(엔진은 구애 잠금 미강제). 커밋 `b50bc32`.
+- **H-2 대타 막힘 문구**: 변화기가 대타에 통째로 막혀 본체에 아무것도 못 했을 때(데미지 없음) → `ActionLogEntry.blockedBySubstituteMoveName` → `[상대]의 [기술명]은(는) 실패했다!`. 데미지 기술이 대타를 실제로 깎은 경우는 기존 `대타가 대신 맞았다!` 유지(2차 확인). 소리 기술은 원래대로 본체 통과. 커밋 `fe6c2da`·`57cd5c3`.
+- **H-3 잠듦/얼음 해제 UI 순서·문구**: `selfCuredStatus`(자연 해제 + `thawsUserOnUse`)를 `curedStatus`에 머지하지 않고 `ActionLogEntry.selfWokeBeforeMove` 별도 축으로 분리 → 로그에서 **기술 줄보다 먼저** 렌더(움직이기 전 상태 판정 순서). `STATUS_CURE_TEXT.sleep`: `OO의 눈을 떴다!` → `OO은(는) 눈을 떴다!`(주격). 커밋 `fe6c2da`.
+- **H-4 가루/포자 기술 풀타입 면역**: `MoveClassification`에 `"가루"` 추가, 수면가루·저리가루·독가루·목화포자·분노가루 5종에 태깅. `battleSimulator`의 `blockedByPowderImmunity`(`classification "가루"` && 방어측 풀타입) → `opponentEffectsBlocked`에 합류. 로그 `powderBlockedMoveName`. 방진 특성·방진고글 도구는 로스터에 없어 생략. 커밋 `b382725`.
+- **H-5 씨뿌리기 풀타입 면역**: H-4와 같은 축의 본가 면역. `setsLeechSeed` 적용 전 `defender.types.includes("풀")` 확인 → `leechSeedBlockedByGrass`, 씨앗 미부착. 커밋 `967c910`.
+
 ### 1-4. 범위·리스크
 
 - **표시층 + 로직 둘 다 건드린다**(당초 "문구만"에서 확장). C·D·G는 표시층 중심, E·F는 `battleSimulator` 로직 + 신규 `Move`/`Ability` 플래그.
@@ -133,7 +143,7 @@ Phase 6.5 §6-2 ⑦("막을 게 없으면 streak 0 리셋")은 이 지시로 대
 
 ### 1-5. 진행 상황 (2026-08-28)
 
-전 그룹 **완료**. 커밋: `6a8c655`(B·C·D·G) → `159d2d6`(방어 2차 지시·F-3) → `3f46e0f`(E·F-2) → `9d9e5ac`(A) → `d35c475`(F-1) → `a240dc0`(F-4). 각 그룹 tsx 스모크 테스트 통과.
+전 그룹 **완료**. 커밋: `6a8c655`(B·C·D·G) → `159d2d6`(방어 2차 지시·F-3) → `3f46e0f`(E·F-2) → `9d9e5ac`(A) → `d35c475`(F-1) → `a240dc0`(F-4) → `cbbedb3`(문서) → **H-1** `b50bc32` → **H-2/H-3** `fe6c2da`·`57cd5c3` → **H-4** `b382725` → **H-5** `967c910`. 각 항목 tsx 스모크 테스트 통과.
 
 미착수(별도 논의/인프라 대기): 배턴터치 멸망 카운트 이전(7.5 교체 인프라), 사전 UI 힌트 `moveRestrictionMessage`의 "~해요" 말투(로그가 아니라 선택 경고라 유지).
 
