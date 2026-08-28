@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { MatchupSlotCard } from "./MatchupSlotCard";
 import { VerdictBadge } from "./VerdictBadge";
 import { WeatherPicker } from "./WeatherPicker";
+import { FieldPicker } from "./FieldPicker";
 import { PokemonPickerModal } from "./PokemonPickerModal";
 import { MovePickerModal } from "./MovePickerModal";
 import { AbilityPickerModal } from "./AbilityPickerModal";
@@ -16,7 +17,8 @@ import { getPokemon, getMove } from "../lib/data";
 import { getEffectiveForm } from "../lib/pokemonForm";
 import { computeRealStats } from "../lib/statCalculator";
 import { computeBulkPower } from "../lib/battlePower";
-import { evaluateSlotMatchup } from "../lib/matchupEvaluator";
+import { environmentTintBackground } from "../lib/environmentBackground";
+import { evaluateSlotMatchup, evaluateSpeedMatchup } from "../lib/matchupEvaluator";
 import "./MatchupPage.css";
 
 type Side = "attacker" | "defender";
@@ -32,7 +34,8 @@ type PickerState =
   | null;
 
 export function MatchupPage() {
-  const { attacker, defender, weather, setWeather } = useMatchup();
+  const { attacker, defender, weather, setWeather, field, setField, trickRoom, setTrickRoom } =
+    useMatchup();
   const slotPresets = useSlotPresets();
   const [picker, setPicker] = useState<PickerState>(null);
 
@@ -52,33 +55,85 @@ export function MatchupPage() {
     return { physical, special };
   }, [defenderPokemon, defender.slot]);
 
+  // Phase 6.5 §1 — "이전 턴 가정" 토글 반영. 도구 강탈 토글이 켜진 슬롯은 상대 도구를 장착한
+  // 것으로, 상대 슬롯은 무도구로 계산한다(양쪽 다 켜졌으면 공격 슬롯 우선). 성묘 배율은 위력만 바꾼다.
+  const { effAttackerSlot, effDefenderSlot, effMove } = useMemo(() => {
+    const stealBy = attacker.slot.itemStolenFromOpponent
+      ? "attacker"
+      : defender.slot.itemStolenFromOpponent
+        ? "defender"
+        : null;
+    return {
+      effAttackerSlot:
+        stealBy === "attacker"
+          ? { ...attacker.slot, item: defender.slot.item }
+          : stealBy === "defender"
+            ? { ...attacker.slot, item: null }
+            : attacker.slot,
+      effDefenderSlot:
+        stealBy === "defender"
+          ? { ...defender.slot, item: attacker.slot.item }
+          : stealBy === "attacker"
+            ? { ...defender.slot, item: null }
+            : defender.slot,
+      effMove:
+        attackerMove && attackerMove.id === "성묘" && attacker.slot.graveVisitFaintedAllies
+          ? { ...attackerMove, power: 50 + 50 * attacker.slot.graveVisitFaintedAllies }
+          : attackerMove,
+    };
+  }, [attacker.slot, defender.slot, attackerMove]);
+
   // 양쪽 다 준비되고 기술까지 골랐을 때: 정확한 결정력/내구력/판정
   const fullResult = useMemo(() => {
-    if (!attackerPokemon || !defenderPokemon || !attackerMove) return null;
+    if (!attackerPokemon || !defenderPokemon || !effMove) return null;
     return evaluateSlotMatchup(
-      { ...attacker.slot, pokemonId: attackerPokemon.id },
-      attackerMove,
-      { ...defender.slot, pokemonId: defenderPokemon.id },
+      { ...effAttackerSlot, pokemonId: attackerPokemon.id },
+      effMove,
+      { ...effDefenderSlot, pokemonId: defenderPokemon.id },
       {
         weather: weather ?? undefined,
+        field: field ?? undefined,
         multiHitCount: attacker.slot.multiHitCount,
+        attackerStages: attacker.slot.stages,
+        defenderStages: defender.slot.stages,
+        screen: defender.slot.screen,
+      },
+    );
+  }, [attackerPokemon, defenderPokemon, effAttackerSlot, effDefenderSlot, effMove, attacker.slot, defender.slot, weather, field]);
+
+  // 스피드 비교(Phase 6.5 §2) — 포켓몬 둘 다 골랐으면 기술 선택과 무관하게 계산
+  const speedResult = useMemo(() => {
+    if (!attackerPokemon || !defenderPokemon) return null;
+    return evaluateSpeedMatchup(
+      { ...effAttackerSlot, pokemonId: attackerPokemon.id },
+      { ...effDefenderSlot, pokemonId: defenderPokemon.id },
+      {
+        weather: weather ?? undefined,
+        attackerUnburden: attacker.slot.unburdenAssumed,
+        defenderUnburden: defender.slot.unburdenAssumed,
+        attackerParalyzed: attacker.slot.paralysisAssumed,
+        defenderParalyzed: defender.slot.paralysisAssumed,
+        trickRoom,
         attackerStages: attacker.slot.stages,
         defenderStages: defender.slot.stages,
       },
     );
-  }, [attackerPokemon, defenderPokemon, attackerMove, attacker.slot, defender.slot, weather]);
+  }, [attackerPokemon, defenderPokemon, effAttackerSlot, effDefenderSlot, attacker.slot, defender.slot, weather, trickRoom]);
 
   return (
     <section className="matchup-page">
       <header className="matchup-page-header">
         <div>
           <h2>결정력 &amp; 내구력</h2>
-          <p>내 포켓몬과 상대 포켓몬을 고르고, 기술까지 선택하면 몇 타에 끝나는지 판정해드려요.</p>
+          <p>내 포켓몬과 상대 포켓몬을 고르고, 기술을 선택하면 타수 판정을 확인할 수 있습니다.</p>
         </div>
-        <WeatherPicker weather={weather} onChange={setWeather} />
+        <div className="matchup-env-pickers">
+          <WeatherPicker weather={weather} onChange={setWeather} />
+          <FieldPicker field={field} onChange={setField} />
+        </div>
       </header>
 
-      <div className="matchup-board">
+      <div className="matchup-board" style={{ background: environmentTintBackground(weather, field) }}>
         <MatchupSlotCard
           role="attacker"
           label="내 포켓몬"
@@ -97,6 +152,11 @@ export function MatchupPage() {
           onPickMove={() => setPicker({ kind: "move" })}
           hasSamples={slotPresets.presets.length > 0}
           onOpenSamplePicker={() => setPicker({ kind: "slotPresets", side: "attacker" })}
+          onToggleItemStolen={attacker.setItemStolen}
+          onToggleUnburden={attacker.setUnburdenAssumed}
+          onToggleParalysis={attacker.setParalysisAssumed}
+          moveIsGraveVisit={attackerMove?.id === "성묘"}
+          onSetGraveVisit={attacker.setGraveVisitFaintedAllies}
         />
 
         <div className="matchup-verdict-row">
@@ -118,8 +178,43 @@ export function MatchupPage() {
           onPickStages={() => setPicker({ kind: "stages", side: "defender" })}
           hasSamples={slotPresets.presets.length > 0}
           onOpenSamplePicker={() => setPicker({ kind: "slotPresets", side: "defender" })}
+          onToggleItemStolen={defender.setItemStolen}
+          onToggleUnburden={defender.setUnburdenAssumed}
+          onToggleParalysis={defender.setParalysisAssumed}
+          onSetScreen={defender.setScreen}
         />
       </div>
+
+      {speedResult && (
+        <div className="matchup-speed-block">
+          <div className="matchup-speed-row">
+            <span className="matchup-speed-side">
+              내 포켓몬 <strong>{Math.round(speedResult.attackerSpeed).toLocaleString()}</strong>
+            </span>
+            <span className="matchup-speed-verdict">
+              {speedResult.firstMover === "tie"
+                ? "동속 — 선공은 랜덤"
+                : speedResult.firstMover === "attacker"
+                  ? "⚡ 내 포켓몬이 먼저 움직여요"
+                  : "⚡ 상대가 먼저 움직여요"}
+              {speedResult.trickRoom && speedResult.firstMover !== "tie" && (
+                <span className="matchup-speed-note"> (트릭룸)</span>
+              )}
+            </span>
+            <span className="matchup-speed-side">
+              상대 <strong>{Math.round(speedResult.defenderSpeed).toLocaleString()}</strong>
+            </span>
+          </div>
+          <label className="matchup-assume-toggle matchup-speed-trickroom">
+            <input
+              type="checkbox"
+              checked={trickRoom}
+              onChange={(e) => setTrickRoom(e.target.checked)}
+            />
+            <span>트릭룸 가정 (느린 쪽이 먼저)</span>
+          </label>
+        </div>
+      )}
 
       {picker?.kind === "pokemon" && (
         <PokemonPickerModal

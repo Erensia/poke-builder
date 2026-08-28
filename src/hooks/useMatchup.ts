@@ -3,6 +3,7 @@ import type { MatchupSlot } from "../types/matchup";
 import type { AbilityPoints, PartySlot } from "../types/party";
 import type { BattleStatKey } from "../types/battleStats";
 import type { WeatherKind } from "../types/weather";
+import type { FieldKind } from "../types/field";
 import { EMPTY_ABILITY_POINTS } from "../types/party";
 import { NEUTRAL_STAGES } from "../types/battleStats";
 import { getMove, getPokemon } from "../lib/data";
@@ -22,6 +23,10 @@ export const EMPTY_MATCHUP_SLOT: MatchupSlot = {
   points: { ...EMPTY_ABILITY_POINTS },
   stages: { ...NEUTRAL_STAGES },
   moveId: null,
+  itemStolenFromOpponent: false,
+  unburdenAssumed: false,
+  paralysisAssumed: false,
+  graveVisitFaintedAllies: 0,
 };
 
 function useMatchupSlot() {
@@ -75,13 +80,37 @@ function useMatchupSlot() {
   function setMove(moveId: string | null) {
     setSlot((prev) => {
       const move = moveId ? getMove(moveId) : undefined;
-      const multiHitCount = move?.multiHitPowers ? move.multiHitPowers.length : undefined;
+      const multiHitCount = move?.multiHitPowers
+        ? move.multiHitPowers.length
+        : move?.minHits !== undefined && move?.maxHits !== undefined
+          ? move.maxHits
+          : undefined;
       return { ...prev, moveId, multiHitCount };
     });
   }
 
   function setMultiHitCount(count: number) {
     setSlot((prev) => ({ ...prev, multiHitCount: count }));
+  }
+
+  function setItemStolen(value: boolean) {
+    setSlot((prev) => ({ ...prev, itemStolenFromOpponent: value }));
+  }
+
+  function setUnburdenAssumed(value: boolean) {
+    setSlot((prev) => ({ ...prev, unburdenAssumed: value }));
+  }
+
+  function setParalysisAssumed(value: boolean) {
+    setSlot((prev) => ({ ...prev, paralysisAssumed: value }));
+  }
+
+  function setScreen(value: MatchupSlot["screen"]) {
+    setSlot((prev) => ({ ...prev, screen: value }));
+  }
+
+  function setGraveVisitFaintedAllies(count: 0 | 1 | 2) {
+    setSlot((prev) => ({ ...prev, graveVisitFaintedAllies: count }));
   }
 
   function setPoint(stat: keyof AbilityPoints, value: number) {
@@ -128,6 +157,11 @@ function useMatchupSlot() {
     setNature,
     setMove,
     setMultiHitCount,
+    setItemStolen,
+    setUnburdenAssumed,
+    setParalysisAssumed,
+    setScreen,
+    setGraveVisitFaintedAllies,
     setPoint,
     stepPoint,
     setStageValue,
@@ -139,6 +173,9 @@ export function useMatchup() {
   const attacker = useMatchupSlot();
   const defender = useMatchupSlot();
   const [weather, setWeather] = useState<WeatherKind | null>(null);
+  const [field, setField] = useState<FieldKind | null>(null);
+  /** Phase 6.5 §2 — 트릭룸이 걸려 있다고 가정(스피드 비교 전용, 느린 쪽이 먼저 움직임) */
+  const [trickRoom, setTrickRoom] = useState(false);
 
-  return { attacker, defender, weather, setWeather };
+  return { attacker, defender, weather, setWeather, field, setField, trickRoom, setTrickRoom };
 }

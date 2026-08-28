@@ -12,9 +12,10 @@ import { useBattleSetup } from "../hooks/useBattleSetup";
 import { useSlotPresets } from "../hooks/useSlotPresets";
 import { getPokemon, getMove, getItem } from "../lib/data";
 import { getEffectiveForm, megaBadgeLabel } from "../lib/pokemonForm";
-import { TYPE_COLORS, typeColorRgba } from "../lib/typeColors";
-import { WEATHER_ACCENT_TYPE } from "../lib/weatherEffects";
-import { FIELD_DISPLAY_TYPE } from "../lib/fieldEffects";
+import { TYPE_COLORS } from "../lib/typeColors";
+import { environmentTintBackground } from "../lib/environmentBackground";
+import { rankStageMultiplier } from "../lib/battlePower";
+import { STAT_LABELS } from "../lib/statLabels";
 import {
   createBattleState,
   hasUsableMove,
@@ -70,21 +71,9 @@ const VOLATILES_WITH_DEDICATED_LOG_LINE = new Set(["drowsy", "wish"]);
 
 const SCREEN_LABELS = { reflect: "리플렉터", lightScreen: "빛의장막", auroraVeil: "오로라베일" } as const;
 
-/**
- * 날씨/필드가 적용 중인지 배경색으로 알 수 있게 해달라는 요청 반영 — 날씨는 강화하는 타입 색(비=물,
- * 모래바람=바위, 눈=얼음, 쾌청=불꽃), 필드는 필드 자신의 타입 색(그래스=풀 등)을 낮은 불투명도로 섞는다.
- * 둘 다 있으면 좌우 그라데이션으로, 하나만 있으면 단색 틴트로, 둘 다 없으면 기본(투명) 배경.
- */
+/** 날씨/필드 배경 틴트 — 매치업 페이지와 공유하는 environmentTintBackground에 위임한다. */
 function battleBoardBackground(state: BattleState): string | undefined {
-  const weatherColor = state.weather ? TYPE_COLORS[WEATHER_ACCENT_TYPE[state.weather]] : undefined;
-  const fieldColor = state.field ? TYPE_COLORS[FIELD_DISPLAY_TYPE[state.field]] : undefined;
-
-  if (weatherColor && fieldColor) {
-    return `linear-gradient(135deg, ${typeColorRgba(weatherColor, 0.16)}, ${typeColorRgba(fieldColor, 0.16)})`;
-  }
-  if (weatherColor) return typeColorRgba(weatherColor, 0.14);
-  if (fieldColor) return typeColorRgba(fieldColor, 0.14);
-  return undefined;
+  return environmentTintBackground(state.weather, state.field);
 }
 
 function fighterLabel(state: BattleState, key: FighterKey): string {
@@ -120,6 +109,22 @@ function eulReul(name: string): "을" | "를" {
   const code = lastChar.charCodeAt(0) - 0xac00;
   if (code < 0 || code > 11171) return "를";
   return code % 28 === 0 ? "를" : "을";
+}
+
+/** "공격이"/"스피드가"처럼 마지막 글자 받침 유무로 "이"/"가" 주격 조사를 자동 판별한다(랭크업 결과 문구용) */
+function iGa(name: string): "이" | "가" {
+  const lastChar = name.at(-1);
+  if (!lastChar) return "가";
+  const code = lastChar.charCodeAt(0) - 0xac00;
+  if (code < 0 || code > 11171) return "가";
+  return code % 28 === 0 ? "가" : "이";
+}
+
+/** 랭크 상승폭 → 본가식 수식어. 1랭크는 수식어 없음, 2랭크 "크게", 3랭크 이상 "아주 크게" */
+function stageRiseAdverb(delta: number): string {
+  if (delta >= 3) return "아주 크게 ";
+  if (delta === 2) return "크게 ";
+  return "";
 }
 
 /**
@@ -350,7 +355,11 @@ export function BattleLogPage() {
       {battleState && (
         <>
           <div className="battle-board" style={{ background: battleBoardBackground(battleState) }}>
-            {(battleState.weather || battleState.field || battleState.trickRoomTurnsRemaining !== undefined) && (
+            {(battleState.weather ||
+              battleState.field ||
+              battleState.trickRoomTurnsRemaining !== undefined ||
+              battleState.stealthRock.a ||
+              battleState.stealthRock.b) && (
               <div className="battle-environment-tags">
                 {battleState.weather && (
                   <span className="battle-environment-tag">
@@ -366,6 +375,13 @@ export function BattleLogPage() {
                   <span className="battle-environment-tag">
                     트릭룸 (앞으로 {battleState.trickRoomTurnsRemaining}턴)
                   </span>
+                )}
+                {(["a", "b"] as const).map((side) =>
+                  battleState.stealthRock[side] ? (
+                    <span key={`sr-${side}`} className="battle-environment-tag">
+                      {fighterLabel(battleState, side)} 진영: 뾰족한 바위(스텔스록)
+                    </span>
+                  ) : null,
                 )}
               </div>
             )}
@@ -437,14 +453,39 @@ export function BattleLogPage() {
                   </div>
 
                   {/* 대전 중엔 셋업 카드가 안 보여서 내가 맞춘 능력치를 확인할 방법이 없었다는 피드백 반영 —
-                      HP·공격·방어·특공·특방·스피드 실능치를 배틀 보드에도 그대로 노출한다 */}
+                      HP·공격·방어·특공·특방·스피드 실능치를 배틀 보드에도 그대로 노출한다. 칼춤·위협 등
+                      랭크 변화는 턴 진행 중 이 표시에 즉시 반영한다(Phase 6.5 §6-2 ⑧) — HP는 랭크 대상이 아님. */}
                   <div className="battle-real-stats">
-                    {REAL_STAT_LABELS.map(({ key, label }) => (
-                      <div key={key} className="battle-real-stat-item">
-                        <span className="battle-real-stat-label">{label}</span>
-                        <span className="battle-real-stat-value">{Math.round(fighter.realStats[key])}</span>
-                      </div>
-                    ))}
+                    {REAL_STAT_LABELS.map(({ key, label }) => {
+                      const base = fighter.realStats[key];
+                      const stage = key === "hp" ? 0 : fighter.stages[key];
+                      const effective = stage === 0 ? base : Math.round(base * rankStageMultiplier(stage));
+                      return (
+                        <div
+                          key={key}
+                          className={`battle-real-stat-item${
+                            stage > 0 ? " is-boosted" : stage < 0 ? " is-lowered" : ""
+                          }`}
+                        >
+                          <span className="battle-real-stat-label">{label}</span>
+                          <span
+                            className="battle-real-stat-value"
+                            title={
+                              stage !== 0
+                                ? `기본 ${Math.round(base)} (${stage > 0 ? "+" : ""}${stage}랭크)`
+                                : undefined
+                            }
+                          >
+                            {Math.round(effective)}
+                            {stage !== 0 && (
+                              <span className="battle-real-stat-stage">
+                                {stage > 0 ? `+${stage}` : stage}
+                              </span>
+                            )}
+                          </span>
+                        </div>
+                      );
+                    })}
                   </div>
 
                   {fighter.chargingMoveId ? (
@@ -571,22 +612,22 @@ export function BattleLogPage() {
                         {action.blockedReason === "usageCondition" && "!"}
                         {action.blockedReason === "moveRestricted" && "!"}
                         {action.blockedReason === "status" && action.blockedByStatus === undefined && " — 상태이상으로 행동 불가"}
-                        {action.blockedReason === "flinch" && " — 풀죽어서 행동 불가"}
-                        {action.blockedReason === "recharge" && " — 반동으로 행동 불가"}
+                        {action.blockedReason === "flinch" && " — 풀이 죽어서 움직일 수 없었다!"}
+                        {action.blockedReason === "recharge" && " — 반동으로 움직일 수 없었다!"}
                         {action.blockedReason === "confusion" &&
-                          ` — 혼란으로 자멸! (${action.selfDamage} 데미지)`}
+                          ` — 자기자신을 공격했다! (${action.selfDamage} 데미지)`}
                         {action.blockedReason === "attract" && " — 헤롱헤롱에 빠져 행동 불가"}
                         {action.blockedReason === "psychicFieldPriority" && " — 사이코필드에 막혀 실패"}
                         {!action.blockedReason && action.charging && " — 준비 중! 다음 턴 발동된다"}
                         {!action.blockedReason && !action.charging && action.evadedByCharge && " — 무적 상태라 빗나감"}
-                        {!action.blockedReason && !action.charging && !action.evadedByCharge && !action.hit && " — 빗나감"}
+                        {!action.blockedReason && !action.charging && !action.evadedByCharge && !action.hit && " — 빗나갔다!"}
                         {!action.blockedReason && action.hit && action.damage > 0 && (
                           <>
                             {" "}
                             {/* 다단히트가 아닐 때만 "급소!"를 단일 판정으로 표시 — 다단히트는
                                 타수마다 급소를 따로 판정해서 "하나라도 급소"라는 뜻이 다르므로
                                 뒤의 "(급소 포함)" 표기로 대신한다 */}
-                            — {action.hitCount === undefined && action.critical && "급소! "}
+                            — {action.hitCount === undefined && action.critical && "급소에 맞았다! "}
                             {action.damage} 데미지 ({(action.damagePercent * 100).toFixed(1)}%)
                             {action.hitCount !== undefined && (
                               <> · {action.hitCount}타 명중{action.critical && " (급소 포함)"}</>
@@ -600,13 +641,19 @@ export function BattleLogPage() {
                             <> · {VOLATILE_LABELS[action.inflictedVolatile]}!</>
                           )}
                         {!action.blockedReason && action.hit && action.inflictedVolatile === "wish" && (
-                          <> · 희망사항 발동 준비!</>
+                          <> · 희망사항!</>
                         )}
                         {!action.blockedReason && action.hit && action.setField && (
                           <> · {action.setField} 설치!</>
                         )}
                         {!action.blockedReason && action.hit && action.fieldSetFailed && (
                           <> · 이미 필드가 있어 실패!</>
+                        )}
+                        {!action.blockedReason && action.hit && action.stealthRockSetForSide && (
+                          <> · 상대 편 필드에 뾰족한 바위가 깔렸다!</>
+                        )}
+                        {!action.blockedReason && action.hit && action.hazardSetFailed && (
+                          <> · 이미 뾰족한 바위가 깔려 있어 실패!</>
                         )}
                         {!action.blockedReason && action.hit && action.destroyedField && (
                           <> · {action.destroyedField} 파괴!</>
@@ -665,7 +712,7 @@ export function BattleLogPage() {
                           <> · 상대가 아직 기술을 안 썼거나 이미 걸려있어 실패!</>
                         )}
                         {!action.blockedReason && action.hit && action.setEncoreMoveName && (
-                          <> · {action.setEncoreMoveName}만 반복하게 됨!</>
+                          <> · {action.setEncoreMoveName}밖에 쓸 수 없다!</>
                         )}
                         {!action.blockedReason && action.hit && action.encoreSetFailed && (
                           <> · 상대가 아직 기술을 안 썼거나 이미 걸려있어 실패!</>
@@ -764,6 +811,38 @@ export function BattleLogPage() {
                           {action.abilityDisabledMoveName}이(가) 봉인되었다!
                         </div>
                       )}
+                      {/* 지구력·깨어진갑옷 등 — 피격 시 방어측 특성이 자기 랭크를 바꿨을 때
+                          (Phase 6.5 §6-2 ③ / §6-1). 깨어진갑옷은 방어↓·스피드↑가 같이 오므로 줄을 나눠 낸다.
+                          내림 줄에서 특성 이름을 한 번 알리고, 오름 줄은 이름 없이 결과만. */}
+                      {!action.blockedReason &&
+                        ((action.abilityLoweredDefenderStats?.length ?? 0) > 0 ||
+                          (action.abilityRaisedDefenderStats?.length ?? 0) > 0) &&
+                        (() => {
+                          const lowered = action.abilityLoweredDefenderStats ?? [];
+                          const raised = action.abilityRaisedDefenderStats ?? [];
+                          const abilityName = action.abilityRaisedDefenderStatsAbilityName;
+                          const loweredJoined = lowered.map((s) => STAT_LABELS[s.stat]).join(", ");
+                          const raisedJoined = raised.map((s) => STAT_LABELS[s.stat]).join(", ");
+                          return (
+                            <>
+                              {lowered.length > 0 && (
+                                <div className="battle-turn-line is-muted">
+                                  {defenderName}의 {abilityName}! {defenderName}의 {loweredJoined}
+                                  {iGa(loweredJoined)}{" "}
+                                  {stageRiseAdverb(Math.max(...lowered.map((s) => s.delta)))}내려갔다!
+                                </div>
+                              )}
+                              {raised.length > 0 && (
+                                <div className="battle-turn-line is-muted">
+                                  {lowered.length === 0 && <>{defenderName}의 {abilityName}! </>}
+                                  {defenderName}의 {raisedJoined}
+                                  {iGa(raisedJoined)}{" "}
+                                  {stageRiseAdverb(Math.max(...raised.map((s) => s.delta)))}올라갔다!
+                                </div>
+                              )}
+                            </>
+                          );
+                        })()}
                       {/* 타오르는불꽃/피뢰침 — 해당 타입 기술을 통째로 무효화(데미지는 이미 0으로
                           찍혀있어 별도 표시가 없으면 "그냥 약해서 0"인지 구분이 안 되니 전용 문구로 알려준다) */}
                       {!action.blockedReason && action.abilityAbsorbedMoveType && (
@@ -777,14 +856,15 @@ export function BattleLogPage() {
                           버티는지에 따라 문구를 분기(접촉/특성 트리거가 발동하지 않는 이유이기도 함) */}
                       {!action.blockedReason && action.hitSubstitute && (
                         <div className="battle-turn-line is-muted">
-                          {action.substituteBroke ? "대타가 깨졌다!" : "대타가 대신 맞았다!"}
+                          {action.substituteBroke ? "대타는 사라졌다!" : "대타가 대신 맞았다!"}
                         </div>
                       )}
                       {/* 탈(Disguise) — 데미지를 통째로 무효화하고 그 반동으로 벗겨지며 데미지를 입는다.
                           다단히트 나머지 타수는 이 필드 없이 정상적으로 데미지가 들어간다(첫 타만 무효화). */}
                       {!action.blockedReason && action.hitNegatedByAbilityName && (
                         <div className="battle-turn-line is-muted">
-                          {defenderName}의 {action.hitNegatedByAbilityName}! 공격이 무효화되었다! {defenderName}
+                          {defenderName}의 {action.hitNegatedByAbilityName}! {defenderName}의 정체가 드러났다!{" "}
+                          {defenderName}
                           {eunNeun(defenderName)} 반동으로 {action.disguiseRecoilDamage} 데미지를 입었다!
                         </div>
                       )}
@@ -876,6 +956,37 @@ export function BattleLogPage() {
                           {defenderName}
                           {eunNeun(defenderName)} {action.enduredProtectMoveName}
                           {roEuro(action.enduredProtectMoveName)} 버텼다! (HP 1)
+                        </div>
+                      )}
+                      {/* 랭크업 기술 결과 — "OO의 공격이 크게 올라갔다!". 같은 폭으로 오른 스탯은 쉼표로
+                          묶어 한 줄로 낸다(Phase 6.5 §6-2 ⑥⑦, §6-3). */}
+                      {!action.blockedReason &&
+                        action.selfStatRises &&
+                        action.selfStatRises.length > 0 &&
+                        (() => {
+                          const byDelta = new Map<number, string[]>();
+                          for (const r of action.selfStatRises) {
+                            const labels = byDelta.get(r.delta) ?? [];
+                            labels.push(STAT_LABELS[r.stat]);
+                            byDelta.set(r.delta, labels);
+                          }
+                          return [...byDelta.entries()].map(([delta, labels]) => {
+                            const joined = labels.join(", ");
+                            return (
+                              <div key={`rise-${delta}`} className="battle-turn-line is-muted">
+                                {actorName}의 {joined}
+                                {iGa(joined)} {stageRiseAdverb(delta)}올라갔다!
+                              </div>
+                            );
+                          });
+                        })()}
+                      {/* 랭크업 상한 — 이미 +6이라 한 칸도 못 올랐을 때 */}
+                      {!action.blockedReason && action.selfStatsAtMax && action.selfStatsAtMax.length > 0 && (
+                        <div className="battle-turn-line is-muted">
+                          {actorName}의{" "}
+                          {action.selfStatsAtMax.map((s) => STAT_LABELS[s]).join(", ")}
+                          {eunNeun(action.selfStatsAtMax.map((s) => STAT_LABELS[s]).join(", "))} 더 이상 올라가지
+                          않는다!
                         </div>
                       )}
                       {/* 방어/판별/킹실드 — 자신의 시도가 이번에 성공했는지/실패했는지. 길동무는 "몸을
@@ -1045,7 +1156,7 @@ export function BattleLogPage() {
                 {turn.winner && (
                   <div className="battle-turn-line is-winner">
                     {turn.winner === "draw"
-                      ? "🤝 무승부! 양쪽 다 기절했어요"
+                      ? "🤝 무승부!"
                       : `🏆 ${fighterLabel(battleState, turn.winner)} 승리!`}
                   </div>
                 )}

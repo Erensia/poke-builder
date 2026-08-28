@@ -23,6 +23,13 @@
   max-width: 42ch;
 }
 
+/* 날씨·필드 선택기를 세로로 묶는다 (헤더가 column 레이아웃이라 자연스럽게 쌓인다) */
+.matchup-env-pickers {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
 /* 좌: 내 포켓몬 / 가운데: 판정 / 우: 상대 포켓몬(15px 아래로 오프셋) — 파티 빌더 2열 리듬과 동일 */
 .matchup-board {
   display: flex;
@@ -30,6 +37,10 @@
   align-items: flex-start;
   justify-content: center;
   gap: 1rem;
+  /* 날씨/필드 틴트(environmentTintBackground)가 형태를 갖도록 — 대전 로그 battle-board와 같은 톤 */
+  padding: 0.7rem;
+  border-radius: 16px;
+  transition: background 0.3s ease;
 }
 
 .matchup-board > .matchup-slot:last-child {
@@ -43,6 +54,54 @@
   padding-top: 3.2rem;
   flex-shrink: 0;
   width: 130px;
+}
+
+/* Phase 6.5 §2 — 스피드 비교 행 */
+.matchup-speed-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-top: 1rem;
+  padding: 0.6rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-2);
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.matchup-speed-side strong {
+  font-family: var(--display);
+  font-size: 1.05rem;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  margin-left: 0.25rem;
+}
+
+.matchup-speed-verdict {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.matchup-speed-note {
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+/* 스피드 비교 행 + 트릭룸 토글을 한 덩어리로 */
+.matchup-speed-block {
+  margin-top: 1rem;
+}
+
+.matchup-speed-block .matchup-speed-row {
+  margin-top: 0;
+}
+
+.matchup-speed-trickroom {
+  justify-content: center;
+  margin-top: 0.5rem;
 }
 
 @media (max-width: 760px) {

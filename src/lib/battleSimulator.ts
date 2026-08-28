@@ -7,6 +7,7 @@ import {
   NEUTRAL_ACCURACY_STAGES,
   NEUTRAL_CRIT_STAGE,
   NEUTRAL_STAGES,
+  isBattleStatKey,
   type AccuracyEvasionStages,
   type BattleStatKey,
   type CritStage,
@@ -62,6 +63,7 @@ import {
   getFieldDamageMultiplier,
   getFieldPowerMultiplier,
   isConfusionBlockedByField,
+  isOpponentTargetingMove,
   isPriorityMoveBlockedByField,
   isStatusBlockedByField,
 } from "./fieldEffects";
@@ -268,6 +270,11 @@ export interface BattleState {
   fieldTurnsRemaining?: number;
   /** 트릭룸이 해제되기까지 남은 턴 수. 트릭룸이 안 걸려있으면 undefined */
   trickRoomTurnsRemaining?: number;
+  /**
+   * 진영별 스텔스록 설치 여부. 한 번 깔리면 배틀 끝까지 영구 유지된다(Phase 6.5 §6-2 ④).
+   * 교체 개념이 없어 "등장 데미지"는 아직 없고, 로그·환경 UI 표시용 상태값이다.
+   */
+  stealthRock: { a: boolean; b: boolean };
   turnNumber: number;
   /** 배틀 시작 시점에 특성으로 날씨가 자동으로 바뀌었으면("○○의 잔비!") 그 안내 문구 */
   entryAnnouncements: string[];
@@ -543,6 +550,7 @@ export function createBattleState(
     weatherTurnsRemaining,
     field: entryField,
     fieldTurnsRemaining,
+    stealthRock: { a: false, b: false },
     turnNumber: 0,
     entryAnnouncements: [...weatherAnnouncements, ...abilityAnnouncements],
   };
@@ -604,6 +612,10 @@ export interface ActionLogEntry {
   setField?: FieldKind;
   /** 필드 기술을 썼지만 이미 다른 필드가 깔려있어서 실패했으면 true */
   fieldSetFailed?: boolean;
+  /** 스텔스록을 어느 진영에 깔았으면 그 진영 키(a/b). 로그 문구용 */
+  stealthRockSetForSide?: FighterKey;
+  /** 스텔스록을 깔려 했으나 이미 그 진영에 깔려 있어 실패했으면 true */
+  hazardSetFailed?: boolean;
   /** 아이언롤러처럼 필드를 파괴하는 기술이 명중해서 활성 필드가 없어졌으면, 없어지기 직전의 필드 종류 */
   destroyedField?: FieldKind;
   /** 이 행동으로 트릭룸이 새로 걸렸으면 true */
@@ -684,8 +696,12 @@ export interface ActionLogEntry {
   hitSubstitute?: boolean;
   /** 방어류(방어/판별/버티기/킹실드) 기술이 이번에 성공적으로 발동했으면 true */
   protectSucceeded?: boolean;
-  /** 방어류 기술을 썼지만 연속 사용 확률 판정에 실패했으면 true (streak는 0으로 리셋됨) */
+  /** 방어류 기술을 썼지만 실패했으면 true (연속 사용 확률 판정 실패, 또는 상대가 막을 것을 안 냄). streak는 0으로 리셋됨 */
   protectFailed?: boolean;
+  /** 이 기술로 사용자 자신의 랭크가 실제로 오른 것(칼춤 등). 렌더에서 "OO의 X가 (크게) 올라갔다!" */
+  selfStatRises?: { stat: BattleStatKey; delta: number }[];
+  /** 랭크업을 시도했지만 이미 +6이라 오르지 않은 스탯. "OO의 X는 더 이상 올라가지 않는다!" */
+  selfStatsAtMax?: BattleStatKey[];
   /** 이 행동(공격)이 상대의 방어류 기술에 완전히 막혔으면 그 기술 이름 */
   blockedByProtectMoveName?: string;
   /** 방어류 버티기로 이번 데미지를 버티고 HP 1로 남았으면 그 기술 이름 */
@@ -722,6 +738,12 @@ export interface ActionLogEntry {
   abilityDisabledMoveName?: string;
   /** abilityDisabledMoveName을 봉인시킨 특성 이름 */
   abilityDisableAbilityName?: string;
+  /** 지구력·깨어진갑옷처럼 방어측 특성이 피격 시 자기 랭크를 바꿨으면 그 특성 이름 */
+  abilityRaisedDefenderStatsAbilityName?: string;
+  /** abilityRaisedDefenderStatsAbilityName이 올린 스탯·폭 */
+  abilityRaisedDefenderStats?: { stat: BattleStatKey; delta: number }[];
+  /** 깨어진갑옷처럼 같은 발동에서 내려간 스탯·폭(delta는 내려간 칸 수, 양수). 랭크업과 별도 줄로 표시 */
+  abilityLoweredDefenderStats?: { stat: BattleStatKey; delta: number }[];
   /** 타오르는불꽃/피뢰침처럼 방어측 특성이 이 기술의 타입을 통째로 무효화했으면 그 타입 */
   abilityAbsorbedMoveType?: PokemonType;
   /** abilityAbsorbedMoveType을 무효화한 특성 이름 */
@@ -1174,7 +1196,10 @@ function resolveAction(
   // 고스트다이브: "방어를 무시" = 방어류(protectEffect) 차단 자체를 뚫는다는 뜻(사용자 확인) — 실제
   // 방어 실수치와는 무관해서 여기서 판정 자체를 건너뛴다(틈새포착이 스크린/대타를 뚫는 것과 같은 결).
   const blockedByProtect = !move.bypassesProtect && defender.activeProtect?.effect === "block";
-  const blockedByProtectMoveName = blockedByProtect ? defender.activeProtect?.moveName : undefined;
+  // "방어로 막혔다!" 문구는 실제로 상대를 겨냥한 기술이 막혔을 때만 — 칼춤·나쁜음모처럼 자기
+  // 대상 랭크업/자기 회복기는 방어와 무관하게 그대로 발동하므로 "막혔다"가 아니다(Phase 6.5 §6-2 ⑦).
+  const blockedByProtectMoveName =
+    blockedByProtect && isOpponentTargetingMove(move) ? defender.activeProtect?.moveName : undefined;
   const opponentEffectsBlocked = blockedByGoodAsGold || blockedBySubstitute || blockedByProtect;
 
   // 필드 조건부 타입/위력 변경(대지의파동=fieldPulse, 미스트버스트·와이드포스·라이징볼트=
@@ -1404,6 +1429,11 @@ function resolveAction(
   let abilityDamageAbilityName: string | undefined;
   let abilityDisabledMoveName: string | undefined;
   let abilityDisableAbilityName: string | undefined;
+  // 지구력·깨어진갑옷처럼 방어측 특성이 피격 시 자기 랭크를 바꿨을 때(Phase 6.5 §6-2 ③ / §6-1).
+  // 다단히트면 타수만큼 누적. 오른 스탯과 내려간 스탯을 나눠 담아 로그도 별도 줄로 낸다.
+  let abilityRaisedDefenderStatsAbilityName: string | undefined;
+  const abilityRaisedDefenderStats: { stat: BattleStatKey; delta: number }[] = [];
+  const abilityLoweredDefenderStats: { stat: BattleStatKey; delta: number }[] = [];
 
   // 지진이 땅속의 구멍파기를, 파도타기가 물속의 다이빙을 실제로 맞혔을 때의 위력 배가.
   // evadedByCharge가 false인데 defenderHideType이 있다는 건 bypassesHiding 예외로 명중했다는 뜻.
@@ -1643,7 +1673,19 @@ function resolveAction(
     }
     if (trigger.selfStatChanges) {
       for (const change of trigger.selfStatChanges) {
+        const before = defender.stages[change.stat];
         defender.stages = applyStageDelta(defender.stages, change.stat, change.delta);
+        const after = defender.stages[change.stat];
+        // 실제로 변한 것만 로그에 남긴다(이미 상·하한이라 그대로면 조용히 무산). 다단히트면 폭 누적.
+        // 깨어진갑옷은 한 번 발동에 방어 -1 / 스피드 +2가 같이 오므로 오름·내림을 각자 담는다.
+        if (after !== before) {
+          abilityRaisedDefenderStatsAbilityName = defenderAbility!.name;
+          const bucket = after > before ? abilityRaisedDefenderStats : abilityLoweredDefenderStats;
+          const magnitude = Math.abs(after - before);
+          const existing = bucket.find((s) => s.stat === change.stat);
+          if (existing) existing.delta += magnitude;
+          else bucket.push({ stat: change.stat, delta: magnitude });
+        }
       }
     }
     if (trigger.disablesAttackerMove && attacker.remainingPp[move.id] !== undefined) {
@@ -1823,6 +1865,20 @@ function resolveAction(
   defender.stages = opponentEffectsBlocked
     ? defender.stages
     : applyMoveStatChanges(defender.stages, effectiveMove, "opponent", { userTypes: attacker.types });
+
+  // 랭크업 결과 문구용(Phase 6.5 §6-2 ⑥⑦, §6-3): 이 기술이 사용자 자신의 랭크를 실제로 올린 것과,
+  // 올리려 했으나 이미 +6이라 막힌 것을 각각 모은다. 확정 랭크업만 대상 — 확률 부가효과(chance)와
+  // 자기 랭크다운 디메리트(delta ≤ 0), 명중/회피/급소는 제외. 승기·하양허브 등 뒤 후처리 전에 측정.
+  const selfStatRises: { stat: BattleStatKey; delta: number }[] = [];
+  const selfStatsAtMax: BattleStatKey[] = [];
+  for (const sc of effectiveMove.statChanges ?? []) {
+    if (sc.target !== "self" || sc.chance !== undefined) continue;
+    if (!isBattleStatKey(sc.stat) || (sc.delta ?? 0) <= 0) continue;
+    const before = attackerStagesBeforeMoveChange[sc.stat];
+    const after = attacker.stages[sc.stat];
+    if (after > before) selfStatRises.push({ stat: sc.stat, delta: after - before });
+    else if (before >= 6) selfStatsAtMax.push(sc.stat);
+  }
 
   // 클리어바디(전체)·괴력집게(공격만)·미러아머(반사): 방금 적용된 opponent 랭크변화 중 실제로
   // 내려간 스탯만(-6 클램프로 변화가 없었던 건 자연히 제외) 골라서, 막을 스탯이면 원래 값으로
@@ -2224,7 +2280,15 @@ function resolveAction(
   if (effectiveMove.protectEffect) {
     const streak = attacker.protectStreak ?? 0;
     const successChance = Math.pow(1 / 3, streak);
-    if (random() < successChance) {
+    // 상대가 이번 턴 낸 게 방어로 막을 수 있는 것(공격기 또는 상대를 겨냥한 변화기)이 아니면
+    // — 칼춤·나쁜음모 같은 자기 대상 랭크업, 자기 회복기 등 — "막을 게 없어" 실패로 처리한다
+    // (사용자 확인, Phase 6.5 §6-2 ⑦). 길동무는 애초에 이번 턴 상대를 막는 효과가 아니라 제외.
+    const nothingToBlock =
+      effectiveMove.protectEffect !== "destinyBond" && !isOpponentTargetingMove(defenderMove);
+    if (nothingToBlock) {
+      attacker.protectStreak = 0;
+      protectFailed = true;
+    } else if (random() < successChance) {
       attacker.protectStreak = streak + 1;
       protectSucceeded = true;
       // 길동무는 activeProtect(매 턴 시작 시 초기화)가 아니라 destinyBondArmed(자신의 다음
@@ -2255,6 +2319,19 @@ function resolveAction(
     } else {
       state.field = effectiveMove.setsField;
       state.fieldTurnsRemaining = FIELD_DURATION;
+    }
+  }
+
+  // 스텔스록: 상대 진영에 설치한다. 이미 그 진영에 깔려 있으면 실패한다(사용자 확인). 매직미러
+  // 반사는 아직 특성 자체가 없어 후속 조사 항목으로 분리(Phase 6.5 §8) — 지금은 항상 상대 진영에 깔린다.
+  let stealthRockSetForSide: FighterKey | undefined;
+  let hazardSetFailed = false;
+  if (effectiveMove.setsHazard === "stealthRock") {
+    if (state.stealthRock[defenderKey]) {
+      hazardSetFailed = true;
+    } else {
+      state.stealthRock[defenderKey] = true;
+      stealthRockSetForSide = defenderKey;
     }
   }
 
@@ -2384,6 +2461,8 @@ function resolveAction(
     curedStatusTarget,
     setField: fieldSetFailed ? undefined : effectiveMove.setsField,
     fieldSetFailed,
+    stealthRockSetForSide,
+    hazardSetFailed,
     destroyedField,
     setTrickRoom: trickRoomSetFailed ? undefined : effectiveMove.setsTrickRoom,
     trickRoomSetFailed,
@@ -2426,6 +2505,8 @@ function resolveAction(
     triggeredDestinyBond: destinyBondTriggered || undefined,
     protectSucceeded,
     protectFailed,
+    selfStatRises: selfStatRises.length ? selfStatRises : undefined,
+    selfStatsAtMax: selfStatsAtMax.length ? selfStatsAtMax : undefined,
     blockedByProtectMoveName,
     enduredProtectMoveName,
     protectContactPenaltyMoveName,
@@ -2444,6 +2525,9 @@ function resolveAction(
     abilityDamageAbilityName,
     abilityDisabledMoveName,
     abilityDisableAbilityName,
+    abilityRaisedDefenderStatsAbilityName,
+    abilityRaisedDefenderStats: abilityRaisedDefenderStats.length ? abilityRaisedDefenderStats : undefined,
+    abilityLoweredDefenderStats: abilityLoweredDefenderStats.length ? abilityLoweredDefenderStats : undefined,
     abilityAbsorbedMoveType,
     abilityAbsorbAbilityName,
     abilityAbsorbHealAmount: abilityAbsorbHealAmount || undefined,
@@ -2483,6 +2567,7 @@ export function runTurn(
     field: prevState.field,
     fieldTurnsRemaining: prevState.fieldTurnsRemaining,
     trickRoomTurnsRemaining: prevState.trickRoomTurnsRemaining,
+    stealthRock: { ...prevState.stealthRock },
     turnNumber: prevState.turnNumber + 1,
     entryAnnouncements: prevState.entryAnnouncements,
   };
@@ -2780,10 +2865,12 @@ export function runTurn(
         }
       }
 
-      // 가속(Speed Boost): 매 턴 종료 시 스피드 1랭크 상승. 본가 규칙(교체로 나온 턴엔 발동 안 함)에
-      // 맞춰 배틀 첫 턴(turnNumber === 1)은 건너뛴다 — 이 시뮬레이터는 교체가 없어 turnNumber 1이
-      // 곧 "등장한 턴"이다. 기절했으면(이 턴 데미지로 방금 쓰러졌어도) 발동하지 않는다.
-      if (fighterAbility?.boostsSpeedEachTurnEnd && state.turnNumber > 1 && !isFainted(fighter)) {
+      // 가속(Speed Boost): 매 턴 종료 시 스피드 1랭크 상승. 본가는 "교체로 나온 턴"엔 발동하지
+      // 않지만, 이 시뮬레이터는 교체가 없는 1대1 대면 전용이라 첫 턴도 "등장한 턴"이 아니다 —
+      // 그래서 첫 턴 종료부터 발동시킨다(사용자 확인, Phase 6.5 §6-2 ①). 파티 선출·교체가
+      // 도입되면 그때 "교체로 나온 턴" 예외를 되살린다. 기절했으면(이 턴 데미지로 방금 쓰러졌어도)
+      // 발동하지 않는다.
+      if (fighterAbility?.boostsSpeedEachTurnEnd && !isFainted(fighter)) {
         fighter.stages = applyStageDelta(fighter.stages, "spe", 1);
         endOfTurn.push({
           actor: key,

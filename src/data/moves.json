@@ -784,7 +784,8 @@
     "pp": 20,
     "priority": 0,
     "effect": "상대 진영에 설치. 이후 등장하는 포켓몬은 교체될 때 데미지를 입는다.",
-    "makesContact": false
+    "makesContact": false,
+    "setsHazard": "stealthRock"
   },
   {
     "id": "스톤샤워",
@@ -5724,6 +5725,37 @@
     "pp": 12,
     "priority": 0,
     "effect": "초능력으로 자신과 상대의 공격과 특수공격 능력치를 더해서 반으로 나눈다(파워트릭류와 같은 '실수치 조작' 축 — 실수치를 직접 갈아치우는 로직 자체가 아직 없어 효과 텍스트만).",
+    "makesContact": false
+  },
+  {
+    "id": "앙갚음",
+    "name": "앙갚음",
+    "type": "악",
+    "category": "physical",
+    "power": 50,
+    "accuracy": 100,
+    "pp": 10,
+    "priority": 0,
+    "effect": "자신이 상대보다 나중에 행동하면 위력이 2배가 된다(위력 조건은 효과 텍스트만, 엔진 미반영).",
+    "makesContact": true
+  },
+  {
+    "id": "천추지한",
+    "name": "천추지한",
+    "type": "고스트",
+    "category": "special",
+    "power": 75,
+    "accuracy": 100,
+    "pp": 10,
+    "priority": 0,
+    "effect": "상대의 공격을 1랭크 낮춘다.",
+    "statChanges": [
+      {
+        "target": "opponent",
+        "stat": "atk",
+        "delta": -1
+      }
+    ],
     "makesContact": false
   }
 ]
