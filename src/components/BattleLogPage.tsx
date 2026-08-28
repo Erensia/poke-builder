@@ -745,6 +745,9 @@ export function BattleLogPage() {
                         {!action.blockedReason && action.hit && action.leechSeedSetFailed && (
                           <> · 그러나 실패했다!</>
                         )}
+                        {!action.blockedReason && action.hit && action.leechSeedBlockedByGrass && (
+                          <> · 그러나 풀타입 {defenderName}에게는 통하지 않는다!</>
+                        )}
                         {!action.blockedReason && action.hit && action.setSubstitute && <> · 대타를 세웠다!</>}
                         {!action.blockedReason && action.hit && action.substituteSetFailed && (
                           <> · 그러나 실패하고 말았다!</>

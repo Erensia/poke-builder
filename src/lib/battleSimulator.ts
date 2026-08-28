@@ -738,6 +738,8 @@ export interface ActionLogEntry {
   setLeechSeed?: boolean;
   /** 씨뿌리기를 썼지만 상대가 이미 걸려있어서 실패했으면 true */
   leechSeedSetFailed?: boolean;
+  /** 씨뿌리기를 풀타입 상대에게 써서 통하지 않았으면 true */
+  leechSeedBlockedByGrass?: boolean;
   /** 이 행동으로 대타가 새로 세워졌으면 true */
   setSubstitute?: boolean;
   /** 대타출동을 썼지만 이미 대타가 있거나 HP가 부족해서 실패했으면 true */
@@ -2506,10 +2508,14 @@ function resolveAction(
     }
   }
 
-  // 씨뿌리기: 상대가 이미 씨앗이 박혀있으면 실패.
+  // 씨뿌리기: 풀타입 상대에겐 통하지 않는다(본가 규칙 — 가루 기술과 같은 축의 면역). 그 외에는
+  // 상대가 이미 씨앗이 박혀있으면 실패.
   let leechSeedSetFailed = false;
+  let leechSeedBlockedByGrass = false;
   if (effectiveMove.setsLeechSeed) {
-    if (hasVolatile(defender.volatile, "leechSeed")) {
+    if (defender.types.includes("풀")) {
+      leechSeedBlockedByGrass = true;
+    } else if (hasVolatile(defender.volatile, "leechSeed")) {
       leechSeedSetFailed = true;
     } else {
       defender.volatile = inflictVolatile(defender.volatile, "leechSeed", random);
@@ -2862,8 +2868,9 @@ function resolveAction(
     restSlept,
     setRegenVolatile: regenSetFailed ? undefined : effectiveMove.setsRegenVolatile,
     regenSetFailed,
-    setLeechSeed: leechSeedSetFailed ? undefined : effectiveMove.setsLeechSeed,
+    setLeechSeed: leechSeedSetFailed || leechSeedBlockedByGrass ? undefined : effectiveMove.setsLeechSeed,
     leechSeedSetFailed,
+    leechSeedBlockedByGrass: leechSeedBlockedByGrass || undefined,
     setSubstitute: substituteSetFailed ? undefined : effectiveMove.setsSubstitute,
     substituteSetFailed,
     setDisabledMoveName,
