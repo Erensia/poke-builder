@@ -186,6 +186,11 @@ export interface BattleFighterState {
   lastMoveId?: string;
   /** lastMoveId와 같은 기술을 몇 번 연속으로 썼는지(첫 사용=1). 메트로놈 배율 계산에 쓴다 */
   lastMoveStreak?: number;
+  /**
+   * 이번 턴에 실제 HP로 받은 데미지를 카테고리별로 누적한다(미러코트/카운터용, F-1). 매 턴 시작 시
+   * runTurn이 0으로 초기화한다. 대타로 흡수된 데미지는 포함하지 않는다.
+   */
+  damageTakenThisTurn?: { physical: number; special: number };
   /** 나무열매(카리열매 등)처럼 대전 중 1회만 발동하는 지닌 도구를 이미 썼으면 true */
   itemConsumed?: boolean;
   /**
@@ -767,6 +772,10 @@ export interface ActionLogEntry {
   canceledTargetChargeMoveName?: string;
   /** 죽기살기(Endeavor)가 상대 HP를 사용자 HP와 같게 깎았으면, 실제로 깎은 양 */
   endeavorDamage?: number;
+  /** 미러코트/카운터가 되받아친 데미지(받은 데미지 ×2) */
+  counterDamage?: number;
+  /** 미러코트/카운터가 실패했으면(받은 데미지 없음·상대 면역 타입) true */
+  counterFailed?: boolean;
   /** 이 행동(공격)이 상대의 방어류 기술에 완전히 막혔으면 그 기술 이름 */
   blockedByProtectMoveName?: string;
   /** 방어류 버티기로 이번 데미지를 버티고 HP 1로 남았으면 그 기술 이름 */
@@ -1725,6 +1734,11 @@ function resolveAction(
       return;
     }
     defender.currentHp = Math.max(0, defender.currentHp - amount);
+    // 미러코트/카운터용: 실제 HP로 받은 데미지를 카테고리별로 누적(대타 흡수분은 위에서 이미
+    // return되어 제외). effectiveMove가 아니라 hitMove로 넘어와도 카테고리는 동일하다.
+    if (amount > 0 && (effectiveMove.category === "physical" || effectiveMove.category === "special") && defender.damageTakenThisTurn) {
+      defender.damageTakenThisTurn[effectiveMove.category] += amount;
+    }
   }
 
   /**
@@ -1909,6 +1923,24 @@ function resolveAction(
   if (effectiveMove.cancelsTargetCharge && defender.chargingMoveId && damage > 0) {
     canceledTargetChargeMoveName = getMove(defender.chargingMoveId)?.name;
     defender.chargingMoveId = undefined;
+  }
+
+  // 미러코트/카운터(counters, F-1): 이번 턴 사용자가 받은 해당 카테고리 데미지의 2배를 상대에게
+  // 그대로 되돌린다. 우선도 -5라 보통 이 시점엔 상대가 이미 공격을 마친 뒤다. 타입 상성·자속·랭크
+  // 전부 무시. 받은 데미지가 없거나(0) 상대가 면역 타입(특수 카운터=악, 물리 카운터=고스트)이면 실패.
+  let counterDamage = 0;
+  let counterFailed = false;
+  if (effectiveMove.counters) {
+    const taken = attacker.damageTakenThisTurn?.[effectiveMove.counters] ?? 0;
+    const immuneType = effectiveMove.counters === "special" ? "악" : "고스트";
+    if (taken <= 0 || defender.types.includes(immuneType)) {
+      counterFailed = true;
+    } else {
+      counterDamage = Math.min(defender.currentHp, taken * 2);
+      defender.currentHp -= counterDamage;
+      damage = counterDamage;
+      damagePercent = counterDamage / defender.maxHp;
+    }
   }
 
   // 부자유친: 단일타 기술이 실제로 데미지를 준 뒤(다단히트/고정데미지는 제외 — 본가에서도 이미
@@ -2734,6 +2766,8 @@ function resolveAction(
     selfDamageOnUse: selfDamageOnUse || undefined,
     canceledTargetChargeMoveName,
     endeavorDamage: endeavorDamage || undefined,
+    counterDamage: counterDamage || undefined,
+    counterFailed: counterFailed || undefined,
     curedStatus,
     curedStatusTarget,
     setField: fieldSetFailed ? undefined : effectiveMove.setsField,
@@ -2857,6 +2891,9 @@ export function runTurn(
   // 반대로 배틀 끝까지 유지되는 값이라 여기서 건드리지 않는다.
   state.a.activeProtect = undefined;
   state.b.activeProtect = undefined;
+  // 미러코트/카운터용 — 이번 턴 받은 카테고리별 데미지 누적기를 0으로 초기화한다(F-1).
+  state.a.damageTakenThisTurn = { physical: 0, special: 0 };
+  state.b.damageTakenThisTurn = { physical: 0, special: 0 };
 
   const aAbilityForSpeed = state.a.effectiveAbilityId ? getAbility(state.a.effectiveAbilityId) : undefined;
   const bAbilityForSpeed = state.b.effectiveAbilityId ? getAbility(state.b.effectiveAbilityId) : undefined;

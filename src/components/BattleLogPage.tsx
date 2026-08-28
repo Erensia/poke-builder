@@ -979,6 +979,16 @@ export function BattleLogPage() {
                           {eunNeun(actorName)} {action.move.name}의 반동으로 {action.selfDamageOnUse} 데미지를 입었다
                         </div>
                       )}
+                      {/* F-1 미러코트 반격 / 실패 */}
+                      {!action.blockedReason && !!action.counterDamage && (
+                        <div className="battle-turn-line is-muted">
+                          {actorName}
+                          {eunNeun(actorName)} 받은 데미지를 그대로 되돌려줬다! ({action.counterDamage} 데미지)
+                        </div>
+                      )}
+                      {!action.blockedReason && action.counterFailed && (
+                        <div className="battle-turn-line is-muted">{actorName}의 {action.move.name} - 그러나 실패했다!</div>
+                      )}
                       {/* E-1 떨어뜨리기 등 상대 차징 캔슬 */}
                       {!action.blockedReason && action.canceledTargetChargeMoveName && (
                         <div className="battle-turn-line is-muted">

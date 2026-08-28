@@ -349,6 +349,13 @@ export interface Move {
    */
   reversalPower?: boolean;
   /**
+   * 미러코트(counters: "special")·카운터(counters: "physical")처럼, 이번 턴 사용자가 받은 해당
+   * 카테고리 데미지의 2배를 상대에게 그대로 되돌려주는 기술. 타입 상성·자속·랭크 전부 무시.
+   * 악타입(counters "special") / 고스트타입(counters "physical") 상대에겐 무효. 대타로 흡수된
+   * 데미지는 카운트에 포함되지 않는다. 우선도 -5는 데이터에 이미 있다.
+   */
+  counters?: "physical" | "special";
+  /**
    * 성스러운칼 전용. 데미지 계산에서 상대(방어측)의 능력 랭크 변화(상승분·하락분 전부)를
    * 무시한다 — Ability.ignoresOpponentStatStagesInDamage(천진)와 정확히 같은 축이지만 특성이
    * 아니라 기술 단위 효과라는 점만 다르다(둘 중 하나만 있어도 발동, 중첩 시 자연히 무해).
