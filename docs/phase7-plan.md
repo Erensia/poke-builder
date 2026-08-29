@@ -133,6 +133,7 @@ Phase 6.5 §6-2 ⑦("막을 게 없으면 streak 0 리셋")은 이 지시로 대
 - **H-3 잠듦/얼음 해제 UI 순서·문구**: `selfCuredStatus`(자연 해제 + `thawsUserOnUse`)를 `curedStatus`에 머지하지 않고 `ActionLogEntry.selfWokeBeforeMove` 별도 축으로 분리 → 로그에서 **기술 줄보다 먼저** 렌더(움직이기 전 상태 판정 순서). `STATUS_CURE_TEXT.sleep`: `OO의 눈을 떴다!` → `OO은(는) 눈을 떴다!`(주격). 커밋 `fe6c2da`.
 - **H-4 가루/포자 기술 풀타입 면역**: `MoveClassification`에 `"가루"` 추가, 수면가루·저리가루·독가루·목화포자·분노가루 5종에 태깅. `battleSimulator`의 `blockedByPowderImmunity`(`classification "가루"` && 방어측 풀타입) → `opponentEffectsBlocked`에 합류. 로그 `powderBlockedMoveName`. 방진 특성·방진고글 도구는 로스터에 없어 생략. 커밋 `b382725`.
 - **H-5 씨뿌리기 풀타입 면역**: H-4와 같은 축의 본가 면역. `setsLeechSeed` 적용 전 `defender.types.includes("풀")` 확인 → `leechSeedBlockedByGrass`, 씨앗 미부착. 커밋 `967c910`.
+- **H-6 파멸의빛 PP (2026-08-29)**: 챔피언스 기준 PP가 5가 아니라 **8**. `moves.json` 파멸의빛 `pp` 5→8만 수정(위력 140·명중 90·반동 1/2은 그대로). 데이터 한 줄 변경이라 로직 무영향. 커밋 `82775a9`(킬라플로르 로스터 커밋에 동봉).
 
 ### 1-4. 범위·리스크
 
@@ -143,7 +144,7 @@ Phase 6.5 §6-2 ⑦("막을 게 없으면 streak 0 리셋")은 이 지시로 대
 
 ### 1-5. 진행 상황 (2026-08-28)
 
-전 그룹 **완료**. 커밋: `6a8c655`(B·C·D·G) → `159d2d6`(방어 2차 지시·F-3) → `3f46e0f`(E·F-2) → `9d9e5ac`(A) → `d35c475`(F-1) → `a240dc0`(F-4) → `cbbedb3`(문서) → **H-1** `b50bc32` → **H-2/H-3** `fe6c2da`·`57cd5c3` → **H-4** `b382725` → **H-5** `967c910`. 각 항목 tsx 스모크 테스트 통과.
+전 그룹 **완료**. 커밋: `6a8c655`(B·C·D·G) → `159d2d6`(방어 2차 지시·F-3) → `3f46e0f`(E·F-2) → `9d9e5ac`(A) → `d35c475`(F-1) → `a240dc0`(F-4) → `cbbedb3`(문서) → **H-1** `b50bc32` → **H-2/H-3** `fe6c2da`·`57cd5c3` → **H-4** `b382725` → **H-5** `967c910` → **H-6** `82775a9`(파멸의빛 PP, 킬라플로르 로스터 커밋에 동봉). 각 항목 tsx 스모크 테스트 통과.
 
 미착수(별도 논의/인프라 대기): 배턴터치 멸망 카운트 이전(7.5 교체 인프라), 사전 UI 힌트 `moveRestrictionMessage`의 "~해요" 말투(로그가 아니라 선택 경고라 유지).
 
@@ -210,7 +211,7 @@ Phase 6.5 §6-2 ⑦("막을 게 없으면 streak 0 리셋")은 이 지시로 대
 
 **로스터 (2026-08-29): 킬라플로르 추가** — 바위/독, 종족값 83/55/90/130/81/86. 특성 독치장(일반)·부식(숨특). 메가킬라플로르는 레전즈 Z-A 신규 메가라 메가입치트ZA와 동일 사유로 챔피언스 데이터에서 제외. 학습기 46종 중 `moves.json`에 없던 4종 신규 추가 — **녹기**(Acid Armor: 자기 방어 +2)·**록커트**(Rock Polish: 자기 스피드 +2)·**킬러스핀**(Mortal Spin: 독/물리 30, 100% 독 — 설치·포박 해제는 고속스핀과 동일하게 미구현)·**니들가드**(Spiky Shield). 니들가드는 접촉 반사 데미지를 위해 엔진 확장: `Move.protectContactDamageFraction`(니들가드=1/8) + `activeProtect.contactDamageFraction` → 킹실드 `protectContactPenalty`(랭크변화)와 같은 블록에서 접촉기 차단 시 공격측에 최대 HP 비율 데미지, 매직가드면 무효. 로그 `ActionLogEntry.protectContactDamage` → "OO는 니들가드의 가시에 부딪혀 N 데미지를 입었다!".
 
-### 3-1. 완료 (2026-08-28)
+### 3-1. 완료 (2026-08-28~29)
 
 - **복안** (비비용, 6.5 §9) — 자기 기술 명중률 ×1.3. `Ability.userAccuracyMultiplier` → `battleSimulator`의 `accuracyExtraMultiplier`에 합류(모래숨기와 같은 축, 방향만 반대). 필중기·100% 기술엔 무영향.
 - **페어리오라** (메가플라엣테, §9와 별개로 플라엣테 로스터 추가분) — 장 전체 페어리 기술 위력 ×1.33. `Ability.auraMoveTypeMultiplier` → `moveContext.resolveMoveContext`가 공격측·방어측 양쪽을 보고 offense 배율에 합류(배틀 시뮬 + 매치업 페이지 공용). 오라브레이크는 로스터에 대상 없어 미구현.
