@@ -724,5 +724,16 @@
     "name": "매직미러",
     "description": "상대로부터 받은 변화 기술을 반사한다.",
     "reflectsOpponentStatusMoves": true
+  },
+  {
+    "id": "독치장",
+    "name": "독치장",
+    "description": "물리 기술로 데미지를 받으면 상대의 발밑에 독압정을 뿌린다. (설치기류는 교체가 있는 대전에서만 의미가 있어 이 시뮬레이터에서는 효과가 발동하지 않는다 — 설명 스텁. 플라워베일·공생과 같은 처리, Phase 7.5 교체 인프라 대기.)"
+  },
+  {
+    "id": "부식",
+    "name": "부식",
+    "description": "강철·독 타입 상대도 독 상태로 만들 수 있다.",
+    "bypassesPoisonTypeImmunity": true
   }
 ]

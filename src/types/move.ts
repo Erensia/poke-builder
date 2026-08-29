@@ -294,6 +294,13 @@ export interface Move {
    */
   protectContactPenalty?: { stat: BattleStatKey; delta: number };
   /**
+   * 니들가드 전용. protectEffect: "block"이 성공해서 상대의 접촉기를 막았을 때, 그 공격자에게
+   * 최대 HP × 이 비율만큼 데미지를 준다(니들가드=1/8). 접촉기가 아니면 막았어도 붙지 않고,
+   * 공격측이 매직가드(negatesIndirectDamage)면 무효화된다(까칠한피부·록키헬멧과 같은 축).
+   * 킹실드의 protectContactPenalty(랭크변화)와는 독립 — 한 기술에 둘 다 있을 수도 있다.
+   */
+  protectContactDamageFraction?: number;
+  /**
    * 파워트릭 전용. 명중 시(항상 자기 자신 대상) 이 두 스탯의 실수치를 그 자리에서 서로 맞바꾼다
    * (파워트릭=["atk","def"]). 노력치/성격 보정이 이미 반영된 BattleFighterState.realStats를
    * 직접 스왑하는 것뿐이라 별도 재계산이 필요 없다 — 킬가르도 배틀스위치가 폼 전환 시

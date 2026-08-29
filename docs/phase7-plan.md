@@ -208,12 +208,16 @@ Phase 6.5 §6-2 ⑦("막을 게 없으면 streak 0 리셋")은 이 지시로 대
 
 §1·§2와 성격이 다른 "새 포켓몬을 넣다 보니 딸려온" 특성 배선을 여기 모은다.
 
+**로스터 (2026-08-29): 킬라플로르 추가** — 바위/독, 종족값 83/55/90/130/81/86. 특성 독치장(일반)·부식(숨특). 메가킬라플로르는 레전즈 Z-A 신규 메가라 메가입치트ZA와 동일 사유로 챔피언스 데이터에서 제외. 학습기 46종 중 `moves.json`에 없던 4종 신규 추가 — **녹기**(Acid Armor: 자기 방어 +2)·**록커트**(Rock Polish: 자기 스피드 +2)·**킬러스핀**(Mortal Spin: 독/물리 30, 100% 독 — 설치·포박 해제는 고속스핀과 동일하게 미구현)·**니들가드**(Spiky Shield). 니들가드는 접촉 반사 데미지를 위해 엔진 확장: `Move.protectContactDamageFraction`(니들가드=1/8) + `activeProtect.contactDamageFraction` → 킹실드 `protectContactPenalty`(랭크변화)와 같은 블록에서 접촉기 차단 시 공격측에 최대 HP 비율 데미지, 매직가드면 무효. 로그 `ActionLogEntry.protectContactDamage` → "OO는 니들가드의 가시에 부딪혀 N 데미지를 입었다!".
+
 ### 3-1. 완료 (2026-08-28)
 
 - **복안** (비비용, 6.5 §9) — 자기 기술 명중률 ×1.3. `Ability.userAccuracyMultiplier` → `battleSimulator`의 `accuracyExtraMultiplier`에 합류(모래숨기와 같은 축, 방향만 반대). 필중기·100% 기술엔 무영향.
 - **페어리오라** (메가플라엣테, §9와 별개로 플라엣테 로스터 추가분) — 장 전체 페어리 기술 위력 ×1.33. `Ability.auraMoveTypeMultiplier` → `moveContext.resolveMoveContext`가 공격측·방어측 양쪽을 보고 offense 배율에 합류(배틀 시뮬 + 매치업 페이지 공용). 오라브레이크는 로스터에 대상 없어 미구현.
 - **매직가드** (픽시) — 공격기 데미지 외 부가 피해 무효. 이 엔진에 실재하는 5경로만 게이팅: 상태이상 지속 데미지(걸린 상태·맹독 카운터는 유지, HP만 0)·씨뿌리기(상대 회복도 없음)·반동기·생명의구슬 반동·까칠한피부류 접촉 반사. `Ability.negatesIndirectDamage`. 혼란 자멸·화상 물리 감소는 막지 않음(본가 일치). 날씨 스립·압정·소금절이·포박기 2차 데미지·스텔스록 등장 데미지는 이 엔진에 아직 없어 대상 없음(생기면 같은 플래그로 확장 — 타입 주석 명시).
 - **매직미러** (메가픽시) — §2-5 참조.
+- **부식** (킬라플로르 숨특, 2026-08-29) — 공격측이 이 특성이면 독·강철 타입 상대에게도 독/맹독을 건다. `Ability.bypassesPoisonTypeImmunity` → `isImmuneToStatus`에 4번째 인자로 넘겨 **타입 기반 면역 판정만** 건너뛴다(유연류 상태이상 특성 면역은 그대로 존중, 본가 일치). `battleSimulator`의 `inflictsStatus` 처리 1곳(2274 근처)에서만 `attackerAbility?.bypassesPoisonTypeImmunity` 전달 — 맹독(변화기)·킬러스핀/오물웨이브 등 부가 독 모두 이 경로.
+- **독치장** (킬라플로르 일반, 2026-08-29) — 물리 피격 시 상대 진영에 독압정 설치. **설명 스텁만** (`abilities.json`). 설치기류라 교체 인프라 대기 — 플라워베일·공생과 동일 처리, [Phase 7.5](phase7.5-plan.md).
 - **인분** (비비용) — 방진(Shield Dust)형. 방어측이 이 특성이면 데미지 기술이 자신에게 딸려 거는 **추가효과**를 전부 무산. `Ability.blocksSecondaryEffects` → `battleSimulator`의 4곳(statChanges 필터 · inflictsStatus 블록 · inflictsVolatile per-entry · 왕의징표석 풀죽음)에서 게이팅. 로그 `secondaryBlockedByAbilityName` → "OO의 인분! 추가 효과를 받지 않는다!".
   - **"추가효과" 정의 확정** (§ 별도 논의): 데미지 기술(`category !== "status"`)이 상대에게 딸려 거는 상태이상·행동방해·랭크변화. **`chance` 유무 무관** — 연옥 100% 화상·일렉트릭네트 100% 스피드↓·천추지한 100% 특공↓도 추가효과. 변화기 주효과(도깨비불 등)·자기 대상 효과(반동·자기 랭크변화)는 제외. 왕의징표석(도구발 풀죽음)도 인분이 막는다.
   - 계획 초안에서 `Move`에 `secondary?` 플래그 + 5개 기술 태깅을 예상했으나, 정의가 "데미지기 + 상대 방향"이라는 **순수 구조 규칙**으로 정리되면서 **스키마 변경·데이터 마이그레이션 불필요**해졌다. `hasSheerForceSecondaryEffect`(우격다짐)와 같은 정의를 공유(우격다짐은 여기에 자기 랭크업까지 얹음) — 주석에 단일 기준 명시.

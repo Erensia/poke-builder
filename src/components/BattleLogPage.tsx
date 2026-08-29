@@ -1236,10 +1236,20 @@ export function BattleLogPage() {
                         </div>
                       )}
                       {/* 킹실드 — 접촉기를 막아내 공격측의 공격이 떨어졌을 때 */}
-                      {!action.blockedReason && action.protectContactPenaltyMoveName && (
+                      {!action.blockedReason &&
+                        action.protectContactPenaltyMoveName &&
+                        !action.protectContactDamage && (
+                          <div className="battle-turn-line is-muted">
+                            {actorName}
+                            {eunNeun(actorName)} 접촉한 반동으로 공격이 떨어졌다!
+                          </div>
+                        )}
+                      {/* 니들가드 — 접촉기를 막아내 공격측이 가시에 데미지를 입었을 때 */}
+                      {!action.blockedReason && !!action.protectContactDamage && (
                         <div className="battle-turn-line is-muted">
                           {actorName}
-                          {eunNeun(actorName)} 접촉한 반동으로 공격이 떨어졌다!
+                          {eunNeun(actorName)} {action.protectContactPenaltyMoveName}의 가시에 부딪혀{" "}
+                          {action.protectContactDamage} 데미지를 입었다!
                         </div>
                       )}
                       {/* 하양허브 — 자신/상대 어느 쪽에서 발동했는지 따로 표시 */}

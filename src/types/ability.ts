@@ -201,6 +201,12 @@ export interface Ability {
   /** 유연: 이 상태이상 목록에 면역이다(타입 기반 면역과 별개 축). 유연=["paralysis"] */
   immuneToStatuses?: StatusCondition[];
   /**
+   * 부식(Corrosion): 공격측이 이 특성이면 상대가 독·강철 타입이어도 독/맹독을 걸 수 있다.
+   * isImmuneToStatus에서 타입 기반 면역 판정만 건너뛴다 — 유연 같은 상태이상 특성 면역은
+   * 그대로 존중한다(본가 일치).
+   */
+  bypassesPoisonTypeImmunity?: boolean;
+  /**
    * 정신력: 풀죽음에 면역이다. 원문에 "위협의 효과를 받지 않는다"도 있지만 위협(등장 시 효과)
    * 자체가 이 로스터에 아직 없어 그 절반은 적용 대상이 없다.
    */

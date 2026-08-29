@@ -260,6 +260,8 @@ export interface BattleFighterState {
     moveName: string;
     /** 킹실드가 접촉기를 막았을 때만 채워서 아래에서 상대에게 적용한다 */
     contactPenalty?: { stat: BattleStatKey; delta: number };
+    /** 니들가드가 접촉기를 막았을 때 공격자에게 줄 최대 HP 비율 데미지(니들가드=1/8) */
+    contactDamageFraction?: number;
   };
   /**
    * 방어류 기술의 연속 성공 횟수. 다음 시도 성공 확률은 (1/3)^protectStreak. 계열이 아닌
@@ -804,8 +806,10 @@ export interface ActionLogEntry {
   blockedByProtectMoveName?: string;
   /** 방어류 버티기로 이번 데미지를 버티고 HP 1로 남았으면 그 기술 이름 */
   enduredProtectMoveName?: string;
-  /** 킹실드가 접촉기를 막아 공격측에게 랭크변화(공격 -1)를 걸었으면 그 기술 이름 */
+  /** 킹실드/니들가드가 접촉기를 막아 공격측에게 반동(랭크변화 또는 데미지)을 걸었으면 그 기술 이름 */
   protectContactPenaltyMoveName?: string;
+  /** 니들가드가 접촉기를 막아 공격측이 입은 데미지(currentHp에 이미 반영됨) */
+  protectContactDamage?: number;
   /** 부자유친 추가타로 낸 데미지(총 damage에 이미 합산돼 있음 — 몇 대인지 구분용) */
   followUpHitDamage?: number;
   /** 프레셔로 인해 이번 기술의 PP가 추가로 더 깎였으면 그 특성 이름 */
@@ -1557,13 +1561,23 @@ function resolveAction(
     }
   }
 
-  // 킹실드: 접촉기를 막아냈을 때만 공격측에게 추가 랭크변화(공격 -1)를 건다. 막지 못했거나
-  // (blockedByProtect === false) 접촉기가 아니면 붙지 않는다.
+  // 킹실드/니들가드: 접촉기를 막아냈을 때만 공격측에게 반동을 건다 — 킹실드는 랭크변화(공격 -1),
+  // 니들가드는 최대 HP 1/8 데미지. 막지 못했거나(blockedByProtect === false) 접촉기가 아니면 없다.
   let protectContactPenaltyMoveName: string | undefined;
-  if (blockedByProtect && defender.activeProtect?.contactPenalty && (effectiveMove.makesContact ?? false)) {
-    const penalty = defender.activeProtect.contactPenalty;
-    attacker.stages = applyStageDelta(attacker.stages, penalty.stat, penalty.delta);
-    protectContactPenaltyMoveName = defender.activeProtect.moveName;
+  let protectContactDamage = 0;
+  if (blockedByProtect && defender.activeProtect && (effectiveMove.makesContact ?? false)) {
+    const ap = defender.activeProtect;
+    if (ap.contactPenalty) {
+      attacker.stages = applyStageDelta(attacker.stages, ap.contactPenalty.stat, ap.contactPenalty.delta);
+      protectContactPenaltyMoveName = ap.moveName;
+    }
+    // 니들가드 접촉 데미지 — 공격측이 매직가드면 무효(까칠한피부·록키헬멧과 같은 축).
+    if (ap.contactDamageFraction && !attackerAbility?.negatesIndirectDamage) {
+      const amount = Math.floor(attacker.maxHp * ap.contactDamageFraction);
+      attacker.currentHp = Math.max(0, attacker.currentHp - amount);
+      protectContactDamage = amount;
+      protectContactPenaltyMoveName = ap.moveName;
+    }
   }
 
   // status 기술(도깨비불·최면술 등 위력 없는 변화기)은 데미지 계산을 건너뛴다.
@@ -2271,7 +2285,15 @@ function resolveAction(
     secondaryBlockedByAbilityName = defenderAbility!.name;
   } else if (!opponentEffectsBlocked && effectiveMove.inflictsStatus) {
     for (const effect of effectiveMove.inflictsStatus) {
-      if (isImmuneToStatus(effect.status, defender.types, defenderAbility?.immuneToStatuses)) continue;
+      if (
+        isImmuneToStatus(
+          effect.status,
+          defender.types,
+          defenderAbility?.immuneToStatuses,
+          attackerAbility?.bypassesPoisonTypeImmunity,
+        )
+      )
+        continue;
       if (isStatusBlockedByField(state.field, effect.status)) continue;
       // 쾌청(강한 햇살) 날씨에서는 얼음 상태에 걸리지 않는다 — 타입 면역과는 다른 축이라 별도 확인
       if (effect.status === "freeze" && state.weather === "쾌청") continue;
@@ -2624,6 +2646,7 @@ function resolveAction(
           effect: effectiveMove.protectEffect,
           moveName: effectiveMove.name,
           contactPenalty: effectiveMove.protectContactPenalty,
+          contactDamageFraction: effectiveMove.protectContactDamageFraction,
         };
         // 태세엔 들어갔지만 상대가 자기 대상 기술만 냈으면 "막을 게 없어" 실패로 표기.
         if (targetedSelf) protectSucceeded = true;
@@ -2891,6 +2914,7 @@ function resolveAction(
     blockedByProtectMoveName,
     enduredProtectMoveName,
     protectContactPenaltyMoveName,
+    protectContactDamage: protectContactDamage || undefined,
     followUpHitDamage: followUpHitDamage || undefined,
     pressureExtraPpAbilityName,
     statusCureBerryItemName,
