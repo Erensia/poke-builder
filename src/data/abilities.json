@@ -735,5 +735,19 @@
     "name": "부식",
     "description": "강철·독 타입 상대도 독 상태로 만들 수 있다.",
     "bypassesPoisonTypeImmunity": true
+  },
+  {
+    "id": "파동의방호",
+    "name": "파동의방호",
+    "description": "접촉 기술로 받는 데미지가 절반으로 줄어든다.",
+    "modifiers": [
+      {
+        "scope": "defense",
+        "multiplier": 2,
+        "condition": {
+          "makesContact": true
+        }
+      }
+    ]
   }
 ]

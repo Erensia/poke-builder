@@ -51,5 +51,11 @@ export interface Pokemon {
   stanceChangeForms?: StanceChangeForms;
   /** 본가 기준 성별 분포 카테고리. 헤롱헤롱(매혹)·헤롱헤롱바디 판정에 쓴다 */
   genderCategory: PokemonGenderCategory;
+  /**
+   * 몸무게(kg). 헤비봄버·히트스탬프·풀묶기·안다리걸기의 위력 계산에 쓴다(§3-6). 아직 개별
+   * 조사 전이라 대부분 미입력 — 없으면 해당 기술은 폴백 위력으로 계산한다. 메가폼별 몸무게
+   * 분리는 데이터 채울 때 재검토(현재는 기본 폼 값 하나만).
+   */
+  weightKg?: number;
   learnset: string[];
 }

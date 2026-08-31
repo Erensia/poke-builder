@@ -42,6 +42,11 @@ interface MatchupSlotCardProps {
   moveIsGraveVisit?: boolean;
   /** 공격 슬롯 전용 — 성묘 배율(쓰러진 동료 수) 선택 */
   onSetGraveVisit?: (count: 0 | 1 | 2) => void;
+  /** 공격 슬롯 전용 — 선택한 기술이 토해내기인지 (아니면 비축 스택 선택을 숨긴다) */
+  moveIsSpitUp?: boolean;
+  /** 공격 슬롯 전용 — 토해내기가 가정할 비축 스택(1~3) */
+  stockpileCount?: number;
+  onSetStockpileCount?: (count: number) => void;
   /** 방어 슬롯 전용 — 이 슬롯에 걸린 스크린 가정(리플렉터/빛의장막/오로라베일) */
   onSetScreen?: (screen: MatchupSlot["screen"]) => void;
 }
@@ -71,6 +76,9 @@ export function MatchupSlotCard({
   onToggleParalysis,
   moveIsGraveVisit,
   onSetGraveVisit,
+  moveIsSpitUp,
+  stockpileCount,
+  onSetStockpileCount,
   onSetScreen,
 }: MatchupSlotCardProps) {
   const pokemon = slot.pokemonId ? getPokemon(slot.pokemonId) : undefined;
@@ -236,6 +244,23 @@ export function MatchupSlotCard({
                   onClick={() => onSetGraveVisit(n)}
                 >
                   {n}마리
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        {role === "attacker" && moveIsSpitUp && onSetStockpileCount && (
+          <div className="matchup-assume-grave">
+            <span className="matchup-assume-grave-label">비축 스택</span>
+            <div className="matchup-hitcount-row">
+              {([1, 2, 3] as const).map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  className={`matchup-hitcount-pip${(stockpileCount ?? 3) === n ? " is-active" : ""}`}
+                  onClick={() => onSetStockpileCount(n)}
+                >
+                  ×{n}
                 </button>
               ))}
             </div>

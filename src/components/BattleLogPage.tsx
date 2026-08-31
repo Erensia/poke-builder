@@ -993,7 +993,7 @@ export function BattleLogPage() {
                           {eunNeun(actorName)} 반동으로 {action.selfDamage} 데미지를 입었다
                         </div>
                       )}
-                      {/* 불꽃세례·웨이브태클 등 recoilFraction 기술의 반동. 발버둥과 계산 기준이
+                      {/* 플레어드라이브·웨이브태클 등 recoilFraction 기술의 반동. 발버둥과 계산 기준이
                           달라 별도 필드(recoilDamage)로 표시한다 */}
                       {!action.blockedReason && action.recoilDamage > 0 && (
                         <div className="battle-turn-line is-muted">

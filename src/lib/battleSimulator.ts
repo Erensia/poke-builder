@@ -53,8 +53,17 @@ import {
   inflictVolatile,
 } from "./volatileConditions";
 import { resolveMoveContext } from "./moveContext";
-import { computeDamage, rankStageMultiplier } from "./battlePower";
-import { getWeatherDamageMultiplier, computeWeatherHealFraction } from "./weatherEffects";
+import {
+  computeDamage,
+  rankStageMultiplier,
+  reversalPowerFromHp,
+  gyroBallPowerFromSpeeds,
+  positiveStagesPowerValue,
+  weightRatioPowerValue,
+  absoluteWeightPowerValue,
+  WEIGHT_MOVE_FALLBACK_POWER,
+} from "./battlePower";
+import { getWeatherDamageMultiplier, computeWeatherHealFraction, applyWeatherBall } from "./weatherEffects";
 import {
   FIELD_DURATION,
   applyFieldPulse,
@@ -186,6 +195,15 @@ export interface BattleFighterState {
   lastMoveId?: string;
   /** lastMoveId와 같은 기술을 몇 번 연속으로 썼는지(첫 사용=1). 메트로놈 배율 계산에 쓴다 */
   lastMoveStreak?: number;
+  /** 비축하기(Stockpile) 스택(0~3). 토해내기가 위력·랭크 소비에 쓴다. */
+  stockpileCount?: number;
+  /** 질투의불꽃 판정용 — 이번 턴이 시작된 시점의 랭크 스냅샷. runTurn이 매 턴 갱신한다. */
+  statStagesAtTurnStart?: StatStages;
+  /**
+   * 이번 배틀에서 실제로 "행동을 개시한" 기술 id 모음(명중/빗나감 무관). 비장의무기
+   * (usageCondition: "all-other-moves-used") 사용 가능 판정에 쓴다.
+   */
+  usedMoveIds?: Record<string, true>;
   /**
    * 이번 턴에 실제 HP로 받은 데미지를 카테고리별로 누적한다(미러코트/카운터용, F-1). 매 턴 시작 시
    * runTurn이 0으로 초기화한다. 대타로 흡수된 데미지는 포함하지 않는다.
@@ -327,6 +345,8 @@ export function createFighterState(slot: EvaluatorSlot, moves: Move[]): BattleFi
     status: { ...NO_STATUS_CONDITION },
     volatile: { active: { ...NO_VOLATILE_CONDITIONS.active } },
     remainingPp: Object.fromEntries(moves.map((m) => [m.id, m.pp])),
+    stockpileCount: 0,
+    usedMoveIds: {},
     currentItemId: slot.item ?? null,
     screens: {},
     ownMoveTypeBoosts: {},
@@ -369,18 +389,22 @@ function eulReul(name: string): "을" | "를" {
 const SANDSTORM_IMMUNE_ABILITY_NAMES = new Set(["모래숨기", "모래의힘", "모래날림", "모래헤치기"]);
 
 /**
- * 기사회생(Reversal) 위력표. 사용자 현재 HP 비율(%)로 갈린다 — 사용자 제공 수치(F-2).
- * 71~100 → 20 / 36~70 → 40 / 21~35 → 80 / 11~20 → 100 / 5~10 → 150 / 1~4 → 200.
- * (경계는 백분율 내림 기준 — 예: 35.9%는 "35 이하" 구간이 아니라 "36 이상"으로 본다.)
+ * 자이로볼(Move.gyroBallPower)의 실효 스피드 산출 — 실능 × 스피드 랭크 배율 × 마비 배율 ×
+ * 도구 배율(구애스카프·검은철구). 엽록소류 날씨 스피드 특성은 미반영(후속). 최종 위력 공식은
+ * battlePower.gyroBallPowerFromSpeeds가 담당한다.
  */
-function reversalPowerFromHp(currentHp: number, maxHp: number): number {
-  const pct = (currentHp / maxHp) * 100;
-  if (pct > 70) return 20;
-  if (pct > 35) return 40;
-  if (pct > 20) return 80;
-  if (pct > 10) return 100;
-  if (pct > 4) return 150;
-  return 200;
+function gyroBallPowerValue(
+  attacker: BattleFighterState,
+  defender: BattleFighterState,
+  attackerItem: Parameters<typeof getItemSpeedMultiplier>[0],
+  defenderItem: Parameters<typeof getItemSpeedMultiplier>[0],
+): number {
+  const effSpeed = (f: BattleFighterState, item: Parameters<typeof getItemSpeedMultiplier>[0]) =>
+    f.realStats.spe *
+    rankStageMultiplier(f.stages.spe) *
+    computeStatusSpeedMultiplier(f.status.condition) *
+    getItemSpeedMultiplier(item);
+  return gyroBallPowerFromSpeeds(effSpeed(attacker, attackerItem), effSpeed(defender, defenderItem));
 }
 
 function hasSheerForceSecondaryEffect(move: Move): boolean {
@@ -695,7 +719,7 @@ export interface ActionLogEntry {
   /** 리플렉터/빛의장막을 썼지만 이미 같은 스크린이 걸려있어서 실패했으면 true */
   screenSetFailed?: boolean;
   /**
-   * 불꽃세례·웨이브태클·브레이브버드·양날박치기(Move.recoilFraction)로 입은 반동 데미지.
+   * 플레어드라이브·웨이브태클·브레이브버드·양날박치기(Move.recoilFraction)로 입은 반동 데미지.
    * selfDamage(혼란 자멸/발버둥 반동)와는 계산 기준이 달라 별도 필드로 분리했다 — 준 데미지가
    * 0(면역 등)이면 반동도 자연히 0.
    */
@@ -968,10 +992,12 @@ function cloneFighter(fighter: BattleFighterState): BattleFighterState {
   return {
     ...fighter,
     stages: { ...fighter.stages },
+    statStagesAtTurnStart: fighter.statStagesAtTurnStart ? { ...fighter.statStagesAtTurnStart } : undefined,
     accuracyStages: { ...fighter.accuracyStages },
     status: { ...fighter.status },
     volatile: { active: { ...fighter.volatile.active } },
     remainingPp: { ...fighter.remainingPp },
+    usedMoveIds: { ...fighter.usedMoveIds },
     screens: { ...fighter.screens },
     ownMoveTypeBoosts: { ...fighter.ownMoveTypeBoosts },
   };
@@ -1104,6 +1130,20 @@ function resolveAction(
   }
   // 오로라베일: 지정된 날씨(눈)가 아니면 실패한다
   if (move.usageCondition === "weather-required" && state.weather !== move.requiresWeather) {
+    return blocked("usageCondition");
+  }
+  // 비장의무기: 자신의 다른 기술(remainingPp에 등록된 id들)을 전부 한 번씩 사용하기 전까지는 실패.
+  if (move.usageCondition === "all-other-moves-used") {
+    const otherMoveIds = Object.keys(attacker.remainingPp).filter((id) => id !== move.id);
+    const allUsed = otherMoveIds.every((id) => attacker.usedMoveIds?.[id]);
+    if (!allUsed) return blocked("usageCondition");
+  }
+  // 토해내기: 비축 스택이 0이면 쓸 수 없다.
+  if (move.spitUpPower && (attacker.stockpileCount ?? 0) === 0) {
+    return blocked("usageCondition");
+  }
+  // 비축하기: 이미 3스택이면 더 비축할 수 없다(본가 규칙 — 실패 처리).
+  if (move.addsStockpile && (attacker.stockpileCount ?? 0) >= 3) {
     return blocked("usageCondition");
   }
   // 기습: 상대보다 먼저 움직이지 않으면(movesSecond) 실패, 상대가 이번 턴 고른 기술이
@@ -1337,15 +1377,20 @@ function resolveAction(
     !!defenderAbility?.reflectsOpponentStatusMoves &&
     (isOpponentTargetingMove(move) || !!move.setsHazard);
 
+  // 웨더볼(날씨판 대지의파동): 날씨로 타입·위력이 바뀐다. 웨더볼과 fieldPulse를 동시에 갖는
+  // 기술은 없어 순차 적용해도 안전하다.
+  const weatherBall = applyWeatherBall(move, state.weather);
+  const moveAfterWeatherBall: Move = { ...move, type: weatherBall.type, power: weatherBall.power };
+
   // 필드 조건부 타입/위력 변경(대지의파동=fieldPulse, 미스트버스트·와이드포스·라이징볼트=
   // powerMultiplierInField)을 특성 배율 계산보다 먼저 반영한다 — 타입이 바뀐 상태여야
   // resolveMoveContext 안의 상성 계산(getEffectiveness)에도 바뀐 타입이 들어간다. 둘 중
   // 한 기술이 두 속성을 동시에 갖는 경우는 없어서(대지의파동만 fieldPulse, 나머지 셋만
   // powerMultiplierInField) 순서·중복 곱셈 걱정 없이 그냥 합쳐도 안전하다.
-  const fieldPulse = applyFieldPulse(move, state.field);
-  const fieldPowerMultiplier = getFieldPowerMultiplier(move, state.field);
+  const fieldPulse = applyFieldPulse(moveAfterWeatherBall, state.field);
+  const fieldPowerMultiplier = getFieldPowerMultiplier(moveAfterWeatherBall, state.field);
   const fieldAdjustedMove: Move = {
-    ...move,
+    ...moveAfterWeatherBall,
     type: fieldPulse.type,
     power: fieldPulse.power === null ? null : Math.round(fieldPulse.power * fieldPowerMultiplier),
   };
@@ -1396,9 +1441,60 @@ function resolveAction(
     sheerForceAbilityName = attackerAbility.name;
   }
 
-  // 기사회생(Reversal, F-2): power가 null인 채로 오고, 사용자의 현재 HP 비율에 따라 위력이 정해진다.
+  // 기사회생(Reversal)·바둥바둥(Flail, F-2): power가 null인 채로 오고, 사용자의 현재 HP 비율에 따라 위력이 정해진다.
   if (effectiveMove.reversalPower) {
     effectiveMove = { ...effectiveMove, power: reversalPowerFromHp(attacker.currentHp, attacker.maxHp) };
+  }
+  // 자이로볼(§3-1a): 상대가 느릴수록 강하다. 자신·상대의 실효 스피드로 위력을 정한다.
+  if (effectiveMove.gyroBallPower) {
+    effectiveMove = {
+      ...effectiveMove,
+      power: gyroBallPowerValue(attacker, defender, attackerItem, defenderItem),
+    };
+  }
+  // 기어오르기·어시스트파워(§3-1a): 자신의 양수 랭크 합계로 위력이 오른다.
+  if (effectiveMove.powerFromPositiveStages) {
+    const { base, perStage } = effectiveMove.powerFromPositiveStages;
+    effectiveMove = { ...effectiveMove, power: positiveStagesPowerValue(attacker.stages, base, perStage) };
+  }
+  // 토해내기(§3 증분 B-3): 위력 = 비축 스택 × 100. 스택·랭크 소비는 아래 usedMoveIds 기록 지점에서.
+  if (effectiveMove.spitUpPower) {
+    effectiveMove = { ...effectiveMove, power: (attacker.stockpileCount ?? 0) * 100 };
+  }
+  // 헤비봄버·히트스탬프 / 풀묶기·안다리걸기(§3-6): 몸무게 기반 위력. weightKg 미입력이면 폴백.
+  if (effectiveMove.weightRatioPower) {
+    const userKg = getPokemon(attacker.slot.pokemonId)?.weightKg;
+    const targetKg = getPokemon(defender.slot.pokemonId)?.weightKg;
+    effectiveMove = {
+      ...effectiveMove,
+      power:
+        userKg !== undefined && targetKg !== undefined
+          ? weightRatioPowerValue(userKg, targetKg)
+          : WEIGHT_MOVE_FALLBACK_POWER,
+    };
+  }
+  if (effectiveMove.targetAbsoluteWeightPower) {
+    const targetKg = getPokemon(defender.slot.pokemonId)?.weightKg;
+    effectiveMove = {
+      ...effectiveMove,
+      power: targetKg !== undefined ? absoluteWeightPowerValue(targetKg) : WEIGHT_MOVE_FALLBACK_POWER,
+    };
+  }
+  // 눈사태·보복·애크러뱃(§3 증분 C): 조건 충족 시 위력 2배.
+  // 분풀이("user-stat-lowered-this-turn")·분함의발구르기("user-move-failed-last-turn")는 이번 턴/직전
+  // 턴 이력 상태가 엔진에 없어 여기선 항상 미충족(기본 위력)으로 둔다 — 매치업 페이지에서만 충족
+  // 상정(§3 증분 B-3, 사용자 지시).
+  if (effectiveMove.conditionalDoublePower && effectiveMove.power !== null) {
+    const condition = effectiveMove.conditionalDoublePower;
+    const met =
+      condition === "took-damage-this-turn"
+        ? (attacker.damageTakenThisTurn?.physical ?? 0) + (attacker.damageTakenThisTurn?.special ?? 0) > 0
+        : condition === "moves-after-target"
+          ? movesSecond
+          : condition === "user-has-no-item"
+            ? !attacker.currentItemId
+            : false; // user-stat-lowered-this-turn / user-move-failed-last-turn → 엔진 미추적
+    if (met) effectiveMove = { ...effectiveMove, power: effectiveMove.power * 2 };
   }
 
   // 타오르는불꽃 발동 이후로 자신(=현재 공격자)이 쓰는 그 타입 기술의 위력이 올라있으면 반영.
@@ -1411,6 +1507,24 @@ function resolveAction(
   // 무관하게 여기서 갱신한다(본가 규칙 — 빗나가도 스트릭은 유지되고, 다른 기술을 쓰면 끊긴다).
   attacker.lastMoveStreak = attacker.lastMoveId === effectiveMove.id ? (attacker.lastMoveStreak ?? 1) + 1 : 1;
   attacker.lastMoveId = effectiveMove.id;
+
+  // 비장의무기 사용 조건용 — "이 기술로 행동을 개시했다"를 여기서 기록(명중 여부 무관).
+  (attacker.usedMoveIds ??= {})[effectiveMove.id] = true;
+
+  // 비축하기: 스택 +1 (3스택 초과는 위 usageCondition 게이트에서 이미 실패). 방어·특방 랭크업은
+  // 데이터의 statChanges로 처리된다.
+  if (effectiveMove.addsStockpile) {
+    attacker.stockpileCount = Math.min(3, (attacker.stockpileCount ?? 0) + 1);
+  }
+  // 토해내기: 사용 즉시 비축 스택을 0으로 되돌리고, 비축하기로 올렸던 방어·특방 랭크도 그만큼 내린다.
+  // (위에서 이미 스택 수로 위력을 확정한 뒤라 여기서 소비해도 안전.)
+  if (effectiveMove.spitUpPower) {
+    const spent = attacker.stockpileCount ?? 0;
+    attacker.stockpileCount = 0;
+    if (spent > 0) {
+      attacker.stages = applyStageDelta(applyStageDelta(attacker.stages, "def", -spent), "spd", -spent);
+    }
+  }
 
   // 배틀스위치(킬가르도): 여기까지 왔다는 건 이번 기술을 실제로 사용한다는 뜻이라(위 lastMoveStreak
   // 주석과 동일한 근거), 명중 여부와 무관하게 폼이 바뀐다 — 데미지 기술이면 블레이드폼(공격/특공↑),
@@ -1669,7 +1783,10 @@ function resolveAction(
     // 관통드릴: 접촉기일 때만 상대 방어/특방 랭크의 "상승분"을 무시한다(날카로운눈의 회피율
     // 처리와 같은 패턴 — 마이너스 랭크는 그대로 페널티로 받는다). 천진(전부 무시)과 겹치면
     // 천진 쪽이 이미 NEUTRAL_STAGES라 이 클램프는 자연히 아무 효과가 없다.
-    const contactDefenseStat: BattleStatKey = effectiveMove.category === "physical" ? "def" : "spd";
+    // 사이코쇼크류(hitsDefensiveStat)는 실제 데미지에 쓰는 방어 스탯이 분류 기본값과 다르므로
+    // 그 축(=computeDamage가 실제로 읽는 축)에 클램프를 맞춘다.
+    const contactDefenseStat: BattleStatKey =
+      effectiveMove.hitsDefensiveStat ?? (effectiveMove.category === "physical" ? "def" : "spd");
     const contactIgnoresDefenseBoost =
       (effectiveMove.makesContact ?? false) &&
       attackerAbility?.contactIgnoresDefenseBoostAndGuaranteesMinDamageFraction !== undefined;
@@ -1991,6 +2108,24 @@ function resolveAction(
     }
   }
 
+  // 앙갚음/메탈버스트(countersAllCategories): 이번 턴 받은 (물리+특수) 데미지 합의 multiplier배(1.5)를
+  // 카테고리·타입·랭크 무시하고 되돌린다. counters와 달리 면역 타입이 없다. 받은 데미지가 0이면 실패.
+  if (effectiveMove.countersAllCategories) {
+    const taken =
+      (attacker.damageTakenThisTurn?.physical ?? 0) + (attacker.damageTakenThisTurn?.special ?? 0);
+    if (taken <= 0) {
+      counterFailed = true;
+    } else {
+      counterDamage = Math.min(
+        defender.currentHp,
+        Math.floor(taken * effectiveMove.countersAllCategories.multiplier),
+      );
+      defender.currentHp -= counterDamage;
+      damage = counterDamage;
+      damagePercent = counterDamage / defender.maxHp;
+    }
+  }
+
   // 부자유친: 단일타 기술이 실제로 데미지를 준 뒤(다단히트/고정데미지는 제외 — 본가에서도 이미
   // 여러 번 때리는 기술과는 안 겹침), 같은 컨텍스트로 위력만 배율만큼 줄인 추가타를 한 번 더
   // 날린다. 첫 타로 이미 상대가 쓰러졌으면 추가타는 나가지 않는다.
@@ -2025,7 +2160,7 @@ function resolveAction(
     attacker.currentHp = Math.max(0, attacker.currentHp - selfDamage);
   }
 
-  // 반동(recoil): 불꽃세례·웨이브태클·브레이브버드·양날박치기. 상대에게 준 데미지(damage)의
+  // 반동(recoil): 플레어드라이브·웨이브태클·브레이브버드·양날박치기. 상대에게 준 데미지(damage)의
   // 일정 비율만큼 사용자도 입는다 — damage가 0(면역 등)이면 반동도 자연히 0이 된다.
   // 매직가드: 반동기(recoilFraction)의 반동은 "공격기 데미지"가 아니라서 무효화된다.
   let recoilDamage = 0;
@@ -2305,6 +2440,32 @@ function resolveAction(
         else if (effectiveMove.category === "status" && effect.chance === undefined) statusInflictFailed = true;
         break; // 주 상태이상은 한 번에 하나만 걸린다 (중첩 없음)
       }
+    }
+  }
+
+  // 질투의불꽃(burnsTargetIfStatRoseThisTurn): 명중해서 데미지를 줬고, 이번 턴에 방어자의 랭크가
+  // 하나라도 올랐으면(턴 시작 스냅샷 대비) 화상을 건다(확정). 대타를 맞혔으면 본체엔 안 건다.
+  // 통상 화상 면역(불꽃 타입·특성·이미 상태이상·미스트필드)·인분·황금몸 규칙은 그대로 존중한다.
+  if (
+    effectiveMove.burnsTargetIfStatRoseThisTurn &&
+    hit &&
+    damage > 0 &&
+    !hitSubstitute &&
+    !opponentEffectsBlocked &&
+    !secondaryEffectsBlockedByAbility &&
+    !inflictedStatus
+  ) {
+    const rose = (["atk", "def", "spa", "spd", "spe"] as const).some(
+      (stat) => defender.stages[stat] > (defender.statStagesAtTurnStart?.[stat] ?? 0),
+    );
+    if (
+      rose &&
+      !isImmuneToStatus("burn", defender.types, defenderAbility?.immuneToStatuses) &&
+      !isStatusBlockedByField(state.field, "burn")
+    ) {
+      const before = defender.status.condition;
+      defender.status = inflictStatus(defender.status, "burn");
+      if (defender.status.condition !== before) inflictedStatus = defender.status.condition;
     }
   }
 
@@ -2982,9 +3143,12 @@ export function runTurn(
   // 반대로 배틀 끝까지 유지되는 값이라 여기서 건드리지 않는다.
   state.a.activeProtect = undefined;
   state.b.activeProtect = undefined;
-  // 미러코트/카운터용 — 이번 턴 받은 카테고리별 데미지 누적기를 0으로 초기화한다(F-1).
+  // 미러코트/카운터/앙갚음/메탈버스트용 — 이번 턴 받은 카테고리별 데미지 누적기를 0으로 초기화한다(F-1).
   state.a.damageTakenThisTurn = { physical: 0, special: 0 };
   state.b.damageTakenThisTurn = { physical: 0, special: 0 };
+  // 질투의불꽃용 — 이번 턴이 시작된 시점의 랭크를 스냅샷해 둔다(턴 중 랭크가 올랐는지 판정).
+  state.a.statStagesAtTurnStart = { ...state.a.stages };
+  state.b.statStagesAtTurnStart = { ...state.b.stages };
 
   const aAbilityForSpeed = state.a.effectiveAbilityId ? getAbility(state.a.effectiveAbilityId) : undefined;
   const bAbilityForSpeed = state.b.effectiveAbilityId ? getAbility(state.b.effectiveAbilityId) : undefined;

@@ -27,6 +27,7 @@ export const EMPTY_MATCHUP_SLOT: MatchupSlot = {
   unburdenAssumed: false,
   paralysisAssumed: false,
   graveVisitFaintedAllies: 0,
+  stockpileCount: 3,
 };
 
 function useMatchupSlot() {
@@ -93,6 +94,10 @@ function useMatchupSlot() {
     setSlot((prev) => ({ ...prev, multiHitCount: count }));
   }
 
+  function setStockpileCount(count: number) {
+    setSlot((prev) => ({ ...prev, stockpileCount: count }));
+  }
+
   function setItemStolen(value: boolean) {
     setSlot((prev) => ({ ...prev, itemStolenFromOpponent: value }));
   }
@@ -157,6 +162,7 @@ function useMatchupSlot() {
     setNature,
     setMove,
     setMultiHitCount,
+    setStockpileCount,
     setItemStolen,
     setUnburdenAssumed,
     setParalysisAssumed,

@@ -148,11 +148,11 @@ export function MoveDexPage({ initialMoveId, onInitialMoveConsumed }: MoveDexPag
           <SortableHeader label="기술" sortKey="name" active={sortKey} dir={sortDir} onSort={handleSort} />
           <SortableHeader label="타입" sortKey="type" active={sortKey} dir={sortDir} onSort={handleSort} />
           <SortableHeader label="분류" sortKey="category" active={sortKey} dir={sortDir} onSort={handleSort} />
-          <span className="movedex-cell movedex-cell-contact">접촉</span>
-          <SortableHeader label="우선도" sortKey="priority" active={sortKey} dir={sortDir} onSort={handleSort} />
-          <SortableHeader label="위력" sortKey="power" active={sortKey} dir={sortDir} onSort={handleSort} />
-          <SortableHeader label="명중률" sortKey="accuracy" active={sortKey} dir={sortDir} onSort={handleSort} />
-          <SortableHeader label="PP" sortKey="pp" active={sortKey} dir={sortDir} onSort={handleSort} />
+          <span className="movedex-cell movedex-th movedex-th-static">접촉</span>
+          <SortableHeader label="우선도" sortKey="priority" align="center" active={sortKey} dir={sortDir} onSort={handleSort} />
+          <SortableHeader label="위력" sortKey="power" align="center" active={sortKey} dir={sortDir} onSort={handleSort} />
+          <SortableHeader label="명중률" sortKey="accuracy" align="right" active={sortKey} dir={sortDir} onSort={handleSort} />
+          <SortableHeader label="PP" sortKey="pp" align="center" active={sortKey} dir={sortDir} onSort={handleSort} />
         </div>
 
         <ul className="movedex-list">
@@ -169,17 +169,20 @@ export function MoveDexPage({ initialMoveId, onInitialMoveConsumed }: MoveDexPag
               <div className="movedex-cell movedex-cell-name">
                 <span className="movedex-name">{m.name}</span>
                 {(() => {
-                  // 연속 공격 태그(Phase 6 §2-2, 사용자 1차 정리) — minHits/maxHits가 있는 다단히트
-                  // 기술만 "연속 N회"(고정)나 "연속 N~M회"(가변)로 표시. classification 배열과는
-                  // 별개 축(특성 상호작용용이 아니라 순수 표시용)이라 데이터에 추가하지 않고 여기서
-                  // 즉석으로 계산해 같은 줄에 붙인다.
+                  // 표시 태그는 전수조사 기준 m.tags를 그대로 노출. 여기에 minHits/maxHits가 있는
+                  // 다단히트 기술은 "연속 N회"(고정)/"연속 N~M회"(가변) 라벨을 즉석 계산해 덧붙인다 —
+                  // 이 라벨이 붙는 경우 m.tags에 들어있는 밋밋한 "연속"/"연타"는 횟수 정보가 더 많은
+                  // 라벨로 대체(중복 방지).
                   const multiHitLabel =
                     m.minHits !== undefined && m.maxHits !== undefined
                       ? m.minHits === m.maxHits
                         ? `연속 ${m.minHits}회`
                         : `연속 ${m.minHits}~${m.maxHits}회`
                       : undefined;
-                  const tags = [...(m.classification ?? []), ...(multiHitLabel ? [multiHitLabel] : [])];
+                  const baseTags = (m.tags ?? []).filter(
+                    (t) => !(multiHitLabel && (t === "연속" || t === "연타")),
+                  );
+                  const tags = [...baseTags, ...(multiHitLabel ? [multiHitLabel] : [])];
                   return (
                     tags.length > 0 && <span className="movedex-classification">{tags.join(" · ")}</span>
                   );
@@ -191,12 +194,16 @@ export function MoveDexPage({ initialMoveId, onInitialMoveConsumed }: MoveDexPag
               <span className="movedex-cell movedex-cell-contact">
                 {m.makesContact === undefined ? "—" : m.makesContact ? "접촉" : "비접촉"}
               </span>
-              <span className={`movedex-cell movedex-cell-num${m.priority !== 0 ? " is-priority" : ""}`}>
-                {m.priority > 0 ? `+${m.priority}` : m.priority}
+              <span
+                className={`movedex-cell movedex-cell-center${
+                  m.priority !== 0 || m.priorityDisplay ? " is-priority" : ""
+                }`}
+              >
+                {m.priorityDisplay ?? (m.priority > 0 ? `+${m.priority}` : m.priority)}
               </span>
-              <span className="movedex-cell movedex-cell-num">{m.power ?? "—"}</span>
+              <span className="movedex-cell movedex-cell-center">{m.power ?? "—"}</span>
               <span className="movedex-cell movedex-cell-num">{m.accuracy ? `${m.accuracy}%` : "—"}</span>
-              <span className="movedex-cell movedex-cell-num">{m.pp}</span>
+              <span className="movedex-cell movedex-cell-center">{m.pp}</span>
             </li>
           ))}
           {sorted.length === 0 && <li className="movedex-empty">검색 결과가 없습니다.</li>}
@@ -212,18 +219,23 @@ function SortableHeader({
   active,
   dir,
   onSort,
+  align = "left",
 }: {
   label: string;
   sortKey: SortKey;
   active: SortKey;
   dir: SortDir;
   onSort: (key: SortKey) => void;
+  /** 데이터 열 정렬에 맞춰 헤더 글자·화살표 위치를 맞춘다 (숫자 열=right, 우선도=center) */
+  align?: "left" | "right" | "center";
 }) {
   const isActive = active === sortKey;
+  const alignClass =
+    align === "right" ? " movedex-th-num" : align === "center" ? " movedex-th-center" : "";
   return (
     <button
       type="button"
-      className={`movedex-cell movedex-th${isActive ? " is-active" : ""}`}
+      className={`movedex-cell movedex-th${alignClass}${isActive ? " is-active" : ""}`}
       onClick={() => onSort(sortKey)}
     >
       {label}

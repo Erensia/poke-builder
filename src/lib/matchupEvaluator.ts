@@ -8,7 +8,7 @@ import { getBerryDefenseResult, getItemOffenseMultiplier, getItemSpeedMultiplier
 import { getEffectiveForm, getEffectiveAbilityId, type FormSource } from "./pokemonForm";
 import { computeRealStats } from "./statCalculator";
 import { applyMoveStatChanges } from "./statStages";
-import { getWeatherDamageMultiplier } from "./weatherEffects";
+import { getWeatherDamageMultiplier, applyWeatherBall } from "./weatherEffects";
 import { applyFieldPulse, getFieldPowerMultiplier, getFieldDamageMultiplier } from "./fieldEffects";
 import { resolveMoveContext } from "./moveContext";
 import { resolveEffectiveDefenderAbility } from "./abilityModifiers";
@@ -17,7 +17,14 @@ import {
   computeOffensePower,
   computeBulkPower,
   computeEffectiveSpeed,
-  evaluateMatchup,
+  evaluateMatchupChance,
+  rankStageMultiplier,
+  reversalPowerFromHp,
+  gyroBallPowerFromSpeeds,
+  positiveStagesPowerValue,
+  weightRatioPowerValue,
+  absoluteWeightPowerValue,
+  WEIGHT_MOVE_FALLBACK_POWER,
   type MatchupVerdict,
 } from "./battlePower";
 
@@ -33,6 +40,11 @@ export interface SlotMatchupOptions {
    * move.multiHitPowers가 있을 때만 의미가 있고, 해당 타수까지의 위력을 합산해서 쓴다.
    */
   multiHitCount?: number;
+  /**
+   * 토해내기(spitUpPower)일 때 가정할 비축 스택 수(1~3). 생략하면 3(최대)으로 상정한다.
+   * 위력 = 스택 × 100.
+   */
+  stockpileCount?: number;
   /**
    * 현재 날씨. 모래의힘처럼 날씨 조건부 특성 판정에 쓰고, 날씨 데미지 배율(비=물 1.5배,
    * 쾌청=불꽃 1.5배·물 0.5배 등)도 자동으로 반영한다.
@@ -81,6 +93,10 @@ export interface SlotMatchupResult {
   rawOffensePower: number;
   bulkPower: number;
   verdict: MatchupVerdict;
+  /** 판정 타수로 격파할 확률(0~1). 확정 1·2타면 1, "3타 이상 필요"면 null (Phase 7.5 §2) */
+  koChance: number | null;
+  /** 난수 1타일 때만: [격파 난수 수, 16] */
+  killingRolls?: readonly [number, number];
 }
 
 /**
@@ -98,7 +114,9 @@ export function evaluateSlotMatchup(
   const attackerPokemon = getPokemon(attackerSlot.pokemonId);
   const defenderPokemon = getPokemon(defenderSlot.pokemonId);
   if (!attackerPokemon || !defenderPokemon) return null;
-  if (move.power === null || move.category === "status" || move.category === null) return null;
+  if (move.category === "status" || move.category === null) return null;
+  // move.power === null(자이로볼·바둥바둥·토해내기 등)은 여기서 바로 거르지 않는다 — 아래에서
+  // 가변 위력을 확정해보고, 그래도 null이면 computeOffensePower가 null을 반환해 걸러진다.
 
   const {
     attackerStages: baseAttackerStages = NEUTRAL_STAGES,
@@ -113,6 +131,7 @@ export function evaluateSlotMatchup(
     bulkMultiplier: manualBulkMultiplier,
     screen,
     multiHitCount,
+    stockpileCount,
   } = options;
 
   const attackerForm = getEffectiveForm(attackerPokemon, attackerSlot);
@@ -148,13 +167,77 @@ export function evaluateSlotMatchup(
   const attackerItem = attackerSlot.item ? getItem(attackerSlot.item) : undefined;
   const defenderItem = defenderSlot.item ? getItem(defenderSlot.item) : undefined;
 
-  // 필드 조건부 타입/위력 변경(대지의파동=fieldPulse, 미스트버스트·와이드포스·라이징볼트=
-  // powerMultiplierInField)을 특성 배율 계산보다 먼저 반영한다 — 타입이 바뀐 상태여야 아래
-  // resolveMoveContext의 상성 계산에도 바뀐 타입이 들어간다(battleSimulator와 같은 순서).
-  const fieldPulse = applyFieldPulse(move, field);
-  const fieldPowerMultiplier = getFieldPowerMultiplier(move, field);
+  // 가변 위력 기술(§3 증분 B-2·B-3·B-3몸무게): computeOffensePower 전에 위력을 먼저 확정한다.
+  //  - reversalPower(기사회생·바둥바둥): 매치업은 HP 개념이 없어 풀피(=최소 위력 20) 가정
+  //  - gyroBallPower(자이로볼): 양측 실효 스피드(실능 × 스피드 랭크 × 도구 배율)로 산출. 마비는
+  //    매치업에 상태 개념이 없어 미반영(evaluateSpeedMatchup의 가정 토글과 동일 정책).
+  //  - powerFromPositiveStages(기어오르기·어시스트파워): 넘겨받은 attackerStages 기준
+  //  - spitUpPower(토해내기): options.stockpileCount(생략 시 3) × 100
+  //  - weightRatioPower / targetAbsoluteWeightPower: pokemon.weightKg 기반, 미입력이면 폴백 위력
+  let variablePowerMove: Move = move;
+  if (move.reversalPower) {
+    variablePowerMove = { ...variablePowerMove, power: reversalPowerFromHp(1, 1) };
+  } else if (move.gyroBallPower) {
+    const effSpeed = (
+      spe: number,
+      stages: StatStages,
+      item: Parameters<typeof getItemSpeedMultiplier>[0],
+    ) => spe * rankStageMultiplier(stages.spe) * getItemSpeedMultiplier(item);
+    variablePowerMove = {
+      ...variablePowerMove,
+      power: gyroBallPowerFromSpeeds(
+        effSpeed(attackerRealStats.spe, attackerStages, attackerItem),
+        effSpeed(defenderRealStats.spe, defenderStages, defenderItem),
+      ),
+    };
+  } else if (move.powerFromPositiveStages) {
+    const { base, perStage } = move.powerFromPositiveStages;
+    variablePowerMove = { ...variablePowerMove, power: positiveStagesPowerValue(attackerStages, base, perStage) };
+  } else if (move.spitUpPower) {
+    const stacks = Math.max(0, Math.min(3, stockpileCount ?? 3));
+    variablePowerMove = { ...variablePowerMove, power: stacks * 100 };
+  } else if (move.weightRatioPower) {
+    variablePowerMove = {
+      ...variablePowerMove,
+      power:
+        attackerPokemon.weightKg !== undefined && defenderPokemon.weightKg !== undefined
+          ? weightRatioPowerValue(attackerPokemon.weightKg, defenderPokemon.weightKg)
+          : WEIGHT_MOVE_FALLBACK_POWER,
+    };
+  } else if (move.targetAbsoluteWeightPower) {
+    variablePowerMove = {
+      ...variablePowerMove,
+      power:
+        defenderPokemon.weightKg !== undefined
+          ? absoluteWeightPowerValue(defenderPokemon.weightKg)
+          : WEIGHT_MOVE_FALLBACK_POWER,
+    };
+  }
+  // 조건부 ×2(conditionalDoublePower). 매치업 페이지 정책(§3 증분 C·B-3, 사용자 지시):
+  //  - user-has-no-item(애크러뱃): 지닌 도구를 알고 있으니 실제로 판정
+  //  - user-stat-lowered-this-turn(분풀이)·user-move-failed-last-turn(분함의발구르기): 조건 충족을 상정(항상 ×2)
+  //  - took-damage-this-turn(눈사태)·moves-after-target(보복): 배틀 문맥 필요 → 매치업에선 기본 위력
+  if (variablePowerMove.power !== null) {
+    const cond = variablePowerMove.conditionalDoublePower;
+    const assumeDoubled =
+      cond === "user-stat-lowered-this-turn" ||
+      cond === "user-move-failed-last-turn" ||
+      (cond === "user-has-no-item" && !attackerItem);
+    if (assumeDoubled) {
+      variablePowerMove = { ...variablePowerMove, power: variablePowerMove.power * 2 };
+    }
+  }
+
+  // 웨더볼(날씨판 대지의파동): 타입·위력 변경을 fieldPulse보다 먼저.
+  // 이 아래 fieldPulse/powerMultiplierInField(대지의파동·미스트버스트류)까지가 "특성 배율 계산 전
+  // 타입/위력 확정" 구간 — 타입이 바뀐 상태여야 resolveMoveContext의 상성 계산에 반영된다.
+  const weatherBall = applyWeatherBall(variablePowerMove, weather);
+  const weatherBallMove: Move = { ...variablePowerMove, type: weatherBall.type, power: weatherBall.power };
+
+  const fieldPulse = applyFieldPulse(weatherBallMove, field);
+  const fieldPowerMultiplier = getFieldPowerMultiplier(weatherBallMove, field);
   const fieldAdjustedMove: Move = {
-    ...move,
+    ...weatherBallMove,
     type: fieldPulse.type,
     power: fieldPulse.power === null ? null : Math.round(fieldPulse.power * fieldPowerMultiplier),
   };
@@ -234,6 +317,9 @@ export function evaluateSlotMatchup(
     fieldMultiplier: manualFieldMultiplier ?? autoFieldDamageMultiplier,
     attackerStages,
     stabMultiplier,
+    // 속임수(usesTargetAttackStat): 방어자의 공격 실능·랭크로 결정력을 낸다
+    defenderRealStats,
+    defenderStages,
   });
   if (rawOffensePower === null) return null;
   const offensePower = rawOffensePower * typeEffectiveness;
@@ -254,13 +340,18 @@ export function evaluateSlotMatchup(
     defenderStages,
     bulkMultiplier:
       (manualBulkMultiplier ?? abilityDefense * berryResult.bulkMultiplier) * screenMultiplier,
+    // 사이코쇼크(hitsDefensiveStat): 특수기지만 내구력은 방어자의 물리 방어로 낸다
+    defensiveStatOverride: move.hitsDefensiveStat,
   });
 
+  const chance = evaluateMatchupChance(offensePower, bulkPower);
   return {
     offensePower,
     rawOffensePower,
     bulkPower,
-    verdict: evaluateMatchup(offensePower, bulkPower),
+    verdict: chance.verdict,
+    koChance: chance.koChance,
+    killingRolls: chance.killingRolls,
   };
 }
 

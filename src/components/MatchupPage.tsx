@@ -94,6 +94,7 @@ export function MatchupPage() {
         weather: weather ?? undefined,
         field: field ?? undefined,
         multiHitCount: attacker.slot.multiHitCount,
+        stockpileCount: attacker.slot.stockpileCount,
         attackerStages: attacker.slot.stages,
         defenderStages: defender.slot.stages,
         screen: defender.slot.screen,
@@ -157,10 +158,17 @@ export function MatchupPage() {
           onToggleParalysis={attacker.setParalysisAssumed}
           moveIsGraveVisit={attackerMove?.id === "성묘"}
           onSetGraveVisit={attacker.setGraveVisitFaintedAllies}
+          moveIsSpitUp={!!attackerMove?.spitUpPower}
+          stockpileCount={attacker.slot.stockpileCount}
+          onSetStockpileCount={attacker.setStockpileCount}
         />
 
         <div className="matchup-verdict-row">
-          <VerdictBadge verdict={fullResult?.verdict ?? null} />
+          <VerdictBadge
+            verdict={fullResult?.verdict ?? null}
+            koChance={fullResult?.koChance}
+            killingRolls={fullResult?.killingRolls}
+          />
         </div>
 
         <MatchupSlotCard

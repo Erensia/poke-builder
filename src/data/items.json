@@ -66,6 +66,12 @@
     "category": "mega-stone"
   },
   {
+    "id": "한카리아스나이트Z",
+    "name": "한카리아스나이트Z",
+    "description": "",
+    "category": "mega-stone"
+  },
+  {
     "id": "마기라스나이트",
     "name": "마기라스나이트",
     "description": "",
@@ -74,6 +80,12 @@
   {
     "id": "루카리오나이트",
     "name": "루카리오나이트",
+    "description": "",
+    "category": "mega-stone"
+  },
+  {
+    "id": "루카리오나이트Z",
+    "name": "루카리오나이트Z",
     "description": "",
     "category": "mega-stone"
   },

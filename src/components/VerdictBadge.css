@@ -17,6 +17,30 @@
   letter-spacing: 0.01em;
 }
 
+/* 라벨 아래 난수 격파 확률 줄 (난수 1타·2타·3타 이상 필요일 때만) */
+.verdict-chance {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.05rem;
+  font-size: 0.74rem;
+  font-weight: 700;
+  line-height: 1.2;
+  opacity: 0.92;
+}
+
+.verdict-chance-detail {
+  font-size: 0.62rem;
+  font-weight: 600;
+  opacity: 0.8;
+}
+
+/* "3타 이상 필요"의 "2타 격파 0%"는 안심 색(초록) 대신 회색으로 */
+.verdict-chance-muted {
+  color: var(--text-muted);
+  opacity: 1;
+}
+
 .verdict-pending {
   border: 1px dashed var(--border);
   color: var(--text-muted);

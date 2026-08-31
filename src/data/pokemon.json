@@ -728,6 +728,22 @@
           "spe": 92
         },
         "ability": "모래의힘"
+      },
+      {
+        "form": "한카리아스-메가Z",
+        "megaStone": "한카리아스나이트Z",
+        "types": [
+          "드래곤"
+        ],
+        "baseStats": {
+          "hp": 108,
+          "atk": 130,
+          "def": 85,
+          "spa": 141,
+          "spd": 85,
+          "spe": 151
+        },
+        "ability": "부유"
       }
     ],
     "genderCategory": "both",
@@ -963,6 +979,23 @@
           "spe": 112
         },
         "ability": "적응력"
+      },
+      {
+        "form": "루카리오-메가Z",
+        "megaStone": "루카리오나이트Z",
+        "types": [
+          "격투",
+          "강철"
+        ],
+        "baseStats": {
+          "hp": 70,
+          "atk": 100,
+          "def": 70,
+          "spa": 164,
+          "spd": 70,
+          "spe": 151
+        },
+        "ability": "파동의방호"
       }
     ],
     "genderCategory": "both",
