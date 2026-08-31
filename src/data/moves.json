@@ -1,23 +1,5 @@
 [
   {
-    "id": "불꽃세례",
-    "name": "불꽃세례",
-    "type": "불꽃",
-    "category": "physical",
-    "power": 120,
-    "accuracy": 100,
-    "pp": 15,
-    "effect": "사용자도 준 데미지의 1/3만큼 반동을 입는다. 10% 확률로 상대를 화상 상태로 만든다.",
-    "priority": 0,
-    "recoilFraction": 0.3333333333333333,
-    "inflictsStatus": [
-      {
-        "status": "burn",
-        "chance": 10
-      }
-    ]
-  },
-  {
     "id": "날개치기",
     "name": "날개치기",
     "type": "비행",
@@ -25,7 +7,10 @@
     "power": 60,
     "accuracy": 100,
     "pp": 35,
-    "effect": "",
+    "effect": "크게 펼친 훌륭한 날개를 상대에게 부딪쳐서 공격한다.",
+    "tags": [
+      "접촉"
+    ],
     "priority": 0
   },
   {
@@ -37,7 +22,11 @@
     "accuracy": 100,
     "pp": 20,
     "priority": 1,
-    "effect": "우선도 +1. 항상 먼저 나간다.",
+    "effect": "눈에 보이지 않는 굉장한 속도로 상대에게 돌진한다. 반드시 선제공격할 수 있다.",
+    "tags": [
+      "선공",
+      "접촉"
+    ],
     "makesContact": true
   },
   {
@@ -49,7 +38,11 @@
     "accuracy": 100,
     "pp": 16,
     "priority": 0,
-    "effect": "",
+    "effect": "목숨을 걸고 상대에게 돌진하여 공격을 한다. 자신도 대상에게 준 피해의 ⅓만큼 반동 피해를 받는다.",
+    "tags": [
+      "반동",
+      "접촉"
+    ],
     "makesContact": true
   },
   {
@@ -61,7 +54,11 @@
     "accuracy": 85,
     "pp": 8,
     "priority": 0,
-    "effect": "10% 확률로 상대를 화상 상태로 만든다.",
+    "effect": "큰대자의 불꽃으로 상대를 불태운다. 10%의 확률로 상대를 화상 상태로 만든다.",
+    "tags": [
+      "비접촉",
+      "화상"
+    ],
     "makesContact": false,
     "inflictsStatus": [
       {
@@ -79,7 +76,11 @@
     "accuracy": 100,
     "pp": 16,
     "priority": 0,
-    "effect": "10% 확률로 상대를 화상 상태로 만든다.",
+    "effect": "세찬 불꽃을 상대에게 발사해서 공격한다. 10% 확률로 상대를 화상 상태로 만든다.",
+    "tags": [
+      "비접촉",
+      "화상"
+    ],
     "makesContact": false,
     "inflictsStatus": [
       {
@@ -97,9 +98,18 @@
     "accuracy": 95,
     "pp": 16,
     "priority": 0,
-    "effect": "30% 확률로 상대를 풀죽게 만든다.",
+    "effect": "하늘까지 베어 가르는 공기의 칼날로 공격한다. 30% 확률로 상대를 풀죽게 만든다.",
+    "tags": [
+      "비접촉",
+      "베기",
+      "풀죽음"
+    ],
     "inflictsVolatile": [
-      { "volatile": "flinch", "target": "opponent", "chance": 30 }
+      {
+        "volatile": "flinch",
+        "target": "opponent",
+        "chance": 30
+      }
     ],
     "classification": [
       "베기"
@@ -115,7 +125,11 @@
     "accuracy": 100,
     "pp": 12,
     "priority": 0,
-    "effect": "1턴째 빛을 모으고 2턴째 발사한다. 맑음 날씨에서는 1턴만에 발동한다.",
+    "effect": "1턴째에 빛을 가득 모아 2턴째에 빛의 다발을 발사하여 공격한다. 날씨가 맑을 때는 1턴 만에 공격한다. 다른 날씨에는 위력이 절반이 된다.",
+    "tags": [
+      "충전",
+      "비접촉"
+    ],
     "chargeTurn": true,
     "chargeSkipWeather": "쾌청",
     "makesContact": false
@@ -129,7 +143,11 @@
     "accuracy": null,
     "pp": 20,
     "priority": 0,
-    "effect": "자신의 공격과 스피드를 1랭크씩 올린다.",
+    "effect": "신비롭고 힘센 춤을 격렬하게 춘다. 자신의 공격과 스피드를 1랭크 올린다.",
+    "tags": [
+      "랭크",
+      "춤"
+    ],
     "statChanges": [
       {
         "target": "self",
@@ -156,7 +174,11 @@
     "accuracy": 100,
     "pp": 16,
     "priority": 0,
-    "effect": "",
+    "effect": "날카롭고 뾰족하며 거대한 발톱으로 상대를 베어 갈라서 공격한다.",
+    "tags": [
+      "접촉",
+      "베기"
+    ],
     "classification": [
       "베기"
     ],
@@ -171,7 +193,12 @@
     "accuracy": 90,
     "pp": 12,
     "priority": -6,
-    "effect": "우선도 -6. 명중 시 상대를 강제로 교체시킨다.",
+    "effect": "상대를 튕겨내서 교대할 포켓몬을 끌어낸다. 야생의 경우에는 배틀이 끝난다.",
+    "tags": [
+      "후공",
+      "강제 교체",
+      "접촉"
+    ],
     "makesContact": true
   },
   {
@@ -183,7 +210,12 @@
     "accuracy": 70,
     "pp": 8,
     "priority": 0,
-    "effect": "",
+    "effect": "기합을 높여서 혼신의 힘을 방출한다. 10% 확률로 상대의 특수방어를 떨어뜨린다.",
+    "tags": [
+      "랭크",
+      "비접촉",
+      "폭탄"
+    ],
     "classification": [
       "구슬/폭탄"
     ],
@@ -198,7 +230,12 @@
     "accuracy": 100,
     "pp": 16,
     "priority": 0,
-    "effect": "20% 확률로 상대의 방어를 1랭크 낮춘다.",
+    "effect": "날카로운 이빨로 상대를 깨물어 부숴서 공격한다. 20% 확률로 상대의 방어를 1랭크 떨어뜨린다.",
+    "tags": [
+      "랭크",
+      "접촉",
+      "턱"
+    ],
     "classification": [
       "물기"
     ],
@@ -213,7 +250,10 @@
     "accuracy": 100,
     "pp": 16,
     "priority": 0,
-    "effect": "",
+    "effect": "수도로 기세 좋게 내려쳐서 상대를 공격한다. 빛의장막이나 리플렉터 등도 파괴할 수 있다.",
+    "tags": [
+      "접촉"
+    ],
     "makesContact": true
   },
   {
@@ -225,7 +265,11 @@
     "accuracy": 100,
     "pp": 12,
     "priority": 0,
-    "effect": "10% 확률로 상대를 얼린다.",
+    "effect": "냉동빔을 상대에게 발사하여 공격한다. 10% 확률로 상대를 얼음 상태로 만든다.",
+    "tags": [
+      "비접촉",
+      "얼음"
+    ],
     "makesContact": false,
     "inflictsStatus": [
       {
@@ -242,8 +286,13 @@
     "power": 60,
     "accuracy": 100,
     "pp": 12,
-    "priority": 0,
-    "effect": "우선도 -4. 이번 턴에 먼저 데미지를 입었다면 위력이 2배가 된다.",
+    "priority": -4,
+    "effect": "이번 턴에 상대의 공격 기술로 먼저 데미지를 받았다면 위력이 2배가 된다.",
+    "tags": [
+      "후공",
+      "접촉"
+    ],
+    "conditionalDoublePower": "took-damage-this-turn",
     "makesContact": true
   },
   {
@@ -255,7 +304,11 @@
     "accuracy": 100,
     "pp": 12,
     "priority": 0,
-    "effect": "1턴째 물속으로 잠수해 회피하고, 2턴째 공격한다.",
+    "effect": "1턴째에 잠수했다가 2턴째에 떠올라 공격한다. 깊은 바다에서 잠수도 할 수 있다.",
+    "tags": [
+      "충전",
+      "접촉"
+    ],
     "chargeTurn": true,
     "chargeHideType": "underwater",
     "makesContact": true
@@ -269,7 +322,10 @@
     "accuracy": 100,
     "pp": 16,
     "priority": 0,
-    "effect": "같은 턴에 아군이 먼저 사용했다면 위력이 2배가 된다.",
+    "effect": "노래로 상대를 공격한다. 함께 돌림노래를 하면 계속해서 쓸 수 있고 위력도 2배로 올라간다.",
+    "tags": [
+      "소리"
+    ],
     "classification": [
       "소리"
     ],
@@ -284,7 +340,11 @@
     "accuracy": 100,
     "pp": 12,
     "priority": 0,
-    "effect": "",
+    "effect": "몸의 빛을 한곳에 모아서 힘을 방출한다. 10%의 확률로 상대의 특수방어를 1랭크 떨어뜨린다.",
+    "tags": [
+      "랭크",
+      "비접촉"
+    ],
     "makesContact": false
   },
   {
@@ -296,7 +356,11 @@
     "accuracy": 100,
     "pp": 20,
     "priority": 0,
-    "effect": "",
+    "effect": "풀숲에서 튀어나오듯이 공격한다. 경쾌한 발재간으로 자신의 스피드를 1랭크 올린다.",
+    "tags": [
+      "랭크",
+      "접촉"
+    ],
     "makesContact": true
   },
   {
@@ -308,7 +372,7 @@
     "accuracy": 100,
     "pp": 12,
     "priority": 0,
-    "effect": "상대의 특성을 '불면'으로 바꿔 잠들지 못하게 한다.",
+    "effect": "마음을 괴롭히는 씨앗을 심는다. 상대를 잠잘 수 없게 해서 상대의 특성을 불면으로 만든다.",
     "makesContact": false
   },
   {
@@ -320,7 +384,10 @@
     "accuracy": null,
     "pp": 8,
     "priority": 0,
-    "effect": "자신의 체력을 회복한다. 날씨에 따라 회복량이 달라진다.",
+    "effect": "사용자의 HP를 회복한다. 날씨에 따라 회복량이 변한다.",
+    "tags": [
+      "회복"
+    ],
     "makesContact": false,
     "healsWeatherDependent": true
   },
@@ -333,7 +400,13 @@
     "accuracy": 100,
     "pp": 12,
     "priority": 0,
-    "effect": "2~3턴 연속으로 사용한 뒤 혼란 상태가 된다.",
+    "effect": "2-3턴 동안 꽃을 흩뿌려서 공격한다. 흩뿌린 뒤에는 혼란에 빠진다.",
+    "tags": [
+      "난동",
+      "접촉",
+      "춤",
+      "혼란"
+    ],
     "classification": [
       "춤"
     ],
@@ -348,7 +421,11 @@
     "accuracy": 100,
     "pp": 12,
     "priority": 0,
-    "effect": "준 데미지의 절반만큼 자신의 체력을 회복한다.",
+    "effect": "양분을 흡수하여 공격한다. 대상에게 준 대미지의 ½만큼 체력을 회복한다.",
+    "tags": [
+      "흡수",
+      "비접촉"
+    ],
     "makesContact": false,
     "drainFraction": 0.5
   },
@@ -361,7 +438,11 @@
     "accuracy": 100,
     "pp": 15,
     "priority": 0,
-    "effect": "준 데미지의 1/3만큼 자신도 반동 데미지를 입는다.",
+    "effect": "단단한 몸통을 상대에게 부딪쳐서 공격한다. 자신도 대상에게 준 피해의 ⅓만큼 반동 피해를 받는다.",
+    "tags": [
+      "반동",
+      "접촉"
+    ],
     "recoilFraction": 0.3333333333333333,
     "makesContact": true
   },
@@ -374,7 +455,11 @@
     "accuracy": 100,
     "pp": 12,
     "priority": 0,
-    "effect": "",
+    "effect": "상대의 발밑에 대지의 힘을 방출한다. 10%의 확률로 상대의 특수방어를 1랭크 떨어뜨린다.",
+    "tags": [
+      "랭크",
+      "비접촉"
+    ],
     "makesContact": false
   },
   {
@@ -386,7 +471,7 @@
     "accuracy": null,
     "pp": 12,
     "priority": 0,
-    "effect": "자신의 HP를 조금 깎아서 분신을 만든다. 분신은 자신의 대타가 된다.",
+    "effect": "자신의 HP를 ¼ 깎아서 분신을 만든다. 분신은 자신의 대타가 된다.",
     "makesContact": false,
     "setsSubstitute": true
   },
@@ -399,7 +484,12 @@
     "accuracy": 100,
     "pp": 12,
     "priority": 0,
-    "effect": "30% 확률로 상대를 독 상태로 만든다.",
+    "effect": "더러운 오물을 상대에게 내던져서 공격한다. 30%의 확률로 독 상태로 만든다.",
+    "tags": [
+      "비접촉",
+      "폭탄",
+      "독"
+    ],
     "classification": [
       "구슬/폭탄"
     ],
@@ -420,7 +510,11 @@
     "accuracy": 100,
     "pp": 20,
     "priority": 0,
-    "effect": "30% 확률로 상대를 독 상태로 만든다.",
+    "effect": "독에 물든 촉수나 팔로 상대를 힘껏 꿰찌른다. 30% 확률로 상대를 독 상태로 만든다.",
+    "tags": [
+      "접촉",
+      "독"
+    ],
     "makesContact": true,
     "inflictsStatus": [
       {
@@ -438,7 +532,12 @@
     "accuracy": 100,
     "pp": 16,
     "priority": 0,
-    "effect": "20% 확률로 상대의 특방을 1랭크 낮춘다.",
+    "effect": "까만 그림자의 덩어리를 내던져서 공격한다. 20% 확률로 상대의 특수방어를 1랭크 떨어뜨린다.",
+    "tags": [
+      "랭크",
+      "비접촉",
+      "폭탄"
+    ],
     "classification": [
       "구슬/폭탄"
     ],
@@ -453,7 +552,10 @@
     "accuracy": 90,
     "pp": 12,
     "priority": 0,
-    "effect": "상대를 맹독 상태로 만든다. 턴이 지날수록 데미지가 누적된다.",
+    "effect": "상대를 맹독의 상태로 만든다. 턴이 진행될수록 독의 데미지가 증가한다.",
+    "tags": [
+      "맹독"
+    ],
     "makesContact": false,
     "inflictsStatus": [
       {
@@ -470,7 +572,11 @@
     "accuracy": 100,
     "pp": 12,
     "priority": 0,
-    "effect": "1턴째 숨어서 회피하고, 2턴째 상대의 방어(방어/판별/킹실드 등 방어류 기술)를 무시하고 공격한다.",
+    "effect": "1턴째에 어디론가 사라져서 2턴째에 상대를 공격한다. 기술 방어를 무시하고 공격할 수 있다.",
+    "tags": [
+      "충전",
+      "접촉"
+    ],
     "chargeTurn": true,
     "chargeHideType": "hidden",
     "makesContact": true,
@@ -485,7 +591,7 @@
     "accuracy": null,
     "pp": 8,
     "priority": 0,
-    "effect": "사용 후 자신이 쓰러지면 상대도 같이 쓰러뜨린다. 방어류와 같은 공식으로 연속 사용 시 성공 확률이 줄어든다.",
+    "effect": "기술을 쓴 뒤 공격을 받아 기절했을 때 공격한 상대도 기절하게 한다.",
     "makesContact": false,
     "protectEffect": "destinyBond"
   },
@@ -498,7 +604,11 @@
     "accuracy": 100,
     "pp": 16,
     "priority": 0,
-    "effect": "사용자의 레벨만큼 고정 데미지를 준다. (챔피언스는 레벨 50 고정이라 항상 50 고정 데미지)",
+    "effect": "무시무시한 환상을 보게 해서 자신의 레벨과 똑같은 만큼의 데미지를 상대에게 준다.",
+    "tags": [
+      "고정대미지",
+      "비접촉"
+    ],
     "fixedDamage": 50,
     "makesContact": false
   },
@@ -511,7 +621,12 @@
     "accuracy": 100,
     "pp": 16,
     "priority": 0,
-    "effect": "10% 확률로 상대를 얼린다.",
+    "effect": "냉기를 담은 펀치로 상대를 공격한다. 10%의 확률로 상대를 얼음 상태로 만든다.",
+    "tags": [
+      "펀치",
+      "접촉",
+      "얼음"
+    ],
     "classification": [
       "펀치"
     ],
@@ -532,7 +647,11 @@
     "accuracy": 100,
     "pp": 12,
     "priority": 0,
-    "effect": "",
+    "effect": "강력한 빛을 내어 상대에게 데미지를 준다.",
+    "tags": [
+      "광역-상대",
+      "비접촉"
+    ],
     "makesContact": false
   },
   {
@@ -544,7 +663,12 @@
     "accuracy": 100,
     "pp": 12,
     "priority": 0,
-    "effect": "",
+    "effect": "시끄럽게 울리는 큰 진동을 상대에게 전달하여 공격한다.",
+    "tags": [
+      "광역-상대",
+      "비접촉",
+      "소리"
+    ],
     "classification": [
       "소리"
     ],
@@ -559,7 +683,11 @@
     "accuracy": 100,
     "pp": 12,
     "priority": 0,
-    "effect": "10% 확률로 상대의 특방을 1랭크 낮춘다.",
+    "effect": "강한 염동력을 상대에게 보내어 공격한다. 10% 확률로 상대의 특수방어를 1랭크 떨어뜨린다.",
+    "tags": [
+      "랭크",
+      "비접촉"
+    ],
     "makesContact": false
   },
   {
@@ -571,10 +699,16 @@
     "accuracy": null,
     "pp": 12,
     "priority": 0,
-    "effect": "사용한 다음 턴에 체력의 절반을 회복한다.",
+    "effect": "다음 턴에 자신 또는 교체한 포켓몬의 HP를 최대 HP의 ½만큼 회복한다.",
+    "tags": [
+      "회복"
+    ],
     "makesContact": false,
     "inflictsVolatile": [
-      { "volatile": "wish", "target": "self" }
+      {
+        "volatile": "wish",
+        "target": "self"
+      }
     ]
   },
   {
@@ -586,9 +720,16 @@
     "accuracy": 90,
     "pp": 8,
     "priority": 0,
-    "effect": "사용한 다음 턴에는 움직일 수 없다.",
+    "effect": "가진 힘을 모두 사용해서 상대에게 돌격한다. 다음 턴은 움직일 수 없다.",
+    "tags": [
+      "반동-휴식",
+      "접촉"
+    ],
     "inflictsVolatile": [
-      { "volatile": "recharge", "target": "self" }
+      {
+        "volatile": "recharge",
+        "target": "self"
+      }
     ],
     "makesContact": true
   },
@@ -601,7 +742,11 @@
     "accuracy": 100,
     "pp": 16,
     "priority": 0,
-    "effect": "30% 확률로 상대의 특공을 1랭크 낮춘다.",
+    "effect": "달의 파워를 빌려서 상대를 공격한다. 10% 확률로 상대의 특수공격을 1랭크 떨어뜨린다.",
+    "tags": [
+      "랭크",
+      "비접촉"
+    ],
     "makesContact": false
   },
   {
@@ -613,7 +758,10 @@
     "accuracy": null,
     "pp": 20,
     "priority": 0,
-    "effect": "자신의 특공과 특방을 1랭크씩 올린다.",
+    "effect": "조용히 정신을 통일하고 마음을 가라앉혀서 자신의 특수공격과 특수방어를 1랭크 올린다.",
+    "tags": [
+      "랭크"
+    ],
     "statChanges": [
       {
         "target": "self",
@@ -637,7 +785,11 @@
     "accuracy": 100,
     "pp": 12,
     "priority": 0,
-    "effect": "상대의 방어 능력치를 기준으로 데미지를 계산한다.",
+    "effect": "이상한 염력파를 실체화하여 상대를 공격한다. 자신의 특수공격으로 위력을 내지만 데미지는 상대의 방어로 받는다.",
+    "tags": [
+      "비접촉"
+    ],
+    "hitsDefensiveStat": "def",
     "makesContact": false
   },
   {
@@ -649,7 +801,10 @@
     "accuracy": 100,
     "pp": 20,
     "priority": 0,
-    "effect": "상대의 공격을 2랭크 낮춘다.",
+    "effect": "귀엽게 바라보고 방심을 유도하여 대상의 공격을 2랭크 떨어뜨린다.",
+    "tags": [
+      "랭크"
+    ],
     "statChanges": [
       {
         "target": "opponent",
@@ -668,7 +823,10 @@
     "accuracy": null,
     "pp": 20,
     "priority": 0,
-    "effect": "자신의 스피드를 2랭크 올린다.",
+    "effect": "힘을 빼고 몸을 가볍게 해서 고속으로 움직인다. 자신의 스피드를 2랭크 올린다.",
+    "tags": [
+      "랭크"
+    ],
     "statChanges": [
       {
         "target": "self",
@@ -687,8 +845,14 @@
     "accuracy": 100,
     "pp": 12,
     "priority": 0,
-    "effect": "땅속에 숨은 상대에게는 위력이 2배가 된다.",
-    "bypassesHiding": ["underground"],
+    "effect": "지진의 충격으로 자신의 주위에 있는 포켓몬을 공격한다. 구멍파기 중인 대상에게는 대미지가 2배다.",
+    "tags": [
+      "광역-전원",
+      "비접촉"
+    ],
+    "bypassesHiding": [
+      "underground"
+    ],
     "hidingBypassMultiplier": 2,
     "makesContact": false
   },
@@ -701,7 +865,12 @@
     "accuracy": 100,
     "pp": 16,
     "priority": 0,
-    "effect": "10% 확률로 상대를 마비시킨다.",
+    "effect": "전격을 담은 펀치로 상대를 공격한다. 10% 확률로 상대를 마비 상태로 만든다.",
+    "tags": [
+      "접촉",
+      "펀치",
+      "마비"
+    ],
     "classification": [
       "펀치"
     ],
@@ -722,9 +891,17 @@
     "accuracy": 90,
     "pp": 16,
     "priority": 0,
-    "effect": "20% 확률로 상대를 풀죽게 만든다.",
+    "effect": "사념의 힘을 이마에 모아서 공격한다. 20%의 확률로 상대를 풀죽게 만든다.",
+    "tags": [
+      "접촉",
+      "풀죽음"
+    ],
     "inflictsVolatile": [
-      { "volatile": "flinch", "target": "opponent", "chance": 20 }
+      {
+        "volatile": "flinch",
+        "target": "opponent",
+        "chance": 20
+      }
     ],
     "makesContact": true
   },
@@ -737,7 +914,12 @@
     "accuracy": 100,
     "pp": 12,
     "priority": 0,
-    "effect": "맞은 상대는 이번 전투 중 회복 기술이나 회복 특성으로 체력을 회복할 수 없다.",
+    "effect": "불쾌한 음파를 상대에게 날려서 공격한다. 2턴 동안 상대는 기술이나 특성 또는 지니고 있는 도구로 HP를 회복할 수 없게 된다.",
+    "tags": [
+      "비접촉",
+      "소리",
+      "회복봉인"
+    ],
     "classification": [
       "소리"
     ],
@@ -752,7 +934,12 @@
     "accuracy": 100,
     "pp": 16,
     "priority": 0,
-    "effect": "급소에 맞을 확률이 높다.",
+    "effect": "그림자로 만든 날카로운 발톱으로 상대를 베어 가른다. 급소에 맞을 확률이 높다.",
+    "tags": [
+      "급소",
+      "접촉",
+      "베기"
+    ],
     "highCritRatio": true,
     "classification": [
       "베기"
@@ -768,7 +955,12 @@
     "accuracy": null,
     "pp": 20,
     "priority": 0,
-    "effect": "반드시 명중한다.",
+    "effect": "그림자에 섞여 펀치를 날린다. 공격은 반드시 명중한다.",
+    "tags": [
+      "필중",
+      "접촉",
+      "펀치"
+    ],
     "classification": [
       "펀치"
     ],
@@ -783,7 +975,10 @@
     "accuracy": null,
     "pp": 20,
     "priority": 0,
-    "effect": "상대 진영에 설치. 이후 등장하는 포켓몬은 교체될 때 데미지를 입는다.",
+    "effect": "상대의 주위에 무수한 바위를 띄워 교체되어 나온 상대 포켓몬에게 데미지를 준다. 교체되어 나온 포켓몬의 바위타입 상성에 따라 데미지가 달라진다.",
+    "tags": [
+      "장판"
+    ],
     "makesContact": false,
     "setsHazard": "stealthRock"
   },
@@ -796,7 +991,12 @@
     "accuracy": 90,
     "pp": 12,
     "priority": 0,
-    "effect": "",
+    "effect": "큰 바위를 세차게 부딪쳐서 공격한다. 30% 확률로 상대를 풀죽게 만든다.",
+    "tags": [
+      "광역-상대",
+      "비접촉",
+      "풀죽음"
+    ],
     "makesContact": false
   },
   {
@@ -808,7 +1008,11 @@
     "accuracy": 80,
     "pp": 8,
     "priority": 0,
-    "effect": "급소에 맞을 확률이 높다.",
+    "effect": "뾰족한 바위를 상대에게 꿰찔러서 공격한다. 급소에 맞을 확률이 높다.",
+    "tags": [
+      "급소",
+      "비접촉"
+    ],
     "highCritRatio": true,
     "makesContact": false
   },
@@ -821,9 +1025,17 @@
     "accuracy": 100,
     "pp": 16,
     "priority": 0,
-    "effect": "30% 확률로 상대를 풀죽게 만든다.",
+    "effect": "강철과 같은 단단한 머리로 공격한다. 20%의 확률로 상대를 풀죽게 만든다.",
+    "tags": [
+      "접촉",
+      "풀죽음"
+    ],
     "inflictsVolatile": [
-      { "volatile": "flinch", "target": "opponent", "chance": 30 }
+      {
+        "volatile": "flinch",
+        "target": "opponent",
+        "chance": 30
+      }
     ],
     "makesContact": true
   },
@@ -836,7 +1048,12 @@
     "accuracy": 90,
     "pp": 20,
     "priority": 0,
-    "effect": "2~5회 연속 공격(2/3회 각 35%, 4/5회 각 15% 확률). 다 때리고 나면 적중 여부와 무관하게 자신의 방어가 1랭크 낮아지고 스피드가 1랭크 오른다.",
+    "effect": "비늘을 쏘아서 공격한다. 2~5회 동안 연속으로 쓴다. 스피드가 1랭크 올라가지만 방어가 1랭크 떨어진다.",
+    "tags": [
+      "연속",
+      "반동-랭크",
+      "비접촉"
+    ],
     "statChanges": [
       {
         "target": "self",
@@ -862,7 +1079,12 @@
     "accuracy": 75,
     "pp": 12,
     "priority": 0,
-    "effect": "",
+    "effect": "굉장한 살기로 위압하면서 몸통박치기한다. 20% 확률로 상대를 풀죽게 만든다. 대상이 작아지기를 사용했었다면 필중하며 대미지가 2배다.",
+    "tags": [
+      "압박",
+      "접촉",
+      "풀죽음"
+    ],
     "makesContact": true
   },
   {
@@ -874,7 +1096,11 @@
     "accuracy": null,
     "pp": 20,
     "priority": 0,
-    "effect": "자신의 공격을 2랭크 올린다.",
+    "effect": "싸움의 춤을 격렬하게 춰서 기세를 높인다. 자신의 공격을 2랭크 올린다.",
+    "tags": [
+      "랭크",
+      "춤"
+    ],
     "statChanges": [
       {
         "target": "self",
@@ -896,7 +1122,11 @@
     "accuracy": 75,
     "pp": 16,
     "priority": 0,
-    "effect": "30% 확률로 상대의 방어를 1랭크 낮춘다.",
+    "effect": "단단한 꼬리로 상대를 힘껏 쳐서 공격한다. 30%의 확률로 상대의 방어를 떨어뜨린다.",
+    "tags": [
+      "랭크",
+      "접촉"
+    ],
     "makesContact": true
   },
   {
@@ -908,7 +1138,11 @@
     "accuracy": 100,
     "pp": 12,
     "priority": 0,
-    "effect": "20% 확률로 상대의 방어를 1랭크 낮춘다.",
+    "effect": "물의 힘으로 상대에게 부딪쳐서 공격한다. 20% 확률로 상대의 방어를 1랭크 떨어뜨린다.",
+    "tags": [
+      "랭크",
+      "접촉"
+    ],
     "makesContact": true
   },
   {
@@ -920,7 +1154,12 @@
     "accuracy": 100,
     "pp": 12,
     "priority": 0,
-    "effect": "2~3턴 연속으로 사용한 뒤 혼란 상태가 된다.",
+    "effect": "2~3턴 동안 마구 난동 부려서 공격한다. 난동 부린 뒤에는 혼란에 빠진다.",
+    "tags": [
+      "난동",
+      "접촉",
+      "혼란"
+    ],
     "makesContact": true
   },
   {
@@ -932,7 +1171,11 @@
     "accuracy": 90,
     "pp": 8,
     "priority": 0,
-    "effect": "사용 후 자신의 특공이 2랭크 낮아진다.",
+    "effect": "천공에서 운석을 떨어뜨린다. 사용하면 반동으로 자신의 특수공격이 2랭크 떨어진다.",
+    "tags": [
+      "반동-랭크",
+      "비접촉"
+    ],
     "makesContact": false
   },
   {
@@ -944,7 +1187,11 @@
     "accuracy": 100,
     "pp": 12,
     "priority": 0,
-    "effect": "",
+    "effect": "큰 입으로 충격파를 일으켜서 상대를 공격한다.",
+    "tags": [
+      "파동",
+      "비접촉"
+    ],
     "classification": [
       "파동"
     ],
@@ -959,7 +1206,10 @@
     "accuracy": 100,
     "pp": 12,
     "priority": 0,
-    "effect": "",
+    "effect": "그 턴에 상대가 이미 데미지를 입었다면 기술의 위력은 2배가 된다.",
+    "tags": [
+      "접촉"
+    ],
     "makesContact": false
   },
   {
@@ -971,7 +1221,10 @@
     "accuracy": 100,
     "pp": 20,
     "priority": 0,
-    "effect": "상대가 도구를 지니고 있으면 위력이 올라가고, 명중 시 그 도구를 떨어뜨린다.",
+    "effect": "상대의 지닌 물건을 탁 쳐서 떨어뜨려 배틀이 끝날 때까지 사용할 수 없게 한다. 물건을 가진 상대에게는 데미지를 더 준다.",
+    "tags": [
+      "접촉"
+    ],
     "makesContact": true
   },
   {
@@ -983,7 +1236,11 @@
     "accuracy": 100,
     "pp": 8,
     "priority": 0,
-    "effect": "10% 확률로 자신의 모든 능력치가 1랭크씩 오른다.",
+    "effect": "원시의 힘으로 공격한다. 10% 확률로 자신의 모든 능력이 1랭크 오른다.",
+    "tags": [
+      "랭크",
+      "비접촉"
+    ],
     "makesContact": false
   },
   {
@@ -995,7 +1252,10 @@
     "accuracy": 100,
     "pp": 12,
     "priority": 0,
-    "effect": "상대의 스피드를 2랭크 낮춘다.",
+    "effect": "무서운 얼굴로 노려보고 겁주어 상대의 스피드를 2랭크 떨어뜨린다.",
+    "tags": [
+      "랭크"
+    ],
     "statChanges": [
       {
         "target": "opponent",
@@ -1014,7 +1274,11 @@
     "accuracy": 100,
     "pp": 12,
     "priority": 0,
-    "effect": "1턴째 땅속으로 숨고, 2턴째 공격한다.",
+    "effect": "1턴째에 땅속으로 파고들어 2턴째에 상대를 공격한다.",
+    "tags": [
+      "충전",
+      "접촉"
+    ],
     "chargeTurn": true,
     "chargeHideType": "underground",
     "makesContact": true
@@ -1028,7 +1292,11 @@
     "accuracy": 85,
     "pp": 20,
     "priority": 0,
-    "effect": "상대의 특방을 2랭크 낮춘다.",
+    "effect": "금속을 긁을 때 나는 듯한 싫은 소리를 들려준다. 상대의 특수방어를 2랭크 떨어뜨린다.",
+    "tags": [
+      "랭크",
+      "소리"
+    ],
     "statChanges": [
       {
         "target": "opponent",
@@ -1050,7 +1318,12 @@
     "accuracy": 100,
     "pp": 16,
     "priority": 3,
-    "effect": "상대가 이번 턴 변화기를 사용하려 하면 실패시킨다.",
+    "effect": "움직임에 반응하여 손바닥으로 밀쳐서 상대를 풀죽게 만든다. 상대가 쓴 기술이 선제공격 기술이 아니면 실패한다.",
+    "tags": [
+      "선공",
+      "접촉",
+      "풀죽음"
+    ],
     "makesContact": true
   },
   {
@@ -1062,7 +1335,10 @@
     "accuracy": null,
     "pp": 20,
     "priority": 0,
-    "effect": "자신의 특공을 2랭크 올린다.",
+    "effect": "나쁜 일을 생각해서 머리를 활성화시킨다. 자신의 특수공격을 2랭크 올린다.",
+    "tags": [
+      "랭크"
+    ],
     "statChanges": [
       {
         "target": "self",
@@ -1081,7 +1357,10 @@
     "accuracy": 100,
     "pp": 12,
     "priority": 0,
-    "effect": "지니고 있는 도구를 던져 공격한다. 위력은 도구에 따라 달라진다.",
+    "effect": "지니게 한 도구를 재빠르게 내던져서 공격한다. 도구에 따라 위력과 효과가 바뀐다.",
+    "tags": [
+      "비접촉"
+    ],
     "makesContact": false
   },
   {
@@ -1093,7 +1372,7 @@
     "accuracy": null,
     "pp": 20,
     "priority": 5,
-    "effect": "이번 턴 아군이 사용하는 기술의 위력을 1.5배로 올린다.",
+    "effect": "동료를 돕는다. 도움받은 포켓몬이 쓰는 기술의 위력은 여느 때보다 커진다.",
     "makesContact": false
   },
   {
@@ -1105,7 +1384,12 @@
     "accuracy": 100,
     "pp": 12,
     "priority": 0,
-    "effect": "준 데미지의 절반만큼 자신의 체력을 회복한다.",
+    "effect": "주먹으로 상대의 힘을 흡수한다. 대상에게 준 대미지의 ½만큼 체력을 회복한다.",
+    "tags": [
+      "흡수",
+      "펀치",
+      "접촉"
+    ],
     "drainFraction": 0.5,
     "classification": [
       "펀치"
@@ -1121,7 +1405,12 @@
     "accuracy": 100,
     "pp": 20,
     "priority": 0,
-    "effect": "100% 확률로 상대의 스피드를 1랭크 낮춘다.",
+    "effect": "땅을 힘껏 밟아 자신의 주위에 있는 포켓몬을 공격한다. 상대의 스피드를 1랭크 떨어뜨린다.",
+    "tags": [
+      "광역-전원",
+      "랭크",
+      "비접촉"
+    ],
     "makesContact": false
   },
   {
@@ -1133,7 +1422,18 @@
     "accuracy": 100,
     "pp": 20,
     "priority": 0,
-    "effect": "상대의 몸무게가 무거울수록 위력이 커진다.",
+    "effect": "재빠른 움직임으로 상대의 다리를 노려 공격한다. 반드시 상대의 스피드를 1랭크 떨어뜨린다.",
+    "tags": [
+      "랭크",
+      "접촉"
+    ],
+    "statChanges": [
+      {
+        "target": "opponent",
+        "stat": "spe",
+        "delta": -1
+      }
+    ],
     "makesContact": true
   },
   {
@@ -1145,7 +1445,10 @@
     "accuracy": 75,
     "pp": 8,
     "priority": 0,
-    "effect": "급소에 맞을 확률이 높다.",
+    "effect": "굉장한 힘을 담은 킥으로 상대를 걷어차서 공격한다.",
+    "tags": [
+      "접촉"
+    ],
     "highCritRatio": true,
     "makesContact": true
   },
@@ -1158,7 +1461,12 @@
     "accuracy": 100,
     "pp": 8,
     "priority": 0,
-    "effect": "상대의 체력을 자신과 같은 비율까지 깎는다.",
+    "effect": "목숨을 걸고 상대를 공격한다. 자신은 기절하게 되지만 상대에게 HP만큼의 데미지를 준다.",
+    "tags": [
+      "고정대미지",
+      "자기희생",
+      "비접촉"
+    ],
     "makesContact": true
   },
   {
@@ -1170,9 +1478,18 @@
     "accuracy": 100,
     "pp": 20,
     "priority": 0,
-    "effect": "30% 확률로 상대를 풀죽게 만든다.",
+    "effect": "날카롭고 뾰족한 이빨로 물어서 공격한다. 30% 확률로 상대를 풀죽게 만든다.",
+    "tags": [
+      "접촉",
+      "턱",
+      "풀죽음"
+    ],
     "inflictsVolatile": [
-      { "volatile": "flinch", "target": "opponent", "chance": 30 }
+      {
+        "volatile": "flinch",
+        "target": "opponent",
+        "chance": 30
+      }
     ],
     "classification": [
       "물기"
@@ -1188,7 +1505,12 @@
     "accuracy": 100,
     "pp": 20,
     "priority": 0,
-    "effect": "20% 확률로 상대를 혼란시킨다.",
+    "effect": "물의 진동을 상대에게 가하여 공격한다. 20% 확률로 상대를 혼란 상태로 만든다.",
+    "tags": [
+      "비접촉",
+      "파동",
+      "혼란"
+    ],
     "classification": [
       "파동"
     ],
@@ -1210,7 +1532,10 @@
     "accuracy": null,
     "pp": 8,
     "priority": 4,
-    "effect": "이번 턴 상대의 공격을 완전히 막아낸다. 연속으로 쓰면(판별·버티기·킹실드 포함, 계열 공유) 성공 확률이 100%→1/3→1/9→1/27로 급격히 줄어든다.",
+    "effect": "상대의 공격을 전혀 받지 않는다. 연속으로 쓰면 실패하기 쉽다.",
+    "tags": [
+      "방어"
+    ],
     "makesContact": false,
     "protectEffect": "block"
   },
@@ -1223,7 +1548,12 @@
     "accuracy": 90,
     "pp": 12,
     "priority": -6,
-    "effect": "체력을 절반 소모하고 자신의 공격을 최대로 올린다.",
+    "effect": "상대를 내던져서 교대할 포켓몬을 끌어낸다. 야생의 경우에는 배틀이 끝난다.",
+    "tags": [
+      "후공",
+      "강제 교체",
+      "접촉"
+    ],
     "makesContact": true
   },
   {
@@ -1235,7 +1565,10 @@
     "accuracy": null,
     "pp": 12,
     "priority": 4,
-    "effect": "이번 턴 쓰러지지 않고 체력을 1 남긴다. 연속으로 쓰면(방어·판별·킹실드 포함, 계열 공유) 성공 확률이 100%→1/3→1/9→1/27로 급격히 줄어든다.",
+    "effect": "공격을 받아도 HP를 반드시 1만큼은 남긴다. 연속으로 쓰면 실패하기 쉽다.",
+    "tags": [
+      "방어"
+    ],
     "makesContact": false,
     "protectEffect": "endure"
   },
@@ -1248,7 +1581,10 @@
     "accuracy": null,
     "pp": 20,
     "priority": 0,
-    "effect": "자신의 공격과 방어를 1랭크씩 올린다.",
+    "effect": "몸에 힘을 담아 근육을 두껍게 해서 자신의 공격과 방어를 1랭크 올린다.",
+    "tags": [
+      "랭크"
+    ],
     "statChanges": [
       {
         "target": "self",
@@ -1272,7 +1608,11 @@
     "accuracy": 100,
     "pp": 12,
     "priority": 0,
-    "effect": "상대가 이번 턴 자신보다 나중에 움직였다면 위력이 2배가 된다.",
+    "effect": "모아서 공격한다. 자신이 상대보다 나중에 행동하면 위력이 2배가 된다.",
+    "tags": [
+      "접촉"
+    ],
+    "conditionalDoublePower": "moves-after-target",
     "makesContact": true
   },
   {
@@ -1284,7 +1624,11 @@
     "accuracy": 90,
     "pp": 12,
     "priority": 0,
-    "effect": "2~5회 연속 공격. (2/3회 각 35%, 4/5회 각 15% 확률. 명중 여부는 첫 타에서만 판정)",
+    "effect": "단단한 뼈로 상대를 세게 때려서 공격한다. 2-5회 동안 연속으로 쓴다.",
+    "tags": [
+      "연타",
+      "비접촉"
+    ],
     "makesContact": false,
     "minHits": 2,
     "maxHits": 5
@@ -1298,7 +1642,12 @@
     "accuracy": 100,
     "pp": 20,
     "priority": 1,
-    "effect": "우선도 +1. 항상 먼저 나간다.",
+    "effect": "탄환처럼 빠르고 단단한 펀치를 상대에게 날린다. 반드시 선제공격을 할 수 있다.",
+    "tags": [
+      "선공",
+      "접촉",
+      "펀치"
+    ],
     "classification": [
       "펀치"
     ],
@@ -1313,7 +1662,12 @@
     "accuracy": 90,
     "pp": 12,
     "priority": 0,
-    "effect": "급소에 맞을 확률이 높고, 10% 확률로 화상 상태로 만든다.",
+    "effect": "10% 확률로 상대를 화상 상태로 만든다. 급소에 맞을 확률이 높다.",
+    "tags": [
+      "급소",
+      "접촉",
+      "화상"
+    ],
     "highCritRatio": true,
     "makesContact": true,
     "inflictsStatus": [
@@ -1332,7 +1686,10 @@
     "accuracy": null,
     "pp": 8,
     "priority": 0,
-    "effect": "5턴간 날씨를 비로 바꾼다.",
+    "effect": "5턴 동안 비를 내리게 해서 물타입 기술의 위력을 올린다.",
+    "tags": [
+      "환경"
+    ],
     "makesContact": false,
     "setsWeather": "비"
   },
@@ -1345,7 +1702,11 @@
     "accuracy": 100,
     "pp": 8,
     "priority": 2,
-    "effect": "우선도 +2. 항상 먼저 나간다.",
+    "effect": "눈에 보이지 않는 굉장한 속도로 상대에게 돌진하여 공격한다. 상대방보다 먼저 공격한다.",
+    "tags": [
+      "선공",
+      "접촉"
+    ],
     "makesContact": true
   },
   {
@@ -1357,7 +1718,11 @@
     "accuracy": 85,
     "pp": 20,
     "priority": 0,
-    "effect": "상대의 방어를 2랭크 낮춘다.",
+    "effect": "그만 귀를 막아버리고 싶은 싫은 소리를 내어 상대의 방어를 2랭크 떨어뜨린다.",
+    "tags": [
+      "랭크",
+      "소리"
+    ],
     "statChanges": [
       {
         "target": "opponent",
@@ -1379,9 +1744,18 @@
     "accuracy": 100,
     "pp": 16,
     "priority": 0,
-    "effect": "20% 확률로 상대를 풀죽게 만든다.",
+    "effect": "몸에서 악의로 가득한 무서운 오라를 발한다. 20% 확률로 상대를 풀죽게 만든다.",
+    "tags": [
+      "파동",
+      "비접촉",
+      "풀죽음"
+    ],
     "inflictsVolatile": [
-      { "volatile": "flinch", "target": "opponent", "chance": 20 }
+      {
+        "volatile": "flinch",
+        "target": "opponent",
+        "chance": 20
+      }
     ],
     "classification": [
       "파동"
@@ -1397,7 +1771,11 @@
     "accuracy": null,
     "pp": 20,
     "priority": -6,
-    "effect": "자신의 공격을 1랭크 올린다.",
+    "effect": "상대를 도망가게 해서 교대할 포켓몬을 끌어낸다. 야생의 경우에는 배틀이 끝난다.",
+    "tags": [
+      "강제 교체",
+      "소리"
+    ],
     "classification": [
       "소리"
     ],
@@ -1412,7 +1790,11 @@
     "accuracy": 100,
     "pp": 8,
     "priority": 0,
-    "effect": "사용 후 자신의 방어와 특방이 1랭크씩 낮아진다.",
+    "effect": "방어를 포기하고 상대 쪽으로 깊숙이 돌격한다. 사용 후 사용자의 방어와 특수방어가 1랭크 떨어진다.",
+    "tags": [
+      "반동-랭크",
+      "접촉"
+    ],
     "makesContact": true
   },
   {
@@ -1424,7 +1806,7 @@
     "accuracy": null,
     "pp": 12,
     "priority": 0,
-    "effect": "잠든 상태에서만 사용 가능. 배운 기술 중 하나를 무작위로 사용한다.",
+    "effect": "자신이 배운 기술 중 하나를 무작위로 날린다. 자신이 잠들어 있을 때만 쓸 수 있다.",
     "makesContact": false,
     "usageCondition": "sleep-only",
     "callsRandomLearnedMove": true
@@ -1438,7 +1820,11 @@
     "accuracy": null,
     "pp": 8,
     "priority": 0,
-    "effect": "체력과 상태이상을 모두 회복하고 2턴간 잠든다.",
+    "effect": "2턴 동안 계속 잠잔다. 자신의 HP와 상태 이상을 모두 회복한다.",
+    "tags": [
+      "회복",
+      "잠듦"
+    ],
     "makesContact": false,
     "restSleep": true
   },
@@ -1451,7 +1837,12 @@
     "accuracy": null,
     "pp": 20,
     "priority": 0,
-    "effect": "반드시 명중한다.",
+    "effect": "재빠른 움직임으로 상대를 농락해 벤다. 공격은 반드시 명중한다.",
+    "tags": [
+      "필중",
+      "베기",
+      "접촉"
+    ],
     "classification": [
       "베기"
     ],
@@ -1466,7 +1857,11 @@
     "accuracy": 100,
     "pp": 20,
     "priority": 1,
-    "effect": "우선도 +1. 항상 먼저 나간다.",
+    "effect": "주먹을 흔들어 진공의 파도를 일으킨다. 반드시 선제 공격을 할 수 있다.",
+    "tags": [
+      "선공",
+      "비접촉"
+    ],
     "makesContact": false
   },
   {
@@ -1478,7 +1873,10 @@
     "accuracy": null,
     "pp": 16,
     "priority": 0,
-    "effect": "자신의 방어를 2랭크 올린다.",
+    "effect": "피부를 쇠처럼 단단하게 함으로써 자신의 방어를 2랭크 올린다.",
+    "tags": [
+      "랭크"
+    ],
     "statChanges": [
       {
         "target": "self",
@@ -1497,7 +1895,11 @@
     "accuracy": null,
     "pp": 12,
     "priority": 0,
-    "effect": "상대의 체력을 절반만큼 회복시킨다.",
+    "effect": "치유파동을 날려서 최대 HP의 절반만큼 상대의 HP를 회복한다.",
+    "tags": [
+      "회복",
+      "파동"
+    ],
     "classification": [
       "파동"
     ],
@@ -1514,7 +1916,12 @@
     "accuracy": 100,
     "pp": 20,
     "priority": -5,
-    "effect": "이번 턴 받은 물리 데미지의 2배로 반격한다.",
+    "effect": "상대로부터 받은 물리공격의 데미지를 2배로 만들어 그 상대에게 돌려준다. 고스트 타입에게는 통하지 않는다.",
+    "tags": [
+      "후공",
+      "접촉"
+    ],
+    "counters": "physical",
     "makesContact": true
   },
   {
@@ -1526,10 +1933,19 @@
     "accuracy": 100,
     "pp": 16,
     "priority": 0,
-    "effect": "잠든 상태에서만 사용 가능. 30% 확률로 상대를 풀죽게 만든다.",
+    "effect": "자신이 잠들어 있을 때 소음을 내어 공격한다. 30% 확률로 상대를 풀죽게 만든다.",
+    "tags": [
+      "소리",
+      "비접촉",
+      "풀죽음"
+    ],
     "usageCondition": "sleep-only",
     "inflictsVolatile": [
-      { "volatile": "flinch", "target": "opponent", "chance": 30 }
+      {
+        "volatile": "flinch",
+        "target": "opponent",
+        "chance": 30
+      }
     ],
     "classification": [
       "소리"
@@ -1545,7 +1961,12 @@
     "accuracy": 90,
     "pp": 12,
     "priority": 0,
-    "effect": "2~5회 연속 공격.",
+    "effect": "혜성과 같은 펀치를 날려서 공격한다. 20%의 확률로 자신의 공격이 올라간다.",
+    "tags": [
+      "랭크",
+      "접촉",
+      "펀치"
+    ],
     "classification": [
       "펀치"
     ],
@@ -1560,7 +1981,10 @@
     "accuracy": null,
     "pp": 8,
     "priority": 0,
-    "effect": "5턴간 날씨를 맑음으로 바꾼다.",
+    "effect": "5턴 동안 햇살을 강하게 해서 불꽃타입 기술의 위력을 올린다.",
+    "tags": [
+      "환경"
+    ],
     "makesContact": false,
     "setsWeather": "쾌청"
   },
@@ -1573,7 +1997,11 @@
     "accuracy": 80,
     "pp": 8,
     "priority": 0,
-    "effect": "급소에 맞을 확률이 높다.",
+    "effect": "양손으로 당수를 상대에게 힘껏 쳐서 공격한다. 급소에 맞기 쉽다.",
+    "tags": [
+      "급소",
+      "접촉"
+    ],
     "highCritRatio": true,
     "makesContact": true
   },
@@ -1586,9 +2014,16 @@
     "accuracy": 90,
     "pp": 8,
     "priority": 0,
-    "effect": "사용한 다음 턴은 움직일 수 없다.",
+    "effect": "강한 광선을 상대에게 발사하여 공격한다. 다음 턴은 움직일 수 없다.",
+    "tags": [
+      "반동-휴식",
+      "비접촉"
+    ],
     "inflictsVolatile": [
-      { "volatile": "recharge", "target": "self" }
+      {
+        "volatile": "recharge",
+        "target": "self"
+      }
     ],
     "makesContact": false
   },
@@ -1601,7 +2036,13 @@
     "accuracy": null,
     "pp": 20,
     "priority": 0,
-    "effect": "반드시 명중한다.",
+    "effect": "몸 속에서 파동의 힘을 끌어내 쏜다. 공격은 반드시 명중한다.",
+    "tags": [
+      "필중",
+      "파동",
+      "폭탄",
+      "비접촉"
+    ],
     "classification": [
       "구슬/폭탄",
       "파동"
@@ -1617,7 +2058,10 @@
     "accuracy": null,
     "pp": 8,
     "priority": 4,
-    "effect": "이번 턴 상대의 공격을 완전히 막아낸다. 연속으로 쓰면(방어·버티기·킹실드 포함, 계열 공유) 성공 확률이 100%→1/3→1/9→1/27로 급격히 줄어든다.",
+    "effect": "상대의 공격을 전혀 받지 않는다. 연속으로 쓰면 실패하기 쉽다.",
+    "tags": [
+      "방어"
+    ],
     "makesContact": false,
     "protectEffect": "block"
   },
@@ -1630,7 +2074,10 @@
     "accuracy": null,
     "pp": 16,
     "priority": 3,
-    "effect": "우선도 +3. 아군을 이번 턴 우선도 기술로부터 보호한다.",
+    "effect": "아군 전원을 상대의 선제공격으로부터 보호한다.",
+    "tags": [
+      "방어"
+    ],
     "makesContact": false
   },
   {
@@ -1642,7 +2089,11 @@
     "accuracy": 100,
     "pp": 12,
     "priority": 2,
-    "effect": "방어나 카운터 등으로 막고 있는 상대에게도 명중한다.",
+    "effect": "방어나 판별을 하고 있는 상대에게 공격할 수 있다. 방어 효과를 해제시킨다.",
+    "tags": [
+      "선공",
+      "비접촉"
+    ],
     "makesContact": false
   },
   {
@@ -1654,7 +2105,7 @@
     "accuracy": null,
     "pp": 20,
     "priority": 0,
-    "effect": "상대가 직전에 사용한 기술을 배워서 사용한다.",
+    "effect": "직전에 나온 기술을 흉내 내어 같은 기술을 쓴다. 기술이 나오지 않았으면 실패한다.",
     "makesContact": false,
     "excludedFromSleepTalk": true
   },
@@ -1667,7 +2118,13 @@
     "accuracy": 100,
     "pp": 20,
     "priority": -3,
-    "effect": "",
+    "priorityDisplay": "+5 / -3",
+    "effect": "기술을 고른 턴의 맨 처음에 우선도 +5로 정신을 집중하고, 같은 턴 우선도 -3으로 강력한 펀치를 날린다. 펀치가 나가기 전에 데미지를 주는 기술에 맞으면 실패한다.",
+    "tags": [
+      "정신 집중",
+      "펀치",
+      "접촉"
+    ],
     "classification": [
       "펀치"
     ],
@@ -1682,7 +2139,10 @@
     "accuracy": 100,
     "pp": 20,
     "priority": 0,
-    "effect": "",
+    "effect": "자신이 독, 마비, 화상 상태일 때 날리면 기술의 위력이 2배가 된다.",
+    "tags": [
+      "접촉"
+    ],
     "makesContact": true
   },
   {
@@ -1694,7 +2154,11 @@
     "accuracy": 100,
     "pp": 16,
     "priority": 0,
-    "effect": "자신의 체력이 낮을수록 위력이 커진다.",
+    "effect": "힘을 쥐어짜서 공격한다. 자신의 HP가 적을수록 기술의 위력이 올라간다.",
+    "tags": [
+      "접촉"
+    ],
+    "reversalPower": true,
     "makesContact": true
   },
   {
@@ -1706,9 +2170,16 @@
     "accuracy": null,
     "pp": 20,
     "priority": 0,
-    "effect": "자신의 급소율을 2랭크 올린다.",
+    "effect": "깊게 숨을 들이마셔 기합을 넣는다. 자신의 공격이 급소에 맞을 확률을 2랭크 올린다.",
+    "tags": [
+      "랭크"
+    ],
     "statChanges": [
-      { "target": "self", "stat": "critStage", "delta": 2 }
+      {
+        "target": "self",
+        "stat": "critStage",
+        "delta": 2
+      }
     ],
     "makesContact": false
   },
@@ -1721,7 +2192,12 @@
     "accuracy": 100,
     "pp": 16,
     "priority": 0,
-    "effect": "",
+    "effect": "몸 전체로 상대를 덮쳐눌러 공격한다. 30% 확률로 마비 상태로 만든다. 대상이 작아지기를 사용했다면 필중하며 대미지가 2배다.",
+    "tags": [
+      "접촉",
+      "압박",
+      "마비"
+    ],
     "makesContact": true,
     "inflictsStatus": [
       {
@@ -1739,7 +2215,11 @@
     "accuracy": null,
     "pp": 20,
     "priority": 0,
-    "effect": "자신의 공격을 1랭크 올린다. (8세대부터는 더블배틀에서 사용 시 아군 전원도 함께 1랭크 오름)",
+    "effect": "큰 소리로 짖어 기합을 높여서 자신과 같은 편의 공격을 1랭크 올린다.",
+    "tags": [
+      "랭크",
+      "소리"
+    ],
     "statChanges": [
       {
         "target": "self",
@@ -1761,7 +2241,13 @@
     "accuracy": 90,
     "pp": 12,
     "priority": 0,
-    "effect": "",
+    "effect": "점프해서 무릎차기로 상대를 공격한다. 빗나가면 자신이 전체 HP의 ½의 대미지를 입는다.",
+    "tags": [
+      "반동",
+      "상승",
+      "접촉"
+    ],
+    "crashFraction": 0.5,
     "makesContact": true
   },
   {
@@ -1774,6 +2260,9 @@
     "pp": 12,
     "priority": 0,
     "effect": "신비한 물을 흩뿌려서 자신과 배틀에 나와 있는 같은 편의 HP를 회복한다.",
+    "tags": [
+      "회복"
+    ],
     "makesContact": false
   },
   {
@@ -1785,7 +2274,11 @@
     "accuracy": 100,
     "pp": 20,
     "priority": 0,
-    "effect": "상대의 몸무게가 무거울수록 위력이 커진다.",
+    "effect": "발을 강하게 걸고 상대를 넘어뜨려 공격한다. 상대가 무거울수록 위력이 커진다(<10→20 … 200 이상 120).",
+    "tags": [
+      "접촉"
+    ],
+    "targetAbsoluteWeightPower": true,
     "makesContact": true
   },
   {
@@ -1797,7 +2290,11 @@
     "accuracy": 95,
     "pp": 16,
     "priority": 0,
-    "effect": "",
+    "effect": "암석을 내던져서 공격한다. 상대의 움직임을 봉인함으로 스피드를 1랭크 떨어뜨린다.",
+    "tags": [
+      "랭크",
+      "비접촉"
+    ],
     "makesContact": false
   },
   {
@@ -1809,7 +2306,10 @@
     "accuracy": null,
     "pp": 12,
     "priority": 0,
-    "effect": "고정 수치가 아니라, 사용 시점에서 상대의 랭크 변화 상태를 그대로 복사해 자신에게 적용한다.",
+    "effect": "자신에게 암시를 걸어서 능력 변화 상태를 상대와 같게 만든다.",
+    "tags": [
+      "랭크"
+    ],
     "makesContact": false
   },
   {
@@ -1821,7 +2321,12 @@
     "accuracy": 95,
     "pp": 8,
     "priority": 0,
-    "effect": "",
+    "effect": "전신에서 끌어모은 강철을 빔으로 바꿔 세차게 발사한다. 자신도 최대 HP의 ½만큼 데미지를 받는다.",
+    "tags": [
+      "반동",
+      "비접촉"
+    ],
+    "selfDamageFractionOnUse": 0.5,
     "makesContact": false
   },
   {
@@ -1833,7 +2338,10 @@
     "accuracy": null,
     "pp": 12,
     "priority": 0,
-    "effect": "자신을 제외한 아군 전원의 공격과 방어를 1랭크씩 올린다. 자신에게는 효과가 없다(단식전에서는 사실상 무효과).",
+    "effect": "적절한 지도를 통해서 같은 편 전원의 공격과 방어를 1랭크 올린다.",
+    "tags": [
+      "랭크"
+    ],
     "makesContact": false
   },
   {
@@ -1845,7 +2353,11 @@
     "accuracy": 90,
     "pp": 20,
     "priority": 0,
-    "effect": "10% 확률로 자신의 방어가 1랭크 오른다.",
+    "effect": "단단한 날개를 상대에게 부딪쳐서 공격한다. 10%의 확률로 자신의 방어가 1랭크 올라간다.",
+    "tags": [
+      "랭크",
+      "접촉"
+    ],
     "makesContact": true
   },
   {
@@ -1857,9 +2369,16 @@
     "accuracy": null,
     "pp": 16,
     "priority": 0,
-    "effect": "자신의 회피율을 1랭크 올린다.",
+    "effect": "재빠른 움직임으로 분신을 만들어 상대를 혼란시켜 회피율을 1랭크 올린다.",
+    "tags": [
+      "랭크"
+    ],
     "statChanges": [
-      { "target": "self", "stat": "evasion", "delta": 1 }
+      {
+        "target": "self",
+        "stat": "evasion",
+        "delta": 1
+      }
     ],
     "makesContact": false
   },
@@ -1872,7 +2391,12 @@
     "accuracy": 100,
     "pp": 20,
     "priority": 0,
-    "effect": "반드시 명중한다.",
+    "effect": "순간적으로 빈틈을 노려 상대를 베어 버린다. 급소에 맞을 확률이 높다.",
+    "tags": [
+      "급소",
+      "접촉",
+      "베기"
+    ],
     "classification": [
       "베기"
     ],
@@ -1887,7 +2411,11 @@
     "accuracy": null,
     "pp": 8,
     "priority": 0,
-    "effect": "체력의 절반을 회복한다. 이번 턴 동안 비행 타입이 사라진다.",
+    "effect": "땅에 내려와 몸을 쉬게 한다. 사용자의 최대 HP의 절반만큼 HP를 회복한다. 사용한 턴 동안 사용자의 비행 타입이 없어진다.",
+    "tags": [
+      "타입 변경",
+      "회복"
+    ],
     "makesContact": false,
     "healsFraction": 0.5
   },
@@ -1900,7 +2428,11 @@
     "accuracy": 100,
     "pp": 20,
     "priority": 0,
-    "effect": "",
+    "effect": "상대에게 달려들어 공격한다. 상대의 스피드를 1랭크 떨어뜨린다.",
+    "tags": [
+      "랭크",
+      "접촉"
+    ],
     "makesContact": true
   },
   {
@@ -1912,7 +2444,11 @@
     "accuracy": 90,
     "pp": 12,
     "priority": 0,
-    "effect": "2회 연속 공격. (명중 여부는 첫 타에서만 판정)",
+    "effect": "꼬리 등을 써서 상대를 때려 공격한다. 2회 연속으로 데미지를 준다.",
+    "tags": [
+      "연속",
+      "접촉"
+    ],
     "makesContact": true,
     "minHits": 2,
     "maxHits": 2
@@ -1926,7 +2462,11 @@
     "accuracy": 90,
     "pp": 12,
     "priority": 0,
-    "effect": "2회 연속 공격. (명중 여부는 첫 타에서만 판정)",
+    "effect": "날개를 상대에게 부딪쳐서 공격한다. 2회 연속으로 데미지를 준다.",
+    "tags": [
+      "연속",
+      "접촉"
+    ],
     "makesContact": true,
     "minHits": 2,
     "maxHits": 2
@@ -1940,7 +2480,11 @@
     "accuracy": 100,
     "pp": 16,
     "priority": 0,
-    "effect": "",
+    "effect": "전력으로 상대에게 덤벼들며 공격한다. 상대의 공격을 1랭크 떨어뜨린다.",
+    "tags": [
+      "랭크",
+      "접촉"
+    ],
     "makesContact": true
   },
   {
@@ -1952,7 +2496,10 @@
     "accuracy": 100,
     "pp": 20,
     "priority": 0,
-    "effect": "상대가 도구를 지니고 있으면 명중 시 그 도구를 빼앗는다.",
+    "effect": "공격과 동시에 도구를 훔친다. 자신이 도구를 지니고 있을 경우에는 훔칠 수 없다.",
+    "tags": [
+      "접촉"
+    ],
     "makesContact": true
   },
   {
@@ -1964,7 +2511,11 @@
     "accuracy": null,
     "pp": 8,
     "priority": 0,
-    "effect": "5턴간 날씨를 모래바람으로 바꾼다.",
+    "effect": "5턴 동안 모래바람을 일으켜 바위, 땅, 강철타입 이외의 상대에게 데미지를 준다.",
+    "tags": [
+      "환경",
+      "바람"
+    ],
     "classification": [
       "바람"
     ],
@@ -1980,7 +2531,10 @@
     "accuracy": null,
     "pp": 20,
     "priority": 0,
-    "effect": "자신의 능력 변화를 유지한 채 다른 포켓몬으로 교체한다.",
+    "effect": "교대 포켓몬과 교체한다. 능력 변화는 교대 포켓몬이 그대로 이어받는다.",
+    "tags": [
+      "도주"
+    ],
     "makesContact": false
   },
   {
@@ -1992,7 +2546,10 @@
     "accuracy": 100,
     "pp": 20,
     "priority": 0,
-    "effect": "상대가 지닌 나무열매를 먹어 그 효과를 얻는다.",
+    "effect": "물어서 공격한다. 상대가 나무열매를 지니고 있을 때 먹어서 나무열매의 효과를 받을 수 있다.",
+    "tags": [
+      "접촉"
+    ],
     "makesContact": true
   },
   {
@@ -2004,7 +2561,12 @@
     "accuracy": 100,
     "pp": 12,
     "priority": 0,
-    "effect": "10% 확률로 상대의 특방을 1랭크 낮춘다.",
+    "effect": "진동으로 음파를 일으켜서 공격한다. 10% 확률로 상대의 특수방어를 1랭크 떨어뜨린다.",
+    "tags": [
+      "랭크",
+      "비접촉",
+      "소리"
+    ],
     "classification": [
       "소리"
     ],
@@ -2019,7 +2581,12 @@
     "accuracy": 100,
     "pp": 20,
     "priority": 0,
-    "effect": "100% 확률로 상대의 특공을 1랭크 낮춘다.",
+    "effect": "저항해서 상대를 공격한다. 상대의 특수공격을 1랭크 떨어뜨린다.",
+    "tags": [
+      "광역-상대",
+      "랭크",
+      "비접촉"
+    ],
     "makesContact": false
   },
   {
@@ -2031,7 +2598,10 @@
     "accuracy": null,
     "pp": 20,
     "priority": 0,
-    "effect": "5턴간 아군이 받는 특수 데미지를 절반으로 줄인다.",
+    "effect": "5턴 동안 이상한 장막을 쳐서 상대로부터 받는 특수공격의 데미지를 약하게 한다.",
+    "tags": [
+      "방어"
+    ],
     "makesContact": false,
     "setsScreen": "lightScreen"
   },
@@ -2044,7 +2614,12 @@
     "accuracy": 100,
     "pp": 20,
     "priority": 0,
-    "effect": "급소에 맞을 확률이 높다.",
+    "effect": "실체화시킨 마음의 칼날로 상대를 베어 가른다. 급소에 맞을 확률이 높다.",
+    "tags": [
+      "급소",
+      "비접촉",
+      "베기"
+    ],
     "highCritRatio": true,
     "classification": [
       "베기"
@@ -2060,7 +2635,11 @@
     "accuracy": 100,
     "pp": 20,
     "priority": 0,
-    "effect": "",
+    "effect": "자신의 몸을 세차게 휘둘러서 상대에게 데미지를 준다.",
+    "tags": [
+      "광역-전원",
+      "접촉"
+    ],
     "makesContact": true
   },
   {
@@ -2072,7 +2651,11 @@
     "accuracy": null,
     "pp": 16,
     "priority": 0,
-    "effect": "4턴간 아군의 스피드를 2배로 만든다.",
+    "effect": "세차게 불어대는 바람의 소용돌이를 만들어 4턴 동안 같은 편 모두의 스피드를 올린다.",
+    "tags": [
+      "특수 환경",
+      "바람"
+    ],
     "classification": [
       "바람"
     ],
@@ -2087,7 +2670,11 @@
     "accuracy": 100,
     "pp": 16,
     "priority": 0,
-    "effect": "",
+    "effect": "낫이나 발톱을 가위처럼 교차시키면서 상대를 베어 가른다.",
+    "tags": [
+      "접촉",
+      "베기"
+    ],
     "classification": [
       "베기"
     ],
@@ -2102,7 +2689,10 @@
     "accuracy": null,
     "pp": 16,
     "priority": 0,
-    "effect": "양 진영의 설치물을 제거하고 상대의 회피율을 1랭크 낮춘다.",
+    "effect": "강한 바람으로 상대의 리플렉터나 빛의장막 등을 제거한다. 회피율도 1랭크 떨어뜨린다.",
+    "tags": [
+      "랭크"
+    ],
     "makesContact": false,
     "statChanges": [
       {
@@ -2121,7 +2711,11 @@
     "accuracy": 100,
     "pp": 16,
     "priority": 0,
-    "effect": "도구를 지니고 있지 않으면 위력이 2배가 된다.",
+    "effect": "경쾌하게 상대를 공격한다. 자신이 도구를 지니고 있지 않으면 위력이 2배가 된다.",
+    "tags": [
+      "접촉"
+    ],
+    "conditionalDoublePower": "user-has-no-item",
     "makesContact": true
   },
   {
@@ -2133,7 +2727,11 @@
     "accuracy": 90,
     "pp": 12,
     "priority": 0,
-    "effect": "",
+    "effect": "배후에서 엄습해서 공격한다. 상대의 특수공격을 1랭크 떨어뜨린다.",
+    "tags": [
+      "랭크",
+      "접촉"
+    ],
     "makesContact": true
   },
   {
@@ -2145,7 +2743,11 @@
     "accuracy": 100,
     "pp": 8,
     "priority": 0,
-    "effect": "사용 후 자신의 공격과 방어가 1랭크씩 낮아진다.",
+    "effect": "엄청난 힘을 발휘하여 상대를 공격한다. 사용 후 자신의 공격과 방어가 1랭크 떨어진다.",
+    "tags": [
+      "반동-랭크",
+      "접촉"
+    ],
     "makesContact": true
   },
   {
@@ -2157,7 +2759,14 @@
     "accuracy": 95,
     "pp": 20,
     "priority": 0,
-    "effect": "급소에 맞을 확률이 높다.",
+    "effect": "날카로운 바람으로 상대를 베어 공격한다. 급소에 맞을 확률이 높다.",
+    "tags": [
+      "광역-상대",
+      "급소",
+      "비접촉",
+      "베기",
+      "바람"
+    ],
     "highCritRatio": true,
     "classification": [
       "베기"
@@ -2173,7 +2782,11 @@
     "accuracy": 100,
     "pp": 20,
     "priority": 0,
-    "effect": "사용한 뒤 다른 포켓몬으로 교체한다.",
+    "effect": "공격한 뒤 굉장한 스피드로 돌아와서 교대 포켓몬과 교체한다.",
+    "tags": [
+      "도주",
+      "접촉"
+    ],
     "makesContact": true
   },
   {
@@ -2185,7 +2798,11 @@
     "accuracy": null,
     "pp": 12,
     "priority": 0,
-    "effect": "고스트 타입이면 자신의 최대 HP 절반을 소모해 상대를 저주 상태로 만들고(매 턴 상대 최대 HP 1/4 데미지), 고스트 타입이 아니면 자신의 공격과 방어를 1랭크씩 올리는 대신 스피드가 1랭크 떨어진다.",
+    "effect": "기술을 쓰는 포켓몬이 고스트 타입일 때와 그 이외의 타입일 때 효과가 다르다.",
+    "tags": [
+      "랭크",
+      "저주"
+    ],
     "statChanges": [
       {
         "target": "self",
@@ -2206,7 +2823,8 @@
         "userIsNotType": "고스트"
       }
     ],
-    "makesContact": false
+    "makesContact": false,
+    "notReflectable": true
   },
   {
     "id": "하드프레스",
@@ -2217,7 +2835,10 @@
     "accuracy": 100,
     "pp": 12,
     "priority": 0,
-    "effect": "",
+    "effect": "팔이나 집게로 상대를 압박한다. 상대의 HP가 남아 있을수록 위력이 올라간다.",
+    "tags": [
+      "접촉"
+    ],
     "makesContact": true
   },
   {
@@ -2229,7 +2850,10 @@
     "accuracy": 95,
     "pp": 12,
     "priority": 0,
-    "effect": "",
+    "effect": "온몸을 써서 상대를 맹렬히 공격한다.",
+    "tags": [
+      "접촉"
+    ],
     "makesContact": true
   },
   {
@@ -2241,7 +2865,13 @@
     "accuracy": 70,
     "pp": 8,
     "priority": 0,
-    "effect": "10% 확률로 상대를 얼린다.",
+    "effect": "세찬 눈보라를 모든 상대에게 내뿜어 공격한다. 10% 확률로 상대를 얼음 상태로 만든다. 눈이 내리면 반드시 명중한다.",
+    "tags": [
+      "광역-상대",
+      "비접촉",
+      "바람",
+      "얼음"
+    ],
     "classification": [
       "바람"
     ],
@@ -2262,7 +2892,10 @@
     "accuracy": null,
     "pp": 20,
     "priority": 0,
-    "effect": "자신의 특방을 2랭크 올린다.",
+    "effect": "머리를 비워서 순간적으로 무언가를 잊어버림으로써 자신의 특수방어를 2랭크 올린다.",
+    "tags": [
+      "랭크"
+    ],
     "statChanges": [
       {
         "target": "self",
@@ -2281,7 +2914,11 @@
     "accuracy": 95,
     "pp": 16,
     "priority": 0,
-    "effect": "100% 확률로 상대의 스피드를 1랭크 낮춘다.",
+    "effect": "진흙 덩어리를 상대에게 내던져서 공격한다. 상대의 스피드를 1랭크 떨어뜨린다.",
+    "tags": [
+      "랭크",
+      "비접촉"
+    ],
     "makesContact": false
   },
   {
@@ -2293,7 +2930,11 @@
     "accuracy": 85,
     "pp": 16,
     "priority": 0,
-    "effect": "여러 턴 동안 상대를 속박해 데미지를 준다.",
+    "effect": "세차게 불어대는 모래바람 속에 4-5턴 동안 상대를 가두어 공격한다.",
+    "tags": [
+      "구속",
+      "비접촉"
+    ],
     "makesContact": false
   },
   {
@@ -2305,7 +2946,12 @@
     "accuracy": 100,
     "pp": 20,
     "priority": -5,
-    "effect": "이번 턴 받은 특수 데미지의 2배로 반격한다.",
+    "effect": "상대에게 받은 특수공격의 데미지를 2배로 만들어 그 상대에게 돌려준다.",
+    "tags": [
+      "후공",
+      "비접촉"
+    ],
+    "counters": "special",
     "makesContact": false
   },
   {
@@ -2317,7 +2963,11 @@
     "accuracy": 85,
     "pp": 16,
     "priority": 0,
-    "effect": "여러 턴 동안 상대를 속박해 데미지를 준다.",
+    "effect": "세차게 소용돌이치는 물속에 4-5턴 동안 상대를 가두어 공격한다.",
+    "tags": [
+      "구속",
+      "비접촉"
+    ],
     "makesContact": false
   },
   {
@@ -2329,7 +2979,11 @@
     "accuracy": 100,
     "pp": 12,
     "priority": 0,
-    "effect": "공격력 대신 자신의 방어력으로 데미지를 계산한다.",
+    "effect": "몸을 부딪쳐서 공격한다. 공격이 아니라 자신의 방어 수치로 데미지를 계산한다.",
+    "tags": [
+      "접촉"
+    ],
+    "offensiveStatOverride": "def",
     "makesContact": true
   },
   {
@@ -2341,7 +2995,11 @@
     "accuracy": 100,
     "pp": 12,
     "priority": 0,
-    "effect": "직전에 자신의 기술이 실패했다면 위력이 2배가 된다.",
+    "effect": "분함을 발판삼아 공격한다. 직전에 쓴 기술이 빗나갔거나 막혔다면 위력이 2배가 된다.",
+    "tags": [
+      "접촉"
+    ],
+    "conditionalDoublePower": "user-move-failed-last-turn",
     "makesContact": true
   },
   {
@@ -2353,7 +3011,12 @@
     "accuracy": 100,
     "pp": 12,
     "priority": 0,
-    "effect": "3턴간 계속 사용하며, 주변의 잠든 포켓몬을 깨운다.",
+    "effect": "3턴 동안 소란피워 공격한다. 그 동안은 아무도 잠들지 않게 된다.",
+    "tags": [
+      "난동",
+      "소리",
+      "비접촉"
+    ],
     "classification": [
       "소리"
     ],
@@ -2368,7 +3031,10 @@
     "accuracy": null,
     "pp": 20,
     "priority": 0,
-    "effect": "매 턴 자신의 체력을 조금씩 회복한다.",
+    "effect": "몸 주변을 물로 만든 베일로 덮는다. 매 턴마다 최대 HP의 1/16을 회복한다.",
+    "tags": [
+      "회복"
+    ],
     "makesContact": false,
     "setsRegenVolatile": "aquaRing"
   },
@@ -2381,7 +3047,12 @@
     "accuracy": 90,
     "pp": 12,
     "priority": 0,
-    "effect": "",
+    "effect": "강하고 무거운 주먹을 휘둘러 데미지를 준다. 명중 후 사용자의 스피드가 1랭크 하락한다.",
+    "tags": [
+      "반동-랭크",
+      "펀치",
+      "접촉"
+    ],
     "makesContact": true
   },
   {
@@ -2393,7 +3064,13 @@
     "accuracy": 95,
     "pp": 16,
     "priority": 0,
-    "effect": "물 타입 상대에게 효과가 굉장하다.",
+    "effect": "차가운 냉기를 상대에게 내뿜어 공격한다. 상대의 스피드를 1랭크 떨어뜨린다.",
+    "tags": [
+      "광역-상대",
+      "랭크",
+      "비접촉",
+      "바람"
+    ],
     "classification": [
       "바람"
     ],
@@ -2408,7 +3085,12 @@
     "accuracy": 100,
     "pp": 12,
     "priority": 0,
-    "effect": "10% 확률로 상대를 독 상태로 만든다.",
+    "effect": "오물 파도로 자신의 주위에 있는 포켓몬을 공격한다. 10%의 확률로 독 상태로 만든다.",
+    "tags": [
+      "광역-전원",
+      "비접촉",
+      "독"
+    ],
     "makesContact": false,
     "inflictsStatus": [
       {
@@ -2426,7 +3108,10 @@
     "accuracy": null,
     "pp": 12,
     "priority": 3,
-    "effect": "우선도 +3. 이번 턴 아군을 전체공격 기술로부터 보호한다.",
+    "effect": "같은 편 전원에게 향하는 공격을 1턴 동안 막는다.",
+    "tags": [
+      "방어"
+    ],
     "makesContact": false
   },
   {
@@ -2438,7 +3123,11 @@
     "accuracy": 100,
     "pp": 12,
     "priority": 0,
-    "effect": "날씨에 따라 타입과 위력이 변한다.",
+    "effect": "날씨가 있으면 타입이 그 날씨 타입(비=물·쾌청=불꽃·모래바람=바위·눈=얼음)으로 바뀌고 위력이 2배(100)가 된다. 날씨가 없으면 노말 50.",
+    "tags": [
+      "폭탄"
+    ],
+    "weatherBall": true,
     "classification": [
       "구슬/폭탄"
     ],
@@ -2453,7 +3142,11 @@
     "accuracy": 100,
     "pp": 12,
     "priority": 0,
-    "effect": "사용자도 준 데미지의 1/3만큼 반동을 입는다.",
+    "effect": "물을 두르고 온몸으로 상대에게 부딪친다. 자신도 대상에게 준 피해의 ⅓만큼 반동 피해를 받는다.",
+    "tags": [
+      "반동",
+      "접촉"
+    ],
     "recoilFraction": 0.3333333333333333,
     "makesContact": true
   },
@@ -2466,7 +3159,11 @@
     "accuracy": 100,
     "pp": 8,
     "priority": 0,
-    "effect": "자신의 체력이 낮을수록 위력이 커진다.",
+    "effect": "상대의 HP가 자신의 HP와 같아지도록 데미지를 준다.",
+    "tags": [
+      "접촉"
+    ],
+    "setsTargetHpToUserHp": true,
     "makesContact": true
   },
   {
@@ -2478,7 +3175,11 @@
     "accuracy": 100,
     "pp": 12,
     "priority": 0,
-    "effect": "100% 확률로 상대의 명중률을 1랭크 낮춘다.",
+    "effect": "상대의 얼굴 등에 진흙을 내던져서 공격한다. 명중률을 1랭크 떨어뜨린다.",
+    "tags": [
+      "랭크",
+      "비접촉"
+    ],
     "makesContact": false
   },
   {
@@ -2490,7 +3191,11 @@
     "accuracy": 100,
     "pp": 20,
     "priority": 0,
-    "effect": "30% 확률로 상대를 화상 상태로 만든다.",
+    "effect": "상대의 기운이 빠질 정도로 차가운 물을 끼얹어서 공격한다. 상대의 공격을 1랭크 떨어뜨린다.",
+    "tags": [
+      "랭크",
+      "비접촉"
+    ],
     "makesContact": false,
     "inflictsStatus": [
       {
@@ -2508,7 +3213,11 @@
     "accuracy": 100,
     "pp": 20,
     "priority": 0,
-    "effect": "",
+    "effect": "공격한 뒤 굉장한 스피드로 돌아와서 교대 포켓몬과 교체한다.",
+    "tags": [
+      "도주",
+      "접촉"
+    ],
     "makesContact": true
   },
   {
@@ -2520,7 +3229,12 @@
     "accuracy": 85,
     "pp": 12,
     "priority": 0,
-    "effect": "30% 확률로 상대의 명중률을 1랭크 낮춘다.",
+    "effect": "탁해진 물을 상대에게 발사하여 공격한다. 30% 확률로 상대의 명중률을 1랭크 떨어뜨린다.",
+    "tags": [
+      "광역-상대",
+      "랭크",
+      "비접촉"
+    ],
     "makesContact": false
   },
   {
@@ -2532,8 +3246,14 @@
     "accuracy": 100,
     "pp": 16,
     "priority": 0,
-    "effect": "물속에 숨은 상대에게는 위력이 2배가 된다.",
-    "bypassesHiding": ["underwater"],
+    "effect": "큰 파도를 일으켜 주위에 있는 모든 포켓몬을 공격한다. 다이빙 중인 상대에겐 위력이 2배다.",
+    "tags": [
+      "광역-전원",
+      "비접촉"
+    ],
+    "bypassesHiding": [
+      "underwater"
+    ],
     "hidingBypassMultiplier": 2,
     "makesContact": false
   },
@@ -2546,9 +3266,17 @@
     "accuracy": 100,
     "pp": 16,
     "priority": 0,
-    "effect": "20% 확률로 상대를 풀죽게 만든다.",
+    "effect": "굉장한 기세로 상대에게 돌진한다. 20%의 확률로 상대를 풀죽게 만들 때가 있다.",
+    "tags": [
+      "접촉",
+      "풀죽음"
+    ],
     "inflictsVolatile": [
-      { "volatile": "flinch", "target": "opponent", "chance": 20 }
+      {
+        "volatile": "flinch",
+        "target": "opponent",
+        "chance": 20
+      }
     ],
     "makesContact": true
   },
@@ -2561,9 +3289,16 @@
     "accuracy": 90,
     "pp": 8,
     "priority": 0,
-    "effect": "사용한 다음 턴은 움직일 수 없다.",
+    "effect": "물의 대포를 상대에게 발사하여 공격한다. 사용 후 1턴간 행동할 수 없다.",
+    "tags": [
+      "반동-휴식",
+      "비접촉"
+    ],
     "inflictsVolatile": [
-      { "volatile": "recharge", "target": "self" }
+      {
+        "volatile": "recharge",
+        "target": "self"
+      }
     ],
     "makesContact": false
   },
@@ -2576,7 +3311,10 @@
     "accuracy": 80,
     "pp": 8,
     "priority": 0,
-    "effect": "",
+    "effect": "대량의 물을 세찬 기세로 상대에게 발사하여 공격한다.",
+    "tags": [
+      "비접촉"
+    ],
     "makesContact": false
   },
   {
@@ -2588,9 +3326,17 @@
     "accuracy": null,
     "pp": 12,
     "priority": 0,
-    "effect": "다음 턴 상대를 잠들게 한다.",
+    "effect": "큰 하품으로 졸음을 유도한다. 다음 턴에 상대를 잠듦 상태로 만든다.",
+    "tags": [
+      "잠듦"
+    ],
     "makesContact": false,
-    "inflictsVolatile": [{ "volatile": "drowsy", "target": "opponent" }]
+    "inflictsVolatile": [
+      {
+        "volatile": "drowsy",
+        "target": "opponent"
+      }
+    ]
   },
   {
     "id": "떨어뜨리기",
@@ -2601,7 +3347,14 @@
     "accuracy": 100,
     "pp": 16,
     "priority": 0,
-    "effect": "공중에 떠 있는 상대도 지상으로 떨어뜨려 명중시킨다.",
+    "effect": "돌이나 구슬을 던져서 날고 있는 상대를 공격한다. 맞은 상대는 땅에 떨어진다.",
+    "tags": [
+      "비접촉"
+    ],
+    "bypassesHiding": [
+      "sky"
+    ],
+    "cancelsTargetCharge": true,
     "makesContact": false
   },
   {
@@ -2613,7 +3366,12 @@
     "accuracy": 95,
     "pp": 16,
     "priority": 0,
-    "effect": "1턴째 하늘로 날아올라 회피하고, 2턴째 공격한다.",
+    "effect": "1턴째에 하늘을 날아 2턴째에 상대를 공격한다.",
+    "tags": [
+      "충전",
+      "접촉",
+      "상승"
+    ],
     "chargeTurn": true,
     "chargeHideType": "sky",
     "makesContact": true
@@ -2627,7 +3385,11 @@
     "accuracy": 100,
     "pp": 16,
     "priority": 0,
-    "effect": "상대의 공격을 2랭크 낮춘다.",
+    "effect": "깃털을 흩뿌려 상대의 몸에 휘감는다. 상대의 공격을 2랭크 떨어뜨린다.",
+    "tags": [
+      "랭크",
+      "춤"
+    ],
     "classification": [
       "춤"
     ],
@@ -2642,7 +3404,10 @@
     "accuracy": null,
     "pp": 12,
     "priority": 0,
-    "effect": "비축된 힘을 꿀꺽해서 자신의 HP를 회복한다. 비축된 만큼 회복한다.",
+    "effect": "비축된 힘을 삼켜서 자신의 HP를 회복한다. 비축된 만큼 회복한다.",
+    "tags": [
+      "회복"
+    ],
     "makesContact": false
   },
   {
@@ -2654,7 +3419,11 @@
     "accuracy": 80,
     "pp": 8,
     "priority": 0,
-    "effect": "",
+    "effect": "더러운 쓰레기를 상대에게 부딪쳐서 공격한다. 30% 확률로 상대를 독 상태로 만든다.",
+    "tags": [
+      "비접촉",
+      "독"
+    ],
     "makesContact": false,
     "inflictsStatus": [
       {
@@ -2672,7 +3441,10 @@
     "accuracy": 100,
     "pp": 20,
     "priority": 0,
-    "effect": "많은 물을 끼얹어서 상대를 물타입으로 바꾼다.",
+    "effect": "많은 물을 끼얹어서 대상을 단일 물 타입으로 바꾼다.",
+    "tags": [
+      "타입 변경"
+    ],
     "makesContact": false
   },
   {
@@ -2684,7 +3456,11 @@
     "accuracy": 100,
     "pp": 16,
     "priority": 0,
-    "effect": "사용자도 준 데미지의 1/3만큼 반동을 입는다.",
+    "effect": "날개를 접어 저공비행으로 돌격한다. 자신도 대상에게 준 피해의 ⅓만큼 반동 피해를 받는다.",
+    "tags": [
+      "반동",
+      "접촉"
+    ],
     "recoilFraction": 0.3333333333333333,
     "makesContact": true
   },
@@ -2697,7 +3473,23 @@
     "accuracy": null,
     "pp": 12,
     "priority": 0,
-    "effect": "자신의 방어와 특방이 조금씩 오른다. 최대 3회까지 쌓인다.",
+    "effect": "힘을 비축해서 자신의 방어와 특수방어를 1랭크 올리고 비축 스택을 1 쌓는다. 최대 3회까지 비축할 수 있다(3스택이면 실패).",
+    "tags": [
+      "랭크"
+    ],
+    "addsStockpile": true,
+    "statChanges": [
+      {
+        "target": "self",
+        "stat": "def",
+        "delta": 1
+      },
+      {
+        "target": "self",
+        "stat": "spd",
+        "delta": 1
+      }
+    ],
     "makesContact": false
   },
   {
@@ -2709,7 +3501,10 @@
     "accuracy": null,
     "pp": 8,
     "priority": 0,
-    "effect": "5턴간 날씨를 눈으로 바꾼다.",
+    "effect": "5턴 동안 눈을 내리게 한다. 얼음타입의 방어가 올라간다.",
+    "tags": [
+      "환경"
+    ],
     "makesContact": false,
     "setsWeather": "눈"
   },
@@ -2722,7 +3517,11 @@
     "accuracy": 100,
     "pp": 16,
     "priority": 0,
-    "effect": "",
+    "effect": "단단한 껍질을 가지고 있는 큰 씨앗을 위에서 힘껏 내던져 상대를 공격한다.",
+    "tags": [
+      "폭탄",
+      "비접촉"
+    ],
     "classification": [
       "구슬/폭탄"
     ],
@@ -2737,7 +3536,8 @@
     "accuracy": 100,
     "pp": 12,
     "priority": 0,
-    "effect": "비축하기로 쌓아둔 만큼 위력이 커진다. 사용하면 쌓인 것이 사라진다.",
+    "effect": "비축된 힘을 상대에게 부딪쳐서 공격한다. 위력은 비축 스택 × 100(스택 0이면 실패). 사용하면 비축 스택과 그만큼 올렸던 방어·특수방어 랭크가 사라진다.",
+    "spitUpPower": true,
     "makesContact": false
   },
   {
@@ -2749,8 +3549,15 @@
     "accuracy": 70,
     "pp": 12,
     "priority": 0,
-    "effect": "30% 확률로 상대를 혼란시킨다. 하늘로 회피 중인 상대에게도 명중한다.",
-    "bypassesHiding": ["sky"],
+    "effect": "강렬한 바람으로 상대를 둘러싸서 공격한다. 30% 확률로 상대를 혼란 상태로 만든다.",
+    "tags": [
+      "비접촉",
+      "바람",
+      "혼란"
+    ],
+    "bypassesHiding": [
+      "sky"
+    ],
     "classification": [
       "바람"
     ],
@@ -2772,7 +3579,11 @@
     "accuracy": 100,
     "pp": 16,
     "priority": 0,
-    "effect": "10% 확률로 상대를 마비시킨다.",
+    "effect": "강한 전격을 상대에게 날려서 공격한다. 10%의 확률로 상대를 마비 상태로 만든다.",
+    "tags": [
+      "비접촉",
+      "마비"
+    ],
     "makesContact": false,
     "inflictsStatus": [
       {
@@ -2790,7 +3601,10 @@
     "accuracy": 100,
     "pp": 20,
     "priority": 0,
-    "effect": "상대의 특방을 2랭크 낮춘다.",
+    "effect": "우는 척을 하며 눈물을 흘린다. 난처하게 만들어 상대의 특수방어를 2랭크 떨어뜨린다.",
+    "tags": [
+      "랭크"
+    ],
     "statChanges": [
       {
         "target": "opponent",
@@ -2809,7 +3623,7 @@
     "accuracy": null,
     "pp": 16,
     "priority": 0,
-    "effect": "상대를 이번 턴에 즉시 행동하게 만든다.",
+    "effect": "상대의 행동을 도와서 자신이 행동한 뒤에 바로 움직일 수 있도록 한다.",
     "makesContact": false
   },
   {
@@ -2821,7 +3635,7 @@
     "accuracy": 100,
     "pp": 16,
     "priority": 0,
-    "effect": "이번 턴 상대의 공격을 자신에게 유도한다.",
+    "effect": "이상한 리듬으로 춤춘다. 움직임을 흉내 내게 해서 상대의 특성을 자신의 특성과 같게 만든다.",
     "makesContact": false
   },
   {
@@ -2833,7 +3647,11 @@
     "accuracy": 100,
     "pp": 12,
     "priority": 0,
-    "effect": "준 데미지의 4분의 3만큼 자신의 체력을 회복한다.",
+    "effect": "키스로 상대의 HP를 흡수한다. 상대에게 준 대미지의 ¾만큼 자신의 HP를 회복한다.",
+    "tags": [
+      "흡수",
+      "접촉"
+    ],
     "makesContact": true,
     "drainFraction": 0.75
   },
@@ -2846,7 +3664,13 @@
     "accuracy": 85,
     "pp": 8,
     "priority": 0,
-    "effect": "1턴째 하늘로 뛰어올라 회피하고, 2턴째 공격한다. 30% 확률로 마비시킨다.",
+    "effect": "하늘 높이 뛰어올라 2턴째에 상대를 공격한다. 30% 확률로 상대를 마비 상태로 만든다.",
+    "tags": [
+      "충전",
+      "상승",
+      "접촉",
+      "마비"
+    ],
     "chargeTurn": true,
     "chargeHideType": "sky",
     "makesContact": true,
@@ -2866,7 +3690,12 @@
     "accuracy": 100,
     "pp": 20,
     "priority": 1,
-    "effect": "우선도 +1. 항상 먼저 나간다.",
+    "effect": "눈에 보이지 않는 굉장한 속도로 펀치를 날린다. 반드시 선제 공격을 할 수 있다.",
+    "tags": [
+      "선공",
+      "접촉",
+      "펀치"
+    ],
     "classification": [
       "펀치"
     ],
@@ -2881,7 +3710,7 @@
     "accuracy": 100,
     "pp": 12,
     "priority": 0,
-    "effect": "상대와 서로 지닌 도구를 교환한다.",
+    "effect": "눈에 보이지 않는 속도로 자신과 상대가 지닌 물건을 교환한다.",
     "makesContact": false
   },
   {
@@ -2893,7 +3722,11 @@
     "accuracy": 100,
     "pp": 16,
     "priority": 0,
-    "effect": "자신의 체력이 낮을수록 위력이 커진다.",
+    "effect": "바둥바둥 난동부려서 공격한다. 자신의 HP가 적을수록 기술의 위력이 올라간다(기사회생과 같은 위력표).",
+    "tags": [
+      "접촉"
+    ],
+    "reversalPower": true,
     "makesContact": true
   },
   {
@@ -2905,8 +3738,15 @@
     "accuracy": 70,
     "pp": 12,
     "priority": 0,
-    "effect": "30% 확률로 상대를 마비시킨다. 하늘로 회피 중인 상대에게도 명중한다.",
-    "bypassesHiding": ["sky"],
+    "effect": "강한 번개를 상대에게 떨어뜨려 공격한다. 30%의 확률로 상대를 마비 상태로 만든다. 비가 내리면 반드시 명중한다.",
+    "tags": [
+      "비접촉",
+      "마비"
+    ],
+    "bypassesHiding": [
+      "sky"
+    ],
+    "hidingBypassMultiplier": 2,
     "makesContact": false,
     "inflictsStatus": [
       {
@@ -2924,7 +3764,11 @@
     "accuracy": 100,
     "pp": 16,
     "priority": 0,
-    "effect": "상대의 특공을 1랭크 올리는 대신 혼란 상태로 만든다.",
+    "effect": "상대를 부추겨서 혼란시킨다. 동시에 상대의 특수공격도 1랭크 올라가 버린다.",
+    "tags": [
+      "랭크",
+      "혼란"
+    ],
     "statChanges": [
       {
         "target": "opponent",
@@ -2949,7 +3793,12 @@
     "accuracy": 100,
     "pp": 16,
     "priority": 0,
-    "effect": "10% 확률로 상대를 화상 상태로 만든다.",
+    "effect": "불꽃을 담은 펀치로 상대를 공격한다. 10% 확률로 상대를 화상 상태로 만든다.",
+    "tags": [
+      "접촉",
+      "펀치",
+      "화상"
+    ],
     "classification": [
       "펀치"
     ],
@@ -2970,10 +3819,18 @@
     "accuracy": 100,
     "pp": 12,
     "priority": 3,
-    "effect": "반드시 상대를 풀죽게 만든다. 등장 후 첫 턴에만 사용 가능.",
+    "effect": "선제공격으로 상대를 풀죽게 한다. 배틀에 나가서 바로 쓰지 않으면 성공할 수 없다.",
+    "tags": [
+      "선공",
+      "접촉",
+      "풀죽음"
+    ],
     "usageCondition": "first-turn-only",
     "inflictsVolatile": [
-      { "volatile": "flinch", "target": "opponent" }
+      {
+        "volatile": "flinch",
+        "target": "opponent"
+      }
     ],
     "makesContact": true
   },
@@ -2986,7 +3843,10 @@
     "accuracy": 100,
     "pp": 8,
     "priority": 0,
-    "effect": "상대가 방금 사용한 기술만 3턴간 반복해서 사용하게 만든다. 상대가 아직 기술을 쓴 적이 없으면 실패한다.",
+    "effect": "상대에게 앙코르를 외쳐서 기술을 3번 연속으로 쓰게 한다.",
+    "tags": [
+      "상태이상-기타"
+    ],
     "makesContact": false,
     "setsEncore": true
   },
@@ -2999,7 +3859,10 @@
     "accuracy": 90,
     "pp": 20,
     "priority": 0,
-    "effect": "상대를 마비 상태로 만든다.",
+    "effect": "약한 전격을 날려서 상대를 마비 상태로 만든다.",
+    "tags": [
+      "마비"
+    ],
     "makesContact": false,
     "inflictsStatus": [
       {
@@ -3016,7 +3879,10 @@
     "accuracy": 75,
     "pp": 12,
     "priority": 0,
-    "effect": "상대를 혼란 상태로 만든다.",
+    "effect": "천사처럼 귀엽게 키스하여 상대를 혼란 상태로 만든다.",
+    "tags": [
+      "혼란"
+    ],
     "makesContact": false,
     "inflictsVolatile": [
       {
@@ -3034,7 +3900,11 @@
     "accuracy": 100,
     "pp": 20,
     "priority": 1,
-    "effect": "우선도 +1. 상대의 공격을 1랭크 낮춘다.",
+    "effect": "초롱초롱한 눈동자로 상대를 바라보며 공격을 1랭크 떨어뜨린다. 반드시 선제공격할 수 있다.",
+    "tags": [
+      "선공",
+      "랭크"
+    ],
     "statChanges": [
       {
         "target": "opponent",
@@ -3053,7 +3923,11 @@
     "accuracy": 90,
     "pp": 12,
     "priority": 0,
-    "effect": "10% 확률로 상대의 공격을 1랭크 낮춘다.",
+    "effect": "상대에게 치근거리며 공격한다. 10% 확률로 상대의 공격을 떨어뜨린다.",
+    "tags": [
+      "랭크",
+      "접촉"
+    ],
     "makesContact": true
   },
   {
@@ -3065,7 +3939,10 @@
     "accuracy": null,
     "pp": 12,
     "priority": 0,
-    "effect": "사용자는 기절하지만, 다음에 나오는 아군의 체력과 상태이상을 완전히 회복시킨다.",
+    "effect": "자신은 기절하지만 교대하여 나오는 포켓몬의 상태 이상과 HP를 회복한다.",
+    "tags": [
+      "자기희생"
+    ],
     "makesContact": false
   },
   {
@@ -3077,7 +3954,10 @@
     "accuracy": null,
     "pp": 20,
     "priority": 0,
-    "effect": "자신의 방어와 특방을 1랭크씩 올린다.",
+    "effect": "우주로부터 신비한 힘을 손에 넣음으로써 자신의 방어와 특수방어를 1랭크 올린다.",
+    "tags": [
+      "랭크"
+    ],
     "statChanges": [
       {
         "target": "self",
@@ -3101,7 +3981,10 @@
     "accuracy": null,
     "pp": 12,
     "priority": 0,
-    "effect": "자신의 방어를 3랭크 올린다.",
+    "effect": "푹신푹신한 솜털로 자신의 몸을 둘러싸서 지킨다. 자신의 방어를 3랭크 올린다.",
+    "tags": [
+      "랭크"
+    ],
     "statChanges": [
       {
         "target": "self",
@@ -3120,7 +4003,11 @@
     "accuracy": 90,
     "pp": 12,
     "priority": 0,
-    "effect": "3회 연속 공격하며, 맞을 때마다 위력이 커진다. (다른 연속기와 달리 타수마다 명중 여부를 판정하며, 빗나가면 그 시점에서 중단된다)",
+    "effect": "3회 연속으로 킥을 날려 공격한다. 기술이 맞을 때마다 위력이 올라간다.",
+    "tags": [
+      "연속",
+      "접촉"
+    ],
     "makesContact": true,
     "multiHitPowers": [
       20,
@@ -3139,7 +4026,12 @@
     "accuracy": 50,
     "pp": 8,
     "priority": 0,
-    "effect": "100% 확률로 상대를 혼란시킨다.",
+    "effect": "혼신의 힘으로 펀치를 날려서 공격한다. 상대를 반드시 혼란시킨다.",
+    "tags": [
+      "펀치",
+      "접촉",
+      "혼란"
+    ],
     "classification": [
       "펀치"
     ],
@@ -3160,7 +4052,11 @@
     "accuracy": 100,
     "pp": 20,
     "priority": 0,
-    "effect": "상대의 몸무게가 무거울수록 위력이 커진다.",
+    "effect": "풀을 휘감아서 상대를 쓰러뜨린다. 상대가 무거울수록 위력이 커진다(<10→20 … 200 이상 120).",
+    "tags": [
+      "접촉"
+    ],
+    "targetAbsoluteWeightPower": true,
     "makesContact": true
   },
   {
@@ -3172,9 +4068,17 @@
     "accuracy": 100,
     "pp": 16,
     "priority": 0,
-    "effect": "이성인 상대를 헤롱헤롱 상태로 만들어 가끔 기술을 사용하지 못하게 한다.",
+    "effect": "수컷은 암컷을 암컷은 수컷을 유혹하여 헤롱헤롱하게 만든다. 상대가 기술을 쓰기 힘들어진다.",
+    "tags": [
+      "상태이상-기타"
+    ],
     "makesContact": false,
-    "inflictsVolatile": [{ "volatile": "attract", "target": "opponent" }]
+    "inflictsVolatile": [
+      {
+        "volatile": "attract",
+        "target": "opponent"
+      }
+    ]
   },
   {
     "id": "흔들흔들댄스",
@@ -3185,11 +4089,17 @@
     "accuracy": 100,
     "pp": 20,
     "priority": 0,
-    "effect": "장소에 있는 모든 포켓몬(자신 포함)을 혼란시킨다.",
+    "effect": "흔들흔들 댄스를 춰서 주위에 있는 모두를 혼란 상태로 만든다.",
+    "tags": [
+      "광역-전원",
+      "춤",
+      "혼란"
+    ],
     "classification": [
       "춤"
     ],
     "makesContact": false,
+    "notReflectable": true,
     "inflictsVolatile": [
       {
         "volatile": "confusion",
@@ -3210,7 +4120,10 @@
     "accuracy": 100,
     "pp": 20,
     "priority": 0,
-    "effect": "상대의 공격과 방어를 1랭크씩 낮춘다.",
+    "effect": "몸을 간질여 웃게 만들어서 상대의 공격과 방어를 1랭크 떨어뜨린다.",
+    "tags": [
+      "랭크"
+    ],
     "statChanges": [
       {
         "target": "opponent",
@@ -3234,8 +4147,15 @@
     "accuracy": 100,
     "pp": 20,
     "priority": 0,
-    "effect": "그래스필드 상태일 때 우선도 +1이 된다.",
-    "priorityBoostInField": { "field": "그래스필드", "delta": 1 },
+    "effect": "지면에 미끄러지듯 상대를 공격한다. 그래스필드일 때 반드시 선제공격할 수 있다.",
+    "tags": [
+      "선공",
+      "접촉"
+    ],
+    "priorityBoostInField": {
+      "field": "그래스필드",
+      "delta": 1
+    },
     "makesContact": true
   },
   {
@@ -3247,7 +4167,10 @@
     "accuracy": null,
     "pp": 12,
     "priority": 0,
-    "effect": "5턴간 필드를 그래스필드로 바꾼다.",
+    "effect": "5턴 동안 그래스필드로 만든다. 땅에 있으면 매 턴 회복한다. 풀타입의 위력이 올라간다.",
+    "tags": [
+      "환경"
+    ],
     "makesContact": false,
     "setsField": "그래스필드"
   },
@@ -3261,8 +4184,16 @@
     "pp": 20,
     "priority": 0,
     "effect": "상대를 화나게 한다. 3턴 동안 상대는 데미지를 주는 기술밖에 쓸 수 없게 된다.",
+    "tags": [
+      "상태이상-기타"
+    ],
     "makesContact": false,
-    "inflictsVolatile": [{ "volatile": "taunt", "target": "opponent" }]
+    "inflictsVolatile": [
+      {
+        "volatile": "taunt",
+        "target": "opponent"
+      }
+    ]
   },
   {
     "id": "독가루",
@@ -3273,7 +4204,14 @@
     "accuracy": 75,
     "pp": 20,
     "priority": 0,
-    "effect": "상대를 독 상태로 만든다.",
+    "effect": "독이 있는 가루를 많이 흩뿌려서 상대를 독 상태로 만든다.",
+    "tags": [
+      "가루",
+      "독"
+    ],
+    "classification": [
+      "가루"
+    ],
     "makesContact": false,
     "inflictsStatus": [
       {
@@ -3290,7 +4228,15 @@
     "accuracy": 100,
     "pp": 20,
     "priority": 0,
-    "effect": "상대의 스피드를 2랭크 낮춘다.",
+    "effect": "솜처럼 폭신폭신한 포자를 착 달라붙게 해서 상대의 스피드를 2랭크 떨어뜨린다.",
+    "tags": [
+      "광역-상대",
+      "랭크",
+      "가루"
+    ],
+    "classification": [
+      "가루"
+    ],
     "statChanges": [
       {
         "target": "opponent",
@@ -3309,7 +4255,10 @@
     "accuracy": null,
     "pp": 12,
     "priority": 0,
-    "effect": "5턴간 필드를 미스트필드로 바꾼다.",
+    "effect": "5턴 동안 땅에 있으면 상태 이상이 되지 않고 드래곤타입 기술의 데미지도 절반이 된다.",
+    "tags": [
+      "환경"
+    ],
     "makesContact": false,
     "setsField": "미스트필드"
   },
@@ -3322,7 +4271,10 @@
     "accuracy": null,
     "pp": 20,
     "priority": 0,
-    "effect": "자신의 공격과 특공을 1랭크(맑음 날씨에서는 2랭크) 올린다.",
+    "effect": "몸을 일시에 크게 성장시켜 자신의 공격과 특수공격을 1랭크 올린다. 쾌청 상태일 때는 2랭크 올라간다.",
+    "tags": [
+      "랭크"
+    ],
     "statChanges": [
       {
         "target": "self",
@@ -3358,7 +4310,10 @@
     "accuracy": 90,
     "pp": 12,
     "priority": 0,
-    "effect": "매 턴 상대의 체력을 흡수해 자신이 회복한다.",
+    "effect": "대상을 \"씨뿌리기\" 상태로 만든다. 사용한 쪽의 포켓몬은 이 상태에 걸린 포켓몬의 HP를 매 턴이 끝날 때마다 최대 HP의 ⅛만큼 빼앗아 회복한다.",
+    "tags": [
+      "흡수"
+    ],
     "makesContact": false,
     "setsLeechSeed": true
   },
@@ -3371,7 +4326,12 @@
     "accuracy": 100,
     "pp": 12,
     "priority": 0,
-    "effect": "10% 확률로 상대의 특방을 1랭크 낮춘다.",
+    "effect": "자연으로부터 모은 생명의 힘을 발사한다. 10% 확률로 상대의 특수방어를 1랭크 떨어뜨린다.",
+    "tags": [
+      "랭크",
+      "폭탄",
+      "비접촉"
+    ],
     "classification": [
       "구슬/폭탄"
     ],
@@ -3386,7 +4346,14 @@
     "accuracy": 75,
     "pp": 20,
     "priority": 0,
-    "effect": "상대를 마비 상태로 만든다.",
+    "effect": "저리가루를 많이 흩뿌려서 상대를 마비 상태로 만든다.",
+    "tags": [
+      "가루",
+      "마비"
+    ],
+    "classification": [
+      "가루"
+    ],
     "makesContact": false,
     "inflictsStatus": [
       {
@@ -3403,7 +4370,10 @@
     "accuracy": 100,
     "pp": 12,
     "priority": 0,
-    "effect": "파티에 있는 포켓몬(자신 포함, 기절/알 제외)이 순서대로 한 번씩 공격한다. 최대 6회이며, 타수별 위력은 고정값이 아니라 참가하는 각 포켓몬의 공격 종족값을 기반으로 매번 계산된다.",
+    "effect": "같은 편 전원이 공격한다. 동료 포켓몬이 많을수록 기술의 공격 횟수가 증가한다.",
+    "tags": [
+      "비접촉"
+    ],
     "makesContact": false,
     "maxHits": 6
   },
@@ -3416,7 +4386,11 @@
     "accuracy": 100,
     "pp": 12,
     "priority": 0,
-    "effect": "사용자는 기절하지만, 상대의 공격과 특공을 2랭크씩 낮춘다.",
+    "effect": "자신은 기절하게 되지만 그 대신 상대의 공격과 특수공격을 2랭크 떨어뜨린다.",
+    "tags": [
+      "자기희생",
+      "랭크"
+    ],
     "statChanges": [
       {
         "target": "opponent",
@@ -3429,7 +4403,8 @@
         "delta": -2
       }
     ],
-    "makesContact": false
+    "makesContact": false,
+    "notReflectable": true
   },
   {
     "id": "트릭룸",
@@ -3439,8 +4414,11 @@
     "power": null,
     "accuracy": 100,
     "pp": 12,
-    "priority": 0,
-    "effect": "5턴간 스피드가 낮은 포켓몬부터 먼저 행동한다.",
+    "priority": -7,
+    "effect": "이상한 공간을 만든다. 5턴 동안 느린 포켓몬부터 행동할 수 있다.",
+    "tags": [
+      "환경"
+    ],
     "makesContact": false,
     "setsTrickRoom": true
   },
@@ -3453,7 +4431,10 @@
     "accuracy": null,
     "pp": 12,
     "priority": 0,
-    "effect": "자신과 상대의 방어·특방 랭크 변화를 서로 교환한다.",
+    "effect": "초능력으로 자신과 상대의 방어와 특수방어의 능력 변화를 교체한다.",
+    "tags": [
+      "랭크"
+    ],
     "makesContact": false
   },
   {
@@ -3465,7 +4446,10 @@
     "accuracy": null,
     "pp": 8,
     "priority": 0,
-    "effect": "상대를 도망치거나 교체하지 못하게 만든다.",
+    "effect": "빨려 들어갈 것 같은 까만 눈빛으로 가만히 응시하여 상대를 배틀에서 도망갈 수 없게 한다.",
+    "tags": [
+      "고정-상대"
+    ],
     "makesContact": false
   },
   {
@@ -3477,7 +4461,10 @@
     "accuracy": null,
     "pp": 8,
     "priority": 0,
-    "effect": "체력을 회복한다. 날씨에 따라 회복량이 달라진다.",
+    "effect": "사용자의 HP를 회복한다. 날씨에 따라 회복량이 변한다.",
+    "tags": [
+      "회복"
+    ],
     "makesContact": false,
     "healsWeatherDependent": true
   },
@@ -3490,7 +4477,10 @@
     "accuracy": null,
     "pp": 20,
     "priority": 0,
-    "effect": "5턴간 아군이 받는 물리 데미지를 절반으로 줄인다.",
+    "effect": "5턴 동안 이상한 장막을 쳐서 상대로부터 받는 물리공격의 데미지를 약하게 한다.",
+    "tags": [
+      "방어"
+    ],
     "makesContact": false,
     "setsScreen": "reflect"
   },
@@ -3503,7 +4493,12 @@
     "accuracy": 100,
     "pp": 12,
     "priority": 0,
-    "effect": "반드시 명중한다.",
+    "effect": "천사와도 같은 노랫소리로 상대를 공격한다. 그 턴에 능력이 올라간 포켓몬을 혼란 상태로 만든다.",
+    "tags": [
+      "비접촉",
+      "소리",
+      "혼란"
+    ],
     "classification": [
       "소리"
     ],
@@ -3518,7 +4513,13 @@
     "accuracy": 95,
     "pp": 16,
     "priority": 0,
-    "effect": "",
+    "effect": "호되게 호통을 쳐서 상대의 특수공격을 1랭크 떨어뜨린다.",
+    "tags": [
+      "광역-상대",
+      "랭크",
+      "비접촉",
+      "소리"
+    ],
     "classification": [
       "소리"
     ],
@@ -3533,7 +4534,11 @@
     "accuracy": 100,
     "pp": 8,
     "priority": 0,
-    "effect": "직전에 아군이 쓰러졌다면 위력이 2배가 된다.",
+    "effect": "상대에 대한 울분이 담긴 공격을 한다. 이번 턴에 자신의 능력이 떨어졌다면 위력이 2배가 된다.",
+    "tags": [
+      "접촉"
+    ],
+    "conditionalDoublePower": "user-stat-lowered-this-turn",
     "makesContact": true
   },
   {
@@ -3545,7 +4550,11 @@
     "accuracy": 100,
     "pp": 8,
     "priority": 0,
-    "effect": "남은 PP가 적을수록 위력이 커진다.",
+    "effect": "이 기술을 제외한 자신의 모든 기술을 한 번씩 사용한 뒤부터 쓸 수 있다. 그 전에는 실패한다.",
+    "tags": [
+      "접촉"
+    ],
+    "usageCondition": "all-other-moves-used",
     "makesContact": true
   },
   {
@@ -3557,7 +4566,11 @@
     "accuracy": 85,
     "pp": 16,
     "priority": 0,
-    "effect": "상대의 공격을 2랭크 올리고 혼란 상태로 만든다.",
+    "effect": "상대를 화내게 해서 혼란 시킨다. 분노로 상대의 공격은 2랭크 올라가 버린다.",
+    "tags": [
+      "랭크",
+      "혼란"
+    ],
     "statChanges": [
       {
         "target": "opponent",
@@ -3582,7 +4595,11 @@
     "accuracy": 100,
     "pp": 16,
     "priority": 0,
-    "effect": "",
+    "effect": "상대의 힘을 이용한다. 자신이 아니라 상대의 공격 수치·랭크로 데미지를 계산한다.",
+    "tags": [
+      "접촉"
+    ],
+    "usesTargetAttackStat": true,
     "makesContact": true
   },
   {
@@ -3594,7 +4611,7 @@
     "accuracy": null,
     "pp": 12,
     "priority": 0,
-    "effect": "상대와 서로의 특성을 교환한다.",
+    "effect": "초능력으로 자신의 특성과 상대의 특성을 바꾼다.",
     "makesContact": false
   },
   {
@@ -3606,7 +4623,14 @@
     "accuracy": 100,
     "pp": 12,
     "priority": 0,
-    "effect": "",
+    "effect": "축적된 파워로 상대를 공격한다. 위력은 20에서 시작해 자신의 능력 랭크가 오른 만큼 랭크당 20씩 커진다.",
+    "tags": [
+      "비접촉"
+    ],
+    "powerFromPositiveStages": {
+      "base": 20,
+      "perStage": 20
+    },
     "makesContact": false
   },
   {
@@ -3618,7 +4642,7 @@
     "accuracy": 100,
     "pp": 12,
     "priority": 0,
-    "effect": "사용자가 이번 턴 쓰러지면 상대가 방금 사용한 기술의 PP를 모두 소진시킨다.",
+    "effect": "상대가 마지막으로 사용한 기술에 원한을 품어 그 기술의 PP를 4만큼 줄인다.",
     "makesContact": false
   },
   {
@@ -3630,7 +4654,10 @@
     "accuracy": 100,
     "pp": 12,
     "priority": 0,
-    "effect": "상대를 혼란 상태로 만든다.",
+    "effect": "이상한 빛을 상대에게 비춰 당황하게 한다. 상대를 혼란시킨다.",
+    "tags": [
+      "혼란"
+    ],
     "makesContact": false,
     "inflictsVolatile": [
       {
@@ -3648,7 +4675,11 @@
     "accuracy": 100,
     "pp": 16,
     "priority": 0,
-    "effect": "",
+    "effect": "이 기술에 맞은 상대는 지옥의 고통 때문에 2턴 동안 소리 기술을 낼 수 없다.",
+    "tags": [
+      "접촉",
+      "상태이상-기타"
+    ],
     "makesContact": true
   },
   {
@@ -3660,7 +4691,10 @@
     "accuracy": 100,
     "pp": 20,
     "priority": 0,
-    "effect": "상대가 도구를 지니고 있으면 명중 시 그 도구를 빼앗는다.",
+    "effect": "귀엽게 애교부리며 상대에게 다가가 지니고 있는 도구를 뺏는다.",
+    "tags": [
+      "접촉"
+    ],
     "makesContact": true
   },
   {
@@ -3672,7 +4706,10 @@
     "accuracy": 100,
     "pp": 16,
     "priority": 0,
-    "effect": "상대가 방금 사용한 기술의 PP를 4 감소시킨다.",
+    "effect": "상대에게 트집을 잡아서 똑같은 기술을 2회 연속으로 쓸 수 없게 한다.",
+    "tags": [
+      "상태이상-기타"
+    ],
     "makesContact": false
   },
   {
@@ -3684,7 +4721,11 @@
     "accuracy": 100,
     "pp": 20,
     "priority": 0,
-    "effect": "",
+    "effect": "불꽃을 둘러 상대를 공격한다. 힘을 모아서 자신의 스피드를 1랭크 올린다.",
+    "tags": [
+      "랭크",
+      "접촉"
+    ],
     "makesContact": true
   },
   {
@@ -3696,7 +4737,10 @@
     "accuracy": 85,
     "pp": 16,
     "priority": 0,
-    "effect": "상대를 화상 상태로 만든다.",
+    "effect": "으스스하고 괴상한 불꽃을 쏘아 상대를 화상 상태로 만든다.",
+    "tags": [
+      "화상"
+    ],
     "makesContact": false,
     "inflictsStatus": [
       {
@@ -3713,7 +4757,11 @@
     "accuracy": 100,
     "pp": 12,
     "priority": 0,
-    "effect": "100% 확률로 상대의 특공을 1랭크 낮춘다.",
+    "effect": "입에서 내뱉는 아주 뜨거운 불꽃으로 공격한다. 상대의 특수공격을 1랭크 떨어뜨린다.",
+    "tags": [
+      "랭크",
+      "비접촉"
+    ],
     "makesContact": false
   },
   {
@@ -3725,10 +4773,21 @@
     "accuracy": 90,
     "pp": 12,
     "priority": 0,
-    "effect": "1턴째 자신의 특공을 올리고, 2턴째 공격한다.",
+    "effect": "1턴째에 우주의 힘을 모아서 특수공격을 1랭크 올리고 2턴째에 상대를 공격한다.",
+    "tags": [
+      "충전",
+      "랭크",
+      "비접촉"
+    ],
     "makesContact": false,
     "chargeTurn": true,
-    "chargeStatChanges": [{ "target": "self", "stat": "spa", "delta": 1 }]
+    "chargeStatChanges": [
+      {
+        "target": "self",
+        "stat": "spa",
+        "delta": 1
+      }
+    ]
   },
   {
     "id": "분연",
@@ -3739,7 +4798,12 @@
     "accuracy": 100,
     "pp": 16,
     "priority": 0,
-    "effect": "",
+    "effect": "새빨간 불꽃으로 주위에 있는 모두를 공격한다. 30% 확률로 상대를 화상 상태로 만들 때가 있다.",
+    "tags": [
+      "광역-전원",
+      "비접촉",
+      "화상"
+    ],
     "makesContact": false,
     "inflictsStatus": [
       {
@@ -3757,7 +4821,11 @@
     "accuracy": 100,
     "pp": 8,
     "priority": 0,
-    "effect": "사용 후 자신은 불꽃 타입을 잃는다. 사용 직전 사용자의 얼음 상태를 치유한다.",
+    "effect": "전신의 불꽃을 모두 태워서 큰 데미지를 준다. 사용자의 불꽃 타입이 없어진다. 사용자가 이미 불꽃 타입이 아니면 실패한다. 대상의 얼음을 치료한다.",
+    "tags": [
+      "타입 변경",
+      "비접촉"
+    ],
     "makesContact": false,
     "thawsUserOnUse": true
   },
@@ -3770,7 +4838,10 @@
     "accuracy": 100,
     "pp": 20,
     "priority": 0,
-    "effect": "상대의 움직임을 막아 바로 전에 쓴 기술을 4턴간 사용할 수 없게 만든다. 상대가 아직 기술을 쓴 적이 없으면 실패한다.",
+    "effect": "상대의 움직임을 막아 바로 전에 쓴 기술을 4턴 동안 사용할 수 없게 만든다.",
+    "tags": [
+      "상태이상-기타"
+    ],
     "makesContact": false,
     "setsDisable": true
   },
@@ -3783,7 +4854,7 @@
     "accuracy": null,
     "pp": 16,
     "priority": 2,
-    "effect": "양 진영에 설치된 필드 효과를 서로 교환한다.",
+    "effect": "이상한 힘으로 순간이동하여 자신과 같은 편의 위치를 바꾼다. 연속으로 쓰면 실패하기 쉽다.",
     "makesContact": false
   },
   {
@@ -3795,7 +4866,10 @@
     "accuracy": null,
     "pp": 12,
     "priority": 0,
-    "effect": "5턴간 필드를 사이코필드로 바꾼다.",
+    "effect": "5턴 동안 땅에 있으면 선제공격을 받지 않는다. 에스퍼타입의 위력이 올라간다.",
+    "tags": [
+      "환경"
+    ],
     "makesContact": false,
     "setsField": "사이코필드"
   },
@@ -3808,7 +4882,10 @@
     "accuracy": null,
     "pp": 12,
     "priority": 0,
-    "effect": "5턴간 필드를 일렉트릭필드로 바꾼다.",
+    "effect": "5턴 동안 일렉트릭필드로 만든다. 땅에 있는 포켓몬은 잠들지 않는다. 전기타입의 위력이 올라간다.",
+    "tags": [
+      "환경"
+    ],
     "makesContact": false,
     "setsField": "일렉트릭필드"
   },
@@ -3821,7 +4898,11 @@
     "accuracy": 100,
     "pp": 8,
     "priority": 0,
-    "effect": "사용 후 자신의 방어와 특방이 1랭크씩 낮아진다.",
+    "effect": "자신의 갑옷을 활활 타오르는 탄환으로 발사해서 공격한다. 자신의 방어와 특수방어가 1랭크 떨어진다.",
+    "tags": [
+      "반동-랭크",
+      "비접촉"
+    ],
     "makesContact": false
   },
   {
@@ -3833,7 +4914,12 @@
     "accuracy": 100,
     "pp": 20,
     "priority": 0,
-    "effect": "100% 확률로 상대의 특방을 2랭크 낮춘다.",
+    "effect": "상대를 녹이는 액체를 토해내서 공격한다. 상대의 특수방어를 2랭크 떨어뜨린다.",
+    "tags": [
+      "랭크",
+      "비접촉",
+      "폭탄"
+    ],
     "classification": [
       "구슬/폭탄"
     ],
@@ -3848,7 +4934,11 @@
     "accuracy": 100,
     "pp": 12,
     "priority": 0,
-    "effect": "30% 확률로 상대를 화상 상태로 만든다. 사용 직전 사용자의 얼음 상태를 치유한다.",
+    "effect": "뜨겁게 달궈진 모래를 상대에게 부딪쳐서 공격한다. 30% 확률로 상대를 화상 상태로 만든다.",
+    "tags": [
+      "비접촉",
+      "화상"
+    ],
     "makesContact": false,
     "inflictsStatus": [
       {
@@ -3867,7 +4957,13 @@
     "accuracy": 90,
     "pp": 12,
     "priority": 0,
-    "effect": "10% 확률로 상대를 화상 상태로 만든다.",
+    "effect": "뜨거운 숨결을 상대에게 내뿜어 공격한다. 10% 확률로 상대를 화상 상태로 만든다.",
+    "tags": [
+      "광역-상대",
+      "비접촉",
+      "바람",
+      "화상"
+    ],
     "classification": [
       "바람"
     ],
@@ -3888,7 +4984,11 @@
     "accuracy": 90,
     "pp": 8,
     "priority": 0,
-    "effect": "사용 후 자신의 특공이 2랭크 낮아진다.",
+    "effect": "풀 파워로 상대를 공격한다. 쓰면 반동으로 자신의 특수공격이 2랭크 떨어진다.",
+    "tags": [
+      "반동-랭크",
+      "비접촉"
+    ],
     "makesContact": false
   },
   {
@@ -3900,8 +5000,15 @@
     "accuracy": 100,
     "pp": 12,
     "priority": 0,
-    "effect": "사이코필드 상태일 때 위력이 커진다.",
-    "powerMultiplierInField": { "field": "사이코필드", "multiplier": 1.5 },
+    "effect": "사이코 파워로 상대를 공격한다. 사이코필드일 때는 위력이 120으로 오르며 모든 상대에게 데미지를 준다.",
+    "tags": [
+      "광역-상대",
+      "비접촉"
+    ],
+    "powerMultiplierInField": {
+      "field": "사이코필드",
+      "multiplier": 1.5
+    },
     "makesContact": false
   },
   {
@@ -3913,7 +5020,11 @@
     "accuracy": null,
     "pp": 16,
     "priority": 0,
-    "effect": "상대의 능력 랭크 변화를 전부 원래대로 되돌린다.",
+    "effect": "특수한 진흙 덩어리를 상대에게 내던져서 공격한다. 능력 변화를 원래대로 돌린다.",
+    "tags": [
+      "필중",
+      "비접촉"
+    ],
     "makesContact": false
   },
   {
@@ -3925,7 +5036,7 @@
     "accuracy": null,
     "pp": 8,
     "priority": 0,
-    "effect": "상대와 서로 지닌 도구를 교환한다.",
+    "effect": "상대의 빈틈을 노려 자신과 상대가 지닌 물건을 바꿔치기한다.",
     "makesContact": false
   },
   {
@@ -3937,7 +5048,12 @@
     "accuracy": 100,
     "pp": 16,
     "priority": 0,
-    "effect": "사용자도 준 데미지의 1/3만큼 반동을 입는다. 사용 직전 사용자의 얼음 상태를 치유한다.",
+    "effect": "불꽃을 두르고 돌진한다. 자신도 대상에게 준 피해의 ⅓만큼 반동 피해를 받는다. 10%의 확률로 상대를 화상 상태로 만든다.",
+    "tags": [
+      "반동",
+      "접촉",
+      "화상"
+    ],
     "makesContact": true,
     "recoilFraction": 0.3333333333333333,
     "thawsUserOnUse": true
@@ -3951,7 +5067,11 @@
     "accuracy": 85,
     "pp": 16,
     "priority": 0,
-    "effect": "여러 턴 동안 상대를 속박해 데미지를 준다.",
+    "effect": "세차게 소용돌이치는 불꽃 속에 4~5턴 동안 상대를 가두어 공격한다.",
+    "tags": [
+      "구속",
+      "비접촉"
+    ],
     "makesContact": false
   },
   {
@@ -3963,7 +5083,10 @@
     "accuracy": 100,
     "pp": 12,
     "priority": 0,
-    "effect": "",
+    "effect": "엎친 데 덮친 격으로 공격한다. 상태 이상인 상대에게 큰 데미지를 준다.",
+    "tags": [
+      "비접촉"
+    ],
     "makesContact": false
   },
   {
@@ -3975,7 +5098,12 @@
     "accuracy": 100,
     "pp": 12,
     "priority": 0,
-    "effect": "1턴째 빛을 모으고 2턴째 공격한다. 맑음 날씨에서는 1턴만에 발동한다.",
+    "effect": "1턴째에 빛을 가득 모아 2턴째에 그 힘을 검에 담아 공격한다. 날씨가 맑을 때는 1턴 만에 공격한다.",
+    "tags": [
+      "충전",
+      "베기",
+      "접촉"
+    ],
     "classification": [
       "베기"
     ],
@@ -3990,7 +5118,11 @@
     "accuracy": 100,
     "pp": 20,
     "priority": 1,
-    "effect": "우선도 +1. 항상 먼저 나간다.",
+    "effect": "그림자를 늘려 상대의 배후에서 공격한다. 반드시 선제공격할 수 있다.",
+    "tags": [
+      "선공",
+      "접촉"
+    ],
     "makesContact": true
   },
   {
@@ -4002,7 +5134,12 @@
     "accuracy": 100,
     "pp": 12,
     "priority": 0,
-    "effect": "준 데미지의 절반만큼 자신의 체력을 회복한다.",
+    "effect": "현세의 미련을 칼끝에 담아 베어 버린다. 입힌 데미지의 절반에 해당하는 HP를 회복할 수 있다.",
+    "tags": [
+      "흡수",
+      "접촉",
+      "베기"
+    ],
     "classification": [
       "베기"
     ],
@@ -4018,7 +5155,10 @@
     "accuracy": 90,
     "pp": 8,
     "priority": 0,
-    "effect": "상대가 도구를 지니고 있지 않으면 실패한다.",
+    "effect": "상대가 지닌 물건을 조종해서 공격한다. 상대가 도구를 지니고 있지 않으면 실패한다.",
+    "tags": [
+      "비접촉"
+    ],
     "makesContact": false
   },
   {
@@ -4030,7 +5170,11 @@
     "accuracy": 55,
     "pp": 16,
     "priority": 0,
-    "effect": "상대를 잠들게 한다.",
+    "effect": "기분 좋게 예쁜 노랫소리를 들려주어 상대를 잠듦 상태로 만든다.",
+    "tags": [
+      "소리",
+      "잠듦"
+    ],
     "classification": [
       "소리"
     ],
@@ -4050,11 +5194,16 @@
     "accuracy": null,
     "pp": 8,
     "priority": 0,
-    "effect": "노래를 들은 포켓몬은 3턴 후 기절한다.",
+    "effect": "노래를 들은 포켓몬은 3턴이 지나면 기절한다. 교체되면 효과가 없어진다.",
+    "tags": [
+      "소리"
+    ],
     "classification": [
       "소리"
     ],
-    "makesContact": false
+    "makesContact": false,
+    "notReflectable": true,
+    "setsPerishSong": true
   },
   {
     "id": "물거품아리아",
@@ -4065,12 +5214,20 @@
     "accuracy": 100,
     "pp": 12,
     "priority": 0,
-    "effect": "명중한 상대의 화상 상태를 치료한다.",
+    "effect": "노래 부르는 것으로 많은 벌룬을 방출한다. 기술에 맞으면 화상이 낫는다.",
+    "tags": [
+      "광역-전원",
+      "소리",
+      "비접촉"
+    ],
     "classification": [
       "소리"
     ],
     "makesContact": false,
-    "curesStatus": { "target": "opponent", "status": "burn" }
+    "curesStatus": {
+      "target": "opponent",
+      "status": "burn"
+    }
   },
   {
     "id": "미스트버스트",
@@ -4081,8 +5238,16 @@
     "accuracy": 100,
     "pp": 8,
     "priority": 0,
-    "effect": "미스트필드 상태일 때 위력이 커진다.",
-    "powerMultiplierInField": { "field": "미스트필드", "multiplier": 1.5 },
+    "effect": "자신의 주위에 있는 모두를 공격하지만 사용하면 기절한다. 미스트필드일 때 위력이 올라간다.",
+    "tags": [
+      "광역-전원",
+      "자기희생",
+      "비접촉"
+    ],
+    "powerMultiplierInField": {
+      "field": "미스트필드",
+      "multiplier": 1.5
+    },
     "makesContact": false
   },
   {
@@ -4094,7 +5259,10 @@
     "accuracy": 100,
     "pp": 16,
     "priority": 0,
-    "effect": "필드 효과를 없앤다.",
+    "effect": "발에 얇은 얼음을 두르고 빙글빙글 회전하며 부딪친다. 회전 운동에 의해 필드가 파괴된다.",
+    "tags": [
+      "접촉"
+    ],
     "makesContact": true
   },
   {
@@ -4106,7 +5274,11 @@
     "accuracy": 100,
     "pp": 20,
     "priority": 1,
-    "effect": "우선도 +1. 항상 먼저 나간다.",
+    "effect": "눈에 보이지 않는 굉장한 속도로 상대에게 돌진한다. 반드시 선제 공격을 할 수 있다.",
+    "tags": [
+      "선공",
+      "접촉"
+    ],
     "makesContact": true
   },
   {
@@ -4118,7 +5290,10 @@
     "accuracy": null,
     "pp": 12,
     "priority": 0,
-    "effect": "5턴간 모든 포켓몬의 방어와 특방 능력치를 서로 바꾼다.",
+    "effect": "이상한 공간을 만든다. 5턴 동안 모든 포켓몬의 방어와 특수방어가 바뀐다.",
+    "tags": [
+      "환경"
+    ],
     "makesContact": false
   },
   {
@@ -4130,7 +5305,7 @@
     "accuracy": null,
     "pp": 20,
     "priority": 0,
-    "effect": "필드에 있는 모든 포켓몬의 능력 랭크 변화를 초기화한다.",
+    "effect": "흑안개를 뿜어 배틀에 참가 중인 포켓몬 전원의 능력 변화를 원래대로 돌린다.",
     "makesContact": false,
     "resetsAllStages": true
   },
@@ -4143,7 +5318,11 @@
     "accuracy": 100,
     "pp": 8,
     "priority": 1,
-    "effect": "상대가 이번 턴 데미지 기술을 내지 않았거나 자신보다 먼저 움직이면 실패한다.",
+    "effect": "상대보다 먼저 공격할 수 있다. 상대가 쓴 기술이 공격기술이 아니면 실패한다.",
+    "tags": [
+      "선공",
+      "접촉"
+    ],
     "makesContact": true,
     "usageCondition": "opponent-damaging-move-only"
   },
@@ -4156,7 +5335,12 @@
     "accuracy": 100,
     "pp": 16,
     "priority": 0,
-    "effect": "아군에게 사용하면 체력을 회복시킨다.",
+    "effect": "상대에게는 폭발하는 경단을 사용하여 공격한다. 같은 편에게는 회복하는 경단을 준다.",
+    "tags": [
+      "회복",
+      "비접촉",
+      "폭탄"
+    ],
     "classification": [
       "구슬/폭탄"
     ],
@@ -4171,7 +5355,12 @@
     "accuracy": 100,
     "pp": 16,
     "priority": 0,
-    "effect": "",
+    "effect": "세찬 꽃보라를 일으켜서 주위에 있는 포켓몬을 공격하여 데미지를 준다.",
+    "tags": [
+      "광역-전원",
+      "바람",
+      "비접촉"
+    ],
     "classification": [
       "바람"
     ],
@@ -4186,7 +5375,12 @@
     "accuracy": 90,
     "pp": 20,
     "priority": 0,
-    "effect": "상대 진영에 설치. 이후 등장하는 포켓몬은 교체될 때 독 상태가 된다.",
+    "effect": "상대의 발밑에 독 압정을 뿌린다. 교체로 나온 상대 포켓몬에게 독을 퍼지게 하며 2번 깔았을 경우 맹독을 퍼지게 한다.",
+    "tags": [
+      "장판",
+      "독",
+      "맹독"
+    ],
     "makesContact": false
   },
   {
@@ -4198,7 +5392,11 @@
     "accuracy": 90,
     "pp": 8,
     "priority": 0,
-    "effect": "사용 후 자신의 특공이 2랭크 낮아진다.",
+    "effect": "뾰족한 잎사귀로 상대에게 바람을 일으킨다. 사용하면 반동으로 자신의 특수공격이 2랭크 떨어진다.",
+    "tags": [
+      "반동-랭크",
+      "비접촉"
+    ],
     "makesContact": false
   },
   {
@@ -4210,7 +5408,12 @@
     "accuracy": 100,
     "pp": 20,
     "priority": 0,
-    "effect": "2~5회 연속 공격. (2/3회 각 35%, 4/5회 각 15% 확률. 명중 여부는 첫 타에서만 판정)",
+    "effect": "씨앗을 기세 좋게 상대에게 발사하여 공격한다. 2~5회 동안 연속으로 쓴다.",
+    "tags": [
+      "연속",
+      "폭탄",
+      "비접촉"
+    ],
     "classification": [
       "구슬/폭탄"
     ],
@@ -4227,7 +5430,10 @@
     "accuracy": null,
     "pp": 20,
     "priority": 0,
-    "effect": "상대 진영에 설치. 이후 등장하는 포켓몬은 교체될 때 데미지를 입는다.",
+    "effect": "상대의 발밑에 압정을 뿌린다. 교체된 상대 포켓몬에게 데미지를 준다.",
+    "tags": [
+      "장판"
+    ],
     "makesContact": false
   },
   {
@@ -4239,7 +5445,12 @@
     "accuracy": null,
     "pp": 12,
     "priority": 0,
-    "effect": "반드시 급소에 맞는다.",
+    "effect": "숨겨진 장치가 있는 꽃다발을 상대에게 던져서 공격한다. 반드시 명중하며 급소에 맞는다.",
+    "tags": [
+      "필중",
+      "급소-확정",
+      "비접촉"
+    ],
     "alwaysCrit": true,
     "makesContact": false
   },
@@ -4252,7 +5463,10 @@
     "accuracy": 100,
     "pp": 20,
     "priority": 0,
-    "effect": "",
+    "effect": "보석처럼 반짝이는 빛을 발사하여 상대를 공격한다.",
+    "tags": [
+      "비접촉"
+    ],
     "makesContact": false
   },
   {
@@ -4264,9 +5478,16 @@
     "accuracy": 90,
     "pp": 8,
     "priority": 0,
-    "effect": "사용한 다음 턴은 움직일 수 없다.",
+    "effect": "큰 나무로 상대를 힘껏 쳐서 공격한다. 사용 후 1턴간 행동할 수 없다.",
+    "tags": [
+      "반동-휴식",
+      "비접촉"
+    ],
     "inflictsVolatile": [
-      { "volatile": "recharge", "target": "self" }
+      {
+        "volatile": "recharge",
+        "target": "self"
+      }
     ],
     "makesContact": false
   },
@@ -4279,7 +5500,11 @@
     "accuracy": null,
     "pp": 16,
     "priority": 0,
-    "effect": "자신을 제외한 아군 전원의 급소율을 1랭크 올린다(아군이 드래곤 타입이면 2랭크). 자신에게는 효과가 없다(단식전에서는 사실상 무효과).",
+    "effect": "용의 북돋움으로 사기를 높여서 같은 편의 기술이 급소에 맞기 쉬워진다. 드래곤타입이면 더욱더 사기가 북돋는다.",
+    "tags": [
+      "랭크",
+      "소리"
+    ],
     "classification": [
       "소리"
     ],
@@ -4294,7 +5519,10 @@
     "accuracy": null,
     "pp": 12,
     "priority": 0,
-    "effect": "자신의 최대 HP 절반을 소모하고, 공격 랭크를 현재 상태와 무관하게 무조건 최대(+6)로 끌어올린다. 현재 HP가 최대 HP 절반 미만이면 사용에 실패한다.",
+    "effect": "자신의 HP를 최대 HP의 절반만큼 감소시켜 자신의 공격을 최대로 올린다.",
+    "tags": [
+      "랭크"
+    ],
     "statChanges": [
       {
         "target": "self",
@@ -4313,7 +5541,13 @@
     "accuracy": 95,
     "pp": 16,
     "priority": 0,
-    "effect": "",
+    "effect": "불꽃을 두른 이빨로 문다. 10% 확률로 상대를 풀죽게 하거나 화상 상태로 만든다.",
+    "tags": [
+      "접촉",
+      "턱",
+      "화상",
+      "풀죽음"
+    ],
     "classification": [
       "물기"
     ],
@@ -4334,7 +5568,11 @@
     "accuracy": 90,
     "pp": 8,
     "priority": 0,
-    "effect": "",
+    "effect": "폭발하는 불꽃으로 상대를 태워서 공격한다. 사용 후 1턴간 행동할 수 없다.",
+    "tags": [
+      "반동-휴식",
+      "비접촉"
+    ],
     "makesContact": false
   },
   {
@@ -4346,7 +5584,11 @@
     "accuracy": 50,
     "pp": 8,
     "priority": 0,
-    "effect": "",
+    "effect": "격렬한 불꽃으로 상대를 둘러싸 공격한다. 화상 상태로 만든다.",
+    "tags": [
+      "비접촉",
+      "화상"
+    ],
     "makesContact": false,
     "inflictsStatus": [
       {
@@ -4363,7 +5605,10 @@
     "accuracy": 100,
     "pp": 12,
     "priority": 0,
-    "effect": "",
+    "effect": "자포자기하는 기세로 공격한다. 앞 턴에서 기술이 빗나갔다면 위력이 2배가 된다.",
+    "tags": [
+      "접촉"
+    ],
     "makesContact": true
   },
   {
@@ -4375,7 +5620,12 @@
     "accuracy": 100,
     "pp": 16,
     "priority": 0,
-    "effect": "",
+    "effect": "강인한 꼬리를 세차게 휘둘러서 상대를 공격한다. 상대의 공격을 1랭크 떨어뜨린다.",
+    "tags": [
+      "광역-상대",
+      "랭크",
+      "접촉"
+    ],
     "makesContact": true
   },
   {
@@ -4387,7 +5637,12 @@
     "accuracy": 100,
     "pp": 12,
     "priority": 0,
-    "effect": "자신의 몸무게가 상대보다 무거울수록 위력이 커진다.",
+    "effect": "불타는 몸으로 상대에게 부딪쳐서 공격한다. 상대가 자신보다 가벼울수록 위력이 커진다(≤1/5→120 … 40).",
+    "tags": [
+      "접촉",
+      "압박"
+    ],
+    "weightRatioPower": true,
     "makesContact": false
   },
   {
@@ -4399,7 +5654,11 @@
     "accuracy": 100,
     "pp": 20,
     "priority": 0,
-    "effect": "",
+    "effect": "회전해서 상대를 공격한다. 조이기, 김밥말이, 씨뿌리기 등의 효과를 날려 버린다. 자신의 스피드도 1랭크 올라간다.",
+    "tags": [
+      "랭크",
+      "접촉"
+    ],
     "makesContact": false
   },
   {
@@ -4411,7 +5670,10 @@
     "accuracy": null,
     "pp": 16,
     "priority": 0,
-    "effect": "자신의 공격과 특공, 스피드를 2랭크씩 올리는 대신 방어와 특방이 1랭크씩 낮아진다.",
+    "effect": "껍질을 깨서 자신의 방어와 특수방어를 1랭크 떨어뜨리지만 공격과 특수공격, 스피드를 2랭크 올린다.",
+    "tags": [
+      "랭크"
+    ],
     "statChanges": [
       {
         "target": "self",
@@ -4450,7 +5712,10 @@
     "accuracy": 100,
     "pp": 10,
     "priority": 0,
-    "effect": "필드가 있으면 그 필드에 맞는 타입으로 바뀌고 위력이 2배가 된다.",
+    "effect": "필드의 힘을 빌려서 공격한다. 사용했을 때의 필드 상태에 따라서 기술 타입과 위력이 바뀐다.",
+    "tags": [
+      "파동"
+    ],
     "fieldPulse": true,
     "classification": [
       "파동"
@@ -4466,7 +5731,10 @@
     "accuracy": 90,
     "pp": 12,
     "priority": 0,
-    "effect": "",
+    "effect": "세차게 날뛰는 거친 파도와 같이 큰 꼬리를 흔들어서 공격한다.",
+    "tags": [
+      "접촉"
+    ],
     "makesContact": true
   },
   {
@@ -4478,7 +5746,12 @@
     "accuracy": 100,
     "pp": 8,
     "priority": 0,
-    "effect": "자신의 스피드가 상대보다 느릴수록 위력이 커진다.",
+    "effect": "몸을 고속으로 회전시켜 몸통박치기한다. 상대보다 스피드가 낮을수록 위력이 올라간다(최대 150).",
+    "tags": [
+      "접촉",
+      "폭탄"
+    ],
+    "gyroBallPower": true,
     "classification": [
       "구슬/폭탄"
     ],
@@ -4493,7 +5766,11 @@
     "accuracy": 100,
     "pp": 8,
     "priority": 0,
-    "effect": "",
+    "effect": "바닷물을 내뿜어 공격한다. 자신의 HP가 적을수록 기술의 위력이 떨어진다.",
+    "tags": [
+      "광역-상대",
+      "비접촉"
+    ],
     "makesContact": false
   },
   {
@@ -4505,7 +5782,11 @@
     "accuracy": 100,
     "pp": 20,
     "priority": 0,
-    "effect": "상대의 회피율을 2랭크 낮춘다.",
+    "effect": "향기로 상대의 회피율을 2랭크 떨어뜨린다. 풀밭 등에서 쓰면 포켓몬이 다가온다.",
+    "tags": [
+      "광역-상대",
+      "랭크"
+    ],
     "makesContact": false,
     "statChanges": [
       {
@@ -4524,7 +5805,10 @@
     "accuracy": 100,
     "pp": 12,
     "priority": 0,
-    "effect": "",
+    "effect": "특수한 독액을 끼얹는다. 독 상태의 상대에게는 위력이 2배가 된다.",
+    "tags": [
+      "비접촉"
+    ],
     "makesContact": false
   },
   {
@@ -4536,7 +5820,11 @@
     "accuracy": null,
     "pp": 20,
     "priority": 0,
-    "effect": "매 턴 자신의 체력을 조금씩 회복한다. 상대를 교체하기 전까지 지속된다.",
+    "effect": "대지에 뿌리를 박아 매 턴마다 자신의 HP를 회복한다. 뿌리 박고 있으므로 교체할 수 없다.",
+    "tags": [
+      "회복",
+      "고정-자신"
+    ],
     "makesContact": false,
     "setsRegenVolatile": "ingrain"
   },
@@ -4550,6 +5838,13 @@
     "pp": 16,
     "priority": 0,
     "effect": "잠이 오는 가루를 많이 흩뿌려서 상대를 잠듦 상태로 만든다.",
+    "tags": [
+      "가루",
+      "잠듦"
+    ],
+    "classification": [
+      "가루"
+    ],
     "makesContact": false,
     "inflictsStatus": [
       {
@@ -4566,7 +5861,10 @@
     "accuracy": 85,
     "pp": 12,
     "priority": 0,
-    "effect": "",
+    "effect": "덩굴이나 촉수를 세차게 흔들어 상대를 힘껏 쳐서 공격한다.",
+    "tags": [
+      "접촉"
+    ],
     "makesContact": true
   },
   {
@@ -4590,7 +5888,10 @@
     "accuracy": null,
     "pp": 12,
     "priority": 0,
-    "effect": "상대가 자신과 같은 기술을 기억하고 있으면 상대만 그 기술을 사용할 수 없게 한다.",
+    "effect": "상대가 자신과 같은 기술을 배웠다면 상대만 그 기술을 사용할 수 없게 한다.",
+    "tags": [
+      "상태이상-기타"
+    ],
     "makesContact": false
   },
   {
@@ -4603,6 +5904,9 @@
     "pp": 20,
     "priority": 0,
     "effect": "주위에 있는 모든 것을 강력한 산성 가스로 뒤덮어서 지니고 있는 도구를 녹여버린다.",
+    "tags": [
+      "광역-전원"
+    ],
     "makesContact": false
   },
   {
@@ -4626,7 +5930,12 @@
     "accuracy": 100,
     "pp": 8,
     "priority": 0,
-    "effect": "사용자는 반드시 기절한다.",
+    "effect": "폭발을 일으켜서 자신의 주위에 있는 포켓몬을 공격한다. 쓰고 나서 기절하게 된다.",
+    "tags": [
+      "광역-전원",
+      "자기희생",
+      "비접촉"
+    ],
     "selfFaints": true,
     "makesContact": false
   },
@@ -4640,6 +5949,9 @@
     "pp": 20,
     "priority": 0,
     "effect": "졸음을 유도하는 암시를 걸어서 상대를 잠듦 상태로 만든다.",
+    "tags": [
+      "잠듦"
+    ],
     "makesContact": false,
     "inflictsStatus": [
       {
@@ -4657,6 +5969,9 @@
     "pp": 12,
     "priority": 0,
     "effect": "이상한 공간을 만든다. 5턴 동안 모든 포켓몬의 도구의 효과가 사라진다.",
+    "tags": [
+      "환경"
+    ],
     "makesContact": false
   },
   {
@@ -4668,7 +5983,10 @@
     "accuracy": 100,
     "pp": 12,
     "priority": 0,
-    "effect": "",
+    "effect": "기술을 사용한 2턴 뒤에 상대에게 염동력의 덩어리를 보내어 공격한다. 방어 계열 기술을 무시한다.",
+    "tags": [
+      "비접촉"
+    ],
     "makesContact": false
   },
   {
@@ -4681,6 +5999,9 @@
     "pp": 8,
     "priority": 0,
     "effect": "5턴 동안 부유나 비행타입에 땅타입의 기술이 맞게 된다. 공중으로 나는 기술도 사용할 수 없다.",
+    "tags": [
+      "환경"
+    ],
     "makesContact": false
   },
   {
@@ -4692,7 +6013,11 @@
     "accuracy": 90,
     "pp": 12,
     "priority": 0,
-    "effect": "",
+    "effect": "전격의 다발을 상대에게 발사한다. 전기를 모아서 70% 확률로 자신의 특수공격을 1랭크 올린다.",
+    "tags": [
+      "랭크",
+      "비접촉"
+    ],
     "makesContact": false
   },
   {
@@ -4705,6 +6030,9 @@
     "pp": 12,
     "priority": 0,
     "effect": "초능력으로 자신과 상대의 공격과 특수공격의 능력 변화를 교체한다.",
+    "tags": [
+      "랭크"
+    ],
     "makesContact": false
   },
   {
@@ -4716,7 +6044,12 @@
     "accuracy": 100,
     "pp": 8,
     "priority": 0,
-    "effect": "사용자는 반드시 기절한다.",
+    "effect": "큰 폭발로 자신의 주위에 있는 포켓몬을 공격한다. 쓰고 나서는 기절한다.",
+    "tags": [
+      "광역-전원",
+      "자기희생",
+      "비접촉"
+    ],
     "selfFaints": true,
     "makesContact": false
   },
@@ -4729,7 +6062,11 @@
     "accuracy": 100,
     "pp": 12,
     "priority": 0,
-    "effect": "",
+    "effect": "사이코 파워로 물어서 상대를 공격한다. 빛의장막이나 리플렉터도 파괴할 수 있다.",
+    "tags": [
+      "턱",
+      "접촉"
+    ],
     "classification": [
       "물기"
     ],
@@ -4744,7 +6081,10 @@
     "accuracy": 100,
     "pp": 8,
     "priority": 0,
-    "effect": "필드를 파괴한다. 필드가 없으면 실패한다.",
+    "effect": "필드를 파괴하면서 공격한다. 필드가 어떤 상태로든 변해 있지 않은 경우 기술은 실패한다.",
+    "tags": [
+      "접촉"
+    ],
     "usageCondition": "field-required",
     "destroysField": true,
     "makesContact": true
@@ -4759,6 +6099,9 @@
     "pp": 12,
     "priority": 0,
     "effect": "전기로 만든 자력의 힘으로 허공에 뜬다. 5턴 동안 부유할 수 있다.",
+    "tags": [
+      "상승"
+    ],
     "makesContact": false
   },
   {
@@ -4770,7 +6113,12 @@
     "accuracy": 100,
     "pp": 12,
     "priority": 0,
-    "effect": "",
+    "effect": "2~3턴 동안 마구 난동 부려서 공격한다. 난동 부린 뒤에는 혼란에 빠진다.",
+    "tags": [
+      "난동",
+      "접촉",
+      "혼란"
+    ],
     "makesContact": true
   },
   {
@@ -4782,7 +6130,13 @@
     "accuracy": 95,
     "pp": 16,
     "priority": 0,
-    "effect": "",
+    "effect": "전기를 모은 이빨로 문다. 10% 확률로 상대를 풀죽게 하거나 마비 상태로 만든다.",
+    "tags": [
+      "접촉",
+      "턱",
+      "마비",
+      "풀죽음"
+    ],
     "classification": [
       "물기"
     ],
@@ -4803,7 +6157,12 @@
     "accuracy": 90,
     "pp": 12,
     "priority": 0,
-    "effect": "2~5회 연속 공격. (2/3회 각 35%, 4/5회 각 15% 확률. 명중 여부는 첫 타에서만 판정)",
+    "effect": "단단한 암석을 상대에게 발사하여 공격한다. 2-5회 동안 연속으로 쓴다.",
+    "tags": [
+      "연속",
+      "폭탄",
+      "비접촉"
+    ],
     "makesContact": false,
     "minHits": 2,
     "maxHits": 5
@@ -4817,7 +6176,13 @@
     "accuracy": 95,
     "pp": 16,
     "priority": 0,
-    "effect": "10% 확률로 상대를 얼린다.",
+    "effect": "냉기를 품은 이빨로 문다. 10% 확률로 상대를 풀죽게 하거나 얼음 상태로 만든다.",
+    "tags": [
+      "접촉",
+      "턱",
+      "얼음",
+      "풀죽음"
+    ],
     "classification": [
       "물기"
     ],
@@ -4838,7 +6203,12 @@
     "accuracy": 100,
     "pp": 12,
     "priority": 0,
-    "effect": "자신의 몸무게가 상대보다 무거울수록 위력이 커진다.",
+    "effect": "무거운 몸으로 상대에게 부딪쳐 공격한다. 상대가 자신보다 가벼울수록 위력이 커진다(≤1/5→120 … 40).",
+    "tags": [
+      "접촉",
+      "압박"
+    ],
+    "weightRatioPower": true,
     "makesContact": true
   },
   {
@@ -4850,7 +6220,10 @@
     "accuracy": null,
     "pp": 8,
     "priority": 0,
-    "effect": "자신의 최대 체력을 절반 회복한다.",
+    "effect": "게으름 피우며 쉰다. 자신의 HP를 최대 HP의 절반만큼 회복한다.",
+    "tags": [
+      "회복"
+    ],
     "makesContact": false,
     "healsFraction": 0.5
   },
@@ -4863,7 +6236,10 @@
     "accuracy": 90,
     "pp": 12,
     "priority": 0,
-    "effect": "지니고 있던 나무열매를 먹은 뒤에만 사용할 수 있다.",
+    "effect": "상대를 향해 트림을 하여 데미지를 준다. 나무열매를 먹지 않으면 쓸 수 없다.",
+    "tags": [
+      "비접촉"
+    ],
     "makesContact": true,
     "excludedFromSleepTalk": true
   },
@@ -4876,7 +6252,12 @@
     "accuracy": 100,
     "pp": 12,
     "priority": 0,
-    "effect": "명중하면 자신의 특수공격이 1랭크 오른다.",
+    "effect": "활활 타오르는 불꽃을 노래하듯 뿜어서 상대를 태워 버린다. 자신의 특수공격을 1랭크 올린다.",
+    "tags": [
+      "랭크",
+      "비접촉",
+      "소리"
+    ],
     "statChanges": [
       {
         "target": "self",
@@ -4898,7 +6279,11 @@
     "accuracy": 80,
     "pp": 8,
     "priority": 0,
-    "effect": "준 데미지의 1/3만큼 자신도 반동 데미지를 입는다.",
+    "effect": "목숨을 걸고 풀파워로 박치기를 한다. 자신도 대상에게 준 피해의 ½만큼 반동 피해를 받는다.",
+    "tags": [
+      "반동",
+      "접촉"
+    ],
     "recoilFraction": 0.3333333333333333,
     "makesContact": true
   },
@@ -4911,7 +6296,12 @@
     "accuracy": 100,
     "pp": 12,
     "priority": 0,
-    "effect": "20% 확률로 상대를 화상·마비·냉동 중 하나의 상태로 만든다.",
+    "effect": "3개의 광선으로 공격한다. 20% 확률로 상대를 마비, 화상 또는 얼음 상태로 만든다.",
+    "tags": [
+      "마비",
+      "화상",
+      "얼음"
+    ],
     "makesContact": false,
     "inflictsStatus": [
       {
@@ -4936,8 +6326,15 @@
     "power": null,
     "accuracy": 100,
     "pp": 10,
-    "priority": -3,
-    "effect": "이번 턴 받은 데미지(물리든 특수든)의 1.5배로 반격한다.",
+    "priority": 0,
+    "effect": "이번 턴에 받은 데미지의 1.5배를 상대에게 돌려준다(물리·특수 무관, 타입 상성 무시). 먼저 행동해서 아직 안 맞았으면 실패한다.",
+    "tags": [
+      "고정대미지",
+      "비접촉"
+    ],
+    "countersAllCategories": {
+      "multiplier": 1.5
+    },
     "makesContact": false
   },
   {
@@ -4949,11 +6346,22 @@
     "accuracy": 100,
     "pp": 12,
     "priority": 0,
-    "effect": "1턴째 자신의 특공을 올리고, 2턴째 공격한다. 비가 내리면 1턴만에 발동한다.",
+    "effect": "1턴째에 전기를 모아서 특수공격을 1랭크 올리고 2턴째에 전기를 발사한다. 비가 올 때는 1턴 만에 전기를 발사한다.",
+    "tags": [
+      "충전-제자리",
+      "랭크",
+      "비접촉"
+    ],
     "makesContact": false,
     "chargeTurn": true,
     "chargeSkipWeather": "비",
-    "chargeStatChanges": [{ "target": "self", "stat": "spa", "delta": 1 }]
+    "chargeStatChanges": [
+      {
+        "target": "self",
+        "stat": "spa",
+        "delta": 1
+      }
+    ]
   },
   {
     "id": "기어오르기",
@@ -4964,7 +6372,14 @@
     "accuracy": 100,
     "pp": 12,
     "priority": 0,
-    "effect": "위력 = 20 + (20 × 자신의 랭크가 오른 능력치 합계). 랭크가 오른 게 없으면 기본 위력 20.",
+    "effect": "자신의 강함을 뻐기고 공격한다. 위력은 20에서 시작해 자신의 능력 랭크가 오른 만큼 랭크당 20씩 커진다.",
+    "tags": [
+      "접촉"
+    ],
+    "powerFromPositiveStages": {
+      "base": 20,
+      "perStage": 20
+    },
     "makesContact": true
   },
   {
@@ -4976,9 +6391,19 @@
     "accuracy": 90,
     "pp": 8,
     "priority": 0,
-    "effect": "급소에 맞을 확률이 높다. 1턴째 하늘로 날아올라 모습을 감추고, 2턴째 공격한다. 30% 확률로 상대를 풀죽게 만든다.",
+    "effect": "2턴째에 상대를 공격한다. 30% 확률로 풀죽게 만든다. 급소에 맞을 확률이 높다.",
+    "tags": [
+      "충전-제자리",
+      "급소",
+      "비접촉",
+      "풀죽음"
+    ],
     "inflictsVolatile": [
-      { "volatile": "flinch", "target": "opponent", "chance": 30 }
+      {
+        "volatile": "flinch",
+        "target": "opponent",
+        "chance": 30
+      }
     ],
     "makesContact": true
   },
@@ -4991,7 +6416,10 @@
     "accuracy": 100,
     "pp": 20,
     "priority": 0,
-    "effect": "",
+    "effect": "부리로 공격한다. 상대가 나무열매를 지니고 있을 때 쪼아서 나무열매의 효과를 받을 수 있다.",
+    "tags": [
+      "접촉"
+    ],
     "makesContact": true
   },
   {
@@ -5003,7 +6431,10 @@
     "accuracy": 100,
     "pp": 20,
     "priority": 0,
-    "effect": "",
+    "effect": "회전하면서 뾰족한 부리를 상대에게 꿰찔러 공격한다.",
+    "tags": [
+      "접촉"
+    ],
     "makesContact": true
   },
   {
@@ -5015,9 +6446,16 @@
     "accuracy": 100,
     "pp": 16,
     "priority": 0,
-    "effect": "이상한 전파를 발사해서 상대의 특수공격을 크게 떨어뜨린다.",
+    "effect": "몸에서 발생시킨 괴전파를 상대에게 쏘아 특수공격을 2랭크 떨어뜨린다.",
+    "tags": [
+      "랭크"
+    ],
     "statChanges": [
-      { "target": "opponent", "stat": "spa", "delta": -2 }
+      {
+        "target": "opponent",
+        "stat": "spa",
+        "delta": -2
+      }
     ],
     "makesContact": false
   },
@@ -5030,8 +6468,14 @@
     "accuracy": 100,
     "pp": 20,
     "priority": 0,
-    "effect": "지면에서 올라오는 전격으로 공격한다. 상대가 일렉트릭필드 위에 있으면 위력이 2배가 된다.",
-    "powerMultiplierInField": { "field": "일렉트릭필드", "multiplier": 2 },
+    "effect": "지면에서 올라오는 전격으로 공격한다. 상대가 일렉트릭필드 위에 있을 때 기술의 위력이 2배가 된다.",
+    "tags": [
+      "비접촉"
+    ],
+    "powerMultiplierInField": {
+      "field": "일렉트릭필드",
+      "multiplier": 2
+    },
     "makesContact": false
   },
   {
@@ -5043,9 +6487,17 @@
     "accuracy": 100,
     "pp": 16,
     "priority": 0,
-    "effect": "전격을 두르고 주위에 방전한다. 30% 확률로 상대를 마비 상태로 만든다.",
+    "effect": "눈부신 전격으로 주위에 있는 모두를 공격한다. 30% 확률로 상대를 마비 상태로 만든다.",
+    "tags": [
+      "광역-전원",
+      "비접촉",
+      "마비"
+    ],
     "inflictsStatus": [
-      { "status": "paralysis", "chance": 30 }
+      {
+        "status": "paralysis",
+        "chance": 30
+      }
     ],
     "makesContact": false
   },
@@ -5058,9 +6510,15 @@
     "accuracy": 100,
     "pp": 20,
     "priority": 0,
-    "effect": "볼을 비벼서 전기 충격을 준다. 상대를 반드시 마비 상태로 만든다.",
+    "effect": "전기가 흐르는 볼을 비벼서 공격한다. 상대를 마비 상태로 만든다.",
+    "tags": [
+      "접촉",
+      "마비"
+    ],
     "inflictsStatus": [
-      { "status": "paralysis" }
+      {
+        "status": "paralysis"
+      }
     ],
     "makesContact": true
   },
@@ -5074,6 +6532,10 @@
     "pp": 20,
     "priority": 0,
     "effect": "공격한 뒤 굉장한 스피드로 돌아와서 교대 포켓몬과 교체한다.",
+    "tags": [
+      "도주",
+      "비접촉"
+    ],
     "makesContact": false
   },
   {
@@ -5085,10 +6547,18 @@
     "accuracy": 100,
     "pp": 16,
     "priority": 0,
-    "effect": "전격을 두르고 돌진한다. 사용자도 준 데미지의 1/3만큼 반동을 입는다. 10% 확률로 상대를 마비 상태로 만든다.",
+    "effect": "전기를 한데 모아 돌진한다. 자신도 대상에게 준 피해의 ⅓만큼 반동 피해를 받는다. 10% 확률로 상대를 마비 상태로 만든다.",
+    "tags": [
+      "반동",
+      "접촉",
+      "마비"
+    ],
     "recoilFraction": 0.3333333333333333,
     "inflictsStatus": [
-      { "status": "paralysis", "chance": 10 }
+      {
+        "status": "paralysis",
+        "chance": 10
+      }
     ],
     "makesContact": true
   },
@@ -5101,7 +6571,11 @@
     "accuracy": 100,
     "pp": 16,
     "priority": 0,
-    "effect": "격렬한 전류를 두르고 몸으로 부딪친다. 사용자도 준 데미지의 1/4만큼 반동을 입는다.",
+    "effect": "전기를 두르고 상대에게 부딪쳐 공격한다. 자신도 대상에게 준 피해의 ¼만큼 반동 피해를 받는다.",
+    "tags": [
+      "반동",
+      "접촉"
+    ],
     "recoilFraction": 0.25,
     "makesContact": true
   },
@@ -5114,9 +6588,18 @@
     "accuracy": 95,
     "pp": 16,
     "priority": 0,
-    "effect": "전기가 흐르는 그물로 상대를 잡아 공격한다. 상대의 스피드를 떨어뜨린다.",
+    "effect": "전기 네트로 상대를 붙잡아서 공격한다. 상대의 스피드를 1랭크 떨어뜨린다.",
+    "tags": [
+      "광역-상대",
+      "랭크",
+      "비접촉"
+    ],
     "statChanges": [
-      { "target": "opponent", "stat": "spe", "delta": -1 }
+      {
+        "target": "opponent",
+        "stat": "spe",
+        "delta": -1
+      }
     ],
     "makesContact": false
   },
@@ -5129,8 +6612,14 @@
     "accuracy": 100,
     "pp": 12,
     "priority": 0,
-    "effect": "전기 덩어리로 공격한다. 상대보다 스피드가 빠를수록 위력이 올라간다(고정 위력 없음).",
-    "classification": ["구슬/폭탄"],
+    "effect": "전기 덩어리를 상대에게 부딪쳐서 공격한다. 상대보다 스피드가 빠를수록 위력이 올라간다.",
+    "tags": [
+      "비접촉",
+      "폭탄"
+    ],
+    "classification": [
+      "구슬/폭탄"
+    ],
     "makesContact": false
   },
   {
@@ -5142,9 +6631,16 @@
     "accuracy": 50,
     "pp": 8,
     "priority": 0,
-    "effect": "전기 덩어리를 발사한다. 명중하면 반드시 상대를 마비 상태로 만든다.",
+    "effect": "대포처럼 전기를 발사해서 공격한다. 상대를 반드시 마비 상태로 만든다.",
+    "tags": [
+      "폭탄",
+      "비접촉",
+      "마비"
+    ],
     "inflictsStatus": [
-      { "status": "paralysis" }
+      {
+        "status": "paralysis"
+      }
     ],
     "makesContact": false
   },
@@ -5157,9 +6653,16 @@
     "accuracy": null,
     "pp": 20,
     "priority": 0,
-    "effect": "다음 턴에 쓸 전기타입 기술의 위력이 2배가 된다. 자신의 특수방어가 1랭크 오른다.",
+    "effect": "다음 턴에 쓸 전기타입 기술의 위력이 2배가 된다. 자신의 특수방어도 1랭크 올라간다.",
+    "tags": [
+      "랭크"
+    ],
     "statChanges": [
-      { "target": "self", "stat": "spd", "delta": 1 }
+      {
+        "target": "self",
+        "stat": "spd",
+        "delta": 1
+      }
     ],
     "makesContact": false
   },
@@ -5172,7 +6675,11 @@
     "accuracy": 90,
     "pp": 20,
     "priority": 0,
-    "effect": "긴 몸이나 덩굴을 사용해 4~5턴 동안 상대를 휘감아 공격한다.",
+    "effect": "긴 몸이나 덩굴을 사용해 4-5턴 동안 상대를 휘감아 공격한다.",
+    "tags": [
+      "구속",
+      "접촉"
+    ],
     "makesContact": true
   },
   {
@@ -5184,8 +6691,14 @@
     "accuracy": null,
     "pp": 20,
     "priority": -6,
-    "effect": "상대를 날려버려서 강제로 교대시킨다.",
-    "classification": ["바람"],
+    "effect": "상대를 날려버려서 교대할 포켓몬을 끌어낸다. 야생의 경우에는 배틀이 끝난다.",
+    "tags": [
+      "강제 교체",
+      "바람"
+    ],
+    "classification": [
+      "바람"
+    ],
     "makesContact": false
   },
   {
@@ -5197,13 +6710,31 @@
     "accuracy": null,
     "pp": 20,
     "priority": 0,
-    "effect": "자신의 특공, 특방, 스피드를 1랭크씩 올린다.",
-    "statChanges": [
-      { "target": "self", "stat": "spa", "delta": 1 },
-      { "target": "self", "stat": "spd", "delta": 1 },
-      { "target": "self", "stat": "spe", "delta": 1 }
+    "effect": "신비롭고 아름다운 춤을 경쾌하게 춘다. 자신의 특수공격과 특수방어와 스피드를 1랭크 올린다.",
+    "tags": [
+      "랭크",
+      "춤"
     ],
-    "classification": ["춤"],
+    "statChanges": [
+      {
+        "target": "self",
+        "stat": "spa",
+        "delta": 1
+      },
+      {
+        "target": "self",
+        "stat": "spd",
+        "delta": 1
+      },
+      {
+        "target": "self",
+        "stat": "spe",
+        "delta": 1
+      }
+    ],
+    "classification": [
+      "춤"
+    ],
     "makesContact": false
   },
   {
@@ -5215,7 +6746,13 @@
     "accuracy": null,
     "pp": 20,
     "priority": 2,
-    "effect": "이번 턴 상대의 단일 대상 공격을 자신에게 유도한다.",
+    "effect": "상대를 자극하는 가루를 자신에게 뿌려서 주의를 끈다. 상대의 공격은 모두 자신에게 향한다.",
+    "tags": [
+      "가루"
+    ],
+    "classification": [
+      "가루"
+    ],
     "makesContact": false
   },
   {
@@ -5227,11 +6764,23 @@
     "accuracy": 100,
     "pp": 12,
     "priority": 0,
-    "effect": "50% 확률로 자신의 특공이 1랭크 오른다.",
-    "statChanges": [
-      { "target": "self", "stat": "spa", "delta": 1, "chance": 50 }
+    "effect": "불꽃을 두른 날개를 쳐서 공격한다. 50% 확률로 자신의 특수공격이 1랭크 올라간다.",
+    "tags": [
+      "랭크",
+      "춤",
+      "비접촉"
     ],
-    "classification": ["춤"],
+    "statChanges": [
+      {
+        "target": "self",
+        "stat": "spa",
+        "delta": 1,
+        "chance": 50
+      }
+    ],
+    "classification": [
+      "춤"
+    ],
     "makesContact": false
   },
   {
@@ -5243,9 +6792,17 @@
     "accuracy": 95,
     "pp": 20,
     "priority": 0,
-    "effect": "상대의 스피드를 2랭크 낮춘다.",
+    "effect": "입에서 뿜어낸 실을 휘감아서 상대의 스피드를 2랭크 떨어뜨린다.",
+    "tags": [
+      "광역-상대",
+      "랭크"
+    ],
     "statChanges": [
-      { "target": "opponent", "stat": "spe", "delta": -2 }
+      {
+        "target": "opponent",
+        "stat": "spe",
+        "delta": -2
+      }
     ],
     "makesContact": false
   },
@@ -5258,7 +6815,10 @@
     "accuracy": null,
     "pp": 8,
     "priority": 0,
-    "effect": "자신의 체력을 회복한다. 날씨에 따라 회복량이 달라진다.",
+    "effect": "사용자의 HP를 회복한다. 날씨에 따라 회복량이 변한다.",
+    "tags": [
+      "회복"
+    ],
     "makesContact": false,
     "healsWeatherDependent": true
   },
@@ -5271,7 +6831,11 @@
     "accuracy": 100,
     "pp": 12,
     "priority": 0,
-    "effect": "준 데미지의 절반만큼 자신의 체력을 회복한다.",
+    "effect": "피를 빨아서 상대를 공격한다. 준 데미지의 ½을 HP로 회복한다.",
+    "tags": [
+      "흡수",
+      "접촉"
+    ],
     "drainFraction": 0.5,
     "makesContact": true
   },
@@ -5284,7 +6848,12 @@
     "accuracy": 100,
     "pp": 12,
     "priority": 0,
-    "effect": "",
+    "effect": "2~3턴 동안 불꽃을 마구 뿜어 대며 난동을 부린다. 난동 부린 뒤에는 혼란에 빠진다.",
+    "tags": [
+      "난동",
+      "접촉",
+      "혼란"
+    ],
     "makesContact": true
   },
   {
@@ -5296,7 +6865,13 @@
     "accuracy": 100,
     "pp": 8,
     "priority": 0,
-    "effect": "이번 턴에 상대의 능력치가 올랐다면 위력이 2배가 되고 반드시 화상을 입힌다.",
+    "effect": "질투의 에너지로 상대를 공격한다. 이번 턴에 상대의 능력이 올라갔다면 상대를 화상 상태로 만든다.",
+    "tags": [
+      "광역-상대",
+      "비접촉",
+      "화상"
+    ],
+    "burnsTargetIfStatRoseThisTurn": true,
     "makesContact": false
   },
   {
@@ -5308,7 +6883,10 @@
     "accuracy": null,
     "pp": 8,
     "priority": 0,
-    "effect": "자신의 최대 HP 절반만큼 회복한다.",
+    "effect": "세포를 재생시켜 자신의 최대 HP의 절반만큼 HP를 회복한다.",
+    "tags": [
+      "회복"
+    ],
     "makesContact": false,
     "healsFraction": 0.5
   },
@@ -5321,11 +6899,26 @@
     "accuracy": null,
     "pp": 20,
     "priority": 0,
-    "effect": "자신의 공격, 방어, 명중률을 1랭크씩 올린다.",
+    "effect": "똬리를 틀어서 집중한다. 자신의 공격과 방어와 명중률을 1랭크 올린다.",
+    "tags": [
+      "랭크"
+    ],
     "statChanges": [
-      { "target": "self", "stat": "atk", "delta": 1 },
-      { "target": "self", "stat": "def", "delta": 1 },
-      { "target": "self", "stat": "accuracy", "delta": 1 }
+      {
+        "target": "self",
+        "stat": "atk",
+        "delta": 1
+      },
+      {
+        "target": "self",
+        "stat": "def",
+        "delta": 1
+      },
+      {
+        "target": "self",
+        "stat": "accuracy",
+        "delta": 1
+      }
     ],
     "makesContact": false
   },
@@ -5338,10 +6931,22 @@
     "accuracy": 100,
     "pp": 16,
     "priority": 0,
-    "effect": "30% 확률로 상대를 화상 상태로 만든다. 사용 시 자신과 상대의 얼음 상태를 치료한다.",
+    "effect": "뜨겁게 끓어오르는 물을 상대에게 발사해서 공격한다. 30% 확률로 상대를 화상 상태로 만든다.",
+    "tags": [
+      "비접촉",
+      "화상"
+    ],
     "makesContact": false,
-    "inflictsStatus": [{ "status": "burn", "chance": 30 }],
-    "curesStatus": { "target": "opponent", "status": "freeze" },
+    "inflictsStatus": [
+      {
+        "status": "burn",
+        "chance": 30
+      }
+    ],
+    "curesStatus": {
+      "target": "opponent",
+      "status": "freeze"
+    },
     "thawsUserOnUse": true
   },
   {
@@ -5353,7 +6958,7 @@
     "accuracy": null,
     "pp": 12,
     "priority": 0,
-    "effect": "자신의 특성을 상대의 특성과 같게 만든다.",
+    "effect": "상대의 역할을 하여 자신도 상대와 같은 특성으로 변화한다.",
     "makesContact": false
   },
   {
@@ -5365,10 +6970,22 @@
     "accuracy": 100,
     "pp": 16,
     "priority": 0,
-    "effect": "50% 확률로 상대를 맹독 상태로 만든다.",
-    "classification": ["물기"],
+    "effect": "독이 있는 이빨로 상대를 물어서 공격한다. 50% 확률로 상대를 맹독 상태로 만든다.",
+    "tags": [
+      "접촉",
+      "턱",
+      "맹독"
+    ],
+    "classification": [
+      "물기"
+    ],
     "makesContact": true,
-    "inflictsStatus": [{ "status": "badly-poisoned", "chance": 50 }]
+    "inflictsStatus": [
+      {
+        "status": "badly-poisoned",
+        "chance": 50
+      }
+    ]
   },
   {
     "id": "지구던지기",
@@ -5379,7 +6996,11 @@
     "accuracy": 100,
     "pp": 20,
     "priority": 0,
-    "effect": "사용자의 레벨만큼 고정 데미지를 준다. (챔피언스는 레벨 50 고정이라 항상 50 고정 데미지)",
+    "effect": "인력을 사용해 내던진다. 자신의 레벨과 똑같은 데미지를 상대에게 준다.",
+    "tags": [
+      "고정대미지",
+      "접촉"
+    ],
     "fixedDamage": 50,
     "makesContact": false
   },
@@ -5392,7 +7013,11 @@
     "accuracy": 90,
     "pp": 12,
     "priority": 0,
-    "effect": "상대의 남은 HP 절반만큼 데미지를 준다(최소 1).",
+    "effect": "날카로운 앞니로 강하게 물어서 공격한다. 상대의 HP는 절반이 된다.",
+    "tags": [
+      "고정대미지",
+      "접촉"
+    ],
     "makesContact": true
   },
   {
@@ -5404,7 +7029,11 @@
     "accuracy": 95,
     "pp": 12,
     "priority": 0,
-    "effect": "급소에 맞을 확률이 높다.",
+    "effect": "드릴처럼 몸을 회전시켜서 상대에게 몸통박치기한다. 급소에 맞기 쉽다.",
+    "tags": [
+      "급소",
+      "접촉"
+    ],
     "highCritRatio": true,
     "makesContact": true
   },
@@ -5417,7 +7046,11 @@
     "accuracy": 30,
     "pp": 8,
     "priority": 0,
-    "effect": "명중하면 상대를 즉시 기절시킨다. 명중률은 30%+(자신 레벨-상대 레벨)%이나, 챔피언스는 레벨 50 고정이라 항상 30%다.",
+    "effect": "땅이 갈라진 곳에 상대를 떨어뜨려 공격한다. 맞으면 일격에 기절한다.",
+    "tags": [
+      "일격",
+      "비접촉"
+    ],
     "makesContact": false
   },
   {
@@ -5429,7 +7062,10 @@
     "accuracy": 85,
     "pp": 12,
     "priority": 0,
-    "effect": "",
+    "effect": "단단하고 훌륭한 뿔로 마음껏 상대를 꿰찔러서 공격한다.",
+    "tags": [
+      "접촉"
+    ],
     "makesContact": true
   },
   {
@@ -5441,9 +7077,18 @@
     "accuracy": 95,
     "pp": 12,
     "priority": 0,
-    "effect": "50% 확률로 상대의 방어를 1랭크 낮춘다.",
+    "effect": "단단하고 날카로운 손톱으로 베어 갈라서 공격한다. 50% 확률로 상대의 방어를 1랭크 떨어뜨린다.",
+    "tags": [
+      "접촉",
+      "베기"
+    ],
     "statChanges": [
-      { "target": "opponent", "stat": "def", "delta": -1, "chance": 50 }
+      {
+        "target": "opponent",
+        "stat": "def",
+        "delta": -1,
+        "chance": 50
+      }
     ],
     "makesContact": true
   },
@@ -5456,7 +7101,11 @@
     "accuracy": 30,
     "pp": 8,
     "priority": 0,
-    "effect": "명중하면 상대를 즉시 기절시킨다. 명중률 공식은 땅가르기와 동일하며, 챔피언스는 레벨 50 고정이라 항상 30%다.",
+    "effect": "회전하는 뿔을 상대에게 꿰찔러서 공격한다. 맞으면 일격에 기절한다.",
+    "tags": [
+      "일격",
+      "접촉"
+    ],
     "makesContact": true
   },
   {
@@ -5468,7 +7117,11 @@
     "accuracy": null,
     "pp": 12,
     "priority": 0,
-    "effect": "상대가 숨은 상태가 아니면 반드시 명중한다.",
+    "effect": "뾰족한 뿔로 상대를 꿰찔러서 공격한다. 공격은 반드시 명중한다.",
+    "tags": [
+      "필중",
+      "접촉"
+    ],
     "makesContact": true
   },
   {
@@ -5480,7 +7133,7 @@
     "accuracy": null,
     "pp": 12,
     "priority": 0,
-    "effect": "자신 최대 HP의 절반을 소모해 대타를 만들고 뒤의 포켓몬과 강제로 교체한다.",
+    "effect": "자신의 HP를 깎아서 분신을 만든 뒤 돌아와서 교대 포켓몬과 교체한다.",
     "makesContact": false
   },
   {
@@ -5492,9 +7145,16 @@
     "accuracy": 100,
     "pp": 16,
     "priority": 0,
-    "effect": "급소에 맞을 확률이 높다.",
+    "effect": "잎사귀를 칼처럼 이용해 상대를 베어 공격한다. 급소에 맞을 확률이 높다.",
+    "tags": [
+      "급소",
+      "접촉",
+      "베기"
+    ],
     "highCritRatio": true,
-    "classification": ["베기"],
+    "classification": [
+      "베기"
+    ],
     "makesContact": true
   },
   {
@@ -5506,11 +7166,24 @@
     "accuracy": 100,
     "pp": 20,
     "priority": 0,
-    "effect": "급소에 맞을 확률이 높다. 10% 확률로 상대를 독 상태로 만든다.",
+    "effect": "상대를 베어 가른다. 10% 확률로 상대를 독 상태로 만들고, 급소에 맞을 확률이 높다.",
+    "tags": [
+      "급소",
+      "접촉",
+      "베기",
+      "독"
+    ],
     "highCritRatio": true,
-    "classification": ["베기"],
+    "classification": [
+      "베기"
+    ],
     "makesContact": true,
-    "inflictsStatus": [{ "status": "poison", "chance": 10 }]
+    "inflictsStatus": [
+      {
+        "status": "poison",
+        "chance": 10
+      }
+    ]
   },
   {
     "id": "성묘",
@@ -5521,7 +7194,10 @@
     "accuracy": 100,
     "pp": 10,
     "priority": 0,
-    "effect": "쓰러진 같은 편 포켓몬 1마리당 위력이 50씩 오른다(1v1 시뮬레이터에는 동료가 없어 항상 기본 위력 50으로 계산).",
+    "effect": "동료의 한을 풀어 주기 위해 공격한다. 쓰러진 같은 편 포켓몬이 많을수록 기술의 위력이 올라간다.",
+    "tags": [
+      "비접촉"
+    ],
     "makesContact": false
   },
   {
@@ -5533,7 +7209,11 @@
     "accuracy": 85,
     "pp": 12,
     "priority": 0,
-    "effect": "2~5회 동안 연속으로 쓴다.",
+    "effect": "단단한 꼬리로 상대를 때려서 공격한다. 2-5회 동안 연속으로 쓴다.",
+    "tags": [
+      "연속",
+      "접촉"
+    ],
     "makesContact": true,
     "minHits": 2,
     "maxHits": 5
@@ -5547,7 +7227,11 @@
     "accuracy": 100,
     "pp": 20,
     "priority": 0,
-    "effect": "10% 확률로 상대를 풀죽게 만든다.",
+    "effect": "보이지 않는 이상한 힘을 보내어 공격한다. 10% 확률로 상대를 풀죽게 만든다.",
+    "tags": [
+      "비접촉",
+      "풀죽음"
+    ],
     "inflictsVolatile": [
       {
         "volatile": "flinch",
@@ -5566,7 +7250,11 @@
     "accuracy": 100,
     "pp": 20,
     "priority": 0,
-    "effect": "2~5회 동안 연속으로 쓴다.",
+    "effect": "날카로운 고드름을 상대에게 발사하여 공격한다. 2-5회 동안 연속으로 쓴다.",
+    "tags": [
+      "연속",
+      "비접촉"
+    ],
     "makesContact": false,
     "minHits": 2,
     "maxHits": 5
@@ -5580,7 +7268,11 @@
     "accuracy": 100,
     "pp": 20,
     "priority": 1,
-    "effect": "반드시 선제공격을 할 수 있다.",
+    "effect": "얼음 덩어리를 순식간에 만들어 재빠르게 쏜다. 반드시 선제공격할 수 있다.",
+    "tags": [
+      "선공",
+      "비접촉"
+    ],
     "makesContact": false
   },
   {
@@ -5592,7 +7284,10 @@
     "accuracy": null,
     "pp": 20,
     "priority": 0,
-    "effect": "5턴 동안 오로라 베일을 펼쳐 상대로부터 받는 물리·특수공격 데미지를 절반으로 줄인다. 싸라기눈(눈) 상태일 때만 사용할 수 있다.",
+    "effect": "5턴 동안 물리와 특수 기술의 데미지를 약하게 한다. 설경일 때만 쓸 수 있다.",
+    "tags": [
+      "방어"
+    ],
     "makesContact": false,
     "setsScreen": "auroraVeil",
     "usageCondition": "weather-required",
@@ -5607,9 +7302,15 @@
     "accuracy": 100,
     "pp": 20,
     "priority": 0,
-    "effect": "물타입 포켓몬에게는 상성과 무관하게 효과가 굉장하다. Champions에서는 얼음 상태이상 부여 효과가 삭제됨.",
+    "effect": "상대를 급격히 차갑게 하여 물타입 포켓몬에게도 효과가 굉장해진다.",
+    "tags": [
+      "특별 상성"
+    ],
     "makesContact": false,
-    "overridesTypeEffectivenessFor": { "type": "물", "effectiveness": 2 }
+    "overridesTypeEffectivenessFor": {
+      "type": "물",
+      "effectiveness": 2
+    }
   },
   {
     "id": "골드러시",
@@ -5620,8 +7321,19 @@
     "accuracy": 95,
     "pp": 8,
     "priority": 0,
-    "effect": "대량의 코인을 날려서 공격한다. 사용한 자신의 특수공격이 2랭크 떨어진다. (일반 시리즈에서는 배틀 후 돈을 획득)",
-    "statChanges": [{ "target": "self", "stat": "spa", "delta": -2 }],
+    "effect": "대량의 코인을 날려서 공격한다. 자신의 특수공격이 2랭크 떨어진다. 배틀 후 얻는 상금이 소폭 증가한다.",
+    "tags": [
+      "광역-상대",
+      "반동-랭크",
+      "비접촉"
+    ],
+    "statChanges": [
+      {
+        "target": "self",
+        "stat": "spa",
+        "delta": -2
+      }
+    ],
     "makesContact": false
   },
   {
@@ -5633,7 +7345,10 @@
     "accuracy": null,
     "pp": 8,
     "priority": 0,
-    "effect": "양팔을 벌려 막아서서 상대의 도주로를 가로막아 도망치거나 교체할 수 없게 한다. (1v1 시뮬레이터엔 교체 개념이 없어 이 트래핑 효과는 적용 대상이 없음 — 효과 텍스트만)",
+    "effect": "양팔을 벌려 막아서서 상대의 도주로를 가로막아 도망칠 수 없게 한다.",
+    "tags": [
+      "고정-상대"
+    ],
     "makesContact": false
   },
   {
@@ -5645,8 +7360,14 @@
     "accuracy": 100,
     "pp": 16,
     "priority": 0,
-    "effect": "긴 뿔로 베어 공격한다. 상대의 방어·특수방어·회피율 랭크 변화를 무시하고 데미지를 준다.",
-    "classification": ["베기"],
+    "effect": "칼로 베어 공격한다. 상대의 능력 변화에 관계없이 데미지를 준다.",
+    "tags": [
+      "베기",
+      "접촉"
+    ],
+    "classification": [
+      "베기"
+    ],
     "makesContact": true,
     "ignoresDefenderStatStagesInDamage": true
   },
@@ -5659,10 +7380,17 @@
     "accuracy": null,
     "pp": 8,
     "priority": 4,
-    "effect": "상대의 공격 기술을 완전히 막으면서 방어 태세를 갖춘다. 접촉기로 막으면 상대의 공격이 1랭크 하락한다. 연속으로 쓰면(방어·판별·버티기 포함, 계열 공유) 성공 확률이 100%→1/3→1/9→1/27로 급격히 줄어든다(이전에 '50%씩 감소'로 잘못 적혀있던 걸 방어류 공용 확률표로 정정). 킬가르도가 사용하면 배틀스위치로 실드폼 전환도 함께 반영된다.",
+    "effect": "상대의 공격을 막음과 동시에 방어 태세를 갖춘다. 접촉한 상대의 공격을 1랭크 떨어뜨린다.",
+    "tags": [
+      "방어",
+      "랭크"
+    ],
     "makesContact": false,
     "protectEffect": "block",
-    "protectContactPenalty": { "stat": "atk", "delta": -1 }
+    "protectContactPenalty": {
+      "stat": "atk",
+      "delta": -1
+    }
   },
   {
     "id": "파워트릭",
@@ -5673,9 +7401,12 @@
     "accuracy": null,
     "pp": 12,
     "priority": 0,
-    "effect": "초능력으로 자신의 공격과 방어 수치를 서로 맞바꾼다.",
+    "effect": "초능력으로 자신의 공격과 방어의 힘을 교환한다.",
     "makesContact": false,
-    "swapsOwnStats": ["atk", "def"]
+    "swapsOwnStats": [
+      "atk",
+      "def"
+    ]
   },
   {
     "id": "물수리검",
@@ -5686,7 +7417,12 @@
     "accuracy": 100,
     "pp": 20,
     "priority": 1,
-    "effect": "점액으로 만든 수리검을 연속으로 던져 공격하는 선제(+1) 기술이다. 2~5회 연속 히트.",
+    "effect": "점액으로 만든 수리검을 2~5회 연속으로 던진다. 반드시 선제공격할 수 있다.",
+    "tags": [
+      "연속",
+      "선공",
+      "비접촉"
+    ],
     "makesContact": false,
     "minHits": 2,
     "maxHits": 5
@@ -5700,7 +7436,11 @@
     "accuracy": null,
     "pp": 20,
     "priority": 0,
-    "effect": "상대의 주위에 끈적끈적한 네트를 둘러 펼쳐서 교체되어 나오는 상대의 스피드를 떨어뜨린다. 엔트리 해저드류라 교체가 없는 1v1 시뮬레이터에는 적용 대상이 없다(효과 텍스트만).",
+    "effect": "상대의 주위에 끈적끈적한 네트를 둘러 펼쳐 교체되어 나온 상대의 스피드를 1랭크 떨어뜨린다.",
+    "tags": [
+      "장판",
+      "랭크"
+    ],
     "makesContact": false
   },
   {
@@ -5712,7 +7452,11 @@
     "accuracy": 100,
     "pp": 20,
     "priority": 0,
-    "effect": "4~5턴 동안 상대에게 엉겨 붙어서 공격한다. 그동안 상대는 도망갈 수 없다(모래지옥류와 같은 '조이기' 축 — 여러 턴 지속 구속 데미지 로직 자체가 아직 없어 효과 텍스트만).",
+    "effect": "4-5턴 동안 상대에게 엉겨 붙어서 공격한다. 그동안 상대는 도망갈 수 없다.",
+    "tags": [
+      "구속",
+      "접촉"
+    ],
     "makesContact": true
   },
   {
@@ -5724,7 +7468,7 @@
     "accuracy": null,
     "pp": 12,
     "priority": 0,
-    "effect": "초능력으로 자신과 상대의 공격과 특수공격 능력치를 더해서 반으로 나눈다(파워트릭류와 같은 '실수치 조작' 축 — 실수치를 직접 갈아치우는 로직 자체가 아직 없어 효과 텍스트만).",
+    "effect": "초능력으로 자신과 상대의 공격과 특수공격을 더해서 반으로 나눈다.",
     "makesContact": false
   },
   {
@@ -5732,11 +7476,18 @@
     "name": "앙갚음",
     "type": "악",
     "category": "physical",
-    "power": 50,
+    "power": null,
     "accuracy": 100,
     "pp": 10,
     "priority": 0,
-    "effect": "자신이 상대보다 나중에 행동하면 위력이 2배가 된다(위력 조건은 효과 텍스트만, 엔진 미반영).",
+    "effect": "이번 턴에 받은 데미지의 1.5배를 상대에게 돌려준다(물리·특수 무관, 타입 상성 무시). 먼저 행동해서 아직 안 맞았으면 실패한다.",
+    "tags": [
+      "고정대미지",
+      "접촉"
+    ],
+    "countersAllCategories": {
+      "multiplier": 1.5
+    },
     "makesContact": true
   },
   {
@@ -5748,7 +7499,11 @@
     "accuracy": 100,
     "pp": 10,
     "priority": 0,
-    "effect": "상대의 공격을 1랭크 낮춘다.",
+    "effect": "등골이 서늘해지는 원념으로 공격해서 상대의 공격을 1랭크 떨어뜨린다.",
+    "tags": [
+      "랭크",
+      "비접촉"
+    ],
     "statChanges": [
       {
         "target": "opponent",
@@ -5757,5 +7512,133 @@
       }
     ],
     "makesContact": false
+  },
+  {
+    "id": "눈물그렁그렁",
+    "name": "눈물그렁그렁",
+    "type": "노말",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 20,
+    "priority": 0,
+    "effect": "눈물을 그렁그렁거려 상대의 전의를 상실하게 한다. 상대의 공격과 특수공격이 1랭크 떨어진다.",
+    "tags": [
+      "필중",
+      "랭크"
+    ],
+    "statChanges": [
+      {
+        "target": "opponent",
+        "stat": "atk",
+        "delta": -1
+      },
+      {
+        "target": "opponent",
+        "stat": "spa",
+        "delta": -1
+      }
+    ],
+    "makesContact": false
+  },
+  {
+    "id": "파멸의빛",
+    "name": "파멸의빛",
+    "type": "페어리",
+    "category": "special",
+    "power": 140,
+    "accuracy": 90,
+    "pp": 8,
+    "priority": 0,
+    "effect": "영원의 꽃의 파워를 빌려서 강력한 광선을 쏜다. 자신도 상대에게 준 데미지의 ½만큼 반동 피해를 받는다.",
+    "tags": [
+      "반동",
+      "비접촉"
+    ],
+    "recoilFraction": 0.5,
+    "makesContact": false
+  },
+  {
+    "id": "녹기",
+    "name": "녹기",
+    "type": "독",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 20,
+    "priority": 0,
+    "effect": "세포의 변화로 액체가 되어 자신의 방어를 2랭크 올린다.",
+    "tags": [
+      "랭크"
+    ],
+    "statChanges": [
+      {
+        "target": "self",
+        "stat": "def",
+        "delta": 2
+      }
+    ],
+    "makesContact": false
+  },
+  {
+    "id": "록커트",
+    "name": "록커트",
+    "type": "바위",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 20,
+    "priority": 0,
+    "effect": "몸을 닦아 공기의 저항을 적게 한다. 스피드를 2랭크 올릴 수 있다.",
+    "tags": [
+      "랭크"
+    ],
+    "statChanges": [
+      {
+        "target": "self",
+        "stat": "spe",
+        "delta": 2
+      }
+    ],
+    "makesContact": false
+  },
+  {
+    "id": "킬러스핀",
+    "name": "킬러스핀",
+    "type": "독",
+    "category": "physical",
+    "power": 30,
+    "accuracy": 100,
+    "pp": 15,
+    "priority": 0,
+    "effect": "회전해서 상대를 공격한다. 조이기, 김밥말이, 씨뿌리기 등의 효과를 날려 버린다. 상대를 독 상태로 만든다.",
+    "tags": [
+      "광역-상대",
+      "접촉",
+      "독"
+    ],
+    "inflictsStatus": [
+      {
+        "status": "poison"
+      }
+    ],
+    "makesContact": true
+  },
+  {
+    "id": "니들가드",
+    "name": "니들가드",
+    "type": "풀",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 10,
+    "priority": 4,
+    "effect": "상대의 공격을 막음과 동시에 접촉한 상대의 최대 체력의 1/8을 감소시킨다.",
+    "tags": [
+      "방어"
+    ],
+    "makesContact": false,
+    "protectEffect": "block",
+    "protectContactDamageFraction": 0.125
   }
 ]

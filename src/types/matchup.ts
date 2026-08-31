@@ -17,6 +17,8 @@ export interface MatchupSlot {
    * 단일 위력 기술이거나 아직 안 골랐으면 undefined.
    */
   multiHitCount?: number;
+  /** 토해내기(spitUpPower) 기술을 골랐을 때 가정할 비축 스택(1~3). 기본 3. */
+  stockpileCount?: number;
   /**
    * Phase 6.5 §1 — "이전 턴 가정" 토글. 매치업 페이지는 1턴 스냅샷이라 직전 턴 상황에
    * 의존하는 축을 직접 켜고 끄게 한다. 전부 off/0이면 지금까지와 동일한 계산.

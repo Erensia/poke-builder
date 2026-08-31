@@ -13,6 +13,11 @@ export interface EffectiveForm {
   mega?: MegaEvolution;
   types: PokemonType[];
   baseStats: BaseStats;
+  /**
+   * 이 폼의 몸무게(kg). 메가폼이면 mega.weightKg(없으면 기본 폼 값으로 폴백), 아니면 기본 폼 값.
+   * 헤비봄버·히트스탬프·풀묶기·안다리걸기 위력 계산(§3-6)에 쓴다. 데이터가 없으면 undefined.
+   */
+  weightKg?: number;
   /** 표시용: 메가진화 중이면 "리자몽 (메가X)" 형태로 쓸 수 있는 폼 이름 */
   formLabel: string | null;
 }
@@ -37,12 +42,14 @@ export function getEffectiveForm(pokemon: Pokemon, slot: FormSource): EffectiveF
       mega,
       types: mega.types,
       baseStats: mega.baseStats,
+      weightKg: mega.weightKg ?? pokemon.weightKg,
       formLabel: mega.form,
     };
   }
   return {
     types: pokemon.types,
     baseStats: pokemon.baseStats,
+    weightKg: pokemon.weightKg,
     formLabel: null,
   };
 }

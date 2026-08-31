@@ -100,7 +100,7 @@
 
 .movedex-row {
   display: grid;
-  grid-template-columns: 1fr 5em 3.4em 4.4em 3.6em 3em 3.8em 2.8em;
+  grid-template-columns: 1fr 5em 3.4em 4.4em 4.4em 3em 3.8em 2.8em;
   align-items: center;
   gap: 0.5rem;
   padding: 0.55rem 0.9rem;
@@ -112,6 +112,11 @@
   top: 0;
   background: var(--surface-2);
   z-index: 1;
+  /* 스크롤바는 본문(.movedex-list)에만 두고, 헤더엔 같은 폭의 '거터'만 비워둔다.
+     overflow:hidden으로 헤더도 스크롤 컨테이너가 되어 scrollbar-gutter가 먹는다 —
+     스크롤바는 안 그려지고 우측 여백만 예약돼서 본문과 열이 계속 맞는다. */
+  overflow: hidden;
+  scrollbar-gutter: stable;
 }
 
 .movedex-cell {
@@ -135,12 +140,29 @@
   gap: 0.25rem;
 }
 
-.movedex-th:hover {
+button.movedex-th:hover {
   color: var(--text);
 }
 
 .movedex-th.is-active {
   color: var(--violet);
+}
+
+/* 명중률 열만 우측 정렬 유지 (값이 xx% 형태로 자릿수가 갈려 우측이 읽기 좋다) */
+.movedex-th-num {
+  justify-content: flex-end;
+  text-align: right;
+}
+
+/* 우선도·위력·PP 열은 값이 짧아 헤더·데이터 모두 가운데 정렬 */
+.movedex-th-center {
+  justify-content: center;
+  text-align: center;
+}
+
+/* 정렬 불가 헤더(접촉)도 다른 헤더와 같은 타이포로 — 예전엔 일반 셀 서체(0.82rem)라 튀었다 */
+.movedex-th-static {
+  cursor: default;
 }
 
 .movedex-sort-arrow {
@@ -157,7 +179,14 @@
   font-variant-numeric: tabular-nums;
 }
 
-.movedex-cell-num.is-priority {
+.movedex-cell-center {
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  /* "+5 / -3"(힘껏펀치 복합 우선도)처럼 토큰에 공백이 있어도 칸 안에서 줄바꿈되지 않게 */
+  white-space: nowrap;
+}
+
+.movedex-cell-center.is-priority {
   color: var(--violet);
   font-weight: 700;
 }
@@ -189,8 +218,10 @@
   list-style: none;
   margin: 0;
   padding: 0;
-  max-height: 640px;
+  max-height: 680px;
   overflow-y: auto;
+  /* stable = 스크롤 여부와 무관하게 항상 거터 예약 → 헤더의 예약 폭과 늘 일치해 열이 안 흔들린다 */
+  scrollbar-gutter: stable;
 }
 
 .movedex-list .movedex-row:last-child {

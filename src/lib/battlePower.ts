@@ -19,6 +19,114 @@ export function computeEffectiveSpeed(realSpeed: number, stages: StatStages = NE
   return realSpeed * rankStageMultiplier(stages.spe);
 }
 
+/**
+ * 기사회생(Reversal)·바둥바둥(Flail) 위력표 — 사용자 현재 HP 비율(%)로 갈린다(사용자 제공 수치, F-2).
+ * 71~100 → 20 / 36~70 → 40 / 21~35 → 80 / 11~20 → 100 / 5~10 → 150 / 1~4 → 200.
+ * (경계는 백분율 내림 기준 — 예: 35.9%는 "35 이하" 구간이 아니라 "36 이상"으로 본다.)
+ * battleSimulator(실 HP)와 matchupEvaluator(스냅샷 HP 비율)가 공유한다.
+ */
+export function reversalPowerFromHp(currentHp: number, maxHp: number): number {
+  const pct = (currentHp / maxHp) * 100;
+  if (pct > 70) return 20;
+  if (pct > 35) return 40;
+  if (pct > 20) return 80;
+  if (pct > 10) return 100;
+  if (pct > 4) return 150;
+  return 200;
+}
+
+/**
+ * 자이로볼(Gyro Ball) 위력 — 사용자 확정식: `min(150, floor(25 × (상대 실효 스피드 / 자신 실효 스피드 + 1)))`.
+ * (본가의 "+1 바깥" 공식과 다르게 괄호 안에 +1.) 실효 스피드 산출(랭크·마비·도구 반영)은 호출부 몫.
+ * 자신 스피드가 0 이하면(이론상) 최대 위력 150.
+ */
+export function gyroBallPowerFromSpeeds(userEffectiveSpeed: number, targetEffectiveSpeed: number): number {
+  if (userEffectiveSpeed <= 0) return 150;
+  return Math.min(150, Math.max(1, Math.floor(25 * (targetEffectiveSpeed / userEffectiveSpeed + 1))));
+}
+
+/**
+ * 기어오르기(Power Trip)·어시스트파워(Stored Power) 위력 — `base + perStage × Σ max(0, 랭크)`.
+ * 이 프로젝트 stages엔 명중률·회피율 랭크가 없어 5스탯(공/방/특공/특방/스피드) 양수분만 합산한다.
+ */
+export function positiveStagesPowerValue(stages: StatStages, base: number, perStage: number): number {
+  const sum = (["atk", "def", "spa", "spd", "spe"] as const).reduce(
+    (acc, key) => acc + Math.max(0, stages[key]),
+    0,
+  );
+  return base + perStage * sum;
+}
+
+/**
+ * 헤비봄버·히트스탬프(Move.weightRatioPower) 위력 — 상대 몸무게가 자신 대비 얼마나 가벼운지로 갈린다.
+ * ≤1/5 → 120 · ≤1/4 → 100 · ≤1/3 → 80 · ≤1/2 → 60 · 그 외 → 40 (§3-6).
+ */
+export function weightRatioPowerValue(userKg: number, targetKg: number): number {
+  if (userKg <= 0) return 40;
+  const ratio = targetKg / userKg;
+  if (ratio <= 1 / 5) return 120;
+  if (ratio <= 1 / 4) return 100;
+  if (ratio <= 1 / 3) return 80;
+  if (ratio <= 1 / 2) return 60;
+  return 40;
+}
+
+/**
+ * 풀묶기·안다리걸기(Move.targetAbsoluteWeightPower) 위력 — 상대의 절대 몸무게(kg)로 갈린다.
+ * <10 → 20 · <25 → 40 · <50 → 60 · <100 → 80 · <200 → 100 · 그 이상 → 120 (§3-6).
+ */
+export function absoluteWeightPowerValue(targetKg: number): number {
+  if (targetKg < 10) return 20;
+  if (targetKg < 25) return 40;
+  if (targetKg < 50) return 60;
+  if (targetKg < 100) return 80;
+  if (targetKg < 200) return 100;
+  return 120;
+}
+
+/** pokemon.weightKg가 아직 안 채워진 동안 몸무게 기반 4기술이 쓸 임시 위력 (§3-6 데이터 입력 시 자동 해소) */
+export const WEIGHT_MOVE_FALLBACK_POWER = 60;
+
+/**
+ * 데미지·결정력에 쓸 "공격 측 스탯" 실능과 그 랭크를 고른다.
+ *  - 기본: 물리 = 공격 / 특수 = 특공 (그 스탯의 자신 랭크)
+ *  - offensiveStatOverride(바디프레스): 자신의 def/spd/spe 실능·랭크 (분류는 그대로)
+ *  - usesTargetAttackStat(속임수): 방어자의 공격 실능·랭크 (자신 공격 랭크는 무시). 방어자
+ *    정보가 없으면 자신 공격으로 폴백.
+ * 급소 시 "공격측에 불리한 음수 랭크 무시"는 호출부에서 이 stage에 그대로 적용한다.
+ */
+function resolveAttackStat(
+  move: Move,
+  attackerRealStats: BaseStats,
+  attackerStages: StatStages,
+  defenderRealStats?: BaseStats,
+  defenderStages: StatStages = NEUTRAL_STAGES,
+): { stat: number; stage: number } {
+  if (move.usesTargetAttackStat && defenderRealStats) {
+    return { stat: defenderRealStats.atk, stage: defenderStages.atk };
+  }
+  if (move.offensiveStatOverride) {
+    const key = move.offensiveStatOverride;
+    return { stat: attackerRealStats[key], stage: attackerStages[key] };
+  }
+  const key = move.category === "physical" ? "atk" : "spa";
+  return { stat: attackerRealStats[key], stage: attackerStages[key] };
+}
+
+/**
+ * 데미지·내구력에 쓸 "방어 측 스탯" 실능과 그 랭크를 고른다.
+ *  - 기본: 물리 = 방어 / 특수 = 특방
+ *  - hitsDefensiveStat(사이코쇼크): 분류가 특수여도 방어자의 물리 방어(또는 지정 스탯)로 받는다
+ */
+function resolveDefenseStat(
+  move: Move,
+  defenderRealStats: BaseStats,
+  defenderStages: StatStages,
+): { stat: number; stage: number } {
+  const key = move.hitsDefensiveStat ?? (move.category === "physical" ? "def" : "spd");
+  return { stat: defenderRealStats[key], stage: defenderStages[key] };
+}
+
 export interface OffensePowerOptions {
   /** 타입 상성 배율 (0, 0.25, 0.5, 1, 2, 4). 상대를 모르면 생략 = 1 */
   typeEffectiveness?: number;
@@ -34,6 +142,9 @@ export interface OffensePowerOptions {
   attackerStages?: StatStages;
   /** 자속보정 배율. 기본 1.5, 적응력이면 2.0 (resolveStabMultiplier로 구한다) */
   stabMultiplier?: number;
+  /** 속임수(usesTargetAttackStat)가 방어자의 공격 실능·랭크를 읽을 때만 필요. 없으면 자신 공격으로 폴백 */
+  defenderRealStats?: BaseStats;
+  defenderStages?: StatStages;
 }
 
 /**
@@ -56,11 +167,18 @@ export function computeOffensePower(
     fieldMultiplier = 1,
     attackerStages = NEUTRAL_STAGES,
     stabMultiplier = 1.5,
+    defenderRealStats,
+    defenderStages,
   } = options;
 
-  const attackStat = move.category === "physical" ? attackerRealStats.atk : attackerRealStats.spa;
+  const { stat: attackStat, stage } = resolveAttackStat(
+    move,
+    attackerRealStats,
+    attackerStages,
+    defenderRealStats,
+    defenderStages,
+  );
   const stab = move.type && attackerTypes.includes(move.type) ? stabMultiplier : 1;
-  const stage = move.category === "physical" ? attackerStages.atk : attackerStages.spa;
   const rankMultiplier = rankStageMultiplier(stage);
 
   return (
@@ -105,6 +223,11 @@ export interface DefensePowerOptions {
   defenderStages?: StatStages;
   /** 방어 관련 특성/도구 배율 (예: 두꺼운지방으로 해당 타입 데미지 절반 → 내구력 2배로 표현 가능) */
   bulkMultiplier?: number;
+  /**
+   * 사이코쇼크류(Move.hitsDefensiveStat) — 분류가 특수여도 상대의 물리 방어(또는 지정 스탯)로
+   * 내구력을 낸다. category 인자는 결정력·스크린 판정용 그대로 두고, 방어 스탯 축만 이걸로 바꾼다.
+   */
+  defensiveStatOverride?: "def" | "spd";
 }
 
 /**
@@ -115,9 +238,10 @@ export function computeBulkPower(
   category: "physical" | "special",
   options: DefensePowerOptions = {},
 ): number {
-  const { defenderStages = NEUTRAL_STAGES, bulkMultiplier = 1 } = options;
-  const defenseStat = category === "physical" ? defenderRealStats.def : defenderRealStats.spd;
-  const stage = category === "physical" ? defenderStages.def : defenderStages.spd;
+  const { defenderStages = NEUTRAL_STAGES, bulkMultiplier = 1, defensiveStatOverride } = options;
+  const defenseKey = defensiveStatOverride ?? (category === "physical" ? "def" : "spd");
+  const defenseStat = defenderRealStats[defenseKey];
+  const stage = defenderStages[defenseKey];
   const rankMultiplier = rankStageMultiplier(stage);
 
   return (
@@ -162,6 +286,75 @@ export const LEVEL_50_TERM = Math.floor((2 * 50) / 5 + 2);
 /** 데미지 난수(damage roll)의 최저/최고값. 실제로는 이 사이 16단계 중 하나가 뽑힌다 */
 export const MIN_DAMAGE_ROLL = 0.85;
 export const MAX_DAMAGE_ROLL = 1.0;
+
+/** 데미지 난수 단계 수. 0.85, 0.86, ..., 1.00을 0.01 간격으로 끊은 16개 값을 각 1/16 균등으로 근사한다 */
+export const DAMAGE_ROLL_STEPS = 16;
+
+export interface MatchupChance {
+  verdict: MatchupVerdict;
+  /** 그 판정의 타수로 상대를 격파할 확률(0~1). 확정 1·2타면 1, "3타 이상 필요"면 null */
+  koChance: number | null;
+  /** 난수 1타일 때만 채운다: [격파하는 난수 롤 수, DAMAGE_ROLL_STEPS(=16)] */
+  killingRolls?: readonly [number, number];
+}
+
+/**
+ * 한 방이 상대 현재 HP를 정확히 채우는 "최소 격파 난수" rho*.
+ * evaluateMatchup이 쓰는 관계식 offensePower = bulkPower × 0.411 / (0.44 × rho) 를 rho에 대해 푼 것.
+ * random-1hit이면 rho* ∈ [0.85, 1.00], random-2hit이면 rho* ∈ [1.70, 2.00] 범위에 들어온다.
+ */
+function minKillingRoll(offensePower: number, bulkPower: number): number {
+  return (bulkPower * BULK_BASELINE_DIVISOR) / (GUARANTEED_SURVIVE_2HIT_DIVISOR * offensePower);
+}
+
+/** k번째(0~15) 데미지 난수 값. (85+k)/100 으로 잡아 0.85·…·1.00을 정확히 표현한다 */
+function damageRoll(k: number): number {
+  return (85 + k) / 100;
+}
+
+/** 16개 난수 중 rhoStar 이상인 롤 수 (0~16). 1e-9는 부동소수점 경계 흔들림 보정 */
+function rollsAtLeast(rhoStar: number): number {
+  let n = 0;
+  for (let k = 0; k < DAMAGE_ROLL_STEPS; k++) {
+    if (damageRoll(k) + 1e-9 >= rhoStar) n++;
+  }
+  return n;
+}
+
+/**
+ * evaluateMatchup의 5단계 판정에 더해, 난수 판정일 때 "그 타수로 격파할 확률"까지 낸다.
+ * - random-1hit: 16개 난수 중 격파 롤 수 / 16
+ * - random-2hit: 독립 두 난수(16×16=256쌍) 중 rho1+rho2 ≥ rho* 인 비율
+ *   (한 방 데미지 = 상대 HP × rho/rho* 이므로 두 방 합이 rho* 이상이면 2타에 격파)
+ * - 확정 1·2타: 1 (표기는 UI에서 생략), 3타 이상 필요: null
+ * offensePower가 0(타입 무효)이면 evaluateMatchup이 needs-3hit-plus를 주므로 rho* 계산에 안 들어간다.
+ */
+export function evaluateMatchupChance(offensePower: number, bulkPower: number): MatchupChance {
+  const verdict = evaluateMatchup(offensePower, bulkPower);
+
+  if (verdict === "guaranteed-1hit" || verdict === "guaranteed-2hit") {
+    return { verdict, koChance: 1 };
+  }
+  if (verdict === "needs-3hit-plus") {
+    return { verdict, koChance: null };
+  }
+
+  const rhoStar = minKillingRoll(offensePower, bulkPower);
+
+  if (verdict === "random-1hit") {
+    const killing = rollsAtLeast(rhoStar);
+    return { verdict, koChance: killing / DAMAGE_ROLL_STEPS, killingRolls: [killing, DAMAGE_ROLL_STEPS] };
+  }
+
+  // random-2hit
+  let killingPairs = 0;
+  for (let i = 0; i < DAMAGE_ROLL_STEPS; i++) {
+    for (let j = 0; j < DAMAGE_ROLL_STEPS; j++) {
+      if (damageRoll(i) + damageRoll(j) + 1e-9 >= rhoStar) killingPairs++;
+    }
+  }
+  return { verdict, koChance: killingPairs / (DAMAGE_ROLL_STEPS * DAMAGE_ROLL_STEPS) };
+}
 
 /**
  * ⚠️ 급소 데미지 배율은 챔피언스 실측값이 아직 미확인 — 우선 본가 값(1.5배)을 그대로 쓴다.
@@ -226,15 +419,22 @@ export function computeDamage(
     randomRoll = MAX_DAMAGE_ROLL,
   } = options;
 
-  const isPhysical = move.category === "physical";
-  const attackStage = isPhysical ? attackerStages.atk : attackerStages.spa;
-  const defenseStage = isPhysical ? defenderStages.def : defenderStages.spd;
+  // 공격/방어 스탯 축은 카테고리 기본값 + 특수 로직 플래그(바디프레스=offensiveStatOverride,
+  // 속임수=usesTargetAttackStat, 사이코쇼크=hitsDefensiveStat)를 반영해 고른다.
+  const { stat: rawAttackStat, stage: attackStage } = resolveAttackStat(
+    move,
+    attackerRealStats,
+    attackerStages,
+    defenderRealStats,
+    defenderStages,
+  );
+  const { stat: rawDefenseStat, stage: defenseStage } = resolveDefenseStat(move, defenderRealStats, defenderStages);
   // 급소 맞으면 공격측에 불리한(음수) 랭크와 방어측에 유리한(양수) 랭크를 무시한다 (본가 규칙, 미확인 — 위 주석 참고)
   const attackMultiplier = rankStageMultiplier(isCritical ? Math.max(0, attackStage) : attackStage);
   const defenseMultiplier = rankStageMultiplier(isCritical ? Math.min(0, defenseStage) : defenseStage);
 
-  const attackStat = (isPhysical ? attackerRealStats.atk : attackerRealStats.spa) * attackMultiplier;
-  const defenseStat = (isPhysical ? defenderRealStats.def : defenderRealStats.spd) * defenseMultiplier;
+  const attackStat = rawAttackStat * attackMultiplier;
+  const defenseStat = rawDefenseStat * defenseMultiplier;
 
   const stab = move.type && attackerTypes.includes(move.type) ? stabMultiplier : 1;
   const critMultiplier = isCritical ? CRITICAL_DAMAGE_MULTIPLIER : 1;

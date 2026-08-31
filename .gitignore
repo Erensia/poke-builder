@@ -28,3 +28,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Phase 7 플레이테스트 수정사항 원본 노트(작업용 스크래치 — phase7-plan.md로 정식 문서화)
+/docs/phase7 수정 보완할 점*.txt

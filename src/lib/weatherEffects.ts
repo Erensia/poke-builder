@@ -1,5 +1,6 @@
 import type { PokemonType } from "../types/pokemon-type";
 import type { WeatherKind } from "../types/weather";
+import type { Move } from "../types/move";
 
 /**
  * UI에서 날씨를 시각적으로 표시할 때 쓰는 "이 날씨가 강화하는 타입". TYPE_COLORS와 조합해
@@ -32,6 +33,22 @@ export function getWeatherDamageMultiplier(
     if (moveType === "물") return 0.5;
   }
   return 1;
+}
+
+/**
+ * 웨더볼(Move.weatherBall) 전용. 날씨가 있으면 실제 타입을 그 날씨 강화 타입(WEATHER_ACCENT_TYPE)으로
+ * 바꾸고 위력을 2배로 만든다. 날씨가 없으면 원본 그대로(노말 50). fieldEffects의 applyFieldPulse와
+ * 같은 형태 — resolveMoveContext(상성·자속) 전에 적용해야 바뀐 타입이 반영된다.
+ */
+export function applyWeatherBall(
+  move: Move,
+  weather: WeatherKind | undefined,
+): { type: PokemonType | null; power: number | null } {
+  if (!move.weatherBall || !weather) return { type: move.type, power: move.power };
+  return {
+    type: WEATHER_ACCENT_TYPE[weather],
+    power: move.power === null ? null : move.power * 2,
+  };
 }
 
 /**

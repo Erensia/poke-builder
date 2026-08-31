@@ -24,11 +24,16 @@ export function isImmuneToStatus(
   defenderTypes: PokemonType[],
   /** 유연(마비)처럼 특성으로 특정 상태이상 자체에 면역인 경우(타입 면역과는 별개 축) */
   abilityImmuneStatuses?: StatusCondition[],
+  /** 부식(Ability.bypassesPoisonTypeImmunity): 공격측이 이 특성이면 독·강철의 독 면역을 무시한다 */
+  attackerBypassesPoisonTypeImmunity?: boolean,
 ): boolean {
   if (abilityImmuneStatuses?.includes(status)) return true;
   if (status === "paralysis" && defenderTypes.includes("전기")) return true;
-  if ((status === "poison" || status === "badly-poisoned") && (defenderTypes.includes("독") || defenderTypes.includes("강철"))) {
-    return true;
+  if (
+    (status === "poison" || status === "badly-poisoned") &&
+    (defenderTypes.includes("독") || defenderTypes.includes("강철"))
+  ) {
+    return !attackerBypassesPoisonTypeImmunity;
   }
   if (status === "burn" && defenderTypes.includes("불꽃")) return true;
   if (status === "freeze" && defenderTypes.includes("얼음")) return true;

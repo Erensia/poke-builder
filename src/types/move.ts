@@ -18,7 +18,8 @@ export type MoveClassification =
   | "소리"
   | "파동"
   | "춤"
-  | "바람";
+  | "바람"
+  | "가루";
 
 export interface StatChangeEffect {
   target: "self" | "opponent";
@@ -49,6 +50,31 @@ export interface Move {
   pp: number;
   /** 우선도. 0이 기본, 도우미(+5)처럼 빠르면 양수, 트릭룸 대상 기술처럼 느리면 음수 */
   priority: number;
+  /**
+   * 바디프레스 전용. 데미지의 "공격 측 스탯"을 카테고리 기본값(물리=공격) 대신 사용자의 이 스탯
+   * 실능·랭크로 계산한다(바디프레스="def"). 분류(물리/특수)와 자속·상성은 그대로 — 방어 측이
+   * 받는 스탯도 그대로(물리기니까 상대 방어). 급소 시 "공격측에 불리한 랭크 무시"도 이 대체
+   * 스탯 랭크에 그대로 적용된다.
+   */
+  offensiveStatOverride?: "def" | "spd" | "spe";
+  /**
+   * 속임수(Foul Play) 전용. 데미지의 공격 스탯을 사용자가 아니라 **방어자의 공격 실능·랭크**로
+   * 계산한다(사용자 자신의 공격 랭크는 무시). 분류는 물리 그대로 → 방어자의 방어로 부딪힌다.
+   * 방어자 정보가 없으면(공격측 단독 미리보기) 자신 공격으로 폴백한다.
+   */
+  usesTargetAttackStat?: boolean;
+  /**
+   * 사이코쇼크류 전용. 특수기(자신 특공으로 결정력을 냄)지만 데미지는 방어자의 **물리 방어**로
+   * 받는다(특방 아님). 결정력·자속·분류는 특수 그대로 — 내구력/데미지의 방어 스탯 축만 바꾼다.
+   * 빛의장막(특수 스크린)엔 그대로 막힌다(스크린은 분류 기준).
+   */
+  hitsDefensiveStat?: "def" | "spd";
+  /**
+   * 힘껏펀치처럼 "집중 단계"와 "실제 발동" 우선도가 갈리는 기술만 채운다(힘껏펀치="+5 / -3").
+   * 기술표 우선도 칸에 이 문자열을 그대로 노출하고, 정렬·엔진 판정은 실제 발동값인 priority(-3)를
+   * 그대로 쓴다 — priority는 언제나 진짜 실행 우선도여야 한다.
+   */
+  priorityDisplay?: string;
   effect: string;
   /** 랭크 변화가 있는 기술만 채운다. 없으면 생략 */
   statChanges?: StatChangeEffect[];
@@ -65,6 +91,13 @@ export interface Move {
   inflictsVolatile?: VolatileInflictEffect[];
   /** 분류 태그가 없는 기술이 대부분이라 선택 필드. 파동탄처럼 2개 이상 붙는 경우도 있어 배열 */
   classification?: MoveClassification[];
+  /**
+   * 기술표 화면에 그대로 노출하는 표시 전용 태그 목록(전수조사 기준, 401건). classification은
+   * 특성·대타·가루면역 등 배틀 엔진 로직이 참조하는 엄선된 9종 union이라 성격이 달라 분리했다 —
+   * 이쪽은 접촉/비접촉·선공/후공·랭크·회복·반동처럼 순수 안내용 문구까지 포함하는 자유 문자열.
+   * 표기 충돌(구슬/폭탄 vs 폭탄, 물기 vs 턱)이 있어도 엔진 쪽 classification은 건드리지 않는다.
+   */
+  tags?: string[];
   /** 접촉기 여부. 확인 안 된 기술은 생략 (단정하지 않음) */
   makesContact?: boolean;
   /**
@@ -100,7 +133,7 @@ export interface Move {
   /** 트릭룸: 5턴간 우선도가 같으면 스피드가 느린 쪽이 먼저 움직이도록 순서를 뒤집는 기술만 채운다 */
   setsTrickRoom?: boolean;
   /**
-   * 불꽃세례·웨이브태클·브레이브버드·양날박치기처럼 준 데미지의 일정 비율만큼 사용자도 반동
+   * 플레어드라이브·웨이브태클·브레이브버드·양날박치기처럼 준 데미지의 일정 비율만큼 사용자도 반동
    * 데미지를 입는 기술만 채운다(예: 1/3). 상대에게 준 데미지가 0(면역 등)이면 반동도 0이다 —
    * 발버둥의 "최대 HP의 1/4 고정 반동"과는 계산 기준이 다르므로 별도 필드로 분리했다.
    */
@@ -121,7 +154,10 @@ export interface Move {
    * "opponent-damaging-move-only"(기습 — 상대가 이번 턴 데미지 기술(물리/특수)을 선택하지 않았거나,
    * 자신이 상대보다 늦게 움직이면 실패. 두 조건 모두 "동시 비공개 선택" 특성상 행동 실행 시점에만
    * 판정 가능해 UI에서 사전 경고를 줄 수 없다),
-   * "weather-required"(오로라베일 — 현재 날씨가 requiresWeather와 다르면 실패).
+   * "weather-required"(오로라베일 — 현재 날씨가 requiresWeather와 다르면 실패),
+   * "all-other-moves-used"(비장의무기 — 자신의 나머지 기술을 전부 한 번씩 사용하기 전까지는 실패.
+   * 사용 여부는 BattleFighterState.usedMoveIds로 추적하며, 명중/빗나감과 무관하게 "그 기술로
+   * 행동을 실제로 개시하면" 사용한 것으로 친다).
    * 조건을 안 채우면 battleSimulator가 blockedReason: "usageCondition"으로 실패시킨다.
    */
   usageCondition?:
@@ -129,7 +165,8 @@ export interface Move {
     | "first-turn-only"
     | "field-required"
     | "opponent-damaging-move-only"
-    | "weather-required";
+    | "weather-required"
+    | "all-other-moves-used";
   /** usageCondition: "weather-required"일 때만 의미 있음 — 이 날씨가 아니면 사용 자체가 실패한다(오로라베일=눈) */
   requiresWeather?: WeatherKind;
   /**
@@ -293,6 +330,13 @@ export interface Move {
    */
   protectContactPenalty?: { stat: BattleStatKey; delta: number };
   /**
+   * 니들가드 전용. protectEffect: "block"이 성공해서 상대의 접촉기를 막았을 때, 그 공격자에게
+   * 최대 HP × 이 비율만큼 데미지를 준다(니들가드=1/8). 접촉기가 아니면 막았어도 붙지 않고,
+   * 공격측이 매직가드(negatesIndirectDamage)면 무효화된다(까칠한피부·록키헬멧과 같은 축).
+   * 킹실드의 protectContactPenalty(랭크변화)와는 독립 — 한 기술에 둘 다 있을 수도 있다.
+   */
+  protectContactDamageFraction?: number;
+  /**
    * 파워트릭 전용. 명중 시(항상 자기 자신 대상) 이 두 스탯의 실수치를 그 자리에서 서로 맞바꾼다
    * (파워트릭=["atk","def"]). 노력치/성격 보정이 이미 반영된 BattleFighterState.realStats를
    * 직접 스왑하는 것뿐이라 별도 재계산이 필요 없다 — 킬가르도 배틀스위치가 폼 전환 시
@@ -314,6 +358,126 @@ export interface Move {
    * 버티기/킹실드에 막히지 않고 명중·데미지 계산까지 그대로 진행한다.
    */
   bypassesProtect?: boolean;
+  /**
+   * 매직미러(Ability.reflectsOpponentStatusMoves)로 되돌릴 수 없는 변화기에 표시한다. 본가 기준
+   * 반사 예외 — 고스트 타입의 저주, 추억의선물, 화면 전체 판정인 멸망의노래·흔들흔들댄스 등.
+   * (바꿔치기·트릭·스킬스왑처럼 isOpponentTargetingMove가 애초에 false인 기술은 이 플래그 없이도
+   * 반사 대상에서 자연히 빠진다.)
+   */
+  notReflectable?: boolean;
+  /**
+   * 떨어뜨리기(Smack Down)처럼, 차지 기술 준비 턴(공중날기 등)으로 무적인 상대에게 명중하면
+   * 그 즉시 상대의 차징을 캔슬시키는 기술. bypassesHiding에 해당 무적 종류를 넣어 명중까지
+   * 시키고, 여기서 defender.chargingMoveId를 지운다(§1 E-1).
+   */
+  cancelsTargetCharge?: boolean;
+  /**
+   * 무릎차기처럼 "빗나가거나·방어류에 막히거나·타입 면역으로 무효화되면" 사용자가 최대 HP의
+   * 이 비율만큼(내림) 반동 데미지를 입는 기술(무릎차기=0.5). 전용 문구
+   * "OO은(는) 의욕이 넘쳐 땅에 부딪혔다!". recoilFraction(준 데미지 기준)과 계산축이 다르다.
+   */
+  crashFraction?: number;
+  /**
+   * 철제광선처럼 명중·빗나감과 무관하게 "사용하는 순간" 사용자가 최대 HP의 이 비율만큼(내림)
+   * 데미지를 입는 기술(철제광선=0.5).
+   */
+  selfDamageFractionOnUse?: number;
+  /**
+   * 죽기살기(Endeavor): 명중하면 상대의 현재 HP를 사용자의 현재 HP와 같게 만든다(상대 HP가
+   * 사용자보다 많을 때만 — 적으면 아무 일도 없다). 데미지·상성·랭크 전부 무시.
+   */
+  setsTargetHpToUserHp?: boolean;
+  /**
+   * 기사회생(Reversal)·바둥바둥(Flail): 사용자의 현재 HP 비율에 따라 위력이 달라지는 기술.
+   * power는 이 표의 최고값과 무관하게 null로 두고, 이 플래그가 있으면 battleSimulator가 HP
+   * 비율로 위력을 정한다(reversalPowerFromHp 표 공유).
+   */
+  reversalPower?: boolean;
+  /**
+   * 눈사태·보복·애크러뱃·분풀이·분함의발구르기처럼 조건 충족 시 위력이 2배가 되는 기술.
+   *  - "took-damage-this-turn"(눈사태): 이번 턴에 상대 데미지 기술로 이미 맞았으면
+   *  - "moves-after-target"(보복): 자신이 상대보다 나중에 행동하면
+   *  - "user-has-no-item"(애크러뱃): 자신이 도구를 지니고 있지 않으면
+   *  - "user-stat-lowered-this-turn"(분풀이): 이번 턴에 자신의 능력이 떨어졌으면
+   *  - "user-move-failed-last-turn"(분함의발구르기): 직전에 쓴 기술이 빗나갔거나 막혔으면
+   * 뒤의 두 조건(분풀이·분함의발구르기)은 현행 1v1 엔진에 "이번 턴/직전 턴 랭크변화·기술실패"
+   * 이력 상태가 없어 **battleSimulator에선 항상 미충족(기본 위력)**으로 처리하고,
+   * **matchupEvaluator(결정력·내구력 페이지)에선 항상 충족(×2)으로 상정**한다(§3 증분 B-3, 사용자 지시).
+   * 웨더볼(타입+위력)·질투의불꽃(조건부 화상)은 별개 축이라 여기 안 넣는다.
+   */
+  conditionalDoublePower?:
+    | "took-damage-this-turn"
+    | "moves-after-target"
+    | "user-has-no-item"
+    | "user-stat-lowered-this-turn"
+    | "user-move-failed-last-turn";
+  /**
+   * 비축하기(Stockpile): 사용할 때마다 비축 스택 +1(최대 3, 이미 3이면 실패)하고 자신의 방어·특수방어를
+   * 1랭크 올린다(랭크업은 데이터의 statChanges로 처리, 스택 카운트만 이 플래그로). 토해내기·꿀꺽이 소비.
+   */
+  addsStockpile?: boolean;
+  /**
+   * 토해내기(Spit Up): 위력 = 현재 비축 스택 × 100(스택 0이면 실패). 사용하면 스택이 0이 되고,
+   * 비축하기로 올렸던 방어·특수방어 랭크도 그만큼(스택 수) 되돌아간다. power는 null로 둔다.
+   */
+  spitUpPower?: boolean;
+  /**
+   * 헤비봄버·히트스탬프: 위력 = 상대/자신 몸무게 비율표(≤1/5→120·≤1/4→100·≤1/3→80·≤1/2→60·그 외 40).
+   * power는 null. pokemon.weightKg가 아직 안 채워졌으면(양쪽 중 하나라도 undefined) 폴백 위력.
+   */
+  weightRatioPower?: boolean;
+  /**
+   * 풀묶기·안다리걸기: 위력 = 상대 절대 몸무게표(<10→20·<25→40·<50→60·<100→80·<200→100·그 이상 120).
+   * power는 null. pokemon.weightKg가 아직 안 채워졌으면 폴백 위력.
+   */
+  targetAbsoluteWeightPower?: boolean;
+  /**
+   * 웨더볼(Weather Ball): 날씨에 따라 실제 타입이 그 날씨 강화 타입(비=물·쾌청=불꽃·모래바람=
+   * 바위·눈=얼음)으로 바뀌고 위력이 2배가 된다. 날씨가 없으면 원본 그대로(노말 50).
+   * 대지의파동(fieldPulse)의 날씨판 — applyWeatherBall에서 처리한다.
+   */
+  weatherBall?: boolean;
+  /**
+   * 자이로볼(Gyro Ball): 상대가 느릴수록 위력이 커진다. power는 null로 두고, 이 플래그가 있으면
+   * `min(150, floor(25 × (상대 실효 스피드 / 자신 실효 스피드 + 1)))`로 정한다(사용자 확정식 —
+   * 본가의 "+1 바깥" 공식과 다르게 괄호 안에 +1). 실효 스피드는 실능 × 스피드 랭크 배율 ×
+   * 마비 배율 × 도구 배율(구애스카프·검은철구). 엽록소류 날씨 스피드 특성은 미반영(후속).
+   */
+  gyroBallPower?: boolean;
+  /**
+   * 기어오르기(Power Trip)·어시스트파워(Stored Power): 자신의 양수 랭크 합계로 위력이 오른다.
+   * `power = base + perStage × Σ max(0, 랭크)`. 두 기술 모두 `{ base: 20, perStage: 20 }`
+   * (어시스트파워의 "20 × (합 + 1)"과 동일식). 이 프로젝트 stages엔 명중률·회피율 랭크가 없어
+   * 5스탯(공/방/특공/특방/스피드) 양수분만 합산한다. JSON의 power 리터럴은 최소값(20) 폴백.
+   */
+  powerFromPositiveStages?: { base: number; perStage: number };
+  /**
+   * 미러코트(counters: "special")·카운터(counters: "physical")처럼, 이번 턴 사용자가 받은 해당
+   * 카테고리 데미지의 2배를 상대에게 그대로 되돌려주는 기술. 타입 상성·자속·랭크 전부 무시.
+   * 악타입(counters "special") / 고스트타입(counters "physical") 상대에겐 무효. 대타로 흡수된
+   * 데미지는 카운트에 포함되지 않는다. 우선도 -5는 데이터에 이미 있다.
+   */
+  counters?: "physical" | "special";
+  /**
+   * 앙갚음(Comeuppance)·메탈버스트(Metal Burst): 이번 턴 사용자가 받은 (물리+특수) 데미지 합의
+   * multiplier배(1.5)를 카테고리·타입 상성·자속·랭크 전부 무시하고 상대에게 되돌린다. counters와
+   * 달리 카테고리 구분·타입 면역이 없다. 받은 데미지가 0이면 실패(우선도 0이라 보통 먼저 움직이면
+   * 실패한다). 매치업 페이지는 "직전에 받은 데미지"를 알 수 없어 배선하지 않는다(사용자 확인).
+   */
+  countersAllCategories?: { multiplier: number };
+  /**
+   * 질투의불꽃(Burning Jealousy): 명중해서 데미지를 줬고, 이번 턴에 방어자의 능력 랭크가 하나라도
+   * 올랐으면(턴 시작 시점 스냅샷 대비) 방어자를 화상 상태로 만든다(확정). 불꽃 타입·이미 상태이상
+   * 등 통상 화상 면역 규칙은 그대로. 매치업 페이지는 상태이상 부가효과를 모델링하지 않아 엔진 전용.
+   */
+  burnsTargetIfStatRoseThisTurn?: boolean;
+  /**
+   * 멸망의노래(Perish Song): 명중하면 장에 있는 양쪽 포켓몬 모두에게 멸망 카운트 3을 건다.
+   * 매 턴 종료 시 3→2→1→0으로 줄고, 0에서 다음 감소 시점에 HP가 0이 되어 기절한다. 방어·대타·
+   * 황금몸을 무시하고, 방음(Ability.blocksSound) 특성 포켓몬과 발동 시점에 공중날기/구멍파기 등으로
+   * 다른 장소 취급인 포켓몬에게는 카운트가 시작되지 않는다. 소리 기술(classification "소리").
+   */
+  setsPerishSong?: boolean;
   /**
    * 성스러운칼 전용. 데미지 계산에서 상대(방어측)의 능력 랭크 변화(상승분·하락분 전부)를
    * 무시한다 — Ability.ignoresOpponentStatStagesInDamage(천진)와 정확히 같은 축이지만 특성이
