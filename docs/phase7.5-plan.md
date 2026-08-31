@@ -184,7 +184,7 @@ rho_star = bulkPower × BULK_BASELINE_DIVISOR / (GUARANTEED_SURVIVE_2HIT_DIVISOR
 
 - 성스러운칼 `ignoresDefenderStatStagesInDamage` · 기사회생 `reversalPower` · 나이트헤드/지구던지기 `fixedDamage:50` · 미러코트/카운터 `counters` · 죽기살기 `setsTargetHpToUserHp` · 프리즈드라이 `overridesTypeEffectivenessFor` · 대지의파동 `fieldPulse` · 와이드포스/미스트버스트/라이징볼트 `powerMultiplierInField` · 트리플악셀/스케일샷/록블라스트/고드름침/더블어택 `multiHitPowers`·`minHits` · 지진/파도타기/번개 `bypassesHiding`+`hidingBypassMultiplier`
 
-**(4) → 3-6 참조**: 몸무게 기반(헤비봄버·풀묶기·안다리걸기·히트스탬프)은 스키마·로직만 완료(2026-08-31), `pokemon.json` 실데이터는 후속 개별 조사로 입력.
+**(4) → 3-6 참조**: 몸무게 기반(헤비봄버·풀묶기·안다리걸기·히트스탬프)은 스키마·로직·실데이터 입력 완료(2026-08-31).
 
 ### 3-2. 접근
 
@@ -231,18 +231,20 @@ hitsDefensiveStat?: "def" | "spd";
 - 테라버스트(테라스탈 미모델링), 은혜갚기/화풀이(친밀도 미모델링), 회심의일격류(이미 `alwaysCrit`) 등 현재 로스터에 없거나 별도 시스템이 필요한 것은 이번 감사에서 목록만 남기고 미구현.
 - 삼키기(Swallow)는 로스터에 아예 없음 — 토해내기만 처리하고 삼키기는 데이터 보강 시점에.
 
-### 3-6. 몸무게(weight) 스키마 — 스키마·로직만, 데이터는 후속 (2026-08-31, 사용자 지시)
+### 3-6. 몸무게(weight) 스키마 — 스키마·로직 완료, **실데이터 입력 완료 (2026-08-31)**
 
 - **대상 기술**: 헤비봄버 · 히트스탬프(`weightRatioPower` — 상대/자신 비율), 풀묶기 · 안다리걸기(`targetAbsoluteWeightPower` — 상대 절대값).
 - **한 것**:
-  - `Pokemon` 타입에 `weightKg?: number` 추가(선택 필드). `pokemon.json` 데이터는 **채우지 않음** — "나중에 개별 조사해 추가"(사용자 지시).
+  - `Pokemon` 타입에 `weightKg?: number` 추가(선택 필드). `MegaEvolution` 타입에도 `weightKg?: number` 추가.
   - `battlePower.ts`에 순수 위력표 헬퍼 `weightRatioPowerValue(userKg, targetKg)` / `absoluteWeightPowerValue(targetKg)` + `WEIGHT_MOVE_FALLBACK_POWER = 60`.
-  - `battleSimulator`·`matchupEvaluator` 둘 다: 양쪽(또는 상대) `weightKg`가 있으면 표대로, 하나라도 `undefined`면 폴백 60. → **현재는 모든 포켓몬이 미입력이라 4기술 전부 위력 60**. weightKg를 채우는 즉시 자동으로 정확해진다.
+  - `battleSimulator`·`matchupEvaluator` 둘 다: 양쪽(또는 상대) `weightKg`가 있으면 표대로, 하나라도 `undefined`면 폴백 60.
   - 데이터: 4기술에 플래그 부여(`power`는 `null` 유지).
+  - **실데이터 입력(2026-08-31)**: 기본 종 49마리 전부 `weightKg` 입력(PokéAPI 기준). 메가폼 28개 중 공식 17개는 PokéAPI값, 비공식 11개(라이츄·망나뇽·마폭시·곤율거니·몰드류·개굴닌자·플라엣테·픽시 메가, 한카리아스·루카리오 메가Z)는 사용자 지정값. 참고: `곤율거니 = Scrafty` 30.0kg(Ferrothorn 아님).
+  - **메가폼 몸무게 배선(2026-08-31)**: `EffectiveForm.weightKg` 신설(`getEffectiveForm`이 `mega.weightKg ?? pokemon.weightKg`로 채움). `battleSimulator`(`weightOf(fighter)` = `getEffectiveForm(pk, fighter.slot).weightKg`)·`matchupEvaluator`(`attackerForm.weightKg`/`defenderForm.weightKg`) 둘 다 메가 상태면 그 폼 몸무게로 계산. 검증: 메가캥카(100kg) 안다리걸기 = 캥카(80kg)의 정확히 1.25배.
 - **계산식 (사용자 확정)**:
   - **헤비봄버 / 히트스탬프**: `≤1/5→120` · `≤1/4→100` · `≤1/3→80` · `≤1/2→60` · `>1/2→40`
   - **풀묶기 / 안다리걸기**: `<10→20` · `<25→40` · `<50→60` · `<100→80` · `<200→100` · `≥200→120`
-- **후속 데이터 작업 시 결정할 것**: 메가폼별 몸무게 분리 저장 여부, 부유·경량화(라이트메탈)·헤비메탈 특성 상호작용(현재 미반영).
+- **후속 데이터 작업 시 결정할 것**: 부유·경량화(라이트메탈)·헤비메탈 특성 상호작용(현재 미반영) — 몸무게 4종은 이걸로 완료.
 
 ---
 
@@ -337,7 +339,7 @@ Phase 7 §2 본문을 그대로 승계. 스텔스록은 7에서 "설치 상태 +
 - [x] **1단계**(기술표 열 정렬) 완료 — 헤더/데이터 열 정렬 + 우선도·위력·PP 중앙 정렬, 스크롤바 본문 한정까지 반영.
 - [x] **2단계**(난수 격파 확률 표기) 완료 — `evaluateMatchupChance` + `SlotMatchupResult` 필드 + `VerdictBadge` 확률 줄. 배지 문구: 난수 1타 `50.0%` / `16난수 중 8개`, 난수 2타 `46.9% · 2타`, 3타 이상 필요 `2타 격파 0%`(회색), 확정 1·2타는 줄 없음. 브라우저 5개 판정 전부 확인.
 - [x] **[추가] 기술 설명문·태그·우선도 전건 반영**(1-5) 완료 — 401건 effect/tags/priority 반영, `Move.tags`·`Move.priorityDisplay` 신설. 엔진 참조 태그(`classification`)와 표시 태그(`tags`) 분리 유지, 엔진 값이 꼬이면 두 태그 통합하는 폴백 방침 1-5에 기록.
-- [x] **3단계**(특수 데미지 로직 감사) — **배틀타워 리뉴얼(§4) 앞 전 항목 완료**(2026-08-31). 증분 A·B·C·B-2·B-3, 토해내기·비장의무기, 몸무게 스키마·로직, 질투의불꽃 조건부 화상, 앙갚음·메탈버스트(+카운터 버그픽스)까지. 잔여는 몸무게 실데이터(`weightKg`) 개별 조사 입력뿐 — 순수 데이터 작업이고 §4와 독립.
+- [x] **3단계**(특수 데미지 로직 감사) — **배틀타워 리뉴얼(§4) 앞 전 항목 완료**(2026-08-31). 증분 A·B·C·B-2·B-3, 토해내기·비장의무기, 몸무게 스키마·로직·실데이터(49종+28메가폼)·메가폼 배선, 질투의불꽃 조건부 화상, 앙갚음·메탈버스트(+카운터 버그픽스)까지. §3 잔여 없음.
   - [x] **증분 A** — 계산축 오버라이드(바디프레스·속임수·사이코쇼크). `offensiveStatOverride`/`usesTargetAttackStat`/`hitsDefensiveStat` 3종 + `resolveAttackStat`/`resolveDefenseStat` 헬퍼. 픽스처 8종 PASS. (§3-2 상단 참조)
   - [x] **증분 B** — 플래그만으로 되는 가변 위력 (배틀 엔진 + 데이터, 2026-08-31 완료):
     - `move.ts` 플래그 신설: `gyroBallPower`, `powerFromPositiveStages: { base, perStage }`. `reversalPower` 주석에 바둥바둥 추가.
@@ -366,7 +368,7 @@ Phase 7 §2 본문을 그대로 승계. 스텔스록은 7에서 "설치 상태 +
   - [x] **토해내기 / 비축하기**(2026-08-31 완료): `Move.addsStockpile`·`spitUpPower`, `BattleFighterState.stockpileCount`. 비축하기=스택+1(최대 3, 3이면 실패)+데이터 statChanges로 방어/특방+1. 토해내기=위력 `스택×100`(0이면 실패), 사용 시 스택 0으로·그만큼 방어/특방 랭크 되돌림. 매치업은 `SlotMatchupOptions.stockpileCount`(기본 3) + MatchupSlotCard에 ×1/×2/×3 선택 UI. `runTurn` 검증 7종 PASS. 꿀꺽·삼키기는 로스터에 없어 미처리.
   - [x] **비장의무기**(2026-08-31 완료, 사용자 재정의): PP 위력표 폐기. `usageCondition: "all-other-moves-used"` 신설 — `BattleFighterState.usedMoveIds`로 "그 기술로 행동 개시"를 기록하고, 자신의 나머지 기술(remainingPp 키)을 전부 한 번씩 쓰기 전까지 실패. 위력은 리터럴 140 유지. 검증 2종 PASS.
   - 앙갚음·메탈버스트는 `damageTakenThisTurn`의 물리+특수 합을 그대로 써서 배선 완료(위 항목 참조). 1v1 싱글에선 "턴 누적합 = 그 턴 유일하게 맞은 공격"이라 문제없다.
-- [x] **몸무게 스키마**(3-6, 2026-08-31) — `Pokemon.weightKg?` 필드 + 위력표 헬퍼 + 엔진/매치업 배선 + 4기술 플래그 완료. **`pokemon.json` 실데이터는 미입력**(사용자 지시 — 나중에 개별 조사) → 현재는 전부 폴백 위력 60, weightKg 채우면 자동 정확화.
+- [x] **몸무게 스키마 + 실데이터 + 메가폼 배선**(3-6, 2026-08-31) — `Pokemon.weightKg?` / `MegaEvolution.weightKg?` / `EffectiveForm.weightKg` 필드 + 위력표 헬퍼 + 엔진/매치업 배선(메가 상태면 그 폼 몸무게) + 4기술 플래그. **실데이터**: 기본 종 49/49, 메가폼 28/28(공식 17 PokéAPI + 비공식 11 사용자값). 몸무게 관련 전부 완료 — 후속은 라이트메탈/헤비메탈 특성 상호작용만(현재 로스터 영향 미미).
 - [ ] **4단계**(배틀타워 리뉴얼) — 1~3 완료 후 다시 개별 결재. 아래는 그때 정한다:
   - [ ] 선출 방식: 6마리 빌드 → 3마리(순서 포함) 선출 → 첫 슬롯 리드 vs 3마리만 빌드 — **보류**.
   - [ ] 상대(B) 팀·선출을 전부 수동 구성으로 두는 것(자동 상대 편성은 범위 밖).

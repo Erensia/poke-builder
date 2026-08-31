@@ -197,19 +197,20 @@ export function evaluateSlotMatchup(
     const stacks = Math.max(0, Math.min(3, stockpileCount ?? 3));
     variablePowerMove = { ...variablePowerMove, power: stacks * 100 };
   } else if (move.weightRatioPower) {
+    // 메가폼이면 그 폼의 몸무게(attackerForm.weightKg)를 쓴다.
     variablePowerMove = {
       ...variablePowerMove,
       power:
-        attackerPokemon.weightKg !== undefined && defenderPokemon.weightKg !== undefined
-          ? weightRatioPowerValue(attackerPokemon.weightKg, defenderPokemon.weightKg)
+        attackerForm.weightKg !== undefined && defenderForm.weightKg !== undefined
+          ? weightRatioPowerValue(attackerForm.weightKg, defenderForm.weightKg)
           : WEIGHT_MOVE_FALLBACK_POWER,
     };
   } else if (move.targetAbsoluteWeightPower) {
     variablePowerMove = {
       ...variablePowerMove,
       power:
-        defenderPokemon.weightKg !== undefined
-          ? absoluteWeightPowerValue(defenderPokemon.weightKg)
+        defenderForm.weightKg !== undefined
+          ? absoluteWeightPowerValue(defenderForm.weightKg)
           : WEIGHT_MOVE_FALLBACK_POWER,
     };
   }

@@ -9,6 +9,12 @@ export interface MegaEvolution {
   types: PokemonType[];
   baseStats: BaseStats;
   ability: string;
+  /**
+   * 이 메가폼의 몸무게(kg). 헤비봄버·히트스탬프·풀묶기·안다리걸기 위력 계산용(§3-6). 메가진화로
+   * 몸무게가 바뀌는 종(대짱이 81.9→102.0, 캥카 80→100 등)이 있어 폼별로 따로 저장한다.
+   * 비공식 메가폼은 사용자 지정값.
+   */
+  weightKg?: number;
 }
 
 /**
@@ -52,9 +58,8 @@ export interface Pokemon {
   /** 본가 기준 성별 분포 카테고리. 헤롱헤롱(매혹)·헤롱헤롱바디 판정에 쓴다 */
   genderCategory: PokemonGenderCategory;
   /**
-   * 몸무게(kg). 헤비봄버·히트스탬프·풀묶기·안다리걸기의 위력 계산에 쓴다(§3-6). 아직 개별
-   * 조사 전이라 대부분 미입력 — 없으면 해당 기술은 폴백 위력으로 계산한다. 메가폼별 몸무게
-   * 분리는 데이터 채울 때 재검토(현재는 기본 폼 값 하나만).
+   * 기본 폼 몸무게(kg). 헤비봄버·히트스탬프·풀묶기·안다리걸기의 위력 계산에 쓴다(§3-6).
+   * 전 종 입력 완료(2026-08-31, PokéAPI 기준). 메가폼은 `megaEvolutions[].weightKg`로 폼별 저장.
    */
   weightKg?: number;
   learnset: string[];

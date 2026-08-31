@@ -1461,10 +1461,15 @@ function resolveAction(
   if (effectiveMove.spitUpPower) {
     effectiveMove = { ...effectiveMove, power: (attacker.stockpileCount ?? 0) * 100 };
   }
-  // 헤비봄버·히트스탬프 / 풀묶기·안다리걸기(§3-6): 몸무게 기반 위력. weightKg 미입력이면 폴백.
+  // 헤비봄버·히트스탬프 / 풀묶기·안다리걸기(§3-6): 몸무게 기반 위력. 메가폼이면 그 폼의 몸무게를
+  // 쓴다(getEffectiveForm.weightKg). weightKg 미입력이면 폴백.
+  const weightOf = (fighter: BattleFighterState): number | undefined => {
+    const pk = getPokemon(fighter.slot.pokemonId);
+    return pk ? getEffectiveForm(pk, fighter.slot).weightKg : undefined;
+  };
   if (effectiveMove.weightRatioPower) {
-    const userKg = getPokemon(attacker.slot.pokemonId)?.weightKg;
-    const targetKg = getPokemon(defender.slot.pokemonId)?.weightKg;
+    const userKg = weightOf(attacker);
+    const targetKg = weightOf(defender);
     effectiveMove = {
       ...effectiveMove,
       power:
@@ -1474,7 +1479,7 @@ function resolveAction(
     };
   }
   if (effectiveMove.targetAbsoluteWeightPower) {
-    const targetKg = getPokemon(defender.slot.pokemonId)?.weightKg;
+    const targetKg = weightOf(defender);
     effectiveMove = {
       ...effectiveMove,
       power: targetKg !== undefined ? absoluteWeightPowerValue(targetKg) : WEIGHT_MOVE_FALLBACK_POWER,
