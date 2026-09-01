@@ -175,6 +175,9 @@ export function evaluateSlotMatchup(
   //  - spitUpPower(토해내기): options.stockpileCount(생략 시 3) × 100
   //  - weightRatioPower / targetAbsoluteWeightPower: pokemon.weightKg 기반, 미입력이면 폴백 위력
   let variablePowerMove: Move = move;
+  // 레이징불: 사용자 종(팔데아 켄타로스 3품종)에 따라 실제 타입이 바뀐다 — 위력 확정·상성 계산 전에 먼저.
+  const speciesTypedType = move.typeByUserSpecies?.[attackerSlot.pokemonId];
+  if (speciesTypedType) variablePowerMove = { ...variablePowerMove, type: speciesTypedType };
   if (move.reversalPower) {
     variablePowerMove = { ...variablePowerMove, power: reversalPowerFromHp(1, 1) };
   } else if (move.gyroBallPower) {

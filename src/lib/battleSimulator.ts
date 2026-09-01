@@ -740,6 +740,11 @@ export interface ActionLogEntry {
   /** 리플렉터/빛의장막을 썼지만 이미 같은 스크린이 걸려있어서 실패했으면 true */
   screenSetFailed?: boolean;
   /**
+   * 레이징불·깨트리기(Move.breaksScreensOnHit)로 명중해서 상대 쪽 스크린을 부쉈으면 그 목록.
+   * 데미지 계산은 스크린이 살아있는 상태로 이미 끝난 뒤에 제거한다(그 턴엔 아직 경감됨).
+   */
+  brokeScreens?: ("reflect" | "lightScreen" | "auroraVeil")[];
+  /**
    * 플레어드라이브·웨이브태클·브레이브버드·양날박치기(Move.recoilFraction)로 입은 반동 데미지.
    * selfDamage(혼란 자멸/발버둥 반동)와는 계산 기준이 달라 별도 필드로 분리했다 — 준 데미지가
    * 0(면역 등)이면 반동도 자연히 0.
@@ -1402,10 +1407,15 @@ function resolveAction(
     !!defenderAbility?.reflectsOpponentStatusMoves &&
     (isOpponentTargetingMove(move) || !!move.setsHazard);
 
+  // 레이징불: 이 기술을 쓰는 켄타로스의 종(팔데아 3품종)에 따라 실제 타입이 바뀐다. 웨더볼/
+  // fieldPulse보다 먼저 반영해야 이후 resolveMoveContext의 상성·자속 계산이 전부 새 타입으로 돈다.
+  const speciesTypedType = move.typeByUserSpecies?.[attacker.slot.pokemonId];
+  const speciesTypedMove: Move = speciesTypedType ? { ...move, type: speciesTypedType } : move;
+
   // 웨더볼(날씨판 대지의파동): 날씨로 타입·위력이 바뀐다. 웨더볼과 fieldPulse를 동시에 갖는
   // 기술은 없어 순차 적용해도 안전하다.
-  const weatherBall = applyWeatherBall(move, state.weather);
-  const moveAfterWeatherBall: Move = { ...move, type: weatherBall.type, power: weatherBall.power };
+  const weatherBall = applyWeatherBall(speciesTypedMove, state.weather);
+  const moveAfterWeatherBall: Move = { ...speciesTypedMove, type: weatherBall.type, power: weatherBall.power };
 
   // 필드 조건부 타입/위력 변경(대지의파동=fieldPulse, 미스트버스트·와이드포스·라이징볼트=
   // powerMultiplierInField)을 특성 배율 계산보다 먼저 반영한다 — 타입이 바뀐 상태여야
@@ -3003,6 +3013,26 @@ function resolveAction(
     attacker.stages = applyStageDelta(attacker.stages, boost.stat, boost.delta);
   }
 
+  // 마지막일침(포챔스판): 이 기술의 데미지로 상대를 실제로 쓰러뜨리면 사용자 스탯이 오른다.
+  // 자기과신(위)과 완전히 같은 축 — 특성이 아니라 기술 단위라는 점만 다르다.
+  if (isDamaging && damage > 0 && isFainted(defender) && effectiveMove.boostsUserStatOnKo) {
+    const boost = effectiveMove.boostsUserStatOnKo;
+    attacker.stages = applyStageDelta(attacker.stages, boost.stat, boost.delta);
+  }
+
+  // 레이징불·깨트리기(breaksScreensOnHit): 명중하면 상대 쪽 스크린을 전부 제거한다. 위 데미지
+  // 계산은 스크린이 살아있는 상태로 이미 끝났으니(그 턴엔 아직 경감), 여기서 제거만 한다.
+  let brokeScreens: ("reflect" | "lightScreen" | "auroraVeil")[] | undefined;
+  if (effectiveMove.breaksScreensOnHit) {
+    const present = (Object.keys(defender.screens) as ("reflect" | "lightScreen" | "auroraVeil")[]).filter(
+      (s) => defender.screens[s] !== undefined,
+    );
+    if (present.length > 0) {
+      defender.screens = {};
+      brokeScreens = present;
+    }
+  }
+
   // 곡예: 이번 행동 도중 도구가 있었다가(전) 없어졌으면(후 — 나무열매 소모든 매지션에게
   // 강탈당했든 원인 무관) 그 즉시 한 번만 발동해서 배틀 끝까지 스피드 2배를 유지한다. 이미
   // 발동했으면(unburdenActive) 다시 판정하지 않는다.
@@ -3077,6 +3107,7 @@ function resolveAction(
     setWeather: effectiveMove.setsWeather,
     setScreen: screenSetFailed ? undefined : effectiveMove.setsScreen,
     screenSetFailed,
+    brokeScreens,
     fainted: isFainted(defender),
     selfFainted: isFainted(attacker),
     recoilDamage,

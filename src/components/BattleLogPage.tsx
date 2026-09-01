@@ -721,6 +721,13 @@ export function BattleLogPage() {
                         {!action.blockedReason && action.hit && action.screenSetFailed && (
                           <> · 그러나 실패했다!</>
                         )}
+                        {!action.blockedReason && action.hit && action.brokeScreens?.length && (
+                          <>
+                            {" "}
+                            · {action.brokeScreens.map((s) => SCREEN_LABELS[s]).join("·")}
+                            {eulReul(SCREEN_LABELS[action.brokeScreens[action.brokeScreens.length - 1]])} 부쉈다!
+                          </>
+                        )}
                         {!action.blockedReason && action.hit && !!action.healedAmount && (
                           <>
                             {" "}

@@ -254,7 +254,8 @@
     "tags": [
       "접촉"
     ],
-    "makesContact": true
+    "makesContact": true,
+    "breaksScreensOnHit": true
   },
   {
     "id": "냉동빔",
