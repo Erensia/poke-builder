@@ -341,3 +341,15 @@ hitsDefensiveStat?: "def" | "spd";
 - [ ] 팀빌더 UI에서 "입국몬 전체"를 그대로 노출할지, 필터(세대·타입·이름 검색)를 먼저 붙일지 — 종 수가 수백이 되면 현재 드롭다운/그리드로는 부담.
 - [ ] 배틀타워(§4) 상대 풀을 전종에서 뽑을지, 별도 큐레이션 풀을 둘지.
 - [ ] 전종 추가 시점에 `learnset` 전수조사(챔피언스 기준)를 어느 정밀도로 할지.
+
+### 6-7. 1세대 반영 기록 (2026-09-01, 브랜치 `phase-7.5`)
+
+포챔스 1세대 입국몬 **25종**(현행 로스터 52종 제외) + 신규 특성 **20종** + 신규 기술 **15종**.
+
+- **id 규칙**: 지역폼/리전폼은 **지역명 접두, 구분자 없음**으로 통일(`알로라나인테일` 스타일). 기존 outlier `조로아크히스이` → `히스이조로아크`로 정정. 신규: `알로라라이츄`·`히스이윈디`·`가라르야도란`·`팔데아켄타로스{컴뱃,블레이즈,워터}종`.
+- **특성 배선 3 / 스텁 17**: 배선 = `부풀린가슴`(`blocksOpponentStatDropsForStats:["def"]`)·`축전`(`absorbsType`)·`발광`(9세대 버프판 = `blocksOpponentAccuracyDrops`+`ignoresOpponentEvasionBoost`). 나머지 17종(갈지자걸음·괴짜·근성·돌머리·되새김질·둔감·마이페이스·분노의경혈·서핑테일·속보·스나이퍼·애널라이즈·자연회복·재생력·촉촉바디·퀵드로·포자)은 설명문 스텁 — 대응 스키마 필드 없음/1v1 무의미/미구현 시스템.
+- **신규 기술 엔진 배선**:
+  - 기존 플래그 재사용: `DD래리어트`(`ignoresDefenderStatStagesInDamage`)·`바늘미사일`(`minHits/maxHits` 2–5)·`뱀눈초리`(`inflictsStatus` 마비)·`셸블레이드`(`statChanges` 방어↓ 50%·`베기`)·`업어후리기`(`alwaysCrit`)·`작아지기`(`statChanges` 회피+2).
+  - 신규 플래그 + 전용 로직: `마지막일침`(`boostsUserStatOnKo`)·`레이징불`(`typeByUserSpecies` + `breaksScreensOnHit`)·`힘흡수`(`drainsFromTargetAttackStat`)·`가드셰어`(`averagesDefensesWithTarget`)·`스피드스왑`(`swapsSpeedWithTarget`)·`셸암즈`(`dynamicCategoryByHigherDamage`)·`변신`(`transformsIntoTarget` + 괴짜 `transformsIntoOpponentOnEntry`).
+  - **미구현으로 남긴 것**: `가위자르기` 일격필살 판정(엔진에 일격기 축 없음 — 데이터만, 명중 시 무데미지) · `조이기` 4–5턴 속박 지속 효과(속박 시스템 미구현 — **배틀타워 리뉴얼(Phase 8) 때 추가 예정**). 둘 다 effect 텍스트에 "아직 엔진에 반영되지 않음" 명시.
+- **스크린 파괴(신규 엔진 기능)**: `Move.breaksScreensOnHit` — 명중 시 상대 쪽 스크린(리플렉터/빛의장막/오로라베일) 전부 제거. 데미지 계산은 스크린 살아있는 상태로 하고 이후 제거. `레이징불`·`깨트리기`에 부여.

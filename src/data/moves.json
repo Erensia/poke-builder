@@ -7770,12 +7770,16 @@
     "name": "DD래리어트",
     "type": "악",
     "category": "physical",
-    "power": null,
-    "accuracy": null,
-    "pp": 5,
+    "power": 85,
+    "accuracy": 100,
+    "pp": 10,
     "priority": 0,
-    "effect": "[챔피언스 수치 입력 대기 — 포챔스 1세대 신규 기술]",
-    "tags": []
+    "effect": "상반신을 힘차게 회전시켜 양팔로 상대를 후려친다. 상대의 능력 변화에 관계없이 데미지를 준다.",
+    "tags": [
+      "접촉"
+    ],
+    "makesContact": true,
+    "ignoresDefenderStatStagesInDamage": true
   },
   {
     "id": "가드셰어",
@@ -7784,10 +7788,12 @@
     "category": "status",
     "power": null,
     "accuracy": null,
-    "pp": 5,
+    "pp": 20,
     "priority": 0,
-    "effect": "[챔피언스 수치 입력 대기 — 포챔스 1세대 신규 기술]",
-    "tags": []
+    "effect": "초능력으로 자신과 상대의 방어·특수방어 실능을 더한 뒤 반씩 나눠 갖는다.",
+    "tags": [],
+    "makesContact": false,
+    "averagesDefensesWithTarget": true
   },
   {
     "id": "가위자르기",
@@ -7795,47 +7801,73 @@
     "type": "노말",
     "category": "physical",
     "power": null,
-    "accuracy": null,
+    "accuracy": 30,
     "pp": 5,
     "priority": 0,
-    "effect": "[챔피언스 수치 입력 대기 — 포챔스 1세대 신규 기술]",
-    "tags": []
+    "effect": "거대한 집게발이나 낫 등으로 협공하여 상대를 일격에 쓰러뜨리려 한다. 명중하면 상대는 한 번에 쓰러진다. (일격필살 판정은 아직 엔진에 반영되지 않음)",
+    "tags": [
+      "접촉"
+    ],
+    "makesContact": true
   },
   {
     "id": "레이징불",
     "name": "레이징불",
     "type": "노말",
     "category": "physical",
-    "power": null,
-    "accuracy": null,
-    "pp": 5,
+    "power": 90,
+    "accuracy": 100,
+    "pp": 10,
     "priority": 0,
-    "effect": "[챔피언스 수치 입력 대기 — 포챔스 1세대 신규 기술]",
-    "tags": []
+    "effect": "난폭하게 돌진하여 공격한다. 리플렉터·빛의장막·오로라베일 등의 방어막을 부술 수 있다. 이 기술을 쓰는 켄타로스의 모습에 따라 타입이 바뀐다.",
+    "tags": [
+      "접촉"
+    ],
+    "makesContact": true,
+    "breaksScreensOnHit": true,
+    "typeByUserSpecies": {
+      "팔데아켄타로스컴뱃종": "격투",
+      "팔데아켄타로스블레이즈종": "불꽃",
+      "팔데아켄타로스워터종": "물"
+    }
   },
   {
     "id": "마지막일침",
     "name": "마지막일침",
-    "type": "격투",
-    "category": "special",
-    "power": null,
-    "accuracy": null,
-    "pp": 5,
+    "type": "벌레",
+    "category": "physical",
+    "power": 50,
+    "accuracy": 100,
+    "pp": 25,
     "priority": 0,
-    "effect": "[챔피언스 수치 입력 대기 — 포챔스 1세대 신규 기술]",
-    "tags": []
+    "effect": "전력을 다해 상대에게 맞선다. 이 기술로 상대를 쓰러뜨리면 자신의 공격이 3랭크 오른다.",
+    "tags": [
+      "랭크",
+      "접촉"
+    ],
+    "makesContact": true,
+    "boostsUserStatOnKo": {
+      "stat": "atk",
+      "delta": 3
+    }
   },
   {
     "id": "바늘미사일",
     "name": "바늘미사일",
     "type": "벌레",
     "category": "physical",
-    "power": null,
-    "accuracy": null,
-    "pp": 5,
+    "power": 25,
+    "accuracy": 95,
+    "pp": 20,
     "priority": 0,
-    "effect": "[챔피언스 수치 입력 대기 — 포챔스 1세대 신규 기술]",
-    "tags": []
+    "effect": "단단한 바늘을 발사하여 공격한다. 2-5회 동안 연속으로 쓴다.",
+    "tags": [
+      "연속",
+      "접촉"
+    ],
+    "makesContact": true,
+    "minHits": 2,
+    "maxHits": 5
   },
   {
     "id": "뱀눈초리",
@@ -7843,11 +7875,19 @@
     "type": "노말",
     "category": "status",
     "power": null,
-    "accuracy": null,
-    "pp": 5,
+    "accuracy": 100,
+    "pp": 30,
     "priority": 0,
-    "effect": "[챔피언스 수치 입력 대기 — 포챔스 1세대 신규 기술]",
-    "tags": []
+    "effect": "무서운 얼굴로 위협하여 상대를 마비시켜서 움직임을 둔하게 만든다.",
+    "tags": [
+      "마비"
+    ],
+    "makesContact": false,
+    "inflictsStatus": [
+      {
+        "status": "paralysis"
+      }
+    ]
   },
   {
     "id": "변신",
@@ -7856,34 +7896,56 @@
     "category": "status",
     "power": null,
     "accuracy": null,
-    "pp": 5,
+    "pp": 10,
     "priority": 0,
-    "effect": "[챔피언스 수치 입력 대기 — 포챔스 1세대 신규 기술]",
-    "tags": []
+    "effect": "상대 포켓몬으로 변신한다. 타입·능력치·특성·기술을 상대와 똑같이 복사한다(HP와 현재 상태이상은 제외).",
+    "tags": [],
+    "makesContact": false,
+    "transformsIntoTarget": true
   },
   {
     "id": "셸블레이드",
     "name": "셸블레이드",
     "type": "물",
     "category": "physical",
-    "power": null,
-    "accuracy": null,
-    "pp": 5,
+    "power": 75,
+    "accuracy": 95,
+    "pp": 10,
     "priority": 0,
-    "effect": "[챔피언스 수치 입력 대기 — 포챔스 1세대 신규 기술]",
-    "tags": []
+    "effect": "날카로운 껍질로 상대를 벤다. 50% 확률로 상대의 방어를 1랭크 떨어뜨린다.",
+    "tags": [
+      "랭크",
+      "접촉",
+      "베기"
+    ],
+    "classification": [
+      "베기"
+    ],
+    "makesContact": true,
+    "statChanges": [
+      {
+        "target": "opponent",
+        "stat": "def",
+        "delta": -1,
+        "chance": 50
+      }
+    ]
   },
   {
     "id": "셸암즈",
     "name": "셸암즈",
     "type": "독",
     "category": "physical",
-    "power": null,
-    "accuracy": null,
-    "pp": 5,
+    "power": 90,
+    "accuracy": 100,
+    "pp": 10,
     "priority": 0,
-    "effect": "[챔피언스 수치 입력 대기 — 포챔스 1세대 신규 기술]",
-    "tags": []
+    "effect": "조개 속에 숨겨둔 무기로 상대를 노린다. 물리·특수 중 데미지가 큰 쪽 판정으로 공격하며, 물리면 접촉기, 특수면 비접촉기가 된다. 두 값이 같으면 무작위로 정해진다.",
+    "tags": [
+      "접촉"
+    ],
+    "makesContact": true,
+    "dynamicCategoryByHigherDamage": true
   },
   {
     "id": "스피드스왑",
@@ -7892,22 +7954,29 @@
     "category": "status",
     "power": null,
     "accuracy": null,
-    "pp": 5,
+    "pp": 10,
     "priority": 0,
-    "effect": "[챔피언스 수치 입력 대기 — 포챔스 1세대 신규 기술]",
-    "tags": []
+    "effect": "자신과 상대의 스피드 실능을 서로 맞바꾼다.",
+    "tags": [],
+    "makesContact": false,
+    "swapsSpeedWithTarget": true
   },
   {
     "id": "업어후리기",
     "name": "업어후리기",
     "type": "격투",
     "category": "physical",
-    "power": null,
-    "accuracy": null,
-    "pp": 5,
+    "power": 60,
+    "accuracy": 100,
+    "pp": 10,
     "priority": 0,
-    "effect": "[챔피언스 수치 입력 대기 — 포챔스 1세대 신규 기술]",
-    "tags": []
+    "effect": "상대의 급소를 노려 메어친다. 반드시 급소에 맞는다.",
+    "tags": [
+      "급소-확정",
+      "접촉"
+    ],
+    "makesContact": true,
+    "alwaysCrit": true
   },
   {
     "id": "작아지기",
@@ -7916,22 +7985,35 @@
     "category": "status",
     "power": null,
     "accuracy": null,
-    "pp": 5,
+    "pp": 10,
     "priority": 0,
-    "effect": "[챔피언스 수치 입력 대기 — 포챔스 1세대 신규 기술]",
-    "tags": []
+    "effect": "몸을 움츠려서 작게 만든다. 자신의 회피율을 2랭크 올린다.",
+    "tags": [
+      "랭크"
+    ],
+    "makesContact": false,
+    "statChanges": [
+      {
+        "target": "self",
+        "stat": "evasion",
+        "delta": 2
+      }
+    ]
   },
   {
     "id": "조이기",
     "name": "조이기",
     "type": "노말",
     "category": "physical",
-    "power": null,
-    "accuracy": null,
-    "pp": 5,
+    "power": 15,
+    "accuracy": 85,
+    "pp": 20,
     "priority": 0,
-    "effect": "[챔피언스 수치 입력 대기 — 포챔스 1세대 신규 기술]",
-    "tags": []
+    "effect": "긴 몸이나 촉수 등으로 4-5턴 동안 상대를 옭아매어 조인다. (속박 지속 효과는 아직 엔진에 반영되지 않음)",
+    "tags": [
+      "접촉"
+    ],
+    "makesContact": true
   },
   {
     "id": "힘흡수",
@@ -7939,10 +8021,22 @@
     "type": "풀",
     "category": "status",
     "power": null,
-    "accuracy": null,
-    "pp": 5,
+    "accuracy": 100,
+    "pp": 10,
     "priority": 0,
-    "effect": "[챔피언스 수치 입력 대기 — 포챔스 1세대 신규 기술]",
-    "tags": []
+    "effect": "상대의 공격 실능만큼 자신의 HP를 회복하고, 상대의 공격을 1랭크 떨어뜨린다.",
+    "tags": [
+      "랭크",
+      "회복"
+    ],
+    "makesContact": false,
+    "statChanges": [
+      {
+        "target": "opponent",
+        "stat": "atk",
+        "delta": -1
+      }
+    ],
+    "drainsFromTargetAttackStat": true
   }
 ]

@@ -400,4 +400,10 @@ export interface Ability {
    * 새 타입이 반영된다.
    */
   changesUserTypeToMoveType?: boolean;
+  /**
+   * 괴짜(Imposter) — 메타몽 전용. 배틀에 등장하는 순간 상대로 변신한다(Move.transformsIntoTarget과
+   * 동일 처리). resolveEntryAbilityEffects에서 위협·트레이스와 같은 훅으로 실행하며, 타입·5실능
+   * (HP 제외)·특성·능력 랭크·기술 목록을 상대와 똑같이 복사한다.
+   */
+  transformsIntoOpponentOnEntry?: boolean;
 }

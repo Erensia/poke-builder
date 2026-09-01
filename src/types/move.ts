@@ -501,4 +501,54 @@ export interface Move {
    * 낸 기술"이라는 개념 자체가 성립하지 않음) 둘 다 본가에서 잠꼬대 후보 목록에 없다.
    */
   excludedFromSleepTalk?: boolean;
+  /**
+   * 마지막일침(포챔스판): 이 기술로 상대를 실제로 쓰러뜨리면 사용자의 이 스탯이 delta만큼 오른다
+   * (마지막일침 = 공격 +3). 자기과신(Ability.boostsStatOnKo)과 같은 축이지만 특성이 아니라 기술
+   * 단위 효과다 — damage > 0으로 실제 데미지를 줘서 쓰러뜨린 경우에만 발동한다.
+   */
+  boostsUserStatOnKo?: { stat: BattleStatKey; delta: number };
+  /**
+   * 레이징불(Raging Bull): 이 기술을 쓰는 포켓몬의 종 id에 따라 실제 타입이 바뀐다
+   * (팔데아켄타로스컴뱃종→격투 / 블레이즈종→불꽃 / 워터종→물). 매칭되는 종이 없으면 move.type
+   * (기본 켄타로스 = 노말) 그대로. resolveMoveContext/computeDamage가 보는 effectiveMove.type을
+   * 갈아끼우는 방식이라 자속·상성까지 새 타입 기준으로 계산된다.
+   */
+  typeByUserSpecies?: Partial<Record<string, PokemonType>>;
+  /**
+   * 레이징불·깨트리기: 명중하면(데미지 유무 무관) 상대 쪽에 걸린 스크린(리플렉터/빛의장막/
+   * 오로라베일)을 전부 제거한다. 데미지 계산은 스크린이 살아있는 상태로 하고(본가 규칙 — 그 턴엔
+   * 아직 경감됨), 계산 이후에 제거한다.
+   */
+  breaksScreensOnHit?: boolean;
+  /**
+   * 힘흡수(Strength Sap): 명중 시 상대의 공격 실능(랭크 반영)만큼 자신의 HP를 회복한다. 회복 후
+   * statChanges로 상대 공격 -1이 별도로 적용된다(데이터에 함께 기재). 상대가 이미 최대 HP면
+   * 회복량 0이어도 성공 취급.
+   */
+  drainsFromTargetAttackStat?: boolean;
+  /**
+   * 가드셰어(Guard Split): 명중 시 자신과 상대의 방어·특수방어 실능을 각각 더해 반으로 나눠
+   * 양쪽에 똑같이 배정한다(내림). 파워트릭(swapsOwnStats)처럼 realStats를 직접 고쳐서 재계산이
+   * 필요 없다. 스피드스왑과 함께 1v1 상호 스탯 조작 기술 축.
+   */
+  averagesDefensesWithTarget?: boolean;
+  /**
+   * 스피드스왑(Speed Swap): 명중 시 자신과 상대의 스피드 실능을 서로 맞바꾼다(realStats 직접 스왑).
+   */
+  swapsSpeedWithTarget?: boolean;
+  /**
+   * 셸암즈(Shell Side Arm) — 가라르야도란 전용기. 물리(공격 vs 상대 방어)로 낸 데미지와 특수
+   * (특공 vs 상대 특방)로 낸 데미지를 둘 다 계산해, 큰 쪽 판정으로 공격한다 — 물리면 접촉기,
+   * 특수면 비접촉기. 두 값이 같으면 무작위(랭크업 부가효과 포함). 도구·특성·상태이상 등 배율은
+   * 물리/특수 여부를 먼저 확정한 뒤 적용한다. move.category는 "physical"로 두되 엔진이 이 플래그를
+   * 보고 매 사용마다 다시 판정한다.
+   */
+  dynamicCategoryByHigherDamage?: boolean;
+  /**
+   * 변신(Transform) — 명중 시 사용자가 상대로 변신한다. 타입·5실능(HP 제외)·특성·능력 랭크·
+   * 기술 목록을 상대와 동일하게 복사하고, 복사한 기술의 PP는 각 5(최대 PP가 5 미만이면 그 값)로
+   * 채운다. 현재 HP와 주 상태이상은 유지. 이미 변신 상태면 실패. 괴짜(Ability.transformsIntoOpponentOnEntry)가
+   * 등장 시 같은 처리를 자동으로 건다.
+   */
+  transformsIntoTarget?: boolean;
 }
