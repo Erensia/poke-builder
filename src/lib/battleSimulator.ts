@@ -806,6 +806,10 @@ export interface ActionLogEntry {
   encoreSetFailed?: boolean;
   /** 파워트릭으로 자신의 두 실수치를 맞바꿨으면 그 기술 이름 */
   swappedStatsMoveName?: string;
+  /** 가드셰어로 자신·상대의 방어·특방 실능을 평균냈으면 그 기술 이름 */
+  averagedDefensesMoveName?: string;
+  /** 스피드스왑으로 자신·상대의 스피드 실능을 맞바꿨으면 그 기술 이름 */
+  swappedSpeedMoveName?: string;
   /** 우격다짐(또는 같은 축의 특성)이 이번 기술의 부가효과를 없애고 위력을 올렸으면 그 특성 이름 */
   sheerForceAbilityName?: string;
   /** 이 행동(상대를 공격)으로 상대의 대타가 이번 타격에 깨졌으면 true */
@@ -2735,6 +2739,39 @@ function resolveAction(
     healTarget.currentHp += healedAmount;
   }
 
+  // 힘흡수(drainsFromTargetAttackStat): 상대의 공격 실능(랭크 반영, -1 적용 전 값)만큼 자신을 회복.
+  // 상대 공격 -1은 데이터의 statChanges로 위에서 이미 적용됐지만, 회복량은 랭크 변화 전 실능
+  // 기준이라 defenderStagesBeforeMoveChange를 쓴다(본가 규칙).
+  if (effectiveMove.drainsFromTargetAttackStat) {
+    const targetAtk = Math.floor(
+      defender.realStats.atk * rankStageMultiplier(defenderStagesBeforeMoveChange.atk),
+    );
+    const gain = Math.min(attacker.maxHp - attacker.currentHp, targetAtk);
+    attacker.currentHp += gain;
+    healedAmount = gain;
+    healedTarget = "self";
+  }
+
+  // 가드셰어(averagesDefensesWithTarget): 자신·상대의 방어·특방 실능을 각각 더해 반씩 배정(내림).
+  // 파워트릭(swapsOwnStats)처럼 realStats를 직접 고쳐 재계산이 필요 없다.
+  let averagedDefensesMoveName: string | undefined;
+  if (effectiveMove.averagesDefensesWithTarget) {
+    const avgDef = Math.floor((attacker.realStats.def + defender.realStats.def) / 2);
+    const avgSpd = Math.floor((attacker.realStats.spd + defender.realStats.spd) / 2);
+    attacker.realStats = { ...attacker.realStats, def: avgDef, spd: avgSpd };
+    defender.realStats = { ...defender.realStats, def: avgDef, spd: avgSpd };
+    averagedDefensesMoveName = effectiveMove.name;
+  }
+
+  // 스피드스왑(swapsSpeedWithTarget): 자신·상대의 스피드 실능을 서로 맞바꾼다.
+  let swappedSpeedMoveName: string | undefined;
+  if (effectiveMove.swapsSpeedWithTarget) {
+    const aSpe = attacker.realStats.spe;
+    attacker.realStats = { ...attacker.realStats, spe: defender.realStats.spe };
+    defender.realStats = { ...defender.realStats, spe: aSpe };
+    swappedSpeedMoveName = effectiveMove.name;
+  }
+
   // 뿌리박기/아쿠아링: 이미 걸려있으면 재사용 실패(지속 효과 중복 방지, 필드/트릭룸과 같은 패턴).
   let regenSetFailed = false;
   if (effectiveMove.setsRegenVolatile) {
@@ -3137,6 +3174,8 @@ function resolveAction(
     setEncoreMoveName,
     encoreSetFailed,
     swappedStatsMoveName,
+    averagedDefensesMoveName,
+    swappedSpeedMoveName,
     sheerForceAbilityName,
     substituteBroke,
     hitSubstitute,

@@ -774,6 +774,12 @@ export function BattleLogPage() {
                         {!action.blockedReason && action.hit && action.swappedStatsMoveName && (
                           <> · 공격과 방어 수치가 서로 바뀌었다!</>
                         )}
+                        {!action.blockedReason && action.hit && action.averagedDefensesMoveName && (
+                          <> · 서로의 방어와 특수방어를 나눠 가졌다!</>
+                        )}
+                        {!action.blockedReason && action.hit && action.swappedSpeedMoveName && (
+                          <> · 서로의 스피드를 교체했다!</>
+                        )}
                         {!action.blockedReason && action.hit && action.sheerForceAbilityName && (
                           <> · {action.sheerForceAbilityName} 발동! 부가 효과 대신 위력이 올랐다!</>
                         )}
