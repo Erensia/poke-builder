@@ -810,6 +810,8 @@ export interface ActionLogEntry {
   averagedDefensesMoveName?: string;
   /** 스피드스왑으로 자신·상대의 스피드 실능을 맞바꿨으면 그 기술 이름 */
   swappedSpeedMoveName?: string;
+  /** 셸암즈(dynamicCategoryByHigherDamage)가 이번에 물리/특수 중 어느 판정으로 나갔는지 */
+  shellSideArmCategory?: "physical" | "special";
   /** 우격다짐(또는 같은 축의 특성)이 이번 기술의 부가효과를 없애고 위력을 올렸으면 그 특성 이름 */
   sheerForceAbilityName?: string;
   /** 이 행동(상대를 공격)으로 상대의 대타가 이번 타격에 깨졌으면 true */
@@ -1416,10 +1418,30 @@ function resolveAction(
   const speciesTypedType = move.typeByUserSpecies?.[attacker.slot.pokemonId];
   const speciesTypedMove: Move = speciesTypedType ? { ...move, type: speciesTypedType } : move;
 
+  // 셸암즈(dynamicCategoryByHigherDamage) — 가라르야도란 전용기. 물리(공격 vs 상대 방어)와
+  // 특수(특공 vs 상대 특방)로 각각 데미지를 계산해 큰 쪽 판정으로 공격한다. 물리면 접촉기,
+  // 특수면 비접촉기. 두 값이 같으면 무작위. 도구·특성·날씨 배율은 여기 비교에 넣지 않고(사용자
+  // 확정 — "물리/특수 여부를 먼저 판단한 뒤 적용"), 순수 실능·랭크만으로 비교한다.
+  let shellSideArmCategory: "physical" | "special" | undefined;
+  let categoryResolvedMove: Move = speciesTypedMove;
+  if (speciesTypedMove.dynamicCategoryByHigherDamage) {
+    const dmgOpts = { attackerStages: attacker.stages, defenderStages: defender.stages };
+    const physDmg =
+      computeDamage(attacker.realStats, defender.realStats, attacker.types, { ...speciesTypedMove, category: "physical" }, dmgOpts)?.damage ?? 0;
+    const specDmg =
+      computeDamage(attacker.realStats, defender.realStats, attacker.types, { ...speciesTypedMove, category: "special" }, dmgOpts)?.damage ?? 0;
+    shellSideArmCategory = physDmg > specDmg ? "physical" : specDmg > physDmg ? "special" : random() < 0.5 ? "physical" : "special";
+    categoryResolvedMove = {
+      ...speciesTypedMove,
+      category: shellSideArmCategory,
+      makesContact: shellSideArmCategory === "physical",
+    };
+  }
+
   // 웨더볼(날씨판 대지의파동): 날씨로 타입·위력이 바뀐다. 웨더볼과 fieldPulse를 동시에 갖는
   // 기술은 없어 순차 적용해도 안전하다.
-  const weatherBall = applyWeatherBall(speciesTypedMove, state.weather);
-  const moveAfterWeatherBall: Move = { ...speciesTypedMove, type: weatherBall.type, power: weatherBall.power };
+  const weatherBall = applyWeatherBall(categoryResolvedMove, state.weather);
+  const moveAfterWeatherBall: Move = { ...categoryResolvedMove, type: weatherBall.type, power: weatherBall.power };
 
   // 필드 조건부 타입/위력 변경(대지의파동=fieldPulse, 미스트버스트·와이드포스·라이징볼트=
   // powerMultiplierInField)을 특성 배율 계산보다 먼저 반영한다 — 타입이 바뀐 상태여야
@@ -3176,6 +3198,7 @@ function resolveAction(
     swappedStatsMoveName,
     averagedDefensesMoveName,
     swappedSpeedMoveName,
+    shellSideArmCategory,
     sheerForceAbilityName,
     substituteBroke,
     hitSubstitute,

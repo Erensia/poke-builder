@@ -178,6 +178,24 @@ export function evaluateSlotMatchup(
   // 레이징불: 사용자 종(팔데아 켄타로스 3품종)에 따라 실제 타입이 바뀐다 — 위력 확정·상성 계산 전에 먼저.
   const speciesTypedType = move.typeByUserSpecies?.[attackerSlot.pokemonId];
   if (speciesTypedType) variablePowerMove = { ...variablePowerMove, type: speciesTypedType };
+
+  // 셸암즈(dynamicCategoryByHigherDamage): 물리·특수 결정력을 둘 다 내보고 큰 쪽 판정으로 고정한다.
+  // 매치업 페이지는 1턴 스냅샷이라 "동점 시 무작위"를 표현할 수 없어 동점이면 물리로 확정(결정적).
+  let resolvedCategory: Move["category"] = move.category;
+  if (move.dynamicCategoryByHigherDamage) {
+    const dmgOpts = { attackerStages, defenderRealStats, defenderStages, stabMultiplier: 1.5 };
+    const phys =
+      computeOffensePower(attackerRealStats, attackerForm.types, { ...variablePowerMove, category: "physical" }, dmgOpts) ?? 0;
+    const spec =
+      computeOffensePower(attackerRealStats, attackerForm.types, { ...variablePowerMove, category: "special" }, dmgOpts) ?? 0;
+    resolvedCategory = phys >= spec ? "physical" : "special";
+    variablePowerMove = {
+      ...variablePowerMove,
+      category: resolvedCategory,
+      makesContact: resolvedCategory === "physical",
+    };
+  }
+
   if (move.reversalPower) {
     variablePowerMove = { ...variablePowerMove, power: reversalPowerFromHp(1, 1) };
   } else if (move.gyroBallPower) {
@@ -335,12 +353,12 @@ export function evaluateSlotMatchup(
     screenBypassed || !screen
       ? 1
       : screen === "auroraVeil" ||
-          (screen === "reflect" && move.category === "physical") ||
-          (screen === "lightScreen" && move.category === "special")
+          (screen === "reflect" && resolvedCategory === "physical") ||
+          (screen === "lightScreen" && resolvedCategory === "special")
         ? 2
         : 1;
 
-  const bulkPower = computeBulkPower(defenderRealStats, move.category, {
+  const bulkPower = computeBulkPower(defenderRealStats, resolvedCategory, {
     defenderStages,
     bulkMultiplier:
       (manualBulkMultiplier ?? abilityDefense * berryResult.bulkMultiplier) * screenMultiplier,
