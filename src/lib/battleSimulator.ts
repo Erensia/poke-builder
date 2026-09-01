@@ -239,6 +239,14 @@ export interface BattleFighterState {
    */
   disguiseBroken?: boolean;
   /**
+   * 변신(Move.transformsIntoTarget)·괴짜(Ability.transformsIntoOpponentOnEntry)로 상대로 변신한
+   * 상태면 true. 타입·5실능(HP 제외)·특성·능력 랭크·기술(PP 5)을 상대 것으로 갈아치운 뒤 이 플래그를
+   * 세운다. 교체가 없는 1v1이라 한 번 변신하면 배틀 끝까지 유지되고, 재변신은 실패한다.
+   * slot.pokemonId는 원본 그대로 두므로(종 자체는 안 바뀜) 몸무게·종별타입 기술은 원본 종 기준으로
+   * 남는다 — 변신 사용자가 메타몽뿐이라 실질 영향이 없어 단순화했다.
+   */
+  transformed?: boolean;
+  /**
    * 길동무: 이번 시전이 성공해서 "이번 턴(또는 이후 턴에) 직접 공격으로 쓰러지면 상대도 같이
    * 쓰러뜨린다" 예약이 걸려있으면 true. activeProtect와 달리 매 턴 시작 시 초기화되지 않고,
    * 이 포켓몬 자신의 다음 행동이 시작되는 시점(resolveAction 최상단)에 지워진다 — "다음 자신의
@@ -518,11 +526,38 @@ function resolveEntryWeather(
 }
 
 /**
- * 위협(상대 공격 하락)·일렉트릭메이커(필드 설치)·트레이스(상대 특성 복사) — 배틀 시작과 동시에
- * 발동하는 특성 3종을 한 번에 처리한다. 가뭄류(날씨)와 같은 이유로 실효 스피드가 빠른 쪽부터
- * 순서대로 적용한다. fighterA/fighterB는 이 함수 안에서 직접 변형된다(랭크 반영, 특성 교체).
- * 두 쪽 다 트레이스면 먼저 발동하는 쪽이 상대의 "원래" 특성을 복사하고, 나중 쪽은 그 시점에
- * 이미 바뀐 상대 특성을 복사한다(본가와 동일한 순서 의존성).
+ * 변신(Move.transformsIntoTarget)·괴짜(Ability.transformsIntoOpponentOnEntry) 공통 처리 —
+ * self를 target으로 변신시킨다. 타입·5실능(HP 제외)·특성·능력 랭크(급소율 포함)·기술 목록을
+ * target 것으로 복사하고, 복사한 기술의 PP는 각 min(5, 원래 최대 PP)로 채운다. 현재 HP·maxHp·
+ * 주 상태이상은 유지. slot.pokemonId(종 자체)는 바꾸지 않는다 — 변신 사용자가 메타몽뿐이라
+ * 몸무게·종별타입 기술 정도만 원본 종 기준으로 남고 실질 영향이 없다.
+ */
+function applyTransform(self: BattleFighterState, target: BattleFighterState): void {
+  self.types = [...target.types];
+  self.realStats = {
+    ...self.realStats,
+    atk: target.realStats.atk,
+    def: target.realStats.def,
+    spa: target.realStats.spa,
+    spd: target.realStats.spd,
+    spe: target.realStats.spe,
+  };
+  self.effectiveAbilityId = target.effectiveAbilityId;
+  self.stages = { ...target.stages };
+  self.accuracyStages = { ...target.accuracyStages };
+  self.critStage = target.critStage;
+  self.remainingPp = Object.fromEntries(
+    Object.keys(target.remainingPp).map((id) => [id, Math.min(5, getMove(id)?.pp ?? 5)]),
+  );
+  self.transformed = true;
+}
+
+/**
+ * 위협(상대 공격 하락)·일렉트릭메이커(필드 설치)·트레이스(상대 특성 복사)·괴짜(상대로 변신) —
+ * 배틀 시작과 동시에 발동하는 특성을 한 번에 처리한다. 가뭄류(날씨)와 같은 이유로 실효 스피드가
+ * 빠른 쪽부터 순서대로 적용한다. fighterA/fighterB는 이 함수 안에서 직접 변형된다(랭크 반영,
+ * 특성 교체, 변신). 두 쪽 다 트레이스면 먼저 발동하는 쪽이 상대의 "원래" 특성을 복사하고, 나중
+ * 쪽은 그 시점에 이미 바뀐 상대 특성을 복사한다(본가와 동일한 순서 의존성).
  */
 function resolveEntryAbilityEffects(
   aSlot: EvaluatorSlot,
@@ -540,7 +575,9 @@ function resolveEntryAbilityEffects(
     !aAbility?.copiesOpponentAbilityOnEntry &&
     !bAbility?.copiesOpponentAbilityOnEntry &&
     !aAbility?.revealsOpponentItemOnEntry &&
-    !bAbility?.revealsOpponentItemOnEntry
+    !bAbility?.revealsOpponentItemOnEntry &&
+    !aAbility?.transformsIntoOpponentOnEntry &&
+    !bAbility?.transformsIntoOpponentOnEntry
   ) {
     return { field: undefined, fieldTurnsRemaining: undefined, announcements: [] };
   }
@@ -587,6 +624,14 @@ function resolveEntryAbilityEffects(
       const opponentName = getPokemon(opponentSlot.pokemonId)?.name ?? "상대";
       const copiedName = copiedAbility?.name ?? "특성";
       announcements.push(`${pokemonName}의 ${ability.name}! ${opponentName}의 ${copiedName}${eulReul(copiedName)} 복사했다!`);
+    }
+    // 괴짜(Imposter): 등장하자마자 상대로 변신한다(변신 기술과 같은 처리). 메타몽 전용.
+    if (ability.transformsIntoOpponentOnEntry && !fighter.transformed) {
+      applyTransform(fighter, opponent);
+      const opponentName = getPokemon(opponentSlot.pokemonId)?.name ?? "상대";
+      announcements.push(
+        `${pokemonName}의 ${ability.name}! ${pokemonName}${eunNeun(pokemonName)} ${opponentName}${roEuro(opponentName)} 변신했다!`,
+      );
     }
     // 통찰: 상대가 도구를 지녔을 때만 두 줄로 알린다. 배틀 수치 영향 없음(정보 표시 전용).
     if (ability.revealsOpponentItemOnEntry && opponent.currentItemId) {
@@ -812,6 +857,10 @@ export interface ActionLogEntry {
   swappedSpeedMoveName?: string;
   /** 셸암즈(dynamicCategoryByHigherDamage)가 이번에 물리/특수 중 어느 판정으로 나갔는지 */
   shellSideArmCategory?: "physical" | "special";
+  /** 변신으로 상대(이 종)로 변신했으면 그 종 이름 */
+  transformedIntoName?: string;
+  /** 변신을 썼지만 이미 변신 상태라 실패했으면 true */
+  transformFailed?: boolean;
   /** 우격다짐(또는 같은 축의 특성)이 이번 기술의 부가효과를 없애고 위력을 올렸으면 그 특성 이름 */
   sheerForceAbilityName?: string;
   /** 이 행동(상대를 공격)으로 상대의 대타가 이번 타격에 깨졌으면 true */
@@ -2794,6 +2843,18 @@ function resolveAction(
     swappedSpeedMoveName = effectiveMove.name;
   }
 
+  // 변신(transformsIntoTarget): 상대로 변신한다. 이미 변신 상태면 실패(1v1이라 배틀 끝까지 유지).
+  let transformedIntoName: string | undefined;
+  let transformFailed = false;
+  if (effectiveMove.transformsIntoTarget) {
+    if (attacker.transformed) {
+      transformFailed = true;
+    } else {
+      applyTransform(attacker, defender);
+      transformedIntoName = getPokemon(defender.slot.pokemonId)?.name ?? "상대";
+    }
+  }
+
   // 뿌리박기/아쿠아링: 이미 걸려있으면 재사용 실패(지속 효과 중복 방지, 필드/트릭룸과 같은 패턴).
   let regenSetFailed = false;
   if (effectiveMove.setsRegenVolatile) {
@@ -3199,6 +3260,8 @@ function resolveAction(
     averagedDefensesMoveName,
     swappedSpeedMoveName,
     shellSideArmCategory,
+    transformedIntoName,
+    transformFailed: transformFailed || undefined,
     sheerForceAbilityName,
     substituteBroke,
     hitSubstitute,

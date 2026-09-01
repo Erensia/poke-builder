@@ -783,6 +783,12 @@ export function BattleLogPage() {
                         {!action.blockedReason && action.hit && action.shellSideArmCategory && (
                           <> · {action.shellSideArmCategory === "physical" ? "물리" : "특수"} 판정!</>
                         )}
+                        {!action.blockedReason && action.hit && action.transformedIntoName && (
+                          <> · {action.transformedIntoName}{roEuro(action.transformedIntoName)} 변신했다!</>
+                        )}
+                        {!action.blockedReason && action.hit && action.transformFailed && (
+                          <> · 그러나 실패했다!</>
+                        )}
                         {!action.blockedReason && action.hit && action.sheerForceAbilityName && (
                           <> · {action.sheerForceAbilityName} 발동! 부가 효과 대신 위력이 올랐다!</>
                         )}

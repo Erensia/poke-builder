@@ -787,7 +787,8 @@
   {
     "id": "괴짜",
     "name": "괴짜",
-    "description": "배틀에 나왔을 때 상대 포켓몬으로 변신한다."
+    "description": "배틀에 나왔을 때 상대 포켓몬으로 변신한다. 타입·능력치(HP 제외)·특성·능력 랭크·기술을 상대와 똑같이 복사한다.",
+    "transformsIntoOpponentOnEntry": true
   },
   {
     "id": "근성",

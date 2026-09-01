@@ -348,8 +348,14 @@ hitsDefensiveStat?: "def" | "spd";
 
 - **id 규칙**: 지역폼/리전폼은 **지역명 접두, 구분자 없음**으로 통일(`알로라나인테일` 스타일). 기존 outlier `조로아크히스이` → `히스이조로아크`로 정정. 신규: `알로라라이츄`·`히스이윈디`·`가라르야도란`·`팔데아켄타로스{컴뱃,블레이즈,워터}종`.
 - **특성 배선 3 / 스텁 17**: 배선 = `부풀린가슴`(`blocksOpponentStatDropsForStats:["def"]`)·`축전`(`absorbsType`)·`발광`(9세대 버프판 = `blocksOpponentAccuracyDrops`+`ignoresOpponentEvasionBoost`). 나머지 17종(갈지자걸음·괴짜·근성·돌머리·되새김질·둔감·마이페이스·분노의경혈·서핑테일·속보·스나이퍼·애널라이즈·자연회복·재생력·촉촉바디·퀵드로·포자)은 설명문 스텁 — 대응 스키마 필드 없음/1v1 무의미/미구현 시스템.
-- **신규 기술 엔진 배선**:
+- **신규 기술 엔진 배선** (전부 완료, 스모크 검증):
   - 기존 플래그 재사용: `DD래리어트`(`ignoresDefenderStatStagesInDamage`)·`바늘미사일`(`minHits/maxHits` 2–5)·`뱀눈초리`(`inflictsStatus` 마비)·`셸블레이드`(`statChanges` 방어↓ 50%·`베기`)·`업어후리기`(`alwaysCrit`)·`작아지기`(`statChanges` 회피+2).
-  - 신규 플래그 + 전용 로직: `마지막일침`(`boostsUserStatOnKo`)·`레이징불`(`typeByUserSpecies` + `breaksScreensOnHit`)·`힘흡수`(`drainsFromTargetAttackStat`)·`가드셰어`(`averagesDefensesWithTarget`)·`스피드스왑`(`swapsSpeedWithTarget`)·`셸암즈`(`dynamicCategoryByHigherDamage`)·`변신`(`transformsIntoTarget` + 괴짜 `transformsIntoOpponentOnEntry`).
+  - `마지막일침`(`boostsUserStatOnKo`): 이 기술 데미지로 상대 KO 시 사용자 공격 +3 (자기과신과 같은 축, 기술 단위).
+  - `레이징불`(`typeByUserSpecies`): 팔데아 켄타로스 3품종에 따라 실제 타입 격투/불꽃/물. battleSimulator·matchupEvaluator 둘 다 웨더볼/fieldPulse보다 먼저 반영.
+  - `힘흡수`(`drainsFromTargetAttackStat`): 상대 공격 실능(랭크 반영, -1 적용 전)만큼 회복 + 상대 공격 -1.
+  - `가드셰어`(`averagesDefensesWithTarget`): 자신·상대 방어·특방 realStats 평균(내림) 후 양쪽 배정.
+  - `스피드스왑`(`swapsSpeedWithTarget`): 자신·상대 스피드 realStats 스왑.
+  - `셸암즈`(`dynamicCategoryByHigherDamage`): 매 사용 시 물리(공격 vs 상대 방어)·특수(특공 vs 상대 특방) 데미지를 둘 다 계산해 큰 쪽 판정 — 물리면 접촉, 특수면 비접촉. 동점이면 무작위(매치업 페이지는 스냅샷이라 물리 고정). 도구·특성·상태이상 배율은 물리/특수 확정 후 적용.
+  - `변신`(`transformsIntoTarget`) + **괴짜**(`Ability.transformsIntoOpponentOnEntry`): 상대로 변신 — 타입·5실능(HP 제외)·특성·능력 랭크(급소율 포함)·기술 목록(PP 각 min(5, 원래최대))을 복사. 현재 HP·maxHp·주 상태이상 유지. 1v1이라 한 번 변신하면 배틀 끝까지 유지, 재변신 실패. `slot.pokemonId`(종 자체)는 안 바꿈 — 변신 사용자가 메타몽뿐이라 몸무게·종별타입 기술만 원본 종 기준으로 남고 실질 영향 없음. `applyTransform` 헬퍼를 `resolveAction`(변신 기술)·`resolveEntryAbilityEffects`(괴짜 등장) 둘이 공유.
   - **미구현으로 남긴 것**: `가위자르기` 일격필살 판정(엔진에 일격기 축 없음 — 데이터만, 명중 시 무데미지) · `조이기` 4–5턴 속박 지속 효과(속박 시스템 미구현 — **배틀타워 리뉴얼(Phase 8) 때 추가 예정**). 둘 다 effect 텍스트에 "아직 엔진에 반영되지 않음" 명시.
-- **스크린 파괴(신규 엔진 기능)**: `Move.breaksScreensOnHit` — 명중 시 상대 쪽 스크린(리플렉터/빛의장막/오로라베일) 전부 제거. 데미지 계산은 스크린 살아있는 상태로 하고 이후 제거. `레이징불`·`깨트리기`에 부여.
+- **스크린 파괴(신규 엔진 기능)**: `Move.breaksScreensOnHit` — 명중 시 상대 쪽 스크린(리플렉터/빛의장막/오로라베일) 전부 제거. 데미지 계산은 스크린 살아있는 상태로 하고 이후 제거. `레이징불`·`깨트리기`에 부여. `ActionLogEntry.brokeScreens` + BattleLogPage 로그.
