@@ -301,7 +301,7 @@ export interface Ability {
    * 사용할 수 없다(usageCondition과 같은 "시도 자체가 막힘" 축).
    */
   preventsSelfFaintMoves?: boolean;
-  /** 짖궂은마음: 자신이 쓰는 변화기(카테고리 status)의 우선도를 이 값만큼 올린다(사이코필드 차단 판정에도 반영). */
+  /** 짓궂은마음: 자신이 쓰는 변화기(카테고리 status)의 우선도를 이 값만큼 올린다(사이코필드 차단 판정에도 반영). */
   statusMovePriorityBoost?: number;
   /** 틈새포착: 자신이 공격할 때 상대의 스크린(리플렉터/빛의장막)과 대타출동을 전부 무시한다. */
   bypassesScreensAndSubstitute?: boolean;

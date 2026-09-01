@@ -348,8 +348,8 @@
     "bypassesScreensAndSubstitute": true
   },
   {
-    "id": "짖궂은마음",
-    "name": "짖궂은마음",
+    "id": "짓궂은마음",
+    "name": "짓궂은마음",
     "description": "변화기술의 우선도가 +1이 된다.",
     "statusMovePriorityBoost": 1
   },
@@ -749,5 +749,29 @@
         }
       }
     ]
+  },
+  {
+    "id": "면역",
+    "name": "면역",
+    "description": "몸속에 병원균이 침입하지 못하도록 하여 독·맹독 상태가 되지 않는다.",
+    "immuneToStatuses": [
+      "poison",
+      "badly-poisoned"
+    ]
+  },
+  {
+    "id": "먹보",
+    "name": "먹보",
+    "description": "원래는 HP가 매우 줄어들었을 때 먹는 나무열매를 HP가 절반 이하가 되면 먹는다."
+  },
+  {
+    "id": "통찰",
+    "name": "통찰",
+    "description": "배틀에 나가면 상대가 지닌 도구를 알 수 있다."
+  },
+  {
+    "id": "나쁜손버릇",
+    "name": "나쁜손버릇",
+    "description": "접촉하는 기술로 공격당하면 상대의 도구를 빼앗는다. (자신이 도구를 지니고 있으면 발동하지 않는다)"
   }
 ]

@@ -34,7 +34,7 @@ abilities.json은 처음 발견 당시(라이츄 추가 시점) 54개였지만 �
 | ~~턴 종료 시 확률부 자가 치료~~ | `Ability.curesOwnStatusChance` 신설 — **완료** | ~~탈피~~ |
 | ~~명중률/회피율 특수 규칙~~ | `Ability.blocksOpponentAccuracyDrops`·`ignoresOpponentEvasionBoost`·`alwaysHits` 신설 — **완료** | ~~날카로운눈, 노가드~~ |
 | 등장 시 1회 발동(필드/스탯변화/특성복사 등) | `setsWeather`와 같은 패턴으로 `setsField`·`entryStatChange` 등 신설 | 일렉트릭메이커, 트레이스, 긴장감, 습기, 그림자밟기, 위협 |
-| 우선도 조작 | `Move.priority`와 별개로 특성발 우선도 가산 필요 — Phase 4.5 §4에서 선제공격손톱(도구)으로 비슷한 우선도 개입을 이미 구현해봤으니 참고 가능 | 짖궂은마음 |
+| 우선도 조작 | `Move.priority`와 별개로 특성발 우선도 가산 필요 — Phase 4.5 §4에서 선제공격손톱(도구)으로 비슷한 우선도 개입을 이미 구현해봤으니 참고 가능 | 짓궂은마음 |
 | 벽/대타 무시 | `setsScreen` 방어 로직에 예외 추가 | 틈새포착 |
 | 랭크변화 무시(데미지 계산) | `moveContext.ts`에서 랭크 반영 전 분기 필요 | 천진 |
 | 상대 방어적 특성 무시 | "특성 무효화" 판정 축 자체가 새로 필요(범위가 넓어 신중하게 설계해야 함) | 틀깨기 |
@@ -159,7 +159,7 @@ abilities.json은 처음 발견 당시(라이츄 추가 시점) 54개였지만 �
 | ~~등장 시 1회 발동~~ | ~~일렉트릭메이커~~, ~~트레이스~~, ~~위협~~ | **완료** — `resolveEntryAbilityEffects` 신설(아래 4-3) |
 | ~~등장 시 1회 발동(패시브 축)~~ | ~~긴장감~~ | **완료(2026-08-26)** — 아래 4-4 참고 |
 | 등장 시 1회 발동(1v1 구조상 무의미) | 그림자밟기 | **작업 없음** — 교체가 없는 1v1 시뮬레이터라 "도망/교체 봉쇄"가 적용될 대상 자체가 없음(블록·집단구타와 같은 이유) |
-| ~~우선도 조작~~ | ~~짖궂은마음~~ | **완료** |
+| ~~우선도 조작~~ | ~~짓궂은마음~~ | **완료** |
 | ~~벽/대타 무시~~ | ~~틈새포착~~ | **완료** |
 | ~~랭크변화 무시(데미지 계산)~~ | ~~천진~~ | **완료** — 등장 시 1회가 아니라 상시 발동이 맞았음(사용자 정정) |
 | ~~상대 방어적 특성 무시~~ | ~~틀깨기~~ | **완료(2026-08-26)** — 아래 4-4 참고 |
@@ -195,8 +195,8 @@ abilities.json은 처음 발견 당시(라이츄 추가 시점) 54개였지만 �
 
 **습기**: "등장 시 발동"이 아니라 "필드에 있는 동안 상시 적용되는 사용 조건"이라 엔트리 훅 대신 기존 `usageCondition` 판정과 같은 자리(0번)에 `Ability.preventsSelfFaintMoves` 체크를 추가했다. 자신·상대 어느 쪽이 가졌든 `move.selfFaints` 기술 자체가 실패 처리된다.
 
-**짖궂은마음**: `abilityModifiers.ts`에 `getAbilityPriorityBoost(move, ability)` 신설(필드의 `getFieldAdjustedPriority`와 같은 델타 패턴). `runTurn`의 턴 순서 계산과 `resolveAction`의 사이코필드 우선도 차단 판정 둘 다에 반영 — 짖궂은마음으로 우선도가 올라간 변화기도 사이코필드에 막혀야 하기 때문.
-- **수정(사용자 지적, 2026-08-26)**: 위 구현이 "우선도 +1 이상이면 무조건 막힌다"로만 짜여있었는데, 실제로는 사이코필드가 "상대를 겨냥하는" 우선도 기술만 막고 순풍·리플렉터·빛의장막처럼 자신/필드 전역에만 적용되는 변화기는(우선도가 짖궂은마음으로 올라가 있어도) 막지 않는다. `fieldEffects.ts`에 `isOpponentTargetingMove(move)`를 신설해 `inflictsStatus`·`inflictsVolatile(target:"opponent")`·`statChanges(target:"opponent")`·`setsLeechSeed`·`setsDisable`·`setsEncore`·`curesStatus(target:"opponent")`·`healsTarget:"opponent"` 중 하나라도 있거나 카테고리가 `status`가 아니면(데미지 기술은 항상 상대를 노림) "상대를 겨냥함"으로 판정하고, `isPriorityMoveBlockedByField`가 이 판정까지 같이 확인하도록 시그니처를 확장했다. 리플렉터(자기 대상)는 사이코필드에서도 정상 발동, 도발(상대 겨냥)은 정상 차단되는 것까지 스모크 테스트로 확인.
+**짓궂은마음**: `abilityModifiers.ts`에 `getAbilityPriorityBoost(move, ability)` 신설(필드의 `getFieldAdjustedPriority`와 같은 델타 패턴). `runTurn`의 턴 순서 계산과 `resolveAction`의 사이코필드 우선도 차단 판정 둘 다에 반영 — 짓궂은마음으로 우선도가 올라간 변화기도 사이코필드에 막혀야 하기 때문.
+- **수정(사용자 지적, 2026-08-26)**: 위 구현이 "우선도 +1 이상이면 무조건 막힌다"로만 짜여있었는데, 실제로는 사이코필드가 "상대를 겨냥하는" 우선도 기술만 막고 순풍·리플렉터·빛의장막처럼 자신/필드 전역에만 적용되는 변화기는(우선도가 짓궂은마음으로 올라가 있어도) 막지 않는다. `fieldEffects.ts`에 `isOpponentTargetingMove(move)`를 신설해 `inflictsStatus`·`inflictsVolatile(target:"opponent")`·`statChanges(target:"opponent")`·`setsLeechSeed`·`setsDisable`·`setsEncore`·`curesStatus(target:"opponent")`·`healsTarget:"opponent"` 중 하나라도 있거나 카테고리가 `status`가 아니면(데미지 기술은 항상 상대를 노림) "상대를 겨냥함"으로 판정하고, `isPriorityMoveBlockedByField`가 이 판정까지 같이 확인하도록 시그니처를 확장했다. 리플렉터(자기 대상)는 사이코필드에서도 정상 발동, 도발(상대 겨냥)은 정상 차단되는 것까지 스모크 테스트로 확인.
 
 **틈새포착**: `Ability.bypassesScreensAndSubstitute` 신설. 기존 대타출동의 `blockedBySubstitute` 조건에 `&& !attackerAbility?.bypassesScreensAndSubstitute`를 추가하고, 스크린 반감 배율 계산에도 같은 조건을 얹어 리플렉터/빛의장막을 무시하도록 확장 — 새 인프라 없이 §1에서 이미 만든 두 축에 조건만 추가하면 끝났다.
 
@@ -319,7 +319,7 @@ Phase 5를 종료해도 되는지 사용자에게 확인하는 과정에서, §2
 스캔 방법: abilities.json의 각 항목에 `modifiers`·`hitTrigger`·`absorbsType`·`grantsImmunityToTypes` 등 `abilityModifiers.ts`/`battleSimulator.ts`가 실제로 읽는 필드가 하나라도 있으면 "구현됨"으로 쳤다. (`일찍기상`·`배틀스위치`는 이 필드들이 없지만 `effectiveAbilityId` 문자열을 직접 비교하는 방식으로 이미 구현돼 있어 제외 — 스캔 방법의 사각지대라 수동으로 뺐다.)
 
 **§1 표(1절)에 이미 유형별로 분류돼 있던 25개**(내용은 그쪽이 최신 — 여기서는 목록만 다시 확인):
-등장 시 발동(위협·일렉트릭메이커·트레이스·긴장감·습기·그림자밟기) · 우선도 조작(짖궂은마음) · 벽/대타 무시(틈새포착) · 랭크변화 무시(천진) · 상대 특성 무시(틀깨기) · 능력치 배율(천하장사) · 부가효과 트레이드(우격다짐) · 추가타(부자유친) · 도구 상호작용(매지션·곡예) · 접촉기 방어무시+최소데미지(관통드릴) · 기타(라이트메탈·프레셔·서투름·촉촉보이스·변환자재·텔레파시·굳건한신념)
+등장 시 발동(위협·일렉트릭메이커·트레이스·긴장감·습기·그림자밟기) · 우선도 조작(짓궂은마음) · 벽/대타 무시(틈새포착) · 랭크변화 무시(천진) · 상대 특성 무시(틀깨기) · 능력치 배율(천하장사) · 부가효과 트레이드(우격다짐) · 추가타(부자유친) · 도구 상호작용(매지션·곡예) · 접촉기 방어무시+최소데미지(관통드릴) · 기타(라이트메탈·프레셔·서투름·촉촉보이스·변환자재·텔레파시·굳건한신념)
 
 (이 목록의 25개는 이 절을 쓴 시점 기준 스냅샷이다 — 이후 §4-1~4-6에서 그림자밟기·라이트메탈·텔레파시·굳건한신념(적용 대상 없음)과 헤롱헤롱바디(Phase 6 보류)를 뺀 나머지 전부 완료됐다.)
 

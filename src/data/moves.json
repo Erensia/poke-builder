@@ -7640,5 +7640,129 @@
     "makesContact": false,
     "protectEffect": "block",
     "protectContactDamageFraction": 0.125
+  },
+  {
+    "id": "리사이클",
+    "name": "리사이클",
+    "type": "노말",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 12,
+    "priority": 0,
+    "effect": "한 번 썼거나 잃어버린 자신의 도구를 재생하여 다시 지닌다.",
+    "tags": [
+      "회복"
+    ],
+    "makesContact": false
+  },
+  {
+    "id": "위액",
+    "name": "위액",
+    "type": "독",
+    "category": "status",
+    "power": null,
+    "accuracy": 100,
+    "pp": 12,
+    "priority": 0,
+    "effect": "상대에게 특수한 위액을 튀긴다. 튄 상대의 특성이 사라져 효과가 없어진다.",
+    "tags": [
+      "상태이상-기타"
+    ],
+    "makesContact": false
+  },
+  {
+    "id": "록온",
+    "name": "록온",
+    "type": "노말",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 8,
+    "priority": 0,
+    "effect": "상대에게 조준을 정확히 맞춘다. 다음 턴에 반드시 기술을 명중시킬 수 있다.",
+    "tags": [
+      "상태이상-기타"
+    ],
+    "makesContact": false
+  },
+  {
+    "id": "막말내뱉기",
+    "name": "막말내뱉기",
+    "type": "악",
+    "category": "physical",
+    "power": 80,
+    "accuracy": null,
+    "pp": 20,
+    "priority": 0,
+    "effect": "고개 숙여 사과하는 척하면서 상대를 찔러 공격한다. 공격은 반드시 명중한다.",
+    "tags": [
+      "필중",
+      "접촉"
+    ],
+    "makesContact": true
+  },
+  {
+    "id": "소울크래시",
+    "name": "소울크래시",
+    "type": "페어리",
+    "category": "physical",
+    "power": 75,
+    "accuracy": 100,
+    "pp": 16,
+    "priority": 0,
+    "effect": "상대를 강한 힘으로 내리쳐서 공격한다. 기죽게 만들어서 반드시 상대의 특수공격을 1랭크 떨어뜨린다.",
+    "tags": [
+      "랭크",
+      "접촉"
+    ],
+    "makesContact": true,
+    "statChanges": [
+      {
+        "target": "opponent",
+        "stat": "spa",
+        "delta": -1
+      }
+    ]
+  },
+  {
+    "id": "드래곤애로",
+    "name": "드래곤애로",
+    "type": "드래곤",
+    "category": "physical",
+    "power": 50,
+    "accuracy": 100,
+    "pp": 12,
+    "priority": 0,
+    "effect": "1턴에 데다라이 2마리를 사출해서 공격한다. 2회 연속으로 데미지를 준다.",
+    "tags": [
+      "연속",
+      "비접촉"
+    ],
+    "makesContact": false,
+    "minHits": 2,
+    "maxHits": 2
+  },
+  {
+    "id": "썬더다이브",
+    "name": "썬더다이브",
+    "type": "전기",
+    "category": "physical",
+    "power": 130,
+    "accuracy": 85,
+    "pp": 16,
+    "priority": 0,
+    "effect": "강력한 전기를 몸에 두르고 힘차게 상대에게 부딪친다. 20% 확률로 상대를 마비 상태로 만든다.",
+    "tags": [
+      "접촉",
+      "마비"
+    ],
+    "makesContact": true,
+    "inflictsStatus": [
+      {
+        "status": "paralysis",
+        "chance": 20
+      }
+    ]
   }
 ]

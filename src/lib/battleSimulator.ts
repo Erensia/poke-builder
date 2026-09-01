@@ -1226,7 +1226,7 @@ function resolveAction(
   }
 
   // 2-1) 사이코필드: 우선도 +1 이상인 기술이 "상대를 겨냥"하면 그 기술 자체가 실패한다.
-  // 짖궂은마음으로 변화기 우선도가 올라간 경우도 반영해야 해서 원본 우선도가 아니라 특성
+  // 짓궂은마음으로 변화기 우선도가 올라간 경우도 반영해야 해서 원본 우선도가 아니라 특성
   // 보정을 더한 실제 우선도로 판정한다 — 단, 순풍·리플렉터·빛의장막처럼 상대를 겨냥하지 않는
   // 변화기는 우선도가 올라가 있어도 막히지 않는다(isOpponentTargetingMove가 그 축을 가른다).
   if (isPriorityMoveBlockedByField(state.field, move.priority + getAbilityPriorityBoost(move, attackerAbility), move)) {
@@ -3193,7 +3193,7 @@ export function runTurn(
   // (본가 규칙: 순서는 행동 전에 이미 정해짐).
   const trickRoomActive = state.trickRoomTurnsRemaining !== undefined;
   // 그래스슬라이더처럼 필드 조건부로 우선도가 오르는 기술은, 순서를 정하는 이 시점의 필드
-  // 상태(=이번 턴 시작 시점)를 기준으로 반영한다. 짖궂은마음(변화기 우선도 +1)도 같이 더한다.
+  // 상태(=이번 턴 시작 시점)를 기준으로 반영한다. 짓궂은마음(변화기 우선도 +1)도 같이 더한다.
   // compareTurnOrder는 move.priority만 보므로 우선도만 조정한 얕은 복사본을 넘긴다.
   const priorityAdjustedMoveA = {
     ...moveA,

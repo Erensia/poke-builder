@@ -99,7 +99,7 @@ export function resolveStabMultiplier(ability: Ability | undefined): number {
 }
 
 /**
- * 짖궂은마음: 사용자가 이 특성을 가졌고 쓰려는 기술이 변화기(status)면 우선도가 이 값만큼
+ * 짓궂은마음: 사용자가 이 특성을 가졌고 쓰려는 기술이 변화기(status)면 우선도가 이 값만큼
  * 오른다. 필드(getFieldAdjustedPriority)와 같은 "델타"만 반환하는 함수라 호출부가
  * move.priority(또는 이미 필드로 조정된 값)에 더해서 쓴다.
  */
