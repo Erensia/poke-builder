@@ -2963,8 +2963,7 @@ function resolveAction(
 
   // 자뭉열매/오랭열매: 이번 행동으로 생긴 모든 HP 변화(피격/반동/회복 등)가 끝난 뒤, 체력이 최대
   // HP 1/2 이하인 쪽(공격자든 방어자든)이 있으면 자동 발동한다. attacker를 먼저 확인하는 순서는
-  // 임의지만, 도구는 각자 한 개씩만 지니므로 서로 간섭하지 않는다. 먹보(hpThresholdBerryDivisor)면
-  // 문턱이 1/4로 내려간다.
+  // 임의지만, 도구는 각자 한 개씩만 지니므로 서로 간섭하지 않는다.
   let attackerBerryHealAmount = 0;
   let attackerBerryHealItemName: string | undefined;
   if (!isFainted(attacker) && !attackerBerriesBlocked) {
@@ -2973,7 +2972,6 @@ function resolveAction(
       attacker.currentHp,
       attacker.maxHp,
       attacker.itemConsumed ?? false,
-      attackerAbility?.hpThresholdBerryDivisor,
     );
     if (attackerBerryHealAmount > 0) {
       attacker.currentHp = Math.min(attacker.maxHp, attacker.currentHp + attackerBerryHealAmount);
@@ -2989,7 +2987,6 @@ function resolveAction(
       defender.currentHp,
       defender.maxHp,
       defender.itemConsumed ?? false,
-      defenderAbility?.hpThresholdBerryDivisor,
     );
     if (defenderBerryHealAmount > 0) {
       defender.currentHp = Math.min(defender.maxHp, defender.currentHp + defenderBerryHealAmount);
@@ -3557,13 +3554,7 @@ export function runTurn(
       // 데미지 등)가 끝난 뒤에도 다시 한번 확인한다 — 액션 중엔 안 걸렸다가 턴 종료 데미지로
       // 뒤늦게 1/2 이하가 되는 경우를 놓치지 않기 위해서다.
       if (!isFainted(fighter) && !fighterBerriesBlocked) {
-        const berryHeal = getHpThresholdBerryHeal(
-          fighterItem,
-          fighter.currentHp,
-          fighter.maxHp,
-          fighter.itemConsumed ?? false,
-          fighterAbility?.hpThresholdBerryDivisor,
-        );
+        const berryHeal = getHpThresholdBerryHeal(fighterItem, fighter.currentHp, fighter.maxHp, fighter.itemConsumed ?? false);
         if (berryHeal > 0) {
           fighter.currentHp = Math.min(fighter.maxHp, fighter.currentHp + berryHeal);
           consumeItem(fighter);

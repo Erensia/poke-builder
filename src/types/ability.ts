@@ -146,12 +146,6 @@ export interface Ability {
    * 배틀 수치에는 영향이 없는 정보 표시 전용 효과 — resolveEntryAbilityEffects에서 처리한다.
    */
   revealsOpponentItemOnEntry?: boolean;
-  /**
-   * 먹보: HP회복 나무열매(자뭉열매·오랭열매)의 발동 문턱을 이 분모로 바꾼다. 기본은 maxHp/2 이하이고,
-   * 이 값이 4면 maxHp/4 이하로 내려간다(사용자 지정 — 이 게임의 baseline이 이미 1/2이라 본가와
-   * 반대 방향으로 "더 버틴 뒤" 먹도록 설계). getHpThresholdBerryHeal에 그대로 전달된다.
-   */
-  hpThresholdBerryDivisor?: number;
   /** 특정 타입 기술을 완전히 무효화하는 특성만 채운다(타오르는불꽃·피뢰침) */
   absorbsType?: AbilityTypeAbsorb;
   /**
