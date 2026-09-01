@@ -8039,5 +8039,195 @@
       }
     ],
     "drainsFromTargetAttackStat": true
+  },
+  {
+    "id": "경혈찌르기",
+    "name": "경혈찌르기",
+    "type": "노말",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 20,
+    "priority": 0,
+    "effect": "경혈을 세게 찔러 능력 중 하나를 랜덤으로 크게 올린다. 자신의 능력 하나가 2랭크 오른다. (랜덤 대상 선택은 엔진 미배선)",
+    "tags": [
+      "랭크"
+    ],
+    "makesContact": false
+  },
+  {
+    "id": "독실",
+    "name": "독실",
+    "type": "독",
+    "category": "status",
+    "power": null,
+    "accuracy": 100,
+    "pp": 20,
+    "priority": 0,
+    "effect": "독이 스며든 실을 뿜어 상대를 독 상태로 만들고 스피드를 2랭크 떨어뜨린다.",
+    "tags": [
+      "랭크",
+      "독"
+    ],
+    "makesContact": false,
+    "statChanges": [
+      {
+        "target": "opponent",
+        "stat": "spe",
+        "delta": -2
+      }
+    ],
+    "inflictsStatus": [
+      {
+        "status": "poison"
+      }
+    ]
+  },
+  {
+    "id": "독침천발",
+    "name": "독침천발",
+    "type": "독",
+    "category": "physical",
+    "power": 60,
+    "accuracy": 100,
+    "pp": 12,
+    "priority": 0,
+    "effect": "독이 밴 가시를 연달아 발사해 공격한다. 50% 확률로 상대를 독 상태로 만들며, 상대가 이미 독·맹독 상태이면 위력이 2배가 된다. (위력 2배 조건은 엔진 미배선)",
+    "tags": [
+      "독"
+    ],
+    "makesContact": false,
+    "inflictsStatus": [
+      {
+        "status": "poison",
+        "chance": 50
+      }
+    ]
+  },
+  {
+    "id": "막치기",
+    "name": "막치기",
+    "type": "노말",
+    "category": "physical",
+    "power": 40,
+    "accuracy": 100,
+    "pp": 20,
+    "priority": 0,
+    "effect": "앞발이나 긴 꼬리 등으로 상대를 두들겨서 공격한다.",
+    "tags": [],
+    "makesContact": true
+  },
+  {
+    "id": "만나자마자",
+    "name": "만나자마자",
+    "type": "벌레",
+    "category": "physical",
+    "power": 100,
+    "accuracy": 100,
+    "pp": 12,
+    "priority": 2,
+    "effect": "기세 좋게 공격한다. 위력은 높지만 배틀에 나온 첫 턴에만 쓸 수 있다. 반드시 선제공격한다.",
+    "tags": [
+      "선공"
+    ],
+    "makesContact": true,
+    "usageCondition": "first-turn-only"
+  },
+  {
+    "id": "백귀야행",
+    "name": "백귀야행",
+    "type": "고스트",
+    "category": "special",
+    "power": 65,
+    "accuracy": 100,
+    "pp": 16,
+    "priority": 0,
+    "effect": "수많은 원령이 상대를 습격한다. 30% 확률로 상대를 화상 상태로 만들며, 상대가 상태이상이면 위력이 2배가 된다. (위력 2배 조건은 엔진 미배선)",
+    "tags": [
+      "화상"
+    ],
+    "makesContact": false,
+    "inflictsStatus": [
+      {
+        "status": "burn",
+        "chance": 30
+      }
+    ]
+  },
+  {
+    "id": "분화",
+    "name": "분화",
+    "type": "불꽃",
+    "category": "special",
+    "power": 150,
+    "accuracy": 100,
+    "pp": 8,
+    "priority": 0,
+    "effect": "폭발적인 마그마를 상대에게 내뿜어 공격한다. 자신의 HP가 적을수록 위력이 떨어진다(위력 = 150 × 현재 HP ÷ 최대 HP). (HP 비례 감소는 엔진 미배선 — 계산 페이지에선 150 고정 취급)",
+    "tags": [],
+    "makesContact": false
+  },
+  {
+    "id": "섬뜩한주문",
+    "name": "섬뜩한주문",
+    "type": "에스퍼",
+    "category": "special",
+    "power": 80,
+    "accuracy": 100,
+    "pp": 8,
+    "priority": 0,
+    "effect": "강대한 초능력으로 상대를 공격한다. 상대가 마지막으로 사용한 기술의 PP를 3 깎는다. (PP 감소는 엔진 미배선)",
+    "tags": [
+      "소리"
+    ],
+    "classification": [
+      "소리"
+    ],
+    "makesContact": false
+  },
+  {
+    "id": "썰렁개그",
+    "name": "썰렁개그",
+    "type": "얼음",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 12,
+    "priority": 0,
+    "effect": "썰렁한 개그를 하기 직전 5턴 동안 눈을 내리게 한다. 본가에서는 사용 후 교체되지만 1대1에서는 교체가 없어 눈 설정만 적용된다.",
+    "tags": [
+      "환경"
+    ],
+    "makesContact": false,
+    "setsWeather": "눈"
+  },
+  {
+    "id": "자기장조작",
+    "name": "자기장조작",
+    "type": "전기",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 20,
+    "priority": 0,
+    "effect": "자기장을 조작하여 특성이 플러스나 마이너스인 포켓몬의 방어·특수방어를 1랭크씩 올린다. 1대1 시뮬레이터에서는 아군이 없어 효과가 없다.",
+    "tags": [
+      "랭크"
+    ],
+    "makesContact": false
+  },
+  {
+    "id": "파라볼라차지",
+    "name": "파라볼라차지",
+    "type": "전기",
+    "category": "special",
+    "power": 65,
+    "accuracy": 100,
+    "pp": 20,
+    "priority": 0,
+    "effect": "주위에 있는 것 모두를 공격한다. 준 데미지의 50%만큼 자신의 HP를 회복한다.",
+    "tags": [],
+    "makesContact": false,
+    "drainFraction": 0.5
   }
 ]
