@@ -93,6 +93,11 @@ export interface AbilityHitTrigger {
   selfStatChanges?: { stat: BattleStatKey; delta: number }[];
   /** 공격자가 방금 사용한 기술의 남은 PP를 0으로 만든다(저주받은바디 — "사슬묶기" 텍스트를 PP 0 봉인으로 구현) */
   disablesAttackerMove?: boolean;
+  /**
+   * 나쁜손버릇: 접촉기로 공격당하면 공격자가 지닌 도구를 빼앗는다. 매지션(stealsItemOnDamagingHit)과
+   * 방향이 정반대로, 피격측(이 특성 소유자)이 무도구일 때만 발동한다. on:"contact"와 함께 쓴다.
+   */
+  stealsAttackerItem?: boolean;
 }
 
 /**
@@ -134,8 +139,19 @@ export interface Ability {
    * 그대로 존중한다 — moveContext.ts에서 typeEffectiveness가 정확히 0일 때만 1로 덮어쓴다.
    */
   bypassesImmunityForTypes?: PokemonType[];
-  /** 방어측으로 피격당했을 때 발동하는 특성만 채운다(정전기·불꽃몸·까칠한피부·깨어진갑옷·저주받은바디) */
+  /** 방어측으로 피격당했을 때 발동하는 특성만 채운다(정전기·불꽃몸·까칠한피부·깨어진갑옷·저주받은바디·나쁜손버릇) */
   hitTrigger?: AbilityHitTrigger;
+  /**
+   * 통찰: 배틀에 등장하는 그 순간(=1대1 전용이라 첫 턴 시작) 상대가 지닌 도구를 UI 로그로 알린다.
+   * 배틀 수치에는 영향이 없는 정보 표시 전용 효과 — resolveEntryAbilityEffects에서 처리한다.
+   */
+  revealsOpponentItemOnEntry?: boolean;
+  /**
+   * 먹보: HP회복 나무열매(자뭉열매·오랭열매)의 발동 문턱을 이 분모로 바꾼다. 기본은 maxHp/2 이하이고,
+   * 이 값이 4면 maxHp/4 이하로 내려간다(사용자 지정 — 이 게임의 baseline이 이미 1/2이라 본가와
+   * 반대 방향으로 "더 버틴 뒤" 먹도록 설계). getHpThresholdBerryHeal에 그대로 전달된다.
+   */
+  hpThresholdBerryDivisor?: number;
   /** 특정 타입 기술을 완전히 무효화하는 특성만 채운다(타오르는불꽃·피뢰침) */
   absorbsType?: AbilityTypeAbsorb;
   /**

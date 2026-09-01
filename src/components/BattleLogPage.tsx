@@ -902,6 +902,14 @@ export function BattleLogPage() {
                           {action.abilityDisabledMoveName}이(가) 봉인되었다!
                         </div>
                       )}
+                      {/* 나쁜손버릇 — 접촉기로 피격당한 방어측이 공격자의 도구를 빼앗았을 때 */}
+                      {!action.blockedReason && action.pickpocketStolenItemName && (
+                        <div className="battle-turn-line is-muted">
+                          {defenderName}의 {action.pickpocketAbilityName}! {actorName}의{" "}
+                          {action.pickpocketStolenItemName}
+                          {eulReul(action.pickpocketStolenItemName)} 빼앗았다!
+                        </div>
+                      )}
                       {/* 지구력·깨어진갑옷 등 — 피격 시 방어측 특성이 자기 랭크를 바꿨을 때
                           (Phase 6.5 §6-2 ③ / §6-1). 깨어진갑옷은 방어↓·스피드↑가 같이 오므로 줄을 나눠 낸다.
                           내림 줄에서 특성 이름을 한 번 알리고, 오름 줄은 이름 없이 결과만. */}

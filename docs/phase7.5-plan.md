@@ -369,6 +369,11 @@ Phase 7 §2 본문을 그대로 승계. 스텔스록은 7에서 "설치 상태 +
   - [x] **비장의무기**(2026-08-31 완료, 사용자 재정의): PP 위력표 폐기. `usageCondition: "all-other-moves-used"` 신설 — `BattleFighterState.usedMoveIds`로 "그 기술로 행동 개시"를 기록하고, 자신의 나머지 기술(remainingPp 키)을 전부 한 번씩 쓰기 전까지 실패. 위력은 리터럴 140 유지. 검증 2종 PASS.
   - 앙갚음·메탈버스트는 `damageTakenThisTurn`의 물리+특수 합을 그대로 써서 배선 완료(위 항목 참조). 1v1 싱글에선 "턴 누적합 = 그 턴 유일하게 맞은 공격"이라 문제없다.
 - [x] **몸무게 스키마 + 실데이터 + 메가폼 배선**(3-6, 2026-08-31) — `Pokemon.weightKg?` / `MegaEvolution.weightKg?` / `EffectiveForm.weightKg` 필드 + 위력표 헬퍼 + 엔진/매치업 배선(메가 상태면 그 폼 몸무게) + 4기술 플래그. **실데이터**: 기본 종 49/49, 메가폼 28/28(공식 17 PokéAPI + 비공식 11 사용자값). 몸무게 관련 전부 완료 — 후속은 라이트메탈/헤비메탈 특성 상호작용만(현재 로스터 영향 미미).
+- [x] **[추가] 로스터 3종 + 특성 3종 배선**(2026-09-01) — 잠만보(노말)·오롱털(악/페어리)·드래펄트(드래곤/고스트) + 신규 기술 7종(막말내뱉기·소울크래시·드래곤애로·썬더다이브 배선, 리사이클·위액·록온 스텁). 특성:
+  - **면역**: `immuneToStatuses:["poison","badly-poisoned"]`(독·맹독 면역).
+  - **먹보**: `Ability.hpThresholdBerryDivisor`(=4) 신설. `getHpThresholdBerryHeal`에 `thresholdDivisor` 인자 추가 — HP회복 나무열매(자뭉·오랭) 발동 문턱이 1/2→1/4로 내려간다(사용자 지정, 본가와 반대 방향: 이 게임 baseline이 이미 1/2). 다른 포켓몬은 영향 없음.
+  - **통찰**: `Ability.revealsOpponentItemOnEntry` 신설. `resolveEntryAbilityEffects`(위협·트레이스와 같은 훅)에서 첫 턴 시작과 동시에 `entryAnnouncements`로 2줄("…의 통찰!" / "…은 상대도구를 통찰했다!"). 상대 무도구면 무출력. 배틀 수치 영향 없음.
+  - **나쁜손버릇**: `AbilityHitTrigger.stealsAttackerItem` 신설(`hitTrigger:{on:"contact",...}`). 접촉기(물리·특수 무관)로 피격당하고 자신이 무도구면 공격자 도구를 강탈, 로그 `pickpocketStolenItemName`. 대타·면역 피격·자신 도구 보유 시 무발동(매지션과 방향만 반대). 검증: `createBattleState`/`runTurn` 스모크 — 통찰 2줄·먹보 문턱(45% 무발동/20% 발동)·나쁜손버릇 물리·특수 접촉 강탈 전부 PASS. tsc/lint/build 통과.
 - [ ] **4단계**(배틀타워 리뉴얼) — 1~3 완료 후 다시 개별 결재. 아래는 그때 정한다:
   - [ ] 선출 방식: 6마리 빌드 → 3마리(순서 포함) 선출 → 첫 슬롯 리드 vs 3마리만 빌드 — **보류**.
   - [ ] 상대(B) 팀·선출을 전부 수동 구성으로 두는 것(자동 상대 편성은 범위 밖).

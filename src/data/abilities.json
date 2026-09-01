@@ -762,16 +762,22 @@
   {
     "id": "먹보",
     "name": "먹보",
-    "description": "원래는 HP가 매우 줄어들었을 때 먹는 나무열매를 HP가 절반 이하가 되면 먹는다."
+    "description": "체력이 최대 HP의 1/4 이하가 되어야 HP회복 나무열매(자뭉열매·오랭열매)를 먹는다. 다른 포켓몬은 1/2 이하에서 먹는다.",
+    "hpThresholdBerryDivisor": 4
   },
   {
     "id": "통찰",
     "name": "통찰",
-    "description": "배틀에 나가면 상대가 지닌 도구를 알 수 있다."
+    "description": "배틀에 나가면 상대가 지닌 도구를 알 수 있다. 첫 턴 시작과 동시에 상대의 도구를 로그로 알려준다.",
+    "revealsOpponentItemOnEntry": true
   },
   {
     "id": "나쁜손버릇",
     "name": "나쁜손버릇",
-    "description": "접촉하는 기술로 공격당하면 상대의 도구를 빼앗는다. (자신이 도구를 지니고 있으면 발동하지 않는다)"
+    "description": "접촉하는 기술로 공격당하면 상대의 도구를 빼앗는다. (자신이 도구를 지니고 있으면 발동하지 않는다)",
+    "hitTrigger": {
+      "on": "contact",
+      "stealsAttackerItem": true
+    }
   }
 ]

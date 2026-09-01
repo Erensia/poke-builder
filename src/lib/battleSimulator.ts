@@ -373,6 +373,15 @@ function eulReul(name: string): "을" | "를" {
   return code % 28 === 0 ? "를" : "을";
 }
 
+/** "잠만보는"/"오롱털은" 같은 주제격 조사 — 받침 유무로 "는"/"은"을 자동 판별한다(통찰 로그용) */
+function eunNeun(name: string): "는" | "은" {
+  const lastChar = name.at(-1);
+  if (!lastChar) return "는";
+  const code = lastChar.charCodeAt(0) - 0xac00;
+  if (code < 0 || code > 11171) return "는";
+  return code % 28 === 0 ? "는" : "은";
+}
+
 /**
  * 우격다짐(추가효과 무효화 + 위력 1.3배)이 적용될 "추가효과가 있는 데미지 기술"인지 판정한다.
  *
@@ -529,7 +538,9 @@ function resolveEntryAbilityEffects(
     !aAbility?.setsFieldOnEntry &&
     !bAbility?.setsFieldOnEntry &&
     !aAbility?.copiesOpponentAbilityOnEntry &&
-    !bAbility?.copiesOpponentAbilityOnEntry
+    !bAbility?.copiesOpponentAbilityOnEntry &&
+    !aAbility?.revealsOpponentItemOnEntry &&
+    !bAbility?.revealsOpponentItemOnEntry
   ) {
     return { field: undefined, fieldTurnsRemaining: undefined, announcements: [] };
   }
@@ -576,6 +587,16 @@ function resolveEntryAbilityEffects(
       const opponentName = getPokemon(opponentSlot.pokemonId)?.name ?? "상대";
       const copiedName = copiedAbility?.name ?? "특성";
       announcements.push(`${pokemonName}의 ${ability.name}! ${opponentName}의 ${copiedName}${eulReul(copiedName)} 복사했다!`);
+    }
+    // 통찰: 상대가 도구를 지녔을 때만 두 줄로 알린다. 배틀 수치 영향 없음(정보 표시 전용).
+    if (ability.revealsOpponentItemOnEntry && opponent.currentItemId) {
+      const revealedItem = getItem(opponent.currentItemId);
+      if (revealedItem) {
+        announcements.push(`${pokemonName}의 ${ability.name}!`);
+        announcements.push(
+          `${pokemonName}${eunNeun(pokemonName)} ${revealedItem.name}${eulReul(revealedItem.name)} 통찰했다!`,
+        );
+      }
     }
   }
 
@@ -864,6 +885,10 @@ export interface ActionLogEntry {
   abilityDisabledMoveName?: string;
   /** abilityDisabledMoveName을 봉인시킨 특성 이름 */
   abilityDisableAbilityName?: string;
+  /** 나쁜손버릇으로 피격측이 공격자에게서 빼앗은 도구 이름 */
+  pickpocketStolenItemName?: string;
+  /** pickpocketStolenItemName을 빼앗은 특성 이름(나쁜손버릇) */
+  pickpocketAbilityName?: string;
   /** 지구력·깨어진갑옷처럼 방어측 특성이 피격 시 자기 랭크를 바꿨으면 그 특성 이름 */
   abilityRaisedDefenderStatsAbilityName?: string;
   /** abilityRaisedDefenderStatsAbilityName이 올린 스탯·폭 */
@@ -1727,6 +1752,9 @@ function resolveAction(
   let abilityDamageAbilityName: string | undefined;
   let abilityDisabledMoveName: string | undefined;
   let abilityDisableAbilityName: string | undefined;
+  // 나쁜손버릇: 접촉기로 피격당한 방어측이 공격자의 도구를 빼앗았을 때 그 도구 이름과 특성 이름.
+  let pickpocketStolenItemName: string | undefined;
+  let pickpocketAbilityName: string | undefined;
   // 지구력·깨어진갑옷처럼 방어측 특성이 피격 시 자기 랭크를 바꿨을 때(Phase 6.5 §6-2 ③ / §6-1).
   // 다단히트면 타수만큼 누적. 오른 스탯과 내려간 스탯을 나눠 담아 로그도 별도 줄로 낸다.
   let abilityRaisedDefenderStatsAbilityName: string | undefined;
@@ -2000,6 +2028,17 @@ function resolveAction(
       attacker.remainingPp[move.id] = 0;
       abilityDisabledMoveName = move.name;
       abilityDisableAbilityName = defenderAbility!.name;
+    }
+    // 나쁜손버릇: 피격측(defender)이 무도구이고 공격자(attacker)가 도구를 지녔으면 그 자리에서 강탈한다.
+    // 매지션과 방향만 반대고 규칙은 동일 — 대타에 맞았을 때는 함수 진입부 가드(blockedBySubstitute)에서
+    // 이미 걸러진다. 다단히트여도 첫 타에 도구를 얻는 순간 !defender.currentItemId가 깨져 재발동하지 않는다.
+    if (trigger.stealsAttackerItem && !defender.currentItemId && attacker.currentItemId) {
+      const stolen = getItem(attacker.currentItemId);
+      pickpocketStolenItemName = stolen?.name;
+      pickpocketAbilityName = defenderAbility!.name;
+      defender.currentItemId = attacker.currentItemId;
+      defender.itemConsumed = false; // 새로 얻은 도구라 이전 소모 이력과 무관하게 쓸 수 있다
+      attacker.currentItemId = null;
     }
   }
 
@@ -2924,7 +2963,8 @@ function resolveAction(
 
   // 자뭉열매/오랭열매: 이번 행동으로 생긴 모든 HP 변화(피격/반동/회복 등)가 끝난 뒤, 체력이 최대
   // HP 1/2 이하인 쪽(공격자든 방어자든)이 있으면 자동 발동한다. attacker를 먼저 확인하는 순서는
-  // 임의지만, 도구는 각자 한 개씩만 지니므로 서로 간섭하지 않는다.
+  // 임의지만, 도구는 각자 한 개씩만 지니므로 서로 간섭하지 않는다. 먹보(hpThresholdBerryDivisor)면
+  // 문턱이 1/4로 내려간다.
   let attackerBerryHealAmount = 0;
   let attackerBerryHealItemName: string | undefined;
   if (!isFainted(attacker) && !attackerBerriesBlocked) {
@@ -2933,6 +2973,7 @@ function resolveAction(
       attacker.currentHp,
       attacker.maxHp,
       attacker.itemConsumed ?? false,
+      attackerAbility?.hpThresholdBerryDivisor,
     );
     if (attackerBerryHealAmount > 0) {
       attacker.currentHp = Math.min(attacker.maxHp, attacker.currentHp + attackerBerryHealAmount);
@@ -2948,6 +2989,7 @@ function resolveAction(
       defender.currentHp,
       defender.maxHp,
       defender.itemConsumed ?? false,
+      defenderAbility?.hpThresholdBerryDivisor,
     );
     if (defenderBerryHealAmount > 0) {
       defender.currentHp = Math.min(defender.maxHp, defender.currentHp + defenderBerryHealAmount);
@@ -3096,6 +3138,8 @@ function resolveAction(
     abilityDamageAbilityName,
     abilityDisabledMoveName,
     abilityDisableAbilityName,
+    pickpocketStolenItemName,
+    pickpocketAbilityName,
     abilityRaisedDefenderStatsAbilityName,
     abilityRaisedDefenderStats: abilityRaisedDefenderStats.length ? abilityRaisedDefenderStats : undefined,
     abilityLoweredDefenderStats: abilityLoweredDefenderStats.length ? abilityLoweredDefenderStats : undefined,
@@ -3513,7 +3557,13 @@ export function runTurn(
       // 데미지 등)가 끝난 뒤에도 다시 한번 확인한다 — 액션 중엔 안 걸렸다가 턴 종료 데미지로
       // 뒤늦게 1/2 이하가 되는 경우를 놓치지 않기 위해서다.
       if (!isFainted(fighter) && !fighterBerriesBlocked) {
-        const berryHeal = getHpThresholdBerryHeal(fighterItem, fighter.currentHp, fighter.maxHp, fighter.itemConsumed ?? false);
+        const berryHeal = getHpThresholdBerryHeal(
+          fighterItem,
+          fighter.currentHp,
+          fighter.maxHp,
+          fighter.itemConsumed ?? false,
+          fighterAbility?.hpThresholdBerryDivisor,
+        );
         if (berryHeal > 0) {
           fighter.currentHp = Math.min(fighter.maxHp, fighter.currentHp + berryHeal);
           consumeItem(fighter);
