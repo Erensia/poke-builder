@@ -1177,7 +1177,14 @@
       "반동-랭크",
       "비접촉"
     ],
-    "makesContact": false
+    "makesContact": false,
+    "statChanges": [
+      {
+        "target": "self",
+        "stat": "spa",
+        "delta": -2
+      }
+    ]
   },
   {
     "id": "용의파동",
@@ -1796,7 +1803,19 @@
       "반동-랭크",
       "접촉"
     ],
-    "makesContact": true
+    "makesContact": true,
+    "statChanges": [
+      {
+        "target": "self",
+        "stat": "def",
+        "delta": -1
+      },
+      {
+        "target": "self",
+        "stat": "spd",
+        "delta": -1
+      }
+    ]
   },
   {
     "id": "잠꼬대",
@@ -2749,7 +2768,19 @@
       "반동-랭크",
       "접촉"
     ],
-    "makesContact": true
+    "makesContact": true,
+    "statChanges": [
+      {
+        "target": "self",
+        "stat": "atk",
+        "delta": -1
+      },
+      {
+        "target": "self",
+        "stat": "def",
+        "delta": -1
+      }
+    ]
   },
   {
     "id": "에어커터",
@@ -3054,7 +3085,14 @@
       "펀치",
       "접촉"
     ],
-    "makesContact": true
+    "makesContact": true,
+    "statChanges": [
+      {
+        "target": "self",
+        "stat": "spe",
+        "delta": -1
+      }
+    ]
   },
   {
     "id": "얼어붙은바람",
@@ -4904,7 +4942,19 @@
       "반동-랭크",
       "비접촉"
     ],
-    "makesContact": false
+    "makesContact": false,
+    "statChanges": [
+      {
+        "target": "self",
+        "stat": "def",
+        "delta": -1
+      },
+      {
+        "target": "self",
+        "stat": "spd",
+        "delta": -1
+      }
+    ]
   },
   {
     "id": "애시드봄",
@@ -4990,7 +5040,14 @@
       "반동-랭크",
       "비접촉"
     ],
-    "makesContact": false
+    "makesContact": false,
+    "statChanges": [
+      {
+        "target": "self",
+        "stat": "spa",
+        "delta": -2
+      }
+    ]
   },
   {
     "id": "와이드포스",
@@ -5398,7 +5455,14 @@
       "반동-랭크",
       "비접촉"
     ],
-    "makesContact": false
+    "makesContact": false,
+    "statChanges": [
+      {
+        "target": "self",
+        "stat": "spa",
+        "delta": -2
+      }
+    ]
   },
   {
     "id": "씨기관총",
