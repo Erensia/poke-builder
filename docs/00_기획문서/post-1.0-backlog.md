@@ -83,4 +83,48 @@ Phase 8(배틀타워 리뉴얼)은 **파티 선출·교체 인프라**만 담당
 
 ---
 
-## 2. (이후 항목 추가)
+## 2. 포켓몬 프로필 — 이니셜 뱃지 → 실제 포켓몬 이미지
+
+### 2-1. 현재 방식
+
+포켓몬 프로필(아바타)은 전부 **이름 첫 글자 + 타입 색 그라디언트**로 그려진다.
+
+- 렌더 패턴: `pokemon.name.at(0)` + `linear-gradient(135deg, TYPE_COLORS[type0], TYPE_COLORS[type1 ?? type0])`
+- 등장 위치 및 크기:
+
+  | 위치 | 클래스 | 크기 | 모양 |
+  |---|---|---|---|
+  | 파티 빌더 슬롯 (`PartySlotCard.tsx:94`) | `.party-slot-avatar` | 36×36 | radius 10px |
+  | 배틀 셋업 카드 (`BattleSetupCard.tsx:97`) | `.party-slot-avatar` 재사용 | 36×36 | radius 10px |
+  | 매치업 슬롯 (`MatchupSlotCard.tsx:125`) | `.matchup-slot-avatar` | 42×42 | radius 11px |
+  | 도감 리스트 (`PokedexPage.tsx:270`) | `.pokedex-list-avatar` | 28×28 | 원형 |
+  | 도감 상세 (`PokedexPage.tsx:128`) | `.pokedex-detail-avatar` | 56×56 | 원형 |
+
+  (`ItemDexPage`의 `.itemdex-detail-avatar`는 아이템용이라 대상 아님.)
+
+### 2-2. 목표
+
+각 위치 크기에 맞는 포켓몬 이미지를 구해 이니셜 뱃지를 대체한다. 이미지가 없거나 로드 실패 시
+현재의 이니셜+그라디언트로 **폴백**.
+
+### 2-3. 결정해야 할 것
+
+- **이미지 소스 & 키잉**. 현재 `pokemon.json`은 한글 이름을 `id`로 쓰고 전국도감 번호·스프라이트 URL 필드가 없다. 후보:
+  - (a) `pokemon.json`에 `dexNo`(전국도감 번호) 필드 추가 → 번호로 스프라이트 파일/CDN 참조.
+    로스터를 세대별로 확장 중이므로 병합 스크립트에 `dexNo` 채우는 단계 추가 필요.
+  - (b) 스프라이트를 레포에 번들(`public/sprites/`)하고 `dexNo`(또는 슬러그)로 파일명 매칭.
+  - (c) 외부 CDN 직접 참조(PokéAPI 스프라이트 raw, Pokémon Showdown 스프라이트 등). 오프라인/속도/안정성 트레이드오프.
+- **스프라이트 스타일**. 위치별로 다르게:
+  - 28×28 도감 리스트 → 박스 아이콘(dex box icon)류 작은 픽셀 이미지.
+  - 36~56px → gen5 도트 / Showdown 스프라이트, 또는 HOME 렌더(고해상도라 축소 시 선명).
+  - 픽셀 아트면 작은 크기에서 `image-rendering: pixelated`, HOME 렌더면 일반 스케일.
+- **메가 폼**. `megaEvolutions[].form`(예: `"리자몽-메가X"`)도 별도 이미지가 필요. 폼 키로 매칭.
+  없으면 기본 폼 이미지로 폴백.
+- **라이선스**. 포켓몬 스프라이트/아트워크는 저작권물. 개인·비영리 토이 프로젝트 범위에서만 사용한다는 전제 확인.
+
+### 2-4. 구현 메모
+
+- 5개 위치가 같은 로직(이미지 or 폴백)을 쓰므로 **공유 `<PokemonAvatar pokemonId size formLabel />` 컴포넌트로 통합**하면서 교체.
+  현재는 컴포넌트마다 `avatarGradient` 계산이 중복돼 있다(`PartySlotCard`·`BattleSetupCard`·`MatchupSlotCard` 거의 동일, `PokedexPage`는 함수형).
+- `<img>` `loading="lazy"` + `onError`로 폴백 스위치.
+- `object-fit: contain`, 배경은 기존 그라디언트를 옅게 깔아도 됨(투명 스프라이트 뒤 배경).
