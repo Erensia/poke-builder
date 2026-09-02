@@ -26,6 +26,8 @@ export interface MoveContext {
   typeEffectiveness: number;
   /** 타오르는불꽃/피뢰침처럼 방어측 특성(absorbsType)이 이 기술 타입을 통째로 무효화했으면 true */
   absorbedByDefenderAbility: boolean;
+  /** 방음: 방어측이 이 소리 기술을 완전히 무효화했으면 true (데미지 0 + 상대 방향 효과 전부 차단) */
+  blockedBySoundproof: boolean;
 }
 
 export function resolveMoveContext(
@@ -94,15 +96,22 @@ export function resolveMoveContext(
       ? effectiveMove.overridesTypeEffectivenessFor.effectiveness
       : undefined;
 
+  // 방음: 소리 기술(classification "소리")은 데미지기·변화기 모두 방어측에게 통하지 않는다.
+  const blockedBySoundproof = !!(
+    defenderAbility?.blocksSound && (effectiveMove.classification ?? []).includes("소리")
+  );
+
   const typeEffectiveness = absorbedByDefenderAbility
     ? 0
     : grantsImmunity
       ? 0
-      : typeEffectivenessOverride !== undefined
-        ? typeEffectivenessOverride
-        : effectiveMove.type
-          ? getEffectiveness(effectiveMove.type, defenderTypes, { bypassImmunity })
-          : 1;
+      : blockedBySoundproof
+        ? 0
+        : typeEffectivenessOverride !== undefined
+          ? typeEffectivenessOverride
+          : effectiveMove.type
+            ? getEffectiveness(effectiveMove.type, defenderTypes, { bypassImmunity })
+            : 1;
 
   // 하드록/필터/프리즘아머: 효과가 굉장한(상성 > 1) 공격이면 데미지를 이 배율(0.75)로 줄인다.
   // abilityDefenseMultiplier는 "내구력 배율"이라 데미지는 그 역수 — 데미지 ×0.75 = 내구력 ÷0.75.
@@ -117,5 +126,6 @@ export function resolveMoveContext(
     stabMultiplier,
     typeEffectiveness,
     absorbedByDefenderAbility,
+    blockedBySoundproof,
   };
 }

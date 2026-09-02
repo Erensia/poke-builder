@@ -7807,6 +7807,7 @@
     "priority": 0,
     "effect": "거대한 집게발이나 낫 등으로 협공하여 상대를 일격에 쓰러뜨리려 한다. 명중하면 상대는 한 번에 쓰러진다. (일격필살 판정은 아직 엔진에 반영되지 않음)",
     "tags": [
+      "일격",
       "접촉"
     ],
     "makesContact": true
@@ -8365,5 +8366,125 @@
     "curesStatus": {
       "target": "self"
     }
+  },
+  {
+    "id": "들이받기",
+    "name": "들이받기",
+    "type": "땅",
+    "category": "physical",
+    "power": 120,
+    "accuracy": 100,
+    "pp": 8,
+    "priority": 0,
+    "effect": "온 힘을 다한 몸통박치기를 날린다. 자신의 방어와 특수방어가 1랭크 떨어진다.",
+    "tags": [
+      "반동-랭크",
+      "펀치",
+      "접촉"
+    ],
+    "classification": [
+      "펀치"
+    ],
+    "makesContact": true,
+    "statChanges": [
+      {
+        "target": "self",
+        "stat": "def",
+        "delta": -1
+      },
+      {
+        "target": "self",
+        "stat": "spd",
+        "delta": -1
+      }
+    ]
+  },
+  {
+    "id": "아이스해머",
+    "name": "아이스해머",
+    "type": "얼음",
+    "category": "physical",
+    "power": 100,
+    "accuracy": 90,
+    "pp": 12,
+    "priority": 0,
+    "effect": "강하고 무거운 주먹을 휘둘러 데미지를 준다. 자신의 스피드가 1랭크 떨어진다.",
+    "tags": [
+      "반동-랭크",
+      "펀치",
+      "접촉"
+    ],
+    "classification": [
+      "펀치"
+    ],
+    "makesContact": true,
+    "statChanges": [
+      {
+        "target": "self",
+        "stat": "spe",
+        "delta": -1
+      }
+    ]
+  },
+  {
+    "id": "아쿠아커터",
+    "name": "아쿠아커터",
+    "type": "물",
+    "category": "physical",
+    "power": 70,
+    "accuracy": 100,
+    "pp": 20,
+    "priority": 0,
+    "effect": "압축한 물을 칼날처럼 발사해 상대를 절단한다. 급소에 맞을 확률이 높다.",
+    "tags": [
+      "급소",
+      "비접촉",
+      "베기"
+    ],
+    "classification": [
+      "베기"
+    ],
+    "makesContact": false,
+    "highCritRatio": true
+  },
+  {
+    "id": "암석포",
+    "name": "암석포",
+    "type": "바위",
+    "category": "physical",
+    "power": 150,
+    "accuracy": 90,
+    "pp": 8,
+    "priority": 0,
+    "effect": "거대한 바위를 상대에게 발사하여 공격한다. 다음 턴은 움직일 수 없게 된다.",
+    "tags": [
+      "반동-휴식",
+      "비접촉",
+      "폭탄"
+    ],
+    "makesContact": false,
+    "inflictsVolatile": [
+      {
+        "volatile": "recharge",
+        "target": "self"
+      }
+    ]
+  },
+  {
+    "id": "집게해머",
+    "name": "집게해머",
+    "type": "물",
+    "category": "physical",
+    "power": 100,
+    "accuracy": 95,
+    "pp": 12,
+    "priority": 0,
+    "effect": "큰 집게를 상대에게 내리쳐서 공격한다. 급소에 맞을 확률이 높다.",
+    "tags": [
+      "급소",
+      "접촉"
+    ],
+    "makesContact": true,
+    "highCritRatio": true
   }
 ]

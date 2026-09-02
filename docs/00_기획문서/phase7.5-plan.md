@@ -412,3 +412,26 @@ hitsDefensiveStat?: "def" | "spd";
   - **미배선(데이터 + effect 텍스트만)**:
     - `절대영도`(얼음/특수, acc 30, pp 8): 일격필살 — 엔진에 일격기 축 없음(1세대 `가위자르기` 선례). 명중해도 무데미지, 태그 `일격`.
     - `순서미루기`(**악/변화**, acc 100, pp 16): 상대를 "가장 마지막"에 행동하게(=본가 곤경 효과) — 1v1에서 행동 순서 조작 무의미, 미배선.
+
+### 6-10. 4세대 반영 기록 (2026-09-02, 브랜치 `phase-7.5`)
+
+포챔스 4세대 입국몬 **24종**(로토무 6폼 포함) + 신규 특성 **8종 전부 엔진 배선** + 신규 기술 **5종**. `pokemon.json` 107→131, `moves.json` 441→446, `abilities.json` 136→144. staging: `docs/02_.../pokemon-champions-4gen-staging.json`. 검증(참조 무결성·id 유일성·BST 스팟체크·tsc·lint·build + 스모크 37종) 통과. **기술 수치·특성 배선 방침 모두 2026-09-02 사용자 확정.**
+
+- **종 24종**: 토대부기·엠페르트·찌르호크·렌트라·로즈레이드·램펄드·바리톱스·화강돌·독개굴·눈설왕·포푸니라·거대코뿌리·리피아·글레이시아·글라이온·맘모꾸리·엘레이드·눈여아 + **로토무 6폼**(기본/히트/워시/프로스트/스핀/커트 — 종족값·특성·몸무게 6폼 공통, learnset만 폼별 전용기 1개씩 차이).
+- **성별**: 엘레이드 `male-only`, 눈여아 `female-only`, 로토무 전 폼 `genderless`.
+- **세대 분기**: 엠페르트 숨겨진 특성 `승기`(9세대, 8세대까지 오기), 찌르호크·로즈레이드 종족값 6세대 이후 기준.
+- **메가진화 제외**: 엠페르트·찌르호크·눈설왕·거대코뿌리·엘레이드·눈여아 메가 — 별도 메가 staging. staging `dexNo`·`_flags` 제거.
+
+- **신규 특성 8종 전부 배선** (`ability.ts` 필드 6종 신설: `moveHasRecoilDamage`·`rivalryDamage`·`weatherEndOfTurnDamageDenominator`·`healsFromPoisonEachTurnDenominator`·`revealsThreateningMovesOnEntry`·`poisonTouchChance`. `blocksSound`는 기존 필드 활용):
+  - `예리함` → `modifiers` offense ×1.5 `moveClassificationIn:["베기"]` (메가런처=파동 선례).
+  - `방음` → `blocksSound:true`. **1차의 "멸망의노래만 차단"을 확장** — `resolveMoveContext`가 소리 기술(classification "소리")의 `typeEffectiveness`를 0으로, `battleSimulator`가 `blockedBySoundproof`를 `opponentEffectsBlocked`에 더해 데미지기·소리 변화기 전부 무효. 자신이 쓰는 소리 기술엔 무관. `ActionLogEntry.soundproofBlockedByAbilityName` + 로그.
+  - `이판사판` → `modifiers` offense ×1.2 + `AbilityModifierCondition.moveHasRecoilDamage`(=`recoilFraction` 또는 `crashFraction` 보유 & 발버둥 제외). 매치업 자동 반영.
+  - `투쟁심` → `rivalryDamage:true` + `rivalryDamageMultiplier` 헬퍼. 동성 ×1.25 / 이성 ×0.75 / 어느 한쪽 성별 불명 ×1.0. `battleSimulator`(attacker.gender/defender.gender)·`matchupEvaluator`(getEffectiveGender) 둘 다.
+  - `건조피부` → `absorbsType:{물, healsFraction:0.25}`(저수 패턴) + `modifiers` defense 0.8(불꽃 ×1.25) + `weatherEndOfTurnHealDenominator:{비,8}` + 신설 `weatherEndOfTurnDamageDenominator:{쾌청,8}`(EOT 훅 신설). 매직가드면 쾌청 피해 면제.
+  - `포이즌힐` → `healsFromPoisonEachTurnDenominator:8`. 상태이상 EOT 데미지 블록에서 독·맹독이면 데미지 대신 `maxHp/8` 회복(맹독 카운터는 그대로 누적). `EndOfTurnLogEntry.poisonHeal*` + 로그.
+  - `위험예지` → `revealsThreateningMovesOnEntry:true`. `resolveEntryAbilityEffects`(통찰 패턴)에서 상대 기술 중 자신에게 상성 > 1 또는 tags "일격"인 게 있으면 등장 안내 `"…은(는) 몸을 떨었다!"`. 겸사겸사 `가위자르기`에 누락됐던 `일격` 태그 보강.
+  - `독수` → `poisonTouchChance:30`. `resolveAction`에서 접촉기로 데미지를 준 직후 30%로 상대 독(독가시 hitTrigger의 공격측 버전, 타입/특성 면역·필드 존중, 대타 제외). 싱크로가 반응할 수 있게 `inflictedStatus` 세팅.
+
+- **신규 기술 5종** (수치·설명·태그·PP 전부 2026-09-02 사용자 확정):
+  - `들이받기`(**땅**/물리 **120·100·pp8**, 사용 후 자신 **방어·특방 -1** — `statChanges` self, `classification:["펀치"]`=철주먹 대상, 태그 반동-랭크·펀치·접촉) · `아이스해머`(얼음/물리 100·90·**pp12**, 사용 후 스피드 -1, `classification:["펀치"]`) · `아쿠아커터`(물/물리 70·100·20, `highCritRatio`+`classification:["베기"]`=예리함 대상) · `암석포`(바위/물리 150·90·**pp8**, `inflictsVolatile` recharge, 태그 +폭탄) · `집게해머`(물/물리 100·**95**·**pp12**, `highCritRatio`).
+  - **참고(스코프 밖)**: "사용 후 자신 스탯 하락"(반동-랭크)은 `statChanges` self로 동작하는데, 기존 `인파이트`·`리프스톰`·`오버히트`·`용성군`은 이 데이터가 누락돼 현재 자기 하락이 안 걸린다 — 4세대와 무관하나 같은 패턴으로 보강 가능(사용자 확인 대기).

@@ -6,7 +6,7 @@ import type { FieldKind } from "../types/field";
 import type { PokemonType } from "../types/pokemon-type";
 import { getPokemon, getAbility, getItem } from "./data";
 import { getBerryDefenseResult, getItemOffenseMultiplier, getItemSpeedMultiplier } from "./itemEffects";
-import { getEffectiveForm, getEffectiveAbilityId, type FormSource } from "./pokemonForm";
+import { getEffectiveForm, getEffectiveAbilityId, getEffectiveGender, type FormSource } from "./pokemonForm";
 import { computeRealStats } from "./statCalculator";
 import { applyMoveStatChanges } from "./statStages";
 import { getWeatherDamageMultiplier, applyWeatherBall } from "./weatherEffects";
@@ -351,10 +351,18 @@ export function evaluateSlotMatchup(
   const autoWeatherDamageMultiplier = getWeatherDamageMultiplier(effectiveWeather, effectiveMove.type);
   const autoFieldDamageMultiplier = getFieldDamageMultiplier(field, effectiveMove.type);
 
+  // 투쟁심: 양쪽 슬롯 성별로 ×1.25(동성)/×0.75(이성)/×1.0(불명). battleSimulator.rivalryDamageMultiplier 미러.
+  let rivalryMultiplier = 1;
+  if (attackerAbility?.rivalryDamage) {
+    const ag = getEffectiveGender(attackerPokemon, attackerSlot);
+    const dg = getEffectiveGender(defenderPokemon, defenderSlot);
+    if (ag !== null && dg !== null) rivalryMultiplier = ag === dg ? 1.25 : 0.75;
+  }
+
   // 상대 타입 상성을 곱하기 전의 결정력. offensePower는 여기에 typeEffectiveness만 곱한 값이라
   // 매번 다시 계산하는 대신 이 값에 typeEffectiveness를 곱해서 구한다.
   const rawOffensePower = computeOffensePower(attackerRealStats, attackerForm.types, effectiveMoveFinal, {
-    abilityMultiplier: manualAbilityMultiplier ?? abilityOffenseMultiplier,
+    abilityMultiplier: (manualAbilityMultiplier ?? abilityOffenseMultiplier) * rivalryMultiplier,
     itemMultiplier: itemMultiplier ?? autoItemMultiplier,
     weatherMultiplier: manualWeatherMultiplier ?? autoWeatherDamageMultiplier,
     fieldMultiplier: manualFieldMultiplier ?? autoFieldDamageMultiplier,

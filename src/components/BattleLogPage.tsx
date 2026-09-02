@@ -973,6 +973,12 @@ export function BattleLogPage() {
                           {!!action.abilityAbsorbHealAmount && <> 체력을 {action.abilityAbsorbHealAmount} 회복했다!</>}
                         </div>
                       )}
+                      {/* 방음 — 소리 기술을 통째로 무효화 */}
+                      {!action.blockedReason && action.soundproofBlockedByAbilityName && (
+                        <div className="battle-turn-line is-muted">
+                          {defenderName}의 {action.soundproofBlockedByAbilityName}! 소리 기술은 통하지 않는다!
+                        </div>
+                      )}
                       {/* 인분 — 데미지 기술의 추가효과(상태이상·풀죽음·랭크하락·왕의징표석 풀죽음)를
                           무산시켰을 때. 실제로 무산된 게 있을 때만 채워진다 */}
                       {!action.blockedReason && action.secondaryBlockedByAbilityName && (
@@ -1412,6 +1418,16 @@ export function BattleLogPage() {
                         {fighterLabel(battleState, e.actor)}의 {e.moodyAbilityName}! {STAT_LABELS[e.moodyRaisedStat]}
                         {"이(가)"} 크게 올라가고 {STAT_LABELS[e.moodyLoweredStat]}
                         {"이(가)"} 떨어졌다!
+                      </>
+                    ) : e.poisonHealAbilityName ? (
+                      <>
+                        {fighterLabel(battleState, e.actor)}의 {e.poisonHealAbilityName}! 독 데미지 대신 HP{" "}
+                        {e.poisonHealAmount} 회복 (남은 HP {e.remainingHp})
+                      </>
+                    ) : e.abilityWeatherDamageAbilityName ? (
+                      <>
+                        {fighterLabel(battleState, e.actor)}의 {e.abilityWeatherDamageAbilityName}! 데미지 {e.damage}{" "}
+                        (남은 HP {e.remainingHp}){e.fainted && " · 기절!"}
                       </>
                     ) : (
                       <>

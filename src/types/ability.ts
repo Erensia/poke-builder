@@ -49,6 +49,11 @@ export interface AbilityModifierCondition {
    * 실제로 넘겨준다.
    */
   defenderHasStatusCondition?: boolean;
+  /**
+   * 이판사판: 기술이 "자신도 데미지를 입는" 반동기일 때만(recoilFraction 또는 crashFraction이
+   * 있는 기술 — 단 발버둥은 제외). 위력 ×1.2.
+   */
+  moveHasRecoilDamage?: boolean;
 }
 
 export interface AbilityModifier {
@@ -232,8 +237,11 @@ export interface Ability {
    */
   blocksSecondaryEffects?: boolean;
   /**
-   * 방음(Soundproof): 소리 기술(classification "소리" — 돌림노래·멸망의노래·하이퍼보이스 등)이
-   * 자신에게 통하지 않는다. 현재 포챔스 로스터엔 이 특성 보유 포켓몬이 없어 데이터는 비어 있다.
+   * 방음(Soundproof): 소리 기술(classification "소리" — 돌림노래·멸망의노래·하이퍼보이스·폭음파·
+   * 노래하기 등)이 자신에게 통하지 않는다 — 데미지기·변화기 모두. 자신이 쓰는 소리 기술에는
+   * 영향이 없다(피격 시에만 판정). resolveMoveContext에서 typeEffectiveness를 0으로 덮어쓰고,
+   * battleSimulator가 opponentEffectsBlocked에 더해 상대 방향 부가효과까지 전부 차단한다.
+   * 4세대 로스터의 바리톱스·눈설왕이 보유.
    */
   blocksSound?: boolean;
   /**
@@ -457,4 +465,31 @@ export interface Ability {
    * fighter.types를 다시 계산한다. 종족값·특성은 그대로.
    */
   weatherFormChange?: boolean;
+  /**
+   * 투쟁심(Rivalry): 상대와 성별이 같으면 위력 ×1.25, 다르면 ×0.75. 어느 한쪽이라도 성별
+   * 불명(genderless)이면 ×1.0. 양쪽 성별을 알아야 해서 modifiers가 아니라 battleSimulator·
+   * matchupEvaluator에서 직접 곱한다.
+   */
+  rivalryDamage?: boolean;
+  /**
+   * 건조피부·아이스바디류의 "특정 날씨에 매턴 종료 시 피해" 축(weatherEndOfTurnHealDenominator의
+   * 반대). 건조피부=쾌청일 때 매턴 최대 HP 1/8 피해. (비일 때의 회복은 weatherEndOfTurnHealDenominator로 따로 채운다.)
+   */
+  weatherEndOfTurnDamageDenominator?: { weather: WeatherKind; denominator: number };
+  /**
+   * 포이즌힐(Poison Heal): 독·맹독 상태일 때 턴 종료 시 독 지속 데미지를 받는 대신 최대 HP의
+   * 1/denominator를 회복한다(포이즌힐=8). 상태이상 카운터(맹독 누적)는 그대로 진행된다.
+   */
+  healsFromPoisonEachTurnDenominator?: number;
+  /**
+   * 위험예지(Anticipation): 배틀에 등장하는 순간, 상대가 지닌 기술 중 자신에게 효과가 굉장한
+   * (타입 상성 > 1) 기술이나 일격필살기(tags에 "일격")가 하나라도 있으면 UI 로그로 알린다.
+   * 배틀 수치 영향 없음(통찰과 같은 정보 표시 훅).
+   */
+  revealsThreateningMovesOnEntry?: boolean;
+  /**
+   * 독수(Poison Touch): 접촉하는 기술로 공격해 데미지를 준 직후 이 확률(%)로 상대를 독 상태로
+   * 만든다(독가시 hitTrigger의 공격측 버전). 타입/특성 상태이상 면역은 그대로 존중.
+   */
+  poisonTouchChance?: number;
 }

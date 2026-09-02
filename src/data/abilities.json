@@ -1040,5 +1040,93 @@
     "name": "헤비메탈",
     "description": "자신의 몸무게가 2배가 된다. 헤비봄버 등 자신의 무게로 공격하는 기술의 위력이 오르고, 풀묶기 등 무게로 공격받는 기술의 데미지도 커진다.",
     "weightMultiplier": 2
+  },
+  {
+    "id": "예리함",
+    "name": "예리함",
+    "description": "베기 기술의 위력이 1.5배가 된다.",
+    "modifiers": [
+      {
+        "scope": "offense",
+        "multiplier": 1.5,
+        "condition": {
+          "moveClassificationIn": [
+            "베기"
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "id": "방음",
+    "name": "방음",
+    "description": "소리 기술(돌림노래·하이퍼보이스·폭음파·노래하기 등)이 통하지 않는다. 자신이 쓰는 소리 기술에는 영향이 없다.",
+    "blocksSound": true
+  },
+  {
+    "id": "이판사판",
+    "name": "이판사판",
+    "description": "자신도 반동 데미지를 입는 기술(발버둥 제외 — 반동기·빗나가면 자멸하는 기술)의 위력이 1.2배가 된다.",
+    "modifiers": [
+      {
+        "scope": "offense",
+        "multiplier": 1.2,
+        "condition": {
+          "moveHasRecoilDamage": true
+        }
+      }
+    ]
+  },
+  {
+    "id": "투쟁심",
+    "name": "투쟁심",
+    "description": "상대와 성별이 같으면 위력이 1.25배, 다르면 0.75배가 된다. 어느 한쪽이라도 성별이 불명이면 1.0배(증감 없음).",
+    "rivalryDamage": true
+  },
+  {
+    "id": "건조피부",
+    "name": "건조피부",
+    "description": "물타입 기술을 맞으면 데미지를 받지 않고 최대 HP의 1/4을 회복한다. 입는 불꽃타입 데미지는 1.25배가 된다. 비가 내리면 매턴 종료 시 최대 HP의 1/8을 회복하고, 쾌청 상태면 매턴 종료 시 최대 HP의 1/8만큼 피해를 입는다.",
+    "absorbsType": {
+      "type": "물",
+      "healsFraction": 0.25
+    },
+    "modifiers": [
+      {
+        "scope": "defense",
+        "multiplier": 0.8,
+        "condition": {
+          "moveTypeIn": [
+            "불꽃"
+          ]
+        }
+      }
+    ],
+    "weatherEndOfTurnHealDenominator": {
+      "weather": "비",
+      "denominator": 8
+    },
+    "weatherEndOfTurnDamageDenominator": {
+      "weather": "쾌청",
+      "denominator": 8
+    }
+  },
+  {
+    "id": "포이즌힐",
+    "name": "포이즌힐",
+    "description": "독·맹독 상태일 때 턴 종료 시 독 데미지를 받는 대신 최대 HP의 1/8을 회복한다.",
+    "healsFromPoisonEachTurnDenominator": 8
+  },
+  {
+    "id": "위험예지",
+    "name": "위험예지",
+    "description": "배틀에 나왔을 때 상대가 자신에게 효과가 굉장한 기술(2배·4배 피해)이나 일격필살기를 지녔는지 감지한다.",
+    "revealsThreateningMovesOnEntry": true
+  },
+  {
+    "id": "독수",
+    "name": "독수",
+    "description": "접촉하는 기술로 공격하면 30% 확률로 상대를 독 상태로 만든다.",
+    "poisonTouchChance": 30
   }
 ]

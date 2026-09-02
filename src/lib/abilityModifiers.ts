@@ -40,6 +40,12 @@ function conditionMatches(
   if (condition.defenderHasStatusCondition !== undefined) {
     if (condition.defenderHasStatusCondition !== defenderHasStatusCondition) return false;
   }
+  if (condition.moveHasRecoilDamage !== undefined) {
+    // 이판사판: recoilFraction(반동) 또는 crashFraction(빗나가면 자멸) 기술 — 발버둥 제외.
+    const hasRecoil =
+      (move.recoilFraction !== undefined || move.crashFraction !== undefined) && move.id !== "__struggle__";
+    if (hasRecoil !== condition.moveHasRecoilDamage) return false;
+  }
   return true;
 }
 

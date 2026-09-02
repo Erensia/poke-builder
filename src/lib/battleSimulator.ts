@@ -53,6 +53,7 @@ import {
   inflictVolatile,
 } from "./volatileConditions";
 import { resolveMoveContext } from "./moveContext";
+import { getEffectiveness } from "./typeEffectiveness";
 import {
   computeDamage,
   rankStageMultiplier,
@@ -340,6 +341,20 @@ function activeWeather(state: BattleState): WeatherKind | undefined {
   return state.weather;
 }
 
+/**
+ * 투쟁심(Rivalry): 공격측이 이 특성일 때 상대와의 성별 관계로 데미지 배율을 낸다.
+ * 같은 성별 ×1.25 · 다른 성별 ×0.75 · 어느 한쪽이라도 성별 불명(null) ×1.0.
+ */
+function rivalryDamageMultiplier(
+  ability: Ability | undefined,
+  attackerGender: PokemonGender | null,
+  defenderGender: PokemonGender | null,
+): number {
+  if (!ability?.rivalryDamage) return 1;
+  if (attackerGender === null || defenderGender === null) return 1;
+  return attackerGender === defenderGender ? 1.25 : 0.75;
+}
+
 /** 기분파(캐스퐁): 날씨별 타입. 쾌청→불꽃, 비→물, 눈→얼음, 그 외→노말 */
 const FORECAST_TYPE_BY_WEATHER: Partial<Record<WeatherKind, PokemonType>> = {
   쾌청: "불꽃",
@@ -612,7 +627,9 @@ function resolveEntryAbilityEffects(
     !aAbility?.transformsIntoOpponentOnEntry &&
     !bAbility?.transformsIntoOpponentOnEntry &&
     !aAbility?.negatesWeather &&
-    !bAbility?.negatesWeather
+    !bAbility?.negatesWeather &&
+    !aAbility?.revealsThreateningMovesOnEntry &&
+    !bAbility?.revealsThreateningMovesOnEntry
   ) {
     return { field: undefined, fieldTurnsRemaining: undefined, announcements: [] };
   }
@@ -672,6 +689,19 @@ function resolveEntryAbilityEffects(
     if (ability.negatesWeather) {
       announcements.push(`${pokemonName}의 ${ability.name}!`);
       announcements.push(`날씨의 영향이 없어졌다!`);
+    }
+    // 위험예지: 상대가 지닌 기술 중 자신에게 효과가 굉장한(상성 > 1) 기술이나 일격필살기(tags "일격")가
+    // 하나라도 있으면 한 줄로 알린다. 배틀 수치 영향 없음(통찰과 같은 정보 표시 훅).
+    if (ability.revealsThreateningMovesOnEntry) {
+      const threatened = Object.keys(opponent.remainingPp).some((mid) => {
+        const m = getMove(mid);
+        if (!m) return false;
+        if ((m.tags ?? []).includes("일격")) return true;
+        return !!m.type && getEffectiveness(m.type, fighter.types) > 1;
+      });
+      if (threatened) {
+        announcements.push(`${pokemonName}${eunNeun(pokemonName)} 몸을 떨었다!`);
+      }
     }
     // 통찰: 상대가 도구를 지녔을 때만 두 줄로 알린다. 배틀 수치 영향 없음(정보 표시 전용).
     if (ability.revealsOpponentItemOnEntry && opponent.currentItemId) {
@@ -1003,6 +1033,8 @@ export interface ActionLogEntry {
   abilityAbsorbedMoveType?: PokemonType;
   /** abilityAbsorbedMoveType을 무효화한 특성 이름 */
   abilityAbsorbAbilityName?: string;
+  /** 방음처럼 방어측 특성이 이 소리 기술을 완전히 무효화했으면 그 특성 이름 */
+  soundproofBlockedByAbilityName?: string;
   /** 저수처럼 absorbsType이 랭크업 대신 회복을 줄 때, 그 회복량 */
   abilityAbsorbHealAmount?: number;
   /** 흑안개처럼 이 행동으로 양쪽의 능력 랭크 변화가 전부 초기화됐으면 true */
@@ -1077,6 +1109,14 @@ export interface EndOfTurnLogEntry {
   moodyRaisedStat?: BattleStatKey;
   moodyLoweredStat?: BattleStatKey;
   moodyAbilityName?: string;
+  /** 포이즌힐: 독·맹독 데미지 대신 회복한 양 */
+  poisonHealAmount?: number;
+  /** poisonHealAmount를 준 특성 이름 */
+  poisonHealAbilityName?: string;
+  /** 건조피부: 쾌청 등 날씨로 턴 종료 시 입은 피해량(특성 기인) */
+  abilityWeatherDamage?: number;
+  /** abilityWeatherDamage를 준 특성 이름 */
+  abilityWeatherDamageAbilityName?: string;
   /** 모래바람 틱 데미지면 true (damage에 실제 수치) — §1 F-3 */
   sandstormDamage?: boolean;
   /** 멸망의노래 카운트 안내(F-4) — 이번 턴 종료 시점의 남은 카운트(3→2→1) */
@@ -1494,8 +1534,14 @@ function resolveAction(
   // 대상 랭크업/자기 회복기는 방어와 무관하게 그대로 발동하므로 "막혔다"가 아니다(Phase 6.5 §6-2 ⑦).
   const blockedByProtectMoveName =
     blockedByProtect && isOpponentTargetingMove(move) ? defender.activeProtect?.moveName : undefined;
+  // 방음: 방어측이 이 특성이면 소리 기술(classification "소리")이 데미지기·변화기 모두 완전히
+  // 무효화된다. resolveMoveContext도 같은 판정으로 typeEffectiveness를 0으로 만든다.
+  const blockedBySoundproof = !!(
+    defenderAbility?.blocksSound && (move.classification ?? []).includes("소리")
+  );
+  const soundproofBlockedByAbilityName = blockedBySoundproof ? defenderAbility?.name : undefined;
   const opponentEffectsBlocked =
-    blockedByGoodAsGold || blockedBySubstitute || blockedByProtect || blockedByPowderImmunity;
+    blockedByGoodAsGold || blockedBySubstitute || blockedByProtect || blockedByPowderImmunity || blockedBySoundproof;
 
   // 매직미러: 방어측이 이 특성을 지녔고(틀깨기면 위에서 defenderAbility가 이미 undefined), 이번
   // 기술이 방어측을 겨냥하는 status 변화기이며 반사 제외(notReflectable — 고스트 저주·추억의선물·
@@ -1668,6 +1714,9 @@ function resolveAction(
   // 절대 타입이 null인 기술(발버둥 등)은 boosts 조회 자체를 건너뛴다.
   const ownMoveTypeBoostMultiplier =
     (effectiveMove.type ? attacker.ownMoveTypeBoosts[effectiveMove.type] : undefined) ?? 1;
+
+  // 투쟁심: 상대와 성별이 같으면 ×1.25, 다르면 ×0.75, 어느 한쪽이라도 성별 불명이면 ×1.0.
+  const rivalryMultiplier = rivalryDamageMultiplier(attackerAbility, attacker.gender, defender.gender);
 
   // 메트로놈(연속 같은 기술 위력 증가)용 스트릭 갱신 — 여기까지 왔다는 건 앞의 모든 행동방해
   // 판정(상태이상/풀죽음/반동/혼란/차지 등)을 통과해서 실제로 이 기술을 쓴다는 뜻이라, 명중 여부와
@@ -1976,7 +2025,11 @@ function resolveAction(
     const result = computeDamage(attacker.realStats, defender.realStats, attacker.types, hitMove, {
       typeEffectiveness,
       abilityMultiplier:
-        abilityOffenseMultiplier * statusAttackMultiplier * hidingBypassMultiplier * ownMoveTypeBoostMultiplier,
+        abilityOffenseMultiplier *
+        statusAttackMultiplier *
+        hidingBypassMultiplier *
+        ownMoveTypeBoostMultiplier *
+        rivalryMultiplier,
       weatherMultiplier,
       fieldMultiplier,
       itemMultiplier,
@@ -2653,6 +2706,25 @@ function resolveAction(
       defender.status = inflictStatus(defender.status, "burn");
       if (defender.status.condition !== before) inflictedStatus = defender.status.condition;
     }
+  }
+
+  // 독수(Poison Touch): 접촉기로 데미지를 준 직후 이 확률로 상대를 독 상태로 만든다(독가시
+  // hitTrigger의 공격측 버전). 타입/특성 상태이상 면역·필드는 그대로 존중. 대타를 맞혔으면 본체엔
+  // 안 건다. 이미 다른 부가 상태이상이 걸린 경우는 중첩하지 않는다.
+  if (
+    attackerAbility?.poisonTouchChance !== undefined &&
+    (effectiveMove.makesContact ?? false) &&
+    hit &&
+    damage > 0 &&
+    !hitSubstitute &&
+    !inflictedStatus &&
+    !isImmuneToStatus("poison", defender.types, defenderAbility?.immuneToStatuses, attackerAbility?.bypassesPoisonTypeImmunity) &&
+    !isStatusBlockedByField(state.field, "poison") &&
+    random() * 100 < attackerAbility.poisonTouchChance
+  ) {
+    const before = defender.status.condition;
+    defender.status = inflictStatus(defender.status, "poison");
+    if (defender.status.condition !== before) inflictedStatus = defender.status.condition;
   }
 
   // 싱크로: 이번 행동으로 방어측이 지정된 상태이상에 걸렸으면(원인은 이 블록 — 상대 기술) 그
@@ -3358,6 +3430,7 @@ function resolveAction(
     abilityLoweredDefenderStats: abilityLoweredDefenderStats.length ? abilityLoweredDefenderStats : undefined,
     abilityAbsorbedMoveType,
     abilityAbsorbAbilityName,
+    soundproofBlockedByAbilityName,
     abilityAbsorbHealAmount: abilityAbsorbHealAmount || undefined,
     resetAllStages: effectiveMove.resetsAllStages || undefined,
     stolenItemName,
@@ -3608,6 +3681,29 @@ export function runTurn(
         }
       }
 
+      // 건조피부: 쾌청(강한 햇살)일 때 매 턴 종료 시 최대 HP의 1/8 피해. weatherEndOfTurnHealDenominator
+      // (비 회복)와 반대 축이며, 한 특성이 날씨에 따라 회복/피해를 나눠 갖는다.
+      const weatherDamageBoost = fighterAbility?.weatherEndOfTurnDamageDenominator;
+      if (
+        weatherDamageBoost &&
+        weatherDamageBoost.weather === activeWeather(state) &&
+        !isFainted(fighter) &&
+        !fighterAbility?.negatesIndirectDamage
+      ) {
+        const dmg = Math.min(fighter.currentHp, Math.floor(fighter.maxHp / weatherDamageBoost.denominator));
+        if (dmg > 0) {
+          fighter.currentHp -= dmg;
+          endOfTurn.push({
+            actor: key,
+            damage: dmg,
+            remainingHp: fighter.currentHp,
+            fainted: isFainted(fighter),
+            abilityWeatherDamage: dmg,
+            abilityWeatherDamageAbilityName: fighterAbility!.name,
+          });
+        }
+      }
+
       // 뿌리박기/아쿠아링: 걸려있는 동안 매 턴 종료 시 최대 HP 1/16 회복(큰뿌리 소지 시 1.3배)
       const regenSource = hasVolatile(fighter.volatile, "ingrain")
         ? "ingrain"
@@ -3725,23 +3821,46 @@ export function runTurn(
 
       if (fighter.status.condition) {
         const statusCondition = fighter.status.condition;
-        // 매직가드: 독·맹독·화상의 지속 데미지만 0으로 막는다 — 상태이상에 "걸린" 상태 자체와
-        // 맹독 카운터 누적(advanceStatusTurn)은 그대로 진행된다.
-        const damage = fighterAbility?.negatesIndirectDamage
-          ? 0
-          : computeStatusEndOfTurnDamage(fighter.status, fighter.maxHp);
-        fighter.currentHp = Math.max(0, fighter.currentHp - damage);
-        fighter.status = advanceStatusTurn(fighter.status);
-        // 잠듦/얼음/마비는 매턴 데미지가 없다(항상 0) — "상태이상 데미지 0"만 찍는 무의미한 줄을
-        // 막기 위해 실제로 데미지가 있을 때만 로그에 남긴다.
-        if (damage > 0) {
-          endOfTurn.push({
-            actor: key,
-            damage,
-            remainingHp: fighter.currentHp,
-            fainted: isFainted(fighter),
-            statusCondition,
-          });
+        // 포이즌힐: 독·맹독 상태면 지속 데미지 대신 최대 HP의 1/denominator를 회복한다. 맹독
+        // 카운터(advanceStatusTurn)는 그대로 누적된다.
+        const poisonHealDenom = fighterAbility?.healsFromPoisonEachTurnDenominator;
+        if (
+          poisonHealDenom &&
+          (statusCondition === "poison" || statusCondition === "badly-poisoned") &&
+          !isFainted(fighter)
+        ) {
+          const heal = Math.min(fighter.maxHp - fighter.currentHp, Math.floor(fighter.maxHp / poisonHealDenom));
+          fighter.currentHp += heal;
+          fighter.status = advanceStatusTurn(fighter.status);
+          if (heal > 0) {
+            endOfTurn.push({
+              actor: key,
+              damage: 0,
+              remainingHp: fighter.currentHp,
+              fainted: false,
+              poisonHealAmount: heal,
+              poisonHealAbilityName: fighterAbility!.name,
+            });
+          }
+        } else {
+          // 매직가드: 독·맹독·화상의 지속 데미지만 0으로 막는다 — 상태이상에 "걸린" 상태 자체와
+          // 맹독 카운터 누적(advanceStatusTurn)은 그대로 진행된다.
+          const damage = fighterAbility?.negatesIndirectDamage
+            ? 0
+            : computeStatusEndOfTurnDamage(fighter.status, fighter.maxHp);
+          fighter.currentHp = Math.max(0, fighter.currentHp - damage);
+          fighter.status = advanceStatusTurn(fighter.status);
+          // 잠듦/얼음/마비는 매턴 데미지가 없다(항상 0) — "상태이상 데미지 0"만 찍는 무의미한 줄을
+          // 막기 위해 실제로 데미지가 있을 때만 로그에 남긴다.
+          if (damage > 0) {
+            endOfTurn.push({
+              actor: key,
+              damage,
+              remainingHp: fighter.currentHp,
+              fainted: isFainted(fighter),
+              statusCondition,
+            });
+          }
         }
       }
 
