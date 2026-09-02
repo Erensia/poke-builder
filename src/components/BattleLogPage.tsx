@@ -351,6 +351,7 @@ export function BattleLogPage() {
               onPickPoints={() => setPicker({ kind: "points", side: "a" })}
               onToggleGender={setup.a.toggleGender}
               onCycleSizeForm={setup.a.cycleSizeForm}
+              onCycleFormVariant={setup.a.cycleFormVariant}
               hasSamples={slotPresets.presets.length > 0}
               onSaveAsSample={() => handleSaveSlotAsSample("a")}
               onOpenSamplePicker={() => setPicker({ kind: "slotPresets", side: "a" })}
@@ -367,6 +368,7 @@ export function BattleLogPage() {
               onPickPoints={() => setPicker({ kind: "points", side: "b" })}
               onToggleGender={setup.b.toggleGender}
               onCycleSizeForm={setup.b.cycleSizeForm}
+              onCycleFormVariant={setup.b.cycleFormVariant}
               hasSamples={slotPresets.presets.length > 0}
               onSaveAsSample={() => handleSaveSlotAsSample("b")}
               onOpenSamplePicker={() => setPicker({ kind: "slotPresets", side: "b" })}
@@ -664,6 +666,14 @@ export function BattleLogPage() {
                           ` — 자기자신을 공격했다! (${action.selfDamage} 데미지)`}
                         {action.blockedReason === "attract" && " — 헤롱헤롱에 빠져 행동 불가"}
                         {action.blockedReason === "psychicFieldPriority" && " — 사이코필드에 막혀 실패"}
+                        {action.blockedReason === "queenlyMajesty" && (
+                          <>
+                            {" — "}
+                            {actorName}
+                            {eunNeun(actorName)} {action.move.name}
+                            {eulReul(action.move.name)} 쓸 수 없다!
+                          </>
+                        )}
                         {!action.blockedReason &&
                           action.charging &&
                           (CHARGE_TURN_MESSAGE[action.move.id]
@@ -1056,6 +1066,36 @@ export function BattleLogPage() {
                       {!action.blockedReason && !!action.cheekPouchHeal && (
                         <div className="battle-turn-line is-muted">
                           볼주머니! 체력을 {action.cheekPouchHeal} 회복했다!
+                        </div>
+                      )}
+                      {/* 소울비트 — HP 소비 / HP 부족 실패 */}
+                      {!action.blockedReason && action.soulBeatFailed && (
+                        <div className="battle-turn-line is-muted">하지만 HP가 부족해 실패했다!</div>
+                      )}
+                      {!action.blockedReason && !!action.soulBeatHpCost && (
+                        <div className="battle-turn-line is-muted">
+                          {actorName}
+                          {eunNeun(actorName)} 혼을 실어 HP를 {action.soulBeatHpCost} 소비했다!
+                        </div>
+                      )}
+                      {/* 부리캐논 — 가열 중 접촉기로 맞아 공격자 화상 */}
+                      {!action.blockedReason && action.beakBlastBurnedAttacker && (
+                        <div className="battle-turn-line is-muted">
+                          가열된 부리에 데어 {actorName}
+                          {eunNeun(actorName)} 화상을 입었다!
+                        </div>
+                      )}
+                      {/* 토치카 — 접촉기를 막고 공격자를 독으로 */}
+                      {!action.blockedReason && action.protectContactInflictedStatus === "poison" && (
+                        <div className="battle-turn-line is-muted">
+                          {actorName}
+                          {eunNeun(actorName)} 토치카의 독에 당했다!
+                        </div>
+                      )}
+                      {/* 발끈 — HP 절반 이하가 되어 방어측 특수공격 상승 */}
+                      {!action.blockedReason && action.angerPointRaisedSpa && (
+                        <div className="battle-turn-line is-muted">
+                          {defenderName}의 {action.angerPointAbilityName}! {defenderName}의 특수공격이 올라갔다!
                         </div>
                       )}
                       {/* 인분 — 데미지 기술의 추가효과(상태이상·풀죽음·랭크하락·왕의징표석 풀죽음)를

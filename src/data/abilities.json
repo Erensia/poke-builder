@@ -1318,5 +1318,57 @@
     "name": "흡반",
     "description": "흡반으로 땅에 달라붙어 교체를 강제하는 기술·도구에 밀려나지 않는다. (배틀타워 리뉴얼로 교체가 도입되면 강제 교체 저항 지점에서 발동 — 현재 스키마만 반영, 배선 보류)",
     "preventsForcedSwitch": true
+  },
+  {
+    "id": "오기",
+    "name": "오기",
+    "description": "상대의 기술이나 특성으로 능력치가 떨어지면 오기가 생겨 공격이 2랭크 상승한다.",
+    "boostsStatOnOwnStatDrop": {
+      "stat": "atk",
+      "delta": 2
+    }
+  },
+  {
+    "id": "원격",
+    "name": "원격",
+    "description": "모든 기술을 상대에게 접촉하지 않고 사용할 수 있다. (까칠한피부·독가시·불꽃몸 등 접촉 반격 특성과 록키헬멧을 전부 무시한다)",
+    "movesIgnoreContact": true
+  },
+  {
+    "id": "스킬링크",
+    "name": "스킬링크",
+    "description": "연속 기술을 사용하면 항상 최고 횟수로 사용할 수 있다.",
+    "multiHitAlwaysMax": true
+  },
+  {
+    "id": "무도한행동",
+    "name": "무도한행동",
+    "description": "독/맹독 상태의 상대를 공격하면 반드시 급소에 맞는다.",
+    "alwaysCritsVsPoisonedTarget": true
+  },
+  {
+    "id": "발끈",
+    "name": "발끈",
+    "description": "상대의 공격으로 HP가 절반 이하가 되면 특수공격이 1랭크 상승한다. (상대의 기술에 의한 피격만 판정 — 모래바람·독·설치물 등 다른 경로는 발동하지 않는다)",
+    "raisesSpaWhenHalvedByMoveDamage": true
+  },
+  {
+    "id": "여왕의위엄",
+    "name": "여왕의위엄",
+    "description": "상대에게 위압감을 줘서 이쪽을 향한 선제 기술을 사용할 수 없게 한다. (특성·필드로 우선도가 오른 경우도 포함. 더블의 아군 보호는 미반영)",
+    "blocksOpponentPriorityMoves": true
+  },
+  {
+    "id": "리시버",
+    "name": "리시버",
+    "description": "쓰러진 같은 편의 특성을 이어받아 같은 특성이 된다. (더블 전용 — 1v1 시뮬레이터엔 같은 편이 없어 영향 없음)"
+  },
+  {
+    "id": "의기양양",
+    "name": "의기양양",
+    "description": "기운이 넘쳐서 잠듦 상태가 되지 않는다.",
+    "immuneToStatuses": [
+      "sleep"
+    ]
   }
 ]

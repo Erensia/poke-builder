@@ -82,6 +82,18 @@ function useBattleSetupSlot() {
     });
   }
 
+  /** 루가루암 계열 폼 변종을 다음 폼으로 돌린다(폼별 특성이 달라 특성 선택은 초기화) */
+  function cycleFormVariant() {
+    setSlot((prev) => {
+      if (!prev) return prev;
+      const forms = getPokemon(prev.pokemonId)?.formVariants;
+      if (!forms || forms.length === 0) return prev;
+      const currentId = prev.formVariant ?? forms.find((f) => f.standard)?.id ?? forms[0].id;
+      const idx = forms.findIndex((f) => f.id === currentId);
+      return { ...prev, formVariant: forms[(idx + 1) % forms.length].id, ability: null };
+    });
+  }
+
   function setPoint(stat: keyof AbilityPoints, value: number) {
     setSlot((prev) => {
       if (!prev) return prev;
@@ -115,6 +127,7 @@ function useBattleSetupSlot() {
     setNature,
     toggleGender,
     cycleSizeForm,
+    cycleFormVariant,
     setPoint,
     stepPoint,
   };

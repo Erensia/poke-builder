@@ -20,6 +20,8 @@ interface PartySlotCardProps {
   onToggleGender: () => void;
   /** 펌킨인 계열 크기 변종을 다음 크기로 순환 */
   onCycleSizeForm: () => void;
+  /** 루가루암 계열 폼 변종을 다음 폼으로 순환 */
+  onCycleFormVariant: () => void;
   /** 저장된 샘플(빌드)이 하나라도 있는지 — Phase 6 §1-3, 없으면 버튼 자체를 숨긴다 */
   hasSamples: boolean;
   /** 이 슬롯을 이름 붙여 샘플로 저장 */
@@ -40,6 +42,7 @@ export function PartySlotCard({
   onPickPoints,
   onToggleGender,
   onCycleSizeForm,
+  onCycleFormVariant,
   hasSamples,
   onSaveAsSample,
   onOpenSamplePicker,
@@ -169,6 +172,19 @@ export function PartySlotCard({
               {(() => {
                 const forms = pokemon.sizeForms;
                 const currentId = slot!.sizeForm ?? forms.find((f) => f.standard)?.id ?? forms[0].id;
+                return forms.find((f) => f.id === currentId)?.label ?? forms[0].label;
+              })()}
+            </span>
+          </button>
+        )}
+        {/* 루가루암 계열 폼 변종 — formVariants가 있는 종만 노출. 클릭하면 다음 폼으로 순환 */}
+        {pokemon.formVariants && (
+          <button type="button" className="party-meta-pip" onClick={onCycleFormVariant}>
+            <span className="party-meta-label">모습</span>
+            <span className="party-meta-value">
+              {(() => {
+                const forms = pokemon.formVariants;
+                const currentId = slot!.formVariant ?? forms.find((f) => f.standard)?.id ?? forms[0].id;
                 return forms.find((f) => f.id === currentId)?.label ?? forms[0].label;
               })()}
             </span>

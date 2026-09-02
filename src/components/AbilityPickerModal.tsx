@@ -2,6 +2,7 @@ import { Modal } from "./Modal";
 import { getAbility } from "../lib/data";
 import {
   getEffectiveForm,
+  getEffectiveAbilityList,
   getEffectiveHiddenAbilityId,
   megaBadgeLabel,
   type FormSource,
@@ -44,10 +45,12 @@ export function AbilityPickerModal({
     );
   }
 
-  // 냐오닉스처럼 숨겨진 특성이 성별로 갈리는 종은 슬롯 성별에 맞는 쪽 하나만 후보로 보여준다.
+  // 루가루암처럼 폼 변종이 있는 종은 그 폼의 abilities/hiddenAbility를 후보로 쓴다.
+  // 냐오닉스처럼 숨겨진 특성이 성별로 갈리는 종은 슬롯 성별에 맞는 쪽 하나만 보여준다.
+  const { abilities: normalAbilityIds } = getEffectiveAbilityList(pokemon, slot);
   const hiddenAbilityId = getEffectiveHiddenAbilityId(pokemon, slot);
   const candidates = [
-    ...pokemon.abilities.map((id) => ({ id, hidden: false })),
+    ...normalAbilityIds.map((id) => ({ id, hidden: false })),
     ...(hiddenAbilityId ? [{ id: hiddenAbilityId, hidden: true }] : []),
   ];
 

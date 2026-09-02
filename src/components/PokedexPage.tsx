@@ -147,6 +147,19 @@ function PokedexDetail({ pokemon, onSelectMove }: { pokemon: Pokemon; onSelectMo
             {pokemon.sizeForms.map((f) => `${f.label} 스피드 ${f.spe}·${f.weightKg}kg`).join(" / ")}
           </p>
         )}
+        {pokemon.formVariants && (
+          <ul className="pokedex-ability-list">
+            {pokemon.formVariants.map((f) => (
+              <li key={f.id}>
+                <strong>{f.label}</strong>
+                <p className="pokedex-ability-desc">
+                  {f.types.join("/")} · 종족값 {Object.values(f.baseStats).reduce((a, b) => a + b, 0)} · 특성{" "}
+                  {[...f.abilities, ...(f.hiddenAbility ? [`${f.hiddenAbility}(숨김)`] : [])].join(", ")}
+                </p>
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
 
       <section className="pokedex-detail-section">

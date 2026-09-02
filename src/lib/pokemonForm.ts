@@ -1,4 +1,4 @@
-import type { Pokemon, MegaEvolution, PokemonGender } from "../types/pokemon";
+import type { Pokemon, MegaEvolution, PokemonGender, FormVariant } from "../types/pokemon";
 import type { PokemonType } from "../types/pokemon-type";
 import type { BaseStats } from "../types/stats";
 
@@ -8,6 +8,15 @@ export interface FormSource {
   activeMegaForm?: string;
   /** 펌킨인 계열 크기 변종 선택값(Pokemon.sizeForms[].id). 없으면 종의 기준 크기 */
   sizeForm?: string;
+  /** 루가루암 계열 폼 변종 선택값(Pokemon.formVariants[].id). 없으면 종의 기준 폼 */
+  formVariant?: string;
+}
+
+/** pokemon.formVariants에서 slot이 고른 폼(기준 폼이면 undefined) */
+export function resolveFormVariant(pokemon: Pokemon, slot: { formVariant?: string }): FormVariant | undefined {
+  if (!pokemon.formVariants || !slot.formVariant) return undefined;
+  const fv = pokemon.formVariants.find((f) => f.id === slot.formVariant);
+  return fv && !fv.standard ? fv : undefined;
 }
 
 export interface EffectiveForm {
@@ -48,6 +57,17 @@ export function getEffectiveForm(pokemon: Pokemon, slot: FormSource): EffectiveF
       formLabel: mega.form,
     };
   }
+  // 폼 변종(루가루암 계열): 기준 폼이 아니면 타입·종족값·몸무게를 그 폼 값으로 통째로 덮어쓴다.
+  const fv = resolveFormVariant(pokemon, slot);
+  if (fv) {
+    return {
+      types: fv.types,
+      baseStats: fv.baseStats,
+      weightKg: fv.weightKg ?? pokemon.weightKg,
+      formLabel: fv.label,
+    };
+  }
+
   // 크기 변종(펌킨인 계열): 기준 크기가 아닌 변종을 골랐으면 spe·weightKg만 그 값으로 덮어쓴다.
   if (pokemon.sizeForms && slot.sizeForm) {
     const size = pokemon.sizeForms.find((s) => s.id === slot.sizeForm);
@@ -70,13 +90,26 @@ export function getEffectiveForm(pokemon: Pokemon, slot: FormSource): EffectiveF
 }
 
 /**
+ * 특성 선택 UI가 후보로 보여줄 abilities/hiddenAbility. 폼 변종(루가루암)을 골랐으면 그 폼의
+ * 목록을, 아니면 종의 기본값을 돌려준다. 냐오닉스 성별 분기는 getEffectiveHiddenAbilityId가 별도 처리.
+ */
+export function getEffectiveAbilityList(
+  pokemon: Pokemon,
+  slot: { formVariant?: string },
+): { abilities: string[]; hiddenAbility?: string } {
+  const fv = resolveFormVariant(pokemon, slot);
+  if (fv) return { abilities: fv.abilities, hiddenAbility: fv.hiddenAbility };
+  return { abilities: pokemon.abilities, hiddenAbility: pokemon.hiddenAbility };
+}
+
+/**
  * 특성 선택 UI에 보여줄 "숨겨진 특성" id. 냐오닉스처럼 genderedHiddenAbility가 있는 종은
  * 슬롯 성별(getEffectiveGender)에 맞는 쪽을, 그 외에는 pokemon.hiddenAbility를 그대로 돌려준다.
  * 숨겨진 특성이 없으면 undefined.
  */
 export function getEffectiveHiddenAbilityId(
   pokemon: Pokemon,
-  slot: GenderSource,
+  slot: GenderSource & { formVariant?: string },
 ): string | undefined {
   if (pokemon.genderedHiddenAbility) {
     const g = getEffectiveGender(pokemon, slot);
@@ -84,7 +117,7 @@ export function getEffectiveHiddenAbilityId(
       ? pokemon.genderedHiddenAbility.female
       : pokemon.genderedHiddenAbility.male;
   }
-  return pokemon.hiddenAbility;
+  return getEffectiveAbilityList(pokemon, slot).hiddenAbility;
 }
 
 /**

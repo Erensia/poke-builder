@@ -16,6 +16,7 @@ import {
 import {
   NO_STATUS_CONDITION,
   NO_VOLATILE_CONDITIONS,
+  type StatusCondition,
   type StatusConditionState,
   type VolatileCondition,
   type VolatileConditionState,
@@ -289,6 +290,8 @@ export interface BattleFighterState {
     contactPenalty?: { stat: BattleStatKey; delta: number };
     /** 니들가드가 접촉기를 막았을 때 공격자에게 줄 최대 HP 비율 데미지(니들가드=1/8) */
     contactDamageFraction?: number;
+    /** 토치카가 접촉기를 막았을 때 공격자에게 걸 주 상태이상(토치카=poison) */
+    contactStatus?: StatusCondition;
   };
   /**
    * 방어류 기술의 연속 성공 횟수. 다음 시도 성공 확률은 (1/3)^protectStreak. 계열이 아닌
@@ -879,6 +882,7 @@ export type ActionBlockReason =
   | "confusion"
   | "attract"
   | "psychicFieldPriority"
+  | "queenlyMajesty"
   | "usageCondition"
   | "moveRestricted";
 
@@ -1172,6 +1176,18 @@ export interface ActionLogEntry {
   abilityLoweredAttackerStats?: { stat: BattleStatKey; delta: number }[];
   /** 볼주머니 — 나무열매를 먹어 추가 회복이 발동했으면 그 회복량 */
   cheekPouchHeal?: number;
+  /** 부리캐논 가열 중 접촉기로 맞아 공격자가 화상을 입었으면 true */
+  beakBlastBurnedAttacker?: boolean;
+  /** 토치카가 접촉기를 막아 공격자에게 건 주 상태이상(poison) */
+  protectContactInflictedStatus?: StatusConditionState["condition"];
+  /** 발끈 — 상대 기술 데미지로 HP 절반 이하가 되어 방어측 특수공격이 올랐으면 true */
+  angerPointRaisedSpa?: boolean;
+  /** angerPointRaisedSpa를 발동시킨 특성 이름 */
+  angerPointAbilityName?: string;
+  /** 소울비트 — HP를 소비했으면 그 소비량 */
+  soulBeatHpCost?: number;
+  /** 소울비트 — 현재 HP가 소비량 이하라 실패했으면 true */
+  soulBeatFailed?: boolean;
   /** 저수처럼 absorbsType이 랭크업 대신 회복을 줄 때, 그 회복량 */
   abilityAbsorbHealAmount?: number;
   /** 흑안개처럼 이 행동으로 양쪽의 능력 랭크 변화가 전부 초기화됐으면 true */
@@ -1372,6 +1388,13 @@ function resolveAction(
   // 빠져 있어, 공격측이 틀깨기면 여기서 defenderAbility가 undefined가 되고 반사도 자연히 무산된다.)
   let defenderAbility = resolveEffectiveDefenderAbility(attackerAbility, rawDefenderAbility);
 
+  // 원격(Long Reach): 공격측이 이 특성이면 이번 기술의 접촉 판정을 통째로 없앤다. 이후 아래
+  // 모든 접촉 조건(hitTrigger·록키헬멧·단단한발톱·킹실드 접촉 페널티·부리캐논 화상 등)이
+  // effectiveMove/move의 makesContact를 보므로, 여기서 move를 갈아끼우면 전부 자동 반영된다.
+  if (attackerAbility?.movesIgnoreContact && move.makesContact) {
+    move = { ...move, makesContact: false };
+  }
+
   // 긴장감: "이 특성을 가진 쪽의 상대"가 나무열매를 못 쓴다 — 방향이 헷갈리기 쉬운데, 내(공격측)
   // 나무열매가 막히는 건 상대(방어측)가 긴장감을 가졌을 때고, 상대(방어측) 나무열매가 막히는 건
   // 내(공격측)가 긴장감을 가졌을 때다. defenderAbility는 이미 틀깨기가 반영된 값이라(긴장감은
@@ -1553,14 +1576,19 @@ function resolveAction(
   // 짓궂은마음으로 변화기 우선도가 올라간 경우도 반영해야 해서 원본 우선도가 아니라 특성
   // 보정을 더한 실제 우선도로 판정한다 — 단, 순풍·리플렉터·빛의장막처럼 상대를 겨냥하지 않는
   // 변화기는 우선도가 올라가 있어도 막히지 않는다(isOpponentTargetingMove가 그 축을 가른다).
-  if (
-    isPriorityMoveBlockedByField(
-      state.field,
-      move.priority + getAbilityPriorityBoost(move, attackerAbility, attacker.currentHp === attacker.maxHp),
-      move,
-    )
-  ) {
+  const effectivePriorityForBlock =
+    move.priority + getAbilityPriorityBoost(move, attackerAbility, attacker.currentHp === attacker.maxHp);
+  if (isPriorityMoveBlockedByField(state.field, effectivePriorityForBlock, move)) {
     return blocked("psychicFieldPriority");
+  }
+  // 여왕의위엄: 방어측이 이 특성이면 상대의 우선도 +1↑ 공격 기술이 자신을 겨냥할 때 실패한다.
+  // 사이코필드 차단과 같은 축(isOpponentTargetingMove) — 순풍·방어 같은 자기/필드 기술은 제외.
+  if (
+    defenderAbility?.blocksOpponentPriorityMoves &&
+    effectivePriorityForBlock >= 1 &&
+    isOpponentTargetingMove(move)
+  ) {
+    return blocked("queenlyMajesty");
   }
 
   // 3) 혼란: 매 행동 판정마다 지속 턴수를 소모하고, 1/3 확률로 자멸(물리 40위력 자가타격)한다.
@@ -2070,6 +2098,7 @@ function resolveAction(
   // 니들가드는 최대 HP 1/8 데미지. 막지 못했거나(blockedByProtect === false) 접촉기가 아니면 없다.
   let protectContactPenaltyMoveName: string | undefined;
   let protectContactDamage = 0;
+  let protectContactInflictedStatus: StatusConditionState["condition"] | undefined;
   if (blockedByProtect && defender.activeProtect && (effectiveMove.makesContact ?? false)) {
     const ap = defender.activeProtect;
     if (ap.contactPenalty) {
@@ -2082,6 +2111,19 @@ function resolveAction(
       attacker.currentHp = Math.max(0, attacker.currentHp - amount);
       protectContactDamage = amount;
       protectContactPenaltyMoveName = ap.moveName;
+    }
+    // 토치카: 접촉기를 막으면 공격자를 독 상태로 만든다(타입/특성 면역·필드 존중).
+    if (
+      ap.contactStatus &&
+      !isImmuneToStatus(ap.contactStatus, attacker.types, attackerAbility?.immuneToStatuses) &&
+      !isStatusBlockedByField(state.field, ap.contactStatus)
+    ) {
+      const before = attacker.status.condition;
+      attacker.status = inflictStatus(attacker.status, ap.contactStatus);
+      if (attacker.status.condition !== before) {
+        protectContactInflictedStatus = attacker.status.condition;
+        protectContactPenaltyMoveName = ap.moveName;
+      }
     }
   }
 
@@ -2130,6 +2172,9 @@ function resolveAction(
   let cheekPouchHeal = 0;
   // 아로마베일: 방어측이 이 특성이라 마음을 옭아매는 volatile(헤롱헤롱·도발·기술봉인·앙코르)을 막았을 때 그 특성 이름.
   let mentalMoveBlockedByAbilityName: string | undefined;
+  // 발끈: 상대 기술 데미지로 HP가 절반 이하가 되어 방어측 특수공격이 올랐을 때.
+  let angerPointRaisedSpa = false;
+  let angerPointAbilityName: string | undefined;
 
   // 지진이 땅속의 구멍파기를, 파도타기가 물속의 다이빙을 실제로 맞혔을 때의 위력 배가.
   // evadedByCharge가 false인데 defenderHideType이 있다는 건 bypassesHiding 예외로 명중했다는 뜻.
@@ -2145,9 +2190,15 @@ function resolveAction(
     // 대운: 급소율 카운터가 상시 +raisesCritStageBy(1). 조가비갑옷/전투무장: 방어측이면 급소 자체가 안 뜬다(alwaysCrit 포함).
     const critStageForHit =
       attacker.critStage + getItemCritStageBonus(attackerItem) + (attackerAbility?.raisesCritStageBy ?? 0);
+    // 무도한행동: 방어측이 독/맹독이면 항상 급소(조가비갑옷/전투무장 등 방어측 급소 방지는 존중).
+    const mercilessCrit =
+      !!attackerAbility?.alwaysCritsVsPoisonedTarget &&
+      (defender.status.condition === "poison" || defender.status.condition === "badly-poisoned");
     const critical =
       !defenderAbility?.preventsCritsAgainstSelf &&
-      (effectiveMove.alwaysCrit || random() < critChance(critStageForHit, effectiveMove.highCritRatio));
+      (effectiveMove.alwaysCrit ||
+        mercilessCrit ||
+        random() < critChance(critStageForHit, effectiveMove.highCritRatio));
     const ignoreBurnPenalty = ignoresBurnAttackPenalty(attackerAbility?.id, effectiveMove.id);
     const statusAttackMultiplier = computeStatusAttackMultiplier(
       attacker.status.condition,
@@ -2310,11 +2361,28 @@ function resolveAction(
       defender.currentHp = Math.max(0, defender.currentHp - disguiseRecoilDamage);
       return;
     }
+    const hpBeforeThisHit = defender.currentHp;
     defender.currentHp = Math.max(0, defender.currentHp - amount);
     // 미러코트/카운터용: 실제 HP로 받은 데미지를 카테고리별로 누적(대타 흡수분은 위에서 이미
     // return되어 제외). effectiveMove가 아니라 hitMove로 넘어와도 카테고리는 동일하다.
     if (amount > 0 && (effectiveMove.category === "physical" || effectiveMove.category === "special") && defender.damageTakenThisTurn) {
       defender.damageTakenThisTurn[effectiveMove.category] += amount;
+    }
+    // 발끈(포챔스판): 상대 기술 데미지로 HP가 처음으로 절반 이하가 되는 그 순간 특수공격 +1.
+    // 여기(applyDamageToDefender)는 기술 데미지 경로 전용이라 모래바람·독·설치물은 자연히 제외된다.
+    if (
+      amount > 0 &&
+      defenderAbility?.raisesSpaWhenHalvedByMoveDamage &&
+      !isFainted(defender) &&
+      hpBeforeThisHit * 2 > defender.maxHp &&
+      defender.currentHp * 2 <= defender.maxHp
+    ) {
+      const before = defender.stages.spa;
+      defender.stages = applyStageDelta(defender.stages, "spa", contraryDelta(defender, 1));
+      if (defender.stages.spa !== before) {
+        angerPointRaisedSpa = true;
+        angerPointAbilityName = defenderAbility.name;
+      }
     }
   }
 
@@ -2484,9 +2552,11 @@ function resolveAction(
     // 중단된다 — moves.json의 effect 텍스트에 이미 명시된 구분(사용자 확인). 급소는 다단히트
     // 종류와 무관하게 항상 타수마다 따로 판정한다(사용자 확인).
     const perHitAccuracyCheck = effectiveMove.multiHitPowers !== undefined;
-    const totalHits = perHitAccuracyCheck
-      ? effectiveMove.maxHits
-      : rollMultiHitCount(effectiveMove.minHits, effectiveMove.maxHits, random);
+    // 스킬링크: 2~5회 연속기를 항상 최대 횟수로 고정한다.
+    const totalHits =
+      perHitAccuracyCheck || attackerAbility?.multiHitAlwaysMax
+        ? effectiveMove.maxHits
+        : rollMultiHitCount(effectiveMove.minHits, effectiveMove.maxHits, random);
 
     let landed = 0;
     for (let i = 0; i < totalHits; i++) {
@@ -2750,6 +2820,20 @@ function resolveAction(
     }
   }
 
+  // 소울비트(costsHpFraction): 사용 시 최대 HP의 이 비율을 소비한다. 현재 HP가 소비량 이하면
+  // (=쓰면 기절) 실패해서 랭크업도 없다. 성공하면 statChanges(5스탯 +1) 적용 직전에 HP를 깎는다.
+  let costHpFailed = false;
+  let soulBeatHpCost = 0;
+  if (effectiveMove.costsHpFraction !== undefined) {
+    soulBeatHpCost = Math.floor(attacker.maxHp * effectiveMove.costsHpFraction);
+    if (attacker.currentHp <= soulBeatHpCost) {
+      costHpFailed = true;
+      soulBeatHpCost = 0;
+    } else {
+      attacker.currentHp -= soulBeatHpCost;
+    }
+  }
+
   // 기술 자신의 랭크/명중회피/급소 변화 적용 (칼춤, 그림자분신, 기충전 등).
   // attacker/defender는 state.a/state.b를 그대로 참조하고 있어 여기서 바꾼 값이 state에도 반영된다.
   const attackerStagesBeforeMoveChange = attacker.stages;
@@ -2757,7 +2841,7 @@ function resolveAction(
   // 확률부(chance) statChanges는 여기서 굴려서 통과한 항목만 남긴다(확정은 그대로). 인분이면
   // 상대 대상 항목은 굴림 없이 통째로 제거한다. 예전엔 applyMoveStatChanges가 chance를 굴리지
   // 않고 100%로 적용하던 버그가 있었다(불꽃춤 자기 특공↑ 50%·브레이크클로 상대 방어↓ 50%).
-  const rolledStatChanges = berryEatFailed
+  const rolledStatChanges = berryEatFailed || costHpFailed
     ? []
     : effectiveMove.statChanges?.filter((sc) => {
         if (secondaryEffectsBlockedByAbility && sc.target === "opponent") {
@@ -3025,6 +3109,25 @@ function resolveAction(
     const before = defender.status.condition;
     defender.status = inflictStatus(defender.status, "poison");
     if (defender.status.condition !== before) inflictedStatus = defender.status.condition;
+  }
+
+  // 부리캐논(Beak Blast): 방어측이 이번 턴 부리캐논을 골랐고 아직 발동 전(=공격측이 이번 턴 먼저
+  // 움직임)인데 공격측이 접촉기로 때리면, 가열된 부리에 데어 공격측이 화상을 입는다. 원격이면
+  // move.makesContact가 이미 false라 자연히 제외된다. 대타 피격은 접촉이 아니라 제외.
+  let beakBlastBurnedAttacker = false;
+  if (
+    defenderMove.burnsContactAttackerBeforeResolve &&
+    !movesSecond &&
+    (move.makesContact ?? false) &&
+    hit &&
+    !hitSubstitute &&
+    !isFainted(attacker) &&
+    !isImmuneToStatus("burn", attacker.types, attackerAbility?.immuneToStatuses) &&
+    !isStatusBlockedByField(state.field, "burn")
+  ) {
+    const before = attacker.status.condition;
+    attacker.status = inflictStatus(attacker.status, "burn");
+    if (attacker.status.condition !== before) beakBlastBurnedAttacker = true;
   }
 
   // 싱크로: 이번 행동으로 방어측이 지정된 상태이상에 걸렸으면(원인은 이 블록 — 상대 기술) 그
@@ -3454,6 +3557,7 @@ function resolveAction(
           moveName: effectiveMove.name,
           contactPenalty: effectiveMove.protectContactPenalty,
           contactDamageFraction: effectiveMove.protectContactDamageFraction,
+          contactStatus: effectiveMove.protectContactStatus,
         };
         // 태세엔 들어갔지만 상대가 자기 대상 기술만 냈으면 "막을 게 없어" 실패로 표기.
         if (targetedSelf) protectSucceeded = true;
@@ -3799,6 +3903,12 @@ function resolveAction(
     abilityLoweredAttackerStatsAbilityName,
     abilityLoweredAttackerStats: abilityLoweredAttackerStats.length ? abilityLoweredAttackerStats : undefined,
     cheekPouchHeal: cheekPouchHeal || undefined,
+    beakBlastBurnedAttacker: beakBlastBurnedAttacker || undefined,
+    protectContactInflictedStatus,
+    angerPointRaisedSpa: angerPointRaisedSpa || undefined,
+    angerPointAbilityName,
+    soulBeatHpCost: soulBeatHpCost || undefined,
+    soulBeatFailed: costHpFailed || undefined,
     abilityAbsorbHealAmount: abilityAbsorbHealAmount || undefined,
     resetAllStages: effectiveMove.resetsAllStages || undefined,
     stolenItemName,
@@ -3868,6 +3978,14 @@ export function runTurn(
     if (changedTo) {
       const nm = getPokemon(state[key].slot.pokemonId)?.name ?? "포켓몬";
       turnStartAnnouncements.push(`${nm}${eunNeun(nm)} ${changedTo} 타입이 되었다!`);
+    }
+  }
+
+  // 부리캐논(정신 집중류): 이 기술을 고른 턴 시작 시 "…은(는) 부리를 가열시켰다!"를 알린다.
+  for (const [key, mv] of [["a", moveA], ["b", moveB]] as const) {
+    if (mv.turnStartUserAnnouncement && !isFainted(state[key])) {
+      const nm = getPokemon(state[key].slot.pokemonId)?.name ?? "포켓몬";
+      turnStartAnnouncements.push(`${nm}${eunNeun(nm)} ${mv.turnStartUserAnnouncement}`);
     }
   }
 

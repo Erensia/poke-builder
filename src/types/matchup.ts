@@ -7,6 +7,8 @@ export interface MatchupSlot {
   activeMegaForm?: string;
   /** 펌킨인 계열 크기 변종 선택값(Pokemon.sizeForms[].id). 없으면 종의 기준 크기 */
   sizeForm?: string;
+  /** 루가루암 계열 폼 변종 선택값(Pokemon.formVariants[].id). 없으면 종의 기준 폼 */
+  formVariant?: string;
   ability: string | null;
   item: string | null;
   nature: string | null;

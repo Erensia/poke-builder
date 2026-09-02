@@ -151,6 +151,22 @@ export function useParty() {
     });
   }
 
+  /** 루가루암 계열 폼 변종을 다음 폼으로 돌린다. 폼별로 특성 목록이 달라 특성 선택은 초기화한다 */
+  function cycleFormVariant(slotIndex: number) {
+    setSlots((prev) => {
+      const slot = prev[slotIndex];
+      if (!slot) return prev;
+      const forms = getPokemon(slot.pokemonId)?.formVariants;
+      if (!forms || forms.length === 0) return prev;
+      const currentId = slot.formVariant ?? forms.find((f) => f.standard)?.id ?? forms[0].id;
+      const idx = forms.findIndex((f) => f.id === currentId);
+      const nextForm = forms[(idx + 1) % forms.length];
+      const next = [...prev] as PartySlots;
+      next[slotIndex] = { ...slot, formVariant: nextForm.id, ability: null };
+      return next;
+    });
+  }
+
   /** 합산 66 / 스탯당 32를 넘지 않도록 클램프해서 능력 포인트 한 스탯을 절대값으로 설정한다 (직접 입력용) */
   function setPoint(slotIndex: number, stat: keyof AbilityPoints, value: number) {
     setSlots((prev) => {
@@ -200,6 +216,7 @@ export function useParty() {
     setNature,
     toggleGender,
     cycleSizeForm,
+    cycleFormVariant,
     setPoint,
     stepPoint,
     resetParty,

@@ -492,3 +492,32 @@ hitsDefensiveStat?: "def" | "spd";
   - `숲의저주`(풀/변화) → `addsTypeToTarget:"풀"`. `핼러윈`(고스트/변화) → `addsTypeToTarget:"고스트"`. 명중 시 상대 `types`에 추가(배틀 끝까지, `BattleFighterState.addedType` — 의태/기분파 타입 재계산에도 재부착). `ActionLogEntry.addedTypeToTarget`.
   - `송전`(전기/변화 **pp20, 우선도 0** — 우선도 효과 없음) → `changesTargetMoveTypeThisTurn:"전기"`. 명중 + 공격측이 이번 턴 먼저 움직였을 때만(`!movesSecond`) 상대 이번 턴 기술 타입을 전기로 강제(`moveTypeOverrideThisTurn`, runTurn이 다음 턴 시작 시 해제). `ActionLogEntry.targetMoveTypeOverride`.
   - **스텁 유지**: `페어리록`(교체 봉쇄 — 1v1 무의미). **더블 전용 스텁**: `아로마미스트`(특방 +1 — 아군 대상이라 1v1 무대상). → post-1.0 백로그 대상.
+
+### 6-13. 7세대 반영 기록 (2026-09-02, 브랜치 `phase-7.5`)
+
+포챔스 7세대 입국몬 **14종** + 신규 특성 **8종(배선 6 / 스텁 2)** + 신규 기술 **10종**. `pokemon.json` 185→199, `moves.json` 462→472, `abilities.json` 166→174. staging: `docs/02_.../pokemon-champions-7gen-staging.json`. 검증(참조 무결성·id 유일성·BST 스팟체크·tsc·lint·build + 스모크 25종) 통과.
+
+- **종 14종**: 모크나이퍼·**모크나이퍼(히스이)**·어흥염·왕큰부리·모단단게·루가루암·더시마사리·만마드·염뉴트·달코퀸·하랑우탄·내던숭이·할비롱·짜랑고우거.
+- **리전폼**: `모크나이퍼(히스이)` (풀/격투, HA 원격→배짱, 37.0kg 사용자 제공값. name만 변경, id `히스이모크나이퍼` 유지).
+- **폼 변종 시스템 신설(`Pokemon.formVariants`)**: 종족값·타입·특성이 통째로 갈리는 폼용(크기 변종 `sizeForms`가 스피드·몸무게만 다른 것과 대비). `FormVariant{id,label,types,baseStats,abilities,hiddenAbility?,weightKg?,standard?}`, `PartySlot/MatchupSlot/FormSource.formVariant`. `getEffectiveForm`이 폼 값으로 타입·종족값·몸무게를 덮고, `getEffectiveAbilityList`가 특성 선택 UI 후보를 폼 목록으로 바꾼다. 파티·대전·매치업 카드에 "모습" 순환 pip(폼 전환 시 `ability: null`로 초기화). 도감에 폼별 요약 표시.
+  - **루가루암**: 한낮(기준, 바위, 날카로운눈·모래헤치기, HA 불굴의마음, spe112) / 한밤중(날카로운눈·**의기양양**, HA 노가드, HP85·spe82) / 황혼(단단한발톱 단일, HA 없음, atk117·spe110). learnset은 3폼 공통(황혼 Champions 학습기 미수집 — 한낮 기준 공용). 신규 특성 `의기양양`(`immuneToStatuses:["sleep"]`) 추가.
+- **염뉴트·달코퀸**: `female-only`. **모단단게·할비롱**: 위키 비공식 메가 — 메가진화 일괄 추가 시점에 반영 예정(이번 제외).
+
+- **신규 특성 8종 — 배선 6 / 스텁 2** (2026-09-02 사용자 확정. `ability.ts` 필드 신설: `movesIgnoreContact` · `multiHitAlwaysMax` · `alwaysCritsVsPoisonedTarget` · `raisesSpaWhenHalvedByMoveDamage` · `blocksOpponentPriorityMoves`):
+  - `오기` → `boostsStatOnOwnStatDrop:{atk,+2}` (승기의 공격판, 랭크 하락 시 발동).
+  - `원격` → `movesIgnoreContact`. resolveAction 진입부에서 `move.makesContact`를 false로 갈아끼워 까칠한피부·정전기·불꽃몸·독가시·미끈미끈·저주받은바디·나쁜손버릇·헤롱헤롱바디·록키헬멧·단단한발톱·킹실드/토치카 접촉 페널티·부리캐논 화상이 전부 무발동.
+  - `스킬링크` → `multiHitAlwaysMax`. 2~5회 연속기 명중 횟수를 `maxHits`로 고정(rollMultiHitCount 스킵).
+  - `무도한행동` → `alwaysCritsVsPoisonedTarget`. resolveHit 급소 판정에서 방어측이 poison/badly-poisoned면 급소 확정(조가비갑옷·전투무장 존중).
+  - `발끈`(포챔스판) → `raisesSpaWhenHalvedByMoveDamage`. `applyDamageToDefender`에서 이번 타로 HP가 처음 절반 이하가 되면 특수공격 +1 — 기술 데미지 경로 전용이라 모래바람·독·설치물은 자연히 제외. `ActionLogEntry.angerPointRaisedSpa`.
+  - `여왕의위엄` → `blocksOpponentPriorityMoves`. 사이코필드 우선도 차단 로직을 "이 특성 소유자를 방어측으로 둔" 상황에 적용(특성·필드 우선도 증가 포함, `isOpponentTargetingMove`). 신규 `blockedReason:"queenlyMajesty"` + 전용 문구 "(상대)은(는) (기술)을(를) 쓸 수 없다!".
+  - **스텁 유지**: `리시버`(더블 전용).
+
+- **신규 기술 10종** (수치·설명·태그·PP 2026-09-02 사용자 확정. `move.ts` 필드 신설: `costsHpFraction` · `protectContactStatus` · `burnsContactAttackerBeforeResolve` · `turnStartUserAnnouncement`):
+  - `3연화살`(격투/물리 90·100·**pp12**) → `highCritRatio` + 50% 상대 방어 -1 + 30% 풀죽음.
+  - `불꽃채찍`(불꽃/물리 **90**·100·**pp16**) → 100% 상대 방어 -1. `트로피컬킥`(풀/물리 **85**·100·**pp16**) → 100% 상대 공격 -1.
+  - `스케일노이즈`(드래곤/특수 110·100·**pp8**) → `classification:["소리"]` + 자신 방어 -1.
+  - `액셀록`(바위/물리 40·100·**우선도 +2**).
+  - `부리캐논`(비행/물리 **120**·100·**pp8**) → 힘껏펀치식 `priority:-3` + `priorityDisplay:"+5 / -3"`. `turnStartUserAnnouncement:"부리를 가열시켰다!"` (runTurn turnStartAnnouncements). `burnsContactAttackerBeforeResolve` — 이 기술을 고른 턴에 공격측이 먼저 움직여 접촉기로 때리면 그 공격자가 화상(원격이면 makesContact false라 자연 제외). `ActionLogEntry.beakBlastBurnedAttacker`.
+  - `소울비트`(드래곤/변화 **pp8**) → `costsHpFraction:0.3333` + `statChanges` 5스탯 +1. 현재 HP가 소비량 이하면 실패(랭크업 없음). `ActionLogEntry.soulBeatHpCost`/`soulBeatFailed`.
+  - `토치카`(독/변화 **pp8, 우선도 +4**) → `protectEffect:"block"` + `protectContactStatus:"poison"` (니들가드와 같은 방어류, 접촉기 막으면 공격자 독). `ActionLogEntry.protectContactInflictedStatus`.
+  - `그림자꿰매기`(고스트/물리 **90**·100·**pp12**) → 데미지만(교체 봉쇄는 배틀타워 리뉴얼 시 배선). `지휘`(**에스퍼**/변화 **pp16**) → 더블 전용 스텁.

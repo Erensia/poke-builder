@@ -596,4 +596,27 @@ export interface Move {
    * BattleFighterState.moveTypeOverrideThisTurn에 저장하고 턴 종료 시 해제한다.
    */
   changesTargetMoveTypeThisTurn?: PokemonType;
+  /**
+   * 소울비트(Clangorous Soul): 사용 시 자신의 최대 HP를 이 비율(1/3)만큼 소비하는 대신
+   * statChanges로 5스탯을 올린다. 현재 HP가 소비량 이하면(=쓰면 기절) 실패한다. HP 소비는
+   * statChanges 적용 직전에 처리한다.
+   */
+  costsHpFraction?: number;
+  /**
+   * 토치카(Baneful Bunker): 니들가드(protectContactDamageFraction)와 같은 방어류이면서, 접촉기를
+   * 막았을 때 그 공격자를 이 주 상태이상으로 만든다(토치카=poison). 타입/특성 상태이상 면역은
+   * 그대로 존중(기존 inflictStatus/isImmuneToStatus 경로 재사용). 킹실드의 protectContactPenalty와 독립.
+   */
+  protectContactStatus?: StatusCondition;
+  /**
+   * 부리캐논(Beak Blast): 힘껏펀치처럼 priority가 -3(항상 마지막)인 기술. 추가로 — 이 기술을 고른
+   * 그 턴에 이 포켓몬이 접촉기로 맞으면 그 공격자가 화상을 입는다. resolveAction에서 방어측
+   * defenderMove가 이 플래그를 가졌고 이번 공격이 접촉기로 명중하면 공격자에게 화상을 건다.
+   */
+  burnsContactAttackerBeforeResolve?: boolean;
+  /**
+   * 부리캐논: 이 기술을 고른 턴 시작 시 "(포켓몬)은(는) …" 형태로 안내한다(문구 뒷부분만 담는다 —
+   * 예: "부리를 가열시켰다!"). runTurn의 turnStartAnnouncements에 포켓몬 이름을 붙여 push한다.
+   */
+  turnStartUserAnnouncement?: string;
 }

@@ -29,6 +29,8 @@ interface MatchupSlotCardProps {
   onPickStages: () => void;
   /** 펌킨인 계열 크기 변종을 다음 크기로 순환 */
   onCycleSizeForm: () => void;
+  /** 루가루암 계열 폼 변종을 다음 폼으로 순환 */
+  onCycleFormVariant: () => void;
   onPickMove?: () => void;
   /** 저장된 샘플(빌드)이 하나라도 있는지 — Phase 6 §1-3, 없으면 버튼 자체를 숨긴다 */
   hasSamples: boolean;
@@ -71,6 +73,7 @@ export function MatchupSlotCard({
   onPickPoints,
   onPickStages,
   onCycleSizeForm,
+  onCycleFormVariant,
   onPickMove,
   hasSamples,
   onOpenSamplePicker,
@@ -207,6 +210,18 @@ export function MatchupSlotCard({
               {(() => {
                 const forms = pokemon.sizeForms;
                 const currentId = slot.sizeForm ?? forms.find((f) => f.standard)?.id ?? forms[0].id;
+                return forms.find((f) => f.id === currentId)?.label ?? forms[0].label;
+              })()}
+            </span>
+          </button>
+        )}
+        {pokemon?.formVariants && (
+          <button type="button" className="matchup-meta-pip" onClick={onCycleFormVariant}>
+            <span className="matchup-meta-label">모습</span>
+            <span className="matchup-meta-value">
+              {(() => {
+                const forms = pokemon.formVariants;
+                const currentId = slot.formVariant ?? forms.find((f) => f.standard)?.id ?? forms[0].id;
                 return forms.find((f) => f.id === currentId)?.label ?? forms[0].label;
               })()}
             </span>
