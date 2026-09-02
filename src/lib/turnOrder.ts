@@ -12,6 +12,8 @@ export interface TurnOrderActor {
   /** 이번 턴에 사용하는 기술. priority만 쓰지만, 향후 우선도 변경 특성/도구 확장을 고려해 Move 전체를 받는다 */
   move: Move;
   stages?: StatStages;
+  /** 시간벌기(Ability.movesLastInPriorityBracket): 같은 우선도 안에서는 스피드 무관하게 항상 마지막에 행동한다 */
+  movesLast?: boolean;
 }
 
 /**
@@ -32,6 +34,12 @@ export function compareTurnOrder(
 ): 0 | 1 {
   if (a.move.priority !== b.move.priority) {
     return a.move.priority > b.move.priority ? 0 : 1;
+  }
+
+  // 시간벌기: 우선도가 같을 때 한쪽만 "항상 마지막"이면 그쪽이 나중에 움직인다.
+  // 둘 다면 서로 상쇄돼 정상 스피드 비교로 넘어간다(본가 규칙).
+  if (!!a.movesLast !== !!b.movesLast) {
+    return a.movesLast ? 1 : 0;
   }
 
   const speedA = computeEffectiveSpeed(a.realSpeed, a.stages ?? NEUTRAL_STAGES);

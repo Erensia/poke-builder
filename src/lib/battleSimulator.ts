@@ -325,6 +325,39 @@ export function opponentKey(key: FighterKey): FighterKey {
   return key === "a" ? "b" : "a";
 }
 
+/** fighter의 현재 특성 객체(effectiveAbilityId 기준). 없으면 undefined */
+function abilityOf(fighter: BattleFighterState): Ability | undefined {
+  return fighter.effectiveAbilityId ? getAbility(fighter.effectiveAbilityId) : undefined;
+}
+
+/**
+ * 날씨부정(에어록/날씨부정): 양쪽 중 누구든 이 특성이면 날씨의 "부가효과"는 전부 무시된다.
+ * state.weather 자체와 weatherTurnsRemaining(지속 턴)은 그대로 두고, 데미지 배율·조건 특성·
+ * 웨더볼·틱 데미지 등 효과를 읽는 지점에서만 이 함수를 거쳐 undefined로 만든다.
+ */
+function activeWeather(state: BattleState): WeatherKind | undefined {
+  if (abilityOf(state.a)?.negatesWeather || abilityOf(state.b)?.negatesWeather) return undefined;
+  return state.weather;
+}
+
+/** 기분파(캐스퐁): 날씨별 타입. 쾌청→불꽃, 비→물, 눈→얼음, 그 외→노말 */
+const FORECAST_TYPE_BY_WEATHER: Partial<Record<WeatherKind, PokemonType>> = {
+  쾌청: "불꽃",
+  비: "물",
+  눈: "얼음",
+};
+
+/**
+ * 기분파 특성 소유자(캐스퐁)의 타입을 현재 유효 날씨(activeWeather)에 맞춰 다시 설정한다.
+ * 날씨부정이 걸려 있으면 노말로 되돌아간다. 변신 중이면 건드리지 않는다.
+ */
+function applyForecastForm(fighter: BattleFighterState, weather: WeatherKind | undefined): void {
+  if (fighter.transformed) return;
+  if (!abilityOf(fighter)?.weatherFormChange) return;
+  const next = (weather && FORECAST_TYPE_BY_WEATHER[weather]) || "노말";
+  fighter.types = [next];
+}
+
 /**
  * 파티 슬롯과 보유 기술 목록으로 초기 배틀 상태를 만든다. HP는 만HP로 시작하고,
  * 랭크·명중/회피/급소 카운터·상태이상은 전부 중립, PP는 각 기술의 최대치로 채운다.
@@ -577,7 +610,9 @@ function resolveEntryAbilityEffects(
     !aAbility?.revealsOpponentItemOnEntry &&
     !bAbility?.revealsOpponentItemOnEntry &&
     !aAbility?.transformsIntoOpponentOnEntry &&
-    !bAbility?.transformsIntoOpponentOnEntry
+    !bAbility?.transformsIntoOpponentOnEntry &&
+    !aAbility?.negatesWeather &&
+    !bAbility?.negatesWeather
   ) {
     return { field: undefined, fieldTurnsRemaining: undefined, announcements: [] };
   }
@@ -633,6 +668,11 @@ function resolveEntryAbilityEffects(
         `${pokemonName}의 ${ability.name}! ${pokemonName}${eunNeun(pokemonName)} ${opponentName}${roEuro(opponentName)} 변신했다!`,
       );
     }
+    // 날씨부정(에어록/날씨부정): 등장하자마자 두 줄로 알린다. 실제 날씨 무시 처리는 activeWeather가 담당.
+    if (ability.negatesWeather) {
+      announcements.push(`${pokemonName}의 ${ability.name}!`);
+      announcements.push(`날씨의 영향이 없어졌다!`);
+    }
     // 통찰: 상대가 도구를 지녔을 때만 두 줄로 알린다. 배틀 수치 영향 없음(정보 표시 전용).
     if (ability.revealsOpponentItemOnEntry && opponent.currentItemId) {
       const revealedItem = getItem(opponent.currentItemId);
@@ -668,7 +708,7 @@ export function createBattleState(
     announcements: abilityAnnouncements,
   } = resolveEntryAbilityEffects(a, fighterA, b, fighterB);
 
-  return {
+  const state: BattleState = {
     a: fighterA,
     b: fighterB,
     weather: resolvedWeather,
@@ -679,6 +719,10 @@ export function createBattleState(
     turnNumber: 0,
     entryAnnouncements: [...weatherAnnouncements, ...abilityAnnouncements],
   };
+  // 기분파(캐스퐁): 등장 시점의 유효 날씨(날씨부정 반영)에 맞춰 타입을 맞춰둔다.
+  applyForecastForm(state.a, activeWeather(state));
+  applyForecastForm(state.b, activeWeather(state));
+  return state;
 }
 
 /**
@@ -1029,6 +1073,10 @@ export interface EndOfTurnLogEntry {
   speedBoostAbilityName?: string;
   /** speedBoostAbilityName이 있는데 이미 스피드 +6이라 실제로는 안 올랐으면 true — "더 이상 올라가지 않는다!" 문구용 */
   speedBoostAtCap?: boolean;
+  /** 변덕쟁이: 턴 종료 시 랜덤 능력이 2랭크 올랐으면 [올라간 스탯, 내려간 스탯]과 특성 이름 */
+  moodyRaisedStat?: BattleStatKey;
+  moodyLoweredStat?: BattleStatKey;
+  moodyAbilityName?: string;
   /** 모래바람 틱 데미지면 true (damage에 실제 수치) — §1 F-3 */
   sandstormDamage?: boolean;
   /** 멸망의노래 카운트 안내(F-4) — 이번 턴 종료 시점의 남은 카운트(3→2→1) */
@@ -1214,7 +1262,7 @@ function resolveAction(
     return blocked("usageCondition");
   }
   // 오로라베일: 지정된 날씨(눈)가 아니면 실패한다
-  if (move.usageCondition === "weather-required" && state.weather !== move.requiresWeather) {
+  if (move.usageCondition === "weather-required" && activeWeather(state) !== move.requiresWeather) {
     return blocked("usageCondition");
   }
   // 비장의무기: 자신의 다른 기술(remainingPp에 등록된 id들)을 전부 한 번씩 사용하기 전까지는 실패.
@@ -1354,7 +1402,7 @@ function resolveAction(
         { userTypes: attacker.types },
       );
     }
-    const skipsCharge = move.chargeSkipWeather !== undefined && state.weather === move.chargeSkipWeather;
+    const skipsCharge = move.chargeSkipWeather !== undefined && activeWeather(state) === move.chargeSkipWeather;
     if (!skipsCharge) {
       attacker.chargingMoveId = move.id;
       return {
@@ -1489,7 +1537,7 @@ function resolveAction(
 
   // 웨더볼(날씨판 대지의파동): 날씨로 타입·위력이 바뀐다. 웨더볼과 fieldPulse를 동시에 갖는
   // 기술은 없어 순차 적용해도 안전하다.
-  const weatherBall = applyWeatherBall(categoryResolvedMove, state.weather);
+  const weatherBall = applyWeatherBall(categoryResolvedMove, activeWeather(state));
   const moveAfterWeatherBall: Move = { ...categoryResolvedMove, type: weatherBall.type, power: weatherBall.power };
 
   // 필드 조건부 타입/위력 변경(대지의파동=fieldPulse, 미스트버스트·와이드포스·라이징볼트=
@@ -1518,7 +1566,7 @@ function resolveAction(
     fieldAdjustedMove,
     defender.types,
     defenderAbility,
-    state.weather,
+    activeWeather(state),
     defenderItem,
     attacker.currentHp / attacker.maxHp,
     defender.currentHp === defender.maxHp,
@@ -1575,7 +1623,11 @@ function resolveAction(
   // 쓴다(getEffectiveForm.weightKg). weightKg 미입력이면 폴백.
   const weightOf = (fighter: BattleFighterState): number | undefined => {
     const pk = getPokemon(fighter.slot.pokemonId);
-    return pk ? getEffectiveForm(pk, fighter.slot).weightKg : undefined;
+    const baseKg = pk ? getEffectiveForm(pk, fighter.slot).weightKg : undefined;
+    if (baseKg === undefined) return undefined;
+    // 헤비메탈(2)·라이트메탈(0.5): 자신의 몸무게에 배율을 곱한다.
+    const mult = abilityOf(fighter)?.weightMultiplier ?? 1;
+    return baseKg * mult;
   };
   if (effectiveMove.weightRatioPower) {
     const userKg = weightOf(attacker);
@@ -1678,7 +1730,7 @@ function resolveAction(
   // 모래숨기(방어측, 날씨 조건부 0.8배)·복안(공격측 1.3배)을 전부 한 배율로 곱한다.
   const weatherAccuracyBoost = defenderAbility?.weatherOpponentAccuracyMultiplier;
   const abilityAccuracyMultiplier =
-    (weatherAccuracyBoost && weatherAccuracyBoost.weather === state.weather ? weatherAccuracyBoost.multiplier : 1) *
+    (weatherAccuracyBoost && weatherAccuracyBoost.weather === activeWeather(state) ? weatherAccuracyBoost.multiplier : 1) *
     (attackerAbility?.userAccuracyMultiplier ?? 1);
   const accuracyExtraMultiplier =
     getItemAccuracyMultiplier(attackerItem, defenderItem, movesSecond) * abilityAccuracyMultiplier;
@@ -1857,16 +1909,19 @@ function resolveAction(
    * (effectiveMove) 기준으로 판정하고, hitMove는 트리플악셀처럼 타수별 위력만 다를 때 쓴다.
    */
   function resolveHit(hitMove: Move): { damage: number; isCritical: boolean } {
+    // 대운: 급소율 카운터가 상시 +raisesCritStageBy(1). 조가비갑옷/전투무장: 방어측이면 급소 자체가 안 뜬다(alwaysCrit 포함).
+    const critStageForHit =
+      attacker.critStage + getItemCritStageBonus(attackerItem) + (attackerAbility?.raisesCritStageBy ?? 0);
     const critical =
-      effectiveMove.alwaysCrit ||
-      random() < critChance(attacker.critStage + getItemCritStageBonus(attackerItem), effectiveMove.highCritRatio);
+      !defenderAbility?.preventsCritsAgainstSelf &&
+      (effectiveMove.alwaysCrit || random() < critChance(critStageForHit, effectiveMove.highCritRatio));
     const ignoreBurnPenalty = ignoresBurnAttackPenalty(attackerAbility?.id, effectiveMove.id);
     const statusAttackMultiplier = computeStatusAttackMultiplier(
       attacker.status.condition,
       effectiveMove.category,
       ignoreBurnPenalty,
     );
-    const weatherMultiplier = getWeatherDamageMultiplier(state.weather, effectiveMove.type);
+    const weatherMultiplier = getWeatherDamageMultiplier(activeWeather(state), effectiveMove.type);
     const fieldMultiplier = getFieldDamageMultiplier(state.field, effectiveMove.type);
     const itemMultiplier = getItemOffenseMultiplier(
       attackerItem,
@@ -1933,6 +1988,8 @@ function resolveAction(
       defenderStages: defenderStagesForDamage,
       bulkMultiplier: abilityDefenseMultiplier * berryResult.bulkMultiplier * screenMultiplier,
       isCritical: critical,
+      // 스나이퍼: 급소 데미지 배율을 2.25로 올린다(기본 1.5).
+      critDamageMultiplier: attackerAbility?.critDamageMultiplier,
       randomRoll: MIN_DAMAGE_ROLL + random() * (1 - MIN_DAMAGE_ROLL),
     });
     let hitDamage = result?.damage ?? 0;
@@ -2560,7 +2617,7 @@ function resolveAction(
         continue;
       if (isStatusBlockedByField(state.field, effect.status)) continue;
       // 쾌청(강한 햇살) 날씨에서는 얼음 상태에 걸리지 않는다 — 타입 면역과는 다른 축이라 별도 확인
-      if (effect.status === "freeze" && state.weather === "쾌청") continue;
+      if (effect.status === "freeze" && activeWeather(state) === "쾌청") continue;
       const chance = effect.chance !== undefined ? effect.chance / 100 : 1;
       if (random() < chance) {
         const before = defender.status.condition;
@@ -2607,7 +2664,7 @@ function resolveAction(
     defenderAbility?.reflectsStatusToOpponent?.includes(inflictedStatus) &&
     !isImmuneToStatus(inflictedStatus, attacker.types, attackerAbility?.immuneToStatuses) &&
     !isStatusBlockedByField(state.field, inflictedStatus) &&
-    !(inflictedStatus === "freeze" && state.weather === "쾌청")
+    !(inflictedStatus === "freeze" && activeWeather(state) === "쾌청")
   ) {
     const beforeAttackerStatus = attacker.status.condition;
     attacker.status = inflictStatus(attacker.status, inflictedStatus);
@@ -2801,7 +2858,7 @@ function resolveAction(
     healedTarget = effectiveMove.healsTarget ?? "self";
     const healTarget = healedTarget === "self" ? attacker : defender;
     const fraction = effectiveMove.healsWeatherDependent
-      ? computeWeatherHealFraction(state.weather)
+      ? computeWeatherHealFraction(activeWeather(state))
       : effectiveMove.healsFraction!;
     healedAmount = Math.min(
       healTarget.maxHp - healTarget.currentHp,
@@ -3077,6 +3134,9 @@ function resolveAction(
         ? attackerItem.weatherDurationBonus.bonus
         : 0;
     state.weatherTurnsRemaining = WEATHER_DURATION + rockBonus;
+    // 기분파(캐스퐁): 날씨가 바뀌면 그 자리에서 타입을 다시 맞춘다.
+    applyForecastForm(state.a, activeWeather(state));
+    applyForecastForm(state.b, activeWeather(state));
   }
 
   // 리플렉터/빛의장막: 자신 쪽에 이미 같은 스크린이 걸려있으면 실패(필드/트릭룸과 같은 패턴).
@@ -3352,6 +3412,10 @@ export function runTurn(
   state.a.statStagesAtTurnStart = { ...state.a.stages };
   state.b.statStagesAtTurnStart = { ...state.b.stages };
 
+  // 기분파(캐스퐁): 턴 시작 시점의 유효 날씨(날씨부정 반영)에 맞춰 타입을 다시 맞춘다.
+  applyForecastForm(state.a, activeWeather(state));
+  applyForecastForm(state.b, activeWeather(state));
+
   const aAbilityForSpeed = state.a.effectiveAbilityId ? getAbility(state.a.effectiveAbilityId) : undefined;
   const bAbilityForSpeed = state.b.effectiveAbilityId ? getAbility(state.b.effectiveAbilityId) : undefined;
   // 서투름: 구애스카프 등 스피드 관련 도구 효과도 예외 없이 무효화된다.
@@ -3368,7 +3432,7 @@ export function runTurn(
   // 엽록소·쓱쓱·모래헤치기: 날씨가 일치할 때만 곱해진다(그 외엔 1)
   const getWeatherSpeedMultiplier = (ability: Ability | undefined): number => {
     const boost = ability?.weatherSpeedMultiplier;
-    return boost && boost.weather === state.weather ? boost.multiplier : 1;
+    return boost && boost.weather === activeWeather(state) ? boost.multiplier : 1;
   };
   // 구애스카프(1.5)·검은철구(0.5) — 상태이상 배율과 별개로 곱해진다
   // 곡예: 도구를 잃은 뒤로 배틀 끝까지 유지되는 2배 배율(unburdenActive)도 여기서 같이 곱한다.
@@ -3413,8 +3477,18 @@ export function runTurn(
   const firstIsA = quickClawWinner
     ? quickClawWinner === "a"
     : compareTurnOrder(
-        { realSpeed: speedA, move: priorityAdjustedMoveA, stages: state.a.stages },
-        { realSpeed: speedB, move: priorityAdjustedMoveB, stages: state.b.stages },
+        {
+          realSpeed: speedA,
+          move: priorityAdjustedMoveA,
+          stages: state.a.stages,
+          movesLast: aAbilityForSpeed?.movesLastInPriorityBracket,
+        },
+        {
+          realSpeed: speedB,
+          move: priorityAdjustedMoveB,
+          stages: state.b.stages,
+          movesLast: bAbilityForSpeed?.movesLastInPriorityBracket,
+        },
         random,
         trickRoomActive,
       ) === 0;
@@ -3516,7 +3590,7 @@ export function runTurn(
       // 1/denominator 회복. 먹다남은음식과 별개 축이라 같은 턴에 둘 다 발동할 수 있다.
       const fighterAbility = fighter.effectiveAbilityId ? getAbility(fighter.effectiveAbilityId) : undefined;
       const weatherHealBoost = fighterAbility?.weatherEndOfTurnHealDenominator;
-      if (weatherHealBoost && weatherHealBoost.weather === state.weather) {
+      if (weatherHealBoost && weatherHealBoost.weather === activeWeather(state)) {
         const abilityWeatherHeal = Math.min(
           fighter.maxHp - fighter.currentHp,
           Math.floor(fighter.maxHp / weatherHealBoost.denominator),
@@ -3630,7 +3704,7 @@ export function runTurn(
       // 매직가드·모래 관련 특성(모래숨기/모래의힘/모래날림/모래헤치기) 보유 시 면제.
       // (본가의 방진 특성·방진고글 도구는 포챔스에 없어 제외. 싸라기눈 틱도 없음.)
       if (
-        state.weather === "모래바람" &&
+        activeWeather(state) === "모래바람" &&
         !isFainted(fighter) &&
         !fighter.types.some((t) => t === "바위" || t === "땅" || t === "강철") &&
         !fighterAbility?.negatesIndirectDamage &&
@@ -3706,6 +3780,25 @@ export function runTurn(
         });
       }
 
+      // 변덕쟁이(Moody): 매 턴 종료 시 5스탯 중 하나를 랜덤으로 +2, 그와 다른 하나를 -1.
+      if (fighterAbility?.moodyRandomStages && !isFainted(fighter)) {
+        const MOODY_STATS: BattleStatKey[] = ["atk", "def", "spa", "spd", "spe"];
+        const raised = MOODY_STATS[Math.floor(random() * MOODY_STATS.length)];
+        const lowerPool = MOODY_STATS.filter((s) => s !== raised);
+        const lowered = lowerPool[Math.floor(random() * lowerPool.length)];
+        fighter.stages = applyStageDelta(fighter.stages, raised, 2);
+        fighter.stages = applyStageDelta(fighter.stages, lowered, -1);
+        endOfTurn.push({
+          actor: key,
+          damage: 0,
+          remainingHp: fighter.currentHp,
+          fainted: false,
+          moodyRaisedStat: raised,
+          moodyLoweredStat: lowered,
+          moodyAbilityName: fighterAbility.name,
+        });
+      }
+
       // 자뭉열매/오랭열매: 턴 종료 시점까지의 모든 HP 변화(필드 회복/먹다남은음식/씨뿌리기/상태이상
       // 데미지 등)가 끝난 뒤에도 다시 한번 확인한다 — 액션 중엔 안 걸렸다가 턴 종료 데미지로
       // 뒤늦게 1/2 이하가 되는 경우를 놓치지 않기 위해서다.
@@ -3773,6 +3866,9 @@ export function runTurn(
       state.weather = undefined;
       state.weatherTurnsRemaining = undefined;
       weatherExpired = true;
+      // 기분파(캐스퐁): 날씨가 사라지면 노말로 되돌린다.
+      applyForecastForm(state.a, activeWeather(state));
+      applyForecastForm(state.b, activeWeather(state));
     }
   }
 

@@ -8229,5 +8229,141 @@
     "tags": [],
     "makesContact": false,
     "drainFraction": 0.5
+  },
+  {
+    "id": "고드름떨구기",
+    "name": "고드름떨구기",
+    "type": "얼음",
+    "category": "physical",
+    "power": 85,
+    "accuracy": 90,
+    "pp": 12,
+    "priority": 0,
+    "effect": "큰 고드름을 격렬하게 부딪쳐서 공격한다. 30% 확률로 상대를 풀죽게 만든다.",
+    "tags": [
+      "비접촉",
+      "풀죽음"
+    ],
+    "makesContact": false,
+    "inflictsVolatile": [
+      {
+        "volatile": "flinch",
+        "target": "opponent",
+        "chance": 30
+      }
+    ]
+  },
+  {
+    "id": "발꿈치찍기",
+    "name": "발꿈치찍기",
+    "type": "격투",
+    "category": "physical",
+    "power": 120,
+    "accuracy": 90,
+    "pp": 12,
+    "priority": 0,
+    "effect": "발꿈치를 들어 올린 뒤 내리찍어 공격한다. 30%의 확률로 상대를 혼란 상태로 만든다. 빗나가면 자신이 전체 HP의 ½만큼 대미지를 입는다.",
+    "tags": [
+      "반동",
+      "접촉",
+      "혼란"
+    ],
+    "makesContact": true,
+    "crashFraction": 0.5,
+    "inflictsVolatile": [
+      {
+        "volatile": "confusion",
+        "target": "opponent",
+        "chance": 30
+      }
+    ]
+  },
+  {
+    "id": "얼음숨결",
+    "name": "얼음숨결",
+    "type": "얼음",
+    "category": "special",
+    "power": 60,
+    "accuracy": 90,
+    "pp": 12,
+    "priority": 0,
+    "effect": "차가운 숨결을 상대에게 내뿜어 공격한다. 반드시 급소에 맞는다.",
+    "tags": [
+      "급소-확정",
+      "비접촉"
+    ],
+    "makesContact": false,
+    "alwaysCrit": true
+  },
+  {
+    "id": "폭음파",
+    "name": "폭음파",
+    "type": "노말",
+    "category": "special",
+    "power": 140,
+    "accuracy": 100,
+    "pp": 12,
+    "priority": 0,
+    "effect": "무시무시한 폭음의 파괴력으로 주위에 있는 모든 포켓몬을 공격한다.",
+    "tags": [
+      "광역-전원",
+      "비접촉",
+      "소리"
+    ],
+    "classification": [
+      "소리"
+    ],
+    "makesContact": false
+  },
+  {
+    "id": "순서미루기",
+    "name": "순서미루기",
+    "type": "악",
+    "category": "status",
+    "power": null,
+    "accuracy": 100,
+    "pp": 16,
+    "priority": 0,
+    "effect": "상대를 억눌러서 행동의 순서를 마지막으로 만든다. 1대1에서는 행동 순서 조작이 엔진에 반영되어 있지 않아 효과가 없다.",
+    "tags": [],
+    "makesContact": false
+  },
+  {
+    "id": "절대영도",
+    "name": "절대영도",
+    "type": "얼음",
+    "category": "special",
+    "power": null,
+    "accuracy": 30,
+    "pp": 8,
+    "priority": 0,
+    "effect": "절대영도의 추위로 상대를 공격한다. 맞으면 일격에 기절한다. 아직 엔진에 일격필살 판정이 없어 명중해도 데미지가 들어가지 않는다.",
+    "tags": [
+      "일격",
+      "비접촉"
+    ],
+    "makesContact": false
+  },
+  {
+    "id": "치료방울",
+    "name": "치료방울",
+    "type": "노말",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 8,
+    "priority": 0,
+    "effect": "기분 좋은 방울 소리를 들려주어 같은편 전원의 상태 이상을 회복한다.",
+    "tags": [
+      "회복",
+      "소리"
+    ],
+    "classification": [
+      "소리"
+    ],
+    "makesContact": false,
+    "curesStatus": {
+      "target": "self"
+    }
   }
 ]

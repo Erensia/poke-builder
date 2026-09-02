@@ -378,6 +378,8 @@ export interface DamageOptions {
   bulkMultiplier?: number;
   /** 급소 여부. true면 급소 배율을 곱하고, 방어측 랭크 상승/공격측 랭크 하락은 무시한다(본가 규칙) */
   isCritical?: boolean;
+  /** 급소 데미지 배율 오버라이드(스나이퍼=2.25). 생략하면 기본 CRITICAL_DAMAGE_MULTIPLIER(1.5). */
+  critDamageMultiplier?: number;
   /** 0.85~1.00 사이 데미지 난수. 생략하면 1.00(최고값)으로 계산 — 최저/평균을 보고 싶으면 명시적으로 넘긴다 */
   randomRoll?: number;
 }
@@ -416,6 +418,7 @@ export function computeDamage(
     stabMultiplier = 1.5,
     bulkMultiplier = 1,
     isCritical = false,
+    critDamageMultiplier = CRITICAL_DAMAGE_MULTIPLIER,
     randomRoll = MAX_DAMAGE_ROLL,
   } = options;
 
@@ -437,7 +440,7 @@ export function computeDamage(
   const defenseStat = rawDefenseStat * defenseMultiplier;
 
   const stab = move.type && attackerTypes.includes(move.type) ? stabMultiplier : 1;
-  const critMultiplier = isCritical ? CRITICAL_DAMAGE_MULTIPLIER : 1;
+  const critMultiplier = isCritical ? critDamageMultiplier : 1;
 
   const base = Math.floor(Math.floor((LEVEL_50_TERM * move.power * attackStat) / defenseStat) / 50) + 2;
 

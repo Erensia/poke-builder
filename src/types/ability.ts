@@ -406,4 +406,55 @@ export interface Ability {
    * (HP 제외)·특성·능력 랭크·기술 목록을 상대와 똑같이 복사한다.
    */
   transformsIntoOpponentOnEntry?: boolean;
+  /**
+   * 대운: 자신이 공격할 때 급소율 카운터가 상시로 이 값만큼(대운=1) 오른다. 초점렌즈
+   * (Item.critStageBonus)·highCritRatio·기충전(critStage 랭크)과 같은 축에서 그냥 더해지므로,
+   * "기충전 + 급소율 높은 기술 + 대운"이면 카운터가 3(=100% 급소)에 도달한다.
+   */
+  raisesCritStageBy?: number;
+  /**
+   * 스나이퍼: 자신의 공격이 급소에 맞았을 때의 데미지 배율을 기본값(1.5) 대신 이 값(스나이퍼=2.25)
+   * 으로 쓴다. computeDamage의 critDamageMultiplier로 넘어간다.
+   */
+  critDamageMultiplier?: number;
+  /**
+   * 조가비갑옷·전투무장: 자신이 방어측일 때 상대의 공격이 급소에 맞지 않는다(alwaysCrit 기술도
+   * 포함해 전부 막는다 — 본가 규칙). resolveHit의 급소 판정에서 이 특성이면 항상 비급소로 고정.
+   */
+  preventsCritsAgainstSelf?: boolean;
+  /**
+   * 하드록·필터·프리즘아머: 자신이 받는 "효과가 굉장한"(타입 상성 > 1배) 공격의 데미지에 이 배율을
+   * 곱한다(하드록=0.75 → 데미지의 75%). resolveMoveContext에서 typeEffectiveness > 1일 때만
+   * abilityDefenseMultiplier(=내구력 배율, 데미지는 그 역수)에 반영된다.
+   */
+  reducesSuperEffectiveDamageMultiplier?: number;
+  /**
+   * 헤비메탈(2)·라이트메탈(0.5): 몸무게 관련 계산에서 자신의 몸무게에 이 배율을 곱한다. 헤비봄버·
+   * 히트스탬프(자신이 공격측일 때 위력 ↑)와 풀묶기·안다리걸기(자신이 방어측일 때 받는 데미지 ↑)
+   * 양쪽에 반영된다 — battleSimulator weightOf / matchupEvaluator의 폼 몸무게 조회 지점에서 곱한다.
+   */
+  weightMultiplier?: number;
+  /**
+   * 변덕쟁이: 매 턴 종료 시 5스탯(공격/방어/특공/특방/스피드) 중 하나가 2랭크 오르고, 그와 다른
+   * 하나가 1랭크 내려간다(랜덤). 가속(boostsSpeedEachTurnEnd)과 같은 턴 종료 훅에서 처리한다.
+   * 본가는 명중/회피 랭크도 대상이지만 이 로스터는 BattleStatKey 5종만 대상으로 한다.
+   */
+  moodyRandomStages?: boolean;
+  /**
+   * 시간벌기: 자신의 기술이 항상 "같은 우선도 안에서 가장 마지막"에 나간다(스피드 무관). 두 행동자가
+   * 모두 이 특성이면 우선도가 같을 때 정상 스피드 비교로 되돌아간다. compareTurnOrder에서 처리.
+   */
+  movesLastInPriorityBracket?: boolean;
+  /**
+   * 날씨부정(에어록/날씨부정): 자신이 필드에 있는 동안 모든 날씨의 부가효과가 사라진다 — 날씨
+   * 데미지 배율·날씨 조건 특성(엽록소·모래의힘·젖은접시·아이스바디 등)·웨더볼·모래바람 틱·쾌청
+   * 얼음면역이 전부 무시된다. 날씨 자체와 지속 턴 카운트는 그대로 흘러간다(activeWeather 헬퍼).
+   */
+  negatesWeather?: boolean;
+  /**
+   * 기분파(Forecast) — 캐스퐁 전용. 날씨에 따라 타입이 바뀐다: 쾌청→불꽃, 비→물, 눈→얼음,
+   * 그 외(모래바람·날씨 없음·날씨부정)→노말. battleSimulator가 턴 시작·날씨 변동·등장 시점에
+   * fighter.types를 다시 계산한다. 종족값·특성은 그대로.
+   */
+  weatherFormChange?: boolean;
 }

@@ -182,7 +182,8 @@
   {
     "id": "라이트메탈",
     "name": "라이트메탈",
-    "description": "몸무게가 절반이 된다."
+    "description": "몸무게가 절반이 된다. 헤비봄버 등 자신의 무게로 공격하는 기술의 위력이 내려가고, 풀묶기 등 무게로 공격받는 기술의 데미지도 작아진다.",
+    "weightMultiplier": 0.5
   },
   {
     "id": "모래숨기",
@@ -848,7 +849,8 @@
   {
     "id": "스나이퍼",
     "name": "스나이퍼",
-    "description": "급소에 맞혔을 때의 데미지가 평소보다 더 강해진다."
+    "description": "공격을 급소에 맞혔을 때의 데미지가 평소(1.5배)보다 강한 2.25배가 된다.",
+    "critDamageMultiplier": 2.25
   },
   {
     "id": "애널라이즈",
@@ -940,5 +942,103 @@
     "id": "방진",
     "name": "방진",
     "description": "모래바람·싸라기눈 등 날씨 대미지를 받지 않고, 가루 계열 기술(수면가루·버섯포자 등)도 통하지 않는다. (가루 면역·날씨 대미지 면역 미모델링 — 미배선)"
+  },
+  {
+    "id": "순수한힘",
+    "name": "순수한힘",
+    "description": "물리 기술의 위력이 2배가 된다.",
+    "modifiers": [
+      {
+        "scope": "offense",
+        "multiplier": 2,
+        "condition": {
+          "moveCategoryIn": [
+            "physical"
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "id": "마그마의무장",
+    "name": "마그마의무장",
+    "description": "몸을 뜨겁게 데워서 얼음 상태가 되지 않는다.",
+    "immuneToStatuses": [
+      "freeze"
+    ]
+  },
+  {
+    "id": "아이스바디",
+    "name": "아이스바디",
+    "description": "눈이 내리는 동안 매턴 최대 HP의 1/16을 회복한다.",
+    "weatherEndOfTurnHealDenominator": {
+      "weather": "눈",
+      "denominator": 16
+    }
+  },
+  {
+    "id": "하얀연기",
+    "name": "하얀연기",
+    "description": "하얀 연기로 몸을 보호하여 상대의 기술이나 특성으로 자신의 능력치가 떨어지지 않는다.",
+    "blocksOpponentStatDropsForStats": [
+      "atk",
+      "def",
+      "spa",
+      "spd",
+      "spe"
+    ]
+  },
+  {
+    "id": "기분파",
+    "name": "기분파",
+    "description": "날씨에 따라 모습과 타입이 바뀐다. 쾌청이면 불꽃, 비면 물, 눈이면 얼음, 그 외(모래바람·날씨 없음·날씨부정)에는 노말 타입이 된다.",
+    "weatherFormChange": true
+  },
+  {
+    "id": "날씨부정",
+    "name": "날씨부정",
+    "description": "이 포켓몬이 배틀에 있는 동안 모든 날씨의 부가효과가 사라진다(날씨 자체와 지속 턴 카운트는 그대로 흘러간다).",
+    "negatesWeather": true
+  },
+  {
+    "id": "대운",
+    "name": "대운",
+    "description": "강한 운을 지니고 있어 상대의 급소에 공격을 맞히기 쉽다. (급소율 카운터 상시 +1 — 기충전·초점렌즈 등과 겹치면 100% 급소)",
+    "raisesCritStageBy": 1
+  },
+  {
+    "id": "마이너스",
+    "name": "마이너스",
+    "description": "더블배틀에서 플러스·마이너스 특성의 아군이 있으면 특수공격이 상승한다. (1v1 시뮬레이터에서는 의미 없음 — 플러스와 동일, 미배선)"
+  },
+  {
+    "id": "변덕쟁이",
+    "name": "변덕쟁이",
+    "description": "매 턴 종료 시 5능력치(공격/방어/특공/특방/스피드) 중 하나가 랜덤으로 2랭크 오르고, 그와 다른 하나가 1랭크 내려간다.",
+    "moodyRandomStages": true
+  },
+  {
+    "id": "시간벌기",
+    "name": "시간벌기",
+    "description": "꾸물거려서 같은 우선도 안에서는 스피드와 무관하게 항상 가장 마지막에 행동한다.",
+    "movesLastInPriorityBracket": true
+  },
+  {
+    "id": "조가비갑옷",
+    "name": "조가비갑옷",
+    "description": "단단한 껍질로 몸을 보호하여 상대의 공격이 급소에 맞지 않는다.",
+    "preventsCritsAgainstSelf": true
+  },
+  {
+    "id": "하드록",
+    "name": "하드록",
+    "description": "효과가 굉장한 공격으로 받는 데미지가 25% 줄어든다(데미지 0.75배).",
+    "reducesSuperEffectiveDamageMultiplier": 0.75
+  },
+  {
+    "id": "헤비메탈",
+    "name": "헤비메탈",
+    "description": "자신의 몸무게가 2배가 된다. 헤비봄버 등 자신의 무게로 공격하는 기술의 위력이 오르고, 풀묶기 등 무게로 공격받는 기술의 데미지도 커진다.",
+    "weightMultiplier": 2
   }
 ]

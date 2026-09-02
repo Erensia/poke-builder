@@ -380,3 +380,35 @@ hitsDefensiveStat?: "def" | "spd";
     - `자기장조작`(전기/변화, pp 20): 플러스·마이너스 대상 방어·특방 +1 — 1v1 아군 없어 무의미(`statChanges` 미기재).
     - `썰렁개그` 사용 후 교체: 1v1 교체 없음(눈 설정만 반영).
   - **위력 추정치**(사용자 미회신 → 본가값): `독침천발 60` · `막치기 40`. 나머지는 사용자 확정.
+
+### 6-9. 3세대 반영 기록 (2026-09-02, 브랜치 `phase-7.5`)
+
+포챔스 3세대 입국몬 **13종**(현행 로스터 52종 제외) + 신규 특성 **13종** + 신규 기술 **7종**. `pokemon.json` 94→107, `moves.json` 434→441, `abilities.json` 123→136. staging 파일: `docs/02_.../pokemon-champions-3gen-staging.json`. 검증(참조 무결성·id 유일성·BST 스팟체크·tsc·lint·build + 스모크 38종) 통과.
+
+- **종 13종**: 깜까미·보스로라·요가램·썬더볼트·샤크니아·폭타·코터스·파비코리·캐스퐁·다크펫·치렁·앱솔·얼음귀신. 전부 단일 폼(지역폼·폼토글 없음).
+- **메가진화 제외**: staging `_readme` 방침대로 이번 병합에서 제외(깜까미·보스로라·요가램·썬더볼트·샤크니아·폭타·파비코리·다크펫·치렁·앱솔·얼음귀신 메가 — 앱솔은 레전즈 Z-A 전용 메가앱솔Z도 있음). 대응 메가스톤도 `items.json` 미반영.
+- **staging `dexNo`·`_flags` 필드**: `Pokemon` 스키마 밖이라 병합 시 제거.
+- **캐스퐁**: 기본(노말) 폼으로 등록하고, 배틀 중 날씨별 타입 변화는 `기분파` 특성 배선으로 처리(아래). 숨겨진 특성 없음(`hiddenAbility` 필드 생략).
+- **치렁**: 종족값 7세대 이후 기준(BST 455). 숨겨진 특성 없음.
+
+- **신규 특성 13종 — 사용자 지시로 전부 엔진 배선(마이너스만 스텁)** (2026-09-02, `ability.ts` 필드 9종 신설):
+  - `순수한힘` → `modifiers` offense ×2 physical (천하장사 선례).
+  - `마그마의무장` → `immuneToStatuses:["freeze"]` (얼음 상태 면역).
+  - `아이스바디` → `weatherEndOfTurnHealDenominator:{눈,16}` (젖은접시 선례).
+  - `하얀연기` → `blocksOpponentStatDropsForStats` 5스탯 (클리어바디 선례).
+  - `대운` → 신설 `raisesCritStageBy:1`. 급소율 카운터 상시 +1(초점렌즈·highCritRatio와 합산). `resolveHit`.
+  - `스나이퍼`(1세대 스텁 → 배선) → 신설 `critDamageMultiplier:2.25`. `computeDamage`의 급소 배율을 1.5 대신 2.25로. `DamageOptions.critDamageMultiplier` 신설.
+  - `조가비갑옷` → 신설 `preventsCritsAgainstSelf:true`. 방어측이면 `alwaysCrit` 기술 포함 급소 완전 차단. `resolveHit`.
+  - `하드록` → 신설 `reducesSuperEffectiveDamageMultiplier:0.75`. `resolveMoveContext`에서 `typeEffectiveness > 1`이면 `abilityDefenseMultiplier /= 0.75`(데미지 ×0.75). 매치업도 자동 반영.
+  - `헤비메탈`(2)·`라이트메탈`(1세대 스텁 → 배선, 0.5) → 신설 `weightMultiplier`. `battleSimulator.weightOf` / `matchupEvaluator`의 폼 몸무게 조회에 곱. 헤비봄버·풀묶기·안다리걸기 양방향.
+  - `변덕쟁이` → 신설 `moodyRandomStages:true`. 턴 종료(가속 훅 옆)에서 5스탯 중 랜덤 +2 / 다른 하나 -1. `EndOfTurnLogEntry.moody*` 필드. **본가와 달리 명중/회피 랭크는 대상에서 제외**(BattleStatKey 5종만).
+  - `시간벌기` → 신설 `movesLastInPriorityBracket:true`. `TurnOrderActor.movesLast` + `compareTurnOrder`가 우선도 동일 시 스피드 무시하고 후행(둘 다면 상쇄→정상 스피드). `evaluateSpeedMatchup`도 반영.
+  - `날씨부정` → 신설 `negatesWeather:true`. `battleSimulator.activeWeather(state)` 헬퍼로 날씨 데미지 배율·조건 특성(엽록소·모래의힘·젖은접시·아이스바디·모래숨기)·웨더볼·모래바람 틱·쾌청 얼음면역·광합성 회복량을 전부 무시. **날씨 자체와 지속 턴 카운트는 그대로**. 매치업(`effectiveWeather`)·스피드 매치업도 반영. 등장 시 2줄 안내("…의 날씨부정!" / "날씨의 영향이 없어졌다!").
+  - `기분파` → 신설 `weatherFormChange:true`. 캐스퐁 전용. `applyForecastForm`이 쾌청→불꽃·비→물·눈→얼음·그 외→노말로 `fighter.types`를 재설정 — 등장 시·턴 시작·날씨 변동·날씨 소멸 시점. `날씨부정`이 걸리면 노말. 매치업도 선택 날씨 기준으로 타입 조정.
+  - **스텁 유지**: `마이너스`(더블 전용, 1v1 무의미 — 플러스와 동일).
+
+- **신규 기술 7종** (수치·설명·태그·PP 전부 2026-09-02 사용자 확정):
+  - 배선 완료: `고드름떨구기`(얼음/물리 85·90·**pp12**, `inflictsVolatile` 풀죽음 30%) · `발꿈치찍기`(=Axe Kick, 격투/물리 120·90·**pp12**, `crashFraction:0.5` + `inflictsVolatile` 혼란 30%) · `얼음숨결`(얼음/특수 60·90·**pp12**, `alwaysCrit`) · `폭음파`(노말/특수 140·100·**pp12**, `classification:["소리"]`, 태그 광역-전원) · `치료방울`(노말/변화 **pp8**, `curesStatus:{target:"self"}` — 본가는 파티 전체지만 1v1이라 자신만, `classification:["소리"]`).
+  - **미배선(데이터 + effect 텍스트만)**:
+    - `절대영도`(얼음/특수, acc 30, pp 8): 일격필살 — 엔진에 일격기 축 없음(1세대 `가위자르기` 선례). 명중해도 무데미지, 태그 `일격`.
+    - `순서미루기`(**악/변화**, acc 100, pp 16): 상대를 "가장 마지막"에 행동하게(=본가 곤경 효과) — 1v1에서 행동 순서 조작 무의미, 미배선.

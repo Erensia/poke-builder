@@ -1407,6 +1407,12 @@ export function BattleLogPage() {
                           ? `${fighterLabel(battleState, e.actor)}의 스피드는 더 이상 올라가지 않는다!`
                           : "스피드가 올라갔다!"}
                       </>
+                    ) : e.moodyAbilityName && e.moodyRaisedStat && e.moodyLoweredStat ? (
+                      <>
+                        {fighterLabel(battleState, e.actor)}의 {e.moodyAbilityName}! {STAT_LABELS[e.moodyRaisedStat]}
+                        {"이(가)"} 크게 올라가고 {STAT_LABELS[e.moodyLoweredStat]}
+                        {"이(가)"} 떨어졌다!
+                      </>
                     ) : (
                       <>
                         {fighterLabel(battleState, e.actor)} 상태이상 데미지 {e.damage} (남은 HP {e.remainingHp})

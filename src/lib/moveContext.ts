@@ -55,7 +55,7 @@ export function resolveMoveContext(
         1,
       )
     : 1;
-  const abilityDefenseMultiplier = resolveAbilityDefense(
+  let abilityDefenseMultiplier = resolveAbilityDefense(
     defenderAbility,
     effectiveMove,
     defenderHpIsFull,
@@ -103,6 +103,12 @@ export function resolveMoveContext(
         : effectiveMove.type
           ? getEffectiveness(effectiveMove.type, defenderTypes, { bypassImmunity })
           : 1;
+
+  // 하드록/필터/프리즘아머: 효과가 굉장한(상성 > 1) 공격이면 데미지를 이 배율(0.75)로 줄인다.
+  // abilityDefenseMultiplier는 "내구력 배율"이라 데미지는 그 역수 — 데미지 ×0.75 = 내구력 ÷0.75.
+  if (defenderAbility?.reducesSuperEffectiveDamageMultiplier !== undefined && typeEffectiveness > 1) {
+    abilityDefenseMultiplier /= defenderAbility.reducesSuperEffectiveDamageMultiplier;
+  }
 
   return {
     effectiveMove,
