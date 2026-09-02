@@ -175,12 +175,29 @@ export function evaluateSlotMatchup(
     defenderSlot.nature,
   );
 
+  // 심술꾸러기(Contrary): 랭크 변화를 받는 쪽이 이 특성이면 move.statChanges의 delta 부호를 뒤집는다.
+  const contraryMove = (m: Move, invert: boolean | undefined): Move =>
+    !invert || !m.statChanges
+      ? m
+      : {
+          ...m,
+          statChanges: m.statChanges.map((s) => ({
+            ...s,
+            delta: s.delta === undefined ? undefined : -s.delta,
+            setTo: s.setTo === undefined ? undefined : -s.setTo,
+          })),
+        };
+
   // 이 기술 자체가 주는 랭크 변화(예: 칼춤을 쓴 다음 그 위력으로 계산하고 싶을 때)까지 반영
   const attackerStages = applyMoveOwnStatChanges
-    ? applyMoveStatChanges(baseAttackerStages, move, "self", { userTypes: attackerForm.types })
+    ? applyMoveStatChanges(baseAttackerStages, contraryMove(move, attackerAbility?.invertsStatChanges), "self", {
+        userTypes: attackerForm.types,
+      })
     : baseAttackerStages;
   const defenderStages = applyMoveOwnStatChanges
-    ? applyMoveStatChanges(baseDefenderStages, move, "opponent", { userTypes: attackerForm.types })
+    ? applyMoveStatChanges(baseDefenderStages, contraryMove(move, defenderAbility?.invertsStatChanges), "opponent", {
+        userTypes: attackerForm.types,
+      })
     : baseDefenderStages;
 
   // 지닌 도구: 직접 지정한 배율이 없으면 실제 장착한 도구에서 자동으로 구한다. defenderItem은

@@ -55,6 +55,7 @@ function defaultDuration(volatile: VolatileCondition, random: () => number): num
   if (volatile === "taunt") return TAUNT_DURATION;
   if (volatile === "disable") return DISABLE_DURATION;
   if (volatile === "encore") return ENCORE_DURATION;
+  if (volatile === "bound") return 4 + Math.floor(random() * 2); // 4~5턴
   return 1;
 }
 

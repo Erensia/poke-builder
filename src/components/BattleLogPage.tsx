@@ -64,6 +64,7 @@ const VOLATILE_LABELS = {
   disable: "사슬묶기",
   encore: "앙코르",
   attract: "헤롱헤롱",
+  bound: "속박",
 } as const;
 
 /** 액션 로그 한 줄 안에 "OO 발동!"으로 뭉뚱그리기보다 전용 문구를 따로 쓰는 volatile들 */
@@ -627,6 +628,11 @@ export function BattleLogPage() {
                 <div className="battle-turn-title">
                   턴 {turn.turnNumber} · 먼저 행동: {fighterLabel(battleState, turn.order[0])}
                 </div>
+                {turn.turnStartAnnouncements.map((text, i) => (
+                  <div key={`tsa-${i}`} className="battle-turn-line is-muted">
+                    {text}
+                  </div>
+                ))}
                 {turn.actions.map((action, i) => {
                   const actorName = fighterLabel(battleState, action.actor);
                   const defenderName = fighterLabel(battleState, opponentKey(action.actor));
@@ -696,9 +702,29 @@ export function BattleLogPage() {
                               : "상대 편 필드에 뾰족한 바위가 깔렸다!"}
                           </>
                         )}
+                        {!action.blockedReason && action.hit && action.spikesSetForSide && (
+                          <> · 상대 편 필드에 압정이 흩뿌려졌다!</>
+                        )}
                         {!action.blockedReason && action.hit && action.hazardSetFailed && (
                           <> · 그러나 실패했다!</>
                         )}
+                        {!action.blockedReason && action.hit && action.abilitySwappedTargetToName && (
+                          <> · {defenderName}의 특성이 {action.abilitySwappedTargetToName}(으)로 바뀌었다!</>
+                        )}
+                        {!action.blockedReason && action.hit && action.abilitySwapFailed && (
+                          <> · 그러나 실패했다!</>
+                        )}
+                        {!action.blockedReason && action.hit && action.mummifiedAttackerAbilityName && (
+                          <> · {defenderName}의 {action.mummifiedAttackerAbilityName}! {actorName}의 특성이 미라가 되었다!</>
+                        )}
+                        {!action.blockedReason && action.ateBerryName && (
+                          <>
+                            {" "}
+                            · {actorName}은(는) {action.ateBerryName}을(를) 먹었다!
+                            {!!action.ateBerryHeal && <> HP {action.ateBerryHeal} 회복!</>}
+                          </>
+                        )}
+                        {!action.blockedReason && action.berryEatFailed && <> · 그러나 나무열매가 없어 실패했다!</>}
                         {!action.blockedReason && action.hit && action.destroyedField && (
                           <> · {action.destroyedField} 파괴!</>
                         )}
@@ -1383,6 +1409,12 @@ export function BattleLogPage() {
                         {fighterLabel(battleState, e.actor)}
                         {eunNeun(fighterLabel(battleState, e.actor))} 모래바람에 시달리고 있다! {e.damage} 데미지 (남은
                         HP {e.remainingHp}){e.fainted && " · 기절!"}
+                      </>
+                    ) : e.boundDamage ? (
+                      <>
+                        {fighterLabel(battleState, e.actor)}
+                        {eunNeun(fighterLabel(battleState, e.actor))} 속박에서 벗어나지 못하고 있다! {e.damage} 데미지
+                        (남은 HP {e.remainingHp}){e.fainted && " · 기절!"}
                       </>
                     ) : e.perishFainted ? (
                       <>

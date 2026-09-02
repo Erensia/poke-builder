@@ -438,18 +438,28 @@ hitsDefensiveStat?: "def" | "spd";
 
 ### 6-11. 5세대 반영 기록 (2026-09-02, 브랜치 `phase-7.5`)
 
-포챔스 5세대 입국몬 **26종** + 신규 특성 **9종** + 신규 기술 **5종**. `pokemon.json` 131→157, `moves.json` 446→451, `abilities.json` 144→153. staging: `docs/02_.../pokemon-champions-5gen-staging.json`. 검증(참조 무결성·id 유일성·BST 스팟체크·tsc·lint·build) 통과. **1차 병합 완료 — 특성 배선 방침·기술 수치는 사용자 확정 대기.**
+포챔스 5세대 입국몬 **26종** + 신규 특성 **9종(+`단순` 스텁)** + 신규 기술 **5종**. `pokemon.json` 131→157, `moves.json` 446→451, `abilities.json` 144→154. staging: `docs/02_.../pokemon-champions-5gen-staging.json`. 검증(참조 무결성·id 유일성·BST 스팟체크·tsc·lint·build + 스모크 36종) 통과. 1차 병합(`d740323`) 후 특성 배선·기술 수치 사용자 확정 반영.
 
 - **종 26종**: 샤로다·염무왕·대검귀·**히스이 대검귀**·보르그·레파르다스·야나키·바오키·앗차키·몽얌나·다부니·노보청·펜드라·악비아르·데스니칸·더스트나·조로아크·란쿨루스·배바닐라·에몽가·저리더프·샹델라·툰베어·메더·**가라르 메더**·골루그.
 - **리전폼 2종**: `히스이대검귀`(물/악, 숨김특성 예리함) · `가라르메더`(땅/강철, 특성 의태 단일 — 숨김특성 없음). 각각 폼 전용 learnset·몸무게.
 - **성별/세대분기**: 골루그 `genderless`. 펜드라 숨김특성 `가속`(6세대+, 5세대는 속보). 악비아르·펜드라 종족값 6세대+, 툰베어 7세대+ 기준. 엠페르트 아님(4세대).
 - **메가진화/거다이맥스 제외**: 염무왕·다부니·펜드라·저리더프·샹델라·골루그 메가, 더스트나 거다이맥스 — 별도 처리. staging `dexNo`·`_flags` 제거.
 
-- **신규 특성 9종 — 1차: 배선 2 / 스텁 7** (사용자 확정 대기):
-  - 배선 = `전기엔진`(`absorbsType` 전기→스피드 +1 — **피뢰침** 패턴) · `눈치우기`(`weatherSpeedMultiplier:{눈,2}` — **쓱쓱/엽록소** 패턴).
-  - 스텁 7 = `예지몽`(등장 시 상대 최고위력기 감지 — 통찰 패턴으로 배선 가능) · `심술꾸러기`(랭크 변화 반전 — Contrary, 대응 필드 없음) · `악취`(공격 시 10% 풀죽음 — 독수와 같은 축) · `미라`(피격 시 상대 특성 교체) · `의태`(필드별 타입 변화) · `유폭`(접촉 KO 시 상대 1/4 데미지) · `치유의마음`(더블 전용, 1v1 무의미).
+- **신규 특성 9종 — 배선 8 / 스텁 1** (2026-09-02 사용자 확정. `ability.ts` 필드 6종 신설: `revealsStrongestOpponentMoveOnEntry`·`invertsStatChanges`·`flinchChanceOnHit`·`terrainTypeChange` + `AbilityHitTrigger.setsAttackerAbilityId`·`damagesContactAttackerFractionOnFaint`):
+  - `전기엔진` → `absorbsType` 전기→스피드 +1 (피뢰침 패턴).
+  - `눈치우기` → `weatherSpeedMultiplier:{눈,2}` (쓱쓱 패턴).
+  - `예지몽` → `resolveEntryAbilityEffects`에서 상대 최고위력기 감지 → `"…은(는) …을(를) 간파했다!"` (통찰 패턴).
+  - `심술꾸러기`(Contrary) → `contraryDelta`/`contraryMoveFor` 헬퍼로 랭크 변화 delta 부호 반전. 배선 지점: 기술 self/opponent statChanges·명중/회피 · 위협 등장 · absorbsType 자기 랭크업 · 킹실드 접촉 페널티 · hitTrigger 자기 랭크변화 · 불굴의마음 풀죽음 부스트 · 자기과신/마지막일침 KO 부스트 · 가속·변덕쟁이 EOT. 매치업도 `applyMoveOwnStatChanges` 반전. **미배선 엣지**: 흑안개·하양허브·미러아머 반사·토해내기 되돌림·승기(하락 판정) — 초기화/복구 축이라 반전 대상 아님.
+  - `악취` → `flinchChanceOnHit:10`. 왕의징표석(`getExtraFlinchTriggered`) 블록에 OR로 합류.
+  - `미라` → `hitTrigger{on:"contact", setsAttackerAbilityId:"미라"}`. 접촉 피격 시 공격자 `effectiveAbilityId`를 미라로. `ActionLogEntry.mummifiedAttackerAbilityName`.
+  - `의태`(Mimicry) → `terrainTypeChange`. `applyMimicryForm`이 턴 시작 시 필드별 타입(일렉트릭→전기·사이코→에스퍼·그래스→풀·미스트→페어리·없음→원래)으로 재설정. `TurnResult.turnStartAnnouncements` 신설 + `"…은(는) … 타입이 되었다!"`.
+  - `유폭`(Aftermath) → `hitTrigger{on:"contact", damagesContactAttackerFractionOnFaint:0.25}`. 접촉기로 이 포켓몬이 쓰러진 순간 공격자에게 공격자 최대 HP 1/4 (매직가드 면제).
+  - **스텁 유지**: `치유의마음`(더블 전용, 1v1 무의미).
+  - **신규 스텁 `단순`(Simple)**: 심플빔의 특성 교체 대상이라 엔트리는 추가하되 효과(랭크 변화 배증)는 대응 필드 없어 미배선.
 
-- **신규 기술 5종** — ⚠️ staging에 수치 없어 **본가값 임의 배정**, 사용자 확정 대기:
-  - `나이트버스트`(악/특수 85·95·10, 40% 상대 명중률 -1 — `statChanges` 배선) · `비검천중파`(악/물리 65·90·15, `classification:["베기"]`; 압정 설치는 1v1 무의미) · `집게덫`(강철/물리 35·100·15, 속박 미배선 — 조이기 선례) · `심플빔`(노말/변화, 특성 교체 미배선) · `볼가득넣기`(노말/변화, 자신 방어 +2 — 나무열매 소비는 미배선).
+- **신규 기술 5종** (수치·설명·태그·PP 2026-09-02 사용자 확정):
+  - `나이트버스트`(악/특수 **90·95·pp12**, 40% 상대 명중률 -1 — `statChanges`) · `비검천중파`(악/물리 65·90·**pp16**, `classification:["베기"]` + `setsHazard:"spikes"` — 명중 시 상대 진영 압정 상태. `BattleState.spikes` 신설, 스텔스록과 같은 축) · `집게덫`(강철/물리 35·100·**pp16**, `bindsTarget`) · `심플빔`(노말/변화 **pp16**, `setsTargetAbilityId:"단순"`) · `볼가득넣기`(노말/변화 **pp12**, `eatsHeldBerry` — 지닌 나무열매(이름 "열매" 접미)를 먹고 회복열매면 회복, 없으면 실패 + 자신 방어 +2).
+  - **속박(bound) volatile 신설**: 조이기·엉겨붙기·집게덫·모래지옥·바다회오리·회오리불꽃·김밥말이(`bindsTarget`) — 명중 시 4~5턴 속박, 매 턴 종료 시 최대 HP 1/8 손실(매직가드 면제), 카운터 0에서 자동 해제. `EndOfTurnLogEntry.boundDamage`. 1세대 `조이기` 미배선 스텁 해소.
+  - `압정뿌리기`도 `setsHazard:"spikes"` 보강(스텔스록 통일, 교체 없어 표시용).
 
-- **[별건 발견] `statChanges` 누락 광범위**: effect 텍스트엔 "N랭크 떨어뜨린다/올린다"가 있으나 `statChanges` 데이터가 비어 부가 랭크 변화가 발동하지 않는 기술이 **약 38종** 확인(깨물어부수기 20% 방어↓·섀도볼 20% 특방↓·머드샷/얼어붙은바람 스피드↓·강철날개 10% 방어↑ 등 상용기 다수). 반동-랭크 7종과 동일 원인. 별도 백필 작업 필요 — 사용자 확인 대기.
+- **[별건 완료] `statChanges` 누락 31종 백필**(커밋 `74ed6c2`): effect엔 랭크 변화가 있으나 `statChanges`가 빈 상용기 31종(깨물어부수기 20% 방어↓·섀도볼 20% 특방↓·머드샷/얼어붙은바람 스피드↓·강철날개 10% 방어↑·차지빔 70% 자신 특공↑·개척하기/니트로차지/고속스핀 자신 스피드↑ 등). effect·본가 수치대로. `엄습하는일격`은 effect 텍스트(특수공격)를 따름(본가 Lunge는 공격 — 텍스트 우선). 스킵: 메테오빔·일렉트로빔(chargeStatChanges)·킹실드(protectContactPenalty)·끈적끈적네트(교체 hazard)·경혈찌르기·자기장조작(의도적 스텁)·코칭(아군 전용). 스모크 10종 PASS.

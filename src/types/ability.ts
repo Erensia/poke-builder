@@ -103,6 +103,17 @@ export interface AbilityHitTrigger {
    * 방향이 정반대로, 피격측(이 특성 소유자)이 무도구일 때만 발동한다. on:"contact"와 함께 쓴다.
    */
   stealsAttackerItem?: boolean;
+  /**
+   * 미라(Mummy): 접촉기로 피격당하면 그 공격자의 특성을 이 id(="미라")로 바꾼다. on:"contact"와
+   * 함께 쓴다. 대타·면역 피격 시엔 무발동(triggerAbilityHitEffect 진입부 가드 공유).
+   */
+  setsAttackerAbilityId?: string;
+  /**
+   * 유폭(Aftermath): 접촉기로 이 포켓몬이 쓰러진 그 순간, 공격자에게 공격자 최대 HP의 이 비율만큼
+   * 데미지를 준다. 까칠한피부(damagesAttackerFraction)와 달리 "쓰러졌을 때만" 1회. 매직가드
+   * 공격자에겐 무효. on:"contact"와 함께 쓴다.
+   */
+  damagesContactAttackerFractionOnFaint?: number;
 }
 
 /**
@@ -492,4 +503,27 @@ export interface Ability {
    * 만든다(독가시 hitTrigger의 공격측 버전). 타입/특성 상태이상 면역은 그대로 존중.
    */
   poisonTouchChance?: number;
+  /**
+   * 악취(Stench): 데미지를 주는 기술로 공격했을 때 이 확률(%)로 상대를 추가로 풀죽게 만든다.
+   * 왕의징표석(Item.extraFlinchChance)의 특성 버전 — 같은 블록에서 OR로 판정한다.
+   */
+  flinchChanceOnHit?: number;
+  /**
+   * 예지몽(Forewarn): 배틀에 등장하는 순간 상대가 지닌 기술 중 가장 위력이 높은 기술을 UI 로그로
+   * 알린다(통찰·위험예지와 같은 정보 표시 훅). 배틀 수치 영향 없음.
+   */
+  revealsStrongestOpponentMoveOnEntry?: boolean;
+  /**
+   * 심술꾸러기(Contrary): 이 포켓몬의 능력치 랭크 변화가 전부 반대로 적용된다(오르면 내려가고
+   * 내려가면 올라간다). 기술·특성이 거는 의도적 랭크 변화(자기 것이든 상대가 건 것이든)에 적용되며,
+   * 흑안개·하양허브 같은 "초기화/복구"에는 적용되지 않는다. battleSimulator가 랭크 변경 지점에서
+   * delta를 부호 반전한다.
+   */
+  invertsStatChanges?: boolean;
+  /**
+   * 의태(Mimicry): 필드 상태에 따라 자신의 타입이 바뀐다 — 일렉트릭필드→전기, 사이코필드→에스퍼,
+   * 그래스필드→풀, 미스트필드→페어리, 필드 없음→원래 타입. battleSimulator가 턴 시작 시점에
+   * fighter.types를 다시 계산하고 바뀌면 turnStartAnnouncements로 알린다.
+   */
+  terrainTypeChange?: boolean;
 }

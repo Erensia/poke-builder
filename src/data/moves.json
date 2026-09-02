@@ -3127,7 +3127,8 @@
       "구속",
       "비접촉"
     ],
-    "makesContact": false
+    "makesContact": false,
+    "bindsTarget": true
   },
   {
     "id": "미러코트",
@@ -3160,7 +3161,8 @@
       "구속",
       "비접촉"
     ],
-    "makesContact": false
+    "makesContact": false,
+    "bindsTarget": true
   },
   {
     "id": "바디프레스",
@@ -5362,7 +5364,8 @@
       "구속",
       "비접촉"
     ],
-    "makesContact": false
+    "makesContact": false,
+    "bindsTarget": true
   },
   {
     "id": "병상첨병",
@@ -5731,7 +5734,8 @@
     "tags": [
       "장판"
     ],
-    "makesContact": false
+    "makesContact": false,
+    "setsHazard": "spikes"
   },
   {
     "id": "트릭플라워",
@@ -6999,7 +7003,8 @@
       "구속",
       "접촉"
     ],
-    "makesContact": true
+    "makesContact": true,
+    "bindsTarget": true
   },
   {
     "id": "날려버리기",
@@ -7776,7 +7781,8 @@
       "구속",
       "접촉"
     ],
-    "makesContact": true
+    "makesContact": true,
+    "bindsTarget": true
   },
   {
     "id": "파워셰어",
@@ -8329,11 +8335,12 @@
     "accuracy": 85,
     "pp": 20,
     "priority": 0,
-    "effect": "긴 몸이나 촉수 등으로 4-5턴 동안 상대를 옭아매어 조인다. (속박 지속 효과는 아직 엔진에 반영되지 않음)",
+    "effect": "긴 몸이나 촉수 등으로 4-5턴 동안 상대를 옭아매어 조인다.",
     "tags": [
       "접촉"
     ],
-    "makesContact": true
+    "makesContact": true,
+    "bindsTarget": true
   },
   {
     "id": "힘흡수",
@@ -8810,11 +8817,11 @@
     "name": "나이트버스트",
     "type": "악",
     "category": "special",
-    "power": 85,
+    "power": 90,
     "accuracy": 95,
-    "pp": 10,
+    "pp": 12,
     "priority": 0,
-    "effect": "새까만 충격파를 상대에게 발사해 공격한다. 40% 확률로 상대의 명중률을 1랭크 떨어뜨린다.",
+    "effect": "암흑의 충격파를 날려서 상대를 공격한다. 40% 확률로 명중률을 1랭크 떨어뜨린다.",
     "tags": [
       "랭크",
       "비접촉"
@@ -8836,17 +8843,19 @@
     "category": "physical",
     "power": 65,
     "accuracy": 90,
-    "pp": 15,
+    "pp": 16,
     "priority": 0,
-    "effect": "칼날을 휘둘러 벤 뒤 상대의 발밑에 압정을 뿌린다. 압정 설치는 교체가 없는 1대1에서는 효과가 없다.",
+    "effect": "조개껍질 검으로 공격한다. 조개껍질 파편은 압정이 되어 상대의 발밑에 흩어진다.",
     "tags": [
-      "베기",
-      "접촉"
+      "장판",
+      "접촉",
+      "베기"
     ],
     "classification": [
       "베기"
     ],
-    "makesContact": true
+    "makesContact": true,
+    "setsHazard": "spikes"
   },
   {
     "id": "집게덫",
@@ -8855,13 +8864,15 @@
     "category": "physical",
     "power": 35,
     "accuracy": 100,
-    "pp": 15,
+    "pp": 16,
     "priority": 0,
-    "effect": "집게 모양의 덫으로 상대를 물고 4-5턴 동안 옭아맨다. (속박 지속 효과는 아직 엔진에 반영되지 않음)",
+    "effect": "집게덫으로 붙잡은 뒤 4~5턴 동안 상대를 끼워서 움직임을 봉쇄한다.",
     "tags": [
-      "접촉"
+      "접촉",
+      "구속"
     ],
-    "makesContact": true
+    "makesContact": true,
+    "bindsTarget": true
   },
   {
     "id": "심플빔",
@@ -8870,11 +8881,12 @@
     "category": "status",
     "power": null,
     "accuracy": 100,
-    "pp": 15,
+    "pp": 16,
     "priority": 0,
-    "effect": "이상한 파동을 보내 상대의 특성을 단순으로 바꾼다. (특성 교체는 아직 엔진에 반영되지 않음)",
+    "effect": "수수께끼의 염력파를 상대에게 보낸다. 염력파를 받은 상대는 특성이 단순으로 바뀐다.",
     "tags": [],
-    "makesContact": false
+    "makesContact": false,
+    "setsTargetAbilityId": "단순"
   },
   {
     "id": "볼가득넣기",
@@ -8883,13 +8895,14 @@
     "category": "status",
     "power": null,
     "accuracy": null,
-    "pp": 10,
+    "pp": 12,
     "priority": 0,
-    "effect": "지닌 나무열매를 볼에 가득 넣고 먹어서 방어가 2랭크 오른다. 나무열매 소비는 아직 엔진에 반영되지 않아 방어 상승만 적용된다.",
+    "effect": "지니고 있는 나무열매를 먹고 방어를 2랭크 올린다.",
     "tags": [
       "랭크"
     ],
     "makesContact": false,
+    "eatsHeldBerry": true,
     "statChanges": [
       {
         "target": "self",
