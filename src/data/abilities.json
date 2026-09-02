@@ -1370,5 +1370,60 @@
     "immuneToStatuses": [
       "sleep"
     ]
+  },
+  {
+    "id": "전투무장",
+    "name": "전투무장",
+    "description": "튼튼한 갑옷으로 몸을 보호하여 상대의 공격이 급소에 맞지 않는다.",
+    "preventsCritsAgainstSelf": true
+  },
+  {
+    "id": "의욕",
+    "name": "의욕",
+    "description": "힘이 넘쳐서 물리 공격의 위력이 1.5배가 되지만 명중률이 0.8배가 된다.",
+    "hustleAttackMultiplier": 1.5,
+    "hustlePhysicalAccuracyMultiplier": 0.8
+  },
+  {
+    "id": "숙성",
+    "name": "숙성",
+    "description": "나무열매의 효과가 2배가 된다.",
+    "doublesBerryEffect": true
+  },
+  {
+    "id": "먹보",
+    "name": "먹보",
+    "description": "HP가 절반 이하가 되면 원래 위기 상황(1/4 이하)에서 먹는 나무열매를 미리 먹는다.",
+    "pinchBerryAtHalfHp": true
+  },
+  {
+    "id": "모래뿜기",
+    "name": "모래뿜기",
+    "description": "공격을 받으면 모래바람을 일으킨다.",
+    "hitTrigger": {
+      "on": "damaging",
+      "setsWeather": "모래바람"
+    }
+  },
+  {
+    "id": "배리어프리",
+    "name": "배리어프리",
+    "description": "배틀에 등장하면 서로의 리플렉터·빛의장막·오로라베일을 전부 없앤다.",
+    "clearsAllScreensOnEntry": true
+  },
+  {
+    "id": "떠도는영혼",
+    "name": "떠도는영혼",
+    "description": "접촉하는 기술로 공격당하면 상대와 특성을 맞바꾼다.",
+    "hitTrigger": {
+      "on": "contact",
+      "swapsAbilityWithAttacker": true
+    }
+  },
+  {
+    "id": "꼬르륵스위치",
+    "name": "꼬르륵스위치",
+    "description": "턴이 끝날 때마다 배부른모양/배고픈모양으로 번갈아 바뀐다. 모양에 따라 오라휠의 타입이 전기/악으로 달라진다.",
+    "hungerSwitch": true
   }
 ]

@@ -619,4 +619,25 @@ export interface Move {
    * 예: "부리를 가열시켰다!"). runTurn의 turnStartAnnouncements에 포켓몬 이름을 붙여 push한다.
    */
   turnStartUserAnnouncement?: string;
+  /**
+   * 마법가루(Magic Powder): 명중 시 상대의 타입을 이 타입 하나로 통째로 덮어쓴다(숲의저주의
+   * addsTypeToTarget이 "추가"인 것과 달리 이건 "치환"). BattleFighterState.types를 [이 타입]으로
+   * 바꾸고 배틀 끝까지 유지한다. addedType은 함께 지운다.
+   */
+  setsTargetType?: PokemonType;
+  /**
+   * 페이탈클로: 이 확률(%)로 statuses 목록 중 하나를 무작위로 골라 상대에게 건다. inflictsStatus가
+   * "고정된 하나를 확률로"라면 이건 "확률에 성공하면 그 중 랜덤 하나". 타입/특성 면역은 그대로 존중.
+   */
+  inflictsRandomStatus?: { chance: number; statuses: StatusCondition[] };
+  /**
+   * G의힘(Grav Apple): 현재 중력이 활성 상태면 위력에 이 배율(1.5)을 곱한다. (이 엔진엔 아직
+   * 중력 상태가 없어 상시 미발동 — 중력 도입 시 이 지점만 켜면 된다.)
+   */
+  powerMultiplierInGravity?: number;
+  /**
+   * 오라휠(Aura Wheel) — 모르페코 전용. 사용자의 꼬르륵스위치 모양(BattleFighterState.hungerMode)에
+   * 따라 실제 타입이 바뀐다: 배부른모양(full)=전기, 배고픈모양(hangry)=악. 모양이 없으면 full로 간주.
+   */
+  hungerSwitchType?: { full: PokemonType; hangry: PokemonType };
 }

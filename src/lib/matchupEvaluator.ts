@@ -376,10 +376,17 @@ export function evaluateSlotMatchup(
     if (ag !== null && dg !== null) rivalryMultiplier = ag === dg ? 1.25 : 0.75;
   }
 
+  // 의욕(Hustle): 물리 기술 위력 ×1.5. battleSimulator resolveHit의 hustleMultiplier 미러(명중률 페널티는
+  // 결정력 계산 대상이 아님).
+  const hustleMultiplier =
+    resolvedCategory === "physical" && attackerAbility?.hustleAttackMultiplier !== undefined
+      ? attackerAbility.hustleAttackMultiplier
+      : 1;
+
   // 상대 타입 상성을 곱하기 전의 결정력. offensePower는 여기에 typeEffectiveness만 곱한 값이라
   // 매번 다시 계산하는 대신 이 값에 typeEffectiveness를 곱해서 구한다.
   const rawOffensePower = computeOffensePower(attackerRealStats, attackerForm.types, effectiveMoveFinal, {
-    abilityMultiplier: (manualAbilityMultiplier ?? abilityOffenseMultiplier) * rivalryMultiplier,
+    abilityMultiplier: (manualAbilityMultiplier ?? abilityOffenseMultiplier) * rivalryMultiplier * hustleMultiplier,
     itemMultiplier: itemMultiplier ?? autoItemMultiplier,
     weatherMultiplier: manualWeatherMultiplier ?? autoWeatherDamageMultiplier,
     fieldMultiplier: manualFieldMultiplier ?? autoFieldDamageMultiplier,

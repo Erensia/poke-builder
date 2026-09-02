@@ -9356,5 +9356,247 @@
     "makesContact": false,
     "protectEffect": "block",
     "protectContactStatus": "poison"
+  },
+  {
+    "id": "사과산",
+    "name": "사과산",
+    "type": "풀",
+    "category": "special",
+    "power": 90,
+    "accuracy": 100,
+    "pp": 12,
+    "priority": 0,
+    "effect": "새콤한 사과에서 만들어 낸 산성 액체로 공격한다. 상대의 특수방어를 1랭크 떨어뜨린다.",
+    "tags": [
+      "랭크",
+      "비접촉"
+    ],
+    "makesContact": false,
+    "statChanges": [
+      {
+        "target": "opponent",
+        "stat": "spd",
+        "delta": -1
+      }
+    ]
+  },
+  {
+    "id": "배리어러시",
+    "name": "배리어러시",
+    "type": "에스퍼",
+    "category": "physical",
+    "power": 90,
+    "accuracy": 90,
+    "pp": 12,
+    "priority": 0,
+    "effect": "사념의 에너지를 두른 채로 상대에게 부딪친다. 자신의 방어를 1랭크 올린다.",
+    "tags": [
+      "랭크",
+      "접촉"
+    ],
+    "makesContact": true,
+    "statChanges": [
+      {
+        "target": "self",
+        "stat": "def",
+        "delta": 1
+      }
+    ]
+  },
+  {
+    "id": "배수의진",
+    "name": "배수의진",
+    "type": "격투",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 8,
+    "priority": 0,
+    "effect": "자신의 모든 능력이 올라가지만 교체하거나 도망칠 수 없게 된다. (도망·교체 봉쇄는 배틀타워 리뉴얼로 교체가 도입되면 배선 — 현재 5스탯 +1만)",
+    "tags": [
+      "랭크",
+      "고정-자신"
+    ],
+    "makesContact": false,
+    "statChanges": [
+      {
+        "target": "self",
+        "stat": "atk",
+        "delta": 1
+      },
+      {
+        "target": "self",
+        "stat": "def",
+        "delta": 1
+      },
+      {
+        "target": "self",
+        "stat": "spa",
+        "delta": 1
+      },
+      {
+        "target": "self",
+        "stat": "spd",
+        "delta": 1
+      },
+      {
+        "target": "self",
+        "stat": "spe",
+        "delta": 1
+      }
+    ]
+  },
+  {
+    "id": "오라휠",
+    "name": "오라휠",
+    "type": "전기",
+    "category": "physical",
+    "power": 110,
+    "accuracy": 100,
+    "pp": 12,
+    "priority": 0,
+    "effect": "볼주머니에 저장해 둔 에너지로 공격하고 자신의 스피드를 1랭크 올린다. 모르페코의 모습에 따라 타입이 바뀐다(배부른모양=전기 / 배고픈모양=악).",
+    "tags": [
+      "랭크",
+      "비접촉"
+    ],
+    "makesContact": false,
+    "statChanges": [
+      {
+        "target": "self",
+        "stat": "spe",
+        "delta": 1
+      }
+    ],
+    "hungerSwitchType": {
+      "full": "전기",
+      "hangry": "악"
+    }
+  },
+  {
+    "id": "암석액스",
+    "name": "암석액스",
+    "type": "바위",
+    "category": "physical",
+    "power": 65,
+    "accuracy": 90,
+    "pp": 16,
+    "priority": 0,
+    "effect": "암석 도끼로 공격한다. 흩어진 암석 파편은 상대의 주위에 떠다니게 된다(스텔스록 상태). 급소에 맞기 쉽다.",
+    "tags": [
+      "급소",
+      "장판",
+      "접촉",
+      "베기"
+    ],
+    "classification": [
+      "베기"
+    ],
+    "makesContact": true,
+    "highCritRatio": true,
+    "setsHazard": "stealthRock"
+  },
+  {
+    "id": "G의힘",
+    "name": "G의힘",
+    "type": "풀",
+    "category": "physical",
+    "power": 90,
+    "accuracy": 100,
+    "pp": 12,
+    "priority": 0,
+    "effect": "높은 곳에서 사과를 떨어뜨려서 데미지를 준다. 상대의 방어를 1랭크 떨어뜨린다. 중력이 강할 때 위력이 1.5배가 된다(중력 상태 미구현 — 상시 미발동).",
+    "tags": [
+      "랭크",
+      "비접촉"
+    ],
+    "makesContact": false,
+    "statChanges": [
+      {
+        "target": "opponent",
+        "stat": "def",
+        "delta": -1
+      }
+    ],
+    "powerMultiplierInGravity": 1.5
+  },
+  {
+    "id": "다과회",
+    "name": "다과회",
+    "type": "노말",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 12,
+    "priority": 0,
+    "effect": "다과회를 열어 지닌 나무열매를 먹는다. (섭취 조건 분기를 무시하고 즉시 섭취)",
+    "tags": [],
+    "makesContact": false,
+    "eatsHeldBerry": true
+  },
+  {
+    "id": "데코레이션",
+    "name": "데코레이션",
+    "type": "페어리",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 16,
+    "priority": 0,
+    "effect": "데코레이션을 해서 상대의 공격과 특수공격을 2랭크 올린다. (더블 전용 — 1v1 시뮬레이터엔 대상이 없어 스텁)",
+    "tags": [
+      "랭크"
+    ],
+    "makesContact": false
+  },
+  {
+    "id": "마법가루",
+    "name": "마법가루",
+    "type": "에스퍼",
+    "category": "status",
+    "power": null,
+    "accuracy": 100,
+    "pp": 20,
+    "priority": 0,
+    "effect": "마법가루를 날려서 상대를 단일 에스퍼 타입으로 바꾼다.",
+    "tags": [
+      "타입 변경",
+      "가루"
+    ],
+    "classification": [
+      "가루"
+    ],
+    "makesContact": false,
+    "setsTargetType": "에스퍼"
+  },
+  {
+    "id": "페이탈클로",
+    "name": "페이탈클로",
+    "type": "독",
+    "category": "physical",
+    "power": 80,
+    "accuracy": 100,
+    "pp": 16,
+    "priority": 0,
+    "effect": "치명적인 손톱으로 공격한다. 30% 확률로 상대를 독, 마비, 잠듦 중 하나의 상태로 만든다.",
+    "tags": [
+      "접촉",
+      "베기",
+      "독",
+      "마비",
+      "잠듦"
+    ],
+    "classification": [
+      "베기"
+    ],
+    "makesContact": true,
+    "inflictsRandomStatus": {
+      "chance": 30,
+      "statuses": [
+        "poison",
+        "paralysis",
+        "sleep"
+      ]
+    }
   }
 ]

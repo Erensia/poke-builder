@@ -115,6 +115,17 @@ export interface AbilityHitTrigger {
    */
   setsAttackerAbilityId?: string;
   /**
+   * 떠도는영혼(Wandering Spirit): 접촉기로 피격당하면 공격자와 특성(effectiveAbilityId)을 서로
+   * 맞바꾼다. 미라(setsAttackerAbilityId)의 양방향 스왑 버전 — 이 포켓몬은 공격자의 특성을 얻고,
+   * 공격자는 떠도는영혼을 얻는다. on:"contact"와 함께 쓴다.
+   */
+  swapsAbilityWithAttacker?: boolean;
+  /**
+   * 모래뿜기(Sand Spit): 데미지를 주는 기술로 피격당하면 날씨를 이 값(모래바람)으로 바꾼다(5턴).
+   * 가뭄류(setsWeather 상시 필드)와 달리 "맞을 때마다" 발동한다. on:"damaging"와 함께 쓴다.
+   */
+  setsWeather?: WeatherKind;
+  /**
    * 유폭(Aftermath): 접촉기로 이 포켓몬이 쓰러진 그 순간, 공격자에게 공격자 최대 HP의 이 비율만큼
    * 데미지를 준다. 까칠한피부(damagesAttackerFraction)와 달리 "쓰러졌을 때만" 1회. 매직가드
    * 공격자에겐 무효. on:"contact"와 함께 쓴다.
@@ -599,4 +610,36 @@ export interface Ability {
    * 전용 실패 문구: "(상대)은(는) (기술)을(를) 쓸 수 없다!"
    */
   blocksOpponentPriorityMoves?: boolean;
+  /**
+   * 의욕(Hustle): 자신의 물리 기술 위력에 이 배율(1.5)을 곱한다. computeDamage의 abilityMultiplier
+   * 축에 물리기일 때만 합쳐진다(근성의 화상 무시와는 별개 — 근성은 위력 배율이 없다).
+   */
+  hustleAttackMultiplier?: number;
+  /**
+   * 의욕(Hustle): 자신의 물리 기술 명중률에 이 배율(0.8)을 곱한다. 복안(userAccuracyMultiplier)과
+   * 같은 extraMultiplier 축이지만 물리기 한정이라 별도 필드로 뒀다. 필중기(accuracy=null)엔 영향 없음.
+   */
+  hustlePhysicalAccuracyMultiplier?: number;
+  /**
+   * 숙성(Ripen): 자신이 먹는 나무열매의 효과(HP 회복량·데미지 경감 등)가 2배가 된다.
+   * consumeItem이 나무열매를 감지하는 지점, 그리고 나무열매 회복량을 계산하는 지점에서 반영한다.
+   */
+  doublesBerryEffect?: boolean;
+  /**
+   * 먹보(Gluttony): 원래 HP 1/4 이하에서 발동하는 위기 나무열매(자뭉·오랭 등)를 HP 1/2 이하에서
+   * 미리 먹는다. 이 프로젝트는 위기 나무열매 baseline 문턱이 이미 1/2(getHpThresholdBerryHeal)이라
+   * 실질 효과가 없다 — 데이터만 반영하고 엔진 배선은 사실상 무의미.
+   */
+  pinchBerryAtHalfHp?: boolean;
+  /**
+   * 배리어프리(Screen Cleaner): 배틀에 등장하면 양쪽의 리플렉터·빛의장막·오로라베일을 전부
+   * 없앤다. resolveEntryAbilityEffects에서 처리(등장 시 1회).
+   */
+  clearsAllScreensOnEntry?: boolean;
+  /**
+   * 꼬르륵스위치(Hunger Switch) — 모르페코 전용. 매 턴 종료 시 배부른모양/배고픈모양으로 번갈아
+   * 바뀐다(BattleFighterState.hungerMode). 종족값·타입·특성은 동일하고, 오라휠(Move.hungerSwitchType)의
+   * 타입만 모양에 따라 달라진다.
+   */
+  hungerSwitch?: boolean;
 }

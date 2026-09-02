@@ -104,17 +104,20 @@ export function getMentalHerbCureResult(item: Item | undefined, alreadyConsumed:
 /**
  * 자뭉열매(1/4 회복)·오랭열매(고정 10 회복) — 체력이 최대 HP 1/2 이하가 되면 1회 자동 발동한다.
  * 두 도구 다 healsBelowHalfHp* 계열 필드 중 하나만 갖고 있어서 겹칠 일은 없다.
- * (본가에서 먹보가 바꾸는 게 이 1/4→1/2 문턱인데, 이 게임은 baseline이 이미 1/2이라 먹보는 무배선.)
+ * (본가에서 먹보가 바꾸는 게 이 1/4→1/2 문턱인데, 이 게임은 baseline이 이미 1/2이라 먹보는 사실상 무배선.)
+ * ripen(숙성)이면 회복량이 2배가 된다.
  */
 export function getHpThresholdBerryHeal(
   item: Item | undefined,
   currentHp: number,
   maxHp: number,
   alreadyConsumed: boolean,
+  ripen = false,
 ): number {
   if (alreadyConsumed || currentHp <= 0 || currentHp > maxHp / 2) return 0;
-  if (item?.healsBelowHalfHpDenominator) return Math.floor(maxHp / item.healsBelowHalfHpDenominator);
-  if (item?.healsBelowHalfHpFlat) return item.healsBelowHalfHpFlat;
+  const mult = ripen ? 2 : 1;
+  if (item?.healsBelowHalfHpDenominator) return Math.floor(maxHp / item.healsBelowHalfHpDenominator) * mult;
+  if (item?.healsBelowHalfHpFlat) return item.healsBelowHalfHpFlat * mult;
   return 0;
 }
 
@@ -123,12 +126,14 @@ export function getBerryDefenseResult(
   moveType: string | null,
   typeEffectiveness: number,
   alreadyConsumed: boolean,
+  ripen = false,
 ): { bulkMultiplier: number; consumed: boolean } {
   if (!item?.resistsSuperEffectiveType || alreadyConsumed) return { bulkMultiplier: 1, consumed: false };
   if (moveType !== item.resistsSuperEffectiveType || typeEffectiveness < 2) {
     return { bulkMultiplier: 1, consumed: false };
   }
-  return { bulkMultiplier: 2, consumed: true };
+  // 자바열매류는 데미지 1/2 경감(내구력 배율 2). 숙성이면 데미지 1/4로(내구력 배율 4).
+  return { bulkMultiplier: ripen ? 4 : 2, consumed: true };
 }
 
 /** 하양허브: 지닌 쪽의 랭크가 하나라도 마이너스면(자신이 내렸든 상대가 내렸든) 발동 후보가 된다 */

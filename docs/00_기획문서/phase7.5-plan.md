@@ -521,3 +521,32 @@ hitsDefensiveStat?: "def" | "spd";
   - `소울비트`(드래곤/변화 **pp8**) → `costsHpFraction:0.3333` + `statChanges` 5스탯 +1. 현재 HP가 소비량 이하면 실패(랭크업 없음). `ActionLogEntry.soulBeatHpCost`/`soulBeatFailed`.
   - `토치카`(독/변화 **pp8, 우선도 +4**) → `protectEffect:"block"` + `protectContactStatus:"poison"` (니들가드와 같은 방어류, 접촉기 막으면 공격자 독). `ActionLogEntry.protectContactInflictedStatus`.
   - `그림자꿰매기`(고스트/물리 **90**·100·**pp12**) → 데미지만(교체 봉쇄는 배틀타워 리뉴얼 시 배선). `지휘`(**에스퍼**/변화 **pp16**) → 더블 전용 스텁.
+
+### 6-14. 8세대 반영 기록 (2026-09-02, 브랜치 `phase-7.5`)
+
+포챔스 8세대 입국몬 **14종** + 신규 특성 **8종(배선 7 / 스텁 0)** + 신규 기술 **10종**. `pokemon.json` 199→213, `moves.json` 472→482, `abilities.json` 174→181. staging: `docs/02_.../pokemon-champions-8gen-staging.json`. 검증(참조 무결성·id 유일성·BST 스팟체크·tsc·lint·build + 스모크 19종) 통과.
+
+- **종 14종**: 애프룡·단지래플·사다이사·포트데스·브리무음·마임꽁꽁·데스판·마휘핑·대여르·모르페코·신비록·사마자르·포푸니크·장침바루. 전 종 단일폼.
+- **성별/특성**: 포트데스·대여르 `genderless`, 브리무음·마휘핑 `female-only`. 데스판·모르페코 숨김특성 없음.
+- **거다이맥스 제외**(애프룡·단지래플·사다이사·브리무음·마휘핑): 별도 스탯 세트가 아니라 형태 변경 메커니즘 → 미반영(사용자 확정: 포챔스에 미도입). **대여르**: 비공식 메가 → 메가진화 일괄 추가 시. **모르페코 배부른/배고픈모양**: 매 턴 자동 전환, 오라휠 타입만 영향(아래).
+
+- **신규 특성 8종 — 전부 배선** (2026-09-02 사용자 확정. `ability.ts` 필드 신설: `swapsAbilityWithAttacker` · `AbilityHitTrigger.setsWeather` · `hustleAttackMultiplier` · `hustlePhysicalAccuracyMultiplier` · `doublesBerryEffect` · `pinchBerryAtHalfHp` · `clearsAllScreensOnEntry` · `hungerSwitch`):
+  - `전투무장` → `preventsCritsAgainstSelf`(조가비갑옷과 동일).
+  - `의욕` → `hustleAttackMultiplier:1.5`(물리 위력 ×1.5, resolveHit·matchupEvaluator 미러) + `hustlePhysicalAccuracyMultiplier:0.8`(물리 명중률 ×0.8).
+  - `숙성` → `doublesBerryEffect`. `getHpThresholdBerryHeal`·`getBerryDefenseResult`·볼가득넣기 회복량에 `ripen` 인자로 2배.
+  - `먹보` → `pinchBerryAtHalfHp`. 이 프로젝트는 위기 나무열매 baseline 문턱이 이미 1/2이라 실질 무효과(데이터만 반영).
+  - `모래뿜기` → `hitTrigger{on:"damaging", setsWeather:"모래바람"}`. 피격 시 모래바람 5턴. `ActionLogEntry.sandSpitWeather`.
+  - `배리어프리` → `clearsAllScreensOnEntry`. `resolveEntryAbilityEffects`에서 양쪽 screens 초기화(속도 순서 무관, 1회).
+  - `떠도는영혼` → `hitTrigger{on:"contact", swapsAbilityWithAttacker}`. 접촉 피격 시 공격자와 `effectiveAbilityId` 교환(미라와 유사, 양방향). `ActionLogEntry.wanderingSpiritSwapped`.
+  - `꼬르륵스위치` → `hungerSwitch`. `BattleFighterState.hungerMode:"full"|"hangry"`(기본 full), 매 턴 종료 시 토글. `EndOfTurnLogEntry.hungerModeChangedTo`.
+
+- **신규 기술 10종** (수치·설명·태그·PP 2026-09-02 사용자 확정. `move.ts` 필드 신설: `setsTargetType` · `inflictsRandomStatus` · `powerMultiplierInGravity` · `hungerSwitchType`):
+  - `사과산`(풀/특수 **90**·100·**pp12**) → 100% 상대 특방 -1. `배리어러시`(에스퍼/물리 **90**·90·**pp12**) → 100% 자신 방어 +1.
+  - `배수의진`(격투/변화 **pp8**) → `statChanges` 자신 5스탯 +1(도망·교체 봉쇄는 배틀타워 리뉴얼 시).
+  - `오라휠`(전기/물리 110·100·**pp12**) → 100% 자신 스피드 +1 + `hungerSwitchType:{full:"전기", hangry:"악"}`. resolveAction에서 사용자 hungerMode로 타입 치환(자속·상성 전부 새 타입 기준).
+  - `암석액스`(바위/물리 65·90·**pp16**, **접촉**) → `highCritRatio` + `setsHazard:"stealthRock"`.
+  - `G의힘`(풀/물리 90·100·**pp12**) → 100% 상대 방어 -1. `powerMultiplierInGravity:1.5`는 이 엔진에 중력 상태가 없어 상시 미발동(중력 도입 시 이 필드만 켜면 됨).
+  - `다과회`(노말/변화 **pp12**) → `eatsHeldBerry`(섭취 조건 무시하고 즉시 나무열매 섭취).
+  - `마법가루`(에스퍼/변화 **pp20**) → `setsTargetType:"에스퍼"`(숲의저주의 "추가"와 달리 상대 타입을 에스퍼 단일로 "치환", 배틀 끝까지). `ActionLogEntry.overwroteTargetType`.
+  - `페이탈클로`(독/물리 80·100·**pp16**) → `inflictsRandomStatus:{chance:30, statuses:["poison","paralysis","sleep"]}`(확률 성공 시 셋 중 랜덤 하나, 면역 존중).
+  - **더블 전용 스텁**: `데코레이션`(아군 공격·특공 +2).

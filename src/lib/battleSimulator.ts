@@ -318,6 +318,11 @@ export interface BattleFighterState {
    * 이 값으로 강제된다. runTurn이 턴 종료 시 지운다.
    */
   moveTypeOverrideThisTurn?: PokemonType;
+  /**
+   * 꼬르륵스위치(모르페코): 배부른모양(full)/배고픈모양(hangry). 매 턴 종료 시 토글되고, 오라휠의
+   * 타입이 이 값에 따라 전기/악으로 갈린다. 비-모르페코는 항상 "full"로 두면 아무 영향이 없다.
+   */
+  hungerMode?: "full" | "hangry";
 }
 
 /** 두 포켓몬(a/b)을 마주 세운 배틀 상태 */
@@ -482,6 +487,7 @@ export function createFighterState(slot: EvaluatorSlot, moves: Move[]): BattleFi
     ownMoveTypeBoosts: {},
     stanceChangeForms: pokemon.stanceChangeForms,
     currentStanceForm: pokemon.stanceChangeForms ? "shield" : undefined,
+    hungerMode: "full",
   };
 }
 
@@ -720,7 +726,9 @@ function resolveEntryAbilityEffects(
     !aAbility?.revealsThreateningMovesOnEntry &&
     !bAbility?.revealsThreateningMovesOnEntry &&
     !aAbility?.revealsStrongestOpponentMoveOnEntry &&
-    !bAbility?.revealsStrongestOpponentMoveOnEntry
+    !bAbility?.revealsStrongestOpponentMoveOnEntry &&
+    !aAbility?.clearsAllScreensOnEntry &&
+    !bAbility?.clearsAllScreensOnEntry
   ) {
     return { field: undefined, fieldTurnsRemaining: undefined, announcements: [] };
   }
@@ -739,6 +747,20 @@ function resolveEntryAbilityEffects(
   let field: FieldKind | undefined;
   let fieldTurnsRemaining: number | undefined;
   const announcements: string[] = [];
+
+  // 배리어프리(Screen Cleaner): 등장 시 양쪽 스크린(리플렉터/빛의장막/오로라베일)을 전부 없앤다.
+  // 속도 순서와 무관한 1회 효과라 루프 밖에서 먼저 처리한다.
+  if (aAbility?.clearsAllScreensOnEntry || bAbility?.clearsAllScreensOnEntry) {
+    const cleanerSlot = aAbility?.clearsAllScreensOnEntry ? aSlot : bSlot;
+    const cleanerAbility = aAbility?.clearsAllScreensOnEntry ? aAbility : bAbility;
+    const cleanerName = getPokemon(cleanerSlot.pokemonId)?.name ?? "포켓몬";
+    const hadAny = Object.keys(aFighter.screens).length > 0 || Object.keys(bFighter.screens).length > 0;
+    aFighter.screens = {};
+    bFighter.screens = {};
+    if (hadAny) {
+      announcements.push(`${cleanerName}의 ${cleanerAbility?.name}! 양쪽의 빛의장막과 리플렉터가 사라졌다!`);
+    }
+  }
 
   for (const { slot, fighter, ability, opponent, opponentSlot } of order) {
     if (!ability) continue;
@@ -1188,6 +1210,12 @@ export interface ActionLogEntry {
   soulBeatHpCost?: number;
   /** 소울비트 — 현재 HP가 소비량 이하라 실패했으면 true */
   soulBeatFailed?: boolean;
+  /** 떠도는영혼 — 접촉 피격으로 공격자와 특성을 맞바꿨으면 true */
+  wanderingSpiritSwapped?: boolean;
+  /** 모래뿜기 — 피격으로 날씨를 바꿨으면 그 날씨 */
+  sandSpitWeather?: WeatherKind;
+  /** 마법가루 — 상대의 타입을 이 타입 하나로 덮어썼으면 그 타입 */
+  overwroteTargetType?: PokemonType;
   /** 저수처럼 absorbsType이 랭크업 대신 회복을 줄 때, 그 회복량 */
   abilityAbsorbHealAmount?: number;
   /** 흑안개처럼 이 행동으로 양쪽의 능력 랭크 변화가 전부 초기화됐으면 true */
@@ -1282,6 +1310,8 @@ export interface EndOfTurnLogEntry {
   cheekPouchHeal?: number;
   /** 수확: 턴 종료 시 되돌린 나무열매 이름 */
   harvestRestoredBerryName?: string;
+  /** 꼬르륵스위치: 턴 종료 시 바뀐 모양 */
+  hungerModeChangedTo?: "full" | "hangry";
 }
 
 export interface TurnResult {
@@ -1374,6 +1404,14 @@ function resolveAction(
   // 자속·상성 전부 새 타입 기준으로 계산되도록 여기서 move 자체를 갈아끼운다(변화기는 제외).
   if (attacker.moveTypeOverrideThisTurn && move.category !== "status" && move.type !== null) {
     move = { ...move, type: attacker.moveTypeOverrideThisTurn };
+  }
+
+  // 오라휠(모르페코): 꼬르륵스위치 모양에 따라 타입을 전기/악으로 바꾼다(모양 없으면 full=전기).
+  if (move.hungerSwitchType) {
+    move = {
+      ...move,
+      type: attacker.hungerMode === "hangry" ? move.hungerSwitchType.hangry : move.hungerSwitchType.full,
+    };
   }
 
   // 일찍기상(잠듦 해제 확률 스케줄에 필요)·습기(자폭기 차단, 아래 0번)는 상태이상 판정보다도
@@ -1979,9 +2017,15 @@ function resolveAction(
   // 반짝가루(방어측 0.9배)·광각렌즈(공격측 1.1배)·포커스렌즈(공격측, 늦게 움직일 때 1.2배)·
   // 모래숨기(방어측, 날씨 조건부 0.8배)·복안(공격측 1.3배)을 전부 한 배율로 곱한다.
   const weatherAccuracyBoost = defenderAbility?.weatherOpponentAccuracyMultiplier;
+  // 의욕(Hustle): 물리 기술 명중률 ×0.8.
+  const hustleAccuracyMultiplier =
+    move.category === "physical" && attackerAbility?.hustlePhysicalAccuracyMultiplier !== undefined
+      ? attackerAbility.hustlePhysicalAccuracyMultiplier
+      : 1;
   const abilityAccuracyMultiplier =
     (weatherAccuracyBoost && weatherAccuracyBoost.weather === activeWeather(state) ? weatherAccuracyBoost.multiplier : 1) *
-    (attackerAbility?.userAccuracyMultiplier ?? 1);
+    (attackerAbility?.userAccuracyMultiplier ?? 1) *
+    hustleAccuracyMultiplier;
   const accuracyExtraMultiplier =
     getItemAccuracyMultiplier(attackerItem, defenderItem, movesSecond) * abilityAccuracyMultiplier;
   // 날카로운눈: 공격측이 이 특성이면 상대의 회피율 상승분을 무시한다(원문 "상대의 회피율을
@@ -2175,6 +2219,10 @@ function resolveAction(
   // 발끈: 상대 기술 데미지로 HP가 절반 이하가 되어 방어측 특수공격이 올랐을 때.
   let angerPointRaisedSpa = false;
   let angerPointAbilityName: string | undefined;
+  // 떠도는영혼: 접촉 피격으로 공격자와 특성을 맞바꿨을 때.
+  let wanderingSpiritSwapped = false;
+  // 모래뿜기: 피격으로 날씨를 바꿨을 때 그 날씨.
+  let sandSpitWeather: WeatherKind | undefined;
 
   // 지진이 땅속의 구멍파기를, 파도타기가 물속의 다이빙을 실제로 맞혔을 때의 위력 배가.
   // evadedByCharge가 false인데 defenderHideType이 있다는 건 bypassesHiding 예외로 명중했다는 뜻.
@@ -2205,6 +2253,11 @@ function resolveAction(
       effectiveMove.category,
       ignoreBurnPenalty,
     );
+    // 의욕(Hustle): 물리 기술 위력 ×1.5 (명중률 ×0.8은 위 accuracyExtraMultiplier에서 반영).
+    const hustleMultiplier =
+      effectiveMove.category === "physical" && attackerAbility?.hustleAttackMultiplier !== undefined
+        ? attackerAbility.hustleAttackMultiplier
+        : 1;
     const weatherMultiplier = getWeatherDamageMultiplier(activeWeather(state), effectiveMove.type);
     const fieldMultiplier = getFieldDamageMultiplier(state.field, effectiveMove.type);
     const itemMultiplier = getItemOffenseMultiplier(
@@ -2221,6 +2274,7 @@ function resolveAction(
       effectiveMove.type,
       typeEffectiveness,
       defender.itemConsumed ?? false,
+      !!defenderAbility?.doublesBerryEffect, // 숙성
     );
     if (berryResult.consumed) {
       consumeItem(defender);
@@ -2264,7 +2318,8 @@ function resolveAction(
         statusAttackMultiplier *
         hidingBypassMultiplier *
         ownMoveTypeBoostMultiplier *
-        rivalryMultiplier,
+        rivalryMultiplier *
+        hustleMultiplier,
       weatherMultiplier,
       fieldMultiplier,
       itemMultiplier,
@@ -2518,6 +2573,19 @@ function resolveAction(
     ) {
       attacker.effectiveAbilityId = trigger.setsAttackerAbilityId;
       mummifiedAttackerAbilityName = defenderAbility!.name;
+    }
+    // 떠도는영혼(Wandering Spirit): 접촉기로 피격당하면 공격자와 특성을 맞바꾼다.
+    if (trigger.swapsAbilityWithAttacker && attacker.effectiveAbilityId !== defender.effectiveAbilityId) {
+      const tmp = attacker.effectiveAbilityId;
+      attacker.effectiveAbilityId = defender.effectiveAbilityId;
+      defender.effectiveAbilityId = tmp;
+      wanderingSpiritSwapped = true;
+    }
+    // 모래뿜기(Sand Spit): 데미지를 주는 기술로 피격당하면 날씨를 5턴짜리로 바꾼다(맞을 때마다).
+    if (trigger.setsWeather && state.weather !== trigger.setsWeather) {
+      state.weather = trigger.setsWeather;
+      state.weatherTurnsRemaining = WEATHER_DURATION;
+      sandSpitWeather = trigger.setsWeather;
     }
     // 유폭(Aftermath): 접촉기로 이 포켓몬이 쓰러진 그 순간 공격자에게 공격자 최대 HP 비율만큼 데미지.
     if (
@@ -2811,9 +2879,11 @@ function resolveAction(
       berryEatFailed = true;
     } else {
       stuffCheeksBerryName = berry.name;
-      const rawHeal = berry.healsBelowHalfHpDenominator
-        ? Math.floor(attacker.maxHp / berry.healsBelowHalfHpDenominator)
-        : (berry.healsBelowHalfHpFlat ?? 0);
+      const ripenMult = attackerAbility?.doublesBerryEffect ? 2 : 1; // 숙성
+      const rawHeal =
+        (berry.healsBelowHalfHpDenominator
+          ? Math.floor(attacker.maxHp / berry.healsBelowHalfHpDenominator)
+          : (berry.healsBelowHalfHpFlat ?? 0)) * ripenMult;
       stuffCheeksBerryHeal = Math.min(attacker.maxHp - attacker.currentHp, rawHeal);
       attacker.currentHp += stuffCheeksBerryHeal;
       consumeItem(attacker);
@@ -3018,6 +3088,20 @@ function resolveAction(
     addedTypeToTarget = effectiveMove.addsTypeToTarget;
   }
 
+  // 마법가루(setsTargetType): 명중 시 상대의 타입을 이 타입 하나로 통째로 덮어쓴다(치환, 배틀 끝까지).
+  let overwroteTargetType: PokemonType | undefined;
+  if (
+    effectiveMove.setsTargetType &&
+    hit &&
+    !opponentEffectsBlocked &&
+    !isFainted(defender) &&
+    !(defender.types.length === 1 && defender.types[0] === effectiveMove.setsTargetType)
+  ) {
+    defender.types = [effectiveMove.setsTargetType];
+    defender.addedType = undefined;
+    overwroteTargetType = effectiveMove.setsTargetType;
+  }
+
   // 송전(changesTargetMoveTypeThisTurn): 명중 시, 공격측이 이번 턴 먼저 움직였을 때만(=상대가
   // 아직 행동 안 함) 상대가 이번 턴 쓰는 기술의 타입을 전기로 바꾼다. 턴 종료 시 runTurn이 해제한다.
   let targetMoveTypeOverride: PokemonType | undefined;
@@ -3062,6 +3146,34 @@ function resolveAction(
         if (defender.status.condition !== before) inflictedStatus = defender.status.condition;
         else if (effectiveMove.category === "status" && effect.chance === undefined) statusInflictFailed = true;
         break; // 주 상태이상은 한 번에 하나만 걸린다 (중첩 없음)
+      }
+    }
+  }
+
+  // 페이탈클로(inflictsRandomStatus): 데미지를 준 뒤 이 확률로 statuses 중 하나를 무작위로 걸어본다.
+  // 인분(추가효과 차단)·황금몸·대타·이미 상태이상 규칙은 통상 부가 상태이상과 동일하게 존중한다.
+  if (
+    effectiveMove.inflictsRandomStatus &&
+    hit &&
+    damage > 0 &&
+    !hitSubstitute &&
+    !opponentEffectsBlocked &&
+    !inflictedStatus
+  ) {
+    if (secondaryEffectsBlockedByAbility) {
+      secondaryBlockedByAbilityName = defenderAbility!.name;
+    } else if (random() * 100 < effectiveMove.inflictsRandomStatus.chance) {
+      const pool = effectiveMove.inflictsRandomStatus.statuses;
+      const picked = pool[Math.floor(random() * pool.length)];
+      if (
+        picked &&
+        !isImmuneToStatus(picked, defender.types, defenderAbility?.immuneToStatuses) &&
+        !isStatusBlockedByField(state.field, picked) &&
+        !(picked === "freeze" && activeWeather(state) === "쾌청")
+      ) {
+        const before = defender.status.condition;
+        defender.status = inflictStatus(defender.status, picked);
+        if (defender.status.condition !== before) inflictedStatus = defender.status.condition;
       }
     }
   }
@@ -3686,6 +3798,7 @@ function resolveAction(
       attacker.currentHp,
       attacker.maxHp,
       attacker.itemConsumed ?? false,
+      !!attackerAbility?.doublesBerryEffect, // 숙성
     );
     if (attackerBerryHealAmount > 0) {
       attacker.currentHp = Math.min(attacker.maxHp, attacker.currentHp + attackerBerryHealAmount);
@@ -3701,6 +3814,7 @@ function resolveAction(
       defender.currentHp,
       defender.maxHp,
       defender.itemConsumed ?? false,
+      !!defenderAbility?.doublesBerryEffect, // 숙성
     );
     if (defenderBerryHealAmount > 0) {
       defender.currentHp = Math.min(defender.maxHp, defender.currentHp + defenderBerryHealAmount);
@@ -3909,6 +4023,9 @@ function resolveAction(
     angerPointAbilityName,
     soulBeatHpCost: soulBeatHpCost || undefined,
     soulBeatFailed: costHpFailed || undefined,
+    wanderingSpiritSwapped: wanderingSpiritSwapped || undefined,
+    sandSpitWeather,
+    overwroteTargetType,
     abilityAbsorbHealAmount: abilityAbsorbHealAmount || undefined,
     resetAllStages: effectiveMove.resetsAllStages || undefined,
     stolenItemName,
@@ -4422,6 +4539,18 @@ export function runTurn(
         });
       }
 
+      // 꼬르륵스위치(모르페코): 매 턴 종료 시 배부른모양↔배고픈모양 토글(오라휠 타입에만 영향).
+      if (fighterAbility?.hungerSwitch && !isFainted(fighter)) {
+        fighter.hungerMode = fighter.hungerMode === "hangry" ? "full" : "hangry";
+        endOfTurn.push({
+          actor: key,
+          damage: 0,
+          remainingHp: fighter.currentHp,
+          fainted: false,
+          hungerModeChangedTo: fighter.hungerMode,
+        });
+      }
+
       // 변덕쟁이(Moody): 매 턴 종료 시 5스탯 중 하나를 랜덤으로 +2, 그와 다른 하나를 -1.
       if (fighterAbility?.moodyRandomStages && !isFainted(fighter)) {
         const MOODY_STATS: BattleStatKey[] = ["atk", "def", "spa", "spd", "spe"];
@@ -4445,7 +4574,13 @@ export function runTurn(
       // 데미지 등)가 끝난 뒤에도 다시 한번 확인한다 — 액션 중엔 안 걸렸다가 턴 종료 데미지로
       // 뒤늦게 1/2 이하가 되는 경우를 놓치지 않기 위해서다.
       if (!isFainted(fighter) && !fighterBerriesBlocked) {
-        const berryHeal = getHpThresholdBerryHeal(fighterItem, fighter.currentHp, fighter.maxHp, fighter.itemConsumed ?? false);
+        const berryHeal = getHpThresholdBerryHeal(
+          fighterItem,
+          fighter.currentHp,
+          fighter.maxHp,
+          fighter.itemConsumed ?? false,
+          !!fighterAbility?.doublesBerryEffect, // 숙성
+        );
         if (berryHeal > 0) {
           fighter.currentHp = Math.min(fighter.maxHp, fighter.currentHp + berryHeal);
           consumeItem(fighter);

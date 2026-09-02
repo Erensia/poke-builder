@@ -1098,6 +1098,26 @@ export function BattleLogPage() {
                           {defenderName}의 {action.angerPointAbilityName}! {defenderName}의 특수공격이 올라갔다!
                         </div>
                       )}
+                      {/* 떠도는영혼 — 접촉 피격으로 공격자와 특성 교환 */}
+                      {!action.blockedReason && action.wanderingSpiritSwapped && (
+                        <div className="battle-turn-line is-muted">
+                          {defenderName}의 떠도는영혼! {actorName}
+                          {eunNeun(actorName)} {defenderName}와(과) 특성을 맞바꿨다!
+                        </div>
+                      )}
+                      {/* 모래뿜기 — 피격으로 날씨 변경 */}
+                      {!action.blockedReason && action.sandSpitWeather && (
+                        <div className="battle-turn-line is-muted">
+                          {defenderName}의 모래뿜기! 날씨가 {action.sandSpitWeather}(으)로 바뀌었다!
+                        </div>
+                      )}
+                      {/* 마법가루 — 상대 타입을 단일 타입으로 치환 */}
+                      {!action.blockedReason && action.overwroteTargetType && (
+                        <div className="battle-turn-line is-muted">
+                          {defenderName}
+                          {eunNeun(defenderName)} {typeLabel(action.overwroteTargetType)} 타입이 되었다!
+                        </div>
+                      )}
                       {/* 인분 — 데미지 기술의 추가효과(상태이상·풀죽음·랭크하락·왕의징표석 풀죽음)를
                           무산시켰을 때. 실제로 무산된 게 있을 때만 채워진다 */}
                       {!action.blockedReason && action.secondaryBlockedByAbilityName && (
@@ -1563,6 +1583,12 @@ export function BattleLogPage() {
                       <>
                         {fighterLabel(battleState, e.actor)}의 볼주머니! 체력을 {e.cheekPouchHeal} 회복 (남은 HP{" "}
                         {e.remainingHp})
+                      </>
+                    ) : e.hungerModeChangedTo ? (
+                      <>
+                        {fighterLabel(battleState, e.actor)}
+                        {eunNeun(fighterLabel(battleState, e.actor))}{" "}
+                        {e.hungerModeChangedTo === "hangry" ? "배고픈모양" : "배부른모양"}이 되었다!
                       </>
                     ) : (
                       <>
