@@ -8550,5 +8550,98 @@
     ],
     "makesContact": true,
     "highCritRatio": true
+  },
+  {
+    "id": "나이트버스트",
+    "name": "나이트버스트",
+    "type": "악",
+    "category": "special",
+    "power": 85,
+    "accuracy": 95,
+    "pp": 10,
+    "priority": 0,
+    "effect": "새까만 충격파를 상대에게 발사해 공격한다. 40% 확률로 상대의 명중률을 1랭크 떨어뜨린다.",
+    "tags": [
+      "랭크",
+      "비접촉"
+    ],
+    "makesContact": false,
+    "statChanges": [
+      {
+        "target": "opponent",
+        "stat": "accuracy",
+        "delta": -1,
+        "chance": 40
+      }
+    ]
+  },
+  {
+    "id": "비검천중파",
+    "name": "비검천중파",
+    "type": "악",
+    "category": "physical",
+    "power": 65,
+    "accuracy": 90,
+    "pp": 15,
+    "priority": 0,
+    "effect": "칼날을 휘둘러 벤 뒤 상대의 발밑에 압정을 뿌린다. 압정 설치는 교체가 없는 1대1에서는 효과가 없다.",
+    "tags": [
+      "베기",
+      "접촉"
+    ],
+    "classification": [
+      "베기"
+    ],
+    "makesContact": true
+  },
+  {
+    "id": "집게덫",
+    "name": "집게덫",
+    "type": "강철",
+    "category": "physical",
+    "power": 35,
+    "accuracy": 100,
+    "pp": 15,
+    "priority": 0,
+    "effect": "집게 모양의 덫으로 상대를 물고 4-5턴 동안 옭아맨다. (속박 지속 효과는 아직 엔진에 반영되지 않음)",
+    "tags": [
+      "접촉"
+    ],
+    "makesContact": true
+  },
+  {
+    "id": "심플빔",
+    "name": "심플빔",
+    "type": "노말",
+    "category": "status",
+    "power": null,
+    "accuracy": 100,
+    "pp": 15,
+    "priority": 0,
+    "effect": "이상한 파동을 보내 상대의 특성을 단순으로 바꾼다. (특성 교체는 아직 엔진에 반영되지 않음)",
+    "tags": [],
+    "makesContact": false
+  },
+  {
+    "id": "볼가득넣기",
+    "name": "볼가득넣기",
+    "type": "노말",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 10,
+    "priority": 0,
+    "effect": "지닌 나무열매를 볼에 가득 넣고 먹어서 방어가 2랭크 오른다. 나무열매 소비는 아직 엔진에 반영되지 않아 방어 상승만 적용된다.",
+    "tags": [
+      "랭크"
+    ],
+    "makesContact": false,
+    "statChanges": [
+      {
+        "target": "self",
+        "stat": "def",
+        "delta": 2
+      }
+    ]
   }
 ]
