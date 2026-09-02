@@ -70,6 +70,18 @@ function useBattleSetupSlot() {
     setSlot((prev) => (prev ? { ...prev, gender: (prev.gender ?? "male") === "male" ? "female" : "male" } : prev));
   }
 
+  /** 펌킨인 계열 크기 변종을 다음 크기로 돌린다(sizeForms 순서 순환) */
+  function cycleSizeForm() {
+    setSlot((prev) => {
+      if (!prev) return prev;
+      const forms = getPokemon(prev.pokemonId)?.sizeForms;
+      if (!forms || forms.length === 0) return prev;
+      const currentId = prev.sizeForm ?? forms.find((f) => f.standard)?.id ?? forms[0].id;
+      const idx = forms.findIndex((f) => f.id === currentId);
+      return { ...prev, sizeForm: forms[(idx + 1) % forms.length].id };
+    });
+  }
+
   function setPoint(stat: keyof AbilityPoints, value: number) {
     setSlot((prev) => {
       if (!prev) return prev;
@@ -102,6 +114,7 @@ function useBattleSetupSlot() {
     setItem,
     setNature,
     toggleGender,
+    cycleSizeForm,
     setPoint,
     stepPoint,
   };

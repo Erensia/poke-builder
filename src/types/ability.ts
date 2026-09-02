@@ -99,6 +99,12 @@ export interface AbilityHitTrigger {
   /** 공격자가 방금 사용한 기술의 남은 PP를 0으로 만든다(저주받은바디 — "사슬묶기" 텍스트를 PP 0 봉인으로 구현) */
   disablesAttackerMove?: boolean;
   /**
+   * 미끈미끈(Gooey)·점착: 접촉기로 피격당하면 공격자의 이 랭크를 바꾼다(미끈미끈=스피드 -1).
+   * selfStatChanges가 "이 특성 소유자(방어측)"의 랭크를 바꾸는 것과 방향이 반대 — 공격자 랭크를
+   * 건드린다. 심술꾸러기(공격자 쪽)·클리어바디류(공격자 쪽)는 그대로 존중한다. on:"contact"와 함께 쓴다.
+   */
+  attackerStatChanges?: { stat: BattleStatKey; delta: number }[];
+  /**
    * 나쁜손버릇: 접촉기로 공격당하면 공격자가 지닌 도구를 빼앗는다. 매지션(stealsItemOnDamagingHit)과
    * 방향이 정반대로, 피격측(이 특성 소유자)이 무도구일 때만 발동한다. on:"contact"와 함께 쓴다.
    */
@@ -526,4 +532,39 @@ export interface Ability {
    * fighter.types를 다시 계산하고 바뀌면 turnStartAnnouncements로 알린다.
    */
   terrainTypeChange?: boolean;
+  /**
+   * 방탄(Bulletproof): 구슬·폭탄 계열 기술(tags에 "구슬" 또는 "폭탄"이 있는 기술 —
+   * 기합구슬·오물폭탄·섀도볼·에너지볼·파동탄·록블라스트·전자포·암석포 등, 데미지기·변화기 모두)이
+   * 자신에게 통하지 않는다. 방음(blocksSound)과 완전히 같은 처리 — resolveMoveContext에서
+   * typeEffectiveness를 0으로 덮고, battleSimulator가 opponentEffectsBlocked에 합류시킨다.
+   */
+  blocksBallBomb?: boolean;
+  /**
+   * 질풍날개(Gale Wings, 7세대 형식): 자신의 HP가 가득 찬 상태에서 쓰는 비행타입 기술의 우선도가
+   * +1이 된다. 짓궂은마음(statusMovePriorityBoost)과 같은 "우선도 델타" 축이지만 조건이
+   * "비행타입 기술 + 풀피"라 별도 필드로 뒀다 — getAbilityPriorityBoost/compareTurnOrder에서 처리.
+   */
+  flyingMovePriorityBoostAtFullHp?: boolean;
+  /**
+   * 볼주머니(Cheek Pouch): 나무열매를 먹으면(HP 임계 자동 발동·볼가득넣기·탁쳐서떨구기로 먹거나
+   * 떨어뜨려 먹은 것 포함) 그 열매 고유 효과와 별개로 최대 HP의 이 비율만큼 추가로 회복한다(1/3).
+   */
+  berryHealFraction?: number;
+  /**
+   * 수확(Harvest): 턴 종료 시, 이번 배틀에서 소비한 나무열매가 있으면 chance(%) 확률로 그 열매를
+   * 다시 지닌다(currentItemId 복원). 날씨가 쾌청/큰햇살이면 sunChance(%) 확률(수확=100). 이미
+   * 도구를 지녔거나 소비한 나무열매 기록이 없으면 아무 일도 없다.
+   */
+  restoresBerryEndOfTurn?: { chance: number; sunChance: number };
+  /**
+   * 아로마베일(Aroma Veil): 자신을 겨냥한 "마음을 옭아매는" 변화기의 효과를 받지 않는다 —
+   * 헤롱헤롱(attract)·도발(taunt)·기술봉인(disable)·앙코르(encore). (본가의 트집·회복봉인은 이
+   * 엔진에 volatile로 모델링돼 있지 않아 대상 없음.) battleSimulator가 해당 volatile 부여 직전에 차단한다.
+   */
+  blocksMentalMoves?: boolean;
+  /**
+   * 흡반(Suction Cups): 교체를 강제하는 기술·도구에 밀려나지 않는다. 현행 1v1 시뮬레이터엔 교체가
+   * 없어 아직 배선하지 않는다 — 배틀타워 리뉴얼로 교체가 도입되면 강제 교체 저항 지점에서 이 플래그를 읽는다.
+   */
+  preventsForcedSwitch?: boolean;
 }

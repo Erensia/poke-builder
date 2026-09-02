@@ -463,3 +463,32 @@ hitsDefensiveStat?: "def" | "spd";
   - `압정뿌리기`도 `setsHazard:"spikes"` 보강(스텔스록 통일, 교체 없어 표시용).
 
 - **[별건 완료] `statChanges` 누락 31종 백필**(커밋 `74ed6c2`): effect엔 랭크 변화가 있으나 `statChanges`가 빈 상용기 31종(깨물어부수기 20% 방어↓·섀도볼 20% 특방↓·머드샷/얼어붙은바람 스피드↓·강철날개 10% 방어↑·차지빔 70% 자신 특공↑·개척하기/니트로차지/고속스핀 자신 스피드↑ 등). effect·본가 수치대로. `엄습하는일격`은 effect 텍스트(특수공격)를 따름(본가 Lunge는 공격 — 텍스트 우선). 스킵: 메테오빔·일렉트로빔(chargeStatChanges)·킹실드(protectContactPenalty)·끈적끈적네트(교체 hazard)·경혈찌르기·자기장조작(의도적 스텁)·코칭(아군 전용). 스모크 10종 PASS.
+
+### 6-12. 6세대 반영 기록 (2026-09-02, 브랜치 `phase-7.5`)
+
+포챔스 6세대 입국몬 **28종** + 신규 특성 **12종(배선 9 / 스텁 3)** + 신규 기술 **11종**. `pokemon.json` 157→185, `moves.json` 451→462, `abilities.json` 154→166. staging: `docs/02_.../pokemon-champions-6gen-staging.json`. 검증(참조 무결성·id 유일성·BST 스팟체크·tsc·lint·build + 스모크 25종) 통과. 1차 병합 후 특성 배선·기술 수치 사용자 확정 반영.
+
+- **종 28종**: 브리가론·파르토·파이어로·화염레오·플라제스·부란다·트리미앙·냐오닉스·프레프티르·나루림·칼라마네로·거북손데스·드래캄·블로스터·일레도리자드·견고라스·아마루르가·님피아·루차불·데덴네·미끄래곤·**미끄래곤(히스이)**·클레피·대로트·펌킨인·크레베이스·**크레베이스(히스이)**·음번.
+- **리전폼 2종**: `미끄래곤(히스이)`(강철/드래곤, 특성 촉촉바디→조가비갑옷, 334.1kg) · `크레베이스(히스이)`(얼음/바위, 특성 마이페이스→옹골찬턱, 262.4kg 사용자 제공). 각각 폼 전용 learnset·몸무게. **기존 5세대 리전폼 표기도 통일**: `히스이 대검귀`→`대검귀(히스이)`, `가라르 메더`→`메더(가라르)` (name만, id 유지).
+- **냐오닉스 성별별 숨겨진 특성**: `Pokemon.genderedHiddenAbility:{male:"짓궂은마음", female:"승기"}` 신설. `getEffectiveHiddenAbilityId(pokemon, slot)`가 슬롯 성별로 후보를 가른다 — 특성 선택 모달(AbilityPickerModal)·도감(PokedexPage)에 반영. `hiddenAbility`엔 수컷값을 폴백으로 유지.
+- **펌킨인 크기 변종**: `Pokemon.sizeForms:[{id,label,spe,weightKg,standard?}]` 신설(소99·9.5 / 중84·12.5 standard / 대69·14 / 특대54·39). `PartySlot/MatchupSlot.sizeForm` + `FormSource.sizeForm`. `getEffectiveForm`이 기준 크기가 아니면 spe·weightKg만 덮어쓴다 → 매치업·배틀 자동 반영. 파티/대전/매치업 카드에 크기 순환 pip 추가(성별 토글과 같은 패턴).
+- **메가진화 제외**: 브리가론·냐오닉스·칼라마네로·거북손데스·루차불 공식 메가, 화염레오·드래캄 위키 비공식 메가 — 별도 처리. staging `dexNo`·`_flags` 제거. `클레피` staging 오타 `짓궃은마음`→기존 특성 `짓궂은마음`으로 교정.
+
+- **신규 특성 12종 — 배선 9 / 스텁 3** (2026-09-02 사용자 확정. `ability.ts` 필드 신설: `AbilityHitTrigger.attackerStatChanges` · `blocksBallBomb` · `flyingMovePriorityBoostAtFullHp` · `berryHealFraction` · `restoresBerryEndOfTurn` · `blocksMentalMoves` · `preventsForcedSwitch`):
+  - `퍼코트` → `modifiers` defense ×2 (물리 피해 절반). `옹골찬턱` → offense ×1.5 `moveClassificationIn:["물기"]`. `프리즈스킨` → offense ×1.2 + `overrideMoveType:"얼음"` 노말→얼음(페어리스킨 패턴). `스위트베일` → `immuneToStatuses:["sleep"]`(1v1이라 자신 잠듦 면역만).
+  - `미끈미끈` → `hitTrigger{on:"contact", attackerStatChanges:[{spe,-1}]}`. `triggerAbilityHitEffect`에서 공격자 랭크 하락(공격자 클리어바디류·심술꾸러기 존중). `ActionLogEntry.abilityLoweredAttackerStats*`.
+  - `방탄` → `blocksBallBomb`. tags "구슬"/"폭탄" 기술을 방음과 같은 방식으로 `opponentEffectsBlocked` + `typeEffectiveness 0`(moveContext `blockedByBulletproof`). `ActionLogEntry.bulletproofBlockedByAbilityName`.
+  - `질풍날개` → `flyingMovePriorityBoostAtFullHp`(7세대 형식). `getAbilityPriorityBoost(move, ability, atFullHp)`에 3번째 인자 추가, 풀피+비행 기술이면 +1. `compareTurnOrder` 3개 호출부 갱신.
+  - `볼주머니` → `berryHealFraction:0.3333`. `consumeItem`이 나무열매(이름 "열매" 접미) 소비를 감지해 최대 HP 1/3 추가 회복(`pendingCheekPouchHeal` 경유 → 액션/EOT 로그). 동시에 `consumedBerryId` 기록.
+  - `수확` → `restoresBerryEndOfTurn:{chance:50, sunChance:100}`. 턴 종료 시 `consumedBerryId` 있고 무도구면 확률로 복원(쾌청이면 100). `EndOfTurnLogEntry.harvestRestoredBerryName`.
+  - `아로마베일` → `blocksMentalMoves`. 자신 대상 헤롱헤롱(attract)·도발(taunt)·기술봉인(disable)·앙코르(encore) 차단(inflictsVolatile 루프 + setsDisable/setsEncore + 헤롱헤롱바디 hitTrigger). 본가 트집·회복봉인은 이 엔진에 volatile 미모델링이라 대상 없음. `ActionLogEntry.mentalMoveBlockedByAbilityName`.
+  - **스텁 유지**: `픽업`(배틀 외 효과). **스키마만·배선 보류**: `흡반`(`preventsForcedSwitch` — 배틀타워 리뉴얼 교체 도입 시 배선).
+
+- **신규 기술 11종** (수치·설명·태그·PP 2026-09-02 사용자 확정. `move.ts` 필드 신설: `invertsTargetStatStages` · `additionalType` · `bonusVsMinimize` · `addsTypeToTarget` · `changesTargetMoveTypeThisTurn`):
+  - `뒤집어엎기`(악/**변화** pp20) → `invertsTargetStatStages`. 명중 시 상대 5스탯 + 명중/회피 랭크 부호 전부 반전(급소율 제외). `ActionLogEntry.invertedTargetStages`.
+  - `우드혼`(풀/물리 75·100·**pp12**) → `drainFraction:0.5`. `빙산바람`(**얼음/물리 120**·95·**pp12**) → 30% 풀죽음(`inflictsVolatile flinch`). `부르짖기`(노말/변화 **pp20**) → `classification:["소리"]` + `statChanges` 상대 공격·특공 -1.
+  - `농성`(**강철**/변화 **pp12**) → `statChanges` 자신 방어 +2(철벽 재사용).
+  - `플라잉프레스`(격투/물리 100·95·**pp12**) → `additionalType:"비행"`(moveContext에서 상성 = 격투 배율 × 비행 배율. 자속은 move.type 기준) + `bonusVsMinimize`(상대 `usedMoveIds["작아지기"]`면 필중 + 위력 2배).
+  - `숲의저주`(풀/변화) → `addsTypeToTarget:"풀"`. `핼러윈`(고스트/변화) → `addsTypeToTarget:"고스트"`. 명중 시 상대 `types`에 추가(배틀 끝까지, `BattleFighterState.addedType` — 의태/기분파 타입 재계산에도 재부착). `ActionLogEntry.addedTypeToTarget`.
+  - `송전`(전기/변화 **pp20, 우선도 0** — 우선도 효과 없음) → `changesTargetMoveTypeThisTurn:"전기"`. 명중 + 공격측이 이번 턴 먼저 움직였을 때만(`!movesSecond`) 상대 이번 턴 기술 타입을 전기로 강제(`moveTypeOverrideThisTurn`, runTurn이 다음 턴 시작 시 해제). `ActionLogEntry.targetMoveTypeOverride`.
+  - **스텁 유지**: `페어리록`(교체 봉쇄 — 1v1 무의미). **더블 전용 스텁**: `아로마미스트`(특방 +1 — 아군 대상이라 1v1 무대상). → post-1.0 백로그 대상.

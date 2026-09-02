@@ -1203,5 +1203,120 @@
     "id": "단순",
     "name": "단순",
     "description": "능력치의 랭크 변화가 2배로 적용된다. (랭크 변화 배증 로직 — 대응 필드 없어 미배선. 심플빔의 특성 교체 대상)"
+  },
+  {
+    "id": "퍼코트",
+    "name": "퍼코트",
+    "description": "풍성한 털가죽으로 덮여 있어 물리 기술로 받는 데미지가 절반이 된다.",
+    "modifiers": [
+      {
+        "scope": "defense",
+        "multiplier": 2,
+        "condition": {
+          "moveCategoryIn": [
+            "physical"
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "id": "옹골찬턱",
+    "name": "옹골찬턱",
+    "description": "튼튼한 턱을 지녀 무는 기술(엄니·물기 계열, classification \"물기\")의 위력이 1.5배가 된다.",
+    "modifiers": [
+      {
+        "scope": "offense",
+        "multiplier": 1.5,
+        "condition": {
+          "moveClassificationIn": [
+            "물기"
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "id": "프리즈스킨",
+    "name": "프리즈스킨",
+    "description": "노말타입 기술이 얼음타입으로 바뀌며 위력이 1.2배가 된다.",
+    "modifiers": [
+      {
+        "scope": "offense",
+        "multiplier": 1.2,
+        "condition": {
+          "moveTypeIn": [
+            "노말"
+          ]
+        },
+        "overrideMoveType": "얼음"
+      }
+    ]
+  },
+  {
+    "id": "스위트베일",
+    "name": "스위트베일",
+    "description": "달콤한 향기에 둘러싸여 잠듦 상태가 되지 않는다. (본가에선 아군의 잠듦·하품도 막지만 1v1에선 자신 잠듦 면역만 반영)",
+    "immuneToStatuses": [
+      "sleep"
+    ]
+  },
+  {
+    "id": "미끈미끈",
+    "name": "미끈미끈",
+    "description": "접촉하는 기술로 공격당하면 상대의 스피드를 1랭크 떨어뜨린다.",
+    "hitTrigger": {
+      "on": "contact",
+      "attackerStatChanges": [
+        {
+          "stat": "spe",
+          "delta": -1
+        }
+      ]
+    }
+  },
+  {
+    "id": "방탄",
+    "name": "방탄",
+    "description": "구슬·폭탄 계열 기술(tags에 \"구슬\" 또는 \"폭탄\" — 기합구슬·오물폭탄·섀도볼·에너지볼·파동탄·록블라스트·전자포·암석포 등)을 데미지기·변화기 가리지 않고 무효화한다.",
+    "blocksBallBomb": true
+  },
+  {
+    "id": "질풍날개",
+    "name": "질풍날개",
+    "description": "HP가 가득 찬 상태에서 쓰는 비행타입 기술의 우선도가 +1이 된다.",
+    "flyingMovePriorityBoostAtFullHp": true
+  },
+  {
+    "id": "볼주머니",
+    "name": "볼주머니",
+    "description": "나무열매를 먹으면 그 열매 고유 효과와 별개로 최대 HP의 1/3만큼 추가로 회복한다.",
+    "berryHealFraction": 0.3333
+  },
+  {
+    "id": "수확",
+    "name": "수확",
+    "description": "턴 종료 시 50%의 확률로 사용한 나무열매를 다시 만들어 지닌다. 날씨가 쾌청이면 100%로 발동한다.",
+    "restoresBerryEndOfTurn": {
+      "chance": 50,
+      "sunChance": 100
+    }
+  },
+  {
+    "id": "아로마베일",
+    "name": "아로마베일",
+    "description": "자신은 헤롱헤롱·도발·기술봉인·앙코르 상태가 되지 않는다. (본가의 트집·회복봉인은 이 엔진에 volatile로 없어 대상 없음. 더블에서 같은 편을 지키는 효과도 1v1이라 자신만 반영.)",
+    "blocksMentalMoves": true
+  },
+  {
+    "id": "픽업",
+    "name": "픽업",
+    "description": "배틀이 끝난 뒤 상대가 사용한 도구를 주울 때가 있다. (배틀 외 효과 — 1v1 시뮬레이터에선 영향 없음)"
+  },
+  {
+    "id": "흡반",
+    "name": "흡반",
+    "description": "흡반으로 땅에 달라붙어 교체를 강제하는 기술·도구에 밀려나지 않는다. (배틀타워 리뉴얼로 교체가 도입되면 강제 교체 저항 지점에서 발동 — 현재 스키마만 반영, 배선 보류)",
+    "preventsForcedSwitch": true
   }
 ]

@@ -8910,5 +8910,210 @@
         "delta": 2
       }
     ]
+  },
+  {
+    "id": "뒤집어엎기",
+    "name": "뒤집어엎기",
+    "type": "악",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 20,
+    "priority": 0,
+    "effect": "상대에게 걸려 있는 모든 능력 변화를 뒤집어서 반대로 만든다.",
+    "tags": [
+      "랭크"
+    ],
+    "makesContact": false,
+    "invertsTargetStatStages": true
+  },
+  {
+    "id": "우드혼",
+    "name": "우드혼",
+    "type": "풀",
+    "category": "physical",
+    "power": 75,
+    "accuracy": 100,
+    "pp": 12,
+    "priority": 0,
+    "effect": "뿔을 꿰찔러서 상대의 양분을 흡수한다. 대상에게 준 대미지의 ½만큼 체력을 회복한다.",
+    "tags": [
+      "흡수",
+      "접촉"
+    ],
+    "drainFraction": 0.5,
+    "makesContact": true
+  },
+  {
+    "id": "빙산바람",
+    "name": "빙산바람",
+    "type": "얼음",
+    "category": "physical",
+    "power": 120,
+    "accuracy": 95,
+    "pp": 12,
+    "priority": 0,
+    "effect": "빙산처럼 커다란 얼음덩어리를 부딪쳐서 공격한다. 30%의 확률로 상대를 풀죽게 만든다.",
+    "tags": [
+      "비접촉",
+      "풀죽음"
+    ],
+    "makesContact": false,
+    "inflictsVolatile": [
+      {
+        "volatile": "flinch",
+        "target": "opponent",
+        "chance": 30
+      }
+    ]
+  },
+  {
+    "id": "부르짖기",
+    "name": "부르짖기",
+    "type": "노말",
+    "category": "status",
+    "power": null,
+    "accuracy": 100,
+    "pp": 20,
+    "priority": 0,
+    "effect": "우렁차게 부르짖어서 상대를 위협하여 상대의 공격과 특수공격을 1랭크 떨어뜨린다.",
+    "tags": [
+      "랭크",
+      "소리"
+    ],
+    "classification": [
+      "소리"
+    ],
+    "makesContact": false,
+    "statChanges": [
+      {
+        "target": "opponent",
+        "stat": "atk",
+        "delta": -1
+      },
+      {
+        "target": "opponent",
+        "stat": "spa",
+        "delta": -1
+      }
+    ]
+  },
+  {
+    "id": "플라잉프레스",
+    "name": "플라잉프레스",
+    "type": "격투",
+    "category": "physical",
+    "power": 100,
+    "accuracy": 95,
+    "pp": 12,
+    "priority": 0,
+    "effect": "공중에서 상대에게 다이브한다. 대상이 작아지기를 사용했다면 필중하며 위력이 2배다. 이 기술은 격투타입임과 동시에 비행타입이기도 하다.",
+    "tags": [
+      "복합 타입",
+      "상승",
+      "압박",
+      "접촉"
+    ],
+    "makesContact": true,
+    "additionalType": "비행",
+    "bonusVsMinimize": true
+  },
+  {
+    "id": "농성",
+    "name": "농성",
+    "type": "강철",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 12,
+    "priority": 0,
+    "effect": "피부를 강철 방패처럼 단단하게 만들어서 자신의 방어를 2랭크 올린다.",
+    "tags": [
+      "랭크"
+    ],
+    "makesContact": false,
+    "statChanges": [
+      {
+        "target": "self",
+        "stat": "def",
+        "delta": 2
+      }
+    ]
+  },
+  {
+    "id": "숲의저주",
+    "name": "숲의저주",
+    "type": "풀",
+    "category": "status",
+    "power": null,
+    "accuracy": 100,
+    "pp": 20,
+    "priority": 0,
+    "effect": "상대에게 숲의 저주를 건다. 저주에 걸린 상대는 타입에 풀타입이 추가된다.",
+    "tags": [
+      "타입 변경"
+    ],
+    "makesContact": false,
+    "addsTypeToTarget": "풀"
+  },
+  {
+    "id": "핼러윈",
+    "name": "핼러윈",
+    "type": "고스트",
+    "category": "status",
+    "power": null,
+    "accuracy": 100,
+    "pp": 20,
+    "priority": 0,
+    "effect": "상대를 핼러윈으로 초대한다. 상대 타입에 고스트타입이 추가된다.",
+    "tags": [
+      "타입 변경"
+    ],
+    "makesContact": false,
+    "addsTypeToTarget": "고스트"
+  },
+  {
+    "id": "송전",
+    "name": "송전",
+    "type": "전기",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 20,
+    "priority": 0,
+    "effect": "상대가 기술을 쓰기 전에 송전하면 그 턴에 상대가 사용하는 기술은 전기타입이 된다.",
+    "tags": [],
+    "makesContact": false,
+    "changesTargetMoveTypeThisTurn": "전기"
+  },
+  {
+    "id": "페어리록",
+    "name": "페어리록",
+    "type": "페어리",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 10,
+    "priority": 0,
+    "effect": "다음 턴에 서로가 교체·도주할 수 없게 만든다. (1v1 시뮬레이터엔 교체가 없어 표시용 스텁)",
+    "tags": [
+      "상태이상-기타"
+    ],
+    "makesContact": false
+  },
+  {
+    "id": "아로마미스트",
+    "name": "아로마미스트",
+    "type": "페어리",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 20,
+    "priority": 0,
+    "effect": "신비한 아로마 향으로 같은 편의 특수방어를 1랭크 올린다. (더블 전용 — 1v1엔 대상이 없어 현재 스텁)",
+    "tags": [
+      "랭크"
+    ],
+    "makesContact": false
   }
 ]

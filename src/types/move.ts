@@ -567,4 +567,33 @@ export interface Move {
    * 등장 시 같은 처리를 자동으로 건다.
    */
   transformsIntoTarget?: boolean;
+  /**
+   * 뒤집어엎기(포챔스판 Topsy-Turvy): 명중 시 상대에게 현재 걸려 있는 모든 능력 랭크 변화의
+   * 부호를 뒤집는다(+2 → -2, -1 → +1). 5스탯 + 명중률/회피율 랭크가 대상이고, 급소율(critStage)은
+   * 흑안개(resetsAllStages)와 같은 이유로 건드리지 않는다. 데미지·위력 없는 변화기.
+   */
+  invertsTargetStatStages?: boolean;
+  /**
+   * 플라잉프레스(Flying Press): 타입 상성을 계산할 때 move.type(격투)에 더해 이 타입(비행)으로도
+   * 동시에 판정해 두 배율을 곱한다 — 상대가 격투 2배·비행 2배면 최종 4배. 자속은 move.type
+   * 기준으로만(사용자가 비행타입이 아니어도 비행 자속은 안 붙음, 본가 일치). typeEffectiveness에서 처리.
+   */
+  additionalType?: PokemonType;
+  /**
+   * 플라잉프레스·짓밟기류: 상대가 이번 배틀에서 작아지기(usedMoveIds에 "작아지기")를 쓴 적이 있으면
+   * 반드시 명중하고 위력이 2배가 된다.
+   */
+  bonusVsMinimize?: boolean;
+  /**
+   * 숲의저주(풀)·핼러윈(고스트): 명중 시 상대의 타입 목록에 이 타입을 "추가"한다(기존 타입은 유지).
+   * 배틀이 끝날 때까지 유지되며(BattleFighterState.addedType), 이후 상대가 방어측일 때 타입 상성
+   * 계산에 그대로 반영된다. 이미 그 타입을 갖고 있거나 이미 다른 추가 타입이 붙어 있으면 덮어쓴다.
+   */
+  addsTypeToTarget?: PokemonType;
+  /**
+   * 송전(Ion Deluge): 명중(항상 성공)하면 "이번 턴, 아직 행동하지 않은 상대"가 이번 턴에 쓰는
+   * 기술의 타입을 이 타입(전기)으로 바꾼다. 상대가 이미 이번 턴 행동을 마쳤으면 효과가 없다.
+   * BattleFighterState.moveTypeOverrideThisTurn에 저장하고 턴 종료 시 해제한다.
+   */
+  changesTargetMoveTypeThisTurn?: PokemonType;
 }

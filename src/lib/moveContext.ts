@@ -28,6 +28,8 @@ export interface MoveContext {
   absorbedByDefenderAbility: boolean;
   /** 방음: 방어측이 이 소리 기술을 완전히 무효화했으면 true (데미지 0 + 상대 방향 효과 전부 차단) */
   blockedBySoundproof: boolean;
+  /** 방탄: 방어측이 이 구슬·폭탄 기술을 완전히 무효화했으면 true (방음과 동일 처리) */
+  blockedByBulletproof: boolean;
 }
 
 export function resolveMoveContext(
@@ -100,17 +102,25 @@ export function resolveMoveContext(
   const blockedBySoundproof = !!(
     defenderAbility?.blocksSound && (effectiveMove.classification ?? []).includes("소리")
   );
+  // 방탄: 구슬·폭탄 기술(tags "구슬"/"폭탄")은 데미지기·변화기 모두 방어측에게 통하지 않는다.
+  const blockedByBulletproof = !!(
+    defenderAbility?.blocksBallBomb &&
+    (effectiveMove.tags ?? []).some((t) => t === "구슬" || t === "폭탄")
+  );
 
   const typeEffectiveness = absorbedByDefenderAbility
     ? 0
     : grantsImmunity
       ? 0
-      : blockedBySoundproof
+      : blockedBySoundproof || blockedByBulletproof
         ? 0
         : typeEffectivenessOverride !== undefined
           ? typeEffectivenessOverride
           : effectiveMove.type
-            ? getEffectiveness(effectiveMove.type, defenderTypes, { bypassImmunity })
+            ? getEffectiveness(effectiveMove.type, defenderTypes, { bypassImmunity }) *
+              (effectiveMove.additionalType
+                ? getEffectiveness(effectiveMove.additionalType, defenderTypes, { bypassImmunity })
+                : 1)
             : 1;
 
   // 하드록/필터/프리즘아머: 효과가 굉장한(상성 > 1) 공격이면 데미지를 이 배율(0.75)로 줄인다.
@@ -127,5 +137,6 @@ export function resolveMoveContext(
     typeEffectiveness,
     absorbedByDefenderAbility,
     blockedBySoundproof,
+    blockedByBulletproof,
   };
 }

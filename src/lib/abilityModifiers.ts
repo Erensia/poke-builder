@@ -106,12 +106,19 @@ export function resolveStabMultiplier(ability: Ability | undefined): number {
 
 /**
  * 짓궂은마음: 사용자가 이 특성을 가졌고 쓰려는 기술이 변화기(status)면 우선도가 이 값만큼
- * 오른다. 필드(getFieldAdjustedPriority)와 같은 "델타"만 반환하는 함수라 호출부가
- * move.priority(또는 이미 필드로 조정된 값)에 더해서 쓴다.
+ * 오른다. 질풍날개(7세대 형식): 사용자가 풀피이고 쓰려는 기술이 비행타입이면 우선도 +1.
+ * 필드(getFieldAdjustedPriority)와 같은 "델타"만 반환하는 함수라 호출부가 move.priority
+ * (또는 이미 필드로 조정된 값)에 더해서 쓴다. atFullHp는 안 넘기면 true로 간주한다.
  */
-export function getAbilityPriorityBoost(move: Move, ability: Ability | undefined): number {
-  if (ability?.statusMovePriorityBoost && move.category === "status") return ability.statusMovePriorityBoost;
-  return 0;
+export function getAbilityPriorityBoost(
+  move: Move,
+  ability: Ability | undefined,
+  atFullHp = true,
+): number {
+  let boost = 0;
+  if (ability?.statusMovePriorityBoost && move.category === "status") boost += ability.statusMovePriorityBoost;
+  if (ability?.flyingMovePriorityBoostAtFullHp && atFullHp && move.type === "비행") boost += 1;
+  return boost;
 }
 
 /**

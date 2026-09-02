@@ -34,6 +34,26 @@ export interface StanceChangeForms {
 export type PokemonGender = "male" | "female";
 
 /**
+ * 펌킨인·펌킨인 계열처럼 "크기 변종"이 있는 종 전용. 실제 게임에서 소과종/중과종/대과종/특대과종
+ * 4개 변종이 스피드·몸무게만 다르고 나머지 5스탯·타입·특성·기술은 완전히 동일하다. 파티 슬롯의
+ * `sizeForm` 필드가 이 배열의 `id`를 가리키며, getEffectiveForm이 그 크기의 spe·weightKg로
+ * baseStats/weightKg를 덮어쓴다. `standard: true`인 항목이 종의 기준값(Pokemon.baseStats와 동일)이며,
+ * slot.sizeForm이 없으면 이 기준 크기로 취급한다.
+ */
+export interface SizeForm {
+  /** 크기 변종 고유 id (예: "small" | "medium" | "large" | "super") */
+  id: string;
+  /** 표시 라벨 ("소과종" 등) */
+  label: string;
+  /** 이 크기의 스피드 종족값 */
+  spe: number;
+  /** 이 크기의 몸무게(kg) */
+  weightKg: number;
+  /** 종의 기준 크기(Pokemon.baseStats/weightKg와 같은 값)면 true. 배열에 정확히 하나만 있어야 한다 */
+  standard?: boolean;
+}
+
+/**
  * 종족 단위 성별 분포 카테고리(헤롱헤롱/헤롱헤롱바디 구현에 필요, Phase 6 §1-1 — 사용자 확정
  * 2026-08-26: 배틀마다 랜덤 배정하지 않고, "both"인 종만 파티 슬롯에서 사용자가 직접 고른다):
  *  - "both": 수컷/암컷 둘 다 존재(비율 무관 — 87.5:12.5 같은 극단적 혼합도 포함). 슬롯의 gender
@@ -51,6 +71,15 @@ export interface Pokemon {
   baseStats: BaseStats;
   abilities: string[];
   hiddenAbility?: string;
+  /**
+   * 냐오닉스처럼 숨겨진 특성이 성별에 따라 갈리는 종 전용. 종족값·기술은 성별과 무관하게 동일하고
+   * 숨겨진 특성만 male/female이 다르다. 이 필드가 있으면 특성 선택 UI는 `hiddenAbility` 대신
+   * 슬롯의 성별(getEffectiveGender)에 맞는 쪽 하나만 숨겨진 특성 후보로 보여준다. `hiddenAbility`
+   * 필드에는 수컷 기본값을 함께 채워 두어(포켓몬 도감 등 성별 개념이 없는 화면의 폴백) 준다.
+   */
+  genderedHiddenAbility?: { male: string; female: string };
+  /** 펌킨인 계열처럼 크기 변종(스피드·몸무게만 상이)이 있는 종만 채운다 */
+  sizeForms?: SizeForm[];
   /** 메가진화가 없으면 생략. 2종 이상 가진 포켓몬은 배열 원소를 늘린다. */
   megaEvolutions?: MegaEvolution[];
   /** 킬가르도(배틀스위치)처럼 배틀 중 기술 카테고리에 따라 폼이 바뀌는 포켓몬만 채운다 */

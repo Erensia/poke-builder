@@ -295,6 +295,26 @@ export interface BattleFighterState {
    * 다른 기술을 쓰거나 이번 시도가 실패하면 0으로 리셋된다(undefined와 0은 동일하게 취급).
    */
   protectStreak?: number;
+  /**
+   * 숲의저주(풀)·핼러윈(고스트)으로 추가된 타입. 배틀 끝까지 유지되며, types에 이미 반영돼 있다 —
+   * 의태(applyMimicryForm)·기분파(applyForecastForm)가 타입을 재계산할 때 이 값을 다시 붙인다.
+   */
+  addedType?: PokemonType;
+  /**
+   * 수확: 이번 배틀에서 이 포켓몬이 소비한 마지막 나무열매 id. 턴 종료 시 이 열매를 확률로
+   * 되돌린다. 되돌린 뒤에도 값은 남겨 둔다(다시 먹고 다시 되돌릴 수 있음).
+   */
+  consumedBerryId?: string;
+  /**
+   * 볼주머니: consumeItem이 나무열매 소비를 감지해 추가 회복을 적용했을 때 그 회복량을 잠깐
+   * 담아 둔다. resolveAction 반환 시(액션 중 소비) 또는 턴 종료 처리 시(EOT 소비) 로그로 옮기고 지운다.
+   */
+  pendingCheekPouchHeal?: number;
+  /**
+   * 송전(Move.changesTargetMoveTypeThisTurn): 이번 턴에 한해 이 포켓몬이 쓰는 기술의 타입이
+   * 이 값으로 강제된다. runTurn이 턴 종료 시 지운다.
+   */
+  moveTypeOverrideThisTurn?: PokemonType;
 }
 
 /** 두 포켓몬(a/b)을 마주 세운 배틀 상태 */
@@ -397,7 +417,7 @@ function applyForecastForm(fighter: BattleFighterState, weather: WeatherKind | u
   if (fighter.transformed) return;
   if (!abilityOf(fighter)?.weatherFormChange) return;
   const next = (weather && FORECAST_TYPE_BY_WEATHER[weather]) || "노말";
-  fighter.types = [next];
+  fighter.types = fighter.addedType ? [next, fighter.addedType] : [next];
 }
 
 /** 의태(메더): 필드별 타입. 일렉트릭필드→전기, 사이코필드→에스퍼, 그래스필드→풀, 미스트필드→페어리 */
@@ -418,6 +438,7 @@ function applyMimicryForm(fighter: BattleFighterState, field: FieldKind | undefi
   if (!abilityOf(fighter)?.terrainTypeChange) return undefined;
   const baseTypes = getPokemon(fighter.slot.pokemonId)?.types ?? fighter.types;
   const next: PokemonType[] = field ? [MIMICRY_TYPE_BY_FIELD[field]] : [...baseTypes];
+  if (fighter.addedType && !next.includes(fighter.addedType)) next.push(fighter.addedType);
   const changed = next.length !== fighter.types.length || next.some((t, i) => t !== fighter.types[i]);
   fighter.types = next;
   return changed && field ? next[0] : undefined;
@@ -538,8 +559,23 @@ function hasSheerForceSecondaryEffect(move: Move): boolean {
  * 뒤에도 currentItemId가 그대로 남아있어 곡예가 영영 발동하지 않는다).
  */
 function consumeItem(fighter: BattleFighterState): void {
+  const consumedId = fighter.currentItemId;
   fighter.itemConsumed = true;
   fighter.currentItemId = null;
+
+  // 나무열매(이름이 "열매"로 끝나는 도구)를 소비했을 때만:
+  //  - 수확: 소비한 열매 id를 기록해 둔다(턴 종료 시 확률로 되돌림).
+  //  - 볼주머니: 그 열매 고유 효과와 별개로 최대 HP의 berryHealFraction만큼 추가 회복한다.
+  if (!consumedId) return;
+  const item = getItem(consumedId);
+  if (!item || !item.name.endsWith("열매")) return;
+  fighter.consumedBerryId = consumedId;
+  const frac = abilityOf(fighter)?.berryHealFraction;
+  if (frac && fighter.currentHp > 0 && fighter.currentHp < fighter.maxHp) {
+    const heal = Math.min(fighter.maxHp - fighter.currentHp, Math.max(1, Math.floor(fighter.maxHp * frac)));
+    fighter.currentHp += heal;
+    fighter.pendingCheekPouchHeal = (fighter.pendingCheekPouchHeal ?? 0) + heal;
+  }
 }
 
 /**
@@ -1120,6 +1156,22 @@ export interface ActionLogEntry {
   abilityAbsorbAbilityName?: string;
   /** 방음처럼 방어측 특성이 이 소리 기술을 완전히 무효화했으면 그 특성 이름 */
   soundproofBlockedByAbilityName?: string;
+  /** 방탄처럼 방어측 특성이 이 구슬·폭탄 기술을 완전히 무효화했으면 그 특성 이름 */
+  bulletproofBlockedByAbilityName?: string;
+  /** 아로마베일처럼 방어측 특성이 헤롱헤롱·도발·기술봉인·앙코르를 막았으면 그 특성 이름 */
+  mentalMoveBlockedByAbilityName?: string;
+  /** 뒤집어엎기로 상대의 능력 랭크 변화를 전부 반전시켰으면 true */
+  invertedTargetStages?: boolean;
+  /** 숲의저주·핼러윈으로 상대에게 추가한 타입 (배틀 끝까지 유지) */
+  addedTypeToTarget?: PokemonType;
+  /** 송전으로 이번 턴 상대 기술 타입을 이 타입으로 바꿨으면 그 타입 */
+  targetMoveTypeOverride?: PokemonType;
+  /** 미끈미끈·점착처럼 방어측 특성이 접촉한 공격자의 랭크를 내렸으면 그 특성 이름 */
+  abilityLoweredAttackerStatsAbilityName?: string;
+  /** abilityLoweredAttackerStatsAbilityName이 바꾼 스탯·폭 */
+  abilityLoweredAttackerStats?: { stat: BattleStatKey; delta: number }[];
+  /** 볼주머니 — 나무열매를 먹어 추가 회복이 발동했으면 그 회복량 */
+  cheekPouchHeal?: number;
   /** 저수처럼 absorbsType이 랭크업 대신 회복을 줄 때, 그 회복량 */
   abilityAbsorbHealAmount?: number;
   /** 흑안개처럼 이 행동으로 양쪽의 능력 랭크 변화가 전부 초기화됐으면 true */
@@ -1210,6 +1262,10 @@ export interface EndOfTurnLogEntry {
   perishCount?: number;
   /** 멸망의노래 카운트가 0에 도달해 이번 턴 종료에 쓰러졌으면 true */
   perishFainted?: boolean;
+  /** 볼주머니: 턴 종료 시 나무열매를 먹어 발동한 추가 회복량 */
+  cheekPouchHeal?: number;
+  /** 수확: 턴 종료 시 되돌린 나무열매 이름 */
+  harvestRestoredBerryName?: string;
 }
 
 export interface TurnResult {
@@ -1296,6 +1352,12 @@ function resolveAction(
     const storedMove = getMove(attacker.chargingMoveId!);
     if (storedMove) move = storedMove;
     attacker.chargingMoveId = undefined;
+  }
+
+  // 송전: 지난(같은 턴 먼저 움직인) 상대가 송전을 성공시켰으면 이번 공격의 타입이 전기로 강제된다.
+  // 자속·상성 전부 새 타입 기준으로 계산되도록 여기서 move 자체를 갈아끼운다(변화기는 제외).
+  if (attacker.moveTypeOverrideThisTurn && move.category !== "status" && move.type !== null) {
+    move = { ...move, type: attacker.moveTypeOverrideThisTurn };
   }
 
   // 일찍기상(잠듦 해제 확률 스케줄에 필요)·습기(자폭기 차단, 아래 0번)는 상태이상 판정보다도
@@ -1491,7 +1553,13 @@ function resolveAction(
   // 짓궂은마음으로 변화기 우선도가 올라간 경우도 반영해야 해서 원본 우선도가 아니라 특성
   // 보정을 더한 실제 우선도로 판정한다 — 단, 순풍·리플렉터·빛의장막처럼 상대를 겨냥하지 않는
   // 변화기는 우선도가 올라가 있어도 막히지 않는다(isOpponentTargetingMove가 그 축을 가른다).
-  if (isPriorityMoveBlockedByField(state.field, move.priority + getAbilityPriorityBoost(move, attackerAbility), move)) {
+  if (
+    isPriorityMoveBlockedByField(
+      state.field,
+      move.priority + getAbilityPriorityBoost(move, attackerAbility, attacker.currentHp === attacker.maxHp),
+      move,
+    )
+  ) {
     return blocked("psychicFieldPriority");
   }
 
@@ -1628,9 +1696,20 @@ function resolveAction(
   const blockedBySoundproof = !!(
     defenderAbility?.blocksSound && (move.classification ?? []).includes("소리")
   );
+  // 방탄: 방어측이 이 특성이면 구슬·폭탄 기술(tags "구슬"/"폭탄")이 데미지기·변화기 모두 완전히
+  // 무효화된다. 방음과 같은 처리 — resolveMoveContext도 같은 판정으로 typeEffectiveness를 0으로 만든다.
+  const blockedByBulletproof = !!(
+    defenderAbility?.blocksBallBomb && (move.tags ?? []).some((t) => t === "구슬" || t === "폭탄")
+  );
   const soundproofBlockedByAbilityName = blockedBySoundproof ? defenderAbility?.name : undefined;
+  const bulletproofBlockedByAbilityName = blockedByBulletproof ? defenderAbility?.name : undefined;
   const opponentEffectsBlocked =
-    blockedByGoodAsGold || blockedBySubstitute || blockedByProtect || blockedByPowderImmunity || blockedBySoundproof;
+    blockedByGoodAsGold ||
+    blockedBySubstitute ||
+    blockedByProtect ||
+    blockedByPowderImmunity ||
+    blockedBySoundproof ||
+    blockedByBulletproof;
 
   // 매직미러: 방어측이 이 특성을 지녔고(틀깨기면 위에서 defenderAbility가 이미 undefined), 이번
   // 기술이 방어측을 겨냥하는 status 변화기이며 반사 제외(notReflectable — 고스트 저주·추억의선물·
@@ -1799,6 +1878,11 @@ function resolveAction(
     if (met) effectiveMove = { ...effectiveMove, power: effectiveMove.power * 2 };
   }
 
+  // 플라잉프레스: 상대가 이번 배틀에서 작아지기를 쓴 적이 있으면 위력 2배(필중은 아래 hitChance에서).
+  if (effectiveMove.bonusVsMinimize && effectiveMove.power !== null && defender.usedMoveIds?.["작아지기"]) {
+    effectiveMove = { ...effectiveMove, power: effectiveMove.power * 2 };
+  }
+
   // 타오르는불꽃 발동 이후로 자신(=현재 공격자)이 쓰는 그 타입 기술의 위력이 올라있으면 반영.
   // 절대 타입이 null인 기술(발버둥 등)은 boosts 조회 자체를 건너뛴다.
   const ownMoveTypeBoostMultiplier =
@@ -1882,9 +1966,11 @@ function resolveAction(
     : effectiveMove.ignoresDefenderStatStagesInDamage
       ? 0
       : defender.accuracyStages.evasion;
+  // 플라잉프레스: 상대가 이번 배틀에서 작아지기를 쓴 적이 있으면 반드시 명중한다(위력 2배는 아래에서).
+  const minimizeBonusActive = !!(effectiveMove.bonusVsMinimize && defender.usedMoveIds?.["작아지기"]);
   const hitChance =
     // 노가드: 어느 한쪽이라도 지녔으면 이번 공격은 명중률/회피율과 무관하게 반드시 명중한다.
-    attackerAbility?.alwaysHits || defenderAbility?.alwaysHits
+    attackerAbility?.alwaysHits || defenderAbility?.alwaysHits || minimizeBonusActive
       ? null
       : computeHitChance(
           effectiveMove.accuracy,
@@ -2037,6 +2123,13 @@ function resolveAction(
   let abilityRaisedDefenderStatsAbilityName: string | undefined;
   const abilityRaisedDefenderStats: { stat: BattleStatKey; delta: number }[] = [];
   const abilityLoweredDefenderStats: { stat: BattleStatKey; delta: number }[] = [];
+  // 미끈미끈·점착: 방어측 특성이 접촉한 공격자의 랭크를 내렸을 때(다단히트면 타수만큼 누적).
+  let abilityLoweredAttackerStatsAbilityName: string | undefined;
+  const abilityLoweredAttackerStats: { stat: BattleStatKey; delta: number }[] = [];
+  // 볼주머니: 이번 행동에서 나무열매를 먹어 발동한 추가 회복량 누적.
+  let cheekPouchHeal = 0;
+  // 아로마베일: 방어측이 이 특성이라 마음을 옭아매는 volatile(헤롱헤롱·도발·기술봉인·앙코르)을 막았을 때 그 특성 이름.
+  let mentalMoveBlockedByAbilityName: string | undefined;
 
   // 지진이 땅속의 구멍파기를, 파도타기가 물속의 다이빙을 실제로 맞혔을 때의 위력 배가.
   // evadedByCharge가 false인데 defenderHideType이 있다는 건 bypassesHiding 예외로 명중했다는 뜻.
@@ -2270,7 +2363,12 @@ function resolveAction(
     if (
       trigger.inflictsVolatileOnAttacker &&
       !(trigger.requiresOppositeGender && (attacker.gender === null || defender.gender === null || attacker.gender === defender.gender)) &&
-      !hasVolatile(attacker.volatile, trigger.inflictsVolatileOnAttacker)
+      !hasVolatile(attacker.volatile, trigger.inflictsVolatileOnAttacker) &&
+      // 아로마베일: 접촉기를 쓴 공격자가 이 특성이면 헤롱헤롱바디의 헤롱헤롱이 걸리지 않는다.
+      !(
+        (trigger.inflictsVolatileOnAttacker === "attract" || trigger.inflictsVolatileOnAttacker === "taunt") &&
+        attackerAbility?.blocksMentalMoves
+      )
     ) {
       attacker.volatile = inflictVolatile(attacker.volatile, trigger.inflictsVolatileOnAttacker, random);
       abilityInflictedVolatileOnAttacker = trigger.inflictsVolatileOnAttacker;
@@ -2307,6 +2405,25 @@ function resolveAction(
           const existing = bucket.find((s) => s.stat === change.stat);
           if (existing) existing.delta += magnitude;
           else bucket.push({ stat: change.stat, delta: magnitude });
+        }
+      }
+    }
+    // 미끈미끈·점착(attackerStatChanges): 접촉해 온 공격자의 랭크를 내린다. 공격자의 클리어바디류
+    // (blocksOpponentStatDropsForStats)·심술꾸러기(contraryDelta)는 그대로 존중한다. 미러아머 반사는
+    // 이 로스터에 대상 조합이 없어 생략(공격자가 미러아머면 그냥 정상 하락).
+    if (trigger.attackerStatChanges) {
+      const blocked = attackerAbility?.blocksOpponentStatDropsForStats;
+      for (const change of trigger.attackerStatChanges) {
+        if (blocked?.includes(change.stat)) continue;
+        const before = attacker.stages[change.stat];
+        attacker.stages = applyStageDelta(attacker.stages, change.stat, contraryDelta(attacker, change.delta));
+        const after = attacker.stages[change.stat];
+        if (after !== before) {
+          abilityLoweredAttackerStatsAbilityName = defenderAbility!.name;
+          const magnitude = Math.abs(after - before);
+          const existing = abilityLoweredAttackerStats.find((s) => s.stat === change.stat);
+          if (existing) existing.delta += magnitude;
+          else abilityLoweredAttackerStats.push({ stat: change.stat, delta: magnitude });
         }
       }
     }
@@ -2788,6 +2905,49 @@ function resolveAction(
     defender.accuracyStages = { ...NEUTRAL_ACCURACY_STAGES };
   }
 
+  // 뒤집어엎기(invertsTargetStatStages): 명중 시 상대에게 현재 걸려 있는 5스탯 + 명중률/회피율
+  // 랭크의 부호를 전부 뒤집는다(+2 → -2). 급소율은 흑안개와 같은 이유로 건드리지 않는다.
+  let invertedTargetStages = false;
+  if (effectiveMove.invertsTargetStatStages && hit && !opponentEffectsBlocked && !isFainted(defender)) {
+    defender.stages = Object.fromEntries(
+      Object.entries(defender.stages).map(([k, v]) => [k, -v]),
+    ) as typeof defender.stages;
+    defender.accuracyStages = {
+      accuracy: -defender.accuracyStages.accuracy,
+      evasion: -defender.accuracyStages.evasion,
+    };
+    invertedTargetStages = true;
+  }
+
+  // 숲의저주(풀)·핼러윈(고스트): 명중 시 상대의 타입 목록에 그 타입을 추가한다(배틀 끝까지 유지).
+  // addedType에도 기록해 두어 의태/기분파가 타입을 재계산해도 이 추가 타입이 다시 붙게 한다.
+  let addedTypeToTarget: PokemonType | undefined;
+  if (
+    effectiveMove.addsTypeToTarget &&
+    hit &&
+    !opponentEffectsBlocked &&
+    !isFainted(defender) &&
+    !defender.types.includes(effectiveMove.addsTypeToTarget)
+  ) {
+    defender.addedType = effectiveMove.addsTypeToTarget;
+    defender.types = [...defender.types, effectiveMove.addsTypeToTarget];
+    addedTypeToTarget = effectiveMove.addsTypeToTarget;
+  }
+
+  // 송전(changesTargetMoveTypeThisTurn): 명중 시, 공격측이 이번 턴 먼저 움직였을 때만(=상대가
+  // 아직 행동 안 함) 상대가 이번 턴 쓰는 기술의 타입을 전기로 바꾼다. 턴 종료 시 runTurn이 해제한다.
+  let targetMoveTypeOverride: PokemonType | undefined;
+  if (
+    effectiveMove.changesTargetMoveTypeThisTurn &&
+    hit &&
+    !opponentEffectsBlocked &&
+    !isFainted(defender) &&
+    !movesSecond
+  ) {
+    defender.moveTypeOverrideThisTurn = effectiveMove.changesTargetMoveTypeThisTurn;
+    targetMoveTypeOverride = effectiveMove.changesTargetMoveTypeThisTurn;
+  }
+
   let inflictedStatus: StatusConditionState["condition"] | undefined;
   // 이미 걸린 상태이상 때문에 상태이상 전용 변화기(맹독·도깨비불 등)가 아무 변화도 못 냈으면 true.
   // C-8: "블래키의 맹독 - 그러나 실패했다!". 데미지 기술의 부가 상태이상은 그냥 안 걸린 것뿐이라 대상 아님.
@@ -2912,6 +3072,15 @@ function resolveAction(
       if (effect.volatile === "confusion" && isConfusionBlockedByField(state.field)) continue;
       // 정신력: 풀죽음 자체에 면역이라 발동 시도 자체가 무산된다(본가 규칙 — 확률 판정까지 가지 않음)
       if (effect.volatile === "flinch" && effect.target !== "self" && defenderAbility?.immuneToFlinch) continue;
+      // 아로마베일: 방어측이 이 특성이면 헤롱헤롱·도발이 걸리지 않는다(마음을 옭아매는 기술 차단).
+      if (
+        effect.target !== "self" &&
+        defenderAbility?.blocksMentalMoves &&
+        (effect.volatile === "attract" || effect.volatile === "taunt")
+      ) {
+        mentalMoveBlockedByAbilityName = defenderAbility.name;
+        continue;
+      }
       // 황금몸: 상대(공격측)를 향한 변화기 효과만 막는다 — target이 "self"(공격측 자신에게
       // 거는 것, 예: 반동/하품 예약)면 이 포켓몬을 겨냥한 게 아니라서 그대로 진행된다.
       if (effect.target !== "self" && opponentEffectsBlocked) continue;
@@ -3194,7 +3363,10 @@ function resolveAction(
   let setDisabledMoveName: string | undefined;
   let disableSetFailed = false;
   if (effectiveMove.setsDisable) {
-    if (!defender.lastMoveId || hasVolatile(defender.volatile, "disable")) {
+    if (defenderAbility?.blocksMentalMoves) {
+      mentalMoveBlockedByAbilityName = defenderAbility.name;
+      disableSetFailed = true;
+    } else if (!defender.lastMoveId || hasVolatile(defender.volatile, "disable")) {
       disableSetFailed = true;
     } else {
       defender.volatile = inflictVolatile(defender.volatile, "disable", random, defender.lastMoveId);
@@ -3215,7 +3387,10 @@ function resolveAction(
   let setEncoreMoveName: string | undefined;
   let encoreSetFailed = false;
   if (effectiveMove.setsEncore) {
-    if (!defender.lastMoveId || hasVolatile(defender.volatile, "encore")) {
+    if (defenderAbility?.blocksMentalMoves) {
+      mentalMoveBlockedByAbilityName = defenderAbility.name;
+      encoreSetFailed = true;
+    } else if (!defender.lastMoveId || hasVolatile(defender.volatile, "encore")) {
       encoreSetFailed = true;
     } else {
       defender.volatile = inflictVolatile(defender.volatile, "encore", random, defender.lastMoveId);
@@ -3488,6 +3663,11 @@ function resolveAction(
     blockedBySubstitute && !hitSubstitute && isOpponentTargetingMove(effectiveMove) ? effectiveMove.name : undefined;
   const powderBlockedMoveName = blockedByPowderImmunity ? effectiveMove.name : undefined;
 
+  // 볼주머니: 이번 행동 중 consumeItem이 나무열매 소비로 쌓아둔 추가 회복량을 로그로 옮기고 지운다.
+  cheekPouchHeal += (attacker.pendingCheekPouchHeal ?? 0) + (defender.pendingCheekPouchHeal ?? 0);
+  attacker.pendingCheekPouchHeal = undefined;
+  defender.pendingCheekPouchHeal = undefined;
+
   return {
     actor: actorKey,
     move,
@@ -3611,6 +3791,14 @@ function resolveAction(
     abilityAbsorbedMoveType,
     abilityAbsorbAbilityName,
     soundproofBlockedByAbilityName,
+    bulletproofBlockedByAbilityName,
+    mentalMoveBlockedByAbilityName,
+    invertedTargetStages: invertedTargetStages || undefined,
+    addedTypeToTarget,
+    targetMoveTypeOverride,
+    abilityLoweredAttackerStatsAbilityName,
+    abilityLoweredAttackerStats: abilityLoweredAttackerStats.length ? abilityLoweredAttackerStats : undefined,
+    cheekPouchHeal: cheekPouchHeal || undefined,
     abilityAbsorbHealAmount: abilityAbsorbHealAmount || undefined,
     resetAllStages: effectiveMove.resetsAllStages || undefined,
     stolenItemName,
@@ -3659,6 +3847,9 @@ export function runTurn(
   // 반대로 배틀 끝까지 유지되는 값이라 여기서 건드리지 않는다.
   state.a.activeProtect = undefined;
   state.b.activeProtect = undefined;
+  // 송전: "이번 턴 한정" 타입 강제도 매 턴 시작 시 지운다(지난 턴 송전이 이번 턴까지 남으면 안 됨).
+  state.a.moveTypeOverrideThisTurn = undefined;
+  state.b.moveTypeOverrideThisTurn = undefined;
   // 미러코트/카운터/앙갚음/메탈버스트용 — 이번 턴 받은 카테고리별 데미지 누적기를 0으로 초기화한다(F-1).
   state.a.damageTakenThisTurn = { physical: 0, special: 0 };
   state.b.damageTakenThisTurn = { physical: 0, special: 0 };
@@ -3722,11 +3913,15 @@ export function runTurn(
   // compareTurnOrder는 move.priority만 보므로 우선도만 조정한 얕은 복사본을 넘긴다.
   const priorityAdjustedMoveA = {
     ...moveA,
-    priority: getFieldAdjustedPriority(moveA, state.field) + getAbilityPriorityBoost(moveA, aAbilityForSpeed),
+    priority:
+      getFieldAdjustedPriority(moveA, state.field) +
+      getAbilityPriorityBoost(moveA, aAbilityForSpeed, state.a.currentHp === state.a.maxHp),
   };
   const priorityAdjustedMoveB = {
     ...moveB,
-    priority: getFieldAdjustedPriority(moveB, state.field) + getAbilityPriorityBoost(moveB, bAbilityForSpeed),
+    priority:
+      getFieldAdjustedPriority(moveB, state.field) +
+      getAbilityPriorityBoost(moveB, bAbilityForSpeed, state.b.currentHp === state.b.maxHp),
   };
 
   // 선제공격손톱: 실제 우선도가 같을 때만 끼어든다(더 높은 우선도는 이 효과와 무관하게 항상 이김).
@@ -4143,6 +4338,41 @@ export function runTurn(
             fainted: false,
             berryHeal,
             berryHealItemName: fighterItem!.name,
+          });
+        }
+      }
+
+      // 볼주머니: 위 자뭉/오랭열매를 턴 종료 시 먹었으면 consumeItem이 pendingCheekPouchHeal을 쌓아둔다.
+      if (fighter.pendingCheekPouchHeal) {
+        endOfTurn.push({
+          actor: key,
+          damage: 0,
+          remainingHp: fighter.currentHp,
+          fainted: false,
+          cheekPouchHeal: fighter.pendingCheekPouchHeal,
+        });
+        fighter.pendingCheekPouchHeal = undefined;
+      }
+
+      // 수확(Harvest): 턴 종료 시, 소비한 나무열매가 있고 지금 무도구면 확률로 그 열매를 되돌린다.
+      // 쾌청(큰햇살)이면 sunChance(수확=100), 그 외 chance(50). 날씨부정이면 쾌청 취급하지 않는다.
+      if (
+        !isFainted(fighter) &&
+        fighterAbility?.restoresBerryEndOfTurn &&
+        fighter.consumedBerryId &&
+        !fighter.currentItemId
+      ) {
+        const { chance, sunChance } = fighterAbility.restoresBerryEndOfTurn;
+        const inSun = activeWeather(state) === "쾌청";
+        if (random() * 100 < (inSun ? sunChance : chance)) {
+          fighter.currentItemId = fighter.consumedBerryId;
+          fighter.itemConsumed = false;
+          endOfTurn.push({
+            actor: key,
+            damage: 0,
+            remainingHp: fighter.currentHp,
+            fainted: false,
+            harvestRestoredBerryName: getItem(fighter.consumedBerryId)?.name ?? fighter.consumedBerryId,
           });
         }
       }

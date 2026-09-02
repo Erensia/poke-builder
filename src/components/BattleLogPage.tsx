@@ -350,6 +350,7 @@ export function BattleLogPage() {
               onPickNature={() => setPicker({ kind: "nature", side: "a" })}
               onPickPoints={() => setPicker({ kind: "points", side: "a" })}
               onToggleGender={setup.a.toggleGender}
+              onCycleSizeForm={setup.a.cycleSizeForm}
               hasSamples={slotPresets.presets.length > 0}
               onSaveAsSample={() => handleSaveSlotAsSample("a")}
               onOpenSamplePicker={() => setPicker({ kind: "slotPresets", side: "a" })}
@@ -365,6 +366,7 @@ export function BattleLogPage() {
               onPickNature={() => setPicker({ kind: "nature", side: "b" })}
               onPickPoints={() => setPicker({ kind: "points", side: "b" })}
               onToggleGender={setup.b.toggleGender}
+              onCycleSizeForm={setup.b.cycleSizeForm}
               hasSamples={slotPresets.presets.length > 0}
               onSaveAsSample={() => handleSaveSlotAsSample("b")}
               onOpenSamplePicker={() => setPicker({ kind: "slotPresets", side: "b" })}
@@ -1005,6 +1007,57 @@ export function BattleLogPage() {
                           {defenderName}의 {action.soundproofBlockedByAbilityName}! 소리 기술은 통하지 않는다!
                         </div>
                       )}
+                      {/* 방탄 — 구슬·폭탄 기술을 통째로 무효화 */}
+                      {!action.blockedReason && action.bulletproofBlockedByAbilityName && (
+                        <div className="battle-turn-line is-muted">
+                          {defenderName}의 {action.bulletproofBlockedByAbilityName}! 구슬·폭탄 기술은 통하지 않는다!
+                        </div>
+                      )}
+                      {/* 아로마베일 — 헤롱헤롱·도발·기술봉인·앙코르를 막았을 때 */}
+                      {!action.blockedReason && action.mentalMoveBlockedByAbilityName && (
+                        <div className="battle-turn-line is-muted">
+                          {defenderName}의 {action.mentalMoveBlockedByAbilityName}! 마음을 옭아매는 기술은 통하지 않는다!
+                        </div>
+                      )}
+                      {/* 미끈미끈·점착 — 접촉한 공격자의 랭크를 내렸을 때 */}
+                      {!action.blockedReason &&
+                        action.abilityLoweredAttackerStatsAbilityName &&
+                        (action.abilityLoweredAttackerStats?.length ?? 0) > 0 &&
+                        (() => {
+                          const lowered = action.abilityLoweredAttackerStats ?? [];
+                          const joined = lowered.map((s) => STAT_LABELS[s.stat]).join(", ");
+                          return (
+                            <div className="battle-turn-line is-muted">
+                              {defenderName}의 {action.abilityLoweredAttackerStatsAbilityName}! {actorName}의 {joined}
+                              {iGa(joined)} {stageRiseAdverb(Math.max(...lowered.map((s) => s.delta)))}내려갔다!
+                            </div>
+                          );
+                        })()}
+                      {/* 뒤집어엎기 — 상대 능력 변화를 전부 반전 */}
+                      {!action.blockedReason && action.invertedTargetStages && (
+                        <div className="battle-turn-line is-muted">
+                          {defenderName}의 능력 변화가 모두 반대로 뒤집혔다!
+                        </div>
+                      )}
+                      {/* 숲의저주·핼러윈 — 상대에게 타입 추가 */}
+                      {!action.blockedReason && action.addedTypeToTarget && (
+                        <div className="battle-turn-line is-muted">
+                          {defenderName}
+                          {eunNeun(defenderName)} {typeLabel(action.addedTypeToTarget)} 타입이 추가되었다!
+                        </div>
+                      )}
+                      {/* 송전 — 이번 턴 상대 기술 타입 강제 */}
+                      {!action.blockedReason && action.targetMoveTypeOverride && (
+                        <div className="battle-turn-line is-muted">
+                          송전되었다! 이번 턴 {defenderName}의 기술은 {typeLabel(action.targetMoveTypeOverride)} 타입이 된다!
+                        </div>
+                      )}
+                      {/* 볼주머니 — 나무열매를 먹어 추가 회복 */}
+                      {!action.blockedReason && !!action.cheekPouchHeal && (
+                        <div className="battle-turn-line is-muted">
+                          볼주머니! 체력을 {action.cheekPouchHeal} 회복했다!
+                        </div>
+                      )}
                       {/* 인분 — 데미지 기술의 추가효과(상태이상·풀죽음·랭크하락·왕의징표석 풀죽음)를
                           무산시켰을 때. 실제로 무산된 게 있을 때만 채워진다 */}
                       {!action.blockedReason && action.secondaryBlockedByAbilityName && (
@@ -1460,6 +1513,16 @@ export function BattleLogPage() {
                       <>
                         {fighterLabel(battleState, e.actor)}의 {e.abilityWeatherDamageAbilityName}! 데미지 {e.damage}{" "}
                         (남은 HP {e.remainingHp}){e.fainted && " · 기절!"}
+                      </>
+                    ) : e.harvestRestoredBerryName ? (
+                      <>
+                        {fighterLabel(battleState, e.actor)}의 수확! {e.harvestRestoredBerryName}
+                        {eulReul(e.harvestRestoredBerryName)} 다시 만들었다!
+                      </>
+                    ) : e.cheekPouchHeal ? (
+                      <>
+                        {fighterLabel(battleState, e.actor)}의 볼주머니! 체력을 {e.cheekPouchHeal} 회복 (남은 HP{" "}
+                        {e.remainingHp})
                       </>
                     ) : (
                       <>

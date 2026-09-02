@@ -77,6 +77,17 @@ function useMatchupSlot() {
     setSlot((prev) => ({ ...prev, nature: natureId }));
   }
 
+  /** 펌킨인 계열 크기 변종을 다음 크기로 돌린다(sizeForms 순서 순환) */
+  function cycleSizeForm() {
+    setSlot((prev) => {
+      const forms = prev.pokemonId ? getPokemon(prev.pokemonId)?.sizeForms : undefined;
+      if (!forms || forms.length === 0) return prev;
+      const currentId = prev.sizeForm ?? forms.find((f) => f.standard)?.id ?? forms[0].id;
+      const idx = forms.findIndex((f) => f.id === currentId);
+      return { ...prev, sizeForm: forms[(idx + 1) % forms.length].id };
+    });
+  }
+
   /** 기술을 고르면 다단히트 기술 여부에 따라 적중 타수를 최대치로 기본 설정한다 */
   function setMove(moveId: string | null) {
     setSlot((prev) => {
@@ -160,6 +171,7 @@ function useMatchupSlot() {
     setAbility,
     setItem,
     setNature,
+    cycleSizeForm,
     setMove,
     setMultiHitCount,
     setStockpileCount,

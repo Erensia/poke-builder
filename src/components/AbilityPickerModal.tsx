@@ -1,13 +1,19 @@
 import { Modal } from "./Modal";
 import { getAbility } from "../lib/data";
-import { getEffectiveForm, megaBadgeLabel, type FormSource } from "../lib/pokemonForm";
+import {
+  getEffectiveForm,
+  getEffectiveHiddenAbilityId,
+  megaBadgeLabel,
+  type FormSource,
+  type GenderSource,
+} from "../lib/pokemonForm";
 import type { Pokemon } from "../types/pokemon";
 import "./MovePickerModal.css";
 
 interface AbilityPickerModalProps {
   pokemon: Pokemon;
-  /** 메가진화 여부 판정용(item/activeMegaForm). PartySlot·MatchupSlot 둘 다 만족한다 */
-  slot: FormSource;
+  /** 메가진화 여부 판정용(item/activeMegaForm) + 성별(냐오닉스 성별별 숨겨진 특성). PartySlot·MatchupSlot 둘 다 만족한다 */
+  slot: FormSource & GenderSource;
   currentAbilityId: string | null;
   onSelect: (abilityId: string) => void;
   onClear: () => void;
@@ -38,9 +44,11 @@ export function AbilityPickerModal({
     );
   }
 
+  // 냐오닉스처럼 숨겨진 특성이 성별로 갈리는 종은 슬롯 성별에 맞는 쪽 하나만 후보로 보여준다.
+  const hiddenAbilityId = getEffectiveHiddenAbilityId(pokemon, slot);
   const candidates = [
     ...pokemon.abilities.map((id) => ({ id, hidden: false })),
-    ...(pokemon.hiddenAbility ? [{ id: pokemon.hiddenAbility, hidden: true }] : []),
+    ...(hiddenAbilityId ? [{ id: hiddenAbilityId, hidden: true }] : []),
   ];
 
   return (

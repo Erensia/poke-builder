@@ -135,6 +135,22 @@ export function useParty() {
     });
   }
 
+  /** 펌킨인 계열 크기 변종을 다음 크기로 돌린다(sizeForms 순서 순환, 끝에서 처음으로) */
+  function cycleSizeForm(slotIndex: number) {
+    setSlots((prev) => {
+      const slot = prev[slotIndex];
+      if (!slot) return prev;
+      const forms = getPokemon(slot.pokemonId)?.sizeForms;
+      if (!forms || forms.length === 0) return prev;
+      const currentId = slot.sizeForm ?? forms.find((f) => f.standard)?.id ?? forms[0].id;
+      const idx = forms.findIndex((f) => f.id === currentId);
+      const nextForm = forms[(idx + 1) % forms.length];
+      const next = [...prev] as PartySlots;
+      next[slotIndex] = { ...slot, sizeForm: nextForm.id };
+      return next;
+    });
+  }
+
   /** 합산 66 / 스탯당 32를 넘지 않도록 클램프해서 능력 포인트 한 스탯을 절대값으로 설정한다 (직접 입력용) */
   function setPoint(slotIndex: number, stat: keyof AbilityPoints, value: number) {
     setSlots((prev) => {
@@ -183,6 +199,7 @@ export function useParty() {
     setItem,
     setNature,
     toggleGender,
+    cycleSizeForm,
     setPoint,
     stepPoint,
     resetParty,
