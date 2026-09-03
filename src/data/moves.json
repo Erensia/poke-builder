@@ -9598,5 +9598,318 @@
         "sleep"
       ]
     }
+  },
+  {
+    "id": "아쿠아스텝",
+    "name": "아쿠아스텝",
+    "type": "물",
+    "category": "physical",
+    "power": 80,
+    "accuracy": 100,
+    "pp": 10,
+    "priority": 0,
+    "effect": "가볍고 경쾌한 스텝으로 상대를 농락하면서 공격한다. 자신의 스피드를 1랭크 올린다.",
+    "statChanges": [
+      {
+        "target": "self",
+        "stat": "spe",
+        "delta": 1
+      }
+    ],
+    "tags": [
+      "랭크",
+      "접촉",
+      "춤"
+    ],
+    "classification": [
+      "춤"
+    ],
+    "makesContact": true
+  },
+  {
+    "id": "제트펀치",
+    "name": "제트펀치",
+    "type": "물",
+    "category": "physical",
+    "power": 60,
+    "accuracy": 100,
+    "pp": 15,
+    "priority": 1,
+    "effect": "소용돌이치는 물을 두른 주먹을 눈에 보이지 않는 속도로 내지른다. 반드시 선제 공격을 할 수 있다.",
+    "tags": [
+      "선공",
+      "접촉",
+      "펀치"
+    ],
+    "classification": [
+      "펀치"
+    ],
+    "makesContact": true
+  },
+  {
+    "id": "날따름",
+    "name": "날따름",
+    "type": "노말",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 20,
+    "priority": 2,
+    "effect": "자신에게 주목을 끌어 상대의 공격을 자신이 대신 받는다. (더블 전용 — 1v1 시뮬레이터엔 대상이 없어 스텁)",
+    "tags": [
+      "선공",
+      "변화"
+    ],
+    "makesContact": false
+  },
+  {
+    "id": "정리정돈",
+    "name": "정리정돈",
+    "type": "노말",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 10,
+    "priority": 0,
+    "effect": "스텔스록·압정뿌리기·끈적끈적네트·대타출동을 정리해서 없앤 뒤 자신의 공격과 스피드를 1랭크씩 올린다. (설치물·대타 제거는 아직 엔진에 반영되지 않음 — 고속스핀 선례. 랭크업만 반영)",
+    "statChanges": [
+      {
+        "target": "self",
+        "stat": "atk",
+        "delta": 1
+      },
+      {
+        "target": "self",
+        "stat": "spe",
+        "delta": 1
+      }
+    ],
+    "tags": [
+      "랭크",
+      "변화"
+    ],
+    "makesContact": false
+  },
+  {
+    "id": "찍찍베기",
+    "name": "찍찍베기",
+    "type": "노말",
+    "category": "physical",
+    "power": 60,
+    "accuracy": 100,
+    "pp": 20,
+    "priority": 0,
+    "effect": "예리한 앞니로 상대를 벤다. (수치·부가효과 미확정 — 본가값 추정, 사용자 확정 필요)",
+    "tags": [
+      "접촉",
+      "베기"
+    ],
+    "classification": [
+      "베기"
+    ],
+    "makesContact": true
+  },
+  {
+    "id": "소금절이",
+    "name": "소금절이",
+    "type": "바위",
+    "category": "physical",
+    "power": 40,
+    "accuracy": 100,
+    "pp": 15,
+    "priority": 0,
+    "effect": "상대를 소금에 절여 매 턴 데미지를 준다. 강철·물 타입 상대는 더 오래 괴로워한다. (지속 데미지는 속박(bound)으로 근사 — 타입별 배율·영구 지속은 아직 엔진에 반영되지 않음)",
+    "tags": [
+      "접촉"
+    ],
+    "makesContact": true,
+    "bindsTarget": true
+  },
+  {
+    "id": "하바네로엑기스",
+    "name": "하바네로엑기스",
+    "type": "노말",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 15,
+    "priority": 0,
+    "effect": "아주 매운 엑기스를 상대에게 뿌려 상대의 공격을 2랭크 올리고 방어를 2랭크 떨어뜨린다.",
+    "statChanges": [
+      {
+        "target": "opponent",
+        "stat": "atk",
+        "delta": 2
+      },
+      {
+        "target": "opponent",
+        "stat": "def",
+        "delta": -2
+      }
+    ],
+    "tags": [
+      "랭크",
+      "변화"
+    ],
+    "makesContact": false
+  },
+  {
+    "id": "루미나콜리전",
+    "name": "루미나콜리전",
+    "type": "에스퍼",
+    "category": "special",
+    "power": 80,
+    "accuracy": 100,
+    "pp": 5,
+    "priority": 0,
+    "effect": "빛을 두른 강렬한 힘을 내보내 공격한다. 상대의 특수방어를 2랭크 떨어뜨린다.",
+    "statChanges": [
+      {
+        "target": "opponent",
+        "stat": "spd",
+        "delta": -2
+      }
+    ],
+    "tags": [
+      "랭크",
+      "비접촉"
+    ],
+    "makesContact": false
+  },
+  {
+    "id": "거대해머",
+    "name": "거대해머",
+    "type": "강철",
+    "category": "physical",
+    "power": 160,
+    "accuracy": 100,
+    "pp": 5,
+    "priority": 0,
+    "effect": "거대한 해머를 내리쳐 공격한다. 2턴 연속으로는 사용할 수 없다. (연속 사용 제한은 대응 필드가 없어 아직 엔진에 반영되지 않음)",
+    "tags": [
+      "접촉"
+    ],
+    "makesContact": true
+  },
+  {
+    "id": "분노의주먹",
+    "name": "분노의주먹",
+    "type": "고스트",
+    "category": "physical",
+    "power": 50,
+    "accuracy": 100,
+    "pp": 10,
+    "priority": 0,
+    "effect": "분노를 담아 상대를 때린다. 지금까지 받은 공격 횟수가 많을수록 위력이 올라간다(최대 350). (피격 횟수 누적 위력은 대응 필드가 없어 아직 엔진에 반영되지 않음 — 기본 위력 50 고정)",
+    "tags": [
+      "접촉",
+      "펀치"
+    ],
+    "classification": [
+      "펀치"
+    ],
+    "makesContact": true
+  },
+  {
+    "id": "트윈빔",
+    "name": "트윈빔",
+    "type": "에스퍼",
+    "category": "special",
+    "power": 40,
+    "accuracy": 100,
+    "pp": 10,
+    "priority": 0,
+    "effect": "양쪽 눈에서 신비한 빛줄기를 발사한다. 2회 연속으로 데미지를 준다.",
+    "tags": [
+      "연속",
+      "비접촉"
+    ],
+    "makesContact": false,
+    "minHits": 2,
+    "maxHits": 2
+  },
+  {
+    "id": "도각참",
+    "name": "도각참",
+    "type": "악",
+    "category": "physical",
+    "power": 85,
+    "accuracy": null,
+    "pp": 10,
+    "priority": 0,
+    "effect": "땅에 조아리게 만들어 상대의 빈틈을 노려 벤다. 이 공격은 반드시 명중한다.",
+    "tags": [
+      "접촉",
+      "베기"
+    ],
+    "classification": [
+      "베기"
+    ],
+    "makesContact": true
+  },
+  {
+    "id": "휘적휘적포",
+    "name": "휘적휘적포",
+    "type": "풀",
+    "category": "special",
+    "power": 80,
+    "accuracy": 90,
+    "pp": 15,
+    "priority": 0,
+    "effect": "차를 휘적여 상대에게 끼얹어 공격한다. 준 데미지의 1/2만큼 체력을 회복한다. 20% 확률로 상대를 화상 상태로 만든다. (기술명·수치 미확정 — 말차차차 기준 추정, 사용자 확정 필요)",
+    "inflictsStatus": [
+      {
+        "status": "burn",
+        "chance": 20
+      }
+    ],
+    "tags": [
+      "흡수",
+      "비접촉"
+    ],
+    "makesContact": false,
+    "drainFraction": 0.5
+  },
+  {
+    "id": "변덕레이저",
+    "name": "변덕레이저",
+    "type": "드래곤",
+    "category": "special",
+    "power": 80,
+    "accuracy": 100,
+    "pp": 5,
+    "priority": 0,
+    "effect": "변덕스럽게 광선을 발사한다. 30% 확률로 힘이 폭발해 위력이 2배가 되지만 다음 턴 움직일 수 없다. (확률적 위력 2배·경직은 대응 필드가 없어 아직 엔진에 반영되지 않음 — 기본 위력 80 고정)",
+    "tags": [
+      "비접촉"
+    ],
+    "makesContact": false
+  },
+  {
+    "id": "시럽봄",
+    "name": "시럽봄",
+    "type": "풀",
+    "category": "special",
+    "power": 60,
+    "accuracy": 85,
+    "pp": 10,
+    "priority": 0,
+    "effect": "끈적한 시럽 폭탄을 던져 상대를 시럽투성이로 만들고 3턴간 매 턴 스피드를 1랭크씩 떨어뜨린다. (3턴 지속 하락은 아직 엔진에 반영되지 않음 — 1회 스피드 -1로 근사)",
+    "statChanges": [
+      {
+        "target": "opponent",
+        "stat": "spe",
+        "delta": -1
+      }
+    ],
+    "tags": [
+      "랭크",
+      "비접촉",
+      "폭탄"
+    ],
+    "classification": [
+      "구슬/폭탄"
+    ],
+    "makesContact": false
   }
 ]
