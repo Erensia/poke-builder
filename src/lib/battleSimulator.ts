@@ -1453,6 +1453,22 @@ export interface TurnResult {
   expiredScreens: { actor: FighterKey; screen: "reflect" | "lightScreen" | "auroraVeil" }[];
   /** 턴 시작 시점에 발생한 안내 문구(의태 타입 변화 등). 없으면 빈 배열 */
   turnStartAnnouncements: string[];
+  /**
+   * 이번 턴 처리된 교체(Phase 8 §3). 한쪽 교체면 1개, 양쪽 교체면 2개, 교체 없으면 빈 배열.
+   * 교체 우선도상 항상 기술보다 먼저 처리되므로 로그에서도 actions 앞에 놓는다.
+   */
+  switches: SwitchLogEntry[];
+}
+
+/** 이번 턴 한 편에서 일어난 교체(플레이어 선택) — 로그 문구용 */
+export interface SwitchLogEntry {
+  side: FighterKey;
+  fromIndex: number;
+  toIndex: number;
+  /** 물러난 포켓몬 종 id */
+  outPokemonId: string;
+  /** 새로 나온 포켓몬 종 id */
+  inPokemonId: string;
 }
 
 function isFainted(fighter: BattleFighterState): boolean {
@@ -1481,6 +1497,95 @@ function cloneSide(side: BattleSide): BattleSide {
     activeIndex: side.activeIndex,
     hazards: { ...side.hazards },
   };
+}
+
+/** 편에 활성 슬롯 말고 아직 안 쓰러진 슬롯이 하나라도 있으면 true(파티 길이 1이면 항상 false) */
+function hasLivingReserve(side: BattleSide): boolean {
+  return side.party.some((f, i) => i !== side.activeIndex && !isFainted(f));
+}
+
+/**
+ * 편(side)의 활성 슬롯을 toIndex로 바꾼다(Phase 8 §3). 물러나는 포켓몬의 "슬롯에 종속된"
+ * 휘발 상태(랭크·행동방해·차지·비축·연속기 잠금 등)를 본가 규칙대로 초기화하고, 새로 나온
+ * 포켓몬에 폼(기분파·의태)·스탠스(킬가르도 실드 복귀)를 맞춘다. state.a/state.b 포인터도 다시 문다.
+ *
+ * 등장 시 처리(설치물 발동·위협 등 등장 특성·재생력)는 §4/§5에서 이 함수 뒤에 붙는다 — S2는 순수 교체만.
+ * toIndex가 현재 활성이거나 범위를 벗어나면 아무것도 안 한다.
+ */
+function performSwitch(state: BattleState, key: FighterKey, toIndex: number): void {
+  const side = sideOf(state, key);
+  if (toIndex === side.activeIndex || toIndex < 0 || toIndex >= side.party.length) return;
+  const outgoing = side.party[side.activeIndex];
+
+  // ── 물러나는 포켓몬: 슬롯 종속 상태 초기화 ──
+  outgoing.stages = { ...NEUTRAL_STAGES };
+  outgoing.accuracyStages = { ...NEUTRAL_ACCURACY_STAGES };
+  outgoing.critStage = NEUTRAL_CRIT_STAGE;
+  outgoing.statStagesAtTurnStart = undefined;
+  // 행동방해류(혼란·도발·앙코르·사슬묶기·씨뿌리기·헤롱헤롱·뿌리박기·아쿠아링 등) 전부 해제.
+  // 단 소금절이(saltCure)는 교체로 풀리지 않는다(본가) — 그것만 남긴다.
+  {
+    const kept = outgoing.volatile.active.saltCure;
+    outgoing.volatile = { active: kept ? { saltCure: kept } : {} };
+  }
+  outgoing.chargingMoveId = undefined;
+  outgoing.lastMoveId = undefined;
+  outgoing.lastMoveStreak = undefined;
+  outgoing.stockpileCount = undefined;
+  outgoing.perishCount = undefined;
+  outgoing.destinyBondArmed = undefined;
+  outgoing.substituteHp = undefined;
+  outgoing.activeProtect = undefined;
+  outgoing.protectStreak = undefined;
+  outgoing.moveTypeOverrideThisTurn = undefined;
+  outgoing.electroChargedForElectric = undefined;
+  outgoing.damageTakenThisTurn = { physical: 0, special: 0 };
+  outgoing.consecutiveLockMoveId = undefined;
+  outgoing.consecutiveLockUntilTurn = undefined;
+  // 유지: currentHp · status(주 상태이상) · remainingPp · itemConsumed · currentItemId ·
+  //       consumedBerryId · addedType · timesHitByMoves(교체 초기화 미도입) · ownMoveTypeBoosts ·
+  //       disguiseBroken · hungerMode.
+  //   후속: unburdenActive(§8에서 교체 시 해제로) · screens(편 기반 미이전 — 알려진 단순화) ·
+  //         transformed(변신 원복 — 메타몽 전용이라 미도입).
+
+  // ── 활성 슬롯 전환 ──
+  side.activeIndex = toIndex;
+  if (key === "a") state.a = side.party[toIndex];
+  else state.b = side.party[toIndex];
+  const incoming = side.party[toIndex];
+
+  // 킬가르도: 등장 시 항상 실드폼으로 복귀
+  if (incoming.stanceChangeForms) incoming.currentStanceForm = "shield";
+  // 기분파·의태: 등장 시점의 날씨/필드에 맞춰 타입 정렬
+  applyForecastForm(incoming, activeWeather(state));
+  applyMimicryForm(incoming, state.field);
+
+  // TODO(§4/§5): 여기서 등장 파이프라인 — 설치물 발동, 위협·날씨 등 등장 특성, 물러난 쪽 재생력/자연회복.
+  // TODO(§8): 추격(Pursuit)은 로스터에 없어 미구현 — 교체 대상을 위력 2배로 선타하는 예외.
+}
+
+/**
+ * 강제 교체(기절 후) 또는 UI 교체 확정을 적용한 새 상태를 돌려준다. runTurn 밖에서 호출하며
+ * prevState는 변형하지 않는다. turnNumber는 그대로 둔다(교체는 턴을 소비하지 않는 별도 조작).
+ */
+export function applySwitch(prevState: BattleState, key: FighterKey, toIndex: number): BattleState {
+  const sideA = cloneSide(prevState.sideA);
+  const sideB = cloneSide(prevState.sideB);
+  const state: BattleState = {
+    a: sideA.party[sideA.activeIndex],
+    b: sideB.party[sideB.activeIndex],
+    sideA,
+    sideB,
+    weather: prevState.weather,
+    weatherTurnsRemaining: prevState.weatherTurnsRemaining,
+    field: prevState.field,
+    fieldTurnsRemaining: prevState.fieldTurnsRemaining,
+    trickRoomTurnsRemaining: prevState.trickRoomTurnsRemaining,
+    turnNumber: prevState.turnNumber,
+    entryAnnouncements: prevState.entryAnnouncements,
+  };
+  performSwitch(state, key, toIndex);
+  return state;
 }
 
 /**
@@ -4367,22 +4472,34 @@ function resolveAction(
   };
 }
 
+/** 한 편이 이번 턴에 하는 행동. 교체는 항상 기술보다 먼저 처리된다(Phase 8 §3). */
+export type TurnAction =
+  | { kind: "move"; move: Move }
+  | { kind: "switch"; toIndex: number };
+
 export interface RunTurnOutcome {
   /** 이번 턴 결과가 반영된 새 BattleState. prevState는 변형하지 않는다 */
   nextState: BattleState;
   result: TurnResult;
+  /**
+   * 턴 종료 시 활성 슬롯이 기절해 있어 다음 runTurn 전에 교체가 필요한 편(Phase 8 §3).
+   * 호출부는 applySwitch로 교체를 확정한 뒤 다음 턴을 진행해야 한다. 남은 슬롯이 없으면 그
+   * 편은 이미 패배(result.winner)라 여기 안 실린다. 파티 길이 1이면 항상 undefined.
+   */
+  forcedSwitch?: { a?: boolean; b?: boolean };
 }
 
 /**
  * 한 턴을 진행시킨다. prevState는 변형하지 않고, 복사본에 적용한 새 상태를 nextState로 돌려준다.
+ * 각 편의 액션은 기술(move) 또는 교체(switch) — 교체는 항상 그 턴 기술보다 먼저 처리한다.
  * 우선도 → 실효 스피드(마비 0.5배 포함) → 동속 랜덤 순으로 순서를 정하고,
  * 먼저 움직인 쪽이 상대를 쓰러뜨리면 나중 쪽은 행동하지 않는다.
  * 마지막에 양쪽 다 살아있으면 상태이상 매턴 데미지를 적용한다.
  */
 export function runTurn(
   prevState: BattleState,
-  moveA: Move,
-  moveB: Move,
+  actionA: TurnAction,
+  actionB: TurnAction,
   random: () => number = Math.random,
 ): RunTurnOutcome {
   const sideA = cloneSide(prevState.sideA);
@@ -4401,6 +4518,37 @@ export function runTurn(
     turnNumber: prevState.turnNumber + 1,
     entryAnnouncements: prevState.entryAnnouncements,
   };
+
+  // ── 교체 액션 선처리(Phase 8 §3): 항상 그 턴 기술보다 먼저 ──
+  // 양쪽 다 교체면 스피드 빠른 쪽부터(순수 교체라 결과엔 영향 없지만 로그 순서 일관성).
+  const switches: SwitchLogEntry[] = [];
+  const didSwitch: Record<FighterKey, boolean> = { a: false, b: false };
+  const switchOrder: FighterKey[] =
+    prevState.a.realStats.spe >= prevState.b.realStats.spe ? ["a", "b"] : ["b", "a"];
+  for (const key of switchOrder) {
+    const action = key === "a" ? actionA : actionB;
+    if (action.kind !== "switch") continue;
+    const side = sideOf(state, key);
+    const fromIndex = side.activeIndex;
+    const outgoing = side.party[fromIndex];
+    performSwitch(state, key, action.toIndex);
+    if (side.activeIndex !== fromIndex) {
+      didSwitch[key] = true;
+      switches.push({
+        side: key,
+        fromIndex,
+        toIndex: action.toIndex,
+        outPokemonId: outgoing.slot.pokemonId,
+        inPokemonId: side.party[action.toIndex].slot.pokemonId,
+      });
+    }
+  }
+
+  // 교체한 쪽은 이번 턴 행동하지 않는다. 아래 로직은 전부 Move 객체를 전제하므로, 교체 액션은
+  // 절대 실행되지 않는 무해한 센티넬로 대체한다(순서 계산의 우선도만 0으로 참여).
+  const SWITCH_PASS_MOVE: Move = { ...STRUGGLE_MOVE, id: "__switch_pass__", name: "교체", category: "status", power: null };
+  const moveA: Move = actionA.kind === "move" ? actionA.move : SWITCH_PASS_MOVE;
+  const moveB: Move = actionB.kind === "move" ? actionB.move : SWITCH_PASS_MOVE;
 
   // 방어류(방어/판별/버티기/킹실드)는 "이번 턴 한정" 효과라 매 턴 시작 시 항상 지운다 —
   // 지난 턴에 세운 게 이번 턴까지 남아있으면 안 된다. 연속 성공 스트릭(protectStreak)은
@@ -4433,7 +4581,7 @@ export function runTurn(
 
   // 부리캐논(정신 집중류): 이 기술을 고른 턴 시작 시 "…은(는) 부리를 가열시켰다!"를 알린다.
   for (const [key, mv] of [["a", moveA], ["b", moveB]] as const) {
-    if (mv.turnStartUserAnnouncement && !isFainted(state[key])) {
+    if (mv.turnStartUserAnnouncement && !isFainted(state[key]) && !didSwitch[key]) {
       const nm = getPokemon(state[key].slot.pokemonId)?.name ?? "포켓몬";
       turnStartAnnouncements.push(`${nm}${eunNeun(nm)} ${mv.turnStartUserAnnouncement}`);
     }
@@ -4527,6 +4675,7 @@ export function runTurn(
   let winner: FighterKey | "draw" | undefined;
 
   for (const key of order) {
+    if (didSwitch[key]) continue; // 이번 턴 교체한 쪽은 행동하지 않는다(교체가 곧 그 턴 행동)
     if (isFainted(state[key])) continue; // 이미 쓰러진 쪽은 행동 못 함
     if (isFainted(state[opponentKey(key)])) break; // 상대가 이미 쓰러졌으면 더 진행할 필요 없음
     // 포커스렌즈 판정용 — 이번 턴 order 기준으로 상대보다 늦게 움직이는 쪽인지
@@ -5007,21 +5156,38 @@ export function runTurn(
     }
   }
 
+  // 활성 슬롯이 기절해도 파티에 아직 안 쓰러진 슬롯이 있으면 그 편의 패배가 아니라 강제 교체다.
+  // (파티 길이 1이면 hasLivingReserve가 항상 false라 아래 로직은 기존 1v1과 완전히 동일하게 동작.)
+  const aHasReserve = hasLivingReserve(state.sideA);
+  const bHasReserve = hasLivingReserve(state.sideB);
+
   // 멸망의노래로 양쪽이 동시에 쓰러졌으면 무승부가 아니라 스피드가 느린 쪽이 승리한다(F-4) —
   // 빠른 쪽이 먼저 쓰러지는 것으로 취급. 랭크 반영 실효 스피드로 비교(트릭룸은 무관).
-  if (!winner && perishFaintedKeys.size === 2) {
+  // 단 어느 한쪽이라도 교대할 슬롯이 남아 있으면 배틀은 안 끝나고 강제 교체로 넘어간다(§3).
+  if (!winner && perishFaintedKeys.size === 2 && !aHasReserve && !bHasReserve) {
     const effSpeedA = speedA * rankStageMultiplier(state.a.stages.spe);
     const effSpeedB = speedB * rankStageMultiplier(state.b.stages.spe);
     winner = effSpeedA <= effSpeedB ? "a" : "b";
   }
 
-  // 턴 종료 상태이상 데미지로 양쪽이 동시에 0이 되는 경우만 진짜 무승부로 남는다 — 이건 어느 한
-  // 쪽이 상대를 쓰러뜨린 게 아니라 각자 자기 상태이상으로 따로 쓰러진 것이라 인과관계가 없다.
+  // 턴 종료 시점에 활성이 기절해 있고 교대할 슬롯도 없으면 그 편이 진다. 양쪽 다면 무승부 —
+  // 어느 한 쪽이 상대를 쓰러뜨린 게 아니라 각자 자기 상태이상 등으로 따로 쓰러진 것이라 인과가 없다.
   if (!winner) {
-    if (isFainted(state.a) && isFainted(state.b)) winner = "draw";
-    else if (isFainted(state.a)) winner = "b";
-    else if (isFainted(state.b)) winner = "a";
+    const aOut = isFainted(state.a) && !aHasReserve;
+    const bOut = isFainted(state.b) && !bHasReserve;
+    if (aOut && bOut) winner = "draw";
+    else if (aOut) winner = "b";
+    else if (bOut) winner = "a";
   }
+
+  // 배틀이 안 끝났는데 활성이 기절해 있으면(=교대할 슬롯이 남음) 다음 턴 전에 강제 교체를 요구한다.
+  const forcedSwitch: { a?: boolean; b?: boolean } | undefined =
+    !winner && ((isFainted(state.a) && aHasReserve) || (isFainted(state.b) && bHasReserve))
+      ? {
+          a: isFainted(state.a) && aHasReserve ? true : undefined,
+          b: isFainted(state.b) && bHasReserve ? true : undefined,
+        }
+      : undefined;
 
   // 필드 지속 턴 카운트다운. 0이 되면 이번 턴을 끝으로 필드가 사라진다.
   let fieldExpired = false;
@@ -5093,6 +5259,8 @@ export function runTurn(
       weatherExpired,
       expiredScreens,
       turnStartAnnouncements,
+      switches,
     },
+    forcedSwitch,
   };
 }

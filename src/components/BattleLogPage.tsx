@@ -326,7 +326,13 @@ export function BattleLogPage() {
     const moveA = aStruggling ? STRUGGLE_MOVE : aCharging ? getMove(battleState.a.chargingMoveId!) : getMove(selected.a!);
     const moveB = bStruggling ? STRUGGLE_MOVE : bCharging ? getMove(battleState.b.chargingMoveId!) : getMove(selected.b!);
     if (!moveA || !moveB) return;
-    const { nextState, result } = runTurn(battleState, moveA, moveB);
+    // Phase 8 §3: runTurn은 이제 편별 move|switch 액션을 받는다. 교체 UI(§S3)가 붙기 전까지는
+    // 양쪽 다 move 액션으로 감싸 기존 1v1과 동일하게 동작시킨다.
+    const { nextState, result } = runTurn(
+      battleState,
+      { kind: "move", move: moveA },
+      { kind: "move", move: moveB },
+    );
     setBattleState(nextState);
     setLog((prev) => [...prev, result]);
     setSelected({ a: null, b: null });
