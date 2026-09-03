@@ -551,9 +551,9 @@ hitsDefensiveStat?: "def" | "spd";
   - `페이탈클로`(독/물리 80·100·**pp16**) → `inflictsRandomStatus:{chance:30, statuses:["poison","paralysis","sleep"]}`(확률 성공 시 셋 중 랜덤 하나, 면역 존중).
   - **더블 전용 스텁**: `데코레이션`(아군 공격·특공 +2).
 
-### 6-15. 9세대 반영 기록 (2026-09-03, 브랜치 `phase-7.5`) — 1차 병합
+### 6-15. 9세대 반영 기록 (2026-09-03, 브랜치 `phase-7.5`)
 
-포챔스 9세대 입국몬 **15종** + 신규 특성 **12종(배선 5 / 스텁 7)** + 신규 기술 **15종(배선 10 / 스텁·부분 5)**. `pokemon.json` 213→228, `moves.json` 482→497, `abilities.json` 182→193(중복 1건 제거 포함). staging: `docs/02_.../pokemon-champions-9gen-staging.json`. 검증(참조 무결성·id 유일성·BST 스팟체크·tsc·lint·build + 스모크 15종) 통과. **1차 병합 — 임의 채운 수치·배선은 사용자 확정 대기.**
+포챔스 9세대 입국몬 **15종** + 신규 특성 **12종(배선 9 / 스텁 3)** + 신규 기술 **15종(배선 13 / 스텁 2)**. `pokemon.json` 213→228, `moves.json` 482→497, `abilities.json` 182→193(중복 1건 제거 포함). staging: `docs/02_.../pokemon-champions-9gen-staging.json`. 검증(참조 무결성·id 유일성·BST 스팟체크·tsc·lint·build + 스모크 1차 15종 / 2차 28종) 통과. 1차 병합(`b7a5a37`) 후 특성 배선·기술 수치 사용자 확정 반영.
 
 - **종 15종**: 웨이니발·파밀리쥐·콜로솔트·찌리배리·스코빌런·클레스퍼트라·두드리짱·돌핀맨·꿈트렁·묘두기·저승갓숭·키키링·대도각참·그우린차·과미드라. **전 종 단일폼**(히스이/가라르 등 특수폼 요청 없음).
 - **성별**: 파밀리쥐·그우린차 `genderless`, 두드리짱 `female-only`, 돌핀맨 숨김특성 없음.
@@ -561,15 +561,27 @@ hitsDefensiveStat?: "def" | "spd";
 - **메가진화 제외**: 스코빌런 위키 '메가스코빌런'은 비공식 추정 → 범위 밖. staging `dexNo`·`_flags` 제거.
 - **[별건 정리] `먹보` 중복 엔트리 제거**: 8세대 병합(`66bc63d`) 때 `pinchBerryAtHalfHp` 배선판을 추가하면서 기존 무배선 스텁(index 93)을 갱신하지 않고 새 엔트리로 넣어 id가 중복돼 있었음. 이번에 무배선 스텁을 삭제하고 배선판만 남김.
 
-- **신규 특성 12종 — 배선 5 / 스텁 7** (전부 기존 필드 재사용, `ability.ts`·엔진 코드 신규 변경 없음):
-  - `정화의소금` → `immuneToStatuses`(화상·얼음·마비·독·잠듦) + `modifiers` defense ×2 `moveTypeIn:["고스트"]`(고스트 데미지 절반).
+- **신규 특성 12종 — 배선 9 / 스텁 3** (2026-09-03 사용자 확정. `ability.ts` 필드 5종 신설: `halvesBurnDamage`·`chargesOnDamageTaken`·`copiesOpponentStatBoosts`·`preventsItemLoss`·`lowersOpponentEvasionOnEntry`):
+  - `정화의소금` → `immuneToStatuses`(화상·얼음·마비·독·잠듦) + `modifiers` defense ×2 `moveTypeIn:["고스트"]`.
   - `흙먹기` → `absorbsType:{땅, healsFraction:0.25}`(건조피부 패턴).
-  - `복슬복슬` → `modifiers` defense ×2 `makesContact` + ×0.5 `moveTypeIn:["불꽃"]`(접촉 절반·불꽃 2배).
-  - `테일아머` → `blocksOpponentPriorityMoves`(여왕의위엄과 동일 — `queenlyMajesty` blockedReason·문구 그대로 재사용).
-  - `내열` → `modifiers` defense ×2 `moveTypeIn:["불꽃"]`. **화상 데미지 절반은 대응 필드 없어 미배선(설명문에 명시).**
-  - **스텁 7**: `전기로바꾸기`(피격 시 충전 상태 → 다음 전기기 위력 2배 — 충전 상태 축 없음) · `편승`(상대 랭크 상승 복사 축 없음) · `마이티체인지`(폼체인지 로직 없음) · `점착`(도구 강탈 방지 축 없음) · `총대장`(1v1 아군 없음 — 실질 무효) · `대접`(더블 전용) · `감미로운꿀`(배틀 외 효과).
-  - `MOLD_BREAKER_IMMUNE_ABILITY_NAMES`에 9세대분(테일아머·흙먹기·정화의소금 등)이 이미 선반영돼 있어 별도 작업 없음.
+  - `복슬복슬` → `modifiers` defense ×2 `makesContact` + ×0.5 `moveTypeIn:["불꽃"]`(플레어드라이브류 ×1 상쇄).
+  - `테일아머` → `blocksOpponentPriorityMoves`(여왕의위엄과 동일 — `queenlyMajesty` blockedReason·문구 재사용).
+  - `내열` → `modifiers` defense ×2 `moveTypeIn:["불꽃"]` + 신설 `halvesBurnDamage`. 화상 EOT 지속 데미지를 `Math.floor(rawStatusDamage / 2)`로.
+  - `전기로바꾸기` → 신설 `chargesOnDamageTaken`. `applyDamageToDefender`에서 기술 데미지(amount>0)를 받으면 `BattleFighterState.electroChargedForElectric=true`. resolveAction 위력 계산부에서 충전 상태 + `move.type==="전기"`면 위력 ×2 + 즉시 소모(1회). `ActionLogEntry.electromorphosisEmpoweredAbilityName`.
+  - `편승` → 신설 `copiesOpponentStatBoosts`. 기술 한 번의 랭크 변화가 전부 반영된 뒤(competitive·하양허브 후처리 포함), 상대가 이번 기술로 얻은 양(+)의 랭크 상승분을 편승 보유자에게 그대로 복사(복사자 쪽 심술꾸러기/클리어바디류 존중). `ActionLogEntry.opportunistCopiedStats`.
+  - `점착` → 신설 `preventsItemLoss`. 나쁜손버릇(`stealsAttackerItem`)·매지션(`stealsItemOnDamagingHit`) 도구 강탈 지점에서 피해자가 이 특성이면 무산. (이 엔진엔 도구 이동 기술이 없어 특성 두 곳으로 충분.)
+  - `감미로운꿀`(포챔스판) → 신설 `lowersOpponentEvasionOnEntry:-1`. `resolveEntryAbilityEffects`(위협 패턴)에서 상대 회피율 -1 + 전용 2줄 안내("…의 꿀에서 달콤한 향기가 나고 있다!" / "…의 회피율이 떨어졌다!").
+  - **스텁 3**: `마이티체인지`(교체 도입 시 배선. 재등장 문구 "돌핀맨은 변신하고 돌아왔다!" 스텁) · `총대장`(63배틀 룰 도입 시. 등장 문구 "…은 쓰러진 동료에게서 힘을 받았다!" 스텁) · `대접`(더블 전용).
+  - `MOLD_BREAKER_IMMUNE_ABILITY_NAMES`에 9세대분(테일아머·흙먹기·정화의소금·내열·점착·복슬복슬 등)이 이미 선반영돼 있어 별도 작업 없음.
 
-- **신규 기술 15종 — 배선 10 / 스텁·부분 5** (수치는 전부 **본가값 추정 — 사용자 확정 대기**. `move.ts`·엔진 코드 신규 변경 없음):
-  - 배선 완료: `아쿠아스텝`(물/물리 80·100·pp10, 자신 스피드 +1, `classification:["춤"]`) · `제트펀치`(물/물리 60·100·pp15, **우선도 +1**, `classification:["펀치"]`) · `루미나콜리전`(에스퍼/특수 80·100·pp5, 상대 특방 -2) · `하바네로엑기스`(노말/변화 필중 pp15, 상대 공격 +2·방어 -2) · `트윈빔`(에스퍼/특수 40·100·pp10, `minHits/maxHits` 2) · `도각참`(악/물리 85·**필중**·pp10, `classification:["베기"]`) · `아쿠아스텝`/`제트펀치` 외 `정리정돈`(노말/변화 pp10, 자신 공격·스피드 +1 — 설치물·대타 제거는 고속스핀 선례대로 미배선) · `휘적휘적포`(풀/특수 80·90·pp15, `drainFraction:0.5` + 20% 화상 — **기술명·수치 미확정, 말차차차 기준 추정**) · `시럽봄`(풀/특수 60·85·pp10, 상대 스피드 -1 1회로 근사 — 3턴 지속 하락 미배선) · `소금절이`(바위/물리 40·100·pp15, `bindsTarget`로 지속 데미지 근사 — 타입별 배율·영구 지속 미배선).
-  - **스텁·부분(데이터 + effect 텍스트만)**: `거대해머`(강철/물리 160·100·pp5 — "2턴 연속 사용 불가" 대응 필드 없음) · `분노의주먹`(고스트/물리 50·100·pp10 — 피격 횟수 누적 위력 축 없음, 위력 50 고정) · `변덕레이저`(드래곤/특수 80·100·pp5 — 확률적 위력 2배·경직 축 없음, 위력 80 고정) · `날따름`(노말/변화 우선도+2 pp20 — 더블 전용) · `찍찍베기`(노말/물리 60·100·pp20 `베기` — 수치·부가효과 전부 미확정).
+- **신규 기술 15종 — 배선 13 / 스텁 2** (수치·설명·태그·PP 2026-09-03 사용자 확정. `move.ts` 필드 6종 신설: `hazardClear`·`setsSyrupCoat`·`setsSaltCure`·`cannotUseConsecutively`·`rageFistPower`·`randomDoublePower`. `status.ts` volatile 2종 신설: `saltCure`·`syrupCoat`):
+  - 데이터+`statChanges`만으로 완결: `아쿠아스텝`(물/물리 80·100·**pp12**, 자신 스피드 +1, `classification:["춤"]`) · `제트펀치`(물/물리 60·100·**pp16**, **우선도 +1**, `classification:["펀치"]`) · `루미나콜리전`(에스퍼/특수 80·100·**pp12**, 상대 특방 -2) · `하바네로엑기스`(**풀**/변화 필중 **pp16**, 상대 공격 +2·방어 -2) · `트윈빔`(에스퍼/특수 40·100·**pp12**, `minHits/maxHits` 2) · `도각참`(악/물리 85·**필중**·**pp12**, `classification:["베기"]`) · `휘적휘적포`(풀/특수 80·90·**pp16**, `drainFraction:0.5` + 20% 화상. 태그 광역-상대).
+  - `정리정돈`(노말/변화 **pp12**) → 신설 `hazardClear:"tidy"`. 명중 시 **양쪽** 진영 스텔스록/압정 + **양쪽** 대타 제거 후 자신 공격·스피드 +1. `고속스핀`엔 `hazardClear:"spin"` 부여(사용자 쪽 설치물 + 사용자에게 걸린 속박·씨뿌리기만 정리 — 본가 고속스핀). `ActionLogEntry.tidyUpDone`("정리정돈 끝!").
+  - `시럽봄`(풀/특수 60·90·**pp12**) → 신설 `setsSyrupCoat` + volatile `syrupCoat`(3턴). 매 턴 종료 시 상대 스피드 -1(심술꾸러기/클리어바디류 존중), 카운터 소모. 데미지 기술 부가효과라 인분·우격다짐엔 무발동.
+  - `소금절이`(바위/물리 40·100·**pp16**, **비접촉**) → 신설 `setsSaltCure` + volatile `saltCure`(영구, leechSeed 패턴). 매 턴 종료 시 최대 HP 1/16(**강철/물 타입이면 1/8**) 피해(매직가드 면제). 인분(`blocksSecondaryEffects`)·우격다짐(`tradesSecondaryEffectForPower`)엔 상태가 안 걸리고 데미지만 — `hasSheerForceSecondaryEffect`에 `setsSaltCure`/`setsSyrupCoat` 추가. `ActionLogEntry.saltCureApplied` / `EndOfTurnLogEntry.saltCureDamage`·`saltCureHeavy`.
+  - `거대해머`(강철/물리 160·100·**pp16**, **비접촉**) → 신설 `cannotUseConsecutively`. 직전 턴에 이 기술로 행동을 개시했으면(`consecutiveLockMoveId`+`consecutiveLockUntilTurn` == 현재 턴) `blockedReason:"usageCondition"`. 그 다음 턴부터 다시 사용 가능(잠금은 "사용 턴 + 1" 한 턴만 유효).
+  - `분노의주먹`(고스트/물리 50·100·**pp12**, 펀치) → 신설 `rageFistPower`. 위력 = `min(350, 50 + 50 × BattleFighterState.timesHitByMoves)`. `applyDamageToDefender`에서 기술 데미지(amount>0)마다 카운터 +1(다단히트는 타수만큼). 교체 초기화는 미도입.
+  - `변덕레이저`(드래곤/특수 80·100·**pp8**) → 신설 `randomDoublePower:30`. resolveAction 위력 계산부에서 `random()*100 < 30`이면 위력 ×2 + `ActionLogEntry.fickleBeamEmpowered`("…은(는) 전력을 다하기 시작했다!"). (본가 SV Fickle Beam엔 경직 없음 — 1차 effect 텍스트의 "다음 턴 못 움직임"은 오기, 정정.)
+  - `찍찍베기`(노말/물리 **20**·**90**·**pp12**, 연속·접촉·베기) → `multiHitPowers:[20×10]` + `minHits:1`/`maxHits:10`. `multiHitPowers` 있음 → `perHitAccuracyCheck` 경로 → 최대 10회, 각 타 90% 명중 개별 판정, 빗나가면 즉시 종료(트리플악셀과 같은 축). 엔진 코드 변경 없음.
+  - **스텁 2**: `날따름`(노말/변화 우선도+2 — 더블 전용).
+  - **[1차 → 2차 정정]** `아쿠아스텝` pp10→12 등 PP 전면 정정, `하바네로엑기스` 노말→풀·필중, `시럽봄` `statChanges` 1회 근사 → `syrupCoat` 3턴 지속, `소금절이` `bindsTarget` 근사 → `saltCure` 영구+타입별 배율·접촉→비접촉, `찍찍베기` 60/100 단타 → 20/90 10연타.

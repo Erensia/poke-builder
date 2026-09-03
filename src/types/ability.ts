@@ -642,4 +642,36 @@ export interface Ability {
    * 타입만 모양에 따라 달라진다.
    */
   hungerSwitch?: boolean;
+  /**
+   * 내열(Heatproof): 불꽃타입 데미지 절반(modifiers로 처리)에 더해, 화상 상태의 매 턴 종료 지속
+   * 데미지도 절반이 된다. runEndOfTurn의 상태이상 데미지 틱에서 statusCondition이 "burn"이면
+   * computeStatusEndOfTurnDamage 결과를 반으로 줄인다(내림).
+   */
+  halvesBurnDamage?: boolean;
+  /**
+   * 전기로바꾸기(Electromorphosis): 기술 데미지를 받으면 충전 상태가 된다(BattleFighterState.
+   * electroChargedForElectric). 충전 상태에서 다음에 쓰는 전기타입 기술은 위력이 2배가 되고,
+   * 그 즉시 충전이 소모된다(1회 한정).
+   */
+  chargesOnDamageTaken?: boolean;
+  /**
+   * 편승(Opportunist): 상대의 능력치 랭크가 올라가면(자기 강화기·부가효과 등 원인 무관) 자신도
+   * 같은 능력치를 같은 폭만큼 올린다. battleSimulator가 기술 한 번의 랭크 변화가 전부 반영된 뒤,
+   * 상대가 이번 기술로 얻은 양(+)의 랭크 상승분을 이 특성 소유자에게 그대로 복사한다(심술꾸러기·
+   * 클리어바디류는 복사 적용 시점에서 그대로 존중). 자기 자신의 상승은 복사하지 않는다.
+   */
+  copiesOpponentStatBoosts?: boolean;
+  /**
+   * 점착(Sticky Hold): 지닌 도구를 상대에게 빼앗기지 않는다. 나쁜손버릇(hitTrigger.stealsAttackerItem)·
+   * 매지션(stealsItemOnDamagingHit)의 도구 강탈 지점에서 이 특성 소유자가 피해자면 강탈이 무산된다.
+   * (이 엔진엔 도구를 옮기는 기술 — 탁쳐서떨구기·도둑질·트릭 — 로직이 없어 특성 두 곳만 막으면 충분하다.)
+   */
+  preventsItemLoss?: boolean;
+  /**
+   * 감미로운꿀(포챔스판): 배틀에 등장하면 상대의 회피율을 이 값(-1)만큼 떨어뜨린다. 위협
+   * (lowersOpponentStatOnEntry)의 회피율 버전 — 회피율은 BattleStatKey가 아니라 accuracyStages라
+   * 별도 필드로 뒀다. 배틀당 1회(1v1이라 등장도 1회). resolveEntryAbilityEffects에서 처리.
+   * 전용 안내 2줄: "…의 꿀에서 달콤한 향기가 나고 있다!" / "…의 회피율이 떨어졌다!"
+   */
+  lowersOpponentEvasionOnEntry?: number;
 }

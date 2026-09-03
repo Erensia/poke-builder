@@ -9606,9 +9606,9 @@
     "category": "physical",
     "power": 80,
     "accuracy": 100,
-    "pp": 10,
+    "pp": 12,
     "priority": 0,
-    "effect": "가볍고 경쾌한 스텝으로 상대를 농락하면서 공격한다. 자신의 스피드를 1랭크 올린다.",
+    "effect": "물 흐르듯 민첩하고 경쾌한 발재간으로 상대를 농락하여 데미지를 준다. 자신의 스피드를 1랭크 올린다.",
     "statChanges": [
       {
         "target": "self",
@@ -9633,9 +9633,9 @@
     "category": "physical",
     "power": 60,
     "accuracy": 100,
-    "pp": 15,
+    "pp": 16,
     "priority": 1,
-    "effect": "소용돌이치는 물을 두른 주먹을 눈에 보이지 않는 속도로 내지른다. 반드시 선제 공격을 할 수 있다.",
+    "effect": "거센 물살을 주먹에 둘러 눈에 보이지 않는 속도로 펀치를 날린다. 반드시 선제공격할 수 있다.",
     "tags": [
       "선공",
       "접촉",
@@ -9669,9 +9669,9 @@
     "category": "status",
     "power": null,
     "accuracy": null,
-    "pp": 10,
+    "pp": 12,
     "priority": 0,
-    "effect": "스텔스록·압정뿌리기·끈적끈적네트·대타출동을 정리해서 없앤 뒤 자신의 공격과 스피드를 1랭크씩 올린다. (설치물·대타 제거는 아직 엔진에 반영되지 않음 — 고속스핀 선례. 랭크업만 반영)",
+    "effect": "압정뿌리기, 스텔스록, 끈적끈적네트, 독압정, 대타출동을 모두 정리한다. 자신의 공격과 스피드가 1랭크 올라간다.",
     "statChanges": [
       {
         "target": "self",
@@ -9685,29 +9685,44 @@
       }
     ],
     "tags": [
-      "랭크",
-      "변화"
+      "랭크"
     ],
-    "makesContact": false
+    "makesContact": false,
+    "hazardClear": "tidy"
   },
   {
     "id": "찍찍베기",
     "name": "찍찍베기",
     "type": "노말",
     "category": "physical",
-    "power": 60,
-    "accuracy": 100,
-    "pp": 20,
+    "power": 20,
+    "accuracy": 90,
+    "pp": 12,
     "priority": 0,
-    "effect": "예리한 앞니로 상대를 벤다. (수치·부가효과 미확정 — 본가값 추정, 사용자 확정 필요)",
+    "effect": "여기저기서 동료들을 모아서 화려한 콤비네이션으로 공격한다. 빗나갈 때까지 최대 10회 연속으로 공격한다(각 타마다 명중을 따로 판정).",
     "tags": [
+      "연속",
       "접촉",
       "베기"
     ],
     "classification": [
       "베기"
     ],
-    "makesContact": true
+    "makesContact": true,
+    "multiHitPowers": [
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20
+    ],
+    "minHits": 1,
+    "maxHits": 10
   },
   {
     "id": "소금절이",
@@ -9716,25 +9731,25 @@
     "category": "physical",
     "power": 40,
     "accuracy": 100,
-    "pp": 15,
+    "pp": 16,
     "priority": 0,
-    "effect": "상대를 소금에 절여 매 턴 데미지를 준다. 강철·물 타입 상대는 더 오래 괴로워한다. (지속 데미지는 속박(bound)으로 근사 — 타입별 배율·영구 지속은 아직 엔진에 반영되지 않음)",
+    "effect": "상대를 소금절이 상태로 만들어 매 턴 최대 체력의 1/16의 데미지를 준다. 강철타입이나 물타입에게는 매 턴 최대 체력의 1/8의 데미지를 준다.",
     "tags": [
-      "접촉"
+      "비접촉",
+      "소금절이"
     ],
-    "makesContact": true,
-    "bindsTarget": true
+    "makesContact": false,
+    "setsSaltCure": true
   },
   {
     "id": "하바네로엑기스",
     "name": "하바네로엑기스",
-    "type": "노말",
+    "type": "풀",
     "category": "status",
     "power": null,
-    "accuracy": null,
-    "pp": 15,
+    "pp": 16,
     "priority": 0,
-    "effect": "아주 매운 엑기스를 상대에게 뿌려 상대의 공격을 2랭크 올리고 방어를 2랭크 떨어뜨린다.",
+    "effect": "어마어마하게 매운 엑기스를 발사한다. 상대의 공격을 2랭크 오르게 하고 방어를 2랭크 낮춘다.",
     "statChanges": [
       {
         "target": "opponent",
@@ -9748,8 +9763,7 @@
       }
     ],
     "tags": [
-      "랭크",
-      "변화"
+      "랭크"
     ],
     "makesContact": false
   },
@@ -9760,9 +9774,9 @@
     "category": "special",
     "power": 80,
     "accuracy": 100,
-    "pp": 5,
+    "pp": 12,
     "priority": 0,
-    "effect": "빛을 두른 강렬한 힘을 내보내 공격한다. 상대의 특수방어를 2랭크 떨어뜨린다.",
+    "effect": "정신에도 작용하는 기묘한 빛을 발산해서 공격한다. 상대의 특수방어를 2랭크 떨어뜨린다.",
     "statChanges": [
       {
         "target": "opponent",
@@ -9783,13 +9797,14 @@
     "category": "physical",
     "power": 160,
     "accuracy": 100,
-    "pp": 5,
+    "pp": 16,
     "priority": 0,
-    "effect": "거대한 해머를 내리쳐 공격한다. 2턴 연속으로는 사용할 수 없다. (연속 사용 제한은 대응 필드가 없어 아직 엔진에 반영되지 않음)",
+    "effect": "거대한 해머를 온몸으로 휘둘러서 공격한다. 2회 연속으로 쓸 수 없다.",
     "tags": [
-      "접촉"
+      "비접촉"
     ],
-    "makesContact": true
+    "makesContact": false,
+    "cannotUseConsecutively": true
   },
   {
     "id": "분노의주먹",
@@ -9798,9 +9813,9 @@
     "category": "physical",
     "power": 50,
     "accuracy": 100,
-    "pp": 10,
+    "pp": 12,
     "priority": 0,
-    "effect": "분노를 담아 상대를 때린다. 지금까지 받은 공격 횟수가 많을수록 위력이 올라간다(최대 350). (피격 횟수 누적 위력은 대응 필드가 없어 아직 엔진에 반영되지 않음 — 기본 위력 50 고정)",
+    "effect": "분노를 에너지로 바꿔서 공격한다. 받은 공격의 횟수가 많을수록 기술의 위력이 올라간다(1회당 +50, 최대 350).",
     "tags": [
       "접촉",
       "펀치"
@@ -9808,7 +9823,8 @@
     "classification": [
       "펀치"
     ],
-    "makesContact": true
+    "makesContact": true,
+    "rageFistPower": true
   },
   {
     "id": "트윈빔",
@@ -9817,9 +9833,9 @@
     "category": "special",
     "power": 40,
     "accuracy": 100,
-    "pp": 10,
+    "pp": 12,
     "priority": 0,
-    "effect": "양쪽 눈에서 신비한 빛줄기를 발사한다. 2회 연속으로 데미지를 준다.",
+    "effect": "두 눈에서 불가사의한 광선을 발사해서 공격한다. 2회 연속으로 데미지를 준다.",
     "tags": [
       "연속",
       "비접촉"
@@ -9835,10 +9851,11 @@
     "category": "physical",
     "power": 85,
     "accuracy": null,
-    "pp": 10,
+    "pp": 12,
     "priority": 0,
-    "effect": "땅에 조아리게 만들어 상대의 빈틈을 노려 벤다. 이 공격은 반드시 명중한다.",
+    "effect": "머리를 조아려 상대를 방심하게 만든 뒤에 베어 버린다. 공격은 반드시 명중한다.",
     "tags": [
+      "필중",
       "접촉",
       "베기"
     ],
@@ -9854,9 +9871,9 @@
     "category": "special",
     "power": 80,
     "accuracy": 90,
-    "pp": 15,
+    "pp": 16,
     "priority": 0,
-    "effect": "차를 휘적여 상대에게 끼얹어 공격한다. 준 데미지의 1/2만큼 체력을 회복한다. 20% 확률로 상대를 화상 상태로 만든다. (기술명·수치 미확정 — 말차차차 기준 추정, 사용자 확정 필요)",
+    "effect": "휘저은 차를 대포처럼 발사해 준 데미지의 절반을 HP로 회복한다. 20% 확률로 상대를 화상 상태로 만든다.",
     "inflictsStatus": [
       {
         "status": "burn",
@@ -9864,8 +9881,10 @@
       }
     ],
     "tags": [
+      "광역-상대",
       "흡수",
-      "비접촉"
+      "비접촉",
+      "화상"
     ],
     "makesContact": false,
     "drainFraction": 0.5
@@ -9877,13 +9896,14 @@
     "category": "special",
     "power": 80,
     "accuracy": 100,
-    "pp": 5,
+    "pp": 8,
     "priority": 0,
-    "effect": "변덕스럽게 광선을 발사한다. 30% 확률로 힘이 폭발해 위력이 2배가 되지만 다음 턴 움직일 수 없다. (확률적 위력 2배·경직은 대응 필드가 없어 아직 엔진에 반영되지 않음 — 기본 위력 80 고정)",
+    "effect": "광선을 발사해서 공격한다. 30%의 확률로 다른 머리도 협력해서 레이저를 발사하여 위력이 2배가 된다.",
     "tags": [
       "비접촉"
     ],
-    "makesContact": false
+    "makesContact": false,
+    "randomDoublePower": 30
   },
   {
     "id": "시럽봄",
@@ -9891,17 +9911,10 @@
     "type": "풀",
     "category": "special",
     "power": 60,
-    "accuracy": 85,
-    "pp": 10,
+    "accuracy": 90,
+    "pp": 12,
     "priority": 0,
-    "effect": "끈적한 시럽 폭탄을 던져 상대를 시럽투성이로 만들고 3턴간 매 턴 스피드를 1랭크씩 떨어뜨린다. (3턴 지속 하락은 아직 엔진에 반영되지 않음 — 1회 스피드 -1로 근사)",
-    "statChanges": [
-      {
-        "target": "opponent",
-        "stat": "spe",
-        "delta": -1
-      }
-    ],
+    "effect": "상대에게 물엿을 발사해 폭발시켜 공격한다. 상대를 물엿범벅 상태로 만들어 3턴 동안 매 턴 스피드를 1랭크씩 감소시킨다.",
     "tags": [
       "랭크",
       "비접촉",
@@ -9910,6 +9923,7 @@
     "classification": [
       "구슬/폭탄"
     ],
-    "makesContact": false
+    "makesContact": false,
+    "setsSyrupCoat": true
   }
 ]

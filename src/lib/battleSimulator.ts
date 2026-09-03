@@ -323,6 +323,23 @@ export interface BattleFighterState {
    * 타입이 이 값에 따라 전기/악으로 갈린다. 비-모르페코는 항상 "full"로 두면 아무 영향이 없다.
    */
   hungerMode?: "full" | "hangry";
+  /**
+   * 전기로바꾸기(Electromorphosis): 기술 데미지를 받아 충전된 상태. 다음에 쓰는 전기타입 기술의
+   * 위력이 2배가 되고 그 즉시 false로 돌아간다(1회 한정).
+   */
+  electroChargedForElectric?: boolean;
+  /**
+   * 분노의주먹(Move.rageFistPower): 이번 배틀에서 이 포켓몬이 기술로 데미지를 받은 누적 횟수.
+   * 다단히트는 타수만큼 센다(applyDamageToDefender에서 amount>0마다 +1). 교체 초기화는 미도입.
+   */
+  timesHitByMoves?: number;
+  /**
+   * 거대해머(Move.cannotUseConsecutively): 직전에 이 기술로 행동을 개시했으면 그 기술 id와,
+   * "다음 턴 번호"(= 사용한 턴 + 1)를 함께 기록한다. resolveAction이 (move.id 일치 && 기록된
+   * 턴 번호 == 현재 턴 번호)면 실패시킨다 — 그 다음 턴부터는 자연히 조건이 어긋나 다시 쓸 수 있다.
+   */
+  consecutiveLockMoveId?: string;
+  consecutiveLockUntilTurn?: number;
 }
 
 /** 두 포켓몬(a/b)을 마주 세운 배틀 상태 */
@@ -558,6 +575,8 @@ function hasSheerForceSecondaryEffect(move: Move): boolean {
   if (move.inflictsVolatile?.some((v) => v.target === "opponent")) return true;
   if (move.statChanges?.some((s) => s.target === "opponent")) return true;
   if (move.statChanges?.some((s) => s.target === "self" && (s.delta ?? 0) > 0)) return true;
+  // 소금절이·시럽봄: 상대에게 지속 상태(saltCure/syrupCoat)를 거는 데미지 기술 — 부가효과 취급.
+  if (move.setsSaltCure || move.setsSyrupCoat) return true;
   return false;
 }
 
@@ -728,7 +747,9 @@ function resolveEntryAbilityEffects(
     !aAbility?.revealsStrongestOpponentMoveOnEntry &&
     !bAbility?.revealsStrongestOpponentMoveOnEntry &&
     !aAbility?.clearsAllScreensOnEntry &&
-    !bAbility?.clearsAllScreensOnEntry
+    !bAbility?.clearsAllScreensOnEntry &&
+    !aAbility?.lowersOpponentEvasionOnEntry &&
+    !bAbility?.lowersOpponentEvasionOnEntry
   ) {
     return { field: undefined, fieldTurnsRemaining: undefined, announcements: [] };
   }
@@ -772,6 +793,20 @@ function resolveEntryAbilityEffects(
       opponent.stages = applyStageDelta(opponent.stages, stat, contraryDelta(opponent, delta));
       if (opponent.stages[stat] !== before) {
         announcements.push(`${pokemonName}의 ${ability.name}! 상대의 공격이 떨어졌다!`);
+      }
+    }
+    // 감미로운꿀(포챔스판): 등장 시 상대의 회피율을 1랭크 떨어뜨린다(위협의 회피율 버전).
+    if (ability.lowersOpponentEvasionOnEntry !== undefined) {
+      const opponentName = getPokemon(opponentSlot.pokemonId)?.name ?? "상대";
+      const before = opponent.accuracyStages.evasion;
+      const raw = before + contraryDelta(opponent, ability.lowersOpponentEvasionOnEntry);
+      opponent.accuracyStages = {
+        ...opponent.accuracyStages,
+        evasion: Math.max(-6, Math.min(6, raw)),
+      };
+      announcements.push(`${pokemonName}의 꿀에서 달콤한 향기가 나고 있다!`);
+      if (opponent.accuracyStages.evasion !== before) {
+        announcements.push(`${opponentName}의 회피율이 떨어졌다!`);
       }
     }
     if (ability.setsFieldOnEntry) {
@@ -1242,6 +1277,18 @@ export interface ActionLogEntry {
    * "왜 같이 쓰러졌는지" 전용 문구를 보여줄 수 있게 별도 플래그로 남긴다.
    */
   triggeredDestinyBond?: boolean;
+  /** 편승 — 상대가 이번 기술로 올린 랭크를 그대로 복사해 자신도 올렸으면 그 목록 */
+  opportunistCopiedStats?: { stat: BattleStatKey; delta: number }[];
+  /** opportunistCopiedStats를 발동시킨 특성 이름 */
+  opportunistAbilityName?: string;
+  /** 전기로바꾸기 — 충전 상태라 이번 전기 기술의 위력이 2배가 됐으면 그 특성 이름 */
+  electromorphosisEmpoweredAbilityName?: string;
+  /** 변덕레이저 — 확률 발동으로 위력이 2배가 됐으면 true */
+  fickleBeamEmpowered?: boolean;
+  /** 정리정돈 — 명중해서 설치물·대타를 정리했으면 true ("정리정돈 끝!" 문구용) */
+  tidyUpDone?: boolean;
+  /** 소금절이 — 명중해서 상대를 소금절이 상태로 만들었으면 true */
+  saltCureApplied?: boolean;
 }
 
 /** 턴 종료 시 상태이상 데미지 로그 */
@@ -1302,6 +1349,11 @@ export interface EndOfTurnLogEntry {
   sandstormDamage?: boolean;
   /** 속박(조이기·집게덫류) 지속 데미지면 true (damage에 실제 수치) */
   boundDamage?: boolean;
+  /** 소금절이 지속 데미지면 true (damage에 실제 수치). 강철/물 타입이라 1/8이었으면 saltCureHeavy도 true */
+  saltCureDamage?: boolean;
+  saltCureHeavy?: boolean;
+  /** 물엿범벅(시럽봄): 턴 종료 시 스피드가 1랭크 떨어졌으면 true */
+  syrupCoatDrop?: boolean;
   /** 멸망의노래 카운트 안내(F-4) — 이번 턴 종료 시점의 남은 카운트(3→2→1) */
   perishCount?: number;
   /** 멸망의노래 카운트가 0에 도달해 이번 턴 종료에 쓰러졌으면 true */
@@ -1529,6 +1581,15 @@ function resolveAction(
   }
   // 비축하기: 이미 3스택이면 더 비축할 수 없다(본가 규칙 — 실패 처리).
   if (move.addsStockpile && (attacker.stockpileCount ?? 0) >= 3) {
+    return blocked("usageCondition");
+  }
+  // 거대해머: 직전 턴에 이 기술로 행동을 개시했으면(=consecutiveLock 기록의 턴 번호가 이번 턴과
+  // 정확히 일치) 이번 턴엔 쓸 수 없다. 잠금은 "사용한 턴 + 1" 한 턴만 유효해 그 다음 턴부턴 다시 쓸 수 있다.
+  if (
+    move.cannotUseConsecutively &&
+    attacker.consecutiveLockMoveId === move.id &&
+    attacker.consecutiveLockUntilTurn === state.turnNumber
+  ) {
     return blocked("usageCondition");
   }
   // 기습: 상대보다 먼저 움직이지 않으면(movesSecond) 실패, 상대가 이번 턴 고른 기술이
@@ -1949,6 +2010,37 @@ function resolveAction(
     effectiveMove = { ...effectiveMove, power: effectiveMove.power * 2 };
   }
 
+  // 분노의주먹(Rage Fist): 위력 = min(350, 50 + 50 × 이번 배틀에서 기술로 데미지를 받은 횟수).
+  if (effectiveMove.rageFistPower && effectiveMove.power !== null) {
+    effectiveMove = {
+      ...effectiveMove,
+      power: Math.min(350, 50 + 50 * (attacker.timesHitByMoves ?? 0)),
+    };
+  }
+
+  // 변덕레이저(Fickle Beam): randomDoublePower% 확률로 위력 2배 + "전력을 다하기 시작했다!" 안내.
+  let fickleBeamEmpowered = false;
+  if (
+    effectiveMove.randomDoublePower !== undefined &&
+    effectiveMove.power !== null &&
+    random() * 100 < effectiveMove.randomDoublePower
+  ) {
+    effectiveMove = { ...effectiveMove, power: effectiveMove.power * 2 };
+    fickleBeamEmpowered = true;
+  }
+
+  // 전기로바꾸기(Electromorphosis): 충전 상태에서 쓰는 전기타입 기술은 위력 2배(1회 소모).
+  let electromorphosisEmpoweredAbilityName: string | undefined;
+  if (
+    attacker.electroChargedForElectric &&
+    effectiveMove.type === "전기" &&
+    effectiveMove.power !== null
+  ) {
+    effectiveMove = { ...effectiveMove, power: effectiveMove.power * 2 };
+    attacker.electroChargedForElectric = false;
+    electromorphosisEmpoweredAbilityName = attackerAbility?.name;
+  }
+
   // 타오르는불꽃 발동 이후로 자신(=현재 공격자)이 쓰는 그 타입 기술의 위력이 올라있으면 반영.
   // 절대 타입이 null인 기술(발버둥 등)은 boosts 조회 자체를 건너뛴다.
   const ownMoveTypeBoostMultiplier =
@@ -1962,6 +2054,13 @@ function resolveAction(
   // 무관하게 여기서 갱신한다(본가 규칙 — 빗나가도 스트릭은 유지되고, 다른 기술을 쓰면 끊긴다).
   attacker.lastMoveStreak = attacker.lastMoveId === effectiveMove.id ? (attacker.lastMoveStreak ?? 1) + 1 : 1;
   attacker.lastMoveId = effectiveMove.id;
+
+  // 거대해머(cannotUseConsecutively): 실제로 이 기술로 행동을 개시했으니 "다음 턴엔 잠금" 예약.
+  // usageCondition 게이트(섹션 0)는 이 기록과 현재 턴 번호가 정확히 일치할 때만 실패시킨다.
+  if (effectiveMove.cannotUseConsecutively) {
+    attacker.consecutiveLockMoveId = effectiveMove.id;
+    attacker.consecutiveLockUntilTurn = state.turnNumber + 1;
+  }
 
   // 비장의무기 사용 조건용 — "이 기술로 행동을 개시했다"를 여기서 기록(명중 여부 무관).
   (attacker.usedMoveIds ??= {})[effectiveMove.id] = true;
@@ -2423,6 +2522,14 @@ function resolveAction(
     if (amount > 0 && (effectiveMove.category === "physical" || effectiveMove.category === "special") && defender.damageTakenThisTurn) {
       defender.damageTakenThisTurn[effectiveMove.category] += amount;
     }
+    // 분노의주먹(Move.rageFistPower)용: 이 포켓몬이 기술로 데미지를 받은 누적 횟수(다단히트는 타수만큼).
+    if (amount > 0) {
+      defender.timesHitByMoves = (defender.timesHitByMoves ?? 0) + 1;
+    }
+    // 전기로바꾸기(Electromorphosis): 기술 데미지를 받으면 충전 상태가 된다(다음 전기 기술 위력 2배).
+    if (amount > 0 && defenderAbility?.chargesOnDamageTaken && !isFainted(defender)) {
+      defender.electroChargedForElectric = true;
+    }
     // 발끈(포챔스판): 상대 기술 데미지로 HP가 처음으로 절반 이하가 되는 그 순간 특수공격 +1.
     // 여기(applyDamageToDefender)는 기술 데미지 경로 전용이라 모래바람·독·설치물은 자연히 제외된다.
     if (
@@ -2558,7 +2665,13 @@ function resolveAction(
     // 나쁜손버릇: 피격측(defender)이 무도구이고 공격자(attacker)가 도구를 지녔으면 그 자리에서 강탈한다.
     // 매지션과 방향만 반대고 규칙은 동일 — 대타에 맞았을 때는 함수 진입부 가드(blockedBySubstitute)에서
     // 이미 걸러진다. 다단히트여도 첫 타에 도구를 얻는 순간 !defender.currentItemId가 깨져 재발동하지 않는다.
-    if (trigger.stealsAttackerItem && !defender.currentItemId && attacker.currentItemId) {
+    // 점착: 공격자가 이 특성이면 나쁜손버릇에 도구를 빼앗기지 않는다.
+    if (
+      trigger.stealsAttackerItem &&
+      !defender.currentItemId &&
+      attacker.currentItemId &&
+      !attackerAbility?.preventsItemLoss
+    ) {
       const stolen = getItem(attacker.currentItemId);
       pickpocketStolenItemName = stolen?.name;
       pickpocketAbilityName = defenderAbility!.name;
@@ -2821,7 +2934,8 @@ function resolveAction(
     !hitSubstitute &&
     attackerAbility?.stealsItemOnDamagingHit &&
     !attacker.currentItemId &&
-    defender.currentItemId
+    defender.currentItemId &&
+    !defenderAbility?.preventsItemLoss // 점착: 이 특성이면 매지션에게 도구를 빼앗기지 않는다
   ) {
     const stolenItem = getItem(defender.currentItemId);
     stolenItemName = stolenItem?.name;
@@ -3007,6 +3121,49 @@ function resolveAction(
     consumeItem(defender);
     restoredStatsOpponentItemName = defenderItem?.name;
   }
+
+  // 편승(Opportunist): 이번 기술로 한쪽이 자신의 랭크를 올렸으면(위 statChanges·competitive·하양허브
+  // 후처리까지 전부 반영된 최종값 기준), 상대 쪽에 편승 특성이 있으면 그 상승분을 그대로 복사한다.
+  // 자기 자신의 상승은 복사 대상이 아니고, 복사 적용 시엔 복사자 쪽 심술꾸러기/클리어바디류를 존중한다.
+  function applyOpportunistCopy(
+    copier: BattleFighterState,
+    copierAbility: Ability | undefined,
+    riser: BattleFighterState,
+    riserBefore: StatStages,
+  ): { stat: BattleStatKey; delta: number }[] {
+    if (!copierAbility?.copiesOpponentStatBoosts) return [];
+    const copied: { stat: BattleStatKey; delta: number }[] = [];
+    for (const stat of Object.keys(riser.stages) as BattleStatKey[]) {
+      const gain = riser.stages[stat] - riserBefore[stat];
+      if (gain <= 0) continue;
+      const before = copier.stages[stat];
+      copier.stages = applyStageDelta(copier.stages, stat, contraryDelta(copier, gain));
+      const applied = copier.stages[stat] - before;
+      if (applied !== 0) copied.push({ stat, delta: applied });
+    }
+    return copied;
+  }
+  const opportunistCopiedByDefender = applyOpportunistCopy(
+    defender,
+    defenderAbility,
+    attacker,
+    attackerStagesBeforeMoveChange,
+  );
+  const opportunistCopiedByAttacker = applyOpportunistCopy(
+    attacker,
+    attackerAbility,
+    defender,
+    defenderStagesBeforeMoveChange,
+  );
+  const opportunistCopiedStats =
+    opportunistCopiedByDefender.length > 0
+      ? opportunistCopiedByDefender
+      : opportunistCopiedByAttacker.length > 0
+        ? opportunistCopiedByAttacker
+        : undefined;
+  const opportunistAbilityName = opportunistCopiedStats
+    ? (opportunistCopiedByDefender.length > 0 ? defenderAbility : attackerAbility)?.name
+    : undefined;
 
   // 상대 랭크다운 결과 문구용(§1 C-6): 이 기술이 실제로 상대 랭크를 내린 것만 모은다. 최종
   // defender.stages 기준이라 클리어바디로 막혔거나 미러아머로 반사됐거나 하양허브로 되돌아간
@@ -3361,6 +3518,59 @@ function resolveAction(
         }
       }
     }
+  }
+
+  // 정리정돈·고속스핀(Move.hazardClear): 명중 시 설치물·대타를 정리한다.
+  let tidyUpDone = false;
+  if (effectiveMove.hazardClear && hit && !blockedByProtect) {
+    if (effectiveMove.hazardClear === "tidy") {
+      state.stealthRock = { a: false, b: false };
+      state.spikes = { a: false, b: false };
+      attacker.substituteHp = undefined;
+      defender.substituteHp = undefined;
+      tidyUpDone = true;
+    } else {
+      // "spin": 사용자 쪽 설치물 + 사용자에게 걸린 속박·씨뿌리기만 정리한다(본가 고속스핀).
+      state.stealthRock = { ...state.stealthRock, [actorKey]: false };
+      state.spikes = { ...state.spikes, [actorKey]: false };
+      const nextActive = { ...attacker.volatile.active };
+      delete nextActive.bound;
+      delete nextActive.leechSeed;
+      attacker.volatile = { active: nextActive };
+    }
+  }
+
+  // 시럽봄(Move.setsSyrupCoat): 명중 시 상대를 물엿범벅(syrupCoat, 3턴) 상태로 만든다. 데미지 기술의
+  // 부가효과라 인분·우격다짐엔 발동하지 않고, 황금몸(opponentEffectsBlocked)에도 막힌다.
+  if (
+    effectiveMove.setsSyrupCoat &&
+    hit &&
+    !blockedByProtect &&
+    !opponentEffectsBlocked &&
+    !secondaryEffectsBlockedByAbility &&
+    !sheerForceAbilityName &&
+    !isFainted(defender) &&
+    !hasVolatile(defender.volatile, "syrupCoat")
+  ) {
+    defender.volatile = inflictVolatile(defender.volatile, "syrupCoat", random);
+  }
+
+  // 소금절이(Move.setsSaltCure): 명중해서 데미지를 준 뒤 상대를 소금절이(saltCure, 영구) 상태로 만든다.
+  // 인분·우격다짐엔 발동하지 않는다(공격 데미지만). 황금몸에도 막힌다.
+  let saltCureApplied = false;
+  if (
+    effectiveMove.setsSaltCure &&
+    hit &&
+    !blockedByProtect &&
+    damage > 0 &&
+    !opponentEffectsBlocked &&
+    !secondaryEffectsBlockedByAbility &&
+    !sheerForceAbilityName &&
+    !isFainted(defender) &&
+    !hasVolatile(defender.volatile, "saltCure")
+  ) {
+    defender.volatile = inflictVolatile(defender.volatile, "saltCure", random);
+    saltCureApplied = true;
   }
 
   // 왕의징표석: 데미지를 주는 데 성공하면 이 확률로 상대에게 추가 풀죽음을 건다. 기술 자체의
@@ -4034,6 +4244,12 @@ function resolveAction(
     sleepTalkCalledMoveName,
     changedOwnTypeTo,
     changedOwnTypeAbilityName,
+    opportunistCopiedStats,
+    opportunistAbilityName,
+    electromorphosisEmpoweredAbilityName,
+    fickleBeamEmpowered: fickleBeamEmpowered || undefined,
+    tidyUpDone: tidyUpDone || undefined,
+    saltCureApplied: saltCureApplied || undefined,
   };
 }
 
@@ -4399,6 +4615,44 @@ export function runTurn(
         fighter.volatile = consumeVolatileTurn(fighter.volatile, "bound");
       }
 
+      // 소금절이(saltCure): 걸린 쪽은 매 턴 종료 시 최대 HP 1/16(강철/물 타입이면 1/8)을 잃는다.
+      // 턴 카운터 없이 배틀 끝까지 유지된다(leechSeed 패턴). 매직가드면 데미지 면제.
+      if (hasVolatile(fighter.volatile, "saltCure") && !fighterAbility?.negatesIndirectDamage) {
+        const heavy = fighter.types.some((t) => t === "강철" || t === "물");
+        const saltDamage = Math.min(fighter.currentHp, Math.floor(fighter.maxHp / (heavy ? 8 : 16)));
+        if (saltDamage > 0) {
+          fighter.currentHp -= saltDamage;
+          endOfTurn.push({
+            actor: key,
+            damage: saltDamage,
+            remainingHp: fighter.currentHp,
+            fainted: isFainted(fighter),
+            saltCureDamage: true,
+            saltCureHeavy: heavy || undefined,
+          });
+        }
+      }
+
+      // 물엿범벅(syrupCoat, 시럽봄): 걸린 쪽은 매 턴 종료 시 스피드 1랭크 감소(심술꾸러기·클리어바디류
+      // 존중). 3턴 카운터로 소모되고 0에서 자동 해제된다.
+      if (hasVolatile(fighter.volatile, "syrupCoat") && !isFainted(fighter)) {
+        const before = fighter.stages.spe;
+        // 물엿범벅은 상대(시럽봄 사용자)가 거는 하락 — 클리어바디류/하얀연기가 spe를 막으면 무산.
+        if (!fighterAbility?.blocksOpponentStatDropsForStats?.includes("spe")) {
+          fighter.stages = applyStageDelta(fighter.stages, "spe", contraryDelta(fighter, -1));
+        }
+        if (fighter.stages.spe !== before) {
+          endOfTurn.push({
+            actor: key,
+            damage: 0,
+            remainingHp: fighter.currentHp,
+            fainted: false,
+            syrupCoatDrop: true,
+          });
+        }
+        fighter.volatile = consumeVolatileTurn(fighter.volatile, "syrupCoat");
+      }
+
       // 희망사항: drowsy와 같은 2턴 카운터 패턴 — 쓴 다음 턴 종료에 최대 HP 절반을 회복한다.
       const wishEntry = fighter.volatile.active.wish;
       if (wishEntry) {
@@ -4485,9 +4739,13 @@ export function runTurn(
         } else {
           // 매직가드: 독·맹독·화상의 지속 데미지만 0으로 막는다 — 상태이상에 "걸린" 상태 자체와
           // 맹독 카운터 누적(advanceStatusTurn)은 그대로 진행된다.
+          // 내열: 화상 지속 데미지가 절반이 된다(내림).
+          const rawStatusDamage = computeStatusEndOfTurnDamage(fighter.status, fighter.maxHp);
           const damage = fighterAbility?.negatesIndirectDamage
             ? 0
-            : computeStatusEndOfTurnDamage(fighter.status, fighter.maxHp);
+            : statusCondition === "burn" && fighterAbility?.halvesBurnDamage
+              ? Math.floor(rawStatusDamage / 2)
+              : rawStatusDamage;
           fighter.currentHp = Math.max(0, fighter.currentHp - damage);
           fighter.status = advanceStatusTurn(fighter.status);
           // 잠듦/얼음/마비는 매턴 데미지가 없다(항상 0) — "상태이상 데미지 0"만 찍는 무의미한 줄을

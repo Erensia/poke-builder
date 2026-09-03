@@ -640,4 +640,39 @@ export interface Move {
    * 따라 실제 타입이 바뀐다: 배부른모양(full)=전기, 배고픈모양(hangry)=악. 모양이 없으면 full로 간주.
    */
   hungerSwitchType?: { full: PokemonType; hangry: PokemonType };
+  /**
+   * 정리정돈(tidy)·고속스핀(spin): 명중 시 설치물·대타를 정리한다.
+   *  - "spin"(고속스핀): 사용자 쪽 스텔스록/압정을 없애고, 사용자에게 걸린 속박(bound)·씨뿌리기
+   *    (leechSeed)를 해제한다(본가 고속스핀 그대로 — 상대 쪽은 건드리지 않는다).
+   *  - "tidy"(정리정돈): 양쪽 진영의 스텔스록/압정을 전부 없애고, 양쪽의 대타(substituteHp)를 없앤다.
+   * (독압정·끈적끈적네트는 이 엔진에 모델링돼 있지 않아 대상 없음.)
+   */
+  hazardClear?: "spin" | "tidy";
+  /**
+   * 시럽봄(Syrup Bomb): 명중 시 상대를 물엿범벅(syrupCoat) 상태로 만든다 — 3턴 동안 매 턴 종료 시
+   * 스피드 1랭크 감소. 데미지 기술의 부가효과라 인분(blocksSecondaryEffects)·우격다짐
+   * (tradesSecondaryEffectForPower)에는 발동하지 않는다.
+   */
+  setsSyrupCoat?: boolean;
+  /**
+   * 소금절이(Salt Cure): 명중 시 상대를 소금절이(saltCure) 상태로 만든다 — 배틀이 끝날 때까지
+   * 매 턴 종료 시 최대 HP 1/16(상대가 강철/물 타입이면 1/8) 피해. 데미지 기술의 부가효과라
+   * 인분·우격다짐에는 발동하지 않는다(공격 데미지만 들어간다).
+   */
+  setsSaltCure?: boolean;
+  /**
+   * 거대해머(Gigaton Hammer)·블러드문류: 2턴 연속으로는 쓸 수 없다. 직전 턴에 이 기술로 행동을
+   * 개시했으면 이번 턴엔 실패한다(blockedReason: "usageCondition"). 그 다음 턴부터는 다시 쓸 수 있다.
+   */
+  cannotUseConsecutively?: boolean;
+  /**
+   * 분노의주먹(Rage Fist): 위력 = min(350, 50 + 50 × 이번 배틀에서 이 포켓몬이 기술로 데미지를
+   * 받은 횟수). power 리터럴(50)은 폴백. 교체 시 카운터 초기화는 배틀타워 리뉴얼(교체 도입) 때.
+   */
+  rageFistPower?: boolean;
+  /**
+   * 변덕레이저(Fickle Beam): 이 확률(%)로 위력이 2배가 된다. 발동하면 전용 안내
+   * "…은(는) 전력을 다하기 시작했다!"를 남긴다(ActionLogEntry.fickleBeamEmpowered).
+   */
+  randomDoublePower?: number;
 }

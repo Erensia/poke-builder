@@ -65,6 +65,8 @@ const VOLATILE_LABELS = {
   encore: "앙코르",
   attract: "헤롱헤롱",
   bound: "속박",
+  saltCure: "소금절이",
+  syrupCoat: "물엿범벅",
 } as const;
 
 /** 액션 로그 한 줄 안에 "OO 발동!"으로 뭉뚱그리기보다 전용 문구를 따로 쓰는 volatile들 */
@@ -1118,6 +1120,44 @@ export function BattleLogPage() {
                           {eunNeun(defenderName)} {typeLabel(action.overwroteTargetType)} 타입이 되었다!
                         </div>
                       )}
+                      {/* 전기로바꾸기 — 충전 상태로 전기 기술 위력 2배 */}
+                      {!action.blockedReason && action.electromorphosisEmpoweredAbilityName && (
+                        <div className="battle-turn-line is-muted">
+                          {actorName}의 {action.electromorphosisEmpoweredAbilityName}! 충전한 전기의 힘이 실렸다!
+                        </div>
+                      )}
+                      {/* 변덕레이저 — 확률 발동으로 위력 2배 */}
+                      {!action.blockedReason && action.fickleBeamEmpowered && (
+                        <div className="battle-turn-line is-muted">
+                          {actorName}
+                          {eunNeun(actorName)} 전력을 다하기 시작했다!
+                        </div>
+                      )}
+                      {/* 편승 — 상대의 랭크 상승을 그대로 복사 */}
+                      {!action.blockedReason &&
+                        action.opportunistAbilityName &&
+                        (action.opportunistCopiedStats?.length ?? 0) > 0 &&
+                        (() => {
+                          const copied = action.opportunistCopiedStats ?? [];
+                          const joined = copied.map((s) => STAT_LABELS[s.stat]).join(", ");
+                          return (
+                            <div className="battle-turn-line is-muted">
+                              {action.opportunistAbilityName}! 상대의 능력 상승에 편승해서 {joined}
+                              {iGa(joined)} 올라갔다!
+                            </div>
+                          );
+                        })()}
+                      {/* 정리정돈 — 설치물·대타 정리 완료 */}
+                      {!action.blockedReason && action.tidyUpDone && (
+                        <div className="battle-turn-line is-muted">정리정돈 끝!</div>
+                      )}
+                      {/* 소금절이 — 상대를 소금절이 상태로 */}
+                      {!action.blockedReason && action.saltCureApplied && (
+                        <div className="battle-turn-line is-muted">
+                          {defenderName}
+                          {eunNeun(defenderName)} 소금에 절여졌다!
+                        </div>
+                      )}
                       {/* 인분 — 데미지 기술의 추가효과(상태이상·풀죽음·랭크하락·왕의징표석 풀죽음)를
                           무산시켰을 때. 실제로 무산된 게 있을 때만 채워진다 */}
                       {!action.blockedReason && action.secondaryBlockedByAbilityName && (
@@ -1528,6 +1568,18 @@ export function BattleLogPage() {
                         {fighterLabel(battleState, e.actor)}
                         {eunNeun(fighterLabel(battleState, e.actor))} 속박에서 벗어나지 못하고 있다! {e.damage} 데미지
                         (남은 HP {e.remainingHp}){e.fainted && " · 기절!"}
+                      </>
+                    ) : e.saltCureDamage ? (
+                      <>
+                        {fighterLabel(battleState, e.actor)}
+                        {eunNeun(fighterLabel(battleState, e.actor))} 소금절이 때문에 괴로워하고 있다! {e.damage} 데미지
+                        (남은 HP {e.remainingHp}){e.fainted && " · 기절!"}
+                      </>
+                    ) : e.syrupCoatDrop ? (
+                      <>
+                        {fighterLabel(battleState, e.actor)}
+                        {eunNeun(fighterLabel(battleState, e.actor))} 물엿범벅이 되어 스피드가 떨어졌다! (남은 HP{" "}
+                        {e.remainingHp})
                       </>
                     ) : e.perishFainted ? (
                       <>

@@ -48,7 +48,8 @@ function defaultDuration(volatile: VolatileCondition, random: () => number): num
     volatile === "ingrain" ||
     volatile === "aquaRing" ||
     volatile === "leechSeed" ||
-    volatile === "attract"
+    volatile === "attract" ||
+    volatile === "saltCure"
   ) {
     return PERSISTENT_UNTIL_BATTLE_END;
   }
@@ -56,6 +57,7 @@ function defaultDuration(volatile: VolatileCondition, random: () => number): num
   if (volatile === "disable") return DISABLE_DURATION;
   if (volatile === "encore") return ENCORE_DURATION;
   if (volatile === "bound") return 4 + Math.floor(random() * 2); // 4~5턴
+  if (volatile === "syrupCoat") return 3; // 시럽봄: 3턴 동안 매 턴 스피드 -1
   return 1;
 }
 
