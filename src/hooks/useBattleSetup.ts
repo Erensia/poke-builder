@@ -133,9 +133,25 @@ function useBattleSetupSlot() {
   };
 }
 
+/** 편측 슬롯 개수(배틀타워 = 3마리). Phase 8 §2 — "3슬롯만 빌드" 결재. 슬롯 0이 리드. */
+export const BATTLE_PARTY_SIZE = 3;
+
+export type BattleSetupSlot = ReturnType<typeof useBattleSetupSlot>;
+
+/**
+ * 한 진영의 슬롯 3개. 훅 규칙상 반복문으로 못 만들지만 개수가 고정(3)이라 나란히 호출한다.
+ * BATTLE_PARTY_SIZE를 바꾸려면 이 호출 목록도 같이 늘려야 한다.
+ */
+function useBattleSetupSide(): BattleSetupSlot[] {
+  const s0 = useBattleSetupSlot();
+  const s1 = useBattleSetupSlot();
+  const s2 = useBattleSetupSlot();
+  return [s0, s1, s2];
+}
+
 export function useBattleSetup() {
-  const a = useBattleSetupSlot();
-  const b = useBattleSetupSlot();
+  const a = useBattleSetupSide();
+  const b = useBattleSetupSide();
   const [weather, setWeather] = useState<WeatherKind | null>(null);
 
   return { a, b, weather, setWeather };

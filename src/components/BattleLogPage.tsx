@@ -17,30 +17,40 @@ import { environmentTintBackground } from "../lib/environmentBackground";
 import { rankStageMultiplier } from "../lib/battlePower";
 import { STAT_LABELS } from "../lib/statLabels";
 import {
+  applySwitch,
   createBattleState,
   hasUsableMove,
   opponentKey,
   runTurn,
   STRUGGLE_MOVE,
+  type BattleSide,
   type BattleState,
   type FighterKey,
+  type TurnAction,
   type TurnResult,
 } from "../lib/battleSimulator";
+import type { PartySlot } from "../types/party";
 import type { StatusCondition } from "../types/status";
 import { typeLabel } from "../types/pokemon-type";
 import type { BaseStats } from "../types/stats";
 import "./BattleLogPage.css";
 
 type Side = "a" | "b";
+type SlotIndex = 0 | 1 | 2;
 type PickerState =
-  | { kind: "pokemon"; side: Side }
-  | { kind: "ability"; side: Side }
-  | { kind: "item"; side: Side }
-  | { kind: "nature"; side: Side }
-  | { kind: "points"; side: Side }
-  | { kind: "move"; side: Side; moveIndex: 0 | 1 | 2 | 3 }
-  | { kind: "slotPresets"; side: Side }
+  | { kind: "pokemon"; side: Side; slotIndex: SlotIndex }
+  | { kind: "ability"; side: Side; slotIndex: SlotIndex }
+  | { kind: "item"; side: Side; slotIndex: SlotIndex }
+  | { kind: "nature"; side: Side; slotIndex: SlotIndex }
+  | { kind: "points"; side: Side; slotIndex: SlotIndex }
+  | { kind: "move"; side: Side; slotIndex: SlotIndex; moveIndex: 0 | 1 | 2 | 3 }
+  | { kind: "slotPresets"; side: Side; slotIndex: SlotIndex }
   | null;
+
+/** 이번 턴 한 편의 선택 — 기술 또는 교체(교대 슬롯 인덱스) */
+type TurnChoice = { kind: "move"; moveId: string } | { kind: "switch"; toIndex: number };
+
+const SLOT_INDICES: SlotIndex[] = [0, 1, 2];
 
 const STATUS_LABELS: Record<StatusCondition, string> = {
   burn: "화상",
@@ -188,19 +198,37 @@ export function BattleLogPage() {
   const [picker, setPicker] = useState<PickerState>(null);
   const [battleState, setBattleState] = useState<BattleState | null>(null);
   const [log, setLog] = useState<TurnResult[]>([]);
-  const [selected, setSelected] = useState<{ a: string | null; b: string | null }>({ a: null, b: null });
+  const [selected, setSelected] = useState<{ a: TurnChoice | null; b: TurnChoice | null }>({ a: null, b: null });
+  // 대전 시작 시점의 편측 파티(선출 순서대로 압축). battleState 안의 slot은 EvaluatorSlot이라
+  // 기술 4개 목록이 없어서, 활성 슬롯의 기술은 여기서 activeIndex로 되짚는다. 배틀 중엔 안 바뀜.
+  const [partySlots, setPartySlots] = useState<{ a: PartySlot[]; b: PartySlot[] }>({ a: [], b: [] });
+  // 이번 턴 처리 결과 활성 슬롯이 기절해 강제 교체가 필요한 편. 해소되면 null.
+  const [pendingForcedSwitch, setPendingForcedSwitch] = useState<{ a?: boolean; b?: boolean } | null>(null);
+  // 편별 턴 입력 모드 — "기술" 또는 "교체"
+  const [inputMode, setInputMode] = useState<{ a: "move" | "switch"; b: "move" | "switch" }>({ a: "move", b: "move" });
   // 구애스카프 잠금 위반으로 턴 진행이 막혔을 때 보여줄 경고 문구. 선택이 바뀌거나 턴이 정상
   // 진행되면 지운다.
   const [lockWarning, setLockWarning] = useState<string | null>(null);
 
-  const sideOf = (side: Side) => (side === "a" ? setup.a : setup.b);
-  const pokemonOf = (side: Side) => {
-    const slot = sideOf(side).slot;
+  const sideCtls = (side: Side) => (side === "a" ? setup.a : setup.b);
+  const slotCtl = (side: Side, i: SlotIndex) => sideCtls(side)[i];
+  const pokemonAt = (side: Side, i: SlotIndex) => {
+    const slot = slotCtl(side, i).slot;
     return slot ? getPokemon(slot.pokemonId) : undefined;
   };
+  const battleSide = (side: Side): BattleSide | undefined =>
+    side === "a" ? battleState?.sideA : battleState?.sideB;
+  /** 배틀 중 이 편의 현재 활성 포켓몬(종) */
+  const activePokemon = (side: Side) =>
+    battleState ? getPokemon(battleState[side].slot.pokemonId) : undefined;
+  /** 배틀 중 이 편의 현재 활성 슬롯이 지닌 기술 4개(셋업 PartySlot에서 되짚음) */
+  const activeMoveIds = (side: Side): (string | null)[] => {
+    const idx = battleSide(side)?.activeIndex ?? 0;
+    return partySlots[side][idx]?.moves ?? [];
+  };
 
-  function handleSaveSlotAsSample(side: Side) {
-    const slot = sideOf(side).slot;
+  function handleSaveSlotAsSample(side: Side, i: SlotIndex) {
+    const slot = slotCtl(side, i).slot;
     if (!slot) return;
     const pokemon = getPokemon(slot.pokemonId);
     const name = window.prompt("이 빌드를 저장할 이름을 입력하세요.", pokemon?.name ?? "");
@@ -209,15 +237,23 @@ export function BattleLogPage() {
   }
 
   /**
-   * 구애스카프: 이 쪽이 그 도구를 지녔고, 로그에 이미 이 쪽이 실제로 쓴 기술이 있으면 그 첫 기술
-   * id로 잠긴다. 판정 엔진(battleSimulator)이 아니라 이 화면의 턴 진행 버튼이 UI 단에서 막는
-   * 방식이라, 잠긴 기술 id를 여기서 로그를 훑어 매번 다시 구한다(별도 상태로 안 들고 다닌다).
+   * 구애스카프: 이 쪽 활성 포켓몬이 그 도구를 지녔고, 로그에 이미 이 쪽이 실제로 쓴 기술이 있으면
+   * 그 첫 기술 id로 잠긴다. 판정 엔진이 아니라 이 화면의 턴 진행 버튼이 UI 단에서 막는 방식이라,
+   * 잠긴 기술 id를 여기서 로그를 훑어 매번 다시 구한다(별도 상태로 안 들고 다닌다).
+   * 교체하면 슬롯이 바뀌므로 잠금도 풀린다 — 마지막 교체 이후의 로그만 훑는다.
    */
   function choiceLockedMoveId(side: Side): string | null {
-    const itemId = sideOf(side).slot?.item;
+    if (!battleState) return null;
+    const itemId = battleState[side].slot.item;
     const item = itemId ? getItem(itemId) : undefined;
     if (!item?.locksFirstMoveUsed) return null;
+    // 이 편이 마지막으로 교체한 턴 번호 — 그 뒤의 기술 사용부터가 유효하다.
+    let lastSwitchTurn = 0;
     for (const turn of log) {
+      if (turn.switches.some((s) => s.side === side)) lastSwitchTurn = turn.turnNumber;
+    }
+    for (const turn of log) {
+      if (turn.turnNumber <= lastSwitchTurn) continue;
       const action = turn.actions.find((a) => a.actor === side);
       if (action) return action.move.id;
     }
@@ -245,7 +281,7 @@ export function BattleLogPage() {
   function moveRestrictionMessage(side: Side, moveId: string): string | null {
     if (!battleState) return null;
     const fighter = battleState[side];
-    const pokemonName = pokemonOf(side)?.name ?? "포켓몬";
+    const pokemonName = activePokemon(side)?.name ?? "포켓몬";
     if (fighter.volatile.active.taunt && getMove(moveId)?.category === "status") {
       return `${pokemonName}${eunNeun(pokemonName)} 도발에 걸려 변화기를 사용할 수 없어요.`;
     }
@@ -262,80 +298,122 @@ export function BattleLogPage() {
     return null;
   }
 
+  /** 이 편의 채워진(포켓몬이 있는) 슬롯을 선출 순서대로 압축 */
+  const filledSlots = (side: Side): PartySlot[] =>
+    sideCtls(side)
+      .map((c) => c.slot)
+      .filter((s): s is PartySlot => s !== null);
+
   const canStart =
-    setup.a.slot !== null &&
-    setup.b.slot !== null &&
-    setup.a.slot.moves.some((m) => m !== null) &&
-    setup.b.slot.moves.some((m) => m !== null);
+    (["a", "b"] as const).every((side) => {
+      const slots = filledSlots(side);
+      return slots.length >= 1 && slots.every((s) => s.moves.some((m) => m !== null));
+    });
 
   function startBattle() {
-    if (!setup.a.slot || !setup.b.slot) return;
-    const aMoves = setup.a.slot.moves.filter((id): id is string => id !== null).map((id) => getMove(id)!);
-    const bMoves = setup.b.slot.moves.filter((id): id is string => id !== null).map((id) => getMove(id)!);
-    // Phase 8 §1: createBattleState는 이제 편측 파티 배열을 받는다. 배틀타워 UI가 3슬롯화되기
-    // 전까지(§3)는 슬롯 1개짜리 파티로 넘겨 기존 1v1과 동일하게 동작시킨다.
+    if (!canStart) return;
+    const aParty = filledSlots("a");
+    const bParty = filledSlots("b");
+    const movesOf = (s: PartySlot) => s.moves.filter((id): id is string => id !== null).map((id) => getMove(id)!);
     const state = createBattleState({
-      a: { slots: [setup.a.slot], movesList: [aMoves] },
-      b: { slots: [setup.b.slot], movesList: [bMoves] },
+      a: { slots: aParty, movesList: aParty.map(movesOf) },
+      b: { slots: bParty, movesList: bParty.map(movesOf) },
       weather: setup.weather ?? undefined,
     });
+    setPartySlots({ a: aParty, b: bParty });
     setBattleState(state);
     setLog([]);
     setSelected({ a: null, b: null });
+    setInputMode({ a: "move", b: "move" });
+    setPendingForcedSwitch(null);
     setLockWarning(null);
   }
 
   function resetToSetup() {
     setBattleState(null);
     setLog([]);
+    setPartySlots({ a: [], b: [] });
     setSelected({ a: null, b: null });
+    setInputMode({ a: "move", b: "move" });
+    setPendingForcedSwitch(null);
     setLockWarning(null);
   }
 
-  function playTurn() {
+  /** 이 편에서 지금 교대로 내보낼 수 있는 슬롯(활성 아님 + 안 쓰러짐) */
+  function switchableIndices(side: Side): number[] {
+    const bs = battleSide(side);
+    if (!bs) return [];
+    return bs.party.map((f, i) => ({ f, i })).filter(({ f, i }) => i !== bs.activeIndex && f.currentHp > 0).map(({ i }) => i);
+  }
+
+  /** 강제 교체 확정 — 기절한 활성 자리에 toIndex 슬롯을 세운다(턴은 소비 안 함) */
+  function resolveForcedSwitch(side: Side, toIndex: number) {
     if (!battleState) return;
+    const next = applySwitch(battleState, side, toIndex);
+    setBattleState(next);
+    setPendingForcedSwitch((prev) => {
+      if (!prev) return null;
+      const rest = { ...prev, [side]: undefined };
+      return rest.a || rest.b ? rest : null;
+    });
+  }
+
+  function playTurn() {
+    if (!battleState || pendingForcedSwitch) return;
     setLockWarning(null);
     // PP 남은 기술이 없거나(4개 다 0), 구애류 도구로 잠긴 기술의 PP가 0이면 선택 없이 발버둥.
-    const aStruggling = isStruggling("a");
-    const bStruggling = isStruggling("b");
-    // 공중날기 등 차지 기술 2턴째는 준비해둔 기술이 선택 여부와 무관하게 자동으로 나가므로
-    // 이 턴엔 수동 선택을 요구하지 않는다 — resolveAction이 어차피 이 값을 무시하고 강제한다.
-    const aCharging = battleState.a.chargingMoveId !== undefined;
-    const bCharging = battleState.b.chargingMoveId !== undefined;
-    if ((!aStruggling && !aCharging && !selected.a) || (!bStruggling && !bCharging && !selected.b)) return;
-
-    // 구애스카프 잠금 확인: 발버둥/차지 계속은 애초에 "선택"이 아니라서 대상이 아니다. 이미 잠긴
-    // 기술과 다른 걸 골랐으면 턴 자체를 진행시키지 않고 경고만 띄운다.
+    const struggling = { a: isStruggling("a"), b: isStruggling("b") };
+    // 공중날기 등 차지 기술 2턴째는 준비해둔 기술이 선택 여부와 무관하게 자동으로 나간다.
+    const charging = {
+      a: battleState.a.chargingMoveId !== undefined,
+      b: battleState.b.chargingMoveId !== undefined,
+    };
+    const isSwitch = (side: Side) => selected[side]?.kind === "switch";
+    // 교체를 고른 쪽은 발버둥/차지와 무관하게 교체가 우선. 그 외엔 선택(또는 발버둥/차지)이 있어야 진행.
     for (const side of ["a", "b"] as const) {
-      const chosen = side === "a" ? (!aStruggling && !aCharging ? selected.a : null) : !bStruggling && !bCharging ? selected.b : null;
-      const locked = chosen ? choiceLockedMoveId(side) : null;
+      if (!isSwitch(side) && !struggling[side] && !charging[side] && !selected[side]) return;
+    }
+
+    // 구애스카프·도발/사슬묶기/앙코르 확인 — 기술을 고른 쪽만. 교체·발버둥·차지는 대상 아님.
+    for (const side of ["a", "b"] as const) {
+      if (isSwitch(side) || struggling[side] || charging[side]) continue;
+      const chosen = selected[side]?.kind === "move" ? selected[side]!.moveId : null;
+      if (!chosen) continue;
+      const locked = choiceLockedMoveId(side);
       if (locked && chosen !== locked) {
         const lockedMoveName = getMove(locked)?.name ?? "그 기술";
-        const pokemonName = pokemonOf(side)?.name ?? "포켓몬";
+        const pokemonName = activePokemon(side)?.name ?? "포켓몬";
         setLockWarning(`${pokemonName}${eunNeun(pokemonName)} 구애스카프 때문에 ${lockedMoveName}만 사용할 수 있어요.`);
         return;
       }
-      // 도발/사슬묶기/앙코르도 같은 방식으로 확인 — 선택 자체는 막지 않고 진행만 경고로 저지한다.
-      const restriction = chosen ? moveRestrictionMessage(side, chosen) : null;
+      const restriction = moveRestrictionMessage(side, chosen);
       if (restriction) {
         setLockWarning(restriction);
         return;
       }
     }
 
-    const moveA = aStruggling ? STRUGGLE_MOVE : aCharging ? getMove(battleState.a.chargingMoveId!) : getMove(selected.a!);
-    const moveB = bStruggling ? STRUGGLE_MOVE : bCharging ? getMove(battleState.b.chargingMoveId!) : getMove(selected.b!);
-    if (!moveA || !moveB) return;
-    // Phase 8 §3: runTurn은 이제 편별 move|switch 액션을 받는다. 교체 UI(§S3)가 붙기 전까지는
-    // 양쪽 다 move 액션으로 감싸 기존 1v1과 동일하게 동작시킨다.
-    const { nextState, result } = runTurn(
-      battleState,
-      { kind: "move", move: moveA },
-      { kind: "move", move: moveB },
-    );
+    const actionFor = (side: Side): TurnAction | null => {
+      const sel = selected[side];
+      if (sel?.kind === "switch") return { kind: "switch", toIndex: sel.toIndex };
+      if (struggling[side]) return { kind: "move", move: STRUGGLE_MOVE };
+      if (charging[side]) {
+        const m = getMove(battleState[side].chargingMoveId!);
+        return m ? { kind: "move", move: m } : null;
+      }
+      const m = sel?.kind === "move" ? getMove(sel.moveId) : undefined;
+      return m ? { kind: "move", move: m } : null;
+    };
+    const actionA = actionFor("a");
+    const actionB = actionFor("b");
+    if (!actionA || !actionB) return;
+
+    const { nextState, result, forcedSwitch } = runTurn(battleState, actionA, actionB);
     setBattleState(nextState);
     setLog((prev) => [...prev, result]);
     setSelected({ a: null, b: null });
+    setInputMode({ a: "move", b: "move" });
+    setPendingForcedSwitch(forcedSwitch ?? null);
   }
 
   const winner = log.at(-1)?.winner;
@@ -353,40 +431,33 @@ export function BattleLogPage() {
       {!battleState && (
         <>
           <div className="battle-setup-board">
-            <BattleSetupCard
-              label="내 포켓몬"
-              slot={setup.a.slot}
-              onPickPokemon={() => setPicker({ kind: "pokemon", side: "a" })}
-              onClearPokemon={setup.a.clearPokemon}
-              onPickMove={(moveIndex) => setPicker({ kind: "move", side: "a", moveIndex })}
-              onPickAbility={() => setPicker({ kind: "ability", side: "a" })}
-              onPickItem={() => setPicker({ kind: "item", side: "a" })}
-              onPickNature={() => setPicker({ kind: "nature", side: "a" })}
-              onPickPoints={() => setPicker({ kind: "points", side: "a" })}
-              onToggleGender={setup.a.toggleGender}
-              onCycleSizeForm={setup.a.cycleSizeForm}
-              onCycleFormVariant={setup.a.cycleFormVariant}
-              hasSamples={slotPresets.presets.length > 0}
-              onSaveAsSample={() => handleSaveSlotAsSample("a")}
-              onOpenSamplePicker={() => setPicker({ kind: "slotPresets", side: "a" })}
-            />
-            <BattleSetupCard
-              label="상대 포켓몬"
-              slot={setup.b.slot}
-              onPickPokemon={() => setPicker({ kind: "pokemon", side: "b" })}
-              onClearPokemon={setup.b.clearPokemon}
-              onPickMove={(moveIndex) => setPicker({ kind: "move", side: "b", moveIndex })}
-              onPickAbility={() => setPicker({ kind: "ability", side: "b" })}
-              onPickItem={() => setPicker({ kind: "item", side: "b" })}
-              onPickNature={() => setPicker({ kind: "nature", side: "b" })}
-              onPickPoints={() => setPicker({ kind: "points", side: "b" })}
-              onToggleGender={setup.b.toggleGender}
-              onCycleSizeForm={setup.b.cycleSizeForm}
-              onCycleFormVariant={setup.b.cycleFormVariant}
-              hasSamples={slotPresets.presets.length > 0}
-              onSaveAsSample={() => handleSaveSlotAsSample("b")}
-              onOpenSamplePicker={() => setPicker({ kind: "slotPresets", side: "b" })}
-            />
+            {(["a", "b"] as const).map((side) => (
+              <div key={side} className="battle-setup-column">
+                <div className="battle-setup-column-title">
+                  {side === "a" ? "내 파티" : "상대 파티"} <span className="battle-setup-column-hint">첫 슬롯이 리드</span>
+                </div>
+                {SLOT_INDICES.map((i) => (
+                  <BattleSetupCard
+                    key={i}
+                    label={`${side === "a" ? "내 포켓몬" : "상대 포켓몬"} ${i + 1}${i === 0 ? " (리드)" : ""}`}
+                    slot={slotCtl(side, i).slot}
+                    onPickPokemon={() => setPicker({ kind: "pokemon", side, slotIndex: i })}
+                    onClearPokemon={slotCtl(side, i).clearPokemon}
+                    onPickMove={(moveIndex) => setPicker({ kind: "move", side, slotIndex: i, moveIndex })}
+                    onPickAbility={() => setPicker({ kind: "ability", side, slotIndex: i })}
+                    onPickItem={() => setPicker({ kind: "item", side, slotIndex: i })}
+                    onPickNature={() => setPicker({ kind: "nature", side, slotIndex: i })}
+                    onPickPoints={() => setPicker({ kind: "points", side, slotIndex: i })}
+                    onToggleGender={slotCtl(side, i).toggleGender}
+                    onCycleSizeForm={slotCtl(side, i).cycleSizeForm}
+                    onCycleFormVariant={slotCtl(side, i).cycleFormVariant}
+                    hasSamples={slotPresets.presets.length > 0}
+                    onSaveAsSample={() => handleSaveSlotAsSample(side, i)}
+                    onOpenSamplePicker={() => setPicker({ kind: "slotPresets", side, slotIndex: i })}
+                  />
+                ))}
+              </div>
+            ))}
           </div>
           <button type="button" className="battle-start-button" disabled={!canStart} onClick={startBattle}>
             대전 시작
@@ -436,8 +507,8 @@ export function BattleLogPage() {
               const form = getEffectiveForm(pokemon, fighter.slot);
               const hpPercent = Math.max(0, Math.min(100, (fighter.currentHp / fighter.maxHp) * 100));
               // battleState 안의 slot은 EvaluatorSlot(moves 필드 없음)이라, 4개 기술 목록은
-              // 셋업 단계에서 쓴 PartySlot(setup.a/b.slot)에서 그대로 가져온다 — 배틀 중엔 안 바뀜
-              const moveIds: (string | null)[] = sideOf(side).slot?.moves ?? [];
+              // 셋업 단계에서 쓴 PartySlot을 활성 슬롯 인덱스로 되짚어 가져온다 — 배틀 중엔 안 바뀜
+              const moveIds: (string | null)[] = activeMoveIds(side);
               const moves = moveIds
                 .filter((id): id is string => id !== null)
                 .map((id) => getMove(id))
@@ -530,12 +601,122 @@ export function BattleLogPage() {
                     })}
                   </div>
 
-                  {fighter.chargingMoveId ? (
-                    // 공중날기 등 차지 기술 1턴째를 막 썼다 — 다음 턴 이 기술이 선택 없이 자동으로 나간다
-                    <div className="battle-struggle-notice">
-                      {getMove(fighter.chargingMoveId)?.name ?? "기술"} 준비 중 — 다음 턴 자동으로 발동돼요!
-                    </div>
-                  ) : !isStruggling(side) ? (
+                  {/* 파티 트래커 — 이 편 3마리의 HP·상태·기절, 활성 슬롯 표시 */}
+                  {(() => {
+                    const bs = side === "a" ? battleState.sideA : battleState.sideB;
+                    if (bs.party.length <= 1) return null;
+                    return (
+                      <div className="battle-party-tracker">
+                        {bs.party.map((f, i) => {
+                          const pk = getPokemon(f.slot.pokemonId);
+                          const pct = Math.max(0, Math.min(100, (f.currentHp / f.maxHp) * 100));
+                          const fainted = f.currentHp <= 0;
+                          return (
+                            <div
+                              key={i}
+                              className={`battle-party-chip${i === bs.activeIndex ? " is-active" : ""}${fainted ? " is-fainted" : ""}`}
+                              title={`${pk?.name ?? "포켓몬"} · ${f.currentHp}/${f.maxHp}${f.status.condition ? ` · ${STATUS_LABELS[f.status.condition]}` : ""}`}
+                            >
+                              <span className="battle-party-chip-name">
+                                {i === bs.activeIndex ? "▶ " : ""}
+                                {pk?.name ?? "포켓몬"}
+                              </span>
+                              <span className="battle-party-chip-hp">
+                                {fainted ? "기절" : `${f.currentHp}/${f.maxHp}`}
+                                {f.status.condition && !fainted && ` · ${STATUS_LABELS[f.status.condition]}`}
+                              </span>
+                              <span className="battle-party-chip-bar">
+                                <span
+                                  className={`battle-party-chip-fill${pct <= 20 ? " is-danger" : pct <= 50 ? " is-warn" : ""}`}
+                                  style={{ width: `${pct}%` }}
+                                />
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
+
+                  {/* ── 이번 턴 이 편의 입력 영역 ── */}
+                  {(() => {
+                    const bs = side === "a" ? battleState.sideA : battleState.sideB;
+                    const benchIdx = switchableIndices(side);
+
+                    // 1) 강제 교체: 활성이 기절해 다음 턴 전에 교대해야 한다
+                    if (pendingForcedSwitch?.[side]) {
+                      return (
+                        <div className="battle-switch-panel">
+                          <div className="battle-switch-panel-title">
+                            {pokemon.name}
+                            {eunNeun(pokemon.name)} 쓰러졌어요 — 내보낼 포켓몬을 선택하세요
+                          </div>
+                          <div className="battle-switch-list">
+                            {benchIdx.map((i) => (
+                              <button
+                                key={i}
+                                type="button"
+                                className="battle-switch-button"
+                                onClick={() => resolveForcedSwitch(side, i)}
+                              >
+                                {getPokemon(bs.party[i].slot.pokemonId)?.name ?? "포켓몬"} 내보내기
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    if (winner) return null;
+
+                    const canSwitch = benchIdx.length > 0 && !fighter.chargingMoveId && fighter.currentHp > 0;
+                    const mode = canSwitch ? inputMode[side] : "move";
+
+                    return (
+                      <>
+                        {canSwitch && (
+                          <div className="battle-input-toggle">
+                            {(["move", "switch"] as const).map((m) => (
+                              <button
+                                key={m}
+                                type="button"
+                                className={`battle-input-toggle-btn${mode === m ? " is-on" : ""}`}
+                                onClick={() => {
+                                  setInputMode((p) => ({ ...p, [side]: m }));
+                                  setSelected((p) => ({ ...p, [side]: null }));
+                                }}
+                              >
+                                {m === "move" ? "기술" : "교체"}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+
+                        {mode === "switch" ? (
+                          <div className="battle-switch-list">
+                            {benchIdx.map((i) => {
+                              const chosen = selected[side]?.kind === "switch" && selected[side]!.toIndex === i;
+                              return (
+                                <button
+                                  key={i}
+                                  type="button"
+                                  className={`battle-switch-button${chosen ? " is-selected" : ""}`}
+                                  onClick={() => {
+                                    setLockWarning(null);
+                                    setSelected((p) => ({ ...p, [side]: { kind: "switch", toIndex: i } }));
+                                  }}
+                                >
+                                  {getPokemon(bs.party[i].slot.pokemonId)?.name ?? "포켓몬"} (
+                                  {bs.party[i].currentHp}/{bs.party[i].maxHp})
+                                </button>
+                              );
+                            })}
+                          </div>
+                        ) : fighter.chargingMoveId ? (
+                          <div className="battle-struggle-notice">
+                            {getMove(fighter.chargingMoveId)?.name ?? "기술"} 준비 중 — 다음 턴 자동으로 발동돼요!
+                          </div>
+                        ) : !isStruggling(side) ? (
                     <div className="battle-move-grid">
                       {moves.map((move) => {
                         const pp = fighter.remainingPp[move.id] ?? move.pp;
@@ -562,7 +743,7 @@ export function BattleLogPage() {
                             key={move.id}
                             type="button"
                             className={`battle-move-button${moveColor ? " has-type" : ""}${
-                              selected[side] === move.id ? " is-selected" : ""
+                              selected[side]?.kind === "move" && selected[side]!.moveId === move.id ? " is-selected" : ""
                             }`}
                             style={moveColor ? { background: moveColor } : undefined}
                             disabled={disabled}
@@ -583,7 +764,7 @@ export function BattleLogPage() {
                             }
                             onClick={() => {
                               setLockWarning(null);
-                              setSelected((prev) => ({ ...prev, [side]: move.id }));
+                              setSelected((prev) => ({ ...prev, [side]: { kind: "move", moveId: move.id } }));
                             }}
                           >
                             <span className="battle-move-name">{move.name}</span>
@@ -594,15 +775,17 @@ export function BattleLogPage() {
                         );
                       })}
                     </div>
-                  ) : (
-                    // PP가 전부 0이거나, 구애류 도구로 잠긴 기술의 PP가 0 — 낼 수 있는 기술이
-                    // 없으니 발버둥이 자동으로 나간다는 걸 알려준다
-                    <div className="battle-struggle-notice">
-                      {hasUsableMove(fighter)
-                        ? "구애류 도구로 잠긴 기술의 PP가 다 됐어요 — 발버둥이 자동으로 나갑니다!"
-                        : "사용 가능한 기술이 없어요 — 발버둥이 자동으로 나갑니다!"}
-                    </div>
-                  )}
+                        ) : (
+                          // PP가 전부 0이거나, 구애류 도구로 잠긴 기술의 PP가 0 — 발버둥이 자동으로 나간다
+                          <div className="battle-struggle-notice">
+                            {hasUsableMove(fighter)
+                              ? "구애류 도구로 잠긴 기술의 PP가 다 됐어요 — 발버둥이 자동으로 나갑니다!"
+                              : "사용 가능한 기술이 없어요 — 발버둥이 자동으로 나갑니다!"}
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
                 </div>
               );
             })}
@@ -623,15 +806,20 @@ export function BattleLogPage() {
                 다시 설정하기
               </button>
             </div>
+          ) : pendingForcedSwitch ? (
+            <div className="battle-lock-warning">쓰러진 포켓몬 자리를 교대해야 다음 턴을 진행할 수 있어요.</div>
           ) : (
             <>
               <button
                 type="button"
                 className="battle-start-button"
-                disabled={
-                  (!isStruggling("a") && battleState.a.chargingMoveId === undefined && !selected.a) ||
-                  (!isStruggling("b") && battleState.b.chargingMoveId === undefined && !selected.b)
-                }
+                disabled={(["a", "b"] as const).some(
+                  (side) =>
+                    selected[side]?.kind !== "switch" &&
+                    !isStruggling(side) &&
+                    battleState[side].chargingMoveId === undefined &&
+                    !selected[side],
+                )}
                 onClick={playTurn}
               >
                 턴 진행
@@ -641,19 +829,33 @@ export function BattleLogPage() {
           )}
 
           <div className="battle-turn-log">
-            {[...log].reverse().map((turn) => (
+            {[...log].reverse().map((turn) => {
+              // 이 턴에 실제로 행동한 포켓몬 이름 — 교체 뒤 과거 턴 로그가 현재 활성 이름으로
+              // 잘못 표시되지 않도록, runTurn이 스냅샷한 activePokemonIds로 이름을 되짚는다.
+              const turnName = (key: FighterKey) => getPokemon(turn.activePokemonIds[key])?.name ?? key;
+              return (
               <div key={turn.turnNumber} className="battle-turn-card">
                 <div className="battle-turn-title">
-                  턴 {turn.turnNumber} · 먼저 행동: {fighterLabel(battleState, turn.order[0])}
+                  턴 {turn.turnNumber} · 먼저 행동: {turnName(turn.order[0])}
                 </div>
+                {turn.switches.map((sw, i) => {
+                  const outName = getPokemon(sw.outPokemonId)?.name ?? "포켓몬";
+                  const inName = getPokemon(sw.inPokemonId)?.name ?? "포켓몬";
+                  return (
+                    <div key={`sw-${i}`} className="battle-turn-line">
+                      {outName}
+                      {eunNeun(outName)} 뒤로 물러났다 — {inName} 등장!
+                    </div>
+                  );
+                })}
                 {turn.turnStartAnnouncements.map((text, i) => (
                   <div key={`tsa-${i}`} className="battle-turn-line is-muted">
                     {text}
                   </div>
                 ))}
                 {turn.actions.map((action, i) => {
-                  const actorName = fighterLabel(battleState, action.actor);
-                  const defenderName = fighterLabel(battleState, opponentKey(action.actor));
+                  const actorName = turnName(action.actor);
+                  const defenderName = turnName(opponentKey(action.actor));
                   return (
                     <div key={i}>
                       {/* 움직이기 전 상태 판정 — 잠듦/얼음이 이번 행동 시작 시점에 풀렸으면 기술 줄보다
@@ -1531,132 +1733,132 @@ export function BattleLogPage() {
                   <div key={i} className="battle-turn-line is-muted">
                     {e.fieldHeal ? (
                       <>
-                        {fighterLabel(battleState, e.actor)} 그래스필드로 {e.fieldHeal} 회복 (남은 HP {e.remainingHp})
+                        {turnName(e.actor)} 그래스필드로 {e.fieldHeal} 회복 (남은 HP {e.remainingHp})
                       </>
                     ) : e.itemHeal ? (
                       <>
-                        {fighterLabel(battleState, e.actor)}의 {e.itemHealItemName}로 {e.itemHeal} 회복 (남은 HP{" "}
+                        {turnName(e.actor)}의 {e.itemHealItemName}로 {e.itemHeal} 회복 (남은 HP{" "}
                         {e.remainingHp})
                       </>
                     ) : e.abilityWeatherHeal ? (
                       <>
-                        {fighterLabel(battleState, e.actor)}의 {e.abilityWeatherHealAbilityName}로{" "}
+                        {turnName(e.actor)}의 {e.abilityWeatherHealAbilityName}로{" "}
                         {e.abilityWeatherHeal} 회복 (남은 HP {e.remainingHp})
                       </>
                     ) : e.regenHeal ? (
                       <>
-                        {fighterLabel(battleState, e.actor)}
+                        {turnName(e.actor)}
                         {e.regenSource && VOLATILE_LABELS[e.regenSource]}로 {e.regenHeal} 회복 (남은 HP {e.remainingHp})
                       </>
                     ) : e.leechSeedDamage ? (
                       <>
-                        {fighterLabel(battleState, e.actor)}의 씨앗이 체력을 {e.leechSeedDamage} 흡수했다 (남은 HP{" "}
+                        {turnName(e.actor)}의 씨앗이 체력을 {e.leechSeedDamage} 흡수했다 (남은 HP{" "}
                         {e.remainingHp})
                         {e.fainted && " · 기절!"}
                       </>
                     ) : e.leechSeedHealAmount ? (
                       <>
-                        {fighterLabel(battleState, e.actor)}가 씨앗으로 체력을 {e.leechSeedHealAmount} 회복 (남은 HP{" "}
+                        {turnName(e.actor)}가 씨앗으로 체력을 {e.leechSeedHealAmount} 회복 (남은 HP{" "}
                         {e.remainingHp})
                       </>
                     ) : e.wishHeal ? (
                       <>
-                        {fighterLabel(battleState, e.actor)}의 희망사항으로 체력을 {e.wishHeal} 회복 (남은 HP{" "}
+                        {turnName(e.actor)}의 희망사항으로 체력을 {e.wishHeal} 회복 (남은 HP{" "}
                         {e.remainingHp})
                       </>
                     ) : e.berryHeal ? (
                       <>
-                        {fighterLabel(battleState, e.actor)}의 {e.berryHealItemName}로 {e.berryHeal} 회복 (남은 HP{" "}
+                        {turnName(e.actor)}의 {e.berryHealItemName}로 {e.berryHeal} 회복 (남은 HP{" "}
                         {e.remainingHp})
                       </>
                     ) : e.sandstormDamage ? (
                       <>
-                        {fighterLabel(battleState, e.actor)}
-                        {eunNeun(fighterLabel(battleState, e.actor))} 모래바람에 시달리고 있다! {e.damage} 데미지 (남은
+                        {turnName(e.actor)}
+                        {eunNeun(turnName(e.actor))} 모래바람에 시달리고 있다! {e.damage} 데미지 (남은
                         HP {e.remainingHp}){e.fainted && " · 기절!"}
                       </>
                     ) : e.boundDamage ? (
                       <>
-                        {fighterLabel(battleState, e.actor)}
-                        {eunNeun(fighterLabel(battleState, e.actor))} 속박에서 벗어나지 못하고 있다! {e.damage} 데미지
+                        {turnName(e.actor)}
+                        {eunNeun(turnName(e.actor))} 속박에서 벗어나지 못하고 있다! {e.damage} 데미지
                         (남은 HP {e.remainingHp}){e.fainted && " · 기절!"}
                       </>
                     ) : e.saltCureDamage ? (
                       <>
-                        {fighterLabel(battleState, e.actor)}
-                        {eunNeun(fighterLabel(battleState, e.actor))} 소금절이 때문에 괴로워하고 있다! {e.damage} 데미지
+                        {turnName(e.actor)}
+                        {eunNeun(turnName(e.actor))} 소금절이 때문에 괴로워하고 있다! {e.damage} 데미지
                         (남은 HP {e.remainingHp}){e.fainted && " · 기절!"}
                       </>
                     ) : e.syrupCoatDrop ? (
                       <>
-                        {fighterLabel(battleState, e.actor)}
-                        {eunNeun(fighterLabel(battleState, e.actor))} 물엿범벅이 되어 스피드가 떨어졌다! (남은 HP{" "}
+                        {turnName(e.actor)}
+                        {eunNeun(turnName(e.actor))} 물엿범벅이 되어 스피드가 떨어졌다! (남은 HP{" "}
                         {e.remainingHp})
                       </>
                     ) : e.perishFainted ? (
                       <>
-                        {fighterLabel(battleState, e.actor)}
-                        {eunNeun(fighterLabel(battleState, e.actor))} 멸망의 노래 카운트가 0이 되어 쓰러졌다!
+                        {turnName(e.actor)}
+                        {eunNeun(turnName(e.actor))} 멸망의 노래 카운트가 0이 되어 쓰러졌다!
                       </>
                     ) : e.perishCount !== undefined ? (
                       <>
-                        {fighterLabel(battleState, e.actor)}의 멸망의 노래 카운트: {e.perishCount}
+                        {turnName(e.actor)}의 멸망의 노래 카운트: {e.perishCount}
                       </>
                     ) : e.inflictedDelayedStatus ? (
-                      STATUS_ONSET_TEXT[e.inflictedDelayedStatus](fighterLabel(battleState, e.actor))
+                      STATUS_ONSET_TEXT[e.inflictedDelayedStatus](turnName(e.actor))
                     ) : e.abilityCuredStatus ? (
                       <>
-                        {fighterLabel(battleState, e.actor)}의 {e.abilityCuredStatusAbilityName}!{" "}
-                        {STATUS_CURE_TEXT[e.abilityCuredStatus](fighterLabel(battleState, e.actor))}
+                        {turnName(e.actor)}의 {e.abilityCuredStatusAbilityName}!{" "}
+                        {STATUS_CURE_TEXT[e.abilityCuredStatus](turnName(e.actor))}
                       </>
                     ) : e.statusCondition ? (
                       <>
-                        {STATUS_TRIGGER_TEXT[e.statusCondition](fighterLabel(battleState, e.actor))} (남은 HP{" "}
+                        {STATUS_TRIGGER_TEXT[e.statusCondition](turnName(e.actor))} (남은 HP{" "}
                         {e.remainingHp})
                         {e.fainted && " · 기절!"}
                       </>
                     ) : e.speedBoostAbilityName ? (
                       <>
-                        {fighterLabel(battleState, e.actor)}의 {e.speedBoostAbilityName}!{" "}
+                        {turnName(e.actor)}의 {e.speedBoostAbilityName}!{" "}
                         {e.speedBoostAtCap
-                          ? `${fighterLabel(battleState, e.actor)}의 스피드는 더 이상 올라가지 않는다!`
+                          ? `${turnName(e.actor)}의 스피드는 더 이상 올라가지 않는다!`
                           : "스피드가 올라갔다!"}
                       </>
                     ) : e.moodyAbilityName && e.moodyRaisedStat && e.moodyLoweredStat ? (
                       <>
-                        {fighterLabel(battleState, e.actor)}의 {e.moodyAbilityName}! {STAT_LABELS[e.moodyRaisedStat]}
+                        {turnName(e.actor)}의 {e.moodyAbilityName}! {STAT_LABELS[e.moodyRaisedStat]}
                         {"이(가)"} 크게 올라가고 {STAT_LABELS[e.moodyLoweredStat]}
                         {"이(가)"} 떨어졌다!
                       </>
                     ) : e.poisonHealAbilityName ? (
                       <>
-                        {fighterLabel(battleState, e.actor)}의 {e.poisonHealAbilityName}! 독 데미지 대신 HP{" "}
+                        {turnName(e.actor)}의 {e.poisonHealAbilityName}! 독 데미지 대신 HP{" "}
                         {e.poisonHealAmount} 회복 (남은 HP {e.remainingHp})
                       </>
                     ) : e.abilityWeatherDamageAbilityName ? (
                       <>
-                        {fighterLabel(battleState, e.actor)}의 {e.abilityWeatherDamageAbilityName}! 데미지 {e.damage}{" "}
+                        {turnName(e.actor)}의 {e.abilityWeatherDamageAbilityName}! 데미지 {e.damage}{" "}
                         (남은 HP {e.remainingHp}){e.fainted && " · 기절!"}
                       </>
                     ) : e.harvestRestoredBerryName ? (
                       <>
-                        {fighterLabel(battleState, e.actor)}의 수확! {e.harvestRestoredBerryName}
+                        {turnName(e.actor)}의 수확! {e.harvestRestoredBerryName}
                         {eulReul(e.harvestRestoredBerryName)} 다시 만들었다!
                       </>
                     ) : e.cheekPouchHeal ? (
                       <>
-                        {fighterLabel(battleState, e.actor)}의 볼주머니! 체력을 {e.cheekPouchHeal} 회복 (남은 HP{" "}
+                        {turnName(e.actor)}의 볼주머니! 체력을 {e.cheekPouchHeal} 회복 (남은 HP{" "}
                         {e.remainingHp})
                       </>
                     ) : e.hungerModeChangedTo ? (
                       <>
-                        {fighterLabel(battleState, e.actor)}
-                        {eunNeun(fighterLabel(battleState, e.actor))}{" "}
+                        {turnName(e.actor)}
+                        {eunNeun(turnName(e.actor))}{" "}
                         {e.hungerModeChangedTo === "hangry" ? "배고픈모양" : "배부른모양"}이 되었다!
                       </>
                     ) : (
                       <>
-                        {fighterLabel(battleState, e.actor)} 상태이상 데미지 {e.damage} (남은 HP {e.remainingHp})
+                        {turnName(e.actor)} 상태이상 데미지 {e.damage} (남은 HP {e.remainingHp})
                         {e.fainted && " · 기절!"}
                       </>
                     )}
@@ -1688,18 +1890,19 @@ export function BattleLogPage() {
                 )}
                 {turn.expiredScreens.map((e, i) => (
                   <div key={i} className="battle-turn-line is-muted">
-                    {fighterLabel(battleState, e.actor)}의 {SCREEN_LABELS[e.screen]}이(가) 사라졌다!
+                    {turnName(e.actor)}의 {SCREEN_LABELS[e.screen]}이(가) 사라졌다!
                   </div>
                 ))}
                 {turn.winner && (
                   <div className="battle-turn-line is-winner">
                     {turn.winner === "draw"
                       ? "🤝 무승부!"
-                      : `🏆 ${fighterLabel(battleState, turn.winner)} 승리!`}
+                      : `🏆 ${turnName(turn.winner)} 승리!`}
                   </div>
                 )}
               </div>
-            ))}
+              );
+            })}
           </div>
         </>
       )}
@@ -1708,7 +1911,7 @@ export function BattleLogPage() {
         <PokemonPickerModal
           onClose={() => setPicker(null)}
           onSelect={(pokemonId) => {
-            sideOf(picker.side).setPokemon(pokemonId);
+            slotCtl(picker.side, picker.slotIndex).setPokemon(pokemonId);
             setPicker(null);
           }}
         />
@@ -1716,8 +1919,9 @@ export function BattleLogPage() {
 
       {picker?.kind === "ability" &&
         (() => {
-          const pokemon = pokemonOf(picker.side);
-          const slot = sideOf(picker.side).slot;
+          const ctl = slotCtl(picker.side, picker.slotIndex);
+          const pokemon = pokemonAt(picker.side, picker.slotIndex);
+          const slot = ctl.slot;
           if (!pokemon || !slot) return null;
           return (
             <AbilityPickerModal
@@ -1726,11 +1930,11 @@ export function BattleLogPage() {
               currentAbilityId={slot.ability}
               onClose={() => setPicker(null)}
               onSelect={(abilityId) => {
-                sideOf(picker.side).setAbility(abilityId);
+                ctl.setAbility(abilityId);
                 setPicker(null);
               }}
               onClear={() => {
-                sideOf(picker.side).setAbility(null);
+                ctl.setAbility(null);
                 setPicker(null);
               }}
             />
@@ -1739,92 +1943,101 @@ export function BattleLogPage() {
 
       {picker?.kind === "item" &&
         (() => {
-          const pokemon = pokemonOf(picker.side);
+          const ctl = slotCtl(picker.side, picker.slotIndex);
+          const pokemon = pokemonAt(picker.side, picker.slotIndex);
           if (!pokemon) return null;
           return (
             <ItemPickerModal
               pokemon={pokemon}
-              currentItemId={sideOf(picker.side).slot?.item ?? null}
+              currentItemId={ctl.slot?.item ?? null}
               onClose={() => setPicker(null)}
               onSelect={(itemId) => {
-                sideOf(picker.side).setItem(itemId);
+                ctl.setItem(itemId);
                 setPicker(null);
               }}
               onClear={() => {
-                sideOf(picker.side).setItem(null);
+                ctl.setItem(null);
                 setPicker(null);
               }}
             />
           );
         })()}
 
-      {picker?.kind === "nature" && (
-        <NaturePickerModal
-          currentNatureId={sideOf(picker.side).slot?.nature ?? null}
-          onClose={() => setPicker(null)}
-          onSelect={(natureId) => {
-            sideOf(picker.side).setNature(natureId);
-            setPicker(null);
-          }}
-          onClear={() => {
-            sideOf(picker.side).setNature(null);
-            setPicker(null);
-          }}
-        />
-      )}
+      {picker?.kind === "nature" &&
+        (() => {
+          const ctl = slotCtl(picker.side, picker.slotIndex);
+          return (
+            <NaturePickerModal
+              currentNatureId={ctl.slot?.nature ?? null}
+              onClose={() => setPicker(null)}
+              onSelect={(natureId) => {
+                ctl.setNature(natureId);
+                setPicker(null);
+              }}
+              onClear={() => {
+                ctl.setNature(null);
+                setPicker(null);
+              }}
+            />
+          );
+        })()}
 
       {picker?.kind === "points" &&
         (() => {
-          const side = picker.side;
-          const pokemon = pokemonOf(side);
-          const slotState = sideOf(side);
-          if (!pokemon || !slotState.slot) return null;
-          const form = getEffectiveForm(pokemon, slotState.slot);
+          const ctl = slotCtl(picker.side, picker.slotIndex);
+          const pokemon = pokemonAt(picker.side, picker.slotIndex);
+          if (!pokemon || !ctl.slot) return null;
+          const form = getEffectiveForm(pokemon, ctl.slot);
           return (
             <PointsEditorModal
               pokemonName={pokemon.name}
               baseStats={form.baseStats}
-              points={slotState.slot.points}
-              natureId={slotState.slot.nature}
+              points={ctl.slot.points}
+              natureId={ctl.slot.nature}
               onClose={() => setPicker(null)}
-              onChange={(stat, value) => slotState.setPoint(stat, value)}
-              onStep={(stat, delta) => slotState.stepPoint(stat, delta)}
+              onChange={(stat, value) => ctl.setPoint(stat, value)}
+              onStep={(stat, delta) => ctl.stepPoint(stat, delta)}
             />
           );
         })()}
 
       {picker?.kind === "move" &&
         (() => {
-          const pokemon = pokemonOf(picker.side);
-          const slotState = sideOf(picker.side);
-          if (!pokemon || !slotState.slot) return null;
+          const ctl = slotCtl(picker.side, picker.slotIndex);
+          const pokemon = pokemonAt(picker.side, picker.slotIndex);
+          if (!pokemon || !ctl.slot) return null;
+          const moveIndex = picker.moveIndex;
           return (
             <MovePickerModal
               pokemon={pokemon}
-              currentMoveIds={slotState.slot.moves}
+              currentMoveIds={ctl.slot.moves}
               onClose={() => setPicker(null)}
               onSelect={(moveId) => {
-                slotState.setMove(picker.moveIndex, moveId);
+                ctl.setMove(moveIndex, moveId);
                 setPicker(null);
               }}
               onClear={() => {
-                slotState.setMove(picker.moveIndex, null);
+                ctl.setMove(moveIndex, null);
                 setPicker(null);
               }}
             />
           );
         })()}
 
-      {picker?.kind === "slotPresets" && (
-        <SlotPresetsModal
-          presets={slotPresets.presets}
-          slotIsFilled={sideOf(picker.side).slot !== null}
-          onClose={() => setPicker(null)}
-          onLoad={(preset) => sideOf(picker.side).loadSlot(preset.slot)}
-          onRename={slotPresets.renamePreset}
-          onDelete={slotPresets.deletePreset}
-        />
-      )}
+      {picker?.kind === "slotPresets" &&
+        (() => {
+          const ctl = slotCtl(picker.side, picker.slotIndex);
+          return (
+            <SlotPresetsModal
+              presets={slotPresets.presets}
+              slotIsFilled={ctl.slot !== null}
+              onClose={() => setPicker(null)}
+              onLoad={(preset) => ctl.loadSlot(preset.slot)}
+              onRename={slotPresets.renamePreset}
+              onDelete={slotPresets.deletePreset}
+            />
+          );
+        })()}
     </section>
   );
 }

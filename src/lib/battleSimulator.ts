@@ -1425,6 +1425,12 @@ export interface TurnResult {
   turnNumber: number;
   /** 이번 턴 실제로 먼저 행동한 쪽 */
   order: [FighterKey, FighterKey];
+  /**
+   * 이번 턴에 실제로 행동한(=교체 선처리 직후 활성이던) 포켓몬 종 id. 로그에서 "누가 이 기술을
+   * 썼나"를 현재 활성이 아니라 그 턴 기준으로 표시하려고 스냅샷해 둔다(Phase 8 §3 — 교체 이후
+   * 과거 턴 로그가 현재 활성 이름으로 잘못 표시되던 문제).
+   */
+  activePokemonIds: Record<FighterKey, string>;
   actions: ActionLogEntry[];
   endOfTurn: EndOfTurnLogEntry[];
   /**
@@ -5260,6 +5266,7 @@ export function runTurn(
       expiredScreens,
       turnStartAnnouncements,
       switches,
+      activePokemonIds: { a: state.a.slot.pokemonId, b: state.b.slot.pokemonId },
     },
     forcedSwitch,
   };
