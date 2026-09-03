@@ -351,6 +351,10 @@ export function BattleLogPage() {
     if (!battleState) return;
     const { nextState, entryMessages, outPokemonId, inPokemonId } = applySwitch(battleState, side, toIndex);
     setBattleState(nextState);
+    // 스텔스록·압정 등장 데미지로(§6) 새로 나온 포켓몬이 그 자리에서 또 쓰러졌는지.
+    const inSide = side === "a" ? nextState.sideA : nextState.sideB;
+    const inFainted = nextState[side].currentHp <= 0;
+    const hasReserve = inSide.party.some((f, i) => i !== inSide.activeIndex && f.currentHp > 0);
     // 강제 교체는 턴 밖 조작이라 별도 로그 카드로 남긴다(등장 파이프라인 문구까지 함께).
     const synthetic: TurnResult = {
       turnNumber: nextState.turnNumber,
@@ -358,7 +362,7 @@ export function BattleLogPage() {
       activePokemonIds: { a: nextState.a.slot.pokemonId, b: nextState.b.slot.pokemonId },
       actions: [],
       endOfTurn: [],
-      winner: undefined,
+      winner: inFainted && !hasReserve ? (side === "a" ? "b" : "a") : undefined,
       expiredScreens: [],
       turnStartAnnouncements: [],
       switches: [
@@ -366,9 +370,9 @@ export function BattleLogPage() {
       ],
     };
     setLog((prev) => [...prev, synthetic]);
+    // 새로 나온 포켓몬이 또 쓰러졌고 남은 슬롯이 있으면 강제 교체를 계속 요구한다.
     setPendingForcedSwitch((prev) => {
-      if (!prev) return null;
-      const rest = { ...prev, [side]: undefined };
+      const rest = { ...(prev ?? {}), [side]: inFainted && hasReserve ? true : undefined };
       return rest.a || rest.b ? rest : null;
     });
   }
@@ -483,36 +487,47 @@ export function BattleLogPage() {
       {battleState && (
         <>
           <div className="battle-board" style={{ background: battleBoardBackground(battleState) }}>
-            {(battleState.weather ||
-              battleState.field ||
-              battleState.trickRoomTurnsRemaining !== undefined ||
-              battleState.sideA.hazards.stealthRock ||
-              battleState.sideB.hazards.stealthRock) && (
-              <div className="battle-environment-tags">
-                {battleState.weather && (
-                  <span className="battle-environment-tag">
-                    날씨: {battleState.weather} (앞으로 {battleState.weatherTurnsRemaining}턴)
-                  </span>
-                )}
-                {battleState.field && (
-                  <span className="battle-environment-tag">
-                    필드: {battleState.field} (앞으로 {battleState.fieldTurnsRemaining}턴)
-                  </span>
-                )}
-                {battleState.trickRoomTurnsRemaining !== undefined && (
-                  <span className="battle-environment-tag">
-                    트릭룸 (앞으로 {battleState.trickRoomTurnsRemaining}턴)
-                  </span>
-                )}
-                {(["a", "b"] as const).map((side) =>
-                  (side === "a" ? battleState.sideA : battleState.sideB).hazards.stealthRock ? (
-                    <span key={`sr-${side}`} className="battle-environment-tag">
-                      {fighterLabel(battleState, side)} 진영: 뾰족한 바위(스텔스록)
+            {(() => {
+              const hazardTag = (side: Side): string[] => {
+                const hz = side === "a" ? battleState.sideA.hazards : battleState.sideB.hazards;
+                const parts: string[] = [];
+                if (hz.stealthRock) parts.push("스텔스록");
+                if (hz.spikesLayers > 0) parts.push(`압정뿌리기 ${hz.spikesLayers}층`);
+                if (hz.toxicSpikesLayers > 0) parts.push(`독압정 ${hz.toxicSpikesLayers}층`);
+                if (hz.stickyWeb) parts.push("끈적끈적네트");
+                return parts;
+              };
+              const anyHazard = hazardTag("a").length > 0 || hazardTag("b").length > 0;
+              if (!battleState.weather && !battleState.field && battleState.trickRoomTurnsRemaining === undefined && !anyHazard) {
+                return null;
+              }
+              return (
+                <div className="battle-environment-tags">
+                  {battleState.weather && (
+                    <span className="battle-environment-tag">
+                      날씨: {battleState.weather} (앞으로 {battleState.weatherTurnsRemaining}턴)
                     </span>
-                  ) : null,
-                )}
-              </div>
-            )}
+                  )}
+                  {battleState.field && (
+                    <span className="battle-environment-tag">
+                      필드: {battleState.field} (앞으로 {battleState.fieldTurnsRemaining}턴)
+                    </span>
+                  )}
+                  {battleState.trickRoomTurnsRemaining !== undefined && (
+                    <span className="battle-environment-tag">
+                      트릭룸 (앞으로 {battleState.trickRoomTurnsRemaining}턴)
+                    </span>
+                  )}
+                  {(["a", "b"] as const).map((side) =>
+                    hazardTag(side).length > 0 ? (
+                      <span key={`hz-${side}`} className="battle-environment-tag">
+                        {fighterLabel(battleState, side)} 진영: {hazardTag(side).join(" · ")}
+                      </span>
+                    ) : null,
+                  )}
+                </div>
+              );
+            })()}
             {(["a", "b"] as const).map((side) => {
               const fighter = battleState[side];
               const pokemon = getPokemon(fighter.slot.pokemonId);
@@ -958,6 +973,12 @@ export function BattleLogPage() {
                         )}
                         {!action.blockedReason && action.hit && action.spikesSetForSide && (
                           <> · 상대 편 필드에 압정이 흩뿌려졌다!</>
+                        )}
+                        {!action.blockedReason && action.hit && action.toxicSpikesSetForSide && (
+                          <> · 상대 편 필드에 독 압정이 흩뿌려졌다!</>
+                        )}
+                        {!action.blockedReason && action.hit && action.stickyWebSetForSide && (
+                          <> · 상대 편 필드에 끈적끈적네트가 펼쳐졌다!</>
                         )}
                         {!action.blockedReason && action.hit && action.hazardSetFailed && (
                           <> · 그러나 실패했다!</>

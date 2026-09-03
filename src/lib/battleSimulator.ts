@@ -1054,9 +1054,13 @@ export interface ActionLogEntry {
   fieldSetFailed?: boolean;
   /** 스텔스록을 어느 진영에 깔았으면 그 진영 키(a/b). 로그 문구용 */
   stealthRockSetForSide?: FighterKey;
-  /** 압정뿌리기(스파이크)를 어느 진영에 깔았으면 그 진영 키(a/b). 비검천중파·압정뿌리기 */
+  /** 압정뿌리기(스파이크)를 어느 진영에 새 층을 깔았으면 그 진영 키(a/b). 비검천중파·암석액스·압정뿌리기 */
   spikesSetForSide?: FighterKey;
-  /** 설치기를 깔려 했으나 이미 그 진영에 깔려 있어 실패했으면 true */
+  /** 독압정을 어느 진영에 새 층을 깔았으면 그 진영 키(a/b) */
+  toxicSpikesSetForSide?: FighterKey;
+  /** 끈적끈적네트를 어느 진영에 깔았으면 그 진영 키(a/b) */
+  stickyWebSetForSide?: FighterKey;
+  /** 설치기를 깔려 했으나 이미 최대라 실패했으면 true */
   hazardSetFailed?: boolean;
   /**
    * 매직미러로 이 변화기가 시전자에게 되돌아갔으면 그 기술 이름. 이 플래그가 있으면 아래
@@ -1513,6 +1517,91 @@ function hasLivingReserve(side: BattleSide): boolean {
 }
 
 /**
+/**
+ * 압정뿌리기·독압정·끈적끈적네트가 실제로 발동하는 "접지" 상태인지(Phase 8 §6).
+ * 비행 타입, 부유·천정부지(땅 면역 특성) 보유자는 비접지. 에어벌룬·텔레키네시스 등은
+ * 로스터에 없어 미반영(fieldEffects와 동일한 단순화). 스텔스록은 접지 무관이라 이 판정을 안 쓴다.
+ */
+function isGroundedForHazards(fighter: BattleFighterState): boolean {
+  if (fighter.types.includes("비행")) return false;
+  const ab = abilityOf(fighter);
+  if (ab?.grantsImmunityToTypes?.includes("땅")) return false;
+  return true;
+}
+
+/** 압정뿌리기 층수별 등장 데미지 비율 (사용자 확정: 1→1/16 · 2→1/8 · 3→1/4) */
+const SPIKES_DAMAGE_FRACTION_BY_LAYER: Record<number, number> = { 1: 1 / 16, 2: 1 / 8, 3: 1 / 4 };
+/** 스텔스록 등장 데미지 기준 비율(바위 상성 배율을 곱한다) */
+const STEALTH_ROCK_BASE_FRACTION = 1 / 8;
+
+/**
+ * 교체로 나온 포켓몬이 상대 진영 설치물을 밟을 때의 처리(Phase 8 §6). performSwitch에서
+ * 등장 특성보다 먼저 호출한다. 순서:
+ *  1. 독타입이면 독압정을 흡수해 제거
+ *  2. 스텔스록 등장 데미지(바위 상성 배율, 매직가드가 막음)
+ *  3. 접지 상태면: 압정뿌리기 데미지(매직가드가 막음) → 독압정 중독 → 끈적끈적네트 스피드 -1
+ */
+function applyEntryHazardsOnSwitchIn(state: BattleState, key: FighterKey, log: string[]): void {
+  const self = state[key];
+  if (isFainted(self)) return;
+  const hz = sideOf(state, key).hazards;
+  const selfName = getPokemon(self.slot.pokemonId)?.name ?? "포켓몬";
+  const selfAbility = abilityOf(self);
+  const magicGuard = !!selfAbility?.negatesIndirectDamage;
+
+  // 1. 독타입 등장 → 독압정 흡수
+  if (hz.toxicSpikesLayers > 0 && self.types.includes("독")) {
+    hz.toxicSpikesLayers = 0;
+    log.push(`${selfName}${eunNeun(selfName)} 독압정을 흡수했다!`);
+  }
+
+  // 2. 스텔스록 (접지 무관, 바위 상성)
+  if (hz.stealthRock && !magicGuard) {
+    const eff = getEffectiveness("바위", self.types);
+    if (eff > 0) {
+      const dmg = Math.max(1, Math.floor(self.maxHp * STEALTH_ROCK_BASE_FRACTION * eff));
+      self.currentHp = Math.max(0, self.currentHp - dmg);
+      log.push(`뾰족한 바위가 ${selfName}${eulReul(selfName)} 덮쳤다! (${dmg} 데미지)`);
+    }
+  }
+  if (isFainted(self)) return;
+
+  // 3. 접지 대상만: 압정뿌리기 · 독압정 · 끈적끈적네트
+  if (isGroundedForHazards(self)) {
+    if (hz.spikesLayers > 0 && !magicGuard) {
+      const frac = SPIKES_DAMAGE_FRACTION_BY_LAYER[hz.spikesLayers] ?? 1 / 16;
+      const dmg = Math.max(1, Math.floor(self.maxHp * frac));
+      self.currentHp = Math.max(0, self.currentHp - dmg);
+      log.push(`${selfName}${eunNeun(selfName)} 압정에 상처를 입었다! (${dmg} 데미지)`);
+    }
+    if (isFainted(self)) return;
+
+    if (
+      hz.toxicSpikesLayers > 0 &&
+      !self.status.condition &&
+      !isImmuneToStatus(hz.toxicSpikesLayers >= 2 ? "badly-poisoned" : "poison", self.types, selfAbility?.immuneToStatuses) &&
+      !isStatusBlockedByField(state.field, "poison")
+    ) {
+      const cond: StatusCondition = hz.toxicSpikesLayers >= 2 ? "badly-poisoned" : "poison";
+      self.status = inflictStatus(self.status, cond);
+      log.push(
+        cond === "badly-poisoned"
+          ? `${selfName}의 몸에 맹독이 퍼졌다!`
+          : `${selfName}의 몸에 독이 퍼졌다!`,
+      );
+    }
+
+    if (hz.stickyWeb) {
+      const before = self.stages.spe;
+      self.stages = applyStageDelta(self.stages, "spe", contraryDelta(self, -1));
+      if (self.stages.spe !== before) {
+        log.push(`${selfName}${eunNeun(selfName)} 끈적끈적네트에 걸려 스피드가 떨어졌다!`);
+      }
+    }
+  }
+}
+
+/**
  * 교체로 나온 포켓몬 하나에 대해 "등장 시 특성"을 적용한다(Phase 8 §4 골격).
  * createBattleState의 resolveEntryAbilityEffects는 양쪽을 스피드 순으로 동시에 처리하는
  * 배틀 시작 전용이라, 한 마리만 등장하는 교체용으로 이 단일 버전을 따로 둔다.
@@ -1641,11 +1730,12 @@ function performSwitch(state: BattleState, key: FighterKey, toIndex: number, log
   applyForecastForm(incoming, activeWeather(state));
   applyMimicryForm(incoming, state.field);
 
-  // ── 등장 파이프라인 (Phase 8 §4) ──
-  // 1. 설치물 발동 — §5에서 여기에 applyEntryHazardsOnSwitchIn(state, key, log)을 붙인다.
-  //    (스텔스록 등장 데미지, 압정뿌리기 스택, 끈적끈적네트 스피드 다운, 독압정 중독,
-  //     독타입이면 독압정 해제. 매직가드·인분 게이팅 포함.)
-  // 2. 등장 특성 — 위협·가뭄류·필드·트레이스
+  // ── 등장 파이프라인 (Phase 8 §4·§6) ──
+  // 1. 설치물 발동 — 스텔스록 등장 데미지, 압정뿌리기 스택, 독압정 중독, 끈적끈적네트 스피드 다운,
+  //    독타입이면 독압정 흡수. 스텔스록·압정 데미지는 매직가드가 막는다(ability.ts:307 주석 참조 —
+  //    인분은 "기술의 추가효과"만 막아 설치물엔 무관).
+  applyEntryHazardsOnSwitchIn(state, key, log);
+  // 2. 등장 특성 — 위협·가뭄류·필드·트레이스. 설치물로 이미 기절했으면 스킵된다(내부에서 isFainted 가드).
   applyEntryAbilityOnSwitchIn(state, key, log);
 
   // TODO(§8): 추격(Pursuit)은 로스터에 없어 미구현 — 교체 대상을 위력 2배로 선타하는 예외.
@@ -4210,29 +4300,35 @@ function resolveAction(
     }
   }
 
-  // 스텔스록: 상대 진영에 설치한다. 이미 그 진영에 깔려 있으면 실패한다(사용자 확인).
-  // 매직미러 반사 중이면 바인딩이 맞바뀌어 있으므로 설치 대상 진영은 defenderKey가 아니라
-  // 원래 시전자 쪽(actorKey)이다. (교체가 없는 현행 엔진에선 등장 데미지가 없어 실질 효과는
-  // "어느 진영 플래그가 켜지나"뿐이지만, 방향은 맞게 기록해 둔다.)
+  // 설치물(스텔스록·압정뿌리기·독압정·끈적끈적네트): 상대 진영에 설치한다(Phase 8 §6).
+  // 스텔스록·끈적끈적네트는 1장 고정, 압정뿌리기는 최대 3층, 독압정은 최대 2층 스택.
+  // 매직미러 반사 중이면 설치 대상 진영은 defenderKey가 아니라 원래 시전자 쪽(actorKey)이다.
   let stealthRockSetForSide: FighterKey | undefined;
   let spikesSetForSide: FighterKey | undefined;
+  let toxicSpikesSetForSide: FighterKey | undefined;
+  let stickyWebSetForSide: FighterKey | undefined;
   let hazardSetFailed = false;
   if (effectiveMove.setsHazard !== undefined) {
     const hazardSide = bounceActive ? actorKey : defenderKey;
     const hz = sideOf(state, hazardSide).hazards;
-    // S1 시점: 압정뿌리기는 층수 0↔1만 (기존 불리언 1:1 대응). 스택·독압정·네트는 §6.
-    const alreadySet = effectiveMove.setsHazard === "spikes" ? hz.spikesLayers > 0 : hz.stealthRock;
-    if (alreadySet) {
-      // 비검천중파처럼 명중 부가효과로 까는 데미지기는 "이미 깔림"이어도 공격 자체는 성공이라
-      // 실패 플래그를 세우지 않는다 — 변화기(압정뿌리기·스텔스록)만 실패로 표시한다.
-      if (effectiveMove.category === "status") hazardSetFailed = true;
-    } else if (effectiveMove.setsHazard === "spikes") {
-      hz.spikesLayers = 1;
-      spikesSetForSide = hazardSide;
-    } else {
-      hz.stealthRock = true;
-      stealthRockSetForSide = hazardSide;
+    let didSet = false;
+    switch (effectiveMove.setsHazard) {
+      case "stealthRock":
+        if (!hz.stealthRock) { hz.stealthRock = true; didSet = true; stealthRockSetForSide = hazardSide; }
+        break;
+      case "spikes":
+        if (hz.spikesLayers < 3) { hz.spikesLayers += 1; didSet = true; spikesSetForSide = hazardSide; }
+        break;
+      case "toxicSpikes":
+        if (hz.toxicSpikesLayers < 2) { hz.toxicSpikesLayers += 1; didSet = true; toxicSpikesSetForSide = hazardSide; }
+        break;
+      case "stickyWeb":
+        if (!hz.stickyWeb) { hz.stickyWeb = true; didSet = true; stickyWebSetForSide = hazardSide; }
+        break;
     }
+    // 비검천중파·암석액스처럼 명중 부가효과로 까는 데미지기는 "이미 최대"여도 공격 자체는 성공이라
+    // 실패 플래그를 세우지 않는다 — 변화기만 실패로 표시한다.
+    if (!didSet && effectiveMove.category === "status") hazardSetFailed = true;
   }
 
   // ── 매직미러 반사 구간 끝 ── 바인딩을 원위치한다. 이후 로그·나무열매·매지션·폼 전환 등
@@ -4450,6 +4546,8 @@ function resolveAction(
     fieldSetFailed,
     stealthRockSetForSide,
     spikesSetForSide,
+    toxicSpikesSetForSide,
+    stickyWebSetForSide,
     hazardSetFailed,
     abilitySwappedTargetToName,
     abilitySwapFailed: abilitySwapFailed || undefined,
