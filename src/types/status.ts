@@ -60,6 +60,15 @@ export const NO_STATUS_CONDITION: StatusConditionState = { condition: null, turn
  *    지속시간이 없어 본가 기준값(4턴)을 그대로 썼다.
  *  - encore(앙코르): 3턴 동안 걸린 시점의 "상대가 바로 직전에 쓴 기술"만 강제로 반복해야 한다
  *    (disable과 정반대 방향 — moveId에 강제할 기술 id를 저장). 지속시간도 본가 기준값(3턴).
+ *  - bound(속박): 조이기·엉겨붙기·집게덫 등에 맞으면 4~5턴 지속. 매 턴 종료 시 최대 HP 1/8을
+ *    잃고, 턴 종료마다 카운터가 1씩 줄어 0에서 자동 해제된다(매직가드면 데미지 면제). 교체가
+ *    없어 "빠져나올 수 없음" 부분은 무의미해 지속 데미지만 반영한다.
+ *  - saltCure(소금절이): 소금절이에 맞으면 배틀이 끝날 때까지(leechSeed처럼 턴 카운터 없이) 유지된다.
+ *    매 턴 종료 시 최대 HP 1/16을 잃고, 걸린 쪽이 강철 또는 물 타입이면 1/8을 잃는다(매직가드면
+ *    데미지 면제). 인분(blocksSecondaryEffects)·우격다짐(tradesSecondaryEffectForPower)에는 부가효과
+ *    취급이라 아예 걸리지 않는다.
+ *  - syrupCoat(물엿범벅): 시럽봄에 맞으면 3턴 지속. 매 턴 종료 시 스피드가 1랭크 떨어지고(심술꾸러기·
+ *    클리어바디류 존중), 턴 종료마다 카운터가 1씩 줄어 0에서 자동 해제된다.
  *  - attract(헤롱헤롱): ingrain/aquaRing/leechSeed와 같은 "배틀 끝까지 유지"형 — 1v1이라 교체로
  *    해제될 일이 없다. 걸려있는 동안 매 행동 판정마다 50% 확률로 그 턴 행동을 통째로 못 한다
  *    (마비와 같은 확률 축이지만 별도 상태이상이 아니라 volatile — 본가에서도 주 상태이상과는
@@ -78,7 +87,10 @@ export type VolatileCondition =
   | "taunt"
   | "disable"
   | "encore"
-  | "attract";
+  | "attract"
+  | "bound"
+  | "saltCure"
+  | "syrupCoat";
 
 /** 기술이 상대(또는 자신)에게 행동방해 효과를 걸 때 쓰는 정보 */
 export interface VolatileInflictEffect {

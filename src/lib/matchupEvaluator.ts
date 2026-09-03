@@ -3,9 +3,10 @@ import type { PokemonGender } from "../types/pokemon";
 import type { Move } from "../types/move";
 import type { WeatherKind } from "../types/weather";
 import type { FieldKind } from "../types/field";
+import type { PokemonType } from "../types/pokemon-type";
 import { getPokemon, getAbility, getItem } from "./data";
 import { getBerryDefenseResult, getItemOffenseMultiplier, getItemSpeedMultiplier } from "./itemEffects";
-import { getEffectiveForm, getEffectiveAbilityId, type FormSource } from "./pokemonForm";
+import { getEffectiveForm, getEffectiveAbilityId, getEffectiveGender, type FormSource } from "./pokemonForm";
 import { computeRealStats } from "./statCalculator";
 import { applyMoveStatChanges } from "./statStages";
 import { getWeatherDamageMultiplier, applyWeatherBall } from "./weatherEffects";
@@ -143,6 +144,26 @@ export function evaluateSlotMatchup(
   // 틀깨기: 매치업 페이지(1턴 스냅샷)도 배틀 시뮬레이터와 동일하게 반영한다.
   const defenderAbility = resolveEffectiveDefenderAbility(attackerAbility, rawDefenderAbility);
 
+  // 날씨부정(에어록/날씨부정): 양쪽 중 누구든 이 특성이면 매치업에서도 날씨 효과를 전부 무시한다
+  // (선택한 날씨 자체는 UI에 남지만 데미지 배율·조건 특성·웨더볼·기분파에 반영하지 않는다).
+  const effectiveWeather =
+    attackerAbility?.negatesWeather || defenderAbility?.negatesWeather ? undefined : weather;
+
+  // 기분파(캐스퐁): 유효 날씨에 맞춰 타입을 바꾼 폼으로 계산한다. 쾌청→불꽃, 비→물, 눈→얼음, 그 외→노말.
+  const forecastTypes = (base: PokemonType[], hasForecast: boolean | undefined): PokemonType[] => {
+    if (!hasForecast) return base;
+    const map: Partial<Record<WeatherKind, PokemonType>> = { 쾌청: "불꽃", 비: "물", 눈: "얼음" };
+    return [(effectiveWeather && map[effectiveWeather]) || "노말"];
+  };
+  attackerForm.types = forecastTypes(attackerForm.types, attackerAbility?.weatherFormChange);
+  defenderForm.types = forecastTypes(defenderForm.types, defenderAbility?.weatherFormChange);
+
+  // 헤비메탈(2)·라이트메탈(0.5): 몸무게 기반 기술(헤비봄버·풀묶기 등) 계산에 쓸 유효 몸무게.
+  const attackerWeightKg =
+    attackerForm.weightKg !== undefined ? attackerForm.weightKg * (attackerAbility?.weightMultiplier ?? 1) : undefined;
+  const defenderWeightKg =
+    defenderForm.weightKg !== undefined ? defenderForm.weightKg * (defenderAbility?.weightMultiplier ?? 1) : undefined;
+
   const attackerRealStats = computeRealStats(
     attackerForm.baseStats,
     attackerSlot.points,
@@ -154,12 +175,29 @@ export function evaluateSlotMatchup(
     defenderSlot.nature,
   );
 
+  // 심술꾸러기(Contrary): 랭크 변화를 받는 쪽이 이 특성이면 move.statChanges의 delta 부호를 뒤집는다.
+  const contraryMove = (m: Move, invert: boolean | undefined): Move =>
+    !invert || !m.statChanges
+      ? m
+      : {
+          ...m,
+          statChanges: m.statChanges.map((s) => ({
+            ...s,
+            delta: s.delta === undefined ? undefined : -s.delta,
+            setTo: s.setTo === undefined ? undefined : -s.setTo,
+          })),
+        };
+
   // 이 기술 자체가 주는 랭크 변화(예: 칼춤을 쓴 다음 그 위력으로 계산하고 싶을 때)까지 반영
   const attackerStages = applyMoveOwnStatChanges
-    ? applyMoveStatChanges(baseAttackerStages, move, "self", { userTypes: attackerForm.types })
+    ? applyMoveStatChanges(baseAttackerStages, contraryMove(move, attackerAbility?.invertsStatChanges), "self", {
+        userTypes: attackerForm.types,
+      })
     : baseAttackerStages;
   const defenderStages = applyMoveOwnStatChanges
-    ? applyMoveStatChanges(baseDefenderStages, move, "opponent", { userTypes: attackerForm.types })
+    ? applyMoveStatChanges(baseDefenderStages, contraryMove(move, defenderAbility?.invertsStatChanges), "opponent", {
+        userTypes: attackerForm.types,
+      })
     : baseDefenderStages;
 
   // 지닌 도구: 직접 지정한 배율이 없으면 실제 장착한 도구에서 자동으로 구한다. defenderItem은
@@ -175,6 +213,27 @@ export function evaluateSlotMatchup(
   //  - spitUpPower(토해내기): options.stockpileCount(생략 시 3) × 100
   //  - weightRatioPower / targetAbsoluteWeightPower: pokemon.weightKg 기반, 미입력이면 폴백 위력
   let variablePowerMove: Move = move;
+  // 레이징불: 사용자 종(팔데아 켄타로스 3품종)에 따라 실제 타입이 바뀐다 — 위력 확정·상성 계산 전에 먼저.
+  const speciesTypedType = move.typeByUserSpecies?.[attackerSlot.pokemonId];
+  if (speciesTypedType) variablePowerMove = { ...variablePowerMove, type: speciesTypedType };
+
+  // 셸암즈(dynamicCategoryByHigherDamage): 물리·특수 결정력을 둘 다 내보고 큰 쪽 판정으로 고정한다.
+  // 매치업 페이지는 1턴 스냅샷이라 "동점 시 무작위"를 표현할 수 없어 동점이면 물리로 확정(결정적).
+  let resolvedCategory: Move["category"] = move.category;
+  if (move.dynamicCategoryByHigherDamage) {
+    const dmgOpts = { attackerStages, defenderRealStats, defenderStages, stabMultiplier: 1.5 };
+    const phys =
+      computeOffensePower(attackerRealStats, attackerForm.types, { ...variablePowerMove, category: "physical" }, dmgOpts) ?? 0;
+    const spec =
+      computeOffensePower(attackerRealStats, attackerForm.types, { ...variablePowerMove, category: "special" }, dmgOpts) ?? 0;
+    resolvedCategory = phys >= spec ? "physical" : "special";
+    variablePowerMove = {
+      ...variablePowerMove,
+      category: resolvedCategory,
+      makesContact: resolvedCategory === "physical",
+    };
+  }
+
   if (move.reversalPower) {
     variablePowerMove = { ...variablePowerMove, power: reversalPowerFromHp(1, 1) };
   } else if (move.gyroBallPower) {
@@ -197,20 +256,20 @@ export function evaluateSlotMatchup(
     const stacks = Math.max(0, Math.min(3, stockpileCount ?? 3));
     variablePowerMove = { ...variablePowerMove, power: stacks * 100 };
   } else if (move.weightRatioPower) {
-    // 메가폼이면 그 폼의 몸무게(attackerForm.weightKg)를 쓴다.
+    // 메가폼이면 그 폼의 몸무게, 헤비메탈/라이트메탈이면 그 배율까지 반영한 유효 몸무게를 쓴다.
     variablePowerMove = {
       ...variablePowerMove,
       power:
-        attackerForm.weightKg !== undefined && defenderForm.weightKg !== undefined
-          ? weightRatioPowerValue(attackerForm.weightKg, defenderForm.weightKg)
+        attackerWeightKg !== undefined && defenderWeightKg !== undefined
+          ? weightRatioPowerValue(attackerWeightKg, defenderWeightKg)
           : WEIGHT_MOVE_FALLBACK_POWER,
     };
   } else if (move.targetAbsoluteWeightPower) {
     variablePowerMove = {
       ...variablePowerMove,
       power:
-        defenderForm.weightKg !== undefined
-          ? absoluteWeightPowerValue(defenderForm.weightKg)
+        defenderWeightKg !== undefined
+          ? absoluteWeightPowerValue(defenderWeightKg)
           : WEIGHT_MOVE_FALLBACK_POWER,
     };
   }
@@ -232,7 +291,7 @@ export function evaluateSlotMatchup(
   // 웨더볼(날씨판 대지의파동): 타입·위력 변경을 fieldPulse보다 먼저.
   // 이 아래 fieldPulse/powerMultiplierInField(대지의파동·미스트버스트류)까지가 "특성 배율 계산 전
   // 타입/위력 확정" 구간 — 타입이 바뀐 상태여야 resolveMoveContext의 상성 계산에 반영된다.
-  const weatherBall = applyWeatherBall(variablePowerMove, weather);
+  const weatherBall = applyWeatherBall(variablePowerMove, effectiveWeather);
   const weatherBallMove: Move = { ...variablePowerMove, type: weatherBall.type, power: weatherBall.power };
 
   const fieldPulse = applyFieldPulse(weatherBallMove, field);
@@ -256,7 +315,7 @@ export function evaluateSlotMatchup(
     fieldAdjustedMove,
     defenderForm.types,
     defenderAbility,
-    weather,
+    effectiveWeather,
     defenderItem,
   );
 
@@ -306,13 +365,28 @@ export function evaluateSlotMatchup(
   const berryResult = getBerryDefenseResult(defenderItem, effectiveMove.type, typeEffectiveness, false);
 
   // 날씨/필드 데미지 배율은 (타입 변경까지 끝난) effectiveMove.type 기준으로 구한다 — battleSimulator와 동일.
-  const autoWeatherDamageMultiplier = getWeatherDamageMultiplier(weather, effectiveMove.type);
+  const autoWeatherDamageMultiplier = getWeatherDamageMultiplier(effectiveWeather, effectiveMove.type);
   const autoFieldDamageMultiplier = getFieldDamageMultiplier(field, effectiveMove.type);
+
+  // 투쟁심: 양쪽 슬롯 성별로 ×1.25(동성)/×0.75(이성)/×1.0(불명). battleSimulator.rivalryDamageMultiplier 미러.
+  let rivalryMultiplier = 1;
+  if (attackerAbility?.rivalryDamage) {
+    const ag = getEffectiveGender(attackerPokemon, attackerSlot);
+    const dg = getEffectiveGender(defenderPokemon, defenderSlot);
+    if (ag !== null && dg !== null) rivalryMultiplier = ag === dg ? 1.25 : 0.75;
+  }
+
+  // 의욕(Hustle): 물리 기술 위력 ×1.5. battleSimulator resolveHit의 hustleMultiplier 미러(명중률 페널티는
+  // 결정력 계산 대상이 아님).
+  const hustleMultiplier =
+    resolvedCategory === "physical" && attackerAbility?.hustleAttackMultiplier !== undefined
+      ? attackerAbility.hustleAttackMultiplier
+      : 1;
 
   // 상대 타입 상성을 곱하기 전의 결정력. offensePower는 여기에 typeEffectiveness만 곱한 값이라
   // 매번 다시 계산하는 대신 이 값에 typeEffectiveness를 곱해서 구한다.
   const rawOffensePower = computeOffensePower(attackerRealStats, attackerForm.types, effectiveMoveFinal, {
-    abilityMultiplier: manualAbilityMultiplier ?? abilityOffenseMultiplier,
+    abilityMultiplier: (manualAbilityMultiplier ?? abilityOffenseMultiplier) * rivalryMultiplier * hustleMultiplier,
     itemMultiplier: itemMultiplier ?? autoItemMultiplier,
     weatherMultiplier: manualWeatherMultiplier ?? autoWeatherDamageMultiplier,
     fieldMultiplier: manualFieldMultiplier ?? autoFieldDamageMultiplier,
@@ -332,12 +406,12 @@ export function evaluateSlotMatchup(
     screenBypassed || !screen
       ? 1
       : screen === "auroraVeil" ||
-          (screen === "reflect" && move.category === "physical") ||
-          (screen === "lightScreen" && move.category === "special")
+          (screen === "reflect" && resolvedCategory === "physical") ||
+          (screen === "lightScreen" && resolvedCategory === "special")
         ? 2
         : 1;
 
-  const bulkPower = computeBulkPower(defenderRealStats, move.category, {
+  const bulkPower = computeBulkPower(defenderRealStats, resolvedCategory, {
     defenderStages,
     bulkMultiplier:
       (manualBulkMultiplier ?? abilityDefense * berryResult.bulkMultiplier) * screenMultiplier,
@@ -408,6 +482,17 @@ export function evaluateSpeedMatchup(
     defenderStages = NEUTRAL_STAGES,
   } = options;
 
+  const abilityFor = (slot: EvaluatorSlot, pokemon: NonNullable<ReturnType<typeof getPokemon>>) => {
+    const form = getEffectiveForm(pokemon, slot);
+    const id = getEffectiveAbilityId(form, slot.ability);
+    return id ? getAbility(id) : undefined;
+  };
+  const attackerAbility = abilityFor(attackerSlot, attackerPokemon);
+  const defenderAbility = abilityFor(defenderSlot, defenderPokemon);
+  // 날씨부정: 양쪽 중 누구든 이 특성이면 날씨 스피드 배율(엽록소 등)을 무시한다.
+  const weatherForSpeed =
+    attackerAbility?.negatesWeather || defenderAbility?.negatesWeather ? undefined : weather;
+
   const speedOf = (
     slot: EvaluatorSlot,
     pokemon: NonNullable<ReturnType<typeof getPokemon>>,
@@ -421,7 +506,8 @@ export function evaluateSpeedMatchup(
     const effectiveAbilityId = getEffectiveAbilityId(form, slot.ability);
     const ability = effectiveAbilityId ? getAbility(effectiveAbilityId) : undefined;
     const weatherBoost = ability?.weatherSpeedMultiplier;
-    const weatherSpeedMultiplier = weatherBoost && weatherBoost.weather === weather ? weatherBoost.multiplier : 1;
+    const weatherSpeedMultiplier =
+      weatherBoost && weatherBoost.weather === weatherForSpeed ? weatherBoost.multiplier : 1;
     const base =
       realStats.spe *
       getItemSpeedMultiplier(item) *
@@ -434,8 +520,14 @@ export function evaluateSpeedMatchup(
   const attackerSpeed = speedOf(attackerSlot, attackerPokemon, attackerStages, !!attackerUnburden, !!attackerParalyzed);
   const defenderSpeed = speedOf(defenderSlot, defenderPokemon, defenderStages, !!defenderUnburden, !!defenderParalyzed);
 
+  // 시간벌기: 우선도가 같다는 전제에서 한쪽만 "항상 마지막"이면 스피드 무관하게 그쪽이 나중.
+  const attackerStall = !!attackerAbility?.movesLastInPriorityBracket;
+  const defenderStall = !!defenderAbility?.movesLastInPriorityBracket;
+
   let firstMover: SpeedMatchupResult["firstMover"];
-  if (attackerSpeed === defenderSpeed) {
+  if (attackerStall !== defenderStall) {
+    firstMover = attackerStall ? "defender" : "attacker";
+  } else if (attackerSpeed === defenderSpeed) {
     firstMover = "tie";
   } else {
     const attackerFaster = attackerSpeed > defenderSpeed;

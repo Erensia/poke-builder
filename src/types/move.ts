@@ -126,10 +126,13 @@ export interface Move {
   /** 그래스필드/미스트필드/사이코필드/일렉트릭필드처럼 필드를 새로 까는 기술만 채운다 */
   setsField?: FieldKind;
   /**
-   * 스텔스록처럼 상대 진영에 설치물을 까는 기술만 채운다. 현행 시뮬레이터는 교체가 없어 "등장 시
-   * 데미지"는 미구현 — 설치 상태와 로그·환경 UI 표시만 반영한다(Phase 6.5 §6-2 ④, 나머지는 §8).
+   * 상대 진영에 설치물을 까는 기술(Phase 8 §6). 교체로 나온 상대에게 등장 시 효과가 발동한다.
+   *  - "stealthRock": 1장 고정, 바위 상성 배율로 등장 데미지(매직가드가 막음). 접지 무관.
+   *  - "spikes": 최대 3층, 층수별 등장 데미지(1→1/16·2→1/8·3→1/4, 매직가드가 막음). 접지 대상만.
+   *  - "toxicSpikes": 최대 2층, 1→독·2→맹독. 접지 대상만. 독타입이 나오면 흡수돼 제거된다.
+   *  - "stickyWeb": 1장 고정, 등장 시 스피드 -1랭크. 접지 대상만.
    */
-  setsHazard?: "stealthRock";
+  setsHazard?: "stealthRock" | "spikes" | "toxicSpikes" | "stickyWeb";
   /** 트릭룸: 5턴간 우선도가 같으면 스피드가 느린 쪽이 먼저 움직이도록 순서를 뒤집는 기술만 채운다 */
   setsTrickRoom?: boolean;
   /**
@@ -274,6 +277,22 @@ export interface Move {
    * 그만큼(자신이 큰뿌리를 지녔으면 1.3배) 회복하게 한다. 상대가 이미 걸려있으면 실패.
    */
   setsLeechSeed?: boolean;
+  /**
+   * 조이기·엉겨붙기·모래지옥·바다회오리·회오리불꽃·김밥말이·집게덫 — 명중 시 상대를 4~5턴 동안
+   * 속박(volatile "bound")한다. 매 턴 종료 시 상대가 최대 HP 1/8을 잃고, 4~5턴 뒤 자동 해제된다
+   * (교체가 없어 "빠져나올 수 없음"은 무의미하므로 지속 데미지만 반영). 이미 걸려있으면 갱신하지 않는다.
+   */
+  bindsTarget?: boolean;
+  /**
+   * 심플빔("단순")·바뀌어라("괴짜")류 — 명중 시 상대의 특성을 이 id로 바꾼다. 현행 시뮬레이터는
+   * 특성 교체 자체만 반영하고, 바뀐 특성의 상시 효과는 그 특성이 배선돼 있으면 자동으로 적용된다.
+   */
+  setsTargetAbilityId?: string;
+  /**
+   * 볼가득넣기 전용. 사용 시 지닌 나무열매를 먹는다(HP 회복 나무열매면 그 회복도 발동) — 나무열매가
+   * 없으면 실패. 방어 상승은 statChanges(self, def +2)로 따로 적용된다.
+   */
+  eatsHeldBerry?: boolean;
   /**
    * 비바라기·쾌청·모래바람·설경처럼 날씨를 바꾸는 기술만 채운다. 필드/트릭룸과 달리 이미 다른
    * (또는 같은) 날씨가 있어도 실패하지 않고 항상 덮어쓴다 — 본가 규칙. 지속시간은 기본 5턴,
@@ -501,4 +520,162 @@ export interface Move {
    * 낸 기술"이라는 개념 자체가 성립하지 않음) 둘 다 본가에서 잠꼬대 후보 목록에 없다.
    */
   excludedFromSleepTalk?: boolean;
+  /**
+   * 마지막일침(포챔스판): 이 기술로 상대를 실제로 쓰러뜨리면 사용자의 이 스탯이 delta만큼 오른다
+   * (마지막일침 = 공격 +3). 자기과신(Ability.boostsStatOnKo)과 같은 축이지만 특성이 아니라 기술
+   * 단위 효과다 — damage > 0으로 실제 데미지를 줘서 쓰러뜨린 경우에만 발동한다.
+   */
+  boostsUserStatOnKo?: { stat: BattleStatKey; delta: number };
+  /**
+   * 레이징불(Raging Bull): 이 기술을 쓰는 포켓몬의 종 id에 따라 실제 타입이 바뀐다
+   * (팔데아켄타로스컴뱃종→격투 / 블레이즈종→불꽃 / 워터종→물). 매칭되는 종이 없으면 move.type
+   * (기본 켄타로스 = 노말) 그대로. resolveMoveContext/computeDamage가 보는 effectiveMove.type을
+   * 갈아끼우는 방식이라 자속·상성까지 새 타입 기준으로 계산된다.
+   */
+  typeByUserSpecies?: Partial<Record<string, PokemonType>>;
+  /**
+   * 레이징불·깨트리기: 명중하면(데미지 유무 무관) 상대 쪽에 걸린 스크린(리플렉터/빛의장막/
+   * 오로라베일)을 전부 제거한다. 데미지 계산은 스크린이 살아있는 상태로 하고(본가 규칙 — 그 턴엔
+   * 아직 경감됨), 계산 이후에 제거한다.
+   */
+  breaksScreensOnHit?: boolean;
+  /**
+   * 힘흡수(Strength Sap): 명중 시 상대의 공격 실능(랭크 반영)만큼 자신의 HP를 회복한다. 회복 후
+   * statChanges로 상대 공격 -1이 별도로 적용된다(데이터에 함께 기재). 상대가 이미 최대 HP면
+   * 회복량 0이어도 성공 취급.
+   */
+  drainsFromTargetAttackStat?: boolean;
+  /**
+   * 가드셰어(Guard Split): 명중 시 자신과 상대의 방어·특수방어 실능을 각각 더해 반으로 나눠
+   * 양쪽에 똑같이 배정한다(내림). 파워트릭(swapsOwnStats)처럼 realStats를 직접 고쳐서 재계산이
+   * 필요 없다. 스피드스왑과 함께 1v1 상호 스탯 조작 기술 축.
+   */
+  averagesDefensesWithTarget?: boolean;
+  /**
+   * 스피드스왑(Speed Swap): 명중 시 자신과 상대의 스피드 실능을 서로 맞바꾼다(realStats 직접 스왑).
+   */
+  swapsSpeedWithTarget?: boolean;
+  /**
+   * 셸암즈(Shell Side Arm) — 가라르야도란 전용기. 물리(공격 vs 상대 방어)로 낸 데미지와 특수
+   * (특공 vs 상대 특방)로 낸 데미지를 둘 다 계산해, 큰 쪽 판정으로 공격한다 — 물리면 접촉기,
+   * 특수면 비접촉기. 두 값이 같으면 무작위(랭크업 부가효과 포함). 도구·특성·상태이상 등 배율은
+   * 물리/특수 여부를 먼저 확정한 뒤 적용한다. move.category는 "physical"로 두되 엔진이 이 플래그를
+   * 보고 매 사용마다 다시 판정한다.
+   */
+  dynamicCategoryByHigherDamage?: boolean;
+  /**
+   * 변신(Transform) — 명중 시 사용자가 상대로 변신한다. 타입·5실능(HP 제외)·특성·능력 랭크·
+   * 기술 목록을 상대와 동일하게 복사하고, 복사한 기술의 PP는 각 5(최대 PP가 5 미만이면 그 값)로
+   * 채운다. 현재 HP와 주 상태이상은 유지. 이미 변신 상태면 실패. 괴짜(Ability.transformsIntoOpponentOnEntry)가
+   * 등장 시 같은 처리를 자동으로 건다.
+   */
+  transformsIntoTarget?: boolean;
+  /**
+   * 뒤집어엎기(포챔스판 Topsy-Turvy): 명중 시 상대에게 현재 걸려 있는 모든 능력 랭크 변화의
+   * 부호를 뒤집는다(+2 → -2, -1 → +1). 5스탯 + 명중률/회피율 랭크가 대상이고, 급소율(critStage)은
+   * 흑안개(resetsAllStages)와 같은 이유로 건드리지 않는다. 데미지·위력 없는 변화기.
+   */
+  invertsTargetStatStages?: boolean;
+  /**
+   * 플라잉프레스(Flying Press): 타입 상성을 계산할 때 move.type(격투)에 더해 이 타입(비행)으로도
+   * 동시에 판정해 두 배율을 곱한다 — 상대가 격투 2배·비행 2배면 최종 4배. 자속은 move.type
+   * 기준으로만(사용자가 비행타입이 아니어도 비행 자속은 안 붙음, 본가 일치). typeEffectiveness에서 처리.
+   */
+  additionalType?: PokemonType;
+  /**
+   * 플라잉프레스·짓밟기류: 상대가 이번 배틀에서 작아지기(usedMoveIds에 "작아지기")를 쓴 적이 있으면
+   * 반드시 명중하고 위력이 2배가 된다.
+   */
+  bonusVsMinimize?: boolean;
+  /**
+   * 숲의저주(풀)·핼러윈(고스트): 명중 시 상대의 타입 목록에 이 타입을 "추가"한다(기존 타입은 유지).
+   * 배틀이 끝날 때까지 유지되며(BattleFighterState.addedType), 이후 상대가 방어측일 때 타입 상성
+   * 계산에 그대로 반영된다. 이미 그 타입을 갖고 있거나 이미 다른 추가 타입이 붙어 있으면 덮어쓴다.
+   */
+  addsTypeToTarget?: PokemonType;
+  /**
+   * 송전(Ion Deluge): 명중(항상 성공)하면 "이번 턴, 아직 행동하지 않은 상대"가 이번 턴에 쓰는
+   * 기술의 타입을 이 타입(전기)으로 바꾼다. 상대가 이미 이번 턴 행동을 마쳤으면 효과가 없다.
+   * BattleFighterState.moveTypeOverrideThisTurn에 저장하고 턴 종료 시 해제한다.
+   */
+  changesTargetMoveTypeThisTurn?: PokemonType;
+  /**
+   * 소울비트(Clangorous Soul): 사용 시 자신의 최대 HP를 이 비율(1/3)만큼 소비하는 대신
+   * statChanges로 5스탯을 올린다. 현재 HP가 소비량 이하면(=쓰면 기절) 실패한다. HP 소비는
+   * statChanges 적용 직전에 처리한다.
+   */
+  costsHpFraction?: number;
+  /**
+   * 토치카(Baneful Bunker): 니들가드(protectContactDamageFraction)와 같은 방어류이면서, 접촉기를
+   * 막았을 때 그 공격자를 이 주 상태이상으로 만든다(토치카=poison). 타입/특성 상태이상 면역은
+   * 그대로 존중(기존 inflictStatus/isImmuneToStatus 경로 재사용). 킹실드의 protectContactPenalty와 독립.
+   */
+  protectContactStatus?: StatusCondition;
+  /**
+   * 부리캐논(Beak Blast): 힘껏펀치처럼 priority가 -3(항상 마지막)인 기술. 추가로 — 이 기술을 고른
+   * 그 턴에 이 포켓몬이 접촉기로 맞으면 그 공격자가 화상을 입는다. resolveAction에서 방어측
+   * defenderMove가 이 플래그를 가졌고 이번 공격이 접촉기로 명중하면 공격자에게 화상을 건다.
+   */
+  burnsContactAttackerBeforeResolve?: boolean;
+  /**
+   * 부리캐논: 이 기술을 고른 턴 시작 시 "(포켓몬)은(는) …" 형태로 안내한다(문구 뒷부분만 담는다 —
+   * 예: "부리를 가열시켰다!"). runTurn의 turnStartAnnouncements에 포켓몬 이름을 붙여 push한다.
+   */
+  turnStartUserAnnouncement?: string;
+  /**
+   * 마법가루(Magic Powder): 명중 시 상대의 타입을 이 타입 하나로 통째로 덮어쓴다(숲의저주의
+   * addsTypeToTarget이 "추가"인 것과 달리 이건 "치환"). BattleFighterState.types를 [이 타입]으로
+   * 바꾸고 배틀 끝까지 유지한다. addedType은 함께 지운다.
+   */
+  setsTargetType?: PokemonType;
+  /**
+   * 페이탈클로: 이 확률(%)로 statuses 목록 중 하나를 무작위로 골라 상대에게 건다. inflictsStatus가
+   * "고정된 하나를 확률로"라면 이건 "확률에 성공하면 그 중 랜덤 하나". 타입/특성 면역은 그대로 존중.
+   */
+  inflictsRandomStatus?: { chance: number; statuses: StatusCondition[] };
+  /**
+   * G의힘(Grav Apple): 현재 중력이 활성 상태면 위력에 이 배율(1.5)을 곱한다. (이 엔진엔 아직
+   * 중력 상태가 없어 상시 미발동 — 중력 도입 시 이 지점만 켜면 된다.)
+   */
+  powerMultiplierInGravity?: number;
+  /**
+   * 오라휠(Aura Wheel) — 모르페코 전용. 사용자의 꼬르륵스위치 모양(BattleFighterState.hungerMode)에
+   * 따라 실제 타입이 바뀐다: 배부른모양(full)=전기, 배고픈모양(hangry)=악. 모양이 없으면 full로 간주.
+   */
+  hungerSwitchType?: { full: PokemonType; hangry: PokemonType };
+  /**
+   * 정리정돈(tidy)·고속스핀(spin): 명중 시 설치물·대타를 정리한다.
+   *  - "spin"(고속스핀): 사용자 쪽 스텔스록/압정을 없애고, 사용자에게 걸린 속박(bound)·씨뿌리기
+   *    (leechSeed)를 해제한다(본가 고속스핀 그대로 — 상대 쪽은 건드리지 않는다).
+   *  - "tidy"(정리정돈): 양쪽 진영의 스텔스록/압정을 전부 없애고, 양쪽의 대타(substituteHp)를 없앤다.
+   * (독압정·끈적끈적네트는 이 엔진에 모델링돼 있지 않아 대상 없음.)
+   */
+  hazardClear?: "spin" | "tidy";
+  /**
+   * 시럽봄(Syrup Bomb): 명중 시 상대를 물엿범벅(syrupCoat) 상태로 만든다 — 3턴 동안 매 턴 종료 시
+   * 스피드 1랭크 감소. 데미지 기술의 부가효과라 인분(blocksSecondaryEffects)·우격다짐
+   * (tradesSecondaryEffectForPower)에는 발동하지 않는다.
+   */
+  setsSyrupCoat?: boolean;
+  /**
+   * 소금절이(Salt Cure): 명중 시 상대를 소금절이(saltCure) 상태로 만든다 — 배틀이 끝날 때까지
+   * 매 턴 종료 시 최대 HP 1/16(상대가 강철/물 타입이면 1/8) 피해. 데미지 기술의 부가효과라
+   * 인분·우격다짐에는 발동하지 않는다(공격 데미지만 들어간다).
+   */
+  setsSaltCure?: boolean;
+  /**
+   * 거대해머(Gigaton Hammer)·블러드문류: 2턴 연속으로는 쓸 수 없다. 직전 턴에 이 기술로 행동을
+   * 개시했으면 이번 턴엔 실패한다(blockedReason: "usageCondition"). 그 다음 턴부터는 다시 쓸 수 있다.
+   */
+  cannotUseConsecutively?: boolean;
+  /**
+   * 분노의주먹(Rage Fist): 위력 = min(350, 50 + 50 × 이번 배틀에서 이 포켓몬이 기술로 데미지를
+   * 받은 횟수). power 리터럴(50)은 폴백. 교체 시 카운터 초기화는 배틀타워 리뉴얼(교체 도입) 때.
+   */
+  rageFistPower?: boolean;
+  /**
+   * 변덕레이저(Fickle Beam): 이 확률(%)로 위력이 2배가 된다. 발동하면 전용 안내
+   * "…은(는) 전력을 다하기 시작했다!"를 남긴다(ActionLogEntry.fickleBeamEmpowered).
+   */
+  randomDoublePower?: number;
 }

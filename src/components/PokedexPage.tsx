@@ -114,6 +114,13 @@ function PokedexDetail({ pokemon, onSelectMove }: { pokemon: Pokemon; onSelectMo
     .map((id) => getAbility(id))
     .filter((a): a is NonNullable<typeof a> => !!a);
   const hiddenAbility = pokemon.hiddenAbility ? getAbility(pokemon.hiddenAbility) : undefined;
+  // 냐오닉스처럼 성별로 숨겨진 특성이 갈리는 종은 둘 다 보여준다(수컷/암컷 라벨 포함).
+  const genderedHidden = pokemon.genderedHiddenAbility
+    ? {
+        male: getAbility(pokemon.genderedHiddenAbility.male),
+        female: getAbility(pokemon.genderedHiddenAbility.female),
+      }
+    : undefined;
 
   return (
     <div className="pokedex-detail">
@@ -134,6 +141,25 @@ function PokedexDetail({ pokemon, onSelectMove }: { pokemon: Pokemon; onSelectMo
       <section className="pokedex-detail-section">
         <h4>종족값</h4>
         <StatBars stats={pokemon.baseStats} />
+        {pokemon.sizeForms && (
+          <p className="pokedex-ability-desc">
+            크기 변종(스피드·몸무게만 상이):{" "}
+            {pokemon.sizeForms.map((f) => `${f.label} 스피드 ${f.spe}·${f.weightKg}kg`).join(" / ")}
+          </p>
+        )}
+        {pokemon.formVariants && (
+          <ul className="pokedex-ability-list">
+            {pokemon.formVariants.map((f) => (
+              <li key={f.id}>
+                <strong>{f.label}</strong>
+                <p className="pokedex-ability-desc">
+                  {f.types.join("/")} · 종족값 {Object.values(f.baseStats).reduce((a, b) => a + b, 0)} · 특성{" "}
+                  {[...f.abilities, ...(f.hiddenAbility ? [`${f.hiddenAbility}(숨김)`] : [])].join(", ")}
+                </p>
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
 
       <section className="pokedex-detail-section">
@@ -150,15 +176,30 @@ function PokedexDetail({ pokemon, onSelectMove }: { pokemon: Pokemon; onSelectMo
               <p className="pokedex-ability-desc">{a.description}</p>
             </li>
           ))}
-          {hiddenAbility && (
-            <li>
-              <strong>
-                {hiddenAbility.name}
-                <span className="pokedex-hidden-tag">숨겨진 특성</span>
-              </strong>
-              <p className="pokedex-ability-desc">{hiddenAbility.description}</p>
-            </li>
-          )}
+          {genderedHidden
+            ? (["male", "female"] as const).map((g) => {
+                const a = genderedHidden[g];
+                return a ? (
+                  <li key={g}>
+                    <strong>
+                      {a.name}
+                      <span className="pokedex-hidden-tag">
+                        숨겨진 특성 · {g === "female" ? "암컷" : "수컷"}
+                      </span>
+                    </strong>
+                    <p className="pokedex-ability-desc">{a.description}</p>
+                  </li>
+                ) : null;
+              })
+            : hiddenAbility && (
+                <li>
+                  <strong>
+                    {hiddenAbility.name}
+                    <span className="pokedex-hidden-tag">숨겨진 특성</span>
+                  </strong>
+                  <p className="pokedex-ability-desc">{hiddenAbility.description}</p>
+                </li>
+              )}
         </ul>
       </section>
 

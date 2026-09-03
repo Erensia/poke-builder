@@ -70,6 +70,30 @@ function useBattleSetupSlot() {
     setSlot((prev) => (prev ? { ...prev, gender: (prev.gender ?? "male") === "male" ? "female" : "male" } : prev));
   }
 
+  /** 펌킨인 계열 크기 변종을 다음 크기로 돌린다(sizeForms 순서 순환) */
+  function cycleSizeForm() {
+    setSlot((prev) => {
+      if (!prev) return prev;
+      const forms = getPokemon(prev.pokemonId)?.sizeForms;
+      if (!forms || forms.length === 0) return prev;
+      const currentId = prev.sizeForm ?? forms.find((f) => f.standard)?.id ?? forms[0].id;
+      const idx = forms.findIndex((f) => f.id === currentId);
+      return { ...prev, sizeForm: forms[(idx + 1) % forms.length].id };
+    });
+  }
+
+  /** 루가루암 계열 폼 변종을 다음 폼으로 돌린다(폼별 특성이 달라 특성 선택은 초기화) */
+  function cycleFormVariant() {
+    setSlot((prev) => {
+      if (!prev) return prev;
+      const forms = getPokemon(prev.pokemonId)?.formVariants;
+      if (!forms || forms.length === 0) return prev;
+      const currentId = prev.formVariant ?? forms.find((f) => f.standard)?.id ?? forms[0].id;
+      const idx = forms.findIndex((f) => f.id === currentId);
+      return { ...prev, formVariant: forms[(idx + 1) % forms.length].id, ability: null };
+    });
+  }
+
   function setPoint(stat: keyof AbilityPoints, value: number) {
     setSlot((prev) => {
       if (!prev) return prev;
@@ -102,14 +126,32 @@ function useBattleSetupSlot() {
     setItem,
     setNature,
     toggleGender,
+    cycleSizeForm,
+    cycleFormVariant,
     setPoint,
     stepPoint,
   };
 }
 
+/** 편측 슬롯 개수(배틀타워 = 3마리). Phase 8 §2 — "3슬롯만 빌드" 결재. 슬롯 0이 리드. */
+export const BATTLE_PARTY_SIZE = 3;
+
+export type BattleSetupSlot = ReturnType<typeof useBattleSetupSlot>;
+
+/**
+ * 한 진영의 슬롯 3개. 훅 규칙상 반복문으로 못 만들지만 개수가 고정(3)이라 나란히 호출한다.
+ * BATTLE_PARTY_SIZE를 바꾸려면 이 호출 목록도 같이 늘려야 한다.
+ */
+function useBattleSetupSide(): BattleSetupSlot[] {
+  const s0 = useBattleSetupSlot();
+  const s1 = useBattleSetupSlot();
+  const s2 = useBattleSetupSlot();
+  return [s0, s1, s2];
+}
+
 export function useBattleSetup() {
-  const a = useBattleSetupSlot();
-  const b = useBattleSetupSlot();
+  const a = useBattleSetupSide();
+  const b = useBattleSetupSide();
   const [weather, setWeather] = useState<WeatherKind | null>(null);
 
   return { a, b, weather, setWeather };

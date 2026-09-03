@@ -49,6 +49,11 @@ export interface AbilityModifierCondition {
    * 실제로 넘겨준다.
    */
   defenderHasStatusCondition?: boolean;
+  /**
+   * 이판사판: 기술이 "자신도 데미지를 입는" 반동기일 때만(recoilFraction 또는 crashFraction이
+   * 있는 기술 — 단 발버둥은 제외). 위력 ×1.2.
+   */
+  moveHasRecoilDamage?: boolean;
 }
 
 export interface AbilityModifier {
@@ -93,6 +98,45 @@ export interface AbilityHitTrigger {
   selfStatChanges?: { stat: BattleStatKey; delta: number }[];
   /** 공격자가 방금 사용한 기술의 남은 PP를 0으로 만든다(저주받은바디 — "사슬묶기" 텍스트를 PP 0 봉인으로 구현) */
   disablesAttackerMove?: boolean;
+  /**
+   * 미끈미끈(Gooey)·점착: 접촉기로 피격당하면 공격자의 이 랭크를 바꾼다(미끈미끈=스피드 -1).
+   * selfStatChanges가 "이 특성 소유자(방어측)"의 랭크를 바꾸는 것과 방향이 반대 — 공격자 랭크를
+   * 건드린다. 심술꾸러기(공격자 쪽)·클리어바디류(공격자 쪽)는 그대로 존중한다. on:"contact"와 함께 쓴다.
+   */
+  attackerStatChanges?: { stat: BattleStatKey; delta: number }[];
+  /**
+   * 나쁜손버릇: 접촉기로 공격당하면 공격자가 지닌 도구를 빼앗는다. 매지션(stealsItemOnDamagingHit)과
+   * 방향이 정반대로, 피격측(이 특성 소유자)이 무도구일 때만 발동한다. on:"contact"와 함께 쓴다.
+   */
+  stealsAttackerItem?: boolean;
+  /**
+   * 미라(Mummy): 접촉기로 피격당하면 그 공격자의 특성을 이 id(="미라")로 바꾼다. on:"contact"와
+   * 함께 쓴다. 대타·면역 피격 시엔 무발동(triggerAbilityHitEffect 진입부 가드 공유).
+   */
+  setsAttackerAbilityId?: string;
+  /**
+   * 떠도는영혼(Wandering Spirit): 접촉기로 피격당하면 공격자와 특성(effectiveAbilityId)을 서로
+   * 맞바꾼다. 미라(setsAttackerAbilityId)의 양방향 스왑 버전 — 이 포켓몬은 공격자의 특성을 얻고,
+   * 공격자는 떠도는영혼을 얻는다. on:"contact"와 함께 쓴다.
+   */
+  swapsAbilityWithAttacker?: boolean;
+  /**
+   * 모래뿜기(Sand Spit): 데미지를 주는 기술로 피격당하면 날씨를 이 값(모래바람)으로 바꾼다(5턴).
+   * 가뭄류(setsWeather 상시 필드)와 달리 "맞을 때마다" 발동한다. on:"damaging"와 함께 쓴다.
+   */
+  setsWeather?: WeatherKind;
+  /**
+   * 유폭(Aftermath): 접촉기로 이 포켓몬이 쓰러진 그 순간, 공격자에게 공격자 최대 HP의 이 비율만큼
+   * 데미지를 준다. 까칠한피부(damagesAttackerFraction)와 달리 "쓰러졌을 때만" 1회. 매직가드
+   * 공격자에겐 무효. on:"contact"와 함께 쓴다.
+   */
+  damagesContactAttackerFractionOnFaint?: number;
+  /**
+   * 내용물분출(포챔스판 우츠보트-메가): 기술로 이 포켓몬이 쓰러진 그 순간, 그 마지막 타를 맞기
+   * "직전"에 남아 있던 HP만큼을 공격자에게 데미지로 되돌린다(유폭이 최대 HP 비율 고정인 것과 달리
+   * 그때그때 남아 있던 실 HP). 매직가드 공격자에겐 무효. on:"damaging"과 함께 쓴다.
+   */
+  damagesAttackerByRemainingHpOnFaint?: boolean;
 }
 
 /**
@@ -134,8 +178,13 @@ export interface Ability {
    * 그대로 존중한다 — moveContext.ts에서 typeEffectiveness가 정확히 0일 때만 1로 덮어쓴다.
    */
   bypassesImmunityForTypes?: PokemonType[];
-  /** 방어측으로 피격당했을 때 발동하는 특성만 채운다(정전기·불꽃몸·까칠한피부·깨어진갑옷·저주받은바디) */
+  /** 방어측으로 피격당했을 때 발동하는 특성만 채운다(정전기·불꽃몸·까칠한피부·깨어진갑옷·저주받은바디·나쁜손버릇) */
   hitTrigger?: AbilityHitTrigger;
+  /**
+   * 통찰: 배틀에 등장하는 그 순간(=1대1 전용이라 첫 턴 시작) 상대가 지닌 도구를 UI 로그로 알린다.
+   * 배틀 수치에는 영향이 없는 정보 표시 전용 효과 — resolveEntryAbilityEffects에서 처리한다.
+   */
+  revealsOpponentItemOnEntry?: boolean;
   /** 특정 타입 기술을 완전히 무효화하는 특성만 채운다(타오르는불꽃·피뢰침) */
   absorbsType?: AbilityTypeAbsorb;
   /**
@@ -201,6 +250,20 @@ export interface Ability {
   /** 유연: 이 상태이상 목록에 면역이다(타입 기반 면역과 별개 축). 유연=["paralysis"] */
   immuneToStatuses?: StatusCondition[];
   /**
+   * 플라워베일(Flower Veil): 자신이 **풀타입일 때만** 상대의 기술/특성으로 인한 랭크 하락과 주
+   * 상태이상을 전부 막는다(클리어바디 5스탯 + 유연 전체 상태이상을 합친 효과). 본가는 자기 편
+   * 다른 풀타입까지 보호하지만, 3v3 싱글 교체(Phase 8)에서는 필드에 동시 아군이 없어 보유자
+   * 자신만 대상이 된다. 플라엣테는 페어리라 실제로는 발동하지 않고, 트레이스/스킬스왑 등으로
+   * 풀타입 포켓몬이 이 특성을 얻어야 의미가 생긴다.
+   */
+  grassVeil?: boolean;
+  /**
+   * 공생(Symbiosis): 자기 편 다른 포켓몬이 지닌 도구를 소모하는 순간 자신의 도구를 그 포켓몬에게
+   * 넘긴다. 본가는 더블 배틀 전용이고, 3v3 싱글 교체(Phase 8)에서는 필드에 동시 아군이 없어
+   * **실제로 발동하지 않는다** — 파이프라인 자리만 잡아 둔 플래그(consumeItem 주석 참조).
+   */
+  passesItemToConsumingAlly?: boolean;
+  /**
    * 부식(Corrosion): 공격측이 이 특성이면 상대가 독·강철 타입이어도 독/맹독을 걸 수 있다.
    * isImmuneToStatus에서 타입 기반 면역 판정만 건너뛴다 — 유연 같은 상태이상 특성 면역은
    * 그대로 존중한다(본가 일치).
@@ -222,8 +285,11 @@ export interface Ability {
    */
   blocksSecondaryEffects?: boolean;
   /**
-   * 방음(Soundproof): 소리 기술(classification "소리" — 돌림노래·멸망의노래·하이퍼보이스 등)이
-   * 자신에게 통하지 않는다. 현재 포챔스 로스터엔 이 특성 보유 포켓몬이 없어 데이터는 비어 있다.
+   * 방음(Soundproof): 소리 기술(classification "소리" — 돌림노래·멸망의노래·하이퍼보이스·폭음파·
+   * 노래하기 등)이 자신에게 통하지 않는다 — 데미지기·변화기 모두. 자신이 쓰는 소리 기술에는
+   * 영향이 없다(피격 시에만 판정). resolveMoveContext에서 typeEffectiveness를 0으로 덮어쓰고,
+   * battleSimulator가 opponentEffectsBlocked에 더해 상대 방향 부가효과까지 전부 차단한다.
+   * 4세대 로스터의 바리톱스·눈설왕이 보유.
    */
   blocksSound?: boolean;
   /**
@@ -287,6 +353,16 @@ export interface Ability {
   /** 일렉트릭메이커: 배틀에 등장하면 이 필드를 편다(이미 다른 필드가 있으면 실패). */
   setsFieldOnEntry?: FieldKind;
   /**
+   * 재생력(Regenerator): 교체로 물러날 때 최대 HP의 이 비율(1/3)만큼 회복한 상태로 벤치에
+   * 들어간다. 교체 개념이 도입된 Phase 8 §4부터 의미가 생긴다(performSwitch의 나가는 포켓몬 훅).
+   */
+  healsFractionOnSwitchOut?: number;
+  /**
+   * 자연회복(Natural Cure): 교체로 물러나는 순간 주 상태이상(화상/독/맹독/마비/잠듦/얼음)이
+   * 치유된다. 재생력과 같은 축(performSwitch의 나가는 포켓몬 훅, Phase 8 §4).
+   */
+  curesStatusOnSwitchOut?: boolean;
+  /**
    * 트레이스: 배틀에 등장하면 상대의 특성을 그대로 복사해 이후 자신의 effectiveAbilityId가
    * 상대 것과 같아진다. 실제 게임처럼 일부 특성(다중특성·자기 자신 등)을 복사 제외하는 예외
    * 목록은 없다 — 그런 특성을 복사해도 이 시뮬레이터에서는 대부분 조용히 아무 효과가 없다
@@ -301,7 +377,7 @@ export interface Ability {
    * 사용할 수 없다(usageCondition과 같은 "시도 자체가 막힘" 축).
    */
   preventsSelfFaintMoves?: boolean;
-  /** 짖궂은마음: 자신이 쓰는 변화기(카테고리 status)의 우선도를 이 값만큼 올린다(사이코필드 차단 판정에도 반영). */
+  /** 짓궂은마음: 자신이 쓰는 변화기(카테고리 status)의 우선도를 이 값만큼 올린다(사이코필드 차단 판정에도 반영). */
   statusMovePriorityBoost?: number;
   /** 틈새포착: 자신이 공격할 때 상대의 스크린(리플렉터/빛의장막)과 대타출동을 전부 무시한다. */
   bypassesScreensAndSubstitute?: boolean;
@@ -390,4 +466,263 @@ export interface Ability {
    * 새 타입이 반영된다.
    */
   changesUserTypeToMoveType?: boolean;
+  /**
+   * 괴짜(Imposter) — 메타몽 전용. 배틀에 등장하는 순간 상대로 변신한다(Move.transformsIntoTarget과
+   * 동일 처리). resolveEntryAbilityEffects에서 위협·트레이스와 같은 훅으로 실행하며, 타입·5실능
+   * (HP 제외)·특성·능력 랭크·기술 목록을 상대와 똑같이 복사한다.
+   */
+  transformsIntoOpponentOnEntry?: boolean;
+  /**
+   * 대운: 자신이 공격할 때 급소율 카운터가 상시로 이 값만큼(대운=1) 오른다. 초점렌즈
+   * (Item.critStageBonus)·highCritRatio·기충전(critStage 랭크)과 같은 축에서 그냥 더해지므로,
+   * "기충전 + 급소율 높은 기술 + 대운"이면 카운터가 3(=100% 급소)에 도달한다.
+   */
+  raisesCritStageBy?: number;
+  /**
+   * 스나이퍼: 자신의 공격이 급소에 맞았을 때의 데미지 배율을 기본값(1.5) 대신 이 값(스나이퍼=2.25)
+   * 으로 쓴다. computeDamage의 critDamageMultiplier로 넘어간다.
+   */
+  critDamageMultiplier?: number;
+  /**
+   * 조가비갑옷·전투무장: 자신이 방어측일 때 상대의 공격이 급소에 맞지 않는다(alwaysCrit 기술도
+   * 포함해 전부 막는다 — 본가 규칙). resolveHit의 급소 판정에서 이 특성이면 항상 비급소로 고정.
+   */
+  preventsCritsAgainstSelf?: boolean;
+  /**
+   * 하드록·필터·프리즘아머: 자신이 받는 "효과가 굉장한"(타입 상성 > 1배) 공격의 데미지에 이 배율을
+   * 곱한다(하드록=0.75 → 데미지의 75%). resolveMoveContext에서 typeEffectiveness > 1일 때만
+   * abilityDefenseMultiplier(=내구력 배율, 데미지는 그 역수)에 반영된다.
+   */
+  reducesSuperEffectiveDamageMultiplier?: number;
+  /**
+   * 헤비메탈(2)·라이트메탈(0.5): 몸무게 관련 계산에서 자신의 몸무게에 이 배율을 곱한다. 헤비봄버·
+   * 히트스탬프(자신이 공격측일 때 위력 ↑)와 풀묶기·안다리걸기(자신이 방어측일 때 받는 데미지 ↑)
+   * 양쪽에 반영된다 — battleSimulator weightOf / matchupEvaluator의 폼 몸무게 조회 지점에서 곱한다.
+   */
+  weightMultiplier?: number;
+  /**
+   * 변덕쟁이: 매 턴 종료 시 5스탯(공격/방어/특공/특방/스피드) 중 하나가 2랭크 오르고, 그와 다른
+   * 하나가 1랭크 내려간다(랜덤). 가속(boostsSpeedEachTurnEnd)과 같은 턴 종료 훅에서 처리한다.
+   * 본가는 명중/회피 랭크도 대상이지만 이 로스터는 BattleStatKey 5종만 대상으로 한다.
+   */
+  moodyRandomStages?: boolean;
+  /**
+   * 시간벌기: 자신의 기술이 항상 "같은 우선도 안에서 가장 마지막"에 나간다(스피드 무관). 두 행동자가
+   * 모두 이 특성이면 우선도가 같을 때 정상 스피드 비교로 되돌아간다. compareTurnOrder에서 처리.
+   */
+  movesLastInPriorityBracket?: boolean;
+  /**
+   * 날씨부정(에어록/날씨부정): 자신이 필드에 있는 동안 모든 날씨의 부가효과가 사라진다 — 날씨
+   * 데미지 배율·날씨 조건 특성(엽록소·모래의힘·젖은접시·아이스바디 등)·웨더볼·모래바람 틱·쾌청
+   * 얼음면역이 전부 무시된다. 날씨 자체와 지속 턴 카운트는 그대로 흘러간다(activeWeather 헬퍼).
+   */
+  negatesWeather?: boolean;
+  /**
+   * 기분파(Forecast) — 캐스퐁 전용. 날씨에 따라 타입이 바뀐다: 쾌청→불꽃, 비→물, 눈→얼음,
+   * 그 외(모래바람·날씨 없음·날씨부정)→노말. battleSimulator가 턴 시작·날씨 변동·등장 시점에
+   * fighter.types를 다시 계산한다. 종족값·특성은 그대로.
+   */
+  weatherFormChange?: boolean;
+  /**
+   * 투쟁심(Rivalry): 상대와 성별이 같으면 위력 ×1.25, 다르면 ×0.75. 어느 한쪽이라도 성별
+   * 불명(genderless)이면 ×1.0. 양쪽 성별을 알아야 해서 modifiers가 아니라 battleSimulator·
+   * matchupEvaluator에서 직접 곱한다.
+   */
+  rivalryDamage?: boolean;
+  /**
+   * 건조피부·아이스바디류의 "특정 날씨에 매턴 종료 시 피해" 축(weatherEndOfTurnHealDenominator의
+   * 반대). 건조피부=쾌청일 때 매턴 최대 HP 1/8 피해. (비일 때의 회복은 weatherEndOfTurnHealDenominator로 따로 채운다.)
+   */
+  weatherEndOfTurnDamageDenominator?: { weather: WeatherKind; denominator: number };
+  /**
+   * 포이즌힐(Poison Heal): 독·맹독 상태일 때 턴 종료 시 독 지속 데미지를 받는 대신 최대 HP의
+   * 1/denominator를 회복한다(포이즌힐=8). 상태이상 카운터(맹독 누적)는 그대로 진행된다.
+   */
+  healsFromPoisonEachTurnDenominator?: number;
+  /**
+   * 위험예지(Anticipation): 배틀에 등장하는 순간, 상대가 지닌 기술 중 자신에게 효과가 굉장한
+   * (타입 상성 > 1) 기술이나 일격필살기(tags에 "일격")가 하나라도 있으면 UI 로그로 알린다.
+   * 배틀 수치 영향 없음(통찰과 같은 정보 표시 훅).
+   */
+  revealsThreateningMovesOnEntry?: boolean;
+  /**
+   * 독수(Poison Touch): 접촉하는 기술로 공격해 데미지를 준 직후 이 확률(%)로 상대를 독 상태로
+   * 만든다(독가시 hitTrigger의 공격측 버전). 타입/특성 상태이상 면역은 그대로 존중.
+   */
+  poisonTouchChance?: number;
+  /**
+   * 악취(Stench): 데미지를 주는 기술로 공격했을 때 이 확률(%)로 상대를 추가로 풀죽게 만든다.
+   * 왕의징표석(Item.extraFlinchChance)의 특성 버전 — 같은 블록에서 OR로 판정한다.
+   */
+  flinchChanceOnHit?: number;
+  /**
+   * 예지몽(Forewarn): 배틀에 등장하는 순간 상대가 지닌 기술 중 가장 위력이 높은 기술을 UI 로그로
+   * 알린다(통찰·위험예지와 같은 정보 표시 훅). 배틀 수치 영향 없음.
+   */
+  revealsStrongestOpponentMoveOnEntry?: boolean;
+  /**
+   * 심술꾸러기(Contrary): 이 포켓몬의 능력치 랭크 변화가 전부 반대로 적용된다(오르면 내려가고
+   * 내려가면 올라간다). 기술·특성이 거는 의도적 랭크 변화(자기 것이든 상대가 건 것이든)에 적용되며,
+   * 흑안개·하양허브 같은 "초기화/복구"에는 적용되지 않는다. battleSimulator가 랭크 변경 지점에서
+   * delta를 부호 반전한다.
+   */
+  invertsStatChanges?: boolean;
+  /**
+   * 의태(Mimicry): 필드 상태에 따라 자신의 타입이 바뀐다 — 일렉트릭필드→전기, 사이코필드→에스퍼,
+   * 그래스필드→풀, 미스트필드→페어리, 필드 없음→원래 타입. battleSimulator가 턴 시작 시점에
+   * fighter.types를 다시 계산하고 바뀌면 turnStartAnnouncements로 알린다.
+   */
+  terrainTypeChange?: boolean;
+  /**
+   * 방탄(Bulletproof): 구슬·폭탄 계열 기술(tags에 "구슬" 또는 "폭탄"이 있는 기술 —
+   * 기합구슬·오물폭탄·섀도볼·에너지볼·파동탄·록블라스트·전자포·암석포 등, 데미지기·변화기 모두)이
+   * 자신에게 통하지 않는다. 방음(blocksSound)과 완전히 같은 처리 — resolveMoveContext에서
+   * typeEffectiveness를 0으로 덮고, battleSimulator가 opponentEffectsBlocked에 합류시킨다.
+   */
+  blocksBallBomb?: boolean;
+  /**
+   * 질풍날개(Gale Wings, 7세대 형식): 자신의 HP가 가득 찬 상태에서 쓰는 비행타입 기술의 우선도가
+   * +1이 된다. 짓궂은마음(statusMovePriorityBoost)과 같은 "우선도 델타" 축이지만 조건이
+   * "비행타입 기술 + 풀피"라 별도 필드로 뒀다 — getAbilityPriorityBoost/compareTurnOrder에서 처리.
+   */
+  flyingMovePriorityBoostAtFullHp?: boolean;
+  /**
+   * 볼주머니(Cheek Pouch): 나무열매를 먹으면(HP 임계 자동 발동·볼가득넣기·탁쳐서떨구기로 먹거나
+   * 떨어뜨려 먹은 것 포함) 그 열매 고유 효과와 별개로 최대 HP의 이 비율만큼 추가로 회복한다(1/3).
+   */
+  berryHealFraction?: number;
+  /**
+   * 수확(Harvest): 턴 종료 시, 이번 배틀에서 소비한 나무열매가 있으면 chance(%) 확률로 그 열매를
+   * 다시 지닌다(currentItemId 복원). 날씨가 쾌청/큰햇살이면 sunChance(%) 확률(수확=100). 이미
+   * 도구를 지녔거나 소비한 나무열매 기록이 없으면 아무 일도 없다.
+   */
+  restoresBerryEndOfTurn?: { chance: number; sunChance: number };
+  /**
+   * 아로마베일(Aroma Veil): 자신을 겨냥한 "마음을 옭아매는" 변화기의 효과를 받지 않는다 —
+   * 헤롱헤롱(attract)·도발(taunt)·기술봉인(disable)·앙코르(encore). (본가의 트집·회복봉인은 이
+   * 엔진에 volatile로 모델링돼 있지 않아 대상 없음.) battleSimulator가 해당 volatile 부여 직전에 차단한다.
+   */
+  blocksMentalMoves?: boolean;
+  /**
+   * 흡반(Suction Cups): 교체를 강제하는 기술·도구에 밀려나지 않는다. 현행 1v1 시뮬레이터엔 교체가
+   * 없어 아직 배선하지 않는다 — 배틀타워 리뉴얼로 교체가 도입되면 강제 교체 저항 지점에서 이 플래그를 읽는다.
+   */
+  preventsForcedSwitch?: boolean;
+  /**
+   * 원격(Long Reach): 자신이 쓰는 모든 기술이 접촉 판정을 받지 않는다. resolveAction의 접촉
+   * 판정(`makesContact`)을 공격측이 이 특성이면 강제로 false로 취급한다 — 까칠한피부·정전기·불꽃몸·
+   * 독가시·미끈미끈·저주받은바디·나쁜손버릇·헤롱헤롱바디 같은 접촉 반격 특성과 록키헬멧 도구,
+   * 접촉 조건부 배율(단단한발톱 등)이 전부 발동하지 않게 된다.
+   */
+  movesIgnoreContact?: boolean;
+  /**
+   * 스킬링크(Skill Link): 2~5회 연속 공격 기술(minHits/maxHits가 있는 기술)을 쓰면 명중 횟수가
+   * 항상 최대치(maxHits)로 고정된다. 트리플악셀처럼 minHits가 1인 기술도 max로 고정.
+   */
+  multiHitAlwaysMax?: boolean;
+  /**
+   * 무도한행동(Merciless): 방어측(상대)이 독/맹독 상태이면 자신의 공격이 반드시 급소에 맞는다.
+   * accuracyCrit.ts의 급소 판정에서 이 조건이면 항상 급소로 고정한다(조가비갑옷·전투무장 등
+   * 방어측의 급소 방지 특성은 그대로 존중 — 본가 규칙).
+   */
+  alwaysCritsVsPoisonedTarget?: boolean;
+  /**
+   * 발끈(포챔스판): 상대의 데미지 기술로 HP가 최대치의 절반 이하가 되면 그 즉시 특수공격이
+   * 1랭크 오른다. 판정은 "상대가 사용한 기술의 데미지"에 한정한다 — 모래바람·독/맹독·씨뿌리기·
+   * 설치물처럼 상대 기술이 아닌 경로로 절반 이하가 되면 발동하지 않는다. 배틀당 여러 번 가능하되
+   * "절반 이하로 처음 내려가는 그 순간"에만 트리거된다(이미 절반 이하였으면 재발동 안 함).
+   */
+  raisesSpaWhenHalvedByMoveDamage?: boolean;
+  /**
+   * 여왕의위엄(Queenly Majesty): 상대가 이 포켓몬을 겨냥해 쓰는 우선도 +1 이상의 공격 기술이
+   * 실패한다(특성·필드로 우선도가 올라간 경우도 포함). 사이코필드의 우선도 차단과 같은 로직을
+   * "이 특성 소유자를 방어측으로 둔" 상황에 적용한다. 더블 전용인 "같은 편 보호"는 1v1이라 미반영.
+   * 전용 실패 문구: "(상대)은(는) (기술)을(를) 쓸 수 없다!"
+   */
+  blocksOpponentPriorityMoves?: boolean;
+  /**
+   * 의욕(Hustle): 자신의 물리 기술 위력에 이 배율(1.5)을 곱한다. computeDamage의 abilityMultiplier
+   * 축에 물리기일 때만 합쳐진다(근성의 화상 무시와는 별개 — 근성은 위력 배율이 없다).
+   */
+  hustleAttackMultiplier?: number;
+  /**
+   * 의욕(Hustle): 자신의 물리 기술 명중률에 이 배율(0.8)을 곱한다. 복안(userAccuracyMultiplier)과
+   * 같은 extraMultiplier 축이지만 물리기 한정이라 별도 필드로 뒀다. 필중기(accuracy=null)엔 영향 없음.
+   */
+  hustlePhysicalAccuracyMultiplier?: number;
+  /**
+   * 숙성(Ripen): 자신이 먹는 나무열매의 효과(HP 회복량·데미지 경감 등)가 2배가 된다.
+   * consumeItem이 나무열매를 감지하는 지점, 그리고 나무열매 회복량을 계산하는 지점에서 반영한다.
+   */
+  doublesBerryEffect?: boolean;
+  /**
+   * 먹보(Gluttony): 원래 HP 1/4 이하에서 발동하는 위기 나무열매(자뭉·오랭 등)를 HP 1/2 이하에서
+   * 미리 먹는다. 이 프로젝트는 위기 나무열매 baseline 문턱이 이미 1/2(getHpThresholdBerryHeal)이라
+   * 실질 효과가 없다 — 데이터만 반영하고 엔진 배선은 사실상 무의미.
+   */
+  pinchBerryAtHalfHp?: boolean;
+  /**
+   * 배리어프리(Screen Cleaner): 배틀에 등장하면 양쪽의 리플렉터·빛의장막·오로라베일을 전부
+   * 없앤다. resolveEntryAbilityEffects에서 처리(등장 시 1회).
+   */
+  clearsAllScreensOnEntry?: boolean;
+  /**
+   * 꼬르륵스위치(Hunger Switch) — 모르페코 전용. 매 턴 종료 시 배부른모양/배고픈모양으로 번갈아
+   * 바뀐다(BattleFighterState.hungerMode). 종족값·타입·특성은 동일하고, 오라휠(Move.hungerSwitchType)의
+   * 타입만 모양에 따라 달라진다.
+   */
+  hungerSwitch?: boolean;
+  /**
+   * 내열(Heatproof): 불꽃타입 데미지 절반(modifiers로 처리)에 더해, 화상 상태의 매 턴 종료 지속
+   * 데미지도 절반이 된다. runEndOfTurn의 상태이상 데미지 틱에서 statusCondition이 "burn"이면
+   * computeStatusEndOfTurnDamage 결과를 반으로 줄인다(내림).
+   */
+  halvesBurnDamage?: boolean;
+  /**
+   * 전기로바꾸기(Electromorphosis): 기술 데미지를 받으면 충전 상태가 된다(BattleFighterState.
+   * electroChargedForElectric). 충전 상태에서 다음에 쓰는 전기타입 기술은 위력이 2배가 되고,
+   * 그 즉시 충전이 소모된다(1회 한정).
+   */
+  chargesOnDamageTaken?: boolean;
+  /**
+   * 편승(Opportunist): 상대의 능력치 랭크가 올라가면(자기 강화기·부가효과 등 원인 무관) 자신도
+   * 같은 능력치를 같은 폭만큼 올린다. battleSimulator가 기술 한 번의 랭크 변화가 전부 반영된 뒤,
+   * 상대가 이번 기술로 얻은 양(+)의 랭크 상승분을 이 특성 소유자에게 그대로 복사한다(심술꾸러기·
+   * 클리어바디류는 복사 적용 시점에서 그대로 존중). 자기 자신의 상승은 복사하지 않는다.
+   */
+  copiesOpponentStatBoosts?: boolean;
+  /**
+   * 점착(Sticky Hold): 지닌 도구를 상대에게 빼앗기지 않는다. 나쁜손버릇(hitTrigger.stealsAttackerItem)·
+   * 매지션(stealsItemOnDamagingHit)의 도구 강탈 지점에서 이 특성 소유자가 피해자면 강탈이 무산된다.
+   * (이 엔진엔 도구를 옮기는 기술 — 탁쳐서떨구기·도둑질·트릭 — 로직이 없어 특성 두 곳만 막으면 충분하다.)
+   */
+  preventsItemLoss?: boolean;
+  /**
+   * 감미로운꿀(포챔스판): 배틀에 등장하면 상대의 회피율을 이 값(-1)만큼 떨어뜨린다. 위협
+   * (lowersOpponentStatOnEntry)의 회피율 버전 — 회피율은 BattleStatKey가 아니라 accuracyStages라
+   * 별도 필드로 뒀다. 배틀당 1회(1v1이라 등장도 1회). resolveEntryAbilityEffects에서 처리.
+   * 전용 안내 2줄: "…의 꿀에서 달콤한 향기가 나고 있다!" / "…의 회피율이 떨어졌다!"
+   */
+  lowersOpponentEvasionOnEntry?: number;
+  /**
+   * 메가솔라(포챔스판 메가니움-메가): 자신이 쓰는 기술이 현재 날씨와 무관하게 "쾌청" 상태처럼
+   * 취급된다 — 솔라빔이 준비 턴 없이 나가고(chargeSkipWeather:"쾌청" 대상), 광합성·달빛류
+   * (healsWeatherDependent)의 회복량이 항상 2/3, 웨더볼이 불꽃타입·위력 2배로 나간다.
+   * (모래바람의 바위 특방 1.5배·눈의 얼음 방어 1.5배 무시 조항은 이 엔진에 해당 방어 보정 자체가
+   *  없어 실질 대상 없음.)
+   */
+  treatsOwnWeatherAsSun?: boolean;
+  /**
+   * 천정부지(포챔스판 저리더프-메가): grantsImmunityToTypes:["땅"](부유)와 함께 쓴다. 자신의
+   * 데미지로 상대를 실제로 쓰러뜨리면, 그 즉시 자신의 실능치(realStats)가 가장 높은 능력
+   * (공격/방어/특공/특방/스피드 중)이 1랭크 오른다. 자기과신(boostsStatOnKo)과 같은 KO 훅.
+   */
+  boostsHighestStatOnKo?: boolean;
+  /**
+   * 보이지않는주먹(Unseen Fist, 골루그-메가): 자신이 쓰는 접촉기가 상대의 방어류(방어/판별/킹실드/
+   * 니들가드/토치카 — protectEffect:"block")를 뚫고 명중한다. 단, 그렇게 뚫고 들어간 타는 데미지가
+   * 1/4로 줄고, 상대 방어류의 접촉 성공 시 부가효과(킹실드 공격 -1·니들가드 1/8 데미지·토치카 독)는
+   * 그대로 발동한다(본가와 달리 데미지 페널티가 있는 포챔스판 — 사용자 확정).
+   */
+  contactBypassesProtectAtQuarterDamage?: boolean;
 }

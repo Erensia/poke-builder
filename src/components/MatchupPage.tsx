@@ -150,6 +150,8 @@ export function MatchupPage() {
           onPickNature={() => setPicker({ kind: "nature", side: "attacker" })}
           onPickPoints={() => setPicker({ kind: "points", side: "attacker" })}
           onPickStages={() => setPicker({ kind: "stages", side: "attacker" })}
+          onCycleSizeForm={attacker.cycleSizeForm}
+          onCycleFormVariant={attacker.cycleFormVariant}
           onPickMove={() => setPicker({ kind: "move" })}
           hasSamples={slotPresets.presets.length > 0}
           onOpenSamplePicker={() => setPicker({ kind: "slotPresets", side: "attacker" })}
@@ -184,6 +186,8 @@ export function MatchupPage() {
           onPickNature={() => setPicker({ kind: "nature", side: "defender" })}
           onPickPoints={() => setPicker({ kind: "points", side: "defender" })}
           onPickStages={() => setPicker({ kind: "stages", side: "defender" })}
+          onCycleSizeForm={defender.cycleSizeForm}
+          onCycleFormVariant={defender.cycleFormVariant}
           hasSamples={slotPresets.presets.length > 0}
           onOpenSamplePicker={() => setPicker({ kind: "slotPresets", side: "defender" })}
           onToggleItemStolen={defender.setItemStolen}

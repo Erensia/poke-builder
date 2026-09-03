@@ -742,5 +742,299 @@
     "description": "자신에게 효과가 굉장한 페어리타입 기술의 위력을 반감시킨다.",
     "category": "held-item",
     "resistsSuperEffectiveType": "페어리"
+  },
+  {
+    "id": "독침붕나이트",
+    "name": "독침붕나이트",
+    "description": "",
+    "category": "mega-stone"
+  },
+  {
+    "id": "피죤투나이트",
+    "name": "피죤투나이트",
+    "description": "",
+    "category": "mega-stone"
+  },
+  {
+    "id": "후딘나이트",
+    "name": "후딘나이트",
+    "description": "",
+    "category": "mega-stone"
+  },
+  {
+    "id": "우츠보트나이트",
+    "name": "우츠보트나이트",
+    "description": "",
+    "category": "mega-stone"
+  },
+  {
+    "id": "야도란나이트",
+    "name": "야도란나이트",
+    "description": "",
+    "category": "mega-stone"
+  },
+  {
+    "id": "아쿠스타나이트",
+    "name": "아쿠스타나이트",
+    "description": "",
+    "category": "mega-stone"
+  },
+  {
+    "id": "쁘사이저나이트",
+    "name": "쁘사이저나이트",
+    "description": "",
+    "category": "mega-stone"
+  },
+  {
+    "id": "갸라도스나이트",
+    "name": "갸라도스나이트",
+    "description": "",
+    "category": "mega-stone"
+  },
+  {
+    "id": "프테라나이트",
+    "name": "프테라나이트",
+    "description": "",
+    "category": "mega-stone"
+  },
+  {
+    "id": "메가니움나이트",
+    "name": "메가니움나이트",
+    "description": "",
+    "category": "mega-stone"
+  },
+  {
+    "id": "장크로다일나이트",
+    "name": "장크로다일나이트",
+    "description": "",
+    "category": "mega-stone"
+  },
+  {
+    "id": "전룡나이트",
+    "name": "전룡나이트",
+    "description": "",
+    "category": "mega-stone"
+  },
+  {
+    "id": "강철톤나이트",
+    "name": "강철톤나이트",
+    "description": "",
+    "category": "mega-stone"
+  },
+  {
+    "id": "헤라크로스나이트",
+    "name": "헤라크로스나이트",
+    "description": "",
+    "category": "mega-stone"
+  },
+  {
+    "id": "무장조나이트",
+    "name": "무장조나이트",
+    "description": "",
+    "category": "mega-stone"
+  },
+  {
+    "id": "헬가나이트",
+    "name": "헬가나이트",
+    "description": "",
+    "category": "mega-stone"
+  },
+  {
+    "id": "깜까미나이트",
+    "name": "깜까미나이트",
+    "description": "",
+    "category": "mega-stone"
+  },
+  {
+    "id": "보스로라나이트",
+    "name": "보스로라나이트",
+    "description": "",
+    "category": "mega-stone"
+  },
+  {
+    "id": "요가램나이트",
+    "name": "요가램나이트",
+    "description": "",
+    "category": "mega-stone"
+  },
+  {
+    "id": "썬더볼트나이트",
+    "name": "썬더볼트나이트",
+    "description": "",
+    "category": "mega-stone"
+  },
+  {
+    "id": "샤크니아나이트",
+    "name": "샤크니아나이트",
+    "description": "",
+    "category": "mega-stone"
+  },
+  {
+    "id": "폭타나이트",
+    "name": "폭타나이트",
+    "description": "",
+    "category": "mega-stone"
+  },
+  {
+    "id": "파비코리나이트",
+    "name": "파비코리나이트",
+    "description": "",
+    "category": "mega-stone"
+  },
+  {
+    "id": "다크펫나이트",
+    "name": "다크펫나이트",
+    "description": "",
+    "category": "mega-stone"
+  },
+  {
+    "id": "치렁나이트",
+    "name": "치렁나이트",
+    "description": "",
+    "category": "mega-stone"
+  },
+  {
+    "id": "앱솔나이트",
+    "name": "앱솔나이트",
+    "description": "",
+    "category": "mega-stone"
+  },
+  {
+    "id": "얼음귀신나이트",
+    "name": "얼음귀신나이트",
+    "description": "",
+    "category": "mega-stone"
+  },
+  {
+    "id": "찌르호크나이트",
+    "name": "찌르호크나이트",
+    "description": "",
+    "category": "mega-stone"
+  },
+  {
+    "id": "눈설왕나이트",
+    "name": "눈설왕나이트",
+    "description": "",
+    "category": "mega-stone"
+  },
+  {
+    "id": "엘레이드나이트",
+    "name": "엘레이드나이트",
+    "description": "",
+    "category": "mega-stone"
+  },
+  {
+    "id": "눈여아나이트",
+    "name": "눈여아나이트",
+    "description": "",
+    "category": "mega-stone"
+  },
+  {
+    "id": "염무왕나이트",
+    "name": "염무왕나이트",
+    "description": "",
+    "category": "mega-stone"
+  },
+  {
+    "id": "다부니나이트",
+    "name": "다부니나이트",
+    "description": "",
+    "category": "mega-stone"
+  },
+  {
+    "id": "펜드라나이트",
+    "name": "펜드라나이트",
+    "description": "",
+    "category": "mega-stone"
+  },
+  {
+    "id": "저리더프나이트",
+    "name": "저리더프나이트",
+    "description": "",
+    "category": "mega-stone"
+  },
+  {
+    "id": "샹델라나이트",
+    "name": "샹델라나이트",
+    "description": "",
+    "category": "mega-stone"
+  },
+  {
+    "id": "골루그나이트",
+    "name": "골루그나이트",
+    "description": "",
+    "category": "mega-stone"
+  },
+  {
+    "id": "브리가론나이트",
+    "name": "브리가론나이트",
+    "description": "",
+    "category": "mega-stone"
+  },
+  {
+    "id": "화염레오나이트",
+    "name": "화염레오나이트",
+    "description": "",
+    "category": "mega-stone"
+  },
+  {
+    "id": "냐오닉스나이트",
+    "name": "냐오닉스나이트",
+    "description": "",
+    "category": "mega-stone"
+  },
+  {
+    "id": "칼라마네로나이트",
+    "name": "칼라마네로나이트",
+    "description": "",
+    "category": "mega-stone"
+  },
+  {
+    "id": "거북손데스나이트",
+    "name": "거북손데스나이트",
+    "description": "",
+    "category": "mega-stone"
+  },
+  {
+    "id": "드래캄나이트",
+    "name": "드래캄나이트",
+    "description": "",
+    "category": "mega-stone"
+  },
+  {
+    "id": "루차불나이트",
+    "name": "루차불나이트",
+    "description": "",
+    "category": "mega-stone"
+  },
+  {
+    "id": "모단단게나이트",
+    "name": "모단단게나이트",
+    "description": "",
+    "category": "mega-stone"
+  },
+  {
+    "id": "대여르나이트",
+    "name": "대여르나이트",
+    "description": "",
+    "category": "mega-stone"
+  },
+  {
+    "id": "할비롱나이트",
+    "name": "할비롱나이트",
+    "description": "",
+    "category": "mega-stone"
+  },
+  {
+    "id": "스코빌런나이트",
+    "name": "스코빌런나이트",
+    "description": "",
+    "category": "mega-stone"
+  },
+  {
+    "id": "킬라플로르나이트",
+    "name": "킬라플로르나이트",
+    "description": "",
+    "category": "mega-stone"
   }
 ]

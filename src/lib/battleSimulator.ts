@@ -16,6 +16,7 @@ import {
 import {
   NO_STATUS_CONDITION,
   NO_VOLATILE_CONDITIONS,
+  type StatusCondition,
   type StatusConditionState,
   type VolatileCondition,
   type VolatileConditionState,
@@ -53,6 +54,7 @@ import {
   inflictVolatile,
 } from "./volatileConditions";
 import { resolveMoveContext } from "./moveContext";
+import { getEffectiveness } from "./typeEffectiveness";
 import {
   computeDamage,
   rankStageMultiplier,
@@ -239,6 +241,14 @@ export interface BattleFighterState {
    */
   disguiseBroken?: boolean;
   /**
+   * 변신(Move.transformsIntoTarget)·괴짜(Ability.transformsIntoOpponentOnEntry)로 상대로 변신한
+   * 상태면 true. 타입·5실능(HP 제외)·특성·능력 랭크·기술(PP 5)을 상대 것으로 갈아치운 뒤 이 플래그를
+   * 세운다. 교체가 없는 1v1이라 한 번 변신하면 배틀 끝까지 유지되고, 재변신은 실패한다.
+   * slot.pokemonId는 원본 그대로 두므로(종 자체는 안 바뀜) 몸무게·종별타입 기술은 원본 종 기준으로
+   * 남는다 — 변신 사용자가 메타몽뿐이라 실질 영향이 없어 단순화했다.
+   */
+  transformed?: boolean;
+  /**
    * 길동무: 이번 시전이 성공해서 "이번 턴(또는 이후 턴에) 직접 공격으로 쓰러지면 상대도 같이
    * 쓰러뜨린다" 예약이 걸려있으면 true. activeProtect와 달리 매 턴 시작 시 초기화되지 않고,
    * 이 포켓몬 자신의 다음 행동이 시작되는 시점(resolveAction 최상단)에 지워진다 — "다음 자신의
@@ -280,18 +290,110 @@ export interface BattleFighterState {
     contactPenalty?: { stat: BattleStatKey; delta: number };
     /** 니들가드가 접촉기를 막았을 때 공격자에게 줄 최대 HP 비율 데미지(니들가드=1/8) */
     contactDamageFraction?: number;
+    /** 토치카가 접촉기를 막았을 때 공격자에게 걸 주 상태이상(토치카=poison) */
+    contactStatus?: StatusCondition;
   };
   /**
    * 방어류 기술의 연속 성공 횟수. 다음 시도 성공 확률은 (1/3)^protectStreak. 계열이 아닌
    * 다른 기술을 쓰거나 이번 시도가 실패하면 0으로 리셋된다(undefined와 0은 동일하게 취급).
    */
   protectStreak?: number;
+  /**
+   * 숲의저주(풀)·핼러윈(고스트)으로 추가된 타입. 배틀 끝까지 유지되며, types에 이미 반영돼 있다 —
+   * 의태(applyMimicryForm)·기분파(applyForecastForm)가 타입을 재계산할 때 이 값을 다시 붙인다.
+   */
+  addedType?: PokemonType;
+  /**
+   * 수확: 이번 배틀에서 이 포켓몬이 소비한 마지막 나무열매 id. 턴 종료 시 이 열매를 확률로
+   * 되돌린다. 되돌린 뒤에도 값은 남겨 둔다(다시 먹고 다시 되돌릴 수 있음).
+   */
+  consumedBerryId?: string;
+  /**
+   * 볼주머니: consumeItem이 나무열매 소비를 감지해 추가 회복을 적용했을 때 그 회복량을 잠깐
+   * 담아 둔다. resolveAction 반환 시(액션 중 소비) 또는 턴 종료 처리 시(EOT 소비) 로그로 옮기고 지운다.
+   */
+  pendingCheekPouchHeal?: number;
+  /**
+   * 송전(Move.changesTargetMoveTypeThisTurn): 이번 턴에 한해 이 포켓몬이 쓰는 기술의 타입이
+   * 이 값으로 강제된다. runTurn이 턴 종료 시 지운다.
+   */
+  moveTypeOverrideThisTurn?: PokemonType;
+  /**
+   * 꼬르륵스위치(모르페코): 배부른모양(full)/배고픈모양(hangry). 매 턴 종료 시 토글되고, 오라휠의
+   * 타입이 이 값에 따라 전기/악으로 갈린다. 비-모르페코는 항상 "full"로 두면 아무 영향이 없다.
+   */
+  hungerMode?: "full" | "hangry";
+  /**
+   * 전기로바꾸기(Electromorphosis): 기술 데미지를 받아 충전된 상태. 다음에 쓰는 전기타입 기술의
+   * 위력이 2배가 되고 그 즉시 false로 돌아간다(1회 한정).
+   */
+  electroChargedForElectric?: boolean;
+  /**
+   * 분노의주먹(Move.rageFistPower): 이번 배틀에서 이 포켓몬이 기술로 데미지를 받은 누적 횟수.
+   * 다단히트는 타수만큼 센다(applyDamageToDefender에서 amount>0마다 +1). 교체 초기화는 미도입.
+   */
+  timesHitByMoves?: number;
+  /**
+   * 거대해머(Move.cannotUseConsecutively): 직전에 이 기술로 행동을 개시했으면 그 기술 id와,
+   * "다음 턴 번호"(= 사용한 턴 + 1)를 함께 기록한다. resolveAction이 (move.id 일치 && 기록된
+   * 턴 번호 == 현재 턴 번호)면 실패시킨다 — 그 다음 턴부터는 자연히 조건이 어긋나 다시 쓸 수 있다.
+   */
+  consecutiveLockMoveId?: string;
+  consecutiveLockUntilTurn?: number;
+  /**
+   * 이번 턴에 "자기 의지로" 교체해서 나왔으면 true(Phase 8 §8). 가속(Speed Boost)이 이 턴
+   * 종료에 발동하지 않게 막는 데 쓴다. runTurn이 매 턴 시작 시 지우고, 교체 선처리에서 자발적
+   * 교체에만 세운다 — 기절 후 강제 교체(applySwitch)로 나온 경우엔 세우지 않는다(가속 발동).
+   */
+  switchedInThisTurn?: boolean;
 }
 
-/** 두 포켓몬(a/b)을 마주 세운 배틀 상태 */
+/**
+ * 진영(side)에 붙는 설치물 상태. 슬롯이 아니라 편에 붙으므로 교체해도 유지된다.
+ * Phase 8 §1: 스칼라 `{a,b}` 불리언에서 진영별 구조체로 승격. 스택 처리(압정뿌리기 층수·
+ * 독압정 층수)는 §6에서 채운다 — S1 시점엔 스텔스록·압정뿌리기만 기존 불리언과 1:1 대응
+ * (`spikesLayers`는 0 또는 1).
+ */
+export interface HazardState {
+  /** 스텔스록(1장 고정). 등장 시 바위 상성 배율로 데미지(§6). */
+  stealthRock: boolean;
+  /** 압정뿌리기 층수 0~3. 등장 시 1→1/16 · 2→1/8 · 3→1/4 데미지(§6). 비접지는 무시. */
+  spikesLayers: number;
+  /** 독압정 층수 0~2. 1→독 · 2→맹독(§6). 독타입 등장 시 해제. 비접지는 무시. */
+  toxicSpikesLayers: number;
+  /** 끈적끈적네트(1장 고정). 접지 상태로 등장 시 스피드 -1(§6). */
+  stickyWeb: boolean;
+}
+
+/** 빈 설치물 상태 */
+export function emptyHazardState(): HazardState {
+  return { stealthRock: false, spikesLayers: 0, toxicSpikesLayers: 0, stickyWeb: false };
+}
+
+/**
+ * 한 진영(편). 선출된 파티(배틀타워 = 3마리, 길이는 고정 안 함) + 지금 나와 있는 슬롯 인덱스 +
+ * 그 편에 깔린 설치물. 기절·상태이상·랭크·도구 소모·연속기 카운터는 전부 `party[i]`(슬롯)별로
+ * 유지된다. Phase 8 §1.
+ */
+export interface BattleSide {
+  party: BattleFighterState[];
+  activeIndex: number;
+  hazards: HazardState;
+}
+
+/**
+ * 두 진영(a/b)을 마주 세운 배틀 상태.
+ *
+ * `a` / `b`는 **각 진영의 현재 활성 파이터**를 가리키는 포인터로, 항상
+ * `sideA.party[sideA.activeIndex]` / `sideB.party[sideB.activeIndex]`와 **동일 객체 참조**다.
+ * 엔진 로직 대부분이 "지금 나와 있는 포켓몬 1마리"만 보므로 이 축을 유지한다 — 교체(§3)는
+ * `performSwitch` 한 곳에서만 `activeIndex`를 바꾸고 `a`/`b`를 다시 물린다.
+ */
 export interface BattleState {
   a: BattleFighterState;
   b: BattleFighterState;
+  sideA: BattleSide;
+  sideB: BattleSide;
   weather?: WeatherKind;
   /** 날씨가 사라지기까지 남은 턴 수. weather가 없으면 의미 없음 */
   weatherTurnsRemaining?: number;
@@ -300,11 +402,6 @@ export interface BattleState {
   fieldTurnsRemaining?: number;
   /** 트릭룸이 해제되기까지 남은 턴 수. 트릭룸이 안 걸려있으면 undefined */
   trickRoomTurnsRemaining?: number;
-  /**
-   * 진영별 스텔스록 설치 여부. 한 번 깔리면 배틀 끝까지 영구 유지된다(Phase 6.5 §6-2 ④).
-   * 교체 개념이 없어 "등장 데미지"는 아직 없고, 로그·환경 UI 표시용 상태값이다.
-   */
-  stealthRock: { a: boolean; b: boolean };
   turnNumber: number;
   /** 배틀 시작 시점에 특성으로 날씨가 자동으로 바뀌었으면("○○의 잔비!") 그 안내 문구 */
   entryAnnouncements: string[];
@@ -312,9 +409,154 @@ export interface BattleState {
 
 export type FighterKey = "a" | "b";
 
+/** 편(side) 객체를 키로 구한다 */
+export function sideOf(state: BattleState, key: FighterKey): BattleSide {
+  return key === "a" ? state.sideA : state.sideB;
+}
+
+/** 편(side)의 현재 활성 파이터. state.a / state.b와 동일 참조 */
+export function activeFighter(state: BattleState, key: FighterKey): BattleFighterState {
+  const side = sideOf(state, key);
+  return side.party[side.activeIndex];
+}
+
 /** 상대 키를 구한다 */
 export function opponentKey(key: FighterKey): FighterKey {
   return key === "a" ? "b" : "a";
+}
+
+/** fighter의 현재 특성 객체(effectiveAbilityId 기준). 없으면 undefined */
+function abilityOf(fighter: BattleFighterState): Ability | undefined {
+  return fighter.effectiveAbilityId ? getAbility(fighter.effectiveAbilityId) : undefined;
+}
+
+/**
+ * 날씨부정(에어록/날씨부정): 양쪽 중 누구든 이 특성이면 날씨의 "부가효과"는 전부 무시된다.
+ * state.weather 자체와 weatherTurnsRemaining(지속 턴)은 그대로 두고, 데미지 배율·조건 특성·
+ * 웨더볼·틱 데미지 등 효과를 읽는 지점에서만 이 함수를 거쳐 undefined로 만든다.
+ */
+function activeWeather(state: BattleState): WeatherKind | undefined {
+  if (abilityOf(state.a)?.negatesWeather || abilityOf(state.b)?.negatesWeather) return undefined;
+  return state.weather;
+}
+
+/**
+ * 투쟁심(Rivalry): 공격측이 이 특성일 때 상대와의 성별 관계로 데미지 배율을 낸다.
+ * 같은 성별 ×1.25 · 다른 성별 ×0.75 · 어느 한쪽이라도 성별 불명(null) ×1.0.
+ */
+function rivalryDamageMultiplier(
+  ability: Ability | undefined,
+  attackerGender: PokemonGender | null,
+  defenderGender: PokemonGender | null,
+): number {
+  if (!ability?.rivalryDamage) return 1;
+  if (attackerGender === null || defenderGender === null) return 1;
+  return attackerGender === defenderGender ? 1.25 : 0.75;
+}
+
+/**
+ * 심술꾸러기(Contrary): fighter가 이 특성이면 랭크 변화 delta의 부호를 반전한다(그 외엔 그대로).
+ * 위협·EOT 랭크업·hitTrigger 자기 랭크변화 등 applyStageDelta를 직접 부르는 지점에서 delta를 감싼다.
+ */
+function contraryDelta(fighter: BattleFighterState, delta: number): number {
+  return abilityOf(fighter)?.invertsStatChanges ? -delta : delta;
+}
+
+/** 주 상태이상 6종 — 플라워베일 등 "상태이상 전부 면역"을 표현할 때 쓴다 */
+const ALL_MAJOR_STATUS_CONDITIONS: StatusCondition[] = [
+  "burn",
+  "poison",
+  "badly-poisoned",
+  "paralysis",
+  "sleep",
+  "freeze",
+];
+/** 클리어바디가 막는 5스탯 (HP 제외) */
+const CLEAR_BODY_STAT_KEYS: BattleStatKey[] = ["atk", "def", "spa", "spd", "spe"];
+
+/**
+ * 플라워베일(Phase 8 §7)이 지금 이 fighter에게 실제로 발동하는지 — 이 특성 보유 + 자신이 풀타입.
+ * 본가는 아군 풀타입까지 보호하나 3v3 싱글엔 동시 아군이 없어 자기 자신만 대상.
+ */
+function hasFlowerVeil(fighter: BattleFighterState, ability: Ability | undefined): boolean {
+  return !!ability?.grassVeil && fighter.types.includes("풀");
+}
+
+/** 특성 기반 상태이상 면역 목록 — 유연류(immuneToStatuses) + 플라워베일(풀타입이면 전부) */
+function statusImmunitiesOf(
+  fighter: BattleFighterState,
+  ability: Ability | undefined,
+): StatusCondition[] | undefined {
+  if (hasFlowerVeil(fighter, ability)) return ALL_MAJOR_STATUS_CONDITIONS;
+  return ability?.immuneToStatuses;
+}
+
+/** 상대발 랭크 하락을 막는 스탯 목록 — 클리어바디류(blocksOpponentStatDropsForStats) + 플라워베일(풀타입이면 5스탯) */
+function statDropBlockStatsOf(
+  fighter: BattleFighterState,
+  ability: Ability | undefined,
+): BattleStatKey[] | undefined {
+  if (hasFlowerVeil(fighter, ability)) return CLEAR_BODY_STAT_KEYS;
+  return ability?.blocksOpponentStatDropsForStats;
+}
+
+/**
+ * 심술꾸러기: fighter가 대상이 되는 기술 랭크 변화(statChanges)의 delta/setTo 부호를 반전한 기술
+ * 복사본을 돌려준다. Contrary가 아니거나 statChanges가 없으면 원본을 그대로 반환한다.
+ * applyMoveStatChanges / applyMoveAccuracyEvasionChanges 둘 다에 이 결과를 넘기면 5스탯·명중/회피가 함께 반전된다.
+ */
+function contraryMoveFor(move: Move, fighter: BattleFighterState): Move {
+  if (!abilityOf(fighter)?.invertsStatChanges || !move.statChanges) return move;
+  return {
+    ...move,
+    statChanges: move.statChanges.map((s) => ({
+      ...s,
+      delta: s.delta === undefined ? undefined : -s.delta,
+      setTo: s.setTo === undefined ? undefined : -s.setTo,
+    })),
+  };
+}
+
+/** 기분파(캐스퐁): 날씨별 타입. 쾌청→불꽃, 비→물, 눈→얼음, 그 외→노말 */
+const FORECAST_TYPE_BY_WEATHER: Partial<Record<WeatherKind, PokemonType>> = {
+  쾌청: "불꽃",
+  비: "물",
+  눈: "얼음",
+};
+
+/**
+ * 기분파 특성 소유자(캐스퐁)의 타입을 현재 유효 날씨(activeWeather)에 맞춰 다시 설정한다.
+ * 날씨부정이 걸려 있으면 노말로 되돌아간다. 변신 중이면 건드리지 않는다.
+ */
+function applyForecastForm(fighter: BattleFighterState, weather: WeatherKind | undefined): void {
+  if (fighter.transformed) return;
+  if (!abilityOf(fighter)?.weatherFormChange) return;
+  const next = (weather && FORECAST_TYPE_BY_WEATHER[weather]) || "노말";
+  fighter.types = fighter.addedType ? [next, fighter.addedType] : [next];
+}
+
+/** 의태(메더): 필드별 타입. 일렉트릭필드→전기, 사이코필드→에스퍼, 그래스필드→풀, 미스트필드→페어리 */
+const MIMICRY_TYPE_BY_FIELD: Record<FieldKind, PokemonType> = {
+  일렉트릭필드: "전기",
+  사이코필드: "에스퍼",
+  그래스필드: "풀",
+  미스트필드: "페어리",
+};
+
+/**
+ * 의태 특성 소유자의 타입을 현재 필드에 맞춰 다시 설정한다. 필드가 있으면 그 필드 타입(단일),
+ * 없으면 종족 원래 타입으로 되돌린다. 필드 타입으로 "바뀌었을 때만" 그 타입을 돌려준다(로그용) —
+ * 원래 타입 복귀는 조용히 처리한다. 변신 중이면 건드리지 않는다.
+ */
+function applyMimicryForm(fighter: BattleFighterState, field: FieldKind | undefined): PokemonType | undefined {
+  if (fighter.transformed) return undefined;
+  if (!abilityOf(fighter)?.terrainTypeChange) return undefined;
+  const baseTypes = getPokemon(fighter.slot.pokemonId)?.types ?? fighter.types;
+  const next: PokemonType[] = field ? [MIMICRY_TYPE_BY_FIELD[field]] : [...baseTypes];
+  if (fighter.addedType && !next.includes(fighter.addedType)) next.push(fighter.addedType);
+  const changed = next.length !== fighter.types.length || next.some((t, i) => t !== fighter.types[i]);
+  fighter.types = next;
+  return changed && field ? next[0] : undefined;
 }
 
 /**
@@ -352,6 +594,7 @@ export function createFighterState(slot: EvaluatorSlot, moves: Move[]): BattleFi
     ownMoveTypeBoosts: {},
     stanceChangeForms: pokemon.stanceChangeForms,
     currentStanceForm: pokemon.stanceChangeForms ? "shield" : undefined,
+    hungerMode: "full",
   };
 }
 
@@ -371,6 +614,15 @@ function eulReul(name: string): "을" | "를" {
   const code = lastChar.charCodeAt(0) - 0xac00;
   if (code < 0 || code > 11171) return "를";
   return code % 28 === 0 ? "를" : "을";
+}
+
+/** "잠만보는"/"오롱털은" 같은 주제격 조사 — 받침 유무로 "는"/"은"을 자동 판별한다(통찰 로그용) */
+function eunNeun(name: string): "는" | "은" {
+  const lastChar = name.at(-1);
+  if (!lastChar) return "는";
+  const code = lastChar.charCodeAt(0) - 0xac00;
+  if (code < 0 || code > 11171) return "는";
+  return code % 28 === 0 ? "는" : "은";
 }
 
 /**
@@ -413,6 +665,8 @@ function hasSheerForceSecondaryEffect(move: Move): boolean {
   if (move.inflictsVolatile?.some((v) => v.target === "opponent")) return true;
   if (move.statChanges?.some((s) => s.target === "opponent")) return true;
   if (move.statChanges?.some((s) => s.target === "self" && (s.delta ?? 0) > 0)) return true;
+  // 소금절이·시럽봄: 상대에게 지속 상태(saltCure/syrupCoat)를 거는 데미지 기술 — 부가효과 취급.
+  if (move.setsSaltCure || move.setsSyrupCoat) return true;
   return false;
 }
 
@@ -423,8 +677,27 @@ function hasSheerForceSecondaryEffect(move: Move): boolean {
  * 뒤에도 currentItemId가 그대로 남아있어 곡예가 영영 발동하지 않는다).
  */
 function consumeItem(fighter: BattleFighterState): void {
+  const consumedId = fighter.currentItemId;
   fighter.itemConsumed = true;
   fighter.currentItemId = null;
+
+  // 공생(Ability.passesItemToConsumingAlly, Phase 8 §7): 본가라면 여기서 "같은 편 다른 활성
+  // 포켓몬이 공생 보유 + 무도구면 그 포켓몬의 도구를 이 fighter에게 넘긴다"를 처리한다. 3v3
+  // 싱글 교체에는 필드에 동시 아군이 없어 이 조건이 성립하는 순간이 없으므로 배선하지 않는다.
+
+  // 나무열매(이름이 "열매"로 끝나는 도구)를 소비했을 때만:
+  //  - 수확: 소비한 열매 id를 기록해 둔다(턴 종료 시 확률로 되돌림).
+  //  - 볼주머니: 그 열매 고유 효과와 별개로 최대 HP의 berryHealFraction만큼 추가 회복한다.
+  if (!consumedId) return;
+  const item = getItem(consumedId);
+  if (!item || !item.name.endsWith("열매")) return;
+  fighter.consumedBerryId = consumedId;
+  const frac = abilityOf(fighter)?.berryHealFraction;
+  if (frac && fighter.currentHp > 0 && fighter.currentHp < fighter.maxHp) {
+    const heal = Math.min(fighter.maxHp - fighter.currentHp, Math.max(1, Math.floor(fighter.maxHp * frac)));
+    fighter.currentHp += heal;
+    fighter.pendingCheekPouchHeal = (fighter.pendingCheekPouchHeal ?? 0) + heal;
+  }
 }
 
 /**
@@ -509,11 +782,38 @@ function resolveEntryWeather(
 }
 
 /**
- * 위협(상대 공격 하락)·일렉트릭메이커(필드 설치)·트레이스(상대 특성 복사) — 배틀 시작과 동시에
- * 발동하는 특성 3종을 한 번에 처리한다. 가뭄류(날씨)와 같은 이유로 실효 스피드가 빠른 쪽부터
- * 순서대로 적용한다. fighterA/fighterB는 이 함수 안에서 직접 변형된다(랭크 반영, 특성 교체).
- * 두 쪽 다 트레이스면 먼저 발동하는 쪽이 상대의 "원래" 특성을 복사하고, 나중 쪽은 그 시점에
- * 이미 바뀐 상대 특성을 복사한다(본가와 동일한 순서 의존성).
+ * 변신(Move.transformsIntoTarget)·괴짜(Ability.transformsIntoOpponentOnEntry) 공통 처리 —
+ * self를 target으로 변신시킨다. 타입·5실능(HP 제외)·특성·능력 랭크(급소율 포함)·기술 목록을
+ * target 것으로 복사하고, 복사한 기술의 PP는 각 min(5, 원래 최대 PP)로 채운다. 현재 HP·maxHp·
+ * 주 상태이상은 유지. slot.pokemonId(종 자체)는 바꾸지 않는다 — 변신 사용자가 메타몽뿐이라
+ * 몸무게·종별타입 기술 정도만 원본 종 기준으로 남고 실질 영향이 없다.
+ */
+function applyTransform(self: BattleFighterState, target: BattleFighterState): void {
+  self.types = [...target.types];
+  self.realStats = {
+    ...self.realStats,
+    atk: target.realStats.atk,
+    def: target.realStats.def,
+    spa: target.realStats.spa,
+    spd: target.realStats.spd,
+    spe: target.realStats.spe,
+  };
+  self.effectiveAbilityId = target.effectiveAbilityId;
+  self.stages = { ...target.stages };
+  self.accuracyStages = { ...target.accuracyStages };
+  self.critStage = target.critStage;
+  self.remainingPp = Object.fromEntries(
+    Object.keys(target.remainingPp).map((id) => [id, Math.min(5, getMove(id)?.pp ?? 5)]),
+  );
+  self.transformed = true;
+}
+
+/**
+ * 위협(상대 공격 하락)·일렉트릭메이커(필드 설치)·트레이스(상대 특성 복사)·괴짜(상대로 변신) —
+ * 배틀 시작과 동시에 발동하는 특성을 한 번에 처리한다. 가뭄류(날씨)와 같은 이유로 실효 스피드가
+ * 빠른 쪽부터 순서대로 적용한다. fighterA/fighterB는 이 함수 안에서 직접 변형된다(랭크 반영,
+ * 특성 교체, 변신). 두 쪽 다 트레이스면 먼저 발동하는 쪽이 상대의 "원래" 특성을 복사하고, 나중
+ * 쪽은 그 시점에 이미 바뀐 상대 특성을 복사한다(본가와 동일한 순서 의존성).
  */
 function resolveEntryAbilityEffects(
   aSlot: EvaluatorSlot,
@@ -529,7 +829,21 @@ function resolveEntryAbilityEffects(
     !aAbility?.setsFieldOnEntry &&
     !bAbility?.setsFieldOnEntry &&
     !aAbility?.copiesOpponentAbilityOnEntry &&
-    !bAbility?.copiesOpponentAbilityOnEntry
+    !bAbility?.copiesOpponentAbilityOnEntry &&
+    !aAbility?.revealsOpponentItemOnEntry &&
+    !bAbility?.revealsOpponentItemOnEntry &&
+    !aAbility?.transformsIntoOpponentOnEntry &&
+    !bAbility?.transformsIntoOpponentOnEntry &&
+    !aAbility?.negatesWeather &&
+    !bAbility?.negatesWeather &&
+    !aAbility?.revealsThreateningMovesOnEntry &&
+    !bAbility?.revealsThreateningMovesOnEntry &&
+    !aAbility?.revealsStrongestOpponentMoveOnEntry &&
+    !bAbility?.revealsStrongestOpponentMoveOnEntry &&
+    !aAbility?.clearsAllScreensOnEntry &&
+    !bAbility?.clearsAllScreensOnEntry &&
+    !aAbility?.lowersOpponentEvasionOnEntry &&
+    !bAbility?.lowersOpponentEvasionOnEntry
   ) {
     return { field: undefined, fieldTurnsRemaining: undefined, announcements: [] };
   }
@@ -549,6 +863,20 @@ function resolveEntryAbilityEffects(
   let fieldTurnsRemaining: number | undefined;
   const announcements: string[] = [];
 
+  // 배리어프리(Screen Cleaner): 등장 시 양쪽 스크린(리플렉터/빛의장막/오로라베일)을 전부 없앤다.
+  // 속도 순서와 무관한 1회 효과라 루프 밖에서 먼저 처리한다.
+  if (aAbility?.clearsAllScreensOnEntry || bAbility?.clearsAllScreensOnEntry) {
+    const cleanerSlot = aAbility?.clearsAllScreensOnEntry ? aSlot : bSlot;
+    const cleanerAbility = aAbility?.clearsAllScreensOnEntry ? aAbility : bAbility;
+    const cleanerName = getPokemon(cleanerSlot.pokemonId)?.name ?? "포켓몬";
+    const hadAny = Object.keys(aFighter.screens).length > 0 || Object.keys(bFighter.screens).length > 0;
+    aFighter.screens = {};
+    bFighter.screens = {};
+    if (hadAny) {
+      announcements.push(`${cleanerName}의 ${cleanerAbility?.name}! 양쪽의 빛의장막과 리플렉터가 사라졌다!`);
+    }
+  }
+
   for (const { slot, fighter, ability, opponent, opponentSlot } of order) {
     if (!ability) continue;
     const pokemonName = getPokemon(slot.pokemonId)?.name ?? "포켓몬";
@@ -556,9 +884,23 @@ function resolveEntryAbilityEffects(
     if (ability.lowersOpponentStatOnEntry) {
       const { stat, delta } = ability.lowersOpponentStatOnEntry;
       const before = opponent.stages[stat];
-      opponent.stages = applyStageDelta(opponent.stages, stat, delta);
+      opponent.stages = applyStageDelta(opponent.stages, stat, contraryDelta(opponent, delta));
       if (opponent.stages[stat] !== before) {
         announcements.push(`${pokemonName}의 ${ability.name}! 상대의 공격이 떨어졌다!`);
+      }
+    }
+    // 감미로운꿀(포챔스판): 등장 시 상대의 회피율을 1랭크 떨어뜨린다(위협의 회피율 버전).
+    if (ability.lowersOpponentEvasionOnEntry !== undefined) {
+      const opponentName = getPokemon(opponentSlot.pokemonId)?.name ?? "상대";
+      const before = opponent.accuracyStages.evasion;
+      const raw = before + contraryDelta(opponent, ability.lowersOpponentEvasionOnEntry);
+      opponent.accuracyStages = {
+        ...opponent.accuracyStages,
+        evasion: Math.max(-6, Math.min(6, raw)),
+      };
+      announcements.push(`${pokemonName}의 꿀에서 달콤한 향기가 나고 있다!`);
+      if (opponent.accuracyStages.evasion !== before) {
+        announcements.push(`${opponentName}의 회피율이 떨어졌다!`);
       }
     }
     if (ability.setsFieldOnEntry) {
@@ -577,42 +919,110 @@ function resolveEntryAbilityEffects(
       const copiedName = copiedAbility?.name ?? "특성";
       announcements.push(`${pokemonName}의 ${ability.name}! ${opponentName}의 ${copiedName}${eulReul(copiedName)} 복사했다!`);
     }
+    // 괴짜(Imposter): 등장하자마자 상대로 변신한다(변신 기술과 같은 처리). 메타몽 전용.
+    if (ability.transformsIntoOpponentOnEntry && !fighter.transformed) {
+      applyTransform(fighter, opponent);
+      const opponentName = getPokemon(opponentSlot.pokemonId)?.name ?? "상대";
+      announcements.push(
+        `${pokemonName}의 ${ability.name}! ${pokemonName}${eunNeun(pokemonName)} ${opponentName}${roEuro(opponentName)} 변신했다!`,
+      );
+    }
+    // 날씨부정(에어록/날씨부정): 등장하자마자 두 줄로 알린다. 실제 날씨 무시 처리는 activeWeather가 담당.
+    if (ability.negatesWeather) {
+      announcements.push(`${pokemonName}의 ${ability.name}!`);
+      announcements.push(`날씨의 영향이 없어졌다!`);
+    }
+    // 위험예지: 상대가 지닌 기술 중 자신에게 효과가 굉장한(상성 > 1) 기술이나 일격필살기(tags "일격")가
+    // 하나라도 있으면 한 줄로 알린다. 배틀 수치 영향 없음(통찰과 같은 정보 표시 훅).
+    if (ability.revealsThreateningMovesOnEntry) {
+      const threatened = Object.keys(opponent.remainingPp).some((mid) => {
+        const m = getMove(mid);
+        if (!m) return false;
+        if ((m.tags ?? []).includes("일격")) return true;
+        return !!m.type && getEffectiveness(m.type, fighter.types) > 1;
+      });
+      if (threatened) {
+        announcements.push(`${pokemonName}${eunNeun(pokemonName)} 몸을 떨었다!`);
+      }
+    }
+    // 예지몽: 상대가 지닌 기술 중 가장 위력이 높은 것을 한 줄로 알린다(통찰 패턴, 정보 표시 전용).
+    if (ability.revealsStrongestOpponentMoveOnEntry) {
+      let best: Move | undefined;
+      for (const mid of Object.keys(opponent.remainingPp)) {
+        const m = getMove(mid);
+        if (!m) continue;
+        if (!best || (m.power ?? 0) > (best.power ?? 0)) best = m;
+      }
+      if (best) {
+        const opponentName = getPokemon(opponentSlot.pokemonId)?.name ?? "상대";
+        announcements.push(
+          `${pokemonName}${eunNeun(pokemonName)} ${opponentName}의 ${best.name}${eulReul(best.name)} 간파했다!`,
+        );
+      }
+    }
+    // 통찰: 상대가 도구를 지녔을 때만 두 줄로 알린다. 배틀 수치 영향 없음(정보 표시 전용).
+    if (ability.revealsOpponentItemOnEntry && opponent.currentItemId) {
+      const revealedItem = getItem(opponent.currentItemId);
+      if (revealedItem) {
+        announcements.push(`${pokemonName}의 ${ability.name}!`);
+        announcements.push(
+          `${pokemonName}${eunNeun(pokemonName)} ${revealedItem.name}${eulReul(revealedItem.name)} 통찰했다!`,
+        );
+      }
+    }
   }
 
   return { field, fieldTurnsRemaining, announcements };
 }
 
-export function createBattleState(
-  a: EvaluatorSlot,
-  aMoves: Move[],
-  b: EvaluatorSlot,
-  bMoves: Move[],
-  weather?: WeatherKind,
-): BattleState {
-  const fighterA = createFighterState(a, aMoves);
-  const fighterB = createFighterState(b, bMoves);
+/** 한 진영의 초기 구성. 배틀타워는 slots 3개, 향후 다른 포맷을 위해 길이는 고정하지 않는다. */
+export interface SideInit {
+  slots: EvaluatorSlot[];
+  /** slots와 같은 순서의 기술 목록. movesList[i]가 slots[i]의 지닌 기술. */
+  movesList: Move[][];
+  /** 선봉(리드) 인덱스. 생략 시 0 = 첫 슬롯이 리드. */
+  leadIndex?: number;
+}
+
+export function createBattleState(init: { a: SideInit; b: SideInit; weather?: WeatherKind }): BattleState {
+  const leadA = init.a.leadIndex ?? 0;
+  const leadB = init.b.leadIndex ?? 0;
+  const partyA = init.a.slots.map((slot, i) => createFighterState(slot, init.a.movesList[i] ?? []));
+  const partyB = init.b.slots.map((slot, i) => createFighterState(slot, init.b.movesList[i] ?? []));
+  const aSlot = init.a.slots[leadA];
+  const bSlot = init.b.slots[leadB];
+  const fighterA = partyA[leadA];
+  const fighterB = partyB[leadB];
   const {
     weather: resolvedWeather,
     weatherTurnsRemaining,
     announcements: weatherAnnouncements,
-  } = resolveEntryWeather(a, fighterA, b, fighterB, weather);
+  } = resolveEntryWeather(aSlot, fighterA, bSlot, fighterB, init.weather);
   const {
     field: entryField,
     fieldTurnsRemaining,
     announcements: abilityAnnouncements,
-  } = resolveEntryAbilityEffects(a, fighterA, b, fighterB);
+  } = resolveEntryAbilityEffects(aSlot, fighterA, bSlot, fighterB);
 
-  return {
+  const state: BattleState = {
     a: fighterA,
     b: fighterB,
+    sideA: { party: partyA, activeIndex: leadA, hazards: emptyHazardState() },
+    sideB: { party: partyB, activeIndex: leadB, hazards: emptyHazardState() },
     weather: resolvedWeather,
     weatherTurnsRemaining,
     field: entryField,
     fieldTurnsRemaining,
-    stealthRock: { a: false, b: false },
     turnNumber: 0,
     entryAnnouncements: [...weatherAnnouncements, ...abilityAnnouncements],
   };
+  // 기분파(캐스퐁): 등장 시점의 유효 날씨(날씨부정 반영)에 맞춰 타입을 맞춰둔다.
+  applyForecastForm(state.a, activeWeather(state));
+  applyForecastForm(state.b, activeWeather(state));
+  // 의태(메더): 등장 시점 필드에 맞춰 타입을 맞춰둔다(첫 턴 시작 훅이 안내는 따로 낸다).
+  applyMimicryForm(state.a, state.field);
+  applyMimicryForm(state.b, state.field);
+  return state;
 }
 
 /**
@@ -632,6 +1042,7 @@ export type ActionBlockReason =
   | "confusion"
   | "attract"
   | "psychicFieldPriority"
+  | "queenlyMajesty"
   | "usageCondition"
   | "moveRestricted";
 
@@ -691,7 +1102,13 @@ export interface ActionLogEntry {
   fieldSetFailed?: boolean;
   /** 스텔스록을 어느 진영에 깔았으면 그 진영 키(a/b). 로그 문구용 */
   stealthRockSetForSide?: FighterKey;
-  /** 스텔스록을 깔려 했으나 이미 그 진영에 깔려 있어 실패했으면 true */
+  /** 압정뿌리기(스파이크)를 어느 진영에 새 층을 깔았으면 그 진영 키(a/b). 비검천중파·암석액스·압정뿌리기 */
+  spikesSetForSide?: FighterKey;
+  /** 독압정을 어느 진영에 새 층을 깔았으면 그 진영 키(a/b) */
+  toxicSpikesSetForSide?: FighterKey;
+  /** 끈적끈적네트를 어느 진영에 깔았으면 그 진영 키(a/b) */
+  stickyWebSetForSide?: FighterKey;
+  /** 설치기를 깔려 했으나 이미 최대라 실패했으면 true */
   hazardSetFailed?: boolean;
   /**
    * 매직미러로 이 변화기가 시전자에게 되돌아갔으면 그 기술 이름. 이 플래그가 있으면 아래
@@ -718,6 +1135,11 @@ export interface ActionLogEntry {
   setScreen?: "reflect" | "lightScreen" | "auroraVeil";
   /** 리플렉터/빛의장막을 썼지만 이미 같은 스크린이 걸려있어서 실패했으면 true */
   screenSetFailed?: boolean;
+  /**
+   * 레이징불·깨트리기(Move.breaksScreensOnHit)로 명중해서 상대 쪽 스크린을 부쉈으면 그 목록.
+   * 데미지 계산은 스크린이 살아있는 상태로 이미 끝난 뒤에 제거한다(그 턴엔 아직 경감됨).
+   */
+  brokeScreens?: ("reflect" | "lightScreen" | "auroraVeil")[];
   /**
    * 플레어드라이브·웨이브태클·브레이브버드·양날박치기(Move.recoilFraction)로 입은 반동 데미지.
    * selfDamage(혼란 자멸/발버둥 반동)와는 계산 기준이 달라 별도 필드로 분리했다 — 준 데미지가
@@ -780,6 +1202,16 @@ export interface ActionLogEntry {
   encoreSetFailed?: boolean;
   /** 파워트릭으로 자신의 두 실수치를 맞바꿨으면 그 기술 이름 */
   swappedStatsMoveName?: string;
+  /** 가드셰어로 자신·상대의 방어·특방 실능을 평균냈으면 그 기술 이름 */
+  averagedDefensesMoveName?: string;
+  /** 스피드스왑으로 자신·상대의 스피드 실능을 맞바꿨으면 그 기술 이름 */
+  swappedSpeedMoveName?: string;
+  /** 셸암즈(dynamicCategoryByHigherDamage)가 이번에 물리/특수 중 어느 판정으로 나갔는지 */
+  shellSideArmCategory?: "physical" | "special";
+  /** 변신으로 상대(이 종)로 변신했으면 그 종 이름 */
+  transformedIntoName?: string;
+  /** 변신을 썼지만 이미 변신 상태라 실패했으면 true */
+  transformFailed?: boolean;
   /** 우격다짐(또는 같은 축의 특성)이 이번 기술의 부가효과를 없애고 위력을 올렸으면 그 특성 이름 */
   sheerForceAbilityName?: string;
   /** 이 행동(상대를 공격)으로 상대의 대타가 이번 타격에 깨졌으면 true */
@@ -864,6 +1296,22 @@ export interface ActionLogEntry {
   abilityDisabledMoveName?: string;
   /** abilityDisabledMoveName을 봉인시킨 특성 이름 */
   abilityDisableAbilityName?: string;
+  /** 나쁜손버릇으로 피격측이 공격자에게서 빼앗은 도구 이름 */
+  pickpocketStolenItemName?: string;
+  /** pickpocketStolenItemName을 빼앗은 특성 이름(나쁜손버릇) */
+  pickpocketAbilityName?: string;
+  /** 미라로 공격자의 특성을 바꿨으면 그 특성 이름(=미라) */
+  mummifiedAttackerAbilityName?: string;
+  /** 심플빔류로 상대 특성을 바꿨으면 바뀐 특성 이름 */
+  abilitySwappedTargetToName?: string;
+  /** 심플빔류를 썼으나 상대가 이미 그 특성이라 실패했으면 true */
+  abilitySwapFailed?: boolean;
+  /** 볼가득넣기로 먹은 나무열매 이름 */
+  ateBerryName?: string;
+  /** 볼가득넣기로 먹은 나무열매가 HP를 회복시켰으면 그 회복량 */
+  ateBerryHeal?: number;
+  /** 볼가득넣기를 썼으나 지닌 나무열매가 없어 실패했으면 true */
+  berryEatFailed?: boolean;
   /** 지구력·깨어진갑옷처럼 방어측 특성이 피격 시 자기 랭크를 바꿨으면 그 특성 이름 */
   abilityRaisedDefenderStatsAbilityName?: string;
   /** abilityRaisedDefenderStatsAbilityName이 올린 스탯·폭 */
@@ -874,6 +1322,42 @@ export interface ActionLogEntry {
   abilityAbsorbedMoveType?: PokemonType;
   /** abilityAbsorbedMoveType을 무효화한 특성 이름 */
   abilityAbsorbAbilityName?: string;
+  /** 방음처럼 방어측 특성이 이 소리 기술을 완전히 무효화했으면 그 특성 이름 */
+  soundproofBlockedByAbilityName?: string;
+  /** 방탄처럼 방어측 특성이 이 구슬·폭탄 기술을 완전히 무효화했으면 그 특성 이름 */
+  bulletproofBlockedByAbilityName?: string;
+  /** 아로마베일처럼 방어측 특성이 헤롱헤롱·도발·기술봉인·앙코르를 막았으면 그 특성 이름 */
+  mentalMoveBlockedByAbilityName?: string;
+  /** 뒤집어엎기로 상대의 능력 랭크 변화를 전부 반전시켰으면 true */
+  invertedTargetStages?: boolean;
+  /** 숲의저주·핼러윈으로 상대에게 추가한 타입 (배틀 끝까지 유지) */
+  addedTypeToTarget?: PokemonType;
+  /** 송전으로 이번 턴 상대 기술 타입을 이 타입으로 바꿨으면 그 타입 */
+  targetMoveTypeOverride?: PokemonType;
+  /** 미끈미끈·점착처럼 방어측 특성이 접촉한 공격자의 랭크를 내렸으면 그 특성 이름 */
+  abilityLoweredAttackerStatsAbilityName?: string;
+  /** abilityLoweredAttackerStatsAbilityName이 바꾼 스탯·폭 */
+  abilityLoweredAttackerStats?: { stat: BattleStatKey; delta: number }[];
+  /** 볼주머니 — 나무열매를 먹어 추가 회복이 발동했으면 그 회복량 */
+  cheekPouchHeal?: number;
+  /** 부리캐논 가열 중 접촉기로 맞아 공격자가 화상을 입었으면 true */
+  beakBlastBurnedAttacker?: boolean;
+  /** 토치카가 접촉기를 막아 공격자에게 건 주 상태이상(poison) */
+  protectContactInflictedStatus?: StatusConditionState["condition"];
+  /** 발끈 — 상대 기술 데미지로 HP 절반 이하가 되어 방어측 특수공격이 올랐으면 true */
+  angerPointRaisedSpa?: boolean;
+  /** angerPointRaisedSpa를 발동시킨 특성 이름 */
+  angerPointAbilityName?: string;
+  /** 소울비트 — HP를 소비했으면 그 소비량 */
+  soulBeatHpCost?: number;
+  /** 소울비트 — 현재 HP가 소비량 이하라 실패했으면 true */
+  soulBeatFailed?: boolean;
+  /** 떠도는영혼 — 접촉 피격으로 공격자와 특성을 맞바꿨으면 true */
+  wanderingSpiritSwapped?: boolean;
+  /** 모래뿜기 — 피격으로 날씨를 바꿨으면 그 날씨 */
+  sandSpitWeather?: WeatherKind;
+  /** 마법가루 — 상대의 타입을 이 타입 하나로 덮어썼으면 그 타입 */
+  overwroteTargetType?: PokemonType;
   /** 저수처럼 absorbsType이 랭크업 대신 회복을 줄 때, 그 회복량 */
   abilityAbsorbHealAmount?: number;
   /** 흑안개처럼 이 행동으로 양쪽의 능력 랭크 변화가 전부 초기화됐으면 true */
@@ -900,6 +1384,18 @@ export interface ActionLogEntry {
    * "왜 같이 쓰러졌는지" 전용 문구를 보여줄 수 있게 별도 플래그로 남긴다.
    */
   triggeredDestinyBond?: boolean;
+  /** 편승 — 상대가 이번 기술로 올린 랭크를 그대로 복사해 자신도 올렸으면 그 목록 */
+  opportunistCopiedStats?: { stat: BattleStatKey; delta: number }[];
+  /** opportunistCopiedStats를 발동시킨 특성 이름 */
+  opportunistAbilityName?: string;
+  /** 전기로바꾸기 — 충전 상태라 이번 전기 기술의 위력이 2배가 됐으면 그 특성 이름 */
+  electromorphosisEmpoweredAbilityName?: string;
+  /** 변덕레이저 — 확률 발동으로 위력이 2배가 됐으면 true */
+  fickleBeamEmpowered?: boolean;
+  /** 정리정돈 — 명중해서 설치물·대타를 정리했으면 true ("정리정돈 끝!" 문구용) */
+  tidyUpDone?: boolean;
+  /** 소금절이 — 명중해서 상대를 소금절이 상태로 만들었으면 true */
+  saltCureApplied?: boolean;
 }
 
 /** 턴 종료 시 상태이상 데미지 로그 */
@@ -944,18 +1440,49 @@ export interface EndOfTurnLogEntry {
   speedBoostAbilityName?: string;
   /** speedBoostAbilityName이 있는데 이미 스피드 +6이라 실제로는 안 올랐으면 true — "더 이상 올라가지 않는다!" 문구용 */
   speedBoostAtCap?: boolean;
+  /** 변덕쟁이: 턴 종료 시 랜덤 능력이 2랭크 올랐으면 [올라간 스탯, 내려간 스탯]과 특성 이름 */
+  moodyRaisedStat?: BattleStatKey;
+  moodyLoweredStat?: BattleStatKey;
+  moodyAbilityName?: string;
+  /** 포이즌힐: 독·맹독 데미지 대신 회복한 양 */
+  poisonHealAmount?: number;
+  /** poisonHealAmount를 준 특성 이름 */
+  poisonHealAbilityName?: string;
+  /** 건조피부: 쾌청 등 날씨로 턴 종료 시 입은 피해량(특성 기인) */
+  abilityWeatherDamage?: number;
+  /** abilityWeatherDamage를 준 특성 이름 */
+  abilityWeatherDamageAbilityName?: string;
   /** 모래바람 틱 데미지면 true (damage에 실제 수치) — §1 F-3 */
   sandstormDamage?: boolean;
+  /** 속박(조이기·집게덫류) 지속 데미지면 true (damage에 실제 수치) */
+  boundDamage?: boolean;
+  /** 소금절이 지속 데미지면 true (damage에 실제 수치). 강철/물 타입이라 1/8이었으면 saltCureHeavy도 true */
+  saltCureDamage?: boolean;
+  saltCureHeavy?: boolean;
+  /** 물엿범벅(시럽봄): 턴 종료 시 스피드가 1랭크 떨어졌으면 true */
+  syrupCoatDrop?: boolean;
   /** 멸망의노래 카운트 안내(F-4) — 이번 턴 종료 시점의 남은 카운트(3→2→1) */
   perishCount?: number;
   /** 멸망의노래 카운트가 0에 도달해 이번 턴 종료에 쓰러졌으면 true */
   perishFainted?: boolean;
+  /** 볼주머니: 턴 종료 시 나무열매를 먹어 발동한 추가 회복량 */
+  cheekPouchHeal?: number;
+  /** 수확: 턴 종료 시 되돌린 나무열매 이름 */
+  harvestRestoredBerryName?: string;
+  /** 꼬르륵스위치: 턴 종료 시 바뀐 모양 */
+  hungerModeChangedTo?: "full" | "hangry";
 }
 
 export interface TurnResult {
   turnNumber: number;
   /** 이번 턴 실제로 먼저 행동한 쪽 */
   order: [FighterKey, FighterKey];
+  /**
+   * 이번 턴에 실제로 행동한(=교체 선처리 직후 활성이던) 포켓몬 종 id. 로그에서 "누가 이 기술을
+   * 썼나"를 현재 활성이 아니라 그 턴 기준으로 표시하려고 스냅샷해 둔다(Phase 8 §3 — 교체 이후
+   * 과거 턴 로그가 현재 활성 이름으로 잘못 표시되던 문제).
+   */
+  activePokemonIds: Record<FighterKey, string>;
   actions: ActionLogEntry[];
   endOfTurn: EndOfTurnLogEntry[];
   /**
@@ -982,6 +1509,26 @@ export interface TurnResult {
   weatherExpired?: boolean;
   /** 이번 턴에 사라진 스크린(리플렉터/빛의장막) 목록 — 양쪽에 동시에 걸려있을 수 있어 배열 */
   expiredScreens: { actor: FighterKey; screen: "reflect" | "lightScreen" | "auroraVeil" }[];
+  /** 턴 시작 시점에 발생한 안내 문구(의태 타입 변화 등). 없으면 빈 배열 */
+  turnStartAnnouncements: string[];
+  /**
+   * 이번 턴 처리된 교체(Phase 8 §3). 한쪽 교체면 1개, 양쪽 교체면 2개, 교체 없으면 빈 배열.
+   * 교체 우선도상 항상 기술보다 먼저 처리되므로 로그에서도 actions 앞에 놓는다.
+   */
+  switches: SwitchLogEntry[];
+}
+
+/** 이번 턴 한 편에서 일어난 교체(플레이어 선택) — 로그 문구용 */
+export interface SwitchLogEntry {
+  side: FighterKey;
+  fromIndex: number;
+  toIndex: number;
+  /** 물러난 포켓몬 종 id */
+  outPokemonId: string;
+  /** 새로 나온 포켓몬 종 id */
+  inPokemonId: string;
+  /** 이 교체로 발생한 등장/퇴장 안내(재생력·자연회복·위협·날씨 등, Phase 8 §4). 없으면 빈 배열 */
+  entryMessages: string[];
 }
 
 function isFainted(fighter: BattleFighterState): boolean {
@@ -1001,6 +1548,294 @@ function cloneFighter(fighter: BattleFighterState): BattleFighterState {
     screens: { ...fighter.screens },
     ownMoveTypeBoosts: { ...fighter.ownMoveTypeBoosts },
   };
+}
+
+/** 편(side) 전체를 깊은 복사한다 — 파티 슬롯 전원 + 설치물. runTurn이 prevState를 안 건드리게 쓴다. */
+function cloneSide(side: BattleSide): BattleSide {
+  return {
+    party: side.party.map(cloneFighter),
+    activeIndex: side.activeIndex,
+    hazards: { ...side.hazards },
+  };
+}
+
+/** 편에 활성 슬롯 말고 아직 안 쓰러진 슬롯이 하나라도 있으면 true(파티 길이 1이면 항상 false) */
+function hasLivingReserve(side: BattleSide): boolean {
+  return side.party.some((f, i) => i !== side.activeIndex && !isFainted(f));
+}
+
+/**
+/**
+ * 압정뿌리기·독압정·끈적끈적네트가 실제로 발동하는 "접지" 상태인지(Phase 8 §6).
+ * 비행 타입, 부유·천정부지(땅 면역 특성) 보유자는 비접지. 에어벌룬·텔레키네시스 등은
+ * 로스터에 없어 미반영(fieldEffects와 동일한 단순화). 스텔스록은 접지 무관이라 이 판정을 안 쓴다.
+ */
+function isGroundedForHazards(fighter: BattleFighterState): boolean {
+  if (fighter.types.includes("비행")) return false;
+  const ab = abilityOf(fighter);
+  if (ab?.grantsImmunityToTypes?.includes("땅")) return false;
+  return true;
+}
+
+/** 압정뿌리기 층수별 등장 데미지 비율 (사용자 확정: 1→1/16 · 2→1/8 · 3→1/4) */
+const SPIKES_DAMAGE_FRACTION_BY_LAYER: Record<number, number> = { 1: 1 / 16, 2: 1 / 8, 3: 1 / 4 };
+/** 스텔스록 등장 데미지 기준 비율(바위 상성 배율을 곱한다) */
+const STEALTH_ROCK_BASE_FRACTION = 1 / 8;
+
+/**
+ * 교체로 나온 포켓몬이 상대 진영 설치물을 밟을 때의 처리(Phase 8 §6). performSwitch에서
+ * 등장 특성보다 먼저 호출한다. 순서:
+ *  1. 독타입이면 독압정을 흡수해 제거
+ *  2. 스텔스록 등장 데미지(바위 상성 배율, 매직가드가 막음)
+ *  3. 접지 상태면: 압정뿌리기 데미지(매직가드가 막음) → 독압정 중독 → 끈적끈적네트 스피드 -1
+ */
+function applyEntryHazardsOnSwitchIn(state: BattleState, key: FighterKey, log: string[]): void {
+  const self = state[key];
+  if (isFainted(self)) return;
+  const hz = sideOf(state, key).hazards;
+  const selfName = getPokemon(self.slot.pokemonId)?.name ?? "포켓몬";
+  const selfAbility = abilityOf(self);
+  const magicGuard = !!selfAbility?.negatesIndirectDamage;
+
+  // 1. 독타입 등장 → 독압정 흡수
+  if (hz.toxicSpikesLayers > 0 && self.types.includes("독")) {
+    hz.toxicSpikesLayers = 0;
+    log.push(`${selfName}${eunNeun(selfName)} 독압정을 흡수했다!`);
+  }
+
+  // 2. 스텔스록 (접지 무관, 바위 상성)
+  if (hz.stealthRock && !magicGuard) {
+    const eff = getEffectiveness("바위", self.types);
+    if (eff > 0) {
+      const dmg = Math.max(1, Math.floor(self.maxHp * STEALTH_ROCK_BASE_FRACTION * eff));
+      self.currentHp = Math.max(0, self.currentHp - dmg);
+      log.push(`뾰족한 바위가 ${selfName}${eulReul(selfName)} 덮쳤다! (${dmg} 데미지)`);
+    }
+  }
+  if (isFainted(self)) return;
+
+  // 3. 접지 대상만: 압정뿌리기 · 독압정 · 끈적끈적네트
+  if (isGroundedForHazards(self)) {
+    if (hz.spikesLayers > 0 && !magicGuard) {
+      const frac = SPIKES_DAMAGE_FRACTION_BY_LAYER[hz.spikesLayers] ?? 1 / 16;
+      const dmg = Math.max(1, Math.floor(self.maxHp * frac));
+      self.currentHp = Math.max(0, self.currentHp - dmg);
+      log.push(`${selfName}${eunNeun(selfName)} 압정에 상처를 입었다! (${dmg} 데미지)`);
+    }
+    if (isFainted(self)) return;
+
+    if (
+      hz.toxicSpikesLayers > 0 &&
+      !self.status.condition &&
+      !isImmuneToStatus(hz.toxicSpikesLayers >= 2 ? "badly-poisoned" : "poison", self.types, statusImmunitiesOf(self, selfAbility)) &&
+      !isStatusBlockedByField(state.field, "poison")
+    ) {
+      const cond: StatusCondition = hz.toxicSpikesLayers >= 2 ? "badly-poisoned" : "poison";
+      self.status = inflictStatus(self.status, cond);
+      log.push(
+        cond === "badly-poisoned"
+          ? `${selfName}의 몸에 맹독이 퍼졌다!`
+          : `${selfName}의 몸에 독이 퍼졌다!`,
+      );
+    }
+
+    if (hz.stickyWeb) {
+      const before = self.stages.spe;
+      self.stages = applyStageDelta(self.stages, "spe", contraryDelta(self, -1));
+      if (self.stages.spe !== before) {
+        log.push(`${selfName}${eunNeun(selfName)} 끈적끈적네트에 걸려 스피드가 떨어졌다!`);
+      }
+    }
+  }
+}
+
+/**
+ * 교체로 나온 포켓몬 하나에 대해 "등장 시 특성"을 적용한다(Phase 8 §4 골격).
+ * createBattleState의 resolveEntryAbilityEffects는 양쪽을 스피드 순으로 동시에 처리하는
+ * 배틀 시작 전용이라, 한 마리만 등장하는 교체용으로 이 단일 버전을 따로 둔다.
+ * 처리: 위협(상대 랭크 하락) · 가뭄류(날씨) · 일렉트릭메이커류(필드) · 트레이스(상대 특성 복사).
+ * (다운로드·기분파 등은 로스터에 없거나 다른 훅에서 처리.)
+ */
+function applyEntryAbilityOnSwitchIn(state: BattleState, key: FighterKey, log: string[]): void {
+  const self = state[key];
+  const oppKey = opponentKey(key);
+  const opponent = state[oppKey];
+  const ability = self.effectiveAbilityId ? getAbility(self.effectiveAbilityId) : undefined;
+  if (!ability || isFainted(self)) return;
+  const selfName = getPokemon(self.slot.pokemonId)?.name ?? "포켓몬";
+
+  // 위협류
+  if (ability.lowersOpponentStatOnEntry && !isFainted(opponent)) {
+    const { stat, delta } = ability.lowersOpponentStatOnEntry;
+    const before = opponent.stages[stat];
+    opponent.stages = applyStageDelta(opponent.stages, stat, contraryDelta(opponent, delta));
+    if (opponent.stages[stat] !== before) {
+      log.push(`${selfName}의 ${ability.name}! 상대의 공격이 떨어졌다!`);
+    }
+  }
+  // 가뭄·잔비·모래날림·눈퍼뜨리기: 다른 날씨가 있어도 덮어쓴다(기술 setsWeather와 동일)
+  if (ability.setsWeather) {
+    const weather = ability.setsWeather;
+    state.weather = weather;
+    state.weatherTurnsRemaining =
+      WEATHER_DURATION + weatherRockBonus(weather, state.a.slot, state.b.slot);
+    log.push(`${selfName}의 ${ability.name}! 날씨가 ${weather}${roEuro(weather)} 바뀌었다!`);
+    applyForecastForm(state.a, activeWeather(state));
+    applyForecastForm(state.b, activeWeather(state));
+  }
+  // 일렉트릭메이커류: 이미 다른 필드가 있으면 실패
+  if (ability.setsFieldOnEntry) {
+    if (state.field) {
+      log.push(`${selfName}의 ${ability.name}! 하지만 이미 다른 필드가 있어 실패했다!`);
+    } else {
+      state.field = ability.setsFieldOnEntry;
+      state.fieldTurnsRemaining = FIELD_DURATION;
+      log.push(`${selfName}의 ${ability.name}! 필드가 ${state.field}(으)로 바뀌었다!`);
+      applyMimicryForm(self, state.field);
+    }
+  }
+  // 트레이스: 상대의 현재 특성을 복사
+  if (ability.copiesOpponentAbilityOnEntry && opponent.effectiveAbilityId && !isFainted(opponent)) {
+    const copied = getAbility(opponent.effectiveAbilityId);
+    self.effectiveAbilityId = opponent.effectiveAbilityId;
+    const opponentName = getPokemon(opponent.slot.pokemonId)?.name ?? "상대";
+    const copiedName = copied?.name ?? "특성";
+    log.push(`${selfName}의 ${ability.name}! ${opponentName}의 ${copiedName}${eulReul(copiedName)} 복사했다!`);
+  }
+}
+
+/**
+ * 편(side)의 활성 슬롯을 toIndex로 바꾼다(Phase 8 §3). 물러나는 포켓몬의 "슬롯에 종속된"
+ * 휘발 상태(랭크·행동방해·차지·비축·연속기 잠금 등)를 본가 규칙대로 초기화하고, 나가는 쪽에
+ * 재생력·자연회복을, 새로 나온 쪽에 폼(기분파·의태)·스탠스·등장 특성(위협·날씨 등)을 적용한다.
+ * state.a/state.b 포인터도 다시 문다. 발생한 안내 문구는 log 배열에 push한다.
+ *
+ * 설치물 발동(스텔스록 등장 데미지 등)은 §5에서 이 함수의 "등장 파이프라인" 지점에 붙는다.
+ * toIndex가 현재 활성이거나 범위를 벗어나면 아무것도 안 한다.
+ */
+function performSwitch(
+  state: BattleState,
+  key: FighterKey,
+  toIndex: number,
+  log: string[] = [],
+  /** 자기 의지로 교체했으면 true(runTurn 교체 액션). 기절 후 강제 교체(applySwitch)면 false — 가속 발동. */
+  voluntary = true,
+): void {
+  const side = sideOf(state, key);
+  if (toIndex === side.activeIndex || toIndex < 0 || toIndex >= side.party.length) return;
+  const outgoing = side.party[side.activeIndex];
+
+  // ── 물러나는 포켓몬: 재생력·자연회복(살아서 물러날 때만) ──
+  // 별도 로그 문구는 내지 않는다(사용자 결정 2026-09-03) — 파티 트래커의 HP 바 회복·상태이상
+  // 마크 소멸로만 보여준다.
+  if (!isFainted(outgoing)) {
+    const outAbility = outgoing.effectiveAbilityId ? getAbility(outgoing.effectiveAbilityId) : undefined;
+    if (outAbility?.healsFractionOnSwitchOut && outgoing.currentHp < outgoing.maxHp) {
+      const heal = Math.min(
+        outgoing.maxHp - outgoing.currentHp,
+        Math.max(1, Math.floor(outgoing.maxHp * outAbility.healsFractionOnSwitchOut)),
+      );
+      outgoing.currentHp += heal;
+    }
+    if (outAbility?.curesStatusOnSwitchOut && outgoing.status.condition) {
+      outgoing.status = { ...NO_STATUS_CONDITION };
+    }
+  }
+
+  // ── 물러나는 포켓몬: 슬롯 종속 상태 초기화 ──
+  outgoing.stages = { ...NEUTRAL_STAGES };
+  outgoing.accuracyStages = { ...NEUTRAL_ACCURACY_STAGES };
+  outgoing.critStage = NEUTRAL_CRIT_STAGE;
+  outgoing.statStagesAtTurnStart = undefined;
+  // 행동방해류(혼란·도발·앙코르·사슬묶기·씨뿌리기·헤롱헤롱·뿌리박기·아쿠아링 등) 전부 해제.
+  // 단 소금절이(saltCure)는 교체로 풀리지 않는다(본가) — 그것만 남긴다.
+  {
+    const kept = outgoing.volatile.active.saltCure;
+    outgoing.volatile = { active: kept ? { saltCure: kept } : {} };
+  }
+  outgoing.chargingMoveId = undefined;
+  outgoing.lastMoveId = undefined;
+  outgoing.lastMoveStreak = undefined;
+  outgoing.stockpileCount = undefined;
+  outgoing.perishCount = undefined;
+  outgoing.destinyBondArmed = undefined;
+  outgoing.substituteHp = undefined;
+  outgoing.activeProtect = undefined;
+  outgoing.protectStreak = undefined;
+  outgoing.moveTypeOverrideThisTurn = undefined;
+  outgoing.electroChargedForElectric = undefined;
+  outgoing.damageTakenThisTurn = { physical: 0, special: 0 };
+  outgoing.consecutiveLockMoveId = undefined;
+  outgoing.consecutiveLockUntilTurn = undefined;
+  // 곡예(Unburden): 본가는 "도구를 잃은 뒤 교체하기 전까지"만 2배 유지 — 교체로 물러나면 해제(§8).
+  outgoing.unburdenActive = undefined;
+  // 유지: currentHp · status(주 상태이상) · remainingPp · itemConsumed · currentItemId ·
+  //       consumedBerryId · addedType · timesHitByMoves(교체 초기화 미도입) · ownMoveTypeBoosts ·
+  //       disguiseBroken · hungerMode.
+  //   후속: screens(편 기반 미이전 — 알려진 단순화) · transformed(변신 원복 — 메타몽 전용이라 미도입) ·
+  //         wish(그 자리 포켓몬이 받아야 하나 fighter에 붙어 있어 교체로 소멸 — post-1.0 §6).
+
+  // ── 활성 슬롯 전환 ──
+  side.activeIndex = toIndex;
+  if (key === "a") state.a = side.party[toIndex];
+  else state.b = side.party[toIndex];
+  const incoming = side.party[toIndex];
+
+  // 가속 억제(§8): 자발적 교체로 나온 턴엔 가속이 발동하지 않는다. 강제 교체(voluntary=false)면 세우지 않음.
+  incoming.switchedInThisTurn = voluntary || undefined;
+  // 킬가르도: 등장 시 항상 실드폼으로 복귀
+  if (incoming.stanceChangeForms) incoming.currentStanceForm = "shield";
+  // 기분파·의태: 등장 시점의 날씨/필드에 맞춰 타입 정렬
+  applyForecastForm(incoming, activeWeather(state));
+  applyMimicryForm(incoming, state.field);
+
+  // ── 등장 파이프라인 (Phase 8 §4·§6) ──
+  // 1. 설치물 발동 — 스텔스록 등장 데미지, 압정뿌리기 스택, 독압정 중독, 끈적끈적네트 스피드 다운,
+  //    독타입이면 독압정 흡수. 스텔스록·압정 데미지는 매직가드가 막는다(ability.ts:307 주석 참조 —
+  //    인분은 "기술의 추가효과"만 막아 설치물엔 무관).
+  applyEntryHazardsOnSwitchIn(state, key, log);
+  // 2. 등장 특성 — 위협·가뭄류·필드·트레이스. 설치물로 이미 기절했으면 스킵된다(내부에서 isFainted 가드).
+  applyEntryAbilityOnSwitchIn(state, key, log);
+
+  // TODO(§8): 추격(Pursuit)은 로스터에 없어 미구현 — 교체 대상을 위력 2배로 선타하는 예외.
+}
+
+export interface ApplySwitchOutcome {
+  nextState: BattleState;
+  /** 이 교체로 처리된 등장/퇴장 안내(재생력·자연회복·위협·날씨 등). 없으면 빈 배열 */
+  entryMessages: string[];
+  /** 물러난/새로 나온 포켓몬 종 id. 강제 교체 로그 문구용 */
+  outPokemonId: string;
+  inPokemonId: string;
+}
+
+/**
+ * 강제 교체(기절 후) 또는 UI 교체 확정을 적용한 새 상태를 돌려준다. runTurn 밖에서 호출하며
+ * prevState는 변형하지 않는다. turnNumber는 그대로 둔다(교체는 턴을 소비하지 않는 별도 조작).
+ */
+export function applySwitch(prevState: BattleState, key: FighterKey, toIndex: number): ApplySwitchOutcome {
+  const sideA = cloneSide(prevState.sideA);
+  const sideB = cloneSide(prevState.sideB);
+  const state: BattleState = {
+    a: sideA.party[sideA.activeIndex],
+    b: sideB.party[sideB.activeIndex],
+    sideA,
+    sideB,
+    weather: prevState.weather,
+    weatherTurnsRemaining: prevState.weatherTurnsRemaining,
+    field: prevState.field,
+    fieldTurnsRemaining: prevState.fieldTurnsRemaining,
+    trickRoomTurnsRemaining: prevState.trickRoomTurnsRemaining,
+    turnNumber: prevState.turnNumber,
+    entryAnnouncements: prevState.entryAnnouncements,
+  };
+  const targetSide = sideOf(state, key);
+  const outPokemonId = targetSide.party[targetSide.activeIndex].slot.pokemonId;
+  const entryMessages: string[] = [];
+  // applySwitch는 기절 후 강제 교체 전용 — voluntary=false라 다음 턴 가속이 정상 발동한다.
+  performSwitch(state, key, toIndex, entryMessages, false);
+  const inPokemonId = sideOf(state, key).party[sideOf(state, key).activeIndex].slot.pokemonId;
+  return { nextState: state, entryMessages, outPokemonId, inPokemonId };
 }
 
 /**
@@ -1036,6 +1871,20 @@ function resolveAction(
     attacker.chargingMoveId = undefined;
   }
 
+  // 송전: 지난(같은 턴 먼저 움직인) 상대가 송전을 성공시켰으면 이번 공격의 타입이 전기로 강제된다.
+  // 자속·상성 전부 새 타입 기준으로 계산되도록 여기서 move 자체를 갈아끼운다(변화기는 제외).
+  if (attacker.moveTypeOverrideThisTurn && move.category !== "status" && move.type !== null) {
+    move = { ...move, type: attacker.moveTypeOverrideThisTurn };
+  }
+
+  // 오라휠(모르페코): 꼬르륵스위치 모양에 따라 타입을 전기/악으로 바꾼다(모양 없으면 full=전기).
+  if (move.hungerSwitchType) {
+    move = {
+      ...move,
+      type: attacker.hungerMode === "hangry" ? move.hungerSwitchType.hangry : move.hungerSwitchType.full,
+    };
+  }
+
   // 일찍기상(잠듦 해제 확률 스케줄에 필요)·습기(자폭기 차단, 아래 0번)는 상태이상 판정보다도
   // 먼저 필요해서, attackerAbility/defenderAbility 전체를 원래보다 앞당겨 여기서 구해둔다.
   const attackerHasEarlyBird = attacker.effectiveAbilityId === "일찍기상";
@@ -1047,6 +1896,13 @@ function resolveAction(
   // defenderAbility를 참조하는 아래 코드 전부가 자동으로 반영된다. (매직미러도 이 예외 목록에서
   // 빠져 있어, 공격측이 틀깨기면 여기서 defenderAbility가 undefined가 되고 반사도 자연히 무산된다.)
   let defenderAbility = resolveEffectiveDefenderAbility(attackerAbility, rawDefenderAbility);
+
+  // 원격(Long Reach): 공격측이 이 특성이면 이번 기술의 접촉 판정을 통째로 없앤다. 이후 아래
+  // 모든 접촉 조건(hitTrigger·록키헬멧·단단한발톱·킹실드 접촉 페널티·부리캐논 화상 등)이
+  // effectiveMove/move의 makesContact를 보므로, 여기서 move를 갈아끼우면 전부 자동 반영된다.
+  if (attackerAbility?.movesIgnoreContact && move.makesContact) {
+    move = { ...move, makesContact: false };
+  }
 
   // 긴장감: "이 특성을 가진 쪽의 상대"가 나무열매를 못 쓴다 — 방향이 헷갈리기 쉬운데, 내(공격측)
   // 나무열매가 막히는 건 상대(방어측)가 긴장감을 가졌을 때고, 상대(방어측) 나무열매가 막히는 건
@@ -1129,7 +1985,7 @@ function resolveAction(
     return blocked("usageCondition");
   }
   // 오로라베일: 지정된 날씨(눈)가 아니면 실패한다
-  if (move.usageCondition === "weather-required" && state.weather !== move.requiresWeather) {
+  if (move.usageCondition === "weather-required" && activeWeather(state) !== move.requiresWeather) {
     return blocked("usageCondition");
   }
   // 비장의무기: 자신의 다른 기술(remainingPp에 등록된 id들)을 전부 한 번씩 사용하기 전까지는 실패.
@@ -1144,6 +2000,15 @@ function resolveAction(
   }
   // 비축하기: 이미 3스택이면 더 비축할 수 없다(본가 규칙 — 실패 처리).
   if (move.addsStockpile && (attacker.stockpileCount ?? 0) >= 3) {
+    return blocked("usageCondition");
+  }
+  // 거대해머: 직전 턴에 이 기술로 행동을 개시했으면(=consecutiveLock 기록의 턴 번호가 이번 턴과
+  // 정확히 일치) 이번 턴엔 쓸 수 없다. 잠금은 "사용한 턴 + 1" 한 턴만 유효해 그 다음 턴부턴 다시 쓸 수 있다.
+  if (
+    move.cannotUseConsecutively &&
+    attacker.consecutiveLockMoveId === move.id &&
+    attacker.consecutiveLockUntilTurn === state.turnNumber
+  ) {
     return blocked("usageCondition");
   }
   // 기습: 상대보다 먼저 움직이지 않으면(movesSecond) 실패, 상대가 이번 턴 고른 기술이
@@ -1226,11 +2091,22 @@ function resolveAction(
   }
 
   // 2-1) 사이코필드: 우선도 +1 이상인 기술이 "상대를 겨냥"하면 그 기술 자체가 실패한다.
-  // 짖궂은마음으로 변화기 우선도가 올라간 경우도 반영해야 해서 원본 우선도가 아니라 특성
+  // 짓궂은마음으로 변화기 우선도가 올라간 경우도 반영해야 해서 원본 우선도가 아니라 특성
   // 보정을 더한 실제 우선도로 판정한다 — 단, 순풍·리플렉터·빛의장막처럼 상대를 겨냥하지 않는
   // 변화기는 우선도가 올라가 있어도 막히지 않는다(isOpponentTargetingMove가 그 축을 가른다).
-  if (isPriorityMoveBlockedByField(state.field, move.priority + getAbilityPriorityBoost(move, attackerAbility), move)) {
+  const effectivePriorityForBlock =
+    move.priority + getAbilityPriorityBoost(move, attackerAbility, attacker.currentHp === attacker.maxHp);
+  if (isPriorityMoveBlockedByField(state.field, effectivePriorityForBlock, move)) {
     return blocked("psychicFieldPriority");
+  }
+  // 여왕의위엄: 방어측이 이 특성이면 상대의 우선도 +1↑ 공격 기술이 자신을 겨냥할 때 실패한다.
+  // 사이코필드 차단과 같은 축(isOpponentTargetingMove) — 순풍·방어 같은 자기/필드 기술은 제외.
+  if (
+    defenderAbility?.blocksOpponentPriorityMoves &&
+    effectivePriorityForBlock >= 1 &&
+    isOpponentTargetingMove(move)
+  ) {
+    return blocked("queenlyMajesty");
   }
 
   // 3) 혼란: 매 행동 판정마다 지속 턴수를 소모하고, 1/3 확률로 자멸(물리 40위력 자가타격)한다.
@@ -1269,7 +2145,11 @@ function resolveAction(
         { userTypes: attacker.types },
       );
     }
-    const skipsCharge = move.chargeSkipWeather !== undefined && state.weather === move.chargeSkipWeather;
+    // 메가솔라: 쾌청 조건 차지 스킵기(솔라빔)를 날씨와 무관하게 준비 턴 없이 발동시킨다.
+    const skipsCharge =
+      move.chargeSkipWeather !== undefined &&
+      (activeWeather(state) === move.chargeSkipWeather ||
+        (move.chargeSkipWeather === "쾌청" && attackerAbility?.treatsOwnWeatherAsSun));
     if (!skipsCharge) {
       attacker.chargingMoveId = move.id;
       return {
@@ -1356,13 +2236,39 @@ function resolveAction(
   // 포함하지 않는다.
   // 고스트다이브: "방어를 무시" = 방어류(protectEffect) 차단 자체를 뚫는다는 뜻(사용자 확인) — 실제
   // 방어 실수치와는 무관해서 여기서 판정 자체를 건너뛴다(틈새포착이 스크린/대타를 뚫는 것과 같은 결).
-  const blockedByProtect = !move.bypassesProtect && defender.activeProtect?.effect === "block";
+  // 보이지않는주먹: 접촉기가 방어류를 뚫고 명중한다(데미지는 아래 resolveHit에서 1/4로 줄고, 방어류의
+  // 접촉 성공 부가효과는 그대로 발동). 뚫는 경우엔 blockedByProtect를 false로 둬서 기술이 정상 진행된다.
+  const unseenFistPiercing = !!(
+    attackerAbility?.contactBypassesProtectAtQuarterDamage &&
+    (move.makesContact ?? false) &&
+    !move.bypassesProtect &&
+    defender.activeProtect?.effect === "block"
+  );
+  const blockedByProtect =
+    !move.bypassesProtect && !unseenFistPiercing && defender.activeProtect?.effect === "block";
   // "방어로 막혔다!" 문구는 실제로 상대를 겨냥한 기술이 막혔을 때만 — 칼춤·나쁜음모처럼 자기
   // 대상 랭크업/자기 회복기는 방어와 무관하게 그대로 발동하므로 "막혔다"가 아니다(Phase 6.5 §6-2 ⑦).
   const blockedByProtectMoveName =
     blockedByProtect && isOpponentTargetingMove(move) ? defender.activeProtect?.moveName : undefined;
+  // 방음: 방어측이 이 특성이면 소리 기술(classification "소리")이 데미지기·변화기 모두 완전히
+  // 무효화된다. resolveMoveContext도 같은 판정으로 typeEffectiveness를 0으로 만든다.
+  const blockedBySoundproof = !!(
+    defenderAbility?.blocksSound && (move.classification ?? []).includes("소리")
+  );
+  // 방탄: 방어측이 이 특성이면 구슬·폭탄 기술(tags "구슬"/"폭탄")이 데미지기·변화기 모두 완전히
+  // 무효화된다. 방음과 같은 처리 — resolveMoveContext도 같은 판정으로 typeEffectiveness를 0으로 만든다.
+  const blockedByBulletproof = !!(
+    defenderAbility?.blocksBallBomb && (move.tags ?? []).some((t) => t === "구슬" || t === "폭탄")
+  );
+  const soundproofBlockedByAbilityName = blockedBySoundproof ? defenderAbility?.name : undefined;
+  const bulletproofBlockedByAbilityName = blockedByBulletproof ? defenderAbility?.name : undefined;
   const opponentEffectsBlocked =
-    blockedByGoodAsGold || blockedBySubstitute || blockedByProtect || blockedByPowderImmunity;
+    blockedByGoodAsGold ||
+    blockedBySubstitute ||
+    blockedByProtect ||
+    blockedByPowderImmunity ||
+    blockedBySoundproof ||
+    blockedByBulletproof;
 
   // 매직미러: 방어측이 이 특성을 지녔고(틀깨기면 위에서 defenderAbility가 이미 undefined), 이번
   // 기술이 방어측을 겨냥하는 status 변화기이며 반사 제외(notReflectable — 고스트 저주·추억의선물·
@@ -1377,10 +2283,36 @@ function resolveAction(
     !!defenderAbility?.reflectsOpponentStatusMoves &&
     (isOpponentTargetingMove(move) || !!move.setsHazard);
 
+  // 레이징불: 이 기술을 쓰는 켄타로스의 종(팔데아 3품종)에 따라 실제 타입이 바뀐다. 웨더볼/
+  // fieldPulse보다 먼저 반영해야 이후 resolveMoveContext의 상성·자속 계산이 전부 새 타입으로 돈다.
+  const speciesTypedType = move.typeByUserSpecies?.[attacker.slot.pokemonId];
+  const speciesTypedMove: Move = speciesTypedType ? { ...move, type: speciesTypedType } : move;
+
+  // 셸암즈(dynamicCategoryByHigherDamage) — 가라르야도란 전용기. 물리(공격 vs 상대 방어)와
+  // 특수(특공 vs 상대 특방)로 각각 데미지를 계산해 큰 쪽 판정으로 공격한다. 물리면 접촉기,
+  // 특수면 비접촉기. 두 값이 같으면 무작위. 도구·특성·날씨 배율은 여기 비교에 넣지 않고(사용자
+  // 확정 — "물리/특수 여부를 먼저 판단한 뒤 적용"), 순수 실능·랭크만으로 비교한다.
+  let shellSideArmCategory: "physical" | "special" | undefined;
+  let categoryResolvedMove: Move = speciesTypedMove;
+  if (speciesTypedMove.dynamicCategoryByHigherDamage) {
+    const dmgOpts = { attackerStages: attacker.stages, defenderStages: defender.stages };
+    const physDmg =
+      computeDamage(attacker.realStats, defender.realStats, attacker.types, { ...speciesTypedMove, category: "physical" }, dmgOpts)?.damage ?? 0;
+    const specDmg =
+      computeDamage(attacker.realStats, defender.realStats, attacker.types, { ...speciesTypedMove, category: "special" }, dmgOpts)?.damage ?? 0;
+    shellSideArmCategory = physDmg > specDmg ? "physical" : specDmg > physDmg ? "special" : random() < 0.5 ? "physical" : "special";
+    categoryResolvedMove = {
+      ...speciesTypedMove,
+      category: shellSideArmCategory,
+      makesContact: shellSideArmCategory === "physical",
+    };
+  }
+
   // 웨더볼(날씨판 대지의파동): 날씨로 타입·위력이 바뀐다. 웨더볼과 fieldPulse를 동시에 갖는
-  // 기술은 없어 순차 적용해도 안전하다.
-  const weatherBall = applyWeatherBall(move, state.weather);
-  const moveAfterWeatherBall: Move = { ...move, type: weatherBall.type, power: weatherBall.power };
+  // 기술은 없어 순차 적용해도 안전하다. 메가솔라 보유자는 날씨와 무관하게 쾌청으로 취급한다.
+  const weatherForOwnMoves = attackerAbility?.treatsOwnWeatherAsSun ? "쾌청" : activeWeather(state);
+  const weatherBall = applyWeatherBall(categoryResolvedMove, weatherForOwnMoves);
+  const moveAfterWeatherBall: Move = { ...categoryResolvedMove, type: weatherBall.type, power: weatherBall.power };
 
   // 필드 조건부 타입/위력 변경(대지의파동=fieldPulse, 미스트버스트·와이드포스·라이징볼트=
   // powerMultiplierInField)을 특성 배율 계산보다 먼저 반영한다 — 타입이 바뀐 상태여야
@@ -1408,7 +2340,7 @@ function resolveAction(
     fieldAdjustedMove,
     defender.types,
     defenderAbility,
-    state.weather,
+    activeWeather(state),
     defenderItem,
     attacker.currentHp / attacker.maxHp,
     defender.currentHp === defender.maxHp,
@@ -1465,7 +2397,11 @@ function resolveAction(
   // 쓴다(getEffectiveForm.weightKg). weightKg 미입력이면 폴백.
   const weightOf = (fighter: BattleFighterState): number | undefined => {
     const pk = getPokemon(fighter.slot.pokemonId);
-    return pk ? getEffectiveForm(pk, fighter.slot).weightKg : undefined;
+    const baseKg = pk ? getEffectiveForm(pk, fighter.slot).weightKg : undefined;
+    if (baseKg === undefined) return undefined;
+    // 헤비메탈(2)·라이트메탈(0.5): 자신의 몸무게에 배율을 곱한다.
+    const mult = abilityOf(fighter)?.weightMultiplier ?? 1;
+    return baseKg * mult;
   };
   if (effectiveMove.weightRatioPower) {
     const userKg = weightOf(attacker);
@@ -1502,16 +2438,62 @@ function resolveAction(
     if (met) effectiveMove = { ...effectiveMove, power: effectiveMove.power * 2 };
   }
 
+  // 플라잉프레스: 상대가 이번 배틀에서 작아지기를 쓴 적이 있으면 위력 2배(필중은 아래 hitChance에서).
+  if (effectiveMove.bonusVsMinimize && effectiveMove.power !== null && defender.usedMoveIds?.["작아지기"]) {
+    effectiveMove = { ...effectiveMove, power: effectiveMove.power * 2 };
+  }
+
+  // 분노의주먹(Rage Fist): 위력 = min(350, 50 + 50 × 이번 배틀에서 기술로 데미지를 받은 횟수).
+  if (effectiveMove.rageFistPower && effectiveMove.power !== null) {
+    effectiveMove = {
+      ...effectiveMove,
+      power: Math.min(350, 50 + 50 * (attacker.timesHitByMoves ?? 0)),
+    };
+  }
+
+  // 변덕레이저(Fickle Beam): randomDoublePower% 확률로 위력 2배 + "전력을 다하기 시작했다!" 안내.
+  let fickleBeamEmpowered = false;
+  if (
+    effectiveMove.randomDoublePower !== undefined &&
+    effectiveMove.power !== null &&
+    random() * 100 < effectiveMove.randomDoublePower
+  ) {
+    effectiveMove = { ...effectiveMove, power: effectiveMove.power * 2 };
+    fickleBeamEmpowered = true;
+  }
+
+  // 전기로바꾸기(Electromorphosis): 충전 상태에서 쓰는 전기타입 기술은 위력 2배(1회 소모).
+  let electromorphosisEmpoweredAbilityName: string | undefined;
+  if (
+    attacker.electroChargedForElectric &&
+    effectiveMove.type === "전기" &&
+    effectiveMove.power !== null
+  ) {
+    effectiveMove = { ...effectiveMove, power: effectiveMove.power * 2 };
+    attacker.electroChargedForElectric = false;
+    electromorphosisEmpoweredAbilityName = attackerAbility?.name;
+  }
+
   // 타오르는불꽃 발동 이후로 자신(=현재 공격자)이 쓰는 그 타입 기술의 위력이 올라있으면 반영.
   // 절대 타입이 null인 기술(발버둥 등)은 boosts 조회 자체를 건너뛴다.
   const ownMoveTypeBoostMultiplier =
     (effectiveMove.type ? attacker.ownMoveTypeBoosts[effectiveMove.type] : undefined) ?? 1;
+
+  // 투쟁심: 상대와 성별이 같으면 ×1.25, 다르면 ×0.75, 어느 한쪽이라도 성별 불명이면 ×1.0.
+  const rivalryMultiplier = rivalryDamageMultiplier(attackerAbility, attacker.gender, defender.gender);
 
   // 메트로놈(연속 같은 기술 위력 증가)용 스트릭 갱신 — 여기까지 왔다는 건 앞의 모든 행동방해
   // 판정(상태이상/풀죽음/반동/혼란/차지 등)을 통과해서 실제로 이 기술을 쓴다는 뜻이라, 명중 여부와
   // 무관하게 여기서 갱신한다(본가 규칙 — 빗나가도 스트릭은 유지되고, 다른 기술을 쓰면 끊긴다).
   attacker.lastMoveStreak = attacker.lastMoveId === effectiveMove.id ? (attacker.lastMoveStreak ?? 1) + 1 : 1;
   attacker.lastMoveId = effectiveMove.id;
+
+  // 거대해머(cannotUseConsecutively): 실제로 이 기술로 행동을 개시했으니 "다음 턴엔 잠금" 예약.
+  // usageCondition 게이트(섹션 0)는 이 기록과 현재 턴 번호가 정확히 일치할 때만 실패시킨다.
+  if (effectiveMove.cannotUseConsecutively) {
+    attacker.consecutiveLockMoveId = effectiveMove.id;
+    attacker.consecutiveLockUntilTurn = state.turnNumber + 1;
+  }
 
   // 비장의무기 사용 조건용 — "이 기술로 행동을 개시했다"를 여기서 기록(명중 여부 무관).
   (attacker.usedMoveIds ??= {})[effectiveMove.id] = true;
@@ -1567,9 +2549,15 @@ function resolveAction(
   // 반짝가루(방어측 0.9배)·광각렌즈(공격측 1.1배)·포커스렌즈(공격측, 늦게 움직일 때 1.2배)·
   // 모래숨기(방어측, 날씨 조건부 0.8배)·복안(공격측 1.3배)을 전부 한 배율로 곱한다.
   const weatherAccuracyBoost = defenderAbility?.weatherOpponentAccuracyMultiplier;
+  // 의욕(Hustle): 물리 기술 명중률 ×0.8.
+  const hustleAccuracyMultiplier =
+    move.category === "physical" && attackerAbility?.hustlePhysicalAccuracyMultiplier !== undefined
+      ? attackerAbility.hustlePhysicalAccuracyMultiplier
+      : 1;
   const abilityAccuracyMultiplier =
-    (weatherAccuracyBoost && weatherAccuracyBoost.weather === state.weather ? weatherAccuracyBoost.multiplier : 1) *
-    (attackerAbility?.userAccuracyMultiplier ?? 1);
+    (weatherAccuracyBoost && weatherAccuracyBoost.weather === activeWeather(state) ? weatherAccuracyBoost.multiplier : 1) *
+    (attackerAbility?.userAccuracyMultiplier ?? 1) *
+    hustleAccuracyMultiplier;
   const accuracyExtraMultiplier =
     getItemAccuracyMultiplier(attackerItem, defenderItem, movesSecond) * abilityAccuracyMultiplier;
   // 날카로운눈: 공격측이 이 특성이면 상대의 회피율 상승분을 무시한다(원문 "상대의 회피율을
@@ -1582,9 +2570,11 @@ function resolveAction(
     : effectiveMove.ignoresDefenderStatStagesInDamage
       ? 0
       : defender.accuracyStages.evasion;
+  // 플라잉프레스: 상대가 이번 배틀에서 작아지기를 쓴 적이 있으면 반드시 명중한다(위력 2배는 아래에서).
+  const minimizeBonusActive = !!(effectiveMove.bonusVsMinimize && defender.usedMoveIds?.["작아지기"]);
   const hitChance =
     // 노가드: 어느 한쪽이라도 지녔으면 이번 공격은 명중률/회피율과 무관하게 반드시 명중한다.
-    attackerAbility?.alwaysHits || defenderAbility?.alwaysHits
+    attackerAbility?.alwaysHits || defenderAbility?.alwaysHits || minimizeBonusActive
       ? null
       : computeHitChance(
           effectiveMove.accuracy,
@@ -1664,7 +2654,7 @@ function resolveAction(
     abilityAbsorbAbilityName = defenderAbility.name;
     if (absorb.selfStatChanges) {
       for (const change of absorb.selfStatChanges) {
-        defender.stages = applyStageDelta(defender.stages, change.stat, change.delta);
+        defender.stages = applyStageDelta(defender.stages, change.stat, contraryDelta(defender, change.delta));
       }
     }
     if (absorb.boostsOwnMoveTypeMultiplier) {
@@ -1684,10 +2674,12 @@ function resolveAction(
   // 니들가드는 최대 HP 1/8 데미지. 막지 못했거나(blockedByProtect === false) 접촉기가 아니면 없다.
   let protectContactPenaltyMoveName: string | undefined;
   let protectContactDamage = 0;
-  if (blockedByProtect && defender.activeProtect && (effectiveMove.makesContact ?? false)) {
+  let protectContactInflictedStatus: StatusConditionState["condition"] | undefined;
+  // 보이지않는주먹으로 뚫고 들어간 경우(unseenFistPiercing)도 방어류의 접촉 성공 부가효과는 발동한다.
+  if ((blockedByProtect || unseenFistPiercing) && defender.activeProtect && (effectiveMove.makesContact ?? false)) {
     const ap = defender.activeProtect;
     if (ap.contactPenalty) {
-      attacker.stages = applyStageDelta(attacker.stages, ap.contactPenalty.stat, ap.contactPenalty.delta);
+      attacker.stages = applyStageDelta(attacker.stages, ap.contactPenalty.stat, contraryDelta(attacker, ap.contactPenalty.delta));
       protectContactPenaltyMoveName = ap.moveName;
     }
     // 니들가드 접촉 데미지 — 공격측이 매직가드면 무효(까칠한피부·록키헬멧과 같은 축).
@@ -1696,6 +2688,19 @@ function resolveAction(
       attacker.currentHp = Math.max(0, attacker.currentHp - amount);
       protectContactDamage = amount;
       protectContactPenaltyMoveName = ap.moveName;
+    }
+    // 토치카: 접촉기를 막으면 공격자를 독 상태로 만든다(타입/특성 면역·필드 존중).
+    if (
+      ap.contactStatus &&
+      !isImmuneToStatus(ap.contactStatus, attacker.types, statusImmunitiesOf(attacker, attackerAbility)) &&
+      !isStatusBlockedByField(state.field, ap.contactStatus)
+    ) {
+      const before = attacker.status.condition;
+      attacker.status = inflictStatus(attacker.status, ap.contactStatus);
+      if (attacker.status.condition !== before) {
+        protectContactInflictedStatus = attacker.status.condition;
+        protectContactPenaltyMoveName = ap.moveName;
+      }
     }
   }
 
@@ -1725,13 +2730,34 @@ function resolveAction(
   let abilityInflictedVolatileAbilityName: string | undefined;
   let abilityDamageToAttacker = 0;
   let abilityDamageAbilityName: string | undefined;
+  // 내용물분출: applyDamageToDefender가 "이번 타를 맞기 직전" 방어측 HP를 여기에 담아둔다.
+  let defenderHpBeforeLastHit = 0;
   let abilityDisabledMoveName: string | undefined;
   let abilityDisableAbilityName: string | undefined;
+  // 나쁜손버릇: 접촉기로 피격당한 방어측이 공격자의 도구를 빼앗았을 때 그 도구 이름과 특성 이름.
+  let pickpocketStolenItemName: string | undefined;
+  let pickpocketAbilityName: string | undefined;
+  // 미라: 접촉기로 피격당한 방어측이 공격자의 특성을 미라로 바꿨을 때 그 특성(=미라) 이름.
+  let mummifiedAttackerAbilityName: string | undefined;
   // 지구력·깨어진갑옷처럼 방어측 특성이 피격 시 자기 랭크를 바꿨을 때(Phase 6.5 §6-2 ③ / §6-1).
   // 다단히트면 타수만큼 누적. 오른 스탯과 내려간 스탯을 나눠 담아 로그도 별도 줄로 낸다.
   let abilityRaisedDefenderStatsAbilityName: string | undefined;
   const abilityRaisedDefenderStats: { stat: BattleStatKey; delta: number }[] = [];
   const abilityLoweredDefenderStats: { stat: BattleStatKey; delta: number }[] = [];
+  // 미끈미끈·점착: 방어측 특성이 접촉한 공격자의 랭크를 내렸을 때(다단히트면 타수만큼 누적).
+  let abilityLoweredAttackerStatsAbilityName: string | undefined;
+  const abilityLoweredAttackerStats: { stat: BattleStatKey; delta: number }[] = [];
+  // 볼주머니: 이번 행동에서 나무열매를 먹어 발동한 추가 회복량 누적.
+  let cheekPouchHeal = 0;
+  // 아로마베일: 방어측이 이 특성이라 마음을 옭아매는 volatile(헤롱헤롱·도발·기술봉인·앙코르)을 막았을 때 그 특성 이름.
+  let mentalMoveBlockedByAbilityName: string | undefined;
+  // 발끈: 상대 기술 데미지로 HP가 절반 이하가 되어 방어측 특수공격이 올랐을 때.
+  let angerPointRaisedSpa = false;
+  let angerPointAbilityName: string | undefined;
+  // 떠도는영혼: 접촉 피격으로 공격자와 특성을 맞바꿨을 때.
+  let wanderingSpiritSwapped = false;
+  // 모래뿜기: 피격으로 날씨를 바꿨을 때 그 날씨.
+  let sandSpitWeather: WeatherKind | undefined;
 
   // 지진이 땅속의 구멍파기를, 파도타기가 물속의 다이빙을 실제로 맞혔을 때의 위력 배가.
   // evadedByCharge가 false인데 defenderHideType이 있다는 건 bypassesHiding 예외로 명중했다는 뜻.
@@ -1744,16 +2770,34 @@ function resolveAction(
    * (effectiveMove) 기준으로 판정하고, hitMove는 트리플악셀처럼 타수별 위력만 다를 때 쓴다.
    */
   function resolveHit(hitMove: Move): { damage: number; isCritical: boolean } {
+    // 대운: 급소율 카운터가 상시 +raisesCritStageBy(1). 조가비갑옷/전투무장: 방어측이면 급소 자체가 안 뜬다(alwaysCrit 포함).
+    const critStageForHit =
+      attacker.critStage + getItemCritStageBonus(attackerItem) + (attackerAbility?.raisesCritStageBy ?? 0);
+    // 무도한행동: 방어측이 독/맹독이면 항상 급소(조가비갑옷/전투무장 등 방어측 급소 방지는 존중).
+    const mercilessCrit =
+      !!attackerAbility?.alwaysCritsVsPoisonedTarget &&
+      (defender.status.condition === "poison" || defender.status.condition === "badly-poisoned");
     const critical =
-      effectiveMove.alwaysCrit ||
-      random() < critChance(attacker.critStage + getItemCritStageBonus(attackerItem), effectiveMove.highCritRatio);
+      !defenderAbility?.preventsCritsAgainstSelf &&
+      (effectiveMove.alwaysCrit ||
+        mercilessCrit ||
+        random() < critChance(critStageForHit, effectiveMove.highCritRatio));
     const ignoreBurnPenalty = ignoresBurnAttackPenalty(attackerAbility?.id, effectiveMove.id);
     const statusAttackMultiplier = computeStatusAttackMultiplier(
       attacker.status.condition,
       effectiveMove.category,
       ignoreBurnPenalty,
     );
-    const weatherMultiplier = getWeatherDamageMultiplier(state.weather, effectiveMove.type);
+    // 의욕(Hustle): 물리 기술 위력 ×1.5 (명중률 ×0.8은 위 accuracyExtraMultiplier에서 반영).
+    const hustleMultiplier =
+      effectiveMove.category === "physical" && attackerAbility?.hustleAttackMultiplier !== undefined
+        ? attackerAbility.hustleAttackMultiplier
+        : 1;
+    // 메가솔라: 자신이 쓰는 기술의 날씨 배율을 항상 쾌청 기준으로(불꽃 ×1.5·물 ×0.5) 계산한다.
+    const weatherMultiplier = getWeatherDamageMultiplier(
+      attackerAbility?.treatsOwnWeatherAsSun ? "쾌청" : activeWeather(state),
+      effectiveMove.type,
+    );
     const fieldMultiplier = getFieldDamageMultiplier(state.field, effectiveMove.type);
     const itemMultiplier = getItemOffenseMultiplier(
       attackerItem,
@@ -1769,6 +2813,7 @@ function resolveAction(
       effectiveMove.type,
       typeEffectiveness,
       defender.itemConsumed ?? false,
+      !!defenderAbility?.doublesBerryEffect, // 숙성
     );
     if (berryResult.consumed) {
       consumeItem(defender);
@@ -1808,7 +2853,12 @@ function resolveAction(
     const result = computeDamage(attacker.realStats, defender.realStats, attacker.types, hitMove, {
       typeEffectiveness,
       abilityMultiplier:
-        abilityOffenseMultiplier * statusAttackMultiplier * hidingBypassMultiplier * ownMoveTypeBoostMultiplier,
+        abilityOffenseMultiplier *
+        statusAttackMultiplier *
+        hidingBypassMultiplier *
+        ownMoveTypeBoostMultiplier *
+        rivalryMultiplier *
+        hustleMultiplier,
       weatherMultiplier,
       fieldMultiplier,
       itemMultiplier,
@@ -1820,6 +2870,8 @@ function resolveAction(
       defenderStages: defenderStagesForDamage,
       bulkMultiplier: abilityDefenseMultiplier * berryResult.bulkMultiplier * screenMultiplier,
       isCritical: critical,
+      // 스나이퍼: 급소 데미지 배율을 2.25로 올린다(기본 1.5).
+      critDamageMultiplier: attackerAbility?.critDamageMultiplier,
       randomRoll: MIN_DAMAGE_ROLL + random() * (1 - MIN_DAMAGE_ROLL),
     });
     let hitDamage = result?.damage ?? 0;
@@ -1831,6 +2883,8 @@ function resolveAction(
       );
       if (hitDamage < minDamage) hitDamage = minDamage;
     }
+    // 보이지않는주먹: 방어류를 뚫고 들어간 접촉기는 데미지가 1/4로 줄어든다.
+    if (unseenFistPiercing) hitDamage = Math.floor(hitDamage * 0.25);
     return { damage: hitDamage, isCritical: critical };
   }
 
@@ -1903,11 +2957,37 @@ function resolveAction(
       defender.currentHp = Math.max(0, defender.currentHp - disguiseRecoilDamage);
       return;
     }
+    const hpBeforeThisHit = defender.currentHp;
+    defenderHpBeforeLastHit = hpBeforeThisHit;
     defender.currentHp = Math.max(0, defender.currentHp - amount);
     // 미러코트/카운터용: 실제 HP로 받은 데미지를 카테고리별로 누적(대타 흡수분은 위에서 이미
     // return되어 제외). effectiveMove가 아니라 hitMove로 넘어와도 카테고리는 동일하다.
     if (amount > 0 && (effectiveMove.category === "physical" || effectiveMove.category === "special") && defender.damageTakenThisTurn) {
       defender.damageTakenThisTurn[effectiveMove.category] += amount;
+    }
+    // 분노의주먹(Move.rageFistPower)용: 이 포켓몬이 기술로 데미지를 받은 누적 횟수(다단히트는 타수만큼).
+    if (amount > 0) {
+      defender.timesHitByMoves = (defender.timesHitByMoves ?? 0) + 1;
+    }
+    // 전기로바꾸기(Electromorphosis): 기술 데미지를 받으면 충전 상태가 된다(다음 전기 기술 위력 2배).
+    if (amount > 0 && defenderAbility?.chargesOnDamageTaken && !isFainted(defender)) {
+      defender.electroChargedForElectric = true;
+    }
+    // 발끈(포챔스판): 상대 기술 데미지로 HP가 처음으로 절반 이하가 되는 그 순간 특수공격 +1.
+    // 여기(applyDamageToDefender)는 기술 데미지 경로 전용이라 모래바람·독·설치물은 자연히 제외된다.
+    if (
+      amount > 0 &&
+      defenderAbility?.raisesSpaWhenHalvedByMoveDamage &&
+      !isFainted(defender) &&
+      hpBeforeThisHit * 2 > defender.maxHp &&
+      defender.currentHp * 2 <= defender.maxHp
+    ) {
+      const before = defender.stages.spa;
+      defender.stages = applyStageDelta(defender.stages, "spa", contraryDelta(defender, 1));
+      if (defender.stages.spa !== before) {
+        angerPointRaisedSpa = true;
+        angerPointAbilityName = defenderAbility.name;
+      }
     }
   }
 
@@ -1942,7 +3022,7 @@ function resolveAction(
 
     if (
       trigger.inflictsStatusOnAttacker &&
-      !isImmuneToStatus(trigger.inflictsStatusOnAttacker, attacker.types, attackerAbility?.immuneToStatuses)
+      !isImmuneToStatus(trigger.inflictsStatusOnAttacker, attacker.types, statusImmunitiesOf(attacker, attackerAbility))
     ) {
       const before = attacker.status.condition;
       attacker.status = inflictStatus(attacker.status, trigger.inflictsStatusOnAttacker);
@@ -1956,7 +3036,12 @@ function resolveAction(
     if (
       trigger.inflictsVolatileOnAttacker &&
       !(trigger.requiresOppositeGender && (attacker.gender === null || defender.gender === null || attacker.gender === defender.gender)) &&
-      !hasVolatile(attacker.volatile, trigger.inflictsVolatileOnAttacker)
+      !hasVolatile(attacker.volatile, trigger.inflictsVolatileOnAttacker) &&
+      // 아로마베일: 접촉기를 쓴 공격자가 이 특성이면 헤롱헤롱바디의 헤롱헤롱이 걸리지 않는다.
+      !(
+        (trigger.inflictsVolatileOnAttacker === "attract" || trigger.inflictsVolatileOnAttacker === "taunt") &&
+        attackerAbility?.blocksMentalMoves
+      )
     ) {
       attacker.volatile = inflictVolatile(attacker.volatile, trigger.inflictsVolatileOnAttacker, random);
       abilityInflictedVolatileOnAttacker = trigger.inflictsVolatileOnAttacker;
@@ -1982,7 +3067,7 @@ function resolveAction(
     if (trigger.selfStatChanges) {
       for (const change of trigger.selfStatChanges) {
         const before = defender.stages[change.stat];
-        defender.stages = applyStageDelta(defender.stages, change.stat, change.delta);
+        defender.stages = applyStageDelta(defender.stages, change.stat, contraryDelta(defender, change.delta));
         const after = defender.stages[change.stat];
         // 실제로 변한 것만 로그에 남긴다(이미 상·하한이라 그대로면 조용히 무산). 다단히트면 폭 누적.
         // 깨어진갑옷은 한 번 발동에 방어 -1 / 스피드 +2가 같이 오므로 오름·내림을 각자 담는다.
@@ -1996,10 +3081,91 @@ function resolveAction(
         }
       }
     }
+    // 미끈미끈·점착(attackerStatChanges): 접촉해 온 공격자의 랭크를 내린다. 공격자의 클리어바디류
+    // (blocksOpponentStatDropsForStats)·심술꾸러기(contraryDelta)는 그대로 존중한다. 미러아머 반사는
+    // 이 로스터에 대상 조합이 없어 생략(공격자가 미러아머면 그냥 정상 하락).
+    if (trigger.attackerStatChanges) {
+      const blocked = statDropBlockStatsOf(attacker, attackerAbility);
+      for (const change of trigger.attackerStatChanges) {
+        if (blocked?.includes(change.stat)) continue;
+        const before = attacker.stages[change.stat];
+        attacker.stages = applyStageDelta(attacker.stages, change.stat, contraryDelta(attacker, change.delta));
+        const after = attacker.stages[change.stat];
+        if (after !== before) {
+          abilityLoweredAttackerStatsAbilityName = defenderAbility!.name;
+          const magnitude = Math.abs(after - before);
+          const existing = abilityLoweredAttackerStats.find((s) => s.stat === change.stat);
+          if (existing) existing.delta += magnitude;
+          else abilityLoweredAttackerStats.push({ stat: change.stat, delta: magnitude });
+        }
+      }
+    }
     if (trigger.disablesAttackerMove && attacker.remainingPp[move.id] !== undefined) {
       attacker.remainingPp[move.id] = 0;
       abilityDisabledMoveName = move.name;
       abilityDisableAbilityName = defenderAbility!.name;
+    }
+    // 나쁜손버릇: 피격측(defender)이 무도구이고 공격자(attacker)가 도구를 지녔으면 그 자리에서 강탈한다.
+    // 매지션과 방향만 반대고 규칙은 동일 — 대타에 맞았을 때는 함수 진입부 가드(blockedBySubstitute)에서
+    // 이미 걸러진다. 다단히트여도 첫 타에 도구를 얻는 순간 !defender.currentItemId가 깨져 재발동하지 않는다.
+    // 점착: 공격자가 이 특성이면 나쁜손버릇에 도구를 빼앗기지 않는다.
+    if (
+      trigger.stealsAttackerItem &&
+      !defender.currentItemId &&
+      attacker.currentItemId &&
+      !attackerAbility?.preventsItemLoss
+    ) {
+      const stolen = getItem(attacker.currentItemId);
+      pickpocketStolenItemName = stolen?.name;
+      pickpocketAbilityName = defenderAbility!.name;
+      defender.currentItemId = attacker.currentItemId;
+      defender.itemConsumed = false; // 새로 얻은 도구라 이전 소모 이력과 무관하게 쓸 수 있다
+      attacker.currentItemId = null;
+    }
+    // 미라(Mummy): 접촉기로 피격당하면 공격자의 특성을 미라로 바꾼다. 이미 그 특성이면 무발동.
+    if (
+      trigger.setsAttackerAbilityId &&
+      attacker.effectiveAbilityId !== trigger.setsAttackerAbilityId
+    ) {
+      attacker.effectiveAbilityId = trigger.setsAttackerAbilityId;
+      mummifiedAttackerAbilityName = defenderAbility!.name;
+    }
+    // 떠도는영혼(Wandering Spirit): 접촉기로 피격당하면 공격자와 특성을 맞바꾼다.
+    if (trigger.swapsAbilityWithAttacker && attacker.effectiveAbilityId !== defender.effectiveAbilityId) {
+      const tmp = attacker.effectiveAbilityId;
+      attacker.effectiveAbilityId = defender.effectiveAbilityId;
+      defender.effectiveAbilityId = tmp;
+      wanderingSpiritSwapped = true;
+    }
+    // 모래뿜기(Sand Spit): 데미지를 주는 기술로 피격당하면 날씨를 5턴짜리로 바꾼다(맞을 때마다).
+    if (trigger.setsWeather && state.weather !== trigger.setsWeather) {
+      state.weather = trigger.setsWeather;
+      state.weatherTurnsRemaining = WEATHER_DURATION;
+      sandSpitWeather = trigger.setsWeather;
+    }
+    // 유폭(Aftermath): 접촉기로 이 포켓몬이 쓰러진 그 순간 공격자에게 공격자 최대 HP 비율만큼 데미지.
+    if (
+      trigger.damagesContactAttackerFractionOnFaint &&
+      isFainted(defender) &&
+      !attackerAbility?.negatesIndirectDamage
+    ) {
+      const amount = Math.floor(attacker.maxHp * trigger.damagesContactAttackerFractionOnFaint);
+      attacker.currentHp = Math.max(0, attacker.currentHp - amount);
+      abilityDamageToAttacker += amount;
+      abilityDamageAbilityName = defenderAbility!.name;
+    }
+    // 내용물분출: 기술로 쓰러진 순간, 그 마지막 타를 맞기 직전 남아 있던 HP만큼을 공격자에게 되돌린다.
+    if (
+      trigger.damagesAttackerByRemainingHpOnFaint &&
+      isFainted(defender) &&
+      !attackerAbility?.negatesIndirectDamage
+    ) {
+      const amount = Math.min(attacker.currentHp, defenderHpBeforeLastHit);
+      if (amount > 0) {
+        attacker.currentHp = Math.max(0, attacker.currentHp - amount);
+        abilityDamageToAttacker += amount;
+        abilityDamageAbilityName = defenderAbility!.name;
+      }
     }
   }
 
@@ -2023,9 +3189,11 @@ function resolveAction(
     // 중단된다 — moves.json의 effect 텍스트에 이미 명시된 구분(사용자 확인). 급소는 다단히트
     // 종류와 무관하게 항상 타수마다 따로 판정한다(사용자 확인).
     const perHitAccuracyCheck = effectiveMove.multiHitPowers !== undefined;
-    const totalHits = perHitAccuracyCheck
-      ? effectiveMove.maxHits
-      : rollMultiHitCount(effectiveMove.minHits, effectiveMove.maxHits, random);
+    // 스킬링크: 2~5회 연속기를 항상 최대 횟수로 고정한다.
+    const totalHits =
+      perHitAccuracyCheck || attackerAbility?.multiHitAlwaysMax
+        ? effectiveMove.maxHits
+        : rollMultiHitCount(effectiveMove.minHits, effectiveMove.maxHits, random);
 
     let landed = 0;
     for (let i = 0; i < totalHits; i++) {
@@ -2222,7 +3390,8 @@ function resolveAction(
     !hitSubstitute &&
     attackerAbility?.stealsItemOnDamagingHit &&
     !attacker.currentItemId &&
-    defender.currentItemId
+    defender.currentItemId &&
+    !defenderAbility?.preventsItemLoss // 점착: 이 특성이면 매지션에게 도구를 빼앗기지 않는다
   ) {
     const stolenItem = getItem(defender.currentItemId);
     stolenItemName = stolenItem?.name;
@@ -2269,6 +3438,42 @@ function resolveAction(
     effectiveMove.category !== "status" && !!defenderAbility?.blocksSecondaryEffects;
   let secondaryBlockedByAbilityName: string | undefined;
 
+  // 볼가득넣기(eatsHeldBerry): 지닌 나무열매(이름이 "열매"로 끝나는 도구)를 먹는다 — 없으면 실패.
+  // HP 회복 나무열매(자뭉·오랭)면 즉시 그만큼 회복(HP 조건 무시). 방어 +2는 아래 statChanges로 적용.
+  let berryEatFailed = false;
+  let stuffCheeksBerryHeal = 0;
+  let stuffCheeksBerryName: string | undefined;
+  if (effectiveMove.eatsHeldBerry) {
+    const berry = attackerItem && attackerItem.name.endsWith("열매") ? attackerItem : undefined;
+    if (!berry) {
+      berryEatFailed = true;
+    } else {
+      stuffCheeksBerryName = berry.name;
+      const ripenMult = attackerAbility?.doublesBerryEffect ? 2 : 1; // 숙성
+      const rawHeal =
+        (berry.healsBelowHalfHpDenominator
+          ? Math.floor(attacker.maxHp / berry.healsBelowHalfHpDenominator)
+          : (berry.healsBelowHalfHpFlat ?? 0)) * ripenMult;
+      stuffCheeksBerryHeal = Math.min(attacker.maxHp - attacker.currentHp, rawHeal);
+      attacker.currentHp += stuffCheeksBerryHeal;
+      consumeItem(attacker);
+    }
+  }
+
+  // 소울비트(costsHpFraction): 사용 시 최대 HP의 이 비율을 소비한다. 현재 HP가 소비량 이하면
+  // (=쓰면 기절) 실패해서 랭크업도 없다. 성공하면 statChanges(5스탯 +1) 적용 직전에 HP를 깎는다.
+  let costHpFailed = false;
+  let soulBeatHpCost = 0;
+  if (effectiveMove.costsHpFraction !== undefined) {
+    soulBeatHpCost = Math.floor(attacker.maxHp * effectiveMove.costsHpFraction);
+    if (attacker.currentHp <= soulBeatHpCost) {
+      costHpFailed = true;
+      soulBeatHpCost = 0;
+    } else {
+      attacker.currentHp -= soulBeatHpCost;
+    }
+  }
+
   // 기술 자신의 랭크/명중회피/급소 변화 적용 (칼춤, 그림자분신, 기충전 등).
   // attacker/defender는 state.a/state.b를 그대로 참조하고 있어 여기서 바꾼 값이 state에도 반영된다.
   const attackerStagesBeforeMoveChange = attacker.stages;
@@ -2276,19 +3481,26 @@ function resolveAction(
   // 확률부(chance) statChanges는 여기서 굴려서 통과한 항목만 남긴다(확정은 그대로). 인분이면
   // 상대 대상 항목은 굴림 없이 통째로 제거한다. 예전엔 applyMoveStatChanges가 chance를 굴리지
   // 않고 100%로 적용하던 버그가 있었다(불꽃춤 자기 특공↑ 50%·브레이크클로 상대 방어↓ 50%).
-  const rolledStatChanges = effectiveMove.statChanges?.filter((sc) => {
-    if (secondaryEffectsBlockedByAbility && sc.target === "opponent") {
-      // 방어/대타/황금몸으로 이미 통째로 막힌 경우엔 "인분" 문구를 따로 낼 필요가 없다.
-      if (!opponentEffectsBlocked) secondaryBlockedByAbilityName = defenderAbility!.name;
-      return false;
-    }
-    return sc.chance === undefined || random() * 100 < sc.chance;
-  });
+  const rolledStatChanges = berryEatFailed || costHpFailed
+    ? []
+    : effectiveMove.statChanges?.filter((sc) => {
+        if (secondaryEffectsBlockedByAbility && sc.target === "opponent") {
+          // 방어/대타/황금몸으로 이미 통째로 막힌 경우엔 "인분" 문구를 따로 낼 필요가 없다.
+          if (!opponentEffectsBlocked) secondaryBlockedByAbilityName = defenderAbility!.name;
+          return false;
+        }
+        return sc.chance === undefined || random() * 100 < sc.chance;
+      });
   const statChangeMove: Move = { ...effectiveMove, statChanges: rolledStatChanges };
-  attacker.stages = applyMoveStatChanges(attacker.stages, statChangeMove, "self", { userTypes: attacker.types });
+  // 심술꾸러기: 랭크 변화를 받는 쪽이 Contrary면 delta 부호를 뒤집은 기술로 적용한다(자기 랭크변화·상대가 건 랭크변화 모두).
+  attacker.stages = applyMoveStatChanges(attacker.stages, contraryMoveFor(statChangeMove, attacker), "self", {
+    userTypes: attacker.types,
+  });
   defender.stages = opponentEffectsBlocked
     ? defender.stages
-    : applyMoveStatChanges(defender.stages, statChangeMove, "opponent", { userTypes: attacker.types });
+    : applyMoveStatChanges(defender.stages, contraryMoveFor(statChangeMove, defender), "opponent", {
+        userTypes: attacker.types,
+      });
 
   // 랭크업 결과 문구용(Phase 6.5 §6-2 ⑥⑦, §6-3): 이 기술이 사용자 자신의 랭크를 실제로 올린 것과,
   // 올리려 했으나 이미 +6이라 막힌 것을 각각 모은다. 확정 랭크업만 대상 — 확률 부가효과(chance)와
@@ -2308,7 +3520,7 @@ function resolveAction(
   // 내려간 스탯만(-6 클램프로 변화가 없었던 건 자연히 제외) 골라서, 막을 스탯이면 원래 값으로
   // 되돌리고, 반사 특성이면 원래 값으로 되돌린 뒤 그만큼을 공격측에게 대신 적용한다. "상대의
   // 기술로" 내려간 것만 대상이라 방금 위에서 적용한 opponent 방향 변화만 비교하면 충분하다.
-  const blockedStats = defenderAbility?.blocksOpponentStatDropsForStats;
+  const blockedStats = statDropBlockStatsOf(defender, defenderAbility);
   const reflects = defenderAbility?.reflectsOpponentStatDrops;
   // 미러아머 반사 문구용(E-4): 실제로 시전자(attacker)에게 되돌아간 랭크다운을 모은다. 특성/변화기
   // 랭크다운뿐 아니라 데미지 기술의 부가 랭크다운(브레이크클로 등)도 rolledStatChanges에 반영돼
@@ -2366,6 +3578,49 @@ function resolveAction(
     restoredStatsOpponentItemName = defenderItem?.name;
   }
 
+  // 편승(Opportunist): 이번 기술로 한쪽이 자신의 랭크를 올렸으면(위 statChanges·competitive·하양허브
+  // 후처리까지 전부 반영된 최종값 기준), 상대 쪽에 편승 특성이 있으면 그 상승분을 그대로 복사한다.
+  // 자기 자신의 상승은 복사 대상이 아니고, 복사 적용 시엔 복사자 쪽 심술꾸러기/클리어바디류를 존중한다.
+  function applyOpportunistCopy(
+    copier: BattleFighterState,
+    copierAbility: Ability | undefined,
+    riser: BattleFighterState,
+    riserBefore: StatStages,
+  ): { stat: BattleStatKey; delta: number }[] {
+    if (!copierAbility?.copiesOpponentStatBoosts) return [];
+    const copied: { stat: BattleStatKey; delta: number }[] = [];
+    for (const stat of Object.keys(riser.stages) as BattleStatKey[]) {
+      const gain = riser.stages[stat] - riserBefore[stat];
+      if (gain <= 0) continue;
+      const before = copier.stages[stat];
+      copier.stages = applyStageDelta(copier.stages, stat, contraryDelta(copier, gain));
+      const applied = copier.stages[stat] - before;
+      if (applied !== 0) copied.push({ stat, delta: applied });
+    }
+    return copied;
+  }
+  const opportunistCopiedByDefender = applyOpportunistCopy(
+    defender,
+    defenderAbility,
+    attacker,
+    attackerStagesBeforeMoveChange,
+  );
+  const opportunistCopiedByAttacker = applyOpportunistCopy(
+    attacker,
+    attackerAbility,
+    defender,
+    defenderStagesBeforeMoveChange,
+  );
+  const opportunistCopiedStats =
+    opportunistCopiedByDefender.length > 0
+      ? opportunistCopiedByDefender
+      : opportunistCopiedByAttacker.length > 0
+        ? opportunistCopiedByAttacker
+        : undefined;
+  const opportunistAbilityName = opportunistCopiedStats
+    ? (opportunistCopiedByDefender.length > 0 ? defenderAbility : attackerAbility)?.name
+    : undefined;
+
   // 상대 랭크다운 결과 문구용(§1 C-6): 이 기술이 실제로 상대 랭크를 내린 것만 모은다. 최종
   // defender.stages 기준이라 클리어바디로 막혔거나 미러아머로 반사됐거나 하양허브로 되돌아간
   // 경우엔 net 변화가 0이라 자연히 제외된다. selfStatRises와 대칭 — 확정 하락만(확률 부가효과는
@@ -2381,13 +3636,16 @@ function resolveAction(
     }
   }
 
-  attacker.accuracyStages = applyMoveAccuracyEvasionChanges(attacker.accuracyStages, effectiveMove, "self", {
-    userTypes: attacker.types,
-  });
+  attacker.accuracyStages = applyMoveAccuracyEvasionChanges(
+    attacker.accuracyStages,
+    contraryMoveFor(effectiveMove, attacker),
+    "self",
+    { userTypes: attacker.types },
+  );
   const defenderAccuracyBeforeChange = defender.accuracyStages.accuracy;
   defender.accuracyStages = opponentEffectsBlocked
     ? defender.accuracyStages
-    : applyMoveAccuracyEvasionChanges(defender.accuracyStages, effectiveMove, "opponent", {
+    : applyMoveAccuracyEvasionChanges(defender.accuracyStages, contraryMoveFor(effectiveMove, defender), "opponent", {
         userTypes: attacker.types,
       });
   // 날카로운눈: 상대(공격측)의 기술로 자신의 명중률이 떨어지는 걸 막는다. 회피율 변화는 이
@@ -2414,6 +3672,63 @@ function resolveAction(
     defender.accuracyStages = { ...NEUTRAL_ACCURACY_STAGES };
   }
 
+  // 뒤집어엎기(invertsTargetStatStages): 명중 시 상대에게 현재 걸려 있는 5스탯 + 명중률/회피율
+  // 랭크의 부호를 전부 뒤집는다(+2 → -2). 급소율은 흑안개와 같은 이유로 건드리지 않는다.
+  let invertedTargetStages = false;
+  if (effectiveMove.invertsTargetStatStages && hit && !opponentEffectsBlocked && !isFainted(defender)) {
+    defender.stages = Object.fromEntries(
+      Object.entries(defender.stages).map(([k, v]) => [k, -v]),
+    ) as typeof defender.stages;
+    defender.accuracyStages = {
+      accuracy: -defender.accuracyStages.accuracy,
+      evasion: -defender.accuracyStages.evasion,
+    };
+    invertedTargetStages = true;
+  }
+
+  // 숲의저주(풀)·핼러윈(고스트): 명중 시 상대의 타입 목록에 그 타입을 추가한다(배틀 끝까지 유지).
+  // addedType에도 기록해 두어 의태/기분파가 타입을 재계산해도 이 추가 타입이 다시 붙게 한다.
+  let addedTypeToTarget: PokemonType | undefined;
+  if (
+    effectiveMove.addsTypeToTarget &&
+    hit &&
+    !opponentEffectsBlocked &&
+    !isFainted(defender) &&
+    !defender.types.includes(effectiveMove.addsTypeToTarget)
+  ) {
+    defender.addedType = effectiveMove.addsTypeToTarget;
+    defender.types = [...defender.types, effectiveMove.addsTypeToTarget];
+    addedTypeToTarget = effectiveMove.addsTypeToTarget;
+  }
+
+  // 마법가루(setsTargetType): 명중 시 상대의 타입을 이 타입 하나로 통째로 덮어쓴다(치환, 배틀 끝까지).
+  let overwroteTargetType: PokemonType | undefined;
+  if (
+    effectiveMove.setsTargetType &&
+    hit &&
+    !opponentEffectsBlocked &&
+    !isFainted(defender) &&
+    !(defender.types.length === 1 && defender.types[0] === effectiveMove.setsTargetType)
+  ) {
+    defender.types = [effectiveMove.setsTargetType];
+    defender.addedType = undefined;
+    overwroteTargetType = effectiveMove.setsTargetType;
+  }
+
+  // 송전(changesTargetMoveTypeThisTurn): 명중 시, 공격측이 이번 턴 먼저 움직였을 때만(=상대가
+  // 아직 행동 안 함) 상대가 이번 턴 쓰는 기술의 타입을 전기로 바꾼다. 턴 종료 시 runTurn이 해제한다.
+  let targetMoveTypeOverride: PokemonType | undefined;
+  if (
+    effectiveMove.changesTargetMoveTypeThisTurn &&
+    hit &&
+    !opponentEffectsBlocked &&
+    !isFainted(defender) &&
+    !movesSecond
+  ) {
+    defender.moveTypeOverrideThisTurn = effectiveMove.changesTargetMoveTypeThisTurn;
+    targetMoveTypeOverride = effectiveMove.changesTargetMoveTypeThisTurn;
+  }
+
   let inflictedStatus: StatusConditionState["condition"] | undefined;
   // 이미 걸린 상태이상 때문에 상태이상 전용 변화기(맹독·도깨비불 등)가 아무 변화도 못 냈으면 true.
   // C-8: "블래키의 맹독 - 그러나 실패했다!". 데미지 기술의 부가 상태이상은 그냥 안 걸린 것뿐이라 대상 아님.
@@ -2429,14 +3744,14 @@ function resolveAction(
         isImmuneToStatus(
           effect.status,
           defender.types,
-          defenderAbility?.immuneToStatuses,
+          statusImmunitiesOf(defender, defenderAbility),
           attackerAbility?.bypassesPoisonTypeImmunity,
         )
       )
         continue;
       if (isStatusBlockedByField(state.field, effect.status)) continue;
       // 쾌청(강한 햇살) 날씨에서는 얼음 상태에 걸리지 않는다 — 타입 면역과는 다른 축이라 별도 확인
-      if (effect.status === "freeze" && state.weather === "쾌청") continue;
+      if (effect.status === "freeze" && activeWeather(state) === "쾌청") continue;
       const chance = effect.chance !== undefined ? effect.chance / 100 : 1;
       if (random() < chance) {
         const before = defender.status.condition;
@@ -2444,6 +3759,34 @@ function resolveAction(
         if (defender.status.condition !== before) inflictedStatus = defender.status.condition;
         else if (effectiveMove.category === "status" && effect.chance === undefined) statusInflictFailed = true;
         break; // 주 상태이상은 한 번에 하나만 걸린다 (중첩 없음)
+      }
+    }
+  }
+
+  // 페이탈클로(inflictsRandomStatus): 데미지를 준 뒤 이 확률로 statuses 중 하나를 무작위로 걸어본다.
+  // 인분(추가효과 차단)·황금몸·대타·이미 상태이상 규칙은 통상 부가 상태이상과 동일하게 존중한다.
+  if (
+    effectiveMove.inflictsRandomStatus &&
+    hit &&
+    damage > 0 &&
+    !hitSubstitute &&
+    !opponentEffectsBlocked &&
+    !inflictedStatus
+  ) {
+    if (secondaryEffectsBlockedByAbility) {
+      secondaryBlockedByAbilityName = defenderAbility!.name;
+    } else if (random() * 100 < effectiveMove.inflictsRandomStatus.chance) {
+      const pool = effectiveMove.inflictsRandomStatus.statuses;
+      const picked = pool[Math.floor(random() * pool.length)];
+      if (
+        picked &&
+        !isImmuneToStatus(picked, defender.types, statusImmunitiesOf(defender, defenderAbility)) &&
+        !isStatusBlockedByField(state.field, picked) &&
+        !(picked === "freeze" && activeWeather(state) === "쾌청")
+      ) {
+        const before = defender.status.condition;
+        defender.status = inflictStatus(defender.status, picked);
+        if (defender.status.condition !== before) inflictedStatus = defender.status.condition;
       }
     }
   }
@@ -2465,13 +3808,51 @@ function resolveAction(
     );
     if (
       rose &&
-      !isImmuneToStatus("burn", defender.types, defenderAbility?.immuneToStatuses) &&
+      !isImmuneToStatus("burn", defender.types, statusImmunitiesOf(defender, defenderAbility)) &&
       !isStatusBlockedByField(state.field, "burn")
     ) {
       const before = defender.status.condition;
       defender.status = inflictStatus(defender.status, "burn");
       if (defender.status.condition !== before) inflictedStatus = defender.status.condition;
     }
+  }
+
+  // 독수(Poison Touch): 접촉기로 데미지를 준 직후 이 확률로 상대를 독 상태로 만든다(독가시
+  // hitTrigger의 공격측 버전). 타입/특성 상태이상 면역·필드는 그대로 존중. 대타를 맞혔으면 본체엔
+  // 안 건다. 이미 다른 부가 상태이상이 걸린 경우는 중첩하지 않는다.
+  if (
+    attackerAbility?.poisonTouchChance !== undefined &&
+    (effectiveMove.makesContact ?? false) &&
+    hit &&
+    damage > 0 &&
+    !hitSubstitute &&
+    !inflictedStatus &&
+    !isImmuneToStatus("poison", defender.types, statusImmunitiesOf(defender, defenderAbility), attackerAbility?.bypassesPoisonTypeImmunity) &&
+    !isStatusBlockedByField(state.field, "poison") &&
+    random() * 100 < attackerAbility.poisonTouchChance
+  ) {
+    const before = defender.status.condition;
+    defender.status = inflictStatus(defender.status, "poison");
+    if (defender.status.condition !== before) inflictedStatus = defender.status.condition;
+  }
+
+  // 부리캐논(Beak Blast): 방어측이 이번 턴 부리캐논을 골랐고 아직 발동 전(=공격측이 이번 턴 먼저
+  // 움직임)인데 공격측이 접촉기로 때리면, 가열된 부리에 데어 공격측이 화상을 입는다. 원격이면
+  // move.makesContact가 이미 false라 자연히 제외된다. 대타 피격은 접촉이 아니라 제외.
+  let beakBlastBurnedAttacker = false;
+  if (
+    defenderMove.burnsContactAttackerBeforeResolve &&
+    !movesSecond &&
+    (move.makesContact ?? false) &&
+    hit &&
+    !hitSubstitute &&
+    !isFainted(attacker) &&
+    !isImmuneToStatus("burn", attacker.types, statusImmunitiesOf(attacker, attackerAbility)) &&
+    !isStatusBlockedByField(state.field, "burn")
+  ) {
+    const before = attacker.status.condition;
+    attacker.status = inflictStatus(attacker.status, "burn");
+    if (attacker.status.condition !== before) beakBlastBurnedAttacker = true;
   }
 
   // 싱크로: 이번 행동으로 방어측이 지정된 상태이상에 걸렸으면(원인은 이 블록 — 상대 기술) 그
@@ -2481,9 +3862,9 @@ function resolveAction(
   if (
     inflictedStatus &&
     defenderAbility?.reflectsStatusToOpponent?.includes(inflictedStatus) &&
-    !isImmuneToStatus(inflictedStatus, attacker.types, attackerAbility?.immuneToStatuses) &&
+    !isImmuneToStatus(inflictedStatus, attacker.types, statusImmunitiesOf(attacker, attackerAbility)) &&
     !isStatusBlockedByField(state.field, inflictedStatus) &&
-    !(inflictedStatus === "freeze" && state.weather === "쾌청")
+    !(inflictedStatus === "freeze" && activeWeather(state) === "쾌청")
   ) {
     const beforeAttackerStatus = attacker.status.condition;
     attacker.status = inflictStatus(attacker.status, inflictedStatus);
@@ -2519,6 +3900,15 @@ function resolveAction(
       if (effect.volatile === "confusion" && isConfusionBlockedByField(state.field)) continue;
       // 정신력: 풀죽음 자체에 면역이라 발동 시도 자체가 무산된다(본가 규칙 — 확률 판정까지 가지 않음)
       if (effect.volatile === "flinch" && effect.target !== "self" && defenderAbility?.immuneToFlinch) continue;
+      // 아로마베일: 방어측이 이 특성이면 헤롱헤롱·도발이 걸리지 않는다(마음을 옭아매는 기술 차단).
+      if (
+        effect.target !== "self" &&
+        defenderAbility?.blocksMentalMoves &&
+        (effect.volatile === "attract" || effect.volatile === "taunt")
+      ) {
+        mentalMoveBlockedByAbilityName = defenderAbility.name;
+        continue;
+      }
       // 황금몸: 상대(공격측)를 향한 변화기 효과만 막는다 — target이 "self"(공격측 자신에게
       // 거는 것, 예: 반동/하품 예약)면 이 포켓몬을 겨냥한 게 아니라서 그대로 진행된다.
       if (effect.target !== "self" && opponentEffectsBlocked) continue;
@@ -2586,19 +3976,74 @@ function resolveAction(
     }
   }
 
+  // 정리정돈·고속스핀(Move.hazardClear): 명중 시 설치물·대타를 정리한다.
+  let tidyUpDone = false;
+  if (effectiveMove.hazardClear && hit && !blockedByProtect) {
+    if (effectiveMove.hazardClear === "tidy") {
+      state.sideA.hazards = emptyHazardState();
+      state.sideB.hazards = emptyHazardState();
+      attacker.substituteHp = undefined;
+      defender.substituteHp = undefined;
+      tidyUpDone = true;
+    } else {
+      // "spin": 사용자 쪽 설치물 + 사용자에게 걸린 속박·씨뿌리기만 정리한다(본가 고속스핀).
+      sideOf(state, actorKey).hazards = emptyHazardState();
+      const nextActive = { ...attacker.volatile.active };
+      delete nextActive.bound;
+      delete nextActive.leechSeed;
+      attacker.volatile = { active: nextActive };
+    }
+  }
+
+  // 시럽봄(Move.setsSyrupCoat): 명중 시 상대를 물엿범벅(syrupCoat, 3턴) 상태로 만든다. 데미지 기술의
+  // 부가효과라 인분·우격다짐엔 발동하지 않고, 황금몸(opponentEffectsBlocked)에도 막힌다.
+  if (
+    effectiveMove.setsSyrupCoat &&
+    hit &&
+    !blockedByProtect &&
+    !opponentEffectsBlocked &&
+    !secondaryEffectsBlockedByAbility &&
+    !sheerForceAbilityName &&
+    !isFainted(defender) &&
+    !hasVolatile(defender.volatile, "syrupCoat")
+  ) {
+    defender.volatile = inflictVolatile(defender.volatile, "syrupCoat", random);
+  }
+
+  // 소금절이(Move.setsSaltCure): 명중해서 데미지를 준 뒤 상대를 소금절이(saltCure, 영구) 상태로 만든다.
+  // 인분·우격다짐엔 발동하지 않는다(공격 데미지만). 황금몸에도 막힌다.
+  let saltCureApplied = false;
+  if (
+    effectiveMove.setsSaltCure &&
+    hit &&
+    !blockedByProtect &&
+    damage > 0 &&
+    !opponentEffectsBlocked &&
+    !secondaryEffectsBlockedByAbility &&
+    !sheerForceAbilityName &&
+    !isFainted(defender) &&
+    !hasVolatile(defender.volatile, "saltCure")
+  ) {
+    defender.volatile = inflictVolatile(defender.volatile, "saltCure", random);
+    saltCureApplied = true;
+  }
+
   // 왕의징표석: 데미지를 주는 데 성공하면 이 확률로 상대에게 추가 풀죽음을 건다. 기술 자체의
   // 풀죽음 확률(있다면)과는 완전히 별개 판정이라, 기술이 이미 풀죽음을 걸었으면 중복으로 다시
   // 걸 필요가 없다(로그에 "풀죽음!"이 두 번 찍히는 것만 방지 — 결과 자체는 어차피 동일).
+  // 악취: 왕의징표석과 같은 축의 특성 버전 — 공격측이 이 특성이면 이 확률로 추가 풀죽음.
+  const stenchFlinchTriggered =
+    attackerAbility?.flinchChanceOnHit !== undefined && random() * 100 < attackerAbility.flinchChanceOnHit;
   if (
     isDamaging &&
     damage > 0 &&
     inflictedVolatile !== "flinch" &&
     !isFainted(defender) &&
     !defenderAbility?.immuneToFlinch &&
-    getExtraFlinchTriggered(attackerItem, random)
+    (getExtraFlinchTriggered(attackerItem, random) || stenchFlinchTriggered)
   ) {
     if (defenderAbility?.blocksSecondaryEffects) {
-      // 인분: 왕의징표석이 얹는 추가 풀죽음도 추가효과라 무산된다(굴림은 이미 소비 — 결과만 버린다).
+      // 인분: 왕의징표석·악취가 얹는 추가 풀죽음도 추가효과라 무산된다(굴림은 이미 소비 — 결과만 버린다).
       secondaryBlockedByAbilityName = defenderAbility.name;
     } else {
       defender.volatile = inflictVolatile(defender.volatile, "flinch", random);
@@ -2610,7 +4055,7 @@ function resolveAction(
   // 이미 defender.volatile에 반영됨) 그 즉시 지정된 랭크가 오른다.
   if (inflictedVolatile === "flinch" && defenderAbility?.boostsStatOnFlinch) {
     const boost = defenderAbility.boostsStatOnFlinch;
-    defender.stages = applyStageDelta(defender.stages, boost.stat, boost.delta);
+    defender.stages = applyStageDelta(defender.stages, boost.stat, contraryDelta(defender, boost.delta));
   }
 
   // 상태이상 치료: 물거품아리아처럼 명중 시 대상의 주 상태이상을 없앤다(inflictsStatus의 반대 방향).
@@ -2676,14 +4121,62 @@ function resolveAction(
   if (!effectiveMove.restSleep && (effectiveMove.healsFraction !== undefined || effectiveMove.healsWeatherDependent)) {
     healedTarget = effectiveMove.healsTarget ?? "self";
     const healTarget = healedTarget === "self" ? attacker : defender;
+    // 메가솔라: 자신이 쓰는 광합성·달빛류(자기 회복)의 회복량이 항상 쾌청 기준(2/3)이 된다.
+    const healWeather =
+      healedTarget === "self" && attackerAbility?.treatsOwnWeatherAsSun ? "쾌청" : activeWeather(state);
     const fraction = effectiveMove.healsWeatherDependent
-      ? computeWeatherHealFraction(state.weather)
+      ? computeWeatherHealFraction(healWeather)
       : effectiveMove.healsFraction!;
     healedAmount = Math.min(
       healTarget.maxHp - healTarget.currentHp,
       Math.floor(healTarget.maxHp * fraction),
     );
     healTarget.currentHp += healedAmount;
+  }
+
+  // 힘흡수(drainsFromTargetAttackStat): 상대의 공격 실능(랭크 반영, -1 적용 전 값)만큼 자신을 회복.
+  // 상대 공격 -1은 데이터의 statChanges로 위에서 이미 적용됐지만, 회복량은 랭크 변화 전 실능
+  // 기준이라 defenderStagesBeforeMoveChange를 쓴다(본가 규칙).
+  if (effectiveMove.drainsFromTargetAttackStat) {
+    const targetAtk = Math.floor(
+      defender.realStats.atk * rankStageMultiplier(defenderStagesBeforeMoveChange.atk),
+    );
+    const gain = Math.min(attacker.maxHp - attacker.currentHp, targetAtk);
+    attacker.currentHp += gain;
+    healedAmount = gain;
+    healedTarget = "self";
+  }
+
+  // 가드셰어(averagesDefensesWithTarget): 자신·상대의 방어·특방 실능을 각각 더해 반씩 배정(내림).
+  // 파워트릭(swapsOwnStats)처럼 realStats를 직접 고쳐 재계산이 필요 없다.
+  let averagedDefensesMoveName: string | undefined;
+  if (effectiveMove.averagesDefensesWithTarget) {
+    const avgDef = Math.floor((attacker.realStats.def + defender.realStats.def) / 2);
+    const avgSpd = Math.floor((attacker.realStats.spd + defender.realStats.spd) / 2);
+    attacker.realStats = { ...attacker.realStats, def: avgDef, spd: avgSpd };
+    defender.realStats = { ...defender.realStats, def: avgDef, spd: avgSpd };
+    averagedDefensesMoveName = effectiveMove.name;
+  }
+
+  // 스피드스왑(swapsSpeedWithTarget): 자신·상대의 스피드 실능을 서로 맞바꾼다.
+  let swappedSpeedMoveName: string | undefined;
+  if (effectiveMove.swapsSpeedWithTarget) {
+    const aSpe = attacker.realStats.spe;
+    attacker.realStats = { ...attacker.realStats, spe: defender.realStats.spe };
+    defender.realStats = { ...defender.realStats, spe: aSpe };
+    swappedSpeedMoveName = effectiveMove.name;
+  }
+
+  // 변신(transformsIntoTarget): 상대로 변신한다. 이미 변신 상태면 실패(1v1이라 배틀 끝까지 유지).
+  let transformedIntoName: string | undefined;
+  let transformFailed = false;
+  if (effectiveMove.transformsIntoTarget) {
+    if (attacker.transformed) {
+      transformFailed = true;
+    } else {
+      applyTransform(attacker, defender);
+      transformedIntoName = getPokemon(defender.slot.pokemonId)?.name ?? "상대";
+    }
   }
 
   // 뿌리박기/아쿠아링: 이미 걸려있으면 재사용 실패(지속 효과 중복 방지, 필드/트릭룸과 같은 패턴).
@@ -2710,6 +4203,31 @@ function resolveAction(
     }
   }
 
+  // 조이기·엉겨붙기·집게덫 등(bindsTarget): 데미지를 준 뒤 상대를 4~5턴 속박한다(volatile "bound").
+  // 대타를 맞혔거나 이미 속박 중이면 갱신하지 않는다.
+  if (
+    effectiveMove.bindsTarget &&
+    damage > 0 &&
+    !hitSubstitute &&
+    !isFainted(defender) &&
+    !hasVolatile(defender.volatile, "bound")
+  ) {
+    defender.volatile = inflictVolatile(defender.volatile, "bound", random);
+  }
+
+  // 심플빔("단순")·바뀌어라 등(setsTargetAbilityId): 명중 시 상대 특성을 지정 id로 바꾼다.
+  // 방어/대타/황금몸/매직미러로 상대 방향 효과가 막혔으면 무발동. 이미 그 특성이면 실패 표기.
+  let abilitySwappedTargetToName: string | undefined;
+  let abilitySwapFailed = false;
+  if (effectiveMove.setsTargetAbilityId && hit && !opponentEffectsBlocked && !isFainted(defender)) {
+    if (defender.effectiveAbilityId === effectiveMove.setsTargetAbilityId) {
+      abilitySwapFailed = true;
+    } else {
+      defender.effectiveAbilityId = effectiveMove.setsTargetAbilityId;
+      abilitySwappedTargetToName = getAbility(effectiveMove.setsTargetAbilityId)?.name ?? effectiveMove.setsTargetAbilityId;
+    }
+  }
+
   // 대타출동: 이미 대타가 있거나, 최대 HP 1/4보다 현재 HP가 많지 않으면(=쓰면 자신이 기절하거나
   // 대타 HP가 0 이하가 되는 경우) 실패한다. 성공하면 그 즉시 HP를 깎고 같은 양만큼의 대타를 세운다.
   let substituteSetFailed = false;
@@ -2728,7 +4246,10 @@ function resolveAction(
   let setDisabledMoveName: string | undefined;
   let disableSetFailed = false;
   if (effectiveMove.setsDisable) {
-    if (!defender.lastMoveId || hasVolatile(defender.volatile, "disable")) {
+    if (defenderAbility?.blocksMentalMoves) {
+      mentalMoveBlockedByAbilityName = defenderAbility.name;
+      disableSetFailed = true;
+    } else if (!defender.lastMoveId || hasVolatile(defender.volatile, "disable")) {
       disableSetFailed = true;
     } else {
       defender.volatile = inflictVolatile(defender.volatile, "disable", random, defender.lastMoveId);
@@ -2749,7 +4270,10 @@ function resolveAction(
   let setEncoreMoveName: string | undefined;
   let encoreSetFailed = false;
   if (effectiveMove.setsEncore) {
-    if (!defender.lastMoveId || hasVolatile(defender.volatile, "encore")) {
+    if (defenderAbility?.blocksMentalMoves) {
+      mentalMoveBlockedByAbilityName = defenderAbility.name;
+      encoreSetFailed = true;
+    } else if (!defender.lastMoveId || hasVolatile(defender.volatile, "encore")) {
       encoreSetFailed = true;
     } else {
       defender.volatile = inflictVolatile(defender.volatile, "encore", random, defender.lastMoveId);
@@ -2813,6 +4337,7 @@ function resolveAction(
           moveName: effectiveMove.name,
           contactPenalty: effectiveMove.protectContactPenalty,
           contactDamageFraction: effectiveMove.protectContactDamageFraction,
+          contactStatus: effectiveMove.protectContactStatus,
         };
         // 태세엔 들어갔지만 상대가 자기 대상 기술만 냈으면 "막을 게 없어" 실패로 표기.
         if (targetedSelf) protectSucceeded = true;
@@ -2835,20 +4360,35 @@ function resolveAction(
     }
   }
 
-  // 스텔스록: 상대 진영에 설치한다. 이미 그 진영에 깔려 있으면 실패한다(사용자 확인).
-  // 매직미러 반사 중이면 바인딩이 맞바뀌어 있으므로 설치 대상 진영은 defenderKey가 아니라
-  // 원래 시전자 쪽(actorKey)이다. (교체가 없는 현행 엔진에선 등장 데미지가 없어 실질 효과는
-  // "어느 진영 플래그가 켜지나"뿐이지만, 방향은 맞게 기록해 둔다.)
+  // 설치물(스텔스록·압정뿌리기·독압정·끈적끈적네트): 상대 진영에 설치한다(Phase 8 §6).
+  // 스텔스록·끈적끈적네트는 1장 고정, 압정뿌리기는 최대 3층, 독압정은 최대 2층 스택.
+  // 매직미러 반사 중이면 설치 대상 진영은 defenderKey가 아니라 원래 시전자 쪽(actorKey)이다.
   let stealthRockSetForSide: FighterKey | undefined;
+  let spikesSetForSide: FighterKey | undefined;
+  let toxicSpikesSetForSide: FighterKey | undefined;
+  let stickyWebSetForSide: FighterKey | undefined;
   let hazardSetFailed = false;
-  if (effectiveMove.setsHazard === "stealthRock") {
+  if (effectiveMove.setsHazard !== undefined) {
     const hazardSide = bounceActive ? actorKey : defenderKey;
-    if (state.stealthRock[hazardSide]) {
-      hazardSetFailed = true;
-    } else {
-      state.stealthRock[hazardSide] = true;
-      stealthRockSetForSide = hazardSide;
+    const hz = sideOf(state, hazardSide).hazards;
+    let didSet = false;
+    switch (effectiveMove.setsHazard) {
+      case "stealthRock":
+        if (!hz.stealthRock) { hz.stealthRock = true; didSet = true; stealthRockSetForSide = hazardSide; }
+        break;
+      case "spikes":
+        if (hz.spikesLayers < 3) { hz.spikesLayers += 1; didSet = true; spikesSetForSide = hazardSide; }
+        break;
+      case "toxicSpikes":
+        if (hz.toxicSpikesLayers < 2) { hz.toxicSpikesLayers += 1; didSet = true; toxicSpikesSetForSide = hazardSide; }
+        break;
+      case "stickyWeb":
+        if (!hz.stickyWeb) { hz.stickyWeb = true; didSet = true; stickyWebSetForSide = hazardSide; }
+        break;
     }
+    // 비검천중파·암석액스처럼 명중 부가효과로 까는 데미지기는 "이미 최대"여도 공격 자체는 성공이라
+    // 실패 플래그를 세우지 않는다 — 변화기만 실패로 표시한다.
+    if (!didSet && effectiveMove.category === "status") hazardSetFailed = true;
   }
 
   // ── 매직미러 반사 구간 끝 ── 바인딩을 원위치한다. 이후 로그·나무열매·매지션·폼 전환 등
@@ -2908,6 +4448,9 @@ function resolveAction(
         ? attackerItem.weatherDurationBonus.bonus
         : 0;
     state.weatherTurnsRemaining = WEATHER_DURATION + rockBonus;
+    // 기분파(캐스퐁): 날씨가 바뀌면 그 자리에서 타입을 다시 맞춘다.
+    applyForecastForm(state.a, activeWeather(state));
+    applyForecastForm(state.b, activeWeather(state));
   }
 
   // 리플렉터/빛의장막: 자신 쪽에 이미 같은 스크린이 걸려있으면 실패(필드/트릭룸과 같은 패턴).
@@ -2933,6 +4476,7 @@ function resolveAction(
       attacker.currentHp,
       attacker.maxHp,
       attacker.itemConsumed ?? false,
+      !!attackerAbility?.doublesBerryEffect, // 숙성
     );
     if (attackerBerryHealAmount > 0) {
       attacker.currentHp = Math.min(attacker.maxHp, attacker.currentHp + attackerBerryHealAmount);
@@ -2948,6 +4492,7 @@ function resolveAction(
       defender.currentHp,
       defender.maxHp,
       defender.itemConsumed ?? false,
+      !!defenderAbility?.doublesBerryEffect, // 숙성
     );
     if (defenderBerryHealAmount > 0) {
       defender.currentHp = Math.min(defender.maxHp, defender.currentHp + defenderBerryHealAmount);
@@ -2961,7 +4506,34 @@ function resolveAction(
   // 이번 행동 중에 쓰러진 것이다 — 데미지를 준 경우로 한정해 상태이상/씨뿌리기 등 무관한 원인은 제외.
   if (isDamaging && damage > 0 && isFainted(defender) && attackerAbility?.boostsStatOnKo) {
     const boost = attackerAbility.boostsStatOnKo;
-    attacker.stages = applyStageDelta(attacker.stages, boost.stat, boost.delta);
+    attacker.stages = applyStageDelta(attacker.stages, boost.stat, contraryDelta(attacker, boost.delta));
+  }
+
+  // 천정부지(포챔스판): 자신의 데미지로 상대를 쓰러뜨리면 realStats가 가장 높은 능력이 1랭크 오른다.
+  if (isDamaging && damage > 0 && isFainted(defender) && attackerAbility?.boostsHighestStatOnKo) {
+    const cands: BattleStatKey[] = ["atk", "def", "spa", "spd", "spe"];
+    const highest = cands.reduce((a, b) => (attacker.realStats[b] > attacker.realStats[a] ? b : a));
+    attacker.stages = applyStageDelta(attacker.stages, highest, contraryDelta(attacker, 1));
+  }
+
+  // 마지막일침(포챔스판): 이 기술의 데미지로 상대를 실제로 쓰러뜨리면 사용자 스탯이 오른다.
+  // 자기과신(위)과 완전히 같은 축 — 특성이 아니라 기술 단위라는 점만 다르다.
+  if (isDamaging && damage > 0 && isFainted(defender) && effectiveMove.boostsUserStatOnKo) {
+    const boost = effectiveMove.boostsUserStatOnKo;
+    attacker.stages = applyStageDelta(attacker.stages, boost.stat, contraryDelta(attacker, boost.delta));
+  }
+
+  // 레이징불·깨트리기(breaksScreensOnHit): 명중하면 상대 쪽 스크린을 전부 제거한다. 위 데미지
+  // 계산은 스크린이 살아있는 상태로 이미 끝났으니(그 턴엔 아직 경감), 여기서 제거만 한다.
+  let brokeScreens: ("reflect" | "lightScreen" | "auroraVeil")[] | undefined;
+  if (effectiveMove.breaksScreensOnHit) {
+    const present = (Object.keys(defender.screens) as ("reflect" | "lightScreen" | "auroraVeil")[]).filter(
+      (s) => defender.screens[s] !== undefined,
+    );
+    if (present.length > 0) {
+      defender.screens = {};
+      brokeScreens = present;
+    }
   }
 
   // 곡예: 이번 행동 도중 도구가 있었다가(전) 없어졌으면(후 — 나무열매 소모든 매지션에게
@@ -2993,6 +4565,11 @@ function resolveAction(
   const blockedBySubstituteMoveName =
     blockedBySubstitute && !hitSubstitute && isOpponentTargetingMove(effectiveMove) ? effectiveMove.name : undefined;
   const powderBlockedMoveName = blockedByPowderImmunity ? effectiveMove.name : undefined;
+
+  // 볼주머니: 이번 행동 중 consumeItem이 나무열매 소비로 쌓아둔 추가 회복량을 로그로 옮기고 지운다.
+  cheekPouchHeal += (attacker.pendingCheekPouchHeal ?? 0) + (defender.pendingCheekPouchHeal ?? 0);
+  attacker.pendingCheekPouchHeal = undefined;
+  defender.pendingCheekPouchHeal = undefined;
 
   return {
     actor: actorKey,
@@ -3028,7 +4605,15 @@ function resolveAction(
     setField: fieldSetFailed ? undefined : effectiveMove.setsField,
     fieldSetFailed,
     stealthRockSetForSide,
+    spikesSetForSide,
+    toxicSpikesSetForSide,
+    stickyWebSetForSide,
     hazardSetFailed,
+    abilitySwappedTargetToName,
+    abilitySwapFailed: abilitySwapFailed || undefined,
+    ateBerryName: stuffCheeksBerryName,
+    ateBerryHeal: stuffCheeksBerryHeal || undefined,
+    berryEatFailed: berryEatFailed || undefined,
     bouncedMoveName,
     bouncedByAbilityName,
     secondaryBlockedByAbilityName,
@@ -3038,6 +4623,7 @@ function resolveAction(
     setWeather: effectiveMove.setsWeather,
     setScreen: screenSetFailed ? undefined : effectiveMove.setsScreen,
     screenSetFailed,
+    brokeScreens,
     fainted: isFainted(defender),
     selfFainted: isFainted(attacker),
     recoilDamage,
@@ -3067,6 +4653,11 @@ function resolveAction(
     setEncoreMoveName,
     encoreSetFailed,
     swappedStatsMoveName,
+    averagedDefensesMoveName,
+    swappedSpeedMoveName,
+    shellSideArmCategory,
+    transformedIntoName,
+    transformFailed: transformFailed || undefined,
     sheerForceAbilityName,
     substituteBroke,
     hitSubstitute,
@@ -3096,11 +4687,32 @@ function resolveAction(
     abilityDamageAbilityName,
     abilityDisabledMoveName,
     abilityDisableAbilityName,
+    pickpocketStolenItemName,
+    pickpocketAbilityName,
+    mummifiedAttackerAbilityName,
     abilityRaisedDefenderStatsAbilityName,
     abilityRaisedDefenderStats: abilityRaisedDefenderStats.length ? abilityRaisedDefenderStats : undefined,
     abilityLoweredDefenderStats: abilityLoweredDefenderStats.length ? abilityLoweredDefenderStats : undefined,
     abilityAbsorbedMoveType,
     abilityAbsorbAbilityName,
+    soundproofBlockedByAbilityName,
+    bulletproofBlockedByAbilityName,
+    mentalMoveBlockedByAbilityName,
+    invertedTargetStages: invertedTargetStages || undefined,
+    addedTypeToTarget,
+    targetMoveTypeOverride,
+    abilityLoweredAttackerStatsAbilityName,
+    abilityLoweredAttackerStats: abilityLoweredAttackerStats.length ? abilityLoweredAttackerStats : undefined,
+    cheekPouchHeal: cheekPouchHeal || undefined,
+    beakBlastBurnedAttacker: beakBlastBurnedAttacker || undefined,
+    protectContactInflictedStatus,
+    angerPointRaisedSpa: angerPointRaisedSpa || undefined,
+    angerPointAbilityName,
+    soulBeatHpCost: soulBeatHpCost || undefined,
+    soulBeatFailed: costHpFailed || undefined,
+    wanderingSpiritSwapped: wanderingSpiritSwapped || undefined,
+    sandSpitWeather,
+    overwroteTargetType,
     abilityAbsorbHealAmount: abilityAbsorbHealAmount || undefined,
     resetAllStages: effectiveMove.resetsAllStages || undefined,
     stolenItemName,
@@ -3109,51 +4721,135 @@ function resolveAction(
     sleepTalkCalledMoveName,
     changedOwnTypeTo,
     changedOwnTypeAbilityName,
+    opportunistCopiedStats,
+    opportunistAbilityName,
+    electromorphosisEmpoweredAbilityName,
+    fickleBeamEmpowered: fickleBeamEmpowered || undefined,
+    tidyUpDone: tidyUpDone || undefined,
+    saltCureApplied: saltCureApplied || undefined,
   };
 }
+
+/** 한 편이 이번 턴에 하는 행동. 교체는 항상 기술보다 먼저 처리된다(Phase 8 §3). */
+export type TurnAction =
+  | { kind: "move"; move: Move }
+  | { kind: "switch"; toIndex: number };
 
 export interface RunTurnOutcome {
   /** 이번 턴 결과가 반영된 새 BattleState. prevState는 변형하지 않는다 */
   nextState: BattleState;
   result: TurnResult;
+  /**
+   * 턴 종료 시 활성 슬롯이 기절해 있어 다음 runTurn 전에 교체가 필요한 편(Phase 8 §3).
+   * 호출부는 applySwitch로 교체를 확정한 뒤 다음 턴을 진행해야 한다. 남은 슬롯이 없으면 그
+   * 편은 이미 패배(result.winner)라 여기 안 실린다. 파티 길이 1이면 항상 undefined.
+   */
+  forcedSwitch?: { a?: boolean; b?: boolean };
 }
 
 /**
  * 한 턴을 진행시킨다. prevState는 변형하지 않고, 복사본에 적용한 새 상태를 nextState로 돌려준다.
+ * 각 편의 액션은 기술(move) 또는 교체(switch) — 교체는 항상 그 턴 기술보다 먼저 처리한다.
  * 우선도 → 실효 스피드(마비 0.5배 포함) → 동속 랜덤 순으로 순서를 정하고,
  * 먼저 움직인 쪽이 상대를 쓰러뜨리면 나중 쪽은 행동하지 않는다.
  * 마지막에 양쪽 다 살아있으면 상태이상 매턴 데미지를 적용한다.
  */
 export function runTurn(
   prevState: BattleState,
-  moveA: Move,
-  moveB: Move,
+  actionA: TurnAction,
+  actionB: TurnAction,
   random: () => number = Math.random,
 ): RunTurnOutcome {
+  const sideA = cloneSide(prevState.sideA);
+  const sideB = cloneSide(prevState.sideB);
   const state: BattleState = {
-    a: cloneFighter(prevState.a),
-    b: cloneFighter(prevState.b),
+    // a/b는 각 편의 활성 파이터를 가리키는 포인터 — cloneSide가 만든 새 배열의 요소를 물린다.
+    a: sideA.party[sideA.activeIndex],
+    b: sideB.party[sideB.activeIndex],
+    sideA,
+    sideB,
     weather: prevState.weather,
     weatherTurnsRemaining: prevState.weatherTurnsRemaining,
     field: prevState.field,
     fieldTurnsRemaining: prevState.fieldTurnsRemaining,
     trickRoomTurnsRemaining: prevState.trickRoomTurnsRemaining,
-    stealthRock: { ...prevState.stealthRock },
     turnNumber: prevState.turnNumber + 1,
     entryAnnouncements: prevState.entryAnnouncements,
   };
+
+  // 가속 억제 플래그(§8)는 "이번 턴에 자발적 교체로 나왔나"라 매 턴 시작 시 전 슬롯에서 지운다.
+  // 아래 교체 선처리에서 자발적 교체한 슬롯에만 다시 세워지고, 그 턴 EOT 가속 판정이 이걸 읽는다.
+  for (const s of [state.sideA, state.sideB]) for (const f of s.party) f.switchedInThisTurn = undefined;
+
+  // ── 교체 액션 선처리(Phase 8 §3): 항상 그 턴 기술보다 먼저 ──
+  // 양쪽 다 교체면 스피드 빠른 쪽부터(순수 교체라 결과엔 영향 없지만 로그 순서 일관성).
+  const switches: SwitchLogEntry[] = [];
+  const didSwitch: Record<FighterKey, boolean> = { a: false, b: false };
+  const switchOrder: FighterKey[] =
+    prevState.a.realStats.spe >= prevState.b.realStats.spe ? ["a", "b"] : ["b", "a"];
+  for (const key of switchOrder) {
+    const action = key === "a" ? actionA : actionB;
+    if (action.kind !== "switch") continue;
+    const side = sideOf(state, key);
+    const fromIndex = side.activeIndex;
+    const outgoing = side.party[fromIndex];
+    const entryMessages: string[] = [];
+    performSwitch(state, key, action.toIndex, entryMessages);
+    if (side.activeIndex !== fromIndex) {
+      didSwitch[key] = true;
+      switches.push({
+        side: key,
+        fromIndex,
+        toIndex: action.toIndex,
+        outPokemonId: outgoing.slot.pokemonId,
+        inPokemonId: side.party[action.toIndex].slot.pokemonId,
+        entryMessages,
+      });
+    }
+  }
+
+  // 교체한 쪽은 이번 턴 행동하지 않는다. 아래 로직은 전부 Move 객체를 전제하므로, 교체 액션은
+  // 절대 실행되지 않는 무해한 센티넬로 대체한다(순서 계산의 우선도만 0으로 참여).
+  const SWITCH_PASS_MOVE: Move = { ...STRUGGLE_MOVE, id: "__switch_pass__", name: "교체", category: "status", power: null };
+  const moveA: Move = actionA.kind === "move" ? actionA.move : SWITCH_PASS_MOVE;
+  const moveB: Move = actionB.kind === "move" ? actionB.move : SWITCH_PASS_MOVE;
 
   // 방어류(방어/판별/버티기/킹실드)는 "이번 턴 한정" 효과라 매 턴 시작 시 항상 지운다 —
   // 지난 턴에 세운 게 이번 턴까지 남아있으면 안 된다. 연속 성공 스트릭(protectStreak)은
   // 반대로 배틀 끝까지 유지되는 값이라 여기서 건드리지 않는다.
   state.a.activeProtect = undefined;
   state.b.activeProtect = undefined;
+  // 송전: "이번 턴 한정" 타입 강제도 매 턴 시작 시 지운다(지난 턴 송전이 이번 턴까지 남으면 안 됨).
+  state.a.moveTypeOverrideThisTurn = undefined;
+  state.b.moveTypeOverrideThisTurn = undefined;
   // 미러코트/카운터/앙갚음/메탈버스트용 — 이번 턴 받은 카테고리별 데미지 누적기를 0으로 초기화한다(F-1).
   state.a.damageTakenThisTurn = { physical: 0, special: 0 };
   state.b.damageTakenThisTurn = { physical: 0, special: 0 };
   // 질투의불꽃용 — 이번 턴이 시작된 시점의 랭크를 스냅샷해 둔다(턴 중 랭크가 올랐는지 판정).
   state.a.statStagesAtTurnStart = { ...state.a.stages };
   state.b.statStagesAtTurnStart = { ...state.b.stages };
+
+  // 기분파(캐스퐁): 턴 시작 시점의 유효 날씨(날씨부정 반영)에 맞춰 타입을 다시 맞춘다.
+  applyForecastForm(state.a, activeWeather(state));
+  applyForecastForm(state.b, activeWeather(state));
+
+  // 의태(메더): 턴 시작 시점의 필드에 맞춰 타입을 다시 맞춘다. 필드 타입으로 바뀌면 안내한다.
+  const turnStartAnnouncements: string[] = [];
+  for (const key of ["a", "b"] as const) {
+    const changedTo = applyMimicryForm(state[key], state.field);
+    if (changedTo) {
+      const nm = getPokemon(state[key].slot.pokemonId)?.name ?? "포켓몬";
+      turnStartAnnouncements.push(`${nm}${eunNeun(nm)} ${changedTo} 타입이 되었다!`);
+    }
+  }
+
+  // 부리캐논(정신 집중류): 이 기술을 고른 턴 시작 시 "…은(는) 부리를 가열시켰다!"를 알린다.
+  for (const [key, mv] of [["a", moveA], ["b", moveB]] as const) {
+    if (mv.turnStartUserAnnouncement && !isFainted(state[key]) && !didSwitch[key]) {
+      const nm = getPokemon(state[key].slot.pokemonId)?.name ?? "포켓몬";
+      turnStartAnnouncements.push(`${nm}${eunNeun(nm)} ${mv.turnStartUserAnnouncement}`);
+    }
+  }
 
   const aAbilityForSpeed = state.a.effectiveAbilityId ? getAbility(state.a.effectiveAbilityId) : undefined;
   const bAbilityForSpeed = state.b.effectiveAbilityId ? getAbility(state.b.effectiveAbilityId) : undefined;
@@ -3171,7 +4867,7 @@ export function runTurn(
   // 엽록소·쓱쓱·모래헤치기: 날씨가 일치할 때만 곱해진다(그 외엔 1)
   const getWeatherSpeedMultiplier = (ability: Ability | undefined): number => {
     const boost = ability?.weatherSpeedMultiplier;
-    return boost && boost.weather === state.weather ? boost.multiplier : 1;
+    return boost && boost.weather === activeWeather(state) ? boost.multiplier : 1;
   };
   // 구애스카프(1.5)·검은철구(0.5) — 상태이상 배율과 별개로 곱해진다
   // 곡예: 도구를 잃은 뒤로 배틀 끝까지 유지되는 2배 배율(unburdenActive)도 여기서 같이 곱한다.
@@ -3193,15 +4889,19 @@ export function runTurn(
   // (본가 규칙: 순서는 행동 전에 이미 정해짐).
   const trickRoomActive = state.trickRoomTurnsRemaining !== undefined;
   // 그래스슬라이더처럼 필드 조건부로 우선도가 오르는 기술은, 순서를 정하는 이 시점의 필드
-  // 상태(=이번 턴 시작 시점)를 기준으로 반영한다. 짖궂은마음(변화기 우선도 +1)도 같이 더한다.
+  // 상태(=이번 턴 시작 시점)를 기준으로 반영한다. 짓궂은마음(변화기 우선도 +1)도 같이 더한다.
   // compareTurnOrder는 move.priority만 보므로 우선도만 조정한 얕은 복사본을 넘긴다.
   const priorityAdjustedMoveA = {
     ...moveA,
-    priority: getFieldAdjustedPriority(moveA, state.field) + getAbilityPriorityBoost(moveA, aAbilityForSpeed),
+    priority:
+      getFieldAdjustedPriority(moveA, state.field) +
+      getAbilityPriorityBoost(moveA, aAbilityForSpeed, state.a.currentHp === state.a.maxHp),
   };
   const priorityAdjustedMoveB = {
     ...moveB,
-    priority: getFieldAdjustedPriority(moveB, state.field) + getAbilityPriorityBoost(moveB, bAbilityForSpeed),
+    priority:
+      getFieldAdjustedPriority(moveB, state.field) +
+      getAbilityPriorityBoost(moveB, bAbilityForSpeed, state.b.currentHp === state.b.maxHp),
   };
 
   // 선제공격손톱: 실제 우선도가 같을 때만 끼어든다(더 높은 우선도는 이 효과와 무관하게 항상 이김).
@@ -3216,8 +4916,18 @@ export function runTurn(
   const firstIsA = quickClawWinner
     ? quickClawWinner === "a"
     : compareTurnOrder(
-        { realSpeed: speedA, move: priorityAdjustedMoveA, stages: state.a.stages },
-        { realSpeed: speedB, move: priorityAdjustedMoveB, stages: state.b.stages },
+        {
+          realSpeed: speedA,
+          move: priorityAdjustedMoveA,
+          stages: state.a.stages,
+          movesLast: aAbilityForSpeed?.movesLastInPriorityBracket,
+        },
+        {
+          realSpeed: speedB,
+          move: priorityAdjustedMoveB,
+          stages: state.b.stages,
+          movesLast: bAbilityForSpeed?.movesLastInPriorityBracket,
+        },
         random,
         trickRoomActive,
       ) === 0;
@@ -3229,6 +4939,7 @@ export function runTurn(
   let winner: FighterKey | "draw" | undefined;
 
   for (const key of order) {
+    if (didSwitch[key]) continue; // 이번 턴 교체한 쪽은 행동하지 않는다(교체가 곧 그 턴 행동)
     if (isFainted(state[key])) continue; // 이미 쓰러진 쪽은 행동 못 함
     if (isFainted(state[opponentKey(key)])) break; // 상대가 이미 쓰러졌으면 더 진행할 필요 없음
     // 포커스렌즈 판정용 — 이번 턴 order 기준으로 상대보다 늦게 움직이는 쪽인지
@@ -3319,7 +5030,7 @@ export function runTurn(
       // 1/denominator 회복. 먹다남은음식과 별개 축이라 같은 턴에 둘 다 발동할 수 있다.
       const fighterAbility = fighter.effectiveAbilityId ? getAbility(fighter.effectiveAbilityId) : undefined;
       const weatherHealBoost = fighterAbility?.weatherEndOfTurnHealDenominator;
-      if (weatherHealBoost && weatherHealBoost.weather === state.weather) {
+      if (weatherHealBoost && weatherHealBoost.weather === activeWeather(state)) {
         const abilityWeatherHeal = Math.min(
           fighter.maxHp - fighter.currentHp,
           Math.floor(fighter.maxHp / weatherHealBoost.denominator),
@@ -3333,6 +5044,29 @@ export function runTurn(
             fainted: false,
             abilityWeatherHeal,
             abilityWeatherHealAbilityName: fighterAbility!.name,
+          });
+        }
+      }
+
+      // 건조피부: 쾌청(강한 햇살)일 때 매 턴 종료 시 최대 HP의 1/8 피해. weatherEndOfTurnHealDenominator
+      // (비 회복)와 반대 축이며, 한 특성이 날씨에 따라 회복/피해를 나눠 갖는다.
+      const weatherDamageBoost = fighterAbility?.weatherEndOfTurnDamageDenominator;
+      if (
+        weatherDamageBoost &&
+        weatherDamageBoost.weather === activeWeather(state) &&
+        !isFainted(fighter) &&
+        !fighterAbility?.negatesIndirectDamage
+      ) {
+        const dmg = Math.min(fighter.currentHp, Math.floor(fighter.maxHp / weatherDamageBoost.denominator));
+        if (dmg > 0) {
+          fighter.currentHp -= dmg;
+          endOfTurn.push({
+            actor: key,
+            damage: dmg,
+            remainingHp: fighter.currentHp,
+            fainted: isFainted(fighter),
+            abilityWeatherDamage: dmg,
+            abilityWeatherDamageAbilityName: fighterAbility!.name,
           });
         }
       }
@@ -3392,6 +5126,63 @@ export function runTurn(
         }
       }
 
+      // 속박(bound): 조이기·엉겨붙기·집게덫류에 걸린 쪽은 매 턴 종료 시 최대 HP 1/8을 잃고,
+      // 턴 종료마다 카운터가 1씩 줄어 0에서 자동 해제된다. 매직가드면 데미지 면제(카운터는 진행).
+      if (hasVolatile(fighter.volatile, "bound")) {
+        if (!fighterAbility?.negatesIndirectDamage) {
+          const bindDamage = Math.min(fighter.currentHp, Math.floor(fighter.maxHp / 8));
+          fighter.currentHp -= bindDamage;
+          if (bindDamage > 0) {
+            endOfTurn.push({
+              actor: key,
+              damage: bindDamage,
+              remainingHp: fighter.currentHp,
+              fainted: isFainted(fighter),
+              boundDamage: true,
+            });
+          }
+        }
+        fighter.volatile = consumeVolatileTurn(fighter.volatile, "bound");
+      }
+
+      // 소금절이(saltCure): 걸린 쪽은 매 턴 종료 시 최대 HP 1/16(강철/물 타입이면 1/8)을 잃는다.
+      // 턴 카운터 없이 배틀 끝까지 유지된다(leechSeed 패턴). 매직가드면 데미지 면제.
+      if (hasVolatile(fighter.volatile, "saltCure") && !fighterAbility?.negatesIndirectDamage) {
+        const heavy = fighter.types.some((t) => t === "강철" || t === "물");
+        const saltDamage = Math.min(fighter.currentHp, Math.floor(fighter.maxHp / (heavy ? 8 : 16)));
+        if (saltDamage > 0) {
+          fighter.currentHp -= saltDamage;
+          endOfTurn.push({
+            actor: key,
+            damage: saltDamage,
+            remainingHp: fighter.currentHp,
+            fainted: isFainted(fighter),
+            saltCureDamage: true,
+            saltCureHeavy: heavy || undefined,
+          });
+        }
+      }
+
+      // 물엿범벅(syrupCoat, 시럽봄): 걸린 쪽은 매 턴 종료 시 스피드 1랭크 감소(심술꾸러기·클리어바디류
+      // 존중). 3턴 카운터로 소모되고 0에서 자동 해제된다.
+      if (hasVolatile(fighter.volatile, "syrupCoat") && !isFainted(fighter)) {
+        const before = fighter.stages.spe;
+        // 물엿범벅은 상대(시럽봄 사용자)가 거는 하락 — 클리어바디류/하얀연기가 spe를 막으면 무산.
+        if (!statDropBlockStatsOf(fighter, fighterAbility)?.includes("spe")) {
+          fighter.stages = applyStageDelta(fighter.stages, "spe", contraryDelta(fighter, -1));
+        }
+        if (fighter.stages.spe !== before) {
+          endOfTurn.push({
+            actor: key,
+            damage: 0,
+            remainingHp: fighter.currentHp,
+            fainted: false,
+            syrupCoatDrop: true,
+          });
+        }
+        fighter.volatile = consumeVolatileTurn(fighter.volatile, "syrupCoat");
+      }
+
       // 희망사항: drowsy와 같은 2턴 카운터 패턴 — 쓴 다음 턴 종료에 최대 HP 절반을 회복한다.
       const wishEntry = fighter.volatile.active.wish;
       if (wishEntry) {
@@ -3415,7 +5206,7 @@ export function runTurn(
         if (
           triggersNow &&
           !fighter.status.condition &&
-          !isImmuneToStatus("sleep", fighter.types, fighterAbility?.immuneToStatuses) &&
+          !isImmuneToStatus("sleep", fighter.types, statusImmunitiesOf(fighter, fighterAbility)) &&
           !isStatusBlockedByField(state.field, "sleep")
         ) {
           fighter.status = inflictStatus(fighter.status, "sleep");
@@ -3433,7 +5224,7 @@ export function runTurn(
       // 매직가드·모래 관련 특성(모래숨기/모래의힘/모래날림/모래헤치기) 보유 시 면제.
       // (본가의 방진 특성·방진고글 도구는 포챔스에 없어 제외. 싸라기눈 틱도 없음.)
       if (
-        state.weather === "모래바람" &&
+        activeWeather(state) === "모래바람" &&
         !isFainted(fighter) &&
         !fighter.types.some((t) => t === "바위" || t === "땅" || t === "강철") &&
         !fighterAbility?.negatesIndirectDamage &&
@@ -3454,23 +5245,50 @@ export function runTurn(
 
       if (fighter.status.condition) {
         const statusCondition = fighter.status.condition;
-        // 매직가드: 독·맹독·화상의 지속 데미지만 0으로 막는다 — 상태이상에 "걸린" 상태 자체와
-        // 맹독 카운터 누적(advanceStatusTurn)은 그대로 진행된다.
-        const damage = fighterAbility?.negatesIndirectDamage
-          ? 0
-          : computeStatusEndOfTurnDamage(fighter.status, fighter.maxHp);
-        fighter.currentHp = Math.max(0, fighter.currentHp - damage);
-        fighter.status = advanceStatusTurn(fighter.status);
-        // 잠듦/얼음/마비는 매턴 데미지가 없다(항상 0) — "상태이상 데미지 0"만 찍는 무의미한 줄을
-        // 막기 위해 실제로 데미지가 있을 때만 로그에 남긴다.
-        if (damage > 0) {
-          endOfTurn.push({
-            actor: key,
-            damage,
-            remainingHp: fighter.currentHp,
-            fainted: isFainted(fighter),
-            statusCondition,
-          });
+        // 포이즌힐: 독·맹독 상태면 지속 데미지 대신 최대 HP의 1/denominator를 회복한다. 맹독
+        // 카운터(advanceStatusTurn)는 그대로 누적된다.
+        const poisonHealDenom = fighterAbility?.healsFromPoisonEachTurnDenominator;
+        if (
+          poisonHealDenom &&
+          (statusCondition === "poison" || statusCondition === "badly-poisoned") &&
+          !isFainted(fighter)
+        ) {
+          const heal = Math.min(fighter.maxHp - fighter.currentHp, Math.floor(fighter.maxHp / poisonHealDenom));
+          fighter.currentHp += heal;
+          fighter.status = advanceStatusTurn(fighter.status);
+          if (heal > 0) {
+            endOfTurn.push({
+              actor: key,
+              damage: 0,
+              remainingHp: fighter.currentHp,
+              fainted: false,
+              poisonHealAmount: heal,
+              poisonHealAbilityName: fighterAbility!.name,
+            });
+          }
+        } else {
+          // 매직가드: 독·맹독·화상의 지속 데미지만 0으로 막는다 — 상태이상에 "걸린" 상태 자체와
+          // 맹독 카운터 누적(advanceStatusTurn)은 그대로 진행된다.
+          // 내열: 화상 지속 데미지가 절반이 된다(내림).
+          const rawStatusDamage = computeStatusEndOfTurnDamage(fighter.status, fighter.maxHp);
+          const damage = fighterAbility?.negatesIndirectDamage
+            ? 0
+            : statusCondition === "burn" && fighterAbility?.halvesBurnDamage
+              ? Math.floor(rawStatusDamage / 2)
+              : rawStatusDamage;
+          fighter.currentHp = Math.max(0, fighter.currentHp - damage);
+          fighter.status = advanceStatusTurn(fighter.status);
+          // 잠듦/얼음/마비는 매턴 데미지가 없다(항상 0) — "상태이상 데미지 0"만 찍는 무의미한 줄을
+          // 막기 위해 실제로 데미지가 있을 때만 로그에 남긴다.
+          if (damage > 0) {
+            endOfTurn.push({
+              actor: key,
+              damage,
+              remainingHp: fighter.currentHp,
+              fainted: isFainted(fighter),
+              statusCondition,
+            });
+          }
         }
       }
 
@@ -3491,14 +5309,17 @@ export function runTurn(
         }
       }
 
-      // 가속(Speed Boost): 매 턴 종료 시 스피드 1랭크 상승. 본가는 "교체로 나온 턴"엔 발동하지
-      // 않지만, 이 시뮬레이터는 교체가 없는 1대1 대면 전용이라 첫 턴도 "등장한 턴"이 아니다 —
-      // 그래서 첫 턴 종료부터 발동시킨다(사용자 확인, Phase 6.5 §6-2 ①). 파티 선출·교체가
-      // 도입되면 그때 "교체로 나온 턴" 예외를 되살린다. 기절했으면(이 턴 데미지로 방금 쓰러졌어도)
-      // 발동하지 않는다.
-      if (fighterAbility?.boostsSpeedEachTurnEnd && !isFainted(fighter)) {
+      // 가속(Speed Boost): 매 턴 종료 시 스피드 1랭크 상승. 본가 예외 — "자기 의지로 교체해서
+      // 나온 턴"엔 발동하지 않는다(Phase 8 §8에서 복원). 단 기절 후 강제 교체로 나온 경우는
+      // 발동한다(특성 설명 명시). switchedInThisTurn은 runTurn 교체 선처리에서 자발적 교체에만
+      // 세워지고 턴 시작 시 지워진다. 이 턴 데미지로 방금 쓰러졌으면(isFainted) 발동하지 않는다.
+      if (
+        fighterAbility?.boostsSpeedEachTurnEnd &&
+        !isFainted(fighter) &&
+        !fighter.switchedInThisTurn
+      ) {
         const speBefore = fighter.stages.spe;
-        fighter.stages = applyStageDelta(fighter.stages, "spe", 1);
+        fighter.stages = applyStageDelta(fighter.stages, "spe", contraryDelta(fighter, 1));
         endOfTurn.push({
           actor: key,
           damage: 0,
@@ -3509,11 +5330,48 @@ export function runTurn(
         });
       }
 
+      // 꼬르륵스위치(모르페코): 매 턴 종료 시 배부른모양↔배고픈모양 토글(오라휠 타입에만 영향).
+      if (fighterAbility?.hungerSwitch && !isFainted(fighter)) {
+        fighter.hungerMode = fighter.hungerMode === "hangry" ? "full" : "hangry";
+        endOfTurn.push({
+          actor: key,
+          damage: 0,
+          remainingHp: fighter.currentHp,
+          fainted: false,
+          hungerModeChangedTo: fighter.hungerMode,
+        });
+      }
+
+      // 변덕쟁이(Moody): 매 턴 종료 시 5스탯 중 하나를 랜덤으로 +2, 그와 다른 하나를 -1.
+      if (fighterAbility?.moodyRandomStages && !isFainted(fighter)) {
+        const MOODY_STATS: BattleStatKey[] = ["atk", "def", "spa", "spd", "spe"];
+        const raised = MOODY_STATS[Math.floor(random() * MOODY_STATS.length)];
+        const lowerPool = MOODY_STATS.filter((s) => s !== raised);
+        const lowered = lowerPool[Math.floor(random() * lowerPool.length)];
+        fighter.stages = applyStageDelta(fighter.stages, raised, contraryDelta(fighter, 2));
+        fighter.stages = applyStageDelta(fighter.stages, lowered, contraryDelta(fighter, -1));
+        endOfTurn.push({
+          actor: key,
+          damage: 0,
+          remainingHp: fighter.currentHp,
+          fainted: false,
+          moodyRaisedStat: raised,
+          moodyLoweredStat: lowered,
+          moodyAbilityName: fighterAbility.name,
+        });
+      }
+
       // 자뭉열매/오랭열매: 턴 종료 시점까지의 모든 HP 변화(필드 회복/먹다남은음식/씨뿌리기/상태이상
       // 데미지 등)가 끝난 뒤에도 다시 한번 확인한다 — 액션 중엔 안 걸렸다가 턴 종료 데미지로
       // 뒤늦게 1/2 이하가 되는 경우를 놓치지 않기 위해서다.
       if (!isFainted(fighter) && !fighterBerriesBlocked) {
-        const berryHeal = getHpThresholdBerryHeal(fighterItem, fighter.currentHp, fighter.maxHp, fighter.itemConsumed ?? false);
+        const berryHeal = getHpThresholdBerryHeal(
+          fighterItem,
+          fighter.currentHp,
+          fighter.maxHp,
+          fighter.itemConsumed ?? false,
+          !!fighterAbility?.doublesBerryEffect, // 숙성
+        );
         if (berryHeal > 0) {
           fighter.currentHp = Math.min(fighter.maxHp, fighter.currentHp + berryHeal);
           consumeItem(fighter);
@@ -3527,24 +5385,76 @@ export function runTurn(
           });
         }
       }
+
+      // 볼주머니: 위 자뭉/오랭열매를 턴 종료 시 먹었으면 consumeItem이 pendingCheekPouchHeal을 쌓아둔다.
+      if (fighter.pendingCheekPouchHeal) {
+        endOfTurn.push({
+          actor: key,
+          damage: 0,
+          remainingHp: fighter.currentHp,
+          fainted: false,
+          cheekPouchHeal: fighter.pendingCheekPouchHeal,
+        });
+        fighter.pendingCheekPouchHeal = undefined;
+      }
+
+      // 수확(Harvest): 턴 종료 시, 소비한 나무열매가 있고 지금 무도구면 확률로 그 열매를 되돌린다.
+      // 쾌청(큰햇살)이면 sunChance(수확=100), 그 외 chance(50). 날씨부정이면 쾌청 취급하지 않는다.
+      if (
+        !isFainted(fighter) &&
+        fighterAbility?.restoresBerryEndOfTurn &&
+        fighter.consumedBerryId &&
+        !fighter.currentItemId
+      ) {
+        const { chance, sunChance } = fighterAbility.restoresBerryEndOfTurn;
+        const inSun = activeWeather(state) === "쾌청";
+        if (random() * 100 < (inSun ? sunChance : chance)) {
+          fighter.currentItemId = fighter.consumedBerryId;
+          fighter.itemConsumed = false;
+          endOfTurn.push({
+            actor: key,
+            damage: 0,
+            remainingHp: fighter.currentHp,
+            fainted: false,
+            harvestRestoredBerryName: getItem(fighter.consumedBerryId)?.name ?? fighter.consumedBerryId,
+          });
+        }
+      }
     }
   }
 
+  // 활성 슬롯이 기절해도 파티에 아직 안 쓰러진 슬롯이 있으면 그 편의 패배가 아니라 강제 교체다.
+  // (파티 길이 1이면 hasLivingReserve가 항상 false라 아래 로직은 기존 1v1과 완전히 동일하게 동작.)
+  const aHasReserve = hasLivingReserve(state.sideA);
+  const bHasReserve = hasLivingReserve(state.sideB);
+
   // 멸망의노래로 양쪽이 동시에 쓰러졌으면 무승부가 아니라 스피드가 느린 쪽이 승리한다(F-4) —
   // 빠른 쪽이 먼저 쓰러지는 것으로 취급. 랭크 반영 실효 스피드로 비교(트릭룸은 무관).
-  if (!winner && perishFaintedKeys.size === 2) {
+  // 단 어느 한쪽이라도 교대할 슬롯이 남아 있으면 배틀은 안 끝나고 강제 교체로 넘어간다(§3).
+  if (!winner && perishFaintedKeys.size === 2 && !aHasReserve && !bHasReserve) {
     const effSpeedA = speedA * rankStageMultiplier(state.a.stages.spe);
     const effSpeedB = speedB * rankStageMultiplier(state.b.stages.spe);
     winner = effSpeedA <= effSpeedB ? "a" : "b";
   }
 
-  // 턴 종료 상태이상 데미지로 양쪽이 동시에 0이 되는 경우만 진짜 무승부로 남는다 — 이건 어느 한
-  // 쪽이 상대를 쓰러뜨린 게 아니라 각자 자기 상태이상으로 따로 쓰러진 것이라 인과관계가 없다.
+  // 턴 종료 시점에 활성이 기절해 있고 교대할 슬롯도 없으면 그 편이 진다. 양쪽 다면 무승부 —
+  // 어느 한 쪽이 상대를 쓰러뜨린 게 아니라 각자 자기 상태이상 등으로 따로 쓰러진 것이라 인과가 없다.
   if (!winner) {
-    if (isFainted(state.a) && isFainted(state.b)) winner = "draw";
-    else if (isFainted(state.a)) winner = "b";
-    else if (isFainted(state.b)) winner = "a";
+    const aOut = isFainted(state.a) && !aHasReserve;
+    const bOut = isFainted(state.b) && !bHasReserve;
+    if (aOut && bOut) winner = "draw";
+    else if (aOut) winner = "b";
+    else if (bOut) winner = "a";
   }
+
+  // 배틀이 안 끝났는데 활성이 기절해 있으면(=교대할 슬롯이 남음) 다음 턴 전에 강제 교체를 요구한다.
+  const forcedSwitch: { a?: boolean; b?: boolean } | undefined =
+    !winner && ((isFainted(state.a) && aHasReserve) || (isFainted(state.b) && bHasReserve))
+      ? {
+          a: isFainted(state.a) && aHasReserve ? true : undefined,
+          b: isFainted(state.b) && bHasReserve ? true : undefined,
+        }
+      : undefined;
 
   // 필드 지속 턴 카운트다운. 0이 되면 이번 턴을 끝으로 필드가 사라진다.
   let fieldExpired = false;
@@ -3576,6 +5486,9 @@ export function runTurn(
       state.weather = undefined;
       state.weatherTurnsRemaining = undefined;
       weatherExpired = true;
+      // 기분파(캐스퐁): 날씨가 사라지면 노말로 되돌린다.
+      applyForecastForm(state.a, activeWeather(state));
+      applyForecastForm(state.b, activeWeather(state));
     }
   }
 
@@ -3612,6 +5525,10 @@ export function runTurn(
       weatherTurnsRemaining: state.weatherTurnsRemaining,
       weatherExpired,
       expiredScreens,
+      turnStartAnnouncements,
+      switches,
+      activePokemonIds: { a: state.a.slot.pokemonId, b: state.b.slot.pokemonId },
     },
+    forcedSwitch,
   };
 }

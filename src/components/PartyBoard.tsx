@@ -36,6 +36,8 @@ export function PartyBoard() {
     setItem,
     setNature,
     toggleGender,
+    cycleSizeForm,
+    cycleFormVariant,
     setPoint,
     stepPoint,
     resetParty,
@@ -110,6 +112,8 @@ export function PartyBoard() {
             onSaveAsSample={() => handleSaveSlotAsSample(i)}
             onOpenSamplePicker={() => setPicker({ kind: "slotPresets", slotIndex: i })}
             onToggleGender={() => toggleGender(i)}
+            onCycleSizeForm={() => cycleSizeForm(i)}
+            onCycleFormVariant={() => cycleFormVariant(i)}
           />
         ))}
       </div>

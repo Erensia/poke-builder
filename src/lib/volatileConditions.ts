@@ -33,9 +33,10 @@ const DISABLE_DURATION = 4;
 const ENCORE_DURATION = 3;
 
 /**
- * 뿌리박기·아쿠아링·씨뿌리기는 턴 카운터로 소모되지 않고 배틀이 끝날 때까지 유지된다(교체가
- * 없는 1v1이라 "교체 시 해제"도 해당 없음) — consumeVolatileTurn을 아예 호출하지 않으므로
- * 이 값 자체는 의미 없지만, hasVolatile 판정용으로 유효한 엔트리는 있어야 해서 큰 값을 넣는다.
+ * 뿌리박기·아쿠아링·씨뿌리기·헤롱헤롱은 턴 카운터로 소모되지 않는다(consumeVolatileTurn을 아예
+ * 호출하지 않음) — 이 값 자체는 hasVolatile 판정이 유효한 엔트리를 요구해서 넣는 큰 수일 뿐이다.
+ * 해제 경로는 (a) 배틀 종료, (b) 교체로 물러남(Phase 8 §8 — performSwitch가 volatile을 통째로
+ * 비운다. 소금절이만 예외) 둘 뿐이다.
  */
 const PERSISTENT_UNTIL_BATTLE_END = 999;
 
@@ -48,13 +49,16 @@ function defaultDuration(volatile: VolatileCondition, random: () => number): num
     volatile === "ingrain" ||
     volatile === "aquaRing" ||
     volatile === "leechSeed" ||
-    volatile === "attract"
+    volatile === "attract" ||
+    volatile === "saltCure"
   ) {
     return PERSISTENT_UNTIL_BATTLE_END;
   }
   if (volatile === "taunt") return TAUNT_DURATION;
   if (volatile === "disable") return DISABLE_DURATION;
   if (volatile === "encore") return ENCORE_DURATION;
+  if (volatile === "bound") return 4 + Math.floor(random() * 2); // 4~5턴
+  if (volatile === "syrupCoat") return 3; // 시럽봄: 3턴 동안 매 턴 스피드 -1
   return 1;
 }
 

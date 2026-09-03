@@ -38,16 +38,31 @@
   flex-direction: row;
   justify-content: center;
   align-items: flex-start;
-  gap: 1.2rem;
+  gap: 1.6rem;
+}
+
+.battle-setup-column {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+.battle-setup-column-title {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.battle-setup-column-hint {
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  margin-left: 0.3rem;
 }
 
 .battle-setup-board .party-slot {
   width: 300px;
   flex-shrink: 0;
-}
-
-.battle-setup-board > :last-child {
-  margin-top: 15px;
 }
 
 .battle-start-button {
@@ -383,6 +398,126 @@
 .battle-turn-line.is-fainted {
   color: var(--danger);
   font-weight: 600;
+}
+
+/* ── 파티 트래커(편측 3마리) ── */
+.battle-party-tracker {
+  display: flex;
+  gap: 0.35rem;
+  margin: 0.4rem 0 0.55rem;
+}
+
+.battle-party-chip {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.3rem 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface-2);
+  font-size: 0.7rem;
+}
+
+.battle-party-chip.is-active {
+  border-color: var(--violet);
+  background: var(--violet-soft);
+}
+
+.battle-party-chip.is-fainted {
+  opacity: 0.45;
+}
+
+.battle-party-chip-name {
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.battle-party-chip-hp {
+  color: var(--text-muted);
+}
+
+.battle-party-chip-bar {
+  display: block;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--border);
+  overflow: hidden;
+}
+
+.battle-party-chip-fill {
+  display: block;
+  height: 100%;
+  background: var(--ok, #3fb950);
+}
+
+.battle-party-chip-fill.is-warn {
+  background: #d0a215;
+}
+
+.battle-party-chip-fill.is-danger {
+  background: var(--danger);
+}
+
+/* ── 기술/교체 토글 + 교대 슬롯 목록 ── */
+.battle-input-toggle {
+  display: flex;
+  gap: 0.3rem;
+  margin-bottom: 0.4rem;
+}
+
+.battle-input-toggle-btn {
+  flex: 1;
+  padding: 0.25rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface-2);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.battle-input-toggle-btn.is-on {
+  border-color: var(--violet);
+  background: var(--violet-soft);
+  color: var(--violet);
+}
+
+.battle-switch-panel {
+  border: 1px solid var(--danger);
+  border-radius: 8px;
+  padding: 0.5rem;
+  background: color-mix(in srgb, var(--danger) 8%, transparent);
+}
+
+.battle-switch-panel-title {
+  font-size: 0.8rem;
+  font-weight: 700;
+  margin-bottom: 0.4rem;
+}
+
+.battle-switch-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.battle-switch-button {
+  padding: 0.4rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-2);
+  font-size: 0.82rem;
+  cursor: pointer;
+  text-align: left;
+}
+
+.battle-switch-button.is-selected {
+  border-color: var(--violet);
+  background: var(--violet-soft);
 }
 
 @media (max-width: 860px) {

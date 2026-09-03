@@ -239,7 +239,15 @@
     "classification": [
       "물기"
     ],
-    "makesContact": true
+    "makesContact": true,
+    "statChanges": [
+      {
+        "target": "opponent",
+        "stat": "def",
+        "delta": -1,
+        "chance": 20
+      }
+    ]
   },
   {
     "id": "깨트리기",
@@ -254,7 +262,8 @@
     "tags": [
       "접촉"
     ],
-    "makesContact": true
+    "makesContact": true,
+    "breaksScreensOnHit": true
   },
   {
     "id": "냉동빔",
@@ -345,7 +354,15 @@
       "랭크",
       "비접촉"
     ],
-    "makesContact": false
+    "makesContact": false,
+    "statChanges": [
+      {
+        "target": "opponent",
+        "stat": "spd",
+        "delta": -1,
+        "chance": 10
+      }
+    ]
   },
   {
     "id": "개척하기",
@@ -361,7 +378,14 @@
       "랭크",
       "접촉"
     ],
-    "makesContact": true
+    "makesContact": true,
+    "statChanges": [
+      {
+        "target": "self",
+        "stat": "spe",
+        "delta": 1
+      }
+    ]
   },
   {
     "id": "고민씨",
@@ -460,7 +484,15 @@
       "랭크",
       "비접촉"
     ],
-    "makesContact": false
+    "makesContact": false,
+    "statChanges": [
+      {
+        "target": "opponent",
+        "stat": "spd",
+        "delta": -1,
+        "chance": 10
+      }
+    ]
   },
   {
     "id": "대타출동",
@@ -541,7 +573,15 @@
     "classification": [
       "구슬/폭탄"
     ],
-    "makesContact": false
+    "makesContact": false,
+    "statChanges": [
+      {
+        "target": "opponent",
+        "stat": "spd",
+        "delta": -1,
+        "chance": 20
+      }
+    ]
   },
   {
     "id": "맹독",
@@ -688,7 +728,15 @@
       "랭크",
       "비접촉"
     ],
-    "makesContact": false
+    "makesContact": false,
+    "statChanges": [
+      {
+        "target": "opponent",
+        "stat": "spd",
+        "delta": -1,
+        "chance": 10
+      }
+    ]
   },
   {
     "id": "희망사항",
@@ -747,7 +795,15 @@
       "랭크",
       "비접촉"
     ],
-    "makesContact": false
+    "makesContact": false,
+    "statChanges": [
+      {
+        "target": "opponent",
+        "stat": "spa",
+        "delta": -1,
+        "chance": 10
+      }
+    ]
   },
   {
     "id": "명상",
@@ -1143,7 +1199,15 @@
       "랭크",
       "접촉"
     ],
-    "makesContact": true
+    "makesContact": true,
+    "statChanges": [
+      {
+        "target": "opponent",
+        "stat": "def",
+        "delta": -1,
+        "chance": 20
+      }
+    ]
   },
   {
     "id": "역린",
@@ -1176,7 +1240,14 @@
       "반동-랭크",
       "비접촉"
     ],
-    "makesContact": false
+    "makesContact": false,
+    "statChanges": [
+      {
+        "target": "self",
+        "stat": "spa",
+        "delta": -2
+      }
+    ]
   },
   {
     "id": "용의파동",
@@ -1241,7 +1312,39 @@
       "랭크",
       "비접촉"
     ],
-    "makesContact": false
+    "makesContact": false,
+    "statChanges": [
+      {
+        "target": "self",
+        "stat": "atk",
+        "delta": 1,
+        "chance": 10
+      },
+      {
+        "target": "self",
+        "stat": "def",
+        "delta": 1,
+        "chance": 10
+      },
+      {
+        "target": "self",
+        "stat": "spa",
+        "delta": 1,
+        "chance": 10
+      },
+      {
+        "target": "self",
+        "stat": "spd",
+        "delta": 1,
+        "chance": 10
+      },
+      {
+        "target": "self",
+        "stat": "spe",
+        "delta": 1,
+        "chance": 10
+      }
+    ]
   },
   {
     "id": "겁나는얼굴",
@@ -1411,7 +1514,14 @@
       "랭크",
       "비접촉"
     ],
-    "makesContact": false
+    "makesContact": false,
+    "statChanges": [
+      {
+        "target": "opponent",
+        "stat": "spe",
+        "delta": -1
+      }
+    ]
   },
   {
     "id": "로킥",
@@ -1795,7 +1905,19 @@
       "반동-랭크",
       "접촉"
     ],
-    "makesContact": true
+    "makesContact": true,
+    "statChanges": [
+      {
+        "target": "self",
+        "stat": "def",
+        "delta": -1
+      },
+      {
+        "target": "self",
+        "stat": "spd",
+        "delta": -1
+      }
+    ]
   },
   {
     "id": "잠꼬대",
@@ -2295,7 +2417,14 @@
       "랭크",
       "비접촉"
     ],
-    "makesContact": false
+    "makesContact": false,
+    "statChanges": [
+      {
+        "target": "opponent",
+        "stat": "spe",
+        "delta": -1
+      }
+    ]
   },
   {
     "id": "자기암시",
@@ -2358,7 +2487,15 @@
       "랭크",
       "접촉"
     ],
-    "makesContact": true
+    "makesContact": true,
+    "statChanges": [
+      {
+        "target": "self",
+        "stat": "def",
+        "delta": 1,
+        "chance": 10
+      }
+    ]
   },
   {
     "id": "그림자분신",
@@ -2433,7 +2570,14 @@
       "랭크",
       "접촉"
     ],
-    "makesContact": true
+    "makesContact": true,
+    "statChanges": [
+      {
+        "target": "opponent",
+        "stat": "spe",
+        "delta": -1
+      }
+    ]
   },
   {
     "id": "더블어택",
@@ -2485,7 +2629,14 @@
       "랭크",
       "접촉"
     ],
-    "makesContact": true
+    "makesContact": true,
+    "statChanges": [
+      {
+        "target": "opponent",
+        "stat": "atk",
+        "delta": -1
+      }
+    ]
   },
   {
     "id": "도둑질",
@@ -2570,7 +2721,15 @@
     "classification": [
       "소리"
     ],
-    "makesContact": false
+    "makesContact": false,
+    "statChanges": [
+      {
+        "target": "opponent",
+        "stat": "spd",
+        "delta": -1,
+        "chance": 10
+      }
+    ]
   },
   {
     "id": "벌레의저항",
@@ -2587,7 +2746,14 @@
       "랭크",
       "비접촉"
     ],
-    "makesContact": false
+    "makesContact": false,
+    "statChanges": [
+      {
+        "target": "opponent",
+        "stat": "spa",
+        "delta": -1
+      }
+    ]
   },
   {
     "id": "빛의장막",
@@ -2732,7 +2898,14 @@
       "랭크",
       "접촉"
     ],
-    "makesContact": true
+    "makesContact": true,
+    "statChanges": [
+      {
+        "target": "opponent",
+        "stat": "spa",
+        "delta": -1
+      }
+    ]
   },
   {
     "id": "엄청난힘",
@@ -2748,7 +2921,19 @@
       "반동-랭크",
       "접촉"
     ],
-    "makesContact": true
+    "makesContact": true,
+    "statChanges": [
+      {
+        "target": "self",
+        "stat": "atk",
+        "delta": -1
+      },
+      {
+        "target": "self",
+        "stat": "def",
+        "delta": -1
+      }
+    ]
   },
   {
     "id": "에어커터",
@@ -2919,7 +3104,14 @@
       "랭크",
       "비접촉"
     ],
-    "makesContact": false
+    "makesContact": false,
+    "statChanges": [
+      {
+        "target": "opponent",
+        "stat": "spe",
+        "delta": -1
+      }
+    ]
   },
   {
     "id": "모래지옥",
@@ -2935,7 +3127,8 @@
       "구속",
       "비접촉"
     ],
-    "makesContact": false
+    "makesContact": false,
+    "bindsTarget": true
   },
   {
     "id": "미러코트",
@@ -2968,7 +3161,8 @@
       "구속",
       "비접촉"
     ],
-    "makesContact": false
+    "makesContact": false,
+    "bindsTarget": true
   },
   {
     "id": "바디프레스",
@@ -3053,7 +3247,14 @@
       "펀치",
       "접촉"
     ],
-    "makesContact": true
+    "makesContact": true,
+    "statChanges": [
+      {
+        "target": "self",
+        "stat": "spe",
+        "delta": -1
+      }
+    ]
   },
   {
     "id": "얼어붙은바람",
@@ -3074,7 +3275,14 @@
     "classification": [
       "바람"
     ],
-    "makesContact": false
+    "makesContact": false,
+    "statChanges": [
+      {
+        "target": "opponent",
+        "stat": "spe",
+        "delta": -1
+      }
+    ]
   },
   {
     "id": "오물웨이브",
@@ -3180,7 +3388,14 @@
       "랭크",
       "비접촉"
     ],
-    "makesContact": false
+    "makesContact": false,
+    "statChanges": [
+      {
+        "target": "opponent",
+        "stat": "accuracy",
+        "delta": -1
+      }
+    ]
   },
   {
     "id": "찬물끼얹기",
@@ -3201,6 +3416,13 @@
       {
         "status": "burn",
         "chance": 30
+      }
+    ],
+    "statChanges": [
+      {
+        "target": "opponent",
+        "stat": "atk",
+        "delta": -1
       }
     ]
   },
@@ -3235,7 +3457,15 @@
       "랭크",
       "비접촉"
     ],
-    "makesContact": false
+    "makesContact": false,
+    "statChanges": [
+      {
+        "target": "opponent",
+        "stat": "accuracy",
+        "delta": -1,
+        "chance": 30
+      }
+    ]
   },
   {
     "id": "파도타기",
@@ -3393,7 +3623,14 @@
     "classification": [
       "춤"
     ],
-    "makesContact": false
+    "makesContact": false,
+    "statChanges": [
+      {
+        "target": "opponent",
+        "stat": "atk",
+        "delta": -2
+      }
+    ]
   },
   {
     "id": "꿀꺽",
@@ -4335,7 +4572,15 @@
     "classification": [
       "구슬/폭탄"
     ],
-    "makesContact": false
+    "makesContact": false,
+    "statChanges": [
+      {
+        "target": "opponent",
+        "stat": "spd",
+        "delta": -1,
+        "chance": 10
+      }
+    ]
   },
   {
     "id": "저리가루",
@@ -4523,7 +4768,14 @@
     "classification": [
       "소리"
     ],
-    "makesContact": false
+    "makesContact": false,
+    "statChanges": [
+      {
+        "target": "opponent",
+        "stat": "spa",
+        "delta": -1
+      }
+    ]
   },
   {
     "id": "분풀이",
@@ -4726,7 +4978,14 @@
       "랭크",
       "접촉"
     ],
-    "makesContact": true
+    "makesContact": true,
+    "statChanges": [
+      {
+        "target": "self",
+        "stat": "spe",
+        "delta": 1
+      }
+    ]
   },
   {
     "id": "도깨비불",
@@ -4762,7 +5021,14 @@
       "랭크",
       "비접촉"
     ],
-    "makesContact": false
+    "makesContact": false,
+    "statChanges": [
+      {
+        "target": "opponent",
+        "stat": "spa",
+        "delta": -1
+      }
+    ]
   },
   {
     "id": "메테오빔",
@@ -4903,7 +5169,19 @@
       "반동-랭크",
       "비접촉"
     ],
-    "makesContact": false
+    "makesContact": false,
+    "statChanges": [
+      {
+        "target": "self",
+        "stat": "def",
+        "delta": -1
+      },
+      {
+        "target": "self",
+        "stat": "spd",
+        "delta": -1
+      }
+    ]
   },
   {
     "id": "애시드봄",
@@ -4923,7 +5201,14 @@
     "classification": [
       "구슬/폭탄"
     ],
-    "makesContact": false
+    "makesContact": false,
+    "statChanges": [
+      {
+        "target": "opponent",
+        "stat": "spd",
+        "delta": -2
+      }
+    ]
   },
   {
     "id": "열사의대지",
@@ -4989,7 +5274,14 @@
       "반동-랭크",
       "비접촉"
     ],
-    "makesContact": false
+    "makesContact": false,
+    "statChanges": [
+      {
+        "target": "self",
+        "stat": "spa",
+        "delta": -2
+      }
+    ]
   },
   {
     "id": "와이드포스",
@@ -5072,7 +5364,8 @@
       "구속",
       "비접촉"
     ],
-    "makesContact": false
+    "makesContact": false,
+    "bindsTarget": true
   },
   {
     "id": "병상첨병",
@@ -5372,9 +5665,10 @@
     "type": "독",
     "category": "status",
     "power": null,
-    "accuracy": 90,
+    "accuracy": null,
     "pp": 20,
     "priority": 0,
+    "setsHazard": "toxicSpikes",
     "effect": "상대의 발밑에 독 압정을 뿌린다. 교체로 나온 상대 포켓몬에게 독을 퍼지게 하며 2번 깔았을 경우 맹독을 퍼지게 한다.",
     "tags": [
       "장판",
@@ -5397,7 +5691,14 @@
       "반동-랭크",
       "비접촉"
     ],
-    "makesContact": false
+    "makesContact": false,
+    "statChanges": [
+      {
+        "target": "self",
+        "stat": "spa",
+        "delta": -2
+      }
+    ]
   },
   {
     "id": "씨기관총",
@@ -5434,7 +5735,8 @@
     "tags": [
       "장판"
     ],
-    "makesContact": false
+    "makesContact": false,
+    "setsHazard": "spikes"
   },
   {
     "id": "트릭플라워",
@@ -5626,7 +5928,14 @@
       "랭크",
       "접촉"
     ],
-    "makesContact": true
+    "makesContact": true,
+    "statChanges": [
+      {
+        "target": "opponent",
+        "stat": "atk",
+        "delta": -1
+      }
+    ]
   },
   {
     "id": "히트스탬프",
@@ -5659,7 +5968,14 @@
       "랭크",
       "접촉"
     ],
-    "makesContact": false
+    "makesContact": false,
+    "statChanges": [
+      {
+        "target": "self",
+        "stat": "spe",
+        "delta": 1
+      }
+    ]
   },
   {
     "id": "껍질깨기",
@@ -6018,7 +6334,15 @@
       "랭크",
       "비접촉"
     ],
-    "makesContact": false
+    "makesContact": false,
+    "statChanges": [
+      {
+        "target": "self",
+        "stat": "spa",
+        "delta": 1,
+        "chance": 70
+      }
+    ]
   },
   {
     "id": "파워스왑",
@@ -6680,7 +7004,8 @@
       "구속",
       "접촉"
     ],
-    "makesContact": true
+    "makesContact": true,
+    "bindsTarget": true
   },
   {
     "id": "날려버리기",
@@ -7436,6 +7761,7 @@
     "accuracy": null,
     "pp": 20,
     "priority": 0,
+    "setsHazard": "stickyWeb",
     "effect": "상대의 주위에 끈적끈적한 네트를 둘러 펼쳐 교체되어 나온 상대의 스피드를 1랭크 떨어뜨린다.",
     "tags": [
       "장판",
@@ -7457,7 +7783,8 @@
       "구속",
       "접촉"
     ],
-    "makesContact": true
+    "makesContact": true,
+    "bindsTarget": true
   },
   {
     "id": "파워셰어",
@@ -7640,5 +7967,1965 @@
     "makesContact": false,
     "protectEffect": "block",
     "protectContactDamageFraction": 0.125
+  },
+  {
+    "id": "리사이클",
+    "name": "리사이클",
+    "type": "노말",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 12,
+    "priority": 0,
+    "effect": "한 번 썼거나 잃어버린 자신의 도구를 재생하여 다시 지닌다.",
+    "tags": [
+      "회복"
+    ],
+    "makesContact": false
+  },
+  {
+    "id": "위액",
+    "name": "위액",
+    "type": "독",
+    "category": "status",
+    "power": null,
+    "accuracy": 100,
+    "pp": 12,
+    "priority": 0,
+    "effect": "상대에게 특수한 위액을 튀긴다. 튄 상대의 특성이 사라져 효과가 없어진다.",
+    "tags": [
+      "상태이상-기타"
+    ],
+    "makesContact": false
+  },
+  {
+    "id": "록온",
+    "name": "록온",
+    "type": "노말",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 8,
+    "priority": 0,
+    "effect": "상대에게 조준을 정확히 맞춘다. 다음 턴에 반드시 기술을 명중시킬 수 있다.",
+    "tags": [
+      "상태이상-기타"
+    ],
+    "makesContact": false
+  },
+  {
+    "id": "막말내뱉기",
+    "name": "막말내뱉기",
+    "type": "악",
+    "category": "physical",
+    "power": 80,
+    "accuracy": null,
+    "pp": 20,
+    "priority": 0,
+    "effect": "고개 숙여 사과하는 척하면서 상대를 찔러 공격한다. 공격은 반드시 명중한다.",
+    "tags": [
+      "필중",
+      "접촉"
+    ],
+    "makesContact": true
+  },
+  {
+    "id": "소울크래시",
+    "name": "소울크래시",
+    "type": "페어리",
+    "category": "physical",
+    "power": 75,
+    "accuracy": 100,
+    "pp": 16,
+    "priority": 0,
+    "effect": "상대를 강한 힘으로 내리쳐서 공격한다. 기죽게 만들어서 반드시 상대의 특수공격을 1랭크 떨어뜨린다.",
+    "tags": [
+      "랭크",
+      "접촉"
+    ],
+    "makesContact": true,
+    "statChanges": [
+      {
+        "target": "opponent",
+        "stat": "spa",
+        "delta": -1
+      }
+    ]
+  },
+  {
+    "id": "드래곤애로",
+    "name": "드래곤애로",
+    "type": "드래곤",
+    "category": "physical",
+    "power": 50,
+    "accuracy": 100,
+    "pp": 12,
+    "priority": 0,
+    "effect": "1턴에 데다라이 2마리를 사출해서 공격한다. 2회 연속으로 데미지를 준다.",
+    "tags": [
+      "연속",
+      "비접촉"
+    ],
+    "makesContact": false,
+    "minHits": 2,
+    "maxHits": 2
+  },
+  {
+    "id": "썬더다이브",
+    "name": "썬더다이브",
+    "type": "전기",
+    "category": "physical",
+    "power": 130,
+    "accuracy": 85,
+    "pp": 16,
+    "priority": 0,
+    "effect": "강력한 전기를 몸에 두르고 힘차게 상대에게 부딪친다. 20% 확률로 상대를 마비 상태로 만든다.",
+    "tags": [
+      "접촉",
+      "마비"
+    ],
+    "makesContact": true,
+    "inflictsStatus": [
+      {
+        "status": "paralysis",
+        "chance": 20
+      }
+    ]
+  },
+  {
+    "id": "DD래리어트",
+    "name": "DD래리어트",
+    "type": "악",
+    "category": "physical",
+    "power": 85,
+    "accuracy": 100,
+    "pp": 10,
+    "priority": 0,
+    "effect": "상반신을 힘차게 회전시켜 양팔로 상대를 후려친다. 상대의 능력 변화에 관계없이 데미지를 준다.",
+    "tags": [
+      "접촉"
+    ],
+    "makesContact": true,
+    "ignoresDefenderStatStagesInDamage": true
+  },
+  {
+    "id": "가드셰어",
+    "name": "가드셰어",
+    "type": "에스퍼",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 20,
+    "priority": 0,
+    "effect": "초능력으로 자신과 상대의 방어·특수방어 실능을 더한 뒤 반씩 나눠 갖는다.",
+    "tags": [],
+    "makesContact": false,
+    "averagesDefensesWithTarget": true
+  },
+  {
+    "id": "가위자르기",
+    "name": "가위자르기",
+    "type": "노말",
+    "category": "physical",
+    "power": null,
+    "accuracy": 30,
+    "pp": 5,
+    "priority": 0,
+    "effect": "거대한 집게발이나 낫 등으로 협공하여 상대를 일격에 쓰러뜨리려 한다. 명중하면 상대는 한 번에 쓰러진다. (일격필살 판정은 아직 엔진에 반영되지 않음)",
+    "tags": [
+      "일격",
+      "접촉"
+    ],
+    "makesContact": true
+  },
+  {
+    "id": "레이징불",
+    "name": "레이징불",
+    "type": "노말",
+    "category": "physical",
+    "power": 90,
+    "accuracy": 100,
+    "pp": 10,
+    "priority": 0,
+    "effect": "난폭하게 돌진하여 공격한다. 리플렉터·빛의장막·오로라베일 등의 방어막을 부술 수 있다. 이 기술을 쓰는 켄타로스의 모습에 따라 타입이 바뀐다.",
+    "tags": [
+      "접촉"
+    ],
+    "makesContact": true,
+    "breaksScreensOnHit": true,
+    "typeByUserSpecies": {
+      "팔데아켄타로스컴뱃종": "격투",
+      "팔데아켄타로스블레이즈종": "불꽃",
+      "팔데아켄타로스워터종": "물"
+    }
+  },
+  {
+    "id": "마지막일침",
+    "name": "마지막일침",
+    "type": "벌레",
+    "category": "physical",
+    "power": 50,
+    "accuracy": 100,
+    "pp": 25,
+    "priority": 0,
+    "effect": "전력을 다해 상대에게 맞선다. 이 기술로 상대를 쓰러뜨리면 자신의 공격이 3랭크 오른다.",
+    "tags": [
+      "랭크",
+      "접촉"
+    ],
+    "makesContact": true,
+    "boostsUserStatOnKo": {
+      "stat": "atk",
+      "delta": 3
+    }
+  },
+  {
+    "id": "바늘미사일",
+    "name": "바늘미사일",
+    "type": "벌레",
+    "category": "physical",
+    "power": 25,
+    "accuracy": 95,
+    "pp": 20,
+    "priority": 0,
+    "effect": "단단한 바늘을 발사하여 공격한다. 2-5회 동안 연속으로 쓴다.",
+    "tags": [
+      "연속",
+      "접촉"
+    ],
+    "makesContact": true,
+    "minHits": 2,
+    "maxHits": 5
+  },
+  {
+    "id": "뱀눈초리",
+    "name": "뱀눈초리",
+    "type": "노말",
+    "category": "status",
+    "power": null,
+    "accuracy": 100,
+    "pp": 30,
+    "priority": 0,
+    "effect": "무서운 얼굴로 위협하여 상대를 마비시켜서 움직임을 둔하게 만든다.",
+    "tags": [
+      "마비"
+    ],
+    "makesContact": false,
+    "inflictsStatus": [
+      {
+        "status": "paralysis"
+      }
+    ]
+  },
+  {
+    "id": "변신",
+    "name": "변신",
+    "type": "노말",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 10,
+    "priority": 0,
+    "effect": "상대 포켓몬으로 변신한다. 타입·능력치·특성·기술을 상대와 똑같이 복사한다(HP와 현재 상태이상은 제외).",
+    "tags": [],
+    "makesContact": false,
+    "transformsIntoTarget": true
+  },
+  {
+    "id": "셸블레이드",
+    "name": "셸블레이드",
+    "type": "물",
+    "category": "physical",
+    "power": 75,
+    "accuracy": 95,
+    "pp": 10,
+    "priority": 0,
+    "effect": "날카로운 껍질로 상대를 벤다. 50% 확률로 상대의 방어를 1랭크 떨어뜨린다.",
+    "tags": [
+      "랭크",
+      "접촉",
+      "베기"
+    ],
+    "classification": [
+      "베기"
+    ],
+    "makesContact": true,
+    "statChanges": [
+      {
+        "target": "opponent",
+        "stat": "def",
+        "delta": -1,
+        "chance": 50
+      }
+    ]
+  },
+  {
+    "id": "셸암즈",
+    "name": "셸암즈",
+    "type": "독",
+    "category": "physical",
+    "power": 90,
+    "accuracy": 100,
+    "pp": 10,
+    "priority": 0,
+    "effect": "조개 속에 숨겨둔 무기로 상대를 노린다. 물리·특수 중 데미지가 큰 쪽 판정으로 공격하며, 물리면 접촉기, 특수면 비접촉기가 된다. 두 값이 같으면 무작위로 정해진다.",
+    "tags": [
+      "접촉"
+    ],
+    "makesContact": true,
+    "dynamicCategoryByHigherDamage": true
+  },
+  {
+    "id": "스피드스왑",
+    "name": "스피드스왑",
+    "type": "에스퍼",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 10,
+    "priority": 0,
+    "effect": "자신과 상대의 스피드 실능을 서로 맞바꾼다.",
+    "tags": [],
+    "makesContact": false,
+    "swapsSpeedWithTarget": true
+  },
+  {
+    "id": "업어후리기",
+    "name": "업어후리기",
+    "type": "격투",
+    "category": "physical",
+    "power": 60,
+    "accuracy": 100,
+    "pp": 10,
+    "priority": 0,
+    "effect": "상대의 급소를 노려 메어친다. 반드시 급소에 맞는다.",
+    "tags": [
+      "급소-확정",
+      "접촉"
+    ],
+    "makesContact": true,
+    "alwaysCrit": true
+  },
+  {
+    "id": "작아지기",
+    "name": "작아지기",
+    "type": "노말",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 10,
+    "priority": 0,
+    "effect": "몸을 움츠려서 작게 만든다. 자신의 회피율을 2랭크 올린다.",
+    "tags": [
+      "랭크"
+    ],
+    "makesContact": false,
+    "statChanges": [
+      {
+        "target": "self",
+        "stat": "evasion",
+        "delta": 2
+      }
+    ]
+  },
+  {
+    "id": "조이기",
+    "name": "조이기",
+    "type": "노말",
+    "category": "physical",
+    "power": 15,
+    "accuracy": 85,
+    "pp": 20,
+    "priority": 0,
+    "effect": "긴 몸이나 촉수 등으로 4-5턴 동안 상대를 옭아매어 조인다.",
+    "tags": [
+      "접촉"
+    ],
+    "makesContact": true,
+    "bindsTarget": true
+  },
+  {
+    "id": "힘흡수",
+    "name": "힘흡수",
+    "type": "풀",
+    "category": "status",
+    "power": null,
+    "accuracy": 100,
+    "pp": 10,
+    "priority": 0,
+    "effect": "상대의 공격 실능만큼 자신의 HP를 회복하고, 상대의 공격을 1랭크 떨어뜨린다.",
+    "tags": [
+      "랭크",
+      "회복"
+    ],
+    "makesContact": false,
+    "statChanges": [
+      {
+        "target": "opponent",
+        "stat": "atk",
+        "delta": -1
+      }
+    ],
+    "drainsFromTargetAttackStat": true
+  },
+  {
+    "id": "경혈찌르기",
+    "name": "경혈찌르기",
+    "type": "노말",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 20,
+    "priority": 0,
+    "effect": "경혈을 세게 찔러 능력 중 하나를 랜덤으로 크게 올린다. 자신의 능력 하나가 2랭크 오른다. (랜덤 대상 선택은 엔진 미배선)",
+    "tags": [
+      "랭크"
+    ],
+    "makesContact": false
+  },
+  {
+    "id": "독실",
+    "name": "독실",
+    "type": "독",
+    "category": "status",
+    "power": null,
+    "accuracy": 100,
+    "pp": 20,
+    "priority": 0,
+    "effect": "독이 스며든 실을 뿜어 상대를 독 상태로 만들고 스피드를 2랭크 떨어뜨린다.",
+    "tags": [
+      "랭크",
+      "독"
+    ],
+    "makesContact": false,
+    "statChanges": [
+      {
+        "target": "opponent",
+        "stat": "spe",
+        "delta": -2
+      }
+    ],
+    "inflictsStatus": [
+      {
+        "status": "poison"
+      }
+    ]
+  },
+  {
+    "id": "독침천발",
+    "name": "독침천발",
+    "type": "독",
+    "category": "physical",
+    "power": 60,
+    "accuracy": 100,
+    "pp": 12,
+    "priority": 0,
+    "effect": "독이 밴 가시를 연달아 발사해 공격한다. 50% 확률로 상대를 독 상태로 만들며, 상대가 이미 독·맹독 상태이면 위력이 2배가 된다. (위력 2배 조건은 엔진 미배선)",
+    "tags": [
+      "독"
+    ],
+    "makesContact": false,
+    "inflictsStatus": [
+      {
+        "status": "poison",
+        "chance": 50
+      }
+    ]
+  },
+  {
+    "id": "막치기",
+    "name": "막치기",
+    "type": "노말",
+    "category": "physical",
+    "power": 40,
+    "accuracy": 100,
+    "pp": 20,
+    "priority": 0,
+    "effect": "앞발이나 긴 꼬리 등으로 상대를 두들겨서 공격한다.",
+    "tags": [],
+    "makesContact": true
+  },
+  {
+    "id": "만나자마자",
+    "name": "만나자마자",
+    "type": "벌레",
+    "category": "physical",
+    "power": 100,
+    "accuracy": 100,
+    "pp": 12,
+    "priority": 2,
+    "effect": "기세 좋게 공격한다. 위력은 높지만 배틀에 나온 첫 턴에만 쓸 수 있다. 반드시 선제공격한다.",
+    "tags": [
+      "선공"
+    ],
+    "makesContact": true,
+    "usageCondition": "first-turn-only"
+  },
+  {
+    "id": "백귀야행",
+    "name": "백귀야행",
+    "type": "고스트",
+    "category": "special",
+    "power": 65,
+    "accuracy": 100,
+    "pp": 16,
+    "priority": 0,
+    "effect": "수많은 원령이 상대를 습격한다. 30% 확률로 상대를 화상 상태로 만들며, 상대가 상태이상이면 위력이 2배가 된다. (위력 2배 조건은 엔진 미배선)",
+    "tags": [
+      "화상"
+    ],
+    "makesContact": false,
+    "inflictsStatus": [
+      {
+        "status": "burn",
+        "chance": 30
+      }
+    ]
+  },
+  {
+    "id": "분화",
+    "name": "분화",
+    "type": "불꽃",
+    "category": "special",
+    "power": 150,
+    "accuracy": 100,
+    "pp": 8,
+    "priority": 0,
+    "effect": "폭발적인 마그마를 상대에게 내뿜어 공격한다. 자신의 HP가 적을수록 위력이 떨어진다(위력 = 150 × 현재 HP ÷ 최대 HP). (HP 비례 감소는 엔진 미배선 — 계산 페이지에선 150 고정 취급)",
+    "tags": [],
+    "makesContact": false
+  },
+  {
+    "id": "섬뜩한주문",
+    "name": "섬뜩한주문",
+    "type": "에스퍼",
+    "category": "special",
+    "power": 80,
+    "accuracy": 100,
+    "pp": 8,
+    "priority": 0,
+    "effect": "강대한 초능력으로 상대를 공격한다. 상대가 마지막으로 사용한 기술의 PP를 3 깎는다. (PP 감소는 엔진 미배선)",
+    "tags": [
+      "소리"
+    ],
+    "classification": [
+      "소리"
+    ],
+    "makesContact": false
+  },
+  {
+    "id": "썰렁개그",
+    "name": "썰렁개그",
+    "type": "얼음",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 12,
+    "priority": 0,
+    "effect": "썰렁한 개그를 하기 직전 5턴 동안 눈을 내리게 한다. 본가에서는 사용 후 교체되지만 1대1에서는 교체가 없어 눈 설정만 적용된다.",
+    "tags": [
+      "환경"
+    ],
+    "makesContact": false,
+    "setsWeather": "눈"
+  },
+  {
+    "id": "자기장조작",
+    "name": "자기장조작",
+    "type": "전기",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 20,
+    "priority": 0,
+    "effect": "자기장을 조작하여 특성이 플러스나 마이너스인 포켓몬의 방어·특수방어를 1랭크씩 올린다. 1대1 시뮬레이터에서는 아군이 없어 효과가 없다.",
+    "tags": [
+      "랭크"
+    ],
+    "makesContact": false
+  },
+  {
+    "id": "파라볼라차지",
+    "name": "파라볼라차지",
+    "type": "전기",
+    "category": "special",
+    "power": 65,
+    "accuracy": 100,
+    "pp": 20,
+    "priority": 0,
+    "effect": "주위에 있는 것 모두를 공격한다. 준 데미지의 50%만큼 자신의 HP를 회복한다.",
+    "tags": [],
+    "makesContact": false,
+    "drainFraction": 0.5
+  },
+  {
+    "id": "고드름떨구기",
+    "name": "고드름떨구기",
+    "type": "얼음",
+    "category": "physical",
+    "power": 85,
+    "accuracy": 90,
+    "pp": 12,
+    "priority": 0,
+    "effect": "큰 고드름을 격렬하게 부딪쳐서 공격한다. 30% 확률로 상대를 풀죽게 만든다.",
+    "tags": [
+      "비접촉",
+      "풀죽음"
+    ],
+    "makesContact": false,
+    "inflictsVolatile": [
+      {
+        "volatile": "flinch",
+        "target": "opponent",
+        "chance": 30
+      }
+    ]
+  },
+  {
+    "id": "발꿈치찍기",
+    "name": "발꿈치찍기",
+    "type": "격투",
+    "category": "physical",
+    "power": 120,
+    "accuracy": 90,
+    "pp": 12,
+    "priority": 0,
+    "effect": "발꿈치를 들어 올린 뒤 내리찍어 공격한다. 30%의 확률로 상대를 혼란 상태로 만든다. 빗나가면 자신이 전체 HP의 ½만큼 대미지를 입는다.",
+    "tags": [
+      "반동",
+      "접촉",
+      "혼란"
+    ],
+    "makesContact": true,
+    "crashFraction": 0.5,
+    "inflictsVolatile": [
+      {
+        "volatile": "confusion",
+        "target": "opponent",
+        "chance": 30
+      }
+    ]
+  },
+  {
+    "id": "얼음숨결",
+    "name": "얼음숨결",
+    "type": "얼음",
+    "category": "special",
+    "power": 60,
+    "accuracy": 90,
+    "pp": 12,
+    "priority": 0,
+    "effect": "차가운 숨결을 상대에게 내뿜어 공격한다. 반드시 급소에 맞는다.",
+    "tags": [
+      "급소-확정",
+      "비접촉"
+    ],
+    "makesContact": false,
+    "alwaysCrit": true
+  },
+  {
+    "id": "폭음파",
+    "name": "폭음파",
+    "type": "노말",
+    "category": "special",
+    "power": 140,
+    "accuracy": 100,
+    "pp": 12,
+    "priority": 0,
+    "effect": "무시무시한 폭음의 파괴력으로 주위에 있는 모든 포켓몬을 공격한다.",
+    "tags": [
+      "광역-전원",
+      "비접촉",
+      "소리"
+    ],
+    "classification": [
+      "소리"
+    ],
+    "makesContact": false
+  },
+  {
+    "id": "순서미루기",
+    "name": "순서미루기",
+    "type": "악",
+    "category": "status",
+    "power": null,
+    "accuracy": 100,
+    "pp": 16,
+    "priority": 0,
+    "effect": "상대를 억눌러서 행동의 순서를 마지막으로 만든다. 1대1에서는 행동 순서 조작이 엔진에 반영되어 있지 않아 효과가 없다.",
+    "tags": [],
+    "makesContact": false
+  },
+  {
+    "id": "절대영도",
+    "name": "절대영도",
+    "type": "얼음",
+    "category": "special",
+    "power": null,
+    "accuracy": 30,
+    "pp": 8,
+    "priority": 0,
+    "effect": "절대영도의 추위로 상대를 공격한다. 맞으면 일격에 기절한다. 아직 엔진에 일격필살 판정이 없어 명중해도 데미지가 들어가지 않는다.",
+    "tags": [
+      "일격",
+      "비접촉"
+    ],
+    "makesContact": false
+  },
+  {
+    "id": "치료방울",
+    "name": "치료방울",
+    "type": "노말",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 8,
+    "priority": 0,
+    "effect": "기분 좋은 방울 소리를 들려주어 같은편 전원의 상태 이상을 회복한다.",
+    "tags": [
+      "회복",
+      "소리"
+    ],
+    "classification": [
+      "소리"
+    ],
+    "makesContact": false,
+    "curesStatus": {
+      "target": "self"
+    }
+  },
+  {
+    "id": "들이받기",
+    "name": "들이받기",
+    "type": "땅",
+    "category": "physical",
+    "power": 120,
+    "accuracy": 100,
+    "pp": 8,
+    "priority": 0,
+    "effect": "온 힘을 다한 몸통박치기를 날린다. 자신의 방어와 특수방어가 1랭크 떨어진다.",
+    "tags": [
+      "반동-랭크",
+      "펀치",
+      "접촉"
+    ],
+    "classification": [
+      "펀치"
+    ],
+    "makesContact": true,
+    "statChanges": [
+      {
+        "target": "self",
+        "stat": "def",
+        "delta": -1
+      },
+      {
+        "target": "self",
+        "stat": "spd",
+        "delta": -1
+      }
+    ]
+  },
+  {
+    "id": "아이스해머",
+    "name": "아이스해머",
+    "type": "얼음",
+    "category": "physical",
+    "power": 100,
+    "accuracy": 90,
+    "pp": 12,
+    "priority": 0,
+    "effect": "강하고 무거운 주먹을 휘둘러 데미지를 준다. 자신의 스피드가 1랭크 떨어진다.",
+    "tags": [
+      "반동-랭크",
+      "펀치",
+      "접촉"
+    ],
+    "classification": [
+      "펀치"
+    ],
+    "makesContact": true,
+    "statChanges": [
+      {
+        "target": "self",
+        "stat": "spe",
+        "delta": -1
+      }
+    ]
+  },
+  {
+    "id": "아쿠아커터",
+    "name": "아쿠아커터",
+    "type": "물",
+    "category": "physical",
+    "power": 70,
+    "accuracy": 100,
+    "pp": 20,
+    "priority": 0,
+    "effect": "압축한 물을 칼날처럼 발사해 상대를 절단한다. 급소에 맞을 확률이 높다.",
+    "tags": [
+      "급소",
+      "비접촉",
+      "베기"
+    ],
+    "classification": [
+      "베기"
+    ],
+    "makesContact": false,
+    "highCritRatio": true
+  },
+  {
+    "id": "암석포",
+    "name": "암석포",
+    "type": "바위",
+    "category": "physical",
+    "power": 150,
+    "accuracy": 90,
+    "pp": 8,
+    "priority": 0,
+    "effect": "거대한 바위를 상대에게 발사하여 공격한다. 다음 턴은 움직일 수 없게 된다.",
+    "tags": [
+      "반동-휴식",
+      "비접촉",
+      "폭탄"
+    ],
+    "makesContact": false,
+    "inflictsVolatile": [
+      {
+        "volatile": "recharge",
+        "target": "self"
+      }
+    ]
+  },
+  {
+    "id": "집게해머",
+    "name": "집게해머",
+    "type": "물",
+    "category": "physical",
+    "power": 100,
+    "accuracy": 95,
+    "pp": 12,
+    "priority": 0,
+    "effect": "큰 집게를 상대에게 내리쳐서 공격한다. 급소에 맞을 확률이 높다.",
+    "tags": [
+      "급소",
+      "접촉"
+    ],
+    "makesContact": true,
+    "highCritRatio": true
+  },
+  {
+    "id": "나이트버스트",
+    "name": "나이트버스트",
+    "type": "악",
+    "category": "special",
+    "power": 90,
+    "accuracy": 95,
+    "pp": 12,
+    "priority": 0,
+    "effect": "암흑의 충격파를 날려서 상대를 공격한다. 40% 확률로 명중률을 1랭크 떨어뜨린다.",
+    "tags": [
+      "랭크",
+      "비접촉"
+    ],
+    "makesContact": false,
+    "statChanges": [
+      {
+        "target": "opponent",
+        "stat": "accuracy",
+        "delta": -1,
+        "chance": 40
+      }
+    ]
+  },
+  {
+    "id": "비검천중파",
+    "name": "비검천중파",
+    "type": "악",
+    "category": "physical",
+    "power": 65,
+    "accuracy": 90,
+    "pp": 16,
+    "priority": 0,
+    "effect": "조개껍질 검으로 공격한다. 조개껍질 파편은 압정이 되어 상대의 발밑에 흩어진다.",
+    "tags": [
+      "장판",
+      "접촉",
+      "베기"
+    ],
+    "classification": [
+      "베기"
+    ],
+    "makesContact": true,
+    "setsHazard": "spikes"
+  },
+  {
+    "id": "집게덫",
+    "name": "집게덫",
+    "type": "강철",
+    "category": "physical",
+    "power": 35,
+    "accuracy": 100,
+    "pp": 16,
+    "priority": 0,
+    "effect": "집게덫으로 붙잡은 뒤 4~5턴 동안 상대를 끼워서 움직임을 봉쇄한다.",
+    "tags": [
+      "접촉",
+      "구속"
+    ],
+    "makesContact": true,
+    "bindsTarget": true
+  },
+  {
+    "id": "심플빔",
+    "name": "심플빔",
+    "type": "노말",
+    "category": "status",
+    "power": null,
+    "accuracy": 100,
+    "pp": 16,
+    "priority": 0,
+    "effect": "수수께끼의 염력파를 상대에게 보낸다. 염력파를 받은 상대는 특성이 단순으로 바뀐다.",
+    "tags": [],
+    "makesContact": false,
+    "setsTargetAbilityId": "단순"
+  },
+  {
+    "id": "볼가득넣기",
+    "name": "볼가득넣기",
+    "type": "노말",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 12,
+    "priority": 0,
+    "effect": "지니고 있는 나무열매를 먹고 방어를 2랭크 올린다.",
+    "tags": [
+      "랭크"
+    ],
+    "makesContact": false,
+    "eatsHeldBerry": true,
+    "statChanges": [
+      {
+        "target": "self",
+        "stat": "def",
+        "delta": 2
+      }
+    ]
+  },
+  {
+    "id": "뒤집어엎기",
+    "name": "뒤집어엎기",
+    "type": "악",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 20,
+    "priority": 0,
+    "effect": "상대에게 걸려 있는 모든 능력 변화를 뒤집어서 반대로 만든다.",
+    "tags": [
+      "랭크"
+    ],
+    "makesContact": false,
+    "invertsTargetStatStages": true
+  },
+  {
+    "id": "우드혼",
+    "name": "우드혼",
+    "type": "풀",
+    "category": "physical",
+    "power": 75,
+    "accuracy": 100,
+    "pp": 12,
+    "priority": 0,
+    "effect": "뿔을 꿰찔러서 상대의 양분을 흡수한다. 대상에게 준 대미지의 ½만큼 체력을 회복한다.",
+    "tags": [
+      "흡수",
+      "접촉"
+    ],
+    "drainFraction": 0.5,
+    "makesContact": true
+  },
+  {
+    "id": "빙산바람",
+    "name": "빙산바람",
+    "type": "얼음",
+    "category": "physical",
+    "power": 120,
+    "accuracy": 95,
+    "pp": 12,
+    "priority": 0,
+    "effect": "빙산처럼 커다란 얼음덩어리를 부딪쳐서 공격한다. 30%의 확률로 상대를 풀죽게 만든다.",
+    "tags": [
+      "비접촉",
+      "풀죽음"
+    ],
+    "makesContact": false,
+    "inflictsVolatile": [
+      {
+        "volatile": "flinch",
+        "target": "opponent",
+        "chance": 30
+      }
+    ]
+  },
+  {
+    "id": "부르짖기",
+    "name": "부르짖기",
+    "type": "노말",
+    "category": "status",
+    "power": null,
+    "accuracy": 100,
+    "pp": 20,
+    "priority": 0,
+    "effect": "우렁차게 부르짖어서 상대를 위협하여 상대의 공격과 특수공격을 1랭크 떨어뜨린다.",
+    "tags": [
+      "랭크",
+      "소리"
+    ],
+    "classification": [
+      "소리"
+    ],
+    "makesContact": false,
+    "statChanges": [
+      {
+        "target": "opponent",
+        "stat": "atk",
+        "delta": -1
+      },
+      {
+        "target": "opponent",
+        "stat": "spa",
+        "delta": -1
+      }
+    ]
+  },
+  {
+    "id": "플라잉프레스",
+    "name": "플라잉프레스",
+    "type": "격투",
+    "category": "physical",
+    "power": 100,
+    "accuracy": 95,
+    "pp": 12,
+    "priority": 0,
+    "effect": "공중에서 상대에게 다이브한다. 대상이 작아지기를 사용했다면 필중하며 위력이 2배다. 이 기술은 격투타입임과 동시에 비행타입이기도 하다.",
+    "tags": [
+      "복합 타입",
+      "상승",
+      "압박",
+      "접촉"
+    ],
+    "makesContact": true,
+    "additionalType": "비행",
+    "bonusVsMinimize": true
+  },
+  {
+    "id": "농성",
+    "name": "농성",
+    "type": "강철",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 12,
+    "priority": 0,
+    "effect": "피부를 강철 방패처럼 단단하게 만들어서 자신의 방어를 2랭크 올린다.",
+    "tags": [
+      "랭크"
+    ],
+    "makesContact": false,
+    "statChanges": [
+      {
+        "target": "self",
+        "stat": "def",
+        "delta": 2
+      }
+    ]
+  },
+  {
+    "id": "숲의저주",
+    "name": "숲의저주",
+    "type": "풀",
+    "category": "status",
+    "power": null,
+    "accuracy": 100,
+    "pp": 20,
+    "priority": 0,
+    "effect": "상대에게 숲의 저주를 건다. 저주에 걸린 상대는 타입에 풀타입이 추가된다.",
+    "tags": [
+      "타입 변경"
+    ],
+    "makesContact": false,
+    "addsTypeToTarget": "풀"
+  },
+  {
+    "id": "핼러윈",
+    "name": "핼러윈",
+    "type": "고스트",
+    "category": "status",
+    "power": null,
+    "accuracy": 100,
+    "pp": 20,
+    "priority": 0,
+    "effect": "상대를 핼러윈으로 초대한다. 상대 타입에 고스트타입이 추가된다.",
+    "tags": [
+      "타입 변경"
+    ],
+    "makesContact": false,
+    "addsTypeToTarget": "고스트"
+  },
+  {
+    "id": "송전",
+    "name": "송전",
+    "type": "전기",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 20,
+    "priority": 0,
+    "effect": "상대가 기술을 쓰기 전에 송전하면 그 턴에 상대가 사용하는 기술은 전기타입이 된다.",
+    "tags": [],
+    "makesContact": false,
+    "changesTargetMoveTypeThisTurn": "전기"
+  },
+  {
+    "id": "페어리록",
+    "name": "페어리록",
+    "type": "페어리",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 10,
+    "priority": 0,
+    "effect": "다음 턴에 서로가 교체·도주할 수 없게 만든다. (1v1 시뮬레이터엔 교체가 없어 표시용 스텁)",
+    "tags": [
+      "상태이상-기타"
+    ],
+    "makesContact": false
+  },
+  {
+    "id": "아로마미스트",
+    "name": "아로마미스트",
+    "type": "페어리",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 20,
+    "priority": 0,
+    "effect": "신비한 아로마 향으로 같은 편의 특수방어를 1랭크 올린다. (더블 전용 — 1v1엔 대상이 없어 현재 스텁)",
+    "tags": [
+      "랭크"
+    ],
+    "makesContact": false
+  },
+  {
+    "id": "3연화살",
+    "name": "3연화살",
+    "type": "격투",
+    "category": "physical",
+    "power": 90,
+    "accuracy": 100,
+    "pp": 12,
+    "priority": 0,
+    "effect": "발 기술을 사용하고 3개의 화살을 동시에 발사한다. 급소에 맞기 쉽다. 50% 확률로 상대의 방어를 1랭크 떨어뜨린다. 30% 확률로 상대를 풀죽게 만든다.",
+    "tags": [
+      "랭크",
+      "급소",
+      "비접촉",
+      "풀죽음"
+    ],
+    "makesContact": false,
+    "highCritRatio": true,
+    "statChanges": [
+      {
+        "target": "opponent",
+        "stat": "def",
+        "delta": -1,
+        "chance": 50
+      }
+    ],
+    "inflictsVolatile": [
+      {
+        "volatile": "flinch",
+        "target": "opponent",
+        "chance": 30
+      }
+    ]
+  },
+  {
+    "id": "불꽃채찍",
+    "name": "불꽃채찍",
+    "type": "불꽃",
+    "category": "physical",
+    "power": 90,
+    "accuracy": 100,
+    "pp": 16,
+    "priority": 0,
+    "effect": "불타는 채찍으로 상대를 친다. 공격을 받은 상대는 방어가 1랭크 떨어진다.",
+    "tags": [
+      "랭크",
+      "접촉"
+    ],
+    "makesContact": true,
+    "statChanges": [
+      {
+        "target": "opponent",
+        "stat": "def",
+        "delta": -1
+      }
+    ]
+  },
+  {
+    "id": "트로피컬킥",
+    "name": "트로피컬킥",
+    "type": "풀",
+    "category": "physical",
+    "power": 85,
+    "accuracy": 100,
+    "pp": 16,
+    "priority": 0,
+    "effect": "남쪽 나라에서 유래된 뜨거운 킥을 상대에게 날린다. 상대의 공격을 1랭크 떨어뜨린다.",
+    "tags": [
+      "랭크",
+      "접촉"
+    ],
+    "makesContact": true,
+    "statChanges": [
+      {
+        "target": "opponent",
+        "stat": "atk",
+        "delta": -1
+      }
+    ]
+  },
+  {
+    "id": "스케일노이즈",
+    "name": "스케일노이즈",
+    "type": "드래곤",
+    "category": "special",
+    "power": 110,
+    "accuracy": 100,
+    "pp": 8,
+    "priority": 0,
+    "effect": "전신의 비늘을 비벼서 큰 소리를 내 공격한다. 공격 후 자신의 방어가 1랭크 떨어진다.",
+    "tags": [
+      "광역-상대",
+      "반동-랭크",
+      "소리",
+      "비접촉"
+    ],
+    "classification": [
+      "소리"
+    ],
+    "makesContact": false,
+    "statChanges": [
+      {
+        "target": "self",
+        "stat": "def",
+        "delta": -1
+      }
+    ]
+  },
+  {
+    "id": "액셀록",
+    "name": "액셀록",
+    "type": "바위",
+    "category": "physical",
+    "power": 40,
+    "accuracy": 100,
+    "pp": 20,
+    "priority": 2,
+    "effect": "재빠른 스피드로 상대에게 부딪쳐서 공격한다. 반드시 선제공격할 수 있다.",
+    "tags": [
+      "선공",
+      "접촉"
+    ],
+    "makesContact": true
+  },
+  {
+    "id": "부리캐논",
+    "name": "부리캐논",
+    "type": "비행",
+    "category": "physical",
+    "power": 120,
+    "accuracy": 100,
+    "pp": 8,
+    "priority": -3,
+    "priorityDisplay": "+5 / -3",
+    "effect": "먼저 부리를 가열시킨 다음(우선도 +5) 공격을 날린다(우선도 -3). 가열 중에 접촉기로 공격받으면 그 상대가 화상을 입는다.",
+    "tags": [
+      "정신 집중",
+      "비접촉",
+      "폭탄",
+      "화상"
+    ],
+    "makesContact": false,
+    "burnsContactAttackerBeforeResolve": true,
+    "turnStartUserAnnouncement": "부리를 가열시켰다!"
+  },
+  {
+    "id": "그림자꿰매기",
+    "name": "그림자꿰매기",
+    "type": "고스트",
+    "category": "physical",
+    "power": 90,
+    "accuracy": 100,
+    "pp": 12,
+    "priority": 0,
+    "effect": "공격과 동시에 상대의 그림자를 꿰매 도망칠 수 없게 한다. (교체 봉쇄는 배틀타워 리뉴얼로 교체가 도입되면 배선 — 현재 데미지만)",
+    "tags": [
+      "고정-상대",
+      "비접촉"
+    ],
+    "makesContact": false
+  },
+  {
+    "id": "소울비트",
+    "name": "소울비트",
+    "type": "드래곤",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 8,
+    "priority": 0,
+    "effect": "자신의 HP를 ⅓ 깎아서 공격·방어·특수공격·특수방어·스피드를 1랭크 올린다.",
+    "tags": [
+      "랭크",
+      "소리",
+      "춤"
+    ],
+    "classification": [
+      "소리",
+      "춤"
+    ],
+    "makesContact": false,
+    "costsHpFraction": 0.3333,
+    "statChanges": [
+      {
+        "target": "self",
+        "stat": "atk",
+        "delta": 1
+      },
+      {
+        "target": "self",
+        "stat": "def",
+        "delta": 1
+      },
+      {
+        "target": "self",
+        "stat": "spa",
+        "delta": 1
+      },
+      {
+        "target": "self",
+        "stat": "spd",
+        "delta": 1
+      },
+      {
+        "target": "self",
+        "stat": "spe",
+        "delta": 1
+      }
+    ]
+  },
+  {
+    "id": "지휘",
+    "name": "지휘",
+    "type": "에스퍼",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 16,
+    "priority": 0,
+    "effect": "상대에게 지시하여 상대가 쓴 기술을 다시 한번 쓰게 할 수 있다. (더블 전용 — 1v1 시뮬레이터엔 대상이 없어 스텁)",
+    "tags": [],
+    "makesContact": false
+  },
+  {
+    "id": "토치카",
+    "name": "토치카",
+    "type": "독",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 8,
+    "priority": 4,
+    "effect": "상대의 공격을 막음과 동시에 접촉한 상대에게 독을 퍼뜨린다.",
+    "tags": [
+      "방어",
+      "독"
+    ],
+    "makesContact": false,
+    "protectEffect": "block",
+    "protectContactStatus": "poison"
+  },
+  {
+    "id": "사과산",
+    "name": "사과산",
+    "type": "풀",
+    "category": "special",
+    "power": 90,
+    "accuracy": 100,
+    "pp": 12,
+    "priority": 0,
+    "effect": "새콤한 사과에서 만들어 낸 산성 액체로 공격한다. 상대의 특수방어를 1랭크 떨어뜨린다.",
+    "tags": [
+      "랭크",
+      "비접촉"
+    ],
+    "makesContact": false,
+    "statChanges": [
+      {
+        "target": "opponent",
+        "stat": "spd",
+        "delta": -1
+      }
+    ]
+  },
+  {
+    "id": "배리어러시",
+    "name": "배리어러시",
+    "type": "에스퍼",
+    "category": "physical",
+    "power": 90,
+    "accuracy": 90,
+    "pp": 12,
+    "priority": 0,
+    "effect": "사념의 에너지를 두른 채로 상대에게 부딪친다. 자신의 방어를 1랭크 올린다.",
+    "tags": [
+      "랭크",
+      "접촉"
+    ],
+    "makesContact": true,
+    "statChanges": [
+      {
+        "target": "self",
+        "stat": "def",
+        "delta": 1
+      }
+    ]
+  },
+  {
+    "id": "배수의진",
+    "name": "배수의진",
+    "type": "격투",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 8,
+    "priority": 0,
+    "effect": "자신의 모든 능력이 올라가지만 교체하거나 도망칠 수 없게 된다. (도망·교체 봉쇄는 배틀타워 리뉴얼로 교체가 도입되면 배선 — 현재 5스탯 +1만)",
+    "tags": [
+      "랭크",
+      "고정-자신"
+    ],
+    "makesContact": false,
+    "statChanges": [
+      {
+        "target": "self",
+        "stat": "atk",
+        "delta": 1
+      },
+      {
+        "target": "self",
+        "stat": "def",
+        "delta": 1
+      },
+      {
+        "target": "self",
+        "stat": "spa",
+        "delta": 1
+      },
+      {
+        "target": "self",
+        "stat": "spd",
+        "delta": 1
+      },
+      {
+        "target": "self",
+        "stat": "spe",
+        "delta": 1
+      }
+    ]
+  },
+  {
+    "id": "오라휠",
+    "name": "오라휠",
+    "type": "전기",
+    "category": "physical",
+    "power": 110,
+    "accuracy": 100,
+    "pp": 12,
+    "priority": 0,
+    "effect": "볼주머니에 저장해 둔 에너지로 공격하고 자신의 스피드를 1랭크 올린다. 모르페코의 모습에 따라 타입이 바뀐다(배부른모양=전기 / 배고픈모양=악).",
+    "tags": [
+      "랭크",
+      "비접촉"
+    ],
+    "makesContact": false,
+    "statChanges": [
+      {
+        "target": "self",
+        "stat": "spe",
+        "delta": 1
+      }
+    ],
+    "hungerSwitchType": {
+      "full": "전기",
+      "hangry": "악"
+    }
+  },
+  {
+    "id": "암석액스",
+    "name": "암석액스",
+    "type": "바위",
+    "category": "physical",
+    "power": 65,
+    "accuracy": 90,
+    "pp": 16,
+    "priority": 0,
+    "effect": "암석 도끼로 공격한다. 흩어진 암석 파편은 상대의 주위에 떠다니게 된다(스텔스록 상태). 급소에 맞기 쉽다.",
+    "tags": [
+      "급소",
+      "장판",
+      "접촉",
+      "베기"
+    ],
+    "classification": [
+      "베기"
+    ],
+    "makesContact": true,
+    "highCritRatio": true,
+    "setsHazard": "stealthRock"
+  },
+  {
+    "id": "G의힘",
+    "name": "G의힘",
+    "type": "풀",
+    "category": "physical",
+    "power": 90,
+    "accuracy": 100,
+    "pp": 12,
+    "priority": 0,
+    "effect": "높은 곳에서 사과를 떨어뜨려서 데미지를 준다. 상대의 방어를 1랭크 떨어뜨린다. 중력이 강할 때 위력이 1.5배가 된다(중력 상태 미구현 — 상시 미발동).",
+    "tags": [
+      "랭크",
+      "비접촉"
+    ],
+    "makesContact": false,
+    "statChanges": [
+      {
+        "target": "opponent",
+        "stat": "def",
+        "delta": -1
+      }
+    ],
+    "powerMultiplierInGravity": 1.5
+  },
+  {
+    "id": "다과회",
+    "name": "다과회",
+    "type": "노말",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 12,
+    "priority": 0,
+    "effect": "다과회를 열어 지닌 나무열매를 먹는다. (섭취 조건 분기를 무시하고 즉시 섭취)",
+    "tags": [],
+    "makesContact": false,
+    "eatsHeldBerry": true
+  },
+  {
+    "id": "데코레이션",
+    "name": "데코레이션",
+    "type": "페어리",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 16,
+    "priority": 0,
+    "effect": "데코레이션을 해서 상대의 공격과 특수공격을 2랭크 올린다. (더블 전용 — 1v1 시뮬레이터엔 대상이 없어 스텁)",
+    "tags": [
+      "랭크"
+    ],
+    "makesContact": false
+  },
+  {
+    "id": "마법가루",
+    "name": "마법가루",
+    "type": "에스퍼",
+    "category": "status",
+    "power": null,
+    "accuracy": 100,
+    "pp": 20,
+    "priority": 0,
+    "effect": "마법가루를 날려서 상대를 단일 에스퍼 타입으로 바꾼다.",
+    "tags": [
+      "타입 변경",
+      "가루"
+    ],
+    "classification": [
+      "가루"
+    ],
+    "makesContact": false,
+    "setsTargetType": "에스퍼"
+  },
+  {
+    "id": "페이탈클로",
+    "name": "페이탈클로",
+    "type": "독",
+    "category": "physical",
+    "power": 80,
+    "accuracy": 100,
+    "pp": 16,
+    "priority": 0,
+    "effect": "치명적인 손톱으로 공격한다. 30% 확률로 상대를 독, 마비, 잠듦 중 하나의 상태로 만든다.",
+    "tags": [
+      "접촉",
+      "베기",
+      "독",
+      "마비",
+      "잠듦"
+    ],
+    "classification": [
+      "베기"
+    ],
+    "makesContact": true,
+    "inflictsRandomStatus": {
+      "chance": 30,
+      "statuses": [
+        "poison",
+        "paralysis",
+        "sleep"
+      ]
+    }
+  },
+  {
+    "id": "아쿠아스텝",
+    "name": "아쿠아스텝",
+    "type": "물",
+    "category": "physical",
+    "power": 80,
+    "accuracy": 100,
+    "pp": 12,
+    "priority": 0,
+    "effect": "물 흐르듯 민첩하고 경쾌한 발재간으로 상대를 농락하여 데미지를 준다. 자신의 스피드를 1랭크 올린다.",
+    "statChanges": [
+      {
+        "target": "self",
+        "stat": "spe",
+        "delta": 1
+      }
+    ],
+    "tags": [
+      "랭크",
+      "접촉",
+      "춤"
+    ],
+    "classification": [
+      "춤"
+    ],
+    "makesContact": true
+  },
+  {
+    "id": "제트펀치",
+    "name": "제트펀치",
+    "type": "물",
+    "category": "physical",
+    "power": 60,
+    "accuracy": 100,
+    "pp": 16,
+    "priority": 1,
+    "effect": "거센 물살을 주먹에 둘러 눈에 보이지 않는 속도로 펀치를 날린다. 반드시 선제공격할 수 있다.",
+    "tags": [
+      "선공",
+      "접촉",
+      "펀치"
+    ],
+    "classification": [
+      "펀치"
+    ],
+    "makesContact": true
+  },
+  {
+    "id": "날따름",
+    "name": "날따름",
+    "type": "노말",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 20,
+    "priority": 2,
+    "effect": "자신에게 주목을 끌어 상대의 공격을 자신이 대신 받는다. (더블 전용 — 1v1 시뮬레이터엔 대상이 없어 스텁)",
+    "tags": [
+      "선공",
+      "변화"
+    ],
+    "makesContact": false
+  },
+  {
+    "id": "정리정돈",
+    "name": "정리정돈",
+    "type": "노말",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 12,
+    "priority": 0,
+    "effect": "압정뿌리기, 스텔스록, 끈적끈적네트, 독압정, 대타출동을 모두 정리한다. 자신의 공격과 스피드가 1랭크 올라간다.",
+    "statChanges": [
+      {
+        "target": "self",
+        "stat": "atk",
+        "delta": 1
+      },
+      {
+        "target": "self",
+        "stat": "spe",
+        "delta": 1
+      }
+    ],
+    "tags": [
+      "랭크"
+    ],
+    "makesContact": false,
+    "hazardClear": "tidy"
+  },
+  {
+    "id": "찍찍베기",
+    "name": "찍찍베기",
+    "type": "노말",
+    "category": "physical",
+    "power": 20,
+    "accuracy": 90,
+    "pp": 12,
+    "priority": 0,
+    "effect": "여기저기서 동료들을 모아서 화려한 콤비네이션으로 공격한다. 빗나갈 때까지 최대 10회 연속으로 공격한다(각 타마다 명중을 따로 판정).",
+    "tags": [
+      "연속",
+      "접촉",
+      "베기"
+    ],
+    "classification": [
+      "베기"
+    ],
+    "makesContact": true,
+    "multiHitPowers": [
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20
+    ],
+    "minHits": 1,
+    "maxHits": 10
+  },
+  {
+    "id": "소금절이",
+    "name": "소금절이",
+    "type": "바위",
+    "category": "physical",
+    "power": 40,
+    "accuracy": 100,
+    "pp": 16,
+    "priority": 0,
+    "effect": "상대를 소금절이 상태로 만들어 매 턴 최대 체력의 1/16의 데미지를 준다. 강철타입이나 물타입에게는 매 턴 최대 체력의 1/8의 데미지를 준다.",
+    "tags": [
+      "비접촉",
+      "소금절이"
+    ],
+    "makesContact": false,
+    "setsSaltCure": true
+  },
+  {
+    "id": "하바네로엑기스",
+    "name": "하바네로엑기스",
+    "type": "풀",
+    "category": "status",
+    "power": null,
+    "pp": 16,
+    "priority": 0,
+    "effect": "어마어마하게 매운 엑기스를 발사한다. 상대의 공격을 2랭크 오르게 하고 방어를 2랭크 낮춘다.",
+    "statChanges": [
+      {
+        "target": "opponent",
+        "stat": "atk",
+        "delta": 2
+      },
+      {
+        "target": "opponent",
+        "stat": "def",
+        "delta": -2
+      }
+    ],
+    "tags": [
+      "랭크"
+    ],
+    "makesContact": false
+  },
+  {
+    "id": "루미나콜리전",
+    "name": "루미나콜리전",
+    "type": "에스퍼",
+    "category": "special",
+    "power": 80,
+    "accuracy": 100,
+    "pp": 12,
+    "priority": 0,
+    "effect": "정신에도 작용하는 기묘한 빛을 발산해서 공격한다. 상대의 특수방어를 2랭크 떨어뜨린다.",
+    "statChanges": [
+      {
+        "target": "opponent",
+        "stat": "spd",
+        "delta": -2
+      }
+    ],
+    "tags": [
+      "랭크",
+      "비접촉"
+    ],
+    "makesContact": false
+  },
+  {
+    "id": "거대해머",
+    "name": "거대해머",
+    "type": "강철",
+    "category": "physical",
+    "power": 160,
+    "accuracy": 100,
+    "pp": 16,
+    "priority": 0,
+    "effect": "거대한 해머를 온몸으로 휘둘러서 공격한다. 2회 연속으로 쓸 수 없다.",
+    "tags": [
+      "비접촉"
+    ],
+    "makesContact": false,
+    "cannotUseConsecutively": true
+  },
+  {
+    "id": "분노의주먹",
+    "name": "분노의주먹",
+    "type": "고스트",
+    "category": "physical",
+    "power": 50,
+    "accuracy": 100,
+    "pp": 12,
+    "priority": 0,
+    "effect": "분노를 에너지로 바꿔서 공격한다. 받은 공격의 횟수가 많을수록 기술의 위력이 올라간다(1회당 +50, 최대 350).",
+    "tags": [
+      "접촉",
+      "펀치"
+    ],
+    "classification": [
+      "펀치"
+    ],
+    "makesContact": true,
+    "rageFistPower": true
+  },
+  {
+    "id": "트윈빔",
+    "name": "트윈빔",
+    "type": "에스퍼",
+    "category": "special",
+    "power": 40,
+    "accuracy": 100,
+    "pp": 12,
+    "priority": 0,
+    "effect": "두 눈에서 불가사의한 광선을 발사해서 공격한다. 2회 연속으로 데미지를 준다.",
+    "tags": [
+      "연속",
+      "비접촉"
+    ],
+    "makesContact": false,
+    "minHits": 2,
+    "maxHits": 2
+  },
+  {
+    "id": "도각참",
+    "name": "도각참",
+    "type": "악",
+    "category": "physical",
+    "power": 85,
+    "accuracy": null,
+    "pp": 12,
+    "priority": 0,
+    "effect": "머리를 조아려 상대를 방심하게 만든 뒤에 베어 버린다. 공격은 반드시 명중한다.",
+    "tags": [
+      "필중",
+      "접촉",
+      "베기"
+    ],
+    "classification": [
+      "베기"
+    ],
+    "makesContact": true
+  },
+  {
+    "id": "휘적휘적포",
+    "name": "휘적휘적포",
+    "type": "풀",
+    "category": "special",
+    "power": 80,
+    "accuracy": 90,
+    "pp": 16,
+    "priority": 0,
+    "effect": "휘저은 차를 대포처럼 발사해 준 데미지의 절반을 HP로 회복한다. 20% 확률로 상대를 화상 상태로 만든다.",
+    "inflictsStatus": [
+      {
+        "status": "burn",
+        "chance": 20
+      }
+    ],
+    "tags": [
+      "광역-상대",
+      "흡수",
+      "비접촉",
+      "화상"
+    ],
+    "makesContact": false,
+    "drainFraction": 0.5
+  },
+  {
+    "id": "변덕레이저",
+    "name": "변덕레이저",
+    "type": "드래곤",
+    "category": "special",
+    "power": 80,
+    "accuracy": 100,
+    "pp": 8,
+    "priority": 0,
+    "effect": "광선을 발사해서 공격한다. 30%의 확률로 다른 머리도 협력해서 레이저를 발사하여 위력이 2배가 된다.",
+    "tags": [
+      "비접촉"
+    ],
+    "makesContact": false,
+    "randomDoublePower": 30
+  },
+  {
+    "id": "시럽봄",
+    "name": "시럽봄",
+    "type": "풀",
+    "category": "special",
+    "power": 60,
+    "accuracy": 90,
+    "pp": 12,
+    "priority": 0,
+    "effect": "상대에게 물엿을 발사해 폭발시켜 공격한다. 상대를 물엿범벅 상태로 만들어 3턴 동안 매 턴 스피드를 1랭크씩 감소시킨다.",
+    "tags": [
+      "랭크",
+      "비접촉",
+      "폭탄"
+    ],
+    "classification": [
+      "구슬/폭탄"
+    ],
+    "makesContact": false,
+    "setsSyrupCoat": true
   }
 ]
