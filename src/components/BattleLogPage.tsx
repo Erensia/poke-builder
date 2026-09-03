@@ -272,7 +272,13 @@ export function BattleLogPage() {
     if (!setup.a.slot || !setup.b.slot) return;
     const aMoves = setup.a.slot.moves.filter((id): id is string => id !== null).map((id) => getMove(id)!);
     const bMoves = setup.b.slot.moves.filter((id): id is string => id !== null).map((id) => getMove(id)!);
-    const state = createBattleState(setup.a.slot, aMoves, setup.b.slot, bMoves, setup.weather ?? undefined);
+    // Phase 8 §1: createBattleState는 이제 편측 파티 배열을 받는다. 배틀타워 UI가 3슬롯화되기
+    // 전까지(§3)는 슬롯 1개짜리 파티로 넘겨 기존 1v1과 동일하게 동작시킨다.
+    const state = createBattleState({
+      a: { slots: [setup.a.slot], movesList: [aMoves] },
+      b: { slots: [setup.b.slot], movesList: [bMoves] },
+      weather: setup.weather ?? undefined,
+    });
     setBattleState(state);
     setLog([]);
     setSelected({ a: null, b: null });
@@ -388,8 +394,8 @@ export function BattleLogPage() {
             {(battleState.weather ||
               battleState.field ||
               battleState.trickRoomTurnsRemaining !== undefined ||
-              battleState.stealthRock.a ||
-              battleState.stealthRock.b) && (
+              battleState.sideA.hazards.stealthRock ||
+              battleState.sideB.hazards.stealthRock) && (
               <div className="battle-environment-tags">
                 {battleState.weather && (
                   <span className="battle-environment-tag">
@@ -407,7 +413,7 @@ export function BattleLogPage() {
                   </span>
                 )}
                 {(["a", "b"] as const).map((side) =>
-                  battleState.stealthRock[side] ? (
+                  (side === "a" ? battleState.sideA : battleState.sideB).hazards.stealthRock ? (
                     <span key={`sr-${side}`} className="battle-environment-tag">
                       {fighterLabel(battleState, side)} 진영: 뾰족한 바위(스텔스록)
                     </span>

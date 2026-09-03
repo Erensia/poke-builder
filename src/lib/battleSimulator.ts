@@ -342,10 +342,52 @@ export interface BattleFighterState {
   consecutiveLockUntilTurn?: number;
 }
 
-/** 두 포켓몬(a/b)을 마주 세운 배틀 상태 */
+/**
+ * 진영(side)에 붙는 설치물 상태. 슬롯이 아니라 편에 붙으므로 교체해도 유지된다.
+ * Phase 8 §1: 스칼라 `{a,b}` 불리언에서 진영별 구조체로 승격. 스택 처리(압정뿌리기 층수·
+ * 독압정 층수)는 §6에서 채운다 — S1 시점엔 스텔스록·압정뿌리기만 기존 불리언과 1:1 대응
+ * (`spikesLayers`는 0 또는 1).
+ */
+export interface HazardState {
+  /** 스텔스록(1장 고정). 등장 시 바위 상성 배율로 데미지(§6). */
+  stealthRock: boolean;
+  /** 압정뿌리기 층수 0~3. 등장 시 1→1/16 · 2→1/8 · 3→1/4 데미지(§6). 비접지는 무시. */
+  spikesLayers: number;
+  /** 독압정 층수 0~2. 1→독 · 2→맹독(§6). 독타입 등장 시 해제. 비접지는 무시. */
+  toxicSpikesLayers: number;
+  /** 끈적끈적네트(1장 고정). 접지 상태로 등장 시 스피드 -1(§6). */
+  stickyWeb: boolean;
+}
+
+/** 빈 설치물 상태 */
+export function emptyHazardState(): HazardState {
+  return { stealthRock: false, spikesLayers: 0, toxicSpikesLayers: 0, stickyWeb: false };
+}
+
+/**
+ * 한 진영(편). 선출된 파티(배틀타워 = 3마리, 길이는 고정 안 함) + 지금 나와 있는 슬롯 인덱스 +
+ * 그 편에 깔린 설치물. 기절·상태이상·랭크·도구 소모·연속기 카운터는 전부 `party[i]`(슬롯)별로
+ * 유지된다. Phase 8 §1.
+ */
+export interface BattleSide {
+  party: BattleFighterState[];
+  activeIndex: number;
+  hazards: HazardState;
+}
+
+/**
+ * 두 진영(a/b)을 마주 세운 배틀 상태.
+ *
+ * `a` / `b`는 **각 진영의 현재 활성 파이터**를 가리키는 포인터로, 항상
+ * `sideA.party[sideA.activeIndex]` / `sideB.party[sideB.activeIndex]`와 **동일 객체 참조**다.
+ * 엔진 로직 대부분이 "지금 나와 있는 포켓몬 1마리"만 보므로 이 축을 유지한다 — 교체(§3)는
+ * `performSwitch` 한 곳에서만 `activeIndex`를 바꾸고 `a`/`b`를 다시 물린다.
+ */
 export interface BattleState {
   a: BattleFighterState;
   b: BattleFighterState;
+  sideA: BattleSide;
+  sideB: BattleSide;
   weather?: WeatherKind;
   /** 날씨가 사라지기까지 남은 턴 수. weather가 없으면 의미 없음 */
   weatherTurnsRemaining?: number;
@@ -354,19 +396,23 @@ export interface BattleState {
   fieldTurnsRemaining?: number;
   /** 트릭룸이 해제되기까지 남은 턴 수. 트릭룸이 안 걸려있으면 undefined */
   trickRoomTurnsRemaining?: number;
-  /**
-   * 진영별 스텔스록 설치 여부. 한 번 깔리면 배틀 끝까지 영구 유지된다(Phase 6.5 §6-2 ④).
-   * 교체 개념이 없어 "등장 데미지"는 아직 없고, 로그·환경 UI 표시용 상태값이다.
-   */
-  stealthRock: { a: boolean; b: boolean };
-  /** 진영별 압정뿌리기(스파이크) 설치 여부. 스텔스록과 같은 축 — 교체가 없어 로그·환경 UI 표시용 상태값이다. */
-  spikes: { a: boolean; b: boolean };
   turnNumber: number;
   /** 배틀 시작 시점에 특성으로 날씨가 자동으로 바뀌었으면("○○의 잔비!") 그 안내 문구 */
   entryAnnouncements: string[];
 }
 
 export type FighterKey = "a" | "b";
+
+/** 편(side) 객체를 키로 구한다 */
+export function sideOf(state: BattleState, key: FighterKey): BattleSide {
+  return key === "a" ? state.sideA : state.sideB;
+}
+
+/** 편(side)의 현재 활성 파이터. state.a / state.b와 동일 참조 */
+export function activeFighter(state: BattleState, key: FighterKey): BattleFighterState {
+  const side = sideOf(state, key);
+  return side.party[side.activeIndex];
+}
 
 /** 상대 키를 구한다 */
 export function opponentKey(key: FighterKey): FighterKey {
@@ -881,35 +927,44 @@ function resolveEntryAbilityEffects(
   return { field, fieldTurnsRemaining, announcements };
 }
 
-export function createBattleState(
-  a: EvaluatorSlot,
-  aMoves: Move[],
-  b: EvaluatorSlot,
-  bMoves: Move[],
-  weather?: WeatherKind,
-): BattleState {
-  const fighterA = createFighterState(a, aMoves);
-  const fighterB = createFighterState(b, bMoves);
+/** 한 진영의 초기 구성. 배틀타워는 slots 3개, 향후 다른 포맷을 위해 길이는 고정하지 않는다. */
+export interface SideInit {
+  slots: EvaluatorSlot[];
+  /** slots와 같은 순서의 기술 목록. movesList[i]가 slots[i]의 지닌 기술. */
+  movesList: Move[][];
+  /** 선봉(리드) 인덱스. 생략 시 0 = 첫 슬롯이 리드. */
+  leadIndex?: number;
+}
+
+export function createBattleState(init: { a: SideInit; b: SideInit; weather?: WeatherKind }): BattleState {
+  const leadA = init.a.leadIndex ?? 0;
+  const leadB = init.b.leadIndex ?? 0;
+  const partyA = init.a.slots.map((slot, i) => createFighterState(slot, init.a.movesList[i] ?? []));
+  const partyB = init.b.slots.map((slot, i) => createFighterState(slot, init.b.movesList[i] ?? []));
+  const aSlot = init.a.slots[leadA];
+  const bSlot = init.b.slots[leadB];
+  const fighterA = partyA[leadA];
+  const fighterB = partyB[leadB];
   const {
     weather: resolvedWeather,
     weatherTurnsRemaining,
     announcements: weatherAnnouncements,
-  } = resolveEntryWeather(a, fighterA, b, fighterB, weather);
+  } = resolveEntryWeather(aSlot, fighterA, bSlot, fighterB, init.weather);
   const {
     field: entryField,
     fieldTurnsRemaining,
     announcements: abilityAnnouncements,
-  } = resolveEntryAbilityEffects(a, fighterA, b, fighterB);
+  } = resolveEntryAbilityEffects(aSlot, fighterA, bSlot, fighterB);
 
   const state: BattleState = {
     a: fighterA,
     b: fighterB,
+    sideA: { party: partyA, activeIndex: leadA, hazards: emptyHazardState() },
+    sideB: { party: partyB, activeIndex: leadB, hazards: emptyHazardState() },
     weather: resolvedWeather,
     weatherTurnsRemaining,
     field: entryField,
     fieldTurnsRemaining,
-    stealthRock: { a: false, b: false },
-    spikes: { a: false, b: false },
     turnNumber: 0,
     entryAnnouncements: [...weatherAnnouncements, ...abilityAnnouncements],
   };
@@ -1416,6 +1471,15 @@ function cloneFighter(fighter: BattleFighterState): BattleFighterState {
     usedMoveIds: { ...fighter.usedMoveIds },
     screens: { ...fighter.screens },
     ownMoveTypeBoosts: { ...fighter.ownMoveTypeBoosts },
+  };
+}
+
+/** 편(side) 전체를 깊은 복사한다 — 파티 슬롯 전원 + 설치물. runTurn이 prevState를 안 건드리게 쓴다. */
+function cloneSide(side: BattleSide): BattleSide {
+  return {
+    party: side.party.map(cloneFighter),
+    activeIndex: side.activeIndex,
+    hazards: { ...side.hazards },
   };
 }
 
@@ -3561,15 +3625,14 @@ function resolveAction(
   let tidyUpDone = false;
   if (effectiveMove.hazardClear && hit && !blockedByProtect) {
     if (effectiveMove.hazardClear === "tidy") {
-      state.stealthRock = { a: false, b: false };
-      state.spikes = { a: false, b: false };
+      state.sideA.hazards = emptyHazardState();
+      state.sideB.hazards = emptyHazardState();
       attacker.substituteHp = undefined;
       defender.substituteHp = undefined;
       tidyUpDone = true;
     } else {
       // "spin": 사용자 쪽 설치물 + 사용자에게 걸린 속박·씨뿌리기만 정리한다(본가 고속스핀).
-      state.stealthRock = { ...state.stealthRock, [actorKey]: false };
-      state.spikes = { ...state.spikes, [actorKey]: false };
+      sideOf(state, actorKey).hazards = emptyHazardState();
       const nextActive = { ...attacker.volatile.active };
       delete nextActive.bound;
       delete nextActive.leechSeed;
@@ -3951,15 +4014,19 @@ function resolveAction(
   let hazardSetFailed = false;
   if (effectiveMove.setsHazard !== undefined) {
     const hazardSide = bounceActive ? actorKey : defenderKey;
-    const board = effectiveMove.setsHazard === "spikes" ? state.spikes : state.stealthRock;
-    if (board[hazardSide]) {
+    const hz = sideOf(state, hazardSide).hazards;
+    // S1 시점: 압정뿌리기는 층수 0↔1만 (기존 불리언 1:1 대응). 스택·독압정·네트는 §6.
+    const alreadySet = effectiveMove.setsHazard === "spikes" ? hz.spikesLayers > 0 : hz.stealthRock;
+    if (alreadySet) {
       // 비검천중파처럼 명중 부가효과로 까는 데미지기는 "이미 깔림"이어도 공격 자체는 성공이라
       // 실패 플래그를 세우지 않는다 — 변화기(압정뿌리기·스텔스록)만 실패로 표시한다.
       if (effectiveMove.category === "status") hazardSetFailed = true;
+    } else if (effectiveMove.setsHazard === "spikes") {
+      hz.spikesLayers = 1;
+      spikesSetForSide = hazardSide;
     } else {
-      board[hazardSide] = true;
-      if (effectiveMove.setsHazard === "spikes") spikesSetForSide = hazardSide;
-      else stealthRockSetForSide = hazardSide;
+      hz.stealthRock = true;
+      stealthRockSetForSide = hazardSide;
     }
   }
 
@@ -4318,16 +4385,19 @@ export function runTurn(
   moveB: Move,
   random: () => number = Math.random,
 ): RunTurnOutcome {
+  const sideA = cloneSide(prevState.sideA);
+  const sideB = cloneSide(prevState.sideB);
   const state: BattleState = {
-    a: cloneFighter(prevState.a),
-    b: cloneFighter(prevState.b),
+    // a/b는 각 편의 활성 파이터를 가리키는 포인터 — cloneSide가 만든 새 배열의 요소를 물린다.
+    a: sideA.party[sideA.activeIndex],
+    b: sideB.party[sideB.activeIndex],
+    sideA,
+    sideB,
     weather: prevState.weather,
     weatherTurnsRemaining: prevState.weatherTurnsRemaining,
     field: prevState.field,
     fieldTurnsRemaining: prevState.fieldTurnsRemaining,
     trickRoomTurnsRemaining: prevState.trickRoomTurnsRemaining,
-    stealthRock: { ...prevState.stealthRock },
-    spikes: { ...prevState.spikes },
     turnNumber: prevState.turnNumber + 1,
     entryAnnouncements: prevState.entryAnnouncements,
   };
