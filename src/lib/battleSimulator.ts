@@ -1726,7 +1726,11 @@ function resolveAction(
         { userTypes: attacker.types },
       );
     }
-    const skipsCharge = move.chargeSkipWeather !== undefined && activeWeather(state) === move.chargeSkipWeather;
+    // 메가솔라: 쾌청 조건 차지 스킵기(솔라빔)를 날씨와 무관하게 준비 턴 없이 발동시킨다.
+    const skipsCharge =
+      move.chargeSkipWeather !== undefined &&
+      (activeWeather(state) === move.chargeSkipWeather ||
+        (move.chargeSkipWeather === "쾌청" && attackerAbility?.treatsOwnWeatherAsSun));
     if (!skipsCharge) {
       attacker.chargingMoveId = move.id;
       return {
@@ -1813,7 +1817,16 @@ function resolveAction(
   // 포함하지 않는다.
   // 고스트다이브: "방어를 무시" = 방어류(protectEffect) 차단 자체를 뚫는다는 뜻(사용자 확인) — 실제
   // 방어 실수치와는 무관해서 여기서 판정 자체를 건너뛴다(틈새포착이 스크린/대타를 뚫는 것과 같은 결).
-  const blockedByProtect = !move.bypassesProtect && defender.activeProtect?.effect === "block";
+  // 보이지않는주먹: 접촉기가 방어류를 뚫고 명중한다(데미지는 아래 resolveHit에서 1/4로 줄고, 방어류의
+  // 접촉 성공 부가효과는 그대로 발동). 뚫는 경우엔 blockedByProtect를 false로 둬서 기술이 정상 진행된다.
+  const unseenFistPiercing = !!(
+    attackerAbility?.contactBypassesProtectAtQuarterDamage &&
+    (move.makesContact ?? false) &&
+    !move.bypassesProtect &&
+    defender.activeProtect?.effect === "block"
+  );
+  const blockedByProtect =
+    !move.bypassesProtect && !unseenFistPiercing && defender.activeProtect?.effect === "block";
   // "방어로 막혔다!" 문구는 실제로 상대를 겨냥한 기술이 막혔을 때만 — 칼춤·나쁜음모처럼 자기
   // 대상 랭크업/자기 회복기는 방어와 무관하게 그대로 발동하므로 "막혔다"가 아니다(Phase 6.5 §6-2 ⑦).
   const blockedByProtectMoveName =
@@ -1877,8 +1890,9 @@ function resolveAction(
   }
 
   // 웨더볼(날씨판 대지의파동): 날씨로 타입·위력이 바뀐다. 웨더볼과 fieldPulse를 동시에 갖는
-  // 기술은 없어 순차 적용해도 안전하다.
-  const weatherBall = applyWeatherBall(categoryResolvedMove, activeWeather(state));
+  // 기술은 없어 순차 적용해도 안전하다. 메가솔라 보유자는 날씨와 무관하게 쾌청으로 취급한다.
+  const weatherForOwnMoves = attackerAbility?.treatsOwnWeatherAsSun ? "쾌청" : activeWeather(state);
+  const weatherBall = applyWeatherBall(categoryResolvedMove, weatherForOwnMoves);
   const moveAfterWeatherBall: Move = { ...categoryResolvedMove, type: weatherBall.type, power: weatherBall.power };
 
   // 필드 조건부 타입/위력 변경(대지의파동=fieldPulse, 미스트버스트·와이드포스·라이징볼트=
@@ -2242,7 +2256,8 @@ function resolveAction(
   let protectContactPenaltyMoveName: string | undefined;
   let protectContactDamage = 0;
   let protectContactInflictedStatus: StatusConditionState["condition"] | undefined;
-  if (blockedByProtect && defender.activeProtect && (effectiveMove.makesContact ?? false)) {
+  // 보이지않는주먹으로 뚫고 들어간 경우(unseenFistPiercing)도 방어류의 접촉 성공 부가효과는 발동한다.
+  if ((blockedByProtect || unseenFistPiercing) && defender.activeProtect && (effectiveMove.makesContact ?? false)) {
     const ap = defender.activeProtect;
     if (ap.contactPenalty) {
       attacker.stages = applyStageDelta(attacker.stages, ap.contactPenalty.stat, contraryDelta(attacker, ap.contactPenalty.delta));
@@ -2296,6 +2311,8 @@ function resolveAction(
   let abilityInflictedVolatileAbilityName: string | undefined;
   let abilityDamageToAttacker = 0;
   let abilityDamageAbilityName: string | undefined;
+  // 내용물분출: applyDamageToDefender가 "이번 타를 맞기 직전" 방어측 HP를 여기에 담아둔다.
+  let defenderHpBeforeLastHit = 0;
   let abilityDisabledMoveName: string | undefined;
   let abilityDisableAbilityName: string | undefined;
   // 나쁜손버릇: 접촉기로 피격당한 방어측이 공격자의 도구를 빼앗았을 때 그 도구 이름과 특성 이름.
@@ -2357,7 +2374,11 @@ function resolveAction(
       effectiveMove.category === "physical" && attackerAbility?.hustleAttackMultiplier !== undefined
         ? attackerAbility.hustleAttackMultiplier
         : 1;
-    const weatherMultiplier = getWeatherDamageMultiplier(activeWeather(state), effectiveMove.type);
+    // 메가솔라: 자신이 쓰는 기술의 날씨 배율을 항상 쾌청 기준으로(불꽃 ×1.5·물 ×0.5) 계산한다.
+    const weatherMultiplier = getWeatherDamageMultiplier(
+      attackerAbility?.treatsOwnWeatherAsSun ? "쾌청" : activeWeather(state),
+      effectiveMove.type,
+    );
     const fieldMultiplier = getFieldDamageMultiplier(state.field, effectiveMove.type);
     const itemMultiplier = getItemOffenseMultiplier(
       attackerItem,
@@ -2443,6 +2464,8 @@ function resolveAction(
       );
       if (hitDamage < minDamage) hitDamage = minDamage;
     }
+    // 보이지않는주먹: 방어류를 뚫고 들어간 접촉기는 데미지가 1/4로 줄어든다.
+    if (unseenFistPiercing) hitDamage = Math.floor(hitDamage * 0.25);
     return { damage: hitDamage, isCritical: critical };
   }
 
@@ -2516,6 +2539,7 @@ function resolveAction(
       return;
     }
     const hpBeforeThisHit = defender.currentHp;
+    defenderHpBeforeLastHit = hpBeforeThisHit;
     defender.currentHp = Math.max(0, defender.currentHp - amount);
     // 미러코트/카운터용: 실제 HP로 받은 데미지를 카테고리별로 누적(대타 흡수분은 위에서 이미
     // return되어 제외). effectiveMove가 아니라 hitMove로 넘어와도 카테고리는 동일하다.
@@ -2710,6 +2734,19 @@ function resolveAction(
       attacker.currentHp = Math.max(0, attacker.currentHp - amount);
       abilityDamageToAttacker += amount;
       abilityDamageAbilityName = defenderAbility!.name;
+    }
+    // 내용물분출: 기술로 쓰러진 순간, 그 마지막 타를 맞기 직전 남아 있던 HP만큼을 공격자에게 되돌린다.
+    if (
+      trigger.damagesAttackerByRemainingHpOnFaint &&
+      isFainted(defender) &&
+      !attackerAbility?.negatesIndirectDamage
+    ) {
+      const amount = Math.min(attacker.currentHp, defenderHpBeforeLastHit);
+      if (amount > 0) {
+        attacker.currentHp = Math.max(0, attacker.currentHp - amount);
+        abilityDamageToAttacker += amount;
+        abilityDamageAbilityName = defenderAbility!.name;
+      }
     }
   }
 
@@ -3666,8 +3703,11 @@ function resolveAction(
   if (!effectiveMove.restSleep && (effectiveMove.healsFraction !== undefined || effectiveMove.healsWeatherDependent)) {
     healedTarget = effectiveMove.healsTarget ?? "self";
     const healTarget = healedTarget === "self" ? attacker : defender;
+    // 메가솔라: 자신이 쓰는 광합성·달빛류(자기 회복)의 회복량이 항상 쾌청 기준(2/3)이 된다.
+    const healWeather =
+      healedTarget === "self" && attackerAbility?.treatsOwnWeatherAsSun ? "쾌청" : activeWeather(state);
     const fraction = effectiveMove.healsWeatherDependent
-      ? computeWeatherHealFraction(activeWeather(state))
+      ? computeWeatherHealFraction(healWeather)
       : effectiveMove.healsFraction!;
     healedAmount = Math.min(
       healTarget.maxHp - healTarget.currentHp,
@@ -4039,6 +4079,13 @@ function resolveAction(
   if (isDamaging && damage > 0 && isFainted(defender) && attackerAbility?.boostsStatOnKo) {
     const boost = attackerAbility.boostsStatOnKo;
     attacker.stages = applyStageDelta(attacker.stages, boost.stat, contraryDelta(attacker, boost.delta));
+  }
+
+  // 천정부지(포챔스판): 자신의 데미지로 상대를 쓰러뜨리면 realStats가 가장 높은 능력이 1랭크 오른다.
+  if (isDamaging && damage > 0 && isFainted(defender) && attackerAbility?.boostsHighestStatOnKo) {
+    const cands: BattleStatKey[] = ["atk", "def", "spa", "spd", "spe"];
+    const highest = cands.reduce((a, b) => (attacker.realStats[b] > attacker.realStats[a] ? b : a));
+    attacker.stages = applyStageDelta(attacker.stages, highest, contraryDelta(attacker, 1));
   }
 
   // 마지막일침(포챔스판): 이 기술의 데미지로 상대를 실제로 쓰러뜨리면 사용자 스탯이 오른다.

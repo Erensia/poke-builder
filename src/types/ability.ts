@@ -131,6 +131,12 @@ export interface AbilityHitTrigger {
    * 공격자에겐 무효. on:"contact"와 함께 쓴다.
    */
   damagesContactAttackerFractionOnFaint?: number;
+  /**
+   * 내용물분출(포챔스판 우츠보트-메가): 기술로 이 포켓몬이 쓰러진 그 순간, 그 마지막 타를 맞기
+   * "직전"에 남아 있던 HP만큼을 공격자에게 데미지로 되돌린다(유폭이 최대 HP 비율 고정인 것과 달리
+   * 그때그때 남아 있던 실 HP). 매직가드 공격자에겐 무효. on:"damaging"과 함께 쓴다.
+   */
+  damagesAttackerByRemainingHpOnFaint?: boolean;
 }
 
 /**
@@ -674,4 +680,25 @@ export interface Ability {
    * 전용 안내 2줄: "…의 꿀에서 달콤한 향기가 나고 있다!" / "…의 회피율이 떨어졌다!"
    */
   lowersOpponentEvasionOnEntry?: number;
+  /**
+   * 메가솔라(포챔스판 메가니움-메가): 자신이 쓰는 기술이 현재 날씨와 무관하게 "쾌청" 상태처럼
+   * 취급된다 — 솔라빔이 준비 턴 없이 나가고(chargeSkipWeather:"쾌청" 대상), 광합성·달빛류
+   * (healsWeatherDependent)의 회복량이 항상 2/3, 웨더볼이 불꽃타입·위력 2배로 나간다.
+   * (모래바람의 바위 특방 1.5배·눈의 얼음 방어 1.5배 무시 조항은 이 엔진에 해당 방어 보정 자체가
+   *  없어 실질 대상 없음.)
+   */
+  treatsOwnWeatherAsSun?: boolean;
+  /**
+   * 천정부지(포챔스판 저리더프-메가): grantsImmunityToTypes:["땅"](부유)와 함께 쓴다. 자신의
+   * 데미지로 상대를 실제로 쓰러뜨리면, 그 즉시 자신의 실능치(realStats)가 가장 높은 능력
+   * (공격/방어/특공/특방/스피드 중)이 1랭크 오른다. 자기과신(boostsStatOnKo)과 같은 KO 훅.
+   */
+  boostsHighestStatOnKo?: boolean;
+  /**
+   * 보이지않는주먹(Unseen Fist, 골루그-메가): 자신이 쓰는 접촉기가 상대의 방어류(방어/판별/킹실드/
+   * 니들가드/토치카 — protectEffect:"block")를 뚫고 명중한다. 단, 그렇게 뚫고 들어간 타는 데미지가
+   * 1/4로 줄고, 상대 방어류의 접촉 성공 시 부가효과(킹실드 공격 -1·니들가드 1/8 데미지·토치카 독)는
+   * 그대로 발동한다(본가와 달리 데미지 페널티가 있는 포챔스판 — 사용자 확정).
+   */
+  contactBypassesProtectAtQuarterDamage?: boolean;
 }

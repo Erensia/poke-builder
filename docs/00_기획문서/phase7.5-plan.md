@@ -586,15 +586,22 @@ hitsDefensiveStat?: "def" | "spd";
   - **스텁 2**: `날따름`(노말/변화 우선도+2 — 더블 전용).
   - **[1차 → 2차 정정]** `아쿠아스텝` pp10→12 등 PP 전면 정정, `하바네로엑기스` 노말→풀·필중, `시럽봄` `statChanges` 1회 근사 → `syrupCoat` 3턴 지속, `소금절이` `bindsTarget` 근사 → `saltCure` 영구+타입별 배율·접촉→비접촉, `찍찍베기` 60/100 단타 → 20/90 10연타.
 
-### 6-16. 메가진화 일괄 반영 기록 (2026-09-03, 브랜치 `phase-7.5`) — 1차 병합
+### 6-16. 메가진화 일괄 반영 기록 (2026-09-03, 브랜치 `phase-7.5`)
 
-포챔스 입국몬 중 메가진화가 있는 **49종**의 `megaEvolutions` 데이터 + 대응 **메가스톤 49종**(`items.json`) + 신규 특성 **9종**(배선 3 / 스텁 6). `pokemon.json` 228종(메가 필드 49개 추가) · `items.json` 101→150 · `abilities.json` 193→202. staging: `docs/02_.../pokemon-champions-megaevolution-staging.json`. 검증(참조 무결성·id 유일성·BST 스팟체크·tsc·lint·build + 스모크 38종) 통과. **1차 병합 — 비공식/미확정 특성 6종은 스텁, 사용자 확정 대기.**
+포챔스 입국몬 중 메가진화가 있는 **49종**의 `megaEvolutions` 데이터 + 대응 **메가스톤 49종**(`items.json`) + 신규 특성 **9종 전부 배선**. `pokemon.json` 228종(메가 필드 49개 추가) · `items.json` 101→150 · `abilities.json` 193→202. staging: `docs/02_.../pokemon-champions-megaevolution-staging.json`. 검증(참조 무결성·id 유일성·BST 스팟체크·tsc·lint·build + 스모크 1차 38종 / 2차 14종) 통과. 1차 병합(`61874cd`) 후 신규 특성 스펙 사용자 확정 반영.
 
 - **메커니즘은 기존에 이미 배선됨**: `pokemonForm.getEffectiveForm`이 `slot.item`(메가스톤 id) → `findMegaFormByStone`으로 메가폼 타입·종족값·몸무게를 덮고, `getEffectiveAbilityId`가 메가폼 고유 특성으로 고정. 이번 작업은 **데이터 + 신규 특성 배선**만. items.json category `"mega-stone"`이라 팀빌더 도구 선택 UI에 자동 노출.
 - **49종**: 독침붕·피죤투·후딘·우츠보트·야도란·아쿠스타·쁘사이저·갸라도스·프테라·메가니움·장크로다일·전룡·강철톤·헤라크로스·무장조·헬가·깜까미·보스로라·요가램·썬더볼트·샤크니아·폭타·파비코리·다크펫·치렁·앱솔·얼음귀신·찌르호크·눈설왕·엘레이드·눈여아·염무왕·다부니·펜드라·저리더프·샹델라·골루그·브리가론·화염레오·냐오닉스·칼라마네로·거북손데스·드래캄·루차불·모단단게·대여르·할비롱·스코빌런·킬라플로르. 전부 단일 메가(리자몽·마릴리 등 2메가 종은 이번 목록에 없음).
 - **staging `_readme` 방침**: 7개 그룹(프로젝트 자체 도입 순서, 실제 세대 무관 — 예: 9세대 스코빌런 메가가 그룹7). form/megaStone 이름은 기존 관례(`{종}-메가`/`{종}나이트`, 2메가면 `-메가X`/`나이트X`). 몸무게는 위키 폼 전용값 전부 존재.
 - **비공식 메가 다수 포함**: 장크로다일·메가니움·전룡·썬더볼트·폭타·다크펫·저리더프·샹델라·골루그·화염레오·드래캄·대여르·스코빌런·킬라플로르 등 — staging이 팬위키 `#pokemonToggle`에서 수집한 것으로, 실제 게임에 없는 폼도 있음. 데이터로는 그대로 등록.
 
-- **신규 특성 9종 — 배선 3 / 스텁 6** (1차, 사용자 확정 대기):
-  - 배선: `필터`(`reducesSuperEffectiveDamageMultiplier:0.75` — 하드록 클론, 보스로라-메가) · `스카이스킨`(에어리레이트 = 노말→비행 + ×1.2, 페어리스킨 패턴, 쁘사이저-메가) · `드래곤스킨`(노말→드래곤 + ×1.2, 스킨 패턴으로 **임의 배선** — 비공식 메가, 장크로다일-메가).
-  - **스텁 6(설명문만, 미배선)**: `메가솔라`(메가니움-메가) · `내용물분출`(우츠보트-메가) · `불꽃의갈기`(화염레오-메가) · `천정부지`(저리더프-메가) · `보이지않는주먹`(Unseen Fist = 방어·대타 무시, 골루그-메가 — 배선 방식 확정 필요) · `하바네로분출`(스코빌런-메가). 전부 효과 미확정 — 사용자 확정 후 2차 배선.
+- **신규 특성 9종 — 전부 배선** (2026-09-03 사용자 확정. `ability.ts` 필드 4종 신설: `damagesAttackerByRemainingHpOnFaint`(hitTrigger)·`treatsOwnWeatherAsSun`·`boostsHighestStatOnKo`·`contactBypassesProtectAtQuarterDamage`):
+  - `필터` → `reducesSuperEffectiveDamageMultiplier:0.75`(하드록 클론). 보스로라-메가.
+  - `스카이스킨`(에어리레이트) → `modifiers` offense ×1.2 `overrideMoveType:"비행"`(노말→비행, 자속·상성 전부 비행 기준). 쁘사이저-메가.
+  - `드래곤스킨`(포챔스 메가장크로다일 전용) → 위와 동일 패턴, `overrideMoveType:"드래곤"`.
+  - `불꽃의갈기`(화염레오-메가) → `modifiers` offense ×1.5 `moveTypeIn:["불꽃"]`.
+  - `메가솔라`(메가니움-메가) → 신설 `treatsOwnWeatherAsSun`. 자신이 쓰는 기술 한정으로 날씨를 항상 "쾌청"으로 취급: 솔라빔 차지 스킵(`chargeSkipWeather:"쾌청"`), 광합성·달빛 회복량 2/3(`computeWeatherHealFraction`), 웨더볼 타입·위력(불꽃 100)·날씨 데미지 배율(불꽃 ×1.5/물 ×0.5, `getWeatherDamageMultiplier`) 전부 쾌청 기준. (모래바람 바위 특방 1.5배·눈 얼음 방어 1.5배 무시 조항은 이 엔진에 해당 방어 보정 자체가 없어 대상 없음.)
+  - `내용물분출`(우츠보트-메가) → 신설 `AbilityHitTrigger.damagesAttackerByRemainingHpOnFaint`(`on:"damaging"`). 기술로 쓰러진 순간, 그 마지막 타를 맞기 직전 남아 있던 HP(`applyDamageToDefender`가 `defenderHpBeforeLastHit`에 저장)만큼 공격자에게 되돌린다. 매직가드 면제. 유폭과 같은 로그(`abilityDamageToAttacker` — "…은(는) N 데미지를 입었다!").
+  - `천정부지`(저리더프-메가) → `grantsImmunityToTypes:["땅"]`(부유) + 신설 `boostsHighestStatOnKo`. 자기과신 KO 훅에서 `realStats`가 가장 높은 능력(atk/def/spa/spd/spe)을 1랭크 올린다(심술꾸러기 존중).
+  - `보이지않는주먹`(Unseen Fist, 골루그-메가) → 신설 `contactBypassesProtectAtQuarterDamage`. 접촉기가 상대 방어류(protectEffect:"block" — 방어/판별/킹실드/니들가드/토치카)를 뚫고 명중하되, 뚫은 타는 데미지 ×0.25(`resolveHit`). 방어류의 접촉 성공 부가효과(킹실드 공격 -1·니들가드 1/8·토치카 독)는 그대로 발동 — `unseenFistPiercing` 플래그로 `blockedByProtect`를 false로 두되 접촉 페널티 블록 가드는 `(blockedByProtect || unseenFistPiercing)`로 확장.
+  - `하바네로분출`(스코빌런-메가) → `AbilityHitTrigger{on:"damaging", inflictsStatusOnAttacker:"burn"}`(chance 생략 = 100% 확정). 불꽃몸의 무조건·전-데미지기 버전 — 신규 필드 없음.

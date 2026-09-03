@@ -1539,16 +1539,16 @@
     "description": "점성이 높은 몸에 도구가 달라붙어 있어 상대에게 도구를 뺏기지 않는다.",
     "preventsItemLoss": true
   },
-  {
+    {
     "id": "필터",
     "name": "필터",
-    "description": "효과가 굉장한 공격으로 받는 데미지가 25% 줄어든다(데미지 0.75배).",
+    "description": "자신이 받는 효과가 굉장한 공격의 위력을 약하게 만든다.",
     "reducesSuperEffectiveDamageMultiplier": 0.75
   },
-  {
+    {
     "id": "스카이스킨",
     "name": "스카이스킨",
-    "description": "노말타입 기술이 비행타입으로 바뀌며 위력이 1.2배가 된다.",
+    "description": "노말타입의 기술이 비행타입이 된다. 위력이 조금 올라간다.",
     "modifiers": [
       {
         "scope": "offense",
@@ -1562,10 +1562,10 @@
       }
     ]
   },
-  {
+    {
     "id": "드래곤스킨",
     "name": "드래곤스킨",
-    "description": "노말타입 기술이 드래곤타입으로 바뀌며 위력이 1.2배가 된다. (비공식 메가 전용 특성 — 스킨 계열로 임의 배선, 사용자 확정 필요)",
+    "description": "노말타입의 기술이 드래곤타입이 된다. 위력이 조금 올라간다.",
     "modifiers": [
       {
         "scope": "offense",
@@ -1579,34 +1579,59 @@
       }
     ]
   },
-  {
+    {
     "id": "메가솔라",
     "name": "메가솔라",
-    "description": "(비공식 메가 전용 특성 — 효과 미확정, 아직 엔진에 반영되지 않음. 사용자 확정 필요)"
+    "description": "기술을 사용할 때 항상 쾌청 상태처럼 취급한다. 솔라빔을 준비 턴 없이 사용하고, 광합성·달빛의 회복량이 항상 2/3, 웨더볼이 불꽃타입·위력 2배로 나간다.",
+    "treatsOwnWeatherAsSun": true
   },
-  {
+    {
     "id": "내용물분출",
     "name": "내용물분출",
-    "description": "(비공식 메가 전용 특성 — 효과 미확정, 아직 엔진에 반영되지 않음. 사용자 확정 필요)"
+    "description": "기술로 쓰러졌을 때, 그 마지막 공격을 맞기 직전 남아 있던 HP만큼을 공격한 상대에게 데미지로 되돌린다.",
+    "hitTrigger": {
+      "on": "damaging",
+      "damagesAttackerByRemainingHpOnFaint": true
+    }
   },
-  {
+    {
     "id": "불꽃의갈기",
     "name": "불꽃의갈기",
-    "description": "(비공식 메가 전용 특성 — 효과 미확정, 아직 엔진에 반영되지 않음. 사용자 확정 필요)"
+    "description": "불꽃타입 기술의 위력이 1.5배가 된다.",
+    "modifiers": [
+      {
+        "scope": "offense",
+        "multiplier": 1.5,
+        "condition": {
+          "moveTypeIn": [
+            "불꽃"
+          ]
+        }
+      }
+    ]
   },
-  {
+    {
     "id": "천정부지",
     "name": "천정부지",
-    "description": "(비공식 메가 전용 특성 — 효과 미확정, 아직 엔진에 반영되지 않음. 사용자 확정 필요)"
+    "description": "땅타입 기술을 전부 무효화한다. 자신의 공격으로 상대를 쓰러뜨리면 가장 높은 능력이 1랭크 오른다.",
+    "grantsImmunityToTypes": [
+      "땅"
+    ],
+    "boostsHighestStatOnKo": true
   },
-  {
+    {
     "id": "보이지않는주먹",
     "name": "보이지않는주먹",
-    "description": "접촉하는 기술이 방어·판별·니들가드·대타출동을 무시하고 명중한다. (Unseen Fist — 대응 필드 배선 방식 사용자 확정 필요)"
+    "description": "접촉하는 기술이 상대의 방어·판별·킹실드·니들가드·토치카를 무시하고 명중한다. 단, 그렇게 뚫고 들어간 공격은 데미지가 1/4로 줄고, 상대 방어기술의 접촉 성공 부가효과(공격 감소·데미지·독 등)는 그대로 받는다.",
+    "contactBypassesProtectAtQuarterDamage": true
   },
-  {
+    {
     "id": "하바네로분출",
     "name": "하바네로분출",
-    "description": "(비공식 메가 전용 특성 — 효과 미확정, 아직 엔진에 반영되지 않음. 사용자 확정 필요)"
+    "description": "기술로 데미지를 입으면 공격한 상대를 반드시 화상 상태로 만든다.",
+    "hitTrigger": {
+      "on": "damaging",
+      "inflictsStatusOnAttacker": "burn"
+    }
   }
 ]
