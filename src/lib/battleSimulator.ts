@@ -340,6 +340,12 @@ export interface BattleFighterState {
    */
   consecutiveLockMoveId?: string;
   consecutiveLockUntilTurn?: number;
+  /**
+   * 이번 턴에 "자기 의지로" 교체해서 나왔으면 true(Phase 8 §8). 가속(Speed Boost)이 이 턴
+   * 종료에 발동하지 않게 막는 데 쓴다. runTurn이 매 턴 시작 시 지우고, 교체 선처리에서 자발적
+   * 교체에만 세운다 — 기절 후 강제 교체(applySwitch)로 나온 경우엔 세우지 않는다(가속 발동).
+   */
+  switchedInThisTurn?: boolean;
 }
 
 /**
@@ -1707,7 +1713,14 @@ function applyEntryAbilityOnSwitchIn(state: BattleState, key: FighterKey, log: s
  * 설치물 발동(스텔스록 등장 데미지 등)은 §5에서 이 함수의 "등장 파이프라인" 지점에 붙는다.
  * toIndex가 현재 활성이거나 범위를 벗어나면 아무것도 안 한다.
  */
-function performSwitch(state: BattleState, key: FighterKey, toIndex: number, log: string[] = []): void {
+function performSwitch(
+  state: BattleState,
+  key: FighterKey,
+  toIndex: number,
+  log: string[] = [],
+  /** 자기 의지로 교체했으면 true(runTurn 교체 액션). 기절 후 강제 교체(applySwitch)면 false — 가속 발동. */
+  voluntary = true,
+): void {
   const side = sideOf(state, key);
   if (toIndex === side.activeIndex || toIndex < 0 || toIndex >= side.party.length) return;
   const outgoing = side.party[side.activeIndex];
@@ -1754,11 +1767,13 @@ function performSwitch(state: BattleState, key: FighterKey, toIndex: number, log
   outgoing.damageTakenThisTurn = { physical: 0, special: 0 };
   outgoing.consecutiveLockMoveId = undefined;
   outgoing.consecutiveLockUntilTurn = undefined;
+  // 곡예(Unburden): 본가는 "도구를 잃은 뒤 교체하기 전까지"만 2배 유지 — 교체로 물러나면 해제(§8).
+  outgoing.unburdenActive = undefined;
   // 유지: currentHp · status(주 상태이상) · remainingPp · itemConsumed · currentItemId ·
   //       consumedBerryId · addedType · timesHitByMoves(교체 초기화 미도입) · ownMoveTypeBoosts ·
   //       disguiseBroken · hungerMode.
-  //   후속: unburdenActive(§8에서 교체 시 해제로) · screens(편 기반 미이전 — 알려진 단순화) ·
-  //         transformed(변신 원복 — 메타몽 전용이라 미도입).
+  //   후속: screens(편 기반 미이전 — 알려진 단순화) · transformed(변신 원복 — 메타몽 전용이라 미도입) ·
+  //         wish(그 자리 포켓몬이 받아야 하나 fighter에 붙어 있어 교체로 소멸 — post-1.0 §6).
 
   // ── 활성 슬롯 전환 ──
   side.activeIndex = toIndex;
@@ -1766,6 +1781,8 @@ function performSwitch(state: BattleState, key: FighterKey, toIndex: number, log
   else state.b = side.party[toIndex];
   const incoming = side.party[toIndex];
 
+  // 가속 억제(§8): 자발적 교체로 나온 턴엔 가속이 발동하지 않는다. 강제 교체(voluntary=false)면 세우지 않음.
+  incoming.switchedInThisTurn = voluntary || undefined;
   // 킬가르도: 등장 시 항상 실드폼으로 복귀
   if (incoming.stanceChangeForms) incoming.currentStanceForm = "shield";
   // 기분파·의태: 등장 시점의 날씨/필드에 맞춰 타입 정렬
@@ -1815,7 +1832,8 @@ export function applySwitch(prevState: BattleState, key: FighterKey, toIndex: nu
   const targetSide = sideOf(state, key);
   const outPokemonId = targetSide.party[targetSide.activeIndex].slot.pokemonId;
   const entryMessages: string[] = [];
-  performSwitch(state, key, toIndex, entryMessages);
+  // applySwitch는 기절 후 강제 교체 전용 — voluntary=false라 다음 턴 가속이 정상 발동한다.
+  performSwitch(state, key, toIndex, entryMessages, false);
   const inPokemonId = sideOf(state, key).party[sideOf(state, key).activeIndex].slot.pokemonId;
   return { nextState: state, entryMessages, outPokemonId, inPokemonId };
 }
@@ -4759,6 +4777,10 @@ export function runTurn(
     entryAnnouncements: prevState.entryAnnouncements,
   };
 
+  // 가속 억제 플래그(§8)는 "이번 턴에 자발적 교체로 나왔나"라 매 턴 시작 시 전 슬롯에서 지운다.
+  // 아래 교체 선처리에서 자발적 교체한 슬롯에만 다시 세워지고, 그 턴 EOT 가속 판정이 이걸 읽는다.
+  for (const s of [state.sideA, state.sideB]) for (const f of s.party) f.switchedInThisTurn = undefined;
+
   // ── 교체 액션 선처리(Phase 8 §3): 항상 그 턴 기술보다 먼저 ──
   // 양쪽 다 교체면 스피드 빠른 쪽부터(순수 교체라 결과엔 영향 없지만 로그 순서 일관성).
   const switches: SwitchLogEntry[] = [];
@@ -5287,12 +5309,15 @@ export function runTurn(
         }
       }
 
-      // 가속(Speed Boost): 매 턴 종료 시 스피드 1랭크 상승. 본가는 "교체로 나온 턴"엔 발동하지
-      // 않지만, 이 시뮬레이터는 교체가 없는 1대1 대면 전용이라 첫 턴도 "등장한 턴"이 아니다 —
-      // 그래서 첫 턴 종료부터 발동시킨다(사용자 확인, Phase 6.5 §6-2 ①). 파티 선출·교체가
-      // 도입되면 그때 "교체로 나온 턴" 예외를 되살린다. 기절했으면(이 턴 데미지로 방금 쓰러졌어도)
-      // 발동하지 않는다.
-      if (fighterAbility?.boostsSpeedEachTurnEnd && !isFainted(fighter)) {
+      // 가속(Speed Boost): 매 턴 종료 시 스피드 1랭크 상승. 본가 예외 — "자기 의지로 교체해서
+      // 나온 턴"엔 발동하지 않는다(Phase 8 §8에서 복원). 단 기절 후 강제 교체로 나온 경우는
+      // 발동한다(특성 설명 명시). switchedInThisTurn은 runTurn 교체 선처리에서 자발적 교체에만
+      // 세워지고 턴 시작 시 지워진다. 이 턴 데미지로 방금 쓰러졌으면(isFainted) 발동하지 않는다.
+      if (
+        fighterAbility?.boostsSpeedEachTurnEnd &&
+        !isFainted(fighter) &&
+        !fighter.switchedInThisTurn
+      ) {
         const speBefore = fighter.stages.spe;
         fighter.stages = applyStageDelta(fighter.stages, "spe", contraryDelta(fighter, 1));
         endOfTurn.push({

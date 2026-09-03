@@ -249,3 +249,39 @@ Phase 8 §S3에서 3슬롯 빌더·교체 UI·강제 교체를 넣으면서 임�
   제거함(`performSwitch` — HP·status 변경 자체는 그대로 유지). 향후 문구 정비 시에도 **다시 넣지 말 것.**
 - 참고: 위협·가뭄류·트레이스 등 **등장 특성**은 로그 문구를 유지한다(무슨 일이 일어났는지 값 변화만으로는
   안 보이므로). 재생력/자연회복만 예외.
+
+---
+
+## 6. 배틀타워 — 교체 인프라 위 미완 잔가지 (Phase 8 §8에서 이월)
+
+Phase 8 §S7에서 교체 시 우회 복원(가속·곡예·씨뿌리기류)은 처리했지만, 아래 둘은 교체 인프라만으로는
+안 되고 별도 기능이 필요해 남겼다.
+
+### 6-1. 일루전 (조로아크 / 히스이조로아크)
+
+- **본가**: 파티의 **마지막 슬롯**에 있다가 등장하면 그 마지막 포켓몬의 **이름·아이콘·성별로 위장**하고,
+  데미지를 받는 순간 위장이 풀린다. 타입·실능·특성은 조로아크 그대로(위장은 표시만).
+- **현재**: `abilities.json`에 설명만, `일루전` 로직 미배선. 교체 인프라(Phase 8)는 깔렸으니
+  "등장 시점에 마지막 슬롯 여부 확인" 자체는 가능하지만, **위장 표시(트래커·배틀보드·로그에서
+  다른 포켓몬 이름/아이콘)**·**피격 시 위장 해제 연출**이 UI+엔진 양쪽 작업이라 분리.
+- 배선 시: `BattleFighterState.illusionAs?: string`(위장 대상 종 id) + `applyEntryAbilityOnSwitchIn`에서
+  세팅, `applyDamageToDefender`에서 첫 피격 시 해제 + 로그, BattleLogPage의 이름 표시 지점이
+  `illusionAs`를 우선 참조.
+
+### 6-2. 희망사항(Wish) — 슬롯 이월
+
+- **본가**: 희망사항은 사용한 포켓몬이 아니라 **2턴 뒤 그 자리에 있는 포켓몬**을 회복시킨다.
+  사용 후 교체하면 새로 나온 포켓몬이 회복받는다.
+- **현재**: `wish`가 `BattleFighterState.volatile`에 붙어 있어 **교체로 물러나면 소멸**한다
+  (`performSwitch`가 volatile을 통째로 비움). 사용자가 희망사항 → 교체하면 회복이 사라진다.
+- 배선 시: `wish`를 fighter volatile이 아니라 **`BattleSide`에 큐**(`{ turnsLeft, healAmount }`)로
+  옮기고, 턴 종료 시 그 편 활성에게 적용. `performSwitch`의 volatile 클리어 대상에서 빼야 함.
+- 로스터에 희망사항 학습 포켓몬이 있으나 사용 빈도가 낮아 우선순위 하.
+
+### 6-3. 스크린(리플렉터·빛의장막·오로라베일) — 편 기반 이전
+
+- **현재**: `screens`가 `BattleFighterState`에 붙어 있어 교체하면 그 포켓몬과 함께 사라진다.
+  본가는 **편(side) 전체**에 걸리는 효과라 교체해도 남아야 한다.
+- Phase 8 §1에서 설치물(hazards)만 `BattleSide`로 옮기고 스크린은 남겨 둔 알려진 단순화.
+- 배선 시: `BattleSide.screens: Partial<Record<"reflect"|"lightScreen"|"auroraVeil", number>>`로 이전,
+  데미지 감산·턴 종료 카운트다운·배리어프리(clearsAllScreensOnEntry) 지점을 side 기준으로.
