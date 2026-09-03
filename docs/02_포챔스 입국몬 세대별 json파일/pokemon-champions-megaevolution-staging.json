@@ -1,0 +1,306 @@
+{
+  "_readme": [
+    "검토용 스테이징 파일입니다. pokemon.json/items.json에는 아직 반영하지 않았습니다.",
+    "출처: pokemon.fandom.com/ko (각 항목 페이지의 #pokemonToggle 메가진화 폼), 2026-09-03 수집.",
+    "각 항목은 baseId(기존 pokemon.json에 이미 등록된 종의 id) + megaEvolutions 배열(추가할 항목, src/types/pokemon.ts의 MegaEvolution 형식) 구조입니다. 병합 시 해당 baseId 종의 기존 megaEvolutions 필드에 이 배열을 그대로 추가하면 됩니다.",
+    "form/megaStone 이름은 기존 pokemon.json 관례를 따랐습니다 (예: '리자몽-메가X'/'리자몽나이트X'). 단일 메가만 있는 종은 '{종}-메가'/'{종}나이트' 형식으로 지었습니다.",
+    "49종 전부 요청한 '포챔스 입국몬_메가진화.txt'의 7개 그룹(1~7세대, 이 프로젝트 자체의 도입 순서 그룹이며 실제 포켓몬 세대와는 무관— 예: 7세대 그룹에 9세대 포켓몬 스코빌런의 메가가 포함됨)을 순서대로 수집했습니다.",
+    "몸무게는 전부 위키에 폼 전용 값이 있어 null 항목 없이 전부 채웠습니다."
+  ],
+  "megaEvolutions": [
+    {
+      "baseId": "독침붕",
+      "megaEvolutions": [
+        { "form": "독침붕-메가", "megaStone": "독침붕나이트", "types": ["벌레", "독"], "baseStats": { "hp": 65, "atk": 150, "def": 40, "spa": 15, "spd": 80, "spe": 145 }, "ability": "적응력", "weightKg": 40.5 }
+      ]
+    },
+    {
+      "baseId": "피죤투",
+      "megaEvolutions": [
+        { "form": "피죤투-메가", "megaStone": "피죤투나이트", "types": ["노말", "비행"], "baseStats": { "hp": 83, "atk": 80, "def": 80, "spa": 135, "spd": 80, "spe": 121 }, "ability": "노가드", "weightKg": 50.5 }
+      ]
+    },
+    {
+      "baseId": "후딘",
+      "megaEvolutions": [
+        { "form": "후딘-메가", "megaStone": "후딘나이트", "types": ["에스퍼"], "baseStats": { "hp": 55, "atk": 50, "def": 65, "spa": 175, "spd": 95, "spe": 150 }, "ability": "트레이스", "weightKg": 48.0 }
+      ]
+    },
+    {
+      "baseId": "우츠보트",
+      "megaEvolutions": [
+        { "form": "우츠보트-메가", "megaStone": "우츠보트나이트", "types": ["풀", "독"], "baseStats": { "hp": 80, "atk": 125, "def": 85, "spa": 135, "spd": 95, "spe": 70 }, "ability": "내용물분출", "weightKg": 125.5 }
+      ]
+    },
+    {
+      "baseId": "야도란",
+      "megaEvolutions": [
+        { "form": "야도란-메가", "megaStone": "야도란나이트", "types": ["물", "에스퍼"], "baseStats": { "hp": 95, "atk": 75, "def": 180, "spa": 130, "spd": 80, "spe": 30 }, "ability": "조가비갑옷", "weightKg": 120.0 }
+      ]
+    },
+    {
+      "baseId": "아쿠스타",
+      "megaEvolutions": [
+        { "form": "아쿠스타-메가", "megaStone": "아쿠스타나이트", "types": ["물", "에스퍼"], "baseStats": { "hp": 60, "atk": 100, "def": 105, "spa": 130, "spd": 105, "spe": 120 }, "ability": "천하장사", "weightKg": 80.0 }
+      ]
+    },
+    {
+      "baseId": "쁘사이저",
+      "megaEvolutions": [
+        { "form": "쁘사이저-메가", "megaStone": "쁘사이저나이트", "types": ["벌레", "비행"], "baseStats": { "hp": 65, "atk": 155, "def": 120, "spa": 65, "spd": 90, "spe": 105 }, "ability": "스카이스킨", "weightKg": 59.0 }
+      ]
+    },
+    {
+      "baseId": "갸라도스",
+      "megaEvolutions": [
+        { "form": "갸라도스-메가", "megaStone": "갸라도스나이트", "types": ["물", "악"], "baseStats": { "hp": 95, "atk": 155, "def": 109, "spa": 70, "spd": 130, "spe": 81 }, "ability": "틀깨기", "weightKg": 305.0 }
+      ]
+    },
+    {
+      "baseId": "프테라",
+      "megaEvolutions": [
+        { "form": "프테라-메가", "megaStone": "프테라나이트", "types": ["바위", "비행"], "baseStats": { "hp": 80, "atk": 135, "def": 85, "spa": 70, "spd": 95, "spe": 150 }, "ability": "단단한발톱", "weightKg": 79.0 }
+      ]
+    },
+    {
+      "baseId": "메가니움",
+      "megaEvolutions": [
+        { "form": "메가니움-메가", "megaStone": "메가니움나이트", "types": ["풀", "페어리"], "baseStats": { "hp": 80, "atk": 92, "def": 115, "spa": 143, "spd": 115, "spe": 80 }, "ability": "메가솔라", "weightKg": 201.0 }
+      ]
+    },
+    {
+      "baseId": "장크로다일",
+      "megaEvolutions": [
+        { "form": "장크로다일-메가", "megaStone": "장크로다일나이트", "types": ["물", "드래곤"], "baseStats": { "hp": 85, "atk": 160, "def": 125, "spa": 89, "spd": 93, "spe": 78 }, "ability": "드래곤스킨", "weightKg": 108.8 }
+      ]
+    },
+    {
+      "baseId": "전룡",
+      "megaEvolutions": [
+        { "form": "전룡-메가", "megaStone": "전룡나이트", "types": ["전기", "드래곤"], "baseStats": { "hp": 90, "atk": 95, "def": 105, "spa": 165, "spd": 110, "spe": 45 }, "ability": "틀깨기", "weightKg": 61.5 }
+      ]
+    },
+    {
+      "baseId": "강철톤",
+      "megaEvolutions": [
+        { "form": "강철톤-메가", "megaStone": "강철톤나이트", "types": ["강철", "땅"], "baseStats": { "hp": 75, "atk": 125, "def": 230, "spa": 55, "spd": 95, "spe": 30 }, "ability": "모래의힘", "weightKg": 730.0 }
+      ]
+    },
+    {
+      "baseId": "헤라크로스",
+      "megaEvolutions": [
+        { "form": "헤라크로스-메가", "megaStone": "헤라크로스나이트", "types": ["벌레", "격투"], "baseStats": { "hp": 80, "atk": 185, "def": 115, "spa": 40, "spd": 105, "spe": 75 }, "ability": "스킬링크", "weightKg": 62.5 }
+      ]
+    },
+    {
+      "baseId": "무장조",
+      "megaEvolutions": [
+        { "form": "무장조-메가", "megaStone": "무장조나이트", "types": ["강철", "비행"], "baseStats": { "hp": 65, "atk": 140, "def": 110, "spa": 40, "spd": 100, "spe": 110 }, "ability": "굳건한신념", "weightKg": 40.4 }
+      ]
+    },
+    {
+      "baseId": "헬가",
+      "megaEvolutions": [
+        { "form": "헬가-메가", "megaStone": "헬가나이트", "types": ["악", "불꽃"], "baseStats": { "hp": 75, "atk": 90, "def": 90, "spa": 140, "spd": 90, "spe": 115 }, "ability": "선파워", "weightKg": 49.5 }
+      ]
+    },
+    {
+      "baseId": "깜까미",
+      "megaEvolutions": [
+        { "form": "깜까미-메가", "megaStone": "깜까미나이트", "types": ["악", "고스트"], "baseStats": { "hp": 50, "atk": 85, "def": 125, "spa": 85, "spd": 115, "spe": 20 }, "ability": "매직미러", "weightKg": 161.0 }
+      ]
+    },
+    {
+      "baseId": "보스로라",
+      "megaEvolutions": [
+        { "form": "보스로라-메가", "megaStone": "보스로라나이트", "types": ["강철"], "baseStats": { "hp": 70, "atk": 140, "def": 230, "spa": 60, "spd": 80, "spe": 50 }, "ability": "필터", "weightKg": 395.0 }
+      ]
+    },
+    {
+      "baseId": "요가램",
+      "megaEvolutions": [
+        { "form": "요가램-메가", "megaStone": "요가램나이트", "types": ["격투", "에스퍼"], "baseStats": { "hp": 60, "atk": 100, "def": 85, "spa": 80, "spd": 85, "spe": 100 }, "ability": "순수한힘", "weightKg": 31.5 }
+      ]
+    },
+    {
+      "baseId": "썬더볼트",
+      "megaEvolutions": [
+        { "form": "썬더볼트-메가", "megaStone": "썬더볼트나이트", "types": ["전기"], "baseStats": { "hp": 70, "atk": 75, "def": 80, "spa": 135, "spd": 80, "spe": 135 }, "ability": "위협", "weightKg": 44.0 }
+      ]
+    },
+    {
+      "baseId": "샤크니아",
+      "megaEvolutions": [
+        { "form": "샤크니아-메가", "megaStone": "샤크니아나이트", "types": ["물", "악"], "baseStats": { "hp": 70, "atk": 140, "def": 70, "spa": 110, "spd": 65, "spe": 105 }, "ability": "옹골찬턱", "weightKg": 130.3 }
+      ]
+    },
+    {
+      "baseId": "폭타",
+      "megaEvolutions": [
+        { "form": "폭타-메가", "megaStone": "폭타나이트", "types": ["불꽃", "땅"], "baseStats": { "hp": 70, "atk": 120, "def": 100, "spa": 145, "spd": 105, "spe": 20 }, "ability": "우격다짐", "weightKg": 320.5 }
+      ]
+    },
+    {
+      "baseId": "파비코리",
+      "megaEvolutions": [
+        { "form": "파비코리-메가", "megaStone": "파비코리나이트", "types": ["드래곤", "페어리"], "baseStats": { "hp": 75, "atk": 110, "def": 110, "spa": 110, "spd": 105, "spe": 80 }, "ability": "페어리스킨", "weightKg": 20.6 }
+      ]
+    },
+    {
+      "baseId": "다크펫",
+      "megaEvolutions": [
+        { "form": "다크펫-메가", "megaStone": "다크펫나이트", "types": ["고스트"], "baseStats": { "hp": 64, "atk": 165, "def": 75, "spa": 93, "spd": 83, "spe": 75 }, "ability": "짓궂은마음", "weightKg": 13.0 }
+      ]
+    },
+    {
+      "baseId": "치렁",
+      "megaEvolutions": [
+        { "form": "치렁-메가", "megaStone": "치렁나이트", "types": ["에스퍼", "강철"], "baseStats": { "hp": 75, "atk": 50, "def": 110, "spa": 135, "spd": 120, "spe": 65 }, "ability": "부유", "weightKg": 8.0 }
+      ]
+    },
+    {
+      "baseId": "앱솔",
+      "megaEvolutions": [
+        { "form": "앱솔-메가", "megaStone": "앱솔나이트", "types": ["악"], "baseStats": { "hp": 65, "atk": 150, "def": 60, "spa": 115, "spd": 60, "spe": 115 }, "ability": "매직미러", "weightKg": 49.0 }
+      ]
+    },
+    {
+      "baseId": "얼음귀신",
+      "megaEvolutions": [
+        { "form": "얼음귀신-메가", "megaStone": "얼음귀신나이트", "types": ["얼음"], "baseStats": { "hp": 80, "atk": 120, "def": 80, "spa": 120, "spd": 80, "spe": 100 }, "ability": "프리즈스킨", "weightKg": 350.2 }
+      ]
+    },
+    {
+      "baseId": "찌르호크",
+      "megaEvolutions": [
+        { "form": "찌르호크-메가", "megaStone": "찌르호크나이트", "types": ["격투", "비행"], "baseStats": { "hp": 85, "atk": 140, "def": 100, "spa": 60, "spd": 90, "spe": 110 }, "ability": "심술꾸러기", "weightKg": 50.0 }
+      ]
+    },
+    {
+      "baseId": "눈설왕",
+      "megaEvolutions": [
+        { "form": "눈설왕-메가", "megaStone": "눈설왕나이트", "types": ["풀", "얼음"], "baseStats": { "hp": 90, "atk": 132, "def": 105, "spa": 132, "spd": 105, "spe": 30 }, "ability": "눈퍼뜨리기", "weightKg": 185.0 }
+      ]
+    },
+    {
+      "baseId": "엘레이드",
+      "megaEvolutions": [
+        { "form": "엘레이드-메가", "megaStone": "엘레이드나이트", "types": ["에스퍼", "격투"], "baseStats": { "hp": 68, "atk": 165, "def": 95, "spa": 65, "spd": 115, "spe": 110 }, "ability": "정신력", "weightKg": 56.4 }
+      ]
+    },
+    {
+      "baseId": "눈여아",
+      "megaEvolutions": [
+        { "form": "눈여아-메가", "megaStone": "눈여아나이트", "types": ["얼음", "고스트"], "baseStats": { "hp": 70, "atk": 80, "def": 70, "spa": 140, "spd": 100, "spe": 120 }, "ability": "눈퍼뜨리기", "weightKg": 29.6 }
+      ]
+    },
+    {
+      "baseId": "염무왕",
+      "megaEvolutions": [
+        { "form": "염무왕-메가", "megaStone": "염무왕나이트", "types": ["불꽃", "격투"], "baseStats": { "hp": 110, "atk": 148, "def": 75, "spa": 110, "spd": 110, "spe": 75 }, "ability": "틀깨기", "weightKg": 180.3 }
+      ]
+    },
+    {
+      "baseId": "다부니",
+      "megaEvolutions": [
+        { "form": "다부니-메가", "megaStone": "다부니나이트", "types": ["노말", "페어리"], "baseStats": { "hp": 103, "atk": 60, "def": 126, "spa": 80, "spd": 126, "spe": 50 }, "ability": "치유의마음", "weightKg": 32.0 }
+      ]
+    },
+    {
+      "baseId": "펜드라",
+      "megaEvolutions": [
+        { "form": "펜드라-메가", "megaStone": "펜드라나이트", "types": ["벌레", "독"], "baseStats": { "hp": 60, "atk": 140, "def": 149, "spa": 75, "spd": 99, "spe": 62 }, "ability": "조가비갑옷", "weightKg": 230.5 }
+      ]
+    },
+    {
+      "baseId": "저리더프",
+      "megaEvolutions": [
+        { "form": "저리더프-메가", "megaStone": "저리더프나이트", "types": ["전기"], "baseStats": { "hp": 85, "atk": 145, "def": 80, "spa": 135, "spd": 90, "spe": 80 }, "ability": "천정부지", "weightKg": 180.0 }
+      ]
+    },
+    {
+      "baseId": "샹델라",
+      "megaEvolutions": [
+        { "form": "샹델라-메가", "megaStone": "샹델라나이트", "types": ["고스트", "불꽃"], "baseStats": { "hp": 60, "atk": 75, "def": 110, "spa": 175, "spd": 110, "spe": 90 }, "ability": "틈새포착", "weightKg": 69.6 }
+      ]
+    },
+    {
+      "baseId": "골루그",
+      "megaEvolutions": [
+        { "form": "골루그-메가", "megaStone": "골루그나이트", "types": ["땅", "고스트"], "baseStats": { "hp": 89, "atk": 159, "def": 105, "spa": 70, "spd": 105, "spe": 55 }, "ability": "보이지않는주먹", "weightKg": 330.0 }
+      ]
+    },
+    {
+      "baseId": "브리가론",
+      "megaEvolutions": [
+        { "form": "브리가론-메가", "megaStone": "브리가론나이트", "types": ["풀", "격투"], "baseStats": { "hp": 88, "atk": 137, "def": 172, "spa": 74, "spd": 115, "spe": 44 }, "ability": "심록", "weightKg": 90.0 }
+      ]
+    },
+    {
+      "baseId": "화염레오",
+      "megaEvolutions": [
+        { "form": "화염레오-메가", "megaStone": "화염레오나이트", "types": ["불꽃", "노말"], "baseStats": { "hp": 86, "atk": 88, "def": 92, "spa": 129, "spd": 86, "spe": 126 }, "ability": "불꽃의갈기", "weightKg": 93.3 }
+      ]
+    },
+    {
+      "baseId": "냐오닉스",
+      "megaEvolutions": [
+        { "form": "냐오닉스-메가", "megaStone": "냐오닉스나이트", "types": ["에스퍼"], "baseStats": { "hp": 74, "atk": 48, "def": 76, "spa": 143, "spd": 101, "spe": 124 }, "ability": "트레이스", "weightKg": 10.1 }
+      ]
+    },
+    {
+      "baseId": "칼라마네로",
+      "megaEvolutions": [
+        { "form": "칼라마네로-메가", "megaStone": "칼라마네로나이트", "types": ["악", "에스퍼"], "baseStats": { "hp": 86, "atk": 102, "def": 88, "spa": 98, "spd": 120, "spe": 88 }, "ability": "심술꾸러기", "weightKg": 69.8 }
+      ]
+    },
+    {
+      "baseId": "거북손데스",
+      "megaEvolutions": [
+        { "form": "거북손데스-메가", "megaStone": "거북손데스나이트", "types": ["바위", "격투"], "baseStats": { "hp": 72, "atk": 140, "def": 130, "spa": 64, "spd": 106, "spe": 88 }, "ability": "단단한발톱", "weightKg": 100.0 }
+      ]
+    },
+    {
+      "baseId": "드래캄",
+      "megaEvolutions": [
+        { "form": "드래캄-메가", "megaStone": "드래캄나이트", "types": ["독", "드래곤"], "baseStats": { "hp": 65, "atk": 85, "def": 105, "spa": 132, "spd": 163, "spe": 44 }, "ability": "재생력", "weightKg": 100.3 }
+      ]
+    },
+    {
+      "baseId": "루차불",
+      "megaEvolutions": [
+        { "form": "루차불-메가", "megaStone": "루차불나이트", "types": ["격투", "비행"], "baseStats": { "hp": 78, "atk": 137, "def": 100, "spa": 74, "spd": 93, "spe": 118 }, "ability": "노가드", "weightKg": 25.0 }
+      ]
+    },
+    {
+      "baseId": "모단단게",
+      "megaEvolutions": [
+        { "form": "모단단게-메가", "megaStone": "모단단게나이트", "types": ["격투", "얼음"], "baseStats": { "hp": 97, "atk": 157, "def": 122, "spa": 62, "spd": 107, "spe": 33 }, "ability": "철주먹", "weightKg": 252.8 }
+      ]
+    },
+    {
+      "baseId": "대여르",
+      "megaEvolutions": [
+        { "form": "대여르-메가", "megaStone": "대여르나이트", "types": ["격투"], "baseStats": { "hp": 65, "atk": 135, "def": 135, "spa": 70, "spd": 65, "spe": 100 }, "ability": "오기", "weightKg": 99.0 }
+      ]
+    },
+    {
+      "baseId": "할비롱",
+      "megaEvolutions": [
+        { "form": "할비롱-메가", "megaStone": "할비롱나이트", "types": ["노말", "드래곤"], "baseStats": { "hp": 78, "atk": 85, "def": 110, "spa": 160, "spd": 116, "spe": 36 }, "ability": "발끈", "weightKg": 240.5 }
+      ]
+    },
+    {
+      "baseId": "스코빌런",
+      "megaEvolutions": [
+        { "form": "스코빌런-메가", "megaStone": "스코빌런나이트", "types": ["풀", "불꽃"], "baseStats": { "hp": 65, "atk": 138, "def": 85, "spa": 138, "spd": 85, "spe": 75 }, "ability": "하바네로분출", "weightKg": 22.0 }
+      ]
+    },
+    {
+      "baseId": "킬라플로르",
+      "megaEvolutions": [
+        { "form": "킬라플로르-메가", "megaStone": "킬라플로르나이트", "types": ["바위", "독"], "baseStats": { "hp": 83, "atk": 90, "def": 105, "spa": 150, "spd": 96, "spe": 101 }, "ability": "적응력", "weightKg": 77.0 }
+      ]
+    }
+  ]
+}
