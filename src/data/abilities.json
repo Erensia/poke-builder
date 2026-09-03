@@ -701,12 +701,14 @@
   {
     "id": "플라워베일",
     "name": "플라워베일",
-    "description": "풀타입 포켓몬의 능력이 떨어지지 않으며 상태 이상이 되지 않는다."
+    "description": "풀타입 포켓몬의 능력이 떨어지지 않으며 상태 이상이 되지 않는다.",
+    "grassVeil": true
   },
   {
     "id": "공생",
     "name": "공생",
-    "description": "자기 편 포켓몬이 지닌 도구를 사용하면 자신의 도구를 넘겨준다."
+    "description": "자기 편 포켓몬이 지닌 도구를 사용하면 자신의 도구를 넘겨준다.",
+    "passesItemToConsumingAlly": true
   },
   {
     "id": "페어리오라",

@@ -456,6 +456,44 @@ function contraryDelta(fighter: BattleFighterState, delta: number): number {
   return abilityOf(fighter)?.invertsStatChanges ? -delta : delta;
 }
 
+/** 주 상태이상 6종 — 플라워베일 등 "상태이상 전부 면역"을 표현할 때 쓴다 */
+const ALL_MAJOR_STATUS_CONDITIONS: StatusCondition[] = [
+  "burn",
+  "poison",
+  "badly-poisoned",
+  "paralysis",
+  "sleep",
+  "freeze",
+];
+/** 클리어바디가 막는 5스탯 (HP 제외) */
+const CLEAR_BODY_STAT_KEYS: BattleStatKey[] = ["atk", "def", "spa", "spd", "spe"];
+
+/**
+ * 플라워베일(Phase 8 §7)이 지금 이 fighter에게 실제로 발동하는지 — 이 특성 보유 + 자신이 풀타입.
+ * 본가는 아군 풀타입까지 보호하나 3v3 싱글엔 동시 아군이 없어 자기 자신만 대상.
+ */
+function hasFlowerVeil(fighter: BattleFighterState, ability: Ability | undefined): boolean {
+  return !!ability?.grassVeil && fighter.types.includes("풀");
+}
+
+/** 특성 기반 상태이상 면역 목록 — 유연류(immuneToStatuses) + 플라워베일(풀타입이면 전부) */
+function statusImmunitiesOf(
+  fighter: BattleFighterState,
+  ability: Ability | undefined,
+): StatusCondition[] | undefined {
+  if (hasFlowerVeil(fighter, ability)) return ALL_MAJOR_STATUS_CONDITIONS;
+  return ability?.immuneToStatuses;
+}
+
+/** 상대발 랭크 하락을 막는 스탯 목록 — 클리어바디류(blocksOpponentStatDropsForStats) + 플라워베일(풀타입이면 5스탯) */
+function statDropBlockStatsOf(
+  fighter: BattleFighterState,
+  ability: Ability | undefined,
+): BattleStatKey[] | undefined {
+  if (hasFlowerVeil(fighter, ability)) return CLEAR_BODY_STAT_KEYS;
+  return ability?.blocksOpponentStatDropsForStats;
+}
+
 /**
  * 심술꾸러기: fighter가 대상이 되는 기술 랭크 변화(statChanges)의 delta/setTo 부호를 반전한 기술
  * 복사본을 돌려준다. Contrary가 아니거나 statChanges가 없으면 원본을 그대로 반환한다.
@@ -636,6 +674,10 @@ function consumeItem(fighter: BattleFighterState): void {
   const consumedId = fighter.currentItemId;
   fighter.itemConsumed = true;
   fighter.currentItemId = null;
+
+  // 공생(Ability.passesItemToConsumingAlly, Phase 8 §7): 본가라면 여기서 "같은 편 다른 활성
+  // 포켓몬이 공생 보유 + 무도구면 그 포켓몬의 도구를 이 fighter에게 넘긴다"를 처리한다. 3v3
+  // 싱글 교체에는 필드에 동시 아군이 없어 이 조건이 성립하는 순간이 없으므로 배선하지 않는다.
 
   // 나무열매(이름이 "열매"로 끝나는 도구)를 소비했을 때만:
   //  - 수확: 소비한 열매 id를 기록해 둔다(턴 종료 시 확률로 되돌림).
@@ -1579,7 +1621,7 @@ function applyEntryHazardsOnSwitchIn(state: BattleState, key: FighterKey, log: s
     if (
       hz.toxicSpikesLayers > 0 &&
       !self.status.condition &&
-      !isImmuneToStatus(hz.toxicSpikesLayers >= 2 ? "badly-poisoned" : "poison", self.types, selfAbility?.immuneToStatuses) &&
+      !isImmuneToStatus(hz.toxicSpikesLayers >= 2 ? "badly-poisoned" : "poison", self.types, statusImmunitiesOf(self, selfAbility)) &&
       !isStatusBlockedByField(state.field, "poison")
     ) {
       const cond: StatusCondition = hz.toxicSpikesLayers >= 2 ? "badly-poisoned" : "poison";
@@ -2632,7 +2674,7 @@ function resolveAction(
     // 토치카: 접촉기를 막으면 공격자를 독 상태로 만든다(타입/특성 면역·필드 존중).
     if (
       ap.contactStatus &&
-      !isImmuneToStatus(ap.contactStatus, attacker.types, attackerAbility?.immuneToStatuses) &&
+      !isImmuneToStatus(ap.contactStatus, attacker.types, statusImmunitiesOf(attacker, attackerAbility)) &&
       !isStatusBlockedByField(state.field, ap.contactStatus)
     ) {
       const before = attacker.status.condition;
@@ -2962,7 +3004,7 @@ function resolveAction(
 
     if (
       trigger.inflictsStatusOnAttacker &&
-      !isImmuneToStatus(trigger.inflictsStatusOnAttacker, attacker.types, attackerAbility?.immuneToStatuses)
+      !isImmuneToStatus(trigger.inflictsStatusOnAttacker, attacker.types, statusImmunitiesOf(attacker, attackerAbility))
     ) {
       const before = attacker.status.condition;
       attacker.status = inflictStatus(attacker.status, trigger.inflictsStatusOnAttacker);
@@ -3025,7 +3067,7 @@ function resolveAction(
     // (blocksOpponentStatDropsForStats)·심술꾸러기(contraryDelta)는 그대로 존중한다. 미러아머 반사는
     // 이 로스터에 대상 조합이 없어 생략(공격자가 미러아머면 그냥 정상 하락).
     if (trigger.attackerStatChanges) {
-      const blocked = attackerAbility?.blocksOpponentStatDropsForStats;
+      const blocked = statDropBlockStatsOf(attacker, attackerAbility);
       for (const change of trigger.attackerStatChanges) {
         if (blocked?.includes(change.stat)) continue;
         const before = attacker.stages[change.stat];
@@ -3460,7 +3502,7 @@ function resolveAction(
   // 내려간 스탯만(-6 클램프로 변화가 없었던 건 자연히 제외) 골라서, 막을 스탯이면 원래 값으로
   // 되돌리고, 반사 특성이면 원래 값으로 되돌린 뒤 그만큼을 공격측에게 대신 적용한다. "상대의
   // 기술로" 내려간 것만 대상이라 방금 위에서 적용한 opponent 방향 변화만 비교하면 충분하다.
-  const blockedStats = defenderAbility?.blocksOpponentStatDropsForStats;
+  const blockedStats = statDropBlockStatsOf(defender, defenderAbility);
   const reflects = defenderAbility?.reflectsOpponentStatDrops;
   // 미러아머 반사 문구용(E-4): 실제로 시전자(attacker)에게 되돌아간 랭크다운을 모은다. 특성/변화기
   // 랭크다운뿐 아니라 데미지 기술의 부가 랭크다운(브레이크클로 등)도 rolledStatChanges에 반영돼
@@ -3684,7 +3726,7 @@ function resolveAction(
         isImmuneToStatus(
           effect.status,
           defender.types,
-          defenderAbility?.immuneToStatuses,
+          statusImmunitiesOf(defender, defenderAbility),
           attackerAbility?.bypassesPoisonTypeImmunity,
         )
       )
@@ -3720,7 +3762,7 @@ function resolveAction(
       const picked = pool[Math.floor(random() * pool.length)];
       if (
         picked &&
-        !isImmuneToStatus(picked, defender.types, defenderAbility?.immuneToStatuses) &&
+        !isImmuneToStatus(picked, defender.types, statusImmunitiesOf(defender, defenderAbility)) &&
         !isStatusBlockedByField(state.field, picked) &&
         !(picked === "freeze" && activeWeather(state) === "쾌청")
       ) {
@@ -3748,7 +3790,7 @@ function resolveAction(
     );
     if (
       rose &&
-      !isImmuneToStatus("burn", defender.types, defenderAbility?.immuneToStatuses) &&
+      !isImmuneToStatus("burn", defender.types, statusImmunitiesOf(defender, defenderAbility)) &&
       !isStatusBlockedByField(state.field, "burn")
     ) {
       const before = defender.status.condition;
@@ -3767,7 +3809,7 @@ function resolveAction(
     damage > 0 &&
     !hitSubstitute &&
     !inflictedStatus &&
-    !isImmuneToStatus("poison", defender.types, defenderAbility?.immuneToStatuses, attackerAbility?.bypassesPoisonTypeImmunity) &&
+    !isImmuneToStatus("poison", defender.types, statusImmunitiesOf(defender, defenderAbility), attackerAbility?.bypassesPoisonTypeImmunity) &&
     !isStatusBlockedByField(state.field, "poison") &&
     random() * 100 < attackerAbility.poisonTouchChance
   ) {
@@ -3787,7 +3829,7 @@ function resolveAction(
     hit &&
     !hitSubstitute &&
     !isFainted(attacker) &&
-    !isImmuneToStatus("burn", attacker.types, attackerAbility?.immuneToStatuses) &&
+    !isImmuneToStatus("burn", attacker.types, statusImmunitiesOf(attacker, attackerAbility)) &&
     !isStatusBlockedByField(state.field, "burn")
   ) {
     const before = attacker.status.condition;
@@ -3802,7 +3844,7 @@ function resolveAction(
   if (
     inflictedStatus &&
     defenderAbility?.reflectsStatusToOpponent?.includes(inflictedStatus) &&
-    !isImmuneToStatus(inflictedStatus, attacker.types, attackerAbility?.immuneToStatuses) &&
+    !isImmuneToStatus(inflictedStatus, attacker.types, statusImmunitiesOf(attacker, attackerAbility)) &&
     !isStatusBlockedByField(state.field, inflictedStatus) &&
     !(inflictedStatus === "freeze" && activeWeather(state) === "쾌청")
   ) {
@@ -5104,7 +5146,7 @@ export function runTurn(
       if (hasVolatile(fighter.volatile, "syrupCoat") && !isFainted(fighter)) {
         const before = fighter.stages.spe;
         // 물엿범벅은 상대(시럽봄 사용자)가 거는 하락 — 클리어바디류/하얀연기가 spe를 막으면 무산.
-        if (!fighterAbility?.blocksOpponentStatDropsForStats?.includes("spe")) {
+        if (!statDropBlockStatsOf(fighter, fighterAbility)?.includes("spe")) {
           fighter.stages = applyStageDelta(fighter.stages, "spe", contraryDelta(fighter, -1));
         }
         if (fighter.stages.spe !== before) {
@@ -5142,7 +5184,7 @@ export function runTurn(
         if (
           triggersNow &&
           !fighter.status.condition &&
-          !isImmuneToStatus("sleep", fighter.types, fighterAbility?.immuneToStatuses) &&
+          !isImmuneToStatus("sleep", fighter.types, statusImmunitiesOf(fighter, fighterAbility)) &&
           !isStatusBlockedByField(state.field, "sleep")
         ) {
           fighter.status = inflictStatus(fighter.status, "sleep");
