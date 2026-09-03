@@ -240,3 +240,12 @@ Phase 8 §S3에서 3슬롯 빌더·교체 UI·강제 교체를 넣으면서 임�
 - `src/components/BattleLogPage.tsx` — `battle-struggle-notice`, `battle-switch-panel-title`,
   강제 교체 배너, `turn.switches` 렌더, `choiceLockedMoveId` 경고, `battle-setup-card` 라벨.
 - `src/components/BattleLogPage.css` — 셋업 레이아웃(VS 중앙 배치)용 신규 규칙.
+
+### 5-4. 재생력·자연회복 — 로그 문구 없이 트래커로만 (2026-09-03 확정)
+
+- 교체로 물러나는 순간의 **재생력 회복·자연회복 상태이상 치유는 별도 로그 줄을 내지 않는다.**
+  파티 트래커의 **HP 바가 차오르고 상태이상 마크가 사라지는 것**으로 충분하다는 사용자 결정.
+- S4에서 넣었던 `${이름}의 재생력! 물러나면서 체력을 N 회복했다.` / `…상태이상이 나았다.` 문구는
+  제거함(`performSwitch` — HP·status 변경 자체는 그대로 유지). 향후 문구 정비 시에도 **다시 넣지 말 것.**
+- 참고: 위협·가뭄류·트레이스 등 **등장 특성**은 로그 문구를 유지한다(무슨 일이 일어났는지 값 변화만으로는
+  안 보이므로). 재생력/자연회복만 예외.

@@ -1582,20 +1582,19 @@ function performSwitch(state: BattleState, key: FighterKey, toIndex: number, log
   const outgoing = side.party[side.activeIndex];
 
   // ── 물러나는 포켓몬: 재생력·자연회복(살아서 물러날 때만) ──
+  // 별도 로그 문구는 내지 않는다(사용자 결정 2026-09-03) — 파티 트래커의 HP 바 회복·상태이상
+  // 마크 소멸로만 보여준다.
   if (!isFainted(outgoing)) {
     const outAbility = outgoing.effectiveAbilityId ? getAbility(outgoing.effectiveAbilityId) : undefined;
-    const outName = getPokemon(outgoing.slot.pokemonId)?.name ?? "포켓몬";
     if (outAbility?.healsFractionOnSwitchOut && outgoing.currentHp < outgoing.maxHp) {
       const heal = Math.min(
         outgoing.maxHp - outgoing.currentHp,
         Math.max(1, Math.floor(outgoing.maxHp * outAbility.healsFractionOnSwitchOut)),
       );
       outgoing.currentHp += heal;
-      log.push(`${outName}의 ${outAbility.name}! 물러나면서 체력을 ${heal} 회복했다.`);
     }
     if (outAbility?.curesStatusOnSwitchOut && outgoing.status.condition) {
       outgoing.status = { ...NO_STATUS_CONDITION };
-      log.push(`${outName}의 ${outAbility.name}! 물러나면서 상태이상이 나았다.`);
     }
   }
 
