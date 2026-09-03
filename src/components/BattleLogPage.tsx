@@ -349,8 +349,23 @@ export function BattleLogPage() {
   /** 강제 교체 확정 — 기절한 활성 자리에 toIndex 슬롯을 세운다(턴은 소비 안 함) */
   function resolveForcedSwitch(side: Side, toIndex: number) {
     if (!battleState) return;
-    const next = applySwitch(battleState, side, toIndex);
-    setBattleState(next);
+    const { nextState, entryMessages, outPokemonId, inPokemonId } = applySwitch(battleState, side, toIndex);
+    setBattleState(nextState);
+    // 강제 교체는 턴 밖 조작이라 별도 로그 카드로 남긴다(등장 파이프라인 문구까지 함께).
+    const synthetic: TurnResult = {
+      turnNumber: nextState.turnNumber,
+      order: ["a", "b"],
+      activePokemonIds: { a: nextState.a.slot.pokemonId, b: nextState.b.slot.pokemonId },
+      actions: [],
+      endOfTurn: [],
+      winner: undefined,
+      expiredScreens: [],
+      turnStartAnnouncements: [],
+      switches: [
+        { side: side as FighterKey, fromIndex: -1, toIndex, outPokemonId, inPokemonId, entryMessages },
+      ],
+    };
+    setLog((prev) => [...prev, synthetic]);
     setPendingForcedSwitch((prev) => {
       if (!prev) return null;
       const rest = { ...prev, [side]: undefined };
@@ -829,22 +844,33 @@ export function BattleLogPage() {
           )}
 
           <div className="battle-turn-log">
-            {[...log].reverse().map((turn) => {
+            {[...log].reverse().map((turn, turnIdx) => {
               // 이 턴에 실제로 행동한 포켓몬 이름 — 교체 뒤 과거 턴 로그가 현재 활성 이름으로
               // 잘못 표시되지 않도록, runTurn이 스냅샷한 activePokemonIds로 이름을 되짚는다.
               const turnName = (key: FighterKey) => getPokemon(turn.activePokemonIds[key])?.name ?? key;
+              // 강제 교체는 actions·endOfTurn이 비고 switches만 있는 합성 카드 — 제목을 다르게 준다.
+              const isForcedSwitchCard =
+                turn.switches.length > 0 && turn.actions.length === 0 && turn.endOfTurn.length === 0 && !turn.winner;
               return (
-              <div key={turn.turnNumber} className="battle-turn-card">
+              <div key={`${turn.turnNumber}-${turnIdx}`} className="battle-turn-card">
                 <div className="battle-turn-title">
-                  턴 {turn.turnNumber} · 먼저 행동: {turnName(turn.order[0])}
+                  {isForcedSwitchCard ? `턴 ${turn.turnNumber} · 교체` : `턴 ${turn.turnNumber} · 먼저 행동: ${turnName(turn.order[0])}`}
                 </div>
                 {turn.switches.map((sw, i) => {
                   const outName = getPokemon(sw.outPokemonId)?.name ?? "포켓몬";
                   const inName = getPokemon(sw.inPokemonId)?.name ?? "포켓몬";
                   return (
-                    <div key={`sw-${i}`} className="battle-turn-line">
-                      {outName}
-                      {eunNeun(outName)} 뒤로 물러났다 — {inName} 등장!
+                    <div key={`sw-${i}`}>
+                      <div className="battle-turn-line">
+                        {sw.fromIndex < 0
+                          ? `${inName} 등장!`
+                          : `${outName}${eunNeun(outName)} 뒤로 물러났다 — ${inName} 등장!`}
+                      </div>
+                      {sw.entryMessages.map((m, j) => (
+                        <div key={`swm-${i}-${j}`} className="battle-turn-line is-muted">
+                          {m}
+                        </div>
+                      ))}
                     </div>
                   );
                 })}

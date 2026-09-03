@@ -856,12 +856,14 @@
   {
     "id": "자연회복",
     "name": "자연회복",
-    "description": "배틀에서 물러나면 상태이상이 낫는다. (교체가 없는 1대1에서는 발동하지 않는다)"
+    "description": "배틀에서 물러나면 상태이상이 낫는다.",
+    "curesStatusOnSwitchOut": true
   },
   {
     "id": "재생력",
     "name": "재생력",
-    "description": "배틀에서 물러나면 최대 HP의 1/3을 회복한다. (교체가 없는 1대1에서는 발동하지 않는다)"
+    "description": "배틀에서 물러나면 최대 HP의 1/3을 회복한다.",
+    "healsFractionOnSwitchOut": 0.3333333333333333
   },
   {
     "id": "촉촉바디",

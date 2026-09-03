@@ -339,6 +339,16 @@ export interface Ability {
   /** 일렉트릭메이커: 배틀에 등장하면 이 필드를 편다(이미 다른 필드가 있으면 실패). */
   setsFieldOnEntry?: FieldKind;
   /**
+   * 재생력(Regenerator): 교체로 물러날 때 최대 HP의 이 비율(1/3)만큼 회복한 상태로 벤치에
+   * 들어간다. 교체 개념이 도입된 Phase 8 §4부터 의미가 생긴다(performSwitch의 나가는 포켓몬 훅).
+   */
+  healsFractionOnSwitchOut?: number;
+  /**
+   * 자연회복(Natural Cure): 교체로 물러나는 순간 주 상태이상(화상/독/맹독/마비/잠듦/얼음)이
+   * 치유된다. 재생력과 같은 축(performSwitch의 나가는 포켓몬 훅, Phase 8 §4).
+   */
+  curesStatusOnSwitchOut?: boolean;
+  /**
    * 트레이스: 배틀에 등장하면 상대의 특성을 그대로 복사해 이후 자신의 effectiveAbilityId가
    * 상대 것과 같아진다. 실제 게임처럼 일부 특성(다중특성·자기 자신 등)을 복사 제외하는 예외
    * 목록은 없다 — 그런 특성을 복사해도 이 시뮬레이터에서는 대부분 조용히 아무 효과가 없다

@@ -1475,6 +1475,8 @@ export interface SwitchLogEntry {
   outPokemonId: string;
   /** 새로 나온 포켓몬 종 id */
   inPokemonId: string;
+  /** 이 교체로 발생한 등장/퇴장 안내(재생력·자연회복·위협·날씨 등, Phase 8 §4). 없으면 빈 배열 */
+  entryMessages: string[];
 }
 
 function isFainted(fighter: BattleFighterState): boolean {
@@ -1511,17 +1513,91 @@ function hasLivingReserve(side: BattleSide): boolean {
 }
 
 /**
+ * 교체로 나온 포켓몬 하나에 대해 "등장 시 특성"을 적용한다(Phase 8 §4 골격).
+ * createBattleState의 resolveEntryAbilityEffects는 양쪽을 스피드 순으로 동시에 처리하는
+ * 배틀 시작 전용이라, 한 마리만 등장하는 교체용으로 이 단일 버전을 따로 둔다.
+ * 처리: 위협(상대 랭크 하락) · 가뭄류(날씨) · 일렉트릭메이커류(필드) · 트레이스(상대 특성 복사).
+ * (다운로드·기분파 등은 로스터에 없거나 다른 훅에서 처리.)
+ */
+function applyEntryAbilityOnSwitchIn(state: BattleState, key: FighterKey, log: string[]): void {
+  const self = state[key];
+  const oppKey = opponentKey(key);
+  const opponent = state[oppKey];
+  const ability = self.effectiveAbilityId ? getAbility(self.effectiveAbilityId) : undefined;
+  if (!ability || isFainted(self)) return;
+  const selfName = getPokemon(self.slot.pokemonId)?.name ?? "포켓몬";
+
+  // 위협류
+  if (ability.lowersOpponentStatOnEntry && !isFainted(opponent)) {
+    const { stat, delta } = ability.lowersOpponentStatOnEntry;
+    const before = opponent.stages[stat];
+    opponent.stages = applyStageDelta(opponent.stages, stat, contraryDelta(opponent, delta));
+    if (opponent.stages[stat] !== before) {
+      log.push(`${selfName}의 ${ability.name}! 상대의 공격이 떨어졌다!`);
+    }
+  }
+  // 가뭄·잔비·모래날림·눈퍼뜨리기: 다른 날씨가 있어도 덮어쓴다(기술 setsWeather와 동일)
+  if (ability.setsWeather) {
+    const weather = ability.setsWeather;
+    state.weather = weather;
+    state.weatherTurnsRemaining =
+      WEATHER_DURATION + weatherRockBonus(weather, state.a.slot, state.b.slot);
+    log.push(`${selfName}의 ${ability.name}! 날씨가 ${weather}${roEuro(weather)} 바뀌었다!`);
+    applyForecastForm(state.a, activeWeather(state));
+    applyForecastForm(state.b, activeWeather(state));
+  }
+  // 일렉트릭메이커류: 이미 다른 필드가 있으면 실패
+  if (ability.setsFieldOnEntry) {
+    if (state.field) {
+      log.push(`${selfName}의 ${ability.name}! 하지만 이미 다른 필드가 있어 실패했다!`);
+    } else {
+      state.field = ability.setsFieldOnEntry;
+      state.fieldTurnsRemaining = FIELD_DURATION;
+      log.push(`${selfName}의 ${ability.name}! 필드가 ${state.field}(으)로 바뀌었다!`);
+      applyMimicryForm(self, state.field);
+    }
+  }
+  // 트레이스: 상대의 현재 특성을 복사
+  if (ability.copiesOpponentAbilityOnEntry && opponent.effectiveAbilityId && !isFainted(opponent)) {
+    const copied = getAbility(opponent.effectiveAbilityId);
+    self.effectiveAbilityId = opponent.effectiveAbilityId;
+    const opponentName = getPokemon(opponent.slot.pokemonId)?.name ?? "상대";
+    const copiedName = copied?.name ?? "특성";
+    log.push(`${selfName}의 ${ability.name}! ${opponentName}의 ${copiedName}${eulReul(copiedName)} 복사했다!`);
+  }
+}
+
+/**
  * 편(side)의 활성 슬롯을 toIndex로 바꾼다(Phase 8 §3). 물러나는 포켓몬의 "슬롯에 종속된"
- * 휘발 상태(랭크·행동방해·차지·비축·연속기 잠금 등)를 본가 규칙대로 초기화하고, 새로 나온
- * 포켓몬에 폼(기분파·의태)·스탠스(킬가르도 실드 복귀)를 맞춘다. state.a/state.b 포인터도 다시 문다.
+ * 휘발 상태(랭크·행동방해·차지·비축·연속기 잠금 등)를 본가 규칙대로 초기화하고, 나가는 쪽에
+ * 재생력·자연회복을, 새로 나온 쪽에 폼(기분파·의태)·스탠스·등장 특성(위협·날씨 등)을 적용한다.
+ * state.a/state.b 포인터도 다시 문다. 발생한 안내 문구는 log 배열에 push한다.
  *
- * 등장 시 처리(설치물 발동·위협 등 등장 특성·재생력)는 §4/§5에서 이 함수 뒤에 붙는다 — S2는 순수 교체만.
+ * 설치물 발동(스텔스록 등장 데미지 등)은 §5에서 이 함수의 "등장 파이프라인" 지점에 붙는다.
  * toIndex가 현재 활성이거나 범위를 벗어나면 아무것도 안 한다.
  */
-function performSwitch(state: BattleState, key: FighterKey, toIndex: number): void {
+function performSwitch(state: BattleState, key: FighterKey, toIndex: number, log: string[] = []): void {
   const side = sideOf(state, key);
   if (toIndex === side.activeIndex || toIndex < 0 || toIndex >= side.party.length) return;
   const outgoing = side.party[side.activeIndex];
+
+  // ── 물러나는 포켓몬: 재생력·자연회복(살아서 물러날 때만) ──
+  if (!isFainted(outgoing)) {
+    const outAbility = outgoing.effectiveAbilityId ? getAbility(outgoing.effectiveAbilityId) : undefined;
+    const outName = getPokemon(outgoing.slot.pokemonId)?.name ?? "포켓몬";
+    if (outAbility?.healsFractionOnSwitchOut && outgoing.currentHp < outgoing.maxHp) {
+      const heal = Math.min(
+        outgoing.maxHp - outgoing.currentHp,
+        Math.max(1, Math.floor(outgoing.maxHp * outAbility.healsFractionOnSwitchOut)),
+      );
+      outgoing.currentHp += heal;
+      log.push(`${outName}의 ${outAbility.name}! 물러나면서 체력을 ${heal} 회복했다.`);
+    }
+    if (outAbility?.curesStatusOnSwitchOut && outgoing.status.condition) {
+      outgoing.status = { ...NO_STATUS_CONDITION };
+      log.push(`${outName}의 ${outAbility.name}! 물러나면서 상태이상이 나았다.`);
+    }
+  }
 
   // ── 물러나는 포켓몬: 슬롯 종속 상태 초기화 ──
   outgoing.stages = { ...NEUTRAL_STAGES };
@@ -1566,15 +1642,30 @@ function performSwitch(state: BattleState, key: FighterKey, toIndex: number): vo
   applyForecastForm(incoming, activeWeather(state));
   applyMimicryForm(incoming, state.field);
 
-  // TODO(§4/§5): 여기서 등장 파이프라인 — 설치물 발동, 위협·날씨 등 등장 특성, 물러난 쪽 재생력/자연회복.
+  // ── 등장 파이프라인 (Phase 8 §4) ──
+  // 1. 설치물 발동 — §5에서 여기에 applyEntryHazardsOnSwitchIn(state, key, log)을 붙인다.
+  //    (스텔스록 등장 데미지, 압정뿌리기 스택, 끈적끈적네트 스피드 다운, 독압정 중독,
+  //     독타입이면 독압정 해제. 매직가드·인분 게이팅 포함.)
+  // 2. 등장 특성 — 위협·가뭄류·필드·트레이스
+  applyEntryAbilityOnSwitchIn(state, key, log);
+
   // TODO(§8): 추격(Pursuit)은 로스터에 없어 미구현 — 교체 대상을 위력 2배로 선타하는 예외.
+}
+
+export interface ApplySwitchOutcome {
+  nextState: BattleState;
+  /** 이 교체로 처리된 등장/퇴장 안내(재생력·자연회복·위협·날씨 등). 없으면 빈 배열 */
+  entryMessages: string[];
+  /** 물러난/새로 나온 포켓몬 종 id. 강제 교체 로그 문구용 */
+  outPokemonId: string;
+  inPokemonId: string;
 }
 
 /**
  * 강제 교체(기절 후) 또는 UI 교체 확정을 적용한 새 상태를 돌려준다. runTurn 밖에서 호출하며
  * prevState는 변형하지 않는다. turnNumber는 그대로 둔다(교체는 턴을 소비하지 않는 별도 조작).
  */
-export function applySwitch(prevState: BattleState, key: FighterKey, toIndex: number): BattleState {
+export function applySwitch(prevState: BattleState, key: FighterKey, toIndex: number): ApplySwitchOutcome {
   const sideA = cloneSide(prevState.sideA);
   const sideB = cloneSide(prevState.sideB);
   const state: BattleState = {
@@ -1590,8 +1681,12 @@ export function applySwitch(prevState: BattleState, key: FighterKey, toIndex: nu
     turnNumber: prevState.turnNumber,
     entryAnnouncements: prevState.entryAnnouncements,
   };
-  performSwitch(state, key, toIndex);
-  return state;
+  const targetSide = sideOf(state, key);
+  const outPokemonId = targetSide.party[targetSide.activeIndex].slot.pokemonId;
+  const entryMessages: string[] = [];
+  performSwitch(state, key, toIndex, entryMessages);
+  const inPokemonId = sideOf(state, key).party[sideOf(state, key).activeIndex].slot.pokemonId;
+  return { nextState: state, entryMessages, outPokemonId, inPokemonId };
 }
 
 /**
@@ -4537,7 +4632,8 @@ export function runTurn(
     const side = sideOf(state, key);
     const fromIndex = side.activeIndex;
     const outgoing = side.party[fromIndex];
-    performSwitch(state, key, action.toIndex);
+    const entryMessages: string[] = [];
+    performSwitch(state, key, action.toIndex, entryMessages);
     if (side.activeIndex !== fromIndex) {
       didSwitch[key] = true;
       switches.push({
@@ -4546,6 +4642,7 @@ export function runTurn(
         toIndex: action.toIndex,
         outPokemonId: outgoing.slot.pokemonId,
         inPokemonId: side.party[action.toIndex].slot.pokemonId,
+        entryMessages,
       });
     }
   }
