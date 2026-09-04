@@ -2686,7 +2686,8 @@
     "tags": [
       "도주"
     ],
-    "makesContact": false
+    "makesContact": false,
+    "passesStatsOnSelfSwitch": true
   },
   {
     "id": "벌레먹기",
@@ -2972,7 +2973,8 @@
       "도주",
       "접촉"
     ],
-    "makesContact": true
+    "makesContact": true,
+    "selfSwitchAfterDamage": true
   },
   {
     "id": "저주",
@@ -6860,7 +6862,8 @@
       "도주",
       "비접촉"
     ],
-    "makesContact": false
+    "makesContact": false,
+    "selfSwitchAfterDamage": true
   },
   {
     "id": "볼트태클",

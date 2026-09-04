@@ -1720,10 +1720,35 @@ function performSwitch(
   log: string[] = [],
   /** 자기 의지로 교체했으면 true(runTurn 교체 액션). 기절 후 강제 교체(applySwitch)면 false — 가속 발동. */
   voluntary = true,
+  /** 배턴터치: 물러나는 포켓몬의 랭크·급소랭크·대타·멸망카운트·일부 volatile을 새로 나온 포켓몬이 이어받는다. */
+  passBaton = false,
 ): void {
   const side = sideOf(state, key);
   if (toIndex === side.activeIndex || toIndex < 0 || toIndex >= side.party.length) return;
   const outgoing = side.party[side.activeIndex];
+
+  // ── 배턴터치: 아래에서 outgoing 상태를 초기화하기 전에 인계할 값을 미리 스냅샷 ──
+  const BATON_VOLATILE_KEYS: VolatileCondition[] = [
+    "confusion",
+    "ingrain",
+    "aquaRing",
+    "leechSeed",
+    "syrupCoat",
+  ];
+  const baton = passBaton
+    ? {
+        stages: { ...outgoing.stages },
+        accuracyStages: { ...outgoing.accuracyStages },
+        critStage: outgoing.critStage,
+        substituteHp: outgoing.substituteHp,
+        perishCount: outgoing.perishCount,
+        volatiles: BATON_VOLATILE_KEYS.reduce<VolatileConditionState["active"]>((acc, k) => {
+          const entry = outgoing.volatile.active[k];
+          if (entry) acc[k] = entry;
+          return acc;
+        }, {}),
+      }
+    : undefined;
 
   // ── 물러나는 포켓몬: 재생력·자연회복(살아서 물러날 때만) ──
   // 별도 로그 문구는 내지 않는다(사용자 결정 2026-09-03) — 파티 트래커의 HP 바 회복·상태이상
@@ -1783,6 +1808,18 @@ function performSwitch(
 
   // 가속 억제(§8): 자발적 교체로 나온 턴엔 가속이 발동하지 않는다. 강제 교체(voluntary=false)면 세우지 않음.
   incoming.switchedInThisTurn = voluntary || undefined;
+
+  // ── 배턴터치: 스냅샷해둔 랭크·대타·volatile을 새로 나온 포켓몬에게 인계 ──
+  // 등장 파이프라인(위협·설치물)보다 먼저 얹어야 위협이 인계된 공격 랭크 위에 정상 적용된다.
+  if (baton) {
+    incoming.stages = baton.stages;
+    incoming.accuracyStages = baton.accuracyStages;
+    incoming.critStage = baton.critStage;
+    if (baton.substituteHp !== undefined) incoming.substituteHp = baton.substituteHp;
+    if (baton.perishCount !== undefined) incoming.perishCount = baton.perishCount;
+    incoming.volatile = { active: { ...incoming.volatile.active, ...baton.volatiles } };
+  }
+
   // 킬가르도: 등장 시 항상 실드폼으로 복귀
   if (incoming.stanceChangeForms) incoming.currentStanceForm = "shield";
   // 기분파·의태: 등장 시점의 날씨/필드에 맞춰 타입 정렬
@@ -1812,8 +1849,17 @@ export interface ApplySwitchOutcome {
 /**
  * 강제 교체(기절 후) 또는 UI 교체 확정을 적용한 새 상태를 돌려준다. runTurn 밖에서 호출하며
  * prevState는 변형하지 않는다. turnNumber는 그대로 둔다(교체는 턴을 소비하지 않는 별도 조작).
+ *
+ * opts.voluntary: 유턴·볼트체인지·배턴터치 같은 자체 교체면 true(가속 억제). 기절 후 강제 교체면
+ *   생략(false) — 새로 나온 포켓몬의 가속이 정상 발동한다.
+ * opts.passBaton: 배턴터치면 true — 물러나는 포켓몬의 랭크·대타·일부 volatile을 인계한다.
  */
-export function applySwitch(prevState: BattleState, key: FighterKey, toIndex: number): ApplySwitchOutcome {
+export function applySwitch(
+  prevState: BattleState,
+  key: FighterKey,
+  toIndex: number,
+  opts: { voluntary?: boolean; passBaton?: boolean } = {},
+): ApplySwitchOutcome {
   const sideA = cloneSide(prevState.sideA);
   const sideB = cloneSide(prevState.sideB);
   const state: BattleState = {
@@ -1832,8 +1878,7 @@ export function applySwitch(prevState: BattleState, key: FighterKey, toIndex: nu
   const targetSide = sideOf(state, key);
   const outPokemonId = targetSide.party[targetSide.activeIndex].slot.pokemonId;
   const entryMessages: string[] = [];
-  // applySwitch는 기절 후 강제 교체 전용 — voluntary=false라 다음 턴 가속이 정상 발동한다.
-  performSwitch(state, key, toIndex, entryMessages, false);
+  performSwitch(state, key, toIndex, entryMessages, opts.voluntary ?? false, opts.passBaton ?? false);
   const inPokemonId = sideOf(state, key).party[sideOf(state, key).activeIndex].slot.pokemonId;
   return { nextState: state, entryMessages, outPokemonId, inPokemonId };
 }
@@ -2087,7 +2132,12 @@ function resolveAction(
       if (encoreEntry.moveId !== move.id) restrictionBlockedKind ??= "encore";
       attacker.volatile = consumeVolatileTurn(attacker.volatile, "encore");
     }
-    if (restrictionBlockedKind) return blocked("moveRestricted", 0, { moveRestrictionKind: restrictionBlockedKind });
+    // 발버둥은 이 제약들을 전부 무시하고 나간다(본가 규칙): 앙코르로 변화기가 강제됐는데 도발로
+    // 그 변화기를 못 쓰는 등, 고를 수 있는 기술이 하나도 없을 때의 폴백. 지속 턴수는 위에서 이미
+    // 소모시켰으므로 앙코르·도발·사슬묶기 카운트다운은 정상 진행된다(백로그 §7-5).
+    if (restrictionBlockedKind && move.id !== STRUGGLE_MOVE.id) {
+      return blocked("moveRestricted", 0, { moveRestrictionKind: restrictionBlockedKind });
+    }
   }
 
   // 2-1) 사이코필드: 우선도 +1 이상인 기술이 "상대를 겨냥"하면 그 기술 자체가 실패한다.
@@ -4745,6 +4795,13 @@ export interface RunTurnOutcome {
    * 편은 이미 패배(result.winner)라 여기 안 실린다. 파티 길이 1이면 항상 undefined.
    */
   forcedSwitch?: { a?: boolean; b?: boolean };
+  /**
+   * 유턴·볼트체인지·배턴터치처럼 명중해서 효과를 준 뒤 사용측이 "자발적으로" 교체해야 하는 편
+   * (백로그 §7-2). 호출부는 교체 슬롯을 고르게 한 뒤 applySwitch({ voluntary: true, passBaton })로
+   * 확정하고 같은 턴을 이어간다. 교대할 슬롯이 없으면 여기 안 실린다(교체 없이 턴 종료).
+   * 활성이 유턴에 같이 쓰러졌으면 selfSwitch가 아니라 forcedSwitch로 나간다.
+   */
+  selfSwitch?: { a?: { passBaton: boolean }; b?: { passBaton: boolean } };
 }
 
 /**
@@ -4937,6 +4994,9 @@ export function runTurn(
 
   const actions: ActionLogEntry[] = [];
   let winner: FighterKey | "draw" | undefined;
+  // 자폭 콤보(자폭·대폭발·목숨걸기, 길동무 반사, 생명의구슬/반동 동반 기절)로 활성끼리 동반
+  // 기절한 경우, 이번 턴 행동 루프만 끊고 승패는 예비 슬롯을 본 뒤 턴 종료 블록에서 가른다(§7-1).
+  let selfDestructComboKey: FighterKey | undefined;
 
   for (const key of order) {
     if (didSwitch[key]) continue; // 이번 턴 교체한 쪽은 행동하지 않는다(교체가 곧 그 턴 행동)
@@ -4949,10 +5009,11 @@ export function runTurn(
 
     // 발버둥 반동이나 자폭류로 "상대를 쓰러뜨리면서 자신도 같이 쓰러지는" 행동 하나 안에서는
     // resolveAction이 항상 상대 데미지를 먼저 적용한 뒤에 반동/자멸을 적용하도록 순서를 지킨다
-    // (위 코드 참고) — 즉 상대가 이 행동으로 먼저 쓰러진 뒤에 자신이 쓰러진 것이므로, 실제
-    // 게임처럼 이 행동을 한 쪽이 승자가 된다. 무승부가 아니다.
+    // (위 코드 참고) — 즉 상대가 이 행동으로 먼저 쓰러진 뒤에 자신이 쓰러진 것이라 인과가 있다.
+    // 예비 슬롯이 남았으면 배틀을 끝내지 않고 강제 교체로 넘겨야 하므로(§7-1), 여기선 행동
+    // 루프만 끊고 승패 판정은 hasLivingReserve를 계산한 뒤 아래에서 처리한다.
     if (action.fainted && action.selfFainted) {
-      winner = key;
+      selfDestructComboKey = key;
       break;
     }
   }
@@ -4961,8 +5022,8 @@ export function runTurn(
   // 멸망의노래로 이번 턴 종료에 쓰러진 쪽(F-4) — 양쪽 다면 스피드 느린 쪽이 승리한다.
   const perishFaintedKeys = new Set<FighterKey>();
 
-  // winner가 이미 액션 중 자폭 콤보로 정해졌으면, 배틀이 그 시점에 끝난 것이니
-  // 턴 종료 회복/상태이상 데미지는 더 진행하지 않는다(실제 게임에서도 배틀이 이미 끝났다).
+  // 자폭 콤보로 활성끼리 동반 기절했으면(selfDestructComboKey) 두 활성이 모두 isFainted라
+  // 이 블록은 건너뛴다 — 둘 다 쓰러진 시점의 턴 종료 회복/상태이상 데미지는 의미가 없다.
   if (!winner && !isFainted(state.a) && !isFainted(state.b)) {
     for (const key of (["a", "b"] as const)) {
       const fighter = state[key];
@@ -5428,6 +5489,24 @@ export function runTurn(
   const aHasReserve = hasLivingReserve(state.sideA);
   const bHasReserve = hasLivingReserve(state.sideB);
 
+  // 자폭 콤보로 활성끼리 동반 기절한 경우(§7-1). 아래 generic 무승부 블록은 "각자 따로
+  // 쓰러진 것이라 인과가 없다"는 전제라 여기에 흘리면 예비 슬롯이 남아도 배틀이 끝나버린다.
+  // 콤보를 실행한 쪽이 상대를 먼저 쓰러뜨렸다는 인과를 살려, 예비 슬롯을 보고 여기서 가른다.
+  if (!winner && selfDestructComboKey) {
+    const comboKey = selfDestructComboKey;
+    const foeKey = opponentKey(comboKey);
+    const comboHasReserve = comboKey === "a" ? aHasReserve : bHasReserve;
+    const foeHasReserve = foeKey === "a" ? aHasReserve : bHasReserve;
+    if (!comboHasReserve && !foeHasReserve) {
+      winner = comboKey; // 양쪽 다 예비 없음 → 상대를 먼저 쓰러뜨린 콤보 실행 쪽 승리
+    } else if (!comboHasReserve) {
+      winner = foeKey; // 콤보 실행 쪽만 전멸
+    } else if (!foeHasReserve) {
+      winner = comboKey; // 상대만 전멸
+    }
+    // 둘 다 예비 있음 → winner 미정: 아래 forcedSwitch가 양쪽 강제 교체를 요구한다
+  }
+
   // 멸망의노래로 양쪽이 동시에 쓰러졌으면 무승부가 아니라 스피드가 느린 쪽이 승리한다(F-4) —
   // 빠른 쪽이 먼저 쓰러지는 것으로 취급. 랭크 반영 실효 스피드로 비교(트릭룸은 무관).
   // 단 어느 한쪽이라도 교대할 슬롯이 남아 있으면 배틀은 안 끝나고 강제 교체로 넘어간다(§3).
@@ -5455,6 +5534,26 @@ export function runTurn(
           b: isFainted(state.b) && bHasReserve ? true : undefined,
         }
       : undefined;
+
+  // 유턴·볼트체인지·배턴터치(백로그 §7-2): 명중해서 효과를 준 뒤 사용측이 자발적으로 교체한다.
+  // 빗나감·행동불능·완전 무효(0배)면 교체하지 않고, 사용자가 같이 쓰러졌으면(록키헬멧 등)
+  // forcedSwitch로 이미 처리되므로 여기선 뺀다. 교대할 슬롯이 없어도 교체하지 않는다.
+  let selfSwitch: { a?: { passBaton: boolean }; b?: { passBaton: boolean } } | undefined;
+  if (!winner) {
+    for (const key of order) {
+      const act = actions.find((a) => a.actor === key);
+      if (!act) continue;
+      const mv = act.move;
+      if (!mv.selfSwitchAfterDamage && !mv.passesStatsOnSelfSwitch) continue;
+      // 빗나감·행동불능·완전 무효(0배)·방어류 차단·특성 흡수(전기흡수·번개엔진 등)면 교체하지 않는다.
+      if (act.blockedReason || !act.hit || act.typeEffectiveness === 0) continue;
+      if (act.blockedByProtectMoveName || act.hitNegatedByAbilityName || act.abilityAbsorbAbilityName) continue;
+      if (isFainted(state[key])) continue;
+      const keyHasReserve = key === "a" ? aHasReserve : bHasReserve;
+      if (!keyHasReserve) continue;
+      (selfSwitch ??= {})[key] = { passBaton: !!mv.passesStatsOnSelfSwitch };
+    }
+  }
 
   // 필드 지속 턴 카운트다운. 0이 되면 이번 턴을 끝으로 필드가 사라진다.
   let fieldExpired = false;
@@ -5530,5 +5629,6 @@ export function runTurn(
       activePokemonIds: { a: state.a.slot.pokemonId, b: state.b.slot.pokemonId },
     },
     forcedSwitch,
+    selfSwitch,
   };
 }
