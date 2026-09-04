@@ -575,6 +575,27 @@
   margin-bottom: 0.4rem;
 }
 
+/* §4: 메가진화 선언 토글 */
+.battle-mega-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.5rem;
+  padding: 0.35rem 0.55rem;
+  border: 1px solid var(--violet);
+  border-radius: 8px;
+  background: var(--violet-soft);
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--violet);
+  cursor: pointer;
+  user-select: none;
+}
+
+.battle-mega-toggle input {
+  cursor: pointer;
+}
+
 .battle-input-toggle-btn {
   flex: 1;
   padding: 0.25rem 0.5rem;
