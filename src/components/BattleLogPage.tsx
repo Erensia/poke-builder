@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { BattleSetupCard } from "./BattleSetupCard";
 import { WeatherPicker } from "./WeatherPicker";
 import { PokemonPickerModal } from "./PokemonPickerModal";
@@ -302,12 +302,12 @@ export function BattleLogPage() {
     const fighter = battleState[side];
     const pokemonName = activePokemon(side)?.name ?? "포켓몬";
     if (fighter.volatile.active.taunt && getMove(moveId)?.category === "status") {
-      return `${pokemonName}${eunNeun(pokemonName)} 도발에 걸려 변화기를 사용할 수 없어요.`;
+      return `${pokemonName}${eunNeun(pokemonName)} 도발에 걸려 변화기를 쓸 수 없다!`;
     }
     const disableEntry = fighter.volatile.active.disable;
     if (disableEntry && disableEntry.moveId === moveId) {
       const disabledName = getMove(moveId)?.name ?? "그 기술";
-      return `${disabledName}${eunNeun(disabledName)} 사슬묶기에 걸려 사용할 수 없어요.`;
+      return `${disabledName}${eunNeun(disabledName)} 사슬묶기에 걸려 쓸 수 없다!`;
     }
     const encoreEntry = fighter.volatile.active.encore;
     if (encoreEntry?.moveId && encoreEntry.moveId !== moveId) {
@@ -421,7 +421,7 @@ export function BattleLogPage() {
       if (locked && chosen !== locked) {
         const lockedMoveName = getMove(locked)?.name ?? "그 기술";
         const pokemonName = activePokemon(side)?.name ?? "포켓몬";
-        setLockWarning(`${pokemonName}${eunNeun(pokemonName)} 구애스카프 때문에 ${lockedMoveName}만 사용할 수 있어요.`);
+        setLockWarning(`${pokemonName}${eunNeun(pokemonName)} 구애스카프 때문에 ${lockedMoveName}만 쓸 수 있다!`);
         return;
       }
       const restriction = moveRestrictionMessage(side, chosen);
@@ -480,17 +480,18 @@ export function BattleLogPage() {
       </header>
 
       {!battleState && (
-        <>
-          <div className="battle-setup-board">
-            {(["a", "b"] as const).map((side) => (
-              <div key={side} className="battle-setup-column">
+        <div className="battle-setup-board">
+          {(["a", "b"] as const).map((side) => (
+            <Fragment key={side}>
+              <div className="battle-setup-column">
                 <div className="battle-setup-column-title">
-                  {side === "a" ? "내 파티" : "상대 파티"} <span className="battle-setup-column-hint">첫 슬롯이 리드</span>
+                  {side === "a" ? "내 파티" : "상대 파티"}{" "}
+                  <span className="battle-setup-column-hint">첫 슬롯이 리드</span>
                 </div>
                 {SLOT_INDICES.map((i) => (
                   <BattleSetupCard
                     key={i}
-                    label={`${side === "a" ? "내 포켓몬" : "상대 포켓몬"} ${i + 1}${i === 0 ? " (리드)" : ""}`}
+                    label={`${side === "a" ? "내 포켓몬" : "상대 포켓몬"} ${i + 1}${i === 0 ? " (선출)" : ""}`}
                     slot={slotCtl(side, i).slot}
                     onPickPokemon={() => setPicker({ kind: "pokemon", side, slotIndex: i })}
                     onClearPokemon={slotCtl(side, i).clearPokemon}
@@ -508,12 +509,24 @@ export function BattleLogPage() {
                   />
                 ))}
               </div>
-            ))}
-          </div>
-          <button type="button" className="battle-start-button" disabled={!canStart} onClick={startBattle}>
-            대전 시작
-          </button>
-        </>
+              {side === "a" && (
+                <div className="battle-setup-center">
+                  <div className="battle-setup-vs" aria-hidden="true">
+                    VS
+                  </div>
+                  <button
+                    type="button"
+                    className="battle-start-button"
+                    disabled={!canStart}
+                    onClick={startBattle}
+                  >
+                    대전 시작
+                  </button>
+                </div>
+              )}
+            </Fragment>
+          ))}
+        </div>
       )}
 
       {battleState && (
@@ -599,12 +612,17 @@ export function BattleLogPage() {
                       {(Object.keys(fighter.volatile.active) as (keyof typeof VOLATILE_LABELS)[]).map((v) => {
                         // 사슬묶기/앙코르는 대상 기술 이름까지 같이 보여줘야 어떤 기술이
                         // 막혔는지/강제됐는지 알 수 있다.
-                        const moveId = fighter.volatile.active[v]?.moveId;
-                        const moveName = moveId ? getMove(moveId)?.name : undefined;
+                        const entry = fighter.volatile.active[v];
+                        const moveName = entry?.moveId ? getMove(entry.moveId)?.name : undefined;
+                        // 남은 턴수가 유한한 것(도발·앙코르·사슬묶기·속박·물엿범벅·혼란·졸음)만 " N턴"을
+                        // 붙인다(§5-5). 뿌리박기·아쿠아링·씨뿌리기·헤롱헤롱·소금절이는 배틀 끝까지라
+                        // 999 센티넬 → 표기 안 함.
+                        const turns = entry && entry.turnsRemaining < 900 ? entry.turnsRemaining : undefined;
                         return (
                           <span key={v} className="battle-status-tag is-volatile">
                             {VOLATILE_LABELS[v]}
                             {moveName && `(${moveName})`}
+                            {turns !== undefined && ` ${turns}턴`}
                           </span>
                         );
                       })}
@@ -726,7 +744,9 @@ export function BattleLogPage() {
                         <div className="battle-switch-panel">
                           <div className="battle-switch-panel-title">
                             {pokemon.name}
-                            {eunNeun(pokemon.name)} 쓰러졌어요 — 내보낼 포켓몬을 선택하세요
+                            {eunNeun(pokemon.name)} 쓰러졌다!
+                            <br />
+                            내보낼 포켓몬을 선택하세요!
                           </div>
                           <div className="battle-switch-list">
                             {benchIdx.map((i) => (
@@ -791,7 +811,7 @@ export function BattleLogPage() {
                           </div>
                         ) : fighter.chargingMoveId ? (
                           <div className="battle-struggle-notice">
-                            {getMove(fighter.chargingMoveId)?.name ?? "기술"} 준비 중 — 다음 턴 자동으로 발동돼요!
+                            {getMove(fighter.chargingMoveId)?.name ?? "기술"} 준비 중...
                           </div>
                         ) : !isStruggling(side) ? (
                     <>
@@ -837,7 +857,7 @@ export function BattleLogPage() {
                                       : suckerPunchHint
                                       ? "상대보다 먼저 움직이면서, 상대가 데미지 기술을 낼 때만 성공해요"
                                       : choiceLocked
-                                      ? "구애스카프 때문에 이 기술은 지금 선택할 수 없어요"
+                                      ? "구애스카프 때문에 지금은 이 기술을 쓸 수 없다"
                                       : restrictionMsg ?? undefined
                             }
                             onClick={() => {
@@ -860,7 +880,7 @@ export function BattleLogPage() {
                       return (
                         <div className="battle-switch-panel">
                           <div className="battle-switch-panel-title">
-                            {getMove(sel.moveId)?.name ?? "기술"} 명중 시 나올 포켓몬을 선택하세요
+                            {getMove(sel.moveId)?.name ?? "기술"} 명중하면 나올 포켓몬을 선택하세요!
                           </div>
                           <div className="battle-switch-list">
                             {benchIdx.map((i) => (
@@ -886,14 +906,13 @@ export function BattleLogPage() {
                     })()}
                     </>
                         ) : (
-                          // PP가 전부 0 / 구애류 잠긴 기술 PP 0 / 앙코르·도발 등으로 고를 수 있는
-                          // 기술이 하나도 없음 — 어느 경우든 발버둥이 자동으로 나간다
+                          // PP 전부 0 / 구애류 잠긴 기술 PP 0 / 앙코르·도발 등으로 고를 수 있는
+                          // 기술이 하나도 없음 — 어느 경우든 발버둥이 자동으로 나간다(§5-2)
                           <div className="battle-struggle-notice">
-                            {!hasUsableMove(fighter)
-                              ? "사용 가능한 기술이 없어요 — 발버둥이 자동으로 나갑니다!"
-                              : lockedMoveId !== null && (fighter.remainingPp[lockedMoveId] ?? 0) <= 0
-                                ? "구애류 도구로 잠긴 기술의 PP가 다 됐어요 — 발버둥이 자동으로 나갑니다!"
-                                : "쓸 수 있는 기술이 없어요 (앙코르·도발 등) — 발버둥이 자동으로 나갑니다!"}
+                            {pokemon.name}
+                            {eunNeun(pokemon.name)} 사용할 수 있는 기술이 없다!
+                            <br />
+                            {pokemon.name}의 발버둥!
                           </div>
                         )}
                       </>
@@ -920,7 +939,7 @@ export function BattleLogPage() {
               </button>
             </div>
           ) : pendingForcedSwitch ? (
-            <div className="battle-lock-warning">쓰러진 포켓몬 자리를 교대해야 다음 턴을 진행할 수 있어요.</div>
+            <div className="battle-lock-warning">내보낼 포켓몬을 선택하세요!</div>
           ) : (
             <>
               <button
@@ -961,11 +980,11 @@ export function BattleLogPage() {
                     const inName = getPokemon(sw.inPokemonId)?.name ?? "포켓몬";
                     return (
                       <div key={`sw-${i}`}>
-                        <div className="battle-turn-line">
-                          {sw.fromIndex < 0
-                            ? `${inName} 등장!`
-                            : `${outName}${eunNeun(outName)} 뒤로 물러났다 — ${inName} 등장!`}
-                        </div>
+                        {/* 본가 스타일 2줄(§5-2). fromIndex<0(강제 교체 합성 카드)이면 물러나는 줄 없음 */}
+                        {sw.fromIndex >= 0 && (
+                          <div className="battle-turn-line">돌아와! {outName}!</div>
+                        )}
+                        <div className="battle-turn-line">가라! {inName}!</div>
                         {sw.entryMessages.map((m, j) => (
                           <div key={`swm-${i}-${j}`} className="battle-turn-line is-muted">
                             {m}
@@ -1020,7 +1039,7 @@ export function BattleLogPage() {
                           action.charging &&
                           (CHARGE_TURN_MESSAGE[action.move.id]
                             ? ` — ${actorName}${CHARGE_TURN_MESSAGE[action.move.id]}`
-                            : " — 준비 중! 다음 턴 발동된다")}
+                            : " — 준비 중...")}
                         {!action.blockedReason && !action.charging && action.evadedByCharge && " — 무적 상태라 빗나감"}
                         {!action.blockedReason && !action.charging && !action.evadedByCharge && !action.hit && " — !"}
                         {!action.blockedReason && action.hit && action.damage > 0 && (
@@ -1893,10 +1912,8 @@ export function BattleLogPage() {
                     const inName = getPokemon(sw.inPokemonId)?.name ?? "포켓몬";
                     return (
                       <div key={`swa-${i}`}>
-                        <div className="battle-turn-line">
-                          {outName}
-                          {eunNeun(outName)} 뒤로 물러났다 — {inName} 등장!
-                        </div>
+                        <div className="battle-turn-line">돌아와! {outName}!</div>
+                        <div className="battle-turn-line">가라! {inName}!</div>
                         {sw.entryMessages.map((m, j) => (
                           <div key={`swam-${i}-${j}`} className="battle-turn-line is-muted">
                             {m}
