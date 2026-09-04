@@ -241,6 +241,12 @@ export interface BattleFighterState {
    */
   disguiseBroken?: boolean;
   /**
+   * 일루전(Illusion, 조로아크류): 위장 중이면 위장 대상 포켓몬의 종 id. 등장 시 세팅되고
+   * (파티 마지막 슬롯 = 자신 아님·안 쓰러짐), 기술 데미지를 받는 순간 undefined로 풀린다(§6-1).
+   * 타입·실능·특성 계산엔 전혀 영향을 주지 않는다 — UI 이름/아이콘 표시에만 쓴다.
+   */
+  illusionAs?: string;
+  /**
    * 변신(Move.transformsIntoTarget)·괴짜(Ability.transformsIntoOpponentOnEntry)로 상대로 변신한
    * 상태면 true. 타입·5실능(HP 제외)·특성·능력 랭크·기술(PP 5)을 상대 것으로 갈아치운 뒤 이 플래그를
    * 세운다. 교체가 없는 1v1이라 한 번 변신하면 배틀 끝까지 유지되고, 재변신은 실패한다.
@@ -255,11 +261,6 @@ export interface BattleFighterState {
    * 턴이 오면(행동불능인 턴 포함) 예약이 사라진다"는 본가 규칙과 대응.
    */
   destinyBondArmed?: boolean;
-  /**
-   * 리플렉터(물리)/빛의장막(특수) — 이 포켓몬 쪽에 걸려있는 스크린과 각각의 남은 턴 수.
-   * "아군이 받는 데미지 감소"라 1v1에서는 이 포켓몬 자신이 상대 공격을 맞을 때 적용된다.
-   */
-  screens: Partial<Record<"reflect" | "lightScreen" | "auroraVeil", number>>;
   /**
    * 타오르는불꽃처럼 "이 타입 기술을 무효화한 이후로 자신이 쓰는 그 타입 기술 위력이 오른다"는
    * 특성이 실제로 발동한 적 있으면 그 배수가 채워진다(교체가 없는 1v1이라 배틀 끝까지 유지).
@@ -379,6 +380,12 @@ export interface BattleSide {
   party: BattleFighterState[];
   activeIndex: number;
   hazards: HazardState;
+  /**
+   * 리플렉터(물리 반감)/빛의장막(특수 반감)/오로라베일(양쪽 반감) — 이 편 전체에 걸려 있는
+   * 스크린과 각각의 남은 턴 수(백로그 §6-3). 편 단위 효과라 교체해도 남는다. 설치물(hazards)과
+   * 같은 축.
+   */
+  screens: Partial<Record<"reflect" | "lightScreen" | "auroraVeil", number>>;
 }
 
 /**
@@ -590,7 +597,6 @@ export function createFighterState(slot: EvaluatorSlot, moves: Move[]): BattleFi
     stockpileCount: 0,
     usedMoveIds: {},
     currentItemId: slot.item ?? null,
-    screens: {},
     ownMoveTypeBoosts: {},
     stanceChangeForms: pokemon.stanceChangeForms,
     currentStanceForm: pokemon.stanceChangeForms ? "shield" : undefined,
@@ -863,19 +869,8 @@ function resolveEntryAbilityEffects(
   let fieldTurnsRemaining: number | undefined;
   const announcements: string[] = [];
 
-  // 배리어프리(Screen Cleaner): 등장 시 양쪽 스크린(리플렉터/빛의장막/오로라베일)을 전부 없앤다.
-  // 속도 순서와 무관한 1회 효과라 루프 밖에서 먼저 처리한다.
-  if (aAbility?.clearsAllScreensOnEntry || bAbility?.clearsAllScreensOnEntry) {
-    const cleanerSlot = aAbility?.clearsAllScreensOnEntry ? aSlot : bSlot;
-    const cleanerAbility = aAbility?.clearsAllScreensOnEntry ? aAbility : bAbility;
-    const cleanerName = getPokemon(cleanerSlot.pokemonId)?.name ?? "포켓몬";
-    const hadAny = Object.keys(aFighter.screens).length > 0 || Object.keys(bFighter.screens).length > 0;
-    aFighter.screens = {};
-    bFighter.screens = {};
-    if (hadAny) {
-      announcements.push(`${cleanerName}의 ${cleanerAbility?.name}! 양쪽의 빛의장막과 리플렉터가 사라졌다!`);
-    }
-  }
+  // 배리어프리(Screen Cleaner)의 스크린 제거는 배틀 시작 시점엔 스크린이 없어 무의미하다.
+  // 교체로 등장할 때는 applyEntryAbilityOnSwitchIn이 편(side) 스크린을 지운다(§6-3).
 
   for (const { slot, fighter, ability, opponent, opponentSlot } of order) {
     if (!ability) continue;
@@ -1007,8 +1002,8 @@ export function createBattleState(init: { a: SideInit; b: SideInit; weather?: We
   const state: BattleState = {
     a: fighterA,
     b: fighterB,
-    sideA: { party: partyA, activeIndex: leadA, hazards: emptyHazardState() },
-    sideB: { party: partyB, activeIndex: leadB, hazards: emptyHazardState() },
+    sideA: { party: partyA, activeIndex: leadA, hazards: emptyHazardState(), screens: {} },
+    sideB: { party: partyB, activeIndex: leadB, hazards: emptyHazardState(), screens: {} },
     weather: resolvedWeather,
     weatherTurnsRemaining,
     field: entryField,
@@ -1022,6 +1017,15 @@ export function createBattleState(init: { a: SideInit; b: SideInit; weather?: We
   // 의태(메더): 등장 시점 필드에 맞춰 타입을 맞춰둔다(첫 턴 시작 훅이 안내는 따로 낸다).
   applyMimicryForm(state.a, state.field);
   applyMimicryForm(state.b, state.field);
+
+  // 일루전(§6-1): 리드가 조로아크류면 배틀 시작 시점부터 파티 마지막 슬롯 모습으로 위장한다.
+  for (const key of ["a", "b"] as const) {
+    const f = state[key];
+    if (f.effectiveAbilityId && getAbility(f.effectiveAbilityId)?.illusion) {
+      const s = sideOf(state, key);
+      f.illusionAs = computeIllusionTarget(s.party, s.activeIndex);
+    }
+  }
   return state;
 }
 
@@ -1378,6 +1382,8 @@ export interface ActionLogEntry {
   hitNegatedByAbilityName?: string;
   /** hitNegatedByAbilityName이 발동하며(=탈이 벗겨지며) 방어측이 입은 반동 데미지 */
   disguiseRecoilDamage?: number;
+  /** 일루전(§6-1): 이 행동으로 방어측 조로아크의 위장이 풀렸으면 그 조로아크의 진짜 종 id(로그 문구용) */
+  illusionBrokenSpeciesId?: string;
   /**
    * 길동무: 이 행동(공격측의 공격)으로 상대가 쓰러졌는데, 상대가 길동무 예약 상태였어서
    * 공격측도 같이 쓰러졌으면 true. fainted/selfFainted 둘 다 이미 true로 채워지지만, UI가
@@ -1550,17 +1556,17 @@ function cloneFighter(fighter: BattleFighterState): BattleFighterState {
     volatile: { active: { ...fighter.volatile.active } },
     remainingPp: { ...fighter.remainingPp },
     usedMoveIds: { ...fighter.usedMoveIds },
-    screens: { ...fighter.screens },
     ownMoveTypeBoosts: { ...fighter.ownMoveTypeBoosts },
   };
 }
 
-/** 편(side) 전체를 깊은 복사한다 — 파티 슬롯 전원 + 설치물. runTurn이 prevState를 안 건드리게 쓴다. */
+/** 편(side) 전체를 깊은 복사한다 — 파티 슬롯 전원 + 설치물 + 스크린. runTurn이 prevState를 안 건드리게 쓴다. */
 function cloneSide(side: BattleSide): BattleSide {
   return {
     party: side.party.map(cloneFighter),
     activeIndex: side.activeIndex,
     hazards: { ...side.hazards },
+    screens: { ...side.screens },
   };
 }
 
@@ -1580,6 +1586,18 @@ function isGroundedForHazards(fighter: BattleFighterState): boolean {
   const ab = abilityOf(fighter);
   if (ab?.grantsImmunityToTypes?.includes("땅")) return false;
   return true;
+}
+
+/**
+ * 일루전(§6-1): selfIndex 슬롯의 조로아크가 위장할 대상 종 id. 파티 뒤에서부터 스캔해
+ * "자신 아님 + 안 쓰러짐"인 첫 슬롯의 종을 쓴다(본가: 마지막 포켓몬 모습). 없으면 undefined(위장 안 함).
+ */
+function computeIllusionTarget(party: BattleFighterState[], selfIndex: number): string | undefined {
+  for (let i = party.length - 1; i >= 0; i--) {
+    if (i === selfIndex || isFainted(party[i])) continue;
+    return party[i].slot.pokemonId;
+  }
+  return undefined;
 }
 
 /** 압정뿌리기 층수별 등장 데미지 비율 (사용자 확정: 1→1/16 · 2→1/8 · 3→1/4) */
@@ -1658,8 +1676,8 @@ function applyEntryHazardsOnSwitchIn(state: BattleState, key: FighterKey, log: s
  * 교체로 나온 포켓몬 하나에 대해 "등장 시 특성"을 적용한다(Phase 8 §4 골격).
  * createBattleState의 resolveEntryAbilityEffects는 양쪽을 스피드 순으로 동시에 처리하는
  * 배틀 시작 전용이라, 한 마리만 등장하는 교체용으로 이 단일 버전을 따로 둔다.
- * 처리: 위협(상대 랭크 하락) · 가뭄류(날씨) · 일렉트릭메이커류(필드) · 트레이스(상대 특성 복사).
- * (다운로드·기분파 등은 로스터에 없거나 다른 훅에서 처리.)
+ * 처리: 위협(상대 랭크 하락) · 가뭄류(날씨) · 일렉트릭메이커류(필드) · 트레이스(상대 특성 복사) ·
+ * 배리어프리(양쪽 편 스크린 제거, §6-3). (다운로드·기분파 등은 로스터에 없거나 다른 훅에서 처리.)
  */
 function applyEntryAbilityOnSwitchIn(state: BattleState, key: FighterKey, log: string[]): void {
   const self = state[key];
@@ -1668,6 +1686,23 @@ function applyEntryAbilityOnSwitchIn(state: BattleState, key: FighterKey, log: s
   const ability = self.effectiveAbilityId ? getAbility(self.effectiveAbilityId) : undefined;
   if (!ability || isFainted(self)) return;
   const selfName = getPokemon(self.slot.pokemonId)?.name ?? "포켓몬";
+
+  // 배리어프리(Screen Cleaner): 등장 시 양쪽 편의 스크린을 전부 없앤다(§6-3).
+  if (ability.clearsAllScreensOnEntry) {
+    const hadAny =
+      Object.keys(state.sideA.screens).length > 0 || Object.keys(state.sideB.screens).length > 0;
+    state.sideA.screens = {};
+    state.sideB.screens = {};
+    if (hadAny) {
+      log.push(`${selfName}의 ${ability.name}! 양쪽의 빛의장막과 리플렉터가 사라졌다!`);
+    }
+  }
+
+  // 일루전(§6-1): 등장 시 파티 마지막 슬롯 모습으로 위장한다(별도 로그 없음 — 상대는 눈치채지 못한다).
+  if (ability.illusion) {
+    const s = sideOf(state, key);
+    self.illusionAs = computeIllusionTarget(s.party, s.activeIndex);
+  }
 
   // 위협류
   if (ability.lowersOpponentStatOnEntry && !isFainted(opponent)) {
@@ -1799,10 +1834,13 @@ function performSwitch(
   outgoing.consecutiveLockUntilTurn = undefined;
   // 곡예(Unburden): 본가는 "도구를 잃은 뒤 교체하기 전까지"만 2배 유지 — 교체로 물러나면 해제(§8).
   outgoing.unburdenActive = undefined;
+  // 일루전(§6-1): 물러나면 위장 해제 — 다시 나올 때 파티 상태에 맞춰 재계산된다.
+  outgoing.illusionAs = undefined;
   // 유지: currentHp · status(주 상태이상) · remainingPp · itemConsumed · currentItemId ·
   //       consumedBerryId · addedType · timesHitByMoves(교체 초기화 미도입) · ownMoveTypeBoosts ·
   //       disguiseBroken · hungerMode.
-  //   후속: screens(편 기반 미이전 — 알려진 단순화) · transformed(변신 원복 — 메타몽 전용이라 미도입) ·
+  //   스크린(리플렉터/빛의장막/오로라베일)은 편(BattleSide.screens)에 있어 교체해도 그대로 유지된다(§6-3).
+  //   후속: transformed(변신 원복 — 메타몽 전용이라 미도입) ·
   //         wish(그 자리 포켓몬이 받아야 하나 fighter에 붙어 있어 교체로 소멸 — post-1.0 §6).
 
   // ── 활성 슬롯 전환 ──
@@ -1884,7 +1922,9 @@ export function applySwitch(
   const outPokemonId = targetSide.party[targetSide.activeIndex].slot.pokemonId;
   const entryMessages: string[] = [];
   performSwitch(state, key, toIndex, entryMessages, opts.voluntary ?? false, opts.passBaton ?? false);
-  const inPokemonId = sideOf(state, key).party[sideOf(state, key).activeIndex].slot.pokemonId;
+  const inFighter = sideOf(state, key).party[sideOf(state, key).activeIndex];
+  // 일루전(§6-1): 위장 중이면 로그에도 위장 대상 이름이 나가야 상대가 안 눈치챈다.
+  const inPokemonId = inFighter.illusionAs ?? inFighter.slot.pokemonId;
   return { nextState: state, entryMessages, outPokemonId, inPokemonId };
 }
 
@@ -2875,14 +2915,16 @@ function resolveAction(
       berryReducedDamageItemName = defenderItem?.name;
     }
 
-    // 리플렉터(물리)/빛의장막(특수)/오로라베일(물리·특수 둘 다): 방어측 자기 스크린이 걸려있으면
-    // 데미지 반감. 급소는 스크린을 무시한다(본가 규칙) — bulkMultiplier는 나눗셈이라 2를 곱하면
-    // 절반이 된다. 틈새포착이면 스크린 자체를 아예 무시한다(급소 판정과 별개로 항상 1배).
-    // 오로라베일은 카테고리 전용 스크린과 별개 축이라 둘 다 걸려있으면 곱으로 중첩된다.
+    // 리플렉터(물리)/빛의장막(특수)/오로라베일(물리·특수 둘 다): 방어측 편(side)에 스크린이
+    // 걸려있으면 데미지 반감(§6-3 — 편 단위라 교체해도 유지). 급소는 스크린을 무시한다(본가 규칙)
+    // — bulkMultiplier는 나눗셈이라 2를 곱하면 절반이 된다. 틈새포착이면 스크린 자체를 아예
+    // 무시한다(급소 판정과 별개로 항상 1배). 오로라베일은 카테고리 전용 스크린과 별개 축이라
+    // 둘 다 걸려있으면 곱으로 중첩된다. (여기까지 매직미러 반사 스왑 전이라 defenderKey가 정확.)
+    const defenderScreens = sideOf(state, defenderKey).screens;
     const screenType = effectiveMove.category === "physical" ? "reflect" : "lightScreen";
     const screenBypassed = !!attackerAbility?.bypassesScreensAndSubstitute || critical;
-    const categoryScreenActive = !screenBypassed && defender.screens[screenType] !== undefined;
-    const auroraVeilActive = !screenBypassed && defender.screens.auroraVeil !== undefined;
+    const categoryScreenActive = !screenBypassed && defenderScreens[screenType] !== undefined;
+    const auroraVeilActive = !screenBypassed && defenderScreens.auroraVeil !== undefined;
     const screenMultiplier = (categoryScreenActive ? 2 : 1) * (auroraVeilActive ? 2 : 1);
 
     // 관통드릴: 접촉기일 때만 상대 방어/특방 랭크의 "상승분"을 무시한다(날카로운눈의 회피율
@@ -2988,6 +3030,8 @@ function resolveAction(
   // 탈(Disguise): 배틀 중 처음 데미지를 입는 순간에만 발동(disguiseBroken이 아직 false일 때).
   let hitNegatedByAbilityName: string | undefined;
   let disguiseRecoilDamage: number | undefined;
+  // 일루전(§6-1): 이번 행동으로 방어측 조로아크의 위장이 풀렸으면 그 조로아크의 진짜 종 id.
+  let illusionBrokenSpeciesId: string | undefined;
   // 길동무: 데미지 적용 직후 판정하지만, 기합의띠/옹골참/버티기(applyEndurance)로 HP 1로 버텨낸
   // 경우는 애초에 안 쓰러진 것이므로 발동하면 안 된다 — applyEndurance까지 다 끝난 뒤에 판정해야
   // 한다(checkDestinyBond를 별도 호출로 분리한 이유). 다단히트 도중 이미 발동했으면 재판정 안 함.
@@ -3023,6 +3067,11 @@ function resolveAction(
     // 분노의주먹(Move.rageFistPower)용: 이 포켓몬이 기술로 데미지를 받은 누적 횟수(다단히트는 타수만큼).
     if (amount > 0) {
       defender.timesHitByMoves = (defender.timesHitByMoves ?? 0) + 1;
+    }
+    // 일루전(§6-1): 기술 데미지를 실제로 받는 순간 위장이 풀린다. 다단히트면 첫 타에서만 로그를 낸다.
+    if (amount > 0 && defender.illusionAs && defenderAbility?.illusion) {
+      defender.illusionAs = undefined;
+      illusionBrokenSpeciesId = defender.slot.pokemonId;
     }
     // 전기로바꾸기(Electromorphosis): 기술 데미지를 받으면 충전 상태가 된다(다음 전기 기술 위력 2배).
     if (amount > 0 && defenderAbility?.chargesOnDamageTaken && !isFainted(defender)) {
@@ -4508,15 +4557,20 @@ function resolveAction(
     applyForecastForm(state.b, activeWeather(state));
   }
 
-  // 리플렉터/빛의장막: 자신 쪽에 이미 같은 스크린이 걸려있으면 실패(필드/트릭룸과 같은 패턴).
-  // 빛의점토를 지녔으면 지속시간이 늘어난다.
+  // 리플렉터/빛의장막/오로라베일: 자기 편(side)에 이미 같은 스크린이 걸려있으면 실패(필드/트릭룸과
+  // 같은 패턴). 빛의점토를 지녔으면 지속시간이 늘어난다. 스크린은 사용자 자신을 겨냥하는 기술이라
+  // 매직미러 반사 대상이 아니다 — actorKey가 곧 사용자 편(§6-3).
   let screenSetFailed = false;
   if (effectiveMove.setsScreen) {
-    if (attacker.screens[effectiveMove.setsScreen] !== undefined) {
+    const attackerScreens = sideOf(state, actorKey).screens;
+    if (attackerScreens[effectiveMove.setsScreen] !== undefined) {
       screenSetFailed = true;
     } else {
       const screenBonus = attackerItem?.screenDurationBonus ?? 0;
-      attacker.screens = { ...attacker.screens, [effectiveMove.setsScreen]: SCREEN_DURATION + screenBonus };
+      sideOf(state, actorKey).screens = {
+        ...attackerScreens,
+        [effectiveMove.setsScreen]: SCREEN_DURATION + screenBonus,
+      };
     }
   }
 
@@ -4578,15 +4632,16 @@ function resolveAction(
     attacker.stages = applyStageDelta(attacker.stages, boost.stat, contraryDelta(attacker, boost.delta));
   }
 
-  // 레이징불·깨트리기(breaksScreensOnHit): 명중하면 상대 쪽 스크린을 전부 제거한다. 위 데미지
-  // 계산은 스크린이 살아있는 상태로 이미 끝났으니(그 턴엔 아직 경감), 여기서 제거만 한다.
+  // 레이징불·깨트리기(breaksScreensOnHit): 명중하면 상대 편(side) 스크린을 전부 제거한다. 위
+  // 데미지 계산은 스크린이 살아있는 상태로 이미 끝났으니(그 턴엔 아직 경감), 여기서 제거만 한다.
   let brokeScreens: ("reflect" | "lightScreen" | "auroraVeil")[] | undefined;
   if (effectiveMove.breaksScreensOnHit) {
-    const present = (Object.keys(defender.screens) as ("reflect" | "lightScreen" | "auroraVeil")[]).filter(
-      (s) => defender.screens[s] !== undefined,
+    const defenderScreens = sideOf(state, defenderKey).screens;
+    const present = (Object.keys(defenderScreens) as ("reflect" | "lightScreen" | "auroraVeil")[]).filter(
+      (s) => defenderScreens[s] !== undefined,
     );
     if (present.length > 0) {
-      defender.screens = {};
+      sideOf(state, defenderKey).screens = {};
       brokeScreens = present;
     }
   }
@@ -4718,6 +4773,7 @@ function resolveAction(
     hitSubstitute,
     hitNegatedByAbilityName,
     disguiseRecoilDamage,
+    illusionBrokenSpeciesId,
     triggeredDestinyBond: destinyBondTriggered || undefined,
     protectSucceeded,
     protectFailed,
@@ -4862,12 +4918,13 @@ export function runTurn(
     performSwitch(state, key, action.toIndex, entryMessages);
     if (side.activeIndex !== fromIndex) {
       didSwitch[key] = true;
+      const inFighter = side.party[action.toIndex];
       switches.push({
         side: key,
         fromIndex,
         toIndex: action.toIndex,
         outPokemonId: outgoing.slot.pokemonId,
-        inPokemonId: side.party[action.toIndex].slot.pokemonId,
+        inPokemonId: inFighter.illusionAs ?? inFighter.slot.pokemonId, // 일루전 위장 반영(§6-1)
         entryMessages,
       });
     }
@@ -5055,7 +5112,7 @@ export function runTurn(
           fromIndex,
           toIndex,
           outPokemonId: outgoing.slot.pokemonId,
-          inPokemonId: pivotSide.party[toIndex].slot.pokemonId,
+          inPokemonId: pivotSide.party[toIndex].illusionAs ?? pivotSide.party[toIndex].slot.pokemonId, // §6-1
           entryMessages,
           afterMove: true,
         });
@@ -5628,19 +5685,20 @@ export function runTurn(
     }
   }
 
-  // 리플렉터/빛의장막은 필드/날씨와 달리 "양쪽 다 따로" 걸릴 수 있어 각자 카운트다운한다.
+  // 리플렉터/빛의장막/오로라베일은 필드/날씨와 달리 "양쪽 편이 따로" 걸릴 수 있어 각자
+  // 카운트다운한다. 편(side) 단위 상태라 이번 턴 교체가 있었어도 그대로 이어서 줄어든다(§6-3).
   const expiredScreens: { actor: FighterKey; screen: "reflect" | "lightScreen" | "auroraVeil" }[] = [];
   for (const key of (["a", "b"] as const)) {
-    const fighter = state[key];
+    const side = sideOf(state, key);
     for (const screenType of ["reflect", "lightScreen", "auroraVeil"] as const) {
-      const remaining = fighter.screens[screenType];
+      const remaining = side.screens[screenType];
       if (remaining === undefined) continue;
       const next = remaining - 1;
       if (next <= 0) {
-        fighter.screens = { ...fighter.screens, [screenType]: undefined };
+        side.screens = { ...side.screens, [screenType]: undefined };
         expiredScreens.push({ actor: key, screen: screenType });
       } else {
-        fighter.screens = { ...fighter.screens, [screenType]: next };
+        side.screens = { ...side.screens, [screenType]: next };
       }
     }
   }
