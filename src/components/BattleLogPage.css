@@ -107,6 +107,88 @@
   cursor: not-allowed;
 }
 
+/* §3: 빌드 → 선출 화면 */
+.battle-select {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.4rem;
+}
+
+.battle-select-board {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  gap: 2.5rem;
+  flex-wrap: wrap;
+}
+
+.battle-select-column {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  min-width: 240px;
+}
+
+.battle-select-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.battle-select-mon {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  width: 240px;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  cursor: pointer;
+  text-align: left;
+  font-size: 0.9rem;
+}
+
+.battle-select-mon:disabled {
+  cursor: default;
+}
+
+.battle-select-mon.is-picked {
+  border-color: var(--violet);
+  background: var(--violet-soft);
+}
+
+.battle-select-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  flex-shrink: 0;
+  border-radius: 999px;
+  border: 1px dashed var(--border);
+  font-weight: 800;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.battle-select-num.is-on {
+  border-style: solid;
+  border-color: transparent;
+  background: var(--gradient);
+  color: #fff;
+}
+
+.battle-select-name {
+  font-weight: 600;
+}
+
+.battle-select-actions {
+  display: flex;
+  gap: 0.8rem;
+}
+
 /* 구애스카프 잠금 위반으로 턴 진행이 막혔을 때 뜨는 경고 문구 */
 .battle-lock-warning {
   margin-top: 0.5rem;
