@@ -4937,6 +4937,9 @@ export function runTurn(
 
   const actions: ActionLogEntry[] = [];
   let winner: FighterKey | "draw" | undefined;
+  // 자폭 콤보(자폭·대폭발·목숨걸기, 길동무 반사, 생명의구슬/반동 동반 기절)로 활성끼리 동반
+  // 기절한 경우, 이번 턴 행동 루프만 끊고 승패는 예비 슬롯을 본 뒤 턴 종료 블록에서 가른다(§7-1).
+  let selfDestructComboKey: FighterKey | undefined;
 
   for (const key of order) {
     if (didSwitch[key]) continue; // 이번 턴 교체한 쪽은 행동하지 않는다(교체가 곧 그 턴 행동)
@@ -4949,10 +4952,11 @@ export function runTurn(
 
     // 발버둥 반동이나 자폭류로 "상대를 쓰러뜨리면서 자신도 같이 쓰러지는" 행동 하나 안에서는
     // resolveAction이 항상 상대 데미지를 먼저 적용한 뒤에 반동/자멸을 적용하도록 순서를 지킨다
-    // (위 코드 참고) — 즉 상대가 이 행동으로 먼저 쓰러진 뒤에 자신이 쓰러진 것이므로, 실제
-    // 게임처럼 이 행동을 한 쪽이 승자가 된다. 무승부가 아니다.
+    // (위 코드 참고) — 즉 상대가 이 행동으로 먼저 쓰러진 뒤에 자신이 쓰러진 것이라 인과가 있다.
+    // 예비 슬롯이 남았으면 배틀을 끝내지 않고 강제 교체로 넘겨야 하므로(§7-1), 여기선 행동
+    // 루프만 끊고 승패 판정은 hasLivingReserve를 계산한 뒤 아래에서 처리한다.
     if (action.fainted && action.selfFainted) {
-      winner = key;
+      selfDestructComboKey = key;
       break;
     }
   }
@@ -4961,8 +4965,8 @@ export function runTurn(
   // 멸망의노래로 이번 턴 종료에 쓰러진 쪽(F-4) — 양쪽 다면 스피드 느린 쪽이 승리한다.
   const perishFaintedKeys = new Set<FighterKey>();
 
-  // winner가 이미 액션 중 자폭 콤보로 정해졌으면, 배틀이 그 시점에 끝난 것이니
-  // 턴 종료 회복/상태이상 데미지는 더 진행하지 않는다(실제 게임에서도 배틀이 이미 끝났다).
+  // 자폭 콤보로 활성끼리 동반 기절했으면(selfDestructComboKey) 두 활성이 모두 isFainted라
+  // 이 블록은 건너뛴다 — 둘 다 쓰러진 시점의 턴 종료 회복/상태이상 데미지는 의미가 없다.
   if (!winner && !isFainted(state.a) && !isFainted(state.b)) {
     for (const key of (["a", "b"] as const)) {
       const fighter = state[key];
@@ -5427,6 +5431,24 @@ export function runTurn(
   // (파티 길이 1이면 hasLivingReserve가 항상 false라 아래 로직은 기존 1v1과 완전히 동일하게 동작.)
   const aHasReserve = hasLivingReserve(state.sideA);
   const bHasReserve = hasLivingReserve(state.sideB);
+
+  // 자폭 콤보로 활성끼리 동반 기절한 경우(§7-1). 아래 generic 무승부 블록은 "각자 따로
+  // 쓰러진 것이라 인과가 없다"는 전제라 여기에 흘리면 예비 슬롯이 남아도 배틀이 끝나버린다.
+  // 콤보를 실행한 쪽이 상대를 먼저 쓰러뜨렸다는 인과를 살려, 예비 슬롯을 보고 여기서 가른다.
+  if (!winner && selfDestructComboKey) {
+    const comboKey = selfDestructComboKey;
+    const foeKey = opponentKey(comboKey);
+    const comboHasReserve = comboKey === "a" ? aHasReserve : bHasReserve;
+    const foeHasReserve = foeKey === "a" ? aHasReserve : bHasReserve;
+    if (!comboHasReserve && !foeHasReserve) {
+      winner = comboKey; // 양쪽 다 예비 없음 → 상대를 먼저 쓰러뜨린 콤보 실행 쪽 승리
+    } else if (!comboHasReserve) {
+      winner = foeKey; // 콤보 실행 쪽만 전멸
+    } else if (!foeHasReserve) {
+      winner = comboKey; // 상대만 전멸
+    }
+    // 둘 다 예비 있음 → winner 미정: 아래 forcedSwitch가 양쪽 강제 교체를 요구한다
+  }
 
   // 멸망의노래로 양쪽이 동시에 쓰러졌으면 무승부가 아니라 스피드가 느린 쪽이 승리한다(F-4) —
   // 빠른 쪽이 먼저 쓰러지는 것으로 취급. 랭크 반영 실효 스피드로 비교(트릭룸은 무관).
