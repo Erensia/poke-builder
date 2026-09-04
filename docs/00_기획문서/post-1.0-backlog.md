@@ -269,7 +269,11 @@ Phase 8 §S3에서 3슬롯 빌더·교체 UI·강제 교체를 넣으면서 임�
 Phase 8 §S7에서 교체 시 우회 복원(가속·곡예·씨뿌리기류)은 처리했지만, 아래 둘은 교체 인프라만으로는
 안 되고 별도 기능이 필요해 남겼다.
 
-### 6-1. 일루전 (조로아크 / 히스이조로아크)
+> **6-1·6-3 해결 (2026-09-04, 브랜치 `feat/side-based-screens-illusion`).** 6-3 스크린을
+> `BattleSide.screens`로 이전(교체해도 유지) / 6-1 일루전 위장·피격 해제 배선(`Ability.illusion`
+> + `BattleFighterState.illusionAs`). 6-2 희망사항은 우선순위 하로 미착수.
+
+### 6-1. 일루전 (조로아크 / 히스이조로아크)  ✅
 
 - **본가**: 파티의 **마지막 슬롯**에 있다가 등장하면 그 마지막 포켓몬의 **이름·아이콘·성별로 위장**하고,
   데미지를 받는 순간 위장이 풀린다. 타입·실능·특성은 조로아크 그대로(위장은 표시만).
@@ -279,6 +283,10 @@ Phase 8 §S7에서 교체 시 우회 복원(가속·곡예·씨뿌리기류)은 
 - 배선 시: `BattleFighterState.illusionAs?: string`(위장 대상 종 id) + `applyEntryAbilityOnSwitchIn`에서
   세팅, `applyDamageToDefender`에서 첫 피격 시 해제 + 로그, BattleLogPage의 이름 표시 지점이
   `illusionAs`를 우선 참조.
+- **완료**: 위 그대로 + 리드가 조로아크류면 `createBattleState`에서도 세팅, `computeIllusionTarget`
+  (파티 뒤에서부터 자신 아님·안 쓰러짐 첫 슬롯), `performSwitch` 물러날 때 해제, 로그 교체 줄
+  (`switches[].inPokemonId`)·파티 트래커 칩에도 위장 이름. 데미지 경로만 해제 트리거라 상태이상·
+  날씨·설치물로는 안 풀린다(본가 일치). 성별 위장은 스킵(엔진에서 성별 표시 안 함).
 
 ### 6-2. 희망사항(Wish) — 슬롯 이월
 
@@ -290,13 +298,16 @@ Phase 8 §S7에서 교체 시 우회 복원(가속·곡예·씨뿌리기류)은 
   옮기고, 턴 종료 시 그 편 활성에게 적용. `performSwitch`의 volatile 클리어 대상에서 빼야 함.
 - 로스터에 희망사항 학습 포켓몬이 있으나 사용 빈도가 낮아 우선순위 하.
 
-### 6-3. 스크린(리플렉터·빛의장막·오로라베일) — 편 기반 이전
+### 6-3. 스크린(리플렉터·빛의장막·오로라베일) — 편 기반 이전  ✅
 
 - **현재**: `screens`가 `BattleFighterState`에 붙어 있어 교체하면 그 포켓몬과 함께 사라진다.
   본가는 **편(side) 전체**에 걸리는 효과라 교체해도 남아야 한다.
 - Phase 8 §1에서 설치물(hazards)만 `BattleSide`로 옮기고 스크린은 남겨 둔 알려진 단순화.
 - 배선 시: `BattleSide.screens: Partial<Record<"reflect"|"lightScreen"|"auroraVeil", number>>`로 이전,
   데미지 감산·턴 종료 카운트다운·배리어프리(clearsAllScreensOnEntry) 지점을 side 기준으로.
+- **완료**: 위 그대로 구현. 배리어프리는 `resolveEntryAbilityEffects`(배틀 시작)엔 스크린이 없어
+  무의미하므로 `applyEntryAbilityOnSwitchIn`으로 이동. `setsScreen`은 사용자 겨냥이라 반사 대상이
+  아니어서 `sideOf(state, actorKey)` 기준. 검증: 리플렉터 후 교체 → 데미지 정확히 0.5배 유지.
 
 ---
 
