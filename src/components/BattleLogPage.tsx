@@ -619,6 +619,10 @@ export function BattleLogPage() {
                             </span>
                           ));
                       })()}
+                      {battleSide(side)?.wish && (
+                        // 희망사항도 편 단위 큐다(§6-2). turnsRemaining 1 = 이번 턴 종료에 발동.
+                        <span className="battle-status-tag is-volatile">희망사항 대기</span>
+                      )}
                       {fighter.perishCount !== undefined && (
                         <span className="battle-status-tag is-major">멸망 {fighter.perishCount}</span>
                       )}

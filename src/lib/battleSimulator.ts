@@ -386,6 +386,12 @@ export interface BattleSide {
    * 같은 축.
    */
   screens: Partial<Record<"reflect" | "lightScreen" | "auroraVeil", number>>;
+  /**
+   * 희망사항(Wish) 예약 — 이 편에 하나만 걸 수 있다(백로그 §6-2). 본가처럼 "쓴 포켓몬"이 아니라
+   * 2턴 뒤 그 자리(활성)에 있는 포켓몬을 회복시키므로, fighter가 아니라 편에 큐로 둔다. 교체해도
+   * 유지된다. healAmount는 시전 시점 시전자 최대 HP의 절반(고정).
+   */
+  wish?: { turnsRemaining: number; healAmount: number };
 }
 
 /**
@@ -1567,6 +1573,7 @@ function cloneSide(side: BattleSide): BattleSide {
     activeIndex: side.activeIndex,
     hazards: { ...side.hazards },
     screens: { ...side.screens },
+    wish: side.wish ? { ...side.wish } : undefined,
   };
 }
 
@@ -1839,9 +1846,8 @@ function performSwitch(
   // 유지: currentHp · status(주 상태이상) · remainingPp · itemConsumed · currentItemId ·
   //       consumedBerryId · addedType · timesHitByMoves(교체 초기화 미도입) · ownMoveTypeBoosts ·
   //       disguiseBroken · hungerMode.
-  //   스크린(리플렉터/빛의장막/오로라베일)은 편(BattleSide.screens)에 있어 교체해도 그대로 유지된다(§6-3).
-  //   후속: transformed(변신 원복 — 메타몽 전용이라 미도입) ·
-  //         wish(그 자리 포켓몬이 받아야 하나 fighter에 붙어 있어 교체로 소멸 — post-1.0 §6).
+  //   스크린(§6-3)·희망사항(§6-2)은 편(BattleSide.screens / .wish)에 있어 교체해도 유지된다.
+  //   후속: transformed(변신 원복 — 메타몽 전용이라 미도입).
 
   // ── 활성 슬롯 전환 ──
   side.activeIndex = toIndex;
@@ -4027,8 +4033,19 @@ function resolveAction(
       if (effect.volatile === "drowsy" && (target.status.condition || hasVolatile(target.volatile, "drowsy"))) {
         continue;
       }
-      // 희망사항: 이미 예약돼 있으면 재사용 실패(본가 규칙 — 필드/트릭룸과 같은 패턴)
-      if (effect.volatile === "wish" && hasVolatile(target.volatile, "wish")) continue;
+      // 희망사항(§6-2): fighter volatile이 아니라 편(BattleSide.wish)에 큐로 건다 — 2턴 뒤
+      // 그 자리(활성)의 포켓몬이 회복받으므로 교체와 무관하게 유지돼야 한다. 회복량은 시전 시점
+      // 시전자 최대 HP의 절반(고정). 이미 이 편에 예약돼 있으면 재사용 실패(본가 규칙).
+      // (wish는 자기 편 겨냥이라 매직미러 반사 대상이 아니다 — actorKey가 곧 시전자 편.)
+      if (effect.volatile === "wish") {
+        const wisherSide = sideOf(state, actorKey);
+        if (wisherSide.wish) continue;
+        const wishChance = effect.chance !== undefined ? effect.chance / 100 : 1;
+        if (random() >= wishChance) continue;
+        wisherSide.wish = { turnsRemaining: 2, healAmount: Math.floor(state[actorKey].maxHp / 2) };
+        inflictedVolatile = "wish"; // 시전 로그("· 희망사항!")용 마커
+        continue;
+      }
       // 헤롱헤롱: 이미 헤롱헤롱 상태거나(재사용 실패, drowsy/wish와 같은 패턴), 대상 또는
       // 거는 쪽이 무성별이거나 둘이 동성이면(getEffectiveGender 기준) 조용히 무산된다 — 본가에서도
       // 이 경우 "But it failed!"로 아무 효과 없이 끝난다.
@@ -5356,17 +5373,22 @@ export function runTurn(
         fighter.volatile = consumeVolatileTurn(fighter.volatile, "syrupCoat");
       }
 
-      // 희망사항: drowsy와 같은 2턴 카운터 패턴 — 쓴 다음 턴 종료에 최대 HP 절반을 회복한다.
-      const wishEntry = fighter.volatile.active.wish;
-      if (wishEntry) {
-        const triggersNow = wishEntry.turnsRemaining <= 1;
-        fighter.volatile = consumeVolatileTurn(fighter.volatile, "wish");
-        if (triggersNow && !isFainted(fighter)) {
-          const wishHeal = Math.min(fighter.maxHp - fighter.currentHp, Math.floor(fighter.maxHp * 0.5));
-          if (wishHeal > 0) {
-            fighter.currentHp += wishHeal;
-            endOfTurn.push({ actor: key, damage: 0, remainingHp: fighter.currentHp, fainted: false, wishHeal });
+      // 희망사항(§6-2): 편(BattleSide.wish) 큐를 카운트다운한다 — 쓴 다음 턴 종료에, 그 시점에
+      // "그 자리에 있는 포켓몬"(=현재 활성 fighter)이 시전자 최대 HP 절반만큼 회복한다. 시전 후
+      // 교체했으면 새로 나온 포켓몬이 받는다.
+      const wishQueue = sideOf(state, key).wish;
+      if (wishQueue) {
+        const triggersNow = wishQueue.turnsRemaining <= 1;
+        wishQueue.turnsRemaining -= 1;
+        if (triggersNow) {
+          if (!isFainted(fighter)) {
+            const wishHeal = Math.min(fighter.maxHp - fighter.currentHp, wishQueue.healAmount);
+            if (wishHeal > 0) {
+              fighter.currentHp += wishHeal;
+              endOfTurn.push({ actor: key, damage: 0, remainingHp: fighter.currentHp, fainted: false, wishHeal });
+            }
           }
+          sideOf(state, key).wish = undefined;
         }
       }
 

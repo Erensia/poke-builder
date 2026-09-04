@@ -269,9 +269,10 @@ Phase 8 §S3에서 3슬롯 빌더·교체 UI·강제 교체를 넣으면서 임�
 Phase 8 §S7에서 교체 시 우회 복원(가속·곡예·씨뿌리기류)은 처리했지만, 아래 둘은 교체 인프라만으로는
 안 되고 별도 기능이 필요해 남겼다.
 
-> **6-1·6-3 해결 (2026-09-04, 브랜치 `feat/side-based-screens-illusion`).** 6-3 스크린을
-> `BattleSide.screens`로 이전(교체해도 유지) / 6-1 일루전 위장·피격 해제 배선(`Ability.illusion`
-> + `BattleFighterState.illusionAs`). 6-2 희망사항은 우선순위 하로 미착수.
+> **6-1·6-2·6-3 해결 (2026-09-04, 브랜치 `feat/side-based-screens-illusion`).** 6-3 스크린을
+> `BattleSide.screens`로 이전(교체해도 유지) / 6-2 희망사항을 `BattleSide.wish` 큐로 이전(2턴 뒤
+> 그 자리 활성이 시전자 최대 HP 절반만큼 회복 — 교체하면 새 포켓몬이 받음) / 6-1 일루전 위장·
+> 피격 해제 배선(`Ability.illusion` + `BattleFighterState.illusionAs`).
 
 ### 6-1. 일루전 (조로아크 / 히스이조로아크)  ✅
 
@@ -288,7 +289,7 @@ Phase 8 §S7에서 교체 시 우회 복원(가속·곡예·씨뿌리기류)은 
   (`switches[].inPokemonId`)·파티 트래커 칩에도 위장 이름. 데미지 경로만 해제 트리거라 상태이상·
   날씨·설치물로는 안 풀린다(본가 일치). 성별 위장은 스킵(엔진에서 성별 표시 안 함).
 
-### 6-2. 희망사항(Wish) — 슬롯 이월
+### 6-2. 희망사항(Wish) — 슬롯 이월  ✅
 
 - **본가**: 희망사항은 사용한 포켓몬이 아니라 **2턴 뒤 그 자리에 있는 포켓몬**을 회복시킨다.
   사용 후 교체하면 새로 나온 포켓몬이 회복받는다.
@@ -296,7 +297,12 @@ Phase 8 §S7에서 교체 시 우회 복원(가속·곡예·씨뿌리기류)은 
   (`performSwitch`가 volatile을 통째로 비움). 사용자가 희망사항 → 교체하면 회복이 사라진다.
 - 배선 시: `wish`를 fighter volatile이 아니라 **`BattleSide`에 큐**(`{ turnsLeft, healAmount }`)로
   옮기고, 턴 종료 시 그 편 활성에게 적용. `performSwitch`의 volatile 클리어 대상에서 빼야 함.
-- 로스터에 희망사항 학습 포켓몬이 있으나 사용 빈도가 낮아 우선순위 하.
+- **완료**: `BattleSide.wish = { turnsRemaining, healAmount }`. `inflictsVolatile` 루프에서 `wish`를
+  `inflictVolatile` 대신 편 큐로 가로채고(자기 편 겨냥이라 반사 무관), `healAmount`는 시전 시점
+  시전자 `maxHp/2` 고정(수령자 기준 아님 — 본가 일치). EOT 카운트다운은 편별로, 발동 시 그 편
+  현재 활성이 회복. 재사용 실패 판정도 `BattleSide.wish` 유무로. `VolatileCondition` union의
+  `"wish"`는 무브 데이터 타입용으로 남겨둠(런타임엔 절대 세팅 안 됨). 상태 태그에 "희망사항 대기".
+- 검증: 시전 → 교체 → EOT에 새로 나온 포켓몬이 시전자 절반(예: 71)만큼 회복, 편 큐 소멸.
 
 ### 6-3. 스크린(리플렉터·빛의장막·오로라베일) — 편 기반 이전  ✅
 
