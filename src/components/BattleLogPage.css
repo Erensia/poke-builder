@@ -65,8 +65,32 @@
   flex-shrink: 0;
 }
 
+/* §5-1: "대전 시작"을 두 파티 리스트 가운데에 배치. MatchupPage의 좌/우 슬롯 + 가운데 판정
+   영역 레이아웃 참고. VS 레터마크를 중앙 요소로 얹는다. */
+.battle-setup-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.9rem;
+  align-self: center;
+  flex-shrink: 0;
+  padding-top: 1.6rem;
+}
+
+.battle-setup-vs {
+  font-weight: 900;
+  font-size: 2rem;
+  line-height: 1;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  padding: 0.2rem 0.7rem;
+  border: 2px solid var(--border);
+  border-radius: 9px;
+  transform: skewX(-8deg);
+  user-select: none;
+}
+
 .battle-start-button {
-  align-self: flex-start;
   background: var(--gradient);
   color: #fff;
   border: none;
@@ -532,7 +556,12 @@
     width: 100%;
     max-width: 300px;
   }
-  .battle-setup-board > :last-child {
-    margin-top: 0;
+  .battle-setup-center {
+    align-self: center;
+    padding-top: 0;
+    order: 1; /* 좁은 화면에선 두 파티 사이가 아니라 맨 아래로 */
+  }
+  .battle-setup-column:last-of-type {
+    order: 0;
   }
 }
