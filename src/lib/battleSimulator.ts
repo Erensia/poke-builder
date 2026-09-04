@@ -1720,10 +1720,35 @@ function performSwitch(
   log: string[] = [],
   /** 자기 의지로 교체했으면 true(runTurn 교체 액션). 기절 후 강제 교체(applySwitch)면 false — 가속 발동. */
   voluntary = true,
+  /** 배턴터치: 물러나는 포켓몬의 랭크·급소랭크·대타·멸망카운트·일부 volatile을 새로 나온 포켓몬이 이어받는다. */
+  passBaton = false,
 ): void {
   const side = sideOf(state, key);
   if (toIndex === side.activeIndex || toIndex < 0 || toIndex >= side.party.length) return;
   const outgoing = side.party[side.activeIndex];
+
+  // ── 배턴터치: 아래에서 outgoing 상태를 초기화하기 전에 인계할 값을 미리 스냅샷 ──
+  const BATON_VOLATILE_KEYS: VolatileCondition[] = [
+    "confusion",
+    "ingrain",
+    "aquaRing",
+    "leechSeed",
+    "syrupCoat",
+  ];
+  const baton = passBaton
+    ? {
+        stages: { ...outgoing.stages },
+        accuracyStages: { ...outgoing.accuracyStages },
+        critStage: outgoing.critStage,
+        substituteHp: outgoing.substituteHp,
+        perishCount: outgoing.perishCount,
+        volatiles: BATON_VOLATILE_KEYS.reduce<VolatileConditionState["active"]>((acc, k) => {
+          const entry = outgoing.volatile.active[k];
+          if (entry) acc[k] = entry;
+          return acc;
+        }, {}),
+      }
+    : undefined;
 
   // ── 물러나는 포켓몬: 재생력·자연회복(살아서 물러날 때만) ──
   // 별도 로그 문구는 내지 않는다(사용자 결정 2026-09-03) — 파티 트래커의 HP 바 회복·상태이상
@@ -1783,6 +1808,18 @@ function performSwitch(
 
   // 가속 억제(§8): 자발적 교체로 나온 턴엔 가속이 발동하지 않는다. 강제 교체(voluntary=false)면 세우지 않음.
   incoming.switchedInThisTurn = voluntary || undefined;
+
+  // ── 배턴터치: 스냅샷해둔 랭크·대타·volatile을 새로 나온 포켓몬에게 인계 ──
+  // 등장 파이프라인(위협·설치물)보다 먼저 얹어야 위협이 인계된 공격 랭크 위에 정상 적용된다.
+  if (baton) {
+    incoming.stages = baton.stages;
+    incoming.accuracyStages = baton.accuracyStages;
+    incoming.critStage = baton.critStage;
+    if (baton.substituteHp !== undefined) incoming.substituteHp = baton.substituteHp;
+    if (baton.perishCount !== undefined) incoming.perishCount = baton.perishCount;
+    incoming.volatile = { active: { ...incoming.volatile.active, ...baton.volatiles } };
+  }
+
   // 킬가르도: 등장 시 항상 실드폼으로 복귀
   if (incoming.stanceChangeForms) incoming.currentStanceForm = "shield";
   // 기분파·의태: 등장 시점의 날씨/필드에 맞춰 타입 정렬
@@ -1812,8 +1849,17 @@ export interface ApplySwitchOutcome {
 /**
  * 강제 교체(기절 후) 또는 UI 교체 확정을 적용한 새 상태를 돌려준다. runTurn 밖에서 호출하며
  * prevState는 변형하지 않는다. turnNumber는 그대로 둔다(교체는 턴을 소비하지 않는 별도 조작).
+ *
+ * opts.voluntary: 유턴·볼트체인지·배턴터치 같은 자체 교체면 true(가속 억제). 기절 후 강제 교체면
+ *   생략(false) — 새로 나온 포켓몬의 가속이 정상 발동한다.
+ * opts.passBaton: 배턴터치면 true — 물러나는 포켓몬의 랭크·대타·일부 volatile을 인계한다.
  */
-export function applySwitch(prevState: BattleState, key: FighterKey, toIndex: number): ApplySwitchOutcome {
+export function applySwitch(
+  prevState: BattleState,
+  key: FighterKey,
+  toIndex: number,
+  opts: { voluntary?: boolean; passBaton?: boolean } = {},
+): ApplySwitchOutcome {
   const sideA = cloneSide(prevState.sideA);
   const sideB = cloneSide(prevState.sideB);
   const state: BattleState = {
@@ -1832,8 +1878,7 @@ export function applySwitch(prevState: BattleState, key: FighterKey, toIndex: nu
   const targetSide = sideOf(state, key);
   const outPokemonId = targetSide.party[targetSide.activeIndex].slot.pokemonId;
   const entryMessages: string[] = [];
-  // applySwitch는 기절 후 강제 교체 전용 — voluntary=false라 다음 턴 가속이 정상 발동한다.
-  performSwitch(state, key, toIndex, entryMessages, false);
+  performSwitch(state, key, toIndex, entryMessages, opts.voluntary ?? false, opts.passBaton ?? false);
   const inPokemonId = sideOf(state, key).party[sideOf(state, key).activeIndex].slot.pokemonId;
   return { nextState: state, entryMessages, outPokemonId, inPokemonId };
 }
@@ -4745,6 +4790,13 @@ export interface RunTurnOutcome {
    * 편은 이미 패배(result.winner)라 여기 안 실린다. 파티 길이 1이면 항상 undefined.
    */
   forcedSwitch?: { a?: boolean; b?: boolean };
+  /**
+   * 유턴·볼트체인지·배턴터치처럼 명중해서 효과를 준 뒤 사용측이 "자발적으로" 교체해야 하는 편
+   * (백로그 §7-2). 호출부는 교체 슬롯을 고르게 한 뒤 applySwitch({ voluntary: true, passBaton })로
+   * 확정하고 같은 턴을 이어간다. 교대할 슬롯이 없으면 여기 안 실린다(교체 없이 턴 종료).
+   * 활성이 유턴에 같이 쓰러졌으면 selfSwitch가 아니라 forcedSwitch로 나간다.
+   */
+  selfSwitch?: { a?: { passBaton: boolean }; b?: { passBaton: boolean } };
 }
 
 /**
@@ -5478,6 +5530,26 @@ export function runTurn(
         }
       : undefined;
 
+  // 유턴·볼트체인지·배턴터치(백로그 §7-2): 명중해서 효과를 준 뒤 사용측이 자발적으로 교체한다.
+  // 빗나감·행동불능·완전 무효(0배)면 교체하지 않고, 사용자가 같이 쓰러졌으면(록키헬멧 등)
+  // forcedSwitch로 이미 처리되므로 여기선 뺀다. 교대할 슬롯이 없어도 교체하지 않는다.
+  let selfSwitch: { a?: { passBaton: boolean }; b?: { passBaton: boolean } } | undefined;
+  if (!winner) {
+    for (const key of order) {
+      const act = actions.find((a) => a.actor === key);
+      if (!act) continue;
+      const mv = act.move;
+      if (!mv.selfSwitchAfterDamage && !mv.passesStatsOnSelfSwitch) continue;
+      // 빗나감·행동불능·완전 무효(0배)·방어류 차단·특성 흡수(전기흡수·번개엔진 등)면 교체하지 않는다.
+      if (act.blockedReason || !act.hit || act.typeEffectiveness === 0) continue;
+      if (act.blockedByProtectMoveName || act.hitNegatedByAbilityName || act.abilityAbsorbAbilityName) continue;
+      if (isFainted(state[key])) continue;
+      const keyHasReserve = key === "a" ? aHasReserve : bHasReserve;
+      if (!keyHasReserve) continue;
+      (selfSwitch ??= {})[key] = { passBaton: !!mv.passesStatsOnSelfSwitch };
+    }
+  }
+
   // 필드 지속 턴 카운트다운. 0이 되면 이번 턴을 끝으로 필드가 사라진다.
   let fieldExpired = false;
   if (state.field && state.fieldTurnsRemaining !== undefined) {
@@ -5552,5 +5624,6 @@ export function runTurn(
       activePokemonIds: { a: state.a.slot.pokemonId, b: state.b.slot.pokemonId },
     },
     forcedSwitch,
+    selfSwitch,
   };
 }
