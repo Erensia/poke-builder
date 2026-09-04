@@ -80,7 +80,7 @@ const VOLATILE_LABELS = {
 } as const;
 
 /** 액션 로그 한 줄 안에 "OO 발동!"으로 뭉뚱그리기보다 전용 문구를 따로 쓰는 volatile들 */
-const VOLATILES_WITH_DEDICATED_LOG_LINE = new Set(["drowsy", "wish"]);
+const VOLATILES_WITH_DEDICATED_LOG_LINE = new Set(["drowsy", "wish", "encore"]);
 
 /** 차징 기술 1턴째(준비 턴) 전용 문구 — 공통 "준비 중!" 대신 기술별로 쓴다(§1 D-1). key는 move.id */
 const CHARGE_TURN_MESSAGE: Record<string, string> = {
@@ -298,7 +298,7 @@ export function BattleLogPage() {
     const encoreEntry = fighter.volatile.active.encore;
     if (encoreEntry?.moveId && encoreEntry.moveId !== moveId) {
       const forcedName = getMove(encoreEntry.moveId)?.name ?? "그 기술";
-      return `${pokemonName}${eunNeun(pokemonName)} 앙코르 때문에 ${forcedName}만 사용할 수 있어요.`;
+      return `${pokemonName}${eunNeun(pokemonName)} 앙코르 때문에 ${forcedName}만 사용할 수 있다!`;
     }
     return null;
   }
@@ -1250,6 +1250,24 @@ export function BattleLogPage() {
                       {!action.blockedReason && action.hit && action.statusInflictFailed && (
                         <div className="battle-turn-line is-muted">
                           {actorName}의 {action.move.name} - 그러나 실패했다!
+                        </div>
+                      )}
+                      {/* 앙코르 성공 — 사용/받은 쪽을 두 줄로 나눈다(백로그 §7-3) */}
+                      {!action.blockedReason && action.hit && action.inflictedVolatile === "encore" && (
+                        <div className="battle-turn-line is-muted">
+                          {action.bouncedMoveName ? (
+                            <>
+                              {actorName}의 앙코르!<br />
+                              {actorName}
+                              {eunNeun(actorName)} 앙코르를 받았다!
+                            </>
+                          ) : (
+                            <>
+                              {actorName}의 앙코르!<br />
+                              {defenderName}
+                              {eunNeun(defenderName)} 앙코르를 받았다!
+                            </>
+                          )}
                         </div>
                       )}
                       {/* 하품(졸음) 유도 — 실제로 잠드는 건 2턴 뒤라 onset 문구와 다르게 "유도했다"로 표현 */}
