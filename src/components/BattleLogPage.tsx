@@ -275,7 +275,18 @@ export function BattleLogPage() {
     const fighter = battleState[side];
     if (!hasUsableMove(fighter)) return true;
     const locked = choiceLockedMoveId(side);
-    return locked !== null && (fighter.remainingPp[locked] ?? 0) <= 0;
+    if (locked !== null && (fighter.remainingPp[locked] ?? 0) <= 0) return true;
+    // 이번 턴 실제로 고를 수 있는 기술이 하나도 없으면 발버둥(본가 규칙, 백로그 §7-5):
+    //  - 앙코르로 변화기가 강제됐는데 도발/사슬묶기로 그 기술을 못 씀
+    //  - 앙코르 강제 기술의 PP가 0
+    //  - 도발 상태에서 지닌 기술이 전부 변화기
+    const anySelectable = activeMoveIds(side).some((id) => {
+      if (!id) return false;
+      if ((fighter.remainingPp[id] ?? getMove(id)?.pp ?? 0) <= 0) return false;
+      if (locked !== null && id !== locked) return false;
+      return moveRestrictionMessage(side, id) === null;
+    });
+    return !anySelectable;
   }
 
   /**
@@ -879,11 +890,14 @@ export function BattleLogPage() {
                       })}
                     </div>
                         ) : (
-                          // PP가 전부 0이거나, 구애류 도구로 잠긴 기술의 PP가 0 — 발버둥이 자동으로 나간다
+                          // PP가 전부 0 / 구애류 잠긴 기술 PP 0 / 앙코르·도발 등으로 고를 수 있는
+                          // 기술이 하나도 없음 — 어느 경우든 발버둥이 자동으로 나간다
                           <div className="battle-struggle-notice">
-                            {hasUsableMove(fighter)
-                              ? "구애류 도구로 잠긴 기술의 PP가 다 됐어요 — 발버둥이 자동으로 나갑니다!"
-                              : "사용 가능한 기술이 없어요 — 발버둥이 자동으로 나갑니다!"}
+                            {!hasUsableMove(fighter)
+                              ? "사용 가능한 기술이 없어요 — 발버둥이 자동으로 나갑니다!"
+                              : lockedMoveId !== null && (fighter.remainingPp[lockedMoveId] ?? 0) <= 0
+                                ? "구애류 도구로 잠긴 기술의 PP가 다 됐어요 — 발버둥이 자동으로 나갑니다!"
+                                : "쓸 수 있는 기술이 없어요 (앙코르·도발 등) — 발버둥이 자동으로 나갑니다!"}
                           </div>
                         )}
                       </>

@@ -2132,7 +2132,12 @@ function resolveAction(
       if (encoreEntry.moveId !== move.id) restrictionBlockedKind ??= "encore";
       attacker.volatile = consumeVolatileTurn(attacker.volatile, "encore");
     }
-    if (restrictionBlockedKind) return blocked("moveRestricted", 0, { moveRestrictionKind: restrictionBlockedKind });
+    // 발버둥은 이 제약들을 전부 무시하고 나간다(본가 규칙): 앙코르로 변화기가 강제됐는데 도발로
+    // 그 변화기를 못 쓰는 등, 고를 수 있는 기술이 하나도 없을 때의 폴백. 지속 턴수는 위에서 이미
+    // 소모시켰으므로 앙코르·도발·사슬묶기 카운트다운은 정상 진행된다(백로그 §7-5).
+    if (restrictionBlockedKind && move.id !== STRUGGLE_MOVE.id) {
+      return blocked("moveRestricted", 0, { moveRestrictionKind: restrictionBlockedKind });
+    }
   }
 
   // 2-1) 사이코필드: 우선도 +1 이상인 기술이 "상대를 겨냥"하면 그 기술 자체가 실패한다.
