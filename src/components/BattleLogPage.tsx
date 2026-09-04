@@ -621,6 +621,9 @@ export function BattleLogPage() {
                             {SCREEN_LABELS[s]} {fighter.screens[s]}턴
                           </span>
                         ))}
+                      {fighter.perishCount !== undefined && (
+                        <span className="battle-status-tag is-major">멸망 {fighter.perishCount}</span>
+                      )}
                       {fighter.substituteHp !== undefined && (
                         <span className="battle-status-tag is-volatile">대타 HP {fighter.substituteHp}</span>
                       )}
@@ -698,6 +701,7 @@ export function BattleLogPage() {
                               <span className="battle-party-chip-hp">
                                 {fainted ? "기절" : `${f.currentHp}/${f.maxHp}`}
                                 {f.status.condition && !fainted && ` · ${STATUS_LABELS[f.status.condition]}`}
+                                {f.perishCount !== undefined && !fainted && ` · 멸망 ${f.perishCount}`}
                               </span>
                               <span className="battle-party-chip-bar">
                                 <span
