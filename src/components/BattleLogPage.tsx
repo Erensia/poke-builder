@@ -602,13 +602,17 @@ export function BattleLogPage() {
                           </span>
                         );
                       })}
-                      {(Object.keys(fighter.screens) as ("reflect" | "lightScreen" | "auroraVeil")[])
-                        .filter((s) => fighter.screens[s] !== undefined)
-                        .map((s) => (
-                          <span key={s} className="battle-status-tag is-volatile">
-                            {SCREEN_LABELS[s]} {fighter.screens[s]}턴
-                          </span>
-                        ))}
+                      {(() => {
+                        // 스크린은 편(BattleSide) 단위 상태다(§6-3) — 활성 파이터가 아니라 side에서 읽는다.
+                        const screens = battleSide(side)?.screens ?? {};
+                        return (Object.keys(screens) as ("reflect" | "lightScreen" | "auroraVeil")[])
+                          .filter((s) => screens[s] !== undefined)
+                          .map((s) => (
+                            <span key={s} className="battle-status-tag is-volatile">
+                              {SCREEN_LABELS[s]} {screens[s]}턴
+                            </span>
+                          ));
+                      })()}
                       {fighter.perishCount !== undefined && (
                         <span className="battle-status-tag is-major">멸망 {fighter.perishCount}</span>
                       )}
