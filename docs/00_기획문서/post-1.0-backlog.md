@@ -296,8 +296,8 @@ Phase 8 브랜치(PR #7) 플레이테스트에서 나온 것들. §1~§6의 "1.0
 > **✅ 전부 해결 (2026-09-04, 브랜치 `fix/phase8-followup-bugs`).** 7-1 자폭 콤보 예비 슬롯
 > 인식 / 7-2 유턴·볼트체인지·배턴터치 자체 교체(`selfSwitchAfterDamage`·`passesStatsOnSelfSwitch`
 > 플래그 + `RunTurnOutcome.selfSwitch` + UI 자체 교체 패널) / 7-3 앙코르 문구 / 7-4 멸망 카운트
-> 상시 태그. 7-2는 본가처럼 턴 종료 전 교체가 아니라 기존 forcedSwitch와 동일한 "턴 완결 후
-> 교체 확정" 방식으로 구현.
+> 상시 태그 / 7-5 앙코르∩도발 발버둥 폴백. 7-2는 본가처럼 턴 종료 전 교체가 아니라 기존
+> forcedSwitch와 동일한 "턴 완결 후 교체 확정" 방식으로 구현.
 
 ### 7-1. 길동무 상호 기절 시 배틀이 그대로 끝남 (버그)
 
@@ -341,3 +341,16 @@ Phase 8 브랜치(PR #7) 플레이테스트에서 나온 것들. §1~§6의 "1.0
 - **기대**: `battleState[side].perishCount`가 있으면 `battle-status-tags`에 `멸망 N` 태그를
   상시 표기(스크린 남은 턴수 태그와 같은 방식). 트래커 칩에도 축약 표기 검토.
 - **대상**: `BattleLogPage.tsx`의 `battle-status-tags` 영역 + `battle-party-chip`.
+
+### 7-5. 앙코르∩도발 등으로 고를 기술이 없을 때 턴 진행 불가 (버그, 2026-09-04 추가)
+
+- **증상**: 서로 교체 불가 상황에서 A가 명상 → B가 앙코르 → A는 명상만 강제 → B가 도발 →
+  A는 앙코르로 명상만 써야 하는데 도발로 변화기를 못 쓴다. 이때 배틀타워는 **턴 진행이
+  막힌다**(고를 수 있는 기술 0, "턴 진행" 게이트가 안 풀림). 본가는 이 상황에서 발버둥.
+- **원인**: (1) 엔진 `resolveAction`의 도발·사슬묶기·앙코르 판정이 `STRUGGLE_MOVE`도 앙코르
+  위반으로 막았다. (2) UI `isStruggling`이 PP·구애잠금만 봐서 "합법 수 0" 상태를 발버둥으로
+  인식하지 못했다.
+- **해결 (완료)**: 엔진은 제약 판정에서 `STRUGGLE_MOVE`를 통과(지속 턴수 소모는 유지).
+  UI `isStruggling`은 전 슬롯에서 `moveRestrictionMessage`가 non-null이면 발버둥으로 처리 —
+  도발 상태 전부 변화기·앙코르 강제 기술 PP 0 케이스도 함께 해결.
+- **대상**: `battleSimulator.ts` 2-0 제약 블록, `BattleLogPage.tsx` `isStruggling` + 발버둥 안내.
