@@ -13,6 +13,13 @@ Phase 8(배틀타워 리뉴얼)은 **파티 선출·교체 인프라**만 담당
 
 ## 1. 파티 빌더 — 타입 상성 요약 컴포넌트 개편안
 
+> **✅ 해결 (2026-09-04, 브랜치 `feat/type-coverage-matrix`).** 수량 집계 그리드 + 클릭 상세
+> 패널 → **포켓몬 × 18타입 매트릭스**로 전면 교체. `computeTypeCoverage`/`TypeCoverageCell` 폐기,
+> `computePartyDefenseMatrix`(members 열 + 18행 고정, POKEMON_TYPES 순서, null=등배) 신설.
+> 종합 열은 확정 규칙(강점 `r≥w ∧ r≥2` / 취약 `w−r≥2` / 보통) 그대로. 셀 색상은 기존 `cnt-*`
+> 재사용, 좁은 폭 가로 스크롤, 클릭 상세 제거(hover 툴팁만). 검증: 리자몽메가X 포함 6마리
+> 파티로 18×8 표 렌더 + 종합 판정 스팟체크 전부 일치.
+
 ### 1-1. 대상
 
 - 컴포넌트: `src/components/TypeCoverageSummary.tsx` (+ `TypeCoverageSummary.css`)
