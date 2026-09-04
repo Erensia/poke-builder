@@ -48,7 +48,9 @@ type PickerState =
   | null;
 
 /** 이번 턴 한 편의 선택 — 기술 또는 교체(교대 슬롯 인덱스) */
-type TurnChoice = { kind: "move"; moveId: string } | { kind: "switch"; toIndex: number };
+type TurnChoice =
+  | { kind: "move"; moveId: string; selfSwitchTo?: number }
+  | { kind: "switch"; toIndex: number };
 
 const SLOT_INDICES: SlotIndex[] = [0, 1, 2];
 
@@ -204,11 +206,6 @@ export function BattleLogPage() {
   const [partySlots, setPartySlots] = useState<{ a: PartySlot[]; b: PartySlot[] }>({ a: [], b: [] });
   // 이번 턴 처리 결과 활성 슬롯이 기절해 강제 교체가 필요한 편. 해소되면 null.
   const [pendingForcedSwitch, setPendingForcedSwitch] = useState<{ a?: boolean; b?: boolean } | null>(null);
-  // 유턴·볼트체인지·배턴터치(§7-2): 명중 후 사용측이 자발적으로 골라야 하는 교체.
-  const [pendingSelfSwitch, setPendingSelfSwitch] = useState<{
-    a?: { passBaton: boolean };
-    b?: { passBaton: boolean };
-  } | null>(null);
   // 편별 턴 입력 모드 — "기술" 또는 "교체"
   const [inputMode, setInputMode] = useState<{ a: "move" | "switch"; b: "move" | "switch" }>({ a: "move", b: "move" });
   // 구애스카프 잠금 위반으로 턴 진행이 막혔을 때 보여줄 경고 문구. 선택이 바뀌거나 턴이 정상
@@ -289,6 +286,12 @@ export function BattleLogPage() {
     return !anySelectable;
   }
 
+  /** 유턴·볼트체인지·배턴터치처럼 명중 시 사용측이 교체되는 기술인지(§7-2) */
+  function isPivotMove(moveId: string): boolean {
+    const m = getMove(moveId);
+    return !!(m?.selfSwitchAfterDamage || m?.passesStatsOnSelfSwitch);
+  }
+
   /**
    * 도발/사슬묶기/앙코르: 이 쪽이 지금 이 기술을 고르면 왜 안 되는지(있다면) 문구로 돌려준다.
    * 구애스카프(choiceLockedMoveId)와 달리 판정 엔진(battleSimulator)의 volatile 상태를 그대로
@@ -342,7 +345,6 @@ export function BattleLogPage() {
     setSelected({ a: null, b: null });
     setInputMode({ a: "move", b: "move" });
     setPendingForcedSwitch(null);
-    setPendingSelfSwitch(null);
     setLockWarning(null);
   }
 
@@ -353,7 +355,6 @@ export function BattleLogPage() {
     setSelected({ a: null, b: null });
     setInputMode({ a: "move", b: "move" });
     setPendingForcedSwitch(null);
-    setPendingSelfSwitch(null);
     setLockWarning(null);
   }
 
@@ -395,44 +396,8 @@ export function BattleLogPage() {
     });
   }
 
-  /** 자체 교체(유턴류) 확정 — 사용측이 살아서 스스로 물러나 toIndex 슬롯을 세운다(턴 소비 안 함, §7-2) */
-  function resolveSelfSwitch(side: Side, toIndex: number) {
-    if (!battleState) return;
-    const passBaton = pendingSelfSwitch?.[side]?.passBaton ?? false;
-    const { nextState, entryMessages, outPokemonId, inPokemonId } = applySwitch(battleState, side, toIndex, {
-      voluntary: true,
-      passBaton,
-    });
-    setBattleState(nextState);
-    // 스텔스록·압정 등장 데미지로 새로 나온 포켓몬이 그 자리에서 또 쓰러졌는지.
-    const inSide = side === "a" ? nextState.sideA : nextState.sideB;
-    const inFainted = nextState[side].currentHp <= 0;
-    const hasReserve = inSide.party.some((f, i) => i !== inSide.activeIndex && f.currentHp > 0);
-    const synthetic: TurnResult = {
-      turnNumber: nextState.turnNumber,
-      order: ["a", "b"],
-      activePokemonIds: { a: nextState.a.slot.pokemonId, b: nextState.b.slot.pokemonId },
-      actions: [],
-      endOfTurn: [],
-      winner: undefined,
-      expiredScreens: [],
-      turnStartAnnouncements: [],
-      switches: [{ side: side as FighterKey, fromIndex: -1, toIndex, outPokemonId, inPokemonId, entryMessages }],
-    };
-    setLog((prev) => [...prev, synthetic]);
-    // 이 편의 자체 교체는 처리됐으니 지운다. 등장 즉시 또 쓰러졌으면 강제 교체로 넘긴다.
-    setPendingSelfSwitch((prev) => {
-      const rest = { ...(prev ?? {}) };
-      delete rest[side];
-      return rest.a || rest.b ? rest : null;
-    });
-    if (inFainted && hasReserve) {
-      setPendingForcedSwitch((prev) => ({ ...(prev ?? {}), [side]: true }));
-    }
-  }
-
   function playTurn() {
-    if (!battleState || pendingForcedSwitch || pendingSelfSwitch) return;
+    if (!battleState || pendingForcedSwitch) return;
     setLockWarning(null);
     // PP 남은 기술이 없거나(4개 다 0), 구애류 도구로 잠긴 기술의 PP가 0이면 선택 없이 발버둥.
     const struggling = { a: isStruggling("a"), b: isStruggling("b") };
@@ -464,6 +429,16 @@ export function BattleLogPage() {
         setLockWarning(restriction);
         return;
       }
+      // 유턴·볼트체인지·배턴터치(§7-2): 교대 슬롯이 있으면, 명중 시 나올 포켓몬을 미리 골라야
+      // 한다 — 본가처럼 사용측 교체가 그 턴 안에서(상대 행동·턴 종료 전) 처리되기 때문.
+      if (isPivotMove(chosen) && switchableIndices(side).length > 0) {
+        const sel = selected[side];
+        if (sel?.kind === "move" && sel.selfSwitchTo === undefined) {
+          const pokemonName = activePokemon(side)?.name ?? "포켓몬";
+          setLockWarning(`${pokemonName}${eunNeun(pokemonName)} ${getMove(chosen)?.name ?? "기술"} 뒤 나올 포켓몬을 골라주세요.`);
+          return;
+        }
+      }
     }
 
     const actionFor = (side: Side): TurnAction | null => {
@@ -475,19 +450,21 @@ export function BattleLogPage() {
         return m ? { kind: "move", move: m } : null;
       }
       const m = sel?.kind === "move" ? getMove(sel.moveId) : undefined;
-      return m ? { kind: "move", move: m } : null;
+      if (!m) return null;
+      return sel?.kind === "move" && sel.selfSwitchTo !== undefined
+        ? { kind: "move", move: m, selfSwitchTo: sel.selfSwitchTo }
+        : { kind: "move", move: m };
     };
     const actionA = actionFor("a");
     const actionB = actionFor("b");
     if (!actionA || !actionB) return;
 
-    const { nextState, result, forcedSwitch, selfSwitch } = runTurn(battleState, actionA, actionB);
+    const { nextState, result, forcedSwitch } = runTurn(battleState, actionA, actionB);
     setBattleState(nextState);
     setLog((prev) => [...prev, result]);
     setSelected({ a: null, b: null });
     setInputMode({ a: "move", b: "move" });
     setPendingForcedSwitch(forcedSwitch ?? null);
-    setPendingSelfSwitch(selfSwitch ?? null);
   }
 
   const winner = log.at(-1)?.winner;
@@ -756,31 +733,6 @@ export function BattleLogPage() {
                       );
                     }
 
-                    // 2) 자체 교체: 유턴·볼트체인지·배턴터치로 사용측이 스스로 물러난다(§7-2)
-                    if (pendingSelfSwitch?.[side]) {
-                      return (
-                        <div className="battle-switch-panel">
-                          <div className="battle-switch-panel-title">
-                            {pokemon.name}
-                            {eunNeun(pokemon.name)} 돌아온다 — 내보낼 포켓몬을 선택하세요
-                            {pendingSelfSwitch[side]!.passBaton && " (능력 변화 인계)"}
-                          </div>
-                          <div className="battle-switch-list">
-                            {benchIdx.map((i) => (
-                              <button
-                                key={i}
-                                type="button"
-                                className="battle-switch-button"
-                                onClick={() => resolveSelfSwitch(side, i)}
-                              >
-                                {getPokemon(bs.party[i].slot.pokemonId)?.name ?? "포켓몬"} 내보내기
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      );
-                    }
-
                     if (winner) return null;
 
                     const canSwitch = benchIdx.length > 0 && !fighter.chargingMoveId && fighter.currentHp > 0;
@@ -831,6 +783,7 @@ export function BattleLogPage() {
                             {getMove(fighter.chargingMoveId)?.name ?? "기술"} 준비 중 — 다음 턴 자동으로 발동돼요!
                           </div>
                         ) : !isStruggling(side) ? (
+                    <>
                     <div className="battle-move-grid">
                       {moves.map((move) => {
                         const pp = fighter.remainingPp[move.id] ?? move.pp;
@@ -889,6 +842,38 @@ export function BattleLogPage() {
                         );
                       })}
                     </div>
+                    {/* 유턴·볼트체인지·배턴터치(§7-2): 명중 시 그 턴 안에서 나올 포켓몬을 미리 고른다 */}
+                    {(() => {
+                      const sel = selected[side];
+                      if (sel?.kind !== "move" || !isPivotMove(sel.moveId) || benchIdx.length === 0) return null;
+                      return (
+                        <div className="battle-switch-panel">
+                          <div className="battle-switch-panel-title">
+                            {getMove(sel.moveId)?.name ?? "기술"} 명중 시 나올 포켓몬을 선택하세요
+                          </div>
+                          <div className="battle-switch-list">
+                            {benchIdx.map((i) => (
+                              <button
+                                key={i}
+                                type="button"
+                                className={`battle-switch-button${sel.selfSwitchTo === i ? " is-selected" : ""}`}
+                                onClick={() => {
+                                  setLockWarning(null);
+                                  setSelected((p) => ({
+                                    ...p,
+                                    [side]: { kind: "move", moveId: sel.moveId, selfSwitchTo: i },
+                                  }));
+                                }}
+                              >
+                                {getPokemon(bs.party[i].slot.pokemonId)?.name ?? "포켓몬"} (
+                                {bs.party[i].currentHp}/{bs.party[i].maxHp})
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })()}
+                    </>
                         ) : (
                           // PP가 전부 0 / 구애류 잠긴 기술 PP 0 / 앙코르·도발 등으로 고를 수 있는
                           // 기술이 하나도 없음 — 어느 경우든 발버둥이 자동으로 나간다
@@ -925,8 +910,6 @@ export function BattleLogPage() {
             </div>
           ) : pendingForcedSwitch ? (
             <div className="battle-lock-warning">쓰러진 포켓몬 자리를 교대해야 다음 턴을 진행할 수 있어요.</div>
-          ) : pendingSelfSwitch ? (
-            <div className="battle-lock-warning">교체 기술로 물러날 포켓몬을 선택해야 다음 턴을 진행할 수 있어요.</div>
           ) : (
             <>
               <button
@@ -960,24 +943,26 @@ export function BattleLogPage() {
                 <div className="battle-turn-title">
                   {isForcedSwitchCard ? `턴 ${turn.turnNumber} · 교체` : `턴 ${turn.turnNumber} · 먼저 행동: ${turnName(turn.order[0])}`}
                 </div>
-                {turn.switches.map((sw, i) => {
-                  const outName = getPokemon(sw.outPokemonId)?.name ?? "포켓몬";
-                  const inName = getPokemon(sw.inPokemonId)?.name ?? "포켓몬";
-                  return (
-                    <div key={`sw-${i}`}>
-                      <div className="battle-turn-line">
-                        {sw.fromIndex < 0
-                          ? `${inName} 등장!`
-                          : `${outName}${eunNeun(outName)} 뒤로 물러났다 — ${inName} 등장!`}
-                      </div>
-                      {sw.entryMessages.map((m, j) => (
-                        <div key={`swm-${i}-${j}`} className="battle-turn-line is-muted">
-                          {m}
+                {turn.switches
+                  .filter((sw) => !sw.afterMove)
+                  .map((sw, i) => {
+                    const outName = getPokemon(sw.outPokemonId)?.name ?? "포켓몬";
+                    const inName = getPokemon(sw.inPokemonId)?.name ?? "포켓몬";
+                    return (
+                      <div key={`sw-${i}`}>
+                        <div className="battle-turn-line">
+                          {sw.fromIndex < 0
+                            ? `${inName} 등장!`
+                            : `${outName}${eunNeun(outName)} 뒤로 물러났다 — ${inName} 등장!`}
                         </div>
-                      ))}
-                    </div>
-                  );
-                })}
+                        {sw.entryMessages.map((m, j) => (
+                          <div key={`swm-${i}-${j}`} className="battle-turn-line is-muted">
+                            {m}
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })}
                 {turn.turnStartAnnouncements.map((text, i) => (
                   <div key={`tsa-${i}`} className="battle-turn-line is-muted">
                     {text}
@@ -1883,6 +1868,26 @@ export function BattleLogPage() {
                     </div>
                   );
                 })}
+                {/* 유턴·볼트체인지·배턴터치로 그 턴 안에서 일어난 자체 교체 — 기술 줄 다음에 렌더(§7-2) */}
+                {turn.switches
+                  .filter((sw) => sw.afterMove)
+                  .map((sw, i) => {
+                    const outName = getPokemon(sw.outPokemonId)?.name ?? "포켓몬";
+                    const inName = getPokemon(sw.inPokemonId)?.name ?? "포켓몬";
+                    return (
+                      <div key={`swa-${i}`}>
+                        <div className="battle-turn-line">
+                          {outName}
+                          {eunNeun(outName)} 뒤로 물러났다 — {inName} 등장!
+                        </div>
+                        {sw.entryMessages.map((m, j) => (
+                          <div key={`swam-${i}-${j}`} className="battle-turn-line is-muted">
+                            {m}
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })}
                 {turn.endOfTurn.map((e, i) => (
                   <div key={i} className="battle-turn-line is-muted">
                     {e.fieldHeal ? (
