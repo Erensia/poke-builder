@@ -667,6 +667,12 @@ export interface Ability {
    */
   clearsAllScreensOnEntry?: boolean;
   /**
+   * 일루전(Illusion, 조로아크/히스이조로아크): 등장 시 파티의 마지막 슬롯(자신 아님·안 쓰러짐)
+   * 포켓몬의 이름·아이콘으로 위장한다(BattleFighterState.illusionAs). 타입·실능·특성은 조로아크
+   * 그대로 — 순수 표시용 위장이며, 기술 데미지를 받는 순간 위장이 풀린다(§6-1).
+   */
+  illusion?: boolean;
+  /**
    * 꼬르륵스위치(Hunger Switch) — 모르페코 전용. 매 턴 종료 시 배부른모양/배고픈모양으로 번갈아
    * 바뀐다(BattleFighterState.hungerMode). 종족값·타입·특성은 동일하고, 오라휠(Move.hungerSwitchType)의
    * 타입만 모양에 따라 달라진다.

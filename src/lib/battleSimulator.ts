@@ -241,6 +241,12 @@ export interface BattleFighterState {
    */
   disguiseBroken?: boolean;
   /**
+   * 일루전(Illusion, 조로아크류): 위장 중이면 위장 대상 포켓몬의 종 id. 등장 시 세팅되고
+   * (파티 마지막 슬롯 = 자신 아님·안 쓰러짐), 기술 데미지를 받는 순간 undefined로 풀린다(§6-1).
+   * 타입·실능·특성 계산엔 전혀 영향을 주지 않는다 — UI 이름/아이콘 표시에만 쓴다.
+   */
+  illusionAs?: string;
+  /**
    * 변신(Move.transformsIntoTarget)·괴짜(Ability.transformsIntoOpponentOnEntry)로 상대로 변신한
    * 상태면 true. 타입·5실능(HP 제외)·특성·능력 랭크·기술(PP 5)을 상대 것으로 갈아치운 뒤 이 플래그를
    * 세운다. 교체가 없는 1v1이라 한 번 변신하면 배틀 끝까지 유지되고, 재변신은 실패한다.
@@ -1011,6 +1017,15 @@ export function createBattleState(init: { a: SideInit; b: SideInit; weather?: We
   // 의태(메더): 등장 시점 필드에 맞춰 타입을 맞춰둔다(첫 턴 시작 훅이 안내는 따로 낸다).
   applyMimicryForm(state.a, state.field);
   applyMimicryForm(state.b, state.field);
+
+  // 일루전(§6-1): 리드가 조로아크류면 배틀 시작 시점부터 파티 마지막 슬롯 모습으로 위장한다.
+  for (const key of ["a", "b"] as const) {
+    const f = state[key];
+    if (f.effectiveAbilityId && getAbility(f.effectiveAbilityId)?.illusion) {
+      const s = sideOf(state, key);
+      f.illusionAs = computeIllusionTarget(s.party, s.activeIndex);
+    }
+  }
   return state;
 }
 
@@ -1367,6 +1382,8 @@ export interface ActionLogEntry {
   hitNegatedByAbilityName?: string;
   /** hitNegatedByAbilityName이 발동하며(=탈이 벗겨지며) 방어측이 입은 반동 데미지 */
   disguiseRecoilDamage?: number;
+  /** 일루전(§6-1): 이 행동으로 방어측 조로아크의 위장이 풀렸으면 그 조로아크의 진짜 종 id(로그 문구용) */
+  illusionBrokenSpeciesId?: string;
   /**
    * 길동무: 이 행동(공격측의 공격)으로 상대가 쓰러졌는데, 상대가 길동무 예약 상태였어서
    * 공격측도 같이 쓰러졌으면 true. fainted/selfFainted 둘 다 이미 true로 채워지지만, UI가
@@ -1571,6 +1588,18 @@ function isGroundedForHazards(fighter: BattleFighterState): boolean {
   return true;
 }
 
+/**
+ * 일루전(§6-1): selfIndex 슬롯의 조로아크가 위장할 대상 종 id. 파티 뒤에서부터 스캔해
+ * "자신 아님 + 안 쓰러짐"인 첫 슬롯의 종을 쓴다(본가: 마지막 포켓몬 모습). 없으면 undefined(위장 안 함).
+ */
+function computeIllusionTarget(party: BattleFighterState[], selfIndex: number): string | undefined {
+  for (let i = party.length - 1; i >= 0; i--) {
+    if (i === selfIndex || isFainted(party[i])) continue;
+    return party[i].slot.pokemonId;
+  }
+  return undefined;
+}
+
 /** 압정뿌리기 층수별 등장 데미지 비율 (사용자 확정: 1→1/16 · 2→1/8 · 3→1/4) */
 const SPIKES_DAMAGE_FRACTION_BY_LAYER: Record<number, number> = { 1: 1 / 16, 2: 1 / 8, 3: 1 / 4 };
 /** 스텔스록 등장 데미지 기준 비율(바위 상성 배율을 곱한다) */
@@ -1667,6 +1696,12 @@ function applyEntryAbilityOnSwitchIn(state: BattleState, key: FighterKey, log: s
     if (hadAny) {
       log.push(`${selfName}의 ${ability.name}! 양쪽의 빛의장막과 리플렉터가 사라졌다!`);
     }
+  }
+
+  // 일루전(§6-1): 등장 시 파티 마지막 슬롯 모습으로 위장한다(별도 로그 없음 — 상대는 눈치채지 못한다).
+  if (ability.illusion) {
+    const s = sideOf(state, key);
+    self.illusionAs = computeIllusionTarget(s.party, s.activeIndex);
   }
 
   // 위협류
@@ -1799,6 +1834,8 @@ function performSwitch(
   outgoing.consecutiveLockUntilTurn = undefined;
   // 곡예(Unburden): 본가는 "도구를 잃은 뒤 교체하기 전까지"만 2배 유지 — 교체로 물러나면 해제(§8).
   outgoing.unburdenActive = undefined;
+  // 일루전(§6-1): 물러나면 위장 해제 — 다시 나올 때 파티 상태에 맞춰 재계산된다.
+  outgoing.illusionAs = undefined;
   // 유지: currentHp · status(주 상태이상) · remainingPp · itemConsumed · currentItemId ·
   //       consumedBerryId · addedType · timesHitByMoves(교체 초기화 미도입) · ownMoveTypeBoosts ·
   //       disguiseBroken · hungerMode.
@@ -1885,7 +1922,9 @@ export function applySwitch(
   const outPokemonId = targetSide.party[targetSide.activeIndex].slot.pokemonId;
   const entryMessages: string[] = [];
   performSwitch(state, key, toIndex, entryMessages, opts.voluntary ?? false, opts.passBaton ?? false);
-  const inPokemonId = sideOf(state, key).party[sideOf(state, key).activeIndex].slot.pokemonId;
+  const inFighter = sideOf(state, key).party[sideOf(state, key).activeIndex];
+  // 일루전(§6-1): 위장 중이면 로그에도 위장 대상 이름이 나가야 상대가 안 눈치챈다.
+  const inPokemonId = inFighter.illusionAs ?? inFighter.slot.pokemonId;
   return { nextState: state, entryMessages, outPokemonId, inPokemonId };
 }
 
@@ -2991,6 +3030,8 @@ function resolveAction(
   // 탈(Disguise): 배틀 중 처음 데미지를 입는 순간에만 발동(disguiseBroken이 아직 false일 때).
   let hitNegatedByAbilityName: string | undefined;
   let disguiseRecoilDamage: number | undefined;
+  // 일루전(§6-1): 이번 행동으로 방어측 조로아크의 위장이 풀렸으면 그 조로아크의 진짜 종 id.
+  let illusionBrokenSpeciesId: string | undefined;
   // 길동무: 데미지 적용 직후 판정하지만, 기합의띠/옹골참/버티기(applyEndurance)로 HP 1로 버텨낸
   // 경우는 애초에 안 쓰러진 것이므로 발동하면 안 된다 — applyEndurance까지 다 끝난 뒤에 판정해야
   // 한다(checkDestinyBond를 별도 호출로 분리한 이유). 다단히트 도중 이미 발동했으면 재판정 안 함.
@@ -3026,6 +3067,11 @@ function resolveAction(
     // 분노의주먹(Move.rageFistPower)용: 이 포켓몬이 기술로 데미지를 받은 누적 횟수(다단히트는 타수만큼).
     if (amount > 0) {
       defender.timesHitByMoves = (defender.timesHitByMoves ?? 0) + 1;
+    }
+    // 일루전(§6-1): 기술 데미지를 실제로 받는 순간 위장이 풀린다. 다단히트면 첫 타에서만 로그를 낸다.
+    if (amount > 0 && defender.illusionAs && defenderAbility?.illusion) {
+      defender.illusionAs = undefined;
+      illusionBrokenSpeciesId = defender.slot.pokemonId;
     }
     // 전기로바꾸기(Electromorphosis): 기술 데미지를 받으면 충전 상태가 된다(다음 전기 기술 위력 2배).
     if (amount > 0 && defenderAbility?.chargesOnDamageTaken && !isFainted(defender)) {
@@ -4727,6 +4773,7 @@ function resolveAction(
     hitSubstitute,
     hitNegatedByAbilityName,
     disguiseRecoilDamage,
+    illusionBrokenSpeciesId,
     triggeredDestinyBond: destinyBondTriggered || undefined,
     protectSucceeded,
     protectFailed,
@@ -4871,12 +4918,13 @@ export function runTurn(
     performSwitch(state, key, action.toIndex, entryMessages);
     if (side.activeIndex !== fromIndex) {
       didSwitch[key] = true;
+      const inFighter = side.party[action.toIndex];
       switches.push({
         side: key,
         fromIndex,
         toIndex: action.toIndex,
         outPokemonId: outgoing.slot.pokemonId,
-        inPokemonId: side.party[action.toIndex].slot.pokemonId,
+        inPokemonId: inFighter.illusionAs ?? inFighter.slot.pokemonId, // 일루전 위장 반영(§6-1)
         entryMessages,
       });
     }
@@ -5064,7 +5112,7 @@ export function runTurn(
           fromIndex,
           toIndex,
           outPokemonId: outgoing.slot.pokemonId,
-          inPokemonId: pivotSide.party[toIndex].slot.pokemonId,
+          inPokemonId: pivotSide.party[toIndex].illusionAs ?? pivotSide.party[toIndex].slot.pokemonId, // §6-1
           entryMessages,
           afterMove: true,
         });

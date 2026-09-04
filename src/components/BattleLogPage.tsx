@@ -564,6 +564,10 @@ export function BattleLogPage() {
               const fighter = battleState[side];
               const pokemon = getPokemon(fighter.slot.pokemonId);
               if (!pokemon) return null;
+              // 일루전(§6-1): 위장 중이면 화면에는 위장 대상 이름을 보여준다(타입·실능·특성은 조로아크 그대로).
+              const displayName = fighter.illusionAs
+                ? getPokemon(fighter.illusionAs)?.name ?? pokemon.name
+                : pokemon.name;
               // 셋업 카드와 동일하게 메가진화 여부를 반영해서 이름 옆에 배지를 그린다.
               // fighter.slot(EvaluatorSlot)은 FormSource를 만족하므로 getEffectiveForm을 그대로 쓸 수 있다.
               const form = getEffectiveForm(pokemon, fighter.slot);
@@ -582,8 +586,10 @@ export function BattleLogPage() {
                 <div key={side} className={`battle-fighter battle-fighter-${side}`}>
                   <div className="battle-fighter-head">
                     <span className="battle-fighter-name">
-                      {pokemon.name}
-                      {form.mega && <span className="battle-fighter-mega-tag">{megaBadgeLabel(form.mega)}</span>}
+                      {displayName}
+                      {!fighter.illusionAs && form.mega && (
+                        <span className="battle-fighter-mega-tag">{megaBadgeLabel(form.mega)}</span>
+                      )}
                       {fighter.currentHp <= 0 && <span className="battle-fighter-fainted"> (기절)</span>}
                     </span>
                     <div className="battle-status-tags">
@@ -677,7 +683,8 @@ export function BattleLogPage() {
                     return (
                       <div className="battle-party-tracker">
                         {bs.party.map((f, i) => {
-                          const pk = getPokemon(f.slot.pokemonId);
+                          // 일루전(§6-1): 위장 중인 활성 조로아크는 트래커에서도 위장 대상 이름으로 보인다.
+                          const pk = getPokemon(f.illusionAs ?? f.slot.pokemonId);
                           const pct = Math.max(0, Math.min(100, (f.currentHp / f.maxHp) * 100));
                           const fainted = f.currentHp <= 0;
                           return (
@@ -1552,6 +1559,12 @@ export function BattleLogPage() {
                           {defenderName}의 {action.hitNegatedByAbilityName}! {defenderName}의 정체가 드러났다!{" "}
                           {defenderName}
                           {eunNeun(defenderName)} 반동으로 {action.disguiseRecoilDamage} 데미지를 입었다!
+                        </div>
+                      )}
+                      {/* 일루전(§6-1) — 기술 데미지를 받는 순간 위장이 풀린다 */}
+                      {action.illusionBrokenSpeciesId && (
+                        <div className="battle-turn-line is-muted">
+                          {getPokemon(action.illusionBrokenSpeciesId)?.name ?? "포켓몬"}의 일루전이 풀렸다!
                         </div>
                       )}
                       {/* 흑안개 — 자신/상대 구분 없이 양쪽 다 초기화되는 유일한 랭크변화 효과라 전용 문구로 알려준다 */}
