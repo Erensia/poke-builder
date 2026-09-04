@@ -1771,6 +1771,9 @@ function applyEntryAbilityOnSwitchIn(state: BattleState, key: FighterKey, log: s
  * 메가진화 선언을 처리한다(백로그 §4). 스톤을 든 활성 포켓몬을 그 자리에서 메가폼으로 바꾼다 —
  * 타입·특성·실능치를 메가폼 기준으로 교체하고 편의 megaUsed·파이터의 hasMegaEvolved를 세운다.
  * 조건(스톤 없음·이미 메가·편이 이미 씀·기절)에 안 맞으면 아무것도 안 하고 false를 돌려준다.
+ *
+ * 메가폼의 특성이 등장 특성(가뭄·모래날림·일렉트릭메이커·위협·트레이스 등)이면, 본가처럼
+ * 메가진화 시점에 그 효과가 발동한다 — applyEntryAbilityOnSwitchIn을 그대로 재사용한다(§4 후속).
  */
 function applyMegaEvolution(state: BattleState, key: FighterKey, log: string[]): boolean {
   const side = sideOf(state, key);
@@ -1792,6 +1795,10 @@ function applyMegaEvolution(state: BattleState, key: FighterKey, log: string[]):
 
   const nm = pokemon?.name ?? "포켓몬";
   log.push(`${nm}${eunNeun(nm)} ${mega.form}${roEuro(mega.form)} 메가진화했다!`);
+
+  // 메가폼의 등장 특성 발동(가뭄·위협·트레이스 등). 교체 등장이 아니라 그 자리에서의 발동이지만
+  // 처리 내용은 동일하다 — 날씨/필드 덮어쓰기, 상대 랭크 하락, 상대 특성 복사 등.
+  applyEntryAbilityOnSwitchIn(state, key, log);
   return true;
 }
 
