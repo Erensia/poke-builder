@@ -8,7 +8,7 @@ import { ItemPickerModal } from "./ItemPickerModal";
 import { NaturePickerModal } from "./NaturePickerModal";
 import { PointsEditorModal } from "./PointsEditorModal";
 import { SlotPresetsModal } from "./SlotPresetsModal";
-import { useBattleSetup } from "../hooks/useBattleSetup";
+import { useBattleSetup, BATTLE_SELECT_SIZE } from "../hooks/useBattleSetup";
 import { useSlotPresets } from "../hooks/useSlotPresets";
 import { getPokemon, getMove, getItem } from "../lib/data";
 import { getEffectiveForm, megaBadgeLabel } from "../lib/pokemonForm";
@@ -36,7 +36,7 @@ import type { BaseStats } from "../types/stats";
 import "./BattleLogPage.css";
 
 type Side = "a" | "b";
-type SlotIndex = 0 | 1 | 2;
+type SlotIndex = 0 | 1 | 2 | 3 | 4 | 5;
 type PickerState =
   | { kind: "pokemon"; side: Side; slotIndex: SlotIndex }
   | { kind: "ability"; side: Side; slotIndex: SlotIndex }
@@ -52,7 +52,7 @@ type TurnChoice =
   | { kind: "move"; moveId: string; selfSwitchTo?: number }
   | { kind: "switch"; toIndex: number };
 
-const SLOT_INDICES: SlotIndex[] = [0, 1, 2];
+const SLOT_INDICES: SlotIndex[] = [0, 1, 2, 3, 4, 5];
 
 const STATUS_LABELS: Record<StatusCondition, string> = {
   burn: "화상",
@@ -211,6 +211,11 @@ export function BattleLogPage() {
   // 구애스카프 잠금 위반으로 턴 진행이 막혔을 때 보여줄 경고 문구. 선택이 바뀌거나 턴이 정상
   // 진행되면 지운다.
   const [lockWarning, setLockWarning] = useState<string | null>(null);
+  // 빌드(6슬롯) → 선출(3+순서) → 대전. selecting=true면 선출 화면(§3).
+  const [selecting, setSelecting] = useState(false);
+  // 각 편이 선출한 빌드 슬롯 인덱스 — 고른 순서대로(index 0 = 리드). 선출이 필요 없는 편
+  // (유효 빌드 ≤ BATTLE_SELECT_SIZE)은 "다음"을 누른 시점에 빌드 순서대로 자동으로 채운다.
+  const [selection, setSelection] = useState<{ a: SlotIndex[]; b: SlotIndex[] }>({ a: [], b: [] });
 
   const sideCtls = (side: Side) => (side === "a" ? setup.a : setup.b);
   const slotCtl = (side: Side, i: SlotIndex) => sideCtls(side)[i];
@@ -317,22 +322,26 @@ export function BattleLogPage() {
     return null;
   }
 
-  /** 이 편의 채워진(포켓몬이 있는) 슬롯을 선출 순서대로 압축 */
-  const filledSlots = (side: Side): PartySlot[] =>
-    sideCtls(side)
-      .map((c) => c.slot)
-      .filter((s): s is PartySlot => s !== null);
-
-  const canStart =
-    (["a", "b"] as const).every((side) => {
-      const slots = filledSlots(side);
-      return slots.length >= 1 && slots.every((s) => s.moves.some((m) => m !== null));
+  /** 이 편에서 포켓몬이 있고 기술이 1개 이상인 빌드 슬롯 인덱스(빌드 순서). 이게 곧 "선출 가능" 후보. */
+  const buildableIndices = (side: Side): SlotIndex[] =>
+    SLOT_INDICES.filter((i) => {
+      const s = slotCtl(side, i).slot;
+      return s !== null && s.moves.some((m) => m !== null);
     });
 
-  function startBattle() {
-    if (!canStart) return;
-    const aParty = filledSlots("a");
-    const bParty = filledSlots("b");
+  /** 이 편이 선출 화면에서 골라야 하는지 — 유효 빌드가 선출 인원을 초과하면 true */
+  const needsSelection = (side: Side) => buildableIndices(side).length > BATTLE_SELECT_SIZE;
+
+  /** 양쪽 다 유효 빌드가 1마리 이상이면 다음 단계로 갈 수 있다 */
+  const canProceed = (["a", "b"] as const).every((side) => buildableIndices(side).length >= 1);
+
+  /** 선출된 빌드 슬롯 인덱스 목록으로 배틀 상태를 만들고 대전을 시작한다 */
+  function startBattleWith(sel: { a: SlotIndex[]; b: SlotIndex[] }) {
+    const partyOf = (side: Side) =>
+      sel[side].map((i) => slotCtl(side, i).slot).filter((s): s is PartySlot => s !== null);
+    const aParty = partyOf("a");
+    const bParty = partyOf("b");
+    if (aParty.length < 1 || bParty.length < 1) return;
     const movesOf = (s: PartySlot) => s.moves.filter((id): id is string => id !== null).map((id) => getMove(id)!);
     const state = createBattleState({
       a: { slots: aParty, movesList: aParty.map(movesOf) },
@@ -346,7 +355,38 @@ export function BattleLogPage() {
     setInputMode({ a: "move", b: "move" });
     setPendingForcedSwitch(null);
     setLockWarning(null);
+    setSelecting(false);
   }
+
+  /** 빌드 화면 "다음/대전 시작" — 양쪽 다 3마리 이하면 선출을 건너뛰고 바로 대전, 아니면 선출 화면으로 */
+  function handleProceed() {
+    if (!canProceed) return;
+    const autoSel = (side: Side) =>
+      needsSelection(side) ? [] : buildableIndices(side).slice(0, BATTLE_SELECT_SIZE);
+    const sel = { a: autoSel("a"), b: autoSel("b") };
+    if (!needsSelection("a") && !needsSelection("b")) {
+      startBattleWith(sel);
+    } else {
+      setSelection(sel);
+      setSelecting(true);
+    }
+  }
+
+  /** 선출 화면에서 포켓몬 카드를 눌렀을 때 — 이미 골랐으면 해제(뒤 번호 자동 재정렬), 아니면 다음 번호로 추가 */
+  function toggleSelection(side: Side, i: SlotIndex) {
+    setSelection((prev) => {
+      const cur = prev[side];
+      const at = cur.indexOf(i);
+      if (at >= 0) return { ...prev, [side]: cur.filter((x) => x !== i) };
+      if (cur.length >= BATTLE_SELECT_SIZE) return prev;
+      return { ...prev, [side]: [...cur, i] };
+    });
+  }
+
+  /** 선출 화면 "대전 시작" 가능 여부 — 각 편이 정확히 min(빌드 수, 선출 인원)만큼 골랐는지 */
+  const selectionComplete = (["a", "b"] as const).every(
+    (side) => selection[side].length === Math.min(buildableIndices(side).length, BATTLE_SELECT_SIZE),
+  );
 
   function resetToSetup() {
     setBattleState(null);
@@ -356,6 +396,8 @@ export function BattleLogPage() {
     setInputMode({ a: "move", b: "move" });
     setPendingForcedSwitch(null);
     setLockWarning(null);
+    setSelecting(false);
+    setSelection({ a: [], b: [] });
   }
 
   /** 이 편에서 지금 교대로 내보낼 수 있는 슬롯(활성 아님 + 안 쓰러짐) */
@@ -476,22 +518,24 @@ export function BattleLogPage() {
           <h2>배틀타워</h2>
           <p>실전 배틀 시뮬레이션</p>
         </div>
-        {!battleState && <WeatherPicker weather={setup.weather} onChange={setup.setWeather} />}
+        {!battleState && !selecting && (
+          <WeatherPicker weather={setup.weather} onChange={setup.setWeather} />
+        )}
       </header>
 
-      {!battleState && (
+      {!battleState && !selecting && (
         <div className="battle-setup-board">
           {(["a", "b"] as const).map((side) => (
             <Fragment key={side}>
               <div className="battle-setup-column">
                 <div className="battle-setup-column-title">
                   {side === "a" ? "내 파티" : "상대 파티"}{" "}
-                  <span className="battle-setup-column-hint">첫 슬롯이 리드</span>
+                  <span className="battle-setup-column-hint">6마리까지 빌드 · 4마리 이상이면 3마리 선출</span>
                 </div>
                 {SLOT_INDICES.map((i) => (
                   <BattleSetupCard
                     key={i}
-                    label={`${side === "a" ? "내 포켓몬" : "상대 포켓몬"} ${i + 1}${i === 0 ? " (선출)" : ""}`}
+                    label={`${side === "a" ? "내 포켓몬" : "상대 포켓몬"} ${i + 1}`}
                     slot={slotCtl(side, i).slot}
                     onPickPokemon={() => setPicker({ kind: "pokemon", side, slotIndex: i })}
                     onClearPokemon={slotCtl(side, i).clearPokemon}
@@ -517,15 +561,73 @@ export function BattleLogPage() {
                   <button
                     type="button"
                     className="battle-start-button"
-                    disabled={!canStart}
-                    onClick={startBattle}
+                    disabled={!canProceed}
+                    onClick={handleProceed}
                   >
-                    대전 시작
+                    {needsSelection("a") || needsSelection("b") ? "다음 (선출)" : "대전 시작"}
                   </button>
                 </div>
               )}
             </Fragment>
           ))}
+        </div>
+      )}
+
+      {!battleState && selecting && (
+        <div className="battle-select">
+          <div className="battle-select-board">
+            {(["a", "b"] as const).map((side) => {
+              const pool = buildableIndices(side);
+              const picks = selection[side];
+              const manual = needsSelection(side);
+              return (
+                <div key={side} className="battle-select-column">
+                  <div className="battle-setup-column-title">
+                    {side === "a" ? "내 선출" : "상대 선출"}{" "}
+                    <span className="battle-setup-column-hint">
+                      {manual ? `${picks.length}/${BATTLE_SELECT_SIZE} · 고른 순서가 선출 순서(첫 번째가 리드)` : "빌드 순서대로 선출"}
+                    </span>
+                  </div>
+                  <div className="battle-select-list">
+                    {pool.map((i) => {
+                      const pk = pokemonAt(side, i);
+                      // 수동 선출: 고른 순서대로 번호. 선출 스킵 편: 빌드 순서 그대로 1·2·3 고정.
+                      const num = manual
+                        ? picks.includes(i)
+                          ? picks.indexOf(i) + 1
+                          : null
+                        : pool.indexOf(i) + 1;
+                      return (
+                        <button
+                          key={i}
+                          type="button"
+                          className={`battle-select-mon${num ? " is-picked" : ""}`}
+                          disabled={!manual}
+                          onClick={() => toggleSelection(side, i)}
+                        >
+                          <span className={`battle-select-num${num ? " is-on" : ""}`}>{num ?? ""}</span>
+                          <span className="battle-select-name">{pk?.name ?? "포켓몬"}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <div className="battle-select-actions">
+            <button type="button" className="battle-reset-button" onClick={() => setSelecting(false)}>
+              뒤로
+            </button>
+            <button
+              type="button"
+              className="battle-start-button"
+              disabled={!selectionComplete}
+              onClick={() => startBattleWith(selection)}
+            >
+              대전 시작
+            </button>
+          </div>
         </div>
       )}
 
