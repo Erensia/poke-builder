@@ -23,7 +23,7 @@ import {
 } from "../types/status";
 import type { Ability } from "../types/ability";
 import { getPokemon, getAbility, getMove, getItem } from "./data";
-import { getEffectiveForm, getEffectiveAbilityId, getEffectiveGender } from "./pokemonForm";
+import { getEffectiveForm, getEffectiveAbilityId, getEffectiveGender, findMegaFormByStone } from "./pokemonForm";
 import { computeRealStats } from "./statCalculator";
 import { applyMoveStatChanges, applyStageDelta, clampStagesToNonNegative } from "./statStages";
 import { hitTriggerMatchesMove } from "./abilityHitTriggers";
@@ -247,6 +247,13 @@ export interface BattleFighterState {
    */
   illusionAs?: string;
   /**
+   * 메가진화(백로그 §4): 장착한 메가스톤 item id. 있으면 이 포켓몬은 배틀 시작 시 기본 폼으로
+   * 나오고(굳히지 않음), 턴에 메가진화를 선언하면 그 턴 행동 전에 폼이 바뀐다.
+   */
+  megaStone?: string;
+  /** 이 배틀에서 이미 메가진화했으면 true. 교체로 물러났다 다시 나와도 유지(본가 규칙). */
+  hasMegaEvolved?: boolean;
+  /**
    * 변신(Move.transformsIntoTarget)·괴짜(Ability.transformsIntoOpponentOnEntry)로 상대로 변신한
    * 상태면 true. 타입·5실능(HP 제외)·특성·능력 랭크·기술(PP 5)을 상대 것으로 갈아치운 뒤 이 플래그를
    * 세운다. 교체가 없는 1v1이라 한 번 변신하면 배틀 끝까지 유지되고, 재변신은 실패한다.
@@ -392,6 +399,8 @@ export interface BattleSide {
    * 유지된다. healAmount는 시전 시점 시전자 최대 HP의 절반(고정).
    */
   wish?: { turnsRemaining: number; healAmount: number };
+  /** 메가진화는 팀당 1회(백로그 §4). 이 편이 이미 썼으면 true. */
+  megaUsed?: boolean;
 }
 
 /**
@@ -580,7 +589,12 @@ export function createFighterState(slot: EvaluatorSlot, moves: Move[]): BattleFi
   const pokemon = getPokemon(slot.pokemonId);
   if (!pokemon) throw new Error(`알 수 없는 포켓몬: ${slot.pokemonId}`);
 
-  const form = getEffectiveForm(pokemon, slot);
+  // 메가진화는 배틀 시작 시 굳히지 않는다(§4) — 스톤을 들어도 기본 폼으로 시작하고, 턴에
+  // 선언될 때 runTurn이 폼을 바꾼다. 다만 어떤 메가폼으로 갈지는 스톤으로 미리 파악해 둔다.
+  const form = getEffectiveForm(pokemon, slot, { ignoreMega: true });
+  const megaForm =
+    pokemon.megaEvolutions?.find((m) => m.form === slot.activeMegaForm) ??
+    findMegaFormByStone(pokemon, slot.item);
   // 킬가르도(배틀스위치): pokemon.baseStats에 이미 실드폼 수치를 그대로 채워뒀으므로, 등장 시점
   // 실수치는 별도 분기 없이 그대로 계산된다 — currentForm/stanceChangeForms만 같이 들고 다니다가
   // resolveAction에서 기술 카테고리에 따라 필요할 때 realStats를 다시 계산한다.
@@ -591,6 +605,7 @@ export function createFighterState(slot: EvaluatorSlot, moves: Move[]): BattleFi
     types: form.types,
     gender: getEffectiveGender(pokemon, slot),
     effectiveAbilityId: getEffectiveAbilityId(form, slot.ability),
+    megaStone: megaForm?.megaStone,
     realStats,
     currentHp: realStats.hp,
     maxHp: realStats.hp,
@@ -1574,6 +1589,7 @@ function cloneSide(side: BattleSide): BattleSide {
     hazards: { ...side.hazards },
     screens: { ...side.screens },
     wish: side.wish ? { ...side.wish } : undefined,
+    megaUsed: side.megaUsed,
   };
 }
 
@@ -1749,6 +1765,34 @@ function applyEntryAbilityOnSwitchIn(state: BattleState, key: FighterKey, log: s
     const copiedName = copied?.name ?? "특성";
     log.push(`${selfName}의 ${ability.name}! ${opponentName}의 ${copiedName}${eulReul(copiedName)} 복사했다!`);
   }
+}
+
+/**
+ * 메가진화 선언을 처리한다(백로그 §4). 스톤을 든 활성 포켓몬을 그 자리에서 메가폼으로 바꾼다 —
+ * 타입·특성·실능치를 메가폼 기준으로 교체하고 편의 megaUsed·파이터의 hasMegaEvolved를 세운다.
+ * 조건(스톤 없음·이미 메가·편이 이미 씀·기절)에 안 맞으면 아무것도 안 하고 false를 돌려준다.
+ */
+function applyMegaEvolution(state: BattleState, key: FighterKey, log: string[]): boolean {
+  const side = sideOf(state, key);
+  const fighter = state[key];
+  if (side.megaUsed || fighter.hasMegaEvolved || !fighter.megaStone || isFainted(fighter)) return false;
+  const pokemon = getPokemon(fighter.slot.pokemonId);
+  const mega = pokemon?.megaEvolutions?.find((m) => m.megaStone === fighter.megaStone);
+  if (!mega) return false;
+
+  const newStats = computeRealStats(mega.baseStats, fighter.slot.points, fighter.slot.nature);
+  const hpDelta = newStats.hp - fighter.maxHp; // 공식 메가폼은 HP 불변이지만 비공식 폼 대비 안전하게
+  fighter.types = [...mega.types];
+  fighter.effectiveAbilityId = mega.ability;
+  fighter.realStats = newStats;
+  fighter.maxHp = newStats.hp;
+  fighter.currentHp = Math.min(newStats.hp, Math.max(1, fighter.currentHp + Math.max(0, hpDelta)));
+  fighter.hasMegaEvolved = true;
+  side.megaUsed = true;
+
+  const nm = pokemon?.name ?? "포켓몬";
+  log.push(`${nm}${eunNeun(nm)} ${mega.form}${roEuro(mega.form)} 메가진화했다!`);
+  return true;
 }
 
 /**
@@ -2494,11 +2538,13 @@ function resolveAction(
   if (effectiveMove.spitUpPower) {
     effectiveMove = { ...effectiveMove, power: (attacker.stockpileCount ?? 0) * 100 };
   }
-  // 헤비봄버·히트스탬프 / 풀묶기·안다리걸기(§3-6): 몸무게 기반 위력. 메가폼이면 그 폼의 몸무게를
-  // 쓴다(getEffectiveForm.weightKg). weightKg 미입력이면 폴백.
+  // 헤비봄버·히트스탬프 / 풀묶기·안다리걸기(§3-6): 몸무게 기반 위력. 실제로 메가진화한 상태일
+  // 때만(§4) 그 폼의 몸무게를 쓴다 — 스톤만 들고 선언 전이면 기본 폼 몸무게. weightKg 미입력이면 폴백.
   const weightOf = (fighter: BattleFighterState): number | undefined => {
     const pk = getPokemon(fighter.slot.pokemonId);
-    const baseKg = pk ? getEffectiveForm(pk, fighter.slot).weightKg : undefined;
+    const baseKg = pk
+      ? getEffectiveForm(pk, fighter.slot, { ignoreMega: !fighter.hasMegaEvolved }).weightKg
+      : undefined;
     if (baseKg === undefined) return undefined;
     // 헤비메탈(2)·라이트메탈(0.5): 자신의 몸무게에 배율을 곱한다.
     const mult = abilityOf(fighter)?.weightMultiplier ?? 1;
@@ -4870,6 +4916,11 @@ export type TurnAction =
        * 기술이 빗나가면 교체는 일어나지 않는다.
        */
       selfSwitchTo?: number;
+      /**
+       * 메가진화 선언(백로그 §4). true면 이 턴의 행동 직전(턴 순서 계산 전)에 메가진화가 처리된다.
+       * 스톤이 없거나·이미 메가진화했거나·그 편이 이미 이번 배틀에서 메가진화를 썼으면 무시된다.
+       */
+      mega?: boolean;
     }
   | { kind: "switch"; toIndex: number };
 
@@ -4984,6 +5035,16 @@ export function runTurn(
     if (changedTo) {
       const nm = getPokemon(state[key].slot.pokemonId)?.name ?? "포켓몬";
       turnStartAnnouncements.push(`${nm}${eunNeun(nm)} ${changedTo} 타입이 되었다!`);
+    }
+  }
+
+  // 메가진화 선언(§4): 턴 순서를 계산하기 전에 처리한다 — 메가폼의 스피드가 이번 턴 행동
+  // 순서에 반영된다(본가 규칙). 교체한 쪽은 이번 턴 행동을 안 하므로 메가진화도 없다.
+  // 로그 순서만을 위해 프리스테이트 기본 스피드가 빠른 쪽부터 시도한다.
+  for (const key of prevState.a.realStats.spe >= prevState.b.realStats.spe ? (["a", "b"] as const) : (["b", "a"] as const)) {
+    const action = key === "a" ? actionA : actionB;
+    if (action.kind === "move" && action.mega && !didSwitch[key]) {
+      applyMegaEvolution(state, key, turnStartAnnouncements);
     }
   }
 

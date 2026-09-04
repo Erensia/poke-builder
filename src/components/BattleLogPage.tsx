@@ -216,6 +216,8 @@ export function BattleLogPage() {
   // 각 편이 선출한 빌드 슬롯 인덱스 — 고른 순서대로(index 0 = 리드). 선출이 필요 없는 편
   // (유효 빌드 ≤ BATTLE_SELECT_SIZE)은 "다음"을 누른 시점에 빌드 순서대로 자동으로 채운다.
   const [selection, setSelection] = useState<{ a: SlotIndex[]; b: SlotIndex[] }>({ a: [], b: [] });
+  // 이번 턴 메가진화를 선언했는지(§4). 매 턴 시작 시 꺼짐으로 초기화한다.
+  const [megaDeclared, setMegaDeclared] = useState<{ a: boolean; b: boolean }>({ a: false, b: false });
 
   const sideCtls = (side: Side) => (side === "a" ? setup.a : setup.b);
   const slotCtl = (side: Side, i: SlotIndex) => sideCtls(side)[i];
@@ -356,6 +358,7 @@ export function BattleLogPage() {
     setPendingForcedSwitch(null);
     setLockWarning(null);
     setSelecting(false);
+    setMegaDeclared({ a: false, b: false });
   }
 
   /** 빌드 화면 "다음/대전 시작" — 양쪽 다 3마리 이하면 선출을 건너뛰고 바로 대전, 아니면 선출 화면으로 */
@@ -398,6 +401,7 @@ export function BattleLogPage() {
     setLockWarning(null);
     setSelecting(false);
     setSelection({ a: [], b: [] });
+    setMegaDeclared({ a: false, b: false });
   }
 
   /** 이 편에서 지금 교대로 내보낼 수 있는 슬롯(활성 아님 + 안 쓰러짐) */
@@ -486,16 +490,16 @@ export function BattleLogPage() {
     const actionFor = (side: Side): TurnAction | null => {
       const sel = selected[side];
       if (sel?.kind === "switch") return { kind: "switch", toIndex: sel.toIndex };
-      if (struggling[side]) return { kind: "move", move: STRUGGLE_MOVE };
+      const mega = megaDeclared[side] || undefined; // 메가진화는 기술 행동에만 실린다
+      if (struggling[side]) return { kind: "move", move: STRUGGLE_MOVE, mega };
       if (charging[side]) {
         const m = getMove(battleState[side].chargingMoveId!);
-        return m ? { kind: "move", move: m } : null;
+        return m ? { kind: "move", move: m, mega } : null;
       }
       const m = sel?.kind === "move" ? getMove(sel.moveId) : undefined;
       if (!m) return null;
-      return sel?.kind === "move" && sel.selfSwitchTo !== undefined
-        ? { kind: "move", move: m, selfSwitchTo: sel.selfSwitchTo }
-        : { kind: "move", move: m };
+      const selfSwitchTo = sel?.kind === "move" ? sel.selfSwitchTo : undefined;
+      return { kind: "move", move: m, ...(selfSwitchTo !== undefined ? { selfSwitchTo } : {}), ...(mega ? { mega } : {}) };
     };
     const actionA = actionFor("a");
     const actionB = actionFor("b");
@@ -507,6 +511,7 @@ export function BattleLogPage() {
     setSelected({ a: null, b: null });
     setInputMode({ a: "move", b: "move" });
     setPendingForcedSwitch(forcedSwitch ?? null);
+    setMegaDeclared({ a: false, b: false });
   }
 
   const winner = log.at(-1)?.winner;
@@ -702,7 +707,8 @@ export function BattleLogPage() {
                   <div className="battle-fighter-head">
                     <span className="battle-fighter-name">
                       {displayName}
-                      {!fighter.illusionAs && form.mega && (
+                      {/* §4: 스톤을 들어도 실제로 메가진화를 선언(hasMegaEvolved)해야 배지가 뜬다 */}
+                      {!fighter.illusionAs && fighter.hasMegaEvolved && form.mega && (
                         <span className="battle-fighter-mega-tag">{megaBadgeLabel(form.mega)}</span>
                       )}
                       {fighter.currentHp <= 0 && <span className="battle-fighter-fainted"> (기절)</span>}
@@ -894,6 +900,26 @@ export function BattleLogPage() {
                             ))}
                           </div>
                         )}
+
+                        {/* §4: 메가진화 선언 토글 — 스톤을 들었고, 아직 안 했고, 그 편이 이번 배틀에
+                            메가진화를 안 썼을 때만. 켜고 기술을 고르면 그 턴 행동 전에 메가진화. */}
+                        {mode !== "switch" &&
+                          fighter.megaStone &&
+                          !battleSide(side)?.megaUsed &&
+                          !fighter.hasMegaEvolved && (
+                            <label className="battle-mega-toggle">
+                              <input
+                                type="checkbox"
+                                checked={megaDeclared[side]}
+                                onChange={(e) =>
+                                  setMegaDeclared((p) => ({ ...p, [side]: e.target.checked }))
+                                }
+                              />
+                              <span>
+                                메가진화{form.mega ? ` (${megaBadgeLabel(form.mega)})` : ""}
+                              </span>
+                            </label>
+                          )}
 
                         {mode === "switch" ? (
                           <div className="battle-switch-list">

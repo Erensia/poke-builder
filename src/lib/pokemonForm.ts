@@ -42,11 +42,20 @@ export function findMegaFormByStone(
   return pokemon.megaEvolutions.find((m) => m.megaStone === itemId);
 }
 
-/** 슬롯의 도구/activeMegaForm을 반영한 실제 타입·종족값을 계산한다 */
-export function getEffectiveForm(pokemon: Pokemon, slot: FormSource): EffectiveForm {
-  const mega =
-    pokemon.megaEvolutions?.find((m) => m.form === slot.activeMegaForm) ??
-    findMegaFormByStone(pokemon, slot.item);
+/**
+ * 슬롯의 도구/activeMegaForm을 반영한 실제 타입·종족값을 계산한다.
+ * opts.ignoreMega=true면 메가진화 분기를 통째로 건너뛴다(배틀 시뮬 — 메가는 배틀 시작 시
+ * 굳히지 않고 턴에 선언될 때 적용하므로, createFighterState는 기본 폼을 원한다, §4).
+ */
+export function getEffectiveForm(
+  pokemon: Pokemon,
+  slot: FormSource,
+  opts?: { ignoreMega?: boolean },
+): EffectiveForm {
+  const mega = opts?.ignoreMega
+    ? undefined
+    : (pokemon.megaEvolutions?.find((m) => m.form === slot.activeMegaForm) ??
+      findMegaFormByStone(pokemon, slot.item));
 
   if (mega) {
     return {

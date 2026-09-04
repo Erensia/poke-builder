@@ -184,6 +184,15 @@ Phase 8(배틀타워 리뉴얼)은 **2026-09-03 착수 결재에서 "3슬롯만 
 
 ## 4. 배틀타워 — 메가진화 버튼 (턴 중 메가진화 선언)
 
+> **✅ 해결 (2026-09-04, 브랜치 `feat/turn-mega-evolution`).** 스톤을 들어도 배틀 시작 시 기본
+> 폼(`getEffectiveForm(..., { ignoreMega: true })`). 매 턴 기술 UI에 "메가진화" 토글 —
+> `TurnAction.mega` 플래그. `runTurn`이 턴 순서 계산 **전에** `applyMegaEvolution`(타입·특성·실능치
+> 교체 + `BattleFighterState.hasMegaEvolved`·`BattleSide.megaUsed`)으로 처리 → 메가폼 스피드가
+> 그 턴 순서에 반영. 4-4 결정: 빌더 표시 현행 유지 / 토글 항상 꺼짐 시작 / 안 켜면 기본 폼
+> 유지 / 상대측도 수동. 검증: 팬텀(spe 110)+팬텀나이트 vs 엘풍(spe 116) — 선언 안 하면 엘풍
+> 선공, 선언하면 메가팬텀(spe 130) 선공. 교체 후 복귀해도 메가 유지, 팀 2번째 몬·타 편은 불가.
+> **미반영(후속)**: 메가진화로 등장 특성(메가리자몽Y=가뭄 등)이 발동하는 케이스.
+
 ### 4-1. 현재 방식
 
 메가진화는 **메가스톤을 도구로 장착하면 자동**으로 적용된다. `getEffectiveForm`이 `findMegaFormByStone`으로
