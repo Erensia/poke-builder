@@ -614,6 +614,7 @@
 }
 
 .battle-switch-panel {
+  margin-top: 5px;
   border: 1px solid var(--danger);
   border-radius: 8px;
   padding: 0.5rem;

@@ -1556,11 +1556,6 @@ export interface SwitchLogEntry {
   inPokemonId: string;
   /** 이 교체로 발생한 등장/퇴장 안내(재생력·자연회복·위협·날씨 등, Phase 8 §4). 없으면 빈 배열 */
   entryMessages: string[];
-  /**
-   * 유턴·볼트체인지·배턴터치로 "행동 뒤 같은 턴 안에서" 일어난 자체 교체면 true(백로그 §7-2).
-   * 로그 렌더에서 이 교체는 그 편의 기술 줄 "다음"에 놓는다(선처리 교체는 actions 앞).
-   */
-  afterMove?: boolean;
 }
 
 function isFainted(fighter: BattleFighterState): boolean {
@@ -4917,13 +4912,6 @@ export type TurnAction =
       kind: "move";
       move: Move;
       /**
-       * 유턴·볼트체인지·배턴터치(백로그 §7-2)를 골랐을 때, 명중하면 교대해 나올 슬롯 인덱스.
-       * 호출부가 기술 선택과 함께 미리 지정한다 — 본가처럼 사용측의 교체가 그 턴 안에서,
-       * 상대 행동·턴 종료 처리보다 먼저 이뤄지도록 하기 위함. 유효한 슬롯이 아니거나(기절·활성)
-       * 기술이 빗나가면 교체는 일어나지 않는다.
-       */
-      selfSwitchTo?: number;
-      /**
        * 메가진화 선언(백로그 §4). true면 이 턴의 행동 직전(턴 순서 계산 전)에 메가진화가 처리된다.
        * 스톤이 없거나·이미 메가진화했거나·그 편이 이미 이번 배틀에서 메가진화를 썼으면 무시된다.
        */
@@ -4941,6 +4929,13 @@ export interface RunTurnOutcome {
    * 편은 이미 패배(result.winner)라 여기 안 실린다. 파티 길이 1이면 항상 undefined.
    */
   forcedSwitch?: { a?: boolean; b?: boolean };
+  /**
+   * 유턴·볼트체인지·배턴터치(백로그 §7-2). 이번 턴 명중해서 효과를 준 뒤, 사용측이 교대할
+   * 포켓몬을 골라야 하는 편. 호출부는 이 선택이 끝날 때까지 다음 턴 진행을 막고, 선택되면
+   * applySwitch({ voluntary: true, passBaton })로 교체를 확정한 뒤 교체 로그를 남긴다.
+   * 사용측이 같이 쓰러졌거나 교대할 슬롯이 없으면 여기 안 실린다.
+   */
+  selfSwitch?: { a?: { passBaton: boolean }; b?: { passBaton: boolean } };
 }
 
 /**
@@ -5010,11 +5005,6 @@ export function runTurn(
   const SWITCH_PASS_MOVE: Move = { ...STRUGGLE_MOVE, id: "__switch_pass__", name: "교체", category: "status", power: null };
   const moveA: Move = actionA.kind === "move" ? actionA.move : SWITCH_PASS_MOVE;
   const moveB: Move = actionB.kind === "move" ? actionB.move : SWITCH_PASS_MOVE;
-  // 유턴류 자체 교체(§7-2)로 나올 슬롯 — 호출부가 기술과 함께 미리 지정한 값.
-  const selfSwitchTo: Record<FighterKey, number | undefined> = {
-    a: actionA.kind === "move" ? actionA.selfSwitchTo : undefined,
-    b: actionB.kind === "move" ? actionB.selfSwitchTo : undefined,
-  };
 
   // 방어류(방어/판별/버티기/킹실드)는 "이번 턴 한정" 효과라 매 턴 시작 시 항상 지운다 —
   // 지난 턴에 세운 게 이번 턴까지 남아있으면 안 된다. 연속 성공 스트릭(protectStreak)은
@@ -5161,48 +5151,6 @@ export function runTurn(
     const movesSecond = order[1] === key;
     const action = resolveAction(state, key, moves[key], random, movesSecond, moves[opponentKey(key)]);
     actions.push(action);
-
-    // 유턴·볼트체인지·배턴터치(§7-2): 명중해서 효과를 준 뒤, 사용측이 "이 턴 안에서" 바로 교체한다.
-    // 상대가 아직 안 움직였으면(사용측이 더 빠름) 상대는 새로 나온 포켓몬을 상대하게 되고,
-    // 턴 종료 회복·상태이상 데미지도 새 포켓몬에게 간다 — 본가와 같은 흐름.
-    // 빗나감·행동불능·완전 무효·방어류 차단·특성 흡수면 교체하지 않고, 사용자가 같이 쓰러졌으면
-    // (록키헬멧 등) 아래 자폭 콤보/강제 교체 경로가 처리하므로 여기선 뺀다.
-    const pivotMv = action.move;
-    if (
-      (pivotMv.selfSwitchAfterDamage || pivotMv.passesStatsOnSelfSwitch) &&
-      !action.blockedReason &&
-      action.hit &&
-      action.typeEffectiveness !== 0 &&
-      !action.blockedByProtectMoveName &&
-      !action.hitNegatedByAbilityName &&
-      !action.abilityAbsorbAbilityName &&
-      !isFainted(state[key])
-    ) {
-      const pivotSide = sideOf(state, key);
-      const toIndex = selfSwitchTo[key];
-      // 유효한 교대 슬롯(범위 내·활성 아님·안 쓰러짐)일 때만. 없으면 교체 없이 진행(본가 규칙).
-      if (
-        toIndex !== undefined &&
-        toIndex >= 0 &&
-        toIndex < pivotSide.party.length &&
-        toIndex !== pivotSide.activeIndex &&
-        !isFainted(pivotSide.party[toIndex])
-      ) {
-        const fromIndex = pivotSide.activeIndex;
-        const outgoing = pivotSide.party[fromIndex];
-        const entryMessages: string[] = [];
-        performSwitch(state, key, toIndex, entryMessages, true, !!pivotMv.passesStatsOnSelfSwitch);
-        switches.push({
-          side: key,
-          fromIndex,
-          toIndex,
-          outPokemonId: outgoing.slot.pokemonId,
-          inPokemonId: pivotSide.party[toIndex].illusionAs ?? pivotSide.party[toIndex].slot.pokemonId, // §6-1
-          entryMessages,
-          afterMove: true,
-        });
-      }
-    }
 
     // 발버둥 반동이나 자폭류로 "상대를 쓰러뜨리면서 자신도 같이 쓰러지는" 행동 하나 안에서는
     // resolveAction이 항상 상대 데미지를 먼저 적용한 뒤에 반동/자멸을 적용하도록 순서를 지킨다
@@ -5737,7 +5685,25 @@ export function runTurn(
         }
       : undefined;
 
-  // (유턴·볼트체인지·배턴터치의 자체 교체는 위 행동 루프 안에서 이미 처리된다 — §7-2.)
+  // 유턴·볼트체인지·배턴터치(백로그 §7-2): 이번 턴 명중해서 효과를 준 뒤 사용측이 교체한다.
+  // 여기선 "교체가 필요한 편"만 신호로 돌려주고, 실제 교체 슬롯 선택·교체·로그는 호출부가
+  // 한다(턴 결과를 먼저 보여준 뒤 교체 UI로 고르게 하는 흐름). 빗나감·행동불능·완전 무효(0배)·
+  // 방어류 차단·특성 흡수면 교체하지 않고, 사용자가 같이 쓰러졌으면 forcedSwitch가 처리한다.
+  let selfSwitch: { a?: { passBaton: boolean }; b?: { passBaton: boolean } } | undefined;
+  if (!winner) {
+    for (const key of order) {
+      const act = actions.find((a) => a.actor === key);
+      if (!act) continue;
+      const mv = act.move;
+      if (!mv.selfSwitchAfterDamage && !mv.passesStatsOnSelfSwitch) continue;
+      if (act.blockedReason || !act.hit || act.typeEffectiveness === 0) continue;
+      if (act.blockedByProtectMoveName || act.hitNegatedByAbilityName || act.abilityAbsorbAbilityName) continue;
+      if (isFainted(state[key])) continue;
+      const keyHasReserve = key === "a" ? aHasReserve : bHasReserve;
+      if (!keyHasReserve) continue;
+      (selfSwitch ??= {})[key] = { passBaton: !!mv.passesStatsOnSelfSwitch };
+    }
+  }
 
   // 필드 지속 턴 카운트다운. 0이 되면 이번 턴을 끝으로 필드가 사라진다.
   let fieldExpired = false;
@@ -5814,5 +5780,6 @@ export function runTurn(
       activePokemonIds: { a: state.a.slot.pokemonId, b: state.b.slot.pokemonId },
     },
     forcedSwitch,
+    selfSwitch,
   };
 }
