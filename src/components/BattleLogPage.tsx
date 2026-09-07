@@ -339,6 +339,9 @@ export function BattleLogPage() {
   /** 양쪽 다 유효 빌드가 1마리 이상이면 다음 단계로 갈 수 있다 */
   const canProceed = (["a", "b"] as const).every((side) => buildableIndices(side).length >= 1);
 
+  /** 셋업 화면 VS 버튼이 무엇을 하는지 (선출 화면을 거치면 "다음 (선출)", 아니면 바로 "대전 시작") */
+  const proceedLabel = needsSelection("a") || needsSelection("b") ? "다음 (선출)" : "대전 시작";
+
   /** 선출된 빌드 슬롯 인덱스 목록으로 배틀 상태를 만들고 대전을 시작한다 */
   function startBattleWith(sel: { a: SlotIndex[]; b: SlotIndex[] }) {
     const partyOf = (side: Side) =>
@@ -582,16 +585,15 @@ export function BattleLogPage() {
               </div>
               {side === "a" && (
                 <div className="battle-setup-center">
-                  <div className="battle-setup-vs" aria-hidden="true">
-                    VS
-                  </div>
                   <button
                     type="button"
-                    className="battle-start-button"
+                    className="battle-setup-vs"
                     disabled={!canProceed}
                     onClick={handleProceed}
+                    aria-label={canProceed ? proceedLabel : "양쪽 파티를 먼저 완성하세요"}
+                    title={canProceed ? proceedLabel : "양쪽 파티를 먼저 완성하세요"}
                   >
-                    {needsSelection("a") || needsSelection("b") ? "다음 (선출)" : "대전 시작"}
+                    VS
                   </button>
                 </div>
               )}

@@ -66,7 +66,7 @@
 }
 
 /* §5-1: "대전 시작"을 두 파티 리스트 가운데에 배치. MatchupPage의 좌/우 슬롯 + 가운데 판정
-   영역 레이아웃 참고. VS 레터마크를 중앙 요소로 얹는다. */
+   영역 레이아웃 참고. VS 레터마크가 곧 대전 시작 버튼(백로그 §2-2 — 별도 버튼 제거). */
 .battle-setup-center {
   display: flex;
   flex-direction: column;
@@ -78,16 +78,39 @@
 }
 
 .battle-setup-vs {
+  font-family: var(--display);
   font-weight: 900;
   font-size: 2rem;
   line-height: 1;
   letter-spacing: 0.06em;
   color: var(--text-muted);
-  padding: 0.2rem 0.7rem;
+  padding: 0.35rem 0.9rem;
   border: 2px solid var(--border);
   border-radius: 9px;
+  background: var(--surface);
   transform: skewX(-8deg);
   user-select: none;
+  cursor: pointer;
+  transition:
+    color 0.15s ease,
+    border-color 0.15s ease,
+    background 0.15s ease,
+    transform 0.1s ease;
+}
+
+.battle-setup-vs:not(:disabled):hover {
+  color: #fff;
+  border-color: transparent;
+  background: var(--gradient);
+}
+
+.battle-setup-vs:not(:disabled):active {
+  transform: skewX(-8deg) scale(0.95);
+}
+
+.battle-setup-vs:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .battle-start-button {
