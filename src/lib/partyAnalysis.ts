@@ -46,14 +46,8 @@ export interface PartyDefenseMatrix {
   members: PartyMember[];
   /** 18행 고정 — POKEMON_TYPES 배열 순서 */
   rows: PartyDefenseRow[];
-  /** members와 같은 순서 — 그 포켓몬 한 마리의 18타입 방어 상성 종합 판정(표 마지막 행) */
-  memberVerdicts: PartyDefenseVerdict[];
-}
-
-/** w(약점 수)·r(저항+면역 수)로 취약/보통/강점을 가르는 공통 규칙 (백로그 §1-3 확정, 2026-09-02).
- *  타입 행(파티 전체)과 포켓몬 열(한 마리의 18타입) 양쪽에서 같은 임계값을 쓴다. */
-function verdictOf(w: number, r: number): PartyDefenseVerdict {
-  return r >= w && r >= 2 ? "강점" : w - r >= 2 ? "취약" : "보통";
+  /** members와 같은 순서 — 그 포켓몬 한 마리가 18타입 중 약점(×2·×4)인 타입 수(표 마지막 행) */
+  memberWeakCounts: number[];
 }
 
 /**
@@ -64,13 +58,12 @@ function verdictOf(w: number, r: number): PartyDefenseVerdict {
  *  - 취약: w − r ≥ 2
  *  - 보통: 그 외 (두 조건은 상호배타적)
  *
- * 표 마지막 행(`memberVerdicts`)은 같은 규칙을 세로로 — 그 포켓몬 한 마리가 18타입 중 몇 개에
- * 약한지(w)·저항하는지(r, 면역 포함)로 취약/보통/강점을 매긴다.
+ * 표 마지막 행(`memberWeakCounts`)은 그 포켓몬 한 마리가 18타입 중 약점(×2·×4)인 타입 수
+ * (¼·면역 등 저항은 세지 않고, ×4도 타입 1개로만 집계).
  */
 export function computePartyDefenseMatrix(slots: PartySlots): PartyDefenseMatrix {
   const members = getPartyMembers(slots);
-  const colW = members.map(() => 0);
-  const colR = members.map(() => 0);
+  const memberWeakCounts = members.map(() => 0);
   const rows: PartyDefenseRow[] = POKEMON_TYPES.map((attacking) => {
     const cells = members.map((m) => {
       const mult = getEffectiveness(attacking, m.types);
@@ -82,14 +75,14 @@ export function computePartyDefenseMatrix(slots: PartySlots): PartyDefenseMatrix
       if (c === null) return;
       if (c > 1) {
         w++;
-        colW[i]++;
+        memberWeakCounts[i]++;
       } else {
         r++; // c < 1 (0/0.25/0.5) — 면역도 저항으로 집계
-        colR[i]++;
       }
     });
-    return { type: attacking, cells, verdict: verdictOf(w, r) };
+    const verdict: PartyDefenseVerdict =
+      r >= w && r >= 2 ? "강점" : w - r >= 2 ? "취약" : "보통";
+    return { type: attacking, cells, verdict };
   });
-  const memberVerdicts = members.map((_, i) => verdictOf(colW[i], colR[i]));
-  return { members, rows, memberVerdicts };
+  return { members, rows, memberWeakCounts };
 }
