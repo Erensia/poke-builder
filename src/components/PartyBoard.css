@@ -81,7 +81,22 @@
   transform: translateY(15px);
 }
 
-@media (max-width: 520px) {
+/* 공통 모바일 브레이크포인트 760px (§2-3) */
+@media (max-width: 760px) {
+  .party-board-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.7rem;
+  }
+
+  .party-board-header-right {
+    flex-wrap: wrap;
+  }
+
+  .party-board-header p {
+    max-width: none;
+  }
+
   .party-grid {
     grid-template-columns: 1fr;
   }
