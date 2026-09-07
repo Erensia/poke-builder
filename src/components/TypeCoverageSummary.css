@@ -138,6 +138,29 @@
   background: var(--surface-2);
 }
 
+/* 종합(포켓몬별) 행 (tfoot) — 그 포켓몬의 약점 타입 수 */
+.type-matrix tfoot th,
+.type-matrix tfoot td {
+  border-top: 2px solid var(--border);
+  border-bottom: none;
+}
+
+.tm-foot-label {
+  font-weight: 700;
+  background: var(--surface-2);
+}
+
+.tm-foot-count {
+  font-weight: 700;
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.tm-foot-corner {
+  background: var(--surface-2);
+}
+
 /* 종합 열 */
 .tm-verdict {
   font-weight: 700;
