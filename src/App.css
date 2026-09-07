@@ -8,3 +8,12 @@
   display: flex;
   justify-content: center;
 }
+
+/* 공통 모바일 브레이크포인트: 760px (§2-3). 사이드바가 오버레이 드로어로 바뀌므로
+   본문은 왼쪽 레일 자리를 비우지 않고, 상단에 고정 햄버거 버튼 높이만 확보한다. */
+@media (max-width: 760px) {
+  .app-main {
+    margin-left: 0;
+    padding: 3.75rem 0.85rem 1.5rem;
+  }
+}

@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import "./Sidebar.css";
 
 export type AppView = "party" | "matchup" | "battle-log" | "pokedex" | "movedex" | "itemdex";
@@ -72,6 +72,26 @@ function IconList() {
   );
 }
 
+/** 모바일 햄버거 토글 — 닫힘이면 3줄, 열림이면 X */
+function IconMenuToggle({ open }: { open: boolean }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      {open ? (
+        <>
+          <line x1="18" x2="6" y1="6" y2="18" />
+          <line x1="6" x2="18" y1="6" y2="18" />
+        </>
+      ) : (
+        <>
+          <line x1="3" x2="21" y1="6" y2="6" />
+          <line x1="3" x2="21" y1="12" y2="12" />
+          <line x1="3" x2="21" y1="18" y2="18" />
+        </>
+      )}
+    </svg>
+  );
+}
+
 const NAV_ITEMS: { label: string; icon: ReactNode; view: AppView | null }[] = [
   { label: "파티 빌더", icon: <IconHexagon />, view: "party" },
   { label: "결정력 & 내구력", icon: <IconSwords />, view: "matchup" },
@@ -88,43 +108,78 @@ interface SidebarProps {
 
 export function Sidebar({ activeView, onSelectView }: SidebarProps) {
   // hover만으로 펼침을 제어하면 클릭 후에도 마우스가 사이드바 위에 남아있는 동안 계속 펼쳐져 있으니,
-  // 상태로 직접 제어해서 메뉴 클릭 시 즉시 접히게 한다.
+  // 상태로 직접 제어해서 메뉴 클릭 시 즉시 접히게 한다. (데스크톱 전용 — 모바일에선 무의미)
   const [expanded, setExpanded] = useState(false);
+  // 모바일(≤760px): 사이드바를 햄버거로 여는 오버레이 드로어로 쓴다.
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  // 드로어가 열려 있는 동안 Esc로 닫기 + 뒤 스크롤 잠금
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMobileOpen(false);
+    };
+    document.addEventListener("keydown", onKey);
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = "";
+    };
+  }, [mobileOpen]);
 
   return (
-    <aside
-      className={`sidebar${expanded ? " is-expanded" : ""}`}
-      onMouseEnter={() => setExpanded(true)}
-      onMouseLeave={() => setExpanded(false)}
-    >
-      <div className="sidebar-logo">
-        <span className="sidebar-logo-mark" aria-hidden="true" />
-        <span className="sidebar-logo-text">
-          Poke-Builder
-          <small>파티 빌더</small>
-        </span>
-      </div>
+    <>
+      <button
+        type="button"
+        className="sidebar-toggle"
+        aria-label={mobileOpen ? "메뉴 닫기" : "메뉴 열기"}
+        aria-expanded={mobileOpen}
+        onClick={() => setMobileOpen((v) => !v)}
+      >
+        <IconMenuToggle open={mobileOpen} />
+      </button>
 
-      <nav className="sidebar-nav">
-        {NAV_ITEMS.map((item) => (
-          <button
-            key={item.label}
-            type="button"
-            className={`sidebar-nav-item${item.view === activeView ? " is-active" : ""}`}
-            disabled={item.view === null}
-            onClick={() => {
-              if (!item.view) return;
-              onSelectView(item.view);
-              setExpanded(false);
-            }}
-          >
-            <span className="sidebar-nav-icon" aria-hidden="true">
-              {item.icon}
-            </span>
-            <span className="sidebar-nav-label">{item.label}</span>
-          </button>
-        ))}
-      </nav>
-    </aside>
+      <div
+        className={`sidebar-backdrop${mobileOpen ? " is-visible" : ""}`}
+        onClick={() => setMobileOpen(false)}
+        aria-hidden="true"
+      />
+
+      <aside
+        className={`sidebar${expanded ? " is-expanded" : ""}${mobileOpen ? " is-mobile-open" : ""}`}
+        onMouseEnter={() => setExpanded(true)}
+        onMouseLeave={() => setExpanded(false)}
+      >
+        <div className="sidebar-logo">
+          <span className="sidebar-logo-mark" aria-hidden="true" />
+          <span className="sidebar-logo-text">
+            Poke-Builder
+            <small>파티 빌더</small>
+          </span>
+        </div>
+
+        <nav className="sidebar-nav">
+          {NAV_ITEMS.map((item) => (
+            <button
+              key={item.label}
+              type="button"
+              className={`sidebar-nav-item${item.view === activeView ? " is-active" : ""}`}
+              disabled={item.view === null}
+              onClick={() => {
+                if (!item.view) return;
+                onSelectView(item.view);
+                setExpanded(false);
+                setMobileOpen(false);
+              }}
+            >
+              <span className="sidebar-nav-icon" aria-hidden="true">
+                {item.icon}
+              </span>
+              <span className="sidebar-nav-label">{item.label}</span>
+            </button>
+          ))}
+        </nav>
+      </aside>
+    </>
   );
 }
