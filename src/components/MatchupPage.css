@@ -108,13 +108,16 @@
   .matchup-board {
     flex-direction: column;
     align-items: center;
+    padding: 0.5rem;
   }
 
   .matchup-board > .matchup-slot:last-child {
     margin-top: 0;
   }
 
+  /* 세로 배치에선 130px 고정 폭이 판정 안내문을 과하게 좁혀서 auto로 */
   .matchup-verdict-row {
     padding-top: 0;
+    width: auto;
   }
 }

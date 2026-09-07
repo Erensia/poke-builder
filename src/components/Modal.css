@@ -57,3 +57,23 @@
   padding: 0.75rem;
   overflow-y: auto;
 }
+
+/* 모바일(≤760px): 화면 하단에 붙는 시트로 (§2-3). 전체 폭 · 상단만 라운드 · 더 높게 */
+@media (max-width: 760px) {
+  .modal-overlay {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .modal-panel {
+    width: 100%;
+    max-width: none;
+    max-height: 92vh;
+    border-radius: 16px 16px 0 0;
+    border-bottom: none;
+  }
+
+  .modal-header {
+    padding: 0.85rem 1rem;
+  }
+}
