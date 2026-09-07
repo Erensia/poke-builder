@@ -38,13 +38,16 @@ function formTag(formLabel: string): string {
 }
 
 export function TypeCoverageSummary({ slots }: TypeCoverageSummaryProps) {
-  const { members, rows } = computePartyDefenseMatrix(slots);
+  const { members, rows, memberVerdicts } = computePartyDefenseMatrix(slots);
 
   return (
     <section className="type-coverage">
       <header className="type-coverage-header">
         <h2>타입 상성표</h2>
-        <p>빌드한 포켓몬별 방어 배율입니다. 등배(×1)는 빈 칸, 마지막 열은 파티 전체 판정입니다.</p>
+        <p>
+          빌드한 포켓몬별 방어 배율입니다. 등배(×1)는 빈 칸, 마지막 열은 타입별 파티 전체 판정,
+          마지막 행은 포켓몬별 약점 상성 종합입니다.
+        </p>
       </header>
 
       {members.length === 0 ? (
@@ -89,6 +92,23 @@ export function TypeCoverageSummary({ slots }: TypeCoverageSummaryProps) {
                 </tr>
               ))}
             </tbody>
+            <tfoot>
+              <tr>
+                <th className="tm-type tm-foot-label" scope="row">
+                  종합
+                </th>
+                {memberVerdicts.map((verdict, i) => (
+                  <td
+                    key={members[i].pokemonId}
+                    className={`tm-verdict tm-verdict-${VERDICT_SLUG[verdict]}`}
+                    title={`${members[i].name}의 약점 상성 종합`}
+                  >
+                    {verdict}
+                  </td>
+                ))}
+                <td className="tm-foot-corner" aria-hidden="true" />
+              </tr>
+            </tfoot>
           </table>
         </div>
       )}

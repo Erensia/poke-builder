@@ -138,6 +138,22 @@
   background: var(--surface-2);
 }
 
+/* 종합 행 (tfoot) — 포켓몬별 약점 상성 종합 */
+.type-matrix tfoot th,
+.type-matrix tfoot td {
+  border-top: 2px solid var(--border);
+  border-bottom: none;
+}
+
+.tm-foot-label {
+  font-weight: 700;
+  background: var(--surface-2);
+}
+
+.tm-foot-corner {
+  background: var(--surface-2);
+}
+
 /* 종합 열 */
 .tm-verdict {
   font-weight: 700;
