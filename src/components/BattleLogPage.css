@@ -671,17 +671,27 @@
   background: var(--violet-soft);
 }
 
-@media (max-width: 860px) {
+/* 공통 모바일 브레이크포인트 760px (§2-3). 이전엔 860px였으나 다른 페이지와 통일 —
+   battle-log-page max-width 740px라 760px 이하에서 2열이 확실히 좁아진다. */
+@media (max-width: 760px) {
   .battle-board {
     grid-template-columns: 1fr;
+    padding: 0.4rem;
   }
+
+  /* 셋업: 두 파티 세로로 쌓고 VS(대전 시작)를 맨 아래로 */
   .battle-setup-board {
     flex-direction: column;
     align-items: center;
+    gap: 1rem;
   }
   .battle-setup-board .party-slot {
     width: 100%;
-    max-width: 300px;
+    max-width: 340px;
+  }
+  .battle-setup-column {
+    width: 100%;
+    max-width: 340px;
   }
   .battle-setup-center {
     align-self: center;
@@ -690,5 +700,22 @@
   }
   .battle-setup-column:last-of-type {
     order: 0;
+  }
+
+  /* 선출 화면: 고정 폭(240px) 제거하고 폭에 맞춘다 */
+  .battle-select-board {
+    gap: 1.2rem;
+  }
+  .battle-select-column {
+    min-width: 0;
+    width: 100%;
+    max-width: 340px;
+  }
+  .battle-select-mon {
+    width: 100%;
+  }
+
+  .battle-log-header h2 {
+    font-size: 1.15rem;
   }
 }
