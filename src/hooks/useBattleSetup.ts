@@ -133,20 +133,28 @@ function useBattleSetupSlot() {
   };
 }
 
-/** 편측 슬롯 개수(배틀타워 = 3마리). Phase 8 §2 — "3슬롯만 빌드" 결재. 슬롯 0이 리드. */
-export const BATTLE_PARTY_SIZE = 3;
+/**
+ * 편측 빌드 슬롯 개수. 백로그 §3 — 6마리 빌드 → 3마리 선출. 3마리 이하만 빌드하면 선출 화면을
+ * 건너뛰고 빌드 순서대로 선출된다(첫 슬롯이 리드).
+ */
+export const BATTLE_BUILD_SIZE = 6;
+/** 선출 인원 — 4마리 이상 빌드한 편은 이 수만큼 순서까지 골라야 한다. */
+export const BATTLE_SELECT_SIZE = 3;
 
 export type BattleSetupSlot = ReturnType<typeof useBattleSetupSlot>;
 
 /**
- * 한 진영의 슬롯 3개. 훅 규칙상 반복문으로 못 만들지만 개수가 고정(3)이라 나란히 호출한다.
- * BATTLE_PARTY_SIZE를 바꾸려면 이 호출 목록도 같이 늘려야 한다.
+ * 한 진영의 빌드 슬롯 6개. 훅 규칙상 반복문으로 못 만들지만 개수가 고정(6)이라 나란히 호출한다.
+ * BATTLE_BUILD_SIZE를 바꾸려면 이 호출 목록도 같이 늘려야 한다.
  */
 function useBattleSetupSide(): BattleSetupSlot[] {
   const s0 = useBattleSetupSlot();
   const s1 = useBattleSetupSlot();
   const s2 = useBattleSetupSlot();
-  return [s0, s1, s2];
+  const s3 = useBattleSetupSlot();
+  const s4 = useBattleSetupSlot();
+  const s5 = useBattleSetupSlot();
+  return [s0, s1, s2, s3, s4, s5];
 }
 
 export function useBattleSetup() {

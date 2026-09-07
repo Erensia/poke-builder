@@ -65,8 +65,32 @@
   flex-shrink: 0;
 }
 
+/* §5-1: "대전 시작"을 두 파티 리스트 가운데에 배치. MatchupPage의 좌/우 슬롯 + 가운데 판정
+   영역 레이아웃 참고. VS 레터마크를 중앙 요소로 얹는다. */
+.battle-setup-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.9rem;
+  align-self: center;
+  flex-shrink: 0;
+  padding-top: 1.6rem;
+}
+
+.battle-setup-vs {
+  font-weight: 900;
+  font-size: 2rem;
+  line-height: 1;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  padding: 0.2rem 0.7rem;
+  border: 2px solid var(--border);
+  border-radius: 9px;
+  transform: skewX(-8deg);
+  user-select: none;
+}
+
 .battle-start-button {
-  align-self: flex-start;
   background: var(--gradient);
   color: #fff;
   border: none;
@@ -81,6 +105,88 @@
 .battle-start-button:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+}
+
+/* §3: 빌드 → 선출 화면 */
+.battle-select {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.4rem;
+}
+
+.battle-select-board {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  gap: 2.5rem;
+  flex-wrap: wrap;
+}
+
+.battle-select-column {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  min-width: 240px;
+}
+
+.battle-select-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.battle-select-mon {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  width: 240px;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  cursor: pointer;
+  text-align: left;
+  font-size: 0.9rem;
+}
+
+.battle-select-mon:disabled {
+  cursor: default;
+}
+
+.battle-select-mon.is-picked {
+  border-color: var(--violet);
+  background: var(--violet-soft);
+}
+
+.battle-select-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  flex-shrink: 0;
+  border-radius: 999px;
+  border: 1px dashed var(--border);
+  font-weight: 800;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.battle-select-num.is-on {
+  border-style: solid;
+  border-color: transparent;
+  background: var(--gradient);
+  color: #fff;
+}
+
+.battle-select-name {
+  font-weight: 600;
+}
+
+.battle-select-actions {
+  display: flex;
+  gap: 0.8rem;
 }
 
 /* 구애스카프 잠금 위반으로 턴 진행이 막혔을 때 뜨는 경고 문구 */
@@ -469,6 +575,27 @@
   margin-bottom: 0.4rem;
 }
 
+/* §4: 메가진화 선언 토글 */
+.battle-mega-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.5rem;
+  padding: 0.35rem 0.55rem;
+  border: 1px solid var(--violet);
+  border-radius: 8px;
+  background: var(--violet-soft);
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--violet);
+  cursor: pointer;
+  user-select: none;
+}
+
+.battle-mega-toggle input {
+  cursor: pointer;
+}
+
 .battle-input-toggle-btn {
   flex: 1;
   padding: 0.25rem 0.5rem;
@@ -487,6 +614,7 @@
 }
 
 .battle-switch-panel {
+  margin-top: 5px;
   border: 1px solid var(--danger);
   border-radius: 8px;
   padding: 0.5rem;
@@ -532,7 +660,12 @@
     width: 100%;
     max-width: 300px;
   }
-  .battle-setup-board > :last-child {
-    margin-top: 0;
+  .battle-setup-center {
+    align-self: center;
+    padding-top: 0;
+    order: 1; /* 좁은 화면에선 두 파티 사이가 아니라 맨 아래로 */
+  }
+  .battle-setup-column:last-of-type {
+    order: 0;
   }
 }

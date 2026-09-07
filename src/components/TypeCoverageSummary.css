@@ -1,6 +1,6 @@
 .type-coverage {
   width: 100%;
-  max-width: 560px;
+  max-width: 100%;
   margin-top: 2rem;
 }
 
@@ -13,7 +13,7 @@
   margin: 0 0 1rem;
   color: var(--text-muted);
   font-size: 0.8rem;
-  max-width: 44ch;
+  max-width: 50ch;
 }
 
 .type-coverage-empty {
@@ -22,33 +22,74 @@
   padding: 1rem 0;
 }
 
-.type-coverage-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
-  gap: 0.5rem;
-}
-
-.type-coverage-cell {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.35rem;
+/* 좁은 폭에서 18×N 표는 가로 스크롤 (백로그 §1-5) */
+.type-matrix-scroll {
+  overflow-x: auto;
   border: 1px solid var(--border);
+  border-radius: 12px;
   background: var(--surface);
-  border-radius: 10px;
-  padding: 0.5rem 0.55rem;
-  cursor: pointer;
+}
+
+.type-matrix {
+  border-collapse: collapse;
+  font-size: 0.72rem;
+  width: max-content;
+  min-width: 100%;
+}
+
+.type-matrix th,
+.type-matrix td {
+  padding: 0.3rem 0.4rem;
+  text-align: center;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.type-matrix tbody tr:last-child th,
+.type-matrix tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* 열 헤더(포켓몬) */
+.type-matrix thead th {
+  position: sticky;
+  top: 0;
+  background: var(--surface-2);
+  font-weight: 700;
+  border-bottom: 2px solid var(--border);
+}
+
+.tm-corner {
+  background: var(--surface-2);
+}
+
+.tm-mon {
+  min-width: 4.5rem;
+}
+
+.tm-mon-name {
+  display: block;
+  max-width: 6rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tm-mon-form {
+  display: block;
+  margin-top: 0.1rem;
+  font-size: 0.6rem;
+  font-weight: 600;
+  color: var(--violet);
+}
+
+.tm-verdict-head {
+  min-width: 3rem;
+}
+
+/* 행 헤더(타입 배지) */
+.tm-type {
   text-align: left;
-}
-
-.type-coverage-cell:hover,
-.type-coverage-cell.is-open {
-  border-color: var(--violet);
-}
-
-.type-coverage-cell:disabled {
-  cursor: default;
-  opacity: 0.55;
+  padding-left: 0.5rem;
 }
 
 .type-coverage-badge {
@@ -60,10 +101,8 @@
   border-radius: 5px;
 }
 
-.type-coverage-counts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.25rem;
+.tm-cell {
+  min-width: 2.4rem;
 }
 
 .cnt {
@@ -99,50 +138,22 @@
   background: var(--surface-2);
 }
 
-.cnt-neutral {
+/* 종합 열 */
+.tm-verdict {
+  font-weight: 700;
+  font-size: 0.7rem;
+}
+
+.tm-verdict-weak {
+  color: var(--danger);
+  background: var(--danger-bg);
+}
+
+.tm-verdict-strong {
+  color: var(--safe);
+  background: var(--safe-bg);
+}
+
+.tm-verdict-neutral {
   color: var(--text-muted);
-}
-
-.type-coverage-detail {
-  margin-top: 1rem;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 0.9rem 1rem;
-  background: var(--surface);
-}
-
-.type-coverage-detail h3 {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.9rem;
-  margin-bottom: 0.6rem;
-}
-
-.type-coverage-detail-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-}
-
-.type-coverage-detail-list li {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  font-size: 0.82rem;
-  padding: 0.3rem 0.1rem;
-  border-bottom: 1px solid var(--border);
-}
-
-.type-coverage-detail-list li:last-child {
-  border-bottom: none;
-}
-
-.type-coverage-form-tag {
-  color: var(--violet);
-  font-size: 0.72rem;
-  font-weight: 600;
 }

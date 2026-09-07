@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { BattleSetupCard } from "./BattleSetupCard";
 import { WeatherPicker } from "./WeatherPicker";
 import { PokemonPickerModal } from "./PokemonPickerModal";
@@ -8,7 +8,7 @@ import { ItemPickerModal } from "./ItemPickerModal";
 import { NaturePickerModal } from "./NaturePickerModal";
 import { PointsEditorModal } from "./PointsEditorModal";
 import { SlotPresetsModal } from "./SlotPresetsModal";
-import { useBattleSetup } from "../hooks/useBattleSetup";
+import { useBattleSetup, BATTLE_SELECT_SIZE } from "../hooks/useBattleSetup";
 import { useSlotPresets } from "../hooks/useSlotPresets";
 import { getPokemon, getMove, getItem } from "../lib/data";
 import { getEffectiveForm, megaBadgeLabel } from "../lib/pokemonForm";
@@ -22,10 +22,12 @@ import {
   hasUsableMove,
   opponentKey,
   runTurn,
+  resumeTurn,
   STRUGGLE_MOVE,
   type BattleSide,
   type BattleState,
   type FighterKey,
+  type RunTurnContext,
   type TurnAction,
   type TurnResult,
 } from "../lib/battleSimulator";
@@ -36,7 +38,7 @@ import type { BaseStats } from "../types/stats";
 import "./BattleLogPage.css";
 
 type Side = "a" | "b";
-type SlotIndex = 0 | 1 | 2;
+type SlotIndex = 0 | 1 | 2 | 3 | 4 | 5;
 type PickerState =
   | { kind: "pokemon"; side: Side; slotIndex: SlotIndex }
   | { kind: "ability"; side: Side; slotIndex: SlotIndex }
@@ -50,7 +52,7 @@ type PickerState =
 /** 이번 턴 한 편의 선택 — 기술 또는 교체(교대 슬롯 인덱스) */
 type TurnChoice = { kind: "move"; moveId: string } | { kind: "switch"; toIndex: number };
 
-const SLOT_INDICES: SlotIndex[] = [0, 1, 2];
+const SLOT_INDICES: SlotIndex[] = [0, 1, 2, 3, 4, 5];
 
 const STATUS_LABELS: Record<StatusCondition, string> = {
   burn: "화상",
@@ -80,7 +82,7 @@ const VOLATILE_LABELS = {
 } as const;
 
 /** 액션 로그 한 줄 안에 "OO 발동!"으로 뭉뚱그리기보다 전용 문구를 따로 쓰는 volatile들 */
-const VOLATILES_WITH_DEDICATED_LOG_LINE = new Set(["drowsy", "wish"]);
+const VOLATILES_WITH_DEDICATED_LOG_LINE = new Set(["drowsy", "wish", "encore"]);
 
 /** 차징 기술 1턴째(준비 턴) 전용 문구 — 공통 "준비 중!" 대신 기술별로 쓴다(§1 D-1). key는 move.id */
 const CHARGE_TURN_MESSAGE: Record<string, string> = {
@@ -204,11 +206,26 @@ export function BattleLogPage() {
   const [partySlots, setPartySlots] = useState<{ a: PartySlot[]; b: PartySlot[] }>({ a: [], b: [] });
   // 이번 턴 처리 결과 활성 슬롯이 기절해 강제 교체가 필요한 편. 해소되면 null.
   const [pendingForcedSwitch, setPendingForcedSwitch] = useState<{ a?: boolean; b?: boolean } | null>(null);
+  // 유턴·볼트체인지·배턴터치(§7-2): 사용측 기술 데미지까지 처리하고 턴이 "멈춘" 상태. 이 편이
+  // 교대할 포켓몬을 골라야 나머지 턴(상대 행동·턴 종료)이 새 포켓몬 기준으로 이어진다.
+  // ctx는 엔진이 준 불투명 컨텍스트 — resumeTurn에 그대로 넘긴다.
+  const [pendingPivot, setPendingPivot] = useState<{
+    ctx: RunTurnContext;
+    side: Side;
+    passBaton: boolean;
+  } | null>(null);
   // 편별 턴 입력 모드 — "기술" 또는 "교체"
   const [inputMode, setInputMode] = useState<{ a: "move" | "switch"; b: "move" | "switch" }>({ a: "move", b: "move" });
   // 구애스카프 잠금 위반으로 턴 진행이 막혔을 때 보여줄 경고 문구. 선택이 바뀌거나 턴이 정상
   // 진행되면 지운다.
   const [lockWarning, setLockWarning] = useState<string | null>(null);
+  // 빌드(6슬롯) → 선출(3+순서) → 대전. selecting=true면 선출 화면(§3).
+  const [selecting, setSelecting] = useState(false);
+  // 각 편이 선출한 빌드 슬롯 인덱스 — 고른 순서대로(index 0 = 리드). 선출이 필요 없는 편
+  // (유효 빌드 ≤ BATTLE_SELECT_SIZE)은 "다음"을 누른 시점에 빌드 순서대로 자동으로 채운다.
+  const [selection, setSelection] = useState<{ a: SlotIndex[]; b: SlotIndex[] }>({ a: [], b: [] });
+  // 이번 턴 메가진화를 선언했는지(§4). 매 턴 시작 시 꺼짐으로 초기화한다.
+  const [megaDeclared, setMegaDeclared] = useState<{ a: boolean; b: boolean }>({ a: false, b: false });
 
   const sideCtls = (side: Side) => (side === "a" ? setup.a : setup.b);
   const slotCtl = (side: Side, i: SlotIndex) => sideCtls(side)[i];
@@ -270,7 +287,18 @@ export function BattleLogPage() {
     const fighter = battleState[side];
     if (!hasUsableMove(fighter)) return true;
     const locked = choiceLockedMoveId(side);
-    return locked !== null && (fighter.remainingPp[locked] ?? 0) <= 0;
+    if (locked !== null && (fighter.remainingPp[locked] ?? 0) <= 0) return true;
+    // 이번 턴 실제로 고를 수 있는 기술이 하나도 없으면 발버둥(본가 규칙, 백로그 §7-5):
+    //  - 앙코르로 변화기가 강제됐는데 도발/사슬묶기로 그 기술을 못 씀
+    //  - 앙코르 강제 기술의 PP가 0
+    //  - 도발 상태에서 지닌 기술이 전부 변화기
+    const anySelectable = activeMoveIds(side).some((id) => {
+      if (!id) return false;
+      if ((fighter.remainingPp[id] ?? getMove(id)?.pp ?? 0) <= 0) return false;
+      if (locked !== null && id !== locked) return false;
+      return moveRestrictionMessage(side, id) === null;
+    });
+    return !anySelectable;
   }
 
   /**
@@ -283,37 +311,41 @@ export function BattleLogPage() {
     const fighter = battleState[side];
     const pokemonName = activePokemon(side)?.name ?? "포켓몬";
     if (fighter.volatile.active.taunt && getMove(moveId)?.category === "status") {
-      return `${pokemonName}${eunNeun(pokemonName)} 도발에 걸려 변화기를 사용할 수 없어요.`;
+      return `${pokemonName}${eunNeun(pokemonName)} 도발에 걸려 변화기를 쓸 수 없다!`;
     }
     const disableEntry = fighter.volatile.active.disable;
     if (disableEntry && disableEntry.moveId === moveId) {
       const disabledName = getMove(moveId)?.name ?? "그 기술";
-      return `${disabledName}${eunNeun(disabledName)} 사슬묶기에 걸려 사용할 수 없어요.`;
+      return `${disabledName}${eunNeun(disabledName)} 사슬묶기에 걸려 쓸 수 없다!`;
     }
     const encoreEntry = fighter.volatile.active.encore;
     if (encoreEntry?.moveId && encoreEntry.moveId !== moveId) {
       const forcedName = getMove(encoreEntry.moveId)?.name ?? "그 기술";
-      return `${pokemonName}${eunNeun(pokemonName)} 앙코르 때문에 ${forcedName}만 사용할 수 있어요.`;
+      return `${pokemonName}${eunNeun(pokemonName)} 앙코르 때문에 ${forcedName}만 사용할 수 있다!`;
     }
     return null;
   }
 
-  /** 이 편의 채워진(포켓몬이 있는) 슬롯을 선출 순서대로 압축 */
-  const filledSlots = (side: Side): PartySlot[] =>
-    sideCtls(side)
-      .map((c) => c.slot)
-      .filter((s): s is PartySlot => s !== null);
-
-  const canStart =
-    (["a", "b"] as const).every((side) => {
-      const slots = filledSlots(side);
-      return slots.length >= 1 && slots.every((s) => s.moves.some((m) => m !== null));
+  /** 이 편에서 포켓몬이 있고 기술이 1개 이상인 빌드 슬롯 인덱스(빌드 순서). 이게 곧 "선출 가능" 후보. */
+  const buildableIndices = (side: Side): SlotIndex[] =>
+    SLOT_INDICES.filter((i) => {
+      const s = slotCtl(side, i).slot;
+      return s !== null && s.moves.some((m) => m !== null);
     });
 
-  function startBattle() {
-    if (!canStart) return;
-    const aParty = filledSlots("a");
-    const bParty = filledSlots("b");
+  /** 이 편이 선출 화면에서 골라야 하는지 — 유효 빌드가 선출 인원을 초과하면 true */
+  const needsSelection = (side: Side) => buildableIndices(side).length > BATTLE_SELECT_SIZE;
+
+  /** 양쪽 다 유효 빌드가 1마리 이상이면 다음 단계로 갈 수 있다 */
+  const canProceed = (["a", "b"] as const).every((side) => buildableIndices(side).length >= 1);
+
+  /** 선출된 빌드 슬롯 인덱스 목록으로 배틀 상태를 만들고 대전을 시작한다 */
+  function startBattleWith(sel: { a: SlotIndex[]; b: SlotIndex[] }) {
+    const partyOf = (side: Side) =>
+      sel[side].map((i) => slotCtl(side, i).slot).filter((s): s is PartySlot => s !== null);
+    const aParty = partyOf("a");
+    const bParty = partyOf("b");
+    if (aParty.length < 1 || bParty.length < 1) return;
     const movesOf = (s: PartySlot) => s.moves.filter((id): id is string => id !== null).map((id) => getMove(id)!);
     const state = createBattleState({
       a: { slots: aParty, movesList: aParty.map(movesOf) },
@@ -326,8 +358,41 @@ export function BattleLogPage() {
     setSelected({ a: null, b: null });
     setInputMode({ a: "move", b: "move" });
     setPendingForcedSwitch(null);
+    setPendingPivot(null);
     setLockWarning(null);
+    setSelecting(false);
+    setMegaDeclared({ a: false, b: false });
   }
+
+  /** 빌드 화면 "다음/대전 시작" — 양쪽 다 3마리 이하면 선출을 건너뛰고 바로 대전, 아니면 선출 화면으로 */
+  function handleProceed() {
+    if (!canProceed) return;
+    const autoSel = (side: Side) =>
+      needsSelection(side) ? [] : buildableIndices(side).slice(0, BATTLE_SELECT_SIZE);
+    const sel = { a: autoSel("a"), b: autoSel("b") };
+    if (!needsSelection("a") && !needsSelection("b")) {
+      startBattleWith(sel);
+    } else {
+      setSelection(sel);
+      setSelecting(true);
+    }
+  }
+
+  /** 선출 화면에서 포켓몬 카드를 눌렀을 때 — 이미 골랐으면 해제(뒤 번호 자동 재정렬), 아니면 다음 번호로 추가 */
+  function toggleSelection(side: Side, i: SlotIndex) {
+    setSelection((prev) => {
+      const cur = prev[side];
+      const at = cur.indexOf(i);
+      if (at >= 0) return { ...prev, [side]: cur.filter((x) => x !== i) };
+      if (cur.length >= BATTLE_SELECT_SIZE) return prev;
+      return { ...prev, [side]: [...cur, i] };
+    });
+  }
+
+  /** 선출 화면 "대전 시작" 가능 여부 — 각 편이 정확히 min(빌드 수, 선출 인원)만큼 골랐는지 */
+  const selectionComplete = (["a", "b"] as const).every(
+    (side) => selection[side].length === Math.min(buildableIndices(side).length, BATTLE_SELECT_SIZE),
+  );
 
   function resetToSetup() {
     setBattleState(null);
@@ -336,7 +401,46 @@ export function BattleLogPage() {
     setSelected({ a: null, b: null });
     setInputMode({ a: "move", b: "move" });
     setPendingForcedSwitch(null);
+    setPendingPivot(null);
     setLockWarning(null);
+    setSelecting(false);
+    setSelection({ a: [], b: [] });
+    setMegaDeclared({ a: false, b: false });
+  }
+
+  /**
+   * runTurn/resumeTurn의 결과를 UI에 반영한다(§7-2). 멈춘 결과(awaitingSelfSwitch)면 부분 결과를
+   * 로그에 얹고 교체 대기 상태로, 최종 결과면 (부분 결과가 있었으면 그걸 대체하며) 완결 처리한다.
+   */
+  function applyTurnOutcome(
+    outcome: ReturnType<typeof runTurn>,
+    /** 직전에 부분 결과 카드를 로그에 올려둔 상태면 true — 대체(replace)한다 */
+    replacingPartial: boolean,
+  ) {
+    setBattleState(outcome.nextState);
+    if ("awaitingSelfSwitch" in outcome) {
+      setLog((prev) =>
+        replacingPartial ? [...prev.slice(0, -1), outcome.partialResult] : [...prev, outcome.partialResult],
+      );
+      setPendingPivot({
+        ctx: outcome._ctx,
+        side: outcome.awaitingSelfSwitch.side,
+        passBaton: outcome.awaitingSelfSwitch.passBaton,
+      });
+      return;
+    }
+    setLog((prev) => (replacingPartial ? [...prev.slice(0, -1), outcome.result] : [...prev, outcome.result]));
+    setPendingPivot(null);
+    setPendingForcedSwitch(outcome.forcedSwitch ?? null);
+    setSelected({ a: null, b: null });
+    setInputMode({ a: "move", b: "move" });
+    setMegaDeclared({ a: false, b: false });
+  }
+
+  /** 유턴류 자체 교체 선택 확정 — 고른 슬롯으로 교체하고 나머지 턴(상대 행동·턴 종료)을 이어간다. */
+  function resolvePivot(toIndex: number) {
+    if (!pendingPivot) return;
+    applyTurnOutcome(resumeTurn(pendingPivot.ctx, toIndex), true);
   }
 
   /** 이 편에서 지금 교대로 내보낼 수 있는 슬롯(활성 아님 + 안 쓰러짐) */
@@ -378,7 +482,7 @@ export function BattleLogPage() {
   }
 
   function playTurn() {
-    if (!battleState || pendingForcedSwitch) return;
+    if (!battleState || pendingForcedSwitch || pendingPivot) return;
     setLockWarning(null);
     // PP 남은 기술이 없거나(4개 다 0), 구애류 도구로 잠긴 기술의 PP가 0이면 선택 없이 발버둥.
     const struggling = { a: isStruggling("a"), b: isStruggling("b") };
@@ -402,7 +506,7 @@ export function BattleLogPage() {
       if (locked && chosen !== locked) {
         const lockedMoveName = getMove(locked)?.name ?? "그 기술";
         const pokemonName = activePokemon(side)?.name ?? "포켓몬";
-        setLockWarning(`${pokemonName}${eunNeun(pokemonName)} 구애스카프 때문에 ${lockedMoveName}만 사용할 수 있어요.`);
+        setLockWarning(`${pokemonName}${eunNeun(pokemonName)} 구애스카프 때문에 ${lockedMoveName}만 쓸 수 있다!`);
         return;
       }
       const restriction = moveRestrictionMessage(side, chosen);
@@ -415,24 +519,21 @@ export function BattleLogPage() {
     const actionFor = (side: Side): TurnAction | null => {
       const sel = selected[side];
       if (sel?.kind === "switch") return { kind: "switch", toIndex: sel.toIndex };
-      if (struggling[side]) return { kind: "move", move: STRUGGLE_MOVE };
+      const mega = megaDeclared[side] || undefined; // 메가진화는 기술 행동에만 실린다
+      if (struggling[side]) return { kind: "move", move: STRUGGLE_MOVE, mega };
       if (charging[side]) {
         const m = getMove(battleState[side].chargingMoveId!);
-        return m ? { kind: "move", move: m } : null;
+        return m ? { kind: "move", move: m, mega } : null;
       }
       const m = sel?.kind === "move" ? getMove(sel.moveId) : undefined;
-      return m ? { kind: "move", move: m } : null;
+      if (!m) return null;
+      return { kind: "move", move: m, ...(mega ? { mega } : {}) };
     };
     const actionA = actionFor("a");
     const actionB = actionFor("b");
     if (!actionA || !actionB) return;
 
-    const { nextState, result, forcedSwitch } = runTurn(battleState, actionA, actionB);
-    setBattleState(nextState);
-    setLog((prev) => [...prev, result]);
-    setSelected({ a: null, b: null });
-    setInputMode({ a: "move", b: "move" });
-    setPendingForcedSwitch(forcedSwitch ?? null);
+    applyTurnOutcome(runTurn(battleState, actionA, actionB), false);
   }
 
   const winner = log.at(-1)?.winner;
@@ -444,21 +545,24 @@ export function BattleLogPage() {
           <h2>배틀타워</h2>
           <p>실전 배틀 시뮬레이션</p>
         </div>
-        {!battleState && <WeatherPicker weather={setup.weather} onChange={setup.setWeather} />}
+        {!battleState && !selecting && (
+          <WeatherPicker weather={setup.weather} onChange={setup.setWeather} />
+        )}
       </header>
 
-      {!battleState && (
-        <>
-          <div className="battle-setup-board">
-            {(["a", "b"] as const).map((side) => (
-              <div key={side} className="battle-setup-column">
+      {!battleState && !selecting && (
+        <div className="battle-setup-board">
+          {(["a", "b"] as const).map((side) => (
+            <Fragment key={side}>
+              <div className="battle-setup-column">
                 <div className="battle-setup-column-title">
-                  {side === "a" ? "내 파티" : "상대 파티"} <span className="battle-setup-column-hint">첫 슬롯이 리드</span>
+                  {side === "a" ? "내 파티" : "상대 파티"}{" "}
+                  <span className="battle-setup-column-hint">6마리까지 빌드 · 4마리 이상이면 3마리 선출</span>
                 </div>
                 {SLOT_INDICES.map((i) => (
                   <BattleSetupCard
                     key={i}
-                    label={`${side === "a" ? "내 포켓몬" : "상대 포켓몬"} ${i + 1}${i === 0 ? " (리드)" : ""}`}
+                    label={`${side === "a" ? "내 포켓몬" : "상대 포켓몬"} ${i + 1}`}
                     slot={slotCtl(side, i).slot}
                     onPickPokemon={() => setPicker({ kind: "pokemon", side, slotIndex: i })}
                     onClearPokemon={slotCtl(side, i).clearPokemon}
@@ -476,12 +580,82 @@ export function BattleLogPage() {
                   />
                 ))}
               </div>
-            ))}
+              {side === "a" && (
+                <div className="battle-setup-center">
+                  <div className="battle-setup-vs" aria-hidden="true">
+                    VS
+                  </div>
+                  <button
+                    type="button"
+                    className="battle-start-button"
+                    disabled={!canProceed}
+                    onClick={handleProceed}
+                  >
+                    {needsSelection("a") || needsSelection("b") ? "다음 (선출)" : "대전 시작"}
+                  </button>
+                </div>
+              )}
+            </Fragment>
+          ))}
+        </div>
+      )}
+
+      {!battleState && selecting && (
+        <div className="battle-select">
+          <div className="battle-select-board">
+            {(["a", "b"] as const).map((side) => {
+              const pool = buildableIndices(side);
+              const picks = selection[side];
+              const manual = needsSelection(side);
+              return (
+                <div key={side} className="battle-select-column">
+                  <div className="battle-setup-column-title">
+                    {side === "a" ? "내 선출" : "상대 선출"}{" "}
+                    <span className="battle-setup-column-hint">
+                      {manual ? `${picks.length}/${BATTLE_SELECT_SIZE} · 고른 순서가 선출 순서(첫 번째가 리드)` : "빌드 순서대로 선출"}
+                    </span>
+                  </div>
+                  <div className="battle-select-list">
+                    {pool.map((i) => {
+                      const pk = pokemonAt(side, i);
+                      // 수동 선출: 고른 순서대로 번호. 선출 스킵 편: 빌드 순서 그대로 1·2·3 고정.
+                      const num = manual
+                        ? picks.includes(i)
+                          ? picks.indexOf(i) + 1
+                          : null
+                        : pool.indexOf(i) + 1;
+                      return (
+                        <button
+                          key={i}
+                          type="button"
+                          className={`battle-select-mon${num ? " is-picked" : ""}`}
+                          disabled={!manual}
+                          onClick={() => toggleSelection(side, i)}
+                        >
+                          <span className={`battle-select-num${num ? " is-on" : ""}`}>{num ?? ""}</span>
+                          <span className="battle-select-name">{pk?.name ?? "포켓몬"}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
           </div>
-          <button type="button" className="battle-start-button" disabled={!canStart} onClick={startBattle}>
-            대전 시작
-          </button>
-        </>
+          <div className="battle-select-actions">
+            <button type="button" className="battle-reset-button" onClick={() => setSelecting(false)}>
+              뒤로
+            </button>
+            <button
+              type="button"
+              className="battle-start-button"
+              disabled={!selectionComplete}
+              onClick={() => startBattleWith(selection)}
+            >
+              대전 시작
+            </button>
+          </div>
+        </div>
       )}
 
       {battleState && (
@@ -532,6 +706,10 @@ export function BattleLogPage() {
               const fighter = battleState[side];
               const pokemon = getPokemon(fighter.slot.pokemonId);
               if (!pokemon) return null;
+              // 일루전(§6-1): 위장 중이면 화면에는 위장 대상 이름을 보여준다(타입·실능·특성은 조로아크 그대로).
+              const displayName = fighter.illusionAs
+                ? getPokemon(fighter.illusionAs)?.name ?? pokemon.name
+                : pokemon.name;
               // 셋업 카드와 동일하게 메가진화 여부를 반영해서 이름 옆에 배지를 그린다.
               // fighter.slot(EvaluatorSlot)은 FormSource를 만족하므로 getEffectiveForm을 그대로 쓸 수 있다.
               const form = getEffectiveForm(pokemon, fighter.slot);
@@ -550,8 +728,11 @@ export function BattleLogPage() {
                 <div key={side} className={`battle-fighter battle-fighter-${side}`}>
                   <div className="battle-fighter-head">
                     <span className="battle-fighter-name">
-                      {pokemon.name}
-                      {form.mega && <span className="battle-fighter-mega-tag">{megaBadgeLabel(form.mega)}</span>}
+                      {displayName}
+                      {/* §4: 스톤을 들어도 실제로 메가진화를 선언(hasMegaEvolved)해야 배지가 뜬다 */}
+                      {!fighter.illusionAs && fighter.hasMegaEvolved && form.mega && (
+                        <span className="battle-fighter-mega-tag">{megaBadgeLabel(form.mega)}</span>
+                      )}
                       {fighter.currentHp <= 0 && <span className="battle-fighter-fainted"> (기절)</span>}
                     </span>
                     <div className="battle-status-tags">
@@ -561,22 +742,38 @@ export function BattleLogPage() {
                       {(Object.keys(fighter.volatile.active) as (keyof typeof VOLATILE_LABELS)[]).map((v) => {
                         // 사슬묶기/앙코르는 대상 기술 이름까지 같이 보여줘야 어떤 기술이
                         // 막혔는지/강제됐는지 알 수 있다.
-                        const moveId = fighter.volatile.active[v]?.moveId;
-                        const moveName = moveId ? getMove(moveId)?.name : undefined;
+                        const entry = fighter.volatile.active[v];
+                        const moveName = entry?.moveId ? getMove(entry.moveId)?.name : undefined;
+                        // 남은 턴수가 유한한 것(도발·앙코르·사슬묶기·속박·물엿범벅·혼란·졸음)만 " N턴"을
+                        // 붙인다(§5-5). 뿌리박기·아쿠아링·씨뿌리기·헤롱헤롱·소금절이는 배틀 끝까지라
+                        // 999 센티넬 → 표기 안 함.
+                        const turns = entry && entry.turnsRemaining < 900 ? entry.turnsRemaining : undefined;
                         return (
                           <span key={v} className="battle-status-tag is-volatile">
                             {VOLATILE_LABELS[v]}
                             {moveName && `(${moveName})`}
+                            {turns !== undefined && ` ${turns}턴`}
                           </span>
                         );
                       })}
-                      {(Object.keys(fighter.screens) as ("reflect" | "lightScreen" | "auroraVeil")[])
-                        .filter((s) => fighter.screens[s] !== undefined)
-                        .map((s) => (
-                          <span key={s} className="battle-status-tag is-volatile">
-                            {SCREEN_LABELS[s]} {fighter.screens[s]}턴
-                          </span>
-                        ))}
+                      {(() => {
+                        // 스크린은 편(BattleSide) 단위 상태다(§6-3) — 활성 파이터가 아니라 side에서 읽는다.
+                        const screens = battleSide(side)?.screens ?? {};
+                        return (Object.keys(screens) as ("reflect" | "lightScreen" | "auroraVeil")[])
+                          .filter((s) => screens[s] !== undefined)
+                          .map((s) => (
+                            <span key={s} className="battle-status-tag is-volatile">
+                              {SCREEN_LABELS[s]} {screens[s]}턴
+                            </span>
+                          ));
+                      })()}
+                      {battleSide(side)?.wish && (
+                        // 희망사항도 편 단위 큐다(§6-2). turnsRemaining 1 = 이번 턴 종료에 발동.
+                        <span className="battle-status-tag is-volatile">희망사항 대기</span>
+                      )}
+                      {fighter.perishCount !== undefined && (
+                        <span className="battle-status-tag is-major">멸망 {fighter.perishCount}</span>
+                      )}
                       {fighter.substituteHp !== undefined && (
                         <span className="battle-status-tag is-volatile">대타 HP {fighter.substituteHp}</span>
                       )}
@@ -638,7 +835,8 @@ export function BattleLogPage() {
                     return (
                       <div className="battle-party-tracker">
                         {bs.party.map((f, i) => {
-                          const pk = getPokemon(f.slot.pokemonId);
+                          // 일루전(§6-1): 위장 중인 활성 조로아크는 트래커에서도 위장 대상 이름으로 보인다.
+                          const pk = getPokemon(f.illusionAs ?? f.slot.pokemonId);
                           const pct = Math.max(0, Math.min(100, (f.currentHp / f.maxHp) * 100));
                           const fainted = f.currentHp <= 0;
                           return (
@@ -654,6 +852,7 @@ export function BattleLogPage() {
                               <span className="battle-party-chip-hp">
                                 {fainted ? "기절" : `${f.currentHp}/${f.maxHp}`}
                                 {f.status.condition && !fainted && ` · ${STATUS_LABELS[f.status.condition]}`}
+                                {f.perishCount !== undefined && !fainted && ` · 멸망 ${f.perishCount}`}
                               </span>
                               <span className="battle-party-chip-bar">
                                 <span
@@ -679,7 +878,9 @@ export function BattleLogPage() {
                         <div className="battle-switch-panel">
                           <div className="battle-switch-panel-title">
                             {pokemon.name}
-                            {eunNeun(pokemon.name)} 쓰러졌어요 — 내보낼 포켓몬을 선택하세요
+                            {eunNeun(pokemon.name)} 쓰러졌다!
+                            <br />
+                            내보낼 포켓몬을 선택하세요!
                           </div>
                           <div className="battle-switch-list">
                             {benchIdx.map((i) => (
@@ -688,6 +889,34 @@ export function BattleLogPage() {
                                 type="button"
                                 className="battle-switch-button"
                                 onClick={() => resolveForcedSwitch(side, i)}
+                              >
+                                {getPokemon(bs.party[i].slot.pokemonId)?.name ?? "포켓몬"} 내보내기
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    // 2) 유턴류 자체 교체: 사용측 기술까지 처리된 뒤 멈춘 상태 — 나올 포켓몬을 고르면
+                    //    나머지 턴(상대 행동·턴 종료)이 새 포켓몬 기준으로 이어진다(§7-2).
+                    if (pendingPivot && pendingPivot.side === side) {
+                      return (
+                        <div className="battle-switch-panel">
+                          <div className="battle-switch-panel-title">
+                            {pokemon.name}
+                            {eunNeun(pokemon.name)} 돌아온다!
+                            {pendingPivot.passBaton && " (능력 변화 인계)"}
+                            <br />
+                            내보낼 포켓몬을 선택하세요!
+                          </div>
+                          <div className="battle-switch-list">
+                            {benchIdx.map((i) => (
+                              <button
+                                key={i}
+                                type="button"
+                                className="battle-switch-button"
+                                onClick={() => resolvePivot(i)}
                               >
                                 {getPokemon(bs.party[i].slot.pokemonId)?.name ?? "포켓몬"} 내보내기
                               </button>
@@ -722,6 +951,26 @@ export function BattleLogPage() {
                           </div>
                         )}
 
+                        {/* §4: 메가진화 선언 토글 — 스톤을 들었고, 아직 안 했고, 그 편이 이번 배틀에
+                            메가진화를 안 썼을 때만. 켜고 기술을 고르면 그 턴 행동 전에 메가진화. */}
+                        {mode !== "switch" &&
+                          fighter.megaStone &&
+                          !battleSide(side)?.megaUsed &&
+                          !fighter.hasMegaEvolved && (
+                            <label className="battle-mega-toggle">
+                              <input
+                                type="checkbox"
+                                checked={megaDeclared[side]}
+                                onChange={(e) =>
+                                  setMegaDeclared((p) => ({ ...p, [side]: e.target.checked }))
+                                }
+                              />
+                              <span>
+                                메가진화{form.mega ? ` (${megaBadgeLabel(form.mega)})` : ""}
+                              </span>
+                            </label>
+                          )}
+
                         {mode === "switch" ? (
                           <div className="battle-switch-list">
                             {benchIdx.map((i) => {
@@ -744,7 +993,7 @@ export function BattleLogPage() {
                           </div>
                         ) : fighter.chargingMoveId ? (
                           <div className="battle-struggle-notice">
-                            {getMove(fighter.chargingMoveId)?.name ?? "기술"} 준비 중 — 다음 턴 자동으로 발동돼요!
+                            {getMove(fighter.chargingMoveId)?.name ?? "기술"} 준비 중...
                           </div>
                         ) : !isStruggling(side) ? (
                     <div className="battle-move-grid">
@@ -789,7 +1038,7 @@ export function BattleLogPage() {
                                       : suckerPunchHint
                                       ? "상대보다 먼저 움직이면서, 상대가 데미지 기술을 낼 때만 성공해요"
                                       : choiceLocked
-                                      ? "구애스카프 때문에 이 기술은 지금 선택할 수 없어요"
+                                      ? "구애스카프 때문에 지금은 이 기술을 쓸 수 없다"
                                       : restrictionMsg ?? undefined
                             }
                             onClick={() => {
@@ -806,11 +1055,13 @@ export function BattleLogPage() {
                       })}
                     </div>
                         ) : (
-                          // PP가 전부 0이거나, 구애류 도구로 잠긴 기술의 PP가 0 — 발버둥이 자동으로 나간다
+                          // PP 전부 0 / 구애류 잠긴 기술 PP 0 / 앙코르·도발 등으로 고를 수 있는
+                          // 기술이 하나도 없음 — 어느 경우든 발버둥이 자동으로 나간다(§5-2)
                           <div className="battle-struggle-notice">
-                            {hasUsableMove(fighter)
-                              ? "구애류 도구로 잠긴 기술의 PP가 다 됐어요 — 발버둥이 자동으로 나갑니다!"
-                              : "사용 가능한 기술이 없어요 — 발버둥이 자동으로 나갑니다!"}
+                            {pokemon.name}
+                            {eunNeun(pokemon.name)} 사용할 수 있는 기술이 없다!
+                            <br />
+                            {pokemon.name}의 발버둥!
                           </div>
                         )}
                       </>
@@ -837,7 +1088,9 @@ export function BattleLogPage() {
               </button>
             </div>
           ) : pendingForcedSwitch ? (
-            <div className="battle-lock-warning">쓰러진 포켓몬 자리를 교대해야 다음 턴을 진행할 수 있어요.</div>
+            <div className="battle-lock-warning">내보낼 포켓몬을 선택하세요!</div>
+          ) : pendingPivot ? (
+            <div className="battle-lock-warning">교체 기술로 물러날 포켓몬을 선택하세요!</div>
           ) : (
             <>
               <button
@@ -860,43 +1113,48 @@ export function BattleLogPage() {
 
           <div className="battle-turn-log">
             {[...log].reverse().map((turn, turnIdx) => {
-              // 이 턴에 실제로 행동한 포켓몬 이름 — 교체 뒤 과거 턴 로그가 현재 활성 이름으로
-              // 잘못 표시되지 않도록, runTurn이 스냅샷한 activePokemonIds로 이름을 되짚는다.
+              // 턴 종료 처리(회복·상태이상)는 그 시점의 활성 기준이라 activePokemonIds(턴 끝 스냅샷)로 되짚는다.
               const turnName = (key: FighterKey) => getPokemon(turn.activePokemonIds[key])?.name ?? key;
               // 강제 교체는 actions·endOfTurn이 비고 switches만 있는 합성 카드 — 제목을 다르게 준다.
               const isForcedSwitchCard =
                 turn.switches.length > 0 && turn.actions.length === 0 && turn.endOfTurn.length === 0 && !turn.winner;
+              // "먼저 행동"은 첫 행동 주체(유턴 턴 중간 교체 전이라 activePokemonIds와 다를 수 있음).
+              const firstActorName =
+                getPokemon(turn.actions[0]?.actorPokemonId ?? turn.activePokemonIds[turn.order[0]])?.name ??
+                turn.order[0];
               return (
               <div key={`${turn.turnNumber}-${turnIdx}`} className="battle-turn-card">
                 <div className="battle-turn-title">
-                  {isForcedSwitchCard ? `턴 ${turn.turnNumber} · 교체` : `턴 ${turn.turnNumber} · 먼저 행동: ${turnName(turn.order[0])}`}
+                  {isForcedSwitchCard ? `턴 ${turn.turnNumber} · 교체` : `턴 ${turn.turnNumber} · 먼저 행동: ${firstActorName}`}
                 </div>
-                {turn.switches.map((sw, i) => {
-                  const outName = getPokemon(sw.outPokemonId)?.name ?? "포켓몬";
-                  const inName = getPokemon(sw.inPokemonId)?.name ?? "포켓몬";
-                  return (
-                    <div key={`sw-${i}`}>
-                      <div className="battle-turn-line">
-                        {sw.fromIndex < 0
-                          ? `${inName} 등장!`
-                          : `${outName}${eunNeun(outName)} 뒤로 물러났다 — ${inName} 등장!`}
+                {turn.switches
+                  .filter((sw) => !sw.afterMove)
+                  .map((sw, i) => {
+                    const outName = getPokemon(sw.outPokemonId)?.name ?? "포켓몬";
+                    const inName = getPokemon(sw.inPokemonId)?.name ?? "포켓몬";
+                    return (
+                      <div key={`sw-${i}`}>
+                        {/* 본가 스타일 2줄(§5-2). fromIndex<0(강제 교체 합성 카드)이면 물러나는 줄 없음 */}
+                        {sw.fromIndex >= 0 && <div className="battle-turn-line">돌아와! {outName}!</div>}
+                        <div className="battle-turn-line">가라! {inName}!</div>
+                        {sw.entryMessages.map((m, j) => (
+                          <div key={`swm-${i}-${j}`} className="battle-turn-line is-muted">
+                            {m}
+                          </div>
+                        ))}
                       </div>
-                      {sw.entryMessages.map((m, j) => (
-                        <div key={`swm-${i}-${j}`} className="battle-turn-line is-muted">
-                          {m}
-                        </div>
-                      ))}
-                    </div>
-                  );
-                })}
+                    );
+                  })}
                 {turn.turnStartAnnouncements.map((text, i) => (
                   <div key={`tsa-${i}`} className="battle-turn-line is-muted">
                     {text}
                   </div>
                 ))}
                 {turn.actions.map((action, i) => {
-                  const actorName = turnName(action.actor);
-                  const defenderName = turnName(opponentKey(action.actor));
+                  // 행동/피격 시점의 종(유턴 턴 중간 교체 반영) — turn.activePokemonIds가 아니라 action에 스냅샷된 값.
+                  const actorName = getPokemon(action.actorPokemonId)?.name ?? turnName(action.actor);
+                  const defenderName =
+                    getPokemon(action.defenderPokemonId)?.name ?? turnName(opponentKey(action.actor));
                   return (
                     <div key={i}>
                       {/* 움직이기 전 상태 판정 — 잠듦/얼음이 이번 행동 시작 시점에 풀렸으면 기술 줄보다
@@ -935,7 +1193,7 @@ export function BattleLogPage() {
                           action.charging &&
                           (CHARGE_TURN_MESSAGE[action.move.id]
                             ? ` — ${actorName}${CHARGE_TURN_MESSAGE[action.move.id]}`
-                            : " — 준비 중! 다음 턴 발동된다")}
+                            : " — 준비 중...")}
                         {!action.blockedReason && !action.charging && action.evadedByCharge && " — 무적 상태라 빗나감"}
                         {!action.blockedReason && !action.charging && !action.evadedByCharge && !action.hit && " — !"}
                         {!action.blockedReason && action.hit && action.damage > 0 && (
@@ -1179,6 +1437,24 @@ export function BattleLogPage() {
                       {!action.blockedReason && action.hit && action.statusInflictFailed && (
                         <div className="battle-turn-line is-muted">
                           {actorName}의 {action.move.name} - 그러나 실패했다!
+                        </div>
+                      )}
+                      {/* 앙코르 성공 — 사용/받은 쪽을 두 줄로 나눈다(백로그 §7-3) */}
+                      {!action.blockedReason && action.hit && action.inflictedVolatile === "encore" && (
+                        <div className="battle-turn-line is-muted">
+                          {action.bouncedMoveName ? (
+                            <>
+                              {actorName}의 앙코르!<br />
+                              {actorName}
+                              {eunNeun(actorName)} 앙코르를 받았다!
+                            </>
+                          ) : (
+                            <>
+                              {actorName}의 앙코르!<br />
+                              {defenderName}
+                              {eunNeun(defenderName)} 앙코르를 받았다!
+                            </>
+                          )}
                         </div>
                       )}
                       {/* 하품(졸음) 유도 — 실제로 잠드는 건 2턴 뒤라 onset 문구와 다르게 "유도했다"로 표현 */}
@@ -1456,6 +1732,12 @@ export function BattleLogPage() {
                           {defenderName}의 {action.hitNegatedByAbilityName}! {defenderName}의 정체가 드러났다!{" "}
                           {defenderName}
                           {eunNeun(defenderName)} 반동으로 {action.disguiseRecoilDamage} 데미지를 입었다!
+                        </div>
+                      )}
+                      {/* 일루전(§6-1) — 기술 데미지를 받는 순간 위장이 풀린다 */}
+                      {action.illusionBrokenSpeciesId && (
+                        <div className="battle-turn-line is-muted">
+                          {getPokemon(action.illusionBrokenSpeciesId)?.name ?? "포켓몬"}의 일루전이 풀렸다!
                         </div>
                       )}
                       {/* 흑안개 — 자신/상대 구분 없이 양쪽 다 초기화되는 유일한 랭크변화 효과라 전용 문구로 알려준다 */}
@@ -1773,6 +2055,24 @@ export function BattleLogPage() {
                           로 쓰러졌다
                         </div>
                       )}
+                      {/* 유턴류 자체 교체: 이 행동 직후에(§7-2) 시간 순서대로 렌더 */}
+                      {turn.switches
+                        .filter((sw) => sw.afterMove && sw.side === action.actor)
+                        .map((sw, j) => {
+                          const outN = getPokemon(sw.outPokemonId)?.name ?? "포켓몬";
+                          const inN = getPokemon(sw.inPokemonId)?.name ?? "포켓몬";
+                          return (
+                            <div key={`swa-${j}`}>
+                              <div className="battle-turn-line">돌아와! {outN}!</div>
+                              <div className="battle-turn-line">가라! {inN}!</div>
+                              {sw.entryMessages.map((m, k) => (
+                                <div key={`swam-${j}-${k}`} className="battle-turn-line is-muted">
+                                  {m}
+                                </div>
+                              ))}
+                            </div>
+                          );
+                        })}
                     </div>
                   );
                 })}

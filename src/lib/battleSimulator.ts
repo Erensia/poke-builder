@@ -23,7 +23,7 @@ import {
 } from "../types/status";
 import type { Ability } from "../types/ability";
 import { getPokemon, getAbility, getMove, getItem } from "./data";
-import { getEffectiveForm, getEffectiveAbilityId, getEffectiveGender } from "./pokemonForm";
+import { getEffectiveForm, getEffectiveAbilityId, getEffectiveGender, findMegaFormByStone } from "./pokemonForm";
 import { computeRealStats } from "./statCalculator";
 import { applyMoveStatChanges, applyStageDelta, clampStagesToNonNegative } from "./statStages";
 import { hitTriggerMatchesMove } from "./abilityHitTriggers";
@@ -241,6 +241,19 @@ export interface BattleFighterState {
    */
   disguiseBroken?: boolean;
   /**
+   * 일루전(Illusion, 조로아크류): 위장 중이면 위장 대상 포켓몬의 종 id. 등장 시 세팅되고
+   * (파티 마지막 슬롯 = 자신 아님·안 쓰러짐), 기술 데미지를 받는 순간 undefined로 풀린다(§6-1).
+   * 타입·실능·특성 계산엔 전혀 영향을 주지 않는다 — UI 이름/아이콘 표시에만 쓴다.
+   */
+  illusionAs?: string;
+  /**
+   * 메가진화(백로그 §4): 장착한 메가스톤 item id. 있으면 이 포켓몬은 배틀 시작 시 기본 폼으로
+   * 나오고(굳히지 않음), 턴에 메가진화를 선언하면 그 턴 행동 전에 폼이 바뀐다.
+   */
+  megaStone?: string;
+  /** 이 배틀에서 이미 메가진화했으면 true. 교체로 물러났다 다시 나와도 유지(본가 규칙). */
+  hasMegaEvolved?: boolean;
+  /**
    * 변신(Move.transformsIntoTarget)·괴짜(Ability.transformsIntoOpponentOnEntry)로 상대로 변신한
    * 상태면 true. 타입·5실능(HP 제외)·특성·능력 랭크·기술(PP 5)을 상대 것으로 갈아치운 뒤 이 플래그를
    * 세운다. 교체가 없는 1v1이라 한 번 변신하면 배틀 끝까지 유지되고, 재변신은 실패한다.
@@ -255,11 +268,6 @@ export interface BattleFighterState {
    * 턴이 오면(행동불능인 턴 포함) 예약이 사라진다"는 본가 규칙과 대응.
    */
   destinyBondArmed?: boolean;
-  /**
-   * 리플렉터(물리)/빛의장막(특수) — 이 포켓몬 쪽에 걸려있는 스크린과 각각의 남은 턴 수.
-   * "아군이 받는 데미지 감소"라 1v1에서는 이 포켓몬 자신이 상대 공격을 맞을 때 적용된다.
-   */
-  screens: Partial<Record<"reflect" | "lightScreen" | "auroraVeil", number>>;
   /**
    * 타오르는불꽃처럼 "이 타입 기술을 무효화한 이후로 자신이 쓰는 그 타입 기술 위력이 오른다"는
    * 특성이 실제로 발동한 적 있으면 그 배수가 채워진다(교체가 없는 1v1이라 배틀 끝까지 유지).
@@ -379,6 +387,20 @@ export interface BattleSide {
   party: BattleFighterState[];
   activeIndex: number;
   hazards: HazardState;
+  /**
+   * 리플렉터(물리 반감)/빛의장막(특수 반감)/오로라베일(양쪽 반감) — 이 편 전체에 걸려 있는
+   * 스크린과 각각의 남은 턴 수(백로그 §6-3). 편 단위 효과라 교체해도 남는다. 설치물(hazards)과
+   * 같은 축.
+   */
+  screens: Partial<Record<"reflect" | "lightScreen" | "auroraVeil", number>>;
+  /**
+   * 희망사항(Wish) 예약 — 이 편에 하나만 걸 수 있다(백로그 §6-2). 본가처럼 "쓴 포켓몬"이 아니라
+   * 2턴 뒤 그 자리(활성)에 있는 포켓몬을 회복시키므로, fighter가 아니라 편에 큐로 둔다. 교체해도
+   * 유지된다. healAmount는 시전 시점 시전자 최대 HP의 절반(고정).
+   */
+  wish?: { turnsRemaining: number; healAmount: number };
+  /** 메가진화는 팀당 1회(백로그 §4). 이 편이 이미 썼으면 true. */
+  megaUsed?: boolean;
 }
 
 /**
@@ -567,7 +589,12 @@ export function createFighterState(slot: EvaluatorSlot, moves: Move[]): BattleFi
   const pokemon = getPokemon(slot.pokemonId);
   if (!pokemon) throw new Error(`알 수 없는 포켓몬: ${slot.pokemonId}`);
 
-  const form = getEffectiveForm(pokemon, slot);
+  // 메가진화는 배틀 시작 시 굳히지 않는다(§4) — 스톤을 들어도 기본 폼으로 시작하고, 턴에
+  // 선언될 때 runTurn이 폼을 바꾼다. 다만 어떤 메가폼으로 갈지는 스톤으로 미리 파악해 둔다.
+  const form = getEffectiveForm(pokemon, slot, { ignoreMega: true });
+  const megaForm =
+    pokemon.megaEvolutions?.find((m) => m.form === slot.activeMegaForm) ??
+    findMegaFormByStone(pokemon, slot.item);
   // 킬가르도(배틀스위치): pokemon.baseStats에 이미 실드폼 수치를 그대로 채워뒀으므로, 등장 시점
   // 실수치는 별도 분기 없이 그대로 계산된다 — currentForm/stanceChangeForms만 같이 들고 다니다가
   // resolveAction에서 기술 카테고리에 따라 필요할 때 realStats를 다시 계산한다.
@@ -578,6 +605,7 @@ export function createFighterState(slot: EvaluatorSlot, moves: Move[]): BattleFi
     types: form.types,
     gender: getEffectiveGender(pokemon, slot),
     effectiveAbilityId: getEffectiveAbilityId(form, slot.ability),
+    megaStone: megaForm?.megaStone,
     realStats,
     currentHp: realStats.hp,
     maxHp: realStats.hp,
@@ -590,7 +618,6 @@ export function createFighterState(slot: EvaluatorSlot, moves: Move[]): BattleFi
     stockpileCount: 0,
     usedMoveIds: {},
     currentItemId: slot.item ?? null,
-    screens: {},
     ownMoveTypeBoosts: {},
     stanceChangeForms: pokemon.stanceChangeForms,
     currentStanceForm: pokemon.stanceChangeForms ? "shield" : undefined,
@@ -863,19 +890,8 @@ function resolveEntryAbilityEffects(
   let fieldTurnsRemaining: number | undefined;
   const announcements: string[] = [];
 
-  // 배리어프리(Screen Cleaner): 등장 시 양쪽 스크린(리플렉터/빛의장막/오로라베일)을 전부 없앤다.
-  // 속도 순서와 무관한 1회 효과라 루프 밖에서 먼저 처리한다.
-  if (aAbility?.clearsAllScreensOnEntry || bAbility?.clearsAllScreensOnEntry) {
-    const cleanerSlot = aAbility?.clearsAllScreensOnEntry ? aSlot : bSlot;
-    const cleanerAbility = aAbility?.clearsAllScreensOnEntry ? aAbility : bAbility;
-    const cleanerName = getPokemon(cleanerSlot.pokemonId)?.name ?? "포켓몬";
-    const hadAny = Object.keys(aFighter.screens).length > 0 || Object.keys(bFighter.screens).length > 0;
-    aFighter.screens = {};
-    bFighter.screens = {};
-    if (hadAny) {
-      announcements.push(`${cleanerName}의 ${cleanerAbility?.name}! 양쪽의 빛의장막과 리플렉터가 사라졌다!`);
-    }
-  }
+  // 배리어프리(Screen Cleaner)의 스크린 제거는 배틀 시작 시점엔 스크린이 없어 무의미하다.
+  // 교체로 등장할 때는 applyEntryAbilityOnSwitchIn이 편(side) 스크린을 지운다(§6-3).
 
   for (const { slot, fighter, ability, opponent, opponentSlot } of order) {
     if (!ability) continue;
@@ -1007,8 +1023,8 @@ export function createBattleState(init: { a: SideInit; b: SideInit; weather?: We
   const state: BattleState = {
     a: fighterA,
     b: fighterB,
-    sideA: { party: partyA, activeIndex: leadA, hazards: emptyHazardState() },
-    sideB: { party: partyB, activeIndex: leadB, hazards: emptyHazardState() },
+    sideA: { party: partyA, activeIndex: leadA, hazards: emptyHazardState(), screens: {} },
+    sideB: { party: partyB, activeIndex: leadB, hazards: emptyHazardState(), screens: {} },
     weather: resolvedWeather,
     weatherTurnsRemaining,
     field: entryField,
@@ -1022,6 +1038,15 @@ export function createBattleState(init: { a: SideInit; b: SideInit; weather?: We
   // 의태(메더): 등장 시점 필드에 맞춰 타입을 맞춰둔다(첫 턴 시작 훅이 안내는 따로 낸다).
   applyMimicryForm(state.a, state.field);
   applyMimicryForm(state.b, state.field);
+
+  // 일루전(§6-1): 리드가 조로아크류면 배틀 시작 시점부터 파티 마지막 슬롯 모습으로 위장한다.
+  for (const key of ["a", "b"] as const) {
+    const f = state[key];
+    if (f.effectiveAbilityId && getAbility(f.effectiveAbilityId)?.illusion) {
+      const s = sideOf(state, key);
+      f.illusionAs = computeIllusionTarget(s.party, s.activeIndex);
+    }
+  }
   return state;
 }
 
@@ -1049,6 +1074,11 @@ export type ActionBlockReason =
 /** 한 번의 기술 사용 결과 로그 */
 export interface ActionLogEntry {
   actor: FighterKey;
+  /** 이 행동을 한 포켓몬 종 id(일루전 위장 시 위장 대상). 유턴류 턴 중간 교체로 한 카드 안에서
+   *  활성이 바뀌므로, 로그는 turn.activePokemonIds(턴 끝 스냅샷)가 아니라 이 값으로 이름을 쓴다. */
+  actorPokemonId: string;
+  /** 이 행동의 대상(상대 활성) 포켓몬 종 id — 위 이유로 같이 스냅샷한다. */
+  defenderPokemonId: string;
   move: Move;
   /** 주 상태이상(잠듦/얼음/마비)이나 행동방해(풀죽음/반동/혼란 자멸)로 기술을 못 썼으면 채워진다 */
   blockedReason?: ActionBlockReason;
@@ -1378,6 +1408,8 @@ export interface ActionLogEntry {
   hitNegatedByAbilityName?: string;
   /** hitNegatedByAbilityName이 발동하며(=탈이 벗겨지며) 방어측이 입은 반동 데미지 */
   disguiseRecoilDamage?: number;
+  /** 일루전(§6-1): 이 행동으로 방어측 조로아크의 위장이 풀렸으면 그 조로아크의 진짜 종 id(로그 문구용) */
+  illusionBrokenSpeciesId?: string;
   /**
    * 길동무: 이 행동(공격측의 공격)으로 상대가 쓰러졌는데, 상대가 길동무 예약 상태였어서
    * 공격측도 같이 쓰러졌으면 true. fainted/selfFainted 둘 다 이미 true로 채워지지만, UI가
@@ -1529,6 +1561,11 @@ export interface SwitchLogEntry {
   inPokemonId: string;
   /** 이 교체로 발생한 등장/퇴장 안내(재생력·자연회복·위협·날씨 등, Phase 8 §4). 없으면 빈 배열 */
   entryMessages: string[];
+  /**
+   * 유턴·볼트체인지·배턴터치로 "사용측 기술 뒤"에 일어난 자체 교체면 true(§7-2). 로그에서 이
+   * 교체는 그 편의 기술 줄 다음에 놓는다(선처리 교체는 actions 앞).
+   */
+  afterMove?: boolean;
 }
 
 function isFainted(fighter: BattleFighterState): boolean {
@@ -1545,17 +1582,19 @@ function cloneFighter(fighter: BattleFighterState): BattleFighterState {
     volatile: { active: { ...fighter.volatile.active } },
     remainingPp: { ...fighter.remainingPp },
     usedMoveIds: { ...fighter.usedMoveIds },
-    screens: { ...fighter.screens },
     ownMoveTypeBoosts: { ...fighter.ownMoveTypeBoosts },
   };
 }
 
-/** 편(side) 전체를 깊은 복사한다 — 파티 슬롯 전원 + 설치물. runTurn이 prevState를 안 건드리게 쓴다. */
+/** 편(side) 전체를 깊은 복사한다 — 파티 슬롯 전원 + 설치물 + 스크린. runTurn이 prevState를 안 건드리게 쓴다. */
 function cloneSide(side: BattleSide): BattleSide {
   return {
     party: side.party.map(cloneFighter),
     activeIndex: side.activeIndex,
     hazards: { ...side.hazards },
+    screens: { ...side.screens },
+    wish: side.wish ? { ...side.wish } : undefined,
+    megaUsed: side.megaUsed,
   };
 }
 
@@ -1575,6 +1614,18 @@ function isGroundedForHazards(fighter: BattleFighterState): boolean {
   const ab = abilityOf(fighter);
   if (ab?.grantsImmunityToTypes?.includes("땅")) return false;
   return true;
+}
+
+/**
+ * 일루전(§6-1): selfIndex 슬롯의 조로아크가 위장할 대상 종 id. 파티 뒤에서부터 스캔해
+ * "자신 아님 + 안 쓰러짐"인 첫 슬롯의 종을 쓴다(본가: 마지막 포켓몬 모습). 없으면 undefined(위장 안 함).
+ */
+function computeIllusionTarget(party: BattleFighterState[], selfIndex: number): string | undefined {
+  for (let i = party.length - 1; i >= 0; i--) {
+    if (i === selfIndex || isFainted(party[i])) continue;
+    return party[i].slot.pokemonId;
+  }
+  return undefined;
 }
 
 /** 압정뿌리기 층수별 등장 데미지 비율 (사용자 확정: 1→1/16 · 2→1/8 · 3→1/4) */
@@ -1653,8 +1704,8 @@ function applyEntryHazardsOnSwitchIn(state: BattleState, key: FighterKey, log: s
  * 교체로 나온 포켓몬 하나에 대해 "등장 시 특성"을 적용한다(Phase 8 §4 골격).
  * createBattleState의 resolveEntryAbilityEffects는 양쪽을 스피드 순으로 동시에 처리하는
  * 배틀 시작 전용이라, 한 마리만 등장하는 교체용으로 이 단일 버전을 따로 둔다.
- * 처리: 위협(상대 랭크 하락) · 가뭄류(날씨) · 일렉트릭메이커류(필드) · 트레이스(상대 특성 복사).
- * (다운로드·기분파 등은 로스터에 없거나 다른 훅에서 처리.)
+ * 처리: 위협(상대 랭크 하락) · 가뭄류(날씨) · 일렉트릭메이커류(필드) · 트레이스(상대 특성 복사) ·
+ * 배리어프리(양쪽 편 스크린 제거, §6-3). (다운로드·기분파 등은 로스터에 없거나 다른 훅에서 처리.)
  */
 function applyEntryAbilityOnSwitchIn(state: BattleState, key: FighterKey, log: string[]): void {
   const self = state[key];
@@ -1663,6 +1714,23 @@ function applyEntryAbilityOnSwitchIn(state: BattleState, key: FighterKey, log: s
   const ability = self.effectiveAbilityId ? getAbility(self.effectiveAbilityId) : undefined;
   if (!ability || isFainted(self)) return;
   const selfName = getPokemon(self.slot.pokemonId)?.name ?? "포켓몬";
+
+  // 배리어프리(Screen Cleaner): 등장 시 양쪽 편의 스크린을 전부 없앤다(§6-3).
+  if (ability.clearsAllScreensOnEntry) {
+    const hadAny =
+      Object.keys(state.sideA.screens).length > 0 || Object.keys(state.sideB.screens).length > 0;
+    state.sideA.screens = {};
+    state.sideB.screens = {};
+    if (hadAny) {
+      log.push(`${selfName}의 ${ability.name}! 양쪽의 빛의장막과 리플렉터가 사라졌다!`);
+    }
+  }
+
+  // 일루전(§6-1): 등장 시 파티 마지막 슬롯 모습으로 위장한다(별도 로그 없음 — 상대는 눈치채지 못한다).
+  if (ability.illusion) {
+    const s = sideOf(state, key);
+    self.illusionAs = computeIllusionTarget(s.party, s.activeIndex);
+  }
 
   // 위협류
   if (ability.lowersOpponentStatOnEntry && !isFainted(opponent)) {
@@ -1705,6 +1773,41 @@ function applyEntryAbilityOnSwitchIn(state: BattleState, key: FighterKey, log: s
 }
 
 /**
+ * 메가진화 선언을 처리한다(백로그 §4). 스톤을 든 활성 포켓몬을 그 자리에서 메가폼으로 바꾼다 —
+ * 타입·특성·실능치를 메가폼 기준으로 교체하고 편의 megaUsed·파이터의 hasMegaEvolved를 세운다.
+ * 조건(스톤 없음·이미 메가·편이 이미 씀·기절)에 안 맞으면 아무것도 안 하고 false를 돌려준다.
+ *
+ * 메가폼의 특성이 등장 특성(가뭄·모래날림·일렉트릭메이커·위협·트레이스 등)이면, 본가처럼
+ * 메가진화 시점에 그 효과가 발동한다 — applyEntryAbilityOnSwitchIn을 그대로 재사용한다(§4 후속).
+ */
+function applyMegaEvolution(state: BattleState, key: FighterKey, log: string[]): boolean {
+  const side = sideOf(state, key);
+  const fighter = state[key];
+  if (side.megaUsed || fighter.hasMegaEvolved || !fighter.megaStone || isFainted(fighter)) return false;
+  const pokemon = getPokemon(fighter.slot.pokemonId);
+  const mega = pokemon?.megaEvolutions?.find((m) => m.megaStone === fighter.megaStone);
+  if (!mega) return false;
+
+  const newStats = computeRealStats(mega.baseStats, fighter.slot.points, fighter.slot.nature);
+  const hpDelta = newStats.hp - fighter.maxHp; // 공식 메가폼은 HP 불변이지만 비공식 폼 대비 안전하게
+  fighter.types = [...mega.types];
+  fighter.effectiveAbilityId = mega.ability;
+  fighter.realStats = newStats;
+  fighter.maxHp = newStats.hp;
+  fighter.currentHp = Math.min(newStats.hp, Math.max(1, fighter.currentHp + Math.max(0, hpDelta)));
+  fighter.hasMegaEvolved = true;
+  side.megaUsed = true;
+
+  const nm = pokemon?.name ?? "포켓몬";
+  log.push(`${nm}${eunNeun(nm)} ${mega.form}${roEuro(mega.form)} 메가진화했다!`);
+
+  // 메가폼의 등장 특성 발동(가뭄·위협·트레이스 등). 교체 등장이 아니라 그 자리에서의 발동이지만
+  // 처리 내용은 동일하다 — 날씨/필드 덮어쓰기, 상대 랭크 하락, 상대 특성 복사 등.
+  applyEntryAbilityOnSwitchIn(state, key, log);
+  return true;
+}
+
+/**
  * 편(side)의 활성 슬롯을 toIndex로 바꾼다(Phase 8 §3). 물러나는 포켓몬의 "슬롯에 종속된"
  * 휘발 상태(랭크·행동방해·차지·비축·연속기 잠금 등)를 본가 규칙대로 초기화하고, 나가는 쪽에
  * 재생력·자연회복을, 새로 나온 쪽에 폼(기분파·의태)·스탠스·등장 특성(위협·날씨 등)을 적용한다.
@@ -1720,10 +1823,35 @@ function performSwitch(
   log: string[] = [],
   /** 자기 의지로 교체했으면 true(runTurn 교체 액션). 기절 후 강제 교체(applySwitch)면 false — 가속 발동. */
   voluntary = true,
+  /** 배턴터치: 물러나는 포켓몬의 랭크·급소랭크·대타·멸망카운트·일부 volatile을 새로 나온 포켓몬이 이어받는다. */
+  passBaton = false,
 ): void {
   const side = sideOf(state, key);
   if (toIndex === side.activeIndex || toIndex < 0 || toIndex >= side.party.length) return;
   const outgoing = side.party[side.activeIndex];
+
+  // ── 배턴터치: 아래에서 outgoing 상태를 초기화하기 전에 인계할 값을 미리 스냅샷 ──
+  const BATON_VOLATILE_KEYS: VolatileCondition[] = [
+    "confusion",
+    "ingrain",
+    "aquaRing",
+    "leechSeed",
+    "syrupCoat",
+  ];
+  const baton = passBaton
+    ? {
+        stages: { ...outgoing.stages },
+        accuracyStages: { ...outgoing.accuracyStages },
+        critStage: outgoing.critStage,
+        substituteHp: outgoing.substituteHp,
+        perishCount: outgoing.perishCount,
+        volatiles: BATON_VOLATILE_KEYS.reduce<VolatileConditionState["active"]>((acc, k) => {
+          const entry = outgoing.volatile.active[k];
+          if (entry) acc[k] = entry;
+          return acc;
+        }, {}),
+      }
+    : undefined;
 
   // ── 물러나는 포켓몬: 재생력·자연회복(살아서 물러날 때만) ──
   // 별도 로그 문구는 내지 않는다(사용자 결정 2026-09-03) — 파티 트래커의 HP 바 회복·상태이상
@@ -1769,11 +1897,13 @@ function performSwitch(
   outgoing.consecutiveLockUntilTurn = undefined;
   // 곡예(Unburden): 본가는 "도구를 잃은 뒤 교체하기 전까지"만 2배 유지 — 교체로 물러나면 해제(§8).
   outgoing.unburdenActive = undefined;
+  // 일루전(§6-1): 물러나면 위장 해제 — 다시 나올 때 파티 상태에 맞춰 재계산된다.
+  outgoing.illusionAs = undefined;
   // 유지: currentHp · status(주 상태이상) · remainingPp · itemConsumed · currentItemId ·
   //       consumedBerryId · addedType · timesHitByMoves(교체 초기화 미도입) · ownMoveTypeBoosts ·
   //       disguiseBroken · hungerMode.
-  //   후속: screens(편 기반 미이전 — 알려진 단순화) · transformed(변신 원복 — 메타몽 전용이라 미도입) ·
-  //         wish(그 자리 포켓몬이 받아야 하나 fighter에 붙어 있어 교체로 소멸 — post-1.0 §6).
+  //   스크린(§6-3)·희망사항(§6-2)은 편(BattleSide.screens / .wish)에 있어 교체해도 유지된다.
+  //   후속: transformed(변신 원복 — 메타몽 전용이라 미도입).
 
   // ── 활성 슬롯 전환 ──
   side.activeIndex = toIndex;
@@ -1783,6 +1913,18 @@ function performSwitch(
 
   // 가속 억제(§8): 자발적 교체로 나온 턴엔 가속이 발동하지 않는다. 강제 교체(voluntary=false)면 세우지 않음.
   incoming.switchedInThisTurn = voluntary || undefined;
+
+  // ── 배턴터치: 스냅샷해둔 랭크·대타·volatile을 새로 나온 포켓몬에게 인계 ──
+  // 등장 파이프라인(위협·설치물)보다 먼저 얹어야 위협이 인계된 공격 랭크 위에 정상 적용된다.
+  if (baton) {
+    incoming.stages = baton.stages;
+    incoming.accuracyStages = baton.accuracyStages;
+    incoming.critStage = baton.critStage;
+    if (baton.substituteHp !== undefined) incoming.substituteHp = baton.substituteHp;
+    if (baton.perishCount !== undefined) incoming.perishCount = baton.perishCount;
+    incoming.volatile = { active: { ...incoming.volatile.active, ...baton.volatiles } };
+  }
+
   // 킬가르도: 등장 시 항상 실드폼으로 복귀
   if (incoming.stanceChangeForms) incoming.currentStanceForm = "shield";
   // 기분파·의태: 등장 시점의 날씨/필드에 맞춰 타입 정렬
@@ -1812,8 +1954,17 @@ export interface ApplySwitchOutcome {
 /**
  * 강제 교체(기절 후) 또는 UI 교체 확정을 적용한 새 상태를 돌려준다. runTurn 밖에서 호출하며
  * prevState는 변형하지 않는다. turnNumber는 그대로 둔다(교체는 턴을 소비하지 않는 별도 조작).
+ *
+ * opts.voluntary: 유턴·볼트체인지·배턴터치 같은 자체 교체면 true(가속 억제). 기절 후 강제 교체면
+ *   생략(false) — 새로 나온 포켓몬의 가속이 정상 발동한다.
+ * opts.passBaton: 배턴터치면 true — 물러나는 포켓몬의 랭크·대타·일부 volatile을 인계한다.
  */
-export function applySwitch(prevState: BattleState, key: FighterKey, toIndex: number): ApplySwitchOutcome {
+export function applySwitch(
+  prevState: BattleState,
+  key: FighterKey,
+  toIndex: number,
+  opts: { voluntary?: boolean; passBaton?: boolean } = {},
+): ApplySwitchOutcome {
   const sideA = cloneSide(prevState.sideA);
   const sideB = cloneSide(prevState.sideB);
   const state: BattleState = {
@@ -1832,9 +1983,10 @@ export function applySwitch(prevState: BattleState, key: FighterKey, toIndex: nu
   const targetSide = sideOf(state, key);
   const outPokemonId = targetSide.party[targetSide.activeIndex].slot.pokemonId;
   const entryMessages: string[] = [];
-  // applySwitch는 기절 후 강제 교체 전용 — voluntary=false라 다음 턴 가속이 정상 발동한다.
-  performSwitch(state, key, toIndex, entryMessages, false);
-  const inPokemonId = sideOf(state, key).party[sideOf(state, key).activeIndex].slot.pokemonId;
+  performSwitch(state, key, toIndex, entryMessages, opts.voluntary ?? false, opts.passBaton ?? false);
+  const inFighter = sideOf(state, key).party[sideOf(state, key).activeIndex];
+  // 일루전(§6-1): 위장 중이면 로그에도 위장 대상 이름이 나가야 상대가 안 눈치챈다.
+  const inPokemonId = inFighter.illusionAs ?? inFighter.slot.pokemonId;
   return { nextState: state, entryMessages, outPokemonId, inPokemonId };
 }
 
@@ -1855,6 +2007,9 @@ function resolveAction(
   // 매직미러 반사 구간에서만 이 바인딩들을 통째로 맞바꾼다(let). 그 외에는 사실상 const처럼 쓰인다.
   let attacker = state[actorKey];
   let defender = state[defenderKey];
+  // 로그 이름용 — 행동/피격 시점의 활성 종 id(일루전 위장 반영). 아래 모든 return에 싣는다.
+  const actorPokemonId = attacker.illusionAs ?? attacker.slot.pokemonId;
+  const defenderPokemonId = defender.illusionAs ?? defender.slot.pokemonId;
 
   // 길동무: "다음 자신의 턴이 오면(행동불능인 턴 포함) 예약이 사라진다"는 본가 규칙 — 이 공격자의
   // 이번 턴 처리가 막 시작된 시점에 지난 턴 걸어둔 예약을 무조건 지운다. 이번 턴 다시 길동무를
@@ -1956,6 +2111,8 @@ function resolveAction(
     extra?: Partial<ActionLogEntry>,
   ): ActionLogEntry => ({
     actor: actorKey,
+    actorPokemonId,
+    defenderPokemonId,
     move,
     blockedReason: reason,
     hit: false,
@@ -2087,7 +2244,12 @@ function resolveAction(
       if (encoreEntry.moveId !== move.id) restrictionBlockedKind ??= "encore";
       attacker.volatile = consumeVolatileTurn(attacker.volatile, "encore");
     }
-    if (restrictionBlockedKind) return blocked("moveRestricted", 0, { moveRestrictionKind: restrictionBlockedKind });
+    // 발버둥은 이 제약들을 전부 무시하고 나간다(본가 규칙): 앙코르로 변화기가 강제됐는데 도발로
+    // 그 변화기를 못 쓰는 등, 고를 수 있는 기술이 하나도 없을 때의 폴백. 지속 턴수는 위에서 이미
+    // 소모시켰으므로 앙코르·도발·사슬묶기 카운트다운은 정상 진행된다(백로그 §7-5).
+    if (restrictionBlockedKind && move.id !== STRUGGLE_MOVE.id) {
+      return blocked("moveRestricted", 0, { moveRestrictionKind: restrictionBlockedKind });
+    }
   }
 
   // 2-1) 사이코필드: 우선도 +1 이상인 기술이 "상대를 겨냥"하면 그 기술 자체가 실패한다.
@@ -2154,6 +2316,8 @@ function resolveAction(
       attacker.chargingMoveId = move.id;
       return {
         actor: actorKey,
+        actorPokemonId,
+        defenderPokemonId,
         move,
         hit: true,
         critical: false,
@@ -2393,11 +2557,13 @@ function resolveAction(
   if (effectiveMove.spitUpPower) {
     effectiveMove = { ...effectiveMove, power: (attacker.stockpileCount ?? 0) * 100 };
   }
-  // 헤비봄버·히트스탬프 / 풀묶기·안다리걸기(§3-6): 몸무게 기반 위력. 메가폼이면 그 폼의 몸무게를
-  // 쓴다(getEffectiveForm.weightKg). weightKg 미입력이면 폴백.
+  // 헤비봄버·히트스탬프 / 풀묶기·안다리걸기(§3-6): 몸무게 기반 위력. 실제로 메가진화한 상태일
+  // 때만(§4) 그 폼의 몸무게를 쓴다 — 스톤만 들고 선언 전이면 기본 폼 몸무게. weightKg 미입력이면 폴백.
   const weightOf = (fighter: BattleFighterState): number | undefined => {
     const pk = getPokemon(fighter.slot.pokemonId);
-    const baseKg = pk ? getEffectiveForm(pk, fighter.slot).weightKg : undefined;
+    const baseKg = pk
+      ? getEffectiveForm(pk, fighter.slot, { ignoreMega: !fighter.hasMegaEvolved }).weightKg
+      : undefined;
     if (baseKg === undefined) return undefined;
     // 헤비메탈(2)·라이트메탈(0.5): 자신의 몸무게에 배율을 곱한다.
     const mult = abilityOf(fighter)?.weightMultiplier ?? 1;
@@ -2623,6 +2789,8 @@ function resolveAction(
     }
     return {
       actor: actorKey,
+      actorPokemonId,
+      defenderPokemonId,
       move,
       hit,
       critical: false,
@@ -2820,14 +2988,16 @@ function resolveAction(
       berryReducedDamageItemName = defenderItem?.name;
     }
 
-    // 리플렉터(물리)/빛의장막(특수)/오로라베일(물리·특수 둘 다): 방어측 자기 스크린이 걸려있으면
-    // 데미지 반감. 급소는 스크린을 무시한다(본가 규칙) — bulkMultiplier는 나눗셈이라 2를 곱하면
-    // 절반이 된다. 틈새포착이면 스크린 자체를 아예 무시한다(급소 판정과 별개로 항상 1배).
-    // 오로라베일은 카테고리 전용 스크린과 별개 축이라 둘 다 걸려있으면 곱으로 중첩된다.
+    // 리플렉터(물리)/빛의장막(특수)/오로라베일(물리·특수 둘 다): 방어측 편(side)에 스크린이
+    // 걸려있으면 데미지 반감(§6-3 — 편 단위라 교체해도 유지). 급소는 스크린을 무시한다(본가 규칙)
+    // — bulkMultiplier는 나눗셈이라 2를 곱하면 절반이 된다. 틈새포착이면 스크린 자체를 아예
+    // 무시한다(급소 판정과 별개로 항상 1배). 오로라베일은 카테고리 전용 스크린과 별개 축이라
+    // 둘 다 걸려있으면 곱으로 중첩된다. (여기까지 매직미러 반사 스왑 전이라 defenderKey가 정확.)
+    const defenderScreens = sideOf(state, defenderKey).screens;
     const screenType = effectiveMove.category === "physical" ? "reflect" : "lightScreen";
     const screenBypassed = !!attackerAbility?.bypassesScreensAndSubstitute || critical;
-    const categoryScreenActive = !screenBypassed && defender.screens[screenType] !== undefined;
-    const auroraVeilActive = !screenBypassed && defender.screens.auroraVeil !== undefined;
+    const categoryScreenActive = !screenBypassed && defenderScreens[screenType] !== undefined;
+    const auroraVeilActive = !screenBypassed && defenderScreens.auroraVeil !== undefined;
     const screenMultiplier = (categoryScreenActive ? 2 : 1) * (auroraVeilActive ? 2 : 1);
 
     // 관통드릴: 접촉기일 때만 상대 방어/특방 랭크의 "상승분"을 무시한다(날카로운눈의 회피율
@@ -2933,6 +3103,8 @@ function resolveAction(
   // 탈(Disguise): 배틀 중 처음 데미지를 입는 순간에만 발동(disguiseBroken이 아직 false일 때).
   let hitNegatedByAbilityName: string | undefined;
   let disguiseRecoilDamage: number | undefined;
+  // 일루전(§6-1): 이번 행동으로 방어측 조로아크의 위장이 풀렸으면 그 조로아크의 진짜 종 id.
+  let illusionBrokenSpeciesId: string | undefined;
   // 길동무: 데미지 적용 직후 판정하지만, 기합의띠/옹골참/버티기(applyEndurance)로 HP 1로 버텨낸
   // 경우는 애초에 안 쓰러진 것이므로 발동하면 안 된다 — applyEndurance까지 다 끝난 뒤에 판정해야
   // 한다(checkDestinyBond를 별도 호출로 분리한 이유). 다단히트 도중 이미 발동했으면 재판정 안 함.
@@ -2968,6 +3140,11 @@ function resolveAction(
     // 분노의주먹(Move.rageFistPower)용: 이 포켓몬이 기술로 데미지를 받은 누적 횟수(다단히트는 타수만큼).
     if (amount > 0) {
       defender.timesHitByMoves = (defender.timesHitByMoves ?? 0) + 1;
+    }
+    // 일루전(§6-1): 기술 데미지를 실제로 받는 순간 위장이 풀린다. 다단히트면 첫 타에서만 로그를 낸다.
+    if (amount > 0 && defender.illusionAs && defenderAbility?.illusion) {
+      defender.illusionAs = undefined;
+      illusionBrokenSpeciesId = defender.slot.pokemonId;
     }
     // 전기로바꾸기(Electromorphosis): 기술 데미지를 받으면 충전 상태가 된다(다음 전기 기술 위력 2배).
     if (amount > 0 && defenderAbility?.chargesOnDamageTaken && !isFainted(defender)) {
@@ -3923,8 +4100,19 @@ function resolveAction(
       if (effect.volatile === "drowsy" && (target.status.condition || hasVolatile(target.volatile, "drowsy"))) {
         continue;
       }
-      // 희망사항: 이미 예약돼 있으면 재사용 실패(본가 규칙 — 필드/트릭룸과 같은 패턴)
-      if (effect.volatile === "wish" && hasVolatile(target.volatile, "wish")) continue;
+      // 희망사항(§6-2): fighter volatile이 아니라 편(BattleSide.wish)에 큐로 건다 — 2턴 뒤
+      // 그 자리(활성)의 포켓몬이 회복받으므로 교체와 무관하게 유지돼야 한다. 회복량은 시전 시점
+      // 시전자 최대 HP의 절반(고정). 이미 이 편에 예약돼 있으면 재사용 실패(본가 규칙).
+      // (wish는 자기 편 겨냥이라 매직미러 반사 대상이 아니다 — actorKey가 곧 시전자 편.)
+      if (effect.volatile === "wish") {
+        const wisherSide = sideOf(state, actorKey);
+        if (wisherSide.wish) continue;
+        const wishChance = effect.chance !== undefined ? effect.chance / 100 : 1;
+        if (random() >= wishChance) continue;
+        wisherSide.wish = { turnsRemaining: 2, healAmount: Math.floor(state[actorKey].maxHp / 2) };
+        inflictedVolatile = "wish"; // 시전 로그("· 희망사항!")용 마커
+        continue;
+      }
       // 헤롱헤롱: 이미 헤롱헤롱 상태거나(재사용 실패, drowsy/wish와 같은 패턴), 대상 또는
       // 거는 쪽이 무성별이거나 둘이 동성이면(getEffectiveGender 기준) 조용히 무산된다 — 본가에서도
       // 이 경우 "But it failed!"로 아무 효과 없이 끝난다.
@@ -4453,15 +4641,20 @@ function resolveAction(
     applyForecastForm(state.b, activeWeather(state));
   }
 
-  // 리플렉터/빛의장막: 자신 쪽에 이미 같은 스크린이 걸려있으면 실패(필드/트릭룸과 같은 패턴).
-  // 빛의점토를 지녔으면 지속시간이 늘어난다.
+  // 리플렉터/빛의장막/오로라베일: 자기 편(side)에 이미 같은 스크린이 걸려있으면 실패(필드/트릭룸과
+  // 같은 패턴). 빛의점토를 지녔으면 지속시간이 늘어난다. 스크린은 사용자 자신을 겨냥하는 기술이라
+  // 매직미러 반사 대상이 아니다 — actorKey가 곧 사용자 편(§6-3).
   let screenSetFailed = false;
   if (effectiveMove.setsScreen) {
-    if (attacker.screens[effectiveMove.setsScreen] !== undefined) {
+    const attackerScreens = sideOf(state, actorKey).screens;
+    if (attackerScreens[effectiveMove.setsScreen] !== undefined) {
       screenSetFailed = true;
     } else {
       const screenBonus = attackerItem?.screenDurationBonus ?? 0;
-      attacker.screens = { ...attacker.screens, [effectiveMove.setsScreen]: SCREEN_DURATION + screenBonus };
+      sideOf(state, actorKey).screens = {
+        ...attackerScreens,
+        [effectiveMove.setsScreen]: SCREEN_DURATION + screenBonus,
+      };
     }
   }
 
@@ -4523,15 +4716,16 @@ function resolveAction(
     attacker.stages = applyStageDelta(attacker.stages, boost.stat, contraryDelta(attacker, boost.delta));
   }
 
-  // 레이징불·깨트리기(breaksScreensOnHit): 명중하면 상대 쪽 스크린을 전부 제거한다. 위 데미지
-  // 계산은 스크린이 살아있는 상태로 이미 끝났으니(그 턴엔 아직 경감), 여기서 제거만 한다.
+  // 레이징불·깨트리기(breaksScreensOnHit): 명중하면 상대 편(side) 스크린을 전부 제거한다. 위
+  // 데미지 계산은 스크린이 살아있는 상태로 이미 끝났으니(그 턴엔 아직 경감), 여기서 제거만 한다.
   let brokeScreens: ("reflect" | "lightScreen" | "auroraVeil")[] | undefined;
   if (effectiveMove.breaksScreensOnHit) {
-    const present = (Object.keys(defender.screens) as ("reflect" | "lightScreen" | "auroraVeil")[]).filter(
-      (s) => defender.screens[s] !== undefined,
+    const defenderScreens = sideOf(state, defenderKey).screens;
+    const present = (Object.keys(defenderScreens) as ("reflect" | "lightScreen" | "auroraVeil")[]).filter(
+      (s) => defenderScreens[s] !== undefined,
     );
     if (present.length > 0) {
-      defender.screens = {};
+      sideOf(state, defenderKey).screens = {};
       brokeScreens = present;
     }
   }
@@ -4573,6 +4767,8 @@ function resolveAction(
 
   return {
     actor: actorKey,
+    actorPokemonId,
+    defenderPokemonId,
     move,
     hit: true,
     critical: isCritical,
@@ -4663,6 +4859,7 @@ function resolveAction(
     hitSubstitute,
     hitNegatedByAbilityName,
     disguiseRecoilDamage,
+    illusionBrokenSpeciesId,
     triggeredDestinyBond: destinyBondTriggered || undefined,
     protectSucceeded,
     protectFailed,
@@ -4732,7 +4929,15 @@ function resolveAction(
 
 /** 한 편이 이번 턴에 하는 행동. 교체는 항상 기술보다 먼저 처리된다(Phase 8 §3). */
 export type TurnAction =
-  | { kind: "move"; move: Move }
+  | {
+      kind: "move";
+      move: Move;
+      /**
+       * 메가진화 선언(백로그 §4). true면 이 턴의 행동 직전(턴 순서 계산 전)에 메가진화가 처리된다.
+       * 스톤이 없거나·이미 메가진화했거나·그 편이 이미 이번 배틀에서 메가진화를 썼으면 무시된다.
+       */
+      mega?: boolean;
+    }
   | { kind: "switch"; toIndex: number };
 
 export interface RunTurnOutcome {
@@ -4748,6 +4953,37 @@ export interface RunTurnOutcome {
 }
 
 /**
+ * runTurn / resumeTurn이 유턴류 자체 교체(§7-2) 앞에서 멈췄을 때 돌려주는 결과. 호출부는
+ * partialResult(사용측 기술 데미지까지)를 로그·보드에 반영하고, 교체 슬롯을 고르게 한 뒤
+ * resumeTurn(_ctx, toIndex)로 이어간다 — 그래야 상대 행동·턴 종료가 새로 나온 포켓몬 기준으로
+ * 처리된다. _ctx는 불투명 컨텍스트(직렬화하지 말 것 — random·Move 객체를 물고 있다).
+ */
+export interface RunTurnPaused {
+  awaitingSelfSwitch: { side: FighterKey; passBaton: boolean };
+  nextState: BattleState;
+  partialResult: TurnResult;
+  _ctx: RunTurnContext;
+}
+
+/** runActionPhase ↔ resumeTurn ↔ finishTurn이 나눠 쓰는 턴 처리 상태. runTurn 밖에서 만들지 말 것. */
+export interface RunTurnContext {
+  state: BattleState;
+  order: [FighterKey, FighterKey];
+  moves: Record<FighterKey, Move>;
+  random: () => number;
+  speedA: number;
+  speedB: number;
+  didSwitch: Record<FighterKey, boolean>;
+  turnStartAnnouncements: string[];
+  actions: ActionLogEntry[];
+  switches: SwitchLogEntry[];
+  /** 다음에 처리할 order 인덱스(pause 후 resume 시작점) */
+  actionIdx: number;
+  selfDestructComboKey: FighterKey | undefined;
+  pendingPivot: { side: FighterKey; passBaton: boolean } | undefined;
+}
+
+/**
  * 한 턴을 진행시킨다. prevState는 변형하지 않고, 복사본에 적용한 새 상태를 nextState로 돌려준다.
  * 각 편의 액션은 기술(move) 또는 교체(switch) — 교체는 항상 그 턴 기술보다 먼저 처리한다.
  * 우선도 → 실효 스피드(마비 0.5배 포함) → 동속 랜덤 순으로 순서를 정하고,
@@ -4759,7 +4995,7 @@ export function runTurn(
   actionA: TurnAction,
   actionB: TurnAction,
   random: () => number = Math.random,
-): RunTurnOutcome {
+): RunTurnOutcome | RunTurnPaused {
   const sideA = cloneSide(prevState.sideA);
   const sideB = cloneSide(prevState.sideB);
   const state: BattleState = {
@@ -4797,12 +5033,13 @@ export function runTurn(
     performSwitch(state, key, action.toIndex, entryMessages);
     if (side.activeIndex !== fromIndex) {
       didSwitch[key] = true;
+      const inFighter = side.party[action.toIndex];
       switches.push({
         side: key,
         fromIndex,
         toIndex: action.toIndex,
         outPokemonId: outgoing.slot.pokemonId,
-        inPokemonId: side.party[action.toIndex].slot.pokemonId,
+        inPokemonId: inFighter.illusionAs ?? inFighter.slot.pokemonId, // 일루전 위장 반영(§6-1)
         entryMessages,
       });
     }
@@ -4840,6 +5077,16 @@ export function runTurn(
     if (changedTo) {
       const nm = getPokemon(state[key].slot.pokemonId)?.name ?? "포켓몬";
       turnStartAnnouncements.push(`${nm}${eunNeun(nm)} ${changedTo} 타입이 되었다!`);
+    }
+  }
+
+  // 메가진화 선언(§4): 턴 순서를 계산하기 전에 처리한다 — 메가폼의 스피드가 이번 턴 행동
+  // 순서에 반영된다(본가 규칙). 교체한 쪽은 이번 턴 행동을 안 하므로 메가진화도 없다.
+  // 로그 순서만을 위해 프리스테이트 기본 스피드가 빠른 쪽부터 시도한다.
+  for (const key of prevState.a.realStats.spe >= prevState.b.realStats.spe ? (["a", "b"] as const) : (["b", "a"] as const)) {
+    const action = key === "a" ? actionA : actionB;
+    if (action.kind === "move" && action.mega && !didSwitch[key]) {
+      applyMegaEvolution(state, key, turnStartAnnouncements);
     }
   }
 
@@ -4935,11 +5182,38 @@ export function runTurn(
   const order: [FighterKey, FighterKey] = firstIsA ? ["a", "b"] : ["b", "a"];
   const moves: Record<FighterKey, Move> = { a: moveA, b: moveB };
 
-  const actions: ActionLogEntry[] = [];
-  let winner: FighterKey | "draw" | undefined;
+  // 이번 턴 처리 컨텍스트. 유턴류 자체 교체(§7-2)로 턴 중간에 멈췄다가 resumeTurn으로 이어갈 때
+  // 그대로 넘겨받는다. 직렬화하지 않고 JS 메모리에만 들고 다닌다(random·Move 객체 포함).
+  const ctx: RunTurnContext = {
+    state,
+    order,
+    moves,
+    random,
+    speedA,
+    speedB,
+    didSwitch,
+    turnStartAnnouncements,
+    actions: [],
+    switches,
+    actionIdx: 0,
+    selfDestructComboKey: undefined,
+    pendingPivot: undefined,
+  };
+  return runActionPhase(ctx);
+}
 
-  for (const key of order) {
-    if (didSwitch[key]) continue; // 이번 턴 교체한 쪽은 행동하지 않는다(교체가 곧 그 턴 행동)
+/**
+ * 한 편이 이번 턴에 하는 행동을 스피드 순서대로 처리하는 루프. 유턴·볼트체인지·배턴터치가
+ * 명중해서 효과를 줬고 사용측에 교대 슬롯이 있으면, 그 자리에서 멈추고 RunTurnPaused를 돌려준다
+ * (호출부가 교체 슬롯을 고른 뒤 resumeTurn으로 이어간다 — 그래야 상대 행동·턴 종료 처리가 새로
+ * 나온 포켓몬 기준으로 이뤄진다). 그 외에는 루프를 끝까지 돌리고 finishTurn을 호출한다.
+ */
+function runActionPhase(ctx: RunTurnContext): RunTurnOutcome | RunTurnPaused {
+  const { state, order, moves, random, switches, actions } = ctx;
+  for (let i = ctx.actionIdx; i < order.length; i++) {
+    const key = order[i];
+    ctx.actionIdx = i + 1;
+    if (ctx.didSwitch[key]) continue; // 이번 턴 교체한 쪽은 행동하지 않는다(교체가 곧 그 턴 행동)
     if (isFainted(state[key])) continue; // 이미 쓰러진 쪽은 행동 못 함
     if (isFainted(state[opponentKey(key)])) break; // 상대가 이미 쓰러졌으면 더 진행할 필요 없음
     // 포커스렌즈 판정용 — 이번 턴 order 기준으로 상대보다 늦게 움직이는 쪽인지
@@ -4947,22 +5221,98 @@ export function runTurn(
     const action = resolveAction(state, key, moves[key], random, movesSecond, moves[opponentKey(key)]);
     actions.push(action);
 
+    // 유턴·볼트체인지·배턴터치(§7-2): 명중해서 효과를 줬고(빗나감·행동불능·완전 무효·방어류
+    // 차단·특성 흡수 제외) 사용측이 살아 있고 교대 슬롯이 있으면 — 여기서 멈춘다. 상대 행동·턴
+    // 종료 처리는 교체가 확정된 뒤에(resumeTurn) 새 포켓몬 기준으로 이어진다.
+    const mv = action.move;
+    if (
+      (mv.selfSwitchAfterDamage || mv.passesStatsOnSelfSwitch) &&
+      !action.blockedReason &&
+      action.hit &&
+      action.typeEffectiveness !== 0 &&
+      !action.blockedByProtectMoveName &&
+      !action.hitNegatedByAbilityName &&
+      !action.abilityAbsorbAbilityName &&
+      !isFainted(state[key]) &&
+      hasLivingReserve(sideOf(state, key))
+    ) {
+      ctx.pendingPivot = { side: key, passBaton: !!mv.passesStatsOnSelfSwitch };
+      return {
+        awaitingSelfSwitch: { side: key, passBaton: !!mv.passesStatsOnSelfSwitch },
+        nextState: state,
+        partialResult: {
+          turnNumber: state.turnNumber,
+          order,
+          actions: [...actions],
+          endOfTurn: [],
+          winner: undefined,
+          expiredScreens: [],
+          turnStartAnnouncements: ctx.turnStartAnnouncements,
+          switches: [...switches],
+          activePokemonIds: { a: state.a.slot.pokemonId, b: state.b.slot.pokemonId },
+        },
+        _ctx: ctx,
+      };
+    }
+
     // 발버둥 반동이나 자폭류로 "상대를 쓰러뜨리면서 자신도 같이 쓰러지는" 행동 하나 안에서는
     // resolveAction이 항상 상대 데미지를 먼저 적용한 뒤에 반동/자멸을 적용하도록 순서를 지킨다
-    // (위 코드 참고) — 즉 상대가 이 행동으로 먼저 쓰러진 뒤에 자신이 쓰러진 것이므로, 실제
-    // 게임처럼 이 행동을 한 쪽이 승자가 된다. 무승부가 아니다.
+    // (위 코드 참고) — 즉 상대가 이 행동으로 먼저 쓰러진 뒤에 자신이 쓰러진 것이라 인과가 있다.
+    // 예비 슬롯이 남았으면 배틀을 끝내지 않고 강제 교체로 넘겨야 하므로(§7-1), 여기선 행동
+    // 루프만 끊고 승패 판정은 hasLivingReserve를 계산한 뒤 아래에서 처리한다.
     if (action.fainted && action.selfFainted) {
-      winner = key;
+      ctx.selfDestructComboKey = key;
       break;
     }
   }
+  return finishTurn(ctx);
+}
+
+/**
+ * 유턴류 자체 교체 선택이 끝난 뒤 이어서 호출한다(§7-2). 사용측을 toIndex 슬롯으로 교체하고
+ * (등장 파이프라인 포함), 아직 안 움직인 상대가 있으면 그 상대는 새로 나온 포켓몬을 상대하게
+ * runActionPhase를 이어 돌린다. toIndex가 유효한 슬롯이 아니면 교체 없이 이어간다.
+ */
+export function resumeTurn(ctx: RunTurnContext, toIndex: number): RunTurnOutcome | RunTurnPaused {
+  const pivot = ctx.pendingPivot;
+  ctx.pendingPivot = undefined;
+  if (pivot) {
+    const side = sideOf(ctx.state, pivot.side);
+    if (
+      toIndex >= 0 &&
+      toIndex < side.party.length &&
+      toIndex !== side.activeIndex &&
+      !isFainted(side.party[toIndex])
+    ) {
+      const fromIndex = side.activeIndex;
+      const outgoing = side.party[fromIndex];
+      const entryMessages: string[] = [];
+      performSwitch(ctx.state, pivot.side, toIndex, entryMessages, true, pivot.passBaton);
+      const inFighter = side.party[toIndex];
+      ctx.switches.push({
+        side: pivot.side,
+        fromIndex,
+        toIndex,
+        outPokemonId: outgoing.slot.pokemonId,
+        inPokemonId: inFighter.illusionAs ?? inFighter.slot.pokemonId, // §6-1
+        entryMessages,
+        afterMove: true,
+      });
+    }
+  }
+  return runActionPhase(ctx);
+}
+
+function finishTurn(ctx: RunTurnContext): RunTurnOutcome {
+  const { state, order, actions, switches, turnStartAnnouncements, selfDestructComboKey, speedA, speedB, random } = ctx;
+  let winner: FighterKey | "draw" | undefined;
 
   const endOfTurn: EndOfTurnLogEntry[] = [];
   // 멸망의노래로 이번 턴 종료에 쓰러진 쪽(F-4) — 양쪽 다면 스피드 느린 쪽이 승리한다.
   const perishFaintedKeys = new Set<FighterKey>();
 
-  // winner가 이미 액션 중 자폭 콤보로 정해졌으면, 배틀이 그 시점에 끝난 것이니
-  // 턴 종료 회복/상태이상 데미지는 더 진행하지 않는다(실제 게임에서도 배틀이 이미 끝났다).
+  // 자폭 콤보로 활성끼리 동반 기절했으면(selfDestructComboKey) 두 활성이 모두 isFainted라
+  // 이 블록은 건너뛴다 — 둘 다 쓰러진 시점의 턴 종료 회복/상태이상 데미지는 의미가 없다.
   if (!winner && !isFainted(state.a) && !isFainted(state.b)) {
     for (const key of (["a", "b"] as const)) {
       const fighter = state[key];
@@ -5183,17 +5533,22 @@ export function runTurn(
         fighter.volatile = consumeVolatileTurn(fighter.volatile, "syrupCoat");
       }
 
-      // 희망사항: drowsy와 같은 2턴 카운터 패턴 — 쓴 다음 턴 종료에 최대 HP 절반을 회복한다.
-      const wishEntry = fighter.volatile.active.wish;
-      if (wishEntry) {
-        const triggersNow = wishEntry.turnsRemaining <= 1;
-        fighter.volatile = consumeVolatileTurn(fighter.volatile, "wish");
-        if (triggersNow && !isFainted(fighter)) {
-          const wishHeal = Math.min(fighter.maxHp - fighter.currentHp, Math.floor(fighter.maxHp * 0.5));
-          if (wishHeal > 0) {
-            fighter.currentHp += wishHeal;
-            endOfTurn.push({ actor: key, damage: 0, remainingHp: fighter.currentHp, fainted: false, wishHeal });
+      // 희망사항(§6-2): 편(BattleSide.wish) 큐를 카운트다운한다 — 쓴 다음 턴 종료에, 그 시점에
+      // "그 자리에 있는 포켓몬"(=현재 활성 fighter)이 시전자 최대 HP 절반만큼 회복한다. 시전 후
+      // 교체했으면 새로 나온 포켓몬이 받는다.
+      const wishQueue = sideOf(state, key).wish;
+      if (wishQueue) {
+        const triggersNow = wishQueue.turnsRemaining <= 1;
+        wishQueue.turnsRemaining -= 1;
+        if (triggersNow) {
+          if (!isFainted(fighter)) {
+            const wishHeal = Math.min(fighter.maxHp - fighter.currentHp, wishQueue.healAmount);
+            if (wishHeal > 0) {
+              fighter.currentHp += wishHeal;
+              endOfTurn.push({ actor: key, damage: 0, remainingHp: fighter.currentHp, fainted: false, wishHeal });
+            }
           }
+          sideOf(state, key).wish = undefined;
         }
       }
 
@@ -5428,6 +5783,24 @@ export function runTurn(
   const aHasReserve = hasLivingReserve(state.sideA);
   const bHasReserve = hasLivingReserve(state.sideB);
 
+  // 자폭 콤보로 활성끼리 동반 기절한 경우(§7-1). 아래 generic 무승부 블록은 "각자 따로
+  // 쓰러진 것이라 인과가 없다"는 전제라 여기에 흘리면 예비 슬롯이 남아도 배틀이 끝나버린다.
+  // 콤보를 실행한 쪽이 상대를 먼저 쓰러뜨렸다는 인과를 살려, 예비 슬롯을 보고 여기서 가른다.
+  if (!winner && selfDestructComboKey) {
+    const comboKey = selfDestructComboKey;
+    const foeKey = opponentKey(comboKey);
+    const comboHasReserve = comboKey === "a" ? aHasReserve : bHasReserve;
+    const foeHasReserve = foeKey === "a" ? aHasReserve : bHasReserve;
+    if (!comboHasReserve && !foeHasReserve) {
+      winner = comboKey; // 양쪽 다 예비 없음 → 상대를 먼저 쓰러뜨린 콤보 실행 쪽 승리
+    } else if (!comboHasReserve) {
+      winner = foeKey; // 콤보 실행 쪽만 전멸
+    } else if (!foeHasReserve) {
+      winner = comboKey; // 상대만 전멸
+    }
+    // 둘 다 예비 있음 → winner 미정: 아래 forcedSwitch가 양쪽 강제 교체를 요구한다
+  }
+
   // 멸망의노래로 양쪽이 동시에 쓰러졌으면 무승부가 아니라 스피드가 느린 쪽이 승리한다(F-4) —
   // 빠른 쪽이 먼저 쓰러지는 것으로 취급. 랭크 반영 실효 스피드로 비교(트릭룸은 무관).
   // 단 어느 한쪽이라도 교대할 슬롯이 남아 있으면 배틀은 안 끝나고 강제 교체로 넘어간다(§3).
@@ -5455,6 +5828,8 @@ export function runTurn(
           b: isFainted(state.b) && bHasReserve ? true : undefined,
         }
       : undefined;
+
+  // (유턴류 자체 교체(§7-2)는 runActionPhase에서 턴 중간에 멈춰 resumeTurn으로 이미 처리된다.)
 
   // 필드 지속 턴 카운트다운. 0이 되면 이번 턴을 끝으로 필드가 사라진다.
   let fieldExpired = false;
@@ -5492,19 +5867,20 @@ export function runTurn(
     }
   }
 
-  // 리플렉터/빛의장막은 필드/날씨와 달리 "양쪽 다 따로" 걸릴 수 있어 각자 카운트다운한다.
+  // 리플렉터/빛의장막/오로라베일은 필드/날씨와 달리 "양쪽 편이 따로" 걸릴 수 있어 각자
+  // 카운트다운한다. 편(side) 단위 상태라 이번 턴 교체가 있었어도 그대로 이어서 줄어든다(§6-3).
   const expiredScreens: { actor: FighterKey; screen: "reflect" | "lightScreen" | "auroraVeil" }[] = [];
   for (const key of (["a", "b"] as const)) {
-    const fighter = state[key];
+    const side = sideOf(state, key);
     for (const screenType of ["reflect", "lightScreen", "auroraVeil"] as const) {
-      const remaining = fighter.screens[screenType];
+      const remaining = side.screens[screenType];
       if (remaining === undefined) continue;
       const next = remaining - 1;
       if (next <= 0) {
-        fighter.screens = { ...fighter.screens, [screenType]: undefined };
+        side.screens = { ...side.screens, [screenType]: undefined };
         expiredScreens.push({ actor: key, screen: screenType });
       } else {
-        fighter.screens = { ...fighter.screens, [screenType]: next };
+        side.screens = { ...side.screens, [screenType]: next };
       }
     }
   }
