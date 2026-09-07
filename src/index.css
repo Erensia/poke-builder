@@ -119,3 +119,15 @@ button {
   outline: 2px solid var(--violet);
   outline-offset: 2px;
 }
+
+/* 모바일(iOS Safari 등): 폼 요소 글자 크기가 16px 미만이면 포커스 시 화면이 확대되고
+   포커스가 풀려도 원래 배율로 돌아오지 않는다(포켓몬 선택창 검색 입력 등). 확대 자체를
+   막기 위해 좁은 폭에서는 입력 요소 글자 크기를 16px로 강제한다 — 개별 컴포넌트가 더 작은
+   font-size를 지정하고 있어(.picker-search 등) !important가 필요하다. (백로그 §2-3) */
+@media (max-width: 760px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
