@@ -104,7 +104,8 @@
   position: relative;
   height: 14px;
   min-width: 0;
-  border-radius: 999px;
+  /* −/+ 버튼(.points-step)과 같은 곡률 */
+  border-radius: 7px;
   background: var(--surface);
   border: 1px solid var(--border);
   overflow: hidden;
@@ -123,7 +124,8 @@
   bottom: 0;
   left: 0;
   background: var(--gradient);
-  border-radius: inherit;
+  /* 왼쪽 모서리는 부모의 overflow:hidden이 잘라주고, 채움 끝(오른쪽)은 직각으로 둔다 */
+  border-radius: 0;
   pointer-events: none;
   transition: width 0.08s linear;
 }
