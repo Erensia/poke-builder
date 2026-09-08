@@ -304,3 +304,22 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* 모바일(≤760px): 코너 아이콘 버튼(✕ 슬롯 비우기 · 💾 샘플 저장)을 손가락 타깃으로 키운다
+   (백로그 §2-7, §2-3 B에서 보류했던 항목). 커진 만큼 이름 줄이 가리지 않게 오른쪽 여백 확보. */
+@media (max-width: 760px) {
+  .party-slot-clear,
+  .party-slot-save-sample {
+    width: 28px;
+    height: 28px;
+    font-size: 0.72rem;
+  }
+
+  .party-slot-save-sample {
+    right: calc(0.5rem + 28px + 6px);
+  }
+
+  .party-slot-main {
+    padding-right: 4.2rem;
+  }
+}

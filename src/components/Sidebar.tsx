@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import "./Sidebar.css";
 
 export type AppView = "party" | "matchup" | "battle-log" | "pokedex" | "movedex" | "itemdex";
@@ -112,24 +112,62 @@ export function Sidebar({ activeView, onSelectView }: SidebarProps) {
   const [expanded, setExpanded] = useState(false);
   // 모바일(≤760px): 사이드바를 햄버거로 여는 오버레이 드로어로 쓴다.
   const [mobileOpen, setMobileOpen] = useState(false);
+  const toggleRef = useRef<HTMLButtonElement>(null);
+  const asideRef = useRef<HTMLElement>(null);
 
-  // 드로어가 열려 있는 동안 Esc로 닫기 + 뒤 스크롤 잠금
+  // 드로어가 열려 있는 동안: Esc로 닫기 · 뒤 스크롤 잠금 · Tab 포커스를 드로어 안에 가둠 ·
+  // 닫힐 때 포커스를 토글 버튼으로 복귀 (백로그 §2-7).
   useEffect(() => {
     if (!mobileOpen) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setMobileOpen(false);
+    const toggle = toggleRef.current;
+    const aside = asideRef.current;
+
+    const focusables = (): HTMLElement[] => {
+      const items = aside
+        ? Array.from(aside.querySelectorAll<HTMLElement>(".sidebar-nav-item:not(:disabled)"))
+        : [];
+      return toggle ? [toggle, ...items] : items;
     };
+
+    // 열릴 때 포커스를 드로어 첫 내비 항목으로 옮긴다.
+    aside?.querySelector<HTMLElement>(".sidebar-nav-item:not(:disabled)")?.focus();
+
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setMobileOpen(false);
+        return;
+      }
+      if (e.key !== "Tab") return;
+      const list = focusables();
+      if (list.length === 0) return;
+      const first = list[0];
+      const last = list[list.length - 1];
+      const active = document.activeElement as HTMLElement | null;
+      if (e.shiftKey && active === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && active === last) {
+        e.preventDefault();
+        first.focus();
+      } else if (active && !list.includes(active)) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+
     document.addEventListener("keydown", onKey);
     document.body.style.overflow = "hidden";
     return () => {
       document.removeEventListener("keydown", onKey);
       document.body.style.overflow = "";
+      toggle?.focus();
     };
   }, [mobileOpen]);
 
   return (
     <>
       <button
+        ref={toggleRef}
         type="button"
         className="sidebar-toggle"
         aria-label={mobileOpen ? "메뉴 닫기" : "메뉴 열기"}
@@ -146,6 +184,7 @@ export function Sidebar({ activeView, onSelectView }: SidebarProps) {
       />
 
       <aside
+        ref={asideRef}
         className={`sidebar${expanded ? " is-expanded" : ""}${mobileOpen ? " is-mobile-open" : ""}`}
         onMouseEnter={() => setExpanded(true)}
         onMouseLeave={() => setExpanded(false)}
