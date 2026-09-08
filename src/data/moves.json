@@ -194,6 +194,7 @@
     "pp": 12,
     "priority": -6,
     "effect": "상대를 튕겨내서 교대할 포켓몬을 끌어낸다. 야생의 경우에는 배틀이 끝난다.",
+    "forcesTargetSwitch": true,
     "tags": [
       "후공",
       "강제 교체",
@@ -1659,6 +1660,7 @@
     "pp": 12,
     "priority": -6,
     "effect": "상대를 내던져서 교대할 포켓몬을 끌어낸다. 야생의 경우에는 배틀이 끝난다.",
+    "forcesTargetSwitch": true,
     "tags": [
       "후공",
       "강제 교체",
@@ -1882,6 +1884,7 @@
     "pp": 20,
     "priority": -6,
     "effect": "상대를 도망가게 해서 교대할 포켓몬을 끌어낸다. 야생의 경우에는 배틀이 끝난다.",
+    "forcesTargetSwitch": true,
     "tags": [
       "강제 교체",
       "소리"
@@ -7020,6 +7023,7 @@
     "pp": 20,
     "priority": -6,
     "effect": "상대를 날려버려서 교대할 포켓몬을 끌어낸다. 야생의 경우에는 배틀이 끝난다.",
+    "forcesTargetSwitch": true,
     "tags": [
       "강제 교체",
       "바람"

@@ -1620,6 +1620,11 @@ export interface SwitchLogEntry {
    * 교체는 그 편의 기술 줄 다음에 놓는다(선처리 교체는 actions 앞).
    */
   afterMove?: boolean;
+  /**
+   * 드래곤테일·울부짖기류로 상대가 강제로 끌려나온 교체면 true. `side`는 기술을 맞은(끌려나온)
+   * 편이고 `afterMove`도 함께 true다. 로그 문구를 "돌아와!"가 아니라 강제 교체용으로 바꿔 쓴다.
+   */
+  forced?: boolean;
 }
 
 function isFainted(fighter: BattleFighterState): boolean {
@@ -1655,6 +1660,17 @@ function cloneSide(side: BattleSide): BattleSide {
 /** 편에 활성 슬롯 말고 아직 안 쓰러진 슬롯이 하나라도 있으면 true(파티 길이 1이면 항상 false) */
 function hasLivingReserve(side: BattleSide): boolean {
   return side.party.some((f, i) => i !== side.activeIndex && !isFainted(f));
+}
+
+/**
+ * 드래곤테일·울부짖기류의 강제 교체가 이 대상에게 막히는지. 흡반(preventsForcedSwitch)은 기술·도구
+ * 불문 강제 교체 저항, 뿌리박기(ingrain)는 땅에 붙어 밀려나지 않는다. 울부짖기의 방음(소리 차단)은
+ * 기술 자체가 무효라 여기가 아니라 resolveAction 단계에서 걸러진다.
+ */
+function isForcedSwitchBlocked(target: BattleFighterState): boolean {
+  if (abilityOf(target)?.preventsForcedSwitch) return true;
+  if (hasVolatile(target.volatile, "ingrain")) return true;
+  return false;
 }
 
 /**
@@ -5374,6 +5390,53 @@ function runActionPhase(ctx: RunTurnContext): RunTurnOutcome | RunTurnPaused {
         },
         _ctx: ctx,
       };
+    }
+
+    // 드래곤테일·배대뒤치기·울부짖기·날려버리기: 명중해서(빗나감·행동불능·방어·대타·방음·매직미러·
+    // 특성 무효 제외) 상대에게 살아있는 예비가 있고 흡반·뿌리박기로 저항하지 않으면 — 상대를 무작위
+    // 예비 포켓몬으로 강제 교체한다. 데미지 기술은 데미지를 이미 준 뒤이고 타입 면역(0배)이면 발동
+    // 안 한다. 유저 선택이 없는 엔진 내부 처리라 pendingPivot 같은 일시정지 없이 여기서 즉시 끝낸다.
+    const oppKey = opponentKey(key);
+    if (
+      mv.forcesTargetSwitch &&
+      !action.blockedReason &&
+      action.hit &&
+      action.typeEffectiveness !== 0 &&
+      !action.fainted &&
+      !action.blockedByProtectMoveName &&
+      !action.blockedBySubstituteMoveName &&
+      !action.hitNegatedByAbilityName &&
+      !action.abilityAbsorbAbilityName &&
+      !action.soundproofBlockedByAbilityName &&
+      !action.bouncedMoveName &&
+      !isFainted(state[oppKey]) &&
+      hasLivingReserve(sideOf(state, oppKey)) &&
+      !isForcedSwitchBlocked(state[oppKey])
+    ) {
+      const oppSide = sideOf(state, oppKey);
+      const fromIndex = oppSide.activeIndex;
+      const reserveIdxs = oppSide.party
+        .map((_f, idx) => idx)
+        .filter((idx) => idx !== fromIndex && !isFainted(oppSide.party[idx]));
+      const toIndex = reserveIdxs[Math.floor(random() * reserveIdxs.length)];
+      const outgoing = oppSide.party[fromIndex];
+      const entryMessages: string[] = [];
+      // voluntary=false — 기절 후 강제 교체와 같은 취급(가속 발동, 등장 파이프라인은 그대로 탐).
+      performSwitch(state, oppKey, toIndex, entryMessages, false, false);
+      const inFighter = oppSide.party[toIndex];
+      switches.push({
+        side: oppKey,
+        fromIndex,
+        toIndex,
+        outPokemonId: outgoing.illusionAs ?? outgoing.slot.pokemonId,
+        inPokemonId: inFighter.illusionAs ?? inFighter.slot.pokemonId,
+        entryMessages,
+        afterMove: true,
+        forced: true,
+      });
+      // 아직 안 움직였다면 이번 턴 행동을 못 하게 막는다(끌려나온 포켓몬). 우선도 -6이라 대개
+      // 상대는 이미 움직인 뒤라 이 플래그는 무해하게 무시된다.
+      ctx.didSwitch[oppKey] = true;
     }
 
     // 발버둥 반동이나 자폭류로 "상대를 쓰러뜨리면서 자신도 같이 쓰러지는" 행동 하나 안에서는
