@@ -2243,7 +2243,7 @@ export function BattleLogPage() {
                       )}
                       {/* 유턴류 자체 교체: 이 행동 직후에(§7-2) 시간 순서대로 렌더 */}
                       {turn.switches
-                        .filter((sw) => sw.afterMove && sw.side === action.actor)
+                        .filter((sw) => sw.afterMove && !sw.forced && sw.side === action.actor)
                         .map((sw, j) => {
                           const outN = getPokemon(sw.outPokemonId)?.name ?? "포켓몬";
                           const inN = getPokemon(sw.inPokemonId)?.name ?? "포켓몬";
@@ -2253,6 +2253,32 @@ export function BattleLogPage() {
                               <div className="battle-turn-line">가라! {inN}!</div>
                               {sw.entryMessages.map((m, k) => (
                                 <div key={`swam-${j}-${k}`} className="battle-turn-line is-muted">
+                                  {m}
+                                </div>
+                              ))}
+                            </div>
+                          );
+                        })}
+                      {/* 드래곤테일·울부짖기류: 이 기술로 상대가 강제로 끌려나온 교체 */}
+                      {turn.switches
+                        .filter(
+                          (sw) => sw.afterMove && sw.forced && sw.side === opponentKey(action.actor),
+                        )
+                        .map((sw, j) => {
+                          const outN = getPokemon(sw.outPokemonId)?.name ?? "포켓몬";
+                          const inN = getPokemon(sw.inPokemonId)?.name ?? "포켓몬";
+                          return (
+                            <div key={`swf-${j}`}>
+                              <div className="battle-turn-line">
+                                {outN}
+                                {eunNeun(outN)} 강제로 교체되었다!
+                              </div>
+                              <div className="battle-turn-line">
+                                {inN}
+                                {eunNeun(inN)} 배틀에 끌려나왔다!
+                              </div>
+                              {sw.entryMessages.map((m, k) => (
+                                <div key={`swfm-${j}-${k}`} className="battle-turn-line is-muted">
                                   {m}
                                 </div>
                               ))}
