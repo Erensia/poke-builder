@@ -1,6 +1,12 @@
 import type { MatchupSlot } from "../types/matchup";
 import { getPokemon, getMove, getAbility, getItem, getNature } from "../lib/data";
-import { getEffectiveForm, getEffectiveAbilityId, megaBadgeLabel } from "../lib/pokemonForm";
+import {
+  getEffectiveForm,
+  getEffectiveAbilityId,
+  megaBadgeLabel,
+  resolveCosmeticForm,
+  COSMETIC_FORM_CYCLE_MAX,
+} from "../lib/pokemonForm";
 import { computeRealStats } from "../lib/statCalculator";
 import { totalAbilityPoints } from "../lib/statCalculator";
 import { rankStageMultiplier } from "../lib/battlePower";
@@ -31,6 +37,10 @@ interface MatchupSlotCardProps {
   onCycleSizeForm: () => void;
   /** 루가루암 계열 폼 변종을 다음 폼으로 순환 */
   onCycleFormVariant: () => void;
+  /** 마휘핑 계열 겉모습을 다음 모습으로 순환(옵션 ≤4일 때) */
+  onCycleCosmeticForm: () => void;
+  /** 마휘핑 계열 겉모습을 리스트 모달로 고르기(옵션 >4일 때) */
+  onPickCosmeticForm: () => void;
   onPickMove?: () => void;
   /** 저장된 샘플(빌드)이 하나라도 있는지 — Phase 6 §1-3, 없으면 버튼 자체를 숨긴다 */
   hasSamples: boolean;
@@ -74,6 +84,8 @@ export function MatchupSlotCard({
   onPickStages,
   onCycleSizeForm,
   onCycleFormVariant,
+  onCycleCosmeticForm,
+  onPickCosmeticForm,
   onPickMove,
   hasSamples,
   onOpenSamplePicker,
@@ -224,6 +236,22 @@ export function MatchupSlotCard({
                 const currentId = slot.formVariant ?? forms.find((f) => f.standard)?.id ?? forms[0].id;
                 return forms.find((f) => f.id === currentId)?.label ?? forms[0].label;
               })()}
+            </span>
+          </button>
+        )}
+        {pokemon?.cosmeticForms && (
+          <button
+            type="button"
+            className="matchup-meta-pip"
+            onClick={
+              pokemon.cosmeticForms.length <= COSMETIC_FORM_CYCLE_MAX
+                ? onCycleCosmeticForm
+                : onPickCosmeticForm
+            }
+          >
+            <span className="matchup-meta-label">모습</span>
+            <span className="matchup-meta-value">
+              {resolveCosmeticForm(pokemon, slot)?.label ?? pokemon.cosmeticForms[0].label}
             </span>
           </button>
         )}

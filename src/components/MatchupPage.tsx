@@ -10,6 +10,7 @@ import { ItemPickerModal } from "./ItemPickerModal";
 import { NaturePickerModal } from "./NaturePickerModal";
 import { PointsEditorModal } from "./PointsEditorModal";
 import { StageEditorModal } from "./StageEditorModal";
+import { CosmeticFormPickerModal } from "./CosmeticFormPickerModal";
 import { SlotPresetsModal } from "./SlotPresetsModal";
 import { useMatchup } from "../hooks/useMatchup";
 import { useSlotPresets } from "../hooks/useSlotPresets";
@@ -29,6 +30,7 @@ type PickerState =
   | { kind: "nature"; side: Side }
   | { kind: "points"; side: Side }
   | { kind: "stages"; side: Side }
+  | { kind: "cosmeticForm"; side: Side }
   | { kind: "move" }
   | { kind: "slotPresets"; side: Side }
   | null;
@@ -152,6 +154,8 @@ export function MatchupPage() {
           onPickStages={() => setPicker({ kind: "stages", side: "attacker" })}
           onCycleSizeForm={attacker.cycleSizeForm}
           onCycleFormVariant={attacker.cycleFormVariant}
+          onCycleCosmeticForm={attacker.cycleCosmeticForm}
+          onPickCosmeticForm={() => setPicker({ kind: "cosmeticForm", side: "attacker" })}
           onPickMove={() => setPicker({ kind: "move" })}
           hasSamples={slotPresets.presets.length > 0}
           onOpenSamplePicker={() => setPicker({ kind: "slotPresets", side: "attacker" })}
@@ -188,6 +192,8 @@ export function MatchupPage() {
           onPickStages={() => setPicker({ kind: "stages", side: "defender" })}
           onCycleSizeForm={defender.cycleSizeForm}
           onCycleFormVariant={defender.cycleFormVariant}
+          onCycleCosmeticForm={defender.cycleCosmeticForm}
+          onPickCosmeticForm={() => setPicker({ kind: "cosmeticForm", side: "defender" })}
           hasSamples={slotPresets.presets.length > 0}
           onOpenSamplePicker={() => setPicker({ kind: "slotPresets", side: "defender" })}
           onToggleItemStolen={defender.setItemStolen}
@@ -333,6 +339,26 @@ export function MatchupPage() {
                 );
               }}
               onClose={() => setPicker(null)}
+            />
+          );
+        })()}
+
+      {picker?.kind === "cosmeticForm" &&
+        (() => {
+          const side = picker.side;
+          const pokemon = side === "attacker" ? attackerPokemon : defenderPokemon;
+          if (!pokemon?.cosmeticForms) return null;
+          const slotState = sideOf(side);
+          return (
+            <CosmeticFormPickerModal
+              pokemonName={pokemon.name}
+              forms={pokemon.cosmeticForms}
+              currentFormId={slotState.slot.cosmeticForm ?? null}
+              onClose={() => setPicker(null)}
+              onSelect={(formId) => {
+                slotState.setCosmeticForm(formId);
+                setPicker(null);
+              }}
             />
           );
         })()}
