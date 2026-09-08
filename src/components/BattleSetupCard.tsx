@@ -3,6 +3,7 @@ import { getPokemon, getMove, getAbility, getItem, getNature } from "../lib/data
 import {
   getEffectiveForm,
   getEffectiveAbilityId,
+  getEffectiveGender,
   genderLabel,
   megaBadgeLabel,
   resolveCosmeticForm,
@@ -11,6 +12,7 @@ import {
 import { computeRealStats, totalAbilityPoints } from "../lib/statCalculator";
 import { computeBulkPower } from "../lib/battlePower";
 import { TypeBadge } from "./TypeBadge";
+import { PokemonAvatar } from "./PokemonAvatar";
 import { TYPE_COLORS } from "../lib/typeColors";
 import "./PartySlotCard.css";
 
@@ -85,9 +87,6 @@ export function BattleSetupCard({
   }
 
   const form = getEffectiveForm(pokemon, slot!);
-  const avatarGradient = `linear-gradient(135deg, ${TYPE_COLORS[form.types[0]]}, ${
-    TYPE_COLORS[form.types[1] ?? form.types[0]]
-  })`;
   const realStats = computeRealStats(form.baseStats, slot!.points, slot!.nature);
   const bulkPhysical = computeBulkPower(realStats, "physical");
   const bulkSpecial = computeBulkPower(realStats, "special");
@@ -109,9 +108,21 @@ export function BattleSetupCard({
       </button>
 
       <button type="button" className="party-slot-main" onClick={onPickPokemon}>
-        <span className="party-slot-avatar" style={{ background: avatarGradient }}>
-          {pokemon.name.at(0)}
-        </span>
+        <PokemonAvatar
+          pokemon={pokemon}
+          size={36}
+          radius={10}
+          gradientTypes={form.types}
+          className="party-slot-avatar"
+          form={{
+            gender: getEffectiveGender(pokemon, slot!),
+            cosmeticForm: slot!.cosmeticForm,
+            formVariant: slot!.formVariant,
+            sizeForm: slot!.sizeForm,
+            activeMegaForm: slot!.activeMegaForm,
+            item: slot!.item,
+          }}
+        />
         <span className="party-slot-info">
           <span className="party-slot-name">
             {pokemon.name}
