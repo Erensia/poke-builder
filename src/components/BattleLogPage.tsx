@@ -1202,9 +1202,6 @@ export function BattleLogPage() {
                           <>
                             {" "}
                             — {action.damage} 데미지 ({(action.damagePercent * 100).toFixed(1)}%)
-                            {action.hitCount !== undefined && (
-                              <> · {action.hitCount}타 명중{action.critical && " (급소 포함)"}</>
-                            )}
                           </>
                         )}
                         {!action.blockedReason &&
@@ -1362,19 +1359,30 @@ export function BattleLogPage() {
                         {!action.blockedReason && action.hit && action.unburdenOpponentAbilityName && (
                           <> · 상대의 {action.unburdenOpponentAbilityName} 발동! 상대의 스피드가 2배로 올랐다!</>
                         )}
-                        {!action.blockedReason && action.changedOwnTypeTo && (
-                          <>
-                            {" "}
-                            · {action.changedOwnTypeAbilityName} 발동! 타입이 {action.changedOwnTypeTo}
-                            {roEuro(action.changedOwnTypeTo)} 바뀌었다!
-                          </>
-                        )}
                       </div>
+                      {/* §2-4: 변환자재/리베로 타입 변경 — 데미지 줄 인라인에서 분리해 2줄로 */}
+                      {!action.blockedReason && action.changedOwnTypeTo && (
+                        <>
+                          <div className="battle-turn-line is-muted">
+                            {actorName}의 {action.changedOwnTypeAbilityName}!
+                          </div>
+                          <div className="battle-turn-line is-muted">
+                            {actorName}
+                            {eunNeun(actorName)} {action.changedOwnTypeTo}타입이 되었다!
+                          </div>
+                        </>
+                      )}
                       {/* C-5 명중 빗나감 — 메인 줄은 "OO의 기합구슬 — !"로 끝내고 여기서 별도 줄 */}
                       {!action.blockedReason && !action.charging && !action.evadedByCharge && !action.hit && (
                         <div className="battle-turn-line is-muted">
                           {defenderName}
                           {eunNeun(defenderName)} 맞지 않았다!
+                        </div>
+                      )}
+                      {/* §2-5: 연타(멀티히트) 적중 횟수 — 데미지 줄 인라인에서 분리 */}
+                      {!action.blockedReason && action.hit && action.hitCount !== undefined && action.damage > 0 && (
+                        <div className="battle-turn-line is-muted">
+                          {action.hitCount}번 맞았다!{action.critical && " (급소 포함)"}
                         </div>
                       )}
                       {/* C-4 급소 — 데미지 줄 인라인에서 분리 (다단히트는 "(급소 포함)" 인라인 유지) */}
