@@ -87,12 +87,12 @@ const VOLATILES_WITH_DEDICATED_LOG_LINE = new Set(["drowsy", "wish", "encore"]);
 
 /** 차징 기술 1턴째(준비 턴) 전용 문구 — 공통 "준비 중!" 대신 기술별로 쓴다(§1 D-1). key는 move.id */
 const CHARGE_TURN_MESSAGE: Record<string, string> = {
-  구멍파기: "은(는) 땅을 파기 시작했다!",
-  메테오빔: "은(는) 우주의 힘을 모으기 시작했다!",
-  일렉트로빔: "은(는) 전기를 모으기 시작했다!",
-  공중날기: "은(는) 하늘 높이 날아올랐다!",
-  뛰어오르기: "은(는) 하늘 높이 뛰어올랐다!",
-  다이빙: "은(는) 물속 깊이 가라앉았다!",
+  구멍파기: " 땅을 파기 시작했다!",
+  메테오빔: " 우주의 힘을 모으기 시작했다!",
+  일렉트로빔: " 전기를 모으기 시작했다!",
+  공중날기: " 하늘 높이 날아올랐다!",
+  뛰어오르기: " 하늘 높이 뛰어올랐다!",
+  다이빙: " 물속 깊이 가라앉았다!",
 };
 
 const SCREEN_LABELS = { reflect: "리플렉터", lightScreen: "빛의장막", auroraVeil: "오로라베일" } as const;
@@ -119,13 +119,15 @@ function eunNeun(name: string): "은" | "는" {
   return code % 28 === 0 ? "는" : "은";
 }
 
-/** "카리열매로"/"먹다남은음식으로"처럼 자음 받침 유무에 따라 "로"/"으로" 조사를 자동 판별한다 */
+/** "카리열매로"/"먹다남은음식으로"처럼 조사를 자동 판별한다. 받침 없음 또는 ㄹ 받침이면 "로",
+ *  그 외 자음 받침이면 "으로". (ㄹ 받침 code%28===8) */
 function roEuro(name: string): "로" | "으로" {
   const lastChar = name.at(-1);
   if (!lastChar) return "로";
   const code = lastChar.charCodeAt(0) - 0xac00;
   if (code < 0 || code > 11171) return "로";
-  return code % 28 === 0 ? "로" : "으로";
+  const jong = code % 28;
+  return jong === 0 || jong === 8 ? "로" : "으로";
 }
 
 /** "구애스카프를"/"압도적힘을"처럼 자음 받침 유무에 따라 "을"/"를" 조사를 자동 판별한다(매지션 강탈 로그용) */
@@ -144,6 +146,15 @@ function iGa(name: string): "이" | "가" {
   const code = lastChar.charCodeAt(0) - 0xac00;
   if (code < 0 || code > 11171) return "가";
   return code % 28 === 0 ? "가" : "이";
+}
+
+/** "팬텀과"/"조로아크와"처럼 받침 유무에 따라 "과"/"와" 조사를 자동 판별한다 */
+function waGwa(name: string): "와" | "과" {
+  const lastChar = name.at(-1);
+  if (!lastChar) return "와";
+  const code = lastChar.charCodeAt(0) - 0xac00;
+  if (code < 0 || code > 11171) return "와";
+  return code % 28 === 0 ? "와" : "과";
 }
 
 /** 랭크 상승폭 → 본가식 수식어. 1랭크는 수식어 없음, 2랭크 "크게", 3랭크 이상 "아주 크게" */
@@ -233,7 +244,8 @@ function hitAbilityEventLines(
   if (ev.disabledMoveName) {
     push(
       <>
-        {defenderName}의 {ev.abilityName}! {actorName}의 {ev.disabledMoveName}이(가) 봉인되었다!
+        {defenderName}의 {ev.abilityName}! {actorName}의 {ev.disabledMoveName}
+        {iGa(ev.disabledMoveName)} 봉인되었다!
       </>,
     );
   }
@@ -256,14 +268,16 @@ function hitAbilityEventLines(
     push(
       <>
         {defenderName}의 떠도는영혼! {actorName}
-        {eunNeun(actorName)} {defenderName}와(과) 특성을 맞바꿨다!
+        {eunNeun(actorName)} {defenderName}
+        {waGwa(defenderName)} 특성을 맞바꿨다!
       </>,
     );
   }
   if (ev.sandSpitWeather) {
     push(
       <>
-        {defenderName}의 모래뿜기! 날씨가 {ev.sandSpitWeather}(으)로 바뀌었다!
+        {defenderName}의 모래뿜기! 날씨가 {ev.sandSpitWeather}
+        {roEuro(ev.sandSpitWeather)} 바뀌었다!
       </>,
     );
   }
@@ -1315,7 +1329,7 @@ export function BattleLogPage() {
                         {!action.blockedReason &&
                           action.charging &&
                           (CHARGE_TURN_MESSAGE[action.move.id]
-                            ? ` — ${actorName}${CHARGE_TURN_MESSAGE[action.move.id]}`
+                            ? ` — ${actorName}${eunNeun(actorName)}${CHARGE_TURN_MESSAGE[action.move.id]}`
                             : " — 준비 중...")}
                         {!action.blockedReason && !action.charging && action.evadedByCharge && " — 무적 상태라 빗나감"}
                         {!action.blockedReason && !action.charging && !action.evadedByCharge && !action.hit && " — !"}
@@ -1363,7 +1377,11 @@ export function BattleLogPage() {
                           <> · 그러나 실패했다!</>
                         )}
                         {!action.blockedReason && action.hit && action.abilitySwappedTargetToName && (
-                          <> · {defenderName}의 특성이 {action.abilitySwappedTargetToName}(으)로 바뀌었다!</>
+                          <>
+                            {" "}
+                            · {defenderName}의 특성이 {action.abilitySwappedTargetToName}
+                            {roEuro(action.abilitySwappedTargetToName)} 바뀌었다!
+                          </>
                         )}
                         {!action.blockedReason && action.hit && action.abilitySwapFailed && (
                           <> · 그러나 실패했다!</>
@@ -1374,7 +1392,9 @@ export function BattleLogPage() {
                         {!action.blockedReason && action.ateBerryName && (
                           <>
                             {" "}
-                            · {actorName}은(는) {action.ateBerryName}을(를) 먹었다!
+                            · {actorName}
+                            {eunNeun(actorName)} {action.ateBerryName}
+                            {eulReul(action.ateBerryName)} 먹었다!
                             {!!action.ateBerryHeal && <> HP {action.ateBerryHeal} 회복!</>}
                           </>
                         )}
@@ -1569,11 +1589,11 @@ export function BattleLogPage() {
                       {action.blockedReason === "moveRestricted" && (
                         <div className="battle-turn-line is-muted">
                           {action.moveRestrictionKind === "taunt" &&
-                            `${actorName}은(는) 도발에 걸려 변화기를 쓸 수 없다!`}
+                            `${actorName}${eunNeun(actorName)} 도발에 걸려 변화기를 쓸 수 없다!`}
                           {action.moveRestrictionKind === "disable" &&
                             `${actorName}의 ${action.move.name}${eunNeun(action.move.name)} 사슬묶기에 봉인돼있다!`}
                           {action.moveRestrictionKind === "encore" &&
-                            `${actorName}은(는) 앙코르 때문에 이 기술을 쓸 수 없다!`}
+                            `${actorName}${eunNeun(actorName)} 앙코르 때문에 이 기술을 쓸 수 없다!`}
                         </div>
                       )}
                       {/* 상태이상에 새로 걸렸을 때(onset) — 보통 상대가 대상이지만, 매직미러로 되돌아온
@@ -1651,7 +1671,8 @@ export function BattleLogPage() {
                       {!action.blockedReason && !action.hits && action.abilityDisabledMoveName && (
                         <div className="battle-turn-line is-muted">
                           {defenderName}의 {action.abilityDisableAbilityName}! {actorName}의{" "}
-                          {action.abilityDisabledMoveName}이(가) 봉인되었다!
+                          {action.abilityDisabledMoveName}
+                          {iGa(action.abilityDisabledMoveName)} 봉인되었다!
                         </div>
                       )}
                       {/* 나쁜손버릇 — 접촉기로 피격당한 방어측이 공격자의 도구를 빼앗았을 때 */}
@@ -1796,13 +1817,15 @@ export function BattleLogPage() {
                       {!action.blockedReason && !action.hits && action.wanderingSpiritSwapped && (
                         <div className="battle-turn-line is-muted">
                           {defenderName}의 떠도는영혼! {actorName}
-                          {eunNeun(actorName)} {defenderName}와(과) 특성을 맞바꿨다!
+                          {eunNeun(actorName)} {defenderName}
+                          {waGwa(defenderName)} 특성을 맞바꿨다!
                         </div>
                       )}
                       {/* 모래뿜기 — 피격으로 날씨 변경 */}
                       {!action.blockedReason && !action.hits && action.sandSpitWeather && (
                         <div className="battle-turn-line is-muted">
-                          {defenderName}의 모래뿜기! 날씨가 {action.sandSpitWeather}(으)로 바뀌었다!
+                          {defenderName}의 모래뿜기! 날씨가 {action.sandSpitWeather}
+                          {roEuro(action.sandSpitWeather)} 바뀌었다!
                         </div>
                       )}
                       {/* 마법가루 — 상대 타입을 단일 타입으로 치환 */}
@@ -2011,7 +2034,8 @@ export function BattleLogPage() {
                       {/* 상태이상/혼란 즉시치료 나무열매 — curedStatus 문구와 별개로 "어떤 도구가 발동했는지"만 알려준다 */}
                       {!action.blockedReason && action.statusCureBerryItemName && (
                         <div className="battle-turn-line is-muted">
-                          {action.statusCureBerryItemName}이(가) 발동했다!
+                          {action.statusCureBerryItemName}
+                          {iGa(action.statusCureBerryItemName)} 발동했다!
                         </div>
                       )}
                       {/* 자뭉열매/오랭열매 — 공격자/방어자 중 발동한 쪽만 표시 */}
@@ -2329,8 +2353,9 @@ export function BattleLogPage() {
                     ) : e.moodyAbilityName && e.moodyRaisedStat && e.moodyLoweredStat ? (
                       <>
                         {turnName(e.actor)}의 {e.moodyAbilityName}! {STAT_LABELS[e.moodyRaisedStat]}
-                        {"이(가)"} 크게 올라가고 {STAT_LABELS[e.moodyLoweredStat]}
-                        {"이(가)"} 떨어졌다!
+                        {iGa(STAT_LABELS[e.moodyRaisedStat])} 크게 올라가고{" "}
+                        {STAT_LABELS[e.moodyLoweredStat]}
+                        {iGa(STAT_LABELS[e.moodyLoweredStat])} 떨어졌다!
                       </>
                     ) : e.poisonHealAbilityName ? (
                       <>
@@ -2392,7 +2417,8 @@ export function BattleLogPage() {
                 )}
                 {turn.expiredScreens.map((e, i) => (
                   <div key={i} className="battle-turn-line is-muted">
-                    {turnName(e.actor)}의 {SCREEN_LABELS[e.screen]}이(가) 사라졌다!
+                    {turnName(e.actor)}의 {SCREEN_LABELS[e.screen]}
+                    {iGa(SCREEN_LABELS[e.screen])} 사라졌다!
                   </div>
                 ))}
                 {turn.winner && (

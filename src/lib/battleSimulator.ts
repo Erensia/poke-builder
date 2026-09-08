@@ -644,13 +644,14 @@ export function createFighterState(slot: EvaluatorSlot, moves: Move[]): BattleFi
   };
 }
 
-/** "비"/"쾌청"처럼 자음 받침 유무에 따라 "로"/"으로" 조사를 자동 판별한다 */
+/** "비"/"쾌청"처럼 조사를 자동 판별한다. 받침 없음 또는 ㄹ 받침이면 "로", 그 외 자음이면 "으로". */
 function roEuro(name: string): "로" | "으로" {
   const lastChar = name.at(-1);
   if (!lastChar) return "로";
   const code = lastChar.charCodeAt(0) - 0xac00;
   if (code < 0 || code > 11171) return "로";
-  return code % 28 === 0 ? "로" : "으로";
+  const jong = code % 28;
+  return jong === 0 || jong === 8 ? "로" : "으로";
 }
 
 /** "맹화를"/"트레이스을" 같은 목적격 조사 — 받침 유무로 "을"/"를"을 자동 판별한다(트레이스 복사 로그용) */
@@ -944,7 +945,7 @@ function resolveEntryAbilityEffects(
       } else {
         field = ability.setsFieldOnEntry;
         fieldTurnsRemaining = FIELD_DURATION;
-        announcements.push(`${pokemonName}의 ${ability.name}! 필드가 ${field}(으)로 바뀌었다!`);
+        announcements.push(`${pokemonName}의 ${ability.name}! 필드가 ${field}${roEuro(field)} 바뀌었다!`);
       }
     }
     if (ability.copiesOpponentAbilityOnEntry && opponent.effectiveAbilityId) {
@@ -1811,7 +1812,7 @@ function applyEntryAbilityOnSwitchIn(state: BattleState, key: FighterKey, log: s
     } else {
       state.field = ability.setsFieldOnEntry;
       state.fieldTurnsRemaining = FIELD_DURATION;
-      log.push(`${selfName}의 ${ability.name}! 필드가 ${state.field}(으)로 바뀌었다!`);
+      log.push(`${selfName}의 ${ability.name}! 필드가 ${state.field}${roEuro(state.field)} 바뀌었다!`);
       applyMimicryForm(self, state.field);
     }
   }
