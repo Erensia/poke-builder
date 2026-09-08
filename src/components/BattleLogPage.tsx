@@ -2275,7 +2275,7 @@ export function BattleLogPage() {
                               </div>
                               <div className="battle-turn-line">
                                 {inN}
-                                {iGa(inN)} 끌려나왔다!
+                                {eunNeun(inN)} 배틀에 끌려나왔다!
                               </div>
                               {sw.entryMessages.map((m, k) => (
                                 <div key={`swfm-${j}-${k}`} className="battle-turn-line is-muted">
