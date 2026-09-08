@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Modal } from "./Modal";
+import { eulReul } from "../lib/josa";
 import type { Party } from "../types/party";
 import "./PresetListModal.css";
 
@@ -31,7 +32,7 @@ export function PartyPresetsModal({
   }
 
   function handleLoad(preset: Party) {
-    if (window.confirm(`"${preset.name}"을(를) 불러올까요? 현재 편성 중인 파티는 덮어써집니다.`)) {
+    if (window.confirm(`"${preset.name}"${eulReul(preset.name)} 불러올까요? 현재 편성 중인 파티는 덮어써집니다.`)) {
       onLoad(preset);
       onClose();
     }
@@ -44,7 +45,7 @@ export function PartyPresetsModal({
   }
 
   function handleDelete(preset: Party) {
-    if (window.confirm(`"${preset.name}"을(를) 삭제할까요?`)) {
+    if (window.confirm(`"${preset.name}"${eulReul(preset.name)} 삭제할까요?`)) {
       onDelete(preset.id);
     }
   }
