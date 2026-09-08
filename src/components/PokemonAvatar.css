@@ -1,0 +1,21 @@
+.pokemon-avatar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  color: #fff;
+  font-family: var(--display);
+  font-weight: 700;
+  line-height: 1;
+  /* 스프라이트가 없을 때만 보이는 이니셜에 그라디언트 위 가독성 확보 */
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+}
+
+.pokemon-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  /* 도트 스프라이트가 작은 박스에서 뭉개지지 않도록 */
+  image-rendering: -webkit-optimize-contrast;
+}

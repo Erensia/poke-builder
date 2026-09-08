@@ -11,6 +11,7 @@ import { computeRealStats } from "../lib/statCalculator";
 import { totalAbilityPoints } from "../lib/statCalculator";
 import { rankStageMultiplier } from "../lib/battlePower";
 import { TypeBadge } from "./TypeBadge";
+import { PokemonAvatar } from "./PokemonAvatar";
 import { STAT_ORDER, STAT_LABELS } from "../lib/statLabels";
 import { TYPE_COLORS } from "../lib/typeColors";
 import "./MatchupSlotCard.css";
@@ -121,9 +122,6 @@ export function MatchupSlotCard({
   }
 
   const form = getEffectiveForm(pokemon, slot);
-  const avatarGradient = `linear-gradient(135deg, ${TYPE_COLORS[form.types[0]]}, ${
-    TYPE_COLORS[form.types[1] ?? form.types[0]]
-  })`;
   const realStats = computeRealStats(form.baseStats, slot.points, slot.nature);
   const move = slot.moveId ? getMove(slot.moveId) : undefined;
   const usedPoints = totalAbilityPoints(slot.points);
@@ -137,9 +135,21 @@ export function MatchupSlotCard({
       </button>
 
       <button type="button" className="matchup-slot-main" onClick={onPickPokemon}>
-        <span className="matchup-slot-avatar" style={{ background: avatarGradient }}>
-          {pokemon.name.at(0)}
-        </span>
+        <PokemonAvatar
+          pokemon={pokemon}
+          size={42}
+          radius={11}
+          gradientTypes={form.types}
+          className="matchup-slot-avatar"
+          form={{
+            // 매치업 슬롯엔 성별 선택이 없다 — genderedSprite 종은 기본(수컷) 스프라이트.
+            cosmeticForm: slot.cosmeticForm,
+            formVariant: slot.formVariant,
+            sizeForm: slot.sizeForm,
+            activeMegaForm: slot.activeMegaForm,
+            item: slot.item,
+          }}
+        />
         <span className="matchup-slot-info">
           <span className="matchup-slot-name">
             {pokemon.name}

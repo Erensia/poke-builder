@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { POKEMON, getAbility, getMove } from "../lib/data";
 import { TypeBadge } from "./TypeBadge";
+import { PokemonAvatar } from "./PokemonAvatar";
 import { TYPE_COLORS } from "../lib/typeColors";
 import { STAT_LABELS, STAT_ORDER } from "../lib/statLabels";
 import { megaBadgeLabel } from "../lib/pokemonForm";
@@ -13,10 +14,6 @@ import "./PokedexPage.css";
 /** 챔피언스 로스터 종족값 막대의 기준선. 실제 최고치(라이츄메가X/Y 585 등)보다 넉넉하게 잡아
  * 극단적으로 높은 스탯도 막대가 가득 차 보이지 않게 여유를 둔다. */
 const STAT_BAR_MAX = 200;
-
-function avatarGradient(types: Pokemon["types"]): string {
-  return `linear-gradient(135deg, ${TYPE_COLORS[types[0]]}, ${TYPE_COLORS[types[1] ?? types[0]]})`;
-}
 
 function StatBars({ stats }: { stats: BaseStats }) {
   const total = STAT_ORDER.reduce((sum, stat) => sum + stats[stat], 0);
@@ -125,9 +122,12 @@ function PokedexDetail({ pokemon, onSelectMove }: { pokemon: Pokemon; onSelectMo
   return (
     <div className="pokedex-detail">
       <div className="pokedex-detail-head">
-        <span className="pokedex-detail-avatar" style={{ background: avatarGradient(pokemon.types) }}>
-          {pokemon.name.at(0)}
-        </span>
+        <PokemonAvatar
+          pokemon={pokemon}
+          size={56}
+          radius="circle"
+          className="pokedex-detail-avatar"
+        />
         <div>
           <h3>{pokemon.name}</h3>
           <div className="pokedex-detail-types">
@@ -280,9 +280,7 @@ export function PokedexPage({ onSelectMove }: PokedexPageProps) {
                   className={`pokedex-list-item${p.id === selected?.id ? " is-active" : ""}`}
                   onClick={() => setSelectedId(p.id)}
                 >
-                  <span className="pokedex-list-avatar" style={{ background: avatarGradient(p.types) }}>
-                    {p.name.at(0)}
-                  </span>
+                  <PokemonAvatar pokemon={p} size={28} radius="circle" className="pokedex-list-avatar" />
                   <span className="pokedex-list-name">{p.name}</span>
                   {p.megaEvolutions && p.megaEvolutions.length > 0 && (
                     <span className="pokedex-list-mega">메가×{p.megaEvolutions.length}</span>
