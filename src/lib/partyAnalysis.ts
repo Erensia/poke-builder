@@ -46,6 +46,8 @@ export interface PartyDefenseMatrix {
   members: PartyMember[];
   /** 18행 고정 — POKEMON_TYPES 배열 순서 */
   rows: PartyDefenseRow[];
+  /** members와 같은 순서 — 그 포켓몬 한 마리가 18타입 중 약점(×2·×4)인 타입 수(표 마지막 행) */
+  memberWeakCounts: number[];
 }
 
 /**
@@ -55,9 +57,13 @@ export interface PartyDefenseMatrix {
  *  - 강점: r ≥ w  그리고  r ≥ 2
  *  - 취약: w − r ≥ 2
  *  - 보통: 그 외 (두 조건은 상호배타적)
+ *
+ * 표 마지막 행(`memberWeakCounts`)은 그 포켓몬 한 마리가 18타입 중 약점(×2·×4)인 타입 수
+ * (¼·면역 등 저항은 세지 않고, ×4도 타입 1개로만 집계).
  */
 export function computePartyDefenseMatrix(slots: PartySlots): PartyDefenseMatrix {
   const members = getPartyMembers(slots);
+  const memberWeakCounts = members.map(() => 0);
   const rows: PartyDefenseRow[] = POKEMON_TYPES.map((attacking) => {
     const cells = members.map((m) => {
       const mult = getEffectiveness(attacking, m.types);
@@ -65,14 +71,18 @@ export function computePartyDefenseMatrix(slots: PartySlots): PartyDefenseMatrix
     });
     let w = 0;
     let r = 0;
-    for (const c of cells) {
-      if (c === null) continue;
-      if (c > 1) w++;
-      else r++; // c < 1 (0/0.25/0.5) — 면역도 저항으로 집계
-    }
+    cells.forEach((c, i) => {
+      if (c === null) return;
+      if (c > 1) {
+        w++;
+        memberWeakCounts[i]++;
+      } else {
+        r++; // c < 1 (0/0.25/0.5) — 면역도 저항으로 집계
+      }
+    });
     const verdict: PartyDefenseVerdict =
       r >= w && r >= 2 ? "강점" : w - r >= 2 ? "취약" : "보통";
     return { type: attacking, cells, verdict };
   });
-  return { members, rows };
+  return { members, rows, memberWeakCounts };
 }

@@ -374,3 +374,11 @@
   color: var(--text-muted);
   flex-shrink: 0;
 }
+
+/* 모바일(≤760px): 보드가 세로로 쌓이므로 고정 280px 대신 폭에 맞춘다 (§2-3) */
+@media (max-width: 760px) {
+  .matchup-slot {
+    width: 100%;
+    max-width: 320px;
+  }
+}

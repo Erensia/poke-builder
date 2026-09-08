@@ -167,6 +167,33 @@ export function useParty() {
     });
   }
 
+  /** 마휘핑 계열 겉모습을 다음 모습으로 돌린다(cosmeticForms 순서 순환). 이미지에만 영향 — 특성/스탯 불변 */
+  function cycleCosmeticForm(slotIndex: number) {
+    setSlots((prev) => {
+      const slot = prev[slotIndex];
+      if (!slot) return prev;
+      const forms = getPokemon(slot.pokemonId)?.cosmeticForms;
+      if (!forms || forms.length === 0) return prev;
+      const currentId = slot.cosmeticForm ?? forms.find((f) => f.standard)?.id ?? forms[0].id;
+      const idx = forms.findIndex((f) => f.id === currentId);
+      const nextForm = forms[(idx + 1) % forms.length];
+      const next = [...prev] as PartySlots;
+      next[slotIndex] = { ...slot, cosmeticForm: nextForm.id };
+      return next;
+    });
+  }
+
+  /** 마휘핑 계열 겉모습을 리스트에서 고른 id로 바로 설정한다(옵션이 5개 이상이라 순환이 불편한 종용) */
+  function setCosmeticForm(slotIndex: number, formId: string) {
+    setSlots((prev) => {
+      const slot = prev[slotIndex];
+      if (!slot) return prev;
+      const next = [...prev] as PartySlots;
+      next[slotIndex] = { ...slot, cosmeticForm: formId };
+      return next;
+    });
+  }
+
   /** 합산 66 / 스탯당 32를 넘지 않도록 클램프해서 능력 포인트 한 스탯을 절대값으로 설정한다 (직접 입력용) */
   function setPoint(slotIndex: number, stat: keyof AbilityPoints, value: number) {
     setSlots((prev) => {
@@ -217,6 +244,8 @@ export function useParty() {
     toggleGender,
     cycleSizeForm,
     cycleFormVariant,
+    cycleCosmeticForm,
+    setCosmeticForm,
     setPoint,
     stepPoint,
     resetParty,

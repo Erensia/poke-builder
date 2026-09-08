@@ -66,7 +66,7 @@
 }
 
 /* §5-1: "대전 시작"을 두 파티 리스트 가운데에 배치. MatchupPage의 좌/우 슬롯 + 가운데 판정
-   영역 레이아웃 참고. VS 레터마크를 중앙 요소로 얹는다. */
+   영역 레이아웃 참고. VS 레터마크가 곧 대전 시작 버튼(백로그 §2-2 — 별도 버튼 제거). */
 .battle-setup-center {
   display: flex;
   flex-direction: column;
@@ -78,16 +78,39 @@
 }
 
 .battle-setup-vs {
+  font-family: var(--display);
   font-weight: 900;
   font-size: 2rem;
   line-height: 1;
   letter-spacing: 0.06em;
   color: var(--text-muted);
-  padding: 0.2rem 0.7rem;
+  padding: 0.35rem 0.9rem;
   border: 2px solid var(--border);
   border-radius: 9px;
+  background: var(--surface);
   transform: skewX(-8deg);
   user-select: none;
+  cursor: pointer;
+  transition:
+    color 0.15s ease,
+    border-color 0.15s ease,
+    background 0.15s ease,
+    transform 0.1s ease;
+}
+
+.battle-setup-vs:not(:disabled):hover {
+  color: #fff;
+  border-color: transparent;
+  background: var(--gradient);
+}
+
+.battle-setup-vs:not(:disabled):active {
+  transform: skewX(-8deg) scale(0.95);
+}
+
+.battle-setup-vs:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .battle-start-button {
@@ -236,11 +259,74 @@
 }
 
 .battle-fighter {
+  position: relative;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 14px;
   padding: 0.9rem 1rem;
   box-shadow: var(--shadow-sm);
+}
+
+/* 승리한 편의 활성 포켓몬을 금색 테두리 + 맥동 광휘 + 주기적 반짝임으로 강조한다.
+   같은 종끼리 맞붙으면 배너 문구만으로는 어느 쪽이 이겼는지 헷갈린다는 피드백. */
+.battle-fighter.is-winner {
+  border-color: #f2b705;
+  animation: battle-winner-glow 1.5s ease-in-out infinite;
+}
+
+.battle-fighter.is-winner::after {
+  content: "";
+  position: absolute;
+  top: -3px;
+  left: 0;
+  width: 44px;
+  height: 6px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0) 70%);
+  filter: blur(1px);
+  pointer-events: none;
+  animation: battle-winner-glint 2.4s linear infinite;
+}
+
+@keyframes battle-winner-glow {
+  0%,
+  100% {
+    border-color: #f2b705;
+    box-shadow: 0 0 0 1px rgba(242, 183, 5, 0.5), 0 0 10px 1px rgba(242, 183, 5, 0.35);
+  }
+  50% {
+    border-color: #ffdd66;
+    box-shadow: 0 0 0 1px rgba(255, 221, 102, 0.9), 0 0 22px 5px rgba(242, 183, 5, 0.6);
+  }
+}
+
+@keyframes battle-winner-glint {
+  0% {
+    left: -44px;
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  50% {
+    left: 100%;
+    opacity: 1;
+  }
+  62%,
+  100% {
+    left: calc(100% + 44px);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .battle-fighter.is-winner {
+    animation: none;
+    box-shadow: 0 0 0 1px rgba(242, 183, 5, 0.6), 0 0 12px 2px rgba(242, 183, 5, 0.4);
+  }
+  .battle-fighter.is-winner::after {
+    display: none;
+  }
 }
 
 .battle-fighter-head {
@@ -648,17 +734,27 @@
   background: var(--violet-soft);
 }
 
-@media (max-width: 860px) {
+/* 공통 모바일 브레이크포인트 760px (§2-3). 이전엔 860px였으나 다른 페이지와 통일 —
+   battle-log-page max-width 740px라 760px 이하에서 2열이 확실히 좁아진다. */
+@media (max-width: 760px) {
   .battle-board {
     grid-template-columns: 1fr;
+    padding: 0.4rem;
   }
+
+  /* 셋업: 두 파티 세로로 쌓고 VS(대전 시작)를 맨 아래로 */
   .battle-setup-board {
     flex-direction: column;
     align-items: center;
+    gap: 1rem;
   }
   .battle-setup-board .party-slot {
     width: 100%;
-    max-width: 300px;
+    max-width: 340px;
+  }
+  .battle-setup-column {
+    width: 100%;
+    max-width: 340px;
   }
   .battle-setup-center {
     align-self: center;
@@ -667,5 +763,22 @@
   }
   .battle-setup-column:last-of-type {
     order: 0;
+  }
+
+  /* 선출 화면: 고정 폭(240px) 제거하고 폭에 맞춘다 */
+  .battle-select-board {
+    gap: 1.2rem;
+  }
+  .battle-select-column {
+    min-width: 0;
+    width: 100%;
+    max-width: 340px;
+  }
+  .battle-select-mon {
+    width: 100%;
+  }
+
+  .battle-log-header h2 {
+    font-size: 1.15rem;
   }
 }

@@ -157,3 +157,80 @@
   opacity: 1;
   transition: opacity 0.15s ease 0.08s, max-width 0.22s cubic-bezier(0.4, 0, 0.2, 1);
 }
+
+/* ── 모바일(≤760px): 햄버거로 여는 오버레이 드로어 ───────────────────────────
+   데스크톱 레일/hover 확장은 그대로 두고, 좁은 폭에서만 아래 규칙으로 덮어쓴다. */
+
+/* 햄버거 토글 — 데스크톱에선 숨김 */
+.sidebar-toggle {
+  display: none;
+  position: fixed;
+  top: 0.7rem;
+  left: 0.7rem;
+  z-index: 42;
+  width: 2.5rem;
+  height: 2.5rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+}
+
+.sidebar-toggle svg {
+  width: 1.35rem;
+  height: 1.35rem;
+}
+
+/* 드로어 뒤 백드롭 */
+.sidebar-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: rgba(20, 16, 40, 0.45);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+@media (max-width: 760px) {
+  .sidebar-toggle {
+    display: flex;
+  }
+
+  .sidebar-backdrop.is-visible {
+    display: block;
+    opacity: 1;
+  }
+
+  /* 레일 → 화면 밖 드로어. hover 확장(is-expanded)은 폭에 관여하지 못하게 고정 폭으로.
+     상단 패딩을 키워 로고가 좌상단 고정 토글(X) 버튼과 겹치지 않게 한다. */
+  .sidebar,
+  .sidebar.is-expanded {
+    width: min(82vw, 260px);
+    padding: 3.75rem 1rem 1.5rem;
+    z-index: 41;
+    box-shadow: none;
+    transform: translateX(-100%);
+    transition: transform 0.24s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .sidebar.is-mobile-open {
+    transform: translateX(0);
+    box-shadow: 0 8px 40px rgba(20, 16, 40, 0.3);
+  }
+
+  /* 드로어 안에서는 라벨·로고 텍스트를 항상 펼쳐 보인다 */
+  .sidebar-logo-text,
+  .sidebar-nav-label {
+    max-width: 160px;
+    opacity: 1;
+  }
+
+  .sidebar-nav-item {
+    padding-left: 2.3rem;
+  }
+}

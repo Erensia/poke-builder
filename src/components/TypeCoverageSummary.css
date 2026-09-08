@@ -22,16 +22,25 @@
   padding: 1rem 0;
 }
 
-/* 좁은 폭에서 18×N 표는 가로 스크롤 (백로그 §1-5) */
+/* 좁은 폭에서 18×N 표는 가로 스크롤 (백로그 §1-5).
+   오른쪽에 아직 안 보이는 열이 남았을 때만 끝단 그림자 — background-attachment 스크롤 섀도 기법.
+   왼쪽은 행 헤더가 sticky라 힌트가 필요 없다. */
 .type-matrix-scroll {
   overflow-x: auto;
   border: 1px solid var(--border);
   border-radius: 12px;
-  background: var(--surface);
+  background:
+    linear-gradient(to left, var(--surface), transparent) 100% 0 / 40px 100% no-repeat local,
+    radial-gradient(farthest-side at 100% 50%, rgba(20, 16, 40, 0.16), transparent) 100% 0 / 14px 100%
+      no-repeat scroll,
+    var(--surface);
 }
 
 .type-matrix {
-  border-collapse: collapse;
+  /* collapse가 아니라 separate — position:sticky 셀에서 구분선이 사라지거나 인접 셀이
+     1~2px 새어 보이는 문제를 피한다. border-spacing 0으로 셀은 붙여 둔다. */
+  border-collapse: separate;
+  border-spacing: 0;
   font-size: 0.72rem;
   width: max-content;
   min-width: 100%;
@@ -54,12 +63,30 @@
 .type-matrix thead th {
   position: sticky;
   top: 0;
+  z-index: 2;
   background: var(--surface-2);
   font-weight: 700;
   border-bottom: 2px solid var(--border);
 }
 
+/* 행 헤더(타입 배지 열)를 왼쪽에 고정 — 오른쪽으로 스크롤해도 타입 이름이 보인다.
+   오른쪽 옅은 그림자로 "위에 얹힌 고정 열"임을 알린다. */
+.tm-type,
+.tm-foot-label,
 .tm-corner {
+  position: sticky;
+  left: 0;
+  box-shadow: 6px 0 6px -4px rgba(20, 16, 40, 0.14);
+}
+
+.tm-type,
+.tm-foot-label {
+  z-index: 2;
+  background: var(--surface);
+}
+
+.tm-corner {
+  z-index: 3;
   background: var(--surface-2);
 }
 
@@ -80,6 +107,13 @@
   font-size: 0.6rem;
   font-weight: 600;
   color: var(--violet);
+}
+
+/* 종합(상성별) 열은 상성표 본문과 구분선으로 나눈다 (백로그 §2-6) */
+.tm-verdict-head,
+.tm-verdict,
+.tm-foot-corner {
+  border-left: 2px solid var(--border);
 }
 
 .tm-verdict-head {
@@ -136,6 +170,26 @@
 .cnt-immune {
   color: var(--text-muted);
   background: var(--surface-2);
+}
+
+/* 종합(포켓몬별) 행 (tfoot) — 그 포켓몬의 약점 타입 수.
+   행 전체 배경을 헤더(surface-2)와 통일한다 — 숫자 셀만 흰색으로 튀지 않도록. */
+.type-matrix tfoot th,
+.type-matrix tfoot td {
+  border-top: 2px solid var(--border);
+  border-bottom: none;
+  background: var(--surface-2);
+}
+
+.tm-foot-label {
+  font-weight: 700;
+}
+
+.tm-foot-count {
+  font-weight: 700;
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
 }
 
 /* 종합 열 */

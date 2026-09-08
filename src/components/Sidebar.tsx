@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import "./Sidebar.css";
 
 export type AppView = "party" | "matchup" | "battle-log" | "pokedex" | "movedex" | "itemdex";
@@ -72,6 +72,26 @@ function IconList() {
   );
 }
 
+/** 모바일 햄버거 토글 — 닫힘이면 3줄, 열림이면 X */
+function IconMenuToggle({ open }: { open: boolean }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      {open ? (
+        <>
+          <line x1="18" x2="6" y1="6" y2="18" />
+          <line x1="6" x2="18" y1="6" y2="18" />
+        </>
+      ) : (
+        <>
+          <line x1="3" x2="21" y1="6" y2="6" />
+          <line x1="3" x2="21" y1="12" y2="12" />
+          <line x1="3" x2="21" y1="18" y2="18" />
+        </>
+      )}
+    </svg>
+  );
+}
+
 const NAV_ITEMS: { label: string; icon: ReactNode; view: AppView | null }[] = [
   { label: "파티 빌더", icon: <IconHexagon />, view: "party" },
   { label: "결정력 & 내구력", icon: <IconSwords />, view: "matchup" },
@@ -88,43 +108,117 @@ interface SidebarProps {
 
 export function Sidebar({ activeView, onSelectView }: SidebarProps) {
   // hover만으로 펼침을 제어하면 클릭 후에도 마우스가 사이드바 위에 남아있는 동안 계속 펼쳐져 있으니,
-  // 상태로 직접 제어해서 메뉴 클릭 시 즉시 접히게 한다.
+  // 상태로 직접 제어해서 메뉴 클릭 시 즉시 접히게 한다. (데스크톱 전용 — 모바일에선 무의미)
   const [expanded, setExpanded] = useState(false);
+  // 모바일(≤760px): 사이드바를 햄버거로 여는 오버레이 드로어로 쓴다.
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const toggleRef = useRef<HTMLButtonElement>(null);
+  const asideRef = useRef<HTMLElement>(null);
+
+  // 드로어가 열려 있는 동안: Esc로 닫기 · 뒤 스크롤 잠금 · Tab 포커스를 드로어 안에 가둠 ·
+  // 닫힐 때 포커스를 토글 버튼으로 복귀 (백로그 §2-7).
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const toggle = toggleRef.current;
+    const aside = asideRef.current;
+
+    const focusables = (): HTMLElement[] => {
+      const items = aside
+        ? Array.from(aside.querySelectorAll<HTMLElement>(".sidebar-nav-item:not(:disabled)"))
+        : [];
+      return toggle ? [toggle, ...items] : items;
+    };
+
+    // 열릴 때 포커스를 드로어 첫 내비 항목으로 옮긴다.
+    aside?.querySelector<HTMLElement>(".sidebar-nav-item:not(:disabled)")?.focus();
+
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setMobileOpen(false);
+        return;
+      }
+      if (e.key !== "Tab") return;
+      const list = focusables();
+      if (list.length === 0) return;
+      const first = list[0];
+      const last = list[list.length - 1];
+      const active = document.activeElement as HTMLElement | null;
+      if (e.shiftKey && active === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && active === last) {
+        e.preventDefault();
+        first.focus();
+      } else if (active && !list.includes(active)) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener("keydown", onKey);
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = "";
+      toggle?.focus();
+    };
+  }, [mobileOpen]);
 
   return (
-    <aside
-      className={`sidebar${expanded ? " is-expanded" : ""}`}
-      onMouseEnter={() => setExpanded(true)}
-      onMouseLeave={() => setExpanded(false)}
-    >
-      <div className="sidebar-logo">
-        <span className="sidebar-logo-mark" aria-hidden="true" />
-        <span className="sidebar-logo-text">
-          Poke-Builder
-          <small>파티 빌더</small>
-        </span>
-      </div>
+    <>
+      <button
+        ref={toggleRef}
+        type="button"
+        className="sidebar-toggle"
+        aria-label={mobileOpen ? "메뉴 닫기" : "메뉴 열기"}
+        aria-expanded={mobileOpen}
+        onClick={() => setMobileOpen((v) => !v)}
+      >
+        <IconMenuToggle open={mobileOpen} />
+      </button>
 
-      <nav className="sidebar-nav">
-        {NAV_ITEMS.map((item) => (
-          <button
-            key={item.label}
-            type="button"
-            className={`sidebar-nav-item${item.view === activeView ? " is-active" : ""}`}
-            disabled={item.view === null}
-            onClick={() => {
-              if (!item.view) return;
-              onSelectView(item.view);
-              setExpanded(false);
-            }}
-          >
-            <span className="sidebar-nav-icon" aria-hidden="true">
-              {item.icon}
-            </span>
-            <span className="sidebar-nav-label">{item.label}</span>
-          </button>
-        ))}
-      </nav>
-    </aside>
+      <div
+        className={`sidebar-backdrop${mobileOpen ? " is-visible" : ""}`}
+        onClick={() => setMobileOpen(false)}
+        aria-hidden="true"
+      />
+
+      <aside
+        ref={asideRef}
+        className={`sidebar${expanded ? " is-expanded" : ""}${mobileOpen ? " is-mobile-open" : ""}`}
+        onMouseEnter={() => setExpanded(true)}
+        onMouseLeave={() => setExpanded(false)}
+      >
+        <div className="sidebar-logo">
+          <span className="sidebar-logo-mark" aria-hidden="true" />
+          <span className="sidebar-logo-text">
+            Poke-Builder
+            <small>파티 빌더</small>
+          </span>
+        </div>
+
+        <nav className="sidebar-nav">
+          {NAV_ITEMS.map((item) => (
+            <button
+              key={item.label}
+              type="button"
+              className={`sidebar-nav-item${item.view === activeView ? " is-active" : ""}`}
+              disabled={item.view === null}
+              onClick={() => {
+                if (!item.view) return;
+                onSelectView(item.view);
+                setExpanded(false);
+                setMobileOpen(false);
+              }}
+            >
+              <span className="sidebar-nav-icon" aria-hidden="true">
+                {item.icon}
+              </span>
+              <span className="sidebar-nav-label">{item.label}</span>
+            </button>
+          ))}
+        </nav>
+      </aside>
+    </>
   );
 }

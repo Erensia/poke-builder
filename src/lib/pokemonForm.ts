@@ -1,4 +1,4 @@
-import type { Pokemon, MegaEvolution, PokemonGender, FormVariant } from "../types/pokemon";
+import type { Pokemon, MegaEvolution, PokemonGender, FormVariant, CosmeticForm } from "../types/pokemon";
 import type { PokemonType } from "../types/pokemon-type";
 import type { BaseStats } from "../types/stats";
 
@@ -10,6 +10,33 @@ export interface FormSource {
   sizeForm?: string;
   /** 루가루암 계열 폼 변종 선택값(Pokemon.formVariants[].id). 없으면 종의 기준 폼 */
   formVariant?: string;
+  /** 마휘핑 계열 겉모습 선택값(Pokemon.cosmeticForms[].id). 이미지에만 영향 — getEffectiveForm은 이 값을 보지 않는다 */
+  cosmeticForm?: string;
+}
+
+/**
+ * 겉모습 옵션이 이 수 이하면 슬롯 카드에서 클릭으로 순환(펌킨인·루가루암과 동일 UX), 이보다 많으면
+ * 리스트 모달로 고른다. 비비용(20종)처럼 옵션이 너무 많은 종의 순환 UX가 나빠서 둔 경계
+ * (사용자 확정 2026-09-08).
+ */
+export const COSMETIC_FORM_CYCLE_MAX = 4;
+
+/**
+ * pokemon.cosmeticForms에서 slot이 실제로 가리키는 겉모습을 돌려준다. 슬롯 값이 없거나 목록에
+ * 없는 id면 `standard: true`인 기준 모습으로, 그것도 없으면 배열 첫 원소로 폴백한다. 겉모습
+ * 목록 자체가 없으면 undefined. 슬롯 카드의 클릭 순환·리스트 모달·이미지 해석이 공통으로 쓴다.
+ */
+export function resolveCosmeticForm(
+  pokemon: Pokemon,
+  slot: { cosmeticForm?: string },
+): CosmeticForm | undefined {
+  const forms = pokemon.cosmeticForms;
+  if (!forms || forms.length === 0) return undefined;
+  return (
+    forms.find((f) => f.id === slot.cosmeticForm) ??
+    forms.find((f) => f.standard) ??
+    forms[0]
+  );
 }
 
 /** pokemon.formVariants에서 slot이 고른 폼(기준 폼이면 undefined) */
@@ -175,4 +202,14 @@ export function genderLabel(gender: PokemonGender): "수컷" | "암컷" {
  */
 export function megaBadgeLabel(mega: MegaEvolution): string {
   return mega.form.split("-").at(-1) ?? "메가";
+}
+
+/**
+ * 메가폼의 정식(사람이 읽는) 명칭. 폼 이름은 데이터상 "이어롭-메가" / "리자몽-메가X" 형태지만
+ * 실제 한국어 정식 명칭은 "메가이어롭" / "메가리자몽X"다 — 배틀 로그 문구처럼 그대로 노출되는
+ * 자리엔 이 형태를 쓴다. 예상 밖 형식이면 폼 이름을 그대로 돌려준다.
+ */
+export function megaFormFullName(mega: MegaEvolution): string {
+  const m = mega.form.match(/^(.+)-메가([XYZ]?)$/);
+  return m ? `메가${m[1]}${m[2]}` : mega.form;
 }
