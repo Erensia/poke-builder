@@ -23,7 +23,13 @@ import {
 } from "../types/status";
 import type { Ability } from "../types/ability";
 import { getPokemon, getAbility, getMove, getItem } from "./data";
-import { getEffectiveForm, getEffectiveAbilityId, getEffectiveGender, findMegaFormByStone } from "./pokemonForm";
+import {
+  getEffectiveForm,
+  getEffectiveAbilityId,
+  getEffectiveGender,
+  findMegaFormByStone,
+  megaFormFullName,
+} from "./pokemonForm";
 import { computeRealStats } from "./statCalculator";
 import { applyMoveStatChanges, applyStageDelta, clampStagesToNonNegative } from "./statStages";
 import { hitTriggerMatchesMove } from "./abilityHitTriggers";
@@ -1846,7 +1852,9 @@ function applyMegaEvolution(state: BattleState, key: FighterKey, log: string[]):
   side.megaUsed = true;
 
   const nm = pokemon?.name ?? "포켓몬";
-  log.push(`${nm}${eunNeun(nm)} ${mega.form}${roEuro(mega.form)} 메가진화했다!`);
+  // 폼 이름은 "이어롭-메가"지만 로그엔 정식 명칭 "메가이어롭"으로. 조사도 바뀐 이름 기준으로.
+  const megaName = megaFormFullName(mega);
+  log.push(`${nm}${eunNeun(nm)} ${megaName}${roEuro(megaName)} 메가진화했다!`);
 
   // 메가폼의 등장 특성 발동(가뭄·위협·트레이스 등). 교체 등장이 아니라 그 자리에서의 발동이지만
   // 처리 내용은 동일하다 — 날씨/필드 덮어쓰기, 상대 랭크 하락, 상대 특성 복사 등.
