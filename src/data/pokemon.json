@@ -4250,26 +4250,26 @@
     "genderCategory": "both",
     "weightKg": 17,
     "cosmeticForms": [
-      { "id": "meadow", "label": "화원의 모양", "standard": true },
-      { "id": "polar", "label": "빙설의 모양" },
-      { "id": "tundra", "label": "동토의 모양" },
-      { "id": "continental", "label": "대륙의 모양" },
-      { "id": "garden", "label": "정원의 모양" },
-      { "id": "elegant", "label": "우아한 모양" },
-      { "id": "icy-snow", "label": "얼음눈의 모양" },
-      { "id": "modern", "label": "모던한 모양" },
-      { "id": "marine", "label": "마린의 모양" },
-      { "id": "archipelago", "label": "다도해의 모양" },
-      { "id": "high-plains", "label": "고원의 모양" },
-      { "id": "sandstorm", "label": "모래바람의 모양" },
-      { "id": "river", "label": "강의 모양" },
-      { "id": "monsoon", "label": "몬순의 모양" },
-      { "id": "savanna", "label": "사바나의 모양" },
-      { "id": "sun", "label": "태양의 모양" },
-      { "id": "ocean", "label": "대양의 모양" },
-      { "id": "jungle", "label": "정글의 모양" },
-      { "id": "fancy", "label": "팬시한 모양" },
-      { "id": "poke-ball", "label": "몬스터볼의 모양" }
+      { "id": "볼의 모양", "label": "볼의 모양" },
+      { "id": "펜시한 모양", "label": "펜시한 모양" },
+      { "id": "정글의 모양", "label": "정글의 모양" },
+      { "id": "오션의 모양", "label": "오션의 모양" },
+      { "id": "태양의 모양", "label": "태양의 모양" },
+      { "id": "사바나의 모양", "label": "사바나의 모양" },
+      { "id": "스콜의 모양", "label": "스콜의 모양" },
+      { "id": "대하의 모양", "label": "대하의 모양" },
+      { "id": "사진의 모양", "label": "사진의 모양" },
+      { "id": "황야의 모양", "label": "황야의 모양" },
+      { "id": "군도의 모양", "label": "군도의 모양" },
+      { "id": "마린의 모양", "label": "마린의 모양" },
+      { "id": "모던한 모양", "label": "모던한 모양" },
+      { "id": "화원의 모양", "label": "화원의 모양", "standard": true },
+      { "id": "우아한 모양", "label": "우아한 모양" },
+      { "id": "정원의 모양", "label": "정원의 모양" },
+      { "id": "대륙의 모양", "label": "대륙의 모양" },
+      { "id": "설원의 모양", "label": "설원의 모양" },
+      { "id": "설국의 모양", "label": "설국의 모양" },
+      { "id": "빙설의 모양", "label": "빙설의 모양" }
     ],
     "learnset": [
       "객기",
@@ -14982,11 +14982,11 @@
     "genderCategory": "female-only",
     "weightKg": 10,
     "cosmeticForms": [
-      { "id": "red", "label": "빨강꽃", "standard": true },
-      { "id": "yellow", "label": "노랑꽃" },
-      { "id": "orange", "label": "주황꽃" },
-      { "id": "blue", "label": "파랑꽃" },
-      { "id": "white", "label": "하양꽃" }
+      { "id": "빨간 꽃", "label": "빨간 꽃", "standard": true },
+      { "id": "노란 꽃", "label": "노란 꽃" },
+      { "id": "오렌지색 꽃", "label": "오렌지색 꽃" },
+      { "id": "파란 꽃", "label": "파란 꽃" },
+      { "id": "하얀 꽃", "label": "하얀 꽃" }
     ],
     "learnset": [
       "개척하기",
@@ -15162,16 +15162,16 @@
     "genderCategory": "both",
     "weightKg": 28,
     "cosmeticForms": [
-      { "id": "natural", "label": "기본 모습", "standard": true },
-      { "id": "heart", "label": "하트 트림" },
-      { "id": "star", "label": "스타 트림" },
-      { "id": "diamond", "label": "다이아 트림" },
-      { "id": "debutante", "label": "아가씨 트림" },
-      { "id": "matron", "label": "마담 트림" },
-      { "id": "dandy", "label": "신사 트림" },
-      { "id": "la-reine", "label": "여왕 트림" },
-      { "id": "kabuki", "label": "가부키 트림" },
-      { "id": "pharaoh", "label": "파라오 트림" }
+      { "id": "야생의 모습", "label": "야생의 모습", "standard": true },
+      { "id": "하트컷", "label": "하트컷" },
+      { "id": "스타컷", "label": "스타컷" },
+      { "id": "다이아컷", "label": "다이아컷" },
+      { "id": "레이디컷", "label": "레이디컷" },
+      { "id": "마담컷", "label": "마담컷" },
+      { "id": "젠틀컷", "label": "젠틀컷" },
+      { "id": "퀸컷", "label": "퀸컷" },
+      { "id": "가부키컷", "label": "가부키컷" },
+      { "id": "킹덤컷", "label": "킹덤컷" }
     ],
     "learnset": [
       "개척하기",
@@ -18632,6 +18632,10 @@
     "hiddenAbility": "저주받은바디",
     "genderCategory": "genderless",
     "weightKg": 0.4,
+    "cosmeticForms": [
+      { "id": "위작폼", "label": "위작폼", "standard": true },
+      { "id": "진작폼", "label": "진작폼" }
+    ],
     "learnset": [
       "객기",
       "고스트다이브",
@@ -18995,15 +18999,15 @@
     "genderCategory": "female-only",
     "weightKg": 0.5,
     "cosmeticForms": [
-      { "id": "vanilla-cream", "label": "바닐라크림", "standard": true },
-      { "id": "ruby-cream", "label": "루비크림" },
-      { "id": "matcha-cream", "label": "말차크림" },
-      { "id": "mint-cream", "label": "민트크림" },
-      { "id": "lemon-cream", "label": "레몬크림" },
-      { "id": "salted-cream", "label": "소금크림" },
-      { "id": "ruby-swirl", "label": "루비믹스" },
-      { "id": "caramel-swirl", "label": "캐러멜믹스" },
-      { "id": "rainbow-swirl", "label": "무지개믹스" }
+      { "id": "밀키바닐라", "label": "밀키바닐라", "standard": true },
+      { "id": "밀키루비", "label": "밀키루비" },
+      { "id": "밀키말차", "label": "밀키말차" },
+      { "id": "밀키민트", "label": "밀키민트" },
+      { "id": "밀키레몬", "label": "밀키레몬" },
+      { "id": "밀키솔트", "label": "밀키솔트" },
+      { "id": "루비믹스", "label": "루비믹스" },
+      { "id": "캐러멜믹스", "label": "캐러멜믹스" },
+      { "id": "트리플믹스", "label": "트리플믹스" }
     ],
     "learnset": [
       "HP회복",
@@ -19680,8 +19684,8 @@
     "genderCategory": "genderless",
     "weightKg": 2.8,
     "cosmeticForms": [
-      { "id": "three", "label": "세 마리 가족", "standard": true },
-      { "id": "four", "label": "네 마리 가족" }
+      { "id": "세 식구", "label": "세 식구", "standard": true },
+      { "id": "네 식구", "label": "네 식구" }
     ],
     "learnset": [
       "간지르기",
@@ -20631,8 +20635,8 @@
     "genderCategory": "genderless",
     "weightKg": 2.2,
     "cosmeticForms": [
-      { "id": "unremarkable", "label": "범작의 모습", "standard": true },
-      { "id": "masterpiece", "label": "걸작의 모습" }
+      { "id": "범작의 모습", "label": "범작의 모습", "standard": true },
+      { "id": "걸작의 모습", "label": "걸작의 모습" }
     ],
     "learnset": [
       "고스트다이브",
