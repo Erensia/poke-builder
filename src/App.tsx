@@ -6,6 +6,7 @@ import { BattleLogPage } from "./components/BattleLogPage";
 import { PokedexPage } from "./components/PokedexPage";
 import { MoveDexPage } from "./components/MoveDexPage";
 import { ItemDexPage } from "./components/ItemDexPage";
+import { Footer } from "./components/Footer";
 import "./App.css";
 
 function App() {
@@ -17,23 +18,26 @@ function App() {
   return (
     <div className="app-shell">
       <Sidebar activeView={view} onSelectView={setView} />
-      <main className="app-main">
-        {view === "party" && <PartyBoard />}
-        {view === "matchup" && <MatchupPage />}
-        {view === "battle-log" && <BattleLogPage />}
-        {view === "pokedex" && (
-          <PokedexPage
-            onSelectMove={(moveId) => {
-              setPendingMoveId(moveId);
-              setView("movedex");
-            }}
-          />
-        )}
-        {view === "movedex" && (
-          <MoveDexPage initialMoveId={pendingMoveId} onInitialMoveConsumed={() => setPendingMoveId(null)} />
-        )}
-        {view === "itemdex" && <ItemDexPage />}
-      </main>
+      <div className="app-body">
+        <main className="app-main">
+          {view === "party" && <PartyBoard />}
+          {view === "matchup" && <MatchupPage />}
+          {view === "battle-log" && <BattleLogPage />}
+          {view === "pokedex" && (
+            <PokedexPage
+              onSelectMove={(moveId) => {
+                setPendingMoveId(moveId);
+                setView("movedex");
+              }}
+            />
+          )}
+          {view === "movedex" && (
+            <MoveDexPage initialMoveId={pendingMoveId} onInitialMoveConsumed={() => setPendingMoveId(null)} />
+          )}
+          {view === "itemdex" && <ItemDexPage />}
+        </main>
+        <Footer />
+      </div>
     </div>
   );
 }
