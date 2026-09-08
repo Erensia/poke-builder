@@ -1,4 +1,4 @@
-import { Fragment, useState } from "react";
+import { Fragment, useState, type ReactNode } from "react";
 import { BattleSetupCard } from "./BattleSetupCard";
 import { WeatherPicker } from "./WeatherPicker";
 import { PokemonPickerModal } from "./PokemonPickerModal";
@@ -27,6 +27,7 @@ import {
   type BattleSide,
   type BattleState,
   type FighterKey,
+  type HitAbilityEvent,
   type RunTurnContext,
   type TurnAction,
   type TurnResult,
@@ -150,6 +151,123 @@ function stageRiseAdverb(delta: number): string {
   if (delta >= 3) return "아주 크게 ";
   if (delta === 2) return "크게 ";
   return "";
+}
+
+/**
+ * 다단히트 한 타의 방어측 on-hit 특성 이벤트(HitAbilityEvent)를 로그 줄들로 렌더한다.
+ * 문구는 단타용 집계 렌더(아래 JSX)와 동일하게 맞춘다 — 다단히트일 땐 그 집계 줄들이 숨겨지고
+ * 이 함수가 타별로 같은 문구를 찍는다.
+ */
+function hitAbilityEventLines(
+  ev: HitAbilityEvent,
+  actorName: string,
+  defenderName: string,
+  keyPrefix: string,
+): ReactNode[] {
+  const lines: ReactNode[] = [];
+  const push = (node: ReactNode) =>
+    lines.push(
+      <div key={`${keyPrefix}-${lines.length}`} className="battle-turn-line is-muted">
+        {node}
+      </div>,
+    );
+
+  if (ev.statusOnAttacker) {
+    push(
+      <>
+        {defenderName}의 {ev.abilityName}! {STATUS_ONSET_TEXT[ev.statusOnAttacker](actorName)}
+      </>,
+    );
+  }
+  if (ev.volatileOnAttacker) {
+    push(
+      <>
+        {defenderName}의 {ev.abilityName}! {actorName}
+        {eunNeun(actorName)} {VOLATILE_LABELS[ev.volatileOnAttacker]} 상태가 되었다!
+      </>,
+    );
+  }
+  if (ev.damageToAttacker) {
+    push(
+      <>
+        {defenderName}의 {ev.abilityName}! {actorName}
+        {eunNeun(actorName)} {ev.damageToAttacker} 데미지를 입었다
+      </>,
+    );
+  }
+  if (ev.loweredDefenderStats?.length) {
+    const joined = ev.loweredDefenderStats.map((s) => STAT_LABELS[s.stat]).join(", ");
+    const maxDelta = Math.max(...ev.loweredDefenderStats.map((s) => s.delta));
+    push(
+      <>
+        {defenderName}의 {ev.abilityName}! {defenderName}의 {joined}
+        {iGa(joined)} {stageRiseAdverb(maxDelta)}내려갔다!
+      </>,
+    );
+  }
+  if (ev.raisedDefenderStats?.length) {
+    const joined = ev.raisedDefenderStats.map((s) => STAT_LABELS[s.stat]).join(", ");
+    const maxDelta = Math.max(...ev.raisedDefenderStats.map((s) => s.delta));
+    push(
+      <>
+        {!ev.loweredDefenderStats?.length && (
+          <>
+            {defenderName}의 {ev.abilityName}!{" "}
+          </>
+        )}
+        {defenderName}의 {joined}
+        {iGa(joined)} {stageRiseAdverb(maxDelta)}올라갔다!
+      </>,
+    );
+  }
+  if (ev.loweredAttackerStats?.length) {
+    const joined = ev.loweredAttackerStats.map((s) => STAT_LABELS[s.stat]).join(", ");
+    const maxDelta = Math.max(...ev.loweredAttackerStats.map((s) => s.delta));
+    push(
+      <>
+        {defenderName}의 {ev.abilityName}! {actorName}의 {joined}
+        {iGa(joined)} {stageRiseAdverb(maxDelta)}내려갔다!
+      </>,
+    );
+  }
+  if (ev.disabledMoveName) {
+    push(
+      <>
+        {defenderName}의 {ev.abilityName}! {actorName}의 {ev.disabledMoveName}이(가) 봉인되었다!
+      </>,
+    );
+  }
+  if (ev.pickpocketStolenItemName) {
+    push(
+      <>
+        {defenderName}의 {ev.abilityName}! {actorName}의 {ev.pickpocketStolenItemName}
+        {eulReul(ev.pickpocketStolenItemName)} 빼앗았다!
+      </>,
+    );
+  }
+  if (ev.mummifiedAttackerAbilityName) {
+    push(
+      <>
+        {defenderName}의 {ev.mummifiedAttackerAbilityName}! {actorName}의 특성이 미라가 되었다!
+      </>,
+    );
+  }
+  if (ev.wanderingSpiritSwapped) {
+    push(
+      <>
+        {defenderName}의 떠도는영혼! {actorName}
+        {eunNeun(actorName)} {defenderName}와(과) 특성을 맞바꿨다!
+      </>,
+    );
+  }
+  if (ev.sandSpitWeather) {
+    push(
+      <>
+        {defenderName}의 모래뿜기! 날씨가 {ev.sandSpitWeather}(으)로 바뀌었다!
+      </>,
+    );
+  }
+  return lines;
 }
 
 /**
@@ -1250,7 +1368,7 @@ export function BattleLogPage() {
                         {!action.blockedReason && action.hit && action.abilitySwapFailed && (
                           <> · 그러나 실패했다!</>
                         )}
-                        {!action.blockedReason && action.hit && action.mummifiedAttackerAbilityName && (
+                        {!action.blockedReason && action.hit && !action.hits && action.mummifiedAttackerAbilityName && (
                           <> · {defenderName}의 {action.mummifiedAttackerAbilityName}! {actorName}의 특성이 미라가 되었다!</>
                         )}
                         {!action.blockedReason && action.ateBerryName && (
@@ -1383,14 +1501,16 @@ export function BattleLogPage() {
                           {eunNeun(defenderName)} 맞지 않았다!
                         </div>
                       )}
-                      {/* §2-5: 연타(멀티히트) — 1타 몫은 위 데미지 줄이 이미 찍었고, 여기서 1타 급소 →
-                          2타부터 "타별 데미지 줄(+급소)" → 마지막에 "N번 맞았다!". 변환자재 2줄은
-                          위 §2-4 블록이 1타 직후에 이미 찍는다(본가처럼 첫 기술에서 타입 변경). */}
+                      {/* §2-5: 연타(멀티히트) — 1타 몫은 위 데미지 줄이 이미 찍었고, 여기서 1타 급소·
+                          1타 방어측 특성 반응 → 2타부터 "타별 데미지 줄(+급소+특성 반응)" → 마지막에
+                          "N번 맞았다!". 변환자재 2줄은 위 §2-4 블록이 1타 직후에 이미 찍는다. */}
                       {!action.blockedReason && action.hits && action.hits.length > 0 && (
                         <>
                           {action.hits[0].critical && (
                             <div className="battle-turn-line is-muted">급소에 맞았다!</div>
                           )}
+                          {action.hits[0].abilityEvent &&
+                            hitAbilityEventLines(action.hits[0].abilityEvent, actorName, defenderName, "he-0")}
                           {action.hits.slice(1).map((h, i) => (
                             <Fragment key={i}>
                               <div className="battle-turn-line">
@@ -1400,6 +1520,8 @@ export function BattleLogPage() {
                               {h.critical && (
                                 <div className="battle-turn-line is-muted">급소에 맞았다!</div>
                               )}
+                              {h.abilityEvent &&
+                                hitAbilityEventLines(h.abilityEvent, actorName, defenderName, `he-${i + 1}`)}
                             </Fragment>
                           ))}
                           <div className="battle-turn-line is-muted">{action.hitCount}번 맞았다!</div>
@@ -1504,35 +1626,36 @@ export function BattleLogPage() {
                         </div>
                       )}
                       {/* 방어측 접촉/피격 트리거 특성(정전기·불꽃몸=상태이상, 까칠한피부=고정 데미지,
-                          저주받은바디=PP 봉인) — 전부 defenderName의 특성이 actorName(공격자)에게 발동한다 */}
-                      {!action.blockedReason && action.abilityInflictedStatusOnAttacker && (
+                          저주받은바디=PP 봉인) — 전부 defenderName의 특성이 actorName(공격자)에게 발동한다.
+                          다단히트(action.hits)면 §2-5 블록이 타별로 찍으므로 아래 집계 줄은 건너뛴다. */}
+                      {!action.blockedReason && !action.hits && action.abilityInflictedStatusOnAttacker && (
                         <div className="battle-turn-line is-muted">
                           {defenderName}의 {action.abilityInflictedStatusAbilityName}!{" "}
                           {STATUS_ONSET_TEXT[action.abilityInflictedStatusOnAttacker](actorName)}
                         </div>
                       )}
                       {/* 헤롱헤롱바디 — 접촉해 온 공격자가 이성이면 방어측 특성이 발동해 공격자에게 걸린다 */}
-                      {!action.blockedReason && action.abilityInflictedVolatileOnAttacker && (
+                      {!action.blockedReason && !action.hits && action.abilityInflictedVolatileOnAttacker && (
                         <div className="battle-turn-line is-muted">
                           {defenderName}의 {action.abilityInflictedVolatileAbilityName}! {actorName}
                           {eunNeun(actorName)} {VOLATILE_LABELS[action.abilityInflictedVolatileOnAttacker]} 상태가
                           되었다!
                         </div>
                       )}
-                      {!action.blockedReason && !!action.abilityDamageToAttacker && (
+                      {!action.blockedReason && !action.hits && !!action.abilityDamageToAttacker && (
                         <div className="battle-turn-line is-muted">
                           {defenderName}의 {action.abilityDamageAbilityName}! {actorName}
                           {eunNeun(actorName)} {action.abilityDamageToAttacker} 데미지를 입었다
                         </div>
                       )}
-                      {!action.blockedReason && action.abilityDisabledMoveName && (
+                      {!action.blockedReason && !action.hits && action.abilityDisabledMoveName && (
                         <div className="battle-turn-line is-muted">
                           {defenderName}의 {action.abilityDisableAbilityName}! {actorName}의{" "}
                           {action.abilityDisabledMoveName}이(가) 봉인되었다!
                         </div>
                       )}
                       {/* 나쁜손버릇 — 접촉기로 피격당한 방어측이 공격자의 도구를 빼앗았을 때 */}
-                      {!action.blockedReason && action.pickpocketStolenItemName && (
+                      {!action.blockedReason && !action.hits && action.pickpocketStolenItemName && (
                         <div className="battle-turn-line is-muted">
                           {defenderName}의 {action.pickpocketAbilityName}! {actorName}의{" "}
                           {action.pickpocketStolenItemName}
@@ -1543,6 +1666,7 @@ export function BattleLogPage() {
                           (Phase 6.5 §6-2 ③ / §6-1). 깨어진갑옷은 방어↓·스피드↑가 같이 오므로 줄을 나눠 낸다.
                           내림 줄에서 특성 이름을 한 번 알리고, 오름 줄은 이름 없이 결과만. */}
                       {!action.blockedReason &&
+                        !action.hits &&
                         ((action.abilityLoweredDefenderStats?.length ?? 0) > 0 ||
                           (action.abilityRaisedDefenderStats?.length ?? 0) > 0) &&
                         (() => {
@@ -1600,6 +1724,7 @@ export function BattleLogPage() {
                       )}
                       {/* 미끈미끈·점착 — 접촉한 공격자의 랭크를 내렸을 때 */}
                       {!action.blockedReason &&
+                        !action.hits &&
                         action.abilityLoweredAttackerStatsAbilityName &&
                         (action.abilityLoweredAttackerStats?.length ?? 0) > 0 &&
                         (() => {
@@ -1668,14 +1793,14 @@ export function BattleLogPage() {
                         </div>
                       )}
                       {/* 떠도는영혼 — 접촉 피격으로 공격자와 특성 교환 */}
-                      {!action.blockedReason && action.wanderingSpiritSwapped && (
+                      {!action.blockedReason && !action.hits && action.wanderingSpiritSwapped && (
                         <div className="battle-turn-line is-muted">
                           {defenderName}의 떠도는영혼! {actorName}
                           {eunNeun(actorName)} {defenderName}와(과) 특성을 맞바꿨다!
                         </div>
                       )}
                       {/* 모래뿜기 — 피격으로 날씨 변경 */}
-                      {!action.blockedReason && action.sandSpitWeather && (
+                      {!action.blockedReason && !action.hits && action.sandSpitWeather && (
                         <div className="battle-turn-line is-muted">
                           {defenderName}의 모래뿜기! 날씨가 {action.sandSpitWeather}(으)로 바뀌었다!
                         </div>

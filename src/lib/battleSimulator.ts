@@ -1084,6 +1084,29 @@ export type ActionBlockReason =
   | "usageCondition"
   | "moveRestricted";
 
+/**
+ * 다단히트 한 타에서 방어측 on-hit 특성이 한 일(지구력·깨어진갑옷=랭크 변화 / 까칠한피부·철가시=
+ * 반격 데미지 / 미끈미끈·점착=공격자 랭크↓ / 정전기·불꽃몸=상태이상 / 헤롱헤롱바디=헤롱헤롱 /
+ * 저주받은바디=기술 봉인 / 나쁜손버릇·미라·떠도는영혼·모래뿜기). 랭크류·반격뎀은 타마다,
+ * 나머지는 실제 발동한 그 타에 한 번만 담긴다. 단타 기술은 이 구조를 안 쓰고 기존 집계 필드 사용.
+ */
+export interface HitAbilityEvent {
+  /** 이 이벤트를 일으킨 방어측 특성 이름 */
+  abilityName: string;
+  statusOnAttacker?: StatusConditionState["condition"];
+  volatileOnAttacker?: VolatileCondition;
+  /** 까칠한피부·철가시·유폭·내용물분출 등으로 공격자가 이 타에 입은 데미지 합 */
+  damageToAttacker?: number;
+  raisedDefenderStats?: { stat: BattleStatKey; delta: number }[];
+  loweredDefenderStats?: { stat: BattleStatKey; delta: number }[];
+  loweredAttackerStats?: { stat: BattleStatKey; delta: number }[];
+  disabledMoveName?: string;
+  pickpocketStolenItemName?: string;
+  mummifiedAttackerAbilityName?: string;
+  wanderingSpiritSwapped?: boolean;
+  sandSpitWeather?: WeatherKind;
+}
+
 /** 한 번의 기술 사용 결과 로그 */
 export interface ActionLogEntry {
   actor: FighterKey;
@@ -1201,9 +1224,15 @@ export interface ActionLogEntry {
   hitCount?: number;
   /**
    * 다단히트 기술의 타별 내역(명중한 타수만큼, 순서대로). UI가 타마다 데미지 줄을 따로 찍는다.
-   * `damagePercent`는 그 한 타 데미지 ÷ 대상 최대 HP(누적 아님), `critical`은 그 타의 급소 여부.
+   * `damagePercent`는 그 한 타 데미지 ÷ 대상 최대 HP(누적 아님), `critical`은 그 타의 급소 여부,
+   * `abilityEvent`는 그 타에서 방어측 on-hit 특성(지구력·깨어진갑옷·까칠한피부·정전기 등)이 한 일.
    */
-  hits?: { damage: number; damagePercent: number; critical: boolean }[];
+  hits?: {
+    damage: number;
+    damagePercent: number;
+    critical: boolean;
+    abilityEvent?: HitAbilityEvent;
+  }[];
   /** 공중날기 등 차지 기술의 준비 턴(1턴째)이면 true — 데미지 없이 "숨었다"만 기록 */
   charging?: boolean;
   /** 상대가 차지 기술로 무적인 동안 그 무적을 못 뚫는 기술을 써서 빗나갔으면 true */
@@ -2839,6 +2868,9 @@ function resolveAction(
       crashDamage: crashDamage || undefined,
       selfDamageOnUse: selfDamageOnUse || undefined,
       leppaRestoredPpItemName,
+      // 변환자재/리베로는 명중 굴림 전에 이미 발동했다 — 빗나가도 타입은 바뀌고 로그 문구도 나와야 한다.
+      changedOwnTypeTo,
+      changedOwnTypeAbilityName,
     };
   }
 
@@ -2920,7 +2952,9 @@ function resolveAction(
   // 트리플악셀처럼 여러 타로 나뉘는 기술만 채운다 — 실제로 명중해서 데미지를 낸 타수.
   let hitCount: number | undefined;
   // 다단히트 타별 내역(로그용). 명중한 타수만큼 순서대로 push.
-  let perHitLog: { damage: number; damagePercent: number; critical: boolean }[] | undefined;
+  let perHitLog:
+    | { damage: number; damagePercent: number; critical: boolean; abilityEvent?: HitAbilityEvent }[]
+    | undefined;
 
   // 방어측 접촉/피격 트리거 특성(정전기·불꽃몸·까칠한피부·깨어진갑옷·저주받은바디 — Phase 5 §1).
   // 트리플악셀·록블라스트 같은 다단히트 기술은 타수마다 별도로 판정해야 한다(본가 규칙 — 록키헬멧
@@ -3224,12 +3258,17 @@ function resolveAction(
    * 타에서 까칠한피부 반동으로 죽었으면) 더 이상 판정하지 않는다. 대타를 맞혔을 때도 발동하지
    * 않는다 — 본가 규칙: 접촉은 대타(인형)에 닿은 것이라 실제 상대에게 닿은 게 아니다.
    */
-  function triggerAbilityHitEffect(hitDamage: number): void {
-    if (hitDamage <= 0 || isFainted(attacker) || blockedBySubstitute) return;
+  function triggerAbilityHitEffect(hitDamage: number): HitAbilityEvent | undefined {
+    if (hitDamage <= 0 || isFainted(attacker) || blockedBySubstitute) return undefined;
     const trigger = defenderAbility?.hitTrigger;
-    if (!trigger) return;
+    if (!trigger) return undefined;
     const chance = trigger.chance !== undefined ? trigger.chance / 100 : 1;
-    if (!hitTriggerMatchesMove(trigger, effectiveMove) || random() >= chance) return;
+    if (!hitTriggerMatchesMove(trigger, effectiveMove) || random() >= chance) return undefined;
+
+    // 이번 호출(=이 한 타)에서 방어측 특성이 한 일 — 다단히트 로그를 타별로 찍는 데 쓴다.
+    // 기존 집계 변수(abilityRaisedDefenderStats 등)는 그대로 두고 여기에 병렬로 담기만 한다.
+    const ev: HitAbilityEvent = { abilityName: defenderAbility!.name };
+    let evAny = false;
 
     if (
       trigger.inflictsStatusOnAttacker &&
@@ -3240,6 +3279,8 @@ function resolveAction(
       if (attacker.status.condition !== before) {
         abilityInflictedStatusOnAttacker = attacker.status.condition;
         abilityInflictedStatusAbilityName = defenderAbility!.name;
+        ev.statusOnAttacker = attacker.status.condition;
+        evAny = true;
       }
     }
     // 헤롱헤롱바디: 접촉해 온 공격자와 이성 관계일 때만(무성별이거나 동성이면 조용히 무산) 공격자에게
@@ -3257,6 +3298,8 @@ function resolveAction(
       attacker.volatile = inflictVolatile(attacker.volatile, trigger.inflictsVolatileOnAttacker, random);
       abilityInflictedVolatileOnAttacker = trigger.inflictsVolatileOnAttacker;
       abilityInflictedVolatileAbilityName = defenderAbility!.name;
+      ev.volatileOnAttacker = trigger.inflictsVolatileOnAttacker;
+      evAny = true;
       // 멘탈허브: 헤롱헤롱바디로 걸린 헤롱헤롱도 걸리는 순간 치료하고 소모된다.
       if (getMentalHerbCureResult(attackerItem, attacker.itemConsumed ?? false)) {
         attacker.volatile = { active: { ...attacker.volatile.active } };
@@ -3265,6 +3308,7 @@ function resolveAction(
         statusCureBerryItemName = attackerItem!.name;
         abilityInflictedVolatileOnAttacker = undefined;
         abilityInflictedVolatileAbilityName = undefined;
+        ev.volatileOnAttacker = undefined;
       }
     }
     // 매직가드: 까칠한피부·유폭류가 공격자에게 되돌리는 접촉 반사 데미지는 "공격기 데미지"가
@@ -3274,6 +3318,8 @@ function resolveAction(
       attacker.currentHp = Math.max(0, attacker.currentHp - amount);
       abilityDamageToAttacker += amount;
       abilityDamageAbilityName = defenderAbility!.name;
+      ev.damageToAttacker = (ev.damageToAttacker ?? 0) + amount;
+      evAny = true;
     }
     if (trigger.selfStatChanges) {
       for (const change of trigger.selfStatChanges) {
@@ -3289,6 +3335,12 @@ function resolveAction(
           const existing = bucket.find((s) => s.stat === change.stat);
           if (existing) existing.delta += magnitude;
           else bucket.push({ stat: change.stat, delta: magnitude });
+          const evBucket =
+            after > before
+              ? (ev.raisedDefenderStats ??= [])
+              : (ev.loweredDefenderStats ??= []);
+          evBucket.push({ stat: change.stat, delta: magnitude });
+          evAny = true;
         }
       }
     }
@@ -3308,6 +3360,8 @@ function resolveAction(
           const existing = abilityLoweredAttackerStats.find((s) => s.stat === change.stat);
           if (existing) existing.delta += magnitude;
           else abilityLoweredAttackerStats.push({ stat: change.stat, delta: magnitude });
+          (ev.loweredAttackerStats ??= []).push({ stat: change.stat, delta: magnitude });
+          evAny = true;
         }
       }
     }
@@ -3315,6 +3369,8 @@ function resolveAction(
       attacker.remainingPp[move.id] = 0;
       abilityDisabledMoveName = move.name;
       abilityDisableAbilityName = defenderAbility!.name;
+      ev.disabledMoveName = move.name;
+      evAny = true;
     }
     // 나쁜손버릇: 피격측(defender)이 무도구이고 공격자(attacker)가 도구를 지녔으면 그 자리에서 강탈한다.
     // 매지션과 방향만 반대고 규칙은 동일 — 대타에 맞았을 때는 함수 진입부 가드(blockedBySubstitute)에서
@@ -3332,6 +3388,8 @@ function resolveAction(
       defender.currentItemId = attacker.currentItemId;
       defender.itemConsumed = false; // 새로 얻은 도구라 이전 소모 이력과 무관하게 쓸 수 있다
       attacker.currentItemId = null;
+      ev.pickpocketStolenItemName = stolen?.name;
+      evAny = true;
     }
     // 미라(Mummy): 접촉기로 피격당하면 공격자의 특성을 미라로 바꾼다. 이미 그 특성이면 무발동.
     if (
@@ -3340,6 +3398,8 @@ function resolveAction(
     ) {
       attacker.effectiveAbilityId = trigger.setsAttackerAbilityId;
       mummifiedAttackerAbilityName = defenderAbility!.name;
+      ev.mummifiedAttackerAbilityName = defenderAbility!.name;
+      evAny = true;
     }
     // 떠도는영혼(Wandering Spirit): 접촉기로 피격당하면 공격자와 특성을 맞바꾼다.
     if (trigger.swapsAbilityWithAttacker && attacker.effectiveAbilityId !== defender.effectiveAbilityId) {
@@ -3347,12 +3407,16 @@ function resolveAction(
       attacker.effectiveAbilityId = defender.effectiveAbilityId;
       defender.effectiveAbilityId = tmp;
       wanderingSpiritSwapped = true;
+      ev.wanderingSpiritSwapped = true;
+      evAny = true;
     }
     // 모래뿜기(Sand Spit): 데미지를 주는 기술로 피격당하면 날씨를 5턴짜리로 바꾼다(맞을 때마다).
     if (trigger.setsWeather && state.weather !== trigger.setsWeather) {
       state.weather = trigger.setsWeather;
       state.weatherTurnsRemaining = WEATHER_DURATION;
       sandSpitWeather = trigger.setsWeather;
+      ev.sandSpitWeather = trigger.setsWeather;
+      evAny = true;
     }
     // 유폭(Aftermath): 접촉기로 이 포켓몬이 쓰러진 그 순간 공격자에게 공격자 최대 HP 비율만큼 데미지.
     if (
@@ -3364,6 +3428,8 @@ function resolveAction(
       attacker.currentHp = Math.max(0, attacker.currentHp - amount);
       abilityDamageToAttacker += amount;
       abilityDamageAbilityName = defenderAbility!.name;
+      ev.damageToAttacker = (ev.damageToAttacker ?? 0) + amount;
+      evAny = true;
     }
     // 내용물분출: 기술로 쓰러진 순간, 그 마지막 타를 맞기 직전 남아 있던 HP만큼을 공격자에게 되돌린다.
     if (
@@ -3376,8 +3442,12 @@ function resolveAction(
         attacker.currentHp = Math.max(0, attacker.currentHp - amount);
         abilityDamageToAttacker += amount;
         abilityDamageAbilityName = defenderAbility!.name;
+        ev.damageToAttacker = (ev.damageToAttacker ?? 0) + amount;
+        evAny = true;
       }
     }
+
+    return evAny ? ev : undefined;
   }
 
   // 방어/판별/킹실드가 성공했으면 데미지 계산 자체를 건너뛴다(대타처럼 흡수하는 게 아니라
@@ -3428,7 +3498,8 @@ function resolveAction(
       const preHp = defender.currentHp;
       applyDamageToDefender(hitResult.damage);
       applyEndurance(preHp);
-      triggerAbilityHitEffect(hitResult.damage);
+      // 이 타에서 방어측 on-hit 특성이 한 일을 그 타 레코드에 붙인다(로그를 타별로 찍기 위함).
+      perHitLog[perHitLog.length - 1].abilityEvent = triggerAbilityHitEffect(hitResult.damage);
       if (isFainted(defender) || substituteBroke) break; // 상대가 쓰러지거나 대타가 깨지면 남은 타수는 진행하지 않는다
     }
     damagePercent = damage / defender.realStats.hp;
