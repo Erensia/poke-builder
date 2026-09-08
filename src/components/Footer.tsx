@@ -9,11 +9,8 @@ export function Footer() {
   return (
     <footer className="app-footer">
       <p className="app-footer-legal">
-        Pokémon and Pokémon character names are trademarks of Nintendo.
-        <br />
-        Pokémon content and materials are trademarks and copyrights of Nintendo or its licensors.
-        <br />
-        All rights reserved.
+        Pokémon and Pokémon character names are trademarks of Nintendo. Pokémon content and
+        materials are trademarks and copyrights of Nintendo or its licensors. All rights reserved.
       </p>
     </footer>
   );

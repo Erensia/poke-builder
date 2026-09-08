@@ -1,26 +1,28 @@
 .app-footer {
   width: 100%;
-  margin-top: 2.5rem;
-  padding: 1.5rem 1rem 1.75rem;
+  margin-top: 2rem;
+  padding: 0.9rem 1rem 1.1rem;
   border-top: 1px solid var(--border);
   text-align: center;
   color: var(--text-muted);
 }
 
 .app-footer-legal {
-  margin: 0;
-  font-size: 0.68rem;
-  line-height: 1.6;
+  margin: 0 auto;
+  max-width: 24rem;
+  font-size: 0.6rem;
+  line-height: 1.55;
   letter-spacing: 0.01em;
+  opacity: 0.8;
 }
 
 @media (max-width: 760px) {
   .app-footer {
-    margin-top: 1.75rem;
-    padding: 1.25rem 0.85rem 1.5rem;
+    margin-top: 1.5rem;
+    padding: 0.8rem 0.85rem 1rem;
   }
 
   .app-footer-legal {
-    font-size: 0.64rem;
+    font-size: 0.56rem;
   }
 }
