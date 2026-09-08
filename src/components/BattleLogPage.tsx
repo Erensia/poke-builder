@@ -863,7 +863,10 @@ export function BattleLogPage() {
               const lockedMoveId = choiceLockedMoveId(side);
 
               return (
-                <div key={side} className={`battle-fighter battle-fighter-${side}`}>
+                <div
+                  key={side}
+                  className={`battle-fighter battle-fighter-${side}${winner === side ? " is-winner" : ""}`}
+                >
                   <div className="battle-fighter-head">
                     <span className="battle-fighter-name">
                       {displayName}
