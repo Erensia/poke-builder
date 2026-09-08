@@ -176,3 +176,13 @@ export function genderLabel(gender: PokemonGender): "수컷" | "암컷" {
 export function megaBadgeLabel(mega: MegaEvolution): string {
   return mega.form.split("-").at(-1) ?? "메가";
 }
+
+/**
+ * 메가폼의 정식(사람이 읽는) 명칭. 폼 이름은 데이터상 "이어롭-메가" / "리자몽-메가X" 형태지만
+ * 실제 한국어 정식 명칭은 "메가이어롭" / "메가리자몽X"다 — 배틀 로그 문구처럼 그대로 노출되는
+ * 자리엔 이 형태를 쓴다. 예상 밖 형식이면 폼 이름을 그대로 돌려준다.
+ */
+export function megaFormFullName(mega: MegaEvolution): string {
+  const m = mega.form.match(/^(.+)-메가([XYZ]?)$/);
+  return m ? `메가${m[1]}${m[2]}` : mega.form;
+}

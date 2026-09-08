@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Modal } from "./Modal";
 import type { SlotPreset } from "../types/party";
 import { getPokemon } from "../lib/data";
+import { eulReul } from "../lib/josa";
 import "./PresetListModal.css";
 
 interface SlotPresetsModalProps {
@@ -23,7 +24,7 @@ export function SlotPresetsModal({
   onDelete,
 }: SlotPresetsModalProps) {
   function handleLoad(preset: SlotPreset) {
-    if (slotIsFilled && !window.confirm(`"${preset.name}"을(를) 불러올까요? 이 슬롯의 내용이 덮어써집니다.`)) {
+    if (slotIsFilled && !window.confirm(`"${preset.name}"${eulReul(preset.name)} 불러올까요? 이 슬롯의 내용이 덮어써집니다.`)) {
       return;
     }
     onLoad(preset);
@@ -37,7 +38,7 @@ export function SlotPresetsModal({
   }
 
   function handleDelete(preset: SlotPreset) {
-    if (window.confirm(`"${preset.name}"을(를) 삭제할까요?`)) {
+    if (window.confirm(`"${preset.name}"${eulReul(preset.name)} 삭제할까요?`)) {
       onDelete(preset.id);
     }
   }
