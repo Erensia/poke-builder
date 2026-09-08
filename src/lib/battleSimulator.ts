@@ -354,6 +354,19 @@ export interface BattleFighterState {
    * 교체에만 세운다 — 기절 후 강제 교체(applySwitch)로 나온 경우엔 세우지 않는다(가속 발동).
    */
   switchedInThisTurn?: boolean;
+  /**
+   * 이 포켓몬이 필드에 등장한 뒤 이미 자기 행동(resolveAction)을 한 번이라도 개시했으면 true.
+   * 속이기(first-turn-only)는 이게 false일 때만 성공한다 — 등장 첫 행동 턴에만. 행동이 막혀도
+   * (마비·풀죽음 등) 소진되고(본가 동일), 유턴 등으로 턴 중 들어와 그 턴에 행동을 못 했으면
+   * 다음 턴까지 false로 남는다. 등장(배틀 시작·performSwitch) 시 초기화.
+   */
+  hasActedSinceSwitchIn?: boolean;
+  /**
+   * 변환자재/리베로가 이번 등장 스탠스에서 이미 발동했으면 true. 발동은 등장당 1회
+   * (본가 9세대) — 기술을 실제로 사용한 순간에만 소진되므로 행동이 막히면 유지된다.
+   * 이미 바뀐 타입 자체는 계속 유지(재발동만 막는다). 등장 시 초기화.
+   */
+  proteanActivatedSinceSwitchIn?: boolean;
 }
 
 /**
@@ -1186,6 +1199,11 @@ export interface ActionLogEntry {
   restoredStatsOpponentItemName?: string;
   /** 트리플악셀·록블라스트 등 다단히트 기술만 채운다 — 실제로 명중해서 데미지를 낸 타수 */
   hitCount?: number;
+  /**
+   * 다단히트 기술의 타별 내역(명중한 타수만큼, 순서대로). UI가 타마다 데미지 줄을 따로 찍는다.
+   * `damagePercent`는 그 한 타 데미지 ÷ 대상 최대 HP(누적 아님), `critical`은 그 타의 급소 여부.
+   */
+  hits?: { damage: number; damagePercent: number; critical: boolean }[];
   /** 공중날기 등 차지 기술의 준비 턴(1턴째)이면 true — 데미지 없이 "숨었다"만 기록 */
   charging?: boolean;
   /** 상대가 차지 기술로 무적인 동안 그 무적을 못 뚫는 기술을 써서 빗나갔으면 true */
@@ -1913,6 +1931,9 @@ function performSwitch(
 
   // 가속 억제(§8): 자발적 교체로 나온 턴엔 가속이 발동하지 않는다. 강제 교체(voluntary=false)면 세우지 않음.
   incoming.switchedInThisTurn = voluntary || undefined;
+  // 등장당 1회 판정(속이기·변환자재)은 새로 나온 포켓몬 기준으로 리셋한다.
+  incoming.hasActedSinceSwitchIn = undefined;
+  incoming.proteanActivatedSinceSwitchIn = undefined;
 
   // ── 배턴터치: 스냅샷해둔 랭크·대타·volatile을 새로 나온 포켓몬에게 인계 ──
   // 등장 파이프라인(위협·설치물)보다 먼저 얹어야 위협이 인계된 공격 랭크 위에 정상 적용된다.
@@ -2133,10 +2154,14 @@ function resolveAction(
 
   // 0) 사용 조건이 있는 기술(코골기=잠든 상태 전용, 속이기=첫 턴 전용). 상태이상/행동방해
   // 판정보다 먼저 확인한다 — 조건 자체를 못 채우면 애초에 시도조차 안 한 것으로 취급.
-  // 첫 턴 전용은 1v1 시뮬레이터에 교체가 없으니 배틀 전체의 1턴째로 취급한다.
-  if (move.usageCondition === "first-turn-only" && state.turnNumber !== 1) {
+  // 속이기: 이 포켓몬이 등장한 뒤 처음 행동을 개시하는 턴에만 성공한다(리드의 1턴, 교체·유턴
+  // 으로 나온 뒤 첫 행동 턴 등). 배틀 전체의 턴 번호가 아니라 파이터별 등장 후 행동 여부로 본다.
+  if (move.usageCondition === "first-turn-only" && attacker.hasActedSinceSwitchIn) {
     return blocked("usageCondition");
   }
+  // resolveAction이 이 파이터에 대해 돌았다는 건 이번 턴에 자기 행동을 개시했다는 뜻 —
+  // 이후 usageCondition 실패로 막히거나 마비·풀죽음으로 못 움직여도 속이기 창은 소진된 것.
+  attacker.hasActedSinceSwitchIn = true;
   // 아이언롤러: 활성화된 필드가 하나도 없으면 실패한다(본가 규칙)
   if (move.usageCondition === "field-required" && !state.field) {
     return blocked("usageCondition");
@@ -2699,15 +2724,22 @@ function resolveAction(
     }
   }
 
-  // 변환자재: 위와 같은 이유(여기까지 왔다는 건 실제로 이 기술을 쓴다는 뜻)로, 명중 여부와 무관하게
-  // 자신의 타입이 이 기술의 타입으로 바뀐다(사용자 확인 — 실제로 타입이 바뀌어서 이후 턴 방어에도
-  // 반영된다). attacker.types를 그 자리에서 통째로 갈아치우는 것뿐이라 이후 이 값을 읽는 모든
-  // 곳(이번 턴의 자속 판정은 물론, 다음 턴 이 포켓몬이 방어측이 될 때 defender.types로 쓰이는 것
-  // 까지)에 자동으로 반영된다. 발버둥처럼 타입이 없는(null) 기술은 바뀌지 않는다(본가와 동일).
+  // 변환자재/리베로: 여기까지 왔다는 건 상태이상·행동방해를 뚫고 실제로 이 기술을 쓴다는 뜻이라,
+  // 명중 여부와 무관하게 자신의 타입이 이 기술의 타입으로 바뀐다(사용자 확인 — 실제로 타입이
+  // 바뀌어서 이후 턴 방어에도 반영된다). **발동은 이번 등장 스탠스에서 1회뿐(본가 9세대)** —
+  // 첫 기술 이후엔 다른 타입 기술을 써도 안 바뀌고, 교체로 물러났다 다시 나오면 다시 1회 가능.
+  // attacker.types를 그 자리에서 통째로 갈아치우는 것뿐이라 이후 이 값을 읽는 모든 곳(이번 턴의
+  // 자속 판정은 물론, 다음 턴 이 포켓몬이 방어측이 될 때 defender.types로 쓰이는 것까지)에 자동
+  // 반영된다. 발버둥처럼 타입이 없는(null) 기술은 바뀌지 않는다(본가와 동일).
   let changedOwnTypeTo: PokemonType | undefined;
   let changedOwnTypeAbilityName: string | undefined;
-  if (attackerAbility?.changesUserTypeToMoveType && effectiveMove.type) {
+  if (
+    attackerAbility?.changesUserTypeToMoveType &&
+    effectiveMove.type &&
+    !attacker.proteanActivatedSinceSwitchIn
+  ) {
     attacker.types = [effectiveMove.type];
+    attacker.proteanActivatedSinceSwitchIn = true;
     changedOwnTypeTo = effectiveMove.type;
     changedOwnTypeAbilityName = attackerAbility.name;
   }
@@ -2887,6 +2919,8 @@ function resolveAction(
   let isCritical = false;
   // 트리플악셀처럼 여러 타로 나뉘는 기술만 채운다 — 실제로 명중해서 데미지를 낸 타수.
   let hitCount: number | undefined;
+  // 다단히트 타별 내역(로그용). 명중한 타수만큼 순서대로 push.
+  let perHitLog: { damage: number; damagePercent: number; critical: boolean }[] | undefined;
 
   // 방어측 접촉/피격 트리거 특성(정전기·불꽃몸·까칠한피부·깨어진갑옷·저주받은바디 — Phase 5 §1).
   // 트리플악셀·록블라스트 같은 다단히트 기술은 타수마다 별도로 판정해야 한다(본가 규칙 — 록키헬멧
@@ -3373,6 +3407,7 @@ function resolveAction(
         : rollMultiHitCount(effectiveMove.minHits, effectiveMove.maxHits, random);
 
     let landed = 0;
+    perHitLog = [];
     for (let i = 0; i < totalHits; i++) {
       if (i > 0 && perHitAccuracyCheck) {
         const stillHits = hitChance === null ? true : random() < hitChance;
@@ -3385,6 +3420,11 @@ function resolveAction(
       damage += hitResult.damage;
       if (hitResult.isCritical) isCritical = true;
       landed += 1;
+      perHitLog.push({
+        damage: hitResult.damage,
+        damagePercent: hitResult.damage / defender.realStats.hp,
+        critical: hitResult.isCritical,
+      });
       const preHp = defender.currentHp;
       applyDamageToDefender(hitResult.damage);
       applyEndurance(preHp);
@@ -4828,6 +4868,7 @@ function resolveAction(
     restoredStatsSelfItemName,
     restoredStatsOpponentItemName,
     hitCount,
+    hits: perHitLog && perHitLog.length > 0 ? perHitLog : undefined,
     itemRecoilDamage: itemRecoilDamage || undefined,
     itemRecoilItemName,
     berryReducedDamageItemName,

@@ -1157,6 +1157,9 @@ export function BattleLogPage() {
                   const actorName = getPokemon(action.actorPokemonId)?.name ?? turnName(action.actor);
                   const defenderName =
                     getPokemon(action.defenderPokemonId)?.name ?? turnName(opponentKey(action.actor));
+                  // 데미지 줄에 쓸 값 — 다단히트면 메인 줄엔 1타 몫만, 아니면 총합 그대로.
+                  const headDamage = action.hits ? action.hits[0].damage : action.damage;
+                  const headDamagePercent = action.hits ? action.hits[0].damagePercent : action.damagePercent;
                   return (
                     <div key={i}>
                       {/* 움직이기 전 상태 판정 — 잠듦/얼음이 이번 행동 시작 시점에 풀렸으면 기술 줄보다
@@ -1198,10 +1201,11 @@ export function BattleLogPage() {
                             : " — 준비 중...")}
                         {!action.blockedReason && !action.charging && action.evadedByCharge && " — 무적 상태라 빗나감"}
                         {!action.blockedReason && !action.charging && !action.evadedByCharge && !action.hit && " — !"}
+                        {/* 데미지 표기. 다단히트면 이 줄은 1타 몫만 — 나머지 타는 아래 별도 줄(§2-5). */}
                         {!action.blockedReason && action.hit && action.damage > 0 && (
                           <>
                             {" "}
-                            — {action.damage} 데미지 ({(action.damagePercent * 100).toFixed(1)}%)
+                            — {headDamage} 데미지 ({(headDamagePercent * 100).toFixed(1)}%)
                           </>
                         )}
                         {!action.blockedReason &&
@@ -1379,11 +1383,27 @@ export function BattleLogPage() {
                           {eunNeun(defenderName)} 맞지 않았다!
                         </div>
                       )}
-                      {/* §2-5: 연타(멀티히트) 적중 횟수 — 데미지 줄 인라인에서 분리 */}
-                      {!action.blockedReason && action.hit && action.hitCount !== undefined && action.damage > 0 && (
-                        <div className="battle-turn-line is-muted">
-                          {action.hitCount}번 맞았다!{action.critical && " (급소 포함)"}
-                        </div>
+                      {/* §2-5: 연타(멀티히트) — 1타 몫은 위 데미지 줄이 이미 찍었고, 여기서 1타 급소 →
+                          2타부터 "타별 데미지 줄(+급소)" → 마지막에 "N번 맞았다!". 변환자재 2줄은
+                          위 §2-4 블록이 1타 직후에 이미 찍는다(본가처럼 첫 기술에서 타입 변경). */}
+                      {!action.blockedReason && action.hits && action.hits.length > 0 && (
+                        <>
+                          {action.hits[0].critical && (
+                            <div className="battle-turn-line is-muted">급소에 맞았다!</div>
+                          )}
+                          {action.hits.slice(1).map((h, i) => (
+                            <Fragment key={i}>
+                              <div className="battle-turn-line">
+                                {actorName}의 {action.move.name} — {h.damage} 데미지 (
+                                {(h.damagePercent * 100).toFixed(1)}%)
+                              </div>
+                              {h.critical && (
+                                <div className="battle-turn-line is-muted">급소에 맞았다!</div>
+                              )}
+                            </Fragment>
+                          ))}
+                          <div className="battle-turn-line is-muted">{action.hitCount}번 맞았다!</div>
+                        </>
                       )}
                       {/* C-4 급소 — 데미지 줄 인라인에서 분리 (다단히트는 "(급소 포함)" 인라인 유지) */}
                       {!action.blockedReason && action.hit && action.critical && action.hitCount === undefined && action.damage > 0 && (
