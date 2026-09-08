@@ -1,6 +1,13 @@
 import type { PartySlot } from "../types/party";
 import { getPokemon, getMove, getAbility, getItem, getNature } from "../lib/data";
-import { getEffectiveForm, getEffectiveAbilityId, genderLabel, megaBadgeLabel } from "../lib/pokemonForm";
+import {
+  getEffectiveForm,
+  getEffectiveAbilityId,
+  genderLabel,
+  megaBadgeLabel,
+  resolveCosmeticForm,
+  COSMETIC_FORM_CYCLE_MAX,
+} from "../lib/pokemonForm";
 import { computeRealStats, totalAbilityPoints } from "../lib/statCalculator";
 import { computeBulkPower } from "../lib/battlePower";
 import { TypeBadge } from "./TypeBadge";
@@ -20,6 +27,10 @@ interface BattleSetupCardProps {
   onToggleGender: () => void;
   onCycleSizeForm: () => void;
   onCycleFormVariant: () => void;
+  /** 마휘핑 계열 겉모습을 다음 모습으로 순환(옵션 ≤4일 때) */
+  onCycleCosmeticForm: () => void;
+  /** 마휘핑 계열 겉모습을 리스트 모달로 고르기(옵션 >4일 때) */
+  onPickCosmeticForm: () => void;
   /** 저장된 샘플(빌드)이 하나라도 있는지 — Phase 6 §1-3, 없으면 버튼 자체를 숨긴다 */
   hasSamples: boolean;
   /** 이 슬롯을 이름 붙여 샘플로 저장 */
@@ -46,6 +57,8 @@ export function BattleSetupCard({
   onToggleGender,
   onCycleSizeForm,
   onCycleFormVariant,
+  onCycleCosmeticForm,
+  onPickCosmeticForm,
   hasSamples,
   onSaveAsSample,
   onOpenSamplePicker,
@@ -179,6 +192,22 @@ export function BattleSetupCard({
                 const currentId = slot!.formVariant ?? forms.find((f) => f.standard)?.id ?? forms[0].id;
                 return forms.find((f) => f.id === currentId)?.label ?? forms[0].label;
               })()}
+            </span>
+          </button>
+        )}
+        {pokemon.cosmeticForms && (
+          <button
+            type="button"
+            className="party-meta-pip"
+            onClick={
+              pokemon.cosmeticForms.length <= COSMETIC_FORM_CYCLE_MAX
+                ? onCycleCosmeticForm
+                : onPickCosmeticForm
+            }
+          >
+            <span className="party-meta-label">모습</span>
+            <span className="party-meta-value">
+              {resolveCosmeticForm(pokemon, slot!)?.label ?? pokemon.cosmeticForms[0].label}
             </span>
           </button>
         )}

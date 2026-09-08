@@ -8,6 +8,7 @@ import { ItemPickerModal } from "./ItemPickerModal";
 import { NaturePickerModal } from "./NaturePickerModal";
 import { PointsEditorModal } from "./PointsEditorModal";
 import { SlotPresetsModal } from "./SlotPresetsModal";
+import { CosmeticFormPickerModal } from "./CosmeticFormPickerModal";
 import { useBattleSetup, BATTLE_SELECT_SIZE } from "../hooks/useBattleSetup";
 import { useSlotPresets } from "../hooks/useSlotPresets";
 import { getPokemon, getMove, getItem } from "../lib/data";
@@ -46,6 +47,7 @@ type PickerState =
   | { kind: "item"; side: Side; slotIndex: SlotIndex }
   | { kind: "nature"; side: Side; slotIndex: SlotIndex }
   | { kind: "points"; side: Side; slotIndex: SlotIndex }
+  | { kind: "cosmeticForm"; side: Side; slotIndex: SlotIndex }
   | { kind: "move"; side: Side; slotIndex: SlotIndex; moveIndex: 0 | 1 | 2 | 3 }
   | { kind: "slotPresets"; side: Side; slotIndex: SlotIndex }
   | null;
@@ -709,6 +711,8 @@ export function BattleLogPage() {
                     onToggleGender={slotCtl(side, i).toggleGender}
                     onCycleSizeForm={slotCtl(side, i).cycleSizeForm}
                     onCycleFormVariant={slotCtl(side, i).cycleFormVariant}
+                    onCycleCosmeticForm={slotCtl(side, i).cycleCosmeticForm}
+                    onPickCosmeticForm={() => setPicker({ kind: "cosmeticForm", side, slotIndex: i })}
                     hasSamples={slotPresets.presets.length > 0}
                     onSaveAsSample={() => handleSaveSlotAsSample(side, i)}
                     onOpenSamplePicker={() => setPicker({ kind: "slotPresets", side, slotIndex: i })}
@@ -2525,6 +2529,25 @@ export function BattleLogPage() {
               onClose={() => setPicker(null)}
               onChange={(stat, value) => ctl.setPoint(stat, value)}
               onStep={(stat, delta) => ctl.stepPoint(stat, delta)}
+            />
+          );
+        })()}
+
+      {picker?.kind === "cosmeticForm" &&
+        (() => {
+          const ctl = slotCtl(picker.side, picker.slotIndex);
+          const pokemon = pokemonAt(picker.side, picker.slotIndex);
+          if (!pokemon?.cosmeticForms || !ctl.slot) return null;
+          return (
+            <CosmeticFormPickerModal
+              pokemonName={pokemon.name}
+              forms={pokemon.cosmeticForms}
+              currentFormId={ctl.slot.cosmeticForm ?? null}
+              onClose={() => setPicker(null)}
+              onSelect={(formId) => {
+                ctl.setCosmeticForm(formId);
+                setPicker(null);
+              }}
             />
           );
         })()}

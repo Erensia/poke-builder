@@ -9,6 +9,8 @@ export interface MatchupSlot {
   sizeForm?: string;
   /** 루가루암 계열 폼 변종 선택값(Pokemon.formVariants[].id). 없으면 종의 기준 폼 */
   formVariant?: string;
+  /** 마휘핑 계열 겉모습 선택값(Pokemon.cosmeticForms[].id). 이미지에만 영향, 전투 판정과 무관 */
+  cosmeticForm?: string;
   ability: string | null;
   item: string | null;
   nature: string | null;

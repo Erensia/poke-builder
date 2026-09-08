@@ -3451,6 +3451,7 @@
     "hiddenAbility": "틀깨기",
     "genderCategory": "both",
     "weightKg": 39.5,
+    "genderedSprite": true,
     "learnset": [
       "객기",
       "겁나는얼굴",
@@ -4248,6 +4249,28 @@
     "hiddenAbility": "프렌드가드",
     "genderCategory": "both",
     "weightKg": 17,
+    "cosmeticForms": [
+      { "id": "meadow", "label": "화원의 모양", "standard": true },
+      { "id": "polar", "label": "빙설의 모양" },
+      { "id": "tundra", "label": "동토의 모양" },
+      { "id": "continental", "label": "대륙의 모양" },
+      { "id": "garden", "label": "정원의 모양" },
+      { "id": "elegant", "label": "우아한 모양" },
+      { "id": "icy-snow", "label": "얼음눈의 모양" },
+      { "id": "modern", "label": "모던한 모양" },
+      { "id": "marine", "label": "마린의 모양" },
+      { "id": "archipelago", "label": "다도해의 모양" },
+      { "id": "high-plains", "label": "고원의 모양" },
+      { "id": "sandstorm", "label": "모래바람의 모양" },
+      { "id": "river", "label": "강의 모양" },
+      { "id": "monsoon", "label": "몬순의 모양" },
+      { "id": "savanna", "label": "사바나의 모양" },
+      { "id": "sun", "label": "태양의 모양" },
+      { "id": "ocean", "label": "대양의 모양" },
+      { "id": "jungle", "label": "정글의 모양" },
+      { "id": "fancy", "label": "팬시한 모양" },
+      { "id": "poke-ball", "label": "몬스터볼의 모양" }
+    ],
     "learnset": [
       "객기",
       "기가드레인",
@@ -14885,6 +14908,7 @@
     ],
     "genderCategory": "both",
     "weightKg": 81.5,
+    "genderedSprite": true,
     "learnset": [
       "개척하기",
       "객기",
@@ -14957,6 +14981,13 @@
     "hiddenAbility": "공생",
     "genderCategory": "female-only",
     "weightKg": 10,
+    "cosmeticForms": [
+      { "id": "red", "label": "빨강꽃", "standard": true },
+      { "id": "yellow", "label": "노랑꽃" },
+      { "id": "orange", "label": "주황꽃" },
+      { "id": "blue", "label": "파랑꽃" },
+      { "id": "white", "label": "하양꽃" }
+    ],
     "learnset": [
       "개척하기",
       "객기",
@@ -15130,6 +15161,18 @@
     ],
     "genderCategory": "both",
     "weightKg": 28,
+    "cosmeticForms": [
+      { "id": "natural", "label": "기본 모습", "standard": true },
+      { "id": "heart", "label": "하트 트림" },
+      { "id": "star", "label": "스타 트림" },
+      { "id": "diamond", "label": "다이아 트림" },
+      { "id": "debutante", "label": "아가씨 트림" },
+      { "id": "matron", "label": "마담 트림" },
+      { "id": "dandy", "label": "신사 트림" },
+      { "id": "la-reine", "label": "여왕 트림" },
+      { "id": "kabuki", "label": "가부키 트림" },
+      { "id": "pharaoh", "label": "파라오 트림" }
+    ],
     "learnset": [
       "개척하기",
       "객기",
@@ -15216,6 +15259,7 @@
     ],
     "genderCategory": "both",
     "weightKg": 8.5,
+    "genderedSprite": true,
     "learnset": [
       "10만볼트",
       "간지르기",
@@ -18950,6 +18994,17 @@
     "hiddenAbility": "아로마베일",
     "genderCategory": "female-only",
     "weightKg": 0.5,
+    "cosmeticForms": [
+      { "id": "vanilla-cream", "label": "바닐라크림", "standard": true },
+      { "id": "ruby-cream", "label": "루비크림" },
+      { "id": "matcha-cream", "label": "말차크림" },
+      { "id": "mint-cream", "label": "민트크림" },
+      { "id": "lemon-cream", "label": "레몬크림" },
+      { "id": "salted-cream", "label": "소금크림" },
+      { "id": "ruby-swirl", "label": "루비믹스" },
+      { "id": "caramel-swirl", "label": "캐러멜믹스" },
+      { "id": "rainbow-swirl", "label": "무지개믹스" }
+    ],
     "learnset": [
       "HP회복",
       "객기",
@@ -19624,6 +19679,10 @@
     "hiddenAbility": "테크니션",
     "genderCategory": "genderless",
     "weightKg": 2.8,
+    "cosmeticForms": [
+      { "id": "three", "label": "세 마리 가족", "standard": true },
+      { "id": "four", "label": "네 마리 가족" }
+    ],
     "learnset": [
       "간지르기",
       "개척하기",
@@ -20571,6 +20630,10 @@
     "hiddenAbility": "내열",
     "genderCategory": "genderless",
     "weightKg": 2.2,
+    "cosmeticForms": [
+      { "id": "unremarkable", "label": "범작의 모습", "standard": true },
+      { "id": "masterpiece", "label": "걸작의 모습" }
+    ],
     "learnset": [
       "고스트다이브",
       "그래스필드",

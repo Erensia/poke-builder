@@ -6,6 +6,7 @@ import { AbilityPickerModal } from "./AbilityPickerModal";
 import { ItemPickerModal } from "./ItemPickerModal";
 import { NaturePickerModal } from "./NaturePickerModal";
 import { PointsEditorModal } from "./PointsEditorModal";
+import { CosmeticFormPickerModal } from "./CosmeticFormPickerModal";
 import { PartyPresetsModal } from "./PartyPresetsModal";
 import { SlotPresetsModal } from "./SlotPresetsModal";
 import { TypeCoverageSummary } from "./TypeCoverageSummary";
@@ -23,6 +24,7 @@ type PickerState =
   | { kind: "item"; slotIndex: number }
   | { kind: "nature"; slotIndex: number }
   | { kind: "points"; slotIndex: number }
+  | { kind: "cosmeticForm"; slotIndex: number }
   | { kind: "slotPresets"; slotIndex: number }
   | null;
 
@@ -38,6 +40,8 @@ export function PartyBoard() {
     toggleGender,
     cycleSizeForm,
     cycleFormVariant,
+    cycleCosmeticForm,
+    setCosmeticForm,
     setPoint,
     stepPoint,
     resetParty,
@@ -114,6 +118,8 @@ export function PartyBoard() {
             onToggleGender={() => toggleGender(i)}
             onCycleSizeForm={() => cycleSizeForm(i)}
             onCycleFormVariant={() => cycleFormVariant(i)}
+            onCycleCosmeticForm={() => cycleCosmeticForm(i)}
+            onPickCosmeticForm={() => setPicker({ kind: "cosmeticForm", slotIndex: i })}
           />
         ))}
       </div>
@@ -240,6 +246,25 @@ export function PartyBoard() {
               onClose={() => setPicker(null)}
               onChange={(stat, value) => setPoint(picker.slotIndex, stat, value)}
               onStep={(stat, delta) => stepPoint(picker.slotIndex, stat, delta)}
+            />
+          );
+        })()}
+
+      {picker?.kind === "cosmeticForm" &&
+        (() => {
+          const slot = slots[picker.slotIndex];
+          const pokemon = slot ? getPokemon(slot.pokemonId) : undefined;
+          if (!slot || !pokemon?.cosmeticForms) return null;
+          return (
+            <CosmeticFormPickerModal
+              pokemonName={pokemon.name}
+              forms={pokemon.cosmeticForms}
+              currentFormId={slot.cosmeticForm ?? null}
+              onClose={() => setPicker(null)}
+              onSelect={(formId) => {
+                setCosmeticForm(picker.slotIndex, formId);
+                setPicker(null);
+              }}
             />
           );
         })()}

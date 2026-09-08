@@ -76,6 +76,21 @@ export interface FormVariant {
 }
 
 /**
+ * 마휘핑·비비용·트리미앙·플라제스·파밀리쥐·그우린차처럼 종족값·타입·특성은 완전히 동일하고
+ * **겉모습만** 갈리는 종 전용. 오로지 아바타 이미지 선택에만 쓰며 전투 판정엔 아무 영향이 없다
+ * (그래서 FormVariant/SizeForm과 달리 baseStats·types 등을 안 들고 있다). 파티 슬롯의
+ * `cosmeticForm` 필드가 이 배열의 `id`를 가리키며, `standard: true`인 항목이 기준 모습이다.
+ */
+export interface CosmeticForm {
+  /** 모습 고유 id (예: "vanilla-cream" | "family-of-three") */
+  id: string;
+  /** 표시 라벨 ("바닐라크림맛" 등) */
+  label: string;
+  /** 종의 기준 모습이면 true. 배열에 정확히 하나만 있어야 한다 */
+  standard?: boolean;
+}
+
+/**
  * 종족 단위 성별 분포 카테고리(헤롱헤롱/헤롱헤롱바디 구현에 필요, Phase 6 §1-1 — 사용자 확정
  * 2026-08-26: 배틀마다 랜덤 배정하지 않고, "both"인 종만 파티 슬롯에서 사용자가 직접 고른다):
  *  - "both": 수컷/암컷 둘 다 존재(비율 무관 — 87.5:12.5 같은 극단적 혼합도 포함). 슬롯의 gender
@@ -104,6 +119,18 @@ export interface Pokemon {
   sizeForms?: SizeForm[];
   /** 루가루암 계열처럼 종족값·타입·특성이 통째로 갈리는 폼 변종이 있는 종만 채운다 */
   formVariants?: FormVariant[];
+  /**
+   * 마휘핑·비비용·트리미앙·플라제스·파밀리쥐·그우린차처럼 종족값·타입·특성은 같고 겉모습(아바타
+   * 이미지)만 갈리는 종만 채운다. 슬롯의 `cosmeticForm` id가 이 배열의 원소를 가리킨다.
+   * 옵션이 4개 이하면 슬롯 카드에서 클릭으로 순환, 5개 이상이면 리스트 모달로 고른다.
+   */
+  cosmeticForms?: CosmeticForm[];
+  /**
+   * 화염레오·대쓰여너·냐오닉스처럼 성별에 따라 아바타 이미지가 다른 종이면 true. 전용 UI는 없고
+   * (성별 선택 UI가 이미 있음) 이미지 해석 단계에서 슬롯의 성별(getEffectiveGender)에 맞는
+   * 스프라이트를 고르는 데만 쓴다.
+   */
+  genderedSprite?: boolean;
   /** 메가진화가 없으면 생략. 2종 이상 가진 포켓몬은 배열 원소를 늘린다. */
   megaEvolutions?: MegaEvolution[];
   /** 킬가르도(배틀스위치)처럼 배틀 중 기술 카테고리에 따라 폼이 바뀌는 포켓몬만 채운다 */

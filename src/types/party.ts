@@ -21,6 +21,8 @@ export interface PartySlot {
   sizeForm?: string;
   /** 루가루암 계열 폼 변종 선택값(Pokemon.formVariants[].id). 없으면 종의 기준 폼 */
   formVariant?: string;
+  /** 마휘핑 계열 겉모습 선택값(Pokemon.cosmeticForms[].id). 이미지에만 영향, 전투 판정과 무관. 없으면 기준 모습 */
+  cosmeticForm?: string;
   /** 항상 4개 슬롯. 비어있는 슬롯은 null */
   moves: [string | null, string | null, string | null, string | null];
   ability: string | null;

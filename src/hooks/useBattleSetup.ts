@@ -94,6 +94,23 @@ function useBattleSetupSlot() {
     });
   }
 
+  /** 마휘핑 계열 겉모습을 다음 모습으로 돌린다(cosmeticForms 순서 순환). 이미지에만 영향 */
+  function cycleCosmeticForm() {
+    setSlot((prev) => {
+      if (!prev) return prev;
+      const forms = getPokemon(prev.pokemonId)?.cosmeticForms;
+      if (!forms || forms.length === 0) return prev;
+      const currentId = prev.cosmeticForm ?? forms.find((f) => f.standard)?.id ?? forms[0].id;
+      const idx = forms.findIndex((f) => f.id === currentId);
+      return { ...prev, cosmeticForm: forms[(idx + 1) % forms.length].id };
+    });
+  }
+
+  /** 마휘핑 계열 겉모습을 리스트에서 고른 id로 바로 설정한다(옵션 5개 이상인 종용) */
+  function setCosmeticForm(formId: string) {
+    setSlot((prev) => (prev ? { ...prev, cosmeticForm: formId } : prev));
+  }
+
   function setPoint(stat: keyof AbilityPoints, value: number) {
     setSlot((prev) => {
       if (!prev) return prev;
@@ -128,6 +145,8 @@ function useBattleSetupSlot() {
     toggleGender,
     cycleSizeForm,
     cycleFormVariant,
+    cycleCosmeticForm,
+    setCosmeticForm,
     setPoint,
     stepPoint,
   };
