@@ -1,6 +1,6 @@
 import type { PartySlots } from "../hooks/useParty";
 import { computePartyDefenseMatrix, type PartyDefenseVerdict } from "../lib/partyAnalysis";
-import { TYPE_COLORS } from "../lib/typeColors";
+import { TypeBadge } from "./TypeBadge";
 import "./TypeCoverageSummary.css";
 
 interface TypeCoverageSummaryProps {
@@ -75,9 +75,7 @@ export function TypeCoverageSummary({ slots }: TypeCoverageSummaryProps) {
               {rows.map((row) => (
                 <tr key={row.type}>
                   <th className="tm-type" scope="row" title={`${row.type}타입 기술을 받을 때`}>
-                    <span className="type-coverage-badge" style={{ background: TYPE_COLORS[row.type] }}>
-                      {row.type}
-                    </span>
+                    <TypeBadge type={row.type} />
                   </th>
                   {row.cells.map((cell, i) => (
                     <td key={members[i].pokemonId} className="tm-cell">
