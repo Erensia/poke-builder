@@ -7,9 +7,11 @@ import { ItemPickerModal } from "./ItemPickerModal";
 import { NaturePickerModal } from "./NaturePickerModal";
 import { PointsEditorModal } from "./PointsEditorModal";
 import { SlotPresetsModal } from "./SlotPresetsModal";
+import { PartyPresetsModal } from "./PartyPresetsModal";
 import { CosmeticFormPickerModal } from "./CosmeticFormPickerModal";
 import { useBattleSetup, BATTLE_SELECT_SIZE } from "../hooks/useBattleSetup";
 import { useSlotPresets } from "../hooks/useSlotPresets";
+import { usePartyPresets } from "../hooks/usePartyPresets";
 import { getPokemon, getMove, getItem } from "../lib/data";
 import { getEffectiveForm, megaBadgeLabel } from "../lib/pokemonForm";
 import { MEGA_SYMBOL_SPRITE_URL } from "../lib/sprites";
@@ -50,6 +52,7 @@ type PickerState =
   | { kind: "cosmeticForm"; side: Side; slotIndex: SlotIndex }
   | { kind: "move"; side: Side; slotIndex: SlotIndex; moveIndex: 0 | 1 | 2 | 3 }
   | { kind: "slotPresets"; side: Side; slotIndex: SlotIndex }
+  | { kind: "loadParty"; side: Side }
   | null;
 
 /** 이번 턴 한 편의 선택 — 기술 또는 교체(교대 슬롯 인덱스) */
@@ -331,6 +334,7 @@ const REAL_STAT_LABELS: { key: keyof BaseStats; label: string }[] = [
 export function BattleLogPage() {
   const setup = useBattleSetup();
   const slotPresets = useSlotPresets();
+  const partyPresets = usePartyPresets();
   const [picker, setPicker] = useState<PickerState>(null);
   const [battleState, setBattleState] = useState<BattleState | null>(null);
   const [log, setLog] = useState<TurnResult[]>([]);
@@ -689,6 +693,15 @@ export function BattleLogPage() {
             <Fragment key={side}>
               <div className="battle-setup-column">
                 <div className="battle-setup-column-title">
+                  {partyPresets.presets.length > 0 && (
+                    <button
+                      type="button"
+                      className="battle-setup-load-party"
+                      onClick={() => setPicker({ kind: "loadParty", side })}
+                    >
+                      저장된 파티 불러오기
+                    </button>
+                  )}
                   {side === "a" ? "내 파티" : "상대 파티"}{" "}
                   <span className="battle-setup-column-hint">6마리까지 빌드 · 4마리 이상이면 3마리 선출</span>
                 </div>
@@ -2631,6 +2644,20 @@ export function BattleLogPage() {
               onLoad={(preset) => ctl.loadSlot(preset.slot)}
               onRename={slotPresets.renamePreset}
               onDelete={slotPresets.deletePreset}
+            />
+          );
+        })()}
+
+      {picker?.kind === "loadParty" &&
+        (() => {
+          const side = picker.side;
+          return (
+            <PartyPresetsModal
+              presets={partyPresets.presets}
+              loadOnly
+              loadTargetLabel={`${side === "a" ? "내 파티" : "상대 파티"} 빌드`}
+              onClose={() => setPicker(null)}
+              onLoad={(preset) => setup.loadSide(side, preset.slots)}
             />
           );
         })()}
