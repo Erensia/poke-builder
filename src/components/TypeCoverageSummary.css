@@ -126,15 +126,6 @@
   padding-left: 0.5rem;
 }
 
-.type-coverage-badge {
-  display: inline-flex;
-  font-size: 0.66rem;
-  font-weight: 600;
-  color: #fff;
-  padding: 0.1rem 0.45rem;
-  border-radius: 5px;
-}
-
 .tm-cell {
   min-width: 2.4rem;
 }
