@@ -7465,8 +7465,9 @@
     "accuracy": null,
     "pp": 12,
     "priority": 0,
-    "effect": "자신의 HP를 깎아서 분신을 만든 뒤 돌아와서 교대 포켓몬과 교체한다.",
-    "makesContact": false
+    "effect": "자신의 HP를 절반 깎아서 분신을 만든 뒤 돌아와서 교대 포켓몬과 교체한다.",
+    "makesContact": false,
+    "shedTail": true
   },
   {
     "id": "리프블레이드",

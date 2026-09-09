@@ -1470,6 +1470,12 @@ export function BattleLogPage() {
                         {!action.blockedReason && action.hit && action.substituteSetFailed && (
                           <> · 그러나 실패하고 말았다!</>
                         )}
+                        {!action.blockedReason && action.hit && action.shedTailSucceeded && (
+                          <> · 꼬리를 잘라 분신을 만들고 물러났다!</>
+                        )}
+                        {!action.blockedReason && action.hit && action.shedTailFailed && (
+                          <> · 그러나 실패했다!</>
+                        )}
                         {!action.blockedReason && action.hit && action.setDisabledMoveName && (
                           <> · {action.setDisabledMoveName} 봉인!</>
                         )}
