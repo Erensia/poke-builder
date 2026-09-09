@@ -75,7 +75,7 @@ export function PartyBoard() {
     <section className="party-board">
       <header className="party-board-header">
         <div>
-          <h2>파티 편성</h2>
+          <h2>파티 샘플 작성</h2>
           <p>63싱글배틀의 파티를 편성해보세요!</p>
         </div>
         <div className="party-board-header-right">
