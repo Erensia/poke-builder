@@ -1,0 +1,16 @@
+{
+  "_readme": [
+    "validate-data.mjs 의 스프라이트 역방향 체크에서 '없어도 되는' 항목. 에셋이 아직 없거나(§ 백로그 대기)",
+    "의도적으로 이니셜 폴백을 쓰는 경우 여기에 id 를 등록하면 경고에서 빠진다.",
+    "에셋을 실제로 추가하면 여기서도 지운다."
+  ],
+  "spriteMissingPokemon": [],
+  "spriteMissingMegaForm": [
+    "한카리아스-메가Z",
+    "루카리오-메가Z"
+  ],
+  "spriteMissingItem": [
+    "한카리아스나이트Z",
+    "루카리오나이트Z"
+  ]
+}
