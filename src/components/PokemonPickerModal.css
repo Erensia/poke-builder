@@ -51,6 +51,10 @@
   background: var(--surface-2);
 }
 
+.pokemon-picker-avatar {
+  flex-shrink: 0;
+}
+
 .pokemon-picker-name {
   font-weight: 600;
   font-size: 0.9rem;

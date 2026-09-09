@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Modal } from "./Modal";
 import { TypeBadge } from "./TypeBadge";
+import { PokemonAvatar } from "./PokemonAvatar";
 import { POKEMON } from "../lib/data";
 import "./PokemonPickerModal.css";
 
@@ -43,6 +44,12 @@ export function PokemonPickerModal({ onSelect, onClose, usedPokemonIds }: Pokemo
                 disabled={isTaken}
                 onClick={() => onSelect(p.id)}
               >
+                <PokemonAvatar
+                  pokemon={p}
+                  size={26}
+                  radius="circle"
+                  className="pokemon-picker-avatar"
+                />
                 <span className="pokemon-picker-name">{p.name}</span>
                 <span className="pokemon-picker-types">
                   {p.types.map((t) => (
