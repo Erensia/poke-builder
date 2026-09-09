@@ -27,6 +27,10 @@ function look(key: string | undefined | null): string | null {
   return MANIFEST[norm(key)] ?? null;
 }
 
+/** 범용 메가진화 심볼 아이콘(`public/sprites/메가진화/메가진화.webp`) — 특정 종과 무관한 메가 마크.
+ * 배틀타워 메가진화 선언 토글 등에서 쓴다. 에셋이 없으면 null. */
+export const MEGA_SYMBOL_SPRITE_URL: string | null = look("메가진화");
+
 /**
  * `pokemon.id` 가 파일명 stem 과 다른 종(리전폼 접두사, 파일명 오타 등)의 보정.
  * 값은 파일명 stem(공백 유무 무관 — look 이 정규화한다).

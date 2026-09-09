@@ -1,6 +1,5 @@
 import { Fragment, useState, type ReactNode } from "react";
 import { BattleSetupCard } from "./BattleSetupCard";
-import { WeatherPicker } from "./WeatherPicker";
 import { PokemonPickerModal } from "./PokemonPickerModal";
 import { MovePickerModal } from "./MovePickerModal";
 import { AbilityPickerModal } from "./AbilityPickerModal";
@@ -13,6 +12,7 @@ import { useBattleSetup, BATTLE_SELECT_SIZE } from "../hooks/useBattleSetup";
 import { useSlotPresets } from "../hooks/useSlotPresets";
 import { getPokemon, getMove, getItem } from "../lib/data";
 import { getEffectiveForm, megaBadgeLabel } from "../lib/pokemonForm";
+import { MEGA_SYMBOL_SPRITE_URL } from "../lib/sprites";
 import { TYPE_COLORS } from "../lib/typeColors";
 import { environmentTintBackground } from "../lib/environmentBackground";
 import { rankStageMultiplier } from "../lib/battlePower";
@@ -487,7 +487,6 @@ export function BattleLogPage() {
     const state = createBattleState({
       a: { slots: aParty, movesList: aParty.map(movesOf) },
       b: { slots: bParty, movesList: bParty.map(movesOf) },
-      weather: setup.weather ?? undefined,
     });
     setPartySlots({ a: aParty, b: bParty });
     setBattleState(state);
@@ -682,9 +681,6 @@ export function BattleLogPage() {
           <h2>배틀타워</h2>
           <p>실전 배틀 시뮬레이션</p>
         </div>
-        {!battleState && !selecting && (
-          <WeatherPicker weather={setup.weather} onChange={setup.setWeather} />
-        )}
       </header>
 
       {!battleState && !selecting && (
@@ -1106,6 +1102,14 @@ export function BattleLogPage() {
                                   setMegaDeclared((p) => ({ ...p, [side]: e.target.checked }))
                                 }
                               />
+                              {MEGA_SYMBOL_SPRITE_URL && (
+                                <img
+                                  className="battle-mega-toggle-icon"
+                                  src={MEGA_SYMBOL_SPRITE_URL}
+                                  alt=""
+                                  draggable={false}
+                                />
+                              )}
                               <span>
                                 메가진화{form.mega ? ` (${megaBadgeLabel(form.mega)})` : ""}
                               </span>
