@@ -1629,6 +1629,11 @@ export interface SwitchLogEntry {
    * 편이고 `afterMove`도 함께 true다. 로그 문구를 "돌아와!"가 아니라 강제 교체용으로 바꿔 쓴다.
    */
   forced?: boolean;
+  /**
+   * 꼬리자르기로 세운 대타를 넘기며 물러난 교체면 true(§4-1). `afterMove`도 함께 true.
+   * 로그에서 새로 나온 포켓몬을 부르는 "가라!" 줄 대신 "…은 트레이너의 곁으로 돌아간다!"를 쓴다.
+   */
+  shedTail?: boolean;
 }
 
 function isFainted(fighter: BattleFighterState): boolean {
@@ -5543,6 +5548,7 @@ export function resumeTurn(ctx: RunTurnContext, toIndex: number): RunTurnOutcome
         inPokemonId: inFighter.illusionAs ?? inFighter.slot.pokemonId, // §6-1
         entryMessages,
         afterMove: true,
+        shedTail: pivot.passSubstitute || undefined,
       });
     }
   }
