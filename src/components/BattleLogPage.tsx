@@ -1471,7 +1471,7 @@ export function BattleLogPage() {
                           <> · 그러나 실패하고 말았다!</>
                         )}
                         {!action.blockedReason && action.hit && action.shedTailSucceeded && (
-                          <> · 꼬리를 잘라 분신을 만들고 물러났다!</>
+                          <> · 꼬리를 잘라 분신을 만들었다!</>
                         )}
                         {!action.blockedReason && action.hit && action.shedTailFailed && (
                           <> · 그러나 실패했다!</>
@@ -2259,6 +2259,12 @@ export function BattleLogPage() {
                           const inN = getPokemon(sw.inPokemonId)?.name ?? "포켓몬";
                           return (
                             <div key={`swa-${j}`}>
+                              {sw.shedTail && (
+                                <div className="battle-turn-line">
+                                  {outN}
+                                  {eunNeun(outN)} 트레이너의 곁으로 돌아간다!
+                                </div>
+                              )}
                               <div className="battle-turn-line">돌아와! {outN}!</div>
                               <div className="battle-turn-line">가라! {inN}!</div>
                               {sw.entryMessages.map((m, k) => (
