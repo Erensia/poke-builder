@@ -2259,20 +2259,14 @@ export function BattleLogPage() {
                           const inN = getPokemon(sw.inPokemonId)?.name ?? "포켓몬";
                           return (
                             <div key={`swa-${j}`}>
-                              {sw.shedTail ? (
-                                <>
-                                  <div className="battle-turn-line">
-                                    {outN}
-                                    {eunNeun(outN)} 트레이너의 곁으로 돌아간다!
-                                  </div>
-                                  <div className="battle-turn-line">돌아와! {outN}!</div>
-                                </>
-                              ) : (
-                                <>
-                                  <div className="battle-turn-line">돌아와! {outN}!</div>
-                                  <div className="battle-turn-line">가라! {inN}!</div>
-                                </>
+                              {sw.shedTail && (
+                                <div className="battle-turn-line">
+                                  {outN}
+                                  {eunNeun(outN)} 트레이너의 곁으로 돌아간다!
+                                </div>
                               )}
+                              <div className="battle-turn-line">돌아와! {outN}!</div>
+                              <div className="battle-turn-line">가라! {inN}!</div>
                               {sw.entryMessages.map((m, k) => (
                                 <div key={`swam-${j}-${k}`} className="battle-turn-line is-muted">
                                   {m}
