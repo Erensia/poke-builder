@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react";
 import { ITEMS, POKEMON, getAbility } from "../lib/data";
 import { TypeBadge } from "./TypeBadge";
+import { ItemIcon } from "./ItemIcon";
+import { resolveItemSpriteUrl } from "../lib/sprites";
 import { megaBadgeLabel } from "../lib/pokemonForm";
 import type { Item, ItemCategory } from "../types/item";
 import type { MegaEvolution, Pokemon } from "../types/pokemon";
@@ -25,12 +27,20 @@ function findMegaOwner(item: Item): { pokemon: Pokemon; mega: MegaEvolution } | 
 function ItemDetail({ item }: { item: Item }) {
   const megaOwner = findMegaOwner(item);
   const ability = megaOwner ? getAbility(megaOwner.mega.ability) : undefined;
+  const iconUrl = resolveItemSpriteUrl(item.id);
 
   return (
     <div className="itemdex-detail">
       <div className="itemdex-detail-head">
-        <span className="itemdex-detail-avatar" aria-hidden="true">
-          {item.name.at(0)}
+        <span
+          className={`itemdex-detail-avatar${iconUrl ? " has-image" : ""}`}
+          aria-hidden="true"
+        >
+          {iconUrl ? (
+            <img className="itemdex-detail-avatar-img" src={iconUrl} alt="" draggable={false} />
+          ) : (
+            item.name.at(0)
+          )}
         </span>
         <div>
           <h3>{item.name}</h3>
@@ -116,6 +126,7 @@ export function ItemDexPage() {
                   className={`itemdex-list-item${i.id === selected?.id ? " is-active" : ""}`}
                   onClick={() => setSelectedId(i.id)}
                 >
+                  <ItemIcon itemId={i.id} size={22} className="itemdex-list-icon" />
                   <span className="itemdex-list-name">{i.name}</span>
                   {i.category === "mega-stone" && <span className="itemdex-list-mega">메가</span>}
                 </button>
