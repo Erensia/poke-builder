@@ -1,0 +1,6 @@
+.item-icon {
+  display: block;
+  object-fit: contain;
+  /* 작은 박스에서 도트 이미지가 뭉개지지 않도록 */
+  image-rendering: -webkit-optimize-contrast;
+}
