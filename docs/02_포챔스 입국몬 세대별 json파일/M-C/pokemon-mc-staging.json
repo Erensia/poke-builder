@@ -1,0 +1,1121 @@
+{
+  "_readme": [
+    "검토용 스테이징. src/data/*.json 에는 아직 반영하지 않았다.",
+    "출처: 사용자 제공 (Downloads/M-C/입국 포켓몬/추가 포켓몬.txt), 2026-09-09.",
+    "필드는 src/types/pokemon.ts 의 Pokemon / MegaEvolution / FormVariant 를 따른다.",
+    "learnset: 보만다·갑주무사·드닐레이브·에써르 4종만 확보. 나머지는 [] 이며 _flags 로 표시.",
+    "  learnset 오타 수정: 꺠물어부수기→깨물어부수기, 코골리→코골기, 꺠트리기→깨트리기.",
+    "  신규 기술 베어가르기·대검돌격은 moves-mc-staging.json 참고.",
+    "megaEvolutionAdditions: 앱솔(기존 종)에 앱솔-메가Z 를 추가. 나머지 메가는 해당 신규 종 안에 포함.",
+    "메가루카리오Z·메가한카리아스Z 는 이미 pokemon.json 에 존재 — 이 파일 대상 아님(이미지 배선만).",
+    "폼 변종: 스트린더(하이/로우)·에써르(수컷/암컷)·시비꼬(4색) 는 formVariants 로 모델링(선택형 UI).",
+    "  스트린더 하이한 모습 종족값은 원본에 비어 있어 로우한 모습과 동일하게 채웠다(게임상 동일)."
+  ],
+  "pokemon": [
+    {
+      "id": "푸크린",
+      "name": "푸크린",
+      "types": [
+        "노말",
+        "페어리"
+      ],
+      "baseStats": {
+        "hp": 140,
+        "atk": 70,
+        "def": 45,
+        "spa": 85,
+        "spd": 50,
+        "spe": 45
+      },
+      "abilities": [
+        "헤롱헤롱바디",
+        "승기"
+      ],
+      "hiddenAbility": "통찰",
+      "genderCategory": "both",
+      "weightKg": 12.0,
+      "learnset": [],
+      "_flags": [
+        "learnset 미수집(M-C 기술표 미공개) — 병합 전 채울 것"
+      ]
+    },
+    {
+      "id": "페르시온",
+      "name": "페르시온",
+      "types": [
+        "노말"
+      ],
+      "baseStats": {
+        "hp": 65,
+        "atk": 70,
+        "def": 60,
+        "spa": 65,
+        "spd": 65,
+        "spe": 115
+      },
+      "abilities": [
+        "테크니션",
+        "유연"
+      ],
+      "hiddenAbility": "긴장감",
+      "genderCategory": "both",
+      "weightKg": 32.0,
+      "learnset": [],
+      "_flags": [
+        "learnset 미수집(M-C 기술표 미공개) — 병합 전 채울 것"
+      ]
+    },
+    {
+      "id": "페르시온(알로라)",
+      "name": "페르시온(알로라)",
+      "types": [
+        "악"
+      ],
+      "baseStats": {
+        "hp": 65,
+        "atk": 60,
+        "def": 60,
+        "spa": 75,
+        "spd": 65,
+        "spe": 115
+      },
+      "abilities": [
+        "테크니션",
+        "퍼코트"
+      ],
+      "hiddenAbility": "주눅",
+      "genderCategory": "both",
+      "weightKg": 33.0,
+      "learnset": [],
+      "_flags": [
+        "learnset 미수집(M-C 기술표 미공개) — 병합 전 채울 것"
+      ]
+    },
+    {
+      "id": "파오리",
+      "name": "파오리",
+      "types": [
+        "노말",
+        "비행"
+      ],
+      "baseStats": {
+        "hp": 52,
+        "atk": 90,
+        "def": 55,
+        "spa": 58,
+        "spd": 62,
+        "spe": 60
+      },
+      "abilities": [
+        "날카로운눈",
+        "정신력"
+      ],
+      "hiddenAbility": "오기",
+      "genderCategory": "both",
+      "weightKg": 15.0,
+      "learnset": [],
+      "_flags": [
+        "learnset 미수집(M-C 기술표 미공개) — 병합 전 채울 것"
+      ]
+    },
+    {
+      "id": "마임맨",
+      "name": "마임맨",
+      "types": [
+        "에스퍼",
+        "페어리"
+      ],
+      "baseStats": {
+        "hp": 40,
+        "atk": 45,
+        "def": 65,
+        "spa": 100,
+        "spd": 120,
+        "spe": 90
+      },
+      "abilities": [
+        "방음",
+        "필터"
+      ],
+      "hiddenAbility": "테크니션",
+      "genderCategory": "both",
+      "weightKg": 54.5,
+      "learnset": [],
+      "_flags": [
+        "learnset 미수집(M-C 기술표 미공개) — 병합 전 채울 것"
+      ]
+    },
+    {
+      "id": "꿀꺽몬",
+      "name": "꿀꺽몬",
+      "types": [
+        "독"
+      ],
+      "baseStats": {
+        "hp": 100,
+        "atk": 73,
+        "def": 83,
+        "spa": 73,
+        "spd": 83,
+        "spe": 55
+      },
+      "abilities": [
+        "점착",
+        "해감액"
+      ],
+      "hiddenAbility": "먹보",
+      "genderCategory": "both",
+      "weightKg": 80.0,
+      "learnset": [],
+      "_flags": [
+        "learnset 미수집(M-C 기술표 미공개) — 병합 전 채울 것"
+      ]
+    },
+    {
+      "id": "고고트",
+      "name": "고고트",
+      "types": [
+        "풀"
+      ],
+      "baseStats": {
+        "hp": 123,
+        "atk": 100,
+        "def": 62,
+        "spa": 97,
+        "spd": 81,
+        "spe": 68
+      },
+      "abilities": [
+        "초식"
+      ],
+      "hiddenAbility": "풀모피",
+      "genderCategory": "both",
+      "weightKg": 91.0,
+      "learnset": [],
+      "_flags": [
+        "learnset 미수집(M-C 기술표 미공개) — 병합 전 채울 것"
+      ]
+    },
+    {
+      "id": "고릴타",
+      "name": "고릴타",
+      "types": [
+        "풀"
+      ],
+      "baseStats": {
+        "hp": 100,
+        "atk": 125,
+        "def": 90,
+        "spa": 60,
+        "spd": 70,
+        "spe": 85
+      },
+      "abilities": [
+        "심록"
+      ],
+      "hiddenAbility": "그래스메이커",
+      "genderCategory": "both",
+      "weightKg": 90.0,
+      "learnset": [],
+      "_flags": [
+        "learnset 미수집(M-C 기술표 미공개) — 병합 전 채울 것"
+      ]
+    },
+    {
+      "id": "에이스번",
+      "name": "에이스번",
+      "types": [
+        "불꽃"
+      ],
+      "baseStats": {
+        "hp": 80,
+        "atk": 116,
+        "def": 75,
+        "spa": 65,
+        "spd": 75,
+        "spe": 119
+      },
+      "abilities": [
+        "맹화"
+      ],
+      "hiddenAbility": "리베로",
+      "genderCategory": "both",
+      "weightKg": 33.0,
+      "learnset": [],
+      "_flags": [
+        "learnset 미수집(M-C 기술표 미공개) — 병합 전 채울 것"
+      ]
+    },
+    {
+      "id": "인텔리레온",
+      "name": "인텔리레온",
+      "types": [
+        "물"
+      ],
+      "baseStats": {
+        "hp": 70,
+        "atk": 85,
+        "def": 65,
+        "spa": 125,
+        "spd": 65,
+        "spe": 120
+      },
+      "abilities": [
+        "급류"
+      ],
+      "hiddenAbility": "스나이퍼",
+      "genderCategory": "both",
+      "weightKg": 45.2,
+      "learnset": [],
+      "_flags": [
+        "learnset 미수집(M-C 기술표 미공개) — 병합 전 채울 것"
+      ]
+    },
+    {
+      "id": "폭슬라이",
+      "name": "폭슬라이",
+      "types": [
+        "악"
+      ],
+      "baseStats": {
+        "hp": 70,
+        "atk": 58,
+        "def": 58,
+        "spa": 87,
+        "spd": 92,
+        "spe": 90
+      },
+      "abilities": [
+        "도주",
+        "곡예"
+      ],
+      "hiddenAbility": "잠복",
+      "genderCategory": "both",
+      "weightKg": 19.0,
+      "learnset": [],
+      "_flags": [
+        "learnset 미수집(M-C 기술표 미공개) — 병합 전 채울 것"
+      ]
+    },
+    {
+      "id": "케오퍼스",
+      "name": "케오퍼스",
+      "types": [
+        "격투"
+      ],
+      "baseStats": {
+        "hp": 80,
+        "atk": 118,
+        "def": 90,
+        "spa": 70,
+        "spd": 80,
+        "spe": 42
+      },
+      "abilities": [
+        "유연"
+      ],
+      "hiddenAbility": "테크니션",
+      "genderCategory": "both",
+      "weightKg": 39.0,
+      "learnset": [],
+      "_flags": [
+        "learnset 미수집(M-C 기술표 미공개) — 병합 전 채울 것"
+      ]
+    },
+    {
+      "id": "나이킹",
+      "name": "나이킹",
+      "types": [
+        "강철"
+      ],
+      "baseStats": {
+        "hp": 70,
+        "atk": 110,
+        "def": 100,
+        "spa": 50,
+        "spd": 60,
+        "spe": 50
+      },
+      "abilities": [
+        "단단한발톱",
+        "전투무장"
+      ],
+      "hiddenAbility": "강철정신",
+      "genderCategory": "both",
+      "weightKg": 28.0,
+      "learnset": [],
+      "_flags": [
+        "learnset 미수집(M-C 기술표 미공개) — 병합 전 채울 것"
+      ]
+    },
+    {
+      "id": "창파나이트",
+      "name": "창파나이트",
+      "types": [
+        "격투"
+      ],
+      "baseStats": {
+        "hp": 62,
+        "atk": 135,
+        "def": 95,
+        "spa": 68,
+        "spd": 82,
+        "spe": 65
+      },
+      "abilities": [
+        "불굴의마음"
+      ],
+      "hiddenAbility": "배짱",
+      "genderCategory": "both",
+      "weightKg": 117.0,
+      "learnset": [],
+      "_flags": [
+        "learnset 미수집(M-C 기술표 미공개) — 병합 전 채울 것"
+      ]
+    },
+    {
+      "id": "찌르성게",
+      "name": "찌르성게",
+      "types": [
+        "전기"
+      ],
+      "baseStats": {
+        "hp": 48,
+        "atk": 101,
+        "def": 95,
+        "spa": 91,
+        "spd": 85,
+        "spe": 15
+      },
+      "abilities": [
+        "피뢰침"
+      ],
+      "hiddenAbility": "일렉트릭메이커",
+      "genderCategory": "both",
+      "weightKg": 1.0,
+      "learnset": [],
+      "_flags": [
+        "learnset 미수집(M-C 기술표 미공개) — 병합 전 채울 것"
+      ]
+    },
+    {
+      "id": "올리르바",
+      "name": "올리르바",
+      "types": [
+        "풀",
+        "노말"
+      ],
+      "baseStats": {
+        "hp": 78,
+        "atk": 69,
+        "def": 90,
+        "spa": 125,
+        "spd": 109,
+        "spe": 39
+      },
+      "abilities": [
+        "넘치는씨"
+      ],
+      "hiddenAbility": "수확",
+      "genderCategory": "both",
+      "weightKg": 48.2,
+      "learnset": [],
+      "_flags": [
+        "learnset 미수집(M-C 기술표 미공개) — 병합 전 채울 것"
+      ]
+    },
+    {
+      "id": "마피티프",
+      "name": "마피티프",
+      "types": [
+        "악"
+      ],
+      "baseStats": {
+        "hp": 80,
+        "atk": 120,
+        "def": 90,
+        "spa": 60,
+        "spd": 70,
+        "spe": 85
+      },
+      "abilities": [
+        "위협",
+        "파수견"
+      ],
+      "hiddenAbility": "잠복",
+      "genderCategory": "both",
+      "weightKg": 61.0,
+      "learnset": [],
+      "_flags": [
+        "learnset 미수집(M-C 기술표 미공개) — 병합 전 채울 것"
+      ]
+    },
+    {
+      "id": "빠르모트",
+      "name": "빠르모트",
+      "types": [
+        "전기",
+        "격투"
+      ],
+      "baseStats": {
+        "hp": 70,
+        "atk": 115,
+        "def": 70,
+        "spa": 70,
+        "spd": 60,
+        "spe": 105
+      },
+      "abilities": [
+        "자연회복",
+        "축전"
+      ],
+      "hiddenAbility": "철주먹",
+      "genderCategory": "both",
+      "weightKg": 41.0,
+      "learnset": [],
+      "_flags": [
+        "learnset 미수집(M-C 기술표 미공개) — 병합 전 채울 것"
+      ]
+    },
+    {
+      "id": "보만다",
+      "name": "보만다",
+      "types": [
+        "드래곤",
+        "비행"
+      ],
+      "baseStats": {
+        "hp": 95,
+        "atk": 135,
+        "def": 80,
+        "spa": 110,
+        "spd": 80,
+        "spe": 100
+      },
+      "abilities": [
+        "위협"
+      ],
+      "hiddenAbility": "자기과신",
+      "genderCategory": "both",
+      "weightKg": 102.6,
+      "learnset": [
+        "기가임팩트",
+        "이판사판태클",
+        "난동부리기",
+        "누르기",
+        "베어가르기",
+        "객기",
+        "파괴광선",
+        "하이퍼보이스",
+        "돌림노래",
+        "코골기",
+        "도우미",
+        "잠꼬대",
+        "버티기",
+        "겁나는얼굴",
+        "방어",
+        "대타출동",
+        "기충전",
+        "울부짖기",
+        "열불내기",
+        "불꽃엄니",
+        "불대문자",
+        "열풍",
+        "화염방사",
+        "회오리불꽃",
+        "쾌청",
+        "하이드로펌프",
+        "비바라기",
+        "번개엄니",
+        "공중날기",
+        "제비반환",
+        "더블윙",
+        "폭풍",
+        "에어슬래시",
+        "순풍",
+        "날개쉬기",
+        "스톤에지",
+        "스톤샤워",
+        "암석봉인",
+        "지진",
+        "땅고르기",
+        "진흙뿌리기",
+        "깨트리기",
+        "사이코팽",
+        "사념의박치기",
+        "잠자기",
+        "섀도클로",
+        "역린",
+        "드래곤다이브",
+        "드래곤클로",
+        "와이드브레이커",
+        "드래곤테일",
+        "용성군",
+        "용의파동",
+        "드래곤옐",
+        "용의춤",
+        "깨물어부수기",
+        "세차게휘두르기",
+        "물기",
+        "아이언테일",
+        "아이언헤드",
+        "강철날개",
+        "철벽"
+      ],
+      "megaEvolutions": [
+        {
+          "form": "보만다-메가",
+          "megaStone": "보만다나이트",
+          "types": [
+            "드래곤",
+            "비행"
+          ],
+          "baseStats": {
+            "hp": 95,
+            "atk": 145,
+            "def": 130,
+            "spa": 120,
+            "spd": 90,
+            "spe": 120
+          },
+          "ability": "스카이스킨",
+          "weightKg": 112.6
+        }
+      ]
+    },
+    {
+      "id": "갑주무사",
+      "name": "갑주무사",
+      "types": [
+        "벌레",
+        "물"
+      ],
+      "baseStats": {
+        "hp": 75,
+        "atk": 125,
+        "def": 140,
+        "spa": 60,
+        "spd": 90,
+        "spe": 40
+      },
+      "abilities": [
+        "위기회피"
+      ],
+      "genderCategory": "both",
+      "weightKg": 108.0,
+      "learnset": [
+        "기가임팩트",
+        "베어가르기",
+        "객기",
+        "더블어택",
+        "파괴광선",
+        "돌림노래",
+        "코골기",
+        "잠꼬대",
+        "헤롱헤롱",
+        "버티기",
+        "방어",
+        "대타출동",
+        "싫은소리",
+        "칼춤",
+        "아쿠아브레이크",
+        "다이빙",
+        "폭포오르기",
+        "셸블레이드",
+        "아쿠아제트",
+        "탁류",
+        "파도타기",
+        "열탕",
+        "찬물끼얹기",
+        "비바라기",
+        "만나자마자",
+        "시저크로스",
+        "흡혈",
+        "엄습하는일격",
+        "유턴",
+        "벌레먹기",
+        "달려들기",
+        "바늘미사일",
+        "벌레의야단법석",
+        "벌레의저항",
+        "스톤샤워",
+        "암석봉인",
+        "와이드가드",
+        "더스트슈트",
+        "독찌르기",
+        "오물웨이브",
+        "오물폭탄",
+        "베놈쇼크",
+        "드릴라이너",
+        "머드샷",
+        "압정뿌리기",
+        "눈보라",
+        "냉동빔",
+        "얼어붙은바람",
+        "인파이트",
+        "깨트리기",
+        "기합구슬",
+        "벌크업",
+        "잠자기",
+        "고속이동",
+        "섀도클로",
+        "원한",
+        "지옥찌르기",
+        "깜짝베기",
+        "기습",
+        "승부굳히기",
+        "보복",
+        "내던지기",
+        "악의파동",
+        "바크아웃",
+        "도발",
+        "아이언헤드",
+        "철벽"
+      ],
+      "megaEvolutions": [
+        {
+          "form": "갑주무사-메가",
+          "megaStone": "갑주무사나이트",
+          "types": [
+            "벌레",
+            "강철"
+          ],
+          "baseStats": {
+            "hp": 75,
+            "atk": 150,
+            "def": 175,
+            "spa": 70,
+            "spd": 120,
+            "spe": 40
+          },
+          "ability": "단단한발톱",
+          "weightKg": 148.0
+        }
+      ]
+    },
+    {
+      "id": "드닐레이브",
+      "name": "드닐레이브",
+      "types": [
+        "드래곤",
+        "얼음"
+      ],
+      "baseStats": {
+        "hp": 115,
+        "atk": 145,
+        "def": 92,
+        "spa": 75,
+        "spd": 86,
+        "spe": 87
+      },
+      "abilities": [
+        "열교환"
+      ],
+      "hiddenAbility": "아이스바디",
+      "genderCategory": "both",
+      "weightKg": 210.0,
+      "learnset": [
+        "기가임팩트",
+        "이판사판태클",
+        "누르기",
+        "객기",
+        "파괴광선",
+        "도우미",
+        "잠꼬대",
+        "버티기",
+        "겁나는얼굴",
+        "방어",
+        "대타출동",
+        "기충전",
+        "칼춤",
+        "아쿠아테일",
+        "비바라기",
+        "번개엄니",
+        "제비반환",
+        "지진",
+        "10만마력",
+        "구멍파기",
+        "분함의발구르기",
+        "땅고르기",
+        "고드름떨구기",
+        "얼음엄니",
+        "눈사태",
+        "얼음뭉치",
+        "고드름침",
+        "눈보라",
+        "냉동빔",
+        "프리즈드라이",
+        "얼음숨결",
+        "얼어붙은바람",
+        "설경",
+        "바디프레스",
+        "깨트리기",
+        "사념의박치기",
+        "잠자기",
+        "대검돌격",
+        "역린",
+        "드래곤다이브",
+        "드래곤클로",
+        "와이드브레이커",
+        "드래곤테일",
+        "스케일샷",
+        "용성군",
+        "용의파동",
+        "드래곤옐",
+        "용의춤",
+        "깨물어부수기",
+        "물기",
+        "아이언헤드"
+      ],
+      "megaEvolutions": [
+        {
+          "form": "드닐레이브-메가",
+          "megaStone": "드닐레이브나이트",
+          "types": [
+            "드래곤",
+            "얼음"
+          ],
+          "baseStats": {
+            "hp": 115,
+            "atk": 175,
+            "def": 117,
+            "spa": 105,
+            "spd": 101,
+            "spe": 87
+          },
+          "ability": "열교환",
+          "weightKg": 315.0
+        }
+      ]
+    },
+    {
+      "id": "스트린더",
+      "name": "스트린더",
+      "types": [
+        "전기",
+        "독"
+      ],
+      "baseStats": {
+        "hp": 75,
+        "atk": 98,
+        "def": 70,
+        "spa": 114,
+        "spd": 70,
+        "spe": 75
+      },
+      "abilities": [
+        "펑크록",
+        "플러스"
+      ],
+      "hiddenAbility": "테크니션",
+      "genderCategory": "both",
+      "weightKg": 40.0,
+      "formVariants": [
+        {
+          "id": "high",
+          "label": "하이한 모습",
+          "types": [
+            "전기",
+            "독"
+          ],
+          "baseStats": {
+            "hp": 75,
+            "atk": 98,
+            "def": 70,
+            "spa": 114,
+            "spd": 70,
+            "spe": 75
+          },
+          "abilities": [
+            "펑크록",
+            "플러스"
+          ],
+          "hiddenAbility": "테크니션",
+          "standard": true
+        },
+        {
+          "id": "low",
+          "label": "로우한 모습",
+          "types": [
+            "전기",
+            "독"
+          ],
+          "baseStats": {
+            "hp": 75,
+            "atk": 98,
+            "def": 70,
+            "spa": 114,
+            "spd": 70,
+            "spe": 75
+          },
+          "abilities": [
+            "펑크록",
+            "마이너스"
+          ],
+          "hiddenAbility": "테크니션"
+        }
+      ],
+      "learnset": [],
+      "_flags": [
+        "learnset 미수집(M-C 기술표 미공개) — 병합 전 채울 것"
+      ]
+    },
+    {
+      "id": "에써르",
+      "name": "에써르",
+      "types": [
+        "에스퍼",
+        "노말"
+      ],
+      "baseStats": {
+        "hp": 60,
+        "atk": 65,
+        "def": 55,
+        "spa": 105,
+        "spd": 95,
+        "spe": 95
+      },
+      "abilities": [
+        "싱크로",
+        "정신력"
+      ],
+      "hiddenAbility": "사이코메이커",
+      "genderCategory": "both",
+      "weightKg": 28.0,
+      "formVariants": [
+        {
+          "id": "male",
+          "label": "수컷",
+          "types": [
+            "에스퍼",
+            "노말"
+          ],
+          "baseStats": {
+            "hp": 60,
+            "atk": 65,
+            "def": 55,
+            "spa": 105,
+            "spd": 95,
+            "spe": 95
+          },
+          "abilities": [
+            "싱크로",
+            "정신력"
+          ],
+          "hiddenAbility": "사이코메이커",
+          "standard": true
+        },
+        {
+          "id": "female",
+          "label": "암컷",
+          "types": [
+            "에스퍼",
+            "노말"
+          ],
+          "baseStats": {
+            "hp": 70,
+            "atk": 55,
+            "def": 65,
+            "spa": 95,
+            "spd": 105,
+            "spe": 85
+          },
+          "abilities": [
+            "싱크로",
+            "마이페이스"
+          ],
+          "hiddenAbility": "사이코메이커"
+        }
+      ],
+      "learnset": [
+        "누르기",
+        "객기",
+        "속이기",
+        "하이퍼보이스",
+        "돌림노래",
+        "대지의파동",
+        "코골기",
+        "희망사항",
+        "도우미",
+        "날따름",
+        "자기암시",
+        "배턴터치",
+        "신비의부적",
+        "잠꼬대",
+        "버티기",
+        "방어",
+        "대타출동",
+        "노래하기",
+        "에너지볼",
+        "매지컬플레임",
+        "드레인펀치",
+        "사념의박치기",
+        "미래예지",
+        "사이코키네시스",
+        "사이코쇼크",
+        "어시스트파워",
+        "사이코필드",
+        "치유파동",
+        "가드셰어",
+        "트릭룸",
+        "가드스왑",
+        "치유소원",
+        "명상",
+        "봉인",
+        "스킬스왑",
+        "트릭",
+        "잠자기",
+        "리플렉터",
+        "빛의장막",
+        "섀도볼",
+        "치근거리기",
+        "매혹의보이스",
+        "매지컬샤인",
+        "드레인키스",
+        "애교부리기"
+      ],
+      "_flags": [
+        "learnset 은 암컷 폼 기준(수컷 폼 전용 기술 별도 확인 필요)"
+      ]
+    },
+    {
+      "id": "시비꼬",
+      "name": "시비꼬",
+      "types": [
+        "노말",
+        "비행"
+      ],
+      "baseStats": {
+        "hp": 82,
+        "atk": 96,
+        "def": 51,
+        "spa": 45,
+        "spd": 51,
+        "spe": 92
+      },
+      "abilities": [
+        "위협",
+        "의욕"
+      ],
+      "hiddenAbility": "근성",
+      "genderCategory": "both",
+      "weightKg": 2.4,
+      "formVariants": [
+        {
+          "id": "green",
+          "label": "그린 페더",
+          "types": [
+            "노말",
+            "비행"
+          ],
+          "baseStats": {
+            "hp": 82,
+            "atk": 96,
+            "def": 51,
+            "spa": 45,
+            "spd": 51,
+            "spe": 92
+          },
+          "abilities": [
+            "위협",
+            "의욕"
+          ],
+          "hiddenAbility": "근성",
+          "standard": true
+        },
+        {
+          "id": "blue",
+          "label": "블루 페더",
+          "types": [
+            "노말",
+            "비행"
+          ],
+          "baseStats": {
+            "hp": 82,
+            "atk": 96,
+            "def": 51,
+            "spa": 45,
+            "spd": 51,
+            "spe": 92
+          },
+          "abilities": [
+            "위협",
+            "의욕"
+          ],
+          "hiddenAbility": "근성"
+        },
+        {
+          "id": "yellow",
+          "label": "옐로 페더",
+          "types": [
+            "노말",
+            "비행"
+          ],
+          "baseStats": {
+            "hp": 82,
+            "atk": 96,
+            "def": 51,
+            "spa": 45,
+            "spd": 51,
+            "spe": 92
+          },
+          "abilities": [
+            "위협",
+            "의욕"
+          ],
+          "hiddenAbility": "우격다짐"
+        },
+        {
+          "id": "white",
+          "label": "화이트 페더",
+          "types": [
+            "노말",
+            "비행"
+          ],
+          "baseStats": {
+            "hp": 82,
+            "atk": 96,
+            "def": 51,
+            "spa": 45,
+            "spd": 51,
+            "spe": 92
+          },
+          "abilities": [
+            "위협",
+            "의욕"
+          ],
+          "hiddenAbility": "우격다짐"
+        }
+      ],
+      "learnset": [],
+      "_flags": [
+        "learnset 미수집(M-C 기술표 미공개) — 병합 전 채울 것"
+      ]
+    }
+  ],
+  "megaEvolutionAdditions": [
+    {
+      "baseId": "앱솔",
+      "megaEvolutions": [
+        {
+          "form": "앱솔-메가Z",
+          "megaStone": "앱솔나이트Z",
+          "types": [
+            "악",
+            "고스트"
+          ],
+          "baseStats": {
+            "hp": 65,
+            "atk": 154,
+            "def": 60,
+            "spa": 75,
+            "spd": 60,
+            "spe": 151
+          },
+          "ability": "예리함",
+          "weightKg": 49.0
+        }
+      ]
+    }
+  ]
+}

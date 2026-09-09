@@ -1,0 +1,40 @@
+{
+  "_readme": [
+    "검토용 스테이징. src/data/moves.json 에는 아직 반영하지 않았다.",
+    "출처: 사용자 제공 (Downloads/M-C/입국 포켓몬/추가 포켓몬.txt 의 learnset + 사용자 추가 정보), 2026-09-09.",
+    "M-C 신규 종 learnset 이 참조하는데 기존 moves.json 에 없던 기술 2종.",
+    "베어가르기: 섀도클로/크로스촙과 동일한 하이크리티컬 물리기. 그대로 병합 가능.",
+    "대검돌격: 위력/명중/PP 는 그대로 병합 가능하나, 부가효과(사용 후 다음 상대 턴까지 '피격 시 필중 + 피해 2배' 볼라틸)는 battleSimulator 미구현 → 엔진 트랙에서 별도 처리. 병합 시 _flags 로 표시."
+  ],
+  "moves": [
+    {
+      "id": "베어가르기",
+      "name": "베어가르기",
+      "type": "노말",
+      "category": "physical",
+      "power": 80,
+      "accuracy": 100,
+      "pp": 20,
+      "priority": 0,
+      "effect": "발톱이나 낫 등으로 상대를 베어 갈라서 공격한다. 급소에 맞을 확률이 높다.",
+      "tags": ["급소", "접촉", "베기"],
+      "highCritRatio": true,
+      "classification": ["베기"],
+      "makesContact": true
+    },
+    {
+      "id": "대검돌격",
+      "name": "대검돌격",
+      "type": "드래곤",
+      "category": "physical",
+      "power": 120,
+      "accuracy": 100,
+      "pp": 8,
+      "priority": 0,
+      "effect": "몸을 내던지는 무모한 돌격. 기술을 사용한 다음 상대의 공격이 반드시 명중하고 데미지를 2배로 입게 된다.",
+      "tags": ["접촉"],
+      "makesContact": true,
+      "_flags": ["부가효과(피격 시 필중+피해 2배 볼라틸) 엔진 미구현 — 병합 시 데미지 계산만 유효"]
+    }
+  ]
+}

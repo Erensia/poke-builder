@@ -1,0 +1,16 @@
+{
+  "_readme": [
+    "검토용 스테이징. src/data/items.json 에는 아직 반영하지 않았다.",
+    "출처: 사용자 제공 (Downloads/M-C/입국 도구/), 2026-09-09.",
+    "메가스톤만 이 파일에 담는다 — 효과 데이터가 필요 없고(기존 메가스톤도 description \"\") 즉시 병합 가능.",
+    "한카리아스나이트Z·루카리오나이트Z 는 이미 items.json 에 존재 → 여기 넣지 않는다. 스프라이트 배선만 하면 된다(현재 data-allowlist.json 에 '누락'으로 등록돼 있으니 이미지 추가 후 제거).",
+    "신규 지닌도구 12종(대파·울퉁불퉁멧·풍선·레드카드·조임밴드·탈출버튼·노말주얼·그라운드코트·시드 4종)은",
+    "현재 items.json 스키마로 표현 불가 → itemEffects.ts + battleSimulator.ts 확장이 필요한 '엔진 트랙'. 이 파일 대상 아님."
+  ],
+  "items": [
+    { "id": "앱솔나이트Z", "name": "앱솔나이트Z", "description": "", "category": "mega-stone" },
+    { "id": "보만다나이트", "name": "보만다나이트", "description": "", "category": "mega-stone" },
+    { "id": "갑주무사나이트", "name": "갑주무사나이트", "description": "", "category": "mega-stone" },
+    { "id": "드닐레이브나이트", "name": "드닐레이브나이트", "description": "", "category": "mega-stone" }
+  ]
+}
