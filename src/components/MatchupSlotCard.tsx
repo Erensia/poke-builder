@@ -11,7 +11,7 @@ import { computeRealStats } from "../lib/statCalculator";
 import { totalAbilityPoints } from "../lib/statCalculator";
 import { rankStageMultiplier } from "../lib/battlePower";
 import { TypeBadge } from "./TypeBadge";
-import { PokemonAvatar } from "./PokemonAvatar";
+import { PokemonAvatarWithItem } from "./PokemonAvatarWithItem";
 import { STAT_ORDER, STAT_LABELS } from "../lib/statLabels";
 import { TYPE_COLORS } from "../lib/typeColors";
 import "./MatchupSlotCard.css";
@@ -135,12 +135,13 @@ export function MatchupSlotCard({
       </button>
 
       <button type="button" className="matchup-slot-main" onClick={onPickPokemon}>
-        <PokemonAvatar
+        <PokemonAvatarWithItem
           pokemon={pokemon}
           size={42}
           radius={11}
           gradientTypes={form.types}
-          className="matchup-slot-avatar"
+          avatarClassName="matchup-slot-avatar"
+          itemId={slot.item}
           form={{
             // 매치업 슬롯엔 성별 선택이 없다 — genderedSprite 종은 기본(수컷) 스프라이트.
             cosmeticForm: slot.cosmeticForm,

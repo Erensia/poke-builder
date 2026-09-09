@@ -32,6 +32,15 @@ function look(key: string | undefined | null): string | null {
 export const MEGA_SYMBOL_SPRITE_URL: string | null = look("메가진화");
 
 /**
+ * 지닌 도구/메가스톤 아이콘 URL(§1-2). `itemId`는 곧 도구명이라(`items.json`에서 id === name)
+ * `public/sprites/도구/{도구명}.webp`(메가스톤은 `도구/메가스톤/{스톤명}.png`) 매니페스트 키가 된다.
+ * 스프라이트가 없으면 null — 호출부(ItemIcon)가 아무것도 렌더하지 않는다(폴백 아이콘 없음).
+ */
+export function resolveItemSpriteUrl(itemId: string | null | undefined): string | null {
+  return look(itemId);
+}
+
+/**
  * `pokemon.id` 가 파일명 stem 과 다른 종(리전폼 접두사, 파일명 오타 등)의 보정.
  * 값은 파일명 stem(공백 유무 무관 — look 이 정규화한다).
  */

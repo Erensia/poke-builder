@@ -1,0 +1,12 @@
+.avatar-with-item {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+/* 아바타 우하단 모서리에 겹치는 도구 뱃지 — 배경 없이 도구 이미지만. */
+.avatar-with-item-badge {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+}
