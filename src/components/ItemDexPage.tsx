@@ -95,7 +95,7 @@ export function ItemDexPage() {
   return (
     <section className="itemdex-page">
       <header className="itemdex-page-header">
-        <h2>포켓몬 도구 도감</h2>
+        <h2>도구 도감</h2>
         <p>로스터 {ITEMS.length}종의 메가스톤·지닌 도구 효과를 한눈에 확인합니다.</p>
       </header>
 
