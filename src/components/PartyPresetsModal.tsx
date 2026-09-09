@@ -7,17 +7,23 @@ import "./PresetListModal.css";
 interface PartyPresetsModalProps {
   presets: Party[];
   onClose: () => void;
-  onSaveCurrent: (name: string) => void;
   onLoad: (preset: Party) => void;
-  onRename: (id: string, name: string) => void;
-  onDelete: (id: string) => void;
+  /** 불러오기만 노출한다(배틀타워 셋업 §3-2). 저장/이름변경/삭제 UI를 숨기고 콜백도 안 받는다. */
+  loadOnly?: boolean;
+  /** loadOnly면 불러오기 확인 문구에 붙일 대상 설명(예: "이 진영 빌드"). 기본 "현재 편성 중인 파티". */
+  loadTargetLabel?: string;
+  onSaveCurrent?: (name: string) => void;
+  onRename?: (id: string, name: string) => void;
+  onDelete?: (id: string) => void;
 }
 
 export function PartyPresetsModal({
   presets,
   onClose,
-  onSaveCurrent,
   onLoad,
+  loadOnly = false,
+  loadTargetLabel = "현재 편성 중인 파티",
+  onSaveCurrent,
   onRename,
   onDelete,
 }: PartyPresetsModalProps) {
@@ -27,12 +33,12 @@ export function PartyPresetsModal({
   function handleSaveCurrent() {
     const trimmed = newName.trim();
     if (!trimmed) return;
-    onSaveCurrent(trimmed);
+    onSaveCurrent?.(trimmed);
     setNewName("");
   }
 
   function handleLoad(preset: Party) {
-    if (window.confirm(`"${preset.name}"${eulReul(preset.name)} 불러올까요? 현재 편성 중인 파티는 덮어써집니다.`)) {
+    if (window.confirm(`"${preset.name}"${eulReul(preset.name)} 불러올까요? ${loadTargetLabel}는 덮어써집니다.`)) {
       onLoad(preset);
       onClose();
     }
@@ -41,12 +47,12 @@ export function PartyPresetsModal({
   function handleRename(preset: Party) {
     const next = window.prompt("새 이름을 입력하세요.", preset.name);
     if (next === null) return;
-    onRename(preset.id, next);
+    onRename?.(preset.id, next);
   }
 
   function handleDelete(preset: Party) {
     if (window.confirm(`"${preset.name}"${eulReul(preset.name)} 삭제할까요?`)) {
-      onDelete(preset.id);
+      onDelete?.(preset.id);
     }
   }
 
@@ -57,27 +63,29 @@ export function PartyPresetsModal({
 
   return (
     <Modal title="저장된 파티" onClose={onClose}>
-      <div className="preset-save-row">
-        <input
-          type="text"
-          className="preset-save-input"
-          placeholder="현재 파티를 이 이름으로 저장"
-          value={newName}
-          onChange={(e) => setNewName(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") handleSaveCurrent();
-          }}
-          autoFocus
-        />
-        <button
-          type="button"
-          className="preset-save-button"
-          onClick={handleSaveCurrent}
-          disabled={!newName.trim()}
-        >
-          저장
-        </button>
-      </div>
+      {!loadOnly && (
+        <div className="preset-save-row">
+          <input
+            type="text"
+            className="preset-save-input"
+            placeholder="현재 파티를 이 이름으로 저장"
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleSaveCurrent();
+            }}
+            autoFocus
+          />
+          <button
+            type="button"
+            className="preset-save-button"
+            onClick={handleSaveCurrent}
+            disabled={!newName.trim()}
+          >
+            저장
+          </button>
+        </div>
+      )}
 
       <input
         type="text"
@@ -102,12 +110,16 @@ export function PartyPresetsModal({
                 <button type="button" onClick={() => handleLoad(preset)}>
                   불러오기
                 </button>
-                <button type="button" onClick={() => handleRename(preset)}>
-                  이름변경
-                </button>
-                <button type="button" className="is-danger" onClick={() => handleDelete(preset)}>
-                  삭제
-                </button>
+                {!loadOnly && (
+                  <>
+                    <button type="button" onClick={() => handleRename(preset)}>
+                      이름변경
+                    </button>
+                    <button type="button" className="is-danger" onClick={() => handleDelete(preset)}>
+                      삭제
+                    </button>
+                  </>
+                )}
               </div>
             </li>
           );
