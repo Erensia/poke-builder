@@ -356,6 +356,13 @@
   margin-bottom: 0.4rem;
 }
 
+.battle-fighter-ident {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
 .battle-fighter-name {
   font-weight: 700;
 }

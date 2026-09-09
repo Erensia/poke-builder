@@ -13,8 +13,9 @@ import { useBattleSetup, BATTLE_SELECT_SIZE } from "../hooks/useBattleSetup";
 import { useSlotPresets } from "../hooks/useSlotPresets";
 import { usePartyPresets } from "../hooks/usePartyPresets";
 import { getPokemon, getMove, getItem } from "../lib/data";
-import { getEffectiveForm, megaBadgeLabel } from "../lib/pokemonForm";
-import { MEGA_SYMBOL_SPRITE_URL } from "../lib/sprites";
+import { getEffectiveForm, getEffectiveGender, megaBadgeLabel } from "../lib/pokemonForm";
+import { MEGA_SYMBOL_SPRITE_URL, type SpriteFormOptions } from "../lib/sprites";
+import { PokemonAvatarWithItem } from "./PokemonAvatarWithItem";
 import { TYPE_COLORS } from "../lib/typeColors";
 import { environmentTintBackground } from "../lib/environmentBackground";
 import { rankStageMultiplier } from "../lib/battlePower";
@@ -861,6 +862,21 @@ export function BattleLogPage() {
               // fighter.slot(EvaluatorSlot)은 FormSource를 만족하므로 getEffectiveForm을 그대로 쓸 수 있다.
               const form = getEffectiveForm(pokemon, fighter.slot);
               const hpPercent = Math.max(0, Math.min(100, (fighter.currentHp / fighter.maxHp) * 100));
+              // §1-4: 대전 화면 아바타. 일루전 중이면 위장 대상 종의 스프라이트를(상대가 안 눈치채도록,
+              // 도구 뱃지도 숨김), 아니면 실제 종. 메가스톤을 들어도 실제로 선언(hasMegaEvolved)해야
+              // 메가폼 스프라이트로 바뀐다 — 그래서 item은 스프라이트 옵션에 안 넘기고(메가스톤이
+              // 스프라이트를 강제로 메가폼으로 만들기 때문) 뱃지로만 표시한다.
+              const illusionPokemon = fighter.illusionAs ? getPokemon(fighter.illusionAs) : undefined;
+              const avatarPokemon = illusionPokemon ?? pokemon;
+              const avatarForm: SpriteFormOptions = illusionPokemon
+                ? {}
+                : {
+                    gender: getEffectiveGender(pokemon, fighter.slot),
+                    cosmeticForm: fighter.slot.cosmeticForm,
+                    formVariant: fighter.slot.formVariant,
+                    sizeForm: fighter.slot.sizeForm,
+                    activeMegaForm: fighter.hasMegaEvolved ? form.mega?.form : undefined,
+                  };
               // battleState 안의 slot은 EvaluatorSlot(moves 필드 없음)이라, 4개 기술 목록은
               // 셋업 단계에서 쓴 PartySlot을 활성 슬롯 인덱스로 되짚어 가져온다 — 배틀 중엔 안 바뀜
               const moveIds: (string | null)[] = activeMoveIds(side);
@@ -877,14 +893,24 @@ export function BattleLogPage() {
                   className={`battle-fighter battle-fighter-${side}${winner === side ? " is-winner" : ""}`}
                 >
                   <div className="battle-fighter-head">
-                    <span className="battle-fighter-name">
-                      {displayName}
-                      {/* §4: 스톤을 들어도 실제로 메가진화를 선언(hasMegaEvolved)해야 배지가 뜬다 */}
-                      {!fighter.illusionAs && fighter.hasMegaEvolved && form.mega && (
-                        <span className="battle-fighter-mega-tag">{megaBadgeLabel(form.mega)}</span>
-                      )}
-                      {fighter.currentHp <= 0 && <span className="battle-fighter-fainted"> (기절)</span>}
-                    </span>
+                    <div className="battle-fighter-ident">
+                      <PokemonAvatarWithItem
+                        pokemon={avatarPokemon}
+                        form={avatarForm}
+                        gradientTypes={illusionPokemon ? illusionPokemon.types : form.types}
+                        size={38}
+                        radius={9}
+                        itemId={fighter.illusionAs ? undefined : fighter.slot.item}
+                      />
+                      <span className="battle-fighter-name">
+                        {displayName}
+                        {/* §4: 스톤을 들어도 실제로 메가진화를 선언(hasMegaEvolved)해야 배지가 뜬다 */}
+                        {!fighter.illusionAs && fighter.hasMegaEvolved && form.mega && (
+                          <span className="battle-fighter-mega-tag">{megaBadgeLabel(form.mega)}</span>
+                        )}
+                        {fighter.currentHp <= 0 && <span className="battle-fighter-fainted"> (기절)</span>}
+                      </span>
+                    </div>
                     <div className="battle-status-tags">
                       {fighter.status.condition && (
                         <span className="battle-status-tag is-major">{STATUS_LABELS[fighter.status.condition]}</span>
