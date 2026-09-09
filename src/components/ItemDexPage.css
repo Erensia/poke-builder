@@ -88,6 +88,10 @@
   background: var(--violet-soft);
 }
 
+.itemdex-list-icon {
+  flex-shrink: 0;
+}
+
 .itemdex-list-name {
   font-size: 0.85rem;
   font-weight: 600;
@@ -150,6 +154,17 @@
   font-size: 1.35rem;
   font-family: var(--display);
   background: var(--gradient);
+}
+
+/* 실제 도구 스프라이트가 있으면 그라디언트 배경 없이 이미지만 */
+.itemdex-detail-avatar.has-image {
+  background: none;
+}
+
+.itemdex-detail-avatar-img {
+  width: 46px;
+  height: 46px;
+  object-fit: contain;
 }
 
 .itemdex-detail-head h3 {
