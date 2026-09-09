@@ -375,6 +375,10 @@
   margin-bottom: 0.55rem;
 }
 
+.pokedex-mega-avatar {
+  flex-shrink: 0;
+}
+
 .pokedex-mega-tag {
   font-size: 0.72rem;
   font-weight: 700;

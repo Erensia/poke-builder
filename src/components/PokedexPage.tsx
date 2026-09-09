@@ -84,11 +84,19 @@ function DefensiveProfile({ types }: { types: PokemonType[] }) {
   );
 }
 
-function MegaBlock({ mega }: { mega: MegaEvolution }) {
+function MegaBlock({ pokemon, mega }: { pokemon: Pokemon; mega: MegaEvolution }) {
   const ability = getAbility(mega.ability);
   return (
     <div className="pokedex-mega-block">
       <div className="pokedex-mega-head">
+        <PokemonAvatar
+          pokemon={pokemon}
+          form={{ activeMegaForm: mega.form }}
+          gradientTypes={mega.types}
+          size={40}
+          radius="circle"
+          className="pokedex-mega-avatar"
+        />
         <span className="pokedex-mega-tag">{megaBadgeLabel(mega)}</span>
         <span className="pokedex-mega-types">
           {mega.types.map((t) => (
@@ -208,7 +216,7 @@ function PokedexDetail({ pokemon, onSelectMove }: { pokemon: Pokemon; onSelectMo
           <h4>메가진화</h4>
           <div className="pokedex-mega-list">
             {pokemon.megaEvolutions.map((mega) => (
-              <MegaBlock key={mega.form} mega={mega} />
+              <MegaBlock key={mega.form} pokemon={pokemon} mega={mega} />
             ))}
           </div>
         </section>
