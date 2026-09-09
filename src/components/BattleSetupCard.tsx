@@ -12,7 +12,7 @@ import {
 import { computeRealStats, totalAbilityPoints } from "../lib/statCalculator";
 import { computeBulkPower } from "../lib/battlePower";
 import { TypeBadge } from "./TypeBadge";
-import { PokemonAvatar } from "./PokemonAvatar";
+import { PokemonAvatarWithItem } from "./PokemonAvatarWithItem";
 import { TYPE_COLORS } from "../lib/typeColors";
 import "./PartySlotCard.css";
 
@@ -108,12 +108,13 @@ export function BattleSetupCard({
       </button>
 
       <button type="button" className="party-slot-main" onClick={onPickPokemon}>
-        <PokemonAvatar
+        <PokemonAvatarWithItem
           pokemon={pokemon}
           size={36}
           radius={10}
           gradientTypes={form.types}
-          className="party-slot-avatar"
+          avatarClassName="party-slot-avatar"
+          itemId={slot!.item}
           form={{
             gender: getEffectiveGender(pokemon, slot!),
             cosmeticForm: slot!.cosmeticForm,

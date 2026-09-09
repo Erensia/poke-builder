@@ -1,7 +1,6 @@
 import { useState } from "react";
 import type { AbilityPoints, PartySlot } from "../types/party";
 import { EMPTY_ABILITY_POINTS } from "../types/party";
-import type { WeatherKind } from "../types/weather";
 import { getPokemon } from "../lib/data";
 import { findMegaFormByStone } from "../lib/pokemonForm";
 import { MAX_ABILITY_POINTS_PER_STAT, MAX_ABILITY_POINTS_TOTAL, totalAbilityPoints } from "../lib/statCalculator";
@@ -179,7 +178,19 @@ function useBattleSetupSide(): BattleSetupSlot[] {
 export function useBattleSetup() {
   const a = useBattleSetupSide();
   const b = useBattleSetupSide();
-  const [weather, setWeather] = useState<WeatherKind | null>(null);
 
-  return { a, b, weather, setWeather };
+  /**
+   * 저장된 파티 프리셋의 6칸을 한 진영 빌드에 통째로 적용한다(백로그 §3-2). `PartySlot`이
+   * 배틀 셋업 슬롯 타입과 같아 변환 없이 그대로 넣고, 빈 칸은 비운다.
+   */
+  function loadSide(sideKey: "a" | "b", slots: readonly (PartySlot | null)[]) {
+    const target = sideKey === "a" ? a : b;
+    target.forEach((ctl, i) => {
+      const src = slots[i] ?? null;
+      if (src) ctl.loadSlot(src);
+      else ctl.clearPokemon();
+    });
+  }
+
+  return { a, b, loadSide };
 }

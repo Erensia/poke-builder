@@ -1276,6 +1276,10 @@ export interface ActionLogEntry {
   setSubstitute?: boolean;
   /** 대타출동을 썼지만 이미 대타가 있거나 HP가 부족해서 실패했으면 true */
   substituteSetFailed?: boolean;
+  /** 꼬리자르기로 대타(최대 HP 1/2)를 세운 것 — 교체는 switches 배열로 별도 렌더된다 */
+  shedTailSucceeded?: boolean;
+  /** 꼬리자르기를 썼지만 HP 절반 이하·대타 보유·예비 없음으로 실패했으면 true */
+  shedTailFailed?: boolean;
   /** 사슬묶기로 상대의 이 기술이 봉인됐으면 그 기술 이름 */
   setDisabledMoveName?: string;
   /** 사슬묶기를 썼지만 상대가 아직 기술을 안 썼거나 이미 걸려있어서 실패했으면 true */
@@ -1625,6 +1629,11 @@ export interface SwitchLogEntry {
    * 편이고 `afterMove`도 함께 true다. 로그 문구를 "돌아와!"가 아니라 강제 교체용으로 바꿔 쓴다.
    */
   forced?: boolean;
+  /**
+   * 꼬리자르기로 세운 대타를 넘기며 물러난 교체면 true(§4-1). `afterMove`도 함께 true.
+   * 로그에서 새로 나온 포켓몬을 부르는 "가라!" 줄 대신 "…은 트레이너의 곁으로 돌아간다!"를 쓴다.
+   */
+  shedTail?: boolean;
 }
 
 function isFainted(fighter: BattleFighterState): boolean {
@@ -1897,10 +1906,15 @@ function performSwitch(
   voluntary = true,
   /** 배턴터치: 물러나는 포켓몬의 랭크·급소랭크·대타·멸망카운트·일부 volatile을 새로 나온 포켓몬이 이어받는다. */
   passBaton = false,
+  /** 꼬리자르기: 물러나는 포켓몬이 세운 대타만 새로 나온 포켓몬에게 넘긴다(랭크 등은 안 넘김). */
+  passSubstituteOnly = false,
 ): void {
   const side = sideOf(state, key);
   if (toIndex === side.activeIndex || toIndex < 0 || toIndex >= side.party.length) return;
   const outgoing = side.party[side.activeIndex];
+
+  // 꼬리자르기: 리셋으로 outgoing.substituteHp가 지워지기 전에 인계값을 잡아둔다(배턴터치는 아래 baton 스냅샷에서 별도 처리).
+  const carriedSubstituteHp = passSubstituteOnly ? outgoing.substituteHp : undefined;
 
   // ── 배턴터치: 아래에서 outgoing 상태를 초기화하기 전에 인계할 값을 미리 스냅샷 ──
   const BATON_VOLATILE_KEYS: VolatileCondition[] = [
@@ -1999,6 +2013,9 @@ function performSwitch(
     if (baton.perishCount !== undefined) incoming.perishCount = baton.perishCount;
     incoming.volatile = { active: { ...incoming.volatile.active, ...baton.volatiles } };
   }
+
+  // ── 꼬리자르기: 세운 대타만 인계 ──
+  if (carriedSubstituteHp !== undefined) incoming.substituteHp = carriedSubstituteHp;
 
   // 킬가르도: 등장 시 항상 실드폼으로 복귀
   if (incoming.stanceChangeForms) incoming.currentStanceForm = "shield";
@@ -4565,6 +4582,26 @@ function resolveAction(
     }
   }
 
+  // 꼬리자르기: 최대 HP 1/2을 깎아 그만큼의 대타를 세운 뒤 교대 포켓몬과 교체한다(교체·대타 인계는
+  // runActionPhase에서 처리). HP가 절반 이하이거나, 이미 대타가 있거나, 교대할 살아있는 예비가
+  // 없으면 실패한다 — 대타도 안 세우고 교체도 안 한다.
+  let shedTailFailed = false;
+  let shedTailSucceeded = false;
+  if (effectiveMove.shedTail) {
+    const shedCost = Math.floor(attacker.maxHp / 2);
+    if (
+      attacker.substituteHp !== undefined ||
+      attacker.currentHp <= shedCost ||
+      !hasLivingReserve(sideOf(state, actorKey))
+    ) {
+      shedTailFailed = true;
+    } else {
+      attacker.currentHp -= shedCost;
+      attacker.substituteHp = shedCost;
+      shedTailSucceeded = true;
+    }
+  }
+
   // 사슬묶기: 상대가 "바로 직전에 쓴 기술"(defender.lastMoveId) 하나를 4턴간 봉인한다.
   // 상대가 아직 아무 기술도 안 썼거나(등장 직후) 이미 disable이 걸려있으면 실패한다.
   let setDisabledMoveName: string | undefined;
@@ -4981,6 +5018,8 @@ function resolveAction(
     leechSeedBlockedByGrass: leechSeedBlockedByGrass || undefined,
     setSubstitute: substituteSetFailed ? undefined : effectiveMove.setsSubstitute,
     substituteSetFailed,
+    shedTailSucceeded: shedTailSucceeded || undefined,
+    shedTailFailed: shedTailFailed || undefined,
     setDisabledMoveName,
     disableSetFailed,
     setEncoreMoveName,
@@ -5117,7 +5156,8 @@ export interface RunTurnContext {
   /** 다음에 처리할 order 인덱스(pause 후 resume 시작점) */
   actionIdx: number;
   selfDestructComboKey: FighterKey | undefined;
-  pendingPivot: { side: FighterKey; passBaton: boolean } | undefined;
+  /** passSubstitute: 꼬리자르기 — 세운 대타만 새로 나온 포켓몬에게 인계(랭크 등은 인계 안 함) */
+  pendingPivot: { side: FighterKey; passBaton: boolean; passSubstitute?: boolean } | undefined;
 }
 
 /**
@@ -5392,6 +5432,33 @@ function runActionPhase(ctx: RunTurnContext): RunTurnOutcome | RunTurnPaused {
       };
     }
 
+    // 꼬리자르기(§4-1): 대타 세팅이 성공했으면(HP·대타·예비 조건 통과) 유턴류처럼 여기서 멈추고
+    // 교체 슬롯을 받는다. 세운 대타는 새로 나온 포켓몬이 이어받는다(passSubstitute). 실패했으면
+    // action.shedTailSucceeded가 false라 이 블록은 건너뛴다.
+    if (
+      action.shedTailSucceeded &&
+      !isFainted(state[key]) &&
+      hasLivingReserve(sideOf(state, key))
+    ) {
+      ctx.pendingPivot = { side: key, passBaton: false, passSubstitute: true };
+      return {
+        awaitingSelfSwitch: { side: key, passBaton: false },
+        nextState: state,
+        partialResult: {
+          turnNumber: state.turnNumber,
+          order,
+          actions: [...actions],
+          endOfTurn: [],
+          winner: undefined,
+          expiredScreens: [],
+          turnStartAnnouncements: ctx.turnStartAnnouncements,
+          switches: [...switches],
+          activePokemonIds: { a: state.a.slot.pokemonId, b: state.b.slot.pokemonId },
+        },
+        _ctx: ctx,
+      };
+    }
+
     // 드래곤테일·배대뒤치기·울부짖기·날려버리기: 명중해서(빗나감·행동불능·방어·대타·방음·매직미러·
     // 특성 무효 제외) 상대에게 살아있는 예비가 있고 흡반·뿌리박기로 저항하지 않으면 — 상대를 무작위
     // 예비 포켓몬으로 강제 교체한다. 데미지 기술은 데미지를 이미 준 뒤이고 타입 면역(0배)이면 발동
@@ -5471,7 +5538,7 @@ export function resumeTurn(ctx: RunTurnContext, toIndex: number): RunTurnOutcome
       const fromIndex = side.activeIndex;
       const outgoing = side.party[fromIndex];
       const entryMessages: string[] = [];
-      performSwitch(ctx.state, pivot.side, toIndex, entryMessages, true, pivot.passBaton);
+      performSwitch(ctx.state, pivot.side, toIndex, entryMessages, true, pivot.passBaton, pivot.passSubstitute);
       const inFighter = side.party[toIndex];
       ctx.switches.push({
         side: pivot.side,
@@ -5481,6 +5548,7 @@ export function resumeTurn(ctx: RunTurnContext, toIndex: number): RunTurnOutcome
         inPokemonId: inFighter.illusionAs ?? inFighter.slot.pokemonId, // §6-1
         entryMessages,
         afterMove: true,
+        shedTail: pivot.passSubstitute || undefined,
       });
     }
   }

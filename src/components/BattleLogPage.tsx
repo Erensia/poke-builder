@@ -1,6 +1,5 @@
 import { Fragment, useState, type ReactNode } from "react";
 import { BattleSetupCard } from "./BattleSetupCard";
-import { WeatherPicker } from "./WeatherPicker";
 import { PokemonPickerModal } from "./PokemonPickerModal";
 import { MovePickerModal } from "./MovePickerModal";
 import { AbilityPickerModal } from "./AbilityPickerModal";
@@ -8,11 +7,15 @@ import { ItemPickerModal } from "./ItemPickerModal";
 import { NaturePickerModal } from "./NaturePickerModal";
 import { PointsEditorModal } from "./PointsEditorModal";
 import { SlotPresetsModal } from "./SlotPresetsModal";
+import { PartyPresetsModal } from "./PartyPresetsModal";
 import { CosmeticFormPickerModal } from "./CosmeticFormPickerModal";
 import { useBattleSetup, BATTLE_SELECT_SIZE } from "../hooks/useBattleSetup";
 import { useSlotPresets } from "../hooks/useSlotPresets";
+import { usePartyPresets } from "../hooks/usePartyPresets";
 import { getPokemon, getMove, getItem } from "../lib/data";
-import { getEffectiveForm, megaBadgeLabel } from "../lib/pokemonForm";
+import { getEffectiveForm, getEffectiveGender, megaBadgeLabel } from "../lib/pokemonForm";
+import { MEGA_SYMBOL_SPRITE_URL, type SpriteFormOptions } from "../lib/sprites";
+import { PokemonAvatarWithItem } from "./PokemonAvatarWithItem";
 import { TYPE_COLORS } from "../lib/typeColors";
 import { environmentTintBackground } from "../lib/environmentBackground";
 import { rankStageMultiplier } from "../lib/battlePower";
@@ -50,6 +53,7 @@ type PickerState =
   | { kind: "cosmeticForm"; side: Side; slotIndex: SlotIndex }
   | { kind: "move"; side: Side; slotIndex: SlotIndex; moveIndex: 0 | 1 | 2 | 3 }
   | { kind: "slotPresets"; side: Side; slotIndex: SlotIndex }
+  | { kind: "loadParty"; side: Side }
   | null;
 
 /** 이번 턴 한 편의 선택 — 기술 또는 교체(교대 슬롯 인덱스) */
@@ -331,6 +335,7 @@ const REAL_STAT_LABELS: { key: keyof BaseStats; label: string }[] = [
 export function BattleLogPage() {
   const setup = useBattleSetup();
   const slotPresets = useSlotPresets();
+  const partyPresets = usePartyPresets();
   const [picker, setPicker] = useState<PickerState>(null);
   const [battleState, setBattleState] = useState<BattleState | null>(null);
   const [log, setLog] = useState<TurnResult[]>([]);
@@ -487,7 +492,6 @@ export function BattleLogPage() {
     const state = createBattleState({
       a: { slots: aParty, movesList: aParty.map(movesOf) },
       b: { slots: bParty, movesList: bParty.map(movesOf) },
-      weather: setup.weather ?? undefined,
     });
     setPartySlots({ a: aParty, b: bParty });
     setBattleState(state);
@@ -682,9 +686,6 @@ export function BattleLogPage() {
           <h2>배틀타워</h2>
           <p>실전 배틀 시뮬레이션</p>
         </div>
-        {!battleState && !selecting && (
-          <WeatherPicker weather={setup.weather} onChange={setup.setWeather} />
-        )}
       </header>
 
       {!battleState && !selecting && (
@@ -693,6 +694,15 @@ export function BattleLogPage() {
             <Fragment key={side}>
               <div className="battle-setup-column">
                 <div className="battle-setup-column-title">
+                  {partyPresets.presets.length > 0 && (
+                    <button
+                      type="button"
+                      className="battle-setup-load-party"
+                      onClick={() => setPicker({ kind: "loadParty", side })}
+                    >
+                      저장된 파티 불러오기
+                    </button>
+                  )}
                   {side === "a" ? "내 파티" : "상대 파티"}{" "}
                   <span className="battle-setup-column-hint">6마리까지 빌드 · 4마리 이상이면 3마리 선출</span>
                 </div>
@@ -852,6 +862,21 @@ export function BattleLogPage() {
               // fighter.slot(EvaluatorSlot)은 FormSource를 만족하므로 getEffectiveForm을 그대로 쓸 수 있다.
               const form = getEffectiveForm(pokemon, fighter.slot);
               const hpPercent = Math.max(0, Math.min(100, (fighter.currentHp / fighter.maxHp) * 100));
+              // §1-4: 대전 화면 아바타. 일루전 중이면 위장 대상 종의 스프라이트를(상대가 안 눈치채도록,
+              // 도구 뱃지도 숨김), 아니면 실제 종. 메가스톤을 들어도 실제로 선언(hasMegaEvolved)해야
+              // 메가폼 스프라이트로 바뀐다 — 그래서 item은 스프라이트 옵션에 안 넘기고(메가스톤이
+              // 스프라이트를 강제로 메가폼으로 만들기 때문) 뱃지로만 표시한다.
+              const illusionPokemon = fighter.illusionAs ? getPokemon(fighter.illusionAs) : undefined;
+              const avatarPokemon = illusionPokemon ?? pokemon;
+              const avatarForm: SpriteFormOptions = illusionPokemon
+                ? {}
+                : {
+                    gender: getEffectiveGender(pokemon, fighter.slot),
+                    cosmeticForm: fighter.slot.cosmeticForm,
+                    formVariant: fighter.slot.formVariant,
+                    sizeForm: fighter.slot.sizeForm,
+                    activeMegaForm: fighter.hasMegaEvolved ? form.mega?.form : undefined,
+                  };
               // battleState 안의 slot은 EvaluatorSlot(moves 필드 없음)이라, 4개 기술 목록은
               // 셋업 단계에서 쓴 PartySlot을 활성 슬롯 인덱스로 되짚어 가져온다 — 배틀 중엔 안 바뀜
               const moveIds: (string | null)[] = activeMoveIds(side);
@@ -868,14 +893,24 @@ export function BattleLogPage() {
                   className={`battle-fighter battle-fighter-${side}${winner === side ? " is-winner" : ""}`}
                 >
                   <div className="battle-fighter-head">
-                    <span className="battle-fighter-name">
-                      {displayName}
-                      {/* §4: 스톤을 들어도 실제로 메가진화를 선언(hasMegaEvolved)해야 배지가 뜬다 */}
-                      {!fighter.illusionAs && fighter.hasMegaEvolved && form.mega && (
-                        <span className="battle-fighter-mega-tag">{megaBadgeLabel(form.mega)}</span>
-                      )}
-                      {fighter.currentHp <= 0 && <span className="battle-fighter-fainted"> (기절)</span>}
-                    </span>
+                    <div className="battle-fighter-ident">
+                      <PokemonAvatarWithItem
+                        pokemon={avatarPokemon}
+                        form={avatarForm}
+                        gradientTypes={illusionPokemon ? illusionPokemon.types : form.types}
+                        size={38}
+                        radius={9}
+                        itemId={fighter.illusionAs ? undefined : fighter.slot.item}
+                      />
+                      <span className="battle-fighter-name">
+                        {displayName}
+                        {/* §4: 스톤을 들어도 실제로 메가진화를 선언(hasMegaEvolved)해야 배지가 뜬다 */}
+                        {!fighter.illusionAs && fighter.hasMegaEvolved && form.mega && (
+                          <span className="battle-fighter-mega-tag">{megaBadgeLabel(form.mega)}</span>
+                        )}
+                        {fighter.currentHp <= 0 && <span className="battle-fighter-fainted"> (기절)</span>}
+                      </span>
+                    </div>
                     <div className="battle-status-tags">
                       {fighter.status.condition && (
                         <span className="battle-status-tag is-major">{STATUS_LABELS[fighter.status.condition]}</span>
@@ -1106,6 +1141,14 @@ export function BattleLogPage() {
                                   setMegaDeclared((p) => ({ ...p, [side]: e.target.checked }))
                                 }
                               />
+                              {MEGA_SYMBOL_SPRITE_URL && (
+                                <img
+                                  className="battle-mega-toggle-icon"
+                                  src={MEGA_SYMBOL_SPRITE_URL}
+                                  alt=""
+                                  draggable={false}
+                                />
+                              )}
                               <span>
                                 메가진화{form.mega ? ` (${megaBadgeLabel(form.mega)})` : ""}
                               </span>
@@ -1465,6 +1508,12 @@ export function BattleLogPage() {
                         {!action.blockedReason && action.hit && action.setSubstitute && <> · 대타를 세웠다!</>}
                         {!action.blockedReason && action.hit && action.substituteSetFailed && (
                           <> · 그러나 실패하고 말았다!</>
+                        )}
+                        {!action.blockedReason && action.hit && action.shedTailSucceeded && (
+                          <> · 꼬리를 잘라 분신을 만들었다!</>
+                        )}
+                        {!action.blockedReason && action.hit && action.shedTailFailed && (
+                          <> · 그러나 실패했다!</>
                         )}
                         {!action.blockedReason && action.hit && action.setDisabledMoveName && (
                           <> · {action.setDisabledMoveName} 봉인!</>
@@ -2249,6 +2298,12 @@ export function BattleLogPage() {
                           const inN = getPokemon(sw.inPokemonId)?.name ?? "포켓몬";
                           return (
                             <div key={`swa-${j}`}>
+                              {sw.shedTail && (
+                                <div className="battle-turn-line">
+                                  {outN}
+                                  {eunNeun(outN)} 트레이너의 곁으로 돌아간다!
+                                </div>
+                              )}
                               <div className="battle-turn-line">돌아와! {outN}!</div>
                               <div className="battle-turn-line">가라! {inN}!</div>
                               {sw.entryMessages.map((m, k) => (
@@ -2615,6 +2670,20 @@ export function BattleLogPage() {
               onLoad={(preset) => ctl.loadSlot(preset.slot)}
               onRename={slotPresets.renamePreset}
               onDelete={slotPresets.deletePreset}
+            />
+          );
+        })()}
+
+      {picker?.kind === "loadParty" &&
+        (() => {
+          const side = picker.side;
+          return (
+            <PartyPresetsModal
+              presets={partyPresets.presets}
+              loadOnly
+              loadTargetLabel={`${side === "a" ? "내 파티" : "상대 파티"} 빌드`}
+              onClose={() => setPicker(null)}
+              onLoad={(preset) => setup.loadSide(side, preset.slots)}
             />
           );
         })()}
