@@ -70,6 +70,8 @@ def category_of(path: Path) -> str | None:
 def resize_contain(im: Image.Image, size: tuple[int, int]) -> Image.Image:
     """비율을 유지해 목표 안에 맞추고, 투명 캔버스 중앙에 배치한다."""
     im = im.convert("RGBA")
+    if im.size == size:
+        return im  # 이미 목표 크기면 재리샘플하지 않는다(LANCZOS 가 배율 1.0 에서도 가장자리 알파를 흐린다)
     tw, th = size
     scale = min(tw / im.width, th / im.height)
     nw, nh = max(1, round(im.width * scale)), max(1, round(im.height * scale))
