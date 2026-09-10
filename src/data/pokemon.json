@@ -3449,9 +3449,54 @@
     },
     "abilities": ["쓱쓱", "적응력"],
     "hiddenAbility": "틀깨기",
+    "formVariants": [
+      {
+        "id": "male",
+        "label": "수컷",
+        "types": [
+          "물",
+          "고스트"
+        ],
+        "baseStats": {
+          "hp": 120,
+          "atk": 112,
+          "def": 65,
+          "spa": 80,
+          "spd": 75,
+          "spe": 78
+        },
+        "abilities": [
+          "쓱쓱",
+          "적응력"
+        ],
+        "hiddenAbility": "틀깨기",
+        "standard": true
+      },
+      {
+        "id": "female",
+        "label": "암컷",
+        "types": [
+          "물",
+          "고스트"
+        ],
+        "baseStats": {
+          "hp": 120,
+          "atk": 92,
+          "def": 65,
+          "spa": 100,
+          "spd": 75,
+          "spe": 78
+        },
+        "abilities": [
+          "쓱쓱",
+          "적응력"
+        ],
+        "hiddenAbility": "틀깨기"
+      }
+    ],
     "genderCategory": "both",
+    "formVariantByGender": true,
     "weightKg": 39.5,
-    "genderedSprite": true,
     "learnset": [
       "객기",
       "겁나는얼굴",
