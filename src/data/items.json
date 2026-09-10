@@ -1036,5 +1036,29 @@
     "name": "킬라플로르나이트",
     "description": "",
     "category": "mega-stone"
+  },
+  {
+    "id": "앱솔나이트Z",
+    "name": "앱솔나이트Z",
+    "description": "",
+    "category": "mega-stone"
+  },
+  {
+    "id": "보만다나이트",
+    "name": "보만다나이트",
+    "description": "",
+    "category": "mega-stone"
+  },
+  {
+    "id": "갑주무사나이트",
+    "name": "갑주무사나이트",
+    "description": "",
+    "category": "mega-stone"
+  },
+  {
+    "id": "드닐레이브나이트",
+    "name": "드닐레이브나이트",
+    "description": "",
+    "category": "mega-stone"
   }
 ]

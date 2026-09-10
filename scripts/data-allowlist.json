@@ -5,12 +5,6 @@
     "에셋을 실제로 추가하면 여기서도 지운다."
   ],
   "spriteMissingPokemon": [],
-  "spriteMissingMegaForm": [
-    "한카리아스-메가Z",
-    "루카리오-메가Z"
-  ],
-  "spriteMissingItem": [
-    "한카리아스나이트Z",
-    "루카리오나이트Z"
-  ]
+  "spriteMissingMegaForm": [],
+  "spriteMissingItem": []
 }
