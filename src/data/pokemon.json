@@ -22855,6 +22855,7 @@
       }
     ],
     "genderCategory": "both",
+    "formVariantByGender": true,
     "weightKg": 28.0,
     "learnset": [
       "비장의무기",

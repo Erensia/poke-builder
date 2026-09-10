@@ -137,6 +137,15 @@ export interface Pokemon {
    * 스프라이트를 고르는 데만 쓴다.
    */
   genderedSprite?: boolean;
+  /**
+   * 에써르·대쓰여너처럼 "성별 = 폼"인 종. `formVariants`의 폼 id 가 "male"/"female" 이고,
+   * 슬롯의 성별 선택이 곧 그 폼 선택이 된다:
+   *  - 슬롯 카드에서 별도 "모습" 핍을 숨기고 "성별" 핍 하나로 폼·종족값·특성·기술·스프라이트를 제어
+   *  - getEffectiveGender 는 이 종의 성별을 slot.gender 가 아니라 slot.formVariant 로 판정한다
+   *    (slot.gender 는 안 쓴다 — 성별 핍이 formVariant 를 토글)
+   * genderedSprite 와 달리 종족값·특성·기술까지 성별로 갈리므로 formVariants 로 모델링한다.
+   */
+  formVariantByGender?: boolean;
   /** 메가진화가 없으면 생략. 2종 이상 가진 포켓몬은 배열 원소를 늘린다. */
   megaEvolutions?: MegaEvolution[];
   /** 킬가르도(배틀스위치)처럼 배틀 중 기술 카테고리에 따라 폼이 바뀌는 포켓몬만 채운다 */
