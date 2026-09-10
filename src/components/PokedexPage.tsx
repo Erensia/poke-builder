@@ -163,6 +163,7 @@ function PokedexDetail({ pokemon, onSelectMove }: { pokemon: Pokemon; onSelectMo
                 <p className="pokedex-ability-desc">
                   {f.types.join("/")} · 종족값 {Object.values(f.baseStats).reduce((a, b) => a + b, 0)} · 특성{" "}
                   {[...f.abilities, ...(f.hiddenAbility ? [`${f.hiddenAbility}(숨김)`] : [])].join(", ")}
+                  {f.learnset ? ` · 전용 기술 ${f.learnset.length}개` : ""}
                 </p>
               </li>
             ))}

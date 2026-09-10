@@ -71,6 +71,12 @@ export interface FormVariant {
   abilities: string[];
   hiddenAbility?: string;
   weightKg?: number;
+  /**
+   * 이 폼 전용 습득 기술. 에써르(수컷/암컷)처럼 폼에 따라 배우는 기술이 갈리는 종만 채운다.
+   * 생략하면 종 공통 learnset(Pokemon.learnset)을 그대로 쓴다 — 기준(standard) 폼의 기술은
+   * Pokemon.learnset 이 곧 그 폼 것이므로 여기 채우지 않는다.
+   */
+  learnset?: string[];
   /** 종의 기준 폼(Pokemon 최상위 필드와 동일)이면 true. 배열에 정확히 하나만 있어야 한다 */
   standard?: boolean;
 }

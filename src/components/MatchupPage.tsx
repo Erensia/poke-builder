@@ -368,6 +368,7 @@ export function MatchupPage() {
         (() => (
           <MovePickerModal
             pokemon={attackerPokemon}
+            formVariant={attacker.slot.formVariant}
             currentMoveIds={[attacker.slot.moveId]}
             onClose={() => setPicker(null)}
             onSelect={(moveId) => {
