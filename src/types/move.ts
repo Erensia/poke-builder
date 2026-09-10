@@ -733,4 +733,15 @@ export interface Move {
    * 없으면 실패한다(ActionLogEntry.reviveFailed).
    */
   revivesFaintedAlly?: boolean;
+  /**
+   * 문어굳히기(Octolock): 변화기. 명중 시 상대를 octolock 상태로 만든다 — 자기 의지로 교체
+   * 불가(고스트 예외) + 매 턴 종료 시 방어·특수방어 1랭크씩 감소. 인분·우격다짐엔 걸리지
+   * 않는다(부가효과 취급). 이미 걸려 있으면 재적용 안 함.
+   */
+  octolock?: boolean;
+  /**
+   * 물고버티기(Jaw Lock): 데미지 기술. 명중 시 사용자와 대상 양쪽을 jawLock 상태로 만든다 —
+   * 양쪽 다 자기 의지로 교체 불가(고스트 예외). 한쪽이 자리를 비우면 양쪽 다 해제.
+   */
+  jawLock?: boolean;
 }

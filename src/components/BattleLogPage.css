@@ -687,6 +687,14 @@
   margin-bottom: 0.4rem;
 }
 
+/* PR-C1b: 도망봉인 안내 — 교체 토글 자리 대체 */
+.battle-input-hint.is-muted {
+  margin-bottom: 0.4rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-muted, #7a7a8c);
+}
+
 /* §4: 메가진화 선언 토글 */
 .battle-mega-toggle {
   display: flex;

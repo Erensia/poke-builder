@@ -69,6 +69,13 @@ export const NO_STATUS_CONDITION: StatusConditionState = { condition: null, turn
  *    취급이라 아예 걸리지 않는다.
  *  - syrupCoat(물엿범벅): 시럽봄에 맞으면 3턴 지속. 매 턴 종료 시 스피드가 1랭크 떨어지고(심술꾸러기·
  *    클리어바디류 존중), 턴 종료마다 카운터가 1씩 줄어 0에서 자동 해제된다.
+ *  - octolock(문어굳히기): 문어굳히기에 맞으면 배틀이 끝날 때까지(leechSeed처럼 턴 카운터 없이) 유지된다.
+ *    걸린 쪽은 자기 의지로 교체할 수 없고(고스트타입은 예외 — 항상 교체 가능), 매 턴 종료 시
+ *    방어·특수방어가 1랭크씩 떨어진다(클리어바디류 존중). 문어굳히기를 건 쪽이 자리를 비우면
+ *    (교체·기절 후 교체) 해제된다.
+ *  - jawLock(물고버티기): 물고버티기에 맞으면 사용자와 대상 양쪽에 걸린다. 걸린 동안 양쪽 다
+ *    자기 의지로 교체할 수 없다(고스트타입 예외). 한쪽이 자리를 비우면(교체·기절) 양쪽 다 해제.
+ *    지속 데미지·랭크 변화는 없다.
  *  - attract(헤롱헤롱): ingrain/aquaRing/leechSeed와 같은 "배틀 끝까지 유지"형 — 1v1이라 교체로
  *    해제될 일이 없다. 걸려있는 동안 매 행동 판정마다 50% 확률로 그 턴 행동을 통째로 못 한다
  *    (마비와 같은 확률 축이지만 별도 상태이상이 아니라 volatile — 본가에서도 주 상태이상과는
@@ -90,7 +97,9 @@ export type VolatileCondition =
   | "attract"
   | "bound"
   | "saltCure"
-  | "syrupCoat";
+  | "syrupCoat"
+  | "octolock"
+  | "jawLock";
 
 /** 기술이 상대(또는 자신)에게 행동방해 효과를 걸 때 쓰는 정보 */
 export interface VolatileInflictEffect {
