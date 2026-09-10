@@ -370,6 +370,14 @@ export interface Ability {
    * HP를 흡수하면, 상대가 회복하는 대신 같은 양만큼 데미지를 입는다.
    */
   reverseDrainHealsToDamage?: boolean;
+  /**
+   * 위기회피(Emergency Exit): 공격을 받아 HP가 최대치의 절반 이하로 떨어지면(직전엔 절반 초과,
+   * 떨어진 뒤에도 0 초과) 지닌 포켓몬과 교체돼 물러난다. 이 시뮬레이터에서는 유턴류와 같은
+   * pause 흐름으로 유저가 나올 포켓몬을 고른다. 살아있는 예비가 없거나 도망봉인·뿌리박기
+   * 상태면 발동하지 않는다. (설치물·상태이상 등 간접 데미지로 인한 발동은 아직 미배선 — 기술
+   * 데미지만.)
+   */
+  exitsFieldAtHalfHp?: boolean;
   /** 일렉트릭메이커: 배틀에 등장하면 이 필드를 편다(이미 다른 필드가 있으면 실패). */
   setsFieldOnEntry?: FieldKind;
   /**
