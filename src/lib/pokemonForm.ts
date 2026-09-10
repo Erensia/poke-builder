@@ -46,6 +46,14 @@ export function resolveFormVariant(pokemon: Pokemon, slot: { formVariant?: strin
   return fv && !fv.standard ? fv : undefined;
 }
 
+/**
+ * 슬롯이 고른 폼의 습득 기술 목록. 폼 전용 learnset(FormVariant.learnset)이 있으면 그것을,
+ * 없으면 종 공통 learnset을 쓴다. 에써르처럼 성별(폼)마다 배우는 기술이 다른 종에 필요하다.
+ */
+export function resolveLearnset(pokemon: Pokemon, slot: { formVariant?: string }): string[] {
+  return resolveFormVariant(pokemon, slot)?.learnset ?? pokemon.learnset;
+}
+
 export interface EffectiveForm {
   /** 메가진화 상태면 해당 폼, 아니면 undefined */
   mega?: MegaEvolution;

@@ -2645,6 +2645,7 @@ export function BattleLogPage() {
           return (
             <MovePickerModal
               pokemon={pokemon}
+              formVariant={ctl.slot.formVariant}
               currentMoveIds={ctl.slot.moves}
               onClose={() => setPicker(null)}
               onSelect={(moveId) => {
