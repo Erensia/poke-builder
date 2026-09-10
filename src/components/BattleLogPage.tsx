@@ -363,6 +363,8 @@ export function BattleLogPage() {
     ctx: RunTurnContext;
     side: Side;
     passBaton: boolean;
+    /** 위기회피로 인한 강제 퇴장이면 true (유턴류와 안내 문구가 다르다) */
+    emergencyExit?: boolean;
   } | null>(null);
   // 편별 턴 입력 모드 — "기술" 또는 "교체"
   const [inputMode, setInputMode] = useState<{ a: "move" | "switch"; b: "move" | "switch" }>({ a: "move", b: "move" });
@@ -578,6 +580,7 @@ export function BattleLogPage() {
         ctx: outcome._ctx,
         side: outcome.awaitingSelfSwitch.side,
         passBaton: outcome.awaitingSelfSwitch.passBaton,
+        emergencyExit: outcome.awaitingSelfSwitch.emergencyExit,
       });
       return;
     }
@@ -1091,9 +1094,17 @@ export function BattleLogPage() {
                       return (
                         <div className="battle-switch-panel">
                           <div className="battle-switch-panel-title">
-                            {pokemon.name}
-                            {eunNeun(pokemon.name)} 돌아온다!
-                            {pendingPivot.passBaton && " (능력 변화 인계)"}
+                            {pendingPivot.emergencyExit ? (
+                              <>
+                                {pokemon.name}의 위기회피! 위험을 피해 물러난다!
+                              </>
+                            ) : (
+                              <>
+                                {pokemon.name}
+                                {eunNeun(pokemon.name)} 돌아온다!
+                                {pendingPivot.passBaton && " (능력 변화 인계)"}
+                              </>
+                            )}
                             <br />
                             내보낼 포켓몬을 선택하세요!
                           </div>
@@ -1627,6 +1638,12 @@ export function BattleLogPage() {
                         <div className="battle-turn-line is-muted">
                           {actorName}와(과) {defenderName}
                           {eunNeun(defenderName)} 서로 물고 늘어져 교체할 수 없다!
+                        </div>
+                      )}
+                      {/* PR-C2b: 위기회피 — 피격으로 HP 절반 이하 → 퇴장 (실제 교체는 pendingPivot 패널) */}
+                      {!action.blockedReason && action.hit && action.triggersDefenderEmergencyExit && (
+                        <div className="battle-turn-line is-muted">
+                          {defenderName}의 {action.emergencyExitAbilityName ?? "위기회피"}!
                         </div>
                       )}
                       {/* C-5 명중 빗나감 — 메인 줄은 "OO의 기합구슬 — !"로 끝내고 여기서 별도 줄 */}

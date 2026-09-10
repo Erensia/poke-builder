@@ -1494,6 +1494,10 @@ export interface ActionLogEntry {
   octolockApplied?: boolean;
   /** 물고버티기(Move.jawLock): 양쪽을 도망봉인 상태로 만들었으면 true */
   jawLockApplied?: boolean;
+  /** 위기회피: 이번 행동으로 방어측 HP가 절반 이하로 떨어져 방어측이 물러나야 하면 true */
+  triggersDefenderEmergencyExit?: boolean;
+  /** triggersDefenderEmergencyExit를 일으킨 방어측 특성 이름 */
+  emergencyExitAbilityName?: string;
   /** 탈(Disguise)처럼 방어측 특성이 이번 데미지를 통째로 무효화했으면 그 특성 이름 */
   hitNegatedByAbilityName?: string;
   /** hitNegatedByAbilityName이 발동하며(=탈이 벗겨지며) 방어측이 입은 반동 데미지 */
@@ -2204,6 +2208,9 @@ function resolveAction(
   // 매직미러 반사 구간에서만 이 바인딩들을 통째로 맞바꾼다(let). 그 외에는 사실상 const처럼 쓰인다.
   let attacker = state[actorKey];
   let defender = state[defenderKey];
+  // 위기회피(Emergency Exit): 이번 행동이 방어측 HP를 절반 초과→절반 이하로 넘겼는지 판정하려면
+  // 행동 시작 시점의 방어측 HP가 필요하다(매직미러 스왑 전 값 — EE는 원래 방어측 것).
+  const defenderHpAtActionStart = defender.currentHp;
   // 로그 이름용 — 행동/피격 시점의 활성 종 id(일루전 위장 반영). 아래 모든 return에 싣는다.
   const actorPokemonId = attacker.illusionAs ?? attacker.slot.pokemonId;
   const defenderPokemonId = defender.illusionAs ?? defender.slot.pokemonId;
@@ -5165,6 +5172,18 @@ function resolveAction(
   attacker.pendingCheekPouchHeal = undefined;
   defender.pendingCheekPouchHeal = undefined;
 
+  // 위기회피(Emergency Exit): 이번 행동으로 방어측(매직미러 스왑 전 원래 방어측) HP가 절반
+  // 초과 → 절반 이하(단 0 초과)로 넘어갔고 이 특성을 가졌으면, runActionPhase가 유턴류와 같은
+  // pause 흐름으로 방어측을 물러나게 하도록 플래그만 세운다. 실제 교체·예비 유무·봉인 판정은
+  // runActionPhase에서 한다.
+  const origDefender = state[defenderKey];
+  const origDefenderAbility = origDefender.effectiveAbilityId ? getAbility(origDefender.effectiveAbilityId) : undefined;
+  const triggersDefenderEmergencyExit =
+    !!origDefenderAbility?.exitsFieldAtHalfHp &&
+    origDefender.currentHp > 0 &&
+    defenderHpAtActionStart * 2 > origDefender.maxHp &&
+    origDefender.currentHp * 2 <= origDefender.maxHp;
+
   return {
     actor: actorKey,
     actorPokemonId,
@@ -5337,6 +5356,8 @@ function resolveAction(
     reviveFailed: reviveFailed || undefined,
     octolockApplied: octolockApplied || undefined,
     jawLockApplied: jawLockApplied || undefined,
+    triggersDefenderEmergencyExit: triggersDefenderEmergencyExit || undefined,
+    emergencyExitAbilityName: triggersDefenderEmergencyExit ? origDefenderAbility!.name : undefined,
   };
 }
 
@@ -5372,7 +5393,7 @@ export interface RunTurnOutcome {
  * 처리된다. _ctx는 불투명 컨텍스트(직렬화하지 말 것 — random·Move 객체를 물고 있다).
  */
 export interface RunTurnPaused {
-  awaitingSelfSwitch: { side: FighterKey; passBaton: boolean };
+  awaitingSelfSwitch: { side: FighterKey; passBaton: boolean; emergencyExit?: boolean };
   nextState: BattleState;
   partialResult: TurnResult;
   _ctx: RunTurnContext;
@@ -5743,6 +5764,37 @@ function runActionPhase(ctx: RunTurnContext): RunTurnOutcome | RunTurnPaused {
       // 아직 안 움직였다면 이번 턴 행동을 못 하게 막는다(끌려나온 포켓몬). 우선도 -6이라 대개
       // 상대는 이미 움직인 뒤라 이 플래그는 무해하게 무시된다.
       ctx.didSwitch[oppKey] = true;
+    }
+
+    // 위기회피(Emergency Exit): 이번 공격으로 방어측 HP가 절반 이하로 떨어졌고 방어측에 살아있는
+    // 예비가 있으며 도망봉인·뿌리박기가 아니면 — 유턴류와 같은 pause 흐름으로 방어측을 물러나게
+    // 한다(유저가 나올 포켓몬을 고른다). 드래곤테일 등으로 이미 이번 턴 교체됐으면(didSwitch) 스킵.
+    if (
+      action.triggersDefenderEmergencyExit &&
+      !isFainted(state[oppKey]) &&
+      !ctx.didSwitch[oppKey] &&
+      hasLivingReserve(sideOf(state, oppKey)) &&
+      !isForcedSwitchBlocked(state[oppKey]) &&
+      !isTrappedFromSwitching(state[oppKey])
+    ) {
+      ctx.didSwitch[oppKey] = true;
+      ctx.pendingPivot = { side: oppKey, passBaton: false };
+      return {
+        awaitingSelfSwitch: { side: oppKey, passBaton: false, emergencyExit: true },
+        nextState: state,
+        partialResult: {
+          turnNumber: state.turnNumber,
+          order,
+          actions: [...actions],
+          endOfTurn: [],
+          winner: undefined,
+          expiredScreens: [],
+          turnStartAnnouncements: ctx.turnStartAnnouncements,
+          switches: [...switches],
+          activePokemonIds: { a: state.a.slot.pokemonId, b: state.b.slot.pokemonId },
+        },
+        _ctx: ctx,
+      };
     }
 
     // 발버둥 반동이나 자폭류로 "상대를 쓰러뜨리면서 자신도 같이 쓰러지는" 행동 하나 안에서는
