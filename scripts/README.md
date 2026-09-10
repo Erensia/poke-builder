@@ -42,10 +42,13 @@ Node 파이프라인과 분리돼 있어 `npm run build` 에는 안 걸린다 �
 | 포켓몬 | `public/sprites/{1~9}세대/` | 128×128 RGBA WEBP |
 | 메가진화 | `public/sprites/메가진화/` | 128×128 RGBA WEBP (`메가진화.webp` 심볼 제외) |
 | 도구 | `public/sprites/도구/` | 160×160 RGBA WEBP |
-| 메가스톤 | `public/sprites/도구/메가스톤/` | 40×40 RGBA PNG |
+| 메가스톤 | `public/sprites/도구/메가스톤/` | 40×40 RGBA PNG + 콘텐츠 채움율 75% |
 | 타입 | `public/sprites/타입/` | SVG — 건드리지 않음 |
 
 비율을 유지해 목표 크기 안에 맞추고 투명 캔버스 중앙에 배치한다. 확장자가 바뀌면 옛 파일은 지운다.
+
+**메가스톤 콘텐츠 채움율**: 원본마다 내부 여백이 제각각(65~100%)이라, 불투명 영역의 긴 변이
+캔버스의 75%가 되도록 다시 스케일해 중앙 배치한다(±6%p 벗어나면 이탈). 다른 카테고리는 원본 여백을 그대로 둔다.
 
 ```
 python scripts/normalize_sprites.py                      # 전체 검사(이탈 목록, exit 1)

@@ -39,6 +39,11 @@ SPEC = {
 WEBP_OPTS = {"quality": 85, "method": 6}
 PNG_OPTS = {"optimize": True}
 
+# 카테고리별 콘텐츠 채움율(불투명 영역의 긴 변 / 캔버스 긴 변) 목표. 메가스톤은 원본마다
+# 내부 여백이 제각각(65~100%)이라 이 값으로 통일한다. 여기 없는 카테고리는 원본 여백을 그대로 둔다.
+CONTENT_FILL = {"메가스톤": 0.75}
+CONTENT_FILL_TOL = 0.06  # 목표에서 ±6%p 벗어나면 이탈로 본다
+
 # 카테고리별 예외 파일(규격에서 일부러 벗어난 것). 파일명 stem 으로 매칭.
 SKIP_STEMS = {"메가진화": {"메가진화"}}  # 범용 메가 심볼(200x200)
 
@@ -74,6 +79,30 @@ def resize_contain(im: Image.Image, size: tuple[int, int]) -> Image.Image:
     return canvas
 
 
+def content_fill(im: Image.Image) -> float:
+    """불투명 콘텐츠의 긴 변 / 캔버스 긴 변. 완전 투명이면 0."""
+    bbox = im.convert("RGBA").getchannel("A").getbbox()
+    if not bbox:
+        return 0.0
+    return max(bbox[2] - bbox[0], bbox[3] - bbox[1]) / max(im.size)
+
+
+def apply_content_fill(im: Image.Image, target: float) -> Image.Image:
+    """콘텐츠만 잘라내 목표 채움율로 다시 스케일하고 투명 캔버스 중앙에 놓는다."""
+    im = im.convert("RGBA")
+    W, H = im.size
+    bbox = im.getchannel("A").getbbox()
+    if not bbox:
+        return im
+    content = im.crop(bbox)
+    scale = round(max(W, H) * target) / max(content.size)
+    nw, nh = max(1, round(content.width * scale)), max(1, round(content.height * scale))
+    content = content.resize((nw, nh), Image.LANCZOS)
+    canvas = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    canvas.paste(content, ((W - nw) // 2, (H - nh) // 2), content)
+    return canvas
+
+
 def check_one(path: Path, category: str):
     """(ok, 사유목록). ok=False 면 규격 이탈."""
     size, fmt, ext, mode = SPEC[category]
@@ -88,6 +117,11 @@ def check_one(path: Path, category: str):
                 reasons.append(f"포맷 {im.format} → {fmt}")
             if im.mode != mode:
                 reasons.append(f"모드 {im.mode} → {mode}")
+            want = CONTENT_FILL.get(category)
+            if want is not None:
+                cur = content_fill(im)
+                if abs(cur - want) > CONTENT_FILL_TOL:
+                    reasons.append(f"콘텐츠 채움율 {cur:.0%} → {want:.0%}")
     except Exception as e:  # noqa: BLE001
         return False, [f"열기 실패: {e}"]
     return (not reasons), reasons
@@ -98,6 +132,9 @@ def fix_one(path: Path, category: str) -> Path:
     size, fmt, ext, _mode = SPEC[category]
     with Image.open(path) as im:
         out = resize_contain(im, size)
+    want = CONTENT_FILL.get(category)
+    if want is not None:
+        out = apply_content_fill(out, want)
     target = path.with_suffix(ext)
     if fmt == "WEBP":
         out.save(target, "WEBP", **WEBP_OPTS)
