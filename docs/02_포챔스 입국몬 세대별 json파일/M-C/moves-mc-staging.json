@@ -6,7 +6,9 @@
     "베어가르기: 섀도클로/크로스촙과 동일한 하이크리티컬 물리기. 그대로 병합 가능.",
     "대검돌격: 위력/명중/PP 는 그대로 병합 가능하나, 부가효과(사용 후 다음 상대 턴까지 '피격 시 필중 + 피해 2배' 볼라틸)는 battleSimulator 미구현 → 엔진 트랙에서 별도 처리. 병합 시 _flags 로 표시.",
     "노려맞히기: 인텔리레온 시그니처(스나이프샷). 수치 사용자 확정(2026-09-10). '공격 대상 변경 무시'는 1v1 시뮬에 리다이렉트할 아군이 없어 무의미 → 실질적으로 하이크리티컬 물 특수기. 에어커터형으로 병합 가능.",
-    "찌리리따끔따끔: 찌르성게 시그니처(Zing Zap). 수치 사용자 확정(2026-09-10). 아이언헤드형(30% 풀죽음). 그대로 병합 가능."
+    "찌리리따끔따끔: 찌르성게 시그니처(Zing Zap). 수치 사용자 확정(2026-09-10). 아이언헤드형(30% 풀죽음). 그대로 병합 가능.",
+    "화염볼(에이스번)·전광쌍격(빠르모트)·오버드라이브(스트린더): 수치 사용자 확정(2026-09-10). 데미지기라 그대로 병합 가능(전광쌍격의 자기 전기타입 소실만 미구현).",
+    "코트체인지(에이스번)·회생의기도(빠르모트): 변화기, 효과(필드 교환 / 기절 동료 부활)는 battleSimulator 미구현 → 엔진 트랙. 데이터만 등록."
   ],
   "moves": [
     {
@@ -66,6 +68,79 @@
       "tags": ["접촉", "풀죽음"],
       "inflictsVolatile": [{ "volatile": "flinch", "target": "opponent", "chance": 30 }],
       "makesContact": true
+    },
+    {
+      "id": "화염볼",
+      "name": "화염볼",
+      "type": "불꽃",
+      "category": "physical",
+      "power": 120,
+      "accuracy": 90,
+      "pp": 8,
+      "priority": 0,
+      "effect": "작은 돌을 태운 불꽃의 공으로 상대를 공격한다. 사용자와 대상의 얼음 상태를 치료한다. 10%의 확률로 상대를 화상 상태로 만든다.",
+      "tags": ["비접촉", "폭탄", "화상"],
+      "classification": ["구슬/폭탄"],
+      "makesContact": false,
+      "inflictsStatus": [{ "status": "burn", "chance": 10 }],
+      "thawsUserOnUse": true
+    },
+    {
+      "id": "코트체인지",
+      "name": "코트체인지",
+      "type": "노말",
+      "category": "status",
+      "power": null,
+      "accuracy": 100,
+      "pp": 12,
+      "priority": 0,
+      "effect": "이상한 힘으로 서로의 필드 효과를 교체한다.",
+      "tags": [],
+      "makesContact": false,
+      "_flags": ["양쪽 필드(설치기·스크린) 교환 — battleSimulator 미구현, 엔진 트랙. 매치업 페이지에선 효과 없음"]
+    },
+    {
+      "id": "회생의기도",
+      "name": "회생의기도",
+      "type": "노말",
+      "category": "status",
+      "power": null,
+      "accuracy": null,
+      "pp": 1,
+      "priority": 0,
+      "effect": "자애로운 마음으로 기도하여 기절한 교대 포켓몬을 HP가 절반인 상태로 부활시킨다.",
+      "tags": ["회복"],
+      "makesContact": false,
+      "_flags": ["기절 동료 부활 — 파티/교체 인프라 필요, 엔진 트랙. 메가진화 상태였으면 메가 상태로 부활"]
+    },
+    {
+      "id": "전광쌍격",
+      "name": "전광쌍격",
+      "type": "전기",
+      "category": "physical",
+      "power": 120,
+      "accuracy": 100,
+      "pp": 8,
+      "priority": 0,
+      "effect": "전신의 전기를 모두 방출해서 큰 데미지를 준다. 사용 후 자신의 전기 타입이 없어진다.",
+      "tags": ["타입 변경", "접촉", "펀치"],
+      "classification": ["펀치"],
+      "makesContact": true,
+      "_flags": ["사용 후 자신 전기타입 소실 — 미구현, 데미지 계산만 유효"]
+    },
+    {
+      "id": "오버드라이브",
+      "name": "오버드라이브",
+      "type": "전기",
+      "category": "special",
+      "power": 80,
+      "accuracy": 100,
+      "pp": 12,
+      "priority": 0,
+      "effect": "기타나 베이스를 쳐서 큰 울림과 강한 진동을 상대에게 전달하여 공격한다.",
+      "tags": ["광역-상대", "소리", "비접촉"],
+      "classification": ["소리"],
+      "makesContact": false
     }
   ]
 }
