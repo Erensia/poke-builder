@@ -5,10 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "npm run validate:data && tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "sprites": "node scripts/gen-sprite-manifest.mjs"
+    "sprites": "node scripts/gen-sprite-manifest.mjs",
+    "validate:data": "node scripts/validate-data.mjs"
   },
   "dependencies": {
     "react": "^19.2.8",

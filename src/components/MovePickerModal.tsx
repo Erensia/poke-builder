@@ -2,11 +2,14 @@ import { useState } from "react";
 import { Modal } from "./Modal";
 import { TypeBadge } from "./TypeBadge";
 import { getMove } from "../lib/data";
+import { resolveLearnset } from "../lib/pokemonForm";
 import type { Pokemon } from "../types/pokemon";
 import "./MovePickerModal.css";
 
 interface MovePickerModalProps {
   pokemon: Pokemon;
+  /** 슬롯이 고른 폼 변종 id. 폼마다 배우는 기술이 다른 종(에써르)에서 기술 목록을 가른다. */
+  formVariant?: string;
   currentMoveIds: (string | null)[];
   onSelect: (moveId: string) => void;
   onClear: () => void;
@@ -17,6 +20,7 @@ const CATEGORY_LABEL = { physical: "물리", special: "특수", status: "변화"
 
 export function MovePickerModal({
   pokemon,
+  formVariant,
   currentMoveIds,
   onSelect,
   onClear,
@@ -24,7 +28,7 @@ export function MovePickerModal({
 }: MovePickerModalProps) {
   const [query, setQuery] = useState("");
 
-  const learnedMoves = pokemon.learnset
+  const learnedMoves = resolveLearnset(pokemon, { formVariant })
     .map((id) => getMove(id))
     .filter((m): m is NonNullable<typeof m> => m !== undefined)
     .filter((m) => m.name.includes(query.trim()));

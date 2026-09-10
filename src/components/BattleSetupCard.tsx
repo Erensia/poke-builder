@@ -180,7 +180,7 @@ export function BattleSetupCard({
         {pokemon.genderCategory === "both" && (
           <button type="button" className="party-meta-pip" onClick={onToggleGender}>
             <span className="party-meta-label">성별</span>
-            <span className="party-meta-value">{genderLabel(slot!.gender ?? "male")}</span>
+            <span className="party-meta-value">{genderLabel(getEffectiveGender(pokemon, slot!) ?? "male")}</span>
           </button>
         )}
         {pokemon.sizeForms && (
@@ -195,7 +195,7 @@ export function BattleSetupCard({
             </span>
           </button>
         )}
-        {pokemon.formVariants && (
+        {pokemon.formVariants && !pokemon.formVariantByGender && (
           <button type="button" className="party-meta-pip" onClick={onCycleFormVariant}>
             <span className="party-meta-label">모습</span>
             <span className="party-meta-value">

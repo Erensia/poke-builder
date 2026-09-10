@@ -148,6 +148,7 @@ export function PartyBoard() {
           return (
             <MovePickerModal
               pokemon={pokemon}
+              formVariant={slot.formVariant}
               currentMoveIds={slot.moves}
               onClose={() => setPicker(null)}
               onSelect={(moveId) => {

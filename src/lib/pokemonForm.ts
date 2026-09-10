@@ -46,6 +46,14 @@ export function resolveFormVariant(pokemon: Pokemon, slot: { formVariant?: strin
   return fv && !fv.standard ? fv : undefined;
 }
 
+/**
+ * 슬롯이 고른 폼의 습득 기술 목록. 폼 전용 learnset(FormVariant.learnset)이 있으면 그것을,
+ * 없으면 종 공통 learnset을 쓴다. 에써르처럼 성별(폼)마다 배우는 기술이 다른 종에 필요하다.
+ */
+export function resolveLearnset(pokemon: Pokemon, slot: { formVariant?: string }): string[] {
+  return resolveFormVariant(pokemon, slot)?.learnset ?? pokemon.learnset;
+}
+
 export interface EffectiveForm {
   /** 메가진화 상태면 해당 폼, 아니면 undefined */
   mega?: MegaEvolution;
@@ -168,6 +176,8 @@ export function getEffectiveAbilityId(form: EffectiveForm, slotAbility: string |
 /** getEffectiveGender가 실제로 필요로 하는 부분만 뽑은 형태. PartySlot이나 MatchupSlot 둘 다 만족한다 */
 export interface GenderSource {
   gender?: PokemonGender;
+  /** formVariantByGender 종에서 성별을 결정하는 폼 id("male"/"female"). 그 외 종에서는 무시된다. */
+  formVariant?: string;
 }
 
 /**
@@ -186,6 +196,8 @@ export function getEffectiveGender(pokemon: Pokemon, slot: GenderSource): Pokemo
     case "genderless":
       return null;
     case "both":
+      // 에써르류: 성별 핍이 slot.formVariant 를 토글하므로 성별도 거기서 읽는다(slot.gender 안 씀).
+      if (pokemon.formVariantByGender) return slot.formVariant === "female" ? "female" : "male";
       return slot.gender ?? "male";
   }
 }
