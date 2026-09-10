@@ -9935,5 +9935,273 @@
     ],
     "makesContact": false,
     "setsSyrupCoat": true
+  },
+  {
+    "id": "베어가르기",
+    "name": "베어가르기",
+    "type": "노말",
+    "category": "physical",
+    "power": 80,
+    "accuracy": 100,
+    "pp": 20,
+    "priority": 0,
+    "effect": "발톱이나 낫 등으로 상대를 베어 갈라서 공격한다. 급소에 맞을 확률이 높다.",
+    "tags": [
+      "급소",
+      "접촉",
+      "베기"
+    ],
+    "highCritRatio": true,
+    "classification": [
+      "베기"
+    ],
+    "makesContact": true
+  },
+  {
+    "id": "대검돌격",
+    "name": "대검돌격",
+    "type": "드래곤",
+    "category": "physical",
+    "power": 120,
+    "accuracy": 100,
+    "pp": 8,
+    "priority": 0,
+    "effect": "몸을 내던지는 무모한 돌격. 기술을 사용한 다음 상대의 공격이 반드시 명중하고 데미지를 2배로 입게 된다.",
+    "tags": [
+      "접촉"
+    ],
+    "makesContact": true
+  },
+  {
+    "id": "노려맞히기",
+    "name": "노려맞히기",
+    "type": "물",
+    "category": "special",
+    "power": 85,
+    "accuracy": 100,
+    "pp": 16,
+    "priority": 0,
+    "effect": "상대의 기술을 끌어모으는 특성이나 기술의 영향을 무시하고 선택한 상대를 공격할 수 있다. 급소에 맞을 확률이 높다.",
+    "tags": [
+      "급소",
+      "비접촉"
+    ],
+    "highCritRatio": true,
+    "makesContact": false
+  },
+  {
+    "id": "찌리리따끔따끔",
+    "name": "찌리리따끔따끔",
+    "type": "전기",
+    "category": "physical",
+    "power": 80,
+    "accuracy": 100,
+    "pp": 12,
+    "priority": 0,
+    "effect": "상대에게 부딪쳐 강력한 전기를 날려서 찌리리따끔따끔하게 만든다. 30%의 확률로 상대를 풀죽게 만든다.",
+    "tags": [
+      "접촉",
+      "풀죽음"
+    ],
+    "inflictsVolatile": [
+      {
+        "volatile": "flinch",
+        "target": "opponent",
+        "chance": 30
+      }
+    ],
+    "makesContact": true
+  },
+  {
+    "id": "화염볼",
+    "name": "화염볼",
+    "type": "불꽃",
+    "category": "physical",
+    "power": 120,
+    "accuracy": 90,
+    "pp": 8,
+    "priority": 0,
+    "effect": "작은 돌을 태운 불꽃의 공으로 상대를 공격한다. 사용자와 대상의 얼음 상태를 치료한다. 10%의 확률로 상대를 화상 상태로 만든다.",
+    "tags": [
+      "비접촉",
+      "폭탄",
+      "화상"
+    ],
+    "classification": [
+      "구슬/폭탄"
+    ],
+    "makesContact": false,
+    "inflictsStatus": [
+      {
+        "status": "burn",
+        "chance": 10
+      }
+    ],
+    "thawsUserOnUse": true
+  },
+  {
+    "id": "코트체인지",
+    "name": "코트체인지",
+    "type": "노말",
+    "category": "status",
+    "power": null,
+    "accuracy": 100,
+    "pp": 12,
+    "priority": 0,
+    "effect": "이상한 힘으로 서로의 필드 효과를 교체한다.",
+    "tags": [],
+    "makesContact": false
+  },
+  {
+    "id": "회생의기도",
+    "name": "회생의기도",
+    "type": "노말",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 1,
+    "priority": 0,
+    "effect": "자애로운 마음으로 기도하여 기절한 교대 포켓몬을 HP가 절반인 상태로 부활시킨다.",
+    "tags": [
+      "회복"
+    ],
+    "makesContact": false
+  },
+  {
+    "id": "전광쌍격",
+    "name": "전광쌍격",
+    "type": "전기",
+    "category": "physical",
+    "power": 120,
+    "accuracy": 100,
+    "pp": 8,
+    "priority": 0,
+    "effect": "전신의 전기를 모두 방출해서 큰 데미지를 준다. 사용 후 자신의 전기 타입이 없어진다.",
+    "tags": [
+      "타입 변경",
+      "접촉",
+      "펀치"
+    ],
+    "classification": [
+      "펀치"
+    ],
+    "makesContact": true
+  },
+  {
+    "id": "오버드라이브",
+    "name": "오버드라이브",
+    "type": "전기",
+    "category": "special",
+    "power": 80,
+    "accuracy": 100,
+    "pp": 12,
+    "priority": 0,
+    "effect": "기타나 베이스를 쳐서 큰 울림과 강한 진동을 상대에게 전달하여 공격한다.",
+    "tags": [
+      "광역-상대",
+      "소리",
+      "비접촉"
+    ],
+    "classification": [
+      "소리"
+    ],
+    "makesContact": false
+  },
+  {
+    "id": "우유마시기",
+    "name": "우유마시기",
+    "type": "노말",
+    "category": "status",
+    "power": null,
+    "accuracy": null,
+    "pp": 8,
+    "priority": 0,
+    "effect": "자신 또는 같은 편의 HP를 최대 HP의 절반만큼 회복한다.",
+    "tags": [
+      "회복"
+    ],
+    "makesContact": false,
+    "healsFraction": 0.5
+  },
+  {
+    "id": "드럼어택",
+    "name": "드럼어택",
+    "type": "풀",
+    "category": "physical",
+    "power": 80,
+    "accuracy": 100,
+    "pp": 12,
+    "priority": 0,
+    "effect": "드럼 연주로 뿌리를 조종해서 공격한다. 상대의 스피드를 1랭크 떨어뜨린다.",
+    "tags": [
+      "랭크",
+      "비접촉"
+    ],
+    "makesContact": false,
+    "statChanges": [
+      {
+        "target": "opponent",
+        "stat": "spe",
+        "delta": -1
+      }
+    ]
+  },
+  {
+    "id": "문어굳히기",
+    "name": "문어굳히기",
+    "type": "격투",
+    "category": "status",
+    "power": null,
+    "accuracy": 100,
+    "pp": 16,
+    "priority": 0,
+    "effect": "상대를 도망칠 수 없게 한다. 굳히기에 당한 상대는 매 턴 방어와 특수방어가 1랭크 떨어진다.",
+    "tags": [
+      "랭크",
+      "고정-상대"
+    ],
+    "makesContact": false
+  },
+  {
+    "id": "스타어설트",
+    "name": "스타어설트",
+    "type": "격투",
+    "category": "physical",
+    "power": 170,
+    "accuracy": 100,
+    "pp": 8,
+    "priority": 0,
+    "effect": "굵은 줄기를 휘둘러서 공격한다. 단 자신도 비틀거리기 때문에 다음 턴은 움직일 수 없다.",
+    "tags": [
+      "반동-휴식",
+      "비접촉"
+    ],
+    "makesContact": false,
+    "inflictsVolatile": [
+      {
+        "volatile": "recharge",
+        "target": "self"
+      }
+    ]
+  },
+  {
+    "id": "물고버티기",
+    "name": "물고버티기",
+    "type": "악",
+    "category": "physical",
+    "power": 80,
+    "accuracy": 100,
+    "pp": 12,
+    "priority": 0,
+    "effect": "어느 한쪽이 기절할 때까지 교체할 수 없게 된다. 한쪽의 포켓몬이 없어지면 효과가 사라진다.",
+    "tags": [
+      "고정-상대",
+      "접촉",
+      "턱"
+    ],
+    "classification": [
+      "물기"
+    ],
+    "makesContact": true
   }
 ]

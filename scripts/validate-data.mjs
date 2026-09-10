@@ -137,6 +137,8 @@ for (const p of POKEMON) {
     checkStats(`${at}.formVariant "${fv.id}"`, fv.baseStats);
     (fv.abilities ?? []).forEach((a) => checkAbility(`${at}.formVariant "${fv.id}".abilities`, a));
     checkAbility(`${at}.formVariant "${fv.id}".hiddenAbility`, fv.hiddenAbility);
+    for (const mv of fv.learnset ?? [])
+      if (!moveIds.has(mv)) err(`${at}.formVariant "${fv.id}".learnset: 기술 "${mv}" 가 moves.json 에 없음`);
   }
   for (const [field, forms] of [["formVariants", p.formVariants], ["sizeForms", p.sizeForms], ["cosmeticForms", p.cosmeticForms]]) {
     if (!forms) continue;
