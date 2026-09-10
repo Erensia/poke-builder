@@ -39,10 +39,13 @@ SPEC = {
 WEBP_OPTS = {"quality": 85, "method": 6}
 PNG_OPTS = {"optimize": True}
 
-# 카테고리별 콘텐츠 채움율(불투명 영역의 긴 변 / 캔버스 긴 변) 목표. 메가스톤은 원본마다
-# 내부 여백이 제각각(65~100%)이라 이 값으로 통일한다. 여기 없는 카테고리는 원본 여백을 그대로 둔다.
-CONTENT_FILL = {"메가스톤": 0.75}
+# 카테고리별 콘텐츠 채움율 목표. 메가스톤은 원본마다 내부 여백이 제각각(65~100%)이라 통일한다.
+# 측정 기준은 "선명한 몸통"(알파 >= SOLID_THR)의 긴 변 / 캔버스 긴 변 — 전체 알파 bbox(희미한
+# 후광 포함)로 재면 후광 두께에 따라 몸통 크기가 달라 보인다. 기존 스톤은 전부 몸통이 26px(=0.65).
+# 여기 없는 카테고리는 원본 여백을 그대로 둔다.
+CONTENT_FILL = {"메가스톤": 0.65}
 CONTENT_FILL_TOL = 0.06  # 목표에서 ±6%p 벗어나면 이탈로 본다
+SOLID_THR = 128           # 이 알파 이상을 "몸통"으로 본다
 
 # 카테고리별 예외 파일(규격에서 일부러 벗어난 것). 파일명 stem 으로 매칭.
 SKIP_STEMS = {"메가진화": {"메가진화"}}  # 범용 메가 심볼(200x200)
@@ -81,23 +84,32 @@ def resize_contain(im: Image.Image, size: tuple[int, int]) -> Image.Image:
     return canvas
 
 
+def _solid_bbox(im: Image.Image):
+    """알파 >= SOLID_THR 인 '몸통' 영역의 bbox."""
+    mask = im.convert("RGBA").getchannel("A").point(lambda v: 255 if v >= SOLID_THR else 0)
+    return mask.getbbox()
+
+
 def content_fill(im: Image.Image) -> float:
-    """불투명 콘텐츠의 긴 변 / 캔버스 긴 변. 완전 투명이면 0."""
-    bbox = im.convert("RGBA").getchannel("A").getbbox()
+    """몸통(알파 >= SOLID_THR)의 긴 변 / 캔버스 긴 변. 완전 투명이면 0."""
+    bbox = _solid_bbox(im)
     if not bbox:
         return 0.0
     return max(bbox[2] - bbox[0], bbox[3] - bbox[1]) / max(im.size)
 
 
 def apply_content_fill(im: Image.Image, target: float) -> Image.Image:
-    """콘텐츠만 잘라내 목표 채움율로 다시 스케일하고 투명 캔버스 중앙에 놓는다."""
+    """몸통이 캔버스의 target 비율이 되도록 다시 스케일하고 투명 캔버스 중앙에 놓는다.
+    자르기는 전체 알파 bbox 로(후광까지 보존), 스케일 배율은 몸통 크기로 정한다."""
     im = im.convert("RGBA")
     W, H = im.size
-    bbox = im.getchannel("A").getbbox()
-    if not bbox:
+    full = im.getchannel("A").getbbox()
+    solid = _solid_bbox(im)
+    if not full or not solid:
         return im
-    content = im.crop(bbox)
-    scale = round(max(W, H) * target) / max(content.size)
+    solid_long = max(solid[2] - solid[0], solid[3] - solid[1])
+    scale = round(max(W, H) * target) / solid_long
+    content = im.crop(full)
     nw, nh = max(1, round(content.width * scale)), max(1, round(content.height * scale))
     content = content.resize((nw, nh), Image.LANCZOS)
     canvas = Image.new("RGBA", (W, H), (0, 0, 0, 0))
