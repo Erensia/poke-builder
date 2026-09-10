@@ -290,6 +290,14 @@ function hitAbilityEventLines(
       </>,
     );
   }
+  if (ev.setFieldOnHit) {
+    push(
+      <>
+        {defenderName}의 {ev.abilityName}! {ev.setFieldOnHit}
+        {roEuro(ev.setFieldOnHit)} 바뀌었다!
+      </>,
+    );
+  }
   return lines;
 }
 
@@ -1935,6 +1943,20 @@ export function BattleLogPage() {
                           {roEuro(action.sandSpitWeather)} 바뀌었다!
                         </div>
                       )}
+                      {/* PR-C2: 넘치는씨 — 피격으로 그래스필드 설정 */}
+                      {!action.blockedReason && !action.hits && action.seedSowerField && (
+                        <div className="battle-turn-line is-muted">
+                          {defenderName}의 넘치는씨! {action.seedSowerField}
+                          {roEuro(action.seedSowerField)} 바뀌었다!
+                        </div>
+                      )}
+                      {/* PR-C2: 해감액 — 흡수기가 회복 대신 데미지 */}
+                      {!action.blockedReason && action.hit && !!action.liquidOozeDamage && (
+                        <div className="battle-turn-line is-muted">
+                          {defenderName}의 {action.liquidOozeAbilityName ?? "해감액"}! {actorName}
+                          {eunNeun(actorName)} 체력을 흡수해 오히려 {action.liquidOozeDamage} 데미지를 입었다!
+                        </div>
+                      )}
                       {/* 마법가루 — 상대 타입을 단일 타입으로 치환 */}
                       {!action.blockedReason && action.overwroteTargetType && (
                         <div className="battle-turn-line is-muted">
@@ -2425,6 +2447,12 @@ export function BattleLogPage() {
                       <>
                         {turnName(e.actor)}가 씨앗으로 체력을 {e.leechSeedHealAmount} 회복 (남은 HP{" "}
                         {e.remainingHp})
+                      </>
+                    ) : e.liquidOozeDamage ? (
+                      <>
+                        {turnName(e.actor)}
+                        {eunNeun(turnName(e.actor))} 해감액을 빨아들여 {e.damage} 데미지 (남은 HP {e.remainingHp})
+                        {e.fainted && " · 기절!"}
                       </>
                     ) : e.wishHeal ? (
                       <>
