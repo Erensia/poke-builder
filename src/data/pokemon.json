@@ -9989,6 +9989,24 @@
         },
         "ability": "매직미러",
         "weightKg": 49.0
+      },
+      {
+        "form": "앱솔-메가Z",
+        "megaStone": "앱솔나이트Z",
+        "types": [
+          "악",
+          "고스트"
+        ],
+        "baseStats": {
+          "hp": 65,
+          "atk": 154,
+          "def": 60,
+          "spa": 75,
+          "spd": 60,
+          "spe": 151
+        },
+        "ability": "예리함",
+        "weightKg": 49.0
       }
     ],
     "genderCategory": "both",
