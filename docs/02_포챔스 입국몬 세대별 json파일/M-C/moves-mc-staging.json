@@ -8,7 +8,9 @@
     "노려맞히기: 인텔리레온 시그니처(스나이프샷). 수치 사용자 확정(2026-09-10). '공격 대상 변경 무시'는 1v1 시뮬에 리다이렉트할 아군이 없어 무의미 → 실질적으로 하이크리티컬 물 특수기. 에어커터형으로 병합 가능.",
     "찌리리따끔따끔: 찌르성게 시그니처(Zing Zap). 수치 사용자 확정(2026-09-10). 아이언헤드형(30% 풀죽음). 그대로 병합 가능.",
     "화염볼(에이스번)·전광쌍격(빠르모트)·오버드라이브(스트린더): 수치 사용자 확정(2026-09-10). 데미지기라 그대로 병합 가능(전광쌍격의 자기 전기타입 소실만 미구현).",
-    "코트체인지(에이스번)·회생의기도(빠르모트): 변화기, 효과(필드 교환 / 기절 동료 부활)는 battleSimulator 미구현 → 엔진 트랙. 데이터만 등록."
+    "코트체인지(에이스번)·회생의기도(빠르모트): 변화기, 효과(필드 교환 / 기절 동료 부활)는 battleSimulator 미구현 → 엔진 트랙. 데이터만 등록.",
+    "우유마시기(고고트)·드럼어택(고릴타)·스타어설트(창파나이트): 수치 사용자 확정(2026-09-10). 그대로 병합 가능. 스타어설트=Meteor Assault 의 Champions 버전(위력 170, 반동-휴식).",
+    "문어굳히기(케오퍼스)·물고버티기(마피티프): 수치 사용자 확정. 도망/교체 봉인 + (문어굳히기) 매턴 상대 랭크 감소는 battleSimulator 미구현 → 엔진 트랙. 데미지·데이터만."
   ],
   "moves": [
     {
@@ -141,6 +143,77 @@
       "tags": ["광역-상대", "소리", "비접촉"],
       "classification": ["소리"],
       "makesContact": false
+    },
+    {
+      "id": "우유마시기",
+      "name": "우유마시기",
+      "type": "노말",
+      "category": "status",
+      "power": null,
+      "accuracy": null,
+      "pp": 8,
+      "priority": 0,
+      "effect": "자신 또는 같은 편의 HP를 최대 HP의 절반만큼 회복한다.",
+      "tags": ["회복"],
+      "makesContact": false,
+      "healsFraction": 0.5
+    },
+    {
+      "id": "드럼어택",
+      "name": "드럼어택",
+      "type": "풀",
+      "category": "physical",
+      "power": 80,
+      "accuracy": 100,
+      "pp": 12,
+      "priority": 0,
+      "effect": "드럼 연주로 뿌리를 조종해서 공격한다. 상대의 스피드를 1랭크 떨어뜨린다.",
+      "tags": ["랭크", "비접촉"],
+      "makesContact": false,
+      "statChanges": [{ "target": "opponent", "stat": "spe", "delta": -1 }]
+    },
+    {
+      "id": "문어굳히기",
+      "name": "문어굳히기",
+      "type": "격투",
+      "category": "status",
+      "power": null,
+      "accuracy": 100,
+      "pp": 16,
+      "priority": 0,
+      "effect": "상대를 도망칠 수 없게 한다. 굳히기에 당한 상대는 매 턴 방어와 특수방어가 1랭크 떨어진다.",
+      "tags": ["랭크", "고정-상대"],
+      "makesContact": false,
+      "_flags": ["도망 봉인 + 매턴 상대 방어·특방 -1 볼라틸 — battleSimulator 미구현, 엔진 트랙. 데이터만"]
+    },
+    {
+      "id": "스타어설트",
+      "name": "스타어설트",
+      "type": "격투",
+      "category": "physical",
+      "power": 170,
+      "accuracy": 100,
+      "pp": 8,
+      "priority": 0,
+      "effect": "굵은 줄기를 휘둘러서 공격한다. 단 자신도 비틀거리기 때문에 다음 턴은 움직일 수 없다.",
+      "tags": ["반동-휴식", "비접촉"],
+      "makesContact": false,
+      "inflictsVolatile": [{ "volatile": "recharge", "target": "self" }]
+    },
+    {
+      "id": "물고버티기",
+      "name": "물고버티기",
+      "type": "악",
+      "category": "physical",
+      "power": 80,
+      "accuracy": 100,
+      "pp": 12,
+      "priority": 0,
+      "effect": "어느 한쪽이 기절할 때까지 교체할 수 없게 된다. 한쪽의 포켓몬이 없어지면 효과가 사라진다.",
+      "tags": ["고정-상대", "접촉", "턱"],
+      "classification": ["물기"],
+      "makesContact": true,
+      "_flags": ["양쪽 교체 봉인(한쪽 기절 시까지) — battleSimulator 미구현. 데미지 계산만 유효"]
     }
   ]
 }
