@@ -925,12 +925,15 @@ function resolveEntryAbilityEffects(
     const pokemonName = getPokemon(slot.pokemonId)?.name ?? "포켓몬";
 
     if (ability.lowersOpponentStatOnEntry) {
-      const { stat, delta } = ability.lowersOpponentStatOnEntry;
-      const before = opponent.stages[stat];
-      opponent.stages = applyStageDelta(opponent.stages, stat, contraryDelta(opponent, delta));
-      if (opponent.stages[stat] !== before) {
-        announcements.push(`${pokemonName}의 ${ability.name}! 상대의 공격이 떨어졌다!`);
-      }
+      const opponentName = getPokemon(opponentSlot.pokemonId)?.name ?? "상대";
+      applyIntimidateWithReaction(
+        opponent,
+        ability.lowersOpponentStatOnEntry,
+        pokemonName,
+        ability.name,
+        opponentName,
+        announcements,
+      );
     }
     // 감미로운꿀(포챔스판): 등장 시 상대의 회피율을 1랭크 떨어뜨린다(위협의 회피율 버전).
     if (ability.lowersOpponentEvasionOnEntry !== undefined) {
@@ -1119,6 +1122,8 @@ export interface HitAbilityEvent {
   mummifiedAttackerAbilityName?: string;
   wanderingSpiritSwapped?: boolean;
   sandSpitWeather?: WeatherKind;
+  /** 넘치는씨: 피격으로 필드가 이 값으로 바뀌었으면 그 필드 */
+  setFieldOnHit?: FieldKind;
 }
 
 /** 한 번의 기술 사용 결과 로그 */
@@ -1261,6 +1266,10 @@ export interface ActionLogEntry {
   leppaRestoredPpItemName?: string;
   /** 흡수기(Move.drainFraction)로 회복한 양(큰뿌리 배율 반영 후) */
   drainHealAmount?: number;
+  /** 해감액: 흡수기가 회복 대신 공격측에게 입힌 데미지 */
+  liquidOozeDamage?: number;
+  /** liquidOozeDamage를 일으킨 방어측 특성 이름 */
+  liquidOozeAbilityName?: string;
   /** 조개껍질방울로 회복한 양 */
   shellBellHealAmount?: number;
   /** 즉시 회복형 변화기(광합성·달빛·날개쉬기·게으름피우기·치유파동)로 회복한 양 */
@@ -1451,6 +1460,8 @@ export interface ActionLogEntry {
   wanderingSpiritSwapped?: boolean;
   /** 모래뿜기 — 피격으로 날씨를 바꿨으면 그 날씨 */
   sandSpitWeather?: WeatherKind;
+  /** 넘치는씨 — 피격으로 필드를 바꿨으면 그 필드 */
+  seedSowerField?: FieldKind;
   /** 마법가루 — 상대의 타입을 이 타입 하나로 덮어썼으면 그 타입 */
   overwroteTargetType?: PokemonType;
   /** 저수처럼 absorbsType이 랭크업 대신 회복을 줄 때, 그 회복량 */
@@ -1541,6 +1552,8 @@ export interface EndOfTurnLogEntry {
   leechSeedDamage?: number;
   /** 씨뿌리기로 상대에게서 흡수해 회복한 양(시드를 심은 쪽의 로그, 큰뿌리 배율 반영 후) */
   leechSeedHealAmount?: number;
+  /** 해감액: 씨뿌리기 흡수가 회복 대신 데미지로 반사됐으면 true(damage에 실제 수치) */
+  liquidOozeDamage?: boolean;
   /** 희망사항이 발동해 회복한 양 */
   wishHeal?: number;
   /** 자뭉열매/오랭열매가 턴 종료 시점에 발동해 회복한 양 */
@@ -1718,6 +1731,46 @@ export function isTrappedFromSwitching(fighter: BattleFighterState): boolean {
 }
 
 /**
+ * 위협(lowersOpponentStatOnEntry)을 opponent에게 적용하되, opponent의 특성 반응까지 처리한다.
+ *  - 파수견(guardsAgainstIntimidate): 하락을 무시하고 공격이 1랭크 오른다.
+ *  - 주눅(raisesStatWhenIntimidated): 공격은 정상적으로 떨어지고, 스피드도 1랭크 오른다.
+ *  - 그 외: 정상 하락.
+ * 로그 문구를 log 배열에 push한다(등장 안내 텍스트 전용 흐름이라 문구는 고정형).
+ */
+function applyIntimidateWithReaction(
+  opponent: BattleFighterState,
+  intimidate: { stat: BattleStatKey; delta: number },
+  intimidaterName: string,
+  intimidateAbilityName: string,
+  opponentName: string,
+  log: string[],
+): void {
+  const oppAbility = opponent.effectiveAbilityId ? getAbility(opponent.effectiveAbilityId) : undefined;
+  if (oppAbility?.guardsAgainstIntimidate) {
+    const before = opponent.stages[intimidate.stat];
+    opponent.stages = applyStageDelta(opponent.stages, intimidate.stat, contraryDelta(opponent, 1));
+    if (opponent.stages[intimidate.stat] !== before) {
+      log.push(`${opponentName}의 ${oppAbility.name}! 위협에 아랑곳 않고 공격이 올라갔다!`);
+    }
+    return;
+  }
+  const before = opponent.stages[intimidate.stat];
+  opponent.stages = applyStageDelta(opponent.stages, intimidate.stat, contraryDelta(opponent, intimidate.delta));
+  if (opponent.stages[intimidate.stat] !== before) {
+    log.push(`${intimidaterName}의 ${intimidateAbilityName}! 상대의 공격이 떨어졌다!`);
+  }
+  // 주눅은 스피드만 올리므로 문구를 고정한다.
+  if (oppAbility?.raisesStatWhenIntimidated) {
+    const { stat, delta } = oppAbility.raisesStatWhenIntimidated;
+    const b2 = opponent.stages[stat];
+    opponent.stages = applyStageDelta(opponent.stages, stat, contraryDelta(opponent, delta));
+    if (opponent.stages[stat] !== b2) {
+      log.push(`${opponentName}의 ${oppAbility.name}! 겁을 먹어 스피드가 올라갔다!`);
+    }
+  }
+}
+
+/**
 /**
  * 압정뿌리기·독압정·끈적끈적네트가 실제로 발동하는 "접지" 상태인지(Phase 8 §6).
  * 비행 타입, 부유·천정부지(땅 면역 특성) 보유자는 비접지. 에어벌룬·텔레키네시스 등은
@@ -1846,14 +1899,17 @@ function applyEntryAbilityOnSwitchIn(state: BattleState, key: FighterKey, log: s
     self.illusionAs = computeIllusionTarget(s.party, s.activeIndex);
   }
 
-  // 위협류
+  // 위협류 (파수견·주눅 반응 포함)
   if (ability.lowersOpponentStatOnEntry && !isFainted(opponent)) {
-    const { stat, delta } = ability.lowersOpponentStatOnEntry;
-    const before = opponent.stages[stat];
-    opponent.stages = applyStageDelta(opponent.stages, stat, contraryDelta(opponent, delta));
-    if (opponent.stages[stat] !== before) {
-      log.push(`${selfName}의 ${ability.name}! 상대의 공격이 떨어졌다!`);
-    }
+    const opponentName = getPokemon(opponent.slot.pokemonId)?.name ?? "상대";
+    applyIntimidateWithReaction(
+      opponent,
+      ability.lowersOpponentStatOnEntry,
+      selfName,
+      ability.name,
+      opponentName,
+      log,
+    );
   }
   // 가뭄·잔비·모래날림·눈퍼뜨리기: 다른 날씨가 있어도 덮어쓴다(기술 setsWeather와 동일)
   if (ability.setsWeather) {
@@ -3114,6 +3170,8 @@ function resolveAction(
   let wanderingSpiritSwapped = false;
   // 모래뿜기: 피격으로 날씨를 바꿨을 때 그 날씨.
   let sandSpitWeather: WeatherKind | undefined;
+  // 넘치는씨: 피격으로 필드를 바꿨을 때 그 필드.
+  let seedSowerField: FieldKind | undefined;
 
   // 지진이 땅속의 구멍파기를, 파도타기가 물속의 다이빙을 실제로 맞혔을 때의 위력 배가.
   // evadedByCharge가 false인데 defenderHideType이 있다는 건 bypassesHiding 예외로 명중했다는 뜻.
@@ -3469,6 +3527,17 @@ function resolveAction(
         }
       }
     }
+    // 넘치는씨(setsFieldOnHit): 데미지를 주는 기술로 피격당하면 필드를 그래스필드로 바꾼다(5턴).
+    // 이미 같은 필드면 아무 일도 안 하고, 다른 필드면 덮어쓴다(본가).
+    if (trigger.setsFieldOnHit && state.field !== trigger.setsFieldOnHit) {
+      state.field = trigger.setsFieldOnHit;
+      state.fieldTurnsRemaining = FIELD_DURATION;
+      applyMimicryForm(attacker, state.field);
+      applyMimicryForm(defender, state.field);
+      seedSowerField = trigger.setsFieldOnHit;
+      ev.setFieldOnHit = trigger.setsFieldOnHit;
+      evAny = true;
+    }
     // 미끈미끈·점착(attackerStatChanges): 접촉해 온 공격자의 랭크를 내린다. 공격자의 클리어바디류
     // (blocksOpponentStatDropsForStats)·심술꾸러기(contraryDelta)는 그대로 존중한다. 미러아머 반사는
     // 이 로스터에 대상 조합이 없어 생략(공격자가 미러아머면 그냥 정상 하락).
@@ -3778,11 +3847,21 @@ function resolveAction(
   // 흡수기(기가드레인·드레인펀치·드레인키스·원념의칼): 준 데미지의 일정 비율만큼 회복.
   // 큰뿌리를 지녔으면 회복량이 1.3배. recoil의 정반대 축이라 recoilDamage와 별도로 관리한다.
   let drainHealAmount = 0;
+  // 해감액: 방어측이 이 특성이면 흡수분만큼 공격측이 회복 대신 데미지를 입는다.
+  let liquidOozeDamage = 0;
+  let liquidOozeAbilityName: string | undefined;
   if (isDamaging && damage > 0 && effectiveMove.drainFraction !== undefined) {
-    drainHealAmount = Math.floor(
+    const rawDrain = Math.floor(
       damage * effectiveMove.drainFraction * getDrainHealMultiplier(attackerItem),
     );
-    attacker.currentHp = Math.min(attacker.maxHp, attacker.currentHp + drainHealAmount);
+    if (defenderAbility?.reverseDrainHealsToDamage) {
+      liquidOozeDamage = Math.min(attacker.currentHp, rawDrain);
+      attacker.currentHp -= liquidOozeDamage;
+      liquidOozeAbilityName = defenderAbility.name;
+    } else {
+      drainHealAmount = rawDrain;
+      attacker.currentHp = Math.min(attacker.maxHp, attacker.currentHp + drainHealAmount);
+    }
   }
 
   // 조개껍질방울: 준 데미지의 1/8만큼 회복. 흡수기와는 별개 축이라 같은 행동에서 동시에 발동할 수 있다.
@@ -5155,6 +5234,8 @@ function resolveAction(
     berryReducedDamageItemName,
     leppaRestoredPpItemName,
     drainHealAmount: drainHealAmount || undefined,
+    liquidOozeDamage: liquidOozeDamage || undefined,
+    liquidOozeAbilityName,
     shellBellHealAmount: shellBellHealAmount || undefined,
     healedAmount: healedAmount || undefined,
     healedTarget,
@@ -5233,6 +5314,7 @@ function resolveAction(
     soulBeatFailed: costHpFailed || undefined,
     wanderingSpiritSwapped: wanderingSpiritSwapped || undefined,
     sandSpitWeather,
+    seedSowerField,
     overwroteTargetType,
     abilityAbsorbHealAmount: abilityAbsorbHealAmount || undefined,
     resetAllStages: effectiveMove.resetsAllStages || undefined,
@@ -5862,25 +5944,38 @@ function finishTurn(ctx: RunTurnContext): RunTurnOutcome {
         });
         const healer = state[opponentKey(key)];
         if (seedDamage > 0 && !isFainted(healer)) {
-          const healerAbilityForItem = healer.effectiveAbilityId ? getAbility(healer.effectiveAbilityId) : undefined;
-          const healerItem = healerAbilityForItem?.disablesOwnItemEffects
-            ? undefined
-            : healer.currentItemId
-              ? getItem(healer.currentItemId)
-              : undefined;
-          const leechSeedHealAmount = Math.min(
-            healer.maxHp - healer.currentHp,
-            Math.floor(seedDamage * getDrainHealMultiplier(healerItem)),
-          );
-          if (leechSeedHealAmount > 0) {
-            healer.currentHp += leechSeedHealAmount;
+          if (fighterAbility?.reverseDrainHealsToDamage) {
+            // 해감액: 씨뿌리기로 빨아들이려던 상대가 회복 대신 같은 양의 데미지를 입는다.
+            const oozeDmg = Math.min(healer.currentHp, seedDamage);
+            healer.currentHp -= oozeDmg;
             endOfTurn.push({
               actor: opponentKey(key),
-              damage: 0,
+              damage: oozeDmg,
               remainingHp: healer.currentHp,
-              fainted: false,
-              leechSeedHealAmount,
+              fainted: isFainted(healer),
+              liquidOozeDamage: true,
             });
+          } else {
+            const healerAbilityForItem = healer.effectiveAbilityId ? getAbility(healer.effectiveAbilityId) : undefined;
+            const healerItem = healerAbilityForItem?.disablesOwnItemEffects
+              ? undefined
+              : healer.currentItemId
+                ? getItem(healer.currentItemId)
+                : undefined;
+            const leechSeedHealAmount = Math.min(
+              healer.maxHp - healer.currentHp,
+              Math.floor(seedDamage * getDrainHealMultiplier(healerItem)),
+            );
+            if (leechSeedHealAmount > 0) {
+              healer.currentHp += leechSeedHealAmount;
+              endOfTurn.push({
+                actor: opponentKey(key),
+                damage: 0,
+                remainingHp: healer.currentHp,
+                fainted: false,
+                leechSeedHealAmount,
+              });
+            }
           }
         }
       }
