@@ -130,7 +130,13 @@ export function useParty() {
       const slot = prev[slotIndex];
       if (!slot) return prev;
       const next = [...prev] as PartySlots;
-      next[slotIndex] = { ...slot, gender: (slot.gender ?? "male") === "male" ? "female" : "male" };
+      // 에써르류(formVariantByGender): 성별 = 폼. formVariant 를 토글하고 특성 선택은 초기화한다.
+      if (getPokemon(slot.pokemonId)?.formVariantByGender) {
+        const nextForm = (slot.formVariant ?? "male") === "male" ? "female" : "male";
+        next[slotIndex] = { ...slot, formVariant: nextForm, ability: null };
+      } else {
+        next[slotIndex] = { ...slot, gender: (slot.gender ?? "male") === "male" ? "female" : "male" };
+      }
       return next;
     });
   }

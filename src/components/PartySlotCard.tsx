@@ -182,11 +182,12 @@ export function PartySlotCard({
           <span className="party-meta-label">포인트</span>
           <span className="party-meta-value">{totalAbilityPoints(slot!.points)} / 66</span>
         </button>
-        {/* 종족 성별이 양성 다 가능("both")할 때만 노출 — 단일성별/무성별 종은 고를 게 없어 아예 숨긴다 */}
+        {/* 종족 성별이 양성 다 가능("both")할 때만 노출 — 단일성별/무성별 종은 고를 게 없어 아예 숨긴다.
+            에써르류(formVariantByGender)는 이 핍이 formVariant(=폼)까지 토글하며, 아래 "모습" 핍은 숨긴다. */}
         {pokemon.genderCategory === "both" && (
           <button type="button" className="party-meta-pip" onClick={onToggleGender}>
             <span className="party-meta-label">성별</span>
-            <span className="party-meta-value">{genderLabel(slot!.gender ?? "male")}</span>
+            <span className="party-meta-value">{genderLabel(getEffectiveGender(pokemon, slot!) ?? "male")}</span>
           </button>
         )}
         {/* 펌킨인 계열 크기 변종 — sizeForms가 있는 종만 노출. 클릭하면 다음 크기로 순환 */}
@@ -202,8 +203,9 @@ export function PartySlotCard({
             </span>
           </button>
         )}
-        {/* 루가루암 계열 폼 변종 — formVariants가 있는 종만 노출. 클릭하면 다음 폼으로 순환 */}
-        {pokemon.formVariants && (
+        {/* 루가루암 계열 폼 변종 — formVariants가 있는 종만 노출. 클릭하면 다음 폼으로 순환.
+            에써르류(formVariantByGender)는 위 "성별" 핍이 이 역할을 하므로 숨긴다. */}
+        {pokemon.formVariants && !pokemon.formVariantByGender && (
           <button type="button" className="party-meta-pip" onClick={onCycleFormVariant}>
             <span className="party-meta-label">모습</span>
             <span className="party-meta-value">

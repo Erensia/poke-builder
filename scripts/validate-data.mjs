@@ -147,6 +147,14 @@ for (const p of POKEMON) {
   }
   if (p.stanceChangeForms?.revertMoveId && !moveIds.has(p.stanceChangeForms.revertMoveId))
     err(`${at}.stanceChangeForms.revertMoveId: "${p.stanceChangeForms.revertMoveId}" 가 moves.json 에 없음`);
+
+  if (p.formVariantByGender) {
+    if (p.genderCategory !== "both")
+      err(`${at}: formVariantByGender 인데 genderCategory 가 "both" 가 아님 ("${p.genderCategory}")`);
+    const ids = (p.formVariants ?? []).map((f) => f.id).sort().join(",");
+    if (ids !== "female,male")
+      err(`${at}: formVariantByGender 는 formVariants id 가 정확히 male/female 이어야 함 (현재 "${ids}")`);
+  }
 }
 
 // ── 4) 스프라이트 역방향 체크 ───────────────────────────────────────────────

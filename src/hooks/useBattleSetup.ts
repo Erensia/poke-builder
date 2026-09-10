@@ -64,9 +64,17 @@ function useBattleSetupSlot() {
     setSlot((prev) => (prev ? { ...prev, nature: natureId } : prev));
   }
 
-  /** 수컷/암컷을 바로 뒤집는다(미지정이면 수컷을 기본값으로 취급해서 그 반대인 암컷으로) */
+  /** 수컷/암컷을 바로 뒤집는다(미지정이면 수컷을 기본값으로 취급해서 그 반대인 암컷으로).
+   *  에써르류(formVariantByGender)는 성별 = 폼이라 formVariant 를 토글하고 특성 선택을 초기화한다. */
   function toggleGender() {
-    setSlot((prev) => (prev ? { ...prev, gender: (prev.gender ?? "male") === "male" ? "female" : "male" } : prev));
+    setSlot((prev) => {
+      if (!prev) return prev;
+      if (getPokemon(prev.pokemonId)?.formVariantByGender) {
+        const nextForm = (prev.formVariant ?? "male") === "male" ? "female" : "male";
+        return { ...prev, formVariant: nextForm, ability: null };
+      }
+      return { ...prev, gender: (prev.gender ?? "male") === "male" ? "female" : "male" };
+    });
   }
 
   /** 펌킨인 계열 크기 변종을 다음 크기로 돌린다(sizeForms 순서 순환) */

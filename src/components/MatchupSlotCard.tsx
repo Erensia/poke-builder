@@ -240,7 +240,8 @@ export function MatchupSlotCard({
         )}
         {pokemon?.formVariants && (
           <button type="button" className="matchup-meta-pip" onClick={onCycleFormVariant}>
-            <span className="matchup-meta-label">모습</span>
+            {/* 매치업엔 성별 핍이 없어 formVariantByGender 종은 이 핍이 성별 선택을 겸한다. */}
+            <span className="matchup-meta-label">{pokemon.formVariantByGender ? "성별" : "모습"}</span>
             <span className="matchup-meta-value">
               {(() => {
                 const forms = pokemon.formVariants;
