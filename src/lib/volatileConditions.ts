@@ -50,7 +50,9 @@ function defaultDuration(volatile: VolatileCondition, random: () => number): num
     volatile === "aquaRing" ||
     volatile === "leechSeed" ||
     volatile === "attract" ||
-    volatile === "saltCure"
+    volatile === "saltCure" ||
+    volatile === "octolock" ||
+    volatile === "jawLock"
   ) {
     return PERSISTENT_UNTIL_BATTLE_END;
   }

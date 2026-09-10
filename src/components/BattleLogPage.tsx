@@ -24,6 +24,7 @@ import {
   applySwitch,
   createBattleState,
   hasUsableMove,
+  isTrappedFromSwitching,
   opponentKey,
   runTurn,
   resumeTurn,
@@ -86,6 +87,8 @@ const VOLATILE_LABELS = {
   bound: "속박",
   saltCure: "소금절이",
   syrupCoat: "물엿범벅",
+  octolock: "문어굳히기",
+  jawLock: "물고버티기",
 } as const;
 
 /** 액션 로그 한 줄 안에 "OO 발동!"으로 뭉뚱그리기보다 전용 문구를 따로 쓰는 volatile들 */
@@ -1104,7 +1107,10 @@ export function BattleLogPage() {
 
                     if (winner) return null;
 
-                    const canSwitch = benchIdx.length > 0 && !fighter.chargingMoveId && fighter.currentHp > 0;
+                    // 문어굳히기/물고버티기(도망봉인)에 걸려 있으면 자발적 교체 불가(고스트 예외).
+                    const trapped = isTrappedFromSwitching(fighter);
+                    const canSwitch =
+                      benchIdx.length > 0 && !fighter.chargingMoveId && fighter.currentHp > 0 && !trapped;
                     const mode = canSwitch ? inputMode[side] : "move";
 
                     return (
@@ -1125,6 +1131,11 @@ export function BattleLogPage() {
                               </button>
                             ))}
                           </div>
+                        )}
+
+                        {/* PR-C1b: 도망봉인(문어굳히기·물고버티기) 안내 — 교체 토글이 사라진 이유 표시 */}
+                        {trapped && benchIdx.length > 0 && fighter.currentHp > 0 && (
+                          <div className="battle-input-hint is-muted">교체할 수 없다! (도망봉인)</div>
                         )}
 
                         {/* §4: 메가진화 선언 토글 — 스톤을 들었고, 아직 안 했고, 그 편이 이번 배틀에
@@ -1596,6 +1607,19 @@ export function BattleLogPage() {
                       )}
                       {!action.blockedReason && action.hit && action.reviveFailed && (
                         <div className="battle-turn-line is-muted">그러나 실패했다!</div>
+                      )}
+                      {/* PR-C1b: 문어굳히기 / 물고버티기 — 도망봉인 */}
+                      {!action.blockedReason && action.hit && action.octolockApplied && (
+                        <div className="battle-turn-line is-muted">
+                          {defenderName}
+                          {eunNeun(defenderName)} 문어굳히기에 붙잡혀 도망칠 수 없다!
+                        </div>
+                      )}
+                      {!action.blockedReason && action.hit && action.jawLockApplied && (
+                        <div className="battle-turn-line is-muted">
+                          {actorName}와(과) {defenderName}
+                          {eunNeun(defenderName)} 서로 물고 늘어져 교체할 수 없다!
+                        </div>
                       )}
                       {/* C-5 명중 빗나감 — 메인 줄은 "OO의 기합구슬 — !"로 끝내고 여기서 별도 줄 */}
                       {!action.blockedReason && !action.charging && !action.evadedByCharge && !action.hit && (
@@ -2434,6 +2458,12 @@ export function BattleLogPage() {
                       <>
                         {turnName(e.actor)}
                         {eunNeun(turnName(e.actor))} 물엿범벅이 되어 스피드가 떨어졌다! (남은 HP{" "}
+                        {e.remainingHp})
+                      </>
+                    ) : e.octolockDrop ? (
+                      <>
+                        {turnName(e.actor)}
+                        {eunNeun(turnName(e.actor))} 문어굳히기 때문에 방어와 특수방어가 떨어졌다! (남은 HP{" "}
                         {e.remainingHp})
                       </>
                     ) : e.perishFainted ? (

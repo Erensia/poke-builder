@@ -1479,6 +1479,10 @@ export interface ActionLogEntry {
   revivedPartyName?: string;
   /** 회생의기도를 썼지만 부활시킬 대상(기절한 교대 포켓몬)이 없었으면 true */
   reviveFailed?: boolean;
+  /** 문어굳히기(Move.octolock): 상대를 도망봉인 상태로 만들었으면 true */
+  octolockApplied?: boolean;
+  /** 물고버티기(Move.jawLock): 양쪽을 도망봉인 상태로 만들었으면 true */
+  jawLockApplied?: boolean;
   /** 탈(Disguise)처럼 방어측 특성이 이번 데미지를 통째로 무효화했으면 그 특성 이름 */
   hitNegatedByAbilityName?: string;
   /** hitNegatedByAbilityName이 발동하며(=탈이 벗겨지며) 방어측이 입은 반동 데미지 */
@@ -1568,6 +1572,8 @@ export interface EndOfTurnLogEntry {
   saltCureHeavy?: boolean;
   /** 물엿범벅(시럽봄): 턴 종료 시 스피드가 1랭크 떨어졌으면 true */
   syrupCoatDrop?: boolean;
+  /** 문어굳히기(octolock): 턴 종료 시 방어·특수방어가 1랭크씩 떨어졌으면 true */
+  octolockDrop?: boolean;
   /** 멸망의노래 카운트 안내(F-4) — 이번 턴 종료 시점의 남은 카운트(3→2→1) */
   perishCount?: number;
   /** 멸망의노래 카운트가 0에 도달해 이번 턴 종료에 쓰러졌으면 true */
@@ -1697,6 +1703,18 @@ function isForcedSwitchBlocked(target: BattleFighterState): boolean {
   if (abilityOf(target)?.preventsForcedSwitch) return true;
   if (hasVolatile(target.volatile, "ingrain")) return true;
   return false;
+}
+
+/**
+ * 문어굳히기(octolock)·물고버티기(jawLock)에 걸려 "자기 의지로 교체할 수 없는" 상태인지.
+ * 고스트타입은 항상 예외(본가 — 도망봉인류가 안 통한다). 기절 후 강제 교체(applySwitch)는
+ * 이 함수를 보지 않는다 — 어디까지나 유저가 교체를 "고를 수 있는지"만 판정한다(UI + runTurn
+ * 액션 검증에서 참조). fighter가 fainted면 판정 의미가 없어 false.
+ */
+export function isTrappedFromSwitching(fighter: BattleFighterState): boolean {
+  if (isFainted(fighter)) return false;
+  if (fighter.types.includes("고스트")) return false;
+  return hasVolatile(fighter.volatile, "octolock") || hasVolatile(fighter.volatile, "jawLock");
 }
 
 /**
@@ -2008,6 +2026,19 @@ function performSwitch(
   //       disguiseBroken · hungerMode.
   //   스크린(§6-3)·희망사항(§6-2)은 편(BattleSide.screens / .wish)에 있어 교체해도 유지된다.
   //   후속: transformed(변신 원복 — 메타몽 전용이라 미도입).
+
+  // 문어굳히기/물고버티기: 이 편이 자리를 비우면(교체·기절 후 교체 모두 이 함수를 지난다),
+  // 자리를 비운 쪽이 상대에게 걸어놨던 도망봉인이 풀린다. 물고버티기는 서로 걸어서 상대 쪽
+  // 것도 여기서 함께 풀린다(물러나는 쪽 것은 아래 volatile 초기화에서 지워진다).
+  {
+    const opp = state[opponentKey(key)];
+    if (hasVolatile(opp.volatile, "octolock") || hasVolatile(opp.volatile, "jawLock")) {
+      const next = { ...opp.volatile.active };
+      delete next.octolock;
+      delete next.jawLock;
+      opp.volatile = { active: next };
+    }
+  }
 
   // ── 활성 슬롯 전환 ──
   side.activeIndex = toIndex;
@@ -4450,6 +4481,42 @@ function resolveAction(
     saltCureApplied = true;
   }
 
+  // 문어굳히기(Move.octolock): 변화기. 명중 시 상대를 octolock 상태로 만든다 — 교체 봉인 +
+  // 매 턴 종료 시 방어·특수방어 -1. 부가효과 취급이라 인분·우격다짐·황금몸에 막힌다.
+  let octolockApplied = false;
+  if (
+    effectiveMove.octolock &&
+    hit &&
+    !blockedByProtect &&
+    !opponentEffectsBlocked &&
+    !secondaryEffectsBlockedByAbility &&
+    !sheerForceAbilityName &&
+    !isFainted(defender) &&
+    !hasVolatile(defender.volatile, "octolock")
+  ) {
+    defender.volatile = inflictVolatile(defender.volatile, "octolock", random);
+    octolockApplied = true;
+  }
+
+  // 물고버티기(Move.jawLock): 데미지 기술. 명중 시 사용자와 대상 양쪽을 jawLock 상태로 만든다
+  // (양쪽 교체 봉인). 이미 어느 쪽이든 걸려 있으면 재적용 안 함. 지속 데미지·랭크 변화 없음.
+  let jawLockApplied = false;
+  if (
+    effectiveMove.jawLock &&
+    hit &&
+    !blockedByProtect &&
+    damage > 0 &&
+    !opponentEffectsBlocked &&
+    !isFainted(defender) &&
+    !isFainted(attacker) &&
+    !hasVolatile(defender.volatile, "jawLock") &&
+    !hasVolatile(attacker.volatile, "jawLock")
+  ) {
+    defender.volatile = inflictVolatile(defender.volatile, "jawLock", random);
+    attacker.volatile = inflictVolatile(attacker.volatile, "jawLock", random);
+    jawLockApplied = true;
+  }
+
   // 왕의징표석: 데미지를 주는 데 성공하면 이 확률로 상대에게 추가 풀죽음을 건다. 기술 자체의
   // 풀죽음 확률(있다면)과는 완전히 별개 판정이라, 기술이 이미 풀죽음을 걸었으면 중복으로 다시
   // 걸 필요가 없다(로그에 "풀죽음!"이 두 번 찍히는 것만 방지 — 결과 자체는 어차피 동일).
@@ -5186,6 +5253,8 @@ function resolveAction(
     courtChangeDone: courtChangeDone || undefined,
     revivedPartyName,
     reviveFailed: reviveFailed || undefined,
+    octolockApplied: octolockApplied || undefined,
+    jawLockApplied: jawLockApplied || undefined,
   };
 }
 
@@ -5292,6 +5361,8 @@ export function runTurn(
     const side = sideOf(state, key);
     const fromIndex = side.activeIndex;
     const outgoing = side.party[fromIndex];
+    // 문어굳히기/물고버티기에 걸린 채로 자발적 교체가 넘어오면(UI가 막지만 방어적으로) 무시한다.
+    if (isTrappedFromSwitching(outgoing)) continue;
     const entryMessages: string[] = [];
     performSwitch(state, key, action.toIndex, entryMessages);
     if (side.activeIndex !== fromIndex) {
@@ -5869,6 +5940,29 @@ function finishTurn(ctx: RunTurnContext): RunTurnOutcome {
           });
         }
         fighter.volatile = consumeVolatileTurn(fighter.volatile, "syrupCoat");
+      }
+
+      // 문어굳히기(octolock): 걸린 쪽은 매 턴 종료 시 방어·특수방어가 1랭크씩 떨어진다(클리어바디류
+      // 존중). 턴 카운터 없이 배틀 끝까지 유지 — 해제는 문어굳히기를 건 쪽이 자리를 비울 때만
+      // (performSwitch). syrupCoat와 달리 소모 호출 없음.
+      if (hasVolatile(fighter.volatile, "octolock") && !isFainted(fighter)) {
+        const blockedStats = statDropBlockStatsOf(fighter, fighterAbility);
+        let octolockDropped = false;
+        for (const stat of ["def", "spd"] as const) {
+          if (blockedStats?.includes(stat)) continue;
+          const before = fighter.stages[stat];
+          fighter.stages = applyStageDelta(fighter.stages, stat, contraryDelta(fighter, -1));
+          if (fighter.stages[stat] !== before) octolockDropped = true;
+        }
+        if (octolockDropped) {
+          endOfTurn.push({
+            actor: key,
+            damage: 0,
+            remainingHp: fighter.currentHp,
+            fainted: false,
+            octolockDrop: true,
+          });
+        }
       }
 
       // 희망사항(§6-2): 편(BattleSide.wish) 큐를 카운트다운한다 — 쓴 다음 턴 종료에, 그 시점에

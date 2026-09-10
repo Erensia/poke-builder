@@ -10164,7 +10164,8 @@
       "랭크",
       "고정-상대"
     ],
-    "makesContact": false
+    "makesContact": false,
+    "octolock": true
   },
   {
     "id": "스타어설트",
@@ -10206,6 +10207,7 @@
     "classification": [
       "물기"
     ],
-    "makesContact": true
+    "makesContact": true,
+    "jawLock": true
   }
 ]
