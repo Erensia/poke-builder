@@ -373,6 +373,13 @@ export interface BattleFighterState {
    * 이미 바뀐 타입 자체는 계속 유지(재발동만 막는다). 등장 시 초기화.
    */
   proteanActivatedSinceSwitchIn?: boolean;
+  /**
+   * 대검돌격(Move.glaiveRush): 이 포켓몬이 대검돌격을 쓴 뒤 "다음 자기 행동 개시 전까지"
+   * 켜지는 자기 약점 플래그 — 이 상태의 포켓몬을 겨냥한 상대 기술은 반드시 명중하고 데미지가
+   * 2배가 된다. resolveAction 최상단에서 이 포켓몬이 다시 행동을 개시하면 지워지고(destinyBondArmed와
+   * 같은 패턴), 교체로 물러나도 지워진다.
+   */
+  glaiveRushVulnerable?: boolean;
 }
 
 /**
@@ -1462,6 +1469,16 @@ export interface ActionLogEntry {
   changedOwnTypeTo?: PokemonType;
   /** changedOwnTypeTo를 발동시킨 특성 이름 */
   changedOwnTypeAbilityName?: string;
+  /** 전광쌍격(Move.losesTypeAfterUse): 사용 후 사라진 자신의 타입(명중·빗나감 무관) */
+  lostTypeAfterUse?: PokemonType;
+  /** 대검돌격(Move.glaiveRush): 이 기술을 써서 "다음 행동 전까지 피격 필중·피해 2배" 상태가 됐으면 true */
+  glaiveRushArmed?: boolean;
+  /** 코트체인지(Move.swapsSideEffects): 양쪽 진영의 설치물·스크린을 맞바꿨으면 true */
+  courtChangeDone?: boolean;
+  /** 회생의기도(Move.revivesFaintedAlly): 부활시킨 교대 포켓몬 이름 */
+  revivedPartyName?: string;
+  /** 회생의기도를 썼지만 부활시킬 대상(기절한 교대 포켓몬)이 없었으면 true */
+  reviveFailed?: boolean;
   /** 탈(Disguise)처럼 방어측 특성이 이번 데미지를 통째로 무효화했으면 그 특성 이름 */
   hitNegatedByAbilityName?: string;
   /** hitNegatedByAbilityName이 발동하며(=탈이 벗겨지며) 방어측이 입은 반동 데미지 */
@@ -1973,6 +1990,7 @@ function performSwitch(
   outgoing.stockpileCount = undefined;
   outgoing.perishCount = undefined;
   outgoing.destinyBondArmed = undefined;
+  outgoing.glaiveRushVulnerable = undefined;
   outgoing.substituteHp = undefined;
   outgoing.activeProtect = undefined;
   outgoing.protectStreak = undefined;
@@ -2107,6 +2125,11 @@ function resolveAction(
   // 이번 턴 처리가 막 시작된 시점에 지난 턴 걸어둔 예약을 무조건 지운다. 이번 턴 다시 길동무를
   // 걸면(아래 protectEffect 판정 성공 시) 새로 켠다.
   attacker.destinyBondArmed = false;
+
+  // 대검돌격: "다음 자기 행동 개시 전까지" 유지되는 피격 약점이라, 이 공격자가 다시 행동을
+  // 개시하는 이 시점에 지운다(길동무와 같은 패턴). 같은 턴에 다시 대검돌격을 쓰면 아래에서
+  // 새로 켜진다. 행동이 마비·풀죽음으로 막혀도 resolveAction엔 들어오므로 정상적으로 소진된다.
+  attacker.glaiveRushVulnerable = undefined;
 
   // 차지 기술 2턴째: 준비 턴에 저장해둔 기술을 이번 턴 실제로 고른 기술과 무관하게 강제로
   // 재실행한다(본가 규칙 — UI에서도 이 경우 선택을 요구하지 않는다). PP는 준비 턴에 이미
@@ -2815,6 +2838,22 @@ function resolveAction(
     changedOwnTypeAbilityName = attackerAbility.name;
   }
 
+  // 전광쌍격(Move.losesTypeAfterUse): 변환자재와 같은 시점 — 실제로 이 기술을 쓰면(명중·빗나감
+  // 무관) 사용자의 타입 목록에서 지정 타입(전기)이 빠진다. 이미 그 타입이 아니면 아무 일도
+  // 없다. 두 타입이면 나머지 하나만, 단일 타입이면 빈 배열(무타입)이 된다 — getEffectiveness가
+  // 빈 배열에 등배(1)를 돌려줘서 상성·자속이 전부 사라지는 형태로 안전하게 처리된다. 교체해도
+  // 돌아오지 않는다(changedOwnTypeTo와 같은 취급).
+  let lostTypeAfterUse: PokemonType | undefined;
+  if (effectiveMove.losesTypeAfterUse && attacker.types.includes(effectiveMove.losesTypeAfterUse)) {
+    attacker.types = attacker.types.filter((t) => t !== effectiveMove.losesTypeAfterUse);
+    lostTypeAfterUse = effectiveMove.losesTypeAfterUse;
+  }
+
+  // 대검돌격(Move.glaiveRush): 실제로 이 기술을 쓰면(명중·빗나감 무관) "다음 자기 행동 전까지"
+  // 피격 필중·피해 2배 상태가 된다. 위 resolveAction 최상단에서 이 공격자가 다시 행동을
+  // 개시할 때 해제된다.
+  if (effectiveMove.glaiveRush) attacker.glaiveRushVulnerable = true;
+
   // 반짝가루(방어측 0.9배)·광각렌즈(공격측 1.1배)·포커스렌즈(공격측, 늦게 움직일 때 1.2배)·
   // 모래숨기(방어측, 날씨 조건부 0.8배)·복안(공격측 1.3배)을 전부 한 배율로 곱한다.
   const weatherAccuracyBoost = defenderAbility?.weatherOpponentAccuracyMultiplier;
@@ -2862,6 +2901,9 @@ function resolveAction(
     !(effectiveMove.bypassesHiding ?? []).includes(defenderHideType) &&
     isOpponentTargetingMove(effectiveMove);
 
+  // 대검돌격: 방어측이 이 상태면(직전에 대검돌격을 쓴 뒤 아직 다음 행동 전) 그를 겨냥한
+  // 기술의 명중 굴림을 건너뛴다(반드시 명중). 무적(evadedByCharge)은 그대로 존중한다.
+  const glaiveRushGuaranteesHit = defender.glaiveRushVulnerable && isOpponentTargetingMove(effectiveMove);
   // 매직미러로 되돌릴 기술은 명중 굴림을 건너뛴다(반사는 빗나가지 않는다).
   const hit = bouncedByMagicMirror
     ? true
@@ -2869,7 +2911,9 @@ function resolveAction(
       ? false
       : hitChance === null
         ? true
-        : random() < hitChance;
+        : glaiveRushGuaranteesHit
+          ? true
+          : random() < hitChance;
 
   // 철제광선: "사용하는 순간" 명중·빗나감과 무관하게 사용자가 최대 HP의 절반을 잃는다(E-3).
   let selfDamageOnUse = 0;
@@ -2913,6 +2957,9 @@ function resolveAction(
       // 변환자재/리베로는 명중 굴림 전에 이미 발동했다 — 빗나가도 타입은 바뀌고 로그 문구도 나와야 한다.
       changedOwnTypeTo,
       changedOwnTypeAbilityName,
+      // 전광쌍격 타입 소실·대검돌격 약점도 명중 굴림 전에 확정된다(빗나가도 적용).
+      lostTypeAfterUse,
+      glaiveRushArmed: effectiveMove.glaiveRush || undefined,
     };
   }
 
@@ -3148,7 +3195,12 @@ function resolveAction(
       // 읽으므로 NEUTRAL_STAGES를 통째로 넘겨도 안전하다. 자신의 랭크는 그대로 반영된다.
       attackerStages: defenderAbility?.ignoresOpponentStatStagesInDamage ? NEUTRAL_STAGES : attacker.stages,
       defenderStages: defenderStagesForDamage,
-      bulkMultiplier: abilityDefenseMultiplier * berryResult.bulkMultiplier * screenMultiplier,
+      // 대검돌격: 방어측이 피격 약점 상태면 받는 데미지 2배(bulkMultiplier는 나눗셈이라 0.5).
+      bulkMultiplier:
+        abilityDefenseMultiplier *
+        berryResult.bulkMultiplier *
+        screenMultiplier *
+        (defender.glaiveRushVulnerable ? 0.5 : 1),
       isCritical: critical,
       // 스나이퍼: 급소 데미지 배율을 2.25로 올린다(기본 1.5).
       critDamageMultiplier: attackerAbility?.critDamageMultiplier,
@@ -4336,6 +4388,35 @@ function resolveAction(
     }
   }
 
+  // 코트체인지(Move.swapsSideEffects): 명중 시 양쪽 진영의 설치물(hazards)·스크린(screens)을
+  // 통째로 맞바꾼다. 필드·날씨·트릭룸은 장 전체 효과라 대상이 아니다(본가와 동일).
+  let courtChangeDone = false;
+  if (effectiveMove.swapsSideEffects && hit && !blockedByProtect) {
+    const swapHazards = state.sideA.hazards;
+    state.sideA.hazards = state.sideB.hazards;
+    state.sideB.hazards = swapHazards;
+    const swapScreens = state.sideA.screens;
+    state.sideA.screens = state.sideB.screens;
+    state.sideB.screens = swapScreens;
+    courtChangeDone = true;
+  }
+
+  // 회생의기도(Move.revivesFaintedAlly): 명중 시 기절한 교대 포켓몬 1마리(가장 앞 슬롯)를 최대
+  // HP의 절반으로 부활시킨다. 벤치 부활이라 교체(pendingPivot)는 일어나지 않는다. 부활 대상이
+  // 없으면 실패("그러나 실패했다!").
+  let revivedPartyName: string | undefined;
+  let reviveFailed = false;
+  if (effectiveMove.revivesFaintedAlly && hit && !blockedByProtect) {
+    const mySide = sideOf(state, actorKey);
+    const target = mySide.party.find((f, i) => i !== mySide.activeIndex && isFainted(f));
+    if (target) {
+      target.currentHp = Math.max(1, Math.floor(target.maxHp / 2));
+      revivedPartyName = getPokemon(target.slot.pokemonId)?.name ?? target.slot.pokemonId;
+    } else {
+      reviveFailed = true;
+    }
+  }
+
   // 시럽봄(Move.setsSyrupCoat): 명중 시 상대를 물엿범벅(syrupCoat, 3턴) 상태로 만든다. 데미지 기술의
   // 부가효과라 인분·우격다짐엔 발동하지 않고, 황금몸(opponentEffectsBlocked)에도 막힌다.
   if (
@@ -5100,6 +5181,11 @@ function resolveAction(
     fickleBeamEmpowered: fickleBeamEmpowered || undefined,
     tidyUpDone: tidyUpDone || undefined,
     saltCureApplied: saltCureApplied || undefined,
+    lostTypeAfterUse,
+    glaiveRushArmed: effectiveMove.glaiveRush || undefined,
+    courtChangeDone: courtChangeDone || undefined,
+    revivedPartyName,
+    reviveFailed: reviveFailed || undefined,
   };
 }
 

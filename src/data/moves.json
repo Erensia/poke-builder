@@ -9970,7 +9970,8 @@
     "tags": [
       "접촉"
     ],
-    "makesContact": true
+    "makesContact": true,
+    "glaiveRush": true
   },
   {
     "id": "노려맞히기",
@@ -10050,7 +10051,8 @@
     "priority": 0,
     "effect": "이상한 힘으로 서로의 필드 효과를 교체한다.",
     "tags": [],
-    "makesContact": false
+    "makesContact": false,
+    "swapsSideEffects": true
   },
   {
     "id": "회생의기도",
@@ -10065,7 +10067,8 @@
     "tags": [
       "회복"
     ],
-    "makesContact": false
+    "makesContact": false,
+    "revivesFaintedAlly": true
   },
   {
     "id": "전광쌍격",
@@ -10085,7 +10088,8 @@
     "classification": [
       "펀치"
     ],
-    "makesContact": true
+    "makesContact": true,
+    "losesTypeAfterUse": "전기"
   },
   {
     "id": "오버드라이브",

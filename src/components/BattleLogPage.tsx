@@ -1570,6 +1570,33 @@ export function BattleLogPage() {
                           </div>
                         </>
                       )}
+                      {/* PR-C1: 전광쌍격 — 사용 후 자기 타입 소실(빗나가도 표시) */}
+                      {!action.blockedReason && action.lostTypeAfterUse && (
+                        <div className="battle-turn-line is-muted">
+                          {actorName}
+                          {eunNeun(actorName)} {action.lostTypeAfterUse}타입이 사라졌다!
+                        </div>
+                      )}
+                      {/* PR-C1: 대검돌격 — 사용 후 피격 필중·피해 2배 상태 */}
+                      {!action.blockedReason && action.glaiveRushArmed && (
+                        <div className="battle-turn-line is-muted">
+                          {actorName}
+                          {eunNeun(actorName)} 무방비 상태가 되었다!
+                        </div>
+                      )}
+                      {/* PR-C1: 코트체인지 — 양쪽 진영 설치물·스크린 교체 */}
+                      {!action.blockedReason && action.hit && action.courtChangeDone && (
+                        <div className="battle-turn-line is-muted">서로의 필드 효과를 뒤바꿨다!</div>
+                      )}
+                      {/* PR-C1: 회생의기도 — 교대 포켓몬 부활 / 대상 없음 */}
+                      {!action.blockedReason && action.hit && action.revivedPartyName && (
+                        <div className="battle-turn-line is-muted">
+                          {action.revivedPartyName}의 기운을 되찾아주었다!
+                        </div>
+                      )}
+                      {!action.blockedReason && action.hit && action.reviveFailed && (
+                        <div className="battle-turn-line is-muted">그러나 실패했다!</div>
+                      )}
                       {/* C-5 명중 빗나감 — 메인 줄은 "OO의 기합구슬 — !"로 끝내고 여기서 별도 줄 */}
                       {!action.blockedReason && !action.charging && !action.evadedByCharge && !action.hit && (
                         <div className="battle-turn-line is-muted">
