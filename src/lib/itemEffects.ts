@@ -182,7 +182,14 @@ export function getItemSpeedMultiplier(item: Item | undefined): number {
   return item?.speedMultiplier ?? 1;
 }
 
-/** 초점렌즈: 급소율 랭크에 항상 더해지는 보너스. 없으면 0 */
-export function getItemCritStageBonus(item: Item | undefined): number {
-  return item?.critStageBonus ?? 0;
+/**
+ * 초점렌즈: 급소율 랭크에 항상 더해지는 보너스. 대파(critStageBonusForSpecies)는 종족이 목록에
+ * 있을 때만 더해진다 — holderSpeciesId를 안 넘기면(매치업 페이지 등) 그 보너스는 적용 안 된다.
+ */
+export function getItemCritStageBonus(item: Item | undefined, holderSpeciesId?: string): number {
+  const speciesBonus =
+    holderSpeciesId && item?.critStageBonusForSpecies?.speciesIds.includes(holderSpeciesId)
+      ? item.critStageBonusForSpecies.bonus
+      : 0;
+  return (item?.critStageBonus ?? 0) + speciesBonus;
 }

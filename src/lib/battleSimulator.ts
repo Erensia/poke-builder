@@ -1264,6 +1264,10 @@ export interface ActionLogEntry {
   berryReducedDamageItemName?: string;
   /** 과사열매: 이번 행동으로 PP가 0이 된 기술의 PP를 복구했으면 그 도구 이름 */
   leppaRestoredPpItemName?: string;
+  /** 노말주얼 등 타입 젬: 이번 기술로 소모되며 위력을 올렸으면 그 도구 이름 */
+  ateGemItemName?: string;
+  /** 풍선: 데미지를 받아 터져서 소모됐으면 그 도구 이름 */
+  balloonPoppedItemName?: string;
   /** 흡수기(Move.drainFraction)로 회복한 양(큰뿌리 배율 반영 후) */
   drainHealAmount?: number;
   /** 해감액: 흡수기가 회복 대신 공격측에게 입힌 데미지 */
@@ -1396,6 +1400,10 @@ export interface ActionLogEntry {
   abilityDamageToAttacker?: number;
   /** abilityDamageToAttacker를 준 특성 이름 */
   abilityDamageAbilityName?: string;
+  /** 울퉁불퉁멧: 접촉기로 공격해 온 공격자가 입은 데미지 합(다단히트면 타수 합산) */
+  rockyHelmetDamage?: number;
+  /** rockyHelmetDamage를 준 도구 이름 */
+  rockyHelmetItemName?: string;
   /** 저주받은바디처럼 방어측 특성이 발동해 공격자가 방금 쓴 기술을 봉인(PP 0)했으면 그 기술 이름 */
   abilityDisabledMoveName?: string;
   /** abilityDisabledMoveName을 봉인시킨 특성 이름 */
@@ -2949,6 +2957,26 @@ function resolveAction(
   // 개시할 때 해제된다.
   if (effectiveMove.glaiveRush) attacker.glaiveRushVulnerable = true;
 
+  // 노말주얼 등 타입 젬(Item.oneTimeGemMultiplier): 대전 중 처음 이 타입의 데미지 기술을 쓰면
+  // 위력이 오르고 그 즉시 소모된다 — 소모 자체는 "사용하는 순간" 일어나 명중·빗나감과 무관하다
+  // (변환자재와 같은 시점). 다단히트 타마다 재판정하면 안 되므로 여기서 한 번만 판정해
+  // gemMultiplier에 담고, resolveHit이 매 타 이 배율을 곱한다.
+  const isDamagingMove =
+    effectiveMove.category !== "status" &&
+    (effectiveMove.power !== null || effectiveMove.fixedDamage !== undefined);
+  let gemMultiplier = 1;
+  let ateGemItemName: string | undefined;
+  if (
+    isDamagingMove &&
+    effectiveMove.type &&
+    attackerItem?.oneTimeGemMultiplier?.type === effectiveMove.type &&
+    !attacker.itemConsumed
+  ) {
+    gemMultiplier = attackerItem.oneTimeGemMultiplier.multiplier;
+    ateGemItemName = attackerItem.name;
+    consumeItem(attacker);
+  }
+
   // 반짝가루(방어측 0.9배)·광각렌즈(공격측 1.1배)·포커스렌즈(공격측, 늦게 움직일 때 1.2배)·
   // 모래숨기(방어측, 날씨 조건부 0.8배)·복안(공격측 1.3배)을 전부 한 배율로 곱한다.
   const weatherAccuracyBoost = defenderAbility?.weatherOpponentAccuracyMultiplier;
@@ -3055,6 +3083,8 @@ function resolveAction(
       // 전광쌍격 타입 소실·대검돌격 약점도 명중 굴림 전에 확정된다(빗나가도 적용).
       lostTypeAfterUse,
       glaiveRushArmed: effectiveMove.glaiveRush || undefined,
+      // 타입 젬도 명중 굴림 전에 이미 소모됐다(빗나가도 소모된 채로 남는다).
+      ateGemItemName,
     };
   }
 
@@ -3150,6 +3180,9 @@ function resolveAction(
   let abilityInflictedVolatileAbilityName: string | undefined;
   let abilityDamageToAttacker = 0;
   let abilityDamageAbilityName: string | undefined;
+  // 울퉁불퉁멧(도구): 접촉기로 공격해 온 공격자가 입은 데미지 합(다단히트면 타수만큼 누적).
+  let rockyHelmetDamage = 0;
+  let rockyHelmetItemName: string | undefined;
   // 내용물분출: applyDamageToDefender가 "이번 타를 맞기 직전" 방어측 HP를 여기에 담아둔다.
   let defenderHpBeforeLastHit = 0;
   let abilityDisabledMoveName: string | undefined;
@@ -3194,7 +3227,9 @@ function resolveAction(
   function resolveHit(hitMove: Move): { damage: number; isCritical: boolean } {
     // 대운: 급소율 카운터가 상시 +raisesCritStageBy(1). 조가비갑옷/전투무장: 방어측이면 급소 자체가 안 뜬다(alwaysCrit 포함).
     const critStageForHit =
-      attacker.critStage + getItemCritStageBonus(attackerItem) + (attackerAbility?.raisesCritStageBy ?? 0);
+      attacker.critStage +
+      getItemCritStageBonus(attackerItem, attacker.slot.pokemonId) +
+      (attackerAbility?.raisesCritStageBy ?? 0);
     // 무도한행동: 방어측이 독/맹독이면 항상 급소(조가비갑옷/전투무장 등 방어측 급소 방지는 존중).
     const mercilessCrit =
       !!attackerAbility?.alwaysCritsVsPoisonedTarget &&
@@ -3285,7 +3320,7 @@ function resolveAction(
         hustleMultiplier,
       weatherMultiplier,
       fieldMultiplier,
-      itemMultiplier,
+      itemMultiplier: itemMultiplier * gemMultiplier,
       stabMultiplier,
       // 천진: 자신이 이 특성이면 상대 쪽 랭크(공격측이면 상대 방어/특방, 방어측이면 상대
       // 공격/특공)를 전부 무시(0랭크 취급) — computeDamage는 카테고리에 맞는 스탯 하나만
@@ -3449,6 +3484,23 @@ function resolveAction(
    * 타에서 까칠한피부 반동으로 죽었으면) 더 이상 판정하지 않는다. 대타를 맞혔을 때도 발동하지
    * 않는다 — 본가 규칙: 접촉은 대타(인형)에 닿은 것이라 실제 상대에게 닿은 게 아니다.
    */
+  /**
+   * 울퉁불퉁멧(Item.contactAttackerDamageDenominator): 방어측이 이 도구를 지녔고 이번 타가
+   * 접촉기면 공격자가 최대 HP를 이 값으로 나눈 만큼 데미지를 입는다. 까칠한피부와 같은 축이지만
+   * 특성이 아니라 도구라 triggerAbilityHitEffect(hitTrigger 전용)와 분리했다 — 그 함수와 같은
+   * 지점마다 나란히 호출된다. 매직가드 공격자·대타로 흡수된 타는 무효.
+   */
+  function applyContactItemRecoil(hitDamage: number): void {
+    if (hitDamage <= 0 || isFainted(attacker) || blockedBySubstitute) return;
+    const denom = defenderItem?.contactAttackerDamageDenominator;
+    if (!denom || !(effectiveMove.makesContact ?? false) || attackerAbility?.negatesIndirectDamage) return;
+    const amount = Math.floor(attacker.maxHp / denom);
+    if (amount <= 0) return;
+    attacker.currentHp = Math.max(0, attacker.currentHp - amount);
+    rockyHelmetDamage += amount;
+    rockyHelmetItemName = defenderItem!.name;
+  }
+
   function triggerAbilityHitEffect(hitDamage: number): HitAbilityEvent | undefined {
     if (hitDamage <= 0 || isFainted(attacker) || blockedBySubstitute) return undefined;
     const trigger = defenderAbility?.hitTrigger;
@@ -3664,6 +3716,7 @@ function resolveAction(
       applyDamageToDefender(damage);
       applyEndurance(preHp);
       triggerAbilityHitEffect(damage);
+      applyContactItemRecoil(damage);
     }
   } else if (isDamaging && !blockedByProtect && effectiveMove.minHits !== undefined && effectiveMove.maxHits !== undefined) {
     // 다단히트: 명중 판정은 이미 위(첫 타 기준)에서 끝났으니 여기부턴 최소 1타는 맞은 상태로
@@ -3702,6 +3755,7 @@ function resolveAction(
       applyEndurance(preHp);
       // 이 타에서 방어측 on-hit 특성이 한 일을 그 타 레코드에 붙인다(로그를 타별로 찍기 위함).
       perHitLog[perHitLog.length - 1].abilityEvent = triggerAbilityHitEffect(hitResult.damage);
+      applyContactItemRecoil(hitResult.damage);
       if (isFainted(defender) || substituteBroke) break; // 상대가 쓰러지거나 대타가 깨지면 남은 타수는 진행하지 않는다
     }
     damagePercent = damage / defender.realStats.hp;
@@ -3715,6 +3769,7 @@ function resolveAction(
     applyDamageToDefender(damage);
     applyEndurance(preHp);
     triggerAbilityHitEffect(damage);
+    applyContactItemRecoil(damage);
   }
 
   // 죽기살기(Endeavor, E-5): 데미지 계산이 없는(power null) 기술이라 위 분기에 안 걸린다.
@@ -3813,6 +3868,7 @@ function resolveAction(
     applyDamageToDefender(followUpHitDamage);
     applyEndurance(preHp);
     triggerAbilityHitEffect(followUpHitDamage);
+    applyContactItemRecoil(followUpHitDamage);
   }
 
   // 발버둥 반동: 필중이라 항상 이 지점까지 오고, 명중/기절 여부와 무관하게 사용자가
@@ -4568,6 +4624,14 @@ function resolveAction(
     saltCureApplied = true;
   }
 
+  // 풍선(Item.grantsGroundImmunity): 데미지를 주는 기술에 맞으면(땅타입은 애초에 면역이라
+  // damage가 0 — 안 터짐) 그 즉시 터져서 소모된다. 이후 판정부터는 다시 땅타입에 노출된다.
+  let balloonPoppedItemName: string | undefined;
+  if (damage > 0 && defenderItem?.grantsGroundImmunity && !defender.itemConsumed) {
+    balloonPoppedItemName = defenderItem.name;
+    consumeItem(defender);
+  }
+
   // 문어굳히기(Move.octolock): 변화기. 명중 시 상대를 octolock 상태로 만든다 — 교체 봉인 +
   // 매 턴 종료 시 방어·특수방어 -1. 부가효과 취급이라 인분·우격다짐·황금몸에 막힌다.
   let octolockApplied = false;
@@ -4952,7 +5016,8 @@ function resolveAction(
       fieldSetFailed = true;
     } else {
       state.field = effectiveMove.setsField;
-      state.fieldTurnsRemaining = FIELD_DURATION;
+      // 그라운드코트: 필드를 깐 쪽이 이 도구를 지녔으면 지속시간이 늘어난다(기본 5턴 + 3 = 8턴).
+      state.fieldTurnsRemaining = FIELD_DURATION + (attackerItem?.fieldDurationBonus ?? 0);
     }
   }
 
@@ -5307,6 +5372,8 @@ function resolveAction(
     abilityInflictedVolatileAbilityName,
     abilityDamageToAttacker: abilityDamageToAttacker || undefined,
     abilityDamageAbilityName,
+    rockyHelmetDamage: rockyHelmetDamage || undefined,
+    rockyHelmetItemName,
     abilityDisabledMoveName,
     abilityDisableAbilityName,
     pickpocketStolenItemName,
@@ -5344,6 +5411,8 @@ function resolveAction(
     sleepTalkCalledMoveName,
     changedOwnTypeTo,
     changedOwnTypeAbilityName,
+    ateGemItemName,
+    balloonPoppedItemName,
     opportunistCopiedStats,
     opportunistAbilityName,
     electromorphosisEmpoweredAbilityName,
@@ -6037,7 +6106,16 @@ function finishTurn(ctx: RunTurnContext): RunTurnOutcome {
       // 턴 종료마다 카운터가 1씩 줄어 0에서 자동 해제된다. 매직가드면 데미지 면제(카운터는 진행).
       if (hasVolatile(fighter.volatile, "bound")) {
         if (!fighterAbility?.negatesIndirectDamage) {
-          const bindDamage = Math.min(fighter.currentHp, Math.floor(fighter.maxHp / 8));
+          // 조임밴드: 속박을 건 쪽(상대)이 이 도구를 지녔으면 1/8 대신 1/6로 데미지가 늘어난다.
+          const binder = state[opponentKey(key)];
+          const binderAbility = binder.effectiveAbilityId ? getAbility(binder.effectiveAbilityId) : undefined;
+          const binderItem = binderAbility?.disablesOwnItemEffects
+            ? undefined
+            : binder.currentItemId
+              ? getItem(binder.currentItemId)
+              : undefined;
+          const bindDenom = binderItem?.bindDamageDenominator ?? 8;
+          const bindDamage = Math.min(fighter.currentHp, Math.floor(fighter.maxHp / bindDenom));
           fighter.currentHp -= bindDamage;
           if (bindDamage > 0) {
             endOfTurn.push({
