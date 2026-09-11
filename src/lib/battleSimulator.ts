@@ -1347,6 +1347,12 @@ export interface ActionLogEntry {
    */
   opponentStatDrops?: { stat: BattleStatKey; delta: number }[];
   /**
+   * 골드러시·오버히트·용성군 등이 자기 자신의 랭크를 실제로 내린 것(§4-6). delta는 내려간
+   * 칸 수(양수) — opponentStatDrops와 같은 포맷, 주어만 항상 actorName. 확정 하락만(확률
+   * 부가효과 제외).
+   */
+  selfStatDrops?: { stat: BattleStatKey; delta: number }[];
+  /**
    * 이미 걸린 상태이상에 같은/다른 주 상태이상 기술을 써서 아무 변화가 없었으면 true
    * (블래키가 이미 맹독인 번치코에게 맹독 재시전 등). "그러나 실패했다!" 문구용.
    */
@@ -4111,13 +4117,22 @@ function resolveAction(
   // 자기 랭크다운 디메리트(delta ≤ 0), 명중/회피/급소는 제외. 승기·하양허브 등 뒤 후처리 전에 측정.
   const selfStatRises: { stat: BattleStatKey; delta: number }[] = [];
   const selfStatsAtMax: BattleStatKey[] = [];
+  // §4-6: selfStatRises와 대칭 — 골드러시·오버히트·용성군처럼 자기 대상 확정 랭크 하락
+  // 부가효과가 실제로 적용된 것을 모은다. delta는 내려간 칸 수(양수)로 opponentStatDrops와
+  // 같은 포맷을 쓴다. 엔진 계산(attacker.stages)은 이미 정상 동작하고 있었고, 이 결과를
+  // 담을 로그 필드가 없던 게 §4-6의 원인이었다.
+  const selfStatDrops: { stat: BattleStatKey; delta: number }[] = [];
   for (const sc of effectiveMove.statChanges ?? []) {
     if (sc.target !== "self" || sc.chance !== undefined) continue;
-    if (!isBattleStatKey(sc.stat) || (sc.delta ?? 0) <= 0) continue;
+    if (!isBattleStatKey(sc.stat) || (sc.delta ?? 0) === 0) continue;
     const before = attackerStagesBeforeMoveChange[sc.stat];
     const after = attacker.stages[sc.stat];
-    if (after > before) selfStatRises.push({ stat: sc.stat, delta: after - before });
-    else if (before >= 6) selfStatsAtMax.push(sc.stat);
+    if ((sc.delta ?? 0) > 0) {
+      if (after > before) selfStatRises.push({ stat: sc.stat, delta: after - before });
+      else if (before >= 6) selfStatsAtMax.push(sc.stat);
+    } else if (after < before) {
+      selfStatDrops.push({ stat: sc.stat, delta: before - after });
+    }
   }
 
   // 클리어바디(전체)·괴력집게(공격만)·미러아머(반사): 방금 적용된 opponent 랭크변화 중 실제로
@@ -5412,6 +5427,7 @@ function resolveAction(
     protectFailed,
     selfStatRises: selfStatRises.length ? selfStatRises : undefined,
     selfStatsAtMax: selfStatsAtMax.length ? selfStatsAtMax : undefined,
+    selfStatDrops: selfStatDrops.length ? selfStatDrops : undefined,
     blockedByProtectMoveName,
     enduredProtectMoveName,
     protectContactPenaltyMoveName,
