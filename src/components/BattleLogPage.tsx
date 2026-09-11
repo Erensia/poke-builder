@@ -365,6 +365,8 @@ export function BattleLogPage() {
     passBaton: boolean;
     /** 위기회피로 인한 강제 퇴장이면 true (유턴류와 안내 문구가 다르다) */
     emergencyExit?: boolean;
+    /** 탈출버튼처럼 도구로 인한 강제 퇴장이면 그 도구 이름 */
+    ejectItemName?: string;
   } | null>(null);
   // 편별 턴 입력 모드 — "기술" 또는 "교체"
   const [inputMode, setInputMode] = useState<{ a: "move" | "switch"; b: "move" | "switch" }>({ a: "move", b: "move" });
@@ -581,6 +583,7 @@ export function BattleLogPage() {
         side: outcome.awaitingSelfSwitch.side,
         passBaton: outcome.awaitingSelfSwitch.passBaton,
         emergencyExit: outcome.awaitingSelfSwitch.emergencyExit,
+        ejectItemName: outcome.awaitingSelfSwitch.ejectItemName,
       });
       return;
     }
@@ -1097,6 +1100,10 @@ export function BattleLogPage() {
                             {pendingPivot.emergencyExit ? (
                               <>
                                 {pokemon.name}의 위기회피! 위험을 피해 물러난다!
+                              </>
+                            ) : pendingPivot.ejectItemName ? (
+                              <>
+                                {pokemon.name}의 {pendingPivot.ejectItemName}! 그 자리에서 물러난다!
                               </>
                             ) : (
                               <>
@@ -2452,6 +2459,30 @@ export function BattleLogPage() {
                               </div>
                               {sw.entryMessages.map((m, k) => (
                                 <div key={`swfm-${j}-${k}`} className="battle-turn-line is-muted">
+                                  {m}
+                                </div>
+                              ))}
+                            </div>
+                          );
+                        })}
+                      {/* PR-C4c: 레드카드 — 공격자 자신이 상대 도구에 맞아 강제로 끌려나온 교체 */}
+                      {turn.switches
+                        .filter((sw) => sw.afterMove && sw.forced && sw.side === action.actor && sw.redCardItemName)
+                        .map((sw, j) => {
+                          const outN = getPokemon(sw.outPokemonId)?.name ?? "포켓몬";
+                          const inN = getPokemon(sw.inPokemonId)?.name ?? "포켓몬";
+                          return (
+                            <div key={`swrc-${j}`}>
+                              <div className="battle-turn-line">
+                                {defenderName}의 {sw.redCardItemName}! {outN}
+                                {eunNeun(outN)} 강제로 교체되었다!
+                              </div>
+                              <div className="battle-turn-line">
+                                {inN}
+                                {eunNeun(inN)} 배틀에 끌려나왔다!
+                              </div>
+                              {sw.entryMessages.map((m, k) => (
+                                <div key={`swrcm-${j}-${k}`} className="battle-turn-line is-muted">
                                   {m}
                                 </div>
                               ))}

@@ -1130,5 +1130,19 @@
     "description": "미스트필드에서는 정신이 단단해져서 특수방어가 1랭크 오르며, 사용 후 사라진다.",
     "category": "held-item",
     "terrainSeedBoost": { "field": "미스트필드", "stat": "spd" }
+  },
+  {
+    "id": "레드카드",
+    "name": "레드카드",
+    "description": "상대에게 공격받으면 그 상대를 강제로 교체시킨다. 사용 후 사라진다.",
+    "category": "held-item",
+    "forcesAttackerSwitchOnHit": true
+  },
+  {
+    "id": "탈출버튼",
+    "name": "탈출버튼",
+    "description": "상대에게 공격받으면 곧바로 교체된다. 사용 후 사라진다.",
+    "category": "held-item",
+    "exitsFieldOnHit": true
   }
 ]
