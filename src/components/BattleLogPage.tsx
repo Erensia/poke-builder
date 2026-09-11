@@ -24,6 +24,7 @@ import {
   applySwitch,
   createBattleState,
   hasUsableMove,
+  isTrappedFromSwitching,
   opponentKey,
   runTurn,
   resumeTurn,
@@ -86,6 +87,8 @@ const VOLATILE_LABELS = {
   bound: "속박",
   saltCure: "소금절이",
   syrupCoat: "물엿범벅",
+  octolock: "문어굳히기",
+  jawLock: "물고버티기",
 } as const;
 
 /** 액션 로그 한 줄 안에 "OO 발동!"으로 뭉뚱그리기보다 전용 문구를 따로 쓰는 volatile들 */
@@ -287,6 +290,14 @@ function hitAbilityEventLines(
       </>,
     );
   }
+  if (ev.setFieldOnHit) {
+    push(
+      <>
+        {defenderName}의 {ev.abilityName}! {ev.setFieldOnHit}
+        {roEuro(ev.setFieldOnHit)} 바뀌었다!
+      </>,
+    );
+  }
   return lines;
 }
 
@@ -352,6 +363,10 @@ export function BattleLogPage() {
     ctx: RunTurnContext;
     side: Side;
     passBaton: boolean;
+    /** 위기회피로 인한 강제 퇴장이면 true (유턴류와 안내 문구가 다르다) */
+    emergencyExit?: boolean;
+    /** 탈출버튼처럼 도구로 인한 강제 퇴장이면 그 도구 이름 */
+    ejectItemName?: string;
   } | null>(null);
   // 편별 턴 입력 모드 — "기술" 또는 "교체"
   const [inputMode, setInputMode] = useState<{ a: "move" | "switch"; b: "move" | "switch" }>({ a: "move", b: "move" });
@@ -472,11 +487,40 @@ export function BattleLogPage() {
       return s !== null && s.moves.some((m) => m !== null);
     });
 
+  /**
+   * 포켓몬은 골랐는데 기술을 하나도 안 배정한 슬롯(§4-2). buildableIndices가 이런 슬롯을
+   * "선출 가능" 후보에서 조용히 빼버려서, 배턴터치·유턴처럼 자체 교체를 하려는 기술이 예비가
+   * 없는 것처럼 취급돼 아무 안내 없이 무산되는 문제로 이어졌다 — 대전 시작 시점에 미리 막아서
+   * 애초에 그 상태로 대전에 들어가지 못하게 한다.
+   */
+  const movelessIndices = (side: Side): SlotIndex[] =>
+    SLOT_INDICES.filter((i) => {
+      const s = slotCtl(side, i).slot;
+      return s !== null && s.moves.every((m) => m === null);
+    });
+
+  /**
+   * movelessIndices가 하나라도 있으면 그 편 소속 포켓몬 이름만 모아 그 편 전용 경고 문구를
+   * 만든다(양쪽을 한 줄로 합치지 않음 — 각자 파티 상단에 표시하려면 편별로 갈라져 있어야 함).
+   */
+  const movelessWarningFor = (side: Side): string | null => {
+    const names = movelessIndices(side).map((i) => {
+      const s = slotCtl(side, i).slot;
+      return s ? (getPokemon(s.pokemonId)?.name ?? "포켓몬") : "포켓몬";
+    });
+    if (names.length === 0) return null;
+    return `${names.join(", ")}에게 기술을 최소 1개 배정해야 대전을 시작할 수 있습니다.`;
+  };
+
+  /** 양쪽 중 어느 편이든 기술 없는 슬롯이 있으면 true — canProceed·VS 버튼 문구용 */
+  const hasMovelessSlot = (["a", "b"] as const).some((side) => movelessIndices(side).length > 0);
+
   /** 이 편이 선출 화면에서 골라야 하는지 — 유효 빌드가 선출 인원을 초과하면 true */
   const needsSelection = (side: Side) => buildableIndices(side).length > BATTLE_SELECT_SIZE;
 
-  /** 양쪽 다 유효 빌드가 1마리 이상이면 다음 단계로 갈 수 있다 */
-  const canProceed = (["a", "b"] as const).every((side) => buildableIndices(side).length >= 1);
+  /** 양쪽 다 유효 빌드가 1마리 이상이고, 기술 없는 슬롯이 하나도 없어야 다음 단계로 갈 수 있다 */
+  const canProceed =
+    !hasMovelessSlot && (["a", "b"] as const).every((side) => buildableIndices(side).length >= 1);
 
   /** 셋업 화면 VS 버튼이 무엇을 하는지 (선출 화면을 거치면 "다음 (선출)", 아니면 바로 "대전 시작") */
   const proceedLabel = needsSelection("a") || needsSelection("b") ? "다음 (선출)" : "대전 시작";
@@ -567,6 +611,8 @@ export function BattleLogPage() {
         ctx: outcome._ctx,
         side: outcome.awaitingSelfSwitch.side,
         passBaton: outcome.awaitingSelfSwitch.passBaton,
+        emergencyExit: outcome.awaitingSelfSwitch.emergencyExit,
+        ejectItemName: outcome.awaitingSelfSwitch.ejectItemName,
       });
       return;
     }
@@ -706,6 +752,9 @@ export function BattleLogPage() {
                   {side === "a" ? "내 파티" : "상대 파티"}{" "}
                   <span className="battle-setup-column-hint">6마리까지 빌드 · 4마리 이상이면 3마리 선출</span>
                 </div>
+                {movelessWarningFor(side) && (
+                  <p className="battle-lock-warning">{movelessWarningFor(side)}</p>
+                )}
                 {SLOT_INDICES.map((i) => (
                   <BattleSetupCard
                     key={i}
@@ -736,8 +785,8 @@ export function BattleLogPage() {
                     className="battle-setup-vs"
                     disabled={!canProceed}
                     onClick={handleProceed}
-                    aria-label={canProceed ? proceedLabel : "양쪽 파티를 먼저 완성하세요"}
-                    title={canProceed ? proceedLabel : "양쪽 파티를 먼저 완성하세요"}
+                    aria-label={canProceed ? proceedLabel : hasMovelessSlot ? "기술을 배정하지 않은 포켓몬이 있습니다" : "양쪽 파티를 먼저 완성하세요"}
+                    title={canProceed ? proceedLabel : hasMovelessSlot ? "기술을 배정하지 않은 포켓몬이 있습니다" : "양쪽 파티를 먼저 완성하세요"}
                   >
                     VS
                   </button>
@@ -1080,9 +1129,21 @@ export function BattleLogPage() {
                       return (
                         <div className="battle-switch-panel">
                           <div className="battle-switch-panel-title">
-                            {pokemon.name}
-                            {eunNeun(pokemon.name)} 돌아온다!
-                            {pendingPivot.passBaton && " (능력 변화 인계)"}
+                            {pendingPivot.emergencyExit ? (
+                              <>
+                                {pokemon.name}의 위기회피! 위험을 피해 물러난다!
+                              </>
+                            ) : pendingPivot.ejectItemName ? (
+                              <>
+                                {pokemon.name}의 {pendingPivot.ejectItemName}! 그 자리에서 물러난다!
+                              </>
+                            ) : (
+                              <>
+                                {pokemon.name}
+                                {eunNeun(pokemon.name)} 돌아온다!
+                                {pendingPivot.passBaton && " (능력 변화 인계)"}
+                              </>
+                            )}
                             <br />
                             내보낼 포켓몬을 선택하세요!
                           </div>
@@ -1104,7 +1165,10 @@ export function BattleLogPage() {
 
                     if (winner) return null;
 
-                    const canSwitch = benchIdx.length > 0 && !fighter.chargingMoveId && fighter.currentHp > 0;
+                    // 문어굳히기/물고버티기(도망봉인)에 걸려 있으면 자발적 교체 불가(고스트 예외).
+                    const trapped = isTrappedFromSwitching(fighter);
+                    const canSwitch =
+                      benchIdx.length > 0 && !fighter.chargingMoveId && fighter.currentHp > 0 && !trapped;
                     const mode = canSwitch ? inputMode[side] : "move";
 
                     return (
@@ -1125,6 +1189,11 @@ export function BattleLogPage() {
                               </button>
                             ))}
                           </div>
+                        )}
+
+                        {/* PR-C1b: 도망봉인(문어굳히기·물고버티기) 안내 — 교체 토글이 사라진 이유 표시 */}
+                        {trapped && benchIdx.length > 0 && fighter.currentHp > 0 && (
+                          <div className="battle-input-hint is-muted">교체할 수 없다! (도망봉인)</div>
                         )}
 
                         {/* §4: 메가진화 선언 토글 — 스톤을 들었고, 아직 안 했고, 그 편이 이번 배틀에
@@ -1570,6 +1639,52 @@ export function BattleLogPage() {
                           </div>
                         </>
                       )}
+                      {/* PR-C1: 전광쌍격 — 사용 후 자기 타입 소실(빗나가도 표시) */}
+                      {!action.blockedReason && action.lostTypeAfterUse && (
+                        <div className="battle-turn-line is-muted">
+                          {actorName}
+                          {eunNeun(actorName)} {action.lostTypeAfterUse}타입이 사라졌다!
+                        </div>
+                      )}
+                      {/* PR-C1: 대검돌격 — 사용 후 피격 필중·피해 2배 상태 */}
+                      {!action.blockedReason && action.glaiveRushArmed && (
+                        <div className="battle-turn-line is-muted">
+                          {actorName}
+                          {eunNeun(actorName)} 무방비 상태가 되었다!
+                        </div>
+                      )}
+                      {/* PR-C1: 코트체인지 — 양쪽 진영 설치물·스크린 교체 */}
+                      {!action.blockedReason && action.hit && action.courtChangeDone && (
+                        <div className="battle-turn-line is-muted">서로의 필드 효과를 뒤바꿨다!</div>
+                      )}
+                      {/* PR-C1: 회생의기도 — 교대 포켓몬 부활 / 대상 없음 */}
+                      {!action.blockedReason && action.hit && action.revivedPartyName && (
+                        <div className="battle-turn-line is-muted">
+                          {action.revivedPartyName}의 기운을 되찾아주었다!
+                        </div>
+                      )}
+                      {!action.blockedReason && action.hit && action.reviveFailed && (
+                        <div className="battle-turn-line is-muted">그러나 실패했다!</div>
+                      )}
+                      {/* PR-C1b: 문어굳히기 / 물고버티기 — 도망봉인 */}
+                      {!action.blockedReason && action.hit && action.octolockApplied && (
+                        <div className="battle-turn-line is-muted">
+                          {defenderName}
+                          {eunNeun(defenderName)} 문어굳히기에 붙잡혀 도망칠 수 없다!
+                        </div>
+                      )}
+                      {!action.blockedReason && action.hit && action.jawLockApplied && (
+                        <div className="battle-turn-line is-muted">
+                          {actorName}와(과) {defenderName}
+                          {eunNeun(defenderName)} 서로 물고 늘어져 교체할 수 없다!
+                        </div>
+                      )}
+                      {/* PR-C2b: 위기회피 — 피격으로 HP 절반 이하 → 퇴장 (실제 교체는 pendingPivot 패널) */}
+                      {!action.blockedReason && action.hit && action.triggersDefenderEmergencyExit && (
+                        <div className="battle-turn-line is-muted">
+                          {defenderName}의 {action.emergencyExitAbilityName ?? "위기회피"}!
+                        </div>
+                      )}
                       {/* C-5 명중 빗나감 — 메인 줄은 "OO의 기합구슬 — !"로 끝내고 여기서 별도 줄 */}
                       {!action.blockedReason && !action.charging && !action.evadedByCharge && !action.hit && (
                         <div className="battle-turn-line is-muted">
@@ -1724,6 +1839,27 @@ export function BattleLogPage() {
                           {eunNeun(actorName)} {action.abilityDamageToAttacker} 데미지를 입었다
                         </div>
                       )}
+                      {/* PR-C4a: 울퉁불퉁멧 — 접촉기 공격자 반동(다단히트 합산이라 hits 무관 표시) */}
+                      {!action.blockedReason && !!action.rockyHelmetDamage && (
+                        <div className="battle-turn-line is-muted">
+                          {defenderName}의 {action.rockyHelmetItemName}! {actorName}
+                          {eunNeun(actorName)} {action.rockyHelmetDamage} 데미지를 입었다!
+                        </div>
+                      )}
+                      {/* PR-C4a: 노말주얼 등 타입 젬 — 소모되며 위력 상승 */}
+                      {!action.blockedReason && action.ateGemItemName && (
+                        <div className="battle-turn-line is-muted">
+                          {actorName}의 {action.ateGemItemName}
+                          {eunNeun(action.ateGemItemName)} 발동해 위력이 올랐다!
+                        </div>
+                      )}
+                      {/* PR-C4a: 풍선 — 피격으로 터짐 */}
+                      {!action.blockedReason && action.hit && action.balloonPoppedItemName && (
+                        <div className="battle-turn-line is-muted">
+                          {defenderName}의 {action.balloonPoppedItemName}
+                          {eunNeun(action.balloonPoppedItemName)} 터졌다!
+                        </div>
+                      )}
                       {!action.blockedReason && !action.hits && action.abilityDisabledMoveName && (
                         <div className="battle-turn-line is-muted">
                           {defenderName}의 {action.abilityDisableAbilityName}! {actorName}의{" "}
@@ -1791,6 +1927,15 @@ export function BattleLogPage() {
                       {!action.blockedReason && action.bulletproofBlockedByAbilityName && (
                         <div className="battle-turn-line is-muted">
                           {defenderName}의 {action.bulletproofBlockedByAbilityName}! 구슬·폭탄 기술은 통하지 않는다!
+                        </div>
+                      )}
+                      {/* 황금몸 — 명중한 변화기의 효과를 통째로 무효화(§4-5). 빗나감(C-5)과 헷갈리지
+                          않도록 battleSimulator에서 hit까지 확인해서 내려준다 */}
+                      {!action.blockedReason && action.goodAsGoldBlockedByAbilityName && (
+                        <div className="battle-turn-line is-muted">
+                          {defenderName}의 {action.goodAsGoldBlockedByAbilityName}!
+                          <br />
+                          {defenderName}에게 효과가 없는 듯하다...
                         </div>
                       )}
                       {/* 아로마베일 — 헤롱헤롱·도발·기술봉인·앙코르를 막았을 때 */}
@@ -1882,6 +2027,27 @@ export function BattleLogPage() {
                         <div className="battle-turn-line is-muted">
                           {defenderName}의 모래뿜기! 날씨가 {action.sandSpitWeather}
                           {roEuro(action.sandSpitWeather)} 바뀌었다!
+                        </div>
+                      )}
+                      {/* PR-C2: 넘치는씨 — 피격으로 그래스필드 설정 */}
+                      {!action.blockedReason && !action.hits && action.seedSowerField && (
+                        <div className="battle-turn-line is-muted">
+                          {defenderName}의 넘치는씨! {action.seedSowerField}
+                          {roEuro(action.seedSowerField)} 바뀌었다!
+                        </div>
+                      )}
+                      {/* PR-C4b: 시드류 — 이번 행동으로 필드가 새로 깔려 발동 */}
+                      {!action.blockedReason &&
+                        action.terrainSeedMessages?.map((m, i) => (
+                          <div key={`seed-${i}`} className="battle-turn-line is-muted">
+                            {m}
+                          </div>
+                        ))}
+                      {/* PR-C2: 해감액 — 흡수기가 회복 대신 데미지 */}
+                      {!action.blockedReason && action.hit && !!action.liquidOozeDamage && (
+                        <div className="battle-turn-line is-muted">
+                          {defenderName}의 {action.liquidOozeAbilityName ?? "해감액"}! {actorName}
+                          {eunNeun(actorName)} 체력을 흡수해 오히려 {action.liquidOozeDamage} 데미지를 입었다!
                         </div>
                       )}
                       {/* 마법가루 — 상대 타입을 단일 타입으로 치환 */}
@@ -2185,6 +2351,28 @@ export function BattleLogPage() {
                             );
                           });
                         })()}
+                      {/* §4-6 골드러시·오버히트·용성군 등 — 자기 대상 확정 랭크 하락 부가효과.
+                          opponentStatDrops와 같은 렌더 패턴, 주어만 항상 actorName. */}
+                      {!action.blockedReason &&
+                        action.selfStatDrops &&
+                        action.selfStatDrops.length > 0 &&
+                        (() => {
+                          const byDelta = new Map<number, string[]>();
+                          for (const d of action.selfStatDrops) {
+                            const labels = byDelta.get(d.delta) ?? [];
+                            labels.push(STAT_LABELS[d.stat]);
+                            byDelta.set(d.delta, labels);
+                          }
+                          return [...byDelta.entries()].map(([delta, labels]) => {
+                            const joined = labels.join(", ");
+                            return (
+                              <div key={`self-drop-${delta}`} className="battle-turn-line is-muted">
+                                {actorName}의 {joined}
+                                {iGa(joined)} {stageRiseAdverb(delta)}떨어졌다!
+                              </div>
+                            );
+                          });
+                        })()}
                       {/* G: 방어/판별/킹실드 — "방어태세 돌입" → 상대가 자신을 겨냥했으면 "몸을 지켰다",
                           아니면 "실패". 버티기/길동무는 별도 문구 축을 유지한다. */}
                       {!action.blockedReason && action.protectStanceEntered && (
@@ -2340,6 +2528,30 @@ export function BattleLogPage() {
                             </div>
                           );
                         })}
+                      {/* PR-C4c: 레드카드 — 공격자 자신이 상대 도구에 맞아 강제로 끌려나온 교체 */}
+                      {turn.switches
+                        .filter((sw) => sw.afterMove && sw.forced && sw.side === action.actor && sw.redCardItemName)
+                        .map((sw, j) => {
+                          const outN = getPokemon(sw.outPokemonId)?.name ?? "포켓몬";
+                          const inN = getPokemon(sw.inPokemonId)?.name ?? "포켓몬";
+                          return (
+                            <div key={`swrc-${j}`}>
+                              <div className="battle-turn-line">
+                                {defenderName}의 {sw.redCardItemName}! {outN}
+                                {eunNeun(outN)} 강제로 교체되었다!
+                              </div>
+                              <div className="battle-turn-line">
+                                {inN}
+                                {eunNeun(inN)} 배틀에 끌려나왔다!
+                              </div>
+                              {sw.entryMessages.map((m, k) => (
+                                <div key={`swrcm-${j}-${k}`} className="battle-turn-line is-muted">
+                                  {m}
+                                </div>
+                              ))}
+                            </div>
+                          );
+                        })}
                     </div>
                   );
                 })}
@@ -2375,6 +2587,12 @@ export function BattleLogPage() {
                         {turnName(e.actor)}가 씨앗으로 체력을 {e.leechSeedHealAmount} 회복 (남은 HP{" "}
                         {e.remainingHp})
                       </>
+                    ) : e.liquidOozeDamage ? (
+                      <>
+                        {turnName(e.actor)}
+                        {eunNeun(turnName(e.actor))} 해감액을 빨아들여 {e.damage} 데미지 (남은 HP {e.remainingHp})
+                        {e.fainted && " · 기절!"}
+                      </>
                     ) : e.wishHeal ? (
                       <>
                         {turnName(e.actor)}의 희망사항으로 체력을 {e.wishHeal} 회복 (남은 HP{" "}
@@ -2407,6 +2625,12 @@ export function BattleLogPage() {
                       <>
                         {turnName(e.actor)}
                         {eunNeun(turnName(e.actor))} 물엿범벅이 되어 스피드가 떨어졌다! (남은 HP{" "}
+                        {e.remainingHp})
+                      </>
+                    ) : e.octolockDrop ? (
+                      <>
+                        {turnName(e.actor)}
+                        {eunNeun(turnName(e.actor))} 문어굳히기 때문에 방어와 특수방어가 떨어졌다! (남은 HP{" "}
                         {e.remainingHp})
                       </>
                     ) : e.perishFainted ? (

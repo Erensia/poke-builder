@@ -92,15 +92,32 @@ function ItemDetail({ item }: { item: Item }) {
 
 export function ItemDexPage() {
   const [query, setQuery] = useState("");
-  const [selectedId, setSelectedId] = useState<string>(ITEMS[0]?.id ?? "");
+  // 처음 들어왔을 땐 아무 것도 안 골랐다는 뜻으로 null — 첫 항목(정렬 순서상 우연히 걸리는
+  // 아무 도구)을 자동으로 보여주지 않는다. 사용자가 리스트에서 뭔가 클릭해야 상세가 뜬다.
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  const filtered = useMemo(() => ITEMS.filter((i) => i.name.includes(query.trim())), [query]);
+  // §3-4: 이름순 정렬 + 메가스톤은 뒤로 뺀다(로스터가 늘면서 원본 items.json 순서가
+  // 뒤죽박죽이라 도감에서 훑어보기 힘들었음). 카테고리로 먼저 나누고 각 카테고리 안에서만
+  // 가나다순.
+  const filtered = useMemo(
+    () =>
+      ITEMS.filter((i) => i.name.includes(query.trim())).sort((a, b) => {
+        if (a.category !== b.category) return a.category === "mega-stone" ? 1 : -1;
+        return a.name.localeCompare(b.name, "ko");
+      }),
+    [query],
+  );
 
   // 검색으로 목록이 좁혀져서 선택된 도구가 더는 안 보이면, 필터된 첫 항목으로 자연스럽게 넘어간다
-  // (포켓몬 도감 PokedexPage와 동일한 패턴).
-  const selected = ITEMS.find((i) => i.id === selectedId) && filtered.some((i) => i.id === selectedId)
-    ? ITEMS.find((i) => i.id === selectedId)
-    : filtered[0];
+  // (포켓몬 도감 PokedexPage와 동일한 패턴). 단, 애초에 아무 것도 선택 안 한 상태(null)면
+  // 그 자동 넘어가기 대상에서 제외 — 계속 빈 상태로 둔다.
+  const selectedFromId = selectedId ? ITEMS.find((i) => i.id === selectedId) : undefined;
+  const selected =
+    selectedId === null
+      ? undefined
+      : selectedFromId && filtered.some((i) => i.id === selectedId)
+        ? selectedFromId
+        : filtered[0];
 
   return (
     <section className="itemdex-page">

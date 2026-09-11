@@ -1659,7 +1659,8 @@
   {
     "id": "넘치는씨",
     "name": "넘치는씨",
-    "description": "공격을 받으면 그래스필드를 펼친다. (피격 시 필드 설정 — 미배선)"
+    "description": "데미지를 주는 기술로 공격받으면 그래스필드를 펼친다.",
+    "hitTrigger": { "on": "damaging", "setsFieldOnHit": "그래스필드" }
   },
   {
     "id": "도주",
@@ -1675,13 +1676,19 @@
   {
     "id": "열교환",
     "name": "열교환",
-    "description": "불꽃타입 기술로 공격받으면 공격이 1랭크 오른다. 화상 상태가 되지 않는다. (불꽃 피격 시 공격 상승은 미배선)",
-    "immuneToStatuses": ["burn"]
+    "description": "불꽃타입 기술로 공격받으면 공격이 1랭크 오른다. 화상 상태가 되지 않는다.",
+    "immuneToStatuses": ["burn"],
+    "hitTrigger": {
+      "on": "damaging",
+      "moveTypeIn": ["불꽃"],
+      "selfStatChanges": [{ "stat": "atk", "delta": 1 }]
+    }
   },
   {
     "id": "위기회피",
     "name": "위기회피",
-    "description": "HP가 절반 이하가 되면 위험을 피하려 지닌 포켓몬과 강제로 교체된다. (교체 발동 — 미배선)"
+    "description": "공격을 받아 HP가 절반 이하가 되면 위험을 피하려 지닌 포켓몬과 교체된다.",
+    "exitsFieldAtHalfHp": true
   },
   {
     "id": "잠복",
@@ -1691,13 +1698,20 @@
   {
     "id": "주눅",
     "name": "주눅",
-    "description": "악·고스트·벌레타입 기술로 공격받거나 위협을 받으면 겁을 먹어 스피드가 1랭크 오른다. (피격/위협 시 스피드 상승 — 미배선)"
+    "description": "악·고스트·벌레타입 기술로 공격받거나 위협을 받으면 겁을 먹어 스피드가 1랭크 오른다.",
+    "hitTrigger": {
+      "on": "damaging",
+      "moveTypeIn": ["악", "고스트", "벌레"],
+      "selfStatChanges": [{ "stat": "spe", "delta": 1 }]
+    },
+    "raisesStatWhenIntimidated": { "stat": "spe", "delta": 1 }
   },
   {
     "id": "파수견",
     "name": "파수견",
-    "description": "위협을 받으면 공격이 1랭크 오른다. 포켓몬을 강제로 교체시키는 기술·도구의 영향을 받지 않는다(자신이 지닌 강제 교체 수단은 정상 작동). (위협 시 공격 상승은 미배선)",
-    "preventsForcedSwitch": true
+    "description": "위협을 받으면 공격이 1랭크 오른다. 포켓몬을 강제로 교체시키는 기술·도구의 영향을 받지 않는다(자신이 지닌 강제 교체 수단은 정상 작동).",
+    "preventsForcedSwitch": true,
+    "guardsAgainstIntimidate": true
   },
   {
     "id": "펑크록",
@@ -1719,11 +1733,19 @@
   {
     "id": "풀모피",
     "name": "풀모피",
-    "description": "그래스필드일 때 방어가 1.5배가 된다. (필드 조건부 방어 상승 — 미배선)"
+    "description": "그래스필드일 때 방어가 1.5배가 된다.",
+    "modifiers": [
+      {
+        "scope": "defense",
+        "multiplier": 1.5,
+        "condition": { "fieldIs": "그래스필드", "moveCategoryIn": ["physical"] }
+      }
+    ]
   },
   {
     "id": "해감액",
     "name": "해감액",
-    "description": "흡수 계열 기술로 이 포켓몬의 HP를 흡수하면, 상대는 HP를 회복하는 대신 그만큼 데미지를 입는다. 씨뿌리기 등의 흡수도 반사한다. (흡수 반사 — 미배선)"
+    "description": "흡수 계열 기술로 이 포켓몬의 HP를 흡수하면, 상대는 HP를 회복하는 대신 그만큼 데미지를 입는다. 씨뿌리기 등의 흡수도 반사한다.",
+    "reverseDrainHealsToDamage": true
   }
 ]

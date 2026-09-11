@@ -3,6 +3,7 @@ import type { Item } from "../types/item";
 import type { Move } from "../types/move";
 import type { PokemonType } from "../types/pokemon-type";
 import type { WeatherKind } from "../types/weather";
+import type { FieldKind } from "../types/field";
 import { resolveAbilityOffense, resolveAbilityDefense, resolveStabMultiplier } from "./abilityModifiers";
 import { getEffectiveness } from "./typeEffectiveness";
 
@@ -45,6 +46,8 @@ export function resolveMoveContext(
   defenderHpIsFull = true,
   /** 이상한비늘(상태이상 조건)용. 안 넘기면 상태이상 없음으로 간주(매치업 페이지 기본값) */
   defenderHasStatusCondition = false,
+  /** 풀모피(그래스필드 조건)용 현재 필드. 안 넘기면 필드 없음으로 간주. */
+  field?: FieldKind,
 ): MoveContext {
   const abilityOffense = resolveAbilityOffense(attackerAbility, move, weather, attackerHpFraction);
   const effectiveMove = abilityOffense.overrideMoveType ? { ...move, type: abilityOffense.overrideMoveType } : move;
@@ -64,6 +67,7 @@ export function resolveMoveContext(
     effectiveMove,
     defenderHpIsFull,
     defenderHasStatusCondition,
+    field,
   );
   const stabMultiplier = resolveStabMultiplier(attackerAbility);
 
@@ -82,9 +86,12 @@ export function resolveMoveContext(
   const absorbedByDefenderAbility = !!(effectiveMove.type && effectiveMove.type === defenderAbility?.absorbsType?.type);
   // 부유: 방어측이 원래 없던 면역을 스스로 얻는다(bypassImmunity와 반대 방향). bypassImmunity가
   // 이미 참이면(배짱류·검은철구) 이 면역은 뚫린 것으로 취급 — 위 두 경로가 이 필드보다 우선한다.
+  // 풍선(Item.grantsGroundImmunity)도 같은 축의 땅타입 한정 버전 — 터지면(battleSimulator가
+  // 데미지를 준 뒤 소모) 다음 판정부터는 자연히 이 조건이 꺼진다.
   const grantsImmunity = !!(
     effectiveMove.type &&
-    defenderAbility?.grantsImmunityToTypes?.includes(effectiveMove.type) &&
+    (defenderAbility?.grantsImmunityToTypes?.includes(effectiveMove.type) ||
+      (effectiveMove.type === "땅" && defenderItem?.grantsGroundImmunity)) &&
     !bypassImmunity
   );
   // 프리즈드라이: 상대가 이 타입이면 상성표를 무시하고 강제로 이 배율을 쓴다. 단, 방어측이

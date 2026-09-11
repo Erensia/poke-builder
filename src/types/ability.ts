@@ -25,6 +25,11 @@ export interface AbilityModifierCondition {
   moveCategoryIn?: MoveCategory[];
   /** 이 날씨일 때만 (모래의힘: 모래바람) */
   weatherIs?: WeatherKind;
+  /**
+   * 이 필드가 깔려 있을 때만 (풀모피: 그래스필드 → 방어 ×1.5). 매치업 페이지·배틀 시뮬레이터
+   * 둘 다 현재 필드를 넘겨준다 — 안 넘기면 필드 없음으로 간주해 이 조건은 실패한다.
+   */
+  fieldIs?: FieldKind;
   /** 접촉기일 때만 (단단한발톱) */
   makesContact?: boolean;
   /**
@@ -137,6 +142,11 @@ export interface AbilityHitTrigger {
    * 그때그때 남아 있던 실 HP). 매직가드 공격자에겐 무효. on:"damaging"과 함께 쓴다.
    */
   damagesAttackerByRemainingHpOnFaint?: boolean;
+  /**
+   * 넘치는씨(Seed Sower): 데미지를 주는 기술로 피격당하면 필드를 이 값(그래스필드)으로 바꾼다(5턴).
+   * 이미 다른 필드가 있어도 덮어쓴다(본가). on:"damaging"과 함께 쓴다.
+   */
+  setsFieldOnHit?: FieldKind;
 }
 
 /**
@@ -350,6 +360,29 @@ export interface Ability {
    * 경우라 별도 필드로 분리했다. resolveEntryAbilityEffects에서 적용한다.
    */
   lowersOpponentStatOnEntry?: { stat: BattleStatKey; delta: number };
+  /**
+   * 파수견(Guard Dog): 상대의 위협(lowersOpponentStatOnEntry)이 이 포켓몬에게 발동하려 하면,
+   * 공격이 떨어지는 대신 오히려 1랭크 오른다(본가 규칙). preventsForcedSwitch와 별개 축.
+   */
+  guardsAgainstIntimidate?: boolean;
+  /**
+   * 주눅(Rattled): 상대의 위협을 받으면(공격 하락은 정상적으로 일어난 뒤) 이 스탯을 추가로
+   * 올린다(주눅 = 스피드 +1). 악·고스트·벌레 기술 피격 시 스피드 상승은 hitTrigger.selfStatChanges로 처리.
+   */
+  raisesStatWhenIntimidated?: { stat: BattleStatKey; delta: number };
+  /**
+   * 해감액(Liquid Ooze): 상대가 흡수 계열 기술(Move.drainFraction)이나 씨뿌리기로 이 포켓몬의
+   * HP를 흡수하면, 상대가 회복하는 대신 같은 양만큼 데미지를 입는다.
+   */
+  reverseDrainHealsToDamage?: boolean;
+  /**
+   * 위기회피(Emergency Exit): 공격을 받아 HP가 최대치의 절반 이하로 떨어지면(직전엔 절반 초과,
+   * 떨어진 뒤에도 0 초과) 지닌 포켓몬과 교체돼 물러난다. 이 시뮬레이터에서는 유턴류와 같은
+   * pause 흐름으로 유저가 나올 포켓몬을 고른다. 살아있는 예비가 없거나 도망봉인·뿌리박기
+   * 상태면 발동하지 않는다. (설치물·상태이상 등 간접 데미지로 인한 발동은 아직 미배선 — 기술
+   * 데미지만.)
+   */
+  exitsFieldAtHalfHp?: boolean;
   /** 일렉트릭메이커: 배틀에 등장하면 이 필드를 편다(이미 다른 필드가 있으면 실패). */
   setsFieldOnEntry?: FieldKind;
   /**

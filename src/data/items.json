@@ -1060,5 +1060,89 @@
     "name": "드닐레이브나이트",
     "description": "",
     "category": "mega-stone"
+  },
+  {
+    "id": "울퉁불퉁멧",
+    "name": "울퉁불퉁멧",
+    "description": "접촉기로 공격해 온 상대에게 최대 HP의 1/6만큼 데미지를 준다.",
+    "category": "held-item",
+    "contactAttackerDamageDenominator": 6
+  },
+  {
+    "id": "노말주얼",
+    "name": "노말주얼",
+    "description": "노말타입 기술을 사용할 때 그 위력이 1.3배가 되며, 사용 후 사라진다.",
+    "category": "held-item",
+    "oneTimeGemMultiplier": { "type": "노말", "multiplier": 1.3 }
+  },
+  {
+    "id": "풍선",
+    "name": "풍선",
+    "description": "땅타입 기술을 맞지 않게 된다. 데미지를 받으면 풍선이 터져서 사라진다.",
+    "category": "held-item",
+    "grantsGroundImmunity": true
+  },
+  {
+    "id": "조임밴드",
+    "name": "조임밴드",
+    "description": "조이기·엉겨붙기 등으로 상대를 묶었을 때 주는 데미지가 1/8에서 1/6으로 늘어난다.",
+    "category": "held-item",
+    "bindDamageDenominator": 6
+  },
+  {
+    "id": "대파",
+    "name": "대파",
+    "description": "파오리가 지니면 급소에 맞는 확률이 크게 오른다.",
+    "category": "held-item",
+    "critStageBonusForSpecies": { "speciesIds": ["파오리"], "bonus": 2 }
+  },
+  {
+    "id": "그라운드코트",
+    "name": "그라운드코트",
+    "description": "그래스필드·사이코필드·미스트필드·일렉트릭필드의 지속 시간이 3턴 증가한다. (총 8턴)",
+    "category": "held-item",
+    "fieldDurationBonus": 3
+  },
+  {
+    "id": "일렉트릭시드",
+    "name": "일렉트릭시드",
+    "description": "일렉트릭필드에서는 몸이 단단해져서 방어가 1랭크 오르며, 사용 후 사라진다.",
+    "category": "held-item",
+    "terrainSeedBoost": { "field": "일렉트릭필드", "stat": "def" }
+  },
+  {
+    "id": "그래스시드",
+    "name": "그래스시드",
+    "description": "그래스필드에서는 몸이 단단해져서 방어가 1랭크 오르며, 사용 후 사라진다.",
+    "category": "held-item",
+    "terrainSeedBoost": { "field": "그래스필드", "stat": "def" }
+  },
+  {
+    "id": "사이코시드",
+    "name": "사이코시드",
+    "description": "사이코필드에서는 정신이 단단해져서 특수방어가 1랭크 오르며, 사용 후 사라진다.",
+    "category": "held-item",
+    "terrainSeedBoost": { "field": "사이코필드", "stat": "spd" }
+  },
+  {
+    "id": "미스트시드",
+    "name": "미스트시드",
+    "description": "미스트필드에서는 정신이 단단해져서 특수방어가 1랭크 오르며, 사용 후 사라진다.",
+    "category": "held-item",
+    "terrainSeedBoost": { "field": "미스트필드", "stat": "spd" }
+  },
+  {
+    "id": "레드카드",
+    "name": "레드카드",
+    "description": "상대에게 공격받으면 그 상대를 강제로 교체시킨다. 사용 후 사라진다.",
+    "category": "held-item",
+    "forcesAttackerSwitchOnHit": true
+  },
+  {
+    "id": "탈출버튼",
+    "name": "탈출버튼",
+    "description": "상대에게 공격받으면 곧바로 교체된다. 사용 후 사라진다.",
+    "category": "held-item",
+    "exitsFieldOnHit": true
   }
 ]

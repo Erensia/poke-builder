@@ -256,14 +256,21 @@ interface PokedexPageProps {
 
 export function PokedexPage({ onSelectMove }: PokedexPageProps) {
   const [query, setQuery] = useState("");
-  const [selectedId, setSelectedId] = useState<string>(POKEMON[0]?.id ?? "");
+  // 처음 들어왔을 땐 아무 것도 안 골랐다는 뜻으로 null — 첫 항목을 자동으로 보여주지 않는다.
+  // 사용자가 리스트에서 뭔가 클릭해야 상세가 뜬다(도구 도감 ItemDexPage와 동일한 패턴).
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const filtered = useMemo(() => POKEMON.filter((p) => p.name.includes(query.trim())), [query]);
 
-  // 검색으로 목록이 좁혀져서 선택된 포켓몬이 더는 안 보이면, 필터된 첫 항목으로 자연스럽게 넘어간다
-  const selected = POKEMON.find((p) => p.id === selectedId) && filtered.some((p) => p.id === selectedId)
-    ? POKEMON.find((p) => p.id === selectedId)
-    : filtered[0];
+  // 검색으로 목록이 좁혀져서 선택된 포켓몬이 더는 안 보이면, 필터된 첫 항목으로 자연스럽게 넘어간다.
+  // 단, 애초에 아무 것도 선택 안 한 상태(null)면 그 자동 넘어가기 대상에서 제외 — 계속 빈 상태로 둔다.
+  const selectedFromId = selectedId ? POKEMON.find((p) => p.id === selectedId) : undefined;
+  const selected =
+    selectedId === null
+      ? undefined
+      : selectedFromId && filtered.some((p) => p.id === selectedId)
+        ? selectedFromId
+        : filtered[0];
 
   return (
     <section className="pokedex-page">

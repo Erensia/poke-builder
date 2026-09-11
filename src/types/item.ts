@@ -2,6 +2,7 @@ import type { PokemonType } from "./pokemon-type";
 import type { MoveCategory } from "./move";
 import type { StatusCondition } from "./status";
 import type { WeatherKind } from "./weather";
+import type { FieldKind } from "./field";
 
 export type ItemCategory = "mega-stone" | "held-item";
 
@@ -120,4 +121,58 @@ export interface Item {
    * "이 도구가 잠금 대상인지"를 판별하는 플래그로만 쓰인다.
    */
   locksFirstMoveUsed?: boolean;
+  /**
+   * 울퉁불퉁멧: 접촉기로 자신을 공격해 온 상대가 최대 HP를 이 값으로 나눈(내림) 만큼 데미지를
+   * 입는다(1/6 → 6). 매직가드 공격자는 무효. 다단히트는 타수마다 발동.
+   */
+  contactAttackerDamageDenominator?: number;
+  /**
+   * 노말주얼 등 타입 젬 — 대전 중 처음 이 타입의 데미지 기술을 쓰면(명중 여부 무관, 사용하는
+   * 순간) 위력이 이 배율만큼 오르고 그 즉시 소모된다. 실크스카프류(moveTypeMultiplier)와 달리
+   * "1회용"이라는 점이 다르다.
+   */
+  oneTimeGemMultiplier?: { type: PokemonType; multiplier: number };
+  /**
+   * 풍선: 땅타입 기술에 대한 완전 면역을 준다(부유와 같은 축이나 도구). 데미지를 주는 기술에
+   * 맞으면(땅타입이 아니라 실제로 데미지가 들어온 기술) 그 즉시 터져서 소모되고, 이후로는
+   * 다시 땅타입에 노출된다.
+   */
+  grantsGroundImmunity?: boolean;
+  /**
+   * 조임밴드: 이 도구를 지닌 쪽이 조이기·엉겨붙기 등으로 상대를 속박(bound)시키면, 매 턴 종료
+   * 속박 데미지가 기본 1/8 대신 이 값으로 나눈 양이 된다(1/6 → 6).
+   */
+  bindDamageDenominator?: number;
+  /**
+   * 대파: 이 종족 id 목록에 있는 포켓몬이 지녔을 때만 급소율 랭크에 이 보너스를 더한다
+   * (critStageBonus의 종족 한정 버전 — 파오리류 전용, +2).
+   */
+  critStageBonusForSpecies?: { speciesIds: string[]; bonus: number };
+  /**
+   * 그라운드코트: 이 도구를 지닌 쪽이 필드를 깔면(기술·특성 무관) 지속시간이 이 값만큼 늘어난다
+   * (weatherDurationBonus·screenDurationBonus와 같은 축의 필드 버전. 기본 5턴 + 3 = 8턴).
+   */
+  fieldDurationBonus?: number;
+  /**
+   * 시드류(일렉트릭시드·그래스시드·사이코시드·미스트시드): 이 필드가 활성화된 동안(이미 나와
+   * 있는데 필드가 깔리거나, 필드가 이미 있는데 등장) 지닌 포켓몬의 이 스탯이 1랭크 오르고
+   * 그 즉시 소모된다(대전 중 1회). stat은 이 4종 전부 방어(def) 또는 특수방어(spd)만 대상이라
+   * 두 값으로 좁혀뒀다.
+   */
+  terrainSeedBoost?: { field: FieldKind; stat: "def" | "spd" };
+  /**
+   * 레드카드: 데미지를 주는 기술에 맞으면(0 초과) 그 공격자를 무작위 예비 포켓몬으로 강제
+   * 교체시키고 그 즉시 소모된다. 드래곤테일(Move.forcesTargetSwitch)과 같은 축이지만 방향이
+   * 반대 — 지닌 쪽(피격자)이 아니라 공격자가 밀려난다. 공격자에게 살아있는 예비가 없거나
+   * 도망봉인·뿌리박기·흡반(preventsForcedSwitch) 상태면 발동하지 않는다. 지닌 쪽이 이 피격으로
+   * 기절했으면 카드를 쓸 수 없어 발동하지 않는다.
+   */
+  forcesAttackerSwitchOnHit?: boolean;
+  /**
+   * 탈출버튼: 데미지를 주는 기술에 맞으면(0 초과, 위기회피와 달리 HP 문턱 없음) 지닌 쪽이
+   * 곧바로 교체된다 — 유턴류와 같은 pause 흐름으로 유저가 나올 포켓몬을 고른다. 살아있는
+   * 예비가 없거나 도망봉인·뿌리박기 상태면, 또는 같은 피격으로 이미 다른 강제 교체가
+   * 확정됐으면(드래곤테일·위기회피 등) 발동하지 않는다.
+   */
+  exitsFieldOnHit?: boolean;
 }

@@ -708,4 +708,40 @@ export interface Move {
    * "…은(는) 전력을 다하기 시작했다!"를 남긴다(ActionLogEntry.fickleBeamEmpowered).
    */
   randomDoublePower?: number;
+  /**
+   * 전광쌍격(Double Shock): 실제로 이 기술을 쓰면(명중·빗나감 무관) 사용자의 타입 목록에서
+   * 이 타입(전기)이 사라진다. 사용자가 이미 그 타입이 아니면 아무 일도 없다. 사라진 타입은
+   * 배틀 끝까지 돌아오지 않는다(변환자재 타입 변경과 같은 취급 — 교체해도 유지). 두 타입 중
+   * 하나면 남은 한 타입만, 단일 타입이면 무타입이 된다(타입 상성이 전부 등배가 됨).
+   */
+  losesTypeAfterUse?: PokemonType;
+  /**
+   * 대검돌격(Glaive Rush): 이 기술을 쓴 뒤 사용자의 다음 행동 개시 전까지, 사용자를 겨냥한
+   * 상대 기술이 반드시 명중하고(명중 굴림 생략) 그 데미지가 2배가 된다. 사용자가 다시 행동을
+   * 개시하는 시점(resolveAction 최상단)에 해제되며, 교체로 물러나도 해제된다
+   * (BattleFighterState.glaiveRushVulnerable).
+   */
+  glaiveRush?: boolean;
+  /**
+   * 코트체인지(Court Change): 명중 시 양쪽 진영의 설치물(hazards)과 스크린(screens)을 통째로
+   * 맞바꾼다. 필드·날씨·트릭룸은 장 전체 효과라 대상이 아니다.
+   */
+  swapsSideEffects?: boolean;
+  /**
+   * 회생의기도(Revival Blessing): 명중 시 기절한 교대 포켓몬 1마리(가장 앞 슬롯)를 최대 HP의
+   * 절반으로 부활시킨다. 벤치 부활이라 교체(pendingPivot)는 일어나지 않는다. 부활시킬 대상이
+   * 없으면 실패한다(ActionLogEntry.reviveFailed).
+   */
+  revivesFaintedAlly?: boolean;
+  /**
+   * 문어굳히기(Octolock): 변화기. 명중 시 상대를 octolock 상태로 만든다 — 자기 의지로 교체
+   * 불가(고스트 예외) + 매 턴 종료 시 방어·특수방어 1랭크씩 감소. 인분·우격다짐엔 걸리지
+   * 않는다(부가효과 취급). 이미 걸려 있으면 재적용 안 함.
+   */
+  octolock?: boolean;
+  /**
+   * 물고버티기(Jaw Lock): 데미지 기술. 명중 시 사용자와 대상 양쪽을 jawLock 상태로 만든다 —
+   * 양쪽 다 자기 의지로 교체 불가(고스트 예외). 한쪽이 자리를 비우면 양쪽 다 해제.
+   */
+  jawLock?: boolean;
 }
