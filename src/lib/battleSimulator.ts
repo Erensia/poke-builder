@@ -1069,6 +1069,9 @@ export function createBattleState(init: { a: SideInit; b: SideInit; weather?: We
   applyMimicryForm(state.a, state.field);
   applyMimicryForm(state.b, state.field);
 
+  // 시드류: 배틀 시작 시점에 이미 필드가 깔려 있으면(등장 특성으로 방금 깔린 경우 포함) 발동.
+  state.entryAnnouncements.push(...triggerTerrainSeeds(state));
+
   // 일루전(§6-1): 리드가 조로아크류면 배틀 시작 시점부터 파티 마지막 슬롯 모습으로 위장한다.
   for (const key of ["a", "b"] as const) {
     const f = state[key];
@@ -1185,6 +1188,8 @@ export interface ActionLogEntry {
   setField?: FieldKind;
   /** 필드 기술을 썼지만 이미 다른 필드가 깔려있어서 실패했으면 true */
   fieldSetFailed?: boolean;
+  /** 시드류(Item.terrainSeedBoost)가 이번 행동으로 새로 깔린 필드에 반응해 발동한 안내 문구 */
+  terrainSeedMessages?: string[];
   /** 스텔스록을 어느 진영에 깔았으면 그 진영 키(a/b). 로그 문구용 */
   stealthRockSetForSide?: FighterKey;
   /** 압정뿌리기(스파이크)를 어느 진영에 새 층을 깔았으면 그 진영 키(a/b). 비검천중파·암석액스·압정뿌리기 */
@@ -1783,6 +1788,35 @@ function applyIntimidateWithReaction(
 }
 
 /**
+ * 시드류(일렉트릭시드·그래스시드→방어 +1 / 사이코시드·미스트시드→특방 +1, Item.terrainSeedBoost):
+ * 지닌 포켓몬이 필드에 있는 동안 그 필드가 활성화되면(이미 나와 있는데 필드가 깔리거나, 필드가
+ * 이미 있는데 등장) 1회 발동하고 소모된다. 양쪽 다 확인 — 필드는 장 전체 효과라 어느 쪽이
+ * 깔아도 상대 시드도 반응한다. 호출부가 반환된 문구를 알맞은 로그(등장 안내·ActionLogEntry)에 얹는다.
+ */
+function triggerTerrainSeeds(state: BattleState): string[] {
+  const lines: string[] = [];
+  if (!state.field) return lines;
+  for (const key of ["a", "b"] as const) {
+    const fighter = state[key];
+    if (isFainted(fighter) || fighter.itemConsumed) continue;
+    const ability = fighter.effectiveAbilityId ? getAbility(fighter.effectiveAbilityId) : undefined;
+    const item = ability?.disablesOwnItemEffects
+      ? undefined
+      : fighter.currentItemId
+        ? getItem(fighter.currentItemId)
+        : undefined;
+    const seed = item?.terrainSeedBoost;
+    if (!seed || seed.field !== state.field) continue;
+    fighter.stages = applyStageDelta(fighter.stages, seed.stat, contraryDelta(fighter, 1));
+    consumeItem(fighter);
+    const name = getPokemon(fighter.slot.pokemonId)?.name ?? "포켓몬";
+    const statText = seed.stat === "def" ? "방어가" : "특수방어가";
+    lines.push(`${name}의 ${item!.name}! ${statText} 올랐다!`);
+  }
+  return lines;
+}
+
+/**
 /**
  * 압정뿌리기·독압정·끈적끈적네트가 실제로 발동하는 "접지" 상태인지(Phase 8 §6).
  * 비행 타입, 부유·천정부지(땅 면역 특성) 보유자는 비접지. 에어벌룬·텔레키네시스 등은
@@ -1988,6 +2022,7 @@ function applyMegaEvolution(state: BattleState, key: FighterKey, log: string[]):
   // 메가폼의 등장 특성 발동(가뭄·위협·트레이스 등). 교체 등장이 아니라 그 자리에서의 발동이지만
   // 처리 내용은 동일하다 — 날씨/필드 덮어쓰기, 상대 랭크 하락, 상대 특성 복사 등.
   applyEntryAbilityOnSwitchIn(state, key, log);
+  log.push(...triggerTerrainSeeds(state));
   return true;
 }
 
@@ -2147,6 +2182,8 @@ function performSwitch(
   applyEntryHazardsOnSwitchIn(state, key, log);
   // 2. 등장 특성 — 위협·가뭄류·필드·트레이스. 설치물로 이미 기절했으면 스킵된다(내부에서 isFainted 가드).
   applyEntryAbilityOnSwitchIn(state, key, log);
+  // 3. 시드류 — 이미 필드가 있으면(방금 등장 특성으로 깔린 경우 포함) 발동.
+  log.push(...triggerTerrainSeeds(state));
 
   // TODO(§8): 추격(Pursuit)은 로스터에 없어 미구현 — 교체 대상을 위력 2배로 선타하는 예외.
 }
@@ -3213,6 +3250,8 @@ function resolveAction(
   let sandSpitWeather: WeatherKind | undefined;
   // 넘치는씨: 피격으로 필드를 바꿨을 때 그 필드.
   let seedSowerField: FieldKind | undefined;
+  // 시드류: 이번 행동 중 필드가 새로 깔려 발동한 시드 문구(넘치는씨 히트·기술 둘 다 여기 담는다).
+  const terrainSeedMessages: string[] = [];
 
   // 지진이 땅속의 구멍파기를, 파도타기가 물속의 다이빙을 실제로 맞혔을 때의 위력 배가.
   // evadedByCharge가 false인데 defenderHideType이 있다는 건 bypassesHiding 예외로 명중했다는 뜻.
@@ -3597,6 +3636,7 @@ function resolveAction(
       seedSowerField = trigger.setsFieldOnHit;
       ev.setFieldOnHit = trigger.setsFieldOnHit;
       evAny = true;
+      terrainSeedMessages.push(...triggerTerrainSeeds(state));
     }
     // 미끈미끈·점착(attackerStatChanges): 접촉해 온 공격자의 랭크를 내린다. 공격자의 클리어바디류
     // (blocksOpponentStatDropsForStats)·심술꾸러기(contraryDelta)는 그대로 존중한다. 미러아머 반사는
@@ -5018,6 +5058,7 @@ function resolveAction(
       state.field = effectiveMove.setsField;
       // 그라운드코트: 필드를 깐 쪽이 이 도구를 지녔으면 지속시간이 늘어난다(기본 5턴 + 3 = 8턴).
       state.fieldTurnsRemaining = FIELD_DURATION + (attackerItem?.fieldDurationBonus ?? 0);
+      terrainSeedMessages.push(...triggerTerrainSeeds(state));
     }
   }
 
@@ -5284,6 +5325,7 @@ function resolveAction(
     blockedBySubstituteMoveName,
     powderBlockedMoveName,
     setField: fieldSetFailed ? undefined : effectiveMove.setsField,
+    terrainSeedMessages: terrainSeedMessages.length ? terrainSeedMessages : undefined,
     fieldSetFailed,
     stealthRockSetForSide,
     spikesSetForSide,
