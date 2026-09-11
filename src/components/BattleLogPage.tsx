@@ -487,11 +487,40 @@ export function BattleLogPage() {
       return s !== null && s.moves.some((m) => m !== null);
     });
 
+  /**
+   * 포켓몬은 골랐는데 기술을 하나도 안 배정한 슬롯(§4-2). buildableIndices가 이런 슬롯을
+   * "선출 가능" 후보에서 조용히 빼버려서, 배턴터치·유턴처럼 자체 교체를 하려는 기술이 예비가
+   * 없는 것처럼 취급돼 아무 안내 없이 무산되는 문제로 이어졌다 — 대전 시작 시점에 미리 막아서
+   * 애초에 그 상태로 대전에 들어가지 못하게 한다.
+   */
+  const movelessIndices = (side: Side): SlotIndex[] =>
+    SLOT_INDICES.filter((i) => {
+      const s = slotCtl(side, i).slot;
+      return s !== null && s.moves.every((m) => m === null);
+    });
+
+  /**
+   * movelessIndices가 하나라도 있으면 그 편 소속 포켓몬 이름만 모아 그 편 전용 경고 문구를
+   * 만든다(양쪽을 한 줄로 합치지 않음 — 각자 파티 상단에 표시하려면 편별로 갈라져 있어야 함).
+   */
+  const movelessWarningFor = (side: Side): string | null => {
+    const names = movelessIndices(side).map((i) => {
+      const s = slotCtl(side, i).slot;
+      return s ? (getPokemon(s.pokemonId)?.name ?? "포켓몬") : "포켓몬";
+    });
+    if (names.length === 0) return null;
+    return `${names.join(", ")}에게 기술을 최소 1개 배정해야 대전을 시작할 수 있습니다.`;
+  };
+
+  /** 양쪽 중 어느 편이든 기술 없는 슬롯이 있으면 true — canProceed·VS 버튼 문구용 */
+  const hasMovelessSlot = (["a", "b"] as const).some((side) => movelessIndices(side).length > 0);
+
   /** 이 편이 선출 화면에서 골라야 하는지 — 유효 빌드가 선출 인원을 초과하면 true */
   const needsSelection = (side: Side) => buildableIndices(side).length > BATTLE_SELECT_SIZE;
 
-  /** 양쪽 다 유효 빌드가 1마리 이상이면 다음 단계로 갈 수 있다 */
-  const canProceed = (["a", "b"] as const).every((side) => buildableIndices(side).length >= 1);
+  /** 양쪽 다 유효 빌드가 1마리 이상이고, 기술 없는 슬롯이 하나도 없어야 다음 단계로 갈 수 있다 */
+  const canProceed =
+    !hasMovelessSlot && (["a", "b"] as const).every((side) => buildableIndices(side).length >= 1);
 
   /** 셋업 화면 VS 버튼이 무엇을 하는지 (선출 화면을 거치면 "다음 (선출)", 아니면 바로 "대전 시작") */
   const proceedLabel = needsSelection("a") || needsSelection("b") ? "다음 (선출)" : "대전 시작";
@@ -723,6 +752,9 @@ export function BattleLogPage() {
                   {side === "a" ? "내 파티" : "상대 파티"}{" "}
                   <span className="battle-setup-column-hint">6마리까지 빌드 · 4마리 이상이면 3마리 선출</span>
                 </div>
+                {movelessWarningFor(side) && (
+                  <p className="battle-lock-warning">{movelessWarningFor(side)}</p>
+                )}
                 {SLOT_INDICES.map((i) => (
                   <BattleSetupCard
                     key={i}
@@ -753,8 +785,8 @@ export function BattleLogPage() {
                     className="battle-setup-vs"
                     disabled={!canProceed}
                     onClick={handleProceed}
-                    aria-label={canProceed ? proceedLabel : "양쪽 파티를 먼저 완성하세요"}
-                    title={canProceed ? proceedLabel : "양쪽 파티를 먼저 완성하세요"}
+                    aria-label={canProceed ? proceedLabel : hasMovelessSlot ? "기술을 배정하지 않은 포켓몬이 있습니다" : "양쪽 파티를 먼저 완성하세요"}
+                    title={canProceed ? proceedLabel : hasMovelessSlot ? "기술을 배정하지 않은 포켓몬이 있습니다" : "양쪽 파티를 먼저 완성하세요"}
                   >
                     VS
                   </button>
@@ -2314,6 +2346,28 @@ export function BattleLogPage() {
                             return (
                               <div key={`drop-${delta}`} className="battle-turn-line is-muted">
                                 {subject}의 {joined}
+                                {iGa(joined)} {stageRiseAdverb(delta)}떨어졌다!
+                              </div>
+                            );
+                          });
+                        })()}
+                      {/* §4-6 골드러시·오버히트·용성군 등 — 자기 대상 확정 랭크 하락 부가효과.
+                          opponentStatDrops와 같은 렌더 패턴, 주어만 항상 actorName. */}
+                      {!action.blockedReason &&
+                        action.selfStatDrops &&
+                        action.selfStatDrops.length > 0 &&
+                        (() => {
+                          const byDelta = new Map<number, string[]>();
+                          for (const d of action.selfStatDrops) {
+                            const labels = byDelta.get(d.delta) ?? [];
+                            labels.push(STAT_LABELS[d.stat]);
+                            byDelta.set(d.delta, labels);
+                          }
+                          return [...byDelta.entries()].map(([delta, labels]) => {
+                            const joined = labels.join(", ");
+                            return (
+                              <div key={`self-drop-${delta}`} className="battle-turn-line is-muted">
+                                {actorName}의 {joined}
                                 {iGa(joined)} {stageRiseAdverb(delta)}떨어졌다!
                               </div>
                             );
