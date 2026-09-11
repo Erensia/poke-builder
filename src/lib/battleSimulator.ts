@@ -2722,6 +2722,7 @@ function resolveAction(
     attacker.currentHp / attacker.maxHp,
     defender.currentHp === defender.maxHp,
     defender.status.condition !== null,
+    state.field,
   );
 
   // 우격다짐: 데미지 기술에 "상대에게 해로운"(상태이상/행동방해/랭크다운) 또는 "자신에게 이로운"

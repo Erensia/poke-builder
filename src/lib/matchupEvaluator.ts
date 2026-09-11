@@ -317,6 +317,11 @@ export function evaluateSlotMatchup(
     defenderAbility,
     effectiveWeather,
     defenderItem,
+    // attackerHpFraction·defenderHpIsFull·defenderHasStatusCondition은 1턴 스냅샷이라 기본값 유지.
+    undefined,
+    undefined,
+    undefined,
+    field,
   );
 
   // 다단히트 기술이면, 특성/타입 조건 판정은 원래 기술(1타 위력) 기준으로 이미 끝났으니 여기서만

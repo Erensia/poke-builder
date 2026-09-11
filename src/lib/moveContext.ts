@@ -3,6 +3,7 @@ import type { Item } from "../types/item";
 import type { Move } from "../types/move";
 import type { PokemonType } from "../types/pokemon-type";
 import type { WeatherKind } from "../types/weather";
+import type { FieldKind } from "../types/field";
 import { resolveAbilityOffense, resolveAbilityDefense, resolveStabMultiplier } from "./abilityModifiers";
 import { getEffectiveness } from "./typeEffectiveness";
 
@@ -45,6 +46,8 @@ export function resolveMoveContext(
   defenderHpIsFull = true,
   /** 이상한비늘(상태이상 조건)용. 안 넘기면 상태이상 없음으로 간주(매치업 페이지 기본값) */
   defenderHasStatusCondition = false,
+  /** 풀모피(그래스필드 조건)용 현재 필드. 안 넘기면 필드 없음으로 간주. */
+  field?: FieldKind,
 ): MoveContext {
   const abilityOffense = resolveAbilityOffense(attackerAbility, move, weather, attackerHpFraction);
   const effectiveMove = abilityOffense.overrideMoveType ? { ...move, type: abilityOffense.overrideMoveType } : move;
@@ -64,6 +67,7 @@ export function resolveMoveContext(
     effectiveMove,
     defenderHpIsFull,
     defenderHasStatusCondition,
+    field,
   );
   const stabMultiplier = resolveStabMultiplier(attackerAbility);
 

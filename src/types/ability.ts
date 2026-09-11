@@ -25,6 +25,11 @@ export interface AbilityModifierCondition {
   moveCategoryIn?: MoveCategory[];
   /** 이 날씨일 때만 (모래의힘: 모래바람) */
   weatherIs?: WeatherKind;
+  /**
+   * 이 필드가 깔려 있을 때만 (풀모피: 그래스필드 → 방어 ×1.5). 매치업 페이지·배틀 시뮬레이터
+   * 둘 다 현재 필드를 넘겨준다 — 안 넘기면 필드 없음으로 간주해 이 조건은 실패한다.
+   */
+  fieldIs?: FieldKind;
   /** 접촉기일 때만 (단단한발톱) */
   makesContact?: boolean;
   /**
