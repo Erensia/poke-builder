@@ -2,6 +2,7 @@ import type { Ability, AbilityModifierCondition } from "../types/ability";
 import type { Move } from "../types/move";
 import type { PokemonType } from "../types/pokemon-type";
 import type { WeatherKind } from "../types/weather";
+import type { FieldKind } from "../types/field";
 
 function conditionMatches(
   condition: AbilityModifierCondition | undefined,
@@ -10,6 +11,7 @@ function conditionMatches(
   attackerHpFraction = 1,
   defenderHpIsFull = true,
   defenderHasStatusCondition = false,
+  field?: FieldKind,
 ): boolean {
   if (!condition) return true;
   if (condition.movePowerAtMost !== undefined) {
@@ -27,6 +29,9 @@ function conditionMatches(
   }
   if (condition.weatherIs !== undefined) {
     if (weather !== condition.weatherIs) return false;
+  }
+  if (condition.fieldIs !== undefined) {
+    if (field !== condition.fieldIs) return false;
   }
   if (condition.makesContact !== undefined) {
     if ((move.makesContact ?? false) !== condition.makesContact) return false;
@@ -88,12 +93,16 @@ export function resolveAbilityDefense(
   move: Move,
   defenderHpIsFull = true,
   defenderHasStatusCondition = false,
+  field?: FieldKind,
 ): number {
   if (!ability?.modifiers) return 1;
   let multiplier = 1;
   for (const modifier of ability.modifiers) {
     if (modifier.scope !== "defense") continue;
-    if (!conditionMatches(modifier.condition, move, undefined, 1, defenderHpIsFull, defenderHasStatusCondition)) continue;
+    if (
+      !conditionMatches(modifier.condition, move, undefined, 1, defenderHpIsFull, defenderHasStatusCondition, field)
+    )
+      continue;
     multiplier *= modifier.multiplier;
   }
   return multiplier;

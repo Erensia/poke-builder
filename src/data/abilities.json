@@ -1733,7 +1733,14 @@
   {
     "id": "풀모피",
     "name": "풀모피",
-    "description": "그래스필드일 때 방어가 1.5배가 된다. (필드 조건부 방어 상승 — 미배선)"
+    "description": "그래스필드일 때 방어가 1.5배가 된다.",
+    "modifiers": [
+      {
+        "scope": "defense",
+        "multiplier": 1.5,
+        "condition": { "fieldIs": "그래스필드", "moveCategoryIn": ["physical"] }
+      }
+    ]
   },
   {
     "id": "해감액",
