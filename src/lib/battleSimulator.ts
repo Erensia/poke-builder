@@ -1687,6 +1687,12 @@ export interface SwitchLogEntry {
    * 로그에서 새로 나온 포켓몬을 부르는 "가라!" 줄 대신 "…은 트레이너의 곁으로 돌아간다!"를 쓴다.
    */
   shedTail?: boolean;
+  /**
+   * 레드카드로 강제 교체됐으면 그 도구 이름. `forced`도 함께 true지만, 드래곤테일과 달리 `side`가
+   * "상대에게 도구를 맞은 공격자"(자기 자신의 편) — 끌려나온 쪽이 기술 시전자의 반대가 아니라
+   * 시전자 자신이라는 게 다르다. UI가 이 필드 유무로 두 케이스를 가른다.
+   */
+  redCardItemName?: string;
 }
 
 function isFainted(fighter: BattleFighterState): boolean {
@@ -5505,7 +5511,13 @@ export interface RunTurnOutcome {
  * 처리된다. _ctx는 불투명 컨텍스트(직렬화하지 말 것 — random·Move 객체를 물고 있다).
  */
 export interface RunTurnPaused {
-  awaitingSelfSwitch: { side: FighterKey; passBaton: boolean; emergencyExit?: boolean };
+  awaitingSelfSwitch: {
+    side: FighterKey;
+    passBaton: boolean;
+    emergencyExit?: boolean;
+    /** 탈출버튼처럼 도구가 강제 교체를 일으켰으면 그 도구 이름(UI 패널 문구용) */
+    ejectItemName?: string;
+  };
   nextState: BattleState;
   partialResult: TurnResult;
   _ctx: RunTurnContext;
@@ -5831,11 +5843,67 @@ function runActionPhase(ctx: RunTurnContext): RunTurnOutcome | RunTurnPaused {
       };
     }
 
+    const oppKey = opponentKey(key);
+
+    // 레드카드(Item.forcesAttackerSwitchOnHit): 데미지를 받은 방어측(홀더)이 이 도구를 지녔으면
+    // 공격자(key)를 무작위 예비 포켓몬으로 강제 교체시키고 카드를 소모한다. 드래곤테일과 같은
+    // 방향(무작위·pause 없음)이지만 대상이 반대다 — 여기선 "공격자"가 밀려난다. 홀더가 이 피격으로
+    // 기절했으면(카드를 쓸 수 없어) 발동하지 않는다. 도구는 "데미지를 받는 순간" 발동하는
+    // 효과라 드래곤테일 등 기술 자체의 강제 교체(아래 블록)보다 먼저 판정한다.
+    {
+      const holder = state[oppKey];
+      const holderAbility = holder.effectiveAbilityId ? getAbility(holder.effectiveAbilityId) : undefined;
+      const holderItem = holderAbility?.disablesOwnItemEffects
+        ? undefined
+        : holder.currentItemId
+          ? getItem(holder.currentItemId)
+          : undefined;
+      if (
+        holderItem?.forcesAttackerSwitchOnHit &&
+        action.hit &&
+        action.damage > 0 &&
+        !action.blockedByProtectMoveName &&
+        !action.blockedBySubstituteMoveName &&
+        !action.hitNegatedByAbilityName &&
+        !action.abilityAbsorbAbilityName &&
+        !isFainted(holder) &&
+        !isFainted(state[key]) &&
+        !ctx.didSwitch[key] &&
+        hasLivingReserve(sideOf(state, key)) &&
+        !isForcedSwitchBlocked(state[key])
+      ) {
+        const attackerSide = sideOf(state, key);
+        const fromIndex = attackerSide.activeIndex;
+        const reserveIdxs = attackerSide.party
+          .map((_f, idx) => idx)
+          .filter((idx) => idx !== fromIndex && !isFainted(attackerSide.party[idx]));
+        const toIndex = reserveIdxs[Math.floor(random() * reserveIdxs.length)];
+        const outgoing = attackerSide.party[fromIndex];
+        const entryMessages: string[] = [];
+        performSwitch(state, key, toIndex, entryMessages, false, false);
+        const inFighter = attackerSide.party[toIndex];
+        switches.push({
+          side: key,
+          fromIndex,
+          toIndex,
+          outPokemonId: outgoing.illusionAs ?? outgoing.slot.pokemonId,
+          inPokemonId: inFighter.illusionAs ?? inFighter.slot.pokemonId,
+          entryMessages,
+          afterMove: true,
+          forced: true,
+          redCardItemName: holderItem.name,
+        });
+        ctx.didSwitch[key] = true;
+        consumeItem(holder);
+      }
+    }
+
     // 드래곤테일·배대뒤치기·울부짖기·날려버리기: 명중해서(빗나감·행동불능·방어·대타·방음·매직미러·
     // 특성 무효 제외) 상대에게 살아있는 예비가 있고 흡반·뿌리박기로 저항하지 않으면 — 상대를 무작위
     // 예비 포켓몬으로 강제 교체한다. 데미지 기술은 데미지를 이미 준 뒤이고 타입 면역(0배)이면 발동
     // 안 한다. 유저 선택이 없는 엔진 내부 처리라 pendingPivot 같은 일시정지 없이 여기서 즉시 끝낸다.
-    const oppKey = opponentKey(key);
+    // 레드카드로 이미 이번 피격에 교체가 확정됐으면(didSwitch[oppKey]는 없지만 방향이 반대라
+    // 무관 — 레드카드는 key를, 이 블록은 oppKey를 움직인다) 그대로 진행해도 안전하다.
     if (
       mv.forcesTargetSwitch &&
       !action.blockedReason &&
@@ -5907,6 +5975,53 @@ function runActionPhase(ctx: RunTurnContext): RunTurnOutcome | RunTurnPaused {
         },
         _ctx: ctx,
       };
+    }
+
+    // 탈출버튼(Item.exitsFieldOnHit): 데미지를 받은 방어측(홀더)이 이 도구를 지녔으면 HP 문턱
+    // 없이(위기회피와 달리) 곧바로 물러난다 — 유턴류·위기회피와 같은 pause 흐름. 이미 다른
+    // 강제 교체가 확정됐으면(드래곤테일·위기회피) didSwitch로 걸러진다.
+    {
+      const holder = state[oppKey];
+      const holderAbility = holder.effectiveAbilityId ? getAbility(holder.effectiveAbilityId) : undefined;
+      const holderItem = holderAbility?.disablesOwnItemEffects
+        ? undefined
+        : holder.currentItemId
+          ? getItem(holder.currentItemId)
+          : undefined;
+      if (
+        holderItem?.exitsFieldOnHit &&
+        action.hit &&
+        action.damage > 0 &&
+        !action.blockedByProtectMoveName &&
+        !action.blockedBySubstituteMoveName &&
+        !action.hitNegatedByAbilityName &&
+        !action.abilityAbsorbAbilityName &&
+        !isFainted(holder) &&
+        !ctx.didSwitch[oppKey] &&
+        hasLivingReserve(sideOf(state, oppKey)) &&
+        !isForcedSwitchBlocked(holder) &&
+        !isTrappedFromSwitching(holder)
+      ) {
+        ctx.didSwitch[oppKey] = true;
+        ctx.pendingPivot = { side: oppKey, passBaton: false };
+        consumeItem(holder);
+        return {
+          awaitingSelfSwitch: { side: oppKey, passBaton: false, ejectItemName: holderItem.name },
+          nextState: state,
+          partialResult: {
+            turnNumber: state.turnNumber,
+            order,
+            actions: [...actions],
+            endOfTurn: [],
+            winner: undefined,
+            expiredScreens: [],
+            turnStartAnnouncements: ctx.turnStartAnnouncements,
+            switches: [...switches],
+            activePokemonIds: { a: state.a.slot.pokemonId, b: state.b.slot.pokemonId },
+          },
+          _ctx: ctx,
+        };
+      }
     }
 
     // 발버둥 반동이나 자폭류로 "상대를 쓰러뜨리면서 자신도 같이 쓰러지는" 행동 하나 안에서는
