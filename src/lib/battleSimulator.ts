@@ -4552,6 +4552,13 @@ function resolveAction(
           continue;
         }
       }
+      // 도발: 이미 도발 상태면 재시전은 실패한다(턴수 리셋 없이 조용히 무산 — 본가 "그러나
+      // 실패했다!"). statusInflictFailed는 위 inflictsStatus 루프와 같은 변수를 공유한다 —
+      // "이 행동으로 뭔가 걸려던 게 무산됐다"는 의미가 같아서 렌더 문구도 그대로 재사용된다.
+      if (effect.volatile === "taunt" && hasVolatile(target.volatile, "taunt")) {
+        statusInflictFailed = true;
+        continue;
+      }
       const chance = effect.chance !== undefined ? effect.chance / 100 : 1;
       if (random() >= chance) continue;
       if (effect.target === "self") {
@@ -5617,6 +5624,20 @@ export function runTurn(
   // 반대로 배틀 끝까지 유지되는 값이라 여기서 건드리지 않는다.
   state.a.activeProtect = undefined;
   state.b.activeProtect = undefined;
+  // 풀죽음(flinch)도 "이번 턴 한정" 효과라 매 턴 시작 시 항상 지운다. 원래는 걸린 포켓몬이
+  // 자기 행동을 개시할 때(resolveAction) consumeVolatileTurn으로 소모되는데, 그 턴에 교체로
+  // 나왔거나(§8 — didSwitch면 resolveAction 자체를 안 탐) 이미 행동을 마친 뒤 뒤늦게 걸리면
+  // (풀죽음을 건 쪽이 상대보다 느려서) 소모 경로를 안 타 다음 턴까지 남는 버그가 있었다
+  // (§4-4, 2026-09-10 발견). 여기서 무조건 지우면 정상 소모된 경우는 이미 없는 값 재확인이라
+  // 안전하고, 위 누락 케이스만 실제로 고쳐진다. recharge는 원래 다음 턴까지 지속돼야 하는
+  // 효과라 여기서 건드리지 않는다.
+  for (const f of [state.a, state.b]) {
+    if (hasVolatile(f.volatile, "flinch")) {
+      const active = { ...f.volatile.active };
+      delete active.flinch;
+      f.volatile = { active };
+    }
+  }
   // 송전: "이번 턴 한정" 타입 강제도 매 턴 시작 시 지운다(지난 턴 송전이 이번 턴까지 남으면 안 됨).
   state.a.moveTypeOverrideThisTurn = undefined;
   state.b.moveTypeOverrideThisTurn = undefined;
