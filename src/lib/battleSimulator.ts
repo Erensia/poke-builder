@@ -1445,6 +1445,8 @@ export interface ActionLogEntry {
   bulletproofBlockedByAbilityName?: string;
   /** 아로마베일처럼 방어측 특성이 헤롱헤롱·도발·기술봉인·앙코르를 막았으면 그 특성 이름 */
   mentalMoveBlockedByAbilityName?: string;
+  /** 황금몸처럼 방어측 특성이 명중한 변화기의 효과를 전부 무효화했으면 그 특성 이름 */
+  goodAsGoldBlockedByAbilityName?: string;
   /** 뒤집어엎기로 상대의 능력 랭크 변화를 전부 반전시켰으면 true */
   invertedTargetStages?: boolean;
   /** 숲의저주·핼러윈으로 상대에게 추가한 타입 (배틀 끝까지 유지) */
@@ -5442,6 +5444,9 @@ function resolveAction(
     soundproofBlockedByAbilityName,
     bulletproofBlockedByAbilityName,
     mentalMoveBlockedByAbilityName,
+    // 황금몸은 명중 굴림과 무관하게 판정되므로, 실제로 빗나간 경우(§4-5)와 구분하려면
+    // 여기서 hit까지 확인해야 한다 — 그래야 "빗나갔다"와 "막혔다"가 서로 다른 로그로 나뉜다.
+    goodAsGoldBlockedByAbilityName: blockedByGoodAsGold && hit ? defenderAbility?.name : undefined,
     invertedTargetStages: invertedTargetStages || undefined,
     addedTypeToTarget,
     targetMoveTypeOverride,

@@ -1897,6 +1897,15 @@ export function BattleLogPage() {
                           {defenderName}의 {action.bulletproofBlockedByAbilityName}! 구슬·폭탄 기술은 통하지 않는다!
                         </div>
                       )}
+                      {/* 황금몸 — 명중한 변화기의 효과를 통째로 무효화(§4-5). 빗나감(C-5)과 헷갈리지
+                          않도록 battleSimulator에서 hit까지 확인해서 내려준다 */}
+                      {!action.blockedReason && action.goodAsGoldBlockedByAbilityName && (
+                        <div className="battle-turn-line is-muted">
+                          {defenderName}의 {action.goodAsGoldBlockedByAbilityName}!
+                          <br />
+                          {defenderName}에게 효과가 없는 듯하다...
+                        </div>
+                      )}
                       {/* 아로마베일 — 헤롱헤롱·도발·기술봉인·앙코르를 막았을 때 */}
                       {!action.blockedReason && action.mentalMoveBlockedByAbilityName && (
                         <div className="battle-turn-line is-muted">
