@@ -1800,6 +1800,27 @@ export function BattleLogPage() {
                           {eunNeun(actorName)} {action.abilityDamageToAttacker} 데미지를 입었다
                         </div>
                       )}
+                      {/* PR-C4a: 울퉁불퉁멧 — 접촉기 공격자 반동(다단히트 합산이라 hits 무관 표시) */}
+                      {!action.blockedReason && !!action.rockyHelmetDamage && (
+                        <div className="battle-turn-line is-muted">
+                          {defenderName}의 {action.rockyHelmetItemName}! {actorName}
+                          {eunNeun(actorName)} {action.rockyHelmetDamage} 데미지를 입었다!
+                        </div>
+                      )}
+                      {/* PR-C4a: 노말주얼 등 타입 젬 — 소모되며 위력 상승 */}
+                      {!action.blockedReason && action.ateGemItemName && (
+                        <div className="battle-turn-line is-muted">
+                          {actorName}의 {action.ateGemItemName}
+                          {eunNeun(action.ateGemItemName)} 발동해 위력이 올랐다!
+                        </div>
+                      )}
+                      {/* PR-C4a: 풍선 — 피격으로 터짐 */}
+                      {!action.blockedReason && action.hit && action.balloonPoppedItemName && (
+                        <div className="battle-turn-line is-muted">
+                          {defenderName}의 {action.balloonPoppedItemName}
+                          {eunNeun(action.balloonPoppedItemName)} 터졌다!
+                        </div>
+                      )}
                       {!action.blockedReason && !action.hits && action.abilityDisabledMoveName && (
                         <div className="battle-turn-line is-muted">
                           {defenderName}의 {action.abilityDisableAbilityName}! {actorName}의{" "}
