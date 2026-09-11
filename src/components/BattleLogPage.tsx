@@ -1988,6 +1988,13 @@ export function BattleLogPage() {
                           {roEuro(action.seedSowerField)} 바뀌었다!
                         </div>
                       )}
+                      {/* PR-C4b: 시드류 — 이번 행동으로 필드가 새로 깔려 발동 */}
+                      {!action.blockedReason &&
+                        action.terrainSeedMessages?.map((m, i) => (
+                          <div key={`seed-${i}`} className="battle-turn-line is-muted">
+                            {m}
+                          </div>
+                        ))}
                       {/* PR-C2: 해감액 — 흡수기가 회복 대신 데미지 */}
                       {!action.blockedReason && action.hit && !!action.liquidOozeDamage && (
                         <div className="battle-turn-line is-muted">

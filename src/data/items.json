@@ -1102,5 +1102,33 @@
     "description": "그래스필드·사이코필드·미스트필드·일렉트릭필드의 지속 시간이 3턴 증가한다. (총 8턴)",
     "category": "held-item",
     "fieldDurationBonus": 3
+  },
+  {
+    "id": "일렉트릭시드",
+    "name": "일렉트릭시드",
+    "description": "일렉트릭필드에서는 몸이 단단해져서 방어가 1랭크 오르며, 사용 후 사라진다.",
+    "category": "held-item",
+    "terrainSeedBoost": { "field": "일렉트릭필드", "stat": "def" }
+  },
+  {
+    "id": "그래스시드",
+    "name": "그래스시드",
+    "description": "그래스필드에서는 몸이 단단해져서 방어가 1랭크 오르며, 사용 후 사라진다.",
+    "category": "held-item",
+    "terrainSeedBoost": { "field": "그래스필드", "stat": "def" }
+  },
+  {
+    "id": "사이코시드",
+    "name": "사이코시드",
+    "description": "사이코필드에서는 정신이 단단해져서 특수방어가 1랭크 오르며, 사용 후 사라진다.",
+    "category": "held-item",
+    "terrainSeedBoost": { "field": "사이코필드", "stat": "spd" }
+  },
+  {
+    "id": "미스트시드",
+    "name": "미스트시드",
+    "description": "미스트필드에서는 정신이 단단해져서 특수방어가 1랭크 오르며, 사용 후 사라진다.",
+    "category": "held-item",
+    "terrainSeedBoost": { "field": "미스트필드", "stat": "spd" }
   }
 ]

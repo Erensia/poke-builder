@@ -2,6 +2,7 @@ import type { PokemonType } from "./pokemon-type";
 import type { MoveCategory } from "./move";
 import type { StatusCondition } from "./status";
 import type { WeatherKind } from "./weather";
+import type { FieldKind } from "./field";
 
 export type ItemCategory = "mega-stone" | "held-item";
 
@@ -152,4 +153,11 @@ export interface Item {
    * (weatherDurationBonus·screenDurationBonus와 같은 축의 필드 버전. 기본 5턴 + 3 = 8턴).
    */
   fieldDurationBonus?: number;
+  /**
+   * 시드류(일렉트릭시드·그래스시드·사이코시드·미스트시드): 이 필드가 활성화된 동안(이미 나와
+   * 있는데 필드가 깔리거나, 필드가 이미 있는데 등장) 지닌 포켓몬의 이 스탯이 1랭크 오르고
+   * 그 즉시 소모된다(대전 중 1회). stat은 이 4종 전부 방어(def) 또는 특수방어(spd)만 대상이라
+   * 두 값으로 좁혀뒀다.
+   */
+  terrainSeedBoost?: { field: FieldKind; stat: "def" | "spd" };
 }
