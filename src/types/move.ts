@@ -456,9 +456,15 @@ export interface Move {
    *  - "user-has-no-item"(애크러뱃): 자신이 도구를 지니고 있지 않으면
    *  - "user-stat-lowered-this-turn"(분풀이): 이번 턴에 자신의 능력이 떨어졌으면
    *  - "user-move-failed-last-turn"(분함의발구르기): 직전에 쓴 기술이 빗나갔거나 막혔으면
+   *  - "user-status-burn-poison-paralysis"(객기): 자신이 화상·독·맹독·마비 상태이면(잠듦·얼음은
+   *    제외 — 본가 규칙)
+   *  - "target-status-poisoned"(베놈쇼크): 상대가 독 또는 맹독 상태이면
    * 뒤의 두 조건(분풀이·분함의발구르기)은 현행 1v1 엔진에 "이번 턴/직전 턴 랭크변화·기술실패"
    * 이력 상태가 없어 **battleSimulator에선 항상 미충족(기본 위력)**으로 처리하고,
    * **matchupEvaluator(결정력·내구력 페이지)에선 항상 충족(×2)으로 상정**한다(§3 증분 B-3, 사용자 지시).
+   * 객기·베놈쇼크는 battleSimulator엔 실제 상태이상 추적이 있어 정확히 판정되지만,
+   * matchupEvaluator는 상태이상 개념 자체가 없는 1턴 스냅샷이라(ability.ts의
+   * defenderHasStatusCondition 정책과 동일) 이 둘도 항상 미충족(기본 위력)으로 둔다.
    * 웨더볼(타입+위력)·질투의불꽃(조건부 화상)은 별개 축이라 여기 안 넣는다.
    */
   conditionalDoublePower?:
@@ -466,7 +472,9 @@ export interface Move {
     | "moves-after-target"
     | "user-has-no-item"
     | "user-stat-lowered-this-turn"
-    | "user-move-failed-last-turn";
+    | "user-move-failed-last-turn"
+    | "user-status-burn-poison-paralysis"
+    | "target-status-poisoned";
   /**
    * 비축하기(Stockpile): 사용할 때마다 비축 스택 +1(최대 3, 이미 3이면 실패)하고 자신의 방어·특수방어를
    * 1랭크 올린다(랭크업은 데이터의 statChanges로 처리, 스택 카운트만 이 플래그로). 토해내기·꿀꺽이 소비.

@@ -2268,7 +2268,8 @@
     "tags": [
       "접촉"
     ],
-    "makesContact": true
+    "makesContact": true,
+    "conditionalDoublePower": "user-status-burn-poison-paralysis"
   },
   {
     "id": "기사회생",
@@ -6133,7 +6134,8 @@
     "tags": [
       "비접촉"
     ],
-    "makesContact": false
+    "makesContact": false,
+    "conditionalDoublePower": "target-status-poisoned"
   },
   {
     "id": "뿌리박기",
