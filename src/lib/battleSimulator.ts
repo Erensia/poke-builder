@@ -1315,6 +1315,8 @@ export interface ActionLogEntry {
   encoreSetFailed?: boolean;
   /** 파워트릭으로 자신의 두 실수치를 맞바꿨으면 그 기술 이름 */
   swappedStatsMoveName?: string;
+  /** 가드스왑·파워스왑으로 자신·상대의 랭크 변화를 맞바꿨으면 그 기술 이름 */
+  swappedStagesMoveName?: string;
   /** 가드셰어로 자신·상대의 방어·특방 실능을 평균냈으면 그 기술 이름 */
   averagedDefensesMoveName?: string;
   /** 스피드스왑으로 자신·상대의 스피드 실능을 맞바꿨으면 그 기술 이름 */
@@ -5029,6 +5031,22 @@ function resolveAction(
     swappedStatsMoveName = effectiveMove.name;
   }
 
+  // 가드스왑·파워스왑: 명중 시 지정된 스탯들의 랭크 변화를 자신과 상대가 서로 맞바꾼다.
+  // 파워트릭(swapsOwnStats)과 달리 실수치는 그대로 두고 stages만 교환 — 이미 -6~+6 범위라
+  // 교환해도 클램프가 필요 없다.
+  let swappedStagesMoveName: string | undefined;
+  if (effectiveMove.swapsStagesWithTarget) {
+    const nextAttackerStages = { ...attacker.stages };
+    const nextDefenderStages = { ...defender.stages };
+    for (const stat of effectiveMove.swapsStagesWithTarget) {
+      nextAttackerStages[stat] = defender.stages[stat];
+      nextDefenderStages[stat] = attacker.stages[stat];
+    }
+    attacker.stages = nextAttackerStages;
+    defender.stages = nextDefenderStages;
+    swappedStagesMoveName = effectiveMove.name;
+  }
+
   // 방어류(방어/판별/버티기/킹실드): 연속 사용 횟수(protectStreak)에 따라 이번 턴 실제로 발동할
   // 확률이 (1/3)^streak로 줄어든다. 직전에 실패했거나 이력이 없으면(streak 0) 확률 1 = 무조건 발동.
   //
@@ -5411,6 +5429,7 @@ function resolveAction(
     setEncoreMoveName,
     encoreSetFailed,
     swappedStatsMoveName,
+    swappedStagesMoveName,
     averagedDefensesMoveName,
     swappedSpeedMoveName,
     shellSideArmCategory,

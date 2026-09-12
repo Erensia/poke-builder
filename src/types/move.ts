@@ -393,6 +393,13 @@ export interface Move {
    */
   swapsOwnStats?: [BattleStatKey, BattleStatKey];
   /**
+   * 가드스왑(["def","spd"])·파워스왑(["atk","spa"]) 전용. 명중 시 이 스탯들의 **랭크 변화**를
+   * 자신과 상대가 서로 맞바꾼다 — swapsOwnStats(파워트릭)는 자기 자신의 실수치 두 개를 교환하는
+   * 것과 달리, 이건 랭크(stages)만 상대와 교환하고 실수치는 그대로 둔다. 랭크는 이미 -6~+6
+   * 범위라 교환해도 클램프가 필요 없다.
+   */
+  swapsStagesWithTarget?: BattleStatKey[];
+  /**
    * 프리즈드라이 전용. 상대가 이 타입이면 통상 상성표를 무시하고 타입 상성 배율을 이 값으로
    * 강제 오버라이드한다(프리즈드라이=물타입 상대에게 2배). 방어측이 타입 면역을 이미 스스로
    * 얻은 경우(absorbsType·grantsImmunityToTypes)엔 면역이 우선이라 이 오버라이드는 적용되지

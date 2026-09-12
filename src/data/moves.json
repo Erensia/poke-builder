@@ -4686,7 +4686,8 @@
     "tags": [
       "랭크"
     ],
-    "makesContact": false
+    "makesContact": false,
+    "swapsStagesWithTarget": ["def", "spd"]
   },
   {
     "id": "검은눈빛",
@@ -6364,7 +6365,8 @@
     "tags": [
       "랭크"
     ],
-    "makesContact": false
+    "makesContact": false,
+    "swapsStagesWithTarget": ["atk", "spa"]
   },
   {
     "id": "대폭발",
