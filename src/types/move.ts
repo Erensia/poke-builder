@@ -377,8 +377,10 @@ export interface Move {
    *    activeProtect(매 턴 시작 시 초기화)가 아니라 BattleFighterState.destinyBondArmed(자신의
    *    다음 행동 전까지 유지)로 별도 추적한다. 본가에서 Gen 7부터 방어류와 같은 연속 성공 확률
    *    공식((1/3)^streak)을 공유해서 이 프로젝트도 protectStreak를 그대로 재사용한다.
+   *  - "blockPriority"(패스트가드): "block"과 같지만 상대 기술의 priority가 0보다 클 때만 막는다
+   *    (본가 규칙 — 우선도 있는 기술만 막고 일반 기술은 그대로 맞는다).
    */
-  protectEffect?: "block" | "endure" | "destinyBond";
+  protectEffect?: "block" | "endure" | "destinyBond" | "blockPriority";
   /**
    * 킹실드 전용. protectEffect: "block"이 성공해서 상대의 접촉기를 막았을 때, 그 공격자에게
    * 추가로 거는 랭크변화(공격 -1). 접촉기가 아니면 막았어도 이 효과는 붙지 않는다.

@@ -297,7 +297,7 @@ export interface BattleFighterState {
    * 지워서 다음 턴엔 남아있지 않게 한다(1턴짜리 효과).
    */
   activeProtect?: {
-    effect: "block" | "endure";
+    effect: "block" | "endure" | "blockPriority";
     /** 로그 문구용 — 실제로 성공시킨 기술 이름(방어/판별/버티기/킹실드 중 하나) */
     moveName: string;
     /** 킹실드가 접촉기를 막았을 때만 채워서 아래에서 상대에게 적용한다 */
@@ -2674,16 +2674,20 @@ function resolveAction(
   // 포함하지 않는다.
   // 고스트다이브: "방어를 무시" = 방어류(protectEffect) 차단 자체를 뚫는다는 뜻(사용자 확인) — 실제
   // 방어 실수치와는 무관해서 여기서 판정 자체를 건너뛴다(틈새포착이 스크린/대타를 뚫는 것과 같은 결).
+  // 패스트가드(protectEffect: "blockPriority"): "block"과 같지만 상대 기술의 priority가 0보다
+  // 클 때만 막는다 — 일반 기술은 그냥 통과.
+  const activeProtectBlocks =
+    defender.activeProtect?.effect === "block" ||
+    (defender.activeProtect?.effect === "blockPriority" && move.priority > 0);
   // 보이지않는주먹: 접촉기가 방어류를 뚫고 명중한다(데미지는 아래 resolveHit에서 1/4로 줄고, 방어류의
   // 접촉 성공 부가효과는 그대로 발동). 뚫는 경우엔 blockedByProtect를 false로 둬서 기술이 정상 진행된다.
   const unseenFistPiercing = !!(
     attackerAbility?.contactBypassesProtectAtQuarterDamage &&
     (move.makesContact ?? false) &&
     !move.bypassesProtect &&
-    defender.activeProtect?.effect === "block"
+    activeProtectBlocks
   );
-  const blockedByProtect =
-    !move.bypassesProtect && !unseenFistPiercing && defender.activeProtect?.effect === "block";
+  const blockedByProtect = !move.bypassesProtect && !unseenFistPiercing && activeProtectBlocks;
   // "방어로 막혔다!" 문구는 실제로 상대를 겨냥한 기술이 막혔을 때만 — 칼춤·나쁜음모처럼 자기
   // 대상 랭크업/자기 회복기는 방어와 무관하게 그대로 발동하므로 "막혔다"가 아니다(Phase 6.5 §6-2 ⑦).
   const blockedByProtectMoveName =
@@ -5076,15 +5080,22 @@ function resolveAction(
     const streak = attacker.protectStreak ?? 0;
     const successChance = Math.pow(1 / 3, streak);
     const rollPassed = random() < successChance;
+    // 패스트가드는 상대 기술이 자신을 겨냥했어도 priority가 0 이하면 애초에 막을 게 없다 —
+    // "몸을 지켜냈다!"를 잘못 띄우지 않게 targetedSelf 판정에도 그 조건을 같이 건다.
     const targetedSelf =
-      effectiveMove.protectEffect === "destinyBond" || isOpponentTargetingMove(defenderMove);
+      effectiveMove.protectEffect === "destinyBond"
+        ? true
+        : effectiveMove.protectEffect === "blockPriority"
+          ? isOpponentTargetingMove(defenderMove) && defenderMove.priority > 0
+          : isOpponentTargetingMove(defenderMove);
     if (!rollPassed) {
       // 연속 사용 굴림 실패 — 태세 진입도 없이 그대로 실패.
       attacker.protectStreak = 0;
       protectFailed = true;
     } else {
       attacker.protectStreak = streak + 1;
-      protectStanceEntered = effectiveMove.protectEffect === "block";
+      protectStanceEntered =
+        effectiveMove.protectEffect === "block" || effectiveMove.protectEffect === "blockPriority";
       // 길동무는 activeProtect(매 턴 시작 시 초기화)가 아니라 destinyBondArmed(자신의 다음
       // 행동 전까지 유지)로 별도 추적한다 — 이번 턴 상대 공격을 막는 게 아니기 때문.
       if (effectiveMove.protectEffect === "destinyBond") {

@@ -2203,6 +2203,7 @@
     "tags": [
       "방어"
     ],
+    "protectEffect": "blockPriority",
     "makesContact": false
   },
   {
