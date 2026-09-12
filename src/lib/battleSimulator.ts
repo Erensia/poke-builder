@@ -2875,7 +2875,14 @@ function resolveAction(
           ? movesSecond
           : condition === "user-has-no-item"
             ? !attacker.currentItemId
-            : false; // user-stat-lowered-this-turn / user-move-failed-last-turn → 엔진 미추적
+            : condition === "user-status-burn-poison-paralysis"
+              ? attacker.status.condition === "burn" ||
+                attacker.status.condition === "poison" ||
+                attacker.status.condition === "badly-poisoned" ||
+                attacker.status.condition === "paralysis"
+              : condition === "target-status-poisoned"
+                ? defender.status.condition === "poison" || defender.status.condition === "badly-poisoned"
+                : false; // user-stat-lowered-this-turn / user-move-failed-last-turn → 엔진 미추적
     if (met) effectiveMove = { ...effectiveMove, power: effectiveMove.power * 2 };
   }
 
