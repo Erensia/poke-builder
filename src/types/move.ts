@@ -35,6 +35,12 @@ export interface StatChangeEffect {
   userIsType?: PokemonType;
   /** 사용자 자신이 이 타입이 아닐 때만 적용 */
   userIsNotType?: PokemonType;
+  /**
+   * 현재 날씨가 이 값일 때만 적용 (성장: 쾌청이면 +1을 추가로 얹어 총 +2). 기본 효과(항상 적용)와
+   * 날씨 보너스(이 조건 있는 항목)를 같은 stat에 대해 별도 항목으로 나눠 넣으면
+   * applyMoveStatChanges가 둘 다 더해서 적용한다.
+   */
+  requiresWeather?: WeatherKind;
 }
 
 export interface Move {

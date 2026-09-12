@@ -1,6 +1,7 @@
 import { NEUTRAL_STAGES, isBattleStatKey, type BattleStatKey, type StatStages } from "../types/battleStats";
 import type { Move } from "../types/move";
 import type { PokemonType } from "../types/pokemon-type";
+import type { WeatherKind } from "../types/weather";
 
 export { NEUTRAL_STAGES };
 
@@ -33,6 +34,8 @@ export interface ApplyMoveStatChangesOptions {
   userTypes?: PokemonType[];
   /** 확률부여 효과(아이언테일 등)를 포함할지. 기본 true(적중한다고 가정) */
   includeChanceBased?: boolean;
+  /** 날씨 조건부 효과(성장의 쾌청 보너스 등) 판정에 쓸 현재 유효 날씨. 안 주면 조건부 항목은 스킵 */
+  weather?: WeatherKind;
 }
 
 /**
@@ -47,7 +50,7 @@ export function applyMoveStatChanges(
   options: ApplyMoveStatChangesOptions = {},
 ): StatStages {
   if (!move.statChanges) return stages;
-  const { userTypes, includeChanceBased = true } = options;
+  const { userTypes, includeChanceBased = true, weather } = options;
 
   let next = stages;
   for (const effect of move.statChanges) {
@@ -63,6 +66,7 @@ export function applyMoveStatChanges(
     if (effect.userIsNotType !== undefined) {
       if (!userTypes || userTypes.includes(effect.userIsNotType)) continue;
     }
+    if (effect.requiresWeather !== undefined && effect.requiresWeather !== weather) continue;
 
     next =
       effect.setTo !== undefined

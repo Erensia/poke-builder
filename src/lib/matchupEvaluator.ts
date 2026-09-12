@@ -190,15 +190,18 @@ export function evaluateSlotMatchup(
     defenderSlot.nature,
   );
 
-  // 이 기술 자체가 주는 랭크 변화(예: 칼춤을 쓴 다음 그 위력으로 계산하고 싶을 때)까지 반영
+  // 이 기술 자체가 주는 랭크 변화(예: 칼춤을 쓴 다음 그 위력으로 계산하고 싶을 때)까지 반영.
+  // weather: 성장(쾌청이면 +1 추가로 얹어 총 +2)처럼 날씨 조건부 statChanges 항목 판정용.
   const attackerStages = applyMoveOwnStatChanges
     ? applyMoveStatChanges(baseAttackerStages, contraryMove(move, attackerAbility?.invertsStatChanges), "self", {
         userTypes: attackerForm.types,
+        weather: effectiveWeather,
       })
     : baseAttackerStages;
   const defenderStages = applyMoveOwnStatChanges
     ? applyMoveStatChanges(baseDefenderStages, contraryMove(move, defenderAbility?.invertsStatChanges), "opponent", {
         userTypes: attackerForm.types,
+        weather: effectiveWeather,
       })
     : baseDefenderStages;
 
@@ -491,6 +494,7 @@ export function computeSoloOffensePower(
   const attackerStages = applyMoveOwnStatChanges
     ? applyMoveStatChanges(baseAttackerStages, contraryMove(move, attackerAbility?.invertsStatChanges), "self", {
         userTypes: attackerForm.types,
+        weather: effectiveWeather,
       })
     : baseAttackerStages;
 
