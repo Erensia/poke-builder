@@ -4112,13 +4112,17 @@ function resolveAction(
       });
   const statChangeMove: Move = { ...effectiveMove, statChanges: rolledStatChanges };
   // 심술꾸러기: 랭크 변화를 받는 쪽이 Contrary면 delta 부호를 뒤집은 기술로 적용한다(자기 랭크변화·상대가 건 랭크변화 모두).
+  // weather: 성장(쾌청이면 +1 추가로 얹어 총 +2)처럼 날씨 조건부 statChanges 항목 판정용.
+  const statChangeWeather = activeWeather(state);
   attacker.stages = applyMoveStatChanges(attacker.stages, contraryMoveFor(statChangeMove, attacker), "self", {
     userTypes: attacker.types,
+    weather: statChangeWeather,
   });
   defender.stages = opponentEffectsBlocked
     ? defender.stages
     : applyMoveStatChanges(defender.stages, contraryMoveFor(statChangeMove, defender), "opponent", {
         userTypes: attacker.types,
+        weather: statChangeWeather,
       });
 
   // 랭크업 결과 문구용(Phase 6.5 §6-2 ⑥⑦, §6-3): 이 기술이 사용자 자신의 랭크를 실제로 올린 것과,

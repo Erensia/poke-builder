@@ -4529,6 +4529,18 @@
         "target": "self",
         "stat": "spa",
         "delta": 1
+      },
+      {
+        "target": "self",
+        "stat": "atk",
+        "delta": 1,
+        "requiresWeather": "쾌청"
+      },
+      {
+        "target": "self",
+        "stat": "spa",
+        "delta": 1,
+        "requiresWeather": "쾌청"
       }
     ],
     "makesContact": false
