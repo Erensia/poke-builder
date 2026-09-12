@@ -274,6 +274,10 @@ export function PartyBoard() {
         <SlotPresetsModal
           presets={slotPresets.presets}
           slotIsFilled={slots[picker.slotIndex] !== null}
+          usedPokemonIds={slots
+            .filter((_, i) => i !== picker.slotIndex)
+            .map((s) => s?.pokemonId)
+            .filter((id): id is string => id !== undefined)}
           onClose={() => setPicker(null)}
           onLoad={(preset) => loadSlot(picker.slotIndex, preset.slot)}
           onRename={slotPresets.renamePreset}
