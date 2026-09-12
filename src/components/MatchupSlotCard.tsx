@@ -22,6 +22,9 @@ interface MatchupSlotCardProps {
   slot: MatchupSlot;
   offensePower?: number | null;
   rawOffensePower?: number | null;
+  /** ver.1.3 §4 — 상대 미선택 시 공격측 정보만으로 계산한 결정력(자속·랭크·특성·도구·날씨 반영,
+   * 상대 타입 상성은 제외). 상대가 있으면 rawOffensePower 쪽이 더 정확하니 그때는 안 넘긴다. */
+  soloOffensePower?: number | null;
   /** 다단히트 기술(트리플악셀 등)일 때 선택된 적중 타수 */
   multiHitCount?: number;
   onSetMultiHitCount?: (count: number) => void;
@@ -72,6 +75,7 @@ export function MatchupSlotCard({
   slot,
   offensePower,
   rawOffensePower,
+  soloOffensePower,
   multiHitCount,
   onSetMultiHitCount,
   bulkPhysical,
@@ -426,16 +430,15 @@ export function MatchupSlotCard({
               )}
             </div>
           )}
-          {/* ver.1.3 §4 — 상대 미선택이라 rawOffensePower를 못 구했을 때도, 변화기가 아니고
-              고정 위력이 있는 기술이면 그 기본 위력만은 보여준다(자속·랭크·특성·도구·날씨 반영 없이).
-              상대와의 타입 상성 배율은 상대가 없으니 표시하지 않는다. */}
+          {/* ver.1.3 §4 — 상대 미선택이라 rawOffensePower를 못 구했을 때: 자속·랭크·특성·도구·
+              날씨는 반영하되 상대 타입 상성만 뺀 결정력(soloOffensePower)을 대신 보여준다. */}
           {move &&
             (rawOffensePower === null || rawOffensePower === undefined) &&
-            move.category !== "status" &&
-            move.power !== null && (
+            soloOffensePower !== undefined &&
+            soloOffensePower !== null && (
               <div className="matchup-power-readout">
-                결정력 <span className="matchup-power-caveat">(상대 미선택 · 기본 위력)</span>{" "}
-                <strong>{move.power.toLocaleString()}</strong>
+                결정력 <span className="matchup-power-caveat">(상대 미선택 · 상성 제외)</span>{" "}
+                <strong>{Math.round(soloOffensePower).toLocaleString()}</strong>
               </div>
             )}
           {move && move.category === "status" && (
@@ -443,8 +446,8 @@ export function MatchupSlotCard({
           )}
           {move &&
             (rawOffensePower === null || rawOffensePower === undefined) &&
-            move.category !== "status" &&
-            move.power === null && (
+            (soloOffensePower === undefined || soloOffensePower === null) &&
+            move.category !== "status" && (
               <div className="matchup-power-readout is-muted">
                 이 기술은 결정력을 고정 수치로 표시할 수 없어요
               </div>
