@@ -1599,6 +1599,9 @@ export function BattleLogPage() {
                         {!action.blockedReason && action.hit && action.swappedStatsMoveName && (
                           <> · 공격과 방어 수치가 서로 바뀌었다!</>
                         )}
+                        {!action.blockedReason && action.hit && action.swappedStagesMoveName && (
+                          <> · 서로의 랭크 변화를 맞바꿨다!</>
+                        )}
                         {!action.blockedReason && action.hit && action.averagedDefensesMoveName && (
                           <> · 서로의 방어와 특수방어를 나눠 가졌다!</>
                         )}
