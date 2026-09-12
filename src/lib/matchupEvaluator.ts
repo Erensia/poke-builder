@@ -87,6 +87,21 @@ export interface EvaluatorSlot extends FormSource {
   gender?: PokemonGender;
 }
 
+// 심술꾸러기(Contrary): 랭크 변화를 받는 쪽이 이 특성이면 move.statChanges의 delta 부호를 뒤집는다.
+// evaluateSlotMatchup·computeSoloOffensePower 둘 다 쓰는 작은 헬퍼라 모듈 최상위로 뺐다.
+function contraryMove(m: Move, invert: boolean | undefined): Move {
+  return !invert || !m.statChanges
+    ? m
+    : {
+        ...m,
+        statChanges: m.statChanges.map((s) => ({
+          ...s,
+          delta: s.delta === undefined ? undefined : -s.delta,
+          setTo: s.setTo === undefined ? undefined : -s.setTo,
+        })),
+      };
+}
+
 export interface SlotMatchupResult {
   /** 상대 타입 상성까지 반영된 최종 결정력. 판정(verdict)은 이 값 기준 */
   offensePower: number;
@@ -174,19 +189,6 @@ export function evaluateSlotMatchup(
     defenderSlot.points,
     defenderSlot.nature,
   );
-
-  // 심술꾸러기(Contrary): 랭크 변화를 받는 쪽이 이 특성이면 move.statChanges의 delta 부호를 뒤집는다.
-  const contraryMove = (m: Move, invert: boolean | undefined): Move =>
-    !invert || !m.statChanges
-      ? m
-      : {
-          ...m,
-          statChanges: m.statChanges.map((s) => ({
-            ...s,
-            delta: s.delta === undefined ? undefined : -s.delta,
-            setTo: s.setTo === undefined ? undefined : -s.setTo,
-          })),
-        };
 
   // 이 기술 자체가 주는 랭크 변화(예: 칼춤을 쓴 다음 그 위력으로 계산하고 싶을 때)까지 반영
   const attackerStages = applyMoveOwnStatChanges
@@ -433,6 +435,190 @@ export function evaluateSlotMatchup(
     koChance: chance.koChance,
     killingRolls: chance.killingRolls,
   };
+}
+
+export interface SoloOffensePowerOptions {
+  attackerStages?: StatStages;
+  applyMoveOwnStatChanges?: boolean;
+  multiHitCount?: number;
+  stockpileCount?: number;
+  weather?: WeatherKind;
+  field?: FieldKind;
+}
+
+/**
+ * ver.1.3 §4 — 상대를 아직 안 골랐을 때, 공격측 정보만으로 계산 가능한 결정력(자속·랭크·특성·
+ * 도구·날씨·필드는 반영, 상대 타입 상성은 제외 — 상대가 없으니 낼 수 없다)을 evaluateSlotMatchup과
+ * 같은 하위 재료로 계산한다. 상대의 실능치·타입·몸무게가 있어야만 뜻이 있는 기술
+ * (usesTargetAttackStat인 속임수, gyroBallPower인 자이로볼)은 null을 반환 — 그 경우 UI가
+ * "상대가 있어야 계산 가능"으로 안내한다. weightRatioPower·targetAbsoluteWeightPower(헤비봄버 등)는
+ * 상대 몸무게를 몰라 evaluateSlotMatchup의 "정보 부족" 기본값(WEIGHT_MOVE_FALLBACK_POWER)을 쓴다.
+ * status 기술이거나 포켓몬을 찾을 수 없으면 null.
+ */
+export function computeSoloOffensePower(
+  attackerSlot: EvaluatorSlot,
+  move: Move,
+  options: SoloOffensePowerOptions = {},
+): number | null {
+  const attackerPokemon = getPokemon(attackerSlot.pokemonId);
+  if (!attackerPokemon) return null;
+  if (move.category === "status" || move.category === null) return null;
+  if (move.usesTargetAttackStat || move.gyroBallPower) return null;
+
+  const {
+    attackerStages: baseAttackerStages = NEUTRAL_STAGES,
+    applyMoveOwnStatChanges = true,
+    weather,
+    field,
+    multiHitCount,
+    stockpileCount,
+  } = options;
+
+  const attackerForm = getEffectiveForm(attackerPokemon, attackerSlot);
+  const attackerEffectiveAbilityId = getEffectiveAbilityId(attackerForm, attackerSlot.ability);
+  const attackerAbility = attackerEffectiveAbilityId ? getAbility(attackerEffectiveAbilityId) : undefined;
+
+  const effectiveWeather = attackerAbility?.negatesWeather ? undefined : weather;
+
+  // 기분파(캐스퐁): 상대 없이도 자기 타입은 유효 날씨 기준으로 갱신할 수 있다.
+  if (attackerAbility?.weatherFormChange) {
+    const map: Partial<Record<WeatherKind, PokemonType>> = { 쾌청: "불꽃", 비: "물", 눈: "얼음" };
+    attackerForm.types = [(effectiveWeather && map[effectiveWeather]) || "노말"];
+  }
+
+  const attackerRealStats = computeRealStats(attackerForm.baseStats, attackerSlot.points, attackerSlot.nature);
+
+  const attackerStages = applyMoveOwnStatChanges
+    ? applyMoveStatChanges(baseAttackerStages, contraryMove(move, attackerAbility?.invertsStatChanges), "self", {
+        userTypes: attackerForm.types,
+      })
+    : baseAttackerStages;
+
+  const attackerItem = attackerSlot.item ? getItem(attackerSlot.item) : undefined;
+
+  let variablePowerMove: Move = move;
+  const speciesTypedType = move.typeByUserSpecies?.[attackerSlot.pokemonId];
+  if (speciesTypedType) variablePowerMove = { ...variablePowerMove, type: speciesTypedType };
+
+  // 셸암즈: 상대 실능치 없이도 물리/특수 둘 다 attacker 기준으로 내보고 큰 쪽으로 고정(동점이면 물리)
+  // — evaluateSlotMatchup과 동일 정책. resolveAttackStat은 usesTargetAttackStat이 아닌 한 defenderRealStats를
+  // 쓰지 않으니 여기서도 결과는 같다.
+  if (move.dynamicCategoryByHigherDamage) {
+    const dmgOpts = { attackerStages, stabMultiplier: 1.5 };
+    const phys =
+      computeOffensePower(attackerRealStats, attackerForm.types, { ...variablePowerMove, category: "physical" }, dmgOpts) ?? 0;
+    const spec =
+      computeOffensePower(attackerRealStats, attackerForm.types, { ...variablePowerMove, category: "special" }, dmgOpts) ?? 0;
+    const resolvedCategory = phys >= spec ? "physical" : "special";
+    variablePowerMove = {
+      ...variablePowerMove,
+      category: resolvedCategory,
+      makesContact: resolvedCategory === "physical",
+    };
+  }
+
+  if (move.reversalPower) {
+    variablePowerMove = { ...variablePowerMove, power: reversalPowerFromHp(1, 1) };
+  } else if (move.powerFromPositiveStages) {
+    const { base, perStage } = move.powerFromPositiveStages;
+    variablePowerMove = { ...variablePowerMove, power: positiveStagesPowerValue(attackerStages, base, perStage) };
+  } else if (move.spitUpPower) {
+    const stacks = Math.max(0, Math.min(3, stockpileCount ?? 3));
+    variablePowerMove = { ...variablePowerMove, power: stacks * 100 };
+  } else if (move.weightRatioPower || move.targetAbsoluteWeightPower) {
+    variablePowerMove = { ...variablePowerMove, power: WEIGHT_MOVE_FALLBACK_POWER };
+  }
+
+  if (variablePowerMove.power !== null) {
+    const cond = variablePowerMove.conditionalDoublePower;
+    const assumeDoubled =
+      cond === "user-stat-lowered-this-turn" ||
+      cond === "user-move-failed-last-turn" ||
+      (cond === "user-has-no-item" && !attackerItem);
+    if (assumeDoubled) {
+      variablePowerMove = { ...variablePowerMove, power: variablePowerMove.power * 2 };
+    }
+  }
+
+  const weatherBall = applyWeatherBall(variablePowerMove, effectiveWeather);
+  const weatherBallMove: Move = { ...variablePowerMove, type: weatherBall.type, power: weatherBall.power };
+
+  const fieldPulse = applyFieldPulse(weatherBallMove, field);
+  const fieldPowerMultiplier = getFieldPowerMultiplier(weatherBallMove, field);
+  const fieldAdjustedMove: Move = {
+    ...weatherBallMove,
+    type: fieldPulse.type,
+    power: fieldPulse.power === null ? null : Math.round(fieldPulse.power * fieldPowerMultiplier),
+  };
+
+  // 상대 정보(타입/특성/도구)가 없으니 전부 "없음"으로 넘긴다 — abilityOffenseMultiplier·stabMultiplier는
+  // 공격측 정보만으로 정해지니 그대로 유효하다.
+  const { effectiveMove, abilityOffenseMultiplier, stabMultiplier } = resolveMoveContext(
+    attackerAbility,
+    fieldAdjustedMove,
+    [],
+    undefined,
+    effectiveWeather,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    field,
+  );
+
+  const effectiveMoveWithHits = (() => {
+    if (move.multiHitPowers && multiHitCount) {
+      return {
+        ...effectiveMove,
+        power: move.multiHitPowers.slice(0, multiHitCount).reduce((sum, p) => sum + p, 0),
+      };
+    }
+    if (
+      move.minHits !== undefined &&
+      move.maxHits !== undefined &&
+      multiHitCount &&
+      effectiveMove.power !== null
+    ) {
+      const clampedHits = Math.max(move.minHits, Math.min(move.maxHits, multiHitCount));
+      return { ...effectiveMove, power: effectiveMove.power * clampedHits };
+    }
+    return effectiveMove;
+  })();
+
+  const followUpMultiplier = attackerAbility?.followUpHitPowerMultiplier;
+  const effectiveMoveFinal =
+    followUpMultiplier !== undefined &&
+    !move.multiHitPowers &&
+    move.minHits === undefined &&
+    move.fixedDamage === undefined &&
+    effectiveMoveWithHits.power !== null
+      ? {
+          ...effectiveMoveWithHits,
+          power:
+            effectiveMoveWithHits.power +
+            Math.round(effectiveMoveWithHits.power * followUpMultiplier),
+        }
+      : effectiveMoveWithHits;
+
+  // typeEffectiveness는 상대가 없으니 중립(1)로 고정 — 상대 타입에 따라서만 조건이 붙는 도구
+  // (익스퍼트벨트 등)는 여기선 보너스가 안 붙는다(정확한 정보가 없으니 과대평가하지 않는 쪽).
+  const autoItemMultiplier = getItemOffenseMultiplier(attackerItem, effectiveMove, 1, 1);
+  const autoWeatherDamageMultiplier = getWeatherDamageMultiplier(effectiveWeather, effectiveMove.type);
+  const autoFieldDamageMultiplier = getFieldDamageMultiplier(field, effectiveMove.type);
+
+  const hustleMultiplier =
+    effectiveMoveFinal.category === "physical" && attackerAbility?.hustleAttackMultiplier !== undefined
+      ? attackerAbility.hustleAttackMultiplier
+      : 1;
+
+  return computeOffensePower(attackerRealStats, attackerForm.types, effectiveMoveFinal, {
+    abilityMultiplier: abilityOffenseMultiplier * hustleMultiplier,
+    itemMultiplier: autoItemMultiplier,
+    weatherMultiplier: autoWeatherDamageMultiplier,
+    fieldMultiplier: autoFieldDamageMultiplier,
+    attackerStages,
+    stabMultiplier,
+  });
 }
 
 export interface SpeedMatchupResult {
