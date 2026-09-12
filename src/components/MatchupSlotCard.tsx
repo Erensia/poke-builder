@@ -426,9 +426,29 @@ export function MatchupSlotCard({
               )}
             </div>
           )}
-          {move && (rawOffensePower === null || rawOffensePower === undefined) && (
+          {/* ver.1.3 §4 — 상대 미선택이라 rawOffensePower를 못 구했을 때도, 변화기가 아니고
+              고정 위력이 있는 기술이면 그 기본 위력만은 보여준다(자속·랭크·특성·도구·날씨 반영 없이).
+              상대와의 타입 상성 배율은 상대가 없으니 표시하지 않는다. */}
+          {move &&
+            (rawOffensePower === null || rawOffensePower === undefined) &&
+            move.category !== "status" &&
+            move.power !== null && (
+              <div className="matchup-power-readout">
+                결정력 <span className="matchup-power-caveat">(상대 미선택 · 기본 위력)</span>{" "}
+                <strong>{move.power.toLocaleString()}</strong>
+              </div>
+            )}
+          {move && move.category === "status" && (
             <div className="matchup-power-readout is-muted">변화기는 결정력이 없어요</div>
           )}
+          {move &&
+            (rawOffensePower === null || rawOffensePower === undefined) &&
+            move.category !== "status" &&
+            move.power === null && (
+              <div className="matchup-power-readout is-muted">
+                이 기술은 결정력을 고정 수치로 표시할 수 없어요
+              </div>
+            )}
         </div>
       )}
 
