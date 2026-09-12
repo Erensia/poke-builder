@@ -5408,6 +5408,8 @@
     "classification": [
       "베기"
     ],
+    "chargeTurn": true,
+    "chargeSkipWeather": "쾌청",
     "makesContact": true
   },
   {
