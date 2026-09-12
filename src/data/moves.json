@@ -3445,7 +3445,8 @@
       "도주",
       "접촉"
     ],
-    "makesContact": true
+    "makesContact": true,
+    "selfSwitchAfterDamage": true
   },
   {
     "id": "탁류",
@@ -5561,7 +5562,8 @@
     "tags": [
       "접촉"
     ],
-    "makesContact": true
+    "makesContact": true,
+    "destroysField": true
   },
   {
     "id": "아쿠아제트",
