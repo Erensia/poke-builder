@@ -747,7 +747,7 @@
     "category": "status",
     "power": null,
     "accuracy": null,
-    "pp": 12,
+    "pp": 8,
     "priority": 0,
     "effect": "다음 턴에 자신 또는 교체한 포켓몬의 HP를 최대 HP의 ½만큼 회복한다.",
     "tags": [
@@ -8382,7 +8382,7 @@
     "category": "status",
     "power": null,
     "accuracy": 100,
-    "pp": 10,
+    "pp": 8,
     "priority": 0,
     "effect": "상대의 공격 실능만큼 자신의 HP를 회복하고, 상대의 공격을 1랭크 떨어뜨린다.",
     "tags": [

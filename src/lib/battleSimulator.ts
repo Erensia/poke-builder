@@ -1705,7 +1705,8 @@ export interface SwitchLogEntry {
   forced?: boolean;
   /**
    * 꼬리자르기로 세운 대타를 넘기며 물러난 교체면 true(§4-1). `afterMove`도 함께 true.
-   * 로그에서 새로 나온 포켓몬을 부르는 "가라!" 줄 대신 "…은 트레이너의 곁으로 돌아간다!"를 쓴다.
+   * 로그에서 통상 "돌아와! ○○!"·"가라! ○○!" 두 줄 **앞에** "○○은 트레이너의 곁으로
+   * 돌아간다!" 줄을 추가로 붙인다(대체가 아니라 추가 — BattleTurnLog.tsx 참고).
    */
   shedTail?: boolean;
   /**
