@@ -35,6 +35,12 @@ export interface StatChangeEffect {
   userIsType?: PokemonType;
   /** 사용자 자신이 이 타입이 아닐 때만 적용 */
   userIsNotType?: PokemonType;
+  /**
+   * 현재 날씨가 이 값일 때만 적용 (성장: 쾌청이면 +1을 추가로 얹어 총 +2). 기본 효과(항상 적용)와
+   * 날씨 보너스(이 조건 있는 항목)를 같은 stat에 대해 별도 항목으로 나눠 넣으면
+   * applyMoveStatChanges가 둘 다 더해서 적용한다.
+   */
+  requiresWeather?: WeatherKind;
 }
 
 export interface Move {
@@ -237,6 +243,12 @@ export interface Move {
   /** 솔라빔처럼 특정 날씨(쾌청)면 준비 턴 없이 1턴만에 발동하는 기술만 채운다. */
   chargeSkipWeather?: WeatherKind;
   /**
+   * 솔라빔처럼 "chargeSkipWeather가 아닌 날씨에는 위력이 절반"인 기술만 채운다(§1-10). 솔라블레이드는
+   * 같은 차지-스킵 기술이지만 effect 텍스트에 이 조항이 없어 false(생략) — chargeSkipWeather와
+   * 별도 필드로 분리해 opt-in해야 한다.
+   */
+  halvesPowerOutsideChargeSkipWeather?: boolean;
+  /**
    * 메테오빔·일렉트로빔처럼 "1턴째(준비 선언 시점)에 자신의 능력치가 오르는" 차지 기술만 채운다.
    * chargeSkipWeather로 준비 턴 자체가 생략되는 경우(예: 일렉트로빔+비)에도 "이 기술을 쓴 턴"은
    * 여전히 1턴째이므로 동일하게 적용된다 — statChanges와 별도 필드로 분리한 이유는, statChanges는
@@ -336,6 +348,12 @@ export interface Move {
    */
   setsScreen?: "reflect" | "lightScreen" | "auroraVeil";
   /**
+   * 신비의부적(세이프가드)처럼 자신 쪽에 5턴간 "상대가 거는" 주요 상태이상을 막는 보호막을
+   * 치는 기술만 채운다. 스크린과 같은 축(편 단위·이미 걸려있으면 실패)이지만 종류가 하나뿐이라
+   * 문자열 대신 boolean. 자기 자신이 스스로 거는 상태이상(잠자기의 잠듦 등)은 막지 않는다(본가 규칙).
+   */
+  setsSafeguard?: boolean;
+  /**
    * 흑안개처럼 명중 시 양쪽(자신+상대)의 능력 랭크 변화를 전부 초기화하는 기술만 채운다.
    * 5스탯(공격/방어/특공/특방/스피드)과 명중률/회피율 랭크까지 리셋하고, 급소율(critStage)은
    * 본가에서 별개 축이라 건드리지 않는다.
@@ -371,8 +389,10 @@ export interface Move {
    *    activeProtect(매 턴 시작 시 초기화)가 아니라 BattleFighterState.destinyBondArmed(자신의
    *    다음 행동 전까지 유지)로 별도 추적한다. 본가에서 Gen 7부터 방어류와 같은 연속 성공 확률
    *    공식((1/3)^streak)을 공유해서 이 프로젝트도 protectStreak를 그대로 재사용한다.
+   *  - "blockPriority"(패스트가드): "block"과 같지만 상대 기술의 priority가 0보다 클 때만 막는다
+   *    (본가 규칙 — 우선도 있는 기술만 막고 일반 기술은 그대로 맞는다).
    */
-  protectEffect?: "block" | "endure" | "destinyBond";
+  protectEffect?: "block" | "endure" | "destinyBond" | "blockPriority";
   /**
    * 킹실드 전용. protectEffect: "block"이 성공해서 상대의 접촉기를 막았을 때, 그 공격자에게
    * 추가로 거는 랭크변화(공격 -1). 접촉기가 아니면 막았어도 이 효과는 붙지 않는다.
@@ -392,6 +412,13 @@ export interface Move {
    * realStats를 직접 교체하는 것과 같은 패턴.
    */
   swapsOwnStats?: [BattleStatKey, BattleStatKey];
+  /**
+   * 가드스왑(["def","spd"])·파워스왑(["atk","spa"]) 전용. 명중 시 이 스탯들의 **랭크 변화**를
+   * 자신과 상대가 서로 맞바꾼다 — swapsOwnStats(파워트릭)는 자기 자신의 실수치 두 개를 교환하는
+   * 것과 달리, 이건 랭크(stages)만 상대와 교환하고 실수치는 그대로 둔다. 랭크는 이미 -6~+6
+   * 범위라 교환해도 클램프가 필요 없다.
+   */
+  swapsStagesWithTarget?: BattleStatKey[];
   /**
    * 프리즈드라이 전용. 상대가 이 타입이면 통상 상성표를 무시하고 타입 상성 배율을 이 값으로
    * 강제 오버라이드한다(프리즈드라이=물타입 상대에게 2배). 방어측이 타입 면역을 이미 스스로
@@ -449,9 +476,15 @@ export interface Move {
    *  - "user-has-no-item"(애크러뱃): 자신이 도구를 지니고 있지 않으면
    *  - "user-stat-lowered-this-turn"(분풀이): 이번 턴에 자신의 능력이 떨어졌으면
    *  - "user-move-failed-last-turn"(분함의발구르기): 직전에 쓴 기술이 빗나갔거나 막혔으면
+   *  - "user-status-burn-poison-paralysis"(객기): 자신이 화상·독·맹독·마비 상태이면(잠듦·얼음은
+   *    제외 — 본가 규칙)
+   *  - "target-status-poisoned"(베놈쇼크): 상대가 독 또는 맹독 상태이면
    * 뒤의 두 조건(분풀이·분함의발구르기)은 현행 1v1 엔진에 "이번 턴/직전 턴 랭크변화·기술실패"
    * 이력 상태가 없어 **battleSimulator에선 항상 미충족(기본 위력)**으로 처리하고,
    * **matchupEvaluator(결정력·내구력 페이지)에선 항상 충족(×2)으로 상정**한다(§3 증분 B-3, 사용자 지시).
+   * 객기·베놈쇼크는 battleSimulator엔 실제 상태이상 추적이 있어 정확히 판정되지만,
+   * matchupEvaluator는 상태이상 개념 자체가 없는 1턴 스냅샷이라(ability.ts의
+   * defenderHasStatusCondition 정책과 동일) 이 둘도 항상 미충족(기본 위력)으로 둔다.
    * 웨더볼(타입+위력)·질투의불꽃(조건부 화상)은 별개 축이라 여기 안 넣는다.
    */
   conditionalDoublePower?:
@@ -459,7 +492,9 @@ export interface Move {
     | "moves-after-target"
     | "user-has-no-item"
     | "user-stat-lowered-this-turn"
-    | "user-move-failed-last-turn";
+    | "user-move-failed-last-turn"
+    | "user-status-burn-poison-paralysis"
+    | "target-status-poisoned";
   /**
    * 비축하기(Stockpile): 사용할 때마다 비축 스택 +1(최대 3, 이미 3이면 실패)하고 자신의 방어·특수방어를
    * 1랭크 올린다(랭크업은 데이터의 statChanges로 처리, 스택 카운트만 이 플래그로). 토해내기·꿀꺽이 소비.

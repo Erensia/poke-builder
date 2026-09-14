@@ -38,6 +38,16 @@ export function PartyPresetsModal({
   }
 
   function handleLoad(preset: Party) {
+    // ver.1.3 §2: 파티 프리셋 저장은 항상 이 화면(중복 방지가 걸린 슬롯 편집)에서만 이뤄지지만,
+    // 이 기능이 생기기 전에 저장된 낡은 프리셋에는 같은 포켓몬이 중복으로 들어 있을 수 있다 —
+    // 불러오기 시점에도 한 번 더 검사해 정합성이 깨진 채로 화면에 반영되지 않게 막는다.
+    const pokemonIds = preset.slots.map((s) => s?.pokemonId).filter((id): id is string => id !== undefined);
+    if (new Set(pokemonIds).size !== pokemonIds.length) {
+      window.alert(
+        `"${preset.name}"${eulReul(preset.name)} 불러올 수 없습니다. 같은 포켓몬이 여러 슬롯에 중복 저장되어 있습니다.`,
+      );
+      return;
+    }
     if (window.confirm(`"${preset.name}"${eulReul(preset.name)} 불러올까요? ${loadTargetLabel}는 덮어써집니다.`)) {
       onLoad(preset);
       onClose();

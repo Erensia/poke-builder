@@ -116,6 +116,16 @@
   color: var(--violet);
 }
 
+.preset-item-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.preset-item-actions button:disabled:hover {
+  border-color: var(--border);
+  color: var(--text);
+}
+
 .preset-item-actions button.is-danger:hover {
   border-color: var(--danger);
   color: var(--danger);

@@ -297,7 +297,7 @@ export interface BattleFighterState {
    * 지워서 다음 턴엔 남아있지 않게 한다(1턴짜리 효과).
    */
   activeProtect?: {
-    effect: "block" | "endure";
+    effect: "block" | "endure" | "blockPriority";
     /** 로그 문구용 — 실제로 성공시킨 기술 이름(방어/판별/버티기/킹실드 중 하나) */
     moveName: string;
     /** 킹실드가 접촉기를 막았을 때만 채워서 아래에서 상대에게 적용한다 */
@@ -419,6 +419,11 @@ export interface BattleSide {
    * 같은 축.
    */
   screens: Partial<Record<"reflect" | "lightScreen" | "auroraVeil", number>>;
+  /**
+   * 신비의부적(세이프가드) — 이 편이 "상대가 거는" 주요 상태이상을 막는 보호막의 남은 턴 수
+   * (백로그 §1-9). 스크린과 같은 축(편 단위, 교체해도 유지)이지만 종류가 하나뿐이라 number만.
+   */
+  safeguardTurnsRemaining?: number;
   /**
    * 희망사항(Wish) 예약 — 이 편에 하나만 걸 수 있다(백로그 §6-2). 본가처럼 "쓴 포켓몬"이 아니라
    * 2턴 뒤 그 자리(활성)에 있는 포켓몬을 회복시키므로, fighter가 아니라 편에 큐로 둔다. 교체해도
@@ -1225,6 +1230,10 @@ export interface ActionLogEntry {
   setScreen?: "reflect" | "lightScreen" | "auroraVeil";
   /** 리플렉터/빛의장막을 썼지만 이미 같은 스크린이 걸려있어서 실패했으면 true */
   screenSetFailed?: boolean;
+  /** 이 행동으로 신비의부적(세이프가드)이 자신 쪽에 새로 걸렸으면 true */
+  setSafeguard?: boolean;
+  /** 신비의부적을 썼지만 이미 걸려있어서 실패했으면 true */
+  safeguardSetFailed?: boolean;
   /**
    * 레이징불·깨트리기(Move.breaksScreensOnHit)로 명중해서 상대 쪽 스크린을 부쉈으면 그 목록.
    * 데미지 계산은 스크린이 살아있는 상태로 이미 끝난 뒤에 제거한다(그 턴엔 아직 경감됨).
@@ -1315,6 +1324,8 @@ export interface ActionLogEntry {
   encoreSetFailed?: boolean;
   /** 파워트릭으로 자신의 두 실수치를 맞바꿨으면 그 기술 이름 */
   swappedStatsMoveName?: string;
+  /** 가드스왑·파워스왑으로 자신·상대의 랭크 변화를 맞바꿨으면 그 기술 이름 */
+  swappedStagesMoveName?: string;
   /** 가드셰어로 자신·상대의 방어·특방 실능을 평균냈으면 그 기술 이름 */
   averagedDefensesMoveName?: string;
   /** 스피드스왑으로 자신·상대의 스피드 실능을 맞바꿨으면 그 기술 이름 */
@@ -1660,6 +1671,8 @@ export interface TurnResult {
   weatherExpired?: boolean;
   /** 이번 턴에 사라진 스크린(리플렉터/빛의장막) 목록 — 양쪽에 동시에 걸려있을 수 있어 배열 */
   expiredScreens: { actor: FighterKey; screen: "reflect" | "lightScreen" | "auroraVeil" }[];
+  /** 이번 턴에 신비의부적(세이프가드)이 5턴을 다 채우고 사라진 편 목록 — 양쪽 다 걸려있을 수 있어 배열 */
+  expiredSafeguard: FighterKey[];
   /** 턴 시작 시점에 발생한 안내 문구(의태 타입 변화 등). 없으면 빈 배열 */
   turnStartAnnouncements: string[];
   /**
@@ -1728,6 +1741,7 @@ function cloneSide(side: BattleSide): BattleSide {
     activeIndex: side.activeIndex,
     hazards: { ...side.hazards },
     screens: { ...side.screens },
+    safeguardTurnsRemaining: side.safeguardTurnsRemaining,
     wish: side.wish ? { ...side.wish } : undefined,
     megaUsed: side.megaUsed,
   };
@@ -1906,7 +1920,8 @@ function applyEntryHazardsOnSwitchIn(state: BattleState, key: FighterKey, log: s
       hz.toxicSpikesLayers > 0 &&
       !self.status.condition &&
       !isImmuneToStatus(hz.toxicSpikesLayers >= 2 ? "badly-poisoned" : "poison", self.types, statusImmunitiesOf(self, selfAbility)) &&
-      !isStatusBlockedByField(state.field, "poison")
+      !isStatusBlockedByField(state.field, "poison") &&
+      sideOf(state, key).safeguardTurnsRemaining === undefined
     ) {
       const cond: StatusCondition = hz.toxicSpikesLayers >= 2 ? "badly-poisoned" : "poison";
       self.status = inflictStatus(self.status, cond);
@@ -2672,16 +2687,20 @@ function resolveAction(
   // 포함하지 않는다.
   // 고스트다이브: "방어를 무시" = 방어류(protectEffect) 차단 자체를 뚫는다는 뜻(사용자 확인) — 실제
   // 방어 실수치와는 무관해서 여기서 판정 자체를 건너뛴다(틈새포착이 스크린/대타를 뚫는 것과 같은 결).
+  // 패스트가드(protectEffect: "blockPriority"): "block"과 같지만 상대 기술의 priority가 0보다
+  // 클 때만 막는다 — 일반 기술은 그냥 통과.
+  const activeProtectBlocks =
+    defender.activeProtect?.effect === "block" ||
+    (defender.activeProtect?.effect === "blockPriority" && move.priority > 0);
   // 보이지않는주먹: 접촉기가 방어류를 뚫고 명중한다(데미지는 아래 resolveHit에서 1/4로 줄고, 방어류의
   // 접촉 성공 부가효과는 그대로 발동). 뚫는 경우엔 blockedByProtect를 false로 둬서 기술이 정상 진행된다.
   const unseenFistPiercing = !!(
     attackerAbility?.contactBypassesProtectAtQuarterDamage &&
     (move.makesContact ?? false) &&
     !move.bypassesProtect &&
-    defender.activeProtect?.effect === "block"
+    activeProtectBlocks
   );
-  const blockedByProtect =
-    !move.bypassesProtect && !unseenFistPiercing && defender.activeProtect?.effect === "block";
+  const blockedByProtect = !move.bypassesProtect && !unseenFistPiercing && activeProtectBlocks;
   // "방어로 막혔다!" 문구는 실제로 상대를 겨냥한 기술이 막혔을 때만 — 칼춤·나쁜음모처럼 자기
   // 대상 랭크업/자기 회복기는 방어와 무관하게 그대로 발동하므로 "막혔다"가 아니다(Phase 6.5 §6-2 ⑦).
   const blockedByProtectMoveName =
@@ -2873,8 +2892,30 @@ function resolveAction(
           ? movesSecond
           : condition === "user-has-no-item"
             ? !attacker.currentItemId
-            : false; // user-stat-lowered-this-turn / user-move-failed-last-turn → 엔진 미추적
+            : condition === "user-status-burn-poison-paralysis"
+              ? attacker.status.condition === "burn" ||
+                attacker.status.condition === "poison" ||
+                attacker.status.condition === "badly-poisoned" ||
+                attacker.status.condition === "paralysis"
+              : condition === "target-status-poisoned"
+                ? defender.status.condition === "poison" || defender.status.condition === "badly-poisoned"
+                : false; // user-stat-lowered-this-turn / user-move-failed-last-turn → 엔진 미추적
     if (met) effectiveMove = { ...effectiveMove, power: effectiveMove.power * 2 };
+  }
+
+  // 솔라빔(§1-10): chargeSkipWeather(쾌청)가 아닌 날씨에서는 위력 절반. 메가솔라(치지직 등)로
+  // 자신의 기술을 항상 쾌청 취급하면 여기서도 그 취급을 존중한다(§1-6의 준비 턴 스킵 판정과 동일 축).
+  if (
+    effectiveMove.halvesPowerOutsideChargeSkipWeather &&
+    effectiveMove.power !== null &&
+    effectiveMove.chargeSkipWeather !== undefined
+  ) {
+    const weatherMatchesSkipCondition =
+      activeWeather(state) === effectiveMove.chargeSkipWeather ||
+      (effectiveMove.chargeSkipWeather === "쾌청" && attackerAbility?.treatsOwnWeatherAsSun);
+    if (!weatherMatchesSkipCondition) {
+      effectiveMove = { ...effectiveMove, power: Math.floor(effectiveMove.power / 2) };
+    }
   }
 
   // 플라잉프레스: 상대가 이번 배틀에서 작아지기를 쓴 적이 있으면 위력 2배(필중은 아래 hitChance에서).
@@ -3190,7 +3231,8 @@ function resolveAction(
     if (
       ap.contactStatus &&
       !isImmuneToStatus(ap.contactStatus, attacker.types, statusImmunitiesOf(attacker, attackerAbility)) &&
-      !isStatusBlockedByField(state.field, ap.contactStatus)
+      !isStatusBlockedByField(state.field, ap.contactStatus) &&
+      sideOf(state, actorKey).safeguardTurnsRemaining === undefined
     ) {
       const before = attacker.status.condition;
       attacker.status = inflictStatus(attacker.status, ap.contactStatus);
@@ -4103,13 +4145,17 @@ function resolveAction(
       });
   const statChangeMove: Move = { ...effectiveMove, statChanges: rolledStatChanges };
   // 심술꾸러기: 랭크 변화를 받는 쪽이 Contrary면 delta 부호를 뒤집은 기술로 적용한다(자기 랭크변화·상대가 건 랭크변화 모두).
+  // weather: 성장(쾌청이면 +1 추가로 얹어 총 +2)처럼 날씨 조건부 statChanges 항목 판정용.
+  const statChangeWeather = activeWeather(state);
   attacker.stages = applyMoveStatChanges(attacker.stages, contraryMoveFor(statChangeMove, attacker), "self", {
     userTypes: attacker.types,
+    weather: statChangeWeather,
   });
   defender.stages = opponentEffectsBlocked
     ? defender.stages
     : applyMoveStatChanges(defender.stages, contraryMoveFor(statChangeMove, defender), "opponent", {
         userTypes: attacker.types,
+        weather: statChangeWeather,
       });
 
   // 랭크업 결과 문구용(Phase 6.5 §6-2 ⑥⑦, §6-3): 이 기술이 사용자 자신의 랭크를 실제로 올린 것과,
@@ -4369,6 +4415,7 @@ function resolveAction(
       )
         continue;
       if (isStatusBlockedByField(state.field, effect.status)) continue;
+      if (sideOf(state, defenderKey).safeguardTurnsRemaining !== undefined) continue;
       // 쾌청(강한 햇살) 날씨에서는 얼음 상태에 걸리지 않는다 — 타입 면역과는 다른 축이라 별도 확인
       if (effect.status === "freeze" && activeWeather(state) === "쾌청") continue;
       const chance = effect.chance !== undefined ? effect.chance / 100 : 1;
@@ -4401,6 +4448,7 @@ function resolveAction(
         picked &&
         !isImmuneToStatus(picked, defender.types, statusImmunitiesOf(defender, defenderAbility)) &&
         !isStatusBlockedByField(state.field, picked) &&
+        sideOf(state, defenderKey).safeguardTurnsRemaining === undefined &&
         !(picked === "freeze" && activeWeather(state) === "쾌청")
       ) {
         const before = defender.status.condition;
@@ -4428,7 +4476,8 @@ function resolveAction(
     if (
       rose &&
       !isImmuneToStatus("burn", defender.types, statusImmunitiesOf(defender, defenderAbility)) &&
-      !isStatusBlockedByField(state.field, "burn")
+      !isStatusBlockedByField(state.field, "burn") &&
+      sideOf(state, defenderKey).safeguardTurnsRemaining === undefined
     ) {
       const before = defender.status.condition;
       defender.status = inflictStatus(defender.status, "burn");
@@ -4448,6 +4497,7 @@ function resolveAction(
     !inflictedStatus &&
     !isImmuneToStatus("poison", defender.types, statusImmunitiesOf(defender, defenderAbility), attackerAbility?.bypassesPoisonTypeImmunity) &&
     !isStatusBlockedByField(state.field, "poison") &&
+    sideOf(state, defenderKey).safeguardTurnsRemaining === undefined &&
     random() * 100 < attackerAbility.poisonTouchChance
   ) {
     const before = defender.status.condition;
@@ -4467,7 +4517,8 @@ function resolveAction(
     !hitSubstitute &&
     !isFainted(attacker) &&
     !isImmuneToStatus("burn", attacker.types, statusImmunitiesOf(attacker, attackerAbility)) &&
-    !isStatusBlockedByField(state.field, "burn")
+    !isStatusBlockedByField(state.field, "burn") &&
+    sideOf(state, actorKey).safeguardTurnsRemaining === undefined
   ) {
     const before = attacker.status.condition;
     attacker.status = inflictStatus(attacker.status, "burn");
@@ -4483,6 +4534,7 @@ function resolveAction(
     defenderAbility?.reflectsStatusToOpponent?.includes(inflictedStatus) &&
     !isImmuneToStatus(inflictedStatus, attacker.types, statusImmunitiesOf(attacker, attackerAbility)) &&
     !isStatusBlockedByField(state.field, inflictedStatus) &&
+    sideOf(state, actorKey).safeguardTurnsRemaining === undefined &&
     !(inflictedStatus === "freeze" && activeWeather(state) === "쾌청")
   ) {
     const beforeAttackerStatus = attacker.status.condition;
@@ -5029,6 +5081,22 @@ function resolveAction(
     swappedStatsMoveName = effectiveMove.name;
   }
 
+  // 가드스왑·파워스왑: 명중 시 지정된 스탯들의 랭크 변화를 자신과 상대가 서로 맞바꾼다.
+  // 파워트릭(swapsOwnStats)과 달리 실수치는 그대로 두고 stages만 교환 — 이미 -6~+6 범위라
+  // 교환해도 클램프가 필요 없다.
+  let swappedStagesMoveName: string | undefined;
+  if (effectiveMove.swapsStagesWithTarget) {
+    const nextAttackerStages = { ...attacker.stages };
+    const nextDefenderStages = { ...defender.stages };
+    for (const stat of effectiveMove.swapsStagesWithTarget) {
+      nextAttackerStages[stat] = defender.stages[stat];
+      nextDefenderStages[stat] = attacker.stages[stat];
+    }
+    attacker.stages = nextAttackerStages;
+    defender.stages = nextDefenderStages;
+    swappedStagesMoveName = effectiveMove.name;
+  }
+
   // 방어류(방어/판별/버티기/킹실드): 연속 사용 횟수(protectStreak)에 따라 이번 턴 실제로 발동할
   // 확률이 (1/3)^streak로 줄어든다. 직전에 실패했거나 이력이 없으면(streak 0) 확률 1 = 무조건 발동.
   //
@@ -5047,15 +5115,22 @@ function resolveAction(
     const streak = attacker.protectStreak ?? 0;
     const successChance = Math.pow(1 / 3, streak);
     const rollPassed = random() < successChance;
+    // 패스트가드는 상대 기술이 자신을 겨냥했어도 priority가 0 이하면 애초에 막을 게 없다 —
+    // "몸을 지켜냈다!"를 잘못 띄우지 않게 targetedSelf 판정에도 그 조건을 같이 건다.
     const targetedSelf =
-      effectiveMove.protectEffect === "destinyBond" || isOpponentTargetingMove(defenderMove);
+      effectiveMove.protectEffect === "destinyBond"
+        ? true
+        : effectiveMove.protectEffect === "blockPriority"
+          ? isOpponentTargetingMove(defenderMove) && defenderMove.priority > 0
+          : isOpponentTargetingMove(defenderMove);
     if (!rollPassed) {
       // 연속 사용 굴림 실패 — 태세 진입도 없이 그대로 실패.
       attacker.protectStreak = 0;
       protectFailed = true;
     } else {
       attacker.protectStreak = streak + 1;
-      protectStanceEntered = effectiveMove.protectEffect === "block";
+      protectStanceEntered =
+        effectiveMove.protectEffect === "block" || effectiveMove.protectEffect === "blockPriority";
       // 길동무는 activeProtect(매 턴 시작 시 초기화)가 아니라 destinyBondArmed(자신의 다음
       // 행동 전까지 유지)로 별도 추적한다 — 이번 턴 상대 공격을 막는 게 아니기 때문.
       if (effectiveMove.protectEffect === "destinyBond") {
@@ -5199,6 +5274,18 @@ function resolveAction(
         ...attackerScreens,
         [effectiveMove.setsScreen]: SCREEN_DURATION + screenBonus,
       };
+    }
+  }
+
+  // 신비의부적(세이프가드): 스크린과 같은 패턴 — 자기 편에 이미 걸려있으면 실패, 사용자 자신
+  // 겨냥이라 매직미러 반사 대상이 아니다. 빛의점토는 스크린 전용(본가 규칙)이라 지속시간 보너스 없음.
+  let safeguardSetFailed = false;
+  if (effectiveMove.setsSafeguard) {
+    const attackerSide = sideOf(state, actorKey);
+    if (attackerSide.safeguardTurnsRemaining !== undefined) {
+      safeguardSetFailed = true;
+    } else {
+      attackerSide.safeguardTurnsRemaining = SCREEN_DURATION;
     }
   }
 
@@ -5376,6 +5463,8 @@ function resolveAction(
     setWeather: effectiveMove.setsWeather,
     setScreen: screenSetFailed ? undefined : effectiveMove.setsScreen,
     screenSetFailed,
+    setSafeguard: safeguardSetFailed ? undefined : (effectiveMove.setsSafeguard || undefined),
+    safeguardSetFailed: safeguardSetFailed || undefined,
     brokeScreens,
     fainted: isFainted(defender),
     selfFainted: isFainted(attacker),
@@ -5411,6 +5500,7 @@ function resolveAction(
     setEncoreMoveName,
     encoreSetFailed,
     swappedStatsMoveName,
+    swappedStagesMoveName,
     averagedDefensesMoveName,
     swappedSpeedMoveName,
     shellSideArmCategory,
@@ -5850,6 +5940,7 @@ function runActionPhase(ctx: RunTurnContext): RunTurnOutcome | RunTurnPaused {
           endOfTurn: [],
           winner: undefined,
           expiredScreens: [],
+          expiredSafeguard: [],
           turnStartAnnouncements: ctx.turnStartAnnouncements,
           switches: [...switches],
           activePokemonIds: { a: state.a.slot.pokemonId, b: state.b.slot.pokemonId },
@@ -5877,6 +5968,7 @@ function runActionPhase(ctx: RunTurnContext): RunTurnOutcome | RunTurnPaused {
           endOfTurn: [],
           winner: undefined,
           expiredScreens: [],
+          expiredSafeguard: [],
           turnStartAnnouncements: ctx.turnStartAnnouncements,
           switches: [...switches],
           activePokemonIds: { a: state.a.slot.pokemonId, b: state.b.slot.pokemonId },
@@ -6011,6 +6103,7 @@ function runActionPhase(ctx: RunTurnContext): RunTurnOutcome | RunTurnPaused {
           endOfTurn: [],
           winner: undefined,
           expiredScreens: [],
+          expiredSafeguard: [],
           turnStartAnnouncements: ctx.turnStartAnnouncements,
           switches: [...switches],
           activePokemonIds: { a: state.a.slot.pokemonId, b: state.b.slot.pokemonId },
@@ -6057,6 +6150,7 @@ function runActionPhase(ctx: RunTurnContext): RunTurnOutcome | RunTurnPaused {
             endOfTurn: [],
             winner: undefined,
             expiredScreens: [],
+            expiredSafeguard: [],
             turnStartAnnouncements: ctx.turnStartAnnouncements,
             switches: [...switches],
             activePokemonIds: { a: state.a.slot.pokemonId, b: state.b.slot.pokemonId },
@@ -6419,7 +6513,8 @@ function finishTurn(ctx: RunTurnContext): RunTurnOutcome {
           triggersNow &&
           !fighter.status.condition &&
           !isImmuneToStatus("sleep", fighter.types, statusImmunitiesOf(fighter, fighterAbility)) &&
-          !isStatusBlockedByField(state.field, "sleep")
+          !isStatusBlockedByField(state.field, "sleep") &&
+          sideOf(state, key).safeguardTurnsRemaining === undefined
         ) {
           fighter.status = inflictStatus(fighter.status, "sleep");
           endOfTurn.push({
@@ -6742,6 +6837,21 @@ function finishTurn(ctx: RunTurnContext): RunTurnOutcome {
     }
   }
 
+  // 신비의부적(세이프가드)도 스크린과 같은 편 단위 카운트다운 — 종류가 하나뿐이라 배열은
+  // "어느 편에서 사라졌는지"만 담는다.
+  const expiredSafeguard: FighterKey[] = [];
+  for (const key of (["a", "b"] as const)) {
+    const side = sideOf(state, key);
+    if (side.safeguardTurnsRemaining === undefined) continue;
+    const next = side.safeguardTurnsRemaining - 1;
+    if (next <= 0) {
+      side.safeguardTurnsRemaining = undefined;
+      expiredSafeguard.push(key);
+    } else {
+      side.safeguardTurnsRemaining = next;
+    }
+  }
+
   return {
     nextState: state,
     result: {
@@ -6758,6 +6868,7 @@ function finishTurn(ctx: RunTurnContext): RunTurnOutcome {
       weatherTurnsRemaining: state.weatherTurnsRemaining,
       weatherExpired,
       expiredScreens,
+      expiredSafeguard,
       turnStartAnnouncements,
       switches,
       activePokemonIds: { a: state.a.slot.pokemonId, b: state.b.slot.pokemonId },

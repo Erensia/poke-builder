@@ -19,7 +19,7 @@ import { getEffectiveForm } from "../lib/pokemonForm";
 import { computeRealStats } from "../lib/statCalculator";
 import { computeBulkPower } from "../lib/battlePower";
 import { environmentTintBackground } from "../lib/environmentBackground";
-import { evaluateSlotMatchup, evaluateSpeedMatchup } from "../lib/matchupEvaluator";
+import { evaluateSlotMatchup, evaluateSpeedMatchup, computeSoloOffensePower } from "../lib/matchupEvaluator";
 import "./MatchupPage.css";
 
 type Side = "attacker" | "defender";
@@ -104,6 +104,24 @@ export function MatchupPage() {
     );
   }, [attackerPokemon, defenderPokemon, effAttackerSlot, effDefenderSlot, effMove, attacker.slot, defender.slot, weather, field]);
 
+  // ver.1.3 §4 — 상대를 아직 안 골랐을 때도(fullResult는 defenderPokemon이 있어야 나옴) 공격측
+  // 정보만으로 계산 가능한 결정력은 보여준다. 상대가 이미 있으면 fullResult 쪽이 더 정확하니
+  // 이 값은 안 쓴다(카드에도 defenderPokemon 없을 때만 넘긴다).
+  const soloOffensePower = useMemo(() => {
+    if (!attackerPokemon || !effMove) return null;
+    return computeSoloOffensePower(
+      { ...effAttackerSlot, pokemonId: attackerPokemon.id },
+      effMove,
+      {
+        weather: weather ?? undefined,
+        field: field ?? undefined,
+        multiHitCount: attacker.slot.multiHitCount,
+        stockpileCount: attacker.slot.stockpileCount,
+        attackerStages: attacker.slot.stages,
+      },
+    );
+  }, [attackerPokemon, effAttackerSlot, effMove, attacker.slot, weather, field]);
+
   // 스피드 비교(Phase 6.5 §2) — 포켓몬 둘 다 골랐으면 기술 선택과 무관하게 계산
   const speedResult = useMemo(() => {
     if (!attackerPokemon || !defenderPokemon) return null;
@@ -143,6 +161,7 @@ export function MatchupPage() {
           slot={attacker.slot}
           offensePower={fullResult?.offensePower}
           rawOffensePower={fullResult?.rawOffensePower}
+          soloOffensePower={!defenderPokemon ? soloOffensePower : undefined}
           multiHitCount={attacker.slot.multiHitCount}
           onSetMultiHitCount={attacker.setMultiHitCount}
           onPickPokemon={() => setPicker({ kind: "pokemon", side: "attacker" })}

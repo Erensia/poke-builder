@@ -1,3 +1,55 @@
+.move-picker-filters {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-bottom: 0.6rem;
+}
+
+.move-picker-type-filter,
+.move-picker-category-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.move-picker-chip,
+.move-picker-type-chip {
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-muted);
+  border-radius: 999px;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.move-picker-chip {
+  padding: 0.3rem 0.65rem;
+  font-size: 0.76rem;
+}
+
+.move-picker-type-chip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.85rem;
+  height: 1.85rem;
+  padding: 0;
+}
+
+.move-picker-chip.is-active,
+.move-picker-type-chip.is-active {
+  border-color: var(--violet);
+  background: var(--violet-soft);
+  color: var(--violet);
+}
+
+.move-picker-empty {
+  padding: 0.7rem 0.8rem;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  text-align: center;
+}
+
 .move-clear-btn {
   width: 100%;
   border: 1px dashed var(--border);

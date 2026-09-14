@@ -132,6 +132,7 @@
     ],
     "chargeTurn": true,
     "chargeSkipWeather": "쾌청",
+    "halvesPowerOutsideChargeSkipWeather": true,
     "makesContact": false
   },
   {
@@ -2203,6 +2204,7 @@
     "tags": [
       "방어"
     ],
+    "protectEffect": "blockPriority",
     "makesContact": false
   },
   {
@@ -2268,7 +2270,8 @@
     "tags": [
       "접촉"
     ],
-    "makesContact": true
+    "makesContact": true,
+    "conditionalDoublePower": "user-status-burn-poison-paralysis"
   },
   {
     "id": "기사회생",
@@ -3445,7 +3448,8 @@
       "도주",
       "접촉"
     ],
-    "makesContact": true
+    "makesContact": true,
+    "selfSwitchAfterDamage": true
   },
   {
     "id": "탁류",
@@ -4527,6 +4531,18 @@
         "target": "self",
         "stat": "spa",
         "delta": 1
+      },
+      {
+        "target": "self",
+        "stat": "atk",
+        "delta": 1,
+        "requiresWeather": "쾌청"
+      },
+      {
+        "target": "self",
+        "stat": "spa",
+        "delta": 1,
+        "requiresWeather": "쾌청"
       }
     ],
     "makesContact": false
@@ -4541,7 +4557,8 @@
     "pp": 20,
     "priority": 0,
     "effect": "5턴 동안 이상한 힘의 보호를 받아 상태 이상이 되지 않는다.",
-    "makesContact": false
+    "makesContact": false,
+    "setsSafeguard": true
   },
   {
     "id": "씨뿌리기",
@@ -4685,7 +4702,8 @@
     "tags": [
       "랭크"
     ],
-    "makesContact": false
+    "makesContact": false,
+    "swapsStagesWithTarget": ["def", "spd"]
   },
   {
     "id": "검은눈빛",
@@ -5405,6 +5423,8 @@
     "classification": [
       "베기"
     ],
+    "chargeTurn": true,
+    "chargeSkipWeather": "쾌청",
     "makesContact": true
   },
   {
@@ -5561,7 +5581,8 @@
     "tags": [
       "접촉"
     ],
-    "makesContact": true
+    "makesContact": true,
+    "destroysField": true
   },
   {
     "id": "아쿠아제트",
@@ -6130,7 +6151,8 @@
     "tags": [
       "비접촉"
     ],
-    "makesContact": false
+    "makesContact": false,
+    "conditionalDoublePower": "target-status-poisoned"
   },
   {
     "id": "뿌리박기",
@@ -6362,7 +6384,8 @@
     "tags": [
       "랭크"
     ],
-    "makesContact": false
+    "makesContact": false,
+    "swapsStagesWithTarget": ["atk", "spa"]
   },
   {
     "id": "대폭발",
