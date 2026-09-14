@@ -485,9 +485,12 @@ export function BattleLogPage() {
   // 돌아가 다음 대전 종료 때 또 한 번만 저장된다.
   useEffect(() => {
     if (!winner || !battleState) return;
+    // 선출된 3마리 전원의 이름을 그대로 나열한다(사용자 확정 — 활성 1마리가 아니라 선출 전체).
+    const teamLabel = (side: Side) =>
+      partySlots[side].map((s) => getPokemon(s.pokemonId)?.name ?? s.pokemonId).join(", ");
     battleVideos.addVideo({
-      labelA: fighterLabel(battleState, "a"),
-      labelB: fighterLabel(battleState, "b"),
+      labelA: teamLabel("a"),
+      labelB: teamLabel("b"),
       winner,
       log,
     });
@@ -1327,7 +1330,7 @@ export function BattleLogPage() {
 
       {battleVideoView && battleVideoView !== "list" && (
         <Modal
-          title={`${battleVideoView.labelA} vs ${battleVideoView.labelB}`}
+          title={`${battleVideoView.labelA} VS ${battleVideoView.labelB}`}
           onClose={() => setBattleVideoView(null)}
         >
           {/* 배틀비디오는 그 시점의 텍스트 로그만 그대로 보여준다 — 포켓몬 UI(스프라이트·게이지)는 없음(§6) */}

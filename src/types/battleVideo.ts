@@ -9,7 +9,10 @@ export interface BattleVideo {
   id: string;
   /** Date.now() 기준 저장 시각. 목록 정렬(최근 저장 순)과 표시용 */
   savedAt: number;
-  /** 대전 종료 시점 양쪽 활성 포켓몬 이름 — 목록 카드 제목에 "OO vs OO"로 보여준다 */
+  /**
+   * 각 편이 선출한 포켓몬 전원의 이름을 ", "로 나열한 문자열(예: "보만다, 에써르, 카디나르마") —
+   * 활성 1마리가 아니라 대전에 나온 전원(사용자 확정). 목록 카드 제목에 "labelA VS labelB"로 보여준다.
+   */
   labelA: string;
   labelB: string;
   winner: FighterKey | "draw";
