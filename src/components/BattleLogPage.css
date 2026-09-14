@@ -30,6 +30,25 @@
   max-width: 60ch;
 }
 
+/* 배틀비디오 토글(§6) — PartyBoard의 "저장된 파티" 버튼과 같은 스타일 축 */
+.battle-video-toggle {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.76rem;
+  font-weight: 500;
+  padding: 0.32rem 0.65rem;
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+  align-self: flex-start;
+}
+
+.battle-video-toggle:hover {
+  border-color: var(--violet);
+  color: var(--violet);
+}
+
 /* 이전엔 grid 1fr 1fr로 두 카드가 740px 전체를 꽉 채워서 결정력&내구력 페이지(카드 폭 280px 고정,
    가운데 정렬)보다 훨씬 커 보였다 — 같은 화면 비율이 되도록 matchup-board와 동일하게
    flex+가운데 정렬 + 카드 폭 고정으로 바꾼다 (사용자 확인, 스크린샷 비교) */
