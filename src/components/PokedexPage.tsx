@@ -6,6 +6,7 @@ import { TYPE_COLORS } from "../lib/typeColors";
 import { STAT_LABELS, STAT_ORDER } from "../lib/statLabels";
 import { megaBadgeLabel } from "../lib/pokemonForm";
 import { getDefensiveProfile } from "../lib/typeEffectiveness";
+import { compareDexOrder } from "../lib/dexOrder";
 import { POKEMON_TYPES, type PokemonType } from "../types/pokemon-type";
 import type { Pokemon, MegaEvolution } from "../types/pokemon";
 import type { BaseStats } from "../types/stats";
@@ -260,7 +261,14 @@ export function PokedexPage({ onSelectMove }: PokedexPageProps) {
   // 사용자가 리스트에서 뭔가 클릭해야 상세가 뜬다(도구 도감 ItemDexPage와 동일한 패턴).
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  const filtered = useMemo(() => POKEMON.filter((p) => p.name.includes(query.trim())), [query]);
+  // 목록 정렬은 전국도감 순서를 따른다(ver.1.3 §5) — 리전폼은 원종과 같은 번호라 원종 바로 뒤에
+  // 자연스럽게 이어붙고(정렬 안정성엔 id 알파벳순 타이브레이크), 메가진화는 애초에 별도 항목이
+  // 아니라 이 정렬 대상이 아니다.
+  const filtered = useMemo(
+    () =>
+      POKEMON.filter((p) => p.name.includes(query.trim())).sort((a, b) => compareDexOrder(a.id, b.id)),
+    [query],
+  );
 
   // 검색으로 목록이 좁혀져서 선택된 포켓몬이 더는 안 보이면, 필터된 첫 항목으로 자연스럽게 넘어간다.
   // 단, 애초에 아무 것도 선택 안 한 상태(null)면 그 자동 넘어가기 대상에서 제외 — 계속 빈 상태로 둔다.

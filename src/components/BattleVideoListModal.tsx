@@ -9,9 +9,14 @@ interface BattleVideoListModalProps {
   onDelete: (id: string) => void;
 }
 
+/**
+ * labelA/labelB는 선출된 3마리 전원의 이름을 나열한 문자열이라 그대로 "승리"에 붙이면 어색하다
+ * ("보만다, 에써르, 카디나르마 승리") — 이 프로젝트에서 a=내 파티·b=상대 파티가 고정 축이라
+ * 그 축으로 간단히 표시한다.
+ */
 function winnerLabel(video: BattleVideo): string {
   if (video.winner === "draw") return "무승부";
-  return `${video.winner === "a" ? video.labelA : video.labelB} 승리`;
+  return video.winner === "a" ? "내 파티 승리" : "상대 파티 승리";
 }
 
 /**
@@ -22,7 +27,7 @@ export function BattleVideoListModal({ videos, onClose, onView, onDelete }: Batt
   const sorted = [...videos].sort((a, b) => b.savedAt - a.savedAt);
 
   function handleDelete(video: BattleVideo) {
-    if (window.confirm(`"${video.labelA} vs ${video.labelB}" 배틀비디오를 삭제할까요?`)) {
+    if (window.confirm(`"${video.labelA} VS ${video.labelB}" 배틀비디오를 삭제할까요?`)) {
       onDelete(video.id);
     }
   }
@@ -34,7 +39,7 @@ export function BattleVideoListModal({ videos, onClose, onView, onDelete }: Batt
           <li key={video.id} className="preset-item">
             <div className="preset-item-info">
               <span className="preset-item-name">
-                {video.labelA} vs {video.labelB}
+                {video.labelA} VS {video.labelB}
               </span>
               <span className="preset-item-meta">
                 {winnerLabel(video)} · {new Date(video.savedAt).toLocaleString()}
