@@ -47,11 +47,35 @@ export function PartyBoard() {
     resetParty,
     loadSlots,
     loadSlot,
+    reorderSlots,
   } = useParty();
   const partyPresets = usePartyPresets();
   const slotPresets = useSlotPresets();
   const [picker, setPicker] = useState<PickerState>(null);
   const [showPartyPresets, setShowPartyPresets] = useState(false);
+  // 드래그앤드랍으로 슬롯 순서 변경(§3) — 잡고 있는 슬롯과 지금 위에 올라와 있는 슬롯을 각각 추적.
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+
+  function handleSlotDragStart(index: number) {
+    setDraggedIndex(index);
+  }
+
+  function handleSlotDragOver(index: number) {
+    if (draggedIndex === null || draggedIndex === index) return;
+    setDragOverIndex(index);
+  }
+
+  function handleSlotDrop(index: number) {
+    if (draggedIndex !== null) reorderSlots(draggedIndex, index);
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+  }
+
+  function handleSlotDragEnd() {
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+  }
 
   function handleSaveSlotAsSample(index: number) {
     const slot = slots[index];
@@ -120,6 +144,12 @@ export function PartyBoard() {
             onCycleFormVariant={() => cycleFormVariant(i)}
             onCycleCosmeticForm={() => cycleCosmeticForm(i)}
             onPickCosmeticForm={() => setPicker({ kind: "cosmeticForm", slotIndex: i })}
+            isDragging={draggedIndex === i}
+            isDragOver={dragOverIndex === i}
+            onDragStart={() => handleSlotDragStart(i)}
+            onDragOverSlot={() => handleSlotDragOver(i)}
+            onDrop={() => handleSlotDrop(i)}
+            onDragEnd={handleSlotDragEnd}
           />
         ))}
       </div>

@@ -6,7 +6,19 @@
   box-shadow: var(--shadow-sm);
   padding: 0.7rem 0.8rem;
   min-height: 178px;
-  transition: box-shadow 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+  cursor: grab;
+  transition: box-shadow 0.15s ease, border-color 0.15s ease, transform 0.1s ease, opacity 0.15s ease;
+}
+
+/* 드래그앤드랍 순서 변경(§3) — 카드 전체가 드래그 소스 겸 드롭 타겟이다. */
+.party-slot.is-dragging {
+  opacity: 0.4;
+  cursor: grabbing;
+}
+
+.party-slot.is-drag-over {
+  border-color: var(--violet);
+  box-shadow: 0 0 0 2px var(--violet-soft);
 }
 
 .party-slot-num {

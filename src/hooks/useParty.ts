@@ -59,6 +59,19 @@ export function useParty() {
     });
   }
 
+  /**
+   * 드래그앤드랍으로 두 슬롯의 배치 순서를 맞바꾼다(§3). 빈 슬롯끼리·빈 슬롯과 채워진 슬롯 사이도
+   * 그냥 스왑 — "채워진 슬롯을 빈 슬롯으로 옮기기"도 이 하나의 연산으로 자연히 표현된다.
+   */
+  function reorderSlots(fromIndex: number, toIndex: number) {
+    if (fromIndex === toIndex) return;
+    setSlots((prev) => {
+      const next = [...prev] as PartySlots;
+      [next[fromIndex], next[toIndex]] = [next[toIndex], next[fromIndex]];
+      return next;
+    });
+  }
+
   function setPokemon(index: number, pokemonId: string) {
     setSlots((prev) => {
       const next = [...prev] as PartySlots;
@@ -257,5 +270,6 @@ export function useParty() {
     resetParty,
     loadSlots,
     loadSlot,
+    reorderSlots,
   };
 }
