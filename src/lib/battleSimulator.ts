@@ -1705,7 +1705,8 @@ export interface SwitchLogEntry {
   forced?: boolean;
   /**
    * 꼬리자르기로 세운 대타를 넘기며 물러난 교체면 true(§4-1). `afterMove`도 함께 true.
-   * 로그에서 새로 나온 포켓몬을 부르는 "가라!" 줄 대신 "…은 트레이너의 곁으로 돌아간다!"를 쓴다.
+   * 로그에서 통상 "돌아와! ○○!"·"가라! ○○!" 두 줄 **앞에** "○○은 트레이너의 곁으로
+   * 돌아간다!" 줄을 추가로 붙인다(대체가 아니라 추가 — BattleTurnLog.tsx 참고).
    */
   shedTail?: boolean;
   /**
@@ -4665,29 +4666,33 @@ function resolveAction(
     }
   }
 
-  // 정리정돈·고속스핀(Move.hazardClear): 명중 시 설치물·대타를 정리한다.
+  // 정리정돈·고속스핀(Move.hazardClear): 명중 시 설치물·대타를 정리한다. 본가 규칙(방어류는
+  // "자신/아군 대상"·"모든 포켓몬 대상" 기술을 막지 못한다 — Bulbapedia Protect 문서)상
+  // 정리정돈(자신+상대 양쪽 대상, status)은 방어류에 안 막히지만, 고속스핀은 상대 1마리를
+  // 겨냥하는 데미지 기술이라 막히면 부가효과(설치물 정리)도 함께 무산된다(§1.4 버그 수정 —
+  // 이전엔 둘 다 blockedByProtect로 묶여 있어 정리정돈까지 잘못 막혔었다).
   let tidyUpDone = false;
-  if (effectiveMove.hazardClear && hit && !blockedByProtect) {
-    if (effectiveMove.hazardClear === "tidy") {
-      state.sideA.hazards = emptyHazardState();
-      state.sideB.hazards = emptyHazardState();
-      attacker.substituteHp = undefined;
-      defender.substituteHp = undefined;
-      tidyUpDone = true;
-    } else {
-      // "spin": 사용자 쪽 설치물 + 사용자에게 걸린 속박·씨뿌리기만 정리한다(본가 고속스핀).
-      sideOf(state, actorKey).hazards = emptyHazardState();
-      const nextActive = { ...attacker.volatile.active };
-      delete nextActive.bound;
-      delete nextActive.leechSeed;
-      attacker.volatile = { active: nextActive };
-    }
+  if (effectiveMove.hazardClear === "tidy" && hit) {
+    state.sideA.hazards = emptyHazardState();
+    state.sideB.hazards = emptyHazardState();
+    attacker.substituteHp = undefined;
+    defender.substituteHp = undefined;
+    tidyUpDone = true;
+  } else if (effectiveMove.hazardClear === "spin" && hit && !blockedByProtect) {
+    // 사용자 쪽 설치물 + 사용자에게 걸린 속박·씨뿌리기만 정리한다(본가 고속스핀).
+    sideOf(state, actorKey).hazards = emptyHazardState();
+    const nextActive = { ...attacker.volatile.active };
+    delete nextActive.bound;
+    delete nextActive.leechSeed;
+    attacker.volatile = { active: nextActive };
   }
 
   // 코트체인지(Move.swapsSideEffects): 명중 시 양쪽 진영의 설치물(hazards)·스크린(screens)을
-  // 통째로 맞바꾼다. 필드·날씨·트릭룸은 장 전체 효과라 대상이 아니다(본가와 동일).
+  // 통째로 맞바꾼다. 필드·날씨·트릭룸은 장 전체 효과라 대상이 아니다(본가와 동일). 양쪽 편
+  // 전체가 대상이라 방어류에 막히지 않는다(본가 규칙 — 정리정돈과 같은 축. §1.4 버그 수정 전엔
+  // blockedByProtect로 잘못 막혔었다).
   let courtChangeDone = false;
-  if (effectiveMove.swapsSideEffects && hit && !blockedByProtect) {
+  if (effectiveMove.swapsSideEffects && hit) {
     const swapHazards = state.sideA.hazards;
     state.sideA.hazards = state.sideB.hazards;
     state.sideB.hazards = swapHazards;
@@ -4699,10 +4704,11 @@ function resolveAction(
 
   // 회생의기도(Move.revivesFaintedAlly): 명중 시 기절한 교대 포켓몬 1마리(가장 앞 슬롯)를 최대
   // HP의 절반으로 부활시킨다. 벤치 부활이라 교체(pendingPivot)는 일어나지 않는다. 부활 대상이
-  // 없으면 실패("그러나 실패했다!").
+  // 없으면 실패("그러나 실패했다!"). 아군 대상 기술이라 방어류에 막히지 않는다(본가 규칙 —
+  // §1.4 버그 수정 전엔 blockedByProtect로 잘못 막혔었다).
   let revivedPartyName: string | undefined;
   let reviveFailed = false;
-  if (effectiveMove.revivesFaintedAlly && hit && !blockedByProtect) {
+  if (effectiveMove.revivesFaintedAlly && hit) {
     const mySide = sideOf(state, actorKey);
     const target = mySide.party.find((f, i) => i !== mySide.activeIndex && isFainted(f));
     if (target) {
