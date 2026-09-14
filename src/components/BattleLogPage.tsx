@@ -655,6 +655,7 @@ export function BattleLogPage() {
       endOfTurn: [],
       winner: inFainted && !hasReserve ? (side === "a" ? "b" : "a") : undefined,
       expiredScreens: [],
+      expiredSafeguard: [],
       turnStartAnnouncements: [],
       switches: [
         { side: side as FighterKey, fromIndex: -1, toIndex, outPokemonId, inPokemonId, entryMessages },
@@ -995,6 +996,12 @@ export function BattleLogPage() {
                       {battleSide(side)?.wish && (
                         // 희망사항도 편 단위 큐다(§6-2). turnsRemaining 1 = 이번 턴 종료에 발동.
                         <span className="battle-status-tag is-volatile">희망사항 대기</span>
+                      )}
+                      {battleSide(side)?.safeguardTurnsRemaining !== undefined && (
+                        // 신비의부적도 스크린과 같은 편 단위 상태다(§1-9).
+                        <span className="battle-status-tag is-volatile">
+                          신비의부적 {battleSide(side)?.safeguardTurnsRemaining}턴
+                        </span>
                       )}
                       {fighter.perishCount !== undefined && (
                         <span className="battle-status-tag is-major">멸망 {fighter.perishCount}</span>
@@ -1538,6 +1545,12 @@ export function BattleLogPage() {
                           <> · {SCREEN_LABELS[action.setScreen]} 설치!</>
                         )}
                         {!action.blockedReason && action.hit && action.screenSetFailed && (
+                          <> · 그러나 실패했다!</>
+                        )}
+                        {!action.blockedReason && action.hit && action.setSafeguard && (
+                          <> · 신비한 힘의 보호를 받았다!</>
+                        )}
+                        {!action.blockedReason && action.hit && action.safeguardSetFailed && (
                           <> · 그러나 실패했다!</>
                         )}
                         {!action.blockedReason && action.hit && action.brokeScreens?.length && (
@@ -2734,6 +2747,11 @@ export function BattleLogPage() {
                   <div key={i} className="battle-turn-line is-muted">
                     {turnName(e.actor)}의 {SCREEN_LABELS[e.screen]}
                     {iGa(SCREEN_LABELS[e.screen])} 사라졌다!
+                  </div>
+                ))}
+                {turn.expiredSafeguard.map((actor, i) => (
+                  <div key={i} className="battle-turn-line is-muted">
+                    {turnName(actor)}의 신비의부적 효과가 사라졌다!
                   </div>
                 ))}
                 {turn.winner && (

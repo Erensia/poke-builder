@@ -420,6 +420,11 @@ export interface BattleSide {
    */
   screens: Partial<Record<"reflect" | "lightScreen" | "auroraVeil", number>>;
   /**
+   * 신비의부적(세이프가드) — 이 편이 "상대가 거는" 주요 상태이상을 막는 보호막의 남은 턴 수
+   * (백로그 §1-9). 스크린과 같은 축(편 단위, 교체해도 유지)이지만 종류가 하나뿐이라 number만.
+   */
+  safeguardTurnsRemaining?: number;
+  /**
    * 희망사항(Wish) 예약 — 이 편에 하나만 걸 수 있다(백로그 §6-2). 본가처럼 "쓴 포켓몬"이 아니라
    * 2턴 뒤 그 자리(활성)에 있는 포켓몬을 회복시키므로, fighter가 아니라 편에 큐로 둔다. 교체해도
    * 유지된다. healAmount는 시전 시점 시전자 최대 HP의 절반(고정).
@@ -1225,6 +1230,10 @@ export interface ActionLogEntry {
   setScreen?: "reflect" | "lightScreen" | "auroraVeil";
   /** 리플렉터/빛의장막을 썼지만 이미 같은 스크린이 걸려있어서 실패했으면 true */
   screenSetFailed?: boolean;
+  /** 이 행동으로 신비의부적(세이프가드)이 자신 쪽에 새로 걸렸으면 true */
+  setSafeguard?: boolean;
+  /** 신비의부적을 썼지만 이미 걸려있어서 실패했으면 true */
+  safeguardSetFailed?: boolean;
   /**
    * 레이징불·깨트리기(Move.breaksScreensOnHit)로 명중해서 상대 쪽 스크린을 부쉈으면 그 목록.
    * 데미지 계산은 스크린이 살아있는 상태로 이미 끝난 뒤에 제거한다(그 턴엔 아직 경감됨).
@@ -1662,6 +1671,8 @@ export interface TurnResult {
   weatherExpired?: boolean;
   /** 이번 턴에 사라진 스크린(리플렉터/빛의장막) 목록 — 양쪽에 동시에 걸려있을 수 있어 배열 */
   expiredScreens: { actor: FighterKey; screen: "reflect" | "lightScreen" | "auroraVeil" }[];
+  /** 이번 턴에 신비의부적(세이프가드)이 5턴을 다 채우고 사라진 편 목록 — 양쪽 다 걸려있을 수 있어 배열 */
+  expiredSafeguard: FighterKey[];
   /** 턴 시작 시점에 발생한 안내 문구(의태 타입 변화 등). 없으면 빈 배열 */
   turnStartAnnouncements: string[];
   /**
@@ -1730,6 +1741,7 @@ function cloneSide(side: BattleSide): BattleSide {
     activeIndex: side.activeIndex,
     hazards: { ...side.hazards },
     screens: { ...side.screens },
+    safeguardTurnsRemaining: side.safeguardTurnsRemaining,
     wish: side.wish ? { ...side.wish } : undefined,
     megaUsed: side.megaUsed,
   };
@@ -1908,7 +1920,8 @@ function applyEntryHazardsOnSwitchIn(state: BattleState, key: FighterKey, log: s
       hz.toxicSpikesLayers > 0 &&
       !self.status.condition &&
       !isImmuneToStatus(hz.toxicSpikesLayers >= 2 ? "badly-poisoned" : "poison", self.types, statusImmunitiesOf(self, selfAbility)) &&
-      !isStatusBlockedByField(state.field, "poison")
+      !isStatusBlockedByField(state.field, "poison") &&
+      sideOf(state, key).safeguardTurnsRemaining === undefined
     ) {
       const cond: StatusCondition = hz.toxicSpikesLayers >= 2 ? "badly-poisoned" : "poison";
       self.status = inflictStatus(self.status, cond);
@@ -3203,7 +3216,8 @@ function resolveAction(
     if (
       ap.contactStatus &&
       !isImmuneToStatus(ap.contactStatus, attacker.types, statusImmunitiesOf(attacker, attackerAbility)) &&
-      !isStatusBlockedByField(state.field, ap.contactStatus)
+      !isStatusBlockedByField(state.field, ap.contactStatus) &&
+      sideOf(state, actorKey).safeguardTurnsRemaining === undefined
     ) {
       const before = attacker.status.condition;
       attacker.status = inflictStatus(attacker.status, ap.contactStatus);
@@ -4386,6 +4400,7 @@ function resolveAction(
       )
         continue;
       if (isStatusBlockedByField(state.field, effect.status)) continue;
+      if (sideOf(state, defenderKey).safeguardTurnsRemaining !== undefined) continue;
       // 쾌청(강한 햇살) 날씨에서는 얼음 상태에 걸리지 않는다 — 타입 면역과는 다른 축이라 별도 확인
       if (effect.status === "freeze" && activeWeather(state) === "쾌청") continue;
       const chance = effect.chance !== undefined ? effect.chance / 100 : 1;
@@ -4418,6 +4433,7 @@ function resolveAction(
         picked &&
         !isImmuneToStatus(picked, defender.types, statusImmunitiesOf(defender, defenderAbility)) &&
         !isStatusBlockedByField(state.field, picked) &&
+        sideOf(state, defenderKey).safeguardTurnsRemaining === undefined &&
         !(picked === "freeze" && activeWeather(state) === "쾌청")
       ) {
         const before = defender.status.condition;
@@ -4445,7 +4461,8 @@ function resolveAction(
     if (
       rose &&
       !isImmuneToStatus("burn", defender.types, statusImmunitiesOf(defender, defenderAbility)) &&
-      !isStatusBlockedByField(state.field, "burn")
+      !isStatusBlockedByField(state.field, "burn") &&
+      sideOf(state, defenderKey).safeguardTurnsRemaining === undefined
     ) {
       const before = defender.status.condition;
       defender.status = inflictStatus(defender.status, "burn");
@@ -4465,6 +4482,7 @@ function resolveAction(
     !inflictedStatus &&
     !isImmuneToStatus("poison", defender.types, statusImmunitiesOf(defender, defenderAbility), attackerAbility?.bypassesPoisonTypeImmunity) &&
     !isStatusBlockedByField(state.field, "poison") &&
+    sideOf(state, defenderKey).safeguardTurnsRemaining === undefined &&
     random() * 100 < attackerAbility.poisonTouchChance
   ) {
     const before = defender.status.condition;
@@ -4484,7 +4502,8 @@ function resolveAction(
     !hitSubstitute &&
     !isFainted(attacker) &&
     !isImmuneToStatus("burn", attacker.types, statusImmunitiesOf(attacker, attackerAbility)) &&
-    !isStatusBlockedByField(state.field, "burn")
+    !isStatusBlockedByField(state.field, "burn") &&
+    sideOf(state, actorKey).safeguardTurnsRemaining === undefined
   ) {
     const before = attacker.status.condition;
     attacker.status = inflictStatus(attacker.status, "burn");
@@ -4500,6 +4519,7 @@ function resolveAction(
     defenderAbility?.reflectsStatusToOpponent?.includes(inflictedStatus) &&
     !isImmuneToStatus(inflictedStatus, attacker.types, statusImmunitiesOf(attacker, attackerAbility)) &&
     !isStatusBlockedByField(state.field, inflictedStatus) &&
+    sideOf(state, actorKey).safeguardTurnsRemaining === undefined &&
     !(inflictedStatus === "freeze" && activeWeather(state) === "쾌청")
   ) {
     const beforeAttackerStatus = attacker.status.condition;
@@ -5242,6 +5262,18 @@ function resolveAction(
     }
   }
 
+  // 신비의부적(세이프가드): 스크린과 같은 패턴 — 자기 편에 이미 걸려있으면 실패, 사용자 자신
+  // 겨냥이라 매직미러 반사 대상이 아니다. 빛의점토는 스크린 전용(본가 규칙)이라 지속시간 보너스 없음.
+  let safeguardSetFailed = false;
+  if (effectiveMove.setsSafeguard) {
+    const attackerSide = sideOf(state, actorKey);
+    if (attackerSide.safeguardTurnsRemaining !== undefined) {
+      safeguardSetFailed = true;
+    } else {
+      attackerSide.safeguardTurnsRemaining = SCREEN_DURATION;
+    }
+  }
+
   // 자뭉열매/오랭열매: 이번 행동으로 생긴 모든 HP 변화(피격/반동/회복 등)가 끝난 뒤, 체력이 최대
   // HP 1/2 이하인 쪽(공격자든 방어자든)이 있으면 자동 발동한다. attacker를 먼저 확인하는 순서는
   // 임의지만, 도구는 각자 한 개씩만 지니므로 서로 간섭하지 않는다.
@@ -5416,6 +5448,8 @@ function resolveAction(
     setWeather: effectiveMove.setsWeather,
     setScreen: screenSetFailed ? undefined : effectiveMove.setsScreen,
     screenSetFailed,
+    setSafeguard: safeguardSetFailed ? undefined : (effectiveMove.setsSafeguard || undefined),
+    safeguardSetFailed: safeguardSetFailed || undefined,
     brokeScreens,
     fainted: isFainted(defender),
     selfFainted: isFainted(attacker),
@@ -5891,6 +5925,7 @@ function runActionPhase(ctx: RunTurnContext): RunTurnOutcome | RunTurnPaused {
           endOfTurn: [],
           winner: undefined,
           expiredScreens: [],
+          expiredSafeguard: [],
           turnStartAnnouncements: ctx.turnStartAnnouncements,
           switches: [...switches],
           activePokemonIds: { a: state.a.slot.pokemonId, b: state.b.slot.pokemonId },
@@ -5918,6 +5953,7 @@ function runActionPhase(ctx: RunTurnContext): RunTurnOutcome | RunTurnPaused {
           endOfTurn: [],
           winner: undefined,
           expiredScreens: [],
+          expiredSafeguard: [],
           turnStartAnnouncements: ctx.turnStartAnnouncements,
           switches: [...switches],
           activePokemonIds: { a: state.a.slot.pokemonId, b: state.b.slot.pokemonId },
@@ -6052,6 +6088,7 @@ function runActionPhase(ctx: RunTurnContext): RunTurnOutcome | RunTurnPaused {
           endOfTurn: [],
           winner: undefined,
           expiredScreens: [],
+          expiredSafeguard: [],
           turnStartAnnouncements: ctx.turnStartAnnouncements,
           switches: [...switches],
           activePokemonIds: { a: state.a.slot.pokemonId, b: state.b.slot.pokemonId },
@@ -6098,6 +6135,7 @@ function runActionPhase(ctx: RunTurnContext): RunTurnOutcome | RunTurnPaused {
             endOfTurn: [],
             winner: undefined,
             expiredScreens: [],
+            expiredSafeguard: [],
             turnStartAnnouncements: ctx.turnStartAnnouncements,
             switches: [...switches],
             activePokemonIds: { a: state.a.slot.pokemonId, b: state.b.slot.pokemonId },
@@ -6460,7 +6498,8 @@ function finishTurn(ctx: RunTurnContext): RunTurnOutcome {
           triggersNow &&
           !fighter.status.condition &&
           !isImmuneToStatus("sleep", fighter.types, statusImmunitiesOf(fighter, fighterAbility)) &&
-          !isStatusBlockedByField(state.field, "sleep")
+          !isStatusBlockedByField(state.field, "sleep") &&
+          sideOf(state, key).safeguardTurnsRemaining === undefined
         ) {
           fighter.status = inflictStatus(fighter.status, "sleep");
           endOfTurn.push({
@@ -6783,6 +6822,21 @@ function finishTurn(ctx: RunTurnContext): RunTurnOutcome {
     }
   }
 
+  // 신비의부적(세이프가드)도 스크린과 같은 편 단위 카운트다운 — 종류가 하나뿐이라 배열은
+  // "어느 편에서 사라졌는지"만 담는다.
+  const expiredSafeguard: FighterKey[] = [];
+  for (const key of (["a", "b"] as const)) {
+    const side = sideOf(state, key);
+    if (side.safeguardTurnsRemaining === undefined) continue;
+    const next = side.safeguardTurnsRemaining - 1;
+    if (next <= 0) {
+      side.safeguardTurnsRemaining = undefined;
+      expiredSafeguard.push(key);
+    } else {
+      side.safeguardTurnsRemaining = next;
+    }
+  }
+
   return {
     nextState: state,
     result: {
@@ -6799,6 +6853,7 @@ function finishTurn(ctx: RunTurnContext): RunTurnOutcome {
       weatherTurnsRemaining: state.weatherTurnsRemaining,
       weatherExpired,
       expiredScreens,
+      expiredSafeguard,
       turnStartAnnouncements,
       switches,
       activePokemonIds: { a: state.a.slot.pokemonId, b: state.b.slot.pokemonId },
