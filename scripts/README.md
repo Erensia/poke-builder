@@ -32,6 +32,38 @@ node scripts/validate-data.mjs           # 오류만 게이트
 node scripts/validate-data.mjs --strict  # 경고도 게이트
 ```
 
+## merge-staging.mjs
+
+신규 포켓몬·기술·도구 스테이징 배치(검토용 JSON)를 `src/data/*.json` 끝에 병합한다. 레귤레이션
+업데이트(예: M-C)처럼 새 종·기술을 한 번에 여러 개 들여올 때 쓴다 — 밸런스 패치(기존 항목의
+수치·학습셋 수정)는 대상이 아니다(수동으로 고칠 것).
+
+스테이징 폴더에 파일명에 `pokemon`/`moves`/`items`가 들어간 JSON을 놓는다(정확한 파일명은
+안 가림):
+
+- `*pokemon*.json` — `{ "pokemon": [...], "megaEvolutionAdditions"?: [{ "baseId": "...", ...메가진화 필드 }] }`
+- `*moves*.json` — `{ "moves": [...] }`
+- `*items*.json` — `{ "items": [...] }`
+
+각 항목 객체의 `_`로 시작하는 키(`_readme`·`_flags` 등)는 스테이징 전용 메모라 병합 전 제거된다.
+포켓몬 항목의 `_learnsetByForm`(폼 id → learnset)은 특별 취급 — standard 폼(또는 최상위
+자신)의 learnset을 최상위 `learnset`으로, 나머지는 각 `formVariants` 항목의 `learnset`으로
+풀어낸 뒤 제거한다(폼마다 학습셋이 다른 종을 표현할 스키마가 없어서 쓰는 편법).
+
+id가 이미 있는 항목은 조용히 건너뛴다 — **재실행해도 안전**(이미 병합된 배치를 다시 돌려도
+중복이 안 생긴다). 기존 파일 내용은 건드리지 않고 텍스트로 끝에 이어붙이거나(신규 항목) 대상
+종의 `megaEvolutions` 배열 안에만 정밀하게 끼워 넣는 방식이라(`megaEvolutionAdditions`),
+전체 파일을 다시 직렬화하지 않는다 — 이 파일들은 엔트리마다 한 줄/여러 줄 서식이 섞여 있어
+`JSON.stringify` 왕복이 무관한 항목까지 재포맷해버리기 때문(격리된 사본으로 실측 확인).
+
+```
+node scripts/merge-staging.mjs <스테이징폴더> --dry-run   # 무엇이 추가될지만 미리 보기
+node scripts/merge-staging.mjs <스테이징폴더>             # 실제로 씀
+```
+
+병합 후에는 `npm run validate:data`로 참조 무결성(learnset·특성 등)을 확인할 것 — 이 스크립트는
+"새 항목을 파일에 추가"만 하고 내용 검증은 하지 않는다.
+
 ## normalize_sprites.py
 
 `public/sprites/` 이미지를 카테고리별 규격으로 통일한다. **의존성: Pillow** (`pip install Pillow`).
@@ -58,7 +90,3 @@ python scripts/normalize_sprites.py x.png --category 포켓몬 --fix   # 트리 
 ```
 
 `--fix` 후에는 `npm run sprites` 로 매니페스트를 재생성한다.
-
-> 참고(2026-09): 기존 `도구/` 32개가 90~100px 로 규격(160px)에서 벗어나 있다. 표시 크기는
-> CSS 가 잡으므로 기능엔 문제없어 이번엔 그대로 뒀다. 일괄 정리하려면 `--fix` 를 돌리고
-> 아이콘 여백이 커지지 않는지 확인할 것.
