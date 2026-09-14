@@ -2903,6 +2903,21 @@ function resolveAction(
     if (met) effectiveMove = { ...effectiveMove, power: effectiveMove.power * 2 };
   }
 
+  // 솔라빔(§1-10): chargeSkipWeather(쾌청)가 아닌 날씨에서는 위력 절반. 메가솔라(치지직 등)로
+  // 자신의 기술을 항상 쾌청 취급하면 여기서도 그 취급을 존중한다(§1-6의 준비 턴 스킵 판정과 동일 축).
+  if (
+    effectiveMove.halvesPowerOutsideChargeSkipWeather &&
+    effectiveMove.power !== null &&
+    effectiveMove.chargeSkipWeather !== undefined
+  ) {
+    const weatherMatchesSkipCondition =
+      activeWeather(state) === effectiveMove.chargeSkipWeather ||
+      (effectiveMove.chargeSkipWeather === "쾌청" && attackerAbility?.treatsOwnWeatherAsSun);
+    if (!weatherMatchesSkipCondition) {
+      effectiveMove = { ...effectiveMove, power: Math.floor(effectiveMove.power / 2) };
+    }
+  }
+
   // 플라잉프레스: 상대가 이번 배틀에서 작아지기를 쓴 적이 있으면 위력 2배(필중은 아래 hitChance에서).
   if (effectiveMove.bonusVsMinimize && effectiveMove.power !== null && defender.usedMoveIds?.["작아지기"]) {
     effectiveMove = { ...effectiveMove, power: effectiveMove.power * 2 };

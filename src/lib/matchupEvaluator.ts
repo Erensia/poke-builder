@@ -293,6 +293,17 @@ export function evaluateSlotMatchup(
     }
   }
 
+  // 솔라빔(§1-10): chargeSkipWeather(쾌청)가 아닌 날씨에서는 위력 절반. matchupEvaluator는
+  // 선택한 날씨를 정확히 알고 있어(§1-7 성장과 같은 근거) 항상 정확히 판정한다.
+  if (
+    variablePowerMove.halvesPowerOutsideChargeSkipWeather &&
+    variablePowerMove.power !== null &&
+    variablePowerMove.chargeSkipWeather !== undefined &&
+    effectiveWeather !== variablePowerMove.chargeSkipWeather
+  ) {
+    variablePowerMove = { ...variablePowerMove, power: Math.floor(variablePowerMove.power / 2) };
+  }
+
   // 웨더볼(날씨판 대지의파동): 타입·위력 변경을 fieldPulse보다 먼저.
   // 이 아래 fieldPulse/powerMultiplierInField(대지의파동·미스트버스트류)까지가 "특성 배율 계산 전
   // 타입/위력 확정" 구간 — 타입이 바뀐 상태여야 resolveMoveContext의 상성 계산에 반영된다.
@@ -542,6 +553,16 @@ export function computeSoloOffensePower(
     if (assumeDoubled) {
       variablePowerMove = { ...variablePowerMove, power: variablePowerMove.power * 2 };
     }
+  }
+
+  // 솔라빔(§1-10): chargeSkipWeather(쾌청)가 아닌 날씨에서는 위력 절반 — evaluateSlotMatchup과 동일.
+  if (
+    variablePowerMove.halvesPowerOutsideChargeSkipWeather &&
+    variablePowerMove.power !== null &&
+    variablePowerMove.chargeSkipWeather !== undefined &&
+    effectiveWeather !== variablePowerMove.chargeSkipWeather
+  ) {
+    variablePowerMove = { ...variablePowerMove, power: Math.floor(variablePowerMove.power / 2) };
   }
 
   const weatherBall = applyWeatherBall(variablePowerMove, effectiveWeather);
