@@ -4556,7 +4556,8 @@
     "pp": 20,
     "priority": 0,
     "effect": "5턴 동안 이상한 힘의 보호를 받아 상태 이상이 되지 않는다.",
-    "makesContact": false
+    "makesContact": false,
+    "setsSafeguard": true
   },
   {
     "id": "씨뿌리기",
