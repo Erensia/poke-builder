@@ -243,6 +243,12 @@ export interface Move {
   /** 솔라빔처럼 특정 날씨(쾌청)면 준비 턴 없이 1턴만에 발동하는 기술만 채운다. */
   chargeSkipWeather?: WeatherKind;
   /**
+   * 솔라빔처럼 "chargeSkipWeather가 아닌 날씨에는 위력이 절반"인 기술만 채운다(§1-10). 솔라블레이드는
+   * 같은 차지-스킵 기술이지만 effect 텍스트에 이 조항이 없어 false(생략) — chargeSkipWeather와
+   * 별도 필드로 분리해 opt-in해야 한다.
+   */
+  halvesPowerOutsideChargeSkipWeather?: boolean;
+  /**
    * 메테오빔·일렉트로빔처럼 "1턴째(준비 선언 시점)에 자신의 능력치가 오르는" 차지 기술만 채운다.
    * chargeSkipWeather로 준비 턴 자체가 생략되는 경우(예: 일렉트로빔+비)에도 "이 기술을 쓴 턴"은
    * 여전히 1턴째이므로 동일하게 적용된다 — statChanges와 별도 필드로 분리한 이유는, statChanges는
