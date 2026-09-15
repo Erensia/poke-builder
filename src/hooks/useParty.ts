@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { AbilityPoints, PartySlot } from "../types/party";
+import type { AbilityPoints, PartySlot, PartySlots } from "../types/party";
 import { EMPTY_ABILITY_POINTS } from "../types/party";
 import { getPokemon } from "../lib/data";
 import { findMegaFormByStone } from "../lib/pokemonForm";
@@ -9,15 +9,6 @@ import {
   MAX_ABILITY_POINTS_TOTAL,
   totalAbilityPoints,
 } from "../lib/statCalculator";
-
-export type PartySlots = [
-  PartySlot | null,
-  PartySlot | null,
-  PartySlot | null,
-  PartySlot | null,
-  PartySlot | null,
-  PartySlot | null,
-];
 
 const EMPTY_SLOTS: PartySlots = [null, null, null, null, null, null];
 

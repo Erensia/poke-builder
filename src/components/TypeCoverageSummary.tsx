@@ -1,4 +1,4 @@
-import type { PartySlots } from "../hooks/useParty";
+import type { PartySlots } from "../types/party";
 import { computePartyDefenseMatrix, type PartyDefenseVerdict } from "../lib/partyAnalysis";
 import { TypeBadge } from "./TypeBadge";
 import "./TypeCoverageSummary.css";
