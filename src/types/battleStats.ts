@@ -14,6 +14,9 @@ export const NEUTRAL_STAGES: StatStages = {
   spe: 0,
 };
 
+/** 전투 스탯 5개(HP 제외) 키 목록. NEUTRAL_STAGES와 동기화되도록 그 키에서 뽑아낸다 */
+export const BATTLE_STAT_KEYS = Object.keys(NEUTRAL_STAGES) as BattleStatKey[];
+
 /**
  * 명중률/회피율 랭크. atk/def 등 5스탯과는 완전히 다른 공식(rankStageMultiplier의 k=2 방식이 아니라
  * 분수 배율 (3+s)/3 · 3/(3+|s|))을 쓰기 때문에 StatStages와 같은 Record에 섞지 않고 분리한다.
