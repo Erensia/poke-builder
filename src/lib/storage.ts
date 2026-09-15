@@ -1,5 +1,4 @@
-import type { PartySlots } from "../hooks/useParty";
-import type { Party, SlotPreset } from "../types/party";
+import type { Party, PartySlots, SlotPreset } from "../types/party";
 import type { BattleVideo } from "../types/battleVideo";
 
 const STORAGE_KEY = "champions-party-sim.party.v1";

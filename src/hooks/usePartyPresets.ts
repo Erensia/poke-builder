@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
-import type { Party } from "../types/party";
-import type { PartySlots } from "./useParty";
+import type { Party, PartySlots } from "../types/party";
 import { loadPartyPresets, savePartyPresets } from "../lib/storage";
 
 /**
