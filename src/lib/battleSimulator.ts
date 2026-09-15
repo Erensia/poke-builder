@@ -44,6 +44,7 @@ import {
 } from "../types/status";
 import type { Ability } from "../types/ability";
 import { getPokemon, getAbility, getMove, getItem } from "./data";
+import { eulReul, eunNeun, roEuro } from "./josa";
 import {
   getEffectiveForm,
   getEffectiveAbilityId,
@@ -91,6 +92,9 @@ import {
   weightRatioPowerValue,
   absoluteWeightPowerValue,
   WEIGHT_MOVE_FALLBACK_POWER,
+  rivalryDamageMultiplier,
+  hustleDamageMultiplier,
+  screenMultiplierFromFlags,
 } from "./battlePower";
 import { getWeatherDamageMultiplier, computeWeatherHealFraction, applyWeatherBall } from "./weatherEffects";
 import {
@@ -490,20 +494,6 @@ function activeWeather(state: BattleState): WeatherKind | undefined {
 }
 
 /**
- * 투쟁심(Rivalry): 공격측이 이 특성일 때 상대와의 성별 관계로 데미지 배율을 낸다.
- * 같은 성별 ×1.25 · 다른 성별 ×0.75 · 어느 한쪽이라도 성별 불명(null) ×1.0.
- */
-function rivalryDamageMultiplier(
-  ability: Ability | undefined,
-  attackerGender: PokemonGender | null,
-  defenderGender: PokemonGender | null,
-): number {
-  if (!ability?.rivalryDamage) return 1;
-  if (attackerGender === null || defenderGender === null) return 1;
-  return attackerGender === defenderGender ? 1.25 : 0.75;
-}
-
-/**
  * 심술꾸러기(Contrary): fighter가 이 특성이면 랭크 변화 delta의 부호를 반전한다(그 외엔 그대로).
  * 위협·EOT 랭크업·hitTrigger 자기 랭크변화 등 applyStageDelta를 직접 부르는 지점에서 delta를 감싼다.
  */
@@ -647,34 +637,6 @@ export function createFighterState(slot: EvaluatorSlot, moves: Move[]): BattleFi
     currentStanceForm: pokemon.stanceChangeForms ? "shield" : undefined,
     hungerMode: "full",
   };
-}
-
-/** "비"/"쾌청"처럼 조사를 자동 판별한다. 받침 없음 또는 ㄹ 받침이면 "로", 그 외 자음이면 "으로". */
-function roEuro(name: string): "로" | "으로" {
-  const lastChar = name.at(-1);
-  if (!lastChar) return "로";
-  const code = lastChar.charCodeAt(0) - 0xac00;
-  if (code < 0 || code > 11171) return "로";
-  const jong = code % 28;
-  return jong === 0 || jong === 8 ? "로" : "으로";
-}
-
-/** "맹화를"/"트레이스을" 같은 목적격 조사 — 받침 유무로 "을"/"를"을 자동 판별한다(트레이스 복사 로그용) */
-function eulReul(name: string): "을" | "를" {
-  const lastChar = name.at(-1);
-  if (!lastChar) return "를";
-  const code = lastChar.charCodeAt(0) - 0xac00;
-  if (code < 0 || code > 11171) return "를";
-  return code % 28 === 0 ? "를" : "을";
-}
-
-/** "잠만보는"/"오롱털은" 같은 주제격 조사 — 받침 유무로 "는"/"은"을 자동 판별한다(통찰 로그용) */
-function eunNeun(name: string): "는" | "은" {
-  const lastChar = name.at(-1);
-  if (!lastChar) return "는";
-  const code = lastChar.charCodeAt(0) - 0xac00;
-  if (code < 0 || code > 11171) return "는";
-  return code % 28 === 0 ? "는" : "은";
 }
 
 /**
@@ -2715,10 +2677,7 @@ function resolveAction(
       ignoreBurnPenalty,
     );
     // 의욕(Hustle): 물리 기술 위력 ×1.5 (명중률 ×0.8은 위 accuracyExtraMultiplier에서 반영).
-    const hustleMultiplier =
-      effectiveMove.category === "physical" && attackerAbility?.hustleAttackMultiplier !== undefined
-        ? attackerAbility.hustleAttackMultiplier
-        : 1;
+    const hustleMultiplier = hustleDamageMultiplier(effectiveMove.category, attackerAbility);
     // 메가솔라: 자신이 쓰는 기술의 날씨 배율을 항상 쾌청 기준으로(불꽃 ×1.5·물 ×0.5) 계산한다.
     const weatherMultiplier = getWeatherDamageMultiplier(
       attackerAbility?.treatsOwnWeatherAsSun ? "쾌청" : activeWeather(state),
@@ -2756,7 +2715,7 @@ function resolveAction(
     const screenBypassed = !!attackerAbility?.bypassesScreensAndSubstitute || critical;
     const categoryScreenActive = !screenBypassed && defenderScreens[screenType] !== undefined;
     const auroraVeilActive = !screenBypassed && defenderScreens.auroraVeil !== undefined;
-    const screenMultiplier = (categoryScreenActive ? 2 : 1) * (auroraVeilActive ? 2 : 1);
+    const screenMultiplier = screenMultiplierFromFlags(categoryScreenActive, auroraVeilActive);
 
     // 관통드릴: 접촉기일 때만 상대 방어/특방 랭크의 "상승분"을 무시한다(날카로운눈의 회피율
     // 처리와 같은 패턴 — 마이너스 랭크는 그대로 페널티로 받는다). 천진(전부 무시)과 겹치면
