@@ -1,5 +1,4 @@
 import {
-  NO_VOLATILE_CONDITIONS,
   type VolatileCondition,
   type VolatileConditionState,
 } from "../types/status";
@@ -101,8 +100,4 @@ export function consumeVolatileTurn(
     active[volatile] = { turnsRemaining: entry.turnsRemaining - 1, moveId: entry.moveId };
   }
   return { active };
-}
-
-export function clearAllVolatiles(): VolatileConditionState {
-  return { ...NO_VOLATILE_CONDITIONS, active: {} };
 }
