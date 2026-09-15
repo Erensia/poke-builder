@@ -53,16 +53,3 @@ export function compareTurnOrder(
   // 완전 동속: 50% 랜덤
   return random() < 0.5 ? 0 : 1;
 }
-
-/**
- * compareTurnOrder를 감싸서, 먼저 움직이는 쪽을 앞에 두고 [먼저, 나중] 튜플로 정렬해 반환한다.
- * 제네릭이라 TurnOrderActor를 만족하는 아무 타입(예: BattleState의 슬롯 확장 타입)이나 그대로 통과시킬 수 있다.
- */
-export function resolveTurnOrder<T extends TurnOrderActor>(
-  a: T,
-  b: T,
-  random: () => number = Math.random,
-  trickRoomActive = false,
-): [T, T] {
-  return compareTurnOrder(a, b, random, trickRoomActive) === 0 ? [a, b] : [b, a];
-}

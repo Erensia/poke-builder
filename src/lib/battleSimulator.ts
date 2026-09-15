@@ -467,12 +467,6 @@ export function sideOf(state: BattleState, key: FighterKey): BattleSide {
   return key === "a" ? state.sideA : state.sideB;
 }
 
-/** 편(side)의 현재 활성 파이터. state.a / state.b와 동일 참조 */
-export function activeFighter(state: BattleState, key: FighterKey): BattleFighterState {
-  const side = sideOf(state, key);
-  return side.party[side.activeIndex];
-}
-
 /** 상대 키를 구한다 */
 export function opponentKey(key: FighterKey): FighterKey {
   return key === "a" ? "b" : "a";
