@@ -3441,30 +3441,42 @@ function resolvePreHitEffects(
   };
 }
 
-function resolveAction(
-  state: BattleState,
-  actorKey: FighterKey,
-  move: Move,
-  random: () => number,
-  movesSecond: boolean,
-  defenderMove: Move,
-): ActionLogEntry {
-  const pre = resolvePreHitEffects(state, actorKey, move, random, movesSecond, defenderMove);
-  if (!("defenderKey" in pre)) return pre;
-  move = pre.move;
+interface MirroredMoveEffectsInput {
+  bouncedByMagicMirror: boolean;
+  move: Move;
+  effectiveMove: Move;
+  opponentEffectsBlocked: boolean;
+  random: () => number;
+  state: BattleState;
+  hit: boolean;
+  movesSecond: boolean;
+  defenderKey: FighterKey;
+  damage: number;
+  hitSubstitute: boolean;
+  defenderMove: Move;
+  actorKey: FighterKey;
+  defenderBerriesBlocked: boolean;
+  attackerBerriesBlocked: boolean;
+  blockedByProtect: boolean;
+  sheerForceAbilityName: string | undefined;
+  isDamaging: boolean;
+  selfCuredStatus: StatusCondition | null | undefined;
+  terrainSeedMessages: string[];
+  defenderAbility: Ability | undefined;
+  attacker: BattleFighterState;
+  defender: BattleFighterState;
+  attackerAbility: Ability | undefined;
+  attackerItem: Item | undefined;
+  defenderItem: Item | undefined;
+  abilityInflictedStatusOnAttacker: StatusCondition | null | undefined;
+  abilityInflictedStatusAbilityName: string | undefined;
+  statusCureBerryItemName: string | undefined;
+  mentalMoveBlockedByAbilityName: string | undefined;
+}
+function resolveMirroredMoveEffects(input: MirroredMoveEffectsInput) {
   let {
-    defenderKey, attacker, defender, defenderHpAtActionStart, actorPokemonId, defenderPokemonId, attackerAbility, defenderAbility, attackerBerriesBlocked, defenderBerriesBlocked, attackerItemIdBeforeAction, defenderItemIdBeforeAction, leppaRestoredPpItemName, pressureExtraPpAbilityName, selfCuredStatus, sleepTalkCalledMoveName, attackerItem, defenderItem, blockedByGoodAsGold, blockedBySubstitute, blockedByPowderImmunity, unseenFistPiercing, blockedByProtect, blockedByProtectMoveName, soundproofBlockedByAbilityName, bulletproofBlockedByAbilityName, opponentEffectsBlocked, bouncedByMagicMirror, shellSideArmCategory, abilityOffenseMultiplier, abilityDefenseMultiplier, stabMultiplier, typeEffectiveness, effectiveMove, sheerForceAbilityName, fickleBeamEmpowered, electromorphosisEmpoweredAbilityName, ownMoveTypeBoostMultiplier, rivalryMultiplier, changedOwnTypeTo, changedOwnTypeAbilityName, lostTypeAfterUse, gemMultiplier, ateGemItemName, hitChance, defenderHideType, evadedByCharge, hit, selfDamageOnUse, abilityAbsorbedMoveType, abilityAbsorbAbilityName, abilityAbsorbHealAmount, protectContactPenaltyMoveName, protectContactDamage, protectContactInflictedStatus,
-  } = pre;
-
-  let {
-    abilityDamageAbilityName, abilityDamageToAttacker, abilityDisableAbilityName, abilityDisabledMoveName, abilityInflictedStatusAbilityName, abilityInflictedStatusOnAttacker, abilityInflictedVolatileAbilityName, abilityInflictedVolatileOnAttacker, abilityLoweredAttackerStats, abilityLoweredAttackerStatsAbilityName, abilityLoweredDefenderStats, abilityRaisedDefenderStats, abilityRaisedDefenderStatsAbilityName, angerPointAbilityName, angerPointRaisedSpa, berryReducedDamageItemName, canceledTargetChargeMoveName, cheekPouchHeal, counterDamage, counterFailed, crashDamage, damage, damagePercent, destinyBondTriggered, disguiseRecoilDamage, drainHealAmount, endeavorDamage, enduredAbilityName, enduredItemName, enduredProtectMoveName, followUpHitDamage, hitCount, hitNegatedByAbilityName, hitSubstitute, illusionBrokenSpeciesId, isCritical, isDamaging, itemRecoilDamage, itemRecoilItemName, liquidOozeAbilityName, liquidOozeDamage, mummifiedAttackerAbilityName, perHitLog, pickpocketAbilityName, pickpocketStolenItemName, recoilDamage, rockyHelmetDamage, rockyHelmetItemName, sandSpitWeather, seedSowerField, selfDamage, shellBellHealAmount, statusCureBerryItemName, stolenItemName, substituteBroke, terrainSeedMessages, wanderingSpiritSwapped
-  } = resolveHitAndApplyDamage({
-    state, defenderKey, move, effectiveMove, random, attacker, defender, attackerAbility, defenderAbility, attackerItem, defenderItem, typeEffectiveness, blockedByProtect, blockedBySubstitute, unseenFistPiercing, hitChance, evadedByCharge, defenderHideType, gemMultiplier, ownMoveTypeBoostMultiplier, rivalryMultiplier, sheerForceAbilityName, defenderBerriesBlocked, abilityOffenseMultiplier, abilityDefenseMultiplier, stabMultiplier
-  });
-  // 아로마베일: 방어측이 이 특성이라 마음을 옭아매는 volatile(헤롱헤롱·도발·기술봉인·앙코르)을 막았을 때 그 특성 이름.
-  // resolveHitAndApplyDamage 구간(§7)에선 안 쓰이고 아래(변화기 효과 적용부)에서만 채워진다.
-  let mentalMoveBlockedByAbilityName: string | undefined;
-
+    bouncedByMagicMirror, move, effectiveMove, opponentEffectsBlocked, random, state, hit, movesSecond, defenderKey, damage, hitSubstitute, defenderMove, actorKey, defenderBerriesBlocked, attackerBerriesBlocked, blockedByProtect, sheerForceAbilityName, isDamaging, selfCuredStatus, terrainSeedMessages, defenderAbility, attacker, defender, attackerAbility, attackerItem, defenderItem, abilityInflictedStatusOnAttacker, abilityInflictedStatusAbilityName, statusCureBerryItemName, mentalMoveBlockedByAbilityName,
+  } = input;
   // ── 매직미러 반사 구간 시작 ──
   // 여기서부터 스텔스록 설치까지의 "방어측 방향" 효과 블록에 한해 공격/방어 바인딩을 맞바꾼다.
   // 되돌린 기술은 원래 시전자(이제 defender) 기준으로 상태이상 면역·조사·도구·승기까지 전부
@@ -4609,6 +4621,42 @@ function resolveAction(
     [attackerAbility, defenderAbility] = [defenderAbility, attackerAbility];
     [attackerItem, defenderItem] = [defenderItem, attackerItem];
   }
+  return {
+    defenderAbility, attacker, defender, attackerAbility, attackerItem, defenderItem, abilityInflictedStatusOnAttacker, abilityInflictedStatusAbilityName, statusCureBerryItemName, mentalMoveBlockedByAbilityName, bouncedMoveName, bouncedByAbilityName, secondaryBlockedByAbilityName, berryEatFailed, stuffCheeksBerryHeal, stuffCheeksBerryName, costHpFailed, soulBeatHpCost, selfStatRises, selfStatsAtMax, selfStatDrops, reflectedStatDropAbilityName, reflectedStatDrops, restoredStatsSelfItemName, restoredStatsOpponentItemName, opportunistCopiedStats, opportunistAbilityName, opponentStatDrops, invertedTargetStages, addedTypeToTarget, overwroteTargetType, targetMoveTypeOverride, inflictedStatus, statusInflictFailed, beakBlastBurnedAttacker, curedStatus, curedStatusTarget, inflictedVolatile, tidyUpDone, courtChangeDone, revivedPartyName, reviveFailed, saltCureApplied, balloonPoppedItemName, octolockApplied, jawLockApplied, selfWokeBeforeMove, restSlept, healedAmount, healedTarget, averagedDefensesMoveName, swappedSpeedMoveName, transformedIntoName, transformFailed, regenSetFailed, leechSeedSetFailed, leechSeedBlockedByGrass, abilitySwappedTargetToName, abilitySwapFailed, substituteSetFailed, shedTailFailed, shedTailSucceeded, setDisabledMoveName, disableSetFailed, setEncoreMoveName, encoreSetFailed, swappedStatsMoveName, swappedStagesMoveName, protectSucceeded, protectFailed, protectStanceEntered, fieldSetFailed, stealthRockSetForSide, spikesSetForSide, toxicSpikesSetForSide, stickyWebSetForSide, hazardSetFailed,
+  };
+}
+
+function resolveAction(
+  state: BattleState,
+  actorKey: FighterKey,
+  move: Move,
+  random: () => number,
+  movesSecond: boolean,
+  defenderMove: Move,
+): ActionLogEntry {
+  const pre = resolvePreHitEffects(state, actorKey, move, random, movesSecond, defenderMove);
+  if (!("defenderKey" in pre)) return pre;
+  move = pre.move;
+  let {
+    defenderKey, attacker, defender, defenderHpAtActionStart, actorPokemonId, defenderPokemonId, attackerAbility, defenderAbility, attackerBerriesBlocked, defenderBerriesBlocked, attackerItemIdBeforeAction, defenderItemIdBeforeAction, leppaRestoredPpItemName, pressureExtraPpAbilityName, selfCuredStatus, sleepTalkCalledMoveName, attackerItem, defenderItem, blockedByGoodAsGold, blockedBySubstitute, blockedByPowderImmunity, unseenFistPiercing, blockedByProtect, blockedByProtectMoveName, soundproofBlockedByAbilityName, bulletproofBlockedByAbilityName, opponentEffectsBlocked, bouncedByMagicMirror, shellSideArmCategory, abilityOffenseMultiplier, abilityDefenseMultiplier, stabMultiplier, typeEffectiveness, effectiveMove, sheerForceAbilityName, fickleBeamEmpowered, electromorphosisEmpoweredAbilityName, ownMoveTypeBoostMultiplier, rivalryMultiplier, changedOwnTypeTo, changedOwnTypeAbilityName, lostTypeAfterUse, gemMultiplier, ateGemItemName, hitChance, defenderHideType, evadedByCharge, hit, selfDamageOnUse, abilityAbsorbedMoveType, abilityAbsorbAbilityName, abilityAbsorbHealAmount, protectContactPenaltyMoveName, protectContactDamage, protectContactInflictedStatus,
+  } = pre;
+
+  let {
+    abilityDamageAbilityName, abilityDamageToAttacker, abilityDisableAbilityName, abilityDisabledMoveName, abilityInflictedStatusAbilityName, abilityInflictedStatusOnAttacker, abilityInflictedVolatileAbilityName, abilityInflictedVolatileOnAttacker, abilityLoweredAttackerStats, abilityLoweredAttackerStatsAbilityName, abilityLoweredDefenderStats, abilityRaisedDefenderStats, abilityRaisedDefenderStatsAbilityName, angerPointAbilityName, angerPointRaisedSpa, berryReducedDamageItemName, canceledTargetChargeMoveName, cheekPouchHeal, counterDamage, counterFailed, crashDamage, damage, damagePercent, destinyBondTriggered, disguiseRecoilDamage, drainHealAmount, endeavorDamage, enduredAbilityName, enduredItemName, enduredProtectMoveName, followUpHitDamage, hitCount, hitNegatedByAbilityName, hitSubstitute, illusionBrokenSpeciesId, isCritical, isDamaging, itemRecoilDamage, itemRecoilItemName, liquidOozeAbilityName, liquidOozeDamage, mummifiedAttackerAbilityName, perHitLog, pickpocketAbilityName, pickpocketStolenItemName, recoilDamage, rockyHelmetDamage, rockyHelmetItemName, sandSpitWeather, seedSowerField, selfDamage, shellBellHealAmount, statusCureBerryItemName, stolenItemName, substituteBroke, terrainSeedMessages, wanderingSpiritSwapped
+  } = resolveHitAndApplyDamage({
+    state, defenderKey, move, effectiveMove, random, attacker, defender, attackerAbility, defenderAbility, attackerItem, defenderItem, typeEffectiveness, blockedByProtect, blockedBySubstitute, unseenFistPiercing, hitChance, evadedByCharge, defenderHideType, gemMultiplier, ownMoveTypeBoostMultiplier, rivalryMultiplier, sheerForceAbilityName, defenderBerriesBlocked, abilityOffenseMultiplier, abilityDefenseMultiplier, stabMultiplier
+  });
+  // 아로마베일: 방어측이 이 특성이라 마음을 옭아매는 volatile(헤롱헤롱·도발·기술봉인·앙코르)을 막았을 때 그 특성 이름.
+  // resolveHitAndApplyDamage 구간(§7)에선 안 쓰이고 아래(변화기 효과 적용부)에서만 채워진다.
+  let mentalMoveBlockedByAbilityName: string | undefined;
+
+  const mirrorResult = resolveMirroredMoveEffects({
+    bouncedByMagicMirror, move, effectiveMove, opponentEffectsBlocked, random, state, hit, movesSecond, defenderKey, damage, hitSubstitute, defenderMove, actorKey, defenderBerriesBlocked, attackerBerriesBlocked, blockedByProtect, sheerForceAbilityName, isDamaging, selfCuredStatus, terrainSeedMessages, defenderAbility, attacker, defender, attackerAbility, attackerItem, defenderItem, abilityInflictedStatusOnAttacker, abilityInflictedStatusAbilityName, statusCureBerryItemName, mentalMoveBlockedByAbilityName,
+  });
+  let {
+    bouncedMoveName, bouncedByAbilityName, secondaryBlockedByAbilityName, berryEatFailed, stuffCheeksBerryHeal, stuffCheeksBerryName, costHpFailed, soulBeatHpCost, selfStatRises, selfStatsAtMax, selfStatDrops, reflectedStatDropAbilityName, reflectedStatDrops, restoredStatsSelfItemName, restoredStatsOpponentItemName, opportunistCopiedStats, opportunistAbilityName, opponentStatDrops, invertedTargetStages, addedTypeToTarget, overwroteTargetType, targetMoveTypeOverride, inflictedStatus, statusInflictFailed, beakBlastBurnedAttacker, curedStatus, curedStatusTarget, inflictedVolatile, tidyUpDone, courtChangeDone, revivedPartyName, reviveFailed, saltCureApplied, balloonPoppedItemName, octolockApplied, jawLockApplied, selfWokeBeforeMove, restSlept, healedAmount, healedTarget, averagedDefensesMoveName, swappedSpeedMoveName, transformedIntoName, transformFailed, regenSetFailed, leechSeedSetFailed, leechSeedBlockedByGrass, abilitySwappedTargetToName, abilitySwapFailed, substituteSetFailed, shedTailFailed, shedTailSucceeded, setDisabledMoveName, disableSetFailed, setEncoreMoveName, encoreSetFailed, swappedStatsMoveName, swappedStagesMoveName, protectSucceeded, protectFailed, protectStanceEntered, fieldSetFailed, stealthRockSetForSide, spikesSetForSide, toxicSpikesSetForSide, stickyWebSetForSide, hazardSetFailed,
+  } = mirrorResult;
+  ({ defenderAbility, attacker, defender, attackerAbility, attackerItem, defenderItem, abilityInflictedStatusOnAttacker, abilityInflictedStatusAbilityName, statusCureBerryItemName, mentalMoveBlockedByAbilityName } = mirrorResult);
 
   // 멸망의노래(setsPerishSong, F-4): 장에 있는 양쪽에게 멸망 카운트 3을 건다. 방어·대타·황금몸을
   // 무시하므로 opponentEffectsBlocked로 게이팅하지 않는다. 방음(blocksSound) 특성이나 발동 시점에
