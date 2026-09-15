@@ -1,7 +1,7 @@
 import type { Move } from "../types/move";
 import type { PokemonType } from "../types/pokemon-type";
 import type { BaseStats } from "../types/stats";
-import { NEUTRAL_STAGES, type StatStages } from "../types/battleStats";
+import { BATTLE_STAT_KEYS, NEUTRAL_STAGES, type StatStages } from "../types/battleStats";
 
 /**
  * 랭크업/랭크다운 배율. -6 ~ +6.
@@ -50,7 +50,7 @@ export function gyroBallPowerFromSpeeds(userEffectiveSpeed: number, targetEffect
  * 이 프로젝트 stages엔 명중률·회피율 랭크가 없어 5스탯(공/방/특공/특방/스피드) 양수분만 합산한다.
  */
 export function positiveStagesPowerValue(stages: StatStages, base: number, perStage: number): number {
-  const sum = (["atk", "def", "spa", "spd", "spe"] as const).reduce(
+  const sum = BATTLE_STAT_KEYS.reduce(
     (acc, key) => acc + Math.max(0, stages[key]),
     0,
   );

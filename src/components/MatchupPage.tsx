@@ -20,6 +20,7 @@ import { computeRealStats } from "../lib/statCalculator";
 import { computeBulkPower } from "../lib/battlePower";
 import { environmentTintBackground } from "../lib/environmentBackground";
 import { evaluateSlotMatchup, evaluateSpeedMatchup, computeSoloOffensePower } from "../lib/matchupEvaluator";
+import { BATTLE_STAT_KEYS } from "../types/battleStats";
 import "./MatchupPage.css";
 
 type Side = "attacker" | "defender";
@@ -353,9 +354,7 @@ export function MatchupPage() {
               stages={slotState.slot.stages}
               onStep={(stat, delta) => slotState.stepStage(stat, delta)}
               onReset={() => {
-                (["atk", "def", "spa", "spd", "spe"] as const).forEach((stat) =>
-                  slotState.setStageValue(stat, 0),
-                );
+                BATTLE_STAT_KEYS.forEach((stat) => slotState.setStageValue(stat, 0));
               }}
               onClose={() => setPicker(null)}
             />

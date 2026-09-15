@@ -4,6 +4,7 @@ import type { FieldKind } from "../types/field";
 import type { PokemonType } from "../types/pokemon-type";
 import type { StanceChangeForms, PokemonGender } from "../types/pokemon";
 import {
+  BATTLE_STAT_KEYS,
   NEUTRAL_ACCURACY_STAGES,
   NEUTRAL_CRIT_STAGE,
   NEUTRAL_STAGES,
@@ -518,9 +519,6 @@ const ALL_MAJOR_STATUS_CONDITIONS: StatusCondition[] = [
   "sleep",
   "freeze",
 ];
-/** 클리어바디가 막는 5스탯 (HP 제외) */
-const CLEAR_BODY_STAT_KEYS: BattleStatKey[] = ["atk", "def", "spa", "spd", "spe"];
-
 /**
  * 플라워베일(Phase 8 §7)이 지금 이 fighter에게 실제로 발동하는지 — 이 특성 보유 + 자신이 풀타입.
  * 본가는 아군 풀타입까지 보호하나 3v3 싱글엔 동시 아군이 없어 자기 자신만 대상.
@@ -543,7 +541,7 @@ function statDropBlockStatsOf(
   fighter: BattleFighterState,
   ability: Ability | undefined,
 ): BattleStatKey[] | undefined {
-  if (hasFlowerVeil(fighter, ability)) return CLEAR_BODY_STAT_KEYS;
+  if (hasFlowerVeil(fighter, ability)) return BATTLE_STAT_KEYS;
   return ability?.blocksOpponentStatDropsForStats;
 }
 
@@ -4465,7 +4463,7 @@ function resolveAction(
     !secondaryEffectsBlockedByAbility &&
     !inflictedStatus
   ) {
-    const rose = (["atk", "def", "spa", "spd", "spe"] as const).some(
+    const rose = BATTLE_STAT_KEYS.some(
       (stat) => defender.stages[stat] > (defender.statStagesAtTurnStart?.[stat] ?? 0),
     );
     if (
@@ -5335,8 +5333,7 @@ function resolveAction(
 
   // 천정부지(포챔스판): 자신의 데미지로 상대를 쓰러뜨리면 realStats가 가장 높은 능력이 1랭크 오른다.
   if (isDamaging && damage > 0 && isFainted(defender) && attackerAbility?.boostsHighestStatOnKo) {
-    const cands: BattleStatKey[] = ["atk", "def", "spa", "spd", "spe"];
-    const highest = cands.reduce((a, b) => (attacker.realStats[b] > attacker.realStats[a] ? b : a));
+    const highest = BATTLE_STAT_KEYS.reduce((a, b) => (attacker.realStats[b] > attacker.realStats[a] ? b : a));
     attacker.stages = applyStageDelta(attacker.stages, highest, contraryDelta(attacker, 1));
   }
 
@@ -6651,9 +6648,8 @@ function finishTurn(ctx: RunTurnContext): RunTurnOutcome {
 
       // 변덕쟁이(Moody): 매 턴 종료 시 5스탯 중 하나를 랜덤으로 +2, 그와 다른 하나를 -1.
       if (fighterAbility?.moodyRandomStages && !isFainted(fighter)) {
-        const MOODY_STATS: BattleStatKey[] = ["atk", "def", "spa", "spd", "spe"];
-        const raised = MOODY_STATS[Math.floor(random() * MOODY_STATS.length)];
-        const lowerPool = MOODY_STATS.filter((s) => s !== raised);
+        const raised = BATTLE_STAT_KEYS[Math.floor(random() * BATTLE_STAT_KEYS.length)];
+        const lowerPool = BATTLE_STAT_KEYS.filter((s) => s !== raised);
         const lowered = lowerPool[Math.floor(random() * lowerPool.length)];
         fighter.stages = applyStageDelta(fighter.stages, raised, contraryDelta(fighter, 2));
         fighter.stages = applyStageDelta(fighter.stages, lowered, contraryDelta(fighter, -1));
