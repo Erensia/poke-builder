@@ -169,6 +169,19 @@ function BattleSetupScreen({
     setDragOverSlot(null);
   }
 
+  // 압축 뷰(ver.1.6 §4-3) — 기본은 압축(프로필 사진+이름만), 펼친 슬롯만 이 집합에 담는다.
+  const [expandedSlots, setExpandedSlots] = useState<Set<string>>(new Set());
+  const slotKey = (side: Side, i: SlotIndex) => `${side}-${i}`;
+  function toggleExpanded(side: Side, i: SlotIndex) {
+    const key = slotKey(side, i);
+    setExpandedSlots((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
   return (
     <div className="battle-setup-board">
       {(["a", "b"] as const).map((side) => (
@@ -210,6 +223,8 @@ function BattleSetupScreen({
                 hasSamples={hasSlotPresets}
                 onSaveAsSample={() => onSaveSlotAsSample(side, i)}
                 onOpenSamplePicker={() => onOpenPicker({ kind: "slotPresets", side, slotIndex: i })}
+                expanded={expandedSlots.has(slotKey(side, i))}
+                onToggleExpand={() => toggleExpanded(side, i)}
                 isDragging={draggedSlot?.side === side && draggedSlot.index === i}
                 isDragOver={dragOverSlot?.side === side && dragOverSlot.index === i}
                 onDragStart={() => handleSlotDragStart(side, i)}
