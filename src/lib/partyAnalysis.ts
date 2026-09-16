@@ -2,7 +2,7 @@ import { POKEMON_TYPES, type PokemonType } from "../types/pokemon-type";
 import { getEffectiveness } from "./typeEffectiveness";
 import { getPokemon } from "./data";
 import { getEffectiveForm } from "./pokemonForm";
-import type { PartySlots } from "../hooks/useParty";
+import type { PartySlots } from "../types/party";
 
 export interface PartyMember {
   pokemonId: string;

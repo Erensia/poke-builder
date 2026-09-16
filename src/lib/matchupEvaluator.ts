@@ -26,6 +26,9 @@ import {
   weightRatioPowerValue,
   absoluteWeightPowerValue,
   WEIGHT_MOVE_FALLBACK_POWER,
+  rivalryDamageMultiplier,
+  hustleDamageMultiplier,
+  screenMultiplierFromFlags,
   type MatchupVerdict,
 } from "./battlePower";
 
@@ -389,20 +392,16 @@ export function evaluateSlotMatchup(
   const autoWeatherDamageMultiplier = getWeatherDamageMultiplier(effectiveWeather, effectiveMove.type);
   const autoFieldDamageMultiplier = getFieldDamageMultiplier(field, effectiveMove.type);
 
-  // 투쟁심: 양쪽 슬롯 성별로 ×1.25(동성)/×0.75(이성)/×1.0(불명). battleSimulator.rivalryDamageMultiplier 미러.
-  let rivalryMultiplier = 1;
-  if (attackerAbility?.rivalryDamage) {
-    const ag = getEffectiveGender(attackerPokemon, attackerSlot);
-    const dg = getEffectiveGender(defenderPokemon, defenderSlot);
-    if (ag !== null && dg !== null) rivalryMultiplier = ag === dg ? 1.25 : 0.75;
-  }
+  // 투쟁심: 양쪽 슬롯 성별로 ×1.25(동성)/×0.75(이성)/×1.0(불명). battlePower.rivalryDamageMultiplier 공유(§5).
+  const rivalryMultiplier = rivalryDamageMultiplier(
+    attackerAbility,
+    getEffectiveGender(attackerPokemon, attackerSlot),
+    getEffectiveGender(defenderPokemon, defenderSlot),
+  );
 
-  // 의욕(Hustle): 물리 기술 위력 ×1.5. battleSimulator resolveHit의 hustleMultiplier 미러(명중률 페널티는
-  // 결정력 계산 대상이 아님).
-  const hustleMultiplier =
-    resolvedCategory === "physical" && attackerAbility?.hustleAttackMultiplier !== undefined
-      ? attackerAbility.hustleAttackMultiplier
-      : 1;
+  // 의욕(Hustle): 물리 기술 위력 ×1.5(명중률 페널티는 결정력 계산 대상이 아님).
+  // battlePower.hustleDamageMultiplier 공유(§5).
+  const hustleMultiplier = hustleDamageMultiplier(resolvedCategory, attackerAbility);
 
   // 상대 타입 상성을 곱하기 전의 결정력. offensePower는 여기에 typeEffectiveness만 곱한 값이라
   // 매번 다시 계산하는 대신 이 값에 typeEffectiveness를 곱해서 구한다.
@@ -420,17 +419,16 @@ export function evaluateSlotMatchup(
   if (rawOffensePower === null) return null;
   const offensePower = rawOffensePower * typeEffectiveness;
 
-  // 스크린(리플렉터/빛의장막/오로라베일): 해당 카테고리 데미지 절반 = 내구력 2배.
-  // battleSimulator resolveAction의 screenMultiplier와 동일 — 틈새포착이면 무시.
+  // 스크린(리플렉터/빛의장막/오로라베일): 해당 카테고리 데미지 절반 = 내구력 2배 — 틈새포착이면 무시.
+  // 이쪽은 1턴 스냅샷이라 진영 상태 대신 단일 screen 옵션에서 두 불리언을 도출하고,
+  // 실제 곱셈 공식은 battlePower.screenMultiplierFromFlags로 battleSimulator와 공유한다(§5).
   const screenBypassed = !!attackerAbility?.bypassesScreensAndSubstitute;
-  const screenMultiplier =
-    screenBypassed || !screen
-      ? 1
-      : screen === "auroraVeil" ||
-          (screen === "reflect" && resolvedCategory === "physical") ||
-          (screen === "lightScreen" && resolvedCategory === "special")
-        ? 2
-        : 1;
+  const auroraVeilActive = !screenBypassed && screen === "auroraVeil";
+  const categoryScreenActive =
+    !screenBypassed &&
+    ((screen === "reflect" && resolvedCategory === "physical") ||
+      (screen === "lightScreen" && resolvedCategory === "special"));
+  const screenMultiplier = screenMultiplierFromFlags(categoryScreenActive, auroraVeilActive);
 
   const bulkPower = computeBulkPower(defenderRealStats, resolvedCategory, {
     defenderStages,

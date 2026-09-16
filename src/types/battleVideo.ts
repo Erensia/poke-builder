@@ -1,4 +1,4 @@
-import type { FighterKey, TurnResult } from "../lib/battleSimulator";
+import type { FighterKey, TurnResult } from "./battle";
 
 /**
  * 배틀타워 대전이 끝날 때 저장하는 "배틀비디오"(§6) — 그 시점의 턴별 로그를 그대로 담는다.
