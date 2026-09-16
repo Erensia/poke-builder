@@ -7,6 +7,7 @@ import {
   type HitAbilityEvent,
   type TurnResult,
 } from "../lib/battleSimulator";
+import type { EndOfTurnLogEntry } from "../types/battle";
 import { STAT_LABELS } from "../lib/statLabels";
 import { typeLabel } from "../types/pokemon-type";
 import { eunNeun, iGa, eulReul, waGwa, roEuro } from "../lib/josa";
@@ -252,6 +253,220 @@ function hitAbilityEventLines(
     push(setFieldOnHitLine(ev.abilityName, ev.setFieldOnHit, defenderName));
   }
   return lines;
+}
+
+/**
+ * 턴 종료 처리 한 줄(회복/상태이상 틱/카운트다운 등 §6의 22개 메커니즘에 대응) — `entry` 하나와
+ * 이름 조회용 `turnName`만 있으면 렌더 가능해 다른 섹션과 데이터 의존이 없다. `entry`의 어느
+ * 필드가 채워져 있는지로 어떤 메커니즘인지 분기(엔진의 `finishTurn.ts` 실행 순서와 무관 —
+ * 이미 끝난 결과를 필드 유무로 표시만 함).
+ */
+function EndOfTurnLine({
+  entry: e,
+  turnName,
+}: {
+  entry: EndOfTurnLogEntry;
+  turnName: (key: FighterKey) => string;
+}) {
+  return (
+    <div className="battle-turn-line is-muted">
+      {e.fieldHeal ? (
+        <>
+          {turnName(e.actor)} 그래스필드로 {e.fieldHeal} 회복 (남은 HP {e.remainingHp})
+        </>
+      ) : e.itemHeal ? (
+        <>
+          {turnName(e.actor)}의 {e.itemHealItemName}로 {e.itemHeal} 회복 (남은 HP{" "}
+          {e.remainingHp})
+        </>
+      ) : e.abilityWeatherHeal ? (
+        <>
+          {turnName(e.actor)}의 {e.abilityWeatherHealAbilityName}로{" "}
+          {e.abilityWeatherHeal} 회복 (남은 HP {e.remainingHp})
+        </>
+      ) : e.regenHeal ? (
+        <>
+          {turnName(e.actor)}
+          {e.regenSource && VOLATILE_LABELS[e.regenSource]}로 {e.regenHeal} 회복 (남은 HP {e.remainingHp})
+        </>
+      ) : e.leechSeedDamage ? (
+        <>
+          {turnName(e.actor)}의 씨앗이 체력을 {e.leechSeedDamage} 흡수했다 (남은 HP{" "}
+          {e.remainingHp})
+          {e.fainted && " · 기절!"}
+        </>
+      ) : e.leechSeedHealAmount ? (
+        <>
+          {turnName(e.actor)}가 씨앗으로 체력을 {e.leechSeedHealAmount} 회복 (남은 HP{" "}
+          {e.remainingHp})
+        </>
+      ) : e.liquidOozeDamage ? (
+        <>
+          {turnName(e.actor)}
+          {eunNeun(turnName(e.actor))} 해감액을 빨아들여 {e.damage} 데미지 (남은 HP {e.remainingHp})
+          {e.fainted && " · 기절!"}
+        </>
+      ) : e.wishHeal ? (
+        <>
+          {turnName(e.actor)}의 희망사항으로 체력을 {e.wishHeal} 회복 (남은 HP{" "}
+          {e.remainingHp})
+        </>
+      ) : e.berryHeal ? (
+        <>
+          {turnName(e.actor)}의 {e.berryHealItemName}로 {e.berryHeal} 회복 (남은 HP{" "}
+          {e.remainingHp})
+        </>
+      ) : e.sandstormDamage ? (
+        <>
+          {turnName(e.actor)}
+          {eunNeun(turnName(e.actor))} 모래바람에 시달리고 있다! {e.damage} 데미지 (남은
+          HP {e.remainingHp}){e.fainted && " · 기절!"}
+        </>
+      ) : e.boundDamage ? (
+        <>
+          {turnName(e.actor)}
+          {eunNeun(turnName(e.actor))} 속박에서 벗어나지 못하고 있다! {e.damage} 데미지
+          (남은 HP {e.remainingHp}){e.fainted && " · 기절!"}
+        </>
+      ) : e.saltCureDamage ? (
+        <>
+          {turnName(e.actor)}
+          {eunNeun(turnName(e.actor))} 소금절이 때문에 괴로워하고 있다! {e.damage} 데미지
+          (남은 HP {e.remainingHp}){e.fainted && " · 기절!"}
+        </>
+      ) : e.syrupCoatDrop ? (
+        <>
+          {turnName(e.actor)}
+          {eunNeun(turnName(e.actor))} 물엿범벅이 되어 스피드가 떨어졌다! (남은 HP{" "}
+          {e.remainingHp})
+        </>
+      ) : e.octolockDrop ? (
+        <>
+          {turnName(e.actor)}
+          {eunNeun(turnName(e.actor))} 문어굳히기 때문에 방어와 특수방어가 떨어졌다! (남은 HP{" "}
+          {e.remainingHp})
+        </>
+      ) : e.perishFainted ? (
+        <>
+          {turnName(e.actor)}
+          {eunNeun(turnName(e.actor))} 멸망의 노래 카운트가 0이 되어 쓰러졌다!
+        </>
+      ) : e.perishCount !== undefined ? (
+        <>
+          {turnName(e.actor)}의 멸망의 노래 카운트: {e.perishCount}
+        </>
+      ) : e.inflictedDelayedStatus ? (
+        STATUS_ONSET_TEXT[e.inflictedDelayedStatus](turnName(e.actor))
+      ) : e.abilityCuredStatus ? (
+        <>
+          {turnName(e.actor)}의 {e.abilityCuredStatusAbilityName}!{" "}
+          {STATUS_CURE_TEXT[e.abilityCuredStatus](turnName(e.actor))}
+        </>
+      ) : e.statusCondition ? (
+        <>
+          {STATUS_TRIGGER_TEXT[e.statusCondition](turnName(e.actor))} (남은 HP{" "}
+          {e.remainingHp})
+          {e.fainted && " · 기절!"}
+        </>
+      ) : e.speedBoostAbilityName ? (
+        <>
+          {turnName(e.actor)}의 {e.speedBoostAbilityName}!{" "}
+          {e.speedBoostAtCap
+            ? `${turnName(e.actor)}의 스피드는 더 이상 올라가지 않는다!`
+            : "스피드가 올라갔다!"}
+        </>
+      ) : e.moodyAbilityName && e.moodyRaisedStat && e.moodyLoweredStat ? (
+        <>
+          {turnName(e.actor)}의 {e.moodyAbilityName}! {STAT_LABELS[e.moodyRaisedStat]}
+          {iGa(STAT_LABELS[e.moodyRaisedStat])} 크게 올라가고{" "}
+          {STAT_LABELS[e.moodyLoweredStat]}
+          {iGa(STAT_LABELS[e.moodyLoweredStat])} 떨어졌다!
+        </>
+      ) : e.poisonHealAbilityName ? (
+        <>
+          {turnName(e.actor)}의 {e.poisonHealAbilityName}! 독 데미지 대신 HP{" "}
+          {e.poisonHealAmount} 회복 (남은 HP {e.remainingHp})
+        </>
+      ) : e.abilityWeatherDamageAbilityName ? (
+        <>
+          {turnName(e.actor)}의 {e.abilityWeatherDamageAbilityName}! 데미지 {e.damage}{" "}
+          (남은 HP {e.remainingHp}){e.fainted && " · 기절!"}
+        </>
+      ) : e.harvestRestoredBerryName ? (
+        <>
+          {turnName(e.actor)}의 수확! {e.harvestRestoredBerryName}
+          {eulReul(e.harvestRestoredBerryName)} 다시 만들었다!
+        </>
+      ) : e.cheekPouchHeal ? (
+        <>
+          {turnName(e.actor)}의 볼주머니! 체력을 {e.cheekPouchHeal} 회복 (남은 HP{" "}
+          {e.remainingHp})
+        </>
+      ) : e.hungerModeChangedTo ? (
+        <>
+          {turnName(e.actor)}
+          {eunNeun(turnName(e.actor))}{" "}
+          {e.hungerModeChangedTo === "hangry" ? "배고픈모양" : "배부른모양"}이 되었다!
+        </>
+      ) : (
+        <>
+          {turnName(e.actor)} 상태이상 데미지 {e.damage} (남은 HP {e.remainingHp})
+          {e.fainted && " · 기절!"}
+        </>
+      )}
+    </div>
+  );
+}
+
+/**
+ * 턴 카드 맨 아래 — 필드/트릭룸/날씨 잔여턴·소멸, 스크린/신비의부적 만료, 승패 판정. 전부
+ * `turn`(과 이름 조회용 `turnName`)만 있으면 렌더 가능해 다른 섹션과 데이터 의존이 없다.
+ */
+function TurnFooterLines({
+  turn,
+  turnName,
+}: {
+  turn: TurnResult;
+  turnName: (key: FighterKey) => string;
+}) {
+  return (
+    <>
+      {turn.field && (
+        <div className="battle-turn-line is-muted">
+          필드: {turn.field} (앞으로 {turn.fieldTurnsRemaining}턴 뒤 소멸)
+        </div>
+      )}
+      {turn.fieldExpired && <div className="battle-turn-line is-muted">필드가 사라졌다!</div>}
+      {turn.trickRoomTurnsRemaining !== undefined && (
+        <div className="battle-turn-line is-muted">
+          트릭룸: 앞으로 {turn.trickRoomTurnsRemaining}턴 뒤 해제
+        </div>
+      )}
+      {turn.trickRoomExpired && <div className="battle-turn-line is-muted">트릭룸이 해제됐다!</div>}
+      {turn.weatherTurnsRemaining !== undefined && (
+        <div className="battle-turn-line is-muted">
+          날씨: 앞으로 {turn.weatherTurnsRemaining}턴 뒤 소멸
+        </div>
+      )}
+      {turn.weatherExpired && <div className="battle-turn-line is-muted">날씨가 원래대로 돌아갔다!</div>}
+      {turn.expiredScreens.map((e, i) => (
+        <div key={i} className="battle-turn-line is-muted">
+          {turnName(e.actor)}의 {SCREEN_LABELS[e.screen]}
+          {iGa(SCREEN_LABELS[e.screen])} 사라졌다!
+        </div>
+      ))}
+      {turn.expiredSafeguard.map((actor, i) => (
+        <div key={i} className="battle-turn-line is-muted">
+          {turnName(actor)}의 신비의부적 효과가 사라졌다!
+        </div>
+      ))}
+      {turn.winner && (
+        <div className="battle-turn-line is-winner">
+          {turn.winner === "draw" ? "🤝 무승부!" : `🏆 ${turnName(turn.winner)} 승리!`}
+        </div>
+      )}
+    </>
+  );
 }
 
 /**
@@ -1461,195 +1676,9 @@ export function BattleTurnLog({ log }: { log: TurnResult[] }) {
                   );
                 })}
                 {turn.endOfTurn.map((e, i) => (
-                  <div key={i} className="battle-turn-line is-muted">
-                    {e.fieldHeal ? (
-                      <>
-                        {turnName(e.actor)} 그래스필드로 {e.fieldHeal} 회복 (남은 HP {e.remainingHp})
-                      </>
-                    ) : e.itemHeal ? (
-                      <>
-                        {turnName(e.actor)}의 {e.itemHealItemName}로 {e.itemHeal} 회복 (남은 HP{" "}
-                        {e.remainingHp})
-                      </>
-                    ) : e.abilityWeatherHeal ? (
-                      <>
-                        {turnName(e.actor)}의 {e.abilityWeatherHealAbilityName}로{" "}
-                        {e.abilityWeatherHeal} 회복 (남은 HP {e.remainingHp})
-                      </>
-                    ) : e.regenHeal ? (
-                      <>
-                        {turnName(e.actor)}
-                        {e.regenSource && VOLATILE_LABELS[e.regenSource]}로 {e.regenHeal} 회복 (남은 HP {e.remainingHp})
-                      </>
-                    ) : e.leechSeedDamage ? (
-                      <>
-                        {turnName(e.actor)}의 씨앗이 체력을 {e.leechSeedDamage} 흡수했다 (남은 HP{" "}
-                        {e.remainingHp})
-                        {e.fainted && " · 기절!"}
-                      </>
-                    ) : e.leechSeedHealAmount ? (
-                      <>
-                        {turnName(e.actor)}가 씨앗으로 체력을 {e.leechSeedHealAmount} 회복 (남은 HP{" "}
-                        {e.remainingHp})
-                      </>
-                    ) : e.liquidOozeDamage ? (
-                      <>
-                        {turnName(e.actor)}
-                        {eunNeun(turnName(e.actor))} 해감액을 빨아들여 {e.damage} 데미지 (남은 HP {e.remainingHp})
-                        {e.fainted && " · 기절!"}
-                      </>
-                    ) : e.wishHeal ? (
-                      <>
-                        {turnName(e.actor)}의 희망사항으로 체력을 {e.wishHeal} 회복 (남은 HP{" "}
-                        {e.remainingHp})
-                      </>
-                    ) : e.berryHeal ? (
-                      <>
-                        {turnName(e.actor)}의 {e.berryHealItemName}로 {e.berryHeal} 회복 (남은 HP{" "}
-                        {e.remainingHp})
-                      </>
-                    ) : e.sandstormDamage ? (
-                      <>
-                        {turnName(e.actor)}
-                        {eunNeun(turnName(e.actor))} 모래바람에 시달리고 있다! {e.damage} 데미지 (남은
-                        HP {e.remainingHp}){e.fainted && " · 기절!"}
-                      </>
-                    ) : e.boundDamage ? (
-                      <>
-                        {turnName(e.actor)}
-                        {eunNeun(turnName(e.actor))} 속박에서 벗어나지 못하고 있다! {e.damage} 데미지
-                        (남은 HP {e.remainingHp}){e.fainted && " · 기절!"}
-                      </>
-                    ) : e.saltCureDamage ? (
-                      <>
-                        {turnName(e.actor)}
-                        {eunNeun(turnName(e.actor))} 소금절이 때문에 괴로워하고 있다! {e.damage} 데미지
-                        (남은 HP {e.remainingHp}){e.fainted && " · 기절!"}
-                      </>
-                    ) : e.syrupCoatDrop ? (
-                      <>
-                        {turnName(e.actor)}
-                        {eunNeun(turnName(e.actor))} 물엿범벅이 되어 스피드가 떨어졌다! (남은 HP{" "}
-                        {e.remainingHp})
-                      </>
-                    ) : e.octolockDrop ? (
-                      <>
-                        {turnName(e.actor)}
-                        {eunNeun(turnName(e.actor))} 문어굳히기 때문에 방어와 특수방어가 떨어졌다! (남은 HP{" "}
-                        {e.remainingHp})
-                      </>
-                    ) : e.perishFainted ? (
-                      <>
-                        {turnName(e.actor)}
-                        {eunNeun(turnName(e.actor))} 멸망의 노래 카운트가 0이 되어 쓰러졌다!
-                      </>
-                    ) : e.perishCount !== undefined ? (
-                      <>
-                        {turnName(e.actor)}의 멸망의 노래 카운트: {e.perishCount}
-                      </>
-                    ) : e.inflictedDelayedStatus ? (
-                      STATUS_ONSET_TEXT[e.inflictedDelayedStatus](turnName(e.actor))
-                    ) : e.abilityCuredStatus ? (
-                      <>
-                        {turnName(e.actor)}의 {e.abilityCuredStatusAbilityName}!{" "}
-                        {STATUS_CURE_TEXT[e.abilityCuredStatus](turnName(e.actor))}
-                      </>
-                    ) : e.statusCondition ? (
-                      <>
-                        {STATUS_TRIGGER_TEXT[e.statusCondition](turnName(e.actor))} (남은 HP{" "}
-                        {e.remainingHp})
-                        {e.fainted && " · 기절!"}
-                      </>
-                    ) : e.speedBoostAbilityName ? (
-                      <>
-                        {turnName(e.actor)}의 {e.speedBoostAbilityName}!{" "}
-                        {e.speedBoostAtCap
-                          ? `${turnName(e.actor)}의 스피드는 더 이상 올라가지 않는다!`
-                          : "스피드가 올라갔다!"}
-                      </>
-                    ) : e.moodyAbilityName && e.moodyRaisedStat && e.moodyLoweredStat ? (
-                      <>
-                        {turnName(e.actor)}의 {e.moodyAbilityName}! {STAT_LABELS[e.moodyRaisedStat]}
-                        {iGa(STAT_LABELS[e.moodyRaisedStat])} 크게 올라가고{" "}
-                        {STAT_LABELS[e.moodyLoweredStat]}
-                        {iGa(STAT_LABELS[e.moodyLoweredStat])} 떨어졌다!
-                      </>
-                    ) : e.poisonHealAbilityName ? (
-                      <>
-                        {turnName(e.actor)}의 {e.poisonHealAbilityName}! 독 데미지 대신 HP{" "}
-                        {e.poisonHealAmount} 회복 (남은 HP {e.remainingHp})
-                      </>
-                    ) : e.abilityWeatherDamageAbilityName ? (
-                      <>
-                        {turnName(e.actor)}의 {e.abilityWeatherDamageAbilityName}! 데미지 {e.damage}{" "}
-                        (남은 HP {e.remainingHp}){e.fainted && " · 기절!"}
-                      </>
-                    ) : e.harvestRestoredBerryName ? (
-                      <>
-                        {turnName(e.actor)}의 수확! {e.harvestRestoredBerryName}
-                        {eulReul(e.harvestRestoredBerryName)} 다시 만들었다!
-                      </>
-                    ) : e.cheekPouchHeal ? (
-                      <>
-                        {turnName(e.actor)}의 볼주머니! 체력을 {e.cheekPouchHeal} 회복 (남은 HP{" "}
-                        {e.remainingHp})
-                      </>
-                    ) : e.hungerModeChangedTo ? (
-                      <>
-                        {turnName(e.actor)}
-                        {eunNeun(turnName(e.actor))}{" "}
-                        {e.hungerModeChangedTo === "hangry" ? "배고픈모양" : "배부른모양"}이 되었다!
-                      </>
-                    ) : (
-                      <>
-                        {turnName(e.actor)} 상태이상 데미지 {e.damage} (남은 HP {e.remainingHp})
-                        {e.fainted && " · 기절!"}
-                      </>
-                    )}
-                  </div>
+                  <EndOfTurnLine key={i} entry={e} turnName={turnName} />
                 ))}
-                {turn.field && (
-                  <div className="battle-turn-line is-muted">
-                    필드: {turn.field} (앞으로 {turn.fieldTurnsRemaining}턴 뒤 소멸)
-                  </div>
-                )}
-                {turn.fieldExpired && (
-                  <div className="battle-turn-line is-muted">필드가 사라졌다!</div>
-                )}
-                {turn.trickRoomTurnsRemaining !== undefined && (
-                  <div className="battle-turn-line is-muted">
-                    트릭룸: 앞으로 {turn.trickRoomTurnsRemaining}턴 뒤 해제
-                  </div>
-                )}
-                {turn.trickRoomExpired && (
-                  <div className="battle-turn-line is-muted">트릭룸이 해제됐다!</div>
-                )}
-                {turn.weatherTurnsRemaining !== undefined && (
-                  <div className="battle-turn-line is-muted">
-                    날씨: 앞으로 {turn.weatherTurnsRemaining}턴 뒤 소멸
-                  </div>
-                )}
-                {turn.weatherExpired && (
-                  <div className="battle-turn-line is-muted">날씨가 원래대로 돌아갔다!</div>
-                )}
-                {turn.expiredScreens.map((e, i) => (
-                  <div key={i} className="battle-turn-line is-muted">
-                    {turnName(e.actor)}의 {SCREEN_LABELS[e.screen]}
-                    {iGa(SCREEN_LABELS[e.screen])} 사라졌다!
-                  </div>
-                ))}
-                {turn.expiredSafeguard.map((actor, i) => (
-                  <div key={i} className="battle-turn-line is-muted">
-                    {turnName(actor)}의 신비의부적 효과가 사라졌다!
-                  </div>
-                ))}
-                {turn.winner && (
-                  <div className="battle-turn-line is-winner">
-                    {turn.winner === "draw"
-                      ? "🤝 무승부!"
-                      : `🏆 ${turnName(turn.winner)} 승리!`}
-                  </div>
-                )}
+                <TurnFooterLines turn={turn} turnName={turnName} />
               </div>
               );
             })}
