@@ -890,6 +890,862 @@ function ActionMainLine({
 }
 
 /**
+ * 행동 한 건의 타입변화·방어·상태·스탯변화·도구·특성반응 계열 — ActionMainLine(메인 라인)
+ * 다음부터 교체 로그(TurnSwitchLines 계열) 앞까지 오는 나머지 전부(연타 집계용
+ * MultiHitLines 호출도 이 안에 포함). §15에서 가장 크고(원래 836줄) 마지막으로 남겨둔
+ * 덩어리 — 순서가 그대로 로그 문구 순서라 세부 계열별로 더 쪼개지 않고 하나로 뒀다.
+ */
+function ActionEffectLines({
+  action,
+  actorName,
+  defenderName,
+}: {
+  action: ActionLogEntry;
+  actorName: string;
+  defenderName: string;
+}) {
+  return (
+    <>
+      {/* §2-4: 변환자재/리베로 타입 변경 — 데미지 줄 인라인에서 분리해 2줄로 */}
+      {!action.blockedReason && action.changedOwnTypeTo && (
+        <>
+          <div className="battle-turn-line is-muted">
+            {actorName}의 {action.changedOwnTypeAbilityName}!
+          </div>
+          <div className="battle-turn-line is-muted">
+            {actorName}
+            {eunNeun(actorName)} {action.changedOwnTypeTo}타입이 되었다!
+          </div>
+        </>
+      )}
+      {/* PR-C1: 전광쌍격 — 사용 후 자기 타입 소실(빗나가도 표시) */}
+      {!action.blockedReason && action.lostTypeAfterUse && (
+        <div className="battle-turn-line is-muted">
+          {actorName}
+          {eunNeun(actorName)} {action.lostTypeAfterUse}타입이 사라졌다!
+        </div>
+      )}
+      {/* PR-C1: 대검돌격 — 사용 후 피격 필중·피해 2배 상태 */}
+      {!action.blockedReason && action.glaiveRushArmed && (
+        <div className="battle-turn-line is-muted">
+          {actorName}
+          {eunNeun(actorName)} 무방비 상태가 되었다!
+        </div>
+      )}
+      {/* PR-C1: 코트체인지 — 양쪽 진영 설치물·스크린 교체 */}
+      {!action.blockedReason && action.hit && action.courtChangeDone && (
+        <div className="battle-turn-line is-muted">서로의 필드 효과를 뒤바꿨다!</div>
+      )}
+      {/* PR-C1: 회생의기도 — 교대 포켓몬 부활 / 대상 없음 */}
+      {!action.blockedReason && action.hit && action.revivedPartyName && (
+        <div className="battle-turn-line is-muted">
+          {action.revivedPartyName}의 기운을 되찾아주었다!
+        </div>
+      )}
+      {!action.blockedReason && action.hit && action.reviveFailed && (
+        <div className="battle-turn-line is-muted">그러나 실패했다!</div>
+      )}
+      {/* PR-C1b: 문어굳히기 / 물고버티기 — 도망봉인 */}
+      {!action.blockedReason && action.hit && action.octolockApplied && (
+        <div className="battle-turn-line is-muted">
+          {defenderName}
+          {eunNeun(defenderName)} 문어굳히기에 붙잡혀 도망칠 수 없다!
+        </div>
+      )}
+      {!action.blockedReason && action.hit && action.jawLockApplied && (
+        <div className="battle-turn-line is-muted">
+          {actorName}와(과) {defenderName}
+          {eunNeun(defenderName)} 서로 물고 늘어져 교체할 수 없다!
+        </div>
+      )}
+      {/* PR-C2b: 위기회피 — 피격으로 HP 절반 이하 → 퇴장 (실제 교체는 pendingPivot 패널) */}
+      {!action.blockedReason && action.hit && action.triggersDefenderEmergencyExit && (
+        <div className="battle-turn-line is-muted">
+          {defenderName}의 {action.emergencyExitAbilityName ?? "위기회피"}!
+        </div>
+      )}
+      {/* C-5 명중 빗나감 — 메인 줄은 "OO의 기합구슬 — !"로 끝내고 여기서 별도 줄 */}
+      {!action.blockedReason && !action.charging && !action.evadedByCharge && !action.hit && (
+        <div className="battle-turn-line is-muted">
+          {defenderName}
+          {eunNeun(defenderName)} 맞지 않았다!
+        </div>
+      )}
+      {/* §2-5: 연타(멀티히트) — 1타 몫은 위 데미지 줄이 이미 찍었고, 여기서 1타 급소·
+          1타 방어측 특성 반응 → 2타부터 "타별 데미지 줄(+급소+특성 반응)" → 마지막에
+          "N번 맞았다!". 변환자재 2줄은 위 §2-4 블록이 1타 직후에 이미 찍는다. */}
+      {!action.blockedReason && action.hits && action.hits.length > 0 && (
+        <MultiHitLines
+          hits={action.hits}
+          moveName={action.move.name}
+          hitCount={action.hitCount}
+          actorName={actorName}
+          defenderName={defenderName}
+        />
+      )}
+      {/* C-4 급소 — 데미지 줄 인라인에서 분리 (다단히트는 "(급소 포함)" 인라인 유지) */}
+      {!action.blockedReason && action.hit && action.critical && action.hitCount === undefined && action.damage > 0 && (
+        <div className="battle-turn-line is-muted">급소에 맞았다!</div>
+      )}
+      {/* C-1~C-3 타입 상성 문구 — 데미지 기술이 명중했을 때만 */}
+      {!action.blockedReason &&
+        action.hit &&
+        !action.charging &&
+        action.move.category !== "status" &&
+        (action.move.power !== null || action.move.fixedDamage !== undefined) && (
+          <>
+            {action.typeEffectiveness === 0 && (
+              <div className="battle-turn-line is-muted">
+                상대 {defenderName}에게는 효과가 없는 듯하다...
+              </div>
+            )}
+            {action.typeEffectiveness >= 2 && (
+              <div className="battle-turn-line is-muted">효과가 굉장했다!</div>
+            )}
+            {action.typeEffectiveness > 0 && action.typeEffectiveness <= 0.5 && (
+              <div className="battle-turn-line is-muted">효과가 별로인 듯하다...</div>
+            )}
+          </>
+        )}
+      {/* 마비/잠듦/얼음으로 이번 턴 행동이 막혔으면(단순 "상태이상으로 행동 불가"가
+          아니라) 매턴 효과가 발동한 것과 같은 의미라 트리거 문구를 그대로 쓴다 */}
+      {action.blockedReason === "status" && action.blockedByStatus && (
+        <div className="battle-turn-line is-muted">
+          {STATUS_TRIGGER_TEXT[action.blockedByStatus](actorName)}
+        </div>
+      )}
+      {/* 속이기(첫 턴 전용)처럼 사용 조건을 못 채워 실패했을 때 — 메인 줄은
+          "OO의 속이기!"로만 끝내고, 실패 여부는 이 별도 줄로 알려준다 */}
+      {action.blockedReason === "usageCondition" && (
+        <div className="battle-turn-line is-muted">
+          {actorName}의 {action.move.name}{eunNeun(action.move.name)} 실패했다!
+        </div>
+      )}
+      {/* 도발/사슬묶기/앙코르로 이번 선택 자체가 막혔을 때 — 어떤 제약 때문인지 구분해서 보여준다 */}
+      {action.blockedReason === "moveRestricted" && (
+        <div className="battle-turn-line is-muted">
+          {action.moveRestrictionKind === "taunt" &&
+            `${actorName}${eunNeun(actorName)} 도발에 걸려 변화기를 쓸 수 없다!`}
+          {action.moveRestrictionKind === "disable" &&
+            `${actorName}의 ${action.move.name}${eunNeun(action.move.name)} 사슬묶기에 봉인돼있다!`}
+          {action.moveRestrictionKind === "encore" &&
+            `${actorName}${eunNeun(actorName)} 앙코르 때문에 이 기술을 쓸 수 없다!`}
+        </div>
+      )}
+      {/* 상태이상에 새로 걸렸을 때(onset) — 보통 상대가 대상이지만, 매직미러로 되돌아온
+          경우(bouncedMoveName)엔 시전자(actor) 자신에게 걸린 것이다 */}
+      {!action.blockedReason && action.hit && action.inflictedStatus && (
+        <div className="battle-turn-line is-muted">
+          {STATUS_ONSET_TEXT[action.inflictedStatus](
+            action.bouncedMoveName ? actorName : defenderName,
+          )}
+        </div>
+      )}
+      {/* C-8 이미 걸린 상태이상에 상태이상 전용기를 다시 써서 아무 변화가 없었을 때 */}
+      {!action.blockedReason && action.hit && action.statusInflictFailed && (
+        <div className="battle-turn-line is-muted">
+          {actorName}의 {action.move.name} - 그러나 실패했다!
+        </div>
+      )}
+      {/* 앙코르 성공 — 사용/받은 쪽을 두 줄로 나눈다(백로그 §7-3) */}
+      {!action.blockedReason && action.hit && action.inflictedVolatile === "encore" && (
+        <div className="battle-turn-line is-muted">
+          {action.bouncedMoveName ? (
+            <>
+              {actorName}의 앙코르!<br />
+              {actorName}
+              {eunNeun(actorName)} 앙코르를 받았다!
+            </>
+          ) : (
+            <>
+              {actorName}의 앙코르!<br />
+              {defenderName}
+              {eunNeun(defenderName)} 앙코르를 받았다!
+            </>
+          )}
+        </div>
+      )}
+      {/* 하품(졸음) 유도 — 실제로 잠드는 건 2턴 뒤라 onset 문구와 다르게 "유도했다"로 표현 */}
+      {!action.blockedReason && action.hit && action.inflictedVolatile === "drowsy" && (
+        <div className="battle-turn-line is-muted">
+          {action.bouncedMoveName
+            ? `${actorName}의 졸음을 유도했다!`
+            : `상대 ${defenderName}의 졸음을 유도했다!`}
+        </div>
+      )}
+      {/* 상태이상이 나았을 때(cure) — curedStatusTarget으로 자신/상대 구분 */}
+      {!action.blockedReason && action.hit && action.curedStatus && (
+        <div className="battle-turn-line is-muted">
+          {STATUS_CURE_TEXT[action.curedStatus](
+            action.curedStatusTarget === "self" ? actorName : defenderName,
+          )}
+        </div>
+      )}
+      {/* 방어측 접촉/피격 트리거 특성(정전기·불꽃몸=상태이상, 까칠한피부=고정 데미지,
+          저주받은바디=PP 봉인) — 전부 defenderName의 특성이 actorName(공격자)에게 발동한다.
+          다단히트(action.hits)면 §2-5 블록이 타별로 찍으므로 아래 집계 줄은 건너뛴다. */}
+      {!action.blockedReason && !action.hits && action.abilityInflictedStatusOnAttacker && (
+        <div className="battle-turn-line is-muted">
+          {abilityStatusLine(
+            action.abilityInflictedStatusAbilityName,
+            action.abilityInflictedStatusOnAttacker,
+            actorName,
+            defenderName,
+          )}
+        </div>
+      )}
+      {/* 헤롱헤롱바디 — 접촉해 온 공격자가 이성이면 방어측 특성이 발동해 공격자에게 걸린다 */}
+      {!action.blockedReason && !action.hits && action.abilityInflictedVolatileOnAttacker && (
+        <div className="battle-turn-line is-muted">
+          {abilityVolatileLine(
+            action.abilityInflictedVolatileAbilityName,
+            action.abilityInflictedVolatileOnAttacker,
+            actorName,
+            defenderName,
+          )}
+        </div>
+      )}
+      {!action.blockedReason && !action.hits && !!action.abilityDamageToAttacker && (
+        <div className="battle-turn-line is-muted">
+          {abilityDamageLine(
+            action.abilityDamageAbilityName,
+            action.abilityDamageToAttacker,
+            actorName,
+            defenderName,
+          )}
+        </div>
+      )}
+      {/* PR-C4a: 울퉁불퉁멧 — 접촉기 공격자 반동(다단히트 합산이라 hits 무관 표시) */}
+      {!action.blockedReason && !!action.rockyHelmetDamage && (
+        <div className="battle-turn-line is-muted">
+          {defenderName}의 {action.rockyHelmetItemName}! {actorName}
+          {eunNeun(actorName)} {action.rockyHelmetDamage} 데미지를 입었다!
+        </div>
+      )}
+      {/* PR-C4a: 노말주얼 등 타입 젬 — 소모되며 위력 상승 */}
+      {!action.blockedReason && action.ateGemItemName && (
+        <div className="battle-turn-line is-muted">
+          {actorName}의 {action.ateGemItemName}
+          {eunNeun(action.ateGemItemName)} 발동해 위력이 올랐다!
+        </div>
+      )}
+      {/* PR-C4a: 풍선 — 피격으로 터짐 */}
+      {!action.blockedReason && action.hit && action.balloonPoppedItemName && (
+        <div className="battle-turn-line is-muted">
+          {defenderName}의 {action.balloonPoppedItemName}
+          {eunNeun(action.balloonPoppedItemName)} 터졌다!
+        </div>
+      )}
+      {!action.blockedReason && !action.hits && action.abilityDisabledMoveName && (
+        <div className="battle-turn-line is-muted">
+          {abilityDisabledMoveLine(
+            action.abilityDisableAbilityName,
+            action.abilityDisabledMoveName,
+            actorName,
+            defenderName,
+          )}
+        </div>
+      )}
+      {/* 나쁜손버릇 — 접촉기로 피격당한 방어측이 공격자의 도구를 빼앗았을 때 */}
+      {!action.blockedReason && !action.hits && action.pickpocketStolenItemName && (
+        <div className="battle-turn-line is-muted">
+          {abilityPickpocketLine(
+            action.pickpocketAbilityName,
+            action.pickpocketStolenItemName,
+            actorName,
+            defenderName,
+          )}
+        </div>
+      )}
+      {/* 지구력·깨어진갑옷 등 — 피격 시 방어측 특성이 자기 랭크를 바꿨을 때
+          (Phase 6.5 §6-2 ③ / §6-1). 깨어진갑옷은 방어↓·스피드↑가 같이 오므로 줄을 나눠 낸다.
+          내림 줄에서 특성 이름을 한 번 알리고, 오름 줄은 이름 없이 결과만. */}
+      {!action.blockedReason &&
+        !action.hits &&
+        ((action.abilityLoweredDefenderStats?.length ?? 0) > 0 ||
+          (action.abilityRaisedDefenderStats?.length ?? 0) > 0) &&
+        (() => {
+          const { lowered, raised } = abilityDefenderStatsLines(
+            action.abilityRaisedDefenderStatsAbilityName,
+            action.abilityLoweredDefenderStats ?? [],
+            action.abilityRaisedDefenderStats ?? [],
+            defenderName,
+          );
+          return (
+            <>
+              {lowered && <div className="battle-turn-line is-muted">{lowered}</div>}
+              {raised && <div className="battle-turn-line is-muted">{raised}</div>}
+            </>
+          );
+        })()}
+      {/* 타오르는불꽃/피뢰침 — 해당 타입 기술을 통째로 무효화(데미지는 이미 0으로
+          찍혀있어 별도 표시가 없으면 "그냥 약해서 0"인지 구분이 안 되니 전용 문구로 알려준다) */}
+      {!action.blockedReason && action.abilityAbsorbedMoveType && (
+        <div className="battle-turn-line is-muted">
+          {defenderName}의 {action.abilityAbsorbAbilityName}! {typeLabel(action.abilityAbsorbedMoveType)}
+          {eunNeun(typeLabel(action.abilityAbsorbedMoveType))} 전혀 효과가 없었다!
+          {!!action.abilityAbsorbHealAmount && <> 체력을 {action.abilityAbsorbHealAmount} 회복했다!</>}
+        </div>
+      )}
+      {/* 방음 — 소리 기술을 통째로 무효화 */}
+      {!action.blockedReason && action.soundproofBlockedByAbilityName && (
+        <div className="battle-turn-line is-muted">
+          {defenderName}의 {action.soundproofBlockedByAbilityName}! 소리 기술은 통하지 않는다!
+        </div>
+      )}
+      {/* 방탄 — 구슬·폭탄 기술을 통째로 무효화 */}
+      {!action.blockedReason && action.bulletproofBlockedByAbilityName && (
+        <div className="battle-turn-line is-muted">
+          {defenderName}의 {action.bulletproofBlockedByAbilityName}! 구슬·폭탄 기술은 통하지 않는다!
+        </div>
+      )}
+      {/* 황금몸 — 명중한 변화기의 효과를 통째로 무효화(§4-5). 빗나감(C-5)과 헷갈리지
+          않도록 battleSimulator에서 hit까지 확인해서 내려준다 */}
+      {!action.blockedReason && action.goodAsGoldBlockedByAbilityName && (
+        <div className="battle-turn-line is-muted">
+          {defenderName}의 {action.goodAsGoldBlockedByAbilityName}!
+          <br />
+          {defenderName}에게 효과가 없는 듯하다...
+        </div>
+      )}
+      {/* 아로마베일 — 헤롱헤롱·도발·기술봉인·앙코르를 막았을 때 */}
+      {!action.blockedReason && action.mentalMoveBlockedByAbilityName && (
+        <div className="battle-turn-line is-muted">
+          {defenderName}의 {action.mentalMoveBlockedByAbilityName}! 마음을 옭아매는 기술은 통하지 않는다!
+        </div>
+      )}
+      {/* 미끈미끈·점착 — 접촉한 공격자의 랭크를 내렸을 때 */}
+      {!action.blockedReason &&
+        !action.hits &&
+        action.abilityLoweredAttackerStatsAbilityName &&
+        (action.abilityLoweredAttackerStats?.length ?? 0) > 0 &&
+        (() => (
+          <div className="battle-turn-line is-muted">
+            {abilityLoweredAttackerStatsLine(
+              action.abilityLoweredAttackerStatsAbilityName,
+              action.abilityLoweredAttackerStats ?? [],
+              actorName,
+              defenderName,
+            )}
+          </div>
+        ))()}
+      {/* 뒤집어엎기 — 상대 능력 변화를 전부 반전 */}
+      {!action.blockedReason && action.invertedTargetStages && (
+        <div className="battle-turn-line is-muted">
+          {defenderName}의 능력 변화가 모두 반대로 뒤집혔다!
+        </div>
+      )}
+      {/* 숲의저주·핼러윈 — 상대에게 타입 추가 */}
+      {!action.blockedReason && action.addedTypeToTarget && (
+        <div className="battle-turn-line is-muted">
+          {defenderName}
+          {eunNeun(defenderName)} {typeLabel(action.addedTypeToTarget)} 타입이 추가되었다!
+        </div>
+      )}
+      {/* 송전 — 이번 턴 상대 기술 타입 강제 */}
+      {!action.blockedReason && action.targetMoveTypeOverride && (
+        <div className="battle-turn-line is-muted">
+          송전되었다! 이번 턴 {defenderName}의 기술은 {typeLabel(action.targetMoveTypeOverride)} 타입이 된다!
+        </div>
+      )}
+      {/* 볼주머니 — 나무열매를 먹어 추가 회복 */}
+      {!action.blockedReason && !!action.cheekPouchHeal && (
+        <div className="battle-turn-line is-muted">
+          볼주머니! 체력을 {action.cheekPouchHeal} 회복했다!
+        </div>
+      )}
+      {/* 소울비트 — HP 소비 / HP 부족 실패 */}
+      {!action.blockedReason && action.soulBeatFailed && (
+        <div className="battle-turn-line is-muted">하지만 HP가 부족해 실패했다!</div>
+      )}
+      {!action.blockedReason && !!action.soulBeatHpCost && (
+        <div className="battle-turn-line is-muted">
+          {actorName}
+          {eunNeun(actorName)} 혼을 실어 HP를 {action.soulBeatHpCost} 소비했다!
+        </div>
+      )}
+      {/* 부리캐논 — 가열 중 접촉기로 맞아 공격자 화상 */}
+      {!action.blockedReason && action.beakBlastBurnedAttacker && (
+        <div className="battle-turn-line is-muted">
+          가열된 부리에 데어 {actorName}
+          {eunNeun(actorName)} 화상을 입었다!
+        </div>
+      )}
+      {/* 토치카 — 접촉기를 막고 공격자를 독으로 */}
+      {!action.blockedReason && action.protectContactInflictedStatus === "poison" && (
+        <div className="battle-turn-line is-muted">
+          {actorName}
+          {eunNeun(actorName)} 토치카의 독에 당했다!
+        </div>
+      )}
+      {/* 발끈 — HP 절반 이하가 되어 방어측 특수공격 상승 */}
+      {!action.blockedReason && action.angerPointRaisedSpa && (
+        <div className="battle-turn-line is-muted">
+          {defenderName}의 {action.angerPointAbilityName}! {defenderName}의 특수공격이 올라갔다!
+        </div>
+      )}
+      {/* 떠도는영혼 — 접촉 피격으로 공격자와 특성 교환 */}
+      {!action.blockedReason && !action.hits && action.wanderingSpiritSwapped && (
+        <div className="battle-turn-line is-muted">{wanderingSpiritLine(actorName, defenderName)}</div>
+      )}
+      {/* 모래뿜기 — 피격으로 날씨 변경 */}
+      {!action.blockedReason && !action.hits && action.sandSpitWeather && (
+        <div className="battle-turn-line is-muted">
+          {sandSpitWeatherLine(action.sandSpitWeather, defenderName)}
+        </div>
+      )}
+      {/* PR-C2: 넘치는씨 — 피격으로 그래스필드 설정 */}
+      {!action.blockedReason && !action.hits && action.seedSowerField && (
+        <div className="battle-turn-line is-muted">
+          {setFieldOnHitLine("넘치는씨", action.seedSowerField, defenderName)}
+        </div>
+      )}
+      {/* PR-C4b: 시드류 — 이번 행동으로 필드가 새로 깔려 발동 */}
+      {!action.blockedReason &&
+        action.terrainSeedMessages?.map((m, i) => (
+          <div key={`seed-${i}`} className="battle-turn-line is-muted">
+            {m}
+          </div>
+        ))}
+      {/* PR-C2: 해감액 — 흡수기가 회복 대신 데미지 */}
+      {!action.blockedReason && action.hit && !!action.liquidOozeDamage && (
+        <div className="battle-turn-line is-muted">
+          {defenderName}의 {action.liquidOozeAbilityName ?? "해감액"}! {actorName}
+          {eunNeun(actorName)} 체력을 흡수해 오히려 {action.liquidOozeDamage} 데미지를 입었다!
+        </div>
+      )}
+      {/* 마법가루 — 상대 타입을 단일 타입으로 치환 */}
+      {!action.blockedReason && action.overwroteTargetType && (
+        <div className="battle-turn-line is-muted">
+          {defenderName}
+          {eunNeun(defenderName)} {typeLabel(action.overwroteTargetType)} 타입이 되었다!
+        </div>
+      )}
+      {/* 전기로바꾸기 — 충전 상태로 전기 기술 위력 2배 */}
+      {!action.blockedReason && action.electromorphosisEmpoweredAbilityName && (
+        <div className="battle-turn-line is-muted">
+          {actorName}의 {action.electromorphosisEmpoweredAbilityName}! 충전한 전기의 힘이 실렸다!
+        </div>
+      )}
+      {/* 변덕레이저 — 확률 발동으로 위력 2배 */}
+      {!action.blockedReason && action.fickleBeamEmpowered && (
+        <div className="battle-turn-line is-muted">
+          {actorName}
+          {eunNeun(actorName)} 전력을 다하기 시작했다!
+        </div>
+      )}
+      {/* 편승 — 상대의 랭크 상승을 그대로 복사 */}
+      {!action.blockedReason &&
+        action.opportunistAbilityName &&
+        (action.opportunistCopiedStats?.length ?? 0) > 0 &&
+        (() => {
+          const copied = action.opportunistCopiedStats ?? [];
+          const joined = copied.map((s) => STAT_LABELS[s.stat]).join(", ");
+          return (
+            <div className="battle-turn-line is-muted">
+              {action.opportunistAbilityName}! 상대의 능력 상승에 편승해서 {joined}
+              {iGa(joined)} 올라갔다!
+            </div>
+          );
+        })()}
+      {/* 정리정돈 — 설치물·대타 정리 완료 */}
+      {!action.blockedReason && action.tidyUpDone && (
+        <div className="battle-turn-line is-muted">정리정돈 끝!</div>
+      )}
+      {/* 소금절이 — 상대를 소금절이 상태로 */}
+      {!action.blockedReason && action.saltCureApplied && (
+        <div className="battle-turn-line is-muted">
+          {defenderName}
+          {eunNeun(defenderName)} 소금에 절여졌다!
+        </div>
+      )}
+      {/* 인분 — 데미지 기술의 추가효과(상태이상·풀죽음·랭크하락·왕의징표석 풀죽음)를
+          무산시켰을 때. 실제로 무산된 게 있을 때만 채워진다 */}
+      {!action.blockedReason && action.secondaryBlockedByAbilityName && (
+        <div className="battle-turn-line is-muted">
+          {defenderName}의 {action.secondaryBlockedByAbilityName}! 추가 효과를 받지 않는다!
+        </div>
+      )}
+      {/* 대타출동 — 데미지 기술이 대타로 들어갔을 때. 깨졌는지 버텼는지에 따라 분기
+          (접촉/특성 트리거가 발동하지 않는 이유이기도 함). */}
+      {!action.blockedReason && action.hitSubstitute && (
+        <div className="battle-turn-line is-muted">
+          {action.substituteBroke ? "대타는 사라졌다!" : "대타가 대신 맞았다!"}
+        </div>
+      )}
+      {/* 변화기 등이 대타에 통째로 막혀 본체에 아무것도 못 했을 때
+          (데미지 자체가 없어 hitSubstitute가 안 뜸) — 소리 기술 제외. */}
+      {!action.blockedReason && action.blockedBySubstituteMoveName && (
+        <div className="battle-turn-line is-muted">
+          {actorName}의 {action.blockedBySubstituteMoveName}
+          {eunNeun(action.blockedBySubstituteMoveName)} 실패했다!
+        </div>
+      )}
+      {/* 가루/포자 기술을 풀타입 상대에게 썼을 때 */}
+      {!action.blockedReason && action.powderBlockedMoveName && (
+        <div className="battle-turn-line is-muted">
+          {defenderName}
+          {eunNeun(defenderName)} 풀타입이라 {action.powderBlockedMoveName}
+          {eunNeun(action.powderBlockedMoveName)} 통하지 않는다!
+        </div>
+      )}
+      {/* 탈(Disguise) — 데미지를 통째로 무효화하고 그 반동으로 벗겨지며 데미지를 입는다.
+          다단히트 나머지 타수는 이 필드 없이 정상적으로 데미지가 들어간다(첫 타만 무효화). */}
+      {!action.blockedReason && action.hitNegatedByAbilityName && (
+        <div className="battle-turn-line is-muted">
+          {defenderName}의 {action.hitNegatedByAbilityName}! {defenderName}의 정체가 드러났다!{" "}
+          {defenderName}
+          {eunNeun(defenderName)} 반동으로 {action.disguiseRecoilDamage} 데미지를 입었다!
+        </div>
+      )}
+      {/* 일루전(§6-1) — 기술 데미지를 받는 순간 위장이 풀린다 */}
+      {action.illusionBrokenSpeciesId && (
+        <div className="battle-turn-line is-muted">
+          {getPokemon(action.illusionBrokenSpeciesId)?.name ?? "포켓몬"}의 일루전이 풀렸다!
+        </div>
+      )}
+      {/* 흑안개 — 자신/상대 구분 없이 양쪽 다 초기화되는 유일한 랭크변화 효과라 전용 문구로 알려준다 */}
+      {!action.blockedReason && action.resetAllStages && (
+        <div className="battle-turn-line is-muted">양쪽의 능력 변화가 전부 원래대로 돌아갔다!</div>
+      )}
+      {/* 발버둥 반동은 상대 데미지와 별개의 수치라 자기 줄로 분리 */}
+      {!action.blockedReason && action.move.id === STRUGGLE_MOVE.id && action.selfDamage > 0 && (
+        <div className="battle-turn-line is-muted">
+          {actorName}
+          {eunNeun(actorName)} 반동으로 {action.selfDamage} 데미지를 입었다
+        </div>
+      )}
+      {/* 플레어드라이브·웨이브태클 등 recoilFraction 기술의 반동. 발버둥과 계산 기준이
+          달라 별도 필드(recoilDamage)로 표시한다 */}
+      {!action.blockedReason && action.recoilDamage > 0 && (
+        <div className="battle-turn-line is-muted">
+          {actorName}
+          {eunNeun(actorName)} 반동으로 {action.recoilDamage} 데미지를 입었다
+        </div>
+      )}
+      {/* 생명의구슬처럼 도구가 주는 반동 — 데미지 기준 반동(recoilDamage)과 달리
+          최대 HP 비율 고정이라 별도 필드(itemRecoilDamage)로 표시한다 */}
+      {!action.blockedReason && !!action.itemRecoilDamage && (
+        <div className="battle-turn-line is-muted">
+          {actorName}
+          {eunNeun(actorName)} {action.itemRecoilItemName}의 반동으로 {action.itemRecoilDamage} 데미지를 입었다
+        </div>
+      )}
+      {/* E-2 무릎차기 반동 (빗나감·방어류·타입면역) */}
+      {!!action.crashDamage && (
+        <div className="battle-turn-line is-muted">
+          {actorName}
+          {eunNeun(actorName)} 의욕이 넘쳐 땅에 부딪혔다!
+        </div>
+      )}
+      {/* E-3 철제광선 등 "사용하는 순간" 자해 */}
+      {!!action.selfDamageOnUse && (
+        <div className="battle-turn-line is-muted">
+          {actorName}
+          {eunNeun(actorName)} {action.move.name}의 반동으로 {action.selfDamageOnUse} 데미지를 입었다
+        </div>
+      )}
+      {/* F-1 미러코트 반격 / 실패 */}
+      {!action.blockedReason && !!action.counterDamage && (
+        <div className="battle-turn-line is-muted">
+          {actorName}
+          {eunNeun(actorName)} 받은 데미지를 그대로 되돌려줬다! ({action.counterDamage} 데미지)
+        </div>
+      )}
+      {!action.blockedReason && action.counterFailed && (
+        <div className="battle-turn-line is-muted">{actorName}의 {action.move.name} - 그러나 실패했다!</div>
+      )}
+      {/* F-4 멸망의노래 */}
+      {!action.blockedReason && action.perishSongStarted && (
+        <div className="battle-turn-line is-muted">
+          노래를 들은 모두가 3턴 후에 쓰러진다!
+        </div>
+      )}
+      {!action.blockedReason && action.perishSongFailed && (
+        <div className="battle-turn-line is-muted">{actorName}의 {action.move.name} - 그러나 실패했다!</div>
+      )}
+      {/* E-1 떨어뜨리기 등 상대 차징 캔슬 */}
+      {!action.blockedReason && action.canceledTargetChargeMoveName && (
+        <div className="battle-turn-line is-muted">
+          {defenderName}
+          {eunNeun(defenderName)} 땅으로 떨어져 {action.canceledTargetChargeMoveName}
+          {iGa(action.canceledTargetChargeMoveName)} 캔슬됐다!
+        </div>
+      )}
+      {/* E-4 미러아머 — 능력 다운 효과 반사 */}
+      {!action.blockedReason && action.reflectedStatDropAbilityName && action.reflectedStatDrops && (
+        <>
+          <div className="battle-turn-line is-muted">
+            {defenderName}의 {action.reflectedStatDropAbilityName}! 능력을 떨어뜨리는 효과를 되받아쳤다!
+          </div>
+          {(() => {
+            const byDelta = new Map<number, string[]>();
+            for (const d of action.reflectedStatDrops) {
+              const labels = byDelta.get(d.delta) ?? [];
+              labels.push(STAT_LABELS[d.stat]);
+              byDelta.set(d.delta, labels);
+            }
+            return [...byDelta.entries()].map(([delta, labels]) => {
+              const joined = labels.join(", ");
+              return (
+                <div key={`refl-${delta}`} className="battle-turn-line is-muted">
+                  {actorName}의 {joined}
+                  {iGa(joined)} {stageRiseAdverb(delta)}떨어졌다!
+                </div>
+              );
+            });
+          })()}
+        </>
+      )}
+      {/* 나무열매(카리열매 등)로 이번 피격 데미지가 반감됐으면 알려준다 */}
+      {!action.blockedReason && action.berryReducedDamageItemName && (
+        <div className="battle-turn-line is-muted">
+          {defenderName}의 {action.berryReducedDamageItemName}
+          {roEuro(action.berryReducedDamageItemName)} 데미지가 절반으로 줄었다!
+        </div>
+      )}
+      {/* 조개껍질방울 — 흡수기(drainHealAmount)와 별개 축이라 따로 표시 */}
+      {!action.blockedReason && !!action.shellBellHealAmount && (
+        <div className="battle-turn-line is-muted">
+          {actorName}의 조개껍질방울로 체력을 {action.shellBellHealAmount} 회복했다!
+        </div>
+      )}
+      {/* 과사열매 — PP 0이 된 기술을 즉시 복구 */}
+      {!action.blockedReason && action.leppaRestoredPpItemName && (
+        <div className="battle-turn-line is-muted">
+          {actorName}의 {action.leppaRestoredPpItemName}
+          {roEuro(action.leppaRestoredPpItemName)} {action.move.name}의 PP를 회복시켰다!
+        </div>
+      )}
+      {/* 상태이상/혼란 즉시치료 나무열매 — curedStatus 문구와 별개로 "어떤 도구가 발동했는지"만 알려준다 */}
+      {!action.blockedReason && action.statusCureBerryItemName && (
+        <div className="battle-turn-line is-muted">
+          {action.statusCureBerryItemName}
+          {iGa(action.statusCureBerryItemName)} 발동했다!
+        </div>
+      )}
+      {/* 자뭉열매/오랭열매 — 공격자/방어자 중 발동한 쪽만 표시 */}
+      {!action.blockedReason && !!action.attackerBerryHealAmount && (
+        <div className="battle-turn-line is-muted">
+          {actorName}의 {action.attackerBerryHealItemName}
+          {roEuro(action.attackerBerryHealItemName ?? "")} 체력을 {action.attackerBerryHealAmount} 회복했다!
+        </div>
+      )}
+      {!action.blockedReason && !!action.defenderBerryHealAmount && (
+        <div className="battle-turn-line is-muted">
+          {defenderName}의 {action.defenderBerryHealItemName}
+          {roEuro(action.defenderBerryHealItemName ?? "")} 체력을 {action.defenderBerryHealAmount} 회복했다!
+        </div>
+      )}
+      {/* 기합의띠·기합의머리띠 — 기절할 데미지를 버티고 HP 1로 남았을 때 */}
+      {!action.blockedReason && action.enduredItemName && (
+        <div className="battle-turn-line is-muted">
+          {defenderName}
+          {eunNeun(defenderName)} {action.enduredItemName}
+          {roEuro(action.enduredItemName)} 버텼다! (HP 1)
+        </div>
+      )}
+      {/* 옹골참 — 기합의띠와 같은 문구지만 도구가 아니라 특성이 버텨줬을 때 */}
+      {!action.blockedReason && action.enduredAbilityName && (
+        <div className="battle-turn-line is-muted">
+          {defenderName}
+          {eunNeun(defenderName)} {action.enduredAbilityName}
+          {roEuro(action.enduredAbilityName)} 버텼다! (HP 1)
+        </div>
+      )}
+      {/* 버티기 — 기합의띠/옹골참과 같은 문구지만 방어류 기술이 버텨줬을 때 */}
+      {!action.blockedReason && action.enduredProtectMoveName && (
+        <div className="battle-turn-line is-muted">
+          {defenderName}
+          {eunNeun(defenderName)} {action.enduredProtectMoveName}
+          {roEuro(action.enduredProtectMoveName)} 버텼다! (HP 1)
+        </div>
+      )}
+      {/* 랭크업 기술 결과 — "OO의 공격이 크게 올라갔다!". 같은 폭으로 오른 스탯은 쉼표로
+          묶어 한 줄로 낸다(Phase 6.5 §6-2 ⑥⑦, §6-3). */}
+      {!action.blockedReason &&
+        action.selfStatRises &&
+        action.selfStatRises.length > 0 &&
+        (() => {
+          const byDelta = new Map<number, string[]>();
+          for (const r of action.selfStatRises) {
+            const labels = byDelta.get(r.delta) ?? [];
+            labels.push(STAT_LABELS[r.stat]);
+            byDelta.set(r.delta, labels);
+          }
+          return [...byDelta.entries()].map(([delta, labels]) => {
+            const joined = labels.join(", ");
+            return (
+              <div key={`rise-${delta}`} className="battle-turn-line is-muted">
+                {actorName}의 {joined}
+                {iGa(joined)} {stageRiseAdverb(delta)}올라갔다!
+              </div>
+            );
+          });
+        })()}
+      {/* 랭크업 상한 — 이미 +6이라 한 칸도 못 올랐을 때 */}
+      {!action.blockedReason && action.selfStatsAtMax && action.selfStatsAtMax.length > 0 && (
+        <div className="battle-turn-line is-muted">
+          {actorName}의{" "}
+          {action.selfStatsAtMax.map((s) => STAT_LABELS[s]).join(", ")}
+          {eunNeun(action.selfStatsAtMax.map((s) => STAT_LABELS[s]).join(", "))} 더 이상 올라가지
+          않는다!
+        </div>
+      )}
+      {/* C-6 랭크다운 기술 결과 — "OO의 X가 (크게) 떨어졌다!". selfStatRises와 대칭.
+          매직미러 반사면 시전자(actor) 자신에게 적용된 것 */}
+      {!action.blockedReason &&
+        action.opponentStatDrops &&
+        action.opponentStatDrops.length > 0 &&
+        (() => {
+          const subject = action.bouncedMoveName ? actorName : defenderName;
+          const byDelta = new Map<number, string[]>();
+          for (const d of action.opponentStatDrops) {
+            const labels = byDelta.get(d.delta) ?? [];
+            labels.push(STAT_LABELS[d.stat]);
+            byDelta.set(d.delta, labels);
+          }
+          return [...byDelta.entries()].map(([delta, labels]) => {
+            const joined = labels.join(", ");
+            return (
+              <div key={`drop-${delta}`} className="battle-turn-line is-muted">
+                {subject}의 {joined}
+                {iGa(joined)} {stageRiseAdverb(delta)}떨어졌다!
+              </div>
+            );
+          });
+        })()}
+      {/* §4-6 골드러시·오버히트·용성군 등 — 자기 대상 확정 랭크 하락 부가효과.
+          opponentStatDrops와 같은 렌더 패턴, 주어만 항상 actorName. */}
+      {!action.blockedReason &&
+        action.selfStatDrops &&
+        action.selfStatDrops.length > 0 &&
+        (() => {
+          const byDelta = new Map<number, string[]>();
+          for (const d of action.selfStatDrops) {
+            const labels = byDelta.get(d.delta) ?? [];
+            labels.push(STAT_LABELS[d.stat]);
+            byDelta.set(d.delta, labels);
+          }
+          return [...byDelta.entries()].map(([delta, labels]) => {
+            const joined = labels.join(", ");
+            return (
+              <div key={`self-drop-${delta}`} className="battle-turn-line is-muted">
+                {actorName}의 {joined}
+                {iGa(joined)} {stageRiseAdverb(delta)}떨어졌다!
+              </div>
+            );
+          });
+        })()}
+      {/* G: 방어/판별/킹실드 — "방어태세 돌입" → 상대가 자신을 겨냥했으면 "몸을 지켰다",
+          아니면 "실패". 버티기/길동무는 별도 문구 축을 유지한다. */}
+      {!action.blockedReason && action.protectStanceEntered && (
+        <div className="battle-turn-line is-muted">
+          {actorName}
+          {eunNeun(actorName)} 방어태세에 들어갔다!
+        </div>
+      )}
+      {!action.blockedReason && action.protectStanceEntered && action.protectSucceeded && (
+        <div className="battle-turn-line is-muted">
+          {actorName}
+          {eunNeun(actorName)} 공격으로부터 몸을 지켜냈다!
+        </div>
+      )}
+      {!action.blockedReason && action.protectStanceEntered && action.protectFailed && (
+        <div className="battle-turn-line is-muted">{actorName}의 방어는 실패했다!</div>
+      )}
+      {!action.blockedReason &&
+        !action.protectStanceEntered &&
+        action.protectSucceeded &&
+        action.move.protectEffect !== "destinyBond" && (
+          <div className="battle-turn-line is-muted">
+            {actorName}
+            {eunNeun(actorName)} {action.move.name}로 몸을 지켰다!
+          </div>
+        )}
+      {!action.blockedReason && action.protectSucceeded && action.move.protectEffect === "destinyBond" && (
+        <div className="battle-turn-line is-muted">
+          {actorName}는 상대를 길동무로 삼으려 한다!
+        </div>
+      )}
+      {!action.blockedReason && !action.protectStanceEntered && action.protectFailed && (
+        <div className="battle-turn-line is-muted">
+          {actorName}의 {action.move.name}{eunNeun(action.move.name)} 실패했다!
+        </div>
+      )}
+      {/* 공격이 상대의 방어류 기술에 완전히 막혔을 때 — 이 행동(공격측)의 로그에 표시 */}
+      {!action.blockedReason && action.blockedByProtectMoveName && (
+        <div className="battle-turn-line is-muted">
+          {defenderName}의 {action.blockedByProtectMoveName}
+          {roEuro(action.blockedByProtectMoveName)} 막혔다!
+        </div>
+      )}
+      {/* 킹실드 — 접촉기를 막아내 공격측의 공격이 떨어졌을 때 */}
+      {!action.blockedReason &&
+        action.protectContactPenaltyMoveName &&
+        !action.protectContactDamage && (
+          <div className="battle-turn-line is-muted">
+            {actorName}
+            {eunNeun(actorName)} 접촉한 반동으로 공격이 떨어졌다!
+          </div>
+        )}
+      {/* 니들가드 — 접촉기를 막아내 공격측이 가시에 데미지를 입었을 때 */}
+      {!action.blockedReason && !!action.protectContactDamage && (
+        <div className="battle-turn-line is-muted">
+          {actorName}
+          {eunNeun(actorName)} {action.protectContactPenaltyMoveName}의 가시에 부딪혀{" "}
+          {action.protectContactDamage} 데미지를 입었다!
+        </div>
+      )}
+      {/* 하양허브 — 자신/상대 어느 쪽에서 발동했는지 따로 표시 */}
+      {!action.blockedReason && action.restoredStatsSelfItemName && (
+        <div className="battle-turn-line is-muted">
+          {actorName}의 {action.restoredStatsSelfItemName}
+          {roEuro(action.restoredStatsSelfItemName)} 떨어진 능력을 원래대로 되돌렸다!
+        </div>
+      )}
+      {!action.blockedReason && action.restoredStatsOpponentItemName && (
+        <div className="battle-turn-line is-muted">
+          {defenderName}의 {action.restoredStatsOpponentItemName}
+          {roEuro(action.restoredStatsOpponentItemName)} 떨어진 능력을 원래대로 되돌렸다!
+        </div>
+      )}
+      {/* 상대가 쓰러졌는지 여부 — 데미지 수치와 분리된 별도 상태 줄 */}
+      {!action.blockedReason && action.fainted && (
+        <div className="battle-turn-line is-fainted">
+          {defenderName}
+          {eunNeun(defenderName)} 쓰러졌다
+        </div>
+      )}
+      {/* D-2 길동무 — "삼았다!" 한 줄 + "쓰러졌다" 한 줄로 분리 */}
+      {action.selfFainted && action.triggeredDestinyBond && (
+        <>
+          <div className="battle-turn-line is-muted">
+            {defenderName}
+            {eunNeun(defenderName)} {actorName}
+            {eulReul(actorName)} 길동무로 삼았다!
+          </div>
+          <div className="battle-turn-line is-fainted">
+            {actorName}
+            {eunNeun(actorName)} 쓰러졌다
+          </div>
+        </>
+      )}
+      {/* 자신이 쓰러졌는지 여부(자폭류·발버둥 반동·혼란 자멸) — 원인을 그대로 붙인다 */}
+      {action.selfFainted && !action.triggeredDestinyBond && (
+        <div className="battle-turn-line is-fainted">
+          {actorName}
+          {eunNeun(actorName)}{" "}
+          {action.blockedReason === "confusion"
+            ? "혼란으로 인한 데미지"
+            : `${action.move.name}의 여파`}
+          로 쓰러졌다
+        </div>
+      )}
+    </>
+  );
+}
+/**
  * 턴별 배틀 로그(실시간 배틀판·HP게이지·조작 UI에서 분리된, 텍스트 중심 히스토리) — 실시간
  * 대전(BattleLogPage)과 저장된 배틀비디오 다시보기(§6)가 그대로 공유한다. log 배열 하나만
  * 있으면 완전히 렌더 가능해 배틀비디오 저장에도 이 log만 그대로 남기면 된다.
@@ -944,842 +1800,8 @@ export function BattleTurnLog({ log }: { log: TurnResult[] }) {
                         headDamage={headDamage}
                         headDamagePercent={headDamagePercent}
                       />
-                      {/* §2-4: 변환자재/리베로 타입 변경 — 데미지 줄 인라인에서 분리해 2줄로 */}
-                      {!action.blockedReason && action.changedOwnTypeTo && (
-                        <>
-                          <div className="battle-turn-line is-muted">
-                            {actorName}의 {action.changedOwnTypeAbilityName}!
-                          </div>
-                          <div className="battle-turn-line is-muted">
-                            {actorName}
-                            {eunNeun(actorName)} {action.changedOwnTypeTo}타입이 되었다!
-                          </div>
-                        </>
-                      )}
-                      {/* PR-C1: 전광쌍격 — 사용 후 자기 타입 소실(빗나가도 표시) */}
-                      {!action.blockedReason && action.lostTypeAfterUse && (
-                        <div className="battle-turn-line is-muted">
-                          {actorName}
-                          {eunNeun(actorName)} {action.lostTypeAfterUse}타입이 사라졌다!
-                        </div>
-                      )}
-                      {/* PR-C1: 대검돌격 — 사용 후 피격 필중·피해 2배 상태 */}
-                      {!action.blockedReason && action.glaiveRushArmed && (
-                        <div className="battle-turn-line is-muted">
-                          {actorName}
-                          {eunNeun(actorName)} 무방비 상태가 되었다!
-                        </div>
-                      )}
-                      {/* PR-C1: 코트체인지 — 양쪽 진영 설치물·스크린 교체 */}
-                      {!action.blockedReason && action.hit && action.courtChangeDone && (
-                        <div className="battle-turn-line is-muted">서로의 필드 효과를 뒤바꿨다!</div>
-                      )}
-                      {/* PR-C1: 회생의기도 — 교대 포켓몬 부활 / 대상 없음 */}
-                      {!action.blockedReason && action.hit && action.revivedPartyName && (
-                        <div className="battle-turn-line is-muted">
-                          {action.revivedPartyName}의 기운을 되찾아주었다!
-                        </div>
-                      )}
-                      {!action.blockedReason && action.hit && action.reviveFailed && (
-                        <div className="battle-turn-line is-muted">그러나 실패했다!</div>
-                      )}
-                      {/* PR-C1b: 문어굳히기 / 물고버티기 — 도망봉인 */}
-                      {!action.blockedReason && action.hit && action.octolockApplied && (
-                        <div className="battle-turn-line is-muted">
-                          {defenderName}
-                          {eunNeun(defenderName)} 문어굳히기에 붙잡혀 도망칠 수 없다!
-                        </div>
-                      )}
-                      {!action.blockedReason && action.hit && action.jawLockApplied && (
-                        <div className="battle-turn-line is-muted">
-                          {actorName}와(과) {defenderName}
-                          {eunNeun(defenderName)} 서로 물고 늘어져 교체할 수 없다!
-                        </div>
-                      )}
-                      {/* PR-C2b: 위기회피 — 피격으로 HP 절반 이하 → 퇴장 (실제 교체는 pendingPivot 패널) */}
-                      {!action.blockedReason && action.hit && action.triggersDefenderEmergencyExit && (
-                        <div className="battle-turn-line is-muted">
-                          {defenderName}의 {action.emergencyExitAbilityName ?? "위기회피"}!
-                        </div>
-                      )}
-                      {/* C-5 명중 빗나감 — 메인 줄은 "OO의 기합구슬 — !"로 끝내고 여기서 별도 줄 */}
-                      {!action.blockedReason && !action.charging && !action.evadedByCharge && !action.hit && (
-                        <div className="battle-turn-line is-muted">
-                          {defenderName}
-                          {eunNeun(defenderName)} 맞지 않았다!
-                        </div>
-                      )}
-                      {/* §2-5: 연타(멀티히트) — 1타 몫은 위 데미지 줄이 이미 찍었고, 여기서 1타 급소·
-                          1타 방어측 특성 반응 → 2타부터 "타별 데미지 줄(+급소+특성 반응)" → 마지막에
-                          "N번 맞았다!". 변환자재 2줄은 위 §2-4 블록이 1타 직후에 이미 찍는다. */}
-                      {!action.blockedReason && action.hits && action.hits.length > 0 && (
-                        <MultiHitLines
-                          hits={action.hits}
-                          moveName={action.move.name}
-                          hitCount={action.hitCount}
-                          actorName={actorName}
-                          defenderName={defenderName}
-                        />
-                      )}
-                      {/* C-4 급소 — 데미지 줄 인라인에서 분리 (다단히트는 "(급소 포함)" 인라인 유지) */}
-                      {!action.blockedReason && action.hit && action.critical && action.hitCount === undefined && action.damage > 0 && (
-                        <div className="battle-turn-line is-muted">급소에 맞았다!</div>
-                      )}
-                      {/* C-1~C-3 타입 상성 문구 — 데미지 기술이 명중했을 때만 */}
-                      {!action.blockedReason &&
-                        action.hit &&
-                        !action.charging &&
-                        action.move.category !== "status" &&
-                        (action.move.power !== null || action.move.fixedDamage !== undefined) && (
-                          <>
-                            {action.typeEffectiveness === 0 && (
-                              <div className="battle-turn-line is-muted">
-                                상대 {defenderName}에게는 효과가 없는 듯하다...
-                              </div>
-                            )}
-                            {action.typeEffectiveness >= 2 && (
-                              <div className="battle-turn-line is-muted">효과가 굉장했다!</div>
-                            )}
-                            {action.typeEffectiveness > 0 && action.typeEffectiveness <= 0.5 && (
-                              <div className="battle-turn-line is-muted">효과가 별로인 듯하다...</div>
-                            )}
-                          </>
-                        )}
-                      {/* 마비/잠듦/얼음으로 이번 턴 행동이 막혔으면(단순 "상태이상으로 행동 불가"가
-                          아니라) 매턴 효과가 발동한 것과 같은 의미라 트리거 문구를 그대로 쓴다 */}
-                      {action.blockedReason === "status" && action.blockedByStatus && (
-                        <div className="battle-turn-line is-muted">
-                          {STATUS_TRIGGER_TEXT[action.blockedByStatus](actorName)}
-                        </div>
-                      )}
-                      {/* 속이기(첫 턴 전용)처럼 사용 조건을 못 채워 실패했을 때 — 메인 줄은
-                          "OO의 속이기!"로만 끝내고, 실패 여부는 이 별도 줄로 알려준다 */}
-                      {action.blockedReason === "usageCondition" && (
-                        <div className="battle-turn-line is-muted">
-                          {actorName}의 {action.move.name}{eunNeun(action.move.name)} 실패했다!
-                        </div>
-                      )}
-                      {/* 도발/사슬묶기/앙코르로 이번 선택 자체가 막혔을 때 — 어떤 제약 때문인지 구분해서 보여준다 */}
-                      {action.blockedReason === "moveRestricted" && (
-                        <div className="battle-turn-line is-muted">
-                          {action.moveRestrictionKind === "taunt" &&
-                            `${actorName}${eunNeun(actorName)} 도발에 걸려 변화기를 쓸 수 없다!`}
-                          {action.moveRestrictionKind === "disable" &&
-                            `${actorName}의 ${action.move.name}${eunNeun(action.move.name)} 사슬묶기에 봉인돼있다!`}
-                          {action.moveRestrictionKind === "encore" &&
-                            `${actorName}${eunNeun(actorName)} 앙코르 때문에 이 기술을 쓸 수 없다!`}
-                        </div>
-                      )}
-                      {/* 상태이상에 새로 걸렸을 때(onset) — 보통 상대가 대상이지만, 매직미러로 되돌아온
-                          경우(bouncedMoveName)엔 시전자(actor) 자신에게 걸린 것이다 */}
-                      {!action.blockedReason && action.hit && action.inflictedStatus && (
-                        <div className="battle-turn-line is-muted">
-                          {STATUS_ONSET_TEXT[action.inflictedStatus](
-                            action.bouncedMoveName ? actorName : defenderName,
-                          )}
-                        </div>
-                      )}
-                      {/* C-8 이미 걸린 상태이상에 상태이상 전용기를 다시 써서 아무 변화가 없었을 때 */}
-                      {!action.blockedReason && action.hit && action.statusInflictFailed && (
-                        <div className="battle-turn-line is-muted">
-                          {actorName}의 {action.move.name} - 그러나 실패했다!
-                        </div>
-                      )}
-                      {/* 앙코르 성공 — 사용/받은 쪽을 두 줄로 나눈다(백로그 §7-3) */}
-                      {!action.blockedReason && action.hit && action.inflictedVolatile === "encore" && (
-                        <div className="battle-turn-line is-muted">
-                          {action.bouncedMoveName ? (
-                            <>
-                              {actorName}의 앙코르!<br />
-                              {actorName}
-                              {eunNeun(actorName)} 앙코르를 받았다!
-                            </>
-                          ) : (
-                            <>
-                              {actorName}의 앙코르!<br />
-                              {defenderName}
-                              {eunNeun(defenderName)} 앙코르를 받았다!
-                            </>
-                          )}
-                        </div>
-                      )}
-                      {/* 하품(졸음) 유도 — 실제로 잠드는 건 2턴 뒤라 onset 문구와 다르게 "유도했다"로 표현 */}
-                      {!action.blockedReason && action.hit && action.inflictedVolatile === "drowsy" && (
-                        <div className="battle-turn-line is-muted">
-                          {action.bouncedMoveName
-                            ? `${actorName}의 졸음을 유도했다!`
-                            : `상대 ${defenderName}의 졸음을 유도했다!`}
-                        </div>
-                      )}
-                      {/* 상태이상이 나았을 때(cure) — curedStatusTarget으로 자신/상대 구분 */}
-                      {!action.blockedReason && action.hit && action.curedStatus && (
-                        <div className="battle-turn-line is-muted">
-                          {STATUS_CURE_TEXT[action.curedStatus](
-                            action.curedStatusTarget === "self" ? actorName : defenderName,
-                          )}
-                        </div>
-                      )}
-                      {/* 방어측 접촉/피격 트리거 특성(정전기·불꽃몸=상태이상, 까칠한피부=고정 데미지,
-                          저주받은바디=PP 봉인) — 전부 defenderName의 특성이 actorName(공격자)에게 발동한다.
-                          다단히트(action.hits)면 §2-5 블록이 타별로 찍으므로 아래 집계 줄은 건너뛴다. */}
-                      {!action.blockedReason && !action.hits && action.abilityInflictedStatusOnAttacker && (
-                        <div className="battle-turn-line is-muted">
-                          {abilityStatusLine(
-                            action.abilityInflictedStatusAbilityName,
-                            action.abilityInflictedStatusOnAttacker,
-                            actorName,
-                            defenderName,
-                          )}
-                        </div>
-                      )}
-                      {/* 헤롱헤롱바디 — 접촉해 온 공격자가 이성이면 방어측 특성이 발동해 공격자에게 걸린다 */}
-                      {!action.blockedReason && !action.hits && action.abilityInflictedVolatileOnAttacker && (
-                        <div className="battle-turn-line is-muted">
-                          {abilityVolatileLine(
-                            action.abilityInflictedVolatileAbilityName,
-                            action.abilityInflictedVolatileOnAttacker,
-                            actorName,
-                            defenderName,
-                          )}
-                        </div>
-                      )}
-                      {!action.blockedReason && !action.hits && !!action.abilityDamageToAttacker && (
-                        <div className="battle-turn-line is-muted">
-                          {abilityDamageLine(
-                            action.abilityDamageAbilityName,
-                            action.abilityDamageToAttacker,
-                            actorName,
-                            defenderName,
-                          )}
-                        </div>
-                      )}
-                      {/* PR-C4a: 울퉁불퉁멧 — 접촉기 공격자 반동(다단히트 합산이라 hits 무관 표시) */}
-                      {!action.blockedReason && !!action.rockyHelmetDamage && (
-                        <div className="battle-turn-line is-muted">
-                          {defenderName}의 {action.rockyHelmetItemName}! {actorName}
-                          {eunNeun(actorName)} {action.rockyHelmetDamage} 데미지를 입었다!
-                        </div>
-                      )}
-                      {/* PR-C4a: 노말주얼 등 타입 젬 — 소모되며 위력 상승 */}
-                      {!action.blockedReason && action.ateGemItemName && (
-                        <div className="battle-turn-line is-muted">
-                          {actorName}의 {action.ateGemItemName}
-                          {eunNeun(action.ateGemItemName)} 발동해 위력이 올랐다!
-                        </div>
-                      )}
-                      {/* PR-C4a: 풍선 — 피격으로 터짐 */}
-                      {!action.blockedReason && action.hit && action.balloonPoppedItemName && (
-                        <div className="battle-turn-line is-muted">
-                          {defenderName}의 {action.balloonPoppedItemName}
-                          {eunNeun(action.balloonPoppedItemName)} 터졌다!
-                        </div>
-                      )}
-                      {!action.blockedReason && !action.hits && action.abilityDisabledMoveName && (
-                        <div className="battle-turn-line is-muted">
-                          {abilityDisabledMoveLine(
-                            action.abilityDisableAbilityName,
-                            action.abilityDisabledMoveName,
-                            actorName,
-                            defenderName,
-                          )}
-                        </div>
-                      )}
-                      {/* 나쁜손버릇 — 접촉기로 피격당한 방어측이 공격자의 도구를 빼앗았을 때 */}
-                      {!action.blockedReason && !action.hits && action.pickpocketStolenItemName && (
-                        <div className="battle-turn-line is-muted">
-                          {abilityPickpocketLine(
-                            action.pickpocketAbilityName,
-                            action.pickpocketStolenItemName,
-                            actorName,
-                            defenderName,
-                          )}
-                        </div>
-                      )}
-                      {/* 지구력·깨어진갑옷 등 — 피격 시 방어측 특성이 자기 랭크를 바꿨을 때
-                          (Phase 6.5 §6-2 ③ / §6-1). 깨어진갑옷은 방어↓·스피드↑가 같이 오므로 줄을 나눠 낸다.
-                          내림 줄에서 특성 이름을 한 번 알리고, 오름 줄은 이름 없이 결과만. */}
-                      {!action.blockedReason &&
-                        !action.hits &&
-                        ((action.abilityLoweredDefenderStats?.length ?? 0) > 0 ||
-                          (action.abilityRaisedDefenderStats?.length ?? 0) > 0) &&
-                        (() => {
-                          const { lowered, raised } = abilityDefenderStatsLines(
-                            action.abilityRaisedDefenderStatsAbilityName,
-                            action.abilityLoweredDefenderStats ?? [],
-                            action.abilityRaisedDefenderStats ?? [],
-                            defenderName,
-                          );
-                          return (
-                            <>
-                              {lowered && <div className="battle-turn-line is-muted">{lowered}</div>}
-                              {raised && <div className="battle-turn-line is-muted">{raised}</div>}
-                            </>
-                          );
-                        })()}
-                      {/* 타오르는불꽃/피뢰침 — 해당 타입 기술을 통째로 무효화(데미지는 이미 0으로
-                          찍혀있어 별도 표시가 없으면 "그냥 약해서 0"인지 구분이 안 되니 전용 문구로 알려준다) */}
-                      {!action.blockedReason && action.abilityAbsorbedMoveType && (
-                        <div className="battle-turn-line is-muted">
-                          {defenderName}의 {action.abilityAbsorbAbilityName}! {typeLabel(action.abilityAbsorbedMoveType)}
-                          {eunNeun(typeLabel(action.abilityAbsorbedMoveType))} 전혀 효과가 없었다!
-                          {!!action.abilityAbsorbHealAmount && <> 체력을 {action.abilityAbsorbHealAmount} 회복했다!</>}
-                        </div>
-                      )}
-                      {/* 방음 — 소리 기술을 통째로 무효화 */}
-                      {!action.blockedReason && action.soundproofBlockedByAbilityName && (
-                        <div className="battle-turn-line is-muted">
-                          {defenderName}의 {action.soundproofBlockedByAbilityName}! 소리 기술은 통하지 않는다!
-                        </div>
-                      )}
-                      {/* 방탄 — 구슬·폭탄 기술을 통째로 무효화 */}
-                      {!action.blockedReason && action.bulletproofBlockedByAbilityName && (
-                        <div className="battle-turn-line is-muted">
-                          {defenderName}의 {action.bulletproofBlockedByAbilityName}! 구슬·폭탄 기술은 통하지 않는다!
-                        </div>
-                      )}
-                      {/* 황금몸 — 명중한 변화기의 효과를 통째로 무효화(§4-5). 빗나감(C-5)과 헷갈리지
-                          않도록 battleSimulator에서 hit까지 확인해서 내려준다 */}
-                      {!action.blockedReason && action.goodAsGoldBlockedByAbilityName && (
-                        <div className="battle-turn-line is-muted">
-                          {defenderName}의 {action.goodAsGoldBlockedByAbilityName}!
-                          <br />
-                          {defenderName}에게 효과가 없는 듯하다...
-                        </div>
-                      )}
-                      {/* 아로마베일 — 헤롱헤롱·도발·기술봉인·앙코르를 막았을 때 */}
-                      {!action.blockedReason && action.mentalMoveBlockedByAbilityName && (
-                        <div className="battle-turn-line is-muted">
-                          {defenderName}의 {action.mentalMoveBlockedByAbilityName}! 마음을 옭아매는 기술은 통하지 않는다!
-                        </div>
-                      )}
-                      {/* 미끈미끈·점착 — 접촉한 공격자의 랭크를 내렸을 때 */}
-                      {!action.blockedReason &&
-                        !action.hits &&
-                        action.abilityLoweredAttackerStatsAbilityName &&
-                        (action.abilityLoweredAttackerStats?.length ?? 0) > 0 &&
-                        (() => (
-                          <div className="battle-turn-line is-muted">
-                            {abilityLoweredAttackerStatsLine(
-                              action.abilityLoweredAttackerStatsAbilityName,
-                              action.abilityLoweredAttackerStats ?? [],
-                              actorName,
-                              defenderName,
-                            )}
-                          </div>
-                        ))()}
-                      {/* 뒤집어엎기 — 상대 능력 변화를 전부 반전 */}
-                      {!action.blockedReason && action.invertedTargetStages && (
-                        <div className="battle-turn-line is-muted">
-                          {defenderName}의 능력 변화가 모두 반대로 뒤집혔다!
-                        </div>
-                      )}
-                      {/* 숲의저주·핼러윈 — 상대에게 타입 추가 */}
-                      {!action.blockedReason && action.addedTypeToTarget && (
-                        <div className="battle-turn-line is-muted">
-                          {defenderName}
-                          {eunNeun(defenderName)} {typeLabel(action.addedTypeToTarget)} 타입이 추가되었다!
-                        </div>
-                      )}
-                      {/* 송전 — 이번 턴 상대 기술 타입 강제 */}
-                      {!action.blockedReason && action.targetMoveTypeOverride && (
-                        <div className="battle-turn-line is-muted">
-                          송전되었다! 이번 턴 {defenderName}의 기술은 {typeLabel(action.targetMoveTypeOverride)} 타입이 된다!
-                        </div>
-                      )}
-                      {/* 볼주머니 — 나무열매를 먹어 추가 회복 */}
-                      {!action.blockedReason && !!action.cheekPouchHeal && (
-                        <div className="battle-turn-line is-muted">
-                          볼주머니! 체력을 {action.cheekPouchHeal} 회복했다!
-                        </div>
-                      )}
-                      {/* 소울비트 — HP 소비 / HP 부족 실패 */}
-                      {!action.blockedReason && action.soulBeatFailed && (
-                        <div className="battle-turn-line is-muted">하지만 HP가 부족해 실패했다!</div>
-                      )}
-                      {!action.blockedReason && !!action.soulBeatHpCost && (
-                        <div className="battle-turn-line is-muted">
-                          {actorName}
-                          {eunNeun(actorName)} 혼을 실어 HP를 {action.soulBeatHpCost} 소비했다!
-                        </div>
-                      )}
-                      {/* 부리캐논 — 가열 중 접촉기로 맞아 공격자 화상 */}
-                      {!action.blockedReason && action.beakBlastBurnedAttacker && (
-                        <div className="battle-turn-line is-muted">
-                          가열된 부리에 데어 {actorName}
-                          {eunNeun(actorName)} 화상을 입었다!
-                        </div>
-                      )}
-                      {/* 토치카 — 접촉기를 막고 공격자를 독으로 */}
-                      {!action.blockedReason && action.protectContactInflictedStatus === "poison" && (
-                        <div className="battle-turn-line is-muted">
-                          {actorName}
-                          {eunNeun(actorName)} 토치카의 독에 당했다!
-                        </div>
-                      )}
-                      {/* 발끈 — HP 절반 이하가 되어 방어측 특수공격 상승 */}
-                      {!action.blockedReason && action.angerPointRaisedSpa && (
-                        <div className="battle-turn-line is-muted">
-                          {defenderName}의 {action.angerPointAbilityName}! {defenderName}의 특수공격이 올라갔다!
-                        </div>
-                      )}
-                      {/* 떠도는영혼 — 접촉 피격으로 공격자와 특성 교환 */}
-                      {!action.blockedReason && !action.hits && action.wanderingSpiritSwapped && (
-                        <div className="battle-turn-line is-muted">{wanderingSpiritLine(actorName, defenderName)}</div>
-                      )}
-                      {/* 모래뿜기 — 피격으로 날씨 변경 */}
-                      {!action.blockedReason && !action.hits && action.sandSpitWeather && (
-                        <div className="battle-turn-line is-muted">
-                          {sandSpitWeatherLine(action.sandSpitWeather, defenderName)}
-                        </div>
-                      )}
-                      {/* PR-C2: 넘치는씨 — 피격으로 그래스필드 설정 */}
-                      {!action.blockedReason && !action.hits && action.seedSowerField && (
-                        <div className="battle-turn-line is-muted">
-                          {setFieldOnHitLine("넘치는씨", action.seedSowerField, defenderName)}
-                        </div>
-                      )}
-                      {/* PR-C4b: 시드류 — 이번 행동으로 필드가 새로 깔려 발동 */}
-                      {!action.blockedReason &&
-                        action.terrainSeedMessages?.map((m, i) => (
-                          <div key={`seed-${i}`} className="battle-turn-line is-muted">
-                            {m}
-                          </div>
-                        ))}
-                      {/* PR-C2: 해감액 — 흡수기가 회복 대신 데미지 */}
-                      {!action.blockedReason && action.hit && !!action.liquidOozeDamage && (
-                        <div className="battle-turn-line is-muted">
-                          {defenderName}의 {action.liquidOozeAbilityName ?? "해감액"}! {actorName}
-                          {eunNeun(actorName)} 체력을 흡수해 오히려 {action.liquidOozeDamage} 데미지를 입었다!
-                        </div>
-                      )}
-                      {/* 마법가루 — 상대 타입을 단일 타입으로 치환 */}
-                      {!action.blockedReason && action.overwroteTargetType && (
-                        <div className="battle-turn-line is-muted">
-                          {defenderName}
-                          {eunNeun(defenderName)} {typeLabel(action.overwroteTargetType)} 타입이 되었다!
-                        </div>
-                      )}
-                      {/* 전기로바꾸기 — 충전 상태로 전기 기술 위력 2배 */}
-                      {!action.blockedReason && action.electromorphosisEmpoweredAbilityName && (
-                        <div className="battle-turn-line is-muted">
-                          {actorName}의 {action.electromorphosisEmpoweredAbilityName}! 충전한 전기의 힘이 실렸다!
-                        </div>
-                      )}
-                      {/* 변덕레이저 — 확률 발동으로 위력 2배 */}
-                      {!action.blockedReason && action.fickleBeamEmpowered && (
-                        <div className="battle-turn-line is-muted">
-                          {actorName}
-                          {eunNeun(actorName)} 전력을 다하기 시작했다!
-                        </div>
-                      )}
-                      {/* 편승 — 상대의 랭크 상승을 그대로 복사 */}
-                      {!action.blockedReason &&
-                        action.opportunistAbilityName &&
-                        (action.opportunistCopiedStats?.length ?? 0) > 0 &&
-                        (() => {
-                          const copied = action.opportunistCopiedStats ?? [];
-                          const joined = copied.map((s) => STAT_LABELS[s.stat]).join(", ");
-                          return (
-                            <div className="battle-turn-line is-muted">
-                              {action.opportunistAbilityName}! 상대의 능력 상승에 편승해서 {joined}
-                              {iGa(joined)} 올라갔다!
-                            </div>
-                          );
-                        })()}
-                      {/* 정리정돈 — 설치물·대타 정리 완료 */}
-                      {!action.blockedReason && action.tidyUpDone && (
-                        <div className="battle-turn-line is-muted">정리정돈 끝!</div>
-                      )}
-                      {/* 소금절이 — 상대를 소금절이 상태로 */}
-                      {!action.blockedReason && action.saltCureApplied && (
-                        <div className="battle-turn-line is-muted">
-                          {defenderName}
-                          {eunNeun(defenderName)} 소금에 절여졌다!
-                        </div>
-                      )}
-                      {/* 인분 — 데미지 기술의 추가효과(상태이상·풀죽음·랭크하락·왕의징표석 풀죽음)를
-                          무산시켰을 때. 실제로 무산된 게 있을 때만 채워진다 */}
-                      {!action.blockedReason && action.secondaryBlockedByAbilityName && (
-                        <div className="battle-turn-line is-muted">
-                          {defenderName}의 {action.secondaryBlockedByAbilityName}! 추가 효과를 받지 않는다!
-                        </div>
-                      )}
-                      {/* 대타출동 — 데미지 기술이 대타로 들어갔을 때. 깨졌는지 버텼는지에 따라 분기
-                          (접촉/특성 트리거가 발동하지 않는 이유이기도 함). */}
-                      {!action.blockedReason && action.hitSubstitute && (
-                        <div className="battle-turn-line is-muted">
-                          {action.substituteBroke ? "대타는 사라졌다!" : "대타가 대신 맞았다!"}
-                        </div>
-                      )}
-                      {/* 변화기 등이 대타에 통째로 막혀 본체에 아무것도 못 했을 때
-                          (데미지 자체가 없어 hitSubstitute가 안 뜸) — 소리 기술 제외. */}
-                      {!action.blockedReason && action.blockedBySubstituteMoveName && (
-                        <div className="battle-turn-line is-muted">
-                          {actorName}의 {action.blockedBySubstituteMoveName}
-                          {eunNeun(action.blockedBySubstituteMoveName)} 실패했다!
-                        </div>
-                      )}
-                      {/* 가루/포자 기술을 풀타입 상대에게 썼을 때 */}
-                      {!action.blockedReason && action.powderBlockedMoveName && (
-                        <div className="battle-turn-line is-muted">
-                          {defenderName}
-                          {eunNeun(defenderName)} 풀타입이라 {action.powderBlockedMoveName}
-                          {eunNeun(action.powderBlockedMoveName)} 통하지 않는다!
-                        </div>
-                      )}
-                      {/* 탈(Disguise) — 데미지를 통째로 무효화하고 그 반동으로 벗겨지며 데미지를 입는다.
-                          다단히트 나머지 타수는 이 필드 없이 정상적으로 데미지가 들어간다(첫 타만 무효화). */}
-                      {!action.blockedReason && action.hitNegatedByAbilityName && (
-                        <div className="battle-turn-line is-muted">
-                          {defenderName}의 {action.hitNegatedByAbilityName}! {defenderName}의 정체가 드러났다!{" "}
-                          {defenderName}
-                          {eunNeun(defenderName)} 반동으로 {action.disguiseRecoilDamage} 데미지를 입었다!
-                        </div>
-                      )}
-                      {/* 일루전(§6-1) — 기술 데미지를 받는 순간 위장이 풀린다 */}
-                      {action.illusionBrokenSpeciesId && (
-                        <div className="battle-turn-line is-muted">
-                          {getPokemon(action.illusionBrokenSpeciesId)?.name ?? "포켓몬"}의 일루전이 풀렸다!
-                        </div>
-                      )}
-                      {/* 흑안개 — 자신/상대 구분 없이 양쪽 다 초기화되는 유일한 랭크변화 효과라 전용 문구로 알려준다 */}
-                      {!action.blockedReason && action.resetAllStages && (
-                        <div className="battle-turn-line is-muted">양쪽의 능력 변화가 전부 원래대로 돌아갔다!</div>
-                      )}
-                      {/* 발버둥 반동은 상대 데미지와 별개의 수치라 자기 줄로 분리 */}
-                      {!action.blockedReason && action.move.id === STRUGGLE_MOVE.id && action.selfDamage > 0 && (
-                        <div className="battle-turn-line is-muted">
-                          {actorName}
-                          {eunNeun(actorName)} 반동으로 {action.selfDamage} 데미지를 입었다
-                        </div>
-                      )}
-                      {/* 플레어드라이브·웨이브태클 등 recoilFraction 기술의 반동. 발버둥과 계산 기준이
-                          달라 별도 필드(recoilDamage)로 표시한다 */}
-                      {!action.blockedReason && action.recoilDamage > 0 && (
-                        <div className="battle-turn-line is-muted">
-                          {actorName}
-                          {eunNeun(actorName)} 반동으로 {action.recoilDamage} 데미지를 입었다
-                        </div>
-                      )}
-                      {/* 생명의구슬처럼 도구가 주는 반동 — 데미지 기준 반동(recoilDamage)과 달리
-                          최대 HP 비율 고정이라 별도 필드(itemRecoilDamage)로 표시한다 */}
-                      {!action.blockedReason && !!action.itemRecoilDamage && (
-                        <div className="battle-turn-line is-muted">
-                          {actorName}
-                          {eunNeun(actorName)} {action.itemRecoilItemName}의 반동으로 {action.itemRecoilDamage} 데미지를 입었다
-                        </div>
-                      )}
-                      {/* E-2 무릎차기 반동 (빗나감·방어류·타입면역) */}
-                      {!!action.crashDamage && (
-                        <div className="battle-turn-line is-muted">
-                          {actorName}
-                          {eunNeun(actorName)} 의욕이 넘쳐 땅에 부딪혔다!
-                        </div>
-                      )}
-                      {/* E-3 철제광선 등 "사용하는 순간" 자해 */}
-                      {!!action.selfDamageOnUse && (
-                        <div className="battle-turn-line is-muted">
-                          {actorName}
-                          {eunNeun(actorName)} {action.move.name}의 반동으로 {action.selfDamageOnUse} 데미지를 입었다
-                        </div>
-                      )}
-                      {/* F-1 미러코트 반격 / 실패 */}
-                      {!action.blockedReason && !!action.counterDamage && (
-                        <div className="battle-turn-line is-muted">
-                          {actorName}
-                          {eunNeun(actorName)} 받은 데미지를 그대로 되돌려줬다! ({action.counterDamage} 데미지)
-                        </div>
-                      )}
-                      {!action.blockedReason && action.counterFailed && (
-                        <div className="battle-turn-line is-muted">{actorName}의 {action.move.name} - 그러나 실패했다!</div>
-                      )}
-                      {/* F-4 멸망의노래 */}
-                      {!action.blockedReason && action.perishSongStarted && (
-                        <div className="battle-turn-line is-muted">
-                          노래를 들은 모두가 3턴 후에 쓰러진다!
-                        </div>
-                      )}
-                      {!action.blockedReason && action.perishSongFailed && (
-                        <div className="battle-turn-line is-muted">{actorName}의 {action.move.name} - 그러나 실패했다!</div>
-                      )}
-                      {/* E-1 떨어뜨리기 등 상대 차징 캔슬 */}
-                      {!action.blockedReason && action.canceledTargetChargeMoveName && (
-                        <div className="battle-turn-line is-muted">
-                          {defenderName}
-                          {eunNeun(defenderName)} 땅으로 떨어져 {action.canceledTargetChargeMoveName}
-                          {iGa(action.canceledTargetChargeMoveName)} 캔슬됐다!
-                        </div>
-                      )}
-                      {/* E-4 미러아머 — 능력 다운 효과 반사 */}
-                      {!action.blockedReason && action.reflectedStatDropAbilityName && action.reflectedStatDrops && (
-                        <>
-                          <div className="battle-turn-line is-muted">
-                            {defenderName}의 {action.reflectedStatDropAbilityName}! 능력을 떨어뜨리는 효과를 되받아쳤다!
-                          </div>
-                          {(() => {
-                            const byDelta = new Map<number, string[]>();
-                            for (const d of action.reflectedStatDrops) {
-                              const labels = byDelta.get(d.delta) ?? [];
-                              labels.push(STAT_LABELS[d.stat]);
-                              byDelta.set(d.delta, labels);
-                            }
-                            return [...byDelta.entries()].map(([delta, labels]) => {
-                              const joined = labels.join(", ");
-                              return (
-                                <div key={`refl-${delta}`} className="battle-turn-line is-muted">
-                                  {actorName}의 {joined}
-                                  {iGa(joined)} {stageRiseAdverb(delta)}떨어졌다!
-                                </div>
-                              );
-                            });
-                          })()}
-                        </>
-                      )}
-                      {/* 나무열매(카리열매 등)로 이번 피격 데미지가 반감됐으면 알려준다 */}
-                      {!action.blockedReason && action.berryReducedDamageItemName && (
-                        <div className="battle-turn-line is-muted">
-                          {defenderName}의 {action.berryReducedDamageItemName}
-                          {roEuro(action.berryReducedDamageItemName)} 데미지가 절반으로 줄었다!
-                        </div>
-                      )}
-                      {/* 조개껍질방울 — 흡수기(drainHealAmount)와 별개 축이라 따로 표시 */}
-                      {!action.blockedReason && !!action.shellBellHealAmount && (
-                        <div className="battle-turn-line is-muted">
-                          {actorName}의 조개껍질방울로 체력을 {action.shellBellHealAmount} 회복했다!
-                        </div>
-                      )}
-                      {/* 과사열매 — PP 0이 된 기술을 즉시 복구 */}
-                      {!action.blockedReason && action.leppaRestoredPpItemName && (
-                        <div className="battle-turn-line is-muted">
-                          {actorName}의 {action.leppaRestoredPpItemName}
-                          {roEuro(action.leppaRestoredPpItemName)} {action.move.name}의 PP를 회복시켰다!
-                        </div>
-                      )}
-                      {/* 상태이상/혼란 즉시치료 나무열매 — curedStatus 문구와 별개로 "어떤 도구가 발동했는지"만 알려준다 */}
-                      {!action.blockedReason && action.statusCureBerryItemName && (
-                        <div className="battle-turn-line is-muted">
-                          {action.statusCureBerryItemName}
-                          {iGa(action.statusCureBerryItemName)} 발동했다!
-                        </div>
-                      )}
-                      {/* 자뭉열매/오랭열매 — 공격자/방어자 중 발동한 쪽만 표시 */}
-                      {!action.blockedReason && !!action.attackerBerryHealAmount && (
-                        <div className="battle-turn-line is-muted">
-                          {actorName}의 {action.attackerBerryHealItemName}
-                          {roEuro(action.attackerBerryHealItemName ?? "")} 체력을 {action.attackerBerryHealAmount} 회복했다!
-                        </div>
-                      )}
-                      {!action.blockedReason && !!action.defenderBerryHealAmount && (
-                        <div className="battle-turn-line is-muted">
-                          {defenderName}의 {action.defenderBerryHealItemName}
-                          {roEuro(action.defenderBerryHealItemName ?? "")} 체력을 {action.defenderBerryHealAmount} 회복했다!
-                        </div>
-                      )}
-                      {/* 기합의띠·기합의머리띠 — 기절할 데미지를 버티고 HP 1로 남았을 때 */}
-                      {!action.blockedReason && action.enduredItemName && (
-                        <div className="battle-turn-line is-muted">
-                          {defenderName}
-                          {eunNeun(defenderName)} {action.enduredItemName}
-                          {roEuro(action.enduredItemName)} 버텼다! (HP 1)
-                        </div>
-                      )}
-                      {/* 옹골참 — 기합의띠와 같은 문구지만 도구가 아니라 특성이 버텨줬을 때 */}
-                      {!action.blockedReason && action.enduredAbilityName && (
-                        <div className="battle-turn-line is-muted">
-                          {defenderName}
-                          {eunNeun(defenderName)} {action.enduredAbilityName}
-                          {roEuro(action.enduredAbilityName)} 버텼다! (HP 1)
-                        </div>
-                      )}
-                      {/* 버티기 — 기합의띠/옹골참과 같은 문구지만 방어류 기술이 버텨줬을 때 */}
-                      {!action.blockedReason && action.enduredProtectMoveName && (
-                        <div className="battle-turn-line is-muted">
-                          {defenderName}
-                          {eunNeun(defenderName)} {action.enduredProtectMoveName}
-                          {roEuro(action.enduredProtectMoveName)} 버텼다! (HP 1)
-                        </div>
-                      )}
-                      {/* 랭크업 기술 결과 — "OO의 공격이 크게 올라갔다!". 같은 폭으로 오른 스탯은 쉼표로
-                          묶어 한 줄로 낸다(Phase 6.5 §6-2 ⑥⑦, §6-3). */}
-                      {!action.blockedReason &&
-                        action.selfStatRises &&
-                        action.selfStatRises.length > 0 &&
-                        (() => {
-                          const byDelta = new Map<number, string[]>();
-                          for (const r of action.selfStatRises) {
-                            const labels = byDelta.get(r.delta) ?? [];
-                            labels.push(STAT_LABELS[r.stat]);
-                            byDelta.set(r.delta, labels);
-                          }
-                          return [...byDelta.entries()].map(([delta, labels]) => {
-                            const joined = labels.join(", ");
-                            return (
-                              <div key={`rise-${delta}`} className="battle-turn-line is-muted">
-                                {actorName}의 {joined}
-                                {iGa(joined)} {stageRiseAdverb(delta)}올라갔다!
-                              </div>
-                            );
-                          });
-                        })()}
-                      {/* 랭크업 상한 — 이미 +6이라 한 칸도 못 올랐을 때 */}
-                      {!action.blockedReason && action.selfStatsAtMax && action.selfStatsAtMax.length > 0 && (
-                        <div className="battle-turn-line is-muted">
-                          {actorName}의{" "}
-                          {action.selfStatsAtMax.map((s) => STAT_LABELS[s]).join(", ")}
-                          {eunNeun(action.selfStatsAtMax.map((s) => STAT_LABELS[s]).join(", "))} 더 이상 올라가지
-                          않는다!
-                        </div>
-                      )}
-                      {/* C-6 랭크다운 기술 결과 — "OO의 X가 (크게) 떨어졌다!". selfStatRises와 대칭.
-                          매직미러 반사면 시전자(actor) 자신에게 적용된 것 */}
-                      {!action.blockedReason &&
-                        action.opponentStatDrops &&
-                        action.opponentStatDrops.length > 0 &&
-                        (() => {
-                          const subject = action.bouncedMoveName ? actorName : defenderName;
-                          const byDelta = new Map<number, string[]>();
-                          for (const d of action.opponentStatDrops) {
-                            const labels = byDelta.get(d.delta) ?? [];
-                            labels.push(STAT_LABELS[d.stat]);
-                            byDelta.set(d.delta, labels);
-                          }
-                          return [...byDelta.entries()].map(([delta, labels]) => {
-                            const joined = labels.join(", ");
-                            return (
-                              <div key={`drop-${delta}`} className="battle-turn-line is-muted">
-                                {subject}의 {joined}
-                                {iGa(joined)} {stageRiseAdverb(delta)}떨어졌다!
-                              </div>
-                            );
-                          });
-                        })()}
-                      {/* §4-6 골드러시·오버히트·용성군 등 — 자기 대상 확정 랭크 하락 부가효과.
-                          opponentStatDrops와 같은 렌더 패턴, 주어만 항상 actorName. */}
-                      {!action.blockedReason &&
-                        action.selfStatDrops &&
-                        action.selfStatDrops.length > 0 &&
-                        (() => {
-                          const byDelta = new Map<number, string[]>();
-                          for (const d of action.selfStatDrops) {
-                            const labels = byDelta.get(d.delta) ?? [];
-                            labels.push(STAT_LABELS[d.stat]);
-                            byDelta.set(d.delta, labels);
-                          }
-                          return [...byDelta.entries()].map(([delta, labels]) => {
-                            const joined = labels.join(", ");
-                            return (
-                              <div key={`self-drop-${delta}`} className="battle-turn-line is-muted">
-                                {actorName}의 {joined}
-                                {iGa(joined)} {stageRiseAdverb(delta)}떨어졌다!
-                              </div>
-                            );
-                          });
-                        })()}
-                      {/* G: 방어/판별/킹실드 — "방어태세 돌입" → 상대가 자신을 겨냥했으면 "몸을 지켰다",
-                          아니면 "실패". 버티기/길동무는 별도 문구 축을 유지한다. */}
-                      {!action.blockedReason && action.protectStanceEntered && (
-                        <div className="battle-turn-line is-muted">
-                          {actorName}
-                          {eunNeun(actorName)} 방어태세에 들어갔다!
-                        </div>
-                      )}
-                      {!action.blockedReason && action.protectStanceEntered && action.protectSucceeded && (
-                        <div className="battle-turn-line is-muted">
-                          {actorName}
-                          {eunNeun(actorName)} 공격으로부터 몸을 지켜냈다!
-                        </div>
-                      )}
-                      {!action.blockedReason && action.protectStanceEntered && action.protectFailed && (
-                        <div className="battle-turn-line is-muted">{actorName}의 방어는 실패했다!</div>
-                      )}
-                      {!action.blockedReason &&
-                        !action.protectStanceEntered &&
-                        action.protectSucceeded &&
-                        action.move.protectEffect !== "destinyBond" && (
-                          <div className="battle-turn-line is-muted">
-                            {actorName}
-                            {eunNeun(actorName)} {action.move.name}로 몸을 지켰다!
-                          </div>
-                        )}
-                      {!action.blockedReason && action.protectSucceeded && action.move.protectEffect === "destinyBond" && (
-                        <div className="battle-turn-line is-muted">
-                          {actorName}는 상대를 길동무로 삼으려 한다!
-                        </div>
-                      )}
-                      {!action.blockedReason && !action.protectStanceEntered && action.protectFailed && (
-                        <div className="battle-turn-line is-muted">
-                          {actorName}의 {action.move.name}{eunNeun(action.move.name)} 실패했다!
-                        </div>
-                      )}
-                      {/* 공격이 상대의 방어류 기술에 완전히 막혔을 때 — 이 행동(공격측)의 로그에 표시 */}
-                      {!action.blockedReason && action.blockedByProtectMoveName && (
-                        <div className="battle-turn-line is-muted">
-                          {defenderName}의 {action.blockedByProtectMoveName}
-                          {roEuro(action.blockedByProtectMoveName)} 막혔다!
-                        </div>
-                      )}
-                      {/* 킹실드 — 접촉기를 막아내 공격측의 공격이 떨어졌을 때 */}
-                      {!action.blockedReason &&
-                        action.protectContactPenaltyMoveName &&
-                        !action.protectContactDamage && (
-                          <div className="battle-turn-line is-muted">
-                            {actorName}
-                            {eunNeun(actorName)} 접촉한 반동으로 공격이 떨어졌다!
-                          </div>
-                        )}
-                      {/* 니들가드 — 접촉기를 막아내 공격측이 가시에 데미지를 입었을 때 */}
-                      {!action.blockedReason && !!action.protectContactDamage && (
-                        <div className="battle-turn-line is-muted">
-                          {actorName}
-                          {eunNeun(actorName)} {action.protectContactPenaltyMoveName}의 가시에 부딪혀{" "}
-                          {action.protectContactDamage} 데미지를 입었다!
-                        </div>
-                      )}
-                      {/* 하양허브 — 자신/상대 어느 쪽에서 발동했는지 따로 표시 */}
-                      {!action.blockedReason && action.restoredStatsSelfItemName && (
-                        <div className="battle-turn-line is-muted">
-                          {actorName}의 {action.restoredStatsSelfItemName}
-                          {roEuro(action.restoredStatsSelfItemName)} 떨어진 능력을 원래대로 되돌렸다!
-                        </div>
-                      )}
-                      {!action.blockedReason && action.restoredStatsOpponentItemName && (
-                        <div className="battle-turn-line is-muted">
-                          {defenderName}의 {action.restoredStatsOpponentItemName}
-                          {roEuro(action.restoredStatsOpponentItemName)} 떨어진 능력을 원래대로 되돌렸다!
-                        </div>
-                      )}
-                      {/* 상대가 쓰러졌는지 여부 — 데미지 수치와 분리된 별도 상태 줄 */}
-                      {!action.blockedReason && action.fainted && (
-                        <div className="battle-turn-line is-fainted">
-                          {defenderName}
-                          {eunNeun(defenderName)} 쓰러졌다
-                        </div>
-                      )}
-                      {/* D-2 길동무 — "삼았다!" 한 줄 + "쓰러졌다" 한 줄로 분리 */}
-                      {action.selfFainted && action.triggeredDestinyBond && (
-                        <>
-                          <div className="battle-turn-line is-muted">
-                            {defenderName}
-                            {eunNeun(defenderName)} {actorName}
-                            {eulReul(actorName)} 길동무로 삼았다!
-                          </div>
-                          <div className="battle-turn-line is-fainted">
-                            {actorName}
-                            {eunNeun(actorName)} 쓰러졌다
-                          </div>
-                        </>
-                      )}
-                      {/* 자신이 쓰러졌는지 여부(자폭류·발버둥 반동·혼란 자멸) — 원인을 그대로 붙인다 */}
-                      {action.selfFainted && !action.triggeredDestinyBond && (
-                        <div className="battle-turn-line is-fainted">
-                          {actorName}
-                          {eunNeun(actorName)}{" "}
-                          {action.blockedReason === "confusion"
-                            ? "혼란으로 인한 데미지"
-                            : `${action.move.name}의 여파`}
-                          로 쓰러졌다
-                        </div>
-                      )}
+                      {/* 타입변화·방어·상태·스탯변화·도구·특성반응 계열(§15-5) */}
+                      <ActionEffectLines action={action} actorName={actorName} defenderName={defenderName} />
                       {/* 유턴류 자체 교체: 이 행동 직후에(§7-2) 시간 순서대로 렌더 */}
                       <SelfSwitchAfterMoveLines switches={turn.switches} actor={action.actor} />
                       {/* 드래곤테일·울부짖기류: 이 기술로 상대가 강제로 끌려나온 교체 */}
