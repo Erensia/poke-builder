@@ -653,6 +653,243 @@ function RedCardSwitchLines({
 }
 
 /**
+ * 행동 한 건의 메인 라인 — 누가 무슨 기술을 써서 어떻게 됐는지("빗나감"/데미지 수치)까지만
+ * 한 줄에 모은다. 기절 같은 "상태"는 이 컴포넌트 밖(호출부)에서 별도 줄로 분리한다. `action`의
+ * ~50개 optional 필드를 조건부로 읽는 게 전부라 클로저 의존 없이(호출부가 넘겨주는 다섯 개
+ * props만으로) 그대로 뗄 수 있었다.
+ */
+function ActionMainLine({
+  action,
+  actorName,
+  defenderName,
+  headDamage,
+  headDamagePercent,
+}: {
+  action: ActionLogEntry;
+  actorName: string;
+  defenderName: string;
+  headDamage: number;
+  headDamagePercent: number;
+}) {
+  return (
+    <div className="battle-turn-line">
+      <strong>{actorName}</strong>의 {action.move.name}
+      {action.sleepTalkCalledMoveName && " (잠꼬대로 냈다!)"}
+      {action.bouncedMoveName && (
+        <> — {defenderName}의 {action.bouncedByAbilityName}! 기술이 되돌아왔다!</>
+      )}
+      {action.blockedReason === "usageCondition" && "!"}
+      {action.blockedReason === "moveRestricted" && "!"}
+      {action.blockedReason === "status" && action.blockedByStatus === undefined && " — 상태이상으로 행동 불가"}
+      {action.blockedReason === "flinch" && " — 풀이 죽어서 움직일 수 없었다!"}
+      {action.blockedReason === "recharge" && " — 반동으로 움직일 수 없었다!"}
+      {action.blockedReason === "confusion" &&
+        ` — 자기자신을 공격했다! (${action.selfDamage} 데미지)`}
+      {action.blockedReason === "attract" && " — 헤롱헤롱에 빠져 행동 불가"}
+      {action.blockedReason === "psychicFieldPriority" && " — 사이코필드에 막혀 실패"}
+      {action.blockedReason === "queenlyMajesty" && (
+        <>
+          {" — "}
+          {actorName}
+          {eunNeun(actorName)} {action.move.name}
+          {eulReul(action.move.name)} 쓸 수 없다!
+        </>
+      )}
+      {!action.blockedReason &&
+        action.charging &&
+        (CHARGE_TURN_MESSAGE[action.move.id]
+          ? ` — ${actorName}${eunNeun(actorName)}${CHARGE_TURN_MESSAGE[action.move.id]}`
+          : " — 준비 중...")}
+      {!action.blockedReason && !action.charging && action.evadedByCharge && " — 무적 상태라 빗나감"}
+      {!action.blockedReason && !action.charging && !action.evadedByCharge && !action.hit && " — !"}
+      {/* 데미지 표기. 다단히트면 이 줄은 1타 몫만 — 나머지 타는 아래 별도 줄(§2-5). */}
+      {!action.blockedReason && action.hit && action.damage > 0 && (
+        <>
+          {" "}
+          — {headDamage} 데미지 ({(headDamagePercent * 100).toFixed(1)}%)
+        </>
+      )}
+      {!action.blockedReason &&
+        action.hit &&
+        action.inflictedVolatile &&
+        !VOLATILES_WITH_DEDICATED_LOG_LINE.has(action.inflictedVolatile) && (
+          <> · {VOLATILE_LABELS[action.inflictedVolatile]}!</>
+        )}
+      {!action.blockedReason && action.hit && action.inflictedVolatile === "wish" && (
+        <> · 희망사항!</>
+      )}
+      {!action.blockedReason && action.hit && action.setField && (
+        <> · {action.setField} 설치!</>
+      )}
+      {!action.blockedReason && action.hit && action.fieldSetFailed && (
+        <> · 그러나 실패했다!</>
+      )}
+      {!action.blockedReason && action.hit && action.stealthRockSetForSide && (
+        <>
+          {" "}
+          ·{" "}
+          {action.bouncedMoveName
+            ? "뾰족한 바위가 되돌아와 시전자 쪽 필드에 깔렸다!"
+            : "상대 편 필드에 뾰족한 바위가 깔렸다!"}
+        </>
+      )}
+      {!action.blockedReason && action.hit && action.spikesSetForSide && (
+        <> · 상대 편 필드에 압정이 흩뿌려졌다!</>
+      )}
+      {!action.blockedReason && action.hit && action.toxicSpikesSetForSide && (
+        <> · 상대 편 필드에 독 압정이 흩뿌려졌다!</>
+      )}
+      {!action.blockedReason && action.hit && action.stickyWebSetForSide && (
+        <> · 상대 편 필드에 끈적끈적네트가 펼쳐졌다!</>
+      )}
+      {!action.blockedReason && action.hit && action.hazardSetFailed && (
+        <> · 그러나 실패했다!</>
+      )}
+      {!action.blockedReason && action.hit && action.abilitySwappedTargetToName && (
+        <>
+          {" "}
+          · {defenderName}의 특성이 {action.abilitySwappedTargetToName}
+          {roEuro(action.abilitySwappedTargetToName)} 바뀌었다!
+        </>
+      )}
+      {!action.blockedReason && action.hit && action.abilitySwapFailed && (
+        <> · 그러나 실패했다!</>
+      )}
+      {!action.blockedReason && action.hit && !action.hits && action.mummifiedAttackerAbilityName && (
+        <> · {abilityMummifiedLine(action.mummifiedAttackerAbilityName, actorName, defenderName)}</>
+      )}
+      {!action.blockedReason && action.ateBerryName && (
+        <>
+          {" "}
+          · {actorName}
+          {eunNeun(actorName)} {action.ateBerryName}
+          {eulReul(action.ateBerryName)} 먹었다!
+          {!!action.ateBerryHeal && <> HP {action.ateBerryHeal} 회복!</>}
+        </>
+      )}
+      {!action.blockedReason && action.berryEatFailed && <> · 그러나 나무열매가 없어 실패했다!</>}
+      {!action.blockedReason && action.hit && action.destroyedField && (
+        <> · {action.destroyedField} 파괴!</>
+      )}
+      {!action.blockedReason && action.hit && action.setTrickRoom && (
+        <> · 트릭룸 발동!</>
+      )}
+      {!action.blockedReason && action.hit && action.trickRoomSetFailed && (
+        <> · 그러나 실패했다!</>
+      )}
+      {!action.blockedReason && action.hit && action.setWeather && (
+        <>
+          {" "}
+          · 날씨가 {action.setWeather}
+          {roEuro(action.setWeather)} 바뀌었다!
+        </>
+      )}
+      {!action.blockedReason && action.hit && action.setScreen && (
+        <> · {SCREEN_LABELS[action.setScreen]} 설치!</>
+      )}
+      {!action.blockedReason && action.hit && action.screenSetFailed && (
+        <> · 그러나 실패했다!</>
+      )}
+      {!action.blockedReason && action.hit && action.setSafeguard && (
+        <> · 신비한 힘의 보호를 받았다!</>
+      )}
+      {!action.blockedReason && action.hit && action.safeguardSetFailed && (
+        <> · 그러나 실패했다!</>
+      )}
+      {!action.blockedReason && action.hit && action.brokeScreens?.length && (
+        <>
+          {" "}
+          · {action.brokeScreens.map((s) => SCREEN_LABELS[s]).join("·")}
+          {eulReul(SCREEN_LABELS[action.brokeScreens[action.brokeScreens.length - 1]])} 부쉈다!
+        </>
+      )}
+      {!action.blockedReason && action.hit && !!action.healedAmount && (
+        <>
+          {" "}
+          · {action.healedTarget === "opponent" ? defenderName : actorName}
+          {roEuro(action.healedTarget === "opponent" ? defenderName : actorName)} 체력을{" "}
+          {action.healedAmount} 회복했다!
+        </>
+      )}
+      {!action.blockedReason && action.hit && action.restSlept && <> · 잠들었다!</>}
+      {!action.blockedReason && action.hit && !!action.drainHealAmount && (
+        <> · 체력을 {action.drainHealAmount} 흡수했다!</>
+      )}
+      {!action.blockedReason && action.hit && action.setRegenVolatile && (
+        <> · {VOLATILE_LABELS[action.setRegenVolatile]} 발동!</>
+      )}
+      {!action.blockedReason && action.hit && action.regenSetFailed && (
+        <> · 그러나 실패했다!</>
+      )}
+      {!action.blockedReason && action.hit && action.setLeechSeed && (
+        <> · 씨앗을 심었다!</>
+      )}
+      {!action.blockedReason && action.hit && action.leechSeedSetFailed && (
+        <> · 그러나 실패했다!</>
+      )}
+      {!action.blockedReason && action.hit && action.leechSeedBlockedByGrass && (
+        <> · 그러나 풀타입 {defenderName}에게는 통하지 않는다!</>
+      )}
+      {!action.blockedReason && action.hit && action.setSubstitute && <> · 대타를 세웠다!</>}
+      {!action.blockedReason && action.hit && action.substituteSetFailed && (
+        <> · 그러나 실패하고 말았다!</>
+      )}
+      {!action.blockedReason && action.hit && action.shedTailSucceeded && (
+        <> · 꼬리를 잘라 분신을 만들었다!</>
+      )}
+      {!action.blockedReason && action.hit && action.shedTailFailed && (
+        <> · 그러나 실패했다!</>
+      )}
+      {!action.blockedReason && action.hit && action.setDisabledMoveName && (
+        <> · {action.setDisabledMoveName} 봉인!</>
+      )}
+      {!action.blockedReason && action.hit && action.disableSetFailed && (
+        <> · 그러나 실패했다!</>
+      )}
+      {!action.blockedReason && action.hit && action.setEncoreMoveName && (
+        <> · {action.setEncoreMoveName}밖에 쓸 수 없다!</>
+      )}
+      {!action.blockedReason && action.hit && action.encoreSetFailed && (
+        <> · 그러나 실패했다!</>
+      )}
+      {!action.blockedReason && action.hit && action.swappedStatsMoveName && (
+        <> · 공격과 방어 수치가 서로 바뀌었다!</>
+      )}
+      {!action.blockedReason && action.hit && action.swappedStagesMoveName && (
+        <> · 서로의 랭크 변화를 맞바꿨다!</>
+      )}
+      {!action.blockedReason && action.hit && action.averagedDefensesMoveName && (
+        <> · 서로의 방어와 특수방어를 나눠 가졌다!</>
+      )}
+      {!action.blockedReason && action.hit && action.swappedSpeedMoveName && (
+        <> · 서로의 스피드를 교체했다!</>
+      )}
+      {!action.blockedReason && action.hit && action.shellSideArmCategory && (
+        <> · {action.shellSideArmCategory === "physical" ? "물리" : "특수"} 판정!</>
+      )}
+      {!action.blockedReason && action.hit && action.transformedIntoName && (
+        <> · {action.transformedIntoName}{roEuro(action.transformedIntoName)} 변신했다!</>
+      )}
+      {!action.blockedReason && action.hit && action.transformFailed && (
+        <> · 그러나 실패했다!</>
+      )}
+      {!action.blockedReason && action.hit && action.sheerForceAbilityName && (
+        <> · {action.sheerForceAbilityName} 발동! 부가 효과 대신 위력이 올랐다!</>
+      )}
+      {!action.blockedReason && action.hit && action.stolenItemName && (
+        <> · 매지션 발동! 상대의 {action.stolenItemName}{eulReul(action.stolenItemName)} 빼앗았다!</>
+      )}
+      {!action.blockedReason && action.hit && action.unburdenSelfAbilityName && (
+        <> · {action.unburdenSelfAbilityName} 발동! 스피드가 2배로 올랐다!</>
+      )}
+      {!action.blockedReason && action.hit && action.unburdenOpponentAbilityName && (
+        <> · 상대의 {action.unburdenOpponentAbilityName} 발동! 상대의 스피드가 2배로 올랐다!</>
+      )}
+    </div>
+  );
+}
+
+/**
  * 턴별 배틀 로그(실시간 배틀판·HP게이지·조작 UI에서 분리된, 텍스트 중심 히스토리) — 실시간
  * 대전(BattleLogPage)과 저장된 배틀비디오 다시보기(§6)가 그대로 공유한다. log 배열 하나만
  * 있으면 완전히 렌더 가능해 배틀비디오 저장에도 이 log만 그대로 남기면 된다.
@@ -700,220 +937,13 @@ export function BattleTurnLog({ log }: { log: TurnResult[] }) {
                       )}
                       {/* 메인 라인: 누가 무슨 기술을 써서 어떻게 됐는지("빗나감"/데미지 수치)까지만.
                           기절 같은 "상태"는 아래에서 별도 줄로 분리한다. */}
-                      <div className="battle-turn-line">
-                        <strong>{actorName}</strong>의 {action.move.name}
-                        {action.sleepTalkCalledMoveName && " (잠꼬대로 냈다!)"}
-                        {action.bouncedMoveName && (
-                          <> — {defenderName}의 {action.bouncedByAbilityName}! 기술이 되돌아왔다!</>
-                        )}
-                        {action.blockedReason === "usageCondition" && "!"}
-                        {action.blockedReason === "moveRestricted" && "!"}
-                        {action.blockedReason === "status" && action.blockedByStatus === undefined && " — 상태이상으로 행동 불가"}
-                        {action.blockedReason === "flinch" && " — 풀이 죽어서 움직일 수 없었다!"}
-                        {action.blockedReason === "recharge" && " — 반동으로 움직일 수 없었다!"}
-                        {action.blockedReason === "confusion" &&
-                          ` — 자기자신을 공격했다! (${action.selfDamage} 데미지)`}
-                        {action.blockedReason === "attract" && " — 헤롱헤롱에 빠져 행동 불가"}
-                        {action.blockedReason === "psychicFieldPriority" && " — 사이코필드에 막혀 실패"}
-                        {action.blockedReason === "queenlyMajesty" && (
-                          <>
-                            {" — "}
-                            {actorName}
-                            {eunNeun(actorName)} {action.move.name}
-                            {eulReul(action.move.name)} 쓸 수 없다!
-                          </>
-                        )}
-                        {!action.blockedReason &&
-                          action.charging &&
-                          (CHARGE_TURN_MESSAGE[action.move.id]
-                            ? ` — ${actorName}${eunNeun(actorName)}${CHARGE_TURN_MESSAGE[action.move.id]}`
-                            : " — 준비 중...")}
-                        {!action.blockedReason && !action.charging && action.evadedByCharge && " — 무적 상태라 빗나감"}
-                        {!action.blockedReason && !action.charging && !action.evadedByCharge && !action.hit && " — !"}
-                        {/* 데미지 표기. 다단히트면 이 줄은 1타 몫만 — 나머지 타는 아래 별도 줄(§2-5). */}
-                        {!action.blockedReason && action.hit && action.damage > 0 && (
-                          <>
-                            {" "}
-                            — {headDamage} 데미지 ({(headDamagePercent * 100).toFixed(1)}%)
-                          </>
-                        )}
-                        {!action.blockedReason &&
-                          action.hit &&
-                          action.inflictedVolatile &&
-                          !VOLATILES_WITH_DEDICATED_LOG_LINE.has(action.inflictedVolatile) && (
-                            <> · {VOLATILE_LABELS[action.inflictedVolatile]}!</>
-                          )}
-                        {!action.blockedReason && action.hit && action.inflictedVolatile === "wish" && (
-                          <> · 희망사항!</>
-                        )}
-                        {!action.blockedReason && action.hit && action.setField && (
-                          <> · {action.setField} 설치!</>
-                        )}
-                        {!action.blockedReason && action.hit && action.fieldSetFailed && (
-                          <> · 그러나 실패했다!</>
-                        )}
-                        {!action.blockedReason && action.hit && action.stealthRockSetForSide && (
-                          <>
-                            {" "}
-                            ·{" "}
-                            {action.bouncedMoveName
-                              ? "뾰족한 바위가 되돌아와 시전자 쪽 필드에 깔렸다!"
-                              : "상대 편 필드에 뾰족한 바위가 깔렸다!"}
-                          </>
-                        )}
-                        {!action.blockedReason && action.hit && action.spikesSetForSide && (
-                          <> · 상대 편 필드에 압정이 흩뿌려졌다!</>
-                        )}
-                        {!action.blockedReason && action.hit && action.toxicSpikesSetForSide && (
-                          <> · 상대 편 필드에 독 압정이 흩뿌려졌다!</>
-                        )}
-                        {!action.blockedReason && action.hit && action.stickyWebSetForSide && (
-                          <> · 상대 편 필드에 끈적끈적네트가 펼쳐졌다!</>
-                        )}
-                        {!action.blockedReason && action.hit && action.hazardSetFailed && (
-                          <> · 그러나 실패했다!</>
-                        )}
-                        {!action.blockedReason && action.hit && action.abilitySwappedTargetToName && (
-                          <>
-                            {" "}
-                            · {defenderName}의 특성이 {action.abilitySwappedTargetToName}
-                            {roEuro(action.abilitySwappedTargetToName)} 바뀌었다!
-                          </>
-                        )}
-                        {!action.blockedReason && action.hit && action.abilitySwapFailed && (
-                          <> · 그러나 실패했다!</>
-                        )}
-                        {!action.blockedReason && action.hit && !action.hits && action.mummifiedAttackerAbilityName && (
-                          <> · {abilityMummifiedLine(action.mummifiedAttackerAbilityName, actorName, defenderName)}</>
-                        )}
-                        {!action.blockedReason && action.ateBerryName && (
-                          <>
-                            {" "}
-                            · {actorName}
-                            {eunNeun(actorName)} {action.ateBerryName}
-                            {eulReul(action.ateBerryName)} 먹었다!
-                            {!!action.ateBerryHeal && <> HP {action.ateBerryHeal} 회복!</>}
-                          </>
-                        )}
-                        {!action.blockedReason && action.berryEatFailed && <> · 그러나 나무열매가 없어 실패했다!</>}
-                        {!action.blockedReason && action.hit && action.destroyedField && (
-                          <> · {action.destroyedField} 파괴!</>
-                        )}
-                        {!action.blockedReason && action.hit && action.setTrickRoom && (
-                          <> · 트릭룸 발동!</>
-                        )}
-                        {!action.blockedReason && action.hit && action.trickRoomSetFailed && (
-                          <> · 그러나 실패했다!</>
-                        )}
-                        {!action.blockedReason && action.hit && action.setWeather && (
-                          <>
-                            {" "}
-                            · 날씨가 {action.setWeather}
-                            {roEuro(action.setWeather)} 바뀌었다!
-                          </>
-                        )}
-                        {!action.blockedReason && action.hit && action.setScreen && (
-                          <> · {SCREEN_LABELS[action.setScreen]} 설치!</>
-                        )}
-                        {!action.blockedReason && action.hit && action.screenSetFailed && (
-                          <> · 그러나 실패했다!</>
-                        )}
-                        {!action.blockedReason && action.hit && action.setSafeguard && (
-                          <> · 신비한 힘의 보호를 받았다!</>
-                        )}
-                        {!action.blockedReason && action.hit && action.safeguardSetFailed && (
-                          <> · 그러나 실패했다!</>
-                        )}
-                        {!action.blockedReason && action.hit && action.brokeScreens?.length && (
-                          <>
-                            {" "}
-                            · {action.brokeScreens.map((s) => SCREEN_LABELS[s]).join("·")}
-                            {eulReul(SCREEN_LABELS[action.brokeScreens[action.brokeScreens.length - 1]])} 부쉈다!
-                          </>
-                        )}
-                        {!action.blockedReason && action.hit && !!action.healedAmount && (
-                          <>
-                            {" "}
-                            · {action.healedTarget === "opponent" ? defenderName : actorName}
-                            {roEuro(action.healedTarget === "opponent" ? defenderName : actorName)} 체력을{" "}
-                            {action.healedAmount} 회복했다!
-                          </>
-                        )}
-                        {!action.blockedReason && action.hit && action.restSlept && <> · 잠들었다!</>}
-                        {!action.blockedReason && action.hit && !!action.drainHealAmount && (
-                          <> · 체력을 {action.drainHealAmount} 흡수했다!</>
-                        )}
-                        {!action.blockedReason && action.hit && action.setRegenVolatile && (
-                          <> · {VOLATILE_LABELS[action.setRegenVolatile]} 발동!</>
-                        )}
-                        {!action.blockedReason && action.hit && action.regenSetFailed && (
-                          <> · 그러나 실패했다!</>
-                        )}
-                        {!action.blockedReason && action.hit && action.setLeechSeed && (
-                          <> · 씨앗을 심었다!</>
-                        )}
-                        {!action.blockedReason && action.hit && action.leechSeedSetFailed && (
-                          <> · 그러나 실패했다!</>
-                        )}
-                        {!action.blockedReason && action.hit && action.leechSeedBlockedByGrass && (
-                          <> · 그러나 풀타입 {defenderName}에게는 통하지 않는다!</>
-                        )}
-                        {!action.blockedReason && action.hit && action.setSubstitute && <> · 대타를 세웠다!</>}
-                        {!action.blockedReason && action.hit && action.substituteSetFailed && (
-                          <> · 그러나 실패하고 말았다!</>
-                        )}
-                        {!action.blockedReason && action.hit && action.shedTailSucceeded && (
-                          <> · 꼬리를 잘라 분신을 만들었다!</>
-                        )}
-                        {!action.blockedReason && action.hit && action.shedTailFailed && (
-                          <> · 그러나 실패했다!</>
-                        )}
-                        {!action.blockedReason && action.hit && action.setDisabledMoveName && (
-                          <> · {action.setDisabledMoveName} 봉인!</>
-                        )}
-                        {!action.blockedReason && action.hit && action.disableSetFailed && (
-                          <> · 그러나 실패했다!</>
-                        )}
-                        {!action.blockedReason && action.hit && action.setEncoreMoveName && (
-                          <> · {action.setEncoreMoveName}밖에 쓸 수 없다!</>
-                        )}
-                        {!action.blockedReason && action.hit && action.encoreSetFailed && (
-                          <> · 그러나 실패했다!</>
-                        )}
-                        {!action.blockedReason && action.hit && action.swappedStatsMoveName && (
-                          <> · 공격과 방어 수치가 서로 바뀌었다!</>
-                        )}
-                        {!action.blockedReason && action.hit && action.swappedStagesMoveName && (
-                          <> · 서로의 랭크 변화를 맞바꿨다!</>
-                        )}
-                        {!action.blockedReason && action.hit && action.averagedDefensesMoveName && (
-                          <> · 서로의 방어와 특수방어를 나눠 가졌다!</>
-                        )}
-                        {!action.blockedReason && action.hit && action.swappedSpeedMoveName && (
-                          <> · 서로의 스피드를 교체했다!</>
-                        )}
-                        {!action.blockedReason && action.hit && action.shellSideArmCategory && (
-                          <> · {action.shellSideArmCategory === "physical" ? "물리" : "특수"} 판정!</>
-                        )}
-                        {!action.blockedReason && action.hit && action.transformedIntoName && (
-                          <> · {action.transformedIntoName}{roEuro(action.transformedIntoName)} 변신했다!</>
-                        )}
-                        {!action.blockedReason && action.hit && action.transformFailed && (
-                          <> · 그러나 실패했다!</>
-                        )}
-                        {!action.blockedReason && action.hit && action.sheerForceAbilityName && (
-                          <> · {action.sheerForceAbilityName} 발동! 부가 효과 대신 위력이 올랐다!</>
-                        )}
-                        {!action.blockedReason && action.hit && action.stolenItemName && (
-                          <> · 매지션 발동! 상대의 {action.stolenItemName}{eulReul(action.stolenItemName)} 빼앗았다!</>
-                        )}
-                        {!action.blockedReason && action.hit && action.unburdenSelfAbilityName && (
-                          <> · {action.unburdenSelfAbilityName} 발동! 스피드가 2배로 올랐다!</>
-                        )}
-                        {!action.blockedReason && action.hit && action.unburdenOpponentAbilityName && (
-                          <> · 상대의 {action.unburdenOpponentAbilityName} 발동! 상대의 스피드가 2배로 올랐다!</>
-                        )}
-                      </div>
+                      <ActionMainLine
+                        action={action}
+                        actorName={actorName}
+                        defenderName={defenderName}
+                        headDamage={headDamage}
+                        headDamagePercent={headDamagePercent}
+                      />
                       {/* §2-4: 변환자재/리베로 타입 변경 — 데미지 줄 인라인에서 분리해 2줄로 */}
                       {!action.blockedReason && action.changedOwnTypeTo && (
                         <>
