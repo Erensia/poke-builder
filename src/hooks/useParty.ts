@@ -2,13 +2,13 @@ import { useEffect, useState } from "react";
 import type { AbilityPoints, PartySlot, PartySlots } from "../types/party";
 import { EMPTY_ABILITY_POINTS } from "../types/party";
 import { getPokemon } from "../lib/data";
-import { findMegaFormByStone } from "../lib/pokemonForm";
 import { loadParty, saveParty, clearSavedParty } from "../lib/storage";
 import {
-  MAX_ABILITY_POINTS_PER_STAT,
-  MAX_ABILITY_POINTS_TOTAL,
-  totalAbilityPoints,
-} from "../lib/statCalculator";
+  applyItemToSlot,
+  cycleFormOnSlot,
+  setAbilityPointOnSlot,
+  stepAbilityPointOnSlot,
+} from "../lib/slotMutations";
 
 const EMPTY_SLOTS: PartySlots = [null, null, null, null, null, null];
 
@@ -106,14 +106,7 @@ export function useParty() {
       const slot = prev[slotIndex];
       if (!slot) return prev;
       const next = [...prev] as PartySlots;
-      const pokemon = getPokemon(slot.pokemonId);
-      // 메가스톤을 장착하면 해당 메가폼을 자동 활성화하고, 그 외 도구/미지정이면 기본형으로 되돌린다.
-      const matchedMega = pokemon ? findMegaFormByStone(pokemon, itemId) : undefined;
-      next[slotIndex] = {
-        ...slot,
-        item: itemId,
-        activeMegaForm: matchedMega?.form,
-      };
+      next[slotIndex] = applyItemToSlot(slot, itemId);
       return next;
     });
   }
@@ -150,13 +143,10 @@ export function useParty() {
     setSlots((prev) => {
       const slot = prev[slotIndex];
       if (!slot) return prev;
-      const forms = getPokemon(slot.pokemonId)?.sizeForms;
-      if (!forms || forms.length === 0) return prev;
-      const currentId = slot.sizeForm ?? forms.find((f) => f.standard)?.id ?? forms[0].id;
-      const idx = forms.findIndex((f) => f.id === currentId);
-      const nextForm = forms[(idx + 1) % forms.length];
+      const nextSlot = cycleFormOnSlot(slot, "sizeForm");
+      if (nextSlot === slot) return prev;
       const next = [...prev] as PartySlots;
-      next[slotIndex] = { ...slot, sizeForm: nextForm.id };
+      next[slotIndex] = nextSlot;
       return next;
     });
   }
@@ -166,13 +156,10 @@ export function useParty() {
     setSlots((prev) => {
       const slot = prev[slotIndex];
       if (!slot) return prev;
-      const forms = getPokemon(slot.pokemonId)?.formVariants;
-      if (!forms || forms.length === 0) return prev;
-      const currentId = slot.formVariant ?? forms.find((f) => f.standard)?.id ?? forms[0].id;
-      const idx = forms.findIndex((f) => f.id === currentId);
-      const nextForm = forms[(idx + 1) % forms.length];
+      const nextSlot = cycleFormOnSlot(slot, "formVariant");
+      if (nextSlot === slot) return prev;
       const next = [...prev] as PartySlots;
-      next[slotIndex] = { ...slot, formVariant: nextForm.id, ability: null };
+      next[slotIndex] = nextSlot;
       return next;
     });
   }
@@ -182,13 +169,10 @@ export function useParty() {
     setSlots((prev) => {
       const slot = prev[slotIndex];
       if (!slot) return prev;
-      const forms = getPokemon(slot.pokemonId)?.cosmeticForms;
-      if (!forms || forms.length === 0) return prev;
-      const currentId = slot.cosmeticForm ?? forms.find((f) => f.standard)?.id ?? forms[0].id;
-      const idx = forms.findIndex((f) => f.id === currentId);
-      const nextForm = forms[(idx + 1) % forms.length];
+      const nextSlot = cycleFormOnSlot(slot, "cosmeticForm");
+      if (nextSlot === slot) return prev;
       const next = [...prev] as PartySlots;
-      next[slotIndex] = { ...slot, cosmeticForm: nextForm.id };
+      next[slotIndex] = nextSlot;
       return next;
     });
   }
@@ -209,17 +193,8 @@ export function useParty() {
     setSlots((prev) => {
       const slot = prev[slotIndex];
       if (!slot) return prev;
-      const clampedValue = Math.max(0, value);
-      const restTotal = totalAbilityPoints(slot.points) - slot.points[stat];
-      const maxForStat = Math.min(
-        MAX_ABILITY_POINTS_PER_STAT,
-        MAX_ABILITY_POINTS_TOTAL - restTotal,
-      );
       const next = [...prev] as PartySlots;
-      next[slotIndex] = {
-        ...slot,
-        points: { ...slot.points, [stat]: Math.min(clampedValue, maxForStat) },
-      };
+      next[slotIndex] = setAbilityPointOnSlot(slot, stat, value);
       return next;
     });
   }
@@ -229,16 +204,10 @@ export function useParty() {
     setSlots((prev) => {
       const slot = prev[slotIndex];
       if (!slot) return prev;
-      const currentValue = slot.points[stat];
-      const restTotal = totalAbilityPoints(slot.points) - currentValue;
-      const maxForStat = Math.min(
-        MAX_ABILITY_POINTS_PER_STAT,
-        MAX_ABILITY_POINTS_TOTAL - restTotal,
-      );
-      const nextValue = Math.min(Math.max(0, currentValue + delta), maxForStat);
-      if (nextValue === currentValue) return prev;
+      const nextSlot = stepAbilityPointOnSlot(slot, stat, delta);
+      if (nextSlot === slot) return prev;
       const next = [...prev] as PartySlots;
-      next[slotIndex] = { ...slot, points: { ...slot.points, [stat]: nextValue } };
+      next[slotIndex] = nextSlot;
       return next;
     });
   }
