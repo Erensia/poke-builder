@@ -805,7 +805,9 @@ function resolveEntryAbilityEffects(
         announcements.push(`${pokemonName}의 ${ability.name}! 하지만 이미 다른 필드가 있어 실패했다!`);
       } else {
         field = ability.setsFieldOnEntry;
-        fieldTurnsRemaining = FIELD_DURATION;
+        // 그라운드코트: 필드를 편 쪽이 이 도구를 지녔으면 지속시간이 늘어난다(기본 5턴 + 3 = 8턴).
+        const fighterItem = fighter.currentItemId ? getItem(fighter.currentItemId) : undefined;
+        fieldTurnsRemaining = FIELD_DURATION + (fighterItem?.fieldDurationBonus ?? 0);
         announcements.push(`${pokemonName}의 ${ability.name}! 필드가 ${field}${roEuro(field)} 바뀌었다!`);
       }
     }
