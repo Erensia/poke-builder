@@ -1538,6 +1538,10 @@ export function BattleLogPage() {
             <SlotPresetsModal
               presets={slotPresets.presets}
               slotIsFilled={ctl.slot !== null}
+              usedPokemonIds={sideCtls(picker.side)
+                .filter((_, i) => i !== picker.slotIndex)
+                .map((c) => c.slot?.pokemonId)
+                .filter((id): id is string => id !== undefined)}
               onClose={() => setPicker(null)}
               onLoad={(preset) => ctl.loadSlot(preset.slot)}
               onRename={slotPresets.renamePreset}
