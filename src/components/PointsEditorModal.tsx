@@ -148,7 +148,11 @@ export function PointsEditorModal({
   const nature = natureId ? getNature(natureId) : undefined;
 
   return (
-    <Modal title={`${pokemonName} · 능력 포인트`} onClose={onClose}>
+    <Modal
+      title={`${pokemonName} · 능력 포인트`}
+      onClose={onClose}
+      panelClassName="points-editor-modal-panel"
+    >
       <div className="points-remaining">
         <span>남은 포인트</span>
         <strong className={remaining === 0 ? "is-zero" : ""}>

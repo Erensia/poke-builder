@@ -1,4 +1,10 @@
+/* ver.1.6 §2-1 — 검색창을 modal-body(스크롤 컨테이너) 상단에 고정한다. 목록을 내려서 스크롤해도
+   검색창이 같이 밀려 올라가 버려서 매번 위로 스크롤해야 했던 문제(모바일 사파리에서 발견)의
+   원인 — 이전엔 그냥 목록과 같이 흐르는 첫 번째 자식이었다. */
 .picker-search {
+  position: sticky;
+  top: 0;
+  z-index: 1;
   width: 100%;
   padding: 0.6rem 0.8rem;
   border-radius: 10px;
