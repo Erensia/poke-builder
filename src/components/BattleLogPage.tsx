@@ -94,6 +94,99 @@ const REAL_STAT_LABELS: { key: keyof BaseStats; label: string }[] = [
   { key: "spe", label: "스피드" },
 ];
 
+/**
+ * 빌드(6슬롯) 화면 — 양쪽 파티를 편성하는 단계(§16). `BattleLogPage`가 쥔 `setup`(훅
+ * 반환값 그대로)과 피커 열기·샘플 저장·다음 단계 진행 콜백만 받는 presentational 컴포넌트.
+ */
+function BattleSetupScreen({
+  setup,
+  hasPartyPresets,
+  hasSlotPresets,
+  movelessWarningFor,
+  onSaveSlotAsSample,
+  onOpenPicker,
+  canProceed,
+  proceedLabel,
+  hasMovelessSlot,
+  onProceed,
+}: {
+  setup: ReturnType<typeof useBattleSetup>;
+  hasPartyPresets: boolean;
+  hasSlotPresets: boolean;
+  movelessWarningFor: (side: Side) => string | null;
+  onSaveSlotAsSample: (side: Side, i: SlotIndex) => void;
+  onOpenPicker: (picker: PickerState) => void;
+  canProceed: boolean;
+  proceedLabel: string;
+  hasMovelessSlot: boolean;
+  onProceed: () => void;
+}) {
+  const sideCtls = (side: Side) => (side === "a" ? setup.a : setup.b);
+  const slotCtl = (side: Side, i: SlotIndex) => sideCtls(side)[i];
+  return (
+    <div className="battle-setup-board">
+      {(["a", "b"] as const).map((side) => (
+        <Fragment key={side}>
+          <div className="battle-setup-column">
+            <div className="battle-setup-column-title">
+              {hasPartyPresets && (
+                <button
+                  type="button"
+                  className="battle-setup-load-party"
+                  onClick={() => onOpenPicker({ kind: "loadParty", side })}
+                >
+                  저장된 파티 불러오기
+                </button>
+              )}
+              {side === "a" ? "내 파티" : "상대 파티"}{" "}
+              <span className="battle-setup-column-hint">6마리까지 빌드 · 4마리 이상이면 3마리 선출</span>
+            </div>
+            {movelessWarningFor(side) && (
+              <p className="battle-lock-warning">{movelessWarningFor(side)}</p>
+            )}
+            {SLOT_INDICES.map((i) => (
+              <BattleSetupCard
+                key={i}
+                label={`${side === "a" ? "내 포켓몬" : "상대 포켓몬"} ${i + 1}`}
+                slot={slotCtl(side, i).slot}
+                onPickPokemon={() => onOpenPicker({ kind: "pokemon", side, slotIndex: i })}
+                onClearPokemon={slotCtl(side, i).clearPokemon}
+                onPickMove={(moveIndex) => onOpenPicker({ kind: "move", side, slotIndex: i, moveIndex })}
+                onPickAbility={() => onOpenPicker({ kind: "ability", side, slotIndex: i })}
+                onPickItem={() => onOpenPicker({ kind: "item", side, slotIndex: i })}
+                onPickNature={() => onOpenPicker({ kind: "nature", side, slotIndex: i })}
+                onPickPoints={() => onOpenPicker({ kind: "points", side, slotIndex: i })}
+                onToggleGender={slotCtl(side, i).toggleGender}
+                onCycleSizeForm={slotCtl(side, i).cycleSizeForm}
+                onCycleFormVariant={slotCtl(side, i).cycleFormVariant}
+                onCycleCosmeticForm={slotCtl(side, i).cycleCosmeticForm}
+                onPickCosmeticForm={() => onOpenPicker({ kind: "cosmeticForm", side, slotIndex: i })}
+                hasSamples={hasSlotPresets}
+                onSaveAsSample={() => onSaveSlotAsSample(side, i)}
+                onOpenSamplePicker={() => onOpenPicker({ kind: "slotPresets", side, slotIndex: i })}
+              />
+            ))}
+          </div>
+          {side === "a" && (
+            <div className="battle-setup-center">
+              <button
+                type="button"
+                className="battle-setup-vs"
+                disabled={!canProceed}
+                onClick={onProceed}
+                aria-label={canProceed ? proceedLabel : hasMovelessSlot ? "기술을 배정하지 않은 포켓몬이 있습니다" : "양쪽 파티를 먼저 완성하세요"}
+                title={canProceed ? proceedLabel : hasMovelessSlot ? "기술을 배정하지 않은 포켓몬이 있습니다" : "양쪽 파티를 먼저 완성하세요"}
+              >
+                VS
+              </button>
+            </div>
+          )}
+        </Fragment>
+      ))}
+    </div>
+  );
+}
+
 export function BattleLogPage() {
   const setup = useBattleSetup();
   const slotPresets = useSlotPresets();
@@ -514,66 +607,18 @@ export function BattleLogPage() {
       </header>
 
       {!battleState && !selecting && (
-        <div className="battle-setup-board">
-          {(["a", "b"] as const).map((side) => (
-            <Fragment key={side}>
-              <div className="battle-setup-column">
-                <div className="battle-setup-column-title">
-                  {partyPresets.presets.length > 0 && (
-                    <button
-                      type="button"
-                      className="battle-setup-load-party"
-                      onClick={() => setPicker({ kind: "loadParty", side })}
-                    >
-                      저장된 파티 불러오기
-                    </button>
-                  )}
-                  {side === "a" ? "내 파티" : "상대 파티"}{" "}
-                  <span className="battle-setup-column-hint">6마리까지 빌드 · 4마리 이상이면 3마리 선출</span>
-                </div>
-                {movelessWarningFor(side) && (
-                  <p className="battle-lock-warning">{movelessWarningFor(side)}</p>
-                )}
-                {SLOT_INDICES.map((i) => (
-                  <BattleSetupCard
-                    key={i}
-                    label={`${side === "a" ? "내 포켓몬" : "상대 포켓몬"} ${i + 1}`}
-                    slot={slotCtl(side, i).slot}
-                    onPickPokemon={() => setPicker({ kind: "pokemon", side, slotIndex: i })}
-                    onClearPokemon={slotCtl(side, i).clearPokemon}
-                    onPickMove={(moveIndex) => setPicker({ kind: "move", side, slotIndex: i, moveIndex })}
-                    onPickAbility={() => setPicker({ kind: "ability", side, slotIndex: i })}
-                    onPickItem={() => setPicker({ kind: "item", side, slotIndex: i })}
-                    onPickNature={() => setPicker({ kind: "nature", side, slotIndex: i })}
-                    onPickPoints={() => setPicker({ kind: "points", side, slotIndex: i })}
-                    onToggleGender={slotCtl(side, i).toggleGender}
-                    onCycleSizeForm={slotCtl(side, i).cycleSizeForm}
-                    onCycleFormVariant={slotCtl(side, i).cycleFormVariant}
-                    onCycleCosmeticForm={slotCtl(side, i).cycleCosmeticForm}
-                    onPickCosmeticForm={() => setPicker({ kind: "cosmeticForm", side, slotIndex: i })}
-                    hasSamples={slotPresets.presets.length > 0}
-                    onSaveAsSample={() => handleSaveSlotAsSample(side, i)}
-                    onOpenSamplePicker={() => setPicker({ kind: "slotPresets", side, slotIndex: i })}
-                  />
-                ))}
-              </div>
-              {side === "a" && (
-                <div className="battle-setup-center">
-                  <button
-                    type="button"
-                    className="battle-setup-vs"
-                    disabled={!canProceed}
-                    onClick={handleProceed}
-                    aria-label={canProceed ? proceedLabel : hasMovelessSlot ? "기술을 배정하지 않은 포켓몬이 있습니다" : "양쪽 파티를 먼저 완성하세요"}
-                    title={canProceed ? proceedLabel : hasMovelessSlot ? "기술을 배정하지 않은 포켓몬이 있습니다" : "양쪽 파티를 먼저 완성하세요"}
-                  >
-                    VS
-                  </button>
-                </div>
-              )}
-            </Fragment>
-          ))}
-        </div>
+        <BattleSetupScreen
+          setup={setup}
+          hasPartyPresets={partyPresets.presets.length > 0}
+          hasSlotPresets={slotPresets.presets.length > 0}
+          movelessWarningFor={movelessWarningFor}
+          onSaveSlotAsSample={handleSaveSlotAsSample}
+          onOpenPicker={setPicker}
+          canProceed={canProceed}
+          proceedLabel={proceedLabel}
+          hasMovelessSlot={hasMovelessSlot}
+          onProceed={handleProceed}
+        />
       )}
 
       {!battleState && selecting && (
