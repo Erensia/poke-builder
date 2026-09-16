@@ -470,6 +470,150 @@ function TurnFooterLines({
 }
 
 /**
+ * 교체 로그 4계열 — 문구가 계열마다 달라(누가 왜 교체됐는지) 하나로 합치지 않고 이름만
+ * "TurnSwitchLines" 아래 나란히 뒀다. 공통점은 outName/inName 조회 + entryMessages 꼬리뿐.
+ */
+
+/** 턴 시작 시점의 자발적 교체(빌드에서 고른 순서대로) — 유일하게 `action`과 무관하다 */
+function PreMoveSwitchLines({ switches }: { switches: TurnResult["switches"] }) {
+  return (
+    <>
+      {switches
+        .filter((sw) => !sw.afterMove)
+        .map((sw, i) => {
+          const outName = getPokemon(sw.outPokemonId)?.name ?? "포켓몬";
+          const inName = getPokemon(sw.inPokemonId)?.name ?? "포켓몬";
+          return (
+            <div key={`sw-${i}`}>
+              {/* 본가 스타일 2줄(§5-2). fromIndex<0(강제 교체 합성 카드)이면 물러나는 줄 없음 */}
+              {sw.fromIndex >= 0 && <div className="battle-turn-line">돌아와! {outName}!</div>}
+              <div className="battle-turn-line">가라! {inName}!</div>
+              {sw.entryMessages.map((m, j) => (
+                <div key={`swm-${i}-${j}`} className="battle-turn-line is-muted">
+                  {m}
+                </div>
+              ))}
+            </div>
+          );
+        })}
+    </>
+  );
+}
+
+/** 유턴류 자체 교체 — 이 행동 직후에(§7-2) 시간 순서대로 렌더 */
+function SelfSwitchAfterMoveLines({
+  switches,
+  actor,
+}: {
+  switches: TurnResult["switches"];
+  actor: FighterKey;
+}) {
+  return (
+    <>
+      {switches
+        .filter((sw) => sw.afterMove && !sw.forced && sw.side === actor)
+        .map((sw, j) => {
+          const outN = getPokemon(sw.outPokemonId)?.name ?? "포켓몬";
+          const inN = getPokemon(sw.inPokemonId)?.name ?? "포켓몬";
+          return (
+            <div key={`swa-${j}`}>
+              {sw.shedTail && (
+                <div className="battle-turn-line">
+                  {outN}
+                  {eunNeun(outN)} 트레이너의 곁으로 돌아간다!
+                </div>
+              )}
+              <div className="battle-turn-line">돌아와! {outN}!</div>
+              <div className="battle-turn-line">가라! {inN}!</div>
+              {sw.entryMessages.map((m, k) => (
+                <div key={`swam-${j}-${k}`} className="battle-turn-line is-muted">
+                  {m}
+                </div>
+              ))}
+            </div>
+          );
+        })}
+    </>
+  );
+}
+
+/** 드래곤테일·울부짖기류 — 이 기술로 상대가 강제로 끌려나온 교체 */
+function ForcedOpponentSwitchLines({
+  switches,
+  actor,
+}: {
+  switches: TurnResult["switches"];
+  actor: FighterKey;
+}) {
+  return (
+    <>
+      {switches
+        .filter((sw) => sw.afterMove && sw.forced && sw.side === opponentKey(actor))
+        .map((sw, j) => {
+          const outN = getPokemon(sw.outPokemonId)?.name ?? "포켓몬";
+          const inN = getPokemon(sw.inPokemonId)?.name ?? "포켓몬";
+          return (
+            <div key={`swf-${j}`}>
+              <div className="battle-turn-line">
+                {outN}
+                {eunNeun(outN)} 강제로 교체되었다!
+              </div>
+              <div className="battle-turn-line">
+                {inN}
+                {eunNeun(inN)} 배틀에 끌려나왔다!
+              </div>
+              {sw.entryMessages.map((m, k) => (
+                <div key={`swfm-${j}-${k}`} className="battle-turn-line is-muted">
+                  {m}
+                </div>
+              ))}
+            </div>
+          );
+        })}
+    </>
+  );
+}
+
+/** PR-C4c: 레드카드 — 공격자 자신이 상대 도구에 맞아 강제로 끌려나온 교체 */
+function RedCardSwitchLines({
+  switches,
+  actor,
+  defenderName,
+}: {
+  switches: TurnResult["switches"];
+  actor: FighterKey;
+  defenderName: string;
+}) {
+  return (
+    <>
+      {switches
+        .filter((sw) => sw.afterMove && sw.forced && sw.side === actor && sw.redCardItemName)
+        .map((sw, j) => {
+          const outN = getPokemon(sw.outPokemonId)?.name ?? "포켓몬";
+          const inN = getPokemon(sw.inPokemonId)?.name ?? "포켓몬";
+          return (
+            <div key={`swrc-${j}`}>
+              <div className="battle-turn-line">
+                {defenderName}의 {sw.redCardItemName}! {outN}
+                {eunNeun(outN)} 강제로 교체되었다!
+              </div>
+              <div className="battle-turn-line">
+                {inN}
+                {eunNeun(inN)} 배틀에 끌려나왔다!
+              </div>
+              {sw.entryMessages.map((m, k) => (
+                <div key={`swrcm-${j}-${k}`} className="battle-turn-line is-muted">
+                  {m}
+                </div>
+              ))}
+            </div>
+          );
+        })}
+    </>
+  );
+}
+
+/**
  * 턴별 배틀 로그(실시간 배틀판·HP게이지·조작 UI에서 분리된, 텍스트 중심 히스토리) — 실시간
  * 대전(BattleLogPage)과 저장된 배틀비디오 다시보기(§6)가 그대로 공유한다. log 배열 하나만
  * 있으면 완전히 렌더 가능해 배틀비디오 저장에도 이 log만 그대로 남기면 된다.
@@ -492,24 +636,7 @@ export function BattleTurnLog({ log }: { log: TurnResult[] }) {
                 <div className="battle-turn-title">
                   {isForcedSwitchCard ? `턴 ${turn.turnNumber} · 교체` : `턴 ${turn.turnNumber} · 먼저 행동: ${firstActorName}`}
                 </div>
-                {turn.switches
-                  .filter((sw) => !sw.afterMove)
-                  .map((sw, i) => {
-                    const outName = getPokemon(sw.outPokemonId)?.name ?? "포켓몬";
-                    const inName = getPokemon(sw.inPokemonId)?.name ?? "포켓몬";
-                    return (
-                      <div key={`sw-${i}`}>
-                        {/* 본가 스타일 2줄(§5-2). fromIndex<0(강제 교체 합성 카드)이면 물러나는 줄 없음 */}
-                        {sw.fromIndex >= 0 && <div className="battle-turn-line">돌아와! {outName}!</div>}
-                        <div className="battle-turn-line">가라! {inName}!</div>
-                        {sw.entryMessages.map((m, j) => (
-                          <div key={`swm-${i}-${j}`} className="battle-turn-line is-muted">
-                            {m}
-                          </div>
-                        ))}
-                      </div>
-                    );
-                  })}
+                <PreMoveSwitchLines switches={turn.switches} />
                 {turn.turnStartAnnouncements.map((text, i) => (
                   <div key={`tsa-${i}`} className="battle-turn-line is-muted">
                     {text}
@@ -1599,79 +1726,15 @@ export function BattleTurnLog({ log }: { log: TurnResult[] }) {
                         </div>
                       )}
                       {/* 유턴류 자체 교체: 이 행동 직후에(§7-2) 시간 순서대로 렌더 */}
-                      {turn.switches
-                        .filter((sw) => sw.afterMove && !sw.forced && sw.side === action.actor)
-                        .map((sw, j) => {
-                          const outN = getPokemon(sw.outPokemonId)?.name ?? "포켓몬";
-                          const inN = getPokemon(sw.inPokemonId)?.name ?? "포켓몬";
-                          return (
-                            <div key={`swa-${j}`}>
-                              {sw.shedTail && (
-                                <div className="battle-turn-line">
-                                  {outN}
-                                  {eunNeun(outN)} 트레이너의 곁으로 돌아간다!
-                                </div>
-                              )}
-                              <div className="battle-turn-line">돌아와! {outN}!</div>
-                              <div className="battle-turn-line">가라! {inN}!</div>
-                              {sw.entryMessages.map((m, k) => (
-                                <div key={`swam-${j}-${k}`} className="battle-turn-line is-muted">
-                                  {m}
-                                </div>
-                              ))}
-                            </div>
-                          );
-                        })}
+                      <SelfSwitchAfterMoveLines switches={turn.switches} actor={action.actor} />
                       {/* 드래곤테일·울부짖기류: 이 기술로 상대가 강제로 끌려나온 교체 */}
-                      {turn.switches
-                        .filter(
-                          (sw) => sw.afterMove && sw.forced && sw.side === opponentKey(action.actor),
-                        )
-                        .map((sw, j) => {
-                          const outN = getPokemon(sw.outPokemonId)?.name ?? "포켓몬";
-                          const inN = getPokemon(sw.inPokemonId)?.name ?? "포켓몬";
-                          return (
-                            <div key={`swf-${j}`}>
-                              <div className="battle-turn-line">
-                                {outN}
-                                {eunNeun(outN)} 강제로 교체되었다!
-                              </div>
-                              <div className="battle-turn-line">
-                                {inN}
-                                {eunNeun(inN)} 배틀에 끌려나왔다!
-                              </div>
-                              {sw.entryMessages.map((m, k) => (
-                                <div key={`swfm-${j}-${k}`} className="battle-turn-line is-muted">
-                                  {m}
-                                </div>
-                              ))}
-                            </div>
-                          );
-                        })}
+                      <ForcedOpponentSwitchLines switches={turn.switches} actor={action.actor} />
                       {/* PR-C4c: 레드카드 — 공격자 자신이 상대 도구에 맞아 강제로 끌려나온 교체 */}
-                      {turn.switches
-                        .filter((sw) => sw.afterMove && sw.forced && sw.side === action.actor && sw.redCardItemName)
-                        .map((sw, j) => {
-                          const outN = getPokemon(sw.outPokemonId)?.name ?? "포켓몬";
-                          const inN = getPokemon(sw.inPokemonId)?.name ?? "포켓몬";
-                          return (
-                            <div key={`swrc-${j}`}>
-                              <div className="battle-turn-line">
-                                {defenderName}의 {sw.redCardItemName}! {outN}
-                                {eunNeun(outN)} 강제로 교체되었다!
-                              </div>
-                              <div className="battle-turn-line">
-                                {inN}
-                                {eunNeun(inN)} 배틀에 끌려나왔다!
-                              </div>
-                              {sw.entryMessages.map((m, k) => (
-                                <div key={`swrcm-${j}-${k}`} className="battle-turn-line is-muted">
-                                  {m}
-                                </div>
-                              ))}
-                            </div>
-                          );
-                        })}
+                      <RedCardSwitchLines
+                        switches={turn.switches}
+                        actor={action.actor}
+                        defenderName={defenderName}
+                      />
                     </div>
                   );
                 })}
