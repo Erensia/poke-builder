@@ -94,6 +94,12 @@
   gap: 0.5rem;
 }
 
+/* 압축 뷰(ver.1.6 §4-3, 배틀타워 편성 전용) — 프로필 사진+이름만이라 카드가 짧아진다 */
+.party-slot-compact {
+  min-height: auto;
+  padding-bottom: 0.5rem;
+}
+
 .party-slot-clear {
   position: absolute;
   top: 0.5rem;
@@ -137,6 +143,31 @@
 }
 
 .party-slot-save-sample:hover {
+  background: var(--violet-soft);
+  color: var(--violet);
+}
+
+/* 종 변경 버튼(ver.1.6 §4-3, 배틀타워 편성 전용) — 펼침 상태에서만 나온다. 사진 클릭은 압축⇄펼침 토글로 뺐다.
+   💾 샘플 저장 버튼과 같은 간격(20px + 5px)으로 붙여서 세 아이콘이 한 묶음처럼 보이게 한다. */
+.party-slot-swap {
+  position: absolute;
+  top: 0.5rem;
+  right: calc(1.75rem + 30px);
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: none;
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font-size: 0.62rem;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.party-slot-swap:hover {
   background: var(--violet-soft);
   color: var(--violet);
 }
@@ -321,7 +352,8 @@
    (백로그 §2-7, §2-3 B에서 보류했던 항목). 커진 만큼 이름 줄이 가리지 않게 오른쪽 여백 확보. */
 @media (max-width: 760px) {
   .party-slot-clear,
-  .party-slot-save-sample {
+  .party-slot-save-sample,
+  .party-slot-swap {
     width: 28px;
     height: 28px;
     font-size: 0.72rem;
@@ -331,7 +363,17 @@
     right: calc(0.5rem + 28px + 6px);
   }
 
+  /* ver.1.6 §4-3 — 종 변경 버튼도 데스크톱과 같은 규칙(버튼 하나 폭 + 여백)으로 이어 붙인다 */
+  .party-slot-swap {
+    right: calc(0.5rem + 28px + 6px + 28px + 6px);
+  }
+
   .party-slot-main {
     padding-right: 4.2rem;
+  }
+
+  /* ver.1.6 §4-3 — 배틀타워 편성 펼침 카드는 코너 아이콘이 3개(✕·💾·🔀)라 더 넓게 비운다 */
+  .party-slot-main-has-swap {
+    padding-right: 6.3rem;
   }
 }
