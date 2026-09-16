@@ -13,6 +13,7 @@ import { STAT_LABELS } from "../lib/statLabels";
 import { typeLabel } from "../types/pokemon-type";
 import { eunNeun, iGa, eulReul, waGwa, roEuro } from "../lib/josa";
 import { VOLATILE_LABELS, SCREEN_LABELS } from "../lib/battleLogLabels";
+import { FIELD_ENTRY_ANNOUNCEMENT } from "../lib/fieldEffects";
 import {
   CHARGE_TURN_MESSAGE,
   stageRiseAdverb,
@@ -653,6 +654,22 @@ function RedCardSwitchLines({
 }
 
 /**
+ * 사이코필드에 선공기가 막혔을 때(ver.1.6 §3-3-5) — 보호받은 쪽이 "내 파티"(side a)면 실제
+ * 이름을, "상대 파티"(side b)면 "상대 포켓몬"으로 뭉뚱그린다. 보호받은 쪽은 시전자(actor)의
+ * 반대편이라, actor가 a면 보호받은 쪽은 b(상대), actor가 b면 보호받은 쪽은 a(내 파티)다.
+ */
+function psychicFieldBlockedLine(actor: FighterKey, defenderName: string): ReactNode {
+  const protectedName = actor === "a" ? "상대 포켓몬" : defenderName;
+  return (
+    <>
+      {" — "}
+      {protectedName}
+      {eunNeun(protectedName)} 사이코필드의 보호를 받고 있다!
+    </>
+  );
+}
+
+/**
  * 행동 한 건의 메인 라인 — 누가 무슨 기술을 써서 어떻게 됐는지("빗나감"/데미지 수치)까지만
  * 한 줄에 모은다. 기절 같은 "상태"는 이 컴포넌트 밖(호출부)에서 별도 줄로 분리한다. `action`의
  * ~50개 optional 필드를 조건부로 읽는 게 전부라 클로저 의존 없이(호출부가 넘겨주는 다섯 개
@@ -686,7 +703,7 @@ function ActionMainLine({
       {action.blockedReason === "confusion" &&
         ` — 자기자신을 공격했다! (${action.selfDamage} 데미지)`}
       {action.blockedReason === "attract" && " — 헤롱헤롱에 빠져 행동 불가"}
-      {action.blockedReason === "psychicFieldPriority" && " — 사이코필드에 막혀 실패"}
+      {action.blockedReason === "psychicFieldPriority" && psychicFieldBlockedLine(action.actor, defenderName)}
       {action.blockedReason === "queenlyMajesty" && (
         <>
           {" — "}
@@ -719,7 +736,11 @@ function ActionMainLine({
         <> · 희망사항!</>
       )}
       {!action.blockedReason && action.hit && action.setField && (
-        <> · {action.setField} 설치!</>
+        <>
+          {" "}
+          ·{" "}
+          {action.setField === "미스트필드" ? FIELD_ENTRY_ANNOUNCEMENT.미스트필드 : `${action.setField} 설치!`}
+        </>
       )}
       {!action.blockedReason && action.hit && action.fieldSetFailed && (
         <> · 그러나 실패했다!</>
@@ -1133,7 +1154,7 @@ function ActionEffectLines({
       {!action.blockedReason && action.hit && action.balloonPoppedItemName && (
         <div className="battle-turn-line is-muted">
           {defenderName}의 {action.balloonPoppedItemName}
-          {eunNeun(action.balloonPoppedItemName)} 터졌다!
+          {iGa(action.balloonPoppedItemName)} 터졌다!
         </div>
       )}
       {!action.blockedReason && !action.hits && action.abilityDisabledMoveName && (

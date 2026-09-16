@@ -100,7 +100,9 @@ export function PartyBoard() {
       <header className="party-board-header">
         <div>
           <h2>파티 샘플 작성</h2>
-          <p>63싱글배틀의 파티를 편성해보세요!</p>
+          <p>
+            Pokémon Cham<span className="party-board-title-accent">p</span>ions 파티를 편성해보세요!
+          </p>
         </div>
         <div className="party-board-header-right">
           <span className="party-board-count">{filledCount} / 6</span>

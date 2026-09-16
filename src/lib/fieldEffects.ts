@@ -3,7 +3,7 @@ import type { FieldKind } from "../types/field";
 import type { StatusCondition } from "../types/status";
 import type { Move } from "../types/move";
 
-/** 필드는 전부 5턴 지속 (그라운드코트로 8턴까지 늘어나는 건 아직 도구 배율처럼 스키마 밖) */
+/** 필드는 기본 5턴 지속. 그라운드코트를 지닌 쪽이 펼치면 +3(총 8턴) — Item.fieldDurationBonus로 반영 */
 export const FIELD_DURATION = 5;
 
 /** 필드마다 위력이 1.3배 오르는 타입. 미스트필드는 특정 타입을 강화하지 않고 대신 드래곤을 반감시킨다 */
@@ -19,6 +19,17 @@ export const FIELD_DISPLAY_TYPE: Record<FieldKind, PokemonType> = {
   미스트필드: "페어리",
   사이코필드: "에스퍼",
   일렉트릭필드: "전기",
+};
+
+/**
+ * 필드가 새로 깔릴 때 "필드가 X로 바뀌었다!" 대신 쓰는 필드별 전용 문구(ver.1.6 §3-3-1~4).
+ * 등장 특성(사이코/그래스/일렉트릭메이커)과 미스트필드 기술 양쪽에서 공유한다.
+ */
+export const FIELD_ENTRY_ANNOUNCEMENT: Record<FieldKind, string> = {
+  그래스필드: "발밑에 풀이 무성해졌다!",
+  미스트필드: "발밑이 안개로 자욱해졌다!",
+  사이코필드: "발밑에서 이상한 느낌이 든다!",
+  일렉트릭필드: "발밑에 전기가 떠돌기 시작했다!",
 };
 
 /** 필드가 기술 데미지에 주는 배율. 그래스/사이코/일렉트릭=해당 타입 1.3배, 미스트필드=드래곤타입 0.5배 */
