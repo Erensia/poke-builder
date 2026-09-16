@@ -1,3 +1,4 @@
+import type { DragEvent } from "react";
 import type { PartySlot } from "../types/party";
 import { getPokemon, getMove, getAbility, getItem, getNature } from "../lib/data";
 import {
@@ -39,6 +40,15 @@ interface BattleSetupCardProps {
   onSaveAsSample: () => void;
   /** 저장된 샘플 목록에서 이 슬롯에 불러올 것을 고르는 모달 열기 */
   onOpenSamplePicker: () => void;
+  /** 지금 이 슬롯을 드래그해서 잡고 있는 중이면 true(ver.1.6 §4-2 D&D) — 드는 카드 자체를 옅게 표시 */
+  isDragging: boolean;
+  /** 잡고 있는 다른 슬롯이 지금 이 슬롯 위에 올라와 있으면 true — 놓을 자리 하이라이트 */
+  isDragOver: boolean;
+  onDragStart: () => void;
+  /** 이 슬롯 위로 드래그 중인 카드가 지나갈 때(dragover) */
+  onDragOverSlot: () => void;
+  onDrop: () => void;
+  onDragEnd: () => void;
 }
 
 /**
@@ -64,12 +74,34 @@ export function BattleSetupCard({
   hasSamples,
   onSaveAsSample,
   onOpenSamplePicker,
+  isDragging,
+  isDragOver,
+  onDragStart,
+  onDragOverSlot,
+  onDrop,
+  onDragEnd,
 }: BattleSetupCardProps) {
   const pokemon = slot ? getPokemon(slot.pokemonId) : undefined;
 
+  // 카드 전체를 드래그 소스 겸 드롭 타겟으로 쓴다(PartySlotCard와 동일 패턴).
+  const dragHandlers = {
+    draggable: true,
+    onDragStart,
+    onDragOver: (e: DragEvent) => {
+      e.preventDefault();
+      onDragOverSlot();
+    },
+    onDrop: (e: DragEvent) => {
+      e.preventDefault();
+      onDrop();
+    },
+    onDragEnd,
+  };
+  const dragStateClass = `${isDragging ? " is-dragging" : ""}${isDragOver ? " is-drag-over" : ""}`;
+
   if (!pokemon) {
     return (
-      <div className="party-slot party-slot-empty">
+      <div className={`party-slot party-slot-empty${dragStateClass}`} {...dragHandlers}>
         <span className="party-slot-num">{label}</span>
         <button type="button" className="party-slot-empty-main" onClick={onPickPokemon}>
           <span className="party-slot-plus" aria-hidden="true">
@@ -92,7 +124,7 @@ export function BattleSetupCard({
   const bulkSpecial = computeBulkPower(realStats, "special");
 
   return (
-    <div className="party-slot party-slot-filled">
+    <div className={`party-slot party-slot-filled${dragStateClass}`} {...dragHandlers}>
       <span className="party-slot-num">{label}</span>
       <button
         type="button"

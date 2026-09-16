@@ -164,5 +164,17 @@ export function useBattleSetup() {
     });
   }
 
-  return { a, b, loadSide };
+  /** 드래그앤드롭으로 두 슬롯의 내용을 맞바꾼다(ver.1.6 §4-2). PartyBoard의 reorderSlots와 동일하게 스왑 방식. */
+  function reorderSlots(sideKey: "a" | "b", fromIndex: number, toIndex: number) {
+    if (fromIndex === toIndex) return;
+    const target = sideKey === "a" ? a : b;
+    const fromSlot = target[fromIndex].slot;
+    const toSlot = target[toIndex].slot;
+    if (toSlot) target[fromIndex].loadSlot(toSlot);
+    else target[fromIndex].clearPokemon();
+    if (fromSlot) target[toIndex].loadSlot(fromSlot);
+    else target[toIndex].clearPokemon();
+  }
+
+  return { a, b, loadSide, reorderSlots };
 }
