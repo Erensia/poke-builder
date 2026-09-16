@@ -23,6 +23,176 @@ import {
 const VOLATILES_WITH_DEDICATED_LOG_LINE = new Set(["drowsy", "wish", "encore"]);
 
 /**
+ * 방어측 on-hit 특성 효과 한 줄의 "내용"만 만드는 함수들(감싸는 div·key는 호출부 책임) —
+ * 다단히트 집계(HitAbilityEvent, 타별로 여러 번 발동 가능)와 단일히트(ActionLogEntry의 개별
+ * `ability*` 필드, 최대 1회)가 문구는 완전히 동일해서(§5와 같은 이유로 대조 확인 완료) 공유한다.
+ */
+function abilityStatusLine(
+  abilityName: string | undefined,
+  status: NonNullable<HitAbilityEvent["statusOnAttacker"]>,
+  actorName: string,
+  defenderName: string,
+): ReactNode {
+  return (
+    <>
+      {defenderName}의 {abilityName}! {STATUS_ONSET_TEXT[status](actorName)}
+    </>
+  );
+}
+
+function abilityVolatileLine(
+  abilityName: string | undefined,
+  volatile: NonNullable<HitAbilityEvent["volatileOnAttacker"]>,
+  actorName: string,
+  defenderName: string,
+): ReactNode {
+  return (
+    <>
+      {defenderName}의 {abilityName}! {actorName}
+      {eunNeun(actorName)} {VOLATILE_LABELS[volatile]} 상태가 되었다!
+    </>
+  );
+}
+
+function abilityDamageLine(
+  abilityName: string | undefined,
+  damage: number,
+  actorName: string,
+  defenderName: string,
+): ReactNode {
+  return (
+    <>
+      {defenderName}의 {abilityName}! {actorName}
+      {eunNeun(actorName)} {damage} 데미지를 입었다
+    </>
+  );
+}
+
+/** 방어측 랭크 변화(지구력·깨어진갑옷류 — 같은 특성이 내림·오름을 동시에 낼 수 있어 한 쌍으로 처리) */
+function abilityDefenderStatsLines(
+  abilityName: string | undefined,
+  lowered: NonNullable<HitAbilityEvent["loweredDefenderStats"]>,
+  raised: NonNullable<HitAbilityEvent["raisedDefenderStats"]>,
+  defenderName: string,
+): { lowered: ReactNode | null; raised: ReactNode | null } {
+  let loweredContent: ReactNode | null = null;
+  if (lowered.length > 0) {
+    const joined = lowered.map((s) => STAT_LABELS[s.stat]).join(", ");
+    const maxDelta = Math.max(...lowered.map((s) => s.delta));
+    loweredContent = (
+      <>
+        {defenderName}의 {abilityName}! {defenderName}의 {joined}
+        {iGa(joined)} {stageRiseAdverb(maxDelta)}내려갔다!
+      </>
+    );
+  }
+  let raisedContent: ReactNode | null = null;
+  if (raised.length > 0) {
+    const joined = raised.map((s) => STAT_LABELS[s.stat]).join(", ");
+    const maxDelta = Math.max(...raised.map((s) => s.delta));
+    raisedContent = (
+      <>
+        {lowered.length === 0 && (
+          <>
+            {defenderName}의 {abilityName}!{" "}
+          </>
+        )}
+        {defenderName}의 {joined}
+        {iGa(joined)} {stageRiseAdverb(maxDelta)}올라갔다!
+      </>
+    );
+  }
+  return { lowered: loweredContent, raised: raisedContent };
+}
+
+function abilityLoweredAttackerStatsLine(
+  abilityName: string | undefined,
+  lowered: NonNullable<HitAbilityEvent["loweredAttackerStats"]>,
+  actorName: string,
+  defenderName: string,
+): ReactNode {
+  const joined = lowered.map((s) => STAT_LABELS[s.stat]).join(", ");
+  const maxDelta = Math.max(...lowered.map((s) => s.delta));
+  return (
+    <>
+      {defenderName}의 {abilityName}! {actorName}의 {joined}
+      {iGa(joined)} {stageRiseAdverb(maxDelta)}내려갔다!
+    </>
+  );
+}
+
+function abilityDisabledMoveLine(
+  abilityName: string | undefined,
+  moveName: string,
+  actorName: string,
+  defenderName: string,
+): ReactNode {
+  return (
+    <>
+      {defenderName}의 {abilityName}! {actorName}의 {moveName}
+      {iGa(moveName)} 봉인되었다!
+    </>
+  );
+}
+
+function abilityPickpocketLine(
+  abilityName: string | undefined,
+  itemName: string,
+  actorName: string,
+  defenderName: string,
+): ReactNode {
+  return (
+    <>
+      {defenderName}의 {abilityName}! {actorName}의 {itemName}
+      {eulReul(itemName)} 빼앗았다!
+    </>
+  );
+}
+
+function abilityMummifiedLine(abilityName: string, actorName: string, defenderName: string): ReactNode {
+  return (
+    <>
+      {defenderName}의 {abilityName}! {actorName}의 특성이 미라가 되었다!
+    </>
+  );
+}
+
+function wanderingSpiritLine(actorName: string, defenderName: string): ReactNode {
+  return (
+    <>
+      {defenderName}의 떠도는영혼! {actorName}
+      {eunNeun(actorName)} {defenderName}
+      {waGwa(defenderName)} 특성을 맞바꿨다!
+    </>
+  );
+}
+
+function sandSpitWeatherLine(
+  weather: NonNullable<HitAbilityEvent["sandSpitWeather"]>,
+  defenderName: string,
+): ReactNode {
+  return (
+    <>
+      {defenderName}의 모래뿜기! 날씨가 {weather}
+      {roEuro(weather)} 바뀌었다!
+    </>
+  );
+}
+
+function setFieldOnHitLine(
+  abilityName: string | undefined,
+  field: NonNullable<HitAbilityEvent["setFieldOnHit"]>,
+  defenderName: string,
+): ReactNode {
+  return (
+    <>
+      {defenderName}의 {abilityName}! {field}
+      {roEuro(field)} 바뀌었다!
+    </>
+  );
+}
+
+/**
  * 다단히트 한 타의 방어측 on-hit 특성 이벤트(HitAbilityEvent)를 로그 줄들로 렌더한다.
  * 문구는 단타용 집계 렌더(아래 JSX)와 동일하게 맞춘다 — 다단히트일 땐 그 집계 줄들이 숨겨지고
  * 이 함수가 타별로 같은 문구를 찍는다.
@@ -42,110 +212,44 @@ function hitAbilityEventLines(
     );
 
   if (ev.statusOnAttacker) {
-    push(
-      <>
-        {defenderName}의 {ev.abilityName}! {STATUS_ONSET_TEXT[ev.statusOnAttacker](actorName)}
-      </>,
-    );
+    push(abilityStatusLine(ev.abilityName, ev.statusOnAttacker, actorName, defenderName));
   }
   if (ev.volatileOnAttacker) {
-    push(
-      <>
-        {defenderName}의 {ev.abilityName}! {actorName}
-        {eunNeun(actorName)} {VOLATILE_LABELS[ev.volatileOnAttacker]} 상태가 되었다!
-      </>,
-    );
+    push(abilityVolatileLine(ev.abilityName, ev.volatileOnAttacker, actorName, defenderName));
   }
   if (ev.damageToAttacker) {
-    push(
-      <>
-        {defenderName}의 {ev.abilityName}! {actorName}
-        {eunNeun(actorName)} {ev.damageToAttacker} 데미지를 입었다
-      </>,
-    );
+    push(abilityDamageLine(ev.abilityName, ev.damageToAttacker, actorName, defenderName));
   }
-  if (ev.loweredDefenderStats?.length) {
-    const joined = ev.loweredDefenderStats.map((s) => STAT_LABELS[s.stat]).join(", ");
-    const maxDelta = Math.max(...ev.loweredDefenderStats.map((s) => s.delta));
-    push(
-      <>
-        {defenderName}의 {ev.abilityName}! {defenderName}의 {joined}
-        {iGa(joined)} {stageRiseAdverb(maxDelta)}내려갔다!
-      </>,
+  if (ev.loweredDefenderStats?.length || ev.raisedDefenderStats?.length) {
+    const { lowered, raised } = abilityDefenderStatsLines(
+      ev.abilityName,
+      ev.loweredDefenderStats ?? [],
+      ev.raisedDefenderStats ?? [],
+      defenderName,
     );
-  }
-  if (ev.raisedDefenderStats?.length) {
-    const joined = ev.raisedDefenderStats.map((s) => STAT_LABELS[s.stat]).join(", ");
-    const maxDelta = Math.max(...ev.raisedDefenderStats.map((s) => s.delta));
-    push(
-      <>
-        {!ev.loweredDefenderStats?.length && (
-          <>
-            {defenderName}의 {ev.abilityName}!{" "}
-          </>
-        )}
-        {defenderName}의 {joined}
-        {iGa(joined)} {stageRiseAdverb(maxDelta)}올라갔다!
-      </>,
-    );
+    if (lowered) push(lowered);
+    if (raised) push(raised);
   }
   if (ev.loweredAttackerStats?.length) {
-    const joined = ev.loweredAttackerStats.map((s) => STAT_LABELS[s.stat]).join(", ");
-    const maxDelta = Math.max(...ev.loweredAttackerStats.map((s) => s.delta));
-    push(
-      <>
-        {defenderName}의 {ev.abilityName}! {actorName}의 {joined}
-        {iGa(joined)} {stageRiseAdverb(maxDelta)}내려갔다!
-      </>,
-    );
+    push(abilityLoweredAttackerStatsLine(ev.abilityName, ev.loweredAttackerStats, actorName, defenderName));
   }
   if (ev.disabledMoveName) {
-    push(
-      <>
-        {defenderName}의 {ev.abilityName}! {actorName}의 {ev.disabledMoveName}
-        {iGa(ev.disabledMoveName)} 봉인되었다!
-      </>,
-    );
+    push(abilityDisabledMoveLine(ev.abilityName, ev.disabledMoveName, actorName, defenderName));
   }
   if (ev.pickpocketStolenItemName) {
-    push(
-      <>
-        {defenderName}의 {ev.abilityName}! {actorName}의 {ev.pickpocketStolenItemName}
-        {eulReul(ev.pickpocketStolenItemName)} 빼앗았다!
-      </>,
-    );
+    push(abilityPickpocketLine(ev.abilityName, ev.pickpocketStolenItemName, actorName, defenderName));
   }
   if (ev.mummifiedAttackerAbilityName) {
-    push(
-      <>
-        {defenderName}의 {ev.mummifiedAttackerAbilityName}! {actorName}의 특성이 미라가 되었다!
-      </>,
-    );
+    push(abilityMummifiedLine(ev.mummifiedAttackerAbilityName, actorName, defenderName));
   }
   if (ev.wanderingSpiritSwapped) {
-    push(
-      <>
-        {defenderName}의 떠도는영혼! {actorName}
-        {eunNeun(actorName)} {defenderName}
-        {waGwa(defenderName)} 특성을 맞바꿨다!
-      </>,
-    );
+    push(wanderingSpiritLine(actorName, defenderName));
   }
   if (ev.sandSpitWeather) {
-    push(
-      <>
-        {defenderName}의 모래뿜기! 날씨가 {ev.sandSpitWeather}
-        {roEuro(ev.sandSpitWeather)} 바뀌었다!
-      </>,
-    );
+    push(sandSpitWeatherLine(ev.sandSpitWeather, defenderName));
   }
   if (ev.setFieldOnHit) {
-    push(
-      <>
-        {defenderName}의 {ev.abilityName}! {ev.setFieldOnHit}
-        {roEuro(ev.setFieldOnHit)} 바뀌었다!
-      </>,
-    );
+    push(setFieldOnHitLine(ev.abilityName, ev.setFieldOnHit, defenderName));
   }
   return lines;
 }
@@ -299,7 +403,7 @@ export function BattleTurnLog({ log }: { log: TurnResult[] }) {
                           <> · 그러나 실패했다!</>
                         )}
                         {!action.blockedReason && action.hit && !action.hits && action.mummifiedAttackerAbilityName && (
-                          <> · {defenderName}의 {action.mummifiedAttackerAbilityName}! {actorName}의 특성이 미라가 되었다!</>
+                          <> · {abilityMummifiedLine(action.mummifiedAttackerAbilityName, actorName, defenderName)}</>
                         )}
                         {!action.blockedReason && action.ateBerryName && (
                           <>
@@ -623,22 +727,33 @@ export function BattleTurnLog({ log }: { log: TurnResult[] }) {
                           다단히트(action.hits)면 §2-5 블록이 타별로 찍으므로 아래 집계 줄은 건너뛴다. */}
                       {!action.blockedReason && !action.hits && action.abilityInflictedStatusOnAttacker && (
                         <div className="battle-turn-line is-muted">
-                          {defenderName}의 {action.abilityInflictedStatusAbilityName}!{" "}
-                          {STATUS_ONSET_TEXT[action.abilityInflictedStatusOnAttacker](actorName)}
+                          {abilityStatusLine(
+                            action.abilityInflictedStatusAbilityName,
+                            action.abilityInflictedStatusOnAttacker,
+                            actorName,
+                            defenderName,
+                          )}
                         </div>
                       )}
                       {/* 헤롱헤롱바디 — 접촉해 온 공격자가 이성이면 방어측 특성이 발동해 공격자에게 걸린다 */}
                       {!action.blockedReason && !action.hits && action.abilityInflictedVolatileOnAttacker && (
                         <div className="battle-turn-line is-muted">
-                          {defenderName}의 {action.abilityInflictedVolatileAbilityName}! {actorName}
-                          {eunNeun(actorName)} {VOLATILE_LABELS[action.abilityInflictedVolatileOnAttacker]} 상태가
-                          되었다!
+                          {abilityVolatileLine(
+                            action.abilityInflictedVolatileAbilityName,
+                            action.abilityInflictedVolatileOnAttacker,
+                            actorName,
+                            defenderName,
+                          )}
                         </div>
                       )}
                       {!action.blockedReason && !action.hits && !!action.abilityDamageToAttacker && (
                         <div className="battle-turn-line is-muted">
-                          {defenderName}의 {action.abilityDamageAbilityName}! {actorName}
-                          {eunNeun(actorName)} {action.abilityDamageToAttacker} 데미지를 입었다
+                          {abilityDamageLine(
+                            action.abilityDamageAbilityName,
+                            action.abilityDamageToAttacker,
+                            actorName,
+                            defenderName,
+                          )}
                         </div>
                       )}
                       {/* PR-C4a: 울퉁불퉁멧 — 접촉기 공격자 반동(다단히트 합산이라 hits 무관 표시) */}
@@ -664,17 +779,23 @@ export function BattleTurnLog({ log }: { log: TurnResult[] }) {
                       )}
                       {!action.blockedReason && !action.hits && action.abilityDisabledMoveName && (
                         <div className="battle-turn-line is-muted">
-                          {defenderName}의 {action.abilityDisableAbilityName}! {actorName}의{" "}
-                          {action.abilityDisabledMoveName}
-                          {iGa(action.abilityDisabledMoveName)} 봉인되었다!
+                          {abilityDisabledMoveLine(
+                            action.abilityDisableAbilityName,
+                            action.abilityDisabledMoveName,
+                            actorName,
+                            defenderName,
+                          )}
                         </div>
                       )}
                       {/* 나쁜손버릇 — 접촉기로 피격당한 방어측이 공격자의 도구를 빼앗았을 때 */}
                       {!action.blockedReason && !action.hits && action.pickpocketStolenItemName && (
                         <div className="battle-turn-line is-muted">
-                          {defenderName}의 {action.pickpocketAbilityName}! {actorName}의{" "}
-                          {action.pickpocketStolenItemName}
-                          {eulReul(action.pickpocketStolenItemName)} 빼앗았다!
+                          {abilityPickpocketLine(
+                            action.pickpocketAbilityName,
+                            action.pickpocketStolenItemName,
+                            actorName,
+                            defenderName,
+                          )}
                         </div>
                       )}
                       {/* 지구력·깨어진갑옷 등 — 피격 시 방어측 특성이 자기 랭크를 바꿨을 때
@@ -685,28 +806,16 @@ export function BattleTurnLog({ log }: { log: TurnResult[] }) {
                         ((action.abilityLoweredDefenderStats?.length ?? 0) > 0 ||
                           (action.abilityRaisedDefenderStats?.length ?? 0) > 0) &&
                         (() => {
-                          const lowered = action.abilityLoweredDefenderStats ?? [];
-                          const raised = action.abilityRaisedDefenderStats ?? [];
-                          const abilityName = action.abilityRaisedDefenderStatsAbilityName;
-                          const loweredJoined = lowered.map((s) => STAT_LABELS[s.stat]).join(", ");
-                          const raisedJoined = raised.map((s) => STAT_LABELS[s.stat]).join(", ");
+                          const { lowered, raised } = abilityDefenderStatsLines(
+                            action.abilityRaisedDefenderStatsAbilityName,
+                            action.abilityLoweredDefenderStats ?? [],
+                            action.abilityRaisedDefenderStats ?? [],
+                            defenderName,
+                          );
                           return (
                             <>
-                              {lowered.length > 0 && (
-                                <div className="battle-turn-line is-muted">
-                                  {defenderName}의 {abilityName}! {defenderName}의 {loweredJoined}
-                                  {iGa(loweredJoined)}{" "}
-                                  {stageRiseAdverb(Math.max(...lowered.map((s) => s.delta)))}내려갔다!
-                                </div>
-                              )}
-                              {raised.length > 0 && (
-                                <div className="battle-turn-line is-muted">
-                                  {lowered.length === 0 && <>{defenderName}의 {abilityName}! </>}
-                                  {defenderName}의 {raisedJoined}
-                                  {iGa(raisedJoined)}{" "}
-                                  {stageRiseAdverb(Math.max(...raised.map((s) => s.delta)))}올라갔다!
-                                </div>
-                              )}
+                              {lowered && <div className="battle-turn-line is-muted">{lowered}</div>}
+                              {raised && <div className="battle-turn-line is-muted">{raised}</div>}
                             </>
                           );
                         })()}
@@ -751,16 +860,16 @@ export function BattleTurnLog({ log }: { log: TurnResult[] }) {
                         !action.hits &&
                         action.abilityLoweredAttackerStatsAbilityName &&
                         (action.abilityLoweredAttackerStats?.length ?? 0) > 0 &&
-                        (() => {
-                          const lowered = action.abilityLoweredAttackerStats ?? [];
-                          const joined = lowered.map((s) => STAT_LABELS[s.stat]).join(", ");
-                          return (
-                            <div className="battle-turn-line is-muted">
-                              {defenderName}의 {action.abilityLoweredAttackerStatsAbilityName}! {actorName}의 {joined}
-                              {iGa(joined)} {stageRiseAdverb(Math.max(...lowered.map((s) => s.delta)))}내려갔다!
-                            </div>
-                          );
-                        })()}
+                        (() => (
+                          <div className="battle-turn-line is-muted">
+                            {abilityLoweredAttackerStatsLine(
+                              action.abilityLoweredAttackerStatsAbilityName,
+                              action.abilityLoweredAttackerStats ?? [],
+                              actorName,
+                              defenderName,
+                            )}
+                          </div>
+                        ))()}
                       {/* 뒤집어엎기 — 상대 능력 변화를 전부 반전 */}
                       {!action.blockedReason && action.invertedTargetStages && (
                         <div className="battle-turn-line is-muted">
@@ -818,24 +927,18 @@ export function BattleTurnLog({ log }: { log: TurnResult[] }) {
                       )}
                       {/* 떠도는영혼 — 접촉 피격으로 공격자와 특성 교환 */}
                       {!action.blockedReason && !action.hits && action.wanderingSpiritSwapped && (
-                        <div className="battle-turn-line is-muted">
-                          {defenderName}의 떠도는영혼! {actorName}
-                          {eunNeun(actorName)} {defenderName}
-                          {waGwa(defenderName)} 특성을 맞바꿨다!
-                        </div>
+                        <div className="battle-turn-line is-muted">{wanderingSpiritLine(actorName, defenderName)}</div>
                       )}
                       {/* 모래뿜기 — 피격으로 날씨 변경 */}
                       {!action.blockedReason && !action.hits && action.sandSpitWeather && (
                         <div className="battle-turn-line is-muted">
-                          {defenderName}의 모래뿜기! 날씨가 {action.sandSpitWeather}
-                          {roEuro(action.sandSpitWeather)} 바뀌었다!
+                          {sandSpitWeatherLine(action.sandSpitWeather, defenderName)}
                         </div>
                       )}
                       {/* PR-C2: 넘치는씨 — 피격으로 그래스필드 설정 */}
                       {!action.blockedReason && !action.hits && action.seedSowerField && (
                         <div className="battle-turn-line is-muted">
-                          {defenderName}의 넘치는씨! {action.seedSowerField}
-                          {roEuro(action.seedSowerField)} 바뀌었다!
+                          {setFieldOnHitLine("넘치는씨", action.seedSowerField, defenderName)}
                         </div>
                       )}
                       {/* PR-C4b: 시드류 — 이번 행동으로 필드가 새로 깔려 발동 */}
