@@ -5,16 +5,13 @@ interface ModalProps {
   title: string;
   onClose: () => void;
   children: ReactNode;
-  /** modal-panel에 덧붙일 클래스(ver.1.6 §2-2) — 내용이 짧은 모달이 모바일 하단 시트에서
-   *  화면 아래쪽에 작게 눌러앉아 보이는 걸 그 모달만 골라서 고칠 때 씀. */
-  panelClassName?: string;
 }
 
-export function Modal({ title, onClose, children, panelClassName }: ModalProps) {
+export function Modal({ title, onClose, children }: ModalProps) {
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div
-        className={`modal-panel${panelClassName ? ` ${panelClassName}` : ""}`}
+        className="modal-panel"
         role="dialog"
         aria-modal="true"
         aria-label={title}

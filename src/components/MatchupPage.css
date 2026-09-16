@@ -122,9 +122,9 @@
   }
 
   /* ver.1.6 §2-3 — 스피드 결과 블록에 폭 제한이 없어서 .matchup-slot(280px 고정)보다 넓게
-     퍼져 보이던 문제. 세로 배치에서 슬롯 카드와 같은 폭으로 맞추고 가운데 정렬한다. */
+     퍼져 보이던 문제. 슬롯 카드 폭 그대로 맞추니 너무 좁아 보인다는 피드백으로 10px 더 줌. */
   .matchup-speed-block {
-    width: 280px;
+    width: 290px;
     max-width: 100%;
     margin-left: auto;
     margin-right: auto;

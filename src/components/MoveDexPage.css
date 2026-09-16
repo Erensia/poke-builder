@@ -245,20 +245,18 @@ button.movedex-th:hover {
   font-size: 0.85rem;
 }
 
+/* ver.1.6 §2-5 — .movedex-table을 가로 스크롤 컨테이너로 두면(헤더·본문이 그냥 같은 부모의
+   형제) 이론상 같이 움직여야 하는데, 실기기(모바일 사파리, PC 확대 화면 둘 다)에서 헤더를
+   직접 슬라이드하면 헤더만 밀리고 본문은 그대로 있는 게 재현됨 — 원인 불명의 실제 동작이라,
+   CSS만으로 동기화를 기대하지 않고 확실하게 JS로 스크롤 위치를 맞춘다: 가로 스크롤은
+   .movedex-list(본문)만 담당하고, 헤더는 overflow:hidden으로 직접 드래그를 막은 뒤 본문의
+   스크롤 이벤트에 맞춰 scrollLeft를 그대로 따라가게 한다(MoveDexPage.tsx). */
 @media (max-width: 760px) {
-  .movedex-table {
+  .movedex-list {
     overflow-x: auto;
   }
 
   .movedex-row {
     min-width: 640px;
-  }
-
-  /* ver.1.6 §2-5 — 헤더가 position:sticky인 상태로 이 컨테이너를 가로로 슬라이드하면, 일부
-     모바일 사파리에서 sticky 요소가 가로 스크롤을 안 따라가고 제자리에 남아버린다(헤더만
-     슬라이드되고 본문은 그대로 있다가, 본문을 직접 슬라이드해야 맞춰지던 버그의 원인).
-     가로 스크롤 구간에선 세로 sticky를 포기하고 헤더도 본문과 같은 일반 흐름으로 스크롤시킨다. */
-  .movedex-head-row {
-    position: static;
   }
 }

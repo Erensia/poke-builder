@@ -197,11 +197,3 @@
     font-size: 0.7rem;
   }
 }
-
-/* ver.1.6 §2-2 — 이 모달은 내용(6줄)이 짧아서 모바일 하단 시트가 화면 아래쪽에 작게 눌러앉아
-   보이는 문제가 있었다. 최소 높이를 줘서 다른 모달들처럼 화면에 자연스럽게 자리 잡게 한다. */
-@media (max-width: 760px) {
-  .points-editor-modal-panel {
-    min-height: 50vh;
-  }
-}
