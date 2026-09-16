@@ -241,6 +241,10 @@
   color: #fff;
 }
 
+.battle-select-mon .avatar-with-item {
+  flex-shrink: 0;
+}
+
 .battle-select-name {
   font-weight: 600;
 }

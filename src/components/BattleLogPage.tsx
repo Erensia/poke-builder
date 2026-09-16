@@ -146,6 +146,29 @@ function BattleSetupScreen({
 }) {
   const sideCtls = (side: Side) => (side === "a" ? setup.a : setup.b);
   const slotCtl = (side: Side, i: SlotIndex) => sideCtls(side)[i];
+
+  // 드래그앤드롭으로 슬롯 순서 변경(ver.1.6 §4-2) — PartyBoard와 동일한 패턴. 편(side)이
+  // 다르면 맞바꾸지 않는다(내 파티 ↔ 상대 파티 사이 드래그는 의미가 없다).
+  const [draggedSlot, setDraggedSlot] = useState<{ side: Side; index: SlotIndex } | null>(null);
+  const [dragOverSlot, setDragOverSlot] = useState<{ side: Side; index: SlotIndex } | null>(null);
+
+  function handleSlotDragStart(side: Side, index: SlotIndex) {
+    setDraggedSlot({ side, index });
+  }
+  function handleSlotDragOver(side: Side, index: SlotIndex) {
+    if (!draggedSlot || draggedSlot.side !== side || draggedSlot.index === index) return;
+    setDragOverSlot({ side, index });
+  }
+  function handleSlotDrop(side: Side, index: SlotIndex) {
+    if (draggedSlot && draggedSlot.side === side) setup.reorderSlots(side, draggedSlot.index, index);
+    setDraggedSlot(null);
+    setDragOverSlot(null);
+  }
+  function handleSlotDragEnd() {
+    setDraggedSlot(null);
+    setDragOverSlot(null);
+  }
+
   return (
     <div className="battle-setup-board">
       {(["a", "b"] as const).map((side) => (
@@ -187,6 +210,12 @@ function BattleSetupScreen({
                 hasSamples={hasSlotPresets}
                 onSaveAsSample={() => onSaveSlotAsSample(side, i)}
                 onOpenSamplePicker={() => onOpenPicker({ kind: "slotPresets", side, slotIndex: i })}
+                isDragging={draggedSlot?.side === side && draggedSlot.index === i}
+                isDragOver={dragOverSlot?.side === side && dragOverSlot.index === i}
+                onDragStart={() => handleSlotDragStart(side, i)}
+                onDragOverSlot={() => handleSlotDragOver(side, i)}
+                onDrop={() => handleSlotDrop(side, i)}
+                onDragEnd={handleSlotDragEnd}
               />
             ))}
           </div>
@@ -219,6 +248,7 @@ function BattleSelectScreen({
   buildableIndices,
   needsSelection,
   pokemonAt,
+  slotAt,
   onToggleSelection,
   onBack,
   selectionComplete,
@@ -228,6 +258,8 @@ function BattleSelectScreen({
   buildableIndices: (side: Side) => SlotIndex[];
   needsSelection: (side: Side) => boolean;
   pokemonAt: (side: Side, i: SlotIndex) => Pokemon | undefined;
+  /** 프로필(+도구) 이미지용 슬롯 원본(ver.1.6 §4-4) — pokemonAt은 종 데이터만 준다 */
+  slotAt: (side: Side, i: SlotIndex) => PartySlot | null;
   onToggleSelection: (side: Side, i: SlotIndex) => void;
   onBack: () => void;
   selectionComplete: boolean;
@@ -251,6 +283,7 @@ function BattleSelectScreen({
               <div className="battle-select-list">
                 {pool.map((i) => {
                   const pk = pokemonAt(side, i);
+                  const pkSlot = slotAt(side, i);
                   // 수동 선출: 고른 순서대로 번호. 선출 스킵 편: 빌드 순서 그대로 1·2·3 고정.
                   const num = manual
                     ? picks.includes(i)
@@ -266,6 +299,23 @@ function BattleSelectScreen({
                       onClick={() => onToggleSelection(side, i)}
                     >
                       <span className={`battle-select-num${num ? " is-on" : ""}`}>{num ?? ""}</span>
+                      {pk && pkSlot && (
+                        <PokemonAvatarWithItem
+                          pokemon={pk}
+                          size={28}
+                          radius={8}
+                          gradientTypes={getEffectiveForm(pk, pkSlot).types}
+                          itemId={pkSlot.item}
+                          form={{
+                            gender: getEffectiveGender(pk, pkSlot),
+                            cosmeticForm: pkSlot.cosmeticForm,
+                            formVariant: pkSlot.formVariant,
+                            sizeForm: pkSlot.sizeForm,
+                            activeMegaForm: pkSlot.activeMegaForm,
+                            item: pkSlot.item,
+                          }}
+                        />
+                      )}
                       <span className="battle-select-name">{pk?.name ?? "포켓몬"}</span>
                     </button>
                   );
@@ -1302,6 +1352,7 @@ export function BattleLogPage() {
           buildableIndices={buildableIndices}
           needsSelection={needsSelection}
           pokemonAt={pokemonAt}
+          slotAt={(side, i) => slotCtl(side, i).slot}
           onToggleSelection={toggleSelection}
           onBack={() => setSelecting(false)}
           selectionComplete={selectionComplete}
@@ -1342,6 +1393,10 @@ export function BattleLogPage() {
       {picker?.kind === "pokemon" && (
         <PokemonPickerModal
           onClose={() => setPicker(null)}
+          usedPokemonIds={sideCtls(picker.side)
+            .filter((_, i) => i !== picker.slotIndex)
+            .map((ctl) => ctl.slot?.pokemonId)
+            .filter((id): id is string => id !== undefined)}
           onSelect={(pokemonId) => {
             slotCtl(picker.side, picker.slotIndex).setPokemon(pokemonId);
             setPicker(null);
@@ -1483,6 +1538,10 @@ export function BattleLogPage() {
             <SlotPresetsModal
               presets={slotPresets.presets}
               slotIsFilled={ctl.slot !== null}
+              usedPokemonIds={sideCtls(picker.side)
+                .filter((_, i) => i !== picker.slotIndex)
+                .map((c) => c.slot?.pokemonId)
+                .filter((id): id is string => id !== undefined)}
               onClose={() => setPicker(null)}
               onLoad={(preset) => ctl.loadSlot(preset.slot)}
               onRename={slotPresets.renamePreset}
