@@ -17,6 +17,11 @@
     "noEmit": true,
     "jsx": "react-jsx",
 
+    /* ver.1.5 §8: 하위 폴더(src/lib/battle/ 등)의 "../../" 체인 방지 */
+    "paths": {
+      "@/*": ["./src/*"]
+    },
+
     /* Linting */
     "noUnusedLocals": true,
     "noUnusedParameters": true,

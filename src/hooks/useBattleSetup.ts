@@ -2,8 +2,12 @@ import { useState } from "react";
 import type { AbilityPoints, PartySlot } from "../types/party";
 import { EMPTY_ABILITY_POINTS } from "../types/party";
 import { getPokemon } from "../lib/data";
-import { findMegaFormByStone } from "../lib/pokemonForm";
-import { MAX_ABILITY_POINTS_PER_STAT, MAX_ABILITY_POINTS_TOTAL, totalAbilityPoints } from "../lib/statCalculator";
+import {
+  applyItemToSlot,
+  cycleFormOnSlot,
+  setAbilityPointOnSlot,
+  stepAbilityPointOnSlot,
+} from "../lib/slotMutations";
 
 /**
  * 대전 로그(다중 턴 시뮬레이션) 화면의 셋업 상태. PartySlot을 그대로 쓴다 — 포켓몬/기술 4개/
@@ -52,12 +56,7 @@ function useBattleSetupSlot() {
   }
 
   function setItem(itemId: string | null) {
-    setSlot((prev) => {
-      if (!prev) return prev;
-      const pokemon = getPokemon(prev.pokemonId);
-      const matchedMega = pokemon ? findMegaFormByStone(pokemon, itemId) : undefined;
-      return { ...prev, item: itemId, activeMegaForm: matchedMega?.form };
-    });
+    setSlot((prev) => (prev ? applyItemToSlot(prev, itemId) : prev));
   }
 
   function setNature(natureId: string | null) {
@@ -79,38 +78,17 @@ function useBattleSetupSlot() {
 
   /** 펌킨인 계열 크기 변종을 다음 크기로 돌린다(sizeForms 순서 순환) */
   function cycleSizeForm() {
-    setSlot((prev) => {
-      if (!prev) return prev;
-      const forms = getPokemon(prev.pokemonId)?.sizeForms;
-      if (!forms || forms.length === 0) return prev;
-      const currentId = prev.sizeForm ?? forms.find((f) => f.standard)?.id ?? forms[0].id;
-      const idx = forms.findIndex((f) => f.id === currentId);
-      return { ...prev, sizeForm: forms[(idx + 1) % forms.length].id };
-    });
+    setSlot((prev) => (prev ? cycleFormOnSlot(prev, "sizeForm") : prev));
   }
 
   /** 루가루암 계열 폼 변종을 다음 폼으로 돌린다(폼별 특성이 달라 특성 선택은 초기화) */
   function cycleFormVariant() {
-    setSlot((prev) => {
-      if (!prev) return prev;
-      const forms = getPokemon(prev.pokemonId)?.formVariants;
-      if (!forms || forms.length === 0) return prev;
-      const currentId = prev.formVariant ?? forms.find((f) => f.standard)?.id ?? forms[0].id;
-      const idx = forms.findIndex((f) => f.id === currentId);
-      return { ...prev, formVariant: forms[(idx + 1) % forms.length].id, ability: null };
-    });
+    setSlot((prev) => (prev ? cycleFormOnSlot(prev, "formVariant") : prev));
   }
 
   /** 마휘핑 계열 겉모습을 다음 모습으로 돌린다(cosmeticForms 순서 순환). 이미지에만 영향 */
   function cycleCosmeticForm() {
-    setSlot((prev) => {
-      if (!prev) return prev;
-      const forms = getPokemon(prev.pokemonId)?.cosmeticForms;
-      if (!forms || forms.length === 0) return prev;
-      const currentId = prev.cosmeticForm ?? forms.find((f) => f.standard)?.id ?? forms[0].id;
-      const idx = forms.findIndex((f) => f.id === currentId);
-      return { ...prev, cosmeticForm: forms[(idx + 1) % forms.length].id };
-    });
+    setSlot((prev) => (prev ? cycleFormOnSlot(prev, "cosmeticForm") : prev));
   }
 
   /** 마휘핑 계열 겉모습을 리스트에서 고른 id로 바로 설정한다(옵션 5개 이상인 종용) */
@@ -119,25 +97,11 @@ function useBattleSetupSlot() {
   }
 
   function setPoint(stat: keyof AbilityPoints, value: number) {
-    setSlot((prev) => {
-      if (!prev) return prev;
-      const clampedValue = Math.max(0, value);
-      const restTotal = totalAbilityPoints(prev.points) - prev.points[stat];
-      const maxForStat = Math.min(MAX_ABILITY_POINTS_PER_STAT, MAX_ABILITY_POINTS_TOTAL - restTotal);
-      return { ...prev, points: { ...prev.points, [stat]: Math.min(clampedValue, maxForStat) } };
-    });
+    setSlot((prev) => (prev ? setAbilityPointOnSlot(prev, stat, value) : prev));
   }
 
   function stepPoint(stat: keyof AbilityPoints, delta: number) {
-    setSlot((prev) => {
-      if (!prev) return prev;
-      const currentValue = prev.points[stat];
-      const restTotal = totalAbilityPoints(prev.points) - currentValue;
-      const maxForStat = Math.min(MAX_ABILITY_POINTS_PER_STAT, MAX_ABILITY_POINTS_TOTAL - restTotal);
-      const nextValue = Math.min(Math.max(0, currentValue + delta), maxForStat);
-      if (nextValue === currentValue) return prev;
-      return { ...prev, points: { ...prev.points, [stat]: nextValue } };
-    });
+    setSlot((prev) => (prev ? stepAbilityPointOnSlot(prev, stat, delta) : prev));
   }
 
   return {

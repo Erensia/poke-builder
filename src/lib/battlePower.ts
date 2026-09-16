@@ -1,7 +1,9 @@
-import type { Move } from "../types/move";
+import type { Move, MoveCategory } from "../types/move";
 import type { PokemonType } from "../types/pokemon-type";
 import type { BaseStats } from "../types/stats";
-import { NEUTRAL_STAGES, type StatStages } from "../types/battleStats";
+import type { Ability } from "../types/ability";
+import type { PokemonGender } from "../types/pokemon";
+import { BATTLE_STAT_KEYS, NEUTRAL_STAGES, type StatStages } from "../types/battleStats";
 
 /**
  * 랭크업/랭크다운 배율. -6 ~ +6.
@@ -17,6 +19,42 @@ export function rankStageMultiplier(stage: number, k = 2): number {
 /** 스피드 랭크까지 반영한 실질 스피드. 턴 순서 계산에 사용 */
 export function computeEffectiveSpeed(realSpeed: number, stages: StatStages = NEUTRAL_STAGES): number {
   return realSpeed * rankStageMultiplier(stages.spe);
+}
+
+/**
+ * 투쟁심(Rivalry): 공격측이 이 특성일 때 상대와의 성별 관계로 데미지 배율을 낸다.
+ * 같은 성별 ×1.25 · 다른 성별 ×0.75 · 어느 한쪽이라도 성별 불명(null) ×1.0.
+ * battleSimulator(실전)·matchupEvaluator(매치업 스냅샷) 양쪽이 공유한다(ver.1.5 §5).
+ */
+export function rivalryDamageMultiplier(
+  ability: Ability | undefined,
+  attackerGender: PokemonGender | null,
+  defenderGender: PokemonGender | null,
+): number {
+  if (!ability?.rivalryDamage) return 1;
+  if (attackerGender === null || defenderGender === null) return 1;
+  return attackerGender === defenderGender ? 1.25 : 0.75;
+}
+
+/**
+ * 의욕(Hustle): 물리 기술 위력 ×1.5 (명중률 페널티는 결정력 계산 대상이 아니라 별도 처리).
+ * battleSimulator(실전)·matchupEvaluator(매치업 스냅샷) 양쪽이 공유한다(ver.1.5 §5).
+ */
+export function hustleDamageMultiplier(category: MoveCategory | null, ability: Ability | undefined): number {
+  return category === "physical" && ability?.hustleAttackMultiplier !== undefined
+    ? ability.hustleAttackMultiplier
+    : 1;
+}
+
+/**
+ * 리플렉터/빛의장막(카테고리 전용)·오로라베일(물리·특수 공통)이 동시에 걸려있을 수 있는 축을
+ * 곱셈으로 합산한다 — 급소·틈새포착 등 "스크린을 아예 무시할지"는 호출부가 각자의 상태 모양에
+ * 맞춰 미리 판정해서 두 불리언으로 넘긴다(battleSimulator는 진영 상태 그대로, matchupEvaluator는
+ * 1턴 스냅샷의 단일 screen 옵션에서 도출 — 입력 모양이 달라 이 부분만은 각자 유지).
+ * battleSimulator(실전)·matchupEvaluator(매치업 스냅샷) 양쪽이 공유한다(ver.1.5 §5).
+ */
+export function screenMultiplierFromFlags(categoryScreenActive: boolean, auroraVeilActive: boolean): number {
+  return (categoryScreenActive ? 2 : 1) * (auroraVeilActive ? 2 : 1);
 }
 
 /**
@@ -50,7 +88,7 @@ export function gyroBallPowerFromSpeeds(userEffectiveSpeed: number, targetEffect
  * 이 프로젝트 stages엔 명중률·회피율 랭크가 없어 5스탯(공/방/특공/특방/스피드) 양수분만 합산한다.
  */
 export function positiveStagesPowerValue(stages: StatStages, base: number, perStage: number): number {
-  const sum = (["atk", "def", "spa", "spd", "spe"] as const).reduce(
+  const sum = BATTLE_STAT_KEYS.reduce(
     (acc, key) => acc + Math.max(0, stages[key]),
     0,
   );

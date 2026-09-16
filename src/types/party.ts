@@ -39,6 +39,16 @@ export interface PartySlot {
   gender?: PokemonGender;
 }
 
+/** 항상 6개 슬롯인 파티 튜플(화면에서 편집 중인 "현재 파티" 상태 모양). 비어있는 슬롯은 null */
+export type PartySlots = [
+  PartySlot | null,
+  PartySlot | null,
+  PartySlot | null,
+  PartySlot | null,
+  PartySlot | null,
+  PartySlot | null,
+];
+
 /**
  * 이름 붙여 저장한 파티 프리셋(Phase 6 §1-2). 화면에서 계속 편집 중인 "현재 파티"(storage.ts의
  * 기존 단일 자동저장)와는 별도 목록 — 여러 개를 만들어두고 나중에 골라서 불러올 수 있다.
@@ -47,14 +57,7 @@ export interface Party {
   id: string;
   name: string;
   /** 항상 6마리 슬롯. 비어있는 슬롯은 null */
-  slots: [
-    PartySlot | null,
-    PartySlot | null,
-    PartySlot | null,
-    PartySlot | null,
-    PartySlot | null,
-    PartySlot | null,
-  ];
+  slots: PartySlots;
   /** Date.now() 기준 저장 시각. 목록 정렬(최근 저장 순)에 쓴다 */
   savedAt: number;
 }

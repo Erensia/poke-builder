@@ -1,5 +1,4 @@
-import type { PartySlots } from "../hooks/useParty";
-import type { Party, SlotPreset } from "../types/party";
+import type { Party, PartySlots, SlotPreset } from "../types/party";
 import type { BattleVideo } from "../types/battleVideo";
 
 const STORAGE_KEY = "champions-party-sim.party.v1";
@@ -13,105 +12,106 @@ const SLOT_PRESETS_STORAGE_KEY = "champions-party-sim.slot-presets.v1";
  */
 const BATTLE_VIDEOS_STORAGE_KEY = "champions-party-sim.battle-videos.v1";
 
+/**
+ * localStorage에 JSON 하나를 저장/로드하는 공용 팩토리(ver.1.5 §10). party/partyPresets/
+ * slotPresets/battleVideos 4쌍이 저장키만 다르고 try/catch 로드·세이브 보일러플레이트가
+ * 완전히 동일했던 것을 통합 — 로드 시 `guard`로 형태를 검증해 손상됐거나 없으면 `fallback`을
+ * 돌려주고, localStorage 접근 자체가 막힌 환경(프라이빗 모드 등)에서도 조용히 무시한다.
+ */
+function createLocalStorageStore<T>(key: string, guard: (value: unknown) => value is T, fallback: T) {
+  function load(): T {
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) return fallback;
+      const parsed = JSON.parse(raw);
+      return guard(parsed) ? parsed : fallback;
+    } catch {
+      return fallback;
+    }
+  }
+
+  function save(value: T): void {
+    try {
+      localStorage.setItem(key, JSON.stringify(value));
+    } catch {
+      // localStorage가 막혀있는 환경(프라이빗 모드 등)에서는 조용히 무시한다.
+    }
+  }
+
+  function clear(): void {
+    try {
+      localStorage.removeItem(key);
+    } catch {
+      // ignore
+    }
+  }
+
+  return { load, save, clear };
+}
+
 function isPartySlots(value: unknown): value is PartySlots {
   return Array.isArray(value) && value.length === 6;
 }
 
+const partyStore = createLocalStorageStore<PartySlots | null>(STORAGE_KEY, isPartySlots, null);
+
 export function loadParty(): PartySlots | null {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    return isPartySlots(parsed) ? parsed : null;
-  } catch {
-    return null;
-  }
+  return partyStore.load();
 }
 
 export function saveParty(slots: PartySlots): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(slots));
-  } catch {
-    // localStorage가 막혀있는 환경(프라이빗 모드 등)에서는 조용히 무시한다.
-  }
+  partyStore.save(slots);
 }
 
 export function clearSavedParty(): void {
-  try {
-    localStorage.removeItem(STORAGE_KEY);
-  } catch {
-    // ignore
-  }
+  partyStore.clear();
 }
 
 function isPartyPresetList(value: unknown): value is Party[] {
   return Array.isArray(value);
 }
 
+const partyPresetsStore = createLocalStorageStore<Party[]>(PARTY_PRESETS_STORAGE_KEY, isPartyPresetList, []);
+
 /** 이름 붙인 파티 프리셋 목록을 불러온다. 저장된 적 없거나 손상됐으면 빈 배열 */
 export function loadPartyPresets(): Party[] {
-  try {
-    const raw = localStorage.getItem(PARTY_PRESETS_STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return isPartyPresetList(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
+  return partyPresetsStore.load();
 }
 
 export function savePartyPresets(presets: Party[]): void {
-  try {
-    localStorage.setItem(PARTY_PRESETS_STORAGE_KEY, JSON.stringify(presets));
-  } catch {
-    // ignore
-  }
+  partyPresetsStore.save(presets);
 }
 
 function isSlotPresetList(value: unknown): value is SlotPreset[] {
   return Array.isArray(value);
 }
 
+const slotPresetsStore = createLocalStorageStore<SlotPreset[]>(SLOT_PRESETS_STORAGE_KEY, isSlotPresetList, []);
+
 /** 이름 붙인 포켓몬 빌드(슬롯 1개) 목록을 불러온다. 저장된 적 없거나 손상됐으면 빈 배열 */
 export function loadSlotPresets(): SlotPreset[] {
-  try {
-    const raw = localStorage.getItem(SLOT_PRESETS_STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return isSlotPresetList(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
+  return slotPresetsStore.load();
 }
 
 export function saveSlotPresets(presets: SlotPreset[]): void {
-  try {
-    localStorage.setItem(SLOT_PRESETS_STORAGE_KEY, JSON.stringify(presets));
-  } catch {
-    // ignore
-  }
+  slotPresetsStore.save(presets);
 }
 
 function isBattleVideoList(value: unknown): value is BattleVideo[] {
   return Array.isArray(value);
 }
 
+const battleVideosStore = createLocalStorageStore<BattleVideo[]>(
+  BATTLE_VIDEOS_STORAGE_KEY,
+  isBattleVideoList,
+  [],
+);
+
 /** 저장된 배틀비디오 목록을 불러온다. 저장된 적 없거나 손상됐으면 빈 배열 */
 export function loadBattleVideos(): BattleVideo[] {
-  try {
-    const raw = localStorage.getItem(BATTLE_VIDEOS_STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return isBattleVideoList(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
+  return battleVideosStore.load();
 }
 
 export function saveBattleVideos(videos: BattleVideo[]): void {
-  try {
-    localStorage.setItem(BATTLE_VIDEOS_STORAGE_KEY, JSON.stringify(videos));
-  } catch {
-    // ignore
-  }
+  battleVideosStore.save(videos);
 }

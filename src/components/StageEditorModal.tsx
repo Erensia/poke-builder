@@ -1,10 +1,8 @@
 import { Modal } from "./Modal";
 import { rankStageMultiplier } from "../lib/battlePower";
 import { STAT_LABELS } from "../lib/statLabels";
-import type { StatStages, BattleStatKey } from "../types/battleStats";
+import { BATTLE_STAT_KEYS, type StatStages, type BattleStatKey } from "../types/battleStats";
 import "./PointsEditorModal.css";
-
-const STAGE_ORDER: BattleStatKey[] = ["atk", "def", "spa", "spd", "spe"];
 
 interface StageEditorModalProps {
   pokemonName: string;
@@ -27,7 +25,7 @@ export function StageEditorModal({
         전부 0랭크로 초기화
       </button>
       <div className="points-rows">
-        {STAGE_ORDER.map((stat) => {
+        {BATTLE_STAT_KEYS.map((stat) => {
           const value = stages[stat];
           const pct = Math.round(rankStageMultiplier(value) * 100);
           return (
