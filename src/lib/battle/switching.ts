@@ -245,7 +245,9 @@ function applyEntryAbilityOnSwitchIn(state: BattleState, key: FighterKey, log: s
       log.push(`${selfName}의 ${ability.name}! 하지만 이미 다른 필드가 있어 실패했다!`);
     } else {
       state.field = ability.setsFieldOnEntry;
-      state.fieldTurnsRemaining = FIELD_DURATION;
+      // 그라운드코트: 필드를 편 쪽이 이 도구를 지녔으면 지속시간이 늘어난다(기본 5턴 + 3 = 8턴).
+      const selfItem = self.currentItemId ? getItem(self.currentItemId) : undefined;
+      state.fieldTurnsRemaining = FIELD_DURATION + (selfItem?.fieldDurationBonus ?? 0);
       log.push(`${selfName}의 ${ability.name}! 필드가 ${state.field}${roEuro(state.field)} 바뀌었다!`);
       applyMimicryForm(self, state.field);
     }
