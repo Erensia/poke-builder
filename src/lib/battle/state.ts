@@ -15,7 +15,7 @@ import { computeStatusSpeedMultiplier } from "@/lib/statusConditions";
 import { CONFUSION_SELF_HIT_POWER, hasVolatile } from "@/lib/volatileConditions";
 import { getEffectiveness } from "@/lib/typeEffectiveness";
 import { gyroBallPowerFromSpeeds, rankStageMultiplier } from "@/lib/battlePower";
-import { FIELD_DURATION } from "@/lib/fieldEffects";
+import { FIELD_DURATION, FIELD_ENTRY_ANNOUNCEMENT } from "@/lib/fieldEffects";
 import { getItemSpeedMultiplier } from "@/lib/itemEffects";
 import { type BaseStats } from "@/types/stats";
 import { type EvaluatorSlot } from "@/lib/matchupEvaluator";
@@ -687,6 +687,17 @@ function resolveEntryWeather(
 }
 
 /**
+ * 풍선(Item.grantsGroundImmunity): 지닌 채로 등장하면 안내 문구를 한 번 낸다(배틀 시작·교체
+ * 등장 공통). 기절 중이면 호출하지 않는다.
+ */
+export function balloonEntryAnnouncement(fighter: BattleFighterState): string | undefined {
+  const item = fighter.currentItemId ? getItem(fighter.currentItemId) : undefined;
+  if (!item?.grantsGroundImmunity) return undefined;
+  const name = getPokemon(fighter.slot.pokemonId)?.name ?? "포켓몬";
+  return `${name}${eunNeun(name)} ${item.name}${roEuro(item.name)} 인해 공중에 떠있다!`;
+}
+
+/**
  * 변신(Move.transformsIntoTarget)·괴짜(Ability.transformsIntoOpponentOnEntry) 공통 처리 —
  * self를 target으로 변신시킨다. 타입·5실능(HP 제외)·특성·능력 랭크(급소율 포함)·기술 목록을
  * target 것으로 복사하고, 복사한 기술의 PP는 각 min(5, 원래 최대 PP)로 채운다. 현재 HP·maxHp·
@@ -801,14 +812,14 @@ function resolveEntryAbilityEffects(
       }
     }
     if (ability.setsFieldOnEntry) {
-      if (field) {
-        announcements.push(`${pokemonName}의 ${ability.name}! 하지만 이미 다른 필드가 있어 실패했다!`);
+      if (field === ability.setsFieldOnEntry) {
+        announcements.push(`${pokemonName}의 ${ability.name}! 하지만 이미 같은 필드가 있어 실패했다!`);
       } else {
         field = ability.setsFieldOnEntry;
         // 그라운드코트: 필드를 편 쪽이 이 도구를 지녔으면 지속시간이 늘어난다(기본 5턴 + 3 = 8턴).
         const fighterItem = fighter.currentItemId ? getItem(fighter.currentItemId) : undefined;
         fieldTurnsRemaining = FIELD_DURATION + (fighterItem?.fieldDurationBonus ?? 0);
-        announcements.push(`${pokemonName}의 ${ability.name}! 필드가 ${field}${roEuro(field)} 바뀌었다!`);
+        announcements.push(`${pokemonName}의 ${ability.name}! ${FIELD_ENTRY_ANNOUNCEMENT[field]}`);
       }
     }
     if (ability.copiesOpponentAbilityOnEntry && opponent.effectiveAbilityId) {
@@ -924,6 +935,11 @@ export function createBattleState(init: { a: SideInit; b: SideInit; weather?: We
 
   // 시드류: 배틀 시작 시점에 이미 필드가 깔려 있으면(등장 특성으로 방금 깔린 경우 포함) 발동.
   state.entryAnnouncements.push(...triggerTerrainSeeds(state));
+
+  // 풍선: 지니고 등장하면 공중에 떠있다는 안내를 낸다.
+  for (const msg of [balloonEntryAnnouncement(state.a), balloonEntryAnnouncement(state.b)]) {
+    if (msg) state.entryAnnouncements.push(msg);
+  }
 
   // 일루전(§6-1): 리드가 조로아크류면 배틀 시작 시점부터 파티 마지막 슬롯 모습으로 위장한다.
   for (const key of ["a", "b"] as const) {
