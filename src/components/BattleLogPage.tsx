@@ -44,6 +44,7 @@ import {
 import type { PartySlot } from "../types/party";
 import type { StatusCondition } from "../types/status";
 import type { BaseStats } from "../types/stats";
+import type { Pokemon } from "../types/pokemon";
 import "./BattleLogPage.css";
 
 type Side = "a" | "b";
@@ -183,6 +184,88 @@ function BattleSetupScreen({
           )}
         </Fragment>
       ))}
+    </div>
+  );
+}
+
+/**
+ * 선출(3+순서) 화면 — 6마리 중 4마리 이상 빌드한 편만 여기서 순서까지 고른다(§16). 빌드
+ * 화면과 마찬가지로 파생값/콜백만 props로 받는 presentational 컴포넌트.
+ */
+function BattleSelectScreen({
+  selection,
+  buildableIndices,
+  needsSelection,
+  pokemonAt,
+  onToggleSelection,
+  onBack,
+  selectionComplete,
+  onStartBattle,
+}: {
+  selection: { a: SlotIndex[]; b: SlotIndex[] };
+  buildableIndices: (side: Side) => SlotIndex[];
+  needsSelection: (side: Side) => boolean;
+  pokemonAt: (side: Side, i: SlotIndex) => Pokemon | undefined;
+  onToggleSelection: (side: Side, i: SlotIndex) => void;
+  onBack: () => void;
+  selectionComplete: boolean;
+  onStartBattle: () => void;
+}) {
+  return (
+    <div className="battle-select">
+      <div className="battle-select-board">
+        {(["a", "b"] as const).map((side) => {
+          const pool = buildableIndices(side);
+          const picks = selection[side];
+          const manual = needsSelection(side);
+          return (
+            <div key={side} className="battle-select-column">
+              <div className="battle-setup-column-title">
+                {side === "a" ? "내 선출" : "상대 선출"}{" "}
+                <span className="battle-setup-column-hint">
+                  {manual ? `${picks.length}/${BATTLE_SELECT_SIZE} · 고른 순서가 선출 순서(첫 번째가 리드)` : "빌드 순서대로 선출"}
+                </span>
+              </div>
+              <div className="battle-select-list">
+                {pool.map((i) => {
+                  const pk = pokemonAt(side, i);
+                  // 수동 선출: 고른 순서대로 번호. 선출 스킵 편: 빌드 순서 그대로 1·2·3 고정.
+                  const num = manual
+                    ? picks.includes(i)
+                      ? picks.indexOf(i) + 1
+                      : null
+                    : pool.indexOf(i) + 1;
+                  return (
+                    <button
+                      key={i}
+                      type="button"
+                      className={`battle-select-mon${num ? " is-picked" : ""}`}
+                      disabled={!manual}
+                      onClick={() => onToggleSelection(side, i)}
+                    >
+                      <span className={`battle-select-num${num ? " is-on" : ""}`}>{num ?? ""}</span>
+                      <span className="battle-select-name">{pk?.name ?? "포켓몬"}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div className="battle-select-actions">
+        <button type="button" className="battle-reset-button" onClick={onBack}>
+          뒤로
+        </button>
+        <button
+          type="button"
+          className="battle-start-button"
+          disabled={!selectionComplete}
+          onClick={onStartBattle}
+        >
+          대전 시작
+        </button>
+      </div>
     </div>
   );
 }
@@ -622,61 +705,16 @@ export function BattleLogPage() {
       )}
 
       {!battleState && selecting && (
-        <div className="battle-select">
-          <div className="battle-select-board">
-            {(["a", "b"] as const).map((side) => {
-              const pool = buildableIndices(side);
-              const picks = selection[side];
-              const manual = needsSelection(side);
-              return (
-                <div key={side} className="battle-select-column">
-                  <div className="battle-setup-column-title">
-                    {side === "a" ? "내 선출" : "상대 선출"}{" "}
-                    <span className="battle-setup-column-hint">
-                      {manual ? `${picks.length}/${BATTLE_SELECT_SIZE} · 고른 순서가 선출 순서(첫 번째가 리드)` : "빌드 순서대로 선출"}
-                    </span>
-                  </div>
-                  <div className="battle-select-list">
-                    {pool.map((i) => {
-                      const pk = pokemonAt(side, i);
-                      // 수동 선출: 고른 순서대로 번호. 선출 스킵 편: 빌드 순서 그대로 1·2·3 고정.
-                      const num = manual
-                        ? picks.includes(i)
-                          ? picks.indexOf(i) + 1
-                          : null
-                        : pool.indexOf(i) + 1;
-                      return (
-                        <button
-                          key={i}
-                          type="button"
-                          className={`battle-select-mon${num ? " is-picked" : ""}`}
-                          disabled={!manual}
-                          onClick={() => toggleSelection(side, i)}
-                        >
-                          <span className={`battle-select-num${num ? " is-on" : ""}`}>{num ?? ""}</span>
-                          <span className="battle-select-name">{pk?.name ?? "포켓몬"}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-          <div className="battle-select-actions">
-            <button type="button" className="battle-reset-button" onClick={() => setSelecting(false)}>
-              뒤로
-            </button>
-            <button
-              type="button"
-              className="battle-start-button"
-              disabled={!selectionComplete}
-              onClick={() => startBattleWith(selection)}
-            >
-              대전 시작
-            </button>
-          </div>
-        </div>
+        <BattleSelectScreen
+          selection={selection}
+          buildableIndices={buildableIndices}
+          needsSelection={needsSelection}
+          pokemonAt={pokemonAt}
+          onToggleSelection={toggleSelection}
+          onBack={() => setSelecting(false)}
+          selectionComplete={selectionComplete}
+          onStartBattle={() => startBattleWith(selection)}
+        />
       )}
 
       {battleState && (
