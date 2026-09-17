@@ -274,8 +274,13 @@
 }
 
 @media (max-width: 760px) {
+  /* ver.1.6 §1-1 — align-items:flex-start는 데스크톱(가로 배치)에서 목록·상세 패널의
+     높이가 서로 다른 값으로 늘어나지 않게 하려는 의도인데, 모바일(세로 배치)에서는 같은
+     속성이 교차축(가로)에 적용돼 내용이 적은 상세 패널이 목록 패널보다 좁게 쪼그라드는
+     버그였다 — 모바일에서만 stretch로 되돌려 두 패널 폭을 맞춘다. */
   .itemdex-board {
     flex-direction: column;
+    align-items: stretch;
   }
 
   .itemdex-list-panel {
