@@ -10,7 +10,7 @@ import { inflictStatus, isImmuneToStatus } from "@/lib/statusConditions";
 import { hasVolatile } from "@/lib/volatileConditions";
 import { getEffectiveness } from "@/lib/typeEffectiveness";
 import { FIELD_DURATION, FIELD_ENTRY_ANNOUNCEMENT, isStatusBlockedByField } from "@/lib/fieldEffects";
-import { WEATHER_DURATION, abilityOf, activeWeather, applyForecastForm, applyMimicryForm, balloonEntryAnnouncement, cloneSide, consumeItem, contraryDelta, isFainted, opponentKey, sideOf, statusImmunitiesOf, weatherRockBonus, type BattleFighterState, type BattleState } from "./state";
+import { WEATHER_DURATION, abilityOf, activeWeather, applyForecastForm, applyMimicryForm, applyTransform, balloonEntryAnnouncement, cloneSide, consumeItem, contraryDelta, isFainted, opponentKey, sideOf, statusImmunitiesOf, weatherRockBonus, type BattleFighterState, type BattleState } from "./state";
 
 export function isTrappedFromSwitching(fighter: BattleFighterState): boolean {
   if (isFainted(fighter)) return false;
@@ -259,6 +259,13 @@ function applyEntryAbilityOnSwitchIn(state: BattleState, key: FighterKey, log: s
     const opponentName = getPokemon(opponent.slot.pokemonId)?.name ?? "상대";
     const copiedName = copied?.name ?? "특성";
     log.push(`${selfName}의 ${ability.name}! ${opponentName}의 ${copiedName}${eulReul(copiedName)} 복사했다!`);
+  }
+  // 괴짜(Imposter): 등장하자마자 상대로 변신한다(변신 기술과 같은 처리, state.ts의 배틀 시작
+  // 버전과 동일 — 여태 배틀 시작(리드)에만 있고 교체 등장엔 빠져 있던 처리를 여기 추가).
+  if (ability.transformsIntoOpponentOnEntry && !self.transformed && !isFainted(opponent)) {
+    applyTransform(self, opponent);
+    const opponentName = getPokemon(opponent.slot.pokemonId)?.name ?? "상대";
+    log.push(`${selfName}의 ${ability.name}! ${selfName}${eunNeun(selfName)} ${opponentName}${roEuro(opponentName)} 변신했다!`);
   }
 }
 

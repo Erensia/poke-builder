@@ -176,13 +176,19 @@ export interface BattleFighterState {
   /** 이 배틀에서 이미 메가진화했으면 true. 교체로 물러났다 다시 나와도 유지(본가 규칙). */
   hasMegaEvolved?: boolean;
   /**
-   * 변신(Move.transformsIntoTarget)·괴짜(Ability.transformsIntoOpponentOnEntry)로 상대로 변신한
-   * 상태면 true. 타입·5실능(HP 제외)·특성·능력 랭크·기술(PP 5)을 상대 것으로 갈아치운 뒤 이 플래그를
-   * 세운다. 교체가 없는 1v1이라 한 번 변신하면 배틀 끝까지 유지되고, 재변신은 실패한다.
-   * slot.pokemonId는 원본 그대로 두므로(종 자체는 안 바뀜) 몸무게·종별타입 기술은 원본 종 기준으로
-   * 남는다 — 변신 사용자가 메타몽뿐이라 실질 영향이 없어 단순화했다.
+   * 변신(Move.transformsIntoTarget)·괴짜(Ability.transformsIntoOpponentOnEntry, 교체 등장 포함
+   * ver.1.6)로 상대로 변신한 상태면 true. 타입·5실능(HP 제외)·특성·능력 랭크·기술(PP 5)을 상대
+   * 것으로 갈아치운 뒤 이 플래그를 세운다. slot.pokemonId는 원본 그대로 두므로(종 자체는 안
+   * 바뀜) 몸무게·종별타입 기술은 원본 종 기준으로 남는다 — 변신 사용자가 메타몽뿐이라 실질
+   * 영향이 없어 단순화했다.
+   * 알려진 한계: 교체로 물러나도 이 플래그와 복제된 값들이 원상복귀되지 않는다(원래 "교체 없는
+   * 1v1" 가정하에 설계됨 — ver.1.6에서 교체 등장 지원이 추가되며 이 가정이 깨졌지만 아직
+   * 미수정). 즉 한 번 변신한 메타몽은 교체로 물러났다 다시 나와도 계속 변신 상태로 남고, 다시
+   * 괴짜가 발동하지 않는다.
    */
   transformed?: boolean;
+  /** 변신 대상 종(BattleBoard 표시용, ver.1.6) — applyTransform이 target.slot.pokemonId로 세운다. */
+  transformedIntoPokemonId?: string;
   /**
    * 길동무: 이번 시전이 성공해서 "이번 턴(또는 이후 턴에) 직접 공격으로 쓰러지면 상대도 같이
    * 쓰러뜨린다" 예약이 걸려있으면 true. activeProtect와 달리 매 턴 시작 시 초기화되지 않고,
@@ -702,7 +708,8 @@ export function balloonEntryAnnouncement(fighter: BattleFighterState): string | 
  * self를 target으로 변신시킨다. 타입·5실능(HP 제외)·특성·능력 랭크(급소율 포함)·기술 목록을
  * target 것으로 복사하고, 복사한 기술의 PP는 각 min(5, 원래 최대 PP)로 채운다. 현재 HP·maxHp·
  * 주 상태이상은 유지. slot.pokemonId(종 자체)는 바꾸지 않는다 — 변신 사용자가 메타몽뿐이라
- * 몸무게·종별타입 기술 정도만 원본 종 기준으로 남고 실질 영향이 없다.
+ * 몸무게·종별타입 기술 정도만 원본 종 기준으로 남고 실질 영향이 없다. transformedIntoPokemonId만
+ * 따로 세워서 BattleBoard가 이름은 그대로 두고 스프라이트·타입 배지만 대상 종으로 보여준다.
  */
 export function applyTransform(self: BattleFighterState, target: BattleFighterState): void {
   self.types = [...target.types];
@@ -722,6 +729,8 @@ export function applyTransform(self: BattleFighterState, target: BattleFighterSt
     Object.keys(target.remainingPp).map((id) => [id, Math.min(5, getMove(id)?.pp ?? 5)]),
   );
   self.transformed = true;
+  // target이 이미 변신 중이면(메타몽 vs 메타몽처럼) target이 지금 보이는 모습을 그대로 물려받는다.
+  self.transformedIntoPokemonId = target.transformedIntoPokemonId ?? target.slot.pokemonId;
 }
 
 /**

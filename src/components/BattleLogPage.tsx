@@ -470,23 +470,33 @@ function BattleBoard({
           : pokemon.name;
         // 셋업 카드와 동일하게 메가진화 여부를 반영해서 이름 옆에 배지를 그린다.
         // fighter.slot(EvaluatorSlot)은 FormSource를 만족하므로 getEffectiveForm을 그대로 쓸 수 있다.
+        // (메가진화 관련 용도 전용 — 변신 중에도 메타몽 자신의 메가 여부라 원본 종 기준 그대로 둔다.)
         const form = getEffectiveForm(pokemon, fighter.slot);
         const hpPercent = Math.max(0, Math.min(100, (fighter.currentHp / fighter.maxHp) * 100));
+        // 변신(§괴짜/변신, ver.1.6): 로그엔 "변신했다!"가 찍히는데 보드 표시가 안 바뀌던 버그 —
+        // 이름은 원본 종 그대로 두되(본가 규칙), 스프라이트·타입 배지는 변신 대상 모습으로 보여준다.
+        // fighter.types는 applyTransform이 이미 대상 것으로 갈아치워 둔 값이라 그대로 쓴다.
+        const transformedPokemon =
+          !fighter.illusionAs && fighter.transformedIntoPokemonId
+            ? getPokemon(fighter.transformedIntoPokemonId)
+            : undefined;
         // §1-4: 대전 화면 아바타. 일루전 중이면 위장 대상 종의 스프라이트를(상대가 안 눈치채도록,
-        // 도구 뱃지도 숨김), 아니면 실제 종. 메가스톤을 들어도 실제로 선언(hasMegaEvolved)해야
+        // 도구 뱃지도 숨김), 변신 중이면 변신 대상 종을(성별·폼 등은 복제 대상이 아니라 기본
+        // 모습으로), 아니면 실제 종. 메가스톤을 들어도 실제로 선언(hasMegaEvolved)해야
         // 메가폼 스프라이트로 바뀐다 — 그래서 item은 스프라이트 옵션에 안 넘기고(메가스톤이
         // 스프라이트를 강제로 메가폼으로 만들기 때문) 뱃지로만 표시한다.
         const illusionPokemon = fighter.illusionAs ? getPokemon(fighter.illusionAs) : undefined;
-        const avatarPokemon = illusionPokemon ?? pokemon;
-        const avatarForm: SpriteFormOptions = illusionPokemon
-          ? {}
-          : {
-              gender: getEffectiveGender(pokemon, fighter.slot),
-              cosmeticForm: fighter.slot.cosmeticForm,
-              formVariant: fighter.slot.formVariant,
-              sizeForm: fighter.slot.sizeForm,
-              activeMegaForm: fighter.hasMegaEvolved ? form.mega?.form : undefined,
-            };
+        const avatarPokemon = illusionPokemon ?? transformedPokemon ?? pokemon;
+        const avatarForm: SpriteFormOptions =
+          illusionPokemon || transformedPokemon
+            ? {}
+            : {
+                gender: getEffectiveGender(pokemon, fighter.slot),
+                cosmeticForm: fighter.slot.cosmeticForm,
+                formVariant: fighter.slot.formVariant,
+                sizeForm: fighter.slot.sizeForm,
+                activeMegaForm: fighter.hasMegaEvolved ? form.mega?.form : undefined,
+              };
         // battleState 안의 slot은 EvaluatorSlot(moves 필드 없음)이라, 4개 기술 목록은
         // 셋업 단계에서 쓴 PartySlot을 활성 슬롯 인덱스로 되짚어 가져온다 — 배틀 중엔 안 바뀜
         const moveIds: (string | null)[] = activeMoveIds(side);
@@ -507,7 +517,7 @@ function BattleBoard({
                 <PokemonAvatarWithItem
                   pokemon={avatarPokemon}
                   form={avatarForm}
-                  gradientTypes={illusionPokemon ? illusionPokemon.types : form.types}
+                  gradientTypes={illusionPokemon ? illusionPokemon.types : fighter.types}
                   size={38}
                   radius={9}
                   itemId={fighter.illusionAs ? undefined : fighter.slot.item}
