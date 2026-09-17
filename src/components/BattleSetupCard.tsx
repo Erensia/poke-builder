@@ -1,8 +1,8 @@
+import type { DragEvent } from "react";
 import type { PartySlot } from "../types/party";
 import { getPokemon, getMove, getAbility, getItem, getNature } from "../lib/data";
 import {
   getEffectiveForm,
-  getEffectiveAbilityId,
   getEffectiveGender,
   genderLabel,
   megaBadgeLabel,
@@ -39,6 +39,19 @@ interface BattleSetupCardProps {
   onSaveAsSample: () => void;
   /** 저장된 샘플 목록에서 이 슬롯에 불러올 것을 고르는 모달 열기 */
   onOpenSamplePicker: () => void;
+  /** 채워진 슬롯의 펼침 상태(ver.1.6 §4-3) — false면 프로필 사진+이름만 압축 표기 */
+  expanded: boolean;
+  /** 프로필 사진(party-slot-main) 클릭 시 압축⇄펼침 토글. 종 변경은 별도 버튼(onPickPokemon)으로 뺐다 */
+  onToggleExpand: () => void;
+  /** 지금 이 슬롯을 드래그해서 잡고 있는 중이면 true(ver.1.6 §4-2 D&D) — 드는 카드 자체를 옅게 표시 */
+  isDragging: boolean;
+  /** 잡고 있는 다른 슬롯이 지금 이 슬롯 위에 올라와 있으면 true — 놓을 자리 하이라이트 */
+  isDragOver: boolean;
+  onDragStart: () => void;
+  /** 이 슬롯 위로 드래그 중인 카드가 지나갈 때(dragover) */
+  onDragOverSlot: () => void;
+  onDrop: () => void;
+  onDragEnd: () => void;
 }
 
 /**
@@ -64,12 +77,36 @@ export function BattleSetupCard({
   hasSamples,
   onSaveAsSample,
   onOpenSamplePicker,
+  expanded,
+  onToggleExpand,
+  isDragging,
+  isDragOver,
+  onDragStart,
+  onDragOverSlot,
+  onDrop,
+  onDragEnd,
 }: BattleSetupCardProps) {
   const pokemon = slot ? getPokemon(slot.pokemonId) : undefined;
 
+  // 카드 전체를 드래그 소스 겸 드롭 타겟으로 쓴다(PartySlotCard와 동일 패턴).
+  const dragHandlers = {
+    draggable: true,
+    onDragStart,
+    onDragOver: (e: DragEvent) => {
+      e.preventDefault();
+      onDragOverSlot();
+    },
+    onDrop: (e: DragEvent) => {
+      e.preventDefault();
+      onDrop();
+    },
+    onDragEnd,
+  };
+  const dragStateClass = `${isDragging ? " is-dragging" : ""}${isDragOver ? " is-drag-over" : ""}`;
+
   if (!pokemon) {
     return (
-      <div className="party-slot party-slot-empty">
+      <div className={`party-slot party-slot-empty${dragStateClass}`} {...dragHandlers}>
         <span className="party-slot-num">{label}</span>
         <button type="button" className="party-slot-empty-main" onClick={onPickPokemon}>
           <span className="party-slot-plus" aria-hidden="true">
@@ -87,13 +124,60 @@ export function BattleSetupCard({
   }
 
   const form = getEffectiveForm(pokemon, slot!);
+
+  const avatar = (
+    <PokemonAvatarWithItem
+      pokemon={pokemon}
+      size={36}
+      radius={10}
+      gradientTypes={form.types}
+      avatarClassName="party-slot-avatar"
+      itemId={slot!.item}
+      form={{
+        gender: getEffectiveGender(pokemon, slot!),
+        cosmeticForm: slot!.cosmeticForm,
+        formVariant: slot!.formVariant,
+        sizeForm: slot!.sizeForm,
+        activeMegaForm: slot!.activeMegaForm,
+        item: slot!.item,
+      }}
+    />
+  );
+
+  // 압축 뷰(ver.1.6 §4-3) — 프로필 사진+이름만. 사진을 클릭하면 펼쳐진다.
+  if (!expanded) {
+    return (
+      <div className={`party-slot party-slot-filled party-slot-compact${dragStateClass}`} {...dragHandlers}>
+        <span className="party-slot-num">{label}</span>
+        <button type="button" className="party-slot-clear" onClick={onClearPokemon} aria-label="슬롯 비우기">
+          ✕
+        </button>
+        <button type="button" className="party-slot-main" onClick={onToggleExpand}>
+          {avatar}
+          <span className="party-slot-info">
+            <span className="party-slot-name">{pokemon.name}</span>
+          </span>
+        </button>
+      </div>
+    );
+  }
+
   const realStats = computeRealStats(form.baseStats, slot!.points, slot!.nature);
   const bulkPhysical = computeBulkPower(realStats, "physical");
   const bulkSpecial = computeBulkPower(realStats, "special");
 
   return (
-    <div className="party-slot party-slot-filled">
+    <div className={`party-slot party-slot-filled${dragStateClass}`} {...dragHandlers}>
       <span className="party-slot-num">{label}</span>
+      <button
+        type="button"
+        className="party-slot-swap"
+        onClick={onPickPokemon}
+        aria-label="포켓몬 변경"
+        title="포켓몬 변경"
+      >
+        🔀
+      </button>
       <button
         type="button"
         className="party-slot-save-sample"
@@ -107,23 +191,13 @@ export function BattleSetupCard({
         ✕
       </button>
 
-      <button type="button" className="party-slot-main" onClick={onPickPokemon}>
-        <PokemonAvatarWithItem
-          pokemon={pokemon}
-          size={36}
-          radius={10}
-          gradientTypes={form.types}
-          avatarClassName="party-slot-avatar"
-          itemId={slot!.item}
-          form={{
-            gender: getEffectiveGender(pokemon, slot!),
-            cosmeticForm: slot!.cosmeticForm,
-            formVariant: slot!.formVariant,
-            sizeForm: slot!.sizeForm,
-            activeMegaForm: slot!.activeMegaForm,
-            item: slot!.item,
-          }}
-        />
+      <button
+        type="button"
+        className="party-slot-main party-slot-main-has-swap"
+        onClick={onToggleExpand}
+        aria-label="압축 보기로 접기"
+      >
+        {avatar}
         <span className="party-slot-info">
           <span className="party-slot-name">
             {pokemon.name}
@@ -159,10 +233,7 @@ export function BattleSetupCard({
         <button type="button" className="party-meta-pip" onClick={onPickAbility}>
           <span className="party-meta-label">특성</span>
           <span className="party-meta-value">
-            {(() => {
-              const effectiveAbilityId = getEffectiveAbilityId(form, slot!.ability);
-              return effectiveAbilityId ? getAbility(effectiveAbilityId)?.name : "미지정";
-            })()}
+            {slot!.ability ? getAbility(slot!.ability)?.name : "미지정"}
           </span>
         </button>
         <button type="button" className="party-meta-pip" onClick={onPickItem}>

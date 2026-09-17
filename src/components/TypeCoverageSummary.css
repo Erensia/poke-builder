@@ -27,8 +27,10 @@
    왼쪽은 행 헤더가 sticky라 힌트가 필요 없다. */
 .type-matrix-scroll {
   overflow-x: auto;
-  border: 1px solid var(--border);
+  border: 1px solid var(--glass-border);
   border-radius: 12px;
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
   background:
     linear-gradient(to left, var(--surface), transparent) 100% 0 / 40px 100% no-repeat local,
     radial-gradient(farthest-side at 100% 50%, rgba(20, 16, 40, 0.16), transparent) 100% 0 / 14px 100%

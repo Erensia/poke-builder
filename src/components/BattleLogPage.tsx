@@ -146,6 +146,42 @@ function BattleSetupScreen({
 }) {
   const sideCtls = (side: Side) => (side === "a" ? setup.a : setup.b);
   const slotCtl = (side: Side, i: SlotIndex) => sideCtls(side)[i];
+
+  // 드래그앤드롭으로 슬롯 순서 변경(ver.1.6 §4-2) — PartyBoard와 동일한 패턴. 편(side)이
+  // 다르면 맞바꾸지 않는다(내 파티 ↔ 상대 파티 사이 드래그는 의미가 없다).
+  const [draggedSlot, setDraggedSlot] = useState<{ side: Side; index: SlotIndex } | null>(null);
+  const [dragOverSlot, setDragOverSlot] = useState<{ side: Side; index: SlotIndex } | null>(null);
+
+  function handleSlotDragStart(side: Side, index: SlotIndex) {
+    setDraggedSlot({ side, index });
+  }
+  function handleSlotDragOver(side: Side, index: SlotIndex) {
+    if (!draggedSlot || draggedSlot.side !== side || draggedSlot.index === index) return;
+    setDragOverSlot({ side, index });
+  }
+  function handleSlotDrop(side: Side, index: SlotIndex) {
+    if (draggedSlot && draggedSlot.side === side) setup.reorderSlots(side, draggedSlot.index, index);
+    setDraggedSlot(null);
+    setDragOverSlot(null);
+  }
+  function handleSlotDragEnd() {
+    setDraggedSlot(null);
+    setDragOverSlot(null);
+  }
+
+  // 압축 뷰(ver.1.6 §4-3) — 기본은 압축(프로필 사진+이름만), 펼친 슬롯만 이 집합에 담는다.
+  const [expandedSlots, setExpandedSlots] = useState<Set<string>>(new Set());
+  const slotKey = (side: Side, i: SlotIndex) => `${side}-${i}`;
+  function toggleExpanded(side: Side, i: SlotIndex) {
+    const key = slotKey(side, i);
+    setExpandedSlots((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
   return (
     <div className="battle-setup-board">
       {(["a", "b"] as const).map((side) => (
@@ -187,6 +223,14 @@ function BattleSetupScreen({
                 hasSamples={hasSlotPresets}
                 onSaveAsSample={() => onSaveSlotAsSample(side, i)}
                 onOpenSamplePicker={() => onOpenPicker({ kind: "slotPresets", side, slotIndex: i })}
+                expanded={expandedSlots.has(slotKey(side, i))}
+                onToggleExpand={() => toggleExpanded(side, i)}
+                isDragging={draggedSlot?.side === side && draggedSlot.index === i}
+                isDragOver={dragOverSlot?.side === side && dragOverSlot.index === i}
+                onDragStart={() => handleSlotDragStart(side, i)}
+                onDragOverSlot={() => handleSlotDragOver(side, i)}
+                onDrop={() => handleSlotDrop(side, i)}
+                onDragEnd={handleSlotDragEnd}
               />
             ))}
           </div>
@@ -219,6 +263,7 @@ function BattleSelectScreen({
   buildableIndices,
   needsSelection,
   pokemonAt,
+  slotAt,
   onToggleSelection,
   onBack,
   selectionComplete,
@@ -228,6 +273,8 @@ function BattleSelectScreen({
   buildableIndices: (side: Side) => SlotIndex[];
   needsSelection: (side: Side) => boolean;
   pokemonAt: (side: Side, i: SlotIndex) => Pokemon | undefined;
+  /** 프로필(+도구) 이미지용 슬롯 원본(ver.1.6 §4-4) — pokemonAt은 종 데이터만 준다 */
+  slotAt: (side: Side, i: SlotIndex) => PartySlot | null;
   onToggleSelection: (side: Side, i: SlotIndex) => void;
   onBack: () => void;
   selectionComplete: boolean;
@@ -251,6 +298,7 @@ function BattleSelectScreen({
               <div className="battle-select-list">
                 {pool.map((i) => {
                   const pk = pokemonAt(side, i);
+                  const pkSlot = slotAt(side, i);
                   // 수동 선출: 고른 순서대로 번호. 선출 스킵 편: 빌드 순서 그대로 1·2·3 고정.
                   const num = manual
                     ? picks.includes(i)
@@ -266,6 +314,23 @@ function BattleSelectScreen({
                       onClick={() => onToggleSelection(side, i)}
                     >
                       <span className={`battle-select-num${num ? " is-on" : ""}`}>{num ?? ""}</span>
+                      {pk && pkSlot && (
+                        <PokemonAvatarWithItem
+                          pokemon={pk}
+                          size={28}
+                          radius={8}
+                          gradientTypes={getEffectiveForm(pk, pkSlot).types}
+                          itemId={pkSlot.item}
+                          form={{
+                            gender: getEffectiveGender(pk, pkSlot),
+                            cosmeticForm: pkSlot.cosmeticForm,
+                            formVariant: pkSlot.formVariant,
+                            sizeForm: pkSlot.sizeForm,
+                            activeMegaForm: pkSlot.activeMegaForm,
+                            item: pkSlot.item,
+                          }}
+                        />
+                      )}
                       <span className="battle-select-name">{pk?.name ?? "포켓몬"}</span>
                     </button>
                   );
@@ -405,23 +470,38 @@ function BattleBoard({
           : pokemon.name;
         // 셋업 카드와 동일하게 메가진화 여부를 반영해서 이름 옆에 배지를 그린다.
         // fighter.slot(EvaluatorSlot)은 FormSource를 만족하므로 getEffectiveForm을 그대로 쓸 수 있다.
+        // (메가진화 관련 용도 전용 — 변신 중에도 메타몽 자신의 메가 여부라 원본 종 기준 그대로 둔다.)
         const form = getEffectiveForm(pokemon, fighter.slot);
         const hpPercent = Math.max(0, Math.min(100, (fighter.currentHp / fighter.maxHp) * 100));
+        // 변신(§괴짜/변신, ver.1.6): 로그엔 "변신했다!"가 찍히는데 보드 표시가 안 바뀌던 버그 —
+        // 이름은 원본 종 그대로 두되(본가 규칙), 스프라이트·타입 배지는 변신 대상 모습으로 보여준다.
+        // fighter.types는 applyTransform이 이미 대상 것으로 갈아치워 둔 값이라 그대로 쓴다.
+        const transformedPokemon =
+          !fighter.illusionAs && fighter.transformedIntoPokemonId
+            ? getPokemon(fighter.transformedIntoPokemonId)
+            : undefined;
         // §1-4: 대전 화면 아바타. 일루전 중이면 위장 대상 종의 스프라이트를(상대가 안 눈치채도록,
-        // 도구 뱃지도 숨김), 아니면 실제 종. 메가스톤을 들어도 실제로 선언(hasMegaEvolved)해야
+        // 도구 뱃지도 숨김), 변신 중이면 변신 대상 종을(성별·폼 등은 복제 대상이 아니라 기본
+        // 모습으로), 아니면 실제 종. 메가스톤을 들어도 실제로 선언(hasMegaEvolved)해야
         // 메가폼 스프라이트로 바뀐다 — 그래서 item은 스프라이트 옵션에 안 넘기고(메가스톤이
         // 스프라이트를 강제로 메가폼으로 만들기 때문) 뱃지로만 표시한다.
         const illusionPokemon = fighter.illusionAs ? getPokemon(fighter.illusionAs) : undefined;
-        const avatarPokemon = illusionPokemon ?? pokemon;
+        const avatarPokemon = illusionPokemon ?? transformedPokemon ?? pokemon;
+        // 변신 시점에 대상이 메가진화 상태였으면(transformedIntoMegaStone) 그 메가폼 이미지 그대로.
+        const transformedMegaForm = transformedPokemon?.megaEvolutions?.find(
+          (m) => m.megaStone === fighter.transformedIntoMegaStone,
+        )?.form;
         const avatarForm: SpriteFormOptions = illusionPokemon
           ? {}
-          : {
-              gender: getEffectiveGender(pokemon, fighter.slot),
-              cosmeticForm: fighter.slot.cosmeticForm,
-              formVariant: fighter.slot.formVariant,
-              sizeForm: fighter.slot.sizeForm,
-              activeMegaForm: fighter.hasMegaEvolved ? form.mega?.form : undefined,
-            };
+          : transformedPokemon
+            ? { activeMegaForm: transformedMegaForm }
+            : {
+                gender: getEffectiveGender(pokemon, fighter.slot),
+                cosmeticForm: fighter.slot.cosmeticForm,
+                formVariant: fighter.slot.formVariant,
+                sizeForm: fighter.slot.sizeForm,
+                activeMegaForm: fighter.hasMegaEvolved ? form.mega?.form : undefined,
+              };
         // battleState 안의 slot은 EvaluatorSlot(moves 필드 없음)이라, 4개 기술 목록은
         // 셋업 단계에서 쓴 PartySlot을 활성 슬롯 인덱스로 되짚어 가져온다 — 배틀 중엔 안 바뀜
         const moveIds: (string | null)[] = activeMoveIds(side);
@@ -442,7 +522,7 @@ function BattleBoard({
                 <PokemonAvatarWithItem
                   pokemon={avatarPokemon}
                   form={avatarForm}
-                  gradientTypes={illusionPokemon ? illusionPokemon.types : form.types}
+                  gradientTypes={illusionPokemon ? illusionPokemon.types : fighter.types}
                   size={38}
                   radius={9}
                   itemId={fighter.illusionAs ? undefined : fighter.slot.item}
@@ -839,7 +919,7 @@ function BattleBoard({
       <div className={`battle-result-banner${winner === "draw" ? " is-draw" : ""}`}>
         {winner === "draw" ? "🤝 무승부! 양쪽 다 기절했어요" : `🏆 ${fighterLabel(battleState, winner)} 승리!`}
         <button type="button" className="battle-reset-button" onClick={resetToSetup}>
-          다시 설정하기
+          대전 이어하기
         </button>
       </div>
     ) : pendingForcedSwitch ? (
@@ -914,8 +994,15 @@ export function BattleLogPage() {
   /** 배틀 중 이 편의 현재 활성 포켓몬(종) */
   const activePokemon = (side: Side) =>
     battleState ? getPokemon(battleState[side].slot.pokemonId) : undefined;
-  /** 배틀 중 이 편의 현재 활성 슬롯이 지닌 기술 4개(셋업 PartySlot에서 되짚음) */
+  /**
+   * 배틀 중 이 편의 현재 활성 슬롯이 지닌 기술 4개(셋업 PartySlot에서 되짚음). 단, 변신/괴짜로
+   * 상대 기술을 복제한 상태(fighter.transformed)면 셋업 때의 원본 기술(메타몽이면 "변신" 하나뿐)이
+   * 아니라 실제로 복제된 fighter.remainingPp의 키를 써야 한다 — 전에는 이 구분이 없어서 변신 후에도
+   * 계속 "변신" 하나만 낼 수 있던 버그가 있었다(ver.1.6).
+   */
   const activeMoveIds = (side: Side): (string | null)[] => {
+    const fighter = battleState?.[side];
+    if (fighter?.transformed) return Object.keys(fighter.remainingPp);
     const idx = battleSide(side)?.activeIndex ?? 0;
     return partySlots[side][idx]?.moves ?? [];
   };
@@ -1302,6 +1389,7 @@ export function BattleLogPage() {
           buildableIndices={buildableIndices}
           needsSelection={needsSelection}
           pokemonAt={pokemonAt}
+          slotAt={(side, i) => slotCtl(side, i).slot}
           onToggleSelection={toggleSelection}
           onBack={() => setSelecting(false)}
           selectionComplete={selectionComplete}
@@ -1342,6 +1430,10 @@ export function BattleLogPage() {
       {picker?.kind === "pokemon" && (
         <PokemonPickerModal
           onClose={() => setPicker(null)}
+          usedPokemonIds={sideCtls(picker.side)
+            .filter((_, i) => i !== picker.slotIndex)
+            .map((ctl) => ctl.slot?.pokemonId)
+            .filter((id): id is string => id !== undefined)}
           onSelect={(pokemonId) => {
             slotCtl(picker.side, picker.slotIndex).setPokemon(pokemonId);
             setPicker(null);
@@ -1483,6 +1575,10 @@ export function BattleLogPage() {
             <SlotPresetsModal
               presets={slotPresets.presets}
               slotIsFilled={ctl.slot !== null}
+              usedPokemonIds={sideCtls(picker.side)
+                .filter((_, i) => i !== picker.slotIndex)
+                .map((c) => c.slot?.pokemonId)
+                .filter((id): id is string => id !== undefined)}
               onClose={() => setPicker(null)}
               onLoad={(preset) => ctl.loadSlot(preset.slot)}
               onRename={slotPresets.renamePreset}

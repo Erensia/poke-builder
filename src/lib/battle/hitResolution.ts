@@ -62,6 +62,12 @@ export function resolveHitAndApplyDamage(input: HitResolutionInput) {
   let berryReducedDamageItemName: string | undefined;
   let damage = 0;
   let damagePercent = 0;
+  // 반동(recoilFraction)·흡수기(drainFraction)·해감액·조개껍질방울은 본가에서 상대 HP를
+  // 넘는 "이론상 데미지"가 아니라, 그 히트로 실제로 깎인 HP(상대 최대/잔여 HP에 잘린 값)를
+  // 기준으로 계산된다 — damage는 오버킬이어도 그대로 누적되는 값이라 여기 쓰면 안 된다.
+  // applyDamageToDefender(대타 포함)와 카운터류처럼 defender.currentHp를 직접 건드리는
+  // 모든 지점에서 이 값을 같이 채운다.
+  let actualDamageDealt = 0;
   let isCritical = false;
   // 트리플악셀처럼 여러 타로 나뉘는 기술만 채운다 — 실제로 명중해서 데미지를 낸 타수.
   let hitCount: number | undefined;
@@ -303,7 +309,9 @@ export function resolveHitAndApplyDamage(input: HitResolutionInput) {
   function applyDamageToDefender(amount: number): void {
     if (blockedBySubstitute && defender.substituteHp !== undefined) {
       hitSubstitute = true;
+      const substituteHpBefore = defender.substituteHp;
       defender.substituteHp = Math.max(0, defender.substituteHp - amount);
+      actualDamageDealt += substituteHpBefore - defender.substituteHp;
       if (defender.substituteHp <= 0) {
         defender.substituteHp = undefined;
         substituteBroke = true;
@@ -323,6 +331,7 @@ export function resolveHitAndApplyDamage(input: HitResolutionInput) {
     const hpBeforeThisHit = defender.currentHp;
     defenderHpBeforeLastHit = hpBeforeThisHit;
     defender.currentHp = Math.max(0, defender.currentHp - amount);
+    actualDamageDealt += hpBeforeThisHit - defender.currentHp;
     // 미러코트/카운터용: 실제 HP로 받은 데미지를 카테고리별로 누적(대타 흡수분은 위에서 이미
     // return되어 제외). effectiveMove가 아니라 hitMove로 넘어와도 카테고리는 동일하다.
     if (amount > 0 && (effectiveMove.category === "physical" || effectiveMove.category === "special") && defender.damageTakenThisTurn) {
@@ -684,6 +693,7 @@ export function resolveHitAndApplyDamage(input: HitResolutionInput) {
     endeavorDamage = defender.currentHp - attacker.currentHp;
     defender.currentHp = attacker.currentHp;
     damage = endeavorDamage;
+    actualDamageDealt = endeavorDamage;
     damagePercent = endeavorDamage / defender.maxHp;
   }
 
@@ -720,6 +730,7 @@ export function resolveHitAndApplyDamage(input: HitResolutionInput) {
       counterDamage = Math.min(defender.currentHp, taken * 2);
       defender.currentHp -= counterDamage;
       damage = counterDamage;
+      actualDamageDealt = counterDamage;
       damagePercent = counterDamage / defender.maxHp;
     }
   }
@@ -738,6 +749,7 @@ export function resolveHitAndApplyDamage(input: HitResolutionInput) {
       );
       defender.currentHp -= counterDamage;
       damage = counterDamage;
+      actualDamageDealt = counterDamage;
       damagePercent = counterDamage / defender.maxHp;
     }
   }
@@ -777,17 +789,22 @@ export function resolveHitAndApplyDamage(input: HitResolutionInput) {
     attacker.currentHp = Math.max(0, attacker.currentHp - selfDamage);
   }
 
-  // 반동(recoil): 플레어드라이브·웨이브태클·브레이브버드·양날박치기. 상대에게 준 데미지(damage)의
-  // 일정 비율만큼 사용자도 입는다 — damage가 0(면역 등)이면 반동도 자연히 0이 된다.
-  // 매직가드: 반동기(recoilFraction)의 반동은 "공격기 데미지"가 아니라서 무효화된다.
+  // 반동(recoil): 플레어드라이브·웨이브태클·브레이브버드·양날박치기. 상대에게 "실제로 깎인"
+  // HP(actualDamageDealt)의 일정 비율만큼 사용자도 입는다 — 오버킬로 이론상 데미지가 상대
+  // 잔여 HP보다 커도, 반동은 실제로 들어간 HP만큼만 기준으로 계산해야 한다(본가 규칙).
+  // damage(이론상 수치)를 쓰면 반동이 부풀려지는 버그가 된다. actualDamageDealt가 0(면역 등)
+  // 이면 반동도 자연히 0이 된다. 매직가드: 반동기(recoilFraction)의 반동은 "공격기 데미지"가
+  // 아니라서 무효화된다.
   let recoilDamage = 0;
-  if (effectiveMove.recoilFraction !== undefined && damage > 0 && !attackerAbility?.negatesIndirectDamage) {
-    recoilDamage = Math.floor(damage * effectiveMove.recoilFraction);
+  if (effectiveMove.recoilFraction !== undefined && actualDamageDealt > 0 && !attackerAbility?.negatesIndirectDamage) {
+    recoilDamage = Math.floor(actualDamageDealt * effectiveMove.recoilFraction);
     attacker.currentHp = Math.max(0, attacker.currentHp - recoilDamage);
   }
 
-  // 생명의구슬: 데미지를 실제로 준(damage > 0) 공격이 성공할 때마다 최대 HP의 1/10만큼 자신도
-  // 반동을 입는다 — 다단히트도 타수 수와 무관하게 이번 행동에 한 번만 적용(본가 규칙).
+  // 생명의구슬: 데미지를 실제로 준 공격이 성공할 때마다 최대 HP의 1/10만큼 자신도 반동을
+  // 입는다 — 다단히트도 타수 수와 무관하게 이번 행동에 한 번만 적용(본가 규칙). 이쪽은 데미지
+  // 양과 무관한 고정 비율(공격자 최대 HP 기준)이라 오버킬 버그와는 무관하지만, "데미지가 실제로
+  // 들어갔는지" 게이트는 다른 항목들과 일관되게 actualDamageDealt로 맞춘다.
   // 단, 이번 기술에서 우격다짐(sheerForceAbilityName)이 실제로 발동했다면 생명의구슬 반동은
   // 면제된다 — 본가에서 확인된 특수 상호작용(Bulbapedia: Sheer Force negates Life Orb recoil).
   // 위력 상승·아이템 데미지 보너스는 그대로 받으면서 반동만 사라진다.
@@ -796,7 +813,7 @@ export function resolveHitAndApplyDamage(input: HitResolutionInput) {
   // 매직가드: 생명의구슬 반동도 무효화한다(위력·데미지 보너스는 그대로 — 우격다짐과 같은 결).
   if (
     isDamaging &&
-    damage > 0 &&
+    actualDamageDealt > 0 &&
     attackerItem?.selfRecoilFractionOfMaxHp &&
     !sheerForceAbilityName &&
     !attackerAbility?.negatesIndirectDamage
@@ -806,15 +823,17 @@ export function resolveHitAndApplyDamage(input: HitResolutionInput) {
     itemRecoilItemName = attackerItem.name;
   }
 
-  // 흡수기(기가드레인·드레인펀치·드레인키스·원념의칼): 준 데미지의 일정 비율만큼 회복.
-  // 큰뿌리를 지녔으면 회복량이 1.3배. recoil의 정반대 축이라 recoilDamage와 별도로 관리한다.
+  // 흡수기(기가드레인·드레인펀치·드레인키스·원념의칼): 실제로 깎인 HP(actualDamageDealt)의
+  // 일정 비율만큼 회복 — recoil과 같은 이유로 이론상 데미지(damage)가 아니라 실제 HP 감소분을
+  // 기준으로 써야 오버킬 시 회복량이 부풀려지지 않는다. 큰뿌리를 지녔으면 회복량이 1.3배.
+  // recoil의 정반대 축이라 recoilDamage와 별도로 관리한다.
   let drainHealAmount = 0;
   // 해감액: 방어측이 이 특성이면 흡수분만큼 공격측이 회복 대신 데미지를 입는다.
   let liquidOozeDamage = 0;
   let liquidOozeAbilityName: string | undefined;
-  if (isDamaging && damage > 0 && effectiveMove.drainFraction !== undefined) {
+  if (isDamaging && actualDamageDealt > 0 && effectiveMove.drainFraction !== undefined) {
     const rawDrain = Math.floor(
-      damage * effectiveMove.drainFraction * getDrainHealMultiplier(attackerItem),
+      actualDamageDealt * effectiveMove.drainFraction * getDrainHealMultiplier(attackerItem),
     );
     if (defenderAbility?.reverseDrainHealsToDamage) {
       liquidOozeDamage = Math.min(attacker.currentHp, rawDrain);
@@ -826,21 +845,24 @@ export function resolveHitAndApplyDamage(input: HitResolutionInput) {
     }
   }
 
-  // 조개껍질방울: 준 데미지의 1/8만큼 회복. 흡수기와는 별개 축이라 같은 행동에서 동시에 발동할 수 있다.
+  // 조개껍질방울: 실제로 깎인 HP(actualDamageDealt)의 1/8만큼 회복(오버킬 시 부풀려지지 않게).
+  // 흡수기와는 별개 축이라 같은 행동에서 동시에 발동할 수 있다.
   let shellBellHealAmount = 0;
-  if (isDamaging && damage > 0 && attackerItem?.damageDealtHealDenominator) {
-    shellBellHealAmount = Math.floor(damage / attackerItem.damageDealtHealDenominator);
+  if (isDamaging && actualDamageDealt > 0 && attackerItem?.damageDealtHealDenominator) {
+    shellBellHealAmount = Math.floor(actualDamageDealt / attackerItem.damageDealtHealDenominator);
     attacker.currentHp = Math.min(attacker.maxHp, attacker.currentHp + shellBellHealAmount);
   }
 
-  // 매지션: 데미지를 실제로 준(damage > 0) 공격이 명중했고, 자신이 무도구 상태(currentItemId
-  // 없음)면 그 자리에서 상대가 지닌 도구를 빼앗는다. 자신이 이미 도구를 지녔으면 발동하지
-  // 않고(본가 규칙), 상대도 무도구면 훔칠 게 없어 조용히 아무 일도 안 일어난다. 대타가 대신
-  // 맞았을 때는 상대의 "실제 소지품"과 무관한 인형에 닿은 것이므로 훔치지 않는다.
+  // 매지션: 실제로 HP를 깎은(actualDamageDealt > 0) 공격이 명중했고, 자신이 무도구 상태
+  // (currentItemId 없음)면 그 자리에서 상대가 지닌 도구를 빼앗는다. damage(이론상 수치)를
+  // 쓰면 탈(Disguise)처럼 데미지가 전부 무효화된 히트도 "명중"으로 잘못 취급된다. 자신이
+  // 이미 도구를 지녔으면 발동하지 않고(본가 규칙), 상대도 무도구면 훔칠 게 없어 조용히 아무
+  // 일도 안 일어난다. 대타가 대신 맞았을 때는 상대의 "실제 소지품"과 무관한 인형에 닿은
+  // 것이므로 훔치지 않는다.
   let stolenItemName: string | undefined;
   if (
     isDamaging &&
-    damage > 0 &&
+    actualDamageDealt > 0 &&
     !hitSubstitute &&
     attackerAbility?.stealsItemOnDamagingHit &&
     !attacker.currentItemId &&

@@ -9,13 +9,13 @@ import { NO_STATUS_CONDITION, NO_VOLATILE_CONDITIONS, type StatusCondition, type
 import { type Ability } from "@/types/ability";
 import { getAbility, getItem, getMove, getPokemon } from "@/lib/data";
 import { eulReul, eunNeun, roEuro } from "@/lib/josa";
-import { findMegaFormByStone, getEffectiveAbilityId, getEffectiveForm, getEffectiveGender } from "@/lib/pokemonForm";
+import { findMegaFormByStone, getEffectiveForm, getEffectiveGender } from "@/lib/pokemonForm";
 import { computeRealStats } from "@/lib/statCalculator";
 import { computeStatusSpeedMultiplier } from "@/lib/statusConditions";
 import { CONFUSION_SELF_HIT_POWER, hasVolatile } from "@/lib/volatileConditions";
 import { getEffectiveness } from "@/lib/typeEffectiveness";
 import { gyroBallPowerFromSpeeds, rankStageMultiplier } from "@/lib/battlePower";
-import { FIELD_DURATION } from "@/lib/fieldEffects";
+import { FIELD_DURATION, FIELD_ENTRY_ANNOUNCEMENT } from "@/lib/fieldEffects";
 import { getItemSpeedMultiplier } from "@/lib/itemEffects";
 import { type BaseStats } from "@/types/stats";
 import { type EvaluatorSlot } from "@/lib/matchupEvaluator";
@@ -92,9 +92,10 @@ export interface BattleFighterState {
    */
   gender: PokemonGender | null;
   /**
-   * 실제로 판정에 쓰는 특성 id. 메가진화 중이면 slot.ability와 무관하게 항상 그 메가폼 고유
-   * 특성으로 고정된다(getEffectiveAbilityId) — 메가리자몽Y는 항상 가뭄, 메가리자몽X는 항상
-   * 단단한발톱. slot.ability를 직접 쓰면 메가 특성이 무시되는 버그가 있어 이 필드로 분리했다.
+   * 실제로 판정에 쓰는 특성 id. 배틀 시작 시엔 slot.ability 그대로(메가스톤을 들었어도 아직
+   * 메가진화를 선언하지 않았으면 기본 특성 — ver.1.6). 턴 중 메가진화를 실제로 선언하면
+   * applyMegaEvolution이 이 필드를 그 메가폼 고유 특성으로 바꿔치운다(메가리자몽Y=가뭄,
+   * 메가리자몽X=단단한발톱 등) — slot.ability는 그대로 두고 이 필드만 갈아치운다.
    */
   effectiveAbilityId: string | null;
   realStats: BaseStats;
@@ -176,13 +177,25 @@ export interface BattleFighterState {
   /** 이 배틀에서 이미 메가진화했으면 true. 교체로 물러났다 다시 나와도 유지(본가 규칙). */
   hasMegaEvolved?: boolean;
   /**
-   * 변신(Move.transformsIntoTarget)·괴짜(Ability.transformsIntoOpponentOnEntry)로 상대로 변신한
-   * 상태면 true. 타입·5실능(HP 제외)·특성·능력 랭크·기술(PP 5)을 상대 것으로 갈아치운 뒤 이 플래그를
-   * 세운다. 교체가 없는 1v1이라 한 번 변신하면 배틀 끝까지 유지되고, 재변신은 실패한다.
-   * slot.pokemonId는 원본 그대로 두므로(종 자체는 안 바뀜) 몸무게·종별타입 기술은 원본 종 기준으로
-   * 남는다 — 변신 사용자가 메타몽뿐이라 실질 영향이 없어 단순화했다.
+   * 변신(Move.transformsIntoTarget)·괴짜(Ability.transformsIntoOpponentOnEntry, 교체 등장 포함
+   * ver.1.6)로 상대로 변신한 상태면 true. 타입·5실능(HP 제외)·특성·능력 랭크·기술(PP 5)을 상대
+   * 것으로 갈아치운 뒤 이 플래그를 세운다. slot.pokemonId는 원본 그대로 두므로(종 자체는 안
+   * 바뀜) 몸무게·종별타입 기술은 원본 종 기준으로 남는다 — 변신 사용자가 메타몽뿐이라 실질
+   * 영향이 없어 단순화했다.
+   * 알려진 한계: 교체로 물러나도 이 플래그와 복제된 값들이 원상복귀되지 않는다(원래 "교체 없는
+   * 1v1" 가정하에 설계됨 — ver.1.6에서 교체 등장 지원이 추가되며 이 가정이 깨졌지만 아직
+   * 미수정). 즉 한 번 변신한 메타몽은 교체로 물러났다 다시 나와도 계속 변신 상태로 남고, 다시
+   * 괴짜가 발동하지 않는다.
    */
   transformed?: boolean;
+  /** 변신 대상 종(BattleBoard 표시용, ver.1.6) — applyTransform이 target.slot.pokemonId로 세운다. */
+  transformedIntoPokemonId?: string;
+  /**
+   * 변신 시점에 대상이 메가진화한 상태였으면 그 메가스톤 id(BattleBoard가 메가 이미지를 그대로
+   * 보여주기 위한 값, ver.1.6). 변신 이후 대상이 메가진화해도 소급 반영되진 않는다(변신 시점
+   * 스냅샷 — 본가 규칙).
+   */
+  transformedIntoMegaStone?: string;
   /**
    * 길동무: 이번 시전이 성공해서 "이번 턴(또는 이후 턴에) 직접 공격으로 쓰러지면 상대도 같이
    * 쓰러뜨린다" 예약이 걸려있으면 true. activeProtect와 달리 매 턴 시작 시 초기화되지 않고,
@@ -509,7 +522,7 @@ export function createFighterState(slot: EvaluatorSlot, moves: Move[]): BattleFi
     slot,
     types: form.types,
     gender: getEffectiveGender(pokemon, slot),
-    effectiveAbilityId: getEffectiveAbilityId(form, slot.ability),
+    effectiveAbilityId: slot.ability,
     megaStone: megaForm?.megaStone,
     realStats,
     currentHp: realStats.hp,
@@ -687,11 +700,23 @@ function resolveEntryWeather(
 }
 
 /**
+ * 풍선(Item.grantsGroundImmunity): 지닌 채로 등장하면 안내 문구를 한 번 낸다(배틀 시작·교체
+ * 등장 공통). 기절 중이면 호출하지 않는다.
+ */
+export function balloonEntryAnnouncement(fighter: BattleFighterState): string | undefined {
+  const item = fighter.currentItemId ? getItem(fighter.currentItemId) : undefined;
+  if (!item?.grantsGroundImmunity) return undefined;
+  const name = getPokemon(fighter.slot.pokemonId)?.name ?? "포켓몬";
+  return `${name}${eunNeun(name)} ${item.name}${roEuro(item.name)} 인해 공중에 떠있다!`;
+}
+
+/**
  * 변신(Move.transformsIntoTarget)·괴짜(Ability.transformsIntoOpponentOnEntry) 공통 처리 —
  * self를 target으로 변신시킨다. 타입·5실능(HP 제외)·특성·능력 랭크(급소율 포함)·기술 목록을
  * target 것으로 복사하고, 복사한 기술의 PP는 각 min(5, 원래 최대 PP)로 채운다. 현재 HP·maxHp·
  * 주 상태이상은 유지. slot.pokemonId(종 자체)는 바꾸지 않는다 — 변신 사용자가 메타몽뿐이라
- * 몸무게·종별타입 기술 정도만 원본 종 기준으로 남고 실질 영향이 없다.
+ * 몸무게·종별타입 기술 정도만 원본 종 기준으로 남고 실질 영향이 없다. transformedIntoPokemonId만
+ * 따로 세워서 BattleBoard가 이름은 그대로 두고 스프라이트·타입 배지만 대상 종으로 보여준다.
  */
 export function applyTransform(self: BattleFighterState, target: BattleFighterState): void {
   self.types = [...target.types];
@@ -711,6 +736,12 @@ export function applyTransform(self: BattleFighterState, target: BattleFighterSt
     Object.keys(target.remainingPp).map((id) => [id, Math.min(5, getMove(id)?.pp ?? 5)]),
   );
   self.transformed = true;
+  // target이 이미 변신 중이면(메타몽 vs 메타몽처럼) target이 지금 보이는 모습을 그대로 물려받는다.
+  self.transformedIntoPokemonId = target.transformedIntoPokemonId ?? target.slot.pokemonId;
+  // target이 변신 시점에 메가진화 상태였으면 그 메가스톤까지 그대로 복제(이미지 표시용).
+  self.transformedIntoMegaStone = target.hasMegaEvolved
+    ? (target.transformedIntoMegaStone ?? target.megaStone)
+    : undefined;
 }
 
 /**
@@ -801,12 +832,14 @@ function resolveEntryAbilityEffects(
       }
     }
     if (ability.setsFieldOnEntry) {
-      if (field) {
-        announcements.push(`${pokemonName}의 ${ability.name}! 하지만 이미 다른 필드가 있어 실패했다!`);
+      if (field === ability.setsFieldOnEntry) {
+        announcements.push(`${pokemonName}의 ${ability.name}! 하지만 이미 같은 필드가 있어 실패했다!`);
       } else {
         field = ability.setsFieldOnEntry;
-        fieldTurnsRemaining = FIELD_DURATION;
-        announcements.push(`${pokemonName}의 ${ability.name}! 필드가 ${field}${roEuro(field)} 바뀌었다!`);
+        // 그라운드코트: 필드를 편 쪽이 이 도구를 지녔으면 지속시간이 늘어난다(기본 5턴 + 3 = 8턴).
+        const fighterItem = fighter.currentItemId ? getItem(fighter.currentItemId) : undefined;
+        fieldTurnsRemaining = FIELD_DURATION + (fighterItem?.fieldDurationBonus ?? 0);
+        announcements.push(`${pokemonName}의 ${ability.name}! ${FIELD_ENTRY_ANNOUNCEMENT[field]}`);
       }
     }
     if (ability.copiesOpponentAbilityOnEntry && opponent.effectiveAbilityId) {
@@ -922,6 +955,11 @@ export function createBattleState(init: { a: SideInit; b: SideInit; weather?: We
 
   // 시드류: 배틀 시작 시점에 이미 필드가 깔려 있으면(등장 특성으로 방금 깔린 경우 포함) 발동.
   state.entryAnnouncements.push(...triggerTerrainSeeds(state));
+
+  // 풍선: 지니고 등장하면 공중에 떠있다는 안내를 낸다.
+  for (const msg of [balloonEntryAnnouncement(state.a), balloonEntryAnnouncement(state.b)]) {
+    if (msg) state.entryAnnouncements.push(msg);
+  }
 
   // 일루전(§6-1): 리드가 조로아크류면 배틀 시작 시점부터 파티 마지막 슬롯 모습으로 위장한다.
   for (const key of ["a", "b"] as const) {

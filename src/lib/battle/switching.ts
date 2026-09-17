@@ -9,8 +9,8 @@ import { applyStageDelta } from "@/lib/statStages";
 import { inflictStatus, isImmuneToStatus } from "@/lib/statusConditions";
 import { hasVolatile } from "@/lib/volatileConditions";
 import { getEffectiveness } from "@/lib/typeEffectiveness";
-import { FIELD_DURATION, isStatusBlockedByField } from "@/lib/fieldEffects";
-import { WEATHER_DURATION, abilityOf, activeWeather, applyForecastForm, applyMimicryForm, cloneSide, consumeItem, contraryDelta, isFainted, opponentKey, sideOf, statusImmunitiesOf, weatherRockBonus, type BattleFighterState, type BattleState } from "./state";
+import { FIELD_DURATION, FIELD_ENTRY_ANNOUNCEMENT, isStatusBlockedByField } from "@/lib/fieldEffects";
+import { WEATHER_DURATION, abilityOf, activeWeather, applyForecastForm, applyMimicryForm, applyTransform, balloonEntryAnnouncement, cloneSide, consumeItem, contraryDelta, isFainted, opponentKey, sideOf, statusImmunitiesOf, weatherRockBonus, type BattleFighterState, type BattleState } from "./state";
 
 export function isTrappedFromSwitching(fighter: BattleFighterState): boolean {
   if (isFainted(fighter)) return false;
@@ -239,14 +239,16 @@ function applyEntryAbilityOnSwitchIn(state: BattleState, key: FighterKey, log: s
     applyForecastForm(state.a, activeWeather(state));
     applyForecastForm(state.b, activeWeather(state));
   }
-  // 일렉트릭메이커류: 이미 다른 필드가 있으면 실패
+  // 일렉트릭메이커류: 같은 필드가 이미 있으면 실패, 다른 필드가 있으면 날씨처럼 덮어쓴다.
   if (ability.setsFieldOnEntry) {
-    if (state.field) {
-      log.push(`${selfName}의 ${ability.name}! 하지만 이미 다른 필드가 있어 실패했다!`);
+    if (state.field === ability.setsFieldOnEntry) {
+      log.push(`${selfName}의 ${ability.name}! 하지만 이미 같은 필드가 있어 실패했다!`);
     } else {
       state.field = ability.setsFieldOnEntry;
-      state.fieldTurnsRemaining = FIELD_DURATION;
-      log.push(`${selfName}의 ${ability.name}! 필드가 ${state.field}${roEuro(state.field)} 바뀌었다!`);
+      // 그라운드코트: 필드를 편 쪽이 이 도구를 지녔으면 지속시간이 늘어난다(기본 5턴 + 3 = 8턴).
+      const selfItem = self.currentItemId ? getItem(self.currentItemId) : undefined;
+      state.fieldTurnsRemaining = FIELD_DURATION + (selfItem?.fieldDurationBonus ?? 0);
+      log.push(`${selfName}의 ${ability.name}! ${FIELD_ENTRY_ANNOUNCEMENT[state.field]}`);
       applyMimicryForm(self, state.field);
     }
   }
@@ -257,6 +259,13 @@ function applyEntryAbilityOnSwitchIn(state: BattleState, key: FighterKey, log: s
     const opponentName = getPokemon(opponent.slot.pokemonId)?.name ?? "상대";
     const copiedName = copied?.name ?? "특성";
     log.push(`${selfName}의 ${ability.name}! ${opponentName}의 ${copiedName}${eulReul(copiedName)} 복사했다!`);
+  }
+  // 괴짜(Imposter): 등장하자마자 상대로 변신한다(변신 기술과 같은 처리, state.ts의 배틀 시작
+  // 버전과 동일 — 여태 배틀 시작(리드)에만 있고 교체 등장엔 빠져 있던 처리를 여기 추가).
+  if (ability.transformsIntoOpponentOnEntry && !self.transformed && !isFainted(opponent)) {
+    applyTransform(self, opponent);
+    const opponentName = getPokemon(opponent.slot.pokemonId)?.name ?? "상대";
+    log.push(`${selfName}의 ${ability.name}! ${selfName}${eunNeun(selfName)} ${opponentName}${roEuro(opponentName)} 변신했다!`);
   }
 }
 
@@ -456,6 +465,9 @@ export function performSwitch(
   applyEntryAbilityOnSwitchIn(state, key, log);
   // 3. 시드류 — 이미 필드가 있으면(방금 등장 특성으로 깔린 경우 포함) 발동.
   log.push(...triggerTerrainSeeds(state));
+  // 4. 풍선 — 지니고 등장하면 공중에 떠있다는 안내를 낸다.
+  const balloonMsg = balloonEntryAnnouncement(incoming);
+  if (balloonMsg) log.push(balloonMsg);
 
   // TODO(§8): 추격(Pursuit)은 로스터에 없어 미구현 — 교체 대상을 위력 2배로 선타하는 예외.
 }

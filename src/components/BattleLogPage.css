@@ -203,9 +203,11 @@
   gap: 0.7rem;
   width: 240px;
   padding: 0.6rem 0.8rem;
-  border: 1px solid var(--border);
+  border: 1px solid var(--glass-border);
   border-radius: 10px;
   background: var(--surface);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
   cursor: pointer;
   text-align: left;
   font-size: 0.9rem;
@@ -239,6 +241,10 @@
   border-color: transparent;
   background: var(--gradient);
   color: #fff;
+}
+
+.battle-select-mon .avatar-with-item {
+  flex-shrink: 0;
 }
 
 .battle-select-name {
@@ -299,10 +305,12 @@
 .battle-fighter {
   position: relative;
   background: var(--surface);
-  border: 1px solid var(--border);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border);
   border-radius: 14px;
   padding: 0.9rem 1rem;
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--glass-shadow);
 }
 
 /* 승리한 편의 활성 포켓몬을 금색 테두리 + 맥동 광휘 + 주기적 반짝임으로 강조한다.

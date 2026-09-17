@@ -182,13 +182,18 @@
   color: var(--blue);
 }
 
-/* 좁은 폭(모달이 하단 시트가 되는 구간): 숫자 입력창을 접고 슬라이더에 폭을 몰아준다 */
+/* 좁은 폭(모달이 하단 시트가 되는 구간): 배분 수치 입력창을 숨기면 모바일에서 배분값을 확인할
+   방법이 없어지는 버그(ver.1.6 §2-2)였다 — 숨기는 대신 입력창 자체를 줄여서 자리를 만든다. */
 @media (max-width: 560px) {
   .points-row {
-    grid-template-columns: 3.4em auto auto minmax(60px, 1fr) auto;
-    gap: 0.35rem;
+    grid-template-columns: 3em auto 2.2em auto minmax(50px, 1fr) auto;
+    gap: 0.3rem;
   }
   .points-input {
-    display: none;
+    width: 2.2em;
+    font-size: 0.78rem;
+  }
+  .points-real {
+    font-size: 0.7rem;
   }
 }

@@ -1145,11 +1145,12 @@ export function resolveMirroredMoveEffects(input: MirroredMoveEffectsInput) {
     attacker.protectStreak = 0;
   }
 
-  // 필드 설치: 이미 다른(또는 같은) 필드가 깔려있으면 실패한다 — 필드를 쓸 때마다 지속 턴수가
-  // 갱신되던 버그 수정. 기존 필드가 다 사라지기 전까지는 필드 기술 자체가 실패해야 한다.
+  // 필드 설치: 같은 필드가 이미 깔려있으면 실패한다(재설치 시 턴수가 갱신되던 버그 수정).
+  // 날씨처럼 다른 종류의 필드가 깔려있으면 덮어쓴다 — 그래스필드 위에 일렉트릭필드를 깔면
+  // 일렉트릭필드로 교체되는 게 본가 동작이다(ver.1.6, 같은 필드만 막던 과거 버그 재수정).
   let fieldSetFailed = false;
   if (effectiveMove.setsField) {
-    if (state.field) {
+    if (state.field === effectiveMove.setsField) {
       fieldSetFailed = true;
     } else {
       state.field = effectiveMove.setsField;

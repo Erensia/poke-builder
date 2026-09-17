@@ -16,6 +16,16 @@ const CATEGORY_FILTERS: { label: string; value: MoveCategory | "all" }[] = [
 type SortKey = "name" | "type" | "category" | "priority" | "power" | "accuracy" | "pp";
 type SortDir = "asc" | "desc";
 
+const SORT_OPTIONS: { label: string; value: SortKey }[] = [
+  { label: "이름순", value: "name" },
+  { label: "타입순", value: "type" },
+  { label: "분류순", value: "category" },
+  { label: "우선도순", value: "priority" },
+  { label: "위력순", value: "power" },
+  { label: "명중률순", value: "accuracy" },
+  { label: "PP순", value: "pp" },
+];
+
 /**
  * 정렬용 보조값. null(변화기 위력·필중기/자신대상 명중률 등)은 오름/내림차순 방향과 무관하게 항상
  * 맨 뒤로 보내야 해서, 정렬 비교 쪽(sorted useMemo)에서 null을 따로 걸러낸다 — 여기서 -1 같은
@@ -56,7 +66,7 @@ export function MoveDexPage({ initialMoveId, onInitialMoveConsumed }: MoveDexPag
   // 마운트 시점의 initialMoveId로 고정 — 페이지 전환마다 컴포넌트가 통째로 다시 마운트되므로
   // (App.tsx가 뷰를 조건부 렌더링) 이후 갱신은 필요 없다.
   const highlightedId = initialMoveId ?? null;
-  const rowRefs = useRef(new Map<string, HTMLLIElement>());
+  const cardRefs = useRef(new Map<string, HTMLDivElement>());
 
   const filtered = useMemo(() => {
     const q = query.trim();
@@ -80,20 +90,11 @@ export function MoveDexPage({ initialMoveId, onInitialMoveConsumed }: MoveDexPag
     });
   }, [filtered, sortKey, sortDir]);
 
-  function handleSort(key: SortKey) {
-    if (key === sortKey) {
-      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-    } else {
-      setSortKey(key);
-      setSortDir("asc");
-    }
-  }
-
   // 도감에서 넘어온 초기 기술로 스크롤(강조 표시는 useState 초깃값에서 이미 처리됨).
   // 스크롤 대상 DOM을 읽는 시점이라 진짜 effect가 필요한 지점 — 한 번 스크롤하고 상위에 소비했음을 알린다.
   useEffect(() => {
     if (!initialMoveId) return;
-    const el = rowRefs.current.get(initialMoveId);
+    const el = cardRefs.current.get(initialMoveId);
     el?.scrollIntoView({ behavior: "smooth", block: "center" });
     onInitialMoveConsumed?.();
   }, [initialMoveId, onInitialMoveConsumed]);
@@ -141,105 +142,105 @@ export function MoveDexPage({ initialMoveId, onInitialMoveConsumed }: MoveDexPag
         </div>
       </div>
 
-      <div className="movedex-count">{sorted.length}개 표시 중</div>
-
-      <div className="movedex-table">
-        <div className="movedex-row movedex-head-row">
-          <SortableHeader label="기술" sortKey="name" active={sortKey} dir={sortDir} onSort={handleSort} />
-          <SortableHeader label="타입" sortKey="type" active={sortKey} dir={sortDir} onSort={handleSort} />
-          <SortableHeader label="분류" sortKey="category" active={sortKey} dir={sortDir} onSort={handleSort} />
-          <span className="movedex-cell movedex-th movedex-th-static">접촉</span>
-          <SortableHeader label="우선도" sortKey="priority" align="center" active={sortKey} dir={sortDir} onSort={handleSort} />
-          <SortableHeader label="위력" sortKey="power" align="center" active={sortKey} dir={sortDir} onSort={handleSort} />
-          <SortableHeader label="명중률" sortKey="accuracy" align="right" active={sortKey} dir={sortDir} onSort={handleSort} />
-          <SortableHeader label="PP" sortKey="pp" align="center" active={sortKey} dir={sortDir} onSort={handleSort} />
+      <div className="movedex-sort-bar">
+        <div className="movedex-count">{sorted.length}개 표시 중</div>
+        <div className="movedex-sort-controls">
+          <select
+            className="movedex-sort-select"
+            value={sortKey}
+            onChange={(e) => setSortKey(e.target.value as SortKey)}
+            aria-label="정렬 기준"
+          >
+            {SORT_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            className="movedex-sort-dir"
+            onClick={() => setSortDir((d) => (d === "asc" ? "desc" : "asc"))}
+            aria-label={sortDir === "asc" ? "오름차순" : "내림차순"}
+            title={sortDir === "asc" ? "오름차순" : "내림차순"}
+          >
+            {sortDir === "asc" ? "▲" : "▼"}
+          </button>
         </div>
+      </div>
 
-        <ul className="movedex-list">
-          {sorted.map((m) => (
-            <li
-              key={m.id}
-              id={`movedex-row-${m.id}`}
-              ref={(el) => {
-                if (el) rowRefs.current.set(m.id, el);
-                else rowRefs.current.delete(m.id);
-              }}
-              className={`movedex-row${m.id === highlightedId ? " is-highlighted" : ""}`}
-            >
-              <div className="movedex-cell movedex-cell-name">
-                <span className="movedex-name">{m.name}</span>
-                {(() => {
-                  // 표시 태그는 전수조사 기준 m.tags를 그대로 노출. 여기에 minHits/maxHits가 있는
-                  // 다단히트 기술은 "연속 N회"(고정)/"연속 N~M회"(가변) 라벨을 즉석 계산해 덧붙인다 —
-                  // 이 라벨이 붙는 경우 m.tags에 들어있는 밋밋한 "연속"/"연타"는 횟수 정보가 더 많은
-                  // 라벨로 대체(중복 방지).
-                  const multiHitLabel =
-                    m.minHits !== undefined && m.maxHits !== undefined
-                      ? m.minHits === m.maxHits
-                        ? `연속 ${m.minHits}회`
-                        : `연속 ${m.minHits}~${m.maxHits}회`
-                      : undefined;
-                  const baseTags = (m.tags ?? []).filter(
-                    (t) => !(multiHitLabel && (t === "연속" || t === "연타")),
-                  );
-                  const tags = [...baseTags, ...(multiHitLabel ? [multiHitLabel] : [])];
-                  return (
-                    tags.length > 0 && <span className="movedex-classification">{tags.join(" · ")}</span>
-                  );
-                })()}
-                {m.effect && <p className="movedex-effect">{m.effect}</p>}
-              </div>
-              <span className="movedex-cell">{m.type ? <TypeBadge type={m.type} /> : "—"}</span>
-              <span className="movedex-cell movedex-cell-cat">{m.category ? CATEGORY_LABEL[m.category] : "—"}</span>
-              <span className="movedex-cell movedex-cell-contact">
-                {m.makesContact === undefined ? "—" : m.makesContact ? "접촉" : "비접촉"}
-              </span>
-              <span
-                className={`movedex-cell movedex-cell-center${
-                  m.priority !== 0 || m.priorityDisplay ? " is-priority" : ""
-                }`}
+      <div className="movedex-panel">
+        <div className="movedex-grid">
+          {sorted.map((m) => {
+            // 표시 태그는 전수조사 기준 m.tags를 그대로 노출. 여기에 minHits/maxHits가 있는
+            // 다단히트 기술은 "연속 N회"(고정)/"연속 N~M회"(가변) 라벨을 즉석 계산해 덧붙인다 —
+            // 이 라벨이 붙는 경우 m.tags에 들어있는 밋밋한 "연속"/"연타"는 횟수 정보가 더 많은
+            // 라벨로 대체(중복 방지).
+            const multiHitLabel =
+              m.minHits !== undefined && m.maxHits !== undefined
+                ? m.minHits === m.maxHits
+                  ? `연속 ${m.minHits}회`
+                  : `연속 ${m.minHits}~${m.maxHits}회`
+                : undefined;
+            const baseTags = (m.tags ?? []).filter((t) => !(multiHitLabel && (t === "연속" || t === "연타")));
+            const tags = [...baseTags, ...(multiHitLabel ? [multiHitLabel] : [])];
+
+            return (
+              <div
+                key={m.id}
+                id={`movedex-card-${m.id}`}
+                ref={(el) => {
+                  if (el) cardRefs.current.set(m.id, el);
+                  else cardRefs.current.delete(m.id);
+                }}
+                className={`movedex-card${m.id === highlightedId ? " is-highlighted" : ""}`}
               >
-                {m.priorityDisplay ?? (m.priority > 0 ? `+${m.priority}` : m.priority)}
-              </span>
-              <span className="movedex-cell movedex-cell-center">{m.power ?? "—"}</span>
-              <span className="movedex-cell movedex-cell-num">{m.accuracy ? `${m.accuracy}%` : "—"}</span>
-              <span className="movedex-cell movedex-cell-center">{m.pp}</span>
-            </li>
-          ))}
-          {sorted.length === 0 && <li className="movedex-empty">검색 결과가 없습니다.</li>}
-        </ul>
+                <div className="movedex-card-head">
+                  <span className="movedex-card-name">{m.name}</span>
+                  {m.type ? <TypeBadge type={m.type} /> : <span className="movedex-card-notype">—</span>}
+                </div>
+                {tags.length > 0 && <span className="movedex-classification">{tags.join(" · ")}</span>}
+                {m.effect && <p className="movedex-effect">{m.effect}</p>}
+                <div className="movedex-card-stats">
+                  <div className="movedex-stat">
+                    <span className="movedex-stat-label">분류</span>
+                    <span className="movedex-stat-value">{m.category ? CATEGORY_LABEL[m.category] : "—"}</span>
+                  </div>
+                  <div className="movedex-stat">
+                    <span className="movedex-stat-label">접촉</span>
+                    <span className="movedex-stat-value">
+                      {m.makesContact === undefined ? "—" : m.makesContact ? "접촉" : "비접촉"}
+                    </span>
+                  </div>
+                  <div className="movedex-stat">
+                    <span className="movedex-stat-label">우선도</span>
+                    <span
+                      className={`movedex-stat-value${
+                        m.priority !== 0 || m.priorityDisplay ? " is-priority" : ""
+                      }`}
+                    >
+                      {m.priorityDisplay ?? (m.priority > 0 ? `+${m.priority}` : m.priority)}
+                    </span>
+                  </div>
+                  <div className="movedex-stat">
+                    <span className="movedex-stat-label">위력</span>
+                    <span className="movedex-stat-value">{m.power ?? "—"}</span>
+                  </div>
+                  <div className="movedex-stat">
+                    <span className="movedex-stat-label">명중률</span>
+                    <span className="movedex-stat-value">{m.accuracy ? `${m.accuracy}%` : "—"}</span>
+                  </div>
+                  <div className="movedex-stat">
+                    <span className="movedex-stat-label">PP</span>
+                    <span className="movedex-stat-value">{m.pp}</span>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+          {sorted.length === 0 && <div className="movedex-empty">검색 결과가 없습니다.</div>}
+        </div>
       </div>
     </section>
-  );
-}
-
-function SortableHeader({
-  label,
-  sortKey,
-  active,
-  dir,
-  onSort,
-  align = "left",
-}: {
-  label: string;
-  sortKey: SortKey;
-  active: SortKey;
-  dir: SortDir;
-  onSort: (key: SortKey) => void;
-  /** 데이터 열 정렬에 맞춰 헤더 글자·화살표 위치를 맞춘다 (숫자 열=right, 우선도=center) */
-  align?: "left" | "right" | "center";
-}) {
-  const isActive = active === sortKey;
-  const alignClass =
-    align === "right" ? " movedex-th-num" : align === "center" ? " movedex-th-center" : "";
-  return (
-    <button
-      type="button"
-      className={`movedex-cell movedex-th${alignClass}${isActive ? " is-active" : ""}`}
-      onClick={() => onSort(sortKey)}
-    >
-      {label}
-      {isActive && <span className="movedex-sort-arrow">{dir === "asc" ? "▲" : "▼"}</span>}
-    </button>
   );
 }

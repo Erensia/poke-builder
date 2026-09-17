@@ -24,6 +24,10 @@
   max-width: 34ch;
 }
 
+.party-board-title-accent {
+  color: var(--danger-strong);
+}
+
 .party-board-header-right {
   display: flex;
   align-items: center;

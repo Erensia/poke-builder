@@ -65,11 +65,19 @@
   flex-wrap: wrap;
   margin-top: 1rem;
   padding: 0.6rem 0.9rem;
-  border: 1px solid var(--border);
+  border: 1px solid var(--glass-border);
   border-radius: 10px;
   background: var(--surface-2);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
   font-size: 0.82rem;
   color: var(--text-muted);
+}
+
+.matchup-speed-side {
+  /* ver.1.6 §2-3 — 두 실능치 span을 먼저 배치해 한 줄로 묶고, 판정 문구는 아래서 항상
+     자기 줄 전체를 쓰게 한다(순서는 order로만 바꾸고 DOM 순서는 그대로라 읽는 순서엔 영향 없음). */
+  order: 1;
 }
 
 .matchup-speed-side strong {
@@ -80,7 +88,14 @@
   margin-left: 0.25rem;
 }
 
+/* ver.1.6 §2-3 — "⚡ 내 포켓몬이 먼저 움직여요" 같은 긴 판정 문구가 실능치 span과 한 줄에
+   같이 들어가려다 플렉스 아이템이 최소 크기 아래로 못 줄어들어서(min-width:auto) 부모의
+   max-width를 뚫고 넘치던 버그. 판정 문구는 항상 자기 줄 전체(flex-basis:100%)를 쓰게 해서
+   폭 계산에서 완전히 분리한다. */
 .matchup-speed-verdict {
+  order: 2;
+  flex-basis: 100%;
+  text-align: center;
   font-weight: 600;
   color: var(--text);
 }
@@ -90,9 +105,16 @@
   color: var(--text-muted);
 }
 
-/* 스피드 비교 행 + 트릭룸 토글을 한 덩어리로 */
+/* 스피드 비교 행 + 트릭룸 토글을 한 덩어리로(ver.1.6 §2-3). 데스크톱은 카드 2장 폭만으론
+   안 맞았다 — .matchup-board가 슬롯 2장(280px씩) 사이에 .matchup-verdict-row(130px)까지
+   나란히 두고 각 사이에 1rem 갭이 있어서, 실제 카드 열 전체 폭은 280+16+130+16+280=722px.
+   그 폭에 정확히 맞춘다(스크린샷 대조로 여유분 없이 딱 맞추는 게 낫다고 확인됨). */
 .matchup-speed-block {
   margin-top: 1rem;
+  width: calc(280px * 2 + 130px + 1rem * 2);
+  max-width: 100%;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .matchup-speed-block .matchup-speed-row {
@@ -119,5 +141,13 @@
   .matchup-verdict-row {
     padding-top: 0;
     width: auto;
+  }
+
+  /* ver.1.6 §2-3 — MatchupSlotCard.css의 기존 규칙이 모바일에서 .matchup-slot을 고정 280px가
+     아니라 width:100%; max-width:320px;로 바꾼다. 여유분(10px)을 더했더니 카드보다 미묘하게
+     넓어 보인다는 스크린샷 피드백 — 여유 없이 정확히 같은 값으로 맞춘다. */
+  .matchup-speed-block {
+    width: 100%;
+    max-width: 320px;
   }
 }

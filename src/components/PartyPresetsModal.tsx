@@ -97,14 +97,6 @@ export function PartyPresetsModal({
         </div>
       )}
 
-      <input
-        type="text"
-        className="preset-search-input"
-        placeholder="파티 이름으로 검색"
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-      />
-
       <ul className="preset-list">
         {sorted.map((preset) => {
           const filledCount = preset.slots.filter((s) => s !== null).length;
@@ -140,6 +132,14 @@ export function PartyPresetsModal({
           </li>
         )}
       </ul>
+
+      <input
+        type="text"
+        className="preset-search-input"
+        placeholder="파티 이름으로 검색"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+      />
     </Modal>
   );
 }

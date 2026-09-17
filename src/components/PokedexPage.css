@@ -33,19 +33,27 @@
   flex-direction: column;
   gap: 0.6rem;
   background: var(--surface);
-  border: 1px solid var(--border);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border);
   border-radius: 14px;
   padding: 0.75rem;
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--glass-shadow);
   max-height: 680px;
 }
 
+/* ver.1.6 §1-1 — 검색창 모달 계열(.picker-search/.preset-search-input)과 위치·스타일 통일:
+   목록 아래(패널 하단)에 두고 유리 블러 적용. 목록(.pokedex-list)만 내부 스크롤되는 별도
+   플렉스 자식이라 모달과 달리 sticky 없이도 항상 보인다. */
 .pokedex-search {
   width: 100%;
   padding: 0.55rem 0.75rem;
   border-radius: 10px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--glass-border);
   background: var(--surface-2);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
+  box-shadow: var(--glass-shadow);
   color: var(--text);
   font-size: 0.85rem;
   flex-shrink: 0;
@@ -53,7 +61,7 @@
 
 .pokedex-search:focus {
   outline: none;
-  border-color: var(--violet);
+  border-color: var(--glass-focus-border);
 }
 
 .pokedex-list {
@@ -131,10 +139,12 @@
   flex: 1;
   min-width: 0;
   background: var(--surface);
-  border: 1px solid var(--border);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border);
   border-radius: 14px;
   padding: 1.25rem 1.4rem;
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--glass-shadow);
 }
 
 .pokedex-detail-empty {
@@ -433,12 +443,27 @@
 }
 
 @media (max-width: 760px) {
+  /* ver.1.6 §1-1 — align-items:flex-start는 데스크톱(가로 배치)에서 목록·상세 패널의
+     높이가 서로 다른 값으로 늘어나지 않게 하려는 의도인데, 모바일(세로 배치)에서는 같은
+     속성이 교차축(가로)에 적용돼 내용이 적은 상세 패널이 목록 패널보다 좁게 쪼그라드는
+     버그였다 — 모바일에서만 stretch로 되돌려 두 패널 폭을 맞춘다. */
   .pokedex-board {
     flex-direction: column;
+    align-items: stretch;
   }
 
   .pokedex-list-panel {
     width: 100%;
     max-height: 320px;
+  }
+
+  /* ver.1.6 §2-4 — 미선택 상태 안내 블록이 문구 높이만큼만 차지해서 위 리스트 블록(320px)보다
+     훨씬 작아 보이던 문제. 리스트와 같은 높이를 주고 문구를 가운데로 옮긴다. */
+  .pokedex-detail-empty {
+    min-height: 320px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
   }
 }

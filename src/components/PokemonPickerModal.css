@@ -1,17 +1,30 @@
+/* ver.1.6 §2-1 — 검색창을 modal-body(스크롤 컨테이너)에 고정한다. 목록을 스크롤해도 검색창이
+   같이 밀려 버려서 매번 스크롤해야 했던 문제(모바일 사파리에서 발견)의 원인 — 원래는 그냥
+   목록과 같이 흐르는 첫 번째 자식이었다.
+   ver.1.6 §1-1 — 고정 위치를 상단에서 하단으로 옮겼다(모달·프리셋 목록 등 다른 검색창과
+   위치를 통일하고, 엄지로 누르기 쉬운 화면 하단에 두기 위해). sticky는 DOM상 뒤에 오는
+   형제가 있어야 "항상 하단에 붙어 있는" 효과가 나서, 검색창을 목록 뒤(JSX 마지막)로 옮겼다
+   — 대신 자동 포커스(autoFocus)는 그대로 있어 탭 순서가 달라져도 열자마자 바로 입력 가능. */
 .picker-search {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
   width: 100%;
   padding: 0.6rem 0.8rem;
   border-radius: 10px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--glass-border);
   background: var(--surface-2);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
+  box-shadow: var(--glass-shadow);
   color: var(--text);
   font-size: 0.88rem;
-  margin-bottom: 0.6rem;
+  margin-top: 0.6rem;
 }
 
 .picker-search:focus {
   outline: none;
-  border-color: var(--violet);
+  border-color: var(--glass-focus-border);
 }
 
 .pokemon-picker-list {

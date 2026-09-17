@@ -4,7 +4,7 @@ Pokémon Champions 파티 빌더 — 6슬롯 파티를 구성하고 타입 상�
 
 - **배포**: [poke-builder-two.vercel.app](https://poke-builder-two.vercel.app/) — Vercel에 `main` 브랜치 자동 배포
 - **저장소**: [github.com/Erensia/poke-builder](https://github.com/Erensia/poke-builder)
-- **현재 버전**: ver.1.4 — 상세는 [문서](#문서) 참고
+- **현재 버전**: ver.1.6 — 상세는 [문서](#문서) 참고
 
 ## 주요 기능
 
@@ -12,11 +12,11 @@ Pokémon Champions 파티 빌더 — 6슬롯 파티를 구성하고 타입 상�
 - **타입 상성 매트릭스**: 파티 6마리 × 공격 타입 18종 방어 배율을 한눈에, 파티 전체 취약/강점 자동 판정
 - **성격·능력포인트 편집**: 챔피언스 전용 실수치 공식, 슬라이더 UI로 스탯 배분
 - **결정력 & 내구력 매치업**: 랭크·날씨·필드·스크린·특성·다단히트까지 반영해 확정 1타~3타 이상 판정
-- **배틀타워(다중 턴 시뮬레이션)**: 우선도·명중/회피·급소·상태이상·반동·2턴 차지기·날씨/필드 등 전투 로직 전반을 반영한 턴제 대전, 6빌드→3선출 & 교체, 배틀비디오(최근 3전 다시보기)
+- **배틀타워(다중 턴 시뮬레이션)**: 우선도·명중/회피·급소·상태이상·반동·2턴 차지기·날씨/필드 등 전투 로직 전반을 반영한 턴제 대전, 6빌드→3선출 & 교체(중복 배치 방지, 드래그앤드롭 순서 변경, 압축 카드 뷰), 배틀비디오(최근 3전 다시보기)
 - **상대 진영 설치 기술 6종**·**강제 교체 기술 4종**: 스텔스록·압정뿌리기 등 / 드래곤테일·울부짖기 등
-- **사이드 메뉴**: 포켓몬 도감(전국도감 순 정렬)·기술표·도구 도감
+- **사이드 메뉴**: 포켓몬 도감(전국도감 순 정렬)·카드형 기술표·도구 도감
 - **레귤레이션 M-C 대응**: 신규 포켓몬 26종 + 전용 기술·특성·지닌 도구를 엔진에 배선
-- **모바일 대응(≤760px)**: 사이드바 드로어, 모달 하단 시트화, 입력 확대 방지
+- **글래스모피즘 UI + 모바일 대응(≤760px)**: 반투명·블러 기반 디자인 토큰, 사이드바 드로어, 모달 하단 시트화, 검색창 하단 고정, 입력 확대 방지
 - **로컬 자동 저장**: 편성 내용이 `localStorage`에 자동 저장, 새로고침해도 복원
 - **한국어 조사 자동 처리**: 로그·모달 문구의 조사를 받침 기반으로 자동 판별
 
@@ -31,7 +31,7 @@ Pokémon Champions 파티 빌더 — 6슬롯 파티를 구성하고 타입 상�
 
 ## 기술 스택
 
-React 19 + TypeScript + Vite 8. 별도 백엔드 없이 로컬 JSON 데이터 + `localStorage`로 동작하는 순수 정적 SPA. 린트는 oxlint, 테스트 러너는 없음(엔진 검증은 dev 서버 페이지 컨텍스트에서 `src/lib/*` 직접 import).
+React 19 + TypeScript + Vite 8. 별도 백엔드 없이 로컬 JSON 데이터 + `localStorage`로 동작하는 순수 정적 SPA. `@/`는 `src/`를 가리키는 경로 별칭(ver.1.5). 린트는 oxlint, 테스트 러너는 없음(엔진 검증은 dev 서버 페이지 컨텍스트에서 `src/lib/*` 직접 import).
 
 ## 시작하기
 
@@ -53,11 +53,15 @@ npm run sprites  # public/sprites/ 스캔 → src/data/spriteManifest.json 재�
 src/
 ├─ types/        Pokemon, Move, Ability, Item, Party, Nature, Matchup, BattleStats, Status, Weather, Field 등 도메인 타입
 ├─ data/         pokemon.json, moves.json, abilities.json, items.json, natures.json, typeChart.json, spriteManifest.json
-├─ lib/          데이터 조회·타입 상성·실수치/결정력/내구력 계산·특성/랭크/명중/턴순서 판정·
-│                다중 턴 배틀 시뮬레이터(battleSimulator)·도구 효과·조사 자동 판별·로컬 저장
+├─ lib/          데이터 조회·타입 상성·실수치/결정력/내구력 계산·특성/랭크/명중/턴순서 판정·도구 효과·
+│                조사 자동 판별·로컬 저장(storage.ts, 팩토리 기반)
+│  └─ battle/    다중 턴 배틀 시뮬레이터(ver.1.5에 8개 파일로 분리) — state/switching/
+│                hitResolution/preHitEffects/mirroredEffects/resolveAction/runTurn/finishTurn.ts
+│                (battleSimulator.ts는 공개 표면만 재export하는 얇은 배럴로 유지)
 ├─ hooks/        useParty · useMatchup · useBattleSetup · usePartyPresets · useSlotPresets · useBattleVideos
-└─ components/   PartyBoard, MatchupPage, BattleLogPage(+ BattleTurnLog), PokedexPage, MoveDexPage, ItemDexPage,
-                 각종 PickerModal 등
+└─ components/   PartyBoard, MatchupPage, PokedexPage, MoveDexPage(카드형 UI), ItemDexPage, 각종 PickerModal 등
+                 BattleLogPage(+ BattleSetupScreen/BattleSelectScreen/BattleBoard 화면 분리),
+                 BattleTurnLog(+ 로그 계열별 렌더러 9종 분리)
 public/sprites/  포켓몬·메가진화·도구·타입 스프라이트 (spriteManifest.json 생성 소스)
 scripts/         데이터·에셋 유지보수 도구 — scripts/README.md 참고
 ```
@@ -71,6 +75,8 @@ scripts/         데이터·에셋 유지보수 도구 — scripts/README.md 참
 - [1.2-backlog.md](docs/00_기획문서/1.2-backlog.md) — ver.1.2: 이미지·아이콘 확대, 레귤레이션 M-C 대응(신규 26종 + 엔진 배선), 엔진 버그 수정 다수
 - [1.3-backlog.md](docs/00_기획문서/1.3-backlog.md) — ver.1.3: 엔진 미배선 기술 전수 감사·수정, 파티 D&D + 기술 필터, 도감 전국도감 순 정렬, 배틀비디오 신설
 - [1.4-backlog.md](docs/00_기획문서/1.4-backlog.md) — ver.1.4: M-C 밸런스 패치, 방어류 오적용 버그 수정, 데이터 변경이력 문서화
+- [1.5-backlog.md](docs/00_기획문서/1.5-backlog.md) — ver.1.5: 코드 리팩토링(기능 변경 없음) — `battleSimulator.ts`(6,884줄)를 `lib/battle/` 8개 파일로 분리, `resolveAction`(~3,400줄)을 421줄로 축소, `BattleTurnLog`/`BattleLogPage` 컴포넌트 분리, 훅/저장소 중복 제거, `@/` 경로 별칭 도입
+- [1.6-backlog.md](docs/00_기획문서/1.6-backlog.md) — ver.1.6: 전면 글래스모피즘 UI 개편 + 기술표 카드형 전환, 모바일 UX 버그 5건, 배틀타워 편성/선출 UI 개선 4건, 엔진 버그 다수 수정(필드 지속시간·덮어쓰기, 위기회피/괴짜/변신/메가스톤 표기, 반동 미적용·오버킬 시 부풀려지던 버그)
 - [데이터변경이력.md](docs/데이터변경이력.md) — 기존 항목 수치·학습셋 변경(밸런스 패치) 기록. ver.1.4부터 시작
 
 ver.1.0 이전(Phase 1~8) 회고·기획 문서도 같은 폴더에 있다 — 초기 아키텍처 결정과 단계별 개발 이력이 궁금하면 참고.
