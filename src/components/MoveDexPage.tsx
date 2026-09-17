@@ -163,8 +163,12 @@ export function MoveDexPage({ initialMoveId, onInitialMoveConsumed }: MoveDexPag
           className="movedex-list"
           ref={listRef}
           onScroll={() => {
+            // movedex-head-row는 movedex-row 공유 클래스 때문에 본문 행과 똑같이 min-width:640px라
+            // 그 자체가 이미 내용만큼 넓다 — scrollLeft를 줘도 자기 안에서 밀 내용이 없어 무의미하다.
+            // 실제로 잘라 보여주는 건 부모 movedex-table의 overflow:hidden이므로, translateX로
+            // head-row 자체를 이동시켜야 잘리는 부분이 바뀐다.
             if (headRowRef.current && listRef.current) {
-              headRowRef.current.scrollLeft = listRef.current.scrollLeft;
+              headRowRef.current.style.transform = `translateX(-${listRef.current.scrollLeft}px)`;
             }
           }}
         >

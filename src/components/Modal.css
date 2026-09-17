@@ -68,11 +68,10 @@
   .modal-panel {
     width: 100%;
     max-width: none;
-    max-height: 92vh;
-    /* ver.1.6 §2-1/§2-2 — 내용이 짧으면(검색 결과 적음, 항목 몇 개뿐인 모달) 시트가 내용
-       높이만큼만 차지해서 화면 아래쪽에 작게 눌러앉아 위에 빈 공간만 크게 남았다. 최소 높이를
-       줘서 내용량과 무관하게 자연스러운 크기로 뜨게 한다. */
-    min-height: 50vh;
+    /* ver.1.6 §2-1/§2-2 — min-height로 늘렸는데도(50vh) 내용이 짧으면 여전히 화면 아래쪽에
+       작게 눌러앉은 것처럼 보인다는 피드백 — 내용량과 무관하게 항상 같은 크기로 뜨도록
+       max-height 대신 고정 height로 바꿨다. 모자란/넘치는 내용은 modal-body의 overflow-y로. */
+    height: 85vh;
     border-radius: 16px 16px 0 0;
     border-bottom: none;
   }

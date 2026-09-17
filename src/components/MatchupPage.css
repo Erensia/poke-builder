@@ -90,9 +90,16 @@
   color: var(--text-muted);
 }
 
-/* 스피드 비교 행 + 트릭룸 토글을 한 덩어리로 */
+/* 스피드 비교 행 + 트릭룸 토글을 한 덩어리로. 폭 제한이 없어서 상태창 카드 두 장(.matchup-slot
+   280px×2 + gap)보다 넓게 퍼져 보이던 문제(ver.1.6 §2-3) — 데스크톱(카드 나란히)도 같은
+   문제였어서 미디어쿼리 밖(항상 적용)으로 폭을 맞췄다. 카드 폭 그대로면 좁아 보인다는
+   피드백으로 10px 여유를 더 줌. */
 .matchup-speed-block {
   margin-top: 1rem;
+  width: calc(280px * 2 + 1rem + 10px);
+  max-width: 100%;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .matchup-speed-block .matchup-speed-row {
@@ -121,12 +128,9 @@
     width: auto;
   }
 
-  /* ver.1.6 §2-3 — 스피드 결과 블록에 폭 제한이 없어서 .matchup-slot(280px 고정)보다 넓게
-     퍼져 보이던 문제. 슬롯 카드 폭 그대로 맞추니 너무 좁아 보인다는 피드백으로 10px 더 줌. */
+  /* ver.1.6 §2-3 — 세로 배치(카드 1장)에서는 기본값(카드 2장 기준 폭)이 아니라 카드 1장 폭
+     기준으로 다시 맞춘다. */
   .matchup-speed-block {
     width: 290px;
-    max-width: 100%;
-    margin-left: auto;
-    margin-right: auto;
   }
 }
