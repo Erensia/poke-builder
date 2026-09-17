@@ -103,13 +103,13 @@
   color: var(--text-muted);
 }
 
-/* 스피드 비교 행 + 트릭룸 토글을 한 덩어리로. 폭 제한이 없어서 상태창 카드 두 장(.matchup-slot
-   280px×2 + gap)보다 넓게 퍼져 보이던 문제(ver.1.6 §2-3) — 데스크톱(카드 나란히)도 같은
-   문제였어서 미디어쿼리 밖(항상 적용)으로 폭을 맞췄다. 카드 폭 그대로면 좁아 보인다는
-   피드백으로 10px 여유를 더 줌. */
+/* 스피드 비교 행 + 트릭룸 토글을 한 덩어리로(ver.1.6 §2-3). 데스크톱은 카드 2장 폭만으론
+   안 맞았다 — .matchup-board가 슬롯 2장(280px씩) 사이에 .matchup-verdict-row(130px)까지
+   나란히 두고 각 사이에 1rem 갭이 있어서, 실제 카드 열 전체 폭은 280+16+130+16+280=722px.
+   그 폭에 정확히 맞춘다(스크린샷 대조로 여유분 없이 딱 맞추는 게 낫다고 확인됨). */
 .matchup-speed-block {
   margin-top: 1rem;
-  width: calc(280px * 2 + 1rem + 10px);
+  width: calc(280px * 2 + 130px + 1rem * 2);
   max-width: 100%;
   margin-left: auto;
   margin-right: auto;
@@ -141,11 +141,11 @@
     width: auto;
   }
 
-  /* ver.1.6 §2-3 — 계속 안 맞던 진짜 원인: MatchupSlotCard.css에 이미 있던 규칙(과거 §2-3)이
-     모바일에서 .matchup-slot을 고정 280px가 아니라 width:100%; max-width:320px;로 바꾸고
-     있었다(내가 280px 기준으로만 계산해서 계속 어긋났음). 같은 공식으로 맞추고 10px 여유. */
+  /* ver.1.6 §2-3 — MatchupSlotCard.css의 기존 규칙이 모바일에서 .matchup-slot을 고정 280px가
+     아니라 width:100%; max-width:320px;로 바꾼다. 여유분(10px)을 더했더니 카드보다 미묘하게
+     넓어 보인다는 스크린샷 피드백 — 여유 없이 정확히 같은 값으로 맞춘다. */
   .matchup-speed-block {
     width: 100%;
-    max-width: 330px;
+    max-width: 320px;
   }
 }
