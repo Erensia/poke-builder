@@ -128,9 +128,11 @@
     width: auto;
   }
 
-  /* ver.1.6 §2-3 — 세로 배치(카드 1장)에서는 기본값(카드 2장 기준 폭)이 아니라 카드 1장 폭
-     기준으로 다시 맞춘다. */
+  /* ver.1.6 §2-3 — 계속 안 맞던 진짜 원인: MatchupSlotCard.css에 이미 있던 규칙(과거 §2-3)이
+     모바일에서 .matchup-slot을 고정 280px가 아니라 width:100%; max-width:320px;로 바꾸고
+     있었다(내가 280px 기준으로만 계산해서 계속 어긋났음). 같은 공식으로 맞추고 10px 여유. */
   .matchup-speed-block {
-    width: 290px;
+    width: 100%;
+    max-width: 330px;
   }
 }
