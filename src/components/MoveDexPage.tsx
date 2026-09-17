@@ -57,6 +57,10 @@ export function MoveDexPage({ initialMoveId, onInitialMoveConsumed }: MoveDexPag
   // (App.tsx가 뷰를 조건부 렌더링) 이후 갱신은 필요 없다.
   const highlightedId = initialMoveId ?? null;
   const rowRefs = useRef(new Map<string, HTMLLIElement>());
+  // ver.1.6 §2-5 — 가로 스크롤은 movedex-list(본문)만 담당하고, 헤더는 본문 스크롤에 맞춰
+  // scrollLeft를 그대로 따라간다(헤더 자체는 overflow:hidden이라 직접 드래그는 안 먹는다).
+  const headRowRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLUListElement>(null);
 
   const filtered = useMemo(() => {
     const q = query.trim();
@@ -144,7 +148,7 @@ export function MoveDexPage({ initialMoveId, onInitialMoveConsumed }: MoveDexPag
       <div className="movedex-count">{sorted.length}개 표시 중</div>
 
       <div className="movedex-table">
-        <div className="movedex-row movedex-head-row">
+        <div className="movedex-row movedex-head-row" ref={headRowRef}>
           <SortableHeader label="기술" sortKey="name" active={sortKey} dir={sortDir} onSort={handleSort} />
           <SortableHeader label="타입" sortKey="type" active={sortKey} dir={sortDir} onSort={handleSort} />
           <SortableHeader label="분류" sortKey="category" active={sortKey} dir={sortDir} onSort={handleSort} />
@@ -155,7 +159,19 @@ export function MoveDexPage({ initialMoveId, onInitialMoveConsumed }: MoveDexPag
           <SortableHeader label="PP" sortKey="pp" align="center" active={sortKey} dir={sortDir} onSort={handleSort} />
         </div>
 
-        <ul className="movedex-list">
+        <ul
+          className="movedex-list"
+          ref={listRef}
+          onScroll={() => {
+            // movedex-head-row는 movedex-row 공유 클래스 때문에 본문 행과 똑같이 min-width:640px라
+            // 그 자체가 이미 내용만큼 넓다 — scrollLeft를 줘도 자기 안에서 밀 내용이 없어 무의미하다.
+            // 실제로 잘라 보여주는 건 부모 movedex-table의 overflow:hidden이므로, translateX로
+            // head-row 자체를 이동시켜야 잘리는 부분이 바뀐다.
+            if (headRowRef.current && listRef.current) {
+              headRowRef.current.style.transform = `translateX(-${listRef.current.scrollLeft}px)`;
+            }
+          }}
+        >
           {sorted.map((m) => (
             <li
               key={m.id}

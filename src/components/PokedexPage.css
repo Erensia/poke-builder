@@ -441,4 +441,14 @@
     width: 100%;
     max-height: 320px;
   }
+
+  /* ver.1.6 §2-4 — 미선택 상태 안내 블록이 문구 높이만큼만 차지해서 위 리스트 블록(320px)보다
+     훨씬 작아 보이던 문제. 리스트와 같은 높이를 주고 문구를 가운데로 옮긴다. */
+  .pokedex-detail-empty {
+    min-height: 320px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+  }
 }
