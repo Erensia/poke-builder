@@ -6,7 +6,7 @@ import type { FieldKind } from "../types/field";
 import type { PokemonType } from "../types/pokemon-type";
 import { getPokemon, getAbility, getItem } from "./data";
 import { getBerryDefenseResult, getItemOffenseMultiplier, getItemSpeedMultiplier } from "./itemEffects";
-import { getEffectiveForm, getEffectiveAbilityId, getEffectiveGender, type FormSource } from "./pokemonForm";
+import { getEffectiveForm, getEffectiveGender, type FormSource } from "./pokemonForm";
 import { computeRealStats } from "./statCalculator";
 import { applyMoveStatChanges } from "./statStages";
 import { getWeatherDamageMultiplier, applyWeatherBall } from "./weatherEffects";
@@ -155,10 +155,8 @@ export function evaluateSlotMatchup(
 
   const attackerForm = getEffectiveForm(attackerPokemon, attackerSlot);
   const defenderForm = getEffectiveForm(defenderPokemon, defenderSlot);
-  const attackerEffectiveAbilityId = getEffectiveAbilityId(attackerForm, attackerSlot.ability);
-  const defenderEffectiveAbilityId = getEffectiveAbilityId(defenderForm, defenderSlot.ability);
-  const attackerAbility = attackerEffectiveAbilityId ? getAbility(attackerEffectiveAbilityId) : undefined;
-  const rawDefenderAbility = defenderEffectiveAbilityId ? getAbility(defenderEffectiveAbilityId) : undefined;
+  const attackerAbility = attackerSlot.ability ? getAbility(attackerSlot.ability) : undefined;
+  const rawDefenderAbility = defenderSlot.ability ? getAbility(defenderSlot.ability) : undefined;
   // 틀깨기: 매치업 페이지(1턴 스냅샷)도 배틀 시뮬레이터와 동일하게 반영한다.
   const defenderAbility = resolveEffectiveDefenderAbility(attackerAbility, rawDefenderAbility);
 
@@ -487,8 +485,7 @@ export function computeSoloOffensePower(
   } = options;
 
   const attackerForm = getEffectiveForm(attackerPokemon, attackerSlot);
-  const attackerEffectiveAbilityId = getEffectiveAbilityId(attackerForm, attackerSlot.ability);
-  const attackerAbility = attackerEffectiveAbilityId ? getAbility(attackerEffectiveAbilityId) : undefined;
+  const attackerAbility = attackerSlot.ability ? getAbility(attackerSlot.ability) : undefined;
 
   const effectiveWeather = attackerAbility?.negatesWeather ? undefined : weather;
 
@@ -696,13 +693,9 @@ export function evaluateSpeedMatchup(
     defenderStages = NEUTRAL_STAGES,
   } = options;
 
-  const abilityFor = (slot: EvaluatorSlot, pokemon: NonNullable<ReturnType<typeof getPokemon>>) => {
-    const form = getEffectiveForm(pokemon, slot);
-    const id = getEffectiveAbilityId(form, slot.ability);
-    return id ? getAbility(id) : undefined;
-  };
-  const attackerAbility = abilityFor(attackerSlot, attackerPokemon);
-  const defenderAbility = abilityFor(defenderSlot, defenderPokemon);
+  const abilityFor = (slot: EvaluatorSlot) => (slot.ability ? getAbility(slot.ability) : undefined);
+  const attackerAbility = abilityFor(attackerSlot);
+  const defenderAbility = abilityFor(defenderSlot);
   // 날씨부정: 양쪽 중 누구든 이 특성이면 날씨 스피드 배율(엽록소 등)을 무시한다.
   const weatherForSpeed =
     attackerAbility?.negatesWeather || defenderAbility?.negatesWeather ? undefined : weather;
@@ -717,8 +710,7 @@ export function evaluateSpeedMatchup(
     const form = getEffectiveForm(pokemon, slot);
     const realStats = computeRealStats(form.baseStats, slot.points, slot.nature);
     const item = slot.item ? getItem(slot.item) : undefined;
-    const effectiveAbilityId = getEffectiveAbilityId(form, slot.ability);
-    const ability = effectiveAbilityId ? getAbility(effectiveAbilityId) : undefined;
+    const ability = slot.ability ? getAbility(slot.ability) : undefined;
     const weatherBoost = ability?.weatherSpeedMultiplier;
     const weatherSpeedMultiplier =
       weatherBoost && weatherBoost.weather === weatherForSpeed ? weatherBoost.multiplier : 1;

@@ -3,7 +3,6 @@ import type { PartySlot } from "../types/party";
 import { getPokemon, getMove, getAbility, getItem, getNature } from "../lib/data";
 import {
   getEffectiveForm,
-  getEffectiveAbilityId,
   getEffectiveGender,
   genderLabel,
   megaBadgeLabel,
@@ -234,10 +233,7 @@ export function BattleSetupCard({
         <button type="button" className="party-meta-pip" onClick={onPickAbility}>
           <span className="party-meta-label">특성</span>
           <span className="party-meta-value">
-            {(() => {
-              const effectiveAbilityId = getEffectiveAbilityId(form, slot!.ability);
-              return effectiveAbilityId ? getAbility(effectiveAbilityId)?.name : "미지정";
-            })()}
+            {slot!.ability ? getAbility(slot!.ability)?.name : "미지정"}
           </span>
         </button>
         <button type="button" className="party-meta-pip" onClick={onPickItem}>
