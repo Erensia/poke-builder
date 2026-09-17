@@ -19,21 +19,29 @@
   border-color: var(--violet);
 }
 
+/* ver.1.6 §1-1 — 포켓몬/기술 선택 모달의 검색창(.picker-search)과 위치·스타일을 통일:
+   목록 뒤(JSX 마지막)에 두고 modal-body 하단에 sticky로 고정 + 유리 블러. */
 .preset-search-input {
   width: 100%;
   box-sizing: border-box;
   padding: 0.55rem 0.75rem;
-  margin-bottom: 0.6rem;
+  margin-top: 0.6rem;
   border-radius: 10px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--glass-border);
   background: var(--surface-2);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
+  box-shadow: var(--glass-shadow);
   color: var(--text);
   font-size: 0.85rem;
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
 }
 
 .preset-search-input:focus {
   outline: none;
-  border-color: var(--violet);
+  border-color: var(--glass-focus-border);
 }
 
 .preset-save-button {

@@ -65,9 +65,11 @@
   flex-wrap: wrap;
   margin-top: 1rem;
   padding: 0.6rem 0.9rem;
-  border: 1px solid var(--border);
+  border: 1px solid var(--glass-border);
   border-radius: 10px;
   background: var(--surface-2);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
   font-size: 0.82rem;
   color: var(--text-muted);
 }

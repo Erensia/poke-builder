@@ -33,19 +33,26 @@
   flex-direction: column;
   gap: 0.6rem;
   background: var(--surface);
-  border: 1px solid var(--border);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border);
   border-radius: 14px;
   padding: 0.75rem;
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--glass-shadow);
   max-height: 680px;
 }
 
+/* ver.1.6 §1-1 — 포켓몬 도감(PokedexPage)과 동일하게 검색창을 목록 아래로 옮기고 유리 블러
+   적용(모달 검색창들과 위치·스타일 통일). */
 .itemdex-search {
   width: 100%;
   padding: 0.55rem 0.75rem;
   border-radius: 10px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--glass-border);
   background: var(--surface-2);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
+  box-shadow: var(--glass-shadow);
   color: var(--text);
   font-size: 0.85rem;
   flex-shrink: 0;
@@ -53,7 +60,7 @@
 
 .itemdex-search:focus {
   outline: none;
-  border-color: var(--violet);
+  border-color: var(--glass-focus-border);
 }
 
 .itemdex-list {
@@ -121,10 +128,12 @@
   flex: 1;
   min-width: 0;
   background: var(--surface);
-  border: 1px solid var(--border);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border);
   border-radius: 14px;
   padding: 1.25rem 1.4rem;
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--glass-shadow);
 }
 
 .itemdex-detail-empty {

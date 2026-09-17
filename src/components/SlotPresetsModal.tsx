@@ -66,14 +66,6 @@ export function SlotPresetsModal({
 
   return (
     <Modal title="저장된 샘플에서 불러오기" onClose={onClose}>
-      <input
-        type="text"
-        className="preset-search-input"
-        placeholder="이름 · 포켓몬으로 검색"
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        autoFocus
-      />
       <ul className="preset-list">
         {sorted.map((preset) => {
           const pokemon = getPokemon(preset.slot.pokemonId);
@@ -107,6 +99,14 @@ export function SlotPresetsModal({
           </li>
         )}
       </ul>
+      <input
+        type="text"
+        className="preset-search-input"
+        placeholder="이름 · 포켓몬으로 검색"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        autoFocus
+      />
     </Modal>
   );
 }

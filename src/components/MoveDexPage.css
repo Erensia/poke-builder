@@ -32,23 +32,30 @@
   min-width: 12em;
   padding: 0.55rem 0.75rem;
   border-radius: 10px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--glass-border);
   background: var(--surface-2);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
+  box-shadow: var(--glass-shadow);
   color: var(--text);
   font-size: 0.85rem;
 }
 
 .movedex-search:focus,
-.movedex-type-select:focus {
+.movedex-type-select:focus,
+.movedex-sort-select:focus {
   outline: none;
-  border-color: var(--violet);
+  border-color: var(--glass-focus-border);
 }
 
 .movedex-type-select {
   padding: 0.55rem 0.75rem;
   border-radius: 10px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--glass-border);
   background: var(--surface-2);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
+  box-shadow: var(--glass-shadow);
   color: var(--text);
   font-size: 0.85rem;
 }
@@ -57,8 +64,12 @@
   display: flex;
   gap: 0.3rem;
   background: var(--surface-2);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border);
   border-radius: 10px;
   padding: 0.25rem;
+  box-shadow: var(--glass-shadow);
 }
 
 .movedex-category-tab {
@@ -82,124 +93,116 @@
   box-shadow: var(--shadow-sm);
 }
 
+/* ver.1.6 §1-1 — 표 → 카드형 전환(§2-5의 헤더/본문 가로 스크롤 동기화 로직 자체가 더 이상
+   필요 없어짐). 정렬은 열 헤더 클릭 대신 이 바의 드롭다운 + 방향 토글 버튼으로. */
+.movedex-sort-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  margin-bottom: 0.6rem;
+}
+
 .movedex-count {
   color: var(--text-muted);
   font-size: 0.78rem;
-  margin-bottom: 0.5rem;
 }
 
-/* 표 */
-
-.movedex-table {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  box-shadow: var(--shadow-sm);
-  overflow: hidden;
-}
-
-.movedex-row {
-  display: grid;
-  grid-template-columns: 1fr 5em 3.4em 4.4em 4.4em 3em 3.8em 2.8em;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.55rem 0.9rem;
-  border-bottom: 1px solid var(--border);
-}
-
-.movedex-head-row {
-  position: sticky;
-  top: 0;
-  background: var(--surface-2);
-  z-index: 1;
-  /* 스크롤바는 본문(.movedex-list)에만 두고, 헤더엔 같은 폭의 '거터'만 비워둔다.
-     overflow:hidden으로 헤더도 스크롤 컨테이너가 되어 scrollbar-gutter가 먹는다 —
-     스크롤바는 안 그려지고 우측 여백만 예약돼서 본문과 열이 계속 맞는다. */
-  overflow: hidden;
-  scrollbar-gutter: stable;
-}
-
-.movedex-cell {
-  font-size: 0.82rem;
-  min-width: 0;
-}
-
-.movedex-th {
-  border: none;
-  background: transparent;
-  color: var(--text-muted);
-  font-weight: 700;
-  font-size: 0.74rem;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  text-align: left;
-  cursor: pointer;
-  padding: 0;
+.movedex-sort-controls {
   display: flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: 0.4rem;
 }
 
-button.movedex-th:hover {
+.movedex-sort-select {
+  padding: 0.4rem 0.6rem;
+  border-radius: 10px;
+  border: 1px solid var(--glass-border);
+  background: var(--surface-2);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
+  box-shadow: var(--glass-shadow);
   color: var(--text);
+  font-size: 0.8rem;
 }
 
-.movedex-th.is-active {
+.movedex-sort-dir {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 10px;
+  border: 1px solid var(--glass-border);
+  background: var(--surface-2);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
+  box-shadow: var(--glass-shadow);
   color: var(--violet);
-}
-
-/* 명중률 열만 우측 정렬 유지 (값이 xx% 형태로 자릿수가 갈려 우측이 읽기 좋다) */
-.movedex-th-num {
-  justify-content: flex-end;
-  text-align: right;
-}
-
-/* 우선도·위력·PP 열은 값이 짧아 헤더·데이터 모두 가운데 정렬 */
-.movedex-th-center {
+  font-size: 0.75rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
   justify-content: center;
-  text-align: center;
 }
 
-/* 정렬 불가 헤더(접촉)도 다른 헤더와 같은 타이포로 — 예전엔 일반 셀 서체(0.82rem)라 튀었다 */
-.movedex-th-static {
-  cursor: default;
+.movedex-sort-dir:hover {
+  border-color: var(--violet);
 }
 
-.movedex-sort-arrow {
-  font-size: 0.6rem;
+/* 카드 패널 */
+
+.movedex-panel {
+  background: var(--surface);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border);
+  border-radius: 14px;
+  box-shadow: var(--glass-shadow);
+  padding: 1rem;
 }
 
-.movedex-cell-contact,
-.movedex-cell-cat {
-  color: var(--text-muted);
+/* 카드 간격을 넉넉히 둬서(0.6rem→0.9rem) 카드 밑에 깔린 .movedex-panel의 반투명·블러
+   배경이 카드 사이사이로 드러나게 한다 — 간격이 좁으면 카드(불투명에 가까운 --surface-2)가
+   패널 배경을 거의 다 덮어서 유리 느낌이 안 보인다. */
+.movedex-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 0.9rem;
+  max-height: 680px;
+  overflow-y: auto;
 }
 
-.movedex-cell-num {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-}
-
-.movedex-cell-center {
-  text-align: center;
-  font-variant-numeric: tabular-nums;
-  /* "+5 / -3"(힘껏펀치 복합 우선도)처럼 토큰에 공백이 있어도 칸 안에서 줄바꿈되지 않게 */
-  white-space: nowrap;
-}
-
-.movedex-cell-center.is-priority {
-  color: var(--violet);
-  font-weight: 700;
-}
-
-.movedex-cell-name {
+/* 카드 하나하나는 목록 안에서 수십~수백 개씩 반복돼 개별 블러를 걸면 무겁다 — 바깥
+   .movedex-panel 한 곳에만 블러를 걸고, 카드 자체는 옅은 단색 배경만 쓴다. */
+.movedex-card {
   display: flex;
   flex-direction: column;
-  gap: 0.15rem;
+  gap: 0.3rem;
+  background: var(--surface-2);
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  padding: 0.65rem 0.75rem;
 }
 
-.movedex-name {
+.movedex-card.is-highlighted {
+  background: var(--violet-soft);
+  outline: 2px solid var(--violet);
+  outline-offset: -2px;
+}
+
+.movedex-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.movedex-card-name {
   font-weight: 600;
-  font-size: 0.86rem;
+  font-size: 0.9rem;
+}
+
+.movedex-card-notype {
+  color: var(--text-muted);
+  font-size: 0.8rem;
 }
 
 .movedex-classification {
@@ -214,49 +217,52 @@ button.movedex-th:hover {
   line-height: 1.4;
 }
 
-.movedex-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  max-height: 680px;
-  overflow-y: auto;
-  /* stable = 스크롤 여부와 무관하게 항상 거터 예약 → 헤더의 예약 폭과 늘 일치해 열이 안 흔들린다 */
-  scrollbar-gutter: stable;
+.movedex-card-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.3rem 0.5rem;
+  margin-top: 0.3rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--border);
 }
 
-.movedex-list .movedex-row:last-child {
-  border-bottom: none;
+.movedex-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
 }
 
-.movedex-list .movedex-row:hover {
-  background: var(--surface-2);
+.movedex-stat-label {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
 }
 
-.movedex-row.is-highlighted {
-  background: var(--violet-soft);
-  outline: 2px solid var(--violet);
-  outline-offset: -2px;
+.movedex-stat-value {
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.movedex-stat-value.is-priority {
+  color: var(--violet);
+  font-weight: 700;
 }
 
 .movedex-empty {
+  grid-column: 1 / -1;
   padding: 2rem;
   text-align: center;
   color: var(--text-muted);
   font-size: 0.85rem;
 }
 
-/* ver.1.6 §2-5 — .movedex-table을 가로 스크롤 컨테이너로 두면(헤더·본문이 그냥 같은 부모의
-   형제) 이론상 같이 움직여야 하는데, 실기기(모바일 사파리, PC 확대 화면 둘 다)에서 헤더를
-   직접 슬라이드하면 헤더만 밀리고 본문은 그대로 있는 게 재현됨 — 원인 불명의 실제 동작이라,
-   CSS만으로 동기화를 기대하지 않고 확실하게 JS로 스크롤 위치를 맞춘다: 가로 스크롤은
-   .movedex-list(본문)만 담당하고, 헤더는 overflow:hidden으로 직접 드래그를 막은 뒤 본문의
-   스크롤 이벤트에 맞춰 scrollLeft를 그대로 따라가게 한다(MoveDexPage.tsx). */
 @media (max-width: 760px) {
-  .movedex-list {
-    overflow-x: auto;
+  .movedex-grid {
+    grid-template-columns: 1fr;
   }
 
-  .movedex-row {
-    min-width: 640px;
+  .movedex-sort-bar {
+    flex-wrap: wrap;
   }
 }
