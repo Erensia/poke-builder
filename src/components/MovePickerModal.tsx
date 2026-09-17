@@ -42,14 +42,6 @@ export function MovePickerModal({
 
   return (
     <Modal title={`${pokemon.name} · 기술 선택`} onClose={onClose}>
-      <input
-        type="text"
-        className="picker-search"
-        placeholder="기술 이름으로 검색"
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        autoFocus
-      />
       <div className="move-picker-filters">
         <div className="move-picker-type-filter">
           <button
@@ -112,6 +104,14 @@ export function MovePickerModal({
           <li className="move-picker-empty">조건에 맞는 기술이 없습니다.</li>
         )}
       </ul>
+      <input
+        type="text"
+        className="picker-search"
+        placeholder="기술 이름으로 검색"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        autoFocus
+      />
     </Modal>
   );
 }

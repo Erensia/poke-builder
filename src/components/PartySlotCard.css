@@ -1,9 +1,11 @@
 .party-slot {
   position: relative;
   background: var(--surface);
-  border: 1px solid var(--border);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border);
   border-radius: 14px;
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--glass-shadow);
   padding: 0.7rem 0.8rem;
   min-height: 178px;
   cursor: grab;

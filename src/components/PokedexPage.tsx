@@ -289,13 +289,6 @@ export function PokedexPage({ onSelectMove }: PokedexPageProps) {
 
       <div className="pokedex-board">
         <div className="pokedex-list-panel">
-          <input
-            type="text"
-            className="pokedex-search"
-            placeholder="이름으로 검색"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
           <ul className="pokedex-list">
             {filtered.map((p) => (
               <li key={p.id}>
@@ -314,6 +307,13 @@ export function PokedexPage({ onSelectMove }: PokedexPageProps) {
             ))}
             {filtered.length === 0 && <li className="pokedex-list-empty">검색 결과가 없습니다.</li>}
           </ul>
+          <input
+            type="text"
+            className="pokedex-search"
+            placeholder="이름으로 검색"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
         </div>
 
         <div className="pokedex-detail-panel">

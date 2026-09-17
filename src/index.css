@@ -1,7 +1,7 @@
 :root {
   --bg: #f4f2f9;
-  --surface: #ffffff;
-  --surface-2: #ece8f5;
+  --surface: rgba(255, 255, 255, 0.62);
+  --surface-2: rgba(236, 232, 245, 0.55);
   --border: #ddd7ea;
   --text: #211f2e;
   --text-muted: #6d6880;
@@ -13,6 +13,17 @@
 
   --shadow-sm: 0 1px 2px rgba(30, 20, 60, 0.06);
   --shadow-md: 0 10px 30px rgba(30, 20, 60, 0.1);
+
+  /* 글래스모피즘(ver.1.6 §1-1): 반투명 패널 위 블러+하이라이트 테두리 전용 토큰.
+     --border는 인풋 등 불투명 요소에 계속 쓰이므로 유리 패널에는 더 밝은 전용 테두리를 쓴다. */
+  --glass-blur: 20px;
+  --glass-border: rgba(255, 255, 255, 0.6);
+  --glass-focus-border: rgba(109, 84, 214, 0.55);
+  --glass-shadow: 0 8px 32px rgba(30, 20, 60, 0.14);
+  --glass-blob-1: rgba(109, 84, 214, 0.28);
+  --glass-blob-2: rgba(79, 142, 247, 0.24);
+  --scrollbar-thumb: rgba(109, 84, 214, 0.28);
+  --scrollbar-thumb-hover: rgba(109, 84, 214, 0.5);
 
   --danger: #c1382c;
   --danger-bg: #fbe2dd;
@@ -35,8 +46,8 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
     --bg: #121121;
-    --surface: #1c1a2b;
-    --surface-2: #242138;
+    --surface: rgba(28, 26, 43, 0.6);
+    --surface-2: rgba(36, 33, 56, 0.55);
     --border: #332e4a;
     --text: #ece9f7;
     --text-muted: #9992b3;
@@ -47,6 +58,15 @@
 
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
     --shadow-md: 0 10px 30px rgba(0, 0, 0, 0.4);
+
+    --glass-blur: 20px;
+    --glass-border: rgba(255, 255, 255, 0.1);
+    --glass-focus-border: rgba(147, 132, 242, 0.6);
+    --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+    --glass-blob-1: rgba(147, 132, 242, 0.24);
+    --glass-blob-2: rgba(110, 168, 255, 0.18);
+    --scrollbar-thumb: rgba(147, 132, 242, 0.3);
+    --scrollbar-thumb-hover: rgba(147, 132, 242, 0.55);
 
     --danger: #ef8478;
     --danger-bg: #3a231f;
@@ -60,8 +80,8 @@
 
 :root[data-theme='dark'] {
   --bg: #121121;
-  --surface: #1c1a2b;
-  --surface-2: #242138;
+  --surface: rgba(28, 26, 43, 0.6);
+  --surface-2: rgba(36, 33, 56, 0.55);
   --border: #332e4a;
   --text: #ece9f7;
   --text-muted: #9992b3;
@@ -72,6 +92,15 @@
 
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-md: 0 10px 30px rgba(0, 0, 0, 0.4);
+
+  --glass-blur: 20px;
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --glass-focus-border: rgba(147, 132, 242, 0.6);
+  --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+  --glass-blob-1: rgba(147, 132, 242, 0.24);
+  --glass-blob-2: rgba(110, 168, 255, 0.18);
+  --scrollbar-thumb: rgba(147, 132, 242, 0.3);
+  --scrollbar-thumb-hover: rgba(147, 132, 242, 0.55);
 
   --danger: #ef8478;
   --danger-bg: #3a231f;
@@ -90,16 +119,71 @@ body {
   padding: 0;
 }
 
+html {
+  overflow-x: hidden;
+}
+
 body {
+  position: relative;
   background: var(--bg);
   color: var(--text);
   font-family: var(--sans);
   font-size: 15px;
   line-height: 1.5;
+  overflow-x: hidden;
+}
+
+/* 글래스모피즘(ver.1.6 §1-1): 화면 뒤에 고정된 색 얼룩을 깔아 위의 반투명 패널이
+   backdrop-filter로 블러/굴절시킬 대상이 생기게 한다(안 깔면 유리 패널이 그냥
+   흐릿한 단색판으로만 보인다). 콘텐츠와 상호작용하지 않도록 pointer-events:none,
+   스크롤 중에도 항상 같은 자리에 있도록 fixed.
+   모바일처럼 세로로 아주 긴 뷰포트에서는 vmax(가로·세로 중 큰 쪽 기준)로 잡은 원이
+   가로폭만 채우고 세로는 뷰포트 아래쪽 절반 이상을 못 덮어서, 화면 중간~아래로
+   스크롤하면 블러 대상이 아예 없어 패널이 그냥 불투명해 보였다 — 얼룩을 훨씬 크게
+   키우고(46/50→70vmax) #root에 세 번째 얼룩을 더해 뷰포트 중간대까지 커버한다. */
+body::before,
+body::after {
+  content: "";
+  position: fixed;
+  z-index: -1;
+  border-radius: 50%;
+  pointer-events: none;
+  filter: blur(90px);
+}
+
+body::before {
+  top: -20vmax;
+  left: -18vmax;
+  width: 70vmax;
+  height: 70vmax;
+  background: var(--glass-blob-1);
+}
+
+body::after {
+  bottom: -24vmax;
+  right: -18vmax;
+  width: 74vmax;
+  height: 74vmax;
+  background: var(--glass-blob-2);
 }
 
 #root {
+  position: relative;
   min-height: 100svh;
+}
+
+#root::before {
+  content: "";
+  position: fixed;
+  z-index: -1;
+  top: 30vh;
+  right: -22vmax;
+  width: 60vmax;
+  height: 60vmax;
+  border-radius: 50%;
+  pointer-events: none;
+  filter: blur(90px);
+  background: var(--glass-blob-1);
 }
 
 h1,
@@ -118,6 +202,32 @@ button {
 :focus-visible {
   outline: 2px solid var(--violet);
   outline-offset: 2px;
+}
+
+/* ver.1.6 §1-1 — 브라우저 기본 스크롤바가 두껍고 불투명해서 유리 패널 위에서 튀어 보이는
+   문제 — 얇고 반투명한 보라 막대로 통일한다. Firefox는 scrollbar-color/-width, 나머지는
+   -webkit-scrollbar 계열 의사요소로 나눠서 지정해야 한다. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 999px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
 }
 
 /* 모바일(iOS Safari 등): 폼 요소 글자 크기가 16px 미만이면 포커스 시 화면이 확대되고

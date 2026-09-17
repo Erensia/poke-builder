@@ -25,14 +25,6 @@ export function PokemonPickerModal({ onSelect, onClose, usedPokemonIds }: Pokemo
 
   return (
     <Modal title="포켓몬 선택" onClose={onClose}>
-      <input
-        type="text"
-        className="picker-search"
-        placeholder="이름으로 검색"
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        autoFocus
-      />
       <ul className="pokemon-picker-list">
         {filtered.map((p) => {
           const isTaken = usedSet.has(p.id);
@@ -72,6 +64,14 @@ export function PokemonPickerModal({ onSelect, onClose, usedPokemonIds }: Pokemo
           <li className="pokemon-picker-empty">검색 결과가 없습니다.</li>
         )}
       </ul>
+      <input
+        type="text"
+        className="picker-search"
+        placeholder="이름으로 검색"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        autoFocus
+      />
     </Modal>
   );
 }

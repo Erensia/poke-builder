@@ -1,9 +1,11 @@
 .matchup-slot {
   position: relative;
   background: var(--surface);
-  border: 1px solid var(--border);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border);
   border-radius: 14px;
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--glass-shadow);
   padding: 0.85rem 1rem;
   width: 280px;
   flex-shrink: 0;

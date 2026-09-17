@@ -12,9 +12,11 @@
 
 .modal-panel {
   background: var(--surface);
-  border: 1px solid var(--border);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border);
   border-radius: 16px;
-  box-shadow: var(--shadow-md);
+  box-shadow: var(--glass-shadow);
   width: min(560px, 100%);
   max-height: min(640px, 85vh);
   display: flex;

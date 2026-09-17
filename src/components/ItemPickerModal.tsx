@@ -39,14 +39,6 @@ export function ItemPickerModal({
 
   return (
     <Modal title={`${pokemon.name} · 도구 선택`} onClose={onClose}>
-      <input
-        type="text"
-        className="picker-search"
-        placeholder="도구 이름으로 검색"
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        autoFocus
-      />
       <button type="button" className="move-clear-btn" onClick={onClear}>
         도구 비우기
       </button>
@@ -75,6 +67,14 @@ export function ItemPickerModal({
           );
         })}
       </ul>
+      <input
+        type="text"
+        className="picker-search"
+        placeholder="도구 이름으로 검색"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        autoFocus
+      />
     </Modal>
   );
 }

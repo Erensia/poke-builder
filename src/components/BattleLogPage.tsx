@@ -919,7 +919,7 @@ function BattleBoard({
       <div className={`battle-result-banner${winner === "draw" ? " is-draw" : ""}`}>
         {winner === "draw" ? "🤝 무승부! 양쪽 다 기절했어요" : `🏆 ${fighterLabel(battleState, winner)} 승리!`}
         <button type="button" className="battle-reset-button" onClick={resetToSetup}>
-          다시 설정하기
+          대전 이어하기
         </button>
       </div>
     ) : pendingForcedSwitch ? (

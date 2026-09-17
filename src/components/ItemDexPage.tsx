@@ -128,13 +128,6 @@ export function ItemDexPage() {
 
       <div className="itemdex-board">
         <div className="itemdex-list-panel">
-          <input
-            type="text"
-            className="itemdex-search"
-            placeholder="이름으로 검색"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
           <ul className="itemdex-list">
             {filtered.map((i) => (
               <li key={i.id}>
@@ -151,6 +144,13 @@ export function ItemDexPage() {
             ))}
             {filtered.length === 0 && <li className="itemdex-list-empty">검색 결과가 없습니다.</li>}
           </ul>
+          <input
+            type="text"
+            className="itemdex-search"
+            placeholder="이름으로 검색"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
         </div>
 
         <div className="itemdex-detail-panel">
