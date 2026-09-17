@@ -43,7 +43,8 @@
       "반동",
       "접촉"
     ],
-    "makesContact": true
+    "makesContact": true,
+    "recoilFraction": 0.3333333333333333
   },
   {
     "id": "불대문자",
