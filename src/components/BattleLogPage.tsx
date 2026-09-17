@@ -487,9 +487,14 @@ function BattleBoard({
         // 스프라이트를 강제로 메가폼으로 만들기 때문) 뱃지로만 표시한다.
         const illusionPokemon = fighter.illusionAs ? getPokemon(fighter.illusionAs) : undefined;
         const avatarPokemon = illusionPokemon ?? transformedPokemon ?? pokemon;
-        const avatarForm: SpriteFormOptions =
-          illusionPokemon || transformedPokemon
-            ? {}
+        // 변신 시점에 대상이 메가진화 상태였으면(transformedIntoMegaStone) 그 메가폼 이미지 그대로.
+        const transformedMegaForm = transformedPokemon?.megaEvolutions?.find(
+          (m) => m.megaStone === fighter.transformedIntoMegaStone,
+        )?.form;
+        const avatarForm: SpriteFormOptions = illusionPokemon
+          ? {}
+          : transformedPokemon
+            ? { activeMegaForm: transformedMegaForm }
             : {
                 gender: getEffectiveGender(pokemon, fighter.slot),
                 cosmeticForm: fighter.slot.cosmeticForm,
@@ -989,8 +994,15 @@ export function BattleLogPage() {
   /** 배틀 중 이 편의 현재 활성 포켓몬(종) */
   const activePokemon = (side: Side) =>
     battleState ? getPokemon(battleState[side].slot.pokemonId) : undefined;
-  /** 배틀 중 이 편의 현재 활성 슬롯이 지닌 기술 4개(셋업 PartySlot에서 되짚음) */
+  /**
+   * 배틀 중 이 편의 현재 활성 슬롯이 지닌 기술 4개(셋업 PartySlot에서 되짚음). 단, 변신/괴짜로
+   * 상대 기술을 복제한 상태(fighter.transformed)면 셋업 때의 원본 기술(메타몽이면 "변신" 하나뿐)이
+   * 아니라 실제로 복제된 fighter.remainingPp의 키를 써야 한다 — 전에는 이 구분이 없어서 변신 후에도
+   * 계속 "변신" 하나만 낼 수 있던 버그가 있었다(ver.1.6).
+   */
   const activeMoveIds = (side: Side): (string | null)[] => {
+    const fighter = battleState?.[side];
+    if (fighter?.transformed) return Object.keys(fighter.remainingPp);
     const idx = battleSide(side)?.activeIndex ?? 0;
     return partySlots[side][idx]?.moves ?? [];
   };

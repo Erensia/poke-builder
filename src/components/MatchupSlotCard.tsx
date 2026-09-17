@@ -2,7 +2,6 @@ import type { MatchupSlot } from "../types/matchup";
 import { getPokemon, getMove, getAbility, getItem, getNature } from "../lib/data";
 import {
   getEffectiveForm,
-  getEffectiveAbilityId,
   megaBadgeLabel,
   resolveCosmeticForm,
   COSMETIC_FORM_CYCLE_MAX,
@@ -202,10 +201,7 @@ export function MatchupSlotCard({
         <button type="button" className="matchup-meta-pip" onClick={onPickAbility}>
           <span className="matchup-meta-label">특성</span>
           <span className="matchup-meta-value">
-            {(() => {
-              const effectiveAbilityId = getEffectiveAbilityId(form, slot.ability);
-              return effectiveAbilityId ? getAbility(effectiveAbilityId)?.name : "미지정";
-            })()}
+            {slot.ability ? getAbility(slot.ability)?.name : "미지정"}
           </span>
         </button>
         <button type="button" className="matchup-meta-pip" onClick={onPickItem}>

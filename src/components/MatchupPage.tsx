@@ -273,6 +273,7 @@ export function MatchupPage() {
               pokemon={pokemon}
               slot={sideOf(picker.side).slot}
               currentAbilityId={sideOf(picker.side).slot.ability}
+              includeMegaAbilityOption
               onClose={() => setPicker(null)}
               onSelect={(abilityId) => {
                 sideOf(picker.side).setAbility(abilityId);

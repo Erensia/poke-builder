@@ -9,7 +9,7 @@ import { NO_STATUS_CONDITION, NO_VOLATILE_CONDITIONS, type StatusCondition, type
 import { type Ability } from "@/types/ability";
 import { getAbility, getItem, getMove, getPokemon } from "@/lib/data";
 import { eulReul, eunNeun, roEuro } from "@/lib/josa";
-import { findMegaFormByStone, getEffectiveAbilityId, getEffectiveForm, getEffectiveGender } from "@/lib/pokemonForm";
+import { findMegaFormByStone, getEffectiveForm, getEffectiveGender } from "@/lib/pokemonForm";
 import { computeRealStats } from "@/lib/statCalculator";
 import { computeStatusSpeedMultiplier } from "@/lib/statusConditions";
 import { CONFUSION_SELF_HIT_POWER, hasVolatile } from "@/lib/volatileConditions";
@@ -92,9 +92,10 @@ export interface BattleFighterState {
    */
   gender: PokemonGender | null;
   /**
-   * 실제로 판정에 쓰는 특성 id. 메가진화 중이면 slot.ability와 무관하게 항상 그 메가폼 고유
-   * 특성으로 고정된다(getEffectiveAbilityId) — 메가리자몽Y는 항상 가뭄, 메가리자몽X는 항상
-   * 단단한발톱. slot.ability를 직접 쓰면 메가 특성이 무시되는 버그가 있어 이 필드로 분리했다.
+   * 실제로 판정에 쓰는 특성 id. 배틀 시작 시엔 slot.ability 그대로(메가스톤을 들었어도 아직
+   * 메가진화를 선언하지 않았으면 기본 특성 — ver.1.6). 턴 중 메가진화를 실제로 선언하면
+   * applyMegaEvolution이 이 필드를 그 메가폼 고유 특성으로 바꿔치운다(메가리자몽Y=가뭄,
+   * 메가리자몽X=단단한발톱 등) — slot.ability는 그대로 두고 이 필드만 갈아치운다.
    */
   effectiveAbilityId: string | null;
   realStats: BaseStats;
@@ -189,6 +190,12 @@ export interface BattleFighterState {
   transformed?: boolean;
   /** 변신 대상 종(BattleBoard 표시용, ver.1.6) — applyTransform이 target.slot.pokemonId로 세운다. */
   transformedIntoPokemonId?: string;
+  /**
+   * 변신 시점에 대상이 메가진화한 상태였으면 그 메가스톤 id(BattleBoard가 메가 이미지를 그대로
+   * 보여주기 위한 값, ver.1.6). 변신 이후 대상이 메가진화해도 소급 반영되진 않는다(변신 시점
+   * 스냅샷 — 본가 규칙).
+   */
+  transformedIntoMegaStone?: string;
   /**
    * 길동무: 이번 시전이 성공해서 "이번 턴(또는 이후 턴에) 직접 공격으로 쓰러지면 상대도 같이
    * 쓰러뜨린다" 예약이 걸려있으면 true. activeProtect와 달리 매 턴 시작 시 초기화되지 않고,
@@ -515,7 +522,7 @@ export function createFighterState(slot: EvaluatorSlot, moves: Move[]): BattleFi
     slot,
     types: form.types,
     gender: getEffectiveGender(pokemon, slot),
-    effectiveAbilityId: getEffectiveAbilityId(form, slot.ability),
+    effectiveAbilityId: slot.ability,
     megaStone: megaForm?.megaStone,
     realStats,
     currentHp: realStats.hp,
@@ -731,6 +738,10 @@ export function applyTransform(self: BattleFighterState, target: BattleFighterSt
   self.transformed = true;
   // target이 이미 변신 중이면(메타몽 vs 메타몽처럼) target이 지금 보이는 모습을 그대로 물려받는다.
   self.transformedIntoPokemonId = target.transformedIntoPokemonId ?? target.slot.pokemonId;
+  // target이 변신 시점에 메가진화 상태였으면 그 메가스톤까지 그대로 복제(이미지 표시용).
+  self.transformedIntoMegaStone = target.hasMegaEvolved
+    ? (target.transformedIntoMegaStone ?? target.megaStone)
+    : undefined;
 }
 
 /**

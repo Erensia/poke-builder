@@ -164,15 +164,6 @@ export function getEffectiveHiddenAbilityId(
   return getEffectiveAbilityList(pokemon, slot).hiddenAbility;
 }
 
-/**
- * 실제로 판정에 써야 할 특성 id. 메가진화 중이면 유저가 고른 slot.ability와 무관하게
- * 항상 그 메가폼 고유 특성(예: 메가리자몽Y=가뭄, 메가리자몽X=단단한발톱)으로 고정된다 — 본가 규칙.
- * 메가진화가 아니면 그대로 slot.ability.
- */
-export function getEffectiveAbilityId(form: EffectiveForm, slotAbility: string | null): string | null {
-  return form.mega ? form.mega.ability : slotAbility;
-}
-
 /** getEffectiveGender가 실제로 필요로 하는 부분만 뽑은 형태. PartySlot이나 MatchupSlot 둘 다 만족한다 */
 export interface GenderSource {
   gender?: PokemonGender;

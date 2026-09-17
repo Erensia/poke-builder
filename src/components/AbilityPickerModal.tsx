@@ -4,7 +4,6 @@ import {
   getEffectiveForm,
   getEffectiveAbilityList,
   getEffectiveHiddenAbilityId,
-  megaBadgeLabel,
   type FormSource,
   type GenderSource,
 } from "../lib/pokemonForm";
@@ -19,6 +18,14 @@ interface AbilityPickerModalProps {
   onSelect: (abilityId: string) => void;
   onClear: () => void;
   onClose: () => void;
+  /**
+   * 매치업 페이지 전용(ver.1.6) — 메가스톤을 지녔으면 후보 목록 맨 끝에 메가폼 고유 특성도
+   * 하나 더 얹는다. 메가진화 전/후 결정력을 비교해보고 싶을 때 명시적으로 골라 넣으라는 뜻 —
+   * 배틀 시뮬레이션·파티 샘플 화면은 실제 배틀처럼 메가진화를 선언하기 전까진 기본 특성만
+   * 써야 해서 이 옵션을 안 켠다(예전엔 메가스톤만 들어도 무조건 메가 특성으로 고정해버려서
+   * 기본 특성을 아예 못 고르던 버그가 있었다 — 이제 기본이 "고정 없음"이다).
+   */
+  includeMegaAbilityOption?: boolean;
 }
 
 export function AbilityPickerModal({
@@ -28,31 +35,20 @@ export function AbilityPickerModal({
   onSelect,
   onClear,
   onClose,
+  includeMegaAbilityOption,
 }: AbilityPickerModalProps) {
-  // 메가진화 중이면 getEffectiveAbilityId가 slot.ability와 무관하게 항상 그 메가폼 고유 특성을
-  // 쓴다(pokemonForm.ts) — 선택 UI를 그대로 보여주면 유저가 고른 값과 실제 적용되는 값이 달라
-  // 보이는 버그가 생기므로, 이 경우엔 선택지 대신 고정 특성 안내만 보여준다.
   const form = getEffectiveForm(pokemon, slot);
-  if (form.mega) {
-    const fixedAbility = getAbility(form.mega.ability);
-    return (
-      <Modal title={`${pokemon.name} · 특성 선택`} onClose={onClose}>
-        <p className="move-picker-locked-notice">
-          {megaBadgeLabel(form.mega)} 진화 중에는 특성이 <strong>{fixedAbility?.name ?? form.mega.ability}</strong>
-          (으)로 고정됩니다. 메가스톤을 해제하면 다시 특성을 고를 수 있어요.
-        </p>
-      </Modal>
-    );
-  }
-
   // 루가루암처럼 폼 변종이 있는 종은 그 폼의 abilities/hiddenAbility를 후보로 쓴다.
   // 냐오닉스처럼 숨겨진 특성이 성별로 갈리는 종은 슬롯 성별에 맞는 쪽 하나만 보여준다.
   const { abilities: normalAbilityIds } = getEffectiveAbilityList(pokemon, slot);
   const hiddenAbilityId = getEffectiveHiddenAbilityId(pokemon, slot);
-  const candidates = [
+  const candidates: { id: string; hidden: boolean; mega?: boolean }[] = [
     ...normalAbilityIds.map((id) => ({ id, hidden: false })),
     ...(hiddenAbilityId ? [{ id: hiddenAbilityId, hidden: true }] : []),
   ];
+  if (includeMegaAbilityOption && form.mega && !candidates.some((c) => c.id === form.mega!.ability)) {
+    candidates.push({ id: form.mega.ability, hidden: false, mega: true });
+  }
 
   return (
     <Modal title={`${pokemon.name} · 특성 선택`} onClose={onClose}>
@@ -60,7 +56,7 @@ export function AbilityPickerModal({
         특성 비우기
       </button>
       <ul className="move-picker-list">
-        {candidates.map(({ id, hidden }) => {
+        {candidates.map(({ id, hidden, mega }) => {
           const ability = getAbility(id);
           if (!ability) return null;
           const active = id === currentAbilityId;
@@ -74,6 +70,7 @@ export function AbilityPickerModal({
               >
                 <span className="move-picker-name">{ability.name}</span>
                 {hidden && <span className="move-picker-cat">숨겨진 특성</span>}
+                {mega && <span className="move-picker-cat">메가진화 시</span>}
               </button>
             </li>
           );
