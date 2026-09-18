@@ -83,6 +83,13 @@ export function triggerTerrainSeeds(state: BattleState): string[] {
     const name = getPokemon(fighter.slot.pokemonId)?.name ?? "포켓몬";
     const statText = seed.stat === "def" ? "방어가" : "특수방어가";
     lines.push(`${name}의 ${item!.name}! ${statText} 올랐다!`);
+    // 곡예: resolveAction의 행동 단위 전후비교(§attackerItemIdBeforeAction)는 "하나의 행동" 범위
+    // 밖에서 일어나는 이 시드 소모(배틀 시작/교체 등장/메가진화 시 등장 특성 처리 중)를 못 잡는다
+    // — 이 자리에서 직접 판정해야 한다(ver.1.7 §1-2에서 확인된 버그).
+    if (ability?.doublesSpeedOnItemLoss && !fighter.unburdenActive) {
+      fighter.unburdenActive = true;
+      lines.push(`${name}의 ${ability.name}! 스피드가 2배로 올랐다!`);
+    }
   }
   return lines;
 }
