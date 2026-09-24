@@ -9,7 +9,9 @@
     "lint": "oxlint",
     "preview": "vite preview",
     "sprites": "node scripts/gen-sprite-manifest.mjs",
-    "validate:data": "node scripts/validate-data.mjs"
+    "validate:data": "node scripts/validate-data.mjs",
+    "sim:ai": "node scripts/battle-ai-sim.mjs",
+    "test:ai": "node scripts/battle-ai-scenarios.mjs"
   },
   "dependencies": {
     "react": "^19.2.8",

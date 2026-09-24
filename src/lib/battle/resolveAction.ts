@@ -82,10 +82,14 @@ export function resolveAction(
     }
   }
 
-  // 날씨 변화 기술(비바라기 등): 필드/트릭룸과 달리 이미 다른(또는 같은) 날씨가 있어도 실패하지
-  // 않고 항상 덮어쓴다 — 실패라는 개념 자체가 없다(본가 규칙). 지속시간은 특성/수동 선택으로
-  // 걸렸을 때와 마찬가지로 WEATHER_DURATION(+바위 보너스)으로 다시 채워진다(카운트다운 초기화).
-  if (effectiveMove.setsWeather) {
+  // 날씨 변화 기술(비바라기 등): 다른 날씨는 덮어쓰지만, 이미 같은 날씨면 실패한다 — 남은 턴도
+  // 다시 채우지 않는다(본가 규칙, 사용자 확인 — 필드/트릭룸과 같은 규칙). 날씨부정으로 효과가 꺼져
+  // 있어도 날씨 자체는 있으므로 state.weather(원래 값)로 비교한다. 지속시간은 특성/수동 선택으로
+  // 걸렸을 때와 마찬가지로 WEATHER_DURATION(+바위 보너스).
+  let weatherSetFailed = false;
+  if (effectiveMove.setsWeather && state.weather === effectiveMove.setsWeather) {
+    weatherSetFailed = true;
+  } else if (effectiveMove.setsWeather) {
     state.weather = effectiveMove.setsWeather;
     const rockBonus =
       attackerItem?.weatherDurationBonus?.weather === effectiveMove.setsWeather
@@ -296,7 +300,8 @@ export function resolveAction(
     destroyedField,
     setTrickRoom: trickRoomSetFailed ? undefined : effectiveMove.setsTrickRoom,
     trickRoomSetFailed,
-    setWeather: effectiveMove.setsWeather,
+    setWeather: weatherSetFailed ? undefined : effectiveMove.setsWeather,
+    weatherSetFailed: weatherSetFailed || undefined,
     setScreen: screenSetFailed ? undefined : effectiveMove.setsScreen,
     screenSetFailed,
     setSafeguard: safeguardSetFailed ? undefined : (effectiveMove.setsSafeguard || undefined),

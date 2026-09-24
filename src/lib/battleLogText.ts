@@ -7,6 +7,14 @@
 import type { StatusCondition } from "../types/status";
 import { eunNeun } from "./josa";
 
+/**
+ * 날씨 기술의 성공/실패 문구를 기술별로 바꿔 쓸 때(key는 move.id). 없으면 공통 문구
+ * ("날씨가 ○로 바뀌었다!" / "그러나 실패했다!")를 쓴다. 썰렁개그 문구는 사용자 제공.
+ */
+export const WEATHER_MOVE_LINES: Record<string, { set: string; fail: string }> = {
+  썰렁개그: { set: "눈이 내리기 시작했다!", fail: "그러나 실패하고 말았다!" },
+};
+
 /** 차징 기술 1턴째(준비 턴) 전용 문구 — 공통 "준비 중!" 대신 기술별로 쓴다(§1 D-1). key는 move.id */
 export const CHARGE_TURN_MESSAGE: Record<string, string> = {
   구멍파기: " 땅을 파기 시작했다!",

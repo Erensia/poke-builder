@@ -126,6 +126,98 @@
   margin-top: 0.5rem;
 }
 
+/* ver.1.7 트랙 H — 난수별 데미지(스피드 판정 위). 폭은 스피드 블록과 같은 카드 열 전체 폭 */
+.matchup-roll-block {
+  margin-top: 1rem;
+  width: calc(280px * 2 + 130px + 1rem * 2);
+  max-width: 100%;
+  margin-left: auto;
+  margin-right: auto;
+  padding: 0.6rem 0.9rem;
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  background: var(--surface-2);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.matchup-roll-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.75rem;
+}
+
+.matchup-roll-title {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.matchup-roll-range strong {
+  font-family: var(--display);
+  font-size: 1.05rem;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.matchup-roll-toggle {
+  border: 1px solid var(--glass-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  padding: 0.15rem 0.6rem;
+  cursor: pointer;
+}
+
+.matchup-roll-toggle:hover {
+  color: var(--text);
+}
+
+.matchup-roll-grid {
+  list-style: none;
+  margin: 0.6rem 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.3rem 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.matchup-roll-grid li {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.4rem;
+}
+
+.matchup-roll-value {
+  color: var(--text-muted);
+}
+
+.matchup-roll-percent {
+  color: var(--text);
+}
+
+/* 그 타수로 격파하는 난수 강조 */
+.matchup-roll-grid li.is-killing .matchup-roll-percent {
+  color: var(--violet);
+  font-weight: 700;
+}
+
+@media (max-width: 760px) {
+  .matchup-roll-block {
+    width: 100%;
+    max-width: 320px;
+  }
+
+  .matchup-roll-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
 @media (max-width: 760px) {
   .matchup-board {
     flex-direction: column;

@@ -8554,12 +8554,14 @@
     "accuracy": null,
     "pp": 12,
     "priority": 0,
-    "effect": "썰렁한 개그를 하기 직전 5턴 동안 눈을 내리게 한다. 본가에서는 사용 후 교체되지만 1대1에서는 교체가 없어 눈 설정만 적용된다.",
+    "effect": "썰렁한 개그를 하기 직전 5턴 동안 눈을 내리게 한 뒤, 대기하고 있는 포켓몬과 교체한다. 이미 눈이 내리고 있어도 교체는 한다.",
     "tags": [
       "환경"
     ],
     "makesContact": false,
-    "setsWeather": "눈"
+    "setsWeather": "눈",
+    "selfSwitchAfterUse": true,
+    "preUseUserAnnouncement": "썰렁한 개그를 선보였다!"
   },
   {
     "id": "자기장조작",

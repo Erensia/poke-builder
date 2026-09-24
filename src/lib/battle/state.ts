@@ -635,10 +635,9 @@ export function weatherRockBonus(weather: WeatherKind, aSlot: EvaluatorSlot, bSl
  * 배틀 시작과 동시에 날씨를 자동으로 바꾼다.
  *
  * 양쪽 다 날씨 특성이면 실효 스피드가 빠른 쪽부터 순서대로 발동한다(사용자 확인) — "우선권"이
- * 있는 게 아니라 그냥 둘 다 발동하는데, 날씨 기술/특성은 이미 다른 날씨가 있어도 실패하지 않고
- * 항상 덮어쓰는 규칙(resolveAction의 Move.setsWeather 처리와 동일)이라, 나중에(=스피드가 느린
- * 쪽이) 발동하는 쪽의 날씨가 결국 최종적으로 남는다. 로그에도 두 특성이 순서대로 발동하는 걸
- * 그대로 보여준다.
+ * 있는 게 아니라 그냥 둘 다 발동하는데, 날씨 기술/특성은 이미 **다른** 날씨가 있으면 덮어쓰는
+ * 규칙이라, 나중에(=스피드가 느린 쪽이) 발동하는 쪽의 날씨가 결국 최종적으로 남는다. 로그에도 두
+ * 특성이 순서대로 발동하는 걸 그대로 보여준다. 같은 날씨 특성끼리면 두 번째는 아무 일도 없다.
  *
  * 챔피언스는 특성으로 걸리든 사용자가 수동으로 고르든 날씨에 5턴 카운트다운이 있다(사용자 확인 —
  * 본가와 달리 날씨 특성이 무제한 지속이 아님). 그래서 여기서도 기술로 걸 때(resolveAction의
@@ -676,6 +675,16 @@ function resolveEntryWeather(
     const aFaster = aFighter.realStats.spe >= bFighter.realStats.spe;
     const [firstSlot, firstAbility] = aFaster ? ([aSlot, aAbility] as const) : ([bSlot, bAbility] as const);
     const [secondSlot, secondAbility] = aFaster ? ([bSlot, bAbility] as const) : ([aSlot, aAbility] as const);
+    // 같은 날씨 특성끼리면 두 번째는 이미 같은 날씨라 아무 일도 없다(발동 문구·턴 재충전 없음 — 본가 규칙).
+    // 지속 턴 보너스도 먼저 발동한 쪽의 바위만 본다.
+    if (firstAbility.setsWeather === secondAbility.setsWeather) {
+      const weather = firstAbility.setsWeather!;
+      return {
+        weather,
+        weatherTurnsRemaining: WEATHER_DURATION + weatherRockBonus(weather, firstSlot, firstSlot),
+        announcements: [announce(firstSlot, firstAbility, weather)],
+      };
+    }
     const weather = secondAbility.setsWeather!;
     return {
       weather,

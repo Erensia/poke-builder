@@ -350,6 +350,24 @@ function damageRoll(k: number): number {
   return (85 + k) / 100;
 }
 
+export interface DamageRollPercent {
+  /** 난수(85~100) */
+  roll: number;
+  /** 그 난수로 한 방 때렸을 때 상대 최대 HP의 몇 %가 깎이는지 */
+  percent: number;
+}
+
+/**
+ * 16단계 난수별 한 방 데미지를 상대 최대 HP 대비 %로(ver.1.7 트랙 H — 매치업 화면 표기). 한 방 데미지 =
+ * 상대 HP × rho / rho*(minKillingRoll) — 격파 판정(evaluateMatchupChance)·배틀 AI 기대 타수(hitsToKill)와
+ * 같은 관계식이다. 결정력이 0이면 빈 배열.
+ */
+export function damageRollPercents(offensePower: number, bulkPower: number): DamageRollPercent[] {
+  if (offensePower <= 0 || bulkPower <= 0) return [];
+  const rhoStar = minKillingRoll(offensePower, bulkPower);
+  return Array.from({ length: DAMAGE_ROLL_STEPS }, (_, k) => ({ roll: 85 + k, percent: (damageRoll(k) / rhoStar) * 100 }));
+}
+
 /** 16개 난수 중 rhoStar 이상인 롤 수 (0~16). 1e-9는 부동소수점 경계 흔들림 보정 */
 function rollsAtLeast(rhoStar: number): number {
   let n = 0;
