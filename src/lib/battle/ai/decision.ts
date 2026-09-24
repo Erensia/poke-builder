@@ -31,6 +31,13 @@ export interface DecisionParams {
   statusAware: boolean;
   /** 대면이 끝난 뒤에도 남는 이득(설치기·벽 이월 항)에 곱하는 가중치 */
   wCarry: number;
+  /**
+   * 랭크업기를 "적용 후 재평가"(c·d·p 전부 — 스피드·방어 랭크업 반영)와 "올린 뒤 배턴터치"로 평가할지(§4-2).
+   * false면 v1 방식(랭크업 후 c만 재계산). statusAware가 false면 이것도 꺼진다.
+   */
+  setupAware: boolean;
+  /** 동률 처리 4순위를 "이번 턴 처치 가능한 공격기 > 그 외 기술 > 교체"로(§7). false면 이전 "기술 > 교체" */
+  tieAttackFirst: boolean;
 }
 
 /**
@@ -47,6 +54,8 @@ export const DEFAULT_DECISION_PARAMS: DecisionParams = {
   pivotAware: true,
   statusAware: true,
   wCarry: 1.0,
+  setupAware: true,
+  tieAttackFirst: true,
   riskFlagPenaltyBase: 0.4,
   tieThreshold: 0.1,
   wSurvival: 1.0,
@@ -145,12 +154,38 @@ function pivotValue(option: AiOption): number {
  * 빗나가면 지금 그대로의 대면을 끝까지 이어간다 + 대면 뒤에도 남는 이득(설치기·벽) × w_carry.
  */
 function effectValue(option: AiOption, params: DecisionParams): number {
-  const { hit, base, hitChance, carry } = option.support!.effect!;
+  const { hit, base, hitChance, carry, selfCost = 0 } = option.support!.effect!;
   const my = option.hpFraction;
   const opp = option.opponentHpFraction;
-  const onHit = raceValue(hit.killTurns, hit.survivalTurns, hit.firstProbability, my, opp, 1);
+  // HP 비용(소울비트류)은 치른 만큼 손실로 빼고, 대면은 깎인 HP에서 시작한다.
+  const onHit = raceValue(hit.killTurns, hit.survivalTurns, hit.firstProbability, my - selfCost, opp, 1) - selfCost;
   const onMiss = raceValue(base.killTurns, base.survivalTurns, base.firstProbability, my, opp, 1);
   return hitChance * onHit + (1 - hitChance) * onMiss + params.wCarry * carry;
+}
+
+/**
+ * 랭크업 → 다음 턴 배턴터치(decision-layer §4-2): 이번 턴 랭크업하며 한 대 맞고, 다음 턴 배턴터치로 올린 랭크를
+ * 교대 후보에게 넘긴다. 넘기는 턴의 처리는 유턴류·배턴터치 pivot_value와 같다(선공이면 후보가 맞고, 후공이면
+ * 지금 포켓몬이 한 대 더 맞은 뒤 후보가 안전하게 등장). 넘기기 전에 쓰러지면 선택 불가.
+ */
+function batonFollowUpValue(option: AiOption): number {
+  const support = option.support!;
+  const follow = support.batonFollowUp!;
+  const selfCost = support.effect?.selfCost ?? 0;
+  const hpAtPass = option.hpFraction - selfCost - follow.hitLoss;
+  if (hpAtPass <= 0 || follow.candidates.length === 0) return -Infinity;
+  const p = follow.firstProbability;
+  const nextHit = Math.min(hpAtPass, follow.hitLoss);
+  const best = Math.max(
+    ...follow.candidates.map((c) => p * switchInValue(c, 1) + (1 - p) * (switchInValue(c, 0) - nextHit)),
+  );
+  return -selfCost - follow.hitLoss + best;
+}
+
+/** 랭크업기: 올린 뒤 직접 싸우는 값과 올린 뒤 배턴터치로 넘기는 값 중 큰 쪽 */
+function setupValue(option: AiOption, params: DecisionParams): number {
+  const self = effectValue(option, params);
+  return option.support!.batonFollowUp ? Math.max(self, batonFollowUpValue(option)) : self;
 }
 
 function tradeScore(option: AiOption, riskAversion: number, params: DecisionParams): number {
@@ -163,6 +198,10 @@ function tradeScore(option: AiOption, riskAversion: number, params: DecisionPara
     const { kind, after, bestKillTurns, healedHpFraction } = option.support;
     if (kind === "other") return -Infinity;
     if (kind === "effect") return effectValue(option, params) - riskPenalty;
+    if (kind === "setup" && params.statusAware && params.setupAware) {
+      if (option.support.setupFailed) return -Infinity;
+      if (option.support.effect) return setupValue(option, params) - riskPenalty;
+    }
     if (kind === "heal") {
       if (params.statusAware && (option.support.healNetGain ?? 1) <= 0) return -Infinity;
       const healed = healedHpFraction ?? option.hpFraction;
@@ -208,13 +247,24 @@ export function scoreOption(option: AiOption, riskAversion: number, params: Deci
   return exchangeAdvantage + speedAdj - entryPenalty - tempoPenalty - riskPenalty;
 }
 
+/**
+ * 동률 처리 4순위: 이번 턴 잡을 수 있는 공격기 → 그 외 기술 → 교체. HP 교환식은 "결국 이기는 대면이면 몇 턴
+ * 걸리든" 같은 점수를 줘서, 지금 잡을 수 있는데 철벽을 쓰는 선택이 동률에서 뽑혔다(§7). 공격기 전체를 변화기보다
+ * 앞세우면 800판 기준 21승 손해라(동률 변화기는 대부분 실제로 이득), 처치 가능한 공격기로만 좁혔다.
+ */
+function actionTempoRank(option: AiOption, attackFirst: boolean): number {
+  if (option.optionType === "switch") return 2;
+  const killsNow = option.move?.category !== "status" && option.hitsToKill.expected <= 1;
+  return attackFirst && !killsNow ? 1 : 0;
+}
+
 function compareBy<T>(key: (item: T) => number): (a: T, b: T) => number {
   return (a, b) => key(a) - key(b);
 }
 
 /**
  * 의사결정 레이어(decision-layer §8): 하드 오버라이드 → 점수 최고점 → ±0.1 이내면 동률 처리.
- * 동률 처리: 즉사(worst_case 1타) 위험 배제 → 진입 비용 낮은 쪽 → 방어 상성 낮은 쪽 → 공격 유지 우선.
+ * 동률 처리: 즉사(worst_case 1타) 위험 배제 → 진입 비용 낮은 쪽 → 방어 상성 낮은 쪽 → 처치 가능 공격기 > 기술 > 교체.
  */
 export function decide(
   options: AiOption[],
@@ -243,7 +293,7 @@ export function decide(
       (a, b) =>
         compareBy<ScoredOption>((s) => s.option.entryCost)(a, b) ||
         compareBy<ScoredOption>((s) => s.option.typeMatchup.defensive)(a, b) ||
-        compareBy<ScoredOption>((s) => (s.option.optionType === "move" ? 0 : 1))(a, b) ||
+        compareBy<ScoredOption>((s) => actionTempoRank(s.option, params.tieAttackFirst))(a, b) ||
         b.score - a.score,
     );
   }

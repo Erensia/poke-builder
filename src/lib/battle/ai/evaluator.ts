@@ -3,6 +3,7 @@ import { type Move } from "@/types/move";
 import { type PokemonType } from "@/types/pokemon-type";
 import { type StatStages } from "@/types/battleStats";
 import { applyMoveStatChanges } from "@/lib/statStages";
+import { applyMoveAccuracyEvasionChanges } from "@/lib/accuracyCrit";
 import { compareTurnOrder } from "@/lib/turnOrder";
 import { resolveEffectiveDefenderAbility } from "@/lib/abilityModifiers";
 import { inflictRestSleep } from "@/lib/statusConditions";
@@ -10,6 +11,7 @@ import { computeWeatherHealFraction } from "@/lib/weatherEffects";
 import {
   abilityOf,
   activeWeather,
+  contraryMoveFor,
   cloneSide,
   isFainted,
   opponentKey,
@@ -62,6 +64,18 @@ export interface EffectEvaluation {
   hitChance: number;
   /** 대면이 끝난 뒤에도 남는 이득(설치기·벽) — HP 비율 단위, 결정 레이어가 w_carry를 곱한다 */
   carry: number;
+  /** 이 기술을 쓰느라 내가 치르는 HP 비율(소울비트류 costsHpFraction) */
+  selfCost?: number;
+}
+
+/**
+ * 랭크업기 → 다음 턴 배턴터치(decision-layer §4-2). hitLoss = 랭크업 후 상대 공격 한 번에 잃는 HP 비율,
+ * candidates = 올린 랭크를 이어받은 교대 후보, firstProbability = 다음 턴 배턴터치 시 내가 먼저 움직일 확률.
+ */
+export interface BatonFollowUp {
+  candidates: AiOption[];
+  hitLoss: number;
+  firstProbability: number;
 }
 
 /** 공통 평가 엔진 출력(common-engine §5 v1.1 + extension 반영). 6개 옵션이 모두 이 구조다. */
@@ -100,6 +114,10 @@ export interface AiOption {
     /** 회복기: 회복량 − 회복에 쓴 턴 동안 맞는 양(HP 비율). 0 이하면 회복 루프 — statusAware일 때 고르지 않는다 */
     healNetGain?: number;
     effect?: EffectEvaluation;
+    /** 랭크업기: 올린 뒤 다음 턴 배턴터치로 넘기는 선택지(배턴터치 보유 + 교대 가능할 때만) */
+    batonFollowUp?: BatonFollowUp;
+    /** 랭크업기: 이미 +6·HP 부족 등으로 실패 — statusAware일 때 고르지 않는다 */
+    setupFailed?: boolean;
     /** v1에서 "그 외 변화기"로 막혀 있던 기술(효과 변화기·날씨 회복기·잠자기·배턴터치) — statusAware: false면 다시 막는다 */
     extended?: boolean;
   };
@@ -269,6 +287,70 @@ function evaluateSwitchCandidate(state: BattleState, key: FighterKey, index: num
     opponentHpFraction: oppHp / opponent.maxHp,
     riskFlag: threat.riskFlag,
     accuracy: pick?.estimate.accuracy ?? 0,
+  };
+}
+
+/**
+ * 배턴터치 교대 후보: from이 넘겨줄 것(랭크·명중/회피 랭크·급소 랭크 — 엔진 performSwitch의 baton 인계)을
+ * 입힌 상태로 평가한다.
+ */
+function batonCandidates(state: BattleState, key: FighterKey, bench: number[], from: BattleFighterState): AiOption[] {
+  const passed = cloneBattleState(state);
+  const side = sideOf(passed, key);
+  return bench.map((index) => {
+    const candidate = side.party[index];
+    candidate.stages = { ...from.stages };
+    candidate.accuracyStages = { ...from.accuracyStages };
+    candidate.critStage = from.critStage;
+    return evaluateSwitchCandidate(passed, key, index);
+  });
+}
+
+interface SetupContext {
+  state: BattleState;
+  key: FighterKey;
+  move: Move;
+  raceMoves: Move[];
+  /** 배턴터치로 넘길 수 있으면 교대 후보 슬롯, 아니면 빈 배열 */
+  batonBench: number[];
+}
+
+/**
+ * 랭크업기 "적용 후 재평가"(decision-layer §4-2): 복제한 state에 자기 랭크 변화(심술꾸러기·명중/회피 포함)와
+ * HP 비용을 적용하고 대면의 c·d·p를 모두 다시 계산한다 — 스피드 랭크업은 선공(p), 방어 랭크업은 버티는 턴(d)으로
+ * 값이 생긴다. 배턴터치를 가졌으면 "올린 뒤 다음 턴 넘기기"도 함께 계산한다. 아무 변화가 없으면(+6 등) failed.
+ */
+function evaluateSetupMove(ctx: SetupContext): { effect?: EffectEvaluation; batonFollowUp?: BatonFollowUp; failed?: boolean } {
+  const { state, key, move, raceMoves } = ctx;
+  const clone = cloneBattleState(state);
+  const self = clone[key];
+  const selfMove = contraryMoveFor(move, self);
+  let selfCost = 0;
+  if (move.costsHpFraction !== undefined) {
+    const cost = Math.floor(self.maxHp * move.costsHpFraction);
+    if (self.currentHp <= cost) return { failed: true };
+    self.currentHp -= cost;
+    selfCost = cost / self.maxHp;
+  }
+  const beforeStages = self.stages;
+  const beforeAccuracy = self.accuracyStages;
+  self.stages = applyMoveStatChanges(self.stages, selfMove, "self", { userTypes: self.types, weather: activeWeather(clone) });
+  self.accuracyStages = applyMoveAccuracyEvasionChanges(self.accuracyStages, selfMove, "self", { userTypes: self.types });
+  const changed =
+    (Object.keys(beforeStages) as (keyof typeof beforeStages)[]).some((s) => self.stages[s] !== beforeStages[s]) ||
+    (Object.keys(beforeAccuracy) as (keyof typeof beforeAccuracy)[]).some((s) => self.accuracyStages[s] !== beforeAccuracy[s]);
+  if (!changed) return { failed: true };
+
+  const base = currentRace(state, key, raceMoves);
+  const hit = currentRace(clone, key, raceMoves);
+  const effect: EffectEvaluation = { hit, base, hitChance: 1, carry: 0, selfCost };
+  if (ctx.batonBench.length === 0) return { effect };
+
+  const myAfter = self.currentHp / self.maxHp;
+  const hitLoss = hit.survivalTurns > 0 && Number.isFinite(hit.survivalTurns) ? Math.min(myAfter, myAfter / hit.survivalTurns) : 0;
+  return {
+    effect,
+    batonFollowUp: { candidates: batonCandidates(clone, key, ctx.batonBench, self), hitLoss, firstProbability: hit.firstProbability },
   };
 }
 
@@ -519,17 +601,12 @@ export function evaluateOptions(state: BattleState, key: FighterKey, options: Ev
         option.support = { kind: effect ? "effect" : "other", before: 0, after: 0, bestKillTurns, effect, extended: true };
       } else if (isBatonPass(move) && bench.length > 0) {
         // 배턴터치: 유턴류와 같은 "교체" 평가 — 데미지는 0, 후보는 내 랭크 변화를 이어받은 상태로 평가한다.
-        const passed = cloneBattleState(state);
-        const passedSide = sideOf(passed, key);
         const d = threat.hitsToBeKilled.expected;
         option.pivot = {
           hitRate: 0,
           hitChance: 1,
           activeHitLoss: (me.currentHp / me.maxHp) * Math.min(1, d > 0 ? 1 / d : 1),
-          candidates: bench.map((index) => {
-            passedSide.party[index].stages = { ...state[key].stages };
-            return evaluateSwitchCandidate(passed, key, index);
-          }),
+          candidates: batonCandidates(state, key, bench, state[key]),
         };
         option.support = { kind: "other", before: 0, after: 0, bestKillTurns, extended: true };
       } else if (kind === "setup") {
@@ -543,7 +620,22 @@ export function evaluateOptions(state: BattleState, key: FighterKey, options: Ev
           attackerMovesSecond: iMoveSecond,
           stagesOverride: boosted,
         });
-        option.support = { kind, before: bestKillTurns, after: turnsFor(after?.estimate, me, opponent).expected, bestKillTurns };
+        const setup = evaluateSetupMove({
+          state: moveState,
+          key,
+          move,
+          raceMoves,
+          batonBench: myMoves.some(isBatonPass) ? bench : [],
+        });
+        option.support = {
+          kind,
+          before: bestKillTurns,
+          after: turnsFor(after?.estimate, me, opponent).expected,
+          bestKillTurns,
+          effect: setup.effect,
+          batonFollowUp: setup.batonFollowUp,
+          setupFailed: setup.failed,
+        };
       } else {
         option.support = { kind, before: 0, after: 0, bestKillTurns };
       }

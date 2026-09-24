@@ -175,6 +175,45 @@ try {
       `c 이어받음=${o.pivot?.candidates[0].hitsToKill.expected.toFixed(2)} 일반교체=${plain.hitsToKill.expected.toFixed(2)}`,
     );
   }
+  // ── 랭크업기 재평가·배턴터치 연계(decision-layer §4-2) ──
+  {
+    // 고속이동: 느린 쪽이 스피드 +2로 선공 역전 → p 0→1
+    const speed = battle(
+      [mon("메타그로스", ["고속이동", "코멧펀치"], null, null, pts({ atk: 32, hp: 32 }))],
+      [mon("한카리아스", ["역린"], null, null, pts({ atk: 32, spe: 32 }))],
+    );
+    const e = opt(ev.evaluateOptions(speed, "a"), "고속이동").support?.effect;
+    check("고속이동 → 선공 역전 반영", e && e.base.firstProbability === 0 && e.hit.firstProbability === 1, `p ${e?.base.firstProbability}→${e?.hit.firstProbability}`);
+    // 철벽: 물리 상대에게 d 증가
+    const iron = battle(
+      [mon("메타그로스", ["철벽", "코멧펀치"], null, null, pts({ atk: 32, hp: 32 }))],
+      [mon("한카리아스", ["역린"], null, null, pts({ atk: 32, spe: 32 }))],
+    );
+    const ei = opt(ev.evaluateOptions(iron, "a"), "철벽").support?.effect;
+    check("철벽 → d 증가 반영", ei && ei.hit.survivalTurns > ei.base.survivalTurns, `d ${ei?.base.survivalTurns.toFixed(2)}→${ei?.hit.survivalTurns.toFixed(2)}`);
+    // 이미 +6이면 실패
+    iron.a.stages = { ...iron.a.stages, def: 6 };
+    const maxed = opt(ev.evaluateOptions(iron, "a"), "철벽");
+    check("방어 +6 → 철벽 실패", maxed.support?.setupFailed === true && dec.scoreOption(maxed, 0.5) === -Infinity);
+  }
+  {
+    // 번치코(가속): 칼춤 → 배턴터치로 한카리아스에게 넘기는 선택지가 계산된다
+    const st = battle(
+      [
+        mon("번치코", ["칼춤", "배턴터치", "불꽃세례"].filter((m) => data.getMove(m)), "가속", null, pts({ hp: 32, spe: 32 })),
+        mon("한카리아스", ["역린", "지진"], null, null, pts({ atk: 32, spe: 32 })),
+      ],
+      [mon("핫삼", ["불릿펀치"], null, null, pts({ hp: 32, def: 32 }))],
+    );
+    const sd = opt(ev.evaluateOptions(st, "a"), "칼춤");
+    const follow = sd?.support?.batonFollowUp;
+    const plainSwitch = ev.evaluateOptions(st, "a").find((o) => o.optionType === "switch");
+    check(
+      "칼춤 → 배턴터치 연계 계산(후보가 +2를 이어받음)",
+      !!follow && follow.candidates[0].hitsToKill.expected < plainSwitch.hitsToKill.expected && Number.isFinite(dec.scoreOption(sd, 0.5)),
+      `c 이어받음=${follow?.candidates[0].hitsToKill.expected.toFixed(2)} 일반교체=${plainSwitch?.hitsToKill.expected.toFixed(2)} score=${dec.scoreOption(sd, 0.5).toFixed(3)}`,
+    );
+  }
   // 첫 턴 전용 기술(만나자마자): 등장 후 행동했으면 옵션·상대 위협에서 모두 빠진다(사용자 발견 버그)
   {
     const st = battle(

@@ -11,6 +11,8 @@
  *
  * 예) npm run sim:ai -- greedy 150 '{"scoring":"spec"}'   ← 파라미터 튜닝: 값을 바꿔 승률 비교
  * 환경변수 PIVOT=1: 유턴류를 배울 수 있는 포켓몬은 기술 하나를 유턴류로 바꿔 파티를 만든다(유턴 판단 검증용)
+ * 환경변수 SETUP=1: 랭크업기·배턴터치를 배울 수 있으면 기술 두 개를 그걸로 바꾼다(랭크업·배턴터치 연계 검증용).
+ *     diag 모드에 DIAG=setup을 주면 랭크업기·배턴터치를 고른 순간을 덤프한다.
  * 환경변수 STATUS=1: AI가 점수 매기는 변화기를 배울 수 있으면 기술 하나를 그걸로 바꾼다(변화기 판단 검증용).
  *     diag 모드에 DIAG=status를 주면 그 변화기를 고른 순간을 덤프한다.
  *     (PowerShell에서는 JSON 따옴표를 '{\"scoring\":\"spec\"}' 처럼 이스케이프)
@@ -68,6 +70,16 @@ try {
     }
     // STATUS=1: AI가 점수 매기는 변화기(상태이상·랭크다운·벽·설치기·배턴터치·날씨 회복기·잠자기)를 배울 수
     // 있으면 3번째 기술을 그걸로 바꾼다(변화기 판단 검증용). 4번째는 PIVOT용으로 남겨 둔다.
+    // SETUP=1: 랭크업기를 배울 수 있으면 2번째 기술을 랭크업기로, 배턴터치를 배울 수 있으면 3번째 기술을
+    // 배턴터치로 바꾼다(랭크업 재평가·"올린 뒤 배턴터치" 검증용).
+    if (process.env.SETUP === "1") {
+      const setups = learn.filter((m) => {
+        const mv = data.getMove(m);
+        return mv.category === "status" && mv.statChanges?.some((s) => s.target === "self" && (s.delta ?? 0) > 0) && !moves.includes(m);
+      });
+      if (setups.length) moves[1] = pick(rng, setups);
+      if (learn.includes("배턴터치") && !moves.includes("배턴터치")) moves[2] = "배턴터치";
+    }
     if (process.env.STATUS === "1") {
       const designed = learn.filter((m) => fx.isDesignedStatusMove(data.getMove(m)) && !moves.includes(m));
       if (designed.length) moves[2] = pick(rng, designed);
@@ -168,7 +180,9 @@ try {
     const wantDump = (d) =>
       process.env.DIAG === "pivot"
         ? d.action.kind === "move" && !!d.action.move.selfSwitchAfterDamage
-        : process.env.DIAG === "status"
+        : process.env.DIAG === "setup"
+          ? d.action.kind === "move" && ["setup", "batonPass"].includes(statusLabel(d.action.move)) && d.action.move.category === "status"
+          : process.env.DIAG === "status"
           ? d.action.kind === "move" && fx.isDesignedStatusMove(d.action.move)
           : d.action.kind === "switch";
     const aiPolicy = (st, key) => {
@@ -200,7 +214,9 @@ try {
       if (d.action.kind === "switch") mix.switch++;
       else if (d.action.move.category === "status") {
         mix.status++;
-        const label = statusLabel(d.action.move);
+        let label = statusLabel(d.action.move);
+        // 랭크가 오른 상태에서 쓴 배턴터치는 따로 센다("올린 뒤 넘기기")
+        if (label === "batonPass" && Object.values(st[key].stages).some((v) => v > 0)) label = "batonPassBoosted";
         statusMix[label] = (statusMix[label] ?? 0) + 1;
       }
       else if (d.action.move.selfSwitchAfterDamage) mix.pivot++;
