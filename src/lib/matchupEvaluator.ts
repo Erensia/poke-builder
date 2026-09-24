@@ -74,6 +74,14 @@ export interface SlotMatchupOptions {
    * 공격측이 틈새포착(bypassesScreensAndSubstitute)이면 무시된다.
    */
   screen?: "reflect" | "lightScreen" | "auroraVeil";
+  /**
+   * 배틀 AI용 실전 문맥(매치업 페이지는 1턴 스냅샷이라 생략 — 기본값은 각각 풀피/상태이상 없음/도구 미소모).
+   * 맹화류(HP 1/3 이하)·멀티스케일(풀피)·이상한비늘(상태이상)·소모된 열매 판정에 쓴다.
+   */
+  attackerHpFraction?: number;
+  defenderHpIsFull?: boolean;
+  defenderHasStatusCondition?: boolean;
+  defenderItemConsumed?: boolean;
 }
 
 /** evaluateSlotMatchup이 실제로 필요로 하는 최소 형태. PartySlot과 MatchupSlot 둘 다 만족한다 */
@@ -151,6 +159,10 @@ export function evaluateSlotMatchup(
     screen,
     multiHitCount,
     stockpileCount,
+    attackerHpFraction,
+    defenderHpIsFull,
+    defenderHasStatusCondition,
+    defenderItemConsumed,
   } = options;
 
   const attackerForm = getEffectiveForm(attackerPokemon, attackerSlot);
@@ -334,10 +346,10 @@ export function evaluateSlotMatchup(
     defenderAbility,
     effectiveWeather,
     defenderItem,
-    // attackerHpFraction·defenderHpIsFull·defenderHasStatusCondition은 1턴 스냅샷이라 기본값 유지.
-    undefined,
-    undefined,
-    undefined,
+    // 매치업 페이지는 1턴 스냅샷이라 아래 세 값을 안 넘겨 기본값(풀피/상태이상 없음)을 쓴다.
+    attackerHpFraction,
+    defenderHpIsFull,
+    defenderHasStatusCondition,
     field,
   );
 
@@ -384,7 +396,13 @@ export function evaluateSlotMatchup(
 
   // 메트로놈(연속 사용 보너스)은 매치업 화면이 여러 턴 이력이 없는 1턴 스냅샷이라 스트릭=1(보너스 없음)로 고정.
   const autoItemMultiplier = getItemOffenseMultiplier(attackerItem, effectiveMove, typeEffectiveness, 1);
-  const berryResult = getBerryDefenseResult(defenderItem, effectiveMove.type, typeEffectiveness, false);
+  const berryResult = getBerryDefenseResult(
+    defenderItem,
+    effectiveMove.type,
+    typeEffectiveness,
+    defenderItemConsumed ?? false,
+    !!defenderAbility?.doublesBerryEffect, // 숙성 — 실전 엔진(hitResolution)과 같은 판정
+  );
 
   // 날씨/필드 데미지 배율은 (타입 변경까지 끝난) effectiveMove.type 기준으로 구한다 — battleSimulator와 동일.
   const autoWeatherDamageMultiplier = getWeatherDamageMultiplier(effectiveWeather, effectiveMove.type);
