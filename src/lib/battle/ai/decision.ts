@@ -1,6 +1,7 @@
 import type { AiOption } from "./evaluator";
 import { DEFAULT_THREAT_MODEL } from "./opponentMoveModel";
 import { PHASE3_EFFECT_KINDS } from "./statusMoveEffects";
+import { ALL_PROTECT_GROUPS, type ProtectGroup } from "./protectMoves";
 
 /**
  * decision-layer §9 파라미터(튜닝 대상) + extension §2-2 w_survival.
@@ -40,6 +41,8 @@ export interface DecisionParams {
   setupAware: boolean;
   /** 3단계 효과 변화기(날씨·필드·트릭룸·도발·앙코르·사슬묶기, §4-3)를 평가할지. false면 고르지 않는다(비교용) */
   phase3Aware: boolean;
+  /** 평가할 방어류 묶음(§4-4) — 빼면 그 묶음은 고르지 않는다(묶음별 비교용) */
+  protectGroups: readonly ProtectGroup[];
   /** 동률 처리 4순위를 "이번 턴 처치 가능한 공격기 > 그 외 기술 > 교체"로(§7). false면 이전 "기술 > 교체" */
   tieAttackFirst: boolean;
   /** 상대 기술 모델(§2-2): 의미 있는 변화기 1개당 사용 확률 */
@@ -67,6 +70,7 @@ export const DEFAULT_DECISION_PARAMS: DecisionParams = {
   setupAware: true,
   tieAttackFirst: true,
   phase3Aware: true,
+  protectGroups: ALL_PROTECT_GROUPS,
   // §2-2 튜닝값 — 근거는 DEFAULT_THREAT_MODEL 주석
   threatStatusWeight: DEFAULT_THREAT_MODEL.statusWeight,
   threatSharpness: DEFAULT_THREAT_MODEL.sharpness,
@@ -197,6 +201,25 @@ function batonFollowUpValue(option: AiOption): number {
   return -selfCost - follow.hitLoss + best;
 }
 
+/**
+ * 방어류(decision-layer §4-4): 성공하면 상대 행동별 엔진 시뮬레이션 결과를 확률로 섞고 — 그 턴의 HP 변화(턴 종료
+ * 효과·접촉 페널티·버티기·길동무) + 둘 다 살아 있으면 이어지는 대면(이번 턴은 양쪽 다 행동을 쓴 셈이라 lost=0).
+ * 연속 사용으로 실패하면 아무것도 안 하고 맞는 대면(lost=1).
+ */
+function protectValue(option: AiOption): number {
+  const protect = option.support!.protect!;
+  if (protect.pointless || protect.outcomes.length === 0) return -Infinity;
+  const my = option.hpFraction;
+  const opp = option.opponentHpFraction;
+  const success = protect.outcomes.reduce((sum, o) => {
+    const rest = o.race ? raceValue(o.race.killTurns, o.race.survivalTurns, o.race.firstProbability, o.myAfter, o.oppAfter, 0) : 0;
+    return sum + o.weight * (opp - o.oppAfter - (my - o.myAfter) + rest);
+  }, 0);
+  const { base } = protect;
+  const fail = raceValue(base.killTurns, base.survivalTurns, base.firstProbability, my, opp, 1);
+  return protect.successChance * success + (1 - protect.successChance) * fail;
+}
+
 /** 랭크업기: 올린 뒤 직접 싸우는 값과 올린 뒤 배턴터치로 넘기는 값 중 큰 쪽 */
 function setupValue(option: AiOption, params: DecisionParams): number {
   const self = effectValue(option, params);
@@ -212,6 +235,11 @@ function tradeScore(option: AiOption, riskAversion: number, params: DecisionPara
   if (option.support) {
     const { kind, after, bestKillTurns, healedHpFraction } = option.support;
     if (kind === "other") return -Infinity;
+    if (kind === "protect") {
+      const group = option.support.protect?.group;
+      if (!group || !params.protectGroups.includes(group)) return -Infinity;
+      return protectValue(option) - riskPenalty;
+    }
     if (kind === "effect") {
       const effectKind = option.support.effect?.kind;
       if (!params.phase3Aware && effectKind && PHASE3_EFFECT_KINDS.has(effectKind)) return -Infinity;
@@ -273,6 +301,9 @@ export function scoreOption(option: AiOption, riskAversion: number, params: Deci
  */
 function actionTempoRank(option: AiOption, attackFirst: boolean): number {
   if (option.optionType === "switch") return 2;
+  // 방어류는 동률이면 다른 기술보다 뒤 — 턴 종료 효과 등 뚜렷한 이득이 없으면 "둘 다 한 턴 쉼"이라 공격과 점수가
+  // 같아지는데, 그럴 때 방어를 고르면 의미 없는 방어가 반복된다(§4-4).
+  if (option.support?.kind === "protect") return 1.5;
   const killsNow = option.move?.category !== "status" && option.hitsToKill.expected <= 1;
   return attackFirst && !killsNow ? 1 : 0;
 }

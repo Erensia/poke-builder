@@ -262,6 +262,44 @@ try {
     taunt.b.volatile = { active: { taunt: { turnsRemaining: 2 } } };
     check("도발 계산 + 이미 도발이면 실패", tn?.kind === "taunt" && dec.scoreOption(opt(ev.evaluateOptions(taunt, "a"), "도발"), 0.5) === -Infinity);
   }
+  // ── 방어류(§4-4 엔진 한 턴 시뮬레이션) ──
+  {
+    const protectOpt = (st, id) => opt(ev.evaluateOptions(st, "a"), id);
+    // 방어: 맹독 상대 → 방어 턴에 상대만 맹독 데미지, 연속 사용이면 성공 확률 1/3
+    const toxic = battle([mon("잠만보", ["방어", "누르기"], null, null, pts({ hp: 32, def: 32 }))], [mon("한카리아스", ["역린"], null, null, pts({ atk: 32 }))]);
+    toxic.b.status = { condition: "badly-poisoned", turnsElapsed: 3 };
+    const tp = protectOpt(toxic, "방어").support?.protect;
+    check("방어: 맹독 상대 HP만 깎임", tp?.group === "block" && tp.outcomes.every((o) => o.oppAfter < 1 && o.myAfter === 1), tp?.outcomes.map((o) => `나${o.myAfter.toFixed(2)} 상대${o.oppAfter.toFixed(2)}`).join(" "));
+    toxic.a.protectStreak = 1;
+    check("방어 연속 사용 → 성공 1/3", Math.abs(protectOpt(toxic, "방어").support.protect.successChance - 1 / 3) < 1e-9);
+    // 패스트가드: 상대에게 선공기가 없으면 무의미, 있으면 평가
+    const guard = (oppMoves) =>
+      protectOpt(battle([mon("잠만보", ["패스트가드", "누르기"])], [mon("루카리오", oppMoves, null, null, pts({ atk: 32 }))]), "패스트가드").support.protect;
+    // (신속 + 인파이트면 모델이 약한 신속에 5% 미만을 줘서 후보에서 빠진다 — 선공기가 주력인 상대로 확인)
+    check("패스트가드: 선공기 없으면 무의미 / 신속이 주력이면 평가", guard(["인파이트"]).pointless === true && !guard(["신속", "칼춤"]).pointless);
+    // 버티기: 이번 턴 안 쓰러지면 무의미, 쓰러질 상황이면 HP 1로 버팀
+    const endure = (hpPts) =>
+      protectOpt(battle([mon("피카츄", ["버티기", "10만볼트"], null, null, pts({ hp: hpPts }))], [mon("한카리아스", ["지진"], null, null, pts({ atk: 32 }))]), "버티기").support.protect;
+    const lethal = endure(0);
+    check("버티기: 쓰러질 상황이면 HP 1로 버팀", !lethal.pointless && lethal.outcomes.some((o) => o.myAfter > 0 && o.myAfter < 0.05), lethal.outcomes.map((o) => o.myAfter.toFixed(3)).join(","));
+    const safe = protectOpt(battle([mon("잠만보", ["버티기", "누르기"], null, null, pts({ hp: 32, def: 32 }))], [mon("피카츄", ["전광석화"])]), "버티기").support.protect;
+    check("버티기: 이번 턴 안 쓰러지면 무의미", safe.pointless === true);
+    // 길동무: 내가 먼저 움직이고 이번 턴 쓰러지면 상대도 기절
+    const bond = protectOpt(
+      battle([mon("팬텀", ["길동무", "섀도볼"], null, null, pts({ spe: 32 }))], [mon("마기라스", ["깨물어부수기"], null, null, pts({ atk: 32 }))]),
+      "길동무",
+    ).support.protect;
+    check("길동무: 먼저 움직이고 쓰러지면 동반 기절", bond.group === "destinyBond" && bond.outcomes.some((o) => o.myAfter === 0 && o.oppAfter === 0), bond.outcomes.map((o) => `나${o.myAfter.toFixed(2)} 상대${o.oppAfter.toFixed(2)}`).join(" "));
+    // 킹실드: 접촉기를 막으면 상대 공격 −1 → 이어지는 대면에서 d 증가
+    const shield = protectOpt(
+      battle([mon("킬가르도", ["킹실드", "섀도볼"], null, null, pts({ hp: 32 }))], [mon("한카리아스", ["역린"], null, null, pts({ atk: 32 }))]),
+      "킹실드",
+    ).support;
+    const shieldBase = shield.protect.base.survivalTurns;
+    check("킹실드: 접촉기 막고 상대 공격 −1 → d 증가", shield.protect.group === "punish" && shield.protect.outcomes.some((o) => o.race && o.race.survivalTurns > shieldBase), `기본 d=${shieldBase.toFixed(2)} → ${shield.protect.outcomes.map((o) => o.race?.survivalTurns.toFixed(2)).join(",")}`);
+    // 방어류 끄기(protectGroups)
+    check("protectGroups에서 빼면 고르지 않음", dec.scoreOption(protectOpt(toxic, "방어"), 0.5, { ...dec.DEFAULT_DECISION_PARAMS, protectGroups: [] }) === -Infinity);
+  }
   // 첫 턴 전용 기술(만나자마자): 등장 후 행동했으면 옵션·상대 위협에서 모두 빠진다(사용자 발견 버그)
   {
     const st = battle(
@@ -321,6 +359,19 @@ try {
       "awaitingSelfSwitch" in paused && chillyAct?.weatherSetFailed === true && chillySwitch?.returnsToTrainer === true && resumed.nextState.sideA.activeIndex === 1,
       `paused=${"awaitingSelfSwitch" in paused} failed=${chillyAct?.weatherSetFailed} 교체=${chillySwitch?.returnsToTrainer}`,
     );
+    // 공격기의 랭크 변화는 맞았을 때만(방어로 막힘·빗나감·상성 무효면 없음)
+    const overheat = (defMoves, rngValue) => {
+      const s = battle([mon("히트로토무", ["오버히트"], null, null, pts({ spa: 32, hp: 32 }))], [mon("잠만보", defMoves, null, null, pts({ hp: 32 }))]);
+      const out = rt.runTurn(s, moveAction("오버히트"), moveAction(defMoves[0]), () => rngValue);
+      return out.nextState.a.stages.spa;
+    };
+    const blocked = overheat(["방어"], 0.5);
+    const landed = overheat(["칼춤"], 0.5);
+    const missed = overheat(["칼춤"], 0.95);
+    check("오버히트: 방어로 막힘·빗나감 → 특공 유지, 명중 → −2", blocked === 0 && missed === 0 && landed === -2, `막힘=${blocked} 빗나감=${missed} 명중=${landed}`);
+    const cc = battle([mon("루카리오", ["인파이트"], null, null, pts({ atk: 32 }))], [mon("팬텀", ["칼춤"], null, null, pts({ hp: 32 }))]);
+    const ccOut = rt.runTurn(cc, moveAction("인파이트"), moveAction("칼춤"), rng);
+    check("인파이트 vs 고스트(무효) → 방어·특방 유지", ccOut.nextState.a.stages.def === 0 && ccOut.nextState.a.stages.spd === 0, `def=${ccOut.nextState.a.stages.def}`);
     // 같은 날씨 특성으로 등장 → 턴 재충전 없음
     const entry = battle([mon("한카리아스", ["칼춤"]), mon("패리퍼", ["비바라기"], "잔비")], [mon("한카리아스", ["칼춤"])]);
     entry.weather = "비";

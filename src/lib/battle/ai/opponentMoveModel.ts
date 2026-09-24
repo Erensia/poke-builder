@@ -24,6 +24,8 @@ export interface OpponentThreat {
   bestMove?: Move;
   /** 상대가 최선 공격기만 쓸 때 한 턴에 깎이는 내 HP(최대 HP 대비, 명중률 포함) — 회복 루프 판정용 보수적 값 */
   bestHitFraction: number;
+  /** 기술별 사용 확률(의미 있는 변화기 + 공격기, 합 ≤ 1) — 방어류 시뮬레이션에서 상대 행동을 섞을 때 쓴다(§4-4) */
+  moveWeights: { move: Move; weight: number }[];
 }
 
 /** 상대가 지금 고를 수 있는 기술(남은 PP > 0) */
@@ -174,7 +176,7 @@ export function evaluateOpponentThreat(ctx: ThreatContext): OpponentThreat {
   const targetTypes = ctx.targetTypes ?? target.types;
   const targetHp = ctx.targetHp ?? target.currentHp;
 
-  let statusCount = 0;
+  const meaningfulStatus: Move[] = [];
   let riskFlag = false;
   const attacks: { move: Move; estimate: MoveHitEstimate; rate: number }[] = [];
   let defensiveMatchup = 0;
@@ -188,7 +190,7 @@ export function evaluateOpponentThreat(ctx: ThreatContext): OpponentThreat {
       const wasted =
         isWastedStatusMove(move, opponent, target, targetTypes, targetSide) ||
         (threatModel.strictWaste && isPointlessNow(state, move, opponent, target));
-      if (!wasted) statusCount++;
+      if (!wasted) meaningfulStatus.push(move);
       continue;
     }
     const estimate = estimateMoveHits(
@@ -201,7 +203,7 @@ export function evaluateOpponentThreat(ctx: ThreatContext): OpponentThreat {
     attacks.push({ move, estimate, rate: 1 / estimate.expected });
   }
 
-  const remainingWeight = Math.max(0, 1 - statusCount * threatModel.statusWeight);
+  const remainingWeight = Math.max(0, 1 - meaningfulStatus.length * threatModel.statusWeight);
   // 공격기 사용 확률 ∝ 데미지^k (k = sharpness, 1이면 v1의 데미지 비례)
   const shares = attacks.map((a) => a.rate ** threatModel.sharpness);
   const totalShare = shares.reduce((sum, s) => sum + s, 0);
@@ -222,5 +224,9 @@ export function evaluateOpponentThreat(ctx: ThreatContext): OpponentThreat {
     defensiveMatchup,
     bestMove: best?.move,
     bestHitFraction: best ? Math.min(1, best.rate) * (targetHp / target.maxHp) : 0,
+    moveWeights: [
+      ...meaningfulStatus.map((move) => ({ move, weight: Math.min(threatModel.statusWeight, 1 / meaningfulStatus.length) })),
+      ...attacks.map((a, i) => ({ move: a.move, weight: totalShare > 0 ? (shares[i] / totalShare) * remainingWeight : 0 })),
+    ],
   };
 }

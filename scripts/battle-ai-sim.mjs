@@ -15,6 +15,7 @@
  * 환경변수 PIVOT=1: 유턴류를 배울 수 있는 포켓몬은 기술 하나를 유턴류로 바꿔 파티를 만든다(유턴 판단 검증용)
  * 환경변수 SETUP=1: 랭크업기·배턴터치를 배울 수 있으면 기술 두 개를 그걸로 바꾼다(랭크업·배턴터치 연계 검증용).
  *     diag 모드에 DIAG=setup을 주면 랭크업기·배턴터치를 고른 순간을 덤프한다.
+ * 환경변수 PROTECT=1: 방어류를 배울 수 있으면 4번째 기술을 방어류로 바꾼다. DIAG=protect면 방어류를 고른 순간을 덤프.
  * 환경변수 STATUS=1: AI가 점수 매기는 변화기를 배울 수 있으면 기술 하나를 그걸로 바꾼다(변화기 판단 검증용).
  *     diag 모드에 DIAG=status를 주면 그 변화기를 고른 순간을 덤프한다.
  *     (PowerShell에서는 JSON 따옴표를 '{\"scoring\":\"spec\"}' 처럼 이스케이프)
@@ -52,8 +53,12 @@ try {
   const ev = mode === "regress" ? null : await server.ssrLoadModule("/src/lib/battle/ai/evaluator.ts");
   const fx = await server.ssrLoadModule("/src/lib/battle/ai/statusMoveEffects.ts");
   // 변화기 종류 라벨(집계용)
-  const statusLabel = (m) =>
-    fx.effectKindOf(m) ?? (fx.isBatonPass(m) ? "batonPass" : m.healsFraction || m.healsWeatherDependent || m.restSleep ? "heal" : "setup");
+  const pm = await server.ssrLoadModule("/src/lib/battle/ai/protectMoves.ts");
+  const statusLabel = (m) => {
+    const group = pm.protectGroupOf(m);
+    if (group) return `protect:${group}`;
+    return fx.effectKindOf(m) ?? (fx.isBatonPass(m) ? "batonPass" : m.healsFraction || m.healsWeatherDependent || m.restSleep ? "heal" : "setup");
+  };
 
   const heldItems = data.ITEMS.filter((i) => i.category === "held-item");
   const pool = data.POKEMON.filter((p) => (p.learnset ?? []).filter((m) => data.getMove(m)).length >= 4);
@@ -83,6 +88,11 @@ try {
       });
       if (setups.length) moves[1] = pick(rng, setups);
       if (learn.includes("배턴터치") && !moves.includes("배턴터치")) moves[2] = "배턴터치";
+    }
+    // PROTECT=1: 방어류를 배울 수 있으면 4번째 기술을 방어류로 바꾼다(방어류 판단 검증용)
+    if (process.env.PROTECT === "1") {
+      const protects = learn.filter((m) => pm.protectGroupOf(data.getMove(m)) && !moves.includes(m));
+      if (protects.length) moves[3] = pick(rng, protects);
     }
     if (process.env.STATUS === "1") {
       const designed = learn.filter((m) => fx.isDesignedStatusMove(data.getMove(m)) && !moves.includes(m));
@@ -184,7 +194,9 @@ try {
     const wantDump = (d) =>
       process.env.DIAG === "pivot"
         ? d.action.kind === "move" && !!d.action.move.selfSwitchAfterDamage
-        : process.env.DIAG === "setup"
+        : process.env.DIAG === "protect"
+          ? d.action.kind === "move" && !!pm.protectGroupOf(d.action.move)
+          : process.env.DIAG === "setup"
           ? d.action.kind === "move" && ["setup", "batonPass"].includes(statusLabel(d.action.move)) && d.action.move.category === "status"
           : process.env.DIAG === "status"
           ? d.action.kind === "move" && fx.isDesignedStatusMove(d.action.move)
@@ -203,6 +215,17 @@ try {
             `  ${s.option === d.chosen ? "*" : " "} ${label.padEnd(12)} score=${fmt(s.score)} c=${fmt(o.hitsToKill.expected)} d=${fmt(o.hitsToBeKilled.expected)} first=${o.firstProbability.toFixed(2)} entry=${o.entryCost}` +
               (o.support?.effect
                 ? ` | 적용후 c=${fmt(o.support.effect.hit.killTurns)} d=${fmt(o.support.effect.hit.survivalTurns)} p=${o.support.effect.hit.firstProbability.toFixed(2)} 원래 c=${fmt(o.support.effect.base.killTurns)} d=${fmt(o.support.effect.base.survivalTurns)} 명중=${o.support.effect.hitChance.toFixed(2)} 이월=${fmt(o.support.effect.carry)}`
+                : "") +
+              (o.support?.protect
+                ? ` | ${o.support.protect.group} 성공=${o.support.protect.successChance.toFixed(2)}${o.support.protect.pointless ? " 무의미" : ""} ` +
+                  o.support.protect.outcomes
+                    .map(
+                      (x) =>
+                        `[w${x.weight.toFixed(2)} 나${x.myAfter.toFixed(2)} 상대${x.oppAfter.toFixed(2)}` +
+                        (x.race ? ` c${fmt(x.race.killTurns)} d${fmt(x.race.survivalTurns)} p${x.race.firstProbability.toFixed(2)}` : "") +
+                        "]",
+                    )
+                    .join("")
                 : ""),
           );
         }

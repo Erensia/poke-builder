@@ -35,6 +35,14 @@ import {
   type EffectMoveKind,
 } from "./statusMoveEffects";
 import { isOneShotMove, isUsageBlocked } from "./usageConditions";
+import {
+  hasPriorityThreat,
+  opponentActionMix,
+  protectGroupOf,
+  protectSuccessChance,
+  simulateProtectTurn,
+  type ProtectGroup,
+} from "./protectMoves";
 import { estimateMoveHits, type MoveHitEstimate } from "./moveDamage";
 import { allowedByVolatiles, evaluateOpponentThreat, usableMoves, type OpponentThreat } from "./opponentMoveModel";
 import { blockedTurns, turnsToKo } from "./turnRates";
@@ -46,7 +54,27 @@ export type SpeedOrder = "first" | "second" | "speed_tie";
  * 데미지 없는 변화기 옵션의 종류(extension §2-2, decision-layer §4-1).
  * effect = 상태이상 부여·상대 랭크다운·벽·설치기 — "효과를 적용한 state로 대면을 다시 평가"해서 점수를 매긴다.
  */
-export type SupportKind = "heal" | "setup" | "effect" | "other";
+export type SupportKind = "heal" | "setup" | "effect" | "protect" | "other";
+
+/** 방어류 시뮬레이션 한 갈래(상대 행동 1개): 그 턴이 끝난 뒤 양쪽 HP 비율과, 둘 다 살아 있으면 이어지는 대면 */
+export interface ProtectOutcome {
+  weight: number;
+  myAfter: number;
+  oppAfter: number;
+  race?: RaceInputs;
+}
+
+/** 방어류 평가(decision-layer §4-4) */
+export interface ProtectEvaluation {
+  group: ProtectGroup;
+  /** 연속 사용 성공 확률 (1/3)^연속 횟수 */
+  successChance: number;
+  outcomes: ProtectOutcome[];
+  /** 실패했을 때(연속 사용) = 아무것도 안 하고 맞는 대면 */
+  base: RaceInputs;
+  /** 묶음별 판정으로 쓸 이유가 없음(패스트가드: 막을 선공기 없음, 버티기: 이번 턴 쓰러질 일 없음) */
+  pointless?: boolean;
+}
 
 /** 현재 대면을 끝까지 이어갈 때의 c(처치 턴)·d(피처치 턴)·p(선공 확률) — 내 최선 공격기 기준 */
 export interface RaceInputs {
@@ -117,6 +145,8 @@ export interface AiOption {
     /** 회복기: 회복량 − 회복에 쓴 턴 동안 맞는 양(HP 비율). 0 이하면 회복 루프 — statusAware일 때 고르지 않는다 */
     healNetGain?: number;
     effect?: EffectEvaluation;
+    /** 방어류: 엔진 한 턴 시뮬레이션 결과(§4-4) */
+    protect?: ProtectEvaluation;
     /** 랭크업기: 올린 뒤 다음 턴 배턴터치로 넘기는 선택지(배턴터치 보유 + 교대 가능할 때만) */
     batonFollowUp?: BatonFollowUp;
     /** 랭크업기: 이미 +6·HP 부족 등으로 실패 — statusAware일 때 고르지 않는다 */
@@ -351,6 +381,52 @@ function evaluateSetupMove(ctx: SetupContext): { effect?: EffectEvaluation; bato
   };
 }
 
+interface ProtectContext {
+  /** 메가진화 전 원래 state — 시뮬레이션은 mega 플래그로 엔진이 직접 메가진화시킨다 */
+  state: BattleState;
+  /** 평가 기준 state(메가진화 반영) — 실패 시 대면 계산용 */
+  moveState: BattleState;
+  key: FighterKey;
+  move: Move;
+  mega: boolean | undefined;
+  raceMoves: Move[];
+  threat: OpponentThreat;
+}
+
+/**
+ * 방어류 "엔진 한 턴 시뮬레이션 + 재평가"(decision-layer §4-4): 상대 행동 후보(사용 확률 모델)마다 실제 runTurn을
+ * 한 번 돌려, 턴 종료 효과·접촉 페널티·버티기·길동무까지 엔진이 처리한 결과 state에서 대면을 다시 계산한다.
+ */
+function evaluateProtectMove(ctx: ProtectContext): ProtectEvaluation {
+  const { state, key, move } = ctx;
+  const group = protectGroupOf(move)!;
+  const oppKey = opponentKey(key);
+  const base = currentRace(ctx.moveState, key, ctx.raceMoves);
+  const successChance = protectSuccessChance(state[key].protectStreak);
+  const mix = opponentActionMix(ctx.threat.moveWeights);
+  if (mix.length === 0 || (group === "priorityGuard" && !hasPriorityThreat(mix))) {
+    return { group, successChance, outcomes: [], base, pointless: true };
+  }
+  const myIndex = sideOf(state, key).activeIndex;
+  const oppIndex = sideOf(state, oppKey).activeIndex;
+  let endured = false;
+  const outcomes = mix.map(({ move: opponentMove, weight }): ProtectOutcome => {
+    const after = simulateProtectTurn(state, key, move, opponentMove, ctx.mega);
+    const me = sideOf(after, key).party[myIndex];
+    const opponent = sideOf(after, oppKey).party[oppIndex];
+    if (me.currentHp === 1 && state[key].currentHp > 1) endured = true;
+    const myAfter = me.currentHp / me.maxHp;
+    const oppAfter = opponent.currentHp / opponent.maxHp;
+    // 양쪽 다 살아 있고 그대로 대면 중일 때만 이어지는 대면을 계산한다(강제 교체 등으로 바뀌었으면 HP 변화만 센다)
+    const sameMatchup = sideOf(after, key).activeIndex === myIndex && sideOf(after, oppKey).activeIndex === oppIndex;
+    const race = myAfter > 0 && oppAfter > 0 && sameMatchup ? currentRace(after, key, ctx.raceMoves) : undefined;
+    return { weight, myAfter, oppAfter, race };
+  });
+  // 버티기: 어느 상대 행동에서도 HP 1로 버틸 일이 없으면(이번 턴 안 쓰러짐) 쓸 이유가 없다
+  const pointless = group === "endure" && !endured;
+  return { group, successChance, outcomes, base, pointless };
+}
+
 /** 지금 교대로 내보낼 수 있는 슬롯(활성 아님 + 안 쓰러짐) */
 function benchIndices(side: BattleSide): number[] {
   return side.party.map((_, i) => i).filter((i) => i !== side.activeIndex && !isFainted(side.party[i]));
@@ -566,7 +642,16 @@ export function evaluateOptions(state: BattleState, key: FighterKey, options: Ev
     if (move.category === "status") {
       const kind = classifySupport(move);
       const bestKillTurns = turnsFor(myBest?.estimate, me, opponent).expected;
-      if (kind === "heal" && move.restSleep) {
+      if (protectGroupOf(move)) {
+        option.support = {
+          kind: "protect",
+          before: 0,
+          after: 0,
+          bestKillTurns,
+          protect: evaluateProtectMove({ state, moveState, key, move, mega: option.mega, raceMoves, threat }),
+          extended: true,
+        };
+      } else if (kind === "heal" && move.restSleep) {
         // 잠자기: HP·상태이상 완전 회복 + 2턴 잠듦 — 잠든 상태로 대면을 다시 평가한다(잠든 턴은 turnsToKo가 더함).
         const rested = cloneBattleState(moveState);
         rested[key].currentHp = me.maxHp;
