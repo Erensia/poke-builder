@@ -55,6 +55,8 @@ export const DEFAULT_DECISION_PARAMS: DecisionParams = {
 export interface ScoredOption {
   option: AiOption;
   score: number;
+  /** 점수 계산 결과가 NaN이라 −∞로 바꿨음(계산 결함 신호 — sim:ai ai 모드가 센다) */
+  nan?: boolean;
 }
 
 /** 선공 +0.5 / 동속 0 / 후공 −0.5 — 선제공격손톱 확률까지 선형으로 섞인다(extension §3-4) */
@@ -220,7 +222,11 @@ export function decide(
   params: DecisionParams = DEFAULT_DECISION_PARAMS,
 ): { chosen: AiOption; scored: ScoredOption[] } | null {
   if (options.length === 0) return null;
-  const scored = options.map((option) => ({ option, score: scoreOption(option, riskAversion, params) }));
+  // NaN 점수는 비교가 전부 false라 후보가 하나도 안 남는다 — 계산 결함이 있어도 배틀이 멈추지 않게 선택 불가로 본다.
+  const scored = options.map((option) => {
+    const score = scoreOption(option, riskAversion, params);
+    return Number.isNaN(score) ? { option, score: -Infinity, nan: true } : { option, score };
+  });
 
   const override = options.find(isHardOverride);
   if (override) return { chosen: override, scored };

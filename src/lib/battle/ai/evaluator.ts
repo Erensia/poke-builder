@@ -31,6 +31,7 @@ import {
   isBatonPass,
   screenDuration,
 } from "./statusMoveEffects";
+import { isOneShotMove, isUsageBlocked } from "./usageConditions";
 import { estimateMoveHits, type MoveHitEstimate } from "./moveDamage";
 import { evaluateOpponentThreat, usableMoves, type OpponentThreat } from "./opponentMoveModel";
 import { blockedTurns, turnsToKo } from "./turnRates";
@@ -134,9 +135,17 @@ function canMegaEvolve(state: BattleState, key: FighterKey): boolean {
   return !sideOf(state, key).megaUsed && !fighter.hasMegaEvolved && !!fighter.megaStone && !isFainted(fighter);
 }
 
-/** 사람이 고를 수 있는 기술과 같은 기준(PP > 0, 도발 중 변화기·사슬묶기·앵콜 제외) */
-export function selectableMoves(fighter: BattleFighterState, legalMoveIds?: string[]): Move[] {
-  const moves = usableMoves(fighter);
+/**
+ * 사람이 고를 수 있는 기술과 같은 기준(PP > 0, 도발 중 변화기·사슬묶기·앵콜 제외) + 이번 턴 사용 조건 때문에
+ * 반드시 실패하는 기술 제외(첫 턴 전용·필드/날씨 필요·비장의무기 등, usageConditions.ts).
+ */
+export function selectableMoves(
+  state: BattleState,
+  fighter: BattleFighterState,
+  opponent: BattleFighterState,
+  legalMoveIds?: string[],
+): Move[] {
+  const moves = usableMoves(fighter).filter((m) => !isUsageBlocked(state, fighter, m, opponent));
   if (legalMoveIds) return moves.filter((m) => legalMoveIds.includes(m.id));
   const { taunt, disable, encore } = fighter.volatile.active;
   return moves.filter((m) => {
@@ -233,7 +242,8 @@ function evaluateSwitchCandidate(state: BattleState, key: FighterKey, index: num
     attacker: candidate,
     defender: opponent,
     defenderSide: oppSide,
-    moves: usableMoves(candidate),
+    // 교체 후 대면을 끝까지 이어가는 계산이라 1회용(첫 턴 전용) 기술은 뺀다.
+    moves: usableMoves(candidate).filter((m) => !isOneShotMove(m) && !isUsageBlocked(state, candidate, m, opponent)),
     attackerMovesSecond: false,
     defenderHp: oppHp,
   });
@@ -311,6 +321,7 @@ interface EffectContext {
   state: BattleState;
   key: FighterKey;
   move: Move;
+  /** 대면을 이어갈 때 쓰는 내 기술(1회용 기술 제외) */
   myMoves: Move[];
   /** 이 변화기 자체의 선공 확률 — 벽이 이번 턴 상대 공격부터 막는지 */
   moveFirstProbability: number;
@@ -385,10 +396,12 @@ export function evaluateOptions(state: BattleState, key: FighterKey, options: Ev
   const opponent = moveState[oppKey];
   const myMoveSide = sideOf(moveState, key);
   const oppMoveSide = sideOf(moveState, oppKey);
-  const myMoves = selectableMoves(me, options.legalMoveIds);
+  const myMoves = selectableMoves(moveState, me, opponent, options.legalMoveIds);
+  // 대면을 끝까지 이어가는 계산(c)에 쓰는 기술 — 1회용(첫 턴 전용) 기술은 반복해서 쓸 수 없으니 뺀다.
+  const raceMoves = myMoves.filter((m) => !isOneShotMove(m));
 
   const baseThreat = evaluateOpponentThreat({ state: moveState, opponent, target: me, targetSide: myMoveSide, opponentMovesSecond: false });
-  const myBest = bestAttack({ state: moveState, attacker: me, defender: opponent, defenderSide: oppMoveSide, moves: myMoves, attackerMovesSecond: false });
+  const myBest = bestAttack({ state: moveState, attacker: me, defender: opponent, defenderSide: oppMoveSide, moves: raceMoves, attackerMovesSecond: false });
   const bench = benchIndices(mySide);
   let benchCache: AiOption[] | undefined;
   const benchOptions = () => (benchCache ??= bench.map((index) => evaluateSwitchCandidate(state, key, index)));
@@ -427,6 +440,23 @@ export function evaluateOptions(state: BattleState, key: FighterKey, options: Ev
       accuracy: estimate?.accuracy ?? 0,
     };
 
+    // 1회용(첫 턴 전용) 기술: 이번 턴 한 번 맞히고, 그 뒤는 나머지 기술 중 최선으로 대면을 이어간다.
+    if (isOneShotMove(move) && estimate && Number.isFinite(estimate.rawHits) && estimate.rawHits > 1) {
+      const opponentHpAfter = Math.max(1, Math.round(opponent.currentHp * (1 - 1 / estimate.rawHits)));
+      const follow = (hp?: number) =>
+        turnsFor(
+          bestAttack({ state: moveState, attacker: me, defender: opponent, defenderSide: oppMoveSide, moves: raceMoves, attackerMovesSecond: iMoveSecond, defenderHp: hp })?.estimate,
+          me,
+          opponent,
+          hp,
+        ).expected;
+      const acc = estimate.accuracy;
+      // 가중치 0인 항은 빼야 0 × ∞ = NaN이 안 생긴다(나머지 공격기가 없으면 후속 처치 턴이 ∞).
+      const afterHit = acc > 0 ? acc * follow(opponentHpAfter) : 0;
+      const afterMiss = acc < 1 ? (1 - acc) * follow() : 0;
+      option.hitsToKill = { ...option.hitsToKill, expected: 1 + afterHit + afterMiss };
+    }
+
     // 유턴류: 맞히면(상대 기절 여부 무관) 교대할 포켓몬이 있는 한 엔진이 교체를 강제한다. 한 방에 쓰러뜨리면
     // 다음 상대를 모르므로 일반 공격기로만 평가한다.
     if (move.selfSwitchAfterDamage && estimate && estimate.rawHits > 1 && Number.isFinite(estimate.rawHits) && bench.length > 0) {
@@ -448,7 +478,7 @@ export function evaluateOptions(state: BattleState, key: FighterKey, options: Ev
         const rested = cloneBattleState(moveState);
         rested[key].currentHp = me.maxHp;
         rested[key].status = inflictRestSleep();
-        const race = currentRace(rested, key, myMoves);
+        const race = currentRace(rested, key, raceMoves);
         option.support = {
           kind,
           before: threat.hitsToBeKilled.expected,
@@ -482,7 +512,7 @@ export function evaluateOptions(state: BattleState, key: FighterKey, options: Ev
           state: moveState,
           key,
           move,
-          myMoves,
+          myMoves: raceMoves,
           moveFirstProbability: speed.probability,
           benchOptions: () => benchOptions(),
         });
@@ -509,7 +539,7 @@ export function evaluateOptions(state: BattleState, key: FighterKey, options: Ev
           attacker: me,
           defender: opponent,
           defenderSide: oppMoveSide,
-          moves: myMoves,
+          moves: raceMoves,
           attackerMovesSecond: iMoveSecond,
           stagesOverride: boosted,
         });

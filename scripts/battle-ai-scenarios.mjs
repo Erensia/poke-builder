@@ -175,6 +175,29 @@ try {
       `c 이어받음=${o.pivot?.candidates[0].hitsToKill.expected.toFixed(2)} 일반교체=${plain.hitsToKill.expected.toFixed(2)}`,
     );
   }
+  // 첫 턴 전용 기술(만나자마자): 등장 후 행동했으면 옵션·상대 위협에서 모두 빠진다(사용자 발견 버그)
+  {
+    const st = battle(
+      [mon("갑주무사", ["만나자마자", "아쿠아브레이크", "시저크로스"], null, null, pts({ atk: 32, spe: 32 }))],
+      [mon("보만다", ["역린", "지진", "만나자마자"].filter((m) => data.getMove(m)), null, null, pts({ atk: 32, spe: 32 }))],
+    );
+    const first = opt(ev.evaluateOptions(st, "a"), "만나자마자");
+    const firstRaw = ev.evaluateOptions(st, "a").find((o) => o.move?.id === "시저크로스");
+    check(
+      "등장 첫 턴 → 만나자마자 선택 가능(이후는 다른 기술로 이어감)",
+      !!first && first.hitsToKill.expected > 1 && Number.isFinite(first.hitsToKill.expected),
+      `c=${first?.hitsToKill.expected.toFixed(2)} 시저크로스 c=${firstRaw?.hitsToKill.expected.toFixed(2)}`,
+    );
+    st.a.hasActedSinceSwitchIn = true;
+    st.b.hasActedSinceSwitchIn = true;
+    const later = ev.evaluateOptions(st, "a");
+    const d = ai.chooseAiAction(st, "a", 0.5);
+    check(
+      "첫 턴 이후 → 만나자마자 제외",
+      !opt(later, "만나자마자") && !(d.action.kind === "move" && d.action.move.id === "만나자마자"),
+      JSON.stringify(d.action.kind === "move" ? d.action.move.id : d.action),
+    );
+  }
   // 상대가 나에게 데미지를 줄 수단이 없을 때(+Infinity 점수)
   {
     const st = battle([mon("팬텀", ["10만볼트"])], [mon("한카리아스", ["지진"])]);

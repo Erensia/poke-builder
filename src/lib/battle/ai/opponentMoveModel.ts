@@ -7,6 +7,7 @@ import { isOpponentTargetingMove } from "@/lib/fieldEffects";
 import { abilityOf, type BattleFighterState, type BattleSide, type BattleState } from "../state";
 import { estimateMoveHits, type MoveHitEstimate } from "./moveDamage";
 import { turnsToKo } from "./turnRates";
+import { isUsageBlocked } from "./usageConditions";
 import type { HitsEstimate } from "./types";
 
 /** 변화기 1개당 사용 확률(decision-layer §2·§9 초기값) */
@@ -113,7 +114,8 @@ export function evaluateOpponentThreat(ctx: ThreatContext): OpponentThreat {
   const attacks: { move: Move; estimate: MoveHitEstimate; rate: number }[] = [];
   let defensiveMatchup = 0;
 
-  for (const move of usableMoves(opponent)) {
+  // 이번 턴 사용 조건 때문에 반드시 실패하는 기술(첫 턴이 지난 속이기·만나자마자 등)은 위협에서 뺀다.
+  for (const move of usableMoves(opponent).filter((m) => !isUsageBlocked(state, opponent, m, target))) {
     if (move.category === "status") {
       if (isOffensiveSetupMove(move)) riskFlag = true;
       if (!isWastedStatusMove(move, opponent, target, targetTypes, targetSide)) statusCount++;

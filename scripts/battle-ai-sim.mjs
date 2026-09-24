@@ -227,7 +227,7 @@ try {
     let nanScores = 0;
     const aiPolicy = (risk) => (st, key) => {
       const d = ai.chooseAiAction(st, key, risk, { decisionParams });
-      for (const s of d.scored) if (Number.isNaN(s.score)) nanScores++;
+      for (const s of d.scored) if (s.nan || Number.isNaN(s.score)) nanScores++;
       return d.action;
     };
     for (let s = 1; s <= battles; s++) {
