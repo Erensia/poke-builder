@@ -12,7 +12,7 @@ import { hitTriggerMatchesMove } from "@/lib/abilityHitTriggers";
 import { critChance } from "@/lib/accuracyCrit";
 import { computeStatusAttackMultiplier, ignoresBurnAttackPenalty, inflictStatus, isImmuneToStatus } from "@/lib/statusConditions";
 import { hasVolatile, inflictVolatile } from "@/lib/volatileConditions";
-import { computeDamage, hustleDamageMultiplier, screenMultiplierFromFlags } from "@/lib/battlePower";
+import { computeDamage, hustleDamageMultiplier, screenMultiplierFromFlags, supremeOverlordMultiplier } from "@/lib/battlePower";
 import { getWeatherDamageMultiplier } from "@/lib/weatherEffects";
 import { FIELD_DURATION, getFieldDamageMultiplier } from "@/lib/fieldEffects";
 import { getBerryDefenseResult, getDrainHealMultiplier, getEnduranceResult, getItemCritStageBonus, getItemOffenseMultiplier, getMentalHerbCureResult } from "@/lib/itemEffects";
@@ -153,6 +153,8 @@ export function resolveHitAndApplyDamage(input: HitResolutionInput) {
     );
     // 의욕(Hustle): 물리 기술 위력 ×1.5 (명중률 ×0.8은 위 accuracyExtraMultiplier에서 반영).
     const hustleMultiplier = hustleDamageMultiplier(effectiveMove.category, attackerAbility);
+    // 총대장: 등장 시 센 쓰러진 같은 편 수만큼 위력 ×(1 + 0.1 × 수).
+    const overlordMultiplier = supremeOverlordMultiplier(attackerAbility, attacker.supremeOverlordCount);
     // 메가솔라: 자신이 쓰는 기술의 날씨 배율을 항상 쾌청 기준으로(불꽃 ×1.5·물 ×0.5) 계산한다.
     const weatherMultiplier = getWeatherDamageMultiplier(
       attackerAbility?.treatsOwnWeatherAsSun ? "쾌청" : activeWeather(state),
@@ -220,7 +222,8 @@ export function resolveHitAndApplyDamage(input: HitResolutionInput) {
         hidingBypassMultiplier *
         ownMoveTypeBoostMultiplier *
         rivalryMultiplier *
-        hustleMultiplier,
+        hustleMultiplier *
+        overlordMultiplier,
       weatherMultiplier,
       fieldMultiplier,
       itemMultiplier: itemMultiplier * gemMultiplier,

@@ -174,7 +174,7 @@ function applyEntryHazardsOnSwitchIn(state: BattleState, key: FighterKey, log: s
  * createBattleState의 resolveEntryAbilityEffects는 양쪽을 스피드 순으로 동시에 처리하는
  * 배틀 시작 전용이라, 한 마리만 등장하는 교체용으로 이 단일 버전을 따로 둔다.
  * 처리: 위협(상대 랭크 하락) · 가뭄류(날씨) · 일렉트릭메이커류(필드) · 트레이스(상대 특성 복사) ·
- * 배리어프리(양쪽 편 스크린 제거, §6-3). (다운로드·기분파 등은 로스터에 없거나 다른 훅에서 처리.)
+ * 배리어프리(양쪽 편 스크린 제거, §6-3) · 총대장(쓰러진 같은 편 수, ver.1.8). (다운로드·기분파 등은 로스터에 없거나 다른 훅에서 처리.)
  */
 function applyEntryAbilityOnSwitchIn(state: BattleState, key: FighterKey, log: string[]): void {
   const self = state[key];
@@ -199,6 +199,19 @@ function applyEntryAbilityOnSwitchIn(state: BattleState, key: FighterKey, log: s
   if (ability.illusion) {
     const s = sideOf(state, key);
     self.illusionAs = computeIllusionTarget(s.party, s.activeIndex);
+  }
+
+  // 총대장: 지금까지 쓰러진 같은 편 수(상한 maxCount)를 세어 둔다 — 이후 공격 위력 배율(supremeOverlordMultiplier).
+  if (ability.powerBoostPerFaintedAlly) {
+    const count = Math.min(
+      sideOf(state, key).party.filter((member) => member !== self && isFainted(member)).length,
+      ability.powerBoostPerFaintedAlly.maxCount,
+    );
+    self.supremeOverlordCount = count;
+    if (count > 0) {
+      log.push(`${selfName}의 ${ability.name}!`);
+      log.push(`${selfName}${eunNeun(selfName)} 쓰러진 동료에게서 힘을 받았다!`);
+    }
   }
 
   // 위협류 (파수견·주눅 반응 포함)
@@ -379,6 +392,7 @@ export function performSwitch(
   outgoing.chargingMoveId = undefined;
   outgoing.lastMoveId = undefined;
   outgoing.lastMoveStreak = undefined;
+  outgoing.supremeOverlordCount = undefined;
   outgoing.stockpileCount = undefined;
   outgoing.perishCount = undefined;
   outgoing.destinyBondArmed = undefined;

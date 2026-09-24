@@ -222,11 +222,23 @@ export interface Ability {
    */
   weatherOpponentAccuracyMultiplier?: { weather: WeatherKind; multiplier: number };
   /**
+   * 갈지자걸음: 자신이 혼란 상태일 때 상대의 명중률에 곱해지는 배율(본가 4세대~ = 0.5).
+   * weatherOpponentAccuracyMultiplier(모래숨기)와 같은 extraMultiplier 축이라 랭크 기반 회피율과
+   * 중첩되고, 틀깨기류에 무시된다(방어측 특성 판정 경로가 같음).
+   */
+  confusedOpponentAccuracyMultiplier?: number;
+  /**
    * 복안: 자신이 쓰는 기술의 명중률에 곱해지는 배율(복안=1.3). weatherOpponentAccuracyMultiplier
    * (모래숨기, 방어측)와 같은 extraMultiplier 축이지만 방향이 반대 — 공격측이 지녔을 때 자기
    * 명중률을 올린다. 필중기(accuracy=null)는 computeHitChance가 그대로 null을 돌려줘 영향 없음.
    */
   userAccuracyMultiplier?: number;
+  /**
+   * 총대장: 등장 시점까지 쓰러진 같은 편 수(maxCount까지)만큼 자신의 공격 기술 위력에
+   * (1 + perFainted × 수)가 곱해진다. 수는 등장할 때 세서 물러날 때까지 고정(BattleFighterState.
+   * supremeOverlordCount) — 랭크가 아니라 위력 배율이라 랭크 UI에는 안 나온다.
+   */
+  powerBoostPerFaintedAlly?: { perFainted: number; maxCount: number };
   /**
    * 페어리오라(오라): 필드에 있는 아무 포켓몬(자신이든 상대든)이 이 특성을 지녔으면, 해당 타입
    * (페어리오라=페어리) 기술 전체의 위력에 이 배율이 곱해진다 — 공격측/방어측 어느 쪽이 지녔는지
