@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { MatchupSlotCard } from "./MatchupSlotCard";
 import { VerdictBadge } from "./VerdictBadge";
+import { DamageRollBlock } from "./DamageRollBlock";
 import { WeatherPicker } from "./WeatherPicker";
 import { FieldPicker } from "./FieldPicker";
 import { PokemonPickerModal } from "./PokemonPickerModal";
@@ -222,6 +223,8 @@ export function MatchupPage() {
           onSetScreen={defender.setScreen}
         />
       </div>
+
+      {fullResult && <DamageRollBlock offensePower={fullResult.offensePower} bulkPower={fullResult.bulkPower} />}
 
       {speedResult && (
         <div className="matchup-speed-block">

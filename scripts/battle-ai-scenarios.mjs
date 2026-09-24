@@ -379,6 +379,25 @@ try {
     const entered = sw.applySwitch(entry, "a", 1).nextState;
     check("같은 날씨 특성 등장 → 턴 유지", entered.weatherTurnsRemaining === 2, `남은턴=${entered.weatherTurnsRemaining}`);
   }
+  // ── 매치업 난수별 데미지(ver.1.7 트랙 H): 기존 격파 판정과 같은 관계식인지 대조 ──
+  {
+    const bp = await server.ssrLoadModule("/src/lib/battlePower.ts");
+    let mismatches = 0;
+    let checked = 0;
+    for (let i = 0; i < 2000; i++) {
+      const offense = 50 + ((i * 7919) % 400);
+      const bulk = 40 + ((i * 104729) % 300);
+      const rolls = bp.damageRollPercents(offense, bulk);
+      const chance = bp.evaluateMatchupChance(offense, bulk);
+      const ohko = rolls.filter((r) => r.percent + 1e-9 >= 100).length;
+      checked++;
+      if (chance.verdict === "guaranteed-1hit" && ohko !== 16) mismatches++;
+      if (chance.verdict === "random-1hit" && ohko !== chance.killingRolls[0]) mismatches++;
+      if ((chance.verdict === "guaranteed-2hit" || chance.verdict === "random-2hit" || chance.verdict === "needs-3hit-plus") && ohko !== 0) mismatches++;
+      if (chance.verdict === "needs-3hit-plus" && rolls[15].percent * 2 + 1e-9 >= 100) mismatches++;
+    }
+    check("난수별 데미지 % ↔ 격파 판정 일치(2000조합)", mismatches === 0, `불일치 ${mismatches}/${checked}`);
+  }
   // 상대가 나에게 데미지를 줄 수단이 없을 때(+Infinity 점수)
   {
     const st = battle([mon("팬텀", ["10만볼트"])], [mon("한카리아스", ["지진"])]);
