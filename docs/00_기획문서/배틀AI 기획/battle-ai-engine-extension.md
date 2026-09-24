@@ -81,7 +81,14 @@ if E[opponent_net_hp_loss_per_turn] <= 0:
 
 회복기는 `damage_i = 0`이라 `hits_to_kill.expected = INFINITE`가 되고, 기존 `exchange_advantage = hits_to_be_killed.expected − hits_to_kill.expected` 공식에 대입하면 `−∞`가 되어 **회복기가 항상 최하위 점수를 받아 절대 선택되지 않는 구조적 결함**이 있었다. `hits_to_kill.expected == INFINITE`인 옵션(회복기, 데미지 없는 자기강화기 전반)은 exchange_advantage 대신 전용 점수식을 쓴다.
 
+> **v2(2026-09-24) 개정**: 아래 v1 전용 점수식은 decision-layer §4 HP 교환식으로 대체됐다. 회복기는 이제
+> `race_value(내 최선 공격의 c, 회복 후 d, p, 회복 후 HP 비율, 상대 HP 비율, lost=1) + 회복한 HP 비율`로 다른
+> 옵션과 같은 단위에서 비교한다 — "회복하는 턴에는 공격을 못 한다"는 손해가 식 안에 들어가 있어서 별도 가중치
+> (`w_survival`)가 필요 없다. 데미지 없는 랭크업기도 같은 방식(`race_value(랭크업 후 c, d, …, lost=1)`).
+> 아래는 v1 원안 기록용.
+
 ```
+# v1 원안 (코드 scoring: "spec")
 if hits_to_kill.expected == INFINITE:
     d_before = 현재 체력 기준 hits_to_be_killed.expected
     d_after  = (현재체력 + heal_amount, 최대체력 상한) 기준으로 재계산한 hits_to_be_killed.expected
@@ -92,7 +99,7 @@ if hits_to_kill.expected == INFINITE:
 
 | 파라미터 | 초기값 | 비고 |
 |---|---|---|
-| `w_survival` | 1.0 | "생존 연장 1턴 = 타수차이 1"과 동일 무게로 취급, 시뮬레이션 튜닝 대상 |
+| `w_survival` | 1.0 | v1 원안 전용. "생존 연장 1턴 = 타수차이 1"과 동일 무게로 취급 |
 
 ### 2-3. 범위 외
 
@@ -425,6 +432,10 @@ if attacker.item == "선제공격손톱":
     p_trigger = 0.20
     speed_adjustment = p_trigger * (+0.5) + (1 - p_trigger) * normal_speed_adjustment(attacker, opponent)
 ```
+
+> **v2(2026-09-24)**: 구현은 ±0.5 보정 대신 **선공 확률**(`first_probability`, 0~1)로 통일했다. 우선도가 같을 때만
+> `P(선공) = q_나(1 − q_상대) + [(1 − q_나)(1 − q_상대) + q_나·q_상대] × 기본 선공 확률`(q = 손톱 발동 확률, 양쪽 다
+> 발동하면 상쇄 — 실전 엔진 runTurn과 동일)로 섞이고, 이 값이 decision-layer §4 HP 교환식의 `p`로 들어간다.
 
 **하드 오버라이드 제외 로직에도 동일 필터 반영 필요:**
 

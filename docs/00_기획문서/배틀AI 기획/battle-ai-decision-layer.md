@@ -1,4 +1,7 @@
-# 포켓몬 배틀 AI — 의사결정 레이어 명세서
+# 포켓몬 배틀 AI — 의사결정 레이어 명세서 (v2)
+
+> **v2(2026-09-24)**: 핵심 점수식(§4)을 HP 교환식으로 교체 — 구현 후 시뮬레이션에서 v1 원안의 결함이 확인됨(§11).
+> §6 하드 오버라이드에 필중 조건 추가, §8 의사코드·§9 파라미터를 새 식 기준으로 개정, 검증 스크립트(§12) 추가.
 
 > 본 문서는 `battle-ai-common-engine.md`(공통 평가 엔진)의 후속 문서다. 공통 엔진이 산출한 6개 옵션의 값을 입력받아, 그중 하나를 최종 선택하는 로직만 다룬다. 엔진 자체의 계산 방식은 다루지 않는다.
 
@@ -63,24 +66,49 @@ hits_to_kill.expected = (2 × 0.62) + (3 × 0.38) = 2.38
 
 확1타/확2타처럼 확정적인 경우는 `expected = count` 그대로 사용한다.
 
-## 4. 핵심 점수 공식
+## 4. 핵심 점수 공식 — HP 교환식 (v2, 2026-09-24 채택)
+
+> v1 원안(`exchange_advantage = d − c` + 속도 보정 ±0.5 + 교체 템포 −0.3)은 시뮬레이션에서 결함이 확인되어
+> 이 식으로 교체했다. 경위와 수치는 §11 참고. 원안은 코드에 `scoring: "spec"`으로 남아 있다.
+
+**원칙**: 모든 옵션을 같은 단위 — **각자 최대 HP 대비 비율** — 로 비교한다. "처치 후 남는 여유 턴 수"(d − c)는
+포켓몬마다 HP·내구가 달라서 옵션끼리(특히 기술 사용 vs 교체) 비교할 수 없기 때문이다.
+
+옵션을 고른 뒤 그 대면을 끝까지 이어간다고 보고, 결과를 "상대 HP 제거 비율 − 내 HP 손실 비율"로 매긴다.
 
 ```
-exchange_advantage = hits_to_be_killed.expected − hits_to_kill.expected
+c = hits_to_kill.expected      # 내가 상대를 쓰러뜨리는 기대 턴 수
+d = hits_to_be_killed.expected # 상대가 나를 쓰러뜨리는 기대 턴 수
+p = 선공 확률(0~1)              # 선공 1 / 동속 0.5 / 후공 0 — 선제공격손톱 확률까지 섞인 값
+my  = 대면 시작 시 내 HP / 내 최대 HP       # 교체는 진입 비용을 뺀 뒤
+opp = 상대 현재 HP / 상대 최대 HP
+lost = 이번 턴 공격하지 않으면 1(교체·회복·랭크업), 공격하면 0
 
-score = exchange_advantage
-      + speed_adjustment
-      − (entry_cost / max_hp) × 1.5
-      − (0.3 if option_type == "switch" else 0)
-      − (risk_flag_penalty_base × risk_aversion   if risk_flag else 0)
+def race_value(c, d, p, my, opp, lost):
+    if c == ∞ and d == ∞: return 0                 # 서로 못 쓰러뜨림
+    opp_hits = c + lost − p                          # 내가 처치할 때까지 상대가 때리는 횟수
+    if opp_hits < d:                                 # 이기는 대면
+        return opp − my × max(0, opp_hits) / d       #   상대 전부 제거 − 그동안 내가 잃는 HP
+    my_hits = max(0, d − (1 − p) − lost)             # 지는 대면: 쓰러지기 전까지 내가 때리는 횟수
+    return opp × min(1, my_hits / c) − my            #   깎은 만큼 − 내 남은 HP 전부
 ```
 
-| 항목 | 값 | 설명 |
-|---|---|---|
-| `speed_adjustment` | 선공 +0.5 / 동속 0 / 후공 −0.5 | 타수 차이가 근소할 때만 실질적으로 작동하는 타이브레이커성 상수. 타수 차이가 1 이상 벌어지면 결과를 뒤집지 못함 |
-| `entry_cost 페널티` | `−(entry_cost / max_hp) × 1.5` | 교체 옵션에만 발생. 헤저드 1회(~12.5%)는 미미, 중첩 시 유의미해지도록 설계 |
-| `switch tempo penalty` | 교체 옵션 한정 `−0.3` | 이번 턴 공격 기회를 포기하는 데 대한 기본 페널티. 동률 시 "공격 유지"가 기본값이 되도록 함 |
-| `risk_flag penalty` | `risk_flag_penalty_base(0.4) × risk_aversion` | 랭크업기 보유 상대에 대한 경계 페널티. 크기는 AI의 위험 회피 성향에 비례 |
+| 옵션 | 점수 |
+|---|---|
+| 공격기 사용 | `race_value(c, d, p, my, opp, 0)` |
+| 교체 | `race_value(c, d, p, my, opp, 1) − entry_cost / max_hp` (c·d·p는 교체 후 다음 턴 기준) |
+| 회복기 | `race_value(내 최선 공격의 c, 회복 후 d, p, 회복 후 my, opp, 1) + (회복 후 my − 지금 my)` |
+| 랭크업기 | `race_value(랭크업 후 최선 공격의 c, d, p, my, opp, 1)` |
+| 그 외 변화기(설치기·상태이상 부여 등) | 이득이 다음 턴부터라 다턴 예측 범위 — 선택하지 않음(`−∞`) |
+
+모든 옵션에서 공통으로 `risk_flag`면 `trade_risk_penalty_base(0.1) × risk_aversion`을 뺀다.
+
+| 항목 | 설명 |
+|---|---|
+| 선공 처리 | 별도 ±0.5 보정 대신 경기 계산 안에서 "선공이면 상대가 마지막 한 번을 못 때림"(`− p`)으로 반영 |
+| 교체·회복·랭크업 | 이번 턴 공격을 안 하므로 "상대가 한 번 더 때린다"(`+ lost`). 원안의 고정 템포 페널티(−0.3)를 대체 |
+| 진입 비용 | 교체 시 설치물로 잃는 HP 비율을 그대로 뺀다(원안의 ×1.5 가중치는 단위가 HP 비율이 되어 불필요) |
+| risk_flag | 랭크업기 보유 상대 경계. HP 비율 단위라 원안(0.4)보다 작은 0.1 |
 
 ## 5. 위험 회피 성향 (`risk_aversion`)
 
@@ -104,15 +132,19 @@ risk_aversion ∈ [0.0, 1.0]
 점수식만으로는 상대에게 반격 기회 자체가 없는 상황(내가 선공으로 확실히 처치)이 다른 옵션에 밀려 역전될 수 있음이 검증 과정에서 발견되었다. 이는 튜닝으로 해결 불가한 논리 구조상의 예외이므로, 점수 비교보다 우선 체크한다.
 
 ```
-if 선공 == true AND hits_to_kill.expected <= 1 AND worst_case.certainty == "guaranteed":
+if 선공 확률 == 1 AND worst_case.count == 1 AND worst_case.certainty == "guaranteed" AND accuracy == 1.0:
     해당 옵션 즉시 채택, 점수 계산 생략
 ```
 
-이 조건 외의 모든 경우는 6개 옵션 전부 동일한 점수식으로 비교한다 (예외 규칙 추가 금지 — 필요성이 생기면 이 문서를 개정하여 검토).
+- `accuracy == 1.0`(필중)은 engine-extension §7-3에서 추가 — 명중률 100% 미만 원턴킬 기술이 "확정 처치"로 오인되는 걸 막는다.
+- 기합의띠·옹골참·탈은 생존 보장 후처리(engine-extension §3-0)가 worst_case를 먼저 2타로 바꾸므로 여기 걸리지 않는다.
+- 선공 판정에는 여왕의위엄·테일아머·사이코필드의 우선도 차단이 이미 반영돼 있다(차단되면 c = ∞).
+
+이 조건 외의 모든 경우는 옵션 전부 동일한 점수식으로 비교한다 (예외 규칙 추가 금지 — 필요성이 생기면 이 문서를 개정하여 검토).
 
 ## 7. 동률 처리 (타이브레이커)
 
-`score` 차이가 임계값(예: ±0.1) 이내일 때 적용.
+`score` 차이가 임계값(±0.1, HP 비율 단위) 이내일 때 적용.
 
 1. `worst_case.count == 1`인 옵션을 우선 배제 (근소한 우위보다 즉사 리스크 회피 우선)
 2. `entry_cost`가 더 낮은 쪽
@@ -124,29 +156,41 @@ if 선공 == true AND hits_to_kill.expected <= 1 AND worst_case.certainty == "gu
 ```
 options = common_engine.evaluate()   # 6개 옵션, battle-ai-common-engine.md v1.1 출력
 
-# 0단계 — 하드 오버라이드
+# 0단계 — 하드 오버라이드 (§6)
 for option in options:
-    if option.speed_order == "first"
-       and option.hits_to_kill.expected <= 1
-       and option.hits_to_kill.worst_case.certainty == "guaranteed":
+    if option.option_type == "move"
+       and option.first_probability == 1
+       and option.hits_to_kill.worst_case.count == 1
+       and option.hits_to_kill.worst_case.certainty == "guaranteed"
+       and option.accuracy == 1.0:
         return option
 
 # risk_aversion: 배틀 시작 시 1회만 샘플링해 재사용 (매 턴 재추첨 금지)
 risk_aversion = battle_state.risk_aversion
 
-# 1단계 — 점수 계산
+# 1단계 — 점수 계산 (§4 HP 교환식)
 for option in options:
-    exchange_advantage = option.hits_to_be_killed.expected - option.hits_to_kill.expected
-    speed_adj = {"first": 0.5, "tie": 0, "second": -0.5}[option.speed_order]
-    entry_penalty = (option.entry_cost / option.max_hp) * 1.5
-    tempo_penalty = 0.3 if option.option_type == "switch" else 0
-    risk_penalty = (0.4 * risk_aversion) if option.risk_flag else 0
-
-    option.score = exchange_advantage + speed_adj - entry_penalty - tempo_penalty - risk_penalty
+    c, d, p = option.hits_to_kill.expected, option.hits_to_be_killed.expected, option.first_probability
+    my, opp = option.hp_fraction, option.opponent_hp_fraction
+    if option.support == "other":
+        score = -inf
+    elif option.support == "heal":
+        score = race_value(option.best_kill_turns, option.d_after_heal, p, option.healed_fraction, opp, 1) \
+                + (option.healed_fraction - my)
+    elif option.support == "setup":
+        score = race_value(option.c_after_setup, d, p, my, opp, 1)
+    elif option.option_type == "switch":
+        score = race_value(c, d, p, my, opp, 1) - option.entry_cost / option.max_hp
+    else:
+        score = race_value(c, d, p, my, opp, 0)
+    if option.risk_flag:
+        score -= 0.1 * risk_aversion
+    option.score = score
 
 # 2단계 — 최고점 선택 + 동률 처리
 best = max(options, key=score)
-candidates = [o for o in options if abs(o.score - best.score) < 0.1]
+if best.score == -inf: return options[0]                 # 전부 선택 불가면 첫 옵션
+candidates = [o for o in options if o.score == best.score or best.score - o.score < 0.1]
 
 if len(candidates) > 1:
     candidates = [o for o in candidates if o.hits_to_be_killed.worst_case.count != 1] or candidates
@@ -160,17 +204,20 @@ return best
 
 ## 9. 파라미터 테이블 (튜닝 대상, 전부 초기 추정치)
 
-| 파라미터 | 초기값 | 근거 |
-|---|---|---|
-| `w_status` | 0.15 | 변화기 1개당 사용 확률 |
-| `speed_adjustment` | ±0.5 | 타수 1개 차이(±1.0)의 절반 — 근접 승부에서만 작동 |
-| `switch tempo penalty` | −0.3 | speed_adjustment보다 약간 작게 |
-| `entry_cost 가중치` | ×1.5 | 헤저드 1회 ≈ −0.19, 중첩 시 −0.5 이상 |
-| `risk_flag_penalty_base` | 0.4 | switch penalty(0.3)와 speed_adjustment(0.5) 사이 |
-| `risk_aversion 분포` | 균등분포 U(0,1) | 극단 편중 없이 배틀마다 고르게 분산. 특정 성향 강화 시 베타분포로 교체 가능 |
-| 동률 처리 임계값 | ±0.1 | score 단위 기준 근사치, 시뮬레이션으로 조정 |
+코드: `src/lib/battle/ai/decision.ts`의 `DEFAULT_DECISION_PARAMS`.
 
-확정 값은 시뮬레이션 로그에서 "이 상황에서 사람이라면 하지 않을 선택을 AI가 했는가"를 기준으로 역산하여 조정한다.
+| 파라미터 | 현재값 | 근거 |
+|---|---|---|
+| `w_status` | 0.15 | 변화기 1개당 사용 확률 (§2) |
+| `trade_risk_penalty_base` | 0.1 | risk_flag 페널티. HP 비율 단위 |
+| `risk_aversion 분포` | 균등분포 U(0,1) | 극단 편중 없이 배틀마다 고르게 분산. 특정 성향 강화 시 베타분포로 교체 가능 |
+| 동률 처리 임계값 | ±0.1 | HP 비율 단위. 0.03으로 줄여도 승률 차이 없음(166 vs 169승, 오차 범위) |
+
+**튜닝 방법**: `npm run sim:ai -- greedy 150 '{"파라미터":값}'`로 값을 바꿔 가며 그리디 봇 상대 승률을 비교하고,
+`npm run sim:ai -- diag`로 "사람이라면 하지 않을 선택"이 나오는지 사례를 확인한다(§12).
+
+원안(`scoring: "spec"`) 전용 파라미터 — 교체 템포 페널티 0.3, 진입 비용 가중치 ×1.5, risk_flag 0.4,
+speed_adjustment ±0.5 — 는 HP 교환식에서는 쓰이지 않는다(각각 `+ lost`, HP 비율 그대로, 0.1, `− p`로 대체).
 
 ## 10. 범위 외 사항 (다음 단계)
 
@@ -179,7 +226,7 @@ return best
 - **트릭룸/도발 등 저빈도 게임체인저**: 1차 버전 범위 밖, 시뮬레이션에서 문제가 드러나면 추가 검토
 - **B안 (파티 성향 자동 추론)**: 장기 검토 대상, 현재 미채택
 
-## 11. v1 구현 후 시뮬레이션 검증 결과 (2026-09-24) — 채점식 변경 제안, 사용자 확인 필요
+## 11. v1 구현 후 시뮬레이션 검증 결과 (2026-09-24) — HP 교환식 채택 경위
 
 구현: `src/lib/battle/ai/`. 검증은 시드 고정 무작위 파티(3마리) 배틀을 CLI에서 돌려서 했다(Vite
 `ssrLoadModule`). 비교 상대는 **그리디 봇**(교체 없이 매 턴 가장 빨리 처치하는 기술만 쓰는 봇) — 같은 시드로
@@ -187,7 +234,7 @@ return best
 
 | 채점식 | AI 승 / 300 | AI 행동 중 교체 비율 |
 |---|---|---|
-| spec — 본 문서 §4 원안(교체 템포 −0.3, 회복은 §2-2 연장분) | 108 (36%) | 28% |
+| spec — v1 원안(`d − c` + 속도 ±0.5 + 교체 템포 −0.3, 회복은 extension §2-2 연장분) | 108 (36%) | 28% |
 | tempo — 공격 안 하는 행동을 "처치 턴 +1"로 통일 | 137 | 22% |
 | tempo + 교체 추가비용 2 | 162 | 12% |
 | 교체 금지(기술 선택만) | 157 | 1% |
@@ -200,15 +247,9 @@ AI 대 랜덤 행동 봇: trade 기준 170승 30패(85%). 턴당 판단 평균 5
 선택이 반복됐다(예: 상대 HP 17/182라 이번 턴에 잡을 수 있는데 d가 더 큰 후보로 교체). 템포 페널티를 키워도
 완화될 뿐 근본 해결이 안 된다(교체 금지와 비슷한 수준에서 멈춤).
 
-**trade 채점(현재 코드 기본값 `scoring: "trade"`)**: 모든 옵션을 같은 단위 — 최대 HP 대비 비율 — 로 비교한다.
-- 이기는 대면(상대가 나를 쓰러뜨리기 전에 내가 처치): `상대 남은 HP 비율 − 그동안 내가 잃는 HP 비율`
-- 지는 대면: `쓰러지기 전까지 깎는 상대 HP 비율 − 내 남은 HP 비율 전부`
-- 교체·회복·랭크업: 이번 턴 공격을 안 하므로 "상대가 한 번 더 때린다"로 같은 계산에 넣는다. 교체는 진입 비용 비율을 뺀다.
-- 선공 여부는 +0.5 보정 대신 "선공이면 상대가 마지막 한 번을 못 때림"으로 계산 안에 반영(선제공격손톱 확률도 그대로 섞임).
-- risk_flag 페널티는 HP 비율 단위라 `0.1 × risk_aversion`.
-- 하드 오버라이드(§6 + extension §7-3 필중 조건)와 동률 처리(§7)는 그대로.
-
-원안(`spec`)·`tempo`도 `DecisionParams.scoring`으로 그대로 남겨 뒀다 — 이 문서를 trade 기준으로 개정할지 확인 필요.
+**결정(사용자 확인, 2026-09-24)**: trade(HP 교환식)를 정식 채택하고 §4·§6·§8·§9를 이 기준으로 개정했다. 교체 비율이
+높은 것 자체가 문제가 아니라, 교체를 **틀린 상황에서 고르는 것**이 문제였고 그 원인이 비교 단위였다는 게 채택 근거다.
+원안(`spec`)과 `tempo`는 비교·회귀용으로 `DecisionParams.scoring`에 남겨 뒀다.
 
 ### 11-1. v1 알려진 한계 (다음 단계 후보)
 
@@ -217,3 +258,19 @@ AI 대 랜덤 행동 봇: trade 기준 170승 30패(85%). 턴당 판단 평균 5
 - 턴 순서 예측 시 상대 기술은 "상대의 최선 공격기"로 가정.
 - **구애 고정**은 엔진이 아니라 UI가 로그로 판정하므로, UI가 `legalMoveIds`로 선택 가능 기술을 넘겨줘야 한다(안 넘기면 PP·도발·사슬묶기·앵콜만 거름).
 - 배틀타워 화면 연결은 아직 안 함.
+
+## 12. 검증 스크립트
+
+리포 `scripts/`에 있다. 브라우저 없이 Vite `ssrLoadModule`로 `src/`의 실제 엔진을 불러와 돌린다.
+
+| 명령 | 내용 |
+|---|---|
+| `npm run test:ai` | 규칙 시나리오 10건(부유·여왕의위엄·기합의띠·하드 오버라이드·명중률·메가진화 등). 실패 시 종료 코드 1 |
+| `npm run sim:ai -- regress [판수]` | 무작위 행동끼리 배틀 후 전체 로그 해시 출력. **엔진 수정 전후 해시가 같으면 엔진 동작 무변경** (2026-09-24 기준 300판 해시 `bb34b4b0…`) |
+| `npm run sim:ai -- ai [판수]` | AI 대 무작위 봇·AI 대 AI 승률, 턴당 판단 시간, NaN 점수 수 |
+| `npm run sim:ai -- greedy [판수] [파라미터 JSON]` | AI 대 그리디 봇(파티 좌우 교대). 파라미터 튜닝의 기준 지표 |
+| `npm run sim:ai -- diag [판수] [파라미터 JSON]` | AI가 교체를 고른 순간의 옵션별 점수·c·d 덤프 |
+
+파라미터 JSON 예: `'{"scoring":"spec"}'`, `'{"tieThreshold":0.03}'` (PowerShell은 `'{\"scoring\":\"spec\"}'`).
+regress 해시는 파티 생성 방식·데이터 파일이 바뀌면 달라지므로, 엔진 리팩토링 검증 시에는 **같은 커밋의 데이터로
+수정 전/후를 둘 다 돌려 비교**한다(수정할 파일만 `git stash`로 되돌려 실행).
