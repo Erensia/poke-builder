@@ -1,5 +1,6 @@
 import type { AiOption } from "./evaluator";
 import { DEFAULT_THREAT_MODEL } from "./opponentMoveModel";
+import { PHASE3_EFFECT_KINDS } from "./statusMoveEffects";
 
 /**
  * decision-layer §9 파라미터(튜닝 대상) + extension §2-2 w_survival.
@@ -37,6 +38,8 @@ export interface DecisionParams {
    * false면 v1 방식(랭크업 후 c만 재계산). statusAware가 false면 이것도 꺼진다.
    */
   setupAware: boolean;
+  /** 3단계 효과 변화기(날씨·필드·트릭룸·도발·앙코르·사슬묶기, §4-3)를 평가할지. false면 고르지 않는다(비교용) */
+  phase3Aware: boolean;
   /** 동률 처리 4순위를 "이번 턴 처치 가능한 공격기 > 그 외 기술 > 교체"로(§7). false면 이전 "기술 > 교체" */
   tieAttackFirst: boolean;
   /** 상대 기술 모델(§2-2): 의미 있는 변화기 1개당 사용 확률 */
@@ -63,6 +66,7 @@ export const DEFAULT_DECISION_PARAMS: DecisionParams = {
   wCarry: 1.0,
   setupAware: true,
   tieAttackFirst: true,
+  phase3Aware: true,
   // §2-2 튜닝값 — 근거는 DEFAULT_THREAT_MODEL 주석
   threatStatusWeight: DEFAULT_THREAT_MODEL.statusWeight,
   threatSharpness: DEFAULT_THREAT_MODEL.sharpness,
@@ -208,7 +212,11 @@ function tradeScore(option: AiOption, riskAversion: number, params: DecisionPara
   if (option.support) {
     const { kind, after, bestKillTurns, healedHpFraction } = option.support;
     if (kind === "other") return -Infinity;
-    if (kind === "effect") return effectValue(option, params) - riskPenalty;
+    if (kind === "effect") {
+      const effectKind = option.support.effect?.kind;
+      if (!params.phase3Aware && effectKind && PHASE3_EFFECT_KINDS.has(effectKind)) return -Infinity;
+      return effectValue(option, params) - riskPenalty;
+    }
     if (kind === "setup" && params.statusAware && params.setupAware) {
       if (option.support.setupFailed) return -Infinity;
       if (option.support.effect) return setupValue(option, params) - riskPenalty;

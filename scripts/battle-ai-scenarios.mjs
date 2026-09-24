@@ -214,6 +214,54 @@ try {
       `c 이어받음=${follow?.candidates[0].hitsToKill.expected.toFixed(2)} 일반교체=${plainSwitch?.hitsToKill.expected.toFixed(2)} score=${dec.scoreOption(sd, 0.5).toFixed(3)}`,
     );
   }
+  // ── 3단계 변화기(§4-3): 날씨·필드·트릭룸·도발·앙코르 ──
+  {
+    const slowVsFast = () =>
+      battle(
+        [mon("메타그로스", ["트릭룸", "비바라기", "코멧펀치"], null, null, pts({ atk: 32, hp: 32 }))],
+        [mon("한카리아스", ["역린", "칼춤"], null, null, pts({ atk: 32, spe: 32 }))],
+      );
+    const st = slowVsFast();
+    const tr = opt(ev.evaluateOptions(st, "a"), "트릭룸").support?.effect;
+    check(
+      "트릭룸 → 선공 역전(지속 턴 비율만큼)",
+      tr?.kind === "trickRoom" && tr.base.firstProbability === 0 && tr.hit.firstProbability > 0.5,
+      `p ${tr?.base.firstProbability}→${tr?.hit.firstProbability.toFixed(2)}`,
+    );
+    st.trickRoomTurnsRemaining = 3;
+    check("트릭룸 이미 있음 → 실패", dec.scoreOption(opt(ev.evaluateOptions(st, "a"), "트릭룸"), 0.5) === -Infinity);
+    // 비바라기: 물 공격기가 강해져 c 감소, 이미 비면 실패
+    const rain = battle(
+      [mon("거북왕", ["비바라기", "하이드로펌프"], null, null, pts({ spa: 32, hp: 32 }))],
+      [mon("한카리아스", ["역린"], null, null, pts({ hp: 32, def: 32 }))],
+    );
+    const rd = opt(ev.evaluateOptions(rain, "a"), "비바라기").support?.effect;
+    check("비바라기 → 물 기술 강화로 c 감소", rd?.kind === "weather" && rd.hit.killTurns < rd.base.killTurns, `c ${rd?.base.killTurns.toFixed(2)}→${rd?.hit.killTurns.toFixed(2)}`);
+    rain.weather = "비";
+    rain.weatherTurnsRemaining = 3;
+    check("이미 비 → 비바라기 실패", dec.scoreOption(opt(ev.evaluateOptions(rain, "a"), "비바라기"), 0.5) === -Infinity);
+    // 앙코르: 상대가 직전에 칼춤(변화기)을 썼으면 묶어서 d 증가 / 아직 기술을 안 썼으면 실패
+    const enc = battle(
+      [mon("팬텀", ["앙코르", "섀도볼"], null, null, pts({ spa: 32, spe: 32 }))],
+      [mon("한카리아스", ["역린", "칼춤"], null, null, pts({ atk: 32, hp: 32 }))],
+    );
+    check("상대가 기술을 안 씀 → 앙코르 실패", dec.scoreOption(opt(ev.evaluateOptions(enc, "a"), "앙코르"), 0.5) === -Infinity);
+    enc.b.lastMoveId = "칼춤";
+    const en = opt(ev.evaluateOptions(enc, "a"), "앙코르").support?.effect;
+    check("직전 칼춤에 앙코르 → d 증가", en?.kind === "encore" && en.hit.survivalTurns > en.base.survivalTurns, `d ${en?.base.survivalTurns.toFixed(2)}→${en?.hit.survivalTurns.toFixed(2)}`);
+    // 상대 모델이 앙코르를 반영: 칼춤에 묶인 상대는 공격하지 않는다
+    enc.b.volatile = { active: { encore: { turnsRemaining: 3, moveId: "칼춤" } } };
+    const locked = opt(ev.evaluateOptions(enc, "a"), "섀도볼");
+    check("칼춤 앙코르 중인 상대 → 위협 없음(d = ∞)", locked.hitsToBeKilled.expected === Infinity, `d=${locked.hitsToBeKilled.expected}`);
+    // 도발: 효과 계산 + 이미 도발이면 실패
+    const taunt = battle(
+      [mon("팬텀", ["도발", "섀도볼"], null, null, pts({ spa: 32, spe: 32 }))],
+      [mon("한카리아스", ["역린", "칼춤"], null, null, pts({ atk: 32, hp: 32 }))],
+    );
+    const tn = opt(ev.evaluateOptions(taunt, "a"), "도발").support?.effect;
+    taunt.b.volatile = { active: { taunt: { turnsRemaining: 2 } } };
+    check("도발 계산 + 이미 도발이면 실패", tn?.kind === "taunt" && dec.scoreOption(opt(ev.evaluateOptions(taunt, "a"), "도발"), 0.5) === -Infinity);
+  }
   // 첫 턴 전용 기술(만나자마자): 등장 후 행동했으면 옵션·상대 위협에서 모두 빠진다(사용자 발견 버그)
   {
     const st = battle(
@@ -242,13 +290,13 @@ try {
     const rt = await server.ssrLoadModule("/src/lib/battle/runTurn.ts");
     const sw = await server.ssrLoadModule("/src/lib/battle/switching.ts");
     const rng = () => 0.5;
-    const use = (id) => ({ kind: "move", move: data.getMove(id) });
-    const idle = use("칼춤");
+    const moveAction = (id) => ({ kind: "move", move: data.getMove(id) });
+    const idle = moveAction("칼춤");
     // 같은 날씨 → 실패, 남은 턴 유지 / 다른 날씨 → 덮어쓰고 5턴
     const same = battle([mon("패리퍼", ["비바라기"])], [mon("한카리아스", ["칼춤"])]);
     same.weather = "비";
     same.weatherTurnsRemaining = 2;
-    const sameOut = rt.runTurn(same, use("비바라기"), idle, rng);
+    const sameOut = rt.runTurn(same, moveAction("비바라기"), idle, rng);
     const sameAct = sameOut.result.actions.find((a) => a.actor === "a");
     check(
       "같은 날씨에 비바라기 → 실패·턴 유지",
@@ -258,13 +306,13 @@ try {
     const other = battle([mon("패리퍼", ["비바라기"])], [mon("한카리아스", ["칼춤"])]);
     other.weather = "쾌청";
     other.weatherTurnsRemaining = 2;
-    const otherOut = rt.runTurn(other, use("비바라기"), idle, rng);
+    const otherOut = rt.runTurn(other, moveAction("비바라기"), idle, rng);
     check("다른 날씨에 비바라기 → 덮어씀", otherOut.nextState.weather === "비" && otherOut.nextState.weatherTurnsRemaining === 4, `${otherOut.nextState.weather} ${otherOut.nextState.weatherTurnsRemaining}`);
     // 썰렁개그: 이미 눈이어도 실패 후 교체(returnsToTrainer)
     const chilly = battle([mon("야도킹", ["썰렁개그"]), mon("피카츄", ["10만볼트"])], [mon("한카리아스", ["칼춤"])]);
     chilly.weather = "눈";
     chilly.weatherTurnsRemaining = 3;
-    const paused = rt.runTurn(chilly, use("썰렁개그"), idle, rng);
+    const paused = rt.runTurn(chilly, moveAction("썰렁개그"), idle, rng);
     const chillyAct = paused.partialResult?.actions.find((a) => a.actor === "a");
     const resumed = "awaitingSelfSwitch" in paused ? rt.resumeTurn(paused._ctx, 1) : paused;
     const chillySwitch = resumed.result?.switches.find((s) => s.side === "a" && s.afterMove);

@@ -27,15 +27,16 @@ import { computeBattleHitChance } from "../hitChance";
 import {
   applyEffectMove,
   blendTurns,
+  effectDuration,
   effectKindOf,
   effectMoveFails,
   hazardCarry,
   isBatonPass,
-  screenDuration,
+  type EffectMoveKind,
 } from "./statusMoveEffects";
 import { isOneShotMove, isUsageBlocked } from "./usageConditions";
 import { estimateMoveHits, type MoveHitEstimate } from "./moveDamage";
-import { evaluateOpponentThreat, usableMoves, type OpponentThreat } from "./opponentMoveModel";
+import { allowedByVolatiles, evaluateOpponentThreat, usableMoves, type OpponentThreat } from "./opponentMoveModel";
 import { blockedTurns, turnsToKo } from "./turnRates";
 import type { HitsEstimate } from "./types";
 
@@ -66,6 +67,8 @@ export interface EffectEvaluation {
   carry: number;
   /** 이 기술을 쓰느라 내가 치르는 HP 비율(소울비트류 costsHpFraction) */
   selfCost?: number;
+  /** 효과 종류(랭크업기는 없음) — phase3Aware 등 종류별 토글용 */
+  kind?: EffectMoveKind;
 }
 
 /**
@@ -165,13 +168,7 @@ export function selectableMoves(
 ): Move[] {
   const moves = usableMoves(fighter).filter((m) => !isUsageBlocked(state, fighter, m, opponent));
   if (legalMoveIds) return moves.filter((m) => legalMoveIds.includes(m.id));
-  const { taunt, disable, encore } = fighter.volatile.active;
-  return moves.filter((m) => {
-    if (taunt && m.category === "status") return false;
-    if (disable && disable.moveId === m.id) return false;
-    if (encore?.moveId && encore.moveId !== m.id) return false;
-    return true;
-  });
+  return allowedByVolatiles(fighter, moves);
 }
 
 /**
@@ -439,14 +436,17 @@ function evaluateEffectMove(ctx: EffectContext): EffectEvaluation | undefined {
       attackerMovesSecond: ctx.moveFirstProbability < 0.5,
     }) ?? 1;
 
-  if (kind === "hazard") return { hit: base, base, hitChance, carry: hazardCarry(state, key, move) };
+  if (kind === "hazard") return { hit: base, base, hitChance, carry: hazardCarry(state, key, move), kind };
   const after = currentRace(clone, key, myMoves);
-  if (kind !== "screen") return { hit: after, base, hitChance, carry: 0 };
+  const duration = effectDuration(state, key, move);
+  if (duration === undefined) return { hit: after, base, hitChance, carry: 0, kind };
 
-  // 벽: 이번 턴(내가 먼저 움직이면 이번 턴 상대 공격부터) + 남은 턴 동안만 상대 공격을 줄인다.
-  const covered = screenDuration(me) - 1 + ctx.moveFirstProbability;
-  const survivalTurns = blendTurns(after.survivalTurns, base.survivalTurns, covered);
-  const hit = { ...after, survivalTurns };
+  // 지속 턴이 있는 효과(벽·날씨·필드·트릭룸·도발·앙코르·사슬묶기): 이번 턴(내가 먼저 움직이면 이번 턴 상대
+  // 행동부터) + 남은 턴 동안만 효과가 있다 — c·d는 그 구간만 효과 적용 속도, p는 그 구간 비율만큼 섞는다.
+  const covered = duration - 1 + ctx.moveFirstProbability;
+  const hit = blendRace(after, base, covered);
+  if (kind !== "screen") return { hit, base, hitChance, carry: 0, kind };
+  const survivalTurns = hit.survivalTurns;
   // 대면이 끝난 뒤 남는 벽 턴: 이기는 대면이면 지금 포켓몬이, 지는 대면이면 다음 포켓몬이 덜 맞는다.
   const opponentHits = base.killTurns + 1 - hit.firstProbability;
   const winning = opponentHits < survivalTurns;
@@ -458,7 +458,18 @@ function evaluateEffectMove(ctx: EffectContext): EffectEvaluation | undefined {
     ? [perHitLoss(me.currentHp / me.maxHp, base.survivalTurns)]
     : ctx.benchOptions().map((o) => perHitLoss(o.hpFraction, o.hitsToBeKilled.expected));
   const averageLoss = pool.length > 0 ? pool.reduce((a, b) => a + b, 0) / pool.length : 0;
-  return { hit, base, hitChance, carry: leftover > 0 ? leftover * savedRatio * averageLoss : 0 };
+  return { hit, base, hitChance, carry: leftover > 0 ? leftover * savedRatio * averageLoss : 0, kind };
+}
+
+/** 효과가 covered 턴 동안만 유지될 때의 대면 값(decision-layer §4-1 3단계를 c·d·p 전부로 일반화) */
+function blendRace(after: RaceInputs, base: RaceInputs, covered: number): RaceInputs {
+  const raceLength = Math.min(after.killTurns, after.survivalTurns);
+  const share = raceLength <= covered ? 1 : covered / raceLength;
+  return {
+    killTurns: blendTurns(after.killTurns, base.killTurns, covered),
+    survivalTurns: blendTurns(after.survivalTurns, base.survivalTurns, covered),
+    firstProbability: share * after.firstProbability + (1 - share) * base.firstProbability,
+  };
 }
 
 /**

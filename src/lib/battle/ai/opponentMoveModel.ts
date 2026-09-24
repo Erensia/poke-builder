@@ -34,6 +34,20 @@ export function usableMoves(fighter: BattleFighterState): Move[] {
     .filter((m): m is Move => !!m);
 }
 
+/**
+ * 행동방해 volatile로 막힌 기술을 거른다 — 도발 중이면 변화기 불가, 사슬묶기면 그 기술 불가, 앙코르면 그 기술만.
+ * AI 자신의 선택지(selectableMoves)와 상대 기술 사용 확률 모델이 같은 규칙을 쓴다(decision-layer §4-3).
+ */
+export function allowedByVolatiles(fighter: BattleFighterState, moves: Move[]): Move[] {
+  const { taunt, disable, encore } = fighter.volatile.active;
+  return moves.filter((m) => {
+    if (taunt && m.category === "status") return false;
+    if (disable && disable.moveId === m.id) return false;
+    if (encore?.moveId && encore.moveId !== m.id) return false;
+    return true;
+  });
+}
+
 function hazardAlreadyMaxed(hazards: HazardState, kind: NonNullable<Move["setsHazard"]>): boolean {
   switch (kind) {
     case "stealthRock":
@@ -165,8 +179,10 @@ export function evaluateOpponentThreat(ctx: ThreatContext): OpponentThreat {
   const attacks: { move: Move; estimate: MoveHitEstimate; rate: number }[] = [];
   let defensiveMatchup = 0;
 
-  // 이번 턴 사용 조건 때문에 반드시 실패하는 기술(첫 턴이 지난 속이기·만나자마자 등)은 위협에서 뺀다.
-  for (const move of usableMoves(opponent).filter((m) => !isUsageBlocked(state, opponent, m, target))) {
+  // 이번 턴 사용 조건 때문에 반드시 실패하는 기술(첫 턴이 지난 속이기·만나자마자 등)과 도발·앙코르·사슬묶기로
+  // 막힌 기술은 위협에서 뺀다.
+  const candidates = allowedByVolatiles(opponent, usableMoves(opponent)).filter((m) => !isUsageBlocked(state, opponent, m, target));
+  for (const move of candidates) {
     if (move.category === "status") {
       if (isOffensiveSetupMove(move)) riskFlag = true;
       const wasted =

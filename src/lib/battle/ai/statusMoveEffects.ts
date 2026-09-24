@@ -5,8 +5,12 @@ import { applyMoveStatChanges } from "@/lib/statStages";
 import { resolveEffectiveDefenderAbility } from "@/lib/abilityModifiers";
 import { isOpponentTargetingMove, isStatusBlockedByField } from "@/lib/fieldEffects";
 import { inflictStatus, isImmuneToStatus } from "@/lib/statusConditions";
+import { FIELD_DURATION } from "@/lib/fieldEffects";
+import { inflictVolatile } from "@/lib/volatileConditions";
 import {
   SCREEN_DURATION,
+  TRICK_ROOM_DURATION,
+  WEATHER_DURATION,
   abilityOf,
   activeWeather,
   contraryMoveFor,
@@ -26,7 +30,21 @@ import { effectiveHeldItem } from "../turnOrderInputs";
  *  - status: 상태이상 부여(inflictsStatus) / debuff: 상대 랭크다운(statChanges → opponent)
  *  - screen: 벽(setsScreen) / hazard: 설치기(setsHazard)
  */
-export type EffectMoveKind = "status" | "debuff" | "screen" | "hazard";
+export type EffectMoveKind =
+  | "status"
+  | "debuff"
+  | "screen"
+  | "hazard"
+  // §4-3(3단계): 날씨·필드·트릭룸(양쪽 모두에 영향), 도발·앙코르·사슬묶기(상대 기술 제한)
+  | "weather"
+  | "field"
+  | "trickRoom"
+  | "taunt"
+  | "encore"
+  | "disable";
+
+/** 3단계(§4-3) 효과 — decision의 phase3Aware로 따로 끌 수 있다 */
+export const PHASE3_EFFECT_KINDS: ReadonlySet<EffectMoveKind> = new Set(["weather", "field", "trickRoom", "taunt", "encore", "disable"]);
 
 /** 독압정으로 걸린 독이 상대 대기 포켓몬에게 몇 턴 동안 데미지를 준다고 볼지(이월 항 근사) */
 export const HAZARD_POISON_TURNS = 3;
@@ -38,6 +56,13 @@ export function effectKindOf(move: Move): EffectMoveKind | undefined {
   if (move.setsScreen) return "screen";
   if (move.setsHazard) return "hazard";
   if (move.inflictsStatus?.length) return "status";
+  // 썰렁개그(날씨 + 사용 후 교체)는 교체 평가가 따로 필요해 아직 대상 아님
+  if (move.setsWeather && !move.selfSwitchAfterUse) return "weather";
+  if (move.setsField) return "field";
+  if (move.setsTrickRoom) return "trickRoom";
+  if (move.setsEncore) return "encore";
+  if (move.setsDisable) return "disable";
+  if (move.inflictsVolatile?.some((v) => v.volatile === "taunt" && v.target !== "self")) return "taunt";
   const debuff =
     move.statChanges?.some((s) => s.target === "opponent") &&
     !move.statChanges.some((s) => s.target === "self" && (s.delta ?? 0) > 0) &&
@@ -82,6 +107,10 @@ export function effectMoveFails(state: BattleState, key: FighterKey, move: Move)
   const target = state[oppKey];
   if (move.requiresWeather && activeWeather(state) !== move.requiresWeather) return true;
   if (move.setsScreen) return sideOf(state, key).screens[move.setsScreen] !== undefined;
+  // 같은 날씨·같은 필드·이미 걸린 트릭룸 → 실패(resolveAction·mirroredEffects와 같은 규칙)
+  if (move.setsWeather) return state.weather === move.setsWeather;
+  if (move.setsField) return state.field === move.setsField;
+  if (move.setsTrickRoom) return state.trickRoomTurnsRemaining !== undefined;
 
   const userAbility = abilityOf(me);
   const targetAbility = resolveEffectiveDefenderAbility(userAbility, abilityOf(target));
@@ -109,7 +138,45 @@ export function effectMoveFails(state: BattleState, key: FighterKey, move: Move)
   if (classification.includes("가루") && target.types.includes("풀")) return true;
   if (targetAbility?.blocksSound && classification.includes("소리")) return true;
   if (move.inflictsStatus?.length && !statusToInflict(state, key, move)) return true;
+  // 도발·앙코르·사슬묶기: 아로마베일(마음을 옭아매는 기술 차단)·이미 걸림·상대가 아직 기술을 안 씀(앙코르·사슬묶기)
+  const kind = effectKindOf(move);
+  if (kind === "taunt" || kind === "encore" || kind === "disable") {
+    if (targetAbility?.blocksMentalMoves) return true;
+    const volatile = target.volatile.active;
+    if (kind === "taunt") return volatile.taunt !== undefined;
+    if (!target.lastMoveId) return true;
+    return kind === "encore" ? volatile.encore !== undefined : volatile.disable !== undefined;
+  }
   return false;
+}
+
+/**
+ * 이 효과가 유지되는 턴 수(적용 후 재평가에서 효과 구간을 자를 때 쓴다). 영구·대상에 붙는 효과(상태이상·
+ * 랭크다운)와 현재 대면과 무관한 설치기는 undefined.
+ */
+export function effectDuration(state: BattleState, key: FighterKey, move: Move): number | undefined {
+  const user = state[key];
+  const item = effectiveHeldItem(user);
+  switch (effectKindOf(move)) {
+    case "screen":
+      return screenDuration(user);
+    case "weather":
+      return WEATHER_DURATION + (item?.weatherDurationBonus?.weather === move.setsWeather ? item!.weatherDurationBonus!.bonus : 0);
+    case "field":
+      return FIELD_DURATION + (item?.fieldDurationBonus ?? 0);
+    case "trickRoom":
+      return TRICK_ROOM_DURATION;
+    case "taunt":
+    case "encore":
+    case "disable":
+      return volatileDuration(effectKindOf(move) as "taunt" | "encore" | "disable");
+    default:
+      return undefined;
+  }
+}
+
+function volatileDuration(volatile: "taunt" | "encore" | "disable"): number {
+  return inflictVolatile({ active: {} }, volatile, () => 0).active[volatile]!.turnsRemaining;
 }
 
 export interface ApplyEffectOptions {
@@ -141,6 +208,24 @@ export function applyEffectMove(clone: BattleState, key: FighterKey, move: Move,
       target.status = status === "badly-poisoned" ? { ...inflicted, turnsElapsed: averageCounter } : inflicted;
       return true;
     }
+    case "weather":
+      clone.weather = move.setsWeather;
+      clone.weatherTurnsRemaining = effectDuration(clone, key, move);
+      return true;
+    case "field":
+      clone.field = move.setsField;
+      clone.fieldTurnsRemaining = effectDuration(clone, key, move);
+      return true;
+    case "trickRoom":
+      clone.trickRoomTurnsRemaining = TRICK_ROOM_DURATION;
+      return true;
+    case "taunt":
+      target.volatile = inflictVolatile(target.volatile, "taunt", () => 0);
+      return true;
+    case "encore":
+    case "disable":
+      target.volatile = inflictVolatile(target.volatile, kind, () => 0, target.lastMoveId);
+      return true;
     case "debuff": {
       const before = target.stages;
       const targetAbility = resolveEffectiveDefenderAbility(abilityOf(me), abilityOf(target));
