@@ -8,7 +8,7 @@ import { createServer } from "vite";
 import { fileURLToPath } from "node:url";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
-const server = await createServer({ root, server: { middlewareMode: true }, appType: "custom", logLevel: "error" });
+const server = await createServer({ root, server: { middlewareMode: true, hmr: false }, appType: "custom", logLevel: "error" });
 try {
   const data = await server.ssrLoadModule("/src/lib/data.ts");
   const state = await server.ssrLoadModule("/src/lib/battle/state.ts");

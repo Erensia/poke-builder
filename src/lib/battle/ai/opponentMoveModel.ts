@@ -78,6 +78,57 @@ function isWastedStatusMove(
   return false;
 }
 
+/**
+ * 지금 써 봐야 효과가 없는 변화기(threatStrictWaste, decision-layer §2-2): HP가 가득인데 회복기, 올릴 스탯이 전부 +6인
+ * 랭크업기, 이미 자기 편에 깔린 벽, 이미 상태이상인 대상에게 거는 상태이상기. 상대가 합리적이면 이런 기술에
+ * 턴을 쓰지 않으니 사용 확률을 공격기로 돌린다.
+ */
+function isPointlessNow(state: BattleState, move: Move, user: BattleFighterState, target: BattleFighterState): boolean {
+  const heals = (move.healsFraction && move.healsTarget !== "opponent") || move.healsWeatherDependent || move.restSleep;
+  if (heals && user.currentHp >= user.maxHp && !(move.restSleep && user.status.condition)) return true;
+  const raises = move.statChanges?.filter((s) => s.target === "self" && (s.delta ?? 0) > 0 && s.stat in user.stages) ?? [];
+  if (raises.length > 0 && raises.every((s) => user.stages[s.stat as keyof typeof user.stages] >= 6)) return true;
+  if (move.setsScreen) {
+    const userSide = state.sideA.party.includes(user) ? state.sideA : state.sideB;
+    if (userSide.screens[move.setsScreen] !== undefined) return true;
+  }
+  if (move.inflictsStatus?.length && !move.statChanges?.length && target.status.condition) return true;
+  return false;
+}
+
+/** 상대 기술 사용 확률 모델의 튜닝값(decision-layer §2-2) */
+export interface ThreatModelParams {
+  /** 의미 있는 변화기 1개당 사용 확률 */
+  statusWeight: number;
+  /** 공격기 분배 날카로움: 데미지^k 비례. 1 = 데미지 비례(v1), 클수록 최선기에 몰린다 */
+  sharpness: number;
+  /** isPointlessNow 변화기도 사용 확률 0으로 */
+  strictWaste: boolean;
+}
+
+/** v1 원안(비교용) */
+export const V1_THREAT_MODEL: ThreatModelParams = { statusWeight: W_STATUS, sharpness: 1, strictWaste: false };
+/**
+ * 기본값(§2-2 튜닝, 2026-09-24): v1 대비 그리디 247→253승, AI끼리 197:196 — 승률 차이는 오차 안이지만 쓸모없는
+ * 변화기 제외는 논리적으로 맞고 상대 피해를 덜 과소평가한다. DEFAULT_DECISION_PARAMS도 이 값을 쓴다.
+ */
+export const DEFAULT_THREAT_MODEL: ThreatModelParams = { statusWeight: 0.08, sharpness: 3, strictWaste: true };
+let threatModel: ThreatModelParams = DEFAULT_THREAT_MODEL;
+
+/**
+ * fn 실행 동안만 상대 기술 모델 튜닝값을 바꾼다. 평가 함수가 여러 겹이라 인자로 끝까지 내리는 대신 이렇게 감싼다 —
+ * 동기 실행이라 AI끼리 다른 값으로 붙이는 시뮬레이션에서도 서로 섞이지 않는다.
+ */
+export function withThreatModel<T>(model: ThreatModelParams, fn: () => T): T {
+  const previous = threatModel;
+  threatModel = model;
+  try {
+    return fn();
+  } finally {
+    threatModel = previous;
+  }
+}
+
 /** 공격 관련 스탯(공격·특공)을 올리는 자기 대상 변화기 */
 export function isOffensiveSetupMove(move: Move): boolean {
   return (
@@ -101,7 +152,7 @@ export interface ThreatContext {
 
 /**
  * 상대 기술 사용 확률 모델(decision-layer §2 + extension §7-2 명중률).
- *   변화기(의미 있는 것) 1개당 W_STATUS, 남은 가중치를 공격기에 데미지 비례 분배,
+ *   변화기(의미 있는 것) 1개당 statusWeight, 남은 가중치를 공격기에 데미지^sharpness 비례 분배(§2-2 튜닝값),
  *   E[턴당 데미지] = Σ weight_i × damage_i (damage_i = 그 기술로 턴당 깎는 현재 HP 비율, 명중률 포함).
  */
 export function evaluateOpponentThreat(ctx: ThreatContext): OpponentThreat {
@@ -118,7 +169,10 @@ export function evaluateOpponentThreat(ctx: ThreatContext): OpponentThreat {
   for (const move of usableMoves(opponent).filter((m) => !isUsageBlocked(state, opponent, m, target))) {
     if (move.category === "status") {
       if (isOffensiveSetupMove(move)) riskFlag = true;
-      if (!isWastedStatusMove(move, opponent, target, targetTypes, targetSide)) statusCount++;
+      const wasted =
+        isWastedStatusMove(move, opponent, target, targetTypes, targetSide) ||
+        (threatModel.strictWaste && isPointlessNow(state, move, opponent, target));
+      if (!wasted) statusCount++;
       continue;
     }
     const estimate = estimateMoveHits(
@@ -131,9 +185,12 @@ export function evaluateOpponentThreat(ctx: ThreatContext): OpponentThreat {
     attacks.push({ move, estimate, rate: 1 / estimate.expected });
   }
 
-  const remainingWeight = Math.max(0, 1 - statusCount * W_STATUS);
-  const totalRate = attacks.reduce((sum, a) => sum + a.rate, 0);
-  const expectedRate = totalRate > 0 ? attacks.reduce((sum, a) => sum + (a.rate / totalRate) * remainingWeight * a.rate, 0) : 0;
+  const remainingWeight = Math.max(0, 1 - statusCount * threatModel.statusWeight);
+  // 공격기 사용 확률 ∝ 데미지^k (k = sharpness, 1이면 v1의 데미지 비례)
+  const shares = attacks.map((a) => a.rate ** threatModel.sharpness);
+  const totalShare = shares.reduce((sum, s) => sum + s, 0);
+  const expectedRate =
+    totalShare > 0 ? attacks.reduce((sum, a, i) => sum + (shares[i] / totalShare) * remainingWeight * a.rate, 0) : 0;
 
   const best = attacks.reduce<(typeof attacks)[number] | undefined>(
     (acc, a) => (!acc || a.estimate.expected < acc.estimate.expected ? a : acc),

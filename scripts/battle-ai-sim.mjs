@@ -8,6 +8,8 @@
  *   ai       AI 대 무작위 봇 + AI 대 AI 승률, 턴당 판단 시간, NaN 점수 개수
  *   greedy   AI 대 그리디 봇(교체 없이 매 턴 가장 빨리 처치하는 기술만) — 파티를 좌우 바꿔 한 번 더
  *   diag     AI가 교체를 고른 순간의 모든 옵션 점수·c·d 출력(판단 이상 사례 찾기)
+ *   h2h      AI(파라미터 A) 대 AI(파라미터 B, 5번째 인자 — 생략하면 기본값), 파티 좌우 교대. 그리디 봇은 항상
+ *            최선기만 써서 "상대 모델" 튜닝에 편향되므로, 모델 변경은 이 모드로도 비교한다.
  *
  * 예) npm run sim:ai -- greedy 150 '{"scoring":"spec"}'   ← 파라미터 튜닝: 값을 바꿔 승률 비교
  * 환경변수 PIVOT=1: 유턴류를 배울 수 있는 포켓몬은 기술 하나를 유턴류로 바꿔 파티를 만든다(유턴 판단 검증용)
@@ -25,7 +27,9 @@ const mode = process.argv[2] ?? "regress";
 const battles = Number(process.argv[3] ?? 200);
 const decisionParams = process.argv[4] ? JSON.parse(process.argv[4]) : undefined;
 const root = fileURLToPath(new URL("..", import.meta.url));
-const server = await createServer({ root, server: { middlewareMode: true }, appType: "custom", logLevel: "error" });
+// hmr: false — 병렬 실행 시 HMR 웹소켓 포트(24678) 충돌로 프로세스가 죽는 걸 막는다.
+const server = await createServer({ root, server: { middlewareMode: true, hmr: false }, appType: "custom", logLevel: "error" });
+const opponentParams = process.argv[5] ? JSON.parse(process.argv[5]) : undefined;
 
 function mulberry32(seed) {
   let a = seed >>> 0;
@@ -235,6 +239,24 @@ try {
       res[outcome(s, "b", risk)]++;
     }
     console.log(JSON.stringify({ battles: battles * 2, res, aiActionMix: mix, statusMix }));
+  } else if (mode === "h2h") {
+    // AI(파라미터 A = argv[4]) 대 AI(파라미터 B = argv[5], 생략하면 기본값), 파티 좌우 교대
+    const policy = (params, risk) => (st, key) => ai.chooseAiAction(st, key, risk, { decisionParams: params }).action;
+    const forced = (params, risk) => (st, key) => ai.chooseAiForcedSwitch(st, key, risk, params) ?? living(st, key)[0];
+    const res = { aWins: 0, bWins: 0, other: 0 };
+    for (let s = 1; s <= battles; s++) {
+      const risk = mulberry32(s)();
+      for (const aSide of ["a", "b"]) {
+        const bSide = aSide === "a" ? "b" : "a";
+        const r = runBattle(
+          s,
+          { [aSide]: policy(decisionParams, risk), [bSide]: policy(opponentParams, risk) },
+          { [aSide]: forced(decisionParams, risk), [bSide]: forced(opponentParams, risk) },
+        );
+        res[r.winner === aSide ? "aWins" : r.winner === bSide ? "bWins" : "other"]++;
+      }
+    }
+    console.log(JSON.stringify({ battles: battles * 2, A: decisionParams ?? "default", B: opponentParams ?? "default", res }));
   } else if (mode === "ai") {
     const results = { aiVsRandom: { a: 0, b: 0, draw: 0, timeout: 0 }, aiVsAi: { a: 0, b: 0, draw: 0, timeout: 0 } };
     let maxMs = 0;
@@ -263,7 +285,7 @@ try {
     }
     console.log(JSON.stringify({ battles, results, avgTurnMs: +(totalMs / decisions).toFixed(2), maxTurnMs: +maxMs.toFixed(1), nanScores }));
   } else {
-    console.error(`알 수 없는 모드: ${mode} (regress | ai | greedy | diag)`);
+    console.error(`알 수 없는 모드: ${mode} (regress | ai | greedy | diag | h2h)`);
     process.exitCode = 1;
   }
 } finally {

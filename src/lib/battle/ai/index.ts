@@ -2,6 +2,7 @@ import { type FighterKey, type TurnAction } from "@/types/battle";
 import { STRUGGLE_MOVE, type BattleState } from "../state";
 import { DEFAULT_DECISION_PARAMS, decide, scoreOption, type DecisionParams, type ScoredOption } from "./decision";
 import { evaluateOptions, type AiOption, type EvaluateOptions } from "./evaluator";
+import { withThreatModel, type ThreatModelParams } from "./opponentMoveModel";
 
 export type { AiOption } from "./evaluator";
 export type { DecisionParams, ScoredOption } from "./decision";
@@ -9,6 +10,11 @@ export type { DecisionParams, ScoredOption } from "./decision";
 /** decision-layer §5: 배틀 시작 시 1회 U(0,1)에서 뽑아 그 배틀 동안 계속 쓴다(매 턴 재추첨 금지) */
 export function sampleRiskAversion(random: () => number = Math.random): number {
   return random();
+}
+
+/** 결정 파라미터 중 상대 기술 모델 튜닝값(§2-2) */
+function threatModelOf(params: DecisionParams): ThreatModelParams {
+  return { statusWeight: params.threatStatusWeight, sharpness: params.threatSharpness, strictWaste: params.threatStrictWaste };
 }
 
 export interface AiDecision {
@@ -33,7 +39,7 @@ export function chooseAiAction(
   options: ChooseAiOptions = {},
 ): AiDecision {
   const params = { ...DEFAULT_DECISION_PARAMS, ...options.decisionParams };
-  const evaluated = evaluateOptions(state, key, options);
+  const evaluated = withThreatModel(threatModelOf(params), () => evaluateOptions(state, key, options));
   const decision = decide(evaluated, riskAversion, params);
   if (!decision) return { action: { kind: "move", move: STRUGGLE_MOVE }, scored: [] };
   const { chosen, scored } = decision;
@@ -55,7 +61,9 @@ export function chooseAiForcedSwitch(
   decisionParams?: Partial<DecisionParams>,
 ): number | undefined {
   const params = { ...DEFAULT_DECISION_PARAMS, ...decisionParams };
-  const switches = evaluateOptions(state, key).filter((o) => o.optionType === "switch");
+  const switches = withThreatModel(threatModelOf(params), () => evaluateOptions(state, key)).filter(
+    (o) => o.optionType === "switch",
+  );
   if (switches.length === 0) return undefined;
   const best = switches
     .map((option) => ({ option, score: scoreOption({ ...option, optionType: "move" }, riskAversion, params) }))

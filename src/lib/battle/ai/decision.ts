@@ -1,4 +1,5 @@
 import type { AiOption } from "./evaluator";
+import { DEFAULT_THREAT_MODEL } from "./opponentMoveModel";
 
 /**
  * decision-layer §9 파라미터(튜닝 대상) + extension §2-2 w_survival.
@@ -38,6 +39,12 @@ export interface DecisionParams {
   setupAware: boolean;
   /** 동률 처리 4순위를 "이번 턴 처치 가능한 공격기 > 그 외 기술 > 교체"로(§7). false면 이전 "기술 > 교체" */
   tieAttackFirst: boolean;
+  /** 상대 기술 모델(§2-2): 의미 있는 변화기 1개당 사용 확률 */
+  threatStatusWeight: number;
+  /** 상대 기술 모델: 공격기 사용 확률 ∝ 데미지^k (1 = v1 데미지 비례) */
+  threatSharpness: number;
+  /** 상대 기술 모델: 지금 효과 없는 변화기(가득 찬 HP 회복·+6 랭크업·이미 깔린 벽·이미 상태이상)도 확률 0 */
+  threatStrictWaste: boolean;
 }
 
 /**
@@ -56,6 +63,10 @@ export const DEFAULT_DECISION_PARAMS: DecisionParams = {
   wCarry: 1.0,
   setupAware: true,
   tieAttackFirst: true,
+  // §2-2 튜닝값 — 근거는 DEFAULT_THREAT_MODEL 주석
+  threatStatusWeight: DEFAULT_THREAT_MODEL.statusWeight,
+  threatSharpness: DEFAULT_THREAT_MODEL.sharpness,
+  threatStrictWaste: DEFAULT_THREAT_MODEL.strictWaste,
   riskFlagPenaltyBase: 0.4,
   tieThreshold: 0.1,
   wSurvival: 1.0,
