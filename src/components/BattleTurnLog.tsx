@@ -20,6 +20,7 @@ import {
   STATUS_ONSET_TEXT,
   STATUS_TRIGGER_TEXT,
   STATUS_CURE_TEXT,
+  WEATHER_MOVE_LINES,
 } from "../lib/battleLogText";
 
 /** 액션 로그 한 줄 안에 "OO 발동!"으로 뭉뚱그리기보다 전용 문구를 따로 쓰는 volatile들 */
@@ -557,7 +558,7 @@ function SelfSwitchAfterMoveLines({
           const inN = getPokemon(sw.inPokemonId)?.name ?? "포켓몬";
           return (
             <div key={`swa-${j}`}>
-              {sw.shedTail && (
+              {(sw.shedTail || sw.returnsToTrainer) && (
                 <div className="battle-turn-line">
                   {outN}
                   {eunNeun(outN)} 트레이너의 곁으로 돌아간다!
@@ -801,9 +802,17 @@ function ActionMainLine({
       {!action.blockedReason && action.hit && action.setWeather && (
         <>
           {" "}
-          · 날씨가 {action.setWeather}
-          {roEuro(action.setWeather)} 바뀌었다!
+          ·{" "}
+          {WEATHER_MOVE_LINES[action.move.id]?.set ?? (
+            <>
+              날씨가 {action.setWeather}
+              {roEuro(action.setWeather)} 바뀌었다!
+            </>
+          )}
         </>
+      )}
+      {!action.blockedReason && action.hit && action.weatherSetFailed && (
+        <> · {WEATHER_MOVE_LINES[action.move.id]?.fail ?? "그러나 실패했다!"}</>
       )}
       {!action.blockedReason && action.hit && action.setScreen && (
         <> · {SCREEN_LABELS[action.setScreen]} 설치!</>
@@ -1810,6 +1819,14 @@ export function BattleTurnLog({ log }: { log: TurnResult[] }) {
                       {action.selfWokeBeforeMove && (
                         <div className="battle-turn-line is-muted">
                           {STATUS_CURE_TEXT[action.selfWokeBeforeMove](actorName)}
+                        </div>
+                      )}
+                      {/* 썰렁개그처럼 기술을 실제로 쓸 때 기술 줄 앞에 붙는 대사("…은(는) 썰렁한 개그를 선보였다!").
+                          행동불능 등으로 못 썼으면 나오지 않는다. */}
+                      {!action.blockedReason && action.move.preUseUserAnnouncement && (
+                        <div className="battle-turn-line">
+                          {actorName}
+                          {eunNeun(actorName)} {action.move.preUseUserAnnouncement}
                         </div>
                       )}
                       {/* 메인 라인: 누가 무슨 기술을 써서 어떻게 됐는지("빗나감"/데미지 수치)까지만.

@@ -58,7 +58,9 @@ export interface RunTurnContext {
   actionIdx: number;
   selfDestructComboKey: FighterKey | undefined;
   /** passSubstitute: 꼬리자르기 — 세운 대타만 새로 나온 포켓몬에게 인계(랭크 등은 인계 안 함) */
-  pendingPivot: { side: FighterKey; passBaton: boolean; passSubstitute?: boolean } | undefined;
+  pendingPivot:
+    | { side: FighterKey; passBaton: boolean; passSubstitute?: boolean; returnsToTrainer?: boolean }
+    | undefined;
 }
 
 /**
@@ -277,6 +279,30 @@ function runActionPhase(ctx: RunTurnContext): RunTurnOutcome | RunTurnPaused {
       ctx.pendingPivot = { side: key, passBaton: !!mv.passesStatsOnSelfSwitch };
       return {
         awaitingSelfSwitch: { side: key, passBaton: !!mv.passesStatsOnSelfSwitch },
+        nextState: state,
+        partialResult: {
+          turnNumber: state.turnNumber,
+          order,
+          actions: [...actions],
+          endOfTurn: [],
+          winner: undefined,
+          expiredScreens: [],
+          expiredSafeguard: [],
+          turnStartAnnouncements: ctx.turnStartAnnouncements,
+          switches: [...switches],
+          activePokemonIds: { a: state.a.slot.pokemonId, b: state.b.slot.pokemonId },
+        },
+        _ctx: ctx,
+      };
+    }
+
+    // 썰렁개그(Move.selfSwitchAfterUse): 기술을 쓰기만 했으면(행동불능 등으로 못 쓴 경우 제외) 날씨 설정
+    // 성공 여부와 무관하게 교체한다 — 이미 눈이라 실패해도 교체(사용자 확인). 유턴류와 달리 효과 실패가
+    // 교체를 막지 않는다.
+    if (mv.selfSwitchAfterUse && !action.blockedReason && !isFainted(state[key]) && hasLivingReserve(sideOf(state, key))) {
+      ctx.pendingPivot = { side: key, passBaton: false, returnsToTrainer: true };
+      return {
+        awaitingSelfSwitch: { side: key, passBaton: false },
         nextState: state,
         partialResult: {
           turnNumber: state.turnNumber,
@@ -548,6 +574,7 @@ export function resumeTurn(ctx: RunTurnContext, toIndex: number): RunTurnOutcome
         entryMessages,
         afterMove: true,
         shedTail: pivot.passSubstitute || undefined,
+        returnsToTrainer: pivot.returnsToTrainer || undefined,
       });
     }
   }

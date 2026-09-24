@@ -237,6 +237,49 @@ try {
       JSON.stringify(d.action.kind === "move" ? d.action.move.id : d.action),
     );
   }
+  // ── 엔진: 날씨 기술·썰렁개그(2026-09-24 사용자 확인 규칙) ──
+  {
+    const rt = await server.ssrLoadModule("/src/lib/battle/runTurn.ts");
+    const sw = await server.ssrLoadModule("/src/lib/battle/switching.ts");
+    const rng = () => 0.5;
+    const use = (id) => ({ kind: "move", move: data.getMove(id) });
+    const idle = use("칼춤");
+    // 같은 날씨 → 실패, 남은 턴 유지 / 다른 날씨 → 덮어쓰고 5턴
+    const same = battle([mon("패리퍼", ["비바라기"])], [mon("한카리아스", ["칼춤"])]);
+    same.weather = "비";
+    same.weatherTurnsRemaining = 2;
+    const sameOut = rt.runTurn(same, use("비바라기"), idle, rng);
+    const sameAct = sameOut.result.actions.find((a) => a.actor === "a");
+    check(
+      "같은 날씨에 비바라기 → 실패·턴 유지",
+      sameAct.weatherSetFailed === true && !sameAct.setWeather && sameOut.nextState.weatherTurnsRemaining === 1,
+      `failed=${sameAct.weatherSetFailed} 남은턴=${sameOut.nextState.weatherTurnsRemaining}`,
+    );
+    const other = battle([mon("패리퍼", ["비바라기"])], [mon("한카리아스", ["칼춤"])]);
+    other.weather = "쾌청";
+    other.weatherTurnsRemaining = 2;
+    const otherOut = rt.runTurn(other, use("비바라기"), idle, rng);
+    check("다른 날씨에 비바라기 → 덮어씀", otherOut.nextState.weather === "비" && otherOut.nextState.weatherTurnsRemaining === 4, `${otherOut.nextState.weather} ${otherOut.nextState.weatherTurnsRemaining}`);
+    // 썰렁개그: 이미 눈이어도 실패 후 교체(returnsToTrainer)
+    const chilly = battle([mon("야도킹", ["썰렁개그"]), mon("피카츄", ["10만볼트"])], [mon("한카리아스", ["칼춤"])]);
+    chilly.weather = "눈";
+    chilly.weatherTurnsRemaining = 3;
+    const paused = rt.runTurn(chilly, use("썰렁개그"), idle, rng);
+    const chillyAct = paused.partialResult?.actions.find((a) => a.actor === "a");
+    const resumed = "awaitingSelfSwitch" in paused ? rt.resumeTurn(paused._ctx, 1) : paused;
+    const chillySwitch = resumed.result?.switches.find((s) => s.side === "a" && s.afterMove);
+    check(
+      "이미 눈에 썰렁개그 → 실패해도 교체",
+      "awaitingSelfSwitch" in paused && chillyAct?.weatherSetFailed === true && chillySwitch?.returnsToTrainer === true && resumed.nextState.sideA.activeIndex === 1,
+      `paused=${"awaitingSelfSwitch" in paused} failed=${chillyAct?.weatherSetFailed} 교체=${chillySwitch?.returnsToTrainer}`,
+    );
+    // 같은 날씨 특성으로 등장 → 턴 재충전 없음
+    const entry = battle([mon("한카리아스", ["칼춤"]), mon("패리퍼", ["비바라기"], "잔비")], [mon("한카리아스", ["칼춤"])]);
+    entry.weather = "비";
+    entry.weatherTurnsRemaining = 2;
+    const entered = sw.applySwitch(entry, "a", 1).nextState;
+    check("같은 날씨 특성 등장 → 턴 유지", entered.weatherTurnsRemaining === 2, `남은턴=${entered.weatherTurnsRemaining}`);
+  }
   // 상대가 나에게 데미지를 줄 수단이 없을 때(+Infinity 점수)
   {
     const st = battle([mon("팬텀", ["10만볼트"])], [mon("한카리아스", ["지진"])]);

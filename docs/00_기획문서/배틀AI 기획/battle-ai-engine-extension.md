@@ -511,7 +511,9 @@ field_state = {
 
 ```
 def apply_weather(new_type, setter_has_extender):
-    weather_state.type = new_type   # 같은 날씨여도 무조건 갱신 (카운트다운 리셋)
+    if weather_state.type == new_type:
+        return FAILED   # 동일 날씨 재설치는 실패, 카운트다운도 리셋 안 함 (2026-09-24 정정)
+    weather_state.type = new_type
     weather_state.turns_remaining = 8 if setter_has_extender else 5
 
 def apply_field(new_type, setter_has_extender):
@@ -523,8 +525,16 @@ def apply_field(new_type, setter_has_extender):
 
 | | 날씨 | 필드 |
 |---|---|---|
-| 동일 종류 재설치 | **항상 성공, 카운트다운 리셋** | **항상 실패, 상태 변화 없음** |
+| 동일 종류 재설치 | **실패, 상태 변화 없음(카운트다운 리셋 안 함)** | **항상 실패, 상태 변화 없음** |
 | 다른 종류 설치 | 항상 덮어씀 | 덮어씀 |
+
+> **2026-09-24 정정(사용자 확인)**: 처음엔 "날씨는 같은 종류를 다시 걸어도 성공하고 카운트다운을 리셋"이라는
+> 비대칭으로 적었고 엔진도 그렇게 구현돼 있었으나, 본가 규칙은 날씨도 필드와 같다 — 같은 날씨 기술은 실패
+> ("그러나 실패했다!"), 같은 날씨 특성(잔비 등)은 등장해도 아무 일 없음(문구·턴 재충전 없음). 배틀 시작 시
+> 같은 날씨 특성 두 마리면 먼저 발동한 쪽만 적용. 날씨부정 중에도 날씨 자체는 있으므로 원래 날씨로 비교한다.
+> 썰렁개그는 예외적으로 **날씨 설정이 실패해도 사용 후 교체**한다(`Move.selfSwitchAfterUse` — 유턴류는 효과가
+> 실패하면 교체도 안 함). 로그: "○○은(는) 썰렁한 개그를 선보였다!" → "○○의 썰렁개그" → 성공 "눈이 내리기
+> 시작했다!" / 실패 "그러나 실패하고 말았다!" → "○○은(는) 트레이너의 곁으로 돌아간다!"
 
 ### 4-3. 동시 등장 처리
 

@@ -155,8 +155,10 @@ export interface ActionLogEntry {
   setTrickRoom?: boolean;
   /** 트릭룸을 썼지만 이미 걸려있어서 실패했으면 true */
   trickRoomSetFailed?: boolean;
-  /** 이 행동으로 날씨가 바뀌었으면(비바라기 등) 그 날씨. 실패라는 개념이 없어 항상 성공 시 채워진다 */
+  /** 이 행동으로 날씨가 바뀌었으면(비바라기 등) 그 날씨. 이미 같은 날씨라 실패했으면 비어 있다 */
   setWeather?: WeatherKind;
+  /** 날씨 기술을 썼지만 이미 같은 날씨라 실패했으면 true(본가 규칙, 사용자 확인) */
+  weatherSetFailed?: boolean;
   /** 이 행동으로 리플렉터/빛의장막이 자신 쪽에 새로 걸렸으면 채워진다 */
   setScreen?: "reflect" | "lightScreen" | "auroraVeil";
   /** 리플렉터/빛의장막을 썼지만 이미 같은 스크린이 걸려있어서 실패했으면 true */
@@ -640,6 +642,11 @@ export interface SwitchLogEntry {
    * 돌아간다!" 줄을 추가로 붙인다(대체가 아니라 추가 — BattleTurnLog.tsx 참고).
    */
   shedTail?: boolean;
+  /**
+   * 썰렁개그(Move.selfSwitchAfterUse)로 물러난 교체면 true. `afterMove`도 함께 true. 꼬리자르기처럼
+   * "○○은(는) 트레이너의 곁으로 돌아간다!" 줄을 앞에 붙인다(대타 인계는 없음).
+   */
+  returnsToTrainer?: boolean;
   /**
    * 레드카드로 강제 교체됐으면 그 도구 이름. `forced`도 함께 true지만, 드래곤테일과 달리 `side`가
    * "상대에게 도구를 맞은 공격자"(자기 자신의 편) — 끌려나온 쪽이 기술 시전자의 반대가 아니라

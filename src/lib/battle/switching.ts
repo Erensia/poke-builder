@@ -213,8 +213,9 @@ function applyEntryAbilityOnSwitchIn(state: BattleState, key: FighterKey, log: s
       log,
     );
   }
-  // 가뭄·잔비·모래날림·눈퍼뜨리기: 다른 날씨가 있어도 덮어쓴다(기술 setsWeather와 동일)
-  if (ability.setsWeather) {
+  // 가뭄·잔비·모래날림·눈퍼뜨리기: 다른 날씨는 덮어쓰고, 이미 같은 날씨면 아무 일도 없다 — 남은 턴도
+  // 다시 채우지 않고 발동 문구도 없다(본가 6세대 이후 규칙, 기술 setsWeather의 실패와 같은 축).
+  if (ability.setsWeather && state.weather !== ability.setsWeather) {
     const weather = ability.setsWeather;
     state.weather = weather;
     state.weatherTurnsRemaining =
