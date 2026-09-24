@@ -120,7 +120,13 @@ export function resolveMirroredMoveEffects(input: MirroredMoveEffectsInput) {
   // 확률부(chance) statChanges는 여기서 굴려서 통과한 항목만 남긴다(확정은 그대로). 인분이면
   // 상대 대상 항목은 굴림 없이 통째로 제거한다. 예전엔 applyMoveStatChanges가 chance를 굴리지
   // 않고 100%로 적용하던 버그가 있었다(불꽃춤 자기 특공↑ 50%·브레이크클로 상대 방어↓ 50%).
-  const rolledStatChanges = berryEatFailed || costHpFailed
+  // 공격기(데미지 기술)의 랭크 변화는 기술이 실제로 맞았을 때만 일어난다 — 오버히트·인파이트의 자기 랭크 하락,
+  // 니트로차지의 스피드 상승, 브레이크클로의 상대 방어 하락 모두. 빗나감·방어로 막힘·상성 무효(데미지 0)면 없고,
+  // 대타에 맞았으면 있다(본가 규칙, 사용자 확인 2026-09-24). 변화기(칼춤 등)는 이 조건과 무관하다.
+  // (isDamaging은 가변 위력 기술을 빼므로 여기선 분류로 판단한다)
+  const damagingMoveLanded =
+    effectiveMove.category === "status" || (hit && !blockedByProtect && (damage > 0 || !!hitSubstitute));
+  const rolledStatChanges = berryEatFailed || costHpFailed || !damagingMoveLanded
     ? []
     : effectiveMove.statChanges?.filter((sc) => {
         if (secondaryEffectsBlockedByAbility && sc.target === "opponent") {

@@ -4,15 +4,17 @@ import type { PokemonType } from "../types/pokemon-type";
 import type { WeatherKind } from "../types/weather";
 import type { FieldKind } from "../types/field";
 
-function conditionMatches(
-  condition: AbilityModifierCondition | undefined,
-  move: Move,
-  weather?: WeatherKind,
-  attackerHpFraction = 1,
-  defenderHpIsFull = true,
-  defenderHasStatusCondition = false,
-  field?: FieldKind,
-): boolean {
+/** 특성 배율 조건 판정에 쓰는 전투 상황(안 넘긴 값은 매치업 페이지 기본값 — 풀피·상태이상 없음·날씨/필드 없음) */
+interface ConditionContext {
+  weather?: WeatherKind;
+  field?: FieldKind;
+  attackerHpFraction?: number;
+  defenderHpIsFull?: boolean;
+  defenderHasStatusCondition?: boolean;
+}
+
+function conditionMatches(condition: AbilityModifierCondition | undefined, move: Move, context: ConditionContext): boolean {
+  const { weather, field, attackerHpFraction = 1, defenderHpIsFull = true, defenderHasStatusCondition = false } = context;
   if (!condition) return true;
   if (condition.movePowerAtMost !== undefined) {
     if (move.power === null || move.power > condition.movePowerAtMost) return false;
@@ -76,7 +78,7 @@ export function resolveAbilityOffense(
 
   for (const modifier of ability.modifiers) {
     if (modifier.scope !== "offense") continue;
-    if (!conditionMatches(modifier.condition, move, weather, attackerHpFraction)) continue;
+    if (!conditionMatches(modifier.condition, move, { weather, attackerHpFraction })) continue;
     result.multiplier *= modifier.multiplier;
     if (modifier.overrideMoveType) result.overrideMoveType = modifier.overrideMoveType;
   }
@@ -99,10 +101,7 @@ export function resolveAbilityDefense(
   let multiplier = 1;
   for (const modifier of ability.modifiers) {
     if (modifier.scope !== "defense") continue;
-    if (
-      !conditionMatches(modifier.condition, move, undefined, 1, defenderHpIsFull, defenderHasStatusCondition, field)
-    )
-      continue;
+    if (!conditionMatches(modifier.condition, move, { defenderHpIsFull, defenderHasStatusCondition, field })) continue;
     multiplier *= modifier.multiplier;
   }
   return multiplier;

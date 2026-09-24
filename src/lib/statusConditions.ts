@@ -139,21 +139,42 @@ export function checkStatusActionBlock(
     return { blocked: random() < PARALYSIS_ACTION_FAIL_CHANCE, nextState: state };
   }
 
-  if (state.condition === "sleep") {
-    // 잠자기(Move.restSleep)로 걸린 잠듦은 확률 스케줄을 무시하고 정확히 2턴간 무조건 잠들었다가
-    // 3턴째 무조건 깬다 — 일반 잠듦의 "2턴째 33% 확률로 깰 수 있음"이 적용되지 않는다.
-    const effectiveTurnsElapsed = hasEarlyBird ? state.turnsElapsed + 1 : state.turnsElapsed;
-    const wakeChance =
-      effectiveTurnsElapsed >= 3 ? 1 : state.isRestSleep ? 0 : (SLEEP_WAKE_CHANCE_BY_TURN[effectiveTurnsElapsed] ?? 0);
-    if (random() < wakeChance) return { blocked: false, nextState: cureStatus() };
-    return { blocked: true, nextState: { ...state, turnsElapsed: state.turnsElapsed + 1 } };
-  }
-
-  if (state.condition === "freeze") {
-    const thawChance = state.turnsElapsed >= 3 ? 1 : FREEZE_THAW_CHANCE;
-    if (random() < thawChance) return { blocked: false, nextState: cureStatus() };
+  if (state.condition === "sleep" || state.condition === "freeze") {
+    if (random() < statusReleaseChance(state, hasEarlyBird)) return { blocked: false, nextState: cureStatus() };
     return { blocked: true, nextState: { ...state, turnsElapsed: state.turnsElapsed + 1 } };
   }
 
   return { blocked: false, nextState: state };
+}
+
+/**
+ * 잠듦/얼음이 이번 판정에서 풀릴 확률(checkStatusActionBlock의 스케줄 그대로).
+ * 잠자기(Move.restSleep)로 걸린 잠듦은 확률 스케줄을 무시하고 정확히 2턴간 무조건 잠들었다가
+ * 3턴째 무조건 깬다 — 일반 잠듦의 "2턴째 33% 확률로 깰 수 있음"이 적용되지 않는다.
+ */
+function statusReleaseChance(state: StatusConditionState, hasEarlyBird: boolean): number {
+  if (state.condition === "sleep") {
+    const effectiveTurnsElapsed = hasEarlyBird ? state.turnsElapsed + 1 : state.turnsElapsed;
+    return effectiveTurnsElapsed >= 3 ? 1 : state.isRestSleep ? 0 : (SLEEP_WAKE_CHANCE_BY_TURN[effectiveTurnsElapsed] ?? 0);
+  }
+  if (state.condition === "freeze") return state.turnsElapsed >= 3 ? 1 : FREEZE_THAW_CHANCE;
+  return 1;
+}
+
+/**
+ * 배틀 AI 기대값용 — 잠듦/얼음으로 앞으로 막힐 턴 수의 기댓값(checkStatusActionBlock 스케줄 기준).
+ * 마비는 매 턴 12.5%라 여기가 아니라 행동 확률 배율(1 − PARALYSIS_ACTION_FAIL_CHANCE)로 따로 반영한다.
+ */
+export function expectedStatusBlockedTurns(state: StatusConditionState, hasEarlyBird = false): number {
+  if (state.condition !== "sleep" && state.condition !== "freeze") return 0;
+  let expected = 0;
+  let stillBlocked = 1;
+  let s = state;
+  for (let i = 0; i < 6; i++) {
+    stillBlocked *= 1 - statusReleaseChance(s, hasEarlyBird);
+    if (stillBlocked <= 0) break;
+    expected += stillBlocked;
+    s = { ...s, turnsElapsed: s.turnsElapsed + 1 };
+  }
+  return expected;
 }

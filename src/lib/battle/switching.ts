@@ -8,7 +8,7 @@ import { computeRealStats } from "@/lib/statCalculator";
 import { applyStageDelta } from "@/lib/statStages";
 import { inflictStatus, isImmuneToStatus } from "@/lib/statusConditions";
 import { hasVolatile } from "@/lib/volatileConditions";
-import { getEffectiveness } from "@/lib/typeEffectiveness";
+import { calcSpikesDamage, calcStealthRockDamage, isGroundedForHazards } from "./entryCost";
 import { FIELD_DURATION, FIELD_ENTRY_ANNOUNCEMENT, isStatusBlockedByField } from "@/lib/fieldEffects";
 import { WEATHER_DURATION, abilityOf, activeWeather, applyForecastForm, applyMimicryForm, applyTransform, balloonEntryAnnouncement, cloneSide, consumeItem, contraryDelta, isFainted, opponentKey, sideOf, statusImmunitiesOf, weatherRockBonus, type BattleFighterState, type BattleState } from "./state";
 
@@ -83,21 +83,15 @@ export function triggerTerrainSeeds(state: BattleState): string[] {
     const name = getPokemon(fighter.slot.pokemonId)?.name ?? "포켓몬";
     const statText = seed.stat === "def" ? "방어가" : "특수방어가";
     lines.push(`${name}의 ${item!.name}! ${statText} 올랐다!`);
+    // 곡예: resolveAction의 행동 단위 전후비교(§attackerItemIdBeforeAction)는 "하나의 행동" 범위
+    // 밖에서 일어나는 이 시드 소모(배틀 시작/교체 등장/메가진화 시 등장 특성 처리 중)를 못 잡는다
+    // — 이 자리에서 직접 판정해야 한다(ver.1.7 §1-2에서 확인된 버그).
+    if (ability?.doublesSpeedOnItemLoss && !fighter.unburdenActive) {
+      fighter.unburdenActive = true;
+      lines.push(`${name}의 ${ability.name}! 스피드가 2배로 올랐다!`);
+    }
   }
   return lines;
-}
-
-/**
-/**
- * 압정뿌리기·독압정·끈적끈적네트가 실제로 발동하는 "접지" 상태인지(Phase 8 §6).
- * 비행 타입, 부유·천정부지(땅 면역 특성) 보유자는 비접지. 에어벌룬·텔레키네시스 등은
- * 로스터에 없어 미반영(fieldEffects와 동일한 단순화). 스텔스록은 접지 무관이라 이 판정을 안 쓴다.
- */
-function isGroundedForHazards(fighter: BattleFighterState): boolean {
-  if (fighter.types.includes("비행")) return false;
-  const ab = abilityOf(fighter);
-  if (ab?.grantsImmunityToTypes?.includes("땅")) return false;
-  return true;
 }
 
 /**
@@ -112,11 +106,6 @@ export function computeIllusionTarget(party: BattleFighterState[], selfIndex: nu
   return undefined;
 }
 
-/** 압정뿌리기 층수별 등장 데미지 비율 (사용자 확정: 1→1/16 · 2→1/8 · 3→1/4) */
-const SPIKES_DAMAGE_FRACTION_BY_LAYER: Record<number, number> = { 1: 1 / 16, 2: 1 / 8, 3: 1 / 4 };
-/** 스텔스록 등장 데미지 기준 비율(바위 상성 배율을 곱한다) */
-const STEALTH_ROCK_BASE_FRACTION = 1 / 8;
-
 /**
  * 교체로 나온 포켓몬이 상대 진영 설치물을 밟을 때의 처리(Phase 8 §6). performSwitch에서
  * 등장 특성보다 먼저 호출한다. 순서:
@@ -130,7 +119,6 @@ function applyEntryHazardsOnSwitchIn(state: BattleState, key: FighterKey, log: s
   const hz = sideOf(state, key).hazards;
   const selfName = getPokemon(self.slot.pokemonId)?.name ?? "포켓몬";
   const selfAbility = abilityOf(self);
-  const magicGuard = !!selfAbility?.negatesIndirectDamage;
 
   // 1. 독타입 등장 → 독압정 흡수
   if (hz.toxicSpikesLayers > 0 && self.types.includes("독")) {
@@ -139,23 +127,19 @@ function applyEntryHazardsOnSwitchIn(state: BattleState, key: FighterKey, log: s
   }
 
   // 2. 스텔스록 (접지 무관, 바위 상성)
-  if (hz.stealthRock && !magicGuard) {
-    const eff = getEffectiveness("바위", self.types);
-    if (eff > 0) {
-      const dmg = Math.max(1, Math.floor(self.maxHp * STEALTH_ROCK_BASE_FRACTION * eff));
-      self.currentHp = Math.max(0, self.currentHp - dmg);
-      log.push(`뾰족한 바위가 ${selfName}${eulReul(selfName)} 덮쳤다! (${dmg} 데미지)`);
-    }
+  const stealthRockDamage = calcStealthRockDamage(self.maxHp, self.types, selfAbility, hz);
+  if (stealthRockDamage > 0) {
+    self.currentHp = Math.max(0, self.currentHp - stealthRockDamage);
+    log.push(`뾰족한 바위가 ${selfName}${eulReul(selfName)} 덮쳤다! (${stealthRockDamage} 데미지)`);
   }
   if (isFainted(self)) return;
 
   // 3. 접지 대상만: 압정뿌리기 · 독압정 · 끈적끈적네트
-  if (isGroundedForHazards(self)) {
-    if (hz.spikesLayers > 0 && !magicGuard) {
-      const frac = SPIKES_DAMAGE_FRACTION_BY_LAYER[hz.spikesLayers] ?? 1 / 16;
-      const dmg = Math.max(1, Math.floor(self.maxHp * frac));
-      self.currentHp = Math.max(0, self.currentHp - dmg);
-      log.push(`${selfName}${eunNeun(selfName)} 압정에 상처를 입었다! (${dmg} 데미지)`);
+  if (isGroundedForHazards(self.types, selfAbility)) {
+    const spikesDamage = calcSpikesDamage(self.maxHp, self.types, selfAbility, hz);
+    if (spikesDamage > 0) {
+      self.currentHp = Math.max(0, self.currentHp - spikesDamage);
+      log.push(`${selfName}${eunNeun(selfName)} 압정에 상처를 입었다! (${spikesDamage} 데미지)`);
     }
     if (isFainted(self)) return;
 
@@ -229,8 +213,9 @@ function applyEntryAbilityOnSwitchIn(state: BattleState, key: FighterKey, log: s
       log,
     );
   }
-  // 가뭄·잔비·모래날림·눈퍼뜨리기: 다른 날씨가 있어도 덮어쓴다(기술 setsWeather와 동일)
-  if (ability.setsWeather) {
+  // 가뭄·잔비·모래날림·눈퍼뜨리기: 다른 날씨는 덮어쓰고, 이미 같은 날씨면 아무 일도 없다 — 남은 턴도
+  // 다시 채우지 않고 발동 문구도 없다(본가 6세대 이후 규칙, 기술 setsWeather의 실패와 같은 축).
+  if (ability.setsWeather && state.weather !== ability.setsWeather) {
     const weather = ability.setsWeather;
     state.weather = weather;
     state.weatherTurnsRemaining =
@@ -316,18 +301,23 @@ export function applyMegaEvolution(state: BattleState, key: FighterKey, log: str
  * 설치물 발동(스텔스록 등장 데미지 등)은 §5에서 이 함수의 "등장 파이프라인" 지점에 붙는다.
  * toIndex가 현재 활성이거나 범위를 벗어나면 아무것도 안 한다.
  */
+export interface PerformSwitchOptions {
+  /** 자기 의지로 교체했으면 true(runTurn 교체 액션, 기본값). 기절 후 강제 교체(applySwitch)면 false — 가속 발동. */
+  voluntary?: boolean;
+  /** 배턴터치: 물러나는 포켓몬의 랭크·급소랭크·대타·멸망카운트·일부 volatile을 새로 나온 포켓몬이 이어받는다. */
+  passBaton?: boolean;
+  /** 꼬리자르기: 물러나는 포켓몬이 세운 대타만 새로 나온 포켓몬에게 넘긴다(랭크 등은 안 넘김). */
+  passSubstituteOnly?: boolean;
+}
+
 export function performSwitch(
   state: BattleState,
   key: FighterKey,
   toIndex: number,
   log: string[] = [],
-  /** 자기 의지로 교체했으면 true(runTurn 교체 액션). 기절 후 강제 교체(applySwitch)면 false — 가속 발동. */
-  voluntary = true,
-  /** 배턴터치: 물러나는 포켓몬의 랭크·급소랭크·대타·멸망카운트·일부 volatile을 새로 나온 포켓몬이 이어받는다. */
-  passBaton = false,
-  /** 꼬리자르기: 물러나는 포켓몬이 세운 대타만 새로 나온 포켓몬에게 넘긴다(랭크 등은 안 넘김). */
-  passSubstituteOnly = false,
+  options: PerformSwitchOptions = {},
 ): void {
+  const { voluntary = true, passBaton = false, passSubstituteOnly = false } = options;
   const side = sideOf(state, key);
   if (toIndex === side.activeIndex || toIndex < 0 || toIndex >= side.party.length) return;
   const outgoing = side.party[side.activeIndex];
@@ -513,7 +503,7 @@ export function applySwitch(
   const targetSide = sideOf(state, key);
   const outPokemonId = targetSide.party[targetSide.activeIndex].slot.pokemonId;
   const entryMessages: string[] = [];
-  performSwitch(state, key, toIndex, entryMessages, opts.voluntary ?? false, opts.passBaton ?? false);
+  performSwitch(state, key, toIndex, entryMessages, { voluntary: opts.voluntary ?? false, passBaton: opts.passBaton ?? false });
   const inFighter = sideOf(state, key).party[sideOf(state, key).activeIndex];
   // 일루전(§6-1): 위장 중이면 로그에도 위장 대상 이름이 나가야 상대가 안 눈치챈다.
   const inPokemonId = inFighter.illusionAs ?? inFighter.slot.pokemonId;

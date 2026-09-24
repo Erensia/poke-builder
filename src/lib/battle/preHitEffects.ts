@@ -7,14 +7,13 @@ import { getEffectiveForm } from "@/lib/pokemonForm";
 import { computeRealStats } from "@/lib/statCalculator";
 import { applyMoveStatChanges, applyStageDelta } from "@/lib/statStages";
 import { getAbilityPriorityBoost, resolveEffectiveDefenderAbility } from "@/lib/abilityModifiers";
-import { computeHitChance } from "@/lib/accuracyCrit";
 import { checkStatusActionBlock, inflictStatus, isImmuneToStatus } from "@/lib/statusConditions";
 import { ATTRACT_ACTION_BLOCK_CHANCE, CONFUSION_SELF_HIT_CHANCE, consumeVolatileTurn, hasVolatile } from "@/lib/volatileConditions";
 import { resolveMoveContext } from "@/lib/moveContext";
 import { WEIGHT_MOVE_FALLBACK_POWER, absoluteWeightPowerValue, computeDamage, positiveStagesPowerValue, reversalPowerFromHp, rivalryDamageMultiplier, weightRatioPowerValue } from "@/lib/battlePower";
 import { applyWeatherBall } from "@/lib/weatherEffects";
 import { applyFieldPulse, getFieldPowerMultiplier, isOpponentTargetingMove, isPriorityMoveBlockedByField, isStatusBlockedByField } from "@/lib/fieldEffects";
-import { getItemAccuracyMultiplier } from "@/lib/itemEffects";
+import { computeBattleHitChance } from "./hitChance";
 import { CONFUSION_SELF_HIT_MOVE, MIN_DAMAGE_ROLL, STRUGGLE_MOVE, abilityOf, activeWeather, consumeItem, contraryDelta, gyroBallPowerValue, hasSheerForceSecondaryEffect, isFainted, opponentKey, sideOf, statusImmunitiesOf, type BattleFighterState, type BattleState } from "./state";
 
 export function resolvePreHitEffects(
@@ -537,18 +536,14 @@ export function resolvePreHitEffects(
     stabMultiplier,
     typeEffectiveness,
     absorbedByDefenderAbility,
-  } = resolveMoveContext(
-    attackerAbility,
-    fieldAdjustedMove,
-    defender.types,
-    defenderAbility,
-    activeWeather(state),
+  } = resolveMoveContext(attackerAbility, fieldAdjustedMove, defender.types, defenderAbility, {
+    weather: activeWeather(state),
     defenderItem,
-    attacker.currentHp / attacker.maxHp,
-    defender.currentHp === defender.maxHp,
-    defender.status.condition !== null,
-    state.field,
-  );
+    attackerHpFraction: attacker.currentHp / attacker.maxHp,
+    defenderHpIsFull: defender.currentHp === defender.maxHp,
+    defenderHasStatusCondition: defender.status.condition !== null,
+    field: state.field,
+  });
 
   // 우격다짐: 데미지 기술에 "상대에게 해로운"(상태이상/행동방해/랭크다운) 또는 "자신에게 이로운"
   // (자기 랭크업) 부가 효과가 있으면 그 효과를 전부 없애는 대신 위력에 배수를 곱한다. 반동
@@ -816,42 +811,19 @@ export function resolvePreHitEffects(
     consumeItem(attacker);
   }
 
-  // 반짝가루(방어측 0.9배)·광각렌즈(공격측 1.1배)·포커스렌즈(공격측, 늦게 움직일 때 1.2배)·
-  // 모래숨기(방어측, 날씨 조건부 0.8배)·복안(공격측 1.3배)을 전부 한 배율로 곱한다.
-  const weatherAccuracyBoost = defenderAbility?.weatherOpponentAccuracyMultiplier;
-  // 의욕(Hustle): 물리 기술 명중률 ×0.8.
-  const hustleAccuracyMultiplier =
-    move.category === "physical" && attackerAbility?.hustlePhysicalAccuracyMultiplier !== undefined
-      ? attackerAbility.hustlePhysicalAccuracyMultiplier
-      : 1;
-  const abilityAccuracyMultiplier =
-    (weatherAccuracyBoost && weatherAccuracyBoost.weather === activeWeather(state) ? weatherAccuracyBoost.multiplier : 1) *
-    (attackerAbility?.userAccuracyMultiplier ?? 1) *
-    hustleAccuracyMultiplier;
-  const accuracyExtraMultiplier =
-    getItemAccuracyMultiplier(attackerItem, defenderItem, movesSecond) * abilityAccuracyMultiplier;
-  // 날카로운눈: 공격측이 이 특성이면 상대의 회피율 상승분을 무시한다(원문 "상대의 회피율을
-  // 무시하고 공격한다") — 다만 회피율이 마이너스인 경우(오히려 공격측에게 유리)는 그대로
-  // 존중한다. 0 이하로 클램프하지 않고 min(evasion, 0)만 적용하면 두 조건을 동시에 만족한다.
-  // 성스러운칼은 원문이 방어/특방과 나란히 "회피율 랭크 변화를 무시"라고 못박아서 날카로운눈과
-  // 달리 방향 구분 없이 완전히 0으로 취급한다(천진식 전면 무시와 같은 결).
-  const effectiveDefenderEvasion = attackerAbility?.ignoresOpponentEvasionBoost
-    ? Math.min(defender.accuracyStages.evasion, 0)
-    : effectiveMove.ignoresDefenderStatStagesInDamage
-      ? 0
-      : defender.accuracyStages.evasion;
-  // 플라잉프레스: 상대가 이번 배틀에서 작아지기를 쓴 적이 있으면 반드시 명중한다(위력 2배는 아래에서).
-  const minimizeBonusActive = !!(effectiveMove.bonusVsMinimize && defender.usedMoveIds?.["작아지기"]);
-  const hitChance =
-    // 노가드: 어느 한쪽이라도 지녔으면 이번 공격은 명중률/회피율과 무관하게 반드시 명중한다.
-    attackerAbility?.alwaysHits || defenderAbility?.alwaysHits || minimizeBonusActive
-      ? null
-      : computeHitChance(
-          effectiveMove.accuracy,
-          attacker.accuracyStages.accuracy,
-          effectiveDefenderEvasion,
-          accuracyExtraMultiplier,
-        );
+  // 명중 확률(배율·회피율 예외·필중 조건)은 배틀 AI와 공유하는 computeBattleHitChance에서 계산한다.
+  const hitChance = computeBattleHitChance({
+    state,
+    attacker,
+    defender,
+    move: effectiveMove,
+    hustleCategory: move.category,
+    attackerAbility,
+    defenderAbility,
+    attackerItem,
+    defenderItem,
+    attackerMovesSecond: movesSecond,
+  });
 
   // 상대가 차지 기술 준비 턴(공중날기 등)으로 무적인 동안엔, bypassesHiding에 이 무적 종류가
   // 포함된 기술이 아닌 이상 조건 없이 빗나간다 — 명중률 굴림 자체를 건너뛴다.
