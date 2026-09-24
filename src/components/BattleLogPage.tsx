@@ -41,6 +41,7 @@ import {
   type TurnAction,
   type TurnResult,
 } from "../lib/battleSimulator";
+import { chooseAiAction, chooseAiForcedSwitch, sampleRiskAversion } from "../lib/battle/ai";
 import type { PartySlot } from "../types/party";
 import type { StatusCondition } from "../types/status";
 import type { BaseStats } from "../types/stats";
@@ -132,6 +133,8 @@ function BattleSetupScreen({
   proceedLabel,
   hasMovelessSlot,
   onProceed,
+  aiOpponent,
+  onToggleAiOpponent,
 }: {
   setup: ReturnType<typeof useBattleSetup>;
   hasPartyPresets: boolean;
@@ -143,6 +146,8 @@ function BattleSetupScreen({
   proceedLabel: string;
   hasMovelessSlot: boolean;
   onProceed: () => void;
+  aiOpponent: boolean;
+  onToggleAiOpponent: (on: boolean) => void;
 }) {
   const sideCtls = (side: Side) => (side === "a" ? setup.a : setup.b);
   const slotCtl = (side: Side, i: SlotIndex) => sideCtls(side)[i];
@@ -199,6 +204,16 @@ function BattleSetupScreen({
               )}
               {side === "a" ? "내 파티" : "상대 파티"}{" "}
               <span className="battle-setup-column-hint">6마리까지 빌드 · 4마리 이상이면 3마리 선출</span>
+              {side === "b" && (
+                <label className="battle-ai-toggle">
+                  <input
+                    type="checkbox"
+                    checked={aiOpponent}
+                    onChange={(e) => onToggleAiOpponent(e.target.checked)}
+                  />
+                  <span>AI가 조작</span>
+                </label>
+              )}
             </div>
             {movelessWarningFor(side) && (
               <p className="battle-lock-warning">{movelessWarningFor(side)}</p>
@@ -389,7 +404,10 @@ function BattleBoard({
   moveRestrictionMessage,
   playTurn,
   resetToSetup,
+  aiSide,
 }: {
+  /** 컴퓨터(배틀 AI)가 조작하는 편. 사람이 양쪽 다 조작하면 null */
+  aiSide: Side | null;
   battleState: BattleState;
   winner: FighterKey | "draw" | undefined;
   selected: SelectedState;
@@ -534,6 +552,7 @@ function BattleBoard({
                     <span className="battle-fighter-mega-tag">{megaBadgeLabel(form.mega)}</span>
                   )}
                   {fighter.currentHp <= 0 && <span className="battle-fighter-fainted"> (기절)</span>}
+                  {side === aiSide && <span className="battle-fighter-ai-tag">AI</span>}
                 </span>
               </div>
               <div className="battle-status-tags">
@@ -678,6 +697,17 @@ function BattleBoard({
             {(() => {
               const bs = side === "a" ? battleState.sideA : battleState.sideB;
               const benchIdx = switchableIndices(side);
+
+              // 0) AI가 조작하는 편: 기술·교체·메가진화·강제 교체·유턴류 교대를 전부 AI가 고른다.
+              if (side === aiSide) {
+                if (winner) return null;
+                const waitingSwitch = pendingForcedSwitch?.[side] || pendingPivot?.side === side;
+                return (
+                  <div className="battle-struggle-notice">
+                    {waitingSwitch ? "AI가 내보낼 포켓몬을 고르고 있다..." : "AI가 이번 턴 행동을 고른다"}
+                  </div>
+                );
+              }
 
               // 1) 강제 교체: 활성이 기절해 다음 턴 전에 교대해야 한다
               if (pendingForcedSwitch?.[side]) {
@@ -933,6 +963,7 @@ function BattleBoard({
           className="battle-start-button"
           disabled={(["a", "b"] as const).some(
             (side) =>
+              side !== aiSide &&
               selected[side]?.kind !== "switch" &&
               !isStruggling(side) &&
               battleState[side].chargingMoveId === undefined &&
@@ -982,6 +1013,11 @@ export function BattleLogPage() {
   const [selection, setSelection] = useState<{ a: SlotIndex[]; b: SlotIndex[] }>({ a: [], b: [] });
   // 이번 턴 메가진화를 선언했는지(§4). 매 턴 시작 시 꺼짐으로 초기화한다.
   const [megaDeclared, setMegaDeclared] = useState<MegaDeclaredState>({ a: false, b: false });
+  // 배틀 AI: 셋업 화면 토글(상대 편을 AI가 조작할지)과, 대전 시작 시점에 확정된 AI 편·위험 회피 성향.
+  // 위험 회피 성향은 대전마다 1회만 뽑아 끝까지 쓴다(decision-layer §5).
+  const [aiOpponent, setAiOpponent] = useState(true);
+  const [aiSide, setAiSide] = useState<Side | null>(null);
+  const [aiRiskAversion, setAiRiskAversion] = useState(0.5);
 
   const sideCtls = (side: Side) => (side === "a" ? setup.a : setup.b);
   const slotCtl = (side: Side, i: SlotIndex) => sideCtls(side)[i];
@@ -1156,6 +1192,8 @@ export function BattleLogPage() {
     setLockWarning(null);
     setSelecting(false);
     setMegaDeclared({ a: false, b: false });
+    setAiSide(aiOpponent ? "b" : null);
+    setAiRiskAversion(sampleRiskAversion());
   }
 
   /** 빌드 화면 "다음/대전 시작" — 양쪽 다 3마리 이하면 선출을 건너뛰고 바로 대전, 아니면 선출 화면으로 */
@@ -1200,6 +1238,7 @@ export function BattleLogPage() {
     setSelecting(false);
     setSelection({ a: [], b: [] });
     setMegaDeclared({ a: false, b: false });
+    setAiSide(null);
   }
 
   /**
@@ -1278,6 +1317,34 @@ export function BattleLogPage() {
     });
   }
 
+  /** 이 편이 이번 턴 실제로 고를 수 있는 기술 id — 기술 버튼·턴 진행 검사와 같은 규칙 */
+  function selectableMoveIds(side: Side): string[] {
+    if (!battleState) return [];
+    const fighter = battleState[side];
+    const locked = choiceLockedMoveId(side);
+    return activeMoveIds(side).filter(
+      (id): id is string =>
+        id !== null &&
+        (fighter.remainingPp[id] ?? getMove(id)?.pp ?? 0) > 0 &&
+        (locked === null || id === locked) &&
+        moveRestrictionMessage(side, id) === null,
+    );
+  }
+
+  // AI 편의 강제 교체(기절 후)·유턴류 교대는 사람 입력을 기다리지 않고 AI가 바로 고른다.
+  useEffect(() => {
+    if (!battleState || !aiSide) return;
+    if (pendingPivot?.side === aiSide) {
+      resolvePivot(chooseAiForcedSwitch(battleState, aiSide, aiRiskAversion) ?? switchableIndices(aiSide)[0] ?? -1);
+      return;
+    }
+    if (pendingForcedSwitch?.[aiSide] && !pendingPivot) {
+      const toIndex = chooseAiForcedSwitch(battleState, aiSide, aiRiskAversion) ?? switchableIndices(aiSide)[0];
+      if (toIndex !== undefined) resolveForcedSwitch(aiSide, toIndex);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingForcedSwitch, pendingPivot, battleState, aiSide]);
+
   function playTurn() {
     if (!battleState || pendingForcedSwitch || pendingPivot) return;
     setLockWarning(null);
@@ -1290,13 +1357,15 @@ export function BattleLogPage() {
     };
     const isSwitch = (side: Side) => selected[side]?.kind === "switch";
     // 교체를 고른 쪽은 발버둥/차지와 무관하게 교체가 우선. 그 외엔 선택(또는 발버둥/차지)이 있어야 진행.
+    // AI 편은 사람 선택 없이 아래에서 AI가 고른다.
     for (const side of ["a", "b"] as const) {
+      if (side === aiSide) continue;
       if (!isSwitch(side) && !struggling[side] && !charging[side] && !selected[side]) return;
     }
 
     // 구애스카프·도발/사슬묶기/앙코르 확인 — 기술을 고른 쪽만. 교체·발버둥·차지는 대상 아님.
     for (const side of ["a", "b"] as const) {
-      if (isSwitch(side) || struggling[side] || charging[side]) continue;
+      if (side === aiSide || isSwitch(side) || struggling[side] || charging[side]) continue;
       const chosen = selected[side]?.kind === "move" ? selected[side]!.moveId : null;
       if (!chosen) continue;
       const locked = choiceLockedMoveId(side);
@@ -1313,7 +1382,15 @@ export function BattleLogPage() {
       }
     }
 
+    // AI 편: 발버둥·차지 2턴째는 사람과 같은 자동 처리를 따르고, 그 외엔 AI가 기술·교체·메가진화를 고른다.
+    // 고를 수 있는 기술은 사람에게 적용하는 규칙(PP·구애 고정·도발·사슬묶기·앙코르)과 똑같이 거른다.
+    const aiAction =
+      aiSide && !struggling[aiSide] && !charging[aiSide]
+        ? chooseAiAction(battleState, aiSide, aiRiskAversion, { legalMoveIds: selectableMoveIds(aiSide) }).action
+        : null;
+
     const actionFor = (side: Side): TurnAction | null => {
+      if (side === aiSide && aiAction) return aiAction;
       const sel = selected[side];
       if (sel?.kind === "switch") return { kind: "switch", toIndex: sel.toIndex };
       const mega = megaDeclared[side] || undefined; // 메가진화는 기술 행동에만 실린다
@@ -1380,6 +1457,8 @@ export function BattleLogPage() {
           proceedLabel={proceedLabel}
           hasMovelessSlot={hasMovelessSlot}
           onProceed={handleProceed}
+          aiOpponent={aiOpponent}
+          onToggleAiOpponent={setAiOpponent}
         />
       )}
 
@@ -1424,6 +1503,7 @@ export function BattleLogPage() {
           moveRestrictionMessage={moveRestrictionMessage}
           playTurn={playTurn}
           resetToSetup={resetToSetup}
+          aiSide={aiSide}
         />
       )}
 

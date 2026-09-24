@@ -82,6 +82,26 @@
   color: var(--text-muted);
 }
 
+/* 배틀 AI: 상대 편을 컴퓨터가 조작할지 */
+.battle-ai-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-left: auto;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.2rem 0.55rem;
+  border: 1px solid var(--violet);
+  border-radius: 6px;
+  background: var(--violet-soft);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.battle-ai-toggle input {
+  cursor: pointer;
+}
+
 .battle-setup-load-party {
   font-size: 0.72rem;
   font-weight: 600;
@@ -406,6 +426,18 @@
   letter-spacing: 0.03em;
   color: #fff;
   background: var(--gradient);
+  padding: 0.05rem 0.35rem;
+  border-radius: 4px;
+  margin-left: 0.35rem;
+}
+
+.battle-fighter-ai-tag {
+  font-family: var(--display);
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: var(--violet);
+  border: 1px solid var(--violet);
   padding: 0.05rem 0.35rem;
   border-radius: 4px;
   margin-left: 0.35rem;
