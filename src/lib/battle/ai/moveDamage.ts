@@ -86,7 +86,10 @@ export function estimateMoveHits(ctx: MoveHitContext, move: Move): MoveHitEstima
   const defenderHp = ctx.defenderHp ?? defender.currentHp;
   if (defenderHp <= 0) return { ...NO_DAMAGE, expected: 0, rawHits: 0, accuracy: 1, typeEffectiveness: 1 };
 
-  const moveContext = resolveMoveContext(attackerAbility, move, defenderTypes, defenderAbility, activeWeather(state), defenderItem);
+  const moveContext = resolveMoveContext(attackerAbility, move, defenderTypes, defenderAbility, {
+    weather: activeWeather(state),
+    defenderItem,
+  });
   const typeEffectiveness = moveContext.typeEffectiveness;
 
   // 여왕의위엄/테일아머·사이코필드: 우선도 1 이상인 상대 대상 기술은 실패한다.

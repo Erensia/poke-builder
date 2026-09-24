@@ -33,22 +33,28 @@ export interface MoveContext {
   blockedByBulletproof: boolean;
 }
 
+/** resolveMoveContext의 전투 상황 입력. 안 넘긴 값은 매치업 페이지 기본값(1턴 스냅샷) */
+export interface MoveContextOptions {
+  weather?: WeatherKind;
+  defenderItem?: Item;
+  /** 맹화·급류·심록·벌레의알림(HP 1/3 이하 조건)용. 안 넘기면 풀피로 간주 */
+  attackerHpFraction?: number;
+  /** 멀티스케일(HP 풀피 조건)용. 안 넘기면 풀피로 간주 */
+  defenderHpIsFull?: boolean;
+  /** 이상한비늘(상태이상 조건)용. 안 넘기면 상태이상 없음으로 간주 */
+  defenderHasStatusCondition?: boolean;
+  /** 풀모피(그래스필드 조건)용 현재 필드. 안 넘기면 필드 없음으로 간주 */
+  field?: FieldKind;
+}
+
 export function resolveMoveContext(
   attackerAbility: Ability | undefined,
   move: Move,
   defenderTypes: PokemonType[],
   defenderAbility: Ability | undefined,
-  weather?: WeatherKind,
-  defenderItem?: Item,
-  /** 맹화·급류·심록·벌레의알림(HP 1/3 이하 조건)용. 안 넘기면 풀피로 간주(매치업 페이지 기본값) */
-  attackerHpFraction?: number,
-  /** 멀티스케일(HP 풀피 조건)용. 안 넘기면 풀피로 간주(매치업 페이지 기본값) */
-  defenderHpIsFull = true,
-  /** 이상한비늘(상태이상 조건)용. 안 넘기면 상태이상 없음으로 간주(매치업 페이지 기본값) */
-  defenderHasStatusCondition = false,
-  /** 풀모피(그래스필드 조건)용 현재 필드. 안 넘기면 필드 없음으로 간주. */
-  field?: FieldKind,
+  options: MoveContextOptions = {},
 ): MoveContext {
+  const { weather, defenderItem, attackerHpFraction, defenderHpIsFull = true, defenderHasStatusCondition = false, field } = options;
   const abilityOffense = resolveAbilityOffense(attackerAbility, move, weather, attackerHpFraction);
   const effectiveMove = abilityOffense.overrideMoveType ? { ...move, type: abilityOffense.overrideMoveType } : move;
 

@@ -536,18 +536,14 @@ export function resolvePreHitEffects(
     stabMultiplier,
     typeEffectiveness,
     absorbedByDefenderAbility,
-  } = resolveMoveContext(
-    attackerAbility,
-    fieldAdjustedMove,
-    defender.types,
-    defenderAbility,
-    activeWeather(state),
+  } = resolveMoveContext(attackerAbility, fieldAdjustedMove, defender.types, defenderAbility, {
+    weather: activeWeather(state),
     defenderItem,
-    attacker.currentHp / attacker.maxHp,
-    defender.currentHp === defender.maxHp,
-    defender.status.condition !== null,
-    state.field,
-  );
+    attackerHpFraction: attacker.currentHp / attacker.maxHp,
+    defenderHpIsFull: defender.currentHp === defender.maxHp,
+    defenderHasStatusCondition: defender.status.condition !== null,
+    field: state.field,
+  });
 
   // 우격다짐: 데미지 기술에 "상대에게 해로운"(상태이상/행동방해/랭크다운) 또는 "자신에게 이로운"
   // (자기 랭크업) 부가 효과가 있으면 그 효과를 전부 없애는 대신 위력에 배수를 곱한다. 반동

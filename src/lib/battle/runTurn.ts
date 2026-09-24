@@ -385,7 +385,7 @@ function runActionPhase(ctx: RunTurnContext): RunTurnOutcome | RunTurnPaused {
         const toIndex = reserveIdxs[Math.floor(random() * reserveIdxs.length)];
         const outgoing = attackerSide.party[fromIndex];
         const entryMessages: string[] = [];
-        performSwitch(state, key, toIndex, entryMessages, false, false);
+        performSwitch(state, key, toIndex, entryMessages, { voluntary: false });
         const inFighter = attackerSide.party[toIndex];
         switches.push({
           side: key,
@@ -434,7 +434,7 @@ function runActionPhase(ctx: RunTurnContext): RunTurnOutcome | RunTurnPaused {
       const outgoing = oppSide.party[fromIndex];
       const entryMessages: string[] = [];
       // voluntary=false — 기절 후 강제 교체와 같은 취급(가속 발동, 등장 파이프라인은 그대로 탐).
-      performSwitch(state, oppKey, toIndex, entryMessages, false, false);
+      performSwitch(state, oppKey, toIndex, entryMessages, { voluntary: false });
       const inFighter = oppSide.party[toIndex];
       switches.push({
         side: oppKey,
@@ -563,7 +563,11 @@ export function resumeTurn(ctx: RunTurnContext, toIndex: number): RunTurnOutcome
       const fromIndex = side.activeIndex;
       const outgoing = side.party[fromIndex];
       const entryMessages: string[] = [];
-      performSwitch(ctx.state, pivot.side, toIndex, entryMessages, true, pivot.passBaton, pivot.passSubstitute);
+      performSwitch(ctx.state, pivot.side, toIndex, entryMessages, {
+        voluntary: true,
+        passBaton: pivot.passBaton,
+        passSubstituteOnly: pivot.passSubstitute,
+      });
       const inFighter = side.party[toIndex];
       ctx.switches.push({
         side: pivot.side,

@@ -301,18 +301,23 @@ export function applyMegaEvolution(state: BattleState, key: FighterKey, log: str
  * 설치물 발동(스텔스록 등장 데미지 등)은 §5에서 이 함수의 "등장 파이프라인" 지점에 붙는다.
  * toIndex가 현재 활성이거나 범위를 벗어나면 아무것도 안 한다.
  */
+export interface PerformSwitchOptions {
+  /** 자기 의지로 교체했으면 true(runTurn 교체 액션, 기본값). 기절 후 강제 교체(applySwitch)면 false — 가속 발동. */
+  voluntary?: boolean;
+  /** 배턴터치: 물러나는 포켓몬의 랭크·급소랭크·대타·멸망카운트·일부 volatile을 새로 나온 포켓몬이 이어받는다. */
+  passBaton?: boolean;
+  /** 꼬리자르기: 물러나는 포켓몬이 세운 대타만 새로 나온 포켓몬에게 넘긴다(랭크 등은 안 넘김). */
+  passSubstituteOnly?: boolean;
+}
+
 export function performSwitch(
   state: BattleState,
   key: FighterKey,
   toIndex: number,
   log: string[] = [],
-  /** 자기 의지로 교체했으면 true(runTurn 교체 액션). 기절 후 강제 교체(applySwitch)면 false — 가속 발동. */
-  voluntary = true,
-  /** 배턴터치: 물러나는 포켓몬의 랭크·급소랭크·대타·멸망카운트·일부 volatile을 새로 나온 포켓몬이 이어받는다. */
-  passBaton = false,
-  /** 꼬리자르기: 물러나는 포켓몬이 세운 대타만 새로 나온 포켓몬에게 넘긴다(랭크 등은 안 넘김). */
-  passSubstituteOnly = false,
+  options: PerformSwitchOptions = {},
 ): void {
+  const { voluntary = true, passBaton = false, passSubstituteOnly = false } = options;
   const side = sideOf(state, key);
   if (toIndex === side.activeIndex || toIndex < 0 || toIndex >= side.party.length) return;
   const outgoing = side.party[side.activeIndex];
@@ -498,7 +503,7 @@ export function applySwitch(
   const targetSide = sideOf(state, key);
   const outPokemonId = targetSide.party[targetSide.activeIndex].slot.pokemonId;
   const entryMessages: string[] = [];
-  performSwitch(state, key, toIndex, entryMessages, opts.voluntary ?? false, opts.passBaton ?? false);
+  performSwitch(state, key, toIndex, entryMessages, { voluntary: opts.voluntary ?? false, passBaton: opts.passBaton ?? false });
   const inFighter = sideOf(state, key).party[sideOf(state, key).activeIndex];
   // 일루전(§6-1): 위장 중이면 로그에도 위장 대상 이름이 나가야 상대가 안 눈치챈다.
   const inPokemonId = inFighter.illusionAs ?? inFighter.slot.pokemonId;

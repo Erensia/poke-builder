@@ -367,19 +367,15 @@ export function evaluateSlotMatchup(
     abilityDefenseMultiplier: abilityDefense,
     stabMultiplier,
     typeEffectiveness,
-  } = resolveMoveContext(
-    attackerAbility,
-    fieldAdjustedMove,
-    defenderForm.types,
-    defenderAbility,
-    effectiveWeather,
+  } = resolveMoveContext(attackerAbility, fieldAdjustedMove, defenderForm.types, defenderAbility, {
+    weather: effectiveWeather,
     defenderItem,
     // 매치업 페이지는 1턴 스냅샷이라 아래 세 값을 안 넘겨 기본값(풀피/상태이상 없음)을 쓴다.
     attackerHpFraction,
     defenderHpIsFull,
     defenderHasStatusCondition,
     field,
-  );
+  });
 
   // 다단히트 기술이면, 특성/타입 조건 판정은 원래 기술(1타 위력) 기준으로 이미 끝났으니 여기서만
   // 선택한 타수까지의 위력을 합산해서 결정력 계산에 쓸 위력으로 바꿔치기한다.
@@ -625,12 +621,7 @@ export function computeSoloOffensePower(
     fieldAdjustedMove,
     [],
     undefined,
-    effectiveWeather,
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    field,
+    { weather: effectiveWeather, field },
   );
 
   const effectiveMoveWithHits = (() => {
