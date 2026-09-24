@@ -8,7 +8,7 @@ import { megaBadgeLabel } from "../lib/pokemonForm";
 import { getDefensiveProfile } from "../lib/typeEffectiveness";
 import { compareDexOrder } from "../lib/dexOrder";
 import { POKEMON_TYPES, type PokemonType } from "../types/pokemon-type";
-import type { Pokemon, MegaEvolution } from "../types/pokemon";
+import type { FormVariant, Pokemon, MegaEvolution } from "../types/pokemon";
 import type { BaseStats } from "../types/stats";
 import "./PokedexPage.css";
 
@@ -115,13 +115,53 @@ function MegaBlock({ pokemon, mega }: { pokemon: Pokemon; mega: MegaEvolution })
   );
 }
 
+/**
+ * 폼 변종(루가루암·스트린더·에써르·대쓰여너·시비꼬, ver.1.8 트랙 K) 선택 칩. 고른 폼 기준으로
+ * 상세 전체(아바타·타입·종족값·방어 상성·특성·기술 목록)가 바뀐다.
+ */
+function FormTabs({
+  forms,
+  selectedId,
+  onSelect,
+}: {
+  forms: FormVariant[];
+  selectedId: string;
+  onSelect: (id: string) => void;
+}) {
+  return (
+    <div className="pokedex-form-tabs" role="tablist" aria-label="모습">
+      {forms.map((f) => (
+        <button
+          key={f.id}
+          type="button"
+          role="tab"
+          aria-selected={f.id === selectedId}
+          className={`pokedex-form-tab${f.id === selectedId ? " is-active" : ""}`}
+          onClick={() => onSelect(f.id)}
+        >
+          {f.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function PokedexDetail({ pokemon, onSelectMove }: { pokemon: Pokemon; onSelectMove: (moveId: string) => void }) {
-  const normalAbilities = pokemon.abilities
+  // 폼 변종이 있으면 기준(standard) 폼부터 보여준다. 종이 바뀌면 부모가 key로 다시 마운트해 초기화된다.
+  const forms = pokemon.formVariants;
+  const [formId, setFormId] = useState(() => forms?.find((f) => f.standard)?.id ?? forms?.[0]?.id);
+  const form = forms?.find((f) => f.id === formId);
+  const types = form?.types ?? pokemon.types;
+  const baseStats = form?.baseStats ?? pokemon.baseStats;
+  const learnset = form?.learnset ?? pokemon.learnset;
+
+  const normalAbilities = (form?.abilities ?? pokemon.abilities)
     .map((id) => getAbility(id))
     .filter((a): a is NonNullable<typeof a> => !!a);
-  const hiddenAbility = pokemon.hiddenAbility ? getAbility(pokemon.hiddenAbility) : undefined;
+  const hiddenAbilityId = form ? form.hiddenAbility : pokemon.hiddenAbility;
+  const hiddenAbility = hiddenAbilityId ? getAbility(hiddenAbilityId) : undefined;
   // 냐오닉스처럼 성별로 숨겨진 특성이 갈리는 종은 둘 다 보여준다(수컷/암컷 라벨 포함).
-  const genderedHidden = pokemon.genderedHiddenAbility
+  const genderedHidden = !form && pokemon.genderedHiddenAbility
     ? {
         male: getAbility(pokemon.genderedHiddenAbility.male),
         female: getAbility(pokemon.genderedHiddenAbility.female),
@@ -133,6 +173,8 @@ function PokedexDetail({ pokemon, onSelectMove }: { pokemon: Pokemon; onSelectMo
       <div className="pokedex-detail-head">
         <PokemonAvatar
           pokemon={pokemon}
+          form={form ? { formVariant: form.id } : undefined}
+          gradientTypes={types}
           size={56}
           radius="circle"
           className="pokedex-detail-avatar"
@@ -140,41 +182,29 @@ function PokedexDetail({ pokemon, onSelectMove }: { pokemon: Pokemon; onSelectMo
         <div>
           <h3>{pokemon.name}</h3>
           <div className="pokedex-detail-types">
-            {pokemon.types.map((t) => (
+            {types.map((t) => (
               <TypeBadge key={t} type={t} />
             ))}
           </div>
         </div>
       </div>
 
+      {forms && formId && <FormTabs forms={forms} selectedId={formId} onSelect={setFormId} />}
+
       <section className="pokedex-detail-section">
         <h4>종족값</h4>
-        <StatBars stats={pokemon.baseStats} />
+        <StatBars stats={baseStats} />
         {pokemon.sizeForms && (
           <p className="pokedex-ability-desc">
             크기 변종(스피드·몸무게만 상이):{" "}
             {pokemon.sizeForms.map((f) => `${f.label} 스피드 ${f.spe}·${f.weightKg}kg`).join(" / ")}
           </p>
         )}
-        {pokemon.formVariants && (
-          <ul className="pokedex-ability-list">
-            {pokemon.formVariants.map((f) => (
-              <li key={f.id}>
-                <strong>{f.label}</strong>
-                <p className="pokedex-ability-desc">
-                  {f.types.join("/")} · 종족값 {Object.values(f.baseStats).reduce((a, b) => a + b, 0)} · 특성{" "}
-                  {[...f.abilities, ...(f.hiddenAbility ? [`${f.hiddenAbility}(숨김)`] : [])].join(", ")}
-                  {f.learnset ? ` · 전용 기술 ${f.learnset.length}개` : ""}
-                </p>
-              </li>
-            ))}
-          </ul>
-        )}
       </section>
 
       <section className="pokedex-detail-section">
         <h4>방어 상성</h4>
-        <DefensiveProfile types={pokemon.types} />
+        <DefensiveProfile types={types} />
       </section>
 
       <section className="pokedex-detail-section">
@@ -226,10 +256,10 @@ function PokedexDetail({ pokemon, onSelectMove }: { pokemon: Pokemon; onSelectMo
 
       <section className="pokedex-detail-section">
         <h4>
-          기술 목록 <span className="pokedex-section-count">{pokemon.learnset.length}개</span>
+          기술 목록 <span className="pokedex-section-count">{learnset.length}개</span>
         </h4>
         <div className="pokedex-learnset">
-          {pokemon.learnset.map((moveId) => {
+          {learnset.map((moveId) => {
             const move = getMove(moveId);
             const color = move?.type ? TYPE_COLORS[move.type] : undefined;
             return (
@@ -318,7 +348,7 @@ export function PokedexPage({ onSelectMove }: PokedexPageProps) {
 
         <div className="pokedex-detail-panel">
           {selected ? (
-            <PokedexDetail pokemon={selected} onSelectMove={onSelectMove} />
+            <PokedexDetail key={selected.id} pokemon={selected} onSelectMove={onSelectMove} />
           ) : (
             <div className="pokedex-detail-empty">포켓몬을 선택하세요.</div>
           )}
