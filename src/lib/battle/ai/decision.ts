@@ -2,6 +2,7 @@ import type { AiOption } from "./evaluator";
 import { DEFAULT_THREAT_MODEL } from "./opponentMoveModel";
 import { PHASE3_EFFECT_KINDS } from "./statusMoveEffects";
 import { ALL_PROTECT_GROUPS, type ProtectGroup } from "./protectMoves";
+import { partyRaceValue, type PartyDuel } from "./partyEval";
 
 /**
  * decision-layer §9 파라미터(튜닝 대상) + extension §2-2 w_survival.
@@ -51,6 +52,15 @@ export interface DecisionParams {
   threatSharpness: number;
   /** 상대 기술 모델: 지금 효과 없는 변화기(가득 찬 HP 회복·+6 랭크업·이미 깔린 벽·이미 상태이상)도 확률 0 */
   threatStrictWaste: boolean;
+  /**
+   * 파티 단위 평가(§4-5): 옵션의 첫 대면이 끝난 뒤 남은 포켓몬끼리의 대면을 미니맥스로 이어서 계산해 점수에 더한다.
+   * false면 지금 대면만 보는 이전 동작(비교용). trade 채점 전용.
+   */
+  partyAware: boolean;
+  /** 파티 단위 평가의 판세 값에서 남은 마릿수 1마리의 가치(λ, HP 비율 단위) */
+  partyCountWeight: number;
+  /** 파티 단위 평가에서 대면 승패를 확률로 나눌 때의 폭(여유 턴 σ = 이 값 × 평균 턴 수). 0이면 결정적 */
+  partyDuelNoise: number;
 }
 
 /**
@@ -78,6 +88,9 @@ export const DEFAULT_DECISION_PARAMS: DecisionParams = {
   riskFlagPenaltyBase: 0.4,
   tieThreshold: 0.1,
   wSurvival: 1.0,
+  partyAware: true,
+  partyCountWeight: 0.5,
+  partyDuelNoise: 0.5,
 };
 
 export interface ScoredOption {
@@ -115,7 +128,7 @@ function diff(a: number, b: number): number {
  * 쓰러뜨릴 때, 이 대면을 끝까지 이어갔을 때의 "상대 HP 제거 비율 − 내 HP 손실 비율"(각자 최대 HP 대비).
  * lostTurns: 이번 턴 공격하지 않는 행동(교체·회복·랭크업)이면 1 — 상대만 한 번 더 때린다.
  */
-function raceValue(
+export function raceValue(
   killTurns: number,
   survivalTurns: number,
   firstProbability: number,
@@ -136,19 +149,43 @@ function raceValue(
   return opponentFraction * dealt - myFraction;
 }
 
+/**
+ * raceValue, 또는 파티 단위 평가(§4-5, partyAware): 첫 대면(이 인자들)을 이긴다/진다 갈래로 나누고 각 갈래 뒤로 남은
+ * 포켓몬끼리 이어지는 대면까지 계산한 값. myOverrides = 첫 대면에 안 나오는 내 포켓몬의 HP를 바꿔 볼 때(유턴류 후공 등).
+ */
+function race(
+  params: DecisionParams,
+  party: PartyDuel | undefined,
+  inputs: [killTurns: number, survivalTurns: number, firstProbability: number, my: number, opp: number, lost: number],
+  myOverrides?: Record<number, number>,
+): number {
+  if (!params.partyAware || !party) return raceValue(...inputs);
+  return partyRaceValue(party, inputs, { lambda: params.partyCountWeight, noise: params.partyDuelNoise }, myOverrides);
+}
+
 /** 교체 후보로 대면을 이어갔을 때의 값(진입 비용 차감). lost=1이면 들어온 포켓몬이 이번 턴 한 대를 맞는다. */
-function switchInValue(candidate: AiOption, lost: number): number {
+function switchInValue(candidate: AiOption, lost: number, params: DecisionParams, myOverrides?: Record<number, number>): number {
   const entry = candidate.maxHp > 0 ? candidate.entryCost / candidate.maxHp : 0;
   return (
-    raceValue(
-      candidate.hitsToKill.expected,
-      candidate.hitsToBeKilled.expected,
-      candidate.firstProbability,
-      candidate.hpFraction,
-      candidate.opponentHpFraction,
-      lost,
+    race(
+      params,
+      candidate.party,
+      [
+        candidate.hitsToKill.expected,
+        candidate.hitsToBeKilled.expected,
+        candidate.firstProbability,
+        candidate.hpFraction,
+        candidate.opponentHpFraction,
+        lost,
+      ],
+      myOverrides,
     ) - entry
   );
+}
+
+/** 교체로 물러나는 지금 포켓몬의 HP를 hp로 본다(파티 단위 평가용 덮어쓰기) */
+function activeHpOverride(option: AiOption, hp: number): Record<number, number> | undefined {
+  return option.party ? { [option.party.model.myActive]: hp } : undefined;
 }
 
 /**
@@ -157,15 +194,26 @@ function switchInValue(candidate: AiOption, lost: number): number {
  *   안전하게 들어온다(lost=0, 대신 지금 포켓몬 손실). 선공 확률로 섞는다.
  * 빗나감(명중률) 시 = 교체 없이 한 대 맞고 끝.
  */
-function pivotValue(option: AiOption): number {
+function pivotValue(option: AiOption, params: DecisionParams): number {
   const pivot = option.pivot!;
   const p = option.firstProbability;
   const chip = option.opponentHpFraction * pivot.hitRate;
+  const my = option.hpFraction;
   const bestSwitch = Math.max(
-    ...pivot.candidates.map((c) => p * switchInValue(c, 1) + (1 - p) * (switchInValue(c, 0) - pivot.activeHitLoss)),
+    ...pivot.candidates.map(
+      (c) =>
+        p * switchInValue(c, 1, params, activeHpOverride(option, my)) +
+        (1 - p) * (switchInValue(c, 0, params, activeHpOverride(option, my - pivot.activeHitLoss)) - pivot.activeHitLoss),
+    ),
   );
   const hitChance = pivot.hitChance ?? option.accuracy;
-  return hitChance * (chip + bestSwitch) + (1 - hitChance) * -pivot.activeHitLoss;
+  // 빗나감: 교체 없이 한 대 맞음. 파티 단위 평가에서는 "이번 턴을 날린 채 대면을 이어감"(lost=1)으로 본다 —
+  // 다른 갈래가 이어지는 대면의 가치를 포함하므로 같은 기준으로 맞춘다.
+  const onMiss =
+    params.partyAware && option.party
+      ? race(params, option.party, [option.hitsToKill.expected, option.hitsToBeKilled.expected, p, my, option.opponentHpFraction, 1])
+      : -pivot.activeHitLoss;
+  return hitChance * (chip + bestSwitch) + (1 - hitChance) * onMiss;
 }
 
 /**
@@ -177,8 +225,8 @@ function effectValue(option: AiOption, params: DecisionParams): number {
   const my = option.hpFraction;
   const opp = option.opponentHpFraction;
   // HP 비용(소울비트류)은 치른 만큼 손실로 빼고, 대면은 깎인 HP에서 시작한다.
-  const onHit = raceValue(hit.killTurns, hit.survivalTurns, hit.firstProbability, my - selfCost, opp, 1) - selfCost;
-  const onMiss = raceValue(base.killTurns, base.survivalTurns, base.firstProbability, my, opp, 1);
+  const onHit = race(params, option.party, [hit.killTurns, hit.survivalTurns, hit.firstProbability, my - selfCost, opp, 1]) - selfCost;
+  const onMiss = race(params, option.party, [base.killTurns, base.survivalTurns, base.firstProbability, my, opp, 1]);
   return hitChance * onHit + (1 - hitChance) * onMiss + params.wCarry * carry;
 }
 
@@ -187,7 +235,7 @@ function effectValue(option: AiOption, params: DecisionParams): number {
  * 교대 후보에게 넘긴다. 넘기는 턴의 처리는 유턴류·배턴터치 pivot_value와 같다(선공이면 후보가 맞고, 후공이면
  * 지금 포켓몬이 한 대 더 맞은 뒤 후보가 안전하게 등장). 넘기기 전에 쓰러지면 선택 불가.
  */
-function batonFollowUpValue(option: AiOption): number {
+function batonFollowUpValue(option: AiOption, params: DecisionParams): number {
   const support = option.support!;
   const follow = support.batonFollowUp!;
   const selfCost = support.effect?.selfCost ?? 0;
@@ -196,7 +244,11 @@ function batonFollowUpValue(option: AiOption): number {
   const p = follow.firstProbability;
   const nextHit = Math.min(hpAtPass, follow.hitLoss);
   const best = Math.max(
-    ...follow.candidates.map((c) => p * switchInValue(c, 1) + (1 - p) * (switchInValue(c, 0) - nextHit)),
+    ...follow.candidates.map(
+      (c) =>
+        p * switchInValue(c, 1, params, activeHpOverride(option, hpAtPass)) +
+        (1 - p) * (switchInValue(c, 0, params, activeHpOverride(option, hpAtPass - nextHit)) - nextHit),
+    ),
   );
   return -selfCost - follow.hitLoss + best;
 }
@@ -206,24 +258,26 @@ function batonFollowUpValue(option: AiOption): number {
  * 효과·접촉 페널티·버티기·길동무) + 둘 다 살아 있으면 이어지는 대면(이번 턴은 양쪽 다 행동을 쓴 셈이라 lost=0).
  * 연속 사용으로 실패하면 아무것도 안 하고 맞는 대면(lost=1).
  */
-function protectValue(option: AiOption): number {
+function protectValue(option: AiOption, params: DecisionParams): number {
   const protect = option.support!.protect!;
   if (protect.pointless || protect.outcomes.length === 0) return -Infinity;
   const my = option.hpFraction;
   const opp = option.opponentHpFraction;
   const success = protect.outcomes.reduce((sum, o) => {
-    const rest = o.race ? raceValue(o.race.killTurns, o.race.survivalTurns, o.race.firstProbability, o.myAfter, o.oppAfter, 0) : 0;
+    const rest = o.race
+      ? race(params, option.party, [o.race.killTurns, o.race.survivalTurns, o.race.firstProbability, o.myAfter, o.oppAfter, 0])
+      : 0;
     return sum + o.weight * (opp - o.oppAfter - (my - o.myAfter) + rest);
   }, 0);
   const { base } = protect;
-  const fail = raceValue(base.killTurns, base.survivalTurns, base.firstProbability, my, opp, 1);
+  const fail = race(params, option.party, [base.killTurns, base.survivalTurns, base.firstProbability, my, opp, 1]);
   return protect.successChance * success + (1 - protect.successChance) * fail;
 }
 
 /** 랭크업기: 올린 뒤 직접 싸우는 값과 올린 뒤 배턴터치로 넘기는 값 중 큰 쪽 */
 function setupValue(option: AiOption, params: DecisionParams): number {
   const self = effectValue(option, params);
-  return option.support!.batonFollowUp ? Math.max(self, batonFollowUpValue(option)) : self;
+  return option.support!.batonFollowUp ? Math.max(self, batonFollowUpValue(option, params)) : self;
 }
 
 function tradeScore(option: AiOption, riskAversion: number, params: DecisionParams): number {
@@ -231,14 +285,14 @@ function tradeScore(option: AiOption, riskAversion: number, params: DecisionPara
   const p = option.firstProbability;
   const opp = option.opponentHpFraction;
   if (option.support?.extended && !params.statusAware) return -Infinity;
-  if (params.pivotAware && option.pivot && option.pivot.candidates.length > 0) return pivotValue(option) - riskPenalty;
+  if (params.pivotAware && option.pivot && option.pivot.candidates.length > 0) return pivotValue(option, params) - riskPenalty;
   if (option.support) {
     const { kind, after, bestKillTurns, healedHpFraction } = option.support;
     if (kind === "other") return -Infinity;
     if (kind === "protect") {
       const group = option.support.protect?.group;
       if (!group || !params.protectGroups.includes(group)) return -Infinity;
-      return protectValue(option) - riskPenalty;
+      return protectValue(option, params) - riskPenalty;
     }
     if (kind === "effect") {
       const effectKind = option.support.effect?.kind;
@@ -252,13 +306,17 @@ function tradeScore(option: AiOption, riskAversion: number, params: DecisionPara
     if (kind === "heal") {
       if (params.statusAware && (option.support.healNetGain ?? 1) <= 0) return -Infinity;
       const healed = healedHpFraction ?? option.hpFraction;
-      return raceValue(bestKillTurns, after, p, healed, opp, 1) + (healed - option.hpFraction) - riskPenalty;
+      return race(params, option.party, [bestKillTurns, after, p, healed, opp, 1]) + (healed - option.hpFraction) - riskPenalty;
     }
-    return raceValue(after, option.hitsToBeKilled.expected, p, option.hpFraction, opp, 1) - riskPenalty;
+    return race(params, option.party, [after, option.hitsToBeKilled.expected, p, option.hpFraction, opp, 1]) - riskPenalty;
   }
   const lost = option.optionType === "switch" ? 1 : 0;
   const entry = option.maxHp > 0 ? option.entryCost / option.maxHp : 0;
-  return raceValue(option.hitsToKill.expected, option.hitsToBeKilled.expected, p, option.hpFraction, opp, lost) - entry - riskPenalty;
+  return (
+    race(params, option.party, [option.hitsToKill.expected, option.hitsToBeKilled.expected, p, option.hpFraction, opp, lost]) -
+    entry -
+    riskPenalty
+  );
 }
 
 /** decision-layer §4 점수식. 데미지 없는 변화기는 extension §2-2 전용 점수식. */

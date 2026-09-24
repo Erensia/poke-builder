@@ -4,7 +4,6 @@ import { type PokemonType } from "@/types/pokemon-type";
 import { type StatStages } from "@/types/battleStats";
 import { applyMoveStatChanges } from "@/lib/statStages";
 import { applyMoveAccuracyEvasionChanges } from "@/lib/accuracyCrit";
-import { compareTurnOrder } from "@/lib/turnOrder";
 import { resolveEffectiveDefenderAbility } from "@/lib/abilityModifiers";
 import { inflictRestSleep } from "@/lib/statusConditions";
 import { computeWeatherHealFraction } from "@/lib/weatherEffects";
@@ -22,7 +21,7 @@ import {
 } from "../state";
 import { applyMegaEvolution, isTrappedFromSwitching } from "../switching";
 import { calcEntryHazardDamage } from "../entryCost";
-import { buildTurnOrderActor, effectiveHeldItem } from "../turnOrderInputs";
+import { effectiveHeldItem } from "../turnOrderInputs";
 import { computeBattleHitChance } from "../hitChance";
 import {
   applyEffectMove,
@@ -44,11 +43,14 @@ import {
   type ProtectGroup,
 } from "./protectMoves";
 import { estimateMoveHits, type MoveHitEstimate } from "./moveDamage";
+import { firstProbability } from "./speed";
+import { createPartyModel, type PartyDuel, type PartyModel } from "./partyEval";
 import { allowedByVolatiles, evaluateOpponentThreat, usableMoves, type OpponentThreat } from "./opponentMoveModel";
 import { blockedTurns, turnsToKo } from "./turnRates";
 import type { HitsEstimate } from "./types";
 
-export type SpeedOrder = "first" | "second" | "speed_tie";
+export type { SpeedOrder } from "./speed";
+import type { SpeedOrder } from "./speed";
 
 /**
  * 데미지 없는 변화기 옵션의 종류(extension §2-2, decision-layer §4-1).
@@ -161,6 +163,8 @@ export interface AiOption {
    * 배턴터치도 같은 구조(hitRate 0, 후보는 내 랭크를 이어받은 상태로 평가, hitChance 1).
    */
   pivot?: { hitRate: number; activeHitLoss: number; candidates: AiOption[]; hitChance?: number };
+  /** 파티 단위 평가(§4-5): 이 옵션의 첫 대면이 누구끼리인지 + 대면표. 결정 레이어가 이어지는 대면을 계산한다 */
+  party?: PartyDuel;
 }
 
 export interface EvaluateOptions {
@@ -199,33 +203,6 @@ export function selectableMoves(
   const moves = usableMoves(fighter).filter((m) => !isUsageBlocked(state, fighter, m, opponent));
   if (legalMoveIds) return moves.filter((m) => legalMoveIds.includes(m.id));
   return allowedByVolatiles(fighter, moves);
-}
-
-/**
- * me가 move를, opponent가 opponentMove를 쓸 때 me가 먼저 움직일 확률.
- * 우선도·스피드·트릭룸은 compareTurnOrder(실전과 동일), 선제공격손톱은 우선도가 같을 때만 확률로 끼어든다.
- */
-function firstProbability(
-  state: BattleState,
-  me: BattleFighterState,
-  move: Move,
-  opponent: BattleFighterState,
-  opponentMove: Move | undefined,
-): { probability: number; order: SpeedOrder } {
-  if (!opponentMove) return { probability: 1, order: "first" };
-  const mine = buildTurnOrderActor(state, me, move);
-  const theirs = buildTurnOrderActor(state, opponent, opponentMove);
-  const trickRoom = state.trickRoomTurnsRemaining !== undefined;
-  const lowRoll = compareTurnOrder(mine, theirs, () => 0, trickRoom);
-  const highRoll = compareTurnOrder(mine, theirs, () => 0.99, trickRoom);
-  const base = lowRoll !== highRoll ? 0.5 : lowRoll === 0 ? 1 : 0;
-  const order: SpeedOrder = lowRoll !== highRoll ? "speed_tie" : lowRoll === 0 ? "first" : "second";
-  if (mine.move.priority !== theirs.move.priority) return { probability: base, order };
-  const qMe = (effectiveHeldItem(me)?.quickClawChance ?? 0) / 100;
-  const qThem = (effectiveHeldItem(opponent)?.quickClawChance ?? 0) / 100;
-  const onlyMe = qMe * (1 - qThem);
-  const neitherOrBoth = (1 - qMe) * (1 - qThem) + qMe * qThem;
-  return { probability: onlyMe + neitherOrBoth * base, order };
 }
 
 interface AttackPick {
@@ -744,5 +721,26 @@ export function evaluateOptions(state: BattleState, key: FighterKey, options: Ev
     for (const index of benchIndices(mySide)) result.push(evaluateSwitchCandidate(state, key, index));
   }
 
+  attachParty(result, createPartyModel(moveState, key));
   return result;
+}
+
+/**
+ * 파티 단위 평가(§4-5)용 첫 대면 정보를 옵션마다 붙인다. 기술 옵션은 지금 나와 있는 포켓몬(랭크 유지), 교체·유턴류·
+ * 배턴터치 후보는 들어오는 포켓몬(이후 대면은 랭크 0 — 배턴터치로 받은 랭크는 첫 대면에만 반영되는 근사).
+ */
+function attachParty(options: AiOption[], model: PartyModel): void {
+  const candidateParty = (candidates: AiOption[] | undefined) => {
+    for (const c of candidates ?? []) {
+      if (c.toIndex !== undefined) c.party = { model, myIndex: c.toIndex, myStaged: false };
+    }
+  };
+  for (const option of options) {
+    option.party =
+      option.optionType === "switch"
+        ? { model, myIndex: option.toIndex!, myStaged: false }
+        : { model, myIndex: model.myActive, myStaged: true };
+    candidateParty(option.pivot?.candidates);
+    candidateParty(option.support?.batonFollowUp?.candidates);
+  }
 }
