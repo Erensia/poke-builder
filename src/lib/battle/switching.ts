@@ -8,7 +8,7 @@ import { computeRealStats } from "@/lib/statCalculator";
 import { applyStageDelta } from "@/lib/statStages";
 import { inflictStatus, isImmuneToStatus } from "@/lib/statusConditions";
 import { hasVolatile } from "@/lib/volatileConditions";
-import { getEffectiveness } from "@/lib/typeEffectiveness";
+import { calcSpikesDamage, calcStealthRockDamage, isGroundedForHazards } from "./entryCost";
 import { FIELD_DURATION, FIELD_ENTRY_ANNOUNCEMENT, isStatusBlockedByField } from "@/lib/fieldEffects";
 import { WEATHER_DURATION, abilityOf, activeWeather, applyForecastForm, applyMimicryForm, applyTransform, balloonEntryAnnouncement, cloneSide, consumeItem, contraryDelta, isFainted, opponentKey, sideOf, statusImmunitiesOf, weatherRockBonus, type BattleFighterState, type BattleState } from "./state";
 
@@ -95,19 +95,6 @@ export function triggerTerrainSeeds(state: BattleState): string[] {
 }
 
 /**
-/**
- * 압정뿌리기·독압정·끈적끈적네트가 실제로 발동하는 "접지" 상태인지(Phase 8 §6).
- * 비행 타입, 부유·천정부지(땅 면역 특성) 보유자는 비접지. 에어벌룬·텔레키네시스 등은
- * 로스터에 없어 미반영(fieldEffects와 동일한 단순화). 스텔스록은 접지 무관이라 이 판정을 안 쓴다.
- */
-function isGroundedForHazards(fighter: BattleFighterState): boolean {
-  if (fighter.types.includes("비행")) return false;
-  const ab = abilityOf(fighter);
-  if (ab?.grantsImmunityToTypes?.includes("땅")) return false;
-  return true;
-}
-
-/**
  * 일루전(§6-1): selfIndex 슬롯의 조로아크가 위장할 대상 종 id. 파티 뒤에서부터 스캔해
  * "자신 아님 + 안 쓰러짐"인 첫 슬롯의 종을 쓴다(본가: 마지막 포켓몬 모습). 없으면 undefined(위장 안 함).
  */
@@ -118,11 +105,6 @@ export function computeIllusionTarget(party: BattleFighterState[], selfIndex: nu
   }
   return undefined;
 }
-
-/** 압정뿌리기 층수별 등장 데미지 비율 (사용자 확정: 1→1/16 · 2→1/8 · 3→1/4) */
-const SPIKES_DAMAGE_FRACTION_BY_LAYER: Record<number, number> = { 1: 1 / 16, 2: 1 / 8, 3: 1 / 4 };
-/** 스텔스록 등장 데미지 기준 비율(바위 상성 배율을 곱한다) */
-const STEALTH_ROCK_BASE_FRACTION = 1 / 8;
 
 /**
  * 교체로 나온 포켓몬이 상대 진영 설치물을 밟을 때의 처리(Phase 8 §6). performSwitch에서
@@ -137,7 +119,6 @@ function applyEntryHazardsOnSwitchIn(state: BattleState, key: FighterKey, log: s
   const hz = sideOf(state, key).hazards;
   const selfName = getPokemon(self.slot.pokemonId)?.name ?? "포켓몬";
   const selfAbility = abilityOf(self);
-  const magicGuard = !!selfAbility?.negatesIndirectDamage;
 
   // 1. 독타입 등장 → 독압정 흡수
   if (hz.toxicSpikesLayers > 0 && self.types.includes("독")) {
@@ -146,23 +127,19 @@ function applyEntryHazardsOnSwitchIn(state: BattleState, key: FighterKey, log: s
   }
 
   // 2. 스텔스록 (접지 무관, 바위 상성)
-  if (hz.stealthRock && !magicGuard) {
-    const eff = getEffectiveness("바위", self.types);
-    if (eff > 0) {
-      const dmg = Math.max(1, Math.floor(self.maxHp * STEALTH_ROCK_BASE_FRACTION * eff));
-      self.currentHp = Math.max(0, self.currentHp - dmg);
-      log.push(`뾰족한 바위가 ${selfName}${eulReul(selfName)} 덮쳤다! (${dmg} 데미지)`);
-    }
+  const stealthRockDamage = calcStealthRockDamage(self.maxHp, self.types, selfAbility, hz);
+  if (stealthRockDamage > 0) {
+    self.currentHp = Math.max(0, self.currentHp - stealthRockDamage);
+    log.push(`뾰족한 바위가 ${selfName}${eulReul(selfName)} 덮쳤다! (${stealthRockDamage} 데미지)`);
   }
   if (isFainted(self)) return;
 
   // 3. 접지 대상만: 압정뿌리기 · 독압정 · 끈적끈적네트
-  if (isGroundedForHazards(self)) {
-    if (hz.spikesLayers > 0 && !magicGuard) {
-      const frac = SPIKES_DAMAGE_FRACTION_BY_LAYER[hz.spikesLayers] ?? 1 / 16;
-      const dmg = Math.max(1, Math.floor(self.maxHp * frac));
-      self.currentHp = Math.max(0, self.currentHp - dmg);
-      log.push(`${selfName}${eunNeun(selfName)} 압정에 상처를 입었다! (${dmg} 데미지)`);
+  if (isGroundedForHazards(self.types, selfAbility)) {
+    const spikesDamage = calcSpikesDamage(self.maxHp, self.types, selfAbility, hz);
+    if (spikesDamage > 0) {
+      self.currentHp = Math.max(0, self.currentHp - spikesDamage);
+      log.push(`${selfName}${eunNeun(selfName)} 압정에 상처를 입었다! (${spikesDamage} 데미지)`);
     }
     if (isFainted(self)) return;
 
