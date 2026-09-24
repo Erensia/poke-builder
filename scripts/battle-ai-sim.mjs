@@ -10,6 +10,7 @@
  *   diag     AI가 교체를 고른 순간의 모든 옵션 점수·c·d 출력(판단 이상 사례 찾기)
  *
  * 예) npm run sim:ai -- greedy 150 '{"scoring":"spec"}'   ← 파라미터 튜닝: 값을 바꿔 승률 비교
+ * 환경변수 PIVOT=1: 유턴류를 배울 수 있는 포켓몬은 기술 하나를 유턴류로 바꿔 파티를 만든다(유턴 판단 검증용)
  *     (PowerShell에서는 JSON 따옴표를 '{\"scoring\":\"spec\"}' 처럼 이스케이프)
  */
 import { createServer } from "vite";
@@ -53,6 +54,11 @@ try {
     while (moves.length < 4) {
       const m = pick(rng, learn);
       if (!moves.includes(m)) moves.push(m);
+    }
+    // PIVOT=1: 유턴류(selfSwitchAfterDamage)를 배울 수 있으면 4번째 기술을 그걸로 바꾼다(유턴 판단 검증용)
+    if (process.env.PIVOT === "1") {
+      const pivots = learn.filter((m) => data.getMove(m).selfSwitchAfterDamage && !moves.includes(m));
+      if (pivots.length) moves[3] = pick(rng, pivots);
     }
     const abilities = [...(p.abilities ?? []), ...(p.hiddenAbility ? [p.hiddenAbility] : [])];
     let item = rng() < 0.8 ? pick(rng, heldItems).id : null;
@@ -145,9 +151,12 @@ try {
     const name = (f) => data.getPokemon(f.slot.pokemonId)?.name;
     const fmt = (x) => (Number.isFinite(x) ? x.toFixed(2) : String(x));
     let dumped = 0;
+    // DIAG=pivot: 교체 대신 유턴류를 고른 순간을 덤프
+    const wantDump = (d) =>
+      process.env.DIAG === "pivot" ? d.action.kind === "move" && !!d.action.move.selfSwitchAfterDamage : d.action.kind === "switch";
     const aiPolicy = (st, key) => {
       const d = ai.chooseAiAction(st, key, 0.5, { decisionParams });
-      if (d.action.kind === "switch" && dumped < 14) {
+      if (wantDump(d) && dumped < 14) {
         dumped++;
         const me = st[key];
         const op = st[key === "a" ? "b" : "a"];
@@ -164,11 +173,12 @@ try {
     };
     for (let s = 1; s <= battles && dumped < 14; s++) runBattle(s, { a: aiPolicy, b: greedyPolicy }, { a: aiForced(0.5), b: firstLiving });
   } else if (mode === "greedy") {
-    const mix = { move: 0, switch: 0, status: 0 };
+    const mix = { move: 0, pivot: 0, switch: 0, status: 0 };
     const aiPolicy = (risk) => (st, key) => {
       const d = ai.chooseAiAction(st, key, risk, { decisionParams });
       if (d.action.kind === "switch") mix.switch++;
       else if (d.action.move.category === "status") mix.status++;
+      else if (d.action.move.selfSwitchAfterDamage) mix.pivot++;
       else mix.move++;
       return d.action;
     };

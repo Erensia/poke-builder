@@ -22,6 +22,8 @@ export interface DecisionParams {
   wSurvival: number;
   /** "tempo" 채점에서 교체 옵션에 추가로 빼는 값("처치 턴 +1"에 더해) */
   switchExtraPenalty: number;
+  /** trade 채점에서 유턴류를 "공격 + 교체"로 평가할지. false면 교체 효과를 무시한 일반 공격기로 본다(비교용) */
+  pivotAware: boolean;
 }
 
 /**
@@ -35,6 +37,7 @@ export const DEFAULT_DECISION_PARAMS: DecisionParams = {
   switchTempoPenalty: 0.3,
   switchExtraPenalty: 0,
   tradeRiskPenaltyBase: 0.1,
+  pivotAware: true,
   riskFlagPenaltyBase: 0.4,
   tieThreshold: 0.1,
   wSurvival: 1.0,
@@ -94,10 +97,42 @@ function raceValue(
   return opponentFraction * dealt - myFraction;
 }
 
+/** 교체 후보로 대면을 이어갔을 때의 값(진입 비용 차감). lost=1이면 들어온 포켓몬이 이번 턴 한 대를 맞는다. */
+function switchInValue(candidate: AiOption, lost: number): number {
+  const entry = candidate.maxHp > 0 ? candidate.entryCost / candidate.maxHp : 0;
+  return (
+    raceValue(
+      candidate.hitsToKill.expected,
+      candidate.hitsToBeKilled.expected,
+      candidate.firstProbability,
+      candidate.hpFraction,
+      candidate.opponentHpFraction,
+      lost,
+    ) - entry
+  );
+}
+
+/**
+ * 유턴류(맞히면 교체): 명중 시 = 이번 턴 데미지 + 최선 후보로 교체한 값.
+ *   선공이면 들어온 후보가 그 턴 상대 공격을 맞고(lost=1), 후공이면 지금 포켓몬이 먼저 맞은 뒤 후보가
+ *   안전하게 들어온다(lost=0, 대신 지금 포켓몬 손실). 선공 확률로 섞는다.
+ * 빗나감(명중률) 시 = 교체 없이 한 대 맞고 끝.
+ */
+function pivotValue(option: AiOption): number {
+  const pivot = option.pivot!;
+  const p = option.firstProbability;
+  const chip = option.opponentHpFraction * pivot.hitRate;
+  const bestSwitch = Math.max(
+    ...pivot.candidates.map((c) => p * switchInValue(c, 1) + (1 - p) * (switchInValue(c, 0) - pivot.activeHitLoss)),
+  );
+  return option.accuracy * (chip + bestSwitch) + (1 - option.accuracy) * -pivot.activeHitLoss;
+}
+
 function tradeScore(option: AiOption, riskAversion: number, params: DecisionParams): number {
   const riskPenalty = option.riskFlag ? params.tradeRiskPenaltyBase * riskAversion : 0;
   const p = option.firstProbability;
   const opp = option.opponentHpFraction;
+  if (params.pivotAware && option.pivot && option.pivot.candidates.length > 0) return pivotValue(option) - riskPenalty;
   if (option.support) {
     const { kind, after, bestKillTurns, healedHpFraction } = option.support;
     if (kind === "other") return -Infinity;

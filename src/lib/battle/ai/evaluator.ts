@@ -55,6 +55,12 @@ export interface AiOption {
    * 내 최선 공격의 hits_to_kill(랭크업 전/후). bestKillTurns = 이 턴 공격 안 하면 쓰게 될 내 최선 공격의 처치 턴 수.
    */
   support?: { kind: SupportKind; before: number; after: number; bestKillTurns: number; healedHpFraction?: number };
+  /**
+   * 유턴·볼트체인지·퀵턴처럼 맞히면 교체되는 기술(selfSwitchAfterDamage)이고 교대할 포켓몬이 있을 때만.
+   * hitRate = 한 번 맞혔을 때 깎는 상대 현재 HP 비율(0~1), activeHitLoss = 지금 포켓몬이 상대 공격을 한 번
+   * 맞을 때 잃는 HP 비율(최대 HP 대비), candidates = 그 데미지를 받은 상대 기준으로 다시 평가한 교체 후보들.
+   */
+  pivot?: { hitRate: number; activeHitLoss: number; candidates: AiOption[] };
 }
 
 export interface EvaluateOptions {
@@ -133,26 +139,84 @@ interface BestAttackInput {
   moves: Move[];
   attackerMovesSecond: boolean;
   stagesOverride?: StatStages;
+  defenderHp?: number;
 }
 
 /** attacker가 가진 공격기 중 defender를 가장 빨리 쓰러뜨리는 것 */
 function bestAttack(input: BestAttackInput): AttackPick | undefined {
-  const { state, attacker, defender, defenderSide, moves, attackerMovesSecond, stagesOverride } = input;
+  const { state, attacker, defender, defenderSide, moves, attackerMovesSecond, stagesOverride, defenderHp } = input;
   const actor = stagesOverride ? { ...attacker, stages: stagesOverride } : attacker;
   let best: AttackPick | undefined;
   for (const move of moves) {
-    const estimate = estimateMoveHits({ state, attacker: actor, defender, defenderSide, attackerMovesSecond }, move);
+    const estimate = estimateMoveHits({ state, attacker: actor, defender, defenderSide, attackerMovesSecond, defenderHp }, move);
     if (!estimate || !Number.isFinite(estimate.expected)) continue;
     if (!best || estimate.expected < best.estimate.expected) best = { move, estimate };
   }
   return best;
 }
 
-function turnsFor(estimate: MoveHitEstimate | undefined, attacker: BattleFighterState, defender: BattleFighterState): HitsEstimate {
+function turnsFor(
+  estimate: MoveHitEstimate | undefined,
+  attacker: BattleFighterState,
+  defender: BattleFighterState,
+  defenderHp?: number,
+): HitsEstimate {
   if (!estimate || !Number.isFinite(estimate.expected)) {
     return { expected: Infinity, worstCase: { count: 3, certainty: "random", probability: 0 } };
   }
-  return { expected: turnsToKo(1 / estimate.expected, attacker, defender), worstCase: estimate.worstCase };
+  return { expected: turnsToKo(1 / estimate.expected, attacker, defender, defenderHp), worstCase: estimate.worstCase };
+}
+
+/** key 편에서 index 슬롯으로 교체하는 옵션. opponentHp를 주면 상대가 그 HP라고 가정한다(유턴류 평가용). */
+function evaluateSwitchCandidate(state: BattleState, key: FighterKey, index: number, opponentHp?: number): AiOption {
+  const mySide = sideOf(state, key);
+  const oppKey = opponentKey(key);
+  const oppSide = sideOf(state, oppKey);
+  const candidate = mySide.party[index];
+  const opponent = state[oppKey];
+  const oppHp = opponentHp ?? opponent.currentHp;
+  const entryCost = Math.min(
+    candidate.currentHp,
+    calcEntryHazardDamage(candidate.maxHp, candidate.types, abilityOf(candidate), mySide.hazards),
+  );
+  const hpAfterEntry = candidate.currentHp - entryCost;
+  const pick = bestAttack({
+    state,
+    attacker: candidate,
+    defender: opponent,
+    defenderSide: oppSide,
+    moves: usableMoves(candidate),
+    attackerMovesSecond: false,
+    defenderHp: oppHp,
+  });
+  const threatProbe = evaluateOpponentThreat({ state, opponent, target: candidate, targetSide: mySide, opponentMovesSecond: false, targetHp: hpAfterEntry });
+  const speed = pick
+    ? firstProbability(state, candidate, pick.move, opponent, threatProbe.bestMove)
+    : { probability: 0, order: "second" as const };
+  const threat =
+    hpAfterEntry <= 0
+      ? { ...threatProbe, hitsToBeKilled: { expected: 0, worstCase: { count: 1, certainty: "guaranteed" as const, probability: 1 } } }
+      : evaluateOpponentThreat({ state, opponent, target: candidate, targetSide: mySide, opponentMovesSecond: speed.probability >= 0.5, targetHp: hpAfterEntry });
+  return {
+    optionType: "switch",
+    toIndex: index,
+    typeMatchup: { offensive: pick?.estimate.typeEffectiveness ?? 0, defensive: threat.defensiveMatchup },
+    speedOrder: speed.order,
+    firstProbability: speed.probability,
+    hitsToKill: turnsFor(pick?.estimate, candidate, opponent, oppHp),
+    hitsToBeKilled: threat.hitsToBeKilled,
+    entryCost,
+    maxHp: candidate.maxHp,
+    hpFraction: Math.max(0, hpAfterEntry) / candidate.maxHp,
+    opponentHpFraction: oppHp / opponent.maxHp,
+    riskFlag: threat.riskFlag,
+    accuracy: pick?.estimate.accuracy ?? 0,
+  };
+}
+
+/** 지금 교대로 내보낼 수 있는 슬롯(활성 아님 + 안 쓰러짐) */
+function benchIndices(side: BattleSide): number[] {
+  return side.party.map((_, i) => i).filter((i) => i !== side.activeIndex && !isFainted(side.party[i]));
 }
 
 function proteanTypes(me: BattleFighterState, move: Move): PokemonType[] | undefined {
@@ -174,7 +238,6 @@ function classifySupport(move: Move): SupportKind {
 export function evaluateOptions(state: BattleState, key: FighterKey, options: EvaluateOptions = {}): AiOption[] {
   const oppKey = opponentKey(key);
   const mySide = sideOf(state, key);
-  const oppSide = sideOf(state, oppKey);
   const result: AiOption[] = [];
 
   // ── 기술 옵션 ──
@@ -189,6 +252,7 @@ export function evaluateOptions(state: BattleState, key: FighterKey, options: Ev
 
   const baseThreat = evaluateOpponentThreat({ state: moveState, opponent, target: me, targetSide: myMoveSide, opponentMovesSecond: false });
   const myBest = bestAttack({ state: moveState, attacker: me, defender: opponent, defenderSide: oppMoveSide, moves: myMoves, attackerMovesSecond: false });
+  const bench = benchIndices(mySide);
 
   for (const move of myMoves) {
     const speed = firstProbability(moveState, me, move, opponent, baseThreat.bestMove);
@@ -224,6 +288,19 @@ export function evaluateOptions(state: BattleState, key: FighterKey, options: Ev
       accuracy: estimate?.accuracy ?? 0,
     };
 
+    // 유턴류: 맞히면(상대 기절 여부 무관) 교대할 포켓몬이 있는 한 엔진이 교체를 강제한다. 한 방에 쓰러뜨리면
+    // 다음 상대를 모르므로 일반 공격기로만 평가한다.
+    if (move.selfSwitchAfterDamage && estimate && estimate.rawHits > 1 && Number.isFinite(estimate.rawHits) && bench.length > 0) {
+      const hitRate = 1 / estimate.rawHits;
+      const opponentHpAfter = Math.max(1, Math.round(opponent.currentHp * (1 - hitRate)));
+      const d = threat.hitsToBeKilled.expected;
+      option.pivot = {
+        hitRate,
+        activeHitLoss: (me.currentHp / me.maxHp) * Math.min(1, d > 0 ? 1 / d : 1),
+        candidates: bench.map((index) => evaluateSwitchCandidate(state, key, index, opponentHpAfter)),
+      };
+    }
+
     if (move.category === "status") {
       const kind = classifySupport(move);
       const bestKillTurns = turnsFor(myBest?.estimate, me, opponent).expected;
@@ -257,42 +334,8 @@ export function evaluateOptions(state: BattleState, key: FighterKey, options: Ev
   }
 
   // ── 교체 옵션 ── (교체 턴에는 메가진화 없음 → 원래 state 기준)
-  const active = state[key];
-  if (!isTrappedFromSwitching(active)) {
-    const currentOpponent = state[oppKey];
-    mySide.party.forEach((candidate, index) => {
-      if (index === mySide.activeIndex || isFainted(candidate)) return;
-      const entryCost = Math.min(
-        candidate.currentHp,
-        calcEntryHazardDamage(candidate.maxHp, candidate.types, abilityOf(candidate), mySide.hazards),
-      );
-      const hpAfterEntry = candidate.currentHp - entryCost;
-      const candidateMoves = usableMoves(candidate);
-      const pick = bestAttack({ state, attacker: candidate, defender: currentOpponent, defenderSide: oppSide, moves: candidateMoves, attackerMovesSecond: false });
-      const threatProbe = evaluateOpponentThreat({ state, opponent: currentOpponent, target: candidate, targetSide: mySide, opponentMovesSecond: false, targetHp: hpAfterEntry });
-      const speed = pick
-        ? firstProbability(state, candidate, pick.move, currentOpponent, threatProbe.bestMove)
-        : { probability: 0, order: "second" as const };
-      const threat =
-        hpAfterEntry <= 0
-          ? { ...threatProbe, hitsToBeKilled: { expected: 0, worstCase: { count: 1, certainty: "guaranteed" as const, probability: 1 } } }
-          : evaluateOpponentThreat({ state, opponent: currentOpponent, target: candidate, targetSide: mySide, opponentMovesSecond: speed.probability >= 0.5, targetHp: hpAfterEntry });
-      result.push({
-        optionType: "switch",
-        toIndex: index,
-        typeMatchup: { offensive: pick?.estimate.typeEffectiveness ?? 0, defensive: threat.defensiveMatchup },
-        speedOrder: speed.order,
-        firstProbability: speed.probability,
-        hitsToKill: turnsFor(pick?.estimate, candidate, currentOpponent),
-        hitsToBeKilled: threat.hitsToBeKilled,
-        entryCost,
-        maxHp: candidate.maxHp,
-        hpFraction: Math.max(0, hpAfterEntry) / candidate.maxHp,
-        opponentHpFraction: currentOpponent.currentHp / currentOpponent.maxHp,
-        riskFlag: threat.riskFlag,
-        accuracy: pick?.estimate.accuracy ?? 0,
-      });
-    });
+  if (!isTrappedFromSwitching(state[key])) {
+    for (const index of benchIndices(mySide)) result.push(evaluateSwitchCandidate(state, key, index));
   }
 
   return result;

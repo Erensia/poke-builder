@@ -81,6 +81,23 @@ try {
     const d = ai.chooseAiAction(st, "a", 0.5);
     check("2마리 파티 판단 정상", !!d.action, JSON.stringify(d.action.kind === "switch" ? d.action : { move: d.action.move.id }));
   }
+  // 유턴류: 교대할 포켓몬이 있으면 "공격 + 교체"로 평가, 없으면 일반 공격기
+  {
+    const withBench = battle(
+      [mon("핫삼", ["유턴", "불꽃펀치"]), mon("메타그로스", ["코멧펀치"])],
+      [mon("갸라도스", ["하이드로펌프"], null, null, pts({ hp: 32, def: 32 }))],
+    );
+    const solo = battle([mon("핫삼", ["유턴", "불꽃펀치"])], [mon("갸라도스", ["하이드로펌프"], null, null, pts({ hp: 32, def: 32 }))]);
+    const pivotOpt = opt(ev.evaluateOptions(withBench, "a"), "유턴");
+    const soloOpt = opt(ev.evaluateOptions(solo, "a"), "유턴");
+    const on = dec.scoreOption(pivotOpt, 0.5);
+    const off = dec.scoreOption(pivotOpt, 0.5, { ...dec.DEFAULT_DECISION_PARAMS, pivotAware: false });
+    check(
+      "유턴류 → 공격+교체로 평가",
+      pivotOpt.pivot?.candidates.length === 1 && !soloOpt.pivot && on !== off,
+      `candidates=${pivotOpt.pivot?.candidates.length} solo=${!!soloOpt.pivot} on=${on.toFixed(3)} off=${off.toFixed(3)}`,
+    );
+  }
   // 상대가 나에게 데미지를 줄 수단이 없을 때(+Infinity 점수)
   {
     const st = battle([mon("팬텀", ["10만볼트"])], [mon("한카리아스", ["지진"])]);
