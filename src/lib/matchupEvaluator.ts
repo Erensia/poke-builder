@@ -4,6 +4,7 @@ import type { Move } from "../types/move";
 import type { WeatherKind } from "../types/weather";
 import type { FieldKind } from "../types/field";
 import type { PokemonType } from "../types/pokemon-type";
+import type { BaseStats } from "../types/stats";
 import { getPokemon, getAbility, getItem } from "./data";
 import { getBerryDefenseResult, getItemOffenseMultiplier, getItemSpeedMultiplier } from "./itemEffects";
 import { getEffectiveForm, getEffectiveGender, type FormSource } from "./pokemonForm";
@@ -82,6 +83,24 @@ export interface SlotMatchupOptions {
   defenderHpIsFull?: boolean;
   defenderHasStatusCondition?: boolean;
   defenderItemConsumed?: boolean;
+  /**
+   * 배틀 AI용 — 슬롯 원본 대신 실전 파이터의 현재 값(메가진화·변신·변환자재·트레이스·도구 소모 반영)을
+   * 쓴다. 생략하면 기존처럼 슬롯에서 폼·실능·특성·도구를 계산한다.
+   */
+  attackerRuntime?: RuntimeCombatant;
+  defenderRuntime?: RuntimeCombatant;
+  /** 배틀 AI용 — 화상·타오르는불꽃 등 실전 전용 공격 배율(자동 계산 배율에 추가로 곱한다) */
+  extraOffenseMultiplier?: number;
+}
+
+/** 실전 파이터의 현재 전투 값. evaluateSlotMatchup이 슬롯 원본 대신 이 값을 쓴다. */
+export interface RuntimeCombatant {
+  types: PokemonType[];
+  realStats: BaseStats;
+  abilityId: string | null;
+  /** null이면 도구 없음(소모·강탈·서투름 포함) */
+  itemId: string | null;
+  weightKg?: number;
 }
 
 /** evaluateSlotMatchup이 실제로 필요로 하는 최소 형태. PartySlot과 MatchupSlot 둘 다 만족한다 */
@@ -163,12 +182,25 @@ export function evaluateSlotMatchup(
     defenderHpIsFull,
     defenderHasStatusCondition,
     defenderItemConsumed,
+    attackerRuntime,
+    defenderRuntime,
+    extraOffenseMultiplier = 1,
   } = options;
 
   const attackerForm = getEffectiveForm(attackerPokemon, attackerSlot);
   const defenderForm = getEffectiveForm(defenderPokemon, defenderSlot);
-  const attackerAbility = attackerSlot.ability ? getAbility(attackerSlot.ability) : undefined;
-  const rawDefenderAbility = defenderSlot.ability ? getAbility(defenderSlot.ability) : undefined;
+  if (attackerRuntime) {
+    attackerForm.types = attackerRuntime.types;
+    attackerForm.weightKg = attackerRuntime.weightKg ?? attackerForm.weightKg;
+  }
+  if (defenderRuntime) {
+    defenderForm.types = defenderRuntime.types;
+    defenderForm.weightKg = defenderRuntime.weightKg ?? defenderForm.weightKg;
+  }
+  const attackerAbilityId = attackerRuntime ? attackerRuntime.abilityId : attackerSlot.ability;
+  const defenderAbilityId = defenderRuntime ? defenderRuntime.abilityId : defenderSlot.ability;
+  const attackerAbility = attackerAbilityId ? getAbility(attackerAbilityId) : undefined;
+  const rawDefenderAbility = defenderAbilityId ? getAbility(defenderAbilityId) : undefined;
   // 틀깨기: 매치업 페이지(1턴 스냅샷)도 배틀 시뮬레이터와 동일하게 반영한다.
   const defenderAbility = resolveEffectiveDefenderAbility(attackerAbility, rawDefenderAbility);
 
@@ -192,16 +224,10 @@ export function evaluateSlotMatchup(
   const defenderWeightKg =
     defenderForm.weightKg !== undefined ? defenderForm.weightKg * (defenderAbility?.weightMultiplier ?? 1) : undefined;
 
-  const attackerRealStats = computeRealStats(
-    attackerForm.baseStats,
-    attackerSlot.points,
-    attackerSlot.nature,
-  );
-  const defenderRealStats = computeRealStats(
-    defenderForm.baseStats,
-    defenderSlot.points,
-    defenderSlot.nature,
-  );
+  const attackerRealStats =
+    attackerRuntime?.realStats ?? computeRealStats(attackerForm.baseStats, attackerSlot.points, attackerSlot.nature);
+  const defenderRealStats =
+    defenderRuntime?.realStats ?? computeRealStats(defenderForm.baseStats, defenderSlot.points, defenderSlot.nature);
 
   // 이 기술 자체가 주는 랭크 변화(예: 칼춤을 쓴 다음 그 위력으로 계산하고 싶을 때)까지 반영.
   // weather: 성장(쾌청이면 +1 추가로 얹어 총 +2)처럼 날씨 조건부 statChanges 항목 판정용.
@@ -220,8 +246,10 @@ export function evaluateSlotMatchup(
 
   // 지닌 도구: 직접 지정한 배율이 없으면 실제 장착한 도구에서 자동으로 구한다. defenderItem은
   // resolveMoveContext의 검은철구(땅타입 면역 무시) 판정에도 필요해서 여기서 먼저 구해둔다.
-  const attackerItem = attackerSlot.item ? getItem(attackerSlot.item) : undefined;
-  const defenderItem = defenderSlot.item ? getItem(defenderSlot.item) : undefined;
+  const attackerItemId = attackerRuntime ? attackerRuntime.itemId : attackerSlot.item;
+  const defenderItemId = defenderRuntime ? defenderRuntime.itemId : defenderSlot.item;
+  const attackerItem = attackerItemId ? getItem(attackerItemId) : undefined;
+  const defenderItem = defenderItemId ? getItem(defenderItemId) : undefined;
 
   // 가변 위력 기술(§3 증분 B-2·B-3·B-3몸무게): computeOffensePower 전에 위력을 먼저 확정한다.
   //  - reversalPower(기사회생·바둥바둥): 매치업은 HP 개념이 없어 풀피(=최소 위력 20) 가정
@@ -422,7 +450,8 @@ export function evaluateSlotMatchup(
   // 상대 타입 상성을 곱하기 전의 결정력. offensePower는 여기에 typeEffectiveness만 곱한 값이라
   // 매번 다시 계산하는 대신 이 값에 typeEffectiveness를 곱해서 구한다.
   const rawOffensePower = computeOffensePower(attackerRealStats, attackerForm.types, effectiveMoveFinal, {
-    abilityMultiplier: (manualAbilityMultiplier ?? abilityOffenseMultiplier) * rivalryMultiplier * hustleMultiplier,
+    abilityMultiplier:
+      (manualAbilityMultiplier ?? abilityOffenseMultiplier) * rivalryMultiplier * hustleMultiplier * extraOffenseMultiplier,
     itemMultiplier: itemMultiplier ?? autoItemMultiplier,
     weatherMultiplier: manualWeatherMultiplier ?? autoWeatherDamageMultiplier,
     fieldMultiplier: manualFieldMultiplier ?? autoFieldDamageMultiplier,

@@ -1,14 +1,11 @@
 import { type Move } from "@/types/move";
 import { type ActionLogEntry, type FighterKey, type SwitchLogEntry, type TurnAction, type TurnResult } from "@/types/battle";
-import { type Ability } from "@/types/ability";
 import { getAbility, getItem, getPokemon } from "@/lib/data";
 import { eunNeun } from "@/lib/josa";
-import { getAbilityPriorityBoost } from "@/lib/abilityModifiers";
-import { computeStatusSpeedMultiplier } from "@/lib/statusConditions";
 import { hasVolatile } from "@/lib/volatileConditions";
-import { getFieldAdjustedPriority } from "@/lib/fieldEffects";
-import { getItemSpeedMultiplier, getQuickClawTriggered } from "@/lib/itemEffects";
+import { getQuickClawTriggered } from "@/lib/itemEffects";
 import { compareTurnOrder } from "@/lib/turnOrder";
+import { buildTurnOrderActor, effectiveHeldItem } from "./turnOrderInputs";
 import { STRUGGLE_MOVE, activeWeather, applyForecastForm, applyMimicryForm, cloneSide, consumeItem, hasLivingReserve, isFainted, isForcedSwitchBlocked, opponentKey, sideOf, type BattleState } from "./state";
 import { applyMegaEvolution, isTrappedFromSwitching, performSwitch } from "./switching";
 import { resolveAction } from "./resolveAction";
@@ -195,86 +192,30 @@ export function runTurn(
     }
   }
 
-  const aAbilityForSpeed = state.a.effectiveAbilityId ? getAbility(state.a.effectiveAbilityId) : undefined;
-  const bAbilityForSpeed = state.b.effectiveAbilityId ? getAbility(state.b.effectiveAbilityId) : undefined;
-  // 서투름: 구애스카프 등 스피드 관련 도구 효과도 예외 없이 무효화된다.
-  const aItem = aAbilityForSpeed?.disablesOwnItemEffects
-    ? undefined
-    : state.a.currentItemId
-      ? getItem(state.a.currentItemId)
-      : undefined;
-  const bItem = bAbilityForSpeed?.disablesOwnItemEffects
-    ? undefined
-    : state.b.currentItemId
-      ? getItem(state.b.currentItemId)
-      : undefined;
-  // 엽록소·쓱쓱·모래헤치기: 날씨가 일치할 때만 곱해진다(그 외엔 1)
-  const getWeatherSpeedMultiplier = (ability: Ability | undefined): number => {
-    const boost = ability?.weatherSpeedMultiplier;
-    return boost && boost.weather === activeWeather(state) ? boost.multiplier : 1;
-  };
-  // 구애스카프(1.5)·검은철구(0.5) — 상태이상 배율과 별개로 곱해진다
-  // 곡예: 도구를 잃은 뒤로 배틀 끝까지 유지되는 2배 배율(unburdenActive)도 여기서 같이 곱한다.
-  const speedA =
-    state.a.realStats.spe *
-    computeStatusSpeedMultiplier(state.a.status.condition) *
-    getItemSpeedMultiplier(aItem) *
-    getWeatherSpeedMultiplier(aAbilityForSpeed) *
-    (state.a.unburdenActive ? 2 : 1);
-  const speedB =
-    state.b.realStats.spe *
-    computeStatusSpeedMultiplier(state.b.status.condition) *
-    getItemSpeedMultiplier(bItem) *
-    getWeatherSpeedMultiplier(bAbilityForSpeed) *
-    (state.b.unburdenActive ? 2 : 1);
+  // 스피드(마비·구애스카프/검은철구·엽록소류·곡예)와 우선도(그래스슬라이더류·짓궂은마음·질풍날개)는
+  // 배틀 AI의 speed_order 예측과 공유하는 turnOrderInputs에서 조립한다(턴 시작 시점 기준).
+  const actorA = buildTurnOrderActor(state, state.a, moveA);
+  const actorB = buildTurnOrderActor(state, state.b, moveB);
+  const speedA = actorA.realSpeed;
+  const speedB = actorB.realSpeed;
 
   // 트릭룸 판정은 이번 턴이 시작된 시점(=아직 이번 턴 행동을 하나도 반영하지 않은 상태)의 값을
   // 쓴다 — 이번 턴에 트릭룸을 새로 걸어도 그 즉시 같은 턴의 순서 계산에는 영향을 주지 않는다
   // (본가 규칙: 순서는 행동 전에 이미 정해짐).
   const trickRoomActive = state.trickRoomTurnsRemaining !== undefined;
-  // 그래스슬라이더처럼 필드 조건부로 우선도가 오르는 기술은, 순서를 정하는 이 시점의 필드
-  // 상태(=이번 턴 시작 시점)를 기준으로 반영한다. 짓궂은마음(변화기 우선도 +1)도 같이 더한다.
-  // compareTurnOrder는 move.priority만 보므로 우선도만 조정한 얕은 복사본을 넘긴다.
-  const priorityAdjustedMoveA = {
-    ...moveA,
-    priority:
-      getFieldAdjustedPriority(moveA, state.field) +
-      getAbilityPriorityBoost(moveA, aAbilityForSpeed, state.a.currentHp === state.a.maxHp),
-  };
-  const priorityAdjustedMoveB = {
-    ...moveB,
-    priority:
-      getFieldAdjustedPriority(moveB, state.field) +
-      getAbilityPriorityBoost(moveB, bAbilityForSpeed, state.b.currentHp === state.b.maxHp),
-  };
 
   // 선제공격손톱: 실제 우선도가 같을 때만 끼어든다(더 높은 우선도는 이 효과와 무관하게 항상 이김).
   // 양쪽 다 발동하면(둘 다 이 도구를 지녔고 둘 다 확률에 성공) 서로 상쇄되어 정상적인 스피드
   // 비교로 넘어간다 — 어느 한쪽만 발동했을 때만 그쪽이 확정으로 먼저 움직인다.
-  const priorityTied = priorityAdjustedMoveA.priority === priorityAdjustedMoveB.priority;
-  const aQuickClaw = priorityTied && getQuickClawTriggered(aItem, random);
-  const bQuickClaw = priorityTied && getQuickClawTriggered(bItem, random);
+  const priorityTied = actorA.move.priority === actorB.move.priority;
+  const aQuickClaw = priorityTied && getQuickClawTriggered(effectiveHeldItem(state.a), random);
+  const bQuickClaw = priorityTied && getQuickClawTriggered(effectiveHeldItem(state.b), random);
   const quickClawWinner: FighterKey | undefined =
     aQuickClaw && !bQuickClaw ? "a" : bQuickClaw && !aQuickClaw ? "b" : undefined;
 
   const firstIsA = quickClawWinner
     ? quickClawWinner === "a"
-    : compareTurnOrder(
-        {
-          realSpeed: speedA,
-          move: priorityAdjustedMoveA,
-          stages: state.a.stages,
-          movesLast: aAbilityForSpeed?.movesLastInPriorityBracket,
-        },
-        {
-          realSpeed: speedB,
-          move: priorityAdjustedMoveB,
-          stages: state.b.stages,
-          movesLast: bAbilityForSpeed?.movesLastInPriorityBracket,
-        },
-        random,
-        trickRoomActive,
-      ) === 0;
+    : compareTurnOrder(actorA, actorB, random, trickRoomActive) === 0;
 
   const order: [FighterKey, FighterKey] = firstIsA ? ["a", "b"] : ["b", "a"];
   const moves: Record<FighterKey, Move> = { a: moveA, b: moveB };
