@@ -418,6 +418,36 @@
   letter-spacing: 0.03em;
 }
 
+/* 폼 변종 선택(ver.1.8 트랙 K) */
+
+.pokedex-form-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0.2rem 0 0.6rem;
+}
+
+.pokedex-form-tab {
+  font-size: 0.8rem;
+  padding: 0.28rem 0.7rem;
+  border-radius: 999px;
+  border: 1.5px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.pokedex-form-tab:hover {
+  border-color: var(--violet);
+}
+
+.pokedex-form-tab.is-active {
+  border-color: var(--violet);
+  background: var(--violet-soft);
+  color: var(--violet);
+  font-weight: 700;
+}
+
 /* 기술 목록 */
 
 .pokedex-learnset {
