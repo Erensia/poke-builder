@@ -173,15 +173,15 @@ try {
       return d.action;
     };
     const res = { aiWins: 0, greedyWins: 0, other: 0 };
+    const outcome = (seed, aiSide, risk) => {
+      const gSide = aiSide === "a" ? "b" : "a";
+      const r = runBattle(seed, { [aiSide]: aiPolicy(risk), [gSide]: greedyPolicy }, { [aiSide]: aiForced(risk), [gSide]: firstLiving });
+      return r.winner === aiSide ? "aiWins" : r.winner === gSide ? "greedyWins" : "other";
+    };
     for (let s = 1; s <= battles; s++) {
       const risk = mulberry32(s)();
-      for (const aiSide of ["a", "b"]) {
-        const gSide = aiSide === "a" ? "b" : "a";
-        const r = runBattle(s, { [aiSide]: aiPolicy(risk), [gSide]: greedyPolicy }, { [aiSide]: aiForced(risk), [gSide]: firstLiving });
-        if (r.winner === aiSide) res.aiWins++;
-        else if (r.winner === gSide) res.greedyWins++;
-        else res.other++;
-      }
+      res[outcome(s, "a", risk)]++;
+      res[outcome(s, "b", risk)]++;
     }
     console.log(JSON.stringify({ battles: battles * 2, res, aiActionMix: mix }));
   } else if (mode === "ai") {
