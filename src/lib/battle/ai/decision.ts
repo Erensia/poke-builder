@@ -24,6 +24,13 @@ export interface DecisionParams {
   switchExtraPenalty: number;
   /** trade 채점에서 유턴류를 "공격 + 교체"로 평가할지. false면 교체 효과를 무시한 일반 공격기로 본다(비교용) */
   pivotAware: boolean;
+  /**
+   * trade 채점에서 v1 때 막아 둔 변화기(상태이상 부여·상대 랭크다운·벽·설치기·배턴터치·날씨 회복기·잠자기)를
+   * "적용 후 재평가"로 점수 매길지. false면 이전처럼 고르지 않는다(비교용) — decision-layer §4-1.
+   */
+  statusAware: boolean;
+  /** 대면이 끝난 뒤에도 남는 이득(설치기·벽 이월 항)에 곱하는 가중치 */
+  wCarry: number;
 }
 
 /**
@@ -38,6 +45,8 @@ export const DEFAULT_DECISION_PARAMS: DecisionParams = {
   switchExtraPenalty: 0,
   tradeRiskPenaltyBase: 0.1,
   pivotAware: true,
+  statusAware: true,
+  wCarry: 1.0,
   riskFlagPenaltyBase: 0.4,
   tieThreshold: 0.1,
   wSurvival: 1.0,
@@ -125,18 +134,35 @@ function pivotValue(option: AiOption): number {
   const bestSwitch = Math.max(
     ...pivot.candidates.map((c) => p * switchInValue(c, 1) + (1 - p) * (switchInValue(c, 0) - pivot.activeHitLoss)),
   );
-  return option.accuracy * (chip + bestSwitch) + (1 - option.accuracy) * -pivot.activeHitLoss;
+  const hitChance = pivot.hitChance ?? option.accuracy;
+  return hitChance * (chip + bestSwitch) + (1 - hitChance) * -pivot.activeHitLoss;
+}
+
+/**
+ * 효과 변화기(decision-layer §4-1): 이번 턴은 공격하지 않고(lost=1), 효과가 걸리면 효과가 적용된 대면,
+ * 빗나가면 지금 그대로의 대면을 끝까지 이어간다 + 대면 뒤에도 남는 이득(설치기·벽) × w_carry.
+ */
+function effectValue(option: AiOption, params: DecisionParams): number {
+  const { hit, base, hitChance, carry } = option.support!.effect!;
+  const my = option.hpFraction;
+  const opp = option.opponentHpFraction;
+  const onHit = raceValue(hit.killTurns, hit.survivalTurns, hit.firstProbability, my, opp, 1);
+  const onMiss = raceValue(base.killTurns, base.survivalTurns, base.firstProbability, my, opp, 1);
+  return hitChance * onHit + (1 - hitChance) * onMiss + params.wCarry * carry;
 }
 
 function tradeScore(option: AiOption, riskAversion: number, params: DecisionParams): number {
   const riskPenalty = option.riskFlag ? params.tradeRiskPenaltyBase * riskAversion : 0;
   const p = option.firstProbability;
   const opp = option.opponentHpFraction;
+  if (option.support?.extended && !params.statusAware) return -Infinity;
   if (params.pivotAware && option.pivot && option.pivot.candidates.length > 0) return pivotValue(option) - riskPenalty;
   if (option.support) {
     const { kind, after, bestKillTurns, healedHpFraction } = option.support;
     if (kind === "other") return -Infinity;
+    if (kind === "effect") return effectValue(option, params) - riskPenalty;
     if (kind === "heal") {
+      if (params.statusAware && (option.support.healNetGain ?? 1) <= 0) return -Infinity;
       const healed = healedHpFraction ?? option.hpFraction;
       return raceValue(bestKillTurns, after, p, healed, opp, 1) + (healed - option.hpFraction) - riskPenalty;
     }
@@ -156,8 +182,8 @@ export function scoreOption(option: AiOption, riskAversion: number, params: Deci
 
   if (option.support) {
     const { kind, before, after, bestKillTurns } = option.support;
-    // 그 외 변화기(설치기·상태이상 부여 등)는 이득이 다음 턴부터라 다턴 예측 범위 — 고르지 않는다.
-    if (kind === "other") return -Infinity;
+    // 그 외 변화기(설치기·상태이상 부여 등)는 원안 채점식에서는 고르지 않는다(trade 채점 전용 §4-1).
+    if (kind === "other" || kind === "effect" || option.support.extended) return -Infinity;
     let value: number;
     if (tempo) {
       // 회복: 늘어난 생존 턴 − (이번 턴을 쓴 만큼 늦어진 처치 턴) / 랭크업: 지금 생존 턴 − (1 + 강화 후 처치 턴)

@@ -11,6 +11,8 @@
  *
  * 예) npm run sim:ai -- greedy 150 '{"scoring":"spec"}'   ← 파라미터 튜닝: 값을 바꿔 승률 비교
  * 환경변수 PIVOT=1: 유턴류를 배울 수 있는 포켓몬은 기술 하나를 유턴류로 바꿔 파티를 만든다(유턴 판단 검증용)
+ * 환경변수 STATUS=1: AI가 점수 매기는 변화기를 배울 수 있으면 기술 하나를 그걸로 바꾼다(변화기 판단 검증용).
+ *     diag 모드에 DIAG=status를 주면 그 변화기를 고른 순간을 덤프한다.
  *     (PowerShell에서는 JSON 따옴표를 '{\"scoring\":\"spec\"}' 처럼 이스케이프)
  */
 import { createServer } from "vite";
@@ -42,6 +44,10 @@ try {
   const sw = await server.ssrLoadModule("/src/lib/battle/switching.ts");
   const ai = mode === "regress" ? null : await server.ssrLoadModule("/src/lib/battle/ai/index.ts");
   const ev = mode === "regress" ? null : await server.ssrLoadModule("/src/lib/battle/ai/evaluator.ts");
+  const fx = await server.ssrLoadModule("/src/lib/battle/ai/statusMoveEffects.ts");
+  // 변화기 종류 라벨(집계용)
+  const statusLabel = (m) =>
+    fx.effectKindOf(m) ?? (fx.isBatonPass(m) ? "batonPass" : m.healsFraction || m.healsWeatherDependent || m.restSleep ? "heal" : "setup");
 
   const heldItems = data.ITEMS.filter((i) => i.category === "held-item");
   const pool = data.POKEMON.filter((p) => (p.learnset ?? []).filter((m) => data.getMove(m)).length >= 4);
@@ -59,6 +65,12 @@ try {
     if (process.env.PIVOT === "1") {
       const pivots = learn.filter((m) => data.getMove(m).selfSwitchAfterDamage && !moves.includes(m));
       if (pivots.length) moves[3] = pick(rng, pivots);
+    }
+    // STATUS=1: AI가 점수 매기는 변화기(상태이상·랭크다운·벽·설치기·배턴터치·날씨 회복기·잠자기)를 배울 수
+    // 있으면 3번째 기술을 그걸로 바꾼다(변화기 판단 검증용). 4번째는 PIVOT용으로 남겨 둔다.
+    if (process.env.STATUS === "1") {
+      const designed = learn.filter((m) => fx.isDesignedStatusMove(data.getMove(m)) && !moves.includes(m));
+      if (designed.length) moves[2] = pick(rng, designed);
     }
     const abilities = [...(p.abilities ?? []), ...(p.hiddenAbility ? [p.hiddenAbility] : [])];
     let item = rng() < 0.8 ? pick(rng, heldItems).id : null;
@@ -152,8 +164,13 @@ try {
     const fmt = (x) => (Number.isFinite(x) ? x.toFixed(2) : String(x));
     let dumped = 0;
     // DIAG=pivot: 교체 대신 유턴류를 고른 순간을 덤프
+    // DIAG=status: 변화기(회복·랭크업 제외)를 고른 순간을 덤프
     const wantDump = (d) =>
-      process.env.DIAG === "pivot" ? d.action.kind === "move" && !!d.action.move.selfSwitchAfterDamage : d.action.kind === "switch";
+      process.env.DIAG === "pivot"
+        ? d.action.kind === "move" && !!d.action.move.selfSwitchAfterDamage
+        : process.env.DIAG === "status"
+          ? d.action.kind === "move" && fx.isDesignedStatusMove(d.action.move)
+          : d.action.kind === "switch";
     const aiPolicy = (st, key) => {
       const d = ai.chooseAiAction(st, key, 0.5, { decisionParams });
       if (wantDump(d) && dumped < 14) {
@@ -165,7 +182,10 @@ try {
           const o = s.option;
           const label = o.optionType === "switch" ? `→${name(state.sideOf(st, key).party[o.toIndex])}` : o.move.name;
           console.log(
-            `  ${s.option === d.chosen ? "*" : " "} ${label.padEnd(12)} score=${fmt(s.score)} c=${fmt(o.hitsToKill.expected)} d=${fmt(o.hitsToBeKilled.expected)} first=${o.firstProbability.toFixed(2)} entry=${o.entryCost}`,
+            `  ${s.option === d.chosen ? "*" : " "} ${label.padEnd(12)} score=${fmt(s.score)} c=${fmt(o.hitsToKill.expected)} d=${fmt(o.hitsToBeKilled.expected)} first=${o.firstProbability.toFixed(2)} entry=${o.entryCost}` +
+              (o.support?.effect
+                ? ` | 적용후 c=${fmt(o.support.effect.hit.killTurns)} d=${fmt(o.support.effect.hit.survivalTurns)} p=${o.support.effect.hit.firstProbability.toFixed(2)} 원래 c=${fmt(o.support.effect.base.killTurns)} d=${fmt(o.support.effect.base.survivalTurns)} 명중=${o.support.effect.hitChance.toFixed(2)} 이월=${fmt(o.support.effect.carry)}`
+                : ""),
           );
         }
       }
@@ -174,10 +194,15 @@ try {
     for (let s = 1; s <= battles && dumped < 14; s++) runBattle(s, { a: aiPolicy, b: greedyPolicy }, { a: aiForced(0.5), b: firstLiving });
   } else if (mode === "greedy") {
     const mix = { move: 0, pivot: 0, switch: 0, status: 0 };
+    const statusMix = {};
     const aiPolicy = (risk) => (st, key) => {
       const d = ai.chooseAiAction(st, key, risk, { decisionParams });
       if (d.action.kind === "switch") mix.switch++;
-      else if (d.action.move.category === "status") mix.status++;
+      else if (d.action.move.category === "status") {
+        mix.status++;
+        const label = statusLabel(d.action.move);
+        statusMix[label] = (statusMix[label] ?? 0) + 1;
+      }
       else if (d.action.move.selfSwitchAfterDamage) mix.pivot++;
       else mix.move++;
       return d.action;
@@ -193,7 +218,7 @@ try {
       res[outcome(s, "a", risk)]++;
       res[outcome(s, "b", risk)]++;
     }
-    console.log(JSON.stringify({ battles: battles * 2, res, aiActionMix: mix }));
+    console.log(JSON.stringify({ battles: battles * 2, res, aiActionMix: mix, statusMix }));
   } else if (mode === "ai") {
     const results = { aiVsRandom: { a: 0, b: 0, draw: 0, timeout: 0 }, aiVsAi: { a: 0, b: 0, draw: 0, timeout: 0 } };
     let maxMs = 0;

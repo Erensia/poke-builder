@@ -21,6 +21,8 @@ export interface OpponentThreat {
   defensiveMatchup: number;
   /** 상대의 최선 공격기(가장 빨리 나를 쓰러뜨리는 기술) — 턴 순서 예측에 쓴다 */
   bestMove?: Move;
+  /** 상대가 최선 공격기만 쓸 때 한 턴에 깎이는 내 HP(최대 HP 대비, 명중률 포함) — 회복 루프 판정용 보수적 값 */
+  bestHitFraction: number;
 }
 
 /** 상대가 지금 고를 수 있는 기술(남은 PP > 0) */
@@ -144,5 +146,6 @@ export function evaluateOpponentThreat(ctx: ThreatContext): OpponentThreat {
     riskFlag,
     defensiveMatchup,
     bestMove: best?.move,
+    bestHitFraction: best ? Math.min(1, best.rate) * (targetHp / target.maxHp) : 0,
   };
 }
