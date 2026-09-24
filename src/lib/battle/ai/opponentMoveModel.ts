@@ -24,6 +24,8 @@ export interface OpponentThreat {
   bestMove?: Move;
   /** 상대가 최선 공격기만 쓸 때 한 턴에 깎이는 내 HP(최대 HP 대비, 명중률 포함) — 회복 루프 판정용 보수적 값 */
   bestHitFraction: number;
+  /** 사용 확률 모델 기준 한 턴에 깎이는 내 HP(targetHp 대비 비율, 명중률 포함) — 파티 단위 평가 대면표용 */
+  expectedRate: number;
   /** 기술별 사용 확률(의미 있는 변화기 + 공격기, 합 ≤ 1) — 방어류 시뮬레이션에서 상대 행동을 섞을 때 쓴다(§4-4) */
   moveWeights: { move: Move; weight: number }[];
 }
@@ -224,6 +226,7 @@ export function evaluateOpponentThreat(ctx: ThreatContext): OpponentThreat {
     defensiveMatchup,
     bestMove: best?.move,
     bestHitFraction: best ? Math.min(1, best.rate) * (targetHp / target.maxHp) : 0,
+    expectedRate,
     moveWeights: [
       ...meaningfulStatus.map((move) => ({ move, weight: Math.min(threatModel.statusWeight, 1 / meaningfulStatus.length) })),
       ...attacks.map((a, i) => ({ move: a.move, weight: totalShare > 0 ? (shares[i] / totalShare) * remainingWeight : 0 })),

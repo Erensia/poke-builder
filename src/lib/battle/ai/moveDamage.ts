@@ -8,7 +8,7 @@ import { resolveMoveContext } from "@/lib/moveContext";
 import { isOpponentTargetingMove, isPriorityMoveBlockedByField } from "@/lib/fieldEffects";
 import { computeStatusAttackMultiplier, ignoresBurnAttackPenalty } from "@/lib/statusConditions";
 import { supremeOverlordMultiplier } from "@/lib/battlePower";
-import { abilityOf, activeWeather, type BattleFighterState, type BattleSide, type BattleState } from "../state";
+import { abilityOf, activeWeather, isFainted, type BattleFighterState, type BattleSide, type BattleState } from "../state";
 import { computeBattleHitChance } from "../hitChance";
 import { computeTurnOrderPriority, effectiveHeldItem } from "../turnOrderInputs";
 import { estimateHits } from "./hitsToKill";
@@ -75,6 +75,18 @@ const NO_DAMAGE: Omit<MoveHitEstimate, "typeEffectiveness" | "accuracy"> = {
  * 공격측이 이 기술을 계속 쓸 때 방어측을 쓰러뜨리기까지의 기대 턴 수(명중률·생존 보장 반영).
  * 데미지를 주지 않는 변화기는 null. 판정 불가한 기술(가변 위력 미지원 등)도 null.
  */
+/**
+ * 총대장 수: 나와 있는 포켓몬(state.a/b 그 자체)이면 엔진이 등장 때 센 값. 그 외(대기 포켓몬, AI가 랭크를 지운 복제본
+ * 포함 — slot으로 파티에서 찾는다)는 지금 나온다고 할 때의 같은 편 기절 수.
+ */
+function supremeOverlordCountFor(state: BattleState, attacker: BattleFighterState): number | undefined {
+  if (!abilityOf(attacker)?.powerBoostPerFaintedAlly) return undefined;
+  if (attacker === state.a || attacker === state.b) return attacker.supremeOverlordCount;
+  const party = [state.sideA.party, state.sideB.party].find((p) => p.some((m) => m.slot === attacker.slot));
+  if (!party) return attacker.supremeOverlordCount;
+  return party.filter((m) => m.slot !== attacker.slot && isFainted(m)).length;
+}
+
 export function estimateMoveHits(ctx: MoveHitContext, move: Move): MoveHitEstimate | null {
   const { state, attacker, defender, defenderSide, attackerMovesSecond } = ctx;
   if (move.category === "status" || move.category === null) return null;
@@ -141,8 +153,9 @@ export function estimateMoveHits(ctx: MoveHitContext, move: Move): MoveHitEstima
     move.category,
     ignoresBurnAttackPenalty(attackerAbility?.id, move.id),
   );
-  // 총대장: 엔진(hitResolution)과 같은 배율. 대기 포켓몬(교체 후보)은 아직 안 세서 1로 본다.
-  const overlordMultiplier = supremeOverlordMultiplier(attackerAbility, attacker.supremeOverlordCount);
+  // 총대장: 엔진(hitResolution)과 같은 배율. 나와 있는 포켓몬은 등장 때 센 값, 대기 포켓몬(교체 후보·파티 대면표)은
+  // "지금 나온다면" 셀 값 — 같은 편 기절 수 — 으로 본다.
+  const overlordMultiplier = supremeOverlordMultiplier(attackerAbility, supremeOverlordCountFor(state, attacker));
 
   const result = evaluateSlotMatchup(attacker.slot, move, defender.slot, {
     attackerStages: attacker.stages,
