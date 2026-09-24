@@ -159,6 +159,11 @@ export interface BattleFighterState {
    */
   unburdenActive?: boolean;
   /**
+   * 총대장: 등장할 때 센 "쓰러진 같은 편 수"(Ability.powerBoostPerFaintedAlly.maxCount로 상한).
+   * 물러나면 초기화되고, 다시 등장하면 그 시점 기준으로 새로 센다. 0/undefined면 배율 없음.
+   */
+  supremeOverlordCount?: number;
+  /**
    * 탈(Disguise): 배틀 중 이 특성으로 한 번이라도 데미지를 무효화했으면(=탈이 벗겨졌으면) true —
    * unburdenActive와 같은 패턴으로 배틀 끝까지 유지되는 플래그. 이후로는 정상적으로 데미지를 받는다.
    */

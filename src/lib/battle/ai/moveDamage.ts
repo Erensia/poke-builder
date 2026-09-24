@@ -7,6 +7,7 @@ import { evaluateSlotMatchup, type RuntimeCombatant } from "@/lib/matchupEvaluat
 import { resolveMoveContext } from "@/lib/moveContext";
 import { isOpponentTargetingMove, isPriorityMoveBlockedByField } from "@/lib/fieldEffects";
 import { computeStatusAttackMultiplier, ignoresBurnAttackPenalty } from "@/lib/statusConditions";
+import { supremeOverlordMultiplier } from "@/lib/battlePower";
 import { abilityOf, activeWeather, type BattleFighterState, type BattleSide, type BattleState } from "../state";
 import { computeBattleHitChance } from "../hitChance";
 import { computeTurnOrderPriority, effectiveHeldItem } from "../turnOrderInputs";
@@ -140,6 +141,8 @@ export function estimateMoveHits(ctx: MoveHitContext, move: Move): MoveHitEstima
     move.category,
     ignoresBurnAttackPenalty(attackerAbility?.id, move.id),
   );
+  // 총대장: 엔진(hitResolution)과 같은 배율. 대기 포켓몬(교체 후보)은 아직 안 세서 1로 본다.
+  const overlordMultiplier = supremeOverlordMultiplier(attackerAbility, attacker.supremeOverlordCount);
 
   const result = evaluateSlotMatchup(attacker.slot, move, defender.slot, {
     attackerStages: attacker.stages,
@@ -156,7 +159,7 @@ export function estimateMoveHits(ctx: MoveHitContext, move: Move): MoveHitEstima
     defenderItemConsumed: !!defender.itemConsumed,
     attackerRuntime: runtimeOf(attacker, ctx.attackerTypes),
     defenderRuntime: runtimeOf(defender, defenderTypes),
-    extraOffenseMultiplier: ownTypeBoost * electroBoost * burnMultiplier,
+    extraOffenseMultiplier: ownTypeBoost * electroBoost * burnMultiplier * overlordMultiplier,
   });
   if (!result) return null;
 

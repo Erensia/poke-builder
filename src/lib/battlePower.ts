@@ -37,6 +37,16 @@ export function rivalryDamageMultiplier(
 }
 
 /**
+ * 총대장(Supreme Overlord): 등장 시점에 센 쓰러진 같은 편 수(faintedCount, maxCount까지)만큼
+ * 공격 기술 위력 ×(1 + perFainted × 수). 수가 없거나 0이면 1. 실전 엔진(hitResolution)과 배틀 AI가 공유한다.
+ */
+export function supremeOverlordMultiplier(ability: Ability | undefined, faintedCount: number | undefined): number {
+  const boost = ability?.powerBoostPerFaintedAlly;
+  if (!boost || !faintedCount) return 1;
+  return 1 + boost.perFainted * Math.min(faintedCount, boost.maxCount);
+}
+
+/**
  * 의욕(Hustle): 물리 기술 위력 ×1.5 (명중률 페널티는 결정력 계산 대상이 아니라 별도 처리).
  * battleSimulator(실전)·matchupEvaluator(매치업 스냅샷) 양쪽이 공유한다(ver.1.5 §5).
  */
