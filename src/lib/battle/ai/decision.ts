@@ -129,7 +129,7 @@ export const DEFAULT_DECISION_PARAMS: DecisionParams = {
   oppSwitchAware: true,
   oppSwitchMargin: 0.1,
   oppSwitchLimit: 1,
-  oppSwitchWeight: 1,
+  oppSwitchWeight: 0.5,
 };
 
 export interface ScoredOption {
