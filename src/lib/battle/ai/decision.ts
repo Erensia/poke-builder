@@ -2,7 +2,7 @@ import type { AiOption } from "./evaluator";
 import { DEFAULT_THREAT_MODEL } from "./opponentMoveModel";
 import { PHASE3_EFFECT_KINDS } from "./statusMoveEffects";
 import { ALL_PROTECT_GROUPS, type ProtectGroup } from "./protectMoves";
-import { partyRaceValue, type PartyDuel } from "./partyEval";
+import { partyRaceValue, partyValueAfterTurn, type PartyDuel, type PartyEffect } from "./partyEval";
 
 /**
  * decision-layer §9 파라미터(튜닝 대상) + extension §2-2 w_survival.
@@ -61,6 +61,11 @@ export interface DecisionParams {
   partyCountWeight: number;
   /** 파티 단위 평가에서 대면 승패를 확률로 나눌 때의 폭(여유 턴 σ = 이 값 × 평균 턴 수). 0이면 결정적 */
   partyDuelNoise: number;
+  /**
+   * §4-5 ②: 변화기·랭크업·방어류의 효과를 이어지는 대면(대면표)에도 남긴다 — 지속 턴 효과는 남은 턴만큼,
+   * 설치기는 실제 등장 비용으로, 방어류는 한 턴 뒤 state에서(쓰러짐·길동무 동반 기절 포함). false면 ① 동작(비교용).
+   */
+  partyEffects: boolean;
 }
 
 /**
@@ -91,6 +96,7 @@ export const DEFAULT_DECISION_PARAMS: DecisionParams = {
   partyAware: true,
   partyCountWeight: 0.5,
   partyDuelNoise: 0.5,
+  partyEffects: true,
 };
 
 export interface ScoredOption {
@@ -183,6 +189,15 @@ function switchInValue(candidate: AiOption, lost: number, params: DecisionParams
   );
 }
 
+/**
+ * 효과가 걸린 갈래의 첫 대면 정보: 계속 남는 효과(turns = ∞)면 대면표 자체를 효과 적용 state 것으로 바꾸고,
+ * 지속 턴 효과면 원래 대면표 + 효과 대면표·남은 턴을 함께 넘긴다(§4-5 ②).
+ */
+function withEffect(party: PartyDuel | undefined, effect: PartyEffect | undefined, params: DecisionParams): PartyDuel | undefined {
+  if (!party || !effect || !params.partyEffects) return party;
+  return effect.turns === Infinity ? { ...party, model: effect.model } : { ...party, effect };
+}
+
 /** 교체로 물러나는 지금 포켓몬의 HP를 hp로 본다(파티 단위 평가용 덮어쓰기) */
 function activeHpOverride(option: AiOption, hp: number): Record<number, number> | undefined {
   return option.party ? { [option.party.model.myActive]: hp } : undefined;
@@ -221,12 +236,17 @@ function pivotValue(option: AiOption, params: DecisionParams): number {
  * 빗나가면 지금 그대로의 대면을 끝까지 이어간다 + 대면 뒤에도 남는 이득(설치기·벽) × w_carry.
  */
 function effectValue(option: AiOption, params: DecisionParams): number {
-  const { hit, base, hitChance, carry, selfCost = 0 } = option.support!.effect!;
+  const effect = option.support!.effect!;
+  const { hit, base, hitChance, selfCost = 0 } = effect;
   const my = option.hpFraction;
   const opp = option.opponentHpFraction;
+  const hitParty = withEffect(option.party, effect.party, params);
   // HP 비용(소울비트류)은 치른 만큼 손실로 빼고, 대면은 깎인 HP에서 시작한다.
-  const onHit = race(params, option.party, [hit.killTurns, hit.survivalTurns, hit.firstProbability, my - selfCost, opp, 1]) - selfCost;
+  const onHit = race(params, hitParty, [hit.killTurns, hit.survivalTurns, hit.firstProbability, my - selfCost, opp, 1]) - selfCost;
   const onMiss = race(params, option.party, [base.killTurns, base.survivalTurns, base.firstProbability, my, opp, 1]);
+  // 파티 모드에서는 벽·설치기의 뒤쪽 이득을 이어지는 대면이 직접 세므로 이월 항은 partyCarry(끈적끈적네트 근사)만.
+  const carry =
+    params.partyAware && params.partyEffects && option.party && effect.partyCarry !== undefined ? effect.partyCarry : effect.carry;
   return hitChance * onHit + (1 - hitChance) * onMiss + params.wCarry * carry;
 }
 
@@ -263,10 +283,16 @@ function protectValue(option: AiOption, params: DecisionParams): number {
   if (protect.pointless || protect.outcomes.length === 0) return -Infinity;
   const my = option.hpFraction;
   const opp = option.opponentHpFraction;
+  const partyMode = params.partyAware && params.partyEffects && !!option.party;
   const success = protect.outcomes.reduce((sum, o) => {
+    // 둘 다 살아 있고 같은 대면: 그 턴 뒤 state의 대면표로 대면을 이어간다. 그 외(쓰러짐·길동무 동반 기절·강제
+    // 교체로 대면이 바뀜): 파티 모드면 그 state에서 이어지는 판세(§4-5 ②), 아니면 그 턴의 HP 변화만.
+    const turnParty = partyMode && o.partyModel ? { ...option.party!, model: o.partyModel } : option.party;
     const rest = o.race
-      ? race(params, option.party, [o.race.killTurns, o.race.survivalTurns, o.race.firstProbability, o.myAfter, o.oppAfter, 0])
-      : 0;
+      ? race(params, turnParty, [o.race.killTurns, o.race.survivalTurns, o.race.firstProbability, o.myAfter, o.oppAfter, 0])
+      : partyMode && o.partyModel
+        ? partyValueAfterTurn(o.partyModel, option.party!.model, { lambda: params.partyCountWeight, noise: params.partyDuelNoise })
+        : 0;
     return sum + o.weight * (opp - o.oppAfter - (my - o.myAfter) + rest);
   }, 0);
   const { base } = protect;

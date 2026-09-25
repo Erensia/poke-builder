@@ -1,7 +1,19 @@
 import { type FighterKey } from "@/types/battle";
 import { NEUTRAL_ACCURACY_STAGES, NEUTRAL_CRIT_STAGE, NEUTRAL_STAGES } from "@/types/battleStats";
-import { abilityOf, isFainted, opponentKey, sideOf, type BattleFighterState, type BattleSide, type BattleState } from "../state";
-import { calcEntryHazardDamage } from "../entryCost";
+import { isImmuneToStatus, inflictStatus } from "@/lib/statusConditions";
+import { isStatusBlockedByField } from "@/lib/fieldEffects";
+import {
+  abilityOf,
+  isFainted,
+  opponentKey,
+  sideOf,
+  statusImmunitiesOf,
+  type BattleFighterState,
+  type BattleSide,
+  type BattleState,
+} from "../state";
+import { calcEntryHazardDamage, isGroundedForHazards } from "../entryCost";
+import { blendTurns } from "./statusMoveEffects";
 import { estimateMoveHits } from "./moveDamage";
 import { evaluateOpponentThreat, usableMoves } from "./opponentMoveModel";
 import { isOneShotMove, isUsageBlocked } from "./usageConditions";
@@ -44,18 +56,32 @@ export interface PartyModel {
   myActive: number;
   oppActive: number;
   pair(myIndex: number, myStaged: boolean, oppIndex: number): PartyPair;
-  /** 이어지는 대면 계산 캐시(λ 포함 키) */
+  /** 이어지는 대면 계산 캐시(λ 포함 키) — 이 대면표만 쓰는 계산용 */
   memo: Map<string, number>;
+  /** 이 대면표를 지속 턴 효과로 얹은 계산의 캐시 — 원래 대면표마다 따로(같은 키라도 값이 다르다) */
+  layeredMemo: WeakMap<PartyModel, Map<string, number>>;
+}
+
+/**
+ * 지속 턴이 있는 효과(벽·날씨·필드·트릭룸·도발·앙코르·사슬묶기, §4-5 ②): 효과를 적용한 state로 만든 대면표와,
+ * 지금부터 효과가 남은 턴 수. 이어지는 대면은 남은 턴까지는 이 대면표, 그 뒤는 원래 대면표로 섞어 계산한다.
+ */
+export interface PartyEffect {
+  model: PartyModel;
+  turns: number;
 }
 
 /**
  * 한 옵션의 "첫 대면"이 누구끼리인지. 상대 쪽은 항상 지금 나와 있는 포켓몬이다.
  * myStaged: 내 쪽이 지금 나와 있는 포켓몬이 그대로 싸우는 것(랭크 유지)이면 true, 교체로 들어온 포켓몬이면 false.
+ * effect: 지속 턴이 있는 효과를 건 옵션의 명중 갈래. (계속 남는 효과 — 상태이상·랭크 변화 — 는 model 자체를
+ * 효과 적용 state로 만든 것으로 바꿔 넣는다.)
  */
 export interface PartyDuel {
   model: PartyModel;
   myIndex: number;
   myStaged: boolean;
+  effect?: PartyEffect;
 }
 
 function unstaged(fighter: BattleFighterState): BattleFighterState {
@@ -65,6 +91,23 @@ function unstaged(fighter: BattleFighterState): BattleFighterState {
     accuracyStages: { ...NEUTRAL_ACCURACY_STAGES },
     critStage: NEUTRAL_CRIT_STAGE,
   };
+}
+
+/**
+ * 독압정: 대기 포켓몬이 이 편 독압정 위로 등장하면 독(2층 맹독)에 걸린 상태로 대면한다고 본다(접지·타입/특성
+ * 면역·이미 상태이상·필드 차단 제외). 맹독 카운터는 대면 기간 평균 근사로 2(applyEffectMove와 같은 방식).
+ */
+function withEntryPoison(state: BattleState, fighter: BattleFighterState, side: BattleSide): BattleFighterState {
+  const layers = side.hazards.toxicSpikesLayers;
+  if (layers <= 0 || fighter.status.condition || fighter.types.includes("독")) return fighter;
+  const ability = abilityOf(fighter);
+  if (!isGroundedForHazards(fighter.types, ability)) return fighter;
+  const status = layers >= 2 ? "badly-poisoned" : "poison";
+  if (isImmuneToStatus(status, fighter.types, statusImmunitiesOf(fighter, ability)) || isStatusBlockedByField(state.field, status)) {
+    return fighter;
+  }
+  const inflicted = inflictStatus(fighter.status, status);
+  return { ...fighter, status: status === "badly-poisoned" ? { ...inflicted, turnsElapsed: 2 } : inflicted };
 }
 
 function entryFraction(fighter: BattleFighterState, side: BattleSide): number {
@@ -115,13 +158,17 @@ export function createPartyModel(state: BattleState, key: FighterKey): PartyMode
     myActive: mySide.activeIndex,
     oppActive: oppSide.activeIndex,
     memo: new Map(),
+    layeredMemo: new WeakMap(),
     pair(myIndex, myStaged, oppIndex) {
       const staged = myStaged && myIndex === mySide.activeIndex;
       const cacheKey = `${myIndex}:${staged ? 1 : 0}:${oppIndex}`;
       let pair = cache.get(cacheKey);
       if (!pair) {
-        const me = staged ? mySide.party[myIndex] : unstaged(mySide.party[myIndex]);
-        const opp = oppIndex === oppSide.activeIndex ? oppSide.party[oppIndex] : unstaged(oppSide.party[oppIndex]);
+        const me = staged ? mySide.party[myIndex] : withEntryPoison(state, unstaged(mySide.party[myIndex]), mySide);
+        const opp =
+          oppIndex === oppSide.activeIndex
+            ? oppSide.party[oppIndex]
+            : withEntryPoison(state, unstaged(oppSide.party[oppIndex]), oppSide);
         pair = computePair(state, key, me, opp);
         cache.set(cacheKey, pair);
       }
@@ -206,16 +253,38 @@ interface ChainPosition {
   oi: number;
   /** 내 쪽 mi가 결정 시점부터 계속 나와 있던 포켓몬(랭크 유지)인지 */
   myStaged: boolean;
+  /** 지속 턴 효과가 남은 턴 수(효과 없으면 0) */
+  effectLeft: number;
 }
 
-/** pos의 두 포켓몬이 방금 대면을 마친 상태 → 쓰러진 쪽이 다음 포켓몬을 고르며 끝까지. 최종 판세 값 F를 돌려준다. */
 interface ChainParams {
   lambda: number;
   noise: number;
 }
 
-function afterDuel(model: PartyModel, params: ChainParams, pos: ChainPosition): number {
-  const { lambda } = params;
+/** 이어지는 대면 계산 한 번의 문맥: 원래 대면표 + (지속 턴 효과가 있으면) 효과 대면표 */
+interface ChainContext extends ChainParams {
+  base: PartyModel;
+  effect?: PartyModel;
+}
+
+/**
+ * 캐시: 효과 대면표가 없으면 원래 대면표의 memo, 있으면 (원래, 효과) 쌍마다 따로. 효과 대면표가 다른 계산에서
+ * "원래 대면표"로도 쓰이므로(계속 남는 효과) 한 memo를 나눠 쓰면 남은 턴 0인 값이 섞인다.
+ */
+function memoOf(ctx: ChainContext): Map<string, number> {
+  if (!ctx.effect) return ctx.base.memo;
+  let memo = ctx.effect.layeredMemo.get(ctx.base);
+  if (!memo) {
+    memo = new Map();
+    ctx.effect.layeredMemo.set(ctx.base, memo);
+  }
+  return memo;
+}
+
+/** pos의 두 포켓몬이 방금 대면을 마친 상태 → 쓰러진 쪽이 다음 포켓몬을 고르며 끝까지. 최종 판세 값 F를 돌려준다. */
+function afterDuel(ctx: ChainContext, pos: ChainPosition): number {
+  const { lambda, base } = ctx;
   const { my, opp, mi, oi, myStaged } = pos;
   const myDown = my[mi] <= 0;
   const oppDown = opp[oi] <= 0;
@@ -224,39 +293,73 @@ function afterDuel(model: PartyModel, params: ChainParams, pos: ChainPosition): 
   const oppChoices = oppDown ? opp.map((hp, j) => (hp > 0 ? j : -1)).filter((j) => j >= 0) : [oi];
   if (myChoices.length === 0 || oppChoices.length === 0) return standing(my, opp, lambda);
 
-  const memoKey = `${lambda}:${params.noise}|${mi},${oi},${myStaged ? 1 : 0}|${my.map(round).join(",")}|${opp.map(round).join(",")}`;
-  const cached = model.memo.get(memoKey);
+  const left = pos.effectLeft === Infinity ? "inf" : Math.round(pos.effectLeft * 100);
+  const memoKey = `${lambda}:${ctx.noise}:${left}|${mi},${oi},${myStaged ? 1 : 0}|${my.map(round).join(",")}|${opp.map(round).join(",")}`;
+  const memo = memoOf(ctx);
+  const cached = memo.get(memoKey);
   if (cached !== undefined) return cached;
 
   let best = -Infinity;
   for (const i of myChoices) {
     let worst = Infinity;
     for (const j of oppChoices) {
-      const next: ChainPosition = { my: [...my], opp: [...opp], mi: i, oi: j, myStaged: myDown ? false : myStaged };
-      if (myDown) next.my[i] = Math.max(0, next.my[i] - model.myEntry[i]);
-      if (oppDown) next.opp[j] = Math.max(0, next.opp[j] - model.oppEntry[j]);
+      const next: ChainPosition = { ...pos, my: [...my], opp: [...opp], mi: i, oi: j, myStaged: myDown ? false : myStaged };
+      // 등장 비용은 효과가 남아 있으면 효과 대면표 기준(설치기를 깐 옵션 등)
+      const entry = ctx.effect && pos.effectLeft > 0 ? ctx.effect : base;
+      if (myDown) next.my[i] = Math.max(0, next.my[i] - entry.myEntry[i]);
+      if (oppDown) next.opp[j] = Math.max(0, next.opp[j] - entry.oppEntry[j]);
       // 등장 비용으로 쓰러지면 대면 없이 다시 고른다
-      const value = next.my[i] <= 0 || next.opp[j] <= 0 ? afterDuel(model, params, next) : duel(model, params, next);
+      const value = next.my[i] <= 0 || next.opp[j] <= 0 ? afterDuel(ctx, next) : duel(ctx, next);
       worst = Math.min(worst, value);
     }
     best = Math.max(best, worst);
   }
-  model.memo.set(memoKey, best);
+  memo.set(memoKey, best);
   return best;
 }
 
+/** 대면표 한 칸으로 pos의 대면 c·d·p — 지속 턴 효과가 남았으면 그 턴까지는 효과 대면표로 섞는다(blendRace와 같은 식) */
+function chainRace(ctx: ChainContext, pos: ChainPosition): { c: number; d: number; p: number } {
+  const { my, opp, mi, oi, myStaged } = pos;
+  const rates = (model: PartyModel) => {
+    const pair = model.pair(mi, myStaged, oi);
+    return {
+      c: turnsAt(pair.myRate, pair.me, pair.opponent, opp[oi]),
+      d: turnsAt(pair.oppRate, pair.opponent, pair.me, my[mi]),
+      p: pair.firstProbability,
+    };
+  };
+  const base = rates(ctx.base);
+  if (!ctx.effect || pos.effectLeft <= 0) return base;
+  const withEffect = rates(ctx.effect);
+  if (pos.effectLeft === Infinity) return withEffect;
+  const covered = pos.effectLeft;
+  const raceLength = Math.min(withEffect.c, withEffect.d);
+  const share = raceLength <= covered ? 1 : covered / raceLength;
+  return {
+    c: blendTurns(withEffect.c, base.c, covered),
+    d: blendTurns(withEffect.d, base.d, covered),
+    p: share * withEffect.p + (1 - share) * base.p,
+  };
+}
+
+/** 대면 갈래 하나가 걸린 턴 수만큼 남은 효과 턴을 줄인다(이긴 갈래 = 내 처치 턴, 진 갈래 = 내가 버틴 턴) */
+function remainingEffect(effectLeft: number, branch: DuelBranch, killTurns: number, survivalTurns: number): number {
+  if (effectLeft <= 0 || effectLeft === Infinity) return effectLeft;
+  const elapsed = branch.opp <= 0 ? killTurns : survivalTurns;
+  return Number.isFinite(elapsed) ? Math.max(0, effectLeft - elapsed) : 0;
+}
+
 /** 대면표로 pos의 두 포켓몬이 대면을 끝까지 치른 뒤 이어서 계산(이긴다/진다 갈래의 확률 가중 평균) */
-function duel(model: PartyModel, params: ChainParams, pos: ChainPosition): number {
+function duel(ctx: ChainContext, pos: ChainPosition): number {
   const { my, opp, mi, oi } = pos;
-  const pair = model.pair(mi, pos.myStaged, oi);
-  const c = turnsAt(pair.myRate, pair.me, pair.opponent, opp[oi]);
-  const d = turnsAt(pair.oppRate, pair.opponent, pair.me, my[mi]);
+  const { c, d, p } = chainRace(ctx, pos);
   let value = 0;
-  for (const branch of duelBranches([c, d, pair.firstProbability, my[mi], opp[oi], 0], params.noise)) {
-    const next: ChainPosition = { ...pos, my: [...my], opp: [...opp] };
+  for (const branch of duelBranches([c, d, p, my[mi], opp[oi], 0], ctx.noise)) {
+    const next: ChainPosition = { ...pos, my: [...my], opp: [...opp], effectLeft: remainingEffect(pos.effectLeft, branch, c, d) };
     next.my[mi] = branch.my;
     next.opp[oi] = branch.opp;
-    value += branch.weight * afterDuel(model, params, next);
+    value += branch.weight * afterDuel(ctx, next);
   }
   return value;
 }
@@ -273,9 +376,10 @@ export function partyRaceValue(
   params: ChainParams,
   myOverrides?: Record<number, number>,
 ): number {
-  const { model, myIndex, myStaged } = duelContext;
+  const { model, myIndex, myStaged, effect } = duelContext;
+  const ctx: ChainContext = { ...params, base: model, effect: effect?.model };
   const { lambda } = params;
-  const [, , , myStart, oppStart] = inputs;
+  const [killTurns, survivalTurns, , myStart, oppStart] = inputs;
   const base = [...model.myHp];
   if (myOverrides) for (const [i, hp] of Object.entries(myOverrides)) base[Number(i)] = Math.max(0, hp);
   let value = 0;
@@ -287,8 +391,35 @@ export function partyRaceValue(
     const exchange = oppStart - branch.opp - (myStart - branch.my);
     const faints =
       (model.oppHp[model.oppActive] > 0 && branch.opp <= 0 ? lambda : 0) - (model.myHp[myIndex] > 0 && branch.my <= 0 ? lambda : 0);
-    const rest = afterDuel(model, params, { my, opp, mi: myIndex, oi: model.oppActive, myStaged }) - standing(my, opp, lambda);
+    const effectLeft = effect ? remainingEffect(effect.turns, branch, killTurns, survivalTurns) : 0;
+    const position: ChainPosition = { my, opp, mi: myIndex, oi: model.oppActive, myStaged, effectLeft };
+    const rest = afterDuel(ctx, position) - standing(my, opp, lambda);
     value += branch.weight * (exchange + faints + rest);
   }
   return value;
+}
+
+/**
+ * 방어류 시뮬레이션처럼 한 턴을 실제로 돌린 뒤의 state(after 대면표)에서 이어지는 판세(§4-5 ②). 그 턴의 HP 변화는
+ * 부르는 쪽이 세고, 여기서는 그 턴에 쓰러진 마릿수 × λ(before 기준) + 그 뒤 이어지는 대면들로 바뀌는 판세를 돌려준다.
+ * 둘 다 살아 있으면 after의 두 포켓몬으로 대면을 이어가고(강제 교체로 대면이 바뀐 경우 포함), 한쪽 또는 둘 다
+ * 쓰러졌으면(길동무 동반 기절 포함) 쓰러진 쪽이 다음 포켓몬을 고른다.
+ */
+export function partyValueAfterTurn(after: PartyModel, before: PartyModel, params: ChainParams): number {
+  const { lambda } = params;
+  const ctx: ChainContext = { ...params, base: after };
+  const position: ChainPosition = {
+    my: [...after.myHp],
+    opp: [...after.oppHp],
+    mi: after.myActive,
+    oi: after.oppActive,
+    myStaged: true,
+    effectLeft: 0,
+  };
+  let faints = 0;
+  before.oppHp.forEach((hp, j) => (faints += hp > 0 && after.oppHp[j] <= 0 ? lambda : 0));
+  before.myHp.forEach((hp, i) => (faints -= hp > 0 && after.myHp[i] <= 0 ? lambda : 0));
+  const bothUp = position.my[position.mi] > 0 && position.opp[position.oi] > 0;
+  const end = bothUp ? duel(ctx, position) : afterDuel(ctx, position);
+  return faints + end - standing(position.my, position.opp, lambda);
 }
