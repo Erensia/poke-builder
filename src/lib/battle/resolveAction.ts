@@ -6,7 +6,7 @@ import { getAbility } from "@/lib/data";
 import { applyStageDelta } from "@/lib/statStages";
 import { isOpponentTargetingMove } from "@/lib/fieldEffects";
 import { getHpThresholdBerryHeal } from "@/lib/itemEffects";
-import { SCREEN_DURATION, TRICK_ROOM_DURATION, WEATHER_DURATION, activeWeather, applyForecastForm, consumeItem, contraryDelta, isFainted, sideOf, type BattleState } from "./state";
+import { SCREEN_DURATION, TAILWIND_DURATION, TRICK_ROOM_DURATION, WEATHER_DURATION, activeWeather, applyForecastForm, consumeItem, contraryDelta, isFainted, sideOf, type BattleState } from "./state";
 import { resolvePreHitEffects } from "./preHitEffects";
 import { resolveHitAndApplyDamage } from "./hitResolution";
 import { resolveMirroredMoveEffects } from "./mirroredEffects";
@@ -39,7 +39,7 @@ export function resolveAction(
     bouncedByMagicMirror, move, effectiveMove, opponentEffectsBlocked, random, state, hit, movesSecond, defenderKey, damage, hitSubstitute, defenderMove, actorKey, defenderBerriesBlocked, attackerBerriesBlocked, blockedByProtect, sheerForceAbilityName, isDamaging, selfCuredStatus, terrainSeedMessages, defenderAbility, attacker, defender, attackerAbility, attackerItem, defenderItem, abilityInflictedStatusOnAttacker, abilityInflictedStatusAbilityName, statusCureBerryItemName, mentalMoveBlockedByAbilityName,
   });
   let {
-    bouncedMoveName, bouncedByAbilityName, secondaryBlockedByAbilityName, berryEatFailed, stuffCheeksBerryHeal, stuffCheeksBerryName, costHpFailed, soulBeatHpCost, selfStatRises, selfStatsAtMax, selfStatDrops, reflectedStatDropAbilityName, reflectedStatDrops, restoredStatsSelfItemName, restoredStatsOpponentItemName, opportunistCopiedStats, opportunistAbilityName, opponentStatDrops, invertedTargetStages, addedTypeToTarget, overwroteTargetType, targetMoveTypeOverride, inflictedStatus, statusInflictFailed, beakBlastBurnedAttacker, curedStatus, curedStatusTarget, inflictedVolatile, tidyUpDone, courtChangeDone, revivedPartyName, reviveFailed, saltCureApplied, balloonPoppedItemName, octolockApplied, jawLockApplied, selfWokeBeforeMove, restSlept, healedAmount, healedTarget, averagedDefensesMoveName, swappedSpeedMoveName, transformedIntoName, transformFailed, regenSetFailed, leechSeedSetFailed, leechSeedBlockedByGrass, abilitySwappedTargetToName, abilitySwapFailed, substituteSetFailed, shedTailFailed, shedTailSucceeded, setDisabledMoveName, disableSetFailed, setEncoreMoveName, encoreSetFailed, swappedStatsMoveName, swappedStagesMoveName, protectSucceeded, protectFailed, protectStanceEntered, fieldSetFailed, stealthRockSetForSide, spikesSetForSide, toxicSpikesSetForSide, stickyWebSetForSide, hazardSetFailed,
+    bouncedMoveName, bouncedByAbilityName, secondaryBlockedByAbilityName, berryEatFailed, stuffCheeksBerryHeal, stuffCheeksBerryName, costHpFailed, soulBeatHpCost, selfStatRises, selfStatsAtMax, selfStatDrops, reflectedStatDropAbilityName, reflectedStatDrops, restoredStatsSelfItemName, restoredStatsOpponentItemName, opportunistCopiedStats, opportunistAbilityName, opponentStatDrops, invertedTargetStages, addedTypeToTarget, overwroteTargetType, targetMoveTypeOverride, inflictedStatus, statusInflictFailed, beakBlastBurnedAttacker, curedStatus, curedStatusTarget, inflictedVolatile, tidyUpDone, courtChangeDone, revivedPartyName, reviveFailed, saltCureApplied, balloonPoppedItemName, octolockApplied, jawLockApplied, selfWokeBeforeMove, restSlept, healedAmount, healedTarget, averagedDefensesMoveName, swappedSpeedMoveName, transformedIntoName, transformFailed, regenSetFailed, leechSeedSetFailed, leechSeedBlockedByGrass, abilitySwappedTargetToName, abilitySwapFailed, substituteSetFailed, shedTailFailed, shedTailSucceeded, setDisabledMoveName, disableSetFailed, setEncoreMoveName, encoreSetFailed, swappedStatsMoveName, swappedStagesMoveName, protectSucceeded, protectFailed, protectStanceEntered, fieldSetFailed, stealthRockSetForSide, spikesSetForSide, toxicSpikesSetForSide, stickyWebSetForSide, hazardSetFailed, swappedItems, itemSwapFailed, painSplitHp, stockpileHealFailed, recycledItemName, recycleFailed,
   } = mirrorResult;
   ({ defenderAbility, attacker, defender, attackerAbility, attackerItem, defenderItem, abilityInflictedStatusOnAttacker, abilityInflictedStatusAbilityName, statusCureBerryItemName, mentalMoveBlockedByAbilityName } = mirrorResult);
 
@@ -127,6 +127,19 @@ export function resolveAction(
       safeguardSetFailed = true;
     } else {
       attackerSide.safeguardTurnsRemaining = SCREEN_DURATION;
+    }
+  }
+
+  // 순풍(트랙 M1): 신비의부적과 같은 편 단위 — 이미 불고 있으면 실패. 쓴 턴 포함 4턴.
+  let tailwindSetFailed = false;
+  let tailwindSet = false;
+  if (effectiveMove.setsTailwind) {
+    const attackerSide = sideOf(state, actorKey);
+    if ((attackerSide.tailwindTurnsRemaining ?? 0) > 0) {
+      tailwindSetFailed = true;
+    } else {
+      attackerSide.tailwindTurnsRemaining = TAILWIND_DURATION;
+      tailwindSet = true;
     }
   }
 
@@ -305,6 +318,8 @@ export function resolveAction(
     setScreen: screenSetFailed ? undefined : effectiveMove.setsScreen,
     screenSetFailed,
     setSafeguard: safeguardSetFailed ? undefined : (effectiveMove.setsSafeguard || undefined),
+    tailwindSet: tailwindSet || undefined,
+    tailwindSetFailed: tailwindSetFailed || undefined,
     safeguardSetFailed: safeguardSetFailed || undefined,
     brokeScreens,
     fainted: isFainted(defender),
@@ -344,6 +359,12 @@ export function resolveAction(
     swappedStagesMoveName,
     averagedDefensesMoveName,
     swappedSpeedMoveName,
+    swappedItems,
+    itemSwapFailed: itemSwapFailed || undefined,
+    painSplitHp,
+    stockpileHealFailed: stockpileHealFailed || undefined,
+    recycledItemName,
+    recycleFailed: recycleFailed || undefined,
     shellSideArmCategory,
     transformedIntoName,
     transformFailed: transformFailed || undefined,

@@ -2392,7 +2392,8 @@
     "tags": [
       "회복"
     ],
-    "makesContact": false
+    "makesContact": false,
+    "healsFraction": 0.25
   },
   {
     "id": "안다리걸기",
@@ -2833,7 +2834,8 @@
     "classification": [
       "바람"
     ],
-    "makesContact": false
+    "makesContact": false,
+    "setsTailwind": true
   },
   {
     "id": "시저크로스",
@@ -3655,7 +3657,8 @@
     "tags": [
       "회복"
     ],
-    "makesContact": false
+    "makesContact": false,
+    "healsByStockpile": true
   },
   {
     "id": "더스트슈트",
@@ -3958,7 +3961,9 @@
     "pp": 12,
     "priority": 0,
     "effect": "눈에 보이지 않는 속도로 자신과 상대가 지닌 물건을 교환한다.",
-    "makesContact": false
+    "makesContact": false,
+    "swapsItemsWithTarget": true,
+    "notReflectable": true
   },
   {
     "id": "바둥바둥",
@@ -5354,7 +5359,9 @@
     "pp": 8,
     "priority": 0,
     "effect": "상대의 빈틈을 노려 자신과 상대가 지닌 물건을 바꿔치기한다.",
-    "makesContact": false
+    "makesContact": false,
+    "swapsItemsWithTarget": true,
+    "notReflectable": true
   },
   {
     "id": "플레어드라이브",
@@ -6266,7 +6273,9 @@
     "pp": 20,
     "priority": 0,
     "effect": "자신의 HP와 상대의 HP를 합친 것을 자신과 상대가 사이좋게 나눈다.",
-    "makesContact": false
+    "makesContact": false,
+    "sharesHpWithTarget": true,
+    "notReflectable": true
   },
   {
     "id": "자폭",
@@ -8016,7 +8025,8 @@
     "tags": [
       "회복"
     ],
-    "makesContact": false
+    "makesContact": false,
+    "recyclesItem": true
   },
   {
     "id": "위액",

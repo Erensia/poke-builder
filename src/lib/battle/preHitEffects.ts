@@ -709,6 +709,10 @@ export function resolvePreHitEffects(
   // 무관하게 여기서 갱신한다(본가 규칙 — 빗나가도 스트릭은 유지되고, 다른 기술을 쓰면 끊긴다).
   attacker.lastMoveStreak = attacker.lastMoveId === effectiveMove.id ? (attacker.lastMoveStreak ?? 1) + 1 : 1;
   attacker.lastMoveId = effectiveMove.id;
+  // 구애류: 지금 지닌 도구가 구애류면 이 기술로 잠긴다(이미 잠겼으면 그대로). 발버둥은 잠그지 않는다.
+  if (attackerItem?.locksFirstMoveUsed && !attacker.choiceLockedMoveId && effectiveMove.id !== STRUGGLE_MOVE.id) {
+    attacker.choiceLockedMoveId = effectiveMove.id;
+  }
 
   // 거대해머(cannotUseConsecutively): 실제로 이 기술로 행동을 개시했으니 "다음 턴엔 잠금" 예약.
   // usageCondition 게이트(섹션 0)는 이 기록과 현재 턴 번호가 정확히 일치할 때만 실패시킨다.

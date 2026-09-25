@@ -392,6 +392,7 @@ export function performSwitch(
   outgoing.chargingMoveId = undefined;
   outgoing.lastMoveId = undefined;
   outgoing.lastMoveStreak = undefined;
+  outgoing.choiceLockedMoveId = undefined;
   outgoing.supremeOverlordCount = undefined;
   outgoing.stockpileCount = undefined;
   outgoing.perishCount = undefined;

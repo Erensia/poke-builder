@@ -1,6 +1,6 @@
 import type { AiOption } from "./evaluator";
 import { DEFAULT_THREAT_MODEL } from "./opponentMoveModel";
-import { A1_EFFECT_KINDS, A2_EFFECT_KINDS, PHASE3_EFFECT_KINDS } from "./statusMoveEffects";
+import { A1_EFFECT_KINDS, A2_EFFECT_KINDS, PHASE3_EFFECT_KINDS, TRACK_M_EFFECT_KINDS } from "./statusMoveEffects";
 import { ALL_PROTECT_GROUPS, type ProtectGroup } from "./protectMoves";
 import { partyRaceValue, partyValueAfterTurn, type PartyDuel, type PartyEffect } from "./partyEval";
 
@@ -76,6 +76,8 @@ export interface DecisionParams {
    * false면 이전처럼 고르지 않는다(비교용). 추억의선물은 파티 단위 평가가 꺼져 있으면 평가할 수 없어 고르지 않는다.
    */
   a2Aware: boolean;
+  /** 트랙 M(ver.1.8) — 엔진에 새로 구현한 변화기(트릭·아픔나누기·순풍·리사이클·꿀꺽 등)를 평가할지(비교용) */
+  trackMAware: boolean;
 }
 
 /**
@@ -109,6 +111,7 @@ export const DEFAULT_DECISION_PARAMS: DecisionParams = {
   partyEffects: false,
   a1Aware: true,
   a2Aware: true,
+  trackMAware: true,
 };
 
 export interface ScoredOption {
@@ -255,8 +258,12 @@ function effectValue(option: AiOption, params: DecisionParams): number {
   const my = option.hpFraction;
   const opp = option.opponentHpFraction;
   const hitParty = withEffect(option.party, effect.party, params);
-  // HP 비용(소울비트류)은 치른 만큼 손실로 빼고, 대면은 깎인 HP에서 시작한다.
-  const onHit = race(params, hitParty, [hit.killTurns, hit.survivalTurns, hit.firstProbability, my - selfCost, opp, 1]) - selfCost;
+  // HP 비용(소울비트류)은 치른 만큼 손실로 빼고, 대면은 깎인 HP에서 시작한다. 아픔나누기는 두 HP가 바뀐 채로 시작하고
+  // 그 변화(상대 손실 − 내 손실)를 더한다.
+  const onHit = effect.hpAfter
+    ? opp - effect.hpAfter.opp - (my - effect.hpAfter.my) +
+      race(params, hitParty, [hit.killTurns, hit.survivalTurns, hit.firstProbability, effect.hpAfter.my, effect.hpAfter.opp, 1])
+    : race(params, hitParty, [hit.killTurns, hit.survivalTurns, hit.firstProbability, my - selfCost, opp, 1]) - selfCost;
   const onMiss = race(params, option.party, [base.killTurns, base.survivalTurns, base.firstProbability, my, opp, 1]);
   // 파티 모드에서는 벽·설치기의 뒤쪽 이득을 이어지는 대면이 직접 세므로 이월 항은 partyCarry(끈적끈적네트 근사)만.
   const carry =
@@ -385,9 +392,11 @@ function tradeScore(option: AiOption, riskAversion: number, params: DecisionPara
       if (!params.phase3Aware && effectKind && PHASE3_EFFECT_KINDS.has(effectKind)) return -Infinity;
       if (!params.a1Aware && effectKind && A1_EFFECT_KINDS.has(effectKind)) return -Infinity;
       if (!params.a2Aware && effectKind && A2_EFFECT_KINDS.has(effectKind)) return -Infinity;
+      if (!params.trackMAware && effectKind && TRACK_M_EFFECT_KINDS.has(effectKind)) return -Infinity;
       return effectValue(option, params) - riskPenalty;
     }
     if (!params.a1Aware && isA1SupportMove(option)) return -Infinity;
+    if (!params.trackMAware && option.move?.healsByStockpile) return -Infinity;
     if (kind === "setup" && params.statusAware && params.setupAware) {
       if (option.support.setupFailed) return -Infinity;
       if (option.support.effect) return setupValue(option, params) - riskPenalty;
