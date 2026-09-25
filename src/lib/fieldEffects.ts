@@ -69,6 +69,9 @@ export function isOpponentTargetingMove(move: Move): boolean {
   // 트랙 M1: 트릭·바꿔치기(도구 교환)·아픔나누기(HP 나눔)는 상대를 겨냥한다(방어·대타·매직미러 판정 대상)
   if (move.swapsItemsWithTarget || move.sharesHpWithTarget) return true;
   if (move.setsDisable || move.setsEncore || move.reducesTargetLastMovePp) return true;
+  // 트랙 M3: 상대 특성·타입을 바꾸는 기술(심플빔·고민씨·스킬스왑·동료만들기·위액·마법가루·물붓기·숲의저주·핼러윈)
+  if (move.setsTargetAbilityId || move.swapsAbilityWithTarget || move.givesAbilityToTarget || move.suppressesTargetAbility) return true;
+  if (move.setsTargetType || move.addsTypeToTarget) return true;
   if (move.curesStatus?.target === "opponent") return true;
   if (move.healsTarget === "opponent") return true;
   return false;

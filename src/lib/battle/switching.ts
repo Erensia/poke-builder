@@ -1,4 +1,5 @@
 import { type FighterKey } from "@/types/battle";
+import { isUncopyableAbility } from "./abilityChange";
 import { NEUTRAL_ACCURACY_STAGES, NEUTRAL_CRIT_STAGE, NEUTRAL_STAGES, type BattleStatKey } from "@/types/battleStats";
 import { NO_STATUS_CONDITION, type StatusCondition, type VolatileCondition, type VolatileConditionState } from "@/types/status";
 import { getAbility, getItem, getPokemon } from "@/lib/data";
@@ -34,6 +35,11 @@ export function applyIntimidateWithReaction(
   log: string[],
 ): void {
   const oppAbility = opponent.effectiveAbilityId ? getAbility(opponent.effectiveAbilityId) : undefined;
+  // 정신력·마이페이스·둔감(트랙 M3): 위협을 아예 받지 않는다
+  if (oppAbility?.immuneToIntimidate) {
+    log.push(`${intimidaterName}의 ${intimidateAbilityName}! 그러나 ${opponentName}의 ${oppAbility.name} 때문에 효과가 없었다!`);
+    return;
+  }
   if (oppAbility?.guardsAgainstIntimidate) {
     const before = opponent.stages[intimidate.stat];
     opponent.stages = applyStageDelta(opponent.stages, intimidate.stat, contraryDelta(opponent, 1));
@@ -251,7 +257,12 @@ function applyEntryAbilityOnSwitchIn(state: BattleState, key: FighterKey, log: s
     }
   }
   // 트레이스: 상대의 현재 특성을 복사
-  if (ability.copiesOpponentAbilityOnEntry && opponent.effectiveAbilityId && !isFainted(opponent)) {
+  if (
+    ability.copiesOpponentAbilityOnEntry &&
+    opponent.effectiveAbilityId &&
+    !isUncopyableAbility(opponent.effectiveAbilityId) &&
+    !isFainted(opponent)
+  ) {
     const copied = getAbility(opponent.effectiveAbilityId);
     self.effectiveAbilityId = opponent.effectiveAbilityId;
     const opponentName = getPokemon(opponent.slot.pokemonId)?.name ?? "상대";
@@ -287,6 +298,8 @@ export function applyMegaEvolution(state: BattleState, key: FighterKey, log: str
   const hpDelta = newStats.hp - fighter.maxHp; // 공식 메가폼은 HP 불변이지만 비공식 폼 대비 안전하게
   fighter.types = [...mega.types];
   fighter.effectiveAbilityId = mega.ability;
+  fighter.baseTypes = [...mega.types];
+  fighter.baseAbilityId = mega.ability;
   fighter.realStats = newStats;
   fighter.maxHp = newStats.hp;
   fighter.currentHp = Math.min(newStats.hp, Math.max(1, fighter.currentHp + Math.max(0, hpDelta)));
@@ -410,8 +423,15 @@ export function performSwitch(
   outgoing.unburdenActive = undefined;
   // 일루전(§6-1): 물러나면 위장 해제 — 다시 나올 때 파티 상태에 맞춰 재계산된다.
   outgoing.illusionAs = undefined;
+  // 트랙 M3: 기술·특성으로 바뀐 타입·특성은 물러나면 원래대로(변신은 원복 자체가 미도입이라 건드리지 않는다).
+  if (!outgoing.transformed) {
+    if (outgoing.baseTypes) outgoing.types = [...outgoing.baseTypes];
+    if (outgoing.baseAbilityId !== undefined) outgoing.effectiveAbilityId = outgoing.baseAbilityId;
+    outgoing.addedType = undefined;
+    outgoing.abilitySuppressed = undefined;
+  }
   // 유지: currentHp · status(주 상태이상) · remainingPp · itemConsumed · currentItemId ·
-  //       consumedBerryId · addedType · timesHitByMoves(교체 초기화 미도입) · ownMoveTypeBoosts ·
+  //       consumedBerryId · timesHitByMoves(교체 초기화 미도입) · ownMoveTypeBoosts ·
   //       disguiseBroken · hungerMode.
   //   스크린(§6-3)·희망사항(§6-2)은 편(BattleSide.screens / .wish)에 있어 교체해도 유지된다.
   //   후속: transformed(변신 원복 — 메타몽 전용이라 미도입).

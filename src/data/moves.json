@@ -393,6 +393,7 @@
   },
   {
     "id": "고민씨",
+    "setsTargetAbilityId": "불면",
     "name": "고민씨",
     "type": "풀",
     "category": "status",
@@ -3702,6 +3703,7 @@
   },
   {
     "id": "물붓기",
+    "setsTargetType": "물",
     "name": "물붓기",
     "type": "물",
     "category": "status",
@@ -3896,6 +3898,7 @@
   },
   {
     "id": "동료만들기",
+    "givesAbilityToTarget": true,
     "name": "동료만들기",
     "type": "노말",
     "category": "status",
@@ -4905,6 +4908,8 @@
   },
   {
     "id": "스킬스왑",
+    "notReflectable": true,
+    "swapsAbilityWithTarget": true,
     "name": "스킬스왑",
     "type": "에스퍼",
     "category": "status",
@@ -6245,6 +6250,7 @@
   },
   {
     "id": "미러타입",
+    "copiesTargetTypes": true,
     "name": "미러타입",
     "type": "노말",
     "category": "status",
@@ -7345,6 +7351,7 @@
   },
   {
     "id": "역할",
+    "copiesTargetAbility": true,
     "name": "역할",
     "type": "에스퍼",
     "category": "status",
@@ -8059,6 +8066,7 @@
   },
   {
     "id": "위액",
+    "suppressesTargetAbility": true,
     "name": "위액",
     "type": "독",
     "category": "status",

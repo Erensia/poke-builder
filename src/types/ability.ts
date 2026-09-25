@@ -377,6 +377,12 @@ export interface Ability {
    * 공격이 떨어지는 대신 오히려 1랭크 오른다(본가 규칙). preventsForcedSwitch와 별개 축.
    */
   guardsAgainstIntimidate?: boolean;
+  /** 트랙 M3: 정신력·마이페이스·둔감 — 상대의 위협(lowersOpponentStatOnEntry)을 받지 않는다 */
+  immuneToIntimidate?: boolean;
+  /** 트랙 M3: 마이페이스 — 혼란에 걸리지 않는다(특성이 바뀌어 새로 얻으면 걸려 있던 혼란도 풀린다) */
+  immuneToConfusion?: boolean;
+  /** 트랙 M3: 둔감 — 헤롱헤롱·도발에 걸리지 않는다(아로마베일의 blocksMentalMoves보다 좁은 범위) */
+  immuneToAttractAndTaunt?: boolean;
   /**
    * 주눅(Rattled): 상대의 위협을 받으면(공격 하락은 정상적으로 일어난 뒤) 이 스탯을 추가로
    * 올린다(주눅 = 스피드 +1). 악·고스트·벌레 기술 피격 시 스피드 상승은 hitTrigger.selfStatChanges로 처리.

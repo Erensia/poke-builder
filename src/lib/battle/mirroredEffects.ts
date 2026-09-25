@@ -14,6 +14,7 @@ import { rankStageMultiplier } from "@/lib/battlePower";
 import { computeWeatherHealFraction } from "@/lib/weatherEffects";
 import { FIELD_DURATION, isConfusionBlockedByField, isOpponentTargetingMove, isStatusBlockedByField } from "@/lib/fieldEffects";
 import { getConfusionCureBerryResult, getExtraFlinchTriggered, getMentalHerbCureResult, getStatusCureBerryResult, shouldTriggerWhiteHerb } from "@/lib/itemEffects";
+import { cureConditionsBlockedByAbility, isFixedAbility, isUncopyableAbility } from "./abilityChange";
 import { activeWeather, applyTransform, consumeItem, contraryDelta, contraryMoveFor, emptyHazardState, hasLivingReserve, isFainted, sideOf, statDropBlockStatsOf, statusImmunitiesOf, type BattleFighterState, type BattleState } from "./state";
 import { triggerTerrainSeeds } from "./switching";
 
@@ -542,6 +543,13 @@ export function resolveMirroredMoveEffects(input: MirroredMoveEffectsInput) {
   // 잠자기, 상태이상 즉시치료 나무열매)를 전부 여기 한 변수에 모은다 — 아래에서 순서대로 채워진다.
   let curedStatus: StatusConditionState["condition"] | undefined;
   let curedStatusTarget: "self" | "opponent" | undefined;
+  // 트랙 M3: 특성이 바뀌어 새 특성이 면역인 상태가 풀렸을 때(고민씨로 불면 → 잠이 깸 등). 이미 다른 치료가 기록됐으면 덮지 않는다.
+  const noteCure = (condition: StatusConditionState["condition"] | undefined, target: "self" | "opponent") => {
+    if (condition && !curedStatus) {
+      curedStatus = condition;
+      curedStatusTarget = target;
+    }
+  };
 
   // 상태이상 즉시치료 나무열매(리샘·버치·유루·복슝·복분·배리): 걸리는 "그 순간" 치료하고 소모된다.
   // itemConsumed는 나무열매 18종(타입내성)과 같은 축을 공유하므로(도구 1개=1회용), 이미 다른
@@ -559,6 +567,7 @@ export function resolveMirroredMoveEffects(input: MirroredMoveEffectsInput) {
   }
 
   let inflictedVolatile: VolatileCondition | undefined;
+  let volatileBlockedByAbility: { abilityName: string; volatile: VolatileCondition; self: boolean } | undefined;
   if (effectiveMove.inflictsVolatile) {
     for (const effect of effectiveMove.inflictsVolatile) {
       if (effect.volatile === "confusion" && isConfusionBlockedByField(state.field)) continue;
@@ -582,6 +591,17 @@ export function resolveMirroredMoveEffects(input: MirroredMoveEffectsInput) {
         continue;
       }
       const target = effect.target === "self" ? attacker : defender;
+      // 마이페이스(혼란)·둔감(헤롱헤롱·도발) — 트랙 M3. 확정 효과(변화기)만 로그로 알리고, 확률 부가효과는 조용히 무산.
+      const immunityAbility = effect.target === "self" ? attackerAbility : defenderAbility;
+      if (
+        (effect.volatile === "confusion" && immunityAbility?.immuneToConfusion) ||
+        ((effect.volatile === "attract" || effect.volatile === "taunt") && immunityAbility?.immuneToAttractAndTaunt)
+      ) {
+        if (effect.chance === undefined) {
+          volatileBlockedByAbility = { abilityName: immunityAbility!.name, volatile: effect.volatile, self: effect.target === "self" };
+        }
+        continue;
+      }
       // 하품(졸음): 대상이 이미 다른 주 상태이상이거나 이미 졸음 상태면 실패한다(본가 규칙) —
       // 실제 잠듦 여부(타입/필드 면역)는 2턴 뒤 트리거 시점에 따로 확인한다.
       if (effect.volatile === "drowsy" && (target.status.condition || hasVolatile(target.volatile, "drowsy"))) {
@@ -1108,12 +1128,74 @@ export function resolveMirroredMoveEffects(input: MirroredMoveEffectsInput) {
   let abilitySwappedTargetToName: string | undefined;
   let abilitySwapFailed = false;
   if (effectiveMove.setsTargetAbilityId && hit && !opponentEffectsBlocked && !isFainted(defender)) {
-    if (defender.effectiveAbilityId === effectiveMove.setsTargetAbilityId) {
+    // 폼 변화 특성·일루전은 덮어쓸 수 없다(트랙 M3)
+    if (defender.effectiveAbilityId === effectiveMove.setsTargetAbilityId || isFixedAbility(defender.effectiveAbilityId)) {
       abilitySwapFailed = true;
     } else {
       defender.effectiveAbilityId = effectiveMove.setsTargetAbilityId;
+      defender.abilitySuppressed = undefined;
       abilitySwappedTargetToName = getAbility(effectiveMove.setsTargetAbilityId)?.name ?? effectiveMove.setsTargetAbilityId;
+      // 고민씨(불면)로 잠든 상대는 바로 깬다
+      noteCure(cureConditionsBlockedByAbility(defender), "opponent");
     }
+  }
+
+  // 트랙 M3: 스킬스왑(맞교환)·동료만들기(내 특성을 상대에게)·역할(상대 특성을 나에게)·위액(상대 특성 무효화)·
+  // 미러타입(상대 타입을 나에게). 폼 변화 특성·일루전은 바꿀 수 없고, 트레이스·괴짜·리시버는 복사·건네기의 원본이 될 수 없다.
+  let abilityChange: { kind: "swap" | "give" | "copy" | "suppress"; abilityName?: string } | undefined;
+  let abilityChangeFailed = false;
+  const nameOf = (id: string | null) => (id ? getAbility(id)?.name ?? id : undefined);
+  if (effectiveMove.swapsAbilityWithTarget && hit && !opponentEffectsBlocked && !isFainted(defender)) {
+    const mine = attacker.effectiveAbilityId;
+    const theirs = defender.effectiveAbilityId;
+    if (isFixedAbility(mine) || isFixedAbility(theirs) || (!mine && !theirs)) {
+      abilityChangeFailed = true;
+    } else {
+      attacker.effectiveAbilityId = theirs;
+      defender.effectiveAbilityId = mine;
+      attacker.abilitySuppressed = undefined;
+      defender.abilitySuppressed = undefined;
+      abilityChange = { kind: "swap" };
+      noteCure(cureConditionsBlockedByAbility(attacker), "self");
+      noteCure(cureConditionsBlockedByAbility(defender), "opponent");
+    }
+  }
+  if (effectiveMove.givesAbilityToTarget && hit && !opponentEffectsBlocked && !isFainted(defender)) {
+    const mine = attacker.effectiveAbilityId;
+    if (!mine || isUncopyableAbility(mine) || isFixedAbility(defender.effectiveAbilityId) || defender.effectiveAbilityId === mine) {
+      abilityChangeFailed = true;
+    } else {
+      defender.effectiveAbilityId = mine;
+      defender.abilitySuppressed = undefined;
+      abilityChange = { kind: "give", abilityName: nameOf(mine) };
+      noteCure(cureConditionsBlockedByAbility(defender), "opponent");
+    }
+  }
+  if (effectiveMove.copiesTargetAbility && !isFainted(defender)) {
+    const theirs = defender.effectiveAbilityId;
+    if (!theirs || isUncopyableAbility(theirs) || isFixedAbility(attacker.effectiveAbilityId) || attacker.effectiveAbilityId === theirs) {
+      abilityChangeFailed = true;
+    } else {
+      attacker.effectiveAbilityId = theirs;
+      attacker.abilitySuppressed = undefined;
+      abilityChange = { kind: "copy", abilityName: nameOf(theirs) };
+      noteCure(cureConditionsBlockedByAbility(attacker), "self");
+    }
+  }
+  if (effectiveMove.suppressesTargetAbility && hit && !opponentEffectsBlocked && !isFainted(defender)) {
+    if (defender.abilitySuppressed || !defender.effectiveAbilityId || isFixedAbility(defender.effectiveAbilityId)) {
+      abilityChangeFailed = true;
+    } else {
+      defender.effectiveAbilityId = null;
+      defender.abilitySuppressed = true;
+      abilityChange = { kind: "suppress" };
+    }
+  }
+  let copiedTypes: PokemonType[] | undefined;
+  if (effectiveMove.copiesTargetTypes && !isFainted(defender)) {
+    attacker.types = [...defender.types];
+    attacker.addedType = undefined;
+    copiedTypes = attacker.types;
   }
 
   // 대타출동: 이미 대타가 있거나, 최대 HP 1/4보다 현재 HP가 많지 않으면(=쓰면 자신이 기절하거나
@@ -1333,7 +1415,7 @@ export function resolveMirroredMoveEffects(input: MirroredMoveEffectsInput) {
     [attackerItem, defenderItem] = [defenderItem, attackerItem];
   }
   return {
-    defenderAbility, attacker, defender, attackerAbility, attackerItem, defenderItem, abilityInflictedStatusOnAttacker, abilityInflictedStatusAbilityName, statusCureBerryItemName, mentalMoveBlockedByAbilityName, bouncedMoveName, bouncedByAbilityName, secondaryBlockedByAbilityName, berryEatFailed, stuffCheeksBerryHeal, stuffCheeksBerryName, costHpFailed, soulBeatHpCost, selfStatRises, selfStatsAtMax, selfStatDrops, reflectedStatDropAbilityName, reflectedStatDrops, restoredStatsSelfItemName, restoredStatsOpponentItemName, opportunistCopiedStats, opportunistAbilityName, opponentStatDrops, invertedTargetStages, addedTypeToTarget, overwroteTargetType, targetMoveTypeOverride, inflictedStatus, statusInflictFailed, beakBlastBurnedAttacker, curedStatus, curedStatusTarget, inflictedVolatile, tidyUpDone, courtChangeDone, revivedPartyName, reviveFailed, saltCureApplied, balloonPoppedItemName, octolockApplied, jawLockApplied, selfWokeBeforeMove, restSlept, healedAmount, healedTarget, averagedDefensesMoveName, swappedSpeedMoveName, transformedIntoName, transformFailed, regenSetFailed, leechSeedSetFailed, leechSeedBlockedByGrass, abilitySwappedTargetToName, abilitySwapFailed, substituteSetFailed, shedTailFailed, shedTailSucceeded, setDisabledMoveName, disableSetFailed, setEncoreMoveName, encoreSetFailed, swappedStatsMoveName, swappedStagesMoveName, protectSucceeded, protectFailed, protectStanceEntered, fieldSetFailed, stealthRockSetForSide, spikesSetForSide, toxicSpikesSetForSide, stickyWebSetForSide, hazardSetFailed, swappedItems, itemSwapFailed, painSplitHp, stockpileHealFailed, recycledItemName, recycleFailed, copiedStagesFromName, averagedAttacksMoveName, spitePp, spiteFailed, acupressureRaised, acupressureFailed,
+    defenderAbility, attacker, defender, attackerAbility, attackerItem, defenderItem, abilityInflictedStatusOnAttacker, abilityInflictedStatusAbilityName, statusCureBerryItemName, mentalMoveBlockedByAbilityName, bouncedMoveName, bouncedByAbilityName, secondaryBlockedByAbilityName, berryEatFailed, stuffCheeksBerryHeal, stuffCheeksBerryName, costHpFailed, soulBeatHpCost, selfStatRises, selfStatsAtMax, selfStatDrops, reflectedStatDropAbilityName, reflectedStatDrops, restoredStatsSelfItemName, restoredStatsOpponentItemName, opportunistCopiedStats, opportunistAbilityName, opponentStatDrops, invertedTargetStages, addedTypeToTarget, overwroteTargetType, targetMoveTypeOverride, inflictedStatus, statusInflictFailed, beakBlastBurnedAttacker, curedStatus, curedStatusTarget, inflictedVolatile, tidyUpDone, courtChangeDone, revivedPartyName, reviveFailed, saltCureApplied, balloonPoppedItemName, octolockApplied, jawLockApplied, selfWokeBeforeMove, restSlept, healedAmount, healedTarget, averagedDefensesMoveName, swappedSpeedMoveName, transformedIntoName, transformFailed, regenSetFailed, leechSeedSetFailed, leechSeedBlockedByGrass, abilitySwappedTargetToName, abilitySwapFailed, substituteSetFailed, shedTailFailed, shedTailSucceeded, setDisabledMoveName, disableSetFailed, setEncoreMoveName, encoreSetFailed, swappedStatsMoveName, swappedStagesMoveName, protectSucceeded, protectFailed, protectStanceEntered, fieldSetFailed, stealthRockSetForSide, spikesSetForSide, toxicSpikesSetForSide, stickyWebSetForSide, hazardSetFailed, swappedItems, itemSwapFailed, painSplitHp, stockpileHealFailed, recycledItemName, recycleFailed, copiedStagesFromName, averagedAttacksMoveName, spitePp, spiteFailed, acupressureRaised, acupressureFailed, volatileBlockedByAbility, abilityChange, abilityChangeFailed, copiedTypes,
   };
 }
 

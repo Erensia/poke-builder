@@ -1,4 +1,5 @@
 import { type ChargeHideType, type Move } from "@/types/move";
+import { isFixedAbility } from "./abilityChange";
 import { type WeatherKind } from "@/types/weather";
 import { type FieldKind } from "@/types/field";
 import { type FighterKey, type HitAbilityEvent } from "@/types/battle";
@@ -444,7 +445,7 @@ export function resolveHitAndApplyDamage(input: HitResolutionInput) {
       // 아로마베일: 접촉기를 쓴 공격자가 이 특성이면 헤롱헤롱바디의 헤롱헤롱이 걸리지 않는다.
       !(
         (trigger.inflictsVolatileOnAttacker === "attract" || trigger.inflictsVolatileOnAttacker === "taunt") &&
-        attackerAbility?.blocksMentalMoves
+        (attackerAbility?.blocksMentalMoves || attackerAbility?.immuneToAttractAndTaunt)
       )
     ) {
       attacker.volatile = inflictVolatile(attacker.volatile, trigger.inflictsVolatileOnAttacker, random);
@@ -558,7 +559,8 @@ export function resolveHitAndApplyDamage(input: HitResolutionInput) {
     // 미라(Mummy): 접촉기로 피격당하면 공격자의 특성을 미라로 바꾼다. 이미 그 특성이면 무발동.
     if (
       trigger.setsAttackerAbilityId &&
-      attacker.effectiveAbilityId !== trigger.setsAttackerAbilityId
+      attacker.effectiveAbilityId !== trigger.setsAttackerAbilityId &&
+      !isFixedAbility(attacker.effectiveAbilityId)
     ) {
       attacker.effectiveAbilityId = trigger.setsAttackerAbilityId;
       mummifiedAttackerAbilityName = defenderAbility!.name;
@@ -566,7 +568,11 @@ export function resolveHitAndApplyDamage(input: HitResolutionInput) {
       evAny = true;
     }
     // 떠도는영혼(Wandering Spirit): 접촉기로 피격당하면 공격자와 특성을 맞바꾼다.
-    if (trigger.swapsAbilityWithAttacker && attacker.effectiveAbilityId !== defender.effectiveAbilityId) {
+    if (
+      trigger.swapsAbilityWithAttacker &&
+      attacker.effectiveAbilityId !== defender.effectiveAbilityId &&
+      !isFixedAbility(attacker.effectiveAbilityId)
+    ) {
       const tmp = attacker.effectiveAbilityId;
       attacker.effectiveAbilityId = defender.effectiveAbilityId;
       defender.effectiveAbilityId = tmp;

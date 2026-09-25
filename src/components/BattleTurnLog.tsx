@@ -789,6 +789,41 @@ function ActionMainLine({
       {!action.blockedReason && action.hit && action.abilitySwapFailed && (
         <> · 그러나 실패했다!</>
       )}
+      {/* 트랙 M3: 스킬스왑·동료만들기·역할·위액·미러타입 */}
+      {!action.blockedReason && action.abilityChange?.kind === "swap" && (
+        <>
+          {" "}
+          · {actorName}
+          {eunNeun(actorName)} 서로의 특성을 바꿨다!
+        </>
+      )}
+      {!action.blockedReason && action.abilityChange?.kind === "give" && action.abilityChange.abilityName && (
+        <>
+          {" "}
+          · {defenderName}의 특성이 {action.abilityChange.abilityName}
+          {roEuro(action.abilityChange.abilityName)} 바뀌었다!
+        </>
+      )}
+      {!action.blockedReason && action.abilityChange?.kind === "copy" && action.abilityChange.abilityName && (
+        <>
+          {" "}
+          · {actorName}
+          {eunNeun(actorName)} {defenderName}의 {action.abilityChange.abilityName}
+          {eulReul(action.abilityChange.abilityName)} 복사했다!
+        </>
+      )}
+      {!action.blockedReason && action.abilityChange?.kind === "suppress" && (
+        <> · {defenderName}의 특성이 효과를 잃었다!</>
+      )}
+      {!action.blockedReason && action.abilityChangeFailed && <> · 그러나 실패했다!</>}
+      {!action.blockedReason && action.copiedTypes && (
+        <>
+          {" "}
+          · {actorName}
+          {eunNeun(actorName)} {defenderName}
+          {waGwa(defenderName)} 같은 타입이 되었다!
+        </>
+      )}
       {!action.blockedReason && action.hit && !action.hits && action.mummifiedAttackerAbilityName && (
         <> · {abilityMummifiedLine(action.mummifiedAttackerAbilityName, actorName, defenderName)}</>
       )}
@@ -1323,6 +1358,16 @@ function ActionEffectLines({
         </div>
       )}
       {/* 아로마베일 — 헤롱헤롱·도발·기술봉인·앙코르를 막았을 때 */}
+      {!action.blockedReason && action.volatileBlockedByAbility && (() => {
+        const { abilityName, volatile, self } = action.volatileBlockedByAbility;
+        const who = self ? actorName : defenderName;
+        const label = VOLATILE_LABELS[volatile];
+        return (
+          <div className="battle-turn-line is-muted">
+            {who}의 {abilityName}! {label}에 걸리지 않는다!
+          </div>
+        );
+      })()}
       {!action.blockedReason && action.mentalMoveBlockedByAbilityName && (
         <div className="battle-turn-line is-muted">
           {defenderName}의 {action.mentalMoveBlockedByAbilityName}! 마음을 옭아매는 기술은 통하지 않는다!

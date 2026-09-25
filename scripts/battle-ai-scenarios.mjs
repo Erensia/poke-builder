@@ -1016,6 +1016,84 @@ try {
       );
     }
   }
+  // ── 트랙 M3(ver.1.8): 특성·타입 바꾸기 + 특성 면역 + 교체 시 원복 ──
+  {
+    const rt = await server.ssrLoadModule("/src/lib/battle/runTurn.ts");
+    const act = (id) => ({ kind: "move", move: data.getMove(id) });
+    const run = (st, a, b) => rt.runTurn(st, a.kind ? a : act(a), b.kind ? b : act(b), () => 0.5);
+    const actionOf = (out, key) => out.result.actions.find((x) => x.actor === key);
+    // 스킬스왑·동료만들기·역할 / 폼 변화 특성(배틀스위치)·트레이스는 안 됨
+    {
+      const st = battle([mon("팬텀", ["스킬스왑", "동료만들기", "역할"], "부유")], [mon("잠만보", ["칼춤"], "두꺼운지방")]);
+      const sw1 = run(st, "스킬스왑", "칼춤").nextState;
+      const give = run(st, "동료만들기", "칼춤").nextState;
+      const copy = run(st, "역할", "칼춤").nextState;
+      const fixed = actionOf(run(battle([mon("팬텀", ["스킬스왑"], "부유")], [mon("킬가르도", ["칼춤"], "배틀스위치")]), "스킬스왑", "칼춤"), "a");
+      const trace = actionOf(run(battle([mon("팬텀", ["역할"], "부유")], [mon("잠만보", ["칼춤"], "트레이스")]), "역할", "칼춤"), "a");
+      check(
+        "M3: 스킬스왑·동료만들기·역할 / 배틀스위치 교환·트레이스 복사는 실패",
+        sw1.a.effectiveAbilityId === "두꺼운지방" && sw1.b.effectiveAbilityId === "부유" && give.b.effectiveAbilityId === "부유" &&
+          copy.a.effectiveAbilityId === "두꺼운지방" && fixed?.abilityChangeFailed === true && trace?.abilityChangeFailed === true,
+        `교환=${sw1.a.effectiveAbilityId}/${sw1.b.effectiveAbilityId} 건넴=${give.b.effectiveAbilityId} 복사=${copy.a.effectiveAbilityId}`,
+      );
+    }
+    // 위액: 특성 무효화 → 물러나면 원래 특성 / 심플빔·숲의저주도 물러나면 원복
+    {
+      const st = battle([mon("팬텀", ["위액", "심플빔", "숲의저주", "칼춤"])], [mon("잠만보", ["칼춤"], "두꺼운지방"), mon("메타그로스", ["코멧펀치"])]);
+      const s1 = run(st, "위액", "칼춤").nextState;
+      const s2 = run(run(s1, "심플빔", "칼춤").nextState, "숲의저주", "칼춤").nextState;
+      const out = run(s2, "칼춤", { kind: "switch", toIndex: 1 }).nextState;
+      const back = run(out, "칼춤", { kind: "switch", toIndex: 0 }).nextState;
+      check(
+        "M3: 위액(특성 무효) + 교체하면 특성·타입 원복(심플빔·숲의저주 포함)",
+        s1.b.effectiveAbilityId === null && s1.b.abilitySuppressed === true && s2.b.effectiveAbilityId === "단순" && s2.b.types.includes("풀") &&
+          back.b.effectiveAbilityId === "두꺼운지방" && !back.b.types.includes("풀") && !back.b.abilitySuppressed,
+        `위액=${s1.b.effectiveAbilityId} 심플빔=${s2.b.effectiveAbilityId} 복귀=${back.b.effectiveAbilityId} 타입=${back.b.types}`,
+      );
+    }
+    // 고민씨: 잠든 상대가 불면이 되면 바로 깬다 / 물붓기·미러타입
+    {
+      const st = battle([mon("팬텀", ["고민씨", "물붓기", "미러타입"])], [mon("잠만보", ["칼춤"])]);
+      st.b.status = { condition: "sleep", turnsElapsed: 0, sleepTurns: 3 };
+      const w = run(st, "고민씨", "칼춤");
+      const soak = run(st, "물붓기", "칼춤").nextState;
+      const mirror = run(st, "미러타입", "칼춤").nextState;
+      check(
+        "M3: 고민씨(불면 → 잠이 깸)·물붓기(단일 물)·미러타입(상대 타입 복사)",
+        w.nextState.b.effectiveAbilityId === "불면" && !w.nextState.b.status.condition && actionOf(w, "a")?.curedStatus === "sleep" &&
+          soak.b.types.join() === "물" && mirror.a.types.join() === st.b.types.join(),
+        `고민씨=${w.nextState.b.effectiveAbilityId}/${w.nextState.b.status.condition} 물붓기=${soak.b.types} 미러=${mirror.a.types}`,
+      );
+    }
+    // 특성 면역: 마이페이스(혼란) · 둔감(도발) · 정신력(위협)
+    {
+      const conf = actionOf(run(battle([mon("팬텀", ["이상한빛"])], [mon("잠만보", ["칼춤"], "마이페이스")]), "이상한빛", "칼춤"), "a");
+      const taunt = actionOf(run(battle([mon("팬텀", ["도발"])], [mon("잠만보", ["칼춤"], "둔감")]), "도발", "칼춤"), "a");
+      const intim = battle([mon("갸라도스", ["폭포오르기"], "위협")], [mon("잠만보", ["칼춤"], "정신력")]);
+      const plain = battle([mon("갸라도스", ["폭포오르기"], "위협")], [mon("잠만보", ["칼춤"])]);
+      check(
+        "M3: 마이페이스 혼란 면역·둔감 도발 면역·정신력 위협 면역",
+        conf?.volatileBlockedByAbility?.volatile === "confusion" && taunt?.volatileBlockedByAbility?.volatile === "taunt" &&
+          intim.b.stages.atk === 0 && plain.b.stages.atk === -1,
+        `혼란=${conf?.volatileBlockedByAbility?.abilityName} 도발=${taunt?.volatileBlockedByAbility?.abilityName} 위협 atk=${intim.b.stages.atk}/${plain.b.stages.atk}`,
+      );
+    }
+    // AI: 물붓기로 땅타입을 물로 → 10만볼트가 통함 / 위액으로 두꺼운지방 해제 → 화염방사가 잘 들어감 / 토글
+    {
+      const P = dec.DEFAULT_DECISION_PARAMS;
+      const optOf = (st, id) => opt(ev.evaluateOptions(st, "a"), id);
+      const soak = optOf(battle([mon("로토무", ["물붓기", "10만볼트"])], [mon("한카리아스", ["스톤에지"])]), "물붓기").support?.effect;
+      const gastroOpt = optOf(battle([mon("리자몽", ["위액", "화염방사"])], [mon("잠만보", ["누르기"], "두꺼운지방", null, pts({ hp: 32 }))]), "위액");
+      const gastro = gastroOpt.support?.effect;
+      check(
+        "M3 AI: 물붓기(면역 → 통함)·위액(두꺼운지방 해제) 재평가 + 토글",
+        soak?.kind === "typeSet" && soak.base.killTurns === Infinity && Number.isFinite(soak.hit.killTurns) &&
+          gastro?.kind === "abilitySuppress" && gastro.hit.killTurns < gastro.base.killTurns &&
+          dec.scoreOption(gastroOpt, 0.5, { ...P, trackMAware: false }) === -Infinity,
+        `물붓기 c ${soak?.base.killTurns}→${soak?.hit.killTurns} 위액 c ${gastro?.base.killTurns}→${gastro?.hit.killTurns}`,
+      );
+    }
+  }
   // ── 매치업 난수별 데미지(ver.1.7 트랙 H): 기존 격파 판정과 같은 관계식인지 대조 ──
   {
     const bp = await server.ssrLoadModule("/src/lib/battlePower.ts");

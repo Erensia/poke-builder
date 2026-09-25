@@ -29,6 +29,7 @@ import {
   type BattleSide,
   type BattleState,
 } from "../state";
+import { cureConditionsBlockedByAbility, isFixedAbility, isUncopyableAbility } from "../abilityChange";
 import { calcEntryHazardDamage, isGroundedForHazards } from "../entryCost";
 import { effectiveHeldItem } from "../turnOrderInputs";
 
@@ -72,7 +73,16 @@ export type EffectMoveKind =
   | "spite"
   | "torment"
   | "imprison"
-  | "acupressure";
+  | "acupressure"
+  // 트랙 M3(ver.1.8): 특성·타입 바꾸기 — 스킬스왑·동료만들기·역할·위액·고민씨/심플빔·물붓기/마법가루·숲의저주/핼러윈·미러타입
+  | "abilitySwap"
+  | "abilityGive"
+  | "abilityCopy"
+  | "abilitySuppress"
+  | "abilitySet"
+  | "typeSet"
+  | "typeAdd"
+  | "typeCopy";
 
 /** AI-A1(ver.1.8) 효과 — decision의 a1Aware로 따로 끌 수 있다(비교용) */
 export const A1_EFFECT_KINDS: ReadonlySet<EffectMoveKind> = new Set(["haze", "safeguard", "regen", "leechSeed", "confuse", "attract", "yawn"]);
@@ -92,6 +102,14 @@ export const TRACK_M_EFFECT_KINDS: ReadonlySet<EffectMoveKind> = new Set([
   "torment",
   "imprison",
   "acupressure",
+  "abilitySwap",
+  "abilityGive",
+  "abilityCopy",
+  "abilitySuppress",
+  "abilitySet",
+  "typeSet",
+  "typeAdd",
+  "typeCopy",
 ]);
 
 /** 경혈찌르기(트랙 M2)가 올릴 수 있는 능력 — 엔진 mirroredEffects와 같은 후보(+6 제외) */
@@ -149,6 +167,14 @@ export function effectKindOf(move: Move): EffectMoveKind | undefined {
   if (move.averagesAttacksWithTarget) return "powerSplit";
   if (move.reducesTargetLastMovePp) return "spite";
   if (move.raisesRandomStat) return "acupressure";
+  if (move.swapsAbilityWithTarget) return "abilitySwap";
+  if (move.givesAbilityToTarget) return "abilityGive";
+  if (move.copiesTargetAbility) return "abilityCopy";
+  if (move.suppressesTargetAbility) return "abilitySuppress";
+  if (move.setsTargetAbilityId) return "abilitySet";
+  if (move.setsTargetType) return "typeSet";
+  if (move.addsTypeToTarget) return "typeAdd";
+  if (move.copiesTargetTypes) return "typeCopy";
   if (move.inflictsVolatile?.some((v) => v.volatile === "torment" && v.target === "opponent")) return "torment";
   if (move.inflictsVolatile?.some((v) => v.volatile === "imprison" && v.target === "self")) return "imprison";
   if (move.setsSubstitute) return "substitute";
@@ -249,6 +275,12 @@ export function effectMoveFails(state: BattleState, key: FighterKey, move: Move)
   if (kind === "powerSplit") return me.realStats.atk === target.realStats.atk && me.realStats.spa === target.realStats.spa;
   if (kind === "acupressure") return acupressureOptions(me).length === 0;
   if (kind === "imprison") return hasVolatile(me.volatile, "imprison") || imprisonedMoveIds(me, target).length === 0;
+  // 트랙 M3: 역할(복사할 수 없는 특성·이미 같음)·미러타입(이미 같은 타입) — 엔진 mirroredEffects와 같은 조건
+  if (kind === "abilityCopy") {
+    const theirs = target.effectiveAbilityId;
+    return !theirs || isUncopyableAbility(theirs) || isFixedAbility(me.effectiveAbilityId) || me.effectiveAbilityId === theirs;
+  }
+  if (kind === "typeCopy") return me.types.length === target.types.length && me.types.every((t) => target.types.includes(t));
   // 대타출동: 이미 대타가 있거나 HP가 최대 HP 1/4 이하면 실패(엔진 mirroredEffects)
   if (kind === "substitute") return me.substituteHp !== undefined || me.currentHp <= Math.floor(me.maxHp / 4);
 
@@ -272,6 +304,20 @@ export function effectMoveFails(state: BattleState, key: FighterKey, move: Move)
     const remaining = target.lastMoveId ? target.remainingPp[target.lastMoveId] : undefined;
     return remaining === undefined || remaining <= 0 || remaining > move.reducesTargetLastMovePp!;
   }
+  // 트랙 M3: 특성·타입 바꾸기(엔진 mirroredEffects와 같은 조건)
+  if (kind === "abilitySwap") {
+    const mine = me.effectiveAbilityId;
+    const theirs = target.effectiveAbilityId;
+    return isFixedAbility(mine) || isFixedAbility(theirs) || (!mine && !theirs) || mine === theirs;
+  }
+  if (kind === "abilityGive") {
+    const mine = me.effectiveAbilityId;
+    return !mine || isUncopyableAbility(mine) || isFixedAbility(target.effectiveAbilityId) || target.effectiveAbilityId === mine;
+  }
+  if (kind === "abilitySuppress") return !!target.abilitySuppressed || !target.effectiveAbilityId || isFixedAbility(target.effectiveAbilityId);
+  if (kind === "abilitySet") return target.effectiveAbilityId === move.setsTargetAbilityId || isFixedAbility(target.effectiveAbilityId);
+  if (kind === "typeSet") return target.types.length === 1 && target.types[0] === move.setsTargetType;
+  if (kind === "typeAdd") return target.types.includes(move.addsTypeToTarget!);
   // 트집(트랙 M2): 이미 걸림·아로마베일·멘탈허브(걸리는 순간 풀림)
   if (kind === "torment") {
     return (
@@ -285,6 +331,7 @@ export function effectMoveFails(state: BattleState, key: FighterKey, move: Move)
   // 도발·앙코르·사슬묶기: 아로마베일(마음을 옭아매는 기술 차단)·이미 걸림·상대가 아직 기술을 안 씀(앙코르·사슬묶기)
   if (kind === "taunt" || kind === "encore" || kind === "disable") {
     if (targetAbility?.blocksMentalMoves) return true;
+    if (kind === "taunt" && targetAbility?.immuneToAttractAndTaunt) return true;
     const volatile = target.volatile.active;
     if (kind === "taunt") return volatile.taunt !== undefined;
     if (!target.lastMoveId) return true;
@@ -306,7 +353,12 @@ function volatileEffectFails(state: BattleState, key: FighterKey, kind: "leechSe
     case "leechSeed":
       return target.types.includes("풀") || hasVolatile(target.volatile, "leechSeed") || !!abilityOf(target)?.negatesIndirectDamage;
     case "confuse":
-      return hasVolatile(target.volatile, "confusion") || isConfusionBlockedByField(state.field) || confusionCuredOnInflict(target);
+      return (
+        hasVolatile(target.volatile, "confusion") ||
+        isConfusionBlockedByField(state.field) ||
+        confusionCuredOnInflict(target) ||
+        !!targetAbility?.immuneToConfusion
+      );
     case "attract":
       return (
         hasVolatile(target.volatile, "attract") ||
@@ -314,6 +366,7 @@ function volatileEffectFails(state: BattleState, key: FighterKey, kind: "leechSe
         user.gender === null ||
         target.gender === user.gender ||
         !!targetAbility?.blocksMentalMoves ||
+        !!targetAbility?.immuneToAttractAndTaunt ||
         getMentalHerbCureResult(effectiveHeldItem(target), target.itemConsumed ?? false)
       );
     case "yawn":
@@ -505,6 +558,43 @@ export function applyEffectMove(clone: BattleState, key: FighterKey, move: Move,
     }
     case "torment":
       target.volatile = inflictVolatile(target.volatile, "torment");
+      return true;
+    // 트랙 M3: 특성·타입을 바꾼 state로 재평가(새 특성이 면역인 상태는 엔진처럼 바로 풀린다)
+    case "abilitySwap": {
+      const mine = me.effectiveAbilityId;
+      me.effectiveAbilityId = target.effectiveAbilityId;
+      target.effectiveAbilityId = mine;
+      cureConditionsBlockedByAbility(me);
+      cureConditionsBlockedByAbility(target);
+      return true;
+    }
+    case "abilityGive":
+      target.effectiveAbilityId = me.effectiveAbilityId;
+      cureConditionsBlockedByAbility(target);
+      return true;
+    case "abilityCopy":
+      me.effectiveAbilityId = target.effectiveAbilityId;
+      cureConditionsBlockedByAbility(me);
+      return true;
+    case "abilitySuppress":
+      target.effectiveAbilityId = null;
+      target.abilitySuppressed = true;
+      return true;
+    case "abilitySet":
+      target.effectiveAbilityId = move.setsTargetAbilityId!;
+      cureConditionsBlockedByAbility(target);
+      return true;
+    case "typeSet":
+      target.types = [move.setsTargetType!];
+      target.addedType = undefined;
+      return true;
+    case "typeAdd":
+      target.types = [...target.types, move.addsTypeToTarget!];
+      target.addedType = move.addsTypeToTarget;
+      return true;
+    case "typeCopy":
+      me.types = [...target.types];
+      me.addedType = undefined;
       return true;
     case "imprison":
       me.volatile = inflictVolatile(me.volatile, "imprison");

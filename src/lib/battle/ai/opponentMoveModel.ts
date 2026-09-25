@@ -132,9 +132,15 @@ function isPointlessNow(state: BattleState, move: Move, user: BattleFighterState
   // AI-A1 변화기: 이미 걸려 있음·효과 없음(effectMoveFails와 같은 축의 빠른 판정 — 대상이 대기 포켓몬일 수도 있어 직접 본다)
   switch (effectKindOf(move)) {
     case "confuse":
-      return hasVolatile(target.volatile, "confusion");
+      return hasVolatile(target.volatile, "confusion") || !!abilityOf(target)?.immuneToConfusion;
     case "attract":
-      return hasVolatile(target.volatile, "attract") || target.gender === null || user.gender === null || target.gender === user.gender;
+      return (
+        hasVolatile(target.volatile, "attract") ||
+        target.gender === null ||
+        user.gender === null ||
+        target.gender === user.gender ||
+        !!abilityOf(target)?.immuneToAttractAndTaunt
+      );
     case "leechSeed":
       return hasVolatile(target.volatile, "leechSeed");
     case "yawn":
