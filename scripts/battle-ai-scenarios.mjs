@@ -673,6 +673,93 @@ try {
       check("A1: 신비의부적 — 평가됨(유한), 이미 깔렸으면 실패", e && Number.isFinite(score(effOf(st, "신비의부적"))) && score(effOf(set, "신비의부적")) === -Infinity, `d ${e?.base.survivalTurns.toFixed(2)}→${e?.hit.survivalTurns.toFixed(2)}`);
     }
   }
+  // ── AI-A2(ver.1.8): 대타출동·잠꼬대·울부짖기/날려버리기·추억의선물 ──
+  {
+    const rt = await server.ssrLoadModule("/src/lib/battle/runTurn.ts");
+    const tr = await server.ssrLoadModule("/src/lib/battle/ai/turnRates.ts");
+    const P = dec.DEFAULT_DECISION_PARAMS;
+    const score = (o, params = P) => dec.scoreOption(o, 0.5, params);
+    const optOf = (st, id) => opt(ev.evaluateOptions(st, "a"), id);
+    // 대타출동: 최대 HP 1/4 비용, d 증가, 이미 대타·HP 1/4 이하면 실패. turnsToKo: 대타가 있으면 처치 턴 증가
+    {
+      const st = battle([mon("잠만보", ["대타출동", "누르기"], null, null, pts({ hp: 32 }))], [mon("한카리아스", ["역린"], null, null, pts({ atk: 32 }))]);
+      const e = optOf(st, "대타출동").support.effect;
+      const withSub = battle([mon("잠만보", ["대타출동", "누르기"])], [mon("한카리아스", ["역린"])]);
+      withSub.a.substituteHp = 50;
+      const low = battle([mon("잠만보", ["대타출동", "누르기"])], [mon("한카리아스", ["역린"])]);
+      low.a.currentHp = Math.floor(low.a.maxHp / 4);
+      const plain = tr.turnsToKo(0.3, st.b, st.a, st.a.currentHp);
+      const subbed = tr.turnsToKo(0.3, st.b, { ...st.a, substituteHp: Math.floor(st.a.maxHp / 4) }, st.a.currentHp);
+      check(
+        "A2: 대타출동 — 비용 1/4·d 증가, 이미 대타·HP 부족이면 실패, 대타 있으면 처치 턴 증가",
+        e && Math.abs(e.selfCost - 0.25) < 0.01 && e.hit.survivalTurns > e.base.survivalTurns * 0.75 && score(optOf(withSub, "대타출동")) === -Infinity && score(optOf(low, "대타출동")) === -Infinity && subbed > plain,
+        `비용=${e?.selfCost?.toFixed(3)} d ${e?.base.survivalTurns.toFixed(2)}→${e?.hit.survivalTurns.toFixed(2)} 처치턴 ${plain.toFixed(2)}→${subbed.toFixed(2)}`,
+      );
+      // 낮은 HP에서도 대타를 깨는 턴은 절대 데미지로 — 현재 HP 대비 비율(한 방에 잘림)로 보면 수십 턴으로 부풀었다
+      const lowHp = battle([mon("잠만보", ["대타출동", "누르기"], null, null, pts({ hp: 32 }))], [mon("한카리아스", ["역린"], null, null, pts({ atk: 32 }))]);
+      lowHp.a.currentHp = Math.floor(lowHp.a.maxHp * 0.3);
+      const le = optOf(lowHp, "대타출동").support.effect;
+      check("A2: 대타출동(HP 30%) — 대타는 한두 대분만 버팀(부풀지 않음)", le && le.hit.survivalTurns <= le.base.survivalTurns + 2.5, `d ${le?.base.survivalTurns.toFixed(2)}→${le?.hit.survivalTurns.toFixed(2)}`);
+      // 상대 기술 모델: 대타가 있으면 상대의 도깨비불은 헛수고
+      const burner = battle([mon("잠만보", ["누르기"])], [mon("헬가", ["도깨비불", "악의파동"])]);
+      burner.a.substituteHp = 50;
+      const threat = await server.ssrLoadModule("/src/lib/battle/ai/opponentMoveModel.ts");
+      const t = threat.evaluateOpponentThreat({ state: burner, opponent: burner.b, target: burner.a, targetSide: burner.sideA, opponentMovesSecond: false });
+      check("A2: 대타 → 상대 상태이상기 확률 0", !t.moveWeights.some((w) => w.move.id === "도깨비불" && w.weight > 0), t.moveWeights.map((w) => `${w.move.id}:${w.weight.toFixed(2)}`).join(" "));
+    }
+    // 잠꼬대: 잠든 동안 고를 수 있고, 다른 공격기(잠들어 못 씀)보다 처치 턴이 짧다. 안 잠들었으면 선택지에 없다
+    {
+      const st = battle([mon("잠만보", ["잠꼬대", "누르기"], null, null, pts({ hp: 32, atk: 32 }))], [mon("한카리아스", ["역린"], null, null, pts())]);
+      st.a.status = { condition: "sleep", turnsElapsed: 1, sleepTurns: 3 };
+      const opts = ev.evaluateOptions(st, "a");
+      const talk = opt(opts, "잠꼬대");
+      const body = opt(opts, "누르기");
+      const awake = battle([mon("잠만보", ["잠꼬대", "누르기"])], [mon("한카리아스", ["역린"])]);
+      check(
+        "A2: 잠꼬대 — 잠든 동안 처치 턴 단축·유한 점수, 깨어 있으면 선택지 없음",
+        talk && Number.isFinite(score(talk)) && talk.hitsToKill.expected < body.hitsToKill.expected && !opt(ev.evaluateOptions(awake, "a"), "잠꼬대") && score(talk, { ...P, a2Aware: false }) === -Infinity,
+        `잠꼬대 c=${talk?.hitsToKill.expected.toFixed(2)} 누르기 c=${body?.hitsToKill.expected.toFixed(2)}`,
+      );
+    }
+    // 울부짖기: 상대가 +6이면 끌어내는 편이 낫다(파티 모드), 예비가 없으면 실패. 엔진도 실제로 강제 교체
+    {
+      const make = () =>
+        battle(
+          [mon("잠만보", ["울부짖기", "누르기"], null, null, pts({ hp: 32, def: 32 })), mon("핫삼", ["불꽃펀치"])],
+          [mon("한카리아스", ["역린"], null, null, pts({ atk: 32 })), mon("팬텀", ["섀도볼"], null, null, pts())],
+        );
+      const st = make();
+      st.b.stages = { ...st.b.stages, atk: 2 };
+      const opts = ev.evaluateOptions(st, "a");
+      const roar = opt(opts, "울부짖기");
+      const body = opt(opts, "누르기");
+      const solo = battle([mon("잠만보", ["울부짖기", "누르기"])], [mon("한카리아스", ["역린"])]);
+      const eng = make();
+      const out = rt.runTurn(eng, { kind: "move", move: data.getMove("울부짖기") }, { kind: "move", move: data.getMove("역린") }, () => 0.5).nextState;
+      check(
+        "A2: 울부짖기 — 상대 +2면 공격보다 높은 점수, 예비 없으면 실패, 엔진 강제 교체",
+        roar && score(roar) > score(body) && score(optOf(solo, "울부짖기")) === -Infinity && out.sideB.activeIndex === 1,
+        `울부짖기=${roar ? score(roar).toFixed(3) : "-"} 누르기=${score(body).toFixed(3)} 교체=${out.sideB.activeIndex}`,
+      );
+    }
+    // 추억의선물: 파티 모드에서만 평가(유한), 끄면 −∞, 엔진은 자신 기절 + 상대 −2/−2
+    {
+      const make = () =>
+        battle(
+          [mon("팬텀", ["추억의선물", "섀도볼"], null, null, pts()), mon("메타그로스", ["코멧펀치"], null, null, pts({ atk: 32, hp: 32 }))],
+          [mon("한카리아스", ["역린"], null, null, pts({ atk: 32 }))],
+        );
+      const o = optOf(make(), "추억의선물");
+      const eng = make();
+      const out = rt.runTurn(eng, { kind: "move", move: data.getMove("추억의선물") }, { kind: "move", move: data.getMove("역린") }, () => 0.5);
+      const ns = out.nextState ?? out._ctx.state;
+      check(
+        "A2: 추억의선물 — 파티 모드에서 유한·끄면 −∞, 엔진은 자신 기절(버그 수정)",
+        Number.isFinite(score(o)) && score(o, { ...P, partyAware: false }) === -Infinity && ns.sideA.party[0].currentHp === 0,
+        `점수=${score(o).toFixed(3)} 사용자HP=${ns.sideA.party[0].currentHp} 상대공격=${ns.b.stages.atk}`,
+      );
+    }
+  }
   // ── 매치업 난수별 데미지(ver.1.7 트랙 H): 기존 격파 판정과 같은 관계식인지 대조 ──
   {
     const bp = await server.ssrLoadModule("/src/lib/battlePower.ts");

@@ -1,5 +1,6 @@
 import { type FighterKey } from "@/types/battle";
 import { type Move } from "@/types/move";
+import { getMove } from "@/lib/data";
 import { type StatusCondition } from "@/types/status";
 import { applyMoveStatChanges } from "@/lib/statStages";
 import { resolveEffectiveDefenderAbility } from "@/lib/abilityModifiers";
@@ -21,6 +22,8 @@ import {
   sideOf,
   statDropBlockStatsOf,
   statusImmunitiesOf,
+  hasLivingReserve,
+  isForcedSwitchBlocked,
   type BattleFighterState,
   type BattleSide,
   type BattleState,
@@ -52,10 +55,17 @@ export type EffectMoveKind =
   | "leechSeed"
   | "confuse"
   | "attract"
-  | "yawn";
+  | "yawn"
+  // AI-A2(ver.1.8): 대타출동·울부짖기/날려버리기·추억의선물
+  | "substitute"
+  | "phaze"
+  | "memento";
 
 /** AI-A1(ver.1.8) 효과 — decision의 a1Aware로 따로 끌 수 있다(비교용) */
 export const A1_EFFECT_KINDS: ReadonlySet<EffectMoveKind> = new Set(["haze", "safeguard", "regen", "leechSeed", "confuse", "attract", "yawn"]);
+
+/** AI-A2(ver.1.8) 효과 — decision의 a2Aware로 따로 끌 수 있다(비교용) */
+export const A2_EFFECT_KINDS: ReadonlySet<EffectMoveKind> = new Set(["substitute", "phaze", "memento"]);
 
 /** 3단계(§4-3) 효과 — decision의 phase3Aware로 따로 끌 수 있다 */
 export const PHASE3_EFFECT_KINDS: ReadonlySet<EffectMoveKind> = new Set(["weather", "field", "trickRoom", "taunt", "encore", "disable"]);
@@ -82,6 +92,9 @@ export function effectKindOf(move: Move): EffectMoveKind | undefined {
   if (move.setsEncore) return "encore";
   if (move.setsDisable) return "disable";
   if (move.inflictsVolatile?.some((v) => v.volatile === "taunt" && v.target !== "self")) return "taunt";
+  if (move.setsSubstitute) return "substitute";
+  if (move.forcesTargetSwitch) return "phaze";
+  if (move.selfFaints && move.statChanges?.some((s) => s.target === "opponent")) return "memento";
   if (move.resetsAllStages) return "haze";
   if (move.setsSafeguard) return "safeguard";
   if (move.setsRegenVolatile) return "regen";
@@ -166,6 +179,8 @@ export function effectMoveFails(state: BattleState, key: FighterKey, move: Move)
   }
   if (kind === "safeguard") return sideOf(state, key).safeguardTurnsRemaining !== undefined;
   if (kind === "regen") return hasVolatile(me.volatile, move.setsRegenVolatile!);
+  // 대타출동: 이미 대타가 있거나 HP가 최대 HP 1/4 이하면 실패(엔진 mirroredEffects)
+  if (kind === "substitute") return me.substituteHp !== undefined || me.currentHp <= Math.floor(me.maxHp / 4);
 
   if (!targetsOpponent) return false;
   const classification = move.classification ?? [];
@@ -177,6 +192,8 @@ export function effectMoveFails(state: BattleState, key: FighterKey, move: Move)
   if (kind === "leechSeed" || kind === "confuse" || kind === "attract" || kind === "yawn") {
     return volatileEffectFails(state, key, kind);
   }
+  // 울부짖기·날려버리기: 상대에게 살아있는 예비가 없거나 흡반·뿌리박기면 강제 교체가 안 된다(엔진 runTurn)
+  if (kind === "phaze") return !hasLivingReserve(sideOf(state, oppKey)) || isForcedSwitchBlocked(target);
   // 도발·앙코르·사슬묶기: 아로마베일(마음을 옭아매는 기술 차단)·이미 걸림·상대가 아직 기술을 안 씀(앙코르·사슬묶기)
   if (kind === "taunt" || kind === "encore" || kind === "disable") {
     if (targetAbility?.blocksMentalMoves) return true;
@@ -332,6 +349,18 @@ export function applyEffectMove(clone: BattleState, key: FighterKey, move: Move,
     case "attract":
       target.volatile = inflictVolatile(target.volatile, "attract", () => 0);
       return true;
+    case "substitute": {
+      const cost = Math.floor(me.maxHp / 4);
+      me.currentHp -= cost;
+      me.substituteHp = cost;
+      return true;
+    }
+    case "memento": {
+      // 상대 랭크다운은 debuff와 같은 처리, 자신은 기절. 내릴 스탯이 없으면(−6·클리어바디 등) 기절만 하므로 실패로 본다.
+      const changed = applyDebuff(clone, key, move);
+      me.currentHp = 0;
+      return changed;
+    }
     case "yawn":
       // 다음 턴 종료에 잠든다 — 잠듦을 바로 걸고, 평가 쪽(evaluateEffectMove)에서 "그 전에 끝나는 대면"을 보정한다.
       target.status = inflictStatus(target.status, "sleep");
@@ -340,24 +369,30 @@ export function applyEffectMove(clone: BattleState, key: FighterKey, move: Move,
     case "disable":
       target.volatile = inflictVolatile(target.volatile, kind, () => 0, target.lastMoveId);
       return true;
-    case "debuff": {
-      const before = target.stages;
-      const targetAbility = resolveEffectiveDefenderAbility(abilityOf(me), abilityOf(target));
-      let after = applyMoveStatChanges(before, contraryMoveFor(move, target), "opponent", {
-        userTypes: me.types,
-        weather: activeWeather(clone),
-      });
-      // 클리어바디류는 내려간 스탯을 되돌리고, 미러아머는 되돌린 뒤 시전자에게 반사한다 — 반사는 이득이 없으니 되돌리기만.
-      const blocked = targetAbility?.reflectsOpponentStatDrops ? Object.keys(before) : (statDropBlockStatsOf(target, targetAbility) ?? []);
-      for (const stat of blocked as (keyof typeof before)[]) {
-        if (after[stat] < before[stat]) after = { ...after, [stat]: before[stat] };
-      }
-      target.stages = after;
-      return (Object.keys(before) as (keyof typeof before)[]).some((s) => after[s] !== before[s]);
-    }
+    case "debuff":
+      return applyDebuff(clone, key, move);
     default:
       return false;
   }
+}
+
+/** 상대 랭크다운 적용(심술꾸러기·클리어바디류·미러아머 반영). 실제로 바뀐 스탯이 있으면 true */
+function applyDebuff(clone: BattleState, key: FighterKey, move: Move): boolean {
+  const me = clone[key];
+  const target = clone[opponentKey(key)];
+  const before = target.stages;
+  const targetAbility = resolveEffectiveDefenderAbility(abilityOf(me), abilityOf(target));
+  let after = applyMoveStatChanges(before, contraryMoveFor(move, target), "opponent", {
+    userTypes: me.types,
+    weather: activeWeather(clone),
+  });
+  // 클리어바디류는 내려간 스탯을 되돌리고, 미러아머는 되돌린 뒤 시전자에게 반사한다 — 반사는 이득이 없으니 되돌리기만.
+  const blocked = targetAbility?.reflectsOpponentStatDrops ? Object.keys(before) : (statDropBlockStatsOf(target, targetAbility) ?? []);
+  for (const stat of blocked as (keyof typeof before)[]) {
+    if (after[stat] < before[stat]) after = { ...after, [stat]: before[stat] };
+  }
+  target.stages = after;
+  return (Object.keys(before) as (keyof typeof before)[]).some((s) => after[s] !== before[s]);
 }
 
 /** 벽 지속 턴(빛의점토 보너스 포함) */
@@ -420,4 +455,13 @@ export function hazardCarry(state: BattleState, key: FighterKey, move: Move): nu
     if (move.setsHazard === "stickyWeb" && grounded) total += STICKY_WEB_VALUE_PER_TARGET;
   });
   return total;
+}
+
+/**
+ * 잠꼬대로 나갈 수 있는 기술(엔진 preHitEffects와 같은 조건 — 배운 기술 중 자신·2턴 기술·사용 조건 기술·제외 기술 빼고).
+ */
+export function sleepTalkCandidates(fighter: BattleFighterState, sleepTalk: Move): Move[] {
+  return Object.keys(fighter.remainingPp)
+    .map((id) => getMove(id))
+    .filter((m): m is Move => !!m && m.id !== sleepTalk.id && !m.chargeTurn && !m.usageCondition && !m.excludedFromSleepTalk);
 }

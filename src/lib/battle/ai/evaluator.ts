@@ -1,7 +1,7 @@
 import { type FighterKey } from "@/types/battle";
 import { type Move } from "@/types/move";
 import { type PokemonType } from "@/types/pokemon-type";
-import { type StatStages } from "@/types/battleStats";
+import { NEUTRAL_ACCURACY_STAGES, NEUTRAL_STAGES, type StatStages } from "@/types/battleStats";
 import { applyMoveStatChanges } from "@/lib/statStages";
 import { applyMoveAccuracyEvasionChanges } from "@/lib/accuracyCrit";
 import { resolveEffectiveDefenderAbility } from "@/lib/abilityModifiers";
@@ -31,6 +31,7 @@ import {
   effectMoveFails,
   hazardCarry,
   hazardsAfter,
+  sleepTalkCandidates,
   isBatonPass,
   type EffectMoveKind,
 } from "./statusMoveEffects";
@@ -109,6 +110,28 @@ export interface EffectEvaluation {
   party?: PartyEffect;
   /** 파티 모드에서 carry 대신 쓰는 이월 항 — 벽·설치기는 이어지는 대면이 직접 세므로 0, 끈적끈적네트만 고정 근사 */
   partyCarry?: number;
+  /** 울부짖기·날려버리기(AI-A2): 상대 대기 포켓몬마다 끌려 나온 뒤의 대면 */
+  phaze?: PhazeEvaluation;
+  /** 추억의선물(AI-A2): 자신 기절 + 상대 랭크다운 뒤 state(성공)·먼저 쓰러진 state(실패)의 대면표 */
+  sacrifice?: { success: number; afterModel: PartyModel; failModel: PartyModel };
+}
+
+/**
+ * 울부짖기·날려버리기(AI-A2): 우선도 −6이라 상대가 먼저 한 번 때리고(hitLoss), 상대 예비 중 무작위 하나가 끌려 나와
+ * 설치물 등장 비용(entry)을 치른다. 원래 상대의 랭크 변화는 사라진다(물러남). branches = 예비마다 그 뒤의 대면.
+ */
+export interface PhazeEvaluation {
+  hitLoss: number;
+  branches: {
+    race: RaceInputs;
+    /** 끌려 나온 뒤 내 HP 비율(한 대 맞은 뒤) / 끌려 나온 상대 HP 비율(등장 비용 뒤) */
+    my: number;
+    opp: number;
+    entry: number;
+    /** 등장 비용으로 쓰러졌는지 */
+    fainted: boolean;
+    model: PartyModel;
+  }[];
 }
 
 /**
@@ -253,7 +276,10 @@ function turnsFor(
   if (!estimate || !Number.isFinite(estimate.expected)) {
     return { expected: Infinity, worstCase: { count: 3, certainty: "random", probability: 0 } };
   }
-  return { expected: turnsToKo(1 / estimate.expected, attacker, defender, defenderHp), worstCase: estimate.worstCase };
+  return {
+    expected: turnsToKo(1 / estimate.expected, attacker, defender, defenderHp, estimate.damageFraction),
+    worstCase: estimate.worstCase,
+  };
 }
 
 /** key 편에서 index 슬롯으로 교체하는 옵션. opponentHp를 주면 상대가 그 HP라고 가정한다(유턴류 평가용). */
@@ -494,9 +520,24 @@ function evaluateEffectMove(ctx: EffectContext): EffectEvaluation | undefined {
   const kind = effectKindOf(move);
   if (!kind || effectMoveFails(state, key, move)) return undefined;
   const base = currentRace(state, key, myMoves);
+  if (kind === "phaze") return evaluatePhaze(ctx, base);
   const clone = cloneBattleState(state);
   const toxicTurns = Math.min(6, Number.isFinite(base.killTurns) ? base.killTurns : 6);
   if (!applyEffectMove(clone, key, move, { toxicTurns })) return undefined;
+  if (kind === "memento") {
+    // 먼저 맞아 쓰러지면(후공인데 이번 턴에 쓰러지는 대면) 랭크다운 없이 기절만
+    const success = ctx.moveFirstProbability + (1 - ctx.moveFirstProbability) * (base.survivalTurns > 1 ? 1 : 0);
+    const failed = cloneBattleState(state);
+    failed[key].currentHp = 0;
+    return {
+      hit: base,
+      base,
+      hitChance: 1,
+      carry: 0,
+      kind,
+      sacrifice: { success, afterModel: createPartyModel(clone, key), failModel: createPartyModel(failed, key) },
+    };
+  }
 
   const me = state[key];
   const opponent = state[opponentKey(key)];
@@ -533,7 +574,9 @@ function evaluateEffectMove(ctx: EffectContext): EffectEvaluation | undefined {
   const duration = effectDuration(state, key, move);
   const partyModel = createPartyModel(clone, key);
   if (duration === undefined) {
-    return { hit: after, base, hitChance, carry: 0, kind, party: { model: partyModel, turns: Infinity }, partyCarry: 0 };
+    // 대타출동: 최대 HP 1/4을 쓰고 대면은 깎인 HP에서 시작(selfCost — 랭크업기의 HP 비용과 같은 처리)
+    const selfCost = kind === "substitute" ? Math.floor(me.maxHp / 4) / me.maxHp : undefined;
+    return { hit: after, base, hitChance, carry: 0, kind, party: { model: partyModel, turns: Infinity }, partyCarry: 0, selfCost };
   }
 
   // 지속 턴이 있는 효과(벽·날씨·필드·트릭룸·도발·앙코르·사슬묶기): 이번 턴(내가 먼저 움직이면 이번 턴 상대
@@ -559,6 +602,80 @@ function evaluateEffectMove(ctx: EffectContext): EffectEvaluation | undefined {
 }
 
 /** 효과가 covered 턴 동안만 유지될 때의 대면 값(decision-layer §4-1 3단계를 c·d·p 전부로 일반화) */
+/**
+ * 잠꼬대 처치 턴: 남은 잠듦 턴 b 동안은 무작위 기술의 평균 피해율(변화기 0)로, 그 뒤는 깬 상태의 최선 처치 턴으로.
+ * awakeKillTurns는 잠듦 턴을 포함한 기존 계산(turnsToKo가 앞에 b를 더함). 나갈 기술이 없으면 undefined(실패).
+ */
+function sleepTalkKillTurns(
+  state: BattleState,
+  key: FighterKey,
+  move: Move,
+  awakeKillTurns: number,
+  attackerMovesSecond: boolean,
+): { killTurns: number; bestTypeEffectiveness: number } | undefined {
+  const me = state[key];
+  const oppKey = opponentKey(key);
+  const candidates = sleepTalkCandidates(me, move);
+  if (candidates.length === 0) return undefined;
+  let bestTypeEffectiveness = 0;
+  const rates = candidates.map((m) => {
+    if (m.category === "status") return 0;
+    const estimate = estimateMoveHits({ state, attacker: me, defender: state[oppKey], defenderSide: sideOf(state, oppKey), attackerMovesSecond }, m);
+    if (!estimate || !Number.isFinite(estimate.rawHits) || estimate.rawHits <= 0) return 0;
+    bestTypeEffectiveness = Math.max(bestTypeEffectiveness, estimate.typeEffectiveness);
+    return 1 / estimate.rawHits;
+  });
+  const rate = rates.reduce((a, b) => a + b, 0) / rates.length;
+  const asleep = blockedTurns(me);
+  if (rate > 0 && asleep * rate >= 1) return { killTurns: Math.max(1, 1 / rate), bestTypeEffectiveness };
+  const afterWaking = Number.isFinite(awakeKillTurns) ? Math.max(0, awakeKillTurns - asleep) : Infinity;
+  return { killTurns: asleep + afterWaking * (1 - asleep * rate), bestTypeEffectiveness };
+}
+
+/**
+ * 울부짖기·날려버리기(AI-A2): 상대 예비마다 "상대가 먼저 한 번 때린 뒤, 그 예비가 설치물을 밟고 나와 원래 상대는
+ * 랭크 변화를 잃고 물러난" state를 만들어 대면을 다시 계산한다(무작위라 결정 레이어가 평균낸다). 이번 턴 안에 내가
+ * 쓰러지는 대면이면(우선도 −6이라 상대가 먼저 움직임) 쓸 수 없다.
+ */
+function evaluatePhaze(ctx: EffectContext, base: RaceInputs): EffectEvaluation | undefined {
+  const { state, key, myMoves } = ctx;
+  const oppKey = opponentKey(key);
+  const me = state[key];
+  if (base.survivalTurns <= 1) return undefined;
+  const hitLossHp = Number.isFinite(base.survivalTurns) ? Math.floor(me.currentHp / base.survivalTurns) : 0;
+  const reserves = benchIndices(sideOf(state, oppKey));
+  const branches: PhazeEvaluation["branches"] = reserves.map((j) => {
+    const clone = cloneBattleState(state);
+    const side = sideOf(clone, oppKey);
+    const outgoing = side.party[side.activeIndex];
+    outgoing.stages = { ...NEUTRAL_STAGES };
+    outgoing.accuracyStages = { ...NEUTRAL_ACCURACY_STAGES };
+    side.activeIndex = j;
+    const incoming = side.party[j];
+    clone[oppKey] = incoming;
+    const entryHp = Math.min(incoming.currentHp, calcEntryHazardDamage(incoming.maxHp, incoming.types, abilityOf(incoming), side.hazards));
+    incoming.currentHp -= entryHp;
+    clone[key].currentHp = Math.max(1, clone[key].currentHp - hitLossHp);
+    const fainted = incoming.currentHp <= 0;
+    return {
+      race: fainted ? base : currentRace(clone, key, myMoves),
+      my: clone[key].currentHp / clone[key].maxHp,
+      opp: incoming.currentHp / incoming.maxHp,
+      entry: entryHp / incoming.maxHp,
+      fainted,
+      model: createPartyModel(clone, key),
+    };
+  });
+  return {
+    hit: base,
+    base,
+    hitChance: 1,
+    carry: 0,
+    kind: "phaze",
+    phaze: { hitLoss: hitLossHp / me.maxHp, branches },
+  };
+}
+
 function blendRace(after: RaceInputs, base: RaceInputs, covered: number): RaceInputs {
   const raceLength = Math.min(after.killTurns, after.survivalTurns);
   const share = raceLength <= covered ? 1 : covered / raceLength;
@@ -658,6 +775,21 @@ export function evaluateOptions(state: BattleState, key: FighterKey, options: Ev
         activeHitLoss: (me.currentHp / me.maxHp) * Math.min(1, d > 0 ? 1 / d : 1),
         candidates: bench.map((index) => evaluateSwitchCandidate(state, key, index, opponentHpAfter)),
       };
+    }
+
+    // 잠꼬대(AI-A2): 잠든 동안(사용 조건은 selectableMoves가 이미 거름) 배운 다른 기술 중 무작위 하나가 나간다 —
+    // 잠든 턴 동안은 그 기대 피해로, 깬 뒤에는 최선 공격기로 대면을 이어간다.
+    if (move.callsRandomLearnedMove) {
+      const sleepTalk = sleepTalkKillTurns(moveState, key, move, turnsFor(myBest?.estimate, me, opponent).expected, iMoveSecond);
+      if (sleepTalk) {
+        option.hitsToKill = { expected: sleepTalk.killTurns, worstCase: { count: 3, certainty: "random", probability: 0 } };
+        option.typeMatchup = { ...option.typeMatchup, offensive: sleepTalk.bestTypeEffectiveness };
+        option.accuracy = 1;
+      } else {
+        option.support = { kind: "other", before: 0, after: 0, bestKillTurns: turnsFor(myBest?.estimate, me, opponent).expected };
+      }
+      result.push(option);
+      continue;
     }
 
     if (move.category === "status") {

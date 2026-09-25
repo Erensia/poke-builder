@@ -7,9 +7,9 @@ import { isOpponentTargetingMove } from "@/lib/fieldEffects";
 import { hasVolatile } from "@/lib/volatileConditions";
 import { abilityOf, type BattleFighterState, type BattleSide, type BattleState } from "../state";
 import { estimateMoveHits, type MoveHitEstimate } from "./moveDamage";
-import { turnsToKo } from "./turnRates";
+import { blockedTurns, turnsToKo } from "./turnRates";
 import { isUsageBlocked } from "./usageConditions";
-import { effectKindOf } from "./statusMoveEffects";
+import { effectKindOf, sleepTalkCandidates } from "./statusMoveEffects";
 import type { HitsEstimate } from "./types";
 
 /** 변화기 1개당 사용 확률(decision-layer §2·§9 초기값) */
@@ -98,6 +98,15 @@ function isWastedStatusMove(
   // 신비의부적이 깔린 편에는 상태이상 부여·하품이 통하지 않는다(AI-A1)
   if (targetSide.safeguardTurnsRemaining !== undefined && (move.inflictsStatus?.length || effectKindOf(move) === "yawn")) return true;
   if (move.setsLeechSeed && targetTypes.includes("풀")) return true;
+  // 대타(AI-A2): 대상이 대타를 세웠으면 상대 대상 변화기는 막힌다(소리 기술·틈새포착 제외 — effectMoveFails와 같은 축)
+  if (
+    target.substituteHp !== undefined &&
+    isOpponentTargetingMove(move) &&
+    !(move.classification ?? []).includes("소리") &&
+    !userAbility?.bypassesScreensAndSubstitute
+  ) {
+    return true;
+  }
   return false;
 }
 
@@ -126,6 +135,13 @@ function isPointlessNow(state: BattleState, move: Move, user: BattleFighterState
       return hasVolatile(user.volatile, move.setsRegenVolatile!);
     case "haze":
       return Object.values(user.stages).every((v) => v <= 0) && Object.values(target.stages).every((v) => v >= 0);
+    // AI-A2
+    case "substitute":
+      return user.substituteHp !== undefined || user.currentHp <= Math.floor(user.maxHp / 4);
+    case "phaze": {
+      const targetSide = state.sideA.party.includes(target) ? state.sideA : state.sideB;
+      return !targetSide.party.some((f) => f !== target && f.currentHp > 0);
+    }
   }
   if (move.setsScreen) {
     const userSide = state.sideA.party.includes(user) ? state.sideA : state.sideB;
@@ -238,9 +254,28 @@ export function evaluateOpponentThreat(ctx: ThreatContext): OpponentThreat {
     undefined,
   );
 
+  // 잠꼬대(AI-A2): 상대가 잠들어 있고 잠꼬대를 쓸 수 있으면, 잠든 턴에도 무작위 기술의 평균 피해를 준다.
+  // 대타를 깨는 턴 계산용 절대 데미지(최대 HP 대비) — 사용 확률 가중 평균
+  const expectedDamage =
+    totalShare > 0 ? attacks.reduce((sum, a, i) => sum + (shares[i] / totalShare) * remainingWeight * a.estimate.damageFraction, 0) : 0;
+  let expectedTurns = turnsToKo(expectedRate, opponent, target, targetHp, expectedDamage);
+  const asleep = blockedTurns(opponent);
+  const sleepTalk = asleep > 0 ? candidates.find((m) => m.callsRandomLearnedMove) : undefined;
+  if (sleepTalk) {
+    const pool = sleepTalkCandidates(opponent, sleepTalk);
+    const rates = pool.map((m) => attacks.find((a) => a.move.id === m.id)?.rate ?? 0);
+    const rate = rates.length > 0 ? rates.reduce((a, b) => a + b, 0) / rates.length : 0;
+    if (rate > 0) {
+      expectedTurns =
+        asleep * rate >= 1
+          ? Math.max(1, 1 / rate)
+          : asleep + (Number.isFinite(expectedTurns) ? Math.max(0, expectedTurns - asleep) : Infinity) * (1 - asleep * rate);
+    }
+  }
+
   return {
     hitsToBeKilled: {
-      expected: turnsToKo(expectedRate, opponent, target, targetHp),
+      expected: expectedTurns,
       worstCase: best?.estimate.worstCase ?? { count: 3, certainty: "random", probability: 0 },
     },
     riskFlag,

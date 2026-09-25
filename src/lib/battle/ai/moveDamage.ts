@@ -11,7 +11,7 @@ import { supremeOverlordMultiplier } from "@/lib/battlePower";
 import { abilityOf, activeWeather, isFainted, type BattleFighterState, type BattleSide, type BattleState } from "../state";
 import { computeBattleHitChance } from "../hitChance";
 import { computeTurnOrderPriority, effectiveHeldItem } from "../turnOrderInputs";
-import { estimateHits } from "./hitsToKill";
+import { estimateHits, meanDamageFraction } from "./hitsToKill";
 import { applySurvivalGuard } from "./survivalGuard";
 import type { HitsEstimate } from "./types";
 
@@ -21,6 +21,8 @@ export interface MoveHitEstimate extends HitsEstimate {
   rawHits: number;
   accuracy: number;
   typeEffectiveness: number;
+  /** 한 번 쓸 때 기대 데미지(방어측 최대 HP 대비, 명중률 포함) — 현재 HP와 무관한 절대량(대타 계산용) */
+  damageFraction: number;
 }
 
 export interface MoveHitContext {
@@ -69,6 +71,7 @@ const NO_DAMAGE: Omit<MoveHitEstimate, "typeEffectiveness" | "accuracy"> = {
   expected: Infinity,
   rawHits: Infinity,
   worstCase: { count: 3, certainty: "random", probability: 0 },
+  damageFraction: 0,
 };
 
 /**
@@ -133,7 +136,8 @@ export function estimateMoveHits(ctx: MoveHitContext, move: Move): MoveHitEstima
       expected: hits / Math.max(accuracy, 1e-9),
       worstCase: { count: Math.min(hits, 3), certainty: "guaranteed", probability: hits <= 2 ? 1 : 0 },
     };
-    return applySurvivalGuard({ ...estimate, rawHits: hits, accuracy, typeEffectiveness }, defender, defenderAbility, defenderItem, defenderHp);
+    const damageFraction = defender.maxHp > 0 ? (move.fixedDamage / defender.maxHp) * accuracy : 0;
+    return applySurvivalGuard({ ...estimate, rawHits: hits, accuracy, typeEffectiveness, damageFraction }, defender, defenderAbility, defenderItem, defenderHp);
   }
 
   const alwaysMaxHits = !!attackerAbility?.multiHitAlwaysMax;
@@ -181,5 +185,6 @@ export function estimateMoveHits(ctx: MoveHitContext, move: Move): MoveHitEstima
     accuracy,
   });
   const rawHits = accuracy > 0 ? estimate.expected * accuracy : Infinity;
-  return applySurvivalGuard({ ...estimate, rawHits, accuracy, typeEffectiveness }, defender, defenderAbility, defenderItem, defenderHp);
+  const damageFraction = meanDamageFraction(result.offensePower * hitCountScale, result.bulkPower) * accuracy;
+  return applySurvivalGuard({ ...estimate, rawHits, accuracy, typeEffectiveness, damageFraction }, defender, defenderAbility, defenderItem, defenderHp);
 }

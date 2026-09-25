@@ -185,7 +185,7 @@ export function createPartyModel(state: BattleState, key: FighterKey): PartyMode
 function turnsAt(rate: number, attacker: BattleFighterState, target: BattleFighterState, hp: number): number {
   if (hp <= 0) return 0;
   // turnsToKo는 "현재 HP 대비" 비율을 받는다 — 최대 HP 대비 rate를 남은 HP 비율로 나눠 넘긴다(같은 식).
-  return turnsToKo(rate / hp, attacker, target, hp * target.maxHp);
+  return turnsToKo(rate / hp, attacker, target, hp * target.maxHp, rate);
 }
 
 /** 대면 한 갈래: 확률 weight로 두 포켓몬이 이 HP 비율로 끝난다 */

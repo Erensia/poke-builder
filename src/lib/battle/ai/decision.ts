@@ -1,6 +1,6 @@
 import type { AiOption } from "./evaluator";
 import { DEFAULT_THREAT_MODEL } from "./opponentMoveModel";
-import { A1_EFFECT_KINDS, PHASE3_EFFECT_KINDS } from "./statusMoveEffects";
+import { A1_EFFECT_KINDS, A2_EFFECT_KINDS, PHASE3_EFFECT_KINDS } from "./statusMoveEffects";
 import { ALL_PROTECT_GROUPS, type ProtectGroup } from "./protectMoves";
 import { partyRaceValue, partyValueAfterTurn, type PartyDuel, type PartyEffect } from "./partyEval";
 
@@ -71,6 +71,11 @@ export interface DecisionParams {
    * 배북(랭크 설정형 랭크업)을 평가할지. false면 이전처럼 고르지 않는다(비교용).
    */
   a1Aware: boolean;
+  /**
+   * AI-A2(ver.1.8) — 대타출동·울부짖기/날려버리기·추억의선물(효과), 잠꼬대(잠든 동안 무작위 기술 기대값)를 평가할지.
+   * false면 이전처럼 고르지 않는다(비교용). 추억의선물은 파티 단위 평가가 꺼져 있으면 평가할 수 없어 고르지 않는다.
+   */
+  a2Aware: boolean;
 }
 
 /**
@@ -103,6 +108,7 @@ export const DEFAULT_DECISION_PARAMS: DecisionParams = {
   partyDuelNoise: 0.5,
   partyEffects: false,
   a1Aware: true,
+  a2Aware: true,
 };
 
 export interface ScoredOption {
@@ -243,6 +249,8 @@ function pivotValue(option: AiOption, params: DecisionParams): number {
  */
 function effectValue(option: AiOption, params: DecisionParams): number {
   const effect = option.support!.effect!;
+  if (effect.phaze) return phazeValue(option, params);
+  if (effect.sacrifice) return sacrificeValue(option, params);
   const { hit, base, hitChance, selfCost = 0 } = effect;
   const my = option.hpFraction;
   const opp = option.opponentHpFraction;
@@ -254,6 +262,43 @@ function effectValue(option: AiOption, params: DecisionParams): number {
   const carry =
     params.partyAware && params.partyEffects && option.party && effect.partyCarry !== undefined ? effect.partyCarry : effect.carry;
   return hitChance * onHit + (1 - hitChance) * onMiss + params.wCarry * carry;
+}
+
+/**
+ * 울부짖기·날려버리기(AI-A2): 이번 턴 상대에게 한 대 맞고(hitLoss), 상대 예비 중 무작위 하나(균등)가 설치물을 밟고
+ * 끌려 나온 대면을 이어간다. 끌려 나온 쪽이 등장 비용으로 쓰러지면 파티 모드에선 그 state에서 이어지는 판세.
+ * 원래 상대의 랭크 변화가 사라지는 이득은 파티 모드의 이어지는 대면(원래 상대가 다시 나올 때)에 반영된다.
+ */
+function phazeValue(option: AiOption, params: DecisionParams): number {
+  const { hitLoss, branches } = option.support!.effect!.phaze!;
+  if (branches.length === 0) return -Infinity;
+  const partyMode = params.partyAware && !!option.party;
+  const chain = { lambda: params.partyCountWeight, noise: params.partyDuelNoise };
+  const total = branches.reduce((sum, b) => {
+    const duel = partyMode ? { model: b.model, myIndex: option.party!.myIndex, myStaged: true } : undefined;
+    const rest = b.fainted
+      ? partyMode
+        ? partyValueAfterTurn(b.model, option.party!.model, chain)
+        : 0
+      : race(params, duel, [b.race.killTurns, b.race.survivalTurns, b.race.firstProbability, b.my, b.opp, 0]);
+    return sum + b.entry + rest;
+  }, 0);
+  return -hitLoss + total / branches.length;
+}
+
+/**
+ * 추억의선물(AI-A2): 내가 기절하는 대신 상대 공격·특공 −2 — 내 남은 HP 전부를 잃고, 그 state에서 이어지는 판세(내가
+ * 다음 포켓몬을 고른다). 후공인데 이번 턴에 쓰러지면 랭크다운 없이 기절만(failModel). 파티 단위 평가 없이는 뒤의
+ * 가치를 셀 수 없어 고르지 않는다.
+ */
+function sacrificeValue(option: AiOption, params: DecisionParams): number {
+  if (!params.partyAware || !option.party) return -Infinity;
+  const { success, afterModel, failModel } = option.support!.effect!.sacrifice!;
+  const chain = { lambda: params.partyCountWeight, noise: params.partyDuelNoise };
+  const before = option.party.model;
+  const onSuccess = partyValueAfterTurn(afterModel, before, chain);
+  const onFail = partyValueAfterTurn(failModel, before, chain);
+  return -option.hpFraction + success * onSuccess + (1 - success) * onFail;
 }
 
 /**
@@ -339,6 +384,7 @@ function tradeScore(option: AiOption, riskAversion: number, params: DecisionPara
       const effectKind = option.support.effect?.kind;
       if (!params.phase3Aware && effectKind && PHASE3_EFFECT_KINDS.has(effectKind)) return -Infinity;
       if (!params.a1Aware && effectKind && A1_EFFECT_KINDS.has(effectKind)) return -Infinity;
+      if (!params.a2Aware && effectKind && A2_EFFECT_KINDS.has(effectKind)) return -Infinity;
       return effectValue(option, params) - riskPenalty;
     }
     if (!params.a1Aware && isA1SupportMove(option)) return -Infinity;
@@ -353,6 +399,8 @@ function tradeScore(option: AiOption, riskAversion: number, params: DecisionPara
     }
     return race(params, option.party, [after, option.hitsToBeKilled.expected, p, option.hpFraction, opp, 1]) - riskPenalty;
   }
+  // 잠꼬대(AI-A2)는 공격기처럼 평가된다(무작위 기술 기대 피해) — a2Aware가 꺼지면 이전처럼 고르지 않는다.
+  if (option.move?.callsRandomLearnedMove && !params.a2Aware) return -Infinity;
   const lost = option.optionType === "switch" ? 1 : 0;
   const entry = option.maxHp > 0 ? option.entryCost / option.maxHp : 0;
   return (
