@@ -1,3 +1,4 @@
+import { type Ability } from "@/types/ability";
 import { abilityOf, type BattleFighterState, type BattleState } from "./state";
 import { effectiveHeldItem } from "./turnOrderInputs";
 
@@ -7,11 +8,16 @@ import { effectiveHeldItem } from "./turnOrderInputs";
  *  - 땅에 붙잡힘: 중력 중 · 떨어뜨리기에 맞음 · 검은철구
  *  - 공중: 비행 타입 · 부유(땅 면역 특성) · 풍선 · 전자부유
  */
-export function isGrounded(state: BattleState, fighter: BattleFighterState): boolean {
+export function isGrounded(
+  state: BattleState,
+  fighter: BattleFighterState,
+  /** 틀깨기류로 특성이 무시될 때처럼 해석된 특성을 따로 넘길 때 — 생략하면 지금 특성 */
+  ability: Ability | undefined = abilityOf(fighter),
+): boolean {
   const item = effectiveHeldItem(fighter, state);
   if (state.gravityTurnsRemaining !== undefined || fighter.smackedDown || item?.groundsHolder) return true;
   if (fighter.types.includes("비행")) return false;
-  if (abilityOf(fighter)?.grantsImmunityToTypes?.includes("땅")) return false;
+  if (ability?.grantsImmunityToTypes?.includes("땅")) return false;
   if (item?.grantsGroundImmunity) return false;
   if ((fighter.magnetRiseTurnsRemaining ?? 0) > 0) return false;
   return true;

@@ -1,4 +1,5 @@
 import { itemsSuppressedByRoom } from "./turnOrderInputs";
+import { isGrounded } from "./grounding";
 import { type Move } from "@/types/move";
 import { type PokemonType } from "@/types/pokemon-type";
 import { type ActionBlockReason, type ActionLogEntry, type FighterKey } from "@/types/battle";
@@ -299,7 +300,7 @@ export function resolvePreHitEffects(
   // 변화기는 우선도가 올라가 있어도 막히지 않는다(isOpponentTargetingMove가 그 축을 가른다).
   const effectivePriorityForBlock =
     move.priority + getAbilityPriorityBoost(move, attackerAbility, attacker.currentHp === attacker.maxHp);
-  if (isPriorityMoveBlockedByField(state.field, effectivePriorityForBlock, move)) {
+  if (isPriorityMoveBlockedByField(state.field, effectivePriorityForBlock, move, isGrounded(state, defender, defenderAbility))) {
     return blocked("psychicFieldPriority");
   }
   // 여왕의위엄: 방어측이 이 특성이면 상대의 우선도 +1↑ 공격 기술이 자신을 겨냥할 때 실패한다.
@@ -558,6 +559,7 @@ export function resolvePreHitEffects(
   } = resolveMoveContext(attackerAbility, fieldAdjustedMove, defender.types, defenderAbility, {
     weather: activeWeather(state),
     defenderItem,
+    defenderGrounded: isGrounded(state, defender, defenderAbility),
     attackerHpFraction: attacker.currentHp / attacker.maxHp,
     defenderHpIsFull: defender.currentHp === defender.maxHp,
     defenderHasStatusCondition: defender.status.condition !== null,
@@ -974,7 +976,7 @@ export function resolvePreHitEffects(
     if (
       ap.contactStatus &&
       !isImmuneToStatus(ap.contactStatus, attacker.types, statusImmunitiesOf(attacker, attackerAbility)) &&
-      !isStatusBlockedByField(state.field, ap.contactStatus) &&
+      !isStatusBlockedByField(state.field, ap.contactStatus, isGrounded(state, attacker, attackerAbility)) &&
       sideOf(state, actorKey).safeguardTurnsRemaining === undefined
     ) {
       const before = attacker.status.condition;

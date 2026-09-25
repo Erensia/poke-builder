@@ -1,4 +1,5 @@
 import { itemsSuppressedByRoom } from "./turnOrderInputs";
+import { isGrounded } from "./grounding";
 import { type EndOfTurnLogEntry, type FighterKey } from "@/types/battle";
 import { BATTLE_STAT_KEYS } from "@/types/battleStats";
 import { NO_STATUS_CONDITION } from "@/types/status";
@@ -52,7 +53,8 @@ function applyPerishSongCountdown(ctx: EndOfTurnFighterContext): boolean {
 /** 그래스필드: 매 턴 종료 시 최대 HP 1/16 회복 */
 function applyFieldEndOfTurnHeal(ctx: EndOfTurnFighterContext): void {
   const { state, key, fighter, endOfTurn } = ctx;
-  const fieldHeal = computeFieldEndOfTurnHeal(state.field, fighter.maxHp);
+  // 트랙 M4: 그래스필드 회복은 땅에 있는 포켓몬만
+  const fieldHeal = isGrounded(state, fighter) ? computeFieldEndOfTurnHeal(state.field, fighter.maxHp) : 0;
   if (fieldHeal > 0) {
     fighter.currentHp = Math.min(fighter.maxHp, fighter.currentHp + fieldHeal);
     endOfTurn.push({ actor: key, damage: 0, remainingHp: fighter.currentHp, fainted: false, fieldHeal });
@@ -338,7 +340,7 @@ function applyDrowsySleepOnset(ctx: EndOfTurnFighterContext): void {
     triggersNow &&
     !fighter.status.condition &&
     !isImmuneToStatus("sleep", fighter.types, statusImmunitiesOf(fighter, fighterAbility)) &&
-    !isStatusBlockedByField(state.field, "sleep") &&
+    !isStatusBlockedByField(state.field, "sleep", isGrounded(state, fighter, fighterAbility)) &&
     sideOf(state, key).safeguardTurnsRemaining === undefined
   ) {
     fighter.status = inflictStatus(fighter.status, "sleep");

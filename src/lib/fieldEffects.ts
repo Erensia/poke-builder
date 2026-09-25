@@ -33,25 +33,33 @@ export const FIELD_ENTRY_ANNOUNCEMENT: Record<FieldKind, string> = {
 };
 
 /** 필드가 기술 데미지에 주는 배율. 그래스/사이코/일렉트릭=해당 타입 1.3배, 미스트필드=드래곤타입 0.5배 */
-export function getFieldDamageMultiplier(field: FieldKind | undefined, moveType: PokemonType | null): number {
+export function getFieldDamageMultiplier(
+  field: FieldKind | undefined,
+  moveType: PokemonType | null,
+  /** 트랙 M4: 공격측이 땅에 있는지 — 필드 타입 강화는 땅에 있는 포켓몬만(생략하면 땅에 있다고 봄) */
+  attackerGrounded = true,
+  /** 트랙 M4: 방어측이 땅에 있는지 — 미스트필드의 드래곤 반감은 땅에 있는 대상만 */
+  defenderGrounded = true,
+): number {
   if (!field || !moveType) return 1;
-  if (field === "미스트필드") return moveType === "드래곤" ? 0.5 : 1;
-  return FIELD_BOOST_TYPE[field] === moveType ? 1.3 : 1;
+  if (field === "미스트필드") return moveType === "드래곤" && defenderGrounded ? 0.5 : 1;
+  return FIELD_BOOST_TYPE[field] === moveType && attackerGrounded ? 1.3 : 1;
 }
 
 /**
  * 미스트필드(모든 상태이상+혼란 면역)·일렉트릭필드(잠듦만 면역) 조건에 걸려 상태이상을 못 거는지.
- * 두 필드 다 "땅에 있는 포켓몬"이 대상이고, 이 프로젝트는 부유/공중 포켓몬 구분이 없어 항상 땅에 있는 것으로 취급한다.
+ * 두 필드 다 "땅에 있는 포켓몬"이 대상이다 — 트랙 M4부터 배틀 엔진은 grounded(battle/grounding.ts)를 넘긴다(생략하면 땅에 있다고 봄).
  */
-export function isStatusBlockedByField(field: FieldKind | undefined, status: StatusCondition): boolean {
+export function isStatusBlockedByField(field: FieldKind | undefined, status: StatusCondition, grounded = true): boolean {
+  if (!grounded) return false;
   if (field === "미스트필드") return true;
   if (field === "일렉트릭필드" && status === "sleep") return true;
   return false;
 }
 
-/** 혼란도 미스트필드의 "각종 상태이상" 면역 범위에 포함된다 (본가 규칙) */
-export function isConfusionBlockedByField(field: FieldKind | undefined): boolean {
-  return field === "미스트필드";
+/** 혼란도 미스트필드의 "각종 상태이상" 면역 범위에 포함된다 (본가 규칙) — 땅에 있는 대상만 */
+export function isConfusionBlockedByField(field: FieldKind | undefined, grounded = true): boolean {
+  return field === "미스트필드" && grounded;
 }
 
 /**
@@ -83,8 +91,14 @@ export function isOpponentTargetingMove(move: Move): boolean {
  * 빛의장막 등 자신/필드 전역 효과) 막히지 않는다(사용자 확인 — Phase 5 §4-3에서 우선도만 보고
  * 막던 걸 정정).
  */
-export function isPriorityMoveBlockedByField(field: FieldKind | undefined, priority: number, move: Move): boolean {
-  return field === "사이코필드" && priority >= 1 && isOpponentTargetingMove(move);
+export function isPriorityMoveBlockedByField(
+  field: FieldKind | undefined,
+  priority: number,
+  move: Move,
+  /** 트랙 M4: 사이코필드는 땅에 있는 대상만 지킨다(생략하면 땅에 있다고 봄) */
+  targetGrounded = true,
+): boolean {
+  return field === "사이코필드" && priority >= 1 && isOpponentTargetingMove(move) && targetGrounded;
 }
 
 /** 그래스필드일 때 턴 종료 시 최대 HP의 1/16을 회복한다 */

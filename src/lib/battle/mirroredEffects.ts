@@ -14,6 +14,7 @@ import { rankStageMultiplier } from "@/lib/battlePower";
 import { computeWeatherHealFraction } from "@/lib/weatherEffects";
 import { FIELD_DURATION, isConfusionBlockedByField, isOpponentTargetingMove, isStatusBlockedByField } from "@/lib/fieldEffects";
 import { getConfusionCureBerryResult, getExtraFlinchTriggered, getMentalHerbCureResult, getStatusCureBerryResult, shouldTriggerWhiteHerb } from "@/lib/itemEffects";
+import { isGrounded } from "./grounding";
 import { cureConditionsBlockedByAbility, isFixedAbility, isUncopyableAbility } from "./abilityChange";
 import { activeWeather, applyTransform, consumeItem, contraryDelta, contraryMoveFor, emptyHazardState, hasLivingReserve, isFainted, sideOf, statDropBlockStatsOf, statusImmunitiesOf, type BattleFighterState, type BattleState } from "./state";
 import { triggerTerrainSeeds } from "./switching";
@@ -408,7 +409,7 @@ export function resolveMirroredMoveEffects(input: MirroredMoveEffectsInput) {
         )
       )
         continue;
-      if (isStatusBlockedByField(state.field, effect.status)) continue;
+      if (isStatusBlockedByField(state.field, effect.status, isGrounded(state, defender, defenderAbility))) continue;
       if (sideOf(state, defenderKey).safeguardTurnsRemaining !== undefined) continue;
       // 쾌청(강한 햇살) 날씨에서는 얼음 상태에 걸리지 않는다 — 타입 면역과는 다른 축이라 별도 확인
       if (effect.status === "freeze" && activeWeather(state) === "쾌청") continue;
@@ -441,7 +442,7 @@ export function resolveMirroredMoveEffects(input: MirroredMoveEffectsInput) {
       if (
         picked &&
         !isImmuneToStatus(picked, defender.types, statusImmunitiesOf(defender, defenderAbility)) &&
-        !isStatusBlockedByField(state.field, picked) &&
+        !isStatusBlockedByField(state.field, picked, isGrounded(state, defender, defenderAbility)) &&
         sideOf(state, defenderKey).safeguardTurnsRemaining === undefined &&
         !(picked === "freeze" && activeWeather(state) === "쾌청")
       ) {
@@ -470,7 +471,7 @@ export function resolveMirroredMoveEffects(input: MirroredMoveEffectsInput) {
     if (
       rose &&
       !isImmuneToStatus("burn", defender.types, statusImmunitiesOf(defender, defenderAbility)) &&
-      !isStatusBlockedByField(state.field, "burn") &&
+      !isStatusBlockedByField(state.field, "burn", isGrounded(state, defender, defenderAbility)) &&
       sideOf(state, defenderKey).safeguardTurnsRemaining === undefined
     ) {
       const before = defender.status.condition;
@@ -490,7 +491,7 @@ export function resolveMirroredMoveEffects(input: MirroredMoveEffectsInput) {
     !hitSubstitute &&
     !inflictedStatus &&
     !isImmuneToStatus("poison", defender.types, statusImmunitiesOf(defender, defenderAbility), attackerAbility?.bypassesPoisonTypeImmunity) &&
-    !isStatusBlockedByField(state.field, "poison") &&
+    !isStatusBlockedByField(state.field, "poison", isGrounded(state, defender, defenderAbility)) &&
     sideOf(state, defenderKey).safeguardTurnsRemaining === undefined &&
     random() * 100 < attackerAbility.poisonTouchChance
   ) {
@@ -511,7 +512,7 @@ export function resolveMirroredMoveEffects(input: MirroredMoveEffectsInput) {
     !hitSubstitute &&
     !isFainted(attacker) &&
     !isImmuneToStatus("burn", attacker.types, statusImmunitiesOf(attacker, attackerAbility)) &&
-    !isStatusBlockedByField(state.field, "burn") &&
+    !isStatusBlockedByField(state.field, "burn", isGrounded(state, attacker, attackerAbility)) &&
     sideOf(state, actorKey).safeguardTurnsRemaining === undefined
   ) {
     const before = attacker.status.condition;
@@ -527,7 +528,7 @@ export function resolveMirroredMoveEffects(input: MirroredMoveEffectsInput) {
     inflictedStatus &&
     defenderAbility?.reflectsStatusToOpponent?.includes(inflictedStatus) &&
     !isImmuneToStatus(inflictedStatus, attacker.types, statusImmunitiesOf(attacker, attackerAbility)) &&
-    !isStatusBlockedByField(state.field, inflictedStatus) &&
+    !isStatusBlockedByField(state.field, inflictedStatus, isGrounded(state, attacker, attackerAbility)) &&
     sideOf(state, actorKey).safeguardTurnsRemaining === undefined &&
     !(inflictedStatus === "freeze" && activeWeather(state) === "쾌청")
   ) {
@@ -570,7 +571,11 @@ export function resolveMirroredMoveEffects(input: MirroredMoveEffectsInput) {
   let volatileBlockedByAbility: { abilityName: string; volatile: VolatileCondition; self: boolean } | undefined;
   if (effectiveMove.inflictsVolatile) {
     for (const effect of effectiveMove.inflictsVolatile) {
-      if (effect.volatile === "confusion" && isConfusionBlockedByField(state.field)) continue;
+      if (
+        effect.volatile === "confusion" &&
+        isConfusionBlockedByField(state.field, effect.target === "self" ? isGrounded(state, attacker, attackerAbility) : isGrounded(state, defender, defenderAbility))
+      )
+        continue;
       // 정신력: 풀죽음 자체에 면역이라 발동 시도 자체가 무산된다(본가 규칙 — 확률 판정까지 가지 않음)
       if (effect.volatile === "flinch" && effect.target !== "self" && defenderAbility?.immuneToFlinch) continue;
       // 아로마베일: 방어측이 이 특성이면 헤롱헤롱·도발이 걸리지 않는다(마음을 옭아매는 기술 차단).

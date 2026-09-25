@@ -38,9 +38,11 @@ export function calcSpikesDamage(
   types: PokemonType[],
   ability: Ability | undefined,
   hazards: HazardState,
+  /** 트랙 M4: 배틀 접지 판정(중력·전자부유 등). 생략하면 타입·특성으로 판정 */
+  grounded: boolean = isGroundedForHazards(types, ability),
 ): number {
   if (hazards.spikesLayers <= 0 || ability?.negatesIndirectDamage) return 0;
-  if (!isGroundedForHazards(types, ability)) return 0;
+  if (!grounded) return 0;
   const frac = SPIKES_DAMAGE_FRACTION_BY_LAYER[hazards.spikesLayers] ?? 1 / 16;
   return Math.max(1, Math.floor(maxHp * frac));
 }
@@ -55,6 +57,7 @@ export function calcEntryHazardDamage(
   types: PokemonType[],
   ability: Ability | undefined,
   hazards: HazardState,
+  grounded?: boolean,
 ): number {
-  return calcStealthRockDamage(maxHp, types, ability, hazards) + calcSpikesDamage(maxHp, types, ability, hazards);
+  return calcStealthRockDamage(maxHp, types, ability, hazards) + calcSpikesDamage(maxHp, types, ability, hazards, grounded);
 }
