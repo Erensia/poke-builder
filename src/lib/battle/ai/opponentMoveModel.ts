@@ -5,7 +5,7 @@ import { getMove } from "@/lib/data";
 import { resolveEffectiveDefenderAbility } from "@/lib/abilityModifiers";
 import { isOpponentTargetingMove } from "@/lib/fieldEffects";
 import { hasVolatile } from "@/lib/volatileConditions";
-import { abilityOf, type BattleFighterState, type BattleSide, type BattleState } from "../state";
+import { abilityOf, choiceLockedMoveOf, type BattleFighterState, type BattleSide, type BattleState } from "../state";
 import { estimateMoveHits, type MoveHitEstimate } from "./moveDamage";
 import { blockedTurns, turnsToKo } from "./turnRates";
 import { isUsageBlocked } from "./usageConditions";
@@ -46,7 +46,10 @@ export function usableMoves(fighter: BattleFighterState): Move[] {
  */
 export function allowedByVolatiles(fighter: BattleFighterState, moves: Move[]): Move[] {
   const { taunt, disable, encore } = fighter.volatile.active;
+  // 구애류 잠금(엔진 state — 트랙 M1)도 같은 축의 제한으로 본다
+  const choiceLocked = choiceLockedMoveOf(fighter);
   return moves.filter((m) => {
+    if (choiceLocked && m.id !== choiceLocked) return false;
     if (taunt && m.category === "status") return false;
     if (disable && disable.moveId === m.id) return false;
     if (encore?.moveId && encore.moveId !== m.id) return false;
@@ -138,6 +141,15 @@ function isPointlessNow(state: BattleState, move: Move, user: BattleFighterState
     // AI-A2
     case "substitute":
       return user.substituteHp !== undefined || user.currentHp <= Math.floor(user.maxHp / 4);
+    // 트랙 M1
+    case "tailwind": {
+      const userSide = state.sideA.party.includes(user) ? state.sideA : state.sideB;
+      return (userSide.tailwindTurnsRemaining ?? 0) > 0;
+    }
+    case "recycle":
+      return !!user.currentItemId || !user.lastConsumedItemId;
+    case "itemSwap":
+      return !user.currentItemId && !target.currentItemId;
     case "phaze": {
       const targetSide = state.sideA.party.includes(target) ? state.sideA : state.sideB;
       return !targetSide.party.some((f) => f !== target && f.currentHp > 0);

@@ -110,6 +110,8 @@ export interface EffectEvaluation {
   party?: PartyEffect;
   /** 파티 모드에서 carry 대신 쓰는 이월 항 — 벽·설치기는 이어지는 대면이 직접 세므로 0, 끈적끈적네트만 고정 근사 */
   partyCarry?: number;
+  /** 아픔나누기(트랙 M1): 효과가 걸린 뒤 두 포켓몬의 HP 비율(첫 대면이 여기서 시작) */
+  hpAfter?: { my: number; opp: number };
   /** 울부짖기·날려버리기(AI-A2): 상대 대기 포켓몬마다 끌려 나온 뒤의 대면 */
   phaze?: PhazeEvaluation;
   /** 추억의선물(AI-A2): 자신 기절 + 상대 랭크다운 뒤 state(성공)·먼저 쓰러진 state(실패)의 대면표 */
@@ -461,7 +463,7 @@ function proteanTypes(me: BattleFighterState, move: Move): PokemonType[] | undef
 
 function classifySupport(move: Move): SupportKind {
   if (move.healsFraction && move.healsTarget !== "opponent") return "heal";
-  if (move.healsWeatherDependent || move.restSleep || isWish(move)) return "heal";
+  if (move.healsWeatherDependent || move.restSleep || isWish(move) || move.healsByStockpile) return "heal";
   // 배북처럼 랭크를 +n이 아니라 특정 값으로 "설정"(setTo)하는 것도 랭크업기다.
   if (move.statChanges?.some((s) => s.target === "self" && ((s.delta ?? 0) > 0 || (s.setTo ?? 0) > 0))) return "setup";
   if (effectKindOf(move)) return "effect";
@@ -576,7 +578,13 @@ function evaluateEffectMove(ctx: EffectContext): EffectEvaluation | undefined {
   if (duration === undefined) {
     // 대타출동: 최대 HP 1/4을 쓰고 대면은 깎인 HP에서 시작(selfCost — 랭크업기의 HP 비용과 같은 처리)
     const selfCost = kind === "substitute" ? Math.floor(me.maxHp / 4) / me.maxHp : undefined;
-    return { hit: after, base, hitChance, carry: 0, kind, party: { model: partyModel, turns: Infinity }, partyCarry: 0, selfCost };
+    // 아픔나누기: 두 포켓몬 HP가 바뀐 채로 대면을 시작한다
+    const oppAfterFighter = clone[opponentKey(key)];
+    const hpAfter =
+      kind === "painSplit"
+        ? { my: clone[key].currentHp / clone[key].maxHp, opp: oppAfterFighter.currentHp / oppAfterFighter.maxHp }
+        : undefined;
+    return { hit: after, base, hitChance, carry: 0, kind, party: { model: partyModel, turns: Infinity }, partyCarry: 0, selfCost, hpAfter };
   }
 
   // 지속 턴이 있는 효과(벽·날씨·필드·트릭룸·도발·앙코르·사슬묶기): 이번 턴(내가 먼저 움직이면 이번 턴 상대
@@ -831,6 +839,13 @@ export function evaluateOptions(state: BattleState, key: FighterKey, options: Ev
         // 희망사항(AI-A1): 회복은 다음 턴 종료 — 그 사이 한 번 더 맞은 뒤 최대 HP 절반을 받는다. 이미 예약돼 있으면
         // 실패(엔진 mirroredEffects), 받기 전에 쓰러지면(이번 턴 + 다음 턴에 쓰러짐) 회복 없음 → 순이득 ≤ 0.
         let wishFails = false;
+        // 꿀꺽(트랙 M1): 비축 1/2/3 → 1/4·1/2·전부. 비축이 없으면 실패(비축 랭크를 되돌리는 손해는 아직 안 셈)
+        if (move.healsByStockpile) {
+          const spent = me.stockpileCount ?? 0;
+          const stockFraction = spent >= 3 ? 1 : spent === 2 ? 0.5 : spent === 1 ? 0.25 : 0;
+          healedHp = Math.min(me.maxHp, me.currentHp + Math.floor(me.maxHp * stockFraction));
+          wishFails = spent === 0;
+        }
         if (isWish(move)) {
           const perTurnLoss = threat.hitsToBeKilled.expected > 0 ? me.currentHp / threat.hitsToBeKilled.expected : me.currentHp;
           const hpBeforeHeal = me.currentHp - perTurnLoss;
@@ -845,7 +860,7 @@ export function evaluateOptions(state: BattleState, key: FighterKey, options: Ev
           bestKillTurns,
           healedHpFraction: healedHp / me.maxHp,
           healNetGain: wishFails ? -1 : healNetGain(me.currentHp / me.maxHp, healedHp / me.maxHp, after.bestHitFraction, 1),
-          extended: move.healsWeatherDependent || isWish(move) || undefined,
+          extended: move.healsWeatherDependent || isWish(move) || move.healsByStockpile || undefined,
         };
       } else if (kind === "effect") {
         const effect = evaluateEffectMove({

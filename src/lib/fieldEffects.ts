@@ -66,6 +66,8 @@ export function isOpponentTargetingMove(move: Move): boolean {
   if (move.inflictsVolatile?.some((v) => v.target === "opponent")) return true;
   if (move.statChanges?.some((s) => s.target === "opponent")) return true;
   if (move.setsLeechSeed) return true;
+  // 트랙 M1: 트릭·바꿔치기(도구 교환)·아픔나누기(HP 나눔)는 상대를 겨냥한다(방어·대타·매직미러 판정 대상)
+  if (move.swapsItemsWithTarget || move.sharesHpWithTarget) return true;
   if (move.setsDisable || move.setsEncore) return true;
   if (move.curesStatus?.target === "opponent") return true;
   if (move.healsTarget === "opponent") return true;

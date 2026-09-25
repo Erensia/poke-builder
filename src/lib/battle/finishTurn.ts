@@ -762,6 +762,20 @@ export function finishTurn(ctx: RunTurnContext): RunTurnOutcome {
     }
   }
 
+  // 순풍(트랙 M1)도 같은 편 단위 카운트다운
+  const expiredTailwind: FighterKey[] = [];
+  for (const key of (["a", "b"] as const)) {
+    const side = sideOf(state, key);
+    if (side.tailwindTurnsRemaining === undefined) continue;
+    const next = side.tailwindTurnsRemaining - 1;
+    if (next <= 0) {
+      side.tailwindTurnsRemaining = undefined;
+      expiredTailwind.push(key);
+    } else {
+      side.tailwindTurnsRemaining = next;
+    }
+  }
+
   return {
     nextState: state,
     result: {
@@ -779,6 +793,7 @@ export function finishTurn(ctx: RunTurnContext): RunTurnOutcome {
       weatherExpired,
       expiredScreens,
       expiredSafeguard,
+      expiredTailwind: expiredTailwind.length > 0 ? expiredTailwind : undefined,
       turnStartAnnouncements,
       switches,
       activePokemonIds: { a: state.a.slot.pokemonId, b: state.b.slot.pokemonId },

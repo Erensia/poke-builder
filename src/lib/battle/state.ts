@@ -256,6 +256,8 @@ export interface BattleFighterState {
    * 되돌린다. 되돌린 뒤에도 값은 남겨 둔다(다시 먹고 다시 되돌릴 수 있음).
    */
   consumedBerryId?: string;
+  /** 리사이클(트랙 M1): 이번 배틀에서 마지막으로 소모한 도구 id(나무열매만이 아니라 전부) */
+  lastConsumedItemId?: string;
   /**
    * 볼주머니: consumeItem이 나무열매 소비를 감지해 추가 회복을 적용했을 때 그 회복량을 잠깐
    * 담아 둔다. resolveAction 반환 시(액션 중 소비) 또는 턴 종료 처리 시(EOT 소비) 로그로 옮기고 지운다.
@@ -287,6 +289,12 @@ export interface BattleFighterState {
    * 턴 번호 == 현재 턴 번호)면 실패시킨다 — 그 다음 턴부터는 자연히 조건이 어긋나 다시 쓸 수 있다.
    */
   consecutiveLockMoveId?: string;
+  /**
+   * 구애류 도구(locksFirstMoveUsed) 잠금: 그 도구를 지닌 채 기술을 쓰면 그 기술 id로 잠긴다(트랙 M1 — 이전엔 화면이
+   * 로그를 훑어 처음 편성한 도구 기준으로 판정해, 도구를 잃거나 트릭으로 주고받으면 틀렸다). 물러나면 풀린다.
+   * 지금 지닌 도구가 구애류가 아니면 무시한다(choiceLockedMoveOf).
+   */
+  choiceLockedMoveId?: string;
   consecutiveLockUntilTurn?: number;
   /**
    * 이번 턴에 "자기 의지로" 교체해서 나왔으면 true(Phase 8 §8). 가속(Speed Boost)이 이 턴
@@ -341,6 +349,8 @@ export interface BattleSide {
    * (백로그 §1-9). 스크린과 같은 축(편 단위, 교체해도 유지)이지만 종류가 하나뿐이라 number만.
    */
   safeguardTurnsRemaining?: number;
+  /** 순풍(트랙 M1): 이 편 스피드 2배의 남은 턴(쓴 턴 포함 4에서 시작, 턴 종료마다 −1) */
+  tailwindTurnsRemaining?: number;
   /**
    * 희망사항(Wish) 예약 — 이 편에 하나만 걸 수 있다(백로그 §6-2). 본가처럼 "쓴 포켓몬"이 아니라
    * 2턴 뒤 그 자리(활성)에 있는 포켓몬을 회복시키므로, fighter가 아니라 편에 큐로 둔다. 교체해도
@@ -603,6 +613,7 @@ export function consumeItem(fighter: BattleFighterState): void {
   const consumedId = fighter.currentItemId;
   fighter.itemConsumed = true;
   fighter.currentItemId = null;
+  if (consumedId) fighter.lastConsumedItemId = consumedId;
 
   // 공생(Ability.passesItemToConsumingAlly, Phase 8 §7): 본가라면 여기서 "같은 편 다른 활성
   // 포켓몬이 공생 보유 + 무도구면 그 포켓몬의 도구를 이 fighter에게 넘긴다"를 처리한다. 3v3
@@ -1021,6 +1032,7 @@ export function cloneSide(side: BattleSide): BattleSide {
     hazards: { ...side.hazards },
     screens: { ...side.screens },
     safeguardTurnsRemaining: side.safeguardTurnsRemaining,
+    tailwindTurnsRemaining: side.tailwindTurnsRemaining,
     wish: side.wish ? { ...side.wish } : undefined,
     megaUsed: side.megaUsed,
   };
@@ -1048,3 +1060,16 @@ export function isForcedSwitchBlocked(target: BattleFighterState): boolean {
  * 이 함수를 보지 않는다 — 어디까지나 유저가 교체를 "고를 수 있는지"만 판정한다(UI + runTurn
  * 액션 검증에서 참조). fighter가 fainted면 판정 의미가 없어 false.
  */
+
+/**
+ * 구애류 잠금으로 지금 쓸 수 있는 유일한 기술 id. 지금 지닌 도구(서투름이면 무효)가 구애류가 아니거나 아직 잠기지
+ * 않았으면 null. 화면(턴 진행 버튼)과 배틀 AI가 같은 판정을 쓴다.
+ */
+export function choiceLockedMoveOf(fighter: BattleFighterState): string | null {
+  if (!fighter.choiceLockedMoveId || !fighter.currentItemId) return null;
+  if (abilityOf(fighter)?.disablesOwnItemEffects) return null;
+  return getItem(fighter.currentItemId)?.locksFirstMoveUsed ? fighter.choiceLockedMoveId : null;
+}
+
+/** 순풍 지속 턴(쓴 턴 포함) */
+export const TAILWIND_DURATION = 4;

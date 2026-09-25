@@ -1,6 +1,6 @@
 import { type FighterKey } from "@/types/battle";
 import { type Move } from "@/types/move";
-import { getMove } from "@/lib/data";
+import { getItem, getMove } from "@/lib/data";
 import { type StatusCondition } from "@/types/status";
 import { applyMoveStatChanges } from "@/lib/statStages";
 import { resolveEffectiveDefenderAbility } from "@/lib/abilityModifiers";
@@ -24,6 +24,7 @@ import {
   statusImmunitiesOf,
   hasLivingReserve,
   isForcedSwitchBlocked,
+  TAILWIND_DURATION,
   type BattleFighterState,
   type BattleSide,
   type BattleState,
@@ -59,13 +60,21 @@ export type EffectMoveKind =
   // AI-A2(ver.1.8): 대타출동·울부짖기/날려버리기·추억의선물
   | "substitute"
   | "phaze"
-  | "memento";
+  | "memento"
+  // 트랙 M1(ver.1.8): 엔진에 새로 구현한 변화기 — 트릭/바꿔치기·아픔나누기·순풍·리사이클
+  | "itemSwap"
+  | "painSplit"
+  | "tailwind"
+  | "recycle";
 
 /** AI-A1(ver.1.8) 효과 — decision의 a1Aware로 따로 끌 수 있다(비교용) */
 export const A1_EFFECT_KINDS: ReadonlySet<EffectMoveKind> = new Set(["haze", "safeguard", "regen", "leechSeed", "confuse", "attract", "yawn"]);
 
 /** AI-A2(ver.1.8) 효과 — decision의 a2Aware로 따로 끌 수 있다(비교용) */
 export const A2_EFFECT_KINDS: ReadonlySet<EffectMoveKind> = new Set(["substitute", "phaze", "memento"]);
+
+/** 트랙 M(ver.1.8) 효과 — decision의 trackMAware로 따로 끌 수 있다(비교용) */
+export const TRACK_M_EFFECT_KINDS: ReadonlySet<EffectMoveKind> = new Set(["itemSwap", "painSplit", "tailwind", "recycle"]);
 
 /** 3단계(§4-3) 효과 — decision의 phase3Aware로 따로 끌 수 있다 */
 export const PHASE3_EFFECT_KINDS: ReadonlySet<EffectMoveKind> = new Set(["weather", "field", "trickRoom", "taunt", "encore", "disable"]);
@@ -92,6 +101,10 @@ export function effectKindOf(move: Move): EffectMoveKind | undefined {
   if (move.setsEncore) return "encore";
   if (move.setsDisable) return "disable";
   if (move.inflictsVolatile?.some((v) => v.volatile === "taunt" && v.target !== "self")) return "taunt";
+  if (move.swapsItemsWithTarget) return "itemSwap";
+  if (move.sharesHpWithTarget) return "painSplit";
+  if (move.setsTailwind) return "tailwind";
+  if (move.recyclesItem) return "recycle";
   if (move.setsSubstitute) return "substitute";
   if (move.forcesTargetSwitch) return "phaze";
   if (move.selfFaints && move.statChanges?.some((s) => s.target === "opponent")) return "memento";
@@ -179,6 +192,9 @@ export function effectMoveFails(state: BattleState, key: FighterKey, move: Move)
   }
   if (kind === "safeguard") return sideOf(state, key).safeguardTurnsRemaining !== undefined;
   if (kind === "regen") return hasVolatile(me.volatile, move.setsRegenVolatile!);
+  // 트랙 M1: 순풍 이미 불고 있음·리사이클 되찾을 도구 없음(엔진 resolveAction·mirroredEffects와 같은 조건)
+  if (kind === "tailwind") return (sideOf(state, key).tailwindTurnsRemaining ?? 0) > 0;
+  if (kind === "recycle") return !!me.currentItemId || !me.lastConsumedItemId;
   // 대타출동: 이미 대타가 있거나 HP가 최대 HP 1/4 이하면 실패(엔진 mirroredEffects)
   if (kind === "substitute") return me.substituteHp !== undefined || me.currentHp <= Math.floor(me.maxHp / 4);
 
@@ -191,6 +207,11 @@ export function effectMoveFails(state: BattleState, key: FighterKey, move: Move)
   if (move.inflictsStatus?.length && !statusToInflict(state, key, move)) return true;
   if (kind === "leechSeed" || kind === "confuse" || kind === "attract" || kind === "yawn") {
     return volatileEffectFails(state, key, kind);
+  }
+  // 트릭·바꿔치기: 둘 다 무도구·어느 쪽이든 메가스톤·상대 점착이면 실패. 아픔나누기는 공통 차단(대타 등)만.
+  if (kind === "itemSwap") {
+    const isMegaStone = (id: string | null) => !!id && getItem(id)?.category === "mega-stone";
+    return (!me.currentItemId && !target.currentItemId) || isMegaStone(me.currentItemId) || isMegaStone(target.currentItemId) || !!targetAbility?.preventsItemLoss;
   }
   // 울부짖기·날려버리기: 상대에게 살아있는 예비가 없거나 흡반·뿌리박기면 강제 교체가 안 된다(엔진 runTurn)
   if (kind === "phaze") return !hasLivingReserve(sideOf(state, oppKey)) || isForcedSwitchBlocked(target);
@@ -267,6 +288,8 @@ export function effectDuration(state: BattleState, key: FighterKey, move: Move):
       return volatileDuration(effectKindOf(move) as "taunt" | "encore" | "disable");
     case "safeguard":
       return SAFEGUARD_DURATION;
+    case "tailwind":
+      return TAILWIND_DURATION;
     default:
       return undefined;
   }
@@ -348,6 +371,30 @@ export function applyEffectMove(clone: BattleState, key: FighterKey, move: Move,
     }
     case "attract":
       target.volatile = inflictVolatile(target.volatile, "attract", () => 0);
+      return true;
+    case "itemSwap": {
+      const mine = me.currentItemId;
+      me.currentItemId = target.currentItemId;
+      target.currentItemId = mine;
+      me.itemConsumed = false;
+      target.itemConsumed = false;
+      me.choiceLockedMoveId = undefined;
+      target.choiceLockedMoveId = undefined;
+      return true;
+    }
+    case "painSplit": {
+      const shared = Math.floor((me.currentHp + target.currentHp) / 2);
+      me.currentHp = Math.min(me.maxHp, shared);
+      target.currentHp = Math.min(target.maxHp, shared);
+      return true;
+    }
+    case "tailwind":
+      sideOf(clone, key).tailwindTurnsRemaining = TAILWIND_DURATION;
+      return true;
+    case "recycle":
+      me.currentItemId = me.lastConsumedItemId ?? null;
+      me.itemConsumed = false;
+      me.lastConsumedItemId = undefined;
       return true;
     case "substitute": {
       const cost = Math.floor(me.maxHp / 4);

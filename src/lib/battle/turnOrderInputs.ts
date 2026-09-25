@@ -16,7 +16,7 @@ export function effectiveHeldItem(fighter: BattleFighterState): Item | undefined
 
 /**
  * 턴 순서 비교에 쓰는 실능 스피드(랭크 미반영 — 랭크는 compareTurnOrder가 곱한다).
- * 마비·구애스카프/검은철구·엽록소류(날씨 일치 시)·곡예(unburdenActive)를 전부 곱한다.
+ * 마비·구애스카프/검은철구·엽록소류(날씨 일치 시)·곡예(unburdenActive)·순풍을 전부 곱한다.
  * runTurn(실전 순서 결정)과 배틀 AI(speed_order 예측)가 같은 계산을 공유한다.
  */
 export function computeTurnOrderSpeed(state: BattleState, fighter: BattleFighterState): number {
@@ -28,7 +28,9 @@ export function computeTurnOrderSpeed(state: BattleState, fighter: BattleFighter
     computeStatusSpeedMultiplier(fighter.status.condition) *
     getItemSpeedMultiplier(effectiveHeldItem(fighter)) *
     weatherMultiplier *
-    (fighter.unburdenActive ? 2 : 1)
+    (fighter.unburdenActive ? 2 : 1) *
+    // 순풍(트랙 M1): 이 포켓몬이 속한 편에 순풍이 불고 있으면 2배
+    (tailwindActiveFor(state, fighter) ? 2 : 1)
   );
 }
 
@@ -51,4 +53,12 @@ export function buildTurnOrderActor(state: BattleState, fighter: BattleFighterSt
     stages: fighter.stages,
     movesLast: abilityOf(fighter)?.movesLastInPriorityBracket,
   };
+}
+
+/** fighter가 속한 편(sideA/sideB — 활성·대기 무관)에 순풍이 불고 있는지 */
+function tailwindActiveFor(state: BattleState, fighter: BattleFighterState): boolean {
+  // AI는 랭크를 지운 복제본으로도 부르므로 slot으로도 찾는다
+  const belongs = (party: BattleFighterState[]) => party.some((m) => m === fighter || m.slot === fighter.slot);
+  const side = belongs(state.sideA.party) ? state.sideA : belongs(state.sideB.party) ? state.sideB : undefined;
+  return (side?.tailwindTurnsRemaining ?? 0) > 0;
 }

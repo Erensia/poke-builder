@@ -760,6 +760,90 @@ try {
       );
     }
   }
+  // ── 트랙 M1(ver.1.8): 엔진 신규 변화기 + 구애 잠금 엔진 이관 ──
+  {
+    const rt = await server.ssrLoadModule("/src/lib/battle/runTurn.ts");
+    const st0 = await server.ssrLoadModule("/src/lib/battle/state.ts");
+    const toi = await server.ssrLoadModule("/src/lib/battle/turnOrderInputs.ts");
+    const P = dec.DEFAULT_DECISION_PARAMS;
+    const act = (id) => ({ kind: "move", move: data.getMove(id) });
+    const turn = (st, a, b) => rt.runTurn(st, act(a), act(b), () => 0.5).nextState;
+    const score = (o, params = P) => dec.scoreOption(o, 0.5, params);
+    const optOf = (st, id) => opt(ev.evaluateOptions(st, "a"), id);
+    // 구애 잠금: 구애스카프를 지닌 채 기술을 쓰면 그 기술로 잠기고, 트릭으로 넘기면 넘긴 쪽은 풀리고 받은 쪽은 다음 기술부터
+    {
+      const st = battle([mon("팬텀", ["트릭", "섀도볼"], null, "구애스카프")], [mon("잠만보", ["누르기", "하품"], null, "먹다남은음식", pts({ hp: 32 }))]);
+      const s1 = turn(st, "섀도볼", "누르기");
+      const lockedBefore = st0.choiceLockedMoveOf(s1.a);
+      const s2 = turn(s1, "트릭", "누르기");
+      const s3 = turn(s2, "섀도볼", "하품");
+      check(
+        "M1: 트릭 — 도구 교환 + 구애 잠금 이전(넘긴 쪽 해제, 받은 쪽은 받은 뒤 처음 쓴 기술로 잠김 — 같은 턴 후공이면 그 기술)",
+        lockedBefore === "섀도볼" && s2.a.currentItemId === "먹다남은음식" && s2.b.currentItemId === "구애스카프" && st0.choiceLockedMoveOf(s2.a) === null && st0.choiceLockedMoveOf(s2.b) === "누르기" && st0.choiceLockedMoveOf(s3.b) === "누르기",
+        `잠금전=${lockedBefore} 내도구=${s2.a.currentItemId} 상대도구=${s2.b.currentItemId} 상대잠금=${st0.choiceLockedMoveOf(s2.b)}`,
+      );
+      const none = battle([mon("팬텀", ["트릭"])], [mon("잠만보", ["누르기"])]);
+      const s4 = turn(none, "트릭", "누르기");
+      const sticky = battle([mon("팬텀", ["트릭"], null, "구애스카프")], [mon("잠만보", ["누르기"], "점착", "먹다남은음식")]);
+      const s5 = turn(sticky, "트릭", "누르기");
+      check("M1: 트릭 실패 — 둘 다 무도구·점착", !s4.a.currentItemId && s5.b.currentItemId === "먹다남은음식", `점착=${s5.b.currentItemId}`);
+    }
+    // 아픔나누기: 두 HP 합을 반씩
+    {
+      const st = battle([mon("팬텀", ["아픔나누기"], null, null, pts())], [mon("잠만보", ["칼춤"], null, null, pts({ hp: 32 }))]);
+      st.a.currentHp = 20;
+      const total = st.a.currentHp + st.b.currentHp;
+      const s1 = turn(st, "아픔나누기", "칼춤");
+      const half = Math.floor(total / 2);
+      check("M1: 아픔나누기 — HP 합을 반씩(최대 HP까지)", s1.a.currentHp === Math.min(s1.a.maxHp, half) && s1.b.currentHp === Math.min(s1.b.maxHp, half), `${s1.a.currentHp}/${s1.b.currentHp} 반=${half}`);
+      const o = optOf(battle([mon("팬텀", ["아픔나누기", "섀도볼"], null, null, pts())], [mon("잠만보", ["칼춤"], null, null, pts({ hp: 32 }))]), "아픔나누기");
+      check("M1: 아픔나누기 AI — HP 변화 반영(hpAfter)", !!o.support?.effect?.hpAfter && Number.isFinite(score(o)), JSON.stringify(o.support?.effect?.hpAfter));
+    }
+    // 순풍: 4턴(쓴 턴 포함) 스피드 2배, 이미 불면 실패, 끝나면 "멈췄다"
+    {
+      const st = battle([mon("잠만보", ["순풍", "누르기"])], [mon("팬텀", ["칼춤"])]);
+      const before = toi.computeTurnOrderSpeed(st, st.a);
+      let s = turn(st, "순풍", "칼춤");
+      const doubled = toi.computeTurnOrderSpeed(s, s.a);
+      const again = rt.runTurn(s, act("순풍"), act("칼춤"), () => 0.5).result.actions.find((x) => x.actor === "a");
+      let expired = false;
+      for (let i = 0; i < 3; i++) {
+        const out = rt.runTurn(s, act("누르기"), act("칼춤"), () => 0.5);
+        if (out.result.expiredTailwind?.includes("a")) expired = i === 2;
+        s = out.nextState;
+      }
+      const e = optOf(battle([mon("잠만보", ["순풍", "누르기"])], [mon("팬텀", ["칼춤"])]), "순풍").support?.effect;
+      check(
+        "M1: 순풍 — 스피드 2배·중복 실패·4턴째 끝에 멈춤 + AI 선공 반영",
+        doubled === before * 2 && again?.tailwindSetFailed === true && expired && !(s.sideA.tailwindTurnsRemaining > 0) && e && e.hit.firstProbability >= e.base.firstProbability,
+        `스피드 ${before}→${doubled} 멈춤=${expired} p ${e?.base.firstProbability}→${e?.hit.firstProbability}`,
+      );
+    }
+    // 생명의물방울(1/4 회복)·꿀꺽(비축 2 → 1/2 회복·비축과 방어/특방 되돌림, 0이면 실패)·리사이클
+    {
+      const dew = battle([mon("잠만보", ["생명의물방울"], null, null, pts({ hp: 32 }))], [mon("팬텀", ["칼춤"])]);
+      dew.a.currentHp = Math.floor(dew.a.maxHp / 2);
+      const d1 = turn(dew, "생명의물방울", "칼춤");
+      const sw = battle([mon("잠만보", ["꿀꺽"], null, null, pts({ hp: 32 }))], [mon("팬텀", ["칼춤"])]);
+      sw.a.currentHp = 10;
+      sw.a.stockpileCount = 2;
+      sw.a.stages = { ...sw.a.stages, def: 2, spd: 2 };
+      const w1 = turn(sw, "꿀꺽", "칼춤");
+      const empty = battle([mon("잠만보", ["꿀꺽"])], [mon("팬텀", ["칼춤"])]);
+      const wAct = rt.runTurn(empty, act("꿀꺽"), act("칼춤"), () => 0.5).result.actions.find((x) => x.actor === "a");
+      const rc = battle([mon("잠만보", ["리사이클"])], [mon("팬텀", ["칼춤"])]);
+      rc.a.currentItemId = null;
+      rc.a.lastConsumedItemId = "자뭉열매";
+      const r1 = turn(rc, "리사이클", "칼춤");
+      check(
+        "M1: 생명의물방울·꿀꺽·리사이클",
+        d1.a.currentHp - dew.a.currentHp === Math.floor(dew.a.maxHp / 4) &&
+          w1.a.currentHp === 10 + Math.floor(w1.a.maxHp / 2) && w1.a.stockpileCount === 0 && w1.a.stages.def === 0 &&
+          wAct?.stockpileHealFailed === true && r1.a.currentItemId === "자뭉열매",
+        `물방울+${d1.a.currentHp - dew.a.currentHp} 꿀꺽HP=${w1.a.currentHp} 비축=${w1.a.stockpileCount} 리사이클=${r1.a.currentItemId}`,
+      );
+    }
+  }
   // ── 매치업 난수별 데미지(ver.1.7 트랙 H): 기존 격파 판정과 같은 관계식인지 대조 ──
   {
     const bp = await server.ssrLoadModule("/src/lib/battlePower.ts");

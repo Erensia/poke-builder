@@ -5,7 +5,7 @@ import { BATTLE_STAT_KEYS, NEUTRAL_ACCURACY_STAGES, NEUTRAL_STAGES, isBattleStat
 import { NO_STATUS_CONDITION, type StatusCondition, type StatusConditionState, type VolatileCondition } from "@/types/status";
 import { type Ability } from "@/types/ability";
 import { type Item } from "@/types/item";
-import { getAbility, getMove, getPokemon } from "@/lib/data";
+import { getAbility, getItem, getMove, getPokemon } from "@/lib/data";
 import { applyMoveStatChanges, applyStageDelta, clampStagesToNonNegative } from "@/lib/statStages";
 import { applyMoveAccuracyEvasionChanges, applyMoveCritStageChanges } from "@/lib/accuracyCrit";
 import { inflictRestSleep, inflictStatus, isImmuneToStatus } from "@/lib/statusConditions";
@@ -894,6 +894,23 @@ export function resolveMirroredMoveEffects(input: MirroredMoveEffectsInput) {
     healTarget.currentHp += healedAmount;
   }
 
+  // 꿀꺽(healsByStockpile, 트랙 M1): 비축 1/2/3이면 최대 HP 1/4·1/2·전부 회복, 스택과 그만큼의 방어·특방 랭크를
+  // 되돌린다(토해내기와 같은 소비). 비축이 없으면 실패.
+  let stockpileHealFailed = false;
+  if (effectiveMove.healsByStockpile) {
+    const spent = attacker.stockpileCount ?? 0;
+    if (spent === 0) {
+      stockpileHealFailed = true;
+    } else {
+      const fraction = spent >= 3 ? 1 : spent === 2 ? 0.5 : 0.25;
+      healedTarget = "self";
+      healedAmount = Math.min(attacker.maxHp - attacker.currentHp, Math.floor(attacker.maxHp * fraction));
+      attacker.currentHp += healedAmount;
+      attacker.stockpileCount = 0;
+      attacker.stages = applyStageDelta(applyStageDelta(attacker.stages, "def", -spent), "spd", -spent);
+    }
+  }
+
   // 힘흡수(drainsFromTargetAttackStat): 상대의 공격 실능(랭크 반영, -1 적용 전 값)만큼 자신을 회복.
   // 상대 공격 -1은 데이터의 statChanges로 위에서 이미 적용됐지만, 회복량은 랭크 변화 전 실능
   // 기준이라 defenderStagesBeforeMoveChange를 쓴다(본가 규칙).
@@ -925,6 +942,53 @@ export function resolveMirroredMoveEffects(input: MirroredMoveEffectsInput) {
     attacker.realStats = { ...attacker.realStats, spe: defender.realStats.spe };
     defender.realStats = { ...defender.realStats, spe: aSpe };
     swappedSpeedMoveName = effectiveMove.name;
+  }
+
+  // 트릭·바꿔치기(swapsItemsWithTarget, 트랙 M1): 도구를 맞바꾼다. 둘 다 무도구·어느 쪽이든 메가스톤·상대 점착이면 실패.
+  // 새 도구로 다음 기술부터 다시 잠기도록 양쪽 구애류 잠금을 푼다. 곡예는 resolveAction의 도구 전후 비교가 처리한다.
+  let swappedItems: { userGotName?: string; targetGotName?: string } | undefined;
+  let itemSwapFailed = false;
+  if (effectiveMove.swapsItemsWithTarget) {
+    const mine = attacker.currentItemId;
+    const theirs = defender.currentItemId;
+    const isMegaStone = (id: string | null) => !!id && getItem(id)?.category === "mega-stone";
+    if ((!mine && !theirs) || isMegaStone(mine) || isMegaStone(theirs) || defenderAbility?.preventsItemLoss) {
+      itemSwapFailed = true;
+    } else {
+      attacker.currentItemId = theirs;
+      defender.currentItemId = mine;
+      // 새로 얻은 도구라 이전 소모 이력과 무관하게 다시 쓸 수 있다(매지션 도둑질과 같은 처리)
+      attacker.itemConsumed = false;
+      defender.itemConsumed = false;
+      attacker.choiceLockedMoveId = undefined;
+      defender.choiceLockedMoveId = undefined;
+      swappedItems = {
+        userGotName: theirs ? getItem(theirs)?.name : undefined,
+        targetGotName: mine ? getItem(mine)?.name : undefined,
+      };
+    }
+  }
+
+  // 아픔나누기(sharesHpWithTarget, 트랙 M1): 둘의 현재 HP 합을 반씩(내림) — 각자 최대 HP까지.
+  let painSplitHp: number | undefined;
+  if (effectiveMove.sharesHpWithTarget) {
+    painSplitHp = Math.floor((attacker.currentHp + defender.currentHp) / 2);
+    attacker.currentHp = Math.min(attacker.maxHp, painSplitHp);
+    defender.currentHp = Math.min(defender.maxHp, painSplitHp);
+  }
+
+  // 리사이클(recyclesItem, 트랙 M1): 지닌 도구가 없고 이번 배틀에서 소모한 도구가 있으면 그 도구를 다시 지닌다.
+  let recycledItemName: string | undefined;
+  let recycleFailed = false;
+  if (effectiveMove.recyclesItem) {
+    if (attacker.currentItemId || !attacker.lastConsumedItemId) {
+      recycleFailed = true;
+    } else {
+      attacker.currentItemId = attacker.lastConsumedItemId;
+      attacker.itemConsumed = false;
+      attacker.lastConsumedItemId = undefined;
+      recycledItemName = getItem(attacker.currentItemId)?.name;
+    }
   }
 
   // 변신(transformsIntoTarget): 상대로 변신한다. 이미 변신 상태면 실패(1v1이라 배틀 끝까지 유지).
@@ -1205,7 +1269,7 @@ export function resolveMirroredMoveEffects(input: MirroredMoveEffectsInput) {
     [attackerItem, defenderItem] = [defenderItem, attackerItem];
   }
   return {
-    defenderAbility, attacker, defender, attackerAbility, attackerItem, defenderItem, abilityInflictedStatusOnAttacker, abilityInflictedStatusAbilityName, statusCureBerryItemName, mentalMoveBlockedByAbilityName, bouncedMoveName, bouncedByAbilityName, secondaryBlockedByAbilityName, berryEatFailed, stuffCheeksBerryHeal, stuffCheeksBerryName, costHpFailed, soulBeatHpCost, selfStatRises, selfStatsAtMax, selfStatDrops, reflectedStatDropAbilityName, reflectedStatDrops, restoredStatsSelfItemName, restoredStatsOpponentItemName, opportunistCopiedStats, opportunistAbilityName, opponentStatDrops, invertedTargetStages, addedTypeToTarget, overwroteTargetType, targetMoveTypeOverride, inflictedStatus, statusInflictFailed, beakBlastBurnedAttacker, curedStatus, curedStatusTarget, inflictedVolatile, tidyUpDone, courtChangeDone, revivedPartyName, reviveFailed, saltCureApplied, balloonPoppedItemName, octolockApplied, jawLockApplied, selfWokeBeforeMove, restSlept, healedAmount, healedTarget, averagedDefensesMoveName, swappedSpeedMoveName, transformedIntoName, transformFailed, regenSetFailed, leechSeedSetFailed, leechSeedBlockedByGrass, abilitySwappedTargetToName, abilitySwapFailed, substituteSetFailed, shedTailFailed, shedTailSucceeded, setDisabledMoveName, disableSetFailed, setEncoreMoveName, encoreSetFailed, swappedStatsMoveName, swappedStagesMoveName, protectSucceeded, protectFailed, protectStanceEntered, fieldSetFailed, stealthRockSetForSide, spikesSetForSide, toxicSpikesSetForSide, stickyWebSetForSide, hazardSetFailed,
+    defenderAbility, attacker, defender, attackerAbility, attackerItem, defenderItem, abilityInflictedStatusOnAttacker, abilityInflictedStatusAbilityName, statusCureBerryItemName, mentalMoveBlockedByAbilityName, bouncedMoveName, bouncedByAbilityName, secondaryBlockedByAbilityName, berryEatFailed, stuffCheeksBerryHeal, stuffCheeksBerryName, costHpFailed, soulBeatHpCost, selfStatRises, selfStatsAtMax, selfStatDrops, reflectedStatDropAbilityName, reflectedStatDrops, restoredStatsSelfItemName, restoredStatsOpponentItemName, opportunistCopiedStats, opportunistAbilityName, opponentStatDrops, invertedTargetStages, addedTypeToTarget, overwroteTargetType, targetMoveTypeOverride, inflictedStatus, statusInflictFailed, beakBlastBurnedAttacker, curedStatus, curedStatusTarget, inflictedVolatile, tidyUpDone, courtChangeDone, revivedPartyName, reviveFailed, saltCureApplied, balloonPoppedItemName, octolockApplied, jawLockApplied, selfWokeBeforeMove, restSlept, healedAmount, healedTarget, averagedDefensesMoveName, swappedSpeedMoveName, transformedIntoName, transformFailed, regenSetFailed, leechSeedSetFailed, leechSeedBlockedByGrass, abilitySwappedTargetToName, abilitySwapFailed, substituteSetFailed, shedTailFailed, shedTailSucceeded, setDisabledMoveName, disableSetFailed, setEncoreMoveName, encoreSetFailed, swappedStatsMoveName, swappedStagesMoveName, protectSucceeded, protectFailed, protectStanceEntered, fieldSetFailed, stealthRockSetForSide, spikesSetForSide, toxicSpikesSetForSide, stickyWebSetForSide, hazardSetFailed, swappedItems, itemSwapFailed, painSplitHp, stockpileHealFailed, recycledItemName, recycleFailed,
   };
 }
 

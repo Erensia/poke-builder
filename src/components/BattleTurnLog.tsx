@@ -501,6 +501,11 @@ function TurnFooterLines({
           {turnName(actor)}의 신비의부적 효과가 사라졌다!
         </div>
       ))}
+      {turn.expiredTailwind?.map((actor, i) => (
+        <div key={`tw-${i}`} className="battle-turn-line is-muted">
+          {turnName(actor)}의 순풍이 멈췄다!
+        </div>
+      ))}
       {turn.winner && (
         <div className="battle-turn-line is-winner">
           {turn.winner === "draw" ? "🤝 무승부!" : `🏆 ${turnName(turn.winner)} 승리!`}
@@ -894,6 +899,43 @@ function ActionMainLine({
       {!action.blockedReason && action.hit && action.swappedSpeedMoveName && (
         <> · 서로의 스피드를 교체했다!</>
       )}
+      {!action.blockedReason && action.hit && action.swappedItems && (
+        <>
+          {" "}
+          · 서로의 도구를 바꿨다!
+          {action.swappedItems.userGotName && (
+            <>
+              <br />
+              {actorName}
+              {eunNeun(actorName)} {action.swappedItems.userGotName}
+              {eulReul(action.swappedItems.userGotName)} 손에 넣었다!
+            </>
+          )}
+          {action.swappedItems.targetGotName && (
+            <>
+              <br />
+              {defenderName}
+              {eunNeun(defenderName)} {action.swappedItems.targetGotName}
+              {eulReul(action.swappedItems.targetGotName)} 손에 넣었다!
+            </>
+          )}
+        </>
+      )}
+      {!action.blockedReason && action.hit && action.itemSwapFailed && <> · 그러나 실패했다!</>}
+      {!action.blockedReason && action.hit && action.painSplitHp !== undefined && (
+        <> · 서로의 체력을 나눠 가졌다!</>
+      )}
+      {!action.blockedReason && action.hit && action.tailwindSet && <> · 순풍이 불기 시작했다!</>}
+      {!action.blockedReason && action.hit && action.tailwindSetFailed && <> · 그러나 실패했다!</>}
+      {!action.blockedReason && action.hit && action.stockpileHealFailed && <> · 그러나 실패했다!</>}
+      {!action.blockedReason && action.hit && action.recycledItemName && (
+        <>
+          {" "}
+          · {action.recycledItemName}
+          {eulReul(action.recycledItemName)} 다시 손에 넣었다!
+        </>
+      )}
+      {!action.blockedReason && action.hit && action.recycleFailed && <> · 그러나 실패했다!</>}
       {!action.blockedReason && action.hit && action.shellSideArmCategory && (
         <> · {action.shellSideArmCategory === "physical" ? "물리" : "특수"} 판정!</>
       )}

@@ -13,6 +13,7 @@ export type {
 
 export {
   STRUGGLE_MOVE,
+  choiceLockedMoveOf,
   emptyHazardState,
   sideOf,
   opponentKey,

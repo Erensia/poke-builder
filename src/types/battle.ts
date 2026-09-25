@@ -263,6 +263,20 @@ export interface ActionLogEntry {
   averagedDefensesMoveName?: string;
   /** 스피드스왑으로 자신·상대의 스피드 실능을 맞바꿨으면 그 기술 이름 */
   swappedSpeedMoveName?: string;
+  /** 트릭·바꿔치기(트랙 M1): 바꾼 뒤 시전자가 얻은 도구 이름 / 상대가 얻은 도구 이름(없으면 빈 칸) */
+  swappedItems?: { userGotName?: string; targetGotName?: string };
+  /** 트릭·바꿔치기가 실패(둘 다 무도구·메가스톤·점착)했으면 true */
+  itemSwapFailed?: boolean;
+  /** 아픔나누기(트랙 M1)로 둘이 나눠 가진 HP(각자 최대 HP로 잘리기 전 값) */
+  painSplitHp?: number;
+  /** 순풍(트랙 M1)을 일으켰으면 true / 이미 불고 있어 실패했으면 true */
+  tailwindSet?: boolean;
+  tailwindSetFailed?: boolean;
+  /** 꿀꺽(트랙 M1)이 비축이 없어 실패했으면 true */
+  stockpileHealFailed?: boolean;
+  /** 리사이클(트랙 M1)로 되찾은 도구 이름 / 되찾을 도구가 없어 실패했으면 true */
+  recycledItemName?: string;
+  recycleFailed?: boolean;
   /** 셸암즈(dynamicCategoryByHigherDamage)가 이번에 물리/특수 중 어느 판정으로 나갔는지 */
   shellSideArmCategory?: "physical" | "special";
   /** 변신으로 상대(이 종)로 변신했으면 그 종 이름 */
@@ -606,6 +620,8 @@ export interface TurnResult {
   expiredScreens: { actor: FighterKey; screen: "reflect" | "lightScreen" | "auroraVeil" }[];
   /** 이번 턴에 신비의부적(세이프가드)이 5턴을 다 채우고 사라진 편 목록 — 양쪽 다 걸려있을 수 있어 배열 */
   expiredSafeguard: FighterKey[];
+  /** 순풍(트랙 M1)이 이번 턴 종료로 멈춘 편 */
+  expiredTailwind?: FighterKey[];
   /** 턴 시작 시점에 발생한 안내 문구(의태 타입 변화 등). 없으면 빈 배열 */
   turnStartAnnouncements: string[];
   /**

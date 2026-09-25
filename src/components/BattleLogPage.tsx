@@ -17,7 +17,7 @@ import { useBattleVideos } from "../hooks/useBattleVideos";
 import type { BattleVideo } from "../types/battleVideo";
 import { Modal } from "./Modal";
 import { BattleVideoListModal } from "./BattleVideoListModal";
-import { getPokemon, getMove, getItem } from "../lib/data";
+import { getPokemon, getMove } from "../lib/data";
 import { getEffectiveForm, getEffectiveGender, megaBadgeLabel } from "../lib/pokemonForm";
 import { MEGA_SYMBOL_SPRITE_URL, type SpriteFormOptions } from "../lib/sprites";
 import { PokemonAvatarWithItem } from "./PokemonAvatarWithItem";
@@ -28,6 +28,7 @@ import { VOLATILE_LABELS, SCREEN_LABELS } from "../lib/battleLogLabels";
 import { eunNeun } from "../lib/josa";
 import {
   applySwitch,
+  choiceLockedMoveOf,
   createBattleState,
   hasUsableMove,
   isTrappedFromSwitching,
@@ -448,7 +449,16 @@ function BattleBoard({
           return parts;
         };
         const anyHazard = hazardTag("a").length > 0 || hazardTag("b").length > 0;
-        if (!battleState.weather && !battleState.field && battleState.trickRoomTurnsRemaining === undefined && !anyHazard) {
+        const tailwindTurns = (side: Side) =>
+          (side === "a" ? battleState.sideA : battleState.sideB).tailwindTurnsRemaining;
+        const anyTailwind = tailwindTurns("a") !== undefined || tailwindTurns("b") !== undefined;
+        if (
+          !battleState.weather &&
+          !battleState.field &&
+          battleState.trickRoomTurnsRemaining === undefined &&
+          !anyHazard &&
+          !anyTailwind
+        ) {
           return null;
         }
         return (
@@ -467,6 +477,13 @@ function BattleBoard({
               <span className="battle-environment-tag">
                 트릭룸 (앞으로 {battleState.trickRoomTurnsRemaining}턴)
               </span>
+            )}
+            {(["a", "b"] as const).map((side) =>
+              tailwindTurns(side) !== undefined ? (
+                <span key={`tw-${side}`} className="battle-environment-tag">
+                  {fighterLabel(battleState, side)} 진영: 순풍 (앞으로 {tailwindTurns(side)}턴)
+                </span>
+              ) : null,
             )}
             {(["a", "b"] as const).map((side) =>
               hazardTag(side).length > 0 ? (
@@ -1053,27 +1070,12 @@ export function BattleLogPage() {
   }
 
   /**
-   * 구애스카프: 이 쪽 활성 포켓몬이 그 도구를 지녔고, 로그에 이미 이 쪽이 실제로 쓴 기술이 있으면
-   * 그 첫 기술 id로 잠긴다. 판정 엔진이 아니라 이 화면의 턴 진행 버튼이 UI 단에서 막는 방식이라,
-   * 잠긴 기술 id를 여기서 로그를 훑어 매번 다시 구한다(별도 상태로 안 들고 다닌다).
-   * 교체하면 슬롯이 바뀌므로 잠금도 풀린다 — 마지막 교체 이후의 로그만 훑는다.
+   * 구애류 잠금: 엔진 state(choiceLockedMoveOf — 지금 지닌 도구가 구애류이고 그 도구로 기술을 쓴 뒤)를 그대로 읽는다.
+   * 트랙 M1 이전에는 로그를 훑어 처음 편성한 도구 기준으로 판정해, 도구를 잃거나 트릭으로 주고받아도 잠금이 그대로였다.
    */
   function choiceLockedMoveId(side: Side): string | null {
     if (!battleState) return null;
-    const itemId = battleState[side].slot.item;
-    const item = itemId ? getItem(itemId) : undefined;
-    if (!item?.locksFirstMoveUsed) return null;
-    // 이 편이 마지막으로 교체한 턴 번호 — 그 뒤의 기술 사용부터가 유효하다.
-    let lastSwitchTurn = 0;
-    for (const turn of log) {
-      if (turn.switches.some((s) => s.side === side)) lastSwitchTurn = turn.turnNumber;
-    }
-    for (const turn of log) {
-      if (turn.turnNumber <= lastSwitchTurn) continue;
-      const action = turn.actions.find((a) => a.actor === side);
-      if (action) return action.move.id;
-    }
-    return null;
+    return choiceLockedMoveOf(battleState[side]);
   }
 
   /**
