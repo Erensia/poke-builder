@@ -10,7 +10,7 @@ import { getBerryDefenseResult, getItemOffenseMultiplier, getItemSpeedMultiplier
 import { getEffectiveForm, getEffectiveGender, type FormSource } from "./pokemonForm";
 import { computeRealStats } from "./statCalculator";
 import { applyMoveStatChanges } from "./statStages";
-import { getWeatherDamageMultiplier, applyWeatherBall } from "./weatherEffects";
+import { getWeatherDamageMultiplier, getWeatherDefenseMultiplier, applyWeatherBall } from "./weatherEffects";
 import { applyFieldPulse, getFieldPowerMultiplier, getFieldDamageMultiplier } from "./fieldEffects";
 import { resolveMoveContext } from "./moveContext";
 import { resolveEffectiveDefenderAbility } from "./abilityModifiers";
@@ -494,11 +494,17 @@ export function evaluateSlotMatchup(
     ((screen === "reflect" && resolvedCategory === "physical") ||
       (screen === "lightScreen" && resolvedCategory === "special"));
   const screenMultiplier = screenMultiplierFromFlags(categoryScreenActive, auroraVeilActive);
+  // 모래바람 바위 특방·눈 얼음 방어 1.5배(Tier 2-C에서 발견한 누락) — hitResolution과 같은 판정
+  const weatherDefenseMultiplier = getWeatherDefenseMultiplier(
+    effectiveWeather,
+    defenderForm.types,
+    move.hitsDefensiveStat ?? (resolvedCategory === "physical" ? "def" : "spd"),
+  );
 
   const bulkPower = computeBulkPower(defenderRealStats, resolvedCategory, {
     defenderStages,
     bulkMultiplier:
-      (manualBulkMultiplier ?? abilityDefense * berryResult.bulkMultiplier) * screenMultiplier,
+      (manualBulkMultiplier ?? abilityDefense * berryResult.bulkMultiplier * weatherDefenseMultiplier) * screenMultiplier,
     // 사이코쇼크(hitsDefensiveStat): 특수기지만 내구력은 방어자의 물리 방어로 낸다
     defensiveStatOverride: move.hitsDefensiveStat,
   });

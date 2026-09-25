@@ -232,13 +232,16 @@ function pivotValue(option: AiOption, params: DecisionParams): number {
   const p = option.firstProbability;
   const chip = option.opponentHpFraction * pivot.hitRate;
   const my = option.hpFraction;
-  const bestSwitch = Math.max(
-    ...pivot.candidates.map(
-      (c) =>
-        p * switchInValue(c, 1, params, activeHpOverride(option, my)) +
-        (1 - p) * (switchInValue(c, 0, params, activeHpOverride(option, my - pivot.activeHitLoss)) - pivot.activeHitLoss),
-    ),
-  );
+  // 꼬리자르기(Tier 2-C): 교체 전에 치르는 HP — 물러난 포켓몬은 그만큼 깎인 채로 이어지는 대면에 남는다
+  const cost = pivot.selfCost ?? 0;
+  const bestSwitch =
+    Math.max(
+      ...pivot.candidates.map(
+        (c) =>
+          p * switchInValue(c, 1, params, activeHpOverride(option, my - cost)) +
+          (1 - p) * (switchInValue(c, 0, params, activeHpOverride(option, my - pivot.activeHitLoss - cost)) - pivot.activeHitLoss),
+      ),
+    ) - cost;
   const hitChance = pivot.hitChance ?? option.accuracy;
   // 빗나감: 교체 없이 한 대 맞음. 파티 단위 평가에서는 "이번 턴을 날린 채 대면을 이어감"(lost=1)으로 본다 —
   // 다른 갈래가 이어지는 대면의 가치를 포함하므로 같은 기준으로 맞춘다.
@@ -431,6 +434,7 @@ function tradeScore(option: AiOption, riskAversion: number, params: DecisionPara
   const opp = option.opponentHpFraction;
   if (option.support?.extended && !params.statusAware) return -Infinity;
   if (option.copycat) return params.statusAware && params.trackMAware ? copycatValue(option, riskAversion, params) : -Infinity;
+  if (option.pivot?.tier2 && !params.tier2Aware) return -Infinity;
   if (params.pivotAware && option.pivot && option.pivot.candidates.length > 0) return pivotValue(option, params) - riskPenalty;
   if (option.support) {
     const { kind, after, bestKillTurns, healedHpFraction } = option.support;

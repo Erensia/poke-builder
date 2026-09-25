@@ -284,7 +284,16 @@ export function isBatonPass(move: Move): boolean {
 
 /** AI가 점수를 매길 수 있는 변화기(회복·랭크업 제외) — 시뮬레이션 파티 생성(STATUS=1)용 */
 export function isDesignedStatusMove(move: Move): boolean {
-  return !!effectKindOf(move) || isBatonPass(move) || !!move.healsWeatherDependent || !!move.restSleep || !!move.callsLastMoveInBattle;
+  return (
+    !!effectKindOf(move) ||
+    isBatonPass(move) ||
+    !!move.healsWeatherDependent ||
+    !!move.restSleep ||
+    !!move.callsLastMoveInBattle ||
+    // Tier 2-C: 꼬리자르기·썰렁개그(교체 평가)
+    !!move.shedTail ||
+    (!!move.setsWeather && !!move.selfSwitchAfterUse)
+  );
 }
 
 /** inflictsStatus 중 이번에 실제로 걸릴 상태이상(엔진 mirroredEffects와 같은 판정 순서). 없으면 undefined */

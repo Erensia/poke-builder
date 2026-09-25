@@ -15,7 +15,7 @@ import { critChance } from "@/lib/accuracyCrit";
 import { computeStatusAttackMultiplier, ignoresBurnAttackPenalty, inflictStatus, isImmuneToStatus } from "@/lib/statusConditions";
 import { hasVolatile, inflictVolatile } from "@/lib/volatileConditions";
 import { computeDamage, hustleDamageMultiplier, screenMultiplierFromFlags, supremeOverlordMultiplier } from "@/lib/battlePower";
-import { getWeatherDamageMultiplier } from "@/lib/weatherEffects";
+import { getWeatherDamageMultiplier, getWeatherDefenseMultiplier } from "@/lib/weatherEffects";
 import { FIELD_DURATION, getFieldDamageMultiplier } from "@/lib/fieldEffects";
 import { getBerryDefenseResult, getDrainHealMultiplier, getEnduranceResult, getItemCritStageBonus, getItemOffenseMultiplier, getMentalHerbCureResult } from "@/lib/itemEffects";
 import { MIN_DAMAGE_ROLL, STRUGGLE_MOVE, WEATHER_DURATION, activeWeather, applyMimicryForm, consumeItem, contraryDelta, isFainted, rollMultiHitCount, sideOf, statDropBlockStatsOf, statusImmunitiesOf, type BattleFighterState, type BattleState } from "./state";
@@ -251,6 +251,8 @@ export function resolveHitAndApplyDamage(input: HitResolutionInput) {
         abilityDefenseMultiplier *
         berryResult.bulkMultiplier *
         screenMultiplier *
+        // 모래바람 바위 특방·눈 얼음 방어 1.5배(날씨 무효 특성이면 activeWeather가 없음)
+        getWeatherDefenseMultiplier(activeWeather(state), defender.types, contactDefenseStat) *
         (defender.glaiveRushVulnerable ? 0.5 : 1),
       isCritical: critical,
       // 스나이퍼: 급소 데미지 배율을 2.25로 올린다(기본 1.5).

@@ -19,6 +19,7 @@ import {
   type BattleFighterState,
   type BattleSide,
   type BattleState,
+  WEATHER_DURATION,
 } from "../state";
 import { applyMegaEvolution, isTrappedFromSwitching } from "../switching";
 import { calcEntryHazardDamage } from "../entryCost";
@@ -209,8 +210,9 @@ export interface AiOption {
    * hitRate = 한 번 맞혔을 때 깎는 상대 현재 HP 비율(0~1), activeHitLoss = 지금 포켓몬이 상대 공격을 한 번
    * 맞을 때 잃는 HP 비율(최대 HP 대비), candidates = 그 데미지를 받은 상대 기준으로 다시 평가한 교체 후보들.
    * 배턴터치도 같은 구조(hitRate 0, 후보는 내 랭크를 이어받은 상태로 평가, hitChance 1).
+   * 꼬리자르기·썰렁개그(Tier 2-C, tier2)도 같은 구조 — selfCost = 교체 전에 치르는 HP 비율(꼬리자르기 1/2).
    */
-  pivot?: { hitRate: number; activeHitLoss: number; candidates: AiOption[]; hitChance?: number };
+  pivot?: { hitRate: number; activeHitLoss: number; candidates: AiOption[]; hitChance?: number; selfCost?: number; tier2?: boolean };
   /** 흉내쟁이(트랙 M2): 따라 쓸 기술 갈래(가중치 합 1). option이 없으면 따라 쓸 수 없어 실패하는 갈래 */
   copycat?: { branches: { weight: number; option?: AiOption }[] };
   /** 파티 단위 평가(§4-5): 이 옵션의 첫 대면이 누구끼리인지 + 대면표. 결정 레이어가 이어지는 대면을 계산한다 */
@@ -1043,6 +1045,49 @@ export function evaluateOptions(state: BattleState, key: FighterKey, options: Ev
           benchOptions: () => benchOptions(),
         });
         option.support = { kind: effect ? "effect" : "other", before: 0, after: 0, bestKillTurns, effect, extended: true };
+      } else if (move.shedTail && bench.length > 0) {
+        // 꼬리자르기(Tier 2-C): 최대 HP 1/2로 대타를 세워 후보에게 넘기는 교체. 후보는 대타를 가진 채로 평가한다.
+        // 이미 대타가 있거나 HP가 절반 이하면 실패하고, 후공이면 먼저 맞아 HP가 절반 이하로 떨어져도 실패한다.
+        const cost = Math.floor(me.maxHp / 2);
+        const d = threat.hitsToBeKilled.expected;
+        const activeHitLoss = (me.currentHp / me.maxHp) * Math.min(1, d > 0 ? 1 / d : 1);
+        if (me.substituteHp === undefined && me.currentHp > cost) {
+          const passed = cloneBattleState(state);
+          passed[key].currentHp -= cost;
+          const side = sideOf(passed, key);
+          const secondOk = me.currentHp - activeHitLoss * me.maxHp > cost;
+          option.pivot = {
+            hitRate: 0,
+            hitChance: speed.probability + (1 - speed.probability) * (secondOk ? 1 : 0),
+            activeHitLoss,
+            selfCost: cost / me.maxHp,
+            tier2: true,
+            candidates: bench.map((index) => {
+              side.party[index].substituteHp = cost;
+              const candidate = evaluateSwitchCandidate(passed, key, index);
+              side.party[index].substituteHp = undefined;
+              return candidate;
+            }),
+          };
+        }
+        option.support = { kind: "other", before: 0, after: 0, bestKillTurns, extended: true };
+      } else if (move.setsWeather && move.selfSwitchAfterUse && bench.length > 0) {
+        // 썰렁개그(Tier 2-C): 눈을 내리게 한 뒤 교체 — 후보는 눈이 내리는 state로 평가한다(이미 눈이어도 교체는 한다).
+        const snowed = cloneBattleState(state);
+        if (snowed.weather !== move.setsWeather) {
+          const item = effectiveHeldItem(me);
+          snowed.weather = move.setsWeather;
+          snowed.weatherTurnsRemaining = WEATHER_DURATION + (item?.weatherDurationBonus?.weather === move.setsWeather ? item.weatherDurationBonus.bonus : 0);
+        }
+        const d = threat.hitsToBeKilled.expected;
+        option.pivot = {
+          hitRate: 0,
+          hitChance: 1,
+          activeHitLoss: (me.currentHp / me.maxHp) * Math.min(1, d > 0 ? 1 / d : 1),
+          tier2: true,
+          candidates: bench.map((index) => evaluateSwitchCandidate(snowed, key, index)),
+        };
+        option.support = { kind: "other", before: 0, after: 0, bestKillTurns, extended: true };
       } else if (isBatonPass(move) && bench.length > 0) {
         // 배턴터치: 유턴류와 같은 "교체" 평가 — 데미지는 0, 후보는 내 랭크 변화를 이어받은 상태로 평가한다.
         const d = threat.hitsToBeKilled.expected;
