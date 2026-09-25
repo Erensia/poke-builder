@@ -5859,6 +5859,7 @@
         "setTo": 6
       }
     ],
+    "costsHpFraction": 0.5,
     "makesContact": false
   },
   {

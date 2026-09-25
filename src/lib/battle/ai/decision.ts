@@ -1,6 +1,6 @@
 import type { AiOption } from "./evaluator";
 import { DEFAULT_THREAT_MODEL } from "./opponentMoveModel";
-import { PHASE3_EFFECT_KINDS } from "./statusMoveEffects";
+import { A1_EFFECT_KINDS, PHASE3_EFFECT_KINDS } from "./statusMoveEffects";
 import { ALL_PROTECT_GROUPS, type ProtectGroup } from "./protectMoves";
 import { partyRaceValue, partyValueAfterTurn, type PartyDuel, type PartyEffect } from "./partyEval";
 
@@ -66,6 +66,11 @@ export interface DecisionParams {
    * 설치기는 실제 등장 비용으로, 방어류는 한 턴 뒤 state에서(쓰러짐·길동무 동반 기절 포함). false면 ① 동작(비교용).
    */
   partyEffects: boolean;
+  /**
+   * AI-A1(ver.1.8) 변화기 — 흑안개·신비의부적·아쿠아링/뿌리박기·씨뿌리기·혼란·헤롱헤롱·하품(효과), 희망사항(지연 회복),
+   * 배북(랭크 설정형 랭크업)을 평가할지. false면 이전처럼 고르지 않는다(비교용).
+   */
+  a1Aware: boolean;
 }
 
 /**
@@ -97,6 +102,7 @@ export const DEFAULT_DECISION_PARAMS: DecisionParams = {
   partyCountWeight: 0.5,
   partyDuelNoise: 0.5,
   partyEffects: false,
+  a1Aware: true,
 };
 
 export interface ScoredOption {
@@ -306,6 +312,15 @@ function setupValue(option: AiOption, params: DecisionParams): number {
   return option.support!.batonFollowUp ? Math.max(self, batonFollowUpValue(option, params)) : self;
 }
 
+/** AI-A1의 회복·랭크업 쪽 대상: 희망사항(지연 회복)·배북(랭크 설정형) */
+function isA1SupportMove(option: AiOption): boolean {
+  const move = option.move;
+  return (
+    !!move?.inflictsVolatile?.some((v) => v.volatile === "wish") ||
+    !!move?.statChanges?.some((s) => s.target === "self" && s.setTo !== undefined)
+  );
+}
+
 function tradeScore(option: AiOption, riskAversion: number, params: DecisionParams): number {
   const riskPenalty = option.riskFlag ? params.tradeRiskPenaltyBase * riskAversion : 0;
   const p = option.firstProbability;
@@ -323,8 +338,10 @@ function tradeScore(option: AiOption, riskAversion: number, params: DecisionPara
     if (kind === "effect") {
       const effectKind = option.support.effect?.kind;
       if (!params.phase3Aware && effectKind && PHASE3_EFFECT_KINDS.has(effectKind)) return -Infinity;
+      if (!params.a1Aware && effectKind && A1_EFFECT_KINDS.has(effectKind)) return -Infinity;
       return effectValue(option, params) - riskPenalty;
     }
+    if (!params.a1Aware && isA1SupportMove(option)) return -Infinity;
     if (kind === "setup" && params.statusAware && params.setupAware) {
       if (option.support.setupFailed) return -Infinity;
       if (option.support.effect) return setupValue(option, params) - riskPenalty;

@@ -579,6 +579,100 @@ try {
     }
     check("파티②: 설치기 헬퍼", fx.hazardsAfter({ stealthRock: false, spikesLayers: 2, toxicSpikesLayers: 1, stickyWeb: false }, data.getMove("독압정")).toxicSpikesLayers === 2);
   }
+  // ── AI-A1(ver.1.8): 배북·흑안개·혼란·헤롱헤롱·씨뿌리기·하품·희망사항·신비의부적 ──
+  {
+    const rt = await server.ssrLoadModule("/src/lib/battle/runTurn.ts");
+    const tr = await server.ssrLoadModule("/src/lib/battle/ai/turnRates.ts");
+    const P = dec.DEFAULT_DECISION_PARAMS;
+    const moveAction = (id) => ({ kind: "move", move: data.getMove(id) });
+    const effOf = (st, id) => opt(ev.evaluateOptions(st, "a"), id);
+    const score = (o) => dec.scoreOption(o, 0.5, P);
+    // 배북(엔진 버그 수정): HP 절반을 쓰고 공격 +6, HP가 절반 이하면 실패
+    {
+      const st = battle([mon("잠만보", ["배북"], null, null, pts({ hp: 32 }))], [mon("팬텀", ["섀도볼"], null, null, pts())]);
+      const full = st.a.currentHp;
+      const out = rt.runTurn(st, moveAction("배북"), moveAction("섀도볼"), () => 0.5).nextState;
+      const low = battle([mon("잠만보", ["배북"], null, null, pts({ hp: 32 }))], [mon("팬텀", ["섀도볼"], null, null, pts())]);
+      low.a.currentHp = Math.floor(low.a.maxHp / 2);
+      const lowOut = rt.runTurn(low, moveAction("배북"), moveAction("섀도볼"), () => 0.5).nextState;
+      const o = effOf(battle([mon("잠만보", ["배북", "누르기"], null, null, pts({ hp: 32 }))], [mon("팬텀", ["섀도볼"], null, null, pts())]), "배북");
+      check(
+        "A1: 배북 — HP 절반 소비·공격 +6, 절반 이하면 실패 + AI 랭크업기로 평가",
+        out.a.stages.atk === 6 && full - out.a.currentHp >= Math.floor(full / 2) && lowOut.a.stages.atk === 0 && o.support.kind === "setup" && Number.isFinite(score(o)),
+        `공격=${out.a.stages.atk} 소비=${full - out.a.currentHp}/${full} 절반HP=${lowOut.a.stages.atk} kind=${o.support.kind}`,
+      );
+    }
+    // 흑안개: 상대 랭크업을 지우면 버티는 턴 증가, 지울 랭크가 없으면 실패
+    {
+      const st = battle([mon("잠만보", ["흑안개", "누르기"], null, null, pts({ hp: 32 }))], [mon("갸라도스", ["폭포오르기"].filter((m) => data.getMove(m)), null, null, pts({ atk: 32 }))]);
+      st.b.stages = { ...st.b.stages, atk: 4 };
+      const e = effOf(st, "흑안개").support.effect;
+      const none = battle([mon("잠만보", ["흑안개", "누르기"])], [mon("갸라도스", ["폭포오르기"].filter((m) => data.getMove(m)))]);
+      check("A1: 흑안개 — 상대 +4 제거로 d 증가, 랭크 없으면 실패", e && e.hit.survivalTurns > e.base.survivalTurns && score(effOf(none, "흑안개")) === -Infinity, `d ${e?.base.survivalTurns.toFixed(2)}→${e?.hit.survivalTurns.toFixed(2)}`);
+    }
+    // 혼란(이상한빛): 상대 행동 손실 + 자멸로 d 증가. 이미 혼란·미스트필드면 실패. turnsToKo: 혼란 공격측은 더 오래 걸림
+    {
+      const st = battle([mon("팬텀", ["이상한빛", "섀도볼"], null, null, pts({ hp: 32 }))], [mon("한카리아스", ["역린"], null, null, pts({ atk: 32 }))]);
+      const e = effOf(st, "이상한빛").support.effect;
+      const already = battle([mon("팬텀", ["이상한빛", "섀도볼"])], [mon("한카리아스", ["역린"])]);
+      already.b.volatile = { active: { confusion: { turnsRemaining: 3 } } };
+      const misty = battle([mon("팬텀", ["이상한빛", "섀도볼"])], [mon("한카리아스", ["역린"])]);
+      misty.field = "미스트필드";
+      const calm = tr.turnsToKo(0.25, st.b, st.a, st.a.currentHp);
+      const conf = { ...st.b, volatile: { active: { confusion: { turnsRemaining: 3 } } } };
+      const confused = tr.turnsToKo(0.25, conf, st.a, st.a.currentHp);
+      check(
+        "A1: 이상한빛 — d 증가, 이미 혼란·미스트필드면 실패, 혼란 공격측 처치 턴 증가",
+        e && e.hit.survivalTurns > e.base.survivalTurns && score(effOf(already, "이상한빛")) === -Infinity && score(effOf(misty, "이상한빛")) === -Infinity && confused > calm,
+        `d ${e?.base.survivalTurns.toFixed(2)}→${e?.hit.survivalTurns.toFixed(2)} 처치턴 ${calm.toFixed(2)}→${confused.toFixed(2)}`,
+      );
+    }
+    // 헤롱헤롱: 이성이면 d 증가, 동성이면 실패
+    {
+      const make = (g) => {
+        const st = battle([mon("팬텀", ["헤롱헤롱", "섀도볼"], null, null, pts({ hp: 32 }))], [mon("한카리아스", ["역린"], null, null, pts({ atk: 32 }))]);
+        st.a.gender = "male";
+        st.b.gender = g;
+        return st;
+      };
+      const e = effOf(make("female"), "헤롱헤롱").support.effect;
+      check("A1: 헤롱헤롱 — 이성이면 d 증가, 동성이면 실패", e && e.hit.survivalTurns > e.base.survivalTurns * 1.5 && score(effOf(make("male"), "헤롱헤롱")) === -Infinity, `d ${e?.base.survivalTurns.toFixed(2)}→${e?.hit.survivalTurns.toFixed(2)}`);
+    }
+    // 씨뿌리기: 상대 지속 피해(c 감소) + 내 회복(d 증가), 풀 타입이면 실패
+    {
+      const st = battle([mon("이상해꽃", ["씨뿌리기", "기가드레인"], null, null, pts({ hp: 32 }))], [mon("잠만보", ["누르기"], null, null, pts({ hp: 32 }))]);
+      const e = effOf(st, "씨뿌리기").support.effect;
+      const grass = battle([mon("이상해꽃", ["씨뿌리기", "기가드레인"])], [mon("이상해꽃", ["기가드레인"])]);
+      check("A1: 씨뿌리기 — c 감소·d 증가, 풀 타입이면 실패", e && e.hit.killTurns < e.base.killTurns && e.hit.survivalTurns > e.base.survivalTurns && score(effOf(grass, "씨뿌리기")) === -Infinity, `c ${e?.base.killTurns.toFixed(2)}→${e?.hit.killTurns.toFixed(2)} d ${e?.base.survivalTurns.toFixed(2)}→${e?.hit.survivalTurns.toFixed(2)}`);
+    }
+    // 하품: 버티는 대면이면 d 증가(다음 턴 끝 잠듦), 상대가 이미 상태이상이면 실패
+    {
+      const st = battle([mon("잠만보", ["하품", "누르기"], null, null, pts({ hp: 32, def: 32 }))], [mon("헬가", ["악의파동"], null, null, pts())]);
+      const e = effOf(st, "하품").support.effect;
+      const burned = battle([mon("잠만보", ["하품", "누르기"])], [mon("헬가", ["악의파동"])]);
+      burned.b.status = { condition: "burn", turnsElapsed: 1 };
+      check("A1: 하품 — d 증가, 이미 상태이상이면 실패", e && e.hit.survivalTurns > e.base.survivalTurns && score(effOf(burned, "하품")) === -Infinity, `d ${e?.base.survivalTurns.toFixed(2)}→${e?.hit.survivalTurns.toFixed(2)}`);
+    }
+    // 희망사항: 절반 HP에서 회복기로 평가(유한), 이미 예약돼 있으면 실패
+    {
+      const st = battle([mon("잠만보", ["희망사항", "누르기"], null, null, pts({ hp: 32, def: 32 }))], [mon("팬텀", ["섀도볼"], null, null, pts())]);
+      st.a.currentHp = Math.floor(st.a.maxHp / 2);
+      const o = effOf(st, "희망사항");
+      const pending = battle([mon("잠만보", ["희망사항", "누르기"], null, null, pts({ hp: 32, def: 32 }))], [mon("팬텀", ["섀도볼"], null, null, pts())]);
+      pending.a.currentHp = Math.floor(pending.a.maxHp / 2);
+      pending.sideA.wish = { turnsRemaining: 1, healAmount: 50 };
+      check("A1: 희망사항 — 회복기로 평가, 이미 예약이면 실패", o.support.kind === "heal" && Number.isFinite(score(o)) && score(effOf(pending, "희망사항")) === -Infinity, `score=${score(o).toFixed(3)} 회복후=${o.support.healedHpFraction?.toFixed(2)}`);
+    }
+    // 신비의부적: 상대 상태이상기를 헛수고로(d 증가 또는 유지), 이미 깔려 있으면 실패
+    {
+      const st = battle([mon("잠만보", ["신비의부적", "누르기"], null, null, pts({ hp: 32 }))], [mon("헬가", ["도깨비불", "악의파동"], null, null, pts())]);
+      const e = effOf(st, "신비의부적").support.effect;
+      const set = battle([mon("잠만보", ["신비의부적", "누르기"])], [mon("헬가", ["도깨비불", "악의파동"])]);
+      set.sideA.safeguardTurnsRemaining = 3;
+      // 가치는 작게(또는 음수로) 나온다 — 상대 변화기 확률이 공격기로 옮겨가는 모델 한계(도발과 같은 축, decision-layer §4-3).
+      check("A1: 신비의부적 — 평가됨(유한), 이미 깔렸으면 실패", e && Number.isFinite(score(effOf(st, "신비의부적"))) && score(effOf(set, "신비의부적")) === -Infinity, `d ${e?.base.survivalTurns.toFixed(2)}→${e?.hit.survivalTurns.toFixed(2)}`);
+    }
+  }
   // ── 매치업 난수별 데미지(ver.1.7 트랙 H): 기존 격파 판정과 같은 관계식인지 대조 ──
   {
     const bp = await server.ssrLoadModule("/src/lib/battlePower.ts");

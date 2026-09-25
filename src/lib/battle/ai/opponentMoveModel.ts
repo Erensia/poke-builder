@@ -4,10 +4,12 @@ import { type HazardState } from "@/types/battle";
 import { getMove } from "@/lib/data";
 import { resolveEffectiveDefenderAbility } from "@/lib/abilityModifiers";
 import { isOpponentTargetingMove } from "@/lib/fieldEffects";
+import { hasVolatile } from "@/lib/volatileConditions";
 import { abilityOf, type BattleFighterState, type BattleSide, type BattleState } from "../state";
 import { estimateMoveHits, type MoveHitEstimate } from "./moveDamage";
 import { turnsToKo } from "./turnRates";
 import { isUsageBlocked } from "./usageConditions";
+import { effectKindOf } from "./statusMoveEffects";
 import type { HitsEstimate } from "./types";
 
 /** 변화기 1개당 사용 확률(decision-layer §2·§9 초기값) */
@@ -93,6 +95,9 @@ function isWastedStatusMove(
   if (poisonsOnly && (targetTypes.includes("독") || targetTypes.includes("강철")) && !userAbility?.bypassesPoisonTypeImmunity) {
     return true;
   }
+  // 신비의부적이 깔린 편에는 상태이상 부여·하품이 통하지 않는다(AI-A1)
+  if (targetSide.safeguardTurnsRemaining !== undefined && (move.inflictsStatus?.length || effectKindOf(move) === "yawn")) return true;
+  if (move.setsLeechSeed && targetTypes.includes("풀")) return true;
   return false;
 }
 
@@ -104,8 +109,24 @@ function isWastedStatusMove(
 function isPointlessNow(state: BattleState, move: Move, user: BattleFighterState, target: BattleFighterState): boolean {
   const heals = (move.healsFraction && move.healsTarget !== "opponent") || move.healsWeatherDependent || move.restSleep;
   if (heals && user.currentHp >= user.maxHp && !(move.restSleep && user.status.condition)) return true;
-  const raises = move.statChanges?.filter((s) => s.target === "self" && (s.delta ?? 0) > 0 && s.stat in user.stages) ?? [];
+  const raises =
+    move.statChanges?.filter((s) => s.target === "self" && ((s.delta ?? 0) > 0 || (s.setTo ?? 0) > 0) && s.stat in user.stages) ?? [];
   if (raises.length > 0 && raises.every((s) => user.stages[s.stat as keyof typeof user.stages] >= 6)) return true;
+  // AI-A1 변화기: 이미 걸려 있음·효과 없음(effectMoveFails와 같은 축의 빠른 판정 — 대상이 대기 포켓몬일 수도 있어 직접 본다)
+  switch (effectKindOf(move)) {
+    case "confuse":
+      return hasVolatile(target.volatile, "confusion");
+    case "attract":
+      return hasVolatile(target.volatile, "attract") || target.gender === null || user.gender === null || target.gender === user.gender;
+    case "leechSeed":
+      return hasVolatile(target.volatile, "leechSeed");
+    case "yawn":
+      return !!target.status.condition || hasVolatile(target.volatile, "drowsy");
+    case "regen":
+      return hasVolatile(user.volatile, move.setsRegenVolatile!);
+    case "haze":
+      return Object.values(user.stages).every((v) => v <= 0) && Object.values(target.stages).every((v) => v >= 0);
+  }
   if (move.setsScreen) {
     const userSide = state.sideA.party.includes(user) ? state.sideA : state.sideB;
     if (userSide.screens[move.setsScreen] !== undefined) return true;

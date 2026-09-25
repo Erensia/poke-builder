@@ -435,10 +435,16 @@ function proteanTypes(me: BattleFighterState, move: Move): PokemonType[] | undef
 
 function classifySupport(move: Move): SupportKind {
   if (move.healsFraction && move.healsTarget !== "opponent") return "heal";
-  if (move.healsWeatherDependent || move.restSleep) return "heal";
-  if (move.statChanges?.some((s) => s.target === "self" && (s.delta ?? 0) > 0)) return "setup";
+  if (move.healsWeatherDependent || move.restSleep || isWish(move)) return "heal";
+  // 배북처럼 랭크를 +n이 아니라 특정 값으로 "설정"(setTo)하는 것도 랭크업기다.
+  if (move.statChanges?.some((s) => s.target === "self" && ((s.delta ?? 0) > 0 || (s.setTo ?? 0) > 0))) return "setup";
   if (effectKindOf(move)) return "effect";
   return "other";
+}
+
+/** 희망사항: 다음 턴 종료에 그 자리의 포켓몬이 시전자 최대 HP 절반을 회복 */
+function isWish(move: Move): boolean {
+  return !!move.inflictsVolatile?.some((v) => v.volatile === "wish");
 }
 
 /**
@@ -521,7 +527,9 @@ function evaluateEffectMove(ctx: EffectContext): EffectEvaluation | undefined {
       partyCarry: move.setsHazard === "stickyWeb" ? hazardCarry(state, key, move) : 0,
     };
   }
-  const after = currentRace(clone, key, myMoves);
+  let after = currentRace(clone, key, myMoves);
+  // 하품: 상대는 이번 턴·다음 턴에 행동한 뒤 잠든다 — 그 두 번 안에 나를 쓰러뜨리는 대면이면 잠듦은 의미 없다.
+  if (kind === "yawn" && base.survivalTurns <= 2) after = { ...after, survivalTurns: base.survivalTurns };
   const duration = effectDuration(state, key, move);
   const partyModel = createPartyModel(clone, key);
   if (duration === undefined) {
@@ -687,7 +695,16 @@ export function evaluateOptions(state: BattleState, key: FighterKey, options: Ev
       } else if (kind === "heal") {
         const healWeather = abilityOf(me)?.treatsOwnWeatherAsSun ? "쾌청" : activeWeather(moveState);
         const fraction = move.healsWeatherDependent ? computeWeatherHealFraction(healWeather) : (move.healsFraction ?? 0);
-        const healedHp = Math.min(me.maxHp, me.currentHp + Math.floor(me.maxHp * fraction));
+        let healedHp = Math.min(me.maxHp, me.currentHp + Math.floor(me.maxHp * fraction));
+        // 희망사항(AI-A1): 회복은 다음 턴 종료 — 그 사이 한 번 더 맞은 뒤 최대 HP 절반을 받는다. 이미 예약돼 있으면
+        // 실패(엔진 mirroredEffects), 받기 전에 쓰러지면(이번 턴 + 다음 턴에 쓰러짐) 회복 없음 → 순이득 ≤ 0.
+        let wishFails = false;
+        if (isWish(move)) {
+          const perTurnLoss = threat.hitsToBeKilled.expected > 0 ? me.currentHp / threat.hitsToBeKilled.expected : me.currentHp;
+          const hpBeforeHeal = me.currentHp - perTurnLoss;
+          wishFails = !!myMoveSide.wish || me.currentHp - 2 * perTurnLoss <= 0;
+          healedHp = Math.max(0, Math.min(me.maxHp, hpBeforeHeal + Math.floor(me.maxHp / 2)));
+        }
         const after = evaluateOpponentThreat({ state: moveState, opponent, target: me, targetSide: myMoveSide, opponentMovesSecond: !iMoveSecond, targetHp: healedHp });
         option.support = {
           kind,
@@ -695,8 +712,8 @@ export function evaluateOptions(state: BattleState, key: FighterKey, options: Ev
           after: after.hitsToBeKilled.expected,
           bestKillTurns,
           healedHpFraction: healedHp / me.maxHp,
-          healNetGain: healNetGain(me.currentHp / me.maxHp, healedHp / me.maxHp, after.bestHitFraction, 1),
-          extended: move.healsWeatherDependent || undefined,
+          healNetGain: wishFails ? -1 : healNetGain(me.currentHp / me.maxHp, healedHp / me.maxHp, after.bestHitFraction, 1),
+          extended: move.healsWeatherDependent || isWish(move) || undefined,
         };
       } else if (kind === "effect") {
         const effect = evaluateEffectMove({
