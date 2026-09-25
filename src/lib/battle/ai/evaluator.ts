@@ -30,6 +30,7 @@ import {
   effectKindOf,
   effectMoveFails,
   hazardCarry,
+  hazardsAfter,
   isBatonPass,
   type EffectMoveKind,
 } from "./statusMoveEffects";
@@ -44,7 +45,7 @@ import {
 } from "./protectMoves";
 import { estimateMoveHits, type MoveHitEstimate } from "./moveDamage";
 import { firstProbability } from "./speed";
-import { createPartyModel, type PartyDuel, type PartyModel } from "./partyEval";
+import { createPartyModel, type PartyDuel, type PartyEffect, type PartyModel } from "./partyEval";
 import { allowedByVolatiles, evaluateOpponentThreat, usableMoves, type OpponentThreat } from "./opponentMoveModel";
 import { blockedTurns, turnsToKo } from "./turnRates";
 import type { HitsEstimate } from "./types";
@@ -64,6 +65,8 @@ export interface ProtectOutcome {
   myAfter: number;
   oppAfter: number;
   race?: RaceInputs;
+  /** 파티 단위 평가(§4-5 ②): 그 한 턴을 돌린 뒤 state의 대면표 — 이어지는 대면·쓰러진 뒤·길동무 동반 기절 계산용 */
+  partyModel?: PartyModel;
 }
 
 /** 방어류 평가(decision-layer §4-4) */
@@ -99,6 +102,13 @@ export interface EffectEvaluation {
   selfCost?: number;
   /** 효과 종류(랭크업기는 없음) — phase3Aware 등 종류별 토글용 */
   kind?: EffectMoveKind;
+  /**
+   * 파티 단위 평가(§4-5 ②): 효과를 적용한 state의 대면표 + 효과가 남는 턴 수(상태이상·랭크 변화·설치기는
+   * Infinity). 명중 갈래의 이어지는 대면이 이걸로 계산된다.
+   */
+  party?: PartyEffect;
+  /** 파티 모드에서 carry 대신 쓰는 이월 항 — 벽·설치기는 이어지는 대면이 직접 세므로 0, 끈적끈적네트만 고정 근사 */
+  partyCarry?: number;
 }
 
 /**
@@ -347,7 +357,15 @@ function evaluateSetupMove(ctx: SetupContext): { effect?: EffectEvaluation; bato
 
   const base = currentRace(state, key, raceMoves);
   const hit = currentRace(clone, key, raceMoves);
-  const effect: EffectEvaluation = { hit, base, hitChance: 1, carry: 0, selfCost };
+  const effect: EffectEvaluation = {
+    hit,
+    base,
+    hitChance: 1,
+    carry: 0,
+    selfCost,
+    // 올린 랭크는 물러나기 전까지 남는다 — 이어지는 대면도 랭크업한 state의 대면표로
+    party: { model: createPartyModel(clone, key), turns: Infinity },
+  };
   if (ctx.batonBench.length === 0) return { effect };
 
   const myAfter = self.currentHp / self.maxHp;
@@ -397,7 +415,7 @@ function evaluateProtectMove(ctx: ProtectContext): ProtectEvaluation {
     // 양쪽 다 살아 있고 그대로 대면 중일 때만 이어지는 대면을 계산한다(강제 교체 등으로 바뀌었으면 HP 변화만 센다)
     const sameMatchup = sideOf(after, key).activeIndex === myIndex && sideOf(after, oppKey).activeIndex === oppIndex;
     const race = myAfter > 0 && oppAfter > 0 && sameMatchup ? currentRace(after, key, ctx.raceMoves) : undefined;
-    return { weight, myAfter, oppAfter, race };
+    return { weight, myAfter, oppAfter, race, partyModel: createPartyModel(after, key) };
   });
   // 버티기: 어느 상대 행동에서도 HP 1로 버틸 일이 없으면(이번 턴 안 쓰러짐) 쓸 이유가 없다
   const pointless = group === "endure" && !endured;
@@ -489,16 +507,34 @@ function evaluateEffectMove(ctx: EffectContext): EffectEvaluation | undefined {
       attackerMovesSecond: ctx.moveFirstProbability < 0.5,
     }) ?? 1;
 
-  if (kind === "hazard") return { hit: base, base, hitChance, carry: hazardCarry(state, key, move), kind };
+  if (kind === "hazard") {
+    // 파티 모드: 설치를 적용한 state로 상대 등장 비용·독압정 독을 계산하고, 끈적끈적네트(스피드 −1)만 고정 근사로 남긴다.
+    const oppSide = sideOf(clone, opponentKey(key));
+    oppSide.hazards = hazardsAfter(oppSide.hazards, move) ?? oppSide.hazards;
+    return {
+      hit: base,
+      base,
+      hitChance,
+      carry: hazardCarry(state, key, move),
+      kind,
+      party: { model: createPartyModel(clone, key), turns: Infinity },
+      partyCarry: move.setsHazard === "stickyWeb" ? hazardCarry(state, key, move) : 0,
+    };
+  }
   const after = currentRace(clone, key, myMoves);
   const duration = effectDuration(state, key, move);
-  if (duration === undefined) return { hit: after, base, hitChance, carry: 0, kind };
+  const partyModel = createPartyModel(clone, key);
+  if (duration === undefined) {
+    return { hit: after, base, hitChance, carry: 0, kind, party: { model: partyModel, turns: Infinity }, partyCarry: 0 };
+  }
 
   // 지속 턴이 있는 효과(벽·날씨·필드·트릭룸·도발·앙코르·사슬묶기): 이번 턴(내가 먼저 움직이면 이번 턴 상대
   // 행동부터) + 남은 턴 동안만 효과가 있다 — c·d는 그 구간만 효과 적용 속도, p는 그 구간 비율만큼 섞는다.
+  // 파티 모드에서는 대면이 끝난 뒤 남은 턴도 이어지는 대면이 효과 대면표로 센다(벽 이월 항 불필요).
   const covered = duration - 1 + ctx.moveFirstProbability;
   const hit = blendRace(after, base, covered);
-  if (kind !== "screen") return { hit, base, hitChance, carry: 0, kind };
+  const party: PartyEffect = { model: partyModel, turns: covered };
+  if (kind !== "screen") return { hit, base, hitChance, carry: 0, kind, party, partyCarry: 0 };
   const survivalTurns = hit.survivalTurns;
   // 대면이 끝난 뒤 남는 벽 턴: 이기는 대면이면 지금 포켓몬이, 지는 대면이면 다음 포켓몬이 덜 맞는다.
   const opponentHits = base.killTurns + 1 - hit.firstProbability;
@@ -511,7 +547,7 @@ function evaluateEffectMove(ctx: EffectContext): EffectEvaluation | undefined {
     ? [perHitLoss(me.currentHp / me.maxHp, base.survivalTurns)]
     : ctx.benchOptions().map((o) => perHitLoss(o.hpFraction, o.hitsToBeKilled.expected));
   const averageLoss = pool.length > 0 ? pool.reduce((a, b) => a + b, 0) / pool.length : 0;
-  return { hit, base, hitChance, carry: leftover > 0 ? leftover * savedRatio * averageLoss : 0, kind };
+  return { hit, base, hitChance, carry: leftover > 0 ? leftover * savedRatio * averageLoss : 0, kind, party, partyCarry: 0 };
 }
 
 /** 효과가 covered 턴 동안만 유지될 때의 대면 값(decision-layer §4-1 3단계를 c·d·p 전부로 일반화) */

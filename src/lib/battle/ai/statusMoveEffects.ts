@@ -20,6 +20,7 @@ import {
   statDropBlockStatsOf,
   statusImmunitiesOf,
   type BattleFighterState,
+  type BattleSide,
   type BattleState,
 } from "../state";
 import { calcEntryHazardDamage, isGroundedForHazards } from "../entryCost";
@@ -261,6 +262,22 @@ export function blendTurns(withEffect: number, without: number, covered: number)
   return covered + (1 - covered / withEffect) * without;
 }
 
+/** 설치기를 한 번 더 깐 뒤의 상대 편 설치물 상태. 설치기가 아니면 undefined */
+export function hazardsAfter(before: BattleSide["hazards"], move: Move): BattleSide["hazards"] | undefined {
+  switch (move.setsHazard) {
+    case "stealthRock":
+      return { ...before, stealthRock: true };
+    case "spikes":
+      return { ...before, spikesLayers: Math.min(3, before.spikesLayers + 1) };
+    case "toxicSpikes":
+      return { ...before, toxicSpikesLayers: Math.min(2, before.toxicSpikesLayers + 1) };
+    case "stickyWeb":
+      return { ...before, stickyWeb: true };
+    default:
+      return undefined;
+  }
+}
+
 /**
  * 설치기 이월 항: 상대 대기 포켓몬이 한 번씩 등장할 때 받는 손해 합(각자 최대 HP 대비 비율).
  * 스텔스록·압정뿌리기는 등장 데미지 증가분, 독압정은 독 지속 데미지 HAZARD_POISON_TURNS 턴분,
@@ -269,23 +286,8 @@ export function blendTurns(withEffect: number, without: number, covered: number)
 export function hazardCarry(state: BattleState, key: FighterKey, move: Move): number {
   const oppSide = sideOf(state, opponentKey(key));
   const before = oppSide.hazards;
-  const after = { ...before };
-  switch (move.setsHazard) {
-    case "stealthRock":
-      after.stealthRock = true;
-      break;
-    case "spikes":
-      after.spikesLayers = Math.min(3, before.spikesLayers + 1);
-      break;
-    case "toxicSpikes":
-      after.toxicSpikesLayers = Math.min(2, before.toxicSpikesLayers + 1);
-      break;
-    case "stickyWeb":
-      after.stickyWeb = true;
-      break;
-    default:
-      return 0;
-  }
+  const after = hazardsAfter(before, move);
+  if (!after) return 0;
   let total = 0;
   oppSide.party.forEach((f, i) => {
     if (i === oppSide.activeIndex || isFainted(f)) return;

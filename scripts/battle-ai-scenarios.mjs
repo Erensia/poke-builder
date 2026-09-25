@@ -507,6 +507,78 @@ try {
       check("총대장 AI: 대기 포켓몬도 기절 수 반영(처치 타수 감소)", h1 < h0, `기절0=${h0.toFixed(3)} 기절1=${h1.toFixed(3)}`);
     }
   }
+  // ── 파티 단위 평가 ②(§4-5): 효과를 대면표에 남기기·지속 턴·설치기·방어류 뒤 이어짐 ──
+  {
+    const pe = await server.ssrLoadModule("/src/lib/battle/ai/partyEval.ts");
+    const fx = await server.ssrLoadModule("/src/lib/battle/ai/statusMoveEffects.ts");
+    const P = dec.DEFAULT_DECISION_PARAMS;
+    const CHAIN = { lambda: P.partyCountWeight, noise: P.partyDuelNoise };
+    const threeVsThree = () =>
+      battle(
+        [mon("메타그로스", ["리플렉터", "코멧펀치", "칼춤"], null, null, pts({ atk: 32, hp: 32 })), mon("핫삼", ["불꽃펀치"]), mon("팬텀", ["섀도볼"])],
+        [mon("한카리아스", ["역린", "지진"], null, null, pts({ atk: 32, spe: 32 })), mon("갸라도스", ["폭포오르기"].filter((m) => data.getMove(m))), mon("잠만보", ["누르기"])],
+      );
+    // 지속 턴 효과: 남은 턴 0이면 효과 없음과 같고, ∞면 대면표를 효과 것으로 바꾼 것과 같다(섞는 식의 양 끝)
+    {
+      const st = threeVsThree();
+      const option = ev.evaluateOptions(st, "a").find((o) => o.move?.id === "리플렉터");
+      const eff = option.support.effect.party;
+      const inputs = [3, 4, 0.5, 1, 1, 1];
+      const none = pe.partyRaceValue(option.party, inputs, CHAIN);
+      const zero = pe.partyRaceValue({ ...option.party, effect: { model: eff.model, turns: 0 } }, inputs, CHAIN);
+      const inf = pe.partyRaceValue({ ...option.party, effect: { model: eff.model, turns: Infinity } }, inputs, CHAIN);
+      const swapped = pe.partyRaceValue({ ...option.party, model: eff.model }, inputs, CHAIN);
+      const five = pe.partyRaceValue({ ...option.party, effect: { model: eff.model, turns: 5 } }, inputs, CHAIN);
+      check(
+        "파티②: 지속 턴 효과 — 0턴 = 효과 없음, ∞턴 = 효과 대면표, 벽 5턴은 그 사이 이상",
+        Math.abs(zero - none) < 1e-9 && Math.abs(inf - swapped) < 1e-9 && five >= none - 1e-9 && eff.turns > 0 && eff.turns < 6,
+        `없음=${none.toFixed(3)} 0턴=${zero.toFixed(3)} 5턴=${five.toFixed(3)} ∞=${inf.toFixed(3)} 옵션 턴=${eff.turns}`,
+      );
+    }
+    // 랭크업: 이어지는 대면도 올린 랭크로(효과 대면표 = 랭크업 state)
+    {
+      const st = threeVsThree();
+      const option = ev.evaluateOptions(st, "a").find((o) => o.move?.id === "칼춤");
+      const on = { ...P, partyEffects: true };
+      const withParty = dec.scoreOption(option, 0.5, on);
+      const withoutParty = dec.scoreOption({ ...option, support: { ...option.support, effect: { ...option.support.effect, party: undefined } } }, 0.5, on);
+      const boostedPair = option.support.effect.party.model.pair(0, true, 1);
+      const basePair = option.party.model.pair(0, true, 1);
+      check("파티②: 랭크업 → 이어지는 대면도 올린 랭크", boostedPair.myRate > basePair.myRate && withParty > withoutParty, `rate ${basePair.myRate.toFixed(3)}→${boostedPair.myRate.toFixed(3)} 점수 ${withoutParty.toFixed(3)}→${withParty.toFixed(3)}`);
+    }
+    // 독압정: 상대 대기 포켓몬은 독 상태로 대면(접지·비면역), 스텔스록: 상대 등장 비용 증가
+    {
+      const st = battle(
+        [mon("팬텀", ["독압정", "스텔스록", "섀도볼"])],
+        [mon("핫삼", ["불꽃펀치"]), mon("잠만보", ["누르기"]), mon("리자몽", ["화염방사"])],
+      );
+      const opts = ev.evaluateOptions(st, "a");
+      const tspikes = opts.find((o) => o.move?.id === "독압정").support.effect;
+      const rocks = opts.find((o) => o.move?.id === "스텔스록").support.effect;
+      const snorlax = tspikes.party.model.pair(0, true, 1).opponent;
+      const charizard = tspikes.party.model.pair(0, true, 2).opponent;
+      const rockEntry = rocks.party.model.oppEntry[2];
+      check(
+        "파티②: 독압정 → 접지 대기 포켓몬 독(비행 제외), 스텔스록 → 등장 비용, 이월 항 0",
+        snorlax.status.condition === "poison" && !charizard.status.condition && rockEntry > 0.2 && tspikes.partyCarry === 0 && rocks.partyCarry === 0,
+        `잠만보=${snorlax.status.condition} 리자몽=${charizard.status.condition} 록(리자몽)=${rockEntry.toFixed(3)}`,
+      );
+    }
+    // 방어류 뒤: 한 턴 뒤 상대 마지막 포켓몬이 쓰러졌으면 +λ, 길동무 동반 기절이면 남은 포켓몬끼리 이어서
+    {
+      const before = battle([mon("팬텀", ["길동무"]), mon("헬가", ["악의파동"], null, null, pts({ spa: 32, spe: 32 }))], [mon("잠만보", ["누르기"]), mon("팬텀", ["섀도볼"], null, null, pts())]);
+      const lastOnly = battle([mon("팬텀", ["방어"])], [mon("핫삼", ["불꽃펀치"])]);
+      const lastDown = battle([mon("팬텀", ["방어"])], [mon("핫삼", ["불꽃펀치"])]);
+      lastDown.b.currentHp = 0;
+      const v1 = pe.partyValueAfterTurn(pe.createPartyModel(lastDown, "a"), pe.createPartyModel(lastOnly, "a"), CHAIN);
+      const both = battle([mon("팬텀", ["길동무"]), mon("헬가", ["악의파동"], null, null, pts({ spa: 32, spe: 32 }))], [mon("잠만보", ["누르기"]), mon("팬텀", ["섀도볼"], null, null, pts())]);
+      both.a.currentHp = 0;
+      both.b.currentHp = 0;
+      const v2 = pe.partyValueAfterTurn(pe.createPartyModel(both, "a"), pe.createPartyModel(before, "a"), CHAIN);
+      check("파티②: 한 턴 뒤 상대 마지막 기절 → +λ, 동반 기절 뒤 유리한 대기 포켓몬 → 양수", Math.abs(v1 - CHAIN.lambda) < 1e-9 && v2 > 0, `마지막=${v1.toFixed(3)} 동반=${v2.toFixed(3)}`);
+    }
+    check("파티②: 설치기 헬퍼", fx.hazardsAfter({ stealthRock: false, spikesLayers: 2, toxicSpikesLayers: 1, stickyWeb: false }, data.getMove("독압정")).toxicSpikesLayers === 2);
+  }
   // ── 매치업 난수별 데미지(ver.1.7 트랙 H): 기존 격파 판정과 같은 관계식인지 대조 ──
   {
     const bp = await server.ssrLoadModule("/src/lib/battlePower.ts");
