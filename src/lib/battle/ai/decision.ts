@@ -89,6 +89,8 @@ export interface DecisionParams {
   oppSwitchMargin: number;
   /** 이어지는 대면 한 번의 계산 안에서 상대가 자발적으로 교체하는 최대 횟수 */
   oppSwitchLimit: number;
+  /** 교체 갈래를 섞는 비율(1 = 상대가 항상 최선으로 교체) */
+  oppSwitchWeight: number;
 }
 
 /**
@@ -127,6 +129,7 @@ export const DEFAULT_DECISION_PARAMS: DecisionParams = {
   oppSwitchAware: true,
   oppSwitchMargin: 0.1,
   oppSwitchLimit: 1,
+  oppSwitchWeight: 1,
 };
 
 export interface ScoredOption {
@@ -204,7 +207,7 @@ function chainParams(params: DecisionParams): ChainParams {
   return {
     lambda: params.partyCountWeight,
     noise: params.partyDuelNoise,
-    oppSwitch: params.oppSwitchAware ? { margin: params.oppSwitchMargin, limit: params.oppSwitchLimit } : undefined,
+    oppSwitch: params.oppSwitchAware ? { margin: params.oppSwitchMargin, limit: params.oppSwitchLimit, weight: params.oppSwitchWeight } : undefined,
   };
 }
 

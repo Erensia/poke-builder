@@ -289,10 +289,14 @@ interface ChainPosition {
   oppPerish: number;
 }
 
-/** 상대 자발적 교체(로드맵 3): 교체 쪽이 margin 이상 나을 때만, 한 계산 안에서 limit번까지 */
+/**
+ * 상대 자발적 교체(로드맵 3): 교체 쪽이 margin 이상 나을 때만, 한 계산 안에서 limit번까지. weight = 교체 갈래를 섞는
+ * 비율(1이면 상대가 항상 최선으로 교체, 0.5면 반반 — 상대가 늘 최선을 두지는 않는다는 완화)
+ */
 export interface OppSwitchParams {
   margin: number;
   limit: number;
+  weight: number;
 }
 
 export interface ChainParams {
@@ -323,7 +327,7 @@ function memoOf(ctx: ChainContext): Map<string, number> {
 
 function positionKey(ctx: ChainContext, pos: ChainPosition): string {
   const turns = (x: number) => (x === Infinity ? "i" : Math.round(x * 100));
-  const sw = ctx.oppSwitch ? `${ctx.oppSwitch.margin}/${ctx.oppSwitch.limit}` : "-";
+  const sw = ctx.oppSwitch ? `${ctx.oppSwitch.margin}/${ctx.oppSwitch.limit}/${ctx.oppSwitch.weight}` : "-";
   return (
     `${ctx.lambda}:${ctx.noise}:${sw}:${turns(pos.effectLeft)}|${pos.mi},${pos.oi},${pos.myStaged ? 1 : 0}${pos.oppStaged ? 1 : 0},` +
     `${pos.oppSwitches}|${turns(pos.myPerish)},${turns(pos.oppPerish)}|${pos.my.map(round).join(",")}|${pos.opp.map(round).join(",")}`
@@ -506,7 +510,10 @@ function oppSwitchValue(ctx: ChainContext, pos: ChainPosition, j: number): numbe
   return next.opp[j] <= 0 ? afterDuel(ctx, next) : duel(ctx, next);
 }
 
-/** stay(그대로 싸운 값)와 상대가 대기 포켓몬으로 교체한 값들 중 상대에게 나은 쪽 — 교체는 margin 이상 나을 때만 */
+/**
+ * stay(그대로 싸운 값)와 상대가 대기 포켓몬으로 교체한 값들 중 상대에게 나은 쪽 — 교체는 margin 이상 나을 때만,
+ * weight만큼 섞는다
+ */
 function withOppSwitch(ctx: ChainContext, pos: ChainPosition, stay: number, switchFrom: ChainPosition): number {
   const sw = ctx.oppSwitch;
   if (!sw || pos.oppSwitches >= sw.limit || oppLocked(ctx, pos)) return stay;
@@ -515,7 +522,7 @@ function withOppSwitch(ctx: ChainContext, pos: ChainPosition, stay: number, swit
     const value = oppSwitchValue(ctx, switchFrom, j);
     if (value < stay - sw.margin && value < best) best = value;
   }
-  return best;
+  return stay + sw.weight * (best - stay);
 }
 
 /** 대면표로 pos의 두 포켓몬이 대면을 치른 뒤 이어서 계산 — 대면이 시작될 때 상대는 교체할 수 있다 */
