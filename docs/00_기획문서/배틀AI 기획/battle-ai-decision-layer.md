@@ -479,6 +479,9 @@ party_race(첫 대면 c, d, p, my, opp, lost) = Σ_갈래 q × [ HP 교환 + λ 
 
 - **봉인·트집의 기술 제한**은 도발·사슬묶기와 같은 축(`allowedByVolatiles`)에 넣어 상대 기술 모델과 AI 선택지가 함께 지킨다.
 - 흉내쟁이 평가를 위해 `evaluateOptions`의 기술 옵션 계산을 `buildMoveOption(move, speedMove)`으로 분리했다(동작 무변경).
+- **결과**(`trackMAware` 켬/끔): 그리디 일반 1600판 981 / 982, STATUS=1 800판 515 / 514. h2h STATUS=1 400판 200:196 — 전부 오차 안.
+  STATUS=1 선택(켬): 흉내쟁이 76 · 자기암시 17 · 봉인 17 · 트집 9 · 파워셰어 6 · 원한 4 · 경혈찌르기 1, 아픔나누기 20 → 89.
+  끔에서도 일부가 선택되는 건 모든 옵션이 −∞일 때 첫 옵션을 고르는 기존 폴백(`chooseAction`) 때문.
 
 ## 5. 위험 회피 성향 (`risk_aversion`)
 
