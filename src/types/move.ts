@@ -656,6 +656,25 @@ export interface Move {
   raisesRandomStat?: number;
   /** 흉내쟁이(트랙 M2): 배틀에서 직전에 나온 기술(누가 썼든)을 대신 쓴다. 없거나 excludedFromCopycat이면 실패. */
   callsLastMoveInBattle?: boolean;
+  /**
+   * 내던지기(트랙 M5): 지닌 도구를 던진다 — 위력은 도구의 flingPower, 도구는 소모(리사이클로 회수 가능). 도구가 없거나
+   * 던질 수 없는 도구(메가스톤 등)·매직룸·서투름이면 실패. 맞은 상대에게 도구 효과(상태이상·풀죽음·나무열매·허브)가 발동한다.
+   */
+  flingsHeldItem?: boolean;
+  /** 일렉트릭볼(트랙 M5): 자신/상대 실효 스피드 비율로 위력(40~150) */
+  electroBallPower?: boolean;
+  /** 하드프레스(트랙 M5): 위력 = 이 값 × 상대 남은 HP 비율 */
+  targetHpRatioPower?: number;
+  /** 분노의앞니(트랙 M5): 상대 현재 HP의 절반(최소 1)만큼 고정 데미지 */
+  halvesTargetHp?: boolean;
+  /**
+   * 일격기(땅가르기·뿔드릴·가위자르기·절대영도, 트랙 M5): 맞으면 상대 현재 HP만큼 데미지. 명중 30% 고정(레벨 50 동일 가정 —
+   * 명중·회피 랭크 무시), 옹골참 무효. immuneType은 그 타입에 안 통함(절대영도 → 얼음), accuracyUnlessUserType은 사용자가
+   * 그 타입이 아니면 명중이 이 값(절대영도 → 얼음이 아니면 20).
+   */
+  oneHitKo?: { immuneType?: PokemonType; accuracyUnlessUserType?: { type: PokemonType; accuracy: number } };
+  /** 목숨걸기(트랙 M5): 자신의 현재 HP만큼 고정 데미지를 주고 기절한다(빗나가거나 면역이면 기절하지 않음) */
+  damageEqualsUserHp?: boolean;
   /** 원더룸·매직룸(트랙 M4): 5턴 동안 장 전체 효과. 이미 걸려 있으면 다시 쓸 때 해제(본가) */
   setsRoom?: "wonderRoom" | "magicRoom";
   /** 중력(트랙 M4): 5턴 동안 모두 접지·명중 ×5/3·공중 기술 사용 불가. 이미 걸려 있으면 실패 */

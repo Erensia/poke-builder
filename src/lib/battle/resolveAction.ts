@@ -2,8 +2,9 @@ import { type Move } from "@/types/move";
 import { type FieldKind } from "@/types/field";
 import { type ActionLogEntry, type FighterKey } from "@/types/battle";
 import { BATTLE_STAT_KEYS } from "@/types/battleStats";
-import { getAbility, getMove } from "@/lib/data";
+import { getAbility, getItem, getMove } from "@/lib/data";
 import { effectiveHeldItem } from "./turnOrderInputs";
+import { applyFlingEffect } from "./fling";
 import { applyStageDelta } from "@/lib/statStages";
 import { isOpponentTargetingMove } from "@/lib/fieldEffects";
 import { getHpThresholdBerryHeal } from "@/lib/itemEffects";
@@ -24,7 +25,7 @@ export function resolveAction(
   if (!("defenderKey" in pre)) return pre;
   move = pre.move;
   let {
-    defenderKey, attacker, defender, defenderHpAtActionStart, actorPokemonId, defenderPokemonId, attackerAbility, defenderAbility, attackerBerriesBlocked, defenderBerriesBlocked, attackerItemIdBeforeAction, defenderItemIdBeforeAction, leppaRestoredPpItemName, pressureExtraPpAbilityName, selfCuredStatus, sleepTalkCalledMoveName, copycatCalledMoveName, attackerItem, defenderItem, blockedByGoodAsGold, blockedBySubstitute, blockedByPowderImmunity, unseenFistPiercing, blockedByProtect, blockedByProtectMoveName, soundproofBlockedByAbilityName, bulletproofBlockedByAbilityName, opponentEffectsBlocked, bouncedByMagicMirror, shellSideArmCategory, abilityOffenseMultiplier, abilityDefenseMultiplier, stabMultiplier, typeEffectiveness, effectiveMove, sheerForceAbilityName, fickleBeamEmpowered, electromorphosisEmpoweredAbilityName, ownMoveTypeBoostMultiplier, rivalryMultiplier, changedOwnTypeTo, changedOwnTypeAbilityName, lostTypeAfterUse, gemMultiplier, ateGemItemName, hitChance, defenderHideType, evadedByCharge, hit, selfDamageOnUse, abilityAbsorbedMoveType, abilityAbsorbAbilityName, abilityAbsorbHealAmount, protectContactPenaltyMoveName, protectContactDamage, protectContactInflictedStatus,
+    defenderKey, attacker, defender, defenderHpAtActionStart, actorPokemonId, defenderPokemonId, attackerAbility, defenderAbility, attackerBerriesBlocked, defenderBerriesBlocked, attackerItemIdBeforeAction, defenderItemIdBeforeAction, leppaRestoredPpItemName, pressureExtraPpAbilityName, selfCuredStatus, sleepTalkCalledMoveName, copycatCalledMoveName, ohkoBlockedByAbilityName, ohkoImmune, flungItemId, attackerItem, defenderItem, blockedByGoodAsGold, blockedBySubstitute, blockedByPowderImmunity, unseenFistPiercing, blockedByProtect, blockedByProtectMoveName, soundproofBlockedByAbilityName, bulletproofBlockedByAbilityName, opponentEffectsBlocked, bouncedByMagicMirror, shellSideArmCategory, abilityOffenseMultiplier, abilityDefenseMultiplier, stabMultiplier, typeEffectiveness, effectiveMove, sheerForceAbilityName, fickleBeamEmpowered, electromorphosisEmpoweredAbilityName, ownMoveTypeBoostMultiplier, rivalryMultiplier, changedOwnTypeTo, changedOwnTypeAbilityName, lostTypeAfterUse, gemMultiplier, ateGemItemName, hitChance, defenderHideType, evadedByCharge, hit, selfDamageOnUse, abilityAbsorbedMoveType, abilityAbsorbAbilityName, abilityAbsorbHealAmount, protectContactPenaltyMoveName, protectContactDamage, protectContactInflictedStatus,
   } = pre;
 
   let {
@@ -43,6 +44,13 @@ export function resolveAction(
     bouncedMoveName, bouncedByAbilityName, secondaryBlockedByAbilityName, berryEatFailed, stuffCheeksBerryHeal, stuffCheeksBerryName, costHpFailed, soulBeatHpCost, selfStatRises, selfStatsAtMax, selfStatDrops, reflectedStatDropAbilityName, reflectedStatDrops, restoredStatsSelfItemName, restoredStatsOpponentItemName, opportunistCopiedStats, opportunistAbilityName, opponentStatDrops, invertedTargetStages, addedTypeToTarget, overwroteTargetType, targetMoveTypeOverride, inflictedStatus, statusInflictFailed, beakBlastBurnedAttacker, curedStatus, curedStatusTarget, inflictedVolatile, tidyUpDone, courtChangeDone, revivedPartyName, reviveFailed, saltCureApplied, balloonPoppedItemName, octolockApplied, jawLockApplied, selfWokeBeforeMove, restSlept, healedAmount, healedTarget, averagedDefensesMoveName, swappedSpeedMoveName, transformedIntoName, transformFailed, regenSetFailed, leechSeedSetFailed, leechSeedBlockedByGrass, abilitySwappedTargetToName, abilitySwapFailed, substituteSetFailed, shedTailFailed, shedTailSucceeded, setDisabledMoveName, disableSetFailed, setEncoreMoveName, encoreSetFailed, swappedStatsMoveName, swappedStagesMoveName, protectSucceeded, protectFailed, protectStanceEntered, fieldSetFailed, stealthRockSetForSide, spikesSetForSide, toxicSpikesSetForSide, stickyWebSetForSide, hazardSetFailed, swappedItems, itemSwapFailed, painSplitHp, stockpileHealFailed, recycledItemName, recycleFailed, copiedStagesFromName, averagedAttacksMoveName, spitePp, spiteFailed, acupressureRaised, acupressureFailed, volatileBlockedByAbility, abilityChange, abilityChangeFailed, copiedTypes, smackedDownTarget,
   } = mirrorResult;
   ({ defenderAbility, attacker, defender, attackerAbility, attackerItem, defenderItem, abilityInflictedStatusOnAttacker, abilityInflictedStatusAbilityName, statusCureBerryItemName, mentalMoveBlockedByAbilityName } = mirrorResult);
+
+  // 내던지기(트랙 M5): 던진 도구의 효과를 맞은 상대에게 — 데미지를 주고 대타가 아니며 상대가 버텼을 때만
+  const flungItem = flungItemId ? getItem(flungItemId) : undefined;
+  const flingEffect =
+    flungItem && hit && damage > 0 && !hitSubstitute && !isFainted(defender)
+      ? applyFlingEffect(state, actorKey, defender, defenderAbility, flungItem, !movesSecond)
+      : undefined;
 
   // 멸망의노래(setsPerishSong, F-4): 장에 있는 양쪽에게 멸망 카운트 3을 건다. 방어·대타·황금몸을
   // 무시하므로 opponentEffectsBlocked로 게이팅하지 않는다. 방음(blocksSound) 특성이나 발동 시점에
@@ -503,6 +511,10 @@ export function resolveAction(
     unburdenOpponentAbilityName,
     sleepTalkCalledMoveName,
     copycatCalledMoveName,
+    ohkoBlockedByAbilityName,
+    flungItemName: flungItem?.name,
+    flingEffect,
+    ohkoImmune: ohkoImmune || undefined,
     changedOwnTypeTo,
     changedOwnTypeAbilityName,
     ateGemItemName,

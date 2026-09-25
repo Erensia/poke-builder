@@ -115,6 +115,12 @@ export interface Item {
    * 지닌 방어측 스스로 자기 면역을 없앤다는 점만 다르다. 반감/2배 관계는 그대로 존중(면역만 무시).
    */
   groundsHolder?: boolean;
+  /** 내던지기(트랙 M5)로 던질 때의 위력. 없으면 던질 수 없다(메가스톤·주얼 등) */
+  flingPower?: number;
+  /** 내던지기로 맞은 상대에게 거는 상태이상(전기구슬 → 마비, 독바늘 → 독) */
+  flingStatus?: StatusCondition;
+  /** 내던지기로 맞은 상대를 풀죽게 한다(왕의징표석) */
+  flingFlinches?: boolean;
   /**
    * 구애스카프: 대전 중 처음 실제로 사용한 기술로 이후 계속 고정된다. 판정 엔진(battleSimulator)이
    * 아니라 BattleLogPage의 턴 진행 버튼이 UI 단에서 막는 방식으로 구현되어 있어, 이 필드는

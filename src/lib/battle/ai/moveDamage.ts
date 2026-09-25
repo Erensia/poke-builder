@@ -135,14 +135,39 @@ export function estimateMoveHits(ctx: MoveHitContext, move: Move): MoveHitEstima
       attackerMovesSecond,
     }) ?? 1;
 
+  // 일격기(트랙 M5): 맞으면 한 번에 쓰러뜨린다(옹골참·면역 타입이면 안 통함). 기합의띠류는 applySurvivalGuard가 본다.
+  if (move.oneHitKo) {
+    if (defenderAbility?.immuneToOhko || (move.oneHitKo.immuneType && defenderTypes.includes(move.oneHitKo.immuneType))) {
+      return { ...NO_DAMAGE, accuracy: 0, typeEffectiveness: 0 };
+    }
+    const estimate: HitsEstimate = {
+      expected: 1 / Math.max(accuracy, 1e-9),
+      worstCase: { count: 1, certainty: "random", probability: accuracy },
+    };
+    const damageFraction = defender.maxHp > 0 ? (defenderHp / defender.maxHp) * accuracy : 0;
+    return applySurvivalGuard({ ...estimate, rawHits: 1, accuracy, typeEffectiveness, damageFraction }, defender, defenderAbility, defenderItem, defenderHp);
+  }
+
+  // 분노의앞니(상대 HP 절반 — 혼자서는 못 쓰러뜨림)·목숨걸기(내 HP만큼)도 고정 데미지(트랙 M5)
+  const fixedDamage = move.halvesTargetHp
+    ? Math.max(1, Math.floor(defenderHp / 2))
+    : move.damageEqualsUserHp
+      ? attacker.currentHp
+      : move.fixedDamage;
+  if (move.halvesTargetHp) {
+    const damageFraction = defender.maxHp > 0 ? ((fixedDamage ?? 0) / defender.maxHp) * accuracy : 0;
+    const estimate: HitsEstimate = { expected: defenderHp <= 1 ? 1 / Math.max(accuracy, 1e-9) : Infinity, worstCase: { count: 3, certainty: "random", probability: 0 } };
+    return { ...estimate, rawHits: defenderHp <= 1 ? 1 : Infinity, accuracy, typeEffectiveness, damageFraction };
+  }
+
   // 지구던지기류: 상성 면역만 존중하는 고정 데미지
-  if (move.fixedDamage !== undefined) {
-    const hits = Math.ceil(defenderHp / move.fixedDamage);
+  if (fixedDamage !== undefined) {
+    const hits = Math.ceil(defenderHp / fixedDamage);
     const estimate: HitsEstimate = {
       expected: hits / Math.max(accuracy, 1e-9),
       worstCase: { count: Math.min(hits, 3), certainty: "guaranteed", probability: hits <= 2 ? 1 : 0 },
     };
-    const damageFraction = defender.maxHp > 0 ? (move.fixedDamage / defender.maxHp) * accuracy : 0;
+    const damageFraction = defender.maxHp > 0 ? (fixedDamage / defender.maxHp) * accuracy : 0;
     return applySurvivalGuard({ ...estimate, rawHits: hits, accuracy, typeEffectiveness, damageFraction }, defender, defenderAbility, defenderItem, defenderHp);
   }
 
@@ -178,6 +203,7 @@ export function estimateMoveHits(ctx: MoveHitContext, move: Move): MoveHitEstima
     stockpileCount: attacker.stockpileCount ?? 0,
     attackerHpFraction: attacker.currentHp / attacker.maxHp,
     defenderHpIsFull: defenderHp === defender.maxHp,
+    defenderHpFraction: defender.maxHp > 0 ? defenderHp / defender.maxHp : 1,
     defenderHasStatusCondition: !!defender.status.condition,
     defenderItemConsumed: !!defender.itemConsumed,
     attackerRuntime: runtimeOf(attacker, ctx.attackerTypes, state),

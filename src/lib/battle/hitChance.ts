@@ -58,5 +58,12 @@ export function computeBattleHitChance(input: BattleHitChanceInput): number | nu
       : defender.accuracyStages.evasion;
   const minimizeBonusActive = !!(move.bonusVsMinimize && defender.usedMoveIds?.["작아지기"]);
   if (attackerAbility?.alwaysHits || defenderAbility?.alwaysHits || minimizeBonusActive) return null;
+  // 일격기(트랙 M5): 명중 30% 고정(레벨 50 동일 가정) — 명중·회피 랭크와 명중 보정을 받지 않는다. 절대영도는 얼음 타입이
+  // 아닌 사용자면 20%.
+  if (move.oneHitKo) {
+    const reduced = move.oneHitKo.accuracyUnlessUserType;
+    const accuracy = reduced && !attacker.types.includes(reduced.type) ? reduced.accuracy : (move.accuracy ?? 30);
+    return accuracy / 100;
+  }
   return computeHitChance(move.accuracy, attacker.accuracyStages.accuracy, effectiveDefenderEvasion, accuracyExtraMultiplier);
 }

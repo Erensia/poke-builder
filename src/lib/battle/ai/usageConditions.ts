@@ -1,5 +1,6 @@
 import { type Move } from "@/types/move";
 import { abilityOf, activeWeather, type BattleFighterState, type BattleState } from "../state";
+import { effectiveHeldItem } from "../turnOrderInputs";
 
 /**
  * 이번 턴 이 기술이 사용 조건 때문에 실패하는지 — 실전 엔진 preHitEffects 섹션 0의 게이트를 결정 시점 정보로
@@ -9,6 +10,8 @@ import { abilityOf, activeWeather, type BattleFighterState, type BattleState } f
 export function isUsageBlocked(state: BattleState, fighter: BattleFighterState, move: Move, opponent: BattleFighterState): boolean {
   // 중력(트랙 M4) 중엔 공중으로 뛰어오르는 기술을 못 쓴다
   if (move.blockedByGravity && state.gravityTurnsRemaining !== undefined) return true;
+  // 내던지기(트랙 M5): 던질 수 있는 도구(서투름·매직룸 제외)가 없으면 실패
+  if (move.flingsHeldItem && !effectiveHeldItem(fighter, state)?.flingPower) return true;
   switch (move.usageCondition) {
     case "first-turn-only":
       if (fighter.hasActedSinceSwitchIn) return true;

@@ -1194,6 +1194,91 @@ try {
       );
     }
   }
+  // ── 트랙 M5(ver.1.8): 데미지 로직이 없던 데미지 기술 ──
+  {
+    const rt = await server.ssrLoadModule("/src/lib/battle/runTurn.ts");
+    const act = (id) => ({ kind: "move", move: data.getMove(id) });
+    const run = (st, a, b, r = 0.3) => rt.runTurn(st, act(a), act(b), () => r);
+    const actionOf = (out, key) => out.result.actions.find((x) => x.actor === key);
+    // 일렉트릭볼(빠를수록 강함)·하드프레스(상대 HP 많을수록 강함)·분노의앞니(상대 HP 절반)
+    {
+      const fast = actionOf(run(battle([mon("로토무", ["일렉트릭볼"])], [mon("잠만보", ["칼춤"])]), "일렉트릭볼", "칼춤"), "a").damage;
+      const slowSt = battle([mon("로토무", ["일렉트릭볼"])], [mon("잠만보", ["칼춤"])]);
+      slowSt.a.stages = { ...slowSt.a.stages, spe: -6 };
+      const slow = actionOf(run(slowSt, "일렉트릭볼", "칼춤"), "a").damage;
+      const full = actionOf(run(battle([mon("메타그로스", ["하드프레스"])], [mon("잠만보", ["칼춤"])]), "하드프레스", "칼춤"), "a").damage;
+      const halfSt = battle([mon("메타그로스", ["하드프레스"])], [mon("잠만보", ["칼춤"])]);
+      halfSt.b.currentHp = Math.floor(halfSt.b.maxHp / 4);
+      const quarter = actionOf(run(halfSt, "하드프레스", "칼춤"), "a").damage;
+      const fangSt = battle([mon("메타그로스", ["분노의앞니"])], [mon("잠만보", ["칼춤"])]);
+      const fang = run(fangSt, "분노의앞니", "칼춤").nextState.b.currentHp;
+      check(
+        "M5: 일렉트릭볼·하드프레스 가변 위력 · 분노의앞니 HP 절반",
+        fast > slow && slow > 0 && full > quarter && quarter > 0 && fang === fangSt.b.maxHp - Math.floor(fangSt.b.maxHp / 2),
+        `일렉트릭볼 ${fast}/${slow} 하드프레스 ${full}/${quarter} 앞니 남은=${fang}`,
+      );
+    }
+    // 일격기: 명중하면 기절(명중 30%, 랭크 무시) · 옹골참 무효 · 절대영도는 얼음 무효·비얼음 사용자 20%
+    {
+      const hit = run(battle([mon("한카리아스", ["땅가르기"])], [mon("잠만보", ["칼춤"])]), "땅가르기", "칼춤", 0.29);
+      const missSt = battle([mon("한카리아스", ["땅가르기"])], [mon("잠만보", ["칼춤"])]);
+      missSt.a.accuracyStages = { ...missSt.a.accuracyStages, accuracy: 6 };
+      const miss = actionOf(run(missSt, "땅가르기", "칼춤", 0.31), "a");
+      const sturdy = actionOf(run(battle([mon("한카리아스", ["땅가르기"])], [mon("잠만보", ["칼춤"], "옹골참")]), "땅가르기", "칼춤", 0.1), "a");
+      const iceImmune = actionOf(run(battle([mon("로토무", ["절대영도"])], [mon("알로라나인테일", ["칼춤"])]), "절대영도", "칼춤", 0.1), "a");
+      const nonIce = actionOf(run(battle([mon("로토무", ["절대영도"])], [mon("잠만보", ["칼춤"])]), "절대영도", "칼춤", 0.25), "a");
+      check(
+        "M5: 일격기 — 30%·랭크 무시·옹골참 무효 · 절대영도 20%(비얼음 사용자)",
+        hit.nextState.b.currentHp === 0 && !miss.hit && sturdy?.ohkoBlockedByAbilityName === "옹골참" && nonIce.hit === false && iceImmune?.ohkoImmune === true && iceImmune.damage === 0,
+        `기절=${hit.nextState.b.currentHp === 0} 명중+6 빗나감=${!miss.hit} 옹골참=${sturdy?.ohkoBlockedByAbilityName} 비얼음 0.25=${nonIce.hit} 얼음상대=${iceImmune.damage}`,
+      );
+    }
+    // 목숨걸기: 내 HP만큼 주고 기절 · 면역(고스트)이면 기절 안 함 · AI는 희생 평가(파티 모드)
+    {
+      const st = battle([mon("로토무", ["목숨걸기"])], [mon("잠만보", ["칼춤"])]);
+      const myHp = st.a.currentHp;
+      const out = run(st, "목숨걸기", "칼춤").nextState;
+      const ghost = run(battle([mon("로토무", ["목숨걸기"])], [mon("팬텀", ["칼춤"])]), "목숨걸기", "칼춤").nextState;
+      const o = opt(ev.evaluateOptions(battle([mon("로토무", ["목숨걸기", "10만볼트"]), mon("메타그로스", ["코멧펀치"])], [mon("잠만보", ["누르기"])]), "a"), "목숨걸기");
+      check(
+        "M5: 목숨걸기 — 내 HP만큼·기절 · 고스트 면역이면 기절 안 함 · AI 희생 평가",
+        out.a.currentHp === 0 && out.b.maxHp - out.b.currentHp === myHp && ghost.a.currentHp > 0 &&
+          o.support?.effect?.kind === "finalGambit" && !!o.support.effect.sacrifice && Number.isFinite(dec.scoreOption(o, 0.5)),
+        `데미지=${out.b.maxHp - out.b.currentHp}/${myHp} 고스트 뒤 내 HP=${ghost.a.currentHp} 점수=${dec.scoreOption(o, 0.5).toFixed(3)}`,
+      );
+    }
+  }
+  // ── 트랙 M5: 내던지기(도구 위력·소모·도구 효과) + 자폭류 AI 희생 평가 ──
+  {
+    const rt = await server.ssrLoadModule("/src/lib/battle/runTurn.ts");
+    const act = (id) => ({ kind: "move", move: data.getMove(id) });
+    const run = (st, a, b) => rt.runTurn(st, act(a), act(b), () => 0.3);
+    const actionOf = (out, key) => out.result.actions.find((x) => x.actor === key);
+    {
+      const ball = battle([mon("메타그로스", ["내던지기"], null, "검은철구")], [mon("잠만보", ["칼춤"], null, null, pts({ hp: 32 }))]);
+      const b1 = run(ball, "내던지기", "칼춤");
+      const orb = run(battle([mon("메타그로스", ["내던지기"], null, "전기구슬")], [mon("잠만보", ["칼춤"], null, null, pts({ hp: 32 }))]), "내던지기", "칼춤");
+      const berrySt = battle([mon("메타그로스", ["내던지기"], null, "오랭열매")], [mon("잠만보", ["칼춤"], null, null, pts({ hp: 32 }))]);
+      berrySt.b.currentHp = 100;
+      const berry = actionOf(run(berrySt, "내던지기", "칼춤"), "a");
+      const none = actionOf(run(battle([mon("메타그로스", ["내던지기"])], [mon("잠만보", ["칼춤"])]), "내던지기", "칼춤"), "a");
+      check(
+        "M5: 내던지기 — 도구 위력·소모(리사이클 가능)·전기구슬 마비·열매는 상대가 먹음·도구 없으면 실패",
+        actionOf(b1, "a").damage > 0 && b1.nextState.a.currentItemId === null && b1.nextState.a.lastConsumedItemId === "검은철구" &&
+          orb.nextState.b.status.condition === "paralysis" && (berry?.flingEffect?.berry?.healed ?? 0) > 0 && none?.blockedReason === "usageCondition",
+        `철구 데미지=${actionOf(b1, "a").damage} 마비=${orb.nextState.b.status.condition} 열매 회복=${berry?.flingEffect?.berry?.healed} 무도구=${none?.blockedReason}`,
+      );
+    }
+    {
+      const o = opt(ev.evaluateOptions(battle([mon("메타그로스", ["대폭발", "코멧펀치"]), mon("잠만보", ["누르기"])], [mon("블래키", ["깨물어부수기"])]), "a"), "대폭발");
+      const off = dec.scoreOption(o, 0.5, { ...dec.DEFAULT_DECISION_PARAMS, trackMAware: false });
+      check(
+        "M5 AI: 자폭류(대폭발) — 자신 기절을 반영한 희생 평가",
+        o.support?.effect?.kind === "selfDestruct" && !!o.support.effect.sacrifice && Number.isFinite(dec.scoreOption(o, 0.5)) && off === -Infinity,
+        `점수=${dec.scoreOption(o, 0.5).toFixed(3)} 성공=${o.support?.effect?.sacrifice?.success}`,
+      );
+    }
+  }
   // ── 매치업 난수별 데미지(ver.1.7 트랙 H): 기존 격파 판정과 같은 관계식인지 대조 ──
   {
     const bp = await server.ssrLoadModule("/src/lib/battlePower.ts");

@@ -1459,6 +1459,7 @@
   },
   {
     "id": "내던지기",
+    "flingsHeldItem": true,
     "name": "내던지기",
     "type": "악",
     "category": "physical",
@@ -1571,6 +1572,7 @@
   },
   {
     "id": "목숨걸기",
+    "damageEqualsUserHp": true,
     "name": "목숨걸기",
     "type": "격투",
     "category": "special",
@@ -1584,7 +1586,7 @@
       "자기희생",
       "비접촉"
     ],
-    "makesContact": true
+    "makesContact": false
   },
   {
     "id": "물기",
@@ -3043,6 +3045,7 @@
   },
   {
     "id": "하드프레스",
+    "targetHpRatioPower": 100,
     "name": "하드프레스",
     "type": "강철",
     "category": "physical",
@@ -7010,6 +7013,7 @@
   },
   {
     "id": "일렉트릭볼",
+    "electroBallPower": true,
     "name": "일렉트릭볼",
     "type": "전기",
     "category": "special",
@@ -7416,6 +7420,7 @@
   },
   {
     "id": "분노의앞니",
+    "halvesTargetHp": true,
     "name": "분노의앞니",
     "type": "노말",
     "category": "physical",
@@ -7449,6 +7454,7 @@
   },
   {
     "id": "땅가르기",
+    "oneHitKo": {},
     "name": "땅가르기",
     "type": "땅",
     "category": "physical",
@@ -7504,6 +7510,7 @@
   },
   {
     "id": "뿔드릴",
+    "oneHitKo": {},
     "name": "뿔드릴",
     "type": "노말",
     "category": "physical",
@@ -8215,6 +8222,7 @@
   },
   {
     "id": "가위자르기",
+    "oneHitKo": {},
     "name": "가위자르기",
     "type": "노말",
     "category": "physical",
@@ -8222,7 +8230,7 @@
     "accuracy": 30,
     "pp": 5,
     "priority": 0,
-    "effect": "거대한 집게발이나 낫 등으로 협공하여 상대를 일격에 쓰러뜨리려 한다. 명중하면 상대는 한 번에 쓰러진다. (일격필살 판정은 아직 엔진에 반영되지 않음)",
+    "effect": "거대한 집게발이나 낫 등으로 협공하여 상대를 일격에 쓰러뜨리려 한다. 명중하면 상대는 한 번에 쓰러진다.",
     "tags": [
       "일격",
       "접촉"
@@ -8753,6 +8761,7 @@
   },
   {
     "id": "절대영도",
+    "oneHitKo": { "immuneType": "얼음", "accuracyUnlessUserType": { "type": "얼음", "accuracy": 20 } },
     "name": "절대영도",
     "type": "얼음",
     "category": "special",
@@ -8760,7 +8769,7 @@
     "accuracy": 30,
     "pp": 8,
     "priority": 0,
-    "effect": "절대영도의 추위로 상대를 공격한다. 맞으면 일격에 기절한다. 아직 엔진에 일격필살 판정이 없어 명중해도 데미지가 들어가지 않는다.",
+    "effect": "절대영도의 추위로 상대를 공격한다. 맞으면 일격에 기절한다.",
     "tags": [
       "일격",
       "비접촉"

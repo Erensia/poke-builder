@@ -15,7 +15,7 @@ import { computeRealStats } from "@/lib/statCalculator";
 import { computeStatusSpeedMultiplier } from "@/lib/statusConditions";
 import { CONFUSION_SELF_HIT_POWER, hasVolatile } from "@/lib/volatileConditions";
 import { getEffectiveness } from "@/lib/typeEffectiveness";
-import { gyroBallPowerFromSpeeds, rankStageMultiplier } from "@/lib/battlePower";
+import { electroBallPowerFromSpeeds, gyroBallPowerFromSpeeds, rankStageMultiplier } from "@/lib/battlePower";
 import { FIELD_DURATION, FIELD_ENTRY_ANNOUNCEMENT } from "@/lib/fieldEffects";
 import { getItemSpeedMultiplier } from "@/lib/itemEffects";
 import { type BaseStats } from "@/types/stats";
@@ -610,12 +610,22 @@ export function gyroBallPowerValue(
   attackerItem: Parameters<typeof getItemSpeedMultiplier>[0],
   defenderItem: Parameters<typeof getItemSpeedMultiplier>[0],
 ): number {
-  const effSpeed = (f: BattleFighterState, item: Parameters<typeof getItemSpeedMultiplier>[0]) =>
-    f.realStats.spe *
-    rankStageMultiplier(f.stages.spe) *
-    computeStatusSpeedMultiplier(f.status.condition) *
-    getItemSpeedMultiplier(item);
-  return gyroBallPowerFromSpeeds(effSpeed(attacker, attackerItem), effSpeed(defender, defenderItem));
+  return gyroBallPowerFromSpeeds(powerSpeedOf(attacker, attackerItem), powerSpeedOf(defender, defenderItem));
+}
+
+/** 일렉트릭볼(트랙 M5): 자이로볼과 같은 실효 스피드로 본가 비율표 위력 */
+export function electroBallPowerValue(
+  attacker: BattleFighterState,
+  defender: BattleFighterState,
+  attackerItem: Parameters<typeof getItemSpeedMultiplier>[0],
+  defenderItem: Parameters<typeof getItemSpeedMultiplier>[0],
+): number {
+  return electroBallPowerFromSpeeds(powerSpeedOf(attacker, attackerItem), powerSpeedOf(defender, defenderItem));
+}
+
+/** 스피드 비교 위력 기술(자이로볼·일렉트릭볼)의 실효 스피드 — 실능 × 스피드 랭크 × 마비 × 도구 */
+function powerSpeedOf(f: BattleFighterState, item: Parameters<typeof getItemSpeedMultiplier>[0]): number {
+  return f.realStats.spe * rankStageMultiplier(f.stages.spe) * computeStatusSpeedMultiplier(f.status.condition) * getItemSpeedMultiplier(item);
 }
 
 export function hasSheerForceSecondaryEffect(move: Move): boolean {

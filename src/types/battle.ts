@@ -65,6 +65,18 @@ export interface HitAbilityEvent {
   setFieldOnHit?: FieldKind;
 }
 
+/** 내던지기(트랙 M5)로 맞은 상대에게 일어난 도구 효과 — 로그용 */
+export interface FlingEffectResult {
+  /** 걸린 상태이상(전기구슬 → 마비, 독바늘 → 독) */
+  status?: NonNullable<StatusConditionState["condition"]>;
+  /** 풀죽음(왕의징표석) */
+  flinched?: boolean;
+  /** 나무열매를 먹음 — 회복량·풀린 상태이상·풀린 혼란 */
+  berry?: { name: string; healed?: number; curedStatus?: NonNullable<StatusConditionState["condition"]>; curedConfusion?: boolean };
+  /** 하양허브(떨어진 능력 복구)·멘탈허브(헤롱헤롱·도발·트집·앙코르·사슬묶기 해제) */
+  herb?: { name: string };
+}
+
 /** 한 번의 기술 사용 결과 로그 */
 export interface ActionLogEntry {
   actor: FighterKey;
@@ -482,6 +494,12 @@ export interface ActionLogEntry {
   unburdenOpponentAbilityName?: string;
   /** 잠꼬대로 대신 발동시킨 기술 이름(잠꼬대 자신이 아니라 이 이름이 실제로 나간 기술) */
   sleepTalkCalledMoveName?: string;
+  /** 일격기(트랙 M5): 옹골참으로 막혔으면 그 특성 이름 / 면역 타입(절대영도 → 얼음)이라 안 통했으면 true */
+  ohkoBlockedByAbilityName?: string;
+  /** 내던지기(트랙 M5): 던진 도구 이름과 맞은 상대에게 일어난 도구 효과 */
+  flungItemName?: string;
+  flingEffect?: FlingEffectResult;
+  ohkoImmune?: boolean;
   /** 흉내쟁이(트랙 M2)로 대신 나간 기술 이름 */
   copycatCalledMoveName?: string;
   /** 변환자재로 자신의 타입이 이번 기술의 타입으로 바뀌었으면 그 타입 */

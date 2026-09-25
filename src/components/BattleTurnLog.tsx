@@ -1406,6 +1406,52 @@ function ActionEffectLines({
         </div>
       )}
       {/* 아로마베일 — 헤롱헤롱·도발·기술봉인·앙코르를 막았을 때 */}
+      {/* 내던지기(트랙 M5): 던진 도구와 맞은 상대에게 일어난 도구 효과 */}
+      {action.flungItemName && (
+        <div className="battle-turn-line is-muted">
+          {actorName}
+          {eunNeun(actorName)} {action.flungItemName}
+          {eulReul(action.flungItemName)} 던졌다!
+        </div>
+      )}
+      {action.flingEffect?.status && (
+        <div className="battle-turn-line is-muted">{STATUS_ONSET_TEXT[action.flingEffect.status](defenderName)}</div>
+      )}
+      {action.flingEffect?.flinched && (
+        <div className="battle-turn-line is-muted">
+          {defenderName}
+          {eunNeun(defenderName)} 풀이 죽었다!
+        </div>
+      )}
+      {action.flingEffect?.berry && (
+        <div className="battle-turn-line is-muted">
+          {defenderName}
+          {eunNeun(defenderName)} {action.flingEffect.berry.name}
+          {eulReul(action.flingEffect.berry.name)} 먹었다!
+          {action.flingEffect.berry.healed ? ` HP를 ${action.flingEffect.berry.healed} 회복했다!` : ""}
+          {action.flingEffect.berry.curedStatus ? ` ${STATUS_CURE_TEXT[action.flingEffect.berry.curedStatus](defenderName)}` : ""}
+          {action.flingEffect.berry.curedConfusion ? " 혼란이 풀렸다!" : ""}
+        </div>
+      )}
+      {action.flingEffect?.herb && (
+        <div className="battle-turn-line is-muted">
+          {defenderName}
+          {eunNeun(defenderName)} {action.flingEffect.herb.name}
+          {roEuro(action.flingEffect.herb.name)} 상태를 원래대로 되돌렸다!
+        </div>
+      )}
+      {/* 일격기(트랙 M5) */}
+      {!action.blockedReason && action.hit && action.move.oneHitKo && action.damage > 0 && (
+        <div className="battle-turn-line is-muted">일격필살!</div>
+      )}
+      {!action.blockedReason && action.hit && action.ohkoBlockedByAbilityName && (
+        <div className="battle-turn-line is-muted">
+          {defenderName}의 {action.ohkoBlockedByAbilityName}! 일격필살 기술은 통하지 않는다!
+        </div>
+      )}
+      {!action.blockedReason && action.hit && action.ohkoImmune && (
+        <div className="battle-turn-line is-muted">{defenderName}에게는 효과가 없는 것 같다...</div>
+      )}
       {!action.blockedReason && action.volatileBlockedByAbility && (() => {
         const { abilityName, volatile, self } = action.volatileBlockedByAbility;
         const who = self ? actorName : defenderName;
