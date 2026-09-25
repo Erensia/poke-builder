@@ -107,6 +107,11 @@ export function electroBallPowerFromSpeeds(userEffectiveSpeed: number, targetEff
   return 40;
 }
 
+/** 성묘(Last Respects, 트랙 L) 위력 — base + perAlly × 쓰러진 같은 편 수, 최대 300 */
+export function faintedAllyPowerValue(base: number, perAlly: number, faintedAllies: number): number {
+  return Math.min(300, base + perAlly * Math.max(0, faintedAllies));
+}
+
 /** 하드프레스(Hard Press, 트랙 M5) 위력 — base × 상대 남은 HP 비율(내림, 최소 1) */
 export function targetHpRatioPowerValue(base: number, currentHp: number, maxHp: number): number {
   if (maxHp <= 0) return 1;
