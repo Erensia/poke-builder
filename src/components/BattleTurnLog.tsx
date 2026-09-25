@@ -905,7 +905,7 @@ function ActionMainLine({
           · 서로의 도구를 바꿨다!
           {action.swappedItems.userGotName && (
             <>
-              {" "}
+              <br />
               {actorName}
               {eunNeun(actorName)} {action.swappedItems.userGotName}
               {eulReul(action.swappedItems.userGotName)} 손에 넣었다!
@@ -913,7 +913,7 @@ function ActionMainLine({
           )}
           {action.swappedItems.targetGotName && (
             <>
-              {" "}
+              <br />
               {defenderName}
               {eunNeun(defenderName)} {action.swappedItems.targetGotName}
               {eulReul(action.swappedItems.targetGotName)} 손에 넣었다!

@@ -449,7 +449,16 @@ function BattleBoard({
           return parts;
         };
         const anyHazard = hazardTag("a").length > 0 || hazardTag("b").length > 0;
-        if (!battleState.weather && !battleState.field && battleState.trickRoomTurnsRemaining === undefined && !anyHazard) {
+        const tailwindTurns = (side: Side) =>
+          (side === "a" ? battleState.sideA : battleState.sideB).tailwindTurnsRemaining;
+        const anyTailwind = tailwindTurns("a") !== undefined || tailwindTurns("b") !== undefined;
+        if (
+          !battleState.weather &&
+          !battleState.field &&
+          battleState.trickRoomTurnsRemaining === undefined &&
+          !anyHazard &&
+          !anyTailwind
+        ) {
           return null;
         }
         return (
@@ -468,6 +477,13 @@ function BattleBoard({
               <span className="battle-environment-tag">
                 트릭룸 (앞으로 {battleState.trickRoomTurnsRemaining}턴)
               </span>
+            )}
+            {(["a", "b"] as const).map((side) =>
+              tailwindTurns(side) !== undefined ? (
+                <span key={`tw-${side}`} className="battle-environment-tag">
+                  {fighterLabel(battleState, side)} 진영: 순풍 (앞으로 {tailwindTurns(side)}턴)
+                </span>
+              ) : null,
             )}
             {(["a", "b"] as const).map((side) =>
               hazardTag(side).length > 0 ? (
