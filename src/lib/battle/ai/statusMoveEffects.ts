@@ -37,6 +37,7 @@ import {
 import { cureConditionsBlockedByAbility, isFixedAbility, isUncopyableAbility } from "../abilityChange";
 import { calcEntryHazardDamage } from "../entryCost";
 import { isGrounded } from "../grounding";
+import { isTrappedFromSwitching } from "../switching";
 import { eatBerryNow } from "../fling";
 import { effectiveHeldItem } from "../turnOrderInputs";
 
@@ -117,7 +118,9 @@ export type EffectMoveKind =
   | "perishSong"
   | "revive"
   | "teaTime"
-  | "octolock";
+  | "octolock"
+  // 로드맵 3: 검은눈빛·블록(교체 봉쇄 — 상대 교체 모델링에서만 가치)
+  | "trap";
 
 /** AI-A1(ver.1.8) 효과 — decision의 a1Aware로 따로 끌 수 있다(비교용) */
 export const A1_EFFECT_KINDS: ReadonlySet<EffectMoveKind> = new Set(["haze", "safeguard", "regen", "leechSeed", "confuse", "attract", "yawn"]);
@@ -267,6 +270,7 @@ export function effectKindOf(move: Move): EffectMoveKind | undefined {
   if (move.setsRegenVolatile) return "regen";
   if (move.setsLeechSeed) return "leechSeed";
   const opponentVolatile = (volatile: string) => move.inflictsVolatile?.some((v) => v.volatile === volatile && v.target === "opponent");
+  if (opponentVolatile("meanLook") && move.category === "status") return "trap";
   if (opponentVolatile("confusion")) return "confuse";
   if (opponentVolatile("attract")) return "attract";
   if (opponentVolatile("drowsy")) return "yawn";
@@ -395,6 +399,8 @@ export function effectMoveFails(state: BattleState, key: FighterKey, move: Move)
     return !hasBerry(me) && !hasBerry(target);
   }
   if (kind === "octolock") return hasVolatile(target.volatile, "octolock");
+  // 로드맵 3: 이미 갇힘(교체 봉쇄 중)·고스트 타입(엔진과 같이 면제)
+  if (kind === "trap") return isTrappedFromSwitching(target) || target.types.includes("고스트");
   // 트랙 M6: 록온 이미 있음 · 자기장조작(플러스·마이너스가 아니거나 둘 다 +6) · 치유소원(교대할 포켓몬 없음)
   if (kind === "lockOn") return hasVolatile(me.volatile, "lockOn");
   if (kind === "magneticFlux") {
@@ -720,6 +726,9 @@ export function applyEffectMove(clone: BattleState, key: FighterKey, move: Move,
           f.currentItemId = null;
         }
       }
+      return true;
+    case "trap":
+      target.volatile = inflictVolatile(target.volatile, "meanLook");
       return true;
     case "octolock":
       // 매 턴 끝 방어·특방 −1 — 대면 동안의 누적을 한 단계로 근사(교체 봉쇄 가치는 교체 모델링 때)

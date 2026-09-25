@@ -1507,6 +1507,37 @@ try {
         `꼬리 후보 d ${plainSwitch?.hitsToBeKilled.expected}→${tc?.hitsToBeKilled.expected} 썰렁 후보 d ${chillSwitch?.hitsToBeKilled.expected}→${chill.pivot?.candidates[0].hitsToBeKilled.expected}`,
       );
     }
+    // 로드맵 3: 상대 자발적 교체 — 지는 대면의 상대는 내 공격을 받지 않는 대기 포켓몬으로 교체한다고 본다
+    {
+      const OFF = { ...P, oppSwitchAware: false };
+      const st = battle([mon("한카리아스", ["지진", "검은눈빛"]), mon("잠만보", ["누르기"])], [mon("메타그로스", ["코멧펀치"]), mon("리자몽", ["화염방사"])]);
+      const opts = ev.evaluateOptions(st, "a");
+      const quake = opt(opts, "지진");
+      const trap = opt(opts, "검은눈빛");
+      const on = dec.scoreOption(quake, 0.5);
+      const off = dec.scoreOption(quake, 0.5, OFF);
+      check(
+        "로드맵 3: 상대 교체 모델링 — 이기는 대면 공격 값이 상대 교체(지진 무효 리자몽)만큼 낮아짐 · 검은눈빛은 켤 때만",
+        on < off - 0.05 && trap.support?.effect?.kind === "trap" && trap.support.effect.party?.model.oppTrapped === true &&
+          Number.isFinite(dec.scoreOption(trap, 0.5)) && dec.scoreOption(trap, 0.5, OFF) === -Infinity,
+        `지진 켬 ${on.toFixed(3)} 끔 ${off.toFixed(3)} 검은눈빛 ${dec.scoreOption(trap, 0.5).toFixed(3)}`,
+      );
+    }
+    // 로드맵 3: 멸망의노래 — 상대가 갇혀 있으면(교체 불가) 카운트로 쓰러지고, 아니면 교체로 피한다
+    {
+      const mk = () => battle([mon("잠만보", ["멸망의노래", "누르기"], null, null, pts({ hp: 32, def: 32 })), mon("메타그로스", ["코멧펀치"])], [mon("잠만보", ["깨물어부수기"]), mon("메타그로스", ["코멧펀치"])]);
+      const free = opt(ev.evaluateOptions(mk(), "a"), "멸망의노래");
+      const lockedSt = mk();
+      lockedSt.b.volatile = { active: { ...lockedSt.b.volatile.active, meanLook: { turnsRemaining: undefined } } };
+      const locked = opt(ev.evaluateOptions(lockedSt, "a"), "멸망의노래");
+      const vFree = dec.scoreOption(free, 0.5);
+      const vLocked = dec.scoreOption(locked, 0.5);
+      check(
+        "로드맵 3: 멸망의노래 — 갇힌 상대는 카운트로 쓰러짐(값 큼) · 교체 가능한 상대는 피함",
+        Number.isFinite(vFree) && Number.isFinite(vLocked) && vLocked > vFree + 0.2,
+        `교체 가능 ${vFree.toFixed(3)} 갇힘 ${vLocked.toFixed(3)}`,
+      );
+    }
   }
   // ── 매치업 난수별 데미지(ver.1.7 트랙 H): 기존 격파 판정과 같은 관계식인지 대조 ──
   {
