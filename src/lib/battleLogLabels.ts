@@ -22,6 +22,8 @@ export const VOLATILE_LABELS = {
   syrupCoat: "물엿범벅",
   octolock: "문어굳히기",
   jawLock: "물고버티기",
+  torment: "트집",
+  imprison: "봉인",
 } as const;
 
 /** 리플렉터(물리 반감)/빛의장막(특수 반감)/오로라베일(양쪽 반감) 표시 라벨. */

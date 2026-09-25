@@ -99,7 +99,10 @@ export type VolatileCondition =
   | "saltCure"
   | "syrupCoat"
   | "octolock"
-  | "jawLock";
+  | "jawLock"
+  // 트랙 M2: 트집(같은 기술 연속 사용 불가, 상대) · 봉인(자신이 배운 기술을 상대가 못 씀, 자신)
+  | "torment"
+  | "imprison";
 
 /** 기술이 상대(또는 자신)에게 행동방해 효과를 걸 때 쓰는 정보 */
 export interface VolatileInflictEffect {

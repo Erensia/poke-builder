@@ -1,7 +1,7 @@
 import { type Move } from "@/types/move";
 import { type PokemonType } from "@/types/pokemon-type";
 import { type FighterKey } from "@/types/battle";
-import { BATTLE_STAT_KEYS, NEUTRAL_ACCURACY_STAGES, NEUTRAL_STAGES, isBattleStatKey, type BattleStatKey, type StatStages } from "@/types/battleStats";
+import { BATTLE_STAT_KEYS, NEUTRAL_ACCURACY_STAGES, NEUTRAL_STAGES, isBattleStatKey, type AccuracyEvasionKey, type BattleStatKey, type StatStages } from "@/types/battleStats";
 import { NO_STATUS_CONDITION, type StatusCondition, type StatusConditionState, type VolatileCondition } from "@/types/status";
 import { type Ability } from "@/types/ability";
 import { type Item } from "@/types/item";
@@ -568,7 +568,7 @@ export function resolveMirroredMoveEffects(input: MirroredMoveEffectsInput) {
       if (
         effect.target !== "self" &&
         defenderAbility?.blocksMentalMoves &&
-        (effect.volatile === "attract" || effect.volatile === "taunt")
+        (effect.volatile === "attract" || effect.volatile === "taunt" || effect.volatile === "torment")
       ) {
         mentalMoveBlockedByAbilityName = defenderAbility.name;
         continue;
@@ -617,7 +617,11 @@ export function resolveMirroredMoveEffects(input: MirroredMoveEffectsInput) {
       // 도발: 이미 도발 상태면 재시전은 실패한다(턴수 리셋 없이 조용히 무산 — 본가 "그러나
       // 실패했다!"). statusInflictFailed는 위 inflictsStatus 루프와 같은 변수를 공유한다 —
       // "이 행동으로 뭔가 걸려던 게 무산됐다"는 의미가 같아서 렌더 문구도 그대로 재사용된다.
-      if (effect.volatile === "taunt" && hasVolatile(target.volatile, "taunt")) {
+      // 트집·봉인(트랙 M2)도 같은 규칙 — 이미 걸려 있으면 실패.
+      if (
+        (effect.volatile === "taunt" || effect.volatile === "torment" || effect.volatile === "imprison") &&
+        hasVolatile(target.volatile, effect.volatile)
+      ) {
         statusInflictFailed = true;
         continue;
       }
@@ -643,9 +647,9 @@ export function resolveMirroredMoveEffects(input: MirroredMoveEffectsInput) {
         }
       }
 
-      // 멘탈허브: 헤롱헤롱/도발이 걸리는 순간 치료하고 소모된다. 나무열매가 아니라 긴장감
+      // 멘탈허브: 헤롱헤롱/도발/트집이 걸리는 순간 치료하고 소모된다. 나무열매가 아니라 긴장감
       // (berriesBlocked)의 영향을 받지 않는다.
-      if (effect.volatile === "attract" || effect.volatile === "taunt") {
+      if (effect.volatile === "attract" || effect.volatile === "taunt" || effect.volatile === "torment") {
         const targetItem = effect.target === "self" ? attackerItem : defenderItem;
         if (getMentalHerbCureResult(targetItem, target.itemConsumed ?? false)) {
           target.volatile = { active: { ...target.volatile.active } };
@@ -991,6 +995,66 @@ export function resolveMirroredMoveEffects(input: MirroredMoveEffectsInput) {
     }
   }
 
+  // 자기암시(copiesTargetStages, 트랙 M2): 상대의 능력·명중·회피·급소 랭크를 그대로 복사한다(변신과 같은 복사).
+  let copiedStagesFromName: string | undefined;
+  if (effectiveMove.copiesTargetStages) {
+    attacker.stages = { ...defender.stages };
+    attacker.accuracyStages = { ...defender.accuracyStages };
+    attacker.critStage = defender.critStage;
+    copiedStagesFromName = getPokemon(defender.slot.pokemonId)?.name ?? "상대";
+  }
+
+  // 파워셰어(averagesAttacksWithTarget, 트랙 M2): 가드셰어의 공격판 — 공격·특공 실능을 각각 더해 반씩(내림).
+  let averagedAttacksMoveName: string | undefined;
+  if (effectiveMove.averagesAttacksWithTarget) {
+    const avgAtk = Math.floor((attacker.realStats.atk + defender.realStats.atk) / 2);
+    const avgSpa = Math.floor((attacker.realStats.spa + defender.realStats.spa) / 2);
+    attacker.realStats = { ...attacker.realStats, atk: avgAtk, spa: avgSpa };
+    defender.realStats = { ...defender.realStats, atk: avgAtk, spa: avgSpa };
+    averagedAttacksMoveName = effectiveMove.name;
+  }
+
+  // 원한(reducesTargetLastMovePp, 트랙 M2): 상대가 마지막으로 쓴 기술의 PP를 줄인다. 쓴 기술이 없거나
+  // (등장 직후) 그 기술 PP가 이미 0이면 실패. 대타·황금몸이면 무산.
+  let spitePp: { moveName: string; amount: number } | undefined;
+  let spiteFailed = false;
+  if (effectiveMove.reducesTargetLastMovePp && hit && !opponentEffectsBlocked) {
+    const lastId = defender.lastMoveId;
+    const remaining = lastId ? defender.remainingPp[lastId] : undefined;
+    if (!lastId || remaining === undefined || remaining <= 0) {
+      spiteFailed = true;
+    } else {
+      const amount = Math.min(remaining, effectiveMove.reducesTargetLastMovePp);
+      defender.remainingPp[lastId] = remaining - amount;
+      spitePp = { moveName: getMove(lastId)?.name ?? lastId, amount };
+    }
+  }
+
+  // 경혈찌르기(raisesRandomStat, 트랙 M2): +6이 아닌 능력(명중·회피 포함) 중 하나를 무작위로 올린다. 전부 +6이면 실패.
+  let acupressureRaised: { stat: BattleStatKey | AccuracyEvasionKey; delta: number } | undefined;
+  let acupressureFailed = false;
+  if (effectiveMove.raisesRandomStat) {
+    const options: (BattleStatKey | AccuracyEvasionKey)[] = [
+      ...BATTLE_STAT_KEYS.filter((s) => attacker.stages[s] < 6),
+      ...(["accuracy", "evasion"] as const).filter((s) => attacker.accuracyStages[s] < 6),
+    ];
+    if (options.length === 0) {
+      acupressureFailed = true;
+    } else {
+      const stat = options[Math.floor(random() * options.length)];
+      if (stat === "accuracy" || stat === "evasion") {
+        const before = attacker.accuracyStages[stat];
+        const after = Math.min(6, before + effectiveMove.raisesRandomStat);
+        attacker.accuracyStages = { ...attacker.accuracyStages, [stat]: after };
+        acupressureRaised = { stat, delta: after - before };
+      } else {
+        const before = attacker.stages[stat];
+        attacker.stages = applyStageDelta(attacker.stages, stat, effectiveMove.raisesRandomStat);
+        acupressureRaised = { stat, delta: attacker.stages[stat] - before };
+      }
+    }
+  }
+
   // 변신(transformsIntoTarget): 상대로 변신한다. 이미 변신 상태면 실패(1v1이라 배틀 끝까지 유지).
   let transformedIntoName: string | undefined;
   let transformFailed = false;
@@ -1269,7 +1333,7 @@ export function resolveMirroredMoveEffects(input: MirroredMoveEffectsInput) {
     [attackerItem, defenderItem] = [defenderItem, attackerItem];
   }
   return {
-    defenderAbility, attacker, defender, attackerAbility, attackerItem, defenderItem, abilityInflictedStatusOnAttacker, abilityInflictedStatusAbilityName, statusCureBerryItemName, mentalMoveBlockedByAbilityName, bouncedMoveName, bouncedByAbilityName, secondaryBlockedByAbilityName, berryEatFailed, stuffCheeksBerryHeal, stuffCheeksBerryName, costHpFailed, soulBeatHpCost, selfStatRises, selfStatsAtMax, selfStatDrops, reflectedStatDropAbilityName, reflectedStatDrops, restoredStatsSelfItemName, restoredStatsOpponentItemName, opportunistCopiedStats, opportunistAbilityName, opponentStatDrops, invertedTargetStages, addedTypeToTarget, overwroteTargetType, targetMoveTypeOverride, inflictedStatus, statusInflictFailed, beakBlastBurnedAttacker, curedStatus, curedStatusTarget, inflictedVolatile, tidyUpDone, courtChangeDone, revivedPartyName, reviveFailed, saltCureApplied, balloonPoppedItemName, octolockApplied, jawLockApplied, selfWokeBeforeMove, restSlept, healedAmount, healedTarget, averagedDefensesMoveName, swappedSpeedMoveName, transformedIntoName, transformFailed, regenSetFailed, leechSeedSetFailed, leechSeedBlockedByGrass, abilitySwappedTargetToName, abilitySwapFailed, substituteSetFailed, shedTailFailed, shedTailSucceeded, setDisabledMoveName, disableSetFailed, setEncoreMoveName, encoreSetFailed, swappedStatsMoveName, swappedStagesMoveName, protectSucceeded, protectFailed, protectStanceEntered, fieldSetFailed, stealthRockSetForSide, spikesSetForSide, toxicSpikesSetForSide, stickyWebSetForSide, hazardSetFailed, swappedItems, itemSwapFailed, painSplitHp, stockpileHealFailed, recycledItemName, recycleFailed,
+    defenderAbility, attacker, defender, attackerAbility, attackerItem, defenderItem, abilityInflictedStatusOnAttacker, abilityInflictedStatusAbilityName, statusCureBerryItemName, mentalMoveBlockedByAbilityName, bouncedMoveName, bouncedByAbilityName, secondaryBlockedByAbilityName, berryEatFailed, stuffCheeksBerryHeal, stuffCheeksBerryName, costHpFailed, soulBeatHpCost, selfStatRises, selfStatsAtMax, selfStatDrops, reflectedStatDropAbilityName, reflectedStatDrops, restoredStatsSelfItemName, restoredStatsOpponentItemName, opportunistCopiedStats, opportunistAbilityName, opponentStatDrops, invertedTargetStages, addedTypeToTarget, overwroteTargetType, targetMoveTypeOverride, inflictedStatus, statusInflictFailed, beakBlastBurnedAttacker, curedStatus, curedStatusTarget, inflictedVolatile, tidyUpDone, courtChangeDone, revivedPartyName, reviveFailed, saltCureApplied, balloonPoppedItemName, octolockApplied, jawLockApplied, selfWokeBeforeMove, restSlept, healedAmount, healedTarget, averagedDefensesMoveName, swappedSpeedMoveName, transformedIntoName, transformFailed, regenSetFailed, leechSeedSetFailed, leechSeedBlockedByGrass, abilitySwappedTargetToName, abilitySwapFailed, substituteSetFailed, shedTailFailed, shedTailSucceeded, setDisabledMoveName, disableSetFailed, setEncoreMoveName, encoreSetFailed, swappedStatsMoveName, swappedStagesMoveName, protectSucceeded, protectFailed, protectStanceEntered, fieldSetFailed, stealthRockSetForSide, spikesSetForSide, toxicSpikesSetForSide, stickyWebSetForSide, hazardSetFailed, swappedItems, itemSwapFailed, painSplitHp, stockpileHealFailed, recycledItemName, recycleFailed, copiedStagesFromName, averagedAttacksMoveName, spitePp, spiteFailed, acupressureRaised, acupressureFailed,
   };
 }
 

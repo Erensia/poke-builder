@@ -9,7 +9,7 @@ import { inflictStatus, isImmuneToStatus } from "@/lib/statusConditions";
 import { FIELD_DURATION } from "@/lib/fieldEffects";
 import { hasVolatile, inflictVolatile } from "@/lib/volatileConditions";
 import { getConfusionCureBerryResult, getMentalHerbCureResult } from "@/lib/itemEffects";
-import { NEUTRAL_ACCURACY_STAGES, NEUTRAL_STAGES } from "@/types/battleStats";
+import { BATTLE_STAT_KEYS, NEUTRAL_ACCURACY_STAGES, NEUTRAL_STAGES, type AccuracyEvasionKey, type BattleStatKey } from "@/types/battleStats";
 import {
   SCREEN_DURATION,
   TRICK_ROOM_DURATION,
@@ -65,7 +65,14 @@ export type EffectMoveKind =
   | "itemSwap"
   | "painSplit"
   | "tailwind"
-  | "recycle";
+  | "recycle"
+  // 트랙 M2(ver.1.8): 자기암시·파워셰어·원한·트집·봉인·경혈찌르기
+  | "copyStages"
+  | "powerSplit"
+  | "spite"
+  | "torment"
+  | "imprison"
+  | "acupressure";
 
 /** AI-A1(ver.1.8) 효과 — decision의 a1Aware로 따로 끌 수 있다(비교용) */
 export const A1_EFFECT_KINDS: ReadonlySet<EffectMoveKind> = new Set(["haze", "safeguard", "regen", "leechSeed", "confuse", "attract", "yawn"]);
@@ -74,7 +81,40 @@ export const A1_EFFECT_KINDS: ReadonlySet<EffectMoveKind> = new Set(["haze", "sa
 export const A2_EFFECT_KINDS: ReadonlySet<EffectMoveKind> = new Set(["substitute", "phaze", "memento"]);
 
 /** 트랙 M(ver.1.8) 효과 — decision의 trackMAware로 따로 끌 수 있다(비교용) */
-export const TRACK_M_EFFECT_KINDS: ReadonlySet<EffectMoveKind> = new Set(["itemSwap", "painSplit", "tailwind", "recycle"]);
+export const TRACK_M_EFFECT_KINDS: ReadonlySet<EffectMoveKind> = new Set([
+  "itemSwap",
+  "painSplit",
+  "tailwind",
+  "recycle",
+  "copyStages",
+  "powerSplit",
+  "spite",
+  "torment",
+  "imprison",
+  "acupressure",
+]);
+
+/** 경혈찌르기(트랙 M2)가 올릴 수 있는 능력 — 엔진 mirroredEffects와 같은 후보(+6 제외) */
+export function acupressureOptions(fighter: BattleFighterState): (BattleStatKey | AccuracyEvasionKey)[] {
+  return [
+    ...BATTLE_STAT_KEYS.filter((s) => fighter.stages[s] < 6),
+    ...(["accuracy", "evasion"] as const).filter((s) => fighter.accuracyStages[s] < 6),
+  ];
+}
+
+/** 경혈찌르기(트랙 M2): fighter의 stat을 amount만큼 올린다(+6까지) */
+export function applyAcupressure(fighter: BattleFighterState, stat: BattleStatKey | AccuracyEvasionKey, amount: number): void {
+  if (stat === "accuracy" || stat === "evasion") {
+    fighter.accuracyStages = { ...fighter.accuracyStages, [stat]: Math.min(6, fighter.accuracyStages[stat] + amount) };
+  } else {
+    fighter.stages = { ...fighter.stages, [stat]: Math.min(6, fighter.stages[stat] + amount) };
+  }
+}
+
+/** 봉인(트랙 M2): 상대가 배운 기술 중 시전자도 배운 것(봉인되면 못 쓰는 기술) */
+export function imprisonedMoveIds(user: BattleFighterState, target: BattleFighterState): string[] {
+  return Object.keys(target.remainingPp).filter((id) => user.remainingPp[id] !== undefined);
+}
 
 /** 3단계(§4-3) 효과 — decision의 phase3Aware로 따로 끌 수 있다 */
 export const PHASE3_EFFECT_KINDS: ReadonlySet<EffectMoveKind> = new Set(["weather", "field", "trickRoom", "taunt", "encore", "disable"]);
@@ -105,6 +145,12 @@ export function effectKindOf(move: Move): EffectMoveKind | undefined {
   if (move.sharesHpWithTarget) return "painSplit";
   if (move.setsTailwind) return "tailwind";
   if (move.recyclesItem) return "recycle";
+  if (move.copiesTargetStages) return "copyStages";
+  if (move.averagesAttacksWithTarget) return "powerSplit";
+  if (move.reducesTargetLastMovePp) return "spite";
+  if (move.raisesRandomStat) return "acupressure";
+  if (move.inflictsVolatile?.some((v) => v.volatile === "torment" && v.target === "opponent")) return "torment";
+  if (move.inflictsVolatile?.some((v) => v.volatile === "imprison" && v.target === "self")) return "imprison";
   if (move.setsSubstitute) return "substitute";
   if (move.forcesTargetSwitch) return "phaze";
   if (move.selfFaints && move.statChanges?.some((s) => s.target === "opponent")) return "memento";
@@ -130,7 +176,7 @@ export function isBatonPass(move: Move): boolean {
 
 /** AI가 점수를 매길 수 있는 변화기(회복·랭크업 제외) — 시뮬레이션 파티 생성(STATUS=1)용 */
 export function isDesignedStatusMove(move: Move): boolean {
-  return !!effectKindOf(move) || isBatonPass(move) || !!move.healsWeatherDependent || !!move.restSleep;
+  return !!effectKindOf(move) || isBatonPass(move) || !!move.healsWeatherDependent || !!move.restSleep || !!move.callsLastMoveInBattle;
 }
 
 /** inflictsStatus 중 이번에 실제로 걸릴 상태이상(엔진 mirroredEffects와 같은 판정 순서). 없으면 undefined */
@@ -195,6 +241,14 @@ export function effectMoveFails(state: BattleState, key: FighterKey, move: Move)
   // 트랙 M1: 순풍 이미 불고 있음·리사이클 되찾을 도구 없음(엔진 resolveAction·mirroredEffects와 같은 조건)
   if (kind === "tailwind") return (sideOf(state, key).tailwindTurnsRemaining ?? 0) > 0;
   if (kind === "recycle") return !!me.currentItemId || !me.lastConsumedItemId;
+  // 트랙 M2: 효과가 없으면(같은 랭크·같은 공격/특공·전부 +6·이미 봉인·겹치는 기술 없음) 쓰지 않는다
+  if (kind === "copyStages") {
+    const same = <T extends object>(a: T, b: T) => (Object.keys(a) as (keyof T)[]).every((s) => a[s] === b[s]);
+    return same(me.stages, target.stages) && same(me.accuracyStages, target.accuracyStages) && me.critStage === target.critStage;
+  }
+  if (kind === "powerSplit") return me.realStats.atk === target.realStats.atk && me.realStats.spa === target.realStats.spa;
+  if (kind === "acupressure") return acupressureOptions(me).length === 0;
+  if (kind === "imprison") return hasVolatile(me.volatile, "imprison") || imprisonedMoveIds(me, target).length === 0;
   // 대타출동: 이미 대타가 있거나 HP가 최대 HP 1/4 이하면 실패(엔진 mirroredEffects)
   if (kind === "substitute") return me.substituteHp !== undefined || me.currentHp <= Math.floor(me.maxHp / 4);
 
@@ -212,6 +266,19 @@ export function effectMoveFails(state: BattleState, key: FighterKey, move: Move)
   if (kind === "itemSwap") {
     const isMegaStone = (id: string | null) => !!id && getItem(id)?.category === "mega-stone";
     return (!me.currentItemId && !target.currentItemId) || isMegaStone(me.currentItemId) || isMegaStone(target.currentItemId) || !!targetAbility?.preventsItemLoss;
+  }
+  // 원한(트랙 M2): 상대 직전 기술의 PP를 0으로 만들 때만 의미가 있다(그 외엔 PP 소모전이 아닌 한 무의미 — 사용자 결정)
+  if (kind === "spite") {
+    const remaining = target.lastMoveId ? target.remainingPp[target.lastMoveId] : undefined;
+    return remaining === undefined || remaining <= 0 || remaining > move.reducesTargetLastMovePp!;
+  }
+  // 트집(트랙 M2): 이미 걸림·아로마베일·멘탈허브(걸리는 순간 풀림)
+  if (kind === "torment") {
+    return (
+      hasVolatile(target.volatile, "torment") ||
+      !!targetAbility?.blocksMentalMoves ||
+      getMentalHerbCureResult(effectiveHeldItem(target), target.itemConsumed ?? false)
+    );
   }
   // 울부짖기·날려버리기: 상대에게 살아있는 예비가 없거나 흡반·뿌리박기면 강제 교체가 안 된다(엔진 runTurn)
   if (kind === "phaze") return !hasLivingReserve(sideOf(state, oppKey)) || isForcedSwitchBlocked(target);
@@ -418,6 +485,30 @@ export function applyEffectMove(clone: BattleState, key: FighterKey, move: Move,
       return true;
     case "debuff":
       return applyDebuff(clone, key, move);
+    // 트랙 M2
+    case "copyStages":
+      me.stages = { ...target.stages };
+      me.accuracyStages = { ...target.accuracyStages };
+      me.critStage = target.critStage;
+      return true;
+    case "powerSplit": {
+      const atk = Math.floor((me.realStats.atk + target.realStats.atk) / 2);
+      const spa = Math.floor((me.realStats.spa + target.realStats.spa) / 2);
+      me.realStats = { ...me.realStats, atk, spa };
+      target.realStats = { ...target.realStats, atk, spa };
+      return true;
+    }
+    case "spite": {
+      const lastId = target.lastMoveId!;
+      target.remainingPp = { ...target.remainingPp, [lastId]: Math.max(0, target.remainingPp[lastId] - move.reducesTargetLastMovePp!) };
+      return true;
+    }
+    case "torment":
+      target.volatile = inflictVolatile(target.volatile, "torment");
+      return true;
+    case "imprison":
+      me.volatile = inflictVolatile(me.volatile, "imprison");
+      return true;
     default:
       return false;
   }

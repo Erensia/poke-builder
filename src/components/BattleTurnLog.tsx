@@ -698,6 +698,7 @@ function ActionMainLine({
     <div className="battle-turn-line">
       <strong>{actorName}</strong>의 {action.move.name}
       {action.sleepTalkCalledMoveName && " (잠꼬대로 냈다!)"}
+      {action.copycatCalledMoveName && " (흉내쟁이로 냈다!)"}
       {action.bouncedMoveName && (
         <> — {defenderName}의 {action.bouncedByAbilityName}! 기술이 되돌아왔다!</>
       )}
@@ -936,6 +937,31 @@ function ActionMainLine({
         </>
       )}
       {!action.blockedReason && action.hit && action.recycleFailed && <> · 그러나 실패했다!</>}
+      {!action.blockedReason && action.hit && action.copiedStagesFromName && (
+        <> · {action.copiedStagesFromName}의 능력 변화를 복사했다!</>
+      )}
+      {!action.blockedReason && action.hit && action.averagedAttacksMoveName && (
+        <> · 서로의 공격과 특수공격을 나눠 가졌다!</>
+      )}
+      {!action.blockedReason && action.hit && action.spitePp && (
+        <>
+          {" "}
+          · {defenderName}의 {action.spitePp.moveName}의 PP가 {action.spitePp.amount} 줄었다!
+        </>
+      )}
+      {!action.blockedReason && action.hit && action.spiteFailed && <> · 그러나 실패했다!</>}
+      {!action.blockedReason && action.hit && action.acupressureRaised && (() => {
+        const { stat, delta } = action.acupressureRaised;
+        const label = stat === "accuracy" ? "명중률" : stat === "evasion" ? "회피율" : STAT_LABELS[stat];
+        return (
+          <>
+            {" "}
+            · {actorName}의 {label}
+            {iGa(label)} {delta >= 2 ? "크게 " : ""}올라갔다!
+          </>
+        );
+      })()}
+      {!action.blockedReason && action.hit && action.acupressureFailed && <> · 그러나 실패했다!</>}
       {!action.blockedReason && action.hit && action.shellSideArmCategory && (
         <> · {action.shellSideArmCategory === "physical" ? "물리" : "특수"} 판정!</>
       )}
@@ -1102,6 +1128,10 @@ function ActionEffectLines({
             `${actorName}의 ${action.move.name}${eunNeun(action.move.name)} 사슬묶기에 봉인돼있다!`}
           {action.moveRestrictionKind === "encore" &&
             `${actorName}${eunNeun(actorName)} 앙코르 때문에 이 기술을 쓸 수 없다!`}
+          {action.moveRestrictionKind === "torment" &&
+            `${actorName}${eunNeun(actorName)} 트집 때문에 같은 기술을 연속으로 쓸 수 없다!`}
+          {action.moveRestrictionKind === "imprison" &&
+            `${actorName}${eunNeun(actorName)} 봉인 때문에 ${action.move.name}${eulReul(action.move.name)} 쓸 수 없다!`}
         </div>
       )}
       {/* 상태이상에 새로 걸렸을 때(onset) — 보통 상대가 대상이지만, 매직미러로 되돌아온

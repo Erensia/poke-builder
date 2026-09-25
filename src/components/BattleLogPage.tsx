@@ -1124,6 +1124,14 @@ export function BattleLogPage() {
       const forcedName = getMove(encoreEntry.moveId)?.name ?? "그 기술";
       return `${pokemonName}${eunNeun(pokemonName)} 앙코르 때문에 ${forcedName}만 사용할 수 있다!`;
     }
+    if (fighter.volatile.active.torment && fighter.lastMoveId === moveId) {
+      return `${pokemonName}${eunNeun(pokemonName)} 트집 때문에 같은 기술을 연속으로 쓸 수 없다!`;
+    }
+    const opponent = battleState[side === "a" ? "b" : "a"];
+    if (opponent.volatile.active.imprison && opponent.remainingPp[moveId] !== undefined) {
+      const movename = getMove(moveId)?.name ?? "그 기술";
+      return `${movename}${eunNeun(movename)} 봉인되어 쓸 수 없다!`;
+    }
     return null;
   }
 

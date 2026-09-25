@@ -23,7 +23,11 @@ import { applyMegaEvolution, isTrappedFromSwitching } from "../switching";
 import { calcEntryHazardDamage } from "../entryCost";
 import { effectiveHeldItem } from "../turnOrderInputs";
 import { computeBattleHitChance } from "../hitChance";
+import { isCopyableMove } from "../preHitEffects";
+import { getMove } from "@/lib/data";
 import {
+  acupressureOptions,
+  applyAcupressure,
   applyEffectMove,
   blendTurns,
   effectDuration,
@@ -114,6 +118,8 @@ export interface EffectEvaluation {
   hpAfter?: { my: number; opp: number };
   /** 울부짖기·날려버리기(AI-A2): 상대 대기 포켓몬마다 끌려 나온 뒤의 대면 */
   phaze?: PhazeEvaluation;
+  /** 경혈찌르기(트랙 M2): 무작위로 오를 능력마다의 대면(가중치 합 1) — 있으면 hit·party 대신 이걸 평균낸다 */
+  branches?: { weight: number; hit: RaceInputs; party: PartyEffect }[];
   /** 추억의선물(AI-A2): 자신 기절 + 상대 랭크다운 뒤 state(성공)·먼저 쓰러진 state(실패)의 대면표 */
   sacrifice?: { success: number; afterModel: PartyModel; failModel: PartyModel };
 }
@@ -198,6 +204,8 @@ export interface AiOption {
    * 배턴터치도 같은 구조(hitRate 0, 후보는 내 랭크를 이어받은 상태로 평가, hitChance 1).
    */
   pivot?: { hitRate: number; activeHitLoss: number; candidates: AiOption[]; hitChance?: number };
+  /** 흉내쟁이(트랙 M2): 따라 쓸 기술 갈래(가중치 합 1). option이 없으면 따라 쓸 수 없어 실패하는 갈래 */
+  copycat?: { branches: { weight: number; option?: AiOption }[] };
   /** 파티 단위 평가(§4-5): 이 옵션의 첫 대면이 누구끼리인지 + 대면표. 결정 레이어가 이어지는 대면을 계산한다 */
   party?: PartyDuel;
 }
@@ -237,7 +245,7 @@ export function selectableMoves(
 ): Move[] {
   const moves = usableMoves(fighter).filter((m) => !isUsageBlocked(state, fighter, m, opponent));
   if (legalMoveIds) return moves.filter((m) => legalMoveIds.includes(m.id));
-  return allowedByVolatiles(fighter, moves);
+  return allowedByVolatiles(fighter, moves, opponent);
 }
 
 interface AttackPick {
@@ -523,9 +531,11 @@ function evaluateEffectMove(ctx: EffectContext): EffectEvaluation | undefined {
   if (!kind || effectMoveFails(state, key, move)) return undefined;
   const base = currentRace(state, key, myMoves);
   if (kind === "phaze") return evaluatePhaze(ctx, base);
+  if (kind === "acupressure") return evaluateAcupressure(ctx, base);
   const clone = cloneBattleState(state);
   const toxicTurns = Math.min(6, Number.isFinite(base.killTurns) ? base.killTurns : 6);
   if (!applyEffectMove(clone, key, move, { toxicTurns })) return undefined;
+  if (kind === "torment") return evaluateTorment(ctx, base, clone);
   if (kind === "memento") {
     // 먼저 맞아 쓰러지면(후공인데 이번 턴에 쓰러지는 대면) 랭크다운 없이 기절만
     const success = ctx.moveFirstProbability + (1 - ctx.moveFirstProbability) * (base.survivalTurns > 1 ? 1 : 0);
@@ -684,6 +694,46 @@ function evaluatePhaze(ctx: EffectContext, base: RaceInputs): EffectEvaluation |
   };
 }
 
+/**
+ * 경혈찌르기(트랙 M2): 올릴 수 있는 능력마다 +2를 적용한 대면을 다시 계산한다 — 무작위(균등)라 결정 레이어가 평균낸다.
+ * 올린 랭크는 물러나기 전까지 남는다(랭크업기와 같은 처리).
+ */
+function evaluateAcupressure(ctx: EffectContext, base: RaceInputs): EffectEvaluation | undefined {
+  const { state, key, move, myMoves } = ctx;
+  const stats = acupressureOptions(state[key]);
+  if (stats.length === 0) return undefined;
+  const branches = stats.map((stat) => {
+    const clone = cloneBattleState(state);
+    applyAcupressure(clone[key], stat, move.raisesRandomStat!);
+    return { weight: 1 / stats.length, hit: currentRace(clone, key, myMoves), party: { model: createPartyModel(clone, key), turns: Infinity } };
+  });
+  return { hit: branches[0].hit, base, hitChance: 1, carry: 0, kind: "acupressure", branches };
+}
+
+/**
+ * 트집(트랙 M2): 상대는 같은 기술을 연속으로 못 써 최선 공격기를 한 턴 걸러 쓰게 된다 — 최선 공격기를 막은 대면을
+ * 대면 길이의 절반만큼 섞는다(교대로 쓰는 근사). 아직 기술을 안 쓴 상대도 최선 공격기부터 쓴다고 보고 그 기술을 막는다.
+ */
+function evaluateTorment(ctx: EffectContext, base: RaceInputs, clone: BattleState): EffectEvaluation {
+  const { state, key, myMoves } = ctx;
+  const oppKey = opponentKey(key);
+  // 최선 공격기는 트집을 걸기 전 state 기준(건 뒤엔 직전 기술이 이미 빠진다)
+  const probe = evaluateOpponentThreat({ state, opponent: state[oppKey], target: state[key], targetSide: sideOf(state, key), opponentMovesSecond: false });
+  if (probe.bestMove) clone[oppKey].lastMoveId = probe.bestMove.id;
+  const after = currentRace(clone, key, myMoves);
+  const raceLength = Math.min(base.killTurns, base.survivalTurns);
+  const covered = Number.isFinite(raceLength) ? raceLength / 2 : Infinity;
+  return {
+    hit: blendRace(after, base, covered),
+    base,
+    hitChance: 1,
+    carry: 0,
+    kind: "torment",
+    party: { model: createPartyModel(clone, key), turns: covered },
+    partyCarry: 0,
+  };
+}
+
 function blendRace(after: RaceInputs, base: RaceInputs, covered: number): RaceInputs {
   const raceLength = Math.min(after.killTurns, after.survivalTurns);
   const share = raceLength <= covered ? 1 : covered / raceLength;
@@ -721,8 +771,9 @@ export function evaluateOptions(state: BattleState, key: FighterKey, options: Ev
   let benchCache: AiOption[] | undefined;
   const benchOptions = () => (benchCache ??= bench.map((index) => evaluateSwitchCandidate(state, key, index)));
 
-  for (const move of myMoves) {
-    const speed = firstProbability(moveState, me, move, opponent, baseThreat.bestMove);
+  // speedMove: 흉내쟁이(트랙 M2)처럼 다른 기술로 나가도 행동 순서는 원래 고른 기술(speedMove)의 우선도로 정해진다
+  const buildMoveOption = (move: Move, speedMove: Move = move): AiOption => {
+    const speed = firstProbability(moveState, me, speedMove, opponent, baseThreat.bestMove);
     const iMoveSecond = speed.probability < 0.5;
     const myTypes = proteanTypes(me, move);
     const threat: OpponentThreat = evaluateOpponentThreat({
@@ -796,8 +847,7 @@ export function evaluateOptions(state: BattleState, key: FighterKey, options: Ev
       } else {
         option.support = { kind: "other", before: 0, after: 0, bestKillTurns: turnsFor(myBest?.estimate, me, opponent).expected };
       }
-      result.push(option);
-      continue;
+      return option;
     }
 
     if (move.category === "status") {
@@ -913,8 +963,32 @@ export function evaluateOptions(state: BattleState, key: FighterKey, options: Ev
         option.support = { kind, before: 0, after: 0, bestKillTurns };
       }
     }
-    result.push(option);
-  }
+    return option;
+  };
+
+  /**
+   * 흉내쟁이(트랙 M2): 선공이면 배틀에서 직전에 나온 기술, 후공이면 이번 턴 상대가 낼 기술(사용 확률 모델)을
+   * 따라 쓴다 — 갈래마다 그 기술을 내 기술로 쓴 옵션을 만들고 결정 레이어가 가중 평균한다. 따라 쓸 수 없으면 한 턴 날림.
+   */
+  const buildCopycatOption = (move: Move): AiOption => {
+    const option = buildMoveOption(move);
+    const p = option.firstProbability;
+    const branch = (copied: Move | undefined, weight: number) => ({
+      weight,
+      option: copied && isCopyableMove(copied) ? buildMoveOption(copied, move) : undefined,
+    });
+    const last = moveState.lastMoveUsedId ? getMove(moveState.lastMoveUsedId) : undefined;
+    const threat = evaluateOpponentThreat({ state: moveState, opponent, target: me, targetSide: myMoveSide, opponentMovesSecond: p >= 0.5 });
+    const total = threat.moveWeights.reduce((a, w) => a + w.weight, 0);
+    const branches = [
+      ...(p > 0 ? [branch(last, p)] : []),
+      ...(p < 1 && total > 0 ? threat.moveWeights.map((w) => branch(w.move, ((1 - p) * w.weight) / total)) : []),
+    ];
+    option.copycat = { branches };
+    return option;
+  };
+
+  for (const move of myMoves) result.push(move.callsLastMoveInBattle ? buildCopycatOption(move) : buildMoveOption(move));
 
   // ── 교체 옵션 ── (교체 턴에는 메가진화 없음 → 원래 state 기준)
   if (!isTrappedFromSwitching(state[key])) {
@@ -942,5 +1016,7 @@ function attachParty(options: AiOption[], model: PartyModel): void {
         : { model, myIndex: model.myActive, myStaged: true };
     candidateParty(option.pivot?.candidates);
     candidateParty(option.support?.batonFollowUp?.candidates);
+    const copied = option.copycat?.branches.flatMap((b) => (b.option ? [b.option] : []));
+    if (copied?.length) attachParty(copied, model);
   }
 }

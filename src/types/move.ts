@@ -646,6 +646,18 @@ export interface Move {
   healsByStockpile?: boolean;
   /** 리사이클(트랙 M1): 지닌 도구가 없고 이번 배틀에서 마지막으로 소모한 도구가 있으면 그 도구를 다시 지닌다. */
   recyclesItem?: boolean;
+  /** 자기암시(트랙 M2): 상대의 랭크 변화(능력·명중·회피·급소 랭크)를 그대로 복사한다. */
+  copiesTargetStages?: boolean;
+  /** 원한(트랙 M2): 상대가 마지막으로 쓴 기술의 PP를 이만큼 줄인다. 쓴 기술이 없거나 PP가 0이면 실패. */
+  reducesTargetLastMovePp?: number;
+  /** 파워셰어(트랙 M2): 자신·상대의 공격·특공 실능을 각각 더해 반씩 나눠 갖는다(가드셰어의 공격판). */
+  averagesAttacksWithTarget?: boolean;
+  /** 경혈찌르기(트랙 M2): +6이 아닌 능력(공·방·특공·특방·스피드·명중·회피) 중 하나를 무작위로 이만큼 올린다. */
+  raisesRandomStat?: number;
+  /** 흉내쟁이(트랙 M2): 배틀에서 직전에 나온 기술(누가 썼든)을 대신 쓴다. 없거나 excludedFromCopycat이면 실패. */
+  callsLastMoveInBattle?: boolean;
+  /** 흉내쟁이가 따라 쓸 수 없는 기술(방어류·강제교체·도구 바꾸기·다른 기술 부르기 등 — 본가 목록). */
+  excludedFromCopycat?: boolean;
   /**
    * 셸암즈(Shell Side Arm) — 가라르야도란 전용기. 물리(공격 vs 상대 방어)로 낸 데미지와 특수
    * (특공 vs 상대 특방)로 낸 데미지를 둘 다 계산해, 큰 쪽 판정으로 공격한다 — 물리면 접촉기,
