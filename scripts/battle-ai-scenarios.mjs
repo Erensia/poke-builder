@@ -1094,6 +1094,106 @@ try {
       );
     }
   }
+  // ── 트랙 M4(ver.1.8): 원더룸·매직룸·중력·전자부유·떨어뜨리기 + 접지 판정 ──
+  {
+    const rt = await server.ssrLoadModule("/src/lib/battle/runTurn.ts");
+    const toi = await server.ssrLoadModule("/src/lib/battle/turnOrderInputs.ts");
+    const act = (id) => ({ kind: "move", move: data.getMove(id) });
+    const run = (st, a, b) => rt.runTurn(st, a.kind ? a : act(a), b.kind ? b : act(b), () => 0.5);
+    const actionOf = (out, key) => out.result.actions.find((x) => x.actor === key);
+    // 원더룸: 물리 기술이 특방으로 받아진다(메타그로스 방어 > 특방 → 더 아픔) / 다시 쓰면 해제 · 트릭룸도 다시 쓰면 해제
+    {
+      const st = battle([mon("한카리아스", ["지진", "원더룸", "트릭룸"])], [mon("메타그로스", ["원더룸", "칼춤"], null, null, pts({ hp: 32 }))]);
+      const plain = actionOf(run(st, "지진", "칼춤"), "a").damage;
+      const roomed = run(st, "원더룸", "칼춤").nextState;
+      const inRoom = actionOf(run(roomed, "지진", "칼춤"), "a").damage;
+      const off = run(roomed, "원더룸", "칼춤");
+      const tr = run(run(st, "트릭룸", "칼춤").nextState, "트릭룸", "칼춤");
+      check(
+        "M4: 원더룸(방어·특방 맞바꿈)·다시 쓰면 해제 · 트릭룸도 다시 쓰면 해제",
+        inRoom > plain && off.nextState.wonderRoomTurnsRemaining === undefined && actionOf(off, "a")?.roomChange?.on === false &&
+          tr.nextState.trickRoomTurnsRemaining === undefined && actionOf(tr, "a")?.trickRoomEnded === true,
+        `데미지 ${plain}→${inRoom} 해제=${off.nextState.wonderRoomTurnsRemaining} 트릭룸=${tr.nextState.trickRoomTurnsRemaining}`,
+      );
+    }
+    // 매직룸: 구애스카프 스피드·먹다남은음식 회복이 꺼진다
+    {
+      const st = battle([mon("잠만보", ["매직룸", "칼춤"], null, "구애스카프", pts({ hp: 32 }))], [mon("메타그로스", ["칼춤"], null, "먹다남은음식")]);
+      const before = toi.computeTurnOrderSpeed(st, st.a);
+      st.b.currentHp = 100;
+      const out = run(st, "매직룸", "칼춤").nextState;
+      const after = toi.computeTurnOrderSpeed(out, out.a);
+      check(
+        "M4: 매직룸 — 구애스카프 스피드·먹다남은음식 회복 무효",
+        out.magicRoomTurnsRemaining > 0 && after < before && out.b.currentHp === 100,
+        `스피드 ${before}→${after} 음식 HP=${out.b.currentHp}`,
+      );
+    }
+    // 중력: 비행 타입도 지진에 맞고 공중날기는 못 씀 / 이미 있으면 실패 / 5턴째 끝에 해제
+    {
+      const st = battle([mon("한카리아스", ["중력", "지진", "칼춤"])], [mon("갸라도스", ["공중날기", "칼춤"], null, null, pts({ hp: 32 }))]);
+      const immune = actionOf(run(st, "지진", "칼춤"), "a").damage;
+      let s = run(st, "중력", "칼춤").nextState;
+      const eq = actionOf(run(s, "지진", "칼춤"), "a").damage;
+      const fly = actionOf(run(s, "지진", "공중날기"), "b");
+      const again = actionOf(run(s, "중력", "칼춤"), "a");
+      let expired = false;
+      for (let i = 0; i < 4; i++) {
+        const out = run(s, "칼춤", "칼춤");
+        if (out.result.expiredFieldEffects?.includes("gravity")) expired = i === 3;
+        s = out.nextState;
+      }
+      check(
+        "M4: 중력 — 비행 타입 접지·공중날기 사용 불가·중복 실패·5턴 해제",
+        immune === 0 && eq > 0 && fly?.moveRestrictionKind === "gravity" && again?.gravitySetFailed === true && expired && s.gravityTurnsRemaining === undefined,
+        `지진 ${immune}→${eq} 공중날기=${fly?.moveRestrictionKind} 해제=${expired}`,
+      );
+    }
+    // 전자부유: 지진 무시 / 떨어뜨리기에 맞으면 풀리고 땅에 붙잡힘 / 중력 중엔 실패
+    {
+      const st = battle([mon("로토무", ["전자부유", "칼춤"], null, null, pts({ hp: 32 }))], [mon("한카리아스", ["지진", "떨어뜨리기", "중력"])]);
+      const s1 = run(st, "전자부유", "칼춤").nextState;
+      const dodge = actionOf(run(s1, "칼춤", "지진"), "b").damage;
+      const smack = run(s1, "칼춤", "떨어뜨리기");
+      const hit = actionOf(run(smack.nextState, "칼춤", "지진"), "b").damage;
+      const grav = run(st, "칼춤", "중력").nextState;
+      const failed = actionOf(run(grav, "전자부유", "칼춤"), "a");
+      check(
+        "M4: 전자부유(땅 무시) · 떨어뜨리기(풀리고 접지) · 중력 중엔 사용 불가",
+        s1.a.magnetRiseTurnsRemaining > 0 && dodge === 0 && smack.nextState.a.smackedDown === true && actionOf(smack, "b")?.smackedDownTarget === true &&
+          hit > 0 && failed?.moveRestrictionKind === "gravity",
+        `부유 지진=${dodge} 떨어뜨린 뒤=${hit} 중력 중=${failed?.moveRestrictionKind}`,
+      );
+    }
+    // 필드 접지: 비행 타입은 그래스필드 회복을 못 받고 미스트필드로 상태이상이 막히지 않는다
+    {
+      const st = battle([mon("로토무", ["도깨비불"])], [mon("갸라도스", ["칼춤"], null, null, pts({ hp: 32 }))]);
+      st.field = "그래스필드";
+      st.fieldTurnsRemaining = 5;
+      st.b.currentHp = 100;
+      const grassy = run(st, "도깨비불", "칼춤").nextState;
+      const misty = battle([mon("로토무", ["도깨비불"])], [mon("갸라도스", ["칼춤"])]);
+      misty.field = "미스트필드";
+      misty.fieldTurnsRemaining = 5;
+      const burned = run(misty, "도깨비불", "칼춤").nextState;
+      check(
+        "M4: 비행 타입은 필드 밖 — 그래스필드 회복 없음·미스트필드 상태이상 보호 없음",
+        grassy.b.currentHp <= 100 && burned.b.status.condition === "burn",
+        `그래스 HP=${grassy.b.currentHp} 미스트 화상=${burned.b.status.condition}`,
+      );
+    }
+    // AI: 땅 기술밖에 없을 때 중력으로 비행 타입을 잡을 수 있게 됨 / 전자부유로 땅 기술을 피함
+    {
+      const optOf = (st, id) => opt(ev.evaluateOptions(st, "a"), id);
+      const g = optOf(battle([mon("한카리아스", ["중력", "지진"])], [mon("갸라도스", ["폭포오르기"])]), "중력").support?.effect;
+      const m = optOf(battle([mon("로토무", ["전자부유", "10만볼트"], null, null, pts({ hp: 32 }))], [mon("한카리아스", ["지진"])]), "전자부유").support?.effect;
+      check(
+        "M4 AI: 중력(비행 타입에 지진이 통함)·전자부유(지진 회피) 재평가",
+        g?.kind === "gravity" && g.base.killTurns === Infinity && Number.isFinite(g.hit.killTurns) && m?.kind === "magnetRise" && m.hit.survivalTurns > m.base.survivalTurns,
+        `중력 c ${g?.base.killTurns}→${g?.hit.killTurns} 전자부유 d ${m?.base.survivalTurns}→${m?.hit.survivalTurns}`,
+      );
+    }
+  }
   // ── 매치업 난수별 데미지(ver.1.7 트랙 H): 기존 격파 판정과 같은 관계식인지 대조 ──
   {
     const bp = await server.ssrLoadModule("/src/lib/battlePower.ts");
