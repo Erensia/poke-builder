@@ -96,7 +96,7 @@ export const DEFAULT_DECISION_PARAMS: DecisionParams = {
   partyAware: true,
   partyCountWeight: 0.5,
   partyDuelNoise: 0.5,
-  partyEffects: true,
+  partyEffects: false,
 };
 
 export interface ScoredOption {

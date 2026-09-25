@@ -539,8 +539,9 @@ try {
     {
       const st = threeVsThree();
       const option = ev.evaluateOptions(st, "a").find((o) => o.move?.id === "칼춤");
-      const withParty = dec.scoreOption(option, 0.5);
-      const withoutParty = dec.scoreOption({ ...option, support: { ...option.support, effect: { ...option.support.effect, party: undefined } } }, 0.5);
+      const on = { ...P, partyEffects: true };
+      const withParty = dec.scoreOption(option, 0.5, on);
+      const withoutParty = dec.scoreOption({ ...option, support: { ...option.support, effect: { ...option.support.effect, party: undefined } } }, 0.5, on);
       const boostedPair = option.support.effect.party.model.pair(0, true, 1);
       const basePair = option.party.model.pair(0, true, 1);
       check("파티②: 랭크업 → 이어지는 대면도 올린 랭크", boostedPair.myRate > basePair.myRate && withParty > withoutParty, `rate ${basePair.myRate.toFixed(3)}→${boostedPair.myRate.toFixed(3)} 점수 ${withoutParty.toFixed(3)}→${withParty.toFixed(3)}`);
