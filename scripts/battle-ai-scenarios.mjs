@@ -1362,6 +1362,25 @@ try {
       );
     }
   }
+  // ── 트랙 L(ver.1.8): 성묘 — 쓰러진 같은 편 수만큼 위력(엔진·AI 같은 계산) ──
+  {
+    const rt = await server.ssrLoadModule("/src/lib/battle/runTurn.ts");
+    const act = (id) => ({ kind: "move", move: data.getMove(id) });
+    const dmg = (fainted) => {
+      const st = battle([mon("팬텀", ["성묘"]), mon("잠만보", ["누르기"]), mon("메타그로스", ["칼춤"])], [mon("블래키", ["칼춤"], null, null, pts({ hp: 32, def: 32 }))]);
+      for (let i = 1; i <= fainted; i++) st.sideA.party[i].currentHp = 0;
+      const out = rt.runTurn(st, act("성묘"), act("칼춤"), () => 0.5);
+      const ai = opt(ev.evaluateOptions(st, "a"), "성묘");
+      return { damage: out.result.actions.find((x) => x.actor === "a").damage, aiTurns: ai.hitsToKill.expected };
+    };
+    const d0 = dmg(0);
+    const d2 = dmg(2);
+    check(
+      "트랙 L: 성묘 — 쓰러진 동료 2마리면 위력 150(엔진 데미지·AI 처치 턴 모두 반영)",
+      d2.damage > d0.damage * 2 && d2.aiTurns < d0.aiTurns,
+      `데미지 ${d0.damage}→${d2.damage} AI 처치 턴 ${d0.aiTurns.toFixed(2)}→${d2.aiTurns.toFixed(2)}`,
+    );
+  }
   // ── 매치업 난수별 데미지(ver.1.7 트랙 H): 기존 격파 판정과 같은 관계식인지 대조 ──
   {
     const bp = await server.ssrLoadModule("/src/lib/battlePower.ts");

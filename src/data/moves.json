@@ -7609,6 +7609,7 @@
   },
   {
     "id": "성묘",
+    "powerPerFaintedAlly": 50,
     "name": "성묘",
     "type": "고스트",
     "category": "physical",

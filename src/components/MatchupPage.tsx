@@ -10,6 +10,7 @@ import { AbilityPickerModal } from "./AbilityPickerModal";
 import { ItemPickerModal } from "./ItemPickerModal";
 import { NaturePickerModal } from "./NaturePickerModal";
 import { PointsEditorModal } from "./PointsEditorModal";
+import { faintedAllyPowerValue } from "../lib/battlePower";
 import { StageEditorModal } from "./StageEditorModal";
 import { CosmeticFormPickerModal } from "./CosmeticFormPickerModal";
 import { SlotPresetsModal } from "./SlotPresetsModal";
@@ -81,8 +82,11 @@ export function MatchupPage() {
             ? { ...defender.slot, item: null }
             : defender.slot,
       effMove:
-        attackerMove && attackerMove.id === "성묘" && attacker.slot.graveVisitFaintedAllies
-          ? { ...attackerMove, power: 50 + 50 * attacker.slot.graveVisitFaintedAllies }
+        attackerMove?.powerPerFaintedAlly && attackerMove.power !== null && attacker.slot.graveVisitFaintedAllies
+          ? {
+              ...attackerMove,
+              power: faintedAllyPowerValue(attackerMove.power, attackerMove.powerPerFaintedAlly, attacker.slot.graveVisitFaintedAllies),
+            }
           : attackerMove,
     };
   }, [attacker.slot, defender.slot, attackerMove]);
@@ -183,7 +187,7 @@ export function MatchupPage() {
           onToggleItemStolen={attacker.setItemStolen}
           onToggleUnburden={attacker.setUnburdenAssumed}
           onToggleParalysis={attacker.setParalysisAssumed}
-          moveIsGraveVisit={attackerMove?.id === "성묘"}
+          moveIsGraveVisit={!!attackerMove?.powerPerFaintedAlly}
           onSetGraveVisit={attacker.setGraveVisitFaintedAllies}
           moveIsSpitUp={!!attackerMove?.spitUpPower}
           stockpileCount={attacker.slot.stockpileCount}

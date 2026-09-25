@@ -7,7 +7,7 @@ import { evaluateSlotMatchup, type RuntimeCombatant } from "@/lib/matchupEvaluat
 import { resolveMoveContext } from "@/lib/moveContext";
 import { isOpponentTargetingMove, isPriorityMoveBlockedByField } from "@/lib/fieldEffects";
 import { computeStatusAttackMultiplier, ignoresBurnAttackPenalty } from "@/lib/statusConditions";
-import { supremeOverlordMultiplier } from "@/lib/battlePower";
+import { faintedAllyPowerValue, supremeOverlordMultiplier } from "@/lib/battlePower";
 import { abilityOf, activeWeather, isFainted, type BattleFighterState, type BattleSide, type BattleState } from "../state";
 import { computeBattleHitChance } from "../hitChance";
 import { computeTurnOrderPriority, effectiveHeldItem } from "../turnOrderInputs";
@@ -57,10 +57,15 @@ export function runtimeOf(fighter: BattleFighterState, types?: PokemonType[], st
   };
 }
 
-/** 집단구타(트랙 M6): 엔진과 같은 파티원 타수 — AI는 평균 위력 × 타수로 본다 */
+/** 파티 상태로 위력이 정해지는 기술: 성묘(트랙 L)·집단구타(트랙 M6 — AI는 평균 위력 × 타수로 본다). 엔진과 같은 계산 */
 function withBeatUpPower(state: BattleState, attacker: BattleFighterState, move: Move): Move {
-  if (!move.beatUpPower) return move;
   const party = (state.sideA.party.includes(attacker) ? state.sideA : state.sideB).party;
+  // 성묘(트랙 L): 엔진과 같은 위력(쓰러진 같은 편 수)
+  if (move.powerPerFaintedAlly && move.power !== null) {
+    const fainted = party.filter((f) => f !== attacker && isFainted(f)).length;
+    return { ...move, power: faintedAllyPowerValue(move.power, move.powerPerFaintedAlly, fainted) };
+  }
+  if (!move.beatUpPower) return move;
   const hitters = party.filter((f) => f === attacker || (!isFainted(f) && !f.status.condition));
   const powers = hitters.map((f) => 5 + Math.floor((getPokemon(f.slot.pokemonId)?.baseStats.atk ?? 0) / 10));
   const average = Math.round(powers.reduce((a, b) => a + b, 0) / powers.length);

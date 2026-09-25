@@ -657,6 +657,10 @@ export interface Move {
   /** 흉내쟁이(트랙 M2): 배틀에서 직전에 나온 기술(누가 썼든)을 대신 쓴다. 없거나 excludedFromCopycat이면 실패. */
   callsLastMoveInBattle?: boolean;
   /**
+   * 성묘(트랙 L): 위력 = power + 이 값 × 쓰러진 같은 편 수(자신 제외, 사용 시점). 최대 300.
+   */
+  powerPerFaintedAlly?: number;
+  /**
    * 집단구타(트랙 M6): 파티에서 기절하지 않고 상태이상이 없는 포켓몬(사용자는 항상) 1마리당 1타. 각 타 위력 = 5 + 그 포켓몬
    * 종족값 공격 ÷ 10(내림). 사용 시점에 multiHitPowers로 바꿔 기존 다단히트 경로를 탄다.
    */

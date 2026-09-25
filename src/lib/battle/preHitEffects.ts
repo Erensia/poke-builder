@@ -12,7 +12,7 @@ import { getAbilityPriorityBoost, resolveEffectiveDefenderAbility } from "@/lib/
 import { checkStatusActionBlock, inflictStatus, isImmuneToStatus } from "@/lib/statusConditions";
 import { ATTRACT_ACTION_BLOCK_CHANCE, CONFUSION_SELF_HIT_CHANCE, consumeVolatileTurn, hasVolatile } from "@/lib/volatileConditions";
 import { resolveMoveContext } from "@/lib/moveContext";
-import { WEIGHT_MOVE_FALLBACK_POWER, absoluteWeightPowerValue, computeDamage, positiveStagesPowerValue, reversalPowerFromHp, targetHpRatioPowerValue, rivalryDamageMultiplier, weightRatioPowerValue } from "@/lib/battlePower";
+import { WEIGHT_MOVE_FALLBACK_POWER, absoluteWeightPowerValue, computeDamage, positiveStagesPowerValue, reversalPowerFromHp, targetHpRatioPowerValue, faintedAllyPowerValue, rivalryDamageMultiplier, weightRatioPowerValue } from "@/lib/battlePower";
 import { applyWeatherBall } from "@/lib/weatherEffects";
 import { applyFieldPulse, getFieldPowerMultiplier, isOpponentTargetingMove, isPriorityMoveBlockedByField, isStatusBlockedByField } from "@/lib/fieldEffects";
 import { computeBattleHitChance } from "./hitChance";
@@ -615,6 +615,12 @@ export function resolvePreHitEffects(
     effectiveMove = { ...effectiveMove, power: thrown.flingPower };
     consumeItem(attacker);
     attackerItem = undefined;
+  }
+
+  // 성묘(트랙 L): 쓰러진 같은 편 수만큼 위력이 오른다(사용 시점, 자신 제외)
+  if (effectiveMove.powerPerFaintedAlly && effectiveMove.power !== null) {
+    const fainted = sideOf(state, actorKey).party.filter((f) => f !== attacker && isFainted(f)).length;
+    effectiveMove = { ...effectiveMove, power: faintedAllyPowerValue(effectiveMove.power, effectiveMove.powerPerFaintedAlly, fainted) };
   }
 
   // 집단구타(트랙 M6): 파티원마다 1타(위력 5 + 종족값 공격/10)
