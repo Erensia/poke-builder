@@ -568,7 +568,9 @@ party_race(첫 대면 c, d, p, my, opp, lost) = Σ_갈래 q × [ HP 교환 + λ 
 - 토글: 두 교체 모두 `pivot.tier2`로 표시해 `tier2Aware` 끔이면 고르지 않는다.
 - 엔진 수정(작업 중 발견): 눈 얼음 방어 1.5배·모래바람 바위 특방 1.5배(`getWeatherDefenseMultiplier` — hitResolution·matchupEvaluator 공통).
 - 송전(D)은 싱글에서 의미가 거의 없어 제외.
-- **결과(T2-C)**: 측정 중.
+- **결과(T2-C)**(`tier2Aware` 켬/끔): 그리디 일반 1600판 980 / 979, STATUS=1 800판 517 / 517. h2h STATUS=1 400판 200:198 — 전부 오차 안.
+  선택(켬, STATUS=1): 꼬리자르기 1 · 썰렁개그 1 — 배우는 포켓몬이 적어 드묾. (처음엔 STATUS 벤치 파티 생성 `isDesignedStatusMove`에 두 기술이 빠져
+  0회였다 — 포함하도록 수정.)
 
 ## 5. 위험 회피 성향 (`risk_aversion`)
 
