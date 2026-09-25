@@ -3,10 +3,12 @@ import { type Move } from "@/types/move";
 import { type StatusCondition } from "@/types/status";
 import { applyMoveStatChanges } from "@/lib/statStages";
 import { resolveEffectiveDefenderAbility } from "@/lib/abilityModifiers";
-import { isOpponentTargetingMove, isStatusBlockedByField } from "@/lib/fieldEffects";
+import { isConfusionBlockedByField, isOpponentTargetingMove, isStatusBlockedByField } from "@/lib/fieldEffects";
 import { inflictStatus, isImmuneToStatus } from "@/lib/statusConditions";
 import { FIELD_DURATION } from "@/lib/fieldEffects";
-import { inflictVolatile } from "@/lib/volatileConditions";
+import { hasVolatile, inflictVolatile } from "@/lib/volatileConditions";
+import { getConfusionCureBerryResult, getMentalHerbCureResult } from "@/lib/itemEffects";
+import { NEUTRAL_ACCURACY_STAGES, NEUTRAL_STAGES } from "@/types/battleStats";
 import {
   SCREEN_DURATION,
   TRICK_ROOM_DURATION,
@@ -42,10 +44,26 @@ export type EffectMoveKind =
   | "trickRoom"
   | "taunt"
   | "encore"
-  | "disable";
+  | "disable"
+  // AI-A1(ver.1.8): 흑안개·신비의부적·아쿠아링/뿌리박기·씨뿌리기·혼란·헤롱헤롱·하품
+  | "haze"
+  | "safeguard"
+  | "regen"
+  | "leechSeed"
+  | "confuse"
+  | "attract"
+  | "yawn";
+
+/** AI-A1(ver.1.8) 효과 — decision의 a1Aware로 따로 끌 수 있다(비교용) */
+export const A1_EFFECT_KINDS: ReadonlySet<EffectMoveKind> = new Set(["haze", "safeguard", "regen", "leechSeed", "confuse", "attract", "yawn"]);
 
 /** 3단계(§4-3) 효과 — decision의 phase3Aware로 따로 끌 수 있다 */
 export const PHASE3_EFFECT_KINDS: ReadonlySet<EffectMoveKind> = new Set(["weather", "field", "trickRoom", "taunt", "encore", "disable"]);
+
+/** 신비의부적 지속 턴(finishTurn이 5에서 센다) */
+export const SAFEGUARD_DURATION = 5;
+/** 혼란 지속 턴 기대값(1~4턴 균등 — rollConfusionDuration) */
+export const EXPECTED_CONFUSION_TURNS = 2.5;
 
 /** 독압정으로 걸린 독이 상대 대기 포켓몬에게 몇 턴 동안 데미지를 준다고 볼지(이월 항 근사) */
 export const HAZARD_POISON_TURNS = 3;
@@ -64,6 +82,14 @@ export function effectKindOf(move: Move): EffectMoveKind | undefined {
   if (move.setsEncore) return "encore";
   if (move.setsDisable) return "disable";
   if (move.inflictsVolatile?.some((v) => v.volatile === "taunt" && v.target !== "self")) return "taunt";
+  if (move.resetsAllStages) return "haze";
+  if (move.setsSafeguard) return "safeguard";
+  if (move.setsRegenVolatile) return "regen";
+  if (move.setsLeechSeed) return "leechSeed";
+  const opponentVolatile = (volatile: string) => move.inflictsVolatile?.some((v) => v.volatile === volatile && v.target === "opponent");
+  if (opponentVolatile("confusion")) return "confuse";
+  if (opponentVolatile("attract")) return "attract";
+  if (opponentVolatile("drowsy")) return "yawn";
   const debuff =
     move.statChanges?.some((s) => s.target === "opponent") &&
     !move.statChanges.some((s) => s.target === "self" && (s.delta ?? 0) > 0) &&
@@ -132,6 +158,15 @@ export function effectMoveFails(state: BattleState, key: FighterKey, move: Move)
     }
   }
 
+  const kind = effectKindOf(move);
+  if (kind === "haze") {
+    const neutral = (f: BattleFighterState) =>
+      Object.values(f.stages).every((v) => v === 0) && Object.values(f.accuracyStages).every((v) => v === 0);
+    return neutral(me) && neutral(target);
+  }
+  if (kind === "safeguard") return sideOf(state, key).safeguardTurnsRemaining !== undefined;
+  if (kind === "regen") return hasVolatile(me.volatile, move.setsRegenVolatile!);
+
   if (!targetsOpponent) return false;
   const classification = move.classification ?? [];
   if (targetAbility?.blocksOpponentStatusMoveEffects) return true;
@@ -139,8 +174,10 @@ export function effectMoveFails(state: BattleState, key: FighterKey, move: Move)
   if (classification.includes("가루") && target.types.includes("풀")) return true;
   if (targetAbility?.blocksSound && classification.includes("소리")) return true;
   if (move.inflictsStatus?.length && !statusToInflict(state, key, move)) return true;
+  if (kind === "leechSeed" || kind === "confuse" || kind === "attract" || kind === "yawn") {
+    return volatileEffectFails(state, key, kind);
+  }
   // 도발·앙코르·사슬묶기: 아로마베일(마음을 옭아매는 기술 차단)·이미 걸림·상대가 아직 기술을 안 씀(앙코르·사슬묶기)
-  const kind = effectKindOf(move);
   if (kind === "taunt" || kind === "encore" || kind === "disable") {
     if (targetAbility?.blocksMentalMoves) return true;
     const volatile = target.volatile.active;
@@ -149,6 +186,46 @@ export function effectMoveFails(state: BattleState, key: FighterKey, move: Move)
     return kind === "encore" ? volatile.encore !== undefined : volatile.disable !== undefined;
   }
   return false;
+}
+
+/**
+ * 씨뿌리기·혼란·헤롱헤롱·하품이 지금 실패하거나 효과가 없는지 — 엔진 mirroredEffects·finishTurn과 같은 조건.
+ * (대타·매직미러·황금몸·방음 등 공통 차단은 effectMoveFails가 먼저 본다.)
+ */
+function volatileEffectFails(state: BattleState, key: FighterKey, kind: "leechSeed" | "confuse" | "attract" | "yawn"): boolean {
+  const user = state[key];
+  const oppKey = opponentKey(key);
+  const target = state[oppKey];
+  const targetAbility = resolveEffectiveDefenderAbility(abilityOf(user), abilityOf(target));
+  switch (kind) {
+    case "leechSeed":
+      return target.types.includes("풀") || hasVolatile(target.volatile, "leechSeed") || !!abilityOf(target)?.negatesIndirectDamage;
+    case "confuse":
+      return hasVolatile(target.volatile, "confusion") || isConfusionBlockedByField(state.field) || confusionCuredOnInflict(target);
+    case "attract":
+      return (
+        hasVolatile(target.volatile, "attract") ||
+        target.gender === null ||
+        user.gender === null ||
+        target.gender === user.gender ||
+        !!targetAbility?.blocksMentalMoves ||
+        getMentalHerbCureResult(effectiveHeldItem(target), target.itemConsumed ?? false)
+      );
+    case "yawn":
+      // 이미 상태이상·졸음이면 실패, 잠듦 면역(타입·특성·필드)·신비의부적이면 2턴 뒤에 무산된다(finishTurn).
+      return (
+        !!target.status.condition ||
+        hasVolatile(target.volatile, "drowsy") ||
+        isImmuneToStatus("sleep", target.types, statusImmunitiesOf(target, targetAbility)) ||
+        isStatusBlockedByField(state.field, "sleep") ||
+        sideOf(state, oppKey).safeguardTurnsRemaining !== undefined
+      );
+  }
+}
+
+/** 시몬열매: 혼란에 걸리는 순간 치료·소모(엔진 mirroredEffects) — AI에겐 실패와 같다 */
+function confusionCuredOnInflict(target: BattleFighterState): boolean {
+  return getConfusionCureBerryResult(effectiveHeldItem(target), target.itemConsumed ?? false);
 }
 
 /**
@@ -171,6 +248,8 @@ export function effectDuration(state: BattleState, key: FighterKey, move: Move):
     case "encore":
     case "disable":
       return volatileDuration(effectKindOf(move) as "taunt" | "encore" | "disable");
+    case "safeguard":
+      return SAFEGUARD_DURATION;
     default:
       return undefined;
   }
@@ -222,6 +301,40 @@ export function applyEffectMove(clone: BattleState, key: FighterKey, move: Move,
       return true;
     case "taunt":
       target.volatile = inflictVolatile(target.volatile, "taunt", () => 0);
+      return true;
+    case "haze":
+      for (const f of [me, target]) {
+        f.stages = { ...NEUTRAL_STAGES };
+        f.accuracyStages = { ...NEUTRAL_ACCURACY_STAGES };
+      }
+      return true;
+    case "safeguard":
+      sideOf(clone, key).safeguardTurnsRemaining = SAFEGUARD_DURATION;
+      return true;
+    case "regen":
+      me.volatile = inflictVolatile(me.volatile, move.setsRegenVolatile!, () => 0);
+      return true;
+    case "leechSeed":
+      target.volatile = inflictVolatile(target.volatile, "leechSeed", () => 0);
+      return true;
+    case "confuse": {
+      // 혼란 턴은 기대값(2.5)으로 — turnsToKo가 남은 턴만큼만 행동 손실·자멸을 센다.
+      const confuse = (f: BattleFighterState) => {
+        f.volatile = { active: { ...f.volatile.active, confusion: { turnsRemaining: EXPECTED_CONFUSION_TURNS } } };
+      };
+      confuse(target);
+      // 흔들흔들댄스: 자신도 혼란(이미 혼란이면 그대로)
+      if (move.inflictsVolatile?.some((v) => v.volatile === "confusion" && v.target === "self") && !hasVolatile(me.volatile, "confusion")) {
+        confuse(me);
+      }
+      return true;
+    }
+    case "attract":
+      target.volatile = inflictVolatile(target.volatile, "attract", () => 0);
+      return true;
+    case "yawn":
+      // 다음 턴 종료에 잠든다 — 잠듦을 바로 걸고, 평가 쪽(evaluateEffectMove)에서 "그 전에 끝나는 대면"을 보정한다.
+      target.status = inflictStatus(target.status, "sleep");
       return true;
     case "encore":
     case "disable":

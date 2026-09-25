@@ -18,7 +18,7 @@ import { estimateMoveHits } from "./moveDamage";
 import { evaluateOpponentThreat, usableMoves } from "./opponentMoveModel";
 import { isOneShotMove, isUsageBlocked } from "./usageConditions";
 import { firstProbability } from "./speed";
-import { actionFactor, blockedTurns, residualDamageFraction } from "./turnRates";
+import { turnsToKo } from "./turnRates";
 
 /**
  * 파티 단위 평가(decision-layer §4-5, ver.1.8): 지금 대면이 끝난 뒤에도 남은 포켓몬끼리 대면이 이어진다고 보고
@@ -184,9 +184,8 @@ export function createPartyModel(state: BattleState, key: FighterKey): PartyMode
  */
 function turnsAt(rate: number, attacker: BattleFighterState, target: BattleFighterState, hp: number): number {
   if (hp <= 0) return 0;
-  const total = rate * actionFactor(attacker) + residualDamageFraction(target, target.maxHp);
-  if (total <= 0) return Infinity;
-  return Math.max(1, blockedTurns(attacker) + hp / total);
+  // turnsToKo는 "현재 HP 대비" 비율을 받는다 — 최대 HP 대비 rate를 남은 HP 비율로 나눠 넘긴다(같은 식).
+  return turnsToKo(rate / hp, attacker, target, hp * target.maxHp);
 }
 
 /** 대면 한 갈래: 확률 weight로 두 포켓몬이 이 HP 비율로 끝난다 */
