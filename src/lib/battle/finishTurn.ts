@@ -1,3 +1,4 @@
+import { itemsSuppressedByRoom } from "./turnOrderInputs";
 import { type EndOfTurnLogEntry, type FighterKey } from "@/types/battle";
 import { BATTLE_STAT_KEYS } from "@/types/battleStats";
 import { NO_STATUS_CONDITION } from "@/types/status";
@@ -184,7 +185,7 @@ function applyLeechSeedDamage(ctx: EndOfTurnFighterContext): void {
       });
     } else {
       const healerAbilityForItem = healer.effectiveAbilityId ? getAbility(healer.effectiveAbilityId) : undefined;
-      const healerItem = healerAbilityForItem?.disablesOwnItemEffects
+      const healerItem = healerAbilityForItem?.disablesOwnItemEffects || itemsSuppressedByRoom(state)
         ? undefined
         : healer.currentItemId
           ? getItem(healer.currentItemId)
@@ -218,7 +219,7 @@ function applyBoundDamage(ctx: EndOfTurnFighterContext): void {
     // 조임밴드: 속박을 건 쪽(상대)이 이 도구를 지녔으면 1/8 대신 1/6로 데미지가 늘어난다.
     const binder = state[opponentKey(key)];
     const binderAbility = binder.effectiveAbilityId ? getAbility(binder.effectiveAbilityId) : undefined;
-    const binderItem = binderAbility?.disablesOwnItemEffects
+    const binderItem = binderAbility?.disablesOwnItemEffects || itemsSuppressedByRoom(state)
       ? undefined
       : binder.currentItemId
         ? getItem(binder.currentItemId)
@@ -591,7 +592,7 @@ export function finishTurn(ctx: RunTurnContext): RunTurnOutcome {
     for (const key of (["a", "b"] as const)) {
       const fighter = state[key];
       const fighterAbility = fighter.effectiveAbilityId ? getAbility(fighter.effectiveAbilityId) : undefined;
-      const fighterItem = fighterAbility?.disablesOwnItemEffects
+      const fighterItem = fighterAbility?.disablesOwnItemEffects || itemsSuppressedByRoom(state)
         ? undefined
         : fighter.currentItemId
           ? getItem(fighter.currentItemId)

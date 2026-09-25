@@ -26,6 +26,11 @@ export const MIN_DAMAGE_ROLL = 0.85;
 
 /** 트릭룸 지속 턴 수. 필드(FIELD_DURATION)와 같은 5턴 */
 export const TRICK_ROOM_DURATION = 5;
+/** 원더룸·매직룸·중력·전자부유 지속 턴(트랙 M4, 쓴 턴 포함) */
+export const WONDER_ROOM_DURATION = 5;
+export const MAGIC_ROOM_DURATION = 5;
+export const GRAVITY_DURATION = 5;
+export const MAGNET_RISE_DURATION = 5;
 
 /** 날씨 기본 지속 턴 수(뜨거운바위 등 맞는 바위를 지녔으면 +3 = 8턴) */
 export const WEATHER_DURATION = 5;
@@ -258,6 +263,10 @@ export interface BattleFighterState {
    */
   baseTypes?: PokemonType[];
   baseAbilityId?: string | null;
+  /** 전자부유(트랙 M4): 땅 기술을 무시하는 남은 턴. 물러나면 풀린다 */
+  magnetRiseTurnsRemaining?: number;
+  /** 떨어뜨리기(트랙 M4): 맞아서 땅에 떨어진 상태(비행·부유·풍선·전자부유 무시). 물러나면 풀린다 */
+  smackedDown?: boolean;
   /** 위액(트랙 M3): 특성이 사라진 상태(effectiveAbilityId는 null). 물러나면 풀린다 */
   abilitySuppressed?: boolean;
   /**
@@ -391,6 +400,10 @@ export interface BattleState {
   fieldTurnsRemaining?: number;
   /** 트릭룸이 해제되기까지 남은 턴 수. 트릭룸이 안 걸려있으면 undefined */
   trickRoomTurnsRemaining?: number;
+  /** 트랙 M4: 원더룸(방어·특방 실능 맞바꿈)·매직룸(도구 효과 무효)·중력(모두 접지·명중 ×5/3) 남은 턴. 없으면 undefined */
+  wonderRoomTurnsRemaining?: number;
+  magicRoomTurnsRemaining?: number;
+  gravityTurnsRemaining?: number;
   /** 흉내쟁이(트랙 M2): 배틀에서 직전에 실제로 나온 기술 id(누가 썼든). 발버둥은 기록하지 않는다 */
   lastMoveUsedId?: string;
   turnNumber: number;
@@ -1078,9 +1091,10 @@ export function isForcedSwitchBlocked(target: BattleFighterState): boolean {
  * 구애류 잠금으로 지금 쓸 수 있는 유일한 기술 id. 지금 지닌 도구(서투름이면 무효)가 구애류가 아니거나 아직 잠기지
  * 않았으면 null. 화면(턴 진행 버튼)과 배틀 AI가 같은 판정을 쓴다.
  */
-export function choiceLockedMoveOf(fighter: BattleFighterState): string | null {
+export function choiceLockedMoveOf(fighter: BattleFighterState, state?: BattleState): string | null {
   if (!fighter.choiceLockedMoveId || !fighter.currentItemId) return null;
-  if (abilityOf(fighter)?.disablesOwnItemEffects) return null;
+  // 매직룸(트랙 M4) 중엔 구애류도 효과가 없어 잠기지 않는다(잠금 기록은 남아 룸이 끝나면 다시 적용)
+  if (abilityOf(fighter)?.disablesOwnItemEffects || state?.magicRoomTurnsRemaining !== undefined) return null;
   return getItem(fighter.currentItemId)?.locksFirstMoveUsed ? fighter.choiceLockedMoveId : null;
 }
 

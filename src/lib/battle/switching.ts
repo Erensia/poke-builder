@@ -1,3 +1,4 @@
+import { itemsSuppressedByRoom } from "./turnOrderInputs";
 import { type FighterKey } from "@/types/battle";
 import { isUncopyableAbility } from "./abilityChange";
 import { NEUTRAL_ACCURACY_STAGES, NEUTRAL_CRIT_STAGE, NEUTRAL_STAGES, type BattleStatKey } from "@/types/battleStats";
@@ -77,7 +78,7 @@ export function triggerTerrainSeeds(state: BattleState): string[] {
     const fighter = state[key];
     if (isFainted(fighter) || fighter.itemConsumed) continue;
     const ability = fighter.effectiveAbilityId ? getAbility(fighter.effectiveAbilityId) : undefined;
-    const item = ability?.disablesOwnItemEffects
+    const item = ability?.disablesOwnItemEffects || itemsSuppressedByRoom(state)
       ? undefined
       : fighter.currentItemId
         ? getItem(fighter.currentItemId)
@@ -430,6 +431,8 @@ export function performSwitch(
     outgoing.addedType = undefined;
     outgoing.abilitySuppressed = undefined;
   }
+  outgoing.magnetRiseTurnsRemaining = undefined;
+  outgoing.smackedDown = undefined;
   // 유지: currentHp · status(주 상태이상) · remainingPp · itemConsumed · currentItemId ·
   //       consumedBerryId · timesHitByMoves(교체 초기화 미도입) · ownMoveTypeBoosts ·
   //       disguiseBroken · hungerMode.
@@ -534,6 +537,9 @@ export function applySwitch(
     trickRoomTurnsRemaining: prevState.trickRoomTurnsRemaining,
     // 흉내쟁이(트랙 M2): 배틀에서 직전에 나온 기술은 턴·교체를 넘어 이어진다
     lastMoveUsedId: prevState.lastMoveUsedId,
+    wonderRoomTurnsRemaining: prevState.wonderRoomTurnsRemaining,
+    magicRoomTurnsRemaining: prevState.magicRoomTurnsRemaining,
+    gravityTurnsRemaining: prevState.gravityTurnsRemaining,
     turnNumber: prevState.turnNumber,
     entryAnnouncements: prevState.entryAnnouncements,
   };

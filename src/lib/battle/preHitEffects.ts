@@ -1,3 +1,4 @@
+import { itemsSuppressedByRoom } from "./turnOrderInputs";
 import { type Move } from "@/types/move";
 import { type PokemonType } from "@/types/pokemon-type";
 import { type ActionBlockReason, type ActionLogEntry, type FighterKey } from "@/types/battle";
@@ -111,6 +112,7 @@ export function resolvePreHitEffects(
       attacker.remainingPp[move.id] === 0 &&
       !attacker.itemConsumed &&
       !attackerAbility?.disablesOwnItemEffects &&
+      !itemsSuppressedByRoom(state) &&
       !defenderBerriesBlocked
     ) {
       const itemForPp = attacker.currentItemId ? getItem(attacker.currentItemId) : undefined;
@@ -411,12 +413,12 @@ export function resolvePreHitEffects(
   // 서투름: 자기 자신의 도구 전투 효과가 무효화된다 — 실제로 지녔는지와 무관하게 이 시점부터는
   // 아예 안 지닌 것처럼 취급한다(메가스톤에 의한 폼 변화는 pokemonForm.ts의 별도 축이라 영향 없음).
   // attackerItem/defenderItem도 매직미러 반사 구간에서 함께 맞바뀐다(let).
-  let attackerItem = attackerAbility?.disablesOwnItemEffects
+  let attackerItem = attackerAbility?.disablesOwnItemEffects || itemsSuppressedByRoom(state)
     ? undefined
     : attacker.currentItemId
       ? getItem(attacker.currentItemId)
       : undefined;
-  let defenderItem = defenderAbility?.disablesOwnItemEffects
+  let defenderItem = defenderAbility?.disablesOwnItemEffects || itemsSuppressedByRoom(state)
     ? undefined
     : defender.currentItemId
       ? getItem(defender.currentItemId)
