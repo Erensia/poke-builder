@@ -1248,6 +1248,37 @@ try {
       );
     }
   }
+  // ── 트랙 M5: 내던지기(도구 위력·소모·도구 효과) + 자폭류 AI 희생 평가 ──
+  {
+    const rt = await server.ssrLoadModule("/src/lib/battle/runTurn.ts");
+    const act = (id) => ({ kind: "move", move: data.getMove(id) });
+    const run = (st, a, b) => rt.runTurn(st, act(a), act(b), () => 0.3);
+    const actionOf = (out, key) => out.result.actions.find((x) => x.actor === key);
+    {
+      const ball = battle([mon("메타그로스", ["내던지기"], null, "검은철구")], [mon("잠만보", ["칼춤"], null, null, pts({ hp: 32 }))]);
+      const b1 = run(ball, "내던지기", "칼춤");
+      const orb = run(battle([mon("메타그로스", ["내던지기"], null, "전기구슬")], [mon("잠만보", ["칼춤"], null, null, pts({ hp: 32 }))]), "내던지기", "칼춤");
+      const berrySt = battle([mon("메타그로스", ["내던지기"], null, "오랭열매")], [mon("잠만보", ["칼춤"], null, null, pts({ hp: 32 }))]);
+      berrySt.b.currentHp = 100;
+      const berry = actionOf(run(berrySt, "내던지기", "칼춤"), "a");
+      const none = actionOf(run(battle([mon("메타그로스", ["내던지기"])], [mon("잠만보", ["칼춤"])]), "내던지기", "칼춤"), "a");
+      check(
+        "M5: 내던지기 — 도구 위력·소모(리사이클 가능)·전기구슬 마비·열매는 상대가 먹음·도구 없으면 실패",
+        actionOf(b1, "a").damage > 0 && b1.nextState.a.currentItemId === null && b1.nextState.a.lastConsumedItemId === "검은철구" &&
+          orb.nextState.b.status.condition === "paralysis" && (berry?.flingEffect?.berry?.healed ?? 0) > 0 && none?.blockedReason === "usageCondition",
+        `철구 데미지=${actionOf(b1, "a").damage} 마비=${orb.nextState.b.status.condition} 열매 회복=${berry?.flingEffect?.berry?.healed} 무도구=${none?.blockedReason}`,
+      );
+    }
+    {
+      const o = opt(ev.evaluateOptions(battle([mon("메타그로스", ["대폭발", "코멧펀치"]), mon("잠만보", ["누르기"])], [mon("블래키", ["깨물어부수기"])]), "a"), "대폭발");
+      const off = dec.scoreOption(o, 0.5, { ...dec.DEFAULT_DECISION_PARAMS, trackMAware: false });
+      check(
+        "M5 AI: 자폭류(대폭발) — 자신 기절을 반영한 희생 평가",
+        o.support?.effect?.kind === "selfDestruct" && !!o.support.effect.sacrifice && Number.isFinite(dec.scoreOption(o, 0.5)) && off === -Infinity,
+        `점수=${dec.scoreOption(o, 0.5).toFixed(3)} 성공=${o.support?.effect?.sacrifice?.success}`,
+      );
+    }
+  }
   // ── 매치업 난수별 데미지(ver.1.7 트랙 H): 기존 격파 판정과 같은 관계식인지 대조 ──
   {
     const bp = await server.ssrLoadModule("/src/lib/battlePower.ts");

@@ -605,6 +605,18 @@ export function resolvePreHitEffects(
       power: gyroBallPowerValue(attacker, defender, attackerItem, defenderItem),
     };
   }
+  // 내던지기(트랙 M5): 지닌 도구(서투름·매직룸이면 없음)를 던진다 — 위력은 도구의 flingPower, 도구는 이 시점에 소모.
+  // 던질 도구가 없으면 실패. 던진 도구의 효과(상태이상·열매 등)는 resolveAction이 맞은 뒤에 적용한다.
+  let flungItemId: string | undefined;
+  if (effectiveMove.flingsHeldItem) {
+    const thrown = attackerItem;
+    if (!thrown?.flingPower) return blocked("usageCondition");
+    flungItemId = thrown.id;
+    effectiveMove = { ...effectiveMove, power: thrown.flingPower };
+    consumeItem(attacker);
+    attackerItem = undefined;
+  }
+
   // 트랙 M5: 일렉트릭볼(스피드 비율)·하드프레스(상대 남은 HP) 위력, 분노의앞니(상대 HP 절반)·목숨걸기(내 HP) 고정 데미지
   if (effectiveMove.electroBallPower) {
     effectiveMove = { ...effectiveMove, power: electroBallPowerValue(attacker, defender, attackerItem, defenderItem) };
@@ -1023,7 +1035,7 @@ export function resolvePreHitEffects(
     }
   }
   return {
-    move, defenderKey, attacker, defender, defenderHpAtActionStart, actorPokemonId, defenderPokemonId, attackerAbility, defenderAbility, attackerBerriesBlocked, defenderBerriesBlocked, attackerItemIdBeforeAction, defenderItemIdBeforeAction, leppaRestoredPpItemName, pressureExtraPpAbilityName, selfCuredStatus, sleepTalkCalledMoveName, copycatCalledMoveName, ohkoBlockedByAbilityName, ohkoImmune, attackerItem, defenderItem, blockedByGoodAsGold, blockedBySubstitute, blockedByPowderImmunity, unseenFistPiercing, blockedByProtect, blockedByProtectMoveName, soundproofBlockedByAbilityName, bulletproofBlockedByAbilityName, opponentEffectsBlocked, bouncedByMagicMirror, shellSideArmCategory, abilityOffenseMultiplier, abilityDefenseMultiplier, stabMultiplier, typeEffectiveness, effectiveMove, sheerForceAbilityName, fickleBeamEmpowered, electromorphosisEmpoweredAbilityName, ownMoveTypeBoostMultiplier, rivalryMultiplier, changedOwnTypeTo, changedOwnTypeAbilityName, lostTypeAfterUse, gemMultiplier, ateGemItemName, hitChance, defenderHideType, evadedByCharge, hit, selfDamageOnUse, abilityAbsorbedMoveType, abilityAbsorbAbilityName, abilityAbsorbHealAmount, protectContactPenaltyMoveName, protectContactDamage, protectContactInflictedStatus,
+    move, defenderKey, attacker, defender, defenderHpAtActionStart, actorPokemonId, defenderPokemonId, attackerAbility, defenderAbility, attackerBerriesBlocked, defenderBerriesBlocked, attackerItemIdBeforeAction, defenderItemIdBeforeAction, leppaRestoredPpItemName, pressureExtraPpAbilityName, selfCuredStatus, sleepTalkCalledMoveName, copycatCalledMoveName, ohkoBlockedByAbilityName, ohkoImmune, flungItemId, attackerItem, defenderItem, blockedByGoodAsGold, blockedBySubstitute, blockedByPowderImmunity, unseenFistPiercing, blockedByProtect, blockedByProtectMoveName, soundproofBlockedByAbilityName, bulletproofBlockedByAbilityName, opponentEffectsBlocked, bouncedByMagicMirror, shellSideArmCategory, abilityOffenseMultiplier, abilityDefenseMultiplier, stabMultiplier, typeEffectiveness, effectiveMove, sheerForceAbilityName, fickleBeamEmpowered, electromorphosisEmpoweredAbilityName, ownMoveTypeBoostMultiplier, rivalryMultiplier, changedOwnTypeTo, changedOwnTypeAbilityName, lostTypeAfterUse, gemMultiplier, ateGemItemName, hitChance, defenderHideType, evadedByCharge, hit, selfDamageOnUse, abilityAbsorbedMoveType, abilityAbsorbAbilityName, abilityAbsorbHealAmount, protectContactPenaltyMoveName, protectContactDamage, protectContactInflictedStatus,
   };
 }
 

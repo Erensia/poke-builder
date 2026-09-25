@@ -94,7 +94,9 @@ export type EffectMoveKind =
   | "gravity"
   | "magnetRise"
   // 트랙 M5: 목숨걸기(데미지 기술이지만 자신이 기절 — 추억의선물과 같은 희생 평가)
-  | "finalGambit";
+  | "finalGambit"
+  // 트랙 M5: 대폭발·자폭·미스트버스트(쓰면 자신이 기절하는 데미지 기술) — 같은 희생 평가(사용자 결정)
+  | "selfDestruct";
 
 /** AI-A1(ver.1.8) 효과 — decision의 a1Aware로 따로 끌 수 있다(비교용) */
 export const A1_EFFECT_KINDS: ReadonlySet<EffectMoveKind> = new Set(["haze", "safeguard", "regen", "leechSeed", "confuse", "attract", "yawn"]);
@@ -127,6 +129,7 @@ export const TRACK_M_EFFECT_KINDS: ReadonlySet<EffectMoveKind> = new Set([
   "gravity",
   "magnetRise",
   "finalGambit",
+  "selfDestruct",
 ]);
 
 /** 경혈찌르기(트랙 M2)가 올릴 수 있는 능력 — 엔진 mirroredEffects와 같은 후보(+6 제외) */

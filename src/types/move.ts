@@ -656,6 +656,11 @@ export interface Move {
   raisesRandomStat?: number;
   /** 흉내쟁이(트랙 M2): 배틀에서 직전에 나온 기술(누가 썼든)을 대신 쓴다. 없거나 excludedFromCopycat이면 실패. */
   callsLastMoveInBattle?: boolean;
+  /**
+   * 내던지기(트랙 M5): 지닌 도구를 던진다 — 위력은 도구의 flingPower, 도구는 소모(리사이클로 회수 가능). 도구가 없거나
+   * 던질 수 없는 도구(메가스톤 등)·매직룸·서투름이면 실패. 맞은 상대에게 도구 효과(상태이상·풀죽음·나무열매·허브)가 발동한다.
+   */
+  flingsHeldItem?: boolean;
   /** 일렉트릭볼(트랙 M5): 자신/상대 실효 스피드 비율로 위력(40~150) */
   electroBallPower?: boolean;
   /** 하드프레스(트랙 M5): 위력 = 이 값 × 상대 남은 HP 비율 */

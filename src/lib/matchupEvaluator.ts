@@ -301,6 +301,9 @@ export function evaluateSlotMatchup(
         effSpeed(defenderRealStats.spe, defenderStages, defenderItem),
       ),
     };
+  } else if (move.flingsHeldItem) {
+    // 내던지기(트랙 M5): 지닌 도구의 flingPower. 던질 도구가 없으면 위력 없음(데미지 0)
+    variablePowerMove = { ...variablePowerMove, power: attackerItem?.flingPower ?? null };
   } else if (move.electroBallPower) {
     // 일렉트릭볼(트랙 M5): 자이로볼과 같은 실효 스피드, 본가 비율표
     const effSpeed = (spe: number, stages: StatStages, item: Parameters<typeof getItemSpeedMultiplier>[0]) =>

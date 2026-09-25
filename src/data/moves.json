@@ -1459,6 +1459,7 @@
   },
   {
     "id": "내던지기",
+    "flingsHeldItem": true,
     "name": "내던지기",
     "type": "악",
     "category": "physical",

@@ -824,16 +824,21 @@ export function evaluateOptions(state: BattleState, key: FighterKey, options: Ev
       option.hitsToKill = { ...option.hitsToKill, expected: 1 + afterHit + afterMiss };
     }
 
-    // 목숨걸기(트랙 M5): 내 HP만큼 주고 기절 — 추억의선물처럼 "그 state에서 이어지는 판세"로 평가(파티 모드 전용).
-    // 후공인데 이번 턴에 쓰러지면 데미지 없이 기절만 한다.
-    if (move.damageEqualsUserHp) {
+    // 목숨걸기·자폭류(트랙 M5): 주고 기절 — 추억의선물처럼 "그 state에서 이어지는 판세"로 평가(파티 모드 전용).
+    // 목숨걸기는 내 HP만큼, 자폭류(대폭발·자폭·미스트버스트)는 한 번 맞혔을 때의 평균 데미지만큼. 후공인데 이번 턴에
+    // 쓰러지면 데미지 없이 기절만 한다(자폭류는 빗나가도 기절).
+    const sacrificeAttack = move.damageEqualsUserHp || (move.selfFaints && move.category !== "status");
+    if (sacrificeAttack) {
       const bestKillTurns = turnsFor(myBest?.estimate, me, opponent).expected;
       if (!estimate || estimate.typeEffectiveness === 0 || estimate.accuracy <= 0) {
         option.support = { kind: "other", before: 0, after: 0, bestKillTurns };
         return option;
       }
+      const dealt = move.damageEqualsUserHp
+        ? me.currentHp
+        : Math.round((estimate.damageFraction / Math.max(estimate.accuracy, 1e-9)) * opponent.maxHp);
       const after = cloneBattleState(moveState);
-      after[oppKey].currentHp = Math.max(0, after[oppKey].currentHp - me.currentHp);
+      after[oppKey].currentHp = Math.max(0, after[oppKey].currentHp - dealt);
       after[key].currentHp = 0;
       const failed = cloneBattleState(moveState);
       failed[key].currentHp = 0;
@@ -851,7 +856,7 @@ export function evaluateOptions(state: BattleState, key: FighterKey, options: Ev
           base: race,
           hitChance: 1,
           carry: 0,
-          kind: "finalGambit",
+          kind: move.damageEqualsUserHp ? "finalGambit" : "selfDestruct",
           sacrifice: { success, afterModel: createPartyModel(after, key), failModel: createPartyModel(failed, key) },
         },
       };
