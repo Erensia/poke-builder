@@ -2,7 +2,7 @@ import { type FighterKey } from "@/types/battle";
 import { type Move } from "@/types/move";
 import { getItem, getMove } from "@/lib/data";
 import { type StatusCondition } from "@/types/status";
-import { applyMoveStatChanges } from "@/lib/statStages";
+import { applyMoveStatChanges, applyStageDelta } from "@/lib/statStages";
 import { resolveEffectiveDefenderAbility } from "@/lib/abilityModifiers";
 import { isConfusionBlockedByField, isOpponentTargetingMove, isStatusBlockedByField } from "@/lib/fieldEffects";
 import { inflictStatus, isImmuneToStatus } from "@/lib/statusConditions";
@@ -96,7 +96,12 @@ export type EffectMoveKind =
   // 트랙 M5: 목숨걸기(데미지 기술이지만 자신이 기절 — 추억의선물과 같은 희생 평가)
   | "finalGambit"
   // 트랙 M5: 대폭발·자폭·미스트버스트(쓰면 자신이 기절하는 데미지 기술) — 같은 희생 평가(사용자 결정)
-  | "selfDestruct";
+  | "selfDestruct"
+  // 트랙 M6: 부식가스·록온·자기장조작·치유소원(검은눈빛·블록·페어리록은 교체 모델링 때 — 사용자 결정)
+  | "itemRemove"
+  | "lockOn"
+  | "magneticFlux"
+  | "healingWish";
 
 /** AI-A1(ver.1.8) 효과 — decision의 a1Aware로 따로 끌 수 있다(비교용) */
 export const A1_EFFECT_KINDS: ReadonlySet<EffectMoveKind> = new Set(["haze", "safeguard", "regen", "leechSeed", "confuse", "attract", "yawn"]);
@@ -130,6 +135,10 @@ export const TRACK_M_EFFECT_KINDS: ReadonlySet<EffectMoveKind> = new Set([
   "magnetRise",
   "finalGambit",
   "selfDestruct",
+  "itemRemove",
+  "lockOn",
+  "magneticFlux",
+  "healingWish",
 ]);
 
 /** 경혈찌르기(트랙 M2)가 올릴 수 있는 능력 — 엔진 mirroredEffects와 같은 후보(+6 제외) */
@@ -188,6 +197,10 @@ export function effectKindOf(move: Move): EffectMoveKind | undefined {
   if (move.reducesTargetLastMovePp) return "spite";
   if (move.raisesRandomStat) return "acupressure";
   if (move.setsRoom) return move.setsRoom;
+  if (move.removesTargetItem) return "itemRemove";
+  if (move.boostsDefensesIfPlusMinus) return "magneticFlux";
+  if (move.setsHealingWish) return "healingWish";
+  if (move.inflictsVolatile?.some((v) => v.volatile === "lockOn" && v.target === "self")) return "lockOn";
   if (move.setsGravity) return "gravity";
   if (move.setsMagnetRise) return "magnetRise";
   if (move.swapsAbilityWithTarget) return "abilitySwap";
@@ -298,6 +311,12 @@ export function effectMoveFails(state: BattleState, key: FighterKey, move: Move)
   if (kind === "powerSplit") return me.realStats.atk === target.realStats.atk && me.realStats.spa === target.realStats.spa;
   if (kind === "acupressure") return acupressureOptions(me).length === 0;
   if (kind === "imprison") return hasVolatile(me.volatile, "imprison") || imprisonedMoveIds(me, target).length === 0;
+  // 트랙 M6: 록온 이미 있음 · 자기장조작(플러스·마이너스가 아니거나 둘 다 +6) · 치유소원(교대할 포켓몬 없음)
+  if (kind === "lockOn") return hasVolatile(me.volatile, "lockOn");
+  if (kind === "magneticFlux") {
+    return (me.effectiveAbilityId !== "플러스" && me.effectiveAbilityId !== "마이너스") || (me.stages.def >= 6 && me.stages.spd >= 6);
+  }
+  if (kind === "healingWish") return !hasLivingReserve(sideOf(state, key));
   // 트랙 M4: 중력 이미 있음 · 전자부유 못 뜸(엔진 resolveAction과 같은 조건). 룸은 다시 쓰면 해제라 실패가 없다.
   if (kind === "gravity") return state.gravityTurnsRemaining !== undefined;
   if (kind === "magnetRise") {
@@ -336,6 +355,10 @@ export function effectMoveFails(state: BattleState, key: FighterKey, move: Move)
   if (kind === "spite") {
     const remaining = target.lastMoveId ? target.remainingPp[target.lastMoveId] : undefined;
     return remaining === undefined || remaining <= 0 || remaining > move.reducesTargetLastMovePp!;
+  }
+  // 부식가스(트랙 M6): 도구 없음·메가스톤·점착
+  if (kind === "itemRemove") {
+    return !target.currentItemId || getItem(target.currentItemId)?.category === "mega-stone" || !!targetAbility?.preventsItemLoss;
   }
   // 트랙 M3: 특성·타입 바꾸기(엔진 mirroredEffects와 같은 조건)
   if (kind === "abilitySwap") {
@@ -452,6 +475,9 @@ export function effectDuration(state: BattleState, key: FighterKey, move: Move):
       return GRAVITY_DURATION;
     case "magnetRise":
       return MAGNET_RISE_DURATION;
+    // 록온: 다음 행동 한 번만 필중
+    case "lockOn":
+      return 1;
     default:
       return undefined;
   }
@@ -600,6 +626,17 @@ export function applyEffectMove(clone: BattleState, key: FighterKey, move: Move,
     }
     case "torment":
       target.volatile = inflictVolatile(target.volatile, "torment");
+      return true;
+    // 트랙 M6
+    case "itemRemove":
+      target.currentItemId = null;
+      target.choiceLockedMoveId = undefined;
+      return true;
+    case "lockOn":
+      me.volatile = inflictVolatile(me.volatile, "lockOn");
+      return true;
+    case "magneticFlux":
+      me.stages = applyStageDelta(applyStageDelta(me.stages, "def", 1), "spd", 1);
       return true;
     // 트랙 M4
     case "wonderRoom":

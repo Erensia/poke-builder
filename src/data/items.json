@@ -300,6 +300,7 @@
   },
   {
     "id": "아름다운허물",
+    "escapesTrapping": true,
     "flingPower": 10,
     "name": "아름다운허물",
     "description": "교체를 방해하는 효과를 무시하고 다른 지닌 포켓몬과 교체할 수 있게 된다.",

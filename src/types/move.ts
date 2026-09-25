@@ -657,6 +657,19 @@ export interface Move {
   /** 흉내쟁이(트랙 M2): 배틀에서 직전에 나온 기술(누가 썼든)을 대신 쓴다. 없거나 excludedFromCopycat이면 실패. */
   callsLastMoveInBattle?: boolean;
   /**
+   * 집단구타(트랙 M6): 파티에서 기절하지 않고 상태이상이 없는 포켓몬(사용자는 항상) 1마리당 1타. 각 타 위력 = 5 + 그 포켓몬
+   * 종족값 공격 ÷ 10(내림). 사용 시점에 multiHitPowers로 바꿔 기존 다단히트 경로를 탄다.
+   */
+  beatUpPower?: boolean;
+  /** 페어리록(트랙 M6): 다음 턴 동안 양쪽 모두 교체할 수 없다. 이미 걸려 있으면 실패 */
+  setsFairyLock?: boolean;
+  /** 치유소원(트랙 M6): 자신은 기절하고 다음에 나오는 포켓몬이 HP·상태이상을 전부 회복. 교대할 포켓몬이 없으면 실패 */
+  setsHealingWish?: boolean;
+  /** 부식가스(트랙 M6): 상대 도구를 녹여 없앤다(리사이클로 회수 불가). 메가스톤·점착이면 실패 */
+  removesTargetItem?: boolean;
+  /** 자기장조작(트랙 M6): 자신이 플러스·마이너스면 방어·특방 +1, 아니면 실패 */
+  boostsDefensesIfPlusMinus?: boolean;
+  /**
    * 내던지기(트랙 M5): 지닌 도구를 던진다 — 위력은 도구의 flingPower, 도구는 소모(리사이클로 회수 가능). 도구가 없거나
    * 던질 수 없는 도구(메가스톤 등)·매직룸·서투름이면 실패. 맞은 상대에게 도구 효과(상태이상·풀죽음·나무열매·허브)가 발동한다.
    */

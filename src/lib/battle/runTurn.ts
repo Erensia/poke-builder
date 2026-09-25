@@ -94,6 +94,7 @@ export function runTurn(
     wonderRoomTurnsRemaining: prevState.wonderRoomTurnsRemaining,
     magicRoomTurnsRemaining: prevState.magicRoomTurnsRemaining,
     gravityTurnsRemaining: prevState.gravityTurnsRemaining,
+    fairyLockTurnsRemaining: prevState.fairyLockTurnsRemaining,
     turnNumber: prevState.turnNumber + 1,
     entryAnnouncements: prevState.entryAnnouncements,
   };
@@ -115,7 +116,7 @@ export function runTurn(
     const fromIndex = side.activeIndex;
     const outgoing = side.party[fromIndex];
     // 문어굳히기/물고버티기에 걸린 채로 자발적 교체가 넘어오면(UI가 막지만 방어적으로) 무시한다.
-    if (isTrappedFromSwitching(outgoing)) continue;
+    if (isTrappedFromSwitching(outgoing, state)) continue;
     const entryMessages: string[] = [];
     performSwitch(state, key, action.toIndex, entryMessages);
     if (side.activeIndex !== fromIndex) {

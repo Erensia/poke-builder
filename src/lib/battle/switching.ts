@@ -1,4 +1,4 @@
-import { itemsSuppressedByRoom } from "./turnOrderInputs";
+import { effectiveHeldItem, itemsSuppressedByRoom } from "./turnOrderInputs";
 import { isGrounded } from "./grounding";
 import { type FighterKey } from "@/types/battle";
 import { isUncopyableAbility } from "./abilityChange";
@@ -15,10 +15,18 @@ import { calcSpikesDamage, calcStealthRockDamage } from "./entryCost";
 import { FIELD_DURATION, FIELD_ENTRY_ANNOUNCEMENT, isStatusBlockedByField } from "@/lib/fieldEffects";
 import { WEATHER_DURATION, abilityOf, activeWeather, applyForecastForm, applyMimicryForm, applyTransform, balloonEntryAnnouncement, cloneSide, consumeItem, contraryDelta, isFainted, opponentKey, sideOf, statusImmunitiesOf, weatherRockBonus, type BattleFighterState, type BattleState } from "./state";
 
-export function isTrappedFromSwitching(fighter: BattleFighterState): boolean {
+export function isTrappedFromSwitching(fighter: BattleFighterState, state?: BattleState): boolean {
   if (isFainted(fighter)) return false;
   if (fighter.types.includes("고스트")) return false;
-  return hasVolatile(fighter.volatile, "octolock") || hasVolatile(fighter.volatile, "jawLock");
+  // 아름다운허물(트랙 M6): 교체 봉쇄를 무시한다(매직룸·서투름이면 효과 없음)
+  if (effectiveHeldItem(fighter, state)?.escapesTrapping) return false;
+  // 페어리록(트랙 M6): 걸린 다음 턴은 모두 교체 불가
+  if ((state?.fairyLockTurnsRemaining ?? 0) > 0 && state!.fairyLockTurnsRemaining! < 2) return true;
+  return (
+    hasVolatile(fighter.volatile, "octolock") ||
+    hasVolatile(fighter.volatile, "jawLock") ||
+    hasVolatile(fighter.volatile, "meanLook")
+  );
 }
 
 /**
@@ -447,10 +455,11 @@ export function performSwitch(
   // 것도 여기서 함께 풀린다(물러나는 쪽 것은 아래 volatile 초기화에서 지워진다).
   {
     const opp = state[opponentKey(key)];
-    if (hasVolatile(opp.volatile, "octolock") || hasVolatile(opp.volatile, "jawLock")) {
+    if (hasVolatile(opp.volatile, "octolock") || hasVolatile(opp.volatile, "jawLock") || hasVolatile(opp.volatile, "meanLook")) {
       const next = { ...opp.volatile.active };
       delete next.octolock;
       delete next.jawLock;
+      delete next.meanLook;
       opp.volatile = { active: next };
     }
   }
@@ -499,6 +508,14 @@ export function performSwitch(
   // 4. 풍선 — 지니고 등장하면 공중에 떠있다는 안내를 낸다.
   const balloonMsg = balloonEntryAnnouncement(incoming);
   if (balloonMsg) log.push(balloonMsg);
+  // 5. 치유소원(트랙 M6): 이 편에 걸려 있으면 새로 나온 포켓몬이 HP·상태이상을 전부 회복한다(설치물 뒤).
+  if (side.healingWishPending && !isFainted(incoming)) {
+    side.healingWishPending = undefined;
+    incoming.currentHp = incoming.maxHp;
+    incoming.status = { ...NO_STATUS_CONDITION };
+    const inName = getPokemon(incoming.illusionAs ?? incoming.slot.pokemonId)?.name ?? "포켓몬";
+    log.push(`치유소원이 ${inName}${eulReul(inName)} 감쌌다! 체력과 상태이상이 모두 회복되었다!`);
+  }
 
   // TODO(§8): 추격(Pursuit)은 로스터에 없어 미구현 — 교체 대상을 위력 2배로 선타하는 예외.
 }
@@ -543,6 +560,7 @@ export function applySwitch(
     wonderRoomTurnsRemaining: prevState.wonderRoomTurnsRemaining,
     magicRoomTurnsRemaining: prevState.magicRoomTurnsRemaining,
     gravityTurnsRemaining: prevState.gravityTurnsRemaining,
+    fairyLockTurnsRemaining: prevState.fairyLockTurnsRemaining,
     turnNumber: prevState.turnNumber,
     entryAnnouncements: prevState.entryAnnouncements,
   };
