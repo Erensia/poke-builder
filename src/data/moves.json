@@ -2379,6 +2379,7 @@
   },
   {
     "id": "무릎차기",
+    "blockedByGravity": true,
     "name": "무릎차기",
     "type": "격투",
     "category": "physical",
@@ -3601,6 +3602,7 @@
   },
   {
     "id": "떨어뜨리기",
+    "groundsTarget": true,
     "name": "떨어뜨리기",
     "type": "바위",
     "category": "physical",
@@ -3620,6 +3622,7 @@
   },
   {
     "id": "공중날기",
+    "blockedByGravity": true,
     "name": "공중날기",
     "type": "비행",
     "category": "physical",
@@ -3928,6 +3931,7 @@
   },
   {
     "id": "뛰어오르기",
+    "blockedByGravity": true,
     "name": "뛰어오르기",
     "type": "비행",
     "category": "physical",
@@ -5639,6 +5643,7 @@
   },
   {
     "id": "원더룸",
+    "setsRoom": "wonderRoom",
     "name": "원더룸",
     "type": "에스퍼",
     "category": "status",
@@ -6346,6 +6351,7 @@
   },
   {
     "id": "매직룸",
+    "setsRoom": "magicRoom",
     "name": "매직룸",
     "type": "에스퍼",
     "category": "status",
@@ -6376,6 +6382,7 @@
   },
   {
     "id": "중력",
+    "setsGravity": true,
     "name": "중력",
     "type": "에스퍼",
     "category": "status",
@@ -6485,6 +6492,8 @@
   },
   {
     "id": "전자부유",
+    "blockedByGravity": true,
+    "setsMagnetRise": true,
     "name": "전자부유",
     "type": "전기",
     "category": "status",
@@ -9088,6 +9097,7 @@
   },
   {
     "id": "플라잉프레스",
+    "blockedByGravity": true,
     "name": "플라잉프레스",
     "type": "격투",
     "category": "physical",

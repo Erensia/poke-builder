@@ -101,6 +101,8 @@ export interface RuntimeCombatant {
   /** null이면 도구 없음(소모·강탈·서투름 포함) */
   itemId: string | null;
   weightKg?: number;
+  /** 트랙 M4: 지금 땅에 있는지(배틀 접지 판정). 생략하면 기존 판정(땅 기술 면역은 타입·특성·도구, 필드는 모두 땅) */
+  grounded?: boolean;
 }
 
 /** evaluateSlotMatchup이 실제로 필요로 하는 최소 형태. PartySlot과 MatchupSlot 둘 다 만족한다 */
@@ -375,6 +377,7 @@ export function evaluateSlotMatchup(
     defenderHpIsFull,
     defenderHasStatusCondition,
     field,
+    defenderGrounded: defenderRuntime?.grounded,
   });
 
   // 다단히트 기술이면, 특성/타입 조건 판정은 원래 기술(1타 위력) 기준으로 이미 끝났으니 여기서만
@@ -430,7 +433,7 @@ export function evaluateSlotMatchup(
 
   // 날씨/필드 데미지 배율은 (타입 변경까지 끝난) effectiveMove.type 기준으로 구한다 — battleSimulator와 동일.
   const autoWeatherDamageMultiplier = getWeatherDamageMultiplier(effectiveWeather, effectiveMove.type);
-  const autoFieldDamageMultiplier = getFieldDamageMultiplier(field, effectiveMove.type);
+  const autoFieldDamageMultiplier = getFieldDamageMultiplier(field, effectiveMove.type, attackerRuntime?.grounded, defenderRuntime?.grounded);
 
   // 투쟁심: 양쪽 슬롯 성별로 ×1.25(동성)/×0.75(이성)/×1.0(불명). battlePower.rivalryDamageMultiplier 공유(§5).
   const rivalryMultiplier = rivalryDamageMultiplier(

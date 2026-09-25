@@ -12,8 +12,9 @@ import {
   type BattleSide,
   type BattleState,
 } from "../state";
-import { calcEntryHazardDamage, isGroundedForHazards } from "../entryCost";
+import { calcEntryHazardDamage } from "../entryCost";
 import { blendTurns } from "./statusMoveEffects";
+import { isGrounded } from "../grounding";
 import { estimateMoveHits } from "./moveDamage";
 import { evaluateOpponentThreat, usableMoves } from "./opponentMoveModel";
 import { isOneShotMove, isUsageBlocked } from "./usageConditions";
@@ -101,18 +102,18 @@ function withEntryPoison(state: BattleState, fighter: BattleFighterState, side: 
   const layers = side.hazards.toxicSpikesLayers;
   if (layers <= 0 || fighter.status.condition || fighter.types.includes("독")) return fighter;
   const ability = abilityOf(fighter);
-  if (!isGroundedForHazards(fighter.types, ability)) return fighter;
+  if (!isGrounded(state, fighter, ability)) return fighter;
   const status = layers >= 2 ? "badly-poisoned" : "poison";
-  if (isImmuneToStatus(status, fighter.types, statusImmunitiesOf(fighter, ability)) || isStatusBlockedByField(state.field, status)) {
+  if (isImmuneToStatus(status, fighter.types, statusImmunitiesOf(fighter, ability)) || isStatusBlockedByField(state.field, status, true)) {
     return fighter;
   }
   const inflicted = inflictStatus(fighter.status, status);
   return { ...fighter, status: status === "badly-poisoned" ? { ...inflicted, turnsElapsed: 2 } : inflicted };
 }
 
-function entryFraction(fighter: BattleFighterState, side: BattleSide): number {
+function entryFraction(state: BattleState, fighter: BattleFighterState, side: BattleSide): number {
   if (fighter.maxHp <= 0) return 0;
-  return calcEntryHazardDamage(fighter.maxHp, fighter.types, abilityOf(fighter), side.hazards) / fighter.maxHp;
+  return calcEntryHazardDamage(fighter.maxHp, fighter.types, abilityOf(fighter), side.hazards, isGrounded(state, fighter)) / fighter.maxHp;
 }
 
 /** 대면표 한 칸을 계산한다(evaluateSwitchCandidate와 같은 재료 — 최선 공격기·상대 기술 모델·선공 확률) */
@@ -153,8 +154,8 @@ export function createPartyModel(state: BattleState, key: FighterKey): PartyMode
   const model: PartyModel = {
     myHp: mySide.party.map(hpOf),
     oppHp: oppSide.party.map(hpOf),
-    myEntry: mySide.party.map((f) => entryFraction(f, mySide)),
-    oppEntry: oppSide.party.map((f) => entryFraction(f, oppSide)),
+    myEntry: mySide.party.map((f) => entryFraction(state, f, mySide)),
+    oppEntry: oppSide.party.map((f) => entryFraction(state, f, oppSide)),
     myActive: mySide.activeIndex,
     oppActive: oppSide.activeIndex,
     memo: new Map(),

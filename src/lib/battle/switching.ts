@@ -1,3 +1,5 @@
+import { itemsSuppressedByRoom } from "./turnOrderInputs";
+import { isGrounded } from "./grounding";
 import { type FighterKey } from "@/types/battle";
 import { isUncopyableAbility } from "./abilityChange";
 import { NEUTRAL_ACCURACY_STAGES, NEUTRAL_CRIT_STAGE, NEUTRAL_STAGES, type BattleStatKey } from "@/types/battleStats";
@@ -9,7 +11,7 @@ import { computeRealStats } from "@/lib/statCalculator";
 import { applyStageDelta } from "@/lib/statStages";
 import { inflictStatus, isImmuneToStatus } from "@/lib/statusConditions";
 import { hasVolatile } from "@/lib/volatileConditions";
-import { calcSpikesDamage, calcStealthRockDamage, isGroundedForHazards } from "./entryCost";
+import { calcSpikesDamage, calcStealthRockDamage } from "./entryCost";
 import { FIELD_DURATION, FIELD_ENTRY_ANNOUNCEMENT, isStatusBlockedByField } from "@/lib/fieldEffects";
 import { WEATHER_DURATION, abilityOf, activeWeather, applyForecastForm, applyMimicryForm, applyTransform, balloonEntryAnnouncement, cloneSide, consumeItem, contraryDelta, isFainted, opponentKey, sideOf, statusImmunitiesOf, weatherRockBonus, type BattleFighterState, type BattleState } from "./state";
 
@@ -77,7 +79,7 @@ export function triggerTerrainSeeds(state: BattleState): string[] {
     const fighter = state[key];
     if (isFainted(fighter) || fighter.itemConsumed) continue;
     const ability = fighter.effectiveAbilityId ? getAbility(fighter.effectiveAbilityId) : undefined;
-    const item = ability?.disablesOwnItemEffects
+    const item = ability?.disablesOwnItemEffects || itemsSuppressedByRoom(state)
       ? undefined
       : fighter.currentItemId
         ? getItem(fighter.currentItemId)
@@ -141,8 +143,10 @@ function applyEntryHazardsOnSwitchIn(state: BattleState, key: FighterKey, log: s
   if (isFainted(self)) return;
 
   // 3. 접지 대상만: 압정뿌리기 · 독압정 · 끈적끈적네트
-  if (isGroundedForHazards(self.types, selfAbility)) {
-    const spikesDamage = calcSpikesDamage(self.maxHp, self.types, selfAbility, hz);
+  // 트랙 M4: 중력·전자부유·풍선·떨어뜨리기까지 반영한 접지 판정
+  const selfGrounded = isGrounded(state, self, selfAbility);
+  if (selfGrounded) {
+    const spikesDamage = calcSpikesDamage(self.maxHp, self.types, selfAbility, hz, selfGrounded);
     if (spikesDamage > 0) {
       self.currentHp = Math.max(0, self.currentHp - spikesDamage);
       log.push(`${selfName}${eunNeun(selfName)} 압정에 상처를 입었다! (${spikesDamage} 데미지)`);
@@ -153,7 +157,7 @@ function applyEntryHazardsOnSwitchIn(state: BattleState, key: FighterKey, log: s
       hz.toxicSpikesLayers > 0 &&
       !self.status.condition &&
       !isImmuneToStatus(hz.toxicSpikesLayers >= 2 ? "badly-poisoned" : "poison", self.types, statusImmunitiesOf(self, selfAbility)) &&
-      !isStatusBlockedByField(state.field, "poison") &&
+      !isStatusBlockedByField(state.field, "poison", selfGrounded) &&
       sideOf(state, key).safeguardTurnsRemaining === undefined
     ) {
       const cond: StatusCondition = hz.toxicSpikesLayers >= 2 ? "badly-poisoned" : "poison";
@@ -430,6 +434,8 @@ export function performSwitch(
     outgoing.addedType = undefined;
     outgoing.abilitySuppressed = undefined;
   }
+  outgoing.magnetRiseTurnsRemaining = undefined;
+  outgoing.smackedDown = undefined;
   // 유지: currentHp · status(주 상태이상) · remainingPp · itemConsumed · currentItemId ·
   //       consumedBerryId · timesHitByMoves(교체 초기화 미도입) · ownMoveTypeBoosts ·
   //       disguiseBroken · hungerMode.
@@ -534,6 +540,9 @@ export function applySwitch(
     trickRoomTurnsRemaining: prevState.trickRoomTurnsRemaining,
     // 흉내쟁이(트랙 M2): 배틀에서 직전에 나온 기술은 턴·교체를 넘어 이어진다
     lastMoveUsedId: prevState.lastMoveUsedId,
+    wonderRoomTurnsRemaining: prevState.wonderRoomTurnsRemaining,
+    magicRoomTurnsRemaining: prevState.magicRoomTurnsRemaining,
+    gravityTurnsRemaining: prevState.gravityTurnsRemaining,
     turnNumber: prevState.turnNumber,
     entryAnnouncements: prevState.entryAnnouncements,
   };

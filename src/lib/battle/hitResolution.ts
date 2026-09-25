@@ -1,5 +1,6 @@
 import { type ChargeHideType, type Move } from "@/types/move";
 import { isFixedAbility } from "./abilityChange";
+import { isGrounded } from "./grounding";
 import { type WeatherKind } from "@/types/weather";
 import { type FieldKind } from "@/types/field";
 import { type FighterKey, type HitAbilityEvent } from "@/types/battle";
@@ -161,7 +162,13 @@ export function resolveHitAndApplyDamage(input: HitResolutionInput) {
       attackerAbility?.treatsOwnWeatherAsSun ? "쾌청" : activeWeather(state),
       effectiveMove.type,
     );
-    const fieldMultiplier = getFieldDamageMultiplier(state.field, effectiveMove.type);
+    // 트랙 M4: 필드 타입 강화는 공격측이, 미스트필드 드래곤 반감은 방어측이 땅에 있을 때만
+    const fieldMultiplier = getFieldDamageMultiplier(
+      state.field,
+      effectiveMove.type,
+      isGrounded(state, attacker, attackerAbility),
+      isGrounded(state, defender, defenderAbility),
+    );
     const itemMultiplier = getItemOffenseMultiplier(
       attackerItem,
       effectiveMove,
@@ -215,7 +222,12 @@ export function resolveHitAndApplyDamage(input: HitResolutionInput) {
         ? { ...baseDefenderStages, [contactDefenseStat]: 0 }
         : baseDefenderStages;
 
-    const result = computeDamage(attacker.realStats, defender.realStats, attacker.types, hitMove, {
+    // 원더룸(트랙 M4): 방어·특방 실능을 맞바꿔 받는다(랭크는 그대로)
+    const defenderStatsForDamage =
+      state.wonderRoomTurnsRemaining !== undefined
+        ? { ...defender.realStats, def: defender.realStats.spd, spd: defender.realStats.def }
+        : defender.realStats;
+    const result = computeDamage(attacker.realStats, defenderStatsForDamage, attacker.types, hitMove, {
       typeEffectiveness,
       abilityMultiplier:
         abilityOffenseMultiplier *

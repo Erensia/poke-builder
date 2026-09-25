@@ -501,6 +501,20 @@ function TurnFooterLines({
           {turnName(actor)}의 신비의부적 효과가 사라졌다!
         </div>
       ))}
+      {turn.expiredFieldEffects?.map((effect) => (
+        <div key={`fx-${effect}`} className="battle-turn-line is-muted">
+          {effect === "wonderRoom"
+            ? "원더룸이 해제되어 방어와 특수방어가 원래대로 돌아왔다!"
+            : effect === "magicRoom"
+              ? "매직룸이 해제되어 도구의 효과가 원래대로 돌아왔다!"
+              : "중력이 원래대로 돌아왔다!"}
+        </div>
+      ))}
+      {turn.expiredMagnetRise?.map((actor, i) => (
+        <div key={`mr-${i}`} className="battle-turn-line is-muted">
+          {turnName(actor)}의 전자부유 효과가 끝났다!
+        </div>
+      ))}
       {turn.expiredTailwind?.map((actor, i) => (
         <div key={`tw-${i}`} className="battle-turn-line is-muted">
           {turnName(actor)}의 순풍이 멈췄다!
@@ -846,6 +860,38 @@ function ActionMainLine({
       {!action.blockedReason && action.hit && action.trickRoomSetFailed && (
         <> · 그러나 실패했다!</>
       )}
+      {/* 트랙 M4: 룸·중력·전자부유·떨어뜨리기 */}
+      {!action.blockedReason && action.trickRoomEnded && <> · 뒤틀린 시공이 원래대로 돌아왔다!</>}
+      {!action.blockedReason && action.roomChange && (
+        <>
+          {" "}
+          ·{" "}
+          {action.roomChange.room === "wonderRoom"
+            ? action.roomChange.on
+              ? "방어와 특수방어가 뒤바뀌는 이상한 공간이 만들어졌다!"
+              : "원더룸이 해제되어 방어와 특수방어가 원래대로 돌아왔다!"
+            : action.roomChange.on
+              ? "도구의 효과가 사라지는 이상한 공간이 만들어졌다!"
+              : "매직룸이 해제되어 도구의 효과가 원래대로 돌아왔다!"}
+        </>
+      )}
+      {!action.blockedReason && action.gravitySet && <> · 중력이 강해졌다!</>}
+      {!action.blockedReason && action.gravitySetFailed && <> · 그러나 실패했다!</>}
+      {!action.blockedReason && action.magnetRiseSet && (
+        <>
+          {" "}
+          · {actorName}
+          {eunNeun(actorName)} 전자기력으로 떠올랐다!
+        </>
+      )}
+      {!action.blockedReason && action.magnetRiseFailed && <> · 그러나 실패했다!</>}
+      {!action.blockedReason && action.smackedDownTarget && (
+        <>
+          {" "}
+          · {defenderName}
+          {eunNeun(defenderName)} 땅으로 떨어졌다!
+        </>
+      )}
       {!action.blockedReason && action.hit && action.setWeather && (
         <>
           {" "}
@@ -1173,6 +1219,8 @@ function ActionEffectLines({
             `${actorName}${eunNeun(actorName)} 트집 때문에 같은 기술을 연속으로 쓸 수 없다!`}
           {action.moveRestrictionKind === "imprison" &&
             `${actorName}${eunNeun(actorName)} 봉인 때문에 ${action.move.name}${eulReul(action.move.name)} 사용하지 못한다!`}
+          {action.moveRestrictionKind === "gravity" &&
+            `${actorName}${eunNeun(actorName)} 중력 때문에 ${action.move.name}${eulReul(action.move.name)} 사용하지 못한다!`}
         </div>
       )}
       {/* 상태이상에 새로 걸렸을 때(onset) — 보통 상대가 대상이지만, 매직미러로 되돌아온

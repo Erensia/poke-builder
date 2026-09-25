@@ -24,6 +24,7 @@ import { calcEntryHazardDamage } from "../entryCost";
 import { effectiveHeldItem } from "../turnOrderInputs";
 import { computeBattleHitChance } from "../hitChance";
 import { isCopyableMove } from "../preHitEffects";
+import { isGrounded } from "../grounding";
 import { getMove } from "@/lib/data";
 import {
   acupressureOptions,
@@ -302,7 +303,7 @@ function evaluateSwitchCandidate(state: BattleState, key: FighterKey, index: num
   const oppHp = opponentHp ?? opponent.currentHp;
   const entryCost = Math.min(
     candidate.currentHp,
-    calcEntryHazardDamage(candidate.maxHp, candidate.types, abilityOf(candidate), mySide.hazards),
+    calcEntryHazardDamage(candidate.maxHp, candidate.types, abilityOf(candidate), mySide.hazards, isGrounded(state, candidate)),
   );
   const hpAfterEntry = candidate.currentHp - entryCost;
   const pick = bestAttack({
@@ -671,7 +672,7 @@ function evaluatePhaze(ctx: EffectContext, base: RaceInputs): EffectEvaluation |
     side.activeIndex = j;
     const incoming = side.party[j];
     clone[oppKey] = incoming;
-    const entryHp = Math.min(incoming.currentHp, calcEntryHazardDamage(incoming.maxHp, incoming.types, abilityOf(incoming), side.hazards));
+    const entryHp = Math.min(incoming.currentHp, calcEntryHazardDamage(incoming.maxHp, incoming.types, abilityOf(incoming), side.hazards, isGrounded(clone, incoming)));
     incoming.currentHp -= entryHp;
     clone[key].currentHp = Math.max(1, clone[key].currentHp - hitLossHp);
     const fainted = incoming.currentHp <= 0;

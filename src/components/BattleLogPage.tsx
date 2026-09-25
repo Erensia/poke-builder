@@ -456,6 +456,9 @@ function BattleBoard({
           !battleState.weather &&
           !battleState.field &&
           battleState.trickRoomTurnsRemaining === undefined &&
+          battleState.wonderRoomTurnsRemaining === undefined &&
+          battleState.magicRoomTurnsRemaining === undefined &&
+          battleState.gravityTurnsRemaining === undefined &&
           !anyHazard &&
           !anyTailwind
         ) {
@@ -477,6 +480,15 @@ function BattleBoard({
               <span className="battle-environment-tag">
                 트릭룸 (앞으로 {battleState.trickRoomTurnsRemaining}턴)
               </span>
+            )}
+            {battleState.wonderRoomTurnsRemaining !== undefined && (
+              <span className="battle-environment-tag">원더룸 (앞으로 {battleState.wonderRoomTurnsRemaining}턴)</span>
+            )}
+            {battleState.magicRoomTurnsRemaining !== undefined && (
+              <span className="battle-environment-tag">매직룸 (앞으로 {battleState.magicRoomTurnsRemaining}턴)</span>
+            )}
+            {battleState.gravityTurnsRemaining !== undefined && (
+              <span className="battle-environment-tag">중력 (앞으로 {battleState.gravityTurnsRemaining}턴)</span>
             )}
             {(["a", "b"] as const).map((side) =>
               tailwindTurns(side) !== undefined ? (
@@ -614,6 +626,10 @@ function BattleBoard({
                     신비의부적 {battleSide(side)?.safeguardTurnsRemaining}턴
                   </span>
                 )}
+                {fighter.magnetRiseTurnsRemaining !== undefined && (
+                  <span className="battle-status-tag is-volatile">전자부유 {fighter.magnetRiseTurnsRemaining}턴</span>
+                )}
+                {fighter.smackedDown && <span className="battle-status-tag is-volatile">떨어뜨리기</span>}
                 {fighter.perishCount !== undefined && (
                   <span className="battle-status-tag is-major">멸망 {fighter.perishCount}</span>
                 )}
@@ -1075,7 +1091,7 @@ export function BattleLogPage() {
    */
   function choiceLockedMoveId(side: Side): string | null {
     if (!battleState) return null;
-    return choiceLockedMoveOf(battleState[side]);
+    return choiceLockedMoveOf(battleState[side], battleState);
   }
 
   /**
@@ -1123,6 +1139,10 @@ export function BattleLogPage() {
     if (encoreEntry?.moveId && encoreEntry.moveId !== moveId) {
       const forcedName = getMove(encoreEntry.moveId)?.name ?? "그 기술";
       return `${pokemonName}${eunNeun(pokemonName)} 앙코르 때문에 ${forcedName}만 사용할 수 있다!`;
+    }
+    if (battleState.gravityTurnsRemaining !== undefined && getMove(moveId)?.blockedByGravity) {
+      const movename = getMove(moveId)?.name ?? "그 기술";
+      return `${pokemonName}${eunNeun(pokemonName)} 중력 때문에 ${movename}${eulReul(movename)} 사용하지 못한다!`;
     }
     if (fighter.volatile.active.torment && fighter.lastMoveId === moveId) {
       return `${pokemonName}${eunNeun(pokemonName)} 트집 때문에 같은 기술을 연속으로 쓸 수 없다!`;

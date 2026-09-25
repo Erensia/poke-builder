@@ -8,9 +8,17 @@ import { getItemSpeedMultiplier } from "@/lib/itemEffects";
 import { type TurnOrderActor } from "@/lib/turnOrder";
 import { abilityOf, activeWeather, type BattleFighterState, type BattleState } from "./state";
 
-/** 지닌 도구의 실효 객체. 서투름(disablesOwnItemEffects)이면 도구 효과가 전부 무효라 undefined. */
-export function effectiveHeldItem(fighter: BattleFighterState): Item | undefined {
-  if (abilityOf(fighter)?.disablesOwnItemEffects) return undefined;
+/** 매직룸(트랙 M4): 모든 포켓몬의 도구 효과가 무효 */
+export function itemsSuppressedByRoom(state: BattleState | undefined): boolean {
+  return state?.magicRoomTurnsRemaining !== undefined;
+}
+
+/**
+ * 지닌 도구의 실효 객체. 서투름(disablesOwnItemEffects)이거나 매직룸 중(트랙 M4 — state를 넘길 때)이면 도구 효과가
+ * 전부 무효라 undefined.
+ */
+export function effectiveHeldItem(fighter: BattleFighterState, state?: BattleState): Item | undefined {
+  if (abilityOf(fighter)?.disablesOwnItemEffects || itemsSuppressedByRoom(state)) return undefined;
   return fighter.currentItemId ? getItem(fighter.currentItemId) : undefined;
 }
 
@@ -26,7 +34,7 @@ export function computeTurnOrderSpeed(state: BattleState, fighter: BattleFighter
   return (
     fighter.realStats.spe *
     computeStatusSpeedMultiplier(fighter.status.condition) *
-    getItemSpeedMultiplier(effectiveHeldItem(fighter)) *
+    getItemSpeedMultiplier(effectiveHeldItem(fighter, state)) *
     weatherMultiplier *
     (fighter.unburdenActive ? 2 : 1) *
     // 순풍(트랙 M1): 이 포켓몬이 속한 편에 순풍이 불고 있으면 2배

@@ -11,6 +11,7 @@ import { supremeOverlordMultiplier } from "@/lib/battlePower";
 import { abilityOf, activeWeather, isFainted, type BattleFighterState, type BattleSide, type BattleState } from "../state";
 import { computeBattleHitChance } from "../hitChance";
 import { computeTurnOrderPriority, effectiveHeldItem } from "../turnOrderInputs";
+import { isGrounded } from "../grounding";
 import { estimateHits, meanDamageFraction } from "./hitsToKill";
 import { applySurvivalGuard } from "./survivalGuard";
 import type { HitsEstimate } from "./types";
@@ -40,16 +41,19 @@ export interface MoveHitContext {
 }
 
 /** 실전 파이터의 현재 값을 evaluateSlotMatchup 런타임 입력으로 옮긴다. */
-export function runtimeOf(fighter: BattleFighterState, types?: PokemonType[]): RuntimeCombatant {
+export function runtimeOf(fighter: BattleFighterState, types?: PokemonType[], state?: BattleState): RuntimeCombatant {
   const pokemon = getPokemon(fighter.slot.pokemonId);
   // 슬롯에 메가스톤이 있으면 getEffectiveForm이 메가폼으로 계산하므로, 아직 메가진화 전이면 무시한다.
   const weightKg = pokemon ? getEffectiveForm(pokemon, fighter.slot, { ignoreMega: !fighter.hasMegaEvolved }).weightKg : undefined;
+  const stats = fighter.realStats;
   return {
     types: types ?? fighter.types,
-    realStats: fighter.realStats,
+    // 원더룸(트랙 M4): 방어·특방 실능을 맞바꾼 채로 계산
+    realStats: state?.wonderRoomTurnsRemaining !== undefined ? { ...stats, def: stats.spd, spd: stats.def } : stats,
     abilityId: fighter.effectiveAbilityId,
-    itemId: effectiveHeldItem(fighter)?.id ?? null,
+    itemId: effectiveHeldItem(fighter, state)?.id ?? null,
     weightKg,
+    grounded: state ? isGrounded(state, types ? { ...fighter, types } : fighter) : undefined,
   };
 }
 
@@ -96,8 +100,8 @@ export function estimateMoveHits(ctx: MoveHitContext, move: Move): MoveHitEstima
 
   const attackerAbility = abilityOf(attacker);
   const defenderAbility = resolveEffectiveDefenderAbility(attackerAbility, abilityOf(defender));
-  const attackerItem = effectiveHeldItem(attacker);
-  const defenderItem = effectiveHeldItem(defender);
+  const attackerItem = effectiveHeldItem(attacker, state);
+  const defenderItem = effectiveHeldItem(defender, state);
   const defenderTypes = ctx.defenderTypes ?? defender.types;
   const defenderHp = ctx.defenderHp ?? defender.currentHp;
   if (defenderHp <= 0) return { ...NO_DAMAGE, expected: 0, rawHits: 0, accuracy: 1, typeEffectiveness: 1 };
@@ -105,6 +109,8 @@ export function estimateMoveHits(ctx: MoveHitContext, move: Move): MoveHitEstima
   const moveContext = resolveMoveContext(attackerAbility, move, defenderTypes, defenderAbility, {
     weather: activeWeather(state),
     defenderItem,
+    // 타입을 가정으로 바꿔 넣은 경우(변환자재 등)는 그 타입 기준으로 접지를 본다
+    defenderGrounded: isGrounded(state, ctx.defenderTypes ? { ...defender, types: defenderTypes } : defender, defenderAbility),
   });
   const typeEffectiveness = moveContext.typeEffectiveness;
 
@@ -174,8 +180,8 @@ export function estimateMoveHits(ctx: MoveHitContext, move: Move): MoveHitEstima
     defenderHpIsFull: defenderHp === defender.maxHp,
     defenderHasStatusCondition: !!defender.status.condition,
     defenderItemConsumed: !!defender.itemConsumed,
-    attackerRuntime: runtimeOf(attacker, ctx.attackerTypes),
-    defenderRuntime: runtimeOf(defender, defenderTypes),
+    attackerRuntime: runtimeOf(attacker, ctx.attackerTypes, state),
+    defenderRuntime: runtimeOf(defender, defenderTypes, state),
     extraOffenseMultiplier: ownTypeBoost * electroBoost * burnMultiplier * overlordMultiplier,
   });
   if (!result) return null;

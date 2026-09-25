@@ -79,7 +79,7 @@ export interface ActionLogEntry {
   /** blockedReason이 "status"일 때, 정확히 어떤 상태이상 때문인지(마비/잠듦/얼음) — UI가 "몸이 저려서"/"쿨쿨 잠들어"/"얼어 버려서" 문구를 골라 쓰는 데 필요 */
   blockedByStatus?: StatusConditionState["condition"];
   /** blockedReason이 "moveRestricted"일 때, 도발/사슬묶기/앙코르 중 무엇 때문에 막혔는지 */
-  moveRestrictionKind?: "taunt" | "disable" | "encore" | "torment" | "imprison";
+  moveRestrictionKind?: "taunt" | "disable" | "encore" | "torment" | "imprison" | "gravity";
   /** 회피/빗나감 여부. 필중기는 항상 true. blockedReason이 있으면 의미 없음 */
   hit: boolean;
   critical: boolean;
@@ -155,6 +155,16 @@ export interface ActionLogEntry {
   setTrickRoom?: boolean;
   /** 트릭룸을 썼지만 이미 걸려있어서 실패했으면 true */
   trickRoomSetFailed?: boolean;
+  /** 트릭룸이 걸린 중에 다시 써서 해제했다(트랙 M4) */
+  trickRoomEnded?: boolean;
+  /** 원더룸·매직룸을 걸었거나(on) 다시 써서 해제했다(트랙 M4) */
+  roomChange?: { room: "wonderRoom" | "magicRoom"; on: boolean };
+  /** 떨어뜨리기(트랙 M4): 공중에 있던 상대를 땅에 떨어뜨렸다 */
+  smackedDownTarget?: boolean;
+  gravitySet?: boolean;
+  gravitySetFailed?: boolean;
+  magnetRiseSet?: boolean;
+  magnetRiseFailed?: boolean;
   /** 이 행동으로 날씨가 바뀌었으면(비바라기 등) 그 날씨. 이미 같은 날씨라 실패했으면 비어 있다 */
   setWeather?: WeatherKind;
   /** 날씨 기술을 썼지만 이미 같은 날씨라 실패했으면 true(본가 규칙, 사용자 확인) */
@@ -641,6 +651,10 @@ export interface TurnResult {
   expiredSafeguard: FighterKey[];
   /** 순풍(트랙 M1)이 이번 턴 종료로 멈춘 편 */
   expiredTailwind?: FighterKey[];
+  /** 트랙 M4: 이번 턴 끝에 끝난 원더룸·매직룸·중력 */
+  expiredFieldEffects?: ("wonderRoom" | "magicRoom" | "gravity")[];
+  /** 트랙 M4: 이번 턴 끝에 전자부유가 끝난 쪽 */
+  expiredMagnetRise?: FighterKey[];
   /** 턴 시작 시점에 발생한 안내 문구(의태 타입 변화 등). 없으면 빈 배열 */
   turnStartAnnouncements: string[];
   /**

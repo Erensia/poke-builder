@@ -25,12 +25,17 @@ import {
   hasLivingReserve,
   isForcedSwitchBlocked,
   TAILWIND_DURATION,
+  WONDER_ROOM_DURATION,
+  MAGIC_ROOM_DURATION,
+  GRAVITY_DURATION,
+  MAGNET_RISE_DURATION,
   type BattleFighterState,
   type BattleSide,
   type BattleState,
 } from "../state";
 import { cureConditionsBlockedByAbility, isFixedAbility, isUncopyableAbility } from "../abilityChange";
-import { calcEntryHazardDamage, isGroundedForHazards } from "../entryCost";
+import { calcEntryHazardDamage } from "../entryCost";
+import { isGrounded } from "../grounding";
 import { effectiveHeldItem } from "../turnOrderInputs";
 
 /**
@@ -82,7 +87,12 @@ export type EffectMoveKind =
   | "abilitySet"
   | "typeSet"
   | "typeAdd"
-  | "typeCopy";
+  | "typeCopy"
+  // 트랙 M4(ver.1.8): 원더룸·매직룸(다시 쓰면 해제)·중력·전자부유
+  | "wonderRoom"
+  | "magicRoom"
+  | "gravity"
+  | "magnetRise";
 
 /** AI-A1(ver.1.8) 효과 — decision의 a1Aware로 따로 끌 수 있다(비교용) */
 export const A1_EFFECT_KINDS: ReadonlySet<EffectMoveKind> = new Set(["haze", "safeguard", "regen", "leechSeed", "confuse", "attract", "yawn"]);
@@ -110,6 +120,10 @@ export const TRACK_M_EFFECT_KINDS: ReadonlySet<EffectMoveKind> = new Set([
   "typeSet",
   "typeAdd",
   "typeCopy",
+  "wonderRoom",
+  "magicRoom",
+  "gravity",
+  "magnetRise",
 ]);
 
 /** 경혈찌르기(트랙 M2)가 올릴 수 있는 능력 — 엔진 mirroredEffects와 같은 후보(+6 제외) */
@@ -167,6 +181,9 @@ export function effectKindOf(move: Move): EffectMoveKind | undefined {
   if (move.averagesAttacksWithTarget) return "powerSplit";
   if (move.reducesTargetLastMovePp) return "spite";
   if (move.raisesRandomStat) return "acupressure";
+  if (move.setsRoom) return move.setsRoom;
+  if (move.setsGravity) return "gravity";
+  if (move.setsMagnetRise) return "magnetRise";
   if (move.swapsAbilityWithTarget) return "abilitySwap";
   if (move.givesAbilityToTarget) return "abilityGive";
   if (move.copiesTargetAbility) return "abilityCopy";
@@ -215,7 +232,7 @@ function statusToInflict(state: BattleState, key: FighterKey, move: Move): Statu
   const targetAbility = resolveEffectiveDefenderAbility(userAbility, abilityOf(target));
   for (const effect of move.inflictsStatus ?? []) {
     if (isImmuneToStatus(effect.status, target.types, statusImmunitiesOf(target, targetAbility), userAbility?.bypassesPoisonTypeImmunity)) continue;
-    if (isStatusBlockedByField(state.field, effect.status)) continue;
+    if (isStatusBlockedByField(state.field, effect.status, isGrounded(state, target, targetAbility))) continue;
     if (effect.status === "freeze" && activeWeather(state) === "쾌청") continue;
     return effect.status;
   }
@@ -275,6 +292,16 @@ export function effectMoveFails(state: BattleState, key: FighterKey, move: Move)
   if (kind === "powerSplit") return me.realStats.atk === target.realStats.atk && me.realStats.spa === target.realStats.spa;
   if (kind === "acupressure") return acupressureOptions(me).length === 0;
   if (kind === "imprison") return hasVolatile(me.volatile, "imprison") || imprisonedMoveIds(me, target).length === 0;
+  // 트랙 M4: 중력 이미 있음 · 전자부유 못 뜸(엔진 resolveAction과 같은 조건). 룸은 다시 쓰면 해제라 실패가 없다.
+  if (kind === "gravity") return state.gravityTurnsRemaining !== undefined;
+  if (kind === "magnetRise") {
+    return (
+      state.gravityTurnsRemaining !== undefined ||
+      !!me.smackedDown ||
+      !!effectiveHeldItem(me, state)?.groundsHolder ||
+      (me.magnetRiseTurnsRemaining ?? 0) > 0
+    );
+  }
   // 트랙 M3: 역할(복사할 수 없는 특성·이미 같음)·미러타입(이미 같은 타입) — 엔진 mirroredEffects와 같은 조건
   if (kind === "abilityCopy") {
     const theirs = target.effectiveAbilityId;
@@ -355,7 +382,7 @@ function volatileEffectFails(state: BattleState, key: FighterKey, kind: "leechSe
     case "confuse":
       return (
         hasVolatile(target.volatile, "confusion") ||
-        isConfusionBlockedByField(state.field) ||
+        isConfusionBlockedByField(state.field, isGrounded(state, target, targetAbility)) ||
         confusionCuredOnInflict(target) ||
         !!targetAbility?.immuneToConfusion
       );
@@ -375,7 +402,7 @@ function volatileEffectFails(state: BattleState, key: FighterKey, kind: "leechSe
         !!target.status.condition ||
         hasVolatile(target.volatile, "drowsy") ||
         isImmuneToStatus("sleep", target.types, statusImmunitiesOf(target, targetAbility)) ||
-        isStatusBlockedByField(state.field, "sleep") ||
+        isStatusBlockedByField(state.field, "sleep", isGrounded(state, target, targetAbility)) ||
         sideOf(state, oppKey).safeguardTurnsRemaining !== undefined
       );
   }
@@ -410,6 +437,15 @@ export function effectDuration(state: BattleState, key: FighterKey, move: Move):
       return SAFEGUARD_DURATION;
     case "tailwind":
       return TAILWIND_DURATION;
+    // 트랙 M4: 룸은 걸려 있으면 다시 쓸 때 해제 — 그때는 "없어진 상태"가 남은 턴만큼 이어진다
+    case "wonderRoom":
+      return state.wonderRoomTurnsRemaining ?? WONDER_ROOM_DURATION;
+    case "magicRoom":
+      return state.magicRoomTurnsRemaining ?? MAGIC_ROOM_DURATION;
+    case "gravity":
+      return GRAVITY_DURATION;
+    case "magnetRise":
+      return MAGNET_RISE_DURATION;
     default:
       return undefined;
   }
@@ -559,6 +595,21 @@ export function applyEffectMove(clone: BattleState, key: FighterKey, move: Move,
     case "torment":
       target.volatile = inflictVolatile(target.volatile, "torment");
       return true;
+    // 트랙 M4
+    case "wonderRoom":
+      clone.wonderRoomTurnsRemaining = clone.wonderRoomTurnsRemaining === undefined ? WONDER_ROOM_DURATION : undefined;
+      return true;
+    case "magicRoom":
+      clone.magicRoomTurnsRemaining = clone.magicRoomTurnsRemaining === undefined ? MAGIC_ROOM_DURATION : undefined;
+      return true;
+    case "gravity":
+      clone.gravityTurnsRemaining = GRAVITY_DURATION;
+      me.magnetRiseTurnsRemaining = undefined;
+      target.magnetRiseTurnsRemaining = undefined;
+      return true;
+    case "magnetRise":
+      me.magnetRiseTurnsRemaining = MAGNET_RISE_DURATION;
+      return true;
     // 트랙 M3: 특성·타입을 바꾼 state로 재평가(새 특성이 면역인 상태는 엔진처럼 바로 풀린다)
     case "abilitySwap": {
       const mine = me.effectiveAbilityId;
@@ -668,9 +719,9 @@ export function hazardCarry(state: BattleState, key: FighterKey, move: Move): nu
   oppSide.party.forEach((f, i) => {
     if (i === oppSide.activeIndex || isFainted(f)) return;
     const ability = abilityOf(f);
-    const grounded = isGroundedForHazards(f.types, ability);
+    const grounded = isGrounded(state, f, ability);
     const extra =
-      calcEntryHazardDamage(f.maxHp, f.types, ability, after) - calcEntryHazardDamage(f.maxHp, f.types, ability, before);
+      calcEntryHazardDamage(f.maxHp, f.types, ability, after, grounded) - calcEntryHazardDamage(f.maxHp, f.types, ability, before, grounded);
     total += Math.min(f.currentHp, extra) / f.maxHp;
     if (move.setsHazard === "toxicSpikes" && grounded && !f.status.condition && !ability?.negatesIndirectDamage) {
       const status = after.toxicSpikesLayers >= 2 ? "badly-poisoned" : "poison";
