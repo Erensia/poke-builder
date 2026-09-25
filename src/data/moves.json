@@ -9648,10 +9648,10 @@
     "accuracy": null,
     "pp": 12,
     "priority": 0,
-    "effect": "다과회를 열어 지닌 나무열매를 먹는다. (섭취 조건 분기를 무시하고 즉시 섭취)",
+    "effect": "다과회를 열어 그 자리에 있는 모든 포켓몬이 지닌 나무열매를 먹는다.",
     "tags": [],
     "makesContact": false,
-    "eatsHeldBerry": true
+    "allEatBerries": true
   },
   {
     "id": "데코레이션",

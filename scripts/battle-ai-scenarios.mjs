@@ -1423,6 +1423,44 @@ try {
         `파워스왑 c ${se?.base.killTurns}→${se?.hit.killTurns} d ${se?.base.survivalTurns}→${se?.hit.survivalTurns} 뒤집어 d ${topsy?.base.survivalTurns}→${topsy?.hit.survivalTurns}`,
       );
     }
+    // 엔진: 다과회는 양쪽 모두 열매를 바로 먹는다(HP 조건 무시) · 아무도 없으면 실패
+    {
+      const st = battle([mon("잠만보", ["다과회"], null, "자뭉열매")], [mon("블래키", ["칼춤"], null, "리샘열매")]);
+      st.a.currentHp -= 30;
+      st.b.status = { condition: "sleep", turnsElapsed: 0, sleepTurns: 3 };
+      const out = run(st, "다과회", "칼춤");
+      const tea = out.result.actions.find((x) => x.actor === "a");
+      const none = run(battle([mon("잠만보", ["다과회"])], [mon("블래키", ["칼춤"])]), "다과회", "칼춤").result.actions.find((x) => x.actor === "a");
+      check(
+        "T2-B: 다과회 양쪽 열매 즉시 발동 · 열매 없으면 실패",
+        tea?.teaTime?.self?.healed > 0 && tea?.teaTime?.opponent?.curedStatus === "sleep" && !out.nextState.a.currentItemId && !out.nextState.b.currentItemId && none?.teaTimeFailed === true,
+        `회복=${tea?.teaTime?.self?.healed} 치료=${tea?.teaTime?.opponent?.curedStatus} 실패=${none?.teaTimeFailed}`,
+      );
+    }
+    // AI: 회생의기도(쓰러진 동료 부활)·멸망의노래(긴 대면에서 양쪽 기절)·다과회·문어굳히기 평가 + 토글
+    {
+      const revSt = battle([mon("잠만보", ["회생의기도", "누르기"]), mon("메타그로스", ["코멧펀치"])], [mon("블래키", ["깨물어부수기"])]);
+      revSt.sideA.party[1].currentHp = 0;
+      const rev = optOf(revSt, "회생의기도");
+      const noRev = optOf(battle([mon("잠만보", ["회생의기도", "누르기"]), mon("메타그로스", ["코멧펀치"])], [mon("블래키", ["깨물어부수기"])]), "회생의기도");
+      // 서로 못 쓰러뜨리는 긴 대면(둘 다 변화기뿐)이면 멸망의노래가 평가된다 / 짧은 대면이면 고르지 않는다
+      const perish = optOf(battle([mon("팬텀", ["멸망의노래", "섀도볼"]), mon("잠만보", ["누르기"])], [mon("블래키", ["칼춤"])]), "멸망의노래");
+      const shortPerish = optOf(battle([mon("팬텀", ["멸망의노래", "섀도볼"]), mon("잠만보", ["누르기"])], [mon("한카리아스", ["지진"])]), "멸망의노래");
+      const teaSt = battle([mon("잠만보", ["다과회", "누르기"], null, "자뭉열매")], [mon("블래키", ["깨물어부수기"])]);
+      teaSt.a.currentHp = Math.floor(teaSt.a.maxHp / 2);
+      const tea = optOf(teaSt, "다과회");
+      const octo = optOf(battle([mon("메타그로스", ["문어굳히기", "코멧펀치"])], [mon("잠만보", ["누르기"])]), "문어굳히기");
+      const re = rev.support?.effect;
+      check(
+        "T2-B AI: 회생의기도·멸망의노래·다과회·문어굳히기 평가 + tier2Aware 토글",
+        re?.kind === "revive" && re.partyShift?.extraCount === 1 && Number.isFinite(dec.scoreOption(rev, 0.5)) && !noRev.support?.effect &&
+          perish.support?.effect?.kind === "perishSong" && Number.isFinite(dec.scoreOption(perish, 0.5)) && !shortPerish.support?.effect &&
+          tea.support?.effect?.kind === "teaTime" && octo.support?.effect?.kind === "octolock" &&
+          octo.support.effect.hit.killTurns <= octo.support.effect.base.killTurns &&
+          dec.scoreOption(rev, 0.5, { ...P, tier2Aware: false }) === -Infinity,
+        `회생=${dec.scoreOption(rev, 0.5).toFixed(3)} 멸망=${dec.scoreOption(perish, 0.5).toFixed(3)} 문어 c ${octo.support?.effect?.base.killTurns}→${octo.support?.effect?.hit.killTurns}`,
+      );
+    }
   }
   // ── 매치업 난수별 데미지(ver.1.7 트랙 H): 기존 격파 판정과 같은 관계식인지 대조 ──
   {

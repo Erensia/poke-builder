@@ -37,6 +37,7 @@ import {
 import { cureConditionsBlockedByAbility, isFixedAbility, isUncopyableAbility } from "../abilityChange";
 import { calcEntryHazardDamage } from "../entryCost";
 import { isGrounded } from "../grounding";
+import { eatBerryNow } from "../fling";
 import { effectiveHeldItem } from "../turnOrderInputs";
 
 /**
@@ -111,7 +112,12 @@ export type EffectMoveKind =
   | "invertStages"
   | "healBell"
   | "transform"
-  | "courtChange";
+  | "courtChange"
+  // 변화기 판단 Tier 2-B: 멸망의노래·회생의기도·다과회·문어굳히기
+  | "perishSong"
+  | "revive"
+  | "teaTime"
+  | "octolock";
 
 /** AI-A1(ver.1.8) 효과 — decision의 a1Aware로 따로 끌 수 있다(비교용) */
 export const A1_EFFECT_KINDS: ReadonlySet<EffectMoveKind> = new Set(["haze", "safeguard", "regen", "leechSeed", "confuse", "attract", "yawn"]);
@@ -183,6 +189,10 @@ export const TIER2_EFFECT_KINDS: ReadonlySet<EffectMoveKind> = new Set([
   "healBell",
   "transform",
   "courtChange",
+  "perishSong",
+  "revive",
+  "teaTime",
+  "octolock",
 ]);
 
 /** 3단계(§4-3) 효과 — decision의 phase3Aware로 따로 끌 수 있다 */
@@ -228,6 +238,11 @@ export function effectKindOf(move: Move): EffectMoveKind | undefined {
   if (move.curesStatus?.target === "self" && move.curesParty) return "healBell";
   if (move.transformsIntoTarget) return "transform";
   if (move.swapsSideEffects) return "courtChange";
+  // Tier 2-B
+  if (move.setsPerishSong) return "perishSong";
+  if (move.revivesFaintedAlly) return "revive";
+  if (move.allEatBerries) return "teaTime";
+  if (move.octolock && move.category === "status") return "octolock";
   if (move.removesTargetItem) return "itemRemove";
   if (move.boostsDefensesIfPlusMinus) return "magneticFlux";
   if (move.setsHealingWish) return "healingWish";
@@ -359,6 +374,18 @@ export function effectMoveFails(state: BattleState, key: FighterKey, move: Move)
       hazardsEmpty(s.hazards) && Object.values(s.screens).every((v) => v === undefined) && s.tailwindTurnsRemaining === undefined && s.safeguardTurnsRemaining === undefined;
     return sideEmpty(state.sideA) && sideEmpty(state.sideB);
   }
+  // Tier 2-B: 멸망의노래(상대가 이미 멸망 카운트·방음이면 나만 기절) · 회생의기도(쓰러진 동료 없음) · 다과회(아무도 열매 없음)
+  // · 문어굳히기(이미 걸림)
+  if (kind === "perishSong") return target.perishCount !== undefined || me.perishCount !== undefined || !!abilityOf(target)?.blocksSound;
+  if (kind === "revive") {
+    const side = sideOf(state, key);
+    return !side.party.some((f, i) => i !== side.activeIndex && isFainted(f));
+  }
+  if (kind === "teaTime") {
+    const hasBerry = (f: BattleFighterState) => !!effectiveHeldItem(f, state)?.name.endsWith("열매");
+    return !hasBerry(me) && !hasBerry(target);
+  }
+  if (kind === "octolock") return hasVolatile(target.volatile, "octolock");
   // 트랙 M6: 록온 이미 있음 · 자기장조작(플러스·마이너스가 아니거나 둘 다 +6) · 치유소원(교대할 포켓몬 없음)
   if (kind === "lockOn") return hasVolatile(me.volatile, "lockOn");
   if (kind === "magneticFlux") {
@@ -674,6 +701,20 @@ export function applyEffectMove(clone: BattleState, key: FighterKey, move: Move,
     }
     case "torment":
       target.volatile = inflictVolatile(target.volatile, "torment");
+      return true;
+    // Tier 2-B(멸망의노래·회생의기도는 evaluator가 파티 판세로 따로 평가)
+    case "teaTime":
+      for (const f of [me, target]) {
+        const item = effectiveHeldItem(f, clone);
+        if (item?.name.endsWith("열매")) {
+          eatBerryNow(f, item);
+          f.currentItemId = null;
+        }
+      }
+      return true;
+    case "octolock":
+      // 매 턴 끝 방어·특방 −1 — 대면 동안의 누적을 한 단계로 근사(교체 봉쇄 가치는 교체 모델링 때)
+      target.stages = applyStageDelta(applyStageDelta(target.stages, "def", -1), "spd", -1);
       return true;
     // Tier 2-A
     case "stageSwap": {
