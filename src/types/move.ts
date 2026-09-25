@@ -665,6 +665,8 @@ export interface Move {
    * 종족값 공격 ÷ 10(내림). 사용 시점에 multiHitPowers로 바꿔 기존 다단히트 경로를 탄다.
    */
   beatUpPower?: boolean;
+  /** 치료방울(Tier 2): curesStatus(자신)에 더해 대기 포켓몬의 상태이상도 모두 고친다 */
+  curesParty?: boolean;
   /** 페어리록(트랙 M6): 다음 턴 동안 양쪽 모두 교체할 수 없다. 이미 걸려 있으면 실패 */
   setsFairyLock?: boolean;
   /** 치유소원(트랙 M6): 자신은 기절하고 다음에 나오는 포켓몬이 HP·상태이상을 전부 회복. 교대할 포켓몬이 없으면 실패 */

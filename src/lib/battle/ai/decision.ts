@@ -1,6 +1,6 @@
 import type { AiOption } from "./evaluator";
 import { DEFAULT_THREAT_MODEL } from "./opponentMoveModel";
-import { A1_EFFECT_KINDS, A2_EFFECT_KINDS, PHASE3_EFFECT_KINDS, TRACK_M_EFFECT_KINDS } from "./statusMoveEffects";
+import { A1_EFFECT_KINDS, A2_EFFECT_KINDS, PHASE3_EFFECT_KINDS, TRACK_M_EFFECT_KINDS, TIER2_EFFECT_KINDS } from "./statusMoveEffects";
 import { ALL_PROTECT_GROUPS, type ProtectGroup } from "./protectMoves";
 import { partyRaceValue, partyValueAfterTurn, type PartyDuel, type PartyEffect } from "./partyEval";
 
@@ -78,6 +78,8 @@ export interface DecisionParams {
   a2Aware: boolean;
   /** 트랙 M(ver.1.8) — 엔진에 새로 구현한 변화기(트릭·아픔나누기·순풍·리사이클·꿀꺽 등)를 평가할지(비교용) */
   trackMAware: boolean;
+  /** 변화기 판단 Tier 2(ver.1.8) — 파워스왑·가드셰어·변신·코트체인지 등을 평가할지(비교용) */
+  tier2Aware: boolean;
 }
 
 /**
@@ -112,6 +114,7 @@ export const DEFAULT_DECISION_PARAMS: DecisionParams = {
   a1Aware: true,
   a2Aware: true,
   trackMAware: true,
+  tier2Aware: true,
 };
 
 export interface ScoredOption {
@@ -431,6 +434,7 @@ function tradeScore(option: AiOption, riskAversion: number, params: DecisionPara
       if (!params.a1Aware && effectKind && A1_EFFECT_KINDS.has(effectKind)) return -Infinity;
       if (!params.a2Aware && effectKind && A2_EFFECT_KINDS.has(effectKind)) return -Infinity;
       if (!params.trackMAware && effectKind && TRACK_M_EFFECT_KINDS.has(effectKind)) return -Infinity;
+      if (!params.tier2Aware && effectKind && TIER2_EFFECT_KINDS.has(effectKind)) return -Infinity;
       return effectValue(option, params) - riskPenalty;
     }
     if (!params.a1Aware && isA1SupportMove(option)) return -Infinity;

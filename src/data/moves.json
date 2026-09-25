@@ -8786,6 +8786,7 @@
   },
   {
     "id": "치료방울",
+    "curesParty": true,
     "name": "치료방울",
     "type": "노말",
     "category": "status",

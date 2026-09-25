@@ -1381,6 +1381,49 @@ try {
       `데미지 ${d0.damage}→${d2.damage} AI 처치 턴 ${d0.aiTurns.toFixed(2)}→${d2.aiTurns.toFixed(2)}`,
     );
   }
+  // ── 변화기 판단 Tier 2-A(ver.1.8) ──
+  {
+    const rt = await server.ssrLoadModule("/src/lib/battle/runTurn.ts");
+    const act = (id) => ({ kind: "move", move: data.getMove(id) });
+    const run = (st, a, b) => rt.runTurn(st, act(a), act(b), () => 0.3);
+    const P = dec.DEFAULT_DECISION_PARAMS;
+    const optOf = (st, id) => opt(ev.evaluateOptions(st, "a"), id);
+    // 엔진: 치료방울은 대기 포켓몬까지 · 코트체인지는 순풍도 맞바꿈
+    {
+      const st = battle([mon("잠만보", ["치료방울"]), mon("메타그로스", ["코멧펀치"])], [mon("블래키", ["칼춤"])]);
+      st.a.status = { condition: "burn", turnsElapsed: 0 };
+      st.sideA.party[1].status = { condition: "paralysis", turnsElapsed: 0 };
+      const bell = run(st, "치료방울", "칼춤").nextState;
+      const court = battle([mon("블래키", ["코트체인지"])], [mon("잠만보", ["칼춤"])]);
+      court.sideB.tailwindTurnsRemaining = 3;
+      court.sideB.hazards = { ...court.sideB.hazards, stealthRock: true };
+      const c1 = run(court, "코트체인지", "칼춤").nextState;
+      check(
+        "T2-A: 치료방울 대기 포켓몬까지 치료 · 코트체인지 순풍·설치물 맞바꿈",
+        !bell.a.status.condition && !bell.sideA.party[1].status.condition && c1.sideA.tailwindTurnsRemaining > 0 && c1.sideB.hazards.stealthRock === false && c1.sideA.hazards.stealthRock === true,
+        `치료=${bell.a.status.condition}/${bell.sideA.party[1].status.condition} 순풍 A=${c1.sideA.tailwindTurnsRemaining}`,
+      );
+    }
+    // AI: 파워스왑(상대 +2 공격을 가져옴)·뒤집어엎기(상대 +2 → −2)·변신 평가 + 토글
+    {
+      const swapSt = battle([mon("잠만보", ["파워스왑", "누르기"], null, null, pts({ hp: 32, atk: 32 }))], [mon("블래키", ["깨물어부수기"])]);
+      swapSt.b.stages = { ...swapSt.b.stages, atk: 2 };
+      const swap = optOf(swapSt, "파워스왑");
+      const topsySt = battle([mon("잠만보", ["뒤집어엎기", "누르기"], null, null, pts({ hp: 32, atk: 32 }))], [mon("블래키", ["깨물어부수기"])]);
+      topsySt.b.stages = { ...topsySt.b.stages, atk: 2 };
+      const topsy = optOf(topsySt, "뒤집어엎기").support?.effect;
+      const tf = optOf(battle([mon("메타그로스", ["변신", "코멧펀치"])], [mon("한카리아스", ["지진"])]), "변신");
+      const se = swap.support?.effect;
+      check(
+        "T2-A AI: 파워스왑·뒤집어엎기·변신 재평가 + tier2Aware 토글",
+        se?.kind === "stageSwap" && se.hit.killTurns < se.base.killTurns && se.hit.survivalTurns > se.base.survivalTurns &&
+          topsy?.kind === "invertStages" && topsy.hit.survivalTurns > topsy.base.survivalTurns &&
+          tf.support?.effect?.kind === "transform" && Number.isFinite(dec.scoreOption(tf, 0.5)) &&
+          dec.scoreOption(swap, 0.5, { ...P, tier2Aware: false }) === -Infinity,
+        `파워스왑 c ${se?.base.killTurns}→${se?.hit.killTurns} d ${se?.base.survivalTurns}→${se?.hit.survivalTurns} 뒤집어 d ${topsy?.base.survivalTurns}→${topsy?.hit.survivalTurns}`,
+      );
+    }
+  }
   // ── 매치업 난수별 데미지(ver.1.7 트랙 H): 기존 격파 판정과 같은 관계식인지 대조 ──
   {
     const bp = await server.ssrLoadModule("/src/lib/battlePower.ts");
