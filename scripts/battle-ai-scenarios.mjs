@@ -902,6 +902,18 @@ try {
       const fast = battle([mon("팬텀", ["흉내쟁이"])], [mon("잠만보", ["칼춤", "방어"])]);
       const c2 = actionOf(run(fast, "흉내쟁이", "칼춤"), "a");
       const c3 = actionOf(run(st, "흉내쟁이", "방어"), "a");
+      // 턴·기절 교체를 넘어서도 직전 기술을 기억한다(사용자 제보: 죽기살기 → 객기로 기절 → 교체해 나온 흉내쟁이 = 객기)
+      const sw = await server.ssrLoadModule("/src/lib/battle/switching.ts");
+      const chain = battle([mon("시비꼬", ["죽기살기"]), mon("마임맨", ["흉내쟁이"])], [mon("가디안", ["객기", "사이코키네시스"])]);
+      chain.a.currentHp = 5;
+      const k1 = run(chain, "죽기살기", "객기");
+      const afterFaint = k1.forcedSwitch?.a ? sw.applySwitch(k1.nextState, "a", 1).nextState : k1.nextState;
+      const k2 = actionOf(run(afterFaint, "흉내쟁이", "사이코키네시스"), "a");
+      check(
+        "M2: 흉내쟁이 — 기절 교체 뒤 다음 턴에도 직전 기술(객기)을 따라 씀",
+        afterFaint.lastMoveUsedId === "객기" && k2?.copycatCalledMoveName === "객기" && k2.damage > 0,
+        `교체 뒤 기록=${afterFaint.lastMoveUsedId} 따라씀=${k2?.copycatCalledMoveName} 데미지=${k2?.damage}`,
+      );
       check(
         "M2: 흉내쟁이 — 직전 기술 따라 쓰기 / 없음·방어류면 실패",
         c1.nextState.a.stages.atk === 2 && actionOf(c1, "a")?.copycatCalledMoveName === "칼춤" && c2?.blockedReason === "usageCondition" && c3?.blockedReason === "usageCondition",

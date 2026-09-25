@@ -89,6 +89,8 @@ export function runTurn(
     field: prevState.field,
     fieldTurnsRemaining: prevState.fieldTurnsRemaining,
     trickRoomTurnsRemaining: prevState.trickRoomTurnsRemaining,
+    // 흉내쟁이(트랙 M2): 배틀에서 직전에 나온 기술은 턴·교체를 넘어 이어진다
+    lastMoveUsedId: prevState.lastMoveUsedId,
     turnNumber: prevState.turnNumber + 1,
     entryAnnouncements: prevState.entryAnnouncements,
   };
