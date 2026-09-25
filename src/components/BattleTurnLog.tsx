@@ -1406,6 +1406,18 @@ function ActionEffectLines({
         </div>
       )}
       {/* 아로마베일 — 헤롱헤롱·도발·기술봉인·앙코르를 막았을 때 */}
+      {/* 일격기(트랙 M5) */}
+      {!action.blockedReason && action.hit && action.move.oneHitKo && action.damage > 0 && (
+        <div className="battle-turn-line is-muted">일격필살!</div>
+      )}
+      {!action.blockedReason && action.hit && action.ohkoBlockedByAbilityName && (
+        <div className="battle-turn-line is-muted">
+          {defenderName}의 {action.ohkoBlockedByAbilityName}! 일격필살 기술은 통하지 않는다!
+        </div>
+      )}
+      {!action.blockedReason && action.hit && action.ohkoImmune && (
+        <div className="battle-turn-line is-muted">{defenderName}에게는 효과가 없는 것 같다...</div>
+      )}
       {!action.blockedReason && action.volatileBlockedByAbility && (() => {
         const { abilityName, volatile, self } = action.volatileBlockedByAbility;
         const who = self ? actorName : defenderName;

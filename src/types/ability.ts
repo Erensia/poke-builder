@@ -377,6 +377,8 @@ export interface Ability {
    * 공격이 떨어지는 대신 오히려 1랭크 오른다(본가 규칙). preventsForcedSwitch와 별개 축.
    */
   guardsAgainstIntimidate?: boolean;
+  /** 옹골참(트랙 M5): 일격기(Move.oneHitKo)가 통하지 않는다 */
+  immuneToOhko?: boolean;
   /** 트랙 M3: 정신력·마이페이스·둔감 — 상대의 위협(lowersOpponentStatOnEntry)을 받지 않는다 */
   immuneToIntimidate?: boolean;
   /** 트랙 M3: 마이페이스 — 혼란에 걸리지 않는다(특성이 바뀌어 새로 얻으면 걸려 있던 혼란도 풀린다) */

@@ -23,6 +23,7 @@ import {
   rankStageMultiplier,
   reversalPowerFromHp,
   gyroBallPowerFromSpeeds,
+  electroBallPowerFromSpeeds,
   positiveStagesPowerValue,
   weightRatioPowerValue,
   absoluteWeightPowerValue,
@@ -81,6 +82,8 @@ export interface SlotMatchupOptions {
    */
   attackerHpFraction?: number;
   defenderHpIsFull?: boolean;
+  /** 하드프레스(트랙 M5)처럼 상대 남은 HP 비율로 위력이 정해지는 기술용. 생략하면 풀피 */
+  defenderHpFraction?: number;
   defenderHasStatusCondition?: boolean;
   defenderItemConsumed?: boolean;
   /**
@@ -182,6 +185,7 @@ export function evaluateSlotMatchup(
     stockpileCount,
     attackerHpFraction,
     defenderHpIsFull,
+    defenderHpFraction = 1,
     defenderHasStatusCondition,
     defenderItemConsumed,
     attackerRuntime,
@@ -297,6 +301,20 @@ export function evaluateSlotMatchup(
         effSpeed(defenderRealStats.spe, defenderStages, defenderItem),
       ),
     };
+  } else if (move.electroBallPower) {
+    // 일렉트릭볼(트랙 M5): 자이로볼과 같은 실효 스피드, 본가 비율표
+    const effSpeed = (spe: number, stages: StatStages, item: Parameters<typeof getItemSpeedMultiplier>[0]) =>
+      spe * rankStageMultiplier(stages.spe) * getItemSpeedMultiplier(item);
+    variablePowerMove = {
+      ...variablePowerMove,
+      power: electroBallPowerFromSpeeds(
+        effSpeed(attackerRealStats.spe, attackerStages, attackerItem),
+        effSpeed(defenderRealStats.spe, defenderStages, defenderItem),
+      ),
+    };
+  } else if (move.targetHpRatioPower) {
+    // 하드프레스(트랙 M5): 상대 남은 HP 비율(매치업 페이지는 풀피)
+    variablePowerMove = { ...variablePowerMove, power: Math.max(1, Math.floor(move.targetHpRatioPower * defenderHpFraction)) };
   } else if (move.powerFromPositiveStages) {
     const { base, perStage } = move.powerFromPositiveStages;
     variablePowerMove = { ...variablePowerMove, power: positiveStagesPowerValue(attackerStages, base, perStage) };

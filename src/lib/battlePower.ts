@@ -94,6 +94,26 @@ export function gyroBallPowerFromSpeeds(userEffectiveSpeed: number, targetEffect
 }
 
 /**
+ * 일렉트릭볼(Electro Ball, 트랙 M5) 위력 — 본가 표: 자신/상대 실효 스피드 비율이 4배 이상 150, 3배 120, 2배 80, 1배 60, 그 미만 40.
+ * 상대 스피드가 0 이하면(이론상) 최대 위력.
+ */
+export function electroBallPowerFromSpeeds(userEffectiveSpeed: number, targetEffectiveSpeed: number): number {
+  if (targetEffectiveSpeed <= 0) return 150;
+  const ratio = userEffectiveSpeed / targetEffectiveSpeed;
+  if (ratio >= 4) return 150;
+  if (ratio >= 3) return 120;
+  if (ratio >= 2) return 80;
+  if (ratio >= 1) return 60;
+  return 40;
+}
+
+/** 하드프레스(Hard Press, 트랙 M5) 위력 — base × 상대 남은 HP 비율(내림, 최소 1) */
+export function targetHpRatioPowerValue(base: number, currentHp: number, maxHp: number): number {
+  if (maxHp <= 0) return 1;
+  return Math.max(1, Math.floor((base * currentHp) / maxHp));
+}
+
+/**
  * 기어오르기(Power Trip)·어시스트파워(Stored Power) 위력 — `base + perStage × Σ max(0, 랭크)`.
  * 이 프로젝트 stages엔 명중률·회피율 랭크가 없어 5스탯(공/방/특공/특방/스피드) 양수분만 합산한다.
  */

@@ -903,6 +903,10 @@ export function resolveHitAndApplyDamage(input: HitResolutionInput) {
   if (effectiveMove.selfFaints) {
     attacker.currentHp = 0;
   }
+  // 목숨걸기(트랙 M5): 데미지를 줬을 때만 기절(빗나감·면역·방어로 막힘이면 그대로)
+  if (effectiveMove.damageEqualsUserHp && damage > 0) {
+    attacker.currentHp = 0;
+  }
 
   // 길동무: 생명의구슬 반동/흡수기 회복/조개껍질방울 등 공격측 HP에 영향을 주는 후처리가 전부
   // 끝난 뒤에 마지막으로 판정한다 — 상대를 쓰러뜨리며 동시에 흡수기로 회복했더라도, 길동무는

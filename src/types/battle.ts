@@ -482,6 +482,9 @@ export interface ActionLogEntry {
   unburdenOpponentAbilityName?: string;
   /** 잠꼬대로 대신 발동시킨 기술 이름(잠꼬대 자신이 아니라 이 이름이 실제로 나간 기술) */
   sleepTalkCalledMoveName?: string;
+  /** 일격기(트랙 M5): 옹골참으로 막혔으면 그 특성 이름 / 면역 타입(절대영도 → 얼음)이라 안 통했으면 true */
+  ohkoBlockedByAbilityName?: string;
+  ohkoImmune?: boolean;
   /** 흉내쟁이(트랙 M2)로 대신 나간 기술 이름 */
   copycatCalledMoveName?: string;
   /** 변환자재로 자신의 타입이 이번 기술의 타입으로 바뀌었으면 그 타입 */
