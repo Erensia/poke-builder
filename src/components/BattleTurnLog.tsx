@@ -24,7 +24,7 @@ import {
 } from "../lib/battleLogText";
 
 /** 액션 로그 한 줄 안에 "OO 발동!"으로 뭉뚱그리기보다 전용 문구를 따로 쓰는 volatile들 */
-const VOLATILES_WITH_DEDICATED_LOG_LINE = new Set(["drowsy", "wish", "encore"]);
+const VOLATILES_WITH_DEDICATED_LOG_LINE = new Set(["drowsy", "wish", "encore", "imprison"]);
 
 /**
  * 방어측 on-hit 특성 효과 한 줄의 "내용"만 만드는 함수들(감싸는 div·key는 호출부 책임) —
@@ -696,9 +696,15 @@ function ActionMainLine({
 }) {
   return (
     <div className="battle-turn-line">
+      {/* 흉내쟁이(트랙 M2): "OO의 흉내쟁이!" 다음 줄에 따라 쓴 기술 — action.move는 따라 쓴 기술이다 */}
+      {action.copycatCalledMoveName && (
+        <>
+          <strong>{actorName}</strong>의 흉내쟁이!
+          <br />
+        </>
+      )}
       <strong>{actorName}</strong>의 {action.move.name}
       {action.sleepTalkCalledMoveName && " (잠꼬대로 냈다!)"}
-      {action.copycatCalledMoveName && " (흉내쟁이로 냈다!)"}
       {action.bouncedMoveName && (
         <> — {defenderName}의 {action.bouncedByAbilityName}! 기술이 되돌아왔다!</>
       )}
@@ -1131,7 +1137,7 @@ function ActionEffectLines({
           {action.moveRestrictionKind === "torment" &&
             `${actorName}${eunNeun(actorName)} 트집 때문에 같은 기술을 연속으로 쓸 수 없다!`}
           {action.moveRestrictionKind === "imprison" &&
-            `${actorName}${eunNeun(actorName)} 봉인 때문에 ${action.move.name}${eulReul(action.move.name)} 쓸 수 없다!`}
+            `${actorName}${eunNeun(actorName)} 봉인 때문에 ${action.move.name}${eulReul(action.move.name)} 사용하지 못한다!`}
         </div>
       )}
       {/* 상태이상에 새로 걸렸을 때(onset) — 보통 상대가 대상이지만, 매직미러로 되돌아온
@@ -1150,6 +1156,12 @@ function ActionEffectLines({
         </div>
       )}
       {/* 앙코르 성공 — 사용/받은 쪽을 두 줄로 나눈다(백로그 §7-3) */}
+      {!action.blockedReason && action.hit && action.inflictedVolatile === "imprison" && (
+        <div className="battle-turn-line is-muted">
+          {actorName}
+          {eunNeun(actorName)} 상대의 기술을 봉인했다!
+        </div>
+      )}
       {!action.blockedReason && action.hit && action.inflictedVolatile === "encore" && (
         <div className="battle-turn-line is-muted">
           {action.bouncedMoveName ? (

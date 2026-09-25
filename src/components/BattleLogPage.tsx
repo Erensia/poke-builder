@@ -25,7 +25,7 @@ import { TYPE_COLORS } from "../lib/typeColors";
 import { environmentTintBackground } from "../lib/environmentBackground";
 import { rankStageMultiplier } from "../lib/battlePower";
 import { VOLATILE_LABELS, SCREEN_LABELS } from "../lib/battleLogLabels";
-import { eunNeun } from "../lib/josa";
+import { eulReul, eunNeun } from "../lib/josa";
 import {
   applySwitch,
   choiceLockedMoveOf,
@@ -1130,7 +1130,7 @@ export function BattleLogPage() {
     const opponent = battleState[side === "a" ? "b" : "a"];
     if (opponent.volatile.active.imprison && opponent.remainingPp[moveId] !== undefined) {
       const movename = getMove(moveId)?.name ?? "그 기술";
-      return `${movename}${eunNeun(movename)} 봉인되어 쓸 수 없다!`;
+      return `${pokemonName}${eunNeun(pokemonName)} 봉인 때문에 ${movename}${eulReul(movename)} 사용하지 못한다!`;
     }
     return null;
   }
