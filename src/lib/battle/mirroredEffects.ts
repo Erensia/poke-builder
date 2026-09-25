@@ -725,6 +725,9 @@ export function resolveMirroredMoveEffects(input: MirroredMoveEffectsInput) {
     const swapScreens = state.sideA.screens;
     state.sideA.screens = state.sideB.screens;
     state.sideB.screens = swapScreens;
+    // 순풍·신비의부적도 편 단위 효과라 함께 맞바꾼다(본가 — Tier 2 작업 중 수정)
+    [state.sideA.tailwindTurnsRemaining, state.sideB.tailwindTurnsRemaining] = [state.sideB.tailwindTurnsRemaining, state.sideA.tailwindTurnsRemaining];
+    [state.sideA.safeguardTurnsRemaining, state.sideB.safeguardTurnsRemaining] = [state.sideB.safeguardTurnsRemaining, state.sideA.safeguardTurnsRemaining];
     courtChangeDone = true;
   }
 
@@ -854,6 +857,7 @@ export function resolveMirroredMoveEffects(input: MirroredMoveEffectsInput) {
 
   // 상태이상 치료: 물거품아리아처럼 명중 시 대상의 주 상태이상을 없앤다(inflictsStatus의 반대 방향).
   // status가 지정돼 있으면(물거품아리아=화상) 그 상태일 때만 치료 — 다른 상태이상은 안 지운다.
+  let partyStatusCuredCount = 0;
   if (effectiveMove.curesStatus) {
     const { target: cureTarget, status: cureStatus } = effectiveMove.curesStatus;
     const target = cureTarget === "self" ? attacker : defender;
@@ -861,6 +865,15 @@ export function resolveMirroredMoveEffects(input: MirroredMoveEffectsInput) {
       curedStatus = target.status.condition;
       curedStatusTarget = cureTarget;
       target.status = { ...NO_STATUS_CONDITION };
+    }
+    // 치료방울(curesParty, Tier 2): 대기 포켓몬의 상태이상도 모두 고친다(본가 — 이전엔 자신만)
+    if (effectiveMove.curesParty) {
+      for (const f of sideOf(state, actorKey).party) {
+        if (f !== attacker && !isFainted(f) && f.status.condition) {
+          f.status = { ...NO_STATUS_CONDITION };
+          partyStatusCuredCount++;
+        }
+      }
     }
   }
 
@@ -1464,7 +1477,7 @@ export function resolveMirroredMoveEffects(input: MirroredMoveEffectsInput) {
     [attackerItem, defenderItem] = [defenderItem, attackerItem];
   }
   return {
-    defenderAbility, attacker, defender, attackerAbility, attackerItem, defenderItem, abilityInflictedStatusOnAttacker, abilityInflictedStatusAbilityName, statusCureBerryItemName, mentalMoveBlockedByAbilityName, bouncedMoveName, bouncedByAbilityName, secondaryBlockedByAbilityName, berryEatFailed, stuffCheeksBerryHeal, stuffCheeksBerryName, costHpFailed, soulBeatHpCost, selfStatRises, selfStatsAtMax, selfStatDrops, reflectedStatDropAbilityName, reflectedStatDrops, restoredStatsSelfItemName, restoredStatsOpponentItemName, opportunistCopiedStats, opportunistAbilityName, opponentStatDrops, invertedTargetStages, addedTypeToTarget, overwroteTargetType, targetMoveTypeOverride, inflictedStatus, statusInflictFailed, beakBlastBurnedAttacker, curedStatus, curedStatusTarget, inflictedVolatile, tidyUpDone, courtChangeDone, revivedPartyName, reviveFailed, saltCureApplied, balloonPoppedItemName, octolockApplied, jawLockApplied, selfWokeBeforeMove, restSlept, healedAmount, healedTarget, averagedDefensesMoveName, swappedSpeedMoveName, transformedIntoName, transformFailed, regenSetFailed, leechSeedSetFailed, leechSeedBlockedByGrass, abilitySwappedTargetToName, abilitySwapFailed, substituteSetFailed, shedTailFailed, shedTailSucceeded, setDisabledMoveName, disableSetFailed, setEncoreMoveName, encoreSetFailed, swappedStatsMoveName, swappedStagesMoveName, protectSucceeded, protectFailed, protectStanceEntered, fieldSetFailed, stealthRockSetForSide, spikesSetForSide, toxicSpikesSetForSide, stickyWebSetForSide, hazardSetFailed, swappedItems, itemSwapFailed, painSplitHp, stockpileHealFailed, recycledItemName, recycleFailed, copiedStagesFromName, averagedAttacksMoveName, spitePp, spiteFailed, acupressureRaised, acupressureFailed, volatileBlockedByAbility, abilityChange, abilityChangeFailed, copiedTypes, smackedDownTarget, meltedItemName, meltFailed, magneticFluxFailed,
+    defenderAbility, attacker, defender, attackerAbility, attackerItem, defenderItem, abilityInflictedStatusOnAttacker, abilityInflictedStatusAbilityName, statusCureBerryItemName, mentalMoveBlockedByAbilityName, bouncedMoveName, bouncedByAbilityName, secondaryBlockedByAbilityName, berryEatFailed, stuffCheeksBerryHeal, stuffCheeksBerryName, costHpFailed, soulBeatHpCost, selfStatRises, selfStatsAtMax, selfStatDrops, reflectedStatDropAbilityName, reflectedStatDrops, restoredStatsSelfItemName, restoredStatsOpponentItemName, opportunistCopiedStats, opportunistAbilityName, opponentStatDrops, invertedTargetStages, addedTypeToTarget, overwroteTargetType, targetMoveTypeOverride, inflictedStatus, statusInflictFailed, beakBlastBurnedAttacker, curedStatus, curedStatusTarget, inflictedVolatile, tidyUpDone, courtChangeDone, revivedPartyName, reviveFailed, saltCureApplied, balloonPoppedItemName, octolockApplied, jawLockApplied, selfWokeBeforeMove, restSlept, healedAmount, healedTarget, averagedDefensesMoveName, swappedSpeedMoveName, transformedIntoName, transformFailed, regenSetFailed, leechSeedSetFailed, leechSeedBlockedByGrass, abilitySwappedTargetToName, abilitySwapFailed, substituteSetFailed, shedTailFailed, shedTailSucceeded, setDisabledMoveName, disableSetFailed, setEncoreMoveName, encoreSetFailed, swappedStatsMoveName, swappedStagesMoveName, protectSucceeded, protectFailed, protectStanceEntered, fieldSetFailed, stealthRockSetForSide, spikesSetForSide, toxicSpikesSetForSide, stickyWebSetForSide, hazardSetFailed, swappedItems, itemSwapFailed, painSplitHp, stockpileHealFailed, recycledItemName, recycleFailed, copiedStagesFromName, averagedAttacksMoveName, spitePp, spiteFailed, acupressureRaised, acupressureFailed, volatileBlockedByAbility, abilityChange, abilityChangeFailed, copiedTypes, smackedDownTarget, meltedItemName, meltFailed, magneticFluxFailed, partyStatusCuredCount,
   };
 }
 

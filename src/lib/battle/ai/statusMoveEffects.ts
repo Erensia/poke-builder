@@ -1,7 +1,7 @@
 import { type FighterKey } from "@/types/battle";
 import { type Move } from "@/types/move";
 import { getItem, getMove } from "@/lib/data";
-import { type StatusCondition } from "@/types/status";
+import { NO_STATUS_CONDITION, type StatusCondition } from "@/types/status";
 import { applyMoveStatChanges, applyStageDelta } from "@/lib/statStages";
 import { resolveEffectiveDefenderAbility } from "@/lib/abilityModifiers";
 import { isConfusionBlockedByField, isOpponentTargetingMove, isStatusBlockedByField } from "@/lib/fieldEffects";
@@ -23,6 +23,7 @@ import {
   statDropBlockStatsOf,
   statusImmunitiesOf,
   hasLivingReserve,
+  applyTransform,
   isForcedSwitchBlocked,
   TAILWIND_DURATION,
   WONDER_ROOM_DURATION,
@@ -101,7 +102,16 @@ export type EffectMoveKind =
   | "itemRemove"
   | "lockOn"
   | "magneticFlux"
-  | "healingWish";
+  | "healingWish"
+  // 변화기 판단 Tier 2-A(ver.1.8): 파워스왑·가드스왑·가드셰어·스피드스왑·파워트릭·뒤집어엎기·치료방울·변신·코트체인지
+  | "stageSwap"
+  | "guardSplit"
+  | "speedSwap"
+  | "powerTrick"
+  | "invertStages"
+  | "healBell"
+  | "transform"
+  | "courtChange";
 
 /** AI-A1(ver.1.8) 효과 — decision의 a1Aware로 따로 끌 수 있다(비교용) */
 export const A1_EFFECT_KINDS: ReadonlySet<EffectMoveKind> = new Set(["haze", "safeguard", "regen", "leechSeed", "confuse", "attract", "yawn"]);
@@ -163,6 +173,18 @@ export function imprisonedMoveIds(user: BattleFighterState, target: BattleFighte
   return Object.keys(target.remainingPp).filter((id) => user.remainingPp[id] !== undefined);
 }
 
+/** 변화기 판단 Tier 2(ver.1.8) 효과 — decision의 tier2Aware로 따로 끌 수 있다(비교용) */
+export const TIER2_EFFECT_KINDS: ReadonlySet<EffectMoveKind> = new Set([
+  "stageSwap",
+  "guardSplit",
+  "speedSwap",
+  "powerTrick",
+  "invertStages",
+  "healBell",
+  "transform",
+  "courtChange",
+]);
+
 /** 3단계(§4-3) 효과 — decision의 phase3Aware로 따로 끌 수 있다 */
 export const PHASE3_EFFECT_KINDS: ReadonlySet<EffectMoveKind> = new Set(["weather", "field", "trickRoom", "taunt", "encore", "disable"]);
 
@@ -197,6 +219,15 @@ export function effectKindOf(move: Move): EffectMoveKind | undefined {
   if (move.reducesTargetLastMovePp) return "spite";
   if (move.raisesRandomStat) return "acupressure";
   if (move.setsRoom) return move.setsRoom;
+  // Tier 2-A
+  if (move.swapsStagesWithTarget) return "stageSwap";
+  if (move.averagesDefensesWithTarget) return "guardSplit";
+  if (move.swapsSpeedWithTarget) return "speedSwap";
+  if (move.swapsOwnStats) return "powerTrick";
+  if (move.invertsTargetStatStages) return "invertStages";
+  if (move.curesStatus?.target === "self" && move.curesParty) return "healBell";
+  if (move.transformsIntoTarget) return "transform";
+  if (move.swapsSideEffects) return "courtChange";
   if (move.removesTargetItem) return "itemRemove";
   if (move.boostsDefensesIfPlusMinus) return "magneticFlux";
   if (move.setsHealingWish) return "healingWish";
@@ -311,6 +342,23 @@ export function effectMoveFails(state: BattleState, key: FighterKey, move: Move)
   if (kind === "powerSplit") return me.realStats.atk === target.realStats.atk && me.realStats.spa === target.realStats.spa;
   if (kind === "acupressure") return acupressureOptions(me).length === 0;
   if (kind === "imprison") return hasVolatile(me.volatile, "imprison") || imprisonedMoveIds(me, target).length === 0;
+  // Tier 2-A: 바꿔도 달라지는 게 없으면 쓰지 않는다(엔진 규칙상 실패는 변신 중 재변신뿐)
+  if (kind === "stageSwap") return move.swapsStagesWithTarget!.every((s) => me.stages[s] === target.stages[s]);
+  if (kind === "guardSplit") return me.realStats.def === target.realStats.def && me.realStats.spd === target.realStats.spd;
+  if (kind === "speedSwap") return me.realStats.spe === target.realStats.spe;
+  if (kind === "powerTrick") {
+    const [a, b] = move.swapsOwnStats!;
+    return me.realStats[a] === me.realStats[b];
+  }
+  if (kind === "invertStages") return Object.values(target.stages).every((v) => v === 0);
+  if (kind === "healBell") return !me.status.condition && !sideOf(state, key).party.some((f) => !isFainted(f) && !!f.status.condition);
+  if (kind === "transform") return !!me.transformed;
+  if (kind === "courtChange") {
+    const hazardsEmpty = (h: BattleSide["hazards"]) => !h.stealthRock && !h.stickyWeb && h.spikesLayers === 0 && h.toxicSpikesLayers === 0;
+    const sideEmpty = (s: BattleSide) =>
+      hazardsEmpty(s.hazards) && Object.values(s.screens).every((v) => v === undefined) && s.tailwindTurnsRemaining === undefined && s.safeguardTurnsRemaining === undefined;
+    return sideEmpty(state.sideA) && sideEmpty(state.sideB);
+  }
   // 트랙 M6: 록온 이미 있음 · 자기장조작(플러스·마이너스가 아니거나 둘 다 +6) · 치유소원(교대할 포켓몬 없음)
   if (kind === "lockOn") return hasVolatile(me.volatile, "lockOn");
   if (kind === "magneticFlux") {
@@ -627,6 +675,57 @@ export function applyEffectMove(clone: BattleState, key: FighterKey, move: Move,
     case "torment":
       target.volatile = inflictVolatile(target.volatile, "torment");
       return true;
+    // Tier 2-A
+    case "stageSwap": {
+      const mine = { ...me.stages };
+      const theirs = { ...target.stages };
+      for (const s of move.swapsStagesWithTarget!) {
+        mine[s] = target.stages[s];
+        theirs[s] = me.stages[s];
+      }
+      me.stages = mine;
+      target.stages = theirs;
+      return true;
+    }
+    case "guardSplit": {
+      const def = Math.floor((me.realStats.def + target.realStats.def) / 2);
+      const spd = Math.floor((me.realStats.spd + target.realStats.spd) / 2);
+      me.realStats = { ...me.realStats, def, spd };
+      target.realStats = { ...target.realStats, def, spd };
+      return true;
+    }
+    case "speedSwap": {
+      const spe = me.realStats.spe;
+      me.realStats = { ...me.realStats, spe: target.realStats.spe };
+      target.realStats = { ...target.realStats, spe };
+      return true;
+    }
+    case "powerTrick": {
+      const [a, b] = move.swapsOwnStats!;
+      me.realStats = { ...me.realStats, [a]: me.realStats[b], [b]: me.realStats[a] };
+      return true;
+    }
+    case "invertStages": {
+      const inverted = { ...target.stages };
+      for (const s of Object.keys(inverted) as (keyof typeof inverted)[]) inverted[s] = -inverted[s];
+      target.stages = inverted;
+      return true;
+    }
+    case "healBell":
+      for (const f of sideOf(clone, key).party) if (!isFainted(f)) f.status = { ...NO_STATUS_CONDITION };
+      return true;
+    case "transform":
+      applyTransform(me, target);
+      return true;
+    case "courtChange": {
+      const a = clone.sideA;
+      const b = clone.sideB;
+      [a.hazards, b.hazards] = [b.hazards, a.hazards];
+      [a.screens, b.screens] = [b.screens, a.screens];
+      [a.tailwindTurnsRemaining, b.tailwindTurnsRemaining] = [b.tailwindTurnsRemaining, a.tailwindTurnsRemaining];
+      [a.safeguardTurnsRemaining, b.safeguardTurnsRemaining] = [b.safeguardTurnsRemaining, a.safeguardTurnsRemaining];
+      return true;
+    }
     // 트랙 M6
     case "itemRemove":
       target.currentItemId = null;

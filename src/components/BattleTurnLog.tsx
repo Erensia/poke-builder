@@ -1239,6 +1239,9 @@ function ActionEffectLines({
         </div>
       )}
       {/* 앙코르 성공 — 사용/받은 쪽을 두 줄로 나눈다(백로그 §7-3) */}
+      {!action.blockedReason && (action.partyStatusCuredCount ?? 0) > 0 && (
+        <div className="battle-turn-line is-muted">동료의 상태이상이 모두 나았다!</div>
+      )}
       {/* 트랙 M6 */}
       {!action.blockedReason && action.hit && action.inflictedVolatile === "meanLook" && (
         <div className="battle-turn-line is-muted">

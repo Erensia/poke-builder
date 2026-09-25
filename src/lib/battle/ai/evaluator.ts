@@ -583,7 +583,8 @@ function evaluateEffectMove(ctx: EffectContext): EffectEvaluation | undefined {
       partyCarry: move.setsHazard === "stickyWeb" ? hazardCarry(state, key, move) : 0,
     };
   }
-  let after = currentRace(clone, key, myMoves);
+  // 변신(Tier 2): 상대 기술을 복사하므로 변신 뒤 기술로 대면을 잇는다
+  let after = currentRace(clone, key, kind === "transform" ? usableMoves(clone[key]) : myMoves);
   // 하품: 상대는 이번 턴·다음 턴에 행동한 뒤 잠든다 — 그 두 번 안에 나를 쓰러뜨리는 대면이면 잠듦은 의미 없다.
   if (kind === "yawn" && base.survivalTurns <= 2) after = { ...after, survivalTurns: base.survivalTurns };
   const duration = effectDuration(state, key, move);
