@@ -656,6 +656,16 @@ export interface Move {
   raisesRandomStat?: number;
   /** 흉내쟁이(트랙 M2): 배틀에서 직전에 나온 기술(누가 썼든)을 대신 쓴다. 없거나 excludedFromCopycat이면 실패. */
   callsLastMoveInBattle?: boolean;
+  /** 스킬스왑(트랙 M3): 자신과 상대의 특성을 맞바꾼다 */
+  swapsAbilityWithTarget?: boolean;
+  /** 동료만들기(트랙 M3): 상대의 특성을 자신의 특성으로 바꾼다 */
+  givesAbilityToTarget?: boolean;
+  /** 역할(트랙 M3): 자신의 특성을 상대의 특성으로 바꾼다 */
+  copiesTargetAbility?: boolean;
+  /** 위액(트랙 M3): 상대의 특성을 무효로 만든다(물러날 때까지) */
+  suppressesTargetAbility?: boolean;
+  /** 미러타입(트랙 M3): 자신의 타입을 상대와 같게 만든다 */
+  copiesTargetTypes?: boolean;
   /** 흉내쟁이가 따라 쓸 수 없는 기술(방어류·강제교체·도구 바꾸기·다른 기술 부르기 등 — 본가 목록). */
   excludedFromCopycat?: boolean;
   /**

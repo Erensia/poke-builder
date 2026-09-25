@@ -1,4 +1,5 @@
 import { type Move } from "@/types/move";
+import { isUncopyableAbility } from "./abilityChange";
 import { type WeatherKind } from "@/types/weather";
 import { type FieldKind } from "@/types/field";
 import { type PokemonType } from "@/types/pokemon-type";
@@ -247,10 +248,18 @@ export interface BattleFighterState {
    */
   protectStreak?: number;
   /**
-   * 숲의저주(풀)·핼러윈(고스트)으로 추가된 타입. 배틀 끝까지 유지되며, types에 이미 반영돼 있다 —
+   * 숲의저주(풀)·핼러윈(고스트)으로 추가된 타입. 물러날 때까지 유지되며(트랙 M3), types에 이미 반영돼 있다 —
    * 의태(applyMimicryForm)·기분파(applyForecastForm)가 타입을 재계산할 때 이 값을 다시 붙인다.
    */
   addedType?: PokemonType;
+  /**
+   * 트랙 M3: 교체로 물러날 때 되돌아갈 원래 타입·특성(폼 기준, 메가진화하면 메가폼 것). 심플빔·스킬스왑·물붓기·
+   * 숲의저주·변환자재 등으로 바뀐 특성·타입은 물러나면 원래대로 돌아온다(본가).
+   */
+  baseTypes?: PokemonType[];
+  baseAbilityId?: string | null;
+  /** 위액(트랙 M3): 특성이 사라진 상태(effectiveAbilityId는 null). 물러나면 풀린다 */
+  abilitySuppressed?: boolean;
   /**
    * 수확: 이번 배틀에서 이 포켓몬이 소비한 마지막 나무열매 id. 턴 종료 시 이 열매를 확률로
    * 되돌린다. 되돌린 뒤에도 값은 남겨 둔다(다시 먹고 다시 되돌릴 수 있음).
@@ -538,8 +547,10 @@ export function createFighterState(slot: EvaluatorSlot, moves: Move[]): BattleFi
   return {
     slot,
     types: form.types,
+    baseTypes: form.types,
     gender: getEffectiveGender(pokemon, slot),
     effectiveAbilityId: slot.ability,
+    baseAbilityId: slot.ability,
     megaStone: megaForm?.megaStone,
     realStats,
     currentHp: realStats.hp,
@@ -869,7 +880,7 @@ function resolveEntryAbilityEffects(
         announcements.push(`${pokemonName}의 ${ability.name}! ${FIELD_ENTRY_ANNOUNCEMENT[field]}`);
       }
     }
-    if (ability.copiesOpponentAbilityOnEntry && opponent.effectiveAbilityId) {
+    if (ability.copiesOpponentAbilityOnEntry && opponent.effectiveAbilityId && !isUncopyableAbility(opponent.effectiveAbilityId)) {
       const copiedAbility = getAbility(opponent.effectiveAbilityId);
       fighter.effectiveAbilityId = opponent.effectiveAbilityId;
       const opponentName = getPokemon(opponentSlot.pokemonId)?.name ?? "상대";

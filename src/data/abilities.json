@@ -239,6 +239,7 @@
   },
   {
     "id": "정신력",
+    "immuneToIntimidate": true,
     "name": "정신력",
     "description": "풀죽음 상태가 되지 않으며, 위협의 효과를 받지 않는다.",
     "immuneToFlinch": true
@@ -808,11 +809,15 @@
   },
   {
     "id": "둔감",
+    "immuneToIntimidate": true,
+    "immuneToAttractAndTaunt": true,
     "name": "둔감",
     "description": "둔감해서 헤롱헤롱·도발 상태가 되지 않고, 위협의 효과도 받지 않는다."
   },
   {
     "id": "마이페이스",
+    "immuneToIntimidate": true,
+    "immuneToConfusion": true,
     "name": "마이페이스",
     "description": "마이페이스라서 혼란 상태가 되지 않고, 위협의 효과도 받지 않는다."
   },

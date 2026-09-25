@@ -287,6 +287,13 @@ export interface ActionLogEntry {
   /** 경혈찌르기(트랙 M2): 무작위로 오른 능력과 오른 칸 수 */
   acupressureRaised?: { stat: BattleStatKey | AccuracyEvasionKey; delta: number };
   acupressureFailed?: boolean;
+  /** 트랙 M3: 마이페이스(혼란)·둔감(헤롱헤롱·도발)으로 막힌 행동방해. self면 시전자 자신에게 걸려던 것 */
+  /** 트랙 M3: 스킬스왑(swap)·동료만들기(give)·역할(copy)·위액(suppress) 성공. abilityName은 건넨/복사한 특성 */
+  abilityChange?: { kind: "swap" | "give" | "copy" | "suppress"; abilityName?: string };
+  abilityChangeFailed?: boolean;
+  /** 미러타입(트랙 M3): 복사한 타입 */
+  copiedTypes?: PokemonType[];
+  volatileBlockedByAbility?: { abilityName: string; volatile: VolatileCondition; self: boolean };
   /** 셸암즈(dynamicCategoryByHigherDamage)가 이번에 물리/특수 중 어느 판정으로 나갔는지 */
   shellSideArmCategory?: "physical" | "special";
   /** 변신으로 상대(이 종)로 변신했으면 그 종 이름 */
