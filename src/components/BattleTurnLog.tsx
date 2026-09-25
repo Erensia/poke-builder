@@ -1239,6 +1239,24 @@ function ActionEffectLines({
         </div>
       )}
       {/* 앙코르 성공 — 사용/받은 쪽을 두 줄로 나눈다(백로그 §7-3) */}
+      {/* 다과회(Tier 2): 양쪽이 먹은 나무열매 */}
+      {!action.blockedReason &&
+        action.teaTime &&
+        ([["self", actorName], ["opponent", defenderName]] as const).map(([who, name]) => {
+          const b = action.teaTime![who];
+          if (!b) return null;
+          return (
+            <div key={`tea-${who}`} className="battle-turn-line is-muted">
+              {name}
+              {eunNeun(name)} {b.name}
+              {eulReul(b.name)} 먹었다!
+              {b.healed ? ` HP를 ${b.healed} 회복했다!` : ""}
+              {b.curedStatus ? ` ${STATUS_CURE_TEXT[b.curedStatus](name)}` : ""}
+              {b.curedConfusion ? " 혼란이 풀렸다!" : ""}
+            </div>
+          );
+        })}
+      {!action.blockedReason && action.teaTimeFailed && <div className="battle-turn-line is-muted">그러나 실패했다!</div>}
       {!action.blockedReason && (action.partyStatusCuredCount ?? 0) > 0 && (
         <div className="battle-turn-line is-muted">동료의 상태이상이 모두 나았다!</div>
       )}

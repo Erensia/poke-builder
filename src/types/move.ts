@@ -665,6 +665,8 @@ export interface Move {
    * 종족값 공격 ÷ 10(내림). 사용 시점에 multiHitPowers로 바꿔 기존 다단히트 경로를 탄다.
    */
   beatUpPower?: boolean;
+  /** 다과회(Tier 2): 장에 있는 양쪽 모두 지닌 나무열매를 바로 먹는다(효과 전부). 아무도 없으면 실패 */
+  allEatBerries?: boolean;
   /** 치료방울(Tier 2): curesStatus(자신)에 더해 대기 포켓몬의 상태이상도 모두 고친다 */
   curesParty?: boolean;
   /** 페어리록(트랙 M6): 다음 턴 동안 양쪽 모두 교체할 수 없다. 이미 걸려 있으면 실패 */

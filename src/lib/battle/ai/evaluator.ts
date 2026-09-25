@@ -124,6 +124,11 @@ export interface EffectEvaluation {
   branches?: { weight: number; hit: RaceInputs; party: PartyEffect }[];
   /** 추억의선물(AI-A2): 자신 기절 + 상대 랭크다운 뒤 state(성공)·먼저 쓰러진 state(실패)의 대면표 */
   sacrifice?: { success: number; afterModel: PartyModel; failModel: PartyModel };
+  /**
+   * 회생의기도·멸망의노래(Tier 2-B): 이번 턴 HP 비율 변화 합(hpDelta) + 늘어난 내 포켓몬 수(extraCount)와 그 뒤 state의
+   * 대면표 — 대면을 이어가지 않고 바뀐 파티 판세로 평가한다.
+   */
+  partyShift?: { hpDelta: number; extraCount: number; afterModel: PartyModel };
 }
 
 /**
@@ -535,6 +540,8 @@ function evaluateEffectMove(ctx: EffectContext): EffectEvaluation | undefined {
   if (kind === "phaze") return evaluatePhaze(ctx, base);
   if (kind === "acupressure") return evaluateAcupressure(ctx, base);
   if (kind === "healingWish") return evaluateHealingWish(ctx, base);
+  if (kind === "revive") return evaluateRevive(ctx, base);
+  if (kind === "perishSong") return evaluatePerishSong(ctx, base);
   const clone = cloneBattleState(state);
   const toxicTurns = Math.min(6, Number.isFinite(base.killTurns) ? base.killTurns : 6);
   if (!applyEffectMove(clone, key, move, { toxicTurns })) return undefined;
@@ -740,6 +747,49 @@ function evaluateHealingWish(ctx: EffectContext, base: RaceInputs): EffectEvalua
     kind: "healingWish",
     sacrifice: { success, afterModel: createPartyModel(after, key), failModel: createPartyModel(failed, key) },
   };
+}
+
+/**
+ * 회생의기도(Tier 2-B): 엔진과 같이 가장 앞 슬롯의 기절한 교대 포켓몬을 최대 HP 절반으로 되살린다. 이번 턴은 공격하지
+ * 않으니 상대에게 한 대 맞고(대면이 끝나는 턴 수로 나눈 근사), 되살린 포켓몬 1마리가 늘어난 판세로 평가한다.
+ */
+function evaluateRevive(ctx: EffectContext, base: RaceInputs): EffectEvaluation | undefined {
+  const { state, key } = ctx;
+  const after = cloneBattleState(state);
+  const side = sideOf(after, key);
+  const target = side.party.find((f, i) => i !== side.activeIndex && isFainted(f));
+  if (!target) return undefined;
+  target.currentHp = Math.max(1, Math.floor(target.maxHp / 2));
+  const me = after[key];
+  const hitLoss = Number.isFinite(base.survivalTurns) ? Math.min(me.currentHp, Math.floor(me.currentHp / base.survivalTurns)) : 0;
+  me.currentHp -= hitLoss;
+  return {
+    hit: base,
+    base,
+    hitChance: 1,
+    carry: 0,
+    kind: "revive",
+    partyShift: { hpDelta: target.currentHp / target.maxHp - hitLoss / me.maxHp, extraCount: 1, afterModel: createPartyModel(after, key) },
+  };
+}
+
+/**
+ * 멸망의노래(Tier 2-B): 3턴 뒤 장에 남은 양쪽이 쓰러진다. 교체 모델링 전이라 둘 다 끝까지 남는다고 보고, 대면이 3턴
+ * 안에 끝나면(노래가 의미 없음) 고르지 않는다. 방음인 쪽은 카운트가 없어 남는다. 교체로 빠져나가는 판정은 로드맵 3.
+ */
+function evaluatePerishSong(ctx: EffectContext, base: RaceInputs): EffectEvaluation | undefined {
+  const { state, key } = ctx;
+  if (Math.min(base.killTurns, base.survivalTurns) <= 3) return undefined;
+  const after = cloneBattleState(state);
+  const oppKey = opponentKey(key);
+  let hpDelta = 0;
+  if (!abilityOf(after[key])?.blocksSound) {
+    hpDelta -= after[key].currentHp / after[key].maxHp;
+    after[key].currentHp = 0;
+  }
+  hpDelta += after[oppKey].currentHp / after[oppKey].maxHp;
+  after[oppKey].currentHp = 0;
+  return { hit: base, base, hitChance: 1, carry: 0, kind: "perishSong", partyShift: { hpDelta, extraCount: 0, afterModel: createPartyModel(after, key) } };
 }
 
 /**

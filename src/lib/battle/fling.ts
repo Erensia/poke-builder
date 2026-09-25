@@ -59,29 +59,34 @@ export function applyFlingEffect(
     defender.volatile = { active };
     return had.length > 0 ? { herb: { name: item.name } } : undefined;
   }
-  if (item.name.endsWith("열매")) {
-    const berry: NonNullable<FlingEffectResult["berry"]> = { name: item.name };
-    const condition = defender.status.condition;
-    if (condition && item.curesStatusOnInflict?.includes(condition)) {
-      defender.status = NO_STATUS_CONDITION;
-      berry.curedStatus = condition;
-    }
-    if (item.curesConfusionOnInflict && hasVolatile(defender.volatile, "confusion")) {
-      const active = { ...defender.volatile.active };
-      delete active.confusion;
-      defender.volatile = { active };
-      berry.curedConfusion = true;
-    }
-    // HP 회복 열매는 HP 조건과 무관하게 바로 먹는다
-    const heal = item.healsBelowHalfHpDenominator
-      ? Math.floor(defender.maxHp / item.healsBelowHalfHpDenominator)
-      : (item.healsBelowHalfHpFlat ?? 0);
-    if (heal > 0) {
-      const healed = Math.min(defender.maxHp - defender.currentHp, heal);
-      defender.currentHp += healed;
-      berry.healed = healed;
-    }
-    return { berry };
-  }
+  if (item.name.endsWith("열매")) return { berry: eatBerryNow(defender, item) };
   return undefined;
+}
+
+/**
+ * 나무열매를 조건과 무관하게 바로 먹은 효과(내던지기로 맞음·다과회 — 트랙 M5·Tier 2): 해당 상태이상·혼란을 풀고 HP 회복 열매면
+ * 그만큼 회복한다(HP 조건 무시). 도구 소모는 부르는 쪽 몫.
+ */
+export function eatBerryNow(fighter: BattleFighterState, item: Item): NonNullable<FlingEffectResult["berry"]> {
+  const berry: NonNullable<FlingEffectResult["berry"]> = { name: item.name };
+  const condition = fighter.status.condition;
+  if (condition && item.curesStatusOnInflict?.includes(condition)) {
+    fighter.status = NO_STATUS_CONDITION;
+    berry.curedStatus = condition;
+  }
+  if (item.curesConfusionOnInflict && hasVolatile(fighter.volatile, "confusion")) {
+    const active = { ...fighter.volatile.active };
+    delete active.confusion;
+    fighter.volatile = { active };
+    berry.curedConfusion = true;
+  }
+  const heal = item.healsBelowHalfHpDenominator
+    ? Math.floor(fighter.maxHp / item.healsBelowHalfHpDenominator)
+    : (item.healsBelowHalfHpFlat ?? 0);
+  if (heal > 0) {
+    const healed = Math.min(fighter.maxHp - fighter.currentHp, heal);
+    fighter.currentHp += healed;
+    berry.healed = healed;
+  }
+  return berry;
 }

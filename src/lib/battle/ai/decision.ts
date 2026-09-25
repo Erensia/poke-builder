@@ -257,6 +257,7 @@ function effectValue(option: AiOption, params: DecisionParams): number {
   const effect = option.support!.effect!;
   if (effect.phaze) return phazeValue(option, params);
   if (effect.sacrifice) return sacrificeValue(option, params);
+  if (effect.partyShift) return partyShiftValue(option, params);
   const { hit, base, hitChance, selfCost = 0 } = effect;
   const my = option.hpFraction;
   const opp = option.opponentHpFraction;
@@ -318,6 +319,17 @@ function sacrificeValue(option: AiOption, params: DecisionParams): number {
   const onSuccess = partyValueAfterTurn(afterModel, before, chain);
   const onFail = partyValueAfterTurn(failModel, before, chain);
   return -option.hpFraction + success * onSuccess + (1 - success) * onFail;
+}
+
+/**
+ * 회생의기도·멸망의노래(Tier 2-B): 이번 턴의 HP 비율 변화 + 늘어난 포켓몬 수 × λ + 그 뒤 state에서 이어지는 판세.
+ * 파티 단위 평가 없이는 뒤의 가치를 셀 수 없어 고르지 않는다.
+ */
+function partyShiftValue(option: AiOption, params: DecisionParams): number {
+  if (!params.partyAware || !option.party) return -Infinity;
+  const { hpDelta, extraCount, afterModel } = option.support!.effect!.partyShift!;
+  const chain = { lambda: params.partyCountWeight, noise: params.partyDuelNoise };
+  return hpDelta + extraCount * params.partyCountWeight + partyValueAfterTurn(afterModel, option.party.model, chain);
 }
 
 /**

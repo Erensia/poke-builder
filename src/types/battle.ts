@@ -173,6 +173,9 @@ export interface ActionLogEntry {
   roomChange?: { room: "wonderRoom" | "magicRoom"; on: boolean };
   /** 트랙 M6: 부식가스로 녹인 도구 이름 / 실패 · 자기장조작 실패 · 페어리록 · 치유소원 */
   meltedItemName?: string;
+  /** 다과회(Tier 2): 양쪽이 먹은 나무열매 효과 */
+  teaTime?: { self?: NonNullable<FlingEffectResult["berry"]>; opponent?: NonNullable<FlingEffectResult["berry"]> };
+  teaTimeFailed?: boolean;
   /** 치료방울(Tier 2): 상태이상을 고친 대기 포켓몬 수 */
   partyStatusCuredCount?: number;
   meltFailed?: boolean;
