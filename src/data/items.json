@@ -368,7 +368,7 @@
   },
   {
     "id": "기적의씨",
-    "flingPower": 30,
+    "flingPower": 10,
     "name": "기적의씨",
     "description": "풀타입 기술의 위력이 1.2배가 된다.",
     "category": "held-item",
