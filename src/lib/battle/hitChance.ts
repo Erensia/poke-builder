@@ -47,8 +47,10 @@ export function computeBattleHitChance(input: BattleHitChanceInput): number | nu
     tangledFeetMultiplier *
     (attackerAbility?.userAccuracyMultiplier ?? 1) *
     hustleAccuracyMultiplier;
+  // 중력(트랙 M4): 명중률 ×5/3
+  const gravityAccuracyMultiplier = state.gravityTurnsRemaining !== undefined ? 5 / 3 : 1;
   const accuracyExtraMultiplier =
-    getItemAccuracyMultiplier(attackerItem, defenderItem, attackerMovesSecond) * abilityAccuracyMultiplier;
+    getItemAccuracyMultiplier(attackerItem, defenderItem, attackerMovesSecond) * abilityAccuracyMultiplier * gravityAccuracyMultiplier;
   const effectiveDefenderEvasion = attackerAbility?.ignoresOpponentEvasionBoost
     ? Math.min(defender.accuracyStages.evasion, 0)
     : move.ignoresDefenderStatStagesInDamage

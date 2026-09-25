@@ -176,6 +176,11 @@ function isPointlessNow(state: BattleState, move: Move, user: BattleFighterState
     }
     case "acupressure":
       return acupressureOptions(user).length === 0;
+    // 트랙 M4
+    case "gravity":
+      return state.gravityTurnsRemaining !== undefined;
+    case "magnetRise":
+      return state.gravityTurnsRemaining !== undefined || !!user.smackedDown || (user.magnetRiseTurnsRemaining ?? 0) > 0;
   }
   if (move.setsScreen) {
     const userSide = state.sideA.party.includes(user) ? state.sideA : state.sideB;

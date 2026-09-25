@@ -1117,6 +1117,15 @@ export function resolveMirroredMoveEffects(input: MirroredMoveEffectsInput) {
   }
 
   // 조이기·엉겨붙기·집게덫 등(bindsTarget): 데미지를 준 뒤 상대를 4~5턴 속박한다(volatile "bound").
+  // 떨어뜨리기(트랙 M4): 데미지를 주면 상대를 물러날 때까지 땅에 떨어뜨린다(전자부유도 끝남). 원래 공중에 있었을 때만 로그.
+  let smackedDownTarget = false;
+  if (effectiveMove.groundsTarget && damage > 0 && !hitSubstitute && !isFainted(defender) && !defender.smackedDown) {
+    const wasAirborne = !isGrounded(state, defender, defenderAbility);
+    defender.smackedDown = true;
+    defender.magnetRiseTurnsRemaining = undefined;
+    smackedDownTarget = wasAirborne;
+  }
+
   // 대타를 맞혔거나 이미 속박 중이면 갱신하지 않는다.
   if (
     effectiveMove.bindsTarget &&
@@ -1420,7 +1429,7 @@ export function resolveMirroredMoveEffects(input: MirroredMoveEffectsInput) {
     [attackerItem, defenderItem] = [defenderItem, attackerItem];
   }
   return {
-    defenderAbility, attacker, defender, attackerAbility, attackerItem, defenderItem, abilityInflictedStatusOnAttacker, abilityInflictedStatusAbilityName, statusCureBerryItemName, mentalMoveBlockedByAbilityName, bouncedMoveName, bouncedByAbilityName, secondaryBlockedByAbilityName, berryEatFailed, stuffCheeksBerryHeal, stuffCheeksBerryName, costHpFailed, soulBeatHpCost, selfStatRises, selfStatsAtMax, selfStatDrops, reflectedStatDropAbilityName, reflectedStatDrops, restoredStatsSelfItemName, restoredStatsOpponentItemName, opportunistCopiedStats, opportunistAbilityName, opponentStatDrops, invertedTargetStages, addedTypeToTarget, overwroteTargetType, targetMoveTypeOverride, inflictedStatus, statusInflictFailed, beakBlastBurnedAttacker, curedStatus, curedStatusTarget, inflictedVolatile, tidyUpDone, courtChangeDone, revivedPartyName, reviveFailed, saltCureApplied, balloonPoppedItemName, octolockApplied, jawLockApplied, selfWokeBeforeMove, restSlept, healedAmount, healedTarget, averagedDefensesMoveName, swappedSpeedMoveName, transformedIntoName, transformFailed, regenSetFailed, leechSeedSetFailed, leechSeedBlockedByGrass, abilitySwappedTargetToName, abilitySwapFailed, substituteSetFailed, shedTailFailed, shedTailSucceeded, setDisabledMoveName, disableSetFailed, setEncoreMoveName, encoreSetFailed, swappedStatsMoveName, swappedStagesMoveName, protectSucceeded, protectFailed, protectStanceEntered, fieldSetFailed, stealthRockSetForSide, spikesSetForSide, toxicSpikesSetForSide, stickyWebSetForSide, hazardSetFailed, swappedItems, itemSwapFailed, painSplitHp, stockpileHealFailed, recycledItemName, recycleFailed, copiedStagesFromName, averagedAttacksMoveName, spitePp, spiteFailed, acupressureRaised, acupressureFailed, volatileBlockedByAbility, abilityChange, abilityChangeFailed, copiedTypes,
+    defenderAbility, attacker, defender, attackerAbility, attackerItem, defenderItem, abilityInflictedStatusOnAttacker, abilityInflictedStatusAbilityName, statusCureBerryItemName, mentalMoveBlockedByAbilityName, bouncedMoveName, bouncedByAbilityName, secondaryBlockedByAbilityName, berryEatFailed, stuffCheeksBerryHeal, stuffCheeksBerryName, costHpFailed, soulBeatHpCost, selfStatRises, selfStatsAtMax, selfStatDrops, reflectedStatDropAbilityName, reflectedStatDrops, restoredStatsSelfItemName, restoredStatsOpponentItemName, opportunistCopiedStats, opportunistAbilityName, opponentStatDrops, invertedTargetStages, addedTypeToTarget, overwroteTargetType, targetMoveTypeOverride, inflictedStatus, statusInflictFailed, beakBlastBurnedAttacker, curedStatus, curedStatusTarget, inflictedVolatile, tidyUpDone, courtChangeDone, revivedPartyName, reviveFailed, saltCureApplied, balloonPoppedItemName, octolockApplied, jawLockApplied, selfWokeBeforeMove, restSlept, healedAmount, healedTarget, averagedDefensesMoveName, swappedSpeedMoveName, transformedIntoName, transformFailed, regenSetFailed, leechSeedSetFailed, leechSeedBlockedByGrass, abilitySwappedTargetToName, abilitySwapFailed, substituteSetFailed, shedTailFailed, shedTailSucceeded, setDisabledMoveName, disableSetFailed, setEncoreMoveName, encoreSetFailed, swappedStatsMoveName, swappedStagesMoveName, protectSucceeded, protectFailed, protectStanceEntered, fieldSetFailed, stealthRockSetForSide, spikesSetForSide, toxicSpikesSetForSide, stickyWebSetForSide, hazardSetFailed, swappedItems, itemSwapFailed, painSplitHp, stockpileHealFailed, recycledItemName, recycleFailed, copiedStagesFromName, averagedAttacksMoveName, spitePp, spiteFailed, acupressureRaised, acupressureFailed, volatileBlockedByAbility, abilityChange, abilityChangeFailed, copiedTypes, smackedDownTarget,
   };
 }
 

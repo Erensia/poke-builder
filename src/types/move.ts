@@ -656,6 +656,16 @@ export interface Move {
   raisesRandomStat?: number;
   /** 흉내쟁이(트랙 M2): 배틀에서 직전에 나온 기술(누가 썼든)을 대신 쓴다. 없거나 excludedFromCopycat이면 실패. */
   callsLastMoveInBattle?: boolean;
+  /** 원더룸·매직룸(트랙 M4): 5턴 동안 장 전체 효과. 이미 걸려 있으면 다시 쓸 때 해제(본가) */
+  setsRoom?: "wonderRoom" | "magicRoom";
+  /** 중력(트랙 M4): 5턴 동안 모두 접지·명중 ×5/3·공중 기술 사용 불가. 이미 걸려 있으면 실패 */
+  setsGravity?: boolean;
+  /** 전자부유(트랙 M4): 5턴 동안 자신이 떠올라 땅 기술을 무시. 중력·검은철구·떨어뜨리기·이미 떠 있으면 실패 */
+  setsMagnetRise?: boolean;
+  /** 떨어뜨리기(트랙 M4): 맞은 상대를 물러날 때까지 땅에 떨어뜨린다 */
+  groundsTarget?: boolean;
+  /** 중력 중엔 쓸 수 없는 기술(공중날기·뛰어오르기·무릎차기·플라잉프레스·전자부유) */
+  blockedByGravity?: boolean;
   /** 스킬스왑(트랙 M3): 자신과 상대의 특성을 맞바꾼다 */
   swapsAbilityWithTarget?: boolean;
   /** 동료만들기(트랙 M3): 상대의 특성을 자신의 특성으로 바꾼다 */

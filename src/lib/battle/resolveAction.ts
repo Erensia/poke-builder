@@ -2,11 +2,12 @@ import { type Move } from "@/types/move";
 import { type FieldKind } from "@/types/field";
 import { type ActionLogEntry, type FighterKey } from "@/types/battle";
 import { BATTLE_STAT_KEYS } from "@/types/battleStats";
-import { getAbility } from "@/lib/data";
+import { getAbility, getMove } from "@/lib/data";
+import { effectiveHeldItem } from "./turnOrderInputs";
 import { applyStageDelta } from "@/lib/statStages";
 import { isOpponentTargetingMove } from "@/lib/fieldEffects";
 import { getHpThresholdBerryHeal } from "@/lib/itemEffects";
-import { SCREEN_DURATION, TAILWIND_DURATION, TRICK_ROOM_DURATION, WEATHER_DURATION, activeWeather, applyForecastForm, consumeItem, contraryDelta, isFainted, sideOf, type BattleState } from "./state";
+import { GRAVITY_DURATION, MAGIC_ROOM_DURATION, MAGNET_RISE_DURATION, SCREEN_DURATION, TAILWIND_DURATION, TRICK_ROOM_DURATION, WONDER_ROOM_DURATION, WEATHER_DURATION, activeWeather, applyForecastForm, consumeItem, contraryDelta, isFainted, sideOf, type BattleState } from "./state";
 import { resolvePreHitEffects } from "./preHitEffects";
 import { resolveHitAndApplyDamage } from "./hitResolution";
 import { resolveMirroredMoveEffects } from "./mirroredEffects";
@@ -39,7 +40,7 @@ export function resolveAction(
     bouncedByMagicMirror, move, effectiveMove, opponentEffectsBlocked, random, state, hit, movesSecond, defenderKey, damage, hitSubstitute, defenderMove, actorKey, defenderBerriesBlocked, attackerBerriesBlocked, blockedByProtect, sheerForceAbilityName, isDamaging, selfCuredStatus, terrainSeedMessages, defenderAbility, attacker, defender, attackerAbility, attackerItem, defenderItem, abilityInflictedStatusOnAttacker, abilityInflictedStatusAbilityName, statusCureBerryItemName, mentalMoveBlockedByAbilityName,
   });
   let {
-    bouncedMoveName, bouncedByAbilityName, secondaryBlockedByAbilityName, berryEatFailed, stuffCheeksBerryHeal, stuffCheeksBerryName, costHpFailed, soulBeatHpCost, selfStatRises, selfStatsAtMax, selfStatDrops, reflectedStatDropAbilityName, reflectedStatDrops, restoredStatsSelfItemName, restoredStatsOpponentItemName, opportunistCopiedStats, opportunistAbilityName, opponentStatDrops, invertedTargetStages, addedTypeToTarget, overwroteTargetType, targetMoveTypeOverride, inflictedStatus, statusInflictFailed, beakBlastBurnedAttacker, curedStatus, curedStatusTarget, inflictedVolatile, tidyUpDone, courtChangeDone, revivedPartyName, reviveFailed, saltCureApplied, balloonPoppedItemName, octolockApplied, jawLockApplied, selfWokeBeforeMove, restSlept, healedAmount, healedTarget, averagedDefensesMoveName, swappedSpeedMoveName, transformedIntoName, transformFailed, regenSetFailed, leechSeedSetFailed, leechSeedBlockedByGrass, abilitySwappedTargetToName, abilitySwapFailed, substituteSetFailed, shedTailFailed, shedTailSucceeded, setDisabledMoveName, disableSetFailed, setEncoreMoveName, encoreSetFailed, swappedStatsMoveName, swappedStagesMoveName, protectSucceeded, protectFailed, protectStanceEntered, fieldSetFailed, stealthRockSetForSide, spikesSetForSide, toxicSpikesSetForSide, stickyWebSetForSide, hazardSetFailed, swappedItems, itemSwapFailed, painSplitHp, stockpileHealFailed, recycledItemName, recycleFailed, copiedStagesFromName, averagedAttacksMoveName, spitePp, spiteFailed, acupressureRaised, acupressureFailed, volatileBlockedByAbility, abilityChange, abilityChangeFailed, copiedTypes,
+    bouncedMoveName, bouncedByAbilityName, secondaryBlockedByAbilityName, berryEatFailed, stuffCheeksBerryHeal, stuffCheeksBerryName, costHpFailed, soulBeatHpCost, selfStatRises, selfStatsAtMax, selfStatDrops, reflectedStatDropAbilityName, reflectedStatDrops, restoredStatsSelfItemName, restoredStatsOpponentItemName, opportunistCopiedStats, opportunistAbilityName, opponentStatDrops, invertedTargetStages, addedTypeToTarget, overwroteTargetType, targetMoveTypeOverride, inflictedStatus, statusInflictFailed, beakBlastBurnedAttacker, curedStatus, curedStatusTarget, inflictedVolatile, tidyUpDone, courtChangeDone, revivedPartyName, reviveFailed, saltCureApplied, balloonPoppedItemName, octolockApplied, jawLockApplied, selfWokeBeforeMove, restSlept, healedAmount, healedTarget, averagedDefensesMoveName, swappedSpeedMoveName, transformedIntoName, transformFailed, regenSetFailed, leechSeedSetFailed, leechSeedBlockedByGrass, abilitySwappedTargetToName, abilitySwapFailed, substituteSetFailed, shedTailFailed, shedTailSucceeded, setDisabledMoveName, disableSetFailed, setEncoreMoveName, encoreSetFailed, swappedStatsMoveName, swappedStagesMoveName, protectSucceeded, protectFailed, protectStanceEntered, fieldSetFailed, stealthRockSetForSide, spikesSetForSide, toxicSpikesSetForSide, stickyWebSetForSide, hazardSetFailed, swappedItems, itemSwapFailed, painSplitHp, stockpileHealFailed, recycledItemName, recycleFailed, copiedStagesFromName, averagedAttacksMoveName, spitePp, spiteFailed, acupressureRaised, acupressureFailed, volatileBlockedByAbility, abilityChange, abilityChangeFailed, copiedTypes, smackedDownTarget,
   } = mirrorResult;
   ({ defenderAbility, attacker, defender, attackerAbility, attackerItem, defenderItem, abilityInflictedStatusOnAttacker, abilityInflictedStatusAbilityName, statusCureBerryItemName, mentalMoveBlockedByAbilityName } = mirrorResult);
 
@@ -71,14 +72,61 @@ export function resolveAction(
     state.fieldTurnsRemaining = undefined;
   }
 
-  // 트릭룸도 필드와 같은 이유로 이미 걸려있으면 재사용 시 실패 처리한다(지속 턴수 갱신 방지) —
-  // 다만 아직 아무 효과도 안 걸린 채로 게임이 끝나는 극단적 경우는 없으니 별 문제 없음.
-  let trickRoomSetFailed = false;
+  // 트릭룸: 이미 걸려 있으면 다시 쓸 때 해제된다(본가 — 트랙 M4에서 "재사용 실패"였던 규칙을 사용자 결정으로 변경).
+  const trickRoomSetFailed = false;
+  let trickRoomEnded = false;
   if (effectiveMove.setsTrickRoom) {
     if (state.trickRoomTurnsRemaining !== undefined) {
-      trickRoomSetFailed = true;
+      state.trickRoomTurnsRemaining = undefined;
+      trickRoomEnded = true;
     } else {
       state.trickRoomTurnsRemaining = TRICK_ROOM_DURATION;
+    }
+  }
+
+  // 원더룸·매직룸(트랙 M4): 트릭룸과 같은 규칙 — 5턴, 다시 쓰면 해제.
+  let roomChange: { room: "wonderRoom" | "magicRoom"; on: boolean } | undefined;
+  if (effectiveMove.setsRoom === "wonderRoom") {
+    const on = state.wonderRoomTurnsRemaining === undefined;
+    state.wonderRoomTurnsRemaining = on ? WONDER_ROOM_DURATION : undefined;
+    roomChange = { room: "wonderRoom", on };
+  } else if (effectiveMove.setsRoom === "magicRoom") {
+    const on = state.magicRoomTurnsRemaining === undefined;
+    state.magicRoomTurnsRemaining = on ? MAGIC_ROOM_DURATION : undefined;
+    roomChange = { room: "magicRoom", on };
+  }
+
+  // 중력(트랙 M4): 5턴, 이미 있으면 실패. 걸리는 순간 공중에 있던 포켓몬이 떨어진다 — 공중날기·뛰어오르기 모으기가
+  // 풀리고 전자부유가 끝난다.
+  let gravitySet = false;
+  let gravitySetFailed = false;
+  if (effectiveMove.setsGravity) {
+    if (state.gravityTurnsRemaining !== undefined) {
+      gravitySetFailed = true;
+    } else {
+      state.gravityTurnsRemaining = GRAVITY_DURATION;
+      gravitySet = true;
+      for (const f of [state.a, state.b]) {
+        f.magnetRiseTurnsRemaining = undefined;
+        if (f.chargingMoveId && getMove(f.chargingMoveId)?.chargeHideType === "sky") f.chargingMoveId = undefined;
+      }
+    }
+  }
+
+  // 전자부유(트랙 M4): 5턴 동안 떠오른다. 중력·떨어뜨리기·검은철구(땅에 붙잡힘)·이미 떠 있으면 실패.
+  let magnetRiseSet = false;
+  let magnetRiseFailed = false;
+  if (effectiveMove.setsMagnetRise) {
+    if (
+      state.gravityTurnsRemaining !== undefined ||
+      attacker.smackedDown ||
+      effectiveHeldItem(attacker, state)?.groundsHolder ||
+      (attacker.magnetRiseTurnsRemaining ?? 0) > 0
+    ) {
+      magnetRiseFailed = true;
+    } else {
+      attacker.magnetRiseTurnsRemaining = MAGNET_RISE_DURATION;
+      magnetRiseSet = true;
     }
   }
 
@@ -311,13 +359,19 @@ export function resolveAction(
     bouncedByAbilityName,
     secondaryBlockedByAbilityName,
     destroyedField,
-    setTrickRoom: trickRoomSetFailed ? undefined : effectiveMove.setsTrickRoom,
+    setTrickRoom: trickRoomSetFailed || trickRoomEnded ? undefined : effectiveMove.setsTrickRoom,
     trickRoomSetFailed,
     setWeather: weatherSetFailed ? undefined : effectiveMove.setsWeather,
     weatherSetFailed: weatherSetFailed || undefined,
     setScreen: screenSetFailed ? undefined : effectiveMove.setsScreen,
     screenSetFailed,
     setSafeguard: safeguardSetFailed ? undefined : (effectiveMove.setsSafeguard || undefined),
+    trickRoomEnded: trickRoomEnded || undefined,
+    roomChange,
+    gravitySet: gravitySet || undefined,
+    gravitySetFailed: gravitySetFailed || undefined,
+    magnetRiseSet: magnetRiseSet || undefined,
+    magnetRiseFailed: magnetRiseFailed || undefined,
     tailwindSet: tailwindSet || undefined,
     tailwindSetFailed: tailwindSetFailed || undefined,
     safeguardSetFailed: safeguardSetFailed || undefined,
@@ -375,6 +429,7 @@ export function resolveAction(
     abilityChange,
     abilityChangeFailed: abilityChangeFailed || undefined,
     copiedTypes,
+    smackedDownTarget: smackedDownTarget || undefined,
     shellSideArmCategory,
     transformedIntoName,
     transformFailed: transformFailed || undefined,

@@ -265,7 +265,7 @@ export function resolvePreHitEffects(
   // 자연히 턴당 1회 소모) — 여러 제약이 동시에 걸려있어도 전부 소모시킨 뒤 첫 번째로 걸린
   // 이유(도발 > 사슬묶기 > 앙코르 순)만 대표로 보고한다.
   if (!releasingCharge) {
-    let restrictionBlockedKind: "taunt" | "disable" | "encore" | "torment" | "imprison" | undefined;
+    let restrictionBlockedKind: "taunt" | "disable" | "encore" | "torment" | "imprison" | "gravity" | undefined;
     if (hasVolatile(attacker.volatile, "taunt")) {
       if (move.category === "status") restrictionBlockedKind = "taunt";
       attacker.volatile = consumeVolatileTurn(attacker.volatile, "taunt");
@@ -286,6 +286,8 @@ export function resolvePreHitEffects(
     if (hasVolatile(defender.volatile, "imprison") && defender.remainingPp[move.id] !== undefined) {
       restrictionBlockedKind ??= "imprison";
     }
+    // 중력(트랙 M4): 공중으로 뛰어오르는 기술은 못 쓴다
+    if (state.gravityTurnsRemaining !== undefined && move.blockedByGravity) restrictionBlockedKind ??= "gravity";
     // 발버둥은 이 제약들을 전부 무시하고 나간다(본가 규칙): 앙코르로 변화기가 강제됐는데 도발로
     // 그 변화기를 못 쓰는 등, 고를 수 있는 기술이 하나도 없을 때의 폴백. 지속 턴수는 위에서 이미
     // 소모시켰으므로 앙코르·도발·사슬묶기 카운트다운은 정상 진행된다(백로그 §7-5).
@@ -703,6 +705,11 @@ export function resolvePreHitEffects(
   ) {
     effectiveMove = { ...effectiveMove, power: effectiveMove.power * 2 };
     fickleBeamEmpowered = true;
+  }
+
+  // G의힘(트랙 M4): 중력 중이면 위력 ×1.5
+  if (effectiveMove.powerMultiplierInGravity && state.gravityTurnsRemaining !== undefined && effectiveMove.power !== null) {
+    effectiveMove = { ...effectiveMove, power: Math.floor(effectiveMove.power * effectiveMove.powerMultiplierInGravity) };
   }
 
   // 전기로바꾸기(Electromorphosis): 충전 상태에서 쓰는 전기타입 기술은 위력 2배(1회 소모).

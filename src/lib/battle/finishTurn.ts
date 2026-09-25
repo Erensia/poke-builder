@@ -717,6 +717,32 @@ export function finishTurn(ctx: RunTurnContext): RunTurnOutcome {
     }
   }
 
+  // 트랙 M4: 원더룸·매직룸·중력(장 전체)과 전자부유(활성 포켓몬별)도 같은 방식으로 카운트다운한다.
+  const expiredFieldEffects: ("wonderRoom" | "magicRoom" | "gravity")[] = [];
+  const countDown = (key: "wonderRoomTurnsRemaining" | "magicRoomTurnsRemaining" | "gravityTurnsRemaining", name: "wonderRoom" | "magicRoom" | "gravity") => {
+    const left = state[key];
+    if (left === undefined) return;
+    if (left - 1 <= 0) {
+      state[key] = undefined;
+      expiredFieldEffects.push(name);
+    } else {
+      state[key] = left - 1;
+    }
+  };
+  countDown("wonderRoomTurnsRemaining", "wonderRoom");
+  countDown("magicRoomTurnsRemaining", "magicRoom");
+  countDown("gravityTurnsRemaining", "gravity");
+  const expiredMagnetRise: FighterKey[] = [];
+  for (const key of ["a", "b"] as const) {
+    const f = state[key];
+    if (f.magnetRiseTurnsRemaining === undefined) continue;
+    f.magnetRiseTurnsRemaining -= 1;
+    if (f.magnetRiseTurnsRemaining <= 0) {
+      f.magnetRiseTurnsRemaining = undefined;
+      if (!isFainted(f)) expiredMagnetRise.push(key);
+    }
+  }
+
   // 날씨도 같은 방식으로 카운트다운한다. weatherTurnsRemaining은 날씨가 아예 없을 때만
   // undefined이고, 특성/수동/기술 어느 경로로 걸렸든 항상 유한 턴수를 갖는다(챔피언스 규칙).
   let weatherExpired = false;
@@ -797,6 +823,8 @@ export function finishTurn(ctx: RunTurnContext): RunTurnOutcome {
       expiredScreens,
       expiredSafeguard,
       expiredTailwind: expiredTailwind.length > 0 ? expiredTailwind : undefined,
+      expiredFieldEffects: expiredFieldEffects.length > 0 ? expiredFieldEffects : undefined,
+      expiredMagnetRise: expiredMagnetRise.length > 0 ? expiredMagnetRise : undefined,
       turnStartAnnouncements,
       switches,
       activePokemonIds: { a: state.a.slot.pokemonId, b: state.b.slot.pokemonId },

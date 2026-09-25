@@ -7,6 +7,8 @@ import { abilityOf, activeWeather, type BattleFighterState, type BattleState } f
  * 엔진은 runTurn에서 turnNumber를 +1한 state로 기술을 처리하므로, 거대해머 잠금은 turnNumber + 1과 비교한다.
  */
 export function isUsageBlocked(state: BattleState, fighter: BattleFighterState, move: Move, opponent: BattleFighterState): boolean {
+  // 중력(트랙 M4) 중엔 공중으로 뛰어오르는 기술을 못 쓴다
+  if (move.blockedByGravity && state.gravityTurnsRemaining !== undefined) return true;
   switch (move.usageCondition) {
     case "first-turn-only":
       if (fighter.hasActedSinceSwitchIn) return true;
