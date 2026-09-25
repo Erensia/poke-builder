@@ -93,7 +93,14 @@ export function blockedTurns(fighter: BattleFighterState): number {
  * "공격측이 매 턴 target 현재 HP의 attackRate 비율을 깎는다" + target 자신의 지속 데미지 → 기대 처치 턴 수.
  * 잠듦/얼음으로 막히는 턴은 앞에 더한다(그 동안의 지속 데미지는 무시하는 근사).
  */
-export function turnsToKo(attackRate: number, attacker: BattleFighterState, target: BattleFighterState, targetHp?: number): number {
+export function turnsToKo(
+  attackRate: number,
+  attacker: BattleFighterState,
+  target: BattleFighterState,
+  targetHp?: number,
+  /** 턴당 기대 데미지의 절대량(대상 최대 HP 대비) — 대타를 깨는 턴 계산용. 없으면 attackRate로 근사 */
+  absoluteRate?: number,
+): number {
   const hp = targetHp ?? target.currentHp;
   // 혼란(대상): 남은 혼란 턴 동안 행동할 때마다 1/3 확률로 자멸 — 그만큼 HP가 먼저 줄어든 것으로 본다.
   const targetConfusion = confusionTurns(target);
@@ -104,6 +111,14 @@ export function turnsToKo(attackRate: number, attacker: BattleFighterState, targ
   if (selfHit > 0) {
     const selfLoss = Math.min(hp, selfHit * Math.min(targetConfusion, turns));
     turns = hp - selfLoss <= 0 ? 1 : (hp - selfLoss) / hp / base;
+  }
+  // 대타(대상): 대타 HP를 깨는 동안의 공격은 본체에 안 들어간다(넘친 데미지도 사라짐) — 그 턴 수만큼 더 걸린다.
+  // 틈새포착(대타 무시)이면 없음. 소리 기술의 대타 무시는 기술별이라 여기선 보지 않는다.
+  const substitute = target.substituteHp ?? 0;
+  // attackRate는 "현재 HP 대비"라 HP가 낮으면 한 방 데미지가 현재 HP로 잘린다 — 대타는 절대량(absoluteRate)으로 본다.
+  const perTurn = absoluteRate !== undefined ? absoluteRate * target.maxHp : attackRate * hp;
+  if (substitute > 0 && perTurn > 0 && !abilityOf(attacker)?.bypassesScreensAndSubstitute) {
+    turns += Math.max(1, substitute / perTurn) / Math.max(actionFactor(attacker), 1e-9);
   }
   // 혼란(공격측): 혼란인 동안 행동의 1/3을 자멸로 날린다 — 남은 혼란 턴 t 안에서 잃는 턴 = min(t/3, 필요 턴/2).
   const attackerConfusion = confusionTurns(attacker);

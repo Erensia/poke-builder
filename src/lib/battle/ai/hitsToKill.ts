@@ -54,6 +54,15 @@ function survivalProbabilities(rhoStar: number): number[] {
  * 기대 타수 E[N] = Σ_{n≥0} P(N>n). 결정력이 0이면 Infinity.
  * hpFraction은 방어측 현재 HP 비율(0~1] — 내구력이 HP에 비례하므로 bulk에 그대로 곱하면 남은 HP 기준이 된다.
  */
+/**
+ * 한 번 맞혔을 때 평균 데미지(방어측 최대 HP 대비) — 난수 평균 0.925 기준. 현재 HP와 무관한 절대량이라, "현재 HP 대비
+ * 타수"로는 알 수 없는 양(대타 HP를 깨는 턴 수 등)에 쓴다.
+ */
+export function meanDamageFraction(offensePower: number, bulkPower: number): number {
+  if (offensePower <= 0) return 0;
+  return 0.925 / minKillingRoll(offensePower, bulkPower);
+}
+
 export function expectedHits(offensePower: number, bulkPower: number, hpFraction = 1): number {
   if (offensePower <= 0) return Infinity;
   const rhoStar = minKillingRoll(offensePower, bulkPower * hpFraction);
