@@ -9,7 +9,7 @@ import { abilityOf, choiceLockedMoveOf, type BattleFighterState, type BattleSide
 import { estimateMoveHits, type MoveHitEstimate } from "./moveDamage";
 import { blockedTurns, turnsToKo } from "./turnRates";
 import { isUsageBlocked } from "./usageConditions";
-import { effectKindOf, sleepTalkCandidates } from "./statusMoveEffects";
+import { acupressureOptions, effectKindOf, imprisonedMoveIds, sleepTalkCandidates } from "./statusMoveEffects";
 import type { HitsEstimate } from "./types";
 
 /** 변화기 1개당 사용 확률(decision-layer §2·§9 초기값) */
@@ -44,8 +44,10 @@ export function usableMoves(fighter: BattleFighterState): Move[] {
  * 행동방해 volatile로 막힌 기술을 거른다 — 도발 중이면 변화기 불가, 사슬묶기면 그 기술 불가, 앙코르면 그 기술만.
  * AI 자신의 선택지(selectableMoves)와 상대 기술 사용 확률 모델이 같은 규칙을 쓴다(decision-layer §4-3).
  */
-export function allowedByVolatiles(fighter: BattleFighterState, moves: Move[]): Move[] {
-  const { taunt, disable, encore } = fighter.volatile.active;
+export function allowedByVolatiles(fighter: BattleFighterState, moves: Move[], opponent?: BattleFighterState): Move[] {
+  const { taunt, disable, encore, torment } = fighter.volatile.active;
+  // 봉인(트랙 M2): 상대가 봉인을 썼으면 상대도 배운 기술은 못 쓴다
+  const imprisoner = opponent?.volatile.active.imprison ? opponent : undefined;
   // 구애류 잠금(엔진 state — 트랙 M1)도 같은 축의 제한으로 본다
   const choiceLocked = choiceLockedMoveOf(fighter);
   return moves.filter((m) => {
@@ -53,6 +55,9 @@ export function allowedByVolatiles(fighter: BattleFighterState, moves: Move[]): 
     if (taunt && m.category === "status") return false;
     if (disable && disable.moveId === m.id) return false;
     if (encore?.moveId && encore.moveId !== m.id) return false;
+    // 트집(트랙 M2): 직전에 쓴 기술은 이번 턴에 못 쓴다
+    if (torment && fighter.lastMoveId === m.id) return false;
+    if (imprisoner && imprisoner.remainingPp[m.id] !== undefined) return false;
     return true;
   });
 }
@@ -154,6 +159,17 @@ function isPointlessNow(state: BattleState, move: Move, user: BattleFighterState
       const targetSide = state.sideA.party.includes(target) ? state.sideA : state.sideB;
       return !targetSide.party.some((f) => f !== target && f.currentHp > 0);
     }
+    // 트랙 M2
+    case "torment":
+      return hasVolatile(target.volatile, "torment");
+    case "imprison":
+      return hasVolatile(user.volatile, "imprison") || imprisonedMoveIds(user, target).length === 0;
+    case "spite": {
+      const remaining = target.lastMoveId ? target.remainingPp[target.lastMoveId] : undefined;
+      return remaining === undefined || remaining <= 0;
+    }
+    case "acupressure":
+      return acupressureOptions(user).length === 0;
   }
   if (move.setsScreen) {
     const userSide = state.sideA.party.includes(user) ? state.sideA : state.sideB;
@@ -234,7 +250,7 @@ export function evaluateOpponentThreat(ctx: ThreatContext): OpponentThreat {
 
   // 이번 턴 사용 조건 때문에 반드시 실패하는 기술(첫 턴이 지난 속이기·만나자마자 등)과 도발·앙코르·사슬묶기로
   // 막힌 기술은 위협에서 뺀다.
-  const candidates = allowedByVolatiles(opponent, usableMoves(opponent)).filter((m) => !isUsageBlocked(state, opponent, m, target));
+  const candidates = allowedByVolatiles(opponent, usableMoves(opponent), target).filter((m) => !isUsageBlocked(state, opponent, m, target));
   for (const move of candidates) {
     if (move.category === "status") {
       if (isOffensiveSetupMove(move)) riskFlag = true;

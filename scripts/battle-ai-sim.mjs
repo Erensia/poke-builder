@@ -57,6 +57,7 @@ try {
   const statusLabel = (m) => {
     const group = pm.protectGroupOf(m);
     if (group) return `protect:${group}`;
+    if (m.callsLastMoveInBattle) return "copycat";
     return fx.effectKindOf(m) ?? (fx.isBatonPass(m) ? "batonPass" : m.healsFraction || m.healsWeatherDependent || m.restSleep ? "heal" : "setup");
   };
 

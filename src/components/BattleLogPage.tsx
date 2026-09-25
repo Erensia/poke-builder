@@ -25,7 +25,7 @@ import { TYPE_COLORS } from "../lib/typeColors";
 import { environmentTintBackground } from "../lib/environmentBackground";
 import { rankStageMultiplier } from "../lib/battlePower";
 import { VOLATILE_LABELS, SCREEN_LABELS } from "../lib/battleLogLabels";
-import { eunNeun } from "../lib/josa";
+import { eulReul, eunNeun } from "../lib/josa";
 import {
   applySwitch,
   choiceLockedMoveOf,
@@ -1123,6 +1123,14 @@ export function BattleLogPage() {
     if (encoreEntry?.moveId && encoreEntry.moveId !== moveId) {
       const forcedName = getMove(encoreEntry.moveId)?.name ?? "그 기술";
       return `${pokemonName}${eunNeun(pokemonName)} 앙코르 때문에 ${forcedName}만 사용할 수 있다!`;
+    }
+    if (fighter.volatile.active.torment && fighter.lastMoveId === moveId) {
+      return `${pokemonName}${eunNeun(pokemonName)} 트집 때문에 같은 기술을 연속으로 쓸 수 없다!`;
+    }
+    const opponent = battleState[side === "a" ? "b" : "a"];
+    if (opponent.volatile.active.imprison && opponent.remainingPp[moveId] !== undefined) {
+      const movename = getMove(moveId)?.name ?? "그 기술";
+      return `${pokemonName}${eunNeun(pokemonName)} 봉인 때문에 ${movename}${eulReul(movename)} 사용하지 못한다!`;
     }
     return null;
   }

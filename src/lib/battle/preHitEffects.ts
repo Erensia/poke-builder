@@ -262,7 +262,7 @@ export function resolvePreHitEffects(
   // 자연히 턴당 1회 소모) — 여러 제약이 동시에 걸려있어도 전부 소모시킨 뒤 첫 번째로 걸린
   // 이유(도발 > 사슬묶기 > 앙코르 순)만 대표로 보고한다.
   if (!releasingCharge) {
-    let restrictionBlockedKind: "taunt" | "disable" | "encore" | undefined;
+    let restrictionBlockedKind: "taunt" | "disable" | "encore" | "torment" | "imprison" | undefined;
     if (hasVolatile(attacker.volatile, "taunt")) {
       if (move.category === "status") restrictionBlockedKind = "taunt";
       attacker.volatile = consumeVolatileTurn(attacker.volatile, "taunt");
@@ -276,6 +276,12 @@ export function resolvePreHitEffects(
     if (encoreEntry) {
       if (encoreEntry.moveId !== move.id) restrictionBlockedKind ??= "encore";
       attacker.volatile = consumeVolatileTurn(attacker.volatile, "encore");
+    }
+    // 트집(트랙 M2): 직전에 쓴 기술을 다시 못 쓴다. 봉인(트랙 M2): 봉인을 쓴 상대가 배운 기술은 못 쓴다.
+    // 둘 다 물러나기 전까지 이어져 턴 소모가 없다.
+    if (hasVolatile(attacker.volatile, "torment") && attacker.lastMoveId === move.id) restrictionBlockedKind ??= "torment";
+    if (hasVolatile(defender.volatile, "imprison") && defender.remainingPp[move.id] !== undefined) {
+      restrictionBlockedKind ??= "imprison";
     }
     // 발버둥은 이 제약들을 전부 무시하고 나간다(본가 규칙): 앙코르로 변화기가 강제됐는데 도발로
     // 그 변화기를 못 쓰는 등, 고를 수 있는 기술이 하나도 없을 때의 폴백. 지속 턴수는 위에서 이미
@@ -389,6 +395,17 @@ export function resolvePreHitEffects(
     const chosen = candidates[Math.floor(random() * candidates.length)];
     sleepTalkCalledMoveName = chosen.name;
     move = chosen;
+  }
+
+  // 흉내쟁이(트랙 M2): 배틀에서 직전에 나온 기술(누가 썼든 — 이번 턴 상대가 먼저 썼으면 그 기술)을
+  // 대신 쓴다. 나온 기술이 없거나 따라 쓸 수 없는 기술이면 실패. 잠꼬대처럼 PP는 흉내쟁이 것만 쓴다.
+  // 모으기 기술·사용 조건 기술은 그 판정이 이미 지나간 뒤라 잠꼬대와 같이 실패로 근사한다.
+  let copycatCalledMoveName: string | undefined;
+  if (move.callsLastMoveInBattle) {
+    const copied = state.lastMoveUsedId ? getMove(state.lastMoveUsedId) : undefined;
+    if (!copied || !isCopyableMove(copied)) return blocked("usageCondition");
+    copycatCalledMoveName = copied.name;
+    move = copied;
   }
 
   // 서투름: 자기 자신의 도구 전투 효과가 무효화된다 — 실제로 지녔는지와 무관하게 이 시점부터는
@@ -709,6 +726,7 @@ export function resolvePreHitEffects(
   // 무관하게 여기서 갱신한다(본가 규칙 — 빗나가도 스트릭은 유지되고, 다른 기술을 쓰면 끊긴다).
   attacker.lastMoveStreak = attacker.lastMoveId === effectiveMove.id ? (attacker.lastMoveStreak ?? 1) + 1 : 1;
   attacker.lastMoveId = effectiveMove.id;
+  if (effectiveMove.id !== STRUGGLE_MOVE.id) state.lastMoveUsedId = effectiveMove.id;
   // 구애류: 지금 지닌 도구가 구애류면 이 기술로 잠긴다(이미 잠겼으면 그대로). 발버둥은 잠그지 않는다.
   if (attackerItem?.locksFirstMoveUsed && !attacker.choiceLockedMoveId && effectiveMove.id !== STRUGGLE_MOVE.id) {
     attacker.choiceLockedMoveId = effectiveMove.id;
@@ -966,7 +984,11 @@ export function resolvePreHitEffects(
     }
   }
   return {
-    move, defenderKey, attacker, defender, defenderHpAtActionStart, actorPokemonId, defenderPokemonId, attackerAbility, defenderAbility, attackerBerriesBlocked, defenderBerriesBlocked, attackerItemIdBeforeAction, defenderItemIdBeforeAction, leppaRestoredPpItemName, pressureExtraPpAbilityName, selfCuredStatus, sleepTalkCalledMoveName, attackerItem, defenderItem, blockedByGoodAsGold, blockedBySubstitute, blockedByPowderImmunity, unseenFistPiercing, blockedByProtect, blockedByProtectMoveName, soundproofBlockedByAbilityName, bulletproofBlockedByAbilityName, opponentEffectsBlocked, bouncedByMagicMirror, shellSideArmCategory, abilityOffenseMultiplier, abilityDefenseMultiplier, stabMultiplier, typeEffectiveness, effectiveMove, sheerForceAbilityName, fickleBeamEmpowered, electromorphosisEmpoweredAbilityName, ownMoveTypeBoostMultiplier, rivalryMultiplier, changedOwnTypeTo, changedOwnTypeAbilityName, lostTypeAfterUse, gemMultiplier, ateGemItemName, hitChance, defenderHideType, evadedByCharge, hit, selfDamageOnUse, abilityAbsorbedMoveType, abilityAbsorbAbilityName, abilityAbsorbHealAmount, protectContactPenaltyMoveName, protectContactDamage, protectContactInflictedStatus,
+    move, defenderKey, attacker, defender, defenderHpAtActionStart, actorPokemonId, defenderPokemonId, attackerAbility, defenderAbility, attackerBerriesBlocked, defenderBerriesBlocked, attackerItemIdBeforeAction, defenderItemIdBeforeAction, leppaRestoredPpItemName, pressureExtraPpAbilityName, selfCuredStatus, sleepTalkCalledMoveName, copycatCalledMoveName, attackerItem, defenderItem, blockedByGoodAsGold, blockedBySubstitute, blockedByPowderImmunity, unseenFistPiercing, blockedByProtect, blockedByProtectMoveName, soundproofBlockedByAbilityName, bulletproofBlockedByAbilityName, opponentEffectsBlocked, bouncedByMagicMirror, shellSideArmCategory, abilityOffenseMultiplier, abilityDefenseMultiplier, stabMultiplier, typeEffectiveness, effectiveMove, sheerForceAbilityName, fickleBeamEmpowered, electromorphosisEmpoweredAbilityName, ownMoveTypeBoostMultiplier, rivalryMultiplier, changedOwnTypeTo, changedOwnTypeAbilityName, lostTypeAfterUse, gemMultiplier, ateGemItemName, hitChance, defenderHideType, evadedByCharge, hit, selfDamageOnUse, abilityAbsorbedMoveType, abilityAbsorbAbilityName, abilityAbsorbHealAmount, protectContactPenaltyMoveName, protectContactDamage, protectContactInflictedStatus,
   };
 }
 
+/** 흉내쟁이(트랙 M2)가 따라 쓸 수 있는 기술인지 — AI(흉내쟁이 평가)도 같은 판정을 쓴다 */
+export function isCopyableMove(move: Move): boolean {
+  return !move.excludedFromCopycat && !move.callsLastMoveInBattle && !move.chargeTurn && !move.usageCondition;
+}

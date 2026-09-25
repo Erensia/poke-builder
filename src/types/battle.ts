@@ -6,7 +6,7 @@ import type { Move } from "./move";
 import type { WeatherKind } from "./weather";
 import type { FieldKind } from "./field";
 import type { PokemonType } from "./pokemon-type";
-import type { BattleStatKey } from "./battleStats";
+import type { AccuracyEvasionKey, BattleStatKey } from "./battleStats";
 import type { StatusConditionState, VolatileCondition } from "./status";
 
 /**
@@ -79,7 +79,7 @@ export interface ActionLogEntry {
   /** blockedReason이 "status"일 때, 정확히 어떤 상태이상 때문인지(마비/잠듦/얼음) — UI가 "몸이 저려서"/"쿨쿨 잠들어"/"얼어 버려서" 문구를 골라 쓰는 데 필요 */
   blockedByStatus?: StatusConditionState["condition"];
   /** blockedReason이 "moveRestricted"일 때, 도발/사슬묶기/앙코르 중 무엇 때문에 막혔는지 */
-  moveRestrictionKind?: "taunt" | "disable" | "encore";
+  moveRestrictionKind?: "taunt" | "disable" | "encore" | "torment" | "imprison";
   /** 회피/빗나감 여부. 필중기는 항상 true. blockedReason이 있으면 의미 없음 */
   hit: boolean;
   critical: boolean;
@@ -277,6 +277,16 @@ export interface ActionLogEntry {
   /** 리사이클(트랙 M1)로 되찾은 도구 이름 / 되찾을 도구가 없어 실패했으면 true */
   recycledItemName?: string;
   recycleFailed?: boolean;
+  /** 자기암시(트랙 M2): 랭크 변화를 복사해 온 상대 이름 */
+  copiedStagesFromName?: string;
+  /** 파워셰어(트랙 M2): 공격·특공을 나눠 가졌으면 기술 이름 */
+  averagedAttacksMoveName?: string;
+  /** 원한(트랙 M2): PP를 줄인 상대 기술과 줄인 양 */
+  spitePp?: { moveName: string; amount: number };
+  spiteFailed?: boolean;
+  /** 경혈찌르기(트랙 M2): 무작위로 오른 능력과 오른 칸 수 */
+  acupressureRaised?: { stat: BattleStatKey | AccuracyEvasionKey; delta: number };
+  acupressureFailed?: boolean;
   /** 셸암즈(dynamicCategoryByHigherDamage)가 이번에 물리/특수 중 어느 판정으로 나갔는지 */
   shellSideArmCategory?: "physical" | "special";
   /** 변신으로 상대(이 종)로 변신했으면 그 종 이름 */
@@ -455,6 +465,8 @@ export interface ActionLogEntry {
   unburdenOpponentAbilityName?: string;
   /** 잠꼬대로 대신 발동시킨 기술 이름(잠꼬대 자신이 아니라 이 이름이 실제로 나간 기술) */
   sleepTalkCalledMoveName?: string;
+  /** 흉내쟁이(트랙 M2)로 대신 나간 기술 이름 */
+  copycatCalledMoveName?: string;
   /** 변환자재로 자신의 타입이 이번 기술의 타입으로 바뀌었으면 그 타입 */
   changedOwnTypeTo?: PokemonType;
   /** changedOwnTypeTo를 발동시킨 특성 이름 */

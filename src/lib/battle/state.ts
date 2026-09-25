@@ -382,6 +382,8 @@ export interface BattleState {
   fieldTurnsRemaining?: number;
   /** 트릭룸이 해제되기까지 남은 턴 수. 트릭룸이 안 걸려있으면 undefined */
   trickRoomTurnsRemaining?: number;
+  /** 흉내쟁이(트랙 M2): 배틀에서 직전에 실제로 나온 기술 id(누가 썼든). 발버둥은 기록하지 않는다 */
+  lastMoveUsedId?: string;
   turnNumber: number;
   /** 배틀 시작 시점에 특성으로 날씨가 자동으로 바뀌었으면("○○의 잔비!") 그 안내 문구 */
   entryAnnouncements: string[];

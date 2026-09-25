@@ -188,6 +188,7 @@
   },
   {
     "id": "드래곤테일",
+    "excludedFromCopycat": true,
     "name": "드래곤테일",
     "type": "드래곤",
     "category": "physical",
@@ -627,6 +628,7 @@
   },
   {
     "id": "길동무",
+    "excludedFromCopycat": true,
     "name": "길동무",
     "type": "고스트",
     "category": "status",
@@ -1471,6 +1473,7 @@
   },
   {
     "id": "도우미",
+    "excludedFromCopycat": true,
     "name": "도우미",
     "type": "노말",
     "category": "status",
@@ -1638,6 +1641,7 @@
   },
   {
     "id": "방어",
+    "excludedFromCopycat": true,
     "name": "방어",
     "type": "노말",
     "category": "status",
@@ -1654,6 +1658,7 @@
   },
   {
     "id": "배대뒤치기",
+    "excludedFromCopycat": true,
     "name": "배대뒤치기",
     "type": "격투",
     "category": "physical",
@@ -1672,6 +1677,7 @@
   },
   {
     "id": "버티기",
+    "excludedFromCopycat": true,
     "name": "버티기",
     "type": "노말",
     "category": "status",
@@ -1878,6 +1884,7 @@
   },
   {
     "id": "울부짖기",
+    "excludedFromCopycat": true,
     "name": "울부짖기",
     "type": "노말",
     "category": "status",
@@ -1926,6 +1933,7 @@
   },
   {
     "id": "잠꼬대",
+    "excludedFromCopycat": true,
     "name": "잠꼬대",
     "type": "노말",
     "category": "status",
@@ -2036,6 +2044,7 @@
   },
   {
     "id": "카운터",
+    "excludedFromCopycat": true,
     "name": "카운터",
     "type": "격투",
     "category": "physical",
@@ -2178,6 +2187,7 @@
   },
   {
     "id": "판별",
+    "excludedFromCopycat": true,
     "name": "판별",
     "type": "격투",
     "category": "status",
@@ -2194,6 +2204,7 @@
   },
   {
     "id": "패스트가드",
+    "excludedFromCopycat": true,
     "name": "패스트가드",
     "type": "격투",
     "category": "status",
@@ -2210,6 +2221,7 @@
   },
   {
     "id": "페인트",
+    "excludedFromCopycat": true,
     "name": "페인트",
     "type": "노말",
     "category": "physical",
@@ -2226,6 +2238,8 @@
   },
   {
     "id": "흉내쟁이",
+    "callsLastMoveInBattle": true,
+    "excludedFromCopycat": true,
     "name": "흉내쟁이",
     "type": "노말",
     "category": "status",
@@ -2239,6 +2253,7 @@
   },
   {
     "id": "힘껏펀치",
+    "excludedFromCopycat": true,
     "name": "힘껏펀치",
     "type": "격투",
     "category": "physical",
@@ -2436,6 +2451,7 @@
   },
   {
     "id": "자기암시",
+    "copiesTargetStages": true,
     "name": "자기암시",
     "type": "노말",
     "category": "status",
@@ -2648,6 +2664,7 @@
   },
   {
     "id": "도둑질",
+    "excludedFromCopycat": true,
     "name": "도둑질",
     "type": "악",
     "category": "physical",
@@ -3143,6 +3160,7 @@
   },
   {
     "id": "미러코트",
+    "excludedFromCopycat": true,
     "name": "미러코트",
     "type": "에스퍼",
     "category": "special",
@@ -3953,6 +3971,7 @@
   },
   {
     "id": "바꿔치기",
+    "excludedFromCopycat": true,
     "name": "바꿔치기",
     "type": "악",
     "category": "status",
@@ -4917,6 +4936,7 @@
   },
   {
     "id": "원한",
+    "reducesTargetLastMovePp": 4,
     "name": "원한",
     "type": "고스트",
     "category": "status",
@@ -4981,6 +5001,7 @@
   },
   {
     "id": "트집",
+    "inflictsVolatile": [{ "volatile": "torment", "target": "opponent" }],
     "name": "트집",
     "type": "악",
     "category": "status",
@@ -5351,6 +5372,7 @@
   },
   {
     "id": "트릭",
+    "excludedFromCopycat": true,
     "name": "트릭",
     "type": "에스퍼",
     "category": "status",
@@ -6235,6 +6257,7 @@
   },
   {
     "id": "봉인",
+    "inflictsVolatile": [{ "volatile": "imprison", "target": "self" }],
     "name": "봉인",
     "type": "에스퍼",
     "category": "status",
@@ -6594,6 +6617,7 @@
   },
   {
     "id": "트림",
+    "excludedFromCopycat": true,
     "name": "트림",
     "type": "독",
     "category": "special",
@@ -7051,6 +7075,7 @@
   },
   {
     "id": "날려버리기",
+    "excludedFromCopycat": true,
     "name": "날려버리기",
     "type": "노말",
     "category": "status",
@@ -7107,6 +7132,7 @@
   },
   {
     "id": "분노가루",
+    "excludedFromCopycat": true,
     "name": "분노가루",
     "type": "벌레",
     "category": "status",
@@ -7742,6 +7768,7 @@
   },
   {
     "id": "킹실드",
+    "excludedFromCopycat": true,
     "name": "킹실드",
     "type": "강철",
     "category": "status",
@@ -7832,6 +7859,7 @@
   },
   {
     "id": "파워셰어",
+    "averagesAttacksWithTarget": true,
     "name": "파워셰어",
     "type": "에스퍼",
     "category": "status",
@@ -7997,6 +8025,7 @@
   },
   {
     "id": "니들가드",
+    "excludedFromCopycat": true,
     "name": "니들가드",
     "type": "풀",
     "category": "status",
@@ -8264,6 +8293,7 @@
   },
   {
     "id": "변신",
+    "excludedFromCopycat": true,
     "name": "변신",
     "type": "노말",
     "category": "status",
@@ -8415,6 +8445,7 @@
   },
   {
     "id": "경혈찌르기",
+    "raisesRandomStat": 2,
     "name": "경혈찌르기",
     "type": "노말",
     "category": "status",
@@ -8422,7 +8453,7 @@
     "accuracy": null,
     "pp": 20,
     "priority": 0,
-    "effect": "경혈을 세게 찔러 능력 중 하나를 랜덤으로 크게 올린다. 자신의 능력 하나가 2랭크 오른다. (랜덤 대상 선택은 엔진 미배선)",
+    "effect": "경혈을 세게 찔러 능력 중 하나를 랜덤으로 크게 올린다. 자신의 능력 하나가 2랭크 오른다.",
     "tags": [
       "랭크"
     ],
@@ -9291,6 +9322,7 @@
   },
   {
     "id": "부리캐논",
+    "excludedFromCopycat": true,
     "name": "부리캐논",
     "type": "비행",
     "category": "physical",
@@ -9390,6 +9422,7 @@
   },
   {
     "id": "토치카",
+    "excludedFromCopycat": true,
     "name": "토치카",
     "type": "독",
     "category": "status",
@@ -9697,6 +9730,7 @@
   },
   {
     "id": "날따름",
+    "excludedFromCopycat": true,
     "name": "날따름",
     "type": "노말",
     "category": "status",
