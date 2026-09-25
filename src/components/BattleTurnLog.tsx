@@ -24,7 +24,7 @@ import {
 } from "../lib/battleLogText";
 
 /** 액션 로그 한 줄 안에 "OO 발동!"으로 뭉뚱그리기보다 전용 문구를 따로 쓰는 volatile들 */
-const VOLATILES_WITH_DEDICATED_LOG_LINE = new Set(["drowsy", "wish", "encore", "imprison"]);
+const VOLATILES_WITH_DEDICATED_LOG_LINE = new Set(["drowsy", "wish", "encore", "imprison", "meanLook", "lockOn"]);
 
 /**
  * 방어측 on-hit 특성 효과 한 줄의 "내용"만 만드는 함수들(감싸는 div·key는 호출부 책임) —
@@ -1239,6 +1239,37 @@ function ActionEffectLines({
         </div>
       )}
       {/* 앙코르 성공 — 사용/받은 쪽을 두 줄로 나눈다(백로그 §7-3) */}
+      {/* 트랙 M6 */}
+      {!action.blockedReason && action.hit && action.inflictedVolatile === "meanLook" && (
+        <div className="battle-turn-line is-muted">
+          {defenderName}
+          {eunNeun(defenderName)} 이제 도망칠 수 없다!
+        </div>
+      )}
+      {!action.blockedReason && action.hit && action.inflictedVolatile === "lockOn" && (
+        <div className="battle-turn-line is-muted">
+          {actorName}
+          {eunNeun(actorName)} {defenderName}에게 조준을 맞췄다!
+        </div>
+      )}
+      {!action.blockedReason && action.fairyLockSet && (
+        <div className="battle-turn-line is-muted">다음 턴에는 누구도 도망칠 수 없게 되었다!</div>
+      )}
+      {!action.blockedReason && (action.fairyLockFailed || action.healingWishFailed || action.meltFailed || action.magneticFluxFailed) && (
+        <div className="battle-turn-line is-muted">그러나 실패했다!</div>
+      )}
+      {!action.blockedReason && action.healingWishSet && (
+        <div className="battle-turn-line is-muted">
+          {actorName}
+          {eunNeun(actorName)} 치유소원을 빌고 쓰러졌다!
+        </div>
+      )}
+      {!action.blockedReason && action.meltedItemName && (
+        <div className="battle-turn-line is-muted">
+          {defenderName}의 {action.meltedItemName}
+          {iGa(action.meltedItemName)} 녹아버렸다!
+        </div>
+      )}
       {!action.blockedReason && action.hit && action.inflictedVolatile === "imprison" && (
         <div className="battle-turn-line is-muted">
           {actorName}

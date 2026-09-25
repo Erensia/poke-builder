@@ -459,6 +459,7 @@ function BattleBoard({
           battleState.wonderRoomTurnsRemaining === undefined &&
           battleState.magicRoomTurnsRemaining === undefined &&
           battleState.gravityTurnsRemaining === undefined &&
+          battleState.fairyLockTurnsRemaining === undefined &&
           !anyHazard &&
           !anyTailwind
         ) {
@@ -489,6 +490,11 @@ function BattleBoard({
             )}
             {battleState.gravityTurnsRemaining !== undefined && (
               <span className="battle-environment-tag">중력 (앞으로 {battleState.gravityTurnsRemaining}턴)</span>
+            )}
+            {battleState.fairyLockTurnsRemaining !== undefined && (
+              <span className="battle-environment-tag">
+                페어리록 ({battleState.fairyLockTurnsRemaining >= 2 ? "다음 턴 교체 불가" : "이번 턴 교체 불가"})
+              </span>
             )}
             {(["a", "b"] as const).map((side) =>
               tailwindTurns(side) !== undefined ? (
@@ -619,6 +625,9 @@ function BattleBoard({
                 {battleSide(side)?.wish && (
                   // 희망사항도 편 단위 큐다(§6-2). turnsRemaining 1 = 이번 턴 종료에 발동.
                   <span className="battle-status-tag is-volatile">희망사항 대기</span>
+                )}
+                {battleSide(side)?.healingWishPending && (
+                  <span className="battle-status-tag is-volatile">치유소원 대기</span>
                 )}
                 {battleSide(side)?.safeguardTurnsRemaining !== undefined && (
                   // 신비의부적도 스크린과 같은 편 단위 상태다(§1-9).
@@ -811,7 +820,7 @@ function BattleBoard({
               if (winner) return null;
 
               // 문어굳히기/물고버티기(도망봉인)에 걸려 있으면 자발적 교체 불가(고스트 예외).
-              const trapped = isTrappedFromSwitching(fighter);
+              const trapped = isTrappedFromSwitching(fighter, battleState);
               const canSwitch =
                 benchIdx.length > 0 && !fighter.chargingMoveId && fighter.currentHp > 0 && !trapped;
               const mode = canSwitch ? inputMode[side] : "move";

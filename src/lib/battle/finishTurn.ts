@@ -732,6 +732,11 @@ export function finishTurn(ctx: RunTurnContext): RunTurnOutcome {
   countDown("wonderRoomTurnsRemaining", "wonderRoom");
   countDown("magicRoomTurnsRemaining", "magicRoom");
   countDown("gravityTurnsRemaining", "gravity");
+  // 페어리록(트랙 M6): 걸린 턴 끝에 2 → 1(다음 턴이 봉쇄 턴), 그 턴 끝에 해제 — 해제 로그는 따로 내지 않는다
+  if (state.fairyLockTurnsRemaining !== undefined) {
+    state.fairyLockTurnsRemaining -= 1;
+    if (state.fairyLockTurnsRemaining <= 0) state.fairyLockTurnsRemaining = undefined;
+  }
   const expiredMagnetRise: FighterKey[] = [];
   for (const key of ["a", "b"] as const) {
     const f = state[key];

@@ -369,6 +369,8 @@ export interface BattleSide {
   safeguardTurnsRemaining?: number;
   /** 순풍(트랙 M1): 이 편 스피드 2배의 남은 턴(쓴 턴 포함 4에서 시작, 턴 종료마다 −1) */
   tailwindTurnsRemaining?: number;
+  /** 치유소원(트랙 M6): 다음에 이 편에 나오는 포켓몬이 HP·상태이상을 전부 회복한다 */
+  healingWishPending?: boolean;
   /**
    * 희망사항(Wish) 예약 — 이 편에 하나만 걸 수 있다(백로그 §6-2). 본가처럼 "쓴 포켓몬"이 아니라
    * 2턴 뒤 그 자리(활성)에 있는 포켓몬을 회복시키므로, fighter가 아니라 편에 큐로 둔다. 교체해도
@@ -404,6 +406,8 @@ export interface BattleState {
   wonderRoomTurnsRemaining?: number;
   magicRoomTurnsRemaining?: number;
   gravityTurnsRemaining?: number;
+  /** 페어리록(트랙 M6): 남은 턴 — 걸린 다음 턴 동안 양쪽 모두 교체할 수 없다 */
+  fairyLockTurnsRemaining?: number;
   /** 흉내쟁이(트랙 M2): 배틀에서 직전에 실제로 나온 기술 id(누가 썼든). 발버둥은 기록하지 않는다 */
   lastMoveUsedId?: string;
   turnNumber: number;
@@ -1069,6 +1073,7 @@ export function cloneSide(side: BattleSide): BattleSide {
     screens: { ...side.screens },
     safeguardTurnsRemaining: side.safeguardTurnsRemaining,
     tailwindTurnsRemaining: side.tailwindTurnsRemaining,
+    healingWishPending: side.healingWishPending,
     wish: side.wish ? { ...side.wish } : undefined,
     megaUsed: side.megaUsed,
   };

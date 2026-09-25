@@ -171,6 +171,14 @@ export interface ActionLogEntry {
   trickRoomEnded?: boolean;
   /** 원더룸·매직룸을 걸었거나(on) 다시 써서 해제했다(트랙 M4) */
   roomChange?: { room: "wonderRoom" | "magicRoom"; on: boolean };
+  /** 트랙 M6: 부식가스로 녹인 도구 이름 / 실패 · 자기장조작 실패 · 페어리록 · 치유소원 */
+  meltedItemName?: string;
+  meltFailed?: boolean;
+  magneticFluxFailed?: boolean;
+  fairyLockSet?: boolean;
+  fairyLockFailed?: boolean;
+  healingWishSet?: boolean;
+  healingWishFailed?: boolean;
   /** 떨어뜨리기(트랙 M4): 공중에 있던 상대를 땅에 떨어뜨렸다 */
   smackedDownTarget?: boolean;
   gravitySet?: boolean;

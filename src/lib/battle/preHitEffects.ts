@@ -617,6 +617,14 @@ export function resolvePreHitEffects(
     attackerItem = undefined;
   }
 
+  // 집단구타(트랙 M6): 파티원마다 1타(위력 5 + 종족값 공격/10)
+  if (effectiveMove.beatUpPower) {
+    const party = sideOf(state, actorKey).party;
+    const hitters = party.filter((f) => f === attacker || (!isFainted(f) && !f.status.condition));
+    const powers = hitters.map((f) => 5 + Math.floor((getPokemon(f.slot.pokemonId)?.baseStats.atk ?? 0) / 10));
+    effectiveMove = { ...effectiveMove, power: powers[0], multiHitPowers: powers, minHits: powers.length, maxHits: powers.length };
+  }
+
   // 트랙 M5: 일렉트릭볼(스피드 비율)·하드프레스(상대 남은 HP) 위력, 분노의앞니(상대 HP 절반)·목숨걸기(내 HP) 고정 데미지
   if (effectiveMove.electroBallPower) {
     effectiveMove = { ...effectiveMove, power: electroBallPowerValue(attacker, defender, attackerItem, defenderItem) };
@@ -921,6 +929,12 @@ export function resolvePreHitEffects(
         : glaiveRushGuaranteesHit
           ? true
           : random() < hitChance;
+  // 록온(트랙 M6): 걸어둔 다음 행동 한 번으로 소모된다
+  if (hasVolatile(attacker.volatile, "lockOn") && !effectiveMove.inflictsVolatile?.some((v) => v.volatile === "lockOn")) {
+    const active = { ...attacker.volatile.active };
+    delete active.lockOn;
+    attacker.volatile = { active };
+  }
 
   // 철제광선: "사용하는 순간" 명중·빗나감과 무관하게 사용자가 최대 HP의 절반을 잃는다(E-3).
   let selfDamageOnUse = 0;

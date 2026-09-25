@@ -4213,6 +4213,7 @@
   },
   {
     "id": "치유소원",
+    "setsHealingWish": true,
     "name": "치유소원",
     "type": "에스퍼",
     "category": "status",
@@ -4665,6 +4666,7 @@
   },
   {
     "id": "집단구타",
+    "beatUpPower": true,
     "name": "집단구타",
     "type": "악",
     "category": "physical",
@@ -4743,6 +4745,7 @@
   },
   {
     "id": "검은눈빛",
+    "inflictsVolatile": [{ "volatile": "meanLook", "target": "opponent" }],
     "name": "검은눈빛",
     "type": "노말",
     "category": "status",
@@ -6287,6 +6290,7 @@
   },
   {
     "id": "부식가스",
+    "removesTargetItem": true,
     "name": "부식가스",
     "type": "독",
     "category": "status",
@@ -7756,6 +7760,7 @@
   },
   {
     "id": "블록",
+    "inflictsVolatile": [{ "volatile": "meanLook", "target": "opponent" }],
     "name": "블록",
     "type": "노말",
     "category": "status",
@@ -8098,6 +8103,7 @@
   },
   {
     "id": "록온",
+    "inflictsVolatile": [{ "volatile": "lockOn", "target": "self" }],
     "name": "록온",
     "type": "노말",
     "category": "status",
@@ -8634,6 +8640,7 @@
   },
   {
     "id": "자기장조작",
+    "boostsDefensesIfPlusMinus": true,
     "name": "자기장조작",
     "type": "전기",
     "category": "status",
@@ -8641,7 +8648,7 @@
     "accuracy": null,
     "pp": 20,
     "priority": 0,
-    "effect": "자기장을 조작하여 특성이 플러스나 마이너스인 포켓몬의 방어·특수방어를 1랭크씩 올린다. 1대1 시뮬레이터에서는 아군이 없어 효과가 없다.",
+    "effect": "자기장을 조작하여 특성이 플러스나 마이너스인 포켓몬의 방어·특수방어를 1랭크씩 올린다.",
     "tags": [
       "랭크"
     ],
@@ -9195,6 +9202,7 @@
   },
   {
     "id": "페어리록",
+    "setsFairyLock": true,
     "name": "페어리록",
     "type": "페어리",
     "category": "status",
@@ -9202,7 +9210,7 @@
     "accuracy": null,
     "pp": 10,
     "priority": 0,
-    "effect": "다음 턴에 서로가 교체·도주할 수 없게 만든다. (1v1 시뮬레이터엔 교체가 없어 표시용 스텁)",
+    "effect": "다음 턴에 서로가 교체·도주할 수 없게 만든다.",
     "tags": [
       "상태이상-기타"
     ],

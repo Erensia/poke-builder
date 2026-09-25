@@ -57,6 +57,16 @@ export function runtimeOf(fighter: BattleFighterState, types?: PokemonType[], st
   };
 }
 
+/** 집단구타(트랙 M6): 엔진과 같은 파티원 타수 — AI는 평균 위력 × 타수로 본다 */
+function withBeatUpPower(state: BattleState, attacker: BattleFighterState, move: Move): Move {
+  if (!move.beatUpPower) return move;
+  const party = (state.sideA.party.includes(attacker) ? state.sideA : state.sideB).party;
+  const hitters = party.filter((f) => f === attacker || (!isFainted(f) && !f.status.condition));
+  const powers = hitters.map((f) => 5 + Math.floor((getPokemon(f.slot.pokemonId)?.baseStats.atk ?? 0) / 10));
+  const average = Math.round(powers.reduce((a, b) => a + b, 0) / powers.length);
+  return { ...move, power: average, minHits: powers.length, maxHits: powers.length };
+}
+
 /** 2~5회 기술의 기대 타격 수(rollMultiHitCount 분포 그대로: 2·3회 35%, 4·5회 15%). 그 외는 균등. */
 function expectedMultiHitCount(minHits: number, maxHits: number): number {
   if (minHits === maxHits) return minHits;
@@ -94,9 +104,10 @@ function supremeOverlordCountFor(state: BattleState, attacker: BattleFighterStat
   return party.filter((m) => m.slot !== attacker.slot && isFainted(m)).length;
 }
 
-export function estimateMoveHits(ctx: MoveHitContext, move: Move): MoveHitEstimate | null {
+export function estimateMoveHits(ctx: MoveHitContext, baseMove: Move): MoveHitEstimate | null {
   const { state, attacker, defender, defenderSide, attackerMovesSecond } = ctx;
-  if (move.category === "status" || move.category === null) return null;
+  if (baseMove.category === "status" || baseMove.category === null) return null;
+  const move = withBeatUpPower(state, attacker, baseMove);
 
   const attackerAbility = abilityOf(attacker);
   const defenderAbility = resolveEffectiveDefenderAbility(attackerAbility, abilityOf(defender));

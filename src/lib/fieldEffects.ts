@@ -80,6 +80,8 @@ export function isOpponentTargetingMove(move: Move): boolean {
   // 트랙 M3: 상대 특성·타입을 바꾸는 기술(심플빔·고민씨·스킬스왑·동료만들기·위액·마법가루·물붓기·숲의저주·핼러윈)
   if (move.setsTargetAbilityId || move.swapsAbilityWithTarget || move.givesAbilityToTarget || move.suppressesTargetAbility) return true;
   if (move.setsTargetType || move.addsTypeToTarget) return true;
+  // 트랙 M6: 부식가스(상대 도구 제거)
+  if (move.removesTargetItem) return true;
   if (move.curesStatus?.target === "opponent") return true;
   if (move.healsTarget === "opponent") return true;
   return false;

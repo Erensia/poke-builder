@@ -58,6 +58,8 @@ export function computeBattleHitChance(input: BattleHitChanceInput): number | nu
       : defender.accuracyStages.evasion;
   const minimizeBonusActive = !!(move.bonusVsMinimize && defender.usedMoveIds?.["작아지기"]);
   if (attackerAbility?.alwaysHits || defenderAbility?.alwaysHits || minimizeBonusActive) return null;
+  // 록온(트랙 M6): 다음 기술은 반드시 맞는다(일격기 포함)
+  if (hasVolatile(attacker.volatile, "lockOn")) return null;
   // 일격기(트랙 M5): 명중 30% 고정(레벨 50 동일 가정) — 명중·회피 랭크와 명중 보정을 받지 않는다. 절대영도는 얼음 타입이
   // 아닌 사용자면 20%.
   if (move.oneHitKo) {

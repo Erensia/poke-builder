@@ -1,5 +1,6 @@
 import { type FighterKey } from "@/types/battle";
 import { type Move } from "@/types/move";
+import { NO_STATUS_CONDITION } from "@/types/status";
 import { type PokemonType } from "@/types/pokemon-type";
 import { NEUTRAL_ACCURACY_STAGES, NEUTRAL_STAGES, type StatStages } from "@/types/battleStats";
 import { applyMoveStatChanges } from "@/lib/statStages";
@@ -533,6 +534,7 @@ function evaluateEffectMove(ctx: EffectContext): EffectEvaluation | undefined {
   const base = currentRace(state, key, myMoves);
   if (kind === "phaze") return evaluatePhaze(ctx, base);
   if (kind === "acupressure") return evaluateAcupressure(ctx, base);
+  if (kind === "healingWish") return evaluateHealingWish(ctx, base);
   const clone = cloneBattleState(state);
   const toxicTurns = Math.min(6, Number.isFinite(base.killTurns) ? base.killTurns : 6);
   if (!applyEffectMove(clone, key, move, { toxicTurns })) return undefined;
@@ -709,6 +711,34 @@ function evaluateAcupressure(ctx: EffectContext, base: RaceInputs): EffectEvalua
     return { weight: 1 / stats.length, hit: currentRace(clone, key, myMoves), party: { model: createPartyModel(clone, key), turns: Infinity } };
   });
   return { hit: branches[0].hit, base, hitChance: 1, carry: 0, kind: "acupressure", branches };
+}
+
+/**
+ * 치유소원(트랙 M6): 자신은 기절하고 다음에 나오는 포켓몬이 HP·상태이상을 전부 회복 — 추억의선물과 같은 희생 평가.
+ * 나올 포켓몬은 회복 이득이 가장 큰 대기 포켓몬으로 본다. 후공인데 이번 턴에 쓰러지면 소원 없이 기절만.
+ */
+function evaluateHealingWish(ctx: EffectContext, base: RaceInputs): EffectEvaluation | undefined {
+  const { state, key } = ctx;
+  const bench = benchIndices(sideOf(state, key));
+  if (bench.length === 0) return undefined;
+  const gain = (f: BattleFighterState) => 1 - f.currentHp / f.maxHp + (f.status.condition ? 0.25 : 0);
+  const after = cloneBattleState(state);
+  after[key].currentHp = 0;
+  const side = sideOf(after, key);
+  const target = bench.reduce((best, i) => (gain(side.party[i]) > gain(side.party[best]) ? i : best), bench[0]);
+  side.party[target].currentHp = side.party[target].maxHp;
+  side.party[target].status = { ...NO_STATUS_CONDITION };
+  const failed = cloneBattleState(state);
+  failed[key].currentHp = 0;
+  const success = ctx.moveFirstProbability + (1 - ctx.moveFirstProbability) * (base.survivalTurns > 1 ? 1 : 0);
+  return {
+    hit: base,
+    base,
+    hitChance: 1,
+    carry: 0,
+    kind: "healingWish",
+    sacrifice: { success, afterModel: createPartyModel(after, key), failModel: createPartyModel(failed, key) },
+  };
 }
 
 /**
@@ -1031,7 +1061,7 @@ export function evaluateOptions(state: BattleState, key: FighterKey, options: Ev
   for (const move of myMoves) result.push(move.callsLastMoveInBattle ? buildCopycatOption(move) : buildMoveOption(move));
 
   // ── 교체 옵션 ── (교체 턴에는 메가진화 없음 → 원래 state 기준)
-  if (!isTrappedFromSwitching(state[key])) {
+  if (!isTrappedFromSwitching(state[key], state)) {
     for (const index of benchIndices(mySide)) result.push(evaluateSwitchCandidate(state, key, index));
   }
 

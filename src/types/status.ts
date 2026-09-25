@@ -102,7 +102,10 @@ export type VolatileCondition =
   | "jawLock"
   // 트랙 M2: 트집(같은 기술 연속 사용 불가, 상대) · 봉인(자신이 배운 기술을 상대가 못 씀, 자신)
   | "torment"
-  | "imprison";
+  | "imprison"
+  // 트랙 M6: 검은눈빛·블록(교체 봉쇄, 상대) · 록온(다음 기술 필중, 자신)
+  | "meanLook"
+  | "lockOn";
 
 /** 기술이 상대(또는 자신)에게 행동방해 효과를 걸 때 쓰는 정보 */
 export interface VolatileInflictEffect {
