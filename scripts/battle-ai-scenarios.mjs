@@ -1461,6 +1461,52 @@ try {
         `회생=${dec.scoreOption(rev, 0.5).toFixed(3)} 멸망=${dec.scoreOption(perish, 0.5).toFixed(3)} 문어 c ${octo.support?.effect?.base.killTurns}→${octo.support?.effect?.hit.killTurns}`,
       );
     }
+    // 엔진(T2-C에서 발견): 눈이면 얼음 타입 방어 1.5배 · 모래바람이면 바위 타입 특방 1.5배(데미지 감소)
+    {
+      const dmg = (weather, a, b, move) => {
+        const st = battle([mon(a, [move])], [mon(b, ["칼춤"])]);
+        if (weather) {
+          st.weather = weather;
+          st.weatherTurnsRemaining = 5;
+        }
+        const out = run(st, move, "칼춤");
+        // 마기라스(바위)는 모래바람 틱 면제라 차이는 기술 데미지뿐
+        return st.b.currentHp - out.nextState.b.currentHp;
+      };
+      const clear = dmg(undefined, "한카리아스", "크레베이스", "지진");
+      const snow = dmg("눈", "한카리아스", "크레베이스", "지진");
+      const snowSpecial = dmg("눈", "리자몽", "크레베이스", "화염방사");
+      const clearSpecial = dmg(undefined, "리자몽", "크레베이스", "화염방사");
+      const sandClear = dmg(undefined, "밀로틱", "마기라스", "하이드로펌프");
+      const sandSpecial = dmg("모래바람", "밀로틱", "마기라스", "하이드로펌프");
+      check(
+        "T2-C 엔진: 눈 얼음 방어 1.5배 · 모래바람 바위 특방 1.5배",
+        snow < clear && snowSpecial === clearSpecial && sandSpecial < sandClear,
+        `눈 지진 ${clear}→${snow} 눈 특수 ${clearSpecial}→${snowSpecial} 모래 특수 ${sandClear}→${sandSpecial}`,
+      );
+    }
+    // AI(T2-C): 꼬리자르기 — 대타를 넘겨받은 후보로 교체 평가(HP 절반 이하면 실패) · 썰렁개그 — 눈 state로 교체 평가 + 토글
+    {
+      const tailSt = battle([mon("잠만보", ["꼬리자르기", "누르기"]), mon("메타그로스", ["코멧펀치"])], [mon("블래키", ["깨물어부수기"])]);
+      const tail = optOf(tailSt, "꼬리자르기");
+      const lowSt = battle([mon("잠만보", ["꼬리자르기", "누르기"]), mon("메타그로스", ["코멧펀치"])], [mon("블래키", ["깨물어부수기"])]);
+      lowSt.a.currentHp = Math.floor(lowSt.a.maxHp / 2);
+      const low = optOf(lowSt, "꼬리자르기");
+      const plain = optOf(battle([mon("잠만보", ["누르기"]), mon("메타그로스", ["코멧펀치"])], [mon("블래키", ["깨물어부수기"])]), "누르기");
+      const plainSwitch = ev.evaluateOptions(tailSt, "a").find((o) => o.optionType === "switch");
+      const tc = tail.pivot?.candidates[0];
+      const chillSt = battle([mon("잠만보", ["썰렁개그", "누르기"]), mon("크레베이스", ["눈사태"])], [mon("한카리아스", ["지진"])]);
+      const chill = optOf(chillSt, "썰렁개그");
+      const chillSwitch = ev.evaluateOptions(chillSt, "a").find((o) => o.optionType === "switch");
+      check(
+        "T2-C AI: 꼬리자르기(대타 인계 후보)·썰렁개그(눈 후보) 교체 평가 + tier2Aware 토글",
+        tail.pivot?.tier2 && Math.abs(tail.pivot.selfCost - 0.5) < 0.01 && tc.hitsToBeKilled.expected > plainSwitch.hitsToBeKilled.expected && !low.pivot &&
+          Number.isFinite(dec.scoreOption(tail, 0.5)) && dec.scoreOption(tail, 0.5, { ...P, tier2Aware: false }) === -Infinity &&
+          chill.pivot?.tier2 && chill.pivot.candidates[0].hitsToBeKilled.expected > chillSwitch.hitsToBeKilled.expected && Number.isFinite(dec.scoreOption(chill, 0.5)) &&
+          !!plain,
+        `꼬리 후보 d ${plainSwitch?.hitsToBeKilled.expected}→${tc?.hitsToBeKilled.expected} 썰렁 후보 d ${chillSwitch?.hitsToBeKilled.expected}→${chill.pivot?.candidates[0].hitsToBeKilled.expected}`,
+      );
+    }
   }
   // ── 매치업 난수별 데미지(ver.1.7 트랙 H): 기존 격파 판정과 같은 관계식인지 대조 ──
   {
