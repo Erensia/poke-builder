@@ -308,7 +308,15 @@ try {
     let nanScores = 0;
     const aiPolicy = (risk) => (st, key) => {
       const d = ai.chooseAiAction(st, key, risk, { decisionParams, difficulty, random: choiceRng });
-      for (const s of d.scored) if (s.nan || Number.isNaN(s.score)) nanScores++;
+      for (const s of d.scored) {
+        if (s.nan || Number.isNaN(s.score)) {
+          nanScores++;
+          if (process.env.NAN_DUMP) {
+            const o = s.option;
+            console.error("NaN", o.optionType, o.move?.name, o.support?.kind, o.support?.effect?.kind, JSON.stringify({ c: o.hitsToKill.expected, d: o.hitsToBeKilled.expected, p: o.firstProbability, hp: o.hpFraction, opp: o.opponentHpFraction, eff: o.support?.effect && { hit: o.support.effect.hit, base: o.support.effect.base, hc: o.support.effect.hitChance, carry: o.support.effect.carry } }));
+          }
+        }
+      }
       return d.action;
     };
     for (let s = 1; s <= battles; s++) {

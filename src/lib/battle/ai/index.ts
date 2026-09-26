@@ -41,7 +41,7 @@ export const DIFFICULTY_PRESETS: Record<AiDifficulty, Partial<DecisionParams>> =
     a2Aware: false,
     trackMAware: false,
     tier2Aware: false,
-    choiceTemperature: 0.15,
+    choiceTemperature: 0.2,
   },
 };
 

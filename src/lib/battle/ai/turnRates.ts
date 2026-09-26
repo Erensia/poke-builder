@@ -207,7 +207,8 @@ export function turnsToKo(
   }
   if (base <= 0) return Infinity;
   // 자뭉열매·오랭열매: 버티는 HP가 그만큼 늘어난다
-  let turns = (1 + berryHp / hp) / base;
+  // (HP 0이면 berryHp도 0 — 0/0 NaN을 피한다)
+  let turns = (1 + (hp > 0 ? berryHp / hp : 0)) / base;
   if (selfHit > 0) {
     const selfLoss = Math.min(hp, selfHit * Math.min(targetConfusion, turns));
     turns = hp - selfLoss <= 0 ? 1 : (hp - selfLoss + berryHp) / hp / base;
