@@ -70,7 +70,7 @@ export function chooseAiSelection(state: BattleState, key: FighterKey, options: 
   if (mine.length <= 1) return mine.length ? orderOf(mine[0]) : [];
   const theirs = candidatesOf(oppCount, size);
   // 상대 자발적 교체 갈래는 끈다 — 3600판 가까운 대전을 한 번에 재야 해서 켜면 약 4초, 끄면 약 1초(선출 판단엔 근사로 충분)
-  const chain = { ...chainParams(params), oppSwitch: undefined };
+  const chain = { ...chainParams(params), oppSwitch: undefined, mySwitch: undefined };
   const scored = withEndOfTurnModel(params.endOfTurnAware, () => {
     const model = createPartyModel(state, key);
     return mine.map((candidate) => {

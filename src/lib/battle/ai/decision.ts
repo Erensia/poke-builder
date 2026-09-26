@@ -103,6 +103,10 @@ export interface DecisionParams {
   oppSwitchLimit: number;
   /** 교체 갈래를 섞는 비율(1 = 상대가 항상 최선으로 교체) */
   oppSwitchWeight: number;
+  /** 이어지는 대면에서 내 자발적 교체(ver.1.8 한계점 정리 ④) — false면 이전 동작(비교용) */
+  mySwitchAware: boolean;
+  mySwitchMargin: number;
+  mySwitchLimit: number;
   /**
    * 턴 종료 효과(ver.1.8) — 대면 턴 수에 먹다남은음식·그래스필드·모래바람·날씨 특성·속박·소금절이·자뭉/오랭열매를 센다.
    * false면 이전 동작(비교용). 평가·점수 계산 전체를 withEndOfTurnModel로 감싸 적용한다(index.ts).
@@ -156,6 +160,9 @@ export const DEFAULT_DECISION_PARAMS: DecisionParams = {
   oppSwitchMargin: 0.1,
   oppSwitchLimit: 1,
   oppSwitchWeight: 0.5,
+  mySwitchAware: true,
+  mySwitchMargin: 0.1,
+  mySwitchLimit: 1,
   endOfTurnAware: true,
   choiceTemperature: 0,
 };
@@ -236,6 +243,7 @@ export function chainParams(params: DecisionParams): ChainParams {
     lambda: params.partyCountWeight,
     noise: params.partyDuelNoise,
     oppSwitch: params.oppSwitchAware ? { margin: params.oppSwitchMargin, limit: params.oppSwitchLimit, weight: params.oppSwitchWeight } : undefined,
+    mySwitch: params.mySwitchAware ? { margin: params.mySwitchMargin, limit: params.mySwitchLimit } : undefined,
   };
 }
 

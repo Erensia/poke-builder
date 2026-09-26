@@ -306,6 +306,8 @@ interface ChainPosition {
   effectLeft: number;
   /** 이 계산 안에서 상대가 자발적으로 교체한 횟수 */
   oppSwitches: number;
+  /** 이 계산 안에서 내가 자발적으로 교체한 횟수(ver.1.8 한계점 정리 ④) */
+  mySwitches: number;
   /** 나와 있는 포켓몬의 남은 멸망 카운트(없으면 Infinity) */
   myPerish: number;
   oppPerish: number;
@@ -321,10 +323,17 @@ export interface OppSwitchParams {
   weight: number;
 }
 
+/** 내 자발적 교체(ver.1.8 한계점 정리 ④): 교체 쪽이 margin 이상 나을 때만, 한 계산 안에서 limit번까지(나는 최선을 고른다) */
+export interface MySwitchParams {
+  margin: number;
+  limit: number;
+}
+
 export interface ChainParams {
   lambda: number;
   noise: number;
   oppSwitch?: OppSwitchParams;
+  mySwitch?: MySwitchParams;
 }
 
 /** 이어지는 대면 계산 한 번의 문맥: 원래 대면표 + (지속 턴 효과가 있으면) 효과 대면표 */
@@ -349,10 +358,12 @@ function memoOf(ctx: ChainContext): Map<string, number> {
 
 function positionKey(ctx: ChainContext, pos: ChainPosition): string {
   const turns = (x: number) => (x === Infinity ? "i" : Math.round(x * 100));
-  const sw = ctx.oppSwitch ? `${ctx.oppSwitch.margin}/${ctx.oppSwitch.limit}/${ctx.oppSwitch.weight}` : "-";
+  const sw =
+    (ctx.oppSwitch ? `${ctx.oppSwitch.margin}/${ctx.oppSwitch.limit}/${ctx.oppSwitch.weight}` : "-") +
+    (ctx.mySwitch ? `m${ctx.mySwitch.margin}/${ctx.mySwitch.limit}` : "");
   return (
     `${ctx.lambda}:${ctx.noise}:${sw}:${turns(pos.effectLeft)}|${pos.mi},${pos.oi},${pos.myStaged ? 1 : 0}${pos.oppStaged ? 1 : 0},` +
-    `${pos.oppSwitches}|${turns(pos.myPerish)},${turns(pos.oppPerish)}|${pos.my.map(round).join(",")}|${pos.opp.map(round).join(",")}`
+    `${pos.oppSwitches},${pos.mySwitches}|${turns(pos.myPerish)},${turns(pos.oppPerish)}|${pos.my.map(round).join(",")}|${pos.opp.map(round).join(",")}`
   );
 }
 
@@ -547,7 +558,40 @@ function withOppSwitch(ctx: ChainContext, pos: ChainPosition, stay: number, swit
   return stay + sw.weight * (best - stay);
 }
 
-/** 대면표로 pos의 두 포켓몬이 대면을 치른 뒤 이어서 계산 — 대면이 시작될 때 상대는 교체할 수 있다 */
+/**
+ * 내가 mi 대신 대기 i로 교체하는 턴(ver.1.8 한계점 정리 ④ — 상대 교체와 대칭): i는 등장 비용 + 상대 공격 한 번을 받고, 물러난
+ * mi는 그 HP로 대기(다시 나오면 랭크·휘발 상태 없음). 그 뒤 i와 대면을 이어간다(상대는 그걸 보고 교체로 대응할 수 있다).
+ */
+function mySwitchValue(ctx: ChainContext, pos: ChainPosition, i: number): number {
+  const model = activeModel(ctx, pos);
+  const next: ChainPosition = {
+    ...pos,
+    my: [...pos.my],
+    mi: i,
+    myStaged: false,
+    mySwitches: pos.mySwitches + 1,
+    myPerish: Infinity,
+    oppPerish: pos.oppPerish - 1,
+    effectLeft: tick(pos.effectLeft, 1),
+  };
+  const pair = model.pair(i, false, pos.oi, pos.oppStaged);
+  next.my[i] = Math.max(0, next.my[i] - model.myEntry[i] - pair.oppRate);
+  return next.my[i] <= 0 ? afterDuel(ctx, next) : duel(ctx, next);
+}
+
+/** stay와 내가 대기 포켓몬으로 교체한 값들 중 나은 쪽 — 교체는 margin 이상 나을 때만 */
+function withMySwitch(ctx: ChainContext, pos: ChainPosition, stay: number, switchFrom: ChainPosition): number {
+  const sw = ctx.mySwitch;
+  if (!sw || pos.mySwitches >= sw.limit || myLocked(ctx, pos)) return stay;
+  let best = stay;
+  for (const i of aliveExcept(switchFrom.my, switchFrom.mi)) {
+    const value = mySwitchValue(ctx, switchFrom, i);
+    if (value > stay + sw.margin && value > best) best = value;
+  }
+  return best;
+}
+
+/** 대면표로 pos의 두 포켓몬이 대면을 치른 뒤 이어서 계산 — 대면이 시작될 때 나(먼저)와 상대는 교체할 수 있다 */
 function duel(ctx: ChainContext, pos: ChainPosition): number {
   const memoKey = `D|${positionKey(ctx, pos)}`;
   const memo = memoOf(ctx);
@@ -555,7 +599,7 @@ function duel(ctx: ChainContext, pos: ChainPosition): number {
   if (cached !== undefined) return cached;
   const { c, d, p } = chainRace(ctx, pos);
   const stay = fight(ctx, pos, [c, d, p, pos.my[pos.mi], pos.opp[pos.oi], 0]);
-  const value = withOppSwitch(ctx, pos, stay, pos);
+  const value = withMySwitch(ctx, pos, withOppSwitch(ctx, pos, stay, pos), pos);
   memo.set(memoKey, value);
   return value;
 }
@@ -598,6 +642,7 @@ export function partyRaceValue(
     oppStaged: true,
     effectLeft: effect ? effect.turns : 0,
     oppSwitches: 0,
+    mySwitches: 0,
     myPerish: myStaged && myIndex === model.myActive ? model.myPerish : Infinity,
     oppPerish: model.oppPerish,
   };
@@ -616,6 +661,8 @@ export function partyRaceValue(
     if (Number.isFinite(survivalTurns)) afterTurn.my[myIndex] = myStart * (1 - 1 / survivalTurns);
     if (Number.isFinite(killTurns)) afterTurn.opp[model.oppActive] = oppStart * Math.max(0, 1 - (1 - lost) / killTurns);
     value = withOppSwitch(ctx, start, stay, afterTurn);
+    // 내 교체는 첫 대면엔 넣지 않는다 — 이번 턴의 교체 선택지가 이미 따로 있어서, "지금 공격하고 다음 턴 교체"가 "지금 교체"와
+    // 같은 값이 되어 교착에서 교체를 미루게 된다(시나리오 테스트가 잡음). 이어지는 대면(duel)에서만.
   }
   return value - startStanding(model, start, params.lambda);
 }
@@ -638,6 +685,7 @@ export function partyValueAfterTurn(after: PartyModel, before: PartyModel, param
     oppStaged: true,
     effectLeft: 0,
     oppSwitches: 0,
+    mySwitches: 0,
     myPerish: after.myPerish,
     oppPerish: after.oppPerish,
   };
@@ -671,6 +719,7 @@ export function partyMatchValue(
     oppStaged: false,
     effectLeft: 0,
     oppSwitches: 0,
+    mySwitches: 0,
     myPerish: Infinity,
     oppPerish: Infinity,
   };
