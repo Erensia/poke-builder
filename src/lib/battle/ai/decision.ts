@@ -1,6 +1,6 @@
 import type { AiOption } from "./evaluator";
 import { DEFAULT_THREAT_MODEL } from "./opponentMoveModel";
-import { A1_EFFECT_KINDS, A2_EFFECT_KINDS, PHASE3_EFFECT_KINDS, TRACK_M_EFFECT_KINDS, TIER2_EFFECT_KINDS } from "./statusMoveEffects";
+import { A1_EFFECT_KINDS, A2_EFFECT_KINDS, PHASE3_EFFECT_KINDS, TRACK_M_EFFECT_KINDS, TIER2_EFFECT_KINDS, type EffectMoveKind } from "./statusMoveEffects";
 import { ALL_PROTECT_GROUPS, type ProtectGroup } from "./protectMoves";
 import { partyRaceValue, partyValueAfterTurn, type ChainParams, type PartyDuel, type PartyEffect } from "./partyEval";
 
@@ -72,6 +72,11 @@ export interface DecisionParams {
    */
   partyEffects: boolean;
   /**
+   * §4-5 ② 종류별(ver.1.8 사용자 결정 (나)): partyEffects가 꺼져 있어도 여기 든 종류는 이어지는 대면에 남긴다.
+   * 교체해도 남는 효과(내 랭크업·설치기·장/편 효과·상태이상)와 교체하면 사라지는 효과(상대 휘발·랭크다운)를 나눠 잰다.
+   */
+  partyEffectKinds: readonly PartyEffectCategory[];
+  /**
    * AI-A1(ver.1.8) 변화기 — 흑안개·신비의부적·아쿠아링/뿌리박기·씨뿌리기·혼란·헤롱헤롱·하품(효과), 희망사항(지연 회복),
    * 배북(랭크 설정형 랭크업)을 평가할지. false면 이전처럼 고르지 않는다(비교용).
    */
@@ -133,6 +138,7 @@ export const DEFAULT_DECISION_PARAMS: DecisionParams = {
   partyCountWeight: 0.5,
   partyDuelNoise: 0.5,
   partyEffects: false,
+  partyEffectKinds: [],
   a1Aware: true,
   a2Aware: true,
   trackMAware: true,
@@ -247,8 +253,56 @@ function switchInValue(candidate: AiOption, lost: number, params: DecisionParams
  * 효과가 걸린 갈래의 첫 대면 정보: 계속 남는 효과(turns = ∞)면 대면표 자체를 효과 적용 state 것으로 바꾸고,
  * 지속 턴 효과면 원래 대면표 + 효과 대면표·남은 턴을 함께 넘긴다(§4-5 ②).
  */
-function withEffect(party: PartyDuel | undefined, effect: PartyEffect | undefined, params: DecisionParams): PartyDuel | undefined {
-  if (!party || !effect || (!params.partyEffects && !effect.always)) return party;
+/** §4-5 ② 효과 종류(partyEffectKinds) */
+export type PartyEffectCategory = "selfBoost" | "hazard" | "field" | "status" | "oppVolatile" | "oppStages" | "protect" | "other";
+
+const CATEGORY_OF_KIND: Partial<Record<EffectMoveKind, PartyEffectCategory>> = {
+  acupressure: "selfBoost",
+  copyStages: "selfBoost",
+  magneticFlux: "selfBoost",
+  hazard: "hazard",
+  screen: "field",
+  weather: "field",
+  field: "field",
+  trickRoom: "field",
+  tailwind: "field",
+  safeguard: "field",
+  wonderRoom: "field",
+  magicRoom: "field",
+  gravity: "field",
+  courtChange: "field",
+  status: "status",
+  yawn: "status",
+  taunt: "oppVolatile",
+  encore: "oppVolatile",
+  disable: "oppVolatile",
+  leechSeed: "oppVolatile",
+  confuse: "oppVolatile",
+  attract: "oppVolatile",
+  torment: "oppVolatile",
+  spite: "oppVolatile",
+  debuff: "oppStages",
+  haze: "oppStages",
+};
+
+/** 옵션의 효과 종류 — 랭크업기(setup)는 효과 kind가 없어 support.kind로 */
+function effectCategoryOf(option: AiOption): PartyEffectCategory {
+  if (option.support?.kind === "setup") return "selfBoost";
+  const kind = option.support?.effect?.kind;
+  return (kind && CATEGORY_OF_KIND[kind]) ?? "other";
+}
+
+function partyEffectOn(params: DecisionParams, category: PartyEffectCategory): boolean {
+  return params.partyEffects || params.partyEffectKinds.includes(category);
+}
+
+function withEffect(
+  party: PartyDuel | undefined,
+  effect: PartyEffect | undefined,
+  params: DecisionParams,
+  category: PartyEffectCategory,
+): PartyDuel | undefined {
+  if (!party || !effect || (!partyEffectOn(params, category) && !effect.always)) return party;
   return effect.turns === Infinity ? { ...party, model: effect.model } : { ...party, effect };
 }
 
@@ -300,14 +354,15 @@ function effectValue(option: AiOption, params: DecisionParams): number {
   const { hit, base, hitChance, selfCost = 0 } = effect;
   const my = option.hpFraction;
   const opp = option.opponentHpFraction;
-  const hitParty = withEffect(option.party, effect.party, params);
+  const category = effectCategoryOf(option);
+  const hitParty = withEffect(option.party, effect.party, params, category);
   // HP 비용(소울비트류)은 치른 만큼 손실로 빼고, 대면은 깎인 HP에서 시작한다. 아픔나누기는 두 HP가 바뀐 채로 시작하고
   // 그 변화(상대 손실 − 내 손실)를 더한다.
   // 경혈찌르기(트랙 M2): 오를 능력마다의 대면을 평균
   if (effect.branches) {
     const onBranches = effect.branches.reduce(
       (sum, b) =>
-        sum + b.weight * race(params, withEffect(option.party, b.party, params), [b.hit.killTurns, b.hit.survivalTurns, b.hit.firstProbability, my, opp, 1]),
+        sum + b.weight * race(params, withEffect(option.party, b.party, params, category), [b.hit.killTurns, b.hit.survivalTurns, b.hit.firstProbability, my, opp, 1]),
       0,
     );
     return onBranches + params.wCarry * effect.carry;
@@ -319,7 +374,7 @@ function effectValue(option: AiOption, params: DecisionParams): number {
   const onMiss = race(params, option.party, [base.killTurns, base.survivalTurns, base.firstProbability, my, opp, 1]);
   // 파티 모드에서는 벽·설치기의 뒤쪽 이득을 이어지는 대면이 직접 세므로 이월 항은 partyCarry(끈적끈적네트 근사)만.
   const carry =
-    params.partyAware && params.partyEffects && option.party && effect.partyCarry !== undefined ? effect.partyCarry : effect.carry;
+    params.partyAware && partyEffectOn(params, category) && option.party && effect.partyCarry !== undefined ? effect.partyCarry : effect.carry;
   return hitChance * onHit + (1 - hitChance) * onMiss + params.wCarry * carry;
 }
 
@@ -404,7 +459,7 @@ function protectValue(option: AiOption, params: DecisionParams): number {
   if (protect.pointless || protect.outcomes.length === 0) return -Infinity;
   const my = option.hpFraction;
   const opp = option.opponentHpFraction;
-  const partyMode = params.partyAware && params.partyEffects && !!option.party;
+  const partyMode = params.partyAware && partyEffectOn(params, "protect") && !!option.party;
   const success = protect.outcomes.reduce((sum, o) => {
     // 둘 다 살아 있고 같은 대면: 그 턴 뒤 state의 대면표로 대면을 이어간다. 그 외(쓰러짐·길동무 동반 기절·강제
     // 교체로 대면이 바뀜): 파티 모드면 그 state에서 이어지는 판세(§4-5 ②), 아니면 그 턴의 HP 변화만.
