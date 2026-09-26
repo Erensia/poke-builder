@@ -42,7 +42,7 @@ import {
   type TurnAction,
   type TurnResult,
 } from "../lib/battleSimulator";
-import { chooseAiAction, chooseAiForcedSwitch, sampleRiskAversion, type AiDifficulty } from "../lib/battle/ai";
+import { chooseAiAction, chooseAiForcedSwitch, chooseAiSelection, sampleRiskAversion, type AiDifficulty } from "../lib/battle/ai";
 
 /** AI 난이도 선택 기억(ver.1.8) — 파티 자동저장과 다른 키. 저장소를 못 쓰는 환경이면 기본 어려움 */
 const AI_DIFFICULTY_STORAGE_KEY = "champions-battle.aiDifficulty.v1";
@@ -311,7 +311,10 @@ function BattleSelectScreen({
   onBack,
   selectionComplete,
   onStartBattle,
+  hiddenSide,
 }: {
+  /** AI가 선출한 편 — 대전 시작 전까지 선출을 공개하지 않는다(3선출 AI, ver.1.8) */
+  hiddenSide: Side | null;
   selection: { a: SlotIndex[]; b: SlotIndex[] };
   buildableIndices: (side: Side) => SlotIndex[];
   needsSelection: (side: Side) => boolean;
@@ -329,13 +332,18 @@ function BattleSelectScreen({
         {(["a", "b"] as const).map((side) => {
           const pool = buildableIndices(side);
           const picks = selection[side];
-          const manual = needsSelection(side);
+          const hidden = side === hiddenSide;
+          const manual = needsSelection(side) && !hidden;
           return (
             <div key={side} className="battle-select-column">
               <div className="battle-setup-column-title">
                 {side === "a" ? "내 선출" : "상대 선출"}{" "}
                 <span className="battle-setup-column-hint">
-                  {manual ? `${picks.length}/${BATTLE_SELECT_SIZE} · 고른 순서가 선출 순서(첫 번째가 리드)` : "빌드 순서대로 선출"}
+                  {hidden
+                    ? "AI가 선출함 · 대전 시작 때 공개"
+                    : manual
+                      ? `${picks.length}/${BATTLE_SELECT_SIZE} · 고른 순서가 선출 순서(첫 번째가 리드)`
+                      : "빌드 순서대로 선출"}
                 </span>
               </div>
               <div className="battle-select-list">
@@ -343,11 +351,13 @@ function BattleSelectScreen({
                   const pk = pokemonAt(side, i);
                   const pkSlot = slotAt(side, i);
                   // 수동 선출: 고른 순서대로 번호. 선출 스킵 편: 빌드 순서 그대로 1·2·3 고정.
-                  const num = manual
-                    ? picks.includes(i)
-                      ? picks.indexOf(i) + 1
-                      : null
-                    : pool.indexOf(i) + 1;
+                  const num = hidden
+                    ? null
+                    : manual
+                      ? picks.includes(i)
+                        ? picks.indexOf(i) + 1
+                        : null
+                      : pool.indexOf(i) + 1;
                   return (
                     <button
                       key={i}
@@ -1245,7 +1255,8 @@ export function BattleLogPage() {
     !hasMovelessSlot && (["a", "b"] as const).every((side) => buildableIndices(side).length >= 1);
 
   /** 셋업 화면 VS 버튼이 무엇을 하는지 (선출 화면을 거치면 "다음 (선출)", 아니면 바로 "대전 시작") */
-  const proceedLabel = needsSelection("a") || needsSelection("b") ? "다음 (선출)" : "대전 시작";
+  // AI 편 선출은 자동(비공개)이라, 내 편이 고를 게 없으면 바로 대전
+  const proceedLabel = needsSelection("a") || (needsSelection("b") && !aiOpponent) ? "다음 (선출)" : "대전 시작";
 
   /** 선출된 빌드 슬롯 인덱스 목록으로 배틀 상태를 만들고 대전을 시작한다 */
   function startBattleWith(sel: { a: SlotIndex[]; b: SlotIndex[] }) {
@@ -1273,13 +1284,31 @@ export function BattleLogPage() {
     setAiRiskAversion(sampleRiskAversion());
   }
 
+  /**
+   * 3선출 AI(ver.1.8): AI 편은 팀 프리뷰처럼 양쪽 빌드 전체를 보고 선출한다(사용자 선출은 모름). 약 1초 걸린다.
+   * 결과는 빌드 슬롯 인덱스(선봉 먼저).
+   */
+  function aiSelectionFor(side: Side): SlotIndex[] {
+    const buildsOf = (s: Side) => buildableIndices(s).map((i) => slotCtl(s, i).slot).filter((x): x is PartySlot => x !== null);
+    const movesOf = (slot: PartySlot) => slot.moves.filter((id): id is string => id !== null).map((id) => getMove(id)!);
+    const aBuilds = buildsOf("a");
+    const bBuilds = buildsOf("b");
+    const full = createBattleState({
+      a: { slots: aBuilds, movesList: aBuilds.map(movesOf) },
+      b: { slots: bBuilds, movesList: bBuilds.map(movesOf) },
+    });
+    const pool = buildableIndices(side);
+    return chooseAiSelection(full, side, { difficulty: aiDifficulty, size: BATTLE_SELECT_SIZE }).map((p) => pool[p]);
+  }
+
   /** 빌드 화면 "다음/대전 시작" — 양쪽 다 3마리 이하면 선출을 건너뛰고 바로 대전, 아니면 선출 화면으로 */
   function handleProceed() {
     if (!canProceed) return;
+    const aiSelects = aiOpponent && needsSelection("b");
     const autoSel = (side: Side) =>
-      needsSelection(side) ? [] : buildableIndices(side).slice(0, BATTLE_SELECT_SIZE);
+      side === "b" && aiSelects ? aiSelectionFor("b") : needsSelection(side) ? [] : buildableIndices(side).slice(0, BATTLE_SELECT_SIZE);
     const sel = { a: autoSel("a"), b: autoSel("b") };
-    if (!needsSelection("a") && !needsSelection("b")) {
+    if (!needsSelection("a") && (!needsSelection("b") || aiSelects)) {
       startBattleWith(sel);
     } else {
       setSelection(sel);
@@ -1552,6 +1581,7 @@ export function BattleLogPage() {
           onBack={() => setSelecting(false)}
           selectionComplete={selectionComplete}
           onStartBattle={() => startBattleWith(selection)}
+          hiddenSide={aiOpponent ? "b" : null}
         />
       )}
 
