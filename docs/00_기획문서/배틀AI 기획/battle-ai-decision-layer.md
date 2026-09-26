@@ -400,6 +400,27 @@ party_race(첫 대면 c, d, p, my, opp, lost) = Σ_갈래 q × [ HP 교환 + λ 
 **결정(사용자, 2026-09-25)**: 코드는 머지하고 기본값은 끔. 상대 교체 모델링 뒤 다시 켜서 측정하고, 쉬움/어려움 난이도
 구분에도 이 스위치를 쓸 수 있다.
 
+#### ②-2 효과 종류별 분리 (2026-09-26, 사용자 결정 (나))
+
+`partyEffects`(전부)는 로드맵 3 뒤에도 AI 상대 이득이 없고 난이도 구분에도 쓸모가 없어, 효과 종류별 토글 `partyEffectKinds`로
+나눠 쟀다(기본 AI 대 그 종류만 켠 AI, h2h 400판 — 대조군 기본끼리 STATUS=1 197:197).
+
+| 종류(`PartyEffectCategory`) | 대상 | 파티 | 켬 : 기본 |
+|---|---|---|---|
+| `selfBoost` | 랭크업기·경혈찌르기·자기암시·자기장조작 | SETUP=1 | **206:191** |
+| `status` | 주 상태이상·하품 | STATUS=1 | 200:195 |
+| `protect` | 방어류 한 턴 뒤 state | PROTECT=1 | 200:194 |
+| `hazard` | 설치기 | STATUS=1 | 194:200 |
+| `field` | 벽·날씨·필드·트릭룸·순풍·신비의부적·룸·중력·코트체인지 | STATUS=1 | 194:200 |
+| `oppVolatile` | 도발·앙코르·사슬묶기·씨뿌리기·혼란·헤롱헤롱·트집·원한 | STATUS=1 | 197:197 |
+| `oppStages` | 상대 랭크다운·흑안개 | STATUS=1 | 197:196 |
+| `other` | 그 밖 | STATUS=1 | 197:196 |
+
+교체해도 남는 효과(내 랭크업·설치기·장/편·상태이상·방어류) 묶음: 그리디 979 / 980, STATUS=1 그리디 **522** / 511, h2h SETUP=1
+204:193 · STATUS=1 197:198 · 일반 200:200 — 손해 없이 약간 이득 → **이 5종을 어려움 기본값으로 켬**. 상대에게 거는 효과는
+교체로 사라져 과대평가되므로 끔(`partyEffects: true`는 전부 켬 — 비교용). 설치기·장/편은 점수는 바뀌지만(리플렉터 −1.35 →
+−1.11) 대전에서 선택이 바뀌는 일이 드물어 결과가 같았다.
+
 코드: `partyEval.ts` `PartyEffect`·`chainRace`·`partyValueAfterTurn`·`withEntryPoison`, `evaluator.ts`의
 `EffectEvaluation.party/partyCarry`·`ProtectOutcome.partyModel`, `decision.ts` `withEffect`. 캐시는 (원래, 효과) 대면표
 쌍마다 따로 둔다(같은 대면표가 다른 옵션에서 "원래"로도 쓰여 값이 섞이던 문제를 테스트가 잡음).
@@ -773,7 +794,8 @@ return best
 | `trackMAware` | true | §4-8 트랙 M 신규 변화기 평가. false면 고르지 않음(비교용) |
 | `a2Aware` | true | §4-7 AI-A2 변화기 평가. false면 고르지 않음(비교용) |
 | `a1Aware` | true | §4-6 AI-A1 변화기 평가. false면 고르지 않음(비교용) |
-| `partyEffects` | **false** | §4-5 ② 효과를 이어지는 대면에 남기기. 상대 교체 모델링 뒤 재측정에서도 AI 상대 이득 없음(그리디만 +21) → 끔 유지, **난이도 스위치로 사용**(사용자 결정, §4-10) |
+| `partyEffects` | **false** | §4-5 ② 효과 전부를 이어지는 대면에 남기기(비교용). 종류별은 `partyEffectKinds` |
+| `partyEffectKinds` | selfBoost·hazard·field·status·protect | §4-5 ②-2 교체해도 남는 효과만 이어지는 대면에 남김(종류별 측정으로 결정) |
 | `oppSwitchAware` | true | §4-10 이어지는 대면에서 상대 자발적 교체(미니맥스) + 교체 봉쇄 평가. false면 이전 동작(비교용) |
 | `oppSwitchMargin` | 0.1 | 상대가 교체하려면 교체 쪽이 이만큼(판세 값) 나아야 함 |
 | `oppSwitchLimit` | 1 | 이어지는 대면 한 번의 계산 안에서 상대 자발적 교체 최대 횟수 |
