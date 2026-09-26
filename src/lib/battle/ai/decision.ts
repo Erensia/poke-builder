@@ -106,6 +106,11 @@ export interface DecisionParams {
    * false면 이전 동작(비교용). 평가·점수 계산 전체를 withEndOfTurnModel로 감싸 적용한다(index.ts).
    */
   endOfTurnAware: boolean;
+  /**
+   * 쉬움 난이도(ver.1.8, A안): 0보다 크면 최고점만 고르지 않고 점수 소프트맥스(온도 τ)로 뽑는다 — 점수 차가 작을수록
+   * 차선이 자주 나온다. 0이면 최고점(어려움). 하드 오버라이드(확정 처치 등)는 그대로 우선한다.
+   */
+  choiceTemperature: number;
 }
 
 /**
@@ -149,6 +154,7 @@ export const DEFAULT_DECISION_PARAMS: DecisionParams = {
   oppSwitchLimit: 1,
   oppSwitchWeight: 0.5,
   endOfTurnAware: true,
+  choiceTemperature: 0,
 };
 
 export interface ScoredOption {
@@ -618,6 +624,19 @@ function actionTempoRank(option: AiOption, attackFirst: boolean): number {
   return attackFirst && !killsNow ? 1 : 0;
 }
 
+/** 쉬움 난이도: 점수 소프트맥스로 뽑는다(−∞는 제외). 최고점 대비 차이로 계산해 overflow를 피한다 */
+function softmaxPick(scored: ScoredOption[], bestScore: number, temperature: number, random: () => number): AiOption {
+  const pool = scored.filter((s) => Number.isFinite(s.score));
+  const weights = pool.map((s) => Math.exp((s.score - bestScore) / temperature));
+  const total = weights.reduce((a, b) => a + b, 0);
+  let r = random() * total;
+  for (let i = 0; i < pool.length; i++) {
+    r -= weights[i];
+    if (r <= 0) return pool[i].option;
+  }
+  return pool[pool.length - 1].option;
+}
+
 function compareBy<T>(key: (item: T) => number): (a: T, b: T) => number {
   return (a, b) => key(a) - key(b);
 }
@@ -630,6 +649,7 @@ export function decide(
   options: AiOption[],
   riskAversion: number,
   params: DecisionParams = DEFAULT_DECISION_PARAMS,
+  random: () => number = Math.random,
 ): { chosen: AiOption; scored: ScoredOption[] } | null {
   if (options.length === 0) return null;
   // NaN 점수는 비교가 전부 false라 후보가 하나도 안 남는다 — 계산 결함이 있어도 배틀이 멈추지 않게 선택 불가로 본다.
@@ -643,6 +663,7 @@ export function decide(
 
   const bestScore = Math.max(...scored.map((s) => s.score));
   if (bestScore === -Infinity) return { chosen: options[0], scored };
+  if (params.choiceTemperature > 0 && Number.isFinite(bestScore)) return { chosen: softmaxPick(scored, bestScore, params.choiceTemperature, random), scored };
 
   // 상대가 나에게 데미지를 줄 수단이 없으면 점수가 +Infinity — Infinity − Infinity(NaN) 비교를 피한다.
   let candidates = scored.filter((s) => s.score === bestScore || bestScore - s.score < params.tieThreshold);

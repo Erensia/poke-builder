@@ -25,12 +25,40 @@ export interface AiDecision {
   scored: ScoredOption[];
 }
 
+/** AI 난이도(ver.1.8): 어려움 = 기본값, 쉬움 = 어려움에서 평가 일부를 끄고 점수 소프트맥스로 가끔 차선(A안) */
+export type AiDifficulty = "hard" | "easy";
+
+/**
+ * 난이도 프리셋 — DEFAULT_DECISION_PARAMS 위에 덮어쓴다. 쉬움은 기여가 큰 파티 단위 평가·상대 교체·턴 종료 효과와 변화기
+ * 확장(A2·트랙 M·Tier 2)을 끄고 선택에 무작위성을 준다. 목표: 쉬움 대 어려움 25~35%, 무작위 상대 80% 이상(결정 레이어 §4-12).
+ */
+export const DIFFICULTY_PRESETS: Record<AiDifficulty, Partial<DecisionParams>> = {
+  hard: {},
+  easy: {
+    partyAware: false,
+    oppSwitchAware: false,
+    endOfTurnAware: false,
+    a2Aware: false,
+    trackMAware: false,
+    tier2Aware: false,
+    choiceTemperature: 0.15,
+  },
+};
+
 export interface ChooseAiOptions extends EvaluateOptions {
   decisionParams?: Partial<DecisionParams>;
+  /** 기본 hard. decisionParams가 프리셋 위에 덮어쓴다 */
+  difficulty?: AiDifficulty;
+  /** 쉬움의 소프트맥스 선택용 난수(기본 Math.random — 시뮬레이터는 시드 고정 난수를 넘긴다) */
+  random?: () => number;
+}
+
+function paramsFor(difficulty: AiDifficulty | undefined, decisionParams: Partial<DecisionParams> | undefined): DecisionParams {
+  return { ...DEFAULT_DECISION_PARAMS, ...DIFFICULTY_PRESETS[difficulty ?? "hard"], ...decisionParams };
 }
 
 /**
- * 배틀 AI(어려움 난이도, 완전 정보): key 편의 이번 턴 행동을 고른다.
+ * 배틀 AI(완전 정보 — 난이도는 options.difficulty, 기본 어려움): key 편의 이번 턴 행동을 고른다.
  * riskAversion은 sampleRiskAversion()으로 배틀 시작 시 한 번 뽑아 둔 값을 넘긴다.
  */
 export function chooseAiAction(
@@ -39,11 +67,11 @@ export function chooseAiAction(
   riskAversion: number,
   options: ChooseAiOptions = {},
 ): AiDecision {
-  const params = { ...DEFAULT_DECISION_PARAMS, ...options.decisionParams };
+  const params = paramsFor(options.difficulty, options.decisionParams);
   // 턴 종료 효과 토글은 평가(대면 턴 수)와 점수 계산(이어지는 대면)에 모두 걸린다
   const decision = withEndOfTurnModel(params.endOfTurnAware, () => {
     const evaluated = withThreatModel(threatModelOf(params), () => evaluateOptions(state, key, options));
-    return decide(evaluated, riskAversion, params);
+    return decide(evaluated, riskAversion, params, options.random);
   });
   if (!decision) return { action: { kind: "move", move: STRUGGLE_MOVE }, scored: [] };
   const { chosen, scored } = decision;
@@ -63,8 +91,9 @@ export function chooseAiForcedSwitch(
   key: FighterKey,
   riskAversion: number,
   decisionParams?: Partial<DecisionParams>,
+  difficulty?: AiDifficulty,
 ): number | undefined {
-  const params = { ...DEFAULT_DECISION_PARAMS, ...decisionParams };
+  const params = paramsFor(difficulty, decisionParams);
   return withEndOfTurnModel(params.endOfTurnAware, () => {
     const switches = withThreatModel(threatModelOf(params), () => evaluateOptions(state, key)).filter(
       (o) => o.optionType === "switch",
