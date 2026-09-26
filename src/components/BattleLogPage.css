@@ -102,6 +102,22 @@
   cursor: pointer;
 }
 
+.battle-ai-difficulty {
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.15rem 0.35rem;
+  border: 1px solid var(--violet);
+  border-radius: 6px;
+  background: var(--violet-soft);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.battle-ai-difficulty:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 .battle-setup-load-party {
   font-size: 0.72rem;
   font-weight: 600;

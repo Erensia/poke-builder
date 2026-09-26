@@ -1571,6 +1571,23 @@ try {
         `버팀 ${plain.toFixed(2)} 음식 ${lefties.toFixed(2)} 자뭉 ${sitrus.toFixed(2)} 그래스 ${grassy.toFixed(2)} · 처치 ${k0.toFixed(2)}/${k1.toFixed(2)}/${k5.toFixed(2)}`,
       );
     }
+    // 쉬움 난이도(ver.1.8 A안): 프리셋(파티 평가 등 끔) + 점수 소프트맥스 — 어려움은 항상 같은 선택, 쉬움은 가끔 차선
+    {
+      const st = battle([mon("한카리아스", ["지진", "드래곤클로", "스톤에지", "칼춤"]), mon("잠만보", ["누르기"])], [mon("메타그로스", ["코멧펀치"])]);
+      let seed = 7;
+      const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+      const pickName = (difficulty) => {
+        const d = ai.chooseAiAction(st, "a", 0.5, { difficulty, random: rnd });
+        return d.action.kind === "switch" ? `→${d.action.toIndex}` : d.action.move.name;
+      };
+      const hardPicks = new Set(Array.from({ length: 30 }, () => pickName("hard")));
+      const easyPicks = new Set(Array.from({ length: 30 }, () => pickName("easy")));
+      check(
+        "쉬움 난이도: 어려움은 같은 선택 · 쉬움은 소프트맥스로 여러 선택 · 프리셋이 파티 평가 끔",
+        hardPicks.size === 1 && easyPicks.size >= 2 && ai.DIFFICULTY_PRESETS.easy.partyAware === false && ai.DIFFICULTY_PRESETS.easy.choiceTemperature > 0,
+        `어려움 ${[...hardPicks].join("/")} · 쉬움 ${[...easyPicks].join("/")}`,
+      );
+    }
   }
   // ── 매치업 난수별 데미지(ver.1.7 트랙 H): 기존 격파 판정과 같은 관계식인지 대조 ──
   {
