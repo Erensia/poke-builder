@@ -1644,6 +1644,19 @@ try {
         `가속 p ${pOff.toFixed(2)}→${pOn.toFixed(2)} 문어 c ${cOff.toFixed(2)}→${cOn.toFixed(2)}`,
       );
     }
+    // 한계점 정리 ③: 상대 변화기 위협 환산 — 칼춤·HP회복을 가진 상대에게 도발의 가치(공격 대비)가 켤 때 더 크다
+    {
+      const opm = await server.ssrLoadModule("/src/lib/battle/ai/opponentMoveModel.ts");
+      const mk = () => battle([mon("한카리아스", ["도발", "드래곤클로"])], [mon("잠만보", ["칼춤", "HP회복", "누르기"], null, null, pts({ hp: 32, def: 32 }))]);
+      const gap = (model) =>
+        opm.withThreatModel(model, () => {
+          const os = ev.evaluateOptions(mk(), "a");
+          return dec.scoreOption(opt(os, "도발"), 0.5) - dec.scoreOption(opt(os, "드래곤클로"), 0.5);
+        });
+      const on = gap(opm.DEFAULT_THREAT_MODEL);
+      const off = gap({ ...opm.DEFAULT_THREAT_MODEL, statusThreat: false });
+      check("한계점 정리 ③: 위협 환산 — 칼춤·HP회복 상대에게 도발 가치(공격 대비)↑", on > off, `도발−공격 끔 ${off.toFixed(3)} → 켬 ${on.toFixed(3)}`);
+    }
   }
   // ── 매치업 난수별 데미지(ver.1.7 트랙 H): 기존 격파 판정과 같은 관계식인지 대조 ──
   {

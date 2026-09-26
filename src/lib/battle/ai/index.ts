@@ -19,7 +19,12 @@ export function sampleRiskAversion(random: () => number = Math.random): number {
 
 /** 결정 파라미터 중 상대 기술 모델 튜닝값(§2-2) */
 function threatModelOf(params: DecisionParams): ThreatModelParams {
-  return { statusWeight: params.threatStatusWeight, sharpness: params.threatSharpness, strictWaste: params.threatStrictWaste };
+  return {
+    statusWeight: params.threatStatusWeight,
+    sharpness: params.threatSharpness,
+    strictWaste: params.threatStrictWaste,
+    statusThreat: params.threatStatusThreat,
+  };
 }
 
 export interface AiDecision {
@@ -51,8 +56,8 @@ export function chooseAiAction(
   const params = paramsFor(options.difficulty, options.decisionParams);
   // 턴 종료 효과 토글은 평가(대면 턴 수)와 점수 계산(이어지는 대면)에 모두 걸린다
   const decision = withEndOfTurnModel(params.endOfTurnAware, () => {
-    const evaluated = withThreatModel(threatModelOf(params), () => evaluateOptions(state, key, options));
-    return decide(evaluated, riskAversion, params, options.random);
+    // 점수 계산(파티 대면표는 이때 계산됨)도 같은 상대 기술 모델로
+    return withThreatModel(threatModelOf(params), () => decide(evaluateOptions(state, key, options), riskAversion, params, options.random));
   });
   if (!decision) return { action: { kind: "move", move: STRUGGLE_MOVE }, scored: [] };
   const { chosen, scored } = decision;
@@ -76,13 +81,13 @@ export function chooseAiForcedSwitch(
 ): number | undefined {
   const params = paramsFor(difficulty, decisionParams);
   return withEndOfTurnModel(params.endOfTurnAware, () => {
-    const switches = withThreatModel(threatModelOf(params), () => evaluateOptions(state, key)).filter(
-      (o) => o.optionType === "switch",
-    );
-    if (switches.length === 0) return undefined;
-    const best = switches
-      .map((option) => ({ option, score: scoreOption({ ...option, optionType: "move" }, riskAversion, params) }))
-      .reduce((a, b) => (b.score > a.score ? b : a));
-    return best.option.toIndex;
+    return withThreatModel(threatModelOf(params), () => {
+      const switches = evaluateOptions(state, key).filter((o) => o.optionType === "switch");
+      if (switches.length === 0) return undefined;
+      const best = switches
+        .map((option) => ({ option, score: scoreOption({ ...option, optionType: "move" }, riskAversion, params) }))
+        .reduce((a, b) => (b.score > a.score ? b : a));
+      return best.option.toIndex;
+    });
   });
 }

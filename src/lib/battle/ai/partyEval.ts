@@ -19,7 +19,7 @@ import { isTrappedFromSwitching } from "../switching";
 import { blendTurns } from "./statusMoveEffects";
 import { isGrounded } from "../grounding";
 import { estimateMoveHits } from "./moveDamage";
-import { evaluateOpponentThreat, usableMoves } from "./opponentMoveModel";
+import { evaluateOpponentThreat, opponentStatusDrag, usableMoves } from "./opponentMoveModel";
 import { isOneShotMove, isUsageBlocked } from "./usageConditions";
 import { firstProbability } from "./speed";
 import { turnsToKo } from "./turnRates";
@@ -171,8 +171,10 @@ function computePair(state: BattleState, key: FighterKey, me: BattleFighterState
     speed >= 0.5
       ? evaluateOpponentThreat({ state, opponent, target: me, targetSide: mySide, opponentMovesSecond: true, targetHp: me.maxHp })
       : probe;
+  // 위협 환산 c 쪽(ver.1.8 한계점 정리 ③) — 상대 회복기·벽 등이 내 공격 효율을 깎는 몫
+  const drag = best ? opponentStatusDrag(state, opponent, me, mySide, best.expected) : { rateMult: 1, heal: 0 };
   return {
-    myRate: best ? 1 / best.expected : 0,
+    myRate: best ? Math.max(0, (1 / best.expected) * drag.rateMult - drag.heal) : 0,
     oppRate: threat.expectedRate,
     firstProbability: speed,
     me,
