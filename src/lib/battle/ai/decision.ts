@@ -46,6 +46,11 @@ export interface DecisionParams {
   protectGroups: readonly ProtectGroup[];
   /** 동률 처리 4순위를 "이번 턴 처치 가능한 공격기 > 그 외 기술 > 교체"로(§7). false면 이전 "기술 > 교체" */
   tieAttackFirst: boolean;
+  /**
+   * 동률 처리에서 "이번 턴 처치 가능한 공격기"를 진입 비용·방어 상성보다 먼저 본다(종합 테스트에서 발견 — 상대가
+   * 빈사인데 방어 상성이 좋은 교체가 동률로 뽑혀 상대에게 한 턴을 줬다). false면 이전 순서(비교용)
+   */
+  tieKillFirst: boolean;
   /** 상대 기술 모델(§2-2): 의미 있는 변화기 1개당 사용 확률 */
   threatStatusWeight: number;
   /** 상대 기술 모델: 공격기 사용 확률 ∝ 데미지^k (1 = v1 데미지 비례) */
@@ -114,6 +119,7 @@ export const DEFAULT_DECISION_PARAMS: DecisionParams = {
   wCarry: 1.0,
   setupAware: true,
   tieAttackFirst: true,
+  tieKillFirst: true,
   phase3Aware: true,
   protectGroups: ALL_PROTECT_GROUPS,
   // §2-2 튜닝값 — 근거는 DEFAULT_THREAT_MODEL 주석
@@ -587,8 +593,11 @@ export function decide(
   if (candidates.length > 1) {
     const safe = candidates.filter((s) => s.option.hitsToBeKilled.worstCase.count !== 1);
     if (safe.length > 0) candidates = safe;
+    const killRank = (s: ScoredOption) =>
+      params.tieKillFirst && s.option.move?.category !== "status" && s.option.hitsToKill.expected <= 1 ? 0 : 1;
     candidates = [...candidates].sort(
       (a, b) =>
+        compareBy<ScoredOption>(killRank)(a, b) ||
         compareBy<ScoredOption>((s) => s.option.entryCost)(a, b) ||
         compareBy<ScoredOption>((s) => s.option.typeMatchup.defensive)(a, b) ||
         compareBy<ScoredOption>((s) => actionTempoRank(s.option, params.tieAttackFirst))(a, b) ||
