@@ -590,7 +590,8 @@ function evaluateEffectMove(ctx: EffectContext): EffectEvaluation | undefined {
       carry: hazardCarry(state, key, move),
       kind,
       party: { model: createPartyModel(clone, key), turns: Infinity },
-      partyCarry: move.setsHazard === "stickyWeb" ? hazardCarry(state, key, move) : 0,
+      // 끈적끈적네트도 대면표가 등장 시 스피드 −1을 반영한다(ver.1.8) — 이월 항 0
+      partyCarry: 0,
     };
   }
   // 변신(Tier 2): 상대 기술을 복사하므로 변신 뒤 기술로 대면을 잇는다
@@ -609,7 +610,7 @@ function evaluateEffectMove(ctx: EffectContext): EffectEvaluation | undefined {
         ? { my: clone[key].currentHp / clone[key].maxHp, opp: oppAfterFighter.currentHp / oppAfterFighter.maxHp }
         : undefined;
     // 교체 봉쇄(로드맵 3)는 이어지는 대면에서만 가치가 생기므로 partyEffects와 무관하게 쓴다
-    const always = kind === "trap" || kind === "octolock" || undefined;
+    const always = kind === "trap" || kind === "octolock" || kind === "fairyLock" || undefined;
     return { hit: after, base, hitChance, carry: 0, kind, party: { model: partyModel, turns: Infinity, always }, partyCarry: 0, selfCost, hpAfter };
   }
 

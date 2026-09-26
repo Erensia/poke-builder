@@ -2,8 +2,10 @@ import { type FighterKey } from "@/types/battle";
 import { NEUTRAL_ACCURACY_STAGES, NEUTRAL_CRIT_STAGE, NEUTRAL_STAGES } from "@/types/battleStats";
 import { isImmuneToStatus, inflictStatus } from "@/lib/statusConditions";
 import { isStatusBlockedByField } from "@/lib/fieldEffects";
+import { applyStageDelta } from "@/lib/statStages";
 import {
   abilityOf,
+  contraryDelta,
   isFainted,
   opponentKey,
   sideOf,
@@ -68,6 +70,8 @@ export interface PartyModel {
   /** 지금 나와 있는 상대가 교체 봉쇄에 걸려 있음(내 지금 포켓몬이 나와 있는 동안 — 페어리록은 한 턴이라 제외) */
   oppTrapped: boolean;
   myTrapped: boolean;
+  /** 페어리록을 이번 턴에 걸었다(다음 턴 양쪽 교체 불가) — 첫 대면의 "다음 턴 상대 교체" 갈래를 막는다 */
+  switchLockedNextTurn: boolean;
   /** 지금 나와 있는 포켓몬의 멸망 카운트(없으면 Infinity) — 이번 턴을 포함해 남은 턴 수 */
   myPerish: number;
   oppPerish: number;
@@ -133,6 +137,15 @@ function withEntryPoison(state: BattleState, fighter: BattleFighterState, side: 
   return { ...fighter, status: status === "badly-poisoned" ? { ...inflicted, turnsElapsed: 2 } : inflicted };
 }
 
+/**
+ * 끈적끈적네트(ver.1.8 한계점 정리 — 이전엔 고정 근사 0.1): 대기 포켓몬이 이 편 끈적끈적네트 위로 등장하면 스피드 −1
+ * (땅에 있을 때만, 심술꾸러기면 +1 — 엔진 applyEntryHazards와 같은 규칙).
+ */
+function withEntryStickyWeb(state: BattleState, fighter: BattleFighterState, side: BattleSide): BattleFighterState {
+  if (!side.hazards.stickyWeb || !isGrounded(state, fighter, abilityOf(fighter))) return fighter;
+  return { ...fighter, stages: applyStageDelta(fighter.stages, "spe", contraryDelta(fighter, -1)) };
+}
+
 function entryFraction(state: BattleState, fighter: BattleFighterState, side: BattleSide): number {
   if (fighter.maxHp <= 0) return 0;
   return calcEntryHazardDamage(fighter.maxHp, fighter.types, abilityOf(fighter), side.hazards, isGrounded(state, fighter)) / fighter.maxHp;
@@ -185,6 +198,8 @@ export function createPartyModel(state: BattleState, key: FighterKey): PartyMode
     oppActive: oppSide.activeIndex,
     oppTrapped: isTrappedFromSwitching(oppActive),
     myTrapped: isTrappedFromSwitching(myActive),
+    // 엔진: 쓴 턴에 2 → 그 턴 끝 1 → 다음 턴 교체 불가. 결정 시점에 2 이상이면 "이번 턴에 건" 효과 state
+    switchLockedNextTurn: (state.fairyLockTurnsRemaining ?? 0) >= 2,
     myPerish: isFainted(myActive) ? Infinity : (myActive.perishCount ?? Infinity),
     oppPerish: isFainted(oppActive) ? Infinity : (oppActive.perishCount ?? Infinity),
     memo: new Map(),
@@ -195,8 +210,10 @@ export function createPartyModel(state: BattleState, key: FighterKey): PartyMode
       const cacheKey = `${myIndex}:${staged ? 1 : 0}:${oppIndex}:${oppIsStaged ? 1 : 0}`;
       let pair = cache.get(cacheKey);
       if (!pair) {
-        const me = staged ? mySide.party[myIndex] : withEntryPoison(state, unstaged(mySide.party[myIndex]), mySide);
-        const opp = oppIsStaged ? oppSide.party[oppIndex] : withEntryPoison(state, unstaged(oppSide.party[oppIndex]), oppSide);
+        const entered = (fighter: BattleFighterState, side: BattleSide) =>
+          withEntryStickyWeb(state, withEntryPoison(state, unstaged(fighter), side), side);
+        const me = staged ? mySide.party[myIndex] : entered(mySide.party[myIndex], mySide);
+        const opp = oppIsStaged ? oppSide.party[oppIndex] : entered(oppSide.party[oppIndex], oppSide);
         pair = computePair(state, key, me, opp);
         cache.set(cacheKey, pair);
       }
@@ -584,7 +601,7 @@ export function partyRaceValue(
   };
   const stay = fight(ctx, start, inputs);
   let value = stay;
-  if (myStart > 0 && oppStart > 0 && Math.min(killTurns, survivalTurns) > 1) {
+  if (myStart > 0 && oppStart > 0 && Math.min(killTurns, survivalTurns) > 1 && !model.switchLockedNextTurn) {
     // 이번 턴: 내 공격 (1 − lost)번, 상대 공격 1번 → 다음 턴에 상대가 교체
     const afterTurn: ChainPosition = {
       ...start,

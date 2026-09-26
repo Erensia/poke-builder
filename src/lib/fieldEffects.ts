@@ -108,18 +108,25 @@ export function computeFieldEndOfTurnHeal(field: FieldKind | undefined, maxHp: n
   return field === "그래스필드" ? Math.floor(maxHp / 16) : 0;
 }
 
-/** 그래스슬라이더처럼 특정 필드에서만 우선도가 오르는 기술의 실제 우선도(조건 안 맞으면 원래 priority) */
-export function getFieldAdjustedPriority(move: Move, field: FieldKind | undefined): number {
-  if (move.priorityBoostInField && field === move.priorityBoostInField.field) {
+/**
+ * 그래스슬라이더처럼 특정 필드에서만 우선도가 오르는 기술의 실제 우선도(조건 안 맞으면 원래 priority).
+ * 필드 효과라 사용자가 땅에 있을 때만(ver.1.8 한계점 정리 — 이전엔 접지를 안 봤다).
+ */
+export function getFieldAdjustedPriority(move: Move, field: FieldKind | undefined, userGrounded = true): number {
+  if (move.priorityBoostInField && field === move.priorityBoostInField.field && userGrounded) {
     return move.priority + move.priorityBoostInField.delta;
   }
   return move.priority;
 }
 
-/** 미스트버스트·와이드포스·라이징볼트처럼 특정 필드에서 위력이 배가되는 기술의 배율(조건 안 맞으면 1) */
-export function getFieldPowerMultiplier(move: Move, field: FieldKind | undefined): number {
-  if (move.powerMultiplierInField && field === move.powerMultiplierInField.field) {
-    return move.powerMultiplierInField.multiplier;
+/**
+ * 미스트버스트·와이드포스·라이징볼트처럼 특정 필드에서 위력이 배가되는 기술의 배율(조건 안 맞으면 1).
+ * 미스트버스트·와이드포스는 사용자가, 라이징볼트(requiresTargetGrounded)는 상대가 땅에 있어야 한다.
+ */
+export function getFieldPowerMultiplier(move: Move, field: FieldKind | undefined, userGrounded = true, targetGrounded = true): number {
+  const boost = move.powerMultiplierInField;
+  if (boost && field === boost.field && (boost.requiresTargetGrounded ? targetGrounded : userGrounded)) {
+    return boost.multiplier;
   }
   return 1;
 }
@@ -131,7 +138,9 @@ export function getFieldPowerMultiplier(move: Move, field: FieldKind | undefined
 export function applyFieldPulse(
   move: Move,
   field: FieldKind | undefined,
+  /** 대지의파동은 사용자가 땅에 있을 때만 필드 타입·위력 2배 */
+  userGrounded = true,
 ): { type: PokemonType | null; power: number | null } {
-  if (!move.fieldPulse || !field) return { type: move.type, power: move.power };
+  if (!move.fieldPulse || !field || !userGrounded) return { type: move.type, power: move.power };
   return { type: FIELD_DISPLAY_TYPE[field], power: move.power === null ? null : move.power * 2 };
 }

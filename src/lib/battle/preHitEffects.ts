@@ -542,8 +542,15 @@ export function resolvePreHitEffects(
   // resolveMoveContext 안의 상성 계산(getEffectiveness)에도 바뀐 타입이 들어간다. 둘 중
   // 한 기술이 두 속성을 동시에 갖는 경우는 없어서(대지의파동만 fieldPulse, 나머지 셋만
   // powerMultiplierInField) 순서·중복 곱셈 걱정 없이 그냥 합쳐도 안전하다.
-  const fieldPulse = applyFieldPulse(moveAfterWeatherBall, state.field);
-  const fieldPowerMultiplier = getFieldPowerMultiplier(moveAfterWeatherBall, state.field);
+  // 필드 효과라 접지 조건(ver.1.8): 대지의파동·미스트버스트·와이드포스는 사용자, 라이징볼트는 상대가 땅에 있을 때만
+  const attackerGrounded = isGrounded(state, attacker, attackerAbility);
+  const fieldPulse = applyFieldPulse(moveAfterWeatherBall, state.field, attackerGrounded);
+  const fieldPowerMultiplier = getFieldPowerMultiplier(
+    moveAfterWeatherBall,
+    state.field,
+    attackerGrounded,
+    isGrounded(state, defender, defenderAbility),
+  );
   const fieldAdjustedMove: Move = {
     ...moveAfterWeatherBall,
     type: fieldPulse.type,

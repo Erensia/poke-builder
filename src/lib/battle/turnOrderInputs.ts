@@ -7,6 +7,7 @@ import { getFieldAdjustedPriority } from "@/lib/fieldEffects";
 import { getItemSpeedMultiplier } from "@/lib/itemEffects";
 import { type TurnOrderActor } from "@/lib/turnOrder";
 import { abilityOf, activeWeather, type BattleFighterState, type BattleState } from "./state";
+import { isGrounded } from "./grounding";
 
 /** 매직룸(트랙 M4): 모든 포켓몬의 도구 효과가 무효 */
 export function itemsSuppressedByRoom(state: BattleState | undefined): boolean {
@@ -48,7 +49,7 @@ export function computeTurnOrderSpeed(state: BattleState, fighter: BattleFighter
  */
 export function computeTurnOrderPriority(state: BattleState, fighter: BattleFighterState, move: Move): number {
   return (
-    getFieldAdjustedPriority(move, state.field) +
+    getFieldAdjustedPriority(move, state.field, isGrounded(state, fighter)) +
     getAbilityPriorityBoost(move, abilityOf(fighter), fighter.currentHp === fighter.maxHp)
   );
 }

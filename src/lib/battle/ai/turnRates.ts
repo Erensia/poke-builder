@@ -196,12 +196,15 @@ export function turnsToKo(
   if (endOfTurnAware && state && hp > 0) {
     // 남은 턴이 있는 효과는 대면이 그보다 길면 그 비율만큼만 섞는다(전부 넣은 속도로 대면 길이를 어림)
     const env = environmentResidual(state, target, attacker);
-    base += env.permanent / hp;
-    const all = base + env.timed.reduce((sum, t) => sum + t.amount / hp, 0);
+    const all = base + (env.permanent + env.timed.reduce((sum, t) => sum + t.amount, 0)) / hp;
     const estimate = all > 0 ? 1 / all : Infinity;
+    // HP가 가득 찬 채 시작하면 첫 턴의 회복은 버려진다(최대 HP 상한, ver.1.8 한계점 정리) — 회복분을 (1 − 1/대면 길이)만큼만
+    const healScale = hp >= target.maxHp && Number.isFinite(estimate) ? Math.max(0, 1 - 1 / estimate) : 1;
+    const scaled = (amount: number) => (amount < 0 ? amount * healScale : amount);
+    base += scaled(env.permanent) / hp;
     for (const t of env.timed) {
       const share = Number.isFinite(estimate) ? Math.min(1, t.turns / estimate) : t.turns === Infinity ? 1 : 0;
-      base += (t.amount / hp) * share;
+      base += (scaled(t.amount) / hp) * share;
     }
     berryHp = thresholdBerryHp(state, target, attacker);
   }
