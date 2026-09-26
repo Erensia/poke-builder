@@ -2,6 +2,7 @@ import { type Move } from "@/types/move";
 import { type PokemonType } from "@/types/pokemon-type";
 import { type HazardState } from "@/types/battle";
 import { getMove } from "@/lib/data";
+import { rankStageMultiplier } from "@/lib/battlePower";
 import { resolveEffectiveDefenderAbility } from "@/lib/abilityModifiers";
 import { isOpponentTargetingMove } from "@/lib/fieldEffects";
 import { hasVolatile } from "@/lib/volatileConditions";
@@ -198,6 +199,11 @@ export interface ThreatModelParams {
   sharpness: number;
   /** isPointlessNow 변화기도 사용 확률 0으로 */
   strictWaste: boolean;
+  /**
+   * 상대 변화기의 위협 환산(ver.1.8 한계점 정리 ③): 의미 있는 변화기가 앞으로 대면에 미칠 해(랭크업·상태이상 → 내가 버티는
+   * 턴, 회복·벽·나에게 거는 상태이상·랭크다운 → 내가 쓰러뜨리는 턴)를 센다. false면 "그 턴 공격 안 함"으로만(이전 동작)
+   */
+  statusThreat?: boolean;
 }
 
 /** v1 원안(비교용) */
@@ -206,7 +212,7 @@ export const V1_THREAT_MODEL: ThreatModelParams = { statusWeight: W_STATUS, shar
  * 기본값(§2-2 튜닝, 2026-09-24): v1 대비 그리디 247→253승, AI끼리 197:196 — 승률 차이는 오차 안이지만 쓸모없는
  * 변화기 제외는 논리적으로 맞고 상대 피해를 덜 과소평가한다. DEFAULT_DECISION_PARAMS도 이 값을 쓴다.
  */
-export const DEFAULT_THREAT_MODEL: ThreatModelParams = { statusWeight: 0.08, sharpness: 3, strictWaste: true };
+export const DEFAULT_THREAT_MODEL: ThreatModelParams = { statusWeight: 0.08, sharpness: 3, strictWaste: true, statusThreat: true };
 let threatModel: ThreatModelParams = DEFAULT_THREAT_MODEL;
 
 /**
@@ -249,6 +255,113 @@ export interface ThreatContext {
  *   변화기(의미 있는 것) 1개당 statusWeight, 남은 가중치를 공격기에 데미지^sharpness 비례 분배(§2-2 튜닝값),
  *   E[턴당 데미지] = Σ weight_i × damage_i (damage_i = 그 기술로 턴당 깎는 현재 HP 비율, 명중률 포함).
  */
+/** 상대(user)가 target에게 이번 판에 쓸 만한(헛수고가 아닌) 변화기 — 위협 모델과 위협 환산이 함께 쓴다 */
+function meaningfulStatusMoves(
+  state: BattleState,
+  user: BattleFighterState,
+  target: BattleFighterState,
+  targetTypes: PokemonType[],
+  targetSide: BattleSide,
+): Move[] {
+  return allowedByVolatiles(user, usableMoves(user), target)
+    .filter((m) => !isUsageBlocked(state, user, m, target))
+    .filter(
+      (move) =>
+        move.category === "status" &&
+        !isWastedStatusMove(move, user, target, targetTypes, targetSide) &&
+        !(threatModel.strictWaste && isPointlessNow(state, move, user, target)),
+    );
+}
+
+/** 변화기가 효과를 내는 기간 비율(대면 길이의 절반쯤부터 효과 — 1~3배) */
+function statusHorizon(turns: number): number {
+  return Number.isFinite(turns) ? Math.min(3, Math.max(1, turns / 2)) : 3;
+}
+
+/** 자기 대상 랭크 상승 중 stats에 해당하는 최대 배율(없으면 1) */
+function selfBoostMultiplier(move: Move, user: BattleFighterState, stats: readonly string[]): number {
+  let best = 1;
+  for (const s of move.statChanges ?? []) {
+    if (s.target !== "self" || !stats.includes(s.stat)) continue;
+    const current = user.stages[s.stat as keyof typeof user.stages] ?? 0;
+    const next = s.setTo !== undefined ? s.setTo : Math.min(6, current + (s.delta ?? 0));
+    if (next > current) best = Math.max(best, rankStageMultiplier(next) / rankStageMultiplier(current));
+  }
+  return best;
+}
+
+/** 대상 상태이상 부여 기술이 거는 주 상태이상(첫 번째, 확률 100%인 변화기만) */
+function inflictedStatusOf(move: Move): string | undefined {
+  const effect = move.inflictsStatus?.find((s) => s.chance === undefined || s.chance >= 100);
+  return effect?.status;
+}
+
+/**
+ * 위협 환산 — 내가 버티는 쪽(d): 상대 랭크업기(공격·특공 상승)는 이후 상대 공격이 세지는 몫, 나에게 거는 독·화상은 매 턴
+ * 피해. 반환: 상대 공격 속도 배율 증가분(dRateBonus)과 내 최대 HP 대비 매 턴 추가 피해(dResidual).
+ */
+function statusThreatOnSurvival(
+  statusMoves: Move[],
+  user: BattleFighterState,
+  target: BattleFighterState,
+  horizon: number,
+): { dRateBonus: number; dResidual: number } {
+  const w = threatModel.statusWeight;
+  let dRateBonus = 0;
+  let dResidual = 0;
+  for (const move of statusMoves) {
+    const boost = selfBoostMultiplier(move, user, ["atk", "spa"]);
+    if (boost > 1) dRateBonus += w * horizon * (boost - 1);
+    if (target.status.condition) continue;
+    const status = inflictedStatusOf(move);
+    if (status === "burn") dResidual += w * horizon * (1 / 16);
+    else if (status === "poison") dResidual += w * horizon * (1 / 8);
+    else if (status === "badly-poisoned") dResidual += w * horizon * (2 / 16);
+  }
+  return { dRateBonus, dResidual };
+}
+
+/**
+ * 위협 환산 — 내가 쓰러뜨리는 쪽(c, ver.1.8 한계점 정리 ③): user(상대)의 의미 있는 변화기가 attacker(나)의 공격 효율을 깎는 몫.
+ * 회복기(매 턴 기대 회복 = 사용 확률 × 회복량), 벽(내 데미지 절반), 나에게 거는 화상·마비·수면, 내 공격·특공 랭크다운,
+ * 상대 자신의 방어·특방 상승. 반환: 내 공격 속도 배율(rateMult ≤ 1)과 상대 최대 HP 대비 매 턴 기대 회복(heal).
+ */
+export function opponentStatusDrag(
+  state: BattleState,
+  user: BattleFighterState,
+  attacker: BattleFighterState,
+  attackerSide: BattleSide,
+  horizonTurns: number,
+): { rateMult: number; heal: number } {
+  if (!threatModel.statusThreat) return { rateMult: 1, heal: 0 };
+  const statusMoves = meaningfulStatusMoves(state, user, attacker, attacker.types, attackerSide);
+  if (statusMoves.length === 0) return { rateMult: 1, heal: 0 };
+  const w = threatModel.statusWeight;
+  const horizon = statusHorizon(horizonTurns);
+  let rateMult = 1;
+  let heal = 0;
+  for (const move of statusMoves) {
+    if (move.healsFraction && move.healsTarget !== "opponent") heal += w * move.healsFraction;
+    else if (move.healsWeatherDependent) heal += w * 0.5;
+    if (move.setsScreen) rateMult *= 1 - Math.min(0.5, w * horizon * 0.5);
+    const defense = selfBoostMultiplier(move, user, ["def", "spd"]);
+    if (defense > 1) rateMult *= 1 / (1 + w * horizon * (defense - 1));
+    if (!attacker.status.condition) {
+      const status = inflictedStatusOf(move);
+      if (status === "burn") rateMult *= 1 - w * horizon * 0.5;
+      else if (status === "paralysis") rateMult *= 1 - w * horizon * 0.25;
+      else if (status === "sleep") rateMult *= 1 - w * horizon * 0.5;
+    }
+    for (const s of move.statChanges ?? []) {
+      if (s.target === "opponent" && (s.stat === "atk" || s.stat === "spa") && (s.delta ?? 0) < 0) {
+        rateMult *= 1 - w * horizon * (1 - rankStageMultiplier(s.delta ?? 0));
+        break;
+      }
+    }
+  }
+  return { rateMult: Math.max(0.2, rateMult), heal };
+}
+
 export function evaluateOpponentThreat(ctx: ThreatContext): OpponentThreat {
   const { state, opponent, target, targetSide, opponentMovesSecond } = ctx;
   const targetTypes = ctx.targetTypes ?? target.types;
@@ -297,7 +410,16 @@ export function evaluateOpponentThreat(ctx: ThreatContext): OpponentThreat {
   // 대타를 깨는 턴 계산용 절대 데미지(최대 HP 대비) — 사용 확률 가중 평균
   const expectedDamage =
     totalShare > 0 ? attacks.reduce((sum, a, i) => sum + (shares[i] / totalShare) * remainingWeight * a.estimate.damageFraction, 0) : 0;
-  let expectedTurns = turnsToKo(expectedRate, opponent, target, targetHp, expectedDamage, ctx.state);
+  // 위협 환산(ver.1.8 한계점 정리 ③): 상대 랭크업기·나에게 거는 독·화상이 앞으로 끼칠 해를 공격 속도에 얹는다
+  let threatRate = expectedRate;
+  let threatDamage = expectedDamage;
+  if (threatModel.statusThreat && meaningfulStatus.length > 0 && targetHp > 0) {
+    const horizon = statusHorizon(expectedRate > 0 ? 1 / expectedRate : Infinity);
+    const { dRateBonus, dResidual } = statusThreatOnSurvival(meaningfulStatus, opponent, target, horizon);
+    threatRate = expectedRate * (1 + dRateBonus) + (dResidual * target.maxHp) / targetHp;
+    threatDamage = expectedDamage * (1 + dRateBonus) + dResidual;
+  }
+  let expectedTurns = turnsToKo(threatRate, opponent, target, targetHp, threatDamage, ctx.state);
   const asleep = blockedTurns(opponent);
   const sleepTalk = asleep > 0 ? candidates.find((m) => m.callsRandomLearnedMove) : undefined;
   if (sleepTalk) {
@@ -321,7 +443,7 @@ export function evaluateOpponentThreat(ctx: ThreatContext): OpponentThreat {
     defensiveMatchup,
     bestMove: best?.move,
     bestHitFraction: best ? Math.min(1, best.rate) * (targetHp / target.maxHp) : 0,
-    expectedRate,
+    expectedRate: threatRate,
     moveWeights: [
       ...meaningfulStatus.map((move) => ({ move, weight: Math.min(threatModel.statusWeight, 1 / meaningfulStatus.length) })),
       ...attacks.map((a, i) => ({ move: a.move, weight: totalShare > 0 ? (shares[i] / totalShare) * remainingWeight : 0 })),

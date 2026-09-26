@@ -57,6 +57,8 @@ export interface DecisionParams {
   threatSharpness: number;
   /** 상대 기술 모델: 지금 효과 없는 변화기(가득 찬 HP 회복·+6 랭크업·이미 깔린 벽·이미 상태이상)도 확률 0 */
   threatStrictWaste: boolean;
+  /** 상대 변화기의 위협 환산(ver.1.8 한계점 정리 ③) — false면 이전 동작(비교용) */
+  threatStatusThreat: boolean;
   /**
    * 파티 단위 평가(§4-5): 옵션의 첫 대면이 끝난 뒤 남은 포켓몬끼리의 대면을 미니맥스로 이어서 계산해 점수에 더한다.
    * false면 지금 대면만 보는 이전 동작(비교용). trade 채점 전용.
@@ -136,6 +138,7 @@ export const DEFAULT_DECISION_PARAMS: DecisionParams = {
   threatStatusWeight: DEFAULT_THREAT_MODEL.statusWeight,
   threatSharpness: DEFAULT_THREAT_MODEL.sharpness,
   threatStrictWaste: DEFAULT_THREAT_MODEL.strictWaste,
+  threatStatusThreat: true,
   riskFlagPenaltyBase: 0.4,
   tieThreshold: 0.1,
   wSurvival: 1.0,

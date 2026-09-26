@@ -57,7 +57,7 @@ import {
 import { estimateMoveHits, type MoveHitEstimate } from "./moveDamage";
 import { firstProbability } from "./speed";
 import { createPartyModel, type PartyDuel, type PartyEffect, type PartyModel } from "./partyEval";
-import { allowedByVolatiles, evaluateOpponentThreat, usableMoves, type OpponentThreat } from "./opponentMoveModel";
+import { allowedByVolatiles, evaluateOpponentThreat, opponentStatusDrag, usableMoves, type OpponentThreat } from "./opponentMoveModel";
 import { blockedTurns, isEndOfTurnAware, turnsToKo, withAccumulationSteps } from "./turnRates";
 import type { HitsEstimate } from "./types";
 
@@ -299,8 +299,14 @@ function turnsFor(
   if (!estimate || !Number.isFinite(estimate.expected)) {
     return { expected: Infinity, worstCase: { count: 3, certainty: "random", probability: 0 } };
   }
+  // 위협 환산 c 쪽(ver.1.8 한계점 정리 ③): 상대 회복기·벽·나에게 거는 상태이상·랭크다운이 내 공격 효율을 깎는다
+  const hp = defenderHp ?? defender.currentHp;
+  const attackerSide = state.sideA.party.includes(attacker) ? state.sideA : state.sideB;
+  const drag = opponentStatusDrag(state, defender, attacker, attackerSide, estimate.expected);
+  const rate = (1 / estimate.expected) * drag.rateMult - (hp > 0 ? (drag.heal * defender.maxHp) / hp : 0);
+  if (rate <= 0) return { expected: Infinity, worstCase: estimate.worstCase };
   return {
-    expected: turnsToKo(1 / estimate.expected, attacker, defender, defenderHp, estimate.damageFraction, state),
+    expected: turnsToKo(rate, attacker, defender, defenderHp, estimate.damageFraction * drag.rateMult, state),
     worstCase: estimate.worstCase,
   };
 }
