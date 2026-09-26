@@ -18,6 +18,7 @@
  * 환경변수 PROTECT=1: 방어류를 배울 수 있으면 4번째 기술을 방어류로 바꾼다. DIAG=protect면 방어류를 고른 순간을 덤프.
  * 환경변수 STATUS=1: AI가 점수 매기는 변화기를 배울 수 있으면 기술 하나를 그걸로 바꾼다(변화기 판단 검증용).
  *     diag 모드에 DIAG=status를 주면 그 변화기를 고른 순간을 덤프한다.
+ *   h2h에 OPP_ROOT=<다른 체크아웃 경로>를 주면 B 쪽 AI를 그 코드에서 불러온다(예: ver.1.7 끝 대비 — 엔진·데이터는 이 체크아웃).
  *     (PowerShell에서는 JSON 따옴표를 '{\"scoring\":\"spec\"}' 처럼 이스케이프)
  */
 import { createServer } from "vite";
@@ -31,6 +32,10 @@ const root = fileURLToPath(new URL("..", import.meta.url));
 // hmr: false — 병렬 실행 시 HMR 웹소켓 포트(24678) 충돌로 프로세스가 죽는 걸 막는다.
 const server = await createServer({ root, server: { middlewareMode: true, hmr: false }, appType: "custom", logLevel: "error" });
 const opponentParams = process.argv[5] ? JSON.parse(process.argv[5]) : undefined;
+// h2h 모드: OPP_ROOT=<다른 체크아웃 경로>면 B 쪽 AI를 그 코드(예: ver.1.7 끝)에서 불러온다 — 엔진·데이터는 이 체크아웃 것.
+const oppServer = process.env.OPP_ROOT
+  ? await createServer({ root: process.env.OPP_ROOT, server: { middlewareMode: true, hmr: false }, appType: "custom", logLevel: "error" })
+  : undefined;
 
 function mulberry32(seed) {
   let a = seed >>> 0;
@@ -266,9 +271,12 @@ try {
     }
     console.log(JSON.stringify({ battles: battles * 2, res, aiActionMix: mix, statusMix }));
   } else if (mode === "h2h") {
-    // AI(파라미터 A = argv[4]) 대 AI(파라미터 B = argv[5], 생략하면 기본값), 파티 좌우 교대
-    const policy = (params, risk) => (st, key) => ai.chooseAiAction(st, key, risk, { decisionParams: params }).action;
-    const forced = (params, risk) => (st, key) => ai.chooseAiForcedSwitch(st, key, risk, params) ?? living(st, key)[0];
+    // AI(파라미터 A = argv[4]) 대 AI(파라미터 B = argv[5], 생략하면 기본값), 파티 좌우 교대.
+    // OPP_ROOT면 B는 그 체크아웃의 AI — 고른 기술은 이 체크아웃 데이터의 같은 id 기술로 바꿔 엔진에 넘긴다.
+    const oppAi = oppServer ? await oppServer.ssrLoadModule("/src/lib/battle/ai/index.ts") : ai;
+    const remap = (action) => (action.kind === "move" && action.move ? { ...action, move: data.getMove(action.move.id) ?? action.move } : action);
+    const policy = (params, risk, which = ai) => (st, key) => remap(which.chooseAiAction(st, key, risk, { decisionParams: params }).action);
+    const forced = (params, risk, which = ai) => (st, key) => which.chooseAiForcedSwitch(st, key, risk, params) ?? living(st, key)[0];
     const res = { aWins: 0, bWins: 0, other: 0 };
     for (let s = 1; s <= battles; s++) {
       const risk = mulberry32(s)();
@@ -276,8 +284,8 @@ try {
         const bSide = aSide === "a" ? "b" : "a";
         const r = runBattle(
           s,
-          { [aSide]: policy(decisionParams, risk), [bSide]: policy(opponentParams, risk) },
-          { [aSide]: forced(decisionParams, risk), [bSide]: forced(opponentParams, risk) },
+          { [aSide]: policy(decisionParams, risk), [bSide]: policy(opponentParams, risk, oppAi) },
+          { [aSide]: forced(decisionParams, risk), [bSide]: forced(opponentParams, risk, oppAi) },
         );
         res[r.winner === aSide ? "aWins" : r.winner === bSide ? "bWins" : "other"]++;
       }
@@ -316,4 +324,5 @@ try {
   }
 } finally {
   await server.close();
+  await oppServer?.close();
 }
