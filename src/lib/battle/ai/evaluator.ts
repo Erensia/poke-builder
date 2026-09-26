@@ -3,7 +3,8 @@ import { type Move } from "@/types/move";
 import { NO_STATUS_CONDITION } from "@/types/status";
 import { type PokemonType } from "@/types/pokemon-type";
 import { NEUTRAL_ACCURACY_STAGES, NEUTRAL_STAGES, type StatStages } from "@/types/battleStats";
-import { applyMoveStatChanges } from "@/lib/statStages";
+import { applyMoveStatChanges, applyStageDelta } from "@/lib/statStages";
+import { hasVolatile } from "@/lib/volatileConditions";
 import { applyMoveAccuracyEvasionChanges } from "@/lib/accuracyCrit";
 import { resolveEffectiveDefenderAbility } from "@/lib/abilityModifiers";
 import { inflictRestSleep } from "@/lib/statusConditions";
@@ -11,11 +12,13 @@ import { computeWeatherHealFraction } from "@/lib/weatherEffects";
 import {
   abilityOf,
   activeWeather,
+  contraryDelta,
   contraryMoveFor,
   cloneSide,
   isFainted,
   opponentKey,
   sideOf,
+  statDropBlockStatsOf,
   type BattleFighterState,
   type BattleSide,
   type BattleState,
@@ -55,7 +58,7 @@ import { estimateMoveHits, type MoveHitEstimate } from "./moveDamage";
 import { firstProbability } from "./speed";
 import { createPartyModel, type PartyDuel, type PartyEffect, type PartyModel } from "./partyEval";
 import { allowedByVolatiles, evaluateOpponentThreat, usableMoves, type OpponentThreat } from "./opponentMoveModel";
-import { blockedTurns, turnsToKo } from "./turnRates";
+import { blockedTurns, isEndOfTurnAware, turnsToKo, withAccumulationSteps } from "./turnRates";
 import type { HitsEstimate } from "./types";
 
 export type { SpeedOrder } from "./speed";
@@ -840,7 +843,43 @@ function blendRace(after: RaceInputs, base: RaceInputs, covered: number): RaceIn
  * 공통 평가 엔진: key 편의 이번 턴 옵션(기술 최대 4 + 교체 후보)을 전부 같은 항목(a~e)으로 평가한다.
  * 메가진화가 가능하면 기술 옵션은 메가진화한 상태로 평가하고 mega: true로 표시한다(교체 옵션은 메가 없음).
  */
-export function evaluateOptions(state: BattleState, key: FighterKey, options: EvaluateOptions = {}): AiOption[] {
+/**
+ * 매 턴 쌓이는 랭크(ver.1.8 한계점 정리 ②): 가속(스피드 +1)·문어굳히기(방어·특방 −1)·물엿범벅(스피드 −1, 남은 턴까지)은
+ * 턴이 지날수록 대면이 바뀐다. 지금 대면 길이를 어림해 중간 시점까지 쌓인 랭크(대면 길이 T → (T−1)/2 내림, 최대 3)를 두
+ * 활성 포켓몬에 미리 얹은 state로 평가한다(엔진과 같이 클리어바디류·심술꾸러기 존중). 턴 종료 효과 토글에 묶는다.
+ */
+function projectAccumulatingStages(state: BattleState, key: FighterKey): { state: BattleState; steps: number } {
+  const accumulates = (f: BattleFighterState) =>
+    !!abilityOf(f)?.boostsSpeedEachTurnEnd || hasVolatile(f.volatile, "octolock") || hasVolatile(f.volatile, "syrupCoat");
+  if (!isEndOfTurnAware() || (!accumulates(state.a) && !accumulates(state.b))) return { state, steps: 0 };
+  const race = currentRace(state, key, usableMoves(state[key]).filter((m) => !isOneShotMove(m)));
+  const length = Math.min(race.killTurns, race.survivalTurns);
+  const steps = Number.isFinite(length) ? Math.min(3, Math.max(0, Math.floor((length - 1) / 2))) : 3;
+  if (steps === 0) return { state, steps };
+  const projected = cloneBattleState(state);
+  for (const f of [projected.a, projected.b]) {
+    const ability = abilityOf(f);
+    if (ability?.boostsSpeedEachTurnEnd) f.stages = applyStageDelta(f.stages, "spe", contraryDelta(f, steps));
+    const blocked = statDropBlockStatsOf(f, ability);
+    if (hasVolatile(f.volatile, "octolock")) {
+      for (const stat of ["def", "spd"] as const) {
+        if (!blocked?.includes(stat)) f.stages = applyStageDelta(f.stages, stat, contraryDelta(f, -steps));
+      }
+    }
+    if (hasVolatile(f.volatile, "syrupCoat") && !blocked?.includes("spe")) {
+      const left = f.volatile.active.syrupCoat!.turnsRemaining ?? steps;
+      f.stages = applyStageDelta(f.stages, "spe", contraryDelta(f, -Math.min(steps, left)));
+    }
+  }
+  return { state: projected, steps };
+}
+
+export function evaluateOptions(rawState: BattleState, key: FighterKey, options: EvaluateOptions = {}): AiOption[] {
+  const { state, steps } = projectAccumulatingStages(rawState, key);
+  return withAccumulationSteps(steps, () => evaluateOptionsOn(state, key, options));
+}
+
+function evaluateOptionsOn(state: BattleState, key: FighterKey, options: EvaluateOptions): AiOption[] {
   const oppKey = opponentKey(key);
   const mySide = sideOf(state, key);
   const result: AiOption[] = [];

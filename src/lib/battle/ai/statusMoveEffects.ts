@@ -22,6 +22,7 @@ import {
   sideOf,
   statDropBlockStatsOf,
   statusImmunitiesOf,
+  contraryDelta,
   hasLivingReserve,
   applyTransform,
   isForcedSwitchBlocked,
@@ -38,6 +39,7 @@ import { cureConditionsBlockedByAbility, isFixedAbility, isUncopyableAbility } f
 import { calcEntryHazardDamage } from "../entryCost";
 import { isGrounded } from "../grounding";
 import { isTrappedFromSwitching } from "../switching";
+import { currentAccumulationSteps } from "./turnRates";
 import { eatBerryNow } from "../fling";
 import { effectiveHeldItem } from "../turnOrderInputs";
 
@@ -738,10 +740,15 @@ export function applyEffectMove(clone: BattleState, key: FighterKey, move: Move,
     case "fairyLock":
       clone.fairyLockTurnsRemaining = 2;
       return true;
-    case "octolock":
-      // 매 턴 끝 방어·특방 −1 — 대면 동안의 누적을 한 단계로 근사(교체 봉쇄 가치는 교체 모델링 때)
-      target.stages = applyStageDelta(applyStageDelta(target.stages, "def", -1), "spd", -1);
+    case "octolock": {
+      // 매 턴 끝 방어·특방 −1 — 대면 중간 시점까지 쌓이는 단계 수만큼(최소 1, ver.1.8 한계점 정리 ②). 클리어바디류는 막힘
+      const steps = Math.max(1, currentAccumulationSteps());
+      const blocked = statDropBlockStatsOf(target, abilityOf(target));
+      for (const stat of ["def", "spd"] as const) {
+        if (!blocked?.includes(stat)) target.stages = applyStageDelta(target.stages, stat, contraryDelta(target, -steps));
+      }
       return true;
+    }
     // Tier 2-A
     case "stageSwap": {
       const mine = { ...me.stages };
