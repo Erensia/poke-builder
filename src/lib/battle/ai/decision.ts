@@ -138,7 +138,8 @@ export const DEFAULT_DECISION_PARAMS: DecisionParams = {
   partyCountWeight: 0.5,
   partyDuelNoise: 0.5,
   partyEffects: false,
-  partyEffectKinds: [],
+  // 교체해도 남는 효과만(종류별 측정 — 결정 레이어 §4-5 ②-2). 상대 휘발·랭크다운은 교체로 사라져 과대평가라 끔
+  partyEffectKinds: ["selfBoost", "hazard", "field", "status", "protect"],
   a1Aware: true,
   a2Aware: true,
   trackMAware: true,
