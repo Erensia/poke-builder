@@ -374,8 +374,9 @@ export function evaluateSlotMatchup(
   const weatherBall = applyWeatherBall(variablePowerMove, effectiveWeather);
   const weatherBallMove: Move = { ...variablePowerMove, type: weatherBall.type, power: weatherBall.power };
 
-  const fieldPulse = applyFieldPulse(weatherBallMove, field);
-  const fieldPowerMultiplier = getFieldPowerMultiplier(weatherBallMove, field);
+  // 접지 조건(ver.1.8) — runtime이 없으면(매치업 페이지) 땅에 있다고 본다
+  const fieldPulse = applyFieldPulse(weatherBallMove, field, attackerRuntime?.grounded ?? true);
+  const fieldPowerMultiplier = getFieldPowerMultiplier(weatherBallMove, field, attackerRuntime?.grounded ?? true, defenderRuntime?.grounded ?? true);
   const fieldAdjustedMove: Move = {
     ...weatherBallMove,
     type: fieldPulse.type,

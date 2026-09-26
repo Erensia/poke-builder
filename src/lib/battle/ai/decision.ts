@@ -550,7 +550,7 @@ function tradeScore(option: AiOption, riskAversion: number, params: DecisionPara
       if (!params.trackMAware && effectKind && TRACK_M_EFFECT_KINDS.has(effectKind)) return -Infinity;
       if (!params.tier2Aware && effectKind && TIER2_EFFECT_KINDS.has(effectKind)) return -Infinity;
       // 교체 봉쇄의 가치는 상대 교체 모델링에서만 생긴다
-      if (effectKind === "trap" && !(params.oppSwitchAware && params.partyAware)) return -Infinity;
+      if ((effectKind === "trap" || effectKind === "fairyLock") && !(params.oppSwitchAware && params.partyAware)) return -Infinity;
       return effectValue(option, params) - riskPenalty;
     }
     if (!params.a1Aware && isA1SupportMove(option)) return -Infinity;
@@ -624,6 +624,16 @@ function actionTempoRank(option: AiOption, attackFirst: boolean): number {
   return attackFirst && !killsNow ? 1 : 0;
 }
 
+/**
+ * 모든 선택지가 −∞일 때(ver.1.8 한계점 정리 — 이전엔 첫 선택지라 실패하는 변화기를 반복했다): 데미지를 줄 수 있는 공격기
+ * (처치 턴이 가장 짧은 것) → 교체 → 첫 선택지.
+ */
+function fallbackOption(options: AiOption[]): AiOption {
+  const attacks = options.filter((o) => o.optionType === "move" && o.move && o.move.category !== "status" && Number.isFinite(o.hitsToKill.expected));
+  if (attacks.length > 0) return attacks.reduce((a, b) => (b.hitsToKill.expected < a.hitsToKill.expected ? b : a));
+  return options.find((o) => o.optionType === "switch") ?? options[0];
+}
+
 /** 쉬움 난이도: 점수 소프트맥스로 뽑는다(−∞는 제외). 최고점 대비 차이로 계산해 overflow를 피한다 */
 function softmaxPick(scored: ScoredOption[], bestScore: number, temperature: number, random: () => number): AiOption {
   const pool = scored.filter((s) => Number.isFinite(s.score));
@@ -662,7 +672,7 @@ export function decide(
   if (override) return { chosen: override, scored };
 
   const bestScore = Math.max(...scored.map((s) => s.score));
-  if (bestScore === -Infinity) return { chosen: options[0], scored };
+  if (bestScore === -Infinity) return { chosen: fallbackOption(options), scored };
   if (params.choiceTemperature > 0 && Number.isFinite(bestScore)) return { chosen: softmaxPick(scored, bestScore, params.choiceTemperature, random), scored };
 
   // 상대가 나에게 데미지를 줄 수단이 없으면 점수가 +Infinity — Infinity − Infinity(NaN) 비교를 피한다.

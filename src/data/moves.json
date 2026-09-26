@@ -6885,7 +6885,8 @@
     ],
     "powerMultiplierInField": {
       "field": "일렉트릭필드",
-      "multiplier": 2
+      "multiplier": 2,
+      "requiresTargetGrounded": true
     },
     "makesContact": false
   },

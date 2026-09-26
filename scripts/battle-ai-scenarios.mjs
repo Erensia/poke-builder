@@ -1601,6 +1601,33 @@ try {
         `선출 ${sel.join(",")}`,
       );
     }
+    // 한계점 정리(ver.1.8): 필드 기술 접지 조건(엔진) · 페어리록 평가 · 끈적끈적네트 대면표 반영
+    {
+      const pe = await server.ssrLoadModule("/src/lib/battle/ai/partyEval.ts");
+      const toi = await server.ssrLoadModule("/src/lib/battle/turnOrderInputs.ts");
+      const fe = await server.ssrLoadModule("/src/lib/fieldEffects.ts");
+      const glideSt = battle([mon("리자몽", ["그래스슬라이더"]), mon("이상해꽃", ["그래스슬라이더"])], [mon("잠만보", ["누르기"])]);
+      glideSt.field = "그래스필드";
+      glideSt.fieldTurnsRemaining = 5;
+      const flyingPrio = toi.computeTurnOrderPriority(glideSt, glideSt.a, data.getMove("그래스슬라이더"));
+      const groundPrio = toi.computeTurnOrderPriority(glideSt, glideSt.sideA.party[1], data.getMove("그래스슬라이더"));
+      const volt = data.getMove("라이징볼트");
+      const voltFlying = fe.getFieldPowerMultiplier(volt, "일렉트릭필드", true, false);
+      const voltGround = fe.getFieldPowerMultiplier(volt, "일렉트릭필드", false, true);
+      const lockSt = battle([mon("한카리아스", ["지진", "페어리록"]), mon("잠만보", ["누르기"])], [mon("메타그로스", ["코멧펀치"]), mon("리자몽", ["화염방사"])]);
+      const lock = opt(ev.evaluateOptions(lockSt, "a"), "페어리록");
+      const webSt = battle([mon("잠만보", ["누르기"]), mon("한카리아스", ["지진"])], [mon("메타그로스", ["코멧펀치"])]);
+      webSt.sideA.hazards = { ...webSt.sideA.hazards, stickyWeb: true };
+      const benchSpe = pe.createPartyModel(webSt, "a").pair(1, false, 0).me.stages.spe;
+      check(
+        "한계점 정리: 그래스슬라이더·라이징볼트 접지 조건 · 페어리록 평가(교체 모델링 켤 때만) · 끈적끈적네트 등장 스피드 −1",
+        flyingPrio === 0 && groundPrio === 1 && voltFlying === 1 && voltGround === 2 &&
+          lock.support?.effect?.kind === "fairyLock" && lock.support.effect.party?.model.switchLockedNextTurn === true &&
+          Number.isFinite(dec.scoreOption(lock, 0.5)) && dec.scoreOption(lock, 0.5, { ...P, oppSwitchAware: false }) === -Infinity &&
+          benchSpe === -1,
+        `우선도 비행 ${flyingPrio}/땅 ${groundPrio} 라이징볼트 ${voltFlying}/${voltGround} 페어리록 ${dec.scoreOption(lock, 0.5).toFixed(3)} 네트 ${benchSpe}`,
+      );
+    }
   }
   // ── 매치업 난수별 데미지(ver.1.7 트랙 H): 기존 격파 판정과 같은 관계식인지 대조 ──
   {

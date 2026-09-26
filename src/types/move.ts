@@ -232,7 +232,8 @@ export interface Move {
    * 활성 상태일 때 위력에 곱해지는 배율만 채운다. 필드 타입 자체가 위력을 올리는 getFieldDamageMultiplier
    * (자속처럼 타입 일치 시 1.3배)와는 별개 축 — 이쪽은 기술 고유의 "이 필드에서만 강해짐" 효과다.
    */
-  powerMultiplierInField?: { field: FieldKind; multiplier: number };
+  /** requiresTargetGrounded: 라이징볼트처럼 상대가 땅에 있어야 하는 경우(기본은 사용자 접지) */
+  powerMultiplierInField?: { field: FieldKind; multiplier: number; requiresTargetGrounded?: boolean };
   /**
    * 대지의파동(Terrain Pulse) 전용. 필드가 활성 상태면 기술의 실제 타입이 그 필드의 표시 타입
    * (FIELD_DISPLAY_TYPE)으로 바뀌고 위력이 2배가 된다. 필드가 없으면 원본 그대로(노말타입 50).
