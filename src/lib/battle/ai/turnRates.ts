@@ -29,6 +29,30 @@ const LEECH_SEED_DENOMINATOR = 8;
  */
 let endOfTurnAware = true;
 
+export function isEndOfTurnAware(): boolean {
+  return endOfTurnAware;
+}
+
+/**
+ * 매 턴 쌓이는 랭크(가속·문어굳히기·물엿범벅, ver.1.8 한계점 정리 ②): 이번 결정에서 대면 중간 시점까지 쌓이는 단계 수 —
+ * evaluateOptions가 정해 두고, 효과 변화기(문어굳히기)가 새로 거는 누적에도 같은 값을 쓴다.
+ */
+let accumulationSteps = 0;
+
+export function withAccumulationSteps<T>(steps: number, fn: () => T): T {
+  const previous = accumulationSteps;
+  accumulationSteps = steps;
+  try {
+    return fn();
+  } finally {
+    accumulationSteps = previous;
+  }
+}
+
+export function currentAccumulationSteps(): number {
+  return accumulationSteps;
+}
+
 export function withEndOfTurnModel<T>(enabled: boolean, fn: () => T): T {
   const previous = endOfTurnAware;
   endOfTurnAware = enabled;

@@ -1628,6 +1628,22 @@ try {
         `우선도 비행 ${flyingPrio}/땅 ${groundPrio} 라이징볼트 ${voltFlying}/${voltGround} 페어리록 ${dec.scoreOption(lock, 0.5).toFixed(3)} 네트 ${benchSpe}`,
       );
     }
+    // 한계점 정리 ②: 매 턴 쌓이는 랭크 — 가속은 긴 대면일수록 선공 확률↑, 문어굳히기 건 상대는 방어·특방이 대면 중간만큼 더 떨어짐
+    {
+      const tr = await server.ssrLoadModule("/src/lib/battle/ai/turnRates.ts");
+      const mk = () => battle([mon("잠만보", ["누르기"], "가속", null, pts({ hp: 32, def: 32 }))], [mon("잠만보", ["누르기"], null, null, pts({ hp: 32, def: 32, spe: 32 }))]);
+      const pOn = opt(ev.evaluateOptions(mk(), "a"), "누르기").firstProbability;
+      const pOff = tr.withEndOfTurnModel(false, () => opt(ev.evaluateOptions(mk(), "a"), "누르기").firstProbability);
+      const octoSt = battle([mon("메타그로스", ["코멧펀치"])], [mon("잠만보", ["누르기"], null, null, pts({ hp: 32, def: 32 }))]);
+      octoSt.b.volatile = { active: { ...octoSt.b.volatile.active, octolock: {} } };
+      const cOn = opt(ev.evaluateOptions(octoSt, "a"), "코멧펀치").hitsToKill.expected;
+      const cOff = tr.withEndOfTurnModel(false, () => opt(ev.evaluateOptions(octoSt, "a"), "코멧펀치").hitsToKill.expected);
+      check(
+        "한계점 정리 ②: 가속 누적 선공 확률↑ · 문어굳히기 누적 처치 턴↓ · 턴 종료 토글",
+        pOn > pOff && cOn < cOff,
+        `가속 p ${pOff.toFixed(2)}→${pOn.toFixed(2)} 문어 c ${cOff.toFixed(2)}→${cOn.toFixed(2)}`,
+      );
+    }
   }
   // ── 매치업 난수별 데미지(ver.1.7 트랙 H): 기존 격파 판정과 같은 관계식인지 대조 ──
   {
