@@ -2,7 +2,7 @@ import type { AiOption } from "./evaluator";
 import { DEFAULT_THREAT_MODEL } from "./opponentMoveModel";
 import { A1_EFFECT_KINDS, A2_EFFECT_KINDS, PHASE3_EFFECT_KINDS, TRACK_M_EFFECT_KINDS, TIER2_EFFECT_KINDS } from "./statusMoveEffects";
 import { ALL_PROTECT_GROUPS, type ProtectGroup } from "./protectMoves";
-import { partyRaceValue, partyValueAfterTurn, type PartyDuel, type PartyEffect } from "./partyEval";
+import { partyRaceValue, partyValueAfterTurn, type ChainParams, type PartyDuel, type PartyEffect } from "./partyEval";
 
 /**
  * decision-layer §9 파라미터(튜닝 대상) + extension §2-2 w_survival.
@@ -80,6 +80,17 @@ export interface DecisionParams {
   trackMAware: boolean;
   /** 변화기 판단 Tier 2(ver.1.8) — 파워스왑·가드셰어·변신·코트체인지 등을 평가할지(비교용) */
   tier2Aware: boolean;
+  /**
+   * 로드맵 3 — 이어지는 대면에서 상대의 자발적 교체를 모델링한다(대면 시작마다 "그대로 / 교체" 중 상대에게 나은 쪽).
+   * 교체 봉쇄 기술(검은눈빛·블록)의 가치도 이걸로 생긴다. false면 이전 동작(비교용).
+   */
+  oppSwitchAware: boolean;
+  /** 상대가 교체하려면 교체 쪽이 이만큼(판세 값 단위) 나아야 한다 — 왕복·근소한 차이의 교체 억제 */
+  oppSwitchMargin: number;
+  /** 이어지는 대면 한 번의 계산 안에서 상대가 자발적으로 교체하는 최대 횟수 */
+  oppSwitchLimit: number;
+  /** 교체 갈래를 섞는 비율(1 = 상대가 항상 최선으로 교체) */
+  oppSwitchWeight: number;
 }
 
 /**
@@ -115,6 +126,10 @@ export const DEFAULT_DECISION_PARAMS: DecisionParams = {
   a2Aware: true,
   trackMAware: true,
   tier2Aware: true,
+  oppSwitchAware: true,
+  oppSwitchMargin: 0.1,
+  oppSwitchLimit: 1,
+  oppSwitchWeight: 0.5,
 };
 
 export interface ScoredOption {
@@ -184,7 +199,16 @@ function race(
   myOverrides?: Record<number, number>,
 ): number {
   if (!params.partyAware || !party) return raceValue(...inputs);
-  return partyRaceValue(party, inputs, { lambda: params.partyCountWeight, noise: params.partyDuelNoise }, myOverrides);
+  return partyRaceValue(party, inputs, chainParams(params), myOverrides);
+}
+
+/** 이어지는 대면 계산 파라미터(λ·대면 폭·상대 자발적 교체) */
+function chainParams(params: DecisionParams): ChainParams {
+  return {
+    lambda: params.partyCountWeight,
+    noise: params.partyDuelNoise,
+    oppSwitch: params.oppSwitchAware ? { margin: params.oppSwitchMargin, limit: params.oppSwitchLimit, weight: params.oppSwitchWeight } : undefined,
+  };
 }
 
 /** 교체 후보로 대면을 이어갔을 때의 값(진입 비용 차감). lost=1이면 들어온 포켓몬이 이번 턴 한 대를 맞는다. */
@@ -212,7 +236,7 @@ function switchInValue(candidate: AiOption, lost: number, params: DecisionParams
  * 지속 턴 효과면 원래 대면표 + 효과 대면표·남은 턴을 함께 넘긴다(§4-5 ②).
  */
 function withEffect(party: PartyDuel | undefined, effect: PartyEffect | undefined, params: DecisionParams): PartyDuel | undefined {
-  if (!party || !effect || !params.partyEffects) return party;
+  if (!party || !effect || (!params.partyEffects && !effect.always)) return party;
   return effect.turns === Infinity ? { ...party, model: effect.model } : { ...party, effect };
 }
 
@@ -296,7 +320,7 @@ function phazeValue(option: AiOption, params: DecisionParams): number {
   const { hitLoss, branches } = option.support!.effect!.phaze!;
   if (branches.length === 0) return -Infinity;
   const partyMode = params.partyAware && !!option.party;
-  const chain = { lambda: params.partyCountWeight, noise: params.partyDuelNoise };
+  const chain = chainParams(params);
   const total = branches.reduce((sum, b) => {
     const duel = partyMode ? { model: b.model, myIndex: option.party!.myIndex, myStaged: true } : undefined;
     const rest = b.fainted
@@ -317,7 +341,7 @@ function phazeValue(option: AiOption, params: DecisionParams): number {
 function sacrificeValue(option: AiOption, params: DecisionParams): number {
   if (!params.partyAware || !option.party) return -Infinity;
   const { success, afterModel, failModel } = option.support!.effect!.sacrifice!;
-  const chain = { lambda: params.partyCountWeight, noise: params.partyDuelNoise };
+  const chain = chainParams(params);
   const before = option.party.model;
   const onSuccess = partyValueAfterTurn(afterModel, before, chain);
   const onFail = partyValueAfterTurn(failModel, before, chain);
@@ -331,7 +355,7 @@ function sacrificeValue(option: AiOption, params: DecisionParams): number {
 function partyShiftValue(option: AiOption, params: DecisionParams): number {
   if (!params.partyAware || !option.party) return -Infinity;
   const { hpDelta, extraCount, afterModel } = option.support!.effect!.partyShift!;
-  const chain = { lambda: params.partyCountWeight, noise: params.partyDuelNoise };
+  const chain = chainParams(params);
   return hpDelta + extraCount * params.partyCountWeight + partyValueAfterTurn(afterModel, option.party.model, chain);
 }
 
@@ -376,7 +400,7 @@ function protectValue(option: AiOption, params: DecisionParams): number {
     const rest = o.race
       ? race(params, turnParty, [o.race.killTurns, o.race.survivalTurns, o.race.firstProbability, o.myAfter, o.oppAfter, 0])
       : partyMode && o.partyModel
-        ? partyValueAfterTurn(o.partyModel, option.party!.model, { lambda: params.partyCountWeight, noise: params.partyDuelNoise })
+        ? partyValueAfterTurn(o.partyModel, option.party!.model, chainParams(params))
         : 0;
     return sum + o.weight * (opp - o.oppAfter - (my - o.myAfter) + rest);
   }, 0);
@@ -451,6 +475,8 @@ function tradeScore(option: AiOption, riskAversion: number, params: DecisionPara
       if (!params.a2Aware && effectKind && A2_EFFECT_KINDS.has(effectKind)) return -Infinity;
       if (!params.trackMAware && effectKind && TRACK_M_EFFECT_KINDS.has(effectKind)) return -Infinity;
       if (!params.tier2Aware && effectKind && TIER2_EFFECT_KINDS.has(effectKind)) return -Infinity;
+      // 교체 봉쇄의 가치는 상대 교체 모델링에서만 생긴다
+      if (effectKind === "trap" && !(params.oppSwitchAware && params.partyAware)) return -Infinity;
       return effectValue(option, params) - riskPenalty;
     }
     if (!params.a1Aware && isA1SupportMove(option)) return -Infinity;

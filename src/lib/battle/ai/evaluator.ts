@@ -607,7 +607,9 @@ function evaluateEffectMove(ctx: EffectContext): EffectEvaluation | undefined {
       kind === "painSplit"
         ? { my: clone[key].currentHp / clone[key].maxHp, opp: oppAfterFighter.currentHp / oppAfterFighter.maxHp }
         : undefined;
-    return { hit: after, base, hitChance, carry: 0, kind, party: { model: partyModel, turns: Infinity }, partyCarry: 0, selfCost, hpAfter };
+    // 교체 봉쇄(로드맵 3)는 이어지는 대면에서만 가치가 생기므로 partyEffects와 무관하게 쓴다
+    const always = kind === "trap" || kind === "octolock" || undefined;
+    return { hit: after, base, hitChance, carry: 0, kind, party: { model: partyModel, turns: Infinity, always }, partyCarry: 0, selfCost, hpAfter };
   }
 
   // 지속 턴이 있는 효과(벽·날씨·필드·트릭룸·도발·앙코르·사슬묶기): 이번 턴(내가 먼저 움직이면 이번 턴 상대
@@ -776,22 +778,26 @@ function evaluateRevive(ctx: EffectContext, base: RaceInputs): EffectEvaluation 
 }
 
 /**
- * 멸망의노래(Tier 2-B): 3턴 뒤 장에 남은 양쪽이 쓰러진다. 교체 모델링 전이라 둘 다 끝까지 남는다고 보고, 대면이 3턴
- * 안에 끝나면(노래가 의미 없음) 고르지 않는다. 방음인 쪽은 카운트가 없어 남는다. 교체로 빠져나가는 판정은 로드맵 3.
+ * 멸망의노래(Tier 2-B → 로드맵 3): 장에 있는 양쪽(방음 제외)에 멸망 카운트 3을 건 state로 이어지는 대면을 계산한다 —
+ * 카운트가 끝나는 턴까지 대면이 이어지면, 교체할 수 있는 쪽은 물러나고 못 하는 쪽(교체 봉쇄·대기 없음)은 쓰러진다.
+ * 상대는 그 전에 교체로 피할 수도 있다(상대 자발적 교체). 대면이 3턴 안에 끝나면 노래가 의미 없어 고르지 않는다.
  */
 function evaluatePerishSong(ctx: EffectContext, base: RaceInputs): EffectEvaluation | undefined {
   const { state, key } = ctx;
   if (Math.min(base.killTurns, base.survivalTurns) <= 3) return undefined;
   const after = cloneBattleState(state);
   const oppKey = opponentKey(key);
-  let hpDelta = 0;
-  if (!abilityOf(after[key])?.blocksSound) {
-    hpDelta -= after[key].currentHp / after[key].maxHp;
-    after[key].currentHp = 0;
-  }
-  hpDelta += after[oppKey].currentHp / after[oppKey].maxHp;
-  after[oppKey].currentHp = 0;
-  return { hit: base, base, hitChance: 1, carry: 0, kind: "perishSong", partyShift: { hpDelta, extraCount: 0, afterModel: createPartyModel(after, key) } };
+  if (!abilityOf(after[key])?.blocksSound) after[key].perishCount = 3;
+  if (!abilityOf(after[oppKey])?.blocksSound && after[oppKey].chargingMoveId === undefined) after[oppKey].perishCount = 3;
+  return {
+    hit: base,
+    base,
+    hitChance: 1,
+    carry: 0,
+    kind: "perishSong",
+    party: { model: createPartyModel(after, key), turns: Infinity, always: true },
+    partyCarry: 0,
+  };
 }
 
 /**
