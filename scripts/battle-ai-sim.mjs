@@ -160,10 +160,10 @@ try {
   };
   const aiForced = (risk) => (st, key) => ai.chooseAiForcedSwitch(st, key, risk, decisionParams, difficulty) ?? living(st, key)[0];
 
-  function runBattle(seed, policies, forced) {
+  function runBattle(seed, policies, forced, initial) {
     const rng = mulberry32(seed);
     const partyRng = mulberry32(seed ^ 0x9e3779b9);
-    let st = state.createBattleState({ a: makeSide(partyRng), b: makeSide(partyRng) });
+    let st = initial ?? state.createBattleState({ a: makeSide(partyRng), b: makeSide(partyRng) });
     const trace = [];
     const timings = [];
     for (let turn = 0; turn < 80; turn++) {
@@ -300,6 +300,39 @@ try {
       }
     }
     console.log(JSON.stringify({ battles: battles * 2, A: { difficulty: difficulty ?? "hard", ...decisionParams }, B: { difficulty: opponentDifficulty ?? "hard", ...opponentParams }, res }));
+  } else if (mode === "select") {
+    // 3선출 AI(로드맵 7): 양쪽 6마리 빌드 → 한쪽은 AI 선출, 다른 쪽은 SELECT_B(random | first, 기본 random) → 양쪽 어려움 AI로 대전.
+    // 좌우 교대. 파라미터 JSON(argv[4])의 difficulty는 AI 선출 쪽 난이도.
+    const baseline = process.env.SELECT_B ?? "random";
+    const make6 = (rng) => {
+      const members = Array.from({ length: 6 }, () => makeSlot(rng));
+      return { slots: members.map((m) => m.slot), movesList: members.map((m) => m.moves) };
+    };
+    const pickSide = (side6, sel) => ({ slots: sel.map((i) => side6.slots[i]), movesList: sel.map((i) => side6.movesList[i]) });
+    const policy = (risk) => (st, key) => ai.chooseAiAction(st, key, risk, {}).action;
+    const forced = (risk) => (st, key) => ai.chooseAiForcedSwitch(st, key, risk) ?? living(st, key)[0];
+    const res = { aiSelectWins: 0, baselineWins: 0, other: 0 };
+    let selectMs = 0;
+    let selects = 0;
+    for (let s = 1; s <= battles; s++) {
+      const partyRng = mulberry32(s ^ 0x51ec7);
+      const six = { a: make6(partyRng), b: make6(partyRng) };
+      const full = state.createBattleState(six);
+      const risk = mulberry32(s)();
+      for (const aiSide of ["a", "b"]) {
+        const other = aiSide === "a" ? "b" : "a";
+        const t0 = performance.now();
+        const aiSel = ai.chooseAiSelection(full, aiSide, { difficulty, random: choiceRng });
+        selectMs += performance.now() - t0;
+        selects++;
+        const baseSel =
+          baseline === "first" ? [0, 1, 2] : (() => { const r = mulberry32(s * 97 + (aiSide === "a" ? 1 : 2)); const idx = [0, 1, 2, 3, 4, 5]; for (let i = 5; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [idx[i], idx[j]] = [idx[j], idx[i]]; } return idx.slice(0, 3); })();
+        const initial = state.createBattleState({ [aiSide]: pickSide(six[aiSide], aiSel), [other]: pickSide(six[other], baseSel) });
+        const r = runBattle(s, { a: policy(risk), b: policy(1 - risk) }, { a: forced(risk), b: forced(1 - risk) }, initial);
+        res[r.winner === aiSide ? "aiSelectWins" : r.winner === other ? "baselineWins" : "other"]++;
+      }
+    }
+    console.log(JSON.stringify({ battles: battles * 2, baseline, difficulty: difficulty ?? "hard", res, avgSelectMs: +(selectMs / selects).toFixed(1) }));
   } else if (mode === "ai") {
     const results = { aiVsRandom: { a: 0, b: 0, draw: 0, timeout: 0 }, aiVsAi: { a: 0, b: 0, draw: 0, timeout: 0 } };
     let maxMs = 0;
@@ -336,7 +369,7 @@ try {
     }
     console.log(JSON.stringify({ battles, results, avgTurnMs: +(totalMs / decisions).toFixed(2), maxTurnMs: +maxMs.toFixed(1), nanScores }));
   } else {
-    console.error(`알 수 없는 모드: ${mode} (regress | ai | greedy | diag | h2h)`);
+    console.error(`알 수 없는 모드: ${mode} (regress | ai | greedy | diag | h2h | select)`);
     process.exitCode = 1;
   }
 } finally {

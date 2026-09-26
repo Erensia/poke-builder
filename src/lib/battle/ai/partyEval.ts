@@ -629,3 +629,31 @@ export function partyValueAfterTurn(after: PartyModel, before: PartyModel, param
   const end = bothUp ? duel(ctx, position) : afterDuel(ctx, position);
   return faints + end - standing(position.my, position.opp, lambda);
 }
+
+/**
+ * 3선출(ver.1.8 로드맵 7): 양쪽이 선출한 포켓몬만 가득 찬 HP(나머지 0)로 두 선봉이 랭크·효과 없이 대면을 시작해 끝까지
+ * 이어간 최종 판세 F(내 관점, HP 비율 합 차 + λ × 마릿수 차). model은 양쪽 빌드 전체로 만든 대면표.
+ */
+export function partyMatchValue(
+  model: PartyModel,
+  myHp: number[],
+  oppHp: number[],
+  myLead: number,
+  oppLead: number,
+  params: ChainParams,
+): number {
+  const ctx: ChainContext = { ...params, base: model };
+  const position: ChainPosition = {
+    my: [...myHp],
+    opp: [...oppHp],
+    mi: myLead,
+    oi: oppLead,
+    myStaged: false,
+    oppStaged: false,
+    effectLeft: 0,
+    oppSwitches: 0,
+    myPerish: Infinity,
+    oppPerish: Infinity,
+  };
+  return duel(ctx, position);
+}

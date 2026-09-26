@@ -228,7 +228,7 @@ function race(
 }
 
 /** 이어지는 대면 계산 파라미터(λ·대면 폭·상대 자발적 교체) */
-function chainParams(params: DecisionParams): ChainParams {
+export function chainParams(params: DecisionParams): ChainParams {
   return {
     lambda: params.partyCountWeight,
     noise: params.partyDuelNoise,
