@@ -1538,6 +1538,39 @@ try {
         `교체 가능 ${vFree.toFixed(3)} 갇힘 ${vLocked.toFixed(3)}`,
       );
     }
+    // 턴 종료 효과(ver.1.8): 대면 턴 수에 먹다남은음식·자뭉열매·그래스필드·모래바람(남은 턴만큼)을 센다 + 토글
+    {
+      const tr = await server.ssrLoadModule("/src/lib/battle/ai/turnRates.ts");
+      const surv = (item, setup) => {
+        const st = battle([mon("잠만보", ["누르기"], null, item)], [mon("메타그로스", ["코멧펀치"])]);
+        setup?.(st);
+        return opt(ev.evaluateOptions(st, "a"), "누르기").hitsToBeKilled.expected;
+      };
+      const plain = surv(null);
+      const lefties = surv("먹다남은음식");
+      const sitrus = surv("자뭉열매");
+      const grassy = surv(null, (st) => {
+        st.field = "그래스필드";
+        st.fieldTurnsRemaining = 5;
+      });
+      const leftiesOff = tr.withEndOfTurnModel(false, () => surv("먹다남은음식"));
+      const kill = (turns) => {
+        const st = battle([mon("한카리아스", ["지진"])], [mon("잠만보", ["누르기"])]);
+        if (turns) {
+          st.weather = "모래바람";
+          st.weatherTurnsRemaining = turns;
+        }
+        return opt(ev.evaluateOptions(st, "a"), "지진").hitsToKill.expected;
+      };
+      const k0 = kill(0);
+      const k1 = kill(1);
+      const k5 = kill(5);
+      check(
+        "턴 종료 효과: 먹다남은음식·자뭉열매·그래스필드로 버티는 턴 증가 · 모래바람은 남은 턴만큼 처치 턴 감소 · 토글",
+        lefties > plain && sitrus > plain && grassy > plain && leftiesOff === plain && k5 < k1 && k1 < k0,
+        `버팀 ${plain.toFixed(2)} 음식 ${lefties.toFixed(2)} 자뭉 ${sitrus.toFixed(2)} 그래스 ${grassy.toFixed(2)} · 처치 ${k0.toFixed(2)}/${k1.toFixed(2)}/${k5.toFixed(2)}`,
+      );
+    }
   }
   // ── 매치업 난수별 데미지(ver.1.7 트랙 H): 기존 격파 판정과 같은 관계식인지 대조 ──
   {

@@ -52,6 +52,8 @@ export interface PartyPair {
   firstProbability: number;
   me: BattleFighterState;
   opponent: BattleFighterState;
+  /** 이 칸을 계산한 state — 이어지는 대면의 턴 수에 턴 종료 효과(날씨·필드·도구)를 셀 때 쓴다 */
+  state: BattleState;
 }
 
 export interface PartyModel {
@@ -162,6 +164,7 @@ function computePair(state: BattleState, key: FighterKey, me: BattleFighterState
     firstProbability: speed,
     me,
     opponent,
+    state,
   };
 }
 
@@ -207,10 +210,10 @@ export function createPartyModel(state: BattleState, key: FighterKey): PartyMode
  * attacker가 target(남은 HP 비율 hp)을 쓰러뜨리는 기대 턴 수 — turnsToKo와 같은 규칙(마비 행동 확률·잠듦 막힘·
  * 상태이상 지속 데미지)을 "최대 HP 대비" 단위로 쓴다.
  */
-function turnsAt(rate: number, attacker: BattleFighterState, target: BattleFighterState, hp: number): number {
+function turnsAt(rate: number, attacker: BattleFighterState, target: BattleFighterState, hp: number, state: BattleState): number {
   if (hp <= 0) return 0;
   // turnsToKo는 "현재 HP 대비" 비율을 받는다 — 최대 HP 대비 rate를 남은 HP 비율로 나눠 넘긴다(같은 식).
-  return turnsToKo(rate / hp, attacker, target, hp * target.maxHp, rate);
+  return turnsToKo(rate / hp, attacker, target, hp * target.maxHp, rate, state);
 }
 
 /** 대면 한 갈래: 확률 weight로 두 포켓몬이 이 HP 비율로 끝난다 */
@@ -414,8 +417,8 @@ function chainRace(ctx: ChainContext, pos: ChainPosition): { c: number; d: numbe
   const rates = (model: PartyModel) => {
     const pair = model.pair(mi, myStaged, oi, oppStaged);
     return {
-      c: turnsAt(pair.myRate, pair.me, pair.opponent, opp[oi]),
-      d: turnsAt(pair.oppRate, pair.opponent, pair.me, my[mi]),
+      c: turnsAt(pair.myRate, pair.me, pair.opponent, opp[oi], pair.state),
+      d: turnsAt(pair.oppRate, pair.opponent, pair.me, my[mi], pair.state),
       p: pair.firstProbability,
     };
   };

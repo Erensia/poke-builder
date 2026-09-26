@@ -297,7 +297,7 @@ export function evaluateOpponentThreat(ctx: ThreatContext): OpponentThreat {
   // 대타를 깨는 턴 계산용 절대 데미지(최대 HP 대비) — 사용 확률 가중 평균
   const expectedDamage =
     totalShare > 0 ? attacks.reduce((sum, a, i) => sum + (shares[i] / totalShare) * remainingWeight * a.estimate.damageFraction, 0) : 0;
-  let expectedTurns = turnsToKo(expectedRate, opponent, target, targetHp, expectedDamage);
+  let expectedTurns = turnsToKo(expectedRate, opponent, target, targetHp, expectedDamage, ctx.state);
   const asleep = blockedTurns(opponent);
   const sleepTalk = asleep > 0 ? candidates.find((m) => m.callsRandomLearnedMove) : undefined;
   if (sleepTalk) {

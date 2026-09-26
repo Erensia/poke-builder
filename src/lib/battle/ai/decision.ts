@@ -91,6 +91,11 @@ export interface DecisionParams {
   oppSwitchLimit: number;
   /** 교체 갈래를 섞는 비율(1 = 상대가 항상 최선으로 교체) */
   oppSwitchWeight: number;
+  /**
+   * 턴 종료 효과(ver.1.8) — 대면 턴 수에 먹다남은음식·그래스필드·모래바람·날씨 특성·속박·소금절이·자뭉/오랭열매를 센다.
+   * false면 이전 동작(비교용). 평가·점수 계산 전체를 withEndOfTurnModel로 감싸 적용한다(index.ts).
+   */
+  endOfTurnAware: boolean;
 }
 
 /**
@@ -130,6 +135,7 @@ export const DEFAULT_DECISION_PARAMS: DecisionParams = {
   oppSwitchMargin: 0.1,
   oppSwitchLimit: 1,
   oppSwitchWeight: 0.5,
+  endOfTurnAware: true,
 };
 
 export interface ScoredOption {

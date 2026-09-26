@@ -287,6 +287,7 @@ function bestAttack(input: BestAttackInput): AttackPick | undefined {
 }
 
 function turnsFor(
+  state: BattleState,
   estimate: MoveHitEstimate | undefined,
   attacker: BattleFighterState,
   defender: BattleFighterState,
@@ -296,7 +297,7 @@ function turnsFor(
     return { expected: Infinity, worstCase: { count: 3, certainty: "random", probability: 0 } };
   }
   return {
-    expected: turnsToKo(1 / estimate.expected, attacker, defender, defenderHp, estimate.damageFraction),
+    expected: turnsToKo(1 / estimate.expected, attacker, defender, defenderHp, estimate.damageFraction, state),
     worstCase: estimate.worstCase,
   };
 }
@@ -338,7 +339,7 @@ function evaluateSwitchCandidate(state: BattleState, key: FighterKey, index: num
     typeMatchup: { offensive: pick?.estimate.typeEffectiveness ?? 0, defensive: threat.defensiveMatchup },
     speedOrder: speed.order,
     firstProbability: speed.probability,
-    hitsToKill: turnsFor(pick?.estimate, candidate, opponent, oppHp),
+    hitsToKill: turnsFor(state, pick?.estimate, candidate, opponent, oppHp),
     hitsToBeKilled: threat.hitsToBeKilled,
     entryCost,
     maxHp: candidate.maxHp,
@@ -512,7 +513,7 @@ function currentRace(st: BattleState, key: FighterKey, moves: Move[]): RaceInput
   const speed = best ? firstProbability(st, me, best.move, opponent, probe.bestMove) : { probability: 0 };
   const threat = evaluateOpponentThreat({ state: st, opponent, target: me, targetSide: mySide, opponentMovesSecond: speed.probability >= 0.5 });
   return {
-    killTurns: turnsFor(best?.estimate, me, opponent).expected,
+    killTurns: turnsFor(st, best?.estimate, me, opponent).expected,
     survivalTurns: threat.hitsToBeKilled.expected,
     firstProbability: speed.probability,
   };
@@ -886,7 +887,7 @@ export function evaluateOptions(state: BattleState, key: FighterKey, options: Ev
       typeMatchup: { offensive: estimate?.typeEffectiveness ?? 0, defensive: threat.defensiveMatchup },
       speedOrder: speed.order,
       firstProbability: speed.probability,
-      hitsToKill: turnsFor(estimate ?? undefined, me, opponent),
+      hitsToKill: turnsFor(moveState, estimate ?? undefined, me, opponent),
       hitsToBeKilled: threat.hitsToBeKilled,
       entryCost: 0,
       maxHp: me.maxHp,
@@ -901,6 +902,7 @@ export function evaluateOptions(state: BattleState, key: FighterKey, options: Ev
       const opponentHpAfter = Math.max(1, Math.round(opponent.currentHp * (1 - 1 / estimate.rawHits)));
       const follow = (hp?: number) =>
         turnsFor(
+          moveState,
           bestAttack({ state: moveState, attacker: me, defender: opponent, defenderSide: oppMoveSide, moves: raceMoves, attackerMovesSecond: iMoveSecond, defenderHp: hp })?.estimate,
           me,
           opponent,
@@ -918,7 +920,7 @@ export function evaluateOptions(state: BattleState, key: FighterKey, options: Ev
     // 쓰러지면 데미지 없이 기절만 한다(자폭류는 빗나가도 기절).
     const sacrificeAttack = move.damageEqualsUserHp || (move.selfFaints && move.category !== "status");
     if (sacrificeAttack) {
-      const bestKillTurns = turnsFor(myBest?.estimate, me, opponent).expected;
+      const bestKillTurns = turnsFor(moveState, myBest?.estimate, me, opponent).expected;
       if (!estimate || estimate.typeEffectiveness === 0 || estimate.accuracy <= 0) {
         option.support = { kind: "other", before: 0, after: 0, bestKillTurns };
         return option;
@@ -968,20 +970,20 @@ export function evaluateOptions(state: BattleState, key: FighterKey, options: Ev
     // 잠꼬대(AI-A2): 잠든 동안(사용 조건은 selectableMoves가 이미 거름) 배운 다른 기술 중 무작위 하나가 나간다 —
     // 잠든 턴 동안은 그 기대 피해로, 깬 뒤에는 최선 공격기로 대면을 이어간다.
     if (move.callsRandomLearnedMove) {
-      const sleepTalk = sleepTalkKillTurns(moveState, key, move, turnsFor(myBest?.estimate, me, opponent).expected, iMoveSecond);
+      const sleepTalk = sleepTalkKillTurns(moveState, key, move, turnsFor(moveState, myBest?.estimate, me, opponent).expected, iMoveSecond);
       if (sleepTalk) {
         option.hitsToKill = { expected: sleepTalk.killTurns, worstCase: { count: 3, certainty: "random", probability: 0 } };
         option.typeMatchup = { ...option.typeMatchup, offensive: sleepTalk.bestTypeEffectiveness };
         option.accuracy = 1;
       } else {
-        option.support = { kind: "other", before: 0, after: 0, bestKillTurns: turnsFor(myBest?.estimate, me, opponent).expected };
+        option.support = { kind: "other", before: 0, after: 0, bestKillTurns: turnsFor(moveState, myBest?.estimate, me, opponent).expected };
       }
       return option;
     }
 
     if (move.category === "status") {
       const kind = classifySupport(move);
-      const bestKillTurns = turnsFor(myBest?.estimate, me, opponent).expected;
+      const bestKillTurns = turnsFor(moveState, myBest?.estimate, me, opponent).expected;
       if (protectGroupOf(move)) {
         option.support = {
           kind: "protect",
@@ -1125,7 +1127,7 @@ export function evaluateOptions(state: BattleState, key: FighterKey, options: Ev
         option.support = {
           kind,
           before: bestKillTurns,
-          after: turnsFor(after?.estimate, me, opponent).expected,
+          after: turnsFor(moveState, after?.estimate, me, opponent).expected,
           bestKillTurns,
           effect: setup.effect,
           batonFollowUp: setup.batonFollowUp,
