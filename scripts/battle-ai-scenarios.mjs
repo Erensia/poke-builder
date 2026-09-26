@@ -1657,6 +1657,19 @@ try {
       const off = gap({ ...opm.DEFAULT_THREAT_MODEL, statusThreat: false });
       check("한계점 정리 ③: 위협 환산 — 칼춤·HP회복 상대에게 도발 가치(공격 대비)↑", on > off, `도발−공격 끔 ${off.toFixed(3)} → 켬 ${on.toFixed(3)}`);
     }
+    // 한계점 정리 ④: 내 자발적 교체 — 이어지는 대면에서 불리한 대면이 오면 교체로 피한다(켤 때 판세 ≥ 끌 때)
+    {
+      const pe = await server.ssrLoadModule("/src/lib/battle/ai/partyEval.ts");
+      const st = battle(
+        [mon("한카리아스", ["지진"]), mon("잠만보", ["누르기"]), mon("밀로틱", ["하이드로펌프"])],
+        [mon("메타그로스", ["코멧펀치"]), mon("리자몽", ["에어슬래시"])],
+      );
+      const model = pe.createPartyModel(st, "a");
+      const base = { lambda: 0.5, noise: 0.5 };
+      const off = pe.partyMatchValue(model, [1, 1, 1], [1, 1], 0, 0, base);
+      const on = pe.partyMatchValue(model, [1, 1, 1], [1, 1], 0, 0, { ...base, mySwitch: { margin: 0.1, limit: 1 } });
+      check("한계점 정리 ④: 내 자발적 교체 — 켤 때 판세 ≥ 끌 때", on >= off - 1e-9, `끔 ${off.toFixed(3)} 켬 ${on.toFixed(3)}`);
+    }
   }
   // ── 매치업 난수별 데미지(ver.1.7 트랙 H): 기존 격파 판정과 같은 관계식인지 대조 ──
   {
