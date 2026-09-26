@@ -5,12 +5,96 @@ import {
 } from "@/lib/statusConditions";
 import { computeDamage } from "@/lib/battlePower";
 import { ATTRACT_ACTION_BLOCK_CHANCE, CONFUSION_SELF_HIT_CHANCE, hasVolatile } from "@/lib/volatileConditions";
-import { CONFUSION_SELF_HIT_MOVE, abilityOf, type BattleFighterState } from "../state";
+import { getHpThresholdBerryHeal } from "@/lib/itemEffects";
+import { computeFieldEndOfTurnHeal } from "@/lib/fieldEffects";
+import {
+  CONFUSION_SELF_HIT_MOVE,
+  SANDSTORM_IMMUNE_ABILITY_NAMES,
+  abilityOf,
+  activeWeather,
+  type BattleFighterState,
+  type BattleState,
+} from "../state";
+import { isGrounded } from "../grounding";
+import { effectiveHeldItem } from "../turnOrderInputs";
 
 /** 아쿠아링·뿌리박기: 매 턴 종료 최대 HP 1/16 회복(finishTurn과 같은 규칙) */
 const REGEN_DENOMINATOR = 16;
 /** 씨뿌리기: 걸린 쪽이 매 턴 종료 최대 HP 1/8을 잃고 상대가 그만큼 회복 */
 const LEECH_SEED_DENOMINATOR = 8;
+
+/**
+ * 턴 종료 효과(ver.1.8, 사용자 합의 2026-09-26): 켜져 있으면 turnsToKo가 도구·필드·날씨·속박·소금절이의 매 턴 HP 변화와
+ * 자뭉열매·오랭열매의 한 번 회복을 센다. 평가 함수가 여러 겹이라 withThreatModel처럼 감싸서 바꾼다(비교용 토글).
+ */
+let endOfTurnAware = true;
+
+export function withEndOfTurnModel<T>(enabled: boolean, fn: () => T): T {
+  const previous = endOfTurnAware;
+  endOfTurnAware = enabled;
+  try {
+    return fn();
+  } finally {
+    endOfTurnAware = previous;
+  }
+}
+
+/** 매 턴 종료 HP 변화(HP 절대량, 양수 = 피해·음수 = 회복). timed는 남은 턴이 있는 효과(날씨·필드·속박) */
+interface EnvironmentResidual {
+  permanent: number;
+  timed: { amount: number; turns: number }[];
+}
+
+/**
+ * finishTurn과 같은 규칙: 먹다남은음식(회복), 그래스필드(땅에 있으면 회복), 모래바람(바위·땅·강철·면제 특성·매직가드 제외
+ * 1/16), 날씨 특성(젖은접시·아이스바디·건조피부), 속박(1/8, 조임밴드 1/6), 소금절이(1/16, 강철·물 1/8).
+ */
+function environmentResidual(state: BattleState, fighter: BattleFighterState, opponent: BattleFighterState | undefined): EnvironmentResidual {
+  const result: EnvironmentResidual = { permanent: 0, timed: [] };
+  const { maxHp } = fighter;
+  const ability = abilityOf(fighter);
+  const magicGuard = !!ability?.negatesIndirectDamage;
+  const item = effectiveHeldItem(fighter, state);
+  if (item?.endOfTurnHealDenominator) result.permanent -= Math.floor(maxHp / item.endOfTurnHealDenominator);
+  if (hasVolatile(fighter.volatile, "saltCure") && !magicGuard) {
+    const heavy = fighter.types.some((t) => t === "강철" || t === "물");
+    result.permanent += Math.floor(maxHp / (heavy ? 8 : 16));
+  }
+  const fieldHeal = state.field && isGrounded(state, fighter, ability) ? computeFieldEndOfTurnHeal(state.field, maxHp) : 0;
+  if (fieldHeal > 0) result.timed.push({ amount: -fieldHeal, turns: state.fieldTurnsRemaining ?? Infinity });
+  const weather = activeWeather(state);
+  if (weather) {
+    const turns = state.weatherTurnsRemaining ?? Infinity;
+    let amount = 0;
+    if (
+      weather === "모래바람" &&
+      !fighter.types.some((t) => t === "바위" || t === "땅" || t === "강철") &&
+      !magicGuard &&
+      !SANDSTORM_IMMUNE_ABILITY_NAMES.has(ability?.name ?? "")
+    ) {
+      amount += Math.floor(maxHp / 16);
+    }
+    const heal = ability?.weatherEndOfTurnHealDenominator;
+    if (heal?.weather === weather) amount -= Math.floor(maxHp / heal.denominator);
+    const damage = ability?.weatherEndOfTurnDamageDenominator;
+    if (damage?.weather === weather && !magicGuard) amount += Math.floor(maxHp / damage.denominator);
+    if (amount !== 0) result.timed.push({ amount, turns });
+  }
+  if (hasVolatile(fighter.volatile, "bound") && !magicGuard) {
+    const binderItem = opponent ? effectiveHeldItem(opponent, state) : undefined;
+    const amount = Math.floor(maxHp / (binderItem?.bindDamageDenominator ?? 8));
+    result.timed.push({ amount, turns: fighter.volatile.active.bound!.turnsRemaining ?? Infinity });
+  }
+  return result;
+}
+
+/** 자뭉열매·오랭열매: HP 절반 이하에서 한 번 회복(숙성 2배) — 버티는 HP에 더한다. 긴장감(상대)이면 못 먹는다 */
+function thresholdBerryHp(state: BattleState, fighter: BattleFighterState, opponent: BattleFighterState | undefined): number {
+  if (fighter.itemConsumed || (opponent && abilityOf(opponent)?.preventsOpponentBerries)) return 0;
+  const item = effectiveHeldItem(fighter, state);
+  if (!item?.healsBelowHalfHpDenominator && !item?.healsBelowHalfHpFlat) return 0;
+  return getHpThresholdBerryHeal(item, 1, fighter.maxHp, false, !!abilityOf(fighter)?.doublesBerryEffect);
+}
 
 /**
  * 상태이상 지속 데미지가 매 턴 현재 HP의 몇 비율을 깎는지(engine-extension §1-2, finishTurn과 같은 규칙).
@@ -100,17 +184,33 @@ export function turnsToKo(
   targetHp?: number,
   /** 턴당 기대 데미지의 절대량(대상 최대 HP 대비) — 대타를 깨는 턴 계산용. 없으면 attackRate로 근사 */
   absoluteRate?: number,
+  /** 턴 종료 효과(도구·필드·날씨·속박·소금절이·HP 열매)를 셀 state — 없으면 세지 않는다 */
+  state?: BattleState,
 ): number {
   const hp = targetHp ?? target.currentHp;
   // 혼란(대상): 남은 혼란 턴 동안 행동할 때마다 1/3 확률로 자멸 — 그만큼 HP가 먼저 줄어든 것으로 본다.
   const targetConfusion = confusionTurns(target);
   const selfHit = targetConfusion > 0 ? CONFUSION_SELF_HIT_CHANCE * confusionSelfHitFraction(target) * target.maxHp : 0;
-  const base = attackRate * actionFactor(attacker) + residualDamageFraction(target, hp, attacker);
+  let base = attackRate * actionFactor(attacker) + residualDamageFraction(target, hp, attacker);
+  let berryHp = 0;
+  if (endOfTurnAware && state && hp > 0) {
+    // 남은 턴이 있는 효과는 대면이 그보다 길면 그 비율만큼만 섞는다(전부 넣은 속도로 대면 길이를 어림)
+    const env = environmentResidual(state, target, attacker);
+    base += env.permanent / hp;
+    const all = base + env.timed.reduce((sum, t) => sum + t.amount / hp, 0);
+    const estimate = all > 0 ? 1 / all : Infinity;
+    for (const t of env.timed) {
+      const share = Number.isFinite(estimate) ? Math.min(1, t.turns / estimate) : t.turns === Infinity ? 1 : 0;
+      base += (t.amount / hp) * share;
+    }
+    berryHp = thresholdBerryHp(state, target, attacker);
+  }
   if (base <= 0) return Infinity;
-  let turns = 1 / base;
+  // 자뭉열매·오랭열매: 버티는 HP가 그만큼 늘어난다
+  let turns = (1 + berryHp / hp) / base;
   if (selfHit > 0) {
     const selfLoss = Math.min(hp, selfHit * Math.min(targetConfusion, turns));
-    turns = hp - selfLoss <= 0 ? 1 : (hp - selfLoss) / hp / base;
+    turns = hp - selfLoss <= 0 ? 1 : (hp - selfLoss + berryHp) / hp / base;
   }
   // 대타(대상): 대타 HP를 깨는 동안의 공격은 본체에 안 들어간다(넘친 데미지도 사라짐) — 그 턴 수만큼 더 걸린다.
   // 틈새포착(대타 무시)이면 없음. 소리 기술의 대타 무시는 기술별이라 여기선 보지 않는다.

@@ -3,6 +3,7 @@ import { STRUGGLE_MOVE, type BattleState } from "../state";
 import { DEFAULT_DECISION_PARAMS, decide, scoreOption, type DecisionParams, type ScoredOption } from "./decision";
 import { evaluateOptions, type AiOption, type EvaluateOptions } from "./evaluator";
 import { withThreatModel, type ThreatModelParams } from "./opponentMoveModel";
+import { withEndOfTurnModel } from "./turnRates";
 
 export type { AiOption } from "./evaluator";
 export type { DecisionParams, ScoredOption } from "./decision";
@@ -39,8 +40,11 @@ export function chooseAiAction(
   options: ChooseAiOptions = {},
 ): AiDecision {
   const params = { ...DEFAULT_DECISION_PARAMS, ...options.decisionParams };
-  const evaluated = withThreatModel(threatModelOf(params), () => evaluateOptions(state, key, options));
-  const decision = decide(evaluated, riskAversion, params);
+  // 턴 종료 효과 토글은 평가(대면 턴 수)와 점수 계산(이어지는 대면)에 모두 걸린다
+  const decision = withEndOfTurnModel(params.endOfTurnAware, () => {
+    const evaluated = withThreatModel(threatModelOf(params), () => evaluateOptions(state, key, options));
+    return decide(evaluated, riskAversion, params);
+  });
   if (!decision) return { action: { kind: "move", move: STRUGGLE_MOVE }, scored: [] };
   const { chosen, scored } = decision;
   const action: TurnAction =
@@ -61,12 +65,14 @@ export function chooseAiForcedSwitch(
   decisionParams?: Partial<DecisionParams>,
 ): number | undefined {
   const params = { ...DEFAULT_DECISION_PARAMS, ...decisionParams };
-  const switches = withThreatModel(threatModelOf(params), () => evaluateOptions(state, key)).filter(
-    (o) => o.optionType === "switch",
-  );
-  if (switches.length === 0) return undefined;
-  const best = switches
-    .map((option) => ({ option, score: scoreOption({ ...option, optionType: "move" }, riskAversion, params) }))
-    .reduce((a, b) => (b.score > a.score ? b : a));
-  return best.option.toIndex;
+  return withEndOfTurnModel(params.endOfTurnAware, () => {
+    const switches = withThreatModel(threatModelOf(params), () => evaluateOptions(state, key)).filter(
+      (o) => o.optionType === "switch",
+    );
+    if (switches.length === 0) return undefined;
+    const best = switches
+      .map((option) => ({ option, score: scoreOption({ ...option, optionType: "move" }, riskAversion, params) }))
+      .reduce((a, b) => (b.score > a.score ? b : a));
+    return best.option.toIndex;
+  });
 }
