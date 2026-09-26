@@ -594,7 +594,13 @@ export function decide(
     const safe = candidates.filter((s) => s.option.hitsToBeKilled.worstCase.count !== 1);
     if (safe.length > 0) candidates = safe;
     const killRank = (s: ScoredOption) =>
-      params.tieKillFirst && s.option.move?.category !== "status" && s.option.hitsToKill.expected <= 1 ? 0 : 1;
+      params.tieKillFirst &&
+      s.option.optionType === "move" &&
+      !!s.option.move &&
+      s.option.move.category !== "status" &&
+      s.option.hitsToKill.expected <= 1
+        ? 0
+        : 1;
     candidates = [...candidates].sort(
       (a, b) =>
         compareBy<ScoredOption>(killRank)(a, b) ||
