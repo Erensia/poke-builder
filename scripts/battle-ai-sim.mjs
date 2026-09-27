@@ -15,6 +15,7 @@
  * 환경변수 PIVOT=1: 유턴류를 배울 수 있는 포켓몬은 기술 하나를 유턴류로 바꿔 파티를 만든다(유턴 판단 검증용)
  * 환경변수 SETUP=1: 랭크업기·배턴터치를 배울 수 있으면 기술 두 개를 그걸로 바꾼다(랭크업·배턴터치 연계 검증용).
  *     diag 모드에 DIAG=setup을 주면 랭크업기·배턴터치를 고른 순간을 덤프한다.
+ *     DIAG=tiesetup이면 확정 처치가 아닌 공격기와 동률인데 랭크업기를 고른 순간을 전부 센다(c 구간별, 앞 14건 덤프).
  * 환경변수 PROTECT=1: 방어류를 배울 수 있으면 4번째 기술을 방어류로 바꾼다. DIAG=protect면 방어류를 고른 순간을 덤프.
  * 환경변수 STATUS=1: AI가 점수 매기는 변화기를 배울 수 있으면 기술 하나를 그걸로 바꾼다(변화기 판단 검증용).
  *     diag 모드에 DIAG=status를 주면 그 변화기를 고른 순간을 덤프한다.
@@ -217,9 +218,38 @@ try {
           : process.env.DIAG === "status"
           ? d.action.kind === "move" && fx.isDesignedStatusMove(d.action.move)
           : d.action.kind === "switch";
+    // DIAG=tiesetup: 확정 처치가 아닌 공격기(c > 1)와 동률(점수 차 tieThreshold 안)인데 랭크업기를 고른 순간을 전부 세고
+    // 앞 14건을 덤프한다(한계점 정리 ⑤). 공격기의 c 구간별 빈도와, 반대로 동률에서 공격기를 고른 횟수도 같이 센다.
+    const tieSetup = process.env.DIAG === "tiesetup";
+    const tieThreshold = decisionParams?.tieThreshold ?? 0.1;
+    const tieStats = { decisions: 0, setupChosenTie: 0, attackChosenTie: 0, byC: { "<1.5": 0, "1.5-2": 0, ">=2": 0 } };
+    const tieAttackOf = (d) => {
+      const best = Math.max(...d.scored.map((s) => s.score));
+      if (!Number.isFinite(best)) return undefined;
+      const inTie = (s) => best - s.score < tieThreshold;
+      const hasSetup = d.scored.some((s) => inTie(s) && s.option.support?.kind === "setup");
+      const attacks = d.scored.filter(
+        (s) => inTie(s) && s.option.optionType === "move" && s.option.move?.category !== "status" && s.option.hitsToKill.expected > 1,
+      );
+      if (!hasSetup || attacks.length === 0) return undefined;
+      return attacks.reduce((a, b) => (b.option.hitsToKill.expected < a.option.hitsToKill.expected ? b : a));
+    };
     const aiPolicy = (st, key) => {
       const d = ai.chooseAiAction(st, key, 0.5, { decisionParams, difficulty, random: choiceRng });
-      if (wantDump(d) && dumped < 14) {
+      let dumpThis = wantDump(d);
+      if (tieSetup) {
+        tieStats.decisions++;
+        const atk = tieAttackOf(d);
+        const chosen = d.scored.find((s) => s.option === d.chosen);
+        dumpThis = false;
+        if (atk && chosen?.option.support?.kind === "setup") {
+          tieStats.setupChosenTie++;
+          const c = atk.option.hitsToKill.expected;
+          tieStats.byC[c < 1.5 ? "<1.5" : c < 2 ? "1.5-2" : ">=2"]++;
+          dumpThis = c < 1.5;
+        } else if (atk && chosen?.option.optionType === "move" && chosen.option.move?.category !== "status") tieStats.attackChosenTie++;
+      }
+      if (dumpThis && dumped < 14) {
         dumped++;
         const me = st[key];
         const op = st[key === "a" ? "b" : "a"];
@@ -248,7 +278,8 @@ try {
       }
       return d.action;
     };
-    for (let s = 1; s <= battles && dumped < 14; s++) runBattle(s, { a: aiPolicy, b: greedyPolicy }, { a: aiForced(0.5), b: firstLiving });
+    for (let s = 1; s <= battles && (tieSetup || dumped < 14); s++) runBattle(s, { a: aiPolicy, b: greedyPolicy }, { a: aiForced(0.5), b: firstLiving });
+    if (tieSetup) console.log(`\n${JSON.stringify(tieStats)}`);
   } else if (mode === "greedy") {
     const mix = { move: 0, pivot: 0, switch: 0, status: 0 };
     const statusMix = {};
