@@ -1,4 +1,5 @@
 import { type Move } from "@/types/move";
+import { isUncopyableAbility } from "./abilityChange";
 import { type WeatherKind } from "@/types/weather";
 import { type FieldKind } from "@/types/field";
 import { type PokemonType } from "@/types/pokemon-type";
@@ -14,7 +15,7 @@ import { computeRealStats } from "@/lib/statCalculator";
 import { computeStatusSpeedMultiplier } from "@/lib/statusConditions";
 import { CONFUSION_SELF_HIT_POWER, hasVolatile } from "@/lib/volatileConditions";
 import { getEffectiveness } from "@/lib/typeEffectiveness";
-import { gyroBallPowerFromSpeeds, rankStageMultiplier } from "@/lib/battlePower";
+import { electroBallPowerFromSpeeds, gyroBallPowerFromSpeeds, rankStageMultiplier } from "@/lib/battlePower";
 import { FIELD_DURATION, FIELD_ENTRY_ANNOUNCEMENT } from "@/lib/fieldEffects";
 import { getItemSpeedMultiplier } from "@/lib/itemEffects";
 import { type BaseStats } from "@/types/stats";
@@ -25,6 +26,11 @@ export const MIN_DAMAGE_ROLL = 0.85;
 
 /** 트릭룸 지속 턴 수. 필드(FIELD_DURATION)와 같은 5턴 */
 export const TRICK_ROOM_DURATION = 5;
+/** 원더룸·매직룸·중력·전자부유 지속 턴(트랙 M4, 쓴 턴 포함) */
+export const WONDER_ROOM_DURATION = 5;
+export const MAGIC_ROOM_DURATION = 5;
+export const GRAVITY_DURATION = 5;
+export const MAGNET_RISE_DURATION = 5;
 
 /** 날씨 기본 지속 턴 수(뜨거운바위 등 맞는 바위를 지녔으면 +3 = 8턴) */
 export const WEATHER_DURATION = 5;
@@ -159,6 +165,11 @@ export interface BattleFighterState {
    */
   unburdenActive?: boolean;
   /**
+   * 총대장: 등장할 때 센 "쓰러진 같은 편 수"(Ability.powerBoostPerFaintedAlly.maxCount로 상한).
+   * 물러나면 초기화되고, 다시 등장하면 그 시점 기준으로 새로 센다. 0/undefined면 배율 없음.
+   */
+  supremeOverlordCount?: number;
+  /**
    * 탈(Disguise): 배틀 중 이 특성으로 한 번이라도 데미지를 무효화했으면(=탈이 벗겨졌으면) true —
    * unburdenActive와 같은 패턴으로 배틀 끝까지 유지되는 플래그. 이후로는 정상적으로 데미지를 받는다.
    */
@@ -242,15 +253,29 @@ export interface BattleFighterState {
    */
   protectStreak?: number;
   /**
-   * 숲의저주(풀)·핼러윈(고스트)으로 추가된 타입. 배틀 끝까지 유지되며, types에 이미 반영돼 있다 —
+   * 숲의저주(풀)·핼러윈(고스트)으로 추가된 타입. 물러날 때까지 유지되며(트랙 M3), types에 이미 반영돼 있다 —
    * 의태(applyMimicryForm)·기분파(applyForecastForm)가 타입을 재계산할 때 이 값을 다시 붙인다.
    */
   addedType?: PokemonType;
+  /**
+   * 트랙 M3: 교체로 물러날 때 되돌아갈 원래 타입·특성(폼 기준, 메가진화하면 메가폼 것). 심플빔·스킬스왑·물붓기·
+   * 숲의저주·변환자재 등으로 바뀐 특성·타입은 물러나면 원래대로 돌아온다(본가).
+   */
+  baseTypes?: PokemonType[];
+  baseAbilityId?: string | null;
+  /** 전자부유(트랙 M4): 땅 기술을 무시하는 남은 턴. 물러나면 풀린다 */
+  magnetRiseTurnsRemaining?: number;
+  /** 떨어뜨리기(트랙 M4): 맞아서 땅에 떨어진 상태(비행·부유·풍선·전자부유 무시). 물러나면 풀린다 */
+  smackedDown?: boolean;
+  /** 위액(트랙 M3): 특성이 사라진 상태(effectiveAbilityId는 null). 물러나면 풀린다 */
+  abilitySuppressed?: boolean;
   /**
    * 수확: 이번 배틀에서 이 포켓몬이 소비한 마지막 나무열매 id. 턴 종료 시 이 열매를 확률로
    * 되돌린다. 되돌린 뒤에도 값은 남겨 둔다(다시 먹고 다시 되돌릴 수 있음).
    */
   consumedBerryId?: string;
+  /** 리사이클(트랙 M1): 이번 배틀에서 마지막으로 소모한 도구 id(나무열매만이 아니라 전부) */
+  lastConsumedItemId?: string;
   /**
    * 볼주머니: consumeItem이 나무열매 소비를 감지해 추가 회복을 적용했을 때 그 회복량을 잠깐
    * 담아 둔다. resolveAction 반환 시(액션 중 소비) 또는 턴 종료 처리 시(EOT 소비) 로그로 옮기고 지운다.
@@ -282,6 +307,12 @@ export interface BattleFighterState {
    * 턴 번호 == 현재 턴 번호)면 실패시킨다 — 그 다음 턴부터는 자연히 조건이 어긋나 다시 쓸 수 있다.
    */
   consecutiveLockMoveId?: string;
+  /**
+   * 구애류 도구(locksFirstMoveUsed) 잠금: 그 도구를 지닌 채 기술을 쓰면 그 기술 id로 잠긴다(트랙 M1 — 이전엔 화면이
+   * 로그를 훑어 처음 편성한 도구 기준으로 판정해, 도구를 잃거나 트릭으로 주고받으면 틀렸다). 물러나면 풀린다.
+   * 지금 지닌 도구가 구애류가 아니면 무시한다(choiceLockedMoveOf).
+   */
+  choiceLockedMoveId?: string;
   consecutiveLockUntilTurn?: number;
   /**
    * 이번 턴에 "자기 의지로" 교체해서 나왔으면 true(Phase 8 §8). 가속(Speed Boost)이 이 턴
@@ -336,6 +367,10 @@ export interface BattleSide {
    * (백로그 §1-9). 스크린과 같은 축(편 단위, 교체해도 유지)이지만 종류가 하나뿐이라 number만.
    */
   safeguardTurnsRemaining?: number;
+  /** 순풍(트랙 M1): 이 편 스피드 2배의 남은 턴(쓴 턴 포함 4에서 시작, 턴 종료마다 −1) */
+  tailwindTurnsRemaining?: number;
+  /** 치유소원(트랙 M6): 다음에 이 편에 나오는 포켓몬이 HP·상태이상을 전부 회복한다 */
+  healingWishPending?: boolean;
   /**
    * 희망사항(Wish) 예약 — 이 편에 하나만 걸 수 있다(백로그 §6-2). 본가처럼 "쓴 포켓몬"이 아니라
    * 2턴 뒤 그 자리(활성)에 있는 포켓몬을 회복시키므로, fighter가 아니라 편에 큐로 둔다. 교체해도
@@ -367,6 +402,14 @@ export interface BattleState {
   fieldTurnsRemaining?: number;
   /** 트릭룸이 해제되기까지 남은 턴 수. 트릭룸이 안 걸려있으면 undefined */
   trickRoomTurnsRemaining?: number;
+  /** 트랙 M4: 원더룸(방어·특방 실능 맞바꿈)·매직룸(도구 효과 무효)·중력(모두 접지·명중 ×5/3) 남은 턴. 없으면 undefined */
+  wonderRoomTurnsRemaining?: number;
+  magicRoomTurnsRemaining?: number;
+  gravityTurnsRemaining?: number;
+  /** 페어리록(트랙 M6): 남은 턴 — 걸린 다음 턴 동안 양쪽 모두 교체할 수 없다 */
+  fairyLockTurnsRemaining?: number;
+  /** 흉내쟁이(트랙 M2): 배틀에서 직전에 실제로 나온 기술 id(누가 썼든). 발버둥은 기록하지 않는다 */
+  lastMoveUsedId?: string;
   turnNumber: number;
   /** 배틀 시작 시점에 특성으로 날씨가 자동으로 바뀌었으면("○○의 잔비!") 그 안내 문구 */
   entryAnnouncements: string[];
@@ -521,8 +564,10 @@ export function createFighterState(slot: EvaluatorSlot, moves: Move[]): BattleFi
   return {
     slot,
     types: form.types,
+    baseTypes: form.types,
     gender: getEffectiveGender(pokemon, slot),
     effectiveAbilityId: slot.ability,
+    baseAbilityId: slot.ability,
     megaStone: megaForm?.megaStone,
     realStats,
     currentHp: realStats.hp,
@@ -569,12 +614,22 @@ export function gyroBallPowerValue(
   attackerItem: Parameters<typeof getItemSpeedMultiplier>[0],
   defenderItem: Parameters<typeof getItemSpeedMultiplier>[0],
 ): number {
-  const effSpeed = (f: BattleFighterState, item: Parameters<typeof getItemSpeedMultiplier>[0]) =>
-    f.realStats.spe *
-    rankStageMultiplier(f.stages.spe) *
-    computeStatusSpeedMultiplier(f.status.condition) *
-    getItemSpeedMultiplier(item);
-  return gyroBallPowerFromSpeeds(effSpeed(attacker, attackerItem), effSpeed(defender, defenderItem));
+  return gyroBallPowerFromSpeeds(powerSpeedOf(attacker, attackerItem), powerSpeedOf(defender, defenderItem));
+}
+
+/** 일렉트릭볼(트랙 M5): 자이로볼과 같은 실효 스피드로 본가 비율표 위력 */
+export function electroBallPowerValue(
+  attacker: BattleFighterState,
+  defender: BattleFighterState,
+  attackerItem: Parameters<typeof getItemSpeedMultiplier>[0],
+  defenderItem: Parameters<typeof getItemSpeedMultiplier>[0],
+): number {
+  return electroBallPowerFromSpeeds(powerSpeedOf(attacker, attackerItem), powerSpeedOf(defender, defenderItem));
+}
+
+/** 스피드 비교 위력 기술(자이로볼·일렉트릭볼)의 실효 스피드 — 실능 × 스피드 랭크 × 마비 × 도구 */
+function powerSpeedOf(f: BattleFighterState, item: Parameters<typeof getItemSpeedMultiplier>[0]): number {
+  return f.realStats.spe * rankStageMultiplier(f.stages.spe) * computeStatusSpeedMultiplier(f.status.condition) * getItemSpeedMultiplier(item);
 }
 
 export function hasSheerForceSecondaryEffect(move: Move): boolean {
@@ -598,6 +653,7 @@ export function consumeItem(fighter: BattleFighterState): void {
   const consumedId = fighter.currentItemId;
   fighter.itemConsumed = true;
   fighter.currentItemId = null;
+  if (consumedId) fighter.lastConsumedItemId = consumedId;
 
   // 공생(Ability.passesItemToConsumingAlly, Phase 8 §7): 본가라면 여기서 "같은 편 다른 활성
   // 포켓몬이 공생 보유 + 무도구면 그 포켓몬의 도구를 이 fighter에게 넘긴다"를 처리한다. 3v3
@@ -851,7 +907,7 @@ function resolveEntryAbilityEffects(
         announcements.push(`${pokemonName}의 ${ability.name}! ${FIELD_ENTRY_ANNOUNCEMENT[field]}`);
       }
     }
-    if (ability.copiesOpponentAbilityOnEntry && opponent.effectiveAbilityId) {
+    if (ability.copiesOpponentAbilityOnEntry && opponent.effectiveAbilityId && !isUncopyableAbility(opponent.effectiveAbilityId)) {
       const copiedAbility = getAbility(opponent.effectiveAbilityId);
       fighter.effectiveAbilityId = opponent.effectiveAbilityId;
       const opponentName = getPokemon(opponentSlot.pokemonId)?.name ?? "상대";
@@ -1016,6 +1072,8 @@ export function cloneSide(side: BattleSide): BattleSide {
     hazards: { ...side.hazards },
     screens: { ...side.screens },
     safeguardTurnsRemaining: side.safeguardTurnsRemaining,
+    tailwindTurnsRemaining: side.tailwindTurnsRemaining,
+    healingWishPending: side.healingWishPending,
     wish: side.wish ? { ...side.wish } : undefined,
     megaUsed: side.megaUsed,
   };
@@ -1043,3 +1101,17 @@ export function isForcedSwitchBlocked(target: BattleFighterState): boolean {
  * 이 함수를 보지 않는다 — 어디까지나 유저가 교체를 "고를 수 있는지"만 판정한다(UI + runTurn
  * 액션 검증에서 참조). fighter가 fainted면 판정 의미가 없어 false.
  */
+
+/**
+ * 구애류 잠금으로 지금 쓸 수 있는 유일한 기술 id. 지금 지닌 도구(서투름이면 무효)가 구애류가 아니거나 아직 잠기지
+ * 않았으면 null. 화면(턴 진행 버튼)과 배틀 AI가 같은 판정을 쓴다.
+ */
+export function choiceLockedMoveOf(fighter: BattleFighterState, state?: BattleState): string | null {
+  if (!fighter.choiceLockedMoveId || !fighter.currentItemId) return null;
+  // 매직룸(트랙 M4) 중엔 구애류도 효과가 없어 잠기지 않는다(잠금 기록은 남아 룸이 끝나면 다시 적용)
+  if (abilityOf(fighter)?.disablesOwnItemEffects || state?.magicRoomTurnsRemaining !== undefined) return null;
+  return getItem(fighter.currentItemId)?.locksFirstMoveUsed ? fighter.choiceLockedMoveId : null;
+}
+
+/** 순풍 지속 턴(쓴 턴 포함) */
+export const TAILWIND_DURATION = 4;

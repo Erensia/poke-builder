@@ -2,11 +2,13 @@ import { type Move } from "@/types/move";
 import { type FieldKind } from "@/types/field";
 import { type ActionLogEntry, type FighterKey } from "@/types/battle";
 import { BATTLE_STAT_KEYS } from "@/types/battleStats";
-import { getAbility } from "@/lib/data";
+import { getAbility, getItem, getMove } from "@/lib/data";
+import { effectiveHeldItem } from "./turnOrderInputs";
+import { applyFlingEffect } from "./fling";
 import { applyStageDelta } from "@/lib/statStages";
 import { isOpponentTargetingMove } from "@/lib/fieldEffects";
 import { getHpThresholdBerryHeal } from "@/lib/itemEffects";
-import { SCREEN_DURATION, TRICK_ROOM_DURATION, WEATHER_DURATION, activeWeather, applyForecastForm, consumeItem, contraryDelta, isFainted, sideOf, type BattleState } from "./state";
+import { GRAVITY_DURATION, MAGIC_ROOM_DURATION, MAGNET_RISE_DURATION, SCREEN_DURATION, TAILWIND_DURATION, TRICK_ROOM_DURATION, WONDER_ROOM_DURATION, WEATHER_DURATION, activeWeather, applyForecastForm, consumeItem, contraryDelta, hasLivingReserve, isFainted, sideOf, type BattleState } from "./state";
 import { resolvePreHitEffects } from "./preHitEffects";
 import { resolveHitAndApplyDamage } from "./hitResolution";
 import { resolveMirroredMoveEffects } from "./mirroredEffects";
@@ -23,7 +25,7 @@ export function resolveAction(
   if (!("defenderKey" in pre)) return pre;
   move = pre.move;
   let {
-    defenderKey, attacker, defender, defenderHpAtActionStart, actorPokemonId, defenderPokemonId, attackerAbility, defenderAbility, attackerBerriesBlocked, defenderBerriesBlocked, attackerItemIdBeforeAction, defenderItemIdBeforeAction, leppaRestoredPpItemName, pressureExtraPpAbilityName, selfCuredStatus, sleepTalkCalledMoveName, attackerItem, defenderItem, blockedByGoodAsGold, blockedBySubstitute, blockedByPowderImmunity, unseenFistPiercing, blockedByProtect, blockedByProtectMoveName, soundproofBlockedByAbilityName, bulletproofBlockedByAbilityName, opponentEffectsBlocked, bouncedByMagicMirror, shellSideArmCategory, abilityOffenseMultiplier, abilityDefenseMultiplier, stabMultiplier, typeEffectiveness, effectiveMove, sheerForceAbilityName, fickleBeamEmpowered, electromorphosisEmpoweredAbilityName, ownMoveTypeBoostMultiplier, rivalryMultiplier, changedOwnTypeTo, changedOwnTypeAbilityName, lostTypeAfterUse, gemMultiplier, ateGemItemName, hitChance, defenderHideType, evadedByCharge, hit, selfDamageOnUse, abilityAbsorbedMoveType, abilityAbsorbAbilityName, abilityAbsorbHealAmount, protectContactPenaltyMoveName, protectContactDamage, protectContactInflictedStatus,
+    defenderKey, attacker, defender, defenderHpAtActionStart, actorPokemonId, defenderPokemonId, attackerAbility, defenderAbility, attackerBerriesBlocked, defenderBerriesBlocked, attackerItemIdBeforeAction, defenderItemIdBeforeAction, leppaRestoredPpItemName, pressureExtraPpAbilityName, selfCuredStatus, sleepTalkCalledMoveName, copycatCalledMoveName, ohkoBlockedByAbilityName, ohkoImmune, flungItemId, attackerItem, defenderItem, blockedByGoodAsGold, blockedBySubstitute, blockedByPowderImmunity, unseenFistPiercing, blockedByProtect, blockedByProtectMoveName, soundproofBlockedByAbilityName, bulletproofBlockedByAbilityName, opponentEffectsBlocked, bouncedByMagicMirror, shellSideArmCategory, abilityOffenseMultiplier, abilityDefenseMultiplier, stabMultiplier, typeEffectiveness, effectiveMove, sheerForceAbilityName, fickleBeamEmpowered, electromorphosisEmpoweredAbilityName, ownMoveTypeBoostMultiplier, rivalryMultiplier, changedOwnTypeTo, changedOwnTypeAbilityName, lostTypeAfterUse, gemMultiplier, ateGemItemName, hitChance, defenderHideType, evadedByCharge, hit, selfDamageOnUse, abilityAbsorbedMoveType, abilityAbsorbAbilityName, abilityAbsorbHealAmount, protectContactPenaltyMoveName, protectContactDamage, protectContactInflictedStatus,
   } = pre;
 
   let {
@@ -39,9 +41,16 @@ export function resolveAction(
     bouncedByMagicMirror, move, effectiveMove, opponentEffectsBlocked, random, state, hit, movesSecond, defenderKey, damage, hitSubstitute, defenderMove, actorKey, defenderBerriesBlocked, attackerBerriesBlocked, blockedByProtect, sheerForceAbilityName, isDamaging, selfCuredStatus, terrainSeedMessages, defenderAbility, attacker, defender, attackerAbility, attackerItem, defenderItem, abilityInflictedStatusOnAttacker, abilityInflictedStatusAbilityName, statusCureBerryItemName, mentalMoveBlockedByAbilityName,
   });
   let {
-    bouncedMoveName, bouncedByAbilityName, secondaryBlockedByAbilityName, berryEatFailed, stuffCheeksBerryHeal, stuffCheeksBerryName, costHpFailed, soulBeatHpCost, selfStatRises, selfStatsAtMax, selfStatDrops, reflectedStatDropAbilityName, reflectedStatDrops, restoredStatsSelfItemName, restoredStatsOpponentItemName, opportunistCopiedStats, opportunistAbilityName, opponentStatDrops, invertedTargetStages, addedTypeToTarget, overwroteTargetType, targetMoveTypeOverride, inflictedStatus, statusInflictFailed, beakBlastBurnedAttacker, curedStatus, curedStatusTarget, inflictedVolatile, tidyUpDone, courtChangeDone, revivedPartyName, reviveFailed, saltCureApplied, balloonPoppedItemName, octolockApplied, jawLockApplied, selfWokeBeforeMove, restSlept, healedAmount, healedTarget, averagedDefensesMoveName, swappedSpeedMoveName, transformedIntoName, transformFailed, regenSetFailed, leechSeedSetFailed, leechSeedBlockedByGrass, abilitySwappedTargetToName, abilitySwapFailed, substituteSetFailed, shedTailFailed, shedTailSucceeded, setDisabledMoveName, disableSetFailed, setEncoreMoveName, encoreSetFailed, swappedStatsMoveName, swappedStagesMoveName, protectSucceeded, protectFailed, protectStanceEntered, fieldSetFailed, stealthRockSetForSide, spikesSetForSide, toxicSpikesSetForSide, stickyWebSetForSide, hazardSetFailed,
+    bouncedMoveName, bouncedByAbilityName, secondaryBlockedByAbilityName, berryEatFailed, stuffCheeksBerryHeal, stuffCheeksBerryName, costHpFailed, soulBeatHpCost, selfStatRises, selfStatsAtMax, selfStatDrops, reflectedStatDropAbilityName, reflectedStatDrops, restoredStatsSelfItemName, restoredStatsOpponentItemName, opportunistCopiedStats, opportunistAbilityName, opponentStatDrops, invertedTargetStages, addedTypeToTarget, overwroteTargetType, targetMoveTypeOverride, inflictedStatus, statusInflictFailed, beakBlastBurnedAttacker, curedStatus, curedStatusTarget, inflictedVolatile, tidyUpDone, courtChangeDone, revivedPartyName, reviveFailed, saltCureApplied, balloonPoppedItemName, octolockApplied, jawLockApplied, selfWokeBeforeMove, restSlept, healedAmount, healedTarget, averagedDefensesMoveName, swappedSpeedMoveName, transformedIntoName, transformFailed, regenSetFailed, leechSeedSetFailed, leechSeedBlockedByGrass, abilitySwappedTargetToName, abilitySwapFailed, substituteSetFailed, shedTailFailed, shedTailSucceeded, setDisabledMoveName, disableSetFailed, setEncoreMoveName, encoreSetFailed, swappedStatsMoveName, swappedStagesMoveName, protectSucceeded, protectFailed, protectStanceEntered, fieldSetFailed, stealthRockSetForSide, spikesSetForSide, toxicSpikesSetForSide, stickyWebSetForSide, hazardSetFailed, swappedItems, itemSwapFailed, painSplitHp, stockpileHealFailed, recycledItemName, recycleFailed, copiedStagesFromName, averagedAttacksMoveName, spitePp, spiteFailed, acupressureRaised, acupressureFailed, volatileBlockedByAbility, abilityChange, abilityChangeFailed, copiedTypes, smackedDownTarget, meltedItemName, meltFailed, magneticFluxFailed, partyStatusCuredCount, teaTime, teaTimeFailed,
   } = mirrorResult;
   ({ defenderAbility, attacker, defender, attackerAbility, attackerItem, defenderItem, abilityInflictedStatusOnAttacker, abilityInflictedStatusAbilityName, statusCureBerryItemName, mentalMoveBlockedByAbilityName } = mirrorResult);
+
+  // 내던지기(트랙 M5): 던진 도구의 효과를 맞은 상대에게 — 데미지를 주고 대타가 아니며 상대가 버텼을 때만
+  const flungItem = flungItemId ? getItem(flungItemId) : undefined;
+  const flingEffect =
+    flungItem && hit && damage > 0 && !hitSubstitute && !isFainted(defender)
+      ? applyFlingEffect(state, actorKey, defender, defenderAbility, flungItem, !movesSecond)
+      : undefined;
 
   // 멸망의노래(setsPerishSong, F-4): 장에 있는 양쪽에게 멸망 카운트 3을 건다. 방어·대타·황금몸을
   // 무시하므로 opponentEffectsBlocked로 게이팅하지 않는다. 방음(blocksSound) 특성이나 발동 시점에
@@ -71,14 +80,87 @@ export function resolveAction(
     state.fieldTurnsRemaining = undefined;
   }
 
-  // 트릭룸도 필드와 같은 이유로 이미 걸려있으면 재사용 시 실패 처리한다(지속 턴수 갱신 방지) —
-  // 다만 아직 아무 효과도 안 걸린 채로 게임이 끝나는 극단적 경우는 없으니 별 문제 없음.
-  let trickRoomSetFailed = false;
+  // 트릭룸: 이미 걸려 있으면 다시 쓸 때 해제된다(본가 — 트랙 M4에서 "재사용 실패"였던 규칙을 사용자 결정으로 변경).
+  const trickRoomSetFailed = false;
+  let trickRoomEnded = false;
   if (effectiveMove.setsTrickRoom) {
     if (state.trickRoomTurnsRemaining !== undefined) {
-      trickRoomSetFailed = true;
+      state.trickRoomTurnsRemaining = undefined;
+      trickRoomEnded = true;
     } else {
       state.trickRoomTurnsRemaining = TRICK_ROOM_DURATION;
+    }
+  }
+
+  // 원더룸·매직룸(트랙 M4): 트릭룸과 같은 규칙 — 5턴, 다시 쓰면 해제.
+  let roomChange: { room: "wonderRoom" | "magicRoom"; on: boolean } | undefined;
+  if (effectiveMove.setsRoom === "wonderRoom") {
+    const on = state.wonderRoomTurnsRemaining === undefined;
+    state.wonderRoomTurnsRemaining = on ? WONDER_ROOM_DURATION : undefined;
+    roomChange = { room: "wonderRoom", on };
+  } else if (effectiveMove.setsRoom === "magicRoom") {
+    const on = state.magicRoomTurnsRemaining === undefined;
+    state.magicRoomTurnsRemaining = on ? MAGIC_ROOM_DURATION : undefined;
+    roomChange = { room: "magicRoom", on };
+  }
+
+  // 중력(트랙 M4): 5턴, 이미 있으면 실패. 걸리는 순간 공중에 있던 포켓몬이 떨어진다 — 공중날기·뛰어오르기 모으기가
+  // 풀리고 전자부유가 끝난다.
+  let gravitySet = false;
+  let gravitySetFailed = false;
+  if (effectiveMove.setsGravity) {
+    if (state.gravityTurnsRemaining !== undefined) {
+      gravitySetFailed = true;
+    } else {
+      state.gravityTurnsRemaining = GRAVITY_DURATION;
+      gravitySet = true;
+      for (const f of [state.a, state.b]) {
+        f.magnetRiseTurnsRemaining = undefined;
+        if (f.chargingMoveId && getMove(f.chargingMoveId)?.chargeHideType === "sky") f.chargingMoveId = undefined;
+      }
+    }
+  }
+
+  // 페어리록(트랙 M6): 다음 턴 양쪽 모두 교체 불가(2로 걸어 이번 턴 끝에 1 — 그 턴이 봉쇄 턴). 이미 걸려 있으면 실패.
+  let fairyLockSet = false;
+  let fairyLockFailed = false;
+  if (effectiveMove.setsFairyLock) {
+    if (state.fairyLockTurnsRemaining !== undefined) {
+      fairyLockFailed = true;
+    } else {
+      state.fairyLockTurnsRemaining = 2;
+      fairyLockSet = true;
+    }
+  }
+
+  // 치유소원(트랙 M6): 교대할 포켓몬이 있으면 자신은 기절하고, 다음에 이 편에 나오는 포켓몬이 전부 회복(switching)
+  let healingWishSet = false;
+  let healingWishFailed = false;
+  if (effectiveMove.setsHealingWish) {
+    const mySide = sideOf(state, actorKey);
+    if (!hasLivingReserve(mySide)) {
+      healingWishFailed = true;
+    } else {
+      mySide.healingWishPending = true;
+      attacker.currentHp = 0;
+      healingWishSet = true;
+    }
+  }
+
+  // 전자부유(트랙 M4): 5턴 동안 떠오른다. 중력·떨어뜨리기·검은철구(땅에 붙잡힘)·이미 떠 있으면 실패.
+  let magnetRiseSet = false;
+  let magnetRiseFailed = false;
+  if (effectiveMove.setsMagnetRise) {
+    if (
+      state.gravityTurnsRemaining !== undefined ||
+      attacker.smackedDown ||
+      effectiveHeldItem(attacker, state)?.groundsHolder ||
+      (attacker.magnetRiseTurnsRemaining ?? 0) > 0
+    ) {
+      magnetRiseFailed = true;
+    } else {
+      attacker.magnetRiseTurnsRemaining = MAGNET_RISE_DURATION;
+      magnetRiseSet = true;
     }
   }
 
@@ -127,6 +209,19 @@ export function resolveAction(
       safeguardSetFailed = true;
     } else {
       attackerSide.safeguardTurnsRemaining = SCREEN_DURATION;
+    }
+  }
+
+  // 순풍(트랙 M1): 신비의부적과 같은 편 단위 — 이미 불고 있으면 실패. 쓴 턴 포함 4턴.
+  let tailwindSetFailed = false;
+  let tailwindSet = false;
+  if (effectiveMove.setsTailwind) {
+    const attackerSide = sideOf(state, actorKey);
+    if ((attackerSide.tailwindTurnsRemaining ?? 0) > 0) {
+      tailwindSetFailed = true;
+    } else {
+      attackerSide.tailwindTurnsRemaining = TAILWIND_DURATION;
+      tailwindSet = true;
     }
   }
 
@@ -298,13 +393,21 @@ export function resolveAction(
     bouncedByAbilityName,
     secondaryBlockedByAbilityName,
     destroyedField,
-    setTrickRoom: trickRoomSetFailed ? undefined : effectiveMove.setsTrickRoom,
+    setTrickRoom: trickRoomSetFailed || trickRoomEnded ? undefined : effectiveMove.setsTrickRoom,
     trickRoomSetFailed,
     setWeather: weatherSetFailed ? undefined : effectiveMove.setsWeather,
     weatherSetFailed: weatherSetFailed || undefined,
     setScreen: screenSetFailed ? undefined : effectiveMove.setsScreen,
     screenSetFailed,
     setSafeguard: safeguardSetFailed ? undefined : (effectiveMove.setsSafeguard || undefined),
+    trickRoomEnded: trickRoomEnded || undefined,
+    roomChange,
+    gravitySet: gravitySet || undefined,
+    gravitySetFailed: gravitySetFailed || undefined,
+    magnetRiseSet: magnetRiseSet || undefined,
+    magnetRiseFailed: magnetRiseFailed || undefined,
+    tailwindSet: tailwindSet || undefined,
+    tailwindSetFailed: tailwindSetFailed || undefined,
     safeguardSetFailed: safeguardSetFailed || undefined,
     brokeScreens,
     fainted: isFainted(defender),
@@ -344,6 +447,33 @@ export function resolveAction(
     swappedStagesMoveName,
     averagedDefensesMoveName,
     swappedSpeedMoveName,
+    swappedItems,
+    itemSwapFailed: itemSwapFailed || undefined,
+    painSplitHp,
+    stockpileHealFailed: stockpileHealFailed || undefined,
+    recycledItemName,
+    recycleFailed: recycleFailed || undefined,
+    copiedStagesFromName,
+    averagedAttacksMoveName,
+    spitePp,
+    spiteFailed: spiteFailed || undefined,
+    acupressureRaised,
+    acupressureFailed: acupressureFailed || undefined,
+    volatileBlockedByAbility,
+    abilityChange,
+    abilityChangeFailed: abilityChangeFailed || undefined,
+    copiedTypes,
+    smackedDownTarget: smackedDownTarget || undefined,
+    meltedItemName,
+    partyStatusCuredCount: partyStatusCuredCount || undefined,
+    teaTime,
+    teaTimeFailed: teaTimeFailed || undefined,
+    meltFailed: meltFailed || undefined,
+    magneticFluxFailed: magneticFluxFailed || undefined,
+    fairyLockSet: fairyLockSet || undefined,
+    fairyLockFailed: fairyLockFailed || undefined,
+    healingWishSet: healingWishSet || undefined,
+    healingWishFailed: healingWishFailed || undefined,
     shellSideArmCategory,
     transformedIntoName,
     transformFailed: transformFailed || undefined,
@@ -416,6 +546,11 @@ export function resolveAction(
     unburdenSelfAbilityName,
     unburdenOpponentAbilityName,
     sleepTalkCalledMoveName,
+    copycatCalledMoveName,
+    ohkoBlockedByAbilityName,
+    flungItemName: flungItem?.name,
+    flingEffect,
+    ohkoImmune: ohkoImmune || undefined,
     changedOwnTypeTo,
     changedOwnTypeAbilityName,
     ateGemItemName,

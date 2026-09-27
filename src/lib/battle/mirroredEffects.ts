@@ -1,11 +1,11 @@
 import { type Move } from "@/types/move";
 import { type PokemonType } from "@/types/pokemon-type";
 import { type FighterKey } from "@/types/battle";
-import { BATTLE_STAT_KEYS, NEUTRAL_ACCURACY_STAGES, NEUTRAL_STAGES, isBattleStatKey, type BattleStatKey, type StatStages } from "@/types/battleStats";
+import { BATTLE_STAT_KEYS, NEUTRAL_ACCURACY_STAGES, NEUTRAL_STAGES, isBattleStatKey, type AccuracyEvasionKey, type BattleStatKey, type StatStages } from "@/types/battleStats";
 import { NO_STATUS_CONDITION, type StatusCondition, type StatusConditionState, type VolatileCondition } from "@/types/status";
 import { type Ability } from "@/types/ability";
 import { type Item } from "@/types/item";
-import { getAbility, getMove, getPokemon } from "@/lib/data";
+import { getAbility, getItem, getMove, getPokemon } from "@/lib/data";
 import { applyMoveStatChanges, applyStageDelta, clampStagesToNonNegative } from "@/lib/statStages";
 import { applyMoveAccuracyEvasionChanges, applyMoveCritStageChanges } from "@/lib/accuracyCrit";
 import { inflictRestSleep, inflictStatus, isImmuneToStatus } from "@/lib/statusConditions";
@@ -14,6 +14,9 @@ import { rankStageMultiplier } from "@/lib/battlePower";
 import { computeWeatherHealFraction } from "@/lib/weatherEffects";
 import { FIELD_DURATION, isConfusionBlockedByField, isOpponentTargetingMove, isStatusBlockedByField } from "@/lib/fieldEffects";
 import { getConfusionCureBerryResult, getExtraFlinchTriggered, getMentalHerbCureResult, getStatusCureBerryResult, shouldTriggerWhiteHerb } from "@/lib/itemEffects";
+import { isGrounded } from "./grounding";
+import { eatBerryNow } from "./fling";
+import { cureConditionsBlockedByAbility, isFixedAbility, isUncopyableAbility } from "./abilityChange";
 import { activeWeather, applyTransform, consumeItem, contraryDelta, contraryMoveFor, emptyHazardState, hasLivingReserve, isFainted, sideOf, statDropBlockStatsOf, statusImmunitiesOf, type BattleFighterState, type BattleState } from "./state";
 import { triggerTerrainSeeds } from "./switching";
 
@@ -96,6 +99,23 @@ export function resolveMirroredMoveEffects(input: MirroredMoveEffectsInput) {
       stuffCheeksBerryHeal = Math.min(attacker.maxHp - attacker.currentHp, rawHeal);
       attacker.currentHp += stuffCheeksBerryHeal;
       consumeItem(attacker);
+    }
+  }
+
+  // 다과회(allEatBerries, Tier 2): 장에 있는 양쪽 모두 지닌 나무열매를 바로 먹는다(서투름·매직룸이면 못 먹음). 아무도 못 먹으면 실패.
+  let teaTime: { self?: ReturnType<typeof eatBerryNow>; opponent?: ReturnType<typeof eatBerryNow> } | undefined;
+  let teaTimeFailed = false;
+  if (effectiveMove.allEatBerries) {
+    const eat = (f: BattleFighterState, item: Item | undefined) => {
+      if (!item || !item.name.endsWith("열매") || isFainted(f)) return undefined;
+      const result = eatBerryNow(f, item);
+      consumeItem(f);
+      return result;
+    };
+    teaTime = { self: eat(attacker, attackerItem), opponent: eat(defender, defenderItem) };
+    if (!teaTime.self && !teaTime.opponent) {
+      teaTime = undefined;
+      teaTimeFailed = true;
     }
   }
 
@@ -407,7 +427,7 @@ export function resolveMirroredMoveEffects(input: MirroredMoveEffectsInput) {
         )
       )
         continue;
-      if (isStatusBlockedByField(state.field, effect.status)) continue;
+      if (isStatusBlockedByField(state.field, effect.status, isGrounded(state, defender, defenderAbility))) continue;
       if (sideOf(state, defenderKey).safeguardTurnsRemaining !== undefined) continue;
       // 쾌청(강한 햇살) 날씨에서는 얼음 상태에 걸리지 않는다 — 타입 면역과는 다른 축이라 별도 확인
       if (effect.status === "freeze" && activeWeather(state) === "쾌청") continue;
@@ -440,7 +460,7 @@ export function resolveMirroredMoveEffects(input: MirroredMoveEffectsInput) {
       if (
         picked &&
         !isImmuneToStatus(picked, defender.types, statusImmunitiesOf(defender, defenderAbility)) &&
-        !isStatusBlockedByField(state.field, picked) &&
+        !isStatusBlockedByField(state.field, picked, isGrounded(state, defender, defenderAbility)) &&
         sideOf(state, defenderKey).safeguardTurnsRemaining === undefined &&
         !(picked === "freeze" && activeWeather(state) === "쾌청")
       ) {
@@ -469,7 +489,7 @@ export function resolveMirroredMoveEffects(input: MirroredMoveEffectsInput) {
     if (
       rose &&
       !isImmuneToStatus("burn", defender.types, statusImmunitiesOf(defender, defenderAbility)) &&
-      !isStatusBlockedByField(state.field, "burn") &&
+      !isStatusBlockedByField(state.field, "burn", isGrounded(state, defender, defenderAbility)) &&
       sideOf(state, defenderKey).safeguardTurnsRemaining === undefined
     ) {
       const before = defender.status.condition;
@@ -489,7 +509,7 @@ export function resolveMirroredMoveEffects(input: MirroredMoveEffectsInput) {
     !hitSubstitute &&
     !inflictedStatus &&
     !isImmuneToStatus("poison", defender.types, statusImmunitiesOf(defender, defenderAbility), attackerAbility?.bypassesPoisonTypeImmunity) &&
-    !isStatusBlockedByField(state.field, "poison") &&
+    !isStatusBlockedByField(state.field, "poison", isGrounded(state, defender, defenderAbility)) &&
     sideOf(state, defenderKey).safeguardTurnsRemaining === undefined &&
     random() * 100 < attackerAbility.poisonTouchChance
   ) {
@@ -510,7 +530,7 @@ export function resolveMirroredMoveEffects(input: MirroredMoveEffectsInput) {
     !hitSubstitute &&
     !isFainted(attacker) &&
     !isImmuneToStatus("burn", attacker.types, statusImmunitiesOf(attacker, attackerAbility)) &&
-    !isStatusBlockedByField(state.field, "burn") &&
+    !isStatusBlockedByField(state.field, "burn", isGrounded(state, attacker, attackerAbility)) &&
     sideOf(state, actorKey).safeguardTurnsRemaining === undefined
   ) {
     const before = attacker.status.condition;
@@ -526,7 +546,7 @@ export function resolveMirroredMoveEffects(input: MirroredMoveEffectsInput) {
     inflictedStatus &&
     defenderAbility?.reflectsStatusToOpponent?.includes(inflictedStatus) &&
     !isImmuneToStatus(inflictedStatus, attacker.types, statusImmunitiesOf(attacker, attackerAbility)) &&
-    !isStatusBlockedByField(state.field, inflictedStatus) &&
+    !isStatusBlockedByField(state.field, inflictedStatus, isGrounded(state, attacker, attackerAbility)) &&
     sideOf(state, actorKey).safeguardTurnsRemaining === undefined &&
     !(inflictedStatus === "freeze" && activeWeather(state) === "쾌청")
   ) {
@@ -542,6 +562,13 @@ export function resolveMirroredMoveEffects(input: MirroredMoveEffectsInput) {
   // 잠자기, 상태이상 즉시치료 나무열매)를 전부 여기 한 변수에 모은다 — 아래에서 순서대로 채워진다.
   let curedStatus: StatusConditionState["condition"] | undefined;
   let curedStatusTarget: "self" | "opponent" | undefined;
+  // 트랙 M3: 특성이 바뀌어 새 특성이 면역인 상태가 풀렸을 때(고민씨로 불면 → 잠이 깸 등). 이미 다른 치료가 기록됐으면 덮지 않는다.
+  const noteCure = (condition: StatusConditionState["condition"] | undefined, target: "self" | "opponent") => {
+    if (condition && !curedStatus) {
+      curedStatus = condition;
+      curedStatusTarget = target;
+    }
+  };
 
   // 상태이상 즉시치료 나무열매(리샘·버치·유루·복슝·복분·배리): 걸리는 "그 순간" 치료하고 소모된다.
   // itemConsumed는 나무열매 18종(타입내성)과 같은 축을 공유하므로(도구 1개=1회용), 이미 다른
@@ -559,16 +586,21 @@ export function resolveMirroredMoveEffects(input: MirroredMoveEffectsInput) {
   }
 
   let inflictedVolatile: VolatileCondition | undefined;
+  let volatileBlockedByAbility: { abilityName: string; volatile: VolatileCondition; self: boolean } | undefined;
   if (effectiveMove.inflictsVolatile) {
     for (const effect of effectiveMove.inflictsVolatile) {
-      if (effect.volatile === "confusion" && isConfusionBlockedByField(state.field)) continue;
+      if (
+        effect.volatile === "confusion" &&
+        isConfusionBlockedByField(state.field, effect.target === "self" ? isGrounded(state, attacker, attackerAbility) : isGrounded(state, defender, defenderAbility))
+      )
+        continue;
       // 정신력: 풀죽음 자체에 면역이라 발동 시도 자체가 무산된다(본가 규칙 — 확률 판정까지 가지 않음)
       if (effect.volatile === "flinch" && effect.target !== "self" && defenderAbility?.immuneToFlinch) continue;
       // 아로마베일: 방어측이 이 특성이면 헤롱헤롱·도발이 걸리지 않는다(마음을 옭아매는 기술 차단).
       if (
         effect.target !== "self" &&
         defenderAbility?.blocksMentalMoves &&
-        (effect.volatile === "attract" || effect.volatile === "taunt")
+        (effect.volatile === "attract" || effect.volatile === "taunt" || effect.volatile === "torment")
       ) {
         mentalMoveBlockedByAbilityName = defenderAbility.name;
         continue;
@@ -582,6 +614,17 @@ export function resolveMirroredMoveEffects(input: MirroredMoveEffectsInput) {
         continue;
       }
       const target = effect.target === "self" ? attacker : defender;
+      // 마이페이스(혼란)·둔감(헤롱헤롱·도발) — 트랙 M3. 확정 효과(변화기)만 로그로 알리고, 확률 부가효과는 조용히 무산.
+      const immunityAbility = effect.target === "self" ? attackerAbility : defenderAbility;
+      if (
+        (effect.volatile === "confusion" && immunityAbility?.immuneToConfusion) ||
+        ((effect.volatile === "attract" || effect.volatile === "taunt") && immunityAbility?.immuneToAttractAndTaunt)
+      ) {
+        if (effect.chance === undefined) {
+          volatileBlockedByAbility = { abilityName: immunityAbility!.name, volatile: effect.volatile, self: effect.target === "self" };
+        }
+        continue;
+      }
       // 하품(졸음): 대상이 이미 다른 주 상태이상이거나 이미 졸음 상태면 실패한다(본가 규칙) —
       // 실제 잠듦 여부(타입/필드 면역)는 2턴 뒤 트리거 시점에 따로 확인한다.
       if (effect.volatile === "drowsy" && (target.status.condition || hasVolatile(target.volatile, "drowsy"))) {
@@ -617,7 +660,16 @@ export function resolveMirroredMoveEffects(input: MirroredMoveEffectsInput) {
       // 도발: 이미 도발 상태면 재시전은 실패한다(턴수 리셋 없이 조용히 무산 — 본가 "그러나
       // 실패했다!"). statusInflictFailed는 위 inflictsStatus 루프와 같은 변수를 공유한다 —
       // "이 행동으로 뭔가 걸려던 게 무산됐다"는 의미가 같아서 렌더 문구도 그대로 재사용된다.
-      if (effect.volatile === "taunt" && hasVolatile(target.volatile, "taunt")) {
+      // 트집·봉인(트랙 M2)·검은눈빛/블록·록온(트랙 M6)도 같은 규칙 — 이미 걸려 있으면 실패. 고스트는 교체 봉쇄에 걸리지 않는다.
+      if (
+        ((effect.volatile === "taunt" ||
+          effect.volatile === "torment" ||
+          effect.volatile === "imprison" ||
+          effect.volatile === "meanLook" ||
+          effect.volatile === "lockOn") &&
+          hasVolatile(target.volatile, effect.volatile)) ||
+        (effect.volatile === "meanLook" && target.types.includes("고스트"))
+      ) {
         statusInflictFailed = true;
         continue;
       }
@@ -643,9 +695,9 @@ export function resolveMirroredMoveEffects(input: MirroredMoveEffectsInput) {
         }
       }
 
-      // 멘탈허브: 헤롱헤롱/도발이 걸리는 순간 치료하고 소모된다. 나무열매가 아니라 긴장감
+      // 멘탈허브: 헤롱헤롱/도발/트집이 걸리는 순간 치료하고 소모된다. 나무열매가 아니라 긴장감
       // (berriesBlocked)의 영향을 받지 않는다.
-      if (effect.volatile === "attract" || effect.volatile === "taunt") {
+      if (effect.volatile === "attract" || effect.volatile === "taunt" || effect.volatile === "torment") {
         const targetItem = effect.target === "self" ? attackerItem : defenderItem;
         if (getMentalHerbCureResult(targetItem, target.itemConsumed ?? false)) {
           target.volatile = { active: { ...target.volatile.active } };
@@ -691,6 +743,9 @@ export function resolveMirroredMoveEffects(input: MirroredMoveEffectsInput) {
     const swapScreens = state.sideA.screens;
     state.sideA.screens = state.sideB.screens;
     state.sideB.screens = swapScreens;
+    // 순풍·신비의부적도 편 단위 효과라 함께 맞바꾼다(본가 — Tier 2 작업 중 수정)
+    [state.sideA.tailwindTurnsRemaining, state.sideB.tailwindTurnsRemaining] = [state.sideB.tailwindTurnsRemaining, state.sideA.tailwindTurnsRemaining];
+    [state.sideA.safeguardTurnsRemaining, state.sideB.safeguardTurnsRemaining] = [state.sideB.safeguardTurnsRemaining, state.sideA.safeguardTurnsRemaining];
     courtChangeDone = true;
   }
 
@@ -820,6 +875,7 @@ export function resolveMirroredMoveEffects(input: MirroredMoveEffectsInput) {
 
   // 상태이상 치료: 물거품아리아처럼 명중 시 대상의 주 상태이상을 없앤다(inflictsStatus의 반대 방향).
   // status가 지정돼 있으면(물거품아리아=화상) 그 상태일 때만 치료 — 다른 상태이상은 안 지운다.
+  let partyStatusCuredCount = 0;
   if (effectiveMove.curesStatus) {
     const { target: cureTarget, status: cureStatus } = effectiveMove.curesStatus;
     const target = cureTarget === "self" ? attacker : defender;
@@ -827,6 +883,15 @@ export function resolveMirroredMoveEffects(input: MirroredMoveEffectsInput) {
       curedStatus = target.status.condition;
       curedStatusTarget = cureTarget;
       target.status = { ...NO_STATUS_CONDITION };
+    }
+    // 치료방울(curesParty, Tier 2): 대기 포켓몬의 상태이상도 모두 고친다(본가 — 이전엔 자신만)
+    if (effectiveMove.curesParty) {
+      for (const f of sideOf(state, actorKey).party) {
+        if (f !== attacker && !isFainted(f) && f.status.condition) {
+          f.status = { ...NO_STATUS_CONDITION };
+          partyStatusCuredCount++;
+        }
+      }
     }
   }
 
@@ -894,6 +959,23 @@ export function resolveMirroredMoveEffects(input: MirroredMoveEffectsInput) {
     healTarget.currentHp += healedAmount;
   }
 
+  // 꿀꺽(healsByStockpile, 트랙 M1): 비축 1/2/3이면 최대 HP 1/4·1/2·전부 회복, 스택과 그만큼의 방어·특방 랭크를
+  // 되돌린다(토해내기와 같은 소비). 비축이 없으면 실패.
+  let stockpileHealFailed = false;
+  if (effectiveMove.healsByStockpile) {
+    const spent = attacker.stockpileCount ?? 0;
+    if (spent === 0) {
+      stockpileHealFailed = true;
+    } else {
+      const fraction = spent >= 3 ? 1 : spent === 2 ? 0.5 : 0.25;
+      healedTarget = "self";
+      healedAmount = Math.min(attacker.maxHp - attacker.currentHp, Math.floor(attacker.maxHp * fraction));
+      attacker.currentHp += healedAmount;
+      attacker.stockpileCount = 0;
+      attacker.stages = applyStageDelta(applyStageDelta(attacker.stages, "def", -spent), "spd", -spent);
+    }
+  }
+
   // 힘흡수(drainsFromTargetAttackStat): 상대의 공격 실능(랭크 반영, -1 적용 전 값)만큼 자신을 회복.
   // 상대 공격 -1은 데이터의 statChanges로 위에서 이미 적용됐지만, 회복량은 랭크 변화 전 실능
   // 기준이라 defenderStagesBeforeMoveChange를 쓴다(본가 규칙).
@@ -925,6 +1007,143 @@ export function resolveMirroredMoveEffects(input: MirroredMoveEffectsInput) {
     attacker.realStats = { ...attacker.realStats, spe: defender.realStats.spe };
     defender.realStats = { ...defender.realStats, spe: aSpe };
     swappedSpeedMoveName = effectiveMove.name;
+  }
+
+  // 트릭·바꿔치기(swapsItemsWithTarget, 트랙 M1): 도구를 맞바꾼다. 둘 다 무도구·어느 쪽이든 메가스톤·상대 점착이면 실패.
+  // 새 도구로 다음 기술부터 다시 잠기도록 양쪽 구애류 잠금을 푼다. 곡예는 resolveAction의 도구 전후 비교가 처리한다.
+  let swappedItems: { userGotName?: string; targetGotName?: string } | undefined;
+  let itemSwapFailed = false;
+  if (effectiveMove.swapsItemsWithTarget) {
+    const mine = attacker.currentItemId;
+    const theirs = defender.currentItemId;
+    const isMegaStone = (id: string | null) => !!id && getItem(id)?.category === "mega-stone";
+    if ((!mine && !theirs) || isMegaStone(mine) || isMegaStone(theirs) || defenderAbility?.preventsItemLoss) {
+      itemSwapFailed = true;
+    } else {
+      attacker.currentItemId = theirs;
+      defender.currentItemId = mine;
+      // 새로 얻은 도구라 이전 소모 이력과 무관하게 다시 쓸 수 있다(매지션 도둑질과 같은 처리)
+      attacker.itemConsumed = false;
+      defender.itemConsumed = false;
+      attacker.choiceLockedMoveId = undefined;
+      defender.choiceLockedMoveId = undefined;
+      swappedItems = {
+        userGotName: theirs ? getItem(theirs)?.name : undefined,
+        targetGotName: mine ? getItem(mine)?.name : undefined,
+      };
+    }
+  }
+
+  // 아픔나누기(sharesHpWithTarget, 트랙 M1): 둘의 현재 HP 합을 반씩(내림) — 각자 최대 HP까지.
+  let painSplitHp: number | undefined;
+  if (effectiveMove.sharesHpWithTarget) {
+    painSplitHp = Math.floor((attacker.currentHp + defender.currentHp) / 2);
+    attacker.currentHp = Math.min(attacker.maxHp, painSplitHp);
+    defender.currentHp = Math.min(defender.maxHp, painSplitHp);
+  }
+
+  // 리사이클(recyclesItem, 트랙 M1): 지닌 도구가 없고 이번 배틀에서 소모한 도구가 있으면 그 도구를 다시 지닌다.
+  let recycledItemName: string | undefined;
+  let recycleFailed = false;
+  if (effectiveMove.recyclesItem) {
+    if (attacker.currentItemId || !attacker.lastConsumedItemId) {
+      recycleFailed = true;
+    } else {
+      attacker.currentItemId = attacker.lastConsumedItemId;
+      attacker.itemConsumed = false;
+      attacker.lastConsumedItemId = undefined;
+      recycledItemName = getItem(attacker.currentItemId)?.name;
+    }
+  }
+
+  // 자기암시(copiesTargetStages, 트랙 M2): 상대의 능력·명중·회피·급소 랭크를 그대로 복사한다(변신과 같은 복사).
+  let copiedStagesFromName: string | undefined;
+  if (effectiveMove.copiesTargetStages) {
+    attacker.stages = { ...defender.stages };
+    attacker.accuracyStages = { ...defender.accuracyStages };
+    attacker.critStage = defender.critStage;
+    copiedStagesFromName = getPokemon(defender.slot.pokemonId)?.name ?? "상대";
+  }
+
+  // 파워셰어(averagesAttacksWithTarget, 트랙 M2): 가드셰어의 공격판 — 공격·특공 실능을 각각 더해 반씩(내림).
+  let averagedAttacksMoveName: string | undefined;
+  if (effectiveMove.averagesAttacksWithTarget) {
+    const avgAtk = Math.floor((attacker.realStats.atk + defender.realStats.atk) / 2);
+    const avgSpa = Math.floor((attacker.realStats.spa + defender.realStats.spa) / 2);
+    attacker.realStats = { ...attacker.realStats, atk: avgAtk, spa: avgSpa };
+    defender.realStats = { ...defender.realStats, atk: avgAtk, spa: avgSpa };
+    averagedAttacksMoveName = effectiveMove.name;
+  }
+
+  // 원한(reducesTargetLastMovePp, 트랙 M2): 상대가 마지막으로 쓴 기술의 PP를 줄인다. 쓴 기술이 없거나
+  // (등장 직후) 그 기술 PP가 이미 0이면 실패. 대타·황금몸이면 무산.
+  let spitePp: { moveName: string; amount: number } | undefined;
+  let spiteFailed = false;
+  if (effectiveMove.reducesTargetLastMovePp && hit && !opponentEffectsBlocked) {
+    const lastId = defender.lastMoveId;
+    const remaining = lastId ? defender.remainingPp[lastId] : undefined;
+    if (!lastId || remaining === undefined || remaining <= 0) {
+      spiteFailed = true;
+    } else {
+      const amount = Math.min(remaining, effectiveMove.reducesTargetLastMovePp);
+      defender.remainingPp[lastId] = remaining - amount;
+      spitePp = { moveName: getMove(lastId)?.name ?? lastId, amount };
+    }
+  }
+
+  // 경혈찌르기(raisesRandomStat, 트랙 M2): +6이 아닌 능력(명중·회피 포함) 중 하나를 무작위로 올린다. 전부 +6이면 실패.
+  let acupressureRaised: { stat: BattleStatKey | AccuracyEvasionKey; delta: number } | undefined;
+  let acupressureFailed = false;
+  if (effectiveMove.raisesRandomStat) {
+    const options: (BattleStatKey | AccuracyEvasionKey)[] = [
+      ...BATTLE_STAT_KEYS.filter((s) => attacker.stages[s] < 6),
+      ...(["accuracy", "evasion"] as const).filter((s) => attacker.accuracyStages[s] < 6),
+    ];
+    if (options.length === 0) {
+      acupressureFailed = true;
+    } else {
+      const stat = options[Math.floor(random() * options.length)];
+      if (stat === "accuracy" || stat === "evasion") {
+        const before = attacker.accuracyStages[stat];
+        const after = Math.min(6, before + effectiveMove.raisesRandomStat);
+        attacker.accuracyStages = { ...attacker.accuracyStages, [stat]: after };
+        acupressureRaised = { stat, delta: after - before };
+      } else {
+        const before = attacker.stages[stat];
+        attacker.stages = applyStageDelta(attacker.stages, stat, effectiveMove.raisesRandomStat);
+        acupressureRaised = { stat, delta: attacker.stages[stat] - before };
+      }
+    }
+  }
+
+  // 부식가스(removesTargetItem, 트랙 M6): 상대 도구를 녹여 없앤다 — 리사이클로 되찾을 수 없다(소모 기록을 남기지 않음).
+  let meltedItemName: string | undefined;
+  let meltFailed = false;
+  if (effectiveMove.removesTargetItem && hit && !opponentEffectsBlocked) {
+    const itemId = defender.currentItemId;
+    if (!itemId || getItem(itemId)?.category === "mega-stone" || defenderAbility?.preventsItemLoss) {
+      meltFailed = true;
+    } else {
+      meltedItemName = getItem(itemId)?.name ?? itemId;
+      defender.currentItemId = null;
+      defender.choiceLockedMoveId = undefined;
+    }
+  }
+
+  // 자기장조작(boostsDefensesIfPlusMinus, 트랙 M6): 플러스·마이너스면 방어·특방 +1(자기 랭크업 로그로), 아니면 실패.
+  let magneticFluxFailed = false;
+  if (effectiveMove.boostsDefensesIfPlusMinus) {
+    const abilityId = attacker.effectiveAbilityId;
+    if (abilityId !== "플러스" && abilityId !== "마이너스") {
+      magneticFluxFailed = true;
+    } else {
+      for (const stat of ["def", "spd"] as const) {
+        const before = attacker.stages[stat];
+        attacker.stages = applyStageDelta(attacker.stages, stat, contraryDelta(attacker, 1));
+        if (attacker.stages[stat] > before) selfStatRises.push({ stat, delta: attacker.stages[stat] - before });
+        else if (before >= 6) selfStatsAtMax.push(stat);
+      }
+    }
   }
 
   // 변신(transformsIntoTarget): 상대로 변신한다. 이미 변신 상태면 실패(1v1이라 배틀 끝까지 유지).
@@ -964,6 +1183,15 @@ export function resolveMirroredMoveEffects(input: MirroredMoveEffectsInput) {
   }
 
   // 조이기·엉겨붙기·집게덫 등(bindsTarget): 데미지를 준 뒤 상대를 4~5턴 속박한다(volatile "bound").
+  // 떨어뜨리기(트랙 M4): 데미지를 주면 상대를 물러날 때까지 땅에 떨어뜨린다(전자부유도 끝남). 원래 공중에 있었을 때만 로그.
+  let smackedDownTarget = false;
+  if (effectiveMove.groundsTarget && damage > 0 && !hitSubstitute && !isFainted(defender) && !defender.smackedDown) {
+    const wasAirborne = !isGrounded(state, defender, defenderAbility);
+    defender.smackedDown = true;
+    defender.magnetRiseTurnsRemaining = undefined;
+    smackedDownTarget = wasAirborne;
+  }
+
   // 대타를 맞혔거나 이미 속박 중이면 갱신하지 않는다.
   if (
     effectiveMove.bindsTarget &&
@@ -980,12 +1208,74 @@ export function resolveMirroredMoveEffects(input: MirroredMoveEffectsInput) {
   let abilitySwappedTargetToName: string | undefined;
   let abilitySwapFailed = false;
   if (effectiveMove.setsTargetAbilityId && hit && !opponentEffectsBlocked && !isFainted(defender)) {
-    if (defender.effectiveAbilityId === effectiveMove.setsTargetAbilityId) {
+    // 폼 변화 특성·일루전은 덮어쓸 수 없다(트랙 M3)
+    if (defender.effectiveAbilityId === effectiveMove.setsTargetAbilityId || isFixedAbility(defender.effectiveAbilityId)) {
       abilitySwapFailed = true;
     } else {
       defender.effectiveAbilityId = effectiveMove.setsTargetAbilityId;
+      defender.abilitySuppressed = undefined;
       abilitySwappedTargetToName = getAbility(effectiveMove.setsTargetAbilityId)?.name ?? effectiveMove.setsTargetAbilityId;
+      // 고민씨(불면)로 잠든 상대는 바로 깬다
+      noteCure(cureConditionsBlockedByAbility(defender), "opponent");
     }
+  }
+
+  // 트랙 M3: 스킬스왑(맞교환)·동료만들기(내 특성을 상대에게)·역할(상대 특성을 나에게)·위액(상대 특성 무효화)·
+  // 미러타입(상대 타입을 나에게). 폼 변화 특성·일루전은 바꿀 수 없고, 트레이스·괴짜·리시버는 복사·건네기의 원본이 될 수 없다.
+  let abilityChange: { kind: "swap" | "give" | "copy" | "suppress"; abilityName?: string } | undefined;
+  let abilityChangeFailed = false;
+  const nameOf = (id: string | null) => (id ? getAbility(id)?.name ?? id : undefined);
+  if (effectiveMove.swapsAbilityWithTarget && hit && !opponentEffectsBlocked && !isFainted(defender)) {
+    const mine = attacker.effectiveAbilityId;
+    const theirs = defender.effectiveAbilityId;
+    if (isFixedAbility(mine) || isFixedAbility(theirs) || (!mine && !theirs)) {
+      abilityChangeFailed = true;
+    } else {
+      attacker.effectiveAbilityId = theirs;
+      defender.effectiveAbilityId = mine;
+      attacker.abilitySuppressed = undefined;
+      defender.abilitySuppressed = undefined;
+      abilityChange = { kind: "swap" };
+      noteCure(cureConditionsBlockedByAbility(attacker), "self");
+      noteCure(cureConditionsBlockedByAbility(defender), "opponent");
+    }
+  }
+  if (effectiveMove.givesAbilityToTarget && hit && !opponentEffectsBlocked && !isFainted(defender)) {
+    const mine = attacker.effectiveAbilityId;
+    if (!mine || isUncopyableAbility(mine) || isFixedAbility(defender.effectiveAbilityId) || defender.effectiveAbilityId === mine) {
+      abilityChangeFailed = true;
+    } else {
+      defender.effectiveAbilityId = mine;
+      defender.abilitySuppressed = undefined;
+      abilityChange = { kind: "give", abilityName: nameOf(mine) };
+      noteCure(cureConditionsBlockedByAbility(defender), "opponent");
+    }
+  }
+  if (effectiveMove.copiesTargetAbility && !isFainted(defender)) {
+    const theirs = defender.effectiveAbilityId;
+    if (!theirs || isUncopyableAbility(theirs) || isFixedAbility(attacker.effectiveAbilityId) || attacker.effectiveAbilityId === theirs) {
+      abilityChangeFailed = true;
+    } else {
+      attacker.effectiveAbilityId = theirs;
+      attacker.abilitySuppressed = undefined;
+      abilityChange = { kind: "copy", abilityName: nameOf(theirs) };
+      noteCure(cureConditionsBlockedByAbility(attacker), "self");
+    }
+  }
+  if (effectiveMove.suppressesTargetAbility && hit && !opponentEffectsBlocked && !isFainted(defender)) {
+    if (defender.abilitySuppressed || !defender.effectiveAbilityId || isFixedAbility(defender.effectiveAbilityId)) {
+      abilityChangeFailed = true;
+    } else {
+      defender.effectiveAbilityId = null;
+      defender.abilitySuppressed = true;
+      abilityChange = { kind: "suppress" };
+    }
+  }
+  let copiedTypes: PokemonType[] | undefined;
+  if (effectiveMove.copiesTargetTypes && !isFainted(defender)) {
+    attacker.types = [...defender.types];
+    attacker.addedType = undefined;
+    copiedTypes = attacker.types;
   }
 
   // 대타출동: 이미 대타가 있거나, 최대 HP 1/4보다 현재 HP가 많지 않으면(=쓰면 자신이 기절하거나
@@ -1205,7 +1495,7 @@ export function resolveMirroredMoveEffects(input: MirroredMoveEffectsInput) {
     [attackerItem, defenderItem] = [defenderItem, attackerItem];
   }
   return {
-    defenderAbility, attacker, defender, attackerAbility, attackerItem, defenderItem, abilityInflictedStatusOnAttacker, abilityInflictedStatusAbilityName, statusCureBerryItemName, mentalMoveBlockedByAbilityName, bouncedMoveName, bouncedByAbilityName, secondaryBlockedByAbilityName, berryEatFailed, stuffCheeksBerryHeal, stuffCheeksBerryName, costHpFailed, soulBeatHpCost, selfStatRises, selfStatsAtMax, selfStatDrops, reflectedStatDropAbilityName, reflectedStatDrops, restoredStatsSelfItemName, restoredStatsOpponentItemName, opportunistCopiedStats, opportunistAbilityName, opponentStatDrops, invertedTargetStages, addedTypeToTarget, overwroteTargetType, targetMoveTypeOverride, inflictedStatus, statusInflictFailed, beakBlastBurnedAttacker, curedStatus, curedStatusTarget, inflictedVolatile, tidyUpDone, courtChangeDone, revivedPartyName, reviveFailed, saltCureApplied, balloonPoppedItemName, octolockApplied, jawLockApplied, selfWokeBeforeMove, restSlept, healedAmount, healedTarget, averagedDefensesMoveName, swappedSpeedMoveName, transformedIntoName, transformFailed, regenSetFailed, leechSeedSetFailed, leechSeedBlockedByGrass, abilitySwappedTargetToName, abilitySwapFailed, substituteSetFailed, shedTailFailed, shedTailSucceeded, setDisabledMoveName, disableSetFailed, setEncoreMoveName, encoreSetFailed, swappedStatsMoveName, swappedStagesMoveName, protectSucceeded, protectFailed, protectStanceEntered, fieldSetFailed, stealthRockSetForSide, spikesSetForSide, toxicSpikesSetForSide, stickyWebSetForSide, hazardSetFailed,
+    defenderAbility, attacker, defender, attackerAbility, attackerItem, defenderItem, abilityInflictedStatusOnAttacker, abilityInflictedStatusAbilityName, statusCureBerryItemName, mentalMoveBlockedByAbilityName, bouncedMoveName, bouncedByAbilityName, secondaryBlockedByAbilityName, berryEatFailed, stuffCheeksBerryHeal, stuffCheeksBerryName, costHpFailed, soulBeatHpCost, selfStatRises, selfStatsAtMax, selfStatDrops, reflectedStatDropAbilityName, reflectedStatDrops, restoredStatsSelfItemName, restoredStatsOpponentItemName, opportunistCopiedStats, opportunistAbilityName, opponentStatDrops, invertedTargetStages, addedTypeToTarget, overwroteTargetType, targetMoveTypeOverride, inflictedStatus, statusInflictFailed, beakBlastBurnedAttacker, curedStatus, curedStatusTarget, inflictedVolatile, tidyUpDone, courtChangeDone, revivedPartyName, reviveFailed, saltCureApplied, balloonPoppedItemName, octolockApplied, jawLockApplied, selfWokeBeforeMove, restSlept, healedAmount, healedTarget, averagedDefensesMoveName, swappedSpeedMoveName, transformedIntoName, transformFailed, regenSetFailed, leechSeedSetFailed, leechSeedBlockedByGrass, abilitySwappedTargetToName, abilitySwapFailed, substituteSetFailed, shedTailFailed, shedTailSucceeded, setDisabledMoveName, disableSetFailed, setEncoreMoveName, encoreSetFailed, swappedStatsMoveName, swappedStagesMoveName, protectSucceeded, protectFailed, protectStanceEntered, fieldSetFailed, stealthRockSetForSide, spikesSetForSide, toxicSpikesSetForSide, stickyWebSetForSide, hazardSetFailed, swappedItems, itemSwapFailed, painSplitHp, stockpileHealFailed, recycledItemName, recycleFailed, copiedStagesFromName, averagedAttacksMoveName, spitePp, spiteFailed, acupressureRaised, acupressureFailed, volatileBlockedByAbility, abilityChange, abilityChangeFailed, copiedTypes, smackedDownTarget, meltedItemName, meltFailed, magneticFluxFailed, partyStatusCuredCount, teaTime, teaTimeFailed,
   };
 }
 

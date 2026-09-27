@@ -188,6 +188,7 @@
   },
   {
     "id": "드래곤테일",
+    "excludedFromCopycat": true,
     "name": "드래곤테일",
     "type": "드래곤",
     "category": "physical",
@@ -392,6 +393,7 @@
   },
   {
     "id": "고민씨",
+    "setsTargetAbilityId": "불면",
     "name": "고민씨",
     "type": "풀",
     "category": "status",
@@ -627,6 +629,7 @@
   },
   {
     "id": "길동무",
+    "excludedFromCopycat": true,
     "name": "길동무",
     "type": "고스트",
     "category": "status",
@@ -1456,6 +1459,7 @@
   },
   {
     "id": "내던지기",
+    "flingsHeldItem": true,
     "name": "내던지기",
     "type": "악",
     "category": "physical",
@@ -1471,6 +1475,7 @@
   },
   {
     "id": "도우미",
+    "excludedFromCopycat": true,
     "name": "도우미",
     "type": "노말",
     "category": "status",
@@ -1567,6 +1572,7 @@
   },
   {
     "id": "목숨걸기",
+    "damageEqualsUserHp": true,
     "name": "목숨걸기",
     "type": "격투",
     "category": "special",
@@ -1580,7 +1586,7 @@
       "자기희생",
       "비접촉"
     ],
-    "makesContact": true
+    "makesContact": false
   },
   {
     "id": "물기",
@@ -1638,6 +1644,7 @@
   },
   {
     "id": "방어",
+    "excludedFromCopycat": true,
     "name": "방어",
     "type": "노말",
     "category": "status",
@@ -1654,6 +1661,7 @@
   },
   {
     "id": "배대뒤치기",
+    "excludedFromCopycat": true,
     "name": "배대뒤치기",
     "type": "격투",
     "category": "physical",
@@ -1672,6 +1680,7 @@
   },
   {
     "id": "버티기",
+    "excludedFromCopycat": true,
     "name": "버티기",
     "type": "노말",
     "category": "status",
@@ -1878,6 +1887,7 @@
   },
   {
     "id": "울부짖기",
+    "excludedFromCopycat": true,
     "name": "울부짖기",
     "type": "노말",
     "category": "status",
@@ -1926,6 +1936,7 @@
   },
   {
     "id": "잠꼬대",
+    "excludedFromCopycat": true,
     "name": "잠꼬대",
     "type": "노말",
     "category": "status",
@@ -2036,6 +2047,7 @@
   },
   {
     "id": "카운터",
+    "excludedFromCopycat": true,
     "name": "카운터",
     "type": "격투",
     "category": "physical",
@@ -2178,6 +2190,7 @@
   },
   {
     "id": "판별",
+    "excludedFromCopycat": true,
     "name": "판별",
     "type": "격투",
     "category": "status",
@@ -2194,6 +2207,7 @@
   },
   {
     "id": "패스트가드",
+    "excludedFromCopycat": true,
     "name": "패스트가드",
     "type": "격투",
     "category": "status",
@@ -2210,6 +2224,7 @@
   },
   {
     "id": "페인트",
+    "excludedFromCopycat": true,
     "name": "페인트",
     "type": "노말",
     "category": "physical",
@@ -2226,6 +2241,8 @@
   },
   {
     "id": "흉내쟁이",
+    "callsLastMoveInBattle": true,
+    "excludedFromCopycat": true,
     "name": "흉내쟁이",
     "type": "노말",
     "category": "status",
@@ -2239,6 +2256,7 @@
   },
   {
     "id": "힘껏펀치",
+    "excludedFromCopycat": true,
     "name": "힘껏펀치",
     "type": "격투",
     "category": "physical",
@@ -2363,6 +2381,7 @@
   },
   {
     "id": "무릎차기",
+    "blockedByGravity": true,
     "name": "무릎차기",
     "type": "격투",
     "category": "physical",
@@ -2392,7 +2411,8 @@
     "tags": [
       "회복"
     ],
-    "makesContact": false
+    "makesContact": false,
+    "healsFraction": 0.25
   },
   {
     "id": "안다리걸기",
@@ -2435,6 +2455,7 @@
   },
   {
     "id": "자기암시",
+    "copiesTargetStages": true,
     "name": "자기암시",
     "type": "노말",
     "category": "status",
@@ -2647,6 +2668,7 @@
   },
   {
     "id": "도둑질",
+    "excludedFromCopycat": true,
     "name": "도둑질",
     "type": "악",
     "category": "physical",
@@ -2833,7 +2855,8 @@
     "classification": [
       "바람"
     ],
-    "makesContact": false
+    "makesContact": false,
+    "setsTailwind": true
   },
   {
     "id": "시저크로스",
@@ -3022,6 +3045,7 @@
   },
   {
     "id": "하드프레스",
+    "targetHpRatioPower": 100,
     "name": "하드프레스",
     "type": "강철",
     "category": "physical",
@@ -3141,6 +3165,7 @@
   },
   {
     "id": "미러코트",
+    "excludedFromCopycat": true,
     "name": "미러코트",
     "type": "에스퍼",
     "category": "special",
@@ -3580,6 +3605,7 @@
   },
   {
     "id": "떨어뜨리기",
+    "groundsTarget": true,
     "name": "떨어뜨리기",
     "type": "바위",
     "category": "physical",
@@ -3599,6 +3625,7 @@
   },
   {
     "id": "공중날기",
+    "blockedByGravity": true,
     "name": "공중날기",
     "type": "비행",
     "category": "physical",
@@ -3655,7 +3682,8 @@
     "tags": [
       "회복"
     ],
-    "makesContact": false
+    "makesContact": false,
+    "healsByStockpile": true
   },
   {
     "id": "더스트슈트",
@@ -3681,6 +3709,7 @@
   },
   {
     "id": "물붓기",
+    "setsTargetType": "물",
     "name": "물붓기",
     "type": "물",
     "category": "status",
@@ -3875,6 +3904,7 @@
   },
   {
     "id": "동료만들기",
+    "givesAbilityToTarget": true,
     "name": "동료만들기",
     "type": "노말",
     "category": "status",
@@ -3904,6 +3934,7 @@
   },
   {
     "id": "뛰어오르기",
+    "blockedByGravity": true,
     "name": "뛰어오르기",
     "type": "비행",
     "category": "physical",
@@ -3950,6 +3981,7 @@
   },
   {
     "id": "바꿔치기",
+    "excludedFromCopycat": true,
     "name": "바꿔치기",
     "type": "악",
     "category": "status",
@@ -3958,7 +3990,9 @@
     "pp": 12,
     "priority": 0,
     "effect": "눈에 보이지 않는 속도로 자신과 상대가 지닌 물건을 교환한다.",
-    "makesContact": false
+    "makesContact": false,
+    "swapsItemsWithTarget": true,
+    "notReflectable": true
   },
   {
     "id": "바둥바둥",
@@ -4179,6 +4213,7 @@
   },
   {
     "id": "치유소원",
+    "setsHealingWish": true,
     "name": "치유소원",
     "type": "에스퍼",
     "category": "status",
@@ -4631,6 +4666,7 @@
   },
   {
     "id": "집단구타",
+    "beatUpPower": true,
     "name": "집단구타",
     "type": "악",
     "category": "physical",
@@ -4671,6 +4707,7 @@
         "delta": -2
       }
     ],
+    "selfFaints": true,
     "makesContact": false,
     "notReflectable": true
   },
@@ -4708,6 +4745,7 @@
   },
   {
     "id": "검은눈빛",
+    "inflictsVolatile": [{ "volatile": "meanLook", "target": "opponent" }],
     "name": "검은눈빛",
     "type": "노말",
     "category": "status",
@@ -4880,6 +4918,8 @@
   },
   {
     "id": "스킬스왑",
+    "notReflectable": true,
+    "swapsAbilityWithTarget": true,
     "name": "스킬스왑",
     "type": "에스퍼",
     "category": "status",
@@ -4911,6 +4951,7 @@
   },
   {
     "id": "원한",
+    "reducesTargetLastMovePp": 4,
     "name": "원한",
     "type": "고스트",
     "category": "status",
@@ -4975,6 +5016,7 @@
   },
   {
     "id": "트집",
+    "inflictsVolatile": [{ "volatile": "torment", "target": "opponent" }],
     "name": "트집",
     "type": "악",
     "category": "status",
@@ -5345,6 +5387,7 @@
   },
   {
     "id": "트릭",
+    "excludedFromCopycat": true,
     "name": "트릭",
     "type": "에스퍼",
     "category": "status",
@@ -5353,7 +5396,9 @@
     "pp": 8,
     "priority": 0,
     "effect": "상대의 빈틈을 노려 자신과 상대가 지닌 물건을 바꿔치기한다.",
-    "makesContact": false
+    "makesContact": false,
+    "swapsItemsWithTarget": true,
+    "notReflectable": true
   },
   {
     "id": "플레어드라이브",
@@ -5567,6 +5612,7 @@
       "field": "미스트필드",
       "multiplier": 1.5
     },
+    "selfFaints": true,
     "makesContact": false
   },
   {
@@ -5603,6 +5649,7 @@
   },
   {
     "id": "원더룸",
+    "setsRoom": "wonderRoom",
     "name": "원더룸",
     "type": "에스퍼",
     "category": "status",
@@ -5859,6 +5906,7 @@
         "setTo": 6
       }
     ],
+    "costsHpFraction": 0.5,
     "makesContact": false
   },
   {
@@ -6213,6 +6261,7 @@
   },
   {
     "id": "미러타입",
+    "copiesTargetTypes": true,
     "name": "미러타입",
     "type": "노말",
     "category": "status",
@@ -6225,6 +6274,7 @@
   },
   {
     "id": "봉인",
+    "inflictsVolatile": [{ "volatile": "imprison", "target": "self" }],
     "name": "봉인",
     "type": "에스퍼",
     "category": "status",
@@ -6240,6 +6290,7 @@
   },
   {
     "id": "부식가스",
+    "removesTargetItem": true,
     "name": "부식가스",
     "type": "독",
     "category": "status",
@@ -6263,7 +6314,9 @@
     "pp": 20,
     "priority": 0,
     "effect": "자신의 HP와 상대의 HP를 합친 것을 자신과 상대가 사이좋게 나눈다.",
-    "makesContact": false
+    "makesContact": false,
+    "sharesHpWithTarget": true,
+    "notReflectable": true
   },
   {
     "id": "자폭",
@@ -6305,6 +6358,7 @@
   },
   {
     "id": "매직룸",
+    "setsRoom": "magicRoom",
     "name": "매직룸",
     "type": "에스퍼",
     "category": "status",
@@ -6335,6 +6389,7 @@
   },
   {
     "id": "중력",
+    "setsGravity": true,
     "name": "중력",
     "type": "에스퍼",
     "category": "status",
@@ -6444,6 +6499,8 @@
   },
   {
     "id": "전자부유",
+    "blockedByGravity": true,
+    "setsMagnetRise": true,
     "name": "전자부유",
     "type": "전기",
     "category": "status",
@@ -6582,6 +6639,7 @@
   },
   {
     "id": "트림",
+    "excludedFromCopycat": true,
     "name": "트림",
     "type": "독",
     "category": "special",
@@ -6827,7 +6885,8 @@
     ],
     "powerMultiplierInField": {
       "field": "일렉트릭필드",
-      "multiplier": 2
+      "multiplier": 2,
+      "requiresTargetGrounded": true
     },
     "makesContact": false
   },
@@ -6959,6 +7018,7 @@
   },
   {
     "id": "일렉트릭볼",
+    "electroBallPower": true,
     "name": "일렉트릭볼",
     "type": "전기",
     "category": "special",
@@ -7039,6 +7099,7 @@
   },
   {
     "id": "날려버리기",
+    "excludedFromCopycat": true,
     "name": "날려버리기",
     "type": "노말",
     "category": "status",
@@ -7095,6 +7156,7 @@
   },
   {
     "id": "분노가루",
+    "excludedFromCopycat": true,
     "name": "분노가루",
     "type": "벌레",
     "category": "status",
@@ -7307,6 +7369,7 @@
   },
   {
     "id": "역할",
+    "copiesTargetAbility": true,
     "name": "역할",
     "type": "에스퍼",
     "category": "status",
@@ -7362,6 +7425,7 @@
   },
   {
     "id": "분노의앞니",
+    "halvesTargetHp": true,
     "name": "분노의앞니",
     "type": "노말",
     "category": "physical",
@@ -7395,6 +7459,7 @@
   },
   {
     "id": "땅가르기",
+    "oneHitKo": {},
     "name": "땅가르기",
     "type": "땅",
     "category": "physical",
@@ -7450,6 +7515,7 @@
   },
   {
     "id": "뿔드릴",
+    "oneHitKo": {},
     "name": "뿔드릴",
     "type": "노말",
     "category": "physical",
@@ -7544,6 +7610,7 @@
   },
   {
     "id": "성묘",
+    "powerPerFaintedAlly": 50,
     "name": "성묘",
     "type": "고스트",
     "category": "physical",
@@ -7695,6 +7762,7 @@
   },
   {
     "id": "블록",
+    "inflictsVolatile": [{ "volatile": "meanLook", "target": "opponent" }],
     "name": "블록",
     "type": "노말",
     "category": "status",
@@ -7730,6 +7798,7 @@
   },
   {
     "id": "킹실드",
+    "excludedFromCopycat": true,
     "name": "킹실드",
     "type": "강철",
     "category": "status",
@@ -7820,6 +7889,7 @@
   },
   {
     "id": "파워셰어",
+    "averagesAttacksWithTarget": true,
     "name": "파워셰어",
     "type": "에스퍼",
     "category": "status",
@@ -7985,6 +8055,7 @@
   },
   {
     "id": "니들가드",
+    "excludedFromCopycat": true,
     "name": "니들가드",
     "type": "풀",
     "category": "status",
@@ -8013,10 +8084,12 @@
     "tags": [
       "회복"
     ],
-    "makesContact": false
+    "makesContact": false,
+    "recyclesItem": true
   },
   {
     "id": "위액",
+    "suppressesTargetAbility": true,
     "name": "위액",
     "type": "독",
     "category": "status",
@@ -8032,6 +8105,7 @@
   },
   {
     "id": "록온",
+    "inflictsVolatile": [{ "volatile": "lockOn", "target": "self" }],
     "name": "록온",
     "type": "노말",
     "category": "status",
@@ -8156,6 +8230,7 @@
   },
   {
     "id": "가위자르기",
+    "oneHitKo": {},
     "name": "가위자르기",
     "type": "노말",
     "category": "physical",
@@ -8163,7 +8238,7 @@
     "accuracy": 30,
     "pp": 5,
     "priority": 0,
-    "effect": "거대한 집게발이나 낫 등으로 협공하여 상대를 일격에 쓰러뜨리려 한다. 명중하면 상대는 한 번에 쓰러진다. (일격필살 판정은 아직 엔진에 반영되지 않음)",
+    "effect": "거대한 집게발이나 낫 등으로 협공하여 상대를 일격에 쓰러뜨리려 한다. 명중하면 상대는 한 번에 쓰러진다.",
     "tags": [
       "일격",
       "접촉"
@@ -8251,6 +8326,7 @@
   },
   {
     "id": "변신",
+    "excludedFromCopycat": true,
     "name": "변신",
     "type": "노말",
     "category": "status",
@@ -8402,6 +8478,7 @@
   },
   {
     "id": "경혈찌르기",
+    "raisesRandomStat": 2,
     "name": "경혈찌르기",
     "type": "노말",
     "category": "status",
@@ -8409,7 +8486,7 @@
     "accuracy": null,
     "pp": 20,
     "priority": 0,
-    "effect": "경혈을 세게 찔러 능력 중 하나를 랜덤으로 크게 올린다. 자신의 능력 하나가 2랭크 오른다. (랜덤 대상 선택은 엔진 미배선)",
+    "effect": "경혈을 세게 찔러 능력 중 하나를 랜덤으로 크게 올린다. 자신의 능력 하나가 2랭크 오른다.",
     "tags": [
       "랭크"
     ],
@@ -8565,6 +8642,7 @@
   },
   {
     "id": "자기장조작",
+    "boostsDefensesIfPlusMinus": true,
     "name": "자기장조작",
     "type": "전기",
     "category": "status",
@@ -8572,7 +8650,7 @@
     "accuracy": null,
     "pp": 20,
     "priority": 0,
-    "effect": "자기장을 조작하여 특성이 플러스나 마이너스인 포켓몬의 방어·특수방어를 1랭크씩 올린다. 1대1 시뮬레이터에서는 아군이 없어 효과가 없다.",
+    "effect": "자기장을 조작하여 특성이 플러스나 마이너스인 포켓몬의 방어·특수방어를 1랭크씩 올린다.",
     "tags": [
       "랭크"
     ],
@@ -8692,6 +8770,7 @@
   },
   {
     "id": "절대영도",
+    "oneHitKo": { "immuneType": "얼음", "accuracyUnlessUserType": { "type": "얼음", "accuracy": 20 } },
     "name": "절대영도",
     "type": "얼음",
     "category": "special",
@@ -8699,7 +8778,7 @@
     "accuracy": 30,
     "pp": 8,
     "priority": 0,
-    "effect": "절대영도의 추위로 상대를 공격한다. 맞으면 일격에 기절한다. 아직 엔진에 일격필살 판정이 없어 명중해도 데미지가 들어가지 않는다.",
+    "effect": "절대영도의 추위로 상대를 공격한다. 맞으면 일격에 기절한다.",
     "tags": [
       "일격",
       "비접촉"
@@ -8708,6 +8787,7 @@
   },
   {
     "id": "치료방울",
+    "curesParty": true,
     "name": "치료방울",
     "type": "노말",
     "category": "status",
@@ -9036,6 +9116,7 @@
   },
   {
     "id": "플라잉프레스",
+    "blockedByGravity": true,
     "name": "플라잉프레스",
     "type": "격투",
     "category": "physical",
@@ -9124,6 +9205,7 @@
   },
   {
     "id": "페어리록",
+    "setsFairyLock": true,
     "name": "페어리록",
     "type": "페어리",
     "category": "status",
@@ -9131,7 +9213,7 @@
     "accuracy": null,
     "pp": 10,
     "priority": 0,
-    "effect": "다음 턴에 서로가 교체·도주할 수 없게 만든다. (1v1 시뮬레이터엔 교체가 없어 표시용 스텁)",
+    "effect": "다음 턴에 서로가 교체·도주할 수 없게 만든다.",
     "tags": [
       "상태이상-기타"
     ],
@@ -9278,6 +9360,7 @@
   },
   {
     "id": "부리캐논",
+    "excludedFromCopycat": true,
     "name": "부리캐논",
     "type": "비행",
     "category": "physical",
@@ -9377,6 +9460,7 @@
   },
   {
     "id": "토치카",
+    "excludedFromCopycat": true,
     "name": "토치카",
     "type": "독",
     "category": "status",
@@ -9565,10 +9649,10 @@
     "accuracy": null,
     "pp": 12,
     "priority": 0,
-    "effect": "다과회를 열어 지닌 나무열매를 먹는다. (섭취 조건 분기를 무시하고 즉시 섭취)",
+    "effect": "다과회를 열어 그 자리에 있는 모든 포켓몬이 지닌 나무열매를 먹는다.",
     "tags": [],
     "makesContact": false,
-    "eatsHeldBerry": true
+    "allEatBerries": true
   },
   {
     "id": "데코레이션",
@@ -9684,6 +9768,7 @@
   },
   {
     "id": "날따름",
+    "excludedFromCopycat": true,
     "name": "날따름",
     "type": "노말",
     "category": "status",

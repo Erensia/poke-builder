@@ -24,7 +24,7 @@ import {
 } from "../lib/battleLogText";
 
 /** 액션 로그 한 줄 안에 "OO 발동!"으로 뭉뚱그리기보다 전용 문구를 따로 쓰는 volatile들 */
-const VOLATILES_WITH_DEDICATED_LOG_LINE = new Set(["drowsy", "wish", "encore"]);
+const VOLATILES_WITH_DEDICATED_LOG_LINE = new Set(["drowsy", "wish", "encore", "imprison", "meanLook", "lockOn"]);
 
 /**
  * 방어측 on-hit 특성 효과 한 줄의 "내용"만 만드는 함수들(감싸는 div·key는 호출부 책임) —
@@ -501,6 +501,25 @@ function TurnFooterLines({
           {turnName(actor)}의 신비의부적 효과가 사라졌다!
         </div>
       ))}
+      {turn.expiredFieldEffects?.map((effect) => (
+        <div key={`fx-${effect}`} className="battle-turn-line is-muted">
+          {effect === "wonderRoom"
+            ? "원더룸이 해제되어 방어와 특수방어가 원래대로 돌아왔다!"
+            : effect === "magicRoom"
+              ? "매직룸이 해제되어 도구의 효과가 원래대로 돌아왔다!"
+              : "중력이 원래대로 돌아왔다!"}
+        </div>
+      ))}
+      {turn.expiredMagnetRise?.map((actor, i) => (
+        <div key={`mr-${i}`} className="battle-turn-line is-muted">
+          {turnName(actor)}의 전자부유 효과가 끝났다!
+        </div>
+      ))}
+      {turn.expiredTailwind?.map((actor, i) => (
+        <div key={`tw-${i}`} className="battle-turn-line is-muted">
+          {turnName(actor)}의 순풍이 멈췄다!
+        </div>
+      ))}
       {turn.winner && (
         <div className="battle-turn-line is-winner">
           {turn.winner === "draw" ? "🤝 무승부!" : `🏆 ${turnName(turn.winner)} 승리!`}
@@ -691,6 +710,13 @@ function ActionMainLine({
 }) {
   return (
     <div className="battle-turn-line">
+      {/* 흉내쟁이(트랙 M2): "OO의 흉내쟁이!" 다음 줄에 따라 쓴 기술 — action.move는 따라 쓴 기술이다 */}
+      {action.copycatCalledMoveName && (
+        <>
+          <strong>{actorName}</strong>의 흉내쟁이!
+          <br />
+        </>
+      )}
       <strong>{actorName}</strong>의 {action.move.name}
       {action.sleepTalkCalledMoveName && " (잠꼬대로 냈다!)"}
       {action.bouncedMoveName && (
@@ -777,6 +803,41 @@ function ActionMainLine({
       {!action.blockedReason && action.hit && action.abilitySwapFailed && (
         <> · 그러나 실패했다!</>
       )}
+      {/* 트랙 M3: 스킬스왑·동료만들기·역할·위액·미러타입 */}
+      {!action.blockedReason && action.abilityChange?.kind === "swap" && (
+        <>
+          {" "}
+          · {actorName}
+          {eunNeun(actorName)} 서로의 특성을 바꿨다!
+        </>
+      )}
+      {!action.blockedReason && action.abilityChange?.kind === "give" && action.abilityChange.abilityName && (
+        <>
+          {" "}
+          · {defenderName}의 특성이 {action.abilityChange.abilityName}
+          {roEuro(action.abilityChange.abilityName)} 바뀌었다!
+        </>
+      )}
+      {!action.blockedReason && action.abilityChange?.kind === "copy" && action.abilityChange.abilityName && (
+        <>
+          {" "}
+          · {actorName}
+          {eunNeun(actorName)} {defenderName}의 {action.abilityChange.abilityName}
+          {eulReul(action.abilityChange.abilityName)} 복사했다!
+        </>
+      )}
+      {!action.blockedReason && action.abilityChange?.kind === "suppress" && (
+        <> · {defenderName}의 특성이 효과를 잃었다!</>
+      )}
+      {!action.blockedReason && action.abilityChangeFailed && <> · 그러나 실패했다!</>}
+      {!action.blockedReason && action.copiedTypes && (
+        <>
+          {" "}
+          · {actorName}
+          {eunNeun(actorName)} {defenderName}
+          {waGwa(defenderName)} 같은 타입이 되었다!
+        </>
+      )}
       {!action.blockedReason && action.hit && !action.hits && action.mummifiedAttackerAbilityName && (
         <> · {abilityMummifiedLine(action.mummifiedAttackerAbilityName, actorName, defenderName)}</>
       )}
@@ -798,6 +859,38 @@ function ActionMainLine({
       )}
       {!action.blockedReason && action.hit && action.trickRoomSetFailed && (
         <> · 그러나 실패했다!</>
+      )}
+      {/* 트랙 M4: 룸·중력·전자부유·떨어뜨리기 */}
+      {!action.blockedReason && action.trickRoomEnded && <> · 뒤틀린 시공이 원래대로 돌아왔다!</>}
+      {!action.blockedReason && action.roomChange && (
+        <>
+          {" "}
+          ·{" "}
+          {action.roomChange.room === "wonderRoom"
+            ? action.roomChange.on
+              ? "방어와 특수방어가 뒤바뀌는 이상한 공간이 만들어졌다!"
+              : "원더룸이 해제되어 방어와 특수방어가 원래대로 돌아왔다!"
+            : action.roomChange.on
+              ? "도구의 효과가 사라지는 이상한 공간이 만들어졌다!"
+              : "매직룸이 해제되어 도구의 효과가 원래대로 돌아왔다!"}
+        </>
+      )}
+      {!action.blockedReason && action.gravitySet && <> · 중력이 강해졌다!</>}
+      {!action.blockedReason && action.gravitySetFailed && <> · 그러나 실패했다!</>}
+      {!action.blockedReason && action.magnetRiseSet && (
+        <>
+          {" "}
+          · {actorName}
+          {eunNeun(actorName)} 전자기력으로 떠올랐다!
+        </>
+      )}
+      {!action.blockedReason && action.magnetRiseFailed && <> · 그러나 실패했다!</>}
+      {!action.blockedReason && action.smackedDownTarget && (
+        <>
+          {" "}
+          · {defenderName}
+          {eunNeun(defenderName)} 땅으로 떨어졌다!
+        </>
       )}
       {!action.blockedReason && action.hit && action.setWeather && (
         <>
@@ -894,6 +987,68 @@ function ActionMainLine({
       {!action.blockedReason && action.hit && action.swappedSpeedMoveName && (
         <> · 서로의 스피드를 교체했다!</>
       )}
+      {!action.blockedReason && action.hit && action.swappedItems && (
+        <>
+          {" "}
+          · 서로의 도구를 바꿨다!
+          {action.swappedItems.userGotName && (
+            <>
+              <br />
+              {actorName}
+              {eunNeun(actorName)} {action.swappedItems.userGotName}
+              {eulReul(action.swappedItems.userGotName)} 손에 넣었다!
+            </>
+          )}
+          {action.swappedItems.targetGotName && (
+            <>
+              <br />
+              {defenderName}
+              {eunNeun(defenderName)} {action.swappedItems.targetGotName}
+              {eulReul(action.swappedItems.targetGotName)} 손에 넣었다!
+            </>
+          )}
+        </>
+      )}
+      {!action.blockedReason && action.hit && action.itemSwapFailed && <> · 그러나 실패했다!</>}
+      {!action.blockedReason && action.hit && action.painSplitHp !== undefined && (
+        <> · 서로의 체력을 나눠 가졌다!</>
+      )}
+      {!action.blockedReason && action.hit && action.tailwindSet && <> · 순풍이 불기 시작했다!</>}
+      {!action.blockedReason && action.hit && action.tailwindSetFailed && <> · 그러나 실패했다!</>}
+      {!action.blockedReason && action.hit && action.stockpileHealFailed && <> · 그러나 실패했다!</>}
+      {!action.blockedReason && action.hit && action.recycledItemName && (
+        <>
+          {" "}
+          · {action.recycledItemName}
+          {eulReul(action.recycledItemName)} 다시 손에 넣었다!
+        </>
+      )}
+      {!action.blockedReason && action.hit && action.recycleFailed && <> · 그러나 실패했다!</>}
+      {!action.blockedReason && action.hit && action.copiedStagesFromName && (
+        <> · {action.copiedStagesFromName}의 능력 변화를 복사했다!</>
+      )}
+      {!action.blockedReason && action.hit && action.averagedAttacksMoveName && (
+        <> · 서로의 공격과 특수공격을 나눠 가졌다!</>
+      )}
+      {!action.blockedReason && action.hit && action.spitePp && (
+        <>
+          {" "}
+          · {defenderName}의 {action.spitePp.moveName}의 PP가 {action.spitePp.amount} 줄었다!
+        </>
+      )}
+      {!action.blockedReason && action.hit && action.spiteFailed && <> · 그러나 실패했다!</>}
+      {!action.blockedReason && action.hit && action.acupressureRaised && (() => {
+        const { stat, delta } = action.acupressureRaised;
+        const label = stat === "accuracy" ? "명중률" : stat === "evasion" ? "회피율" : STAT_LABELS[stat];
+        return (
+          <>
+            {" "}
+            · {actorName}의 {label}
+            {iGa(label)} {delta >= 2 ? "크게 " : ""}올라갔다!
+          </>
+        );
+      })()}
+      {!action.blockedReason && action.hit && action.acupressureFailed && <> · 그러나 실패했다!</>}
       {!action.blockedReason && action.hit && action.shellSideArmCategory && (
         <> · {action.shellSideArmCategory === "physical" ? "물리" : "특수"} 판정!</>
       )}
@@ -1060,6 +1215,12 @@ function ActionEffectLines({
             `${actorName}의 ${action.move.name}${eunNeun(action.move.name)} 사슬묶기에 봉인돼있다!`}
           {action.moveRestrictionKind === "encore" &&
             `${actorName}${eunNeun(actorName)} 앙코르 때문에 이 기술을 쓸 수 없다!`}
+          {action.moveRestrictionKind === "torment" &&
+            `${actorName}${eunNeun(actorName)} 트집 때문에 같은 기술을 연속으로 쓸 수 없다!`}
+          {action.moveRestrictionKind === "imprison" &&
+            `${actorName}${eunNeun(actorName)} 봉인 때문에 ${action.move.name}${eulReul(action.move.name)} 사용하지 못한다!`}
+          {action.moveRestrictionKind === "gravity" &&
+            `${actorName}${eunNeun(actorName)} 중력 때문에 ${action.move.name}${eulReul(action.move.name)} 사용하지 못한다!`}
         </div>
       )}
       {/* 상태이상에 새로 걸렸을 때(onset) — 보통 상대가 대상이지만, 매직미러로 되돌아온
@@ -1078,6 +1239,64 @@ function ActionEffectLines({
         </div>
       )}
       {/* 앙코르 성공 — 사용/받은 쪽을 두 줄로 나눈다(백로그 §7-3) */}
+      {/* 다과회(Tier 2): 양쪽이 먹은 나무열매 */}
+      {!action.blockedReason &&
+        action.teaTime &&
+        ([["self", actorName], ["opponent", defenderName]] as const).map(([who, name]) => {
+          const b = action.teaTime![who];
+          if (!b) return null;
+          return (
+            <div key={`tea-${who}`} className="battle-turn-line is-muted">
+              {name}
+              {eunNeun(name)} {b.name}
+              {eulReul(b.name)} 먹었다!
+              {b.healed ? ` HP를 ${b.healed} 회복했다!` : ""}
+              {b.curedStatus ? ` ${STATUS_CURE_TEXT[b.curedStatus](name)}` : ""}
+              {b.curedConfusion ? " 혼란이 풀렸다!" : ""}
+            </div>
+          );
+        })}
+      {!action.blockedReason && action.teaTimeFailed && <div className="battle-turn-line is-muted">그러나 실패했다!</div>}
+      {!action.blockedReason && (action.partyStatusCuredCount ?? 0) > 0 && (
+        <div className="battle-turn-line is-muted">동료의 상태이상이 모두 나았다!</div>
+      )}
+      {/* 트랙 M6 */}
+      {!action.blockedReason && action.hit && action.inflictedVolatile === "meanLook" && (
+        <div className="battle-turn-line is-muted">
+          {defenderName}
+          {eunNeun(defenderName)} 이제 도망칠 수 없다!
+        </div>
+      )}
+      {!action.blockedReason && action.hit && action.inflictedVolatile === "lockOn" && (
+        <div className="battle-turn-line is-muted">
+          {actorName}
+          {eunNeun(actorName)} {defenderName}에게 조준을 맞췄다!
+        </div>
+      )}
+      {!action.blockedReason && action.fairyLockSet && (
+        <div className="battle-turn-line is-muted">다음 턴에는 누구도 도망칠 수 없게 되었다!</div>
+      )}
+      {!action.blockedReason && (action.fairyLockFailed || action.healingWishFailed || action.meltFailed || action.magneticFluxFailed) && (
+        <div className="battle-turn-line is-muted">그러나 실패했다!</div>
+      )}
+      {!action.blockedReason && action.healingWishSet && (
+        <div className="battle-turn-line is-muted">
+          {actorName}
+          {eunNeun(actorName)} 치유소원을 빌고 쓰러졌다!
+        </div>
+      )}
+      {!action.blockedReason && action.meltedItemName && (
+        <div className="battle-turn-line is-muted">
+          {defenderName}의 {action.meltedItemName}
+          {iGa(action.meltedItemName)} 녹아버렸다!
+        </div>
+      )}
+      {!action.blockedReason && action.hit && action.inflictedVolatile === "imprison" && (
+        <div className="battle-turn-line is-muted">
+          {actorName}
+          {eunNeun(actorName)} 상대의 기술을 봉인했다!
+        </div>
+      )}
       {!action.blockedReason && action.hit && action.inflictedVolatile === "encore" && (
         <div className="battle-turn-line is-muted">
           {action.bouncedMoveName ? (
@@ -1239,6 +1458,62 @@ function ActionEffectLines({
         </div>
       )}
       {/* 아로마베일 — 헤롱헤롱·도발·기술봉인·앙코르를 막았을 때 */}
+      {/* 내던지기(트랙 M5): 던진 도구와 맞은 상대에게 일어난 도구 효과 */}
+      {action.flungItemName && (
+        <div className="battle-turn-line is-muted">
+          {actorName}
+          {eunNeun(actorName)} {action.flungItemName}
+          {eulReul(action.flungItemName)} 던졌다!
+        </div>
+      )}
+      {action.flingEffect?.status && (
+        <div className="battle-turn-line is-muted">{STATUS_ONSET_TEXT[action.flingEffect.status](defenderName)}</div>
+      )}
+      {action.flingEffect?.flinched && (
+        <div className="battle-turn-line is-muted">
+          {defenderName}
+          {eunNeun(defenderName)} 풀이 죽었다!
+        </div>
+      )}
+      {action.flingEffect?.berry && (
+        <div className="battle-turn-line is-muted">
+          {defenderName}
+          {eunNeun(defenderName)} {action.flingEffect.berry.name}
+          {eulReul(action.flingEffect.berry.name)} 먹었다!
+          {action.flingEffect.berry.healed ? ` HP를 ${action.flingEffect.berry.healed} 회복했다!` : ""}
+          {action.flingEffect.berry.curedStatus ? ` ${STATUS_CURE_TEXT[action.flingEffect.berry.curedStatus](defenderName)}` : ""}
+          {action.flingEffect.berry.curedConfusion ? " 혼란이 풀렸다!" : ""}
+        </div>
+      )}
+      {action.flingEffect?.herb && (
+        <div className="battle-turn-line is-muted">
+          {defenderName}
+          {eunNeun(defenderName)} {action.flingEffect.herb.name}
+          {roEuro(action.flingEffect.herb.name)} 상태를 원래대로 되돌렸다!
+        </div>
+      )}
+      {/* 일격기(트랙 M5) */}
+      {!action.blockedReason && action.hit && action.move.oneHitKo && action.damage > 0 && (
+        <div className="battle-turn-line is-muted">일격필살!</div>
+      )}
+      {!action.blockedReason && action.hit && action.ohkoBlockedByAbilityName && (
+        <div className="battle-turn-line is-muted">
+          {defenderName}의 {action.ohkoBlockedByAbilityName}! 일격필살 기술은 통하지 않는다!
+        </div>
+      )}
+      {!action.blockedReason && action.hit && action.ohkoImmune && (
+        <div className="battle-turn-line is-muted">{defenderName}에게는 효과가 없는 것 같다...</div>
+      )}
+      {!action.blockedReason && action.volatileBlockedByAbility && (() => {
+        const { abilityName, volatile, self } = action.volatileBlockedByAbility;
+        const who = self ? actorName : defenderName;
+        const label = VOLATILE_LABELS[volatile];
+        return (
+          <div className="battle-turn-line is-muted">
+            {who}의 {abilityName}! {label}에 걸리지 않는다!
+          </div>
+        );
+      })()}
       {!action.blockedReason && action.mentalMoveBlockedByAbilityName && (
         <div className="battle-turn-line is-muted">
           {defenderName}의 {action.mentalMoveBlockedByAbilityName}! 마음을 옭아매는 기술은 통하지 않는다!

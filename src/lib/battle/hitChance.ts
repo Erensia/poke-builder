@@ -3,6 +3,7 @@ import { type Item } from "@/types/item";
 import { type Move } from "@/types/move";
 import { computeHitChance } from "@/lib/accuracyCrit";
 import { getItemAccuracyMultiplier } from "@/lib/itemEffects";
+import { hasVolatile } from "@/lib/volatileConditions";
 import { activeWeather, type BattleFighterState, type BattleState } from "./state";
 
 export interface BattleHitChanceInput {
@@ -24,7 +25,7 @@ export interface BattleHitChanceInput {
 /**
  * 실전 명중 확률(0~1). 반드시 명중하면 null. 실전 엔진(preHitEffects)과 배틀 AI가 같은 계산을 쓴다.
  *  - 배율: 반짝가루(방어측 0.9)·광각렌즈(1.1)·포커스렌즈(후공 시 1.2)·모래숨기/눈숨기(날씨 조건부 0.8)·
- *    복안(1.3)·의욕(물리 0.8)을 전부 한 배율로 곱한다.
+ *    갈지자걸음(방어측 혼란 시 0.5)·복안(1.3)·의욕(물리 0.8)을 전부 한 배율로 곱한다.
  *  - 날카로운눈: 상대 회피율 상승분만 무시(마이너스 회피율은 존중). 성스러운칼류는 회피율을 완전히 0으로.
  *  - 노가드(어느 한쪽)·플라잉프레스 vs 작아지기 사용 이력: 필중.
  */
@@ -37,12 +38,19 @@ export function computeBattleHitChance(input: BattleHitChanceInput): number | nu
     hustleCategory === "physical" && attackerAbility?.hustlePhysicalAccuracyMultiplier !== undefined
       ? attackerAbility.hustlePhysicalAccuracyMultiplier
       : 1;
+  const tangledFeetMultiplier =
+    defenderAbility?.confusedOpponentAccuracyMultiplier !== undefined && hasVolatile(defender.volatile, "confusion")
+      ? defenderAbility.confusedOpponentAccuracyMultiplier
+      : 1;
   const abilityAccuracyMultiplier =
     (weatherAccuracyBoost && weatherAccuracyBoost.weather === activeWeather(state) ? weatherAccuracyBoost.multiplier : 1) *
+    tangledFeetMultiplier *
     (attackerAbility?.userAccuracyMultiplier ?? 1) *
     hustleAccuracyMultiplier;
+  // 중력(트랙 M4): 명중률 ×5/3
+  const gravityAccuracyMultiplier = state.gravityTurnsRemaining !== undefined ? 5 / 3 : 1;
   const accuracyExtraMultiplier =
-    getItemAccuracyMultiplier(attackerItem, defenderItem, attackerMovesSecond) * abilityAccuracyMultiplier;
+    getItemAccuracyMultiplier(attackerItem, defenderItem, attackerMovesSecond) * abilityAccuracyMultiplier * gravityAccuracyMultiplier;
   const effectiveDefenderEvasion = attackerAbility?.ignoresOpponentEvasionBoost
     ? Math.min(defender.accuracyStages.evasion, 0)
     : move.ignoresDefenderStatStagesInDamage
@@ -50,5 +58,14 @@ export function computeBattleHitChance(input: BattleHitChanceInput): number | nu
       : defender.accuracyStages.evasion;
   const minimizeBonusActive = !!(move.bonusVsMinimize && defender.usedMoveIds?.["작아지기"]);
   if (attackerAbility?.alwaysHits || defenderAbility?.alwaysHits || minimizeBonusActive) return null;
+  // 록온(트랙 M6): 다음 기술은 반드시 맞는다(일격기 포함)
+  if (hasVolatile(attacker.volatile, "lockOn")) return null;
+  // 일격기(트랙 M5): 명중 30% 고정(레벨 50 동일 가정) — 명중·회피 랭크와 명중 보정을 받지 않는다. 절대영도는 얼음 타입이
+  // 아닌 사용자면 20%.
+  if (move.oneHitKo) {
+    const reduced = move.oneHitKo.accuracyUnlessUserType;
+    const accuracy = reduced && !attacker.types.includes(reduced.type) ? reduced.accuracy : (move.accuracy ?? 30);
+    return accuracy / 100;
+  }
   return computeHitChance(move.accuracy, attacker.accuracyStages.accuracy, effectiveDefenderEvasion, accuracyExtraMultiplier);
 }

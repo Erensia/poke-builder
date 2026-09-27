@@ -6,7 +6,7 @@ import type { Move } from "./move";
 import type { WeatherKind } from "./weather";
 import type { FieldKind } from "./field";
 import type { PokemonType } from "./pokemon-type";
-import type { BattleStatKey } from "./battleStats";
+import type { AccuracyEvasionKey, BattleStatKey } from "./battleStats";
 import type { StatusConditionState, VolatileCondition } from "./status";
 
 /**
@@ -65,6 +65,18 @@ export interface HitAbilityEvent {
   setFieldOnHit?: FieldKind;
 }
 
+/** 내던지기(트랙 M5)로 맞은 상대에게 일어난 도구 효과 — 로그용 */
+export interface FlingEffectResult {
+  /** 걸린 상태이상(전기구슬 → 마비, 독바늘 → 독) */
+  status?: NonNullable<StatusConditionState["condition"]>;
+  /** 풀죽음(왕의징표석) */
+  flinched?: boolean;
+  /** 나무열매를 먹음 — 회복량·풀린 상태이상·풀린 혼란 */
+  berry?: { name: string; healed?: number; curedStatus?: NonNullable<StatusConditionState["condition"]>; curedConfusion?: boolean };
+  /** 하양허브(떨어진 능력 복구)·멘탈허브(헤롱헤롱·도발·트집·앙코르·사슬묶기 해제) */
+  herb?: { name: string };
+}
+
 /** 한 번의 기술 사용 결과 로그 */
 export interface ActionLogEntry {
   actor: FighterKey;
@@ -79,7 +91,7 @@ export interface ActionLogEntry {
   /** blockedReason이 "status"일 때, 정확히 어떤 상태이상 때문인지(마비/잠듦/얼음) — UI가 "몸이 저려서"/"쿨쿨 잠들어"/"얼어 버려서" 문구를 골라 쓰는 데 필요 */
   blockedByStatus?: StatusConditionState["condition"];
   /** blockedReason이 "moveRestricted"일 때, 도발/사슬묶기/앙코르 중 무엇 때문에 막혔는지 */
-  moveRestrictionKind?: "taunt" | "disable" | "encore";
+  moveRestrictionKind?: "taunt" | "disable" | "encore" | "torment" | "imprison" | "gravity";
   /** 회피/빗나감 여부. 필중기는 항상 true. blockedReason이 있으면 의미 없음 */
   hit: boolean;
   critical: boolean;
@@ -155,6 +167,29 @@ export interface ActionLogEntry {
   setTrickRoom?: boolean;
   /** 트릭룸을 썼지만 이미 걸려있어서 실패했으면 true */
   trickRoomSetFailed?: boolean;
+  /** 트릭룸이 걸린 중에 다시 써서 해제했다(트랙 M4) */
+  trickRoomEnded?: boolean;
+  /** 원더룸·매직룸을 걸었거나(on) 다시 써서 해제했다(트랙 M4) */
+  roomChange?: { room: "wonderRoom" | "magicRoom"; on: boolean };
+  /** 트랙 M6: 부식가스로 녹인 도구 이름 / 실패 · 자기장조작 실패 · 페어리록 · 치유소원 */
+  meltedItemName?: string;
+  /** 다과회(Tier 2): 양쪽이 먹은 나무열매 효과 */
+  teaTime?: { self?: NonNullable<FlingEffectResult["berry"]>; opponent?: NonNullable<FlingEffectResult["berry"]> };
+  teaTimeFailed?: boolean;
+  /** 치료방울(Tier 2): 상태이상을 고친 대기 포켓몬 수 */
+  partyStatusCuredCount?: number;
+  meltFailed?: boolean;
+  magneticFluxFailed?: boolean;
+  fairyLockSet?: boolean;
+  fairyLockFailed?: boolean;
+  healingWishSet?: boolean;
+  healingWishFailed?: boolean;
+  /** 떨어뜨리기(트랙 M4): 공중에 있던 상대를 땅에 떨어뜨렸다 */
+  smackedDownTarget?: boolean;
+  gravitySet?: boolean;
+  gravitySetFailed?: boolean;
+  magnetRiseSet?: boolean;
+  magnetRiseFailed?: boolean;
   /** 이 행동으로 날씨가 바뀌었으면(비바라기 등) 그 날씨. 이미 같은 날씨라 실패했으면 비어 있다 */
   setWeather?: WeatherKind;
   /** 날씨 기술을 썼지만 이미 같은 날씨라 실패했으면 true(본가 규칙, 사용자 확인) */
@@ -263,6 +298,37 @@ export interface ActionLogEntry {
   averagedDefensesMoveName?: string;
   /** 스피드스왑으로 자신·상대의 스피드 실능을 맞바꿨으면 그 기술 이름 */
   swappedSpeedMoveName?: string;
+  /** 트릭·바꿔치기(트랙 M1): 바꾼 뒤 시전자가 얻은 도구 이름 / 상대가 얻은 도구 이름(없으면 빈 칸) */
+  swappedItems?: { userGotName?: string; targetGotName?: string };
+  /** 트릭·바꿔치기가 실패(둘 다 무도구·메가스톤·점착)했으면 true */
+  itemSwapFailed?: boolean;
+  /** 아픔나누기(트랙 M1)로 둘이 나눠 가진 HP(각자 최대 HP로 잘리기 전 값) */
+  painSplitHp?: number;
+  /** 순풍(트랙 M1)을 일으켰으면 true / 이미 불고 있어 실패했으면 true */
+  tailwindSet?: boolean;
+  tailwindSetFailed?: boolean;
+  /** 꿀꺽(트랙 M1)이 비축이 없어 실패했으면 true */
+  stockpileHealFailed?: boolean;
+  /** 리사이클(트랙 M1)로 되찾은 도구 이름 / 되찾을 도구가 없어 실패했으면 true */
+  recycledItemName?: string;
+  recycleFailed?: boolean;
+  /** 자기암시(트랙 M2): 랭크 변화를 복사해 온 상대 이름 */
+  copiedStagesFromName?: string;
+  /** 파워셰어(트랙 M2): 공격·특공을 나눠 가졌으면 기술 이름 */
+  averagedAttacksMoveName?: string;
+  /** 원한(트랙 M2): PP를 줄인 상대 기술과 줄인 양 */
+  spitePp?: { moveName: string; amount: number };
+  spiteFailed?: boolean;
+  /** 경혈찌르기(트랙 M2): 무작위로 오른 능력과 오른 칸 수 */
+  acupressureRaised?: { stat: BattleStatKey | AccuracyEvasionKey; delta: number };
+  acupressureFailed?: boolean;
+  /** 트랙 M3: 마이페이스(혼란)·둔감(헤롱헤롱·도발)으로 막힌 행동방해. self면 시전자 자신에게 걸려던 것 */
+  /** 트랙 M3: 스킬스왑(swap)·동료만들기(give)·역할(copy)·위액(suppress) 성공. abilityName은 건넨/복사한 특성 */
+  abilityChange?: { kind: "swap" | "give" | "copy" | "suppress"; abilityName?: string };
+  abilityChangeFailed?: boolean;
+  /** 미러타입(트랙 M3): 복사한 타입 */
+  copiedTypes?: PokemonType[];
+  volatileBlockedByAbility?: { abilityName: string; volatile: VolatileCondition; self: boolean };
   /** 셸암즈(dynamicCategoryByHigherDamage)가 이번에 물리/특수 중 어느 판정으로 나갔는지 */
   shellSideArmCategory?: "physical" | "special";
   /** 변신으로 상대(이 종)로 변신했으면 그 종 이름 */
@@ -441,6 +507,14 @@ export interface ActionLogEntry {
   unburdenOpponentAbilityName?: string;
   /** 잠꼬대로 대신 발동시킨 기술 이름(잠꼬대 자신이 아니라 이 이름이 실제로 나간 기술) */
   sleepTalkCalledMoveName?: string;
+  /** 일격기(트랙 M5): 옹골참으로 막혔으면 그 특성 이름 / 면역 타입(절대영도 → 얼음)이라 안 통했으면 true */
+  ohkoBlockedByAbilityName?: string;
+  /** 내던지기(트랙 M5): 던진 도구 이름과 맞은 상대에게 일어난 도구 효과 */
+  flungItemName?: string;
+  flingEffect?: FlingEffectResult;
+  ohkoImmune?: boolean;
+  /** 흉내쟁이(트랙 M2)로 대신 나간 기술 이름 */
+  copycatCalledMoveName?: string;
   /** 변환자재로 자신의 타입이 이번 기술의 타입으로 바뀌었으면 그 타입 */
   changedOwnTypeTo?: PokemonType;
   /** changedOwnTypeTo를 발동시킨 특성 이름 */
@@ -606,6 +680,12 @@ export interface TurnResult {
   expiredScreens: { actor: FighterKey; screen: "reflect" | "lightScreen" | "auroraVeil" }[];
   /** 이번 턴에 신비의부적(세이프가드)이 5턴을 다 채우고 사라진 편 목록 — 양쪽 다 걸려있을 수 있어 배열 */
   expiredSafeguard: FighterKey[];
+  /** 순풍(트랙 M1)이 이번 턴 종료로 멈춘 편 */
+  expiredTailwind?: FighterKey[];
+  /** 트랙 M4: 이번 턴 끝에 끝난 원더룸·매직룸·중력 */
+  expiredFieldEffects?: ("wonderRoom" | "magicRoom" | "gravity")[];
+  /** 트랙 M4: 이번 턴 끝에 전자부유가 끝난 쪽 */
+  expiredMagnetRise?: FighterKey[];
   /** 턴 시작 시점에 발생한 안내 문구(의태 타입 변화 등). 없으면 빈 배열 */
   turnStartAnnouncements: string[];
   /**

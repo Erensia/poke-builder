@@ -45,6 +45,11 @@ export interface MoveContextOptions {
   defenderHasStatusCondition?: boolean;
   /** 풀모피(그래스필드 조건)용 현재 필드. 안 넘기면 필드 없음으로 간주 */
   field?: FieldKind;
+  /**
+   * 트랙 M4: 방어측이 지금 땅에 있는지(battle/grounding.ts isGrounded). 넘기면 땅 기술 면역을 이 값으로 정한다 —
+   * 공중(비행·부유·풍선·전자부유)이면 면역, 땅(중력·떨어뜨리기·검은철구)이면 비행 타입이어도 맞는다. 안 넘기면 기존 판정.
+   */
+  defenderGrounded?: boolean;
 }
 
 export function resolveMoveContext(
@@ -54,7 +59,7 @@ export function resolveMoveContext(
   defenderAbility: Ability | undefined,
   options: MoveContextOptions = {},
 ): MoveContext {
-  const { weather, defenderItem, attackerHpFraction, defenderHpIsFull = true, defenderHasStatusCondition = false, field } = options;
+  const { weather, defenderItem, attackerHpFraction, defenderHpIsFull = true, defenderHasStatusCondition = false, field, defenderGrounded } = options;
   const abilityOffense = resolveAbilityOffense(attackerAbility, move, weather, attackerHpFraction);
   const effectiveMove = abilityOffense.overrideMoveType ? { ...move, type: abilityOffense.overrideMoveType } : move;
 
@@ -83,7 +88,7 @@ export function resolveMoveContext(
   // 격투 → 0.5배, 고스트/악에게 격투 → 2배. 전체를 1배로 뭉개면 안 됨).
   const bypassImmunity =
     !!(effectiveMove.type && attackerAbility?.bypassesImmunityForTypes?.includes(effectiveMove.type)) ||
-    (effectiveMove.type === "땅" && !!defenderItem?.groundsHolder);
+    (effectiveMove.type === "땅" && (defenderGrounded ?? !!defenderItem?.groundsHolder));
 
   // 타오르는불꽃/피뢰침: bypassImmunity(공격측이 상대 면역을 무시)와 정반대로, 방어측이 원래
   // 없던 면역을 스스로 얻는다. 상성표를 거치지 않고 무조건 0배로 덮어쓴다 — 카테고리 무관(상태이상
@@ -94,12 +99,15 @@ export function resolveMoveContext(
   // 이미 참이면(배짱류·검은철구) 이 면역은 뚫린 것으로 취급 — 위 두 경로가 이 필드보다 우선한다.
   // 풍선(Item.grantsGroundImmunity)도 같은 축의 땅타입 한정 버전 — 터지면(battleSimulator가
   // 데미지를 준 뒤 소모) 다음 판정부터는 자연히 이 조건이 꺼진다.
-  const grantsImmunity = !!(
-    effectiveMove.type &&
-    (defenderAbility?.grantsImmunityToTypes?.includes(effectiveMove.type) ||
-      (effectiveMove.type === "땅" && defenderItem?.grantsGroundImmunity)) &&
-    !bypassImmunity
-  );
+  const grantsImmunity =
+    effectiveMove.type === "땅" && defenderGrounded !== undefined
+      ? !defenderGrounded
+      : !!(
+          effectiveMove.type &&
+          (defenderAbility?.grantsImmunityToTypes?.includes(effectiveMove.type) ||
+            (effectiveMove.type === "땅" && defenderItem?.grantsGroundImmunity)) &&
+          !bypassImmunity
+        );
   // 프리즈드라이: 상대가 이 타입이면 상성표를 무시하고 강제로 이 배율을 쓴다. 단, 방어측이
   // 스스로 얻은 완전 면역(absorbsType·grantsImmunityToTypes)이 이미 걸려있으면 면역이 우선이다
   // — 저수 같은 특성을 가진 물타입 상대에게 프리즈드라이를 써도 여전히 무효화돼야 한다.

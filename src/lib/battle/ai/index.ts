@@ -1,8 +1,13 @@
 import { type FighterKey, type TurnAction } from "@/types/battle";
 import { STRUGGLE_MOVE, type BattleState } from "../state";
-import { DEFAULT_DECISION_PARAMS, decide, scoreOption, type DecisionParams, type ScoredOption } from "./decision";
+import { decide, scoreOption, type DecisionParams, type ScoredOption } from "./decision";
 import { evaluateOptions, type AiOption, type EvaluateOptions } from "./evaluator";
 import { withThreatModel, type ThreatModelParams } from "./opponentMoveModel";
+import { withEndOfTurnModel } from "./turnRates";
+import { paramsFor, type AiDifficulty } from "./difficulty";
+
+export { DIFFICULTY_PRESETS, type AiDifficulty } from "./difficulty";
+export { chooseAiSelection } from "./teamSelect";
 
 export type { AiOption } from "./evaluator";
 export type { DecisionParams, ScoredOption } from "./decision";
@@ -14,7 +19,12 @@ export function sampleRiskAversion(random: () => number = Math.random): number {
 
 /** 결정 파라미터 중 상대 기술 모델 튜닝값(§2-2) */
 function threatModelOf(params: DecisionParams): ThreatModelParams {
-  return { statusWeight: params.threatStatusWeight, sharpness: params.threatSharpness, strictWaste: params.threatStrictWaste };
+  return {
+    statusWeight: params.threatStatusWeight,
+    sharpness: params.threatSharpness,
+    strictWaste: params.threatStrictWaste,
+    statusThreat: params.threatStatusThreat,
+  };
 }
 
 export interface AiDecision {
@@ -26,10 +36,15 @@ export interface AiDecision {
 
 export interface ChooseAiOptions extends EvaluateOptions {
   decisionParams?: Partial<DecisionParams>;
+  /** 기본 hard. decisionParams가 프리셋 위에 덮어쓴다 */
+  difficulty?: AiDifficulty;
+  /** 쉬움의 소프트맥스 선택용 난수(기본 Math.random — 시뮬레이터는 시드 고정 난수를 넘긴다) */
+  random?: () => number;
 }
 
+
 /**
- * 배틀 AI(어려움 난이도, 완전 정보): key 편의 이번 턴 행동을 고른다.
+ * 배틀 AI(완전 정보 — 난이도는 options.difficulty, 기본 어려움): key 편의 이번 턴 행동을 고른다.
  * riskAversion은 sampleRiskAversion()으로 배틀 시작 시 한 번 뽑아 둔 값을 넘긴다.
  */
 export function chooseAiAction(
@@ -38,9 +53,12 @@ export function chooseAiAction(
   riskAversion: number,
   options: ChooseAiOptions = {},
 ): AiDecision {
-  const params = { ...DEFAULT_DECISION_PARAMS, ...options.decisionParams };
-  const evaluated = withThreatModel(threatModelOf(params), () => evaluateOptions(state, key, options));
-  const decision = decide(evaluated, riskAversion, params);
+  const params = paramsFor(options.difficulty, options.decisionParams);
+  // 턴 종료 효과 토글은 평가(대면 턴 수)와 점수 계산(이어지는 대면)에 모두 걸린다
+  const decision = withEndOfTurnModel(params.endOfTurnAware, () => {
+    // 점수 계산(파티 대면표는 이때 계산됨)도 같은 상대 기술 모델로
+    return withThreatModel(threatModelOf(params), () => decide(evaluateOptions(state, key, options), riskAversion, params, options.random));
+  });
   if (!decision) return { action: { kind: "move", move: STRUGGLE_MOVE }, scored: [] };
   const { chosen, scored } = decision;
   const action: TurnAction =
@@ -59,14 +77,17 @@ export function chooseAiForcedSwitch(
   key: FighterKey,
   riskAversion: number,
   decisionParams?: Partial<DecisionParams>,
+  difficulty?: AiDifficulty,
 ): number | undefined {
-  const params = { ...DEFAULT_DECISION_PARAMS, ...decisionParams };
-  const switches = withThreatModel(threatModelOf(params), () => evaluateOptions(state, key)).filter(
-    (o) => o.optionType === "switch",
-  );
-  if (switches.length === 0) return undefined;
-  const best = switches
-    .map((option) => ({ option, score: scoreOption({ ...option, optionType: "move" }, riskAversion, params) }))
-    .reduce((a, b) => (b.score > a.score ? b : a));
-  return best.option.toIndex;
+  const params = paramsFor(difficulty, decisionParams);
+  return withEndOfTurnModel(params.endOfTurnAware, () => {
+    return withThreatModel(threatModelOf(params), () => {
+      const switches = evaluateOptions(state, key).filter((o) => o.optionType === "switch");
+      if (switches.length === 0) return undefined;
+      const best = switches
+        .map((option) => ({ option, score: scoreOption({ ...option, optionType: "move" }, riskAversion, params) }))
+        .reduce((a, b) => (b.score > a.score ? b : a));
+      return best.option.toIndex;
+    });
+  });
 }

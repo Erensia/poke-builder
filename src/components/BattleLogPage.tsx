@@ -17,7 +17,7 @@ import { useBattleVideos } from "../hooks/useBattleVideos";
 import type { BattleVideo } from "../types/battleVideo";
 import { Modal } from "./Modal";
 import { BattleVideoListModal } from "./BattleVideoListModal";
-import { getPokemon, getMove, getItem } from "../lib/data";
+import { getPokemon, getMove } from "../lib/data";
 import { getEffectiveForm, getEffectiveGender, megaBadgeLabel } from "../lib/pokemonForm";
 import { MEGA_SYMBOL_SPRITE_URL, type SpriteFormOptions } from "../lib/sprites";
 import { PokemonAvatarWithItem } from "./PokemonAvatarWithItem";
@@ -25,9 +25,10 @@ import { TYPE_COLORS } from "../lib/typeColors";
 import { environmentTintBackground } from "../lib/environmentBackground";
 import { rankStageMultiplier } from "../lib/battlePower";
 import { VOLATILE_LABELS, SCREEN_LABELS } from "../lib/battleLogLabels";
-import { eunNeun } from "../lib/josa";
+import { eulReul, eunNeun } from "../lib/josa";
 import {
   applySwitch,
+  choiceLockedMoveOf,
   createBattleState,
   hasUsableMove,
   isTrappedFromSwitching,
@@ -41,7 +42,18 @@ import {
   type TurnAction,
   type TurnResult,
 } from "../lib/battleSimulator";
-import { chooseAiAction, chooseAiForcedSwitch, sampleRiskAversion } from "../lib/battle/ai";
+import { chooseAiAction, chooseAiForcedSwitch, chooseAiSelection, sampleRiskAversion, type AiDifficulty } from "../lib/battle/ai";
+
+/** AI 난이도 선택 기억(ver.1.8) — 파티 자동저장과 다른 키. 저장소를 못 쓰는 환경이면 기본 어려움 */
+const AI_DIFFICULTY_STORAGE_KEY = "champions-battle.aiDifficulty.v1";
+
+function readStoredAiDifficulty(): AiDifficulty {
+  try {
+    return localStorage.getItem(AI_DIFFICULTY_STORAGE_KEY) === "easy" ? "easy" : "hard";
+  } catch {
+    return "hard";
+  }
+}
 import type { PartySlot } from "../types/party";
 import type { StatusCondition } from "../types/status";
 import type { BaseStats } from "../types/stats";
@@ -135,6 +147,8 @@ function BattleSetupScreen({
   onProceed,
   aiOpponent,
   onToggleAiOpponent,
+  aiDifficulty,
+  onChangeAiDifficulty,
 }: {
   setup: ReturnType<typeof useBattleSetup>;
   hasPartyPresets: boolean;
@@ -148,6 +162,8 @@ function BattleSetupScreen({
   onProceed: () => void;
   aiOpponent: boolean;
   onToggleAiOpponent: (on: boolean) => void;
+  aiDifficulty: AiDifficulty;
+  onChangeAiDifficulty: (difficulty: AiDifficulty) => void;
 }) {
   const sideCtls = (side: Side) => (side === "a" ? setup.a : setup.b);
   const slotCtl = (side: Side, i: SlotIndex) => sideCtls(side)[i];
@@ -213,6 +229,18 @@ function BattleSetupScreen({
                   />
                   <span>AI가 조작</span>
                 </label>
+              )}
+              {side === "b" && (
+                <select
+                  className="battle-ai-difficulty"
+                  value={aiDifficulty}
+                  disabled={!aiOpponent}
+                  onChange={(e) => onChangeAiDifficulty(e.target.value === "easy" ? "easy" : "hard")}
+                  aria-label="AI 난이도"
+                >
+                  <option value="hard">어려움</option>
+                  <option value="easy">쉬움</option>
+                </select>
               )}
             </div>
             {movelessWarningFor(side) && (
@@ -283,7 +311,10 @@ function BattleSelectScreen({
   onBack,
   selectionComplete,
   onStartBattle,
+  hiddenSide,
 }: {
+  /** AI가 선출한 편 — 대전 시작 전까지 선출을 공개하지 않는다(3선출 AI, ver.1.8) */
+  hiddenSide: Side | null;
   selection: { a: SlotIndex[]; b: SlotIndex[] };
   buildableIndices: (side: Side) => SlotIndex[];
   needsSelection: (side: Side) => boolean;
@@ -301,13 +332,18 @@ function BattleSelectScreen({
         {(["a", "b"] as const).map((side) => {
           const pool = buildableIndices(side);
           const picks = selection[side];
-          const manual = needsSelection(side);
+          const hidden = side === hiddenSide;
+          const manual = needsSelection(side) && !hidden;
           return (
             <div key={side} className="battle-select-column">
               <div className="battle-setup-column-title">
                 {side === "a" ? "내 선출" : "상대 선출"}{" "}
                 <span className="battle-setup-column-hint">
-                  {manual ? `${picks.length}/${BATTLE_SELECT_SIZE} · 고른 순서가 선출 순서(첫 번째가 리드)` : "빌드 순서대로 선출"}
+                  {hidden
+                    ? "AI가 선출함 · 대전 시작 때 공개"
+                    : manual
+                      ? `${picks.length}/${BATTLE_SELECT_SIZE} · 고른 순서가 선출 순서(첫 번째가 리드)`
+                      : "빌드 순서대로 선출"}
                 </span>
               </div>
               <div className="battle-select-list">
@@ -315,11 +351,13 @@ function BattleSelectScreen({
                   const pk = pokemonAt(side, i);
                   const pkSlot = slotAt(side, i);
                   // 수동 선출: 고른 순서대로 번호. 선출 스킵 편: 빌드 순서 그대로 1·2·3 고정.
-                  const num = manual
-                    ? picks.includes(i)
-                      ? picks.indexOf(i) + 1
-                      : null
-                    : pool.indexOf(i) + 1;
+                  const num = hidden
+                    ? null
+                    : manual
+                      ? picks.includes(i)
+                        ? picks.indexOf(i) + 1
+                        : null
+                      : pool.indexOf(i) + 1;
                   return (
                     <button
                       key={i}
@@ -405,9 +443,11 @@ function BattleBoard({
   playTurn,
   resetToSetup,
   aiSide,
+  aiDifficulty,
 }: {
   /** 컴퓨터(배틀 AI)가 조작하는 편. 사람이 양쪽 다 조작하면 null */
   aiSide: Side | null;
+  aiDifficulty: AiDifficulty;
   battleState: BattleState;
   winner: FighterKey | "draw" | undefined;
   selected: SelectedState;
@@ -448,7 +488,20 @@ function BattleBoard({
           return parts;
         };
         const anyHazard = hazardTag("a").length > 0 || hazardTag("b").length > 0;
-        if (!battleState.weather && !battleState.field && battleState.trickRoomTurnsRemaining === undefined && !anyHazard) {
+        const tailwindTurns = (side: Side) =>
+          (side === "a" ? battleState.sideA : battleState.sideB).tailwindTurnsRemaining;
+        const anyTailwind = tailwindTurns("a") !== undefined || tailwindTurns("b") !== undefined;
+        if (
+          !battleState.weather &&
+          !battleState.field &&
+          battleState.trickRoomTurnsRemaining === undefined &&
+          battleState.wonderRoomTurnsRemaining === undefined &&
+          battleState.magicRoomTurnsRemaining === undefined &&
+          battleState.gravityTurnsRemaining === undefined &&
+          battleState.fairyLockTurnsRemaining === undefined &&
+          !anyHazard &&
+          !anyTailwind
+        ) {
           return null;
         }
         return (
@@ -467,6 +520,27 @@ function BattleBoard({
               <span className="battle-environment-tag">
                 트릭룸 (앞으로 {battleState.trickRoomTurnsRemaining}턴)
               </span>
+            )}
+            {battleState.wonderRoomTurnsRemaining !== undefined && (
+              <span className="battle-environment-tag">원더룸 (앞으로 {battleState.wonderRoomTurnsRemaining}턴)</span>
+            )}
+            {battleState.magicRoomTurnsRemaining !== undefined && (
+              <span className="battle-environment-tag">매직룸 (앞으로 {battleState.magicRoomTurnsRemaining}턴)</span>
+            )}
+            {battleState.gravityTurnsRemaining !== undefined && (
+              <span className="battle-environment-tag">중력 (앞으로 {battleState.gravityTurnsRemaining}턴)</span>
+            )}
+            {battleState.fairyLockTurnsRemaining !== undefined && (
+              <span className="battle-environment-tag">
+                페어리록 ({battleState.fairyLockTurnsRemaining >= 2 ? "다음 턴 교체 불가" : "이번 턴 교체 불가"})
+              </span>
+            )}
+            {(["a", "b"] as const).map((side) =>
+              tailwindTurns(side) !== undefined ? (
+                <span key={`tw-${side}`} className="battle-environment-tag">
+                  {fighterLabel(battleState, side)} 진영: 순풍 (앞으로 {tailwindTurns(side)}턴)
+                </span>
+              ) : null,
             )}
             {(["a", "b"] as const).map((side) =>
               hazardTag(side).length > 0 ? (
@@ -552,7 +626,7 @@ function BattleBoard({
                     <span className="battle-fighter-mega-tag">{megaBadgeLabel(form.mega)}</span>
                   )}
                   {fighter.currentHp <= 0 && <span className="battle-fighter-fainted"> (기절)</span>}
-                  {side === aiSide && <span className="battle-fighter-ai-tag">AI</span>}
+                  {side === aiSide && <span className="battle-fighter-ai-tag">{aiDifficulty === "easy" ? "AI · 쉬움" : "AI"}</span>}
                 </span>
               </div>
               <div className="battle-status-tags">
@@ -591,12 +665,19 @@ function BattleBoard({
                   // 희망사항도 편 단위 큐다(§6-2). turnsRemaining 1 = 이번 턴 종료에 발동.
                   <span className="battle-status-tag is-volatile">희망사항 대기</span>
                 )}
+                {battleSide(side)?.healingWishPending && (
+                  <span className="battle-status-tag is-volatile">치유소원 대기</span>
+                )}
                 {battleSide(side)?.safeguardTurnsRemaining !== undefined && (
                   // 신비의부적도 스크린과 같은 편 단위 상태다(§1-9).
                   <span className="battle-status-tag is-volatile">
                     신비의부적 {battleSide(side)?.safeguardTurnsRemaining}턴
                   </span>
                 )}
+                {fighter.magnetRiseTurnsRemaining !== undefined && (
+                  <span className="battle-status-tag is-volatile">전자부유 {fighter.magnetRiseTurnsRemaining}턴</span>
+                )}
+                {fighter.smackedDown && <span className="battle-status-tag is-volatile">떨어뜨리기</span>}
                 {fighter.perishCount !== undefined && (
                   <span className="battle-status-tag is-major">멸망 {fighter.perishCount}</span>
                 )}
@@ -778,7 +859,7 @@ function BattleBoard({
               if (winner) return null;
 
               // 문어굳히기/물고버티기(도망봉인)에 걸려 있으면 자발적 교체 불가(고스트 예외).
-              const trapped = isTrappedFromSwitching(fighter);
+              const trapped = isTrappedFromSwitching(fighter, battleState);
               const canSwitch =
                 benchIdx.length > 0 && !fighter.chargingMoveId && fighter.currentHp > 0 && !trapped;
               const mode = canSwitch ? inputMode[side] : "move";
@@ -1016,6 +1097,15 @@ export function BattleLogPage() {
   // 배틀 AI: 셋업 화면 토글(상대 편을 AI가 조작할지)과, 대전 시작 시점에 확정된 AI 편·위험 회피 성향.
   // 위험 회피 성향은 대전마다 1회만 뽑아 끝까지 쓴다(decision-layer §5).
   const [aiOpponent, setAiOpponent] = useState(true);
+  const [aiDifficulty, setAiDifficulty] = useState<AiDifficulty>(readStoredAiDifficulty);
+  function changeAiDifficulty(difficulty: AiDifficulty) {
+    setAiDifficulty(difficulty);
+    try {
+      localStorage.setItem(AI_DIFFICULTY_STORAGE_KEY, difficulty);
+    } catch {
+      // 저장소를 못 쓰면 이번 방문 동안만 유지
+    }
+  }
   const [aiSide, setAiSide] = useState<Side | null>(null);
   const [aiRiskAversion, setAiRiskAversion] = useState(0.5);
 
@@ -1053,27 +1143,12 @@ export function BattleLogPage() {
   }
 
   /**
-   * 구애스카프: 이 쪽 활성 포켓몬이 그 도구를 지녔고, 로그에 이미 이 쪽이 실제로 쓴 기술이 있으면
-   * 그 첫 기술 id로 잠긴다. 판정 엔진이 아니라 이 화면의 턴 진행 버튼이 UI 단에서 막는 방식이라,
-   * 잠긴 기술 id를 여기서 로그를 훑어 매번 다시 구한다(별도 상태로 안 들고 다닌다).
-   * 교체하면 슬롯이 바뀌므로 잠금도 풀린다 — 마지막 교체 이후의 로그만 훑는다.
+   * 구애류 잠금: 엔진 state(choiceLockedMoveOf — 지금 지닌 도구가 구애류이고 그 도구로 기술을 쓴 뒤)를 그대로 읽는다.
+   * 트랙 M1 이전에는 로그를 훑어 처음 편성한 도구 기준으로 판정해, 도구를 잃거나 트릭으로 주고받아도 잠금이 그대로였다.
    */
   function choiceLockedMoveId(side: Side): string | null {
     if (!battleState) return null;
-    const itemId = battleState[side].slot.item;
-    const item = itemId ? getItem(itemId) : undefined;
-    if (!item?.locksFirstMoveUsed) return null;
-    // 이 편이 마지막으로 교체한 턴 번호 — 그 뒤의 기술 사용부터가 유효하다.
-    let lastSwitchTurn = 0;
-    for (const turn of log) {
-      if (turn.switches.some((s) => s.side === side)) lastSwitchTurn = turn.turnNumber;
-    }
-    for (const turn of log) {
-      if (turn.turnNumber <= lastSwitchTurn) continue;
-      const action = turn.actions.find((a) => a.actor === side);
-      if (action) return action.move.id;
-    }
-    return null;
+    return choiceLockedMoveOf(battleState[side], battleState);
   }
 
   /**
@@ -1122,6 +1197,18 @@ export function BattleLogPage() {
       const forcedName = getMove(encoreEntry.moveId)?.name ?? "그 기술";
       return `${pokemonName}${eunNeun(pokemonName)} 앙코르 때문에 ${forcedName}만 사용할 수 있다!`;
     }
+    if (battleState.gravityTurnsRemaining !== undefined && getMove(moveId)?.blockedByGravity) {
+      const movename = getMove(moveId)?.name ?? "그 기술";
+      return `${pokemonName}${eunNeun(pokemonName)} 중력 때문에 ${movename}${eulReul(movename)} 사용하지 못한다!`;
+    }
+    if (fighter.volatile.active.torment && fighter.lastMoveId === moveId) {
+      return `${pokemonName}${eunNeun(pokemonName)} 트집 때문에 같은 기술을 연속으로 쓸 수 없다!`;
+    }
+    const opponent = battleState[side === "a" ? "b" : "a"];
+    if (opponent.volatile.active.imprison && opponent.remainingPp[moveId] !== undefined) {
+      const movename = getMove(moveId)?.name ?? "그 기술";
+      return `${pokemonName}${eunNeun(pokemonName)} 봉인 때문에 ${movename}${eulReul(movename)} 사용하지 못한다!`;
+    }
     return null;
   }
 
@@ -1168,7 +1255,8 @@ export function BattleLogPage() {
     !hasMovelessSlot && (["a", "b"] as const).every((side) => buildableIndices(side).length >= 1);
 
   /** 셋업 화면 VS 버튼이 무엇을 하는지 (선출 화면을 거치면 "다음 (선출)", 아니면 바로 "대전 시작") */
-  const proceedLabel = needsSelection("a") || needsSelection("b") ? "다음 (선출)" : "대전 시작";
+  // AI 편 선출은 자동(비공개)이라, 내 편이 고를 게 없으면 바로 대전
+  const proceedLabel = needsSelection("a") || (needsSelection("b") && !aiOpponent) ? "다음 (선출)" : "대전 시작";
 
   /** 선출된 빌드 슬롯 인덱스 목록으로 배틀 상태를 만들고 대전을 시작한다 */
   function startBattleWith(sel: { a: SlotIndex[]; b: SlotIndex[] }) {
@@ -1196,13 +1284,31 @@ export function BattleLogPage() {
     setAiRiskAversion(sampleRiskAversion());
   }
 
+  /**
+   * 3선출 AI(ver.1.8): AI 편은 팀 프리뷰처럼 양쪽 빌드 전체를 보고 선출한다(사용자 선출은 모름). 약 1초 걸린다.
+   * 결과는 빌드 슬롯 인덱스(선봉 먼저).
+   */
+  function aiSelectionFor(side: Side): SlotIndex[] {
+    const buildsOf = (s: Side) => buildableIndices(s).map((i) => slotCtl(s, i).slot).filter((x): x is PartySlot => x !== null);
+    const movesOf = (slot: PartySlot) => slot.moves.filter((id): id is string => id !== null).map((id) => getMove(id)!);
+    const aBuilds = buildsOf("a");
+    const bBuilds = buildsOf("b");
+    const full = createBattleState({
+      a: { slots: aBuilds, movesList: aBuilds.map(movesOf) },
+      b: { slots: bBuilds, movesList: bBuilds.map(movesOf) },
+    });
+    const pool = buildableIndices(side);
+    return chooseAiSelection(full, side, { difficulty: aiDifficulty, size: BATTLE_SELECT_SIZE }).map((p) => pool[p]);
+  }
+
   /** 빌드 화면 "다음/대전 시작" — 양쪽 다 3마리 이하면 선출을 건너뛰고 바로 대전, 아니면 선출 화면으로 */
   function handleProceed() {
     if (!canProceed) return;
+    const aiSelects = aiOpponent && needsSelection("b");
     const autoSel = (side: Side) =>
-      needsSelection(side) ? [] : buildableIndices(side).slice(0, BATTLE_SELECT_SIZE);
+      side === "b" && aiSelects ? aiSelectionFor("b") : needsSelection(side) ? [] : buildableIndices(side).slice(0, BATTLE_SELECT_SIZE);
     const sel = { a: autoSel("a"), b: autoSel("b") };
-    if (!needsSelection("a") && !needsSelection("b")) {
+    if (!needsSelection("a") && (!needsSelection("b") || aiSelects)) {
       startBattleWith(sel);
     } else {
       setSelection(sel);
@@ -1335,11 +1441,11 @@ export function BattleLogPage() {
   useEffect(() => {
     if (!battleState || !aiSide) return;
     if (pendingPivot?.side === aiSide) {
-      resolvePivot(chooseAiForcedSwitch(battleState, aiSide, aiRiskAversion) ?? switchableIndices(aiSide)[0] ?? -1);
+      resolvePivot(chooseAiForcedSwitch(battleState, aiSide, aiRiskAversion, undefined, aiDifficulty) ?? switchableIndices(aiSide)[0] ?? -1);
       return;
     }
     if (pendingForcedSwitch?.[aiSide] && !pendingPivot) {
-      const toIndex = chooseAiForcedSwitch(battleState, aiSide, aiRiskAversion) ?? switchableIndices(aiSide)[0];
+      const toIndex = chooseAiForcedSwitch(battleState, aiSide, aiRiskAversion, undefined, aiDifficulty) ?? switchableIndices(aiSide)[0];
       if (toIndex !== undefined) resolveForcedSwitch(aiSide, toIndex);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1386,7 +1492,7 @@ export function BattleLogPage() {
     // 고를 수 있는 기술은 사람에게 적용하는 규칙(PP·구애 고정·도발·사슬묶기·앙코르)과 똑같이 거른다.
     const aiAction =
       aiSide && !struggling[aiSide] && !charging[aiSide]
-        ? chooseAiAction(battleState, aiSide, aiRiskAversion, { legalMoveIds: selectableMoveIds(aiSide) }).action
+        ? chooseAiAction(battleState, aiSide, aiRiskAversion, { legalMoveIds: selectableMoveIds(aiSide), difficulty: aiDifficulty }).action
         : null;
 
     const actionFor = (side: Side): TurnAction | null => {
@@ -1459,6 +1565,8 @@ export function BattleLogPage() {
           onProceed={handleProceed}
           aiOpponent={aiOpponent}
           onToggleAiOpponent={setAiOpponent}
+          aiDifficulty={aiDifficulty}
+          onChangeAiDifficulty={changeAiDifficulty}
         />
       )}
 
@@ -1473,6 +1581,7 @@ export function BattleLogPage() {
           onBack={() => setSelecting(false)}
           selectionComplete={selectionComplete}
           onStartBattle={() => startBattleWith(selection)}
+          hiddenSide={aiOpponent ? "b" : null}
         />
       )}
 
@@ -1504,6 +1613,7 @@ export function BattleLogPage() {
           playTurn={playTurn}
           resetToSetup={resetToSetup}
           aiSide={aiSide}
+          aiDifficulty={aiDifficulty}
         />
       )}
 

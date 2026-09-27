@@ -5,7 +5,7 @@ import { eunNeun } from "@/lib/josa";
 import { hasVolatile } from "@/lib/volatileConditions";
 import { getQuickClawTriggered } from "@/lib/itemEffects";
 import { compareTurnOrder } from "@/lib/turnOrder";
-import { buildTurnOrderActor, effectiveHeldItem } from "./turnOrderInputs";
+import { buildTurnOrderActor, effectiveHeldItem, itemsSuppressedByRoom } from "./turnOrderInputs";
 import { STRUGGLE_MOVE, activeWeather, applyForecastForm, applyMimicryForm, cloneSide, consumeItem, hasLivingReserve, isFainted, isForcedSwitchBlocked, opponentKey, sideOf, type BattleState } from "./state";
 import { applyMegaEvolution, isTrappedFromSwitching, performSwitch } from "./switching";
 import { resolveAction } from "./resolveAction";
@@ -89,6 +89,12 @@ export function runTurn(
     field: prevState.field,
     fieldTurnsRemaining: prevState.fieldTurnsRemaining,
     trickRoomTurnsRemaining: prevState.trickRoomTurnsRemaining,
+    // 흉내쟁이(트랙 M2): 배틀에서 직전에 나온 기술은 턴·교체를 넘어 이어진다
+    lastMoveUsedId: prevState.lastMoveUsedId,
+    wonderRoomTurnsRemaining: prevState.wonderRoomTurnsRemaining,
+    magicRoomTurnsRemaining: prevState.magicRoomTurnsRemaining,
+    gravityTurnsRemaining: prevState.gravityTurnsRemaining,
+    fairyLockTurnsRemaining: prevState.fairyLockTurnsRemaining,
     turnNumber: prevState.turnNumber + 1,
     entryAnnouncements: prevState.entryAnnouncements,
   };
@@ -110,7 +116,7 @@ export function runTurn(
     const fromIndex = side.activeIndex;
     const outgoing = side.party[fromIndex];
     // 문어굳히기/물고버티기에 걸린 채로 자발적 교체가 넘어오면(UI가 막지만 방어적으로) 무시한다.
-    if (isTrappedFromSwitching(outgoing)) continue;
+    if (isTrappedFromSwitching(outgoing, state)) continue;
     const entryMessages: string[] = [];
     performSwitch(state, key, action.toIndex, entryMessages);
     if (side.activeIndex !== fromIndex) {
@@ -210,8 +216,8 @@ export function runTurn(
   // 양쪽 다 발동하면(둘 다 이 도구를 지녔고 둘 다 확률에 성공) 서로 상쇄되어 정상적인 스피드
   // 비교로 넘어간다 — 어느 한쪽만 발동했을 때만 그쪽이 확정으로 먼저 움직인다.
   const priorityTied = actorA.move.priority === actorB.move.priority;
-  const aQuickClaw = priorityTied && getQuickClawTriggered(effectiveHeldItem(state.a), random);
-  const bQuickClaw = priorityTied && getQuickClawTriggered(effectiveHeldItem(state.b), random);
+  const aQuickClaw = priorityTied && getQuickClawTriggered(effectiveHeldItem(state.a, state), random);
+  const bQuickClaw = priorityTied && getQuickClawTriggered(effectiveHeldItem(state.b, state), random);
   const quickClawWinner: FighterKey | undefined =
     aQuickClaw && !bQuickClaw ? "a" : bQuickClaw && !aQuickClaw ? "b" : undefined;
 
@@ -358,7 +364,7 @@ function runActionPhase(ctx: RunTurnContext): RunTurnOutcome | RunTurnPaused {
     {
       const holder = state[oppKey];
       const holderAbility = holder.effectiveAbilityId ? getAbility(holder.effectiveAbilityId) : undefined;
-      const holderItem = holderAbility?.disablesOwnItemEffects
+      const holderItem = holderAbility?.disablesOwnItemEffects || itemsSuppressedByRoom(state)
         ? undefined
         : holder.currentItemId
           ? getItem(holder.currentItemId)
@@ -489,7 +495,7 @@ function runActionPhase(ctx: RunTurnContext): RunTurnOutcome | RunTurnPaused {
     {
       const holder = state[oppKey];
       const holderAbility = holder.effectiveAbilityId ? getAbility(holder.effectiveAbilityId) : undefined;
-      const holderItem = holderAbility?.disablesOwnItemEffects
+      const holderItem = holderAbility?.disablesOwnItemEffects || itemsSuppressedByRoom(state)
         ? undefined
         : holder.currentItemId
           ? getItem(holder.currentItemId)

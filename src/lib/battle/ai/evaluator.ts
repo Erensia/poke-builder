@@ -1,36 +1,47 @@
 import { type FighterKey } from "@/types/battle";
 import { type Move } from "@/types/move";
+import { NO_STATUS_CONDITION } from "@/types/status";
 import { type PokemonType } from "@/types/pokemon-type";
-import { type StatStages } from "@/types/battleStats";
-import { applyMoveStatChanges } from "@/lib/statStages";
+import { NEUTRAL_ACCURACY_STAGES, NEUTRAL_STAGES, type StatStages } from "@/types/battleStats";
+import { applyMoveStatChanges, applyStageDelta } from "@/lib/statStages";
+import { hasVolatile } from "@/lib/volatileConditions";
 import { applyMoveAccuracyEvasionChanges } from "@/lib/accuracyCrit";
-import { compareTurnOrder } from "@/lib/turnOrder";
 import { resolveEffectiveDefenderAbility } from "@/lib/abilityModifiers";
 import { inflictRestSleep } from "@/lib/statusConditions";
 import { computeWeatherHealFraction } from "@/lib/weatherEffects";
 import {
   abilityOf,
   activeWeather,
+  contraryDelta,
   contraryMoveFor,
   cloneSide,
   isFainted,
   opponentKey,
   sideOf,
+  statDropBlockStatsOf,
   type BattleFighterState,
   type BattleSide,
   type BattleState,
+  WEATHER_DURATION,
 } from "../state";
 import { applyMegaEvolution, isTrappedFromSwitching } from "../switching";
 import { calcEntryHazardDamage } from "../entryCost";
-import { buildTurnOrderActor, effectiveHeldItem } from "../turnOrderInputs";
+import { effectiveHeldItem } from "../turnOrderInputs";
 import { computeBattleHitChance } from "../hitChance";
+import { isCopyableMove } from "../preHitEffects";
+import { isGrounded } from "../grounding";
+import { getMove } from "@/lib/data";
 import {
+  acupressureOptions,
+  applyAcupressure,
   applyEffectMove,
   blendTurns,
   effectDuration,
   effectKindOf,
   effectMoveFails,
   hazardCarry,
+  hazardsAfter,
+  sleepTalkCandidates,
   isBatonPass,
   type EffectMoveKind,
 } from "./statusMoveEffects";
@@ -44,11 +55,14 @@ import {
   type ProtectGroup,
 } from "./protectMoves";
 import { estimateMoveHits, type MoveHitEstimate } from "./moveDamage";
-import { allowedByVolatiles, evaluateOpponentThreat, usableMoves, type OpponentThreat } from "./opponentMoveModel";
-import { blockedTurns, turnsToKo } from "./turnRates";
+import { firstProbability } from "./speed";
+import { createPartyModel, type PartyDuel, type PartyEffect, type PartyModel } from "./partyEval";
+import { allowedByVolatiles, evaluateOpponentThreat, opponentStatusDrag, usableMoves, type OpponentThreat } from "./opponentMoveModel";
+import { blockedTurns, isEndOfTurnAware, turnsToKo, withAccumulationSteps } from "./turnRates";
 import type { HitsEstimate } from "./types";
 
-export type SpeedOrder = "first" | "second" | "speed_tie";
+export type { SpeedOrder } from "./speed";
+import type { SpeedOrder } from "./speed";
 
 /**
  * 데미지 없는 변화기 옵션의 종류(extension §2-2, decision-layer §4-1).
@@ -62,6 +76,8 @@ export interface ProtectOutcome {
   myAfter: number;
   oppAfter: number;
   race?: RaceInputs;
+  /** 파티 단위 평가(§4-5 ②): 그 한 턴을 돌린 뒤 state의 대면표 — 이어지는 대면·쓰러진 뒤·길동무 동반 기절 계산용 */
+  partyModel?: PartyModel;
 }
 
 /** 방어류 평가(decision-layer §4-4) */
@@ -97,6 +113,44 @@ export interface EffectEvaluation {
   selfCost?: number;
   /** 효과 종류(랭크업기는 없음) — phase3Aware 등 종류별 토글용 */
   kind?: EffectMoveKind;
+  /**
+   * 파티 단위 평가(§4-5 ②): 효과를 적용한 state의 대면표 + 효과가 남는 턴 수(상태이상·랭크 변화·설치기는
+   * Infinity). 명중 갈래의 이어지는 대면이 이걸로 계산된다.
+   */
+  party?: PartyEffect;
+  /** 파티 모드에서 carry 대신 쓰는 이월 항 — 벽·설치기는 이어지는 대면이 직접 세므로 0, 끈적끈적네트만 고정 근사 */
+  partyCarry?: number;
+  /** 아픔나누기(트랙 M1): 효과가 걸린 뒤 두 포켓몬의 HP 비율(첫 대면이 여기서 시작) */
+  hpAfter?: { my: number; opp: number };
+  /** 울부짖기·날려버리기(AI-A2): 상대 대기 포켓몬마다 끌려 나온 뒤의 대면 */
+  phaze?: PhazeEvaluation;
+  /** 경혈찌르기(트랙 M2): 무작위로 오를 능력마다의 대면(가중치 합 1) — 있으면 hit·party 대신 이걸 평균낸다 */
+  branches?: { weight: number; hit: RaceInputs; party: PartyEffect }[];
+  /** 추억의선물(AI-A2): 자신 기절 + 상대 랭크다운 뒤 state(성공)·먼저 쓰러진 state(실패)의 대면표 */
+  sacrifice?: { success: number; afterModel: PartyModel; failModel: PartyModel };
+  /**
+   * 회생의기도·멸망의노래(Tier 2-B): 이번 턴 HP 비율 변화 합(hpDelta) + 늘어난 내 포켓몬 수(extraCount)와 그 뒤 state의
+   * 대면표 — 대면을 이어가지 않고 바뀐 파티 판세로 평가한다.
+   */
+  partyShift?: { hpDelta: number; extraCount: number; afterModel: PartyModel };
+}
+
+/**
+ * 울부짖기·날려버리기(AI-A2): 우선도 −6이라 상대가 먼저 한 번 때리고(hitLoss), 상대 예비 중 무작위 하나가 끌려 나와
+ * 설치물 등장 비용(entry)을 치른다. 원래 상대의 랭크 변화는 사라진다(물러남). branches = 예비마다 그 뒤의 대면.
+ */
+export interface PhazeEvaluation {
+  hitLoss: number;
+  branches: {
+    race: RaceInputs;
+    /** 끌려 나온 뒤 내 HP 비율(한 대 맞은 뒤) / 끌려 나온 상대 HP 비율(등장 비용 뒤) */
+    my: number;
+    opp: number;
+    entry: number;
+    /** 등장 비용으로 쓰러졌는지 */
+    fainted: boolean;
+    model: PartyModel;
+  }[];
 }
 
 /**
@@ -159,8 +213,13 @@ export interface AiOption {
    * hitRate = 한 번 맞혔을 때 깎는 상대 현재 HP 비율(0~1), activeHitLoss = 지금 포켓몬이 상대 공격을 한 번
    * 맞을 때 잃는 HP 비율(최대 HP 대비), candidates = 그 데미지를 받은 상대 기준으로 다시 평가한 교체 후보들.
    * 배턴터치도 같은 구조(hitRate 0, 후보는 내 랭크를 이어받은 상태로 평가, hitChance 1).
+   * 꼬리자르기·썰렁개그(Tier 2-C, tier2)도 같은 구조 — selfCost = 교체 전에 치르는 HP 비율(꼬리자르기 1/2).
    */
-  pivot?: { hitRate: number; activeHitLoss: number; candidates: AiOption[]; hitChance?: number };
+  pivot?: { hitRate: number; activeHitLoss: number; candidates: AiOption[]; hitChance?: number; selfCost?: number; tier2?: boolean };
+  /** 흉내쟁이(트랙 M2): 따라 쓸 기술 갈래(가중치 합 1). option이 없으면 따라 쓸 수 없어 실패하는 갈래 */
+  copycat?: { branches: { weight: number; option?: AiOption }[] };
+  /** 파티 단위 평가(§4-5): 이 옵션의 첫 대면이 누구끼리인지 + 대면표. 결정 레이어가 이어지는 대면을 계산한다 */
+  party?: PartyDuel;
 }
 
 export interface EvaluateOptions {
@@ -198,34 +257,7 @@ export function selectableMoves(
 ): Move[] {
   const moves = usableMoves(fighter).filter((m) => !isUsageBlocked(state, fighter, m, opponent));
   if (legalMoveIds) return moves.filter((m) => legalMoveIds.includes(m.id));
-  return allowedByVolatiles(fighter, moves);
-}
-
-/**
- * me가 move를, opponent가 opponentMove를 쓸 때 me가 먼저 움직일 확률.
- * 우선도·스피드·트릭룸은 compareTurnOrder(실전과 동일), 선제공격손톱은 우선도가 같을 때만 확률로 끼어든다.
- */
-function firstProbability(
-  state: BattleState,
-  me: BattleFighterState,
-  move: Move,
-  opponent: BattleFighterState,
-  opponentMove: Move | undefined,
-): { probability: number; order: SpeedOrder } {
-  if (!opponentMove) return { probability: 1, order: "first" };
-  const mine = buildTurnOrderActor(state, me, move);
-  const theirs = buildTurnOrderActor(state, opponent, opponentMove);
-  const trickRoom = state.trickRoomTurnsRemaining !== undefined;
-  const lowRoll = compareTurnOrder(mine, theirs, () => 0, trickRoom);
-  const highRoll = compareTurnOrder(mine, theirs, () => 0.99, trickRoom);
-  const base = lowRoll !== highRoll ? 0.5 : lowRoll === 0 ? 1 : 0;
-  const order: SpeedOrder = lowRoll !== highRoll ? "speed_tie" : lowRoll === 0 ? "first" : "second";
-  if (mine.move.priority !== theirs.move.priority) return { probability: base, order };
-  const qMe = (effectiveHeldItem(me)?.quickClawChance ?? 0) / 100;
-  const qThem = (effectiveHeldItem(opponent)?.quickClawChance ?? 0) / 100;
-  const onlyMe = qMe * (1 - qThem);
-  const neitherOrBoth = (1 - qMe) * (1 - qThem) + qMe * qThem;
-  return { probability: onlyMe + neitherOrBoth * base, order };
+  return allowedByVolatiles(fighter, moves, opponent);
 }
 
 interface AttackPick {
@@ -258,6 +290,7 @@ function bestAttack(input: BestAttackInput): AttackPick | undefined {
 }
 
 function turnsFor(
+  state: BattleState,
   estimate: MoveHitEstimate | undefined,
   attacker: BattleFighterState,
   defender: BattleFighterState,
@@ -266,7 +299,16 @@ function turnsFor(
   if (!estimate || !Number.isFinite(estimate.expected)) {
     return { expected: Infinity, worstCase: { count: 3, certainty: "random", probability: 0 } };
   }
-  return { expected: turnsToKo(1 / estimate.expected, attacker, defender, defenderHp), worstCase: estimate.worstCase };
+  // 위협 환산 c 쪽(ver.1.8 한계점 정리 ③): 상대 회복기·벽·나에게 거는 상태이상·랭크다운이 내 공격 효율을 깎는다
+  const hp = defenderHp ?? defender.currentHp;
+  const attackerSide = state.sideA.party.includes(attacker) ? state.sideA : state.sideB;
+  const drag = opponentStatusDrag(state, defender, attacker, attackerSide, estimate.expected);
+  const rate = (1 / estimate.expected) * drag.rateMult - (hp > 0 ? (drag.heal * defender.maxHp) / hp : 0);
+  if (rate <= 0) return { expected: Infinity, worstCase: estimate.worstCase };
+  return {
+    expected: turnsToKo(rate, attacker, defender, defenderHp, estimate.damageFraction * drag.rateMult, state),
+    worstCase: estimate.worstCase,
+  };
 }
 
 /** key 편에서 index 슬롯으로 교체하는 옵션. opponentHp를 주면 상대가 그 HP라고 가정한다(유턴류 평가용). */
@@ -279,7 +321,7 @@ function evaluateSwitchCandidate(state: BattleState, key: FighterKey, index: num
   const oppHp = opponentHp ?? opponent.currentHp;
   const entryCost = Math.min(
     candidate.currentHp,
-    calcEntryHazardDamage(candidate.maxHp, candidate.types, abilityOf(candidate), mySide.hazards),
+    calcEntryHazardDamage(candidate.maxHp, candidate.types, abilityOf(candidate), mySide.hazards, isGrounded(state, candidate)),
   );
   const hpAfterEntry = candidate.currentHp - entryCost;
   const pick = bestAttack({
@@ -306,7 +348,7 @@ function evaluateSwitchCandidate(state: BattleState, key: FighterKey, index: num
     typeMatchup: { offensive: pick?.estimate.typeEffectiveness ?? 0, defensive: threat.defensiveMatchup },
     speedOrder: speed.order,
     firstProbability: speed.probability,
-    hitsToKill: turnsFor(pick?.estimate, candidate, opponent, oppHp),
+    hitsToKill: turnsFor(state, pick?.estimate, candidate, opponent, oppHp),
     hitsToBeKilled: threat.hitsToBeKilled,
     entryCost,
     maxHp: candidate.maxHp,
@@ -370,7 +412,15 @@ function evaluateSetupMove(ctx: SetupContext): { effect?: EffectEvaluation; bato
 
   const base = currentRace(state, key, raceMoves);
   const hit = currentRace(clone, key, raceMoves);
-  const effect: EffectEvaluation = { hit, base, hitChance: 1, carry: 0, selfCost };
+  const effect: EffectEvaluation = {
+    hit,
+    base,
+    hitChance: 1,
+    carry: 0,
+    selfCost,
+    // 올린 랭크는 물러나기 전까지 남는다 — 이어지는 대면도 랭크업한 state의 대면표로
+    party: { model: createPartyModel(clone, key), turns: Infinity },
+  };
   if (ctx.batonBench.length === 0) return { effect };
 
   const myAfter = self.currentHp / self.maxHp;
@@ -420,7 +470,7 @@ function evaluateProtectMove(ctx: ProtectContext): ProtectEvaluation {
     // 양쪽 다 살아 있고 그대로 대면 중일 때만 이어지는 대면을 계산한다(강제 교체 등으로 바뀌었으면 HP 변화만 센다)
     const sameMatchup = sideOf(after, key).activeIndex === myIndex && sideOf(after, oppKey).activeIndex === oppIndex;
     const race = myAfter > 0 && oppAfter > 0 && sameMatchup ? currentRace(after, key, ctx.raceMoves) : undefined;
-    return { weight, myAfter, oppAfter, race };
+    return { weight, myAfter, oppAfter, race, partyModel: createPartyModel(after, key) };
   });
   // 버티기: 어느 상대 행동에서도 HP 1로 버틸 일이 없으면(이번 턴 안 쓰러짐) 쓸 이유가 없다
   const pointless = group === "endure" && !endured;
@@ -440,10 +490,16 @@ function proteanTypes(me: BattleFighterState, move: Move): PokemonType[] | undef
 
 function classifySupport(move: Move): SupportKind {
   if (move.healsFraction && move.healsTarget !== "opponent") return "heal";
-  if (move.healsWeatherDependent || move.restSleep) return "heal";
-  if (move.statChanges?.some((s) => s.target === "self" && (s.delta ?? 0) > 0)) return "setup";
+  if (move.healsWeatherDependent || move.restSleep || isWish(move) || move.healsByStockpile) return "heal";
+  // 배북처럼 랭크를 +n이 아니라 특정 값으로 "설정"(setTo)하는 것도 랭크업기다.
+  if (move.statChanges?.some((s) => s.target === "self" && ((s.delta ?? 0) > 0 || (s.setTo ?? 0) > 0))) return "setup";
   if (effectKindOf(move)) return "effect";
   return "other";
+}
+
+/** 희망사항: 다음 턴 종료에 그 자리의 포켓몬이 시전자 최대 HP 절반을 회복 */
+function isWish(move: Move): boolean {
+  return !!move.inflictsVolatile?.some((v) => v.volatile === "wish");
 }
 
 /**
@@ -466,7 +522,7 @@ function currentRace(st: BattleState, key: FighterKey, moves: Move[]): RaceInput
   const speed = best ? firstProbability(st, me, best.move, opponent, probe.bestMove) : { probability: 0 };
   const threat = evaluateOpponentThreat({ state: st, opponent, target: me, targetSide: mySide, opponentMovesSecond: speed.probability >= 0.5 });
   return {
-    killTurns: turnsFor(best?.estimate, me, opponent).expected,
+    killTurns: turnsFor(st, best?.estimate, me, opponent).expected,
     survivalTurns: threat.hitsToBeKilled.expected,
     firstProbability: speed.probability,
   };
@@ -493,9 +549,29 @@ function evaluateEffectMove(ctx: EffectContext): EffectEvaluation | undefined {
   const kind = effectKindOf(move);
   if (!kind || effectMoveFails(state, key, move)) return undefined;
   const base = currentRace(state, key, myMoves);
+  if (kind === "phaze") return evaluatePhaze(ctx, base);
+  if (kind === "acupressure") return evaluateAcupressure(ctx, base);
+  if (kind === "healingWish") return evaluateHealingWish(ctx, base);
+  if (kind === "revive") return evaluateRevive(ctx, base);
+  if (kind === "perishSong") return evaluatePerishSong(ctx, base);
   const clone = cloneBattleState(state);
   const toxicTurns = Math.min(6, Number.isFinite(base.killTurns) ? base.killTurns : 6);
   if (!applyEffectMove(clone, key, move, { toxicTurns })) return undefined;
+  if (kind === "torment") return evaluateTorment(ctx, base, clone);
+  if (kind === "memento") {
+    // 먼저 맞아 쓰러지면(후공인데 이번 턴에 쓰러지는 대면) 랭크다운 없이 기절만
+    const success = ctx.moveFirstProbability + (1 - ctx.moveFirstProbability) * (base.survivalTurns > 1 ? 1 : 0);
+    const failed = cloneBattleState(state);
+    failed[key].currentHp = 0;
+    return {
+      hit: base,
+      base,
+      hitChance: 1,
+      carry: 0,
+      kind,
+      sacrifice: { success, afterModel: createPartyModel(clone, key), failModel: createPartyModel(failed, key) },
+    };
+  }
 
   const me = state[key];
   const opponent = state[opponentKey(key)];
@@ -512,16 +588,48 @@ function evaluateEffectMove(ctx: EffectContext): EffectEvaluation | undefined {
       attackerMovesSecond: ctx.moveFirstProbability < 0.5,
     }) ?? 1;
 
-  if (kind === "hazard") return { hit: base, base, hitChance, carry: hazardCarry(state, key, move), kind };
-  const after = currentRace(clone, key, myMoves);
+  if (kind === "hazard") {
+    // 파티 모드: 설치를 적용한 state로 상대 등장 비용·독압정 독을 계산하고, 끈적끈적네트(스피드 −1)만 고정 근사로 남긴다.
+    const oppSide = sideOf(clone, opponentKey(key));
+    oppSide.hazards = hazardsAfter(oppSide.hazards, move) ?? oppSide.hazards;
+    return {
+      hit: base,
+      base,
+      hitChance,
+      carry: hazardCarry(state, key, move),
+      kind,
+      party: { model: createPartyModel(clone, key), turns: Infinity },
+      // 끈적끈적네트도 대면표가 등장 시 스피드 −1을 반영한다(ver.1.8) — 이월 항 0
+      partyCarry: 0,
+    };
+  }
+  // 변신(Tier 2): 상대 기술을 복사하므로 변신 뒤 기술로 대면을 잇는다
+  let after = currentRace(clone, key, kind === "transform" ? usableMoves(clone[key]) : myMoves);
+  // 하품: 상대는 이번 턴·다음 턴에 행동한 뒤 잠든다 — 그 두 번 안에 나를 쓰러뜨리는 대면이면 잠듦은 의미 없다.
+  if (kind === "yawn" && base.survivalTurns <= 2) after = { ...after, survivalTurns: base.survivalTurns };
   const duration = effectDuration(state, key, move);
-  if (duration === undefined) return { hit: after, base, hitChance, carry: 0, kind };
+  const partyModel = createPartyModel(clone, key);
+  if (duration === undefined) {
+    // 대타출동: 최대 HP 1/4을 쓰고 대면은 깎인 HP에서 시작(selfCost — 랭크업기의 HP 비용과 같은 처리)
+    const selfCost = kind === "substitute" ? Math.floor(me.maxHp / 4) / me.maxHp : undefined;
+    // 아픔나누기: 두 포켓몬 HP가 바뀐 채로 대면을 시작한다
+    const oppAfterFighter = clone[opponentKey(key)];
+    const hpAfter =
+      kind === "painSplit"
+        ? { my: clone[key].currentHp / clone[key].maxHp, opp: oppAfterFighter.currentHp / oppAfterFighter.maxHp }
+        : undefined;
+    // 교체 봉쇄(로드맵 3)는 이어지는 대면에서만 가치가 생기므로 partyEffects와 무관하게 쓴다
+    const always = kind === "trap" || kind === "octolock" || kind === "fairyLock" || undefined;
+    return { hit: after, base, hitChance, carry: 0, kind, party: { model: partyModel, turns: Infinity, always }, partyCarry: 0, selfCost, hpAfter };
+  }
 
   // 지속 턴이 있는 효과(벽·날씨·필드·트릭룸·도발·앙코르·사슬묶기): 이번 턴(내가 먼저 움직이면 이번 턴 상대
   // 행동부터) + 남은 턴 동안만 효과가 있다 — c·d는 그 구간만 효과 적용 속도, p는 그 구간 비율만큼 섞는다.
+  // 파티 모드에서는 대면이 끝난 뒤 남은 턴도 이어지는 대면이 효과 대면표로 센다(벽 이월 항 불필요).
   const covered = duration - 1 + ctx.moveFirstProbability;
   const hit = blendRace(after, base, covered);
-  if (kind !== "screen") return { hit, base, hitChance, carry: 0, kind };
+  const party: PartyEffect = { model: partyModel, turns: covered };
+  if (kind !== "screen") return { hit, base, hitChance, carry: 0, kind, party, partyCarry: 0 };
   const survivalTurns = hit.survivalTurns;
   // 대면이 끝난 뒤 남는 벽 턴: 이기는 대면이면 지금 포켓몬이, 지는 대면이면 다음 포켓몬이 덜 맞는다.
   const opponentHits = base.killTurns + 1 - hit.firstProbability;
@@ -534,10 +642,199 @@ function evaluateEffectMove(ctx: EffectContext): EffectEvaluation | undefined {
     ? [perHitLoss(me.currentHp / me.maxHp, base.survivalTurns)]
     : ctx.benchOptions().map((o) => perHitLoss(o.hpFraction, o.hitsToBeKilled.expected));
   const averageLoss = pool.length > 0 ? pool.reduce((a, b) => a + b, 0) / pool.length : 0;
-  return { hit, base, hitChance, carry: leftover > 0 ? leftover * savedRatio * averageLoss : 0, kind };
+  return { hit, base, hitChance, carry: leftover > 0 ? leftover * savedRatio * averageLoss : 0, kind, party, partyCarry: 0 };
 }
 
 /** 효과가 covered 턴 동안만 유지될 때의 대면 값(decision-layer §4-1 3단계를 c·d·p 전부로 일반화) */
+/**
+ * 잠꼬대 처치 턴: 남은 잠듦 턴 b 동안은 무작위 기술의 평균 피해율(변화기 0)로, 그 뒤는 깬 상태의 최선 처치 턴으로.
+ * awakeKillTurns는 잠듦 턴을 포함한 기존 계산(turnsToKo가 앞에 b를 더함). 나갈 기술이 없으면 undefined(실패).
+ */
+function sleepTalkKillTurns(
+  state: BattleState,
+  key: FighterKey,
+  move: Move,
+  awakeKillTurns: number,
+  attackerMovesSecond: boolean,
+): { killTurns: number; bestTypeEffectiveness: number } | undefined {
+  const me = state[key];
+  const oppKey = opponentKey(key);
+  const candidates = sleepTalkCandidates(me, move);
+  if (candidates.length === 0) return undefined;
+  let bestTypeEffectiveness = 0;
+  const rates = candidates.map((m) => {
+    if (m.category === "status") return 0;
+    const estimate = estimateMoveHits({ state, attacker: me, defender: state[oppKey], defenderSide: sideOf(state, oppKey), attackerMovesSecond }, m);
+    if (!estimate || !Number.isFinite(estimate.rawHits) || estimate.rawHits <= 0) return 0;
+    bestTypeEffectiveness = Math.max(bestTypeEffectiveness, estimate.typeEffectiveness);
+    return 1 / estimate.rawHits;
+  });
+  const rate = rates.reduce((a, b) => a + b, 0) / rates.length;
+  const asleep = blockedTurns(me);
+  if (rate > 0 && asleep * rate >= 1) return { killTurns: Math.max(1, 1 / rate), bestTypeEffectiveness };
+  const afterWaking = Number.isFinite(awakeKillTurns) ? Math.max(0, awakeKillTurns - asleep) : Infinity;
+  return { killTurns: asleep + afterWaking * (1 - asleep * rate), bestTypeEffectiveness };
+}
+
+/**
+ * 울부짖기·날려버리기(AI-A2): 상대 예비마다 "상대가 먼저 한 번 때린 뒤, 그 예비가 설치물을 밟고 나와 원래 상대는
+ * 랭크 변화를 잃고 물러난" state를 만들어 대면을 다시 계산한다(무작위라 결정 레이어가 평균낸다). 이번 턴 안에 내가
+ * 쓰러지는 대면이면(우선도 −6이라 상대가 먼저 움직임) 쓸 수 없다.
+ */
+function evaluatePhaze(ctx: EffectContext, base: RaceInputs): EffectEvaluation | undefined {
+  const { state, key, myMoves } = ctx;
+  const oppKey = opponentKey(key);
+  const me = state[key];
+  if (base.survivalTurns <= 1) return undefined;
+  const hitLossHp = Number.isFinite(base.survivalTurns) ? Math.floor(me.currentHp / base.survivalTurns) : 0;
+  const reserves = benchIndices(sideOf(state, oppKey));
+  const branches: PhazeEvaluation["branches"] = reserves.map((j) => {
+    const clone = cloneBattleState(state);
+    const side = sideOf(clone, oppKey);
+    const outgoing = side.party[side.activeIndex];
+    outgoing.stages = { ...NEUTRAL_STAGES };
+    outgoing.accuracyStages = { ...NEUTRAL_ACCURACY_STAGES };
+    side.activeIndex = j;
+    const incoming = side.party[j];
+    clone[oppKey] = incoming;
+    const entryHp = Math.min(incoming.currentHp, calcEntryHazardDamage(incoming.maxHp, incoming.types, abilityOf(incoming), side.hazards, isGrounded(clone, incoming)));
+    incoming.currentHp -= entryHp;
+    clone[key].currentHp = Math.max(1, clone[key].currentHp - hitLossHp);
+    const fainted = incoming.currentHp <= 0;
+    return {
+      race: fainted ? base : currentRace(clone, key, myMoves),
+      my: clone[key].currentHp / clone[key].maxHp,
+      opp: incoming.currentHp / incoming.maxHp,
+      entry: entryHp / incoming.maxHp,
+      fainted,
+      model: createPartyModel(clone, key),
+    };
+  });
+  return {
+    hit: base,
+    base,
+    hitChance: 1,
+    carry: 0,
+    kind: "phaze",
+    phaze: { hitLoss: hitLossHp / me.maxHp, branches },
+  };
+}
+
+/**
+ * 경혈찌르기(트랙 M2): 올릴 수 있는 능력마다 +2를 적용한 대면을 다시 계산한다 — 무작위(균등)라 결정 레이어가 평균낸다.
+ * 올린 랭크는 물러나기 전까지 남는다(랭크업기와 같은 처리).
+ */
+function evaluateAcupressure(ctx: EffectContext, base: RaceInputs): EffectEvaluation | undefined {
+  const { state, key, move, myMoves } = ctx;
+  const stats = acupressureOptions(state[key]);
+  if (stats.length === 0) return undefined;
+  const branches = stats.map((stat) => {
+    const clone = cloneBattleState(state);
+    applyAcupressure(clone[key], stat, move.raisesRandomStat!);
+    return { weight: 1 / stats.length, hit: currentRace(clone, key, myMoves), party: { model: createPartyModel(clone, key), turns: Infinity } };
+  });
+  return { hit: branches[0].hit, base, hitChance: 1, carry: 0, kind: "acupressure", branches };
+}
+
+/**
+ * 치유소원(트랙 M6): 자신은 기절하고 다음에 나오는 포켓몬이 HP·상태이상을 전부 회복 — 추억의선물과 같은 희생 평가.
+ * 나올 포켓몬은 회복 이득이 가장 큰 대기 포켓몬으로 본다. 후공인데 이번 턴에 쓰러지면 소원 없이 기절만.
+ */
+function evaluateHealingWish(ctx: EffectContext, base: RaceInputs): EffectEvaluation | undefined {
+  const { state, key } = ctx;
+  const bench = benchIndices(sideOf(state, key));
+  if (bench.length === 0) return undefined;
+  const gain = (f: BattleFighterState) => 1 - f.currentHp / f.maxHp + (f.status.condition ? 0.25 : 0);
+  const after = cloneBattleState(state);
+  after[key].currentHp = 0;
+  const side = sideOf(after, key);
+  const target = bench.reduce((best, i) => (gain(side.party[i]) > gain(side.party[best]) ? i : best), bench[0]);
+  side.party[target].currentHp = side.party[target].maxHp;
+  side.party[target].status = { ...NO_STATUS_CONDITION };
+  const failed = cloneBattleState(state);
+  failed[key].currentHp = 0;
+  const success = ctx.moveFirstProbability + (1 - ctx.moveFirstProbability) * (base.survivalTurns > 1 ? 1 : 0);
+  return {
+    hit: base,
+    base,
+    hitChance: 1,
+    carry: 0,
+    kind: "healingWish",
+    sacrifice: { success, afterModel: createPartyModel(after, key), failModel: createPartyModel(failed, key) },
+  };
+}
+
+/**
+ * 회생의기도(Tier 2-B): 엔진과 같이 가장 앞 슬롯의 기절한 교대 포켓몬을 최대 HP 절반으로 되살린다. 이번 턴은 공격하지
+ * 않으니 상대에게 한 대 맞고(대면이 끝나는 턴 수로 나눈 근사), 되살린 포켓몬 1마리가 늘어난 판세로 평가한다.
+ */
+function evaluateRevive(ctx: EffectContext, base: RaceInputs): EffectEvaluation | undefined {
+  const { state, key } = ctx;
+  const after = cloneBattleState(state);
+  const side = sideOf(after, key);
+  const target = side.party.find((f, i) => i !== side.activeIndex && isFainted(f));
+  if (!target) return undefined;
+  target.currentHp = Math.max(1, Math.floor(target.maxHp / 2));
+  const me = after[key];
+  const hitLoss = Number.isFinite(base.survivalTurns) ? Math.min(me.currentHp, Math.floor(me.currentHp / base.survivalTurns)) : 0;
+  me.currentHp -= hitLoss;
+  return {
+    hit: base,
+    base,
+    hitChance: 1,
+    carry: 0,
+    kind: "revive",
+    partyShift: { hpDelta: target.currentHp / target.maxHp - hitLoss / me.maxHp, extraCount: 1, afterModel: createPartyModel(after, key) },
+  };
+}
+
+/**
+ * 멸망의노래(Tier 2-B → 로드맵 3): 장에 있는 양쪽(방음 제외)에 멸망 카운트 3을 건 state로 이어지는 대면을 계산한다 —
+ * 카운트가 끝나는 턴까지 대면이 이어지면, 교체할 수 있는 쪽은 물러나고 못 하는 쪽(교체 봉쇄·대기 없음)은 쓰러진다.
+ * 상대는 그 전에 교체로 피할 수도 있다(상대 자발적 교체). 대면이 3턴 안에 끝나면 노래가 의미 없어 고르지 않는다.
+ */
+function evaluatePerishSong(ctx: EffectContext, base: RaceInputs): EffectEvaluation | undefined {
+  const { state, key } = ctx;
+  if (Math.min(base.killTurns, base.survivalTurns) <= 3) return undefined;
+  const after = cloneBattleState(state);
+  const oppKey = opponentKey(key);
+  if (!abilityOf(after[key])?.blocksSound) after[key].perishCount = 3;
+  if (!abilityOf(after[oppKey])?.blocksSound && after[oppKey].chargingMoveId === undefined) after[oppKey].perishCount = 3;
+  return {
+    hit: base,
+    base,
+    hitChance: 1,
+    carry: 0,
+    kind: "perishSong",
+    party: { model: createPartyModel(after, key), turns: Infinity, always: true },
+    partyCarry: 0,
+  };
+}
+
+/**
+ * 트집(트랙 M2): 상대는 같은 기술을 연속으로 못 써 최선 공격기를 한 턴 걸러 쓰게 된다 — 최선 공격기를 막은 대면을
+ * 대면 길이의 절반만큼 섞는다(교대로 쓰는 근사). 아직 기술을 안 쓴 상대도 최선 공격기부터 쓴다고 보고 그 기술을 막는다.
+ */
+function evaluateTorment(ctx: EffectContext, base: RaceInputs, clone: BattleState): EffectEvaluation {
+  const { state, key, myMoves } = ctx;
+  const oppKey = opponentKey(key);
+  // 최선 공격기는 트집을 걸기 전 state 기준(건 뒤엔 직전 기술이 이미 빠진다)
+  const probe = evaluateOpponentThreat({ state, opponent: state[oppKey], target: state[key], targetSide: sideOf(state, key), opponentMovesSecond: false });
+  if (probe.bestMove) clone[oppKey].lastMoveId = probe.bestMove.id;
+  const after = currentRace(clone, key, myMoves);
+  const raceLength = Math.min(base.killTurns, base.survivalTurns);
+  const covered = Number.isFinite(raceLength) ? raceLength / 2 : Infinity;
+  return {
+    hit: blendRace(after, base, covered),
+    base,
+    hitChance: 1,
+    carry: 0,
+    kind: "torment",
+    party: { model: createPartyModel(clone, key), turns: covered },
+    partyCarry: 0,
+  };
+}
+
 function blendRace(after: RaceInputs, base: RaceInputs, covered: number): RaceInputs {
   const raceLength = Math.min(after.killTurns, after.survivalTurns);
   const share = raceLength <= covered ? 1 : covered / raceLength;
@@ -552,7 +849,43 @@ function blendRace(after: RaceInputs, base: RaceInputs, covered: number): RaceIn
  * 공통 평가 엔진: key 편의 이번 턴 옵션(기술 최대 4 + 교체 후보)을 전부 같은 항목(a~e)으로 평가한다.
  * 메가진화가 가능하면 기술 옵션은 메가진화한 상태로 평가하고 mega: true로 표시한다(교체 옵션은 메가 없음).
  */
-export function evaluateOptions(state: BattleState, key: FighterKey, options: EvaluateOptions = {}): AiOption[] {
+/**
+ * 매 턴 쌓이는 랭크(ver.1.8 한계점 정리 ②): 가속(스피드 +1)·문어굳히기(방어·특방 −1)·물엿범벅(스피드 −1, 남은 턴까지)은
+ * 턴이 지날수록 대면이 바뀐다. 지금 대면 길이를 어림해 중간 시점까지 쌓인 랭크(대면 길이 T → (T−1)/2 내림, 최대 3)를 두
+ * 활성 포켓몬에 미리 얹은 state로 평가한다(엔진과 같이 클리어바디류·심술꾸러기 존중). 턴 종료 효과 토글에 묶는다.
+ */
+function projectAccumulatingStages(state: BattleState, key: FighterKey): { state: BattleState; steps: number } {
+  const accumulates = (f: BattleFighterState) =>
+    !!abilityOf(f)?.boostsSpeedEachTurnEnd || hasVolatile(f.volatile, "octolock") || hasVolatile(f.volatile, "syrupCoat");
+  if (!isEndOfTurnAware() || (!accumulates(state.a) && !accumulates(state.b))) return { state, steps: 0 };
+  const race = currentRace(state, key, usableMoves(state[key]).filter((m) => !isOneShotMove(m)));
+  const length = Math.min(race.killTurns, race.survivalTurns);
+  const steps = Number.isFinite(length) ? Math.min(3, Math.max(0, Math.floor((length - 1) / 2))) : 3;
+  if (steps === 0) return { state, steps };
+  const projected = cloneBattleState(state);
+  for (const f of [projected.a, projected.b]) {
+    const ability = abilityOf(f);
+    if (ability?.boostsSpeedEachTurnEnd) f.stages = applyStageDelta(f.stages, "spe", contraryDelta(f, steps));
+    const blocked = statDropBlockStatsOf(f, ability);
+    if (hasVolatile(f.volatile, "octolock")) {
+      for (const stat of ["def", "spd"] as const) {
+        if (!blocked?.includes(stat)) f.stages = applyStageDelta(f.stages, stat, contraryDelta(f, -steps));
+      }
+    }
+    if (hasVolatile(f.volatile, "syrupCoat") && !blocked?.includes("spe")) {
+      const left = f.volatile.active.syrupCoat!.turnsRemaining ?? steps;
+      f.stages = applyStageDelta(f.stages, "spe", contraryDelta(f, -Math.min(steps, left)));
+    }
+  }
+  return { state: projected, steps };
+}
+
+export function evaluateOptions(rawState: BattleState, key: FighterKey, options: EvaluateOptions = {}): AiOption[] {
+  const { state, steps } = projectAccumulatingStages(rawState, key);
+  return withAccumulationSteps(steps, () => evaluateOptionsOn(state, key, options));
+}
+
+function evaluateOptionsOn(state: BattleState, key: FighterKey, options: EvaluateOptions): AiOption[] {
   const oppKey = opponentKey(key);
   const mySide = sideOf(state, key);
   const result: AiOption[] = [];
@@ -575,8 +908,9 @@ export function evaluateOptions(state: BattleState, key: FighterKey, options: Ev
   let benchCache: AiOption[] | undefined;
   const benchOptions = () => (benchCache ??= bench.map((index) => evaluateSwitchCandidate(state, key, index)));
 
-  for (const move of myMoves) {
-    const speed = firstProbability(moveState, me, move, opponent, baseThreat.bestMove);
+  // speedMove: 흉내쟁이(트랙 M2)처럼 다른 기술로 나가도 행동 순서는 원래 고른 기술(speedMove)의 우선도로 정해진다
+  const buildMoveOption = (move: Move, speedMove: Move = move): AiOption => {
+    const speed = firstProbability(moveState, me, speedMove, opponent, baseThreat.bestMove);
     const iMoveSecond = speed.probability < 0.5;
     const myTypes = proteanTypes(me, move);
     const threat: OpponentThreat = evaluateOpponentThreat({
@@ -599,7 +933,7 @@ export function evaluateOptions(state: BattleState, key: FighterKey, options: Ev
       typeMatchup: { offensive: estimate?.typeEffectiveness ?? 0, defensive: threat.defensiveMatchup },
       speedOrder: speed.order,
       firstProbability: speed.probability,
-      hitsToKill: turnsFor(estimate ?? undefined, me, opponent),
+      hitsToKill: turnsFor(moveState, estimate ?? undefined, me, opponent),
       hitsToBeKilled: threat.hitsToBeKilled,
       entryCost: 0,
       maxHp: me.maxHp,
@@ -614,6 +948,7 @@ export function evaluateOptions(state: BattleState, key: FighterKey, options: Ev
       const opponentHpAfter = Math.max(1, Math.round(opponent.currentHp * (1 - 1 / estimate.rawHits)));
       const follow = (hp?: number) =>
         turnsFor(
+          moveState,
           bestAttack({ state: moveState, attacker: me, defender: opponent, defenderSide: oppMoveSide, moves: raceMoves, attackerMovesSecond: iMoveSecond, defenderHp: hp })?.estimate,
           me,
           opponent,
@@ -624,6 +959,45 @@ export function evaluateOptions(state: BattleState, key: FighterKey, options: Ev
       const afterHit = acc > 0 ? acc * follow(opponentHpAfter) : 0;
       const afterMiss = acc < 1 ? (1 - acc) * follow() : 0;
       option.hitsToKill = { ...option.hitsToKill, expected: 1 + afterHit + afterMiss };
+    }
+
+    // 목숨걸기·자폭류(트랙 M5): 주고 기절 — 추억의선물처럼 "그 state에서 이어지는 판세"로 평가(파티 모드 전용).
+    // 목숨걸기는 내 HP만큼, 자폭류(대폭발·자폭·미스트버스트)는 한 번 맞혔을 때의 평균 데미지만큼. 후공인데 이번 턴에
+    // 쓰러지면 데미지 없이 기절만 한다(자폭류는 빗나가도 기절).
+    const sacrificeAttack = move.damageEqualsUserHp || (move.selfFaints && move.category !== "status");
+    if (sacrificeAttack) {
+      const bestKillTurns = turnsFor(moveState, myBest?.estimate, me, opponent).expected;
+      if (!estimate || estimate.typeEffectiveness === 0 || estimate.accuracy <= 0) {
+        option.support = { kind: "other", before: 0, after: 0, bestKillTurns };
+        return option;
+      }
+      const dealt = move.damageEqualsUserHp
+        ? me.currentHp
+        : Math.round((estimate.damageFraction / Math.max(estimate.accuracy, 1e-9)) * opponent.maxHp);
+      const after = cloneBattleState(moveState);
+      after[oppKey].currentHp = Math.max(0, after[oppKey].currentHp - dealt);
+      after[key].currentHp = 0;
+      const failed = cloneBattleState(moveState);
+      failed[key].currentHp = 0;
+      const survivesTurn = threat.hitsToBeKilled.expected > 1;
+      const success = estimate.accuracy * (speed.probability + (1 - speed.probability) * (survivesTurn ? 1 : 0));
+      const race: RaceInputs = { killTurns: option.hitsToKill.expected, survivalTurns: option.hitsToBeKilled.expected, firstProbability: speed.probability };
+      option.support = {
+        kind: "effect",
+        before: 0,
+        after: 0,
+        bestKillTurns,
+        extended: true,
+        effect: {
+          hit: race,
+          base: race,
+          hitChance: 1,
+          carry: 0,
+          kind: move.damageEqualsUserHp ? "finalGambit" : "selfDestruct",
+          sacrifice: { success, afterModel: createPartyModel(after, key), failModel: createPartyModel(failed, key) },
+        },
+      };
+      return option;
     }
 
     // 유턴류: 맞히면(상대 기절 여부 무관) 교대할 포켓몬이 있는 한 엔진이 교체를 강제한다. 한 방에 쓰러뜨리면
@@ -639,9 +1013,23 @@ export function evaluateOptions(state: BattleState, key: FighterKey, options: Ev
       };
     }
 
+    // 잠꼬대(AI-A2): 잠든 동안(사용 조건은 selectableMoves가 이미 거름) 배운 다른 기술 중 무작위 하나가 나간다 —
+    // 잠든 턴 동안은 그 기대 피해로, 깬 뒤에는 최선 공격기로 대면을 이어간다.
+    if (move.callsRandomLearnedMove) {
+      const sleepTalk = sleepTalkKillTurns(moveState, key, move, turnsFor(moveState, myBest?.estimate, me, opponent).expected, iMoveSecond);
+      if (sleepTalk) {
+        option.hitsToKill = { expected: sleepTalk.killTurns, worstCase: { count: 3, certainty: "random", probability: 0 } };
+        option.typeMatchup = { ...option.typeMatchup, offensive: sleepTalk.bestTypeEffectiveness };
+        option.accuracy = 1;
+      } else {
+        option.support = { kind: "other", before: 0, after: 0, bestKillTurns: turnsFor(moveState, myBest?.estimate, me, opponent).expected };
+      }
+      return option;
+    }
+
     if (move.category === "status") {
       const kind = classifySupport(move);
-      const bestKillTurns = turnsFor(myBest?.estimate, me, opponent).expected;
+      const bestKillTurns = turnsFor(moveState, myBest?.estimate, me, opponent).expected;
       if (protectGroupOf(move)) {
         option.support = {
           kind: "protect",
@@ -674,7 +1062,23 @@ export function evaluateOptions(state: BattleState, key: FighterKey, options: Ev
       } else if (kind === "heal") {
         const healWeather = abilityOf(me)?.treatsOwnWeatherAsSun ? "쾌청" : activeWeather(moveState);
         const fraction = move.healsWeatherDependent ? computeWeatherHealFraction(healWeather) : (move.healsFraction ?? 0);
-        const healedHp = Math.min(me.maxHp, me.currentHp + Math.floor(me.maxHp * fraction));
+        let healedHp = Math.min(me.maxHp, me.currentHp + Math.floor(me.maxHp * fraction));
+        // 희망사항(AI-A1): 회복은 다음 턴 종료 — 그 사이 한 번 더 맞은 뒤 최대 HP 절반을 받는다. 이미 예약돼 있으면
+        // 실패(엔진 mirroredEffects), 받기 전에 쓰러지면(이번 턴 + 다음 턴에 쓰러짐) 회복 없음 → 순이득 ≤ 0.
+        let wishFails = false;
+        // 꿀꺽(트랙 M1): 비축 1/2/3 → 1/4·1/2·전부. 비축이 없으면 실패(비축 랭크를 되돌리는 손해는 아직 안 셈)
+        if (move.healsByStockpile) {
+          const spent = me.stockpileCount ?? 0;
+          const stockFraction = spent >= 3 ? 1 : spent === 2 ? 0.5 : spent === 1 ? 0.25 : 0;
+          healedHp = Math.min(me.maxHp, me.currentHp + Math.floor(me.maxHp * stockFraction));
+          wishFails = spent === 0;
+        }
+        if (isWish(move)) {
+          const perTurnLoss = threat.hitsToBeKilled.expected > 0 ? me.currentHp / threat.hitsToBeKilled.expected : me.currentHp;
+          const hpBeforeHeal = me.currentHp - perTurnLoss;
+          wishFails = !!myMoveSide.wish || me.currentHp - 2 * perTurnLoss <= 0;
+          healedHp = Math.max(0, Math.min(me.maxHp, hpBeforeHeal + Math.floor(me.maxHp / 2)));
+        }
         const after = evaluateOpponentThreat({ state: moveState, opponent, target: me, targetSide: myMoveSide, opponentMovesSecond: !iMoveSecond, targetHp: healedHp });
         option.support = {
           kind,
@@ -682,8 +1086,8 @@ export function evaluateOptions(state: BattleState, key: FighterKey, options: Ev
           after: after.hitsToBeKilled.expected,
           bestKillTurns,
           healedHpFraction: healedHp / me.maxHp,
-          healNetGain: healNetGain(me.currentHp / me.maxHp, healedHp / me.maxHp, after.bestHitFraction, 1),
-          extended: move.healsWeatherDependent || undefined,
+          healNetGain: wishFails ? -1 : healNetGain(me.currentHp / me.maxHp, healedHp / me.maxHp, after.bestHitFraction, 1),
+          extended: move.healsWeatherDependent || isWish(move) || move.healsByStockpile || undefined,
         };
       } else if (kind === "effect") {
         const effect = evaluateEffectMove({
@@ -695,6 +1099,49 @@ export function evaluateOptions(state: BattleState, key: FighterKey, options: Ev
           benchOptions: () => benchOptions(),
         });
         option.support = { kind: effect ? "effect" : "other", before: 0, after: 0, bestKillTurns, effect, extended: true };
+      } else if (move.shedTail && bench.length > 0) {
+        // 꼬리자르기(Tier 2-C): 최대 HP 1/2로 대타를 세워 후보에게 넘기는 교체. 후보는 대타를 가진 채로 평가한다.
+        // 이미 대타가 있거나 HP가 절반 이하면 실패하고, 후공이면 먼저 맞아 HP가 절반 이하로 떨어져도 실패한다.
+        const cost = Math.floor(me.maxHp / 2);
+        const d = threat.hitsToBeKilled.expected;
+        const activeHitLoss = (me.currentHp / me.maxHp) * Math.min(1, d > 0 ? 1 / d : 1);
+        if (me.substituteHp === undefined && me.currentHp > cost) {
+          const passed = cloneBattleState(state);
+          passed[key].currentHp -= cost;
+          const side = sideOf(passed, key);
+          const secondOk = me.currentHp - activeHitLoss * me.maxHp > cost;
+          option.pivot = {
+            hitRate: 0,
+            hitChance: speed.probability + (1 - speed.probability) * (secondOk ? 1 : 0),
+            activeHitLoss,
+            selfCost: cost / me.maxHp,
+            tier2: true,
+            candidates: bench.map((index) => {
+              side.party[index].substituteHp = cost;
+              const candidate = evaluateSwitchCandidate(passed, key, index);
+              side.party[index].substituteHp = undefined;
+              return candidate;
+            }),
+          };
+        }
+        option.support = { kind: "other", before: 0, after: 0, bestKillTurns, extended: true };
+      } else if (move.setsWeather && move.selfSwitchAfterUse && bench.length > 0) {
+        // 썰렁개그(Tier 2-C): 눈을 내리게 한 뒤 교체 — 후보는 눈이 내리는 state로 평가한다(이미 눈이어도 교체는 한다).
+        const snowed = cloneBattleState(state);
+        if (snowed.weather !== move.setsWeather) {
+          const item = effectiveHeldItem(me);
+          snowed.weather = move.setsWeather;
+          snowed.weatherTurnsRemaining = WEATHER_DURATION + (item?.weatherDurationBonus?.weather === move.setsWeather ? item.weatherDurationBonus.bonus : 0);
+        }
+        const d = threat.hitsToBeKilled.expected;
+        option.pivot = {
+          hitRate: 0,
+          hitChance: 1,
+          activeHitLoss: (me.currentHp / me.maxHp) * Math.min(1, d > 0 ? 1 / d : 1),
+          tier2: true,
+          candidates: bench.map((index) => evaluateSwitchCandidate(snowed, key, index)),
+        };
+        option.support = { kind: "other", before: 0, after: 0, bestKillTurns, extended: true };
       } else if (isBatonPass(move) && bench.length > 0) {
         // 배턴터치: 유턴류와 같은 "교체" 평가 — 데미지는 0, 후보는 내 랭크 변화를 이어받은 상태로 평가한다.
         const d = threat.hitsToBeKilled.expected;
@@ -726,7 +1173,7 @@ export function evaluateOptions(state: BattleState, key: FighterKey, options: Ev
         option.support = {
           kind,
           before: bestKillTurns,
-          after: turnsFor(after?.estimate, me, opponent).expected,
+          after: turnsFor(moveState, after?.estimate, me, opponent).expected,
           bestKillTurns,
           effect: setup.effect,
           batonFollowUp: setup.batonFollowUp,
@@ -736,13 +1183,60 @@ export function evaluateOptions(state: BattleState, key: FighterKey, options: Ev
         option.support = { kind, before: 0, after: 0, bestKillTurns };
       }
     }
-    result.push(option);
-  }
+    return option;
+  };
+
+  /**
+   * 흉내쟁이(트랙 M2): 선공이면 배틀에서 직전에 나온 기술, 후공이면 이번 턴 상대가 낼 기술(사용 확률 모델)을
+   * 따라 쓴다 — 갈래마다 그 기술을 내 기술로 쓴 옵션을 만들고 결정 레이어가 가중 평균한다. 따라 쓸 수 없으면 한 턴 날림.
+   */
+  const buildCopycatOption = (move: Move): AiOption => {
+    const option = buildMoveOption(move);
+    const p = option.firstProbability;
+    const branch = (copied: Move | undefined, weight: number) => ({
+      weight,
+      option: copied && isCopyableMove(copied) ? buildMoveOption(copied, move) : undefined,
+    });
+    const last = moveState.lastMoveUsedId ? getMove(moveState.lastMoveUsedId) : undefined;
+    const threat = evaluateOpponentThreat({ state: moveState, opponent, target: me, targetSide: myMoveSide, opponentMovesSecond: p >= 0.5 });
+    const total = threat.moveWeights.reduce((a, w) => a + w.weight, 0);
+    const branches = [
+      ...(p > 0 ? [branch(last, p)] : []),
+      ...(p < 1 && total > 0 ? threat.moveWeights.map((w) => branch(w.move, ((1 - p) * w.weight) / total)) : []),
+    ];
+    option.copycat = { branches };
+    return option;
+  };
+
+  for (const move of myMoves) result.push(move.callsLastMoveInBattle ? buildCopycatOption(move) : buildMoveOption(move));
 
   // ── 교체 옵션 ── (교체 턴에는 메가진화 없음 → 원래 state 기준)
-  if (!isTrappedFromSwitching(state[key])) {
+  if (!isTrappedFromSwitching(state[key], state)) {
     for (const index of benchIndices(mySide)) result.push(evaluateSwitchCandidate(state, key, index));
   }
 
+  attachParty(result, createPartyModel(moveState, key));
   return result;
+}
+
+/**
+ * 파티 단위 평가(§4-5)용 첫 대면 정보를 옵션마다 붙인다. 기술 옵션은 지금 나와 있는 포켓몬(랭크 유지), 교체·유턴류·
+ * 배턴터치 후보는 들어오는 포켓몬(이후 대면은 랭크 0 — 배턴터치로 받은 랭크는 첫 대면에만 반영되는 근사).
+ */
+function attachParty(options: AiOption[], model: PartyModel): void {
+  const candidateParty = (candidates: AiOption[] | undefined) => {
+    for (const c of candidates ?? []) {
+      if (c.toIndex !== undefined) c.party = { model, myIndex: c.toIndex, myStaged: false };
+    }
+  };
+  for (const option of options) {
+    option.party =
+      option.optionType === "switch"
+        ? { model, myIndex: option.toIndex!, myStaged: false }
+        : { model, myIndex: model.myActive, myStaged: true };
+    candidateParty(option.pivot?.candidates);
+    candidateParty(option.support?.batonFollowUp?.candidates);
+    const copied = option.copycat?.branches.flatMap((b) => (b.option ? [b.option] : []));
+    if (copied?.length) attachParty(copied, model);
+  }
 }

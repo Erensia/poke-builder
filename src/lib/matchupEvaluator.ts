@@ -10,7 +10,7 @@ import { getBerryDefenseResult, getItemOffenseMultiplier, getItemSpeedMultiplier
 import { getEffectiveForm, getEffectiveGender, type FormSource } from "./pokemonForm";
 import { computeRealStats } from "./statCalculator";
 import { applyMoveStatChanges } from "./statStages";
-import { getWeatherDamageMultiplier, applyWeatherBall } from "./weatherEffects";
+import { getWeatherDamageMultiplier, getWeatherDefenseMultiplier, applyWeatherBall } from "./weatherEffects";
 import { applyFieldPulse, getFieldPowerMultiplier, getFieldDamageMultiplier } from "./fieldEffects";
 import { resolveMoveContext } from "./moveContext";
 import { resolveEffectiveDefenderAbility } from "./abilityModifiers";
@@ -23,6 +23,7 @@ import {
   rankStageMultiplier,
   reversalPowerFromHp,
   gyroBallPowerFromSpeeds,
+  electroBallPowerFromSpeeds,
   positiveStagesPowerValue,
   weightRatioPowerValue,
   absoluteWeightPowerValue,
@@ -81,6 +82,8 @@ export interface SlotMatchupOptions {
    */
   attackerHpFraction?: number;
   defenderHpIsFull?: boolean;
+  /** 하드프레스(트랙 M5)처럼 상대 남은 HP 비율로 위력이 정해지는 기술용. 생략하면 풀피 */
+  defenderHpFraction?: number;
   defenderHasStatusCondition?: boolean;
   defenderItemConsumed?: boolean;
   /**
@@ -101,6 +104,8 @@ export interface RuntimeCombatant {
   /** null이면 도구 없음(소모·강탈·서투름 포함) */
   itemId: string | null;
   weightKg?: number;
+  /** 트랙 M4: 지금 땅에 있는지(배틀 접지 판정). 생략하면 기존 판정(땅 기술 면역은 타입·특성·도구, 필드는 모두 땅) */
+  grounded?: boolean;
 }
 
 /** evaluateSlotMatchup이 실제로 필요로 하는 최소 형태. PartySlot과 MatchupSlot 둘 다 만족한다 */
@@ -180,6 +185,7 @@ export function evaluateSlotMatchup(
     stockpileCount,
     attackerHpFraction,
     defenderHpIsFull,
+    defenderHpFraction = 1,
     defenderHasStatusCondition,
     defenderItemConsumed,
     attackerRuntime,
@@ -295,6 +301,23 @@ export function evaluateSlotMatchup(
         effSpeed(defenderRealStats.spe, defenderStages, defenderItem),
       ),
     };
+  } else if (move.flingsHeldItem) {
+    // 내던지기(트랙 M5): 지닌 도구의 flingPower. 던질 도구가 없으면 위력 없음(데미지 0)
+    variablePowerMove = { ...variablePowerMove, power: attackerItem?.flingPower ?? null };
+  } else if (move.electroBallPower) {
+    // 일렉트릭볼(트랙 M5): 자이로볼과 같은 실효 스피드, 본가 비율표
+    const effSpeed = (spe: number, stages: StatStages, item: Parameters<typeof getItemSpeedMultiplier>[0]) =>
+      spe * rankStageMultiplier(stages.spe) * getItemSpeedMultiplier(item);
+    variablePowerMove = {
+      ...variablePowerMove,
+      power: electroBallPowerFromSpeeds(
+        effSpeed(attackerRealStats.spe, attackerStages, attackerItem),
+        effSpeed(defenderRealStats.spe, defenderStages, defenderItem),
+      ),
+    };
+  } else if (move.targetHpRatioPower) {
+    // 하드프레스(트랙 M5): 상대 남은 HP 비율(매치업 페이지는 풀피)
+    variablePowerMove = { ...variablePowerMove, power: Math.max(1, Math.floor(move.targetHpRatioPower * defenderHpFraction)) };
   } else if (move.powerFromPositiveStages) {
     const { base, perStage } = move.powerFromPositiveStages;
     variablePowerMove = { ...variablePowerMove, power: positiveStagesPowerValue(attackerStages, base, perStage) };
@@ -351,8 +374,9 @@ export function evaluateSlotMatchup(
   const weatherBall = applyWeatherBall(variablePowerMove, effectiveWeather);
   const weatherBallMove: Move = { ...variablePowerMove, type: weatherBall.type, power: weatherBall.power };
 
-  const fieldPulse = applyFieldPulse(weatherBallMove, field);
-  const fieldPowerMultiplier = getFieldPowerMultiplier(weatherBallMove, field);
+  // 접지 조건(ver.1.8) — runtime이 없으면(매치업 페이지) 땅에 있다고 본다
+  const fieldPulse = applyFieldPulse(weatherBallMove, field, attackerRuntime?.grounded ?? true);
+  const fieldPowerMultiplier = getFieldPowerMultiplier(weatherBallMove, field, attackerRuntime?.grounded ?? true, defenderRuntime?.grounded ?? true);
   const fieldAdjustedMove: Move = {
     ...weatherBallMove,
     type: fieldPulse.type,
@@ -375,6 +399,7 @@ export function evaluateSlotMatchup(
     defenderHpIsFull,
     defenderHasStatusCondition,
     field,
+    defenderGrounded: defenderRuntime?.grounded,
   });
 
   // 다단히트 기술이면, 특성/타입 조건 판정은 원래 기술(1타 위력) 기준으로 이미 끝났으니 여기서만
@@ -430,7 +455,7 @@ export function evaluateSlotMatchup(
 
   // 날씨/필드 데미지 배율은 (타입 변경까지 끝난) effectiveMove.type 기준으로 구한다 — battleSimulator와 동일.
   const autoWeatherDamageMultiplier = getWeatherDamageMultiplier(effectiveWeather, effectiveMove.type);
-  const autoFieldDamageMultiplier = getFieldDamageMultiplier(field, effectiveMove.type);
+  const autoFieldDamageMultiplier = getFieldDamageMultiplier(field, effectiveMove.type, attackerRuntime?.grounded, defenderRuntime?.grounded);
 
   // 투쟁심: 양쪽 슬롯 성별로 ×1.25(동성)/×0.75(이성)/×1.0(불명). battlePower.rivalryDamageMultiplier 공유(§5).
   const rivalryMultiplier = rivalryDamageMultiplier(
@@ -470,11 +495,17 @@ export function evaluateSlotMatchup(
     ((screen === "reflect" && resolvedCategory === "physical") ||
       (screen === "lightScreen" && resolvedCategory === "special"));
   const screenMultiplier = screenMultiplierFromFlags(categoryScreenActive, auroraVeilActive);
+  // 모래바람 바위 특방·눈 얼음 방어 1.5배(Tier 2-C에서 발견한 누락) — hitResolution과 같은 판정
+  const weatherDefenseMultiplier = getWeatherDefenseMultiplier(
+    effectiveWeather,
+    defenderForm.types,
+    move.hitsDefensiveStat ?? (resolvedCategory === "physical" ? "def" : "spd"),
+  );
 
   const bulkPower = computeBulkPower(defenderRealStats, resolvedCategory, {
     defenderStages,
     bulkMultiplier:
-      (manualBulkMultiplier ?? abilityDefense * berryResult.bulkMultiplier) * screenMultiplier,
+      (manualBulkMultiplier ?? abilityDefense * berryResult.bulkMultiplier * weatherDefenseMultiplier) * screenMultiplier,
     // 사이코쇼크(hitsDefensiveStat): 특수기지만 내구력은 방어자의 물리 방어로 낸다
     defensiveStatOverride: move.hitsDefensiveStat,
   });

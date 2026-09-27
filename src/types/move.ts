@@ -232,7 +232,8 @@ export interface Move {
    * 활성 상태일 때 위력에 곱해지는 배율만 채운다. 필드 타입 자체가 위력을 올리는 getFieldDamageMultiplier
    * (자속처럼 타입 일치 시 1.3배)와는 별개 축 — 이쪽은 기술 고유의 "이 필드에서만 강해짐" 효과다.
    */
-  powerMultiplierInField?: { field: FieldKind; multiplier: number };
+  /** requiresTargetGrounded: 라이징볼트처럼 상대가 땅에 있어야 하는 경우(기본은 사용자 접지) */
+  powerMultiplierInField?: { field: FieldKind; multiplier: number; requiresTargetGrounded?: boolean };
   /**
    * 대지의파동(Terrain Pulse) 전용. 필드가 활성 상태면 기술의 실제 타입이 그 필드의 표시 타입
    * (FIELD_DISPLAY_TYPE)으로 바뀌고 위력이 2배가 된다. 필드가 없으면 원본 그대로(노말타입 50).
@@ -633,6 +634,91 @@ export interface Move {
    * 스피드스왑(Speed Swap): 명중 시 자신과 상대의 스피드 실능을 서로 맞바꾼다(realStats 직접 스왑).
    */
   swapsSpeedWithTarget?: boolean;
+  /**
+   * 트릭·바꿔치기(트랙 M1): 명중 시 자신과 상대의 지닌 도구를 맞바꾼다. 둘 다 없거나, 어느 쪽이든 메가스톤이거나,
+   * 상대가 점착(preventsItemLoss)이면 실패. 바뀐 뒤 양쪽 구애류 잠금은 풀린다(새 도구로 다음 기술부터 다시 잠김).
+   */
+  swapsItemsWithTarget?: boolean;
+  /** 아픔나누기(트랙 M1): 자신과 상대의 현재 HP 합을 반씩(내림) 나눠 가진다(각자 최대 HP까지). */
+  sharesHpWithTarget?: boolean;
+  /** 순풍(트랙 M1): 자기 편 스피드 2배를 4턴(쓴 턴 포함) 동안. 이미 불고 있으면 실패. */
+  setsTailwind?: boolean;
+  /** 꿀꺽(트랙 M1): 비축 스택 1/2/3개면 최대 HP 1/4·1/2·전부 회복 후 스택과 그만큼의 방어·특방 랭크를 되돌린다. 0개면 실패. */
+  healsByStockpile?: boolean;
+  /** 리사이클(트랙 M1): 지닌 도구가 없고 이번 배틀에서 마지막으로 소모한 도구가 있으면 그 도구를 다시 지닌다. */
+  recyclesItem?: boolean;
+  /** 자기암시(트랙 M2): 상대의 랭크 변화(능력·명중·회피·급소 랭크)를 그대로 복사한다. */
+  copiesTargetStages?: boolean;
+  /** 원한(트랙 M2): 상대가 마지막으로 쓴 기술의 PP를 이만큼 줄인다. 쓴 기술이 없거나 PP가 0이면 실패. */
+  reducesTargetLastMovePp?: number;
+  /** 파워셰어(트랙 M2): 자신·상대의 공격·특공 실능을 각각 더해 반씩 나눠 갖는다(가드셰어의 공격판). */
+  averagesAttacksWithTarget?: boolean;
+  /** 경혈찌르기(트랙 M2): +6이 아닌 능력(공·방·특공·특방·스피드·명중·회피) 중 하나를 무작위로 이만큼 올린다. */
+  raisesRandomStat?: number;
+  /** 흉내쟁이(트랙 M2): 배틀에서 직전에 나온 기술(누가 썼든)을 대신 쓴다. 없거나 excludedFromCopycat이면 실패. */
+  callsLastMoveInBattle?: boolean;
+  /**
+   * 성묘(트랙 L): 위력 = power + 이 값 × 쓰러진 같은 편 수(자신 제외, 사용 시점). 최대 300.
+   */
+  powerPerFaintedAlly?: number;
+  /**
+   * 집단구타(트랙 M6): 파티에서 기절하지 않고 상태이상이 없는 포켓몬(사용자는 항상) 1마리당 1타. 각 타 위력 = 5 + 그 포켓몬
+   * 종족값 공격 ÷ 10(내림). 사용 시점에 multiHitPowers로 바꿔 기존 다단히트 경로를 탄다.
+   */
+  beatUpPower?: boolean;
+  /** 다과회(Tier 2): 장에 있는 양쪽 모두 지닌 나무열매를 바로 먹는다(효과 전부). 아무도 없으면 실패 */
+  allEatBerries?: boolean;
+  /** 치료방울(Tier 2): curesStatus(자신)에 더해 대기 포켓몬의 상태이상도 모두 고친다 */
+  curesParty?: boolean;
+  /** 페어리록(트랙 M6): 다음 턴 동안 양쪽 모두 교체할 수 없다. 이미 걸려 있으면 실패 */
+  setsFairyLock?: boolean;
+  /** 치유소원(트랙 M6): 자신은 기절하고 다음에 나오는 포켓몬이 HP·상태이상을 전부 회복. 교대할 포켓몬이 없으면 실패 */
+  setsHealingWish?: boolean;
+  /** 부식가스(트랙 M6): 상대 도구를 녹여 없앤다(리사이클로 회수 불가). 메가스톤·점착이면 실패 */
+  removesTargetItem?: boolean;
+  /** 자기장조작(트랙 M6): 자신이 플러스·마이너스면 방어·특방 +1, 아니면 실패 */
+  boostsDefensesIfPlusMinus?: boolean;
+  /**
+   * 내던지기(트랙 M5): 지닌 도구를 던진다 — 위력은 도구의 flingPower, 도구는 소모(리사이클로 회수 가능). 도구가 없거나
+   * 던질 수 없는 도구(메가스톤 등)·매직룸·서투름이면 실패. 맞은 상대에게 도구 효과(상태이상·풀죽음·나무열매·허브)가 발동한다.
+   */
+  flingsHeldItem?: boolean;
+  /** 일렉트릭볼(트랙 M5): 자신/상대 실효 스피드 비율로 위력(40~150) */
+  electroBallPower?: boolean;
+  /** 하드프레스(트랙 M5): 위력 = 이 값 × 상대 남은 HP 비율 */
+  targetHpRatioPower?: number;
+  /** 분노의앞니(트랙 M5): 상대 현재 HP의 절반(최소 1)만큼 고정 데미지 */
+  halvesTargetHp?: boolean;
+  /**
+   * 일격기(땅가르기·뿔드릴·가위자르기·절대영도, 트랙 M5): 맞으면 상대 현재 HP만큼 데미지. 명중 30% 고정(레벨 50 동일 가정 —
+   * 명중·회피 랭크 무시), 옹골참 무효. immuneType은 그 타입에 안 통함(절대영도 → 얼음), accuracyUnlessUserType은 사용자가
+   * 그 타입이 아니면 명중이 이 값(절대영도 → 얼음이 아니면 20).
+   */
+  oneHitKo?: { immuneType?: PokemonType; accuracyUnlessUserType?: { type: PokemonType; accuracy: number } };
+  /** 목숨걸기(트랙 M5): 자신의 현재 HP만큼 고정 데미지를 주고 기절한다(빗나가거나 면역이면 기절하지 않음) */
+  damageEqualsUserHp?: boolean;
+  /** 원더룸·매직룸(트랙 M4): 5턴 동안 장 전체 효과. 이미 걸려 있으면 다시 쓸 때 해제(본가) */
+  setsRoom?: "wonderRoom" | "magicRoom";
+  /** 중력(트랙 M4): 5턴 동안 모두 접지·명중 ×5/3·공중 기술 사용 불가. 이미 걸려 있으면 실패 */
+  setsGravity?: boolean;
+  /** 전자부유(트랙 M4): 5턴 동안 자신이 떠올라 땅 기술을 무시. 중력·검은철구·떨어뜨리기·이미 떠 있으면 실패 */
+  setsMagnetRise?: boolean;
+  /** 떨어뜨리기(트랙 M4): 맞은 상대를 물러날 때까지 땅에 떨어뜨린다 */
+  groundsTarget?: boolean;
+  /** 중력 중엔 쓸 수 없는 기술(공중날기·뛰어오르기·무릎차기·플라잉프레스·전자부유) */
+  blockedByGravity?: boolean;
+  /** 스킬스왑(트랙 M3): 자신과 상대의 특성을 맞바꾼다 */
+  swapsAbilityWithTarget?: boolean;
+  /** 동료만들기(트랙 M3): 상대의 특성을 자신의 특성으로 바꾼다 */
+  givesAbilityToTarget?: boolean;
+  /** 역할(트랙 M3): 자신의 특성을 상대의 특성으로 바꾼다 */
+  copiesTargetAbility?: boolean;
+  /** 위액(트랙 M3): 상대의 특성을 무효로 만든다(물러날 때까지) */
+  suppressesTargetAbility?: boolean;
+  /** 미러타입(트랙 M3): 자신의 타입을 상대와 같게 만든다 */
+  copiesTargetTypes?: boolean;
+  /** 흉내쟁이가 따라 쓸 수 없는 기술(방어류·강제교체·도구 바꾸기·다른 기술 부르기 등 — 본가 목록). */
+  excludedFromCopycat?: boolean;
   /**
    * 셸암즈(Shell Side Arm) — 가라르야도란 전용기. 물리(공격 vs 상대 방어)로 낸 데미지와 특수
    * (특공 vs 상대 특방)로 낸 데미지를 둘 다 계산해, 큰 쪽 판정으로 공격한다 — 물리면 접촉기,

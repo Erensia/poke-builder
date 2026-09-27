@@ -1,4 +1,6 @@
 import { type ChargeHideType, type Move } from "@/types/move";
+import { isFixedAbility } from "./abilityChange";
+import { isGrounded } from "./grounding";
 import { type WeatherKind } from "@/types/weather";
 import { type FieldKind } from "@/types/field";
 import { type FighterKey, type HitAbilityEvent } from "@/types/battle";
@@ -12,8 +14,8 @@ import { hitTriggerMatchesMove } from "@/lib/abilityHitTriggers";
 import { critChance } from "@/lib/accuracyCrit";
 import { computeStatusAttackMultiplier, ignoresBurnAttackPenalty, inflictStatus, isImmuneToStatus } from "@/lib/statusConditions";
 import { hasVolatile, inflictVolatile } from "@/lib/volatileConditions";
-import { computeDamage, hustleDamageMultiplier, screenMultiplierFromFlags } from "@/lib/battlePower";
-import { getWeatherDamageMultiplier } from "@/lib/weatherEffects";
+import { computeDamage, hustleDamageMultiplier, screenMultiplierFromFlags, supremeOverlordMultiplier } from "@/lib/battlePower";
+import { getWeatherDamageMultiplier, getWeatherDefenseMultiplier } from "@/lib/weatherEffects";
 import { FIELD_DURATION, getFieldDamageMultiplier } from "@/lib/fieldEffects";
 import { getBerryDefenseResult, getDrainHealMultiplier, getEnduranceResult, getItemCritStageBonus, getItemOffenseMultiplier, getMentalHerbCureResult } from "@/lib/itemEffects";
 import { MIN_DAMAGE_ROLL, STRUGGLE_MOVE, WEATHER_DURATION, activeWeather, applyMimicryForm, consumeItem, contraryDelta, isFainted, rollMultiHitCount, sideOf, statDropBlockStatsOf, statusImmunitiesOf, type BattleFighterState, type BattleState } from "./state";
@@ -153,12 +155,20 @@ export function resolveHitAndApplyDamage(input: HitResolutionInput) {
     );
     // 의욕(Hustle): 물리 기술 위력 ×1.5 (명중률 ×0.8은 위 accuracyExtraMultiplier에서 반영).
     const hustleMultiplier = hustleDamageMultiplier(effectiveMove.category, attackerAbility);
+    // 총대장: 등장 시 센 쓰러진 같은 편 수만큼 위력 ×(1 + 0.1 × 수).
+    const overlordMultiplier = supremeOverlordMultiplier(attackerAbility, attacker.supremeOverlordCount);
     // 메가솔라: 자신이 쓰는 기술의 날씨 배율을 항상 쾌청 기준으로(불꽃 ×1.5·물 ×0.5) 계산한다.
     const weatherMultiplier = getWeatherDamageMultiplier(
       attackerAbility?.treatsOwnWeatherAsSun ? "쾌청" : activeWeather(state),
       effectiveMove.type,
     );
-    const fieldMultiplier = getFieldDamageMultiplier(state.field, effectiveMove.type);
+    // 트랙 M4: 필드 타입 강화는 공격측이, 미스트필드 드래곤 반감은 방어측이 땅에 있을 때만
+    const fieldMultiplier = getFieldDamageMultiplier(
+      state.field,
+      effectiveMove.type,
+      isGrounded(state, attacker, attackerAbility),
+      isGrounded(state, defender, defenderAbility),
+    );
     const itemMultiplier = getItemOffenseMultiplier(
       attackerItem,
       effectiveMove,
@@ -212,7 +222,12 @@ export function resolveHitAndApplyDamage(input: HitResolutionInput) {
         ? { ...baseDefenderStages, [contactDefenseStat]: 0 }
         : baseDefenderStages;
 
-    const result = computeDamage(attacker.realStats, defender.realStats, attacker.types, hitMove, {
+    // 원더룸(트랙 M4): 방어·특방 실능을 맞바꿔 받는다(랭크는 그대로)
+    const defenderStatsForDamage =
+      state.wonderRoomTurnsRemaining !== undefined
+        ? { ...defender.realStats, def: defender.realStats.spd, spd: defender.realStats.def }
+        : defender.realStats;
+    const result = computeDamage(attacker.realStats, defenderStatsForDamage, attacker.types, hitMove, {
       typeEffectiveness,
       abilityMultiplier:
         abilityOffenseMultiplier *
@@ -220,7 +235,8 @@ export function resolveHitAndApplyDamage(input: HitResolutionInput) {
         hidingBypassMultiplier *
         ownMoveTypeBoostMultiplier *
         rivalryMultiplier *
-        hustleMultiplier,
+        hustleMultiplier *
+        overlordMultiplier,
       weatherMultiplier,
       fieldMultiplier,
       itemMultiplier: itemMultiplier * gemMultiplier,
@@ -235,6 +251,8 @@ export function resolveHitAndApplyDamage(input: HitResolutionInput) {
         abilityDefenseMultiplier *
         berryResult.bulkMultiplier *
         screenMultiplier *
+        // 모래바람 바위 특방·눈 얼음 방어 1.5배(날씨 무효 특성이면 activeWeather가 없음)
+        getWeatherDefenseMultiplier(activeWeather(state), defender.types, contactDefenseStat) *
         (defender.glaiveRushVulnerable ? 0.5 : 1),
       isCritical: critical,
       // 스나이퍼: 급소 데미지 배율을 2.25로 올린다(기본 1.5).
@@ -441,7 +459,7 @@ export function resolveHitAndApplyDamage(input: HitResolutionInput) {
       // 아로마베일: 접촉기를 쓴 공격자가 이 특성이면 헤롱헤롱바디의 헤롱헤롱이 걸리지 않는다.
       !(
         (trigger.inflictsVolatileOnAttacker === "attract" || trigger.inflictsVolatileOnAttacker === "taunt") &&
-        attackerAbility?.blocksMentalMoves
+        (attackerAbility?.blocksMentalMoves || attackerAbility?.immuneToAttractAndTaunt)
       )
     ) {
       attacker.volatile = inflictVolatile(attacker.volatile, trigger.inflictsVolatileOnAttacker, random);
@@ -555,7 +573,8 @@ export function resolveHitAndApplyDamage(input: HitResolutionInput) {
     // 미라(Mummy): 접촉기로 피격당하면 공격자의 특성을 미라로 바꾼다. 이미 그 특성이면 무발동.
     if (
       trigger.setsAttackerAbilityId &&
-      attacker.effectiveAbilityId !== trigger.setsAttackerAbilityId
+      attacker.effectiveAbilityId !== trigger.setsAttackerAbilityId &&
+      !isFixedAbility(attacker.effectiveAbilityId)
     ) {
       attacker.effectiveAbilityId = trigger.setsAttackerAbilityId;
       mummifiedAttackerAbilityName = defenderAbility!.name;
@@ -563,7 +582,11 @@ export function resolveHitAndApplyDamage(input: HitResolutionInput) {
       evAny = true;
     }
     // 떠도는영혼(Wandering Spirit): 접촉기로 피격당하면 공격자와 특성을 맞바꾼다.
-    if (trigger.swapsAbilityWithAttacker && attacker.effectiveAbilityId !== defender.effectiveAbilityId) {
+    if (
+      trigger.swapsAbilityWithAttacker &&
+      attacker.effectiveAbilityId !== defender.effectiveAbilityId &&
+      !isFixedAbility(attacker.effectiveAbilityId)
+    ) {
       const tmp = attacker.effectiveAbilityId;
       attacker.effectiveAbilityId = defender.effectiveAbilityId;
       defender.effectiveAbilityId = tmp;
@@ -880,6 +903,10 @@ export function resolveHitAndApplyDamage(input: HitResolutionInput) {
   // 순서가 중요하다 — 이 데미지로 상대가 이미 쓰러졌다면, 실제 게임처럼 "상대를 먼저 쓰러뜨린 뒤
   // 반동으로 자신도 쓰러진 것"으로 취급되어야 승자 판정(runTurn)이 이 행동의 주체를 승자로 잡는다.
   if (effectiveMove.selfFaints) {
+    attacker.currentHp = 0;
+  }
+  // 목숨걸기(트랙 M5): 데미지를 줬을 때만 기절(빗나감·면역·방어로 막힘이면 그대로)
+  if (effectiveMove.damageEqualsUserHp && damage > 0) {
     attacker.currentHp = 0;
   }
 

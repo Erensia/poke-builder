@@ -37,6 +37,16 @@ export function rivalryDamageMultiplier(
 }
 
 /**
+ * 총대장(Supreme Overlord): 등장 시점에 센 쓰러진 같은 편 수(faintedCount, maxCount까지)만큼
+ * 공격 기술 위력 ×(1 + perFainted × 수). 수가 없거나 0이면 1. 실전 엔진(hitResolution)과 배틀 AI가 공유한다.
+ */
+export function supremeOverlordMultiplier(ability: Ability | undefined, faintedCount: number | undefined): number {
+  const boost = ability?.powerBoostPerFaintedAlly;
+  if (!boost || !faintedCount) return 1;
+  return 1 + boost.perFainted * Math.min(faintedCount, boost.maxCount);
+}
+
+/**
  * 의욕(Hustle): 물리 기술 위력 ×1.5 (명중률 페널티는 결정력 계산 대상이 아니라 별도 처리).
  * battleSimulator(실전)·matchupEvaluator(매치업 스냅샷) 양쪽이 공유한다(ver.1.5 §5).
  */
@@ -81,6 +91,31 @@ export function reversalPowerFromHp(currentHp: number, maxHp: number): number {
 export function gyroBallPowerFromSpeeds(userEffectiveSpeed: number, targetEffectiveSpeed: number): number {
   if (userEffectiveSpeed <= 0) return 150;
   return Math.min(150, Math.max(1, Math.floor(25 * (targetEffectiveSpeed / userEffectiveSpeed + 1))));
+}
+
+/**
+ * 일렉트릭볼(Electro Ball, 트랙 M5) 위력 — 본가 표: 자신/상대 실효 스피드 비율이 4배 이상 150, 3배 120, 2배 80, 1배 60, 그 미만 40.
+ * 상대 스피드가 0 이하면(이론상) 최대 위력.
+ */
+export function electroBallPowerFromSpeeds(userEffectiveSpeed: number, targetEffectiveSpeed: number): number {
+  if (targetEffectiveSpeed <= 0) return 150;
+  const ratio = userEffectiveSpeed / targetEffectiveSpeed;
+  if (ratio >= 4) return 150;
+  if (ratio >= 3) return 120;
+  if (ratio >= 2) return 80;
+  if (ratio >= 1) return 60;
+  return 40;
+}
+
+/** 성묘(Last Respects, 트랙 L) 위력 — base + perAlly × 쓰러진 같은 편 수, 최대 300 */
+export function faintedAllyPowerValue(base: number, perAlly: number, faintedAllies: number): number {
+  return Math.min(300, base + perAlly * Math.max(0, faintedAllies));
+}
+
+/** 하드프레스(Hard Press, 트랙 M5) 위력 — base × 상대 남은 HP 비율(내림, 최소 1) */
+export function targetHpRatioPowerValue(base: number, currentHp: number, maxHp: number): number {
+  if (maxHp <= 0) return 1;
+  return Math.max(1, Math.floor((base * currentHp) / maxHp));
 }
 
 /**

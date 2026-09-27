@@ -1,7 +1,8 @@
 import type { AiOption } from "./evaluator";
 import { DEFAULT_THREAT_MODEL } from "./opponentMoveModel";
-import { PHASE3_EFFECT_KINDS } from "./statusMoveEffects";
+import { A1_EFFECT_KINDS, A2_EFFECT_KINDS, PHASE3_EFFECT_KINDS, TRACK_M_EFFECT_KINDS, TIER2_EFFECT_KINDS, type EffectMoveKind } from "./statusMoveEffects";
 import { ALL_PROTECT_GROUPS, type ProtectGroup } from "./protectMoves";
+import { partyRaceValue, partyValueAfterTurn, type ChainParams, type PartyDuel, type PartyEffect } from "./partyEval";
 
 /**
  * decision-layer §9 파라미터(튜닝 대상) + extension §2-2 w_survival.
@@ -45,12 +46,82 @@ export interface DecisionParams {
   protectGroups: readonly ProtectGroup[];
   /** 동률 처리 4순위를 "이번 턴 처치 가능한 공격기 > 그 외 기술 > 교체"로(§7). false면 이전 "기술 > 교체" */
   tieAttackFirst: boolean;
+  /**
+   * 동률 처리에서 "이번 턴 처치 가능한 공격기"를 진입 비용·방어 상성보다 먼저 본다(종합 테스트에서 발견 — 상대가
+   * 빈사인데 방어 상성이 좋은 교체가 동률로 뽑혀 상대에게 한 턴을 줬다). false면 이전 순서(비교용)
+   */
+  tieKillFirst: boolean;
+  /**
+   * 동률 처리에서 확정 처치는 아니지만 거의 처치인 공격기(1 < c < 이 값)가 후보에 있으면 랭크업기를 후보에서 뺀다
+   * (ver.1.8 한계점 정리 ⑤ — 빈사 상대를 두고 철벽·명상을 고르던 경우). 1 이하면 끔(비교용)
+   */
+  tieNearKillC: number;
   /** 상대 기술 모델(§2-2): 의미 있는 변화기 1개당 사용 확률 */
   threatStatusWeight: number;
   /** 상대 기술 모델: 공격기 사용 확률 ∝ 데미지^k (1 = v1 데미지 비례) */
   threatSharpness: number;
   /** 상대 기술 모델: 지금 효과 없는 변화기(가득 찬 HP 회복·+6 랭크업·이미 깔린 벽·이미 상태이상)도 확률 0 */
   threatStrictWaste: boolean;
+  /** 상대 변화기의 위협 환산(ver.1.8 한계점 정리 ③) — false면 이전 동작(비교용) */
+  threatStatusThreat: boolean;
+  /**
+   * 파티 단위 평가(§4-5): 옵션의 첫 대면이 끝난 뒤 남은 포켓몬끼리의 대면을 미니맥스로 이어서 계산해 점수에 더한다.
+   * false면 지금 대면만 보는 이전 동작(비교용). trade 채점 전용.
+   */
+  partyAware: boolean;
+  /** 파티 단위 평가의 판세 값에서 남은 마릿수 1마리의 가치(λ, HP 비율 단위) */
+  partyCountWeight: number;
+  /** 파티 단위 평가에서 대면 승패를 확률로 나눌 때의 폭(여유 턴 σ = 이 값 × 평균 턴 수). 0이면 결정적 */
+  partyDuelNoise: number;
+  /**
+   * §4-5 ②: 변화기·랭크업·방어류의 효과를 이어지는 대면(대면표)에도 남긴다 — 지속 턴 효과는 남은 턴만큼,
+   * 설치기는 실제 등장 비용으로, 방어류는 한 턴 뒤 state에서(쓰러짐·길동무 동반 기절 포함). false면 ① 동작(비교용).
+   */
+  partyEffects: boolean;
+  /**
+   * §4-5 ② 종류별(ver.1.8 사용자 결정 (나)): partyEffects가 꺼져 있어도 여기 든 종류는 이어지는 대면에 남긴다.
+   * 교체해도 남는 효과(내 랭크업·설치기·장/편 효과·상태이상)와 교체하면 사라지는 효과(상대 휘발·랭크다운)를 나눠 잰다.
+   */
+  partyEffectKinds: readonly PartyEffectCategory[];
+  /**
+   * AI-A1(ver.1.8) 변화기 — 흑안개·신비의부적·아쿠아링/뿌리박기·씨뿌리기·혼란·헤롱헤롱·하품(효과), 희망사항(지연 회복),
+   * 배북(랭크 설정형 랭크업)을 평가할지. false면 이전처럼 고르지 않는다(비교용).
+   */
+  a1Aware: boolean;
+  /**
+   * AI-A2(ver.1.8) — 대타출동·울부짖기/날려버리기·추억의선물(효과), 잠꼬대(잠든 동안 무작위 기술 기대값)를 평가할지.
+   * false면 이전처럼 고르지 않는다(비교용). 추억의선물은 파티 단위 평가가 꺼져 있으면 평가할 수 없어 고르지 않는다.
+   */
+  a2Aware: boolean;
+  /** 트랙 M(ver.1.8) — 엔진에 새로 구현한 변화기(트릭·아픔나누기·순풍·리사이클·꿀꺽 등)를 평가할지(비교용) */
+  trackMAware: boolean;
+  /** 변화기 판단 Tier 2(ver.1.8) — 파워스왑·가드셰어·변신·코트체인지 등을 평가할지(비교용) */
+  tier2Aware: boolean;
+  /**
+   * 로드맵 3 — 이어지는 대면에서 상대의 자발적 교체를 모델링한다(대면 시작마다 "그대로 / 교체" 중 상대에게 나은 쪽).
+   * 교체 봉쇄 기술(검은눈빛·블록)의 가치도 이걸로 생긴다. false면 이전 동작(비교용).
+   */
+  oppSwitchAware: boolean;
+  /** 상대가 교체하려면 교체 쪽이 이만큼(판세 값 단위) 나아야 한다 — 왕복·근소한 차이의 교체 억제 */
+  oppSwitchMargin: number;
+  /** 이어지는 대면 한 번의 계산 안에서 상대가 자발적으로 교체하는 최대 횟수 */
+  oppSwitchLimit: number;
+  /** 교체 갈래를 섞는 비율(1 = 상대가 항상 최선으로 교체) */
+  oppSwitchWeight: number;
+  /** 이어지는 대면에서 내 자발적 교체(ver.1.8 한계점 정리 ④) — false면 이전 동작(비교용) */
+  mySwitchAware: boolean;
+  mySwitchMargin: number;
+  mySwitchLimit: number;
+  /**
+   * 턴 종료 효과(ver.1.8) — 대면 턴 수에 먹다남은음식·그래스필드·모래바람·날씨 특성·속박·소금절이·자뭉/오랭열매를 센다.
+   * false면 이전 동작(비교용). 평가·점수 계산 전체를 withEndOfTurnModel로 감싸 적용한다(index.ts).
+   */
+  endOfTurnAware: boolean;
+  /**
+   * 쉬움 난이도(ver.1.8, A안): 0보다 크면 최고점만 고르지 않고 점수 소프트맥스(온도 τ)로 뽑는다 — 점수 차가 작을수록
+   * 차선이 자주 나온다. 0이면 최고점(어려움). 하드 오버라이드(확정 처치 등)는 그대로 우선한다.
+   */
+  choiceTemperature: number;
 }
 
 /**
@@ -69,15 +140,37 @@ export const DEFAULT_DECISION_PARAMS: DecisionParams = {
   wCarry: 1.0,
   setupAware: true,
   tieAttackFirst: true,
+  tieKillFirst: true,
+  tieNearKillC: 1.5,
   phase3Aware: true,
   protectGroups: ALL_PROTECT_GROUPS,
   // §2-2 튜닝값 — 근거는 DEFAULT_THREAT_MODEL 주석
   threatStatusWeight: DEFAULT_THREAT_MODEL.statusWeight,
   threatSharpness: DEFAULT_THREAT_MODEL.sharpness,
   threatStrictWaste: DEFAULT_THREAT_MODEL.strictWaste,
+  threatStatusThreat: true,
   riskFlagPenaltyBase: 0.4,
   tieThreshold: 0.1,
   wSurvival: 1.0,
+  partyAware: true,
+  partyCountWeight: 0.5,
+  partyDuelNoise: 0.5,
+  partyEffects: false,
+  // 교체해도 남는 효과만(종류별 측정 — 결정 레이어 §4-5 ②-2). 상대 휘발·랭크다운은 교체로 사라져 과대평가라 끔
+  partyEffectKinds: ["selfBoost", "hazard", "field", "status", "protect"],
+  a1Aware: true,
+  a2Aware: true,
+  trackMAware: true,
+  tier2Aware: true,
+  oppSwitchAware: true,
+  oppSwitchMargin: 0.1,
+  oppSwitchLimit: 1,
+  oppSwitchWeight: 0.5,
+  mySwitchAware: true,
+  mySwitchMargin: 0.1,
+  mySwitchLimit: 1,
+  endOfTurnAware: true,
+  choiceTemperature: 0,
 };
 
 export interface ScoredOption {
@@ -115,7 +208,7 @@ function diff(a: number, b: number): number {
  * 쓰러뜨릴 때, 이 대면을 끝까지 이어갔을 때의 "상대 HP 제거 비율 − 내 HP 손실 비율"(각자 최대 HP 대비).
  * lostTurns: 이번 턴 공격하지 않는 행동(교체·회복·랭크업)이면 1 — 상대만 한 번 더 때린다.
  */
-function raceValue(
+export function raceValue(
   killTurns: number,
   survivalTurns: number,
   firstProbability: number,
@@ -136,19 +229,110 @@ function raceValue(
   return opponentFraction * dealt - myFraction;
 }
 
+/**
+ * raceValue, 또는 파티 단위 평가(§4-5, partyAware): 첫 대면(이 인자들)을 이긴다/진다 갈래로 나누고 각 갈래 뒤로 남은
+ * 포켓몬끼리 이어지는 대면까지 계산한 값. myOverrides = 첫 대면에 안 나오는 내 포켓몬의 HP를 바꿔 볼 때(유턴류 후공 등).
+ */
+function race(
+  params: DecisionParams,
+  party: PartyDuel | undefined,
+  inputs: [killTurns: number, survivalTurns: number, firstProbability: number, my: number, opp: number, lost: number],
+  myOverrides?: Record<number, number>,
+): number {
+  if (!params.partyAware || !party) return raceValue(...inputs);
+  return partyRaceValue(party, inputs, chainParams(params), myOverrides);
+}
+
+/** 이어지는 대면 계산 파라미터(λ·대면 폭·상대 자발적 교체) */
+export function chainParams(params: DecisionParams): ChainParams {
+  return {
+    lambda: params.partyCountWeight,
+    noise: params.partyDuelNoise,
+    oppSwitch: params.oppSwitchAware ? { margin: params.oppSwitchMargin, limit: params.oppSwitchLimit, weight: params.oppSwitchWeight } : undefined,
+    mySwitch: params.mySwitchAware ? { margin: params.mySwitchMargin, limit: params.mySwitchLimit } : undefined,
+  };
+}
+
 /** 교체 후보로 대면을 이어갔을 때의 값(진입 비용 차감). lost=1이면 들어온 포켓몬이 이번 턴 한 대를 맞는다. */
-function switchInValue(candidate: AiOption, lost: number): number {
+function switchInValue(candidate: AiOption, lost: number, params: DecisionParams, myOverrides?: Record<number, number>): number {
   const entry = candidate.maxHp > 0 ? candidate.entryCost / candidate.maxHp : 0;
   return (
-    raceValue(
-      candidate.hitsToKill.expected,
-      candidate.hitsToBeKilled.expected,
-      candidate.firstProbability,
-      candidate.hpFraction,
-      candidate.opponentHpFraction,
-      lost,
+    race(
+      params,
+      candidate.party,
+      [
+        candidate.hitsToKill.expected,
+        candidate.hitsToBeKilled.expected,
+        candidate.firstProbability,
+        candidate.hpFraction,
+        candidate.opponentHpFraction,
+        lost,
+      ],
+      myOverrides,
     ) - entry
   );
+}
+
+/**
+ * 효과가 걸린 갈래의 첫 대면 정보: 계속 남는 효과(turns = ∞)면 대면표 자체를 효과 적용 state 것으로 바꾸고,
+ * 지속 턴 효과면 원래 대면표 + 효과 대면표·남은 턴을 함께 넘긴다(§4-5 ②).
+ */
+/** §4-5 ② 효과 종류(partyEffectKinds) */
+export type PartyEffectCategory = "selfBoost" | "hazard" | "field" | "status" | "oppVolatile" | "oppStages" | "protect" | "other";
+
+const CATEGORY_OF_KIND: Partial<Record<EffectMoveKind, PartyEffectCategory>> = {
+  acupressure: "selfBoost",
+  copyStages: "selfBoost",
+  magneticFlux: "selfBoost",
+  hazard: "hazard",
+  screen: "field",
+  weather: "field",
+  field: "field",
+  trickRoom: "field",
+  tailwind: "field",
+  safeguard: "field",
+  wonderRoom: "field",
+  magicRoom: "field",
+  gravity: "field",
+  courtChange: "field",
+  status: "status",
+  yawn: "status",
+  taunt: "oppVolatile",
+  encore: "oppVolatile",
+  disable: "oppVolatile",
+  leechSeed: "oppVolatile",
+  confuse: "oppVolatile",
+  attract: "oppVolatile",
+  torment: "oppVolatile",
+  spite: "oppVolatile",
+  debuff: "oppStages",
+  haze: "oppStages",
+};
+
+/** 옵션의 효과 종류 — 랭크업기(setup)는 효과 kind가 없어 support.kind로 */
+function effectCategoryOf(option: AiOption): PartyEffectCategory {
+  if (option.support?.kind === "setup") return "selfBoost";
+  const kind = option.support?.effect?.kind;
+  return (kind && CATEGORY_OF_KIND[kind]) ?? "other";
+}
+
+function partyEffectOn(params: DecisionParams, category: PartyEffectCategory): boolean {
+  return params.partyEffects || params.partyEffectKinds.includes(category);
+}
+
+function withEffect(
+  party: PartyDuel | undefined,
+  effect: PartyEffect | undefined,
+  params: DecisionParams,
+  category: PartyEffectCategory,
+): PartyDuel | undefined {
+  if (!party || !effect || (!partyEffectOn(params, category) && !effect.always)) return party;
+  return effect.turns === Infinity ? { ...party, model: effect.model } : { ...party, effect };
+}
+
+/** 교체로 물러나는 지금 포켓몬의 HP를 hp로 본다(파티 단위 평가용 덮어쓰기) */
+function activeHpOverride(option: AiOption, hp: number): Record<number, number> | undefined {
+  return option.party ? { [option.party.model.myActive]: hp } : undefined;
 }
 
 /**
@@ -157,15 +341,29 @@ function switchInValue(candidate: AiOption, lost: number): number {
  *   안전하게 들어온다(lost=0, 대신 지금 포켓몬 손실). 선공 확률로 섞는다.
  * 빗나감(명중률) 시 = 교체 없이 한 대 맞고 끝.
  */
-function pivotValue(option: AiOption): number {
+function pivotValue(option: AiOption, params: DecisionParams): number {
   const pivot = option.pivot!;
   const p = option.firstProbability;
   const chip = option.opponentHpFraction * pivot.hitRate;
-  const bestSwitch = Math.max(
-    ...pivot.candidates.map((c) => p * switchInValue(c, 1) + (1 - p) * (switchInValue(c, 0) - pivot.activeHitLoss)),
-  );
+  const my = option.hpFraction;
+  // 꼬리자르기(Tier 2-C): 교체 전에 치르는 HP — 물러난 포켓몬은 그만큼 깎인 채로 이어지는 대면에 남는다
+  const cost = pivot.selfCost ?? 0;
+  const bestSwitch =
+    Math.max(
+      ...pivot.candidates.map(
+        (c) =>
+          p * switchInValue(c, 1, params, activeHpOverride(option, my - cost)) +
+          (1 - p) * (switchInValue(c, 0, params, activeHpOverride(option, my - pivot.activeHitLoss - cost)) - pivot.activeHitLoss),
+      ),
+    ) - cost;
   const hitChance = pivot.hitChance ?? option.accuracy;
-  return hitChance * (chip + bestSwitch) + (1 - hitChance) * -pivot.activeHitLoss;
+  // 빗나감: 교체 없이 한 대 맞음. 파티 단위 평가에서는 "이번 턴을 날린 채 대면을 이어감"(lost=1)으로 본다 —
+  // 다른 갈래가 이어지는 대면의 가치를 포함하므로 같은 기준으로 맞춘다.
+  const onMiss =
+    params.partyAware && option.party
+      ? race(params, option.party, [option.hitsToKill.expected, option.hitsToBeKilled.expected, p, my, option.opponentHpFraction, 1])
+      : -pivot.activeHitLoss;
+  return hitChance * (chip + bestSwitch) + (1 - hitChance) * onMiss;
 }
 
 /**
@@ -173,13 +371,83 @@ function pivotValue(option: AiOption): number {
  * 빗나가면 지금 그대로의 대면을 끝까지 이어간다 + 대면 뒤에도 남는 이득(설치기·벽) × w_carry.
  */
 function effectValue(option: AiOption, params: DecisionParams): number {
-  const { hit, base, hitChance, carry, selfCost = 0 } = option.support!.effect!;
+  const effect = option.support!.effect!;
+  if (effect.phaze) return phazeValue(option, params);
+  if (effect.sacrifice) return sacrificeValue(option, params);
+  if (effect.partyShift) return partyShiftValue(option, params);
+  const { hit, base, hitChance, selfCost = 0 } = effect;
   const my = option.hpFraction;
   const opp = option.opponentHpFraction;
-  // HP 비용(소울비트류)은 치른 만큼 손실로 빼고, 대면은 깎인 HP에서 시작한다.
-  const onHit = raceValue(hit.killTurns, hit.survivalTurns, hit.firstProbability, my - selfCost, opp, 1) - selfCost;
-  const onMiss = raceValue(base.killTurns, base.survivalTurns, base.firstProbability, my, opp, 1);
+  const category = effectCategoryOf(option);
+  const hitParty = withEffect(option.party, effect.party, params, category);
+  // HP 비용(소울비트류)은 치른 만큼 손실로 빼고, 대면은 깎인 HP에서 시작한다. 아픔나누기는 두 HP가 바뀐 채로 시작하고
+  // 그 변화(상대 손실 − 내 손실)를 더한다.
+  // 경혈찌르기(트랙 M2): 오를 능력마다의 대면을 평균
+  if (effect.branches) {
+    const onBranches = effect.branches.reduce(
+      (sum, b) =>
+        sum + b.weight * race(params, withEffect(option.party, b.party, params, category), [b.hit.killTurns, b.hit.survivalTurns, b.hit.firstProbability, my, opp, 1]),
+      0,
+    );
+    return onBranches + params.wCarry * effect.carry;
+  }
+  const onHit = effect.hpAfter
+    ? opp - effect.hpAfter.opp - (my - effect.hpAfter.my) +
+      race(params, hitParty, [hit.killTurns, hit.survivalTurns, hit.firstProbability, effect.hpAfter.my, effect.hpAfter.opp, 1])
+    : race(params, hitParty, [hit.killTurns, hit.survivalTurns, hit.firstProbability, my - selfCost, opp, 1]) - selfCost;
+  const onMiss = race(params, option.party, [base.killTurns, base.survivalTurns, base.firstProbability, my, opp, 1]);
+  // 파티 모드에서는 벽·설치기의 뒤쪽 이득을 이어지는 대면이 직접 세므로 이월 항은 partyCarry(끈적끈적네트 근사)만.
+  const carry =
+    params.partyAware && partyEffectOn(params, category) && option.party && effect.partyCarry !== undefined ? effect.partyCarry : effect.carry;
   return hitChance * onHit + (1 - hitChance) * onMiss + params.wCarry * carry;
+}
+
+/**
+ * 울부짖기·날려버리기(AI-A2): 이번 턴 상대에게 한 대 맞고(hitLoss), 상대 예비 중 무작위 하나(균등)가 설치물을 밟고
+ * 끌려 나온 대면을 이어간다. 끌려 나온 쪽이 등장 비용으로 쓰러지면 파티 모드에선 그 state에서 이어지는 판세.
+ * 원래 상대의 랭크 변화가 사라지는 이득은 파티 모드의 이어지는 대면(원래 상대가 다시 나올 때)에 반영된다.
+ */
+function phazeValue(option: AiOption, params: DecisionParams): number {
+  const { hitLoss, branches } = option.support!.effect!.phaze!;
+  if (branches.length === 0) return -Infinity;
+  const partyMode = params.partyAware && !!option.party;
+  const chain = chainParams(params);
+  const total = branches.reduce((sum, b) => {
+    const duel = partyMode ? { model: b.model, myIndex: option.party!.myIndex, myStaged: true } : undefined;
+    const rest = b.fainted
+      ? partyMode
+        ? partyValueAfterTurn(b.model, option.party!.model, chain)
+        : 0
+      : race(params, duel, [b.race.killTurns, b.race.survivalTurns, b.race.firstProbability, b.my, b.opp, 0]);
+    return sum + b.entry + rest;
+  }, 0);
+  return -hitLoss + total / branches.length;
+}
+
+/**
+ * 추억의선물(AI-A2): 내가 기절하는 대신 상대 공격·특공 −2 — 내 남은 HP 전부를 잃고, 그 state에서 이어지는 판세(내가
+ * 다음 포켓몬을 고른다). 후공인데 이번 턴에 쓰러지면 랭크다운 없이 기절만(failModel). 파티 단위 평가 없이는 뒤의
+ * 가치를 셀 수 없어 고르지 않는다.
+ */
+function sacrificeValue(option: AiOption, params: DecisionParams): number {
+  if (!params.partyAware || !option.party) return -Infinity;
+  const { success, afterModel, failModel } = option.support!.effect!.sacrifice!;
+  const chain = chainParams(params);
+  const before = option.party.model;
+  const onSuccess = partyValueAfterTurn(afterModel, before, chain);
+  const onFail = partyValueAfterTurn(failModel, before, chain);
+  return -option.hpFraction + success * onSuccess + (1 - success) * onFail;
+}
+
+/**
+ * 회생의기도·멸망의노래(Tier 2-B): 이번 턴의 HP 비율 변화 + 늘어난 포켓몬 수 × λ + 그 뒤 state에서 이어지는 판세.
+ * 파티 단위 평가 없이는 뒤의 가치를 셀 수 없어 고르지 않는다.
+ */
+function partyShiftValue(option: AiOption, params: DecisionParams): number {
+  if (!params.partyAware || !option.party) return -Infinity;
+  const { hpDelta, extraCount, afterModel } = option.support!.effect!.partyShift!;
+  const chain = chainParams(params);
+  return hpDelta + extraCount * params.partyCountWeight + partyValueAfterTurn(afterModel, option.party.model, chain);
 }
 
 /**
@@ -187,7 +455,7 @@ function effectValue(option: AiOption, params: DecisionParams): number {
  * 교대 후보에게 넘긴다. 넘기는 턴의 처리는 유턴류·배턴터치 pivot_value와 같다(선공이면 후보가 맞고, 후공이면
  * 지금 포켓몬이 한 대 더 맞은 뒤 후보가 안전하게 등장). 넘기기 전에 쓰러지면 선택 불가.
  */
-function batonFollowUpValue(option: AiOption): number {
+function batonFollowUpValue(option: AiOption, params: DecisionParams): number {
   const support = option.support!;
   const follow = support.batonFollowUp!;
   const selfCost = support.effect?.selfCost ?? 0;
@@ -196,7 +464,11 @@ function batonFollowUpValue(option: AiOption): number {
   const p = follow.firstProbability;
   const nextHit = Math.min(hpAtPass, follow.hitLoss);
   const best = Math.max(
-    ...follow.candidates.map((c) => p * switchInValue(c, 1) + (1 - p) * (switchInValue(c, 0) - nextHit)),
+    ...follow.candidates.map(
+      (c) =>
+        p * switchInValue(c, 1, params, activeHpOverride(option, hpAtPass)) +
+        (1 - p) * (switchInValue(c, 0, params, activeHpOverride(option, hpAtPass - nextHit)) - nextHit),
+    ),
   );
   return -selfCost - follow.hitLoss + best;
 }
@@ -206,24 +478,69 @@ function batonFollowUpValue(option: AiOption): number {
  * 효과·접촉 페널티·버티기·길동무) + 둘 다 살아 있으면 이어지는 대면(이번 턴은 양쪽 다 행동을 쓴 셈이라 lost=0).
  * 연속 사용으로 실패하면 아무것도 안 하고 맞는 대면(lost=1).
  */
-function protectValue(option: AiOption): number {
+function protectValue(option: AiOption, params: DecisionParams): number {
   const protect = option.support!.protect!;
   if (protect.pointless || protect.outcomes.length === 0) return -Infinity;
   const my = option.hpFraction;
   const opp = option.opponentHpFraction;
+  const partyMode = params.partyAware && partyEffectOn(params, "protect") && !!option.party;
   const success = protect.outcomes.reduce((sum, o) => {
-    const rest = o.race ? raceValue(o.race.killTurns, o.race.survivalTurns, o.race.firstProbability, o.myAfter, o.oppAfter, 0) : 0;
+    // 둘 다 살아 있고 같은 대면: 그 턴 뒤 state의 대면표로 대면을 이어간다. 그 외(쓰러짐·길동무 동반 기절·강제
+    // 교체로 대면이 바뀜): 파티 모드면 그 state에서 이어지는 판세(§4-5 ②), 아니면 그 턴의 HP 변화만.
+    const turnParty = partyMode && o.partyModel ? { ...option.party!, model: o.partyModel } : option.party;
+    const rest = o.race
+      ? race(params, turnParty, [o.race.killTurns, o.race.survivalTurns, o.race.firstProbability, o.myAfter, o.oppAfter, 0])
+      : partyMode && o.partyModel
+        ? partyValueAfterTurn(o.partyModel, option.party!.model, chainParams(params))
+        : 0;
     return sum + o.weight * (opp - o.oppAfter - (my - o.myAfter) + rest);
   }, 0);
   const { base } = protect;
-  const fail = raceValue(base.killTurns, base.survivalTurns, base.firstProbability, my, opp, 1);
+  const fail = race(params, option.party, [base.killTurns, base.survivalTurns, base.firstProbability, my, opp, 1]);
   return protect.successChance * success + (1 - protect.successChance) * fail;
 }
 
 /** 랭크업기: 올린 뒤 직접 싸우는 값과 올린 뒤 배턴터치로 넘기는 값 중 큰 쪽 */
 function setupValue(option: AiOption, params: DecisionParams): number {
   const self = effectValue(option, params);
-  return option.support!.batonFollowUp ? Math.max(self, batonFollowUpValue(option)) : self;
+  return option.support!.batonFollowUp ? Math.max(self, batonFollowUpValue(option, params)) : self;
+}
+
+/** AI-A1의 회복·랭크업 쪽 대상: 희망사항(지연 회복)·배북(랭크 설정형) */
+function isA1SupportMove(option: AiOption): boolean {
+  const move = option.move;
+  return (
+    !!move?.inflictsVolatile?.some((v) => v.volatile === "wish") ||
+    !!move?.statChanges?.some((s) => s.target === "self" && s.setTo !== undefined)
+  );
+}
+
+/**
+ * 흉내쟁이(트랙 M2): 따라 쓸 기술 갈래마다 그 기술을 내가 쓴 점수를 가중 평균한다. 따라 쓸 수 없거나 점수를 못 매기는
+ * 갈래는 한 턴을 날린 채 대면을 이어가는 값. 어느 갈래로도 제대로 나가지 않으면 고르지 않는다.
+ */
+function copycatValue(option: AiOption, riskAversion: number, params: DecisionParams): number {
+  const bestKillTurns = option.support?.bestKillTurns ?? option.hitsToKill.expected;
+  const wasted = race(params, option.party, [
+    bestKillTurns,
+    option.hitsToBeKilled.expected,
+    option.firstProbability,
+    option.hpFraction,
+    option.opponentHpFraction,
+    1,
+  ]);
+  let value = 0;
+  let succeeded = 0;
+  for (const branch of option.copycat!.branches) {
+    const score = branch.option ? tradeScore(branch.option, riskAversion, params) : -Infinity;
+    if (Number.isFinite(score)) {
+      value += branch.weight * score;
+      succeeded += branch.weight;
+    } else {
+      value += branch.weight * wasted;
+    }
+  }
+  return succeeded > 0 ? value : -Infinity;
 }
 
 function tradeScore(option: AiOption, riskAversion: number, params: DecisionParams): number {
@@ -231,20 +548,30 @@ function tradeScore(option: AiOption, riskAversion: number, params: DecisionPara
   const p = option.firstProbability;
   const opp = option.opponentHpFraction;
   if (option.support?.extended && !params.statusAware) return -Infinity;
-  if (params.pivotAware && option.pivot && option.pivot.candidates.length > 0) return pivotValue(option) - riskPenalty;
+  if (option.copycat) return params.statusAware && params.trackMAware ? copycatValue(option, riskAversion, params) : -Infinity;
+  if (option.pivot?.tier2 && !params.tier2Aware) return -Infinity;
+  if (params.pivotAware && option.pivot && option.pivot.candidates.length > 0) return pivotValue(option, params) - riskPenalty;
   if (option.support) {
     const { kind, after, bestKillTurns, healedHpFraction } = option.support;
     if (kind === "other") return -Infinity;
     if (kind === "protect") {
       const group = option.support.protect?.group;
       if (!group || !params.protectGroups.includes(group)) return -Infinity;
-      return protectValue(option) - riskPenalty;
+      return protectValue(option, params) - riskPenalty;
     }
     if (kind === "effect") {
       const effectKind = option.support.effect?.kind;
       if (!params.phase3Aware && effectKind && PHASE3_EFFECT_KINDS.has(effectKind)) return -Infinity;
+      if (!params.a1Aware && effectKind && A1_EFFECT_KINDS.has(effectKind)) return -Infinity;
+      if (!params.a2Aware && effectKind && A2_EFFECT_KINDS.has(effectKind)) return -Infinity;
+      if (!params.trackMAware && effectKind && TRACK_M_EFFECT_KINDS.has(effectKind)) return -Infinity;
+      if (!params.tier2Aware && effectKind && TIER2_EFFECT_KINDS.has(effectKind)) return -Infinity;
+      // 교체 봉쇄의 가치는 상대 교체 모델링에서만 생긴다
+      if ((effectKind === "trap" || effectKind === "fairyLock") && !(params.oppSwitchAware && params.partyAware)) return -Infinity;
       return effectValue(option, params) - riskPenalty;
     }
+    if (!params.a1Aware && isA1SupportMove(option)) return -Infinity;
+    if (!params.trackMAware && option.move?.healsByStockpile) return -Infinity;
     if (kind === "setup" && params.statusAware && params.setupAware) {
       if (option.support.setupFailed) return -Infinity;
       if (option.support.effect) return setupValue(option, params) - riskPenalty;
@@ -252,13 +579,19 @@ function tradeScore(option: AiOption, riskAversion: number, params: DecisionPara
     if (kind === "heal") {
       if (params.statusAware && (option.support.healNetGain ?? 1) <= 0) return -Infinity;
       const healed = healedHpFraction ?? option.hpFraction;
-      return raceValue(bestKillTurns, after, p, healed, opp, 1) + (healed - option.hpFraction) - riskPenalty;
+      return race(params, option.party, [bestKillTurns, after, p, healed, opp, 1]) + (healed - option.hpFraction) - riskPenalty;
     }
-    return raceValue(after, option.hitsToBeKilled.expected, p, option.hpFraction, opp, 1) - riskPenalty;
+    return race(params, option.party, [after, option.hitsToBeKilled.expected, p, option.hpFraction, opp, 1]) - riskPenalty;
   }
+  // 잠꼬대(AI-A2)는 공격기처럼 평가된다(무작위 기술 기대 피해) — a2Aware가 꺼지면 이전처럼 고르지 않는다.
+  if (option.move?.callsRandomLearnedMove && !params.a2Aware) return -Infinity;
   const lost = option.optionType === "switch" ? 1 : 0;
   const entry = option.maxHp > 0 ? option.entryCost / option.maxHp : 0;
-  return raceValue(option.hitsToKill.expected, option.hitsToBeKilled.expected, p, option.hpFraction, opp, lost) - entry - riskPenalty;
+  return (
+    race(params, option.party, [option.hitsToKill.expected, option.hitsToBeKilled.expected, p, option.hpFraction, opp, lost]) -
+    entry -
+    riskPenalty
+  );
 }
 
 /** decision-layer §4 점수식. 데미지 없는 변화기는 extension §2-2 전용 점수식. */
@@ -308,18 +641,42 @@ function actionTempoRank(option: AiOption, attackFirst: boolean): number {
   return attackFirst && !killsNow ? 1 : 0;
 }
 
+/**
+ * 모든 선택지가 −∞일 때(ver.1.8 한계점 정리 — 이전엔 첫 선택지라 실패하는 변화기를 반복했다): 데미지를 줄 수 있는 공격기
+ * (처치 턴이 가장 짧은 것) → 교체 → 첫 선택지.
+ */
+function fallbackOption(options: AiOption[]): AiOption {
+  const attacks = options.filter((o) => o.optionType === "move" && o.move && o.move.category !== "status" && Number.isFinite(o.hitsToKill.expected));
+  if (attacks.length > 0) return attacks.reduce((a, b) => (b.hitsToKill.expected < a.hitsToKill.expected ? b : a));
+  return options.find((o) => o.optionType === "switch") ?? options[0];
+}
+
+/** 쉬움 난이도: 점수 소프트맥스로 뽑는다(−∞는 제외). 최고점 대비 차이로 계산해 overflow를 피한다 */
+function softmaxPick(scored: ScoredOption[], bestScore: number, temperature: number, random: () => number): AiOption {
+  const pool = scored.filter((s) => Number.isFinite(s.score));
+  const weights = pool.map((s) => Math.exp((s.score - bestScore) / temperature));
+  const total = weights.reduce((a, b) => a + b, 0);
+  let r = random() * total;
+  for (let i = 0; i < pool.length; i++) {
+    r -= weights[i];
+    if (r <= 0) return pool[i].option;
+  }
+  return pool[pool.length - 1].option;
+}
+
 function compareBy<T>(key: (item: T) => number): (a: T, b: T) => number {
   return (a, b) => key(a) - key(b);
 }
 
 /**
  * 의사결정 레이어(decision-layer §8): 하드 오버라이드 → 점수 최고점 → ±0.1 이내면 동률 처리.
- * 동률 처리: 즉사(worst_case 1타) 위험 배제 → 진입 비용 낮은 쪽 → 방어 상성 낮은 쪽 → 처치 가능 공격기 > 기술 > 교체.
+ * 동률 처리: 즉사(worst_case 1타) 위험 배제 → 거의 처치인 공격기가 있으면 랭크업기 제외 → 처치 가능 공격기 → 진입 비용 낮은 쪽 → 방어 상성 낮은 쪽 → 처치 가능 공격기 > 기술 > 교체.
  */
 export function decide(
   options: AiOption[],
   riskAversion: number,
   params: DecisionParams = DEFAULT_DECISION_PARAMS,
+  random: () => number = Math.random,
 ): { chosen: AiOption; scored: ScoredOption[] } | null {
   if (options.length === 0) return null;
   // NaN 점수는 비교가 전부 false라 후보가 하나도 안 남는다 — 계산 결함이 있어도 배틀이 멈추지 않게 선택 불가로 본다.
@@ -332,15 +689,29 @@ export function decide(
   if (override) return { chosen: override, scored };
 
   const bestScore = Math.max(...scored.map((s) => s.score));
-  if (bestScore === -Infinity) return { chosen: options[0], scored };
+  if (bestScore === -Infinity) return { chosen: fallbackOption(options), scored };
+  if (params.choiceTemperature > 0 && Number.isFinite(bestScore)) return { chosen: softmaxPick(scored, bestScore, params.choiceTemperature, random), scored };
 
   // 상대가 나에게 데미지를 줄 수단이 없으면 점수가 +Infinity — Infinity − Infinity(NaN) 비교를 피한다.
   let candidates = scored.filter((s) => s.score === bestScore || bestScore - s.score < params.tieThreshold);
   if (candidates.length > 1) {
     const safe = candidates.filter((s) => s.option.hitsToBeKilled.worstCase.count !== 1);
     if (safe.length > 0) candidates = safe;
+    const nearKill = candidates.some(
+      (s) => s.option.optionType === "move" && s.option.move?.category !== "status" && s.option.hitsToKill.expected < params.tieNearKillC,
+    );
+    if (nearKill) candidates = candidates.filter((s) => s.option.support?.kind !== "setup");
+    const killRank = (s: ScoredOption) =>
+      params.tieKillFirst &&
+      s.option.optionType === "move" &&
+      !!s.option.move &&
+      s.option.move.category !== "status" &&
+      s.option.hitsToKill.expected <= 1
+        ? 0
+        : 1;
     candidates = [...candidates].sort(
       (a, b) =>
+        compareBy<ScoredOption>(killRank)(a, b) ||
         compareBy<ScoredOption>((s) => s.option.entryCost)(a, b) ||
         compareBy<ScoredOption>((s) => s.option.typeMatchup.defensive)(a, b) ||
         compareBy<ScoredOption>((s) => actionTempoRank(s.option, params.tieAttackFirst))(a, b) ||

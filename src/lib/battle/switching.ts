@@ -1,4 +1,7 @@
+import { effectiveHeldItem, itemsSuppressedByRoom } from "./turnOrderInputs";
+import { isGrounded } from "./grounding";
 import { type FighterKey } from "@/types/battle";
+import { isUncopyableAbility } from "./abilityChange";
 import { NEUTRAL_ACCURACY_STAGES, NEUTRAL_CRIT_STAGE, NEUTRAL_STAGES, type BattleStatKey } from "@/types/battleStats";
 import { NO_STATUS_CONDITION, type StatusCondition, type VolatileCondition, type VolatileConditionState } from "@/types/status";
 import { getAbility, getItem, getPokemon } from "@/lib/data";
@@ -8,14 +11,22 @@ import { computeRealStats } from "@/lib/statCalculator";
 import { applyStageDelta } from "@/lib/statStages";
 import { inflictStatus, isImmuneToStatus } from "@/lib/statusConditions";
 import { hasVolatile } from "@/lib/volatileConditions";
-import { calcSpikesDamage, calcStealthRockDamage, isGroundedForHazards } from "./entryCost";
+import { calcSpikesDamage, calcStealthRockDamage } from "./entryCost";
 import { FIELD_DURATION, FIELD_ENTRY_ANNOUNCEMENT, isStatusBlockedByField } from "@/lib/fieldEffects";
 import { WEATHER_DURATION, abilityOf, activeWeather, applyForecastForm, applyMimicryForm, applyTransform, balloonEntryAnnouncement, cloneSide, consumeItem, contraryDelta, isFainted, opponentKey, sideOf, statusImmunitiesOf, weatherRockBonus, type BattleFighterState, type BattleState } from "./state";
 
-export function isTrappedFromSwitching(fighter: BattleFighterState): boolean {
+export function isTrappedFromSwitching(fighter: BattleFighterState, state?: BattleState): boolean {
   if (isFainted(fighter)) return false;
   if (fighter.types.includes("고스트")) return false;
-  return hasVolatile(fighter.volatile, "octolock") || hasVolatile(fighter.volatile, "jawLock");
+  // 아름다운허물(트랙 M6): 교체 봉쇄를 무시한다(매직룸·서투름이면 효과 없음)
+  if (effectiveHeldItem(fighter, state)?.escapesTrapping) return false;
+  // 페어리록(트랙 M6): 걸린 다음 턴은 모두 교체 불가
+  if ((state?.fairyLockTurnsRemaining ?? 0) > 0 && state!.fairyLockTurnsRemaining! < 2) return true;
+  return (
+    hasVolatile(fighter.volatile, "octolock") ||
+    hasVolatile(fighter.volatile, "jawLock") ||
+    hasVolatile(fighter.volatile, "meanLook")
+  );
 }
 
 /**
@@ -34,6 +45,11 @@ export function applyIntimidateWithReaction(
   log: string[],
 ): void {
   const oppAbility = opponent.effectiveAbilityId ? getAbility(opponent.effectiveAbilityId) : undefined;
+  // 정신력·마이페이스·둔감(트랙 M3): 위협을 아예 받지 않는다
+  if (oppAbility?.immuneToIntimidate) {
+    log.push(`${intimidaterName}의 ${intimidateAbilityName}! 그러나 ${opponentName}의 ${oppAbility.name} 때문에 효과가 없었다!`);
+    return;
+  }
   if (oppAbility?.guardsAgainstIntimidate) {
     const before = opponent.stages[intimidate.stat];
     opponent.stages = applyStageDelta(opponent.stages, intimidate.stat, contraryDelta(opponent, 1));
@@ -71,7 +87,7 @@ export function triggerTerrainSeeds(state: BattleState): string[] {
     const fighter = state[key];
     if (isFainted(fighter) || fighter.itemConsumed) continue;
     const ability = fighter.effectiveAbilityId ? getAbility(fighter.effectiveAbilityId) : undefined;
-    const item = ability?.disablesOwnItemEffects
+    const item = ability?.disablesOwnItemEffects || itemsSuppressedByRoom(state)
       ? undefined
       : fighter.currentItemId
         ? getItem(fighter.currentItemId)
@@ -135,8 +151,10 @@ function applyEntryHazardsOnSwitchIn(state: BattleState, key: FighterKey, log: s
   if (isFainted(self)) return;
 
   // 3. 접지 대상만: 압정뿌리기 · 독압정 · 끈적끈적네트
-  if (isGroundedForHazards(self.types, selfAbility)) {
-    const spikesDamage = calcSpikesDamage(self.maxHp, self.types, selfAbility, hz);
+  // 트랙 M4: 중력·전자부유·풍선·떨어뜨리기까지 반영한 접지 판정
+  const selfGrounded = isGrounded(state, self, selfAbility);
+  if (selfGrounded) {
+    const spikesDamage = calcSpikesDamage(self.maxHp, self.types, selfAbility, hz, selfGrounded);
     if (spikesDamage > 0) {
       self.currentHp = Math.max(0, self.currentHp - spikesDamage);
       log.push(`${selfName}${eunNeun(selfName)} 압정에 상처를 입었다! (${spikesDamage} 데미지)`);
@@ -147,7 +165,7 @@ function applyEntryHazardsOnSwitchIn(state: BattleState, key: FighterKey, log: s
       hz.toxicSpikesLayers > 0 &&
       !self.status.condition &&
       !isImmuneToStatus(hz.toxicSpikesLayers >= 2 ? "badly-poisoned" : "poison", self.types, statusImmunitiesOf(self, selfAbility)) &&
-      !isStatusBlockedByField(state.field, "poison") &&
+      !isStatusBlockedByField(state.field, "poison", selfGrounded) &&
       sideOf(state, key).safeguardTurnsRemaining === undefined
     ) {
       const cond: StatusCondition = hz.toxicSpikesLayers >= 2 ? "badly-poisoned" : "poison";
@@ -174,7 +192,7 @@ function applyEntryHazardsOnSwitchIn(state: BattleState, key: FighterKey, log: s
  * createBattleState의 resolveEntryAbilityEffects는 양쪽을 스피드 순으로 동시에 처리하는
  * 배틀 시작 전용이라, 한 마리만 등장하는 교체용으로 이 단일 버전을 따로 둔다.
  * 처리: 위협(상대 랭크 하락) · 가뭄류(날씨) · 일렉트릭메이커류(필드) · 트레이스(상대 특성 복사) ·
- * 배리어프리(양쪽 편 스크린 제거, §6-3). (다운로드·기분파 등은 로스터에 없거나 다른 훅에서 처리.)
+ * 배리어프리(양쪽 편 스크린 제거, §6-3) · 총대장(쓰러진 같은 편 수, ver.1.8). (다운로드·기분파 등은 로스터에 없거나 다른 훅에서 처리.)
  */
 function applyEntryAbilityOnSwitchIn(state: BattleState, key: FighterKey, log: string[]): void {
   const self = state[key];
@@ -199,6 +217,19 @@ function applyEntryAbilityOnSwitchIn(state: BattleState, key: FighterKey, log: s
   if (ability.illusion) {
     const s = sideOf(state, key);
     self.illusionAs = computeIllusionTarget(s.party, s.activeIndex);
+  }
+
+  // 총대장: 지금까지 쓰러진 같은 편 수(상한 maxCount)를 세어 둔다 — 이후 공격 위력 배율(supremeOverlordMultiplier).
+  if (ability.powerBoostPerFaintedAlly) {
+    const count = Math.min(
+      sideOf(state, key).party.filter((member) => member !== self && isFainted(member)).length,
+      ability.powerBoostPerFaintedAlly.maxCount,
+    );
+    self.supremeOverlordCount = count;
+    if (count > 0) {
+      log.push(`${selfName}의 ${ability.name}!`);
+      log.push(`${selfName}${eunNeun(selfName)} 쓰러진 동료에게서 힘을 받았다!`);
+    }
   }
 
   // 위협류 (파수견·주눅 반응 포함)
@@ -238,7 +269,12 @@ function applyEntryAbilityOnSwitchIn(state: BattleState, key: FighterKey, log: s
     }
   }
   // 트레이스: 상대의 현재 특성을 복사
-  if (ability.copiesOpponentAbilityOnEntry && opponent.effectiveAbilityId && !isFainted(opponent)) {
+  if (
+    ability.copiesOpponentAbilityOnEntry &&
+    opponent.effectiveAbilityId &&
+    !isUncopyableAbility(opponent.effectiveAbilityId) &&
+    !isFainted(opponent)
+  ) {
     const copied = getAbility(opponent.effectiveAbilityId);
     self.effectiveAbilityId = opponent.effectiveAbilityId;
     const opponentName = getPokemon(opponent.slot.pokemonId)?.name ?? "상대";
@@ -274,6 +310,8 @@ export function applyMegaEvolution(state: BattleState, key: FighterKey, log: str
   const hpDelta = newStats.hp - fighter.maxHp; // 공식 메가폼은 HP 불변이지만 비공식 폼 대비 안전하게
   fighter.types = [...mega.types];
   fighter.effectiveAbilityId = mega.ability;
+  fighter.baseTypes = [...mega.types];
+  fighter.baseAbilityId = mega.ability;
   fighter.realStats = newStats;
   fighter.maxHp = newStats.hp;
   fighter.currentHp = Math.min(newStats.hp, Math.max(1, fighter.currentHp + Math.max(0, hpDelta)));
@@ -379,6 +417,8 @@ export function performSwitch(
   outgoing.chargingMoveId = undefined;
   outgoing.lastMoveId = undefined;
   outgoing.lastMoveStreak = undefined;
+  outgoing.choiceLockedMoveId = undefined;
+  outgoing.supremeOverlordCount = undefined;
   outgoing.stockpileCount = undefined;
   outgoing.perishCount = undefined;
   outgoing.destinyBondArmed = undefined;
@@ -395,8 +435,17 @@ export function performSwitch(
   outgoing.unburdenActive = undefined;
   // 일루전(§6-1): 물러나면 위장 해제 — 다시 나올 때 파티 상태에 맞춰 재계산된다.
   outgoing.illusionAs = undefined;
+  // 트랙 M3: 기술·특성으로 바뀐 타입·특성은 물러나면 원래대로(변신은 원복 자체가 미도입이라 건드리지 않는다).
+  if (!outgoing.transformed) {
+    if (outgoing.baseTypes) outgoing.types = [...outgoing.baseTypes];
+    if (outgoing.baseAbilityId !== undefined) outgoing.effectiveAbilityId = outgoing.baseAbilityId;
+    outgoing.addedType = undefined;
+    outgoing.abilitySuppressed = undefined;
+  }
+  outgoing.magnetRiseTurnsRemaining = undefined;
+  outgoing.smackedDown = undefined;
   // 유지: currentHp · status(주 상태이상) · remainingPp · itemConsumed · currentItemId ·
-  //       consumedBerryId · addedType · timesHitByMoves(교체 초기화 미도입) · ownMoveTypeBoosts ·
+  //       consumedBerryId · timesHitByMoves(교체 초기화 미도입) · ownMoveTypeBoosts ·
   //       disguiseBroken · hungerMode.
   //   스크린(§6-3)·희망사항(§6-2)은 편(BattleSide.screens / .wish)에 있어 교체해도 유지된다.
   //   후속: transformed(변신 원복 — 메타몽 전용이라 미도입).
@@ -406,10 +455,11 @@ export function performSwitch(
   // 것도 여기서 함께 풀린다(물러나는 쪽 것은 아래 volatile 초기화에서 지워진다).
   {
     const opp = state[opponentKey(key)];
-    if (hasVolatile(opp.volatile, "octolock") || hasVolatile(opp.volatile, "jawLock")) {
+    if (hasVolatile(opp.volatile, "octolock") || hasVolatile(opp.volatile, "jawLock") || hasVolatile(opp.volatile, "meanLook")) {
       const next = { ...opp.volatile.active };
       delete next.octolock;
       delete next.jawLock;
+      delete next.meanLook;
       opp.volatile = { active: next };
     }
   }
@@ -458,6 +508,14 @@ export function performSwitch(
   // 4. 풍선 — 지니고 등장하면 공중에 떠있다는 안내를 낸다.
   const balloonMsg = balloonEntryAnnouncement(incoming);
   if (balloonMsg) log.push(balloonMsg);
+  // 5. 치유소원(트랙 M6): 이 편에 걸려 있으면 새로 나온 포켓몬이 HP·상태이상을 전부 회복한다(설치물 뒤).
+  if (side.healingWishPending && !isFainted(incoming)) {
+    side.healingWishPending = undefined;
+    incoming.currentHp = incoming.maxHp;
+    incoming.status = { ...NO_STATUS_CONDITION };
+    const inName = getPokemon(incoming.illusionAs ?? incoming.slot.pokemonId)?.name ?? "포켓몬";
+    log.push(`치유소원이 ${inName}${eulReul(inName)} 감쌌다! 체력과 상태이상이 모두 회복되었다!`);
+  }
 
   // TODO(§8): 추격(Pursuit)은 로스터에 없어 미구현 — 교체 대상을 위력 2배로 선타하는 예외.
 }
@@ -497,6 +555,12 @@ export function applySwitch(
     field: prevState.field,
     fieldTurnsRemaining: prevState.fieldTurnsRemaining,
     trickRoomTurnsRemaining: prevState.trickRoomTurnsRemaining,
+    // 흉내쟁이(트랙 M2): 배틀에서 직전에 나온 기술은 턴·교체를 넘어 이어진다
+    lastMoveUsedId: prevState.lastMoveUsedId,
+    wonderRoomTurnsRemaining: prevState.wonderRoomTurnsRemaining,
+    magicRoomTurnsRemaining: prevState.magicRoomTurnsRemaining,
+    gravityTurnsRemaining: prevState.gravityTurnsRemaining,
+    fairyLockTurnsRemaining: prevState.fairyLockTurnsRemaining,
     turnNumber: prevState.turnNumber,
     entryAnnouncements: prevState.entryAnnouncements,
   };

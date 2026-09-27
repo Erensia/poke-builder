@@ -33,25 +33,33 @@ export const FIELD_ENTRY_ANNOUNCEMENT: Record<FieldKind, string> = {
 };
 
 /** 필드가 기술 데미지에 주는 배율. 그래스/사이코/일렉트릭=해당 타입 1.3배, 미스트필드=드래곤타입 0.5배 */
-export function getFieldDamageMultiplier(field: FieldKind | undefined, moveType: PokemonType | null): number {
+export function getFieldDamageMultiplier(
+  field: FieldKind | undefined,
+  moveType: PokemonType | null,
+  /** 트랙 M4: 공격측이 땅에 있는지 — 필드 타입 강화는 땅에 있는 포켓몬만(생략하면 땅에 있다고 봄) */
+  attackerGrounded = true,
+  /** 트랙 M4: 방어측이 땅에 있는지 — 미스트필드의 드래곤 반감은 땅에 있는 대상만 */
+  defenderGrounded = true,
+): number {
   if (!field || !moveType) return 1;
-  if (field === "미스트필드") return moveType === "드래곤" ? 0.5 : 1;
-  return FIELD_BOOST_TYPE[field] === moveType ? 1.3 : 1;
+  if (field === "미스트필드") return moveType === "드래곤" && defenderGrounded ? 0.5 : 1;
+  return FIELD_BOOST_TYPE[field] === moveType && attackerGrounded ? 1.3 : 1;
 }
 
 /**
  * 미스트필드(모든 상태이상+혼란 면역)·일렉트릭필드(잠듦만 면역) 조건에 걸려 상태이상을 못 거는지.
- * 두 필드 다 "땅에 있는 포켓몬"이 대상이고, 이 프로젝트는 부유/공중 포켓몬 구분이 없어 항상 땅에 있는 것으로 취급한다.
+ * 두 필드 다 "땅에 있는 포켓몬"이 대상이다 — 트랙 M4부터 배틀 엔진은 grounded(battle/grounding.ts)를 넘긴다(생략하면 땅에 있다고 봄).
  */
-export function isStatusBlockedByField(field: FieldKind | undefined, status: StatusCondition): boolean {
+export function isStatusBlockedByField(field: FieldKind | undefined, status: StatusCondition, grounded = true): boolean {
+  if (!grounded) return false;
   if (field === "미스트필드") return true;
   if (field === "일렉트릭필드" && status === "sleep") return true;
   return false;
 }
 
-/** 혼란도 미스트필드의 "각종 상태이상" 면역 범위에 포함된다 (본가 규칙) */
-export function isConfusionBlockedByField(field: FieldKind | undefined): boolean {
-  return field === "미스트필드";
+/** 혼란도 미스트필드의 "각종 상태이상" 면역 범위에 포함된다 (본가 규칙) — 땅에 있는 대상만 */
+export function isConfusionBlockedByField(field: FieldKind | undefined, grounded = true): boolean {
+  return field === "미스트필드" && grounded;
 }
 
 /**
@@ -66,7 +74,14 @@ export function isOpponentTargetingMove(move: Move): boolean {
   if (move.inflictsVolatile?.some((v) => v.target === "opponent")) return true;
   if (move.statChanges?.some((s) => s.target === "opponent")) return true;
   if (move.setsLeechSeed) return true;
-  if (move.setsDisable || move.setsEncore) return true;
+  // 트랙 M1: 트릭·바꿔치기(도구 교환)·아픔나누기(HP 나눔)는 상대를 겨냥한다(방어·대타·매직미러 판정 대상)
+  if (move.swapsItemsWithTarget || move.sharesHpWithTarget) return true;
+  if (move.setsDisable || move.setsEncore || move.reducesTargetLastMovePp) return true;
+  // 트랙 M3: 상대 특성·타입을 바꾸는 기술(심플빔·고민씨·스킬스왑·동료만들기·위액·마법가루·물붓기·숲의저주·핼러윈)
+  if (move.setsTargetAbilityId || move.swapsAbilityWithTarget || move.givesAbilityToTarget || move.suppressesTargetAbility) return true;
+  if (move.setsTargetType || move.addsTypeToTarget) return true;
+  // 트랙 M6: 부식가스(상대 도구 제거)
+  if (move.removesTargetItem) return true;
   if (move.curesStatus?.target === "opponent") return true;
   if (move.healsTarget === "opponent") return true;
   return false;
@@ -78,8 +93,14 @@ export function isOpponentTargetingMove(move: Move): boolean {
  * 빛의장막 등 자신/필드 전역 효과) 막히지 않는다(사용자 확인 — Phase 5 §4-3에서 우선도만 보고
  * 막던 걸 정정).
  */
-export function isPriorityMoveBlockedByField(field: FieldKind | undefined, priority: number, move: Move): boolean {
-  return field === "사이코필드" && priority >= 1 && isOpponentTargetingMove(move);
+export function isPriorityMoveBlockedByField(
+  field: FieldKind | undefined,
+  priority: number,
+  move: Move,
+  /** 트랙 M4: 사이코필드는 땅에 있는 대상만 지킨다(생략하면 땅에 있다고 봄) */
+  targetGrounded = true,
+): boolean {
+  return field === "사이코필드" && priority >= 1 && isOpponentTargetingMove(move) && targetGrounded;
 }
 
 /** 그래스필드일 때 턴 종료 시 최대 HP의 1/16을 회복한다 */
@@ -87,18 +108,25 @@ export function computeFieldEndOfTurnHeal(field: FieldKind | undefined, maxHp: n
   return field === "그래스필드" ? Math.floor(maxHp / 16) : 0;
 }
 
-/** 그래스슬라이더처럼 특정 필드에서만 우선도가 오르는 기술의 실제 우선도(조건 안 맞으면 원래 priority) */
-export function getFieldAdjustedPriority(move: Move, field: FieldKind | undefined): number {
-  if (move.priorityBoostInField && field === move.priorityBoostInField.field) {
+/**
+ * 그래스슬라이더처럼 특정 필드에서만 우선도가 오르는 기술의 실제 우선도(조건 안 맞으면 원래 priority).
+ * 필드 효과라 사용자가 땅에 있을 때만(ver.1.8 한계점 정리 — 이전엔 접지를 안 봤다).
+ */
+export function getFieldAdjustedPriority(move: Move, field: FieldKind | undefined, userGrounded = true): number {
+  if (move.priorityBoostInField && field === move.priorityBoostInField.field && userGrounded) {
     return move.priority + move.priorityBoostInField.delta;
   }
   return move.priority;
 }
 
-/** 미스트버스트·와이드포스·라이징볼트처럼 특정 필드에서 위력이 배가되는 기술의 배율(조건 안 맞으면 1) */
-export function getFieldPowerMultiplier(move: Move, field: FieldKind | undefined): number {
-  if (move.powerMultiplierInField && field === move.powerMultiplierInField.field) {
-    return move.powerMultiplierInField.multiplier;
+/**
+ * 미스트버스트·와이드포스·라이징볼트처럼 특정 필드에서 위력이 배가되는 기술의 배율(조건 안 맞으면 1).
+ * 미스트버스트·와이드포스는 사용자가, 라이징볼트(requiresTargetGrounded)는 상대가 땅에 있어야 한다.
+ */
+export function getFieldPowerMultiplier(move: Move, field: FieldKind | undefined, userGrounded = true, targetGrounded = true): number {
+  const boost = move.powerMultiplierInField;
+  if (boost && field === boost.field && (boost.requiresTargetGrounded ? targetGrounded : userGrounded)) {
+    return boost.multiplier;
   }
   return 1;
 }
@@ -110,7 +138,9 @@ export function getFieldPowerMultiplier(move: Move, field: FieldKind | undefined
 export function applyFieldPulse(
   move: Move,
   field: FieldKind | undefined,
+  /** 대지의파동은 사용자가 땅에 있을 때만 필드 타입·위력 2배 */
+  userGrounded = true,
 ): { type: PokemonType | null; power: number | null } {
-  if (!move.fieldPulse || !field) return { type: move.type, power: move.power };
+  if (!move.fieldPulse || !field || !userGrounded) return { type: move.type, power: move.power };
   return { type: FIELD_DISPLAY_TYPE[field], power: move.power === null ? null : move.power * 2 };
 }

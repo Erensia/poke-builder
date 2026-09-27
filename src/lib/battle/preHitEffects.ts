@@ -1,3 +1,5 @@
+import { itemsSuppressedByRoom } from "./turnOrderInputs";
+import { isGrounded } from "./grounding";
 import { type Move } from "@/types/move";
 import { type PokemonType } from "@/types/pokemon-type";
 import { type ActionBlockReason, type ActionLogEntry, type FighterKey } from "@/types/battle";
@@ -10,11 +12,11 @@ import { getAbilityPriorityBoost, resolveEffectiveDefenderAbility } from "@/lib/
 import { checkStatusActionBlock, inflictStatus, isImmuneToStatus } from "@/lib/statusConditions";
 import { ATTRACT_ACTION_BLOCK_CHANCE, CONFUSION_SELF_HIT_CHANCE, consumeVolatileTurn, hasVolatile } from "@/lib/volatileConditions";
 import { resolveMoveContext } from "@/lib/moveContext";
-import { WEIGHT_MOVE_FALLBACK_POWER, absoluteWeightPowerValue, computeDamage, positiveStagesPowerValue, reversalPowerFromHp, rivalryDamageMultiplier, weightRatioPowerValue } from "@/lib/battlePower";
+import { WEIGHT_MOVE_FALLBACK_POWER, absoluteWeightPowerValue, computeDamage, positiveStagesPowerValue, reversalPowerFromHp, targetHpRatioPowerValue, faintedAllyPowerValue, rivalryDamageMultiplier, weightRatioPowerValue } from "@/lib/battlePower";
 import { applyWeatherBall } from "@/lib/weatherEffects";
 import { applyFieldPulse, getFieldPowerMultiplier, isOpponentTargetingMove, isPriorityMoveBlockedByField, isStatusBlockedByField } from "@/lib/fieldEffects";
 import { computeBattleHitChance } from "./hitChance";
-import { CONFUSION_SELF_HIT_MOVE, MIN_DAMAGE_ROLL, STRUGGLE_MOVE, abilityOf, activeWeather, consumeItem, contraryDelta, gyroBallPowerValue, hasSheerForceSecondaryEffect, isFainted, opponentKey, sideOf, statusImmunitiesOf, type BattleFighterState, type BattleState } from "./state";
+import { CONFUSION_SELF_HIT_MOVE, MIN_DAMAGE_ROLL, STRUGGLE_MOVE, abilityOf, activeWeather, consumeItem, contraryDelta, electroBallPowerValue, gyroBallPowerValue, hasSheerForceSecondaryEffect, isFainted, opponentKey, sideOf, statusImmunitiesOf, type BattleFighterState, type BattleState } from "./state";
 
 export function resolvePreHitEffects(
   state: BattleState,
@@ -111,6 +113,7 @@ export function resolvePreHitEffects(
       attacker.remainingPp[move.id] === 0 &&
       !attacker.itemConsumed &&
       !attackerAbility?.disablesOwnItemEffects &&
+      !itemsSuppressedByRoom(state) &&
       !defenderBerriesBlocked
     ) {
       const itemForPp = attacker.currentItemId ? getItem(attacker.currentItemId) : undefined;
@@ -262,7 +265,7 @@ export function resolvePreHitEffects(
   // 자연히 턴당 1회 소모) — 여러 제약이 동시에 걸려있어도 전부 소모시킨 뒤 첫 번째로 걸린
   // 이유(도발 > 사슬묶기 > 앙코르 순)만 대표로 보고한다.
   if (!releasingCharge) {
-    let restrictionBlockedKind: "taunt" | "disable" | "encore" | undefined;
+    let restrictionBlockedKind: "taunt" | "disable" | "encore" | "torment" | "imprison" | "gravity" | undefined;
     if (hasVolatile(attacker.volatile, "taunt")) {
       if (move.category === "status") restrictionBlockedKind = "taunt";
       attacker.volatile = consumeVolatileTurn(attacker.volatile, "taunt");
@@ -277,6 +280,14 @@ export function resolvePreHitEffects(
       if (encoreEntry.moveId !== move.id) restrictionBlockedKind ??= "encore";
       attacker.volatile = consumeVolatileTurn(attacker.volatile, "encore");
     }
+    // 트집(트랙 M2): 직전에 쓴 기술을 다시 못 쓴다. 봉인(트랙 M2): 봉인을 쓴 상대가 배운 기술은 못 쓴다.
+    // 둘 다 물러나기 전까지 이어져 턴 소모가 없다.
+    if (hasVolatile(attacker.volatile, "torment") && attacker.lastMoveId === move.id) restrictionBlockedKind ??= "torment";
+    if (hasVolatile(defender.volatile, "imprison") && defender.remainingPp[move.id] !== undefined) {
+      restrictionBlockedKind ??= "imprison";
+    }
+    // 중력(트랙 M4): 공중으로 뛰어오르는 기술은 못 쓴다
+    if (state.gravityTurnsRemaining !== undefined && move.blockedByGravity) restrictionBlockedKind ??= "gravity";
     // 발버둥은 이 제약들을 전부 무시하고 나간다(본가 규칙): 앙코르로 변화기가 강제됐는데 도발로
     // 그 변화기를 못 쓰는 등, 고를 수 있는 기술이 하나도 없을 때의 폴백. 지속 턴수는 위에서 이미
     // 소모시켰으므로 앙코르·도발·사슬묶기 카운트다운은 정상 진행된다(백로그 §7-5).
@@ -291,7 +302,7 @@ export function resolvePreHitEffects(
   // 변화기는 우선도가 올라가 있어도 막히지 않는다(isOpponentTargetingMove가 그 축을 가른다).
   const effectivePriorityForBlock =
     move.priority + getAbilityPriorityBoost(move, attackerAbility, attacker.currentHp === attacker.maxHp);
-  if (isPriorityMoveBlockedByField(state.field, effectivePriorityForBlock, move)) {
+  if (isPriorityMoveBlockedByField(state.field, effectivePriorityForBlock, move, isGrounded(state, defender, defenderAbility))) {
     return blocked("psychicFieldPriority");
   }
   // 여왕의위엄: 방어측이 이 특성이면 상대의 우선도 +1↑ 공격 기술이 자신을 겨냥할 때 실패한다.
@@ -391,15 +402,26 @@ export function resolvePreHitEffects(
     move = chosen;
   }
 
+  // 흉내쟁이(트랙 M2): 배틀에서 직전에 나온 기술(누가 썼든 — 이번 턴 상대가 먼저 썼으면 그 기술)을
+  // 대신 쓴다. 나온 기술이 없거나 따라 쓸 수 없는 기술이면 실패. 잠꼬대처럼 PP는 흉내쟁이 것만 쓴다.
+  // 모으기 기술·사용 조건 기술은 그 판정이 이미 지나간 뒤라 잠꼬대와 같이 실패로 근사한다.
+  let copycatCalledMoveName: string | undefined;
+  if (move.callsLastMoveInBattle) {
+    const copied = state.lastMoveUsedId ? getMove(state.lastMoveUsedId) : undefined;
+    if (!copied || !isCopyableMove(copied)) return blocked("usageCondition");
+    copycatCalledMoveName = copied.name;
+    move = copied;
+  }
+
   // 서투름: 자기 자신의 도구 전투 효과가 무효화된다 — 실제로 지녔는지와 무관하게 이 시점부터는
   // 아예 안 지닌 것처럼 취급한다(메가스톤에 의한 폼 변화는 pokemonForm.ts의 별도 축이라 영향 없음).
   // attackerItem/defenderItem도 매직미러 반사 구간에서 함께 맞바뀐다(let).
-  let attackerItem = attackerAbility?.disablesOwnItemEffects
+  let attackerItem = attackerAbility?.disablesOwnItemEffects || itemsSuppressedByRoom(state)
     ? undefined
     : attacker.currentItemId
       ? getItem(attacker.currentItemId)
       : undefined;
-  let defenderItem = defenderAbility?.disablesOwnItemEffects
+  let defenderItem = defenderAbility?.disablesOwnItemEffects || itemsSuppressedByRoom(state)
     ? undefined
     : defender.currentItemId
       ? getItem(defender.currentItemId)
@@ -520,8 +542,15 @@ export function resolvePreHitEffects(
   // resolveMoveContext 안의 상성 계산(getEffectiveness)에도 바뀐 타입이 들어간다. 둘 중
   // 한 기술이 두 속성을 동시에 갖는 경우는 없어서(대지의파동만 fieldPulse, 나머지 셋만
   // powerMultiplierInField) 순서·중복 곱셈 걱정 없이 그냥 합쳐도 안전하다.
-  const fieldPulse = applyFieldPulse(moveAfterWeatherBall, state.field);
-  const fieldPowerMultiplier = getFieldPowerMultiplier(moveAfterWeatherBall, state.field);
+  // 필드 효과라 접지 조건(ver.1.8): 대지의파동·미스트버스트·와이드포스는 사용자, 라이징볼트는 상대가 땅에 있을 때만
+  const attackerGrounded = isGrounded(state, attacker, attackerAbility);
+  const fieldPulse = applyFieldPulse(moveAfterWeatherBall, state.field, attackerGrounded);
+  const fieldPowerMultiplier = getFieldPowerMultiplier(
+    moveAfterWeatherBall,
+    state.field,
+    attackerGrounded,
+    isGrounded(state, defender, defenderAbility),
+  );
   const fieldAdjustedMove: Move = {
     ...moveAfterWeatherBall,
     type: fieldPulse.type,
@@ -539,6 +568,7 @@ export function resolvePreHitEffects(
   } = resolveMoveContext(attackerAbility, fieldAdjustedMove, defender.types, defenderAbility, {
     weather: activeWeather(state),
     defenderItem,
+    defenderGrounded: isGrounded(state, defender, defenderAbility),
     attackerHpFraction: attacker.currentHp / attacker.maxHp,
     defenderHpIsFull: defender.currentHp === defender.maxHp,
     defenderHasStatusCondition: defender.status.condition !== null,
@@ -581,6 +611,60 @@ export function resolvePreHitEffects(
       ...effectiveMove,
       power: gyroBallPowerValue(attacker, defender, attackerItem, defenderItem),
     };
+  }
+  // 내던지기(트랙 M5): 지닌 도구(서투름·매직룸이면 없음)를 던진다 — 위력은 도구의 flingPower, 도구는 이 시점에 소모.
+  // 던질 도구가 없으면 실패. 던진 도구의 효과(상태이상·열매 등)는 resolveAction이 맞은 뒤에 적용한다.
+  let flungItemId: string | undefined;
+  if (effectiveMove.flingsHeldItem) {
+    const thrown = attackerItem;
+    if (!thrown?.flingPower) return blocked("usageCondition");
+    flungItemId = thrown.id;
+    effectiveMove = { ...effectiveMove, power: thrown.flingPower };
+    consumeItem(attacker);
+    attackerItem = undefined;
+  }
+
+  // 성묘(트랙 L): 쓰러진 같은 편 수만큼 위력이 오른다(사용 시점, 자신 제외)
+  if (effectiveMove.powerPerFaintedAlly && effectiveMove.power !== null) {
+    const fainted = sideOf(state, actorKey).party.filter((f) => f !== attacker && isFainted(f)).length;
+    effectiveMove = { ...effectiveMove, power: faintedAllyPowerValue(effectiveMove.power, effectiveMove.powerPerFaintedAlly, fainted) };
+  }
+
+  // 집단구타(트랙 M6): 파티원마다 1타(위력 5 + 종족값 공격/10)
+  if (effectiveMove.beatUpPower) {
+    const party = sideOf(state, actorKey).party;
+    const hitters = party.filter((f) => f === attacker || (!isFainted(f) && !f.status.condition));
+    const powers = hitters.map((f) => 5 + Math.floor((getPokemon(f.slot.pokemonId)?.baseStats.atk ?? 0) / 10));
+    effectiveMove = { ...effectiveMove, power: powers[0], multiHitPowers: powers, minHits: powers.length, maxHits: powers.length };
+  }
+
+  // 트랙 M5: 일렉트릭볼(스피드 비율)·하드프레스(상대 남은 HP) 위력, 분노의앞니(상대 HP 절반)·목숨걸기(내 HP) 고정 데미지
+  if (effectiveMove.electroBallPower) {
+    effectiveMove = { ...effectiveMove, power: electroBallPowerValue(attacker, defender, attackerItem, defenderItem) };
+  }
+  if (effectiveMove.targetHpRatioPower) {
+    effectiveMove = {
+      ...effectiveMove,
+      power: targetHpRatioPowerValue(effectiveMove.targetHpRatioPower, defender.currentHp, defender.maxHp),
+    };
+  }
+  if (effectiveMove.halvesTargetHp) {
+    effectiveMove = { ...effectiveMove, fixedDamage: Math.max(1, Math.floor(defender.currentHp / 2)) };
+  }
+  if (effectiveMove.damageEqualsUserHp) {
+    effectiveMove = { ...effectiveMove, fixedDamage: attacker.currentHp };
+  }
+  // 일격기(트랙 M5): 상대 현재 HP만큼. 옹골참·면역 타입(절대영도 → 얼음)이면 아무 일도 없다.
+  let ohkoBlockedByAbilityName: string | undefined;
+  let ohkoImmune = false;
+  if (effectiveMove.oneHitKo) {
+    if (defenderAbility?.immuneToOhko) {
+      ohkoBlockedByAbilityName = defenderAbility.name;
+    } else if (effectiveMove.oneHitKo.immuneType && defender.types.includes(effectiveMove.oneHitKo.immuneType)) {
+      ohkoImmune = true;
+    } else {
+      effectiveMove = { ...effectiveMove, fixedDamage: defender.currentHp };
+    }
   }
   // 기어오르기·어시스트파워(§3-1a): 자신의 양수 랭크 합계로 위력이 오른다.
   if (effectiveMove.powerFromPositiveStages) {
@@ -684,6 +768,11 @@ export function resolvePreHitEffects(
     fickleBeamEmpowered = true;
   }
 
+  // G의힘(트랙 M4): 중력 중이면 위력 ×1.5
+  if (effectiveMove.powerMultiplierInGravity && state.gravityTurnsRemaining !== undefined && effectiveMove.power !== null) {
+    effectiveMove = { ...effectiveMove, power: Math.floor(effectiveMove.power * effectiveMove.powerMultiplierInGravity) };
+  }
+
   // 전기로바꾸기(Electromorphosis): 충전 상태에서 쓰는 전기타입 기술은 위력 2배(1회 소모).
   let electromorphosisEmpoweredAbilityName: string | undefined;
   if (
@@ -709,6 +798,11 @@ export function resolvePreHitEffects(
   // 무관하게 여기서 갱신한다(본가 규칙 — 빗나가도 스트릭은 유지되고, 다른 기술을 쓰면 끊긴다).
   attacker.lastMoveStreak = attacker.lastMoveId === effectiveMove.id ? (attacker.lastMoveStreak ?? 1) + 1 : 1;
   attacker.lastMoveId = effectiveMove.id;
+  if (effectiveMove.id !== STRUGGLE_MOVE.id) state.lastMoveUsedId = effectiveMove.id;
+  // 구애류: 지금 지닌 도구가 구애류면 이 기술로 잠긴다(이미 잠겼으면 그대로). 발버둥은 잠그지 않는다.
+  if (attackerItem?.locksFirstMoveUsed && !attacker.choiceLockedMoveId && effectiveMove.id !== STRUGGLE_MOVE.id) {
+    attacker.choiceLockedMoveId = effectiveMove.id;
+  }
 
   // 거대해머(cannotUseConsecutively): 실제로 이 기술로 행동을 개시했으니 "다음 턴엔 잠금" 예약.
   // usageCondition 게이트(섹션 0)는 이 기록과 현재 턴 번호가 정확히 일치할 때만 실패시킨다.
@@ -848,6 +942,12 @@ export function resolvePreHitEffects(
         : glaiveRushGuaranteesHit
           ? true
           : random() < hitChance;
+  // 록온(트랙 M6): 걸어둔 다음 행동 한 번으로 소모된다
+  if (hasVolatile(attacker.volatile, "lockOn") && !effectiveMove.inflictsVolatile?.some((v) => v.volatile === "lockOn")) {
+    const active = { ...attacker.volatile.active };
+    delete active.lockOn;
+    attacker.volatile = { active };
+  }
 
   // 철제광선: "사용하는 순간" 명중·빗나감과 무관하게 사용자가 최대 HP의 절반을 잃는다(E-3).
   let selfDamageOnUse = 0;
@@ -950,7 +1050,7 @@ export function resolvePreHitEffects(
     if (
       ap.contactStatus &&
       !isImmuneToStatus(ap.contactStatus, attacker.types, statusImmunitiesOf(attacker, attackerAbility)) &&
-      !isStatusBlockedByField(state.field, ap.contactStatus) &&
+      !isStatusBlockedByField(state.field, ap.contactStatus, isGrounded(state, attacker, attackerAbility)) &&
       sideOf(state, actorKey).safeguardTurnsRemaining === undefined
     ) {
       const before = attacker.status.condition;
@@ -962,7 +1062,11 @@ export function resolvePreHitEffects(
     }
   }
   return {
-    move, defenderKey, attacker, defender, defenderHpAtActionStart, actorPokemonId, defenderPokemonId, attackerAbility, defenderAbility, attackerBerriesBlocked, defenderBerriesBlocked, attackerItemIdBeforeAction, defenderItemIdBeforeAction, leppaRestoredPpItemName, pressureExtraPpAbilityName, selfCuredStatus, sleepTalkCalledMoveName, attackerItem, defenderItem, blockedByGoodAsGold, blockedBySubstitute, blockedByPowderImmunity, unseenFistPiercing, blockedByProtect, blockedByProtectMoveName, soundproofBlockedByAbilityName, bulletproofBlockedByAbilityName, opponentEffectsBlocked, bouncedByMagicMirror, shellSideArmCategory, abilityOffenseMultiplier, abilityDefenseMultiplier, stabMultiplier, typeEffectiveness, effectiveMove, sheerForceAbilityName, fickleBeamEmpowered, electromorphosisEmpoweredAbilityName, ownMoveTypeBoostMultiplier, rivalryMultiplier, changedOwnTypeTo, changedOwnTypeAbilityName, lostTypeAfterUse, gemMultiplier, ateGemItemName, hitChance, defenderHideType, evadedByCharge, hit, selfDamageOnUse, abilityAbsorbedMoveType, abilityAbsorbAbilityName, abilityAbsorbHealAmount, protectContactPenaltyMoveName, protectContactDamage, protectContactInflictedStatus,
+    move, defenderKey, attacker, defender, defenderHpAtActionStart, actorPokemonId, defenderPokemonId, attackerAbility, defenderAbility, attackerBerriesBlocked, defenderBerriesBlocked, attackerItemIdBeforeAction, defenderItemIdBeforeAction, leppaRestoredPpItemName, pressureExtraPpAbilityName, selfCuredStatus, sleepTalkCalledMoveName, copycatCalledMoveName, ohkoBlockedByAbilityName, ohkoImmune, flungItemId, attackerItem, defenderItem, blockedByGoodAsGold, blockedBySubstitute, blockedByPowderImmunity, unseenFistPiercing, blockedByProtect, blockedByProtectMoveName, soundproofBlockedByAbilityName, bulletproofBlockedByAbilityName, opponentEffectsBlocked, bouncedByMagicMirror, shellSideArmCategory, abilityOffenseMultiplier, abilityDefenseMultiplier, stabMultiplier, typeEffectiveness, effectiveMove, sheerForceAbilityName, fickleBeamEmpowered, electromorphosisEmpoweredAbilityName, ownMoveTypeBoostMultiplier, rivalryMultiplier, changedOwnTypeTo, changedOwnTypeAbilityName, lostTypeAfterUse, gemMultiplier, ateGemItemName, hitChance, defenderHideType, evadedByCharge, hit, selfDamageOnUse, abilityAbsorbedMoveType, abilityAbsorbAbilityName, abilityAbsorbHealAmount, protectContactPenaltyMoveName, protectContactDamage, protectContactInflictedStatus,
   };
 }
 
+/** 흉내쟁이(트랙 M2)가 따라 쓸 수 있는 기술인지 — AI(흉내쟁이 평가)도 같은 판정을 쓴다 */
+export function isCopyableMove(move: Move): boolean {
+  return !move.excludedFromCopycat && !move.callsLastMoveInBattle && !move.chargeTurn && !move.usageCondition;
+}

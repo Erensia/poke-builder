@@ -17,7 +17,7 @@ export const WEATHER_ACCENT_TYPE: Record<WeatherKind, PokemonType> = {
  * 날씨가 기술 데미지에 주는 기본 배율. 본가 기준 그대로 적용한다(챔피언스도 동일하다고 가정 —
  * Phase 3 문서 3절 "확인 필요" 항목, 실측으로 다르다고 확인되면 이 표만 고치면 된다).
  * 비=물타입 1.5배/불타입 0.5배, 쾌청=불타입 1.5배/물타입 0.5배. 모래바람/눈은 데미지 배율 없음
- * (모래바람의 바위 특방 1.5배는 방어 쪽 계산이라 여기서 다루지 않는다).
+ * (모래바람의 바위 특방·눈의 얼음 방어 1.5배는 방어 쪽 계산이라 getWeatherDefenseMultiplier가 다룬다).
  */
 export function getWeatherDamageMultiplier(
   weather: WeatherKind | undefined,
@@ -32,6 +32,20 @@ export function getWeatherDamageMultiplier(
     if (moveType === "불꽃") return 1.5;
     if (moveType === "물") return 0.5;
   }
+  return 1;
+}
+
+/**
+ * 날씨가 방어측 내구에 주는 배율(본가): 모래바람이면 바위 타입의 특방 1.5배, 눈이면 얼음 타입의 방어 1.5배.
+ * defenseStat은 이번 기술이 실제로 읽는 방어 축(사이코쇼크류는 특수기라도 방어). bulkMultiplier에 곱한다.
+ */
+export function getWeatherDefenseMultiplier(
+  weather: WeatherKind | undefined,
+  defenderTypes: readonly PokemonType[],
+  defenseStat: "def" | "spd",
+): number {
+  if (weather === "모래바람" && defenseStat === "spd" && defenderTypes.includes("바위")) return 1.5;
+  if (weather === "눈" && defenseStat === "def" && defenderTypes.includes("얼음")) return 1.5;
   return 1;
 }
 

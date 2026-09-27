@@ -7,16 +7,25 @@ import { getFieldAdjustedPriority } from "@/lib/fieldEffects";
 import { getItemSpeedMultiplier } from "@/lib/itemEffects";
 import { type TurnOrderActor } from "@/lib/turnOrder";
 import { abilityOf, activeWeather, type BattleFighterState, type BattleState } from "./state";
+import { isGrounded } from "./grounding";
 
-/** 지닌 도구의 실효 객체. 서투름(disablesOwnItemEffects)이면 도구 효과가 전부 무효라 undefined. */
-export function effectiveHeldItem(fighter: BattleFighterState): Item | undefined {
-  if (abilityOf(fighter)?.disablesOwnItemEffects) return undefined;
+/** 매직룸(트랙 M4): 모든 포켓몬의 도구 효과가 무효 */
+export function itemsSuppressedByRoom(state: BattleState | undefined): boolean {
+  return state?.magicRoomTurnsRemaining !== undefined;
+}
+
+/**
+ * 지닌 도구의 실효 객체. 서투름(disablesOwnItemEffects)이거나 매직룸 중(트랙 M4 — state를 넘길 때)이면 도구 효과가
+ * 전부 무효라 undefined.
+ */
+export function effectiveHeldItem(fighter: BattleFighterState, state?: BattleState): Item | undefined {
+  if (abilityOf(fighter)?.disablesOwnItemEffects || itemsSuppressedByRoom(state)) return undefined;
   return fighter.currentItemId ? getItem(fighter.currentItemId) : undefined;
 }
 
 /**
  * 턴 순서 비교에 쓰는 실능 스피드(랭크 미반영 — 랭크는 compareTurnOrder가 곱한다).
- * 마비·구애스카프/검은철구·엽록소류(날씨 일치 시)·곡예(unburdenActive)를 전부 곱한다.
+ * 마비·구애스카프/검은철구·엽록소류(날씨 일치 시)·곡예(unburdenActive)·순풍을 전부 곱한다.
  * runTurn(실전 순서 결정)과 배틀 AI(speed_order 예측)가 같은 계산을 공유한다.
  */
 export function computeTurnOrderSpeed(state: BattleState, fighter: BattleFighterState): number {
@@ -26,9 +35,11 @@ export function computeTurnOrderSpeed(state: BattleState, fighter: BattleFighter
   return (
     fighter.realStats.spe *
     computeStatusSpeedMultiplier(fighter.status.condition) *
-    getItemSpeedMultiplier(effectiveHeldItem(fighter)) *
+    getItemSpeedMultiplier(effectiveHeldItem(fighter, state)) *
     weatherMultiplier *
-    (fighter.unburdenActive ? 2 : 1)
+    (fighter.unburdenActive ? 2 : 1) *
+    // 순풍(트랙 M1): 이 포켓몬이 속한 편에 순풍이 불고 있으면 2배
+    (tailwindActiveFor(state, fighter) ? 2 : 1)
   );
 }
 
@@ -38,7 +49,7 @@ export function computeTurnOrderSpeed(state: BattleState, fighter: BattleFighter
  */
 export function computeTurnOrderPriority(state: BattleState, fighter: BattleFighterState, move: Move): number {
   return (
-    getFieldAdjustedPriority(move, state.field) +
+    getFieldAdjustedPriority(move, state.field, isGrounded(state, fighter)) +
     getAbilityPriorityBoost(move, abilityOf(fighter), fighter.currentHp === fighter.maxHp)
   );
 }
@@ -51,4 +62,12 @@ export function buildTurnOrderActor(state: BattleState, fighter: BattleFighterSt
     stages: fighter.stages,
     movesLast: abilityOf(fighter)?.movesLastInPriorityBracket,
   };
+}
+
+/** fighter가 속한 편(sideA/sideB — 활성·대기 무관)에 순풍이 불고 있는지 */
+function tailwindActiveFor(state: BattleState, fighter: BattleFighterState): boolean {
+  // AI는 랭크를 지운 복제본으로도 부르므로 slot으로도 찾는다
+  const belongs = (party: BattleFighterState[]) => party.some((m) => m === fighter || m.slot === fighter.slot);
+  const side = belongs(state.sideA.party) ? state.sideA : belongs(state.sideB.party) ? state.sideB : undefined;
+  return (side?.tailwindTurnsRemaining ?? 0) > 0;
 }
