@@ -4,7 +4,7 @@ import { NO_STATUS_CONDITION } from "@/types/status";
 import { type PokemonType } from "@/types/pokemon-type";
 import { NEUTRAL_ACCURACY_STAGES, NEUTRAL_STAGES, type StatStages } from "@/types/battleStats";
 import { applyMoveStatChanges, applyStageDelta } from "@/lib/statStages";
-import { hasVolatile } from "@/lib/volatileConditions";
+import { hasVolatile, inflictVolatile } from "@/lib/volatileConditions";
 import { applyMoveAccuracyEvasionChanges } from "@/lib/accuracyCrit";
 import { resolveEffectiveDefenderAbility } from "@/lib/abilityModifiers";
 import { inflictRestSleep } from "@/lib/statusConditions";
@@ -193,6 +193,11 @@ export interface AiOption {
   riskFlag: boolean;
   /** 이 기술(교체면 그 포켓몬의 최선 기술)의 명중률 — 하드 오버라이드 필중 게이트용 */
   accuracy: number;
+  /**
+   * 맞히면 상대를 가두는 공격기(그림자꿰매기, ver.1.9 6-3): 상대가 교체 봉쇄에 걸린 state의 대면표. attachParty가 이 기술의
+   * 이어지는 대면을 이것으로 계산한다(가치는 상대 교체 모델링에서만 생긴다).
+   */
+  trapPartyModel?: PartyModel;
   /**
    * 이번 턴 공격하지 않는 행동(변화기·교체)일 때, 상대가 기습류를 골라 이번 턴 상대 행동이 헛수고가 될 확률(ver.1.9 6-1).
    * 결정 레이어가 이번 턴 행동 손실(lost = 1)을 이 확률만큼 lost = 0(양쪽 다 한 턴 날림)과 섞는다.
@@ -396,6 +401,22 @@ interface SetupContext {
   batonBench: number[];
 }
 
+let trapModelAware = true;
+
+/**
+ * fn 실행 동안만 교체 봉쇄 판단(ver.1.9 6-3 — 그림자꿰매기 가두기 가치·배수의진 자기 봉쇄 비용)을 켜고 끈다. 비교용 토글
+ * (DecisionParams.trapMoveAware), withEndOfTurnModel과 같은 방식.
+ */
+export function withTrapModel<T>(enabled: boolean, fn: () => T): T {
+  const previous = trapModelAware;
+  trapModelAware = enabled;
+  try {
+    return fn();
+  } finally {
+    trapModelAware = previous;
+  }
+}
+
 /**
  * 랭크업기 "적용 후 재평가"(decision-layer §4-2): 복제한 state에 자기 랭크 변화(심술꾸러기·명중/회피 포함)와
  * HP 비용을 적용하고 대면의 c·d·p를 모두 다시 계산한다 — 스피드 랭크업은 선공(p), 방어 랭크업은 버티는 턴(d)으로
@@ -416,6 +437,12 @@ function evaluateSetupMove(ctx: SetupContext): { effect?: EffectEvaluation; bato
   const beforeStages = self.stages;
   const beforeAccuracy = self.accuracyStages;
   self.stages = applyMoveStatChanges(self.stages, selfMove, "self", { userTypes: self.types, weather: activeWeather(clone) });
+  // 배수의진(ver.1.9 6-3): 자기 교체 봉쇄(noRetreat)도 적용 — 이어지는 대면에서 내 자발적 교체가 막히는 비용이 대면표에 생긴다
+  if (trapModelAware) {
+    for (const v of move.inflictsVolatile ?? []) {
+      if (v.target === "self" && v.volatile === "noRetreat") self.volatile = inflictVolatile(self.volatile, v.volatile);
+    }
+  }
   self.accuracyStages = applyMoveAccuracyEvasionChanges(self.accuracyStages, selfMove, "self", { userTypes: self.types });
   const changed =
     (Object.keys(beforeStages) as (keyof typeof beforeStages)[]).some((s) => self.stages[s] !== beforeStages[s]) ||
@@ -1012,6 +1039,21 @@ function evaluateOptionsOn(state: BattleState, key: FighterKey, options: Evaluat
       return option;
     }
 
+    // 그림자꿰매기(ver.1.9 6-3): 맞히면 상대 교체 봉쇄 — 이어지는 대면을 상대가 갇힌 state의 대면표로 본다(한 방에 쓰러뜨리면 무의미)
+    if (
+      trapModelAware &&
+      estimate &&
+      estimate.accuracy > 0 &&
+      estimate.rawHits > 1 &&
+      move.inflictsVolatile?.some((v) => v.volatile === "meanLook" && v.target === "opponent" && v.chance === undefined) &&
+      !isTrappedFromSwitching(opponent, moveState) &&
+      !opponent.types.includes("고스트")
+    ) {
+      const trapped = cloneBattleState(moveState);
+      trapped[oppKey].volatile = inflictVolatile(trapped[oppKey].volatile, "meanLook");
+      option.trapPartyModel = createPartyModel(trapped, key);
+    }
+
     // 유턴류: 맞히면(상대 기절 여부 무관) 교대할 포켓몬이 있는 한 엔진이 교체를 강제한다. 한 방에 쓰러뜨리면
     // 다음 상대를 모르므로 일반 공격기로만 평가한다.
     if (move.selfSwitchAfterDamage && estimate && estimate.rawHits > 1 && Number.isFinite(estimate.rawHits) && bench.length > 0) {
@@ -1253,7 +1295,7 @@ function attachParty(options: AiOption[], model: PartyModel): void {
     option.party =
       option.optionType === "switch"
         ? { model, myIndex: option.toIndex!, myStaged: false }
-        : { model, myIndex: model.myActive, myStaged: true };
+        : { model: option.trapPartyModel ?? model, myIndex: model.myActive, myStaged: true };
     candidateParty(option.pivot?.candidates);
     candidateParty(option.support?.batonFollowUp?.candidates);
     const copied = option.copycat?.branches.flatMap((b) => (b.option ? [b.option] : []));

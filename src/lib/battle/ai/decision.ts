@@ -119,6 +119,8 @@ export interface DecisionParams {
   endOfTurnAware: boolean;
   /** 급소 기대 데미지(ver.1.9 6-2) — 처치 턴 수에 급소 확률을 섞는다. false면 이전 동작(비교용), withCritModel로 적용(index.ts) */
   critAware: boolean;
+  /** 교체 봉쇄 판단(ver.1.9 6-3) — 그림자꿰매기 가두기 가치·배수의진 자기 봉쇄 비용. false면 이전 동작(비교용), withTrapModel(index.ts) */
+  trapMoveAware: boolean;
 }
 
 /**
@@ -168,6 +170,7 @@ export const DEFAULT_DECISION_PARAMS: DecisionParams = {
   mySwitchLimit: 1,
   endOfTurnAware: true,
   critAware: true,
+  trapMoveAware: true,
 };
 
 /** 기본 파라미터 위에 decisionParams(시뮬레이터 튜닝용)를 덮어쓴 최종 파라미터 */

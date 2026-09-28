@@ -1978,6 +1978,29 @@ try {
       `스톤에지 ×${edgeGain.toFixed(3)} 지진 ×${quakeGain.toFixed(3)} 얼음숨결 데미지 ×${breathDmg.toFixed(2)} 전투무장 ${armorSame}`,
     );
   }
+  // ── ver.1.9 6-3 교체 봉쇄: 그림자꿰매기 가두기 가치(상대 갇힌 대면표) · 배수의진 자기 봉쇄 비용(내 교체 막힌 대면표) ──
+  {
+    const st = () =>
+      battle(
+        [mon("팬텀", ["그림자꿰매기", "섀도볼"]), mon("잠만보", ["누르기"])],
+        [mon("마기라스", ["깨물어부수기"], null, null, pts({ hp: 32, def: 32 })), mon("후딘", ["사이코키네시스"])],
+      );
+    const on = opt(ev.evaluateOptions(st(), "a"), "그림자꿰매기");
+    const off = ev.withTrapModel(false, () => opt(ev.evaluateOptions(st(), "a"), "그림자꿰매기"));
+    const ghost = opt(ev.evaluateOptions(battle([mon("팬텀", ["그림자꿰매기"])], [mon("팬텀", ["섀도볼"], null, null, pts({ hp: 32, def: 32 }))]), "a"), "그림자꿰매기");
+    const nr = () => battle([mon("루카리오", ["배수의진", "인파이트"]), mon("잠만보", ["누르기"])], [mon("잠만보", ["누르기"], null, null, pts({ hp: 32, def: 32 }))]);
+    const nrOn = opt(ev.evaluateOptions(nr(), "a"), "배수의진");
+    const nrOff = ev.withTrapModel(false, () => opt(ev.evaluateOptions(nr(), "a"), "배수의진"));
+    const trappedOn = on.party?.model.oppTrapped;
+    const trappedOff = off.party?.model.oppTrapped;
+    const selfOn = nrOn.support?.effect?.party?.model.myTrapped;
+    const selfOff = nrOff.support?.effect?.party?.model.myTrapped;
+    check(
+      "1.9 6-3: 그림자꿰매기 이어지는 대면 = 상대 갇힘(고스트 상대·토글 끔이면 없음) · 배수의진 적용 대면표 = 내 교체 봉쇄",
+      trappedOn === true && trappedOff === false && ghost.trapPartyModel === undefined && selfOn === true && selfOff === false,
+      `꿰매기 ${trappedOn}/${trappedOff} 고스트 ${!!ghost.trapPartyModel} 배수의진 ${selfOn}/${selfOff}`,
+    );
+  }
   // ── 매치업 난수별 데미지(ver.1.7 트랙 H): 기존 격파 판정과 같은 관계식인지 대조 ──
   {
     const bp = await server.ssrLoadModule("/src/lib/battlePower.ts");
