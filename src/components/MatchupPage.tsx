@@ -16,7 +16,7 @@ import { CosmeticFormPickerModal } from "./CosmeticFormPickerModal";
 import { SlotPresetsModal } from "./SlotPresetsModal";
 import { useMatchup } from "../hooks/useMatchup";
 import { useSlotPresets } from "../hooks/useSlotPresets";
-import { getPokemon, getMove } from "../lib/data";
+import { getPokemon, getMove, getAbility } from "../lib/data";
 import { getEffectiveForm } from "../lib/pokemonForm";
 import { computeRealStats } from "../lib/statCalculator";
 import { computeBulkPower } from "../lib/battlePower";
@@ -104,7 +104,12 @@ export function MatchupPage() {
       attackerMovesLast: !!attacker.slot.movesLastAssumed,
       defenderHpIsFull: defender.slot.fullHpAssumed ?? true,
       extraOffenseMultiplier: effMove
-        ? computeStatusAttackMultiplier(status, effMove.category, ignoresBurnAttackPenalty(attacker.slot.ability ?? undefined, effMove.id))
+        ? computeStatusAttackMultiplier(
+            status,
+            effMove.category,
+            ignoresBurnAttackPenalty(attacker.slot.ability ?? undefined, effMove.id),
+            attacker.slot.ability ? getAbility(attacker.slot.ability)?.physicalAttackMultiplierWhenStatused : undefined,
+          )
         : 1,
     };
   }, [attacker.slot, defender.slot, effMove]);

@@ -152,6 +152,7 @@ export function resolveHitAndApplyDamage(input: HitResolutionInput) {
       attacker.status.condition,
       effectiveMove.category,
       ignoreBurnPenalty,
+      attackerAbility?.physicalAttackMultiplierWhenStatused,
     );
     // 의욕(Hustle): 물리 기술 위력 ×1.5 (명중률 ×0.8은 위 accuracyExtraMultiplier에서 반영).
     const hustleMultiplier = hustleDamageMultiplier(effectiveMove.category, attackerAbility);

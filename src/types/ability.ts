@@ -695,9 +695,11 @@ export interface Ability {
   blocksOpponentPriorityMoves?: boolean;
   /**
    * 의욕(Hustle): 자신의 물리 기술 위력에 이 배율(1.5)을 곱한다. computeDamage의 abilityMultiplier
-   * 축에 물리기일 때만 합쳐진다(근성의 화상 무시와는 별개 — 근성은 위력 배율이 없다).
+   * 축에 물리기일 때만 합쳐진다(근성의 상태이상 시 배율은 physicalAttackMultiplierWhenStatused로 따로).
    */
   hustleAttackMultiplier?: number;
+  /** 근성(ver.1.9): 주 상태이상일 때 물리 공격 배율(본가 1.5). 화상 반감 무시는 ignoresBurnAttackPenalty */
+  physicalAttackMultiplierWhenStatused?: number;
   /**
    * 의욕(Hustle): 자신의 물리 기술 명중률에 이 배율(0.8)을 곱한다. 복안(userAccuracyMultiplier)과
    * 같은 extraMultiplier 축이지만 물리기 한정이라 별도 필드로 뒀다. 필중기(accuracy=null)엔 영향 없음.
