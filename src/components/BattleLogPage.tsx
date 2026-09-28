@@ -42,18 +42,7 @@ import {
   type TurnAction,
   type TurnResult,
 } from "../lib/battleSimulator";
-import { chooseAiAction, chooseAiForcedSwitch, chooseAiSelection, sampleRiskAversion, type AiDifficulty } from "../lib/battle/ai";
-
-/** AI 난이도 선택 기억(ver.1.8) — 파티 자동저장과 다른 키. 저장소를 못 쓰는 환경이면 기본 어려움 */
-const AI_DIFFICULTY_STORAGE_KEY = "champions-battle.aiDifficulty.v1";
-
-function readStoredAiDifficulty(): AiDifficulty {
-  try {
-    return localStorage.getItem(AI_DIFFICULTY_STORAGE_KEY) === "easy" ? "easy" : "hard";
-  } catch {
-    return "hard";
-  }
-}
+import { chooseAiAction, chooseAiForcedSwitch, chooseAiSelection, sampleRiskAversion } from "../lib/battle/ai";
 import type { PartySlot } from "../types/party";
 import type { StatusCondition } from "../types/status";
 import type { BaseStats } from "../types/stats";
@@ -147,8 +136,6 @@ function BattleSetupScreen({
   onProceed,
   aiOpponent,
   onToggleAiOpponent,
-  aiDifficulty,
-  onChangeAiDifficulty,
 }: {
   setup: ReturnType<typeof useBattleSetup>;
   hasPartyPresets: boolean;
@@ -162,8 +149,6 @@ function BattleSetupScreen({
   onProceed: () => void;
   aiOpponent: boolean;
   onToggleAiOpponent: (on: boolean) => void;
-  aiDifficulty: AiDifficulty;
-  onChangeAiDifficulty: (difficulty: AiDifficulty) => void;
 }) {
   const sideCtls = (side: Side) => (side === "a" ? setup.a : setup.b);
   const slotCtl = (side: Side, i: SlotIndex) => sideCtls(side)[i];
@@ -229,18 +214,6 @@ function BattleSetupScreen({
                   />
                   <span>AI가 조작</span>
                 </label>
-              )}
-              {side === "b" && (
-                <select
-                  className="battle-ai-difficulty"
-                  value={aiDifficulty}
-                  disabled={!aiOpponent}
-                  onChange={(e) => onChangeAiDifficulty(e.target.value === "easy" ? "easy" : "hard")}
-                  aria-label="AI 난이도"
-                >
-                  <option value="hard">어려움</option>
-                  <option value="easy">쉬움</option>
-                </select>
               )}
             </div>
             {movelessWarningFor(side) && (
@@ -443,11 +416,9 @@ function BattleBoard({
   playTurn,
   resetToSetup,
   aiSide,
-  aiDifficulty,
 }: {
   /** 컴퓨터(배틀 AI)가 조작하는 편. 사람이 양쪽 다 조작하면 null */
   aiSide: Side | null;
-  aiDifficulty: AiDifficulty;
   battleState: BattleState;
   winner: FighterKey | "draw" | undefined;
   selected: SelectedState;
@@ -627,7 +598,7 @@ function BattleBoard({
                     <span className="battle-fighter-mega-tag">{megaBadgeLabel(form.mega)}</span>
                   )}
                   {fighter.currentHp <= 0 && <span className="battle-fighter-fainted"> (기절)</span>}
-                  {side === aiSide && <span className="battle-fighter-ai-tag">{aiDifficulty === "easy" ? "AI · 쉬움" : "AI"}</span>}
+                  {side === aiSide && <span className="battle-fighter-ai-tag">AI</span>}
                 </span>
               </div>
               <div className="battle-status-tags">
@@ -1098,15 +1069,6 @@ export function BattleLogPage() {
   // 배틀 AI: 셋업 화면 토글(상대 편을 AI가 조작할지)과, 대전 시작 시점에 확정된 AI 편·위험 회피 성향.
   // 위험 회피 성향은 대전마다 1회만 뽑아 끝까지 쓴다(decision-layer §5).
   const [aiOpponent, setAiOpponent] = useState(true);
-  const [aiDifficulty, setAiDifficulty] = useState<AiDifficulty>(readStoredAiDifficulty);
-  function changeAiDifficulty(difficulty: AiDifficulty) {
-    setAiDifficulty(difficulty);
-    try {
-      localStorage.setItem(AI_DIFFICULTY_STORAGE_KEY, difficulty);
-    } catch {
-      // 저장소를 못 쓰면 이번 방문 동안만 유지
-    }
-  }
   const [aiSide, setAiSide] = useState<Side | null>(null);
   const [aiRiskAversion, setAiRiskAversion] = useState(0.5);
 
@@ -1299,7 +1261,7 @@ export function BattleLogPage() {
       b: { slots: bBuilds, movesList: bBuilds.map(movesOf) },
     });
     const pool = buildableIndices(side);
-    return chooseAiSelection(full, side, { difficulty: aiDifficulty, size: BATTLE_SELECT_SIZE }).map((p) => pool[p]);
+    return chooseAiSelection(full, side, { size: BATTLE_SELECT_SIZE }).map((p) => pool[p]);
   }
 
   /** 빌드 화면 "다음/대전 시작" — 양쪽 다 3마리 이하면 선출을 건너뛰고 바로 대전, 아니면 선출 화면으로 */
@@ -1442,11 +1404,11 @@ export function BattleLogPage() {
   useEffect(() => {
     if (!battleState || !aiSide) return;
     if (pendingPivot?.side === aiSide) {
-      resolvePivot(chooseAiForcedSwitch(battleState, aiSide, aiRiskAversion, undefined, aiDifficulty) ?? switchableIndices(aiSide)[0] ?? -1);
+      resolvePivot(chooseAiForcedSwitch(battleState, aiSide, aiRiskAversion) ?? switchableIndices(aiSide)[0] ?? -1);
       return;
     }
     if (pendingForcedSwitch?.[aiSide] && !pendingPivot) {
-      const toIndex = chooseAiForcedSwitch(battleState, aiSide, aiRiskAversion, undefined, aiDifficulty) ?? switchableIndices(aiSide)[0];
+      const toIndex = chooseAiForcedSwitch(battleState, aiSide, aiRiskAversion) ?? switchableIndices(aiSide)[0];
       if (toIndex !== undefined) resolveForcedSwitch(aiSide, toIndex);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1493,7 +1455,7 @@ export function BattleLogPage() {
     // 고를 수 있는 기술은 사람에게 적용하는 규칙(PP·구애 고정·도발·사슬묶기·앙코르)과 똑같이 거른다.
     const aiAction =
       aiSide && !struggling[aiSide] && !charging[aiSide]
-        ? chooseAiAction(battleState, aiSide, aiRiskAversion, { legalMoveIds: selectableMoveIds(aiSide), difficulty: aiDifficulty }).action
+        ? chooseAiAction(battleState, aiSide, aiRiskAversion, { legalMoveIds: selectableMoveIds(aiSide) }).action
         : null;
 
     const actionFor = (side: Side): TurnAction | null => {
@@ -1566,8 +1528,6 @@ export function BattleLogPage() {
           onProceed={handleProceed}
           aiOpponent={aiOpponent}
           onToggleAiOpponent={setAiOpponent}
-          aiDifficulty={aiDifficulty}
-          onChangeAiDifficulty={changeAiDifficulty}
         />
       )}
 
@@ -1614,7 +1574,6 @@ export function BattleLogPage() {
           playTurn={playTurn}
           resetToSetup={resetToSetup}
           aiSide={aiSide}
-          aiDifficulty={aiDifficulty}
         />
       )}
 

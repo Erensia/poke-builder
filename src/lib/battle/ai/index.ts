@@ -4,9 +4,8 @@ import { decide, scoreOption, type DecisionParams, type ScoredOption } from "./d
 import { evaluateOptions, type AiOption, type EvaluateOptions } from "./evaluator";
 import { withThreatModel, type ThreatModelParams } from "./opponentMoveModel";
 import { withEndOfTurnModel } from "./turnRates";
-import { paramsFor, type AiDifficulty } from "./difficulty";
+import { paramsFor } from "./decision";
 
-export { DIFFICULTY_PRESETS, type AiDifficulty } from "./difficulty";
 export { chooseAiSelection } from "./teamSelect";
 
 export type { AiOption } from "./evaluator";
@@ -36,15 +35,10 @@ export interface AiDecision {
 
 export interface ChooseAiOptions extends EvaluateOptions {
   decisionParams?: Partial<DecisionParams>;
-  /** 기본 hard. decisionParams가 프리셋 위에 덮어쓴다 */
-  difficulty?: AiDifficulty;
-  /** 쉬움의 소프트맥스 선택용 난수(기본 Math.random — 시뮬레이터는 시드 고정 난수를 넘긴다) */
-  random?: () => number;
 }
 
-
 /**
- * 배틀 AI(완전 정보 — 난이도는 options.difficulty, 기본 어려움): key 편의 이번 턴 행동을 고른다.
+ * 배틀 AI(완전 정보): key 편의 이번 턴 행동을 고른다.
  * riskAversion은 sampleRiskAversion()으로 배틀 시작 시 한 번 뽑아 둔 값을 넘긴다.
  */
 export function chooseAiAction(
@@ -53,11 +47,11 @@ export function chooseAiAction(
   riskAversion: number,
   options: ChooseAiOptions = {},
 ): AiDecision {
-  const params = paramsFor(options.difficulty, options.decisionParams);
+  const params = paramsFor(options.decisionParams);
   // 턴 종료 효과 토글은 평가(대면 턴 수)와 점수 계산(이어지는 대면)에 모두 걸린다
   const decision = withEndOfTurnModel(params.endOfTurnAware, () => {
     // 점수 계산(파티 대면표는 이때 계산됨)도 같은 상대 기술 모델로
-    return withThreatModel(threatModelOf(params), () => decide(evaluateOptions(state, key, options), riskAversion, params, options.random));
+    return withThreatModel(threatModelOf(params), () => decide(evaluateOptions(state, key, options), riskAversion, params));
   });
   if (!decision) return { action: { kind: "move", move: STRUGGLE_MOVE }, scored: [] };
   const { chosen, scored } = decision;
@@ -77,9 +71,8 @@ export function chooseAiForcedSwitch(
   key: FighterKey,
   riskAversion: number,
   decisionParams?: Partial<DecisionParams>,
-  difficulty?: AiDifficulty,
 ): number | undefined {
-  const params = paramsFor(difficulty, decisionParams);
+  const params = paramsFor(decisionParams);
   return withEndOfTurnModel(params.endOfTurnAware, () => {
     return withThreatModel(threatModelOf(params), () => {
       const switches = evaluateOptions(state, key).filter((o) => o.optionType === "switch");
