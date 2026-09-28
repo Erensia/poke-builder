@@ -703,8 +703,12 @@ export function decide(
     return Number.isNaN(score) ? { option, score: -Infinity, nan: true } : { option, score };
   });
 
-  const override = options.find(isHardOverride);
-  if (override) return { chosen: override, scored };
+  // 확정 처치 기술이 여럿이면 점수 최고(ver.1.9 한계점 A4 — 이전엔 목록의 첫 번째라 반동기·접촉 페널티 기술이 먼저면 그걸 썼다)
+  const overrides = scored.filter((s) => isHardOverride(s.option));
+  if (overrides.length > 0) {
+    const best = overrides.reduce((a, b) => (b.score > a.score ? b : a));
+    return { chosen: best.option, scored };
+  }
 
   const bestScore = Math.max(...scored.map((s) => s.score));
   if (bestScore === -Infinity) return { chosen: fallbackOption(options), scored };

@@ -597,8 +597,7 @@ function evaluateEffectMove(ctx: EffectContext): EffectEvaluation | undefined {
   if (kind === "revive") return evaluateRevive(ctx, base);
   if (kind === "perishSong") return evaluatePerishSong(ctx, base);
   const clone = cloneBattleState(state);
-  const toxicTurns = Math.min(6, Number.isFinite(base.killTurns) ? base.killTurns : 6);
-  if (!applyEffectMove(clone, key, move, { toxicTurns })) return undefined;
+  if (!applyEffectMove(clone, key, move)) return undefined;
   if (kind === "torment") return evaluateTorment(ctx, base, clone);
   if (kind === "memento") {
     // 먼저 맞아 쓰러지면(후공인데 이번 턴에 쓰러지는 대면) 랭크다운 없이 기절만

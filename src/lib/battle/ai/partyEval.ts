@@ -122,7 +122,7 @@ function unstaged(fighter: BattleFighterState): BattleFighterState {
 
 /**
  * 독압정: 대기 포켓몬이 이 편 독압정 위로 등장하면 독(2층 맹독)에 걸린 상태로 대면한다고 본다(접지·타입/특성
- * 면역·이미 상태이상·필드 차단 제외). 맹독 카운터는 대면 기간 평균 근사로 2(applyEffectMove와 같은 방식).
+ * 면역·이미 상태이상·필드 차단 제외). 맹독 카운터는 실제 값 — 대면 동안 늘어나는 피해는 turnsToKo가 센다.
  */
 function withEntryPoison(state: BattleState, fighter: BattleFighterState, side: BattleSide): BattleFighterState {
   const layers = side.hazards.toxicSpikesLayers;
@@ -133,8 +133,7 @@ function withEntryPoison(state: BattleState, fighter: BattleFighterState, side: 
   if (isImmuneToStatus(status, fighter.types, statusImmunitiesOf(fighter, ability)) || isStatusBlockedByField(state.field, status, true)) {
     return fighter;
   }
-  const inflicted = inflictStatus(fighter.status, status);
-  return { ...fighter, status: status === "badly-poisoned" ? { ...inflicted, turnsElapsed: 2 } : inflicted };
+  return { ...fighter, status: inflictStatus(fighter.status, status) };
 }
 
 /**

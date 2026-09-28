@@ -2031,6 +2031,31 @@ try {
       `탈피 c ${shedOff.toFixed(2)}→${shedOn.toFixed(2)} 마비 d ${parOff.toFixed(2)}→${parOn.toFixed(2)} 수확 c ${harvestOff.toFixed(2)}→${harvestOn.toFixed(2)}`,
     );
   }
+  // ── ver.1.9 한계점 A3·A4: 맹독 카운터 누적 · 확정 처치 기술이 여럿이면 점수 최고 ──
+  {
+    const tr = await server.ssrLoadModule("/src/lib/battle/ai/turnRates.ts");
+    const st = battle([mon("한카리아스", ["막치기"])], [mon("잠만보", ["막치기"], null, null, pts({ hp: 32, def: 32 }))]);
+    const toxicTurns = (counter) => {
+      st.b.status = { condition: "badly-poisoned", turnsElapsed: counter };
+      return tr.turnsToKo(0.05, st.a, st.b);
+    };
+    const fixedTurns = 1 / (0.05 + Math.floor(st.b.maxHp / 16) / st.b.maxHp);
+    const early = toxicTurns(1);
+    const capped = toxicTurns(15);
+    const cappedFixed = 1 / (0.05 + Math.floor((st.b.maxHp * 15) / 16) / st.b.maxHp);
+    check(
+      "1.9 A3: 맹독 대상은 카운터가 늘어나는 만큼 처치 턴↓(카운터 1), 상한 15면 고정 계산과 같음",
+      early < fixedTurns && early > 1 && Math.abs(capped - Math.max(1, cappedFixed)) < 1e-9,
+      `카운터 1: ${fixedTurns.toFixed(2)} → ${early.toFixed(2)}, 카운터 15: ${capped.toFixed(2)}`,
+    );
+    // 확정 처치 옵션 둘 — 점수가 높은 쪽(목록 뒤)을 고른다
+    const base = opt(ev.evaluateOptions(battle([mon("한카리아스", ["지진"])], [mon("피카츄", ["10만볼트"])]), "a"), "지진");
+    const low = { ...base, party: undefined, opponentHpFraction: 0.5 };
+    const high = { ...base, party: undefined, opponentHpFraction: 1 };
+    const both = [low, high].every((o) => dec.isHardOverride(o));
+    const chosen = dec.decide([low, high], 0.5).chosen;
+    check("1.9 A4: 하드 오버라이드가 여럿이면 점수 최고", both && chosen === high, `override ${both} 선택 ${chosen === high ? "뒤(높은 점수)" : "앞"}`);
+  }
   // ── ver.1.9 난동(역린·꽃잎댄스·난동부리기·대격분·소란피기): 고정 턴·PP 첫 턴만·끝나면 혼란·끊기면 혼란 없음·소란 중 잠듦 불가 ──
   {
     const rt = await server.ssrLoadModule("/src/lib/battle/runTurn.ts");
