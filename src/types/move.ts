@@ -516,7 +516,9 @@ export interface Move {
     | "user-status-burn-poison-paralysis"
     | "target-status-poisoned"
     // 백귀야행(ver.1.9): 상대가 주 상태이상(종류 무관)이면 2배
-    | "target-has-status";
+    | "target-has-status"
+    // 승부굳히기(ver.1.9): 이번 턴 대상이 이미 데미지를 입었으면(출처 무관) 2배
+    | "target-damaged-this-turn";
   /**
    * 비축하기(Stockpile): 사용할 때마다 비축 스택 +1(최대 3, 이미 3이면 실패)하고 자신의 방어·특수방어를
    * 1랭크 올린다(랭크업은 데이터의 statChanges로 처리, 스택 카운트만 이 플래그로). 토해내기·꿀꺽이 소비.

@@ -73,13 +73,13 @@ function expectedFromSurvival(survives: number[], rhoStar: number): number {
 }
 
 /**
- * firstHitScale(< 1): 첫 타만 데미지가 그 배율인 경우(반감 열매 — 첫 타에 소모, ver.1.9 6-1). bulkPower는 열매 없는 값.
+ * firstHitScale(≠ 1): 첫 타만 데미지가 그 배율인 경우(반감 열매 — 첫 타에 소모 ×½, ver.1.9 6-1 · 분함의발구르기 직전 실패 ×2). bulkPower는 열매 없는 값.
  * 첫 타 난수 16가지마다 남은 HP를 채우는 나머지 타수의 분포를 따로 구해 평균한다.
  */
 export function expectedHits(offensePower: number, bulkPower: number, hpFraction = 1, firstHitScale = 1): number {
   if (offensePower <= 0) return Infinity;
   const rhoStar = minKillingRoll(offensePower, bulkPower * hpFraction);
-  if (firstHitScale >= 1) return Math.max(1, expectedFromSurvival(survivalProbabilities(rhoStar), rhoStar));
+  if (firstHitScale === 1) return Math.max(1, expectedFromSurvival(survivalProbabilities(rhoStar), rhoStar));
   let total = 0;
   for (let k = 0; k < DAMAGE_ROLL_STEPS; k++) {
     const residual = rhoStar - (firstHitScale * (ROLL_MIN_PERCENT + k)) / 100;
@@ -119,9 +119,11 @@ export function estimateHits(
 ): HitsEstimate {
   const { hpFraction = 1, accuracy = 1, firstHitScale = 1 } = options;
   const hits = expectedHits(offensePower, bulkPower, hpFraction, firstHitScale);
+  // worst_case(1·2타 확정성)는 보수적으로: 첫 타가 약하면(열매) 그 배율을 모든 타에, 첫 타가 세면(직전 실패 2배) 한 방 판정만 그 배율
+  const scaled = worstCaseFromMatchup(offensePower * firstHitScale, bulkPower, hpFraction);
+  const worstCase = firstHitScale > 1 && scaled.count > 1 ? worstCaseFromMatchup(offensePower, bulkPower, hpFraction) : scaled;
   return {
     expected: accuracy <= 0 ? Infinity : hits / accuracy,
-    // worst_case(1·2타 확정성)는 첫 타 배율을 모든 타에 적용한 보수적인 값
-    worstCase: worstCaseFromMatchup(offensePower * firstHitScale, bulkPower, hpFraction),
+    worstCase,
   };
 }

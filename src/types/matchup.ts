@@ -39,8 +39,18 @@ export interface MatchupSlot {
    * (근성·객기 제외), 객기(공격측 화상·독·마비 2배)·베놈쇼크·독침천발(방어측 독)·백귀야행(방어측 상태이상)·이상한비늘에 반영.
    */
   statusAssumed?: StatusCondition | null;
-  /** ver.1.9 공격 슬롯 — 상대보다 늦게 행동(보복 2배)·먼저 맞음(눈사태 2배) 가정 */
+  /** ver.1.9 공격 슬롯 — 상대보다 늦게 행동 가정(보복 2배) */
   movesLastAssumed?: boolean;
+  /** ver.1.9 공격 슬롯 — 이번 턴 상대 기술로 데미지를 입음 가정(눈사태 2배) */
+  tookDamageAssumed?: boolean;
+  /** ver.1.9 공격 슬롯 — 이번 턴 자기 능력이 떨어짐 가정(분풀이 2배) */
+  statLoweredAssumed?: boolean;
+  /** ver.1.9 공격 슬롯 — 이번 턴 상대가 이미 데미지를 입음 가정(승부굳히기 2배) */
+  targetDamagedAssumed?: boolean;
+  /** ver.1.9 공격 슬롯 — 상대가 작아지기를 썼음 가정(누르기·드래곤다이브·플라잉프레스 2배) */
+  targetMinimizedAssumed?: boolean;
+  /** ver.1.9 공격 슬롯 — 직전 턴 기술 실패 가정(분함의발구르기·열불내기 2배) */
+  moveFailedAssumed?: boolean;
   /** ver.1.9 공격 슬롯 — HP 1/3 이하 가정(맹화·급류·심록·벌레의알림 발동) */
   pinchAssumed?: boolean;
   /** ver.1.9 방어 슬롯 — HP 가득 가정(멀티스케일·섀도실드 발동). 생략하면 켬(이전 계산과 같음) */
@@ -55,3 +65,12 @@ export interface MatchupSlot {
   /** 성묘 배율(공격 슬롯 전용, 선택한 기술이 성묘일 때만). 쓰러진 같은 편 수 가정 — 위력 50/100/150 */
   graveVisitFaintedAllies?: 0 | 1 | 2;
 }
+
+/** ver.1.9 — 조건부 위력 가정 토글(공격 슬롯)의 저장 키 */
+export type PowerConditionKey =
+  | "movesLastAssumed"
+  | "tookDamageAssumed"
+  | "moveFailedAssumed"
+  | "statLoweredAssumed"
+  | "targetDamagedAssumed"
+  | "targetMinimizedAssumed";

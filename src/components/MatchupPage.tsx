@@ -102,6 +102,11 @@ export function MatchupPage() {
       attackerHpFraction: (attacker.slot.hpPercent ?? 100) / 100,
       abilityHpFraction: attacker.slot.pinchAssumed ? 1 / 3 : 1,
       attackerMovesLast: !!attacker.slot.movesLastAssumed,
+      attackerTookDamageThisTurn: !!attacker.slot.tookDamageAssumed,
+      attackerMoveFailedLastTurn: !!attacker.slot.moveFailedAssumed,
+      attackerStatLoweredThisTurn: !!attacker.slot.statLoweredAssumed,
+      defenderDamagedThisTurn: !!attacker.slot.targetDamagedAssumed,
+      defenderMinimized: !!attacker.slot.targetMinimizedAssumed,
       defenderHpIsFull: defender.slot.fullHpAssumed ?? true,
       extraOffenseMultiplier: effMove
         ? computeStatusAttackMultiplier(
@@ -152,6 +157,9 @@ export function MatchupPage() {
         abilityHpFraction: assumeOptions.abilityHpFraction,
         attackerStatus: assumeOptions.attackerStatus,
         attackerMovesLast: assumeOptions.attackerMovesLast,
+        attackerTookDamageThisTurn: assumeOptions.attackerTookDamageThisTurn,
+        attackerMoveFailedLastTurn: assumeOptions.attackerMoveFailedLastTurn,
+        attackerStatLoweredThisTurn: assumeOptions.attackerStatLoweredThisTurn,
         extraOffenseMultiplier: assumeOptions.extraOffenseMultiplier,
       },
     );
@@ -217,7 +225,7 @@ export function MatchupPage() {
           onToggleUnburden={attacker.setUnburdenAssumed}
           onSetStatus={attacker.setStatusAssumed}
           selectedMove={attackerMove ?? undefined}
-          onToggleMovesLast={attacker.setMovesLastAssumed}
+          onSetPowerCondition={attacker.setPowerCondition}
           onTogglePinch={attacker.setPinchAssumed}
           onSetHpPercent={attacker.setHpPercent}
           moveIsGraveVisit={!!attackerMove?.powerPerFaintedAlly}

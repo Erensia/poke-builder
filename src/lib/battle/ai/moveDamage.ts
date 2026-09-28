@@ -245,8 +245,9 @@ export function estimateMoveHits(ctx: MoveHitContext, baseMove: Move): MoveHitEs
     attackerStatus: attacker.status.condition,
     defenderStatus: defender.status.condition,
     attackerMovesLast: move.conditionalDoublePower === "moves-after-target" && attackerMovesSecond,
-    // 분풀이·분함의발구르기: 엔진이 조건 이력을 추적하지 않아 항상 기본 위력 — 계산기의 "충족 상정"을 쓰지 않는다
-    assumeUntrackedConditions: false,
+    // 분풀이(이번 턴 능력 하락)·승부굳히기(이번 턴 대상이 이미 데미지)는 결정 시점(턴 시작 전)엔 알 수 없어 기본 위력으로 본다
+    // 누르기 등 작아지기 보너스: 대상이 이번 배틀에서 작아지기를 썼으면(엔진과 같은 기록)
+    defenderMinimized: !!defender.usedMoveIds?.["작아지기"],
     defenderItemConsumed: !!defender.itemConsumed,
     attackerRuntime: runtimeOf(attacker, ctx.attackerTypes, state),
     defenderRuntime: runtimeOf(defender, defenderTypes, state),
@@ -265,6 +266,8 @@ export function estimateMoveHits(ctx: MoveHitContext, baseMove: Move): MoveHitEs
         ? 1 / hitCountScale / result.berryBulkMultiplier + (1 - 1 / hitCountScale)
         : 1 / result.berryAppliedMultiplier;
   }
+  // 분함의발구르기·열불내기(ver.1.9): 직전 턴 실패 기록이 있으면 이번 한 번만 위력 2배 — 첫 번 사용만 데미지 ×2
+  if (move.conditionalDoublePower === "user-move-failed-last-turn" && attacker.lastTurnMoveFailed) firstHitScale *= 2;
   const estimate = estimateHits(result.offensePower * hitCountScale, bulkPower, {
     hpFraction: defenderHp / defender.maxHp,
     accuracy,

@@ -1,4 +1,4 @@
-import type { MatchupSlot } from "../types/matchup";
+import type { MatchupSlot, PowerConditionKey } from "../types/matchup";
 import type { Move } from "../types/move";
 import type { StatusCondition } from "../types/status";
 import { getPokemon, getMove, getAbility, getItem, getNature } from "../lib/data";
@@ -16,6 +16,18 @@ import { PokemonAvatarWithItem } from "./PokemonAvatarWithItem";
 import { STAT_ORDER, STAT_LABELS } from "../lib/statLabels";
 import { TYPE_COLORS } from "../lib/typeColors";
 import "./MatchupSlotCard.css";
+
+/**
+ * ver.1.9 조건부 위력 가정 토글 — 기술의 2배 조건마다 하나(고른 기술에 해당하는 것만 보인다). 엔진은 실제 전투 이력으로 판정한다.
+ */
+const POWER_CONDITION_TOGGLES: { key: PowerConditionKey; label: string; relevant: (move: Move) => boolean }[] = [
+  { key: "movesLastAssumed", label: "상대보다 늦게 행동 가정", relevant: (m) => m.conditionalDoublePower === "moves-after-target" },
+  { key: "tookDamageAssumed", label: "이번 턴 상대 기술로 데미지를 입음 가정", relevant: (m) => m.conditionalDoublePower === "took-damage-this-turn" },
+  { key: "moveFailedAssumed", label: "직전 턴 기술이 빗나감·실패 가정", relevant: (m) => m.conditionalDoublePower === "user-move-failed-last-turn" },
+  { key: "statLoweredAssumed", label: "이번 턴 자신의 능력이 떨어짐 가정", relevant: (m) => m.conditionalDoublePower === "user-stat-lowered-this-turn" },
+  { key: "targetDamagedAssumed", label: "이번 턴 상대가 이미 데미지를 입음 가정", relevant: (m) => m.conditionalDoublePower === "target-damaged-this-turn" },
+  { key: "targetMinimizedAssumed", label: "상대가 작아지기를 사용 가정", relevant: (m) => !!m.bonusVsMinimize },
+];
 
 /** ver.1.9 상태이상 가정 선택지 */
 const STATUS_OPTIONS: readonly (readonly [StatusCondition | null, string])[] = [
@@ -68,10 +80,10 @@ interface MatchupSlotCardProps {
   onToggleUnburden: (value: boolean) => void;
   /** ver.1.9 — 상태이상 가정(이전 "마비 가정" 토글 통합). 마비 = 스피드 0.5배, 화상 = 물리 반감, 조건부 2배 기술·특성 판정 */
   onSetStatus: (status: StatusCondition | null) => void;
-  /** 공격 슬롯 전용 — 고른 기술(보복·눈사태·HP 비례 위력 기술일 때만 관련 가정을 보인다) */
+  /** 공격 슬롯 전용 — 고른 기술(조건부 위력·HP 비례 위력 기술일 때만 관련 가정을 보인다) */
   selectedMove?: Move;
-  /** 공격 슬롯 전용(ver.1.9) — 상대보다 늦게 행동 가정(보복·눈사태 2배) */
-  onToggleMovesLast?: (value: boolean) => void;
+  /** 공격 슬롯 전용(ver.1.9) — 조건부 위력 가정 토글. 고른 기술에 해당하는 조건만 보인다(POWER_CONDITION_TOGGLES) */
+  onSetPowerCondition?: (key: PowerConditionKey, value: boolean) => void;
   /** 공격 슬롯 전용(ver.1.9) — HP 1/3 이하 가정(맹화류 특성일 때만 보인다) */
   onTogglePinch?: (value: boolean) => void;
   /** 공격 슬롯 전용(ver.1.9) — 현재 HP %(분화·해수스파우팅·기사회생·바둥바둥일 때만 보인다) */
@@ -120,7 +132,7 @@ export function MatchupSlotCard({
   onToggleUnburden,
   onSetStatus,
   selectedMove,
-  onToggleMovesLast,
+  onSetPowerCondition,
   onTogglePinch,
   onSetHpPercent,
   onToggleFullHp,
@@ -134,8 +146,7 @@ export function MatchupSlotCard({
   const pokemon = slot.pokemonId ? getPokemon(slot.pokemonId) : undefined;
   // ver.1.9 가정 토글 — 관련 기술·특성을 골랐을 때만 보인다
   const ability = slot.ability ? getAbility(slot.ability) : undefined;
-  const movesLastRelevant =
-    selectedMove?.conditionalDoublePower === "moves-after-target" || selectedMove?.conditionalDoublePower === "took-damage-this-turn";
+  const powerConditions = selectedMove ? POWER_CONDITION_TOGGLES.filter((t) => t.relevant(selectedMove)) : [];
   const pinchRelevant = !!ability?.modifiers?.some((m) => m.condition?.attackerHpAtMostFraction !== undefined);
   const fullHpRelevant = !!ability?.modifiers?.some((m) => m.condition?.defenderHpIsFull === true);
   const hpPowerRelevant = !!selectedMove && (!!selectedMove.reversalPower || !!selectedMove.userHpScaledPower);
@@ -337,16 +348,18 @@ export function MatchupSlotCard({
             ))}
           </div>
         </div>
-        {role === "attacker" && movesLastRelevant && onToggleMovesLast && (
-          <label className="matchup-assume-toggle">
-            <input type="checkbox" checked={!!slot.movesLastAssumed} onChange={(e) => onToggleMovesLast(e.target.checked)} />
-            <span>상대보다 늦게 행동 가정(보복·눈사태 2배)</span>
-          </label>
-        )}
+        {role === "attacker" &&
+          onSetPowerCondition &&
+          powerConditions.map((t) => (
+            <label key={t.key} className="matchup-assume-toggle">
+              <input type="checkbox" checked={!!slot[t.key]} onChange={(e) => onSetPowerCondition(t.key, e.target.checked)} />
+              <span>{t.label}</span>
+            </label>
+          ))}
         {role === "attacker" && pinchRelevant && onTogglePinch && (
           <label className="matchup-assume-toggle">
             <input type="checkbox" checked={!!slot.pinchAssumed} onChange={(e) => onTogglePinch(e.target.checked)} />
-            <span>HP 1/3 이하 가정({ability?.name} 발동)</span>
+            <span>HP 1/3 이하 가정</span>
           </label>
         )}
         {role === "defender" && fullHpRelevant && onToggleFullHp && (

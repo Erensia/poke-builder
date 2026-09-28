@@ -167,6 +167,9 @@ export function runTurn(
   // 질투의불꽃용 — 이번 턴이 시작된 시점의 랭크를 스냅샷해 둔다(턴 중 랭크가 올랐는지 판정).
   state.a.statStagesAtTurnStart = { ...state.a.stages };
   state.b.statStagesAtTurnStart = { ...state.b.stages };
+  // 승부굳히기(ver.1.9): 이번 턴이 시작된 시점의 HP — 대상이 이번 턴 이미 데미지를 입었는지(출처 무관) 판정
+  state.a.hpAtTurnStart = state.a.currentHp;
+  state.b.hpAtTurnStart = state.b.currentHp;
 
   // 기분파(캐스퐁): 턴 시작 시점의 유효 날씨(날씨부정 반영)에 맞춰 타입을 다시 맞춘다.
   applyForecastForm(state.a, activeWeather(state));

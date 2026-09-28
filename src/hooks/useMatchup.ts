@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { MatchupSlot } from "../types/matchup";
+import type { MatchupSlot, PowerConditionKey } from "../types/matchup";
 import type { AbilityPoints, PartySlot } from "../types/party";
 import type { BattleStatKey } from "../types/battleStats";
 import type { WeatherKind } from "../types/weather";
@@ -126,8 +126,9 @@ function useMatchupSlot() {
     setSlot((prev) => ({ ...prev, statusAssumed: value }));
   }
 
-  function setMovesLastAssumed(value: boolean) {
-    setSlot((prev) => ({ ...prev, movesLastAssumed: value }));
+  /** ver.1.9 조건부 위력 가정 토글(보복·눈사태·분함의발구르기·분풀이·승부굳히기·작아지기) */
+  function setPowerCondition(key: PowerConditionKey, value: boolean) {
+    setSlot((prev) => ({ ...prev, [key]: value }));
   }
 
   function setPinchAssumed(value: boolean) {
@@ -184,7 +185,7 @@ function useMatchupSlot() {
     setItemStolen,
     setUnburdenAssumed,
     setStatusAssumed,
-    setMovesLastAssumed,
+    setPowerCondition,
     setPinchAssumed,
     setFullHpAssumed,
     setHpPercent,

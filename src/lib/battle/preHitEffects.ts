@@ -714,9 +714,9 @@ export function resolvePreHitEffects(
     };
   }
   // 눈사태·보복·애크러뱃(§3 증분 C): 조건 충족 시 위력 2배.
-  // 분풀이("user-stat-lowered-this-turn")·분함의발구르기("user-move-failed-last-turn")는 이번 턴/직전
-  // 턴 이력 상태가 엔진에 없어 여기선 항상 미충족(기본 위력)으로 둔다 — 매치업 페이지에서만 충족
-  // 상정(§3 증분 B-3, 사용자 지시).
+  // 분함의발구르기·열불내기("user-move-failed-last-turn", ver.1.9): 직전 턴 자기 행동이 실패였으면(lastTurnMoveFailed).
+  // 분풀이("user-stat-lowered-this-turn", ver.1.9): 턴 시작 랭크(statStagesAtTurnStart)보다 떨어진 능력이 있으면.
+  // 승부굳히기("target-damaged-this-turn", ver.1.9): 대상 HP가 이번 턴 시작(hpAtTurnStart)보다 줄었으면.
   if (effectiveMove.conditionalDoublePower && effectiveMove.power !== null) {
     const condition = effectiveMove.conditionalDoublePower;
     const met =
@@ -735,7 +735,13 @@ export function resolvePreHitEffects(
                 ? defender.status.condition === "poison" || defender.status.condition === "badly-poisoned"
                 : condition === "target-has-status"
                   ? !!defender.status.condition
-                  : false; // user-stat-lowered-this-turn / user-move-failed-last-turn → 엔진 미추적
+                  : condition === "user-move-failed-last-turn"
+                    ? !!attacker.lastTurnMoveFailed
+                    : condition === "user-stat-lowered-this-turn"
+                      ? statLoweredThisTurn(attacker)
+                      : condition === "target-damaged-this-turn"
+                        ? defender.hpAtTurnStart !== undefined && defender.currentHp < defender.hpAtTurnStart
+                        : false;
     if (met) effectiveMove = { ...effectiveMove, power: effectiveMove.power * 2 };
   }
 
@@ -1079,4 +1085,11 @@ export function resolvePreHitEffects(
 /** 흉내쟁이(트랙 M2)가 따라 쓸 수 있는 기술인지 — AI(흉내쟁이 평가)도 같은 판정을 쓴다 */
 export function isCopyableMove(move: Move): boolean {
   return !move.excludedFromCopycat && !move.callsLastMoveInBattle && !move.chargeTurn && !move.usageCondition;
+}
+
+/** 분풀이(ver.1.9): 이번 턴 시작 때보다 떨어진 능력 랭크가 있는지(턴 중 등장이면 기록이 없어 false) */
+function statLoweredThisTurn(fighter: BattleFighterState): boolean {
+  const before = fighter.statStagesAtTurnStart;
+  if (!before) return false;
+  return (Object.keys(before) as (keyof typeof before)[]).some((stat) => fighter.stages[stat] < before[stat]);
 }

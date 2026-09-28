@@ -328,6 +328,13 @@ export interface BattleFighterState {
    */
   hasActedSinceSwitchIn?: boolean;
   /**
+   * 직전 턴 자기 행동이 실패였으면 true(moveFailure.actionFailed — 빗나감·무효·행동불능·"그러나 실패했다" 등, ver.1.9).
+   * 분함의발구르기·열불내기 위력 2배 판정. 매 턴 끝(finishTurn)에 갱신, 등장 시 초기화.
+   */
+  lastTurnMoveFailed?: boolean;
+  /** 이번 턴 시작(턴 중 등장이면 등장) 시점 HP — 승부굳히기 "이번 턴 대상이 이미 데미지를 입음" 판정(ver.1.9) */
+  hpAtTurnStart?: number;
+  /**
    * 변환자재/리베로가 이번 등장 스탠스에서 이미 발동했으면 true. 발동은 등장당 1회
    * (본가 9세대) — 기술을 실제로 사용한 순간에만 소진되므로 행동이 막히면 유지된다.
    * 이미 바뀐 타입 자체는 계속 유지(재발동만 막는다). 등장 시 초기화.
