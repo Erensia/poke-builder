@@ -272,6 +272,9 @@ export function selectableMoves(
   opponent: BattleFighterState,
   legalMoveIds?: string[],
 ): Move[] {
+  // 난동(ver.1.9): 이어 쓰는 중이면 엔진이 그 기술을 강제로 쓴다(PP도 안 씀) — 선택지는 그것 하나
+  const rampage = fighter.volatile.active.rampage?.moveId ? getMove(fighter.volatile.active.rampage.moveId) : undefined;
+  if (rampage) return [rampage];
   const moves = usableMoves(fighter).filter((m) => !isUsageBlocked(state, fighter, m, opponent));
   if (legalMoveIds) return moves.filter((m) => legalMoveIds.includes(m.id));
   return allowedByVolatiles(fighter, moves, opponent);
@@ -874,6 +877,9 @@ function evaluateTorment(ctx: EffectContext, base: RaceInputs, clone: BattleStat
   };
 }
 
+/** 난동(역린류) 평균 지속 턴(2·3턴 각 50%)이자 끝난 뒤 혼란 평균 턴(1~4턴) — 둘 다 2.5 */
+const RAMPAGE_AVERAGE_TURNS = 2.5;
+
 function blendRace(after: RaceInputs, base: RaceInputs, covered: number): RaceInputs {
   const raceLength = Math.min(after.killTurns, after.survivalTurns);
   const share = raceLength <= covered ? 1 : covered / raceLength;
@@ -998,6 +1004,29 @@ function evaluateOptionsOn(state: BattleState, key: FighterKey, options: Evaluat
       const afterHit = acc > 0 ? acc * follow(opponentHpAfter) : 0;
       const afterMiss = acc < 1 ? (1 - acc) * follow() : 0;
       option.hitsToKill = { ...option.hitsToKill, expected: 1 + afterHit + afterMiss };
+    }
+
+    // 난동(ver.1.9): 역린류를 새로 쓰면 평균 2.5턴(2·3턴 각 50%) 이어 쓰고 끝나면 혼란 — 그 뒤로도 대면이 이어지면 혼란(행동의 1/3
+    // 자해, 평균 2.5턴) 상태로 본다. 이어 쓰는 동안 교체할 수 없는 비용은 이 대면을 끝까지 싸우는 계산이라 따로 넣지 않는다.
+    if (
+      move.rampage === "confuse" &&
+      !me.volatile.active.rampage &&
+      !hasVolatile(me.volatile, "confusion") &&
+      !abilityOf(me)?.immuneToConfusion &&
+      option.hitsToKill.expected > RAMPAGE_AVERAGE_TURNS
+    ) {
+      const confused = cloneBattleState(moveState);
+      confused[key].volatile = {
+        active: { ...confused[key].volatile.active, confusion: { turnsRemaining: RAMPAGE_AVERAGE_TURNS } },
+      };
+      const after = currentRace(confused, key, raceMoves);
+      const blended = blendRace(
+        { killTurns: option.hitsToKill.expected, survivalTurns: option.hitsToBeKilled.expected, firstProbability: option.firstProbability },
+        after,
+        RAMPAGE_AVERAGE_TURNS,
+      );
+      option.hitsToKill = { ...option.hitsToKill, expected: blended.killTurns };
+      option.hitsToBeKilled = { ...option.hitsToBeKilled, expected: blended.survivalTurns };
     }
 
     // 목숨걸기·자폭류(트랙 M5): 주고 기절 — 추억의선물처럼 "그 state에서 이어지는 판세"로 평가(파티 모드 전용).
@@ -1267,7 +1296,8 @@ function evaluateOptionsOn(state: BattleState, key: FighterKey, options: Evaluat
   for (const move of myMoves) result.push(move.callsLastMoveInBattle ? buildCopycatOption(move) : buildMoveOption(move));
 
   // ── 교체 옵션 ── (교체 턴에는 메가진화 없음 → 원래 state 기준)
-  if (!isTrappedFromSwitching(state[key], state)) {
+  // 난동(ver.1.9) 중에는 교체할 수 없다
+  if (!isTrappedFromSwitching(state[key], state) && !state[key].volatile.active.rampage) {
     // 상대는 지금 나와 있는 내 포켓몬을 보고 기술을 고른다 — 기습류를 고르면 교체해 들어온 포켓몬에겐 실패(공격 안 함)
     const idle = targetAttackOnlyWeight(baseThreat);
     for (const index of benchIndices(mySide)) {

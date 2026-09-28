@@ -51,7 +51,10 @@ export function allowedByVolatiles(fighter: BattleFighterState, moves: Move[], o
   const imprisoner = opponent?.volatile.active.imprison ? opponent : undefined;
   // 구애류 잠금(엔진 state — 트랙 M1)도 같은 축의 제한으로 본다
   const choiceLocked = choiceLockedMoveOf(fighter);
+  // 난동(ver.1.9): 이어 쓰는 중이면 그 기술만(상대 기술 사용 확률 모델도 같은 규칙)
+  const rampage = fighter.volatile.active.rampage?.moveId;
   return moves.filter((m) => {
+    if (rampage && m.id !== rampage) return false;
     if (choiceLocked && m.id !== choiceLocked) return false;
     if (taunt && m.category === "status") return false;
     if (disable && disable.moveId === m.id) return false;

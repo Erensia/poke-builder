@@ -832,8 +832,10 @@ function BattleBoard({
 
               // 문어굳히기/물고버티기(도망봉인)에 걸려 있으면 자발적 교체 불가(고스트 예외).
               const trapped = isTrappedFromSwitching(fighter, battleState);
+              // 난동(ver.1.9): 이어 쓰는 동안은 기술·교체 선택 자체가 없다 — 턴 진행 시 그 기술이 자동으로 나간다
+              const rampageMoveId = fighter.volatile.active.rampage?.moveId;
               const canSwitch =
-                benchIdx.length > 0 && !fighter.chargingMoveId && fighter.currentHp > 0 && !trapped;
+                benchIdx.length > 0 && !fighter.chargingMoveId && !rampageMoveId && fighter.currentHp > 0 && !trapped;
               const mode = canSwitch ? inputMode[side] : "move";
 
               return (
@@ -864,6 +866,7 @@ function BattleBoard({
                   {/* §4: 메가진화 선언 토글 — 스톤을 들었고, 아직 안 했고, 그 편이 이번 배틀에
                       메가진화를 안 썼을 때만. 켜고 기술을 고르면 그 턴 행동 전에 메가진화. */}
                   {mode !== "switch" &&
+                    !rampageMoveId &&
                     fighter.megaStone &&
                     !battleSide(side)?.megaUsed &&
                     !fighter.hasMegaEvolved && (
@@ -908,6 +911,11 @@ function BattleBoard({
                           </button>
                         );
                       })}
+                    </div>
+                  ) : rampageMoveId ? (
+                    <div className="battle-struggle-notice">
+                      {pokemon.name}
+                      {eunNeun(pokemon.name)} {getMove(rampageMoveId)?.name ?? "기술"} 사용 중! (끝날 때까지 자동으로 계속 사용)
                     </div>
                   ) : fighter.chargingMoveId ? (
                     <div className="battle-struggle-notice">
@@ -1020,6 +1028,7 @@ function BattleBoard({
               selected[side]?.kind !== "switch" &&
               !isStruggling(side) &&
               battleState[side].chargingMoveId === undefined &&
+              !battleState[side].volatile.active.rampage &&
               !selected[side],
           )}
           onClick={playTurn}
@@ -1420,9 +1429,10 @@ export function BattleLogPage() {
     // PP 남은 기술이 없거나(4개 다 0), 구애류 도구로 잠긴 기술의 PP가 0이면 선택 없이 발버둥.
     const struggling = { a: isStruggling("a"), b: isStruggling("b") };
     // 공중날기 등 차지 기술 2턴째는 준비해둔 기술이 선택 여부와 무관하게 자동으로 나간다.
+    // 난동(ver.1.9)도 차지 2턴째와 같이 선택 없이 자동 — 엔진이 그 기술로 바꿔 쓴다(forcedRampageAction)
     const charging = {
-      a: battleState.a.chargingMoveId !== undefined,
-      b: battleState.b.chargingMoveId !== undefined,
+      a: battleState.a.chargingMoveId !== undefined || !!battleState.a.volatile.active.rampage,
+      b: battleState.b.chargingMoveId !== undefined || !!battleState.b.volatile.active.rampage,
     };
     const isSwitch = (side: Side) => selected[side]?.kind === "switch";
     // 교체를 고른 쪽은 발버둥/차지와 무관하게 교체가 우선. 그 외엔 선택(또는 발버둥/차지)이 있어야 진행.
@@ -1465,7 +1475,7 @@ export function BattleLogPage() {
       const mega = megaDeclared[side] || undefined; // 메가진화는 기술 행동에만 실린다
       if (struggling[side]) return { kind: "move", move: STRUGGLE_MOVE, mega };
       if (charging[side]) {
-        const m = getMove(battleState[side].chargingMoveId!);
+        const m = getMove(battleState[side].chargingMoveId ?? battleState[side].volatile.active.rampage?.moveId ?? "");
         return m ? { kind: "move", move: m, mega } : null;
       }
       const m = sel?.kind === "move" ? getMove(sel.moveId) : undefined;

@@ -439,7 +439,8 @@
     "classification": [
       "춤"
     ],
-    "makesContact": true
+    "makesContact": true,
+    "rampage": "confuse"
   },
   {
     "id": "기가드레인",
@@ -1231,7 +1232,8 @@
       "접촉",
       "혼란"
     ],
-    "makesContact": true
+    "makesContact": true,
+    "rampage": "confuse"
   },
   {
     "id": "용성군",
@@ -3251,7 +3253,8 @@
     "classification": [
       "소리"
     ],
-    "makesContact": false
+    "makesContact": false,
+    "rampage": "uproar"
   },
   {
     "id": "아쿠아링",
@@ -6534,7 +6537,8 @@
       "접촉",
       "혼란"
     ],
-    "makesContact": true
+    "makesContact": true,
+    "rampage": "confuse"
   },
   {
     "id": "번개엄니",
@@ -7277,7 +7281,8 @@
       "접촉",
       "혼란"
     ],
-    "makesContact": true
+    "makesContact": true,
+    "rampage": "confuse"
   },
   {
     "id": "질투의불꽃",

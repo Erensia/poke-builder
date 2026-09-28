@@ -104,7 +104,9 @@ export function resolvePreHitEffects(
 
   // PP 소모는 행동 여부와 무관하게 발생(단, 차지 기술 2턴째는 위에서 이미 스킵 처리)
   let leppaRestoredPpItemName: string | undefined;
-  if (!releasingCharge && attacker.remainingPp[move.id] !== undefined) {
+  // 난동(ver.1.9): 이어 쓰는 턴은 PP를 쓰지 않는다(첫 턴만)
+  const continuingRampage = attacker.volatile.active.rampage?.moveId === move.id;
+  if (!releasingCharge && !continuingRampage && attacker.remainingPp[move.id] !== undefined) {
     const ppBefore = attacker.remainingPp[move.id];
     attacker.remainingPp[move.id] = Math.max(0, ppBefore - 1);
     // 과사열매: 이번 사용으로 PP가 정확히 0이 됐을 때(원래 0이던 걸 또 쓴 게 아니라)만 발동한다.
@@ -131,7 +133,7 @@ export function resolvePreHitEffects(
   // 가리지 않고(본가 규칙 — 프레셔는 "이 포켓몬이 필드에 있는 동안 상대가 쓰는 모든 기술"에
   // 적용된다) PP를 추가로 더 소모시킨다. 과사열매 재판정 없이 단순 차감만 한다.
   let pressureExtraPpAbilityName: string | undefined;
-  if (defenderAbility?.extraPpCostWhenTargeted && !releasingCharge && attacker.remainingPp[move.id] !== undefined) {
+  if (defenderAbility?.extraPpCostWhenTargeted && !releasingCharge && !continuingRampage && attacker.remainingPp[move.id] !== undefined) {
     const before = attacker.remainingPp[move.id];
     attacker.remainingPp[move.id] = Math.max(0, before - defenderAbility.extraPpCostWhenTargeted);
     if (attacker.remainingPp[move.id] !== before) pressureExtraPpAbilityName = defenderAbility.name;
@@ -186,6 +188,10 @@ export function resolvePreHitEffects(
     const otherMoveIds = Object.keys(attacker.remainingPp).filter((id) => id !== move.id);
     const allUsed = otherMoveIds.every((id) => attacker.usedMoveIds?.[id]);
     if (!allUsed) return blocked("usageCondition");
+  }
+  // 소란피기(ver.1.9): 소란 중에는 잠자기가 실패한다(잠들 수 없음)
+  if (move.restSleep && attacker.sleepBlockedByUproar) {
+    return blocked("usageCondition");
   }
   // 배수의진(ver.1.9): 이미 배수의진 상태면 실패(본가 규칙)
   if (move.usageCondition === "not-no-retreat" && hasVolatile(attacker.volatile, "noRetreat")) {

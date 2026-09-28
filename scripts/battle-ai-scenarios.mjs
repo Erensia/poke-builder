@@ -2031,6 +2031,73 @@ try {
       `탈피 c ${shedOff.toFixed(2)}→${shedOn.toFixed(2)} 마비 d ${parOff.toFixed(2)}→${parOn.toFixed(2)} 수확 c ${harvestOff.toFixed(2)}→${harvestOn.toFixed(2)}`,
     );
   }
+  // ── ver.1.9 난동(역린·꽃잎댄스·난동부리기·대격분·소란피기): 고정 턴·PP 첫 턴만·끝나면 혼란·끊기면 혼란 없음·소란 중 잠듦 불가 ──
+  {
+    const rt = await server.ssrLoadModule("/src/lib/battle/runTurn.ts");
+    const act = (id) => ({ kind: "move", move: data.getMove(id) });
+    const run = (st, a, b, r = 0.5) => rt.runTurn(st, a.kind ? a : act(a), b.kind ? b : act(b), () => r);
+    const own = (out, key) => out.result.actions.find((x) => x.actor === key);
+    const tank = (moves) => mon("잠만보", moves, null, null, pts({ hp: 32, def: 32 }));
+    // 난수 0.5 → 지속 3턴(0.5 < 0.5 아님). 1턴째 역린 → 2·3턴째는 다른 기술·교체를 골라도 역린, PP는 첫 턴만, 3턴째 끝에 혼란
+    const st0 = battle([mon("한카리아스", ["역린", "지진"]), mon("잠만보", ["누르기"])], [tank(["칼춤"])]);
+    const pp0 = st0.a.remainingPp["역린"];
+    const t1 = run(st0, "역린", "칼춤");
+    const s1 = t1.nextState;
+    const t2 = run(s1, { kind: "switch", toIndex: 1 }, act("칼춤"));
+    const s2 = t2.nextState;
+    const t3 = run(s2, "지진", "칼춤");
+    const s3 = t3.nextState;
+    const forced = own(t2, "a")?.move.id === "역린" && own(t3, "a")?.move.id === "역린" && t2.result.switches.length === 0;
+    const ppUsed = pp0 - s3.a.remainingPp["역린"];
+    const lockedLeft = [s1, s2].map((s) => s.a.volatile.active.rampage?.turnsRemaining);
+    const confusedEnd = !!s3.a.volatile.active.confusion && !s3.a.volatile.active.rampage && own(t3, "a")?.rampageConfused === true;
+    check(
+      "1.9 난동: 역린 3턴 고정(입력·교체 무시), PP 첫 턴만, 끝까지 쓰면 혼란",
+      forced && ppUsed === 1 && lockedLeft[0] === 2 && lockedLeft[1] === 1 && confusedEnd,
+      `강제 ${forced} PP −${ppUsed} 남은 턴 ${lockedLeft.join("→")} 끝 혼란 ${confusedEnd}`,
+    );
+    // 난수 0.4 → 2턴. 2턴째가 방어에 막히면(마지막 턴) 혼란 없이 끝 · 마이페이스는 끝까지 써도 혼란 없음
+    const p0 = battle([mon("한카리아스", ["역린"])], [tank(["방어", "칼춤"])]);
+    const p1 = run(p0, "역린", "칼춤", 0.4).nextState;
+    const p2out = run(p1, "역린", "방어", 0.4);
+    const blockedEnd = !p2out.nextState.a.volatile.active.rampage && !p2out.nextState.a.volatile.active.confusion;
+    const ot0 = battle([mon("한카리아스", ["역린"], "마이페이스")], [tank(["칼춤"])]);
+    const ot2 = run(run(ot0, "역린", "칼춤", 0.4).nextState, "역린", "칼춤", 0.4).nextState;
+    const ownTempo = !ot2.a.volatile.active.rampage && !ot2.a.volatile.active.confusion;
+    check(
+      "1.9 난동: 2턴(50%) · 마지막 턴이 방어에 막히면 혼란 없이 끝 · 마이페이스는 혼란 없음",
+      p1.a.volatile.active.rampage?.turnsRemaining === 1 && blockedEnd && ownTempo,
+      `2턴 남은 ${p1.a.volatile.active.rampage?.turnsRemaining} 방어 끊김 ${blockedEnd} 마이페이스 ${ownTempo}`,
+    );
+    // 소란피기: 잠든 상대는 깨고, 소란 중엔 수면가루·잠자기 실패, 3턴 뒤 혼란 없이 끝
+    const u0 = battle([mon("잠만보", ["소란피기"])], [mon("후딘", ["최면술", "잠자기"], null, null, pts({ hp: 32, spe: 32 }))]);
+    u0.b.status = { condition: "sleep", turnsElapsed: 0, sleepTurnsRemaining: 3 };
+    const u1 = run(u0, "소란피기", "최면술");
+    const woke = (own(u1, "a")?.uproarWokeIds ?? []).includes(u0.b.slot.pokemonId);
+    const u2out = run(u1.nextState, "소란피기", "최면술");
+    const noSleep = u2out.nextState.a.status.condition !== "sleep";
+    const restOut = run(u2out.nextState, "소란피기", "잠자기");
+    const restFailed = own(restOut, "b")?.blockedReason === "usageCondition";
+    const uEnd = restOut.nextState.a;
+    const uproarEnded = !uEnd.volatile.active.rampage && !uEnd.volatile.active.confusion && own(restOut, "a")?.rampageEnded === true;
+    check(
+      "1.9 소란피기: 잠든 상대 깨움 · 소란 중 최면술·잠자기 실패 · 3턴 뒤 혼란 없이 끝",
+      woke && noSleep && restFailed && uproarEnded,
+      `깨움 ${woke} 잠듦 막힘 ${noSleep} 잠자기 실패 ${restFailed} 끝 ${uproarEnded}`,
+    );
+    // AI: 역린을 새로 쓰면 긴 대면에선 끝난 뒤 혼란 비용(처치 턴↑) — 마이페이스는 비용 없음
+    const cost = (ability) => opt(ev.evaluateOptions(battle([mon("한카리아스", ["역린"], ability)], [tank(["누르기"])]), "a"), "역린").hitsToKill.expected;
+    const withCost = cost(null);
+    const noCost = cost("마이페이스");
+    check("1.9 난동: AI 역린 선택 시 끝난 뒤 혼란 비용(긴 대면 처치 턴↑, 마이페이스는 없음)", withCost > noCost, `${noCost.toFixed(2)} → ${withCost.toFixed(2)}`);
+    // AI: 난동 중엔 선택지가 그 기술 하나(교체 없음)
+    const aiOpts = ev.evaluateOptions(s1, "a");
+    check(
+      "1.9 난동: AI 선택지는 난동 기술 하나(교체 없음)",
+      aiOpts.length === 1 && aiOpts[0].move?.id === "역린",
+      aiOpts.map((o) => o.move?.id ?? `교체${o.toIndex}`).join(","),
+    );
+  }
   // ── 매치업 난수별 데미지(ver.1.7 트랙 H): 기존 격파 판정과 같은 관계식인지 대조 ──
   {
     const bp = await server.ssrLoadModule("/src/lib/battlePower.ts");
