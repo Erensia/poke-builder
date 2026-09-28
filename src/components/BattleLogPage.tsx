@@ -535,18 +535,18 @@ function BattleBoard({
                 페어리록 ({battleState.fairyLockTurnsRemaining >= 2 ? "다음 턴 교체 불가" : "이번 턴 교체 불가"})
               </span>
             )}
-            {/* 진영 태그는 포켓몬 이름 대신 좌측·우측으로 — 같은 포켓몬끼리 싸우면 구분이 안 된다(ver.1.9 사용자 제보) */}
+            {/* 진영 태그는 포켓몬 이름 대신 내·상대 진영으로 — 같은 포켓몬끼리 싸우면 구분이 안 된다(ver.1.9 사용자 제보) */}
             {(["a", "b"] as const).map((side) =>
               tailwindTurns(side) !== undefined ? (
                 <span key={`tw-${side}`} className="battle-environment-tag">
-                  {side === "a" ? "좌측" : "우측"} 진영: 순풍 (앞으로 {tailwindTurns(side)}턴)
+                  {side === "a" ? "내" : "상대"} 진영: 순풍 (앞으로 {tailwindTurns(side)}턴)
                 </span>
               ) : null,
             )}
             {(["a", "b"] as const).map((side) =>
               hazardTag(side).length > 0 ? (
                 <span key={`hz-${side}`} className="battle-environment-tag">
-                  {side === "a" ? "좌측" : "우측"} 진영: {hazardTag(side).join(" · ")}
+                  {side === "a" ? "내" : "상대"} 진영: {hazardTag(side).join(" · ")}
                 </span>
               ) : null,
             )}
