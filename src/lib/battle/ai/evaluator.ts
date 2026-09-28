@@ -57,7 +57,14 @@ import {
 import { estimateMoveHits, type MoveHitEstimate } from "./moveDamage";
 import { firstProbability } from "./speed";
 import { createPartyModel, type PartyDuel, type PartyEffect, type PartyModel } from "./partyEval";
-import { allowedByVolatiles, evaluateOpponentThreat, opponentStatusDrag, usableMoves, type OpponentThreat } from "./opponentMoveModel";
+import {
+  allowedByVolatiles,
+  evaluateOpponentThreat,
+  opponentStatusDrag,
+  targetAttackOnlyWeight,
+  usableMoves,
+  type OpponentThreat,
+} from "./opponentMoveModel";
 import { blockedTurns, isEndOfTurnAware, turnsToKo, withAccumulationSteps } from "./turnRates";
 import type { HitsEstimate } from "./types";
 
@@ -186,6 +193,11 @@ export interface AiOption {
   riskFlag: boolean;
   /** 이 기술(교체면 그 포켓몬의 최선 기술)의 명중률 — 하드 오버라이드 필중 게이트용 */
   accuracy: number;
+  /**
+   * 이번 턴 공격하지 않는 행동(변화기·교체)일 때, 상대가 기습류를 골라 이번 턴 상대 행동이 헛수고가 될 확률(ver.1.9 6-1).
+   * 결정 레이어가 이번 턴 행동 손실(lost = 1)을 이 확률만큼 lost = 0(양쪽 다 한 턴 날림)과 섞는다.
+   */
+  opponentIdleChance?: number;
   /**
    * 데미지 없는 변화기일 때만. before/after = 회복이면 hits_to_be_killed(회복 전/후), 랭크업이면
    * 내 최선 공격의 hits_to_kill(랭크업 전/후). bestKillTurns = 이 턴 공격 안 하면 쓰게 될 내 최선 공격의 처치 턴 수.
@@ -1028,6 +1040,8 @@ function evaluateOptionsOn(state: BattleState, key: FighterKey, options: Evaluat
     }
 
     if (move.category === "status") {
+      const idle = targetAttackOnlyWeight(threat);
+      if (idle > 0) option.opponentIdleChance = idle;
       const kind = classifySupport(move);
       const bestKillTurns = turnsFor(moveState, myBest?.estimate, me, opponent).expected;
       if (protectGroupOf(move)) {
@@ -1212,7 +1226,13 @@ function evaluateOptionsOn(state: BattleState, key: FighterKey, options: Evaluat
 
   // ── 교체 옵션 ── (교체 턴에는 메가진화 없음 → 원래 state 기준)
   if (!isTrappedFromSwitching(state[key], state)) {
-    for (const index of benchIndices(mySide)) result.push(evaluateSwitchCandidate(state, key, index));
+    // 상대는 지금 나와 있는 내 포켓몬을 보고 기술을 고른다 — 기습류를 고르면 교체해 들어온 포켓몬에겐 실패(공격 안 함)
+    const idle = targetAttackOnlyWeight(baseThreat);
+    for (const index of benchIndices(mySide)) {
+      const option = evaluateSwitchCandidate(state, key, index);
+      if (idle > 0) option.opponentIdleChance = idle;
+      result.push(option);
+    }
   }
 
   attachParty(result, createPartyModel(moveState, key));

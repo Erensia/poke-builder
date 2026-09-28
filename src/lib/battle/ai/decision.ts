@@ -232,14 +232,30 @@ export function raceValue(
  * raceValue, 또는 파티 단위 평가(§4-5, partyAware): 첫 대면(이 인자들)을 이긴다/진다 갈래로 나누고 각 갈래 뒤로 남은
  * 포켓몬끼리 이어지는 대면까지 계산한 값. myOverrides = 첫 대면에 안 나오는 내 포켓몬의 HP를 바꿔 볼 때(유턴류 후공 등).
  */
-function race(
-  params: DecisionParams,
-  party: PartyDuel | undefined,
-  inputs: [killTurns: number, survivalTurns: number, firstProbability: number, my: number, opp: number, lost: number],
-  myOverrides?: Record<number, number>,
-): number {
+type RaceInputs = [killTurns: number, survivalTurns: number, firstProbability: number, my: number, opp: number, lost: number];
+
+/**
+ * 채점 중인 옵션의 opponentIdleChance(ver.1.9 6-1): 상대가 기습류를 골라 이번 턴 상대 행동이 헛수고가 될 확률. scoreOption이
+ * 옵션마다 설정한다 — 평가 함수가 여러 겹이라 인자로 내리는 대신(withThreatModel과 같은 방식, 동기 실행).
+ */
+let opponentIdleChance = 0;
+
+function raceOnce(params: DecisionParams, party: PartyDuel | undefined, inputs: RaceInputs, myOverrides?: Record<number, number>): number {
   if (!params.partyAware || !party) return raceValue(...inputs);
   return partyRaceValue(party, inputs, chainParams(params), myOverrides);
+}
+
+function race(params: DecisionParams, party: PartyDuel | undefined, inputs: RaceInputs, myOverrides?: Record<number, number>): number {
+  // 이번 턴 공격하지 않는 행동(lost = 1)인데 상대가 기습류를 고르면 상대도 이번 턴을 날린다 → lost = 0과 섞는다
+  if (opponentIdleChance > 0 && inputs[5] >= 1) {
+    const idle: RaceInputs = [...inputs];
+    idle[5] = inputs[5] - 1;
+    return (
+      opponentIdleChance * raceOnce(params, party, idle, myOverrides) +
+      (1 - opponentIdleChance) * raceOnce(params, party, inputs, myOverrides)
+    );
+  }
+  return raceOnce(params, party, inputs, myOverrides);
 }
 
 /** 이어지는 대면 계산 파라미터(λ·대면 폭·상대 자발적 교체) */
@@ -595,7 +611,15 @@ function tradeScore(option: AiOption, riskAversion: number, params: DecisionPara
 
 /** decision-layer §4 점수식. 데미지 없는 변화기는 extension §2-2 전용 점수식. */
 export function scoreOption(option: AiOption, riskAversion: number, params: DecisionParams = DEFAULT_DECISION_PARAMS): number {
-  if (params.scoring === "trade") return tradeScore(option, riskAversion, params);
+  if (params.scoring === "trade") {
+    const previous = opponentIdleChance;
+    opponentIdleChance = option.opponentIdleChance ?? 0;
+    try {
+      return tradeScore(option, riskAversion, params);
+    } finally {
+      opponentIdleChance = previous;
+    }
+  }
   const riskPenalty = option.riskFlag ? params.riskFlagPenaltyBase * riskAversion : 0;
   const speedAdj = speedAdjustment(option);
   const tempo = params.scoring === "tempo";
