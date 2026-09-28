@@ -51,6 +51,8 @@ export interface MatchupSlot {
   targetMinimizedAssumed?: boolean;
   /** ver.1.9 공격 슬롯 — 직전 턴 기술 실패 가정(분함의발구르기·열불내기 2배) */
   moveFailedAssumed?: boolean;
+  /** ver.1.9 6-2 공격 슬롯 — 급소에 맞았다고 가정(랭크 일부·벽 무시, 데미지 ×1.5 — 스나이퍼 2.25) */
+  critAssumed?: boolean;
   /** ver.1.9 공격 슬롯 — HP 1/3 이하 가정(맹화·급류·심록·벌레의알림 발동) */
   pinchAssumed?: boolean;
   /** ver.1.9 방어 슬롯 — HP 가득 가정(멀티스케일·섀도실드 발동). 생략하면 켬(이전 계산과 같음) */

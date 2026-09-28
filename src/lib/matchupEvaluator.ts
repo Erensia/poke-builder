@@ -18,6 +18,7 @@ import { resolveEffectiveDefenderAbility } from "./abilityModifiers";
 import { NEUTRAL_STAGES, type StatStages } from "../types/battleStats";
 import {
   computeOffensePower,
+  CRITICAL_DAMAGE_MULTIPLIER,
   computeBulkPower,
   computeEffectiveSpeed,
   evaluateMatchupChance,
@@ -109,6 +110,12 @@ export interface SlotMatchupOptions {
   attackerStatLoweredThisTurn?: boolean;
   defenderDamagedThisTurn?: boolean;
   defenderMinimized?: boolean;
+  /**
+   * 급소에 맞았다고 가정(ver.1.9 6-2 — 매치업 페이지 급소 토글·배틀 AI 급소 기대 데미지). 엔진 computeDamage와 같은 규칙:
+   * 공격측 불리한(음수) 랭크·방어측 유리한(양수) 랭크 무시, 벽 무시, 데미지 ×1.5(스나이퍼 2.25). 방어측이 조가비갑옷·전투무장이면
+   * 급소가 안 뜬다(결과 criticalBlocked).
+   */
+  critical?: boolean;
   defenderItemConsumed?: boolean;
   /**
    * 배틀 AI용 — 슬롯 원본 대신 실전 파이터의 현재 값(메가진화·변신·변환자재·트레이스·도구 소모 반영)을
@@ -175,6 +182,8 @@ export interface SlotMatchupResult {
   berryBulkMultiplier: number;
   /** bulkPower에 실제로 곱한 반감 열매 배율(다단히트면 첫 타만 반감된 값, 발동 안 하면 1) */
   berryAppliedMultiplier: number;
+  /** critical 가정인데 방어측 특성(조가비갑옷·전투무장)으로 급소가 안 뜸 — 결과는 급소 없는 값 */
+  criticalBlocked?: boolean;
   /** 판정 타수로 격파할 확률(0~1). 확정 1·2타면 1, "3타 이상 필요"면 null (Phase 7.5 §2) */
   koChance: number | null;
   /** 난수 1타일 때만: [격파 난수 수, 16] */
@@ -227,6 +236,7 @@ export function evaluateSlotMatchup(
     attackerStatLoweredThisTurn,
     defenderDamagedThisTurn,
     defenderMinimized,
+    critical = false,
     defenderItemConsumed,
     attackerRuntime,
     defenderRuntime,
@@ -536,17 +546,20 @@ export function evaluateSlotMatchup(
 
   // 상대 타입 상성을 곱하기 전의 결정력. offensePower는 여기에 typeEffectiveness만 곱한 값이라
   // 매번 다시 계산하는 대신 이 값에 typeEffectiveness를 곱해서 구한다.
+  // 급소(ver.1.9 6-2): 공격 쪽 랭크는 음수를 0으로(속임수는 방어자 공격 랭크가 공격 랭크라 같은 쪽), 방어 랭크는 양수를 0으로
+  const criticalApplies = critical && !defenderAbility?.preventsCritsAgainstSelf;
+  const critMultiplier = criticalApplies ? (attackerAbility?.critDamageMultiplier ?? CRITICAL_DAMAGE_MULTIPLIER) : 1;
   const rawOffensePower = computeOffensePower(attackerRealStats, attackerForm.types, effectiveMoveFinal, {
     abilityMultiplier:
-      (manualAbilityMultiplier ?? abilityOffenseMultiplier) * rivalryMultiplier * hustleMultiplier * extraOffenseMultiplier,
+      (manualAbilityMultiplier ?? abilityOffenseMultiplier) * rivalryMultiplier * hustleMultiplier * extraOffenseMultiplier * critMultiplier,
     itemMultiplier: itemMultiplier ?? autoItemMultiplier,
     weatherMultiplier: manualWeatherMultiplier ?? autoWeatherDamageMultiplier,
     fieldMultiplier: manualFieldMultiplier ?? autoFieldDamageMultiplier,
-    attackerStages,
+    attackerStages: criticalApplies ? clampStages(attackerStages, "positive") : attackerStages,
     stabMultiplier,
     // 속임수(usesTargetAttackStat): 방어자의 공격 실능·랭크로 결정력을 낸다
     defenderRealStats,
-    defenderStages,
+    defenderStages: criticalApplies ? clampStages(defenderStages, "positive") : defenderStages,
   });
   if (rawOffensePower === null) return null;
   const offensePower = rawOffensePower * typeEffectiveness;
@@ -554,7 +567,7 @@ export function evaluateSlotMatchup(
   // 스크린(리플렉터/빛의장막/오로라베일): 해당 카테고리 데미지 절반 = 내구력 2배 — 틈새포착이면 무시.
   // 이쪽은 1턴 스냅샷이라 진영 상태 대신 단일 screen 옵션에서 두 불리언을 도출하고,
   // 실제 곱셈 공식은 battlePower.screenMultiplierFromFlags로 battleSimulator와 공유한다(§5).
-  const screenBypassed = !!attackerAbility?.bypassesScreensAndSubstitute;
+  const screenBypassed = !!attackerAbility?.bypassesScreensAndSubstitute || criticalApplies;
   const auroraVeilActive = !screenBypassed && screen === "auroraVeil";
   const categoryScreenActive =
     !screenBypassed &&
@@ -572,7 +585,7 @@ export function evaluateSlotMatchup(
   const berryHitsMultiplier =
     berryResult.bulkMultiplier === 1 ? 1 : 1 / (firstHitShare / berryResult.bulkMultiplier + (1 - firstHitShare));
   const bulkPower = computeBulkPower(defenderRealStats, resolvedCategory, {
-    defenderStages,
+    defenderStages: criticalApplies ? clampStages(defenderStages, "negative") : defenderStages,
     bulkMultiplier:
       (manualBulkMultiplier ?? abilityDefense * berryHitsMultiplier * weatherDefenseMultiplier) * screenMultiplier,
     // 사이코쇼크(hitsDefensiveStat): 특수기지만 내구력은 방어자의 물리 방어로 낸다
@@ -587,9 +600,19 @@ export function evaluateSlotMatchup(
     verdict: chance.verdict,
     berryBulkMultiplier: manualBulkMultiplier === undefined ? berryResult.bulkMultiplier : 1,
     berryAppliedMultiplier: manualBulkMultiplier === undefined ? berryHitsMultiplier : 1,
+    criticalBlocked: critical && !criticalApplies ? true : undefined,
     koChance: chance.koChance,
     killingRolls: chance.killingRolls,
   };
+}
+
+/** 급소 랭크 처리: positive = 음수 랭크를 0으로(공격 쪽), negative = 양수 랭크를 0으로(방어 쪽) */
+function clampStages(stages: StatStages, keep: "positive" | "negative"): StatStages {
+  const out = { ...stages };
+  for (const key of Object.keys(out) as (keyof StatStages)[]) {
+    out[key] = keep === "positive" ? Math.max(0, out[key]) : Math.min(0, out[key]);
+  }
+  return out;
 }
 
 /**
@@ -644,6 +667,8 @@ export interface SoloOffensePowerOptions {
   attackerTookDamageThisTurn?: boolean;
   attackerMoveFailedLastTurn?: boolean;
   attackerStatLoweredThisTurn?: boolean;
+  /** ver.1.9 6-2 — 급소 가정(음수 공격 랭크 무시·×1.5, 스나이퍼 2.25). 상대가 없으니 방어측 랭크·벽·급소 방지 특성은 모른다 */
+  critical?: boolean;
   extraOffenseMultiplier?: number;
 }
 
@@ -680,11 +705,13 @@ export function computeSoloOffensePower(
     attackerTookDamageThisTurn,
     attackerMoveFailedLastTurn,
     attackerStatLoweredThisTurn,
+    critical = false,
     extraOffenseMultiplier = 1,
   } = options;
 
   const attackerForm = getEffectiveForm(attackerPokemon, attackerSlot);
   const attackerAbility = attackerSlot.ability ? getAbility(attackerSlot.ability) : undefined;
+  const critMultiplier = critical ? (attackerAbility?.critDamageMultiplier ?? CRITICAL_DAMAGE_MULTIPLIER) : 1;
 
   const effectiveWeather = attackerAbility?.negatesWeather ? undefined : weather;
 
@@ -831,11 +858,11 @@ export function computeSoloOffensePower(
       : 1;
 
   return computeOffensePower(attackerRealStats, attackerForm.types, effectiveMoveFinal, {
-    abilityMultiplier: abilityOffenseMultiplier * hustleMultiplier * extraOffenseMultiplier,
+    abilityMultiplier: abilityOffenseMultiplier * hustleMultiplier * extraOffenseMultiplier * critMultiplier,
     itemMultiplier: autoItemMultiplier,
     weatherMultiplier: autoWeatherDamageMultiplier,
     fieldMultiplier: autoFieldDamageMultiplier,
-    attackerStages,
+    attackerStages: critical ? clampStages(attackerStages, "positive") : attackerStages,
     stabMultiplier,
   });
 }

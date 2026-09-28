@@ -4,6 +4,7 @@ import { decide, scoreOption, type DecisionParams, type ScoredOption } from "./d
 import { evaluateOptions, type AiOption, type EvaluateOptions } from "./evaluator";
 import { withThreatModel, type ThreatModelParams } from "./opponentMoveModel";
 import { withEndOfTurnModel } from "./turnRates";
+import { withCritModel } from "./moveDamage";
 import { paramsFor } from "./decision";
 
 export { chooseAiSelection } from "./teamSelect";
@@ -49,10 +50,12 @@ export function chooseAiAction(
 ): AiDecision {
   const params = paramsFor(options.decisionParams);
   // 턴 종료 효과 토글은 평가(대면 턴 수)와 점수 계산(이어지는 대면)에 모두 걸린다
-  const decision = withEndOfTurnModel(params.endOfTurnAware, () => {
-    // 점수 계산(파티 대면표는 이때 계산됨)도 같은 상대 기술 모델로
-    return withThreatModel(threatModelOf(params), () => decide(evaluateOptions(state, key, options), riskAversion, params));
-  });
+  const decision = withCritModel(params.critAware, () =>
+    withEndOfTurnModel(params.endOfTurnAware, () => {
+      // 점수 계산(파티 대면표는 이때 계산됨)도 같은 상대 기술 모델로
+      return withThreatModel(threatModelOf(params), () => decide(evaluateOptions(state, key, options), riskAversion, params));
+    }),
+  );
   if (!decision) return { action: { kind: "move", move: STRUGGLE_MOVE }, scored: [] };
   const { chosen, scored } = decision;
   const action: TurnAction =
@@ -73,7 +76,7 @@ export function chooseAiForcedSwitch(
   decisionParams?: Partial<DecisionParams>,
 ): number | undefined {
   const params = paramsFor(decisionParams);
-  return withEndOfTurnModel(params.endOfTurnAware, () => {
+  return withCritModel(params.critAware, () => withEndOfTurnModel(params.endOfTurnAware, () => {
     return withThreatModel(threatModelOf(params), () => {
       const switches = evaluateOptions(state, key).filter((o) => o.optionType === "switch");
       if (switches.length === 0) return undefined;
@@ -82,5 +85,5 @@ export function chooseAiForcedSwitch(
         .reduce((a, b) => (b.score > a.score ? b : a));
       return best.option.toIndex;
     });
-  });
+  }));
 }

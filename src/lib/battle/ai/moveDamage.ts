@@ -3,7 +3,11 @@ import { type PokemonType } from "@/types/pokemon-type";
 import { getPokemon } from "@/lib/data";
 import { getEffectiveForm } from "@/lib/pokemonForm";
 import { resolveEffectiveDefenderAbility } from "@/lib/abilityModifiers";
-import { evaluateSlotMatchup, type RuntimeCombatant } from "@/lib/matchupEvaluator";
+import { evaluateSlotMatchup, type RuntimeCombatant, type SlotMatchupOptions } from "@/lib/matchupEvaluator";
+import { critChance } from "@/lib/accuracyCrit";
+import { getItemCritStageBonus } from "@/lib/itemEffects";
+import { type Ability } from "@/types/ability";
+import { type Item } from "@/types/item";
 import { resolveMoveContext } from "@/lib/moveContext";
 import { isOpponentTargetingMove, isPriorityMoveBlockedByField } from "@/lib/fieldEffects";
 import { computeStatusAttackMultiplier, ignoresBurnAttackPenalty } from "@/lib/statusConditions";
@@ -12,7 +16,7 @@ import { abilityOf, activeWeather, isFainted, type BattleFighterState, type Batt
 import { computeBattleHitChance } from "../hitChance";
 import { computeTurnOrderPriority, effectiveHeldItem } from "../turnOrderInputs";
 import { isGrounded } from "../grounding";
-import { estimateHits, meanDamageFraction } from "./hitsToKill";
+import { estimateHits, meanDamageFraction, worstCaseFromMatchup, type CritModel } from "./hitsToKill";
 import { attackChanceOf, requiresTargetAttack } from "./opponentMoveModel";
 import { applySurvivalGuard } from "./survivalGuard";
 import type { HitsEstimate } from "./types";
@@ -113,6 +117,37 @@ function supremeOverlordCountFor(state: BattleState, attacker: BattleFighterStat
   const party = [state.sideA.party, state.sideB.party].find((p) => p.some((m) => m.slot === attacker.slot));
   if (!party) return attacker.supremeOverlordCount;
   return party.filter((m) => m.slot !== attacker.slot && isFainted(m)).length;
+}
+
+let critAware = true;
+
+/**
+ * fn 실행 동안만 급소 기대 데미지(ver.1.9 6-2)를 켜고 끈다 — 비교용 토글(DecisionParams.critAware). withEndOfTurnModel과 같은 방식.
+ */
+export function withCritModel<T>(enabled: boolean, fn: () => T): T {
+  const previous = critAware;
+  critAware = enabled;
+  try {
+    return fn();
+  } finally {
+    critAware = previous;
+  }
+}
+
+/** 이 공격이 급소에 맞을 확률 — 엔진 hitResolution.resolveHit과 같은 규칙(급소 랭크·도구·대운·급소율 높은 기술·반드시 급소·무도한행동·조가비갑옷류) */
+function critChanceOf(
+  attacker: BattleFighterState,
+  defender: BattleFighterState,
+  move: Move,
+  attackerAbility: Ability | undefined,
+  defenderAbility: Ability | undefined,
+  attackerItem: Item | undefined,
+): number {
+  if (defenderAbility?.preventsCritsAgainstSelf) return 0;
+  const poisoned = defender.status.condition === "poison" || defender.status.condition === "badly-poisoned";
+  if (move.alwaysCrit || (attackerAbility?.alwaysCritsVsPoisonedTarget && poisoned)) return 1;
+  const stage = attacker.critStage + getItemCritStageBonus(attackerItem, attacker.slot.pokemonId) + (attackerAbility?.raisesCritStageBy ?? 0);
+  return critChance(stage, move.highCritRatio);
 }
 
 export function estimateMoveHits(ctx: MoveHitContext, baseMove: Move): MoveHitEstimate | null {
@@ -229,7 +264,7 @@ export function estimateMoveHits(ctx: MoveHitContext, baseMove: Move): MoveHitEs
   const avalancheMultiplier =
     move.conditionalDoublePower === "took-damage-this-turn" && attackerMovesSecond ? 1 + targetAttackChance : 1;
 
-  const result = evaluateSlotMatchup(attacker.slot, move, defender.slot, {
+  const matchupOptions: SlotMatchupOptions = {
     attackerStages: attacker.stages,
     defenderStages: defender.stages,
     applyMoveOwnStatChanges: false,
@@ -252,8 +287,23 @@ export function estimateMoveHits(ctx: MoveHitContext, baseMove: Move): MoveHitEs
     attackerRuntime: runtimeOf(attacker, ctx.attackerTypes, state),
     defenderRuntime: runtimeOf(defender, defenderTypes, state),
     extraOffenseMultiplier: ownTypeBoost * electroBoost * burnMultiplier * overlordMultiplier * avalancheMultiplier,
-  });
+  };
+  const result = evaluateSlotMatchup(attacker.slot, move, defender.slot, matchupOptions);
   if (!result) return null;
+
+  // 급소(ver.1.9 6-2): 엔진 hitResolution과 같은 확률 규칙. 급소 데미지 비는 계산기 급소 가정(랭크·벽 무시·×1.5)으로 낸다.
+  // 단타는 처치 타수 분포에 급소를 섞고, 다단히트(타마다 따로 굴림)는 기대 데미지 배율로 근사한다.
+  const critP = critAware ? critChanceOf(attacker, defender, move, attackerAbility, defenderAbility, attackerItem) : 0;
+  let crit: CritModel | undefined;
+  let critMeanScale = 1;
+  if (critP > 0 && result.offensePower > 0) {
+    const critResult = evaluateSlotMatchup(attacker.slot, move, defender.slot, { ...matchupOptions, critical: true });
+    const scale = critResult ? critResult.offensePower / critResult.bulkPower / (result.offensePower / result.bulkPower) : 1;
+    if (scale > 1) {
+      if (hitCountScale > 1 || (multiHitCount ?? 1) > 1) critMeanScale = 1 + critP * (scale - 1);
+      else crit = { chance: critP, scale };
+    }
+  }
 
   // 반감 열매는 첫 타에 소모된다(ver.1.9 6-1): 열매 없는 내구력으로 처치 타수를 내고 첫 번 사용만 데미지를 줄인다.
   // 계산기는 고정 타수 다단히트면 첫 타만 반감한 배율을 이미 넣었고, 2~5회 기대 타수(hitCountScale)는 여기서 나눈다.
@@ -268,12 +318,19 @@ export function estimateMoveHits(ctx: MoveHitContext, baseMove: Move): MoveHitEs
   }
   // 분함의발구르기·열불내기(ver.1.9): 직전 턴 실패 기록이 있으면 이번 한 번만 위력 2배 — 첫 번 사용만 데미지 ×2
   if (move.conditionalDoublePower === "user-move-failed-last-turn" && attacker.lastTurnMoveFailed) firstHitScale *= 2;
-  const estimate = estimateHits(result.offensePower * hitCountScale, bulkPower, {
+  const estimate = estimateHits(result.offensePower * hitCountScale * critMeanScale, bulkPower, {
     hpFraction: defenderHp / defender.maxHp,
     accuracy,
     firstHitScale,
+    crit,
   });
+  // 하드 오버라이드용 worst_case는 급소 없는 값(급소는 기대 턴 수에만) — 반드시 급소인 기술만 급소 값
+  const certainCritScale = critP >= 1 ? (crit?.scale ?? critMeanScale) : 1;
+  if (critMeanScale > 1 || certainCritScale > 1) {
+    estimate.worstCase = worstCaseFromMatchup(result.offensePower * hitCountScale * firstHitScale * certainCritScale, bulkPower, defenderHp / defender.maxHp);
+  }
   const rawHits = accuracy > 0 ? estimate.expected * accuracy : Infinity;
-  const damageFraction = meanDamageFraction(result.offensePower * hitCountScale, result.bulkPower) * accuracy;
+  const critMean = crit ? 1 + crit.chance * (crit.scale - 1) : critMeanScale;
+  const damageFraction = meanDamageFraction(result.offensePower * hitCountScale * critMean, result.bulkPower) * accuracy;
   return applySurvivalGuard({ ...estimate, rawHits, accuracy, typeEffectiveness, damageFraction }, defender, defenderAbility, defenderItem, defenderHp);
 }

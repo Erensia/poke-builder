@@ -117,6 +117,8 @@ export interface DecisionParams {
    * false면 이전 동작(비교용). 평가·점수 계산 전체를 withEndOfTurnModel로 감싸 적용한다(index.ts).
    */
   endOfTurnAware: boolean;
+  /** 급소 기대 데미지(ver.1.9 6-2) — 처치 턴 수에 급소 확률을 섞는다. false면 이전 동작(비교용), withCritModel로 적용(index.ts) */
+  critAware: boolean;
 }
 
 /**
@@ -165,6 +167,7 @@ export const DEFAULT_DECISION_PARAMS: DecisionParams = {
   mySwitchMargin: 0.1,
   mySwitchLimit: 1,
   endOfTurnAware: true,
+  critAware: true,
 };
 
 /** 기본 파라미터 위에 decisionParams(시뮬레이터 튜닝용)를 덮어쓴 최종 파라미터 */
