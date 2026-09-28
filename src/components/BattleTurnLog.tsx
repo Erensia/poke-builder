@@ -1232,6 +1232,27 @@ function ActionEffectLines({
           )}
         </div>
       )}
+      {/* 난동(ver.1.9): 소란으로 깨움 / 끝까지 써서 혼란(역린류) / 소란 종료 */}
+      {action.uproarWokeIds?.map((id) => {
+        const name = getPokemon(id)?.name ?? "포켓몬";
+        return (
+          <div key={id} className="battle-turn-line is-muted">
+            소란 때문에 {name}
+            {eunNeun(name)} 잠에서 깼다!
+          </div>
+        );
+      })}
+      {action.rampageConfused && (
+        <div className="battle-turn-line is-muted">
+          {actorName}
+          {eunNeun(actorName)} 지쳐서 혼란에 빠졌다!
+        </div>
+      )}
+      {action.rampageEnded && action.move.rampage === "uproar" && (
+        <div className="battle-turn-line is-muted">
+          {actorName}의 소란이 멈췄다!
+        </div>
+      )}
       {/* C-8 이미 걸린 상태이상에 상태이상 전용기를 다시 써서 아무 변화가 없었을 때 */}
       {!action.blockedReason && action.hit && action.statusInflictFailed && (
         <div className="battle-turn-line is-muted">

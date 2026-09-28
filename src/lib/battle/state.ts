@@ -334,6 +334,8 @@ export interface BattleFighterState {
   lastTurnMoveFailed?: boolean;
   /** 이번 턴 시작(턴 중 등장이면 등장) 시점 HP — 승부굳히기 "이번 턴 대상이 이미 데미지를 입음" 판정(ver.1.9) */
   hpAtTurnStart?: number;
+  /** 소란피기(ver.1.9): 나와 있는 누군가가 소란 중 — 새로 잠들 수 없다(statusImmunitiesOf). rampage.refreshUproar가 갱신 */
+  sleepBlockedByUproar?: boolean;
   /**
    * 변환자재/리베로가 이번 등장 스탠스에서 이미 발동했으면 true. 발동은 등장당 1회
    * (본가 9세대) — 기술을 실제로 사용한 순간에만 소진되므로 행동이 막히면 유지된다.
@@ -478,6 +480,8 @@ export function statusImmunitiesOf(
   ability: Ability | undefined,
 ): StatusCondition[] | undefined {
   if (hasFlowerVeil(fighter, ability)) return ALL_MAJOR_STATUS_CONDITIONS;
+  // 소란피기(ver.1.9): 소란 중에는 누구도 잠들 수 없다
+  if (fighter.sleepBlockedByUproar) return [...(ability?.immuneToStatuses ?? []), "sleep"];
   return ability?.immuneToStatuses;
 }
 

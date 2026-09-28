@@ -341,6 +341,10 @@ export interface ActionLogEntry {
   substituteBroke?: boolean;
   /** 이 행동의 데미지가 상대의 대타로 흡수됐으면(=본체 HP는 그대로) true */
   hitSubstitute?: boolean;
+  /** 난동(ver.1.9): 이번 행동으로 난동을 끝까지 마쳤다 / 그 결과 혼란에 빠졌다 / 소란으로 깨운 포켓몬 종 id */
+  rampageEnded?: boolean;
+  rampageConfused?: boolean;
+  uproarWokeIds?: string[];
   /** 방어류(방어/판별/버티기/킹실드) 기술을 실제로 써서 "방어태세에 들어갔다" — 성공/실패와 무관하게 발동 자체. */
   protectStanceEntered?: boolean;
   /** 방어류(방어/판별/버티기/킹실드) 기술이 이번에 성공적으로 발동했으면 true (상대의 자신을 겨냥한 공격을 실제로 막음) */
