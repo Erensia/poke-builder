@@ -4,9 +4,9 @@
   max-width: 980px;
 }
 
-/* 제목·여백만 도감 페이지(980px)에 맞추고, 카드 등 본문은 예전 폭(740px) 그대로 가운데에 둔다(ver.1.9 사용자 결정 —
+/* 제목·여백만 도감 페이지(980px)에 맞추고, 카드 등 본문은 예전 폭(740px) 그대로 가운데에 둔다(모달 배경은 제외 — 화면 전체를 덮어야 함, ver.1.9 사용자 결정 —
    980px로 넓히니 파티 카드가 너무 넓어 보였다) */
-.party-board > :not(.party-board-header) {
+.party-board > :not(.party-board-header):not(.modal-overlay) {
   max-width: 740px;
   margin-left: auto;
   margin-right: auto;
