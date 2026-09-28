@@ -1731,6 +1731,25 @@ try {
         `보복 ×${payback.toFixed(2)} 눈사태 ×${avalanche.toFixed(2)} 객기 ×${facade.toFixed(2)} 기사회생 ×${reversal.toFixed(2)} 맹화 ×${blaze.toFixed(2)}`,
       );
     }
+    // 근성(ver.1.9 본가 규칙): 상태이상이면 물리 ×1.5, 화상이어도 반감 없음 — 엔진·계산기(AI) 같은 배율
+    {
+      const base = () => battle([mon("괴력몬", ["인파이트"], "근성")], [mon("잠만보", ["칼춤"], null, null, pts({ hp: 32, def: 32 }))]);
+      const plain = base();
+      const burned = base();
+      burned.a.status = { condition: "burn", turnsElapsed: 0 };
+      const noGuts = battle([mon("괴력몬", ["인파이트"], "노가드")], [mon("잠만보", ["칼춤"], null, null, pts({ hp: 32, def: 32 }))]);
+      noGuts.a.status = { condition: "burn", turnsElapsed: 0 };
+      const noGutsPlain = battle([mon("괴력몬", ["인파이트"], "노가드")], [mon("잠만보", ["칼춤"], null, null, pts({ hp: 32, def: 32 }))]);
+      const guts = dmg(burned, "인파이트") / dmg(plain, "인파이트");
+      const burnOnly = dmg(noGuts, "인파이트") / dmg(noGutsPlain, "인파이트");
+      const sc = await server.ssrLoadModule("/src/lib/statusConditions.ts");
+      check(
+        "1.9: 근성 — 상태이상이면 물리 ×1.5(화상 반감 없음), 근성 없으면 화상 ×0.5",
+        guts > 1.4 && guts < 1.6 && burnOnly > 0.45 && burnOnly < 0.55 && sc.computeStatusAttackMultiplier("poison", "physical", true, 1.5) === 1.5 &&
+          sc.computeStatusAttackMultiplier("poison", "special", true, 1.5) === 1,
+        `근성 화상 ×${guts.toFixed(2)} 화상만 ×${burnOnly.toFixed(2)}`,
+      );
+    }
     // 그림자꿰매기: 명중하면 상대 교체 봉쇄(고스트 면제, 실패 문구 없음) / 배수의진: 5스탯 +1 + 자신 교체 봉쇄, 이미 걸려 있으면 실패
     {
       const st = battle([mon("팬텀", ["그림자꿰매기"])], [mon("잠만보", ["칼춤"], null, null, pts({ hp: 32, def: 32 })), mon("한카리아스", ["지진"])]);

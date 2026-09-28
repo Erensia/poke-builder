@@ -89,21 +89,26 @@ export function computeStatusEndOfTurnDamage(state: StatusConditionState, maxHp:
 
 /**
  * 근성 특성이거나 객기 기술이면 화상의 물리 공격력 감소 효과를 무시한다 (사용자 확인).
- * 본가처럼 근성이 상태이상일 때 공격력 자체를 오히려 올려주는지는 미확인이라, "감소를 무시"하는
- * 것까지만 반영하고 별도 상승 배율은 걸지 않는다.
+ * 근성의 상태이상 시 물리 공격 1.5배는 ver.1.9부터 반영(사용자 결정 — 본가 규칙): computeStatusAttackMultiplier의
+ * statusedPhysicalBoost(특성 데이터 physicalAttackMultiplierWhenStatused).
  */
 export function ignoresBurnAttackPenalty(attackerAbilityId: string | undefined, moveId: string): boolean {
   return attackerAbilityId === "근성" || moveId === "객기";
 }
 
-/** 화상은 물리 공격력을 0.5배로 낮춘다 — 근성/객기면 예외(ignoresBurnAttackPenalty) */
+/**
+ * 화상은 물리 공격력을 0.5배로 낮춘다 — 근성/객기면 예외(ignoresBurnAttackPenalty).
+ * statusedPhysicalBoost(근성 1.5): 주 상태이상이면 물리 공격에 곱한다(ver.1.9).
+ */
 export function computeStatusAttackMultiplier(
   condition: StatusCondition | null,
   moveCategory: MoveCategory | null,
   ignorePenalty = false,
+  statusedPhysicalBoost = 1,
 ): number {
-  if (ignorePenalty) return 1;
-  return condition === "burn" && moveCategory === "physical" ? 0.5 : 1;
+  const boost = condition && moveCategory === "physical" ? statusedPhysicalBoost : 1;
+  if (ignorePenalty) return boost;
+  return (condition === "burn" && moveCategory === "physical" ? 0.5 : 1) * boost;
 }
 
 /** 마비는 스피드를 0.5배로 낮춘다 */

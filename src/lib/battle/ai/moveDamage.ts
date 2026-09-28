@@ -203,6 +203,7 @@ export function estimateMoveHits(ctx: MoveHitContext, baseMove: Move): MoveHitEs
     attacker.status.condition,
     move.category,
     ignoresBurnAttackPenalty(attackerAbility?.id, move.id),
+    attackerAbility?.physicalAttackMultiplierWhenStatused,
   );
   // 총대장: 엔진(hitResolution)과 같은 배율. 나와 있는 포켓몬은 등장 때 센 값, 대기 포켓몬(교체 후보·파티 대면표)은
   // "지금 나온다면" 셀 값 — 같은 편 기절 수 — 으로 본다.

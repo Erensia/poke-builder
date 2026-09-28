@@ -795,6 +795,7 @@
   },
   {
     "id": "근성",
+    "physicalAttackMultiplierWhenStatused": 1.5,
     "name": "근성",
     "description": "상태이상이 되면 기합이 들어가 공격이 1.5배가 된다. 화상일 때도 물리 위력이 줄지 않는다."
   },
