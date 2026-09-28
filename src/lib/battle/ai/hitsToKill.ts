@@ -43,30 +43,69 @@ function hitOutcomes(crit?: CritModel): [number, number][] {
  * n = 0, 1, 2, ... 순으로 낸다(합계 정수 DP라 정확 — 급소 롤만 퍼센트 반올림). N = 처치까지 필요한 타수.
  */
 function survivalProbabilities(rhoStar: number, crit?: CritModel): number[] {
+  // 결과는 "살아 있는 합계"의 경계(정수 퍼센트 L — 합계 s가 살아 있음 ⇔ s < L)와 한 타 결과 분포(급소 확률·반올림한 급소 롤)에만
+  // 달렸다. 같은 조합은 캐시해서 다시 쓴다(계산 값은 그대로 — 판단 1회에 같은 대면을 수백 번 다시 계산하던 비용, ver.1.9 벤치 속도).
+  const p = crit && crit.chance > 0 ? Math.min(1, crit.chance) : 0;
+  let key = String(aliveLimit(rhoStar));
+  if (p > 0) {
+    key += `|${p}`;
+    for (let k = 0; k < DAMAGE_ROLL_STEPS; k++) key += `,${Math.round((ROLL_MIN_PERCENT + k) * crit!.scale)}`;
+  }
+  const cached = survivalCache.get(key);
+  if (cached) return cached;
+  const survives = computeSurvival(rhoStar, hitOutcomes(crit));
+  if (survivalCache.size >= SURVIVAL_CACHE_LIMIT) survivalCache.clear();
+  survivalCache.set(key, survives);
+  return survives;
+}
+
+const SURVIVAL_CACHE_LIMIT = 50000;
+const survivalCache = new Map<string, number[]>();
+
+/** 합계 s(정수 퍼센트)가 살아 있는(s/100 + 1e-9 < rhoStar) 가장 작은 경계 L — 살아 있음 ⇔ s < L */
+function aliveLimit(rhoStar: number): number {
+  let limit = Math.max(0, Math.ceil((rhoStar - 1e-9) * 100));
+  while (limit > 0 && !((limit - 1) / 100 + 1e-9 < rhoStar)) limit--;
+  while (limit / 100 + 1e-9 < rhoStar) limit++;
+  return limit;
+}
+
+function computeSurvival(rhoStar: number, outcomes: [number, number][]): number[] {
   const survives: number[] = [1];
-  const outcomes = hitOutcomes(crit);
-  // dist[s] = 정수 합계 s(퍼센트 단위)일 확률
-  let dist = new Map<number, number>([[0, 1]]);
+  // dist[s] = 정수 합계 s(퍼센트 단위)이면서 아직 살아 있을(s < limit) 확률 — 배열 두 개를 번갈아 쓴다(Map 대비 할당·GC 없음).
+  // 한 타 데미지가 [minDmg, maxDmg]라 n타 뒤 도달 가능한 합계는 [n·minDmg, n·maxDmg] 구간뿐이다.
+  const limit = aliveLimit(rhoStar);
+  if (limit <= 0) return [1, 0];
+  let dist = new Float64Array(limit);
+  let next = new Float64Array(limit);
+  dist[0] = 1;
+  let lo = 0;
+  let hi = 0;
+  const minDmg = Math.min(...outcomes.map(([d]) => d));
+  const maxDmg = Math.max(...outcomes.map(([d]) => d));
   for (let n = 1; n <= MAX_HITS_TRACKED; n++) {
-    const next = new Map<number, number>();
-    for (const [sum, p] of dist) {
+    const nextLo = lo + minDmg;
+    const nextHi = Math.min(limit - 1, hi + maxDmg);
+    if (nextLo > nextHi) {
+      survives.push(0);
+      break;
+    }
+    next.fill(0, nextLo, nextHi + 1);
+    for (let sum = lo; sum <= hi; sum++) {
+      const p = dist[sum];
+      if (p === 0) continue;
       for (const [dmg, q] of outcomes) {
-        const s = sum + dmg;
-        next.set(s, (next.get(s) ?? 0) + p * q);
+        const t = sum + dmg;
+        if (t < limit) next[t] += p * q;
       }
     }
     let alive = 0;
-    const stillAlive = new Map<number, number>();
-    for (const [s, p] of next) {
-      // battlePower.rollsAtLeast와 같은 부동소수점 경계 보정(1e-9)
-      if (s / 100 + 1e-9 < rhoStar) {
-        alive += p;
-        stillAlive.set(s, p);
-      }
-    }
+    for (let t = nextLo; t <= nextHi; t++) alive += next[t];
     survives.push(alive);
     if (alive < 1e-12) break;
-    dist = stillAlive;
+    [dist, next] = [next, dist];
+    lo = nextLo;
+    hi = nextHi;
   }
   return survives;
 }
