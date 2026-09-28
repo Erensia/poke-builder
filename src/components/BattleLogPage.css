@@ -9,6 +9,14 @@
   gap: 1.2rem;
 }
 
+/* 제목·여백만 도감 페이지(980px)에 맞추고, 본문(편성·대전 화면)은 예전 폭(740px) 그대로 가운데에 둔다(ver.1.9 사용자 결정) */
+.battle-log-page > :not(.battle-log-header) {
+  width: 100%;
+  max-width: 740px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
 .battle-log-header {
   display: flex;
   justify-content: space-between;
