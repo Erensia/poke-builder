@@ -670,9 +670,12 @@ export function resolveMirroredMoveEffects(input: MirroredMoveEffectsInput) {
           hasVolatile(target.volatile, effect.volatile)) ||
         (effect.volatile === "meanLook" && target.types.includes("고스트"))
       ) {
-        statusInflictFailed = true;
+        // 그림자꿰매기(ver.1.9)처럼 데미지 기술의 추가효과면 조용히 무산 — "실패했다"는 변화기만
+        if (effectiveMove.category === "status") statusInflictFailed = true;
         continue;
       }
+      // 그림자꿰매기: 상대가 쓰러졌으면 걸지 않는다
+      if (effect.volatile === "meanLook" && effect.target !== "self" && isFainted(defender)) continue;
       const chance = effect.chance !== undefined ? effect.chance / 100 : 1;
       if (random() >= chance) continue;
       if (effect.target === "self") {
@@ -1079,11 +1082,18 @@ export function resolveMirroredMoveEffects(input: MirroredMoveEffectsInput) {
   // (등장 직후) 그 기술 PP가 이미 0이면 실패. 대타·황금몸이면 무산.
   let spitePp: { moveName: string; amount: number } | undefined;
   let spiteFailed = false;
-  if (effectiveMove.reducesTargetLastMovePp && hit && !opponentEffectsBlocked) {
+  // 섬뜩한주문(ver.1.9): 데미지 기술의 추가효과 — 상대가 쓰러졌거나 인분이면 무산, 실패 문구 없음.
+  const spiteIsSecondary = effectiveMove.category !== "status";
+  if (
+    effectiveMove.reducesTargetLastMovePp &&
+    hit &&
+    !opponentEffectsBlocked &&
+    !(spiteIsSecondary && (isFainted(defender) || secondaryEffectsBlockedByAbility))
+  ) {
     const lastId = defender.lastMoveId;
     const remaining = lastId ? defender.remainingPp[lastId] : undefined;
     if (!lastId || remaining === undefined || remaining <= 0) {
-      spiteFailed = true;
+      spiteFailed = !spiteIsSecondary;
     } else {
       const amount = Math.min(remaining, effectiveMove.reducesTargetLastMovePp);
       defender.remainingPp[lastId] = remaining - amount;

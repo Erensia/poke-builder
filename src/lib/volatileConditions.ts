@@ -55,7 +55,8 @@ function defaultDuration(volatile: VolatileCondition, random: () => number): num
     volatile === "torment" ||
     volatile === "imprison" ||
     volatile === "meanLook" ||
-    volatile === "lockOn"
+    volatile === "lockOn" ||
+    volatile === "noRetreat"
   ) {
     return PERSISTENT_UNTIL_BATTLE_END;
   }

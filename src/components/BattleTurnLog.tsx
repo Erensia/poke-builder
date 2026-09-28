@@ -24,7 +24,7 @@ import {
 } from "../lib/battleLogText";
 
 /** 액션 로그 한 줄 안에 "OO 발동!"으로 뭉뚱그리기보다 전용 문구를 따로 쓰는 volatile들 */
-const VOLATILES_WITH_DEDICATED_LOG_LINE = new Set(["drowsy", "wish", "encore", "imprison", "meanLook", "lockOn"]);
+const VOLATILES_WITH_DEDICATED_LOG_LINE = new Set(["drowsy", "wish", "encore", "imprison", "meanLook", "lockOn", "noRetreat"]);
 
 /**
  * 방어측 on-hit 특성 효과 한 줄의 "내용"만 만드는 함수들(감싸는 div·key는 호출부 책임) —
@@ -1265,6 +1265,12 @@ function ActionEffectLines({
         <div className="battle-turn-line is-muted">
           {defenderName}
           {eunNeun(defenderName)} 이제 도망칠 수 없다!
+        </div>
+      )}
+      {!action.blockedReason && action.inflictedVolatile === "noRetreat" && (
+        <div className="battle-turn-line is-muted">
+          {actorName}
+          {eunNeun(actorName)} 배수의 진을 쳐서 이제 도망칠 수 없다!
         </div>
       )}
       {!action.blockedReason && action.hit && action.inflictedVolatile === "lockOn" && (

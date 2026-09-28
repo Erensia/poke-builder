@@ -1,6 +1,7 @@
 import type { AbilityPoints } from "../types/party";
 import type { PokemonGender } from "../types/pokemon";
 import type { Move } from "../types/move";
+import type { StatusCondition } from "../types/status";
 import type { WeatherKind } from "../types/weather";
 import type { FieldKind } from "../types/field";
 import type { PokemonType } from "../types/pokemon-type";
@@ -26,6 +27,7 @@ import {
   electroBallPowerFromSpeeds,
   positiveStagesPowerValue,
   weightRatioPowerValue,
+  userHpScaledPowerValue,
   absoluteWeightPowerValue,
   WEIGHT_MOVE_FALLBACK_POWER,
   rivalryDamageMultiplier,
@@ -85,6 +87,12 @@ export interface SlotMatchupOptions {
   /** 하드프레스(트랙 M5)처럼 상대 남은 HP 비율로 위력이 정해지는 기술용. 생략하면 풀피 */
   defenderHpFraction?: number;
   defenderHasStatusCondition?: boolean;
+  /**
+   * 조건부 2배 기술용 상태이상 종류(ver.1.9) — 객기(공격측 화상·독·마비), 베놈쇼크·독침천발(방어측 독), 백귀야행(방어측 아무
+   * 상태이상, 없으면 defenderHasStatusCondition로 판정). 생략하면 상태이상 없음.
+   */
+  attackerStatus?: StatusCondition | null;
+  defenderStatus?: StatusCondition | null;
   defenderItemConsumed?: boolean;
   /**
    * 배틀 AI용 — 슬롯 원본 대신 실전 파이터의 현재 값(메가진화·변신·변환자재·트레이스·도구 소모 반영)을
@@ -187,6 +195,8 @@ export function evaluateSlotMatchup(
     defenderHpIsFull,
     defenderHpFraction = 1,
     defenderHasStatusCondition,
+    attackerStatus,
+    defenderStatus,
     defenderItemConsumed,
     attackerRuntime,
     defenderRuntime,
@@ -342,16 +352,28 @@ export function evaluateSlotMatchup(
           : WEIGHT_MOVE_FALLBACK_POWER,
     };
   }
+  // 분화·해수스파우팅(ver.1.9): 위력 = 최대 위력 × 공격측 HP 비율(생략하면 풀피)
+  if (variablePowerMove.userHpScaledPower) {
+    variablePowerMove = {
+      ...variablePowerMove,
+      power: userHpScaledPowerValue(variablePowerMove.userHpScaledPower, attackerHpFraction ?? 1),
+    };
+  }
   // 조건부 ×2(conditionalDoublePower). 매치업 페이지 정책(§3 증분 C·B-3, 사용자 지시):
   //  - user-has-no-item(애크러뱃): 지닌 도구를 알고 있으니 실제로 판정
   //  - user-stat-lowered-this-turn(분풀이)·user-move-failed-last-turn(분함의발구르기): 조건 충족을 상정(항상 ×2)
   //  - took-damage-this-turn(눈사태)·moves-after-target(보복): 배틀 문맥 필요 → 매치업에선 기본 위력
   if (variablePowerMove.power !== null) {
     const cond = variablePowerMove.conditionalDoublePower;
+    //  - 상태이상 조건(ver.1.9): 넘겨받은 attackerStatus·defenderStatus로 판정(생략하면 상태이상 없음)
     const assumeDoubled =
       cond === "user-stat-lowered-this-turn" ||
       cond === "user-move-failed-last-turn" ||
-      (cond === "user-has-no-item" && !attackerItem);
+      (cond === "user-has-no-item" && !attackerItem) ||
+      (cond === "user-status-burn-poison-paralysis" &&
+        (attackerStatus === "burn" || attackerStatus === "poison" || attackerStatus === "badly-poisoned" || attackerStatus === "paralysis")) ||
+      (cond === "target-status-poisoned" && (defenderStatus === "poison" || defenderStatus === "badly-poisoned")) ||
+      (cond === "target-has-status" && (!!defenderStatus || !!defenderHasStatusCondition));
     if (assumeDoubled) {
       variablePowerMove = { ...variablePowerMove, power: variablePowerMove.power * 2 };
     }

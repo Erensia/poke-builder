@@ -25,6 +25,7 @@ export const VOLATILE_LABELS = {
   torment: "트집",
   imprison: "봉인",
   meanLook: "도망 불가",
+  noRetreat: "배수의진",
   lockOn: "록온",
 } as const;
 

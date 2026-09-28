@@ -12,7 +12,7 @@ import { getAbilityPriorityBoost, resolveEffectiveDefenderAbility } from "@/lib/
 import { checkStatusActionBlock, inflictStatus, isImmuneToStatus } from "@/lib/statusConditions";
 import { ATTRACT_ACTION_BLOCK_CHANCE, CONFUSION_SELF_HIT_CHANCE, consumeVolatileTurn, hasVolatile } from "@/lib/volatileConditions";
 import { resolveMoveContext } from "@/lib/moveContext";
-import { WEIGHT_MOVE_FALLBACK_POWER, absoluteWeightPowerValue, computeDamage, positiveStagesPowerValue, reversalPowerFromHp, targetHpRatioPowerValue, faintedAllyPowerValue, rivalryDamageMultiplier, weightRatioPowerValue } from "@/lib/battlePower";
+import { WEIGHT_MOVE_FALLBACK_POWER, absoluteWeightPowerValue, computeDamage, positiveStagesPowerValue, reversalPowerFromHp, targetHpRatioPowerValue, userHpScaledPowerValue, faintedAllyPowerValue, rivalryDamageMultiplier, weightRatioPowerValue } from "@/lib/battlePower";
 import { applyWeatherBall } from "@/lib/weatherEffects";
 import { applyFieldPulse, getFieldPowerMultiplier, isOpponentTargetingMove, isPriorityMoveBlockedByField, isStatusBlockedByField } from "@/lib/fieldEffects";
 import { computeBattleHitChance } from "./hitChance";
@@ -186,6 +186,10 @@ export function resolvePreHitEffects(
     const otherMoveIds = Object.keys(attacker.remainingPp).filter((id) => id !== move.id);
     const allUsed = otherMoveIds.every((id) => attacker.usedMoveIds?.[id]);
     if (!allUsed) return blocked("usageCondition");
+  }
+  // 배수의진(ver.1.9): 이미 배수의진 상태면 실패(본가 규칙)
+  if (move.usageCondition === "not-no-retreat" && hasVolatile(attacker.volatile, "noRetreat")) {
+    return blocked("usageCondition");
   }
   // 토해내기: 비축 스택이 0이면 쓸 수 없다.
   if (move.spitUpPower && (attacker.stockpileCount ?? 0) === 0) {
@@ -605,6 +609,10 @@ export function resolvePreHitEffects(
   if (effectiveMove.reversalPower) {
     effectiveMove = { ...effectiveMove, power: reversalPowerFromHp(attacker.currentHp, attacker.maxHp) };
   }
+  // 분화·해수스파우팅(ver.1.9): 위력 = max(1, ⌊최대 위력 × 현재 HP ÷ 최대 HP⌋)
+  if (effectiveMove.userHpScaledPower) {
+    effectiveMove = { ...effectiveMove, power: userHpScaledPowerValue(effectiveMove.userHpScaledPower, attacker.currentHp / attacker.maxHp) };
+  }
   // 자이로볼(§3-1a): 상대가 느릴수록 강하다. 자신·상대의 실효 스피드로 위력을 정한다.
   if (effectiveMove.gyroBallPower) {
     effectiveMove = {
@@ -725,7 +733,9 @@ export function resolvePreHitEffects(
                 attacker.status.condition === "paralysis"
               : condition === "target-status-poisoned"
                 ? defender.status.condition === "poison" || defender.status.condition === "badly-poisoned"
-                : false; // user-stat-lowered-this-turn / user-move-failed-last-turn → 엔진 미추적
+                : condition === "target-has-status"
+                  ? !!defender.status.condition
+                  : false; // user-stat-lowered-this-turn / user-move-failed-last-turn → 엔진 미추적
     if (met) effectiveMove = { ...effectiveMove, power: effectiveMove.power * 2 };
   }
 
