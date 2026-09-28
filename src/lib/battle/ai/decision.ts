@@ -248,13 +248,16 @@ type RaceInputs = [killTurns: number, survivalTurns: number, firstProbability: n
  * 옵션마다 설정한다 — 평가 함수가 여러 겹이라 인자로 내리는 대신(withThreatModel과 같은 방식, 동기 실행).
  */
 let opponentIdleChance = 0;
+/** 채점 중인 옵션의 lostShift(ver.1.9 한계점 A1 — 상대 반동 턴 −1, 숨은 상대에게 먼저 치는 공격 + 선공 확률). scoreOption이 설정 */
+let lostShift = 0;
 
 function raceOnce(params: DecisionParams, party: PartyDuel | undefined, inputs: RaceInputs, myOverrides?: Record<number, number>): number {
   if (!params.partyAware || !party) return raceValue(...inputs);
   return partyRaceValue(party, inputs, chainParams(params), myOverrides);
 }
 
-function race(params: DecisionParams, party: PartyDuel | undefined, inputs: RaceInputs, myOverrides?: Record<number, number>): number {
+function race(params: DecisionParams, party: PartyDuel | undefined, raw: RaceInputs, myOverrides?: Record<number, number>): number {
+  const inputs: RaceInputs = lostShift !== 0 ? [raw[0], raw[1], raw[2], raw[3], raw[4], raw[5] + lostShift] : raw;
   // 이번 턴 공격하지 않는 행동(lost = 1)인데 상대가 기습류를 고르면 상대도 이번 턴을 날린다 → lost = 0과 섞는다
   if (opponentIdleChance > 0 && inputs[5] >= 1) {
     const idle: RaceInputs = [...inputs];
@@ -621,12 +624,13 @@ function tradeScore(option: AiOption, riskAversion: number, params: DecisionPara
 /** decision-layer §4 점수식. 데미지 없는 변화기는 extension §2-2 전용 점수식. */
 export function scoreOption(option: AiOption, riskAversion: number, params: DecisionParams = DEFAULT_DECISION_PARAMS): number {
   if (params.scoring === "trade") {
-    const previous = opponentIdleChance;
+    const previous = [opponentIdleChance, lostShift] as const;
     opponentIdleChance = option.opponentIdleChance ?? 0;
+    lostShift = option.lostShift ?? 0;
     try {
       return tradeScore(option, riskAversion, params);
     } finally {
-      opponentIdleChance = previous;
+      [opponentIdleChance, lostShift] = previous;
     }
   }
   const riskPenalty = option.riskFlag ? params.riskFlagPenaltyBase * riskAversion : 0;

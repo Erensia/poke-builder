@@ -27,6 +27,7 @@ export {
 } from "./battle/state";
 
 export { isTrappedFromSwitching, applySwitch, type ApplySwitchOutcome } from "./battle/switching";
+export { forcedLockedAction, isRecharging } from "./battle/lockedAction";
 
 export {
   runTurn,

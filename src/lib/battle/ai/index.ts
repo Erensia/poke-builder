@@ -1,5 +1,6 @@
 import { type FighterKey, type TurnAction } from "@/types/battle";
 import { STRUGGLE_MOVE, type BattleState } from "../state";
+import { forcedLockedAction } from "../lockedAction";
 import { decide, scoreOption, type DecisionParams, type ScoredOption } from "./decision";
 import { evaluateOptions, type AiOption, type EvaluateOptions } from "./evaluator";
 import { withThreatModel, type ThreatModelParams } from "./opponentMoveModel";
@@ -47,6 +48,9 @@ export function chooseAiAction(
   riskAversion: number,
   options: ChooseAiOptions = {},
 ): AiDecision {
+  // 난동·모으기 2턴째·반동 턴(ver.1.9 A1): 엔진이 정해진 행동으로 바꿔 쓰므로 고를 것이 없다
+  const forced = forcedLockedAction(state[key]);
+  if (forced) return { action: forced, scored: [] };
   const params = paramsFor(options.decisionParams);
   // 모델 토글(턴 종료 효과 등)은 평가(대면 턴 수)와 점수 계산(이어지는 대면)에 모두 걸린다
   const decision = withModelToggles(params, () => {

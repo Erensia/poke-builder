@@ -30,7 +30,9 @@ import {
   applySwitch,
   choiceLockedMoveOf,
   createBattleState,
+  forcedLockedAction,
   hasUsableMove,
+  isRecharging,
   isTrappedFromSwitching,
   runTurn,
   resumeTurn,
@@ -834,8 +836,10 @@ function BattleBoard({
               const trapped = isTrappedFromSwitching(fighter, battleState);
               // 난동(ver.1.9): 이어 쓰는 동안은 기술·교체 선택 자체가 없다 — 턴 진행 시 그 기술이 자동으로 나간다
               const rampageMoveId = fighter.volatile.active.rampage?.moveId;
+              // 반동 턴(ver.1.9 A1): 파괴광선류를 맞힌 다음 턴은 움직일 수 없다 — 기술·교체 선택 없이 턴 진행만
+              const recharging = isRecharging(fighter);
               const canSwitch =
-                benchIdx.length > 0 && !fighter.chargingMoveId && !rampageMoveId && fighter.currentHp > 0 && !trapped;
+                benchIdx.length > 0 && !fighter.chargingMoveId && !rampageMoveId && !recharging && fighter.currentHp > 0 && !trapped;
               const mode = canSwitch ? inputMode[side] : "move";
 
               return (
@@ -867,6 +871,7 @@ function BattleBoard({
                       메가진화를 안 썼을 때만. 켜고 기술을 고르면 그 턴 행동 전에 메가진화. */}
                   {mode !== "switch" &&
                     !rampageMoveId &&
+                    !recharging &&
                     fighter.megaStone &&
                     !battleSide(side)?.megaUsed &&
                     !fighter.hasMegaEvolved && (
@@ -916,6 +921,11 @@ function BattleBoard({
                     <div className="battle-struggle-notice">
                       {pokemon.name}
                       {eunNeun(pokemon.name)} {getMove(rampageMoveId)?.name ?? "기술"} 사용 중! (끝날 때까지 자동으로 계속 사용)
+                    </div>
+                  ) : recharging ? (
+                    <div className="battle-struggle-notice">
+                      {pokemon.name}
+                      {eunNeun(pokemon.name)} 반동으로 움직일 수 없다! (턴 진행 시 자동으로 쉼)
                     </div>
                   ) : fighter.chargingMoveId ? (
                     <div className="battle-struggle-notice">
@@ -1027,8 +1037,7 @@ function BattleBoard({
               side !== aiSide &&
               selected[side]?.kind !== "switch" &&
               !isStruggling(side) &&
-              battleState[side].chargingMoveId === undefined &&
-              !battleState[side].volatile.active.rampage &&
+              !forcedLockedAction(battleState[side]) &&
               !selected[side],
           )}
           onClick={playTurn}
@@ -1429,10 +1438,10 @@ export function BattleLogPage() {
     // PP 남은 기술이 없거나(4개 다 0), 구애류 도구로 잠긴 기술의 PP가 0이면 선택 없이 발버둥.
     const struggling = { a: isStruggling("a"), b: isStruggling("b") };
     // 공중날기 등 차지 기술 2턴째는 준비해둔 기술이 선택 여부와 무관하게 자동으로 나간다.
-    // 난동(ver.1.9)도 차지 2턴째와 같이 선택 없이 자동 — 엔진이 그 기술로 바꿔 쓴다(forcedRampageAction)
+    // 난동·반동 턴(ver.1.9)도 차지 2턴째와 같이 선택 없이 자동 — 엔진이 정해진 행동으로 바꿔 쓴다(forcedLockedAction)
     const charging = {
-      a: battleState.a.chargingMoveId !== undefined || !!battleState.a.volatile.active.rampage,
-      b: battleState.b.chargingMoveId !== undefined || !!battleState.b.volatile.active.rampage,
+      a: !!forcedLockedAction(battleState.a),
+      b: !!forcedLockedAction(battleState.b),
     };
     const isSwitch = (side: Side) => selected[side]?.kind === "switch";
     // 교체를 고른 쪽은 발버둥/차지와 무관하게 교체가 우선. 그 외엔 선택(또는 발버둥/차지)이 있어야 진행.
@@ -1475,8 +1484,8 @@ export function BattleLogPage() {
       const mega = megaDeclared[side] || undefined; // 메가진화는 기술 행동에만 실린다
       if (struggling[side]) return { kind: "move", move: STRUGGLE_MOVE, mega };
       if (charging[side]) {
-        const m = getMove(battleState[side].chargingMoveId ?? battleState[side].volatile.active.rampage?.moveId ?? "");
-        return m ? { kind: "move", move: m, mega } : null;
+        const forced = forcedLockedAction(battleState[side]);
+        return forced?.kind === "move" ? { ...forced, mega } : null;
       }
       const m = sel?.kind === "move" ? getMove(sel.moveId) : undefined;
       if (!m) return null;
