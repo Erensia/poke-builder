@@ -996,6 +996,7 @@ AI 대 랜덤 행동 봇: trade 기준 170승 30패(85%). 턴당 판단 평균 5
 | `npm run sim:ai -- ai [판수]` | AI 대 무작위 봇·AI 대 AI 승률, 턴당 판단 시간, NaN 점수 수 |
 | `npm run sim:ai -- greedy [판수] [파라미터 JSON]` | AI 대 그리디 봇(파티 좌우 교대). 파라미터 튜닝의 기준 지표 |
 | `npm run sim:ai -- diag [판수] [파라미터 JSON]` | AI가 교체를 고른 순간의 옵션별 점수·c·d 덤프 |
+| `npm run bench -- toggle '<끔 JSON>'` · `-- compare <이전 체크아웃>` | 표준 벤치 5종(그리디 800·STATUS=1 그리디 400 각 켬/끔, STATUS=1 h2h 200)을 시드 구간 조각(`SEED_FROM`, 기본 50)으로 나눠 코어 수만큼 병렬 실행 후 합산(ver.1.9). `--root`로 다른 체크아웃(`SIM_ROOT`) |
 | `npm run sim:ai -- h2h [판수] [파라미터 A] [파라미터 B]` | AI(A) 대 AI(B, 생략 시 기본값), 파티 좌우 교대. 상대 모델처럼 그리디 봇이 편향되는 변경의 비교용 |
 
 파라미터 JSON 예: `'{"scoring":"spec"}'`, `'{"tieThreshold":0.03}'`, `'{"pivotAware":false}'` (PowerShell은 `'{\"scoring\":\"spec\"}'`).

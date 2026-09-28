@@ -19,6 +19,9 @@
  * 환경변수 PROTECT=1: 방어류를 배울 수 있으면 4번째 기술을 방어류로 바꾼다. DIAG=protect면 방어류를 고른 순간을 덤프.
  * 환경변수 STATUS=1: AI가 점수 매기는 변화기를 배울 수 있으면 기술 하나를 그걸로 바꾼다(변화기 판단 검증용).
  *     diag 모드에 DIAG=status를 주면 그 변화기를 고른 순간을 덤프한다.
+ * 환경변수 SEED_FROM=<n>(greedy·h2h·select): 시드 n부터 [판 수]개만 돈다(기본 1) — 벤치를 조각내 병렬로 돌린 뒤 합산(scripts/bench.mjs).
+ *     각 판은 시드로만 정해지므로 조각의 합은 한 번에 돌린 결과와 같다.
+ * 환경변수 SIM_ROOT=<체크아웃 경로>: 이 스크립트 대신 그 체크아웃의 src/를 불러온다(다른 커밋을 이 하네스로 벤치).
  *   h2h에 OPP_ROOT=<다른 체크아웃 경로>를 주면 B 쪽 AI를 그 코드에서 불러온다(예: ver.1.7 끝 대비 — 엔진·데이터는 이 체크아웃).
  *     (PowerShell에서는 JSON 따옴표를 '{\"scoring\":\"spec\"}' 처럼 이스케이프)
  */
@@ -29,7 +32,9 @@ import { fileURLToPath } from "node:url";
 const mode = process.argv[2] ?? "regress";
 const battles = Number(process.argv[3] ?? 200);
 const decisionParams = process.argv[4] ? JSON.parse(process.argv[4]) : undefined;
-const root = fileURLToPath(new URL("..", import.meta.url));
+const root = process.env.SIM_ROOT ?? fileURLToPath(new URL("..", import.meta.url));
+const seedFrom = Number(process.env.SEED_FROM ?? 1);
+const seedTo = seedFrom + battles - 1;
 // hmr: false — 병렬 실행 시 HMR 웹소켓 포트(24678) 충돌로 프로세스가 죽는 걸 막는다.
 const server = await createServer({ root, server: { middlewareMode: true, hmr: false }, appType: "custom", logLevel: "error" });
 const opponentParams = process.argv[5] ? JSON.parse(process.argv[5]) : undefined;
@@ -297,7 +302,7 @@ try {
       const r = runBattle(seed, { [aiSide]: aiPolicy(risk), [gSide]: greedyPolicy }, { [aiSide]: aiForced(risk), [gSide]: firstLiving });
       return r.winner === aiSide ? "aiWins" : r.winner === gSide ? "greedyWins" : "other";
     };
-    for (let s = 1; s <= battles; s++) {
+    for (let s = seedFrom; s <= seedTo; s++) {
       const risk = mulberry32(s)();
       res[outcome(s, "a", risk)]++;
       res[outcome(s, "b", risk)]++;
@@ -312,7 +317,7 @@ try {
       remap(which.chooseAiAction(st, key, risk, { decisionParams: params }).action);
     const forced = (params, risk, which = ai) => (st, key) => which.chooseAiForcedSwitch(st, key, risk, params) ?? living(st, key)[0];
     const res = { aWins: 0, bWins: 0, other: 0 };
-    for (let s = 1; s <= battles; s++) {
+    for (let s = seedFrom; s <= seedTo; s++) {
       const risk = mulberry32(s)();
       for (const aSide of ["a", "b"]) {
         const bSide = aSide === "a" ? "b" : "a";
@@ -339,7 +344,7 @@ try {
     const res = { aiSelectWins: 0, baselineWins: 0, other: 0 };
     let selectMs = 0;
     let selects = 0;
-    for (let s = 1; s <= battles; s++) {
+    for (let s = seedFrom; s <= seedTo; s++) {
       const partyRng = mulberry32(s ^ 0x51ec7);
       const six = { a: make6(partyRng), b: make6(partyRng) };
       const full = state.createBattleState(six);
