@@ -2001,6 +2001,36 @@ try {
       `꿰매기 ${trappedOn}/${trappedOff} 고스트 ${!!ghost.trapPartyModel} 배수의진 ${selfOn}/${selfOff}`,
     );
   }
+  // ── ver.1.9 6-4 탈피·수확: 대면 턴 수에 기대값(탈피 = 상태이상 남는 비율, 수확 = 절반 이하 구간 열매 반복 회복) ──
+  {
+    const tr = await server.ssrLoadModule("/src/lib/battle/ai/turnRates.ts");
+    const tank = (ability, item = null) => mon("잠만보", ["막치기"], ability, item, pts({ hp: 32, def: 32 }));
+    const both = (build) => {
+      const on = build();
+      const off = tr.withChanceEffectsModel(false, build);
+      return [on, off];
+    };
+    // 독 걸린 탈피 상대: 지속 피해가 줄어 내 처치 턴↑
+    const [shedOn, shedOff] = both(() => {
+      const b = battle([mon("한카리아스", ["막치기"])], [tank("탈피")]);
+      b.b.status = { condition: "poison", turnsElapsed: 0 };
+      return opt(ev.evaluateOptions(b, "a"), "막치기").hitsToKill.expected;
+    });
+    // 마비 걸린 탈피 상대: 행동불능이 줄어 내가 버티는 턴↓
+    const [parOn, parOff] = both(() => {
+      const b = battle([mon("한카리아스", ["막치기"], null, null, pts({ hp: 32, def: 32 }))], [mon("잠만보", ["막치기"], "탈피")]);
+      b.b.status = { condition: "paralysis", turnsElapsed: 0 };
+      return opt(ev.evaluateOptions(b, "a"), "막치기").hitsToBeKilled.expected;
+    });
+    // 자뭉열매를 든 수확 상대: 절반 이하 구간에 반복 회복 → 내 처치 턴↑, 수확 없는 같은 상대는 무변화
+    const [harvestOn, harvestOff] = both(() => opt(ev.evaluateOptions(battle([mon("한카리아스", ["막치기"])], [tank("수확", "자뭉열매")]), "a"), "막치기").hitsToKill.expected);
+    const [plainOn, plainOff] = both(() => opt(ev.evaluateOptions(battle([mon("한카리아스", ["막치기"])], [tank(null, "자뭉열매")]), "a"), "막치기").hitsToKill.expected);
+    check(
+      "1.9 6-4: 탈피(독 상대 처치 턴↑·마비 상대에게 버티는 턴↓)·수확(자뭉열매 처치 턴↑, 수확 없으면 무변화)",
+      shedOn > shedOff && parOn < parOff && harvestOn > harvestOff && plainOn === plainOff,
+      `탈피 c ${shedOff.toFixed(2)}→${shedOn.toFixed(2)} 마비 d ${parOff.toFixed(2)}→${parOn.toFixed(2)} 수확 c ${harvestOff.toFixed(2)}→${harvestOn.toFixed(2)}`,
+    );
+  }
   // ── 매치업 난수별 데미지(ver.1.7 트랙 H): 기존 격파 판정과 같은 관계식인지 대조 ──
   {
     const bp = await server.ssrLoadModule("/src/lib/battlePower.ts");

@@ -6,6 +6,7 @@ import {
 import { computeDamage } from "@/lib/battlePower";
 import { ATTRACT_ACTION_BLOCK_CHANCE, CONFUSION_SELF_HIT_CHANCE, hasVolatile } from "@/lib/volatileConditions";
 import { getHpThresholdBerryHeal } from "@/lib/itemEffects";
+import { getItem } from "@/lib/data";
 import { computeFieldEndOfTurnHeal } from "@/lib/fieldEffects";
 import {
   CONFUSION_SELF_HIT_MOVE,
@@ -51,6 +52,60 @@ export function withAccumulationSteps<T>(steps: number, fn: () => T): T {
 
 export function currentAccumulationSteps(): number {
   return accumulationSteps;
+}
+
+/**
+ * 확률 턴 종료 효과(ver.1.9 6-4): 탈피(매 턴 확률로 상태이상 치료)·수확(매 턴 확률로 먹은 열매 복구)을 대면 턴 수에 기대값으로
+ * 센다. 비교용 토글(DecisionParams.chanceEffectsAware) — 턴 종료 효과 토글(endOfTurnAware)이 켜져 있을 때만 쓴다.
+ */
+let chanceEffectsAware = true;
+
+export function withChanceEffectsModel<T>(enabled: boolean, fn: () => T): T {
+  const previous = chanceEffectsAware;
+  chanceEffectsAware = enabled;
+  try {
+    return fn();
+  } finally {
+    chanceEffectsAware = previous;
+  }
+}
+
+/** 탈피 확률(0~1) — 상태이상이 있고 확률 모델이 켜져 있을 때만 */
+function shedSkinChance(fighter: BattleFighterState): number {
+  if (!endOfTurnAware || !chanceEffectsAware || !fighter.status.condition) return 0;
+  return (abilityOf(fighter)?.curesOwnStatusChance ?? 0) / 100;
+}
+
+/**
+ * 탈피: 매 턴 끝(지속 데미지 뒤) q 확률로 상태이상이 풀릴 때, turns 턴 동안 상태이상이 남아 있는 턴의 기대 비율
+ * (t번째 턴은 앞선 t−1번의 치료를 모두 피해야 함: Σ (1−q)^(t−1) / turns).
+ */
+function statusPersistShare(q: number, turns: number): number {
+  if (q <= 0) return 1;
+  if (!Number.isFinite(turns) || turns <= 0) return turns <= 0 ? 1 : 0;
+  return (1 - (1 - q) ** turns) / (q * turns);
+}
+
+/** 탈피가 있는 잠듦·얼음: 원래 b턴 막힐 것을 매 턴 끝 q 확률 치료로 줄인 기대 턴 수 */
+function shedBlockedTurns(fighter: BattleFighterState): number {
+  const b = blockedTurns(fighter);
+  const q = shedSkinChance(fighter);
+  return q > 0 && b > 0 ? (1 - (1 - q) ** b) / q : b;
+}
+
+/**
+ * 수확(ver.1.9 6-4): HP 절반 이하에서 먹는 회복 열매(자뭉·오랭)를 먹은 뒤 매 턴 끝 확률로 다시 지니고, 절반 이하라 곧 다시 먹는다
+ * — 절반 이하 구간의 매 턴 기대 회복(HP 절대량). 쾌청이면 sunChance. 긴장감 상대면 없음.
+ */
+function harvestHealPerTurn(state: BattleState, fighter: BattleFighterState, opponent: BattleFighterState | undefined): number {
+  if (!endOfTurnAware || !chanceEffectsAware) return 0;
+  const harvest = abilityOf(fighter)?.restoresBerryEndOfTurn;
+  if (!harvest || (opponent && abilityOf(opponent)?.preventsOpponentBerries)) return 0;
+  const berryId = fighter.itemConsumed || !fighter.currentItemId ? fighter.consumedBerryId : fighter.currentItemId;
+  const item = berryId ? getItem(berryId) : undefined;
+  if (!item?.healsBelowHalfHpDenominator && !item?.healsBelowHalfHpFlat) return 0;
+  const chance = (activeWeather(state) === "쾌청" ? harvest.sunChance : harvest.chance) / 100;
+  return chance * getHpThresholdBerryHeal(item, 1, fighter.maxHp, false, !!abilityOf(fighter)?.doublesBerryEffect);
 }
 
 export function withEndOfTurnModel<T>(enabled: boolean, fn: () => T): T {
@@ -216,6 +271,17 @@ export function turnsToKo(
   const targetConfusion = confusionTurns(target);
   const selfHit = targetConfusion > 0 ? CONFUSION_SELF_HIT_CHANCE * confusionSelfHitFraction(target) * target.maxHp : 0;
   let base = attackRate * actionFactor(attacker) + residualDamageFraction(target, hp, attacker);
+  // 탈피(ver.1.9 6-4): 대상의 상태이상 지속 피해·공격측의 마비 행동불능은 대면 동안 상태이상이 남아 있는 기대 비율만큼만
+  const targetShed = shedSkinChance(target);
+  const attackerShed = attacker.status.condition === "paralysis" ? shedSkinChance(attacker) : 0;
+  if ((targetShed > 0 || attackerShed > 0) && base > 0) {
+    const estimate = 1 / base;
+    if (targetShed > 0) base -= statusResidualFraction(target, hp) * (1 - statusPersistShare(targetShed, estimate));
+    if (attackerShed > 0) {
+      const share = statusPersistShare(attackerShed, estimate);
+      base += attackRate * ((1 - PARALYSIS_ACTION_FAIL_CHANCE * share) / (1 - PARALYSIS_ACTION_FAIL_CHANCE) - 1) * actionFactor(attacker);
+    }
+  }
   let berryHp = 0;
   if (endOfTurnAware && state && hp > 0) {
     // 남은 턴이 있는 효과는 대면이 그보다 길면 그 비율만큼만 섞는다(전부 넣은 속도로 대면 길이를 어림)
@@ -231,6 +297,12 @@ export function turnsToKo(
       base += (scaled(t.amount) / hp) * share;
     }
     berryHp = thresholdBerryHp(state, target, attacker);
+    // 수확: 절반 이하 구간(열매를 지녔으면 대면의 절반쯤, 이미 먹었고 절반 이하면 남은 대면 전체) 동안 매 턴 기대 회복
+    const harvest = harvestHealPerTurn(state, target, attacker);
+    if (harvest > 0) {
+      const belowHalfShare = !target.itemConsumed && target.currentItemId ? 0.5 : hp <= target.maxHp / 2 ? 1 : 0.5;
+      base -= (harvest * belowHalfShare) / hp;
+    }
   }
   if (base <= 0) return Infinity;
   // 자뭉열매·오랭열매: 버티는 HP가 그만큼 늘어난다
@@ -251,5 +323,5 @@ export function turnsToKo(
   // 혼란(공격측): 혼란인 동안 행동의 1/3을 자멸로 날린다 — 남은 혼란 턴 t 안에서 잃는 턴 = min(t/3, 필요 턴/2).
   const attackerConfusion = confusionTurns(attacker);
   if (attackerConfusion > 0) turns += Math.min(attackerConfusion * CONFUSION_SELF_HIT_CHANCE, turns / 2);
-  return Math.max(1, blockedTurns(attacker) + turns);
+  return Math.max(1, shedBlockedTurns(attacker) + turns);
 }
