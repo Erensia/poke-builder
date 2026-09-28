@@ -384,3 +384,13 @@
     max-width: 320px;
   }
 }
+
+/* ver.1.9 — 상태이상 가정(선택지 7개라 줄바꿈 허용)·HP 슬라이더 */
+.matchup-status-row {
+  flex-wrap: wrap;
+}
+
+.matchup-hp-slider {
+  width: 100%;
+  accent-color: var(--violet);
+}
