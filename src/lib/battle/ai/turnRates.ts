@@ -359,3 +359,14 @@ export function turnsToKo(
   if (attackerConfusion > 0) turns += Math.min(attackerConfusion * CONFUSION_SELF_HIT_CHANCE, turns / 2);
   return Math.max(1, shedBlockedTurns(attacker) + turns);
 }
+
+/**
+ * 대면 턴 수에 자기 HP 변화를 섞는다(ver.1.9 한계점 A2): turns = 상대 공격 등으로 fighter가 쓰러지는 기대 턴 수, selfRate = fighter가
+ * 매 턴 자기 공격으로 잃는(+)·얻는(−) HP(최대 HP 대비, MoveHitEstimate.selfHpRate). 턴당 손실 비율을 더해 다시 턴 수로.
+ */
+export function withSelfHpChange(turns: number, selfRate: number | undefined, fighter: BattleFighterState, hp = fighter.currentHp): number {
+  if (!selfRate || hp <= 0 || turns <= 0) return turns;
+  const perTurn = (Number.isFinite(turns) ? 1 / turns : 0) + (selfRate * fighter.maxHp) / hp;
+  return perTurn > 0 ? Math.max(1, 1 / perTurn) : Infinity;
+}
+

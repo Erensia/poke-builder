@@ -31,6 +31,8 @@ export interface OpponentThreat {
   expectedRate: number;
   /** 기술별 사용 확률(의미 있는 변화기 + 공격기, 합 ≤ 1) — 방어류 시뮬레이션에서 상대 행동을 섞을 때 쓴다(§4-4) */
   moveWeights: { move: Move; weight: number }[];
+  /** 상대가 자기 공격으로 매 턴 잃는(+)·얻는(−) HP 기대값(상대 최대 HP 대비, 사용 확률 가중 — ver.1.9 한계점 A2) */
+  selfHpRate: number;
 }
 
 /** 상대가 지금 고를 수 있는 기술(남은 PP > 0) */
@@ -476,7 +478,11 @@ export function evaluateOpponentThreat(ctx: ThreatContext): OpponentThreat {
     }
   }
 
+  const selfHpRate =
+    totalShare > 0 ? attacks.reduce((sum, a, i) => sum + (shares[i] / totalShare) * remainingWeight * (a.estimate.selfHpRate ?? 0), 0) : 0;
+
   return {
+    selfHpRate,
     hitsToBeKilled: {
       expected: expectedTurns,
       worstCase: best?.estimate.worstCase ?? { count: 3, certainty: "random", probability: 0 },

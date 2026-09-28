@@ -2056,6 +2056,32 @@ try {
     const chosen = dec.decide([low, high], 0.5).chosen;
     check("1.9 A4: 하드 오버라이드가 여럿이면 점수 최고", both && chosen === high, `override ${both} 선택 ${chosen === high ? "뒤(높은 점수)" : "앞"}`);
   }
+  // ── ver.1.9 한계점 A2: 공격의 자기 HP 변화 — 반동·생명의구슬·접촉 페널티는 내가 버티는 턴↓, 흡수는↑(해감액이면↓), 상대 반동은 내 처치 턴↓ ──
+  {
+    const tank = (moves, ability = null, item = null) => mon("잠만보", moves, ability, item, pts({ hp: 32, def: 32, spd: 32 }));
+    const d = (st, moveId) => opt(ev.evaluateOptions(st, "a"), moveId).hitsToBeKilled.expected;
+    const c = (st, moveId) => opt(ev.evaluateOptions(st, "a"), moveId).hitsToKill.expected;
+    const recoil = battle([mon("찌르호크", ["브레이브버드", "막치기"])], [tank(["막치기"])]);
+    const recoilLower = d(recoil, "브레이브버드") < d(recoil, "막치기");
+    const orb = d(battle([mon("찌르호크", ["막치기"], null, "생명의구슬")], [tank(["막치기"])]), "막치기");
+    const noOrb = d(battle([mon("찌르호크", ["막치기"])], [tank(["막치기"])]), "막치기");
+    const sp = () => mon("라플레시아", ["기가드레인", "에너지볼"], null, null, pts({ spa: 32, hp: 32 }));
+    const drain = battle([sp()], [tank(["막치기"])]);
+    const ooze = battle([sp()], [tank(["막치기"], "해감액")]);
+    const drainUp = d(drain, "기가드레인") > d(drain, "에너지볼");
+    const oozeDown = d(ooze, "기가드레인") < d(ooze, "에너지볼");
+    const pika = () => mon("피카츄", ["막치기", "10만볼트"], null, null, pts({ spa: 32, atk: 32 }));
+    const helmet = battle([pika()], [tank(["막치기"], null, "울퉁불퉁멧")]);
+    const plain = battle([pika()], [tank(["막치기"])]);
+    const helmetDown = d(helmet, "막치기") < d(helmet, "10만볼트") && d(plain, "막치기") === d(plain, "10만볼트");
+    const oppRecoil = c(battle([mon("한카리아스", ["막치기"])], [mon("찌르호크", ["브레이브버드"])]), "막치기");
+    const oppPlain = c(battle([mon("한카리아스", ["막치기"])], [mon("찌르호크", ["막치기"])]), "막치기");
+    check(
+      "1.9 A2: 반동·생명의구슬·울퉁불퉁멧은 버티는 턴↓, 흡수는↑(해감액이면↓), 상대 반동은 내 처치 턴↓",
+      recoilLower && orb < noOrb && drainUp && oozeDown && helmetDown && oppRecoil < oppPlain,
+      `반동 ${recoilLower} 구슬 ${noOrb.toFixed(2)}→${orb.toFixed(2)} 흡수 ${drainUp} 해감액 ${oozeDown} 멧 ${helmetDown} 상대 반동 c ${oppPlain.toFixed(2)}→${oppRecoil.toFixed(2)}`,
+    );
+  }
   // ── ver.1.9 난동(역린·꽃잎댄스·난동부리기·대격분·소란피기): 고정 턴·PP 첫 턴만·끝나면 혼란·끊기면 혼란 없음·소란 중 잠듦 불가 ──
   {
     const rt = await server.ssrLoadModule("/src/lib/battle/runTurn.ts");

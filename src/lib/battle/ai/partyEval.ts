@@ -154,7 +154,7 @@ function entryFraction(state: BattleState, fighter: BattleFighterState, side: Ba
 function computePair(state: BattleState, key: FighterKey, me: BattleFighterState, opponent: BattleFighterState): PartyPair {
   const mySide = sideOf(state, key);
   const oppSide = sideOf(state, opponentKey(key));
-  let best: { move: NonNullable<ReturnType<typeof usableMoves>[number]>; expected: number } | undefined;
+  let best: { move: NonNullable<ReturnType<typeof usableMoves>[number]>; expected: number; selfHpRate: number } | undefined;
   for (const move of usableMoves(me)) {
     if (isOneShotMove(move) || isUsageBlocked(state, me, move, opponent)) continue;
     const estimate = estimateMoveHits(
@@ -162,7 +162,7 @@ function computePair(state: BattleState, key: FighterKey, me: BattleFighterState
       move,
     );
     if (!estimate || !Number.isFinite(estimate.expected) || estimate.expected <= 0) continue;
-    if (!best || estimate.expected < best.expected) best = { move, expected: estimate.expected };
+    if (!best || estimate.expected < best.expected) best = { move, expected: estimate.expected, selfHpRate: estimate.selfHpRate ?? 0 };
   }
   const probe = evaluateOpponentThreat({ state, opponent, target: me, targetSide: mySide, opponentMovesSecond: false, targetHp: me.maxHp });
   const speed = best ? firstProbability(state, me, best.move, opponent, probe.bestMove).probability : 0;
@@ -172,9 +172,10 @@ function computePair(state: BattleState, key: FighterKey, me: BattleFighterState
       : probe;
   // 위협 환산 c 쪽(ver.1.8 한계점 정리 ③) — 상대 회복기·벽 등이 내 공격 효율을 깎는 몫
   const drag = best ? opponentStatusDrag(state, opponent, me, mySide, best.expected) : { rateMult: 1, heal: 0 };
+  // 자기 공격의 HP 변화(ver.1.9 한계점 A2): 상대 반동·흡수는 내 공격 속도에, 내 반동·흡수는 상대 공격 속도에 더한다(최대 HP 대비)
   return {
-    myRate: best ? Math.max(0, (1 / best.expected) * drag.rateMult - drag.heal) : 0,
-    oppRate: threat.expectedRate,
+    myRate: best ? Math.max(0, (1 / best.expected) * drag.rateMult - drag.heal + threat.selfHpRate) : 0,
+    oppRate: Math.max(0, threat.expectedRate + (best?.selfHpRate ?? 0)),
     firstProbability: speed,
     me,
     opponent,

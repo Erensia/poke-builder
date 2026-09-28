@@ -89,7 +89,8 @@ await Promise.all(
   }),
 );
 
-for (const k of kinds) {
+// 판 수 0으로 뺀 종류(--greedy 0 등)는 결과가 없다
+for (const k of kinds.filter((kind) => kind.size > 0)) {
   const merged = results.get(k.label).reduce(merge);
   console.log(JSON.stringify({ bench: k.label, ...merged }));
 }

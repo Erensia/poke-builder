@@ -5,14 +5,15 @@ import { getEffectiveForm } from "@/lib/pokemonForm";
 import { resolveEffectiveDefenderAbility } from "@/lib/abilityModifiers";
 import { evaluateSlotMatchup, type RuntimeCombatant, type SlotMatchupOptions } from "@/lib/matchupEvaluator";
 import { critChance } from "@/lib/accuracyCrit";
-import { getItemCritStageBonus } from "@/lib/itemEffects";
+import { getDrainHealMultiplier, getItemCritStageBonus } from "@/lib/itemEffects";
+import { hitTriggerMatchesMove } from "@/lib/abilityHitTriggers";
 import { type Ability } from "@/types/ability";
 import { type Item } from "@/types/item";
 import { resolveMoveContext } from "@/lib/moveContext";
 import { isOpponentTargetingMove, isPriorityMoveBlockedByField } from "@/lib/fieldEffects";
 import { computeStatusAttackMultiplier, ignoresBurnAttackPenalty } from "@/lib/statusConditions";
 import { faintedAllyPowerValue, supremeOverlordMultiplier } from "@/lib/battlePower";
-import { abilityOf, activeWeather, isFainted, type BattleFighterState, type BattleSide, type BattleState } from "../state";
+import { abilityOf, activeWeather, hasSheerForceSecondaryEffect, isFainted, type BattleFighterState, type BattleSide, type BattleState } from "../state";
 import { computeBattleHitChance } from "../hitChance";
 import { computeTurnOrderPriority, effectiveHeldItem } from "../turnOrderInputs";
 import { isGrounded } from "../grounding";
@@ -29,6 +30,11 @@ export interface MoveHitEstimate extends HitsEstimate {
   typeEffectiveness: number;
   /** 한 번 쓸 때 기대 데미지(방어측 최대 HP 대비, 명중률 포함) — 현재 HP와 무관한 절대량(대타 계산용) */
   damageFraction: number;
+  /**
+   * 한 번 쓸 때 공격측 자신의 HP 변화 기대값(공격측 최대 HP 대비, + 손실 / − 회복) — 반동기·생명의구슬·철제광선·무릎차기 빗나감·
+   * 접촉 페널티(울퉁불퉁멧·까칠한피부류), 흡수기·조개껍질방울(ver.1.9 한계점 A2). 없으면 0.
+   */
+  selfHpRate?: number;
 }
 
 export interface MoveHitContext {
@@ -151,6 +157,64 @@ function critChanceOf(
 }
 
 export function estimateMoveHits(ctx: MoveHitContext, baseMove: Move): MoveHitEstimate | null {
+  const estimate = estimateMoveHitsCore(ctx, baseMove);
+  if (estimate) estimate.selfHpRate = selfHpRateOf(ctx, baseMove, estimate);
+  return estimate;
+}
+
+/** 한 번 쓸 때의 타격 수(다단히트 기대 타수, 스킬링크류는 최대) */
+function hitsPerUse(move: Move, attackerAbility: Ability | undefined): number {
+  if (move.multiHitPowers) return move.multiHitPowers.length;
+  if (move.minHits !== undefined && move.maxHits !== undefined) {
+    return attackerAbility?.multiHitAlwaysMax ? move.maxHits : expectedMultiHitCount(move.minHits, move.maxHits);
+  }
+  return 1;
+}
+
+/**
+ * 공격 한 번에 공격측이 잃는(+)·얻는(−) HP의 기대값(공격측 최대 HP 대비) — 엔진 hitResolution·preHitEffects와 같은 규칙
+ * (ver.1.9 한계점 A2). 반동·흡수·조개껍질방울은 실제로 깎은 HP 기준이라, 대면 전체로 보면 상대 HP를 처치 턴 수에 나눈 값으로
+ * 자른다(오버킬 제외). 대타가 맞는 경우·해감액 외 드문 상호작용은 보지 않는다.
+ */
+function selfHpRateOf(ctx: MoveHitContext, move: Move, estimate: MoveHitEstimate): number {
+  const { state, attacker, defender } = ctx;
+  if (attacker.maxHp <= 0 || estimate.typeEffectiveness === 0 || estimate.accuracy <= 0) return 0;
+  const attackerAbility = abilityOf(attacker);
+  const defenderAbility = resolveEffectiveDefenderAbility(attackerAbility, abilityOf(defender));
+  const attackerItem = effectiveHeldItem(attacker, state);
+  const defenderItem = effectiveHeldItem(defender, state);
+  const magicGuard = !!attackerAbility?.negatesIndirectDamage;
+  const hit = estimate.accuracy;
+  const defenderHp = ctx.defenderHp ?? defender.currentHp;
+  const perUse = Number.isFinite(estimate.expected) ? defenderHp / Math.max(1, estimate.expected) : defenderHp;
+  const dealt = Math.min(estimate.damageFraction * defender.maxHp, perUse);
+  const maxHp = attacker.maxHp;
+  let loss = 0;
+  if (move.recoilFraction !== undefined && !magicGuard) loss += dealt * move.recoilFraction;
+  // 철제광선(쓰는 순간)·무릎차기류(빗나가면) — 엔진은 매직가드와 무관하게 적용
+  if (move.selfDamageFractionOnUse !== undefined) loss += maxHp * move.selfDamageFractionOnUse;
+  if (move.crashFraction !== undefined) loss += (1 - hit) * maxHp * move.crashFraction;
+  const lifeOrb = attackerItem?.selfRecoilFractionOfMaxHp;
+  const sheerForce = !!attackerAbility?.tradesSecondaryEffectForPower && hasSheerForceSecondaryEffect(move);
+  if (lifeOrb && !magicGuard && !sheerForce) loss += hit * maxHp * lifeOrb;
+  if ((move.makesContact ?? false) && !magicGuard) {
+    let perHit = 0;
+    if (defenderItem?.contactAttackerDamageDenominator) perHit += maxHp / defenderItem.contactAttackerDamageDenominator;
+    const trigger = defenderAbility?.hitTrigger;
+    if (trigger?.damagesAttackerFraction && hitTriggerMatchesMove(trigger, move)) {
+      perHit += maxHp * trigger.damagesAttackerFraction * (trigger.chance !== undefined ? trigger.chance / 100 : 1);
+    }
+    loss += hit * hitsPerUse(move, attackerAbility) * perHit;
+  }
+  if (move.drainFraction !== undefined) {
+    const drained = dealt * move.drainFraction * getDrainHealMultiplier(attackerItem);
+    loss += defenderAbility?.reverseDrainHealsToDamage ? drained : -drained;
+  }
+  if (attackerItem?.damageDealtHealDenominator) loss -= dealt / attackerItem.damageDealtHealDenominator;
+  return loss / maxHp;
+}
+
+function estimateMoveHitsCore(ctx: MoveHitContext, baseMove: Move): MoveHitEstimate | null {
   const { state, attacker, defender, defenderSide, attackerMovesSecond } = ctx;
   if (baseMove.category === "status" || baseMove.category === null) return null;
   const move = withBeatUpPower(state, attacker, baseMove);
