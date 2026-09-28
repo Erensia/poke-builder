@@ -121,6 +121,8 @@ export interface DecisionParams {
   critAware: boolean;
   /** 교체 봉쇄 판단(ver.1.9 6-3) — 그림자꿰매기 가두기 가치·배수의진 자기 봉쇄 비용. false면 이전 동작(비교용), withTrapModel(index.ts) */
   trapMoveAware: boolean;
+  /** 확률 턴 종료 효과(ver.1.9 6-4) — 탈피·수확을 대면 턴 수에 기대값으로. false면 이전 동작(비교용), withChanceEffectsModel */
+  chanceEffectsAware: boolean;
 }
 
 /**
@@ -171,6 +173,7 @@ export const DEFAULT_DECISION_PARAMS: DecisionParams = {
   endOfTurnAware: true,
   critAware: true,
   trapMoveAware: true,
+  chanceEffectsAware: true,
 };
 
 /** 기본 파라미터 위에 decisionParams(시뮬레이터 튜닝용)를 덮어쓴 최종 파라미터 */
