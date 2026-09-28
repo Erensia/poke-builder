@@ -104,9 +104,10 @@ export function resolvePreHitEffects(
 
   // PP 소모는 행동 여부와 무관하게 발생(단, 차지 기술 2턴째는 위에서 이미 스킵 처리)
   let leppaRestoredPpItemName: string | undefined;
-  // 난동(ver.1.9): 이어 쓰는 턴은 PP를 쓰지 않는다(첫 턴만)
+  // 난동(ver.1.9): 이어 쓰는 턴은 PP를 쓰지 않는다(첫 턴만). 반동 턴(ver.1.9 A1)도 움직이지 않으니 PP 없음
   const continuingRampage = attacker.volatile.active.rampage?.moveId === move.id;
-  if (!releasingCharge && !continuingRampage && attacker.remainingPp[move.id] !== undefined) {
+  const recharging = hasVolatile(attacker.volatile, "recharge");
+  if (!releasingCharge && !continuingRampage && !recharging && attacker.remainingPp[move.id] !== undefined) {
     const ppBefore = attacker.remainingPp[move.id];
     attacker.remainingPp[move.id] = Math.max(0, ppBefore - 1);
     // 과사열매: 이번 사용으로 PP가 정확히 0이 됐을 때(원래 0이던 걸 또 쓴 게 아니라)만 발동한다.
@@ -133,7 +134,7 @@ export function resolvePreHitEffects(
   // 가리지 않고(본가 규칙 — 프레셔는 "이 포켓몬이 필드에 있는 동안 상대가 쓰는 모든 기술"에
   // 적용된다) PP를 추가로 더 소모시킨다. 과사열매 재판정 없이 단순 차감만 한다.
   let pressureExtraPpAbilityName: string | undefined;
-  if (defenderAbility?.extraPpCostWhenTargeted && !releasingCharge && !continuingRampage && attacker.remainingPp[move.id] !== undefined) {
+  if (defenderAbility?.extraPpCostWhenTargeted && !releasingCharge && !continuingRampage && !recharging && attacker.remainingPp[move.id] !== undefined) {
     const before = attacker.remainingPp[move.id];
     attacker.remainingPp[move.id] = Math.max(0, before - defenderAbility.extraPpCostWhenTargeted);
     if (attacker.remainingPp[move.id] !== before) pressureExtraPpAbilityName = defenderAbility.name;
@@ -164,6 +165,13 @@ export function resolvePreHitEffects(
     pressureExtraPpAbilityName,
     ...extra,
   });
+
+  // 반동 턴(ver.1.9 A1): 무엇보다 먼저 — 상태이상 판정(잠듦 카운터 등)·사용 조건보다 앞서 막고 반동을 소모한다. 이전엔 상태이상
+  // 판정 뒤라 마비로 못 움직이면 반동이 다음 턴까지 남았다.
+  if (recharging) {
+    attacker.volatile = consumeVolatileTurn(attacker.volatile, "recharge");
+    return blocked("recharge");
+  }
 
   // 0) 사용 조건이 있는 기술(코골기=잠든 상태 전용, 속이기=첫 턴 전용). 상태이상/행동방해
   // 판정보다 먼저 확인한다 — 조건 자체를 못 채우면 애초에 시도조차 안 한 것으로 취급.
@@ -259,14 +267,10 @@ export function resolvePreHitEffects(
     }
   }
 
-  // 2) 풀죽음/반동: 1턴짜리 행동방해. 걸려있으면 이번 턴 소모하고 못 움직인다
+  // 2) 풀죽음: 1턴짜리 행동방해. 걸려있으면 이번 턴 소모하고 못 움직인다(반동은 위에서 먼저)
   if (hasVolatile(attacker.volatile, "flinch")) {
     attacker.volatile = consumeVolatileTurn(attacker.volatile, "flinch");
     return blocked("flinch");
-  }
-  if (hasVolatile(attacker.volatile, "recharge")) {
-    attacker.volatile = consumeVolatileTurn(attacker.volatile, "recharge");
-    return blocked("recharge");
   }
 
   // 2-0) 도발/사슬묶기/앙코르: 이번 턴 고른 기술이 제약을 어기면 실패한다. 차지 기술 2턴째

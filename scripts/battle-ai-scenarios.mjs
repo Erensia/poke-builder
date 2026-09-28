@@ -2056,6 +2056,70 @@ try {
     const chosen = dec.decide([low, high], 0.5).chosen;
     check("1.9 A4: 하드 오버라이드가 여럿이면 점수 최고", both && chosen === high, `override ${both} 선택 ${chosen === high ? "뒤(높은 점수)" : "앞"}`);
   }
+  // ── ver.1.9 한계점 A1: 모으기·반동 — 엔진(교체 불가·반동 턴 PP 없음·반동 먼저) + AI(턴 비용·숨은 상대·상대 반동 턴) ──
+  {
+    const rt = await server.ssrLoadModule("/src/lib/battle/runTurn.ts");
+    const md = await server.ssrLoadModule("/src/lib/battle/ai/moveDamage.ts");
+    const act = (id) => ({ kind: "move", move: data.getMove(id) });
+    const own = (out, key) => out.result.actions.find((x) => x.actor === key);
+    const tank = (moves) => mon("잠만보", moves, null, null, pts({ hp: 32, def: 32, spd: 32 }));
+    // 반동: 맞힌 다음 턴 — 교체·다른 기술을 골라도 움직이지 못하고, 고른 기술 PP는 그대로, 마비여도 반동으로 막히고 반동이 풀린다
+    const r0 = battle([mon("켄타로스", ["기가임팩트", "막치기"]), mon("피카츄", ["10만볼트"])], [tank(["막치기"])]);
+    const r1 = rt.runTurn(r0, act("기가임팩트"), act("막치기"), () => 0).nextState;
+    const recharged = !!r1.a.volatile.active.recharge;
+    r1.a.status = { condition: "paralysis", turnsElapsed: 1 };
+    const pp = r1.a.remainingPp["막치기"];
+    const r2out = rt.runTurn(r1, { kind: "switch", toIndex: 1 }, act("막치기"), () => 0);
+    const r2 = r2out.nextState;
+    const rechargeOk =
+      recharged &&
+      r2out.result.switches.length === 0 &&
+      own(r2out, "a")?.blockedReason === "recharge" &&
+      r2.a.remainingPp["막치기"] === pp &&
+      !r2.a.volatile.active.recharge;
+    // 모으기: 공중날기 준비 다음 턴 — 교체를 골라도 공중날기가 나간다
+    const f0 = battle([mon("리자몽", ["공중날기"]), mon("피카츄", ["10만볼트"])], [tank(["막치기"])]);
+    const f1 = rt.runTurn(f0, act("공중날기"), act("막치기"), () => 0).nextState;
+    const f2out = rt.runTurn(f1, { kind: "switch", toIndex: 1 }, act("막치기"), () => 0);
+    const chargeOk = f1.a.chargingMoveId === "공중날기" && f2out.result.switches.length === 0 && own(f2out, "a")?.move.id === "공중날기";
+    check(
+      "1.9 A1 엔진: 반동 턴·모으기 2턴째 교체 불가, 반동 턴 PP 없음·마비보다 반동 먼저(반동 소모)",
+      rechargeOk && chargeOk,
+      `반동 ${rechargeOk} 모으기 ${chargeOk}`,
+    );
+    // AI 턴 비용: 반동기는 (쓴 횟수 + 맞힌 횟수 − 1)턴, 솔라빔은 2배(쾌청이면 그대로)
+    const est = (st, id) => md.estimateMoveHits({ state: st, attacker: st.a, defender: st.b, defenderSide: st.sideB, attackerMovesSecond: false }, data.getMove(id));
+    const gs = battle([mon("켄타로스", ["기가임팩트"])], [tank(["막치기"])]);
+    const g = est(gs, "기가임팩트");
+    const gUses = g.rawHits / g.accuracy;
+    const gOk = Math.abs(g.expected - (gUses + Math.max(0, g.rawHits - 1))) < 1e-9;
+    const ss = battle([mon("라플레시아", ["솔라빔"], null, null, pts({ spa: 32 }))], [tank(["막치기"])]);
+    const s1 = est(ss, "솔라빔");
+    ss.weather = "쾌청";
+    ss.weatherTurnsRemaining = 5;
+    const s2 = est(ss, "솔라빔");
+    const solarOk = Math.abs(s1.expected - (2 * s1.rawHits) / s1.accuracy) < 1e-9 && Math.abs(s2.expected - s2.rawHits / s2.accuracy) < 1e-9;
+    // AI 이번 턴: 상대 반동 턴이면 모든 선택지 lostShift −1, 상대가 공중날기로 숨었고 내가 빠르면 공격 +1(번개는 맞힘)
+    const ai = await server.ssrLoadModule("/src/lib/battle/ai/index.ts");
+    const idle = battle([mon("피카츄", ["10만볼트", "번개"]), mon("잠만보", ["누르기"])], [mon("켄타로스", ["기가임팩트"])]);
+    idle.b.volatile = { active: { recharge: { turnsRemaining: 1 } } };
+    const idleShift = ev.evaluateOptions(idle, "a").every((o) => o.lostShift === -1);
+    const sky = battle([mon("피카츄", ["10만볼트", "번개"], null, null, pts({ spe: 32, spa: 32 }))], [mon("리자몽", ["공중날기"], null, null, pts({ hp: 2 }))]);
+    sky.b.chargingMoveId = "공중날기";
+    const skyOpts = ev.evaluateOptions(sky, "a");
+    const skyShift = opt(skyOpts, "10만볼트").lostShift === 1 && opt(skyOpts, "번개").lostShift === undefined;
+    // AI가 반동 턴이면 평가 없이 강제 행동
+    const me = battle([mon("켄타로스", ["기가임팩트", "막치기"])], [tank(["막치기"])]);
+    me.a.volatile = { active: { recharge: { turnsRemaining: 1 } } };
+    me.a.lastMoveId = "기가임팩트";
+    const forced = ai.chooseAiAction(me, "a", 0.5);
+    const forcedOk = forced.scored.length === 0 && forced.action.kind === "move" && forced.action.move.id === "기가임팩트";
+    check(
+      "1.9 A1 AI: 반동기·모으기 턴 비용, 상대 반동 턴 −1·숨은 상대에게 먼저 치는 공격 +선공, 내 반동 턴은 강제 행동",
+      gOk && solarOk && idleShift && skyShift && forcedOk,
+      `반동기 ${gOk}(${g.expected.toFixed(2)}턴) 솔라빔 ${solarOk} 상대 반동 ${idleShift} 숨음 ${skyShift} 강제 ${forcedOk}`,
+    );
+  }
   // ── ver.1.9 한계점 A2: 공격의 자기 HP 변화 — 반동·생명의구슬·접촉 페널티는 내가 버티는 턴↓, 흡수는↑(해감액이면↓), 상대 반동은 내 처치 턴↓ ──
   {
     const tank = (moves, ability = null, item = null) => mon("잠만보", moves, ability, item, pts({ hp: 32, def: 32, spd: 32 }));

@@ -31,6 +31,8 @@ import { computeBattleHitChance } from "../hitChance";
 import { isCopyableMove } from "../preHitEffects";
 import { isGrounded } from "../grounding";
 import { getMove } from "@/lib/data";
+import { isOpponentTargetingMove } from "@/lib/fieldEffects";
+import { isRecharging } from "../lockedAction";
 import {
   acupressureOptions,
   applyAcupressure,
@@ -203,6 +205,11 @@ export interface AiOption {
    * 결정 레이어가 이번 턴 행동 손실(lost = 1)을 이 확률만큼 lost = 0(양쪽 다 한 턴 날림)과 섞는다.
    */
   opponentIdleChance?: number;
+  /**
+   * 이번 턴 행동 손실(lost)에 더하는 값(ver.1.9 한계점 A1): 상대가 반동 턴이면 −1(상대가 이번 턴 못 움직임), 상대가 공중날기 등으로
+   * 숨어 있는데 내가 먼저 치는 공격이면 + 선공 확률(빗나감).
+   */
+  lostShift?: number;
   /**
    * 데미지 없는 변화기일 때만. before/after = 회복이면 hits_to_be_killed(회복 전/후), 랭크업이면
    * 내 최선 공격의 hits_to_kill(랭크업 전/후). bestKillTurns = 이 턴 공격 안 하면 쓰게 될 내 최선 공격의 처치 턴 수.
@@ -1310,6 +1317,19 @@ function evaluateOptionsOn(state: BattleState, key: FighterKey, options: Evaluat
       if (idle > 0) option.opponentIdleChance = idle;
       result.push(option);
     }
+  }
+
+  // 모으기·반동(ver.1.9 한계점 A1): 상대가 반동 턴이면 이번 턴 상대 행동이 없다 — 어떤 행동이든 한 턴 이득. 상대가 공중날기 등으로
+  // 숨어 있으면 내가 먼저 치는 공격은 빗나간다(숨은 쪽을 맞히는 기술 제외) — 그 확률만큼 이번 턴 공격을 잃는다.
+  const opponentIdle = isRecharging(opponent) ? 1 : 0;
+  const hidden = opponent.chargingMoveId ? getMove(opponent.chargingMoveId)?.chargeHideType : undefined;
+  for (const option of result) {
+    let shift = -opponentIdle;
+    const move = option.optionType === "move" ? option.move : undefined;
+    if (hidden && move && move.category !== "status" && isOpponentTargetingMove(move) && !(move.bypassesHiding ?? []).includes(hidden)) {
+      shift += option.firstProbability;
+    }
+    if (shift !== 0) option.lostShift = shift;
   }
 
   attachParty(result, createPartyModel(moveState, key));

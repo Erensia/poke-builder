@@ -10,7 +10,8 @@ import { STRUGGLE_MOVE, activeWeather, applyForecastForm, applyMimicryForm, clon
 import { applyMegaEvolution, isTrappedFromSwitching, performSwitch } from "./switching";
 import { resolveAction } from "./resolveAction";
 import { finishTurn } from "./finishTurn";
-import { forcedRampageAction, refreshUproar, updateRampage } from "./rampage";
+import { refreshUproar, updateRampage } from "./rampage";
+import { forcedLockedAction } from "./lockedAction";
 
 export interface RunTurnOutcome {
   /** 이번 턴 결과가 반영된 새 BattleState. prevState는 변형하지 않는다 */
@@ -100,9 +101,9 @@ export function runTurn(
     entryAnnouncements: prevState.entryAnnouncements,
   };
 
-  // 난동(ver.1.9): 이어 쓰는 중이면 입력(다른 기술·교체)과 무관하게 그 기술을 쓴다
-  actionA = forcedRampageAction(state.a) ?? actionA;
-  actionB = forcedRampageAction(state.b) ?? actionB;
+  // 난동·모으기 2턴째·반동 턴(ver.1.9): 입력(다른 기술·교체)과 무관하게 정해진 행동 — 교체 불가
+  actionA = forcedLockedAction(state.a) ?? actionA;
+  actionB = forcedLockedAction(state.b) ?? actionB;
   refreshUproar(state);
 
   // 가속 억제 플래그(§8)는 "이번 턴에 자발적 교체로 나왔나"라 매 턴 시작 시 전 슬롯에서 지운다.

@@ -158,8 +158,37 @@ function critChanceOf(
 
 export function estimateMoveHits(ctx: MoveHitContext, baseMove: Move): MoveHitEstimate | null {
   const estimate = estimateMoveHitsCore(ctx, baseMove);
-  if (estimate) estimate.selfHpRate = selfHpRateOf(ctx, baseMove, estimate);
-  return estimate;
+  if (!estimate) return estimate;
+  estimate.selfHpRate = selfHpRateOf(ctx, baseMove, estimate);
+  return withTurnCost(ctx, baseMove, estimate);
+}
+
+/** 모으기 기술의 준비 턴이 날씨로 생략되는가(솔라빔+쾌청 등, 메가솔라는 항상 쾌청 취급) — preHitEffects와 같은 규칙 */
+function skipsChargeTurn(state: BattleState, attacker: BattleFighterState, move: Move): boolean {
+  if (move.chargeSkipWeather === undefined) return false;
+  return activeWeather(state) === move.chargeSkipWeather || (move.chargeSkipWeather === "쾌청" && !!abilityOf(attacker)?.treatsOwnWeatherAsSun);
+}
+
+/**
+ * 모으기·반동(ver.1.9 한계점 A1): 한 번 쓰는 데 드는 턴을 처치 턴에 넣는다 — 모으기는 2턴(날씨로 생략되면 1턴, 이미 모으는 중이면
+ * 이번 한 번은 1턴), 반동은 맞힌 번마다 다음 턴을 쉰다(처치한 마지막 번 뒤의 쉼은 이 대면 밖 — 다음 상대에게 한 턴을 주는 비용은
+ * 보지 않음). 턴당 데미지·자기 HP 변화도 그만큼 나눈다. 모으기로 한 방 처치는 상대가 한 번 더 움직이므로 worst_case도 한 타 늘린다.
+ */
+function withTurnCost(ctx: MoveHitContext, move: Move, e: MoveHitEstimate): MoveHitEstimate {
+  if (!Number.isFinite(e.expected) || e.expected <= 0) return e;
+  const { state, attacker } = ctx;
+  const alreadyCharging = attacker.chargingMoveId === move.id;
+  const charge = !!move.chargeTurn && !skipsChargeTurn(state, attacker, move);
+  const recharge = !!move.inflictsVolatile?.some((v) => v.volatile === "recharge" && v.target === "self");
+  if (!charge && !recharge) return e;
+  const uses = e.expected;
+  const turns = charge ? 2 * uses - (alreadyCharging ? 1 : 0) : uses + Math.max(0, uses * e.accuracy - 1);
+  const scale = uses / turns;
+  const worstCase =
+    charge && !alreadyCharging
+      ? { ...e.worstCase, count: Math.min(3, e.worstCase.count + 1), probability: e.worstCase.count + 1 > 3 ? 0 : e.worstCase.probability }
+      : e.worstCase;
+  return { ...e, expected: turns, worstCase, damageFraction: e.damageFraction * scale, selfHpRate: (e.selfHpRate ?? 0) * scale };
 }
 
 /** 한 번 쓸 때의 타격 수(다단히트 기대 타수, 스킬링크류는 최대) */
