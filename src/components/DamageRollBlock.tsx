@@ -2,15 +2,25 @@ import { useState } from "react";
 import { damageRollPercents } from "../lib/battlePower";
 
 /**
- * 매치업 화면 — 난수별 데미지(상대 최대 HP 대비 %) 표기(ver.1.7 트랙 H). 평소엔 최소~최대 범위와
+ * 매치업 화면 — 난수별 데미지 표기(ver.1.7 트랙 H, ver.1.9부터 "실제 데미지(상대 최대 HP 대비 %)"). 평소엔 최소~최대 범위와
  * "몇 타 격파 난수"만, 펼치면 16개 난수별 값을 4×4로 보여 준다(사용자 선택: 범위 + 펼치기).
  * 몇 타 판정은 같은 난수가 반복된다고 보는 근사 — 정확한 격파 확률은 위쪽 판정 배지(VerdictBadge)가 낸다.
  */
-export function DamageRollBlock({ offensePower, bulkPower }: { offensePower: number; bulkPower: number }) {
+export function DamageRollBlock({
+  offensePower,
+  bulkPower,
+  defenderMaxHp,
+}: {
+  offensePower: number;
+  bulkPower: number;
+  /** 방어측 최대 HP(실능) — 실제 데미지 = ⌊최대 HP × %⌋(ver.1.9, 사용자 요청: "실제 데미지(HP%)" 표기) */
+  defenderMaxHp?: number;
+}) {
   const [expanded, setExpanded] = useState(false);
   const rolls = damageRollPercents(offensePower, bulkPower);
   if (rolls.length === 0) return null;
 
+  const actual = (percent: number) => (defenderMaxHp ? Math.max(1, Math.floor((defenderMaxHp * percent) / 100)) : undefined);
   const min = rolls[0].percent;
   const max = rolls[rolls.length - 1].percent;
   // 최고 난수로 몇 타에 잡히는지, 그 타수로 잡히는 난수가 몇 개인지(같은 난수 반복 기준)
@@ -23,7 +33,15 @@ export function DamageRollBlock({ offensePower, bulkPower }: { offensePower: num
       <div className="matchup-roll-row">
         <span className="matchup-roll-title">난수별 데미지</span>
         <span className="matchup-roll-range">
-          상대 HP의 <strong>{min.toFixed(1)}%</strong> ~ <strong>{max.toFixed(1)}%</strong>
+          {defenderMaxHp ? (
+            <>
+              <strong>{actual(min)}</strong> ~ <strong>{actual(max)}</strong> ({min.toFixed(1)}% ~ {max.toFixed(1)}%)
+            </>
+          ) : (
+            <>
+              상대 HP의 <strong>{min.toFixed(1)}%</strong> ~ <strong>{max.toFixed(1)}%</strong>
+            </>
+          )}
         </span>
         <span className="matchup-roll-summary">({summary})</span>
         <button type="button" className="matchup-roll-toggle" aria-expanded={expanded} onClick={() => setExpanded((v) => !v)}>
@@ -35,7 +53,9 @@ export function DamageRollBlock({ offensePower, bulkPower }: { offensePower: num
           {rolls.map((r) => (
             <li key={r.roll} className={r.percent * hits + 1e-9 >= 100 ? "is-killing" : undefined}>
               <span className="matchup-roll-value">{r.roll}</span>
-              <span className="matchup-roll-percent">{r.percent.toFixed(1)}%</span>
+              <span className="matchup-roll-percent">
+                {defenderMaxHp ? `${actual(r.percent)} (${r.percent.toFixed(1)}%)` : `${r.percent.toFixed(1)}%`}
+              </span>
             </li>
           ))}
         </ul>

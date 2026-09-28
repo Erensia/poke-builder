@@ -58,7 +58,7 @@ export function MatchupPage() {
     const realStats = computeRealStats(form.baseStats, defender.slot.points, defender.slot.nature);
     const physical = computeBulkPower(realStats, "physical", { defenderStages: defender.slot.stages });
     const special = computeBulkPower(realStats, "special", { defenderStages: defender.slot.stages });
-    return { physical, special };
+    return { physical, special, maxHp: realStats.hp };
   }, [defenderPokemon, defender.slot]);
 
   // Phase 6.5 §1 — "이전 턴 가정" 토글 반영. 도구 강탈 토글이 켜진 슬롯은 상대 도구를 장착한
@@ -262,7 +262,7 @@ export function MatchupPage() {
         />
       </div>
 
-      {fullResult && <DamageRollBlock offensePower={fullResult.offensePower} bulkPower={fullResult.bulkPower} />}
+      {fullResult && <DamageRollBlock offensePower={fullResult.offensePower} bulkPower={fullResult.bulkPower} defenderMaxHp={baseBulk?.maxHp} />}
 
       {speedResult && (
         <div className="matchup-speed-block">
