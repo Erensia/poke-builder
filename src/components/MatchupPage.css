@@ -1,7 +1,7 @@
 .matchup-page {
   width: 100%;
-  /* PartyBoard·BattleLogPage와 폭을 통일 (Phase 2.5) — 세 페이지 모두 740px 기준 */
-  max-width: 740px;
+  /* 모든 페이지 폭을 도감 페이지(980px)와 통일 (ver.1.9) */
+  max-width: 980px;
 }
 
 .matchup-page-header {
