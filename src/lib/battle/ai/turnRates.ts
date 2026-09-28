@@ -209,7 +209,26 @@ function volatileResidualFraction(fighter: BattleFighterState, hp: number, oppon
   return damage / hp;
 }
 
-function statusResidualFraction(fighter: BattleFighterState, hp: number): number {
+/** 맹독 카운터 상한(statusConditions와 같은 값) */
+const BADLY_POISONED_MAX_COUNTER = 15;
+/** 대면 길이를 셀 때의 상한 — 사실상 끝나지 않는 대면에서도 카운터 평균이 상한으로 수렴하게 */
+const TOXIC_HORIZON_CAP = 60;
+
+/**
+ * 맹독(ver.1.9 한계점 A3): 카운터 c에서 시작해 turns 턴 동안 매 턴 끝 피해 min(15, c + k)/16을 입을 때의 평균 카운터.
+ * 엔진은 턴 끝마다 피해를 준 뒤 카운터를 1 올린다.
+ */
+function averageToxicCounter(counter: number, turns: number): number {
+  const t = Math.max(1, Math.min(TOXIC_HORIZON_CAP, Number.isFinite(turns) ? turns : TOXIC_HORIZON_CAP));
+  const whole = Math.floor(t);
+  let sum = 0;
+  for (let k = 0; k < whole; k++) sum += Math.min(BADLY_POISONED_MAX_COUNTER, counter + k);
+  sum += (t - whole) * Math.min(BADLY_POISONED_MAX_COUNTER, counter + whole);
+  return sum / t;
+}
+
+/** toxicHorizon: 맹독이면 그 대면 길이 동안의 평균 카운터로 센다(없으면 지금 카운터) */
+function statusResidualFraction(fighter: BattleFighterState, hp: number, toxicHorizon?: number): number {
   const condition = fighter.status.condition;
   if (!condition) return 0;
   const ability = abilityOf(fighter);
@@ -218,7 +237,11 @@ function statusResidualFraction(fighter: BattleFighterState, hp: number): number
     return -Math.floor(fighter.maxHp / ability.healsFromPoisonEachTurnDenominator) / hp;
   }
   if (ability?.negatesIndirectDamage) return 0;
-  const raw = computeStatusEndOfTurnDamage(fighter.status, fighter.maxHp);
+  const status =
+    condition === "badly-poisoned" && toxicHorizon !== undefined
+      ? { ...fighter.status, turnsElapsed: averageToxicCounter(fighter.status.turnsElapsed, toxicHorizon) }
+      : fighter.status;
+  const raw = computeStatusEndOfTurnDamage(status, fighter.maxHp);
   const damage = condition === "burn" && ability?.halvesBurnDamage ? Math.floor(raw / 2) : raw;
   return damage / hp;
 }
@@ -271,6 +294,17 @@ export function turnsToKo(
   const targetConfusion = confusionTurns(target);
   const selfHit = targetConfusion > 0 ? CONFUSION_SELF_HIT_CHANCE * confusionSelfHitFraction(target) * target.maxHp : 0;
   let base = attackRate * actionFactor(attacker) + residualDamageFraction(target, hp, attacker);
+  // 맹독(ver.1.9 한계점 A3): 카운터가 매 턴 올라가므로 대면 길이 동안의 평균 카운터로 — 길이는 지금 카운터 속도로 어림한 뒤
+  // 한 번 더 고쳐 잡는다(평균 피해가 커지면 대면이 짧아짐)
+  if (target.status.condition === "badly-poisoned" && hp > 0) {
+    const current = statusResidualFraction(target, hp);
+    let averaged = current;
+    for (let i = 0; i < 2; i++) {
+      const estimate = base - current + averaged;
+      averaged = statusResidualFraction(target, hp, estimate > 0 ? 1 / estimate : Infinity);
+    }
+    base += averaged - current;
+  }
   // 탈피(ver.1.9 6-4): 대상의 상태이상 지속 피해·공격측의 마비 행동불능은 대면 동안 상태이상이 남아 있는 기대 비율만큼만
   const targetShed = shedSkinChance(target);
   const attackerShed = attacker.status.condition === "paralysis" ? shedSkinChance(attacker) : 0;

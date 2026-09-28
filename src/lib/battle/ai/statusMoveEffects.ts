@@ -584,16 +584,11 @@ function volatileDuration(volatile: "taunt" | "encore" | "disable"): number {
   return inflictVolatile({ active: {} }, volatile, () => 0).active[volatile]!.turnsRemaining;
 }
 
-export interface ApplyEffectOptions {
-  /** 맹독: 대면이 이어지는 동안의 평균 카운터로 쓸 턴 수 — 매 턴 1/16 고정으로 보면 과소평가된다 */
-  toxicTurns: number;
-}
-
 /**
  * 복제한 state에 변화기의 지속 효과만 직접 적용한다(엔진을 돌리지 않음). 달라진 게 없으면 false.
  * 설치기는 현재 대면에 영향이 없으므로 아무것도 바꾸지 않고 true(이득은 hazardCarry로 따로 센다).
  */
-export function applyEffectMove(clone: BattleState, key: FighterKey, move: Move, options: ApplyEffectOptions): boolean {
+export function applyEffectMove(clone: BattleState, key: FighterKey, move: Move): boolean {
   const kind = effectKindOf(move);
   const me = clone[key];
   const target = clone[opponentKey(key)];
@@ -608,9 +603,8 @@ export function applyEffectMove(clone: BattleState, key: FighterKey, move: Move,
     case "status": {
       const status = statusToInflict(clone, key, move);
       if (!status) return false;
-      const inflicted = inflictStatus(target.status, status);
-      const averageCounter = Math.max(1, Math.round((1 + options.toxicTurns) / 2));
-      target.status = status === "badly-poisoned" ? { ...inflicted, turnsElapsed: averageCounter } : inflicted;
+      // 맹독 카운터는 실제 값(1)으로 — 대면 동안 늘어나는 피해는 turnsToKo가 평균 카운터로 센다(ver.1.9 A3)
+      target.status = inflictStatus(target.status, status);
       return true;
     }
     case "weather":
