@@ -15,7 +15,7 @@ import {
   type BattleState,
 } from "../state";
 import { calcEntryHazardDamage } from "../entryCost";
-import { isTrappedFromSwitching } from "../switching";
+import { isTrappedFromSwitching, trappedByOpposingAbility } from "../switching";
 import { blendTurns } from "./statusMoveEffects";
 import { isGrounded } from "../grounding";
 import { estimateMoveHits } from "./moveDamage";
@@ -198,8 +198,9 @@ export function createPartyModel(state: BattleState, key: FighterKey): PartyMode
     oppEntry: oppSide.party.map((f) => entryFraction(state, f, oppSide)),
     myActive: mySide.activeIndex,
     oppActive: oppSide.activeIndex,
-    oppTrapped: isTrappedFromSwitching(oppActive),
-    myTrapped: isTrappedFromSwitching(myActive),
+    // 그림자밟기(ver.1.9 A5)도 — 맞은편 활성 기준
+    oppTrapped: isTrappedFromSwitching(oppActive) || trappedByOpposingAbility(oppActive, myActive),
+    myTrapped: isTrappedFromSwitching(myActive) || trappedByOpposingAbility(myActive, oppActive),
     // 엔진: 쓴 턴에 2 → 그 턴 끝 1 → 다음 턴 교체 불가. 결정 시점에 2 이상이면 "이번 턴에 건" 효과 state
     switchLockedNextTurn: (state.fairyLockTurnsRemaining ?? 0) >= 2,
     myPerish: isFainted(myActive) ? Infinity : (myActive.perishCount ?? Infinity),

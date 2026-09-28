@@ -565,10 +565,14 @@ export function resolvePreHitEffects(
     attackerGrounded,
     isGrounded(state, defender, defenderAbility),
   );
+  // 애널라이즈(대상보다 늦게 행동)·잠복(이번 턴 교체해 들어온 대상) — ver.1.9 A5
+  const analyticMultiplier = movesSecond ? (attackerAbility?.powerMultiplierWhenMovingLast ?? 1) : 1;
+  const stakeoutMultiplier = defender.enteredThisTurn ? (attackerAbility?.powerMultiplierVsSwitchedIn ?? 1) : 1;
   const fieldAdjustedMove: Move = {
     ...moveAfterWeatherBall,
     type: fieldPulse.type,
-    power: fieldPulse.power === null ? null : Math.round(fieldPulse.power * fieldPowerMultiplier),
+    power:
+      fieldPulse.power === null ? null : Math.round(fieldPulse.power * fieldPowerMultiplier * analyticMultiplier * stakeoutMultiplier),
   };
 
   // evaluateSlotMatchup(1턴 스냅샷 판정)과 같은 로직을 공유 — 특성 배율/타입 변경/자속/상대 상성
@@ -977,7 +981,8 @@ export function resolvePreHitEffects(
 
   // 철제광선: "사용하는 순간" 명중·빗나감과 무관하게 사용자가 최대 HP의 절반을 잃는다(E-3).
   let selfDamageOnUse = 0;
-  if (effectiveMove.selfDamageFractionOnUse !== undefined) {
+  // 매직가드(ver.1.9 A5): 철제광선의 HP 손실도 막는다(본가)
+  if (effectiveMove.selfDamageFractionOnUse !== undefined && !attackerAbility?.negatesIndirectDamage) {
     selfDamageOnUse = Math.floor(attacker.maxHp * effectiveMove.selfDamageFractionOnUse);
     attacker.currentHp = Math.max(0, attacker.currentHp - selfDamageOnUse);
   }
@@ -990,7 +995,8 @@ export function resolvePreHitEffects(
     }
     // 무릎차기: 빗나가면 사용자가 최대 HP 절반을 잃는다(E-2). "의욕이 넘쳐 땅에 부딪혔다!"
     let crashDamage = 0;
-    if (effectiveMove.crashFraction !== undefined) {
+    // 매직가드(ver.1.9 A5): 무릎차기류 빗나감 손실도 막는다(본가)
+    if (effectiveMove.crashFraction !== undefined && !attackerAbility?.negatesIndirectDamage) {
       crashDamage = Math.floor(attacker.maxHp * effectiveMove.crashFraction);
       attacker.currentHp = Math.max(0, attacker.currentHp - crashDamage);
     }

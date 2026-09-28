@@ -487,6 +487,10 @@ export interface ActionLogEntry {
   angerPointRaisedSpa?: boolean;
   /** angerPointRaisedSpa를 발동시킨 특성 이름 */
   angerPointAbilityName?: string;
+  /** 분노의경혈(ver.1.9 A5) — 급소에 맞아 방어측 공격이 +6이 됐으면 그 특성 이름 */
+  angerPointMaxedAbilityName?: string;
+  /** 독치장(ver.1.9 A5) — 물리 피격으로 공격자 편에 독압정을 뿌렸으면 그 특성 이름 */
+  toxicDebrisAbilityName?: string;
   /** 소울비트 — HP를 소비했으면 그 소비량 */
   soulBeatHpCost?: number;
   /** 소울비트 — 현재 HP가 소비량 이하라 실패했으면 true */
@@ -642,6 +646,8 @@ export interface EndOfTurnLogEntry {
   cheekPouchHeal?: number;
   /** 수확: 턴 종료 시 되돌린 나무열매 이름 */
   harvestRestoredBerryName?: string;
+  /** 되새김질(ver.1.9 A5): 턴 종료 시 한 번 더 먹은 나무열매 이름(회복량은 berryHeal, 치료는 abilityCuredStatus) */
+  cudChewBerryName?: string;
   /** 꼬르륵스위치: 턴 종료 시 바뀐 모양 */
   hungerModeChangedTo?: "full" | "hangry";
 }

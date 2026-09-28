@@ -70,10 +70,12 @@ export function withChanceEffectsModel<T>(enabled: boolean, fn: () => T): T {
   }
 }
 
-/** 탈피 확률(0~1) — 상태이상이 있고 확률 모델이 켜져 있을 때만 */
-function shedSkinChance(fighter: BattleFighterState): number {
+/** 탈피 확률(0~1) — 상태이상이 있고 확률 모델이 켜져 있을 때만. 촉촉바디(ver.1.9 A5)는 비일 때 1 */
+function shedSkinChance(fighter: BattleFighterState, state?: BattleState): number {
   if (!endOfTurnAware || !chanceEffectsAware || !fighter.status.condition) return 0;
-  return (abilityOf(fighter)?.curesOwnStatusChance ?? 0) / 100;
+  const ability = abilityOf(fighter);
+  if (state && ability?.curesStatusInWeather && ability.curesStatusInWeather === activeWeather(state)) return 1;
+  return (ability?.curesOwnStatusChance ?? 0) / 100;
 }
 
 /**
@@ -87,9 +89,9 @@ function statusPersistShare(q: number, turns: number): number {
 }
 
 /** 탈피가 있는 잠듦·얼음: 원래 b턴 막힐 것을 매 턴 끝 q 확률 치료로 줄인 기대 턴 수 */
-function shedBlockedTurns(fighter: BattleFighterState): number {
+function shedBlockedTurns(fighter: BattleFighterState, state?: BattleState): number {
   const b = blockedTurns(fighter);
-  const q = shedSkinChance(fighter);
+  const q = shedSkinChance(fighter, state);
   return q > 0 && b > 0 ? (1 - (1 - q) ** b) / q : b;
 }
 
@@ -306,8 +308,8 @@ export function turnsToKo(
     base += averaged - current;
   }
   // 탈피(ver.1.9 6-4): 대상의 상태이상 지속 피해·공격측의 마비 행동불능은 대면 동안 상태이상이 남아 있는 기대 비율만큼만
-  const targetShed = shedSkinChance(target);
-  const attackerShed = attacker.status.condition === "paralysis" ? shedSkinChance(attacker) : 0;
+  const targetShed = shedSkinChance(target, state);
+  const attackerShed = attacker.status.condition === "paralysis" ? shedSkinChance(attacker, state) : 0;
   if ((targetShed > 0 || attackerShed > 0) && base > 0) {
     const estimate = 1 / base;
     if (targetShed > 0) base -= statusResidualFraction(target, hp) * (1 - statusPersistShare(targetShed, estimate));
@@ -357,7 +359,7 @@ export function turnsToKo(
   // 혼란(공격측): 혼란인 동안 행동의 1/3을 자멸로 날린다 — 남은 혼란 턴 t 안에서 잃는 턴 = min(t/3, 필요 턴/2).
   const attackerConfusion = confusionTurns(attacker);
   if (attackerConfusion > 0) turns += Math.min(attackerConfusion * CONFUSION_SELF_HIT_CHANCE, turns / 2);
-  return Math.max(1, shedBlockedTurns(attacker) + turns);
+  return Math.max(1, shedBlockedTurns(attacker, state) + turns);
 }
 
 /**

@@ -147,6 +147,13 @@ export interface AbilityHitTrigger {
    * 이미 다른 필드가 있어도 덮어쓴다(본가). on:"damaging"과 함께 쓴다.
    */
   setsFieldOnHit?: FieldKind;
+  /**
+   * 포자(ver.1.9 A5): 발동하면 이 상태이상 중 하나를 무작위로 공격자에게 건다(독·마비·잠듦 — 본가 9·10·11%를 균등 근사).
+   * 풀 타입·방진(가루 면역) 공격자에겐 무효. on:"contact"·chance와 함께 쓴다.
+   */
+  inflictsRandomStatusOnAttacker?: StatusCondition[];
+  /** 독치장(ver.1.9 A5): 물리 기술을 맞으면 공격자 편에 독압정을 한 층 뿌린다(최대 2층). on:"physical"과 함께 쓴다. */
+  setsToxicSpikesOnAttackerSide?: boolean;
 }
 
 /**
@@ -786,4 +793,24 @@ export interface Ability {
    * 그대로 발동한다(본가와 달리 데미지 페널티가 있는 포챔스판 — 사용자 확정).
    */
   contactBypassesProtectAtQuarterDamage?: boolean;
+  /** 그림자밟기(ver.1.9 A5): 맞은편 포켓몬은 교체할 수 없다(고스트·아름다운허물·같은 특성은 예외 — isTrappedFromSwitching) */
+  trapsOpponent?: boolean;
+  /** 돌머리(ver.1.9 A5): 반동기(recoilFraction)의 반동 데미지를 받지 않는다(무릎차기류·생명의구슬은 그대로) */
+  negatesRecoil?: boolean;
+  /** 분노의경혈(ver.1.9 A5): 급소에 맞으면(쓰러지지 않고 대타가 아닐 때) 공격이 +6이 된다 */
+  maxesAttackOnCrit?: boolean;
+  /** 되새김질(ver.1.9 A5): 나무열매를 먹으면 다음 턴 끝에 한 번 더 먹는다(HP 회복·상태이상 치료 열매 — 조건 없이 효과) */
+  reEatsBerryNextTurn?: boolean;
+  /** 속보(ver.1.9 A5): 상태이상이면 스피드 ×이 값, 마비의 스피드 반감은 무시 */
+  speedMultiplierWhenStatused?: number;
+  /** 서핑테일(ver.1.9 A5): 이 필드가 깔려 있으면 스피드 ×multiplier */
+  fieldSpeedMultiplier?: { field: FieldKind; multiplier: number };
+  /** 애널라이즈(ver.1.9 A5): 대상보다 늦게 행동하면(대상이 이번 턴 먼저 움직였으면) 기술 위력 ×이 값 */
+  powerMultiplierWhenMovingLast?: number;
+  /** 촉촉바디(ver.1.9 A5): 이 날씨면 턴 끝에 자신의 상태이상이 낫는다 */
+  curesStatusInWeather?: WeatherKind;
+  /** 퀵드로(ver.1.9 A5): 공격기를 쓸 때 이 확률(%)로 같은 우선도 안에서 먼저 움직인다(선제공격손톱과 같은 축) */
+  movesFirstChance?: number;
+  /** 잠복(ver.1.9 A5): 이번 턴 교체해 들어온 상대에게 기술 위력 ×이 값 */
+  powerMultiplierVsSwitchedIn?: number;
 }

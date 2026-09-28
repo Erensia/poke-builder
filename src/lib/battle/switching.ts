@@ -22,12 +22,26 @@ export function isTrappedFromSwitching(fighter: BattleFighterState, state?: Batt
   if (effectiveHeldItem(fighter, state)?.escapesTrapping) return false;
   // 페어리록(트랙 M6): 걸린 다음 턴은 모두 교체 불가
   if ((state?.fairyLockTurnsRemaining ?? 0) > 0 && state!.fairyLockTurnsRemaining! < 2) return true;
+  // 그림자밟기(ver.1.9 A5): 맞은편 활성 포켓몬이 이 특성이면 교체 불가
+  if (state) {
+    const opposing = state.a === fighter || state.a.slot === fighter.slot ? state.b : state.b === fighter || state.b.slot === fighter.slot ? state.a : undefined;
+    if (opposing && trappedByOpposingAbility(fighter, opposing)) return true;
+  }
   return (
     hasVolatile(fighter.volatile, "octolock") ||
     hasVolatile(fighter.volatile, "jawLock") ||
     hasVolatile(fighter.volatile, "meanLook") ||
     hasVolatile(fighter.volatile, "noRetreat")
   );
+}
+
+/**
+ * 그림자밟기(ver.1.9 A5): opposing이 이 특성이면 fighter는 교체할 수 없다 — 고스트·아름다운허물·같은 특성이면 예외. 파티 대면표(AI)는 맞은편을 직접 넘겨 쓴다.
+ */
+export function trappedByOpposingAbility(fighter: BattleFighterState, opposing: BattleFighterState): boolean {
+  if (isFainted(opposing) || fighter.types.includes("고스트") || abilityOf(fighter)?.trapsOpponent) return false;
+  if (effectiveHeldItem(fighter)?.escapesTrapping) return false;
+  return !!abilityOf(opposing)?.trapsOpponent;
 }
 
 /**
@@ -416,6 +430,8 @@ export function performSwitch(
     outgoing.volatile = { active: kept ? { saltCure: kept } : {} };
   }
   outgoing.chargingMoveId = undefined;
+  outgoing.cudChewBerryId = undefined;
+  outgoing.cudChewTurnsLeft = undefined;
   outgoing.lastMoveId = undefined;
   outgoing.lastMoveStreak = undefined;
   outgoing.choiceLockedMoveId = undefined;
@@ -473,6 +489,7 @@ export function performSwitch(
 
   // 가속 억제(§8): 자발적 교체로 나온 턴엔 가속이 발동하지 않는다. 강제 교체(voluntary=false)면 세우지 않음.
   incoming.switchedInThisTurn = voluntary || undefined;
+  incoming.enteredThisTurn = true;
   // 등장당 1회 판정(속이기·변환자재)은 새로 나온 포켓몬 기준으로 리셋한다.
   incoming.hasActedSinceSwitchIn = undefined;
   incoming.lastTurnMoveFailed = undefined;

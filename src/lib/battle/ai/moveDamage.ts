@@ -219,10 +219,10 @@ function selfHpRateOf(ctx: MoveHitContext, move: Move, estimate: MoveHitEstimate
   const dealt = Math.min(estimate.damageFraction * defender.maxHp, perUse);
   const maxHp = attacker.maxHp;
   let loss = 0;
-  if (move.recoilFraction !== undefined && !magicGuard) loss += dealt * move.recoilFraction;
-  // 철제광선(쓰는 순간)·무릎차기류(빗나가면) — 엔진은 매직가드와 무관하게 적용
-  if (move.selfDamageFractionOnUse !== undefined) loss += maxHp * move.selfDamageFractionOnUse;
-  if (move.crashFraction !== undefined) loss += (1 - hit) * maxHp * move.crashFraction;
+  // 반동기(돌머리면 없음 — ver.1.9 A5), 철제광선(쓰는 순간)·무릎차기류(빗나가면) — 셋 다 매직가드면 없음
+  if (move.recoilFraction !== undefined && !magicGuard && !attackerAbility?.negatesRecoil) loss += dealt * move.recoilFraction;
+  if (move.selfDamageFractionOnUse !== undefined && !magicGuard) loss += maxHp * move.selfDamageFractionOnUse;
+  if (move.crashFraction !== undefined && !magicGuard) loss += (1 - hit) * maxHp * move.crashFraction;
   const lifeOrb = attackerItem?.selfRecoilFractionOfMaxHp;
   const sheerForce = !!attackerAbility?.tradesSecondaryEffectForPower && hasSheerForceSecondaryEffect(move);
   if (lifeOrb && !magicGuard && !sheerForce) loss += hit * maxHp * lifeOrb;
@@ -356,6 +356,8 @@ function estimateMoveHitsCore(ctx: MoveHitContext, baseMove: Move): MoveHitEstim
   // 늦게 행동하면 2배)은 후공 여부 그대로(ver.1.9 6-1 — 이전엔 AI가 항상 기본 위력으로 봤다).
   const avalancheMultiplier =
     move.conditionalDoublePower === "took-damage-this-turn" && attackerMovesSecond ? 1 + targetAttackChance : 1;
+  // 애널라이즈(ver.1.9 A5): 후공이면 위력 ×1.3 — 엔진과 같은 판정(대상보다 늦게 행동)
+  const analyticMultiplier = attackerMovesSecond ? (attackerAbility?.powerMultiplierWhenMovingLast ?? 1) : 1;
 
   const matchupOptions: SlotMatchupOptions = {
     attackerStages: attacker.stages,
@@ -379,7 +381,7 @@ function estimateMoveHitsCore(ctx: MoveHitContext, baseMove: Move): MoveHitEstim
     defenderItemConsumed: !!defender.itemConsumed,
     attackerRuntime: runtimeOf(attacker, ctx.attackerTypes, state),
     defenderRuntime: runtimeOf(defender, defenderTypes, state),
-    extraOffenseMultiplier: ownTypeBoost * electroBoost * burnMultiplier * overlordMultiplier * avalancheMultiplier,
+    extraOffenseMultiplier: ownTypeBoost * electroBoost * burnMultiplier * overlordMultiplier * avalancheMultiplier * analyticMultiplier,
   };
   const result = evaluateSlotMatchup(attacker.slot, move, defender.slot, matchupOptions);
   if (!result) return null;

@@ -1,7 +1,7 @@
 import { type Move } from "@/types/move";
 import { compareTurnOrder } from "@/lib/turnOrder";
 import { type BattleFighterState, type BattleState } from "../state";
-import { buildTurnOrderActor, effectiveHeldItem } from "../turnOrderInputs";
+import { buildTurnOrderActor, quickFirstChances } from "../turnOrderInputs";
 
 export type SpeedOrder = "first" | "second" | "speed_tie";
 
@@ -25,8 +25,11 @@ export function firstProbability(
   const base = lowRoll !== highRoll ? 0.5 : lowRoll === 0 ? 1 : 0;
   const order: SpeedOrder = lowRoll !== highRoll ? "speed_tie" : lowRoll === 0 ? "first" : "second";
   if (mine.move.priority !== theirs.move.priority) return { probability: base, order };
-  const qMe = (effectiveHeldItem(me)?.quickClawChance ?? 0) / 100;
-  const qThem = (effectiveHeldItem(opponent)?.quickClawChance ?? 0) / 100;
+  // 선제공격손톱·퀵드로(ver.1.9 A5) — 각각 굴려 하나라도 성공하면 먼저
+  const quickOf = (fighter: BattleFighterState, used: Move) =>
+    1 - quickFirstChances(state, fighter, used).reduce((miss, c) => miss * (1 - c / 100), 1);
+  const qMe = quickOf(me, move);
+  const qThem = quickOf(opponent, opponentMove);
   const onlyMe = qMe * (1 - qThem);
   const neitherOrBoth = (1 - qMe) * (1 - qThem) + qMe * qThem;
   return { probability: onlyMe + neitherOrBoth * base, order };
