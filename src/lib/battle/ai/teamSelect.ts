@@ -3,6 +3,7 @@ import { opponentKey, sideOf, type BattleState } from "../state";
 import { chainParams, paramsFor, type DecisionParams } from "./decision";
 import { createPartyModel, partyMatchValue } from "./partyEval";
 import { withEndOfTurnModel } from "./turnRates";
+import { withCritModel } from "./moveDamage";
 
 /**
  * 3선출 AI(ver.1.8 로드맵 7, 결정 레이어 §4-13): 팀 프리뷰처럼 상대 빌드 전체는 알고 상대 선출은 모르는 상태에서, 내 선출
@@ -68,7 +69,7 @@ export function chooseAiSelection(state: BattleState, key: FighterKey, options: 
   const theirs = candidatesOf(oppCount, size);
   // 상대 자발적 교체 갈래는 끈다 — 3600판 가까운 대전을 한 번에 재야 해서 켜면 약 4초, 끄면 약 1초(선출 판단엔 근사로 충분)
   const chain = { ...chainParams(params), oppSwitch: undefined, mySwitch: undefined };
-  const scored = withEndOfTurnModel(params.endOfTurnAware, () => {
+  const scored = withCritModel(params.critAware, () => withEndOfTurnModel(params.endOfTurnAware, () => {
     const model = createPartyModel(state, key);
     return mine.map((candidate) => {
       const myHp = hpFor(myCount, candidate.members);
@@ -81,7 +82,7 @@ export function chooseAiSelection(state: BattleState, key: FighterKey, options: 
       }
       return { candidate, score: MEAN_WEIGHT * (sum / theirs.length) + (1 - MEAN_WEIGHT) * worst };
     });
-  });
+  }));
   const best = Math.max(...scored.map((s) => s.score));
   const weights = scored.map((s) => Math.exp((s.score - best) / SELECT_TEMPERATURE));
   const total = weights.reduce((a, b) => a + b, 0);

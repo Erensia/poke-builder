@@ -1614,9 +1614,9 @@ try {
     // 한계점 정리 ②: 매 턴 쌓이는 랭크 — 가속은 긴 대면일수록 선공 확률↑, 문어굳히기 건 상대는 방어·특방이 대면 중간만큼 더 떨어짐
     {
       const tr = await server.ssrLoadModule("/src/lib/battle/ai/turnRates.ts");
-      const mk = () => battle([mon("잠만보", ["누르기"], "가속", null, pts({ hp: 32, def: 32 }))], [mon("잠만보", ["누르기"], null, null, pts({ hp: 32, def: 32, spe: 32 }))]);
-      const pOn = opt(ev.evaluateOptions(mk(), "a"), "누르기").firstProbability;
-      const pOff = tr.withEndOfTurnModel(false, () => opt(ev.evaluateOptions(mk(), "a"), "누르기").firstProbability);
+      const mk = () => battle([mon("잠만보", ["막치기"], "가속", null, pts({ hp: 32, def: 32 }))], [mon("잠만보", ["막치기"], null, null, pts({ hp: 32, def: 32, spe: 32 }))]);
+      const pOn = opt(ev.evaluateOptions(mk(), "a"), "막치기").firstProbability;
+      const pOff = tr.withEndOfTurnModel(false, () => opt(ev.evaluateOptions(mk(), "a"), "막치기").firstProbability);
       const octoSt = battle([mon("메타그로스", ["코멧펀치"])], [mon("잠만보", ["누르기"], null, null, pts({ hp: 32, def: 32 }))]);
       octoSt.b.volatile = { active: { ...octoSt.b.volatile.active, octolock: {} } };
       const cOn = opt(ev.evaluateOptions(octoSt, "a"), "코멧펀치").hitsToKill.expected;
@@ -1933,6 +1933,49 @@ try {
       "1.9 엔진: 실패 판정 표 — 행동불능·풀죽음·혼란·필드 무효·면역·흡수·대타출동 실패는 실패 / 헤롱헤롱·대타 흡수·탈은 아님",
       Object.entries(expected).every(([k, v]) => table[k] === v),
       Object.entries(table).map(([k, v]) => `${k}=${v}`).join(" "),
+    );
+  }
+  // ── ver.1.9 6-2 급소: 계산기 급소 가정(랭크·벽 무시·×1.5·스나이퍼·조가비갑옷류) + AI 처치 턴에 급소 확률 ──
+  {
+    const me = await server.ssrLoadModule("/src/lib/matchupEvaluator.ts");
+    const md = await server.ssrLoadModule("/src/lib/battle/ai/moveDamage.ts");
+    const neutral = { hp: 0, atk: 0, def: 0, spa: 0, spd: 0, spe: 0, accuracy: 0, evasion: 0 };
+    const atk = (ability = null) => mon("한카리아스", ["스톤에지", "지진"], ability).slot;
+    const foe = (ability = null) => mon("잠만보", ["누르기"], ability, null, pts({ hp: 32, def: 32 })).slot;
+    const ratio = (o, a = atk(), f = foe()) => {
+      const hit = (crit) => me.evaluateSlotMatchup(a, data.getMove("지진"), f, { ...o, critical: crit });
+      const on = hit(true);
+      const off = hit(false);
+      return on.offensePower / on.bulkPower / (off.offensePower / off.bulkPower);
+    };
+    const plain = ratio({});
+    const atkDown = ratio({ attackerStages: { ...neutral, atk: -2 } }); // 급소면 −2 무시 → ×1.5 × 2
+    const defUp = ratio({ defenderStages: { ...neutral, def: 2 } }); // 급소면 +2 무시 → ×1.5 × 2
+    const reflect = ratio({ screen: "reflect" }); // 급소면 벽 무시 → ×1.5 × 2
+    const sniper = ratio({}, atk("스나이퍼"));
+    const armor = me.evaluateSlotMatchup(atk(), data.getMove("지진"), foe("전투무장"), { critical: true });
+    const armorRatio = ratio({}, atk(), foe("전투무장"));
+    const solo = (me.computeSoloOffensePower(atk(), data.getMove("지진"), { critical: true }) ?? 0) / (me.computeSoloOffensePower(atk(), data.getMove("지진"), {}) ?? 1);
+    check(
+      "1.9 6-2: 계산기 급소 가정 — ×1.5, 공격 −2·방어 +2·리플렉터 무시(×3), 스나이퍼 ×2.25, 전투무장 무효, 상대 없는 결정력 ×1.5",
+      [plain, sniper, atkDown, defUp, reflect, armorRatio, solo].every(Number.isFinite) &&
+        Math.abs(plain - 1.5) < 0.01 && Math.abs(atkDown - 3) < 0.02 && Math.abs(defUp - 3) < 0.02 && Math.abs(reflect - 3) < 0.02 &&
+        Math.abs(sniper - 2.25) < 0.01 && armor.criticalBlocked === true && Math.abs(armorRatio - 1) < 1e-9 && Math.abs(solo - 1.5) < 0.01,
+      `×${plain.toFixed(2)} −2 ×${atkDown.toFixed(2)} +2 ×${defUp.toFixed(2)} 벽 ×${reflect.toFixed(2)} 스나이퍼 ×${sniper.toFixed(2)} 전투무장 ${armorRatio} 단독 ×${solo.toFixed(2)}`,
+    );
+    // AI: 급소율 높은 스톤에지는 급소를 켜면 처치 턴↓(지진보다 크게), 반드시 급소 기술은 1.5배로, 전투무장 상대는 무변화
+    const est = (moveId, foeAbility = null, on = true) => {
+      const b = battle([mon("한카리아스", ["스톤에지", "지진", "얼음숨결"])], [mon("잠만보", ["누르기"], foeAbility, null, pts({ hp: 32, def: 32 }))]);
+      return md.withCritModel(on, () => md.estimateMoveHits({ state: b, attacker: b.a, defender: b.b, defenderSide: b.sideB, attackerMovesSecond: false }, data.getMove(moveId)));
+    };
+    const edgeGain = est("스톤에지", null, false).rawHits / est("스톤에지").rawHits;
+    const quakeGain = est("지진", null, false).rawHits / est("지진").rawHits;
+    const breathDmg = est("얼음숨결").damageFraction / est("얼음숨결", null, false).damageFraction;
+    const armorSame = est("스톤에지", "전투무장").rawHits === est("스톤에지", "전투무장", false).rawHits;
+    check(
+      "1.9 6-2: AI 급소 — 급소율 높은 기술일수록 처치 턴↓, 반드시 급소 ×1.5, 전투무장 상대 무변화",
+      edgeGain > quakeGain && quakeGain >= 1 && Math.abs(breathDmg - 1.5) < 0.01 && armorSame,
+      `스톤에지 ×${edgeGain.toFixed(3)} 지진 ×${quakeGain.toFixed(3)} 얼음숨결 데미지 ×${breathDmg.toFixed(2)} 전투무장 ${armorSame}`,
     );
   }
   // ── 매치업 난수별 데미지(ver.1.7 트랙 H): 기존 격파 판정과 같은 관계식인지 대조 ──

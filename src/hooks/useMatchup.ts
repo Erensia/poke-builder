@@ -131,6 +131,10 @@ function useMatchupSlot() {
     setSlot((prev) => ({ ...prev, [key]: value }));
   }
 
+  function setCritAssumed(value: boolean) {
+    setSlot((prev) => ({ ...prev, critAssumed: value }));
+  }
+
   function setPinchAssumed(value: boolean) {
     setSlot((prev) => ({ ...prev, pinchAssumed: value }));
   }
@@ -186,6 +190,7 @@ function useMatchupSlot() {
     setUnburdenAssumed,
     setStatusAssumed,
     setPowerCondition,
+    setCritAssumed,
     setPinchAssumed,
     setFullHpAssumed,
     setHpPercent,

@@ -457,7 +457,7 @@ export function evaluateMatchupChance(offensePower: number, bulkPower: number): 
  * 급소가 랭크 하락을 무시하는지(본가 규칙) 여부도 미확인이라, 우선은 그 규칙을 그대로 적용한다.
  * 착수 후 실제 값으로 확인되면 이 상수만 바꾸면 된다.
  */
-const CRITICAL_DAMAGE_MULTIPLIER = 1.5;
+export const CRITICAL_DAMAGE_MULTIPLIER = 1.5;
 
 export interface DamageOptions {
   typeEffectiveness?: number;

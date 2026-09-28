@@ -19,19 +19,40 @@ function minKillingRoll(offensePower: number, bulkPower: number): number {
 }
 
 /**
- * P(N > n) 열: 난수 롤(85~100, 각 1/16)이 독립일 때 n번 때려도 아직 안 죽었을 확률을
- * n = 0, 1, 2, ... 순으로 낸다(합계 정수 DP라 정확). N = 처치까지 필요한 타수.
+ * 급소(ver.1.9 6-2): 매 타 chance 확률로 데미지가 scale배(급소 결정력/내구력 비 — 랭크·벽 무시·×1.5 포함). 없으면 급소 없음.
  */
-function survivalProbabilities(rhoStar: number): number[] {
+export interface CritModel {
+  chance: number;
+  scale: number;
+}
+
+/** 한 타의 데미지 결과(퍼센트 단위 정수 — 급소 롤은 반올림)와 확률 */
+function hitOutcomes(crit?: CritModel): [number, number][] {
+  const p = crit && crit.chance > 0 ? Math.min(1, crit.chance) : 0;
+  const out: [number, number][] = [];
+  for (let k = 0; k < DAMAGE_ROLL_STEPS; k++) {
+    const roll = ROLL_MIN_PERCENT + k;
+    if (p < 1) out.push([roll, (1 - p) / DAMAGE_ROLL_STEPS]);
+    if (p > 0) out.push([Math.round(roll * crit!.scale), p / DAMAGE_ROLL_STEPS]);
+  }
+  return out;
+}
+
+/**
+ * P(N > n) 열: 난수 롤(85~100, 각 1/16)이 독립일 때 n번 때려도 아직 안 죽었을 확률을
+ * n = 0, 1, 2, ... 순으로 낸다(합계 정수 DP라 정확 — 급소 롤만 퍼센트 반올림). N = 처치까지 필요한 타수.
+ */
+function survivalProbabilities(rhoStar: number, crit?: CritModel): number[] {
   const survives: number[] = [1];
+  const outcomes = hitOutcomes(crit);
   // dist[s] = 정수 합계 s(퍼센트 단위)일 확률
   let dist = new Map<number, number>([[0, 1]]);
   for (let n = 1; n <= MAX_HITS_TRACKED; n++) {
     const next = new Map<number, number>();
     for (const [sum, p] of dist) {
-      for (let k = 0; k < DAMAGE_ROLL_STEPS; k++) {
-        const s = sum + ROLL_MIN_PERCENT + k;
-        next.set(s, (next.get(s) ?? 0) + p / DAMAGE_ROLL_STEPS);
+      for (const [dmg, q] of outcomes) {
+        const s = sum + dmg;
+        next.set(s, (next.get(s) ?? 0) + p * q);
       }
     }
     let alive = 0;
@@ -74,19 +95,20 @@ function expectedFromSurvival(survives: number[], rhoStar: number): number {
 
 /**
  * firstHitScale(≠ 1): 첫 타만 데미지가 그 배율인 경우(반감 열매 — 첫 타에 소모 ×½, ver.1.9 6-1 · 분함의발구르기 직전 실패 ×2). bulkPower는 열매 없는 값.
- * 첫 타 난수 16가지마다 남은 HP를 채우는 나머지 타수의 분포를 따로 구해 평균한다.
+ * 첫 타 결과(난수 16가지 × 급소 여부)마다 남은 HP를 채우는 나머지 타수의 분포를 따로 구해 평균한다.
+ * crit: 매 타 급소 확률·배율(ver.1.9 6-2).
  */
-export function expectedHits(offensePower: number, bulkPower: number, hpFraction = 1, firstHitScale = 1): number {
+export function expectedHits(offensePower: number, bulkPower: number, hpFraction = 1, firstHitScale = 1, crit?: CritModel): number {
   if (offensePower <= 0) return Infinity;
   const rhoStar = minKillingRoll(offensePower, bulkPower * hpFraction);
-  if (firstHitScale === 1) return Math.max(1, expectedFromSurvival(survivalProbabilities(rhoStar), rhoStar));
+  if (firstHitScale === 1) return Math.max(1, expectedFromSurvival(survivalProbabilities(rhoStar, crit), rhoStar));
   let total = 0;
-  for (let k = 0; k < DAMAGE_ROLL_STEPS; k++) {
-    const residual = rhoStar - (firstHitScale * (ROLL_MIN_PERCENT + k)) / 100;
+  for (const [dmg, q] of hitOutcomes(crit)) {
+    const residual = rhoStar - (firstHitScale * dmg) / 100;
     // 첫 타로 쓰러짐(battlePower.rollsAtLeast와 같은 경계 보정)이면 1타, 아니면 1 + 나머지 타수
-    total += residual <= 1e-9 ? 1 : 1 + expectedFromSurvival(survivalProbabilities(residual), residual);
+    total += q * (residual <= 1e-9 ? 1 : 1 + expectedFromSurvival(survivalProbabilities(residual, crit), residual));
   }
-  return Math.max(1, total / DAMAGE_ROLL_STEPS);
+  return Math.max(1, total);
 }
 
 /** 5단계 판정(evaluateMatchupChance)을 worst_case 구조로 옮긴다. */
@@ -115,11 +137,12 @@ export function worstCaseFromMatchup(offensePower: number, bulkPower: number, hp
 export function estimateHits(
   offensePower: number,
   bulkPower: number,
-  options: { hpFraction?: number; accuracy?: number; firstHitScale?: number } = {},
+  options: { hpFraction?: number; accuracy?: number; firstHitScale?: number; crit?: CritModel } = {},
 ): HitsEstimate {
-  const { hpFraction = 1, accuracy = 1, firstHitScale = 1 } = options;
-  const hits = expectedHits(offensePower, bulkPower, hpFraction, firstHitScale);
-  // worst_case(1·2타 확정성)는 보수적으로: 첫 타가 약하면(열매) 그 배율을 모든 타에, 첫 타가 세면(직전 실패 2배) 한 방 판정만 그 배율
+  const { hpFraction = 1, accuracy = 1, firstHitScale = 1, crit } = options;
+  const hits = expectedHits(offensePower, bulkPower, hpFraction, firstHitScale, crit);
+  // worst_case(1·2타 확정성, 하드 오버라이드용)는 급소를 빼고 보수적으로: 첫 타가 약하면(열매) 그 배율을 모든 타에, 첫 타가 세면
+  // (직전 실패 2배) 한 방 판정만 그 배율
   const scaled = worstCaseFromMatchup(offensePower * firstHitScale, bulkPower, hpFraction);
   const worstCase = firstHitScale > 1 && scaled.count > 1 ? worstCaseFromMatchup(offensePower, bulkPower, hpFraction) : scaled;
   return {

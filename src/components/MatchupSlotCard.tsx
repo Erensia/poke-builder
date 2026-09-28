@@ -84,6 +84,10 @@ interface MatchupSlotCardProps {
   selectedMove?: Move;
   /** 공격 슬롯 전용(ver.1.9) — 조건부 위력 가정 토글. 고른 기술에 해당하는 조건만 보인다(POWER_CONDITION_TOGGLES) */
   onSetPowerCondition?: (key: PowerConditionKey, value: boolean) => void;
+  /** 공격 슬롯 전용(ver.1.9 6-2) — 급소 가정. 기술을 골랐을 때 항상 보인다 */
+  onToggleCrit?: (value: boolean) => void;
+  /** 급소 가정인데 상대 특성(조가비갑옷·전투무장)으로 급소가 안 뜸 */
+  critBlocked?: boolean;
   /** 공격 슬롯 전용(ver.1.9) — HP 1/3 이하 가정(맹화류 특성일 때만 보인다) */
   onTogglePinch?: (value: boolean) => void;
   /** 공격 슬롯 전용(ver.1.9) — 현재 HP %(분화·해수스파우팅·기사회생·바둥바둥일 때만 보인다) */
@@ -133,6 +137,8 @@ export function MatchupSlotCard({
   onSetStatus,
   selectedMove,
   onSetPowerCondition,
+  onToggleCrit,
+  critBlocked,
   onTogglePinch,
   onSetHpPercent,
   onToggleFullHp,
@@ -348,6 +354,12 @@ export function MatchupSlotCard({
             ))}
           </div>
         </div>
+        {role === "attacker" && onToggleCrit && (
+          <label className="matchup-assume-toggle">
+            <input type="checkbox" checked={!!slot.critAssumed} onChange={(e) => onToggleCrit(e.target.checked)} />
+            <span>{critBlocked ? "급소 가정 — 상대 특성으로 급소에 맞지 않음" : "급소 가정"}</span>
+          </label>
+        )}
         {role === "attacker" &&
           onSetPowerCondition &&
           powerConditions.map((t) => (
