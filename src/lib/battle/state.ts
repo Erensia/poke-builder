@@ -320,6 +320,11 @@ export interface BattleFighterState {
    * 교체에만 세운다 — 기절 후 강제 교체(applySwitch)로 나온 경우엔 세우지 않는다(가속 발동).
    */
   switchedInThisTurn?: boolean;
+  /** 이번 턴 교체(자발·강제 무관)로 나왔는가 — 잠복(ver.1.9 A5) 판정. 턴 시작에 지운다 */
+  enteredThisTurn?: boolean;
+  /** 되새김질(ver.1.9 A5): 다시 먹을 나무열매와 남은 턴 끝 수(먹은 턴 끝 1 → 다음 턴 끝 0에 먹음) */
+  cudChewBerryId?: string;
+  cudChewTurnsLeft?: number;
   /**
    * 이 포켓몬이 필드에 등장한 뒤 이미 자기 행동(resolveAction)을 한 번이라도 개시했으면 true.
    * 속이기(first-turn-only)는 이게 false일 때만 성공한다 — 등장 첫 행동 턴에만. 행동이 막혀도
@@ -327,6 +332,15 @@ export interface BattleFighterState {
    * 다음 턴까지 false로 남는다. 등장(배틀 시작·performSwitch) 시 초기화.
    */
   hasActedSinceSwitchIn?: boolean;
+  /**
+   * 직전 턴 자기 행동이 실패였으면 true(moveFailure.actionFailed — 빗나감·무효·행동불능·"그러나 실패했다" 등, ver.1.9).
+   * 분함의발구르기·열불내기 위력 2배 판정. 매 턴 끝(finishTurn)에 갱신, 등장 시 초기화.
+   */
+  lastTurnMoveFailed?: boolean;
+  /** 이번 턴 시작(턴 중 등장이면 등장) 시점 HP — 승부굳히기 "이번 턴 대상이 이미 데미지를 입음" 판정(ver.1.9) */
+  hpAtTurnStart?: number;
+  /** 소란피기(ver.1.9): 나와 있는 누군가가 소란 중 — 새로 잠들 수 없다(statusImmunitiesOf). rampage.refreshUproar가 갱신 */
+  sleepBlockedByUproar?: boolean;
   /**
    * 변환자재/리베로가 이번 등장 스탠스에서 이미 발동했으면 true. 발동은 등장당 1회
    * (본가 9세대) — 기술을 실제로 사용한 순간에만 소진되므로 행동이 막히면 유지된다.
@@ -471,6 +485,8 @@ export function statusImmunitiesOf(
   ability: Ability | undefined,
 ): StatusCondition[] | undefined {
   if (hasFlowerVeil(fighter, ability)) return ALL_MAJOR_STATUS_CONDITIONS;
+  // 소란피기(ver.1.9): 소란 중에는 누구도 잠들 수 없다
+  if (fighter.sleepBlockedByUproar) return [...(ability?.immuneToStatuses ?? []), "sleep"];
   return ability?.immuneToStatuses;
 }
 
@@ -627,9 +643,16 @@ export function electroBallPowerValue(
   return electroBallPowerFromSpeeds(powerSpeedOf(attacker, attackerItem), powerSpeedOf(defender, defenderItem));
 }
 
-/** 스피드 비교 위력 기술(자이로볼·일렉트릭볼)의 실효 스피드 — 실능 × 스피드 랭크 × 마비 × 도구 */
+/** 상태이상 스피드 배율 — 마비 반감, 속보(ver.1.9 A5)면 상태이상일 때 ×1.5이고 마비 반감 무시 */
+export function statusSpeedMultiplierOf(fighter: BattleFighterState): number {
+  const quickFeet = abilityOf(fighter)?.speedMultiplierWhenStatused;
+  if (quickFeet && fighter.status.condition) return quickFeet;
+  return computeStatusSpeedMultiplier(fighter.status.condition);
+}
+
+/** 스피드 비교 위력 기술(자이로볼·일렉트릭볼)의 실효 스피드 — 실능 × 스피드 랭크 × 마비(속보) × 도구 */
 function powerSpeedOf(f: BattleFighterState, item: Parameters<typeof getItemSpeedMultiplier>[0]): number {
-  return f.realStats.spe * rankStageMultiplier(f.stages.spe) * computeStatusSpeedMultiplier(f.status.condition) * getItemSpeedMultiplier(item);
+  return f.realStats.spe * rankStageMultiplier(f.stages.spe) * statusSpeedMultiplierOf(f) * getItemSpeedMultiplier(item);
 }
 
 export function hasSheerForceSecondaryEffect(move: Move): boolean {
@@ -666,6 +689,11 @@ export function consumeItem(fighter: BattleFighterState): void {
   const item = getItem(consumedId);
   if (!item || !item.name.endsWith("열매")) return;
   fighter.consumedBerryId = consumedId;
+  // 되새김질(ver.1.9 A5): 다음 턴 끝에 한 번 더 먹는다(되새김질로 다시 먹은 것은 consumeItem을 거치지 않아 반복되지 않음)
+  if (abilityOf(fighter)?.reEatsBerryNextTurn) {
+    fighter.cudChewBerryId = consumedId;
+    fighter.cudChewTurnsLeft = 2;
+  }
   const frac = abilityOf(fighter)?.berryHealFraction;
   if (frac && fighter.currentHp > 0 && fighter.currentHp < fighter.maxHp) {
     const heal = Math.min(fighter.maxHp - fighter.currentHp, Math.max(1, Math.floor(fighter.maxHp * frac)));

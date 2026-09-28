@@ -24,7 +24,7 @@ import {
 } from "../lib/battleLogText";
 
 /** 액션 로그 한 줄 안에 "OO 발동!"으로 뭉뚱그리기보다 전용 문구를 따로 쓰는 volatile들 */
-const VOLATILES_WITH_DEDICATED_LOG_LINE = new Set(["drowsy", "wish", "encore", "imprison", "meanLook", "lockOn"]);
+const VOLATILES_WITH_DEDICATED_LOG_LINE = new Set(["drowsy", "wish", "encore", "imprison", "meanLook", "lockOn", "noRetreat"]);
 
 /**
  * 방어측 on-hit 특성 효과 한 줄의 "내용"만 만드는 함수들(감싸는 div·key는 호출부 책임) —
@@ -311,7 +311,14 @@ function EndOfTurnLine({
 }) {
   return (
     <div className="battle-turn-line is-muted">
-      {e.fieldHeal ? (
+      {e.cudChewBerryName ? (
+        <>
+          {turnName(e.actor)}의 되새김질! {e.cudChewBerryName}
+          {eulReul(e.cudChewBerryName)} 한 번 더 먹었다!
+          {e.berryHeal ? ` HP ${e.berryHeal} 회복 (남은 HP ${e.remainingHp})` : ""}
+          {e.abilityCuredStatus ? " 상태이상이 나았다!" : ""}
+        </>
+      ) : e.fieldHeal ? (
         <>
           {turnName(e.actor)} 그래스필드로 {e.fieldHeal} 회복 (남은 HP {e.remainingHp})
         </>
@@ -1232,6 +1239,27 @@ function ActionEffectLines({
           )}
         </div>
       )}
+      {/* 난동(ver.1.9): 소란으로 깨움 / 끝까지 써서 혼란(역린류) / 소란 종료 */}
+      {action.uproarWokeIds?.map((id) => {
+        const name = getPokemon(id)?.name ?? "포켓몬";
+        return (
+          <div key={id} className="battle-turn-line is-muted">
+            소란 때문에 {name}
+            {eunNeun(name)} 잠에서 깼다!
+          </div>
+        );
+      })}
+      {action.rampageConfused && (
+        <div className="battle-turn-line is-muted">
+          {actorName}
+          {eunNeun(actorName)} 지쳐서 혼란에 빠졌다!
+        </div>
+      )}
+      {action.rampageEnded && action.move.rampage === "uproar" && (
+        <div className="battle-turn-line is-muted">
+          {actorName}의 소란이 멈췄다!
+        </div>
+      )}
       {/* C-8 이미 걸린 상태이상에 상태이상 전용기를 다시 써서 아무 변화가 없었을 때 */}
       {!action.blockedReason && action.hit && action.statusInflictFailed && (
         <div className="battle-turn-line is-muted">
@@ -1265,6 +1293,12 @@ function ActionEffectLines({
         <div className="battle-turn-line is-muted">
           {defenderName}
           {eunNeun(defenderName)} 이제 도망칠 수 없다!
+        </div>
+      )}
+      {!action.blockedReason && action.inflictedVolatile === "noRetreat" && (
+        <div className="battle-turn-line is-muted">
+          {actorName}
+          {eunNeun(actorName)} 배수의 진을 쳐서 이제 도망칠 수 없다!
         </div>
       )}
       {!action.blockedReason && action.hit && action.inflictedVolatile === "lockOn" && (
@@ -1587,6 +1621,18 @@ function ActionEffectLines({
       {!action.blockedReason && action.angerPointRaisedSpa && (
         <div className="battle-turn-line is-muted">
           {defenderName}의 {action.angerPointAbilityName}! {defenderName}의 특수공격이 올라갔다!
+        </div>
+      )}
+      {/* 분노의경혈(ver.1.9 A5) — 급소에 맞아 공격 최대 */}
+      {!action.blockedReason && action.angerPointMaxedAbilityName && (
+        <div className="battle-turn-line is-muted">
+          {defenderName}의 {action.angerPointMaxedAbilityName}! {defenderName}의 공격이 최대로 올라갔다!
+        </div>
+      )}
+      {/* 독치장(ver.1.9 A5) — 공격자 편에 독압정 */}
+      {!action.blockedReason && action.toxicDebrisAbilityName && (
+        <div className="battle-turn-line is-muted">
+          {defenderName}의 {action.toxicDebrisAbilityName}! {actorName}의 발밑에 독압정이 뿌려졌다!
         </div>
       )}
       {/* 떠도는영혼 — 접촉 피격으로 공격자와 특성 교환 */}

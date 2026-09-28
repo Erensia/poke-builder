@@ -3,16 +3,22 @@ import { type PokemonType } from "@/types/pokemon-type";
 import { getPokemon } from "@/lib/data";
 import { getEffectiveForm } from "@/lib/pokemonForm";
 import { resolveEffectiveDefenderAbility } from "@/lib/abilityModifiers";
-import { evaluateSlotMatchup, type RuntimeCombatant } from "@/lib/matchupEvaluator";
+import { evaluateSlotMatchup, type RuntimeCombatant, type SlotMatchupOptions } from "@/lib/matchupEvaluator";
+import { critChance } from "@/lib/accuracyCrit";
+import { getDrainHealMultiplier, getItemCritStageBonus } from "@/lib/itemEffects";
+import { hitTriggerMatchesMove } from "@/lib/abilityHitTriggers";
+import { type Ability } from "@/types/ability";
+import { type Item } from "@/types/item";
 import { resolveMoveContext } from "@/lib/moveContext";
 import { isOpponentTargetingMove, isPriorityMoveBlockedByField } from "@/lib/fieldEffects";
 import { computeStatusAttackMultiplier, ignoresBurnAttackPenalty } from "@/lib/statusConditions";
 import { faintedAllyPowerValue, supremeOverlordMultiplier } from "@/lib/battlePower";
-import { abilityOf, activeWeather, isFainted, type BattleFighterState, type BattleSide, type BattleState } from "../state";
+import { abilityOf, activeWeather, hasSheerForceSecondaryEffect, isFainted, type BattleFighterState, type BattleSide, type BattleState } from "../state";
 import { computeBattleHitChance } from "../hitChance";
 import { computeTurnOrderPriority, effectiveHeldItem } from "../turnOrderInputs";
 import { isGrounded } from "../grounding";
-import { estimateHits, meanDamageFraction } from "./hitsToKill";
+import { estimateHits, meanDamageFraction, worstCaseFromMatchup, type CritModel } from "./hitsToKill";
+import { attackChanceOf, requiresTargetAttack } from "./opponentMoveModel";
 import { applySurvivalGuard } from "./survivalGuard";
 import type { HitsEstimate } from "./types";
 
@@ -24,6 +30,11 @@ export interface MoveHitEstimate extends HitsEstimate {
   typeEffectiveness: number;
   /** 한 번 쓸 때 기대 데미지(방어측 최대 HP 대비, 명중률 포함) — 현재 HP와 무관한 절대량(대타 계산용) */
   damageFraction: number;
+  /**
+   * 한 번 쓸 때 공격측 자신의 HP 변화 기대값(공격측 최대 HP 대비, + 손실 / − 회복) — 반동기·생명의구슬·철제광선·무릎차기 빗나감·
+   * 접촉 페널티(울퉁불퉁멧·까칠한피부류), 흡수기·조개껍질방울(ver.1.9 한계점 A2). 없으면 0.
+   */
+  selfHpRate?: number;
 }
 
 export interface MoveHitContext {
@@ -38,6 +49,11 @@ export interface MoveHitContext {
   defenderTypes?: PokemonType[];
   /** 교체 후보처럼 진입 비용을 뺀 HP로 평가할 때 */
   defenderHp?: number;
+  /**
+   * 방어측이 이번 턴 공격기를 고를 확률 — 기습류 성공 확률·눈사태 2배 확률(ver.1.9 6-1). 생략하면 방어측 기술로 낸
+   * 상대 기술 사용 확률 모델 값(attackChanceOf).
+   */
+  targetAttackChance?: number;
 }
 
 /** 실전 파이터의 현재 값을 evaluateSlotMatchup 런타임 입력으로 옮긴다. */
@@ -109,7 +125,125 @@ function supremeOverlordCountFor(state: BattleState, attacker: BattleFighterStat
   return party.filter((m) => m.slot !== attacker.slot && isFainted(m)).length;
 }
 
+let critAware = true;
+
+/**
+ * fn 실행 동안만 급소 기대 데미지(ver.1.9 6-2)를 켜고 끈다 — 비교용 토글(DecisionParams.critAware). withEndOfTurnModel과 같은 방식.
+ */
+export function withCritModel<T>(enabled: boolean, fn: () => T): T {
+  const previous = critAware;
+  critAware = enabled;
+  try {
+    return fn();
+  } finally {
+    critAware = previous;
+  }
+}
+
+/** 이 공격이 급소에 맞을 확률 — 엔진 hitResolution.resolveHit과 같은 규칙(급소 랭크·도구·대운·급소율 높은 기술·반드시 급소·무도한행동·조가비갑옷류) */
+function critChanceOf(
+  attacker: BattleFighterState,
+  defender: BattleFighterState,
+  move: Move,
+  attackerAbility: Ability | undefined,
+  defenderAbility: Ability | undefined,
+  attackerItem: Item | undefined,
+): number {
+  if (defenderAbility?.preventsCritsAgainstSelf) return 0;
+  const poisoned = defender.status.condition === "poison" || defender.status.condition === "badly-poisoned";
+  if (move.alwaysCrit || (attackerAbility?.alwaysCritsVsPoisonedTarget && poisoned)) return 1;
+  const stage = attacker.critStage + getItemCritStageBonus(attackerItem, attacker.slot.pokemonId) + (attackerAbility?.raisesCritStageBy ?? 0);
+  return critChance(stage, move.highCritRatio);
+}
+
 export function estimateMoveHits(ctx: MoveHitContext, baseMove: Move): MoveHitEstimate | null {
+  const estimate = estimateMoveHitsCore(ctx, baseMove);
+  if (!estimate) return estimate;
+  estimate.selfHpRate = selfHpRateOf(ctx, baseMove, estimate);
+  return withTurnCost(ctx, baseMove, estimate);
+}
+
+/** 모으기 기술의 준비 턴이 날씨로 생략되는가(솔라빔+쾌청 등, 메가솔라는 항상 쾌청 취급) — preHitEffects와 같은 규칙 */
+function skipsChargeTurn(state: BattleState, attacker: BattleFighterState, move: Move): boolean {
+  if (move.chargeSkipWeather === undefined) return false;
+  return activeWeather(state) === move.chargeSkipWeather || (move.chargeSkipWeather === "쾌청" && !!abilityOf(attacker)?.treatsOwnWeatherAsSun);
+}
+
+/**
+ * 모으기·반동(ver.1.9 한계점 A1): 한 번 쓰는 데 드는 턴을 처치 턴에 넣는다 — 모으기는 2턴(날씨로 생략되면 1턴, 이미 모으는 중이면
+ * 이번 한 번은 1턴), 반동은 맞힌 번마다 다음 턴을 쉰다(처치한 마지막 번 뒤의 쉼은 이 대면 밖 — 다음 상대에게 한 턴을 주는 비용은
+ * 보지 않음). 턴당 데미지·자기 HP 변화도 그만큼 나눈다. 모으기로 한 방 처치는 상대가 한 번 더 움직이므로 worst_case도 한 타 늘린다.
+ */
+function withTurnCost(ctx: MoveHitContext, move: Move, e: MoveHitEstimate): MoveHitEstimate {
+  if (!Number.isFinite(e.expected) || e.expected <= 0) return e;
+  const { state, attacker } = ctx;
+  const alreadyCharging = attacker.chargingMoveId === move.id;
+  const charge = !!move.chargeTurn && !skipsChargeTurn(state, attacker, move);
+  const recharge = !!move.inflictsVolatile?.some((v) => v.volatile === "recharge" && v.target === "self");
+  if (!charge && !recharge) return e;
+  const uses = e.expected;
+  const turns = charge ? 2 * uses - (alreadyCharging ? 1 : 0) : uses + Math.max(0, uses * e.accuracy - 1);
+  const scale = uses / turns;
+  const worstCase =
+    charge && !alreadyCharging
+      ? { ...e.worstCase, count: Math.min(3, e.worstCase.count + 1), probability: e.worstCase.count + 1 > 3 ? 0 : e.worstCase.probability }
+      : e.worstCase;
+  return { ...e, expected: turns, worstCase, damageFraction: e.damageFraction * scale, selfHpRate: (e.selfHpRate ?? 0) * scale };
+}
+
+/** 한 번 쓸 때의 타격 수(다단히트 기대 타수, 스킬링크류는 최대) */
+function hitsPerUse(move: Move, attackerAbility: Ability | undefined): number {
+  if (move.multiHitPowers) return move.multiHitPowers.length;
+  if (move.minHits !== undefined && move.maxHits !== undefined) {
+    return attackerAbility?.multiHitAlwaysMax ? move.maxHits : expectedMultiHitCount(move.minHits, move.maxHits);
+  }
+  return 1;
+}
+
+/**
+ * 공격 한 번에 공격측이 잃는(+)·얻는(−) HP의 기대값(공격측 최대 HP 대비) — 엔진 hitResolution·preHitEffects와 같은 규칙
+ * (ver.1.9 한계점 A2). 반동·흡수·조개껍질방울은 실제로 깎은 HP 기준이라, 대면 전체로 보면 상대 HP를 처치 턴 수에 나눈 값으로
+ * 자른다(오버킬 제외). 대타가 맞는 경우·해감액 외 드문 상호작용은 보지 않는다.
+ */
+function selfHpRateOf(ctx: MoveHitContext, move: Move, estimate: MoveHitEstimate): number {
+  const { state, attacker, defender } = ctx;
+  if (attacker.maxHp <= 0 || estimate.typeEffectiveness === 0 || estimate.accuracy <= 0) return 0;
+  const attackerAbility = abilityOf(attacker);
+  const defenderAbility = resolveEffectiveDefenderAbility(attackerAbility, abilityOf(defender));
+  const attackerItem = effectiveHeldItem(attacker, state);
+  const defenderItem = effectiveHeldItem(defender, state);
+  const magicGuard = !!attackerAbility?.negatesIndirectDamage;
+  const hit = estimate.accuracy;
+  const defenderHp = ctx.defenderHp ?? defender.currentHp;
+  const perUse = Number.isFinite(estimate.expected) ? defenderHp / Math.max(1, estimate.expected) : defenderHp;
+  const dealt = Math.min(estimate.damageFraction * defender.maxHp, perUse);
+  const maxHp = attacker.maxHp;
+  let loss = 0;
+  // 반동기(돌머리면 없음 — ver.1.9 A5), 철제광선(쓰는 순간)·무릎차기류(빗나가면) — 셋 다 매직가드면 없음
+  if (move.recoilFraction !== undefined && !magicGuard && !attackerAbility?.negatesRecoil) loss += dealt * move.recoilFraction;
+  if (move.selfDamageFractionOnUse !== undefined && !magicGuard) loss += maxHp * move.selfDamageFractionOnUse;
+  if (move.crashFraction !== undefined && !magicGuard) loss += (1 - hit) * maxHp * move.crashFraction;
+  const lifeOrb = attackerItem?.selfRecoilFractionOfMaxHp;
+  const sheerForce = !!attackerAbility?.tradesSecondaryEffectForPower && hasSheerForceSecondaryEffect(move);
+  if (lifeOrb && !magicGuard && !sheerForce) loss += hit * maxHp * lifeOrb;
+  if ((move.makesContact ?? false) && !magicGuard) {
+    let perHit = 0;
+    if (defenderItem?.contactAttackerDamageDenominator) perHit += maxHp / defenderItem.contactAttackerDamageDenominator;
+    const trigger = defenderAbility?.hitTrigger;
+    if (trigger?.damagesAttackerFraction && hitTriggerMatchesMove(trigger, move)) {
+      perHit += maxHp * trigger.damagesAttackerFraction * (trigger.chance !== undefined ? trigger.chance / 100 : 1);
+    }
+    loss += hit * hitsPerUse(move, attackerAbility) * perHit;
+  }
+  if (move.drainFraction !== undefined) {
+    const drained = dealt * move.drainFraction * getDrainHealMultiplier(attackerItem);
+    loss += defenderAbility?.reverseDrainHealsToDamage ? drained : -drained;
+  }
+  if (attackerItem?.damageDealtHealDenominator) loss -= dealt / attackerItem.damageDealtHealDenominator;
+  return loss / maxHp;
+}
+
+function estimateMoveHitsCore(ctx: MoveHitContext, baseMove: Move): MoveHitEstimate | null {
   const { state, attacker, defender, defenderSide, attackerMovesSecond } = ctx;
   if (baseMove.category === "status" || baseMove.category === null) return null;
   const move = withBeatUpPower(state, attacker, baseMove);
@@ -132,13 +266,23 @@ export function estimateMoveHits(ctx: MoveHitContext, baseMove: Move): MoveHitEs
 
   // 여왕의위엄/테일아머·사이코필드: 우선도 1 이상인 상대 대상 기술은 실패한다.
   const priority = computeTurnOrderPriority(state, attacker, move);
+  // 사이코필드는 땅에 있는 대상만 지킨다(엔진과 같게 — ver.1.9 6-1에서 접지 인자 누락 수정)
+  const defenderGrounded = isGrounded(state, ctx.defenderTypes ? { ...defender, types: defenderTypes } : defender, defenderAbility);
   const priorityBlocked =
     (defenderAbility?.blocksOpponentPriorityMoves && priority >= 1 && isOpponentTargetingMove(move)) ||
-    isPriorityMoveBlockedByField(state.field, priority, move);
+    isPriorityMoveBlockedByField(state.field, priority, move, defenderGrounded);
   if (priorityBlocked || typeEffectiveness === 0) return { ...NO_DAMAGE, accuracy: 0, typeEffectiveness };
 
+  // 기습류: 방어측이 이번 턴 공격기를 고를 때만 성공 — 그 확률을 명중률에 곱한다. 선공 +1이라 행동 순서는 먼저로 본다
+  // (방어측이 더 높은 우선도 공격기로 먼저 치는 경우는 무시하는 근사).
+  const targetAttackChance =
+    requiresTargetAttack(move) || move.conditionalDoublePower === "took-damage-this-turn"
+      ? (ctx.targetAttackChance ?? attackChanceOf(state, defender, attacker))
+      : 1;
+  const successChance = requiresTargetAttack(move) ? targetAttackChance : 1;
   const accuracy =
-    computeBattleHitChance({
+    successChance *
+    (computeBattleHitChance({
       state,
       attacker,
       defender,
@@ -149,7 +293,7 @@ export function estimateMoveHits(ctx: MoveHitContext, baseMove: Move): MoveHitEs
       attackerItem,
       defenderItem,
       attackerMovesSecond,
-    }) ?? 1;
+    }) ?? 1);
 
   // 일격기(트랙 M5): 맞으면 한 번에 쓰러뜨린다(옹골참·면역 타입이면 안 통함). 기합의띠류는 applySurvivalGuard가 본다.
   if (move.oneHitKo) {
@@ -203,12 +347,19 @@ export function estimateMoveHits(ctx: MoveHitContext, baseMove: Move): MoveHitEs
     attacker.status.condition,
     move.category,
     ignoresBurnAttackPenalty(attackerAbility?.id, move.id),
+    attackerAbility?.physicalAttackMultiplierWhenStatused,
   );
   // 총대장: 엔진(hitResolution)과 같은 배율. 나와 있는 포켓몬은 등장 때 센 값, 대기 포켓몬(교체 후보·파티 대면표)은
   // "지금 나온다면" 셀 값 — 같은 편 기절 수 — 으로 본다.
   const overlordMultiplier = supremeOverlordMultiplier(attackerAbility, supremeOverlordCountFor(state, attacker));
+  // 눈사태(이번 턴 먼저 맞았으면 2배): 후공이면 방어측이 공격기를 고를 확률만큼 2배를 기대 위력으로 섞는다. 보복(상대보다
+  // 늦게 행동하면 2배)은 후공 여부 그대로(ver.1.9 6-1 — 이전엔 AI가 항상 기본 위력으로 봤다).
+  const avalancheMultiplier =
+    move.conditionalDoublePower === "took-damage-this-turn" && attackerMovesSecond ? 1 + targetAttackChance : 1;
+  // 애널라이즈(ver.1.9 A5): 후공이면 위력 ×1.3 — 엔진과 같은 판정(대상보다 늦게 행동)
+  const analyticMultiplier = attackerMovesSecond ? (attackerAbility?.powerMultiplierWhenMovingLast ?? 1) : 1;
 
-  const result = evaluateSlotMatchup(attacker.slot, move, defender.slot, {
+  const matchupOptions: SlotMatchupOptions = {
     attackerStages: attacker.stages,
     defenderStages: defender.stages,
     applyMoveOwnStatChanges: false,
@@ -221,18 +372,60 @@ export function estimateMoveHits(ctx: MoveHitContext, baseMove: Move): MoveHitEs
     defenderHpIsFull: defenderHp === defender.maxHp,
     defenderHpFraction: defender.maxHp > 0 ? defenderHp / defender.maxHp : 1,
     defenderHasStatusCondition: !!defender.status.condition,
+    attackerStatus: attacker.status.condition,
+    defenderStatus: defender.status.condition,
+    attackerMovesLast: move.conditionalDoublePower === "moves-after-target" && attackerMovesSecond,
+    // 분풀이(이번 턴 능력 하락)·승부굳히기(이번 턴 대상이 이미 데미지)는 결정 시점(턴 시작 전)엔 알 수 없어 기본 위력으로 본다
+    // 누르기 등 작아지기 보너스: 대상이 이번 배틀에서 작아지기를 썼으면(엔진과 같은 기록)
+    defenderMinimized: !!defender.usedMoveIds?.["작아지기"],
     defenderItemConsumed: !!defender.itemConsumed,
     attackerRuntime: runtimeOf(attacker, ctx.attackerTypes, state),
     defenderRuntime: runtimeOf(defender, defenderTypes, state),
-    extraOffenseMultiplier: ownTypeBoost * electroBoost * burnMultiplier * overlordMultiplier,
-  });
+    extraOffenseMultiplier: ownTypeBoost * electroBoost * burnMultiplier * overlordMultiplier * avalancheMultiplier * analyticMultiplier,
+  };
+  const result = evaluateSlotMatchup(attacker.slot, move, defender.slot, matchupOptions);
   if (!result) return null;
 
-  const estimate = estimateHits(result.offensePower * hitCountScale, result.bulkPower, {
+  // 급소(ver.1.9 6-2): 엔진 hitResolution과 같은 확률 규칙. 급소 데미지 비는 계산기 급소 가정(랭크·벽 무시·×1.5)으로 낸다.
+  // 단타는 처치 타수 분포에 급소를 섞고, 다단히트(타마다 따로 굴림)는 기대 데미지 배율로 근사한다.
+  const critP = critAware ? critChanceOf(attacker, defender, move, attackerAbility, defenderAbility, attackerItem) : 0;
+  let crit: CritModel | undefined;
+  let critMeanScale = 1;
+  if (critP > 0 && result.offensePower > 0) {
+    const critResult = evaluateSlotMatchup(attacker.slot, move, defender.slot, { ...matchupOptions, critical: true });
+    const scale = critResult ? critResult.offensePower / critResult.bulkPower / (result.offensePower / result.bulkPower) : 1;
+    if (scale > 1) {
+      if (hitCountScale > 1 || (multiHitCount ?? 1) > 1) critMeanScale = 1 + critP * (scale - 1);
+      else crit = { chance: critP, scale };
+    }
+  }
+
+  // 반감 열매는 첫 타에 소모된다(ver.1.9 6-1): 열매 없는 내구력으로 처치 타수를 내고 첫 번 사용만 데미지를 줄인다.
+  // 계산기는 고정 타수 다단히트면 첫 타만 반감한 배율을 이미 넣었고, 2~5회 기대 타수(hitCountScale)는 여기서 나눈다.
+  let bulkPower = result.bulkPower;
+  let firstHitScale = 1;
+  if (result.berryBulkMultiplier > 1) {
+    bulkPower = result.bulkPower / result.berryAppliedMultiplier;
+    firstHitScale =
+      hitCountScale > 1
+        ? 1 / hitCountScale / result.berryBulkMultiplier + (1 - 1 / hitCountScale)
+        : 1 / result.berryAppliedMultiplier;
+  }
+  // 분함의발구르기·열불내기(ver.1.9): 직전 턴 실패 기록이 있으면 이번 한 번만 위력 2배 — 첫 번 사용만 데미지 ×2
+  if (move.conditionalDoublePower === "user-move-failed-last-turn" && attacker.lastTurnMoveFailed) firstHitScale *= 2;
+  const estimate = estimateHits(result.offensePower * hitCountScale * critMeanScale, bulkPower, {
     hpFraction: defenderHp / defender.maxHp,
     accuracy,
+    firstHitScale,
+    crit,
   });
+  // 하드 오버라이드용 worst_case는 급소 없는 값(급소는 기대 턴 수에만) — 반드시 급소인 기술만 급소 값
+  const certainCritScale = critP >= 1 ? (crit?.scale ?? critMeanScale) : 1;
+  if (critMeanScale > 1 || certainCritScale > 1) {
+    estimate.worstCase = worstCaseFromMatchup(result.offensePower * hitCountScale * firstHitScale * certainCritScale, bulkPower, defenderHp / defender.maxHp);
+  }
   const rawHits = accuracy > 0 ? estimate.expected * accuracy : Infinity;
-  const damageFraction = meanDamageFraction(result.offensePower * hitCountScale, result.bulkPower) * accuracy;
+  const critMean = crit ? 1 + crit.chance * (crit.scale - 1) : critMeanScale;
+  const damageFraction = meanDamageFraction(result.offensePower * hitCountScale * critMean, result.bulkPower) * accuracy;
   return applySurvivalGuard({ ...estimate, rawHits, accuracy, typeEffectiveness, damageFraction }, defender, defenderAbility, defenderItem, defenderHp);
 }

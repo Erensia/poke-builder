@@ -15,7 +15,7 @@ import {
   type BattleState,
 } from "../state";
 import { calcEntryHazardDamage } from "../entryCost";
-import { isTrappedFromSwitching } from "../switching";
+import { isTrappedFromSwitching, trappedByOpposingAbility } from "../switching";
 import { blendTurns } from "./statusMoveEffects";
 import { isGrounded } from "../grounding";
 import { estimateMoveHits } from "./moveDamage";
@@ -122,7 +122,7 @@ function unstaged(fighter: BattleFighterState): BattleFighterState {
 
 /**
  * 독압정: 대기 포켓몬이 이 편 독압정 위로 등장하면 독(2층 맹독)에 걸린 상태로 대면한다고 본다(접지·타입/특성
- * 면역·이미 상태이상·필드 차단 제외). 맹독 카운터는 대면 기간 평균 근사로 2(applyEffectMove와 같은 방식).
+ * 면역·이미 상태이상·필드 차단 제외). 맹독 카운터는 실제 값 — 대면 동안 늘어나는 피해는 turnsToKo가 센다.
  */
 function withEntryPoison(state: BattleState, fighter: BattleFighterState, side: BattleSide): BattleFighterState {
   const layers = side.hazards.toxicSpikesLayers;
@@ -133,8 +133,7 @@ function withEntryPoison(state: BattleState, fighter: BattleFighterState, side: 
   if (isImmuneToStatus(status, fighter.types, statusImmunitiesOf(fighter, ability)) || isStatusBlockedByField(state.field, status, true)) {
     return fighter;
   }
-  const inflicted = inflictStatus(fighter.status, status);
-  return { ...fighter, status: status === "badly-poisoned" ? { ...inflicted, turnsElapsed: 2 } : inflicted };
+  return { ...fighter, status: inflictStatus(fighter.status, status) };
 }
 
 /**
@@ -155,7 +154,7 @@ function entryFraction(state: BattleState, fighter: BattleFighterState, side: Ba
 function computePair(state: BattleState, key: FighterKey, me: BattleFighterState, opponent: BattleFighterState): PartyPair {
   const mySide = sideOf(state, key);
   const oppSide = sideOf(state, opponentKey(key));
-  let best: { move: NonNullable<ReturnType<typeof usableMoves>[number]>; expected: number } | undefined;
+  let best: { move: NonNullable<ReturnType<typeof usableMoves>[number]>; expected: number; selfHpRate: number } | undefined;
   for (const move of usableMoves(me)) {
     if (isOneShotMove(move) || isUsageBlocked(state, me, move, opponent)) continue;
     const estimate = estimateMoveHits(
@@ -163,7 +162,7 @@ function computePair(state: BattleState, key: FighterKey, me: BattleFighterState
       move,
     );
     if (!estimate || !Number.isFinite(estimate.expected) || estimate.expected <= 0) continue;
-    if (!best || estimate.expected < best.expected) best = { move, expected: estimate.expected };
+    if (!best || estimate.expected < best.expected) best = { move, expected: estimate.expected, selfHpRate: estimate.selfHpRate ?? 0 };
   }
   const probe = evaluateOpponentThreat({ state, opponent, target: me, targetSide: mySide, opponentMovesSecond: false, targetHp: me.maxHp });
   const speed = best ? firstProbability(state, me, best.move, opponent, probe.bestMove).probability : 0;
@@ -173,9 +172,10 @@ function computePair(state: BattleState, key: FighterKey, me: BattleFighterState
       : probe;
   // 위협 환산 c 쪽(ver.1.8 한계점 정리 ③) — 상대 회복기·벽 등이 내 공격 효율을 깎는 몫
   const drag = best ? opponentStatusDrag(state, opponent, me, mySide, best.expected) : { rateMult: 1, heal: 0 };
+  // 자기 공격의 HP 변화(ver.1.9 한계점 A2): 상대 반동·흡수는 내 공격 속도에, 내 반동·흡수는 상대 공격 속도에 더한다(최대 HP 대비)
   return {
-    myRate: best ? Math.max(0, (1 / best.expected) * drag.rateMult - drag.heal) : 0,
-    oppRate: threat.expectedRate,
+    myRate: best ? Math.max(0, (1 / best.expected) * drag.rateMult - drag.heal + threat.selfHpRate) : 0,
+    oppRate: Math.max(0, threat.expectedRate + (best?.selfHpRate ?? 0)),
     firstProbability: speed,
     me,
     opponent,
@@ -198,8 +198,9 @@ export function createPartyModel(state: BattleState, key: FighterKey): PartyMode
     oppEntry: oppSide.party.map((f) => entryFraction(state, f, oppSide)),
     myActive: mySide.activeIndex,
     oppActive: oppSide.activeIndex,
-    oppTrapped: isTrappedFromSwitching(oppActive),
-    myTrapped: isTrappedFromSwitching(myActive),
+    // 그림자밟기(ver.1.9 A5)도 — 맞은편 활성 기준
+    oppTrapped: isTrappedFromSwitching(oppActive) || trappedByOpposingAbility(oppActive, myActive),
+    myTrapped: isTrappedFromSwitching(myActive) || trappedByOpposingAbility(myActive, oppActive),
     // 엔진: 쓴 턴에 2 → 그 턴 끝 1 → 다음 턴 교체 불가. 결정 시점에 2 이상이면 "이번 턴에 건" 효과 state
     switchLockedNextTurn: (state.fairyLockTurnsRemaining ?? 0) >= 2,
     myPerish: isFainted(myActive) ? Infinity : (myActive.perishCount ?? Infinity),

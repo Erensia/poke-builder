@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { MatchupSlot } from "../types/matchup";
+import type { MatchupSlot, PowerConditionKey } from "../types/matchup";
 import type { AbilityPoints, PartySlot } from "../types/party";
 import type { BattleStatKey } from "../types/battleStats";
 import type { WeatherKind } from "../types/weather";
@@ -25,7 +25,7 @@ export const EMPTY_MATCHUP_SLOT: MatchupSlot = {
   moveId: null,
   itemStolenFromOpponent: false,
   unburdenAssumed: false,
-  paralysisAssumed: false,
+  statusAssumed: null,
   graveVisitFaintedAllies: 0,
   stockpileCount: 3,
 };
@@ -122,8 +122,29 @@ function useMatchupSlot() {
     setSlot((prev) => ({ ...prev, unburdenAssumed: value }));
   }
 
-  function setParalysisAssumed(value: boolean) {
-    setSlot((prev) => ({ ...prev, paralysisAssumed: value }));
+  function setStatusAssumed(value: MatchupSlot["statusAssumed"]) {
+    setSlot((prev) => ({ ...prev, statusAssumed: value }));
+  }
+
+  /** ver.1.9 조건부 위력 가정 토글(보복·눈사태·분함의발구르기·분풀이·승부굳히기·작아지기) */
+  function setPowerCondition(key: PowerConditionKey, value: boolean) {
+    setSlot((prev) => ({ ...prev, [key]: value }));
+  }
+
+  function setCritAssumed(value: boolean) {
+    setSlot((prev) => ({ ...prev, critAssumed: value }));
+  }
+
+  function setPinchAssumed(value: boolean) {
+    setSlot((prev) => ({ ...prev, pinchAssumed: value }));
+  }
+
+  function setFullHpAssumed(value: boolean) {
+    setSlot((prev) => ({ ...prev, fullHpAssumed: value }));
+  }
+
+  function setHpPercent(value: number) {
+    setSlot((prev) => ({ ...prev, hpPercent: Math.max(1, Math.min(100, Math.round(value))) }));
   }
 
   function setScreen(value: MatchupSlot["screen"]) {
@@ -167,7 +188,12 @@ function useMatchupSlot() {
     setStockpileCount,
     setItemStolen,
     setUnburdenAssumed,
-    setParalysisAssumed,
+    setStatusAssumed,
+    setPowerCondition,
+    setCritAssumed,
+    setPinchAssumed,
+    setFullHpAssumed,
+    setHpPercent,
     setScreen,
     setGraveVisitFaintedAllies,
     setPoint,

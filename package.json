@@ -11,6 +11,7 @@
     "sprites": "node scripts/gen-sprite-manifest.mjs",
     "validate:data": "node scripts/validate-data.mjs",
     "sim:ai": "node scripts/battle-ai-sim.mjs",
+    "bench": "node scripts/bench.mjs",
     "test:ai": "node scripts/battle-ai-scenarios.mjs"
   },
   "dependencies": {

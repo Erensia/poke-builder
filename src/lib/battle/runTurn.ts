@@ -3,13 +3,14 @@ import { type ActionLogEntry, type FighterKey, type SwitchLogEntry, type TurnAct
 import { getAbility, getItem, getPokemon } from "@/lib/data";
 import { eunNeun } from "@/lib/josa";
 import { hasVolatile } from "@/lib/volatileConditions";
-import { getQuickClawTriggered } from "@/lib/itemEffects";
 import { compareTurnOrder } from "@/lib/turnOrder";
-import { buildTurnOrderActor, effectiveHeldItem, itemsSuppressedByRoom } from "./turnOrderInputs";
+import { buildTurnOrderActor, itemsSuppressedByRoom, quickFirstChances } from "./turnOrderInputs";
 import { STRUGGLE_MOVE, activeWeather, applyForecastForm, applyMimicryForm, cloneSide, consumeItem, hasLivingReserve, isFainted, isForcedSwitchBlocked, opponentKey, sideOf, type BattleState } from "./state";
 import { applyMegaEvolution, isTrappedFromSwitching, performSwitch } from "./switching";
 import { resolveAction } from "./resolveAction";
 import { finishTurn } from "./finishTurn";
+import { refreshUproar, updateRampage } from "./rampage";
+import { forcedLockedAction } from "./lockedAction";
 
 export interface RunTurnOutcome {
   /** 이번 턴 결과가 반영된 새 BattleState. prevState는 변형하지 않는다 */
@@ -99,9 +100,19 @@ export function runTurn(
     entryAnnouncements: prevState.entryAnnouncements,
   };
 
+  // 난동·모으기 2턴째·반동 턴(ver.1.9): 입력(다른 기술·교체)과 무관하게 정해진 행동 — 교체 불가
+  actionA = forcedLockedAction(state.a) ?? actionA;
+  actionB = forcedLockedAction(state.b) ?? actionB;
+  refreshUproar(state);
+
   // 가속 억제 플래그(§8)는 "이번 턴에 자발적 교체로 나왔나"라 매 턴 시작 시 전 슬롯에서 지운다.
   // 아래 교체 선처리에서 자발적 교체한 슬롯에만 다시 세워지고, 그 턴 EOT 가속 판정이 이걸 읽는다.
-  for (const s of [state.sideA, state.sideB]) for (const f of s.party) f.switchedInThisTurn = undefined;
+  for (const s of [state.sideA, state.sideB]) {
+    for (const f of s.party) {
+      f.switchedInThisTurn = undefined;
+      f.enteredThisTurn = undefined;
+    }
+  }
 
   // ── 교체 액션 선처리(Phase 8 §3): 항상 그 턴 기술보다 먼저 ──
   // 양쪽 다 교체면 스피드 빠른 쪽부터(순수 교체라 결과엔 영향 없지만 로그 순서 일관성).
@@ -167,6 +178,9 @@ export function runTurn(
   // 질투의불꽃용 — 이번 턴이 시작된 시점의 랭크를 스냅샷해 둔다(턴 중 랭크가 올랐는지 판정).
   state.a.statStagesAtTurnStart = { ...state.a.stages };
   state.b.statStagesAtTurnStart = { ...state.b.stages };
+  // 승부굳히기(ver.1.9): 이번 턴이 시작된 시점의 HP — 대상이 이번 턴 이미 데미지를 입었는지(출처 무관) 판정
+  state.a.hpAtTurnStart = state.a.currentHp;
+  state.b.hpAtTurnStart = state.b.currentHp;
 
   // 기분파(캐스퐁): 턴 시작 시점의 유효 날씨(날씨부정 반영)에 맞춰 타입을 다시 맞춘다.
   applyForecastForm(state.a, activeWeather(state));
@@ -216,8 +230,10 @@ export function runTurn(
   // 양쪽 다 발동하면(둘 다 이 도구를 지녔고 둘 다 확률에 성공) 서로 상쇄되어 정상적인 스피드
   // 비교로 넘어간다 — 어느 한쪽만 발동했을 때만 그쪽이 확정으로 먼저 움직인다.
   const priorityTied = actorA.move.priority === actorB.move.priority;
-  const aQuickClaw = priorityTied && getQuickClawTriggered(effectiveHeldItem(state.a, state), random);
-  const bQuickClaw = priorityTied && getQuickClawTriggered(effectiveHeldItem(state.b, state), random);
+  // 퀵드로(ver.1.9 A5)도 같은 축 — 도구·특성 확률을 각각 굴려 하나라도 성공하면 발동
+  const quickFirst = (fighter: typeof state.a, move: Move) => quickFirstChances(state, fighter, move).some((c) => random() * 100 < c);
+  const aQuickClaw = priorityTied && quickFirst(state.a, moveA);
+  const bQuickClaw = priorityTied && quickFirst(state.b, moveB);
   const quickClawWinner: FighterKey | undefined =
     aQuickClaw && !bQuickClaw ? "a" : bQuickClaw && !aQuickClaw ? "b" : undefined;
 
@@ -266,6 +282,9 @@ function runActionPhase(ctx: RunTurnContext): RunTurnOutcome | RunTurnPaused {
     const movesSecond = order[1] === key;
     const action = resolveAction(state, key, moves[key], random, movesSecond, moves[opponentKey(key)]);
     actions.push(action);
+    // 난동(ver.1.9): 시작·이어가기·끝나면 혼란 / 소란이면 잠든 포켓몬 깨움
+    updateRampage(state, key, action, random);
+    refreshUproar(state, action);
 
     // 유턴·볼트체인지·배턴터치(§7-2): 명중해서 효과를 줬고(빗나감·행동불능·완전 무효·방어류
     // 차단·특성 흡수 제외) 사용측이 살아 있고 교대 슬롯이 있으면 — 여기서 멈춘다. 상대 행동·턴

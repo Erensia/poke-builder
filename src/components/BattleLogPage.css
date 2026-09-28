@@ -1,12 +1,20 @@
 .battle-log-page {
   width: 100%;
-  /* PartyBoard(740px)·MatchupPage(740px)와 폭을 통일 (Phase 2.5). app-main이 이미
+  /* 모든 페이지 폭을 도감 페이지(980px)와 통일 (ver.1.9, 이전 740px). app-main이 이미
      2rem 안팎의 패딩을 주므로 여기서 별도 padding을 더하지 않는다 — 예전엔 padding이
      추가로 붙어서 대전 로그 타이틀만 다른 페이지 타이틀보다 오른쪽/아래로 밀려 보였다 */
-  max-width: 740px;
+  max-width: 980px;
   display: flex;
   flex-direction: column;
   gap: 1.2rem;
+}
+
+/* 제목·여백만 도감 페이지(980px)에 맞추고, 본문(편성·대전 화면)은 예전 폭(740px) 그대로 가운데에 둔다(모달 배경 제외, ver.1.9 사용자 결정) */
+.battle-log-page > :not(.battle-log-header):not(.modal-overlay) {
+  width: 100%;
+  max-width: 740px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .battle-log-header {
@@ -100,22 +108,6 @@
 
 .battle-ai-toggle input {
   cursor: pointer;
-}
-
-.battle-ai-difficulty {
-  font-size: 0.72rem;
-  font-weight: 600;
-  padding: 0.15rem 0.35rem;
-  border: 1px solid var(--violet);
-  border-radius: 6px;
-  background: var(--violet-soft);
-  color: var(--text);
-  cursor: pointer;
-}
-
-.battle-ai-difficulty:disabled {
-  opacity: 0.5;
-  cursor: default;
 }
 
 .battle-setup-load-party {
@@ -851,7 +843,7 @@
 }
 
 /* 공통 모바일 브레이크포인트 760px (§2-3). 이전엔 860px였으나 다른 페이지와 통일 —
-   battle-log-page max-width 740px라 760px 이하에서 2열이 확실히 좁아진다. */
+   battle-log-page max-width 980px라 760px 이하에서 2열이 확실히 좁아진다. */
 @media (max-width: 760px) {
   .battle-board {
     grid-template-columns: 1fr;

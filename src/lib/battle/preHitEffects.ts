@@ -12,7 +12,7 @@ import { getAbilityPriorityBoost, resolveEffectiveDefenderAbility } from "@/lib/
 import { checkStatusActionBlock, inflictStatus, isImmuneToStatus } from "@/lib/statusConditions";
 import { ATTRACT_ACTION_BLOCK_CHANCE, CONFUSION_SELF_HIT_CHANCE, consumeVolatileTurn, hasVolatile } from "@/lib/volatileConditions";
 import { resolveMoveContext } from "@/lib/moveContext";
-import { WEIGHT_MOVE_FALLBACK_POWER, absoluteWeightPowerValue, computeDamage, positiveStagesPowerValue, reversalPowerFromHp, targetHpRatioPowerValue, faintedAllyPowerValue, rivalryDamageMultiplier, weightRatioPowerValue } from "@/lib/battlePower";
+import { WEIGHT_MOVE_FALLBACK_POWER, absoluteWeightPowerValue, computeDamage, positiveStagesPowerValue, reversalPowerFromHp, targetHpRatioPowerValue, userHpScaledPowerValue, faintedAllyPowerValue, rivalryDamageMultiplier, weightRatioPowerValue } from "@/lib/battlePower";
 import { applyWeatherBall } from "@/lib/weatherEffects";
 import { applyFieldPulse, getFieldPowerMultiplier, isOpponentTargetingMove, isPriorityMoveBlockedByField, isStatusBlockedByField } from "@/lib/fieldEffects";
 import { computeBattleHitChance } from "./hitChance";
@@ -104,7 +104,10 @@ export function resolvePreHitEffects(
 
   // PP 소모는 행동 여부와 무관하게 발생(단, 차지 기술 2턴째는 위에서 이미 스킵 처리)
   let leppaRestoredPpItemName: string | undefined;
-  if (!releasingCharge && attacker.remainingPp[move.id] !== undefined) {
+  // 난동(ver.1.9): 이어 쓰는 턴은 PP를 쓰지 않는다(첫 턴만). 반동 턴(ver.1.9 A1)도 움직이지 않으니 PP 없음
+  const continuingRampage = attacker.volatile.active.rampage?.moveId === move.id;
+  const recharging = hasVolatile(attacker.volatile, "recharge");
+  if (!releasingCharge && !continuingRampage && !recharging && attacker.remainingPp[move.id] !== undefined) {
     const ppBefore = attacker.remainingPp[move.id];
     attacker.remainingPp[move.id] = Math.max(0, ppBefore - 1);
     // 과사열매: 이번 사용으로 PP가 정확히 0이 됐을 때(원래 0이던 걸 또 쓴 게 아니라)만 발동한다.
@@ -131,7 +134,7 @@ export function resolvePreHitEffects(
   // 가리지 않고(본가 규칙 — 프레셔는 "이 포켓몬이 필드에 있는 동안 상대가 쓰는 모든 기술"에
   // 적용된다) PP를 추가로 더 소모시킨다. 과사열매 재판정 없이 단순 차감만 한다.
   let pressureExtraPpAbilityName: string | undefined;
-  if (defenderAbility?.extraPpCostWhenTargeted && !releasingCharge && attacker.remainingPp[move.id] !== undefined) {
+  if (defenderAbility?.extraPpCostWhenTargeted && !releasingCharge && !continuingRampage && !recharging && attacker.remainingPp[move.id] !== undefined) {
     const before = attacker.remainingPp[move.id];
     attacker.remainingPp[move.id] = Math.max(0, before - defenderAbility.extraPpCostWhenTargeted);
     if (attacker.remainingPp[move.id] !== before) pressureExtraPpAbilityName = defenderAbility.name;
@@ -163,6 +166,13 @@ export function resolvePreHitEffects(
     ...extra,
   });
 
+  // 반동 턴(ver.1.9 A1): 무엇보다 먼저 — 상태이상 판정(잠듦 카운터 등)·사용 조건보다 앞서 막고 반동을 소모한다. 이전엔 상태이상
+  // 판정 뒤라 마비로 못 움직이면 반동이 다음 턴까지 남았다.
+  if (recharging) {
+    attacker.volatile = consumeVolatileTurn(attacker.volatile, "recharge");
+    return blocked("recharge");
+  }
+
   // 0) 사용 조건이 있는 기술(코골기=잠든 상태 전용, 속이기=첫 턴 전용). 상태이상/행동방해
   // 판정보다 먼저 확인한다 — 조건 자체를 못 채우면 애초에 시도조차 안 한 것으로 취급.
   // 속이기: 이 포켓몬이 등장한 뒤 처음 행동을 개시하는 턴에만 성공한다(리드의 1턴, 교체·유턴
@@ -186,6 +196,14 @@ export function resolvePreHitEffects(
     const otherMoveIds = Object.keys(attacker.remainingPp).filter((id) => id !== move.id);
     const allUsed = otherMoveIds.every((id) => attacker.usedMoveIds?.[id]);
     if (!allUsed) return blocked("usageCondition");
+  }
+  // 소란피기(ver.1.9): 소란 중에는 잠자기가 실패한다(잠들 수 없음)
+  if (move.restSleep && attacker.sleepBlockedByUproar) {
+    return blocked("usageCondition");
+  }
+  // 배수의진(ver.1.9): 이미 배수의진 상태면 실패(본가 규칙)
+  if (move.usageCondition === "not-no-retreat" && hasVolatile(attacker.volatile, "noRetreat")) {
+    return blocked("usageCondition");
   }
   // 토해내기: 비축 스택이 0이면 쓸 수 없다.
   if (move.spitUpPower && (attacker.stockpileCount ?? 0) === 0) {
@@ -249,14 +267,10 @@ export function resolvePreHitEffects(
     }
   }
 
-  // 2) 풀죽음/반동: 1턴짜리 행동방해. 걸려있으면 이번 턴 소모하고 못 움직인다
+  // 2) 풀죽음: 1턴짜리 행동방해. 걸려있으면 이번 턴 소모하고 못 움직인다(반동은 위에서 먼저)
   if (hasVolatile(attacker.volatile, "flinch")) {
     attacker.volatile = consumeVolatileTurn(attacker.volatile, "flinch");
     return blocked("flinch");
-  }
-  if (hasVolatile(attacker.volatile, "recharge")) {
-    attacker.volatile = consumeVolatileTurn(attacker.volatile, "recharge");
-    return blocked("recharge");
   }
 
   // 2-0) 도발/사슬묶기/앙코르: 이번 턴 고른 기술이 제약을 어기면 실패한다. 차지 기술 2턴째
@@ -551,10 +565,14 @@ export function resolvePreHitEffects(
     attackerGrounded,
     isGrounded(state, defender, defenderAbility),
   );
+  // 애널라이즈(대상보다 늦게 행동)·잠복(이번 턴 교체해 들어온 대상) — ver.1.9 A5
+  const analyticMultiplier = movesSecond ? (attackerAbility?.powerMultiplierWhenMovingLast ?? 1) : 1;
+  const stakeoutMultiplier = defender.enteredThisTurn ? (attackerAbility?.powerMultiplierVsSwitchedIn ?? 1) : 1;
   const fieldAdjustedMove: Move = {
     ...moveAfterWeatherBall,
     type: fieldPulse.type,
-    power: fieldPulse.power === null ? null : Math.round(fieldPulse.power * fieldPowerMultiplier),
+    power:
+      fieldPulse.power === null ? null : Math.round(fieldPulse.power * fieldPowerMultiplier * analyticMultiplier * stakeoutMultiplier),
   };
 
   // evaluateSlotMatchup(1턴 스냅샷 판정)과 같은 로직을 공유 — 특성 배율/타입 변경/자속/상대 상성
@@ -604,6 +622,10 @@ export function resolvePreHitEffects(
   // 기사회생(Reversal)·바둥바둥(Flail, F-2): power가 null인 채로 오고, 사용자의 현재 HP 비율에 따라 위력이 정해진다.
   if (effectiveMove.reversalPower) {
     effectiveMove = { ...effectiveMove, power: reversalPowerFromHp(attacker.currentHp, attacker.maxHp) };
+  }
+  // 분화·해수스파우팅(ver.1.9): 위력 = max(1, ⌊최대 위력 × 현재 HP ÷ 최대 HP⌋)
+  if (effectiveMove.userHpScaledPower) {
+    effectiveMove = { ...effectiveMove, power: userHpScaledPowerValue(effectiveMove.userHpScaledPower, attacker.currentHp / attacker.maxHp) };
   }
   // 자이로볼(§3-1a): 상대가 느릴수록 강하다. 자신·상대의 실효 스피드로 위력을 정한다.
   if (effectiveMove.gyroBallPower) {
@@ -706,9 +728,9 @@ export function resolvePreHitEffects(
     };
   }
   // 눈사태·보복·애크러뱃(§3 증분 C): 조건 충족 시 위력 2배.
-  // 분풀이("user-stat-lowered-this-turn")·분함의발구르기("user-move-failed-last-turn")는 이번 턴/직전
-  // 턴 이력 상태가 엔진에 없어 여기선 항상 미충족(기본 위력)으로 둔다 — 매치업 페이지에서만 충족
-  // 상정(§3 증분 B-3, 사용자 지시).
+  // 분함의발구르기·열불내기("user-move-failed-last-turn", ver.1.9): 직전 턴 자기 행동이 실패였으면(lastTurnMoveFailed).
+  // 분풀이("user-stat-lowered-this-turn", ver.1.9): 턴 시작 랭크(statStagesAtTurnStart)보다 떨어진 능력이 있으면.
+  // 승부굳히기("target-damaged-this-turn", ver.1.9): 대상 HP가 이번 턴 시작(hpAtTurnStart)보다 줄었으면.
   if (effectiveMove.conditionalDoublePower && effectiveMove.power !== null) {
     const condition = effectiveMove.conditionalDoublePower;
     const met =
@@ -725,7 +747,15 @@ export function resolvePreHitEffects(
                 attacker.status.condition === "paralysis"
               : condition === "target-status-poisoned"
                 ? defender.status.condition === "poison" || defender.status.condition === "badly-poisoned"
-                : false; // user-stat-lowered-this-turn / user-move-failed-last-turn → 엔진 미추적
+                : condition === "target-has-status"
+                  ? !!defender.status.condition
+                  : condition === "user-move-failed-last-turn"
+                    ? !!attacker.lastTurnMoveFailed
+                    : condition === "user-stat-lowered-this-turn"
+                      ? statLoweredThisTurn(attacker)
+                      : condition === "target-damaged-this-turn"
+                        ? defender.hpAtTurnStart !== undefined && defender.currentHp < defender.hpAtTurnStart
+                        : false;
     if (met) effectiveMove = { ...effectiveMove, power: effectiveMove.power * 2 };
   }
 
@@ -951,7 +981,8 @@ export function resolvePreHitEffects(
 
   // 철제광선: "사용하는 순간" 명중·빗나감과 무관하게 사용자가 최대 HP의 절반을 잃는다(E-3).
   let selfDamageOnUse = 0;
-  if (effectiveMove.selfDamageFractionOnUse !== undefined) {
+  // 매직가드(ver.1.9 A5): 철제광선의 HP 손실도 막는다(본가)
+  if (effectiveMove.selfDamageFractionOnUse !== undefined && !attackerAbility?.negatesIndirectDamage) {
     selfDamageOnUse = Math.floor(attacker.maxHp * effectiveMove.selfDamageFractionOnUse);
     attacker.currentHp = Math.max(0, attacker.currentHp - selfDamageOnUse);
   }
@@ -964,7 +995,8 @@ export function resolvePreHitEffects(
     }
     // 무릎차기: 빗나가면 사용자가 최대 HP 절반을 잃는다(E-2). "의욕이 넘쳐 땅에 부딪혔다!"
     let crashDamage = 0;
-    if (effectiveMove.crashFraction !== undefined) {
+    // 매직가드(ver.1.9 A5): 무릎차기류 빗나감 손실도 막는다(본가)
+    if (effectiveMove.crashFraction !== undefined && !attackerAbility?.negatesIndirectDamage) {
       crashDamage = Math.floor(attacker.maxHp * effectiveMove.crashFraction);
       attacker.currentHp = Math.max(0, attacker.currentHp - crashDamage);
     }
@@ -1069,4 +1101,11 @@ export function resolvePreHitEffects(
 /** 흉내쟁이(트랙 M2)가 따라 쓸 수 있는 기술인지 — AI(흉내쟁이 평가)도 같은 판정을 쓴다 */
 export function isCopyableMove(move: Move): boolean {
   return !move.excludedFromCopycat && !move.callsLastMoveInBattle && !move.chargeTurn && !move.usageCondition;
+}
+
+/** 분풀이(ver.1.9): 이번 턴 시작 때보다 떨어진 능력 랭크가 있는지(턴 중 등장이면 기록이 없어 false) */
+function statLoweredThisTurn(fighter: BattleFighterState): boolean {
+  const before = fighter.statStagesAtTurnStart;
+  if (!before) return false;
+  return (Object.keys(before) as (keyof typeof before)[]).some((stat) => fighter.stages[stat] < before[stat]);
 }

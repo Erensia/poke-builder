@@ -19,6 +19,9 @@
  * 환경변수 PROTECT=1: 방어류를 배울 수 있으면 4번째 기술을 방어류로 바꾼다. DIAG=protect면 방어류를 고른 순간을 덤프.
  * 환경변수 STATUS=1: AI가 점수 매기는 변화기를 배울 수 있으면 기술 하나를 그걸로 바꾼다(변화기 판단 검증용).
  *     diag 모드에 DIAG=status를 주면 그 변화기를 고른 순간을 덤프한다.
+ * 환경변수 SEED_FROM=<n>(greedy·h2h·select): 시드 n부터 [판 수]개만 돈다(기본 1) — 벤치를 조각내 병렬로 돌린 뒤 합산(scripts/bench.mjs).
+ *     각 판은 시드로만 정해지므로 조각의 합은 한 번에 돌린 결과와 같다.
+ * 환경변수 SIM_ROOT=<체크아웃 경로>: 이 스크립트 대신 그 체크아웃의 src/를 불러온다(다른 커밋을 이 하네스로 벤치).
  *   h2h에 OPP_ROOT=<다른 체크아웃 경로>를 주면 B 쪽 AI를 그 코드에서 불러온다(예: ver.1.7 끝 대비 — 엔진·데이터는 이 체크아웃).
  *     (PowerShell에서는 JSON 따옴표를 '{\"scoring\":\"spec\"}' 처럼 이스케이프)
  */
@@ -28,18 +31,14 @@ import { fileURLToPath } from "node:url";
 
 const mode = process.argv[2] ?? "regress";
 const battles = Number(process.argv[3] ?? 200);
-// 파라미터 JSON의 "difficulty"("hard" | "easy")는 난이도 프리셋으로 따로 넘긴다(나머지는 프리셋 위에 덮어씀)
-const splitDifficulty = (p) => {
-  if (!p) return { params: undefined, difficulty: undefined };
-  const { difficulty, ...params } = p;
-  return { params, difficulty };
-};
-const { params: decisionParams, difficulty } = splitDifficulty(process.argv[4] ? JSON.parse(process.argv[4]) : undefined);
-const root = fileURLToPath(new URL("..", import.meta.url));
+const decisionParams = process.argv[4] ? JSON.parse(process.argv[4]) : undefined;
+const root = process.env.SIM_ROOT ?? fileURLToPath(new URL("..", import.meta.url));
+const seedFrom = Number(process.env.SEED_FROM ?? 1);
+const seedTo = seedFrom + battles - 1;
 // hmr: false — 병렬 실행 시 HMR 웹소켓 포트(24678) 충돌로 프로세스가 죽는 걸 막는다.
 const server = await createServer({ root, server: { middlewareMode: true, hmr: false }, appType: "custom", logLevel: "error" });
-const { params: opponentParams, difficulty: opponentDifficulty } = splitDifficulty(process.argv[5] ? JSON.parse(process.argv[5]) : undefined);
-// 쉬움 난이도의 소프트맥스 선택용 시드 고정 난수(배틀 결과 재현)
+const opponentParams = process.argv[5] ? JSON.parse(process.argv[5]) : undefined;
+// 3선출 소프트맥스 선택용 시드 고정 난수(배틀 결과 재현)
 const choiceRng = mulberry32(0x5eed);
 // h2h 모드: OPP_ROOT=<다른 체크아웃 경로>면 B 쪽 AI를 그 코드(예: ver.1.7 끝)에서 불러온다 — 엔진·데이터는 이 체크아웃 것.
 const oppServer = process.env.OPP_ROOT
@@ -159,7 +158,7 @@ try {
     const best = moves.reduce((a, b) => (b.hitsToKill.expected < a.hitsToKill.expected ? b : a));
     return { kind: "move", move: best.move, mega: best.mega };
   };
-  const aiForced = (risk) => (st, key) => ai.chooseAiForcedSwitch(st, key, risk, decisionParams, difficulty) ?? living(st, key)[0];
+  const aiForced = (risk) => (st, key) => ai.chooseAiForcedSwitch(st, key, risk, decisionParams) ?? living(st, key)[0];
 
   function runBattle(seed, policies, forced, initial) {
     const rng = mulberry32(seed);
@@ -235,7 +234,7 @@ try {
       return attacks.reduce((a, b) => (b.option.hitsToKill.expected < a.option.hitsToKill.expected ? b : a));
     };
     const aiPolicy = (st, key) => {
-      const d = ai.chooseAiAction(st, key, 0.5, { decisionParams, difficulty, random: choiceRng });
+      const d = ai.chooseAiAction(st, key, 0.5, { decisionParams });
       let dumpThis = wantDump(d);
       if (tieSetup) {
         tieStats.decisions++;
@@ -284,7 +283,7 @@ try {
     const mix = { move: 0, pivot: 0, switch: 0, status: 0 };
     const statusMix = {};
     const aiPolicy = (risk) => (st, key) => {
-      const d = ai.chooseAiAction(st, key, risk, { decisionParams, difficulty, random: choiceRng });
+      const d = ai.chooseAiAction(st, key, risk, { decisionParams });
       if (d.action.kind === "switch") mix.switch++;
       else if (d.action.move.category === "status") {
         mix.status++;
@@ -303,7 +302,7 @@ try {
       const r = runBattle(seed, { [aiSide]: aiPolicy(risk), [gSide]: greedyPolicy }, { [aiSide]: aiForced(risk), [gSide]: firstLiving });
       return r.winner === aiSide ? "aiWins" : r.winner === gSide ? "greedyWins" : "other";
     };
-    for (let s = 1; s <= battles; s++) {
+    for (let s = seedFrom; s <= seedTo; s++) {
       const risk = mulberry32(s)();
       res[outcome(s, "a", risk)]++;
       res[outcome(s, "b", risk)]++;
@@ -314,26 +313,26 @@ try {
     // OPP_ROOT면 B는 그 체크아웃의 AI — 고른 기술은 이 체크아웃 데이터의 같은 id 기술로 바꿔 엔진에 넘긴다.
     const oppAi = oppServer ? await oppServer.ssrLoadModule("/src/lib/battle/ai/index.ts") : ai;
     const remap = (action) => (action.kind === "move" && action.move ? { ...action, move: data.getMove(action.move.id) ?? action.move } : action);
-    const policy = (params, diff, risk, which = ai) => (st, key) =>
-      remap(which.chooseAiAction(st, key, risk, { decisionParams: params, difficulty: diff, random: choiceRng }).action);
-    const forced = (params, diff, risk, which = ai) => (st, key) => which.chooseAiForcedSwitch(st, key, risk, params, diff) ?? living(st, key)[0];
+    const policy = (params, risk, which = ai) => (st, key) =>
+      remap(which.chooseAiAction(st, key, risk, { decisionParams: params }).action);
+    const forced = (params, risk, which = ai) => (st, key) => which.chooseAiForcedSwitch(st, key, risk, params) ?? living(st, key)[0];
     const res = { aWins: 0, bWins: 0, other: 0 };
-    for (let s = 1; s <= battles; s++) {
+    for (let s = seedFrom; s <= seedTo; s++) {
       const risk = mulberry32(s)();
       for (const aSide of ["a", "b"]) {
         const bSide = aSide === "a" ? "b" : "a";
         const r = runBattle(
           s,
-          { [aSide]: policy(decisionParams, difficulty, risk), [bSide]: policy(opponentParams, opponentDifficulty, risk, oppAi) },
-          { [aSide]: forced(decisionParams, difficulty, risk), [bSide]: forced(opponentParams, opponentDifficulty, risk, oppAi) },
+          { [aSide]: policy(decisionParams, risk), [bSide]: policy(opponentParams, risk, oppAi) },
+          { [aSide]: forced(decisionParams, risk), [bSide]: forced(opponentParams, risk, oppAi) },
         );
         res[r.winner === aSide ? "aWins" : r.winner === bSide ? "bWins" : "other"]++;
       }
     }
-    console.log(JSON.stringify({ battles: battles * 2, A: { difficulty: difficulty ?? "hard", ...decisionParams }, B: { difficulty: opponentDifficulty ?? "hard", ...opponentParams }, res }));
+    console.log(JSON.stringify({ battles: battles * 2, A: { ...decisionParams }, B: { ...opponentParams }, res }));
   } else if (mode === "select") {
-    // 3선출 AI(로드맵 7): 양쪽 6마리 빌드 → 한쪽은 AI 선출, 다른 쪽은 SELECT_B(random | first, 기본 random) → 양쪽 어려움 AI로 대전.
-    // 좌우 교대. 파라미터 JSON(argv[4])의 difficulty는 AI 선출 쪽 난이도.
+    // 3선출 AI(로드맵 7): 양쪽 6마리 빌드 → 한쪽은 AI 선출, 다른 쪽은 SELECT_B(random | first, 기본 random) → 양쪽 AI로 대전.
+    // 좌우 교대.
     const baseline = process.env.SELECT_B ?? "random";
     const make6 = (rng) => {
       const members = Array.from({ length: 6 }, () => makeSlot(rng));
@@ -345,7 +344,7 @@ try {
     const res = { aiSelectWins: 0, baselineWins: 0, other: 0 };
     let selectMs = 0;
     let selects = 0;
-    for (let s = 1; s <= battles; s++) {
+    for (let s = seedFrom; s <= seedTo; s++) {
       const partyRng = mulberry32(s ^ 0x51ec7);
       const six = { a: make6(partyRng), b: make6(partyRng) };
       const full = state.createBattleState(six);
@@ -353,7 +352,7 @@ try {
       for (const aiSide of ["a", "b"]) {
         const other = aiSide === "a" ? "b" : "a";
         const t0 = performance.now();
-        const aiSel = ai.chooseAiSelection(full, aiSide, { difficulty, random: choiceRng });
+        const aiSel = ai.chooseAiSelection(full, aiSide, { random: choiceRng });
         selectMs += performance.now() - t0;
         selects++;
         const baseSel =
@@ -363,7 +362,7 @@ try {
         res[r.winner === aiSide ? "aiSelectWins" : r.winner === other ? "baselineWins" : "other"]++;
       }
     }
-    console.log(JSON.stringify({ battles: battles * 2, baseline, difficulty: difficulty ?? "hard", res, avgSelectMs: +(selectMs / selects).toFixed(1) }));
+    console.log(JSON.stringify({ battles: battles * 2, baseline, res, avgSelectMs: +(selectMs / selects).toFixed(1) }));
   } else if (mode === "ai") {
     const results = { aiVsRandom: { a: 0, b: 0, draw: 0, timeout: 0 }, aiVsAi: { a: 0, b: 0, draw: 0, timeout: 0 } };
     let maxMs = 0;
@@ -371,7 +370,7 @@ try {
     let decisions = 0;
     let nanScores = 0;
     const aiPolicy = (risk) => (st, key) => {
-      const d = ai.chooseAiAction(st, key, risk, { decisionParams, difficulty, random: choiceRng });
+      const d = ai.chooseAiAction(st, key, risk, { decisionParams });
       for (const s of d.scored) {
         if (s.nan || Number.isNaN(s.score)) {
           nanScores++;

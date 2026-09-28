@@ -218,7 +218,9 @@ export interface Move {
     | "field-required"
     | "opponent-damaging-move-only"
     | "weather-required"
-    | "all-other-moves-used";
+    | "all-other-moves-used"
+    // 배수의진(ver.1.9): 이미 배수의진 상태(noRetreat)면 실패
+    | "not-no-retreat";
   /** usageCondition: "weather-required"일 때만 의미 있음 — 이 날씨가 아니면 사용 자체가 실패한다(오로라베일=눈) */
   requiresWeather?: WeatherKind;
   /**
@@ -484,6 +486,10 @@ export interface Move {
    */
   reversalPower?: boolean;
   /**
+   * 분화·해수스파우팅(ver.1.9): 위력 = max(1, ⌊이 값 × 현재 HP ÷ 최대 HP⌋). power에도 같은 최대값을 둔다(표기용).
+   */
+  userHpScaledPower?: number;
+  /**
    * 눈사태·보복·애크러뱃·분풀이·분함의발구르기처럼 조건 충족 시 위력이 2배가 되는 기술.
    *  - "took-damage-this-turn"(눈사태): 이번 턴에 상대 데미지 기술로 이미 맞았으면
    *  - "moves-after-target"(보복): 자신이 상대보다 나중에 행동하면
@@ -508,7 +514,11 @@ export interface Move {
     | "user-stat-lowered-this-turn"
     | "user-move-failed-last-turn"
     | "user-status-burn-poison-paralysis"
-    | "target-status-poisoned";
+    | "target-status-poisoned"
+    // 백귀야행(ver.1.9): 상대가 주 상태이상(종류 무관)이면 2배
+    | "target-has-status"
+    // 승부굳히기(ver.1.9): 이번 턴 대상이 이미 데미지를 입었으면(출처 무관) 2배
+    | "target-damaged-this-turn";
   /**
    * 비축하기(Stockpile): 사용할 때마다 비축 스택 +1(최대 3, 이미 3이면 실패)하고 자신의 방어·특수방어를
    * 1랭크 올린다(랭크업은 데이터의 statChanges로 처리, 스택 카운트만 이 플래그로). 토해내기·꿀꺽이 소비.
@@ -751,6 +761,12 @@ export interface Move {
    * 반드시 명중하고 위력이 2배가 된다.
    */
   bonusVsMinimize?: boolean;
+  /**
+   * 난동(ver.1.9): 쓰면 여러 턴 동안 이 기술을 강제로 이어 쓴다(교체 불가, PP는 첫 턴만). "confuse" = 역린·꽃잎댄스·난동부리기·대격분
+   * (2턴·3턴 각 50%, 끝까지 쓰면 혼란), "uproar" = 소란피기(3턴, 그동안 양쪽 모두 잠들 수 없음). 도중에 끊기면(빗나감·방어에 막힘·
+   * 무효·행동불능) 혼란 없이 끝난다(사용자 결정).
+   */
+  rampage?: "confuse" | "uproar";
   /**
    * 숲의저주(풀)·핼러윈(고스트): 명중 시 상대의 타입 목록에 이 타입을 "추가"한다(기존 타입은 유지).
    * 배틀이 끝날 때까지 유지되며(BattleFighterState.addedType), 이후 상대가 방어측일 때 타입 상성

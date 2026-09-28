@@ -4,7 +4,7 @@ import { NO_STATUS_CONDITION } from "@/types/status";
 import { type PokemonType } from "@/types/pokemon-type";
 import { NEUTRAL_ACCURACY_STAGES, NEUTRAL_STAGES, type StatStages } from "@/types/battleStats";
 import { applyMoveStatChanges, applyStageDelta } from "@/lib/statStages";
-import { hasVolatile } from "@/lib/volatileConditions";
+import { hasVolatile, inflictVolatile } from "@/lib/volatileConditions";
 import { applyMoveAccuracyEvasionChanges } from "@/lib/accuracyCrit";
 import { resolveEffectiveDefenderAbility } from "@/lib/abilityModifiers";
 import { inflictRestSleep } from "@/lib/statusConditions";
@@ -31,6 +31,8 @@ import { computeBattleHitChance } from "../hitChance";
 import { isCopyableMove } from "../preHitEffects";
 import { isGrounded } from "../grounding";
 import { getMove } from "@/lib/data";
+import { isOpponentTargetingMove } from "@/lib/fieldEffects";
+import { isRecharging } from "../lockedAction";
 import {
   acupressureOptions,
   applyAcupressure,
@@ -57,8 +59,15 @@ import {
 import { estimateMoveHits, type MoveHitEstimate } from "./moveDamage";
 import { firstProbability } from "./speed";
 import { createPartyModel, type PartyDuel, type PartyEffect, type PartyModel } from "./partyEval";
-import { allowedByVolatiles, evaluateOpponentThreat, opponentStatusDrag, usableMoves, type OpponentThreat } from "./opponentMoveModel";
-import { blockedTurns, isEndOfTurnAware, turnsToKo, withAccumulationSteps } from "./turnRates";
+import {
+  allowedByVolatiles,
+  evaluateOpponentThreat,
+  opponentStatusDrag,
+  targetAttackOnlyWeight,
+  usableMoves,
+  type OpponentThreat,
+} from "./opponentMoveModel";
+import { blockedTurns, isEndOfTurnAware, turnsToKo, withAccumulationSteps, withSelfHpChange } from "./turnRates";
 import type { HitsEstimate } from "./types";
 
 export type { SpeedOrder } from "./speed";
@@ -187,6 +196,21 @@ export interface AiOption {
   /** 이 기술(교체면 그 포켓몬의 최선 기술)의 명중률 — 하드 오버라이드 필중 게이트용 */
   accuracy: number;
   /**
+   * 맞히면 상대를 가두는 공격기(그림자꿰매기, ver.1.9 6-3): 상대가 교체 봉쇄에 걸린 state의 대면표. attachParty가 이 기술의
+   * 이어지는 대면을 이것으로 계산한다(가치는 상대 교체 모델링에서만 생긴다).
+   */
+  trapPartyModel?: PartyModel;
+  /**
+   * 이번 턴 공격하지 않는 행동(변화기·교체)일 때, 상대가 기습류를 골라 이번 턴 상대 행동이 헛수고가 될 확률(ver.1.9 6-1).
+   * 결정 레이어가 이번 턴 행동 손실(lost = 1)을 이 확률만큼 lost = 0(양쪽 다 한 턴 날림)과 섞는다.
+   */
+  opponentIdleChance?: number;
+  /**
+   * 이번 턴 행동 손실(lost)에 더하는 값(ver.1.9 한계점 A1): 상대가 반동 턴이면 −1(상대가 이번 턴 못 움직임), 상대가 공중날기 등으로
+   * 숨어 있는데 내가 먼저 치는 공격이면 + 선공 확률(빗나감).
+   */
+  lostShift?: number;
+  /**
    * 데미지 없는 변화기일 때만. before/after = 회복이면 hits_to_be_killed(회복 전/후), 랭크업이면
    * 내 최선 공격의 hits_to_kill(랭크업 전/후). bestKillTurns = 이 턴 공격 안 하면 쓰게 될 내 최선 공격의 처치 턴 수.
    */
@@ -255,6 +279,9 @@ export function selectableMoves(
   opponent: BattleFighterState,
   legalMoveIds?: string[],
 ): Move[] {
+  // 난동(ver.1.9): 이어 쓰는 중이면 엔진이 그 기술을 강제로 쓴다(PP도 안 씀) — 선택지는 그것 하나
+  const rampage = fighter.volatile.active.rampage?.moveId ? getMove(fighter.volatile.active.rampage.moveId) : undefined;
+  if (rampage) return [rampage];
   const moves = usableMoves(fighter).filter((m) => !isUsageBlocked(state, fighter, m, opponent));
   if (legalMoveIds) return moves.filter((m) => legalMoveIds.includes(m.id));
   return allowedByVolatiles(fighter, moves, opponent);
@@ -311,6 +338,11 @@ function turnsFor(
   };
 }
 
+/** 기대 턴 수에 fighter 자신의 공격 HP 변화(반동·흡수 등, ver.1.9 한계점 A2)를 섞는다 */
+function selfAdjusted(turns: HitsEstimate, selfRate: number | undefined, fighter: BattleFighterState, hp?: number): HitsEstimate {
+  return selfRate ? { ...turns, expected: withSelfHpChange(turns.expected, selfRate, fighter, hp) } : turns;
+}
+
 /** key 편에서 index 슬롯으로 교체하는 옵션. opponentHp를 주면 상대가 그 HP라고 가정한다(유턴류 평가용). */
 function evaluateSwitchCandidate(state: BattleState, key: FighterKey, index: number, opponentHp?: number): AiOption {
   const mySide = sideOf(state, key);
@@ -348,8 +380,9 @@ function evaluateSwitchCandidate(state: BattleState, key: FighterKey, index: num
     typeMatchup: { offensive: pick?.estimate.typeEffectiveness ?? 0, defensive: threat.defensiveMatchup },
     speedOrder: speed.order,
     firstProbability: speed.probability,
-    hitsToKill: turnsFor(state, pick?.estimate, candidate, opponent, oppHp),
-    hitsToBeKilled: threat.hitsToBeKilled,
+    // 자기 공격의 HP 변화(ver.1.9 A2): 상대 반동은 내 처치 턴을, 내 반동·흡수는 내가 버티는 턴을 바꾼다
+    hitsToKill: selfAdjusted(turnsFor(state, pick?.estimate, candidate, opponent, oppHp), threat.selfHpRate, opponent, oppHp),
+    hitsToBeKilled: selfAdjusted(threat.hitsToBeKilled, pick?.estimate.selfHpRate, candidate, Math.max(0, hpAfterEntry)),
     entryCost,
     maxHp: candidate.maxHp,
     hpFraction: Math.max(0, hpAfterEntry) / candidate.maxHp,
@@ -384,6 +417,22 @@ interface SetupContext {
   batonBench: number[];
 }
 
+let trapModelAware = true;
+
+/**
+ * fn 실행 동안만 교체 봉쇄 판단(ver.1.9 6-3 — 그림자꿰매기 가두기 가치·배수의진 자기 봉쇄 비용)을 켜고 끈다. 비교용 토글
+ * (DecisionParams.trapMoveAware), withEndOfTurnModel과 같은 방식.
+ */
+export function withTrapModel<T>(enabled: boolean, fn: () => T): T {
+  const previous = trapModelAware;
+  trapModelAware = enabled;
+  try {
+    return fn();
+  } finally {
+    trapModelAware = previous;
+  }
+}
+
 /**
  * 랭크업기 "적용 후 재평가"(decision-layer §4-2): 복제한 state에 자기 랭크 변화(심술꾸러기·명중/회피 포함)와
  * HP 비용을 적용하고 대면의 c·d·p를 모두 다시 계산한다 — 스피드 랭크업은 선공(p), 방어 랭크업은 버티는 턴(d)으로
@@ -404,6 +453,12 @@ function evaluateSetupMove(ctx: SetupContext): { effect?: EffectEvaluation; bato
   const beforeStages = self.stages;
   const beforeAccuracy = self.accuracyStages;
   self.stages = applyMoveStatChanges(self.stages, selfMove, "self", { userTypes: self.types, weather: activeWeather(clone) });
+  // 배수의진(ver.1.9 6-3): 자기 교체 봉쇄(noRetreat)도 적용 — 이어지는 대면에서 내 자발적 교체가 막히는 비용이 대면표에 생긴다
+  if (trapModelAware) {
+    for (const v of move.inflictsVolatile ?? []) {
+      if (v.target === "self" && v.volatile === "noRetreat") self.volatile = inflictVolatile(self.volatile, v.volatile);
+    }
+  }
   self.accuracyStages = applyMoveAccuracyEvasionChanges(self.accuracyStages, selfMove, "self", { userTypes: self.types });
   const changed =
     (Object.keys(beforeStages) as (keyof typeof beforeStages)[]).some((s) => self.stages[s] !== beforeStages[s]) ||
@@ -522,8 +577,8 @@ function currentRace(st: BattleState, key: FighterKey, moves: Move[]): RaceInput
   const speed = best ? firstProbability(st, me, best.move, opponent, probe.bestMove) : { probability: 0 };
   const threat = evaluateOpponentThreat({ state: st, opponent, target: me, targetSide: mySide, opponentMovesSecond: speed.probability >= 0.5 });
   return {
-    killTurns: turnsFor(st, best?.estimate, me, opponent).expected,
-    survivalTurns: threat.hitsToBeKilled.expected,
+    killTurns: withSelfHpChange(turnsFor(st, best?.estimate, me, opponent).expected, threat.selfHpRate, opponent),
+    survivalTurns: withSelfHpChange(threat.hitsToBeKilled.expected, best?.estimate.selfHpRate, me),
     firstProbability: speed.probability,
   };
 }
@@ -555,8 +610,7 @@ function evaluateEffectMove(ctx: EffectContext): EffectEvaluation | undefined {
   if (kind === "revive") return evaluateRevive(ctx, base);
   if (kind === "perishSong") return evaluatePerishSong(ctx, base);
   const clone = cloneBattleState(state);
-  const toxicTurns = Math.min(6, Number.isFinite(base.killTurns) ? base.killTurns : 6);
-  if (!applyEffectMove(clone, key, move, { toxicTurns })) return undefined;
+  if (!applyEffectMove(clone, key, move)) return undefined;
   if (kind === "torment") return evaluateTorment(ctx, base, clone);
   if (kind === "memento") {
     // 먼저 맞아 쓰러지면(후공인데 이번 턴에 쓰러지는 대면) 랭크다운 없이 기절만
@@ -835,6 +889,9 @@ function evaluateTorment(ctx: EffectContext, base: RaceInputs, clone: BattleStat
   };
 }
 
+/** 난동(역린류) 평균 지속 턴(2·3턴 각 50%)이자 끝난 뒤 혼란 평균 턴(1~4턴) — 둘 다 2.5 */
+const RAMPAGE_AVERAGE_TURNS = 2.5;
+
 function blendRace(after: RaceInputs, base: RaceInputs, covered: number): RaceInputs {
   const raceLength = Math.min(after.killTurns, after.survivalTurns);
   const share = raceLength <= covered ? 1 : covered / raceLength;
@@ -933,8 +990,8 @@ function evaluateOptionsOn(state: BattleState, key: FighterKey, options: Evaluat
       typeMatchup: { offensive: estimate?.typeEffectiveness ?? 0, defensive: threat.defensiveMatchup },
       speedOrder: speed.order,
       firstProbability: speed.probability,
-      hitsToKill: turnsFor(moveState, estimate ?? undefined, me, opponent),
-      hitsToBeKilled: threat.hitsToBeKilled,
+      hitsToKill: selfAdjusted(turnsFor(moveState, estimate ?? undefined, me, opponent), threat.selfHpRate, opponent),
+      hitsToBeKilled: selfAdjusted(threat.hitsToBeKilled, estimate?.selfHpRate, me),
       entryCost: 0,
       maxHp: me.maxHp,
       hpFraction: me.currentHp / me.maxHp,
@@ -959,6 +1016,29 @@ function evaluateOptionsOn(state: BattleState, key: FighterKey, options: Evaluat
       const afterHit = acc > 0 ? acc * follow(opponentHpAfter) : 0;
       const afterMiss = acc < 1 ? (1 - acc) * follow() : 0;
       option.hitsToKill = { ...option.hitsToKill, expected: 1 + afterHit + afterMiss };
+    }
+
+    // 난동(ver.1.9): 역린류를 새로 쓰면 평균 2.5턴(2·3턴 각 50%) 이어 쓰고 끝나면 혼란 — 그 뒤로도 대면이 이어지면 혼란(행동의 1/3
+    // 자해, 평균 2.5턴) 상태로 본다. 이어 쓰는 동안 교체할 수 없는 비용은 이 대면을 끝까지 싸우는 계산이라 따로 넣지 않는다.
+    if (
+      move.rampage === "confuse" &&
+      !me.volatile.active.rampage &&
+      !hasVolatile(me.volatile, "confusion") &&
+      !abilityOf(me)?.immuneToConfusion &&
+      option.hitsToKill.expected > RAMPAGE_AVERAGE_TURNS
+    ) {
+      const confused = cloneBattleState(moveState);
+      confused[key].volatile = {
+        active: { ...confused[key].volatile.active, confusion: { turnsRemaining: RAMPAGE_AVERAGE_TURNS } },
+      };
+      const after = currentRace(confused, key, raceMoves);
+      const blended = blendRace(
+        { killTurns: option.hitsToKill.expected, survivalTurns: option.hitsToBeKilled.expected, firstProbability: option.firstProbability },
+        after,
+        RAMPAGE_AVERAGE_TURNS,
+      );
+      option.hitsToKill = { ...option.hitsToKill, expected: blended.killTurns };
+      option.hitsToBeKilled = { ...option.hitsToBeKilled, expected: blended.survivalTurns };
     }
 
     // 목숨걸기·자폭류(트랙 M5): 주고 기절 — 추억의선물처럼 "그 state에서 이어지는 판세"로 평가(파티 모드 전용).
@@ -1000,6 +1080,21 @@ function evaluateOptionsOn(state: BattleState, key: FighterKey, options: Evaluat
       return option;
     }
 
+    // 그림자꿰매기(ver.1.9 6-3): 맞히면 상대 교체 봉쇄 — 이어지는 대면을 상대가 갇힌 state의 대면표로 본다(한 방에 쓰러뜨리면 무의미)
+    if (
+      trapModelAware &&
+      estimate &&
+      estimate.accuracy > 0 &&
+      estimate.rawHits > 1 &&
+      move.inflictsVolatile?.some((v) => v.volatile === "meanLook" && v.target === "opponent" && v.chance === undefined) &&
+      !isTrappedFromSwitching(opponent, moveState) &&
+      !opponent.types.includes("고스트")
+    ) {
+      const trapped = cloneBattleState(moveState);
+      trapped[oppKey].volatile = inflictVolatile(trapped[oppKey].volatile, "meanLook");
+      option.trapPartyModel = createPartyModel(trapped, key);
+    }
+
     // 유턴류: 맞히면(상대 기절 여부 무관) 교대할 포켓몬이 있는 한 엔진이 교체를 강제한다. 한 방에 쓰러뜨리면
     // 다음 상대를 모르므로 일반 공격기로만 평가한다.
     if (move.selfSwitchAfterDamage && estimate && estimate.rawHits > 1 && Number.isFinite(estimate.rawHits) && bench.length > 0) {
@@ -1028,6 +1123,8 @@ function evaluateOptionsOn(state: BattleState, key: FighterKey, options: Evaluat
     }
 
     if (move.category === "status") {
+      const idle = targetAttackOnlyWeight(threat);
+      if (idle > 0) option.opponentIdleChance = idle;
       const kind = classifySupport(move);
       const bestKillTurns = turnsFor(moveState, myBest?.estimate, me, opponent).expected;
       if (protectGroupOf(move)) {
@@ -1211,8 +1308,28 @@ function evaluateOptionsOn(state: BattleState, key: FighterKey, options: Evaluat
   for (const move of myMoves) result.push(move.callsLastMoveInBattle ? buildCopycatOption(move) : buildMoveOption(move));
 
   // ── 교체 옵션 ── (교체 턴에는 메가진화 없음 → 원래 state 기준)
-  if (!isTrappedFromSwitching(state[key], state)) {
-    for (const index of benchIndices(mySide)) result.push(evaluateSwitchCandidate(state, key, index));
+  // 난동(ver.1.9) 중에는 교체할 수 없다
+  if (!isTrappedFromSwitching(state[key], state) && !state[key].volatile.active.rampage) {
+    // 상대는 지금 나와 있는 내 포켓몬을 보고 기술을 고른다 — 기습류를 고르면 교체해 들어온 포켓몬에겐 실패(공격 안 함)
+    const idle = targetAttackOnlyWeight(baseThreat);
+    for (const index of benchIndices(mySide)) {
+      const option = evaluateSwitchCandidate(state, key, index);
+      if (idle > 0) option.opponentIdleChance = idle;
+      result.push(option);
+    }
+  }
+
+  // 모으기·반동(ver.1.9 한계점 A1): 상대가 반동 턴이면 이번 턴 상대 행동이 없다 — 어떤 행동이든 한 턴 이득. 상대가 공중날기 등으로
+  // 숨어 있으면 내가 먼저 치는 공격은 빗나간다(숨은 쪽을 맞히는 기술 제외) — 그 확률만큼 이번 턴 공격을 잃는다.
+  const opponentIdle = isRecharging(opponent) ? 1 : 0;
+  const hidden = opponent.chargingMoveId ? getMove(opponent.chargingMoveId)?.chargeHideType : undefined;
+  for (const option of result) {
+    let shift = -opponentIdle;
+    const move = option.optionType === "move" ? option.move : undefined;
+    if (hidden && move && move.category !== "status" && isOpponentTargetingMove(move) && !(move.bypassesHiding ?? []).includes(hidden)) {
+      shift += option.firstProbability;
+    }
+    if (shift !== 0) option.lostShift = shift;
   }
 
   attachParty(result, createPartyModel(moveState, key));
@@ -1233,7 +1350,7 @@ function attachParty(options: AiOption[], model: PartyModel): void {
     option.party =
       option.optionType === "switch"
         ? { model, myIndex: option.toIndex!, myStaged: false }
-        : { model, myIndex: model.myActive, myStaged: true };
+        : { model: option.trapPartyModel ?? model, myIndex: model.myActive, myStaged: true };
     candidateParty(option.pivot?.candidates);
     candidateParty(option.support?.batonFollowUp?.candidates);
     const copied = option.copycat?.branches.flatMap((b) => (b.option ? [b.option] : []));

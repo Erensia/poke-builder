@@ -1571,23 +1571,6 @@ try {
         `버팀 ${plain.toFixed(2)} 음식 ${lefties.toFixed(2)} 자뭉 ${sitrus.toFixed(2)} 그래스 ${grassy.toFixed(2)} · 처치 ${k0.toFixed(2)}/${k1.toFixed(2)}/${k5.toFixed(2)}`,
       );
     }
-    // 쉬움 난이도(ver.1.8 A안): 프리셋(파티 평가 등 끔) + 점수 소프트맥스 — 어려움은 항상 같은 선택, 쉬움은 가끔 차선
-    {
-      const st = battle([mon("한카리아스", ["지진", "드래곤클로", "스톤에지", "칼춤"]), mon("잠만보", ["누르기"])], [mon("메타그로스", ["코멧펀치"])]);
-      let seed = 7;
-      const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
-      const pickName = (difficulty) => {
-        const d = ai.chooseAiAction(st, "a", 0.5, { difficulty, random: rnd });
-        return d.action.kind === "switch" ? `→${d.action.toIndex}` : d.action.move.name;
-      };
-      const hardPicks = new Set(Array.from({ length: 30 }, () => pickName("hard")));
-      const easyPicks = new Set(Array.from({ length: 30 }, () => pickName("easy")));
-      check(
-        "쉬움 난이도: 어려움은 같은 선택 · 쉬움은 소프트맥스로 여러 선택 · 프리셋이 파티 평가 끔",
-        hardPicks.size === 1 && easyPicks.size >= 2 && ai.DIFFICULTY_PRESETS.easy.partyAware === false && ai.DIFFICULTY_PRESETS.easy.choiceTemperature > 0,
-        `어려움 ${[...hardPicks].join("/")} · 쉬움 ${[...easyPicks].join("/")}`,
-      );
-    }
     // 3선출 AI(ver.1.8 로드맵 7): 공격기 없는 빌드는 고르지 않고, 서로 다른 3마리를 선봉 먼저 돌려준다
     {
       const full = battle(
@@ -1631,9 +1614,9 @@ try {
     // 한계점 정리 ②: 매 턴 쌓이는 랭크 — 가속은 긴 대면일수록 선공 확률↑, 문어굳히기 건 상대는 방어·특방이 대면 중간만큼 더 떨어짐
     {
       const tr = await server.ssrLoadModule("/src/lib/battle/ai/turnRates.ts");
-      const mk = () => battle([mon("잠만보", ["누르기"], "가속", null, pts({ hp: 32, def: 32 }))], [mon("잠만보", ["누르기"], null, null, pts({ hp: 32, def: 32, spe: 32 }))]);
-      const pOn = opt(ev.evaluateOptions(mk(), "a"), "누르기").firstProbability;
-      const pOff = tr.withEndOfTurnModel(false, () => opt(ev.evaluateOptions(mk(), "a"), "누르기").firstProbability);
+      const mk = () => battle([mon("잠만보", ["막치기"], "가속", null, pts({ hp: 32, def: 32 }))], [mon("잠만보", ["막치기"], null, null, pts({ hp: 32, def: 32, spe: 32 }))]);
+      const pOn = opt(ev.evaluateOptions(mk(), "a"), "막치기").firstProbability;
+      const pOff = tr.withEndOfTurnModel(false, () => opt(ev.evaluateOptions(mk(), "a"), "막치기").firstProbability);
       const octoSt = battle([mon("메타그로스", ["코멧펀치"])], [mon("잠만보", ["누르기"], null, null, pts({ hp: 32, def: 32 }))]);
       octoSt.b.volatile = { active: { ...octoSt.b.volatile.active, octolock: {} } };
       const cOn = opt(ev.evaluateOptions(octoSt, "a"), "코멧펀치").hitsToKill.expected;
@@ -1670,6 +1653,657 @@ try {
       const on = pe.partyMatchValue(model, [1, 1, 1], [1, 1], 0, 0, { ...base, mySwitch: { margin: 0.1, limit: 1 } });
       check("한계점 정리 ④: 내 자발적 교체 — 켤 때 판세 ≥ 끌 때", on >= off - 1e-9, `끔 ${off.toFixed(3)} 켬 ${on.toFixed(3)}`);
     }
+  }
+  // ── ver.1.9 기술 엔진 배선: 독침천발·백귀야행·분화·해수스파우팅·그림자꿰매기·배수의진·섬뜩한주문 ──
+  {
+    const rt = await server.ssrLoadModule("/src/lib/battle/runTurn.ts");
+    const sw = await server.ssrLoadModule("/src/lib/battle/switching.ts");
+    const me = await server.ssrLoadModule("/src/lib/matchupEvaluator.ts");
+    const act = (id) => ({ kind: "move", move: data.getMove(id) });
+    const run = (st, a, b, r = 0.5) => rt.runTurn(st, a.kind ? a : act(a), b.kind ? b : act(b), () => r);
+    const actionOf = (out, key) => out.result.actions.find((x) => x.actor === key);
+    const dmg = (st, moveId) => actionOf(run(st, moveId, "칼춤"), "a")?.damage ?? 0;
+    // 조건부 2배(독침천발 = 상대 독·맹독, 백귀야행 = 상대 아무 상태이상) · HP 비례 위력(분화)
+    {
+      // 한카리아스(드래곤·땅): 독·고스트·불꽃 모두 등배
+      const base = () => battle([mon("팬텀", ["독침천발", "백귀야행", "분화"])], [mon("한카리아스", ["칼춤"], null, null, pts({ hp: 32, def: 32, spd: 32 }))]);
+      const plain = base();
+      const poisoned = base();
+      poisoned.b.status = { condition: "poison", turnsElapsed: 0 };
+      const paralyzed = base();
+      paralyzed.b.status = { condition: "paralysis", turnsElapsed: 0 };
+      const half = base();
+      half.a.currentHp = Math.floor(half.a.maxHp / 2);
+      const ratio = (a, b) => (b > 0 ? a / b : 0);
+      const barb = ratio(dmg(poisoned, "독침천발"), dmg(plain, "독침천발"));
+      const barbPar = ratio(dmg(paralyzed, "독침천발"), dmg(plain, "독침천발"));
+      const hex = ratio(dmg(paralyzed, "백귀야행"), dmg(plain, "백귀야행"));
+      const erupt = ratio(dmg(half, "분화"), dmg(plain, "분화"));
+      check(
+        "1.9: 독침천발(독이면 2배)·백귀야행(상태이상이면 2배)·분화(HP 절반이면 위력 절반)",
+        barb > 1.8 && barb < 2.2 && Math.abs(barbPar - 1) < 0.05 && hex > 1.8 && hex < 2.2 && erupt > 0.4 && erupt < 0.6,
+        `독침천발 ×${barb.toFixed(2)}(마비 ×${barbPar.toFixed(2)}) 백귀야행 ×${hex.toFixed(2)} 분화 ×${erupt.toFixed(2)}`,
+      );
+      // 매치업 계산기(AI 공유): 상태이상·HP 비율 입력이 같은 배율로
+      const slot = mon("팬텀", ["독침천발"]).slot;
+      const foe = mon("한카리아스", ["칼춤"]).slot;
+      const off = (id, o) => me.evaluateSlotMatchup(slot, data.getMove(id), foe, o)?.offensePower ?? 0;
+      check(
+        "1.9: 매치업 계산기 — 독 상태·HP 비율 반영(독침천발 ×2, 분화 HP 50% ×0.5)",
+        Math.abs(off("독침천발", { defenderStatus: "poison" }) / off("독침천발", {}) - 2) < 0.02 &&
+          Math.abs(off("분화", { attackerHpFraction: 0.5 }) / off("분화", {}) - 0.5) < 0.02,
+        `독침천발 ${off("독침천발", {})}→${off("독침천발", { defenderStatus: "poison" })} 분화 ${off("분화", {})}→${off("분화", { attackerHpFraction: 0.5 })}`,
+      );
+    }
+    // 결정력·내구력 페이지 가정 토글(ver.1.9): 늦게 행동(보복·눈사태 2배)·공격측 상태이상(객기)·HP 비례(기사회생)·특성 HP 조건 분리
+    {
+      const atk = mon("한카리아스", ["보복"], "맹화").slot;
+      const foe = mon("잠만보", ["칼춤"]).slot;
+      const off = (id, o) => me.evaluateSlotMatchup(atk, data.getMove(id), foe, o)?.offensePower ?? 0;
+      const solo = (id, o) => me.computeSoloOffensePower(atk, data.getMove(id), o) ?? 0;
+      const r = (a, b) => (b > 0 ? a / b : 0);
+      const payback = r(off("보복", { attackerMovesLast: true }), off("보복", {}));
+      const avalanche = r(solo("눈사태", { attackerTookDamageThisTurn: true }), solo("눈사태", {}));
+      const avalancheLast = r(solo("눈사태", { attackerMovesLast: true }), solo("눈사태", {}));
+      const facade = r(off("객기", { attackerStatus: "burn" }), off("객기", {}));
+      const reversal = r(off("기사회생", { attackerHpFraction: 0.1 }), off("기사회생", {}));
+      // 맹화: 불꽃 기술, HP 슬라이더(attackerHpFraction)가 아니라 abilityHpFraction으로만 발동
+      const blaze = r(off("화염방사", { abilityHpFraction: 1 / 3 }), off("화염방사", { attackerHpFraction: 0.2, abilityHpFraction: 1 }));
+      check(
+        "1.9 계산기: 늦게 행동(보복 2배)·이번 턴 데미지 입음(눈사태 2배, 늦게 행동만으론 ×1)·객기 화상 2배·기사회생 HP 10%(위력 150)·맹화는 특성 HP 가정으로만",
+        Math.abs(payback - 2) < 0.02 && Math.abs(avalanche - 2) < 0.02 && Math.abs(avalancheLast - 1) < 0.02 && Math.abs(facade - 2) < 0.02 && Math.abs(reversal - 7.5) < 0.05 && Math.abs(blaze - 1.5) < 0.02,
+        `보복 ×${payback.toFixed(2)} 눈사태 ×${avalanche.toFixed(2)} 객기 ×${facade.toFixed(2)} 기사회생 ×${reversal.toFixed(2)} 맹화 ×${blaze.toFixed(2)}`,
+      );
+    }
+    // 근성(ver.1.9 본가 규칙): 상태이상이면 물리 ×1.5, 화상이어도 반감 없음 — 엔진·계산기(AI) 같은 배율
+    {
+      const base = () => battle([mon("괴력몬", ["인파이트"], "근성")], [mon("잠만보", ["칼춤"], null, null, pts({ hp: 32, def: 32 }))]);
+      const plain = base();
+      const burned = base();
+      burned.a.status = { condition: "burn", turnsElapsed: 0 };
+      const noGuts = battle([mon("괴력몬", ["인파이트"], "노가드")], [mon("잠만보", ["칼춤"], null, null, pts({ hp: 32, def: 32 }))]);
+      noGuts.a.status = { condition: "burn", turnsElapsed: 0 };
+      const noGutsPlain = battle([mon("괴력몬", ["인파이트"], "노가드")], [mon("잠만보", ["칼춤"], null, null, pts({ hp: 32, def: 32 }))]);
+      const guts = dmg(burned, "인파이트") / dmg(plain, "인파이트");
+      const burnOnly = dmg(noGuts, "인파이트") / dmg(noGutsPlain, "인파이트");
+      const sc = await server.ssrLoadModule("/src/lib/statusConditions.ts");
+      check(
+        "1.9: 근성 — 상태이상이면 물리 ×1.5(화상 반감 없음), 근성 없으면 화상 ×0.5",
+        guts > 1.4 && guts < 1.6 && burnOnly > 0.45 && burnOnly < 0.55 && sc.computeStatusAttackMultiplier("poison", "physical", true, 1.5) === 1.5 &&
+          sc.computeStatusAttackMultiplier("poison", "special", true, 1.5) === 1,
+        `근성 화상 ×${guts.toFixed(2)} 화상만 ×${burnOnly.toFixed(2)}`,
+      );
+    }
+    // 그림자꿰매기: 명중하면 상대 교체 봉쇄(고스트 면제, 실패 문구 없음) / 배수의진: 5스탯 +1 + 자신 교체 봉쇄, 이미 걸려 있으면 실패
+    {
+      const st = battle([mon("팬텀", ["그림자꿰매기"])], [mon("잠만보", ["칼춤"], null, null, pts({ hp: 32, def: 32 })), mon("한카리아스", ["지진"])]);
+      const s1 = run(st, "그림자꿰매기", "칼춤").nextState;
+      const ghostOut = run(battle([mon("팬텀", ["그림자꿰매기"])], [mon("팬텀", ["칼춤"], null, null, pts({ hp: 32, def: 32 }))]), "그림자꿰매기", "칼춤");
+      const nr = battle([mon("잠만보", ["배수의진"]), mon("팬텀", ["칼춤"])], [mon("메타그로스", ["칼춤"])]);
+      const n1 = run(nr, "배수의진", "칼춤").nextState;
+      const again = actionOf(run(n1, "배수의진", "칼춤"), "a");
+      check(
+        "1.9: 그림자꿰매기(상대 교체 봉쇄·고스트 면제)·배수의진(5스탯 +1·자신 교체 봉쇄·중복 실패)",
+        sw.isTrappedFromSwitching(s1.b, s1) && !sw.isTrappedFromSwitching(ghostOut.nextState.b, ghostOut.nextState) &&
+          !actionOf(ghostOut, "a")?.statusInflictFailed &&
+          n1.a.stages.atk === 1 && n1.a.stages.spe === 1 && sw.isTrappedFromSwitching(n1.a, n1) && again?.blockedReason === "usageCondition",
+        `그림자꿰매기 봉쇄=${sw.isTrappedFromSwitching(s1.b, s1)} 배수의진 atk=${n1.a.stages.atk} 봉쇄=${sw.isTrappedFromSwitching(n1.a, n1)} 재사용=${again?.blockedReason}`,
+      );
+    }
+    // 섬뜩한주문: 상대 직전 기술 PP −3, 쓴 기술이 없으면 조용히 무산(데미지 기술이라 실패 문구 없음)
+    {
+      const st = battle([mon("팬텀", ["섬뜩한주문"])], [mon("잠만보", ["누르기", "칼춤"], null, null, pts({ hp: 32, spd: 32 }))]);
+      const fresh = actionOf(run(st, "섬뜩한주문", "칼춤"), "a");
+      st.b.lastMoveId = "누르기";
+      const before = st.b.remainingPp["누르기"];
+      const out = run(st, "섬뜩한주문", "칼춤");
+      check(
+        "1.9: 섬뜩한주문 — 직전 기술 PP −3 / 쓴 기술 없으면 조용히 무산",
+        !fresh?.spiteFailed && out.nextState.b.remainingPp["누르기"] === before - 3 && actionOf(out, "a")?.spitePp?.amount === 3,
+        `PP ${before}→${out.nextState.b.remainingPp["누르기"]} 실패문구=${fresh?.spiteFailed}`,
+      );
+    }
+  }
+  // ── ver.1.9 6-1 AI 정확도 묶음: 기습 양쪽·사이코필드 접지·보복·눈사태·분함의발구르기·반감 열매 첫 타만 ──
+  {
+    const me = await server.ssrLoadModule("/src/lib/matchupEvaluator.ts");
+    const md = await server.ssrLoadModule("/src/lib/battle/ai/moveDamage.ts");
+    const htk = await server.ssrLoadModule("/src/lib/battle/ai/hitsToKill.ts");
+    const tank = (moves, item = null) => mon("잠만보", moves, null, item, pts({ hp: 32, def: 32 }));
+    // 내 기습: 성공 확률 = 상대가 공격기를 고를 확률(의미 있는 변화기 1개당 0.08) — 변화기뿐이면 0
+    {
+      const acc = (foeMoves) => opt(ev.evaluateOptions(battle([mon("앱솔", ["기습", "치근거리기"])], [tank(foeMoves)]), "a"), "기습")?.accuracy ?? -1;
+      const allAttack = acc(["누르기", "지진"]);
+      const twoStatus = acc(["누르기", "칼춤", "하품"]);
+      const statusOnly = acc(["칼춤", "하품"]);
+      check(
+        "1.9 6-1: 내 기습 — 상대 공격기 확률만큼 성공(공격기뿐 1, 변화기 2개 0.84, 변화기뿐 0)",
+        Math.abs(allAttack - 1) < 1e-9 && Math.abs(twoStatus - 0.84) < 1e-9 && statusOnly === 0,
+        `공격기뿐 ${allAttack} 변화기2 ${twoStatus.toFixed(2)} 변화기뿐 ${statusOnly}`,
+      );
+    }
+    // 상대 기습: AI가 변화기·교체를 고르면 상대 행동이 헛수고(확률 = 상대 기습 사용 확률), 공격기면 성공. 사이코필드면 땅에 있는 AI에게 실패
+    {
+      const st = battle([mon("한카리아스", ["지진", "칼춤"]), mon("잠만보", ["누르기"])], [mon("앱솔", ["기습"])]);
+      const opts = ev.evaluateOptions(st, "a");
+      const statusIdle = opt(opts, "칼춤")?.opponentIdleChance ?? 0;
+      const attackIdle = opt(opts, "지진")?.opponentIdleChance ?? 0;
+      const switchIdle = opts.find((o) => o.optionType === "switch")?.opponentIdleChance ?? 0;
+      const psychic = (flyer) => {
+        const b = battle([mon(flyer ? "리자몽" : "한카리아스", ["칼춤"])], [mon("앱솔", ["기습"])]);
+        b.field = "사이코필드";
+        b.fieldTurnsRemaining = 5;
+        return opt(ev.evaluateOptions(b, "a"), "칼춤")?.hitsToBeKilled.expected;
+      };
+      const groundedD = psychic(false);
+      const flyingD = psychic(true);
+      check(
+        "1.9 6-1: 상대 기습 — AI 변화기·교체면 헛수고 확률 1, 공격기면 0 / 사이코필드: 땅 AI에겐 실패, 비행 AI에겐 통함",
+        statusIdle === 1 && switchIdle === 1 && attackIdle === 0 && groundedD === Infinity && Number.isFinite(flyingD),
+        `변화기 ${statusIdle} 교체 ${switchIdle} 공격기 ${attackIdle} 사이코필드 d 땅 ${groundedD} 비행 ${flyingD?.toFixed(2)}`,
+      );
+      // 헛수고 확률만큼 lost=0과 섞으므로 칼춤 점수가 오른다
+      const sd = opt(opts, "칼춤");
+      const withIdle = dec.scoreOption(sd, 0.5);
+      const withoutIdle = dec.scoreOption({ ...sd, opponentIdleChance: undefined }, 0.5);
+      check("1.9 6-1: 상대 기습 헛수고 → AI 변화기 점수 상승", withIdle > withoutIdle, `${withoutIdle.toFixed(3)} → ${withIdle.toFixed(3)}`);
+    }
+    // 보복(후공 2배)·눈사태(후공이면 상대 공격 확률만큼 2배)·분함의발구르기(계산기는 직전 실패 가정일 때만 2배)
+    {
+      const st = battle([mon("마기라스", ["보복", "눈사태", "분함의발구르기"])], [tank(["누르기"])]);
+      const statusFoe = battle([mon("마기라스", ["눈사태"])], [tank(["칼춤", "하품"])]);
+      const frac = (b, id, second) =>
+        md.estimateMoveHits({ state: b, attacker: b.a, defender: b.b, defenderSide: b.sideB, attackerMovesSecond: second }, data.getMove(id))?.damageFraction ?? 0;
+      const payback = frac(st, "보복", true) / frac(st, "보복", false);
+      const avalanche = frac(st, "눈사태", true) / frac(st, "눈사태", false);
+      const avalancheStatus = frac(statusFoe, "눈사태", true) / frac(statusFoe, "눈사태", false);
+      const calc = me.evaluateSlotMatchup(st.a.slot, data.getMove("분함의발구르기"), st.b.slot, { attackerMoveFailedLastTurn: true })?.offensePower ?? 0;
+      const calcAi = me.evaluateSlotMatchup(st.a.slot, data.getMove("분함의발구르기"), st.b.slot, {})?.offensePower ?? 0;
+      check(
+        "1.9 6-1: AI 보복 후공 ×2·눈사태 후공 ×(1+공격 확률)·분함의발구르기 계산기 직전 실패 가정 ×2(기본 ×1)",
+        Math.abs(payback - 2) < 0.02 && Math.abs(avalanche - 2) < 0.02 && Math.abs(avalancheStatus - 1) < 0.02 && Math.abs(calc / calcAi - 2) < 0.02,
+        `보복 ×${payback.toFixed(2)} 눈사태 ×${avalanche.toFixed(2)}(변화기뿐 ×${avalancheStatus.toFixed(2)}) 발구르기 가정/기본 ×${(calc / calcAi).toFixed(2)}`,
+      );
+    }
+    // 반감 열매는 첫 타만: 계산기 다단히트 5타 = 내구력 ×1/(0.2/2+0.8)·2타 ×1/(0.5/2+0.5), AI 처치 턴 = 열매 없음 < 첫 타만 < 매 타 반감(이전 근사)
+    {
+      const atk = mon("한카리아스", ["스케일샷"]).slot;
+      const foe = (item) => mon("한카리아스", ["칼춤"], null, item, pts({ hp: 32, def: 32 })).slot;
+      const bulk = (item, hits) => me.evaluateSlotMatchup(atk, data.getMove("스케일샷"), foe(item), { multiHitCount: hits })?.bulkPower ?? 0;
+      const multi = bulk("하반열매", 5) / bulk(null, 5);
+      const twoHits = bulk("하반열매", 2) / bulk(null, 2);
+      const quake = (item) => battle([mon("한카리아스", ["지진"])], [mon("메타그로스", ["코멧펀치"], null, item, pts({ hp: 32, def: 32 }))]);
+      const cOf = (b) => opt(ev.evaluateOptions(b, "a"), "지진")?.hitsToKill.expected ?? 0;
+      const none = cOf(quake(null));
+      const berry = cOf(quake("슈캐열매"));
+      const b = quake("슈캐열매");
+      const r = me.evaluateSlotMatchup(b.a.slot, data.getMove("지진"), b.b.slot, {});
+      const allHalved = htk.expectedHits(r.offensePower, r.bulkPower, 1);
+      check(
+        "1.9 6-1: 반감 열매 첫 타만 — 계산기 다단히트 5타 ×1.11·2타 ×1.33, AI 처치 턴 열매 없음 < 첫 타만 < 매 타 반감",
+        Math.abs(multi - 1 / 0.9) < 0.01 && Math.abs(twoHits - 4 / 3) < 0.01 && none < berry && berry < allHalved,
+        `5타 ×${multi.toFixed(3)} 2타 ×${twoHits.toFixed(2)} c ${none.toFixed(2)} < ${berry.toFixed(2)} < ${allHalved.toFixed(2)}`,
+      );
+    }
+  }
+  // ── ver.1.9 조건부 위력 엔진 배선: 분함의발구르기·열불내기(직전 턴 실패) · 분풀이(이번 턴 능력 하락) · 승부굳히기(이번 턴 대상 피해) · 작아지기 보너스 ──
+  {
+    const rt = await server.ssrLoadModule("/src/lib/battle/runTurn.ts");
+    const mf = await server.ssrLoadModule("/src/lib/battle/moveFailure.ts");
+    const md = await server.ssrLoadModule("/src/lib/battle/ai/moveDamage.ts");
+    const act = (id) => ({ kind: "move", move: data.getMove(id) });
+    const run = (st, a, b, r = 0.5) => rt.runTurn(st, act(a), act(b), () => r);
+    const own = (out, key) => out.result.actions.find((x) => x.actor === key);
+    const tank = (moves) => mon("잠만보", moves, null, null, pts({ hp: 32, def: 32 }));
+    // 1턴 행동 → 실패 기록
+    const failedAfter = (aMove, bMove, r = 0.5, setup = () => {}) => {
+      const st = battle([mon("마기라스", [aMove, "분함의발구르기", "열불내기"])], [tank([bMove])]);
+      setup(st);
+      const out = run(st, aMove, bMove, r);
+      return { failed: !!out.nextState.a.lastTurnMoveFailed, out };
+    };
+    const miss = failedAfter("스톤에지", "칼춤", 0.99).failed; // 명중 80%를 0.99로 빗나감
+    const hit = failedAfter("스톤에지", "칼춤", 0.5).failed;
+    const protectedHit = failedAfter("스톤에지", "방어", 0.5).failed; // 방어에 막힘 → 실패 아님
+    const taunted = failedAfter("칼춤", "칼춤", 0.5, (st) => {
+      st.a.volatile = { active: { ...st.a.volatile.active, taunt: { turnsRemaining: 3 } } };
+    }).failed;
+    const fullHeal = failedAfter("HP회복", "칼춤").failed; // HP 가득인데 회복기
+    const maxedUp = failedAfter("칼춤", "칼춤", 0.5, (st) => {
+      st.a.stages = { ...st.a.stages, atk: 6 };
+    }).failed;
+    const recharge = failedAfter("파괴광선", "칼춤", 0.5, (st) => {
+      st.a.volatile = { active: { ...st.a.volatile.active, recharge: { turnsRemaining: 1 } } };
+    });
+    check(
+      "1.9 엔진: 직전 턴 실패 기록 — 빗나감·도발로 막힘·HP 가득 회복기·+6 랭크업기는 실패, 명중·방어에 막힘·반동으로 쉼은 아님",
+      miss && !hit && !protectedHit && taunted && fullHeal && maxedUp && !recharge.failed && own(recharge.out, "a")?.blockedReason === "recharge",
+      `빗나감 ${miss} 명중 ${hit} 방어 ${protectedHit} 도발 ${taunted} 회복 ${fullHeal} +6 ${maxedUp} 반동 ${recharge.failed}(${own(recharge.out, "a")?.blockedReason})`,
+    );
+    // 2턴째 분함의발구르기·열불내기 데미지 2배(실패 기록 있음/없음), 교체하면 기록이 지워진다
+    const tantrum = (moveId, failed) => {
+      const st = battle([mon("마기라스", [moveId])], [tank(["칼춤"])]);
+      st.a.lastTurnMoveFailed = failed || undefined;
+      return own(run(st, moveId, "칼춤"), "a")?.damage ?? 0;
+    };
+    const stomp = tantrum("분함의발구르기", true) / tantrum("분함의발구르기", false);
+    const flare = tantrum("열불내기", true) / tantrum("열불내기", false);
+    // 분풀이: 먼저 움직인 상대가 내 방어를 내리면 2배 / 승부굳히기: 먼저 움직인 상대가 반동으로 HP를 잃었으면 2배
+    const dmgAfter = (aMove, bMove) => {
+      const st = battle([mon("마기라스", [aMove], null, null, pts({ hp: 32 }))], [mon("잠만보", [bMove], null, null, pts({ hp: 32, def: 32, spe: 32 }))]);
+      return own(run(st, aMove, bMove), "a")?.damage ?? 0;
+    };
+    const lashOut = dmgAfter("분풀이", "싫은소리") / dmgAfter("분풀이", "칼춤");
+    const assurance = dmgAfter("승부굳히기", "이판사판태클") / dmgAfter("승부굳히기", "칼춤");
+    // 작아지기 보너스(누르기 데이터 수정): 대상이 작아지기를 썼으면 2배 — 엔진·AI 계산 모두
+    const minimize = (used) => {
+      const st = battle([mon("잠만보", ["누르기"])], [tank(["칼춤"])]);
+      if (used) st.b.usedMoveIds = { ...(st.b.usedMoveIds ?? {}), 작아지기: true };
+      const engine = own(run(st, "누르기", "칼춤"), "a")?.damage ?? 0;
+      const fresh = battle([mon("잠만보", ["누르기"])], [tank(["칼춤"])]);
+      if (used) fresh.b.usedMoveIds = { ...(fresh.b.usedMoveIds ?? {}), 작아지기: true };
+      const ai = md.estimateMoveHits({ state: fresh, attacker: fresh.a, defender: fresh.b, defenderSide: fresh.sideB, attackerMovesSecond: false }, data.getMove("누르기"))?.damageFraction ?? 0;
+      return { engine, ai };
+    };
+    const minOn = minimize(true);
+    const minOff = minimize(false);
+    const near2 = (x) => x > 1.8 && x < 2.2;
+    check(
+      "1.9 엔진: 분함의발구르기·열불내기 직전 실패 2배 · 분풀이 능력 하락 2배 · 승부굳히기 대상 피해 2배 · 누르기 작아지기 2배(AI 동일)",
+      near2(stomp) && near2(flare) && near2(lashOut) && near2(assurance) && near2(minOn.engine / minOff.engine) && near2(minOn.ai / minOff.ai) &&
+        data.getMove("승부굳히기").makesContact === true,
+      `발구르기 ×${stomp.toFixed(2)} 열불내기 ×${flare.toFixed(2)} 분풀이 ×${lashOut.toFixed(2)} 승부굳히기 ×${assurance.toFixed(2)} 작아지기 엔진 ×${(minOn.engine / minOff.engine).toFixed(2)} AI ×${(minOn.ai / minOff.ai).toFixed(2)}`,
+    );
+    // actionFailed 판정 표(정의 목록): 행동불능·풀죽음·필드 무효는 실패, 헤롱헤롱·대타 흡수는 아님
+    const base = { move: data.getMove("스톤에지"), hit: true, typeEffectiveness: 1 };
+    const table = {
+      paralysis: mf.actionFailed({ ...base, blockedReason: "status" }),
+      flinch: mf.actionFailed({ ...base, blockedReason: "flinch" }),
+      confusion: mf.actionFailed({ ...base, blockedReason: "confusion" }),
+      psychicField: mf.actionFailed({ ...base, blockedReason: "psychicFieldPriority" }),
+      immune: mf.actionFailed({ ...base, typeEffectiveness: 0 }),
+      absorbed: mf.actionFailed({ ...base, abilityAbsorbAbilityName: "저수" }),
+      subFailed: mf.actionFailed({ ...base, move: data.getMove("대타출동"), substituteSetFailed: true }),
+      attract: mf.actionFailed({ ...base, blockedReason: "attract" }),
+      substituteHit: mf.actionFailed({ ...base, hitSubstitute: true }),
+      disguise: mf.actionFailed({ ...base, hitNegatedByAbilityName: "탈" }),
+    };
+    const expected = { paralysis: true, flinch: true, confusion: true, psychicField: true, immune: true, absorbed: true, subFailed: true, attract: false, substituteHit: false, disguise: false };
+    check(
+      "1.9 엔진: 실패 판정 표 — 행동불능·풀죽음·혼란·필드 무효·면역·흡수·대타출동 실패는 실패 / 헤롱헤롱·대타 흡수·탈은 아님",
+      Object.entries(expected).every(([k, v]) => table[k] === v),
+      Object.entries(table).map(([k, v]) => `${k}=${v}`).join(" "),
+    );
+  }
+  // ── ver.1.9 6-2 급소: 계산기 급소 가정(랭크·벽 무시·×1.5·스나이퍼·조가비갑옷류) + AI 처치 턴에 급소 확률 ──
+  {
+    const me = await server.ssrLoadModule("/src/lib/matchupEvaluator.ts");
+    const md = await server.ssrLoadModule("/src/lib/battle/ai/moveDamage.ts");
+    const neutral = { hp: 0, atk: 0, def: 0, spa: 0, spd: 0, spe: 0, accuracy: 0, evasion: 0 };
+    const atk = (ability = null) => mon("한카리아스", ["스톤에지", "지진"], ability).slot;
+    const foe = (ability = null) => mon("잠만보", ["누르기"], ability, null, pts({ hp: 32, def: 32 })).slot;
+    const ratio = (o, a = atk(), f = foe()) => {
+      const hit = (crit) => me.evaluateSlotMatchup(a, data.getMove("지진"), f, { ...o, critical: crit });
+      const on = hit(true);
+      const off = hit(false);
+      return on.offensePower / on.bulkPower / (off.offensePower / off.bulkPower);
+    };
+    const plain = ratio({});
+    const atkDown = ratio({ attackerStages: { ...neutral, atk: -2 } }); // 급소면 −2 무시 → ×1.5 × 2
+    const defUp = ratio({ defenderStages: { ...neutral, def: 2 } }); // 급소면 +2 무시 → ×1.5 × 2
+    const reflect = ratio({ screen: "reflect" }); // 급소면 벽 무시 → ×1.5 × 2
+    const sniper = ratio({}, atk("스나이퍼"));
+    const armor = me.evaluateSlotMatchup(atk(), data.getMove("지진"), foe("전투무장"), { critical: true });
+    const armorRatio = ratio({}, atk(), foe("전투무장"));
+    const solo = (me.computeSoloOffensePower(atk(), data.getMove("지진"), { critical: true }) ?? 0) / (me.computeSoloOffensePower(atk(), data.getMove("지진"), {}) ?? 1);
+    check(
+      "1.9 6-2: 계산기 급소 가정 — ×1.5, 공격 −2·방어 +2·리플렉터 무시(×3), 스나이퍼 ×2.25, 전투무장 무효, 상대 없는 결정력 ×1.5",
+      [plain, sniper, atkDown, defUp, reflect, armorRatio, solo].every(Number.isFinite) &&
+        Math.abs(plain - 1.5) < 0.01 && Math.abs(atkDown - 3) < 0.02 && Math.abs(defUp - 3) < 0.02 && Math.abs(reflect - 3) < 0.02 &&
+        Math.abs(sniper - 2.25) < 0.01 && armor.criticalBlocked === true && Math.abs(armorRatio - 1) < 1e-9 && Math.abs(solo - 1.5) < 0.01,
+      `×${plain.toFixed(2)} −2 ×${atkDown.toFixed(2)} +2 ×${defUp.toFixed(2)} 벽 ×${reflect.toFixed(2)} 스나이퍼 ×${sniper.toFixed(2)} 전투무장 ${armorRatio} 단독 ×${solo.toFixed(2)}`,
+    );
+    // AI: 급소율 높은 스톤에지는 급소를 켜면 처치 턴↓(지진보다 크게), 반드시 급소 기술은 1.5배로, 전투무장 상대는 무변화
+    const est = (moveId, foeAbility = null, on = true) => {
+      const b = battle([mon("한카리아스", ["스톤에지", "지진", "얼음숨결"])], [mon("잠만보", ["누르기"], foeAbility, null, pts({ hp: 32, def: 32 }))]);
+      return md.withCritModel(on, () => md.estimateMoveHits({ state: b, attacker: b.a, defender: b.b, defenderSide: b.sideB, attackerMovesSecond: false }, data.getMove(moveId)));
+    };
+    const edgeGain = est("스톤에지", null, false).rawHits / est("스톤에지").rawHits;
+    const quakeGain = est("지진", null, false).rawHits / est("지진").rawHits;
+    const breathDmg = est("얼음숨결").damageFraction / est("얼음숨결", null, false).damageFraction;
+    const armorSame = est("스톤에지", "전투무장").rawHits === est("스톤에지", "전투무장", false).rawHits;
+    check(
+      "1.9 6-2: AI 급소 — 급소율 높은 기술일수록 처치 턴↓, 반드시 급소 ×1.5, 전투무장 상대 무변화",
+      edgeGain > quakeGain && quakeGain >= 1 && Math.abs(breathDmg - 1.5) < 0.01 && armorSame,
+      `스톤에지 ×${edgeGain.toFixed(3)} 지진 ×${quakeGain.toFixed(3)} 얼음숨결 데미지 ×${breathDmg.toFixed(2)} 전투무장 ${armorSame}`,
+    );
+  }
+  // ── ver.1.9 6-3 교체 봉쇄: 그림자꿰매기 가두기 가치(상대 갇힌 대면표) · 배수의진 자기 봉쇄 비용(내 교체 막힌 대면표) ──
+  {
+    const st = () =>
+      battle(
+        [mon("팬텀", ["그림자꿰매기", "섀도볼"]), mon("잠만보", ["누르기"])],
+        [mon("마기라스", ["깨물어부수기"], null, null, pts({ hp: 32, def: 32 })), mon("후딘", ["사이코키네시스"])],
+      );
+    const on = opt(ev.evaluateOptions(st(), "a"), "그림자꿰매기");
+    const off = ev.withTrapModel(false, () => opt(ev.evaluateOptions(st(), "a"), "그림자꿰매기"));
+    const ghost = opt(ev.evaluateOptions(battle([mon("팬텀", ["그림자꿰매기"])], [mon("팬텀", ["섀도볼"], null, null, pts({ hp: 32, def: 32 }))]), "a"), "그림자꿰매기");
+    const nr = () => battle([mon("루카리오", ["배수의진", "인파이트"]), mon("잠만보", ["누르기"])], [mon("잠만보", ["누르기"], null, null, pts({ hp: 32, def: 32 }))]);
+    const nrOn = opt(ev.evaluateOptions(nr(), "a"), "배수의진");
+    const nrOff = ev.withTrapModel(false, () => opt(ev.evaluateOptions(nr(), "a"), "배수의진"));
+    const trappedOn = on.party?.model.oppTrapped;
+    const trappedOff = off.party?.model.oppTrapped;
+    const selfOn = nrOn.support?.effect?.party?.model.myTrapped;
+    const selfOff = nrOff.support?.effect?.party?.model.myTrapped;
+    check(
+      "1.9 6-3: 그림자꿰매기 이어지는 대면 = 상대 갇힘(고스트 상대·토글 끔이면 없음) · 배수의진 적용 대면표 = 내 교체 봉쇄",
+      trappedOn === true && trappedOff === false && ghost.trapPartyModel === undefined && selfOn === true && selfOff === false,
+      `꿰매기 ${trappedOn}/${trappedOff} 고스트 ${!!ghost.trapPartyModel} 배수의진 ${selfOn}/${selfOff}`,
+    );
+  }
+  // ── ver.1.9 6-4 탈피·수확: 대면 턴 수에 기대값(탈피 = 상태이상 남는 비율, 수확 = 절반 이하 구간 열매 반복 회복) ──
+  {
+    const tr = await server.ssrLoadModule("/src/lib/battle/ai/turnRates.ts");
+    const tank = (ability, item = null) => mon("잠만보", ["막치기"], ability, item, pts({ hp: 32, def: 32 }));
+    const both = (build) => {
+      const on = build();
+      const off = tr.withChanceEffectsModel(false, build);
+      return [on, off];
+    };
+    // 독 걸린 탈피 상대: 지속 피해가 줄어 내 처치 턴↑
+    const [shedOn, shedOff] = both(() => {
+      const b = battle([mon("한카리아스", ["막치기"])], [tank("탈피")]);
+      b.b.status = { condition: "poison", turnsElapsed: 0 };
+      return opt(ev.evaluateOptions(b, "a"), "막치기").hitsToKill.expected;
+    });
+    // 마비 걸린 탈피 상대: 행동불능이 줄어 내가 버티는 턴↓
+    const [parOn, parOff] = both(() => {
+      const b = battle([mon("한카리아스", ["막치기"], null, null, pts({ hp: 32, def: 32 }))], [mon("잠만보", ["막치기"], "탈피")]);
+      b.b.status = { condition: "paralysis", turnsElapsed: 0 };
+      return opt(ev.evaluateOptions(b, "a"), "막치기").hitsToBeKilled.expected;
+    });
+    // 자뭉열매를 든 수확 상대: 절반 이하 구간에 반복 회복 → 내 처치 턴↑, 수확 없는 같은 상대는 무변화
+    const [harvestOn, harvestOff] = both(() => opt(ev.evaluateOptions(battle([mon("한카리아스", ["막치기"])], [tank("수확", "자뭉열매")]), "a"), "막치기").hitsToKill.expected);
+    const [plainOn, plainOff] = both(() => opt(ev.evaluateOptions(battle([mon("한카리아스", ["막치기"])], [tank(null, "자뭉열매")]), "a"), "막치기").hitsToKill.expected);
+    check(
+      "1.9 6-4: 탈피(독 상대 처치 턴↑·마비 상대에게 버티는 턴↓)·수확(자뭉열매 처치 턴↑, 수확 없으면 무변화)",
+      shedOn > shedOff && parOn < parOff && harvestOn > harvestOff && plainOn === plainOff,
+      `탈피 c ${shedOff.toFixed(2)}→${shedOn.toFixed(2)} 마비 d ${parOff.toFixed(2)}→${parOn.toFixed(2)} 수확 c ${harvestOff.toFixed(2)}→${harvestOn.toFixed(2)}`,
+    );
+  }
+  // ── ver.1.9 한계점 A3·A4: 맹독 카운터 누적 · 확정 처치 기술이 여럿이면 점수 최고 ──
+  {
+    const tr = await server.ssrLoadModule("/src/lib/battle/ai/turnRates.ts");
+    const st = battle([mon("한카리아스", ["막치기"])], [mon("잠만보", ["막치기"], null, null, pts({ hp: 32, def: 32 }))]);
+    const toxicTurns = (counter) => {
+      st.b.status = { condition: "badly-poisoned", turnsElapsed: counter };
+      return tr.turnsToKo(0.05, st.a, st.b);
+    };
+    const fixedTurns = 1 / (0.05 + Math.floor(st.b.maxHp / 16) / st.b.maxHp);
+    const early = toxicTurns(1);
+    const capped = toxicTurns(15);
+    const cappedFixed = 1 / (0.05 + Math.floor((st.b.maxHp * 15) / 16) / st.b.maxHp);
+    check(
+      "1.9 A3: 맹독 대상은 카운터가 늘어나는 만큼 처치 턴↓(카운터 1), 상한 15면 고정 계산과 같음",
+      early < fixedTurns && early > 1 && Math.abs(capped - Math.max(1, cappedFixed)) < 1e-9,
+      `카운터 1: ${fixedTurns.toFixed(2)} → ${early.toFixed(2)}, 카운터 15: ${capped.toFixed(2)}`,
+    );
+    // 확정 처치 옵션 둘 — 점수가 높은 쪽(목록 뒤)을 고른다
+    const base = opt(ev.evaluateOptions(battle([mon("한카리아스", ["지진"])], [mon("피카츄", ["10만볼트"])]), "a"), "지진");
+    const low = { ...base, party: undefined, opponentHpFraction: 0.5 };
+    const high = { ...base, party: undefined, opponentHpFraction: 1 };
+    const both = [low, high].every((o) => dec.isHardOverride(o));
+    const chosen = dec.decide([low, high], 0.5).chosen;
+    check("1.9 A4: 하드 오버라이드가 여럿이면 점수 최고", both && chosen === high, `override ${both} 선택 ${chosen === high ? "뒤(높은 점수)" : "앞"}`);
+  }
+  // ── ver.1.9 한계점 A1: 모으기·반동 — 엔진(교체 불가·반동 턴 PP 없음·반동 먼저) + AI(턴 비용·숨은 상대·상대 반동 턴) ──
+  {
+    const rt = await server.ssrLoadModule("/src/lib/battle/runTurn.ts");
+    const md = await server.ssrLoadModule("/src/lib/battle/ai/moveDamage.ts");
+    const act = (id) => ({ kind: "move", move: data.getMove(id) });
+    const own = (out, key) => out.result.actions.find((x) => x.actor === key);
+    const tank = (moves) => mon("잠만보", moves, null, null, pts({ hp: 32, def: 32, spd: 32 }));
+    // 반동: 맞힌 다음 턴 — 교체·다른 기술을 골라도 움직이지 못하고, 고른 기술 PP는 그대로, 마비여도 반동으로 막히고 반동이 풀린다
+    const r0 = battle([mon("켄타로스", ["기가임팩트", "막치기"]), mon("피카츄", ["10만볼트"])], [tank(["막치기"])]);
+    const r1 = rt.runTurn(r0, act("기가임팩트"), act("막치기"), () => 0).nextState;
+    const recharged = !!r1.a.volatile.active.recharge;
+    r1.a.status = { condition: "paralysis", turnsElapsed: 1 };
+    const pp = r1.a.remainingPp["막치기"];
+    const r2out = rt.runTurn(r1, { kind: "switch", toIndex: 1 }, act("막치기"), () => 0);
+    const r2 = r2out.nextState;
+    const rechargeOk =
+      recharged &&
+      r2out.result.switches.length === 0 &&
+      own(r2out, "a")?.blockedReason === "recharge" &&
+      r2.a.remainingPp["막치기"] === pp &&
+      !r2.a.volatile.active.recharge;
+    // 모으기: 공중날기 준비 다음 턴 — 교체를 골라도 공중날기가 나간다
+    const f0 = battle([mon("리자몽", ["공중날기"]), mon("피카츄", ["10만볼트"])], [tank(["막치기"])]);
+    const f1 = rt.runTurn(f0, act("공중날기"), act("막치기"), () => 0).nextState;
+    const f2out = rt.runTurn(f1, { kind: "switch", toIndex: 1 }, act("막치기"), () => 0);
+    const chargeOk = f1.a.chargingMoveId === "공중날기" && f2out.result.switches.length === 0 && own(f2out, "a")?.move.id === "공중날기";
+    check(
+      "1.9 A1 엔진: 반동 턴·모으기 2턴째 교체 불가, 반동 턴 PP 없음·마비보다 반동 먼저(반동 소모)",
+      rechargeOk && chargeOk,
+      `반동 ${rechargeOk} 모으기 ${chargeOk}`,
+    );
+    // AI 턴 비용: 반동기는 (쓴 횟수 + 맞힌 횟수 − 1)턴, 솔라빔은 2배(쾌청이면 그대로)
+    const est = (st, id) => md.estimateMoveHits({ state: st, attacker: st.a, defender: st.b, defenderSide: st.sideB, attackerMovesSecond: false }, data.getMove(id));
+    const gs = battle([mon("켄타로스", ["기가임팩트"])], [tank(["막치기"])]);
+    const g = est(gs, "기가임팩트");
+    const gUses = g.rawHits / g.accuracy;
+    const gOk = Math.abs(g.expected - (gUses + Math.max(0, g.rawHits - 1))) < 1e-9;
+    const ss = battle([mon("라플레시아", ["솔라빔"], null, null, pts({ spa: 32 }))], [tank(["막치기"])]);
+    const s1 = est(ss, "솔라빔");
+    ss.weather = "쾌청";
+    ss.weatherTurnsRemaining = 5;
+    const s2 = est(ss, "솔라빔");
+    const solarOk = Math.abs(s1.expected - (2 * s1.rawHits) / s1.accuracy) < 1e-9 && Math.abs(s2.expected - s2.rawHits / s2.accuracy) < 1e-9;
+    // AI 이번 턴: 상대 반동 턴이면 모든 선택지 lostShift −1, 상대가 공중날기로 숨었고 내가 빠르면 공격 +1(번개는 맞힘)
+    const ai = await server.ssrLoadModule("/src/lib/battle/ai/index.ts");
+    const idle = battle([mon("피카츄", ["10만볼트", "번개"]), mon("잠만보", ["누르기"])], [mon("켄타로스", ["기가임팩트"])]);
+    idle.b.volatile = { active: { recharge: { turnsRemaining: 1 } } };
+    const idleShift = ev.evaluateOptions(idle, "a").every((o) => o.lostShift === -1);
+    const sky = battle([mon("피카츄", ["10만볼트", "번개"], null, null, pts({ spe: 32, spa: 32 }))], [mon("리자몽", ["공중날기"], null, null, pts({ hp: 2 }))]);
+    sky.b.chargingMoveId = "공중날기";
+    const skyOpts = ev.evaluateOptions(sky, "a");
+    const skyShift = opt(skyOpts, "10만볼트").lostShift === 1 && opt(skyOpts, "번개").lostShift === undefined;
+    // AI가 반동 턴이면 평가 없이 강제 행동
+    const me = battle([mon("켄타로스", ["기가임팩트", "막치기"])], [tank(["막치기"])]);
+    me.a.volatile = { active: { recharge: { turnsRemaining: 1 } } };
+    me.a.lastMoveId = "기가임팩트";
+    const forced = ai.chooseAiAction(me, "a", 0.5);
+    const forcedOk = forced.scored.length === 0 && forced.action.kind === "move" && forced.action.move.id === "기가임팩트";
+    check(
+      "1.9 A1 AI: 반동기·모으기 턴 비용, 상대 반동 턴 −1·숨은 상대에게 먼저 치는 공격 +선공, 내 반동 턴은 강제 행동",
+      gOk && solarOk && idleShift && skyShift && forcedOk,
+      `반동기 ${gOk}(${g.expected.toFixed(2)}턴) 솔라빔 ${solarOk} 상대 반동 ${idleShift} 숨음 ${skyShift} 강제 ${forcedOk}`,
+    );
+  }
+  // ── ver.1.9 한계점 A5: 엔진 미구현 특성 12종 + 매직가드(무릎차기·철제광선) ──
+  {
+    const rt = await server.ssrLoadModule("/src/lib/battle/runTurn.ts");
+    const sw = await server.ssrLoadModule("/src/lib/battle/switching.ts");
+    const toi = await server.ssrLoadModule("/src/lib/battle/turnOrderInputs.ts");
+    const act = (id) => ({ kind: "move", move: data.getMove(id) });
+    const own = (out, key) => out.result.actions.find((x) => x.actor === key);
+    const tank = (moves, ability = null, item = null) => mon("잠만보", moves, ability, item, pts({ hp: 32, def: 32, spd: 32 }));
+    const results = {};
+    // 그림자밟기: 맞은편은 교체 불가(교체를 골라도 안 됨), 고스트·같은 특성은 예외
+    {
+      const st = battle([mon("팬텀", ["섀도볼"], "그림자밟기")], [tank(["막치기"]), mon("피카츄", ["10만볼트"])]);
+      const out = rt.runTurn(st, act("섀도볼"), { kind: "switch", toIndex: 1 }, () => 0.5);
+      const ghost = battle([mon("팬텀", ["섀도볼"], "그림자밟기")], [mon("팬텀", ["섀도볼"])]);
+      results.shadowTag = sw.isTrappedFromSwitching(st.b, st) && out.result.switches.length === 0 && !sw.isTrappedFromSwitching(ghost.b, ghost);
+    }
+    // 돌머리: 반동 없음
+    {
+      const run = (ability) => own(rt.runTurn(battle([mon("프테라", ["브레이브버드"], ability)], [tank(["막치기"])]), act("브레이브버드"), act("막치기"), () => 0.5), "a").recoilDamage ?? 0;
+      results.rockHead = run("돌머리") === 0 && run(null) > 0;
+    }
+    // 분노의경혈: 급소에 맞으면 공격 +6
+    {
+      const st = battle([mon("한카리아스", ["막치기"])], [tank(["막치기"], "분노의경혈")]);
+      const next = rt.runTurn(st, act("막치기"), act("막치기"), () => 0).nextState;
+      results.angerPoint = next.b.stages.atk === 6;
+    }
+    // 속보: 상태이상이면 ×1.5(마비 반감 무시) · 서핑테일: 일렉트릭필드면 ×2
+    {
+      const st = battle([mon("쥬피썬더", ["10만볼트"], "속보")], [mon("알로라라이츄", ["10만볼트"], "서핑테일")]);
+      const base = toi.computeTurnOrderSpeed(st, st.a);
+      st.a.status = { condition: "paralysis", turnsElapsed: 1 };
+      const quickFeet = toi.computeTurnOrderSpeed(st, st.a) / base;
+      const surfBase = toi.computeTurnOrderSpeed(st, st.b);
+      st.field = "일렉트릭필드";
+      st.fieldTurnsRemaining = 5;
+      results.speed = Math.abs(quickFeet - 1.5) < 1e-9 && Math.abs(toi.computeTurnOrderSpeed(st, st.b) / surfBase - 2) < 1e-9;
+    }
+    // 퀵드로: 공격기면 30%로 먼저(난수 0 → 발동), 변화기면 없음
+    {
+      const st = () => battle([mon("가라르야도란", ["사이코키네시스", "명상"], "퀵드로", null, pts({ hp: 2 }))], [mon("피카츄", ["10만볼트"])]);
+      const first = (moveId) => rt.runTurn(st(), act(moveId), act("10만볼트"), () => 0).result.actions[0].actor;
+      results.quickDraw = first("사이코키네시스") === "a" && first("명상") === "b";
+    }
+    // 애널라이즈: 후공이면 위력 ×1.3
+    {
+      const dmg = (ability) =>
+        own(rt.runTurn(battle([mon("보르그", ["10만볼트"], ability, null, pts({ spa: 32, hp: 2 }))], [mon("메가니움", ["칼춤"], null, null, pts({ hp: 32, spe: 32 }))]), act("10만볼트"), act("칼춤"), () => 0.5), "a").damage;
+      const ratio = dmg("애널라이즈") / dmg(null);
+      results.analytic = ratio > 1.2 && ratio < 1.4;
+    }
+    // 촉촉바디: 비면 턴 끝에 상태이상 치료
+    {
+      const st = battle([mon("샤미드", ["칼춤"], "촉촉바디")], [tank(["칼춤"])]);
+      st.a.status = { condition: "poison", turnsElapsed: 1 };
+      st.weather = "비";
+      st.weatherTurnsRemaining = 5;
+      results.hydration = rt.runTurn(st, act("칼춤"), act("칼춤"), () => 0.9).nextState.a.status.condition === null;
+    }
+    // 포자: 접촉하면 30%로 독·마비·잠듦(난수 0 → 발동·첫 번째 독), 풀 타입은 무효
+    {
+      const hit = (attacker) => rt.runTurn(battle([attacker], [mon("라플레시아", ["칼춤"], "포자", null, pts({ hp: 32, def: 32 }))]), act("막치기"), act("칼춤"), () => 0).nextState.a.status.condition;
+      results.effectSpore = hit(mon("한카리아스", ["막치기"])) === "poison" && hit(mon("메가니움", ["막치기"])) !== "poison";
+    }
+    // 잠복: 이번 턴 교체해 들어온 상대에게 ×2
+    {
+      const st = battle([mon("마피티프", ["깨물어부수기"], "잠복")], [mon("피카츄", ["10만볼트"]), tank(["칼춤"])]);
+      const switched = own(rt.runTurn(st, act("깨물어부수기"), { kind: "switch", toIndex: 1 }, () => 0.5), "a").damage;
+      const stay = own(rt.runTurn(battle([mon("마피티프", ["깨물어부수기"], "잠복")], [tank(["칼춤"])]), act("깨물어부수기"), act("칼춤"), () => 0.5), "a").damage;
+      results.stakeout = Math.abs(switched / stay - 2) < 0.15;
+    }
+    // 되새김질: 자뭉열매를 먹은 다음 턴 끝에 한 번 더
+    {
+      const st = battle([mon("키키링", ["칼춤"], "되새김질", "자뭉열매", pts({ hp: 32 }))], [tank(["칼춤"])]);
+      st.a.currentHp = Math.floor(st.a.maxHp * 0.4);
+      const t1 = rt.runTurn(st, act("칼춤"), act("칼춤"), () => 0.9);
+      const t2 = rt.runTurn(t1.nextState, act("칼춤"), act("칼춤"), () => 0.9);
+      const chewed = t2.result.endOfTurn.some((e) => e.cudChewBerryName === "자뭉열매" && e.berryHeal > 0);
+      results.cudChew = chewed && t2.nextState.a.currentHp > t1.nextState.a.currentHp;
+    }
+    // 독치장: 물리 피격 → 공격자 편 독압정
+    {
+      const next = rt.runTurn(battle([mon("한카리아스", ["막치기"])], [mon("킬라플로르", ["칼춤"], "독치장", null, pts({ hp: 32, def: 32 }))]), act("막치기"), act("칼춤"), () => 0.5).nextState;
+      results.toxicDebris = next.sideA.hazards.toxicSpikesLayers === 1;
+    }
+    // 매직가드: 철제광선 HP 손실 없음
+    {
+      const next = rt.runTurn(battle([mon("픽시", ["철제광선"], "매직가드", null, pts({ hp: 32 }))], [tank(["칼춤"])]), act("철제광선"), act("칼춤"), () => 0.5).nextState;
+      results.magicGuard = next.a.currentHp === next.a.maxHp;
+    }
+    check("1.9 A5: 특성 12종 + 매직가드", Object.values(results).every(Boolean), `실패: ${Object.keys(results).filter((k) => !results[k]).join(",") || "없음"}`);
+  }
+  // ── ver.1.9 한계점 A2: 공격의 자기 HP 변화 — 반동·생명의구슬·접촉 페널티는 내가 버티는 턴↓, 흡수는↑(해감액이면↓), 상대 반동은 내 처치 턴↓ ──
+  {
+    const tank = (moves, ability = null, item = null) => mon("잠만보", moves, ability, item, pts({ hp: 32, def: 32, spd: 32 }));
+    const d = (st, moveId) => opt(ev.evaluateOptions(st, "a"), moveId).hitsToBeKilled.expected;
+    const c = (st, moveId) => opt(ev.evaluateOptions(st, "a"), moveId).hitsToKill.expected;
+    const recoil = battle([mon("찌르호크", ["브레이브버드", "막치기"])], [tank(["막치기"])]);
+    const recoilLower = d(recoil, "브레이브버드") < d(recoil, "막치기");
+    const orb = d(battle([mon("찌르호크", ["막치기"], null, "생명의구슬")], [tank(["막치기"])]), "막치기");
+    const noOrb = d(battle([mon("찌르호크", ["막치기"])], [tank(["막치기"])]), "막치기");
+    const sp = () => mon("라플레시아", ["기가드레인", "에너지볼"], null, null, pts({ spa: 32, hp: 32 }));
+    const drain = battle([sp()], [tank(["막치기"])]);
+    const ooze = battle([sp()], [tank(["막치기"], "해감액")]);
+    const drainUp = d(drain, "기가드레인") > d(drain, "에너지볼");
+    const oozeDown = d(ooze, "기가드레인") < d(ooze, "에너지볼");
+    const pika = () => mon("피카츄", ["막치기", "10만볼트"], null, null, pts({ spa: 32, atk: 32 }));
+    const helmet = battle([pika()], [tank(["막치기"], null, "울퉁불퉁멧")]);
+    const plain = battle([pika()], [tank(["막치기"])]);
+    const helmetDown = d(helmet, "막치기") < d(helmet, "10만볼트") && d(plain, "막치기") === d(plain, "10만볼트");
+    const oppRecoil = c(battle([mon("한카리아스", ["막치기"])], [mon("찌르호크", ["브레이브버드"])]), "막치기");
+    const oppPlain = c(battle([mon("한카리아스", ["막치기"])], [mon("찌르호크", ["막치기"])]), "막치기");
+    check(
+      "1.9 A2: 반동·생명의구슬·울퉁불퉁멧은 버티는 턴↓, 흡수는↑(해감액이면↓), 상대 반동은 내 처치 턴↓",
+      recoilLower && orb < noOrb && drainUp && oozeDown && helmetDown && oppRecoil < oppPlain,
+      `반동 ${recoilLower} 구슬 ${noOrb.toFixed(2)}→${orb.toFixed(2)} 흡수 ${drainUp} 해감액 ${oozeDown} 멧 ${helmetDown} 상대 반동 c ${oppPlain.toFixed(2)}→${oppRecoil.toFixed(2)}`,
+    );
+  }
+  // ── ver.1.9 난동(역린·꽃잎댄스·난동부리기·대격분·소란피기): 고정 턴·PP 첫 턴만·끝나면 혼란·끊기면 혼란 없음·소란 중 잠듦 불가 ──
+  {
+    const rt = await server.ssrLoadModule("/src/lib/battle/runTurn.ts");
+    const act = (id) => ({ kind: "move", move: data.getMove(id) });
+    const run = (st, a, b, r = 0.5) => rt.runTurn(st, a.kind ? a : act(a), b.kind ? b : act(b), () => r);
+    const own = (out, key) => out.result.actions.find((x) => x.actor === key);
+    const tank = (moves) => mon("잠만보", moves, null, null, pts({ hp: 32, def: 32 }));
+    // 난수 0.5 → 지속 3턴(0.5 < 0.5 아님). 1턴째 역린 → 2·3턴째는 다른 기술·교체를 골라도 역린, PP는 첫 턴만, 3턴째 끝에 혼란
+    const st0 = battle([mon("한카리아스", ["역린", "지진"]), mon("잠만보", ["누르기"])], [tank(["칼춤"])]);
+    const pp0 = st0.a.remainingPp["역린"];
+    const t1 = run(st0, "역린", "칼춤");
+    const s1 = t1.nextState;
+    const t2 = run(s1, { kind: "switch", toIndex: 1 }, act("칼춤"));
+    const s2 = t2.nextState;
+    const t3 = run(s2, "지진", "칼춤");
+    const s3 = t3.nextState;
+    const forced = own(t2, "a")?.move.id === "역린" && own(t3, "a")?.move.id === "역린" && t2.result.switches.length === 0;
+    const ppUsed = pp0 - s3.a.remainingPp["역린"];
+    const lockedLeft = [s1, s2].map((s) => s.a.volatile.active.rampage?.turnsRemaining);
+    const confusedEnd = !!s3.a.volatile.active.confusion && !s3.a.volatile.active.rampage && own(t3, "a")?.rampageConfused === true;
+    check(
+      "1.9 난동: 역린 3턴 고정(입력·교체 무시), PP 첫 턴만, 끝까지 쓰면 혼란",
+      forced && ppUsed === 1 && lockedLeft[0] === 2 && lockedLeft[1] === 1 && confusedEnd,
+      `강제 ${forced} PP −${ppUsed} 남은 턴 ${lockedLeft.join("→")} 끝 혼란 ${confusedEnd}`,
+    );
+    // 난수 0.4 → 2턴. 2턴째가 방어에 막히면(마지막 턴) 혼란 없이 끝 · 마이페이스는 끝까지 써도 혼란 없음
+    const p0 = battle([mon("한카리아스", ["역린"])], [tank(["방어", "칼춤"])]);
+    const p1 = run(p0, "역린", "칼춤", 0.4).nextState;
+    const p2out = run(p1, "역린", "방어", 0.4);
+    const blockedEnd = !p2out.nextState.a.volatile.active.rampage && !p2out.nextState.a.volatile.active.confusion;
+    const ot0 = battle([mon("한카리아스", ["역린"], "마이페이스")], [tank(["칼춤"])]);
+    const ot2 = run(run(ot0, "역린", "칼춤", 0.4).nextState, "역린", "칼춤", 0.4).nextState;
+    const ownTempo = !ot2.a.volatile.active.rampage && !ot2.a.volatile.active.confusion;
+    check(
+      "1.9 난동: 2턴(50%) · 마지막 턴이 방어에 막히면 혼란 없이 끝 · 마이페이스는 혼란 없음",
+      p1.a.volatile.active.rampage?.turnsRemaining === 1 && blockedEnd && ownTempo,
+      `2턴 남은 ${p1.a.volatile.active.rampage?.turnsRemaining} 방어 끊김 ${blockedEnd} 마이페이스 ${ownTempo}`,
+    );
+    // 소란피기: 잠든 상대는 깨고, 소란 중엔 수면가루·잠자기 실패, 3턴 뒤 혼란 없이 끝
+    const u0 = battle([mon("잠만보", ["소란피기"])], [mon("후딘", ["최면술", "잠자기"], null, null, pts({ hp: 32, spe: 32 }))]);
+    u0.b.status = { condition: "sleep", turnsElapsed: 0, sleepTurnsRemaining: 3 };
+    const u1 = run(u0, "소란피기", "최면술");
+    const woke = (own(u1, "a")?.uproarWokeIds ?? []).includes(u0.b.slot.pokemonId);
+    const u2out = run(u1.nextState, "소란피기", "최면술");
+    const noSleep = u2out.nextState.a.status.condition !== "sleep";
+    const restOut = run(u2out.nextState, "소란피기", "잠자기");
+    const restFailed = own(restOut, "b")?.blockedReason === "usageCondition";
+    const uEnd = restOut.nextState.a;
+    const uproarEnded = !uEnd.volatile.active.rampage && !uEnd.volatile.active.confusion && own(restOut, "a")?.rampageEnded === true;
+    check(
+      "1.9 소란피기: 잠든 상대 깨움 · 소란 중 최면술·잠자기 실패 · 3턴 뒤 혼란 없이 끝",
+      woke && noSleep && restFailed && uproarEnded,
+      `깨움 ${woke} 잠듦 막힘 ${noSleep} 잠자기 실패 ${restFailed} 끝 ${uproarEnded}`,
+    );
+    // AI: 역린을 새로 쓰면 긴 대면에선 끝난 뒤 혼란 비용(처치 턴↑) — 마이페이스는 비용 없음
+    const cost = (ability) => opt(ev.evaluateOptions(battle([mon("한카리아스", ["역린"], ability)], [tank(["누르기"])]), "a"), "역린").hitsToKill.expected;
+    const withCost = cost(null);
+    const noCost = cost("마이페이스");
+    check("1.9 난동: AI 역린 선택 시 끝난 뒤 혼란 비용(긴 대면 처치 턴↑, 마이페이스는 없음)", withCost > noCost, `${noCost.toFixed(2)} → ${withCost.toFixed(2)}`);
+    // AI: 난동 중엔 선택지가 그 기술 하나(교체 없음)
+    const aiOpts = ev.evaluateOptions(s1, "a");
+    check(
+      "1.9 난동: AI 선택지는 난동 기술 하나(교체 없음)",
+      aiOpts.length === 1 && aiOpts[0].move?.id === "역린",
+      aiOpts.map((o) => o.move?.id ?? `교체${o.toIndex}`).join(","),
+    );
   }
   // ── 매치업 난수별 데미지(ver.1.7 트랙 H): 기존 격파 판정과 같은 관계식인지 대조 ──
   {

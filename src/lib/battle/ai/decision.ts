@@ -117,11 +117,12 @@ export interface DecisionParams {
    * false면 이전 동작(비교용). 평가·점수 계산 전체를 withEndOfTurnModel로 감싸 적용한다(index.ts).
    */
   endOfTurnAware: boolean;
-  /**
-   * 쉬움 난이도(ver.1.8, A안): 0보다 크면 최고점만 고르지 않고 점수 소프트맥스(온도 τ)로 뽑는다 — 점수 차가 작을수록
-   * 차선이 자주 나온다. 0이면 최고점(어려움). 하드 오버라이드(확정 처치 등)는 그대로 우선한다.
-   */
-  choiceTemperature: number;
+  /** 급소 기대 데미지(ver.1.9 6-2) — 처치 턴 수에 급소 확률을 섞는다. false면 이전 동작(비교용), withCritModel로 적용(index.ts) */
+  critAware: boolean;
+  /** 교체 봉쇄 판단(ver.1.9 6-3) — 그림자꿰매기 가두기 가치·배수의진 자기 봉쇄 비용. false면 이전 동작(비교용), withTrapModel(index.ts) */
+  trapMoveAware: boolean;
+  /** 확률 턴 종료 효과(ver.1.9 6-4) — 탈피·수확을 대면 턴 수에 기대값으로. false면 이전 동작(비교용), withChanceEffectsModel */
+  chanceEffectsAware: boolean;
 }
 
 /**
@@ -170,8 +171,15 @@ export const DEFAULT_DECISION_PARAMS: DecisionParams = {
   mySwitchMargin: 0.1,
   mySwitchLimit: 1,
   endOfTurnAware: true,
-  choiceTemperature: 0,
+  critAware: true,
+  trapMoveAware: true,
+  chanceEffectsAware: true,
 };
+
+/** 기본 파라미터 위에 decisionParams(시뮬레이터 튜닝용)를 덮어쓴 최종 파라미터 */
+export function paramsFor(decisionParams: Partial<DecisionParams> | undefined): DecisionParams {
+  return { ...DEFAULT_DECISION_PARAMS, ...decisionParams };
+}
 
 export interface ScoredOption {
   option: AiOption;
@@ -233,14 +241,33 @@ export function raceValue(
  * raceValue, 또는 파티 단위 평가(§4-5, partyAware): 첫 대면(이 인자들)을 이긴다/진다 갈래로 나누고 각 갈래 뒤로 남은
  * 포켓몬끼리 이어지는 대면까지 계산한 값. myOverrides = 첫 대면에 안 나오는 내 포켓몬의 HP를 바꿔 볼 때(유턴류 후공 등).
  */
-function race(
-  params: DecisionParams,
-  party: PartyDuel | undefined,
-  inputs: [killTurns: number, survivalTurns: number, firstProbability: number, my: number, opp: number, lost: number],
-  myOverrides?: Record<number, number>,
-): number {
+type RaceInputs = [killTurns: number, survivalTurns: number, firstProbability: number, my: number, opp: number, lost: number];
+
+/**
+ * 채점 중인 옵션의 opponentIdleChance(ver.1.9 6-1): 상대가 기습류를 골라 이번 턴 상대 행동이 헛수고가 될 확률. scoreOption이
+ * 옵션마다 설정한다 — 평가 함수가 여러 겹이라 인자로 내리는 대신(withThreatModel과 같은 방식, 동기 실행).
+ */
+let opponentIdleChance = 0;
+/** 채점 중인 옵션의 lostShift(ver.1.9 한계점 A1 — 상대 반동 턴 −1, 숨은 상대에게 먼저 치는 공격 + 선공 확률). scoreOption이 설정 */
+let lostShift = 0;
+
+function raceOnce(params: DecisionParams, party: PartyDuel | undefined, inputs: RaceInputs, myOverrides?: Record<number, number>): number {
   if (!params.partyAware || !party) return raceValue(...inputs);
   return partyRaceValue(party, inputs, chainParams(params), myOverrides);
+}
+
+function race(params: DecisionParams, party: PartyDuel | undefined, raw: RaceInputs, myOverrides?: Record<number, number>): number {
+  const inputs: RaceInputs = lostShift !== 0 ? [raw[0], raw[1], raw[2], raw[3], raw[4], raw[5] + lostShift] : raw;
+  // 이번 턴 공격하지 않는 행동(lost = 1)인데 상대가 기습류를 고르면 상대도 이번 턴을 날린다 → lost = 0과 섞는다
+  if (opponentIdleChance > 0 && inputs[5] >= 1) {
+    const idle: RaceInputs = [...inputs];
+    idle[5] = inputs[5] - 1;
+    return (
+      opponentIdleChance * raceOnce(params, party, idle, myOverrides) +
+      (1 - opponentIdleChance) * raceOnce(params, party, inputs, myOverrides)
+    );
+  }
+  return raceOnce(params, party, inputs, myOverrides);
 }
 
 /** 이어지는 대면 계산 파라미터(λ·대면 폭·상대 자발적 교체) */
@@ -596,7 +623,16 @@ function tradeScore(option: AiOption, riskAversion: number, params: DecisionPara
 
 /** decision-layer §4 점수식. 데미지 없는 변화기는 extension §2-2 전용 점수식. */
 export function scoreOption(option: AiOption, riskAversion: number, params: DecisionParams = DEFAULT_DECISION_PARAMS): number {
-  if (params.scoring === "trade") return tradeScore(option, riskAversion, params);
+  if (params.scoring === "trade") {
+    const previous = [opponentIdleChance, lostShift] as const;
+    opponentIdleChance = option.opponentIdleChance ?? 0;
+    lostShift = option.lostShift ?? 0;
+    try {
+      return tradeScore(option, riskAversion, params);
+    } finally {
+      [opponentIdleChance, lostShift] = previous;
+    }
+  }
   const riskPenalty = option.riskFlag ? params.riskFlagPenaltyBase * riskAversion : 0;
   const speedAdj = speedAdjustment(option);
   const tempo = params.scoring === "tempo";
@@ -651,19 +687,6 @@ function fallbackOption(options: AiOption[]): AiOption {
   return options.find((o) => o.optionType === "switch") ?? options[0];
 }
 
-/** 쉬움 난이도: 점수 소프트맥스로 뽑는다(−∞는 제외). 최고점 대비 차이로 계산해 overflow를 피한다 */
-function softmaxPick(scored: ScoredOption[], bestScore: number, temperature: number, random: () => number): AiOption {
-  const pool = scored.filter((s) => Number.isFinite(s.score));
-  const weights = pool.map((s) => Math.exp((s.score - bestScore) / temperature));
-  const total = weights.reduce((a, b) => a + b, 0);
-  let r = random() * total;
-  for (let i = 0; i < pool.length; i++) {
-    r -= weights[i];
-    if (r <= 0) return pool[i].option;
-  }
-  return pool[pool.length - 1].option;
-}
-
 function compareBy<T>(key: (item: T) => number): (a: T, b: T) => number {
   return (a, b) => key(a) - key(b);
 }
@@ -676,7 +699,6 @@ export function decide(
   options: AiOption[],
   riskAversion: number,
   params: DecisionParams = DEFAULT_DECISION_PARAMS,
-  random: () => number = Math.random,
 ): { chosen: AiOption; scored: ScoredOption[] } | null {
   if (options.length === 0) return null;
   // NaN 점수는 비교가 전부 false라 후보가 하나도 안 남는다 — 계산 결함이 있어도 배틀이 멈추지 않게 선택 불가로 본다.
@@ -685,12 +707,15 @@ export function decide(
     return Number.isNaN(score) ? { option, score: -Infinity, nan: true } : { option, score };
   });
 
-  const override = options.find(isHardOverride);
-  if (override) return { chosen: override, scored };
+  // 확정 처치 기술이 여럿이면 점수 최고(ver.1.9 한계점 A4 — 이전엔 목록의 첫 번째라 반동기·접촉 페널티 기술이 먼저면 그걸 썼다)
+  const overrides = scored.filter((s) => isHardOverride(s.option));
+  if (overrides.length > 0) {
+    const best = overrides.reduce((a, b) => (b.score > a.score ? b : a));
+    return { chosen: best.option, scored };
+  }
 
   const bestScore = Math.max(...scored.map((s) => s.score));
   if (bestScore === -Infinity) return { chosen: fallbackOption(options), scored };
-  if (params.choiceTemperature > 0 && Number.isFinite(bestScore)) return { chosen: softmaxPick(scored, bestScore, params.choiceTemperature, random), scored };
 
   // 상대가 나에게 데미지를 줄 수단이 없으면 점수가 +Infinity — Infinity − Infinity(NaN) 비교를 피한다.
   let candidates = scored.filter((s) => s.score === bestScore || bestScore - s.score < params.tieThreshold);

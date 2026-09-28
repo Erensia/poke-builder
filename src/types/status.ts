@@ -105,7 +105,11 @@ export type VolatileCondition =
   | "imprison"
   // 트랙 M6: 검은눈빛·블록(교체 봉쇄, 상대) · 록온(다음 기술 필중, 자신)
   | "meanLook"
-  | "lockOn";
+  | "lockOn"
+  // ver.1.9: 배수의진(자신 교체 봉쇄 — 자신이 물러나기 전까지)
+  | "noRetreat"
+  // ver.1.9: 난동(역린·꽃잎댄스·난동부리기·대격분·소란피기) — moveId 기술을 남은 턴 동안 강제로 쓴다(교체 불가)
+  | "rampage";
 
 /** 기술이 상대(또는 자신)에게 행동방해 효과를 걸 때 쓰는 정보 */
 export interface VolatileInflictEffect {
@@ -118,7 +122,7 @@ export interface VolatileInflictEffect {
 export interface VolatileConditionEntry {
   /** 이번 판정 이후 몇 턴 더 남았는지. 0 이하가 되면 제거된다 */
   turnsRemaining: number;
-  /** 사슬묶기(막힌 기술)·앙코르(강제된 기술) 전용 — 대상 기술 id. 그 외 volatile은 사용하지 않는다 */
+  /** 사슬묶기(막힌 기술)·앙코르(강제된 기술)·난동(이어 쓰는 기술) 전용 — 대상 기술 id. 그 외 volatile은 사용하지 않는다 */
   moveId?: string;
 }
 

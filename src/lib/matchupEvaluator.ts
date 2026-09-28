@@ -1,6 +1,7 @@
 import type { AbilityPoints } from "../types/party";
 import type { PokemonGender } from "../types/pokemon";
 import type { Move } from "../types/move";
+import type { StatusCondition } from "../types/status";
 import type { WeatherKind } from "../types/weather";
 import type { FieldKind } from "../types/field";
 import type { PokemonType } from "../types/pokemon-type";
@@ -17,6 +18,7 @@ import { resolveEffectiveDefenderAbility } from "./abilityModifiers";
 import { NEUTRAL_STAGES, type StatStages } from "../types/battleStats";
 import {
   computeOffensePower,
+  CRITICAL_DAMAGE_MULTIPLIER,
   computeBulkPower,
   computeEffectiveSpeed,
   evaluateMatchupChance,
@@ -26,6 +28,7 @@ import {
   electroBallPowerFromSpeeds,
   positiveStagesPowerValue,
   weightRatioPowerValue,
+  userHpScaledPowerValue,
   absoluteWeightPowerValue,
   WEIGHT_MOVE_FALLBACK_POWER,
   rivalryDamageMultiplier,
@@ -85,6 +88,34 @@ export interface SlotMatchupOptions {
   /** 하드프레스(트랙 M5)처럼 상대 남은 HP 비율로 위력이 정해지는 기술용. 생략하면 풀피 */
   defenderHpFraction?: number;
   defenderHasStatusCondition?: boolean;
+  /**
+   * 조건부 2배 기술용 상태이상 종류(ver.1.9) — 객기(공격측 화상·독·마비), 베놈쇼크·독침천발(방어측 독), 백귀야행(방어측 아무
+   * 상태이상, 없으면 defenderHasStatusCondition로 판정). 생략하면 상태이상 없음.
+   */
+  attackerStatus?: StatusCondition | null;
+  defenderStatus?: StatusCondition | null;
+  /**
+   * ver.1.9 매치업 페이지 — 특성 HP 조건(맹화류 1/3 이하)에만 쓰는 HP 비율. 생략하면 attackerHpFraction과 같다
+   * (배틀 AI는 둘이 같음). 페이지는 HP 슬라이더(위력)와 "HP 1/3 이하 가정"(특성)을 따로 둔다.
+   */
+  abilityHpFraction?: number;
+  /**
+   * 조건부 위력 가정(ver.1.9 — 매치업 페이지 가정 토글, 배틀 AI는 실제 state). 생략하면 모두 미충족(기본 위력).
+   * 보복 = 상대보다 늦게 행동, 눈사태 = 이번 턴 상대 기술로 데미지 입음, 분함의발구르기·열불내기 = 직전 턴 기술 실패,
+   * 분풀이 = 이번 턴 자기 능력 하락, 승부굳히기 = 이번 턴 대상이 이미 데미지 입음, 작아지기 보너스(누르기 등) = 대상이 작아지기 사용.
+   */
+  attackerMovesLast?: boolean;
+  attackerTookDamageThisTurn?: boolean;
+  attackerMoveFailedLastTurn?: boolean;
+  attackerStatLoweredThisTurn?: boolean;
+  defenderDamagedThisTurn?: boolean;
+  defenderMinimized?: boolean;
+  /**
+   * 급소에 맞았다고 가정(ver.1.9 6-2 — 매치업 페이지 급소 토글·배틀 AI 급소 기대 데미지). 엔진 computeDamage와 같은 규칙:
+   * 공격측 불리한(음수) 랭크·방어측 유리한(양수) 랭크 무시, 벽 무시, 데미지 ×1.5(스나이퍼 2.25). 방어측이 조가비갑옷·전투무장이면
+   * 급소가 안 뜬다(결과 criticalBlocked).
+   */
+  critical?: boolean;
   defenderItemConsumed?: boolean;
   /**
    * 배틀 AI용 — 슬롯 원본 대신 실전 파이터의 현재 값(메가진화·변신·변환자재·트레이스·도구 소모 반영)을
@@ -144,6 +175,15 @@ export interface SlotMatchupResult {
   rawOffensePower: number;
   bulkPower: number;
   verdict: MatchupVerdict;
+  /**
+   * 반감 열매(자바열매류)가 이 공격에 발동할 때 그 한 타의 내구력 배율(2, 숙성 4). 발동 안 하면 1. 열매는 첫 타에 소모되므로
+   * 다단히트는 bulkPower에 첫 타만 반감된 배율로 이미 반영돼 있고, 여러 턴 처치 계산(배틀 AI)은 이 값으로 2타째부터 뺀다.
+   */
+  berryBulkMultiplier: number;
+  /** bulkPower에 실제로 곱한 반감 열매 배율(다단히트면 첫 타만 반감된 값, 발동 안 하면 1) */
+  berryAppliedMultiplier: number;
+  /** critical 가정인데 방어측 특성(조가비갑옷·전투무장)으로 급소가 안 뜸 — 결과는 급소 없는 값 */
+  criticalBlocked?: boolean;
   /** 판정 타수로 격파할 확률(0~1). 확정 1·2타면 1, "3타 이상 필요"면 null (Phase 7.5 §2) */
   koChance: number | null;
   /** 난수 1타일 때만: [격파 난수 수, 16] */
@@ -187,6 +227,16 @@ export function evaluateSlotMatchup(
     defenderHpIsFull,
     defenderHpFraction = 1,
     defenderHasStatusCondition,
+    attackerStatus,
+    defenderStatus,
+    abilityHpFraction,
+    attackerMovesLast,
+    attackerTookDamageThisTurn,
+    attackerMoveFailedLastTurn,
+    attackerStatLoweredThisTurn,
+    defenderDamagedThisTurn,
+    defenderMinimized,
+    critical = false,
     defenderItemConsumed,
     attackerRuntime,
     defenderRuntime,
@@ -287,7 +337,8 @@ export function evaluateSlotMatchup(
   }
 
   if (move.reversalPower) {
-    variablePowerMove = { ...variablePowerMove, power: reversalPowerFromHp(1, 1) };
+    // 공격측 HP 비율(배틀 AI의 현재 HP·페이지의 HP 슬라이더), 생략하면 풀피(최소 위력 20)
+    variablePowerMove = { ...variablePowerMove, power: reversalPowerFromHp(attackerHpFraction ?? 1, 1) };
   } else if (move.gyroBallPower) {
     const effSpeed = (
       spe: number,
@@ -342,19 +393,32 @@ export function evaluateSlotMatchup(
           : WEIGHT_MOVE_FALLBACK_POWER,
     };
   }
-  // 조건부 ×2(conditionalDoublePower). 매치업 페이지 정책(§3 증분 C·B-3, 사용자 지시):
-  //  - user-has-no-item(애크러뱃): 지닌 도구를 알고 있으니 실제로 판정
-  //  - user-stat-lowered-this-turn(분풀이)·user-move-failed-last-turn(분함의발구르기): 조건 충족을 상정(항상 ×2)
-  //  - took-damage-this-turn(눈사태)·moves-after-target(보복): 배틀 문맥 필요 → 매치업에선 기본 위력
-  if (variablePowerMove.power !== null) {
-    const cond = variablePowerMove.conditionalDoublePower;
-    const assumeDoubled =
-      cond === "user-stat-lowered-this-turn" ||
-      cond === "user-move-failed-last-turn" ||
-      (cond === "user-has-no-item" && !attackerItem);
-    if (assumeDoubled) {
-      variablePowerMove = { ...variablePowerMove, power: variablePowerMove.power * 2 };
-    }
+  // 분화·해수스파우팅(ver.1.9): 위력 = 최대 위력 × 공격측 HP 비율(생략하면 풀피)
+  if (variablePowerMove.userHpScaledPower) {
+    variablePowerMove = {
+      ...variablePowerMove,
+      power: userHpScaledPowerValue(variablePowerMove.userHpScaledPower, attackerHpFraction ?? 1),
+    };
+  }
+  if (
+    variablePowerMove.power !== null &&
+    conditionalPowerDoubled(variablePowerMove, {
+      attackerHasItem: !!attackerItem,
+      attackerStatus,
+      defenderStatus,
+      defenderHasStatusCondition,
+      attackerMovesLast,
+      attackerTookDamageThisTurn,
+      attackerMoveFailedLastTurn,
+      attackerStatLoweredThisTurn,
+      defenderDamagedThisTurn,
+    })
+  ) {
+    variablePowerMove = { ...variablePowerMove, power: variablePowerMove.power * 2 };
+  }
+  // 누르기·드래곤다이브·플라잉프레스(ver.1.9): 대상이 작아지기를 썼으면 위력 2배(엔진 preHitEffects와 같게)
+  if (variablePowerMove.power !== null && variablePowerMove.bonusVsMinimize && defenderMinimized) {
+    variablePowerMove = { ...variablePowerMove, power: variablePowerMove.power * 2 };
   }
 
   // 솔라빔(§1-10): chargeSkipWeather(쾌청)가 아닌 날씨에서는 위력 절반. matchupEvaluator는
@@ -394,8 +458,8 @@ export function evaluateSlotMatchup(
   } = resolveMoveContext(attackerAbility, fieldAdjustedMove, defenderForm.types, defenderAbility, {
     weather: effectiveWeather,
     defenderItem,
-    // 매치업 페이지는 1턴 스냅샷이라 아래 세 값을 안 넘겨 기본값(풀피/상태이상 없음)을 쓴다.
-    attackerHpFraction,
+    // 매치업 페이지는 가정 토글로 넘긴다(생략하면 풀피/상태이상 없음). 특성 HP 조건은 abilityHpFraction 우선.
+    attackerHpFraction: abilityHpFraction ?? attackerHpFraction,
     defenderHpIsFull,
     defenderHasStatusCondition,
     field,
@@ -406,6 +470,18 @@ export function evaluateSlotMatchup(
   // 선택한 타수까지의 위력을 합산해서 결정력 계산에 쓸 위력으로 바꿔치기한다.
   //  - 트리플악셀류(multiHitPowers): 타수별 위력이 다르므로 배열을 잘라 합산.
   //  - 록블라스트/스케일샷류(minHits~maxHits, multiHitPowers 없음): 매 타 위력이 동일하므로 위력 × 타수.
+  // 반감 열매는 첫 타에만 적용되므로 첫 타 위력 비중(firstHitShare)도 같이 낸다.
+  const firstHitShare = (() => {
+    if (move.multiHitPowers && multiHitCount) {
+      const powers = move.multiHitPowers.slice(0, multiHitCount);
+      const total = powers.reduce((sum, p) => sum + p, 0);
+      return total > 0 ? powers[0] / total : 1;
+    }
+    if (move.minHits !== undefined && move.maxHits !== undefined && multiHitCount) {
+      return 1 / Math.max(move.minHits, Math.min(move.maxHits, multiHitCount));
+    }
+    return 1;
+  })();
   const effectiveMoveWithHits = (() => {
     if (move.multiHitPowers && multiHitCount) {
       return {
@@ -470,17 +546,20 @@ export function evaluateSlotMatchup(
 
   // 상대 타입 상성을 곱하기 전의 결정력. offensePower는 여기에 typeEffectiveness만 곱한 값이라
   // 매번 다시 계산하는 대신 이 값에 typeEffectiveness를 곱해서 구한다.
+  // 급소(ver.1.9 6-2): 공격 쪽 랭크는 음수를 0으로(속임수는 방어자 공격 랭크가 공격 랭크라 같은 쪽), 방어 랭크는 양수를 0으로
+  const criticalApplies = critical && !defenderAbility?.preventsCritsAgainstSelf;
+  const critMultiplier = criticalApplies ? (attackerAbility?.critDamageMultiplier ?? CRITICAL_DAMAGE_MULTIPLIER) : 1;
   const rawOffensePower = computeOffensePower(attackerRealStats, attackerForm.types, effectiveMoveFinal, {
     abilityMultiplier:
-      (manualAbilityMultiplier ?? abilityOffenseMultiplier) * rivalryMultiplier * hustleMultiplier * extraOffenseMultiplier,
+      (manualAbilityMultiplier ?? abilityOffenseMultiplier) * rivalryMultiplier * hustleMultiplier * extraOffenseMultiplier * critMultiplier,
     itemMultiplier: itemMultiplier ?? autoItemMultiplier,
     weatherMultiplier: manualWeatherMultiplier ?? autoWeatherDamageMultiplier,
     fieldMultiplier: manualFieldMultiplier ?? autoFieldDamageMultiplier,
-    attackerStages,
+    attackerStages: criticalApplies ? clampStages(attackerStages, "positive") : attackerStages,
     stabMultiplier,
     // 속임수(usesTargetAttackStat): 방어자의 공격 실능·랭크로 결정력을 낸다
     defenderRealStats,
-    defenderStages,
+    defenderStages: criticalApplies ? clampStages(defenderStages, "positive") : defenderStages,
   });
   if (rawOffensePower === null) return null;
   const offensePower = rawOffensePower * typeEffectiveness;
@@ -488,7 +567,7 @@ export function evaluateSlotMatchup(
   // 스크린(리플렉터/빛의장막/오로라베일): 해당 카테고리 데미지 절반 = 내구력 2배 — 틈새포착이면 무시.
   // 이쪽은 1턴 스냅샷이라 진영 상태 대신 단일 screen 옵션에서 두 불리언을 도출하고,
   // 실제 곱셈 공식은 battlePower.screenMultiplierFromFlags로 battleSimulator와 공유한다(§5).
-  const screenBypassed = !!attackerAbility?.bypassesScreensAndSubstitute;
+  const screenBypassed = !!attackerAbility?.bypassesScreensAndSubstitute || criticalApplies;
   const auroraVeilActive = !screenBypassed && screen === "auroraVeil";
   const categoryScreenActive =
     !screenBypassed &&
@@ -502,10 +581,13 @@ export function evaluateSlotMatchup(
     move.hitsDefensiveStat ?? (resolvedCategory === "physical" ? "def" : "spd"),
   );
 
+  // 반감 열매는 첫 타만(ver.1.9 6-1): 다단히트 전체 데미지 = 첫 타 몫 / 배율 + 나머지 몫 → 내구력 배율 = 1 / 그 비율
+  const berryHitsMultiplier =
+    berryResult.bulkMultiplier === 1 ? 1 : 1 / (firstHitShare / berryResult.bulkMultiplier + (1 - firstHitShare));
   const bulkPower = computeBulkPower(defenderRealStats, resolvedCategory, {
-    defenderStages,
+    defenderStages: criticalApplies ? clampStages(defenderStages, "negative") : defenderStages,
     bulkMultiplier:
-      (manualBulkMultiplier ?? abilityDefense * berryResult.bulkMultiplier * weatherDefenseMultiplier) * screenMultiplier,
+      (manualBulkMultiplier ?? abilityDefense * berryHitsMultiplier * weatherDefenseMultiplier) * screenMultiplier,
     // 사이코쇼크(hitsDefensiveStat): 특수기지만 내구력은 방어자의 물리 방어로 낸다
     defensiveStatOverride: move.hitsDefensiveStat,
   });
@@ -516,9 +598,58 @@ export function evaluateSlotMatchup(
     rawOffensePower,
     bulkPower,
     verdict: chance.verdict,
+    berryBulkMultiplier: manualBulkMultiplier === undefined ? berryResult.bulkMultiplier : 1,
+    berryAppliedMultiplier: manualBulkMultiplier === undefined ? berryHitsMultiplier : 1,
+    criticalBlocked: critical && !criticalApplies ? true : undefined,
     koChance: chance.koChance,
     killingRolls: chance.killingRolls,
   };
+}
+
+/** 급소 랭크 처리: positive = 음수 랭크를 0으로(공격 쪽), negative = 양수 랭크를 0으로(방어 쪽) */
+function clampStages(stages: StatStages, keep: "positive" | "negative"): StatStages {
+  const out = { ...stages };
+  for (const key of Object.keys(out) as (keyof StatStages)[]) {
+    out[key] = keep === "positive" ? Math.max(0, out[key]) : Math.min(0, out[key]);
+  }
+  return out;
+}
+
+/**
+ * 조건부 ×2(conditionalDoublePower) 판정 — evaluateSlotMatchup·computeSoloOffensePower 공용. 매치업 페이지 정책(§3 증분 C·B-3):
+ *  - user-has-no-item(애크러뱃): 지닌 도구를 알고 있으니 실제로 판정
+ *  - 상태이상 조건(ver.1.9): 넘겨받은 상태이상으로 판정(생략하면 상태이상 없음)
+ *  - 이력 조건(ver.1.9 — 가정 토글, 생략하면 기본 위력): 보복(attackerMovesLast)·눈사태(attackerTookDamageThisTurn)·
+ *    분함의발구르기·열불내기(attackerMoveFailedLastTurn)·분풀이(attackerStatLoweredThisTurn)·승부굳히기(defenderDamagedThisTurn)
+ */
+function conditionalPowerDoubled(
+  move: Move,
+  ctx: {
+    attackerHasItem: boolean;
+    attackerStatus?: StatusCondition | null;
+    defenderStatus?: StatusCondition | null;
+    defenderHasStatusCondition?: boolean;
+    attackerMovesLast?: boolean;
+    attackerTookDamageThisTurn?: boolean;
+    attackerMoveFailedLastTurn?: boolean;
+    attackerStatLoweredThisTurn?: boolean;
+    defenderDamagedThisTurn?: boolean;
+  },
+): boolean {
+  const cond = move.conditionalDoublePower;
+  const { attackerStatus, defenderStatus } = ctx;
+  return (
+    (cond === "user-stat-lowered-this-turn" && !!ctx.attackerStatLoweredThisTurn) ||
+    (cond === "user-move-failed-last-turn" && !!ctx.attackerMoveFailedLastTurn) ||
+    (cond === "target-damaged-this-turn" && !!ctx.defenderDamagedThisTurn) ||
+    (cond === "took-damage-this-turn" && !!ctx.attackerTookDamageThisTurn) ||
+    (cond === "user-has-no-item" && !ctx.attackerHasItem) ||
+    (cond === "user-status-burn-poison-paralysis" &&
+      (attackerStatus === "burn" || attackerStatus === "poison" || attackerStatus === "badly-poisoned" || attackerStatus === "paralysis")) ||
+    (cond === "target-status-poisoned" && (defenderStatus === "poison" || defenderStatus === "badly-poisoned")) ||
+    (cond === "target-has-status" && (!!defenderStatus || !!ctx.defenderHasStatusCondition)) ||
+    (cond === "moves-after-target" && !!ctx.attackerMovesLast)
+  );
 }
 
 export interface SoloOffensePowerOptions {
@@ -528,6 +659,17 @@ export interface SoloOffensePowerOptions {
   stockpileCount?: number;
   weather?: WeatherKind;
   field?: FieldKind;
+  /** ver.1.9 가정 토글 — evaluateSlotMatchup의 같은 이름 옵션과 같은 뜻 */
+  attackerHpFraction?: number;
+  abilityHpFraction?: number;
+  attackerStatus?: StatusCondition | null;
+  attackerMovesLast?: boolean;
+  attackerTookDamageThisTurn?: boolean;
+  attackerMoveFailedLastTurn?: boolean;
+  attackerStatLoweredThisTurn?: boolean;
+  /** ver.1.9 6-2 — 급소 가정(음수 공격 랭크 무시·×1.5, 스나이퍼 2.25). 상대가 없으니 방어측 랭크·벽·급소 방지 특성은 모른다 */
+  critical?: boolean;
+  extraOffenseMultiplier?: number;
 }
 
 /**
@@ -556,10 +698,20 @@ export function computeSoloOffensePower(
     field,
     multiHitCount,
     stockpileCount,
+    attackerHpFraction,
+    abilityHpFraction,
+    attackerStatus,
+    attackerMovesLast,
+    attackerTookDamageThisTurn,
+    attackerMoveFailedLastTurn,
+    attackerStatLoweredThisTurn,
+    critical = false,
+    extraOffenseMultiplier = 1,
   } = options;
 
   const attackerForm = getEffectiveForm(attackerPokemon, attackerSlot);
   const attackerAbility = attackerSlot.ability ? getAbility(attackerSlot.ability) : undefined;
+  const critMultiplier = critical ? (attackerAbility?.critDamageMultiplier ?? CRITICAL_DAMAGE_MULTIPLIER) : 1;
 
   const effectiveWeather = attackerAbility?.negatesWeather ? undefined : weather;
 
@@ -602,7 +754,9 @@ export function computeSoloOffensePower(
   }
 
   if (move.reversalPower) {
-    variablePowerMove = { ...variablePowerMove, power: reversalPowerFromHp(1, 1) };
+    variablePowerMove = { ...variablePowerMove, power: reversalPowerFromHp(attackerHpFraction ?? 1, 1) };
+  } else if (move.userHpScaledPower) {
+    variablePowerMove = { ...variablePowerMove, power: userHpScaledPowerValue(move.userHpScaledPower, attackerHpFraction ?? 1) };
   } else if (move.powerFromPositiveStages) {
     const { base, perStage } = move.powerFromPositiveStages;
     variablePowerMove = { ...variablePowerMove, power: positiveStagesPowerValue(attackerStages, base, perStage) };
@@ -613,15 +767,18 @@ export function computeSoloOffensePower(
     variablePowerMove = { ...variablePowerMove, power: WEIGHT_MOVE_FALLBACK_POWER };
   }
 
-  if (variablePowerMove.power !== null) {
-    const cond = variablePowerMove.conditionalDoublePower;
-    const assumeDoubled =
-      cond === "user-stat-lowered-this-turn" ||
-      cond === "user-move-failed-last-turn" ||
-      (cond === "user-has-no-item" && !attackerItem);
-    if (assumeDoubled) {
-      variablePowerMove = { ...variablePowerMove, power: variablePowerMove.power * 2 };
-    }
+  if (
+    variablePowerMove.power !== null &&
+    conditionalPowerDoubled(variablePowerMove, {
+      attackerHasItem: !!attackerItem,
+      attackerStatus,
+      attackerMovesLast,
+      attackerTookDamageThisTurn,
+      attackerMoveFailedLastTurn,
+      attackerStatLoweredThisTurn,
+    })
+  ) {
+    variablePowerMove = { ...variablePowerMove, power: variablePowerMove.power * 2 };
   }
 
   // 솔라빔(§1-10): chargeSkipWeather(쾌청)가 아닌 날씨에서는 위력 절반 — evaluateSlotMatchup과 동일.
@@ -652,7 +809,7 @@ export function computeSoloOffensePower(
     fieldAdjustedMove,
     [],
     undefined,
-    { weather: effectiveWeather, field },
+    { weather: effectiveWeather, field, attackerHpFraction: abilityHpFraction ?? attackerHpFraction },
   );
 
   const effectiveMoveWithHits = (() => {
@@ -701,11 +858,11 @@ export function computeSoloOffensePower(
       : 1;
 
   return computeOffensePower(attackerRealStats, attackerForm.types, effectiveMoveFinal, {
-    abilityMultiplier: abilityOffenseMultiplier * hustleMultiplier,
+    abilityMultiplier: abilityOffenseMultiplier * hustleMultiplier * extraOffenseMultiplier * critMultiplier,
     itemMultiplier: autoItemMultiplier,
     weatherMultiplier: autoWeatherDamageMultiplier,
     fieldMultiplier: autoFieldDamageMultiplier,
-    attackerStages,
+    attackerStages: critical ? clampStages(attackerStages, "positive") : attackerStages,
     stabMultiplier,
   });
 }

@@ -172,11 +172,6 @@ export function getExtraFlinchTriggered(item: Item | undefined, random: () => nu
   return !!item?.extraFlinchChance && random() * 100 < item.extraFlinchChance;
 }
 
-/** 선제공격손톱: 같은 우선도 안에서 이 확률로 스피드와 무관하게 무조건 선공한다 */
-export function getQuickClawTriggered(item: Item | undefined, random: () => number): boolean {
-  return !!item?.quickClawChance && random() * 100 < item.quickClawChance;
-}
-
 /** 구애스카프(1.5)·검은철구(0.5) 등 실효 스피드 배율. 없으면 1배 */
 export function getItemSpeedMultiplier(item: Item | undefined): number {
   return item?.speedMultiplier ?? 1;

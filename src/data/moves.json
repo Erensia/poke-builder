@@ -439,7 +439,8 @@
     "classification": [
       "춤"
     ],
-    "makesContact": true
+    "makesContact": true,
+    "rampage": "confuse"
   },
   {
     "id": "기가드레인",
@@ -1147,7 +1148,8 @@
       "접촉",
       "풀죽음"
     ],
-    "makesContact": true
+    "makesContact": true,
+    "bonusVsMinimize": true
   },
   {
     "id": "칼춤",
@@ -1230,7 +1232,8 @@
       "접촉",
       "혼란"
     ],
-    "makesContact": true
+    "makesContact": true,
+    "rampage": "confuse"
   },
   {
     "id": "용성군",
@@ -1287,7 +1290,8 @@
     "tags": [
       "접촉"
     ],
-    "makesContact": false
+    "makesContact": true,
+    "conditionalDoublePower": "target-damaged-this-turn"
   },
   {
     "id": "탁쳐서떨구기",
@@ -2351,7 +2355,8 @@
         "status": "paralysis",
         "chance": 30
       }
-    ]
+    ],
+    "bonusVsMinimize": true
   },
   {
     "id": "멀리짖기",
@@ -2423,7 +2428,7 @@
     "accuracy": 100,
     "pp": 20,
     "priority": 0,
-    "effect": "발을 강하게 걸고 상대를 넘어뜨려 공격한다. 상대가 무거울수록 위력이 커진다(<10→20 … 200 이상 120).",
+    "effect": "발을 강하게 걸고 상대를 넘어뜨려 공격한다. 상대가 무거울수록 위력이 커진다.",
     "tags": [
       "접촉"
     ],
@@ -3248,7 +3253,8 @@
     "classification": [
       "소리"
     ],
-    "makesContact": false
+    "makesContact": false,
+    "rampage": "uproar"
   },
   {
     "id": "아쿠아링",
@@ -4003,7 +4009,7 @@
     "accuracy": 100,
     "pp": 16,
     "priority": 0,
-    "effect": "바둥바둥 난동부려서 공격한다. 자신의 HP가 적을수록 기술의 위력이 올라간다(기사회생과 같은 위력표).",
+    "effect": "바둥바둥 난동부려서 공격한다. 자신의 HP가 적을수록 기술의 위력이 올라간다.",
     "tags": [
       "접촉"
     ],
@@ -4334,7 +4340,7 @@
     "accuracy": 100,
     "pp": 20,
     "priority": 0,
-    "effect": "풀을 휘감아서 상대를 쓰러뜨린다. 상대가 무거울수록 위력이 커진다(<10→20 … 200 이상 120).",
+    "effect": "풀을 휘감아서 상대를 쓰러뜨린다. 상대가 무거울수록 위력이 커진다.",
     "tags": [
       "접촉"
     ],
@@ -5986,7 +5992,8 @@
     "tags": [
       "접촉"
     ],
-    "makesContact": true
+    "makesContact": true,
+    "conditionalDoublePower": "user-move-failed-last-turn"
   },
   {
     "id": "와이드브레이커",
@@ -6021,13 +6028,13 @@
     "accuracy": 100,
     "pp": 12,
     "priority": 0,
-    "effect": "불타는 몸으로 상대에게 부딪쳐서 공격한다. 상대가 자신보다 가벼울수록 위력이 커진다(≤1/5→120 … 40).",
+    "effect": "불타는 몸으로 상대에게 부딪쳐서 공격한다. 상대가 자신보다 가벼울수록 위력이 커진다.",
     "tags": [
       "접촉",
       "압박"
     ],
     "weightRatioPower": true,
-    "makesContact": false
+    "makesContact": true
   },
   {
     "id": "고속스핀",
@@ -6150,6 +6157,7 @@
   },
   {
     "id": "해수스파우팅",
+    "userHpScaledPower": 150,
     "name": "해수스파우팅",
     "type": "물",
     "category": "special",
@@ -6529,7 +6537,8 @@
       "접촉",
       "혼란"
     ],
-    "makesContact": true
+    "makesContact": true,
+    "rampage": "confuse"
   },
   {
     "id": "번개엄니",
@@ -6613,7 +6622,7 @@
     "accuracy": 100,
     "pp": 12,
     "priority": 0,
-    "effect": "무거운 몸으로 상대에게 부딪쳐 공격한다. 상대가 자신보다 가벼울수록 위력이 커진다(≤1/5→120 … 40).",
+    "effect": "무거운 몸으로 상대에게 부딪쳐 공격한다. 상대가 자신보다 가벼울수록 위력이 커진다.",
     "tags": [
       "접촉",
       "압박"
@@ -7272,7 +7281,8 @@
       "접촉",
       "혼란"
     ],
-    "makesContact": true
+    "makesContact": true,
+    "rampage": "confuse"
   },
   {
     "id": "질투의불꽃",
@@ -8522,6 +8532,7 @@
   },
   {
     "id": "독침천발",
+    "conditionalDoublePower": "target-status-poisoned",
     "name": "독침천발",
     "type": "독",
     "category": "physical",
@@ -8529,7 +8540,7 @@
     "accuracy": 100,
     "pp": 12,
     "priority": 0,
-    "effect": "독이 밴 가시를 연달아 발사해 공격한다. 50% 확률로 상대를 독 상태로 만들며, 상대가 이미 독·맹독 상태이면 위력이 2배가 된다. (위력 2배 조건은 엔진 미배선)",
+    "effect": "독이 밴 가시를 연달아 발사해 공격한다. 50% 확률로 상대를 독 상태로 만들며, 상대가 이미 독·맹독 상태이면 위력이 2배가 된다.",
     "tags": [
       "독"
     ],
@@ -8572,6 +8583,7 @@
   },
   {
     "id": "백귀야행",
+    "conditionalDoublePower": "target-has-status",
     "name": "백귀야행",
     "type": "고스트",
     "category": "special",
@@ -8579,7 +8591,7 @@
     "accuracy": 100,
     "pp": 16,
     "priority": 0,
-    "effect": "수많은 원령이 상대를 습격한다. 30% 확률로 상대를 화상 상태로 만들며, 상대가 상태이상이면 위력이 2배가 된다. (위력 2배 조건은 엔진 미배선)",
+    "effect": "수많은 원령이 상대를 습격한다. 30% 확률로 상대를 화상 상태로 만들며, 상대가 상태이상이면 위력이 2배가 된다.",
     "tags": [
       "화상"
     ],
@@ -8593,6 +8605,7 @@
   },
   {
     "id": "분화",
+    "userHpScaledPower": 150,
     "name": "분화",
     "type": "불꽃",
     "category": "special",
@@ -8600,12 +8613,13 @@
     "accuracy": 100,
     "pp": 8,
     "priority": 0,
-    "effect": "폭발적인 마그마를 상대에게 내뿜어 공격한다. 자신의 HP가 적을수록 위력이 떨어진다(위력 = 150 × 현재 HP ÷ 최대 HP). (HP 비례 감소는 엔진 미배선 — 계산 페이지에선 150 고정 취급)",
+    "effect": "폭발적인 마그마를 상대에게 내뿜어 공격한다. 자신의 HP가 적을수록 위력이 떨어진다.",
     "tags": [],
     "makesContact": false
   },
   {
     "id": "섬뜩한주문",
+    "reducesTargetLastMovePp": 3,
     "name": "섬뜩한주문",
     "type": "에스퍼",
     "category": "special",
@@ -8613,7 +8627,7 @@
     "accuracy": 100,
     "pp": 8,
     "priority": 0,
-    "effect": "강대한 초능력으로 상대를 공격한다. 상대가 마지막으로 사용한 기술의 PP를 3 깎는다. (PP 감소는 엔진 미배선)",
+    "effect": "강대한 초능력으로 상대를 공격한다. 상대가 마지막으로 사용한 기술의 PP를 3 깎는다.",
     "tags": [
       "소리"
     ],
@@ -8764,7 +8778,7 @@
     "accuracy": 100,
     "pp": 16,
     "priority": 0,
-    "effect": "상대를 억눌러서 행동의 순서를 마지막으로 만든다. 1대1에서는 행동 순서 조작이 엔진에 반영되어 있지 않아 효과가 없다.",
+    "effect": "상대를 억눌러서 행동의 순서를 마지막으로 만든다.",
     "tags": [],
     "makesContact": false
   },
@@ -9382,6 +9396,7 @@
   },
   {
     "id": "그림자꿰매기",
+    "inflictsVolatile": [{ "volatile": "meanLook", "target": "opponent" }],
     "name": "그림자꿰매기",
     "type": "고스트",
     "category": "physical",
@@ -9389,7 +9404,7 @@
     "accuracy": 100,
     "pp": 12,
     "priority": 0,
-    "effect": "공격과 동시에 상대의 그림자를 꿰매 도망칠 수 없게 한다. (교체 봉쇄는 배틀타워 리뉴얼로 교체가 도입되면 배선 — 현재 데미지만)",
+    "effect": "공격과 동시에 상대의 그림자를 꿰매 도망칠 수 없게 한다.",
     "tags": [
       "고정-상대",
       "비접촉"
@@ -9525,6 +9540,8 @@
   },
   {
     "id": "배수의진",
+    "inflictsVolatile": [{ "volatile": "noRetreat", "target": "self" }],
+    "usageCondition": "not-no-retreat",
     "name": "배수의진",
     "type": "격투",
     "category": "status",
@@ -9532,7 +9549,7 @@
     "accuracy": null,
     "pp": 8,
     "priority": 0,
-    "effect": "자신의 모든 능력이 올라가지만 교체하거나 도망칠 수 없게 된다. (도망·교체 봉쇄는 배틀타워 리뉴얼로 교체가 도입되면 배선 — 현재 5스탯 +1만)",
+    "effect": "자신의 모든 능력이 올라가지만 교체하거나 도망칠 수 없게 된다.",
     "tags": [
       "랭크",
       "고정-자신"
@@ -9625,7 +9642,7 @@
     "accuracy": 100,
     "pp": 12,
     "priority": 0,
-    "effect": "높은 곳에서 사과를 떨어뜨려서 데미지를 준다. 상대의 방어를 1랭크 떨어뜨린다. 중력이 강할 때 위력이 1.5배가 된다(중력 상태 미구현 — 상시 미발동).",
+    "effect": "높은 곳에서 사과를 떨어뜨려서 데미지를 준다. 상대의 방어를 1랭크 떨어뜨린다. 중력이 강할 때 위력이 1.5배가 된다.",
     "tags": [
       "랭크",
       "비접촉"
@@ -9820,7 +9837,7 @@
     "accuracy": 90,
     "pp": 12,
     "priority": 0,
-    "effect": "여기저기서 동료들을 모아서 화려한 콤비네이션으로 공격한다. 빗나갈 때까지 최대 10회 연속으로 공격한다(각 타마다 명중을 따로 판정).",
+    "effect": "여기저기서 동료들을 모아서 화려한 콤비네이션으로 공격한다. 빗나갈 때까지 최대 10회 연속으로 공격한다.",
     "tags": [
       "연속",
       "접촉",

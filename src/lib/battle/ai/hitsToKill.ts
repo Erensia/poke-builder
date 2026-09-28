@@ -19,35 +19,127 @@ function minKillingRoll(offensePower: number, bulkPower: number): number {
 }
 
 /**
- * P(N > n) 열: 난수 롤(85~100, 각 1/16)이 독립일 때 n번 때려도 아직 안 죽었을 확률을
- * n = 0, 1, 2, ... 순으로 낸다(합계 정수 DP라 정확). N = 처치까지 필요한 타수.
+ * 급소(ver.1.9 6-2): 매 타 chance 확률로 데미지가 scale배(급소 결정력/내구력 비 — 랭크·벽 무시·×1.5 포함). 없으면 급소 없음.
  */
-function survivalProbabilities(rhoStar: number): number[] {
-  const survives: number[] = [1];
-  // dist[s] = 정수 합계 s(퍼센트 단위)일 확률
-  let dist = new Map<number, number>([[0, 1]]);
-  for (let n = 1; n <= MAX_HITS_TRACKED; n++) {
-    const next = new Map<number, number>();
-    for (const [sum, p] of dist) {
-      for (let k = 0; k < DAMAGE_ROLL_STEPS; k++) {
-        const s = sum + ROLL_MIN_PERCENT + k;
-        next.set(s, (next.get(s) ?? 0) + p / DAMAGE_ROLL_STEPS);
-      }
-    }
-    let alive = 0;
-    const stillAlive = new Map<number, number>();
-    for (const [s, p] of next) {
-      // battlePower.rollsAtLeast와 같은 부동소수점 경계 보정(1e-9)
-      if (s / 100 + 1e-9 < rhoStar) {
-        alive += p;
-        stillAlive.set(s, p);
-      }
-    }
-    survives.push(alive);
-    if (alive < 1e-12) break;
-    dist = stillAlive;
+export interface CritModel {
+  chance: number;
+  scale: number;
+}
+
+/** 한 타의 데미지 결과(퍼센트 단위 정수 — 급소 롤은 반올림)와 확률 */
+function hitOutcomes(crit?: CritModel): [number, number][] {
+  const p = crit && crit.chance > 0 ? Math.min(1, crit.chance) : 0;
+  const out: [number, number][] = [];
+  for (let k = 0; k < DAMAGE_ROLL_STEPS; k++) {
+    const roll = ROLL_MIN_PERCENT + k;
+    if (p < 1) out.push([roll, (1 - p) / DAMAGE_ROLL_STEPS]);
+    if (p > 0) out.push([Math.round(roll * crit!.scale), p / DAMAGE_ROLL_STEPS]);
   }
-  return survives;
+  return out;
+}
+
+/**
+ * 처치 타수 분포 요약(ver.1.9 벤치 속도): 한 타 결과 분포(급소 확률·반올림한 급소 롤)마다 "살아 있는 합계 경계" L(정수 퍼센트 —
+ * 합계 s가 살아 있음 ⇔ s < L)별로 Σ P(N > n)(total)과 마지막 P(N > n)(last)를 한 번의 DP로 전부 낸다.
+ * 합계는 늘기만 하므로 경계 L의 DP 값은 더 큰 경계의 DP에서 s < L 부분과 같다 — 경계마다 따로 DP를 돌리던 것과 덧셈 순서까지 같아
+ * 결과가 비트 단위로 같다(P(N > n) = 합계 오름차순 누적). N = 처치까지 필요한 타수.
+ */
+interface SurvivalTable {
+  total: Float64Array;
+  last: Float64Array;
+}
+
+const TABLE_CACHE_LIMIT = 2000;
+const tableCache = new Map<string, SurvivalTable>();
+
+function distributionKey(crit?: CritModel): string {
+  const p = crit && crit.chance > 0 ? Math.min(1, crit.chance) : 0;
+  if (p === 0) return "";
+  let key = String(p);
+  for (let k = 0; k < DAMAGE_ROLL_STEPS; k++) key += `,${Math.round((ROLL_MIN_PERCENT + k) * crit!.scale)}`;
+  return key;
+}
+
+/** 경계 L의 { Σ P(N > n), 마지막 P(N > n) } — 표를 필요한 크기까지 늘려 가며 캐시한다 */
+function survivalSummary(rhoStar: number, crit?: CritModel): { total: number; last: number } {
+  const outcomes = hitOutcomes(crit);
+  const maxDmg = Math.max(...outcomes.map(([d]) => d));
+  // MAX_HITS_TRACKED 타의 최대 합계보다 큰 경계는 전부 같은 결과(모든 합계가 살아 있음)
+  const capLimit = MAX_HITS_TRACKED * maxDmg + 1;
+  const limit = Math.min(aliveLimit(rhoStar), capLimit);
+  const key = distributionKey(crit);
+  let table = tableCache.get(key);
+  if (!table || table.total.length <= limit) {
+    const size = Math.min(capLimit + 1, Math.max(limit + 1, (table?.total.length ?? 0) * 2, 512));
+    table = buildSurvivalTable(outcomes, size);
+    if (tableCache.size >= TABLE_CACHE_LIMIT) tableCache.clear();
+    tableCache.set(key, table);
+  }
+  return { total: table.total[limit], last: table.last[limit] };
+}
+
+/** 경계 0 ~ size−1 전부의 요약 — 합계 배열 두 개를 번갈아 쓰고, 경계마다 합계 오름차순 누적으로 P(N > n)을 낸다 */
+function buildSurvivalTable(outcomes: [number, number][], size: number): SurvivalTable {
+  const total = new Float64Array(size).fill(1);
+  const last = new Float64Array(size);
+  const done = new Uint8Array(size);
+  done[0] = 1; // 경계 0: 첫 타에 반드시 쓰러짐 → P(N > 0) = 1, P(N > 1) = 0
+  let remaining = size - 1;
+  const minDmg = Math.min(...outcomes.map(([d]) => d));
+  const maxDmg = Math.max(...outcomes.map(([d]) => d));
+  // 경계 L은 합계 L − 1까지만 본다 → 합계 배열은 size − 1칸
+  const top = size - 2;
+  let dist = new Float64Array(Math.max(1, size - 1));
+  let next = new Float64Array(Math.max(1, size - 1));
+  dist[0] = 1;
+  let lo = 0;
+  let hi = 0;
+  for (let n = 1; n <= MAX_HITS_TRACKED && remaining > 0; n++) {
+    const nextLo = lo + minDmg;
+    const nextHi = Math.min(top, hi + maxDmg);
+    if (nextLo <= nextHi) {
+      next.fill(0, nextLo, nextHi + 1);
+      addOneHit(dist, next, lo, hi, top, outcomes);
+    }
+    // 경계 L의 P(N > n) = Σ_{t = nextLo}^{L−1} next[t](오름차순) — 도달 못 하는 칸은 0이라 더해도 값이 같다
+    let run = 0;
+    for (let limit = 1; limit < size; limit++) {
+      const t = limit - 1;
+      if (nextLo <= nextHi && t >= nextLo && t <= nextHi) run += next[t];
+      if (done[limit]) continue;
+      total[limit] += run;
+      last[limit] = run;
+      if (run < 1e-12) {
+        done[limit] = 1;
+        remaining--;
+      }
+    }
+    if (nextLo > nextHi) break;
+    [dist, next] = [next, dist];
+    lo = nextLo;
+    hi = nextHi;
+  }
+  return { total, last };
+}
+
+/** 한 타 더: 합계 lo~hi의 확률을 결과 분포대로 next에 더한다(합계 오름차순 · 결과 순 — 덧셈 순서 고정) */
+function addOneHit(dist: Float64Array, next: Float64Array, lo: number, hi: number, top: number, outcomes: [number, number][]): void {
+  for (let sum = lo; sum <= hi; sum++) {
+    const p = dist[sum];
+    if (p === 0) continue;
+    for (const [dmg, q] of outcomes) {
+      const t = sum + dmg;
+      if (t <= top) next[t] += p * q;
+    }
+  }
+}
+
+/** 합계 s(정수 퍼센트)가 살아 있는(s/100 + 1e-9 < rhoStar) 가장 작은 경계 L — 살아 있음 ⇔ s < L */
+function aliveLimit(rhoStar: number): number {
+  let limit = Math.max(0, Math.ceil((rhoStar - 1e-9) * 100));
+  while (limit > 0 && !((limit - 1) / 100 + 1e-9 < rhoStar)) limit--;
+  while (limit / 100 + 1e-9 < rhoStar) limit++;
+  return limit;
 }
 
 /**
@@ -63,14 +155,26 @@ export function meanDamageFraction(offensePower: number, bulkPower: number): num
   return 0.925 / minKillingRoll(offensePower, bulkPower);
 }
 
-export function expectedHits(offensePower: number, bulkPower: number, hpFraction = 1): number {
+/** E[N] = Σ P(N > n) (MAX_HITS_TRACKED 안에 안 끝나면 평균 롤로 남은 타수를 근사) */
+function expectedFromSurvival(rhoStar: number, crit?: CritModel): number {
+  const { total, last } = survivalSummary(rhoStar, crit);
+  return last >= 1e-12 ? total + (rhoStar / 0.925 - MAX_HITS_TRACKED) : total;
+}
+
+/**
+ * firstHitScale(≠ 1): 첫 타만 데미지가 그 배율인 경우(반감 열매 — 첫 타에 소모 ×½, ver.1.9 6-1 · 분함의발구르기 직전 실패 ×2). bulkPower는 열매 없는 값.
+ * 첫 타 결과(난수 16가지 × 급소 여부)마다 남은 HP를 채우는 나머지 타수의 분포를 따로 구해 평균한다.
+ * crit: 매 타 급소 확률·배율(ver.1.9 6-2).
+ */
+export function expectedHits(offensePower: number, bulkPower: number, hpFraction = 1, firstHitScale = 1, crit?: CritModel): number {
   if (offensePower <= 0) return Infinity;
   const rhoStar = minKillingRoll(offensePower, bulkPower * hpFraction);
-  const survives = survivalProbabilities(rhoStar);
-  let total = survives.reduce((sum, p) => sum + p, 0);
-  // MAX_HITS_TRACKED 안에 안 끝나는 극단 케이스: 평균 롤(0.925)로 남은 타수를 근사
-  if (survives[survives.length - 1] >= 1e-12) {
-    total += rhoStar / 0.925 - MAX_HITS_TRACKED;
+  if (firstHitScale === 1) return Math.max(1, expectedFromSurvival(rhoStar, crit));
+  let total = 0;
+  for (const [dmg, q] of hitOutcomes(crit)) {
+    const residual = rhoStar - (firstHitScale * dmg) / 100;
+    // 첫 타로 쓰러짐(battlePower.rollsAtLeast와 같은 경계 보정)이면 1타, 아니면 1 + 나머지 타수
+    total += q * (residual <= 1e-9 ? 1 : 1 + expectedFromSurvival(residual, crit));
   }
   return Math.max(1, total);
 }
@@ -101,12 +205,16 @@ export function worstCaseFromMatchup(offensePower: number, bulkPower: number, hp
 export function estimateHits(
   offensePower: number,
   bulkPower: number,
-  options: { hpFraction?: number; accuracy?: number } = {},
+  options: { hpFraction?: number; accuracy?: number; firstHitScale?: number; crit?: CritModel } = {},
 ): HitsEstimate {
-  const { hpFraction = 1, accuracy = 1 } = options;
-  const hits = expectedHits(offensePower, bulkPower, hpFraction);
+  const { hpFraction = 1, accuracy = 1, firstHitScale = 1, crit } = options;
+  const hits = expectedHits(offensePower, bulkPower, hpFraction, firstHitScale, crit);
+  // worst_case(1·2타 확정성, 하드 오버라이드용)는 급소를 빼고 보수적으로: 첫 타가 약하면(열매) 그 배율을 모든 타에, 첫 타가 세면
+  // (직전 실패 2배) 한 방 판정만 그 배율
+  const scaled = worstCaseFromMatchup(offensePower * firstHitScale, bulkPower, hpFraction);
+  const worstCase = firstHitScale > 1 && scaled.count > 1 ? worstCaseFromMatchup(offensePower, bulkPower, hpFraction) : scaled;
   return {
     expected: accuracy <= 0 ? Infinity : hits / accuracy,
-    worstCase: worstCaseFromMatchup(offensePower, bulkPower, hpFraction),
+    worstCase,
   };
 }

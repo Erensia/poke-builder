@@ -341,6 +341,10 @@ export interface ActionLogEntry {
   substituteBroke?: boolean;
   /** 이 행동의 데미지가 상대의 대타로 흡수됐으면(=본체 HP는 그대로) true */
   hitSubstitute?: boolean;
+  /** 난동(ver.1.9): 이번 행동으로 난동을 끝까지 마쳤다 / 그 결과 혼란에 빠졌다 / 소란으로 깨운 포켓몬 종 id */
+  rampageEnded?: boolean;
+  rampageConfused?: boolean;
+  uproarWokeIds?: string[];
   /** 방어류(방어/판별/버티기/킹실드) 기술을 실제로 써서 "방어태세에 들어갔다" — 성공/실패와 무관하게 발동 자체. */
   protectStanceEntered?: boolean;
   /** 방어류(방어/판별/버티기/킹실드) 기술이 이번에 성공적으로 발동했으면 true (상대의 자신을 겨냥한 공격을 실제로 막음) */
@@ -483,6 +487,10 @@ export interface ActionLogEntry {
   angerPointRaisedSpa?: boolean;
   /** angerPointRaisedSpa를 발동시킨 특성 이름 */
   angerPointAbilityName?: string;
+  /** 분노의경혈(ver.1.9 A5) — 급소에 맞아 방어측 공격이 +6이 됐으면 그 특성 이름 */
+  angerPointMaxedAbilityName?: string;
+  /** 독치장(ver.1.9 A5) — 물리 피격으로 공격자 편에 독압정을 뿌렸으면 그 특성 이름 */
+  toxicDebrisAbilityName?: string;
   /** 소울비트 — HP를 소비했으면 그 소비량 */
   soulBeatHpCost?: number;
   /** 소울비트 — 현재 HP가 소비량 이하라 실패했으면 true */
@@ -638,6 +646,8 @@ export interface EndOfTurnLogEntry {
   cheekPouchHeal?: number;
   /** 수확: 턴 종료 시 되돌린 나무열매 이름 */
   harvestRestoredBerryName?: string;
+  /** 되새김질(ver.1.9 A5): 턴 종료 시 한 번 더 먹은 나무열매 이름(회복량은 berryHeal, 치료는 abilityCuredStatus) */
+  cudChewBerryName?: string;
   /** 꼬르륵스위치: 턴 종료 시 바뀐 모양 */
   hungerModeChangedTo?: "full" | "hangry";
 }

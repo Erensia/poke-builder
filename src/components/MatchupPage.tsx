@@ -16,12 +16,13 @@ import { CosmeticFormPickerModal } from "./CosmeticFormPickerModal";
 import { SlotPresetsModal } from "./SlotPresetsModal";
 import { useMatchup } from "../hooks/useMatchup";
 import { useSlotPresets } from "../hooks/useSlotPresets";
-import { getPokemon, getMove } from "../lib/data";
+import { getPokemon, getMove, getAbility } from "../lib/data";
 import { getEffectiveForm } from "../lib/pokemonForm";
 import { computeRealStats } from "../lib/statCalculator";
 import { computeBulkPower } from "../lib/battlePower";
 import { environmentTintBackground } from "../lib/environmentBackground";
 import { evaluateSlotMatchup, evaluateSpeedMatchup, computeSoloOffensePower } from "../lib/matchupEvaluator";
+import { computeStatusAttackMultiplier, ignoresBurnAttackPenalty } from "../lib/statusConditions";
 import { BATTLE_STAT_KEYS } from "../types/battleStats";
 import "./MatchupPage.css";
 
@@ -57,7 +58,7 @@ export function MatchupPage() {
     const realStats = computeRealStats(form.baseStats, defender.slot.points, defender.slot.nature);
     const physical = computeBulkPower(realStats, "physical", { defenderStages: defender.slot.stages });
     const special = computeBulkPower(realStats, "special", { defenderStages: defender.slot.stages });
-    return { physical, special };
+    return { physical, special, maxHp: realStats.hp };
   }, [defenderPokemon, defender.slot]);
 
   // Phase 6.5 §1 — "이전 턴 가정" 토글 반영. 도구 강탈 토글이 켜진 슬롯은 상대 도구를 장착한
@@ -91,6 +92,34 @@ export function MatchupPage() {
     };
   }, [attacker.slot, defender.slot, attackerMove]);
 
+  // ver.1.9 가정 토글 → 계산 옵션. 화상 물리 반감(근성·객기 예외)은 배틀 AI처럼 추가 공격 배율로 넘긴다.
+  const assumeOptions = useMemo(() => {
+    const status = attacker.slot.statusAssumed ?? null;
+    return {
+      attackerStatus: status,
+      defenderStatus: defender.slot.statusAssumed ?? null,
+      defenderHasStatusCondition: !!defender.slot.statusAssumed,
+      attackerHpFraction: (attacker.slot.hpPercent ?? 100) / 100,
+      abilityHpFraction: attacker.slot.pinchAssumed ? 1 / 3 : 1,
+      attackerMovesLast: !!attacker.slot.movesLastAssumed,
+      attackerTookDamageThisTurn: !!attacker.slot.tookDamageAssumed,
+      attackerMoveFailedLastTurn: !!attacker.slot.moveFailedAssumed,
+      attackerStatLoweredThisTurn: !!attacker.slot.statLoweredAssumed,
+      defenderDamagedThisTurn: !!attacker.slot.targetDamagedAssumed,
+      defenderMinimized: !!attacker.slot.targetMinimizedAssumed,
+      critical: !!attacker.slot.critAssumed,
+      defenderHpIsFull: defender.slot.fullHpAssumed ?? true,
+      extraOffenseMultiplier: effMove
+        ? computeStatusAttackMultiplier(
+            status,
+            effMove.category,
+            ignoresBurnAttackPenalty(attacker.slot.ability ?? undefined, effMove.id),
+            attacker.slot.ability ? getAbility(attacker.slot.ability)?.physicalAttackMultiplierWhenStatused : undefined,
+          )
+        : 1,
+    };
+  }, [attacker.slot, defender.slot, effMove]);
+
   // 양쪽 다 준비되고 기술까지 골랐을 때: 정확한 결정력/내구력/판정
   const fullResult = useMemo(() => {
     if (!attackerPokemon || !defenderPokemon || !effMove) return null;
@@ -106,9 +135,10 @@ export function MatchupPage() {
         attackerStages: attacker.slot.stages,
         defenderStages: defender.slot.stages,
         screen: defender.slot.screen,
+        ...assumeOptions,
       },
     );
-  }, [attackerPokemon, defenderPokemon, effAttackerSlot, effDefenderSlot, effMove, attacker.slot, defender.slot, weather, field]);
+  }, [attackerPokemon, defenderPokemon, effAttackerSlot, effDefenderSlot, effMove, attacker.slot, defender.slot, weather, field, assumeOptions]);
 
   // ver.1.3 §4 — 상대를 아직 안 골랐을 때도(fullResult는 defenderPokemon이 있어야 나옴) 공격측
   // 정보만으로 계산 가능한 결정력은 보여준다. 상대가 이미 있으면 fullResult 쪽이 더 정확하니
@@ -124,9 +154,18 @@ export function MatchupPage() {
         multiHitCount: attacker.slot.multiHitCount,
         stockpileCount: attacker.slot.stockpileCount,
         attackerStages: attacker.slot.stages,
+        attackerHpFraction: assumeOptions.attackerHpFraction,
+        abilityHpFraction: assumeOptions.abilityHpFraction,
+        attackerStatus: assumeOptions.attackerStatus,
+        attackerMovesLast: assumeOptions.attackerMovesLast,
+        attackerTookDamageThisTurn: assumeOptions.attackerTookDamageThisTurn,
+        attackerMoveFailedLastTurn: assumeOptions.attackerMoveFailedLastTurn,
+        attackerStatLoweredThisTurn: assumeOptions.attackerStatLoweredThisTurn,
+        critical: assumeOptions.critical,
+        extraOffenseMultiplier: assumeOptions.extraOffenseMultiplier,
       },
     );
-  }, [attackerPokemon, effAttackerSlot, effMove, attacker.slot, weather, field]);
+  }, [attackerPokemon, effAttackerSlot, effMove, attacker.slot, weather, field, assumeOptions]);
 
   // 스피드 비교(Phase 6.5 §2) — 포켓몬 둘 다 골랐으면 기술 선택과 무관하게 계산
   const speedResult = useMemo(() => {
@@ -138,8 +177,8 @@ export function MatchupPage() {
         weather: weather ?? undefined,
         attackerUnburden: attacker.slot.unburdenAssumed,
         defenderUnburden: defender.slot.unburdenAssumed,
-        attackerParalyzed: attacker.slot.paralysisAssumed,
-        defenderParalyzed: defender.slot.paralysisAssumed,
+        attackerParalyzed: attacker.slot.statusAssumed === "paralysis",
+        defenderParalyzed: defender.slot.statusAssumed === "paralysis",
         trickRoom,
         attackerStages: attacker.slot.stages,
         defenderStages: defender.slot.stages,
@@ -186,7 +225,13 @@ export function MatchupPage() {
           onOpenSamplePicker={() => setPicker({ kind: "slotPresets", side: "attacker" })}
           onToggleItemStolen={attacker.setItemStolen}
           onToggleUnburden={attacker.setUnburdenAssumed}
-          onToggleParalysis={attacker.setParalysisAssumed}
+          onSetStatus={attacker.setStatusAssumed}
+          selectedMove={attackerMove ?? undefined}
+          onSetPowerCondition={attacker.setPowerCondition}
+          onToggleCrit={attacker.setCritAssumed}
+          critBlocked={!!fullResult?.criticalBlocked}
+          onTogglePinch={attacker.setPinchAssumed}
+          onSetHpPercent={attacker.setHpPercent}
           moveIsGraveVisit={!!attackerMove?.powerPerFaintedAlly}
           onSetGraveVisit={attacker.setGraveVisitFaintedAllies}
           moveIsSpitUp={!!attackerMove?.spitUpPower}
@@ -223,12 +268,13 @@ export function MatchupPage() {
           onOpenSamplePicker={() => setPicker({ kind: "slotPresets", side: "defender" })}
           onToggleItemStolen={defender.setItemStolen}
           onToggleUnburden={defender.setUnburdenAssumed}
-          onToggleParalysis={defender.setParalysisAssumed}
+          onSetStatus={defender.setStatusAssumed}
+          onToggleFullHp={defender.setFullHpAssumed}
           onSetScreen={defender.setScreen}
         />
       </div>
 
-      {fullResult && <DamageRollBlock offensePower={fullResult.offensePower} bulkPower={fullResult.bulkPower} />}
+      {fullResult && <DamageRollBlock offensePower={fullResult.offensePower} bulkPower={fullResult.bulkPower} defenderMaxHp={baseBulk?.maxHp} />}
 
       {speedResult && (
         <div className="matchup-speed-block">

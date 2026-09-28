@@ -14,6 +14,7 @@ import { computeFieldEndOfTurnHeal, isStatusBlockedByField } from "@/lib/fieldEf
 import { getDrainHealMultiplier, getHpThresholdBerryHeal } from "@/lib/itemEffects";
 import { SANDSTORM_IMMUNE_ABILITY_NAMES, activeWeather, applyForecastForm, consumeItem, contraryDelta, hasLivingReserve, isFainted, opponentKey, sideOf, statDropBlockStatsOf, statusImmunitiesOf, type BattleFighterState, type BattleState } from "./state";
 import { type RunTurnContext, type RunTurnOutcome } from "./runTurn";
+import { actionFailed } from "./moveFailure";
 
 interface EndOfTurnFighterContext {
   state: BattleState;
@@ -439,9 +440,11 @@ function applyStatusEndOfTurnTick(ctx: EndOfTurnFighterContext): void {
  * 치료한다. 이미 기절했으면 발동할 이유가 없다.
  */
 function applyShedSkinCure(ctx: EndOfTurnFighterContext): void {
-  const { key, fighter, fighterAbility, random, endOfTurn } = ctx;
-  if (!fighter.status.condition || !fighterAbility?.curesOwnStatusChance || isFainted(fighter)) return;
-  if (random() * 100 < fighterAbility.curesOwnStatusChance) {
+  const { state, key, fighter, fighterAbility, random, endOfTurn } = ctx;
+  // 촉촉바디(ver.1.9 A5): 지정 날씨면 확률 없이 치료
+  const hydration = !!fighterAbility?.curesStatusInWeather && fighterAbility.curesStatusInWeather === activeWeather(state);
+  if (!fighter.status.condition || (!fighterAbility?.curesOwnStatusChance && !hydration) || isFainted(fighter)) return;
+  if (hydration || random() * 100 < fighterAbility!.curesOwnStatusChance!) {
     const abilityCuredStatus = fighter.status.condition;
     fighter.status = { ...NO_STATUS_CONDITION };
     endOfTurn.push({
@@ -580,9 +583,53 @@ function applyHarvestRestore(ctx: EndOfTurnFighterContext): void {
   }
 }
 
+/**
+ * 되새김질(ver.1.9 A5): 나무열매를 먹은 턴의 다음 턴 끝에 그 열매를 한 번 더 먹는다(consumeItem이 2로 세팅 — 먹은 턴 끝 1, 다음 턴 끝 0).
+ * HP 회복 열매는 HP 조건 없이 회복, 상태이상·혼란 치료 열매는 걸려 있으면 치료, 그 외(반감·과사)는 효과 없음. 긴장감이면 못 먹는다.
+ */
+function applyCudChew(ctx: EndOfTurnFighterContext): void {
+  const { key, fighter, fighterAbility, fighterBerriesBlocked, endOfTurn } = ctx;
+  if (!fighter.cudChewBerryId || fighter.cudChewTurnsLeft === undefined) return;
+  fighter.cudChewTurnsLeft -= 1;
+  if (fighter.cudChewTurnsLeft > 0) return;
+  const berryId = fighter.cudChewBerryId;
+  fighter.cudChewBerryId = undefined;
+  fighter.cudChewTurnsLeft = undefined;
+  const item = getItem(berryId);
+  if (!item || isFainted(fighter) || fighterBerriesBlocked) return;
+  const ripen = fighterAbility?.doublesBerryEffect ? 2 : 1;
+  const healBase = item.healsBelowHalfHpDenominator ? Math.floor(fighter.maxHp / item.healsBelowHalfHpDenominator) : (item.healsBelowHalfHpFlat ?? 0);
+  const heal = Math.min(fighter.maxHp - fighter.currentHp, healBase * ripen);
+  if (heal > 0) fighter.currentHp += heal;
+  const curedStatus = fighter.status.condition && item.curesStatusOnInflict?.includes(fighter.status.condition) ? fighter.status.condition : undefined;
+  if (curedStatus) fighter.status = { ...NO_STATUS_CONDITION };
+  const curedConfusion = !!item.curesConfusionOnInflict && hasVolatile(fighter.volatile, "confusion");
+  if (curedConfusion) {
+    const { confusion: _cured, ...rest } = fighter.volatile.active;
+    fighter.volatile = { active: rest };
+  }
+  endOfTurn.push({
+    actor: key,
+    damage: 0,
+    remainingHp: fighter.currentHp,
+    fainted: false,
+    cudChewBerryName: item.name,
+    berryHeal: heal > 0 ? heal : undefined,
+    abilityCuredStatus: curedStatus ?? undefined,
+  });
+}
+
 export function finishTurn(ctx: RunTurnContext): RunTurnOutcome {
   const { state, order, actions, switches, turnStartAnnouncements, selfDestructComboKey, speedA, speedB, random } = ctx;
   let winner: FighterKey | "draw" | undefined;
+
+  // 분함의발구르기·열불내기(ver.1.9): 이번 턴 자기 행동이 실패였는지 기록 — 다음 턴 위력 2배 판정. 이번 턴 행동하지 않았으면
+  // (교체로 나옴·쓰러짐 등) 실패 아님. 턴 중 유턴류로 바뀐 경우 행동한 포켓몬이 아니므로 종 id로 맞춘다.
+  for (const key of ["a", "b"] as const) {
+    const fighter = state[key];
+    const own = actions.find((a) => a.actor === key && a.actorPokemonId === fighter.slot.pokemonId);
+    fighter.lastTurnMoveFailed = own && actionFailed(own) ? true : undefined;
+  }
 
   const endOfTurn: EndOfTurnLogEntry[] = [];
   // 멸망의노래로 이번 턴 종료에 쓰러진 쪽(F-4) — 양쪽 다면 스피드 느린 쪽이 승리한다.
@@ -640,6 +687,7 @@ export function finishTurn(ctx: RunTurnContext): RunTurnOutcome {
       applyMoodyRandomStages(eotCtx);
       applyBerryHpThresholdHeal(eotCtx);
       applyHarvestRestore(eotCtx);
+      applyCudChew(eotCtx);
     }
   }
 

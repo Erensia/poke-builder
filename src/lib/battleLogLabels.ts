@@ -25,7 +25,9 @@ export const VOLATILE_LABELS = {
   torment: "트집",
   imprison: "봉인",
   meanLook: "도망 불가",
+  noRetreat: "배수의진",
   lockOn: "록온",
+  rampage: "난동",
 } as const;
 
 /** 리플렉터(물리 반감)/빛의장막(특수 반감)/오로라베일(양쪽 반감) 표시 라벨. */

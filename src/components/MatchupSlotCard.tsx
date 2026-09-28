@@ -1,4 +1,6 @@
-import type { MatchupSlot } from "../types/matchup";
+import type { MatchupSlot, PowerConditionKey } from "../types/matchup";
+import type { Move } from "../types/move";
+import type { StatusCondition } from "../types/status";
 import { getPokemon, getMove, getAbility, getItem, getNature } from "../lib/data";
 import {
   getEffectiveForm,
@@ -14,6 +16,29 @@ import { PokemonAvatarWithItem } from "./PokemonAvatarWithItem";
 import { STAT_ORDER, STAT_LABELS } from "../lib/statLabels";
 import { TYPE_COLORS } from "../lib/typeColors";
 import "./MatchupSlotCard.css";
+
+/**
+ * ver.1.9 조건부 위력 가정 토글 — 기술의 2배 조건마다 하나(고른 기술에 해당하는 것만 보인다). 엔진은 실제 전투 이력으로 판정한다.
+ */
+const POWER_CONDITION_TOGGLES: { key: PowerConditionKey; label: string; relevant: (move: Move) => boolean }[] = [
+  { key: "movesLastAssumed", label: "상대보다 늦게 행동 가정", relevant: (m) => m.conditionalDoublePower === "moves-after-target" },
+  { key: "tookDamageAssumed", label: "이번 턴 상대 기술로 데미지를 입음 가정", relevant: (m) => m.conditionalDoublePower === "took-damage-this-turn" },
+  { key: "moveFailedAssumed", label: "직전 턴 기술이 빗나감·실패 가정", relevant: (m) => m.conditionalDoublePower === "user-move-failed-last-turn" },
+  { key: "statLoweredAssumed", label: "이번 턴 자신의 능력이 떨어짐 가정", relevant: (m) => m.conditionalDoublePower === "user-stat-lowered-this-turn" },
+  { key: "targetDamagedAssumed", label: "이번 턴 상대가 이미 데미지를 입음 가정", relevant: (m) => m.conditionalDoublePower === "target-damaged-this-turn" },
+  { key: "targetMinimizedAssumed", label: "상대가 작아지기를 사용 가정", relevant: (m) => !!m.bonusVsMinimize },
+];
+
+/** ver.1.9 상태이상 가정 선택지 */
+const STATUS_OPTIONS: readonly (readonly [StatusCondition | null, string])[] = [
+  [null, "없음"],
+  ["burn", "화상"],
+  ["poison", "독"],
+  ["badly-poisoned", "맹독"],
+  ["paralysis", "마비"],
+  ["sleep", "잠듦"],
+  ["freeze", "얼음"],
+];
 
 interface MatchupSlotCardProps {
   role: "attacker" | "defender";
@@ -53,8 +78,22 @@ interface MatchupSlotCardProps {
   onToggleItemStolen: (value: boolean) => void;
   /** Phase 6.5 §1 — "곡예(Unburden) 발동 후 = 스피드 2배" 가정 토글 */
   onToggleUnburden: (value: boolean) => void;
-  /** Phase 6.5 §2 — "마비 상태 = 스피드 0.5배" 가정 토글(스피드 비교에만 반영) */
-  onToggleParalysis: (value: boolean) => void;
+  /** ver.1.9 — 상태이상 가정(이전 "마비 가정" 토글 통합). 마비 = 스피드 0.5배, 화상 = 물리 반감, 조건부 2배 기술·특성 판정 */
+  onSetStatus: (status: StatusCondition | null) => void;
+  /** 공격 슬롯 전용 — 고른 기술(조건부 위력·HP 비례 위력 기술일 때만 관련 가정을 보인다) */
+  selectedMove?: Move;
+  /** 공격 슬롯 전용(ver.1.9) — 조건부 위력 가정 토글. 고른 기술에 해당하는 조건만 보인다(POWER_CONDITION_TOGGLES) */
+  onSetPowerCondition?: (key: PowerConditionKey, value: boolean) => void;
+  /** 공격 슬롯 전용(ver.1.9 6-2) — 급소 가정. 기술을 골랐을 때 항상 보인다 */
+  onToggleCrit?: (value: boolean) => void;
+  /** 급소 가정인데 상대 특성(조가비갑옷·전투무장)으로 급소가 안 뜸 */
+  critBlocked?: boolean;
+  /** 공격 슬롯 전용(ver.1.9) — HP 1/3 이하 가정(맹화류 특성일 때만 보인다) */
+  onTogglePinch?: (value: boolean) => void;
+  /** 공격 슬롯 전용(ver.1.9) — 현재 HP %(분화·해수스파우팅·기사회생·바둥바둥일 때만 보인다) */
+  onSetHpPercent?: (value: number) => void;
+  /** 방어 슬롯 전용(ver.1.9) — HP 가득 가정(멀티스케일·섀도실드일 때만 보인다) */
+  onToggleFullHp?: (value: boolean) => void;
   /** 공격 슬롯 전용 — 선택한 기술이 성묘인지 (아니면 성묘 배율 토글을 숨긴다) */
   moveIsGraveVisit?: boolean;
   /** 공격 슬롯 전용 — 성묘 배율(쓰러진 동료 수) 선택 */
@@ -95,7 +134,14 @@ export function MatchupSlotCard({
   onOpenSamplePicker,
   onToggleItemStolen,
   onToggleUnburden,
-  onToggleParalysis,
+  onSetStatus,
+  selectedMove,
+  onSetPowerCondition,
+  onToggleCrit,
+  critBlocked,
+  onTogglePinch,
+  onSetHpPercent,
+  onToggleFullHp,
   moveIsGraveVisit,
   onSetGraveVisit,
   moveIsSpitUp,
@@ -104,6 +150,12 @@ export function MatchupSlotCard({
   onSetScreen,
 }: MatchupSlotCardProps) {
   const pokemon = slot.pokemonId ? getPokemon(slot.pokemonId) : undefined;
+  // ver.1.9 가정 토글 — 관련 기술·특성을 골랐을 때만 보인다
+  const ability = slot.ability ? getAbility(slot.ability) : undefined;
+  const powerConditions = selectedMove ? POWER_CONDITION_TOGGLES.filter((t) => t.relevant(selectedMove)) : [];
+  const pinchRelevant = !!ability?.modifiers?.some((m) => m.condition?.attackerHpAtMostFraction !== undefined);
+  const fullHpRelevant = !!ability?.modifiers?.some((m) => m.condition?.defenderHpIsFull === true);
+  const hpPowerRelevant = !!selectedMove && (!!selectedMove.reversalPower || !!selectedMove.userHpScaledPower);
 
   if (!pokemon) {
     return (
@@ -287,14 +339,61 @@ export function MatchupSlotCard({
           />
           <span>곡예 발동(스피드 2배) 가정</span>
         </label>
-        <label className="matchup-assume-toggle">
-          <input
-            type="checkbox"
-            checked={!!slot.paralysisAssumed}
-            onChange={(e) => onToggleParalysis(e.target.checked)}
-          />
-          <span>마비 상태(스피드 0.5배) 가정</span>
-        </label>
+        <div className="matchup-assume-grave">
+          <span className="matchup-assume-grave-label">상태이상</span>
+          <div className="matchup-hitcount-row matchup-status-row">
+            {STATUS_OPTIONS.map(([value, text]) => (
+              <button
+                key={text}
+                type="button"
+                className={`matchup-hitcount-pip${(slot.statusAssumed ?? null) === value ? " is-active" : ""}`}
+                onClick={() => onSetStatus(value)}
+              >
+                {text}
+              </button>
+            ))}
+          </div>
+        </div>
+        {role === "attacker" && onToggleCrit && (
+          <label className="matchup-assume-toggle">
+            <input type="checkbox" checked={!!slot.critAssumed} onChange={(e) => onToggleCrit(e.target.checked)} />
+            <span>{critBlocked ? "급소 가정 — 상대 특성으로 급소에 맞지 않음" : "급소 가정"}</span>
+          </label>
+        )}
+        {role === "attacker" &&
+          onSetPowerCondition &&
+          powerConditions.map((t) => (
+            <label key={t.key} className="matchup-assume-toggle">
+              <input type="checkbox" checked={!!slot[t.key]} onChange={(e) => onSetPowerCondition(t.key, e.target.checked)} />
+              <span>{t.label}</span>
+            </label>
+          ))}
+        {role === "attacker" && pinchRelevant && onTogglePinch && (
+          <label className="matchup-assume-toggle">
+            <input type="checkbox" checked={!!slot.pinchAssumed} onChange={(e) => onTogglePinch(e.target.checked)} />
+            <span>HP 1/3 이하 가정</span>
+          </label>
+        )}
+        {role === "defender" && fullHpRelevant && onToggleFullHp && (
+          <label className="matchup-assume-toggle">
+            <input type="checkbox" checked={slot.fullHpAssumed ?? true} onChange={(e) => onToggleFullHp(e.target.checked)} />
+            <span>HP 가득 가정({ability?.name} 발동)</span>
+          </label>
+        )}
+        {role === "attacker" && hpPowerRelevant && onSetHpPercent && (
+          <div className="matchup-assume-grave">
+            <span className="matchup-assume-grave-label">현재 HP {slot.hpPercent ?? 100}%</span>
+            <input
+              type="range"
+              className="matchup-hp-slider"
+              min={1}
+              max={100}
+              value={slot.hpPercent ?? 100}
+              onChange={(e) => onSetHpPercent(Number(e.target.value))}
+              aria-label="현재 HP 퍼센트"
+            />
+          </div>
+        )}
         {slot.itemStolenFromOpponent && (
           <p className="matchup-assume-hint">
             {slot.item

@@ -16,8 +16,8 @@
 
   { "id": "차분", "name": "차분", "increased": "spd", "decreased": "atk" },
   { "id": "얌전", "name": "얌전", "increased": "spd", "decreased": "def" },
-  { "id": "건방", "name": "건방", "increased": "spd", "decreased": "spa" },
-  { "id": "신중", "name": "신중", "increased": "spd", "decreased": "spe" },
+  { "id": "신중", "name": "신중", "increased": "spd", "decreased": "spa" },
+  { "id": "건방", "name": "건방", "increased": "spd", "decreased": "spe" },
 
   { "id": "겁쟁이", "name": "겁쟁이", "increased": "spe", "decreased": "atk" },
   { "id": "성급", "name": "성급", "increased": "spe", "decreased": "def" },
