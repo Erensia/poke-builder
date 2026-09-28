@@ -1,4 +1,5 @@
 import { type Move } from "@/types/move";
+import { hasVolatile } from "@/lib/volatileConditions";
 import { abilityOf, activeWeather, type BattleFighterState, type BattleState } from "../state";
 import { effectiveHeldItem } from "../turnOrderInputs";
 
@@ -24,6 +25,9 @@ export function isUsageBlocked(state: BattleState, fighter: BattleFighterState, 
       break;
     case "sleep-only":
       if (fighter.status.condition !== "sleep") return true;
+      break;
+    case "not-no-retreat":
+      if (hasVolatile(fighter.volatile, "noRetreat")) return true;
       break;
     case "all-other-moves-used": {
       const others = Object.keys(fighter.remainingPp).filter((id) => id !== move.id);

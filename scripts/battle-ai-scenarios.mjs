@@ -1671,6 +1671,77 @@ try {
       check("한계점 정리 ④: 내 자발적 교체 — 켤 때 판세 ≥ 끌 때", on >= off - 1e-9, `끔 ${off.toFixed(3)} 켬 ${on.toFixed(3)}`);
     }
   }
+  // ── ver.1.9 기술 엔진 배선: 독침천발·백귀야행·분화·해수스파우팅·그림자꿰매기·배수의진·섬뜩한주문 ──
+  {
+    const rt = await server.ssrLoadModule("/src/lib/battle/runTurn.ts");
+    const sw = await server.ssrLoadModule("/src/lib/battle/switching.ts");
+    const me = await server.ssrLoadModule("/src/lib/matchupEvaluator.ts");
+    const act = (id) => ({ kind: "move", move: data.getMove(id) });
+    const run = (st, a, b, r = 0.5) => rt.runTurn(st, a.kind ? a : act(a), b.kind ? b : act(b), () => r);
+    const actionOf = (out, key) => out.result.actions.find((x) => x.actor === key);
+    const dmg = (st, moveId) => actionOf(run(st, moveId, "칼춤"), "a")?.damage ?? 0;
+    // 조건부 2배(독침천발 = 상대 독·맹독, 백귀야행 = 상대 아무 상태이상) · HP 비례 위력(분화)
+    {
+      // 한카리아스(드래곤·땅): 독·고스트·불꽃 모두 등배
+      const base = () => battle([mon("팬텀", ["독침천발", "백귀야행", "분화"])], [mon("한카리아스", ["칼춤"], null, null, pts({ hp: 32, def: 32, spd: 32 }))]);
+      const plain = base();
+      const poisoned = base();
+      poisoned.b.status = { condition: "poison", turnsElapsed: 0 };
+      const paralyzed = base();
+      paralyzed.b.status = { condition: "paralysis", turnsElapsed: 0 };
+      const half = base();
+      half.a.currentHp = Math.floor(half.a.maxHp / 2);
+      const ratio = (a, b) => (b > 0 ? a / b : 0);
+      const barb = ratio(dmg(poisoned, "독침천발"), dmg(plain, "독침천발"));
+      const barbPar = ratio(dmg(paralyzed, "독침천발"), dmg(plain, "독침천발"));
+      const hex = ratio(dmg(paralyzed, "백귀야행"), dmg(plain, "백귀야행"));
+      const erupt = ratio(dmg(half, "분화"), dmg(plain, "분화"));
+      check(
+        "1.9: 독침천발(독이면 2배)·백귀야행(상태이상이면 2배)·분화(HP 절반이면 위력 절반)",
+        barb > 1.8 && barb < 2.2 && Math.abs(barbPar - 1) < 0.05 && hex > 1.8 && hex < 2.2 && erupt > 0.4 && erupt < 0.6,
+        `독침천발 ×${barb.toFixed(2)}(마비 ×${barbPar.toFixed(2)}) 백귀야행 ×${hex.toFixed(2)} 분화 ×${erupt.toFixed(2)}`,
+      );
+      // 매치업 계산기(AI 공유): 상태이상·HP 비율 입력이 같은 배율로
+      const slot = mon("팬텀", ["독침천발"]).slot;
+      const foe = mon("한카리아스", ["칼춤"]).slot;
+      const off = (id, o) => me.evaluateSlotMatchup(slot, data.getMove(id), foe, o)?.offensePower ?? 0;
+      check(
+        "1.9: 매치업 계산기 — 독 상태·HP 비율 반영(독침천발 ×2, 분화 HP 50% ×0.5)",
+        Math.abs(off("독침천발", { defenderStatus: "poison" }) / off("독침천발", {}) - 2) < 0.02 &&
+          Math.abs(off("분화", { attackerHpFraction: 0.5 }) / off("분화", {}) - 0.5) < 0.02,
+        `독침천발 ${off("독침천발", {})}→${off("독침천발", { defenderStatus: "poison" })} 분화 ${off("분화", {})}→${off("분화", { attackerHpFraction: 0.5 })}`,
+      );
+    }
+    // 그림자꿰매기: 명중하면 상대 교체 봉쇄(고스트 면제, 실패 문구 없음) / 배수의진: 5스탯 +1 + 자신 교체 봉쇄, 이미 걸려 있으면 실패
+    {
+      const st = battle([mon("팬텀", ["그림자꿰매기"])], [mon("잠만보", ["칼춤"], null, null, pts({ hp: 32, def: 32 })), mon("한카리아스", ["지진"])]);
+      const s1 = run(st, "그림자꿰매기", "칼춤").nextState;
+      const ghostOut = run(battle([mon("팬텀", ["그림자꿰매기"])], [mon("팬텀", ["칼춤"], null, null, pts({ hp: 32, def: 32 }))]), "그림자꿰매기", "칼춤");
+      const nr = battle([mon("잠만보", ["배수의진"]), mon("팬텀", ["칼춤"])], [mon("메타그로스", ["칼춤"])]);
+      const n1 = run(nr, "배수의진", "칼춤").nextState;
+      const again = actionOf(run(n1, "배수의진", "칼춤"), "a");
+      check(
+        "1.9: 그림자꿰매기(상대 교체 봉쇄·고스트 면제)·배수의진(5스탯 +1·자신 교체 봉쇄·중복 실패)",
+        sw.isTrappedFromSwitching(s1.b, s1) && !sw.isTrappedFromSwitching(ghostOut.nextState.b, ghostOut.nextState) &&
+          !actionOf(ghostOut, "a")?.statusInflictFailed &&
+          n1.a.stages.atk === 1 && n1.a.stages.spe === 1 && sw.isTrappedFromSwitching(n1.a, n1) && again?.blockedReason === "usageCondition",
+        `그림자꿰매기 봉쇄=${sw.isTrappedFromSwitching(s1.b, s1)} 배수의진 atk=${n1.a.stages.atk} 봉쇄=${sw.isTrappedFromSwitching(n1.a, n1)} 재사용=${again?.blockedReason}`,
+      );
+    }
+    // 섬뜩한주문: 상대 직전 기술 PP −3, 쓴 기술이 없으면 조용히 무산(데미지 기술이라 실패 문구 없음)
+    {
+      const st = battle([mon("팬텀", ["섬뜩한주문"])], [mon("잠만보", ["누르기", "칼춤"], null, null, pts({ hp: 32, spd: 32 }))]);
+      const fresh = actionOf(run(st, "섬뜩한주문", "칼춤"), "a");
+      st.b.lastMoveId = "누르기";
+      const before = st.b.remainingPp["누르기"];
+      const out = run(st, "섬뜩한주문", "칼춤");
+      check(
+        "1.9: 섬뜩한주문 — 직전 기술 PP −3 / 쓴 기술 없으면 조용히 무산",
+        !fresh?.spiteFailed && out.nextState.b.remainingPp["누르기"] === before - 3 && actionOf(out, "a")?.spitePp?.amount === 3,
+        `PP ${before}→${out.nextState.b.remainingPp["누르기"]} 실패문구=${fresh?.spiteFailed}`,
+      );
+    }
+  }
   // ── 매치업 난수별 데미지(ver.1.7 트랙 H): 기존 격파 판정과 같은 관계식인지 대조 ──
   {
     const bp = await server.ssrLoadModule("/src/lib/battlePower.ts");

@@ -6150,6 +6150,7 @@
   },
   {
     "id": "해수스파우팅",
+    "userHpScaledPower": 150,
     "name": "해수스파우팅",
     "type": "물",
     "category": "special",
@@ -8522,6 +8523,7 @@
   },
   {
     "id": "독침천발",
+    "conditionalDoublePower": "target-status-poisoned",
     "name": "독침천발",
     "type": "독",
     "category": "physical",
@@ -8529,7 +8531,7 @@
     "accuracy": 100,
     "pp": 12,
     "priority": 0,
-    "effect": "독이 밴 가시를 연달아 발사해 공격한다. 50% 확률로 상대를 독 상태로 만들며, 상대가 이미 독·맹독 상태이면 위력이 2배가 된다. (위력 2배 조건은 엔진 미배선)",
+    "effect": "독이 밴 가시를 연달아 발사해 공격한다. 50% 확률로 상대를 독 상태로 만들며, 상대가 이미 독·맹독 상태이면 위력이 2배가 된다.",
     "tags": [
       "독"
     ],
@@ -8572,6 +8574,7 @@
   },
   {
     "id": "백귀야행",
+    "conditionalDoublePower": "target-has-status",
     "name": "백귀야행",
     "type": "고스트",
     "category": "special",
@@ -8579,7 +8582,7 @@
     "accuracy": 100,
     "pp": 16,
     "priority": 0,
-    "effect": "수많은 원령이 상대를 습격한다. 30% 확률로 상대를 화상 상태로 만들며, 상대가 상태이상이면 위력이 2배가 된다. (위력 2배 조건은 엔진 미배선)",
+    "effect": "수많은 원령이 상대를 습격한다. 30% 확률로 상대를 화상 상태로 만들며, 상대가 상태이상이면 위력이 2배가 된다.",
     "tags": [
       "화상"
     ],
@@ -8593,6 +8596,7 @@
   },
   {
     "id": "분화",
+    "userHpScaledPower": 150,
     "name": "분화",
     "type": "불꽃",
     "category": "special",
@@ -8600,12 +8604,13 @@
     "accuracy": 100,
     "pp": 8,
     "priority": 0,
-    "effect": "폭발적인 마그마를 상대에게 내뿜어 공격한다. 자신의 HP가 적을수록 위력이 떨어진다(위력 = 150 × 현재 HP ÷ 최대 HP). (HP 비례 감소는 엔진 미배선 — 계산 페이지에선 150 고정 취급)",
+    "effect": "폭발적인 마그마를 상대에게 내뿜어 공격한다. 자신의 HP가 적을수록 위력이 떨어진다.",
     "tags": [],
     "makesContact": false
   },
   {
     "id": "섬뜩한주문",
+    "reducesTargetLastMovePp": 3,
     "name": "섬뜩한주문",
     "type": "에스퍼",
     "category": "special",
@@ -8613,7 +8618,7 @@
     "accuracy": 100,
     "pp": 8,
     "priority": 0,
-    "effect": "강대한 초능력으로 상대를 공격한다. 상대가 마지막으로 사용한 기술의 PP를 3 깎는다. (PP 감소는 엔진 미배선)",
+    "effect": "강대한 초능력으로 상대를 공격한다. 상대가 마지막으로 사용한 기술의 PP를 3 깎는다.",
     "tags": [
       "소리"
     ],
@@ -9382,6 +9387,7 @@
   },
   {
     "id": "그림자꿰매기",
+    "inflictsVolatile": [{ "volatile": "meanLook", "target": "opponent" }],
     "name": "그림자꿰매기",
     "type": "고스트",
     "category": "physical",
@@ -9389,7 +9395,7 @@
     "accuracy": 100,
     "pp": 12,
     "priority": 0,
-    "effect": "공격과 동시에 상대의 그림자를 꿰매 도망칠 수 없게 한다. (교체 봉쇄는 배틀타워 리뉴얼로 교체가 도입되면 배선 — 현재 데미지만)",
+    "effect": "공격과 동시에 상대의 그림자를 꿰매 도망칠 수 없게 한다.",
     "tags": [
       "고정-상대",
       "비접촉"
@@ -9525,6 +9531,8 @@
   },
   {
     "id": "배수의진",
+    "inflictsVolatile": [{ "volatile": "noRetreat", "target": "self" }],
+    "usageCondition": "not-no-retreat",
     "name": "배수의진",
     "type": "격투",
     "category": "status",
@@ -9532,7 +9540,7 @@
     "accuracy": null,
     "pp": 8,
     "priority": 0,
-    "effect": "자신의 모든 능력이 올라가지만 교체하거나 도망칠 수 없게 된다. (도망·교체 봉쇄는 배틀타워 리뉴얼로 교체가 도입되면 배선 — 현재 5스탯 +1만)",
+    "effect": "자신의 모든 능력이 올라가지만 교체하거나 도망칠 수 없게 된다.",
     "tags": [
       "랭크",
       "고정-자신"

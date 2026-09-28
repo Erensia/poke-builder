@@ -218,7 +218,9 @@ export interface Move {
     | "field-required"
     | "opponent-damaging-move-only"
     | "weather-required"
-    | "all-other-moves-used";
+    | "all-other-moves-used"
+    // 배수의진(ver.1.9): 이미 배수의진 상태(noRetreat)면 실패
+    | "not-no-retreat";
   /** usageCondition: "weather-required"일 때만 의미 있음 — 이 날씨가 아니면 사용 자체가 실패한다(오로라베일=눈) */
   requiresWeather?: WeatherKind;
   /**
@@ -484,6 +486,10 @@ export interface Move {
    */
   reversalPower?: boolean;
   /**
+   * 분화·해수스파우팅(ver.1.9): 위력 = max(1, ⌊이 값 × 현재 HP ÷ 최대 HP⌋). power에도 같은 최대값을 둔다(표기용).
+   */
+  userHpScaledPower?: number;
+  /**
    * 눈사태·보복·애크러뱃·분풀이·분함의발구르기처럼 조건 충족 시 위력이 2배가 되는 기술.
    *  - "took-damage-this-turn"(눈사태): 이번 턴에 상대 데미지 기술로 이미 맞았으면
    *  - "moves-after-target"(보복): 자신이 상대보다 나중에 행동하면
@@ -508,7 +514,9 @@ export interface Move {
     | "user-stat-lowered-this-turn"
     | "user-move-failed-last-turn"
     | "user-status-burn-poison-paralysis"
-    | "target-status-poisoned";
+    | "target-status-poisoned"
+    // 백귀야행(ver.1.9): 상대가 주 상태이상(종류 무관)이면 2배
+    | "target-has-status";
   /**
    * 비축하기(Stockpile): 사용할 때마다 비축 스택 +1(최대 3, 이미 3이면 실패)하고 자신의 방어·특수방어를
    * 1랭크 올린다(랭크업은 데이터의 statChanges로 처리, 스택 카운트만 이 플래그로). 토해내기·꿀꺽이 소비.

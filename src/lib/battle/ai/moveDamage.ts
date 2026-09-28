@@ -221,6 +221,8 @@ export function estimateMoveHits(ctx: MoveHitContext, baseMove: Move): MoveHitEs
     defenderHpIsFull: defenderHp === defender.maxHp,
     defenderHpFraction: defender.maxHp > 0 ? defenderHp / defender.maxHp : 1,
     defenderHasStatusCondition: !!defender.status.condition,
+    attackerStatus: attacker.status.condition,
+    defenderStatus: defender.status.condition,
     defenderItemConsumed: !!defender.itemConsumed,
     attackerRuntime: runtimeOf(attacker, ctx.attackerTypes, state),
     defenderRuntime: runtimeOf(defender, defenderTypes, state),

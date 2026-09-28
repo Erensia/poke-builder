@@ -83,6 +83,11 @@ export function reversalPowerFromHp(currentHp: number, maxHp: number): number {
   return 200;
 }
 
+/** 분화·해수스파우팅(ver.1.9): 위력 = max(1, ⌊최대 위력 × HP 비율⌋) */
+export function userHpScaledPowerValue(maxPower: number, hpFraction: number): number {
+  return Math.max(1, Math.floor(maxPower * Math.max(0, Math.min(1, hpFraction))));
+}
+
 /**
  * 자이로볼(Gyro Ball) 위력 — 사용자 확정식: `min(150, floor(25 × (상대 실효 스피드 / 자신 실효 스피드 + 1)))`.
  * (본가의 "+1 바깥" 공식과 다르게 괄호 안에 +1.) 실효 스피드 산출(랭크·마비·도구 반영)은 호출부 몫.

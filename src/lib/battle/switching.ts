@@ -25,7 +25,8 @@ export function isTrappedFromSwitching(fighter: BattleFighterState, state?: Batt
   return (
     hasVolatile(fighter.volatile, "octolock") ||
     hasVolatile(fighter.volatile, "jawLock") ||
-    hasVolatile(fighter.volatile, "meanLook")
+    hasVolatile(fighter.volatile, "meanLook") ||
+    hasVolatile(fighter.volatile, "noRetreat")
   );
 }
 

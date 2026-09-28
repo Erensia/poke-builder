@@ -105,7 +105,9 @@ export type VolatileCondition =
   | "imprison"
   // 트랙 M6: 검은눈빛·블록(교체 봉쇄, 상대) · 록온(다음 기술 필중, 자신)
   | "meanLook"
-  | "lockOn";
+  | "lockOn"
+  // ver.1.9: 배수의진(자신 교체 봉쇄 — 자신이 물러나기 전까지)
+  | "noRetreat";
 
 /** 기술이 상대(또는 자신)에게 행동방해 효과를 걸 때 쓰는 정보 */
 export interface VolatileInflictEffect {
