@@ -65,7 +65,7 @@ import {
   usableMoves,
   type OpponentThreat,
 } from "./opponentMoveModel";
-import { blockedTurns, isEndOfTurnAware, turnsToKo, withAccumulationSteps } from "./turnRates";
+import { blockedTurns, isEndOfTurnAware, turnsToKo, withAccumulationSteps, withSelfHpChange } from "./turnRates";
 import type { HitsEstimate } from "./types";
 
 export type { SpeedOrder } from "./speed";
@@ -331,6 +331,11 @@ function turnsFor(
   };
 }
 
+/** 기대 턴 수에 fighter 자신의 공격 HP 변화(반동·흡수 등, ver.1.9 한계점 A2)를 섞는다 */
+function selfAdjusted(turns: HitsEstimate, selfRate: number | undefined, fighter: BattleFighterState, hp?: number): HitsEstimate {
+  return selfRate ? { ...turns, expected: withSelfHpChange(turns.expected, selfRate, fighter, hp) } : turns;
+}
+
 /** key 편에서 index 슬롯으로 교체하는 옵션. opponentHp를 주면 상대가 그 HP라고 가정한다(유턴류 평가용). */
 function evaluateSwitchCandidate(state: BattleState, key: FighterKey, index: number, opponentHp?: number): AiOption {
   const mySide = sideOf(state, key);
@@ -368,8 +373,9 @@ function evaluateSwitchCandidate(state: BattleState, key: FighterKey, index: num
     typeMatchup: { offensive: pick?.estimate.typeEffectiveness ?? 0, defensive: threat.defensiveMatchup },
     speedOrder: speed.order,
     firstProbability: speed.probability,
-    hitsToKill: turnsFor(state, pick?.estimate, candidate, opponent, oppHp),
-    hitsToBeKilled: threat.hitsToBeKilled,
+    // 자기 공격의 HP 변화(ver.1.9 A2): 상대 반동은 내 처치 턴을, 내 반동·흡수는 내가 버티는 턴을 바꾼다
+    hitsToKill: selfAdjusted(turnsFor(state, pick?.estimate, candidate, opponent, oppHp), threat.selfHpRate, opponent, oppHp),
+    hitsToBeKilled: selfAdjusted(threat.hitsToBeKilled, pick?.estimate.selfHpRate, candidate, Math.max(0, hpAfterEntry)),
     entryCost,
     maxHp: candidate.maxHp,
     hpFraction: Math.max(0, hpAfterEntry) / candidate.maxHp,
@@ -564,8 +570,8 @@ function currentRace(st: BattleState, key: FighterKey, moves: Move[]): RaceInput
   const speed = best ? firstProbability(st, me, best.move, opponent, probe.bestMove) : { probability: 0 };
   const threat = evaluateOpponentThreat({ state: st, opponent, target: me, targetSide: mySide, opponentMovesSecond: speed.probability >= 0.5 });
   return {
-    killTurns: turnsFor(st, best?.estimate, me, opponent).expected,
-    survivalTurns: threat.hitsToBeKilled.expected,
+    killTurns: withSelfHpChange(turnsFor(st, best?.estimate, me, opponent).expected, threat.selfHpRate, opponent),
+    survivalTurns: withSelfHpChange(threat.hitsToBeKilled.expected, best?.estimate.selfHpRate, me),
     firstProbability: speed.probability,
   };
 }
@@ -977,8 +983,8 @@ function evaluateOptionsOn(state: BattleState, key: FighterKey, options: Evaluat
       typeMatchup: { offensive: estimate?.typeEffectiveness ?? 0, defensive: threat.defensiveMatchup },
       speedOrder: speed.order,
       firstProbability: speed.probability,
-      hitsToKill: turnsFor(moveState, estimate ?? undefined, me, opponent),
-      hitsToBeKilled: threat.hitsToBeKilled,
+      hitsToKill: selfAdjusted(turnsFor(moveState, estimate ?? undefined, me, opponent), threat.selfHpRate, opponent),
+      hitsToBeKilled: selfAdjusted(threat.hitsToBeKilled, estimate?.selfHpRate, me),
       entryCost: 0,
       maxHp: me.maxHp,
       hpFraction: me.currentHp / me.maxHp,
