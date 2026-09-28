@@ -25,7 +25,7 @@ export const EMPTY_MATCHUP_SLOT: MatchupSlot = {
   moveId: null,
   itemStolenFromOpponent: false,
   unburdenAssumed: false,
-  paralysisAssumed: false,
+  statusAssumed: null,
   graveVisitFaintedAllies: 0,
   stockpileCount: 3,
 };
@@ -122,8 +122,24 @@ function useMatchupSlot() {
     setSlot((prev) => ({ ...prev, unburdenAssumed: value }));
   }
 
-  function setParalysisAssumed(value: boolean) {
-    setSlot((prev) => ({ ...prev, paralysisAssumed: value }));
+  function setStatusAssumed(value: MatchupSlot["statusAssumed"]) {
+    setSlot((prev) => ({ ...prev, statusAssumed: value }));
+  }
+
+  function setMovesLastAssumed(value: boolean) {
+    setSlot((prev) => ({ ...prev, movesLastAssumed: value }));
+  }
+
+  function setPinchAssumed(value: boolean) {
+    setSlot((prev) => ({ ...prev, pinchAssumed: value }));
+  }
+
+  function setFullHpAssumed(value: boolean) {
+    setSlot((prev) => ({ ...prev, fullHpAssumed: value }));
+  }
+
+  function setHpPercent(value: number) {
+    setSlot((prev) => ({ ...prev, hpPercent: Math.max(1, Math.min(100, Math.round(value))) }));
   }
 
   function setScreen(value: MatchupSlot["screen"]) {
@@ -167,7 +183,11 @@ function useMatchupSlot() {
     setStockpileCount,
     setItemStolen,
     setUnburdenAssumed,
-    setParalysisAssumed,
+    setStatusAssumed,
+    setMovesLastAssumed,
+    setPinchAssumed,
+    setFullHpAssumed,
+    setHpPercent,
     setScreen,
     setGraveVisitFaintedAllies,
     setPoint,

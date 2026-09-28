@@ -1712,6 +1712,25 @@ try {
         `독침천발 ${off("독침천발", {})}→${off("독침천발", { defenderStatus: "poison" })} 분화 ${off("분화", {})}→${off("분화", { attackerHpFraction: 0.5 })}`,
       );
     }
+    // 결정력·내구력 페이지 가정 토글(ver.1.9): 늦게 행동(보복·눈사태 2배)·공격측 상태이상(객기)·HP 비례(기사회생)·특성 HP 조건 분리
+    {
+      const atk = mon("한카리아스", ["보복"], "맹화").slot;
+      const foe = mon("잠만보", ["칼춤"]).slot;
+      const off = (id, o) => me.evaluateSlotMatchup(atk, data.getMove(id), foe, o)?.offensePower ?? 0;
+      const solo = (id, o) => me.computeSoloOffensePower(atk, data.getMove(id), o) ?? 0;
+      const r = (a, b) => (b > 0 ? a / b : 0);
+      const payback = r(off("보복", { attackerMovesLast: true }), off("보복", {}));
+      const avalanche = r(solo("눈사태", { attackerMovesLast: true }), solo("눈사태", {}));
+      const facade = r(off("객기", { attackerStatus: "burn" }), off("객기", {}));
+      const reversal = r(off("기사회생", { attackerHpFraction: 0.1 }), off("기사회생", {}));
+      // 맹화: 불꽃 기술, HP 슬라이더(attackerHpFraction)가 아니라 abilityHpFraction으로만 발동
+      const blaze = r(off("화염방사", { abilityHpFraction: 1 / 3 }), off("화염방사", { attackerHpFraction: 0.2, abilityHpFraction: 1 }));
+      check(
+        "1.9 계산기: 늦게 행동(보복·눈사태 2배)·객기 화상 2배·기사회생 HP 10%(위력 150)·맹화는 특성 HP 가정으로만",
+        Math.abs(payback - 2) < 0.02 && Math.abs(avalanche - 2) < 0.02 && Math.abs(facade - 2) < 0.02 && Math.abs(reversal - 7.5) < 0.05 && Math.abs(blaze - 1.5) < 0.02,
+        `보복 ×${payback.toFixed(2)} 눈사태 ×${avalanche.toFixed(2)} 객기 ×${facade.toFixed(2)} 기사회생 ×${reversal.toFixed(2)} 맹화 ×${blaze.toFixed(2)}`,
+      );
+    }
     // 그림자꿰매기: 명중하면 상대 교체 봉쇄(고스트 면제, 실패 문구 없음) / 배수의진: 5스탯 +1 + 자신 교체 봉쇄, 이미 걸려 있으면 실패
     {
       const st = battle([mon("팬텀", ["그림자꿰매기"])], [mon("잠만보", ["칼춤"], null, null, pts({ hp: 32, def: 32 })), mon("한카리아스", ["지진"])]);

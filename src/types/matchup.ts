@@ -1,3 +1,4 @@
+import type { StatusCondition } from "./status";
 import type { AbilityPoints } from "./party";
 import type { StatStages } from "./battleStats";
 
@@ -33,8 +34,19 @@ export interface MatchupSlot {
   itemStolenFromOpponent?: boolean;
   /** 곡예(Unburden) 발동 후라고 가정 — 이 슬롯의 실효 스피드를 2배로 계산 */
   unburdenAssumed?: boolean;
-  /** 마비 상태라고 가정 — 이 슬롯의 실효 스피드를 0.5배로 계산(스피드 비교 전용) */
-  paralysisAssumed?: boolean;
+  /**
+   * ver.1.9 — 이 슬롯의 주 상태이상 가정(이전 "마비 가정" 체크박스를 통합). 마비면 실효 스피드 0.5배, 화상이면 물리 공격 반감
+   * (근성·객기 제외), 객기(공격측 화상·독·마비 2배)·베놈쇼크·독침천발(방어측 독)·백귀야행(방어측 상태이상)·이상한비늘에 반영.
+   */
+  statusAssumed?: StatusCondition | null;
+  /** ver.1.9 공격 슬롯 — 상대보다 늦게 행동(보복 2배)·먼저 맞음(눈사태 2배) 가정 */
+  movesLastAssumed?: boolean;
+  /** ver.1.9 공격 슬롯 — HP 1/3 이하 가정(맹화·급류·심록·벌레의알림 발동) */
+  pinchAssumed?: boolean;
+  /** ver.1.9 방어 슬롯 — HP 가득 가정(멀티스케일·섀도실드 발동). 생략하면 켬(이전 계산과 같음) */
+  fullHpAssumed?: boolean;
+  /** ver.1.9 공격 슬롯 — 현재 HP %(1~100). 분화·해수스파우팅·기사회생·바둥바둥 위력에만 쓴다. 생략하면 100 */
+  hpPercent?: number;
   /**
    * Phase 6.5 §5 — 이 슬롯(방어측)에 스크린이 걸려 있다고 가정. 받는 데미지가 절반이 된다.
    * 리플렉터=물리, 빛의장막=특수, 오로라베일=물리·특수 둘 다. 없으면 undefined(=지금까지와 동일).

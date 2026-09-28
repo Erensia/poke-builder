@@ -93,6 +93,13 @@ export interface SlotMatchupOptions {
    */
   attackerStatus?: StatusCondition | null;
   defenderStatus?: StatusCondition | null;
+  /**
+   * ver.1.9 매치업 페이지 — 특성 HP 조건(맹화류 1/3 이하)에만 쓰는 HP 비율. 생략하면 attackerHpFraction과 같다
+   * (배틀 AI는 둘이 같음). 페이지는 HP 슬라이더(위력)와 "HP 1/3 이하 가정"(특성)을 따로 둔다.
+   */
+  abilityHpFraction?: number;
+  /** ver.1.9 — 공격측이 상대보다 늦게 행동(보복 2배)·이번 턴 먼저 맞음(눈사태 2배) 가정 */
+  attackerMovesLast?: boolean;
   defenderItemConsumed?: boolean;
   /**
    * 배틀 AI용 — 슬롯 원본 대신 실전 파이터의 현재 값(메가진화·변신·변환자재·트레이스·도구 소모 반영)을
@@ -197,6 +204,8 @@ export function evaluateSlotMatchup(
     defenderHasStatusCondition,
     attackerStatus,
     defenderStatus,
+    abilityHpFraction,
+    attackerMovesLast,
     defenderItemConsumed,
     attackerRuntime,
     defenderRuntime,
@@ -297,7 +306,8 @@ export function evaluateSlotMatchup(
   }
 
   if (move.reversalPower) {
-    variablePowerMove = { ...variablePowerMove, power: reversalPowerFromHp(1, 1) };
+    // 공격측 HP 비율(배틀 AI의 현재 HP·페이지의 HP 슬라이더), 생략하면 풀피(최소 위력 20)
+    variablePowerMove = { ...variablePowerMove, power: reversalPowerFromHp(attackerHpFraction ?? 1, 1) };
   } else if (move.gyroBallPower) {
     const effSpeed = (
       spe: number,
@@ -359,24 +369,17 @@ export function evaluateSlotMatchup(
       power: userHpScaledPowerValue(variablePowerMove.userHpScaledPower, attackerHpFraction ?? 1),
     };
   }
-  // 조건부 ×2(conditionalDoublePower). 매치업 페이지 정책(§3 증분 C·B-3, 사용자 지시):
-  //  - user-has-no-item(애크러뱃): 지닌 도구를 알고 있으니 실제로 판정
-  //  - user-stat-lowered-this-turn(분풀이)·user-move-failed-last-turn(분함의발구르기): 조건 충족을 상정(항상 ×2)
-  //  - took-damage-this-turn(눈사태)·moves-after-target(보복): 배틀 문맥 필요 → 매치업에선 기본 위력
-  if (variablePowerMove.power !== null) {
-    const cond = variablePowerMove.conditionalDoublePower;
-    //  - 상태이상 조건(ver.1.9): 넘겨받은 attackerStatus·defenderStatus로 판정(생략하면 상태이상 없음)
-    const assumeDoubled =
-      cond === "user-stat-lowered-this-turn" ||
-      cond === "user-move-failed-last-turn" ||
-      (cond === "user-has-no-item" && !attackerItem) ||
-      (cond === "user-status-burn-poison-paralysis" &&
-        (attackerStatus === "burn" || attackerStatus === "poison" || attackerStatus === "badly-poisoned" || attackerStatus === "paralysis")) ||
-      (cond === "target-status-poisoned" && (defenderStatus === "poison" || defenderStatus === "badly-poisoned")) ||
-      (cond === "target-has-status" && (!!defenderStatus || !!defenderHasStatusCondition));
-    if (assumeDoubled) {
-      variablePowerMove = { ...variablePowerMove, power: variablePowerMove.power * 2 };
-    }
+  if (
+    variablePowerMove.power !== null &&
+    conditionalPowerDoubled(variablePowerMove, {
+      attackerHasItem: !!attackerItem,
+      attackerStatus,
+      defenderStatus,
+      defenderHasStatusCondition,
+      attackerMovesLast,
+    })
+  ) {
+    variablePowerMove = { ...variablePowerMove, power: variablePowerMove.power * 2 };
   }
 
   // 솔라빔(§1-10): chargeSkipWeather(쾌청)가 아닌 날씨에서는 위력 절반. matchupEvaluator는
@@ -416,8 +419,8 @@ export function evaluateSlotMatchup(
   } = resolveMoveContext(attackerAbility, fieldAdjustedMove, defenderForm.types, defenderAbility, {
     weather: effectiveWeather,
     defenderItem,
-    // 매치업 페이지는 1턴 스냅샷이라 아래 세 값을 안 넘겨 기본값(풀피/상태이상 없음)을 쓴다.
-    attackerHpFraction,
+    // 매치업 페이지는 가정 토글로 넘긴다(생략하면 풀피/상태이상 없음). 특성 HP 조건은 abilityHpFraction 우선.
+    attackerHpFraction: abilityHpFraction ?? attackerHpFraction,
     defenderHpIsFull,
     defenderHasStatusCondition,
     field,
@@ -543,6 +546,37 @@ export function evaluateSlotMatchup(
   };
 }
 
+/**
+ * 조건부 ×2(conditionalDoublePower) 판정 — evaluateSlotMatchup·computeSoloOffensePower 공용. 매치업 페이지 정책(§3 증분 C·B-3):
+ *  - user-has-no-item(애크러뱃): 지닌 도구를 알고 있으니 실제로 판정
+ *  - user-stat-lowered-this-turn(분풀이)·user-move-failed-last-turn(분함의발구르기): 조건 충족을 상정(항상 ×2)
+ *  - 상태이상 조건(ver.1.9): 넘겨받은 상태이상으로 판정(생략하면 상태이상 없음)
+ *  - took-damage-this-turn(눈사태)·moves-after-target(보복): attackerMovesLast 가정일 때만(ver.1.9, 생략하면 기본 위력)
+ */
+function conditionalPowerDoubled(
+  move: Move,
+  ctx: {
+    attackerHasItem: boolean;
+    attackerStatus?: StatusCondition | null;
+    defenderStatus?: StatusCondition | null;
+    defenderHasStatusCondition?: boolean;
+    attackerMovesLast?: boolean;
+  },
+): boolean {
+  const cond = move.conditionalDoublePower;
+  const { attackerStatus, defenderStatus } = ctx;
+  return (
+    cond === "user-stat-lowered-this-turn" ||
+    cond === "user-move-failed-last-turn" ||
+    (cond === "user-has-no-item" && !ctx.attackerHasItem) ||
+    (cond === "user-status-burn-poison-paralysis" &&
+      (attackerStatus === "burn" || attackerStatus === "poison" || attackerStatus === "badly-poisoned" || attackerStatus === "paralysis")) ||
+    (cond === "target-status-poisoned" && (defenderStatus === "poison" || defenderStatus === "badly-poisoned")) ||
+    (cond === "target-has-status" && (!!defenderStatus || !!ctx.defenderHasStatusCondition)) ||
+    ((cond === "moves-after-target" || cond === "took-damage-this-turn") && !!ctx.attackerMovesLast)
+  );
+}
+
 export interface SoloOffensePowerOptions {
   attackerStages?: StatStages;
   applyMoveOwnStatChanges?: boolean;
@@ -550,6 +584,12 @@ export interface SoloOffensePowerOptions {
   stockpileCount?: number;
   weather?: WeatherKind;
   field?: FieldKind;
+  /** ver.1.9 가정 토글 — evaluateSlotMatchup의 같은 이름 옵션과 같은 뜻 */
+  attackerHpFraction?: number;
+  abilityHpFraction?: number;
+  attackerStatus?: StatusCondition | null;
+  attackerMovesLast?: boolean;
+  extraOffenseMultiplier?: number;
 }
 
 /**
@@ -578,6 +618,11 @@ export function computeSoloOffensePower(
     field,
     multiHitCount,
     stockpileCount,
+    attackerHpFraction,
+    abilityHpFraction,
+    attackerStatus,
+    attackerMovesLast,
+    extraOffenseMultiplier = 1,
   } = options;
 
   const attackerForm = getEffectiveForm(attackerPokemon, attackerSlot);
@@ -624,7 +669,9 @@ export function computeSoloOffensePower(
   }
 
   if (move.reversalPower) {
-    variablePowerMove = { ...variablePowerMove, power: reversalPowerFromHp(1, 1) };
+    variablePowerMove = { ...variablePowerMove, power: reversalPowerFromHp(attackerHpFraction ?? 1, 1) };
+  } else if (move.userHpScaledPower) {
+    variablePowerMove = { ...variablePowerMove, power: userHpScaledPowerValue(move.userHpScaledPower, attackerHpFraction ?? 1) };
   } else if (move.powerFromPositiveStages) {
     const { base, perStage } = move.powerFromPositiveStages;
     variablePowerMove = { ...variablePowerMove, power: positiveStagesPowerValue(attackerStages, base, perStage) };
@@ -635,15 +682,11 @@ export function computeSoloOffensePower(
     variablePowerMove = { ...variablePowerMove, power: WEIGHT_MOVE_FALLBACK_POWER };
   }
 
-  if (variablePowerMove.power !== null) {
-    const cond = variablePowerMove.conditionalDoublePower;
-    const assumeDoubled =
-      cond === "user-stat-lowered-this-turn" ||
-      cond === "user-move-failed-last-turn" ||
-      (cond === "user-has-no-item" && !attackerItem);
-    if (assumeDoubled) {
-      variablePowerMove = { ...variablePowerMove, power: variablePowerMove.power * 2 };
-    }
+  if (
+    variablePowerMove.power !== null &&
+    conditionalPowerDoubled(variablePowerMove, { attackerHasItem: !!attackerItem, attackerStatus, attackerMovesLast })
+  ) {
+    variablePowerMove = { ...variablePowerMove, power: variablePowerMove.power * 2 };
   }
 
   // 솔라빔(§1-10): chargeSkipWeather(쾌청)가 아닌 날씨에서는 위력 절반 — evaluateSlotMatchup과 동일.
@@ -674,7 +717,7 @@ export function computeSoloOffensePower(
     fieldAdjustedMove,
     [],
     undefined,
-    { weather: effectiveWeather, field },
+    { weather: effectiveWeather, field, attackerHpFraction: abilityHpFraction ?? attackerHpFraction },
   );
 
   const effectiveMoveWithHits = (() => {
@@ -723,7 +766,7 @@ export function computeSoloOffensePower(
       : 1;
 
   return computeOffensePower(attackerRealStats, attackerForm.types, effectiveMoveFinal, {
-    abilityMultiplier: abilityOffenseMultiplier * hustleMultiplier,
+    abilityMultiplier: abilityOffenseMultiplier * hustleMultiplier * extraOffenseMultiplier,
     itemMultiplier: autoItemMultiplier,
     weatherMultiplier: autoWeatherDamageMultiplier,
     fieldMultiplier: autoFieldDamageMultiplier,
