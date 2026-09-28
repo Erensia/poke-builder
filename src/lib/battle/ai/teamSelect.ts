@@ -1,18 +1,16 @@
 import { type FighterKey } from "@/types/battle";
 import { opponentKey, sideOf, type BattleState } from "../state";
-import { chainParams, type DecisionParams } from "./decision";
-import { paramsFor, type AiDifficulty } from "./difficulty";
+import { chainParams, paramsFor, type DecisionParams } from "./decision";
 import { createPartyModel, partyMatchValue } from "./partyEval";
 import { withEndOfTurnModel } from "./turnRates";
 
 /**
  * 3선출 AI(ver.1.8 로드맵 7, 결정 레이어 §4-13): 팀 프리뷰처럼 상대 빌드 전체는 알고 상대 선출은 모르는 상태에서, 내 선출
  * 조합 × 선봉마다 상대의 모든 조합 × 선봉과 붙여 본 대전 시작 판세(파티 단위 평가 — 6×6 대면표 한 번 + 이어지는 대면)를
- * 평균과 최악을 섞어 점수로 삼고, 상위권에서 소프트맥스로 고른다(쉬움은 폭을 넓게).
+ * 평균과 최악을 섞어 점수로 삼고, 상위권에서 소프트맥스로 고른다.
  */
 
 export interface TeamSelectOptions {
-  difficulty?: AiDifficulty;
   decisionParams?: Partial<DecisionParams>;
   random?: () => number;
   /** 선출 인원(기본 3) */
@@ -21,8 +19,8 @@ export interface TeamSelectOptions {
 
 /** 평균·최악 섞는 비율(평균 쪽) */
 const MEAN_WEIGHT = 0.5;
-/** 선출 소프트맥스 온도 — 어려움은 거의 최선, 쉬움은 넓게 */
-const SELECT_TEMPERATURE: Record<AiDifficulty, number> = { hard: 0.05, easy: 0.3 };
+/** 선출 소프트맥스 온도 — 거의 최선(점수가 비슷한 조합끼리만 섞임) */
+const SELECT_TEMPERATURE = 0.05;
 
 function combinations(n: number, k: number): number[][] {
   const out: number[][] = [];
@@ -62,8 +60,7 @@ function orderOf(candidate: Candidate): number[] {
 /** key 편 AI의 선출(파티 인덱스, 선봉 먼저). state는 양쪽 빌드 전체로 만든 배틀 상태 */
 export function chooseAiSelection(state: BattleState, key: FighterKey, options: TeamSelectOptions = {}): number[] {
   const size = options.size ?? 3;
-  const difficulty = options.difficulty ?? "hard";
-  const params = paramsFor(difficulty, options.decisionParams);
+  const params = paramsFor(options.decisionParams);
   const myCount = sideOf(state, key).party.length;
   const oppCount = sideOf(state, opponentKey(key)).party.length;
   const mine = candidatesOf(myCount, size);
@@ -86,8 +83,7 @@ export function chooseAiSelection(state: BattleState, key: FighterKey, options: 
     });
   });
   const best = Math.max(...scored.map((s) => s.score));
-  const temperature = SELECT_TEMPERATURE[difficulty];
-  const weights = scored.map((s) => Math.exp((s.score - best) / temperature));
+  const weights = scored.map((s) => Math.exp((s.score - best) / SELECT_TEMPERATURE));
   const total = weights.reduce((a, b) => a + b, 0);
   let r = (options.random ?? Math.random)() * total;
   for (let i = 0; i < scored.length; i++) {
