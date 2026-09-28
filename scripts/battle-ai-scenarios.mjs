@@ -1763,6 +1763,88 @@ try {
       );
     }
   }
+  // ── ver.1.9 6-1 AI 정확도 묶음: 기습 양쪽·사이코필드 접지·보복·눈사태·분함의발구르기·반감 열매 첫 타만 ──
+  {
+    const me = await server.ssrLoadModule("/src/lib/matchupEvaluator.ts");
+    const md = await server.ssrLoadModule("/src/lib/battle/ai/moveDamage.ts");
+    const htk = await server.ssrLoadModule("/src/lib/battle/ai/hitsToKill.ts");
+    const tank = (moves, item = null) => mon("잠만보", moves, null, item, pts({ hp: 32, def: 32 }));
+    // 내 기습: 성공 확률 = 상대가 공격기를 고를 확률(의미 있는 변화기 1개당 0.08) — 변화기뿐이면 0
+    {
+      const acc = (foeMoves) => opt(ev.evaluateOptions(battle([mon("앱솔", ["기습", "치근거리기"])], [tank(foeMoves)]), "a"), "기습")?.accuracy ?? -1;
+      const allAttack = acc(["누르기", "지진"]);
+      const twoStatus = acc(["누르기", "칼춤", "하품"]);
+      const statusOnly = acc(["칼춤", "하품"]);
+      check(
+        "1.9 6-1: 내 기습 — 상대 공격기 확률만큼 성공(공격기뿐 1, 변화기 2개 0.84, 변화기뿐 0)",
+        Math.abs(allAttack - 1) < 1e-9 && Math.abs(twoStatus - 0.84) < 1e-9 && statusOnly === 0,
+        `공격기뿐 ${allAttack} 변화기2 ${twoStatus.toFixed(2)} 변화기뿐 ${statusOnly}`,
+      );
+    }
+    // 상대 기습: AI가 변화기·교체를 고르면 상대 행동이 헛수고(확률 = 상대 기습 사용 확률), 공격기면 성공. 사이코필드면 땅에 있는 AI에게 실패
+    {
+      const st = battle([mon("한카리아스", ["지진", "칼춤"]), mon("잠만보", ["누르기"])], [mon("앱솔", ["기습"])]);
+      const opts = ev.evaluateOptions(st, "a");
+      const statusIdle = opt(opts, "칼춤")?.opponentIdleChance ?? 0;
+      const attackIdle = opt(opts, "지진")?.opponentIdleChance ?? 0;
+      const switchIdle = opts.find((o) => o.optionType === "switch")?.opponentIdleChance ?? 0;
+      const psychic = (flyer) => {
+        const b = battle([mon(flyer ? "리자몽" : "한카리아스", ["칼춤"])], [mon("앱솔", ["기습"])]);
+        b.field = "사이코필드";
+        b.fieldTurnsRemaining = 5;
+        return opt(ev.evaluateOptions(b, "a"), "칼춤")?.hitsToBeKilled.expected;
+      };
+      const groundedD = psychic(false);
+      const flyingD = psychic(true);
+      check(
+        "1.9 6-1: 상대 기습 — AI 변화기·교체면 헛수고 확률 1, 공격기면 0 / 사이코필드: 땅 AI에겐 실패, 비행 AI에겐 통함",
+        statusIdle === 1 && switchIdle === 1 && attackIdle === 0 && groundedD === Infinity && Number.isFinite(flyingD),
+        `변화기 ${statusIdle} 교체 ${switchIdle} 공격기 ${attackIdle} 사이코필드 d 땅 ${groundedD} 비행 ${flyingD?.toFixed(2)}`,
+      );
+      // 헛수고 확률만큼 lost=0과 섞으므로 칼춤 점수가 오른다
+      const sd = opt(opts, "칼춤");
+      const withIdle = dec.scoreOption(sd, 0.5);
+      const withoutIdle = dec.scoreOption({ ...sd, opponentIdleChance: undefined }, 0.5);
+      check("1.9 6-1: 상대 기습 헛수고 → AI 변화기 점수 상승", withIdle > withoutIdle, `${withoutIdle.toFixed(3)} → ${withIdle.toFixed(3)}`);
+    }
+    // 보복(후공 2배)·눈사태(후공이면 상대 공격 확률만큼 2배)·분함의발구르기(엔진 미추적 → 기본 위력)
+    {
+      const st = battle([mon("마기라스", ["보복", "눈사태", "분함의발구르기"])], [tank(["누르기"])]);
+      const statusFoe = battle([mon("마기라스", ["눈사태"])], [tank(["칼춤", "하품"])]);
+      const frac = (b, id, second) =>
+        md.estimateMoveHits({ state: b, attacker: b.a, defender: b.b, defenderSide: b.sideB, attackerMovesSecond: second }, data.getMove(id))?.damageFraction ?? 0;
+      const payback = frac(st, "보복", true) / frac(st, "보복", false);
+      const avalanche = frac(st, "눈사태", true) / frac(st, "눈사태", false);
+      const avalancheStatus = frac(statusFoe, "눈사태", true) / frac(statusFoe, "눈사태", false);
+      const calc = me.evaluateSlotMatchup(st.a.slot, data.getMove("분함의발구르기"), st.b.slot, {})?.offensePower ?? 0;
+      const calcAi = me.evaluateSlotMatchup(st.a.slot, data.getMove("분함의발구르기"), st.b.slot, { assumeUntrackedConditions: false })?.offensePower ?? 0;
+      check(
+        "1.9 6-1: AI 보복 후공 ×2·눈사태 후공 ×(1+공격 확률)·분함의발구르기 AI 기본 위력(계산기는 ×2 상정)",
+        Math.abs(payback - 2) < 0.02 && Math.abs(avalanche - 2) < 0.02 && Math.abs(avalancheStatus - 1) < 0.02 && Math.abs(calc / calcAi - 2) < 0.02,
+        `보복 ×${payback.toFixed(2)} 눈사태 ×${avalanche.toFixed(2)}(변화기뿐 ×${avalancheStatus.toFixed(2)}) 발구르기 계산기/AI ×${(calc / calcAi).toFixed(2)}`,
+      );
+    }
+    // 반감 열매는 첫 타만: 계산기 다단히트 5타 = 내구력 ×1/(0.2/2+0.8)·2타 ×1/(0.5/2+0.5), AI 처치 턴 = 열매 없음 < 첫 타만 < 매 타 반감(이전 근사)
+    {
+      const atk = mon("한카리아스", ["스케일샷"]).slot;
+      const foe = (item) => mon("한카리아스", ["칼춤"], null, item, pts({ hp: 32, def: 32 })).slot;
+      const bulk = (item, hits) => me.evaluateSlotMatchup(atk, data.getMove("스케일샷"), foe(item), { multiHitCount: hits })?.bulkPower ?? 0;
+      const multi = bulk("하반열매", 5) / bulk(null, 5);
+      const twoHits = bulk("하반열매", 2) / bulk(null, 2);
+      const quake = (item) => battle([mon("한카리아스", ["지진"])], [mon("메타그로스", ["코멧펀치"], null, item, pts({ hp: 32, def: 32 }))]);
+      const cOf = (b) => opt(ev.evaluateOptions(b, "a"), "지진")?.hitsToKill.expected ?? 0;
+      const none = cOf(quake(null));
+      const berry = cOf(quake("슈캐열매"));
+      const b = quake("슈캐열매");
+      const r = me.evaluateSlotMatchup(b.a.slot, data.getMove("지진"), b.b.slot, {});
+      const allHalved = htk.expectedHits(r.offensePower, r.bulkPower, 1);
+      check(
+        "1.9 6-1: 반감 열매 첫 타만 — 계산기 다단히트 5타 ×1.11·2타 ×1.33, AI 처치 턴 열매 없음 < 첫 타만 < 매 타 반감",
+        Math.abs(multi - 1 / 0.9) < 0.01 && Math.abs(twoHits - 4 / 3) < 0.01 && none < berry && berry < allHalved,
+        `5타 ×${multi.toFixed(3)} 2타 ×${twoHits.toFixed(2)} c ${none.toFixed(2)} < ${berry.toFixed(2)} < ${allHalved.toFixed(2)}`,
+      );
+    }
+  }
   // ── 매치업 난수별 데미지(ver.1.7 트랙 H): 기존 격파 판정과 같은 관계식인지 대조 ──
   {
     const bp = await server.ssrLoadModule("/src/lib/battlePower.ts");

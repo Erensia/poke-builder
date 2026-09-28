@@ -100,6 +100,11 @@ export interface SlotMatchupOptions {
   abilityHpFraction?: number;
   /** ver.1.9 — 공격측이 상대보다 늦게 행동(보복 2배)·이번 턴 먼저 맞음(눈사태 2배) 가정 */
   attackerMovesLast?: boolean;
+  /**
+   * 분풀이(이번 턴 랭크 하락)·분함의발구르기(직전 턴 실패)의 2배 조건을 충족으로 상정할지(기본 true — 매치업 페이지 정책).
+   * 엔진은 이 이력을 추적하지 않아 항상 기본 위력이라, 배틀 AI는 false로 넘긴다(ver.1.9 6-1).
+   */
+  assumeUntrackedConditions?: boolean;
   defenderItemConsumed?: boolean;
   /**
    * 배틀 AI용 — 슬롯 원본 대신 실전 파이터의 현재 값(메가진화·변신·변환자재·트레이스·도구 소모 반영)을
@@ -159,6 +164,13 @@ export interface SlotMatchupResult {
   rawOffensePower: number;
   bulkPower: number;
   verdict: MatchupVerdict;
+  /**
+   * 반감 열매(자바열매류)가 이 공격에 발동할 때 그 한 타의 내구력 배율(2, 숙성 4). 발동 안 하면 1. 열매는 첫 타에 소모되므로
+   * 다단히트는 bulkPower에 첫 타만 반감된 배율로 이미 반영돼 있고, 여러 턴 처치 계산(배틀 AI)은 이 값으로 2타째부터 뺀다.
+   */
+  berryBulkMultiplier: number;
+  /** bulkPower에 실제로 곱한 반감 열매 배율(다단히트면 첫 타만 반감된 값, 발동 안 하면 1) */
+  berryAppliedMultiplier: number;
   /** 판정 타수로 격파할 확률(0~1). 확정 1·2타면 1, "3타 이상 필요"면 null (Phase 7.5 §2) */
   koChance: number | null;
   /** 난수 1타일 때만: [격파 난수 수, 16] */
@@ -206,6 +218,7 @@ export function evaluateSlotMatchup(
     defenderStatus,
     abilityHpFraction,
     attackerMovesLast,
+    assumeUntrackedConditions = true,
     defenderItemConsumed,
     attackerRuntime,
     defenderRuntime,
@@ -377,6 +390,7 @@ export function evaluateSlotMatchup(
       defenderStatus,
       defenderHasStatusCondition,
       attackerMovesLast,
+      assumeUntrackedConditions,
     })
   ) {
     variablePowerMove = { ...variablePowerMove, power: variablePowerMove.power * 2 };
@@ -431,6 +445,18 @@ export function evaluateSlotMatchup(
   // 선택한 타수까지의 위력을 합산해서 결정력 계산에 쓸 위력으로 바꿔치기한다.
   //  - 트리플악셀류(multiHitPowers): 타수별 위력이 다르므로 배열을 잘라 합산.
   //  - 록블라스트/스케일샷류(minHits~maxHits, multiHitPowers 없음): 매 타 위력이 동일하므로 위력 × 타수.
+  // 반감 열매는 첫 타에만 적용되므로 첫 타 위력 비중(firstHitShare)도 같이 낸다.
+  const firstHitShare = (() => {
+    if (move.multiHitPowers && multiHitCount) {
+      const powers = move.multiHitPowers.slice(0, multiHitCount);
+      const total = powers.reduce((sum, p) => sum + p, 0);
+      return total > 0 ? powers[0] / total : 1;
+    }
+    if (move.minHits !== undefined && move.maxHits !== undefined && multiHitCount) {
+      return 1 / Math.max(move.minHits, Math.min(move.maxHits, multiHitCount));
+    }
+    return 1;
+  })();
   const effectiveMoveWithHits = (() => {
     if (move.multiHitPowers && multiHitCount) {
       return {
@@ -527,10 +553,13 @@ export function evaluateSlotMatchup(
     move.hitsDefensiveStat ?? (resolvedCategory === "physical" ? "def" : "spd"),
   );
 
+  // 반감 열매는 첫 타만(ver.1.9 6-1): 다단히트 전체 데미지 = 첫 타 몫 / 배율 + 나머지 몫 → 내구력 배율 = 1 / 그 비율
+  const berryHitsMultiplier =
+    berryResult.bulkMultiplier === 1 ? 1 : 1 / (firstHitShare / berryResult.bulkMultiplier + (1 - firstHitShare));
   const bulkPower = computeBulkPower(defenderRealStats, resolvedCategory, {
     defenderStages,
     bulkMultiplier:
-      (manualBulkMultiplier ?? abilityDefense * berryResult.bulkMultiplier * weatherDefenseMultiplier) * screenMultiplier,
+      (manualBulkMultiplier ?? abilityDefense * berryHitsMultiplier * weatherDefenseMultiplier) * screenMultiplier,
     // 사이코쇼크(hitsDefensiveStat): 특수기지만 내구력은 방어자의 물리 방어로 낸다
     defensiveStatOverride: move.hitsDefensiveStat,
   });
@@ -541,6 +570,8 @@ export function evaluateSlotMatchup(
     rawOffensePower,
     bulkPower,
     verdict: chance.verdict,
+    berryBulkMultiplier: manualBulkMultiplier === undefined ? berryResult.bulkMultiplier : 1,
+    berryAppliedMultiplier: manualBulkMultiplier === undefined ? berryHitsMultiplier : 1,
     koChance: chance.koChance,
     killingRolls: chance.killingRolls,
   };
@@ -549,7 +580,8 @@ export function evaluateSlotMatchup(
 /**
  * 조건부 ×2(conditionalDoublePower) 판정 — evaluateSlotMatchup·computeSoloOffensePower 공용. 매치업 페이지 정책(§3 증분 C·B-3):
  *  - user-has-no-item(애크러뱃): 지닌 도구를 알고 있으니 실제로 판정
- *  - user-stat-lowered-this-turn(분풀이)·user-move-failed-last-turn(분함의발구르기): 조건 충족을 상정(항상 ×2)
+ *  - user-stat-lowered-this-turn(분풀이)·user-move-failed-last-turn(분함의발구르기): 조건 충족을 상정(항상 ×2).
+ *    assumeUntrackedConditions가 false면(배틀 AI — 엔진과 같게) 항상 기본 위력
  *  - 상태이상 조건(ver.1.9): 넘겨받은 상태이상으로 판정(생략하면 상태이상 없음)
  *  - took-damage-this-turn(눈사태)·moves-after-target(보복): attackerMovesLast 가정일 때만(ver.1.9, 생략하면 기본 위력)
  */
@@ -561,13 +593,13 @@ function conditionalPowerDoubled(
     defenderStatus?: StatusCondition | null;
     defenderHasStatusCondition?: boolean;
     attackerMovesLast?: boolean;
+    assumeUntrackedConditions?: boolean;
   },
 ): boolean {
   const cond = move.conditionalDoublePower;
   const { attackerStatus, defenderStatus } = ctx;
   return (
-    cond === "user-stat-lowered-this-turn" ||
-    cond === "user-move-failed-last-turn" ||
+    ((cond === "user-stat-lowered-this-turn" || cond === "user-move-failed-last-turn") && ctx.assumeUntrackedConditions !== false) ||
     (cond === "user-has-no-item" && !ctx.attackerHasItem) ||
     (cond === "user-status-burn-poison-paralysis" &&
       (attackerStatus === "burn" || attackerStatus === "poison" || attackerStatus === "badly-poisoned" || attackerStatus === "paralysis")) ||

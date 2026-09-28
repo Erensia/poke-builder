@@ -248,6 +248,11 @@ export interface ThreatContext {
   targetTypes?: PokemonType[];
   /** 교체 후보의 진입 비용 차감 후 HP */
   targetHp?: number;
+  /**
+   * 공격받는 쪽(target)이 공격기를 쓰는지 — 상대 기습류의 성공 여부(ver.1.9 6-1). 대면 계산(c·d)은 target이 대면 내내 공격한다고
+   * 보므로 기본 true. 변화기·교체로 이번 턴 공격하지 않는 한 턴은 결정 레이어가 targetAttackOnlyWeight로 따로 섞는다.
+   */
+  targetAttacks?: boolean;
 }
 
 /**
@@ -271,6 +276,31 @@ function meaningfulStatusMoves(
         !isWastedStatusMove(move, user, target, targetTypes, targetSide) &&
         !(threatModel.strictWaste && isPointlessNow(state, move, user, target)),
     );
+}
+
+/**
+ * user가 이번 턴 공격기(데미지 기술)를 고를 확률 — 상대 기술 사용 확률 모델과 같은 분배(의미 있는 변화기 1개당 statusWeight,
+ * 나머지가 공격기). 기습(상대가 공격기를 고를 때만 성공)의 성공 확률에 쓴다(ver.1.9 6-1). 데미지 계산은 하지 않는다.
+ */
+export function attackChanceOf(state: BattleState, user: BattleFighterState, target: BattleFighterState): number {
+  const moves = allowedByVolatiles(user, usableMoves(user), target).filter((m) => !isUsageBlocked(state, user, m, target));
+  if (!moves.some((m) => m.category === "physical" || m.category === "special")) return 0;
+  const targetSide = [state.sideA, state.sideB].find((side) => side.party.some((m) => m.slot === target.slot)) ?? state.sideA;
+  const statusCount = meaningfulStatusMoves(state, user, target, target.types, targetSide).length;
+  return Math.max(0, 1 - statusCount * threatModel.statusWeight);
+}
+
+/** 기습처럼 대상이 이번 턴 공격기를 골라야만 성공하는 기술 */
+export function requiresTargetAttack(move: Move): boolean {
+  return move.usageCondition === "opponent-damaging-move-only";
+}
+
+/**
+ * 상대가 이번 턴 기습류를 고를 확률(사용 확률 모델) — AI가 공격하지 않는 행동(변화기·교체)을 고르면 그 몫만큼 상대의 이번 턴
+ * 행동이 헛수고가 된다(ver.1.9 6-1, 사용자 결정). 결정 레이어가 이번 턴 행동 손실(lost = 1)을 이 확률로 lost = 0과 섞는다.
+ */
+export function targetAttackOnlyWeight(threat: OpponentThreat): number {
+  return threat.moveWeights.reduce((sum, w) => sum + (requiresTargetAttack(w.move) ? w.weight : 0), 0);
 }
 
 /** 변화기가 효과를 내는 기간 비율(대면 길이의 절반쯤부터 효과 — 1~3배) */
@@ -385,7 +415,16 @@ export function evaluateOpponentThreat(ctx: ThreatContext): OpponentThreat {
       continue;
     }
     const estimate = estimateMoveHits(
-      { state, attacker: opponent, defender: target, defenderSide: targetSide, attackerMovesSecond: opponentMovesSecond, defenderTypes: targetTypes, defenderHp: targetHp },
+      {
+        state,
+        attacker: opponent,
+        defender: target,
+        defenderSide: targetSide,
+        attackerMovesSecond: opponentMovesSecond,
+        defenderTypes: targetTypes,
+        defenderHp: targetHp,
+        targetAttackChance: ctx.targetAttacks === false ? 0 : 1,
+      },
       move,
     );
     if (!estimate) continue;

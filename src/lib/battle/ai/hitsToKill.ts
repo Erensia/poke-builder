@@ -63,16 +63,30 @@ export function meanDamageFraction(offensePower: number, bulkPower: number): num
   return 0.925 / minKillingRoll(offensePower, bulkPower);
 }
 
-export function expectedHits(offensePower: number, bulkPower: number, hpFraction = 1): number {
-  if (offensePower <= 0) return Infinity;
-  const rhoStar = minKillingRoll(offensePower, bulkPower * hpFraction);
-  const survives = survivalProbabilities(rhoStar);
+/** survivalProbabilities 열의 합 = E[N] (MAX_HITS_TRACKED 안에 안 끝나면 평균 롤로 남은 타수를 근사) */
+function expectedFromSurvival(survives: number[], rhoStar: number): number {
   let total = survives.reduce((sum, p) => sum + p, 0);
-  // MAX_HITS_TRACKED 안에 안 끝나는 극단 케이스: 평균 롤(0.925)로 남은 타수를 근사
   if (survives[survives.length - 1] >= 1e-12) {
     total += rhoStar / 0.925 - MAX_HITS_TRACKED;
   }
-  return Math.max(1, total);
+  return total;
+}
+
+/**
+ * firstHitScale(< 1): 첫 타만 데미지가 그 배율인 경우(반감 열매 — 첫 타에 소모, ver.1.9 6-1). bulkPower는 열매 없는 값.
+ * 첫 타 난수 16가지마다 남은 HP를 채우는 나머지 타수의 분포를 따로 구해 평균한다.
+ */
+export function expectedHits(offensePower: number, bulkPower: number, hpFraction = 1, firstHitScale = 1): number {
+  if (offensePower <= 0) return Infinity;
+  const rhoStar = minKillingRoll(offensePower, bulkPower * hpFraction);
+  if (firstHitScale >= 1) return Math.max(1, expectedFromSurvival(survivalProbabilities(rhoStar), rhoStar));
+  let total = 0;
+  for (let k = 0; k < DAMAGE_ROLL_STEPS; k++) {
+    const residual = rhoStar - (firstHitScale * (ROLL_MIN_PERCENT + k)) / 100;
+    // 첫 타로 쓰러짐(battlePower.rollsAtLeast와 같은 경계 보정)이면 1타, 아니면 1 + 나머지 타수
+    total += residual <= 1e-9 ? 1 : 1 + expectedFromSurvival(survivalProbabilities(residual), residual);
+  }
+  return Math.max(1, total / DAMAGE_ROLL_STEPS);
 }
 
 /** 5단계 판정(evaluateMatchupChance)을 worst_case 구조로 옮긴다. */
@@ -101,12 +115,13 @@ export function worstCaseFromMatchup(offensePower: number, bulkPower: number, hp
 export function estimateHits(
   offensePower: number,
   bulkPower: number,
-  options: { hpFraction?: number; accuracy?: number } = {},
+  options: { hpFraction?: number; accuracy?: number; firstHitScale?: number } = {},
 ): HitsEstimate {
-  const { hpFraction = 1, accuracy = 1 } = options;
-  const hits = expectedHits(offensePower, bulkPower, hpFraction);
+  const { hpFraction = 1, accuracy = 1, firstHitScale = 1 } = options;
+  const hits = expectedHits(offensePower, bulkPower, hpFraction, firstHitScale);
   return {
     expected: accuracy <= 0 ? Infinity : hits / accuracy,
-    worstCase: worstCaseFromMatchup(offensePower, bulkPower, hpFraction),
+    // worst_case(1·2타 확정성)는 첫 타 배율을 모든 타에 적용한 보수적인 값
+    worstCase: worstCaseFromMatchup(offensePower * firstHitScale, bulkPower, hpFraction),
   };
 }

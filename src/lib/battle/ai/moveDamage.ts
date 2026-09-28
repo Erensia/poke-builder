@@ -13,6 +13,7 @@ import { computeBattleHitChance } from "../hitChance";
 import { computeTurnOrderPriority, effectiveHeldItem } from "../turnOrderInputs";
 import { isGrounded } from "../grounding";
 import { estimateHits, meanDamageFraction } from "./hitsToKill";
+import { attackChanceOf, requiresTargetAttack } from "./opponentMoveModel";
 import { applySurvivalGuard } from "./survivalGuard";
 import type { HitsEstimate } from "./types";
 
@@ -38,6 +39,11 @@ export interface MoveHitContext {
   defenderTypes?: PokemonType[];
   /** 교체 후보처럼 진입 비용을 뺀 HP로 평가할 때 */
   defenderHp?: number;
+  /**
+   * 방어측이 이번 턴 공격기를 고를 확률 — 기습류 성공 확률·눈사태 2배 확률(ver.1.9 6-1). 생략하면 방어측 기술로 낸
+   * 상대 기술 사용 확률 모델 값(attackChanceOf).
+   */
+  targetAttackChance?: number;
 }
 
 /** 실전 파이터의 현재 값을 evaluateSlotMatchup 런타임 입력으로 옮긴다. */
@@ -132,13 +138,23 @@ export function estimateMoveHits(ctx: MoveHitContext, baseMove: Move): MoveHitEs
 
   // 여왕의위엄/테일아머·사이코필드: 우선도 1 이상인 상대 대상 기술은 실패한다.
   const priority = computeTurnOrderPriority(state, attacker, move);
+  // 사이코필드는 땅에 있는 대상만 지킨다(엔진과 같게 — ver.1.9 6-1에서 접지 인자 누락 수정)
+  const defenderGrounded = isGrounded(state, ctx.defenderTypes ? { ...defender, types: defenderTypes } : defender, defenderAbility);
   const priorityBlocked =
     (defenderAbility?.blocksOpponentPriorityMoves && priority >= 1 && isOpponentTargetingMove(move)) ||
-    isPriorityMoveBlockedByField(state.field, priority, move);
+    isPriorityMoveBlockedByField(state.field, priority, move, defenderGrounded);
   if (priorityBlocked || typeEffectiveness === 0) return { ...NO_DAMAGE, accuracy: 0, typeEffectiveness };
 
+  // 기습류: 방어측이 이번 턴 공격기를 고를 때만 성공 — 그 확률을 명중률에 곱한다. 선공 +1이라 행동 순서는 먼저로 본다
+  // (방어측이 더 높은 우선도 공격기로 먼저 치는 경우는 무시하는 근사).
+  const targetAttackChance =
+    requiresTargetAttack(move) || move.conditionalDoublePower === "took-damage-this-turn"
+      ? (ctx.targetAttackChance ?? attackChanceOf(state, defender, attacker))
+      : 1;
+  const successChance = requiresTargetAttack(move) ? targetAttackChance : 1;
   const accuracy =
-    computeBattleHitChance({
+    successChance *
+    (computeBattleHitChance({
       state,
       attacker,
       defender,
@@ -149,7 +165,7 @@ export function estimateMoveHits(ctx: MoveHitContext, baseMove: Move): MoveHitEs
       attackerItem,
       defenderItem,
       attackerMovesSecond,
-    }) ?? 1;
+    }) ?? 1);
 
   // 일격기(트랙 M5): 맞으면 한 번에 쓰러뜨린다(옹골참·면역 타입이면 안 통함). 기합의띠류는 applySurvivalGuard가 본다.
   if (move.oneHitKo) {
@@ -208,6 +224,10 @@ export function estimateMoveHits(ctx: MoveHitContext, baseMove: Move): MoveHitEs
   // 총대장: 엔진(hitResolution)과 같은 배율. 나와 있는 포켓몬은 등장 때 센 값, 대기 포켓몬(교체 후보·파티 대면표)은
   // "지금 나온다면" 셀 값 — 같은 편 기절 수 — 으로 본다.
   const overlordMultiplier = supremeOverlordMultiplier(attackerAbility, supremeOverlordCountFor(state, attacker));
+  // 눈사태(이번 턴 먼저 맞았으면 2배): 후공이면 방어측이 공격기를 고를 확률만큼 2배를 기대 위력으로 섞는다. 보복(상대보다
+  // 늦게 행동하면 2배)은 후공 여부 그대로(ver.1.9 6-1 — 이전엔 AI가 항상 기본 위력으로 봤다).
+  const avalancheMultiplier =
+    move.conditionalDoublePower === "took-damage-this-turn" && attackerMovesSecond ? 1 + targetAttackChance : 1;
 
   const result = evaluateSlotMatchup(attacker.slot, move, defender.slot, {
     attackerStages: attacker.stages,
@@ -224,16 +244,31 @@ export function estimateMoveHits(ctx: MoveHitContext, baseMove: Move): MoveHitEs
     defenderHasStatusCondition: !!defender.status.condition,
     attackerStatus: attacker.status.condition,
     defenderStatus: defender.status.condition,
+    attackerMovesLast: move.conditionalDoublePower === "moves-after-target" && attackerMovesSecond,
+    // 분풀이·분함의발구르기: 엔진이 조건 이력을 추적하지 않아 항상 기본 위력 — 계산기의 "충족 상정"을 쓰지 않는다
+    assumeUntrackedConditions: false,
     defenderItemConsumed: !!defender.itemConsumed,
     attackerRuntime: runtimeOf(attacker, ctx.attackerTypes, state),
     defenderRuntime: runtimeOf(defender, defenderTypes, state),
-    extraOffenseMultiplier: ownTypeBoost * electroBoost * burnMultiplier * overlordMultiplier,
+    extraOffenseMultiplier: ownTypeBoost * electroBoost * burnMultiplier * overlordMultiplier * avalancheMultiplier,
   });
   if (!result) return null;
 
-  const estimate = estimateHits(result.offensePower * hitCountScale, result.bulkPower, {
+  // 반감 열매는 첫 타에 소모된다(ver.1.9 6-1): 열매 없는 내구력으로 처치 타수를 내고 첫 번 사용만 데미지를 줄인다.
+  // 계산기는 고정 타수 다단히트면 첫 타만 반감한 배율을 이미 넣었고, 2~5회 기대 타수(hitCountScale)는 여기서 나눈다.
+  let bulkPower = result.bulkPower;
+  let firstHitScale = 1;
+  if (result.berryBulkMultiplier > 1) {
+    bulkPower = result.bulkPower / result.berryAppliedMultiplier;
+    firstHitScale =
+      hitCountScale > 1
+        ? 1 / hitCountScale / result.berryBulkMultiplier + (1 - 1 / hitCountScale)
+        : 1 / result.berryAppliedMultiplier;
+  }
+  const estimate = estimateHits(result.offensePower * hitCountScale, bulkPower, {
     hpFraction: defenderHp / defender.maxHp,
     accuracy,
+    firstHitScale,
   });
   const rawHits = accuracy > 0 ? estimate.expected * accuracy : Infinity;
   const damageFraction = meanDamageFraction(result.offensePower * hitCountScale, result.bulkPower) * accuracy;
