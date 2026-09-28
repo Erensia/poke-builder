@@ -1,7 +1,7 @@
 .party-board {
   width: 100%;
-  /* MatchupPage(740px)와 BattleLogPage(740px)에 맞춰 폭을 통일 (Phase 2.5) */
-  max-width: 740px;
+  /* 모든 페이지 폭을 도감 페이지(980px)와 통일 (ver.1.9 — 이전엔 앞 3개 페이지만 740px라 PC에서 좌우 여백이 달랐다) */
+  max-width: 980px;
 }
 
 .party-board-header {
