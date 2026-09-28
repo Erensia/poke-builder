@@ -320,6 +320,11 @@ export interface BattleFighterState {
    * 교체에만 세운다 — 기절 후 강제 교체(applySwitch)로 나온 경우엔 세우지 않는다(가속 발동).
    */
   switchedInThisTurn?: boolean;
+  /** 이번 턴 교체(자발·강제 무관)로 나왔는가 — 잠복(ver.1.9 A5) 판정. 턴 시작에 지운다 */
+  enteredThisTurn?: boolean;
+  /** 되새김질(ver.1.9 A5): 다시 먹을 나무열매와 남은 턴 끝 수(먹은 턴 끝 1 → 다음 턴 끝 0에 먹음) */
+  cudChewBerryId?: string;
+  cudChewTurnsLeft?: number;
   /**
    * 이 포켓몬이 필드에 등장한 뒤 이미 자기 행동(resolveAction)을 한 번이라도 개시했으면 true.
    * 속이기(first-turn-only)는 이게 false일 때만 성공한다 — 등장 첫 행동 턴에만. 행동이 막혀도
@@ -638,9 +643,16 @@ export function electroBallPowerValue(
   return electroBallPowerFromSpeeds(powerSpeedOf(attacker, attackerItem), powerSpeedOf(defender, defenderItem));
 }
 
-/** 스피드 비교 위력 기술(자이로볼·일렉트릭볼)의 실효 스피드 — 실능 × 스피드 랭크 × 마비 × 도구 */
+/** 상태이상 스피드 배율 — 마비 반감, 속보(ver.1.9 A5)면 상태이상일 때 ×1.5이고 마비 반감 무시 */
+export function statusSpeedMultiplierOf(fighter: BattleFighterState): number {
+  const quickFeet = abilityOf(fighter)?.speedMultiplierWhenStatused;
+  if (quickFeet && fighter.status.condition) return quickFeet;
+  return computeStatusSpeedMultiplier(fighter.status.condition);
+}
+
+/** 스피드 비교 위력 기술(자이로볼·일렉트릭볼)의 실효 스피드 — 실능 × 스피드 랭크 × 마비(속보) × 도구 */
 function powerSpeedOf(f: BattleFighterState, item: Parameters<typeof getItemSpeedMultiplier>[0]): number {
-  return f.realStats.spe * rankStageMultiplier(f.stages.spe) * computeStatusSpeedMultiplier(f.status.condition) * getItemSpeedMultiplier(item);
+  return f.realStats.spe * rankStageMultiplier(f.stages.spe) * statusSpeedMultiplierOf(f) * getItemSpeedMultiplier(item);
 }
 
 export function hasSheerForceSecondaryEffect(move: Move): boolean {
@@ -677,6 +689,11 @@ export function consumeItem(fighter: BattleFighterState): void {
   const item = getItem(consumedId);
   if (!item || !item.name.endsWith("열매")) return;
   fighter.consumedBerryId = consumedId;
+  // 되새김질(ver.1.9 A5): 다음 턴 끝에 한 번 더 먹는다(되새김질로 다시 먹은 것은 consumeItem을 거치지 않아 반복되지 않음)
+  if (abilityOf(fighter)?.reEatsBerryNextTurn) {
+    fighter.cudChewBerryId = consumedId;
+    fighter.cudChewTurnsLeft = 2;
+  }
   const frac = abilityOf(fighter)?.berryHealFraction;
   if (frac && fighter.currentHp > 0 && fighter.currentHp < fighter.maxHp) {
     const heal = Math.min(fighter.maxHp - fighter.currentHp, Math.max(1, Math.floor(fighter.maxHp * frac)));

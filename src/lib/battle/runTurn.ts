@@ -3,9 +3,8 @@ import { type ActionLogEntry, type FighterKey, type SwitchLogEntry, type TurnAct
 import { getAbility, getItem, getPokemon } from "@/lib/data";
 import { eunNeun } from "@/lib/josa";
 import { hasVolatile } from "@/lib/volatileConditions";
-import { getQuickClawTriggered } from "@/lib/itemEffects";
 import { compareTurnOrder } from "@/lib/turnOrder";
-import { buildTurnOrderActor, effectiveHeldItem, itemsSuppressedByRoom } from "./turnOrderInputs";
+import { buildTurnOrderActor, itemsSuppressedByRoom, quickFirstChances } from "./turnOrderInputs";
 import { STRUGGLE_MOVE, activeWeather, applyForecastForm, applyMimicryForm, cloneSide, consumeItem, hasLivingReserve, isFainted, isForcedSwitchBlocked, opponentKey, sideOf, type BattleState } from "./state";
 import { applyMegaEvolution, isTrappedFromSwitching, performSwitch } from "./switching";
 import { resolveAction } from "./resolveAction";
@@ -108,7 +107,12 @@ export function runTurn(
 
   // 가속 억제 플래그(§8)는 "이번 턴에 자발적 교체로 나왔나"라 매 턴 시작 시 전 슬롯에서 지운다.
   // 아래 교체 선처리에서 자발적 교체한 슬롯에만 다시 세워지고, 그 턴 EOT 가속 판정이 이걸 읽는다.
-  for (const s of [state.sideA, state.sideB]) for (const f of s.party) f.switchedInThisTurn = undefined;
+  for (const s of [state.sideA, state.sideB]) {
+    for (const f of s.party) {
+      f.switchedInThisTurn = undefined;
+      f.enteredThisTurn = undefined;
+    }
+  }
 
   // ── 교체 액션 선처리(Phase 8 §3): 항상 그 턴 기술보다 먼저 ──
   // 양쪽 다 교체면 스피드 빠른 쪽부터(순수 교체라 결과엔 영향 없지만 로그 순서 일관성).
@@ -226,8 +230,10 @@ export function runTurn(
   // 양쪽 다 발동하면(둘 다 이 도구를 지녔고 둘 다 확률에 성공) 서로 상쇄되어 정상적인 스피드
   // 비교로 넘어간다 — 어느 한쪽만 발동했을 때만 그쪽이 확정으로 먼저 움직인다.
   const priorityTied = actorA.move.priority === actorB.move.priority;
-  const aQuickClaw = priorityTied && getQuickClawTriggered(effectiveHeldItem(state.a, state), random);
-  const bQuickClaw = priorityTied && getQuickClawTriggered(effectiveHeldItem(state.b, state), random);
+  // 퀵드로(ver.1.9 A5)도 같은 축 — 도구·특성 확률을 각각 굴려 하나라도 성공하면 발동
+  const quickFirst = (fighter: typeof state.a, move: Move) => quickFirstChances(state, fighter, move).some((c) => random() * 100 < c);
+  const aQuickClaw = priorityTied && quickFirst(state.a, moveA);
+  const bQuickClaw = priorityTied && quickFirst(state.b, moveB);
   const quickClawWinner: FighterKey | undefined =
     aQuickClaw && !bQuickClaw ? "a" : bQuickClaw && !aQuickClaw ? "b" : undefined;
 

@@ -2,11 +2,10 @@ import { type Item } from "@/types/item";
 import { type Move } from "@/types/move";
 import { getItem } from "@/lib/data";
 import { getAbilityPriorityBoost } from "@/lib/abilityModifiers";
-import { computeStatusSpeedMultiplier } from "@/lib/statusConditions";
 import { getFieldAdjustedPriority } from "@/lib/fieldEffects";
 import { getItemSpeedMultiplier } from "@/lib/itemEffects";
 import { type TurnOrderActor } from "@/lib/turnOrder";
-import { abilityOf, activeWeather, type BattleFighterState, type BattleState } from "./state";
+import { abilityOf, activeWeather, statusSpeedMultiplierOf, type BattleFighterState, type BattleState } from "./state";
 import { isGrounded } from "./grounding";
 
 /** 매직룸(트랙 M4): 모든 포켓몬의 도구 효과가 무효 */
@@ -32,15 +31,31 @@ export function computeTurnOrderSpeed(state: BattleState, fighter: BattleFighter
   const ability = abilityOf(fighter);
   const weatherBoost = ability?.weatherSpeedMultiplier;
   const weatherMultiplier = weatherBoost && weatherBoost.weather === activeWeather(state) ? weatherBoost.multiplier : 1;
+  // 서핑테일(ver.1.9 A5): 지정 필드면 배율
+  const fieldBoost = ability?.fieldSpeedMultiplier;
+  const fieldMultiplier = fieldBoost && fieldBoost.field === state.field ? fieldBoost.multiplier : 1;
   return (
     fighter.realStats.spe *
-    computeStatusSpeedMultiplier(fighter.status.condition) *
+    statusSpeedMultiplierOf(fighter) *
+    fieldMultiplier *
     getItemSpeedMultiplier(effectiveHeldItem(fighter, state)) *
     weatherMultiplier *
     (fighter.unburdenActive ? 2 : 1) *
     // 순풍(트랙 M1): 이 포켓몬이 속한 편에 순풍이 불고 있으면 2배
     (tailwindActiveFor(state, fighter) ? 2 : 1)
   );
+}
+
+/**
+ * 같은 우선도 안에서 먼저 움직일 확률(%) 목록 — 선제공격손톱(도구)·퀵드로(특성, 공격기만, ver.1.9 A5). 각각 따로 굴린다.
+ */
+export function quickFirstChances(state: BattleState, fighter: BattleFighterState, move: Move): number[] {
+  const chances: number[] = [];
+  const claw = effectiveHeldItem(fighter, state)?.quickClawChance;
+  if (claw) chances.push(claw);
+  const draw = abilityOf(fighter)?.movesFirstChance;
+  if (draw && move.category !== "status") chances.push(draw);
+  return chances;
 }
 
 /**

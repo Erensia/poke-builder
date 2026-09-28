@@ -113,6 +113,10 @@ export function resolveHitAndApplyDamage(input: HitResolutionInput) {
   // 발끈: 상대 기술 데미지로 HP가 절반 이하가 되어 방어측 특수공격이 올랐을 때.
   let angerPointRaisedSpa = false;
   let angerPointAbilityName: string | undefined;
+  // 분노의경혈(ver.1.9 A5): 급소에 맞아 방어측 공격이 +6이 됐을 때 그 특성 이름
+  let angerPointMaxedAbilityName: string | undefined;
+  // 독치장(ver.1.9 A5): 물리 피격으로 공격자 편에 독압정을 뿌렸을 때 그 특성 이름
+  let toxicDebrisAbilityName: string | undefined;
   // 떠도는영혼: 접촉 피격으로 공격자와 특성을 맞바꿨을 때.
   let wanderingSpiritSwapped = false;
   // 모래뿜기: 피격으로 날씨를 바꿨을 때 그 날씨.
@@ -426,6 +430,13 @@ export function resolveHitAndApplyDamage(input: HitResolutionInput) {
     rockyHelmetItemName = defenderItem!.name;
   }
 
+  /** 분노의경혈(ver.1.9 A5): 급소에 맞았고 쓰러지지 않았으면(대타가 아닐 때) 공격 +6 */
+  function applyAngerPoint(critical: boolean): void {
+    if (!critical || hitSubstitute || isFainted(defender) || !defenderAbility?.maxesAttackOnCrit || defender.stages.atk >= 6) return;
+    defender.stages = { ...defender.stages, atk: 6 };
+    angerPointMaxedAbilityName = defenderAbility.name;
+  }
+
   function triggerAbilityHitEffect(hitDamage: number): HitAbilityEvent | undefined {
     if (hitDamage <= 0 || isFainted(attacker) || blockedBySubstitute) return undefined;
     const trigger = defenderAbility?.hitTrigger;
@@ -448,6 +459,30 @@ export function resolveHitAndApplyDamage(input: HitResolutionInput) {
         abilityInflictedStatusOnAttacker = attacker.status.condition;
         abilityInflictedStatusAbilityName = defenderAbility!.name;
         ev.statusOnAttacker = attacker.status.condition;
+        evAny = true;
+      }
+    }
+    // 포자(ver.1.9 A5): 독·마비·잠듦 중 무작위 하나 — 풀 타입(가루 면역)은 무효
+    const randomStatuses = trigger.inflictsRandomStatusOnAttacker;
+    if (randomStatuses?.length && !attacker.types.includes("풀")) {
+      const pick = randomStatuses[Math.min(randomStatuses.length - 1, Math.floor(random() * randomStatuses.length))];
+      if (!isImmuneToStatus(pick, attacker.types, statusImmunitiesOf(attacker, attackerAbility))) {
+        const before = attacker.status.condition;
+        attacker.status = inflictStatus(attacker.status, pick);
+        if (attacker.status.condition !== before) {
+          abilityInflictedStatusOnAttacker = attacker.status.condition;
+          abilityInflictedStatusAbilityName = defenderAbility!.name;
+          ev.statusOnAttacker = attacker.status.condition;
+          evAny = true;
+        }
+      }
+    }
+    // 독치장(ver.1.9 A5): 공격자 편에 독압정 한 층(최대 2층)
+    if (trigger.setsToxicSpikesOnAttackerSide) {
+      const attackerSide = sideOf(state, defenderKey === "a" ? "b" : "a");
+      if (attackerSide.hazards.toxicSpikesLayers < 2) {
+        attackerSide.hazards = { ...attackerSide.hazards, toxicSpikesLayers: attackerSide.hazards.toxicSpikesLayers + 1 };
+        toxicDebrisAbilityName = defenderAbility!.name;
         evAny = true;
       }
     }
@@ -684,6 +719,7 @@ export function resolveHitAndApplyDamage(input: HitResolutionInput) {
       const preHp = defender.currentHp;
       applyDamageToDefender(hitResult.damage);
       applyEndurance(preHp);
+      applyAngerPoint(hitResult.isCritical);
       // 이 타에서 방어측 on-hit 특성이 한 일을 그 타 레코드에 붙인다(로그를 타별로 찍기 위함).
       perHitLog[perHitLog.length - 1].abilityEvent = triggerAbilityHitEffect(hitResult.damage);
       applyContactItemRecoil(hitResult.damage);
@@ -699,6 +735,7 @@ export function resolveHitAndApplyDamage(input: HitResolutionInput) {
     const preHp = defender.currentHp;
     applyDamageToDefender(damage);
     applyEndurance(preHp);
+    applyAngerPoint(isCritical);
     triggerAbilityHitEffect(damage);
     applyContactItemRecoil(damage);
   }
@@ -726,6 +763,7 @@ export function resolveHitAndApplyDamage(input: HitResolutionInput) {
   let crashDamage = 0;
   if (
     effectiveMove.crashFraction !== undefined &&
+    !attackerAbility?.negatesIndirectDamage && // 매직가드(ver.1.9 A5)
     !hitSubstitute &&
     (blockedByProtect || typeEffectiveness === 0)
   ) {
@@ -820,7 +858,8 @@ export function resolveHitAndApplyDamage(input: HitResolutionInput) {
   // 이면 반동도 자연히 0이 된다. 매직가드: 반동기(recoilFraction)의 반동은 "공격기 데미지"가
   // 아니라서 무효화된다.
   let recoilDamage = 0;
-  if (effectiveMove.recoilFraction !== undefined && actualDamageDealt > 0 && !attackerAbility?.negatesIndirectDamage) {
+  // 돌머리(ver.1.9 A5): 반동기의 반동을 받지 않는다
+  if (effectiveMove.recoilFraction !== undefined && actualDamageDealt > 0 && !attackerAbility?.negatesIndirectDamage && !attackerAbility?.negatesRecoil) {
     recoilDamage = Math.floor(actualDamageDealt * effectiveMove.recoilFraction);
     attacker.currentHp = Math.max(0, attacker.currentHp - recoilDamage);
   }
@@ -917,6 +956,6 @@ export function resolveHitAndApplyDamage(input: HitResolutionInput) {
   // 한다(=먼저 판정하면 나중 회복이 되살리는 버그가 생김). 다단히트/부자유친 추가타 중 어느 타가
   // 상대를 쓰러뜨렸든 이 시점의 defender.currentHp/destinyBondArmed만 보면 되므로 한 번으로 충분.
   checkDestinyBond();
-  return { abilityDamageAbilityName, abilityDamageToAttacker, abilityDisableAbilityName, abilityDisabledMoveName, abilityInflictedStatusAbilityName, abilityInflictedStatusOnAttacker, abilityInflictedVolatileAbilityName, abilityInflictedVolatileOnAttacker, abilityLoweredAttackerStats, abilityLoweredAttackerStatsAbilityName, abilityLoweredDefenderStats, abilityRaisedDefenderStats, abilityRaisedDefenderStatsAbilityName, angerPointAbilityName, angerPointRaisedSpa, berryReducedDamageItemName, canceledTargetChargeMoveName, cheekPouchHeal, counterDamage, counterFailed, crashDamage, damage, damagePercent, destinyBondTriggered, disguiseRecoilDamage, drainHealAmount, endeavorDamage, enduredAbilityName, enduredItemName, enduredProtectMoveName, followUpHitDamage, hitCount, hitNegatedByAbilityName, hitSubstitute, illusionBrokenSpeciesId, isCritical, isDamaging, itemRecoilDamage, itemRecoilItemName, liquidOozeAbilityName, liquidOozeDamage, mummifiedAttackerAbilityName, perHitLog, pickpocketAbilityName, pickpocketStolenItemName, recoilDamage, rockyHelmetDamage, rockyHelmetItemName, sandSpitWeather, seedSowerField, selfDamage, shellBellHealAmount, statusCureBerryItemName, stolenItemName, substituteBroke, terrainSeedMessages, wanderingSpiritSwapped };
+  return { abilityDamageAbilityName, abilityDamageToAttacker, abilityDisableAbilityName, abilityDisabledMoveName, abilityInflictedStatusAbilityName, abilityInflictedStatusOnAttacker, abilityInflictedVolatileAbilityName, abilityInflictedVolatileOnAttacker, abilityLoweredAttackerStats, abilityLoweredAttackerStatsAbilityName, abilityLoweredDefenderStats, abilityRaisedDefenderStats, abilityRaisedDefenderStatsAbilityName, angerPointAbilityName, angerPointMaxedAbilityName, angerPointRaisedSpa, berryReducedDamageItemName, canceledTargetChargeMoveName, cheekPouchHeal, counterDamage, counterFailed, crashDamage, damage, damagePercent, destinyBondTriggered, disguiseRecoilDamage, drainHealAmount, endeavorDamage, enduredAbilityName, enduredItemName, enduredProtectMoveName, followUpHitDamage, hitCount, hitNegatedByAbilityName, hitSubstitute, illusionBrokenSpeciesId, isCritical, isDamaging, itemRecoilDamage, itemRecoilItemName, liquidOozeAbilityName, liquidOozeDamage, mummifiedAttackerAbilityName, perHitLog, pickpocketAbilityName, pickpocketStolenItemName, recoilDamage, rockyHelmetDamage, rockyHelmetItemName, sandSpitWeather, seedSowerField, selfDamage, shellBellHealAmount, statusCureBerryItemName, stolenItemName, substituteBroke, terrainSeedMessages, toxicDebrisAbilityName, wanderingSpiritSwapped };
 }
 

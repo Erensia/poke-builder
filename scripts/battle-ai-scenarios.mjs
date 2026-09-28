@@ -2120,6 +2120,98 @@ try {
       `반동기 ${gOk}(${g.expected.toFixed(2)}턴) 솔라빔 ${solarOk} 상대 반동 ${idleShift} 숨음 ${skyShift} 강제 ${forcedOk}`,
     );
   }
+  // ── ver.1.9 한계점 A5: 엔진 미구현 특성 12종 + 매직가드(무릎차기·철제광선) ──
+  {
+    const rt = await server.ssrLoadModule("/src/lib/battle/runTurn.ts");
+    const sw = await server.ssrLoadModule("/src/lib/battle/switching.ts");
+    const toi = await server.ssrLoadModule("/src/lib/battle/turnOrderInputs.ts");
+    const act = (id) => ({ kind: "move", move: data.getMove(id) });
+    const own = (out, key) => out.result.actions.find((x) => x.actor === key);
+    const tank = (moves, ability = null, item = null) => mon("잠만보", moves, ability, item, pts({ hp: 32, def: 32, spd: 32 }));
+    const results = {};
+    // 그림자밟기: 맞은편은 교체 불가(교체를 골라도 안 됨), 고스트·같은 특성은 예외
+    {
+      const st = battle([mon("팬텀", ["섀도볼"], "그림자밟기")], [tank(["막치기"]), mon("피카츄", ["10만볼트"])]);
+      const out = rt.runTurn(st, act("섀도볼"), { kind: "switch", toIndex: 1 }, () => 0.5);
+      const ghost = battle([mon("팬텀", ["섀도볼"], "그림자밟기")], [mon("팬텀", ["섀도볼"])]);
+      results.shadowTag = sw.isTrappedFromSwitching(st.b, st) && out.result.switches.length === 0 && !sw.isTrappedFromSwitching(ghost.b, ghost);
+    }
+    // 돌머리: 반동 없음
+    {
+      const run = (ability) => own(rt.runTurn(battle([mon("프테라", ["브레이브버드"], ability)], [tank(["막치기"])]), act("브레이브버드"), act("막치기"), () => 0.5), "a").recoilDamage ?? 0;
+      results.rockHead = run("돌머리") === 0 && run(null) > 0;
+    }
+    // 분노의경혈: 급소에 맞으면 공격 +6
+    {
+      const st = battle([mon("한카리아스", ["막치기"])], [tank(["막치기"], "분노의경혈")]);
+      const next = rt.runTurn(st, act("막치기"), act("막치기"), () => 0).nextState;
+      results.angerPoint = next.b.stages.atk === 6;
+    }
+    // 속보: 상태이상이면 ×1.5(마비 반감 무시) · 서핑테일: 일렉트릭필드면 ×2
+    {
+      const st = battle([mon("쥬피썬더", ["10만볼트"], "속보")], [mon("알로라라이츄", ["10만볼트"], "서핑테일")]);
+      const base = toi.computeTurnOrderSpeed(st, st.a);
+      st.a.status = { condition: "paralysis", turnsElapsed: 1 };
+      const quickFeet = toi.computeTurnOrderSpeed(st, st.a) / base;
+      const surfBase = toi.computeTurnOrderSpeed(st, st.b);
+      st.field = "일렉트릭필드";
+      st.fieldTurnsRemaining = 5;
+      results.speed = Math.abs(quickFeet - 1.5) < 1e-9 && Math.abs(toi.computeTurnOrderSpeed(st, st.b) / surfBase - 2) < 1e-9;
+    }
+    // 퀵드로: 공격기면 30%로 먼저(난수 0 → 발동), 변화기면 없음
+    {
+      const st = () => battle([mon("가라르야도란", ["사이코키네시스", "명상"], "퀵드로", null, pts({ hp: 2 }))], [mon("피카츄", ["10만볼트"])]);
+      const first = (moveId) => rt.runTurn(st(), act(moveId), act("10만볼트"), () => 0).result.actions[0].actor;
+      results.quickDraw = first("사이코키네시스") === "a" && first("명상") === "b";
+    }
+    // 애널라이즈: 후공이면 위력 ×1.3
+    {
+      const dmg = (ability) =>
+        own(rt.runTurn(battle([mon("보르그", ["10만볼트"], ability, null, pts({ spa: 32, hp: 2 }))], [mon("메가니움", ["칼춤"], null, null, pts({ hp: 32, spe: 32 }))]), act("10만볼트"), act("칼춤"), () => 0.5), "a").damage;
+      const ratio = dmg("애널라이즈") / dmg(null);
+      results.analytic = ratio > 1.2 && ratio < 1.4;
+    }
+    // 촉촉바디: 비면 턴 끝에 상태이상 치료
+    {
+      const st = battle([mon("샤미드", ["칼춤"], "촉촉바디")], [tank(["칼춤"])]);
+      st.a.status = { condition: "poison", turnsElapsed: 1 };
+      st.weather = "비";
+      st.weatherTurnsRemaining = 5;
+      results.hydration = rt.runTurn(st, act("칼춤"), act("칼춤"), () => 0.9).nextState.a.status.condition === null;
+    }
+    // 포자: 접촉하면 30%로 독·마비·잠듦(난수 0 → 발동·첫 번째 독), 풀 타입은 무효
+    {
+      const hit = (attacker) => rt.runTurn(battle([attacker], [mon("라플레시아", ["칼춤"], "포자", null, pts({ hp: 32, def: 32 }))]), act("막치기"), act("칼춤"), () => 0).nextState.a.status.condition;
+      results.effectSpore = hit(mon("한카리아스", ["막치기"])) === "poison" && hit(mon("메가니움", ["막치기"])) !== "poison";
+    }
+    // 잠복: 이번 턴 교체해 들어온 상대에게 ×2
+    {
+      const st = battle([mon("마피티프", ["깨물어부수기"], "잠복")], [mon("피카츄", ["10만볼트"]), tank(["칼춤"])]);
+      const switched = own(rt.runTurn(st, act("깨물어부수기"), { kind: "switch", toIndex: 1 }, () => 0.5), "a").damage;
+      const stay = own(rt.runTurn(battle([mon("마피티프", ["깨물어부수기"], "잠복")], [tank(["칼춤"])]), act("깨물어부수기"), act("칼춤"), () => 0.5), "a").damage;
+      results.stakeout = Math.abs(switched / stay - 2) < 0.15;
+    }
+    // 되새김질: 자뭉열매를 먹은 다음 턴 끝에 한 번 더
+    {
+      const st = battle([mon("키키링", ["칼춤"], "되새김질", "자뭉열매", pts({ hp: 32 }))], [tank(["칼춤"])]);
+      st.a.currentHp = Math.floor(st.a.maxHp * 0.4);
+      const t1 = rt.runTurn(st, act("칼춤"), act("칼춤"), () => 0.9);
+      const t2 = rt.runTurn(t1.nextState, act("칼춤"), act("칼춤"), () => 0.9);
+      const chewed = t2.result.endOfTurn.some((e) => e.cudChewBerryName === "자뭉열매" && e.berryHeal > 0);
+      results.cudChew = chewed && t2.nextState.a.currentHp > t1.nextState.a.currentHp;
+    }
+    // 독치장: 물리 피격 → 공격자 편 독압정
+    {
+      const next = rt.runTurn(battle([mon("한카리아스", ["막치기"])], [mon("킬라플로르", ["칼춤"], "독치장", null, pts({ hp: 32, def: 32 }))]), act("막치기"), act("칼춤"), () => 0.5).nextState;
+      results.toxicDebris = next.sideA.hazards.toxicSpikesLayers === 1;
+    }
+    // 매직가드: 철제광선 HP 손실 없음
+    {
+      const next = rt.runTurn(battle([mon("픽시", ["철제광선"], "매직가드", null, pts({ hp: 32 }))], [tank(["칼춤"])]), act("철제광선"), act("칼춤"), () => 0.5).nextState;
+      results.magicGuard = next.a.currentHp === next.a.maxHp;
+    }
+    check("1.9 A5: 특성 12종 + 매직가드", Object.values(results).every(Boolean), `실패: ${Object.keys(results).filter((k) => !results[k]).join(",") || "없음"}`);
+  }
   // ── ver.1.9 한계점 A2: 공격의 자기 HP 변화 — 반동·생명의구슬·접촉 페널티는 내가 버티는 턴↓, 흡수는↑(해감액이면↓), 상대 반동은 내 처치 턴↓ ──
   {
     const tank = (moves, ability = null, item = null) => mon("잠만보", moves, ability, item, pts({ hp: 32, def: 32, spd: 32 }));

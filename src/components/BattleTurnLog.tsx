@@ -311,7 +311,14 @@ function EndOfTurnLine({
 }) {
   return (
     <div className="battle-turn-line is-muted">
-      {e.fieldHeal ? (
+      {e.cudChewBerryName ? (
+        <>
+          {turnName(e.actor)}의 되새김질! {e.cudChewBerryName}
+          {eulReul(e.cudChewBerryName)} 한 번 더 먹었다!
+          {e.berryHeal ? ` HP ${e.berryHeal} 회복 (남은 HP ${e.remainingHp})` : ""}
+          {e.abilityCuredStatus ? " 상태이상이 나았다!" : ""}
+        </>
+      ) : e.fieldHeal ? (
         <>
           {turnName(e.actor)} 그래스필드로 {e.fieldHeal} 회복 (남은 HP {e.remainingHp})
         </>
@@ -1614,6 +1621,18 @@ function ActionEffectLines({
       {!action.blockedReason && action.angerPointRaisedSpa && (
         <div className="battle-turn-line is-muted">
           {defenderName}의 {action.angerPointAbilityName}! {defenderName}의 특수공격이 올라갔다!
+        </div>
+      )}
+      {/* 분노의경혈(ver.1.9 A5) — 급소에 맞아 공격 최대 */}
+      {!action.blockedReason && action.angerPointMaxedAbilityName && (
+        <div className="battle-turn-line is-muted">
+          {defenderName}의 {action.angerPointMaxedAbilityName}! {defenderName}의 공격이 최대로 올라갔다!
+        </div>
+      )}
+      {/* 독치장(ver.1.9 A5) — 공격자 편에 독압정 */}
+      {!action.blockedReason && action.toxicDebrisAbilityName && (
+        <div className="battle-turn-line is-muted">
+          {defenderName}의 {action.toxicDebrisAbilityName}! {actorName}의 발밑에 독압정이 뿌려졌다!
         </div>
       )}
       {/* 떠도는영혼 — 접촉 피격으로 공격자와 특성 교환 */}
