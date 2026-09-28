@@ -98,13 +98,17 @@ export interface SlotMatchupOptions {
    * (배틀 AI는 둘이 같음). 페이지는 HP 슬라이더(위력)와 "HP 1/3 이하 가정"(특성)을 따로 둔다.
    */
   abilityHpFraction?: number;
-  /** ver.1.9 — 공격측이 상대보다 늦게 행동(보복 2배)·이번 턴 먼저 맞음(눈사태 2배) 가정 */
-  attackerMovesLast?: boolean;
   /**
-   * 분풀이(이번 턴 랭크 하락)·분함의발구르기(직전 턴 실패)의 2배 조건을 충족으로 상정할지(기본 true — 매치업 페이지 정책).
-   * 엔진은 이 이력을 추적하지 않아 항상 기본 위력이라, 배틀 AI는 false로 넘긴다(ver.1.9 6-1).
+   * 조건부 위력 가정(ver.1.9 — 매치업 페이지 가정 토글, 배틀 AI는 실제 state). 생략하면 모두 미충족(기본 위력).
+   * 보복 = 상대보다 늦게 행동, 눈사태 = 이번 턴 상대 기술로 데미지 입음, 분함의발구르기·열불내기 = 직전 턴 기술 실패,
+   * 분풀이 = 이번 턴 자기 능력 하락, 승부굳히기 = 이번 턴 대상이 이미 데미지 입음, 작아지기 보너스(누르기 등) = 대상이 작아지기 사용.
    */
-  assumeUntrackedConditions?: boolean;
+  attackerMovesLast?: boolean;
+  attackerTookDamageThisTurn?: boolean;
+  attackerMoveFailedLastTurn?: boolean;
+  attackerStatLoweredThisTurn?: boolean;
+  defenderDamagedThisTurn?: boolean;
+  defenderMinimized?: boolean;
   defenderItemConsumed?: boolean;
   /**
    * 배틀 AI용 — 슬롯 원본 대신 실전 파이터의 현재 값(메가진화·변신·변환자재·트레이스·도구 소모 반영)을
@@ -218,7 +222,11 @@ export function evaluateSlotMatchup(
     defenderStatus,
     abilityHpFraction,
     attackerMovesLast,
-    assumeUntrackedConditions = true,
+    attackerTookDamageThisTurn,
+    attackerMoveFailedLastTurn,
+    attackerStatLoweredThisTurn,
+    defenderDamagedThisTurn,
+    defenderMinimized,
     defenderItemConsumed,
     attackerRuntime,
     defenderRuntime,
@@ -390,9 +398,16 @@ export function evaluateSlotMatchup(
       defenderStatus,
       defenderHasStatusCondition,
       attackerMovesLast,
-      assumeUntrackedConditions,
+      attackerTookDamageThisTurn,
+      attackerMoveFailedLastTurn,
+      attackerStatLoweredThisTurn,
+      defenderDamagedThisTurn,
     })
   ) {
+    variablePowerMove = { ...variablePowerMove, power: variablePowerMove.power * 2 };
+  }
+  // 누르기·드래곤다이브·플라잉프레스(ver.1.9): 대상이 작아지기를 썼으면 위력 2배(엔진 preHitEffects와 같게)
+  if (variablePowerMove.power !== null && variablePowerMove.bonusVsMinimize && defenderMinimized) {
     variablePowerMove = { ...variablePowerMove, power: variablePowerMove.power * 2 };
   }
 
@@ -580,10 +595,9 @@ export function evaluateSlotMatchup(
 /**
  * 조건부 ×2(conditionalDoublePower) 판정 — evaluateSlotMatchup·computeSoloOffensePower 공용. 매치업 페이지 정책(§3 증분 C·B-3):
  *  - user-has-no-item(애크러뱃): 지닌 도구를 알고 있으니 실제로 판정
- *  - user-stat-lowered-this-turn(분풀이)·user-move-failed-last-turn(분함의발구르기): 조건 충족을 상정(항상 ×2).
- *    assumeUntrackedConditions가 false면(배틀 AI — 엔진과 같게) 항상 기본 위력
  *  - 상태이상 조건(ver.1.9): 넘겨받은 상태이상으로 판정(생략하면 상태이상 없음)
- *  - took-damage-this-turn(눈사태)·moves-after-target(보복): attackerMovesLast 가정일 때만(ver.1.9, 생략하면 기본 위력)
+ *  - 이력 조건(ver.1.9 — 가정 토글, 생략하면 기본 위력): 보복(attackerMovesLast)·눈사태(attackerTookDamageThisTurn)·
+ *    분함의발구르기·열불내기(attackerMoveFailedLastTurn)·분풀이(attackerStatLoweredThisTurn)·승부굳히기(defenderDamagedThisTurn)
  */
 function conditionalPowerDoubled(
   move: Move,
@@ -593,19 +607,25 @@ function conditionalPowerDoubled(
     defenderStatus?: StatusCondition | null;
     defenderHasStatusCondition?: boolean;
     attackerMovesLast?: boolean;
-    assumeUntrackedConditions?: boolean;
+    attackerTookDamageThisTurn?: boolean;
+    attackerMoveFailedLastTurn?: boolean;
+    attackerStatLoweredThisTurn?: boolean;
+    defenderDamagedThisTurn?: boolean;
   },
 ): boolean {
   const cond = move.conditionalDoublePower;
   const { attackerStatus, defenderStatus } = ctx;
   return (
-    ((cond === "user-stat-lowered-this-turn" || cond === "user-move-failed-last-turn") && ctx.assumeUntrackedConditions !== false) ||
+    (cond === "user-stat-lowered-this-turn" && !!ctx.attackerStatLoweredThisTurn) ||
+    (cond === "user-move-failed-last-turn" && !!ctx.attackerMoveFailedLastTurn) ||
+    (cond === "target-damaged-this-turn" && !!ctx.defenderDamagedThisTurn) ||
+    (cond === "took-damage-this-turn" && !!ctx.attackerTookDamageThisTurn) ||
     (cond === "user-has-no-item" && !ctx.attackerHasItem) ||
     (cond === "user-status-burn-poison-paralysis" &&
       (attackerStatus === "burn" || attackerStatus === "poison" || attackerStatus === "badly-poisoned" || attackerStatus === "paralysis")) ||
     (cond === "target-status-poisoned" && (defenderStatus === "poison" || defenderStatus === "badly-poisoned")) ||
     (cond === "target-has-status" && (!!defenderStatus || !!ctx.defenderHasStatusCondition)) ||
-    ((cond === "moves-after-target" || cond === "took-damage-this-turn") && !!ctx.attackerMovesLast)
+    (cond === "moves-after-target" && !!ctx.attackerMovesLast)
   );
 }
 
@@ -621,6 +641,9 @@ export interface SoloOffensePowerOptions {
   abilityHpFraction?: number;
   attackerStatus?: StatusCondition | null;
   attackerMovesLast?: boolean;
+  attackerTookDamageThisTurn?: boolean;
+  attackerMoveFailedLastTurn?: boolean;
+  attackerStatLoweredThisTurn?: boolean;
   extraOffenseMultiplier?: number;
 }
 
@@ -654,6 +677,9 @@ export function computeSoloOffensePower(
     abilityHpFraction,
     attackerStatus,
     attackerMovesLast,
+    attackerTookDamageThisTurn,
+    attackerMoveFailedLastTurn,
+    attackerStatLoweredThisTurn,
     extraOffenseMultiplier = 1,
   } = options;
 
@@ -716,7 +742,14 @@ export function computeSoloOffensePower(
 
   if (
     variablePowerMove.power !== null &&
-    conditionalPowerDoubled(variablePowerMove, { attackerHasItem: !!attackerItem, attackerStatus, attackerMovesLast })
+    conditionalPowerDoubled(variablePowerMove, {
+      attackerHasItem: !!attackerItem,
+      attackerStatus,
+      attackerMovesLast,
+      attackerTookDamageThisTurn,
+      attackerMoveFailedLastTurn,
+      attackerStatLoweredThisTurn,
+    })
   ) {
     variablePowerMove = { ...variablePowerMove, power: variablePowerMove.power * 2 };
   }

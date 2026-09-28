@@ -1147,7 +1147,8 @@
       "접촉",
       "풀죽음"
     ],
-    "makesContact": true
+    "makesContact": true,
+    "bonusVsMinimize": true
   },
   {
     "id": "칼춤",
@@ -1287,7 +1288,8 @@
     "tags": [
       "접촉"
     ],
-    "makesContact": false
+    "makesContact": true,
+    "conditionalDoublePower": "target-damaged-this-turn"
   },
   {
     "id": "탁쳐서떨구기",
@@ -2351,7 +2353,8 @@
         "status": "paralysis",
         "chance": 30
       }
-    ]
+    ],
+    "bonusVsMinimize": true
   },
   {
     "id": "멀리짖기",
@@ -5986,7 +5989,8 @@
     "tags": [
       "접촉"
     ],
-    "makesContact": true
+    "makesContact": true,
+    "conditionalDoublePower": "user-move-failed-last-turn"
   },
   {
     "id": "와이드브레이커",

@@ -475,6 +475,9 @@ export function performSwitch(
   incoming.switchedInThisTurn = voluntary || undefined;
   // 등장당 1회 판정(속이기·변환자재)은 새로 나온 포켓몬 기준으로 리셋한다.
   incoming.hasActedSinceSwitchIn = undefined;
+  incoming.lastTurnMoveFailed = undefined;
+  // 승부굳히기(ver.1.9): 턴 중 등장한 포켓몬은 등장 시점(설치물 피해 전) HP를 이번 턴 기준으로
+  incoming.hpAtTurnStart = incoming.currentHp;
   incoming.proteanActivatedSinceSwitchIn = undefined;
 
   // ── 배턴터치: 스냅샷해둔 랭크·대타·volatile을 새로 나온 포켓몬에게 인계 ──

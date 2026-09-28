@@ -1703,14 +1703,15 @@ try {
       const solo = (id, o) => me.computeSoloOffensePower(atk, data.getMove(id), o) ?? 0;
       const r = (a, b) => (b > 0 ? a / b : 0);
       const payback = r(off("보복", { attackerMovesLast: true }), off("보복", {}));
-      const avalanche = r(solo("눈사태", { attackerMovesLast: true }), solo("눈사태", {}));
+      const avalanche = r(solo("눈사태", { attackerTookDamageThisTurn: true }), solo("눈사태", {}));
+      const avalancheLast = r(solo("눈사태", { attackerMovesLast: true }), solo("눈사태", {}));
       const facade = r(off("객기", { attackerStatus: "burn" }), off("객기", {}));
       const reversal = r(off("기사회생", { attackerHpFraction: 0.1 }), off("기사회생", {}));
       // 맹화: 불꽃 기술, HP 슬라이더(attackerHpFraction)가 아니라 abilityHpFraction으로만 발동
       const blaze = r(off("화염방사", { abilityHpFraction: 1 / 3 }), off("화염방사", { attackerHpFraction: 0.2, abilityHpFraction: 1 }));
       check(
-        "1.9 계산기: 늦게 행동(보복·눈사태 2배)·객기 화상 2배·기사회생 HP 10%(위력 150)·맹화는 특성 HP 가정으로만",
-        Math.abs(payback - 2) < 0.02 && Math.abs(avalanche - 2) < 0.02 && Math.abs(facade - 2) < 0.02 && Math.abs(reversal - 7.5) < 0.05 && Math.abs(blaze - 1.5) < 0.02,
+        "1.9 계산기: 늦게 행동(보복 2배)·이번 턴 데미지 입음(눈사태 2배, 늦게 행동만으론 ×1)·객기 화상 2배·기사회생 HP 10%(위력 150)·맹화는 특성 HP 가정으로만",
+        Math.abs(payback - 2) < 0.02 && Math.abs(avalanche - 2) < 0.02 && Math.abs(avalancheLast - 1) < 0.02 && Math.abs(facade - 2) < 0.02 && Math.abs(reversal - 7.5) < 0.05 && Math.abs(blaze - 1.5) < 0.02,
         `보복 ×${payback.toFixed(2)} 눈사태 ×${avalanche.toFixed(2)} 객기 ×${facade.toFixed(2)} 기사회생 ×${reversal.toFixed(2)} 맹화 ×${blaze.toFixed(2)}`,
       );
     }
@@ -1807,7 +1808,7 @@ try {
       const withoutIdle = dec.scoreOption({ ...sd, opponentIdleChance: undefined }, 0.5);
       check("1.9 6-1: 상대 기습 헛수고 → AI 변화기 점수 상승", withIdle > withoutIdle, `${withoutIdle.toFixed(3)} → ${withIdle.toFixed(3)}`);
     }
-    // 보복(후공 2배)·눈사태(후공이면 상대 공격 확률만큼 2배)·분함의발구르기(엔진 미추적 → 기본 위력)
+    // 보복(후공 2배)·눈사태(후공이면 상대 공격 확률만큼 2배)·분함의발구르기(계산기는 직전 실패 가정일 때만 2배)
     {
       const st = battle([mon("마기라스", ["보복", "눈사태", "분함의발구르기"])], [tank(["누르기"])]);
       const statusFoe = battle([mon("마기라스", ["눈사태"])], [tank(["칼춤", "하품"])]);
@@ -1816,12 +1817,12 @@ try {
       const payback = frac(st, "보복", true) / frac(st, "보복", false);
       const avalanche = frac(st, "눈사태", true) / frac(st, "눈사태", false);
       const avalancheStatus = frac(statusFoe, "눈사태", true) / frac(statusFoe, "눈사태", false);
-      const calc = me.evaluateSlotMatchup(st.a.slot, data.getMove("분함의발구르기"), st.b.slot, {})?.offensePower ?? 0;
-      const calcAi = me.evaluateSlotMatchup(st.a.slot, data.getMove("분함의발구르기"), st.b.slot, { assumeUntrackedConditions: false })?.offensePower ?? 0;
+      const calc = me.evaluateSlotMatchup(st.a.slot, data.getMove("분함의발구르기"), st.b.slot, { attackerMoveFailedLastTurn: true })?.offensePower ?? 0;
+      const calcAi = me.evaluateSlotMatchup(st.a.slot, data.getMove("분함의발구르기"), st.b.slot, {})?.offensePower ?? 0;
       check(
-        "1.9 6-1: AI 보복 후공 ×2·눈사태 후공 ×(1+공격 확률)·분함의발구르기 AI 기본 위력(계산기는 ×2 상정)",
+        "1.9 6-1: AI 보복 후공 ×2·눈사태 후공 ×(1+공격 확률)·분함의발구르기 계산기 직전 실패 가정 ×2(기본 ×1)",
         Math.abs(payback - 2) < 0.02 && Math.abs(avalanche - 2) < 0.02 && Math.abs(avalancheStatus - 1) < 0.02 && Math.abs(calc / calcAi - 2) < 0.02,
-        `보복 ×${payback.toFixed(2)} 눈사태 ×${avalanche.toFixed(2)}(변화기뿐 ×${avalancheStatus.toFixed(2)}) 발구르기 계산기/AI ×${(calc / calcAi).toFixed(2)}`,
+        `보복 ×${payback.toFixed(2)} 눈사태 ×${avalanche.toFixed(2)}(변화기뿐 ×${avalancheStatus.toFixed(2)}) 발구르기 가정/기본 ×${(calc / calcAi).toFixed(2)}`,
       );
     }
     // 반감 열매는 첫 타만: 계산기 다단히트 5타 = 내구력 ×1/(0.2/2+0.8)·2타 ×1/(0.5/2+0.5), AI 처치 턴 = 열매 없음 < 첫 타만 < 매 타 반감(이전 근사)
@@ -1844,6 +1845,95 @@ try {
         `5타 ×${multi.toFixed(3)} 2타 ×${twoHits.toFixed(2)} c ${none.toFixed(2)} < ${berry.toFixed(2)} < ${allHalved.toFixed(2)}`,
       );
     }
+  }
+  // ── ver.1.9 조건부 위력 엔진 배선: 분함의발구르기·열불내기(직전 턴 실패) · 분풀이(이번 턴 능력 하락) · 승부굳히기(이번 턴 대상 피해) · 작아지기 보너스 ──
+  {
+    const rt = await server.ssrLoadModule("/src/lib/battle/runTurn.ts");
+    const mf = await server.ssrLoadModule("/src/lib/battle/moveFailure.ts");
+    const md = await server.ssrLoadModule("/src/lib/battle/ai/moveDamage.ts");
+    const act = (id) => ({ kind: "move", move: data.getMove(id) });
+    const run = (st, a, b, r = 0.5) => rt.runTurn(st, act(a), act(b), () => r);
+    const own = (out, key) => out.result.actions.find((x) => x.actor === key);
+    const tank = (moves) => mon("잠만보", moves, null, null, pts({ hp: 32, def: 32 }));
+    // 1턴 행동 → 실패 기록
+    const failedAfter = (aMove, bMove, r = 0.5, setup = () => {}) => {
+      const st = battle([mon("마기라스", [aMove, "분함의발구르기", "열불내기"])], [tank([bMove])]);
+      setup(st);
+      const out = run(st, aMove, bMove, r);
+      return { failed: !!out.nextState.a.lastTurnMoveFailed, out };
+    };
+    const miss = failedAfter("스톤에지", "칼춤", 0.99).failed; // 명중 80%를 0.99로 빗나감
+    const hit = failedAfter("스톤에지", "칼춤", 0.5).failed;
+    const protectedHit = failedAfter("스톤에지", "방어", 0.5).failed; // 방어에 막힘 → 실패 아님
+    const taunted = failedAfter("칼춤", "칼춤", 0.5, (st) => {
+      st.a.volatile = { active: { ...st.a.volatile.active, taunt: { turnsRemaining: 3 } } };
+    }).failed;
+    const fullHeal = failedAfter("HP회복", "칼춤").failed; // HP 가득인데 회복기
+    const maxedUp = failedAfter("칼춤", "칼춤", 0.5, (st) => {
+      st.a.stages = { ...st.a.stages, atk: 6 };
+    }).failed;
+    const recharge = failedAfter("파괴광선", "칼춤", 0.5, (st) => {
+      st.a.volatile = { active: { ...st.a.volatile.active, recharge: { turnsRemaining: 1 } } };
+    });
+    check(
+      "1.9 엔진: 직전 턴 실패 기록 — 빗나감·도발로 막힘·HP 가득 회복기·+6 랭크업기는 실패, 명중·방어에 막힘·반동으로 쉼은 아님",
+      miss && !hit && !protectedHit && taunted && fullHeal && maxedUp && !recharge.failed && own(recharge.out, "a")?.blockedReason === "recharge",
+      `빗나감 ${miss} 명중 ${hit} 방어 ${protectedHit} 도발 ${taunted} 회복 ${fullHeal} +6 ${maxedUp} 반동 ${recharge.failed}(${own(recharge.out, "a")?.blockedReason})`,
+    );
+    // 2턴째 분함의발구르기·열불내기 데미지 2배(실패 기록 있음/없음), 교체하면 기록이 지워진다
+    const tantrum = (moveId, failed) => {
+      const st = battle([mon("마기라스", [moveId])], [tank(["칼춤"])]);
+      st.a.lastTurnMoveFailed = failed || undefined;
+      return own(run(st, moveId, "칼춤"), "a")?.damage ?? 0;
+    };
+    const stomp = tantrum("분함의발구르기", true) / tantrum("분함의발구르기", false);
+    const flare = tantrum("열불내기", true) / tantrum("열불내기", false);
+    // 분풀이: 먼저 움직인 상대가 내 방어를 내리면 2배 / 승부굳히기: 먼저 움직인 상대가 반동으로 HP를 잃었으면 2배
+    const dmgAfter = (aMove, bMove) => {
+      const st = battle([mon("마기라스", [aMove], null, null, pts({ hp: 32 }))], [mon("잠만보", [bMove], null, null, pts({ hp: 32, def: 32, spe: 32 }))]);
+      return own(run(st, aMove, bMove), "a")?.damage ?? 0;
+    };
+    const lashOut = dmgAfter("분풀이", "싫은소리") / dmgAfter("분풀이", "칼춤");
+    const assurance = dmgAfter("승부굳히기", "이판사판태클") / dmgAfter("승부굳히기", "칼춤");
+    // 작아지기 보너스(누르기 데이터 수정): 대상이 작아지기를 썼으면 2배 — 엔진·AI 계산 모두
+    const minimize = (used) => {
+      const st = battle([mon("잠만보", ["누르기"])], [tank(["칼춤"])]);
+      if (used) st.b.usedMoveIds = { ...(st.b.usedMoveIds ?? {}), 작아지기: true };
+      const engine = own(run(st, "누르기", "칼춤"), "a")?.damage ?? 0;
+      const fresh = battle([mon("잠만보", ["누르기"])], [tank(["칼춤"])]);
+      if (used) fresh.b.usedMoveIds = { ...(fresh.b.usedMoveIds ?? {}), 작아지기: true };
+      const ai = md.estimateMoveHits({ state: fresh, attacker: fresh.a, defender: fresh.b, defenderSide: fresh.sideB, attackerMovesSecond: false }, data.getMove("누르기"))?.damageFraction ?? 0;
+      return { engine, ai };
+    };
+    const minOn = minimize(true);
+    const minOff = minimize(false);
+    const near2 = (x) => x > 1.8 && x < 2.2;
+    check(
+      "1.9 엔진: 분함의발구르기·열불내기 직전 실패 2배 · 분풀이 능력 하락 2배 · 승부굳히기 대상 피해 2배 · 누르기 작아지기 2배(AI 동일)",
+      near2(stomp) && near2(flare) && near2(lashOut) && near2(assurance) && near2(minOn.engine / minOff.engine) && near2(minOn.ai / minOff.ai) &&
+        data.getMove("승부굳히기").makesContact === true,
+      `발구르기 ×${stomp.toFixed(2)} 열불내기 ×${flare.toFixed(2)} 분풀이 ×${lashOut.toFixed(2)} 승부굳히기 ×${assurance.toFixed(2)} 작아지기 엔진 ×${(minOn.engine / minOff.engine).toFixed(2)} AI ×${(minOn.ai / minOff.ai).toFixed(2)}`,
+    );
+    // actionFailed 판정 표(정의 목록): 행동불능·풀죽음·필드 무효는 실패, 헤롱헤롱·대타 흡수는 아님
+    const base = { move: data.getMove("스톤에지"), hit: true, typeEffectiveness: 1 };
+    const table = {
+      paralysis: mf.actionFailed({ ...base, blockedReason: "status" }),
+      flinch: mf.actionFailed({ ...base, blockedReason: "flinch" }),
+      confusion: mf.actionFailed({ ...base, blockedReason: "confusion" }),
+      psychicField: mf.actionFailed({ ...base, blockedReason: "psychicFieldPriority" }),
+      immune: mf.actionFailed({ ...base, typeEffectiveness: 0 }),
+      absorbed: mf.actionFailed({ ...base, abilityAbsorbAbilityName: "저수" }),
+      subFailed: mf.actionFailed({ ...base, move: data.getMove("대타출동"), substituteSetFailed: true }),
+      attract: mf.actionFailed({ ...base, blockedReason: "attract" }),
+      substituteHit: mf.actionFailed({ ...base, hitSubstitute: true }),
+      disguise: mf.actionFailed({ ...base, hitNegatedByAbilityName: "탈" }),
+    };
+    const expected = { paralysis: true, flinch: true, confusion: true, psychicField: true, immune: true, absorbed: true, subFailed: true, attract: false, substituteHit: false, disguise: false };
+    check(
+      "1.9 엔진: 실패 판정 표 — 행동불능·풀죽음·혼란·필드 무효·면역·흡수·대타출동 실패는 실패 / 헤롱헤롱·대타 흡수·탈은 아님",
+      Object.entries(expected).every(([k, v]) => table[k] === v),
+      Object.entries(table).map(([k, v]) => `${k}=${v}`).join(" "),
+    );
   }
   // ── 매치업 난수별 데미지(ver.1.7 트랙 H): 기존 격파 판정과 같은 관계식인지 대조 ──
   {

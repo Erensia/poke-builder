@@ -14,6 +14,7 @@ import { computeFieldEndOfTurnHeal, isStatusBlockedByField } from "@/lib/fieldEf
 import { getDrainHealMultiplier, getHpThresholdBerryHeal } from "@/lib/itemEffects";
 import { SANDSTORM_IMMUNE_ABILITY_NAMES, activeWeather, applyForecastForm, consumeItem, contraryDelta, hasLivingReserve, isFainted, opponentKey, sideOf, statDropBlockStatsOf, statusImmunitiesOf, type BattleFighterState, type BattleState } from "./state";
 import { type RunTurnContext, type RunTurnOutcome } from "./runTurn";
+import { actionFailed } from "./moveFailure";
 
 interface EndOfTurnFighterContext {
   state: BattleState;
@@ -583,6 +584,14 @@ function applyHarvestRestore(ctx: EndOfTurnFighterContext): void {
 export function finishTurn(ctx: RunTurnContext): RunTurnOutcome {
   const { state, order, actions, switches, turnStartAnnouncements, selfDestructComboKey, speedA, speedB, random } = ctx;
   let winner: FighterKey | "draw" | undefined;
+
+  // 분함의발구르기·열불내기(ver.1.9): 이번 턴 자기 행동이 실패였는지 기록 — 다음 턴 위력 2배 판정. 이번 턴 행동하지 않았으면
+  // (교체로 나옴·쓰러짐 등) 실패 아님. 턴 중 유턴류로 바뀐 경우 행동한 포켓몬이 아니므로 종 id로 맞춘다.
+  for (const key of ["a", "b"] as const) {
+    const fighter = state[key];
+    const own = actions.find((a) => a.actor === key && a.actorPokemonId === fighter.slot.pokemonId);
+    fighter.lastTurnMoveFailed = own && actionFailed(own) ? true : undefined;
+  }
 
   const endOfTurn: EndOfTurnLogEntry[] = [];
   // 멸망의노래로 이번 턴 종료에 쓰러진 쪽(F-4) — 양쪽 다면 스피드 느린 쪽이 승리한다.
