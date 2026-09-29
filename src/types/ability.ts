@@ -369,7 +369,7 @@ export interface Ability {
    * 그 자리에서 시전자에게 되돌린다. 되돌린 기술은 빗나가지 않고, 시전자 기준으로 효과가 다시
    * 평가된다(타입 면역·조사 등 전부 시전자 것으로). 반사 제외: notReflectable 플래그가 붙은
    * 기술(고스트 저주·추억의선물·멸망의노래·흔들흔들댄스), 도구·특성 효과, 데미지기.
-   * 틀깨기(공격측)에는 무시당한다 — MOLD_BREAKER_IMMUNE_ABILITY_NAMES에서 제외돼 있어
+   * 틀깨기(공격측)에는 무시당한다 — MOLD_BREAKER_IGNORABLE_ABILITY_NAMES에 있어
    * resolveEffectiveDefenderAbility가 자동으로 이 특성을 무효화한다.
    */
   reflectsOpponentStatusMoves?: boolean;
@@ -479,11 +479,9 @@ export interface Ability {
    */
   disablesOwnItemEffects?: boolean;
   /**
-   * 틀깨기: 공격할 때 상대의 방어적 특성 효과를 무시한다(예외 목록 제외 — abilityModifiers.ts의
-   * `MOLD_BREAKER_IMMUNE_ABILITY_NAMES`에 있는 특성은 여전히 정상 작동한다). 실제 게임에서도
-   * 세대를 거치며 예외가 계속 늘어났고(멀티스케일·부유·클리어바디·천진·유연·저수·타오르는불꽃·
-   * 피뢰침·황금몸 등은 전부 무시 불가), 남는 건 정전기·불꽃몸·까칠한피부·깨어진갑옷·저주받은바디·
-   * 저수(예외 목록에 있음 — 오타 아님, 실제로 무시 불가) 같은 소수뿐이다(사용자 확인).
+   * 틀깨기: 공격할 때 상대의 방어적 특성 효과를 무시한다 — abilityModifiers.ts의 `MOLD_BREAKER_IGNORABLE_ABILITY_NAMES`에
+   * 있는 특성만(멀티스케일·부유·옹골참·클리어바디·천진·유연·저수·타오르는불꽃·피뢰침·황금몸 등). 정전기·불꽃몸·까칠한피부·
+   * 깨어진갑옷·저주받은바디 같은 반격형 특성은 그대로 작동한다(ver.2.0 사용자 정리로 수정 — 이전엔 거꾸로 적용).
    */
   bypassesDefensiveAbilities?: boolean;
   /**

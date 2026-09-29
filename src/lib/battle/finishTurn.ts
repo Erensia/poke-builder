@@ -458,6 +458,47 @@ function applyShedSkinCure(ctx: EndOfTurnFighterContext): void {
   }
 }
 
+/** 틀깨기 공격으로 걸린 상태이상을 턴 끝에 스스로 치료하는 특성에서 뺄 것 — 면역은 치료 없이 걸린 채 남는다(사용자 정리 2026-09-29) */
+const NO_TURN_END_SELF_CURE_ABILITY_NAMES: ReadonlySet<string> = new Set(["면역"]);
+
+/**
+ * 상태이상 면역 특성의 자기 치료(ver.2.0 틀깨기 목록 수정, 사용자 정리): 틀깨기 공격측은 불면·유연·마그마의무장·수포·의기양양·
+ * 열교환 등을 무시하고 상태이상을 걸 수 있지만, 걸린 턴이 끝나는 순간 특성이 발동해 치료한다. 마이페이스(혼란)·둔감(헤롱헤롱·
+ * 도발)도 같은 축. 턴 종료 처리의 맨 앞 — 치료된 상태이상의 턴 끝 데미지는 받지 않는다. 면역은 치료 없음.
+ */
+function applyAbilityImmunityCure(ctx: EndOfTurnFighterContext): void {
+  const { key, fighter, fighterAbility, endOfTurn } = ctx;
+  if (!fighterAbility || isFainted(fighter) || NO_TURN_END_SELF_CURE_ABILITY_NAMES.has(fighterAbility.name)) return;
+  const condition = fighter.status.condition;
+  const curedStatus = condition && fighterAbility.immuneToStatuses?.includes(condition) ? condition : undefined;
+  if (curedStatus) fighter.status = { ...NO_STATUS_CONDITION };
+  const active = { ...fighter.volatile.active };
+  const curedVolatiles: ("confusion" | "attract" | "taunt")[] = [];
+  if (fighterAbility.immuneToConfusion && active.confusion) {
+    delete active.confusion;
+    curedVolatiles.push("confusion");
+  }
+  if (fighterAbility.immuneToAttractAndTaunt) {
+    for (const v of ["attract", "taunt"] as const) {
+      if (active[v]) {
+        delete active[v];
+        curedVolatiles.push(v);
+      }
+    }
+  }
+  if (curedVolatiles.length > 0) fighter.volatile = { ...fighter.volatile, active };
+  if (!curedStatus && curedVolatiles.length === 0) return;
+  endOfTurn.push({
+    actor: key,
+    damage: 0,
+    remainingHp: fighter.currentHp,
+    fainted: false,
+    abilityCuredStatus: curedStatus,
+    abilityCuredStatusAbilityName: fighterAbility.name,
+    abilityCuredVolatiles: curedVolatiles.length > 0 ? curedVolatiles : undefined,
+  });
+}
+
 /**
  * 가속(Speed Boost): 매 턴 종료 시 스피드 1랭크 상승. 본가 예외 — "자기 의지로 교체해서
  * 나온 턴"엔 발동하지 않는다(Phase 8 §8에서 복원). 단 기절 후 강제 교체로 나온 경우는
@@ -667,6 +708,7 @@ export function finishTurn(ctx: RunTurnContext): RunTurnOutcome {
         perishFaintedKeys.add(key);
         continue; // 이미 쓰러졌으니 이 포켓몬의 나머지 턴 종료 처리(회복 등)는 건너뛴다
       }
+      applyAbilityImmunityCure(eotCtx);
       applyFieldEndOfTurnHeal(eotCtx);
       applyLeftoversHeal(eotCtx);
       applyWeatherHealAbility(eotCtx);

@@ -202,6 +202,11 @@ function applyEntryHazardsOnSwitchIn(state: BattleState, key: FighterKey, log: s
   }
 }
 
+/** 틀깨기류 등장 안내(ver.2.0) — 배틀 시작 리드(state.ts)와 교체·메가진화 등장이 같은 문구를 쓴다 */
+export function moldBreakerAnnouncement(pokemonName: string, abilityName: string): string {
+  return `${pokemonName}의 ${abilityName}!`;
+}
+
 /**
  * 교체로 나온 포켓몬 하나에 대해 "등장 시 특성"을 적용한다(Phase 8 §4 골격).
  * createBattleState의 resolveEntryAbilityEffects는 양쪽을 스피드 순으로 동시에 처리하는
@@ -227,6 +232,9 @@ function applyEntryAbilityOnSwitchIn(state: BattleState, key: FighterKey, log: s
       log.push(`${selfName}의 ${ability.name}! 양쪽의 빛의장막과 리플렉터가 사라졌다!`);
     }
   }
+
+  // 틀깨기(ver.2.0 — 사용자 요청): 등장 시 "○○○의 틀깨기!"를 알린다. 메가진화로 얻은 경우도 이 함수를 거친다.
+  if (ability.bypassesDefensiveAbilities) log.push(moldBreakerAnnouncement(selfName, ability.name));
 
   // 일루전(§6-1): 등장 시 파티 마지막 슬롯 모습으로 위장한다(별도 로그 없음 — 상대는 눈치채지 못한다).
   if (ability.illusion) {

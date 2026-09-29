@@ -583,8 +583,10 @@ export interface EndOfTurnLogEntry {
   inflictedDelayedStatus?: StatusConditionState["condition"];
   /** 탈피처럼 턴 종료 시 특성으로 자신의 상태이상이 나았으면 그 상태이상 */
   abilityCuredStatus?: StatusConditionState["condition"];
-  /** abilityCuredStatus를 치료한 특성 이름 */
+  /** abilityCuredStatus(또는 abilityCuredVolatiles)를 치료한 특성 이름 */
   abilityCuredStatusAbilityName?: string;
+  /** 마이페이스·둔감이 틀깨기 공격으로 걸린 혼란·헤롱헤롱·도발을 턴 끝에 푼 것(ver.2.0) */
+  abilityCuredVolatiles?: ("confusion" | "attract" | "taunt")[];
   /** damage가 상태이상 매턴 데미지일 때(독/맹독/화상) 어떤 상태이상인지 — UI가 문구를 골라 쓰는 데 필요 */
   statusCondition?: StatusConditionState["condition"];
   /** 먹다남은음식으로 회복했으면 그 회복량 */
