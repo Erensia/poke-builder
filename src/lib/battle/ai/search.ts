@@ -32,6 +32,13 @@ export interface SearchParams {
   opponentSwitchWeight: number;
   /** 점수(평가식) 상위 K개만 롤아웃(0 = 전부) */
   topK: number;
+  /**
+   * 롤아웃 횟수 예산(ver.2.0 2-A, 0 = 끔 — 모든 후보에 seeds개). 켜면 먼저 모든 후보 × 상대 행동에 시드 1개씩 돌리고, 남은 예산으로
+   * 지금 최선과 값 차이가 budgetMargin 안인 후보에만 시드를 하나씩 더한다(최대 seeds개). 결과가 뻔한 턴은 빨리 끝나고 애매한 턴에
+   * 시간을 쓴다. 시간이 아니라 횟수라서 벤치가 재현된다(앱은 여기에 시간 안전장치를 겹친다).
+   */
+  budget: number;
+  budgetMargin: number;
 }
 
 export const DEFAULT_SEARCH_PARAMS: SearchParams = {
@@ -41,6 +48,8 @@ export const DEFAULT_SEARCH_PARAMS: SearchParams = {
   maxOpponentMoves: 4,
   opponentSwitchWeight: 0.5,
   topK: 0,
+  budget: 0,
+  budgetMargin: 0.15,
 };
 
 /** 오라클이 부르는 지금 AI(탐색 없음) — index.ts가 넘긴다(순환 import 방지) */
@@ -239,26 +248,44 @@ export function searchDecide(ctx: SearchContext, options: AiOption[]): SearchRes
   // 공통 난수: 모든 후보가 (상대 행동, 시드 번호)마다 같은 난수열을 쓴다 — 턴 번호로 배틀 안에서도 매 턴 다르게
   const seedOf = (j: number, s: number) => (state.turnNumber + 1) * 0x9e3779b1 + j * 0x85ebca6b + s * 0xc2b2ae35;
 
-  const values = candidates.map(({ option }) => {
-    const mine = toAction(option);
-    let value = 0;
-    theirs.forEach(({ action, weight }, j) => {
-      let sum = 0;
-      for (let s = 0; s < search.seeds; s++) {
-        const random = mulberry32(seedOf(j, s));
-        let turn = playTurn(state, key, mine, action, random, policy);
-        if (!turn.ended && search.depth === 2) {
-          turn = playTurn(turn.state, key, policy.action(turn.state, key), policy.action(turn.state, opponentKey(key)), random, policy);
-        }
-        const delta = standing(turn.state, key, lambda) - f0;
-        // 롤아웃 뒤 state는 추론 분포를 낸 지금 대면과 다르다 — 잎 평가는 고정 규칙으로
-        const leaf = turn.ended ? 0 : withThreatOverride(undefined, () => leafValue(turn.state, key, riskAversion, params, search));
-        sum += delta + leaf;
-      }
-      value += weight * (sum / search.seeds);
-    });
-    return { option, value };
-  });
+  // 롤아웃 한 번: 후보 c · 상대 행동 j · 시드 번호 sd의 값(그 턴 판세 변화 + 잎 평가)
+  const rollout = (option: AiOption, j: number, sd: number): number => {
+    const random = mulberry32(seedOf(j, sd));
+    let turn = playTurn(state, key, toAction(option), theirs[j].action, random, policy);
+    if (!turn.ended && search.depth === 2) {
+      turn = playTurn(turn.state, key, policy.action(turn.state, key), policy.action(turn.state, opponentKey(key)), random, policy);
+    }
+    const delta = standing(turn.state, key, lambda) - f0;
+    // 롤아웃 뒤 state는 추론 분포를 낸 지금 대면과 다르다 — 잎 평가는 고정 규칙으로
+    const leaf = turn.ended ? 0 : withThreatOverride(undefined, () => leafValue(turn.state, key, riskAversion, params, search));
+    return delta + leaf;
+  };
+  // 후보별 (상대 행동 j마다) 누적 합과 시드 수 — 값 = Σ_j w_j × 평균
+  const tallies = candidates.map(({ option }) => ({ option, sums: theirs.map(() => 0), seeds: 0 }));
+  const addSeed = (t: (typeof tallies)[number]) => {
+    theirs.forEach((_, j) => (t.sums[j] += rollout(t.option, j, t.seeds)));
+    t.seeds++;
+  };
+  const valueOf = (t: (typeof tallies)[number]) => theirs.reduce((v, { weight }, j) => v + (weight * t.sums[j]) / t.seeds, 0);
+  if (search.budget <= 0) {
+    for (const t of tallies) for (let sd = 0; sd < search.seeds; sd++) addSeed(t);
+  } else {
+    let used = 0;
+    for (const t of tallies) {
+      addSeed(t);
+      used += theirs.length;
+    }
+    // 남은 예산: 최선과 가까운 후보(아직 시드 여유가 있는 것)에만 시드를 하나씩 더한다
+    while (used < search.budget) {
+      const top = Math.max(...tallies.map(valueOf));
+      const close = tallies.filter((t) => t.seeds < search.seeds && top - valueOf(t) <= search.budgetMargin);
+      if (close.length < 2 && close.every((t) => valueOf(t) === top)) break;
+      if (close.length === 0 || used + close.length * theirs.length > search.budget) break;
+      for (const t of close) addSeed(t);
+      used += close.length * theirs.length;
+    }
+  }
+  const values = tallies.map((t) => ({ option: t.option, value: valueOf(t) }));
   const best = values.reduce((a, b) => (b.value > a.value ? b : a));
   return { chosen: best.option, baseChosen: base.chosen, values, scored };
 }
