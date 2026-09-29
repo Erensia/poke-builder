@@ -313,8 +313,36 @@ try {
     // OPP_ROOT면 B는 그 체크아웃의 AI — 고른 기술은 이 체크아웃 데이터의 같은 id 기술로 바꿔 엔진에 넘긴다.
     const oppAi = oppServer ? await oppServer.ssrLoadModule("/src/lib/battle/ai/index.ts") : ai;
     const remap = (action) => (action.kind === "move" && action.move ? { ...action, move: data.getMove(action.move.id) ?? action.move } : action);
-    const policy = (params, risk, which = ai) => (st, key) =>
-      remap(which.chooseAiAction(st, key, risk, { decisionParams: params }).action);
+    // 탐색 오라클(ver.2.0 0단계, A 쪽 params.search): 판단 시간과 "평가식만으로 골랐을 선택"과 갈린 턴을 종류별로 센다
+    const searchStats = { decisions: 0, differ: 0, ms: 0, maxMs: 0, byKind: {} };
+    const kindOf = (o) =>
+      o.optionType === "switch" ? "switch" : o.move.category === "status" ? statusLabel(o.move) : o.move.selfSwitchAfterDamage ? "pivot" : "attack";
+    const policy = (params, risk, which = ai) => (st, key) => {
+      const t0 = performance.now();
+      const d = which.chooseAiAction(st, key, risk, { decisionParams: params });
+      if (d.baseChosen) {
+        const ms = performance.now() - t0;
+        searchStats.decisions++;
+        searchStats.ms += ms;
+        searchStats.maxMs = Math.max(searchStats.maxMs, ms);
+        if (d.baseChosen !== d.chosen) {
+          searchStats.differ++;
+          const label = `${kindOf(d.baseChosen)}→${kindOf(d.chosen)}`;
+          searchStats.byKind[label] = (searchStats.byKind[label] ?? 0) + 1;
+          if (process.env.DIAG === "search" && searchStats.differ <= 20) {
+            const name = (o) => (o.optionType === "switch" ? `→${data.getPokemon(state.sideOf(st, key).party[o.toIndex].slot.pokemonId)?.name}` : o.move.name);
+            const me = st[key];
+            const op = st[key === "a" ? "b" : "a"];
+            console.error(
+              `[T${st.turnNumber}] ${data.getPokemon(me.slot.pokemonId)?.name} ${me.currentHp}/${me.maxHp} vs ${data.getPokemon(op.slot.pokemonId)?.name} ${op.currentHp}/${op.maxHp}: ` +
+                `평가식 ${name(d.baseChosen)} → 오라클 ${name(d.chosen)} | ` +
+                d.searchValues.map((v) => `${name(v.option)} 점수=${d.scored.find((x) => x.option === v.option)?.score.toFixed(2)} 값=${v.value.toFixed(2)}`).join(", "),
+            );
+          }
+        }
+      }
+      return remap(d.action);
+    };
     const forced = (params, risk, which = ai) => (st, key) => which.chooseAiForcedSwitch(st, key, risk, params) ?? living(st, key)[0];
     const res = { aWins: 0, bWins: 0, other: 0 };
     for (let s = seedFrom; s <= seedTo; s++) {
@@ -329,7 +357,8 @@ try {
         res[r.winner === aSide ? "aWins" : r.winner === bSide ? "bWins" : "other"]++;
       }
     }
-    console.log(JSON.stringify({ battles: battles * 2, A: { ...decisionParams }, B: { ...opponentParams }, res }));
+    const search = searchStats.decisions > 0 ? { search: searchStats } : {};
+    console.log(JSON.stringify({ battles: battles * 2, A: { ...decisionParams }, B: { ...opponentParams }, res, ...search }));
   } else if (mode === "select") {
     // 3선출 AI(로드맵 7): 양쪽 6마리 빌드 → 한쪽은 AI 선출, 다른 쪽은 SELECT_B(random | first, 기본 random) → 양쪽 AI로 대전.
     // 좌우 교대.

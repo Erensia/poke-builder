@@ -2,6 +2,7 @@ import type { AiOption } from "./evaluator";
 import { DEFAULT_THREAT_MODEL } from "./opponentMoveModel";
 import { A1_EFFECT_KINDS, A2_EFFECT_KINDS, PHASE3_EFFECT_KINDS, TRACK_M_EFFECT_KINDS, TIER2_EFFECT_KINDS, type EffectMoveKind } from "./statusMoveEffects";
 import { ALL_PROTECT_GROUPS, type ProtectGroup } from "./protectMoves";
+import type { SearchParams } from "./search";
 import { partyRaceValue, partyValueAfterTurn, type ChainParams, type PartyDuel, type PartyEffect } from "./partyEval";
 
 /**
@@ -123,6 +124,11 @@ export interface DecisionParams {
   trapMoveAware: boolean;
   /** 확률 턴 종료 효과(ver.1.9 6-4) — 탈피·수확을 대면 턴 수에 기대값으로. false면 이전 동작(비교용), withChanceEffectsModel */
   chanceEffectsAware: boolean;
+  /**
+   * 탐색 오라클(ver.2.0 0단계): 켜면 후보 행동마다 엔진으로 롤아웃해 고른다(search.ts). 시뮬레이터 측정 전용 — 기본 끔(undefined).
+   * 값은 DEFAULT_SEARCH_PARAMS 위에 덮어쓸 부분.
+   */
+  search?: Partial<SearchParams>;
 }
 
 /**
