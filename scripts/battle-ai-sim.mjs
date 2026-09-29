@@ -8,6 +8,9 @@
  *   ai       AI 대 무작위 봇 + AI 대 AI 승률, 턴당 판단 시간, NaN 점수 개수
  *   greedy   AI 대 그리디 봇(교체 없이 매 턴 가장 빨리 처치하는 기술만) — 파티를 좌우 바꿔 한 번 더
  *   diag     AI가 교체를 고른 순간의 모든 옵션 점수·c·d 출력(판단 이상 사례 찾기)
+ *   style    AI(파라미터 A) 대 스타일 봇(환경변수 STYLE=switcher | setup | noisy), 파티 좌우 교대(ver.2.0 1-A — 상대 모델 판정용).
+ *            봇은 지금 AI(기본 파라미터)의 점수를 보고 성향대로 비튼다: switcher = 교체 점수가 최선 −0.3 안이면 교체,
+ *            setup = 변화기 점수가 최선 −0.5 안이면 변화기, noisy = 25%로 차선책(사람 실수 흉내).
  *   h2h      AI(파라미터 A) 대 AI(파라미터 B, 5번째 인자 — 생략하면 기본값), 파티 좌우 교대. 그리디 봇은 항상
  *            최선기만 써서 "상대 모델" 튜닝에 편향되므로, 모델 변경은 이 모드로도 비교한다.
  *
@@ -19,7 +22,7 @@
  * 환경변수 PROTECT=1: 방어류를 배울 수 있으면 4번째 기술을 방어류로 바꾼다. DIAG=protect면 방어류를 고른 순간을 덤프.
  * 환경변수 STATUS=1: AI가 점수 매기는 변화기를 배울 수 있으면 기술 하나를 그걸로 바꾼다(변화기 판단 검증용).
  *     diag 모드에 DIAG=status를 주면 그 변화기를 고른 순간을 덤프한다.
- * 환경변수 SEED_FROM=<n>(greedy·h2h·select): 시드 n부터 [판 수]개만 돈다(기본 1) — 벤치를 조각내 병렬로 돌린 뒤 합산(scripts/bench.mjs).
+ * 환경변수 SEED_FROM=<n>(greedy·style·h2h·select): 시드 n부터 [판 수]개만 돈다(기본 1) — 벤치를 조각내 병렬로 돌린 뒤 합산(scripts/bench.mjs).
  *     각 판은 시드로만 정해지므로 조각의 합은 한 번에 돌린 결과와 같다.
  * 환경변수 SIM_ROOT=<체크아웃 경로>: 이 스크립트 대신 그 체크아웃의 src/를 불러온다(다른 커밋을 이 하네스로 벤치).
  *   h2h에 OPP_ROOT=<다른 체크아웃 경로>를 주면 B 쪽 AI를 그 코드에서 불러온다(예: ver.1.7 끝 대비 — 엔진·데이터는 이 체크아웃).
@@ -308,6 +311,49 @@ try {
       res[outcome(s, "b", risk)]++;
     }
     console.log(JSON.stringify({ battles: battles * 2, res, aiActionMix: mix, statusMix }));
+  } else if (mode === "style") {
+    // 스타일 봇(ver.2.0 1-A): 지금 AI의 채점 결과를 성향대로 비틀어 고른다. 무작위는 시드 고정(판 재현).
+    const style = process.env.STYLE ?? "noisy";
+    if (!["switcher", "setup", "noisy"].includes(style)) throw new Error(`알 수 없는 STYLE: ${style}`);
+    const botPolicy = (risk, rng) => (st, key) => {
+      const d = ai.chooseAiAction(st, key, risk, {});
+      const finite = d.scored.filter((x) => Number.isFinite(x.score)).sort((x, y) => y.score - x.score);
+      if (finite.length < 2) return d.action;
+      const best = finite[0].score;
+      const toAction = (o) => (o.optionType === "switch" ? { kind: "switch", toIndex: o.toIndex } : { kind: "move", move: o.move, mega: o.mega });
+      if (style === "switcher") {
+        const sw = finite.find((x) => x.option.optionType === "switch");
+        if (sw && sw.score >= best - 0.3) return toAction(sw.option);
+      } else if (style === "setup") {
+        const status = finite.find((x) => x.option.optionType === "move" && x.option.move.category === "status");
+        if (status && status.score >= best - 0.5) return toAction(status.option);
+      } else if (rng() < 0.25) {
+        return toAction(finite[1].option);
+      }
+      return d.action;
+    };
+    const res = { aiWins: 0, botWins: 0, other: 0 };
+    const botMix = { move: 0, status: 0, switch: 0 };
+    for (let s = seedFrom; s <= seedTo; s++) {
+      const risk = mulberry32(s)();
+      for (const aiSide of ["a", "b"]) {
+        const botSide = aiSide === "a" ? "b" : "a";
+        const botRng = mulberry32(s * 31 + (aiSide === "a" ? 1 : 2));
+        const bot = botPolicy(1 - risk, botRng);
+        const counted = (st, key) => {
+          const action = bot(st, key);
+          botMix[action.kind === "switch" ? "switch" : action.move.category === "status" ? "status" : "move"]++;
+          return action;
+        };
+        const r = runBattle(
+          s,
+          { [aiSide]: (st, key) => ai.chooseAiAction(st, key, risk, { decisionParams }).action, [botSide]: counted },
+          { [aiSide]: aiForced(risk), [botSide]: (st, key) => ai.chooseAiForcedSwitch(st, key, 1 - risk) ?? living(st, key)[0] },
+        );
+        res[r.winner === aiSide ? "aiWins" : r.winner === botSide ? "botWins" : "other"]++;
+      }
+    }
+    console.log(JSON.stringify({ battles: battles * 2, style, res, botMix }));
   } else if (mode === "h2h") {
     // AI(파라미터 A = argv[4]) 대 AI(파라미터 B = argv[5], 생략하면 기본값), 파티 좌우 교대.
     // OPP_ROOT면 B는 그 체크아웃의 AI — 고른 기술은 이 체크아웃 데이터의 같은 id 기술로 바꿔 엔진에 넘긴다.
@@ -428,7 +474,7 @@ try {
     }
     console.log(JSON.stringify({ battles, results, avgTurnMs: +(totalMs / decisions).toFixed(2), maxTurnMs: +maxMs.toFixed(1), nanScores }));
   } else {
-    console.error(`알 수 없는 모드: ${mode} (regress | ai | greedy | diag | h2h | select)`);
+    console.error(`알 수 없는 모드: ${mode} (regress | ai | greedy | diag | style | h2h | select)`);
     process.exitCode = 1;
   }
 } finally {
