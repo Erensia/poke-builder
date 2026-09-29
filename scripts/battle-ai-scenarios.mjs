@@ -2359,6 +2359,33 @@ try {
     const lead = battle([mon("몰드류", ["아이언헤드"], "틀깨기")], [mon("잠만보", ["칼춤"])]);
     check("2.0 틀깨기 등장 문구 \"○○○의 틀깨기!\"", lead.entryAnnouncements.includes("몰드류의 틀깨기!"), lead.entryAnnouncements.join(" / "));
   }
+  // ── 상대를 쓰러뜨린 턴의 턴 종료 처리(ver.2.0 버그 수정 — 플레이테스트 사용자 제보) ──
+  {
+    const rt = await server.ssrLoadModule("/src/lib/battle/runTurn.ts");
+    const sw = await server.ssrLoadModule("/src/lib/battle/switching.ts");
+    const act = (id) => ({ kind: "move", move: data.getMove(id) });
+    // 턴 1: 하마돈 하품 → 따라큐 졸음. 턴 2: 따라큐가 하마돈을 쓰러뜨림 → 그 턴 끝에 잠들어야 한다
+    const st = battle([mon("따라큐", ["치근거리기"], null, "먹다남은음식")], [mon("하마돈", ["하품"]), mon("갸라도스", ["폭포오르기"])]);
+    const t1 = rt.runTurn(st, act("치근거리기"), act("하품"), () => 0.5).nextState;
+    t1.b.currentHp = 1;
+    t1.a.currentHp = Math.floor(t1.a.maxHp / 2);
+    const t2 = rt.runTurn(t1, act("치근거리기"), act("하품"), () => 0.5);
+    const asleep = t2.nextState.a.status.condition === "sleep";
+    const leftovers = t2.nextState.a.currentHp > t1.a.currentHp;
+    check(
+      "2.0 상대를 쓰러뜨린 턴에도 살아 있는 쪽 턴 종료 처리(하품 졸음 → 잠듦, 먹다남은음식)",
+      t2.nextState.b.currentHp <= 0 && asleep && leftovers,
+      `하마돈 기절 ${t2.nextState.b.currentHp <= 0} 잠듦 ${asleep} 회복 ${leftovers}`,
+    );
+    // 씨뿌리기: 씨를 뿌린 쪽이 이번 턴 쓰러졌으면 흡수 없음(데미지도 없음)
+    const seeded = battle([mon("따라큐", ["치근거리기"])], [mon("하마돈", ["씨뿌리기"]), mon("갸라도스", ["폭포오르기"])]);
+    seeded.a.volatile.active.leechSeed = {};
+    seeded.b.currentHp = 1;
+    const hpBefore = seeded.a.currentHp;
+    const s2 = rt.runTurn(seeded, act("치근거리기"), act("씨뿌리기"), () => 0.5);
+    check("2.0 씨를 뿌린 쪽이 쓰러진 턴엔 씨뿌리기 발동 안 함", s2.nextState.a.currentHp === hpBefore, `${hpBefore} → ${s2.nextState.a.currentHp}`);
+    void sw;
+  }
   // 상대가 나에게 데미지를 줄 수단이 없을 때(+Infinity 점수)
   {
     const st = battle([mon("팬텀", ["10만볼트"])], [mon("한카리아스", ["지진"])]);
