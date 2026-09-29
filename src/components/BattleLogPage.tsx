@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState, type Dispatch, type SetStateAction } from "react";
+import { Fragment, useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { BattleSetupCard } from "./BattleSetupCard";
 import { PokemonPickerModal } from "./PokemonPickerModal";
 import { MovePickerModal } from "./MovePickerModal";
@@ -44,7 +44,8 @@ import {
   type TurnAction,
   type TurnResult,
 } from "../lib/battleSimulator";
-import { chooseAiAction, chooseAiForcedSwitch, chooseAiSelection, sampleRiskAversion } from "../lib/battle/ai";
+import { chooseAiForcedSwitch, chooseAiSelection, sampleRiskAversion } from "../lib/battle/ai";
+import { APP_DECISION_PARAMS, chooseAiActionAsync, prewarmAiWorker } from "../lib/battle/ai/aiClient";
 import type { PartySlot } from "../types/party";
 import type { StatusCondition } from "../types/status";
 import type { BaseStats } from "../types/stats";
@@ -418,9 +419,12 @@ function BattleBoard({
   playTurn,
   resetToSetup,
   aiSide,
+  aiThinking,
 }: {
   /** 컴퓨터(배틀 AI)가 조작하는 편. 사람이 양쪽 다 조작하면 null */
   aiSide: Side | null;
+  /** AI가 이번 턴 행동을 계산하는 중(ver.2.0 2-B — Web Worker) — 점 세 개 표시, 턴 진행 버튼 잠금 */
+  aiThinking: boolean;
   battleState: BattleState;
   winner: FighterKey | "draw" | undefined;
   selected: SelectedState;
@@ -601,6 +605,13 @@ function BattleBoard({
                   )}
                   {fighter.currentHp <= 0 && <span className="battle-fighter-fainted"> (기절)</span>}
                   {side === aiSide && <span className="battle-fighter-ai-tag">AI</span>}
+                  {side === aiSide && aiThinking && (
+                    <span className="battle-ai-thinking" role="status" aria-label="AI 생각 중">
+                      <i />
+                      <i />
+                      <i />
+                    </span>
+                  )}
                 </span>
               </div>
               <div className="battle-status-tags">
@@ -1032,7 +1043,7 @@ function BattleBoard({
         <button
           type="button"
           className="battle-start-button"
-          disabled={(["a", "b"] as const).some(
+          disabled={aiThinking || (["a", "b"] as const).some(
             (side) =>
               side !== aiSide &&
               selected[side]?.kind !== "switch" &&
@@ -1089,6 +1100,9 @@ export function BattleLogPage() {
   const [aiOpponent, setAiOpponent] = useState(true);
   const [aiSide, setAiSide] = useState<Side | null>(null);
   const [aiRiskAversion, setAiRiskAversion] = useState(0.5);
+  // AI 행동 계산 중(ver.2.0 2-B) — 요청 번호로, 계산 도중 초기화·새 대전이 시작되면 늦게 온 답을 버린다
+  const [aiThinking, setAiThinking] = useState(false);
+  const aiRequestRef = useRef(0);
 
   const sideCtls = (side: Side) => (side === "a" ? setup.a : setup.b);
   const slotCtl = (side: Side, i: SlotIndex) => sideCtls(side)[i];
@@ -1262,7 +1276,10 @@ export function BattleLogPage() {
     setSelecting(false);
     setMegaDeclared({ a: false, b: false });
     setAiSide(aiOpponent ? "b" : null);
+    if (aiOpponent) prewarmAiWorker();
     setAiRiskAversion(sampleRiskAversion());
+    aiRequestRef.current++;
+    setAiThinking(false);
   }
 
   /**
@@ -1314,6 +1331,8 @@ export function BattleLogPage() {
   );
 
   function resetToSetup() {
+    aiRequestRef.current++;
+    setAiThinking(false);
     setBattleState(null);
     setLog([]);
     setPartySlots({ a: [], b: [] });
@@ -1433,7 +1452,7 @@ export function BattleLogPage() {
   }, [pendingForcedSwitch, pendingPivot, battleState, aiSide]);
 
   function playTurn() {
-    if (!battleState || pendingForcedSwitch || pendingPivot) return;
+    if (!battleState || pendingForcedSwitch || pendingPivot || aiThinking) return;
     setLockWarning(null);
     // PP 남은 기술이 없거나(4개 다 0), 구애류 도구로 잠긴 기술의 PP가 0이면 선택 없이 발버둥.
     const struggling = { a: isStruggling("a"), b: isStruggling("b") };
@@ -1472,11 +1491,28 @@ export function BattleLogPage() {
 
     // AI 편: 발버둥·차지 2턴째는 사람과 같은 자동 처리를 따르고, 그 외엔 AI가 기술·교체·메가진화를 고른다.
     // 고를 수 있는 기술은 사람에게 적용하는 규칙(PP·구애 고정·도발·사슬묶기·앙코르)과 똑같이 거른다.
-    const aiAction =
-      aiSide && !struggling[aiSide] && !charging[aiSide]
-        ? chooseAiAction(battleState, aiSide, aiRiskAversion, { legalMoveIds: selectableMoveIds(aiSide) }).action
-        : null;
+    // ver.2.0 2-B: 탐색 오라클을 Web Worker에서 계산한다(화면 멈춤 없음, 2초 안에 답이 없으면 지금 AI로 — aiClient.ts).
+    const needsAi = !!aiSide && !struggling[aiSide] && !charging[aiSide];
+    if (!needsAi) {
+      executeTurn(null);
+      return;
+    }
+    const requestId = ++aiRequestRef.current;
+    setAiThinking(true);
+    void chooseAiActionAsync({
+      state: battleState,
+      key: aiSide!,
+      riskAversion: aiRiskAversion,
+      legalMoveIds: selectableMoveIds(aiSide!),
+      decisionParams: APP_DECISION_PARAMS,
+    }).then((aiAction) => {
+      if (requestId !== aiRequestRef.current) return; // 계산 도중 초기화·새 대전
+      setAiThinking(false);
+      executeTurn(aiAction);
+    });
 
+    function executeTurn(aiAction: TurnAction | null) {
+    if (!battleState) return;
     const actionFor = (side: Side): TurnAction | null => {
       if (side === aiSide && aiAction) return aiAction;
       const sel = selected[side];
@@ -1496,6 +1532,7 @@ export function BattleLogPage() {
     if (!actionA || !actionB) return;
 
     applyTurnOutcome(runTurn(battleState, actionA, actionB), false);
+    }
   }
 
   const winner = log.at(-1)?.winner;
@@ -1593,6 +1630,7 @@ export function BattleLogPage() {
           playTurn={playTurn}
           resetToSetup={resetToSetup}
           aiSide={aiSide}
+          aiThinking={aiThinking}
         />
       )}
 
