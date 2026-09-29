@@ -360,7 +360,9 @@ try {
     const oppAi = oppServer ? await oppServer.ssrLoadModule("/src/lib/battle/ai/index.ts") : ai;
     const remap = (action) => (action.kind === "move" && action.move ? { ...action, move: data.getMove(action.move.id) ?? action.move } : action);
     // 탐색 오라클(ver.2.0 0단계, A 쪽 params.search): 판단 시간과 "평가식만으로 골랐을 선택"과 갈린 턴을 종류별로 센다
-    const searchStats = { decisions: 0, differ: 0, ms: 0, maxMs: 0, byKind: {} };
+    // msBuckets: 판단 시간 분포(초 구간별 횟수 — 벤치 조각 합산이 가능하게 배열 대신 구간 객체)
+    const searchStats = { decisions: 0, differ: 0, ms: 0, maxMs: 0, byKind: {}, msBuckets: {} };
+    const bucketOf = (ms) => (ms < 250 ? "<0.25s" : ms < 500 ? "<0.5s" : ms < 1000 ? "<1s" : ms < 1500 ? "<1.5s" : ms < 2000 ? "<2s" : ms < 3000 ? "<3s" : ">=3s");
     const kindOf = (o) =>
       o.optionType === "switch" ? "switch" : o.move.category === "status" ? statusLabel(o.move) : o.move.selfSwitchAfterDamage ? "pivot" : "attack";
     const policy = (params, risk, which = ai) => (st, key) => {
@@ -371,6 +373,7 @@ try {
         searchStats.decisions++;
         searchStats.ms += ms;
         searchStats.maxMs = Math.max(searchStats.maxMs, ms);
+        searchStats.msBuckets[bucketOf(ms)] = (searchStats.msBuckets[bucketOf(ms)] ?? 0) + 1;
         if (d.baseChosen !== d.chosen) {
           searchStats.differ++;
           const label = `${kindOf(d.baseChosen)}→${kindOf(d.chosen)}`;
