@@ -15,6 +15,7 @@ try {
   const ev = await server.ssrLoadModule("/src/lib/battle/ai/evaluator.ts");
   const ai = await server.ssrLoadModule("/src/lib/battle/ai/index.ts");
   const dec = await server.ssrLoadModule("/src/lib/battle/ai/decision.ts");
+  const l1 = await server.ssrLoadModule("/src/lib/battle/ai/levelOne.ts");
 
   const pts = (o = {}) => ({ hp: 0, atk: 0, def: 0, spa: 0, spd: 0, spe: 0, ...o });
   // 엔진은 습득 가능 여부를 검사하지 않으므로 기술·특성·도구를 자유롭게 조합한다.
@@ -2358,6 +2359,36 @@ try {
     // 등장 문구
     const lead = battle([mon("몰드류", ["아이언헤드"], "틀깨기")], [mon("잠만보", ["칼춤"])]);
     check("2.0 틀깨기 등장 문구 \"○○○의 틀깨기!\"", lead.entryAnnouncements.includes("몰드류의 틀깨기!"), lead.entryAnnouncements.join(" / "));
+  }
+  // ── 상대 모델 ver2(ver.2.0 1-B) — 한 단계 추론 · 교체 읽기 ──
+  {
+    const om = { opponentModel: dec.DEFAULT_OPPONENT_MODEL };
+    const params = dec.paramsFor({});
+    // 교체 읽기: 한카리아스 앞의 라이츄는 갸라도스(땅 무효)로 교체할 만하다 → 지진 대신 스톤에지
+    const st = battle(
+      [mon("한카리아스", ["지진", "스톤에지"])],
+      [mon("라이츄", ["10만볼트"], null, null, pts({ spa: 32, hp: 32 })), mon("갸라도스", ["폭포오르기"], "위협", null, pts({ atk: 32, hp: 32 }))],
+    );
+    const dist = l1.levelOneDistribution(st, "a", params, dec.DEFAULT_OPPONENT_MODEL);
+    const off = ai.chooseAiAction(st, "a", 0.5);
+    const on = ai.chooseAiAction(st, "a", 0.5, { decisionParams: om });
+    check(
+      "2.0 1-B 교체 읽기: 불리한 라이츄는 교체 예측 → 들어올 갸라도스에 스톤에지(끄면 지진)",
+      dist.switchProb > 0.2 && off.action.move?.id === "지진" && on.action.move?.id === "스톤에지",
+      `q=${dist.switchProb.toFixed(2)} 끔 ${off.action.move?.id} 켬 ${on.action.move?.id}`,
+    );
+    check(
+      "2.0 1-B 교체 읽기가 붙은 공격기는 하드 오버라이드 아님(상대가 빠지면 확정 1타가 아님)",
+      on.scored.every((x) => !x.option.switchRead || !dec.isHardOverride(x.option)),
+    );
+    // 상대가 확정 처치를 가지면 분포가 그 기술로 몰린다
+    const ko = battle([mon("핫삼", ["불꽃펀치"], null, null, pts())], [mon("리자몽", ["화염방사", "칼춤"], null, null, pts({ spa: 32, spe: 32 }))]);
+    const koDist = l1.levelOneDistribution(ko, "a", params, dec.DEFAULT_OPPONENT_MODEL);
+    check("2.0 1-B 상대 확정 처치 → 분포가 그 기술로", (koDist.moveWeights.get("화염방사") ?? 0) > 0.99, JSON.stringify([...koDist.moveWeights]));
+    // 난동 등 정해진 행동이면 추론 없음(고정 규칙 모델이 그 기술만 남긴다)
+    const locked = battle([mon("핫삼", ["불꽃펀치"])], [mon("한카리아스", ["역린"])]);
+    locked.b.volatile.active.rampage = { moveId: "역린", turnsLeft: 1 };
+    check("2.0 1-B 상대 난동 중 → 추론 안 함", l1.levelOneDistribution(locked, "a", params, dec.DEFAULT_OPPONENT_MODEL) === undefined);
   }
   // 상대가 나에게 데미지를 줄 수단이 없을 때(+Infinity 점수)
   {

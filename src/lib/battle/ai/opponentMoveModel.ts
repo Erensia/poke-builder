@@ -234,6 +234,40 @@ export function withThreatModel<T>(model: ThreatModelParams, fn: () => T): T {
   }
 }
 
+/**
+ * 한 단계 추론(ver.2.0 1-B): 지금 실제 상대(opponentSlot)가 지금 내 포켓몬(targetSlot)을 상대할 때만 기술 사용 확률을 추론 분포
+ * (기술 id → 확률, 상대가 교체하지 않는다는 조건부)와 섞는다 — 확률 = alpha × 추론 + (1 − alpha) × 고정 규칙. 교체 후보·대면표 등
+ * 다른 짝은 고정 규칙 그대로. slot은 state 복제(cloneFighter)에도 같은 객체라 효과 변화기 재평가 복제본에도 적용된다.
+ */
+export interface ThreatOverride {
+  opponentSlot: object;
+  targetSlot: object;
+  weights: ReadonlyMap<string, number>;
+  alpha: number;
+}
+let threatOverride: ThreatOverride | undefined;
+
+/** fn 실행 동안만 한 단계 추론 분포를 적용한다(withThreatModel과 같은 방식) */
+export function withThreatOverride<T>(override: ThreatOverride | undefined, fn: () => T): T {
+  const previous = threatOverride;
+  threatOverride = override;
+  try {
+    return fn();
+  } finally {
+    threatOverride = previous;
+  }
+}
+
+/** 추론 분포와 고정 규칙 가중치를 섞는다 — 후보(지금 쓸 수 있는 의미 있는 기술)에 추론 확률이 없으면 고정 규칙 그대로 */
+function blendWeights(ctx: ThreatContext, moves: Move[], fixed: number[]): number[] {
+  const override = threatOverride;
+  if (!override || ctx.opponent.slot !== override.opponentSlot || ctx.target.slot !== override.targetSlot) return fixed;
+  const inferred = moves.map((m) => override.weights.get(m.id) ?? 0);
+  const total = inferred.reduce((a, b) => a + b, 0);
+  if (total <= 0) return fixed;
+  return fixed.map((w, i) => override.alpha * (inferred[i] / total) + (1 - override.alpha) * w);
+}
+
 /** 공격 관련 스탯(공격·특공)을 올리는 자기 대상 변화기 */
 export function isOffensiveSetupMove(move: Move): boolean {
   return (
@@ -442,8 +476,15 @@ export function evaluateOpponentThreat(ctx: ThreatContext): OpponentThreat {
   // 공격기 사용 확률 ∝ 데미지^k (k = sharpness, 1이면 v1의 데미지 비례)
   const shares = attacks.map((a) => a.rate ** threatModel.sharpness);
   const totalShare = shares.reduce((sum, s) => sum + s, 0);
-  const expectedRate =
-    totalShare > 0 ? attacks.reduce((sum, a, i) => sum + (shares[i] / totalShare) * remainingWeight * a.rate, 0) : 0;
+  const statusWeightEach = Math.min(threatModel.statusWeight, 1 / Math.max(1, meaningfulStatus.length));
+  // 기술별 사용 확률(변화기 → 공격기 순) — 한 단계 추론(1-B)이 걸린 짝이면 추론 분포와 섞는다
+  const weights = blendWeights(
+    ctx,
+    [...meaningfulStatus, ...attacks.map((a) => a.move)],
+    [...meaningfulStatus.map(() => statusWeightEach), ...shares.map((sh) => (totalShare > 0 ? (sh / totalShare) * remainingWeight : 0))],
+  );
+  const attackWeight = (i: number) => weights[meaningfulStatus.length + i];
+  const expectedRate = attacks.reduce((sum, a, i) => sum + attackWeight(i) * a.rate, 0);
 
   const best = attacks.reduce<(typeof attacks)[number] | undefined>(
     (acc, a) => (!acc || a.estimate.expected < acc.estimate.expected ? a : acc),
@@ -452,8 +493,7 @@ export function evaluateOpponentThreat(ctx: ThreatContext): OpponentThreat {
 
   // 잠꼬대(AI-A2): 상대가 잠들어 있고 잠꼬대를 쓸 수 있으면, 잠든 턴에도 무작위 기술의 평균 피해를 준다.
   // 대타를 깨는 턴 계산용 절대 데미지(최대 HP 대비) — 사용 확률 가중 평균
-  const expectedDamage =
-    totalShare > 0 ? attacks.reduce((sum, a, i) => sum + (shares[i] / totalShare) * remainingWeight * a.estimate.damageFraction, 0) : 0;
+  const expectedDamage = attacks.reduce((sum, a, i) => sum + attackWeight(i) * a.estimate.damageFraction, 0);
   // 위협 환산(ver.1.8 한계점 정리 ③): 상대 랭크업기·나에게 거는 독·화상이 앞으로 끼칠 해를 공격 속도에 얹는다
   let threatRate = expectedRate;
   let threatDamage = expectedDamage;
@@ -478,8 +518,7 @@ export function evaluateOpponentThreat(ctx: ThreatContext): OpponentThreat {
     }
   }
 
-  const selfHpRate =
-    totalShare > 0 ? attacks.reduce((sum, a, i) => sum + (shares[i] / totalShare) * remainingWeight * (a.estimate.selfHpRate ?? 0), 0) : 0;
+  const selfHpRate = attacks.reduce((sum, a, i) => sum + attackWeight(i) * (a.estimate.selfHpRate ?? 0), 0);
 
   return {
     selfHpRate,
@@ -493,8 +532,8 @@ export function evaluateOpponentThreat(ctx: ThreatContext): OpponentThreat {
     bestHitFraction: best ? Math.min(1, best.rate) * (targetHp / target.maxHp) : 0,
     expectedRate: threatRate,
     moveWeights: [
-      ...meaningfulStatus.map((move) => ({ move, weight: Math.min(threatModel.statusWeight, 1 / meaningfulStatus.length) })),
-      ...attacks.map((a, i) => ({ move: a.move, weight: totalShare > 0 ? (shares[i] / totalShare) * remainingWeight : 0 })),
+      ...meaningfulStatus.map((move, k) => ({ move, weight: weights[k] })),
+      ...attacks.map((a, i) => ({ move: a.move, weight: attackWeight(i) })),
     ],
   };
 }

@@ -4,7 +4,9 @@ import { resumeTurn, runTurn, type RunTurnOutcome } from "../runTurn";
 import { applySwitch } from "../switching";
 import { forcedLockedAction } from "../lockedAction";
 import { canMegaEvolve, evaluateOptions, type AiOption } from "./evaluator";
-import { evaluateOpponentThreat } from "./opponentMoveModel";
+import { evaluateOpponentThreat, withThreatOverride } from "./opponentMoveModel";
+import type { LevelOneDistribution } from "./levelOne";
+import { getMove } from "@/lib/data";
 import { createPartyModel, partyValueAfterTurn } from "./partyEval";
 import { chainParams, decide, isHardOverride, type DecisionParams, type ScoredOption } from "./decision";
 
@@ -97,10 +99,18 @@ function livingBench(state: BattleState, key: FighterKey): number[] {
  * 상대 행동 분포: 상대 기술 사용 확률 모델(§2) — 확률 5% 미만 제외, 큰 순 최대 N개 — 에, 상대가 자기 평가(지금 AI)로 교체를
  * 고르면 그 교체를 opponentSwitchWeight만큼 섞는다. 난동·모으기·반동 중이면 정해진 행동 하나.
  */
-function opponentActions(state: BattleState, key: FighterKey, riskAversion: number, params: DecisionParams, search: SearchParams) {
+function opponentActions(
+  state: BattleState,
+  key: FighterKey,
+  riskAversion: number,
+  params: DecisionParams,
+  search: SearchParams,
+  dist?: LevelOneDistribution,
+): { action: TurnAction; weight: number }[] {
   const oppKey = opponentKey(key);
   const locked = forcedLockedAction(state[oppKey]);
   if (locked) return [{ action: locked, weight: 1 }];
+  if (dist) return distributionActions(dist, search);
   const threat = evaluateOpponentThreat({
     state,
     opponent: state[oppKey],
@@ -125,6 +135,24 @@ function opponentActions(state: BattleState, key: FighterKey, riskAversion: numb
     }
   }
   return actions;
+}
+
+/** 한 단계 추론 분포(1-B) → 상대 응수: 기술은 5% 이상 큰 순 N개(재정규화), 교체는 대상별로 그대로 */
+function distributionActions(dist: LevelOneDistribution, search: SearchParams): { action: TurnAction; weight: number }[] {
+  const moves = [...dist.moveWeights]
+    .filter(([, w]) => w >= 0.05)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, search.maxOpponentMoves);
+  const total = moves.reduce((sum, [, w]) => sum + w, 0);
+  const actions: { action: TurnAction; weight: number }[] = [];
+  const stay = dist.switches.length > 0 ? 1 - dist.switchProb : 1;
+  for (const [id, w] of moves) {
+    const move = getMove(id);
+    if (move && total > 0) actions.push({ action: { kind: "move", move, mega: dist.megaOf.get(id) }, weight: (stay * w) / total });
+  }
+  for (const s of dist.switches) if (s.weight > 0) actions.push({ action: { kind: "switch", toIndex: s.toIndex }, weight: dist.switchProb * s.weight });
+  const sum = actions.reduce((acc, a) => acc + a.weight, 0);
+  return sum > 0 ? actions.map((a) => ({ ...a, weight: a.weight / sum })) : [];
 }
 
 /** 한 턴을 끝까지(유턴류 멈춤·기절 교체 포함) 진행한다. 배틀이 끝났으면 ended */
@@ -189,6 +217,8 @@ export interface SearchContext {
   params: DecisionParams;
   search: SearchParams;
   policy: SearchPolicy;
+  /** 상대 모델 ver2(1-B)가 켜져 있으면 그 분포를 상대 응수로 쓴다(없으면 고정 규칙 + 상대 자기 평가 교체) */
+  opponent?: LevelOneDistribution;
 }
 
 export function searchDecide(ctx: SearchContext, options: AiOption[]): SearchResult | null {
@@ -204,7 +234,7 @@ export function searchDecide(ctx: SearchContext, options: AiOption[]): SearchRes
 
   const lambda = params.partyCountWeight;
   const f0 = standing(state, key, lambda);
-  const theirs = opponentActions(state, key, riskAversion, params, search);
+  const theirs = opponentActions(state, key, riskAversion, params, search, ctx.opponent);
   if (theirs.length === 0) return plain;
   // 공통 난수: 모든 후보가 (상대 행동, 시드 번호)마다 같은 난수열을 쓴다 — 턴 번호로 배틀 안에서도 매 턴 다르게
   const seedOf = (j: number, s: number) => (state.turnNumber + 1) * 0x9e3779b1 + j * 0x85ebca6b + s * 0xc2b2ae35;
@@ -221,7 +251,9 @@ export function searchDecide(ctx: SearchContext, options: AiOption[]): SearchRes
           turn = playTurn(turn.state, key, policy.action(turn.state, key), policy.action(turn.state, opponentKey(key)), random, policy);
         }
         const delta = standing(turn.state, key, lambda) - f0;
-        sum += delta + (turn.ended ? 0 : leafValue(turn.state, key, riskAversion, params, search));
+        // 롤아웃 뒤 state는 추론 분포를 낸 지금 대면과 다르다 — 잎 평가는 고정 규칙으로
+        const leaf = turn.ended ? 0 : withThreatOverride(undefined, () => leafValue(turn.state, key, riskAversion, params, search));
+        sum += delta + leaf;
       }
       value += weight * (sum / search.seeds);
     });

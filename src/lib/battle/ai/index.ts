@@ -1,9 +1,10 @@
 import { type FighterKey, type TurnAction } from "@/types/battle";
-import { STRUGGLE_MOVE, type BattleState } from "../state";
+import { STRUGGLE_MOVE, opponentKey, type BattleState } from "../state";
 import { forcedLockedAction } from "../lockedAction";
 import { decide, scoreOption, type DecisionParams, type ScoredOption } from "./decision";
 import { evaluateOptions, type AiOption, type EvaluateOptions } from "./evaluator";
-import { withThreatModel, type ThreatModelParams } from "./opponentMoveModel";
+import { withThreatModel, withThreatOverride, type ThreatModelParams } from "./opponentMoveModel";
+import { attachSwitchRead, levelOneDistribution } from "./levelOne";
 import { withModelToggles } from "./modelToggles";
 import { paramsFor } from "./decision";
 import { DEFAULT_SEARCH_PARAMS, searchDecide, type SearchPolicy, type SearchResult } from "./search";
@@ -60,11 +61,26 @@ export function chooseAiAction(
   const decision = withModelToggles(params, (): (Partial<SearchResult> & { chosen: AiOption; scored: ScoredOption[] }) | null => {
     // 점수 계산(파티 대면표는 이때 계산됨)도 같은 상대 기술 모델로
     return withThreatModel(threatModelOf(params), () => {
-      const evaluated = evaluateOptions(state, key, options);
-      if (!params.search) return decide(evaluated, riskAversion, params);
-      const { search: _search, ...plainParams } = params;
-      const search = { ...DEFAULT_SEARCH_PARAMS, ...params.search };
-      return searchDecide({ state, key, riskAversion, params: plainParams, search, policy: searchPolicy(riskAversion, plainParams) }, evaluated);
+      // 탐색·상대 모델을 뺀 파라미터 — 상대 쪽 추론(재귀 한 단계)과 오라클 롤아웃 안의 지금 AI가 쓴다
+      const { search: _search, opponentModel: _opponentModel, ...plainParams } = params;
+      // 상대 모델 ver2(1-B): 상대 행동 분포를 먼저 추론하고(이때 덮어쓰기 없음 — 상대는 나를 고정 규칙으로 본다), 지금 대면의 평가·채점을
+      // 그 분포로. 꺼져 있어도 undefined로 명시해 바깥(오라클 롤아웃 등)의 덮어쓰기가 새지 않게 한다.
+      const dist = params.opponentModel
+        ? withThreatOverride(undefined, () => levelOneDistribution(state, key, plainParams, params.opponentModel!))
+        : undefined;
+      const override = dist
+        ? { opponentSlot: state[opponentKey(key)].slot, targetSlot: state[key].slot, weights: dist.moveWeights, alpha: params.opponentModel!.alpha }
+        : undefined;
+      return withThreatOverride(override, () => {
+        let evaluated = evaluateOptions(state, key, options);
+        if (dist) evaluated = attachSwitchRead(state, key, evaluated, dist, params.opponentModel!);
+        if (!params.search) return decide(evaluated, riskAversion, params);
+        const search = { ...DEFAULT_SEARCH_PARAMS, ...params.search };
+        return searchDecide(
+          { state, key, riskAversion, params: plainParams, search, policy: searchPolicy(riskAversion, plainParams), opponent: dist },
+          evaluated,
+        );
+      });
     });
   });
   if (!decision) return { action: { kind: "move", move: STRUGGLE_MOVE }, scored: [] };
