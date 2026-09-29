@@ -15,6 +15,7 @@ try {
   const ev = await server.ssrLoadModule("/src/lib/battle/ai/evaluator.ts");
   const ai = await server.ssrLoadModule("/src/lib/battle/ai/index.ts");
   const dec = await server.ssrLoadModule("/src/lib/battle/ai/decision.ts");
+  const l1 = await server.ssrLoadModule("/src/lib/battle/ai/levelOne.ts");
 
   const pts = (o = {}) => ({ hp: 0, atk: 0, def: 0, spa: 0, spd: 0, spe: 0, ...o });
   // 엔진은 습득 가능 여부를 검사하지 않으므로 기술·특성·도구를 자유롭게 조합한다.
@@ -2358,6 +2359,45 @@ try {
     // 등장 문구
     const lead = battle([mon("몰드류", ["아이언헤드"], "틀깨기")], [mon("잠만보", ["칼춤"])]);
     check("2.0 틀깨기 등장 문구 \"○○○의 틀깨기!\"", lead.entryAnnouncements.includes("몰드류의 틀깨기!"), lead.entryAnnouncements.join(" / "));
+  }
+  // ── 상대 모델 ver2(ver.2.0 1-B) — 한 단계 추론 · 교체 읽기 ──
+  {
+    const om = { opponentModel: dec.DEFAULT_OPPONENT_MODEL };
+    const params = dec.paramsFor({});
+    // 교체 읽기: 한카리아스 앞의 라이츄는 갸라도스(땅 무효)로 교체할 만하다. 지진이 확정 처치가 아니면 들어올 갸라도스를 노려
+    // 스톤에지, 확정 처치면 교체 읽기와 무관하게 지진(죽어내밀기가 후속 포켓몬 부담이 적다 — 1-B 2차, 사용자 확인)
+    const readCase = (atkPts) =>
+      battle(
+        [mon("한카리아스", ["지진", "스톤에지"], null, null, atkPts)],
+        [mon("라이츄", ["10만볼트"], null, null, pts({ hp: 32, def: 32 })), mon("갸라도스", ["폭포오르기"], "위협", null, pts({ atk: 32, hp: 32 }))],
+      );
+    const st = readCase(pts({ spe: 32 }));
+    const dist = l1.levelOneDistribution(st, "a", params, dec.DEFAULT_OPPONENT_MODEL);
+    const off = ai.chooseAiAction(st, "a", 0.5);
+    const on = ai.chooseAiAction(st, "a", 0.5, { decisionParams: om });
+    check(
+      "2.0 1-B 교체 읽기: 불리한 라이츄는 교체 예측 → 들어올 갸라도스에 스톤에지(끄면 지진)",
+      dist.switchProb >= dec.DEFAULT_OPPONENT_MODEL.minSwitchProb && off.action.move?.id === "지진" && on.action.move?.id === "스톤에지",
+      `q=${dist.switchProb.toFixed(2)} 끔 ${off.action.move?.id} 켬 ${on.action.move?.id}`,
+    );
+    const sure = ai.chooseAiAction(readCase(pts({ atk: 32, spe: 32 })), "a", 0.5, { decisionParams: om });
+    check("2.0 1-B 확정 처치는 교체 읽기와 무관하게 우선(지진)", sure.action.move?.id === "지진", `${sure.action.move?.id}`);
+    // 대칭: 교체 읽기는 공격기만이 아니라 교체·변화기 선택지에도 붙는다(1-B 1차는 공격기에만 붙어 AI 교체가 2배가 됐다)
+    const benchCase = battle(
+      [mon("한카리아스", ["지진", "칼춤"], null, null, pts({ spe: 32 })), mon("메타그로스", ["코멧펀치"])],
+      [mon("라이츄", ["10만볼트"], null, null, pts({ hp: 32, def: 32 })), mon("갸라도스", ["폭포오르기"], "위협", null, pts({ atk: 32, hp: 32 }))],
+    );
+    const sym = ai.chooseAiAction(benchCase, "a", 0.5, { decisionParams: om });
+    const kinds = new Set(sym.scored.filter((x) => x.option.switchRead).map((x) => (x.option.optionType === "switch" ? "switch" : x.option.move.category === "status" ? "status" : "attack")));
+    check("2.0 1-B 교체 읽기 대칭 — 공격·변화기·교체 선택지 모두에 붙음", kinds.has("attack") && kinds.has("status") && kinds.has("switch"), [...kinds].join(","));
+    // 상대가 확정 처치를 가지면 분포가 그 기술로 몰린다
+    const ko = battle([mon("핫삼", ["불꽃펀치"], null, null, pts())], [mon("리자몽", ["화염방사", "칼춤"], null, null, pts({ spa: 32, spe: 32 }))]);
+    const koDist = l1.levelOneDistribution(ko, "a", params, dec.DEFAULT_OPPONENT_MODEL);
+    check("2.0 1-B 상대 확정 처치 → 분포가 그 기술로", (koDist.moveWeights.get("화염방사") ?? 0) > 0.99, JSON.stringify([...koDist.moveWeights]));
+    // 난동 등 정해진 행동이면 추론 없음(고정 규칙 모델이 그 기술만 남긴다)
+    const locked = battle([mon("핫삼", ["불꽃펀치"])], [mon("한카리아스", ["역린"])]);
+    locked.b.volatile.active.rampage = { moveId: "역린", turnsLeft: 1 };
+    check("2.0 1-B 상대 난동 중 → 추론 안 함", l1.levelOneDistribution(locked, "a", params, dec.DEFAULT_OPPONENT_MODEL) === undefined);
   }
   // ── 상대를 쓰러뜨린 턴의 턴 종료 처리(ver.2.0 버그 수정 — 플레이테스트 사용자 제보) ──
   {

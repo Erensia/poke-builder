@@ -129,7 +129,22 @@ export interface DecisionParams {
    * 값은 DEFAULT_SEARCH_PARAMS 위에 덮어쓸 부분.
    */
   search?: Partial<SearchParams>;
+  /**
+   * 상대 모델 ver2(ver.2.0 1-B) — 한 단계 추론: 상대 행동 확률 ∝ exp(상대 관점 점수 / tau)를 지금 대면의 상대 기술 모델과 alpha로 섞고,
+   * readSwitch면 상대 교체 확률 q ≥ minSwitchProb일 때 공격기 점수를 들어올 포켓몬 기준과 섞는다(교체 읽기). undefined면 끔(이전 동작).
+   */
+  opponentModel?: OpponentModelParams;
 }
+
+export interface OpponentModelParams {
+  tau: number;
+  alpha: number;
+  readSwitch: boolean;
+  minSwitchProb: number;
+}
+
+// minSwitchProb 0.3(1-B 2차): 0.1이면 교체 안 하는 상대에게도 교체 읽기가 자주 걸렸다
+export const DEFAULT_OPPONENT_MODEL: OpponentModelParams = { tau: 0.2, alpha: 0.7, readSwitch: true, minSwitchProb: 0.3 };
 
 /**
  * 기본값은 "trade" — 그리디 봇(교체 없이 가장 빨리 처치하는 기술만 사용) 상대 파티 좌우 교대 300판 시뮬레이션에서
@@ -629,6 +644,16 @@ function tradeScore(option: AiOption, riskAversion: number, params: DecisionPara
 
 /** decision-layer §4 점수식. 데미지 없는 변화기는 extension §2-2 전용 점수식. */
 export function scoreOption(option: AiOption, riskAversion: number, params: DecisionParams = DEFAULT_DECISION_PARAMS): number {
+  // 교체 읽기(ver.2.0 1-B): 상대가 그대로면 이 옵션, 교체하면 들어온 포켓몬에게 같은 기술(그 턴 상대는 교체로 행동을 씀 → lost −1)
+  if (option.switchRead) {
+    const { q, alternatives } = option.switchRead;
+    const stay = scoreOption({ ...option, switchRead: undefined }, riskAversion, params);
+    const read = alternatives.reduce(
+      (sum, a) => sum + a.weight * scoreOption({ ...a.option, lostShift: (a.option.lostShift ?? 0) - 1 }, riskAversion, params),
+      0,
+    );
+    return (1 - q) * stay + q * read;
+  }
   if (params.scoring === "trade") {
     const previous = [opponentIdleChance, lostShift] as const;
     opponentIdleChance = option.opponentIdleChance ?? 0;
