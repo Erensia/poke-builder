@@ -143,7 +143,8 @@ export interface OpponentModelParams {
   minSwitchProb: number;
 }
 
-export const DEFAULT_OPPONENT_MODEL: OpponentModelParams = { tau: 0.2, alpha: 0.7, readSwitch: true, minSwitchProb: 0.1 };
+// minSwitchProb 0.3(1-B 2차): 0.1이면 교체 안 하는 상대에게도 교체 읽기가 자주 걸렸다
+export const DEFAULT_OPPONENT_MODEL: OpponentModelParams = { tau: 0.2, alpha: 0.7, readSwitch: true, minSwitchProb: 0.3 };
 
 /**
  * 기본값은 "trade" — 그리디 봇(교체 없이 가장 빨리 처치하는 기술만 사용) 상대 파티 좌우 교대 300판 시뮬레이션에서
@@ -216,8 +217,6 @@ function speedAdjustment(option: AiOption): number {
 /** decision-layer §6 + extension §7-3: 확실한 선공 + 확정 1타 + 필중일 때만 */
 export function isHardOverride(option: AiOption): boolean {
   return (
-    // 교체 읽기(ver.2.0 1-B)가 붙은 옵션: 상대가 교체할 수 있으면 "지금 상대 확정 1타"가 보장이 아니다 — 점수로 비교
-    !option.switchRead &&
     option.optionType === "move" &&
     option.firstProbability === 1 &&
     option.hitsToKill.worstCase.count === 1 &&

@@ -76,7 +76,9 @@ export function levelOneDistribution(
 
 /**
  * 교체 읽기: 상대 교체 확률이 기준 이상이면, 들어올 포켓몬마다 실제 엔진 교체(설치물·등장 효과 반영)를 한 state에서 내 선택지를
- * 다시 평가해 같은 공격기(같은 기술·메가 선언)를 대안으로 붙인다. 교체·변화기 선택지에는 붙이지 않는다.
+ * 다시 평가해 같은 선택지(같은 기술 또는 같은 교체 대상)를 대안으로 붙인다. **모든 선택지에 대칭으로** — 1-B 1차는 공격기에만
+ * 붙여, 흐려진 공격 점수 대비 교체·변화기가 상대적으로 올라가 AI 자신의 교체가 2배가 됐다(decision-layer 2.0-backlog 1-B 1차 결과).
+ * 확정 처치(하드 오버라이드)는 교체 읽기와 무관하게 먼저 고른다(죽어내밀기가 후속 포켓몬 부담이 적다 — 사용자 확인).
  */
 export function attachSwitchRead(
   state: BattleState,
@@ -90,12 +92,13 @@ export function attachSwitchRead(
   const incoming = dist.switches
     .filter((s) => s.weight > 0)
     .map((s) => ({ weight: s.weight, options: evaluateOptions(applySwitch(state, oppKey, s.toIndex, { voluntary: true }).nextState, key) }));
+  const sameChoice = (a: AiOption, b: AiOption) =>
+    a.optionType === b.optionType && (a.optionType === "switch" ? a.toIndex === b.toIndex : a.move?.id === b.move?.id);
   return options.map((option) => {
-    if (option.optionType !== "move" || !option.move || option.move.category === "status") return option;
     const alternatives: { weight: number; option: AiOption }[] = [];
     let covered = 0;
     for (const j of incoming) {
-      const same = j.options.find((o) => o.optionType === "move" && o.move?.id === option.move!.id);
+      const same = j.options.find((o) => sameChoice(o, option));
       if (!same) continue;
       alternatives.push({ weight: j.weight, option: same });
       covered += j.weight;
