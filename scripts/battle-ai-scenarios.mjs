@@ -2324,6 +2324,38 @@ try {
     }
     check("난수별 데미지 % ↔ 격파 판정 일치(2000조합)", mismatches === 0, `불일치 ${mismatches}/${checked}`);
   }
+  // ── 틀깨기 목록 수정(ver.2.0, 사용자 정리 2026-09-29): 목록 = 틀깨기에 무시당하는 특성 ──
+  {
+    const rt = await server.ssrLoadModule("/src/lib/battle/runTurn.ts");
+    const act = (id) => ({ kind: "move", move: data.getMove(id) });
+    const hit = (attackerAbility, defender, defenderAbility, move = "아이언헤드") => {
+      const st = battle([mon("몰드류", [move], attackerAbility)], [mon(defender, ["칼춤"], defenderAbility, null, pts({ hp: 32 }))]);
+      const out = rt.runTurn(st, act(move), act("칼춤"), () => 0.5);
+      return { dealt: st.b.currentHp - out.nextState.b.currentHp, recoil: st.a.currentHp - out.nextState.a.currentHp, out };
+    };
+    const ms = hit("틀깨기", "망나뇽", "멀티스케일").dealt / hit("모래헤치기", "망나뇽", "멀티스케일").dealt;
+    check("2.0 틀깨기 → 멀티스케일 무시(목록 = 무시당하는 특성, 이전엔 거꾸로)", ms > 1.8, `배율 ${ms.toFixed(2)}`);
+    const aura = hit("틀깨기", "루카리오", "파동의방호").dealt / hit("모래헤치기", "루카리오", "파동의방호").dealt;
+    check("2.0 틀깨기 → 파동의방호 무시(복슬복슬과 같은 취급)", aura > 1.8, `배율 ${aura.toFixed(2)}`);
+    const rough = hit("틀깨기", "한카리아스", "까칠한피부");
+    check("2.0 틀깨기 → 까칠한피부(목록 밖)는 그대로 작동", rough.recoil > 0, `반동 ${rough.recoil}`);
+    // 불면: 틀깨기 최면술로 잠들지만 턴 끝에 스스로 치료
+    const insomnia = hit("틀깨기", "잠만보", "불면", "최면술");
+    const cureLog = insomnia.out.result.endOfTurn?.find((e) => e.abilityCuredStatus === "sleep");
+    check("2.0 틀깨기 최면술 → 불면이 턴 끝에 잠듦 치료", !!cureLog && insomnia.out.nextState.b.status.condition === null, cureLog?.abilityCuredStatusAbilityName ?? "치료 로그 없음");
+    // 면역: 틀깨기로 건 맹독은 치료 없이 남는다(사용자 정리)
+    const immunity = hit("틀깨기", "잠만보", "면역", "맹독");
+    check("2.0 틀깨기 맹독 → 면역은 치료 없이 유지", immunity.out.nextState.b.status.condition === "badly-poisoned", `${immunity.out.nextState.b.status.condition}`);
+    // 흡반: 틀깨기 울부짖기는 강제 교체된다
+    const phaze = (ability) => {
+      const st = battle([mon("몰드류", ["울부짖기"], ability)], [mon("잠만보", ["칼춤"], "흡반"), mon("망나뇽", ["칼춤"])]);
+      return rt.runTurn(st, act("울부짖기"), act("칼춤"), () => 0.5).nextState.sideB.activeIndex;
+    };
+    check("2.0 틀깨기 울부짖기 → 흡반 무시하고 강제 교체(틀깨기 없으면 막힘)", phaze("틀깨기") === 1 && phaze("모래헤치기") === 0, `${phaze("틀깨기")} / ${phaze("모래헤치기")}`);
+    // 등장 문구
+    const lead = battle([mon("몰드류", ["아이언헤드"], "틀깨기")], [mon("잠만보", ["칼춤"])]);
+    check("2.0 틀깨기 등장 문구 \"○○○의 틀깨기!\"", lead.entryAnnouncements.includes("몰드류의 틀깨기!"), lead.entryAnnouncements.join(" / "));
+  }
   // 상대가 나에게 데미지를 줄 수단이 없을 때(+Infinity 점수)
   {
     const st = battle([mon("팬텀", ["10만볼트"])], [mon("한카리아스", ["지진"])]);

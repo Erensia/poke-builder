@@ -23,6 +23,13 @@ import {
   WEATHER_MOVE_LINES,
 } from "../lib/battleLogText";
 
+/** 마이페이스·둔감이 턴 끝에 푼 행동방해(ver.2.0 틀깨기 목록 수정) */
+const ABILITY_CURED_VOLATILE_TEXT: Record<"confusion" | "attract" | "taunt", string> = {
+  confusion: "혼란이 풀렸다!",
+  attract: "헤롱헤롱 상태가 풀렸다!",
+  taunt: "도발이 풀렸다!",
+};
+
 /** 액션 로그 한 줄 안에 "OO 발동!"으로 뭉뚱그리기보다 전용 문구를 따로 쓰는 volatile들 */
 const VOLATILES_WITH_DEDICATED_LOG_LINE = new Set(["drowsy", "wish", "encore", "imprison", "meanLook", "lockOn", "noRetreat"]);
 
@@ -405,10 +412,11 @@ function EndOfTurnLine({
         </>
       ) : e.inflictedDelayedStatus ? (
         STATUS_ONSET_TEXT[e.inflictedDelayedStatus](turnName(e.actor))
-      ) : e.abilityCuredStatus ? (
+      ) : e.abilityCuredStatus || e.abilityCuredVolatiles ? (
         <>
-          {turnName(e.actor)}의 {e.abilityCuredStatusAbilityName}!{" "}
-          {STATUS_CURE_TEXT[e.abilityCuredStatus](turnName(e.actor))}
+          {turnName(e.actor)}의 {e.abilityCuredStatusAbilityName}!
+          {e.abilityCuredStatus ? ` ${STATUS_CURE_TEXT[e.abilityCuredStatus](turnName(e.actor))}` : ""}
+          {(e.abilityCuredVolatiles ?? []).map((v) => ` ${ABILITY_CURED_VOLATILE_TEXT[v]}`).join("")}
         </>
       ) : e.statusCondition ? (
         <>

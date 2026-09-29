@@ -480,7 +480,7 @@ export function effectMoveFails(state: BattleState, key: FighterKey, move: Move)
     );
   }
   // 울부짖기·날려버리기: 상대에게 살아있는 예비가 없거나 흡반·뿌리박기면 강제 교체가 안 된다(엔진 runTurn)
-  if (kind === "phaze") return !hasLivingReserve(sideOf(state, oppKey)) || isForcedSwitchBlocked(target);
+  if (kind === "phaze") return !hasLivingReserve(sideOf(state, oppKey)) || isForcedSwitchBlocked(target, abilityOf(state[key]));
   // 도발·앙코르·사슬묶기: 아로마베일(마음을 옭아매는 기술 차단)·이미 걸림·상대가 아직 기술을 안 씀(앙코르·사슬묶기)
   if (kind === "taunt" || kind === "encore" || kind === "disable") {
     if (targetAbility?.blocksMentalMoves) return true;
