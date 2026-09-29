@@ -130,6 +130,13 @@ export interface DecisionParams {
    */
   search?: Partial<SearchParams>;
   /**
+   * 3단계 튜닝용(ver.2.0, 기본 1 — 이전 동작): 회복기 점수의 "회복한 HP" 항 배율. 0단계 오라클 비교에서 평가식이 회복을 높게 보는
+   * 경향(회복 → 공격 82 vs 반대 13)이 나와 조절할 수 있게 둔다.
+   */
+  healGainWeight: number;
+  /** 3단계 튜닝용(기본 1 — 이전 동작): 교체 선택지의 "이번 턴 행동 손실" 턴 수. 0단계에서 평가식이 교체를 낮게 보는 경향 */
+  switchLostTurns: number;
+  /**
    * 상대 모델 ver2(ver.2.0 1-B) — 한 단계 추론: 상대 행동 확률 ∝ exp(상대 관점 점수 / tau)를 지금 대면의 상대 기술 모델과 alpha로 섞고,
    * readSwitch면 상대 교체 확률 q ≥ minSwitchProb일 때 공격기 점수를 들어올 포켓몬 기준과 섞는다(교체 읽기). undefined면 끔(이전 동작).
    */
@@ -195,6 +202,8 @@ export const DEFAULT_DECISION_PARAMS: DecisionParams = {
   critAware: true,
   trapMoveAware: true,
   chanceEffectsAware: true,
+  healGainWeight: 1,
+  switchLostTurns: 1,
 };
 
 /** 기본 파라미터 위에 decisionParams(시뮬레이터 튜닝용)를 덮어쓴 최종 파라미터 */
@@ -627,13 +636,13 @@ function tradeScore(option: AiOption, riskAversion: number, params: DecisionPara
     if (kind === "heal") {
       if (params.statusAware && (option.support.healNetGain ?? 1) <= 0) return -Infinity;
       const healed = healedHpFraction ?? option.hpFraction;
-      return race(params, option.party, [bestKillTurns, after, p, healed, opp, 1]) + (healed - option.hpFraction) - riskPenalty;
+      return race(params, option.party, [bestKillTurns, after, p, healed, opp, 1]) + params.healGainWeight * (healed - option.hpFraction) - riskPenalty;
     }
     return race(params, option.party, [after, option.hitsToBeKilled.expected, p, option.hpFraction, opp, 1]) - riskPenalty;
   }
   // 잠꼬대(AI-A2)는 공격기처럼 평가된다(무작위 기술 기대 피해) — a2Aware가 꺼지면 이전처럼 고르지 않는다.
   if (option.move?.callsRandomLearnedMove && !params.a2Aware) return -Infinity;
-  const lost = option.optionType === "switch" ? 1 : 0;
+  const lost = option.optionType === "switch" ? params.switchLostTurns : 0;
   const entry = option.maxHp > 0 ? option.entryCost / option.maxHp : 0;
   return (
     race(params, option.party, [option.hitsToKill.expected, option.hitsToBeKilled.expected, p, option.hpFraction, opp, lost]) -
