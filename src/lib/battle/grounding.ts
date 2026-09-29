@@ -11,9 +11,13 @@ import { effectiveHeldItem } from "./turnOrderInputs";
 export function isGrounded(
   state: BattleState,
   fighter: BattleFighterState,
-  /** 틀깨기류로 특성이 무시될 때처럼 해석된 특성을 따로 넘길 때 — 생략하면 지금 특성 */
-  ability: Ability | undefined = abilityOf(fighter),
+  /**
+   * 틀깨기류로 특성이 무시될 때처럼 해석된 특성을 따로 넘길 때 — 생략하면 지금 특성. **undefined를 명시하면 "특성 없음"**
+   * (ver.2.0 버그 수정: 기본값 매개변수라 틀깨기가 부유를 무시해 넘긴 undefined가 원래 특성으로 되돌아가 땅 기술이 안 맞았다)
+   */
+  ...resolvedAbility: [ability?: Ability | undefined]
 ): boolean {
+  const ability = resolvedAbility.length > 0 ? resolvedAbility[0] : abilityOf(fighter);
   const item = effectiveHeldItem(fighter, state);
   if (state.gravityTurnsRemaining !== undefined || fighter.smackedDown || item?.groundsHolder) return true;
   if (fighter.types.includes("비행")) return false;
