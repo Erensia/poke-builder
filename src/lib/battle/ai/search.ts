@@ -41,6 +41,9 @@ export interface SearchParams {
   budgetMargin: number;
 }
 
+/** 2-A 채택 설정(decision-layer §17-1) — 앱 기본값으로 켤 때(2-C) 쓴다. h2h STATUS=1 400판 219:174, 판단 평균 0.26초 */
+export const PRODUCT_SEARCH_PARAMS: Partial<SearchParams> = { leaf: "fast", topK: 3, maxOpponentMoves: 3, budget: 24 };
+
 export const DEFAULT_SEARCH_PARAMS: SearchParams = {
   depth: 1,
   seeds: 4,
