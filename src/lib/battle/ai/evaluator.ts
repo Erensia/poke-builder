@@ -264,7 +264,7 @@ function cloneBattleState(state: BattleState): BattleState {
   };
 }
 
-function canMegaEvolve(state: BattleState, key: FighterKey): boolean {
+export function canMegaEvolve(state: BattleState, key: FighterKey): boolean {
   const fighter = state[key];
   return !sideOf(state, key).megaUsed && !fighter.hasMegaEvolved && !!fighter.megaStone && !isFainted(fighter);
 }

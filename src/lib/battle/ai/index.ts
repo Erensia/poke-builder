@@ -6,6 +6,7 @@ import { evaluateOptions, type AiOption, type EvaluateOptions } from "./evaluato
 import { withThreatModel, type ThreatModelParams } from "./opponentMoveModel";
 import { withModelToggles } from "./modelToggles";
 import { paramsFor } from "./decision";
+import { DEFAULT_SEARCH_PARAMS, searchDecide, type SearchPolicy, type SearchResult } from "./search";
 
 export { chooseAiSelection } from "./teamSelect";
 
@@ -32,6 +33,9 @@ export interface AiDecision {
   chosen?: AiOption;
   /** 디버그·튜닝용 — 모든 옵션의 평가값과 점수 */
   scored: ScoredOption[];
+  /** 탐색 오라클(params.search)일 때: 평가식만으로 골랐을 선택과 롤아웃한 후보별 값 */
+  baseChosen?: AiOption;
+  searchValues?: { option: AiOption; value: number }[];
 }
 
 export interface ChooseAiOptions extends EvaluateOptions {
@@ -53,9 +57,15 @@ export function chooseAiAction(
   if (forced) return { action: forced, scored: [] };
   const params = paramsFor(options.decisionParams);
   // 모델 토글(턴 종료 효과 등)은 평가(대면 턴 수)와 점수 계산(이어지는 대면)에 모두 걸린다
-  const decision = withModelToggles(params, () => {
+  const decision = withModelToggles(params, (): (Partial<SearchResult> & { chosen: AiOption; scored: ScoredOption[] }) | null => {
     // 점수 계산(파티 대면표는 이때 계산됨)도 같은 상대 기술 모델로
-    return withThreatModel(threatModelOf(params), () => decide(evaluateOptions(state, key, options), riskAversion, params));
+    return withThreatModel(threatModelOf(params), () => {
+      const evaluated = evaluateOptions(state, key, options);
+      if (!params.search) return decide(evaluated, riskAversion, params);
+      const { search: _search, ...plainParams } = params;
+      const search = { ...DEFAULT_SEARCH_PARAMS, ...params.search };
+      return searchDecide({ state, key, riskAversion, params: plainParams, search, policy: searchPolicy(riskAversion, plainParams) }, evaluated);
+    });
   });
   if (!decision) return { action: { kind: "move", move: STRUGGLE_MOVE }, scored: [] };
   const { chosen, scored } = decision;
@@ -63,7 +73,15 @@ export function chooseAiAction(
     chosen.optionType === "switch"
       ? { kind: "switch", toIndex: chosen.toIndex! }
       : { kind: "move", move: chosen.move!, mega: chosen.mega };
-  return { action, chosen, scored };
+  return decision.baseChosen ? { action, chosen, scored, baseChosen: decision.baseChosen, searchValues: decision.values } : { action, chosen, scored };
+}
+
+/** 탐색 오라클이 롤아웃 안에서 쓰는 지금 AI(탐색 없음) — 기절·유턴류 교체와 depth 2의 두 번째 턴 행동 */
+function searchPolicy(riskAversion: number, decisionParams: DecisionParams): SearchPolicy {
+  return {
+    forcedSwitch: (st, k) => chooseAiForcedSwitch(st, k, riskAversion, decisionParams),
+    action: (st, k) => chooseAiAction(st, k, riskAversion, { decisionParams }).action,
+  };
 }
 
 /**
