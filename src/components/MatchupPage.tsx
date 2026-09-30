@@ -4,6 +4,7 @@ import { VerdictBadge } from "./VerdictBadge";
 import { DamageRollBlock } from "./DamageRollBlock";
 import { WeatherPicker } from "./WeatherPicker";
 import { FieldPicker } from "./FieldPicker";
+import { DefenseInferencePanel } from "./DefenseInferencePanel";
 import { PokemonPickerModal } from "./PokemonPickerModal";
 import { MovePickerModal } from "./MovePickerModal";
 import { AbilityPickerModal } from "./AbilityPickerModal";
@@ -44,6 +45,8 @@ export function MatchupPage() {
     useMatchup();
   const slotPresets = useSlotPresets();
   const [picker, setPicker] = useState<PickerState>(null);
+  // 2.1 C — 결정력 계산 / 상대 실능치 역산 탭. 두 탭이 같은 내 포켓몬·상대 종·날씨·필드 상태를 공유한다
+  const [tab, setTab] = useState<"calc" | "inference">("calc");
 
   const sideOf = (side: Side) => (side === "attacker" ? attacker : defender);
 
@@ -191,7 +194,25 @@ export function MatchupPage() {
       <header className="matchup-page-header">
         <div>
           <h2>결정력 &amp; 내구력</h2>
-          <p>내 포켓몬과 상대 포켓몬을 고르고, 기술을 선택하면 타수 판정을 확인할 수 있습니다.</p>
+          <p>
+            {tab === "calc"
+              ? "내 포켓몬과 상대 포켓몬을 고르고, 기술을 선택하면 타수 판정을 확인할 수 있습니다."
+              : "내가 입힌 데미지(상대 HP %)로 상대의 HP·방어 능력 포인트와 성격이 될 수 있는 범위를 추정합니다."}
+          </p>
+        </div>
+        <div className="matchup-tabs" role="tablist" aria-label="계산기 종류">
+          <button type="button" role="tab" aria-selected={tab === "calc"} className={tab === "calc" ? "is-active" : undefined} onClick={() => setTab("calc")}>
+            결정력 계산
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === "inference"}
+            className={tab === "inference" ? "is-active" : undefined}
+            onClick={() => setTab("inference")}
+          >
+            상대 실능치 역산
+          </button>
         </div>
         <div className="matchup-env-pickers">
           <WeatherPicker weather={weather} onChange={setWeather} />
@@ -199,6 +220,8 @@ export function MatchupPage() {
         </div>
       </header>
 
+      {tab === "calc" && (
+        <>
       <div className="matchup-board" style={{ background: environmentTintBackground(weather, field) }}>
         <MatchupSlotCard
           role="attacker"
@@ -305,6 +328,48 @@ export function MatchupPage() {
             <span>트릭룸 가정 (느린 쪽이 먼저)</span>
           </label>
         </div>
+      )}
+        </>
+      )}
+
+      {tab === "inference" && (
+        <DefenseInferencePanel
+          attacker={attacker.slot}
+          defender={defender.slot}
+          weather={weather}
+          field={field}
+          defenderActions={{
+            onPickPokemon: () => setPicker({ kind: "pokemon", side: "defender" }),
+            onClear: defender.clearPokemon,
+            onCycleFormVariant: defender.cycleFormVariant,
+            onCycleSizeForm: defender.cycleSizeForm,
+          }}
+          attackerCard={
+            <MatchupSlotCard
+              role="attacker"
+              label="내 포켓몬"
+              slot={attacker.slot}
+              hideMoveSlot
+              hideTurnAssumptions
+              onPickPokemon={() => setPicker({ kind: "pokemon", side: "attacker" })}
+              onClearPokemon={attacker.clearPokemon}
+              onPickAbility={() => setPicker({ kind: "ability", side: "attacker" })}
+              onPickItem={() => setPicker({ kind: "item", side: "attacker" })}
+              onPickNature={() => setPicker({ kind: "nature", side: "attacker" })}
+              onPickPoints={() => setPicker({ kind: "points", side: "attacker" })}
+              onPickStages={() => setPicker({ kind: "stages", side: "attacker" })}
+              onCycleSizeForm={attacker.cycleSizeForm}
+              onCycleFormVariant={attacker.cycleFormVariant}
+              onCycleCosmeticForm={attacker.cycleCosmeticForm}
+              onPickCosmeticForm={() => setPicker({ kind: "cosmeticForm", side: "attacker" })}
+              hasSamples={slotPresets.presets.length > 0}
+              onOpenSamplePicker={() => setPicker({ kind: "slotPresets", side: "attacker" })}
+              onToggleItemStolen={attacker.setItemStolen}
+              onToggleUnburden={attacker.setUnburdenAssumed}
+              onSetStatus={attacker.setStatusAssumed}
+            />
+          }
+        />
       )}
 
       {picker?.kind === "pokemon" && (

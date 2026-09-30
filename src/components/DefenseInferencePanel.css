@@ -1,0 +1,421 @@
+/* 상대 실능치 역산 탭 (ver.2.1 C) — 기존 매치업 카드(.matchup-slot)의 글래스 톤을 그대로 따른다 */
+.dinf {
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+}
+
+.dinf-intro {
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.55;
+  color: var(--text-muted);
+  max-width: 62ch;
+}
+
+.dinf-board {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.dinf-defender {
+  margin-top: 15px;
+}
+
+.dinf-defender-forms {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+}
+
+.dinf-defender-forms button {
+  font-size: 0.72rem;
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.dinf-defender-base {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem 0.8rem;
+  margin-top: 0.6rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.dinf-defender-base strong {
+  color: var(--text);
+}
+
+.dinf-unknown {
+  margin: 0.6rem 0 0;
+  padding-top: 0.5rem;
+  border-top: 1px dashed var(--border);
+  font-size: 0.74rem;
+  color: var(--text-muted);
+}
+
+.dinf-unknown strong {
+  color: var(--violet);
+}
+
+.dinf-section {
+  background: var(--surface);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border);
+  border-radius: 14px;
+  box-shadow: var(--glass-shadow);
+  padding: 0.9rem 1rem;
+}
+
+.dinf-section h3 {
+  margin: 0 0 0.7rem;
+  font-size: 0.95rem;
+}
+
+.dinf-conditions {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 0.6rem 0.9rem;
+  margin-bottom: 0.7rem;
+}
+
+.dinf-conditions label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.dinf select,
+.dinf-percent,
+.dinf-move-btn {
+  font: inherit;
+  font-size: 0.82rem;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.35rem 0.5rem;
+}
+
+.dinf-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.45rem;
+  font-size: 0.76rem;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.dinf-check input,
+.dinf-crit input {
+  accent-color: var(--violet);
+  margin-top: 0.15rem;
+}
+
+.dinf-note {
+  margin: 0.55rem 0 0;
+  font-size: 0.7rem;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+
+.dinf-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.dinf-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem 0.7rem;
+  padding: 0.5rem 0.6rem;
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+
+.dinf-row-no {
+  font-weight: 700;
+  font-size: 0.8rem;
+  color: var(--violet);
+  min-width: 1.6rem;
+}
+
+.dinf-move-btn {
+  min-width: 7.5rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.dinf-move-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.dinf-crit {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.76rem;
+  cursor: pointer;
+}
+
+.dinf-percent-pair {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.8rem;
+}
+
+.dinf-percent {
+  width: 3.4rem;
+  text-align: right;
+}
+
+.dinf-row-msg {
+  font-size: 0.72rem;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+}
+
+.dinf-row-msg.is-error {
+  color: var(--danger);
+  background: var(--danger-bg);
+}
+
+.dinf-row-msg.is-ok {
+  color: var(--safe);
+}
+
+.dinf-row-remove {
+  margin-left: auto;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.dinf-add {
+  margin-top: 0.6rem;
+  font: inherit;
+  font-size: 0.8rem;
+  padding: 0.4rem 0.9rem;
+  border-radius: 999px;
+  border: 1px dashed var(--violet);
+  background: var(--violet-soft);
+  color: var(--violet);
+  cursor: pointer;
+}
+
+.dinf-hint {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.dinf-pending {
+  font-size: 0.72rem;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.dinf-stale {
+  opacity: 0.55;
+}
+
+.dinf-warn,
+.dinf-contradiction {
+  margin: 0;
+  padding: 0.7rem 0.9rem;
+  border-radius: 10px;
+  background: var(--danger-bg);
+  color: var(--danger);
+  font-size: 0.82rem;
+}
+
+.dinf-contradiction p {
+  margin: 0.35rem 0 0;
+}
+
+.dinf-summary {
+  margin: 0 0 0.7rem;
+  font-size: 0.95rem;
+}
+
+.dinf-summary strong {
+  color: var(--violet);
+  font-size: 1.15rem;
+}
+
+.dinf-summary-sub {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.dinf-range {
+  display: grid;
+  grid-template-columns: 5.5rem 1fr;
+  grid-template-areas: "label track" "label text";
+  align-items: center;
+  gap: 0.15rem 0.7rem;
+  margin-bottom: 0.55rem;
+}
+
+.dinf-range-label {
+  grid-area: label;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.dinf-range-track {
+  grid-area: track;
+  position: relative;
+  height: 9px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+
+.dinf-range-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: 999px;
+  background: var(--gradient);
+}
+
+.dinf-range-text {
+  grid-area: text;
+  font-size: 0.82rem;
+}
+
+.dinf-range-real {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.dinf-natures {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.8rem;
+}
+
+.dinf-subtitle {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-right: 0.2rem;
+}
+
+.dinf-nature-chip {
+  font-size: 0.74rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  background: var(--violet-soft);
+  color: var(--violet);
+}
+
+.dinf-nature-chip em {
+  font-style: normal;
+  opacity: 0.8;
+}
+
+.dinf-nature-chip.is-no {
+  background: var(--surface-2);
+  color: var(--text-muted);
+  text-decoration: line-through;
+}
+
+.dinf-details {
+  margin-top: 0.9rem;
+  font-size: 0.8rem;
+}
+
+.dinf-details summary {
+  cursor: pointer;
+  color: var(--violet);
+}
+
+.dinf-grids {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-top: 0.7rem;
+}
+
+.dinf-grid-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  max-width: 100%;
+}
+
+.dinf-grid-title {
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+
+.dinf-grid {
+  display: grid;
+  width: min(330px, 100%);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--surface-2);
+}
+
+.dinf-cell {
+  aspect-ratio: 1;
+}
+
+.dinf-cell.is-on {
+  background: var(--violet);
+}
+
+.dinf-grid-axis {
+  font-size: 0.66rem;
+  color: var(--text-muted);
+}
+
+.dinf-assume {
+  margin: 0.9rem 0 0;
+  padding-top: 0.6rem;
+  border-top: 1px dashed var(--border);
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+@media (max-width: 760px) {
+  .dinf-board {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .dinf-defender {
+    margin-top: 0;
+  }
+  .dinf-row {
+    align-items: flex-start;
+  }
+  .dinf-range {
+    grid-template-columns: 4.6rem 1fr;
+  }
+}

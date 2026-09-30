@@ -70,6 +70,10 @@ interface MatchupSlotCardProps {
   /** 마휘핑 계열 겉모습을 리스트 모달로 고르기(옵션 >4일 때) */
   onPickCosmeticForm: () => void;
   onPickMove?: () => void;
+  /** 실능치 역산 탭처럼 기술을 카드 밖(관측 줄)에서 고르는 화면 — 기술 칸을 숨긴다 */
+  hideMoveSlot?: boolean;
+  /** 도구 강탈·곡예 가정처럼 결정력 계산 전용인 토글을 숨긴다(실능치 역산 탭) */
+  hideTurnAssumptions?: boolean;
   /** 저장된 샘플(빌드)이 하나라도 있는지 — Phase 6 §1-3, 없으면 버튼 자체를 숨긴다 */
   hasSamples: boolean;
   /** 저장된 샘플 목록에서 이 슬롯에 불러올 것을 고르는 모달 열기(불러오기 전용 — 저장 없음) */
@@ -130,6 +134,8 @@ export function MatchupSlotCard({
   onCycleCosmeticForm,
   onPickCosmeticForm,
   onPickMove,
+  hideMoveSlot,
+  hideTurnAssumptions,
   hasSamples,
   onOpenSamplePicker,
   onToggleItemStolen,
@@ -323,6 +329,8 @@ export function MatchupSlotCard({
 
       {/* Phase 6.5 §1 — "이전 턴 가정" 토글. 켜기 전까지는 지금까지와 동일한 계산 */}
       <div className="matchup-assume-section">
+        {!hideTurnAssumptions && (
+          <>
         <label className="matchup-assume-toggle">
           <input
             type="checkbox"
@@ -339,6 +347,8 @@ export function MatchupSlotCard({
           />
           <span>곡예 발동(스피드 2배) 가정</span>
         </label>
+          </>
+        )}
         <div className="matchup-assume-grave">
           <span className="matchup-assume-grave-label">상태이상</span>
           <div className="matchup-hitcount-row matchup-status-row">
@@ -461,7 +471,7 @@ export function MatchupSlotCard({
         )}
       </div>
 
-      {role === "attacker" && (
+      {role === "attacker" && !hideMoveSlot && (
         <div className="matchup-move-section">
           <button
             type="button"

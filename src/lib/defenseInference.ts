@@ -4,8 +4,10 @@ import type { Item } from "../types/item";
 import type { StatStages } from "../types/battleStats";
 import type { WeatherKind } from "../types/weather";
 import type { FieldKind } from "../types/field";
-import { ABILITIES, ITEMS, NATURES, getPokemon } from "./data";
+import type { StatusCondition } from "../types/status";
+import { ABILITIES, ITEMS, NATURES, getAbility, getPokemon } from "./data";
 import { getEffectiveForm } from "./pokemonForm";
+import { computeStatusAttackMultiplier, ignoresBurnAttackPenalty } from "./statusConditions";
 import { evaluateSlotMatchup, type EvaluatorSlot, type DamageParts } from "./matchupEvaluator";
 import { EMPTY_ABILITY_POINTS } from "../types/party";
 import { LEVEL_50_TERM, DAMAGE_ROLL_STEPS } from "./battlePower";
@@ -44,6 +46,8 @@ export interface InferenceInput {
   defender: EvaluatorSlot;
   observations: InferenceObservation[];
   attackerStages?: StatStages;
+  /** 내 포켓몬의 주 상태이상 (화상이면 물리 공격 반감, 근성·객기는 예외) */
+  attackerStatus?: StatusCondition | null;
   defenderStages?: StatStages;
   weather?: WeatherKind;
   field?: FieldKind;
@@ -173,7 +177,7 @@ interface PreparedObservation {
 
 /** 관측마다 evaluateSlotMatchup으로 정수 데미지 공식 조각을 구한다. 실패하면 사유 문자열. */
 function prepareObservations(input: InferenceInput): { prepared: PreparedObservation[]; errors: (string | null)[] } {
-  const { attacker, defender, observations, attackerStages, defenderStages, weather, field, screen } = input;
+  const { attacker, defender, observations, attackerStages, attackerStatus, defenderStages, weather, field, screen } = input;
   const probeDefender: EvaluatorSlot = { ...defender, nature: null, points: { ...EMPTY_ABILITY_POINTS } };
   const prepared: PreparedObservation[] = [];
   const errors: (string | null)[] = [];
@@ -203,9 +207,20 @@ function prepareObservations(input: InferenceInput): { prepared: PreparedObserva
       defenderHpIsFull: i === 0 && obs.before >= 100,
       defenderItemConsumed: itemConsumed,
       applyMoveOwnStatChanges: false,
+      attackerStatus: attackerStatus ?? null,
+      extraOffenseMultiplier: computeStatusAttackMultiplier(
+        attackerStatus ?? null,
+        obs.move.category,
+        ignoresBurnAttackPenalty(attacker.ability ?? undefined, obs.move.id),
+        attacker.ability ? getAbility(attacker.ability)?.physicalAttackMultiplierWhenStatused : undefined,
+      ),
     });
     if (!res || !res.damageParts) {
       errors.push("이 기술로는 데미지를 계산할 수 없어요");
+      return;
+    }
+    if (res.damageParts.typeEffectiveness === 0) {
+      errors.push("상대에게 효과가 없는 기술이에요 (타입 면역)");
       return;
     }
     if (res.berryBulkMultiplier > 1) itemConsumed = true;

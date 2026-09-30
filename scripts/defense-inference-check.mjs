@@ -160,17 +160,26 @@ try {
   const done = trials - skipped;
   console.log(`왕복 ${ok}/${done} 통과 (건너뜀 ${skipped}) · 후보가 줄어든 경우 ${narrowed}건 · 평균 남은 비율 ${(done ? (sumRatio / done) * 100 : 0).toFixed(1)}%`);
 
-  // 3) 모순 / 여유 옵션 -----------------------------------------------------------------------
+  // 3) 모순 / 면역 ----------------------------------------------------------------------------
   {
     const atk = slot("한카리아스", { points: pts({ atk: 32 }), nature: "고집" });
-    const move = data.getMove("지진") ?? usable.find((m) => m.category === "physical");
-    const impossible = inf.inferDefense({
+    const move = data.getMove("지진");
+    const contradiction = inf.inferDefense({
+      attacker: atk,
+      defender: slot("마기라스"),
+      observations: [
+        { move, critical: false, before: 100, after: 99 },
+        { move, critical: false, before: 99, after: 0 },
+      ],
+    });
+    if (contradiction?.status !== "contradiction") fail(`모순 시나리오 상태가 ${contradiction?.status}`);
+    const immune = inf.inferDefense({
       attacker: atk,
       defender: slot("망나뇽"),
-      observations: [{ move, critical: false, before: 100, after: 99 }, { move, critical: false, before: 99, after: 0 }],
+      observations: [{ move, critical: false, before: 100, after: 80 }],
     });
-    if (!impossible || impossible.status === "invalid") fail("모순 시나리오가 invalid");
-    console.log(`모순 시나리오 상태: ${impossible?.status}`);
+    if (immune?.status !== "invalid" || !immune.observationErrors[0]?.includes("효과가 없는")) fail("타입 면역 관측이 invalid로 안 잡힘");
+    console.log(`모순 시나리오: ${contradiction?.status} · 면역 관측: ${immune?.status}`);
   }
 } finally {
   await server.close();
