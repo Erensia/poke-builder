@@ -96,22 +96,46 @@ function RangeBar({ label, range, real }: { label: string; range: Range | null; 
   );
 }
 
+const GRID_TICKS = [0, 4, 8, 12, 16, 20, 24, 28, 32];
+
 function AllocationGrid({ title, grid, yLabel }: { title: string; grid: Uint8Array; yLabel: string }) {
   const rows: number[] = [];
   for (let y = GRID - 1; y >= 0; y--) rows.push(y);
+  // 눈금 위치: 칸 가운데 (값 + 0.5) / 33
+  const pos = (v: number) => `${((v + 0.5) / GRID) * 100}%`;
   return (
     <div className="dinf-grid-wrap">
       <span className="dinf-grid-title">{title}</span>
-      <div className="dinf-grid" style={{ gridTemplateColumns: `repeat(${GRID}, 1fr)` }} role="img" aria-label={`${title} 분포`}>
-        {rows.flatMap((y) =>
-          Array.from({ length: GRID }, (_, x) => (
-            <span key={`${x}-${y}`} className={grid[y * GRID + x] ? "dinf-cell is-on" : "dinf-cell"} />
-          )),
-        )}
+      <span className="dinf-axis-name">세로 {yLabel} 포인트 ↑</span>
+      <div className="dinf-plot">
+        <div className="dinf-axis-y" aria-hidden="true">
+          {GRID_TICKS.map((v) => (
+            <span key={v} className="dinf-tick dinf-tick-y" style={{ bottom: pos(v) }}>
+              {v}
+            </span>
+          ))}
+        </div>
+        <div className="dinf-grid" style={{ gridTemplateColumns: `repeat(${GRID}, 1fr)` }} role="img" aria-label={`${title} 분포`}>
+          {rows.flatMap((y) =>
+            Array.from({ length: GRID }, (_, x) => (
+              <span
+                key={`${x}-${y}`}
+                className={grid[y * GRID + x] ? "dinf-cell is-on" : "dinf-cell"}
+                title={`HP ${x} · ${yLabel} ${y}${grid[y * GRID + x] ? " (가능)" : ""}`}
+              />
+            )),
+          )}
+        </div>
+        <div className="dinf-axis-x" aria-hidden="true">
+          {GRID_TICKS.map((v) => (
+            <span key={v} className="dinf-tick dinf-tick-x" style={{ left: pos(v) }}>
+              {v}
+            </span>
+          ))}
+        </div>
+        <span className="dinf-axis-name dinf-axis-name-x">HP 포인트</span>
       </div>
-      <span className="dinf-grid-axis">
-        가로: HP 포인트 0→32 · 세로: {yLabel} 포인트 0→32 (위쪽이 32)
-      </span>
+      <span className="dinf-grid-axis">보라색 칸 = 관측과 맞는 배분. 칸에 마우스를 올리면 수치가 보여요.</span>
     </div>
   );
 }

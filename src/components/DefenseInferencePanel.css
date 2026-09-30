@@ -374,11 +374,61 @@
   font-weight: 600;
 }
 
-.dinf-grid {
+/* 분포 표: 왼쪽 y 눈금 / 아래 x 눈금 (0~32, 4칸 간격) */
+.dinf-plot {
   display: grid;
-  width: min(330px, 100%);
+  grid-template-columns: 1.6rem min(300px, calc(100vw - 8rem));
+  grid-template-rows: auto 1.1rem 1.1rem;
+  grid-template-areas:
+    "yaxis grid"
+    ".     xaxis"
+    ".     xname";
+  align-items: stretch;
+}
+
+.dinf-axis-name {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+}
+
+.dinf-axis-name-x {
+  grid-area: xname;
+  text-align: center;
+}
+
+.dinf-axis-y {
+  grid-area: yaxis;
+  position: relative;
+}
+
+.dinf-axis-x {
+  grid-area: xaxis;
+  position: relative;
+}
+
+.dinf-tick {
+  position: absolute;
+  font-size: 0.64rem;
+  line-height: 1;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.dinf-tick-y {
+  right: 0.25rem;
+  transform: translateY(50%);
+}
+
+.dinf-tick-x {
+  top: 0.2rem;
+  transform: translateX(-50%);
+}
+
+.dinf-grid {
+  grid-area: grid;
+  display: grid;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 4px;
   overflow: hidden;
   background: var(--surface-2);
 }
