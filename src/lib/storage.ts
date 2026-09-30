@@ -1,5 +1,6 @@
 import type { Party, PartySlots, SlotPreset } from "../types/party";
 import type { BattleVideo } from "../types/battleVideo";
+import { emptyOpponentMemory, isOpponentMemory, type OpponentMemory } from "./battle/ai/opponentMemory";
 
 const STORAGE_KEY = "champions-party-sim.party.v1";
 /** 이름 붙인 파티 프리셋 목록(Phase 6 §1-2) — 위 STORAGE_KEY(현재 작업 중인 파티 자동저장)와 별개 */
@@ -11,6 +12,10 @@ const SLOT_PRESETS_STORAGE_KEY = "champions-party-sim.slot-presets.v1";
  * 유지하는 FIFO 로직은 useBattleVideos 훅에서 처리하고, 여기는 단순 로드/저장만 담당한다.
  */
 const BATTLE_VIDEOS_STORAGE_KEY = "champions-party-sim.battle-videos.v1";
+/**
+ * 배틀타워 AI의 사용자 패턴 학습(ver.2.0 1-C) — 파티 자동저장(STORAGE_KEY)과 별도 키. 집계 통계만(최대 약 25KB), 학습 켬/끔 설정 포함.
+ */
+const AI_MEMORY_STORAGE_KEY = "champions-party-sim.ai-memory.v1";
 
 /**
  * localStorage에 JSON 하나를 저장/로드하는 공용 팩토리(ver.1.5 §10). party/partyPresets/
@@ -114,4 +119,36 @@ export function loadBattleVideos(): BattleVideo[] {
 
 export function saveBattleVideos(videos: BattleVideo[]): void {
   battleVideosStore.save(videos);
+}
+
+/** 저장 형태: 학습 기록 + "대전에서 계속 학습" 스위치 */
+export interface StoredAiMemory {
+  version: 1;
+  learningEnabled: boolean;
+  memory: OpponentMemory;
+}
+
+function isStoredAiMemory(value: unknown): value is StoredAiMemory {
+  const v = value as StoredAiMemory;
+  return !!v && typeof v === "object" && v.version === 1 && typeof v.learningEnabled === "boolean" && isOpponentMemory(v.memory);
+}
+
+const aiMemoryStore = createLocalStorageStore<StoredAiMemory>(AI_MEMORY_STORAGE_KEY, isStoredAiMemory, {
+  version: 1,
+  learningEnabled: true,
+  memory: emptyOpponentMemory(),
+});
+
+/** AI 학습 기록을 불러온다. 없거나 손상됐으면 빈 기록(학습 켬) */
+export function loadAiMemory(): StoredAiMemory {
+  return aiMemoryStore.load();
+}
+
+export function saveAiMemory(value: StoredAiMemory): void {
+  aiMemoryStore.save(value);
+}
+
+/** 학습 초기화 — 이 키만 지운다(파티 자동저장 등 다른 키는 건드리지 않는다) */
+export function clearAiMemory(): void {
+  aiMemoryStore.clear();
 }

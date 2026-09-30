@@ -92,9 +92,13 @@ export function attachSwitchRead(
   const incoming = dist.switches
     .filter((s) => s.weight > 0)
     .map((s) => ({ weight: s.weight, options: evaluateOptions(applySwitch(state, oppKey, s.toIndex, { voluntary: true }).nextState, key) }));
+  // 왕복 끊기 ①(1-C): 직전 턴에 양쪽이 모두 자발적으로 교체했으면, 이번 턴 내 교체 선택지에는 교체 읽기를 붙이지 않는다 — 맞교체의 가치가
+  // 연속으로 붙어 서로 교체만 주고받다 시간초과가 나는 것을 막는다(공격기의 교체 읽기 — 들어올 포켓몬 노리기 — 는 그대로)
+  const swappedLastTurn = !!state.a.switchedInThisTurn && !!state.b.switchedInThisTurn;
   const sameChoice = (a: AiOption, b: AiOption) =>
     a.optionType === b.optionType && (a.optionType === "switch" ? a.toIndex === b.toIndex : a.move?.id === b.move?.id);
   return options.map((option) => {
+    if (swappedLastTurn && option.optionType === "switch") return option;
     const alternatives: { weight: number; option: AiOption }[] = [];
     let covered = 0;
     for (const j of incoming) {

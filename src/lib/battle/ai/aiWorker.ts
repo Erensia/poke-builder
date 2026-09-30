@@ -5,20 +5,21 @@
  * (받는 쪽이 자기 데이터의 같은 기술로 다시 잇는다 — aiClient.ts).
  */
 import { chooseAiAction } from "./index";
-import type { AiWorkerRequest, AiWorkerResponse } from "./aiClient";
+import { serializeDistribution, type AiWorkerRequest, type AiWorkerResponse } from "./aiClient";
 
 // 로드 완료 알림 — 첫 판단 전에 워커를 미리 띄워 두면(prewarmAiWorker) 받는 쪽이 이때부터 짧은 제한 시간을 쓴다
 self.postMessage({ ready: true });
 
 self.onmessage = (event: MessageEvent<AiWorkerRequest>) => {
-  const { id, state, key, riskAversion, legalMoveIds, decisionParams } = event.data;
+  const { id, state, key, riskAversion, legalMoveIds, decisionParams, opponentMemory } = event.data;
   let response: AiWorkerResponse;
   try {
-    const { action } = chooseAiAction(state, key, riskAversion, { legalMoveIds, decisionParams });
+    const { action, opponentDistribution } = chooseAiAction(state, key, riskAversion, { legalMoveIds, decisionParams, opponentMemory });
+    const dist = opponentDistribution && serializeDistribution(opponentDistribution);
     response =
       action.kind === "switch"
-        ? { id, action: { kind: "switch", toIndex: action.toIndex } }
-        : { id, action: { kind: "move", moveId: action.move.id, mega: action.mega } };
+        ? { id, action: { kind: "switch", toIndex: action.toIndex }, dist }
+        : { id, action: { kind: "move", moveId: action.move.id, mega: action.mega }, dist };
   } catch (error) {
     response = { id, error: String(error) };
   }

@@ -22,6 +22,8 @@
  * 환경변수 PROTECT=1: 방어류를 배울 수 있으면 4번째 기술을 방어류로 바꾼다. DIAG=protect면 방어류를 고른 순간을 덤프.
  * 환경변수 STATUS=1: AI가 점수 매기는 변화기를 배울 수 있으면 기술 하나를 그걸로 바꾼다(변화기 판단 검증용).
  *     diag 모드에 DIAG=status를 주면 그 변화기를 고른 순간을 덤프한다.
+ * 환경변수 LEARN=1(greedy·style, ver.2.0 1-C): AI 쪽이 상대가 실제로 고른 행동을 대전 간 누적 학습(한 프로세스 안에서 이어짐) —
+ *     상대 모델(opponentModel)이 켜진 파라미터에서만 보정이 걸린다. 결과에 learned(누적 대전 수·교체/변화기 보정 배율).
  * 환경변수 SEED_FROM=<n>(greedy·style·h2h·select): 시드 n부터 [판 수]개만 돈다(기본 1) — 벤치를 조각내 병렬로 돌린 뒤 합산(scripts/bench.mjs).
  *     각 판은 시드로만 정해지므로 조각의 합은 한 번에 돌린 결과와 같다.
  * 환경변수 SIM_ROOT=<체크아웃 경로>: 이 스크립트 대신 그 체크아웃의 src/를 불러온다(다른 커밋을 이 하네스로 벤치).
@@ -163,7 +165,38 @@ try {
   };
   const aiForced = (risk) => (st, key) => ai.chooseAiForcedSwitch(st, key, risk, decisionParams) ?? living(st, key)[0];
 
-  function runBattle(seed, policies, forced, initial) {
+  // LEARN=1(ver.2.0 1-C): AI 쪽이 상대가 실제로 고른 행동을 대전 간 누적 학습 — 한 프로세스(벤치 조각) 안에서 이어진다(같은 상대와
+  // 계속 두는 셈). 상대 모델(opponentModel)이 켜진 파라미터에서만 보정이 걸린다.
+  const opponentMemoryModule = process.env.LEARN === "1" ? await server.ssrLoadModule("/src/lib/battle/ai/opponentMemory.ts") : null;
+  function makeLearner() {
+    if (!opponentMemoryModule) return null;
+    const m = opponentMemoryModule;
+    let saved = m.emptyOpponentMemory();
+    let session = m.emptyOpponentMemory();
+    let pending = null;
+    return {
+      options: () => ({ opponentMemory: m.combinedMemory(saved, session) }),
+      note(d, st, key) {
+        pending = d.opponentDistribution ? { dist: d.opponentDistribution, speciesId: st[key === "a" ? "b" : "a"].slot.pokemonId } : null;
+      },
+      observe(oppAction) {
+        if (!pending || !oppAction) return;
+        const action =
+          oppAction.kind === "switch"
+            ? { kind: "switch" }
+            : { kind: "move", moveId: oppAction.move.id, isStatus: oppAction.move.category === "status" };
+        m.observeOpponent(session, { ...pending, statusMoveIds: ai.statusMoveIdsOf(pending.dist), action });
+        pending = null;
+      },
+      endBattle() {
+        saved = m.commitBattle(saved, session);
+        session = m.emptyOpponentMemory();
+      },
+      summary: () => ({ battles: saved.battles, ...m.memoryFactors(saved) }),
+    };
+  }
+
+  function runBattle(seed, policies, forced, initial, onActions) {
     const rng = mulberry32(seed);
     const partyRng = mulberry32(seed ^ 0x9e3779b9);
     let st = initial ?? state.createBattleState({ a: makeSide(partyRng), b: makeSide(partyRng) });
@@ -174,6 +207,7 @@ try {
       const actionA = policies.a(st, "a");
       const actionB = policies.b(st, "b");
       timings.push(performance.now() - t0);
+      onActions?.(actionA, actionB);
       let out = rt.runTurn(st, actionA, actionB, rng);
       let guard = 0;
       while ("awaitingSelfSwitch" in out && guard++ < 5) {
@@ -285,8 +319,10 @@ try {
   } else if (mode === "greedy") {
     const mix = { move: 0, pivot: 0, switch: 0, status: 0 };
     const statusMix = {};
+    const learner = makeLearner();
     const aiPolicy = (risk) => (st, key) => {
-      const d = ai.chooseAiAction(st, key, risk, { decisionParams });
+      const d = ai.chooseAiAction(st, key, risk, { decisionParams, ...learner?.options() });
+      learner?.note(d, st, key);
       if (d.action.kind === "switch") mix.switch++;
       else if (d.action.move.category === "status") {
         mix.status++;
@@ -302,7 +338,10 @@ try {
     const res = { aiWins: 0, greedyWins: 0, other: 0 };
     const outcome = (seed, aiSide, risk) => {
       const gSide = aiSide === "a" ? "b" : "a";
-      const r = runBattle(seed, { [aiSide]: aiPolicy(risk), [gSide]: greedyPolicy }, { [aiSide]: aiForced(risk), [gSide]: firstLiving });
+      const r = runBattle(seed, { [aiSide]: aiPolicy(risk), [gSide]: greedyPolicy }, { [aiSide]: aiForced(risk), [gSide]: firstLiving }, undefined, (a, b) =>
+        learner?.observe(aiSide === "a" ? b : a),
+      );
+      learner?.endBattle();
       return r.winner === aiSide ? "aiWins" : r.winner === gSide ? "greedyWins" : "other";
     };
     for (let s = seedFrom; s <= seedTo; s++) {
@@ -310,7 +349,7 @@ try {
       res[outcome(s, "a", risk)]++;
       res[outcome(s, "b", risk)]++;
     }
-    console.log(JSON.stringify({ battles: battles * 2, res, aiActionMix: mix, statusMix }));
+    console.log(JSON.stringify({ battles: battles * 2, res, aiActionMix: mix, statusMix, ...(learner && { learned: learner.summary() }) }));
   } else if (mode === "style") {
     // 스타일 봇(ver.2.0 1-A): 지금 AI의 채점 결과를 성향대로 비틀어 고른다. 무작위는 시드 고정(판 재현).
     const style = process.env.STYLE ?? "noisy";
@@ -333,6 +372,7 @@ try {
       return d.action;
     };
     const res = { aiWins: 0, botWins: 0, other: 0 };
+    const learner = makeLearner();
     const botMix = { move: 0, status: 0, switch: 0 };
     for (let s = seedFrom; s <= seedTo; s++) {
       const risk = mulberry32(s)();
@@ -347,13 +387,23 @@ try {
         };
         const r = runBattle(
           s,
-          { [aiSide]: (st, key) => ai.chooseAiAction(st, key, risk, { decisionParams }).action, [botSide]: counted },
+          {
+            [aiSide]: (st, key) => {
+              const d = ai.chooseAiAction(st, key, risk, { decisionParams, ...learner?.options() });
+              learner?.note(d, st, key);
+              return d.action;
+            },
+            [botSide]: counted,
+          },
           { [aiSide]: aiForced(risk), [botSide]: (st, key) => ai.chooseAiForcedSwitch(st, key, 1 - risk) ?? living(st, key)[0] },
+          undefined,
+          (a, b) => learner?.observe(aiSide === "a" ? b : a),
         );
+        learner?.endBattle();
         res[r.winner === aiSide ? "aiWins" : r.winner === botSide ? "botWins" : "other"]++;
       }
     }
-    console.log(JSON.stringify({ battles: battles * 2, style, res, botMix }));
+    console.log(JSON.stringify({ battles: battles * 2, style, res, botMix, ...(learner && { learned: learner.summary() }) }));
   } else if (mode === "h2h") {
     // AI(파라미터 A = argv[4]) 대 AI(파라미터 B = argv[5], 생략하면 기본값), 파티 좌우 교대.
     // OPP_ROOT면 B는 그 체크아웃의 AI — 고른 기술은 이 체크아웃 데이터의 같은 id 기술로 바꿔 엔진에 넘긴다.
@@ -365,9 +415,12 @@ try {
     const bucketOf = (ms) => (ms < 250 ? "<0.25s" : ms < 500 ? "<0.5s" : ms < 1000 ? "<1s" : ms < 1500 ? "<1.5s" : ms < 2000 ? "<2s" : ms < 3000 ? "<3s" : ">=3s");
     const kindOf = (o) =>
       o.optionType === "switch" ? "switch" : o.move.category === "status" ? statusLabel(o.move) : o.move.selfSwitchAfterDamage ? "pivot" : "attack";
-    const policy = (params, risk, which = ai) => (st, key) => {
+    // LEARN=1: A 쪽(파라미터 A)이 B를 대전 간 누적 학습
+    const learner = makeLearner();
+    const policy = (params, risk, which = ai, learn = null) => (st, key) => {
       const t0 = performance.now();
-      const d = which.chooseAiAction(st, key, risk, { decisionParams: params });
+      const d = which.chooseAiAction(st, key, risk, { decisionParams: params, ...learn?.options() });
+      learn?.note(d, st, key);
       if (d.baseChosen) {
         const ms = performance.now() - t0;
         searchStats.decisions++;
@@ -400,9 +453,12 @@ try {
         const bSide = aSide === "a" ? "b" : "a";
         const r = runBattle(
           s,
-          { [aSide]: policy(decisionParams, risk), [bSide]: policy(opponentParams, risk, oppAi) },
+          { [aSide]: policy(decisionParams, risk, ai, learner), [bSide]: policy(opponentParams, risk, oppAi) },
           { [aSide]: forced(decisionParams, risk), [bSide]: forced(opponentParams, risk, oppAi) },
+          undefined,
+          (x, y) => learner?.observe(aSide === "a" ? y : x),
         );
+        learner?.endBattle();
         res[r.winner === aSide ? "aWins" : r.winner === bSide ? "bWins" : "other"]++;
       }
     }

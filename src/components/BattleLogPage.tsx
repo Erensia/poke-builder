@@ -46,6 +46,11 @@ import {
 } from "../lib/battleSimulator";
 import { chooseAiForcedSwitch, chooseAiSelection, sampleRiskAversion } from "../lib/battle/ai";
 import { APP_DECISION_PARAMS, chooseAiActionAsync, prewarmAiWorker } from "../lib/battle/ai/aiClient";
+import { combinedMemory, emptyOpponentMemory, observeOpponent } from "../lib/battle/ai/opponentMemory";
+import { statusMoveIdsOf } from "../lib/battle/ai";
+import type { LevelOneDistribution } from "../lib/battle/ai/levelOne";
+import { useAiMemory } from "../hooks/useAiMemory";
+import { AiMemoryModal } from "./AiMemoryModal";
 import type { PartySlot } from "../types/party";
 import type { StatusCondition } from "../types/status";
 import type { BaseStats } from "../types/stats";
@@ -139,6 +144,8 @@ function BattleSetupScreen({
   onProceed,
   aiOpponent,
   onToggleAiOpponent,
+  aiMemoryBattles,
+  onOpenAiMemory,
 }: {
   setup: ReturnType<typeof useBattleSetup>;
   hasPartyPresets: boolean;
@@ -152,6 +159,9 @@ function BattleSetupScreen({
   onProceed: () => void;
   aiOpponent: boolean;
   onToggleAiOpponent: (on: boolean) => void;
+  /** AI 학습 누적 대전 수(ver.2.0 1-C) — "AI가 조작" 옆 칩 */
+  aiMemoryBattles: number;
+  onOpenAiMemory: () => void;
 }) {
   const sideCtls = (side: Side) => (side === "a" ? setup.a : setup.b);
   const slotCtl = (side: Side, i: SlotIndex) => sideCtls(side)[i];
@@ -217,6 +227,11 @@ function BattleSetupScreen({
                   />
                   <span>AI가 조작</span>
                 </label>
+              )}
+              {side === "b" && aiOpponent && (
+                <button type="button" className="battle-ai-memory-chip" onClick={onOpenAiMemory}>
+                  🧠 AI 학습 {aiMemoryBattles}판
+                </button>
               )}
             </div>
             {movelessWarningFor(side) && (
@@ -420,11 +435,14 @@ function BattleBoard({
   resetToSetup,
   aiSide,
   aiThinking,
+  learnedBattles,
 }: {
   /** 컴퓨터(배틀 AI)가 조작하는 편. 사람이 양쪽 다 조작하면 null */
   aiSide: Side | null;
   /** AI가 이번 턴 행동을 계산하는 중(ver.2.0 2-B — Web Worker) — 점 세 개 표시, 턴 진행 버튼 잠금 */
   aiThinking: boolean;
+  /** 이번 대전을 학습했으면 누적 판 수(ver.2.0 1-C 결과 배너 한 줄) */
+  learnedBattles: number | null;
   battleState: BattleState;
   winner: FighterKey | "draw" | undefined;
   selected: SelectedState;
@@ -1028,12 +1046,17 @@ function BattleBoard({
     )}
 
     {winner ? (
-      <div className={`battle-result-banner${winner === "draw" ? " is-draw" : ""}`}>
-        {winner === "draw" ? "🤝 무승부! 양쪽 다 기절했어요" : `🏆 ${fighterLabel(battleState, winner)} 승리!`}
-        <button type="button" className="battle-reset-button" onClick={resetToSetup}>
-          대전 이어하기
-        </button>
-      </div>
+      <>
+        <div className={`battle-result-banner${winner === "draw" ? " is-draw" : ""}`}>
+          {winner === "draw" ? "🤝 무승부! 양쪽 다 기절했어요" : `🏆 ${fighterLabel(battleState, winner)} 승리!`}
+          <button type="button" className="battle-reset-button" onClick={resetToSetup}>
+            대전 이어하기
+          </button>
+        </div>
+        {learnedBattles !== null && (
+          <p className="battle-ai-learned-note">AI가 이번 대전을 학습했습니다 (누적 {learnedBattles}판)</p>
+        )}
+      </>
     ) : pendingForcedSwitch ? (
       <div className="battle-lock-warning">내보낼 포켓몬을 선택하세요!</div>
     ) : pendingPivot ? (
@@ -1103,6 +1126,12 @@ export function BattleLogPage() {
   // AI 행동 계산 중(ver.2.0 2-B) — 요청 번호로, 계산 도중 초기화·새 대전이 시작되면 늦게 온 답을 버린다
   const [aiThinking, setAiThinking] = useState(false);
   const aiRequestRef = useRef(0);
+  // 사용자 패턴 학습(ver.2.0 1-C): 누적본은 useAiMemory(localStorage), 이번 대전 관측은 세션 기록 — 대전이 끝나면 합친다
+  const aiMemory = useAiMemory();
+  const aiSessionRef = useRef(emptyOpponentMemory());
+  const [showAiMemory, setShowAiMemory] = useState(false);
+  /** 이번 대전을 학습했으면 누적 판 수(결과 배너 한 줄), 아니면 null */
+  const [learnedBattles, setLearnedBattles] = useState<number | null>(null);
 
   const sideCtls = (side: Side) => (side === "a" ? setup.a : setup.b);
   const slotCtl = (side: Side, i: SlotIndex) => sideCtls(side)[i];
@@ -1278,6 +1307,8 @@ export function BattleLogPage() {
     setAiSide(aiOpponent ? "b" : null);
     if (aiOpponent) prewarmAiWorker();
     setAiRiskAversion(sampleRiskAversion());
+    aiSessionRef.current = emptyOpponentMemory();
+    setLearnedBattles(null);
     aiRequestRef.current++;
     setAiThinking(false);
   }
@@ -1505,13 +1536,14 @@ export function BattleLogPage() {
       riskAversion: aiRiskAversion,
       legalMoveIds: selectableMoveIds(aiSide!),
       decisionParams: APP_DECISION_PARAMS,
-    }).then((aiAction) => {
+      opponentMemory: combinedMemory(aiMemory.memory, aiSessionRef.current),
+    }).then((result) => {
       if (requestId !== aiRequestRef.current) return; // 계산 도중 초기화·새 대전
       setAiThinking(false);
-      executeTurn(aiAction);
+      executeTurn(result.action, result.opponentDistribution);
     });
 
-    function executeTurn(aiAction: TurnAction | null) {
+    function executeTurn(aiAction: TurnAction | null, opponentDistribution?: LevelOneDistribution) {
     if (!battleState) return;
     const actionFor = (side: Side): TurnAction | null => {
       if (side === aiSide && aiAction) return aiAction;
@@ -1530,6 +1562,18 @@ export function BattleLogPage() {
     const actionA = actionFor("a");
     const actionB = actionFor("b");
     if (!actionA || !actionB) return;
+
+    // 1-C: AI가 예측한 사용자 행동 분포와 사용자가 실제로 고른 행동을 짝지어 이번 대전 세션 기록에 더한다
+    if (aiSide && opponentDistribution) {
+      const humanSide = aiSide === "a" ? "b" : "a";
+      const human = humanSide === "a" ? actionA : actionB;
+      observeOpponent(aiSessionRef.current, {
+        dist: opponentDistribution,
+        speciesId: battleState[humanSide].slot.pokemonId,
+        statusMoveIds: statusMoveIdsOf(opponentDistribution),
+        action: human.kind === "switch" ? { kind: "switch" } : { kind: "move", moveId: human.move.id, isStatus: human.move.category === "status" },
+      });
+    }
 
     applyTurnOutcome(runTurn(battleState, actionA, actionB), false);
     }
@@ -1551,6 +1595,9 @@ export function BattleLogPage() {
       winner,
       log,
     });
+    // 1-C: AI 대전이면 이번 대전 관측을 누적 학습에 합친다("대전에서 계속 학습"이 꺼져 있으면 합치지 않음)
+    if (aiSide && aiMemory.commit(aiSessionRef.current)) setLearnedBattles(aiMemory.memory.battles + 1);
+    aiSessionRef.current = emptyOpponentMemory();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [winner]);
 
@@ -1584,6 +1631,8 @@ export function BattleLogPage() {
           onProceed={handleProceed}
           aiOpponent={aiOpponent}
           onToggleAiOpponent={setAiOpponent}
+          aiMemoryBattles={aiMemory.memory.battles}
+          onOpenAiMemory={() => setShowAiMemory(true)}
         />
       )}
 
@@ -1631,6 +1680,17 @@ export function BattleLogPage() {
           resetToSetup={resetToSetup}
           aiSide={aiSide}
           aiThinking={aiThinking}
+          learnedBattles={learnedBattles}
+        />
+      )}
+
+      {showAiMemory && (
+        <AiMemoryModal
+          memory={aiMemory.memory}
+          learningEnabled={aiMemory.learningEnabled}
+          onToggleLearning={aiMemory.setLearningEnabled}
+          onReset={aiMemory.reset}
+          onClose={() => setShowAiMemory(false)}
         />
       )}
 

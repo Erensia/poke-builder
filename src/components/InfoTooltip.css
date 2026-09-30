@@ -1,0 +1,49 @@
+.info-tooltip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.info-tooltip-icon {
+  border: none;
+  background: none;
+  padding: 0 0.1rem;
+  font-size: 0.85rem;
+  line-height: 1;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.info-tooltip-bubble {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 6px);
+  z-index: 20;
+  width: max-content;
+  max-width: min(280px, 80vw);
+  padding: 0.5rem 0.65rem;
+  border-radius: 8px;
+  background: var(--text);
+  color: var(--bg, #fff);
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.45;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(2px);
+  transition: opacity 0.12s ease, transform 0.12s ease;
+}
+
+.info-tooltip:hover .info-tooltip-bubble,
+.info-tooltip-bubble.is-open {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .info-tooltip-bubble {
+    transition: none;
+  }
+}
