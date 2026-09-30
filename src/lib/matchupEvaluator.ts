@@ -20,6 +20,7 @@ import {
   computeOffensePower,
   CRITICAL_DAMAGE_MULTIPLIER,
   computeBulkPower,
+  computeAttackTerm,
   computeEffectiveSpeed,
   evaluateMatchupChance,
   rankStageMultiplier,
@@ -168,12 +169,33 @@ function contraryMove(m: Move, invert: boolean | undefined): Move {
       };
 }
 
+/**
+ * 정수 데미지 공식(computeDamage)을 방어측 스탯만 바꿔 다시 돌릴 수 있게 하는 조각(상대 실능치 역산용 — 2.1 C).
+ * 데미지 = floor( (floor(floor(22 × power × attackTerm ÷ (방어 실능 × defenseRankMultiplier)) ÷ 50) + 2) × modifier × 난수 ÷ bulkMultiplier ).
+ * modifier는 자속·특성·도구·날씨·필드·급소(상성 제외), typeEffectiveness는 따로. 다단히트·고정 데미지 기술은 이 공식이 맞지 않으니 쓰지 말 것.
+ */
+export interface DamageParts {
+  power: number;
+  /** 공격 실능 × 랭크 배율 (급소면 공격측 음수 랭크 무시 반영) */
+  attackTerm: number;
+  modifier: number;
+  typeEffectiveness: number;
+  /** 방어측에서 이 기술이 읽는 스탯 */
+  defenseKey: "def" | "spd";
+  /** 방어 랭크 배율 (급소면 양수 랭크 무시 반영) */
+  defenseRankMultiplier: number;
+  /** computeBulkPower에 넘긴 방어 관련 배율 전부(특성·열매·날씨·스크린) — 데미지는 이 값으로 나눈다 */
+  bulkMultiplier: number;
+}
+
 export interface SlotMatchupResult {
   /** 상대 타입 상성까지 반영된 최종 결정력. 판정(verdict)은 이 값 기준 */
   offensePower: number;
   /** 상대 타입 상성을 곱하기 전의 결정력 (자속/랭크/특성/도구/날씨는 반영됨) */
   rawOffensePower: number;
   bulkPower: number;
+  /** 정수 데미지 공식 재계산용 조각 (위력이 없으면 생략) */
+  damageParts?: DamageParts;
   verdict: MatchupVerdict;
   /**
    * 반감 열매(자바열매류)가 이 공격에 발동할 때 그 한 타의 내구력 배율(2, 숙성 4). 발동 안 하면 1. 열매는 첫 타에 소모되므로
@@ -584,19 +606,45 @@ export function evaluateSlotMatchup(
   // 반감 열매는 첫 타만(ver.1.9 6-1): 다단히트 전체 데미지 = 첫 타 몫 / 배율 + 나머지 몫 → 내구력 배율 = 1 / 그 비율
   const berryHitsMultiplier =
     berryResult.bulkMultiplier === 1 ? 1 : 1 / (firstHitShare / berryResult.bulkMultiplier + (1 - firstHitShare));
+  const finalBulkMultiplierForBulkPower =
+    (manualBulkMultiplier ?? abilityDefense * berryHitsMultiplier * weatherDefenseMultiplier) * screenMultiplier;
   const bulkPower = computeBulkPower(defenderRealStats, resolvedCategory, {
     defenderStages: criticalApplies ? clampStages(defenderStages, "negative") : defenderStages,
-    bulkMultiplier:
-      (manualBulkMultiplier ?? abilityDefense * berryHitsMultiplier * weatherDefenseMultiplier) * screenMultiplier,
+    bulkMultiplier: finalBulkMultiplierForBulkPower,
     // 사이코쇼크(hitsDefensiveStat): 특수기지만 내구력은 방어자의 물리 방어로 낸다
     defensiveStatOverride: move.hitsDefensiveStat,
   });
+
+  const finalBulkMultiplier = finalBulkMultiplierForBulkPower;
+  const partsPower = effectiveMoveFinal.power;
+  const attackTerm = computeAttackTerm(
+    attackerRealStats,
+    effectiveMoveFinal,
+    criticalApplies ? clampStages(attackerStages, "positive") : attackerStages,
+    defenderRealStats,
+    criticalApplies ? clampStages(defenderStages, "positive") : defenderStages,
+  );
+  const defenseKey = move.hitsDefensiveStat ?? (resolvedCategory === "physical" ? "def" : "spd");
+  const partsDenominator = partsPower !== null ? attackTerm * partsPower : 0;
+  const damageParts: DamageParts | undefined =
+    partsPower !== null && partsDenominator > 0
+      ? {
+          power: partsPower,
+          attackTerm,
+          modifier: rawOffensePower / partsDenominator,
+          typeEffectiveness,
+          defenseKey,
+          defenseRankMultiplier: rankStageMultiplier((criticalApplies ? clampStages(defenderStages, "negative") : defenderStages)[defenseKey]),
+          bulkMultiplier: finalBulkMultiplier,
+        }
+      : undefined;
 
   const chance = evaluateMatchupChance(offensePower, bulkPower);
   return {
     offensePower,
     rawOffensePower,
     bulkPower,
+    damageParts,
     verdict: chance.verdict,
     berryBulkMultiplier: manualBulkMultiplier === undefined ? berryResult.bulkMultiplier : 1,
     berryAppliedMultiplier: manualBulkMultiplier === undefined ? berryHitsMultiplier : 1,
