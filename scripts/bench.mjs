@@ -8,6 +8,9 @@
  * 표준 5종: 그리디 800(켬·끔), STATUS=1 그리디 400(켬·끔), STATUS=1 h2h 200(켬 대 끔). 판 수는 "좌우 교대 한 쌍" 단위(× 2판).
  * 스타일 봇(ver.2.0 1-A, --style N으로 켬 — 기본 0): 교체형·변화기형·무작위 섞음 봇 상대 각 N(켬·끔, STATUS=1).
  * ver.2.0 3단계: --h2h-plain N(일반 파티 h2h, 기본 0) · --seed-offset N(모든 종류의 시드를 N만큼 뒤로 — 스크리닝과 다른 파티로 재확인).
+ * ver.2.1 A-0: --select N(3선출 방식 A 대 B, 기본 0) — 켬 JSON(--on)이 A, 끔 JSON(toggle 대상)이 B인 **선출 옵션**({...} 또는 {"kind":"random"|"first"}),
+ *   시드당 4판(× 파티·편 교대)이라 N=100이면 400판. --pool samples|random(기본 samples — 기본 제공 샘플 파티 20개에서 서로 다른 둘).
+ *   예) npm run bench -- toggle '{"kind":"random"}' --greedy 0 --status 0 --h2h 0 --select 100
  * 옵션: --root <체크아웃>(벤치할 코드, 기본 이 리포) · --on '<JSON>' · --greedy N · --status N · --h2h N · --style N · --chunk N(조각당 시드 수,
  *       기본 50) · --jobs N(동시 실행 수, 기본 CPU 코어 수)
  * 출력: 진행 상황은 stderr, 마지막에 종류별 합산 JSON 한 줄씩 stdout.
@@ -36,7 +39,9 @@ const sizes = {
   h2h: Number(opt("h2h", 200)),
   style: Number(opt("style", 0)),
   h2hPlain: Number(opt("h2h-plain", 0)),
+  select: Number(opt("select", 0)),
 };
+const pool = opt("pool", "samples");
 const seedOffset = Number(opt("seed-offset", 0));
 const chunk = Number(opt("chunk", 50));
 const concurrency = Number(opt("jobs", availableParallelism()));
@@ -44,6 +49,7 @@ const concurrency = Number(opt("jobs", availableParallelism()));
 /** 벤치 종류: 라벨, 시뮬레이터 모드·인자, 환경변수, 판 수 */
 const kinds = [
   { label: "h2h", mode: "h2h", size: sizes.h2h, args: [onParams, offParams], env: { STATUS: "1", ...(baseRoot && { OPP_ROOT: baseRoot }) } },
+  { label: "select", mode: "selectvs", size: sizes.select, args: [onParams, offParams], env: { POOL: pool } },
   { label: "h2h:plain", mode: "h2h", size: sizes.h2hPlain, args: [onParams, offParams], env: { ...(baseRoot && { OPP_ROOT: baseRoot }) } },
   { label: "status:on", mode: "greedy", size: sizes.status, args: [onParams], env: { STATUS: "1" } },
   { label: "status:off", mode: "greedy", size: sizes.status, args: [offParams], env: { STATUS: "1", ...(baseRoot && { SIM_ROOT: baseRoot }) } },
@@ -90,7 +96,11 @@ function merge(a, b) {
   if (typeof a === "number" && typeof b === "number") return a + b;
   if (a && b && typeof a === "object" && typeof b === "object") {
     const out = { ...a };
-    for (const [k, v] of Object.entries(b)) out[k] = k in out ? merge(out[k], v) : v;
+    for (const [k, v] of Object.entries(b)) {
+      // A·B(파라미터 JSON)·pool은 조각마다 같은 값이라 더하면 안 되고, max* 는 최댓값
+      if (k in out && (k === "A" || k === "B" || k === "pool")) continue;
+      out[k] = k in out ? (k.startsWith("max") ? Math.max(out[k], v) : merge(out[k], v)) : v;
+    }
     return out;
   }
   return a ?? b;
@@ -106,6 +116,11 @@ await Promise.all(
 // 판 수 0으로 뺀 종류(--greedy 0 등)는 결과가 없다
 for (const k of kinds.filter((kind) => kind.size > 0)) {
   const merged = results.get(k.label).reduce(merge);
+  // 선출 벤치는 시간 합계와 횟수만 합산되므로 평균을 여기서 계산한다
+  if (k.label === "select") {
+    merged.avgSelectMsA = +(merged.selectMsA / merged.selectsA).toFixed(1);
+    merged.avgSelectMsB = +(merged.selectMsB / merged.selectsB).toFixed(1);
+  }
   console.log(JSON.stringify({ bench: k.label, ...merged }));
 }
 console.error(`총 ${((Date.now() - started) / 60000).toFixed(1)}분 · 조각 ${jobs.length}개 · 동시 ${concurrency}개`);

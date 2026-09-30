@@ -998,6 +998,7 @@ AI 대 랜덤 행동 봇: trade 기준 170승 30패(85%). 턴당 판단 평균 5
 | `npm run sim:ai -- diag [판수] [파라미터 JSON]` | AI가 교체를 고른 순간의 옵션별 점수·c·d 덤프 |
 | `npm run bench -- toggle '<끔 JSON>'` · `-- compare <이전 체크아웃>` | 표준 벤치 5종(그리디 800·STATUS=1 그리디 400 각 켬/끔, STATUS=1 h2h 200)을 시드 구간 조각(`SEED_FROM`, 기본 50)으로 나눠 코어 수만큼 병렬 실행 후 합산(ver.1.9). `--root`로 다른 체크아웃(`SIM_ROOT`) |
 | `npm run sim:ai -- h2h [판수] [파라미터 A] [파라미터 B]` | AI(A) 대 AI(B, 생략 시 기본값), 파티 좌우 교대. 상대 모델처럼 그리디 봇이 편향되는 변경의 비교용 |
+| `npm run sim:ai -- selectvs [시드 수] [선출 옵션 A] [선출 옵션 B]` | 3선출 방식 A 대 B(ver.2.1 A-0): 같은 파티 두 개를 두고 A·B가 각각 양쪽 선출을 맡아 (파티 × 편) 4판씩. 옵션은 `chooseAiSelection` 옵션 JSON 또는 `{"kind":"random"\|"first"}`(비AI 기준). `POOL=samples`(기본, 기본 제공 샘플 파티 20개 중 서로 다른 둘) \| `random`. 벤치 실행기: `npm run bench -- toggle '<B JSON>' --on '<A JSON>' --greedy 0 --status 0 --h2h 0 --select 100 [--pool samples\|random]` |
 
 파라미터 JSON 예: `'{"scoring":"spec"}'`, `'{"tieThreshold":0.03}'`, `'{"pivotAware":false}'` (PowerShell은 `'{\"scoring\":\"spec\"}'`).
 환경변수 `PIVOT=1`이면 유턴류를 배울 수 있는 포켓몬의 기술 하나를 유턴류로 바꿔 파티를 만들고, diag 모드에
