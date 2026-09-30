@@ -2115,9 +2115,14 @@ export function BattleTurnLog({ log }: { log: TurnResult[] }) {
             {[...log].reverse().map((turn, turnIdx) => {
               // 턴 종료 처리(회복·상태이상)는 그 시점의 활성 기준이라 activePokemonIds(턴 끝 스냅샷)로 되짚는다.
               const turnName = (key: FighterKey) => getPokemon(turn.activePokemonIds[key])?.name ?? key;
-              // 강제 교체는 actions·endOfTurn이 비고 switches만 있는 합성 카드 — 제목을 다르게 준다.
+              // 강제 교체는 actions·endOfTurn이 비고 switches만 있는 합성 카드(fromIndex -1) — 제목을 다르게 준다.
+              // 양쪽 다 교체한 실제 턴도 행동·턴 종료 로그가 비므로 fromIndex로 구분한다(실제 교체는 인덱스가 있음).
               const isForcedSwitchCard =
-                turn.switches.length > 0 && turn.actions.length === 0 && turn.endOfTurn.length === 0 && !turn.winner;
+                turn.switches.length > 0 &&
+                turn.switches.every((sw) => sw.fromIndex < 0) &&
+                turn.actions.length === 0 &&
+                turn.endOfTurn.length === 0 &&
+                !turn.winner;
               // "먼저 행동"은 첫 행동 주체(유턴 턴 중간 교체 전이라 activePokemonIds와 다를 수 있음).
               const firstActorName =
                 getPokemon(turn.actions[0]?.actorPokemonId ?? turn.activePokemonIds[turn.order[0]])?.name ??
