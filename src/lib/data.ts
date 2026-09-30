@@ -3,17 +3,21 @@ import movesJson from "../data/moves.json";
 import abilitiesJson from "../data/abilities.json";
 import itemsJson from "../data/items.json";
 import naturesJson from "../data/natures.json";
+import samplePartiesJson from "../data/samplePartyPresets.json";
 import type { Pokemon } from "../types/pokemon";
 import type { Move } from "../types/move";
 import type { Ability } from "../types/ability";
 import type { Item } from "../types/item";
 import type { Nature } from "../types/nature";
+import type { SamplePartyPreset } from "../types/party";
 
 export const POKEMON = pokemonJson as Pokemon[];
 export const MOVES = movesJson as Move[];
 export const ABILITIES = abilitiesJson as Ability[];
 export const ITEMS = itemsJson as Item[];
 export const NATURES = naturesJson as Nature[];
+/** 기본 제공 샘플 파티(ver.2.1 B) — 읽기 전용 */
+export const SAMPLE_PARTIES = samplePartiesJson as SamplePartyPreset[];
 
 const pokemonById = new Map(POKEMON.map((p) => [p.id, p]));
 const moveById = new Map(MOVES.map((m) => [m.id, m]));

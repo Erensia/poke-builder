@@ -72,3 +72,19 @@ export interface SlotPreset {
   slot: PartySlot;
   savedAt: number;
 }
+
+/**
+ * 앱이 기본으로 제공하는 샘플 파티(ver.2.1 B) — `data/samplePartyPresets.json`. 사용자 저장 파티(Party)와 달리 읽기 전용 데이터이고,
+ * 불러오면 그 진영에만 사본으로 채워진다(원본·사용자 저장 파티는 바뀌지 않는다).
+ */
+export interface SamplePartyPreset {
+  id: string;
+  name: string;
+  /** 성향 라벨(날씨·트릭룸·스톨 등) */
+  style: string;
+  /** real = 실전형(자주 볼 법한 강한 조합), textbook = 교과서형(한 전술을 순수하게 보여 주는 표본) */
+  group: "real" | "textbook";
+  description: string;
+  /** 항상 6마리 */
+  slots: PartySlot[];
+}

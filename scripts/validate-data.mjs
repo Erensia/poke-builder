@@ -245,6 +245,68 @@ const diskUrls = new Set(walk(spritesDir).map((f) => "/" + f.slice(f.indexOf("pu
 for (const [key, url] of Object.entries(MANIFEST))
   if (!diskUrls.has(url)) err(`spriteManifest.json: "${key}" → ${url} 파일이 디스크에 없음 (npm run sprites 필요)`);
 
+// ── 4) 샘플 파티(samplePartyPresets.json) ───────────────────────────────────────────────
+// 기본 제공 파티는 사용자가 그대로 불러와 대전하므로 데이터 규칙을 어기면 안 된다:
+// 존재하는 id, 그 종이 배우는 기술·가질 수 있는 특성, 포인트 상한(합 66·스탯당 32), 파티당 6마리·같은 포켓몬/도구 중복 없음, 메가 1마리 이하.
+{
+  const SAMPLES = read("samplePartyPresets.json");
+  const pokemonById = new Map(POKEMON.map((p) => [p.id, p]));
+  const itemById = new Map(ITEMS.map((i) => [i.id, i]));
+  const natureIds = new Set(NATURES.map((n) => n.id));
+  const abilityIdSet = new Set(ABILITIES.map((a) => a.id));
+  const seenIds = new Set();
+  for (const party of SAMPLES) {
+    const at = `samplePartyPresets.json "${party.id}"`;
+    if (seenIds.has(party.id)) err(`${at}: id 중복`);
+    seenIds.add(party.id);
+    for (const f of ["id", "name", "style", "group", "description"]) if (!party[f]) err(`${at}: 필수 필드 "${f}" 없음`);
+    if (!["real", "textbook"].includes(party.group)) err(`${at}: group 은 real | textbook`);
+    if (!Array.isArray(party.slots) || party.slots.length !== 6) {
+      err(`${at}: slots 는 6개여야 함`);
+      continue;
+    }
+    const names = new Set();
+    const items = new Set();
+    let megas = 0;
+    party.slots.forEach((slot, i) => {
+      const sat = `${at} #${i + 1}(${slot.pokemonId})`;
+      const poke = pokemonById.get(slot.pokemonId);
+      if (!poke) return err(`${sat}: 포켓몬 없음`);
+      if (names.has(slot.pokemonId)) err(`${sat}: 같은 포켓몬 중복`);
+      names.add(slot.pokemonId);
+      const abilities = new Set([...poke.abilities, ...(poke.hiddenAbility ? [poke.hiddenAbility] : [])]);
+      for (const fv of poke.formVariants ?? []) {
+        fv.abilities?.forEach((a) => abilities.add(a));
+        if (fv.hiddenAbility) abilities.add(fv.hiddenAbility);
+      }
+      if (!abilityIdSet.has(slot.ability) || !abilities.has(slot.ability)) err(`${sat}: 특성 "${slot.ability}" 를 이 종이 가질 수 없음`);
+      if (!natureIds.has(slot.nature)) err(`${sat}: 성격 "${slot.nature}" 없음`);
+      if (!Array.isArray(slot.moves) || slot.moves.length !== 4) err(`${sat}: moves 는 4개`);
+      for (const mv of slot.moves ?? []) {
+        if (mv === null) continue;
+        if (!moveIds.has(mv)) err(`${sat}: 기술 "${mv}" 없음`);
+        else if (!poke.learnset.includes(mv)) err(`${sat}: "${mv}" 는 이 종이 배우지 못함`);
+      }
+      const item = itemById.get(slot.item);
+      if (!item) err(`${sat}: 도구 "${slot.item}" 없음`);
+      else {
+        if (items.has(slot.item)) err(`${sat}: 같은 도구 "${slot.item}" 중복`);
+        items.add(slot.item);
+      }
+      const mega = (poke.megaEvolutions ?? []).find((m) => m.megaStone === slot.item);
+      if (mega) {
+        megas++;
+        if (slot.activeMegaForm !== mega.form) err(`${sat}: 메가스톤인데 activeMegaForm 이 "${mega.form}" 가 아님`);
+      } else if (slot.activeMegaForm) err(`${sat}: 메가스톤이 아닌데 activeMegaForm 이 있음`);
+      const pts = slot.points ?? {};
+      const values = STAT_KEYS.map((k) => pts[k] ?? 0);
+      if (values.some((v) => !Number.isInteger(v) || v < 0 || v > 32)) err(`${sat}: 포인트는 스탯당 0~32 정수`);
+      if (values.reduce((a, b) => a + b, 0) > 66) err(`${sat}: 포인트 합계 66 초과`);
+    });
+    if (megas > 1) err(`${at}: 메가스톤을 든 포켓몬이 ${megas}마리 (1마리 이하)`);
+  }
+}
+
 // ── 결과 ─────────────────────────────────────────────────────────────────────
 const line = (s) => console.log(s);
 if (warnings.length) {
