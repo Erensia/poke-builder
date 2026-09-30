@@ -8,6 +8,7 @@ import { NaturePickerModal } from "./NaturePickerModal";
 import { PointsEditorModal } from "./PointsEditorModal";
 import { SlotPresetsModal } from "./SlotPresetsModal";
 import { PartyPresetsModal } from "./PartyPresetsModal";
+import { SamplePartiesModal } from "./SamplePartiesModal";
 import { CosmeticFormPickerModal } from "./CosmeticFormPickerModal";
 import { BattleTurnLog } from "./BattleTurnLog";
 import { useBattleSetup, BATTLE_SELECT_SIZE } from "../hooks/useBattleSetup";
@@ -17,7 +18,7 @@ import { useBattleVideos } from "../hooks/useBattleVideos";
 import type { BattleVideo } from "../types/battleVideo";
 import { Modal } from "./Modal";
 import { BattleVideoListModal } from "./BattleVideoListModal";
-import { getPokemon, getMove } from "../lib/data";
+import { getPokemon, getMove, SAMPLE_PARTIES } from "../lib/data";
 import { getEffectiveForm, getEffectiveGender, megaBadgeLabel } from "../lib/pokemonForm";
 import { MEGA_SYMBOL_SPRITE_URL, type SpriteFormOptions } from "../lib/sprites";
 import { PokemonAvatarWithItem } from "./PokemonAvatarWithItem";
@@ -51,7 +52,7 @@ import { statusMoveIdsOf } from "../lib/battle/ai";
 import type { LevelOneDistribution } from "../lib/battle/ai/levelOne";
 import { useAiMemory } from "../hooks/useAiMemory";
 import { AiMemoryModal } from "./AiMemoryModal";
-import type { PartySlot } from "../types/party";
+import type { PartySlot, SamplePartyPreset } from "../types/party";
 import type { StatusCondition } from "../types/status";
 import type { BaseStats } from "../types/stats";
 import type { Pokemon } from "../types/pokemon";
@@ -69,6 +70,7 @@ type PickerState =
   | { kind: "move"; side: Side; slotIndex: SlotIndex; moveIndex: 0 | 1 | 2 | 3 }
   | { kind: "slotPresets"; side: Side; slotIndex: SlotIndex }
   | { kind: "loadParty"; side: Side }
+  | { kind: "sampleParty"; side: Side }
   | null;
 
 /** 이번 턴 한 편의 선택 — 기술 또는 교체(교대 슬롯 인덱스) */
@@ -148,6 +150,7 @@ function BattleSetupScreen({
   onToggleAiOpponent,
   aiMemoryBattles,
   onOpenAiMemory,
+  onLoadRandomSample,
 }: {
   setup: ReturnType<typeof useBattleSetup>;
   hasPartyPresets: boolean;
@@ -164,6 +167,8 @@ function BattleSetupScreen({
   /** AI 학습 누적 대전 수(ver.2.0 1-C) — "AI가 조작" 옆 칩 */
   aiMemoryBattles: number;
   onOpenAiMemory: () => void;
+  /** 기본 제공 샘플 파티 중 하나를 무작위로 이 진영에 불러온다(ver.2.1 B) */
+  onLoadRandomSample: (side: Side) => void;
 }) {
   const sideCtls = (side: Side) => (side === "a" ? setup.a : setup.b);
   const slotCtl = (side: Side, i: SlotIndex) => sideCtls(side)[i];
@@ -218,6 +223,21 @@ function BattleSetupScreen({
                   저장된 파티 불러오기
                 </button>
               )}
+              <button
+                type="button"
+                className="battle-setup-load-party"
+                onClick={() => onOpenPicker({ kind: "sampleParty", side })}
+              >
+                샘플 파티
+              </button>
+              <button
+                type="button"
+                className="battle-setup-load-party"
+                onClick={() => onLoadRandomSample(side)}
+                title={`${side === "a" ? "내 파티" : "상대 파티"}를 기본 제공 샘플 파티 중 무작위 하나로 바꿉니다`}
+              >
+                무작위 샘플
+              </button>
               {side === "a" ? "내 파티" : "상대 파티"}{" "}
               <span className="battle-setup-column-hint">6마리까지 빌드 · 4마리 이상이면 3마리 선출</span>
               {side === "b" && (
@@ -1142,6 +1162,14 @@ export function BattleLogPage() {
 
   const sideCtls = (side: Side) => (side === "a" ? setup.a : setup.b);
   const slotCtl = (side: Side, i: SlotIndex) => sideCtls(side)[i];
+
+  /** 기본 제공 샘플 파티(ver.2.1 B)를 한 진영에 사본으로 채운다 — 원본 데이터와 사용자 저장 파티는 그대로 */
+  function loadSample(side: Side, sample: SamplePartyPreset) {
+    setup.loadSide(side, structuredClone(sample.slots));
+  }
+  function loadRandomSample(side: Side) {
+    loadSample(side, SAMPLE_PARTIES[Math.floor(Math.random() * SAMPLE_PARTIES.length)]);
+  }
   const pokemonAt = (side: Side, i: SlotIndex) => {
     const slot = slotCtl(side, i).slot;
     return slot ? getPokemon(slot.pokemonId) : undefined;
@@ -1641,6 +1669,7 @@ export function BattleLogPage() {
           onToggleAiOpponent={setAiOpponent}
           aiMemoryBattles={aiMemory.memory.battles}
           onOpenAiMemory={() => setShowAiMemory(true)}
+          onLoadRandomSample={loadRandomSample}
         />
       )}
 
@@ -1872,6 +1901,19 @@ export function BattleLogPage() {
               loadTargetLabel={`${side === "a" ? "내 파티" : "상대 파티"} 빌드`}
               onClose={() => setPicker(null)}
               onLoad={(preset) => setup.loadSide(side, preset.slots)}
+            />
+          );
+        })()}
+
+      {picker?.kind === "sampleParty" &&
+        (() => {
+          const side = picker.side;
+          return (
+            <SamplePartiesModal
+              loadTargetLabel={`${side === "a" ? "내 파티" : "상대 파티"} 빌드`}
+              targetHasPokemon={([0, 1, 2, 3, 4, 5] as SlotIndex[]).some((i) => slotCtl(side, i).slot !== null)}
+              onClose={() => setPicker(null)}
+              onLoad={(sample) => loadSample(side, sample)}
             />
           );
         })()}
