@@ -35,6 +35,8 @@ export interface RunTurnPaused {
     side: FighterKey;
     passBaton: boolean;
     emergencyExit?: boolean;
+    /** 교체로 나온 포켓몬이 등장 설치물로 그 자리에서 쓰러져 행동 전에 대체 슬롯을 고르는 경우 */
+    faintReplacement?: boolean;
     /** 탈출버튼처럼 도구가 강제 교체를 일으켰으면 그 도구 이름(UI 패널 문구용) */
     ejectItemName?: string;
   };
@@ -60,8 +62,10 @@ export interface RunTurnContext {
   selfDestructComboKey: FighterKey | undefined;
   /** passSubstitute: 꼬리자르기 — 세운 대타만 새로 나온 포켓몬에게 인계(랭크 등은 인계 안 함) */
   pendingPivot:
-    | { side: FighterKey; passBaton: boolean; passSubstitute?: boolean; returnsToTrainer?: boolean }
+    | { side: FighterKey; passBaton: boolean; passSubstitute?: boolean; returnsToTrainer?: boolean; faintReplacement?: boolean }
     | undefined;
+  /** 행동 전 기절 대체(faintReplacement)를 이미 처리한(또는 슬롯이 없어 건너뛴) 편 — 같은 편을 다시 멈추지 않는다 */
+  faintReplacementHandled: Record<FighterKey, boolean>;
 }
 
 /**
@@ -260,6 +264,7 @@ export function runTurn(
     actionIdx: 0,
     selfDestructComboKey: undefined,
     pendingPivot: undefined,
+    faintReplacementHandled: { a: false, b: false },
   };
   return runActionPhase(ctx);
 }
@@ -272,6 +277,36 @@ export function runTurn(
  */
 function runActionPhase(ctx: RunTurnContext): RunTurnOutcome | RunTurnPaused {
   const { state, order, moves, random, switches, actions } = ctx;
+
+  // 교체로 나온 포켓몬이 등장 설치물(스텔스록 등)로 그 자리에서 쓰러졌으면, 본가처럼 행동이 시작되기
+  // 전에 대체 포켓몬을 먼저 내보낸다 — 안 그러면 상대(살아 있는 쪽)의 이번 턴 행동이 "쓰러진 상대"
+  // 때문에 통째로 건너뛰어진다(HP회복 등 자기 대상 기술도 못 씀). 행동 도중 기절은 종전대로 턴 종료 후 교체.
+  if (ctx.actionIdx === 0 && actions.length === 0) {
+    for (const key of ["a", "b"] as const) {
+      if (ctx.faintReplacementHandled[key] || !isFainted(state[key])) continue;
+      ctx.faintReplacementHandled[key] = true;
+      if (!hasLivingReserve(sideOf(state, key))) continue; // 남은 슬롯이 없으면 finishTurn에서 패배 처리
+      ctx.pendingPivot = { side: key, passBaton: false, faintReplacement: true };
+      return {
+        awaitingSelfSwitch: { side: key, passBaton: false, faintReplacement: true },
+        nextState: state,
+        partialResult: {
+          turnNumber: state.turnNumber,
+          order,
+          actions: [],
+          endOfTurn: [],
+          winner: undefined,
+          expiredScreens: [],
+          expiredSafeguard: [],
+          turnStartAnnouncements: ctx.turnStartAnnouncements,
+          switches: [...switches],
+          activePokemonIds: { a: state.a.slot.pokemonId, b: state.b.slot.pokemonId },
+        },
+        _ctx: ctx,
+      };
+    }
+  }
+
   for (let i = ctx.actionIdx; i < order.length; i++) {
     const key = order[i];
     ctx.actionIdx = i + 1;
@@ -589,19 +624,21 @@ export function resumeTurn(ctx: RunTurnContext, toIndex: number): RunTurnOutcome
       const outgoing = side.party[fromIndex];
       const entryMessages: string[] = [];
       performSwitch(ctx.state, pivot.side, toIndex, entryMessages, {
-        voluntary: true,
+        // 기절 후 대체는 강제 교체와 같은 취급 — 가속 발동(억제 플래그 안 세움)
+        voluntary: !pivot.faintReplacement,
         passBaton: pivot.passBaton,
         passSubstituteOnly: pivot.passSubstitute,
       });
       const inFighter = side.party[toIndex];
       ctx.switches.push({
         side: pivot.side,
-        fromIndex,
+        // 기절 대체: 물러나는 줄("돌아와!") 없이 "가라!"만 — 강제 교체 합성 카드와 같은 표기(fromIndex -1)
+        fromIndex: pivot.faintReplacement ? -1 : fromIndex,
         toIndex,
         outPokemonId: outgoing.slot.pokemonId,
         inPokemonId: inFighter.illusionAs ?? inFighter.slot.pokemonId, // §6-1
         entryMessages,
-        afterMove: true,
+        afterMove: pivot.faintReplacement ? undefined : true,
         shedTail: pivot.passSubstitute || undefined,
         returnsToTrainer: pivot.returnsToTrainer || undefined,
       });

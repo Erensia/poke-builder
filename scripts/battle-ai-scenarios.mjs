@@ -2424,6 +2424,19 @@ try {
     const hpBefore = seeded.a.currentHp;
     const s2 = rt.runTurn(seeded, act("치근거리기"), act("씨뿌리기"), () => 0.5);
     check("2.0 씨를 뿌린 쪽이 쓰러진 턴엔 씨뿌리기 발동 안 함", s2.nextState.a.currentHp === hpBefore, `${hpBefore} → ${s2.nextState.a.currentHp}`);
+    // 교체로 나온 포켓몬이 스텔스록에 그 자리에서 쓰러지면, 행동 전에 대체를 고른 뒤 상대의 HP회복이 정상 발동해야 한다
+    {
+      const hz = battle([mon("갸라도스", ["HP회복", "폭포오르기"])], [mon("갸라도스", ["폭포오르기"]), mon("한카리아스", ["지진"])]);
+      hz.sideB.hazards.stealthRock = true;
+      hz.sideB.party[1].currentHp = 10;
+      hz.a.currentHp = Math.floor(hz.a.maxHp / 2);
+      const hpBefore = hz.a.currentHp;
+      const p1 = rt.runTurn(hz, act("HP회복"), { kind: "switch", toIndex: 1 }, () => 0.5);
+      const paused = "awaitingSelfSwitch" in p1 && p1.awaitingSelfSwitch.side === "b" && p1.awaitingSelfSwitch.faintReplacement === true;
+      const p2 = paused ? rt.resumeTurn(p1._ctx, 0) : p1;
+      const healed = !!p2.result && p2.nextState.a.currentHp > hpBefore && p2.result.actions.length === 1;
+      check("2.1 교체 직후 설치물로 쓰러지면 대체를 먼저 고른 뒤 상대 행동(HP회복) 진행", paused && healed, `멈춤 ${paused} 회복 ${hpBefore} → ${p2.nextState.a.currentHp}`);
+    }
     void sw;
   }
   // 상대가 나에게 데미지를 줄 수단이 없을 때(+Infinity 점수)

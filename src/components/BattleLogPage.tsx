@@ -92,6 +92,8 @@ type PendingPivotState = {
   passBaton: boolean;
   /** 위기회피로 인한 강제 퇴장이면 true (유턴류와 안내 문구가 다르다) */
   emergencyExit?: boolean;
+  /** 교체로 나온 포켓몬이 등장 설치물에 쓰러져 행동 전에 대체를 고르는 경우 */
+  faintReplacement?: boolean;
   /** 탈출버튼처럼 도구로 인한 강제 퇴장이면 그 도구 이름 */
   ejectItemName?: string;
 } | null;
@@ -825,7 +827,12 @@ function BattleBoard({
                 return (
                   <div className="battle-switch-panel">
                     <div className="battle-switch-panel-title">
-                      {pendingPivot.emergencyExit ? (
+                      {pendingPivot.faintReplacement ? (
+                        <>
+                          {pokemon.name}
+                          {eunNeun(pokemon.name)} 쓰러졌다!
+                        </>
+                      ) : pendingPivot.emergencyExit ? (
                         <>
                           {pokemon.name}의 위기회피! 위험을 피해 물러난다!
                         </>
@@ -1397,6 +1404,7 @@ export function BattleLogPage() {
         side: outcome.awaitingSelfSwitch.side,
         passBaton: outcome.awaitingSelfSwitch.passBaton,
         emergencyExit: outcome.awaitingSelfSwitch.emergencyExit,
+        faintReplacement: outcome.awaitingSelfSwitch.faintReplacement,
         ejectItemName: outcome.awaitingSelfSwitch.ejectItemName,
       });
       return;
