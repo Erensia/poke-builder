@@ -1,11 +1,15 @@
 import { type FighterKey, type TurnAction } from "@/types/battle";
-import { STRUGGLE_MOVE, type BattleState } from "../state";
+import { STRUGGLE_MOVE, opponentKey, type BattleState } from "../state";
 import { forcedLockedAction } from "../lockedAction";
 import { decide, scoreOption, type DecisionParams, type ScoredOption } from "./decision";
 import { evaluateOptions, type AiOption, type EvaluateOptions } from "./evaluator";
-import { withThreatModel, type ThreatModelParams } from "./opponentMoveModel";
+import { withThreatModel, withThreatOverride, type ThreatModelParams } from "./opponentMoveModel";
+import { attachSwitchRead, levelOneDistribution, type LevelOneDistribution } from "./levelOne";
+import { calibrateDistribution, type OpponentMemory } from "./opponentMemory";
+import { getMove } from "@/lib/data";
 import { withModelToggles } from "./modelToggles";
 import { paramsFor } from "./decision";
+import { DEFAULT_SEARCH_PARAMS, searchDecide, type SearchPolicy, type SearchResult } from "./search";
 
 export { chooseAiSelection } from "./teamSelect";
 
@@ -32,10 +36,20 @@ export interface AiDecision {
   chosen?: AiOption;
   /** 디버그·튜닝용 — 모든 옵션의 평가값과 점수 */
   scored: ScoredOption[];
+  /** 탐색 오라클(params.search)일 때: 평가식만으로 골랐을 선택과 롤아웃한 후보별 값 */
+  baseChosen?: AiOption;
+  searchValues?: { option: AiOption; value: number }[];
+  /** 상대 모델이 켜져 있으면: 보정 전(원래) 상대 행동 분포 — 상대가 실제로 고른 행동과 짝지어 학습 기록에 쓴다(1-C) */
+  opponentDistribution?: LevelOneDistribution;
 }
 
 export interface ChooseAiOptions extends EvaluateOptions {
   decisionParams?: Partial<DecisionParams>;
+  /**
+   * 상대 패턴 학습(ver.2.0 1-C): 누적본 + 이번 대전 세션을 합친 기록. 상대 모델(opponentModel)이 켜져 있으면 추론 분포를 이것으로
+   * 보정한다(교체 확률·변화기 확률·그 종의 기술별 습관).
+   */
+  opponentMemory?: OpponentMemory;
 }
 
 /**
@@ -53,9 +67,37 @@ export function chooseAiAction(
   if (forced) return { action: forced, scored: [] };
   const params = paramsFor(options.decisionParams);
   // 모델 토글(턴 종료 효과 등)은 평가(대면 턴 수)와 점수 계산(이어지는 대면)에 모두 걸린다
-  const decision = withModelToggles(params, () => {
+  let rawDistribution: LevelOneDistribution | undefined;
+  const decision = withModelToggles(params, (): (Partial<SearchResult> & { chosen: AiOption; scored: ScoredOption[] }) | null => {
     // 점수 계산(파티 대면표는 이때 계산됨)도 같은 상대 기술 모델로
-    return withThreatModel(threatModelOf(params), () => decide(evaluateOptions(state, key, options), riskAversion, params));
+    return withThreatModel(threatModelOf(params), () => {
+      // 탐색·상대 모델을 뺀 파라미터 — 상대 쪽 추론(재귀 한 단계)과 오라클 롤아웃 안의 지금 AI가 쓴다
+      const { search: _search, opponentModel: _opponentModel, ...plainParams } = params;
+      // 상대 모델 ver2(1-B): 상대 행동 분포를 먼저 추론하고(이때 덮어쓰기 없음 — 상대는 나를 고정 규칙으로 본다), 지금 대면의 평가·채점을
+      // 그 분포로. 꺼져 있어도 undefined로 명시해 바깥(오라클 롤아웃 등)의 덮어쓰기가 새지 않게 한다.
+      rawDistribution = params.opponentModel
+        ? withThreatOverride(undefined, () => levelOneDistribution(state, key, plainParams, params.opponentModel!))
+        : undefined;
+      // 1-C: 이 상대에게서 배운 성향으로 보정(기록이 없으면 교체 확률만 사전값 0.15배로 — 교체 읽기가 거의 안 켜진다)
+      const opponent = state[opponentKey(key)];
+      const dist =
+        rawDistribution && options.opponentMemory
+          ? calibrateDistribution(rawDistribution, options.opponentMemory, opponent.slot.pokemonId, statusMoveIdsOf(rawDistribution))
+          : rawDistribution;
+      const override = dist
+        ? { opponentSlot: state[opponentKey(key)].slot, targetSlot: state[key].slot, weights: dist.moveWeights, alpha: params.opponentModel!.alpha }
+        : undefined;
+      return withThreatOverride(override, () => {
+        let evaluated = evaluateOptions(state, key, options);
+        if (dist) evaluated = attachSwitchRead(state, key, evaluated, dist, params.opponentModel!);
+        if (!params.search) return decide(evaluated, riskAversion, params);
+        const search = { ...DEFAULT_SEARCH_PARAMS, ...params.search };
+        return searchDecide(
+          { state, key, riskAversion, params: plainParams, search, policy: searchPolicy(riskAversion, plainParams), opponent: dist },
+          evaluated,
+        );
+      });
+    });
   });
   if (!decision) return { action: { kind: "move", move: STRUGGLE_MOVE }, scored: [] };
   const { chosen, scored } = decision;
@@ -63,7 +105,21 @@ export function chooseAiAction(
     chosen.optionType === "switch"
       ? { kind: "switch", toIndex: chosen.toIndex! }
       : { kind: "move", move: chosen.move!, mega: chosen.mega };
-  return { action, chosen, scored };
+  const base: AiDecision = { action, chosen, scored, ...(rawDistribution && { opponentDistribution: rawDistribution }) };
+  return decision.baseChosen ? { ...base, baseChosen: decision.baseChosen, searchValues: decision.values } : base;
+}
+
+/** 분포 안 기술 중 변화기 id */
+export function statusMoveIdsOf(dist: LevelOneDistribution): Set<string> {
+  return new Set([...dist.moveWeights.keys()].filter((id) => getMove(id)?.category === "status"));
+}
+
+/** 탐색 오라클이 롤아웃 안에서 쓰는 지금 AI(탐색 없음) — 기절·유턴류 교체와 depth 2의 두 번째 턴 행동 */
+function searchPolicy(riskAversion: number, decisionParams: DecisionParams): SearchPolicy {
+  return {
+    forcedSwitch: (st, k) => chooseAiForcedSwitch(st, k, riskAversion, decisionParams),
+    action: (st, k) => chooseAiAction(st, k, riskAversion, { decisionParams }).action,
+  };
 }
 
 /**

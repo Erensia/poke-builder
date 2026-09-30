@@ -15,6 +15,7 @@ try {
   const ev = await server.ssrLoadModule("/src/lib/battle/ai/evaluator.ts");
   const ai = await server.ssrLoadModule("/src/lib/battle/ai/index.ts");
   const dec = await server.ssrLoadModule("/src/lib/battle/ai/decision.ts");
+  const l1 = await server.ssrLoadModule("/src/lib/battle/ai/levelOne.ts");
 
   const pts = (o = {}) => ({ hp: 0, atk: 0, def: 0, spa: 0, spd: 0, spe: 0, ...o });
   // 엔진은 습득 가능 여부를 검사하지 않으므로 기술·특성·도구를 자유롭게 조합한다.
@@ -2323,6 +2324,107 @@ try {
       if (chance.verdict === "needs-3hit-plus" && rolls[15].percent * 2 + 1e-9 >= 100) mismatches++;
     }
     check("난수별 데미지 % ↔ 격파 판정 일치(2000조합)", mismatches === 0, `불일치 ${mismatches}/${checked}`);
+  }
+  // ── 틀깨기 목록 수정(ver.2.0, 사용자 정리 2026-09-29): 목록 = 틀깨기에 무시당하는 특성 ──
+  {
+    const rt = await server.ssrLoadModule("/src/lib/battle/runTurn.ts");
+    const act = (id) => ({ kind: "move", move: data.getMove(id) });
+    const hit = (attackerAbility, defender, defenderAbility, move = "아이언헤드") => {
+      const st = battle([mon("몰드류", [move], attackerAbility)], [mon(defender, ["칼춤"], defenderAbility, null, pts({ hp: 32 }))]);
+      const out = rt.runTurn(st, act(move), act("칼춤"), () => 0.5);
+      return { dealt: st.b.currentHp - out.nextState.b.currentHp, recoil: st.a.currentHp - out.nextState.a.currentHp, out };
+    };
+    const ms = hit("틀깨기", "망나뇽", "멀티스케일").dealt / hit("모래헤치기", "망나뇽", "멀티스케일").dealt;
+    check("2.0 틀깨기 → 멀티스케일 무시(목록 = 무시당하는 특성, 이전엔 거꾸로)", ms > 1.8, `배율 ${ms.toFixed(2)}`);
+    const aura = hit("틀깨기", "루카리오", "파동의방호").dealt / hit("모래헤치기", "루카리오", "파동의방호").dealt;
+    check("2.0 틀깨기 → 파동의방호 무시(복슬복슬과 같은 취급)", aura > 1.8, `배율 ${aura.toFixed(2)}`);
+    // 부유: 틀깨기 땅 기술은 맞는다(사용자 화면 확인에서 발견 — 접지 판정 기본값 매개변수가 무시된 특성을 되살렸다)
+    const levitate = (ability) => hit(ability, "팬텀", "부유", "지진").dealt;
+    check("2.0 틀깨기 지진 → 부유 무시하고 명중(틀깨기 없으면 무효)", levitate("틀깨기") > 0 && levitate("모래헤치기") === 0, `${levitate("틀깨기")} / ${levitate("모래헤치기")}`);
+    const rough = hit("틀깨기", "한카리아스", "까칠한피부");
+    check("2.0 틀깨기 → 까칠한피부(목록 밖)는 그대로 작동", rough.recoil > 0, `반동 ${rough.recoil}`);
+    // 불면: 틀깨기 최면술로 잠들지만 턴 끝에 스스로 치료
+    const insomnia = hit("틀깨기", "잠만보", "불면", "최면술");
+    const cureLog = insomnia.out.result.endOfTurn?.find((e) => e.abilityCuredStatus === "sleep");
+    check("2.0 틀깨기 최면술 → 불면이 턴 끝에 잠듦 치료", !!cureLog && insomnia.out.nextState.b.status.condition === null, cureLog?.abilityCuredStatusAbilityName ?? "치료 로그 없음");
+    // 면역: 틀깨기로 건 맹독은 치료 없이 남는다(사용자 정리)
+    const immunity = hit("틀깨기", "잠만보", "면역", "맹독");
+    check("2.0 틀깨기 맹독 → 면역은 치료 없이 유지", immunity.out.nextState.b.status.condition === "badly-poisoned", `${immunity.out.nextState.b.status.condition}`);
+    // 흡반: 틀깨기 울부짖기는 강제 교체된다
+    const phaze = (ability) => {
+      const st = battle([mon("몰드류", ["울부짖기"], ability)], [mon("잠만보", ["칼춤"], "흡반"), mon("망나뇽", ["칼춤"])]);
+      return rt.runTurn(st, act("울부짖기"), act("칼춤"), () => 0.5).nextState.sideB.activeIndex;
+    };
+    check("2.0 틀깨기 울부짖기 → 흡반 무시하고 강제 교체(틀깨기 없으면 막힘)", phaze("틀깨기") === 1 && phaze("모래헤치기") === 0, `${phaze("틀깨기")} / ${phaze("모래헤치기")}`);
+    // 등장 문구
+    const lead = battle([mon("몰드류", ["아이언헤드"], "틀깨기")], [mon("잠만보", ["칼춤"])]);
+    check("2.0 틀깨기 등장 문구 \"○○○의 틀깨기!\"", lead.entryAnnouncements.includes("몰드류의 틀깨기!"), lead.entryAnnouncements.join(" / "));
+  }
+  // ── 상대 모델 ver2(ver.2.0 1-B) — 한 단계 추론 · 교체 읽기 ──
+  {
+    const om = { opponentModel: dec.DEFAULT_OPPONENT_MODEL };
+    const params = dec.paramsFor({});
+    // 교체 읽기: 한카리아스 앞의 라이츄는 갸라도스(땅 무효)로 교체할 만하다. 지진이 확정 처치가 아니면 들어올 갸라도스를 노려
+    // 스톤에지, 확정 처치면 교체 읽기와 무관하게 지진(죽어내밀기가 후속 포켓몬 부담이 적다 — 1-B 2차, 사용자 확인)
+    const readCase = (atkPts) =>
+      battle(
+        [mon("한카리아스", ["지진", "스톤에지"], null, null, atkPts)],
+        [mon("라이츄", ["10만볼트"], null, null, pts({ hp: 32, def: 32 })), mon("갸라도스", ["폭포오르기"], "위협", null, pts({ atk: 32, hp: 32 }))],
+      );
+    const st = readCase(pts({ spe: 32 }));
+    const dist = l1.levelOneDistribution(st, "a", params, dec.DEFAULT_OPPONENT_MODEL);
+    const off = ai.chooseAiAction(st, "a", 0.5);
+    const on = ai.chooseAiAction(st, "a", 0.5, { decisionParams: om });
+    check(
+      "2.0 1-B 교체 읽기: 불리한 라이츄는 교체 예측 → 들어올 갸라도스에 스톤에지(끄면 지진)",
+      dist.switchProb >= dec.DEFAULT_OPPONENT_MODEL.minSwitchProb && off.action.move?.id === "지진" && on.action.move?.id === "스톤에지",
+      `q=${dist.switchProb.toFixed(2)} 끔 ${off.action.move?.id} 켬 ${on.action.move?.id}`,
+    );
+    const sure = ai.chooseAiAction(readCase(pts({ atk: 32, spe: 32 })), "a", 0.5, { decisionParams: om });
+    check("2.0 1-B 확정 처치는 교체 읽기와 무관하게 우선(지진)", sure.action.move?.id === "지진", `${sure.action.move?.id}`);
+    // 대칭: 교체 읽기는 공격기만이 아니라 교체·변화기 선택지에도 붙는다(1-B 1차는 공격기에만 붙어 AI 교체가 2배가 됐다)
+    const benchCase = battle(
+      [mon("한카리아스", ["지진", "칼춤"], null, null, pts({ spe: 32 })), mon("메타그로스", ["코멧펀치"])],
+      [mon("라이츄", ["10만볼트"], null, null, pts({ hp: 32, def: 32 })), mon("갸라도스", ["폭포오르기"], "위협", null, pts({ atk: 32, hp: 32 }))],
+    );
+    const sym = ai.chooseAiAction(benchCase, "a", 0.5, { decisionParams: om });
+    const kinds = new Set(sym.scored.filter((x) => x.option.switchRead).map((x) => (x.option.optionType === "switch" ? "switch" : x.option.move.category === "status" ? "status" : "attack")));
+    check("2.0 1-B 교체 읽기 대칭 — 공격·변화기·교체 선택지 모두에 붙음", kinds.has("attack") && kinds.has("status") && kinds.has("switch"), [...kinds].join(","));
+    // 상대가 확정 처치를 가지면 분포가 그 기술로 몰린다
+    const ko = battle([mon("핫삼", ["불꽃펀치"], null, null, pts())], [mon("리자몽", ["화염방사", "칼춤"], null, null, pts({ spa: 32, spe: 32 }))]);
+    const koDist = l1.levelOneDistribution(ko, "a", params, dec.DEFAULT_OPPONENT_MODEL);
+    check("2.0 1-B 상대 확정 처치 → 분포가 그 기술로", (koDist.moveWeights.get("화염방사") ?? 0) > 0.99, JSON.stringify([...koDist.moveWeights]));
+    // 난동 등 정해진 행동이면 추론 없음(고정 규칙 모델이 그 기술만 남긴다)
+    const locked = battle([mon("핫삼", ["불꽃펀치"])], [mon("한카리아스", ["역린"])]);
+    locked.b.volatile.active.rampage = { moveId: "역린", turnsLeft: 1 };
+    check("2.0 1-B 상대 난동 중 → 추론 안 함", l1.levelOneDistribution(locked, "a", params, dec.DEFAULT_OPPONENT_MODEL) === undefined);
+  }
+  // ── 상대를 쓰러뜨린 턴의 턴 종료 처리(ver.2.0 버그 수정 — 플레이테스트 사용자 제보) ──
+  {
+    const rt = await server.ssrLoadModule("/src/lib/battle/runTurn.ts");
+    const sw = await server.ssrLoadModule("/src/lib/battle/switching.ts");
+    const act = (id) => ({ kind: "move", move: data.getMove(id) });
+    // 턴 1: 하마돈 하품 → 따라큐 졸음. 턴 2: 따라큐가 하마돈을 쓰러뜨림 → 그 턴 끝에 잠들어야 한다
+    const st = battle([mon("따라큐", ["치근거리기"], null, "먹다남은음식")], [mon("하마돈", ["하품"]), mon("갸라도스", ["폭포오르기"])]);
+    const t1 = rt.runTurn(st, act("치근거리기"), act("하품"), () => 0.5).nextState;
+    t1.b.currentHp = 1;
+    t1.a.currentHp = Math.floor(t1.a.maxHp / 2);
+    const t2 = rt.runTurn(t1, act("치근거리기"), act("하품"), () => 0.5);
+    const asleep = t2.nextState.a.status.condition === "sleep";
+    const leftovers = t2.nextState.a.currentHp > t1.a.currentHp;
+    check(
+      "2.0 상대를 쓰러뜨린 턴에도 살아 있는 쪽 턴 종료 처리(하품 졸음 → 잠듦, 먹다남은음식)",
+      t2.nextState.b.currentHp <= 0 && asleep && leftovers,
+      `하마돈 기절 ${t2.nextState.b.currentHp <= 0} 잠듦 ${asleep} 회복 ${leftovers}`,
+    );
+    // 씨뿌리기: 씨를 뿌린 쪽이 이번 턴 쓰러졌으면 흡수 없음(데미지도 없음)
+    const seeded = battle([mon("따라큐", ["치근거리기"])], [mon("하마돈", ["씨뿌리기"]), mon("갸라도스", ["폭포오르기"])]);
+    seeded.a.volatile.active.leechSeed = {};
+    seeded.b.currentHp = 1;
+    const hpBefore = seeded.a.currentHp;
+    const s2 = rt.runTurn(seeded, act("치근거리기"), act("씨뿌리기"), () => 0.5);
+    check("2.0 씨를 뿌린 쪽이 쓰러진 턴엔 씨뿌리기 발동 안 함", s2.nextState.a.currentHp === hpBefore, `${hpBefore} → ${s2.nextState.a.currentHp}`);
+    void sw;
   }
   // 상대가 나에게 데미지를 줄 수단이 없을 때(+Infinity 점수)
   {

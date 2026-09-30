@@ -18,6 +18,7 @@ import { getEffectiveness } from "@/lib/typeEffectiveness";
 import { electroBallPowerFromSpeeds, gyroBallPowerFromSpeeds, rankStageMultiplier } from "@/lib/battlePower";
 import { FIELD_DURATION, FIELD_ENTRY_ANNOUNCEMENT } from "@/lib/fieldEffects";
 import { getItemSpeedMultiplier } from "@/lib/itemEffects";
+import { resolveEffectiveDefenderAbility } from "@/lib/abilityModifiers";
 import { type BaseStats } from "@/types/stats";
 import { type EvaluatorSlot } from "@/lib/matchupEvaluator";
 import { applyIntimidateWithReaction, computeIllusionTarget, triggerTerrainSeeds } from "./switching";
@@ -1053,6 +1054,11 @@ export function createBattleState(init: { a: SideInit; b: SideInit; weather?: We
   for (const msg of [balloonEntryAnnouncement(state.a), balloonEntryAnnouncement(state.b)]) {
     if (msg) state.entryAnnouncements.push(msg);
   }
+  // 틀깨기류(ver.2.0 — 사용자 요청): 리드가 틀깨기면 "○○○의 틀깨기!"
+  for (const f of [state.a, state.b]) {
+    const ability = abilityOf(f);
+    if (ability?.bypassesDefensiveAbilities) state.entryAnnouncements.push(`${getPokemon(f.slot.pokemonId)?.name ?? "포켓몬"}의 ${ability.name}!`);
+  }
 
   // 일루전(§6-1): 리드가 조로아크류면 배틀 시작 시점부터 파티 마지막 슬롯 모습으로 위장한다.
   for (const key of ["a", "b"] as const) {
@@ -1117,8 +1123,9 @@ export function hasLivingReserve(side: BattleSide): boolean {
  * 불문 강제 교체 저항, 뿌리박기(ingrain)는 땅에 붙어 밀려나지 않는다. 울부짖기의 방음(소리 차단)은
  * 기술 자체가 무효라 여기가 아니라 resolveAction 단계에서 걸러진다.
  */
-export function isForcedSwitchBlocked(target: BattleFighterState): boolean {
-  if (abilityOf(target)?.preventsForcedSwitch) return true;
+export function isForcedSwitchBlocked(target: BattleFighterState, attackerAbility?: Ability): boolean {
+  // 흡반·파수견은 틀깨기 공격측(울부짖기·드래곤테일 등)에 무시당한다(ver.2.0 틀깨기 목록 수정)
+  if (resolveEffectiveDefenderAbility(attackerAbility, abilityOf(target))?.preventsForcedSwitch) return true;
   if (hasVolatile(target.volatile, "ingrain")) return true;
   return false;
 }

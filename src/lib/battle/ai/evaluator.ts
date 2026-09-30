@@ -211,6 +211,11 @@ export interface AiOption {
    */
   lostShift?: number;
   /**
+   * 교체 읽기(ver.2.0 1-B): 상대가 확률 q로 교체한다고 볼 때, 들어올 포켓몬(확률 weight)을 상대로 같은 기술을 쓴 평가(그 턴 상대는
+   * 교체로 행동을 씀). 결정 레이어가 (1 − q) × 이 옵션 점수 + Σ weight × 대안 점수(lost −1)로 섞는다. 공격기에만 붙는다.
+   */
+  switchRead?: { q: number; alternatives: { weight: number; option: AiOption }[] };
+  /**
    * 데미지 없는 변화기일 때만. before/after = 회복이면 hits_to_be_killed(회복 전/후), 랭크업이면
    * 내 최선 공격의 hits_to_kill(랭크업 전/후). bestKillTurns = 이 턴 공격 안 하면 쓰게 될 내 최선 공격의 처치 턴 수.
    */
@@ -264,7 +269,7 @@ function cloneBattleState(state: BattleState): BattleState {
   };
 }
 
-function canMegaEvolve(state: BattleState, key: FighterKey): boolean {
+export function canMegaEvolve(state: BattleState, key: FighterKey): boolean {
   const fighter = state[key];
   return !sideOf(state, key).megaUsed && !fighter.hasMegaEvolved && !!fighter.megaStone && !isFainted(fighter);
 }

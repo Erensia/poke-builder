@@ -448,7 +448,7 @@ function runActionPhase(ctx: RunTurnContext): RunTurnOutcome | RunTurnPaused {
       !action.bouncedMoveName &&
       !isFainted(state[oppKey]) &&
       hasLivingReserve(sideOf(state, oppKey)) &&
-      !isForcedSwitchBlocked(state[oppKey])
+      !isForcedSwitchBlocked(state[oppKey], state[key].effectiveAbilityId ? getAbility(state[key].effectiveAbilityId) : undefined)
     ) {
       const oppSide = sideOf(state, oppKey);
       const fromIndex = oppSide.activeIndex;

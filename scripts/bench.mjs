@@ -6,7 +6,9 @@
  *   npm run bench -- compare <이전 체크아웃 경로> [옵션]   이 체크아웃 AI / 이전 AI 비교(h2h는 OPP_ROOT)
  *
  * 표준 5종: 그리디 800(켬·끔), STATUS=1 그리디 400(켬·끔), STATUS=1 h2h 200(켬 대 끔). 판 수는 "좌우 교대 한 쌍" 단위(× 2판).
- * 옵션: --root <체크아웃>(벤치할 코드, 기본 이 리포) · --on '<JSON>' · --greedy N · --status N · --h2h N · --chunk N(조각당 시드 수,
+ * 스타일 봇(ver.2.0 1-A, --style N으로 켬 — 기본 0): 교체형·변화기형·무작위 섞음 봇 상대 각 N(켬·끔, STATUS=1).
+ * ver.2.0 3단계: --h2h-plain N(일반 파티 h2h, 기본 0) · --seed-offset N(모든 종류의 시드를 N만큼 뒤로 — 스크리닝과 다른 파티로 재확인).
+ * 옵션: --root <체크아웃>(벤치할 코드, 기본 이 리포) · --on '<JSON>' · --greedy N · --status N · --h2h N · --style N · --chunk N(조각당 시드 수,
  *       기본 50) · --jobs N(동시 실행 수, 기본 CPU 코어 수)
  * 출력: 진행 상황은 stderr, 마지막에 종류별 합산 JSON 한 줄씩 stdout.
  */
@@ -28,17 +30,29 @@ const root = opt("root", fileURLToPath(new URL("..", import.meta.url)));
 const onParams = opt("on", "{}");
 const offParams = kind === "toggle" ? target : "{}";
 const baseRoot = kind === "compare" ? target : undefined;
-const sizes = { greedy: Number(opt("greedy", 800)), status: Number(opt("status", 400)), h2h: Number(opt("h2h", 200)) };
+const sizes = {
+  greedy: Number(opt("greedy", 800)),
+  status: Number(opt("status", 400)),
+  h2h: Number(opt("h2h", 200)),
+  style: Number(opt("style", 0)),
+  h2hPlain: Number(opt("h2h-plain", 0)),
+};
+const seedOffset = Number(opt("seed-offset", 0));
 const chunk = Number(opt("chunk", 50));
 const concurrency = Number(opt("jobs", availableParallelism()));
 
 /** 벤치 종류: 라벨, 시뮬레이터 모드·인자, 환경변수, 판 수 */
 const kinds = [
   { label: "h2h", mode: "h2h", size: sizes.h2h, args: [onParams, offParams], env: { STATUS: "1", ...(baseRoot && { OPP_ROOT: baseRoot }) } },
+  { label: "h2h:plain", mode: "h2h", size: sizes.h2hPlain, args: [onParams, offParams], env: { ...(baseRoot && { OPP_ROOT: baseRoot }) } },
   { label: "status:on", mode: "greedy", size: sizes.status, args: [onParams], env: { STATUS: "1" } },
   { label: "status:off", mode: "greedy", size: sizes.status, args: [offParams], env: { STATUS: "1", ...(baseRoot && { SIM_ROOT: baseRoot }) } },
   { label: "greedy:on", mode: "greedy", size: sizes.greedy, args: [onParams], env: {} },
   { label: "greedy:off", mode: "greedy", size: sizes.greedy, args: [offParams], env: { ...(baseRoot && { SIM_ROOT: baseRoot }) } },
+  ...["switcher", "setup", "noisy"].flatMap((style) => [
+    { label: `style:${style}:on`, mode: "style", size: sizes.style, args: [onParams], env: { STATUS: "1", STYLE: style } },
+    { label: `style:${style}:off`, mode: "style", size: sizes.style, args: [offParams], env: { STATUS: "1", STYLE: style, ...(baseRoot && { SIM_ROOT: baseRoot }) } },
+  ]),
 ];
 
 // 조각: 무거운 종류(h2h → STATUS → 일반)부터 큐에 넣어 끝부분에 코어가 노는 시간을 줄인다
@@ -53,7 +67,7 @@ let done = 0;
 
 function runJob(job) {
   return new Promise((resolve, reject) => {
-    const env = { ...process.env, SIM_ROOT: root, ...job.kind.env, SEED_FROM: String(job.from) };
+    const env = { ...process.env, SIM_ROOT: root, ...job.kind.env, SEED_FROM: String(job.from + seedOffset) };
     const child = spawn(process.execPath, [simPath, job.kind.mode, String(job.count), ...job.kind.args], { env });
     let out = "";
     let err = "";

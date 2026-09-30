@@ -25,6 +25,8 @@ interface EndOfTurnFighterContext {
   fighterBerriesBlocked: boolean;
   random: () => number;
   endOfTurn: EndOfTurnLogEntry[];
+  /** 이번 턴에 상대 활성이 쓰러져 자리가 비었는지 — 상대에게 매인 효과(씨뿌리기 흡수·조이기·문어굳히기)는 발동하지 않는다 */
+  opponentFainted: boolean;
 }
 
 /**
@@ -163,7 +165,8 @@ function applyIngrainAquaRingHeal(ctx: EndOfTurnFighterContext): void {
  */
 function applyLeechSeedDamage(ctx: EndOfTurnFighterContext): void {
   const { state, key, fighter, fighterAbility, endOfTurn } = ctx;
-  if (!hasVolatile(fighter.volatile, "leechSeed") || fighterAbility?.negatesIndirectDamage) return;
+  // 씨를 뿌린 자리가 비었으면(이번 턴 기절, 교대 전) 흡수할 대상이 없어 발동하지 않는다
+  if (!hasVolatile(fighter.volatile, "leechSeed") || fighterAbility?.negatesIndirectDamage || ctx.opponentFainted) return;
   const seedDamage = Math.min(fighter.currentHp, Math.floor(fighter.maxHp / 8));
   fighter.currentHp -= seedDamage;
   endOfTurn.push({
@@ -218,6 +221,12 @@ function applyLeechSeedDamage(ctx: EndOfTurnFighterContext): void {
 function applyBoundDamage(ctx: EndOfTurnFighterContext): void {
   const { state, key, fighter, fighterAbility, endOfTurn } = ctx;
   if (!hasVolatile(fighter.volatile, "bound")) return;
+  // 조인 쪽이 쓰러지면 조이기가 풀린다(데미지 없음)
+  if (ctx.opponentFainted) {
+    const { bound: _released, ...rest } = fighter.volatile.active;
+    fighter.volatile = { ...fighter.volatile, active: rest };
+    return;
+  }
   if (!fighterAbility?.negatesIndirectDamage) {
     // 조임밴드: 속박을 건 쪽(상대)이 이 도구를 지녔으면 1/8 대신 1/6로 데미지가 늘어난다.
     const binder = state[opponentKey(key)];
@@ -290,7 +299,8 @@ function applySyrupCoatDrop(ctx: EndOfTurnFighterContext): void {
  */
 function applyOctolockDrop(ctx: EndOfTurnFighterContext): void {
   const { key, fighter, fighterAbility, endOfTurn } = ctx;
-  if (!hasVolatile(fighter.volatile, "octolock") || isFainted(fighter)) return;
+  // 문어굳히기를 건 쪽이 쓰러졌으면 발동하지 않는다(교대 시 풀림 — switching.ts)
+  if (!hasVolatile(fighter.volatile, "octolock") || isFainted(fighter) || ctx.opponentFainted) return;
   const blockedStats = statDropBlockStatsOf(fighter, fighterAbility);
   let octolockDropped = false;
   for (const stat of ["def", "spd"] as const) {
@@ -456,6 +466,47 @@ function applyShedSkinCure(ctx: EndOfTurnFighterContext): void {
       abilityCuredStatusAbilityName: fighterAbility.name,
     });
   }
+}
+
+/** 틀깨기 공격으로 걸린 상태이상을 턴 끝에 스스로 치료하는 특성에서 뺄 것 — 면역은 치료 없이 걸린 채 남는다(사용자 정리 2026-09-29) */
+const NO_TURN_END_SELF_CURE_ABILITY_NAMES: ReadonlySet<string> = new Set(["면역"]);
+
+/**
+ * 상태이상 면역 특성의 자기 치료(ver.2.0 틀깨기 목록 수정, 사용자 정리): 틀깨기 공격측은 불면·유연·마그마의무장·수포·의기양양·
+ * 열교환 등을 무시하고 상태이상을 걸 수 있지만, 걸린 턴이 끝나는 순간 특성이 발동해 치료한다. 마이페이스(혼란)·둔감(헤롱헤롱·
+ * 도발)도 같은 축. 턴 종료 처리의 맨 앞 — 치료된 상태이상의 턴 끝 데미지는 받지 않는다. 면역은 치료 없음.
+ */
+function applyAbilityImmunityCure(ctx: EndOfTurnFighterContext): void {
+  const { key, fighter, fighterAbility, endOfTurn } = ctx;
+  if (!fighterAbility || isFainted(fighter) || NO_TURN_END_SELF_CURE_ABILITY_NAMES.has(fighterAbility.name)) return;
+  const condition = fighter.status.condition;
+  const curedStatus = condition && fighterAbility.immuneToStatuses?.includes(condition) ? condition : undefined;
+  if (curedStatus) fighter.status = { ...NO_STATUS_CONDITION };
+  const active = { ...fighter.volatile.active };
+  const curedVolatiles: ("confusion" | "attract" | "taunt")[] = [];
+  if (fighterAbility.immuneToConfusion && active.confusion) {
+    delete active.confusion;
+    curedVolatiles.push("confusion");
+  }
+  if (fighterAbility.immuneToAttractAndTaunt) {
+    for (const v of ["attract", "taunt"] as const) {
+      if (active[v]) {
+        delete active[v];
+        curedVolatiles.push(v);
+      }
+    }
+  }
+  if (curedVolatiles.length > 0) fighter.volatile = { ...fighter.volatile, active };
+  if (!curedStatus && curedVolatiles.length === 0) return;
+  endOfTurn.push({
+    actor: key,
+    damage: 0,
+    remainingHp: fighter.currentHp,
+    fainted: false,
+    abilityCuredStatus: curedStatus,
+    abilityCuredStatusAbilityName: fighterAbility.name,
+    abilityCuredVolatiles: curedVolatiles.length > 0 ? curedVolatiles : undefined,
+  });
 }
 
 /**
@@ -635,11 +686,15 @@ export function finishTurn(ctx: RunTurnContext): RunTurnOutcome {
   // 멸망의노래로 이번 턴 종료에 쓰러진 쪽(F-4) — 양쪽 다면 스피드 느린 쪽이 승리한다.
   const perishFaintedKeys = new Set<FighterKey>();
 
-  // 자폭 콤보로 활성끼리 동반 기절했으면(selfDestructComboKey) 두 활성이 모두 isFainted라
-  // 이 블록은 건너뛴다 — 둘 다 쓰러진 시점의 턴 종료 회복/상태이상 데미지는 의미가 없다.
-  if (!winner && !isFainted(state.a) && !isFainted(state.b)) {
+  // 이번 턴 쓰러진 쪽은 건너뛰고, 살아 있는 쪽은 상대가 쓰러졌어도 턴 종료 처리를 받는다(ver.2.0 버그 수정 — 플레이테스트
+  // 사용자 제보: 이전엔 한쪽이라도 쓰러지면 양쪽 다 건너뛰어, 상대를 쓰러뜨린 턴에 하품 졸음이 잠듦으로 넘어가지 않고
+  // 먹다남은음식·독·모래바람 등도 한 턴씩 빠졌다). 상대에게 매인 효과는 opponentFainted로 각 단계가 거른다.
+  // 자폭 콤보로 양쪽 다 쓰러졌으면 둘 다 건너뛴다.
+  if (!winner) {
     for (const key of (["a", "b"] as const)) {
       const fighter = state[key];
+      if (isFainted(fighter)) continue;
+      const opponentFainted = isFainted(state[opponentKey(key)]);
       const fighterAbility = fighter.effectiveAbilityId ? getAbility(fighter.effectiveAbilityId) : undefined;
       const fighterItem = fighterAbility?.disablesOwnItemEffects || itemsSuppressedByRoom(state)
         ? undefined
@@ -651,7 +706,7 @@ export function finishTurn(ctx: RunTurnContext): RunTurnOutcome {
       const opponentAbilityForItem = state[opponentKey(key)].effectiveAbilityId
         ? getAbility(state[opponentKey(key)].effectiveAbilityId!)
         : undefined;
-      const fighterBerriesBlocked = !!opponentAbilityForItem?.preventsOpponentBerries;
+      const fighterBerriesBlocked = !opponentFainted && !!opponentAbilityForItem?.preventsOpponentBerries;
       const eotCtx: EndOfTurnFighterContext = {
         state,
         key,
@@ -661,12 +716,14 @@ export function finishTurn(ctx: RunTurnContext): RunTurnOutcome {
         fighterBerriesBlocked,
         random,
         endOfTurn,
+        opponentFainted,
       };
 
       if (applyPerishSongCountdown(eotCtx)) {
         perishFaintedKeys.add(key);
         continue; // 이미 쓰러졌으니 이 포켓몬의 나머지 턴 종료 처리(회복 등)는 건너뛴다
       }
+      applyAbilityImmunityCure(eotCtx);
       applyFieldEndOfTurnHeal(eotCtx);
       applyLeftoversHeal(eotCtx);
       applyWeatherHealAbility(eotCtx);

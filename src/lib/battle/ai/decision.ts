@@ -2,6 +2,7 @@ import type { AiOption } from "./evaluator";
 import { DEFAULT_THREAT_MODEL } from "./opponentMoveModel";
 import { A1_EFFECT_KINDS, A2_EFFECT_KINDS, PHASE3_EFFECT_KINDS, TRACK_M_EFFECT_KINDS, TIER2_EFFECT_KINDS, type EffectMoveKind } from "./statusMoveEffects";
 import { ALL_PROTECT_GROUPS, type ProtectGroup } from "./protectMoves";
+import type { SearchParams } from "./search";
 import { partyRaceValue, partyValueAfterTurn, type ChainParams, type PartyDuel, type PartyEffect } from "./partyEval";
 
 /**
@@ -123,7 +124,34 @@ export interface DecisionParams {
   trapMoveAware: boolean;
   /** 확률 턴 종료 효과(ver.1.9 6-4) — 탈피·수확을 대면 턴 수에 기대값으로. false면 이전 동작(비교용), withChanceEffectsModel */
   chanceEffectsAware: boolean;
+  /**
+   * 탐색 오라클(ver.2.0 0단계): 켜면 후보 행동마다 엔진으로 롤아웃해 고른다(search.ts). 시뮬레이터 측정 전용 — 기본 끔(undefined).
+   * 값은 DEFAULT_SEARCH_PARAMS 위에 덮어쓸 부분.
+   */
+  search?: Partial<SearchParams>;
+  /**
+   * 3단계 튜닝용(ver.2.0, 기본 1 — 이전 동작): 회복기 점수의 "회복한 HP" 항 배율. 0단계 오라클 비교에서 평가식이 회복을 높게 보는
+   * 경향(회복 → 공격 82 vs 반대 13)이 나와 조절할 수 있게 둔다.
+   */
+  healGainWeight: number;
+  /** 3단계 튜닝용(기본 1 — 이전 동작): 교체 선택지의 "이번 턴 행동 손실" 턴 수. 0단계에서 평가식이 교체를 낮게 보는 경향 */
+  switchLostTurns: number;
+  /**
+   * 상대 모델 ver2(ver.2.0 1-B) — 한 단계 추론: 상대 행동 확률 ∝ exp(상대 관점 점수 / tau)를 지금 대면의 상대 기술 모델과 alpha로 섞고,
+   * readSwitch면 상대 교체 확률 q ≥ minSwitchProb일 때 공격기 점수를 들어올 포켓몬 기준과 섞는다(교체 읽기). undefined면 끔(이전 동작).
+   */
+  opponentModel?: OpponentModelParams;
 }
+
+export interface OpponentModelParams {
+  tau: number;
+  alpha: number;
+  readSwitch: boolean;
+  minSwitchProb: number;
+}
+
+// minSwitchProb 0.3(1-B 2차): 0.1이면 교체 안 하는 상대에게도 교체 읽기가 자주 걸렸다
+export const DEFAULT_OPPONENT_MODEL: OpponentModelParams = { tau: 0.2, alpha: 0.7, readSwitch: true, minSwitchProb: 0.3 };
 
 /**
  * 기본값은 "trade" — 그리디 봇(교체 없이 가장 빨리 처치하는 기술만 사용) 상대 파티 좌우 교대 300판 시뮬레이션에서
@@ -174,6 +202,8 @@ export const DEFAULT_DECISION_PARAMS: DecisionParams = {
   critAware: true,
   trapMoveAware: true,
   chanceEffectsAware: true,
+  healGainWeight: 1,
+  switchLostTurns: 1,
 };
 
 /** 기본 파라미터 위에 decisionParams(시뮬레이터 튜닝용)를 덮어쓴 최종 파라미터 */
@@ -606,13 +636,13 @@ function tradeScore(option: AiOption, riskAversion: number, params: DecisionPara
     if (kind === "heal") {
       if (params.statusAware && (option.support.healNetGain ?? 1) <= 0) return -Infinity;
       const healed = healedHpFraction ?? option.hpFraction;
-      return race(params, option.party, [bestKillTurns, after, p, healed, opp, 1]) + (healed - option.hpFraction) - riskPenalty;
+      return race(params, option.party, [bestKillTurns, after, p, healed, opp, 1]) + params.healGainWeight * (healed - option.hpFraction) - riskPenalty;
     }
     return race(params, option.party, [after, option.hitsToBeKilled.expected, p, option.hpFraction, opp, 1]) - riskPenalty;
   }
   // 잠꼬대(AI-A2)는 공격기처럼 평가된다(무작위 기술 기대 피해) — a2Aware가 꺼지면 이전처럼 고르지 않는다.
   if (option.move?.callsRandomLearnedMove && !params.a2Aware) return -Infinity;
-  const lost = option.optionType === "switch" ? 1 : 0;
+  const lost = option.optionType === "switch" ? params.switchLostTurns : 0;
   const entry = option.maxHp > 0 ? option.entryCost / option.maxHp : 0;
   return (
     race(params, option.party, [option.hitsToKill.expected, option.hitsToBeKilled.expected, p, option.hpFraction, opp, lost]) -
@@ -623,6 +653,16 @@ function tradeScore(option: AiOption, riskAversion: number, params: DecisionPara
 
 /** decision-layer §4 점수식. 데미지 없는 변화기는 extension §2-2 전용 점수식. */
 export function scoreOption(option: AiOption, riskAversion: number, params: DecisionParams = DEFAULT_DECISION_PARAMS): number {
+  // 교체 읽기(ver.2.0 1-B): 상대가 그대로면 이 옵션, 교체하면 들어온 포켓몬에게 같은 기술(그 턴 상대는 교체로 행동을 씀 → lost −1)
+  if (option.switchRead) {
+    const { q, alternatives } = option.switchRead;
+    const stay = scoreOption({ ...option, switchRead: undefined }, riskAversion, params);
+    const read = alternatives.reduce(
+      (sum, a) => sum + a.weight * scoreOption({ ...a.option, lostShift: (a.option.lostShift ?? 0) - 1 }, riskAversion, params),
+      0,
+    );
+    return (1 - q) * stay + q * read;
+  }
   if (params.scoring === "trade") {
     const previous = [opponentIdleChance, lostShift] as const;
     opponentIdleChance = option.opponentIdleChance ?? 0;
