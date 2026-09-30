@@ -1,0 +1,174 @@
+/* ver.2.0 1-C: "AI가 본 내 습관" 모달 */
+.ai-memory {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.ai-memory-meta {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.ai-memory-warmup {
+  margin: 0;
+  padding: 0.5rem 0.7rem;
+  border-radius: 8px;
+  background: var(--violet-soft);
+  color: var(--violet);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.ai-memory-cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+
+@media (max-width: 560px) {
+  .ai-memory-cards {
+    grid-template-columns: 1fr;
+  }
+}
+
+.ai-memory-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.7rem 0.8rem;
+  border-radius: 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--border, rgba(0, 0, 0, 0.06));
+}
+
+.ai-memory-card-title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.ai-memory-bar {
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(127, 127, 127, 0.18);
+  overflow: hidden;
+}
+
+.ai-memory-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: var(--violet);
+}
+
+.ai-memory-bar-fill.is-low {
+  opacity: 0.45;
+}
+
+.ai-memory-card-level {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.ai-memory-card-level.is-high {
+  color: var(--violet);
+}
+
+.ai-memory-card-count {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.ai-memory-card-detail {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.ai-memory-section {
+  margin: 0.2rem 0 0;
+  font-size: 0.8rem;
+  color: var(--text);
+}
+
+.ai-memory-empty {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.ai-memory-species {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.ai-memory-species-row {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-size: 0.8rem;
+}
+
+.ai-memory-species-name {
+  font-weight: 700;
+  color: var(--text);
+  min-width: 5.5rem;
+}
+
+.ai-memory-species-habit {
+  color: var(--text-muted);
+}
+
+.ai-memory-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid rgba(127, 127, 127, 0.18);
+}
+
+.ai-memory-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.ai-memory-confirm {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.78rem;
+  color: var(--text);
+}
+
+.ai-memory-reset {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.25rem 0.7rem;
+  border-radius: 7px;
+  border: 1px solid var(--text-muted);
+  background: none;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.ai-memory-reset.is-danger {
+  border-color: #d14b4b;
+  color: #d14b4b;
+}

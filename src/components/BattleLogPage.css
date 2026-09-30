@@ -106,6 +106,33 @@
   cursor: pointer;
 }
 
+/* ver.2.0 1-C: AI 학습 칩(상대 파티 제목 줄) — "AI가 조작"과 같은 알약형 */
+.battle-ai-memory-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.2rem 0.6rem;
+  border: 1px solid var(--violet);
+  border-radius: 999px;
+  background: var(--violet-soft);
+  color: var(--violet);
+  cursor: pointer;
+}
+
+.battle-ai-memory-chip:hover {
+  background: var(--violet);
+  color: #fff;
+}
+
+/* 결과 배너 아래 한 줄 */
+.battle-ai-learned-note {
+  margin: 0.35rem 0 0;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
 .battle-ai-toggle input {
   cursor: pointer;
 }
