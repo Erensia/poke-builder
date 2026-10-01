@@ -32,3 +32,28 @@ export function useStoredList<T extends { id: string }>(
 
   return { items, setItems, prependItem, removeItem };
 }
+
+/**
+ * 이름 붙여 저장하는 목록(파티·슬롯 프리셋 공용). 이름이 비어 있으면 저장·변경하지 않는다.
+ * `rest`는 id·name·savedAt을 뺀 나머지 필드(예: { slots } / { slot }).
+ */
+export function useNamedList<T extends { id: string; name: string; savedAt: number }>(
+  loadFn: () => T[],
+  saveFn: (items: T[]) => void,
+) {
+  const { items: presets, prependItem, removeItem: deletePreset, setItems } = useStoredList<T>(loadFn, saveFn);
+
+  function savePreset(name: string, rest: Omit<T, "id" | "name" | "savedAt">) {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    prependItem({ ...rest, id: crypto.randomUUID(), name: trimmed, savedAt: Date.now() } as T);
+  }
+
+  function renamePreset(id: string, name: string) {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    setItems((prev) => prev.map((p) => (p.id === id ? { ...p, name: trimmed } : p)));
+  }
+
+  return { presets, savePreset, renamePreset, deletePreset };
+}
