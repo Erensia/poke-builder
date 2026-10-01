@@ -606,16 +606,16 @@ export function evaluateSlotMatchup(
   // 반감 열매는 첫 타만(ver.1.9 6-1): 다단히트 전체 데미지 = 첫 타 몫 / 배율 + 나머지 몫 → 내구력 배율 = 1 / 그 비율
   const berryHitsMultiplier =
     berryResult.bulkMultiplier === 1 ? 1 : 1 / (firstHitShare / berryResult.bulkMultiplier + (1 - firstHitShare));
-  const finalBulkMultiplierForBulkPower =
+  const finalBulkMultiplier =
     (manualBulkMultiplier ?? abilityDefense * berryHitsMultiplier * weatherDefenseMultiplier) * screenMultiplier;
+  const bulkDefenderStages = criticalApplies ? clampStages(defenderStages, "negative") : defenderStages;
   const bulkPower = computeBulkPower(defenderRealStats, resolvedCategory, {
-    defenderStages: criticalApplies ? clampStages(defenderStages, "negative") : defenderStages,
-    bulkMultiplier: finalBulkMultiplierForBulkPower,
+    defenderStages: bulkDefenderStages,
+    bulkMultiplier: finalBulkMultiplier,
     // 사이코쇼크(hitsDefensiveStat): 특수기지만 내구력은 방어자의 물리 방어로 낸다
     defensiveStatOverride: move.hitsDefensiveStat,
   });
 
-  const finalBulkMultiplier = finalBulkMultiplierForBulkPower;
   const partsPower = effectiveMoveFinal.power;
   const attackTerm = computeAttackTerm(
     attackerRealStats,
@@ -634,7 +634,7 @@ export function evaluateSlotMatchup(
           modifier: rawOffensePower / partsDenominator,
           typeEffectiveness,
           defenseKey,
-          defenseRankMultiplier: rankStageMultiplier((criticalApplies ? clampStages(defenderStages, "negative") : defenderStages)[defenseKey]),
+          defenseRankMultiplier: rankStageMultiplier(bulkDefenderStages[defenseKey]),
           bulkMultiplier: finalBulkMultiplier,
         }
       : undefined;

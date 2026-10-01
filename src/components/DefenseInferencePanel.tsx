@@ -12,6 +12,7 @@ import { NEUTRAL_STAGES } from "../types/battleStats";
 import {
   DEFENSE_ABILITY_CANDIDATES,
   DEFENSE_ITEM_CANDIDATES,
+  GRID,
   inferDefense,
   inferenceUnsupportedReason,
   type InferenceInput,
@@ -49,7 +50,6 @@ interface DefenseInferencePanelProps {
   field: FieldKind | null;
 }
 
-const GRID = MAX_ABILITY_POINTS_PER_STAT + 1;
 const STAGE_OPTIONS = [-6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6];
 
 function parsePercent(text: string): number | null {

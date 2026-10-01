@@ -1911,7 +1911,7 @@ export function BattleLogPage() {
           return (
             <SamplePartiesModal
               loadTargetLabel={`${side === "a" ? "내 파티" : "상대 파티"} 빌드`}
-              targetHasPokemon={([0, 1, 2, 3, 4, 5] as SlotIndex[]).some((i) => slotCtl(side, i).slot !== null)}
+              targetHasPokemon={SLOT_INDICES.some((i) => slotCtl(side, i).slot !== null)}
               onClose={() => setPicker(null)}
               onLoad={(sample) => loadSample(side, sample)}
             />
