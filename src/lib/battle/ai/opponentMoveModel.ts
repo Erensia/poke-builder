@@ -13,9 +13,6 @@ import { isUsageBlocked } from "./usageConditions";
 import { acupressureOptions, effectKindOf, imprisonedMoveIds, sleepTalkCandidates } from "./statusMoveEffects";
 import type { HitsEstimate } from "./types";
 
-/** 변화기 1개당 사용 확률(decision-layer §2·§9 초기값) */
-export const W_STATUS = 0.15;
-
 export interface OpponentThreat {
   /** 상대 기술 4개 사용 확률 모델로 낸 "내가 쓰러지기까지 기대 턴 수" + 상대 최선 기술 기준 worst_case */
   hitsToBeKilled: HitsEstimate;
@@ -211,8 +208,6 @@ export interface ThreatModelParams {
   statusThreat?: boolean;
 }
 
-/** v1 원안(비교용) */
-export const V1_THREAT_MODEL: ThreatModelParams = { statusWeight: W_STATUS, sharpness: 1, strictWaste: false };
 /**
  * 기본값(§2-2 튜닝, 2026-09-24): v1 대비 그리디 247→253승, AI끼리 197:196 — 승률 차이는 오차 안이지만 쓸모없는
  * 변화기 제외는 논리적으로 맞고 상대 피해를 덜 과소평가한다. DEFAULT_DECISION_PARAMS도 이 값을 쓴다.
