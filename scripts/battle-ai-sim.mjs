@@ -14,6 +14,10 @@
  *   h2h      AI(파라미터 A) 대 AI(파라미터 B, 5번째 인자 — 생략하면 기본값), 파티 좌우 교대. 그리디 봇은 항상
  *            최선기만 써서 "상대 모델" 튜닝에 편향되므로, 모델 변경은 이 모드로도 비교한다.
  *
+ *   selectvs 3선출 방식 A 대 B(ver.2.1 A-0): 같은 파티 두 개를 두고 A·B 각각이 양쪽 파티 선출을 맡아 좌우·파티를 바꿔 4판씩(시드당 4판).
+ *            대전은 양쪽 같은 어려움 AI. 인자 4·5번째가 A·B 선출 옵션 JSON — chooseAiSelection 옵션({...}) 또는 {"kind":"random"|"first"}(비AI 기준).
+ *            환경변수 POOL=samples(기본, 기본 제공 샘플 파티 20개 중 서로 다른 둘) | random(무작위 6마리 빌드).
+ *
  * 예) npm run sim:ai -- greedy 150 '{"scoring":"spec"}'   ← 파라미터 튜닝: 값을 바꿔 승률 비교
  * 환경변수 PIVOT=1: 유턴류를 배울 수 있는 포켓몬은 기술 하나를 유턴류로 바꿔 파티를 만든다(유턴 판단 검증용)
  * 환경변수 SETUP=1: 랭크업기·배턴터치를 배울 수 있으면 기술 두 개를 그걸로 바꾼다(랭크업·배턴터치 연계 검증용).
@@ -497,6 +501,61 @@ try {
       }
     }
     console.log(JSON.stringify({ battles: battles * 2, baseline, res, avgSelectMs: +(selectMs / selects).toFixed(1) }));
+  } else if (mode === "selectvs") {
+    // 3선출 방식 A 대 B(ver.2.1 A-0). 같은 파티 P·Q를 두고 (A→P·B→Q) × (P가 a편·b편) 조합 4판 — 파티 강약과 편 차이를 상쇄한다.
+    // 선출의 난수는 시드에서 파생시켜(조각 병렬 실행 합 = 한 번에 돌린 결과) 재현 가능하다.
+    const selectA = decisionParams ?? {};
+    const selectB = opponentParams ?? {};
+    const poolKind = process.env.POOL ?? "samples";
+    const samples = data.SAMPLE_PARTIES;
+    const sixOf = (party) => ({ slots: party.slots, movesList: party.slots.map((sl) => sl.moves.filter((m) => m).map((m) => data.getMove(m))) });
+    const make6 = (rng) => {
+      const members = Array.from({ length: 6 }, () => makeSlot(rng));
+      return { slots: members.map((m) => m.slot), movesList: members.map((m) => m.moves) };
+    };
+    const pickSide = (side6, sel) => ({ slots: sel.map((i) => side6.slots[i]), movesList: sel.map((i) => side6.movesList[i]) });
+    const shuffle3 = (rng) => { const idx = [0, 1, 2, 3, 4, 5]; for (let i = 5; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [idx[i], idx[j]] = [idx[j], idx[i]]; } return idx.slice(0, 3); };
+    const choose = (opts, full, side, rng) =>
+      opts.kind === "random" ? shuffle3(rng) : opts.kind === "first" ? [0, 1, 2] : ai.chooseAiSelection(full, side, { ...opts, random: rng });
+    const policy = (risk) => (st, key) => ai.chooseAiAction(st, key, risk, {}).action;
+    const forced = (risk) => (st, key) => ai.chooseAiForcedSwitch(st, key, risk) ?? living(st, key)[0];
+    const res = { aWins: 0, bWins: 0, other: 0 };
+    const time = { selectMsA: 0, selectsA: 0, selectMsB: 0, selectsB: 0, maxSelectMs: 0 };
+    for (let s = seedFrom; s <= seedTo; s++) {
+      const partyRng = mulberry32(s ^ 0x51ec7);
+      let P, Q;
+      if (poolKind === "random") {
+        P = make6(partyRng);
+        Q = make6(partyRng);
+      } else {
+        const i = Math.floor(partyRng() * samples.length);
+        const j = (i + 1 + Math.floor(partyRng() * (samples.length - 1))) % samples.length;
+        P = sixOf(samples[i]);
+        Q = sixOf(samples[j]);
+      }
+      const risk = mulberry32(s)();
+      for (let c = 0; c < 4; c++) {
+        const sideP = c & 1 ? "b" : "a";
+        const sideQ = sideP === "a" ? "b" : "a";
+        const methodP = c & 2 ? "B" : "A";
+        const methodQ = methodP === "A" ? "B" : "A";
+        const full = state.createBattleState({ [sideP]: P, [sideQ]: Q });
+        const selectFor = (method, side, six) => {
+          const t0 = performance.now();
+          const sel = choose(method === "A" ? selectA : selectB, full, side, mulberry32(s * 131 + c * 7 + (side === "a" ? 1 : 2)));
+          const ms = performance.now() - t0;
+          time[`selectMs${method}`] += ms;
+          time[`selects${method}`]++;
+          time.maxSelectMs = Math.max(time.maxSelectMs, ms);
+          return pickSide(six, sel);
+        };
+        const initial = state.createBattleState({ [sideP]: selectFor(methodP, sideP, P), [sideQ]: selectFor(methodQ, sideQ, Q) });
+        const r = runBattle(s, { a: policy(risk), b: policy(1 - risk) }, { a: forced(risk), b: forced(1 - risk) }, initial);
+        const winnerMethod = r.winner === sideP ? methodP : r.winner === sideQ ? methodQ : null;
+        res[winnerMethod === "A" ? "aWins" : winnerMethod === "B" ? "bWins" : "other"]++;
+      }
+    }
+    console.log(JSON.stringify({ battles: (seedTo - seedFrom + 1) * 4, pool: poolKind, A: selectA, B: selectB, res, ...time }));
   } else if (mode === "ai") {
     const results = { aiVsRandom: { a: 0, b: 0, draw: 0, timeout: 0 }, aiVsAi: { a: 0, b: 0, draw: 0, timeout: 0 } };
     let maxMs = 0;
@@ -533,7 +592,7 @@ try {
     }
     console.log(JSON.stringify({ battles, results, avgTurnMs: +(totalMs / decisions).toFixed(2), maxTurnMs: +maxMs.toFixed(1), nanScores }));
   } else {
-    console.error(`알 수 없는 모드: ${mode} (regress | ai | greedy | diag | style | h2h | select)`);
+    console.error(`알 수 없는 모드: ${mode} (regress | ai | greedy | diag | style | h2h | select | selectvs)`);
     process.exitCode = 1;
   }
 } finally {

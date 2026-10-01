@@ -243,3 +243,31 @@
     max-width: 320px;
   }
 }
+
+/* 2.1 C — 결정력 계산 / 상대 실능치 역산 탭 */
+.matchup-tabs {
+  display: inline-flex;
+  align-self: flex-start;
+  gap: 0.25rem;
+  padding: 0.25rem;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+
+.matchup-tabs button {
+  font: inherit;
+  font-size: 0.82rem;
+  padding: 0.35rem 0.95rem;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.matchup-tabs button.is-active {
+  background: var(--gradient);
+  color: #fff;
+  font-weight: 600;
+}

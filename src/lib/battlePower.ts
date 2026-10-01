@@ -205,6 +205,21 @@ function resolveDefenseStat(
   return { stat: defenderRealStats[key], stage: defenderStages[key] };
 }
 
+/**
+ * 공격 측 스탯 × 랭크 배율(= computeDamage의 attackStat). 결정력과 별개로 정수 데미지 공식의 분자를 다시 짜야 하는 호출부
+ * (상대 실능치 역산)가 쓴다 — computeOffensePower·computeDamage와 같은 스탯 선택(resolveAttackStat)을 공유한다.
+ */
+export function computeAttackTerm(
+  attackerRealStats: BaseStats,
+  move: Move,
+  attackerStages: StatStages = NEUTRAL_STAGES,
+  defenderRealStats?: BaseStats,
+  defenderStages: StatStages = NEUTRAL_STAGES,
+): number {
+  const { stat, stage } = resolveAttackStat(move, attackerRealStats, attackerStages, defenderRealStats, defenderStages);
+  return stat * rankStageMultiplier(stage);
+}
+
 export interface OffensePowerOptions {
   /** 타입 상성 배율 (0, 0.25, 0.5, 1, 2, 4). 상대를 모르면 생략 = 1 */
   typeEffectiveness?: number;
