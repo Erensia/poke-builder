@@ -92,7 +92,8 @@ export interface InferenceResult {
   realSpd: Range | null;
 }
 
-const GRID = MAX_ABILITY_POINTS_PER_STAT + 1;
+/** 분포 격자 한 변 칸 수(포인트 0~32) */
+export const GRID = MAX_ABILITY_POINTS_PER_STAT + 1;
 
 /** 다단히트·고정 데미지·변화기는 정수 데미지 공식이 맞지 않아 역산에서 뺀다 */
 export function inferenceUnsupportedReason(move: Move): string | null {
@@ -237,10 +238,7 @@ function damageRolls(parts: DamageParts, defenseRealStat: number): number[] {
   const out = new Set<number>();
   for (let k = 0; k < DAMAGE_ROLL_STEPS; k++) {
     const roll = (85 + k) / 100;
-    if (parts.typeEffectiveness === 0) {
-      out.add(0);
-      continue;
-    }
+    // 타입 면역(상성 0)은 prepareObservations에서 걸러져 여기 오지 않는다
     const modifier = (parts.modifier * parts.typeEffectiveness * roll) / parts.bulkMultiplier;
     out.add(Math.max(1, Math.floor(base * modifier + 1e-9)));
   }
@@ -308,12 +306,8 @@ function runCandidates(input: InferenceInput, prepared: PreparedObservation[]): 
 
   const hpDefGrid = useDef ? new Uint8Array(GRID * GRID) : null;
   const hpSpdGrid = useSpd ? new Uint8Array(GRID * GRID) : null;
-  const hpRange = { min: Infinity, max: -Infinity };
-  const defRange = { min: Infinity, max: -Infinity };
-  const spdRange = { min: Infinity, max: -Infinity };
-  const realHp = { min: Infinity, max: -Infinity };
-  const realDef = { min: Infinity, max: -Infinity };
-  const realSpd = { min: Infinity, max: -Infinity };
+  const emptyRange = (): Range => ({ min: Infinity, max: -Infinity });
+  const [hpRange, defRange, spdRange, realHp, realDef, realSpd] = Array.from({ length: 6 }, emptyRange);
   let total = 0;
   let feasible = 0;
 
