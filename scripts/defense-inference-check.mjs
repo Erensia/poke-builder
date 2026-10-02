@@ -160,6 +160,30 @@ try {
   const done = trials - skipped;
   console.log(`왕복 ${ok}/${done} 통과 (건너뜀 ${skipped}) · 후보가 줄어든 경우 ${narrowed}건 · 평균 남은 비율 ${(done ? (sumRatio / done) * 100 : 0).toFixed(1)}%`);
 
+  // 2.2 C3) 메가폼 상대 — 메가 종족값·고정 특성으로 만든 관측이 메가 지정 역산에서 진짜 배분을 남기는지
+  {
+    const megaSpecies = data.POKEMON.filter((p) => p.megaEvolutions?.length);
+    let megaOk = 0;
+    let megaTried = 0;
+    for (let t = 0; t < 60; t++) {
+      const poke = pick(megaSpecies);
+      const mega = pick(poke.megaEvolutions);
+      const truth = { hp: Math.floor(rnd() * 33), def: Math.floor(rnd() * 33), spd: Math.floor(rnd() * 33), nature: pick(natureIds) };
+      if (truth.hp + truth.def + truth.spd > 66) continue;
+      const atk = slot(pick(species).id, { points: pts({ atk: 32, spa: 32 }), nature: pick(natureIds) });
+      const defTrue = slot(poke.id, { points: pts(truth), nature: truth.nature, activeMegaForm: mega.form, ability: mega.ability });
+      const dReal = stat.computeRealStats(mega.baseStats, defTrue.points, defTrue.nature);
+      const made = makeObservation(usable.filter((m) => m.category === "physical"), atk, defTrue, dReal, dReal.hp);
+      if (!made) continue;
+      megaTried++;
+      const asMega = inf.inferDefense({ attacker: atk, defender: slot(poke.id, { activeMegaForm: mega.form, ability: mega.ability }), observations: [made.observation] });
+      if (asMega?.status === "ok" && asMega.hp.min <= truth.hp && truth.hp <= asMega.hp.max && asMega.def.min <= truth.def && truth.def <= asMega.def.max) megaOk++;
+      else fail(`메가 왕복: 진짜 배분이 빠짐 ${mega.form} truth=${JSON.stringify(truth)} 상태=${asMega?.status}`);
+    }
+    console.log(`메가 왕복 ${megaOk}/${megaTried} 통과`);
+    if (megaTried === 0) fail("메가 왕복 시행이 0건");
+  }
+
   // 3) 모순 / 면역 ----------------------------------------------------------------------------
   {
     const atk = slot("한카리아스", { points: pts({ atk: 32 }), nature: "고집" });
