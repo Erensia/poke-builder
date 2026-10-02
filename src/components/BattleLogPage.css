@@ -491,7 +491,8 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 0.5rem;
+  flex-wrap: wrap; /* 태그가 많으면 이름 영역을 누르지 않고 아래 줄로 내려간다(메가 배지 글자 쪼개짐 방지) */
+  gap: 0.3rem 0.5rem;
   margin-bottom: 0.4rem;
 }
 
@@ -499,7 +500,8 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  min-width: 0;
+  flex: 0 0 auto; /* 이름·배지는 제 폭을 유지 */
+  max-width: 100%;
 }
 
 .battle-fighter-name {
@@ -509,6 +511,12 @@
 .battle-fighter-fainted {
   color: var(--danger);
   font-weight: 700;
+}
+
+.battle-fighter-mega-tag,
+.battle-fighter-ai-tag,
+.battle-fighter-fainted {
+  white-space: nowrap; /* 배지·태그는 글자 중간에서 줄바꿈하지 않는다 */
 }
 
 .battle-fighter-mega-tag {
@@ -581,10 +589,17 @@
 .battle-status-tags {
   display: flex;
   gap: 0.3rem;
+  flex: 1 1 8rem; /* 이름 옆에 최소 8rem이 안 나오면 다음 줄로 */
+  justify-content: flex-end;
   flex-wrap: wrap;
 }
 
+.battle-status-tags:empty {
+  display: none; /* 태그가 없으면 줄바꿈 때 빈 줄 간격이 생기지 않게 */
+}
+
 .battle-status-tag {
+  white-space: nowrap; /* "빛의장막 5턴" 같은 태그는 통째로 다음 줄로 */
   font-size: 0.7rem;
   font-weight: 700;
   padding: 0.1rem 0.45rem;
