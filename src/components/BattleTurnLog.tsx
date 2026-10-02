@@ -9,7 +9,7 @@ import {
   type TurnResult,
 } from "../lib/battleSimulator";
 import type { EndOfTurnLogEntry } from "../types/battle";
-import { STAT_LABELS } from "../lib/statLabels";
+import { STAT_LABELS, statOrAccuracyLabel } from "../lib/statLabels";
 import { typeLabel } from "../types/pokemon-type";
 import { eunNeun, iGa, eulReul, waGwa, roEuro } from "../lib/josa";
 import { VOLATILE_LABELS, SCREEN_LABELS } from "../lib/battleLogLabels";
@@ -1054,7 +1054,7 @@ function ActionMainLine({
       {!action.blockedReason && action.hit && action.spiteFailed && <> · 그러나 실패했다!</>}
       {!action.blockedReason && action.hit && action.acupressureRaised && (() => {
         const { stat, delta } = action.acupressureRaised;
-        const label = stat === "accuracy" ? "명중률" : stat === "evasion" ? "회피율" : STAT_LABELS[stat];
+        const label = statOrAccuracyLabel(stat);
         return (
           <>
             {" "}
@@ -1135,6 +1135,10 @@ function ActionEffectLines({
       {/* PR-C1: 코트체인지 — 양쪽 진영 설치물·스크린 교체 */}
       {!action.blockedReason && action.hit && action.courtChangeDone && (
         <div className="battle-turn-line is-muted">서로의 필드 효과를 뒤바꿨다!</div>
+      )}
+      {/* 2.3 B3: 안개제거 — 양쪽 진영 설치물·스크린·신비의부적·필드 제거 (날씨 제외) */}
+      {!action.blockedReason && action.hit && action.defogFieldCleared && (
+        <div className="battle-turn-line is-muted">강한 바람이 불어 주위의 환경 효과가 모두 사라졌다!</div>
       )}
       {/* PR-C1: 회생의기도 — 교대 포켓몬 부활 / 대상 없음 */}
       {!action.blockedReason && action.hit && action.revivedPartyName && (
@@ -1929,7 +1933,7 @@ function ActionEffectLines({
           const byDelta = new Map<number, string[]>();
           for (const r of action.selfStatRises) {
             const labels = byDelta.get(r.delta) ?? [];
-            labels.push(STAT_LABELS[r.stat]);
+            labels.push(statOrAccuracyLabel(r.stat));
             byDelta.set(r.delta, labels);
           }
           return [...byDelta.entries()].map(([delta, labels]) => {
@@ -1961,7 +1965,7 @@ function ActionEffectLines({
           const byDelta = new Map<number, string[]>();
           for (const d of action.opponentStatDrops) {
             const labels = byDelta.get(d.delta) ?? [];
-            labels.push(STAT_LABELS[d.stat]);
+            labels.push(statOrAccuracyLabel(d.stat));
             byDelta.set(d.delta, labels);
           }
           return [...byDelta.entries()].map(([delta, labels]) => {
@@ -1983,7 +1987,7 @@ function ActionEffectLines({
           const byDelta = new Map<number, string[]>();
           for (const d of action.selfStatDrops) {
             const labels = byDelta.get(d.delta) ?? [];
-            labels.push(STAT_LABELS[d.stat]);
+            labels.push(statOrAccuracyLabel(d.stat));
             byDelta.set(d.delta, labels);
           }
           return [...byDelta.entries()].map(([delta, labels]) => {

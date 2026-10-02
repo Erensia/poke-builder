@@ -832,6 +832,13 @@ export interface Move {
    */
   hazardClear?: "spin" | "tidy";
   /**
+   * 안개제거(Defog): 명중 시(상대 지정 기술이라 방어류에 막힌다) 양쪽 진영의 설치물
+   * (스텔스록·압정뿌리기·독압정·끈적끈적네트)·스크린(리플렉터·빛의장막·오로라베일)·신비의부적을
+   * 전부 없애고, 필드(terrain)도 해제한다. 날씨는 대상이 아니다(본가 규칙, 2.3 B3).
+   * 상대 회피율 −1은 기존 statChanges로 이미 처리된다 — 이 플래그는 그 외의 "환경 제거" 몫만 담당.
+   */
+  defogsField?: boolean;
+  /**
    * 시럽봄(Syrup Bomb): 명중 시 상대를 물엿범벅(syrupCoat) 상태로 만든다 — 3턴 동안 매 턴 종료 시
    * 스피드 1랭크 감소. 데미지 기술의 부가효과라 인분(blocksSecondaryEffects)·우격다짐
    * (tradesSecondaryEffectForPower)에는 발동하지 않는다.
