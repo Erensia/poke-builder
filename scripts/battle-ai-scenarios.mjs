@@ -2491,6 +2491,20 @@ try {
       check("E1-6 드래곤테일 강제 교체 → 위기회피 이중 교체 없음", !out.awaitingSelfSwitch, JSON.stringify(out.awaitingSelfSwitch));
     }
   }
+  // 2.2 F1: 결정력 화면 리베로·변환자재 자속보정 토글 — 켜면 기술 타입으로 자속 판정, 끄면 기본(자속 없음)
+  {
+    const me = await server.ssrLoadModule("/src/lib/matchupEvaluator.ts");
+    const kick = data.getMove("무릎차기");
+    const atk = (ability) => mon("에이스번", ["무릎차기"], ability, null, pts({ atk: 32 })).slot;
+    const def = mon("메타그로스", ["칼춤"]).slot;
+    const power = (ability, on) => me.computeSoloOffensePower(atk(ability), kick, { attackerTypeToMoveType: on });
+    const off = power("리베로", false);
+    check("F1 리베로 토글 끔 → 자속 없음, 켬 → 1.5배", off > 0 && Math.abs(power("리베로", true) / off - 1.5) < 1e-9, `끔 ${off} 켬 ${power("리베로", true)}`);
+    const full = (on) => me.evaluateSlotMatchup(atk("리베로"), kick, def, { attackerTypeToMoveType: on })?.offensePower;
+    check("F1 상대 계산(evaluateSlotMatchup)도 동일 1.5배", Math.abs(full(true) / full(false) - 1.5) < 1e-9, `${full(false)} → ${full(true)}`);
+    const noLibero = atk("맹화");
+    check("F1 리베로가 아닌 특성은 토글 켜도 무변화", me.computeSoloOffensePower(noLibero, kick, { attackerTypeToMoveType: true }) === me.computeSoloOffensePower(noLibero, kick, {}));
+  }
   // 상대가 나에게 데미지를 줄 수단이 없을 때(+Infinity 점수)
   {
     const st = battle([mon("팬텀", ["10만볼트"])], [mon("한카리아스", ["지진"])]);
