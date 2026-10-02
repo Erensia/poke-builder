@@ -9,6 +9,7 @@ import { PointsEditorModal } from "./PointsEditorModal";
 import { SlotPresetsModal } from "./SlotPresetsModal";
 import { PartyPresetsModal } from "./PartyPresetsModal";
 import { SamplePartiesModal } from "./SamplePartiesModal";
+import { buildRandomPartyFromSlots } from "../lib/randomSlotParty";
 import { CosmeticFormPickerModal } from "./CosmeticFormPickerModal";
 import { BattleTurnLog } from "./BattleTurnLog";
 import { useBattleSetup, BATTLE_SELECT_SIZE } from "../hooks/useBattleSetup";
@@ -151,6 +152,7 @@ function BattleSetupScreen({
   aiMemoryBattles,
   onOpenAiMemory,
   onLoadRandomSample,
+  onLoadRandomSlotParty,
 }: {
   setup: ReturnType<typeof useBattleSetup>;
   hasPartyPresets: boolean;
@@ -169,6 +171,8 @@ function BattleSetupScreen({
   onOpenAiMemory: () => void;
   /** 기본 제공 샘플 파티 중 하나를 무작위로 이 진영에 불러온다(ver.2.1 B) */
   onLoadRandomSample: (side: Side) => void;
+  /** 저장해 둔 슬롯 프리셋에서 마리 단위로 6마리를 뽑아 랜덤 파티로 불러온다(2.2 B6) */
+  onLoadRandomSlotParty: (side: Side) => void;
 }) {
   const sideCtls = (side: Side) => (side === "a" ? setup.a : setup.b);
   const slotCtl = (side: Side, i: SlotIndex) => sideCtls(side)[i];
@@ -213,14 +217,14 @@ function BattleSetupScreen({
       {(["a", "b"] as const).map((side) => (
         <Fragment key={side}>
           <div className="battle-setup-column">
-            <div className="battle-setup-column-title">
+            <div className="battle-setup-actions">
               {hasPartyPresets && (
                 <button
                   type="button"
                   className="battle-setup-load-party"
                   onClick={() => onOpenPicker({ kind: "loadParty", side })}
                 >
-                  저장된 파티 불러오기
+                  파티 불러오기
                 </button>
               )}
               <button
@@ -232,12 +236,24 @@ function BattleSetupScreen({
               </button>
               <button
                 type="button"
-                className="battle-setup-load-party"
+                className="battle-setup-load-party has-tip"
                 onClick={() => onLoadRandomSample(side)}
-                title={`${side === "a" ? "내 파티" : "상대 파티"}를 기본 제공 샘플 파티 중 무작위 하나로 바꿉니다`}
+                data-tip={`${side === "a" ? "내 파티" : "상대 파티"}를 기본 제공 샘플 파티 중 무작위 하나로 바꿉니다`}
               >
                 무작위 샘플
               </button>
+              {hasSlotPresets && (
+                <button
+                  type="button"
+                  className="battle-setup-load-party has-tip"
+                  onClick={() => onLoadRandomSlotParty(side)}
+                  data-tip={`저장해 둔 포켓몬 샘플에서 6마리를 무작위로 뽑아 ${side === "a" ? "내 파티" : "상대 파티"}를 만듭니다(중복 포켓몬·도구 없음, 메가 2마리 이하). 저장 샘플이 모자라면 기본 제공 샘플로 채웁니다`}
+                >
+                  랜덤 구축
+                </button>
+              )}
+            </div>
+            <div className="battle-setup-column-title">
               {side === "a" ? "내 파티" : "상대 파티"}{" "}
               <span className="battle-setup-column-hint">6마리까지 빌드 · 4마리 이상이면 3마리 선출</span>
               {side === "b" && (
@@ -1170,6 +1186,14 @@ export function BattleLogPage() {
   function loadRandomSample(side: Side) {
     loadSample(side, SAMPLE_PARTIES[Math.floor(Math.random() * SAMPLE_PARTIES.length)]);
   }
+  /** 저장 슬롯 프리셋 조합 랜덤 파티(2.2 B6) — 저장 파티·슬롯 프리셋 원본은 그대로, 사본만 진영에 채운다 */
+  function loadRandomSlotParty(side: Side) {
+    const { slots } = buildRandomPartyFromSlots(
+      slotPresets.presets.map((p) => p.slot),
+      SAMPLE_PARTIES.flatMap((party) => party.slots),
+    );
+    setup.loadSide(side, slots);
+  }
   const pokemonAt = (side: Side, i: SlotIndex) => {
     const slot = slotCtl(side, i).slot;
     return slot ? getPokemon(slot.pokemonId) : undefined;
@@ -1670,6 +1694,7 @@ export function BattleLogPage() {
           aiMemoryBattles={aiMemory.memory.battles}
           onOpenAiMemory={() => setShowAiMemory(true)}
           onLoadRandomSample={loadRandomSample}
+          onLoadRandomSlotParty={loadRandomSlotParty}
         />
       )}
 

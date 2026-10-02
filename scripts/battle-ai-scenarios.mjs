@@ -2505,6 +2505,39 @@ try {
     const noLibero = atk("맹화");
     check("F1 리베로가 아닌 특성은 토글 켜도 무변화", me.computeSoloOffensePower(noLibero, kick, { attackerTypeToMoveType: true }) === me.computeSoloOffensePower(noLibero, kick, {}));
   }
+  // 2.2 B6: 저장 슬롯 조합 랜덤 파티 — 6마리·중복 포켓몬/도구 없음·메가 1마리 이하, 모자라면 기본 제공 슬롯으로 보충, 입력 불변
+  {
+    const rs = await server.ssrLoadModule("/src/lib/randomSlotParty.ts");
+    const pf = await server.ssrLoadModule("/src/lib/pokemonForm.ts");
+    let seed = 7;
+    const rng = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 2 ** 32);
+    const pool = data.SAMPLE_PARTIES.flatMap((p) => p.slots);
+    const megaCount = (slots) => slots.filter((s) => s.activeMegaForm || pf.findMegaFormByStone(data.getPokemon(s.pokemonId), s.item)).length;
+    const valid = (slots) =>
+      slots.length === 6 &&
+      new Set(slots.map((s) => s.pokemonId)).size === 6 &&
+      new Set(slots.filter((s) => s.item).map((s) => s.item)).size === slots.filter((s) => s.item).length &&
+      megaCount(slots) <= 2;
+    const savedFew = structuredClone(data.SAMPLE_PARTIES[0].slots.slice(0, 3));
+    const frozen = JSON.stringify(savedFew);
+    let allValid = true;
+    let allSavedFirst = true;
+    for (let t = 0; t < 200; t++) {
+      const r = rs.buildRandomPartyFromSlots(t % 2 ? savedFew : pool, pool, rng);
+      if (!valid(r.slots)) allValid = false;
+      if (t % 2 && !(r.fromSaved === 3 && r.slots.slice(0, 3).every((s) => savedFew.some((x) => x.pokemonId === s.pokemonId)))) allSavedFirst = false;
+    }
+    check("B6 랜덤 파티 200회 — 6마리·중복 포켓몬/도구 없음·메가 ≤2", allValid);
+    // 메가 2마리까지 허용: 전체 풀로 뽑을 때 메가 2마리 파티가 실제로 나오고 3마리 이상은 안 나온다
+    const megaMax = Math.max(...Array.from({ length: 200 }, () => megaCount(rs.buildRandomPartyFromSlots(pool, pool, rng).slots)));
+    check("B6 메가 2마리 파티가 나올 수 있고 3마리 이상은 안 나옴", megaMax === 2, `최대 ${megaMax}`);
+    check("B6 저장 슬롯 3마리 → 전부 포함하고 나머지는 기본 슬롯으로 보충", allSavedFirst);
+    const none = rs.buildRandomPartyFromSlots([], pool, rng);
+    check("B6 저장 슬롯 0개 → 기본 제공 슬롯으로만 6마리", none.fromSaved === 0 && valid(none.slots));
+    const dup = rs.buildRandomPartyFromSlots([savedFew[0], savedFew[0], savedFew[0]], pool, rng);
+    check("B6 같은 포켓몬만 저장돼 있어도 1마리만 쓰고 보충", dup.fromSaved === 1 && valid(dup.slots));
+    check("B6 입력 슬롯을 변형하지 않음(사본 반환)", JSON.stringify(savedFew) === frozen && rs.buildRandomPartyFromSlots(savedFew, pool, rng).slots.every((s) => !savedFew.includes(s)));
+  }
   // 상대가 나에게 데미지를 줄 수단이 없을 때(+Infinity 점수)
   {
     const st = battle([mon("팬텀", ["10만볼트"])], [mon("한카리아스", ["지진"])]);
