@@ -694,6 +694,44 @@
   vertical-align: super;
 }
 
+/* 2.3 B2 — 상대(AI) 실능치·파티 트래커 대신 보여주는 파티 6마리 나열. 기절 여부만
+   표기(출전 여부는 안 보임). 실능치 칩(battle-real-stat-item)과 같은 배경·톤의 칩으로
+   만들어 3열 그리드를 꽉 채운다 — 아이콘만 떠 있으니 비어 보인다는 피드백 반영
+   (2.3 B2 보완). */
+.battle-roster-icons {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.4rem;
+  margin-bottom: 0.6rem;
+}
+
+.battle-roster-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  background: var(--surface-2);
+  border-radius: 9px;
+  padding: 0.4rem 0.2rem;
+}
+
+.battle-roster-chip-name {
+  font-size: 0.64rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.battle-roster-chip.is-fainted {
+  opacity: 0.45;
+}
+
+.battle-roster-chip.is-fainted .avatar-with-item {
+  filter: grayscale(1);
+}
+
 .battle-move-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
