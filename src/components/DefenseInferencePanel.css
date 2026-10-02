@@ -469,3 +469,9 @@
     grid-template-columns: 4.6rem 1fr;
   }
 }
+
+.dinf-defender-forms button.is-active {
+  border-color: var(--violet);
+  background: var(--violet-soft);
+  color: var(--violet);
+}
