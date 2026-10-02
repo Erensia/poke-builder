@@ -8,7 +8,8 @@ import { applyFlingEffect } from "./fling";
 import { applyStageDelta } from "@/lib/statStages";
 import { isOpponentTargetingMove } from "@/lib/fieldEffects";
 import { getHpThresholdBerryHeal } from "@/lib/itemEffects";
-import { GRAVITY_DURATION, MAGIC_ROOM_DURATION, MAGNET_RISE_DURATION, SCREEN_DURATION, TAILWIND_DURATION, TRICK_ROOM_DURATION, WONDER_ROOM_DURATION, WEATHER_DURATION, activeWeather, applyForecastForm, consumeItem, contraryDelta, hasLivingReserve, isFainted, sideOf, type BattleState } from "./state";
+import { GRAVITY_DURATION, MAGIC_ROOM_DURATION, MAGNET_RISE_DURATION, SCREEN_DURATION, TAILWIND_DURATION, TRICK_ROOM_DURATION, WONDER_ROOM_DURATION, WEATHER_DURATION, activeWeather, applyForecastForm, consumeItem, contraryDelta, hasLivingReserve, isFainted, isForcedSwitchBlocked, sideOf, type BattleState } from "./state";
+import { isTrappedFromSwitching } from "./switching";
 import { resolvePreHitEffects } from "./preHitEffects";
 import { resolveHitAndApplyDamage } from "./hitResolution";
 import { resolveMirroredMoveEffects } from "./mirroredEffects";
@@ -244,9 +245,21 @@ export function resolveAction(
       attackerBerryHealItemName = attackerItem!.name;
     }
   }
+  // 위기회피가 실제로 발동할 피격(절반 초과→이하, 나갈 예비 있음·봉인 아님)이면 HP 회복 열매는
+  // 먹지 않는다(포챔스 확인) — 열매는 그대로 남고 포켓몬은 물러난다. 나갈 수 없으면 열매가 정상 발동.
+  const origDefender0 = state[defenderKey];
+  const defenderExitsAtHalf =
+    defender === origDefender0 &&
+    !!defenderAbility?.exitsFieldAtHalfHp &&
+    defenderHpAtActionStart * 2 > defender.maxHp &&
+    defender.currentHp > 0 &&
+    defender.currentHp * 2 <= defender.maxHp &&
+    hasLivingReserve(sideOf(state, defenderKey)) &&
+    !isForcedSwitchBlocked(defender) &&
+    !isTrappedFromSwitching(defender);
   let defenderBerryHealAmount = 0;
   let defenderBerryHealItemName: string | undefined;
-  if (!isFainted(defender) && !defenderBerriesBlocked) {
+  if (!isFainted(defender) && !defenderBerriesBlocked && !defenderExitsAtHalf) {
     defenderBerryHealAmount = getHpThresholdBerryHeal(
       defenderItem,
       defender.currentHp,
