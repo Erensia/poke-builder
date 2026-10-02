@@ -19,7 +19,7 @@ import { MAX_ABILITY_POINTS_PER_STAT, MAX_ABILITY_POINTS_TOTAL } from "./statCal
  * 게임은 상대 HP를 정수 %(100~0)로만 보여 준다. 후보(HP 포인트 × 방어 포인트 × 특방 포인트 × 성격)마다
  * 관측을 순서대로 재생해서(난수 16단계를 전부 시험) 화면 %와 하나라도 맞는 후보만 남긴다.
  * 데미지는 배틀 엔진(computeDamage)과 같은 정수 공식으로 낸다 — 매치업 화면의 연속값 근사(damageRollPercents)가 아니다.
- * 상세: docs/00_기획문서/2.1-backlog.md C.
+ * 상세: docs/00_기획문서/02_backlog/02_ver.2.0/2.1-backlog.md C.
  */
 
 /** 화면 %를 HP에서 만드는 규칙 — 사용자 관측("HP 1이 남아도 1%")에 따라 올림. 확정되지 않았으니 이 함수 한 곳에서만 바꾼다. */
