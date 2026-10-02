@@ -111,6 +111,7 @@ export function MatchupPage() {
       defenderDamagedThisTurn: !!attacker.slot.targetDamagedAssumed,
       defenderMinimized: !!attacker.slot.targetMinimizedAssumed,
       critical: !!attacker.slot.critAssumed,
+      attackerTypeToMoveType: !!attacker.slot.typeShiftAssumed,
       defenderHpIsFull: defender.slot.fullHpAssumed ?? true,
       extraOffenseMultiplier: effMove
         ? computeStatusAttackMultiplier(
@@ -165,6 +166,7 @@ export function MatchupPage() {
         attackerMoveFailedLastTurn: assumeOptions.attackerMoveFailedLastTurn,
         attackerStatLoweredThisTurn: assumeOptions.attackerStatLoweredThisTurn,
         critical: assumeOptions.critical,
+        attackerTypeToMoveType: assumeOptions.attackerTypeToMoveType,
         extraOffenseMultiplier: assumeOptions.extraOffenseMultiplier,
       },
     );
@@ -252,6 +254,7 @@ export function MatchupPage() {
           selectedMove={attackerMove ?? undefined}
           onSetPowerCondition={attacker.setPowerCondition}
           onToggleCrit={attacker.setCritAssumed}
+          onToggleTypeShift={attacker.setTypeShiftAssumed}
           critBlocked={!!fullResult?.criticalBlocked}
           onTogglePinch={attacker.setPinchAssumed}
           onSetHpPercent={attacker.setHpPercent}

@@ -53,6 +53,8 @@ export interface MatchupSlot {
   moveFailedAssumed?: boolean;
   /** ver.1.9 6-2 공격 슬롯 — 급소에 맞았다고 가정(랭크 일부·벽 무시, 데미지 ×1.5 — 스나이퍼 2.25) */
   critAssumed?: boolean;
+  /** 2.2 F1 공격 슬롯 — 리베로·변환자재 자속보정: 공격 쪽 타입을 선택한 기술의 타입으로 보고 자속을 판정 */
+  typeShiftAssumed?: boolean;
   /** ver.1.9 공격 슬롯 — HP 1/3 이하 가정(맹화·급류·심록·벌레의알림 발동) */
   pinchAssumed?: boolean;
   /** ver.1.9 방어 슬롯 — HP 가득 가정(멀티스케일·섀도실드 발동). 생략하면 켬(이전 계산과 같음) */
