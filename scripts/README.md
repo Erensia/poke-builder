@@ -111,5 +111,5 @@ python scripts/normalize_sprites.py x.png --category 포켓몬 --fix   # 트리 
 | `diag` | AI가 교체(또는 `DIAG`로 고른 행동)를 고른 순간의 옵션별 점수 덤프 |
 
 환경변수로 파티 구성을 바꿀 수 있다: `PIVOT=1`(유턴류), `STATUS=1`(변화기), `SETUP=1`(랭크업기·배턴터치),
-`PROTECT=1`(방어류). 파라미터·해시 기준값은 `docs/00_기획문서/배틀AI 기획/battle-ai-decision-layer.md` §12 참고.
+`PROTECT=1`(방어류), `POOL=samples`(무작위 빌드 대신 기본 제공 샘플 파티에서 편마다 3마리 — `regress` 포함 3마리 모드 전부, 기본 해시는 불변; 기술 치환 환경변수는 샘플에 안 걸림). 파라미터·해시 기준값은 `docs/00_기획문서/배틀AI 기획/battle-ai-decision-layer.md` §12 참고.
 PowerShell에서는 JSON 따옴표를 `'{\"scoring\":\"spec\"}'`처럼 이스케이프한다.
