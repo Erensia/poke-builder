@@ -224,8 +224,8 @@ export function DefenseInferencePanel({
   const attackerPokemon = attacker.pokemonId ? getPokemon(attacker.pokemonId) : undefined;
   const defenderPokemon = defender.pokemonId ? getPokemon(defender.pokemonId) : undefined;
   // 메가폼은 이 화면 안에서만 고른다(공유 슬롯·메가스톤 도구와 무관). 종이 바뀌어 없는 폼이면 자동 해제.
-  const megas = defenderPokemon?.megaEvolutions ?? [];
-  const activeMega = megas.find((m) => m.form === megaForm);
+  const megas = defenderPokemon?.megaEvolutions;
+  const activeMega = megas?.find((m) => m.form === megaForm);
   const defenderForm = defenderPokemon
     ? getEffectiveForm(defenderPokemon, { ...defender, item: null, activeMegaForm: activeMega?.form })
     : undefined;
@@ -272,15 +272,16 @@ export function DefenseInferencePanel({
 
   const input = useMemo<InferenceInput | null>(() => {
     if (!attacker.pokemonId || !defender.pokemonId || complete.length === 0) return null;
+    const mega = getPokemon(defender.pokemonId)?.megaEvolutions?.find((m) => m.form === megaForm);
     return {
       attacker: { ...attacker, pokemonId: attacker.pokemonId },
       // 메가폼: 특성은 메가폼 고정, 도구는 메가스톤이라 반감 열매 가정을 쓰지 못한다
       defender: {
         ...defender,
         pokemonId: defender.pokemonId,
-        activeMegaForm: activeMega?.form,
-        ability: activeMega ? activeMega.ability : activeAbilityId || null,
-        item: activeMega ? null : itemId || null,
+        activeMegaForm: mega?.form,
+        ability: mega ? mega.ability : activeAbilityId || null,
+        item: mega ? null : itemId || null,
       },
       observations: complete.map((c) => c.obs),
       attackerStages: attacker.stages,
@@ -291,7 +292,7 @@ export function DefenseInferencePanel({
       screen: screen || undefined,
       tolerance: tolerant ? 1 : 0,
     };
-  }, [attacker, defender, complete, activeMega, activeAbilityId, itemId, weather, field, screen, defStage, spdStage, tolerant]);
+  }, [attacker, defender, megaForm, complete, activeAbilityId, itemId, weather, field, screen, defStage, spdStage, tolerant]);
 
   // 계산이 무거울 수 있어(물리+특수 관측이 함께면 수십만 후보) 입력은 즉시 반영하고 결과만 뒤따라 그린다
   const deferredInput = useDeferredValue(input);
@@ -369,7 +370,7 @@ export function DefenseInferencePanel({
                 )}
               </div>
             )}
-            {megas.length > 0 && (
+            {megas && megas.length > 0 && (
               <div className="dinf-defender-forms" role="group" aria-label="메가진화 선택">
                 <button type="button" className={activeMega ? undefined : "is-active"} onClick={() => setMegaForm("")}>
                   메가 전
