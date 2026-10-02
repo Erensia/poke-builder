@@ -135,6 +135,10 @@ function useMatchupSlot() {
     setSlot((prev) => ({ ...prev, critAssumed: value }));
   }
 
+  function setTypeShiftAssumed(value: boolean) {
+    setSlot((prev) => ({ ...prev, typeShiftAssumed: value }));
+  }
+
   function setPinchAssumed(value: boolean) {
     setSlot((prev) => ({ ...prev, pinchAssumed: value }));
   }
@@ -191,6 +195,7 @@ function useMatchupSlot() {
     setStatusAssumed,
     setPowerCondition,
     setCritAssumed,
+    setTypeShiftAssumed,
     setPinchAssumed,
     setFullHpAssumed,
     setHpPercent,

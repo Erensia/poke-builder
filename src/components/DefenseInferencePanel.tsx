@@ -219,10 +219,16 @@ export function DefenseInferencePanel({
   const [defStage, setDefStage] = useState(0);
   const [spdStage, setSpdStage] = useState(0);
   const [tolerant, setTolerant] = useState(false);
+  const [megaForm, setMegaForm] = useState("");
 
   const attackerPokemon = attacker.pokemonId ? getPokemon(attacker.pokemonId) : undefined;
   const defenderPokemon = defender.pokemonId ? getPokemon(defender.pokemonId) : undefined;
-  const defenderForm = defenderPokemon ? getEffectiveForm(defenderPokemon, defender) : undefined;
+  // 메가폼은 이 화면 안에서만 고른다(공유 슬롯·메가스톤 도구와 무관). 종이 바뀌어 없는 폼이면 자동 해제.
+  const megas = defenderPokemon?.megaEvolutions;
+  const activeMega = megas?.find((m) => m.form === megaForm);
+  const defenderForm = defenderPokemon
+    ? getEffectiveForm(defenderPokemon, { ...defender, item: null, activeMegaForm: activeMega?.form })
+    : undefined;
 
   const abilityOptions = defenderPokemon ? defenseRelevantAbilities(defenderPokemon) : [];
   // 종이 바뀌면 그 종이 가질 수 없는 특성 가정은 자동으로 해제
@@ -266,9 +272,17 @@ export function DefenseInferencePanel({
 
   const input = useMemo<InferenceInput | null>(() => {
     if (!attacker.pokemonId || !defender.pokemonId || complete.length === 0) return null;
+    const mega = getPokemon(defender.pokemonId)?.megaEvolutions?.find((m) => m.form === megaForm);
     return {
       attacker: { ...attacker, pokemonId: attacker.pokemonId },
-      defender: { ...defender, pokemonId: defender.pokemonId, ability: activeAbilityId || null, item: itemId || null },
+      // 메가폼: 특성은 메가폼 고정, 도구는 메가스톤이라 반감 열매 가정을 쓰지 못한다
+      defender: {
+        ...defender,
+        pokemonId: defender.pokemonId,
+        activeMegaForm: mega?.form,
+        ability: mega ? mega.ability : activeAbilityId || null,
+        item: mega ? null : itemId || null,
+      },
       observations: complete.map((c) => c.obs),
       attackerStages: attacker.stages,
       attackerStatus: attacker.statusAssumed ?? null,
@@ -278,7 +292,7 @@ export function DefenseInferencePanel({
       screen: screen || undefined,
       tolerance: tolerant ? 1 : 0,
     };
-  }, [attacker, defender, complete, activeAbilityId, itemId, weather, field, screen, defStage, spdStage, tolerant]);
+  }, [attacker, defender, megaForm, complete, activeAbilityId, itemId, weather, field, screen, defStage, spdStage, tolerant]);
 
   // 계산이 무거울 수 있어(물리+특수 관측이 함께면 수십만 후보) 입력은 즉시 반영하고 결과만 뒤따라 그린다
   const deferredInput = useDeferredValue(input);
@@ -331,7 +345,7 @@ export function DefenseInferencePanel({
                 radius={11}
                 gradientTypes={defenderForm.types}
                 className="matchup-slot-avatar"
-                form={{ formVariant: defender.formVariant, sizeForm: defender.sizeForm, cosmeticForm: defender.cosmeticForm, item: null }}
+                form={{ activeMegaForm: activeMega?.form, formVariant: defender.formVariant, sizeForm: defender.sizeForm, cosmeticForm: defender.cosmeticForm, item: null }}
               />
               <span className="matchup-slot-info">
                 <span className="matchup-slot-name">{defenderPokemon.name}</span>
@@ -354,6 +368,18 @@ export function DefenseInferencePanel({
                     크기 바꾸기{defenderForm.formLabel ? ` (${defenderForm.formLabel})` : ""}
                   </button>
                 )}
+              </div>
+            )}
+            {megas && megas.length > 0 && (
+              <div className="dinf-defender-forms" role="group" aria-label="메가진화 선택">
+                <button type="button" className={activeMega ? undefined : "is-active"} onClick={() => setMegaForm("")}>
+                  메가 전
+                </button>
+                {megas.map((m) => (
+                  <button key={m.form} type="button" className={activeMega?.form === m.form ? "is-active" : undefined} onClick={() => setMegaForm(m.form)}>
+                    {m.form.replace(/^.*?-/, "")}
+                  </button>
+                ))}
               </div>
             )}
             <div className="dinf-defender-base">
@@ -389,8 +415,11 @@ export function DefenseInferencePanel({
         <div className="dinf-conditions">
           <label>
             상대 특성
-            <select value={activeAbilityId} onChange={(e) => setAbilityId(e.target.value)} disabled={!defenderPokemon}>
-              <option value="">모름 (방어 특성 없음으로 가정)</option>
+            <select value={activeMega ? activeMega.ability : activeAbilityId} onChange={(e) => setAbilityId(e.target.value)} disabled={!defenderPokemon || !!activeMega}>
+              {activeMega && (
+                <option value={activeMega.ability}>{getAbility(activeMega.ability)?.name ?? activeMega.ability} (메가폼 고정)</option>
+              )}
+              {!activeMega && <option value="">모름 (방어 특성 없음으로 가정)</option>}
               {abilityOptions.map((id) => (
                 <option key={id} value={id}>
                   {getAbility(id)?.name ?? id}
@@ -400,8 +429,8 @@ export function DefenseInferencePanel({
           </label>
           <label>
             상대 도구
-            <select value={itemId} onChange={(e) => setItemId(e.target.value)}>
-              <option value="">모름 (도구 없음으로 가정)</option>
+            <select value={activeMega ? "" : itemId} onChange={(e) => setItemId(e.target.value)} disabled={!!activeMega}>
+              <option value="">{activeMega ? "메가스톤 (반감 열매 사용 불가)" : "모름 (도구 없음으로 가정)"}</option>
               {DEFENSE_ITEM_CANDIDATES.map((item) => (
                 <option key={item.id} value={item.id}>
                   {getItem(item.id)?.name ?? item.id}
@@ -517,8 +546,9 @@ export function DefenseInferencePanel({
           </div>
         )}
         <p className="dinf-assume">
-          가정: 화면 %는 올림 · 상대 특성 {activeAbilityId ? getAbility(activeAbilityId)?.name : "없음(모름)"} · 상대 도구{" "}
-          {itemId ? getItem(itemId)?.name : "없음(모름)"} · 관측 사이 회복 없음{tolerant ? " · ±1% 여유" : ""}
+          가정: 화면 %는 올림 · {activeMega ? `${activeMega.form} · ` : ""}상대 특성{" "}
+          {activeMega ? getAbility(activeMega.ability)?.name : activeAbilityId ? getAbility(activeAbilityId)?.name : "없음(모름)"} · 상대 도구{" "}
+          {activeMega ? "메가스톤" : itemId ? getItem(itemId)?.name : "없음(모름)"} · 관측 사이 회복 없음{tolerant ? " · ±1% 여유" : ""}
         </p>
       </section>
 

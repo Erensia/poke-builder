@@ -9,6 +9,9 @@ import { PointsEditorModal } from "./PointsEditorModal";
 import { SlotPresetsModal } from "./SlotPresetsModal";
 import { PartyPresetsModal } from "./PartyPresetsModal";
 import { SamplePartiesModal } from "./SamplePartiesModal";
+import { buildRandomPartyFromSlots } from "../lib/randomSlotParty";
+import { BattleSeriesPanel } from "./BattleSeriesPanel";
+import { useBattleSeries } from "../hooks/useBattleSeries";
 import { CosmeticFormPickerModal } from "./CosmeticFormPickerModal";
 import { BattleTurnLog } from "./BattleTurnLog";
 import { useBattleSetup, BATTLE_SELECT_SIZE } from "../hooks/useBattleSetup";
@@ -151,6 +154,7 @@ function BattleSetupScreen({
   aiMemoryBattles,
   onOpenAiMemory,
   onLoadRandomSample,
+  onLoadRandomSlotParty,
 }: {
   setup: ReturnType<typeof useBattleSetup>;
   hasPartyPresets: boolean;
@@ -169,6 +173,8 @@ function BattleSetupScreen({
   onOpenAiMemory: () => void;
   /** 기본 제공 샘플 파티 중 하나를 무작위로 이 진영에 불러온다(ver.2.1 B) */
   onLoadRandomSample: (side: Side) => void;
+  /** 저장해 둔 슬롯 프리셋에서 마리 단위로 6마리를 뽑아 랜덤 파티로 불러온다(2.2 B6) */
+  onLoadRandomSlotParty: (side: Side) => void;
 }) {
   const sideCtls = (side: Side) => (side === "a" ? setup.a : setup.b);
   const slotCtl = (side: Side, i: SlotIndex) => sideCtls(side)[i];
@@ -213,14 +219,14 @@ function BattleSetupScreen({
       {(["a", "b"] as const).map((side) => (
         <Fragment key={side}>
           <div className="battle-setup-column">
-            <div className="battle-setup-column-title">
+            <div className="battle-setup-actions">
               {hasPartyPresets && (
                 <button
                   type="button"
                   className="battle-setup-load-party"
                   onClick={() => onOpenPicker({ kind: "loadParty", side })}
                 >
-                  저장된 파티 불러오기
+                  파티 불러오기
                 </button>
               )}
               <button
@@ -232,12 +238,24 @@ function BattleSetupScreen({
               </button>
               <button
                 type="button"
-                className="battle-setup-load-party"
+                className="battle-setup-load-party has-tip"
                 onClick={() => onLoadRandomSample(side)}
-                title={`${side === "a" ? "내 파티" : "상대 파티"}를 기본 제공 샘플 파티 중 무작위 하나로 바꿉니다`}
+                data-tip={`${side === "a" ? "내 파티" : "상대 파티"}를 기본 제공 샘플 파티 중 무작위 하나로 바꿉니다`}
               >
                 무작위 샘플
               </button>
+              {hasSlotPresets && (
+                <button
+                  type="button"
+                  className="battle-setup-load-party has-tip"
+                  onClick={() => onLoadRandomSlotParty(side)}
+                  data-tip={`저장해 둔 포켓몬 샘플에서 6마리를 무작위로 뽑아 ${side === "a" ? "내 파티" : "상대 파티"}를 만듭니다(중복 포켓몬·도구 없음, 메가 2마리 이하). 저장 샘플이 모자라면 기본 제공 샘플로 채웁니다`}
+                >
+                  랜덤 구축
+                </button>
+              )}
+            </div>
+            <div className="battle-setup-column-title">
               {side === "a" ? "내 파티" : "상대 파티"}{" "}
               <span className="battle-setup-column-hint">6마리까지 빌드 · 4마리 이상이면 3마리 선출</span>
               {side === "b" && (
@@ -458,7 +476,10 @@ function BattleBoard({
   aiSide,
   aiThinking,
   learnedBattles,
+  seriesNext,
 }: {
+  /** 연속 대전(2.2 B2) 진행 중이면 결과 배너의 "대전 이어하기"를 이 라벨의 "다음 상대" 버튼으로 바꾼다 */
+  seriesNext: { label: string; onNext: () => void } | null;
   /** 컴퓨터(배틀 AI)가 조작하는 편. 사람이 양쪽 다 조작하면 null */
   aiSide: Side | null;
   /** AI가 이번 턴 행동을 계산하는 중(ver.2.0 2-B — Web Worker) — 점 세 개 표시, 턴 진행 버튼 잠금 */
@@ -1076,8 +1097,8 @@ function BattleBoard({
       <>
         <div className={`battle-result-banner${winner === "draw" ? " is-draw" : ""}`}>
           {winner === "draw" ? "🤝 무승부! 양쪽 다 기절했어요" : `🏆 ${fighterLabel(battleState, winner)} 승리!`}
-          <button type="button" className="battle-reset-button" onClick={resetToSetup}>
-            대전 이어하기
+          <button type="button" className="battle-reset-button" onClick={seriesNext ? seriesNext.onNext : resetToSetup}>
+            {seriesNext ? seriesNext.label : "대전 이어하기"}
           </button>
         </div>
         {learnedBattles !== null && (
@@ -1159,6 +1180,8 @@ export function BattleLogPage() {
   const [showAiMemory, setShowAiMemory] = useState(false);
   /** 이번 대전을 학습했으면 누적 판 수(결과 배너 한 줄), 아니면 null */
   const [learnedBattles, setLearnedBattles] = useState<number | null>(null);
+  /** 연속 대전(2.2 B2) */
+  const series = useBattleSeries();
 
   const sideCtls = (side: Side) => (side === "a" ? setup.a : setup.b);
   const slotCtl = (side: Side, i: SlotIndex) => sideCtls(side)[i];
@@ -1169,6 +1192,14 @@ export function BattleLogPage() {
   }
   function loadRandomSample(side: Side) {
     loadSample(side, SAMPLE_PARTIES[Math.floor(Math.random() * SAMPLE_PARTIES.length)]);
+  }
+  /** 저장 슬롯 프리셋 조합 랜덤 파티(2.2 B6) — 저장 파티·슬롯 프리셋 원본은 그대로, 사본만 진영에 채운다 */
+  function loadRandomSlotParty(side: Side) {
+    const { slots } = buildRandomPartyFromSlots(
+      slotPresets.presets.map((p) => p.slot),
+      SAMPLE_PARTIES.flatMap((party) => party.slots),
+    );
+    setup.loadSide(side, slots);
   }
   const pokemonAt = (side: Side, i: SlotIndex) => {
     const slot = slotCtl(side, i).slot;
@@ -1313,6 +1344,14 @@ export function BattleLogPage() {
   const canProceed =
     !hasMovelessSlot && (["a", "b"] as const).every((side) => buildableIndices(side).length >= 1);
 
+  /** 연속 대전 시작은 AI 상대 + 내 쪽에 빌드가 있을 때만 — 이유를 버튼 툴팁으로 보여 준다 */
+  const seriesStartBlockedReason = !aiOpponent
+    ? "\"AI가 조작\"을 켜야 연속 대전을 할 수 있어요"
+    : buildableIndices("a").length < 1
+      ? "내 파티에 포켓몬을 먼저 구성해 주세요"
+      : movelessIndices("a").length > 0
+        ? "기술이 없는 슬롯이 있어요"
+        : null;
   /** 셋업 화면 VS 버튼이 무엇을 하는지 (선출 화면을 거치면 "다음 (선출)", 아니면 바로 "대전 시작") */
   // AI 편 선출은 자동(비공개)이라, 내 편이 고를 게 없으면 바로 대전
   const proceedLabel = needsSelection("a") || (needsSelection("b") && !aiOpponent) ? "다음 (선출)" : "대전 시작";
@@ -1633,6 +1672,7 @@ export function BattleLogPage() {
     });
     // 1-C: AI 대전이면 이번 대전 관측을 누적 학습에 합친다("대전에서 계속 학습"이 꺼져 있으면 합치지 않음)
     if (aiSide && aiMemory.commit(aiSessionRef.current)) setLearnedBattles(aiMemory.memory.battles + 1);
+    series.record(winner === "draw" ? "draw" : winner);
     aiSessionRef.current = emptyOpponentMemory();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [winner]);
@@ -1654,6 +1694,10 @@ export function BattleLogPage() {
       </header>
 
       {!battleState && !selecting && (
+        <BattleSeriesPanel series={series} startBlockedReason={seriesStartBlockedReason} onStart={(first) => loadSample("b", first)} />
+      )}
+
+      {!battleState && !selecting && (
         <BattleSetupScreen
           setup={setup}
           hasPartyPresets={partyPresets.presets.length > 0}
@@ -1670,6 +1714,7 @@ export function BattleLogPage() {
           aiMemoryBattles={aiMemory.memory.battles}
           onOpenAiMemory={() => setShowAiMemory(true)}
           onLoadRandomSample={loadRandomSample}
+          onLoadRandomSlotParty={loadRandomSlotParty}
         />
       )}
 
@@ -1718,6 +1763,19 @@ export function BattleLogPage() {
           aiSide={aiSide}
           aiThinking={aiThinking}
           learnedBattles={learnedBattles}
+          seriesNext={
+            series.state && !series.state.finished
+              ? {
+                  label: series.current ? "다음 상대 →" : "연속 대전 요약 보기",
+                  onNext: () => {
+                    if (series.current) loadSample("b", series.current);
+                    resetToSetup();
+                  },
+                }
+              : series.state
+                ? { label: "연속 대전 요약 보기", onNext: resetToSetup }
+                : null
+          }
         />
       )}
 

@@ -2439,6 +2439,120 @@ try {
     }
     void sw;
   }
+  // 2.2 E1: 위기회피·탈출버튼은 상대가 턴 시작에 교체해 들어온 직후 맞아도 발동해야 한다(didSwitch 재사용 버그)
+  {
+    const rt = await server.ssrLoadModule("/src/lib/battle/runTurn.ts");
+    const hit = { kind: "move", move: data.getMove("막치기") };
+    const idle = { kind: "move", move: data.getMove("칼춤") };
+    // 막치기 한 방이 HP를 절반 위→절반 이하(기절 아님)로 만들도록 갑주무사 HP를 맞춘다
+    const setup = (ability, item) => {
+      const st = battle(
+        [mon("한카리아스", ["막치기"])],
+        [mon("아머까오", ["칼춤"]), mon("갑주무사", ["칼춤"], ability, item, pts({ hp: 32 })), mon("메타그로스", ["칼춤"])],
+      );
+      const probe = structuredClone(st);
+      probe.sideB.activeIndex = 1;
+      const po = rt.runTurn(probe, hit, idle, () => 0.5);
+      const dmg = (po.result ?? po.partialResult).actions.find((a) => a.actor === "a").damage;
+      const f = st.sideB.party[1];
+      f.currentHp = Math.floor(f.maxHp / 2) + 1;
+      return { st, ok: dmg >= 1 && dmg < f.currentHp };
+    };
+    const exitCase = (ability, item, bAction, label, flag) => {
+      const { st, ok } = setup(ability, item);
+      if (bAction.kind === "move") st.sideB.activeIndex = 1;
+      const out = rt.runTurn(st, hit, bAction, () => 0.5);
+      const sw = out.awaitingSelfSwitch;
+      const resumed = sw ? rt.resumeTurn(out._ctx, 2) : null;
+      check(label, ok && sw?.side === "b" && !!sw[flag] && resumed?.nextState.sideB.activeIndex === 2, `세팅 ${ok} 멈춤 ${JSON.stringify(sw)} 재개 후 ${resumed?.nextState.sideB.activeIndex}`);
+    };
+    exitCase("위기회피", null, { kind: "switch", toIndex: 1 }, "E1-1 턴 시작 교체로 들어온 위기회피 → 맞으면 교체창", "emergencyExit");
+    exitCase("위기회피", null, idle, "E1-2 가만히 있던 위기회피 → 교체창(회귀)", "emergencyExit");
+    exitCase(null, "탈출버튼", { kind: "switch", toIndex: 1 }, "E1-3 턴 시작 교체로 들어온 탈출버튼 → 맞으면 교체창", "ejectItemName");
+    // 위기회피가 발동하는 피격에서는 오랭열매를 먹지 않는다(포챔스 확인) — 나갈 수 없으면(예비 없음) 정상 발동
+    {
+      const { st, ok } = setup("위기회피", "오랭열매");
+      const out = rt.runTurn(st, hit, { kind: "switch", toIndex: 1 }, () => 0.5);
+      const held = out.nextState.sideB.party[1];
+      check("E1-4 위기회피 발동 → 오랭열매 미소비", ok && !!out.awaitingSelfSwitch?.emergencyExit && held.currentItemId === "오랭열매" && !held.itemConsumed, `멈춤 ${!!out.awaitingSelfSwitch} 도구 ${held.currentItemId} 소비 ${held.itemConsumed}`);
+      const solo = battle([mon("한카리아스", ["막치기"])], [mon("갑주무사", ["칼춤"], "위기회피", "오랭열매", pts({ hp: 32 }))]);
+      solo.b.currentHp = Math.floor(solo.b.maxHp / 2) + 1;
+      const so = rt.runTurn(solo, hit, idle, () => 0.5);
+      check("E1-5 예비 없어 못 나가면 오랭열매 정상 발동", !so.awaitingSelfSwitch && so.nextState.b.itemConsumed === true, `멈춤 ${!!so.awaitingSelfSwitch} 소비 ${so.nextState.b.itemConsumed}`);
+    }
+    // 드래곤테일로 이미 강제 교체된 위기회피는 이중 교체 없이 끝난다
+    {
+      const st = battle(
+        [mon("한카리아스", ["드래곤테일"])],
+        [mon("갑주무사", ["칼춤"], "위기회피", null, pts({ hp: 32 })), mon("메타그로스", ["칼춤"])],
+      );
+      st.sideB.party[0].currentHp = Math.floor(st.sideB.party[0].maxHp / 2) + 1;
+      const out = rt.runTurn(st, { kind: "move", move: data.getMove("드래곤테일") }, idle, () => 0.5);
+      check("E1-6 드래곤테일 강제 교체 → 위기회피 이중 교체 없음", !out.awaitingSelfSwitch, JSON.stringify(out.awaitingSelfSwitch));
+    }
+  }
+  // 2.2 F1: 결정력 화면 리베로·변환자재 자속보정 토글 — 켜면 기술 타입으로 자속 판정, 끄면 기본(자속 없음)
+  {
+    const me = await server.ssrLoadModule("/src/lib/matchupEvaluator.ts");
+    const kick = data.getMove("무릎차기");
+    const atk = (ability) => mon("에이스번", ["무릎차기"], ability, null, pts({ atk: 32 })).slot;
+    const def = mon("메타그로스", ["칼춤"]).slot;
+    const power = (ability, on) => me.computeSoloOffensePower(atk(ability), kick, { attackerTypeToMoveType: on });
+    const off = power("리베로", false);
+    check("F1 리베로 토글 끔 → 자속 없음, 켬 → 1.5배", off > 0 && Math.abs(power("리베로", true) / off - 1.5) < 1e-9, `끔 ${off} 켬 ${power("리베로", true)}`);
+    const full = (on) => me.evaluateSlotMatchup(atk("리베로"), kick, def, { attackerTypeToMoveType: on })?.offensePower;
+    check("F1 상대 계산(evaluateSlotMatchup)도 동일 1.5배", Math.abs(full(true) / full(false) - 1.5) < 1e-9, `${full(false)} → ${full(true)}`);
+    const noLibero = atk("맹화");
+    check("F1 리베로가 아닌 특성은 토글 켜도 무변화", me.computeSoloOffensePower(noLibero, kick, { attackerTypeToMoveType: true }) === me.computeSoloOffensePower(noLibero, kick, {}));
+  }
+  // 2.2 B6: 저장 슬롯 조합 랜덤 파티 — 6마리·중복 포켓몬/도구 없음·메가 1마리 이하, 모자라면 기본 제공 슬롯으로 보충, 입력 불변
+  {
+    const rs = await server.ssrLoadModule("/src/lib/randomSlotParty.ts");
+    const pf = await server.ssrLoadModule("/src/lib/pokemonForm.ts");
+    let seed = 7;
+    const rng = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 2 ** 32);
+    const pool = data.SAMPLE_PARTIES.flatMap((p) => p.slots);
+    const megaCount = (slots) => slots.filter((s) => s.activeMegaForm || pf.findMegaFormByStone(data.getPokemon(s.pokemonId), s.item)).length;
+    const valid = (slots) =>
+      slots.length === 6 &&
+      new Set(slots.map((s) => s.pokemonId)).size === 6 &&
+      new Set(slots.filter((s) => s.item).map((s) => s.item)).size === slots.filter((s) => s.item).length &&
+      megaCount(slots) <= 2;
+    const savedFew = structuredClone(data.SAMPLE_PARTIES[0].slots.slice(0, 3));
+    const frozen = JSON.stringify(savedFew);
+    let allValid = true;
+    let allSavedFirst = true;
+    for (let t = 0; t < 200; t++) {
+      const r = rs.buildRandomPartyFromSlots(t % 2 ? savedFew : pool, pool, rng);
+      if (!valid(r.slots)) allValid = false;
+      if (t % 2 && !(r.fromSaved === 3 && r.slots.slice(0, 3).every((s) => savedFew.some((x) => x.pokemonId === s.pokemonId)))) allSavedFirst = false;
+    }
+    check("B6 랜덤 파티 200회 — 6마리·중복 포켓몬/도구 없음·메가 ≤2", allValid);
+    // 메가 2마리까지 허용: 전체 풀로 뽑을 때 메가 2마리 파티가 실제로 나오고 3마리 이상은 안 나온다
+    const megaMax = Math.max(...Array.from({ length: 200 }, () => megaCount(rs.buildRandomPartyFromSlots(pool, pool, rng).slots)));
+    check("B6 메가 2마리 파티가 나올 수 있고 3마리 이상은 안 나옴", megaMax === 2, `최대 ${megaMax}`);
+    check("B6 저장 슬롯 3마리 → 전부 포함하고 나머지는 기본 슬롯으로 보충", allSavedFirst);
+    const none = rs.buildRandomPartyFromSlots([], pool, rng);
+    check("B6 저장 슬롯 0개 → 기본 제공 슬롯으로만 6마리", none.fromSaved === 0 && valid(none.slots));
+    const dup = rs.buildRandomPartyFromSlots([savedFew[0], savedFew[0], savedFew[0]], pool, rng);
+    check("B6 같은 포켓몬만 저장돼 있어도 1마리만 쓰고 보충", dup.fromSaved === 1 && valid(dup.slots));
+    check("B6 입력 슬롯을 변형하지 않음(사본 반환)", JSON.stringify(savedFew) === frozen && rs.buildRandomPartyFromSlots(savedFew, pool, rng).slots.every((s) => !savedFew.includes(s)));
+  }
+  // 2.2 B2: 연속 대전 — 대진표는 샘플 파티를 한 번씩 전부(원본 불변), 전적 요약은 승·패·무 합이 판 수와 일치
+  {
+    const bs = await server.ssrLoadModule("/src/lib/battleSeries.ts");
+    const before = data.SAMPLE_PARTIES.map((p) => p.id).join(",");
+    let seed = 11;
+    const rng = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 2 ** 32);
+    const order = bs.shuffleOpponents(data.SAMPLE_PARTIES, rng);
+    check(
+      "B2 대진표 = 샘플 파티 전부 한 번씩, 원본 순서 불변",
+      order.length === data.SAMPLE_PARTIES.length && new Set(order.map((p) => p.id)).size === data.SAMPLE_PARTIES.length && data.SAMPLE_PARTIES.map((p) => p.id).join(",") === before,
+    );
+    const sum = bs.summarizeSeries([{ winner: "a" }, { winner: "a" }, { winner: "b" }, { winner: "draw" }, { winner: "a" }]);
+    check("B2 전적 요약 3승 1패 1무", sum.wins === 3 && sum.losses === 1 && sum.draws === 1, JSON.stringify(sum));
+    check("B2 빈 전적 요약", JSON.stringify(bs.summarizeSeries([])) === JSON.stringify({ wins: 0, losses: 0, draws: 0 }));
+  }
   // 상대가 나에게 데미지를 줄 수단이 없을 때(+Infinity 점수)
   {
     const st = battle([mon("팬텀", ["10만볼트"])], [mon("한카리아스", ["지진"])]);

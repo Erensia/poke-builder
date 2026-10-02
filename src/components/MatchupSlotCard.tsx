@@ -90,6 +90,8 @@ interface MatchupSlotCardProps {
   onSetPowerCondition?: (key: PowerConditionKey, value: boolean) => void;
   /** 공격 슬롯 전용(ver.1.9 6-2) — 급소 가정. 기술을 골랐을 때 항상 보인다 */
   onToggleCrit?: (value: boolean) => void;
+  /** 공격 슬롯 전용(2.2 F1) — 리베로·변환자재 자속보정. 공격 쪽 특성이 해당할 때만 보인다 */
+  onToggleTypeShift?: (value: boolean) => void;
   /** 급소 가정인데 상대 특성(조가비갑옷·전투무장)으로 급소가 안 뜸 */
   critBlocked?: boolean;
   /** 공격 슬롯 전용(ver.1.9) — HP 1/3 이하 가정(맹화류 특성일 때만 보인다) */
@@ -144,6 +146,7 @@ export function MatchupSlotCard({
   selectedMove,
   onSetPowerCondition,
   onToggleCrit,
+  onToggleTypeShift,
   critBlocked,
   onTogglePinch,
   onSetHpPercent,
@@ -378,6 +381,12 @@ export function MatchupSlotCard({
               <span>{t.label}</span>
             </label>
           ))}
+        {role === "attacker" && ability?.changesUserTypeToMoveType && onToggleTypeShift && (
+          <label className="matchup-assume-toggle">
+            <input type="checkbox" checked={!!slot.typeShiftAssumed} onChange={(e) => onToggleTypeShift(e.target.checked)} />
+            <span>리베로•변환자재 자속보정</span>
+          </label>
+        )}
         {role === "attacker" && pinchRelevant && onTogglePinch && (
           <label className="matchup-assume-toggle">
             <input type="checkbox" checked={!!slot.pinchAssumed} onChange={(e) => onTogglePinch(e.target.checked)} />

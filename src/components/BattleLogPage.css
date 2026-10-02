@@ -74,6 +74,22 @@
   gap: 0.8rem;
 }
 
+/* 파티 열 머리: 불러오기 버튼 4개 한 줄 + 제목 한 줄(2.2 B6 UI 정리) */
+.battle-setup-actions {
+  display: flex;
+  gap: 0.3rem;
+  width: min(300px, 100%); /* 아래 포켓몬 카드(.party-slot 300px)와 가로를 맞춘다 */
+  margin-bottom: -0.3rem;
+}
+
+.battle-setup-actions .battle-setup-load-party {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0.2rem 0.25rem;
+  white-space: nowrap;
+  text-align: center;
+}
+
 .battle-setup-column-title {
   display: flex;
   align-items: center;
@@ -151,6 +167,47 @@
 .battle-setup-load-party:hover {
   background: var(--violet);
   color: #fff;
+}
+
+/* 앱 공통 말풍선(InfoTooltip)과 같은 모양의 CSS 툴팁 — 브라우저 기본 title 대신 data-tip을 쓴다 */
+.has-tip {
+  position: relative;
+}
+
+.has-tip::after {
+  content: attr(data-tip);
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 6px);
+  z-index: 20;
+  width: max-content;
+  max-width: min(260px, 80vw);
+  padding: 0.5rem 0.65rem;
+  border-radius: 8px;
+  background: var(--text);
+  color: var(--bg, #fff);
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.45;
+  text-align: left;
+  white-space: normal;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(2px);
+  transition: opacity 0.12s ease, transform 0.12s ease;
+}
+
+.has-tip:hover::after,
+.has-tip:focus-visible::after {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .has-tip::after {
+    transition: none;
+  }
 }
 
 .battle-setup-board .party-slot {
@@ -434,7 +491,8 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 0.5rem;
+  flex-wrap: wrap; /* 태그가 많으면 이름 영역을 누르지 않고 아래 줄로 내려간다(메가 배지 글자 쪼개짐 방지) */
+  gap: 0.3rem 0.5rem;
   margin-bottom: 0.4rem;
 }
 
@@ -442,7 +500,8 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  min-width: 0;
+  flex: 0 0 auto; /* 이름·배지는 제 폭을 유지 */
+  max-width: 100%;
 }
 
 .battle-fighter-name {
@@ -452,6 +511,12 @@
 .battle-fighter-fainted {
   color: var(--danger);
   font-weight: 700;
+}
+
+.battle-fighter-mega-tag,
+.battle-fighter-ai-tag,
+.battle-fighter-fainted {
+  white-space: nowrap; /* 배지·태그는 글자 중간에서 줄바꿈하지 않는다 */
 }
 
 .battle-fighter-mega-tag {
@@ -524,10 +589,17 @@
 .battle-status-tags {
   display: flex;
   gap: 0.3rem;
+  flex: 1 1 8rem; /* 이름 옆에 최소 8rem이 안 나오면 다음 줄로 */
+  justify-content: flex-end;
   flex-wrap: wrap;
 }
 
+.battle-status-tags:empty {
+  display: none; /* 태그가 없으면 줄바꿈 때 빈 줄 간격이 생기지 않게 */
+}
+
 .battle-status-tag {
+  white-space: nowrap; /* "빛의장막 5턴" 같은 태그는 통째로 다음 줄로 */
   font-size: 0.7rem;
   font-weight: 700;
   padding: 0.1rem 0.45rem;

@@ -38,7 +38,14 @@ import {
   type MatchupVerdict,
 } from "./battlePower";
 
+/** 2.2 F1 — 리베로·변환자재 자속보정 토글이 켜졌고 특성이 해당하면 자속 판정용 타입을 기술 타입 하나로 */
+function offenseTypes(types: PokemonType[], ability: { changesUserTypeToMoveType?: boolean } | undefined, move: Move, on: boolean | undefined): PokemonType[] {
+  return on && ability?.changesUserTypeToMoveType && move.type ? [move.type] : types;
+}
+
 export interface SlotMatchupOptions {
+  /** 2.2 F1 — 리베로·변환자재 자속보정: 공격 쪽 타입을 이 기술의 타입으로 바꿔 자속(적응력이면 2배)을 판정. 기본 끔 */
+  attackerTypeToMoveType?: boolean;
   /** 이번 턴 전까지 누적된 공격측 랭크 상태. 기본은 전부 0랭크 */
   attackerStages?: StatStages;
   /** 이번 턴 전까지 누적된 방어측 랭크 상태. 기본은 전부 0랭크 */
@@ -259,6 +266,7 @@ export function evaluateSlotMatchup(
     defenderDamagedThisTurn,
     defenderMinimized,
     critical = false,
+    attackerTypeToMoveType,
     defenderItemConsumed,
     attackerRuntime,
     defenderRuntime,
@@ -571,7 +579,7 @@ export function evaluateSlotMatchup(
   // 급소(ver.1.9 6-2): 공격 쪽 랭크는 음수를 0으로(속임수는 방어자 공격 랭크가 공격 랭크라 같은 쪽), 방어 랭크는 양수를 0으로
   const criticalApplies = critical && !defenderAbility?.preventsCritsAgainstSelf;
   const critMultiplier = criticalApplies ? (attackerAbility?.critDamageMultiplier ?? CRITICAL_DAMAGE_MULTIPLIER) : 1;
-  const rawOffensePower = computeOffensePower(attackerRealStats, attackerForm.types, effectiveMoveFinal, {
+  const rawOffensePower = computeOffensePower(attackerRealStats, offenseTypes(attackerForm.types, attackerAbility, effectiveMoveFinal, attackerTypeToMoveType), effectiveMoveFinal, {
     abilityMultiplier:
       (manualAbilityMultiplier ?? abilityOffenseMultiplier) * rivalryMultiplier * hustleMultiplier * extraOffenseMultiplier * critMultiplier,
     itemMultiplier: itemMultiplier ?? autoItemMultiplier,
@@ -717,6 +725,8 @@ export interface SoloOffensePowerOptions {
   attackerStatLoweredThisTurn?: boolean;
   /** ver.1.9 6-2 — 급소 가정(음수 공격 랭크 무시·×1.5, 스나이퍼 2.25). 상대가 없으니 방어측 랭크·벽·급소 방지 특성은 모른다 */
   critical?: boolean;
+  /** 2.2 F1 — evaluateSlotMatchup의 attackerTypeToMoveType과 같은 뜻 */
+  attackerTypeToMoveType?: boolean;
   extraOffenseMultiplier?: number;
 }
 
@@ -754,6 +764,7 @@ export function computeSoloOffensePower(
     attackerMoveFailedLastTurn,
     attackerStatLoweredThisTurn,
     critical = false,
+    attackerTypeToMoveType,
     extraOffenseMultiplier = 1,
   } = options;
 
@@ -905,7 +916,7 @@ export function computeSoloOffensePower(
       ? attackerAbility.hustleAttackMultiplier
       : 1;
 
-  return computeOffensePower(attackerRealStats, attackerForm.types, effectiveMoveFinal, {
+  return computeOffensePower(attackerRealStats, offenseTypes(attackerForm.types, attackerAbility, effectiveMoveFinal, attackerTypeToMoveType), effectiveMoveFinal, {
     abilityMultiplier: abilityOffenseMultiplier * hustleMultiplier * extraOffenseMultiplier * critMultiplier,
     itemMultiplier: autoItemMultiplier,
     weatherMultiplier: autoWeatherDamageMultiplier,
