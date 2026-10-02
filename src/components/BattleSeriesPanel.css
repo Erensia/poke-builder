@@ -1,0 +1,78 @@
+/* 연속 대전 패널 (2.2 B2) */
+.battle-series {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.6rem 0.85rem;
+  margin-bottom: 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-2);
+  font-size: 0.8rem;
+}
+
+.battle-series-text {
+  flex: 1 1 18rem;
+  color: var(--text-muted);
+}
+
+.battle-series-text strong {
+  color: var(--text);
+}
+
+.battle-series.is-summary {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.battle-series-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.battle-series-head span {
+  flex: 1;
+  color: var(--text-muted);
+}
+
+.battle-series-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  gap: 0.3rem 0.8rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.battle-series-list li {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+}
+
+.battle-series-no {
+  width: 1.4rem;
+  color: var(--text-muted);
+  text-align: right;
+}
+
+.battle-series-style {
+  flex: 1;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+}
+
+.battle-series-result {
+  font-weight: 700;
+}
+
+.battle-series-list li.is-a .battle-series-result {
+  color: var(--violet);
+}
+
+.battle-series-list li.is-b .battle-series-result {
+  color: #d64545;
+}

@@ -2538,6 +2538,21 @@ try {
     check("B6 같은 포켓몬만 저장돼 있어도 1마리만 쓰고 보충", dup.fromSaved === 1 && valid(dup.slots));
     check("B6 입력 슬롯을 변형하지 않음(사본 반환)", JSON.stringify(savedFew) === frozen && rs.buildRandomPartyFromSlots(savedFew, pool, rng).slots.every((s) => !savedFew.includes(s)));
   }
+  // 2.2 B2: 연속 대전 — 대진표는 샘플 파티를 한 번씩 전부(원본 불변), 전적 요약은 승·패·무 합이 판 수와 일치
+  {
+    const bs = await server.ssrLoadModule("/src/lib/battleSeries.ts");
+    const before = data.SAMPLE_PARTIES.map((p) => p.id).join(",");
+    let seed = 11;
+    const rng = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 2 ** 32);
+    const order = bs.shuffleOpponents(data.SAMPLE_PARTIES, rng);
+    check(
+      "B2 대진표 = 샘플 파티 전부 한 번씩, 원본 순서 불변",
+      order.length === data.SAMPLE_PARTIES.length && new Set(order.map((p) => p.id)).size === data.SAMPLE_PARTIES.length && data.SAMPLE_PARTIES.map((p) => p.id).join(",") === before,
+    );
+    const sum = bs.summarizeSeries([{ winner: "a" }, { winner: "a" }, { winner: "b" }, { winner: "draw" }, { winner: "a" }]);
+    check("B2 전적 요약 3승 1패 1무", sum.wins === 3 && sum.losses === 1 && sum.draws === 1, JSON.stringify(sum));
+    check("B2 빈 전적 요약", JSON.stringify(bs.summarizeSeries([])) === JSON.stringify({ wins: 0, losses: 0, draws: 0 }));
+  }
   // 상대가 나에게 데미지를 줄 수단이 없을 때(+Infinity 점수)
   {
     const st = battle([mon("팬텀", ["10만볼트"])], [mon("한카리아스", ["지진"])]);

@@ -10,6 +10,8 @@ import { SlotPresetsModal } from "./SlotPresetsModal";
 import { PartyPresetsModal } from "./PartyPresetsModal";
 import { SamplePartiesModal } from "./SamplePartiesModal";
 import { buildRandomPartyFromSlots } from "../lib/randomSlotParty";
+import { BattleSeriesPanel } from "./BattleSeriesPanel";
+import { useBattleSeries } from "../hooks/useBattleSeries";
 import { CosmeticFormPickerModal } from "./CosmeticFormPickerModal";
 import { BattleTurnLog } from "./BattleTurnLog";
 import { useBattleSetup, BATTLE_SELECT_SIZE } from "../hooks/useBattleSetup";
@@ -474,7 +476,10 @@ function BattleBoard({
   aiSide,
   aiThinking,
   learnedBattles,
+  seriesNext,
 }: {
+  /** 연속 대전(2.2 B2) 진행 중이면 결과 배너의 "대전 이어하기"를 이 라벨의 "다음 상대" 버튼으로 바꾼다 */
+  seriesNext: { label: string; onNext: () => void } | null;
   /** 컴퓨터(배틀 AI)가 조작하는 편. 사람이 양쪽 다 조작하면 null */
   aiSide: Side | null;
   /** AI가 이번 턴 행동을 계산하는 중(ver.2.0 2-B — Web Worker) — 점 세 개 표시, 턴 진행 버튼 잠금 */
@@ -1092,8 +1097,8 @@ function BattleBoard({
       <>
         <div className={`battle-result-banner${winner === "draw" ? " is-draw" : ""}`}>
           {winner === "draw" ? "🤝 무승부! 양쪽 다 기절했어요" : `🏆 ${fighterLabel(battleState, winner)} 승리!`}
-          <button type="button" className="battle-reset-button" onClick={resetToSetup}>
-            대전 이어하기
+          <button type="button" className="battle-reset-button" onClick={seriesNext ? seriesNext.onNext : resetToSetup}>
+            {seriesNext ? seriesNext.label : "대전 이어하기"}
           </button>
         </div>
         {learnedBattles !== null && (
@@ -1175,6 +1180,8 @@ export function BattleLogPage() {
   const [showAiMemory, setShowAiMemory] = useState(false);
   /** 이번 대전을 학습했으면 누적 판 수(결과 배너 한 줄), 아니면 null */
   const [learnedBattles, setLearnedBattles] = useState<number | null>(null);
+  /** 연속 대전(2.2 B2) */
+  const series = useBattleSeries();
 
   const sideCtls = (side: Side) => (side === "a" ? setup.a : setup.b);
   const slotCtl = (side: Side, i: SlotIndex) => sideCtls(side)[i];
@@ -1337,6 +1344,14 @@ export function BattleLogPage() {
   const canProceed =
     !hasMovelessSlot && (["a", "b"] as const).every((side) => buildableIndices(side).length >= 1);
 
+  /** 연속 대전 시작은 AI 상대 + 내 쪽에 빌드가 있을 때만 — 이유를 버튼 툴팁으로 보여 준다 */
+  const seriesStartBlockedReason = !aiOpponent
+    ? "\"AI가 조작\"을 켜야 연속 대전을 할 수 있어요"
+    : buildableIndices("a").length < 1
+      ? "내 파티에 포켓몬을 먼저 구성해 주세요"
+      : movelessIndices("a").length > 0
+        ? "기술이 없는 슬롯이 있어요"
+        : null;
   /** 셋업 화면 VS 버튼이 무엇을 하는지 (선출 화면을 거치면 "다음 (선출)", 아니면 바로 "대전 시작") */
   // AI 편 선출은 자동(비공개)이라, 내 편이 고를 게 없으면 바로 대전
   const proceedLabel = needsSelection("a") || (needsSelection("b") && !aiOpponent) ? "다음 (선출)" : "대전 시작";
@@ -1657,6 +1672,7 @@ export function BattleLogPage() {
     });
     // 1-C: AI 대전이면 이번 대전 관측을 누적 학습에 합친다("대전에서 계속 학습"이 꺼져 있으면 합치지 않음)
     if (aiSide && aiMemory.commit(aiSessionRef.current)) setLearnedBattles(aiMemory.memory.battles + 1);
+    series.record(winner === "draw" ? "draw" : winner);
     aiSessionRef.current = emptyOpponentMemory();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [winner]);
@@ -1676,6 +1692,10 @@ export function BattleLogPage() {
           배틀비디오{battleVideos.videos.length > 0 && ` (${battleVideos.videos.length})`}
         </button>
       </header>
+
+      {!battleState && !selecting && (
+        <BattleSeriesPanel series={series} startBlockedReason={seriesStartBlockedReason} onStart={(first) => loadSample("b", first)} />
+      )}
 
       {!battleState && !selecting && (
         <BattleSetupScreen
@@ -1743,6 +1763,19 @@ export function BattleLogPage() {
           aiSide={aiSide}
           aiThinking={aiThinking}
           learnedBattles={learnedBattles}
+          seriesNext={
+            series.state && !series.state.finished
+              ? {
+                  label: series.current ? "다음 상대 →" : "연속 대전 요약 보기",
+                  onNext: () => {
+                    if (series.current) loadSample("b", series.current);
+                    resetToSetup();
+                  },
+                }
+              : series.state
+                ? { label: "연속 대전 요약 보기", onNext: resetToSetup }
+                : null
+          }
         />
       )}
 
