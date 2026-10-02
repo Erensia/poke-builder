@@ -469,6 +469,7 @@ function runActionPhase(ctx: RunTurnContext): RunTurnOutcome | RunTurnPaused {
     // 안 한다. 유저 선택이 없는 엔진 내부 처리라 pendingPivot 같은 일시정지 없이 여기서 즉시 끝낸다.
     // 레드카드로 이미 이번 피격에 교체가 확정됐으면(didSwitch[oppKey]는 없지만 방향이 반대라
     // 무관 — 레드카드는 key를, 이 블록은 oppKey를 움직인다) 그대로 진행해도 안전하다.
+    let oppForcedOut = false;
     if (
       mv.forcesTargetSwitch &&
       !action.blockedReason &&
@@ -509,15 +510,17 @@ function runActionPhase(ctx: RunTurnContext): RunTurnOutcome | RunTurnPaused {
       // 아직 안 움직였다면 이번 턴 행동을 못 하게 막는다(끌려나온 포켓몬). 우선도 -6이라 대개
       // 상대는 이미 움직인 뒤라 이 플래그는 무해하게 무시된다.
       ctx.didSwitch[oppKey] = true;
+      oppForcedOut = true;
     }
 
     // 위기회피(Emergency Exit): 이번 공격으로 방어측 HP가 절반 이하로 떨어졌고 방어측에 살아있는
     // 예비가 있으며 도망봉인·뿌리박기가 아니면 — 유턴류와 같은 pause 흐름으로 방어측을 물러나게
-    // 한다(유저가 나올 포켓몬을 고른다). 드래곤테일 등으로 이미 이번 턴 교체됐으면(didSwitch) 스킵.
+    // 한다(유저가 나올 포켓몬을 고른다). 드래곤테일 등으로 이번 피격에 이미 교체됐으면(oppForcedOut) 스킵.
+    // didSwitch[oppKey]는 턴 시작 자발 교체로도 서므로(그 턴 행동 생략용) 이 가드엔 쓰면 안 된다.
     if (
       action.triggersDefenderEmergencyExit &&
       !isFainted(state[oppKey]) &&
-      !ctx.didSwitch[oppKey] &&
+      !oppForcedOut &&
       hasLivingReserve(sideOf(state, oppKey)) &&
       !isForcedSwitchBlocked(state[oppKey]) &&
       !isTrappedFromSwitching(state[oppKey])
@@ -545,7 +548,7 @@ function runActionPhase(ctx: RunTurnContext): RunTurnOutcome | RunTurnPaused {
 
     // 탈출버튼(Item.exitsFieldOnHit): 데미지를 받은 방어측(홀더)이 이 도구를 지녔으면 HP 문턱
     // 없이(위기회피와 달리) 곧바로 물러난다 — 유턴류·위기회피와 같은 pause 흐름. 이미 다른
-    // 강제 교체가 확정됐으면(드래곤테일·위기회피) didSwitch로 걸러진다.
+    // 강제 교체가 확정됐으면(드래곤테일·위기회피) oppForcedOut으로 걸러진다.
     {
       const holder = state[oppKey];
       const holderAbility = holder.effectiveAbilityId ? getAbility(holder.effectiveAbilityId) : undefined;
@@ -563,7 +566,7 @@ function runActionPhase(ctx: RunTurnContext): RunTurnOutcome | RunTurnPaused {
         !action.hitNegatedByAbilityName &&
         !action.abilityAbsorbAbilityName &&
         !isFainted(holder) &&
-        !ctx.didSwitch[oppKey] &&
+        !oppForcedOut &&
         hasLivingReserve(sideOf(state, oppKey)) &&
         !isForcedSwitchBlocked(holder) &&
         !isTrappedFromSwitching(holder)

@@ -2439,6 +2439,58 @@ try {
     }
     void sw;
   }
+  // 2.2 E1: 위기회피·탈출버튼은 상대가 턴 시작에 교체해 들어온 직후 맞아도 발동해야 한다(didSwitch 재사용 버그)
+  {
+    const rt = await server.ssrLoadModule("/src/lib/battle/runTurn.ts");
+    const hit = { kind: "move", move: data.getMove("막치기") };
+    const idle = { kind: "move", move: data.getMove("칼춤") };
+    // 막치기 한 방이 HP를 절반 위→절반 이하(기절 아님)로 만들도록 갑주무사 HP를 맞춘다
+    const setup = (ability, item) => {
+      const st = battle(
+        [mon("한카리아스", ["막치기"])],
+        [mon("아머까오", ["칼춤"]), mon("갑주무사", ["칼춤"], ability, item, pts({ hp: 32 })), mon("메타그로스", ["칼춤"])],
+      );
+      const probe = structuredClone(st);
+      probe.sideB.activeIndex = 1;
+      const po = rt.runTurn(probe, hit, idle, () => 0.5);
+      const dmg = (po.result ?? po.partialResult).actions.find((a) => a.actor === "a").damage;
+      const f = st.sideB.party[1];
+      f.currentHp = Math.floor(f.maxHp / 2) + 1;
+      return { st, ok: dmg >= 1 && dmg < f.currentHp };
+    };
+    const exitCase = (ability, item, bAction, label, flag) => {
+      const { st, ok } = setup(ability, item);
+      if (bAction.kind === "move") st.sideB.activeIndex = 1;
+      const out = rt.runTurn(st, hit, bAction, () => 0.5);
+      const sw = out.awaitingSelfSwitch;
+      const resumed = sw ? rt.resumeTurn(out._ctx, 2) : null;
+      check(label, ok && sw?.side === "b" && !!sw[flag] && resumed?.nextState.sideB.activeIndex === 2, `세팅 ${ok} 멈춤 ${JSON.stringify(sw)} 재개 후 ${resumed?.nextState.sideB.activeIndex}`);
+    };
+    exitCase("위기회피", null, { kind: "switch", toIndex: 1 }, "E1-1 턴 시작 교체로 들어온 위기회피 → 맞으면 교체창", "emergencyExit");
+    exitCase("위기회피", null, idle, "E1-2 가만히 있던 위기회피 → 교체창(회귀)", "emergencyExit");
+    exitCase(null, "탈출버튼", { kind: "switch", toIndex: 1 }, "E1-3 턴 시작 교체로 들어온 탈출버튼 → 맞으면 교체창", "ejectItemName");
+    // 위기회피가 발동하는 피격에서는 오랭열매를 먹지 않는다(포챔스 확인) — 나갈 수 없으면(예비 없음) 정상 발동
+    {
+      const { st, ok } = setup("위기회피", "오랭열매");
+      const out = rt.runTurn(st, hit, { kind: "switch", toIndex: 1 }, () => 0.5);
+      const held = out.nextState.sideB.party[1];
+      check("E1-4 위기회피 발동 → 오랭열매 미소비", ok && !!out.awaitingSelfSwitch?.emergencyExit && held.currentItemId === "오랭열매" && !held.itemConsumed, `멈춤 ${!!out.awaitingSelfSwitch} 도구 ${held.currentItemId} 소비 ${held.itemConsumed}`);
+      const solo = battle([mon("한카리아스", ["막치기"])], [mon("갑주무사", ["칼춤"], "위기회피", "오랭열매", pts({ hp: 32 }))]);
+      solo.b.currentHp = Math.floor(solo.b.maxHp / 2) + 1;
+      const so = rt.runTurn(solo, hit, idle, () => 0.5);
+      check("E1-5 예비 없어 못 나가면 오랭열매 정상 발동", !so.awaitingSelfSwitch && so.nextState.b.itemConsumed === true, `멈춤 ${!!so.awaitingSelfSwitch} 소비 ${so.nextState.b.itemConsumed}`);
+    }
+    // 드래곤테일로 이미 강제 교체된 위기회피는 이중 교체 없이 끝난다
+    {
+      const st = battle(
+        [mon("한카리아스", ["드래곤테일"])],
+        [mon("갑주무사", ["칼춤"], "위기회피", null, pts({ hp: 32 })), mon("메타그로스", ["칼춤"])],
+      );
+      st.sideB.party[0].currentHp = Math.floor(st.sideB.party[0].maxHp / 2) + 1;
+      const out = rt.runTurn(st, { kind: "move", move: data.getMove("드래곤테일") }, idle, () => 0.5);
+      check("E1-6 드래곤테일 강제 교체 → 위기회피 이중 교체 없음", !out.awaitingSelfSwitch, JSON.stringify(out.awaitingSelfSwitch));
+    }
+  }
   // 상대가 나에게 데미지를 줄 수단이 없을 때(+Infinity 점수)
   {
     const st = battle([mon("팬텀", ["10만볼트"])], [mon("한카리아스", ["지진"])]);
