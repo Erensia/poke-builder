@@ -11,16 +11,10 @@ function consecutiveSameMoveMultiplier(item: Item | undefined, streak: number): 
 }
 
 /**
- * 공격측이 지닌 도구가 이번 기술에 주는 위력 배율. 실크스카프류(타입 일치)·힘의머리띠/박식안경
- * (분류 일치)·생명의구슬(전체)·달인의띠(효과가 굉장했을 때)·메트로놈(연속 사용)을 전부 곱해서 반환한다
- * — 한 도구가 동시에 여러 조건에 해당하는 경우는 없어서 곱해도 안전하다.
+ * 공격측이 지닌 도구가 이번 기술에 주는 "위력 단계" 배율 — 실크스카프류(타입 일치)·힘의머리띠/박식안경(분류 일치).
+ * 기본 데미지 안에서 위력에 곱해진다(2.4 B3 사례 ⑨ 용의이빨).
  */
-export function getItemOffenseMultiplier(
-  item: Item | undefined,
-  move: Move,
-  typeEffectiveness: number,
-  sameMoveStreak: number,
-): number {
+export function getItemBasePowerMultiplier(item: Item | undefined, move: Move): number {
   if (!item) return 1;
   let multiplier = 1;
   if (item.moveTypeMultiplier && move.type === item.moveTypeMultiplier.type) {
@@ -29,14 +23,37 @@ export function getItemOffenseMultiplier(
   if (item.moveCategoryMultiplier && move.category === item.moveCategoryMultiplier.category) {
     multiplier *= item.moveCategoryMultiplier.multiplier;
   }
-  if (item.powerMultiplier) {
-    multiplier *= item.powerMultiplier;
-  }
-  if (item.superEffectiveMultiplier && typeEffectiveness >= 2) {
-    multiplier *= item.superEffectiveMultiplier;
-  }
+  return multiplier;
+}
+
+/**
+ * 공격측이 지닌 도구가 "최종 보정" 단계에 주는 배율 — 생명의구슬(전체)·달인의띠(효과가 굉장했을 때)·메트로놈(연속 사용).
+ * 상성까지 끝난 데미지에 곱해진다(2.4 B3 사례 ① 생명의구슬; 달인의띠·메트로놈은 같은 단계로 두되 미확인).
+ */
+export function getItemFinalMultiplier(
+  item: Item | undefined,
+  typeEffectiveness: number,
+  sameMoveStreak: number,
+): number {
+  if (!item) return 1;
+  let multiplier = 1;
+  if (item.powerMultiplier) multiplier *= item.powerMultiplier;
+  if (item.superEffectiveMultiplier && typeEffectiveness >= 2) multiplier *= item.superEffectiveMultiplier;
   multiplier *= consecutiveSameMoveMultiplier(item, sameMoveStreak);
   return multiplier;
+}
+
+/**
+ * 공격측이 지닌 도구가 이번 기술에 주는 총 배율(위력 단계 × 최종 보정). 곱한 값만 필요한 결정력·AI 근사식이 쓴다 —
+ * 정수 데미지 공식은 getItemBasePowerMultiplier / getItemFinalMultiplier를 따로 쓴다.
+ */
+export function getItemOffenseMultiplier(
+  item: Item | undefined,
+  move: Move,
+  typeEffectiveness: number,
+  sameMoveStreak: number,
+): number {
+  return getItemBasePowerMultiplier(item, move) * getItemFinalMultiplier(item, typeEffectiveness, sameMoveStreak);
 }
 
 /**

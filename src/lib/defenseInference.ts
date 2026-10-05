@@ -7,10 +7,10 @@ import type { FieldKind } from "../types/field";
 import type { StatusCondition } from "../types/status";
 import { ABILITIES, ITEMS, NATURES, getAbility, getPokemon } from "./data";
 import { getEffectiveForm } from "./pokemonForm";
-import { computeStatusAttackMultiplier, ignoresBurnAttackPenalty } from "./statusConditions";
+import { burnDamageMultiplier, ignoresBurnAttackPenalty, statusedAttackBoost } from "./statusConditions";
+import { damageRollTotals } from "./damageFormula";
 import { evaluateSlotMatchup, type EvaluatorSlot, type DamageParts } from "./matchupEvaluator";
 import { EMPTY_ABILITY_POINTS } from "../types/party";
-import { LEVEL_50_TERM, DAMAGE_ROLL_STEPS } from "./battlePower";
 import { MAX_ABILITY_POINTS_PER_STAT, MAX_ABILITY_POINTS_TOTAL } from "./statCalculator";
 
 /**
@@ -209,11 +209,16 @@ function prepareObservations(input: InferenceInput): { prepared: PreparedObserva
       defenderItemConsumed: itemConsumed,
       applyMoveOwnStatChanges: false,
       attackerStatus: attackerStatus ?? null,
-      extraOffenseMultiplier: computeStatusAttackMultiplier(
+      // 근성류 상승은 위력 단계, 화상 ×0.5는 최종 단계(2.4 B3)
+      extraOffenseMultiplier: statusedAttackBoost(
+        attackerStatus ?? null,
+        obs.move.category,
+        attacker.ability ? getAbility(attacker.ability)?.physicalAttackMultiplierWhenStatused : undefined,
+      ),
+      finalOffenseMultiplier: burnDamageMultiplier(
         attackerStatus ?? null,
         obs.move.category,
         ignoresBurnAttackPenalty(attacker.ability ?? undefined, obs.move.id),
-        attacker.ability ? getAbility(attacker.ability)?.physicalAttackMultiplierWhenStatused : undefined,
       ),
     });
     if (!res || !res.damageParts) {
@@ -231,18 +236,10 @@ function prepareObservations(input: InferenceInput): { prepared: PreparedObserva
   return { prepared, errors };
 }
 
-/** 방어측 방어 스탯 D에서 16단계 난수 데미지를 낸다 (computeDamage와 같은 식). 중복은 제거한다 */
+/** 방어측 방어 스탯 D에서 16단계 난수 데미지를 낸다 (엔진 computeDamage·난수표와 같은 damageFormula 정수식). 중복은 제거한다 */
 function damageRolls(parts: DamageParts, defenseRealStat: number): number[] {
-  const defenseStat = defenseRealStat * parts.defenseRankMultiplier;
-  const base = Math.floor(Math.floor((LEVEL_50_TERM * parts.power * parts.attackTerm) / defenseStat) / 50) + 2;
-  const out = new Set<number>();
-  for (let k = 0; k < DAMAGE_ROLL_STEPS; k++) {
-    const roll = (85 + k) / 100;
-    // 타입 면역(상성 0)은 prepareObservations에서 걸러져 여기 오지 않는다
-    const modifier = (parts.modifier * parts.typeEffectiveness * roll) / parts.bulkMultiplier;
-    out.add(Math.max(1, Math.floor(base * modifier + 1e-9)));
-  }
-  return [...out];
+  // 타입 면역(상성 0)은 prepareObservations에서 걸러져 여기 오지 않는다
+  return [...new Set(damageRollTotals(parts, defenseRealStat))];
 }
 
 /** 후보 하나(최대 HP + 관측별 데미지 후보)가 관측 전체와 맞는지 */

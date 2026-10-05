@@ -3,6 +3,7 @@ import type { PokemonType } from "../types/pokemon-type";
 import type { BaseStats } from "../types/stats";
 import type { Ability } from "../types/ability";
 import type { PokemonGender } from "../types/pokemon";
+import { integerHitDamage } from "./damageFormula";
 import { BATTLE_STAT_KEYS, NEUTRAL_STAGES, type StatStages } from "../types/battleStats";
 
 /**
@@ -485,8 +486,10 @@ export interface DamageOptions {
   defenderStages?: StatStages;
   /** 자속보정 배율. 기본 1.5, 적응력이면 2.0 */
   stabMultiplier?: number;
-  /** 방어 관련 특성/도구 배율 (두꺼운지방 등). computeBulkPower의 bulkMultiplier와 같은 값 — 데미지는 반대로 나눈다 */
+  /** 방어 스탯 단계 배율(두꺼운지방·날씨 방어 보정 등) — 방어 스탯에 곱한다. 최종 단계 배율(벽·열매·하드록)은 finalMultiplier로 */
   bulkMultiplier?: number;
+  /** 최종 보정 단계(상성 뒤)에 곱하는 데미지 배율 — 생명의구슬·화상·벽·하드록·반감 열매 등. 생략하면 1 */
+  finalMultiplier?: number;
   /** 급소 여부. true면 급소 배율을 곱하고, 방어측 랭크 상승/공격측 랭크 하락은 무시한다(본가 규칙) */
   isCritical?: boolean;
   /** 급소 데미지 배율 오버라이드(스나이퍼=2.25). 생략하면 기본 CRITICAL_DAMAGE_MULTIPLIER(1.5). */
@@ -507,7 +510,7 @@ export interface DamageResult {
  * evaluateMatchup(결정력 vs 내구력 비율로 5단계만 판정)과 달리, 대전 로그에 "47%의 데미지를
  * 입었다" 같은 문구를 넣을 때 필요한 실제 숫자를 낸다. status 기술이면 null.
  *
- * 공식: floor(floor(LEVEL_50_TERM × 위력 × 공격/방어) ÷ 50 + 2) × (자속×상성×특성×도구×날씨×급소×난수÷방어배율)
+ * 공식: damageFormula.ts의 단계별 정수 공식(위력 보정 → 기본 데미지 → 날씨 → 급소 → 난수 → 자속 → 상성 → 최종 보정, 각 단계 내림)
  */
 export function computeDamage(
   attackerRealStats: BaseStats,
@@ -528,6 +531,7 @@ export function computeDamage(
     defenderStages = NEUTRAL_STAGES,
     stabMultiplier = 1.5,
     bulkMultiplier = 1,
+    finalMultiplier = 1,
     isCritical = false,
     critDamageMultiplier = CRITICAL_DAMAGE_MULTIPLIER,
     randomRoll = MAX_DAMAGE_ROLL,
@@ -548,26 +552,28 @@ export function computeDamage(
   const defenseMultiplier = rankStageMultiplier(isCritical ? Math.min(0, defenseStage) : defenseStage);
 
   const attackStat = rawAttackStat * attackMultiplier;
-  const defenseStat = rawDefenseStat * defenseMultiplier;
 
   const stab = move.type && attackerTypes.includes(move.type) ? stabMultiplier : 1;
-  const critMultiplier = isCritical ? critDamageMultiplier : 1;
 
-  const base = Math.floor(Math.floor((LEVEL_50_TERM * move.power * attackStat) / defenseStat) / 50) + 2;
-
-  const modifier =
-    (stab *
-      typeEffectiveness *
-      abilityMultiplier *
-      itemMultiplier *
-      weatherMultiplier *
-      fieldMultiplier *
-      critMultiplier *
-      randomRoll) /
-    bulkMultiplier;
-
-  // 타입 상성 0배(면역)면 데미지도 반드시 0이어야 한다 — 아래 최소 1 보정은 면역이 아닌 경우에만 적용
-  const damage = typeEffectiveness === 0 ? 0 : Math.max(1, Math.floor(base * modifier));
+  // 정수 데미지 공식(damageFormula.ts, 2.4 B3). 위력 단계(특성·도구·필드)·날씨·급소·난수·자속·상성·최종 보정을 단계별로 내린다.
+  // 타입 상성 0배(면역)면 0, 아니면 최소 1 — integerHitDamage가 처리한다.
+  const damage = integerHitDamage(
+    {
+      attackTerm: attackStat,
+      defenseKey: "def",
+      defenseRankMultiplier: defenseMultiplier,
+      baseMultiplier: abilityMultiplier * itemMultiplier * fieldMultiplier,
+      bulkMultiplier,
+      weatherMultiplier,
+      critMultiplier: isCritical ? critDamageMultiplier : 1,
+      stabMultiplier: stab,
+      typeEffectiveness,
+      finalMultiplier,
+    },
+    move.power,
+    rawDefenseStat,
+    randomRoll,
+  );
 
   return {
     damage,

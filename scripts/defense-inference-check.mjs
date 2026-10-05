@@ -24,6 +24,7 @@ try {
   const bp = await server.ssrLoadModule("/src/lib/battlePower.ts");
   const stat = await server.ssrLoadModule("/src/lib/statCalculator.ts");
   const form = await server.ssrLoadModule("/src/lib/pokemonForm.ts");
+  const fm = await server.ssrLoadModule("/src/lib/damageFormula.ts");
 
   // 결정적 난수
   let seed = 12345;
@@ -52,30 +53,30 @@ try {
     const res = ev.evaluateSlotMatchup(atk, move, def, { applyMoveOwnStatChanges: false });
     if (!res?.damageParts) continue;
     const parts = res.damageParts;
+    if (parts.hitPowers.length > 1) continue; // 다단히트는 역산 대상 아님(엔진도 타별 호출)
     const aPoke = data.getPokemon(atk.pokemonId);
     const dPoke = data.getPokemon(def.pokemonId);
     const aForm = form.getEffectiveForm(aPoke, atk);
     const dForm = form.getEffectiveForm(dPoke, def);
     const aReal = stat.computeRealStats(aForm.baseStats, atk.points, atk.nature);
     const dReal = stat.computeRealStats(dForm.baseStats, def.points, def.nature);
-    // 내가 만든 식
-    const defenseStat = dReal[parts.defenseKey] * parts.defenseRankMultiplier;
-    const base = Math.floor(Math.floor((bp.LEVEL_50_TERM * parts.power * parts.attackTerm) / defenseStat) / 50) + 2;
     for (const roll of [0.85, 0.93, 1.0]) {
-      const mine = parts.typeEffectiveness === 0 ? 0 : Math.max(1, Math.floor(base * ((parts.modifier * parts.typeEffectiveness * roll) / parts.bulkMultiplier) + 1e-9));
-      // 엔진: 자속·상성·나머지 배율을 그대로 넘긴다
-      const stab = move.type && aForm.types.includes(move.type) ? 1.5 : 1;
+      // 역산이 쓰는 식(damageFormula)
+      const mine = fm.integerTotalDamage(parts, dReal[parts.defenseKey], roll);
+      // 엔진: 단계별 배율을 그대로 넘긴다
       // 위력·분류는 evaluateSlotMatchup이 확정한 값(애크러뱃 ×2, 솔라빔 절반, 셸암즈 분류 등)으로 맞춰 넘긴다
       const engineMove = {
         ...move,
-        power: parts.power,
+        power: parts.hitPowers[0],
         category: move.dynamicCategoryByHigherDamage ? (parts.defenseKey === "def" ? "physical" : "special") : move.category,
       };
       const engine = bp.computeDamage(aReal, dReal, aForm.types, engineMove, {
         typeEffectiveness: parts.typeEffectiveness,
-        abilityMultiplier: parts.modifier / stab,
-        stabMultiplier: stab,
+        abilityMultiplier: parts.baseMultiplier,
+        weatherMultiplier: parts.weatherMultiplier,
+        stabMultiplier: parts.stabMultiplier,
         bulkMultiplier: parts.bulkMultiplier,
+        finalMultiplier: parts.finalMultiplier,
         randomRoll: roll,
       });
       if (!engine) continue;
@@ -92,10 +93,8 @@ try {
       const res = ev.evaluateSlotMatchup(atk, move, defTrue, { applyMoveOwnStatChanges: false });
       const p = res?.damageParts;
       if (!p || p.typeEffectiveness === 0) continue;
-      const defenseStat = dReal[p.defenseKey] * p.defenseRankMultiplier;
-      const base = Math.floor(Math.floor((bp.LEVEL_50_TERM * p.power * p.attackTerm) / defenseStat) / 50) + 2;
       const roll = (85 + Math.floor(rnd() * 16)) / 100;
-      const damage = Math.max(1, Math.floor(base * ((p.modifier * p.typeEffectiveness * roll) / p.bulkMultiplier) + 1e-9));
+      const damage = fm.integerTotalDamage(p, dReal[p.defenseKey], roll);
       if (damage >= hp) continue;
       const observation = { move, critical: false, before: inf.displayPercent(hp, dReal.hp), after: inf.displayPercent(hp - damage, dReal.hp) };
       return { observation, damage };
