@@ -108,15 +108,17 @@ export function resolveMoveContext(
             (effectiveMove.type === "땅" && defenderItem?.grantsGroundImmunity)) &&
           !bypassImmunity
         );
-  // 프리즈드라이: 상대가 이 타입이면 상성표를 무시하고 강제로 이 배율을 쓴다. 단, 방어측이
-  // 스스로 얻은 완전 면역(absorbsType·grantsImmunityToTypes)이 이미 걸려있으면 면역이 우선이다
-  // — 저수 같은 특성을 가진 물타입 상대에게 프리즈드라이를 써도 여전히 무효화돼야 한다.
+  // 프리즈드라이: 상대가 이 타입이면 그 타입 칸만 이 배율로 치환하고, 나머지 타입은 상성표대로
+  // 곱한다(물/풀 → 2×2=4배, 물/불꽃 → 2×0.5=1배). 단, 방어측이 스스로 얻은 완전 면역
+  // (absorbsType·grantsImmunityToTypes)이 이미 걸려있으면 면역이 우선이다. 프리즈드라이는 얼음
+  // 타입 기술이라 이 면역은 얼음 타입을 막는 특성이 있을 때만 해당한다(저수는 물 기술 전용이라 무관).
+  const override = effectiveMove.overridesTypeEffectivenessFor;
   const typeEffectivenessOverride =
-    !absorbedByDefenderAbility &&
-    !grantsImmunity &&
-    effectiveMove.overridesTypeEffectivenessFor &&
-    defenderTypes.includes(effectiveMove.overridesTypeEffectivenessFor.type)
-      ? effectiveMove.overridesTypeEffectivenessFor.effectiveness
+    !absorbedByDefenderAbility && !grantsImmunity && override && defenderTypes.includes(override.type)
+      ? override.effectiveness *
+        (effectiveMove.type
+          ? getEffectiveness(effectiveMove.type, defenderTypes.filter((t) => t !== override.type), { bypassImmunity })
+          : 1)
       : undefined;
 
   // 방음: 소리 기술(classification "소리")은 데미지기·변화기 모두 방어측에게 통하지 않는다.
