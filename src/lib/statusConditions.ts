@@ -106,9 +106,25 @@ export function computeStatusAttackMultiplier(
   ignorePenalty = false,
   statusedPhysicalBoost = 1,
 ): number {
-  const boost = condition && moveCategory === "physical" ? statusedPhysicalBoost : 1;
-  if (ignorePenalty) return boost;
-  return (condition === "burn" && moveCategory === "physical" ? 0.5 : 1) * boost;
+  return statusedAttackBoost(condition, moveCategory, statusedPhysicalBoost) * burnDamageMultiplier(condition, moveCategory, ignorePenalty);
+}
+
+/** 근성류: 주 상태이상이면 물리 공격 ×boost. 정수 데미지 공식에서는 위력 단계에 곱한다 */
+export function statusedAttackBoost(
+  condition: StatusCondition | null,
+  moveCategory: MoveCategory | null,
+  statusedPhysicalBoost = 1,
+): number {
+  return condition && moveCategory === "physical" ? statusedPhysicalBoost : 1;
+}
+
+/** 화상의 물리 데미지 ×0.5. 정수 데미지 공식에서는 상성 뒤 최종 단계에 곱한다(2.4 B3 사례 ⑧) */
+export function burnDamageMultiplier(
+  condition: StatusCondition | null,
+  moveCategory: MoveCategory | null,
+  ignorePenalty = false,
+): number {
+  return !ignorePenalty && condition === "burn" && moveCategory === "physical" ? 0.5 : 1;
 }
 
 /** 마비는 스피드를 0.5배로 낮춘다 */

@@ -19,8 +19,13 @@ export interface MoveContext {
   effectiveMove: Move;
   /** 공격측 특성이 이 기술에 주는 배율 (테크니션/모래의힘/메가런처 등) */
   abilityOffenseMultiplier: number;
-  /** 방어측 특성이 이 기술을 받을 때 주는 배율 (두꺼운지방 등) */
+  /** 방어측 특성이 이 기술을 받을 때 주는 배율 (두꺼운지방 등) — finalDefenseMultiplier를 포함한 총 내구력 배율 */
   abilityDefenseMultiplier: number;
+  /**
+   * abilityDefenseMultiplier 중 "최종 보정" 단계에 곱해지는 몫(내구력 배율 형태, 하드록·필터 0.75 → 1/0.75). 없으면 1.
+   * 정수 데미지 공식은 총 배율 ÷ 이 값을 방어 스탯 단계에, 이 값을 최종 단계에 쓴다(2.4 B3 사례 ⑩).
+   */
+  finalDefenseMultiplier: number;
   /** 자속보정 배율. 기본 1.5, 적응력이면 2.0 */
   stabMultiplier: number;
   /** 상대 타입 상성 배율 (0/0.25/0.5/1/2/4). 기술에 타입이 없으면(필드기 등) 1 */
@@ -148,14 +153,17 @@ export function resolveMoveContext(
 
   // 하드록/필터/프리즘아머: 효과가 굉장한(상성 > 1) 공격이면 데미지를 이 배율(0.75)로 줄인다.
   // abilityDefenseMultiplier는 "내구력 배율"이라 데미지는 그 역수 — 데미지 ×0.75 = 내구력 ÷0.75.
+  let finalDefenseMultiplier = 1;
   if (defenderAbility?.reducesSuperEffectiveDamageMultiplier !== undefined && typeEffectiveness > 1) {
-    abilityDefenseMultiplier /= defenderAbility.reducesSuperEffectiveDamageMultiplier;
+    finalDefenseMultiplier = 1 / defenderAbility.reducesSuperEffectiveDamageMultiplier;
+    abilityDefenseMultiplier *= finalDefenseMultiplier;
   }
 
   return {
     effectiveMove,
     abilityOffenseMultiplier: abilityOffense.multiplier * auraMultiplier,
     abilityDefenseMultiplier,
+    finalDefenseMultiplier,
     stabMultiplier,
     typeEffectiveness,
     absorbedByDefenderAbility,

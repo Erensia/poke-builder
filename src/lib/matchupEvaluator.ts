@@ -7,13 +7,14 @@ import type { FieldKind } from "../types/field";
 import type { PokemonType } from "../types/pokemon-type";
 import type { BaseStats } from "../types/stats";
 import { getPokemon, getAbility, getItem } from "./data";
-import { getBerryDefenseResult, getItemOffenseMultiplier, getItemSpeedMultiplier } from "./itemEffects";
+import { getBerryDefenseResult, getItemBasePowerMultiplier, getItemFinalMultiplier, getItemOffenseMultiplier, getItemSpeedMultiplier } from "./itemEffects";
 import { getEffectiveForm, getEffectiveGender, type FormSource } from "./pokemonForm";
 import { computeRealStats } from "./statCalculator";
 import { applyMoveStatChanges } from "./statStages";
 import { getWeatherDamageMultiplier, getWeatherDefenseMultiplier, applyWeatherBall } from "./weatherEffects";
 import { applyFieldPulse, getFieldPowerMultiplier, getFieldDamageMultiplier } from "./fieldEffects";
 import { resolveMoveContext } from "./moveContext";
+import type { DamageParts } from "./damageFormula";
 import { resolveEffectiveDefenderAbility } from "./abilityModifiers";
 import { NEUTRAL_STAGES, type StatStages } from "../types/battleStats";
 import {
@@ -50,7 +51,10 @@ export interface SlotMatchupOptions {
   attackerStages?: StatStages;
   /** 이번 턴 전까지 누적된 방어측 랭크 상태. 기본은 전부 0랭크 */
   defenderStages?: StatStages;
-  /** 이 기술 자체가 이번 턴에 주는 랭크 변화까지 반영할지 (기본 true) */
+  /**
+   * 이 기술 자체가 주는 랭크 변화까지 반영할지 (기본 false). 데미지 기술의 부가 효과(상대 방어 하락·자신의 능력 하락·상승)는 데미지를
+   * 준 뒤에 적용되므로 이번 타의 계산에 넣으면 틀린다(2.4 B3 — 아쿠아브레이크 방어 −1이 먼저 걸려 데미지가 부풀던 문제). 연속 사용 가정용.
+   */
   applyMoveOwnStatChanges?: boolean;
   /**
    * 트리플악셀처럼 다단히트 기술일 때 몇 타까지 맞은 걸로 계산할지 (1부터 시작).
@@ -133,6 +137,11 @@ export interface SlotMatchupOptions {
   defenderRuntime?: RuntimeCombatant;
   /** 배틀 AI용 — 화상·타오르는불꽃 등 실전 전용 공격 배율(자동 계산 배율에 추가로 곱한다) */
   extraOffenseMultiplier?: number;
+  /**
+   * 최종 보정 단계(상성 뒤)에 곱하는 공격측 배율 — 화상(물리 ×0.5). 결정력에는 extraOffenseMultiplier와 똑같이 곱하고, 정수 데미지 공식
+   * (damageParts)에서는 위력 단계가 아니라 최종 단계로 들어간다(2.4 B3 사례 ⑧).
+   */
+  finalOffenseMultiplier?: number;
 }
 
 /** 실전 파이터의 현재 전투 값. evaluateSlotMatchup이 슬롯 원본 대신 이 값을 쓴다. */
@@ -176,24 +185,7 @@ function contraryMove(m: Move, invert: boolean | undefined): Move {
       };
 }
 
-/**
- * 정수 데미지 공식(computeDamage)을 방어측 스탯만 바꿔 다시 돌릴 수 있게 하는 조각(상대 실능치 역산용 — 2.1 C).
- * 데미지 = floor( (floor(floor(22 × power × attackTerm ÷ (방어 실능 × defenseRankMultiplier)) ÷ 50) + 2) × modifier × 난수 ÷ bulkMultiplier ).
- * modifier는 자속·특성·도구·날씨·필드·급소(상성 제외), typeEffectiveness는 따로. 다단히트·고정 데미지 기술은 이 공식이 맞지 않으니 쓰지 말 것.
- */
-export interface DamageParts {
-  power: number;
-  /** 공격 실능 × 랭크 배율 (급소면 공격측 음수 랭크 무시 반영) */
-  attackTerm: number;
-  modifier: number;
-  typeEffectiveness: number;
-  /** 방어측에서 이 기술이 읽는 스탯 */
-  defenseKey: "def" | "spd";
-  /** 방어 랭크 배율 (급소면 양수 랭크 무시 반영) */
-  defenseRankMultiplier: number;
-  /** computeBulkPower에 넘긴 방어 관련 배율 전부(특성·열매·날씨·스크린) — 데미지는 이 값으로 나눈다 */
-  bulkMultiplier: number;
-}
+export type { DamageParts } from "./damageFormula";
 
 export interface SlotMatchupResult {
   /** 상대 타입 상성까지 반영된 최종 결정력. 판정(verdict)은 이 값 기준 */
@@ -203,6 +195,8 @@ export interface SlotMatchupResult {
   bulkPower: number;
   /** 정수 데미지 공식 재계산용 조각 (위력이 없으면 생략) */
   damageParts?: DamageParts;
+  /** 방어측이 이 기술에서 읽는 방어 스탯 실능(damageParts.defenseKey) — 난수표가 damageParts와 함께 쓴다 */
+  defenseStat: number;
   verdict: MatchupVerdict;
   /**
    * 반감 열매(자바열매류)가 이 공격에 발동할 때 그 한 타의 내구력 배율(2, 숙성 4). 발동 안 하면 1. 열매는 첫 타에 소모되므로
@@ -241,7 +235,7 @@ export function evaluateSlotMatchup(
   const {
     attackerStages: baseAttackerStages = NEUTRAL_STAGES,
     defenderStages: baseDefenderStages = NEUTRAL_STAGES,
-    applyMoveOwnStatChanges = true,
+    applyMoveOwnStatChanges = false,
     weather,
     field,
     abilityMultiplier: manualAbilityMultiplier,
@@ -271,6 +265,7 @@ export function evaluateSlotMatchup(
     attackerRuntime,
     defenderRuntime,
     extraOffenseMultiplier = 1,
+    finalOffenseMultiplier = 1,
   } = options;
 
   const attackerForm = getEffectiveForm(attackerPokemon, attackerSlot);
@@ -483,6 +478,7 @@ export function evaluateSlotMatchup(
     effectiveMove,
     abilityOffenseMultiplier,
     abilityDefenseMultiplier: abilityDefense,
+    finalDefenseMultiplier,
     stabMultiplier,
     typeEffectiveness,
   } = resolveMoveContext(attackerAbility, fieldAdjustedMove, defenderForm.types, defenderAbility, {
@@ -579,9 +575,10 @@ export function evaluateSlotMatchup(
   // 급소(ver.1.9 6-2): 공격 쪽 랭크는 음수를 0으로(속임수는 방어자 공격 랭크가 공격 랭크라 같은 쪽), 방어 랭크는 양수를 0으로
   const criticalApplies = critical && !defenderAbility?.preventsCritsAgainstSelf;
   const critMultiplier = criticalApplies ? (attackerAbility?.critDamageMultiplier ?? CRITICAL_DAMAGE_MULTIPLIER) : 1;
-  const rawOffensePower = computeOffensePower(attackerRealStats, offenseTypes(attackerForm.types, attackerAbility, effectiveMoveFinal, attackerTypeToMoveType), effectiveMoveFinal, {
+  const attackTypesForStab = offenseTypes(attackerForm.types, attackerAbility, effectiveMoveFinal, attackerTypeToMoveType);
+  const rawOffensePower = computeOffensePower(attackerRealStats, attackTypesForStab, effectiveMoveFinal, {
     abilityMultiplier:
-      (manualAbilityMultiplier ?? abilityOffenseMultiplier) * rivalryMultiplier * hustleMultiplier * extraOffenseMultiplier * critMultiplier,
+      (manualAbilityMultiplier ?? abilityOffenseMultiplier) * rivalryMultiplier * hustleMultiplier * extraOffenseMultiplier * finalOffenseMultiplier * critMultiplier,
     itemMultiplier: itemMultiplier ?? autoItemMultiplier,
     weatherMultiplier: manualWeatherMultiplier ?? autoWeatherDamageMultiplier,
     fieldMultiplier: manualFieldMultiplier ?? autoFieldDamageMultiplier,
@@ -624,7 +621,20 @@ export function evaluateSlotMatchup(
     defensiveStatOverride: move.hitsDefensiveStat,
   });
 
-  const partsPower = effectiveMoveFinal.power;
+  // 정수 데미지 공식 조각(damageFormula.ts, 2.4 B3) — 위의 연속식 결정력·내구력과 같은 입력을 단계별로 나눠 담는다.
+  // 위력 단계: 특성·투쟁심·의욕·추가 배율·위력계 도구(타입 강화 등)·필드 / 날씨·급소·자속·상성은 각자 단계 / 최종 단계: 구슬·달인의띠·화상 ×,
+  // 벽·하드록·반감 열매는 내구력 배율의 역수로. 반감 열매는 첫 타에만(다단히트) 곱한다.
+  const defenseKey = move.hitsDefensiveStat ?? (resolvedCategory === "physical" ? "def" : "spd");
+  const unitPower = effectiveMove.power;
+  const hitPowers = (() => {
+    if (unitPower === null) return [];
+    if (move.multiHitPowers && multiHitCount) return move.multiHitPowers.slice(0, multiHitCount);
+    if (move.minHits !== undefined && move.maxHits !== undefined && multiHitCount) {
+      return Array<number>(Math.max(move.minHits, Math.min(move.maxHits, multiHitCount))).fill(unitPower);
+    }
+    if (effectiveMoveFinal.power !== effectiveMoveWithHits.power) return [unitPower, effectiveMoveFinal.power! - unitPower];
+    return [unitPower];
+  })();
   const attackTerm = computeAttackTerm(
     attackerRealStats,
     effectiveMoveFinal,
@@ -632,18 +642,27 @@ export function evaluateSlotMatchup(
     defenderRealStats,
     criticalApplies ? clampStages(defenderStages, "positive") : defenderStages,
   );
-  const defenseKey = move.hitsDefensiveStat ?? (resolvedCategory === "physical" ? "def" : "spd");
-  const partsDenominator = partsPower !== null ? attackTerm * partsPower : 0;
+  const useAutoDefense = manualBulkMultiplier === undefined;
+  const itemBaseMultiplier = itemMultiplier ?? getItemBasePowerMultiplier(attackerItem, effectiveMove);
+  const itemFinalMultiplier = itemMultiplier !== undefined ? 1 : getItemFinalMultiplier(attackerItem, typeEffectiveness, 1);
   const damageParts: DamageParts | undefined =
-    partsPower !== null && partsDenominator > 0
+    hitPowers.length > 0 && attackTerm > 0
       ? {
-          power: partsPower,
+          hitPowers,
           attackTerm,
-          modifier: rawOffensePower / partsDenominator,
-          typeEffectiveness,
           defenseKey,
           defenseRankMultiplier: rankStageMultiplier(bulkDefenderStages[defenseKey]),
-          bulkMultiplier: finalBulkMultiplier,
+          baseMultiplier:
+            (manualAbilityMultiplier ?? abilityOffenseMultiplier) * rivalryMultiplier * hustleMultiplier * extraOffenseMultiplier *
+            itemBaseMultiplier * (manualFieldMultiplier ?? autoFieldDamageMultiplier),
+          bulkMultiplier: manualBulkMultiplier ?? (abilityDefense / finalDefenseMultiplier) * weatherDefenseMultiplier,
+          weatherMultiplier: manualWeatherMultiplier ?? autoWeatherDamageMultiplier,
+          critMultiplier,
+          stabMultiplier: effectiveMoveFinal.type && attackTypesForStab.includes(effectiveMoveFinal.type) ? stabMultiplier : 1,
+          typeEffectiveness,
+          finalMultiplier:
+            (itemFinalMultiplier * finalOffenseMultiplier) / (screenMultiplier * (useAutoDefense ? finalDefenseMultiplier : 1)),
+          firstHitFinalMultiplier: useAutoDefense ? 1 / berryResult.bulkMultiplier : 1,
         }
       : undefined;
 
@@ -653,6 +672,7 @@ export function evaluateSlotMatchup(
     rawOffensePower,
     bulkPower,
     damageParts,
+    defenseStat: defenderRealStats[defenseKey],
     verdict: chance.verdict,
     berryBulkMultiplier: manualBulkMultiplier === undefined ? berryResult.bulkMultiplier : 1,
     berryAppliedMultiplier: manualBulkMultiplier === undefined ? berryHitsMultiplier : 1,
@@ -728,6 +748,8 @@ export interface SoloOffensePowerOptions {
   /** 2.2 F1 — evaluateSlotMatchup의 attackerTypeToMoveType과 같은 뜻 */
   attackerTypeToMoveType?: boolean;
   extraOffenseMultiplier?: number;
+  /** 최종 보정 단계 공격측 배율(화상) — SlotMatchupOptions.finalOffenseMultiplier와 같은 뜻 */
+  finalOffenseMultiplier?: number;
 }
 
 /**
@@ -751,7 +773,7 @@ export function computeSoloOffensePower(
 
   const {
     attackerStages: baseAttackerStages = NEUTRAL_STAGES,
-    applyMoveOwnStatChanges = true,
+    applyMoveOwnStatChanges = false,
     weather,
     field,
     multiHitCount,
@@ -766,6 +788,7 @@ export function computeSoloOffensePower(
     critical = false,
     attackerTypeToMoveType,
     extraOffenseMultiplier = 1,
+    finalOffenseMultiplier = 1,
   } = options;
 
   const attackerForm = getEffectiveForm(attackerPokemon, attackerSlot);
@@ -917,7 +940,7 @@ export function computeSoloOffensePower(
       : 1;
 
   return computeOffensePower(attackerRealStats, offenseTypes(attackerForm.types, attackerAbility, effectiveMoveFinal, attackerTypeToMoveType), effectiveMoveFinal, {
-    abilityMultiplier: abilityOffenseMultiplier * hustleMultiplier * extraOffenseMultiplier * critMultiplier,
+    abilityMultiplier: abilityOffenseMultiplier * hustleMultiplier * extraOffenseMultiplier * finalOffenseMultiplier * critMultiplier,
     itemMultiplier: autoItemMultiplier,
     weatherMultiplier: autoWeatherDamageMultiplier,
     fieldMultiplier: autoFieldDamageMultiplier,
