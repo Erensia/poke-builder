@@ -302,6 +302,46 @@
   background: var(--gradient);
 }
 
+.dinf-range-central {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  border-radius: 999px;
+  background: var(--violet);
+}
+
+.dinf-range-fill {
+  opacity: 0.45;
+}
+
+.dinf-bulk {
+  margin-bottom: 0.45rem;
+  font-size: 0.86rem;
+}
+
+.dinf-bulk-label {
+  display: inline-block;
+  min-width: 6.8rem;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.dinf-bulk-value strong {
+  color: var(--violet);
+  font-size: 1.05rem;
+}
+
+.dinf-bulk-error {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.dinf-tips ul {
+  margin: 0.4rem 0;
+  padding-left: 1.1rem;
+  line-height: 1.55;
+}
+
 .dinf-range-text {
   grid-area: text;
   font-size: 0.82rem;

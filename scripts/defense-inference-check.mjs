@@ -104,6 +104,7 @@ try {
 
   // 2) 왕복 -----------------------------------------------------------------------------------
   let ok = 0;
+  let bulkChecked = 0;
   let narrowed = 0;
   let sumRatio = 0;
   let skipped = 0;
@@ -151,13 +152,39 @@ try {
       (!result.hpSpdGrid || result.hpSpdGrid[truth.spd * 33 + truth.hp] === 1);
     const nat = data.NATURES.find((n) => n.id === truth.nature);
     const groupOk = result.groups.some((g) => g.feasible > 0 && g.natureNames.includes(nat.name));
+    // 내구 지수(HP×방어)·가능도 가중: 진짜 값이 가능한 전체 범위 안에 있고, 중심 구간(80%)이 전체 범위 안쪽이어야 한다
+    const bulkOf = (est, truthBulk) => !est || (est.support.min <= truthBulk && truthBulk <= est.support.max && est.support.min <= est.central.lo && est.central.hi <= est.support.max);
+    const bulkOk = bulkOf(result.bulkPhysical, dReal.hp * dReal.def) && bulkOf(result.bulkSpecial, dReal.hp * dReal.spd);
+    if (bulkOk) bulkChecked++;
+    else fail(`왕복: 내구 지수 범위가 어긋남 atk=${atkId} def=${defId} truth=${JSON.stringify(truth)}`);
     if (inHp && inDef && inSpd && gridOk && groupOk) ok++;
     else fail(`왕복: 진짜 배분이 후보에서 빠짐 atk=${atkId} def=${defId} truth=${JSON.stringify(truth)} 결과 hp=${JSON.stringify(result.hp)} def=${JSON.stringify(result.def)} spd=${JSON.stringify(result.spd)} grid=${gridOk} group=${groupOk}`);
     sumRatio += result.feasible / result.total;
     if (result.feasible < result.total) narrowed++;
   }
   const done = trials - skipped;
+  console.log(`내구 지수 검사 ${bulkChecked}건`);
   console.log(`왕복 ${ok}/${done} 통과 (건너뜀 ${skipped}) · 후보가 줄어든 경우 ${narrowed}건 · 평균 남은 비율 ${(done ? (sumRatio / done) * 100 : 0).toFixed(1)}%`);
+
+  // 2.4 X1) 실측 사례 — 신중 메가갑주무사(HP31·특방32·스피드3, 흡혈) → 한카리아스(HP32·방어12·특방22, 215칸): 215→124(57%)→30(13%).
+  // 화면 %가 올림(58%·14%)이 아니라 내림이라는 근거 — 올림 가정이면 이 관측과 맞는 진짜 배분이 빠진다.
+  {
+    const mega = data.getPokemon("갑주무사").megaEvolutions[0];
+    const realAtk = { pokemonId: "갑주무사", ability: mega.ability, item: null, nature: "신중", points: pts({ hp: 31, spd: 32, spe: 3 }), activeMegaForm: mega.form };
+    const realDef = slot("한카리아스");
+    const move = data.getMove("흡혈");
+    const res = inf.inferDefense({
+      attacker: realAtk,
+      defender: realDef,
+      observations: [
+        { move, critical: false, before: 100, after: 57 },
+        { move, critical: false, before: 57, after: 13 },
+      ],
+    });
+    if (inf.displayPercent(124, 215) !== 57 || inf.displayPercent(30, 215) !== 13 || inf.displayPercent(1, 215) !== 1) fail("화면 % 규칙(내림·최소 1%)이 실측과 다름");
+    if (res?.status !== "ok" || res.hpDefGrid[12 * 33 + 32] !== 1) fail("실측 사례: 진짜 배분(HP32·방어12)이 후보에서 빠짐");
+    else console.log("실측 사례 통과 (215→124→30, 57%·13%)");
+  }
 
   // 2.2 C3) 메가폼 상대 — 메가 종족값·고정 특성으로 만든 관측이 메가 지정 역산에서 진짜 배분을 남기는지
   {
