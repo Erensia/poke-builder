@@ -19,7 +19,7 @@ export const WEATHER_MOVE_LINES: Record<string, { set: string; fail: string }> =
 export const CHARGE_TURN_MESSAGE: Record<string, string> = {
   구멍파기: " 땅을 파기 시작했다!",
   메테오빔: " 우주의 힘을 모으기 시작했다!",
-  일렉트로빔: " 전기를 모으기 시작했다!",
+  일렉트로빔: " 전기를 모았다!",
   공중날기: " 하늘 높이 날아올랐다!",
   뛰어오르기: " 하늘 높이 뛰어올랐다!",
   다이빙: " 물속 깊이 가라앉았다!",
