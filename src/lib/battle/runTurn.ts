@@ -327,7 +327,8 @@ function runActionPhase(ctx: RunTurnContext): RunTurnOutcome | RunTurnPaused {
     // 전혀 없었으면 교체도 안 한다(본가 규칙 — 땅타입에 볼트체인지가 무효면 교체 안 함). 배턴터치는
     // 상대를 전혀 공격하지 않는 순수 자가효과라 이 타입/특성 상호작용 전부가 무의미하다 — 고스트
     // 상대에게 썼다고(노말타입 대 고스트 0배) 교체가 막히면 안 된다(2.3 B1 버그 수정, 사용자 확인
-    // — "교체 UI 미표시·턴 종료"는 이 typeEffectiveness===0 오탐이 원인이었다).
+    // — "교체 UI 미표시·턴 종료"는 이 typeEffectiveness===0 오탐이 원인이었다). 탈(hitNegatedByAbilityName)은
+    // 데미지만 막을 뿐 기술은 명중했으므로 교체를 막지 않는다(탈 따라큐에 유턴 → 교체 UI 미표시 버그 수정).
     const mv = action.move;
     if (
       (mv.selfSwitchAfterDamage || mv.passesStatsOnSelfSwitch) &&
@@ -336,7 +337,6 @@ function runActionPhase(ctx: RunTurnContext): RunTurnOutcome | RunTurnPaused {
       (mv.passesStatsOnSelfSwitch ||
         (action.typeEffectiveness !== 0 &&
           !action.blockedByProtectMoveName &&
-          !action.hitNegatedByAbilityName &&
           !action.abilityAbsorbAbilityName)) &&
       !isFainted(state[key]) &&
       hasLivingReserve(sideOf(state, key))
