@@ -22,10 +22,13 @@ import { MAX_ABILITY_POINTS_PER_STAT, MAX_ABILITY_POINTS_TOTAL } from "./statCal
  * 상세: docs/00_기획문서/02_backlog/02_ver.2.0/2.1-backlog.md C.
  */
 
-/** 화면 %를 HP에서 만드는 규칙 — 사용자 관측("HP 1이 남아도 1%")에 따라 올림. 확정되지 않았으니 이 함수 한 곳에서만 바꾼다. */
+/**
+ * 화면 %를 HP에서 만드는 규칙 — 내림, 단 HP가 남아 있으면 최소 1%. 사용자 실측(2026-10-05, 2.4 X1): 124/215 → 57%(올림이면 58),
+ * 30/215 → 13%(올림이면 14), "HP 1이 남아도 1%". 확정되지 않았으니 이 함수 한 곳에서만 바꾼다.
+ */
 export function displayPercent(hp: number, maxHp: number): number {
   if (hp <= 0) return 0;
-  return Math.min(100, Math.ceil((hp * 100) / maxHp));
+  return Math.min(100, Math.max(1, Math.floor((hp * 100) / maxHp)));
 }
 
 export interface InferenceObservation {
@@ -62,11 +65,26 @@ export interface NatureGroup {
   natureNames: string[];
   feasible: number;
   total: number;
+  /** 가능도 가중 비율(0~1, 전체 합 1) — 이 성격 묶음이 얼마나 그럴듯한지 */
+  weight: number;
 }
 
 export interface Range {
   min: number;
   max: number;
+}
+
+/** 가능도 가중 중심 구간(10%~90%)과 중앙값 — 가능한 후보의 양 끝(Range)보다 훨씬 좁다 */
+export interface CentralRange {
+  lo: number;
+  median: number;
+  hi: number;
+}
+
+/** 내구 지수(실제 HP × 방어/특방 실수치) — 데미지 %가 실제로 알려 주는 값. support는 가능한 후보 전체의 양 끝 */
+export interface BulkEstimate {
+  support: Range;
+  central: CentralRange;
 }
 
 export interface InferenceResult {
@@ -90,6 +108,18 @@ export interface InferenceResult {
   realHp: Range | null;
   realDef: Range | null;
   realSpd: Range | null;
+  /**
+   * 가능도 가중 결과(2.4 X1) — 난수 16단계 중 관측과 맞는 비율로 후보를 가중한다. 관측이 하나뿐이면 HP·방어가 서로 바뀌어도 같은
+   * 내구라 포인트 범위가 0~32로 넓어지지만, 내구 지수와 중심 구간은 훨씬 좁다.
+   */
+  hpCentral: CentralRange | null;
+  defCentral: CentralRange | null;
+  spdCentral: CentralRange | null;
+  bulkPhysical: BulkEstimate | null;
+  bulkSpecial: BulkEstimate | null;
+  /** 분포 격자의 가중 값(0~1, 가장 그럴듯한 칸 = 1). hpDefGrid와 같은 배치 */
+  hpDefWeights: Float32Array | null;
+  hpSpdWeights: Float32Array | null;
 }
 
 /** 분포 격자 한 변 칸 수(포인트 0~32) */
@@ -167,6 +197,13 @@ function emptyResult(status: InferenceResult["status"], n: number): InferenceRes
     realHp: null,
     realDef: null,
     realSpd: null,
+    hpCentral: null,
+    defCentral: null,
+    spdCentral: null,
+    bulkPhysical: null,
+    bulkSpecial: null,
+    hpDefWeights: null,
+    hpSpdWeights: null,
   };
 }
 
@@ -236,32 +273,67 @@ function prepareObservations(input: InferenceInput): { prepared: PreparedObserva
   return { prepared, errors };
 }
 
-/** 방어측 방어 스탯 D에서 16단계 난수 데미지를 낸다 (엔진 computeDamage·난수표와 같은 damageFormula 정수식). 중복은 제거한다 */
+/** 방어측 방어 스탯 D에서 16단계 난수 데미지를 낸다 (엔진 computeDamage·난수표와 같은 damageFormula 정수식). 가능도 계산이라 중복도 그대로 둔다 */
 function damageRolls(parts: DamageParts, defenseRealStat: number): number[] {
   // 타입 면역(상성 0)은 prepareObservations에서 걸러져 여기 오지 않는다
-  return [...new Set(damageRollTotals(parts, defenseRealStat))];
+  return damageRollTotals(parts, defenseRealStat);
 }
 
-/** 후보 하나(최대 HP + 관측별 데미지 후보)가 관측 전체와 맞는지 */
-function candidateMatches(maxHp: number, rolls: number[][], obs: PreparedObservation[], tol: number): boolean {
-  let current: number[] = [];
+/**
+ * 후보 하나(최대 HP + 관측별 16단계 난수 데미지)가 관측 전체와 얼마나 맞는지(가능도, 0~1). 0이면 불가능.
+ * 첫 관측 "맞기 전 %"에 맞는 HP는 균등하다고 보고, 매 관측마다 난수 16단계를 같은 확률(1/16)로 굴려 화면 %가 맞는 경우만 이어 간다.
+ * 이어서 오는 관측은 "맞기 전 %"가 직전 결과와 맞는 HP만 남긴다(관측 사이 회복 없음 가정).
+ */
+function candidateLikelihood(maxHp: number, rolls: number[][], obs: PreparedObservation[], tol: number): number {
+  let current = new Map<number, number>();
   for (let h = 1; h <= maxHp; h++) {
-    if (Math.abs(displayPercent(h, maxHp) - obs[0].before) <= tol) current.push(h);
+    if (Math.abs(displayPercent(h, maxHp) - obs[0].before) <= tol) current.set(h, 1);
   }
+  if (current.size === 0) return 0;
+  for (const h of current.keys()) current.set(h, 1 / current.size);
   for (let i = 0; i < obs.length; i++) {
-    if (i > 0) current = current.filter((h) => Math.abs(displayPercent(h, maxHp) - obs[i].before) <= tol);
-    if (current.length === 0) return false;
-    const next = new Set<number>();
-    for (const h of current) {
+    if (i > 0) {
+      for (const h of current.keys()) {
+        if (Math.abs(displayPercent(h, maxHp) - obs[i].before) > tol) current.delete(h);
+      }
+      if (current.size === 0) return 0;
+    }
+    const next = new Map<number, number>();
+    for (const [h, w] of current) {
       for (const d of rolls[i]) {
         const h2 = Math.max(0, h - d);
-        if (Math.abs(displayPercent(h2, maxHp) - obs[i].after) <= tol) next.add(h2);
+        if (Math.abs(displayPercent(h2, maxHp) - obs[i].after) <= tol) next.set(h2, (next.get(h2) ?? 0) + w / rolls[i].length);
       }
     }
-    if (next.size === 0) return false;
-    current = [...next];
+    if (next.size === 0) return 0;
+    current = next;
   }
-  return true;
+  let sum = 0;
+  for (const w of current.values()) sum += w;
+  return sum;
+}
+
+/** 값(정수)별 가중치를 쌓았다가 중심 80%(10%~90%) 구간과 중앙값을 낸다 */
+class WeightedValues {
+  private readonly bins = new Map<number, number>();
+  private total = 0;
+  add(value: number, weight: number): void {
+    this.bins.set(value, (this.bins.get(value) ?? 0) + weight);
+    this.total += weight;
+  }
+  central(): CentralRange | null {
+    if (this.total <= 0) return null;
+    const keys = [...this.bins.keys()].sort((x, y) => x - y);
+    const at = (q: number): number => {
+      let cum = 0;
+      for (const k of keys) {
+        cum += this.bins.get(k)!;
+        if (cum / this.total >= q - 1e-9) return k;
+      }
+      return keys[keys.length - 1];
+    };
+    return { lo: at(0.1), median: at(0.5), hi: at(0.9) };
+  }
 }
 
 /** HP·방어·특방 포인트 배분 후보 [hp, def, spd] — 합계 66 이하, 관측이 없는 쪽 스탯은 0 고정 */
@@ -279,7 +351,7 @@ function enumerateAllocations(useDef: boolean, useSpd: boolean): [number, number
   return out;
 }
 
-function runCandidates(input: InferenceInput, prepared: PreparedObservation[]): InferenceResult {
+function runCandidates(input: InferenceInput, prepared: PreparedObservation[], detailed = false): InferenceResult {
   const n = prepared.length;
   const pokemon = getPokemon(input.defender.pokemonId);
   if (!pokemon) return emptyResult("invalid", n);
@@ -288,7 +360,7 @@ function runCandidates(input: InferenceInput, prepared: PreparedObservation[]): 
   const useDef = prepared.some((o) => o.parts.defenseKey === "def");
   const useSpd = prepared.some((o) => o.parts.defenseKey === "spd");
   const combos = buildNatureCombos(useDef, useSpd);
-  const groups: NatureGroup[] = combos.map((c) => ({ id: c.key, label: c.label, natureNames: c.natureNames, feasible: 0, total: 0 }));
+  const groups: NatureGroup[] = combos.map((c) => ({ id: c.key, label: c.label, natureNames: c.natureNames, feasible: 0, total: 0, weight: 0 }));
 
   // 방어 스탯 값별 난수 데미지 캐시 (관측 번호 × 스탯 값)
   const cache = prepared.map(() => new Map<number, number[]>());
@@ -303,6 +375,17 @@ function runCandidates(input: InferenceInput, prepared: PreparedObservation[]): 
 
   const hpDefGrid = useDef ? new Uint8Array(GRID * GRID) : null;
   const hpSpdGrid = useSpd ? new Uint8Array(GRID * GRID) : null;
+  // 가능도 가중 집계(detailed일 때만 — 관측 하나씩 빼 보는 보조 호출에는 필요 없다)
+  const hpDefWeights = detailed && useDef ? new Float32Array(GRID * GRID) : null;
+  const hpSpdWeights = detailed && useSpd ? new Float32Array(GRID * GRID) : null;
+  const hpW = new WeightedValues();
+  const defW = new WeightedValues();
+  const spdW = new WeightedValues();
+  const bulkPhysW = new WeightedValues();
+  const bulkSpecW = new WeightedValues();
+  const bulkPhysRange: Range = { min: Infinity, max: -Infinity };
+  const bulkSpecRange: Range = { min: Infinity, max: -Infinity };
+  let totalWeight = 0;
   const emptyRange = (): Range => ({ min: Infinity, max: -Infinity });
   const [hpRange, defRange, spdRange, realHp, realDef, realSpd] = Array.from({ length: 6 }, emptyRange);
   let total = 0;
@@ -336,14 +419,48 @@ function runCandidates(input: InferenceInput, prepared: PreparedObservation[]): 
       total++;
       groups[c].total++;
       const rolls = prepared.map((o, i) => rollsFor(i, o.parts.defenseKey === "def" ? defStat : spdStat));
-      if (!candidateMatches(maxHp, rolls, prepared, tol)) continue;
+      const likelihood = candidateLikelihood(maxHp, rolls, prepared, tol);
+      if (likelihood <= 0) continue;
       feasible++;
       groups[c].feasible++;
       record(hpP, defP, spdP, maxHp, defStat, spdStat);
+      if (detailed) {
+        totalWeight += likelihood;
+        groups[c].weight += likelihood;
+        hpW.add(hpP, likelihood);
+        if (hpDefWeights) {
+          hpDefWeights[defP * GRID + hpP] += likelihood;
+          defW.add(defP, likelihood);
+          const bulk = maxHp * defStat;
+          bulkPhysW.add(bulk, likelihood);
+          bulkPhysRange.min = Math.min(bulkPhysRange.min, bulk);
+          bulkPhysRange.max = Math.max(bulkPhysRange.max, bulk);
+        }
+        if (hpSpdWeights) {
+          hpSpdWeights[spdP * GRID + hpP] += likelihood;
+          spdW.add(spdP, likelihood);
+          const bulk = maxHp * spdStat;
+          bulkSpecW.add(bulk, likelihood);
+          bulkSpecRange.min = Math.min(bulkSpecRange.min, bulk);
+          bulkSpecRange.max = Math.max(bulkSpecRange.max, bulk);
+        }
+      }
     }
   }
 
   const range = (r: Range): Range | null => (r.min === Infinity ? null : r);
+  const normalize = (w: Float32Array | null): Float32Array | null => {
+    if (!w) return null;
+    let max = 0;
+    for (const v of w) max = Math.max(max, v);
+    if (max > 0) for (let i = 0; i < w.length; i++) w[i] /= max;
+    return w;
+  };
+  const bulkOf = (w: WeightedValues, r: Range): BulkEstimate | null => {
+    const central = w.central();
+    return central && r.min !== Infinity ? { support: r, central } : null;
+  };
+  if (totalWeight > 0) for (const g of groups) g.weight /= totalWeight;
   return {
     status: feasible > 0 ? "ok" : "contradiction",
     observationErrors: Array(n).fill(null),
@@ -360,6 +477,13 @@ function runCandidates(input: InferenceInput, prepared: PreparedObservation[]): 
     realHp: range(realHp),
     realDef: useDef ? range(realDef) : null,
     realSpd: useSpd ? range(realSpd) : null,
+    hpCentral: hpW.central(),
+    defCentral: useDef ? defW.central() : null,
+    spdCentral: useSpd ? spdW.central() : null,
+    bulkPhysical: useDef ? bulkOf(bulkPhysW, bulkPhysRange) : null,
+    bulkSpecial: useSpd ? bulkOf(bulkSpecW, bulkSpecRange) : null,
+    hpDefWeights: normalize(hpDefWeights),
+    hpSpdWeights: normalize(hpSpdWeights),
   };
 }
 
@@ -374,7 +498,7 @@ export function inferDefense(input: InferenceInput): InferenceResult | null {
   if (errors.some((e) => e !== null)) {
     return { ...emptyResult("invalid", total), observationErrors: errors };
   }
-  const result = runCandidates(input, prepared);
+  const result = runCandidates(input, prepared, true);
   result.observationErrors = errors;
 
   if (total > 1) {
