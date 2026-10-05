@@ -351,21 +351,26 @@ export interface ActionLogEntry {
   protectSucceeded?: boolean;
   /** 방어류 기술을 썼지만 실패했으면 true (연속 사용 확률 판정 실패, 또는 상대가 막을 것을 안 냄). streak는 0으로 리셋됨 */
   protectFailed?: boolean;
-  /** 이 기술로 사용자 자신의 랭크가 실제로 오른 것(칼춤 등). 렌더에서 "OO의 X가 (크게) 올라갔다!" */
-  selfStatRises?: { stat: BattleStatKey; delta: number }[];
+  /**
+   * 이 기술로 사용자 자신의 랭크가 실제로 오른 것(칼춤 등). 렌더에서 "OO의 X가 (크게) 올라갔다!"
+   * 명중률/회피율(똬리틀기·작아지기 등)도 같은 포맷으로 담는다(2.3 B3 — 기존엔 5스탯만 수집해
+   * 로그 공백이 있었다).
+   */
+  selfStatRises?: { stat: BattleStatKey | AccuracyEvasionKey; delta: number }[];
   /** 랭크업을 시도했지만 이미 +6이라 오르지 않은 스탯. "OO의 X는 더 이상 올라가지 않는다!" */
   selfStatsAtMax?: BattleStatKey[];
   /**
-   * 이 기술로 상대의 랭크가 실제로 내려간 것(거짓울음·브레이크클로 등). delta는 내려간 칸 수(양수).
-   * selfStatRises와 대칭 — 렌더에서 "[상대]의 X가 (크게) 떨어졌다!". 확정 하락만(확률 부가효과 제외).
+   * 이 기술로 상대의 랭크가 실제로 내려간 것(거짓울음·브레이크클로·안개제거 등). delta는 내려간
+   * 칸 수(양수). selfStatRises와 대칭 — 렌더에서 "[상대]의 X가 (크게) 떨어졌다!". 확정 하락만
+   * (확률 부가효과 제외). 명중률/회피율도 담는다(2.3 B3).
    */
-  opponentStatDrops?: { stat: BattleStatKey; delta: number }[];
+  opponentStatDrops?: { stat: BattleStatKey | AccuracyEvasionKey; delta: number }[];
   /**
    * 골드러시·오버히트·용성군 등이 자기 자신의 랭크를 실제로 내린 것(§4-6). delta는 내려간
    * 칸 수(양수) — opponentStatDrops와 같은 포맷, 주어만 항상 actorName. 확정 하락만(확률
-   * 부가효과 제외).
+   * 부가효과 제외). 명중률/회피율도 담는다(2.3 B3).
    */
-  selfStatDrops?: { stat: BattleStatKey; delta: number }[];
+  selfStatDrops?: { stat: BattleStatKey | AccuracyEvasionKey; delta: number }[];
   /**
    * 이미 걸린 상태이상에 같은/다른 주 상태이상 기술을 써서 아무 변화가 없었으면 true
    * (블래키가 이미 맹독인 번치코에게 맹독 재시전 등). "그러나 실패했다!" 문구용.
@@ -533,6 +538,11 @@ export interface ActionLogEntry {
   glaiveRushArmed?: boolean;
   /** 코트체인지(Move.swapsSideEffects): 양쪽 진영의 설치물·스크린을 맞바꿨으면 true */
   courtChangeDone?: boolean;
+  /**
+   * 안개제거(Move.defogsField): 양쪽 진영의 설치물·스크린·신비의부적과 필드를 실제로 하나 이상
+   * 없앴으면 true(이미 아무것도 없었으면 조용히 생략, 2.3 B3).
+   */
+  defogFieldCleared?: boolean;
   /** 회생의기도(Move.revivesFaintedAlly): 부활시킨 교대 포켓몬 이름 */
   revivedPartyName?: string;
   /** 회생의기도를 썼지만 부활시킬 대상(기절한 교대 포켓몬)이 없었으면 true */

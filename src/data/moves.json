@@ -2902,7 +2902,8 @@
         "stat": "evasion",
         "delta": -1
       }
-    ]
+    ],
+    "defogsField": true
   },
   {
     "id": "애크러뱃",

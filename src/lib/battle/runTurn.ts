@@ -321,18 +321,23 @@ function runActionPhase(ctx: RunTurnContext): RunTurnOutcome | RunTurnPaused {
     updateRampage(state, key, action, random);
     refreshUproar(state, action);
 
-    // 유턴·볼트체인지·배턴터치(§7-2): 명중해서 효과를 줬고(빗나감·행동불능·완전 무효·방어류
-    // 차단·특성 흡수 제외) 사용측이 살아 있고 교대 슬롯이 있으면 — 여기서 멈춘다. 상대 행동·턴
-    // 종료 처리는 교체가 확정된 뒤에(resumeTurn) 새 포켓몬 기준으로 이어진다.
+    // 유턴·볼트체인지·배턴터치(§7-2): 명중해서 효과를 줬고 사용측이 살아 있고 교대 슬롯이 있으면
+    // — 여기서 멈춘다. 상대 행동·턴 종료 처리는 교체가 확정된 뒤에(resumeTurn) 새 포켓몬 기준으로
+    // 이어진다. 유턴·볼트체인지는 데미지 기술이라 완전 무효(0배)·방어류 차단·특성 흡수로 효과가
+    // 전혀 없었으면 교체도 안 한다(본가 규칙 — 땅타입에 볼트체인지가 무효면 교체 안 함). 배턴터치는
+    // 상대를 전혀 공격하지 않는 순수 자가효과라 이 타입/특성 상호작용 전부가 무의미하다 — 고스트
+    // 상대에게 썼다고(노말타입 대 고스트 0배) 교체가 막히면 안 된다(2.3 B1 버그 수정, 사용자 확인
+    // — "교체 UI 미표시·턴 종료"는 이 typeEffectiveness===0 오탐이 원인이었다). 탈(hitNegatedByAbilityName)은
+    // 데미지만 막을 뿐 기술은 명중했으므로 교체를 막지 않는다(탈 따라큐에 유턴 → 교체 UI 미표시 버그 수정).
     const mv = action.move;
     if (
       (mv.selfSwitchAfterDamage || mv.passesStatsOnSelfSwitch) &&
       !action.blockedReason &&
       action.hit &&
-      action.typeEffectiveness !== 0 &&
-      !action.blockedByProtectMoveName &&
-      !action.hitNegatedByAbilityName &&
-      !action.abilityAbsorbAbilityName &&
+      (mv.passesStatsOnSelfSwitch ||
+        (action.typeEffectiveness !== 0 &&
+          !action.blockedByProtectMoveName &&
+          !action.abilityAbsorbAbilityName)) &&
       !isFainted(state[key]) &&
       hasLivingReserve(sideOf(state, key))
     ) {

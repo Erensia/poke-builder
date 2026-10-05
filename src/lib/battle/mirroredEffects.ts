@@ -173,14 +173,15 @@ export function resolveMirroredMoveEffects(input: MirroredMoveEffectsInput) {
 
   // 랭크업 결과 문구용(Phase 6.5 §6-2 ⑥⑦, §6-3): 이 기술이 사용자 자신의 랭크를 실제로 올린 것과,
   // 올리려 했으나 이미 +6이라 막힌 것을 각각 모은다. 확정 랭크업만 대상 — 확률 부가효과(chance)와
-  // 자기 랭크다운 디메리트(delta ≤ 0), 명중/회피/급소는 제외. 승기·하양허브 등 뒤 후처리 전에 측정.
-  const selfStatRises: { stat: BattleStatKey; delta: number }[] = [];
+  // 자기 랭크다운 디메리트(delta ≤ 0)는 제외. 명중률/회피율은 축이 달라(.accuracyStages) 이 루프
+  // 뒤쪽에서 따로 채운다(2.3 B3). 승기·하양허브 등 뒤 후처리 전에 측정.
+  const selfStatRises: { stat: BattleStatKey | AccuracyEvasionKey; delta: number }[] = [];
   const selfStatsAtMax: BattleStatKey[] = [];
   // §4-6: selfStatRises와 대칭 — 골드러시·오버히트·용성군처럼 자기 대상 확정 랭크 하락
   // 부가효과가 실제로 적용된 것을 모은다. delta는 내려간 칸 수(양수)로 opponentStatDrops와
   // 같은 포맷을 쓴다. 엔진 계산(attacker.stages)은 이미 정상 동작하고 있었고, 이 결과를
   // 담을 로그 필드가 없던 게 §4-6의 원인이었다.
-  const selfStatDrops: { stat: BattleStatKey; delta: number }[] = [];
+  const selfStatDrops: { stat: BattleStatKey | AccuracyEvasionKey; delta: number }[] = [];
   for (const sc of effectiveMove.statChanges ?? []) {
     if (sc.target !== "self" || sc.chance !== undefined) continue;
     if (!isBattleStatKey(sc.stat) || (sc.delta ?? 0) === 0) continue;
@@ -302,8 +303,9 @@ export function resolveMirroredMoveEffects(input: MirroredMoveEffectsInput) {
   // 상대 랭크다운 결과 문구용(§1 C-6): 이 기술이 실제로 상대 랭크를 내린 것만 모은다. 최종
   // defender.stages 기준이라 클리어바디로 막혔거나 미러아머로 반사됐거나 하양허브로 되돌아간
   // 경우엔 net 변화가 0이라 자연히 제외된다. selfStatRises와 대칭 — 확정 하락만(확률 부가효과는
-  // rolledStatChanges 단계에서 이미 굴려져 통과한 것만 남아 있고, 실제 하락분으로 판정).
-  const opponentStatDrops: { stat: BattleStatKey; delta: number }[] = [];
+  // rolledStatChanges 단계에서 이미 굴려져 통과한 것만 남아 있고, 실제 하락분으로 판정). 명중률/
+  // 회피율(안개제거 등)은 축이 달라(.accuracyStages) 이 변수에 뒤쪽에서 따로 채운다(2.3 B3).
+  const opponentStatDrops: { stat: BattleStatKey | AccuracyEvasionKey; delta: number }[] = [];
   if (!opponentEffectsBlocked) {
     const seen = new Set<BattleStatKey>();
     for (const sc of rolledStatChanges ?? []) {
@@ -314,6 +316,8 @@ export function resolveMirroredMoveEffects(input: MirroredMoveEffectsInput) {
     }
   }
 
+  const attackerAccuracyStagesBeforeChange = attacker.accuracyStages;
+  const defenderAccuracyStagesBeforeChange = defender.accuracyStages;
   attacker.accuracyStages = applyMoveAccuracyEvasionChanges(
     attacker.accuracyStages,
     contraryMoveFor(effectiveMove, attacker),
@@ -330,6 +334,22 @@ export function resolveMirroredMoveEffects(input: MirroredMoveEffectsInput) {
   // 축과 무관해서(원문이 "명중률을 떨어뜨릴 수 없다"까지만) 건드리지 않는다.
   if (defenderAbility?.blocksOpponentAccuracyDrops && defender.accuracyStages.accuracy < defenderAccuracyBeforeChange) {
     defender.accuracyStages = { ...defender.accuracyStages, accuracy: defenderAccuracyBeforeChange };
+  }
+  // 명중률/회피율 랭크 변화 결과 문구용(2.3 B3) — selfStatRises/selfStatDrops/opponentStatDrops와
+  // 같은 포맷으로 합류시킨다. 안개제거(상대 회피율 −1)를 썼을 때 로그에 아무 문구도 안 뜨던 게
+  // 이 수집이 5스탯(.stages)만 보고 .accuracyStages는 안 봐서 생긴 공백이었다. 명중률/회피율을
+  // 상대 대상으로 "올리는" 기술은 없어 opponentStatDrops만 대칭시키면 충분하다.
+  for (const key of ["accuracy", "evasion"] as const) {
+    const selfBefore = attackerAccuracyStagesBeforeChange[key];
+    const selfAfter = attacker.accuracyStages[key];
+    if (selfAfter > selfBefore) selfStatRises.push({ stat: key, delta: selfAfter - selfBefore });
+    else if (selfAfter < selfBefore) selfStatDrops.push({ stat: key, delta: selfBefore - selfAfter });
+
+    if (!opponentEffectsBlocked) {
+      const oppBefore = defenderAccuracyStagesBeforeChange[key];
+      const oppAfter = defender.accuracyStages[key];
+      if (oppAfter < oppBefore) opponentStatDrops.push({ stat: key, delta: oppBefore - oppAfter });
+    }
   }
   attacker.critStage = applyMoveCritStageChanges(attacker.critStage, effectiveMove, "self", {
     userTypes: attacker.types,
@@ -732,6 +752,32 @@ export function resolveMirroredMoveEffects(input: MirroredMoveEffectsInput) {
     delete nextActive.bound;
     delete nextActive.leechSeed;
     attacker.volatile = { active: nextActive };
+  }
+
+  // 안개제거(Move.defogsField): 상대 1마리를 겨냥하는 status 기술이라 방어류에 막힌다(고속스핀과
+  // 같은 축). 명중 시 양쪽 진영의 설치물·스크린·신비의부적과 필드(terrain)를 전부 없앤다 — 날씨는
+  // 대상이 아니다(사용자 확인, 2.3 B3). 아무 효과도 없었으면 로그에 빈 문구가 안 뜨게 변경 여부를 본다.
+  let defogFieldCleared = false;
+  if (effectiveMove.defogsField && hit && !blockedByProtect) {
+    const hazardsEmpty = (h: typeof state.sideA.hazards) =>
+      !h.stealthRock && h.spikesLayers === 0 && h.toxicSpikesLayers === 0 && !h.stickyWeb;
+    const hadEffect =
+      !hazardsEmpty(state.sideA.hazards) ||
+      !hazardsEmpty(state.sideB.hazards) ||
+      Object.keys(state.sideA.screens).length > 0 ||
+      Object.keys(state.sideB.screens).length > 0 ||
+      state.sideA.safeguardTurnsRemaining !== undefined ||
+      state.sideB.safeguardTurnsRemaining !== undefined ||
+      state.field !== undefined;
+    state.sideA.hazards = emptyHazardState();
+    state.sideB.hazards = emptyHazardState();
+    state.sideA.screens = {};
+    state.sideB.screens = {};
+    state.sideA.safeguardTurnsRemaining = undefined;
+    state.sideB.safeguardTurnsRemaining = undefined;
+    state.field = undefined;
+    state.fieldTurnsRemaining = undefined;
+    defogFieldCleared = hadEffect;
   }
 
   // 코트체인지(Move.swapsSideEffects): 명중 시 양쪽 진영의 설치물(hazards)·스크린(screens)을
@@ -1505,7 +1551,7 @@ export function resolveMirroredMoveEffects(input: MirroredMoveEffectsInput) {
     [attackerItem, defenderItem] = [defenderItem, attackerItem];
   }
   return {
-    defenderAbility, attacker, defender, attackerAbility, attackerItem, defenderItem, abilityInflictedStatusOnAttacker, abilityInflictedStatusAbilityName, statusCureBerryItemName, mentalMoveBlockedByAbilityName, bouncedMoveName, bouncedByAbilityName, secondaryBlockedByAbilityName, berryEatFailed, stuffCheeksBerryHeal, stuffCheeksBerryName, costHpFailed, soulBeatHpCost, selfStatRises, selfStatsAtMax, selfStatDrops, reflectedStatDropAbilityName, reflectedStatDrops, restoredStatsSelfItemName, restoredStatsOpponentItemName, opportunistCopiedStats, opportunistAbilityName, opponentStatDrops, invertedTargetStages, addedTypeToTarget, overwroteTargetType, targetMoveTypeOverride, inflictedStatus, statusInflictFailed, beakBlastBurnedAttacker, curedStatus, curedStatusTarget, inflictedVolatile, tidyUpDone, courtChangeDone, revivedPartyName, reviveFailed, saltCureApplied, balloonPoppedItemName, octolockApplied, jawLockApplied, selfWokeBeforeMove, restSlept, healedAmount, healedTarget, averagedDefensesMoveName, swappedSpeedMoveName, transformedIntoName, transformFailed, regenSetFailed, leechSeedSetFailed, leechSeedBlockedByGrass, abilitySwappedTargetToName, abilitySwapFailed, substituteSetFailed, shedTailFailed, shedTailSucceeded, setDisabledMoveName, disableSetFailed, setEncoreMoveName, encoreSetFailed, swappedStatsMoveName, swappedStagesMoveName, protectSucceeded, protectFailed, protectStanceEntered, fieldSetFailed, stealthRockSetForSide, spikesSetForSide, toxicSpikesSetForSide, stickyWebSetForSide, hazardSetFailed, swappedItems, itemSwapFailed, painSplitHp, stockpileHealFailed, recycledItemName, recycleFailed, copiedStagesFromName, averagedAttacksMoveName, spitePp, spiteFailed, acupressureRaised, acupressureFailed, volatileBlockedByAbility, abilityChange, abilityChangeFailed, copiedTypes, smackedDownTarget, meltedItemName, meltFailed, magneticFluxFailed, partyStatusCuredCount, teaTime, teaTimeFailed,
+    defenderAbility, attacker, defender, attackerAbility, attackerItem, defenderItem, abilityInflictedStatusOnAttacker, abilityInflictedStatusAbilityName, statusCureBerryItemName, mentalMoveBlockedByAbilityName, bouncedMoveName, bouncedByAbilityName, secondaryBlockedByAbilityName, berryEatFailed, stuffCheeksBerryHeal, stuffCheeksBerryName, costHpFailed, soulBeatHpCost, selfStatRises, selfStatsAtMax, selfStatDrops, reflectedStatDropAbilityName, reflectedStatDrops, restoredStatsSelfItemName, restoredStatsOpponentItemName, opportunistCopiedStats, opportunistAbilityName, opponentStatDrops, invertedTargetStages, addedTypeToTarget, overwroteTargetType, targetMoveTypeOverride, inflictedStatus, statusInflictFailed, beakBlastBurnedAttacker, curedStatus, curedStatusTarget, inflictedVolatile, tidyUpDone, courtChangeDone, defogFieldCleared, revivedPartyName, reviveFailed, saltCureApplied, balloonPoppedItemName, octolockApplied, jawLockApplied, selfWokeBeforeMove, restSlept, healedAmount, healedTarget, averagedDefensesMoveName, swappedSpeedMoveName, transformedIntoName, transformFailed, regenSetFailed, leechSeedSetFailed, leechSeedBlockedByGrass, abilitySwappedTargetToName, abilitySwapFailed, substituteSetFailed, shedTailFailed, shedTailSucceeded, setDisabledMoveName, disableSetFailed, setEncoreMoveName, encoreSetFailed, swappedStatsMoveName, swappedStagesMoveName, protectSucceeded, protectFailed, protectStanceEntered, fieldSetFailed, stealthRockSetForSide, spikesSetForSide, toxicSpikesSetForSide, stickyWebSetForSide, hazardSetFailed, swappedItems, itemSwapFailed, painSplitHp, stockpileHealFailed, recycledItemName, recycleFailed, copiedStagesFromName, averagedAttacksMoveName, spitePp, spiteFailed, acupressureRaised, acupressureFailed, volatileBlockedByAbility, abilityChange, abilityChangeFailed, copiedTypes, smackedDownTarget, meltedItemName, meltFailed, magneticFluxFailed, partyStatusCuredCount, teaTime, teaTimeFailed,
   };
 }
 

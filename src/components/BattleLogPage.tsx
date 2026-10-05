@@ -398,20 +398,20 @@ function BattleSelectScreen({
                       onClick={() => onToggleSelection(side, i)}
                     >
                       <span className={`battle-select-num${num ? " is-on" : ""}`}>{num ?? ""}</span>
+                      {/* 2.3 B2 보완(사용자 확인): 선출 화면은 내 카드까지 포함해 양쪽 다 도구
+                          이미지를 숨긴다(itemId 생략) — 배틀 판은 여전히 상대만 숨긴다. */}
                       {pk && pkSlot && (
                         <PokemonAvatarWithItem
                           pokemon={pk}
                           size={28}
                           radius={8}
                           gradientTypes={getEffectiveForm(pk, pkSlot).types}
-                          itemId={pkSlot.item}
                           form={{
                             gender: getEffectiveGender(pk, pkSlot),
                             cosmeticForm: pkSlot.cosmeticForm,
                             formVariant: pkSlot.formVariant,
                             sizeForm: pkSlot.sizeForm,
                             activeMegaForm: pkSlot.activeMegaForm,
-                            item: pkSlot.item,
                           }}
                         />
                       )}
@@ -471,6 +471,9 @@ function BattleBoard({
   resolvePivot,
   isStruggling,
   moveRestrictionMessage,
+  buildableIndices,
+  pokemonAt,
+  selection,
   playTurn,
   resetToSetup,
   aiSide,
@@ -509,6 +512,11 @@ function BattleBoard({
   resolvePivot: (toIndex: number) => void;
   isStruggling: (side: Side) => boolean;
   moveRestrictionMessage: (side: Side, moveId: string) => string | null;
+  /** 2.3 B2 — 상대 파티 6마리 나열용. 빌드된(포켓몬+기술 있는) 슬롯 인덱스 */
+  buildableIndices: (side: Side) => SlotIndex[];
+  pokemonAt: (side: Side, i: SlotIndex) => Pokemon | undefined;
+  /** 선출된 빌드 슬롯 인덱스(선출 순서) — battleSide(side).party[j]가 selection[side][j] 슬롯과 대응 */
+  selection: { a: SlotIndex[]; b: SlotIndex[] };
   playTurn: () => void;
   resetToSetup: () => void;
 }) {
@@ -650,13 +658,14 @@ function BattleBoard({
           >
             <div className="battle-fighter-head">
               <div className="battle-fighter-ident">
+                {/* 2.3 B2: 배틀타워에서 상대(AI) 도구 이미지는 숨긴다. 내 포켓몬은 그대로 표기 */}
                 <PokemonAvatarWithItem
                   pokemon={avatarPokemon}
                   form={avatarForm}
                   gradientTypes={illusionPokemon ? illusionPokemon.types : fighter.types}
                   size={38}
                   radius={9}
-                  itemId={fighter.illusionAs ? undefined : fighter.slot.item}
+                  itemId={fighter.illusionAs || side === aiSide ? undefined : fighter.slot.item}
                 />
                 <span className="battle-fighter-name">
                   {displayName}
@@ -745,44 +754,65 @@ function BattleBoard({
               {fighter.currentHp} / {fighter.maxHp}
             </div>
 
-            {/* 대전 중엔 셋업 카드가 안 보여서 내가 맞춘 능력치를 확인할 방법이 없었다는 피드백 반영 —
-                HP·공격·방어·특공·특방·스피드 실능치를 배틀 보드에도 그대로 노출한다. 칼춤·위협 등
-                랭크 변화는 턴 진행 중 이 표시에 즉시 반영한다(Phase 6.5 §6-2 ⑧) — HP는 랭크 대상이 아님. */}
-            <div className="battle-real-stats">
-              {REAL_STAT_LABELS.map(({ key, label }) => {
-                const base = fighter.realStats[key];
-                const stage = key === "hp" ? 0 : fighter.stages[key];
-                const effective = stage === 0 ? base : Math.round(base * rankStageMultiplier(stage));
-                return (
-                  <div
-                    key={key}
-                    className={`battle-real-stat-item${
-                      stage > 0 ? " is-boosted" : stage < 0 ? " is-lowered" : ""
-                    }`}
-                  >
-                    <span className="battle-real-stat-label">{label}</span>
-                    <span
-                      className="battle-real-stat-value"
-                      title={
-                        stage !== 0
-                          ? `기본 ${Math.round(base)} (${stage > 0 ? "+" : ""}${stage}랭크)`
-                          : undefined
-                      }
+            {/* 2.3 B2: 배틀타워에서 상대(AI) 실능치는 숨기고, 그 자리에 상대 파티 6마리를 이미지로
+                나열한다 — 출전 여부(선출된 3마리 중 무엇인지)는 표기하지 않고 기절 여부만 표기 */}
+            {side === aiSide ? (
+              <div className="battle-roster-icons">
+                {buildableIndices(side).map((i) => {
+                  const pk = pokemonAt(side, i);
+                  if (!pk) return null;
+                  const battleIdx = selection[side].indexOf(i);
+                  const fainted = battleIdx >= 0 && (battleSide(side)?.party[battleIdx]?.currentHp ?? 1) <= 0;
+                  return (
+                    <div key={i} className={`battle-roster-chip${fainted ? " is-fainted" : ""}`}>
+                      <PokemonAvatarWithItem pokemon={pk} size={40} radius={9} />
+                      <span className="battle-roster-chip-name">{pk.name}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              /* 대전 중엔 셋업 카드가 안 보여서 내가 맞춘 능력치를 확인할 방법이 없었다는 피드백 반영 —
+                 HP·공격·방어·특공·특방·스피드 실능치를 배틀 보드에도 그대로 노출한다. 칼춤·위협 등
+                 랭크 변화는 턴 진행 중 이 표시에 즉시 반영한다(Phase 6.5 §6-2 ⑧) — HP는 랭크 대상이 아님. */
+              <div className="battle-real-stats">
+                {REAL_STAT_LABELS.map(({ key, label }) => {
+                  const base = fighter.realStats[key];
+                  const stage = key === "hp" ? 0 : fighter.stages[key];
+                  const effective = stage === 0 ? base : Math.round(base * rankStageMultiplier(stage));
+                  return (
+                    <div
+                      key={key}
+                      className={`battle-real-stat-item${
+                        stage > 0 ? " is-boosted" : stage < 0 ? " is-lowered" : ""
+                      }`}
                     >
-                      {Math.round(effective)}
-                      {stage !== 0 && (
-                        <span className="battle-real-stat-stage">
-                          {stage > 0 ? `+${stage}` : stage}
-                        </span>
-                      )}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
+                      <span className="battle-real-stat-label">{label}</span>
+                      <span
+                        className="battle-real-stat-value"
+                        title={
+                          stage !== 0
+                            ? `기본 ${Math.round(base)} (${stage > 0 ? "+" : ""}${stage}랭크)`
+                            : undefined
+                        }
+                      >
+                        {Math.round(effective)}
+                        {stage !== 0 && (
+                          <span className="battle-real-stat-stage">
+                            {stage > 0 ? `+${stage}` : stage}
+                          </span>
+                        )}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
 
-            {/* 파티 트래커 — 이 편 3마리의 HP·상태·기절, 활성 슬롯 표시 */}
-            {(() => {
+            {/* 파티 트래커 — 이 편 3마리의 HP·상태·기절, 활성 슬롯 표시. 상대(AI) 쪽은 선출된
+                3마리가 그대로 드러나(이름·활성 슬롯) 2.3 B2의 "출전 여부 비공개"와 어긋나서
+                숨긴다 — 그 칸은 위 battle-roster-icons가 대신 채운다(사용자 확인, 2.3 B2 보완). */}
+            {side !== aiSide && (() => {
               const bs = side === "a" ? battleState.sideA : battleState.sideB;
               if (bs.party.length <= 1) return null;
               return (
@@ -1758,6 +1788,9 @@ export function BattleLogPage() {
           resolvePivot={resolvePivot}
           isStruggling={isStruggling}
           moveRestrictionMessage={moveRestrictionMessage}
+          buildableIndices={buildableIndices}
+          pokemonAt={pokemonAt}
+          selection={selection}
           playTurn={playTurn}
           resetToSetup={resetToSetup}
           aiSide={aiSide}
