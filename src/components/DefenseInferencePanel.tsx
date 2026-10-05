@@ -17,6 +17,8 @@ import {
   inferenceUnsupportedReason,
   type InferenceInput,
   type InferenceObservation,
+  type BulkEstimate,
+  type CentralRange,
   type InferenceResult,
   type Range,
 } from "../lib/defenseInference";
@@ -71,26 +73,66 @@ function defenseRelevantAbilities(pokemon: Pokemon): string[] {
   return [...names].filter((id) => relevant.has(id));
 }
 
-function RangeBar({ label, range, real }: { label: string; range: Range | null; real: Range | null }) {
+function RangeBar({
+  label,
+  range,
+  central,
+  real,
+}: {
+  label: string;
+  range: Range | null;
+  central: CentralRange | null;
+  real: Range | null;
+}) {
   if (!range) return null;
-  const left = (range.min / MAX_ABILITY_POINTS_PER_STAT) * 100;
-  const width = Math.max(((range.max - range.min) / MAX_ABILITY_POINTS_PER_STAT) * 100, 2);
+  const pos = (v: number) => (v / MAX_ABILITY_POINTS_PER_STAT) * 100;
+  const span = (min: number, max: number) => (min === max ? String(min) : `${min} ~ ${max}`);
   return (
     <div className="dinf-range">
       <span className="dinf-range-label">{label}</span>
       <div className="dinf-range-track" aria-hidden="true">
-        <div className="dinf-range-fill" style={{ left: `${left}%`, width: `${width}%` }} />
+        <div className="dinf-range-fill" style={{ left: `${pos(range.min)}%`, width: `${Math.max(pos(range.max - range.min), 2)}%` }} />
+        {central && (
+          <div
+            className="dinf-range-central"
+            style={{ left: `${pos(central.lo)}%`, width: `${Math.max(pos(central.hi - central.lo), 2)}%` }}
+          />
+        )}
       </div>
       <span className="dinf-range-text">
-        <strong>
-          {range.min === range.max ? range.min : `${range.min} ~ ${range.max}`}
-        </strong>
-        {real && (
-          <span className="dinf-range-real">
-            {" "}
-            (실수치 {real.min === real.max ? real.min : `${real.min} ~ ${real.max}`})
-          </span>
+        {central ? (
+          <>
+            <strong>{span(central.lo, central.hi)}</strong>
+            <span className="dinf-range-real">
+              {" "}
+              (가장 그럴듯한 80% · 중앙 {central.median}) · 가능한 전체 {span(range.min, range.max)}
+            </span>
+          </>
+        ) : (
+          <strong>{span(range.min, range.max)}</strong>
         )}
+        {real && <span className="dinf-range-real"> (실수치 {span(real.min, real.max)})</span>}
+      </span>
+    </div>
+  );
+}
+
+/** 내구 지수(HP × 방어/특방 실수치) — 데미지 %가 실제로 알려 주는 값이라 포인트 범위보다 훨씬 좁다 */
+function BulkLine({ label, estimate }: { label: string; estimate: BulkEstimate | null }) {
+  if (!estimate) return null;
+  const { central, support } = estimate;
+  const half = Math.round(((central.hi - central.lo) / 2 / central.median) * 100);
+  return (
+    <div className="dinf-bulk">
+      <span className="dinf-bulk-label">{label}</span>
+      <span className="dinf-bulk-value">
+        <strong>{central.median.toLocaleString()}</strong>
+        <span className="dinf-bulk-error"> ±{half}%</span>
+      </span>
+      <span className="dinf-range-real">
+        {" "}
+        (가장 그럴듯한 80% {central.lo.toLocaleString()} ~ {central.hi.toLocaleString()} · 가능한 전체 {support.min.toLocaleString()} ~{" "}
+        {support.max.toLocaleString()})
       </span>
     </div>
   );
@@ -98,7 +140,18 @@ function RangeBar({ label, range, real }: { label: string; range: Range | null; 
 
 const GRID_TICKS = [0, 4, 8, 12, 16, 20, 24, 28, 32];
 
-function AllocationGrid({ title, grid, yLabel }: { title: string; grid: Uint8Array; yLabel: string }) {
+function AllocationGrid({
+  title,
+  grid,
+  weights,
+  yLabel,
+}: {
+  title: string;
+  grid: Uint8Array;
+  /** 가능도 가중(0~1) — 있으면 진하기로 "얼마나 그럴듯한지" 표시 */
+  weights: Float32Array | null;
+  yLabel: string;
+}) {
   const rows: number[] = [];
   for (let y = GRID - 1; y >= 0; y--) rows.push(y);
   // 눈금 위치: 칸 가운데 (값 + 0.5) / 33
@@ -121,7 +174,10 @@ function AllocationGrid({ title, grid, yLabel }: { title: string; grid: Uint8Arr
               <span
                 key={`${x}-${y}`}
                 className={grid[y * GRID + x] ? "dinf-cell is-on" : "dinf-cell"}
-                title={`HP ${x} · ${yLabel} ${y}${grid[y * GRID + x] ? " (가능)" : ""}`}
+                style={grid[y * GRID + x] && weights ? { opacity: 0.45 + 0.55 * weights[y * GRID + x] } : undefined}
+                title={`HP ${x} · ${yLabel} ${y}${
+                  grid[y * GRID + x] ? (weights ? ` (가능 · 그럴듯함 ${Math.round(weights[y * GRID + x] * 100)}%)` : " (가능)") : ""
+                }`}
               />
             )),
           )}
@@ -135,8 +191,43 @@ function AllocationGrid({ title, grid, yLabel }: { title: string; grid: Uint8Arr
         </div>
         <span className="dinf-axis-name dinf-axis-name-x">HP 포인트</span>
       </div>
-      <span className="dinf-grid-axis">보라색 칸 = 관측과 맞는 배분. 칸에 마우스를 올리면 수치가 보여요.</span>
+      <span className="dinf-grid-axis">보라색 칸 = 관측과 맞는 배분, 진할수록 그럴듯해요. 칸에 마우스를 올리면 수치가 보여요.</span>
     </div>
+  );
+}
+
+/**
+ * 관측을 어떻게 모으면 범위가 좁아지는지 안내(2.4 X1). 화면 %가 정수라 한 번의 관측은 오차가 크고(난수 ±7%, 1% 단위 반올림),
+ * 내구 지수는 큰 데미지·여러 번의 독립 관측일수록 좁아진다. 입력한 관측에서 눈에 띄는 약점이 있으면 알려 준다.
+ */
+function ObservationTips({ observations }: { observations: InferenceObservation[] }) {
+  const small = observations.filter((o) => o.before - o.after > 0 && o.before - o.after < 15);
+  const hasPhysical = observations.some((o) => o.move.category === "physical");
+  const hasSpecial = observations.some((o) => o.move.category === "special");
+  return (
+    <details className="dinf-details dinf-tips">
+      <summary>범위를 좁히는 관측 방법</summary>
+      <ul>
+        <li>
+          <strong>큰 데미지</strong>: 한 방에 깎인 %가 클수록 정확해요. 15% 미만 관측은 1% 단위 반올림 오차가 커서 정보가 적어요.
+        </li>
+        <li>
+          <strong>관측을 여러 번</strong>: 난수가 매번 달라서 같은 분류도 여러 번 모으면 내구 지수 오차가 줄어요(약 1/√횟수).
+        </li>
+        <li>
+          <strong>물리와 특수 둘 다</strong>: 물리는 HP×방어, 특수는 HP×특방만 알려 줘요. 둘을 모아야 HP를 가려낼 수 있어요.
+        </li>
+        <li>
+          <strong>입력을 정확히</strong>: 내 능력 랭크·벽·날씨·급소·상대 특성/도구 가정이 틀리면 배분이 아니라 계산이 어긋나요.
+        </li>
+      </ul>
+      {small.length > 0 && <p className="dinf-warn">작은 데미지(15% 미만) 관측이 {small.length}건 있어요. 더 큰 기술로 다시 관측하면 좁아져요.</p>}
+      {observations.length > 0 && (!hasPhysical || !hasSpecial) && (
+        <p className="dinf-note">
+          {hasPhysical ? "특수" : "물리"} 기술 관측이 없어서 {hasPhysical ? "특방" : "방어"}은 알 수 없어요.
+        </p>
+      )}
+    </details>
   );
 }
 
@@ -171,9 +262,15 @@ function ResultView({
         가능한 배분 <strong>{result.feasible.toLocaleString()}</strong> / {result.total.toLocaleString()} 가지
         <span className="dinf-summary-sub"> ({((result.feasible / result.total) * 100).toFixed(1)}%)</span>
       </p>
-      <RangeBar label="HP 포인트" range={result.hp} real={result.realHp} />
-      <RangeBar label="방어 포인트" range={result.def} real={result.realDef} />
-      <RangeBar label="특방 포인트" range={result.spd} real={result.realSpd} />
+      <BulkLine label="물리 내구 지수" estimate={result.bulkPhysical} />
+      <BulkLine label="특수 내구 지수" estimate={result.bulkSpecial} />
+      <p className="dinf-note">
+        내구 지수 = 상대 실제 HP × 방어(특방). 데미지 %가 실제로 알려 주는 값이라 포인트보다 훨씬 정확해요. 아래 포인트는 같은 내구를 내는
+        HP·방어 조합이 여럿이라 범위가 넓게 나옵니다.
+      </p>
+      <RangeBar label="HP 포인트" range={result.hp} central={result.hpCentral} real={result.realHp} />
+      <RangeBar label="방어 포인트" range={result.def} central={result.defCentral} real={result.realDef} />
+      <RangeBar label="특방 포인트" range={result.spd} central={result.spdCentral} real={result.realSpd} />
       <p className="dinf-note">
         각 범위는 따로 본 값이에요. HP와 방어는 서로 바꿔 칠 수 있어서, 아래 분포에서 실제로 가능한 조합을 확인하세요.
       </p>
@@ -186,7 +283,7 @@ function ResultView({
             className={`dinf-nature-chip${g.feasible === 0 ? " is-no" : ""}`}
             title={g.natureNames.join(", ")}
           >
-            {g.label} <em>{g.feasible === 0 ? "불가" : `${g.feasible.toLocaleString()}가지`}</em>
+            {g.label} <em>{g.feasible === 0 ? "불가" : `${Math.round(g.weight * 100)}%`}</em>
           </span>
         ))}
       </div>
@@ -194,8 +291,8 @@ function ResultView({
       <details className="dinf-details">
         <summary>HP × 방어 분포 보기</summary>
         <div className="dinf-grids">
-          {result.hpDefGrid && <AllocationGrid title="HP × 방어" grid={result.hpDefGrid} yLabel="방어" />}
-          {result.hpSpdGrid && <AllocationGrid title="HP × 특방" grid={result.hpSpdGrid} yLabel="특방" />}
+          {result.hpDefGrid && <AllocationGrid title="HP × 방어" grid={result.hpDefGrid} weights={result.hpDefWeights} yLabel="방어" />}
+          {result.hpSpdGrid && <AllocationGrid title="HP × 특방" grid={result.hpSpdGrid} weights={result.hpSpdWeights} yLabel="특방" />}
         </div>
       </details>
     </div>
@@ -545,8 +642,9 @@ export function DefenseInferencePanel({
             <ResultView result={result} rowIdsByObservation={rowIdsByObservation} />
           </div>
         )}
+        <ObservationTips observations={complete.map((c) => c.obs)} />
         <p className="dinf-assume">
-          가정: 화면 %는 올림 · {activeMega ? `${activeMega.form} · ` : ""}상대 특성{" "}
+          가정: 화면 %는 내림(HP가 남으면 최소 1%) · {activeMega ? `${activeMega.form} · ` : ""}상대 특성{" "}
           {activeMega ? getAbility(activeMega.ability)?.name : activeAbilityId ? getAbility(activeAbilityId)?.name : "없음(모름)"} · 상대 도구{" "}
           {activeMega ? "메가스톤" : itemId ? getItem(itemId)?.name : "없음(모름)"} · 관측 사이 회복 없음{tolerant ? " · ±1% 여유" : ""}
         </p>

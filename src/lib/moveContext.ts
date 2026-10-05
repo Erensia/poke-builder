@@ -19,8 +19,13 @@ export interface MoveContext {
   effectiveMove: Move;
   /** 공격측 특성이 이 기술에 주는 배율 (테크니션/모래의힘/메가런처 등) */
   abilityOffenseMultiplier: number;
-  /** 방어측 특성이 이 기술을 받을 때 주는 배율 (두꺼운지방 등) */
+  /** 방어측 특성이 이 기술을 받을 때 주는 배율 (두꺼운지방 등) — finalDefenseMultiplier를 포함한 총 내구력 배율 */
   abilityDefenseMultiplier: number;
+  /**
+   * abilityDefenseMultiplier 중 "최종 보정" 단계에 곱해지는 몫(내구력 배율 형태, 하드록·필터 0.75 → 1/0.75). 없으면 1.
+   * 정수 데미지 공식은 총 배율 ÷ 이 값을 방어 스탯 단계에, 이 값을 최종 단계에 쓴다(2.4 B3 사례 ⑩).
+   */
+  finalDefenseMultiplier: number;
   /** 자속보정 배율. 기본 1.5, 적응력이면 2.0 */
   stabMultiplier: number;
   /** 상대 타입 상성 배율 (0/0.25/0.5/1/2/4). 기술에 타입이 없으면(필드기 등) 1 */
@@ -108,15 +113,17 @@ export function resolveMoveContext(
             (effectiveMove.type === "땅" && defenderItem?.grantsGroundImmunity)) &&
           !bypassImmunity
         );
-  // 프리즈드라이: 상대가 이 타입이면 상성표를 무시하고 강제로 이 배율을 쓴다. 단, 방어측이
-  // 스스로 얻은 완전 면역(absorbsType·grantsImmunityToTypes)이 이미 걸려있으면 면역이 우선이다
-  // — 저수 같은 특성을 가진 물타입 상대에게 프리즈드라이를 써도 여전히 무효화돼야 한다.
+  // 프리즈드라이: 상대가 이 타입이면 그 타입 칸만 이 배율로 치환하고, 나머지 타입은 상성표대로
+  // 곱한다(물/풀 → 2×2=4배, 물/불꽃 → 2×0.5=1배). 단, 방어측이 스스로 얻은 완전 면역
+  // (absorbsType·grantsImmunityToTypes)이 이미 걸려있으면 면역이 우선이다. 프리즈드라이는 얼음
+  // 타입 기술이라 이 면역은 얼음 타입을 막는 특성이 있을 때만 해당한다(저수는 물 기술 전용이라 무관).
+  const override = effectiveMove.overridesTypeEffectivenessFor;
   const typeEffectivenessOverride =
-    !absorbedByDefenderAbility &&
-    !grantsImmunity &&
-    effectiveMove.overridesTypeEffectivenessFor &&
-    defenderTypes.includes(effectiveMove.overridesTypeEffectivenessFor.type)
-      ? effectiveMove.overridesTypeEffectivenessFor.effectiveness
+    !absorbedByDefenderAbility && !grantsImmunity && override && defenderTypes.includes(override.type)
+      ? override.effectiveness *
+        (effectiveMove.type
+          ? getEffectiveness(effectiveMove.type, defenderTypes.filter((t) => t !== override.type), { bypassImmunity })
+          : 1)
       : undefined;
 
   // 방음: 소리 기술(classification "소리")은 데미지기·변화기 모두 방어측에게 통하지 않는다.
@@ -146,14 +153,17 @@ export function resolveMoveContext(
 
   // 하드록/필터/프리즘아머: 효과가 굉장한(상성 > 1) 공격이면 데미지를 이 배율(0.75)로 줄인다.
   // abilityDefenseMultiplier는 "내구력 배율"이라 데미지는 그 역수 — 데미지 ×0.75 = 내구력 ÷0.75.
+  let finalDefenseMultiplier = 1;
   if (defenderAbility?.reducesSuperEffectiveDamageMultiplier !== undefined && typeEffectiveness > 1) {
-    abilityDefenseMultiplier /= defenderAbility.reducesSuperEffectiveDamageMultiplier;
+    finalDefenseMultiplier = 1 / defenderAbility.reducesSuperEffectiveDamageMultiplier;
+    abilityDefenseMultiplier *= finalDefenseMultiplier;
   }
 
   return {
     effectiveMove,
     abilityOffenseMultiplier: abilityOffense.multiplier * auraMultiplier,
     abilityDefenseMultiplier,
+    finalDefenseMultiplier,
     stabMultiplier,
     typeEffectiveness,
     absorbedByDefenderAbility,

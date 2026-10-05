@@ -23,7 +23,7 @@ import { computeRealStats } from "../lib/statCalculator";
 import { computeBulkPower } from "../lib/battlePower";
 import { environmentTintBackground } from "../lib/environmentBackground";
 import { evaluateSlotMatchup, evaluateSpeedMatchup, computeSoloOffensePower } from "../lib/matchupEvaluator";
-import { computeStatusAttackMultiplier, ignoresBurnAttackPenalty } from "../lib/statusConditions";
+import { burnDamageMultiplier, ignoresBurnAttackPenalty, statusedAttackBoost } from "../lib/statusConditions";
 import { BATTLE_STAT_KEYS } from "../types/battleStats";
 import "./MatchupPage.css";
 
@@ -113,13 +113,16 @@ export function MatchupPage() {
       critical: !!attacker.slot.critAssumed,
       attackerTypeToMoveType: !!attacker.slot.typeShiftAssumed,
       defenderHpIsFull: defender.slot.fullHpAssumed ?? true,
+      // 근성류 상승은 위력 단계, 화상 ×0.5는 최종 단계로 따로 넘긴다(2.4 B3 — 정수 데미지 공식의 단계 구분)
       extraOffenseMultiplier: effMove
-        ? computeStatusAttackMultiplier(
+        ? statusedAttackBoost(
             status,
             effMove.category,
-            ignoresBurnAttackPenalty(attacker.slot.ability ?? undefined, effMove.id),
             attacker.slot.ability ? getAbility(attacker.slot.ability)?.physicalAttackMultiplierWhenStatused : undefined,
           )
+        : 1,
+      finalOffenseMultiplier: effMove
+        ? burnDamageMultiplier(status, effMove.category, ignoresBurnAttackPenalty(attacker.slot.ability ?? undefined, effMove.id))
         : 1,
     };
   }, [attacker.slot, defender.slot, effMove]);
@@ -168,6 +171,7 @@ export function MatchupPage() {
         critical: assumeOptions.critical,
         attackerTypeToMoveType: assumeOptions.attackerTypeToMoveType,
         extraOffenseMultiplier: assumeOptions.extraOffenseMultiplier,
+        finalOffenseMultiplier: assumeOptions.finalOffenseMultiplier,
       },
     );
   }, [attackerPokemon, effAttackerSlot, effMove, attacker.slot, weather, field, assumeOptions]);
@@ -300,7 +304,9 @@ export function MatchupPage() {
         />
       </div>
 
-      {fullResult && <DamageRollBlock offensePower={fullResult.offensePower} bulkPower={fullResult.bulkPower} defenderMaxHp={baseBulk?.maxHp} />}
+      {fullResult?.damageParts && baseBulk && (
+        <DamageRollBlock parts={fullResult.damageParts} defenseStat={fullResult.defenseStat} defenderMaxHp={baseBulk.maxHp} />
+      )}
 
       {speedResult && (
         <div className="matchup-speed-block">

@@ -12,13 +12,14 @@ import { getItem, getMove } from "@/lib/data";
 import { applyStageDelta } from "@/lib/statStages";
 import { hitTriggerMatchesMove } from "@/lib/abilityHitTriggers";
 import { critChance } from "@/lib/accuracyCrit";
-import { computeStatusAttackMultiplier, ignoresBurnAttackPenalty, inflictStatus, isImmuneToStatus } from "@/lib/statusConditions";
+import { burnDamageMultiplier, ignoresBurnAttackPenalty, statusedAttackBoost, inflictStatus, isImmuneToStatus } from "@/lib/statusConditions";
 import { hasVolatile, inflictVolatile } from "@/lib/volatileConditions";
+import { DAMAGE_ROLL_MIN_PERCENT, DAMAGE_ROLL_STEP_COUNT } from "@/lib/damageFormula";
 import { computeDamage, hustleDamageMultiplier, screenMultiplierFromFlags, supremeOverlordMultiplier } from "@/lib/battlePower";
 import { getWeatherDamageMultiplier, getWeatherDefenseMultiplier } from "@/lib/weatherEffects";
 import { FIELD_DURATION, getFieldDamageMultiplier } from "@/lib/fieldEffects";
-import { getBerryDefenseResult, getDrainHealMultiplier, getEnduranceResult, getItemCritStageBonus, getItemOffenseMultiplier, getMentalHerbCureResult } from "@/lib/itemEffects";
-import { MIN_DAMAGE_ROLL, STRUGGLE_MOVE, WEATHER_DURATION, activeWeather, applyMimicryForm, consumeItem, contraryDelta, isFainted, rollMultiHitCount, sideOf, statDropBlockStatsOf, statusImmunitiesOf, type BattleFighterState, type BattleState } from "./state";
+import { getBerryDefenseResult, getDrainHealMultiplier, getEnduranceResult, getItemCritStageBonus, getItemBasePowerMultiplier, getItemFinalMultiplier, getMentalHerbCureResult } from "@/lib/itemEffects";
+import { STRUGGLE_MOVE, WEATHER_DURATION, activeWeather, applyMimicryForm, consumeItem, contraryDelta, isFainted, rollMultiHitCount, sideOf, statDropBlockStatsOf, statusImmunitiesOf, type BattleFighterState, type BattleState } from "./state";
 import { triggerTerrainSeeds } from "./switching";
 
 interface HitResolutionInput {
@@ -47,11 +48,13 @@ interface HitResolutionInput {
   defenderBerriesBlocked: boolean;
   abilityOffenseMultiplier: number;
   abilityDefenseMultiplier: number;
+  /** abilityDefenseMultiplier 중 최종 보정 단계 몫(하드록·필터) — moveContext 참고 */
+  finalDefenseMultiplier: number;
   stabMultiplier: number;
 }
 
 export function resolveHitAndApplyDamage(input: HitResolutionInput) {
-  const { state, defenderKey, move, effectiveMove, random, attacker, defender, attackerAbility, defenderAbility, attackerItem, defenderItem, typeEffectiveness, blockedByProtect, blockedBySubstitute, unseenFistPiercing, hitChance, evadedByCharge, defenderHideType, gemMultiplier, ownMoveTypeBoostMultiplier, rivalryMultiplier, sheerForceAbilityName, defenderBerriesBlocked, abilityOffenseMultiplier, abilityDefenseMultiplier, stabMultiplier } = input;
+  const { state, defenderKey, move, effectiveMove, random, attacker, defender, attackerAbility, defenderAbility, attackerItem, defenderItem, typeEffectiveness, blockedByProtect, blockedBySubstitute, unseenFistPiercing, hitChance, evadedByCharge, defenderHideType, gemMultiplier, ownMoveTypeBoostMultiplier, rivalryMultiplier, sheerForceAbilityName, defenderBerriesBlocked, abilityOffenseMultiplier, abilityDefenseMultiplier, finalDefenseMultiplier, stabMultiplier } = input;
   // status 기술(도깨비불·최면술 등 위력 없는 변화기)은 데미지 계산을 건너뛴다.
   // 예전엔 여기서 바로 return 해버려서 이런 기술들의 랭크변화/상태이상 부여가 전혀 발동하지 않는
   // 버그가 있었다 — 명중만 하면 데미지 유무와 무관하게 아래 효과 적용까지 항상 도달해야 한다.
@@ -152,12 +155,12 @@ export function resolveHitAndApplyDamage(input: HitResolutionInput) {
         mercilessCrit ||
         random() < critChance(critStageForHit, effectiveMove.highCritRatio));
     const ignoreBurnPenalty = ignoresBurnAttackPenalty(attackerAbility?.id, effectiveMove.id);
-    const statusAttackMultiplier = computeStatusAttackMultiplier(
+    const statusAttackMultiplier = statusedAttackBoost(
       attacker.status.condition,
       effectiveMove.category,
-      ignoreBurnPenalty,
       attackerAbility?.physicalAttackMultiplierWhenStatused,
     );
+    const burnMultiplier = burnDamageMultiplier(attacker.status.condition, effectiveMove.category, ignoreBurnPenalty);
     // 의욕(Hustle): 물리 기술 위력 ×1.5 (명중률 ×0.8은 위 accuracyExtraMultiplier에서 반영).
     const hustleMultiplier = hustleDamageMultiplier(effectiveMove.category, attackerAbility);
     // 총대장: 등장 시 센 쓰러진 같은 편 수만큼 위력 ×(1 + 0.1 × 수).
@@ -174,12 +177,8 @@ export function resolveHitAndApplyDamage(input: HitResolutionInput) {
       isGrounded(state, attacker, attackerAbility),
       isGrounded(state, defender, defenderAbility),
     );
-    const itemMultiplier = getItemOffenseMultiplier(
-      attackerItem,
-      effectiveMove,
-      typeEffectiveness,
-      attacker.lastMoveStreak ?? 1,
-    );
+    const itemMultiplier = getItemBasePowerMultiplier(attackerItem, effectiveMove);
+    const itemFinalMultiplier = getItemFinalMultiplier(attackerItem, typeEffectiveness, attacker.lastMoveStreak ?? 1);
     // 나무열매(카리열매 등): 이 피격이 조건(타입 일치 + 효과가 굉장함)을 채우면 데미지를
     // 절반으로 줄이고 대전 중 1회만 발동하도록 소모 처리한다. 다단히트면 첫 타에서만 소모되고,
     // 이후 타수는 이미 소모된 상태라 다시 발동하지 않는다.
@@ -251,18 +250,21 @@ export function resolveHitAndApplyDamage(input: HitResolutionInput) {
       // 읽으므로 NEUTRAL_STAGES를 통째로 넘겨도 안전하다. 자신의 랭크는 그대로 반영된다.
       attackerStages: defenderAbility?.ignoresOpponentStatStagesInDamage ? NEUTRAL_STAGES : attacker.stages,
       defenderStages: defenderStagesForDamage,
-      // 대검돌격: 방어측이 피격 약점 상태면 받는 데미지 2배(bulkMultiplier는 나눗셈이라 0.5).
+      // 방어 스탯 단계 배율(두꺼운지방 등). 하드록·필터는 최종 단계라 뺀다(2.4 B3).
       bulkMultiplier:
-        abilityDefenseMultiplier *
-        berryResult.bulkMultiplier *
-        screenMultiplier *
+        (abilityDefenseMultiplier / finalDefenseMultiplier) *
         // 모래바람 바위 특방·눈 얼음 방어 1.5배(날씨 무효 특성이면 activeWeather가 없음)
-        getWeatherDefenseMultiplier(activeWeather(state), defender.types, contactDefenseStat) *
-        (defender.glaiveRushVulnerable ? 0.5 : 1),
+        getWeatherDefenseMultiplier(activeWeather(state), defender.types, contactDefenseStat),
+      // 최종 보정 단계(상성 뒤): 도구(생명의구슬·달인의띠)·화상 ×데미지, 하드록·반감 열매·벽·대검돌격(방어측 약점 상태면 받는 데미지 2배)은
+      // 내구력 배율 형태라 역수로 곱한다.
+      finalMultiplier:
+        (itemFinalMultiplier * burnMultiplier) /
+        (finalDefenseMultiplier * berryResult.bulkMultiplier * screenMultiplier * (defender.glaiveRushVulnerable ? 0.5 : 1)),
       isCritical: critical,
       // 스나이퍼: 급소 데미지 배율을 2.25로 올린다(기본 1.5).
       critDamageMultiplier: attackerAbility?.critDamageMultiplier,
-      randomRoll: MIN_DAMAGE_ROLL + random() * (1 - MIN_DAMAGE_ROLL),
+      // 난수는 본가처럼 85~100% 정수 16단계
+      randomRoll: (DAMAGE_ROLL_MIN_PERCENT + Math.floor(random() * DAMAGE_ROLL_STEP_COUNT)) / 100,
     });
     let hitDamage = result?.damage ?? 0;
     // 관통드릴: 접촉기가 명중(면역 제외)했는데 데미지가 상대 최대 HP의 지정 비율보다 낮으면
