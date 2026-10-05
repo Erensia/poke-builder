@@ -1,6 +1,7 @@
 import { itemsSuppressedByRoom } from "./turnOrderInputs";
 import { isGrounded } from "./grounding";
 import { type Move } from "@/types/move";
+import { type BattleStatKey } from "@/types/battleStats";
 import { type PokemonType } from "@/types/pokemon-type";
 import { type ActionBlockReason, type ActionLogEntry, type FighterKey } from "@/types/battle";
 import { NO_STATUS_CONDITION, type StatusConditionState } from "@/types/status";
@@ -353,17 +354,25 @@ export function resolvePreHitEffects(
   // 4) 차지 기술 1턴째(공중날기 등): 준비만 하고 이번 턴엔 데미지를 주지 않는다. 맑음 날씨의
   // 솔라빔처럼 chargeSkipWeather가 현재 날씨와 일치하면 준비 없이 곧장 2턴째처럼 실행한다.
   // releasingCharge면 이미 2턴째(위에서 move를 저장된 기술로 바꿔치기했음)라 여기 안 들어온다.
+  // 로그용: 차지 1턴째 상승분. 비 오는 일렉트로빔처럼 준비 없이 바로 발사하면 resolveAction이 결과의 selfStatRises에 합친다
+  const chargeStatRises: { stat: BattleStatKey; delta: number }[] = [];
   if (move.chargeTurn && !releasingCharge) {
     // 메테오빔·일렉트로빔: 능력치 상승은 "이 기술을 쓴 턴"(=1턴째, 준비 선언 시점) 기준이라
     // chargeSkipWeather로 준비 턴 자체가 생략되는 경우(비 오는 일렉트로빔)에도 여기서 적용한다.
     // move.statChanges(2턴째 공격 판정에서 쓰는 필드)와 겹치지 않게 별도 필드로 받는다.
     if (move.chargeStatChanges) {
+      const stagesBefore = attacker.stages;
       attacker.stages = applyMoveStatChanges(
         attacker.stages,
         { ...move, statChanges: move.chargeStatChanges },
         "self",
         { userTypes: attacker.types },
       );
+      for (const sc of move.chargeStatChanges) {
+        const stat = sc.stat as BattleStatKey;
+        const delta = attacker.stages[stat] - stagesBefore[stat];
+        if (delta > 0) chargeStatRises.push({ stat, delta });
+      }
     }
     // 메가솔라: 쾌청 조건 차지 스킵기(솔라빔)를 날씨와 무관하게 준비 턴 없이 발동시킨다.
     const skipsCharge =
@@ -389,6 +398,7 @@ export function resolvePreHitEffects(
         selfFainted: false,
         recoilDamage: 0,
         charging: true,
+        selfStatRises: chargeStatRises.length ? chargeStatRises : undefined,
         leppaRestoredPpItemName,
       };
     }
@@ -1094,7 +1104,7 @@ export function resolvePreHitEffects(
     }
   }
   return {
-    move, defenderKey, attacker, defender, defenderHpAtActionStart, actorPokemonId, defenderPokemonId, attackerAbility, defenderAbility, attackerBerriesBlocked, defenderBerriesBlocked, attackerItemIdBeforeAction, defenderItemIdBeforeAction, leppaRestoredPpItemName, pressureExtraPpAbilityName, selfCuredStatus, sleepTalkCalledMoveName, copycatCalledMoveName, ohkoBlockedByAbilityName, ohkoImmune, flungItemId, attackerItem, defenderItem, blockedByGoodAsGold, blockedBySubstitute, blockedByPowderImmunity, unseenFistPiercing, blockedByProtect, blockedByProtectMoveName, soundproofBlockedByAbilityName, bulletproofBlockedByAbilityName, opponentEffectsBlocked, bouncedByMagicMirror, shellSideArmCategory, abilityOffenseMultiplier, abilityDefenseMultiplier, stabMultiplier, typeEffectiveness, effectiveMove, sheerForceAbilityName, fickleBeamEmpowered, electromorphosisEmpoweredAbilityName, ownMoveTypeBoostMultiplier, rivalryMultiplier, changedOwnTypeTo, changedOwnTypeAbilityName, lostTypeAfterUse, gemMultiplier, ateGemItemName, hitChance, defenderHideType, evadedByCharge, hit, selfDamageOnUse, abilityAbsorbedMoveType, abilityAbsorbAbilityName, abilityAbsorbHealAmount, protectContactPenaltyMoveName, protectContactDamage, protectContactInflictedStatus,
+    move, chargeStatRises, defenderKey, attacker, defender, defenderHpAtActionStart, actorPokemonId, defenderPokemonId, attackerAbility, defenderAbility, attackerBerriesBlocked, defenderBerriesBlocked, attackerItemIdBeforeAction, defenderItemIdBeforeAction, leppaRestoredPpItemName, pressureExtraPpAbilityName, selfCuredStatus, sleepTalkCalledMoveName, copycatCalledMoveName, ohkoBlockedByAbilityName, ohkoImmune, flungItemId, attackerItem, defenderItem, blockedByGoodAsGold, blockedBySubstitute, blockedByPowderImmunity, unseenFistPiercing, blockedByProtect, blockedByProtectMoveName, soundproofBlockedByAbilityName, bulletproofBlockedByAbilityName, opponentEffectsBlocked, bouncedByMagicMirror, shellSideArmCategory, abilityOffenseMultiplier, abilityDefenseMultiplier, stabMultiplier, typeEffectiveness, effectiveMove, sheerForceAbilityName, fickleBeamEmpowered, electromorphosisEmpoweredAbilityName, ownMoveTypeBoostMultiplier, rivalryMultiplier, changedOwnTypeTo, changedOwnTypeAbilityName, lostTypeAfterUse, gemMultiplier, ateGemItemName, hitChance, defenderHideType, evadedByCharge, hit, selfDamageOnUse, abilityAbsorbedMoveType, abilityAbsorbAbilityName, abilityAbsorbHealAmount, protectContactPenaltyMoveName, protectContactDamage, protectContactInflictedStatus,
   };
 }
 

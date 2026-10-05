@@ -499,7 +499,7 @@ export function resolveAction(
     triggeredDestinyBond: destinyBondTriggered || undefined,
     protectSucceeded,
     protectFailed,
-    selfStatRises: selfStatRises.length ? selfStatRises : undefined,
+    selfStatRises: selfStatRises.length || pre.chargeStatRises.length ? [...pre.chargeStatRises, ...selfStatRises] : undefined,
     selfStatsAtMax: selfStatsAtMax.length ? selfStatsAtMax : undefined,
     selfStatDrops: selfStatDrops.length ? selfStatDrops : undefined,
     blockedByProtectMoveName,
