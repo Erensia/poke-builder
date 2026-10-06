@@ -110,7 +110,7 @@ try {
     }
   }
 
-  // 부수 확인: 아쿠아브레이크의 방어 하락(부가 효과)이 이번 데미지에 먼저 반영되지 않는다(기본 applyMoveOwnStatChanges=false)
+  // 부수 확인: 아쿠아브레이크의 방어 하락(부가 효과)이 이번 데미지에 먼저 반영되지 않는다(데미지 계산은 부가 효과를 먼저 적용하지 않는다)
   {
     const res = ev.evaluateSlotMatchup(slot("한카리아스"), data.getMove("아쿠아브레이크"), slot("폭타"), {});
     if (res?.damageParts?.defenseRankMultiplier !== 1) fail("부가 효과 랭크 변화가 이번 타 계산에 반영됨");
@@ -134,6 +134,41 @@ try {
     const ward = slot("루카리오", { ability: "파동의방호" });
     check("파동의방호 접촉 ×½", table(slot("번치코"), "번개펀치", ward), table(slot("번치코"), "번개펀치", slot("루카리오")).map(half));
     check("파동의방호 비접촉 ×1", table(slot("번치코"), "화염방사", ward), table(slot("번치코"), "화염방사", slot("루카리오")));
+  }
+
+  // 판정 배지(2.5 D4-a·D5): 단타는 난수표 판정과 같아야 하고, 다단히트는 타별 독립 난수를 전수 열거한 확률과 같아야 한다
+  {
+    const sc = await server.ssrLoadModule("/src/lib/statCalculator.ts");
+    const nodeFs = await import("node:fs");
+    const parties = JSON.parse(nodeFs.readFileSync(new URL("../src/data/samplePartyPresets.json", import.meta.url), "utf8"));
+    const slots = parties.flatMap((p) => p.slots);
+    const defenders = slots.filter((s) => !s.activeMegaForm);
+    let compared = 0;
+    slots.forEach((a, i) => {
+      const d = defenders[(i * 7) % defenders.length];
+      const hp = sc.computeRealStats(data.getPokemon(d.pokemonId).baseStats, d.points, d.nature).hp;
+      for (const mv of a.moves) {
+        const move = data.getMove(mv);
+        const r = move && ev.evaluateSlotMatchup(a, move, d, {});
+        if (!r?.damageParts || r.damageParts.hitPowers.length !== 1) continue;
+        compared++;
+        const rolls = fm.damageRollTotals(r.damageParts, r.defenseStat);
+        const killing = rolls.filter((x) => x >= hp).length;
+        const want = killing === 16 ? "guaranteed-1hit" : killing > 0 ? "random-1hit" : rolls[0] * 2 >= hp ? "guaranteed-2hit" : null;
+        if (want && r.verdict !== want) fail(`판정 배지 ${a.pokemonId} ${mv}→${d.pokemonId}: ${r.verdict} ≠ ${want}`);
+        if (want === "random-1hit" && r.killingRolls?.[0] !== killing) fail(`판정 배지 격파 난수 수 ${a.pokemonId} ${mv}→${d.pokemonId}`);
+      }
+    });
+    if (compared < 100) fail(`판정 배지 비교 표본 부족: ${compared}`);
+    // 독립 난수 전수 열거: 위력 40짜리 2타를 중앙 HP 경계에서 직접 센다
+    const parts = { hitPowers: [40, 40], attackTerm: 100, defenseKey: "def", defenseRankMultiplier: 1, baseMultiplier: 1, bulkMultiplier: 1,
+      weatherMultiplier: 1, critMultiplier: 1, stabMultiplier: 1, typeEffectiveness: 1, finalMultiplier: 1 };
+    const one = Array.from({ length: 16 }, (_, k) => fm.integerHitDamage(parts, 40, 100, (85 + k) / 100));
+    const pairs = one.flatMap((x) => one.map((y) => x + y));
+    const hpEdge = pairs.slice().sort((x, y) => x - y)[128];
+    const exact = pairs.filter((x) => x >= hpEdge).length / 256;
+    const got = fm.koChanceByUses(parts, 100, hpEdge);
+    if (got?.uses !== 1 || Math.abs(got.probability - exact) > 1e-9) fail(`다단히트 격파 확률 ${got?.probability} ≠ ${exact}`);
   }
 
   console.log(failed ? `${failed} FAIL` : `ALL PASS (${cases.length}건 난수표 + 엔진 대조)`);

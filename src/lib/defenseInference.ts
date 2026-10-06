@@ -244,7 +244,6 @@ function prepareObservations(input: InferenceInput): { prepared: PreparedObserva
       // 멀티스케일 등: 처음 맞는 한 방만 풀피
       defenderHpIsFull: i === 0 && obs.before >= 100,
       defenderItemConsumed: itemConsumed,
-      applyMoveOwnStatChanges: false,
       attackerStatus: attackerStatus ?? null,
       // 근성류 상승은 위력 단계, 화상 ×0.5는 최종 단계(2.4 B3)
       extraOffenseMultiplier: statusedAttackBoost(

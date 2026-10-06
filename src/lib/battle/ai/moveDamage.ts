@@ -362,7 +362,6 @@ function estimateMoveHitsCore(ctx: MoveHitContext, baseMove: Move): MoveHitEstim
   const matchupOptions: SlotMatchupOptions = {
     attackerStages: attacker.stages,
     defenderStages: defender.stages,
-    applyMoveOwnStatChanges: false,
     weather: state.weather,
     field: state.field,
     screen: attackerAbility?.bypassesScreensAndSubstitute ? undefined : screenFor(defenderSide, move.category),
