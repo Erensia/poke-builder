@@ -289,28 +289,10 @@ export function computeOffensePower(
 }
 
 /**
- * 내구력 계산에 쓰는 기준 상수들. 전부 레벨 50 상세 데미지 공식에서
- * `HP×방어 ÷ (0.44 × 난수)` 형태로 직접 유도된다 (0.44 = 22÷50, 난수 0.85~1.00).
- *  - 0.374 = 0.44 × 0.85 (최저 난수) → 확정 1타 기준
- *  - 0.411 = 0.44 × 0.9341(대략 50% 지점 난수) → 결정력=내구력이면 50% 확률
- *  - 0.44  = 0.44 × 1.00 (최고 난수) → 확정 2타(=1타로는 절대 안 죽음) 기준
- * 셋 다 "체력×방어"를 각자 독립적으로 나누는 값이지, 내구력(÷0.411)을 한 번 더 나누는 게 아니다.
+ * 내구력(결정력과 비교하는 연속값 지표) 기준 상수 — 레벨 50 공식 `HP×방어 ÷ (0.44 × 난수)`의 평균 난수 지점. 판정·AI 처치 타수는
+ * 정수 데미지 공식(damageFormula)으로 옮겨 갔고, 결정력&내구력 페이지의 내구력 표시에만 남아 있다.
  */
 export const BULK_BASELINE_DIVISOR = 0.411;
-export const GUARANTEED_OHKO_DIVISOR = 0.374;
-export const GUARANTEED_SURVIVE_2HIT_DIVISOR = 0.44;
-/**
- * 확정 2타(난수 없이 2번 만에 확정 격파) 기준.
- * "최저 난수 데미지 하나가 상대 HP의 절반 이상"이면 최저 난수 두 번을 합쳐도 반드시 HP를 넘는다는
- * 원리라서, 확정 1타 기준(0.374)의 정확히 2배(0.748)가 된다.
- */
-export const GUARANTEED_2HIT_DIVISOR = GUARANTEED_OHKO_DIVISOR * 2;
-/**
- * 난수로라도 2타에 격파 가능한 하한선. "최고 난수 데미지 하나가 상대 HP의 절반 이상"이면
- * 최고 난수 두 번을 합쳐 HP를 넘길 수 있다는 뜻이라, 1타 불가 기준(0.44)의 정확히 2배(0.88)가 된다.
- * 이보다 낮으면 최고 난수로도 2타 안에 못 죽여서 3타 이상이 필요하다.
- */
-export const POSSIBLE_2HIT_DIVISOR = GUARANTEED_SURVIVE_2HIT_DIVISOR * 2;
 
 export interface DefensePowerOptions {
   /** 방어자의 현재 랭크 상태. 카테고리에 맞춰 방어/특방 랭크를 자동으로 골라 쓴다 */
@@ -354,118 +336,15 @@ export type MatchupVerdict =
   | "random-2hit"
   | "needs-3hit-plus";
 
-/**
- * 결정력과 (0.411 기준으로 계산된) 내구력을 비교해 판정한다.
- * bulkPower는 반드시 computeBulkPower()의 기본 divisor(0.411)로 계산된 값이어야 한다 —
- * 내부에서 0.411/각 상수 비율로 환산해서 "체력×방어를 각 상수로 직접 나눈 값"과
- * 동등하게 비교한다 (bulkPower를 그 상수로 다시 나누면 안 됨).
- */
-export function evaluateMatchup(offensePower: number, bulkPower: number): MatchupVerdict {
-  const threshold = (divisor: number) => bulkPower * (BULK_BASELINE_DIVISOR / divisor);
-
-  if (offensePower > threshold(GUARANTEED_OHKO_DIVISOR)) return "guaranteed-1hit";
-  if (offensePower >= threshold(GUARANTEED_SURVIVE_2HIT_DIVISOR)) return "random-1hit";
-  if (offensePower >= threshold(GUARANTEED_2HIT_DIVISOR)) return "guaranteed-2hit";
-  if (offensePower >= threshold(POSSIBLE_2HIT_DIVISOR)) return "random-2hit";
-  return "needs-3hit-plus";
-}
-
-/**
- * 챔피언스는 랭크전 기준 레벨 50 고정 (Phase 2 기획 문서에서 리서치로 확인).
- * 본가 데미지 공식의 레벨 항 floor(2×Level/5 + 2)에 50을 대입하면 22로 고정된다.
- * evaluateMatchup의 0.374/0.411/0.44 상수도 이 22가 전제된 값이라 서로 정합적이다.
- */
-export const LEVEL_50_TERM = Math.floor((2 * 50) / 5 + 2);
-
-/** 데미지 난수(damage roll)의 최저/최고값. 실제로는 이 사이 16단계 중 하나가 뽑힌다 */
-export const MIN_DAMAGE_ROLL = 0.85;
+/** 데미지 난수(damage roll)의 최고값 */
 export const MAX_DAMAGE_ROLL = 1.0;
-
-/** 데미지 난수 단계 수. 0.85, 0.86, ..., 1.00을 0.01 간격으로 끊은 16개 값을 각 1/16 균등으로 근사한다 */
-export const DAMAGE_ROLL_STEPS = 16;
 
 export interface MatchupChance {
   verdict: MatchupVerdict;
   /** 그 판정의 타수로 상대를 격파할 확률(0~1). 확정 1·2타면 1, "3타 이상 필요"면 null */
   koChance: number | null;
-  /** 난수 1타일 때만 채운다: [격파하는 난수 롤 수, DAMAGE_ROLL_STEPS(=16)] */
+  /** 난수 1타일 때만 채운다: [격파하는 난수 롤 수, 16] */
   killingRolls?: readonly [number, number];
-}
-
-/**
- * 한 방이 상대 현재 HP를 정확히 채우는 "최소 격파 난수" rho*.
- * evaluateMatchup이 쓰는 관계식 offensePower = bulkPower × 0.411 / (0.44 × rho) 를 rho에 대해 푼 것.
- * random-1hit이면 rho* ∈ [0.85, 1.00], random-2hit이면 rho* ∈ [1.70, 2.00] 범위에 들어온다.
- */
-function minKillingRoll(offensePower: number, bulkPower: number): number {
-  return (bulkPower * BULK_BASELINE_DIVISOR) / (GUARANTEED_SURVIVE_2HIT_DIVISOR * offensePower);
-}
-
-/** k번째(0~15) 데미지 난수 값. (85+k)/100 으로 잡아 0.85·…·1.00을 정확히 표현한다 */
-function damageRoll(k: number): number {
-  return (85 + k) / 100;
-}
-
-export interface DamageRollPercent {
-  /** 난수(85~100) */
-  roll: number;
-  /** 그 난수로 한 방 때렸을 때 상대 최대 HP의 몇 %가 깎이는지 */
-  percent: number;
-}
-
-/**
- * 16단계 난수별 한 방 데미지를 상대 최대 HP 대비 %로(ver.1.7 트랙 H — 매치업 화면 표기). 한 방 데미지 =
- * 상대 HP × rho / rho*(minKillingRoll) — 격파 판정(evaluateMatchupChance)·배틀 AI 기대 타수(hitsToKill)와
- * 같은 관계식이다. 결정력이 0이면 빈 배열.
- */
-export function damageRollPercents(offensePower: number, bulkPower: number): DamageRollPercent[] {
-  if (offensePower <= 0 || bulkPower <= 0) return [];
-  const rhoStar = minKillingRoll(offensePower, bulkPower);
-  return Array.from({ length: DAMAGE_ROLL_STEPS }, (_, k) => ({ roll: 85 + k, percent: (damageRoll(k) / rhoStar) * 100 }));
-}
-
-/** 16개 난수 중 rhoStar 이상인 롤 수 (0~16). 1e-9는 부동소수점 경계 흔들림 보정 */
-function rollsAtLeast(rhoStar: number): number {
-  let n = 0;
-  for (let k = 0; k < DAMAGE_ROLL_STEPS; k++) {
-    if (damageRoll(k) + 1e-9 >= rhoStar) n++;
-  }
-  return n;
-}
-
-/**
- * evaluateMatchup의 5단계 판정에 더해, 난수 판정일 때 "그 타수로 격파할 확률"까지 낸다.
- * - random-1hit: 16개 난수 중 격파 롤 수 / 16
- * - random-2hit: 독립 두 난수(16×16=256쌍) 중 rho1+rho2 ≥ rho* 인 비율
- *   (한 방 데미지 = 상대 HP × rho/rho* 이므로 두 방 합이 rho* 이상이면 2타에 격파)
- * - 확정 1·2타: 1 (표기는 UI에서 생략), 3타 이상 필요: null
- * offensePower가 0(타입 무효)이면 evaluateMatchup이 needs-3hit-plus를 주므로 rho* 계산에 안 들어간다.
- */
-export function evaluateMatchupChance(offensePower: number, bulkPower: number): MatchupChance {
-  const verdict = evaluateMatchup(offensePower, bulkPower);
-
-  if (verdict === "guaranteed-1hit" || verdict === "guaranteed-2hit") {
-    return { verdict, koChance: 1 };
-  }
-  if (verdict === "needs-3hit-plus") {
-    return { verdict, koChance: null };
-  }
-
-  const rhoStar = minKillingRoll(offensePower, bulkPower);
-
-  if (verdict === "random-1hit") {
-    const killing = rollsAtLeast(rhoStar);
-    return { verdict, koChance: killing / DAMAGE_ROLL_STEPS, killingRolls: [killing, DAMAGE_ROLL_STEPS] };
-  }
-
-  // random-2hit
-  let killingPairs = 0;
-  for (let i = 0; i < DAMAGE_ROLL_STEPS; i++) {
-    for (let j = 0; j < DAMAGE_ROLL_STEPS; j++) {
-      if (damageRoll(i) + damageRoll(j) + 1e-9 >= rhoStar) killingPairs++;
-    }
-  }
-  return { verdict, koChance: killingPairs / (DAMAGE_ROLL_STEPS * DAMAGE_ROLL_STEPS) };
 }
 
 /**
