@@ -58,6 +58,8 @@ function conditionMatches(condition: AbilityModifierCondition | undefined, move:
 
 export interface AbilityOffenseResult {
   multiplier: number;
+  /** multiplier 중 공격 스탯 단계에 곱하는 몫(맹화류·선파워, stage "attackStat") — 나머지는 위력 단계 */
+  statMultiplier: number;
   /** 조건에 걸린 조정으로 기술의 유효 타입이 바뀌면 채워짐 (페어리스킨) */
   overrideMoveType?: PokemonType;
 }
@@ -73,20 +75,22 @@ export function resolveAbilityOffense(
   weather?: WeatherKind,
   attackerHpFraction = 1,
 ): AbilityOffenseResult {
-  const result: AbilityOffenseResult = { multiplier: 1 };
+  const result: AbilityOffenseResult = { multiplier: 1, statMultiplier: 1 };
   if (!ability?.modifiers) return result;
 
   for (const modifier of ability.modifiers) {
     if (modifier.scope !== "offense") continue;
     if (!conditionMatches(modifier.condition, move, { weather, attackerHpFraction })) continue;
     result.multiplier *= modifier.multiplier;
+    if (modifier.stage === "attackStat") result.statMultiplier *= modifier.multiplier;
     if (modifier.overrideMoveType) result.overrideMoveType = modifier.overrideMoveType;
   }
   return result;
 }
 
 /**
- * 방어측 특성이 (이 기술로 맞을 때) 주는 배율을 계산한다. 두꺼운지방처럼 내구력에 곱해서 쓴다.
+ * 방어측 특성이 (이 기술로 맞을 때) 주는 내구력 배율을 계산한다. multiplier는 전체, finalMultiplier는 그중 최종 데미지 단계에
+ * 곱하는 몫(멀티스케일·복슬복슬·펑크록·파동의방호, stage "final") — 나머지는 방어 스탯 단계(두꺼운지방 등).
  * defenderHpIsFull(멀티스케일용)은 안 넘기면 true(풀피)로 간주한다 — 매치업 페이지는 "현재 HP"
  * 개념이 없는 1턴 스냅샷이라 항상 풀피 취급, 배틀 시뮬레이터만 실제 HP를 넘겨준다.
  */
@@ -96,15 +100,16 @@ export function resolveAbilityDefense(
   defenderHpIsFull = true,
   defenderHasStatusCondition = false,
   field?: FieldKind,
-): number {
-  if (!ability?.modifiers) return 1;
-  let multiplier = 1;
+): { multiplier: number; finalMultiplier: number } {
+  const result = { multiplier: 1, finalMultiplier: 1 };
+  if (!ability?.modifiers) return result;
   for (const modifier of ability.modifiers) {
     if (modifier.scope !== "defense") continue;
     if (!conditionMatches(modifier.condition, move, { defenderHpIsFull, defenderHasStatusCondition, field })) continue;
-    multiplier *= modifier.multiplier;
+    result.multiplier *= modifier.multiplier;
+    if (modifier.stage === "final") result.finalMultiplier *= modifier.multiplier;
   }
-  return multiplier;
+  return result;
 }
 
 /** 자속보정 배율. 적응력이면 2.0, 그 외에는 표준 1.5 */

@@ -7,6 +7,7 @@
       {
         "scope": "offense",
         "multiplier": 1.5,
+        "stage": "attackStat",
         "condition": {
           "moveTypeIn": ["불꽃"],
           "attackerHpAtMostFraction": 0.3333333333333333
@@ -22,6 +23,7 @@
       {
         "scope": "offense",
         "multiplier": 1.5,
+        "stage": "attackStat",
         "condition": {
           "moveCategoryIn": ["special"],
           "weatherIs": "쾌청"
@@ -57,6 +59,7 @@
       {
         "scope": "offense",
         "multiplier": 1.5,
+        "stage": "attackStat",
         "condition": {
           "moveTypeIn": ["물"],
           "attackerHpAtMostFraction": 0.3333333333333333
@@ -94,6 +97,7 @@
       {
         "scope": "offense",
         "multiplier": 1.5,
+        "stage": "attackStat",
         "condition": {
           "moveTypeIn": ["풀"],
           "attackerHpAtMostFraction": 0.3333333333333333
@@ -330,6 +334,7 @@
       {
         "scope": "offense",
         "multiplier": 1.5,
+        "stage": "attackStat",
         "condition": {
           "moveTypeIn": ["벌레"],
           "attackerHpAtMostFraction": 0.3333333333333333
@@ -480,6 +485,7 @@
       {
         "scope": "defense",
         "multiplier": 2,
+        "stage": "final",
         "condition": {
           "defenderHpIsFull": true
         }
@@ -752,6 +758,7 @@
       {
         "scope": "defense",
         "multiplier": 2,
+        "stage": "final",
         "condition": {
           "makesContact": true
         }
@@ -1503,6 +1510,7 @@
       {
         "scope": "defense",
         "multiplier": 2,
+        "stage": "final",
         "condition": {
           "makesContact": true
         }
@@ -1510,6 +1518,7 @@
       {
         "scope": "defense",
         "multiplier": 0.5,
+        "stage": "final",
         "condition": {
           "moveTypeIn": [
             "불꽃"
@@ -1747,6 +1756,7 @@
       {
         "scope": "defense",
         "multiplier": 2,
+        "stage": "final",
         "condition": { "moveClassificationIn": ["소리"] }
       }
     ]

@@ -477,6 +477,7 @@ export function evaluateSlotMatchup(
   const {
     effectiveMove,
     abilityOffenseMultiplier,
+    statOffenseMultiplier,
     abilityDefenseMultiplier: abilityDefense,
     finalDefenseMultiplier,
     stabMultiplier,
@@ -643,17 +644,19 @@ export function evaluateSlotMatchup(
     criticalApplies ? clampStages(defenderStages, "positive") : defenderStages,
   );
   const useAutoDefense = manualBulkMultiplier === undefined;
+  // 맹화류·선파워는 공격 스탯 단계 — 직접 지정한 특성 배율이 있으면 그 값 전체를 위력 단계로 본다
+  const abilityStatMultiplier = manualAbilityMultiplier === undefined ? statOffenseMultiplier : 1;
   const itemBaseMultiplier = itemMultiplier ?? getItemBasePowerMultiplier(attackerItem, effectiveMove);
   const itemFinalMultiplier = itemMultiplier !== undefined ? 1 : getItemFinalMultiplier(attackerItem, typeEffectiveness, 1);
   const damageParts: DamageParts | undefined =
     hitPowers.length > 0 && attackTerm > 0
       ? {
           hitPowers,
-          attackTerm,
+          attackTerm: Math.floor(attackTerm + 1e-9) * abilityStatMultiplier,
           defenseKey,
           defenseRankMultiplier: rankStageMultiplier(bulkDefenderStages[defenseKey]),
           baseMultiplier:
-            (manualAbilityMultiplier ?? abilityOffenseMultiplier) * rivalryMultiplier * hustleMultiplier * extraOffenseMultiplier *
+            ((manualAbilityMultiplier ?? abilityOffenseMultiplier) / abilityStatMultiplier) * rivalryMultiplier * hustleMultiplier * extraOffenseMultiplier *
             itemBaseMultiplier * (manualFieldMultiplier ?? autoFieldDamageMultiplier),
           bulkMultiplier: manualBulkMultiplier ?? (abilityDefense / finalDefenseMultiplier) * weatherDefenseMultiplier,
           weatherMultiplier: manualWeatherMultiplier ?? autoWeatherDamageMultiplier,
