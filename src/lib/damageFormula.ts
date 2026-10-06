@@ -96,3 +96,41 @@ export function damageRollTotals(parts: DamageParts, defenseRealStat: number): n
     integerTotalDamage(parts, defenseRealStat, (DAMAGE_ROLL_MIN_PERCENT + k) / 100),
   );
 }
+
+/** 기술을 한 번 쓴 총 데미지 분포(총합 → 확률). 다단히트는 타마다 독립 난수를 합성곱한다(D5). 반감 열매는 첫 사용의 첫 타에만 */
+function singleUseDistribution(parts: DamageParts, defenseRealStat: number, isFirstUse: boolean): Map<number, number> {
+  let dist = new Map<number, number>([[0, 1]]);
+  parts.hitPowers.forEach((power, i) => {
+    const next = new Map<number, number>();
+    for (let k = 0; k < DAMAGE_ROLL_STEP_COUNT; k++) {
+      const d = integerHitDamage(
+        parts, power, defenseRealStat, (DAMAGE_ROLL_MIN_PERCENT + k) / 100,
+        isFirstUse && i === 0, parts.firstHitFinalMultiplier ?? 1,
+      );
+      for (const [sum, p] of dist) next.set(sum + d, (next.get(sum + d) ?? 0) + p / DAMAGE_ROLL_STEP_COUNT);
+    }
+    dist = next;
+  });
+  return dist;
+}
+
+function probabilityAtLeast(dist: Map<number, number>, hp: number): number {
+  let sum = 0;
+  for (const [damage, p] of dist) if (damage >= hp) sum += p;
+  return sum;
+}
+
+/**
+ * 방어측 HP를 몇 번 쓰면 격파하는지와 그 확률(난수 판정). 1번에 가능하면 uses=1, 아니면 2번(독립 난수), 그래도 안 되면 null.
+ * 확정이면 probability가 1(부동소수점 보정 포함).
+ */
+export function koChanceByUses(parts: DamageParts, defenseRealStat: number, hp: number): { uses: 1 | 2; probability: number } | null {
+  const first = singleUseDistribution(parts, defenseRealStat, true);
+  const p1 = probabilityAtLeast(first, hp);
+  if (p1 > 0) return { uses: 1, probability: p1 > 1 - 1e-9 ? 1 : p1 };
+  const second = singleUseDistribution(parts, defenseRealStat, false);
+  const two = new Map<number, number>();
+  for (const [a, p] of first) for (const [b, q] of second) two.set(a + b, (two.get(a + b) ?? 0) + p * q);
+  const p2 = probabilityAtLeast(two, hp);
+  return p2 > 0 ? { uses: 2, probability: p2 > 1 - 1e-9 ? 1 : p2 } : null;
+}

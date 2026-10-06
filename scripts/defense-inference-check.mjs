@@ -50,7 +50,7 @@ try {
       nature: pick(natureIds),
     });
     const move = pick(usable);
-    const res = ev.evaluateSlotMatchup(atk, move, def, { applyMoveOwnStatChanges: false });
+    const res = ev.evaluateSlotMatchup(atk, move, def);
     if (!res?.damageParts) continue;
     const parts = res.damageParts;
     if (parts.hitPowers.length > 1) continue; // 다단히트는 역산 대상 아님(엔진도 타별 호출)
@@ -90,7 +90,7 @@ try {
   const makeObservation = (cands, atk, defTrue, dReal, hp) => {
     for (let tries = 0; tries < 20; tries++) {
       const move = pick(cands);
-      const res = ev.evaluateSlotMatchup(atk, move, defTrue, { applyMoveOwnStatChanges: false });
+      const res = ev.evaluateSlotMatchup(atk, move, defTrue);
       const p = res?.damageParts;
       if (!p || p.typeEffectiveness === 0) continue;
       const roll = (85 + Math.floor(rnd() * 16)) / 100;
