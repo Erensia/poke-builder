@@ -478,6 +478,8 @@ export const CRITICAL_DAMAGE_MULTIPLIER = 1.5;
 export interface DamageOptions {
   typeEffectiveness?: number;
   abilityMultiplier?: number;
+  /** 공격 스탯 단계 배율(맹화류·선파워) — 공격 스탯에 곱해 내린다. abilityMultiplier(위력 단계)에는 넣지 않는다. 생략하면 1 */
+  attackStatMultiplier?: number;
   itemMultiplier?: number;
   weatherMultiplier?: number;
   /** 필드(그래스/미스트/사이코/일렉트릭)로 인한 배율. 날씨와 별개 축이라 곱셈 슬롯을 따로 둔다 */
@@ -524,6 +526,7 @@ export function computeDamage(
   const {
     typeEffectiveness = 1,
     abilityMultiplier = 1,
+    attackStatMultiplier = 1,
     itemMultiplier = 1,
     weatherMultiplier = 1,
     fieldMultiplier = 1,
@@ -551,7 +554,8 @@ export function computeDamage(
   const attackMultiplier = rankStageMultiplier(isCritical ? Math.max(0, attackStage) : attackStage);
   const defenseMultiplier = rankStageMultiplier(isCritical ? Math.min(0, defenseStage) : defenseStage);
 
-  const attackStat = rawAttackStat * attackMultiplier;
+  // 공격 스탯 단계 특성(맹화류·선파워 ×1.5)은 랭크까지 내린 스탯에 곱해 다시 내린다(2.5 사용자 사례: 129×1.5=193.5 → 193)
+  const attackStat = Math.floor(rawAttackStat * attackMultiplier + 1e-9) * attackStatMultiplier;
 
   const stab = move.type && attackerTypes.includes(move.type) ? stabMultiplier : 1;
 
