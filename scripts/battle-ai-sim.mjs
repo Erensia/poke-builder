@@ -140,7 +140,7 @@ try {
       moves: moves.map((m) => data.getMove(m)),
     };
   }
-  // POOL=samples(2.2 B3): 무작위 빌드 대신 기본 제공 샘플 파티 하나에서 3마리를 뽑아 편을 만든다(실전형 조합으로 벤치 다양성 확보).
+  // POOL=samples(2.2 B3): 무작위 빌드 대신 기본 제공 샘플 파티 하나에서 3마리를 뽑아 편을 만든다(심화샘플 조합으로 벤치 다양성 확보).
   // PIVOT·SETUP·PROTECT·STATUS 기술 치환은 무작위 빌드(makeSlot)에만 걸린다. 기본값(POOL 없음)은 기존과 동일.
   function sampleSide(rng) {
     const party = data.SAMPLE_PARTIES[Math.floor(rng() * data.SAMPLE_PARTIES.length)];

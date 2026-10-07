@@ -10,14 +10,14 @@ import "./SamplePartiesModal.css";
 type GroupFilter = "all" | SamplePartyPreset["group"];
 
 const GROUP_LABEL: Record<SamplePartyPreset["group"], string> = {
-  real: "실전형",
-  textbook: "교과서형",
+  real: "심화샘플",
+  textbook: "기초샘플",
 };
 
 const FILTERS: { key: GroupFilter; label: string }[] = [
   { key: "all", label: "전체" },
-  { key: "real", label: "실전형" },
-  { key: "textbook", label: "교과서형" },
+  { key: "real", label: "심화샘플" },
+  { key: "textbook", label: "기초샘플" },
 ];
 
 interface SamplePartiesModalProps {
@@ -72,7 +72,7 @@ export function SamplePartiesModal({ onClose, onLoad, loadTargetLabel, targetHas
         ))}
       </div>
       <p className="sample-party-hint">
-        실전형은 자주 볼 법한 강한 조합, 교과서형은 한 가지 전술을 순수하게 보여 주는 표본이에요. 불러와서 고쳐도 원본은 바뀌지 않아요.
+        심화샘플은 자주 볼 법한 강한 조합, 기초샘플은 한 가지 전술을 순수하게 보여 주는 표본이에요. 불러와서 고쳐도 원본은 바뀌지 않아요.
       </p>
 
       <ul className="preset-list">

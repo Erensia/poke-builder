@@ -82,7 +82,7 @@ export interface SamplePartyPreset {
   name: string;
   /** 성향 라벨(날씨·트릭룸·스톨 등) */
   style: string;
-  /** real = 실전형(자주 볼 법한 강한 조합), textbook = 교과서형(한 전술을 순수하게 보여 주는 표본) */
+  /** real = 심화샘플(자주 볼 법한 강한 조합), textbook = 기초샘플(한 전술을 순수하게 보여 주는 표본) */
   group: "real" | "textbook";
   description: string;
   /** 항상 6마리 */
