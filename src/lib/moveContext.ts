@@ -19,11 +19,14 @@ export interface MoveContext {
   effectiveMove: Move;
   /** 공격측 특성이 이 기술에 주는 배율 (테크니션/모래의힘/메가런처 등) */
   abilityOffenseMultiplier: number;
+  /** abilityOffenseMultiplier 중 공격 스탯 단계에 곱하는 몫(맹화류·선파워 — 스탯에 곱해 내림). 나머지는 위력 단계 */
+  statOffenseMultiplier: number;
   /** 방어측 특성이 이 기술을 받을 때 주는 배율 (두꺼운지방 등) — finalDefenseMultiplier를 포함한 총 내구력 배율 */
   abilityDefenseMultiplier: number;
   /**
-   * abilityDefenseMultiplier 중 "최종 보정" 단계에 곱해지는 몫(내구력 배율 형태, 하드록·필터 0.75 → 1/0.75). 없으면 1.
-   * 정수 데미지 공식은 총 배율 ÷ 이 값을 방어 스탯 단계에, 이 값을 최종 단계에 쓴다(2.4 B3 사례 ⑩).
+   * abilityDefenseMultiplier 중 "최종 보정" 단계에 곱해지는 몫(내구력 배율 형태: 하드록·필터 0.75 → 1/0.75,
+   * 멀티스케일·복슬복슬·펑크록·파동의방호 데미지 ×0.5 → 2). 없으면 1.
+   * 정수 데미지 공식은 총 배율 ÷ 이 값을 방어 스탯 단계에, 이 값을 최종 단계에 쓴다(2.4 B3 사례 ⑩, 2.5 D1-a).
    */
   finalDefenseMultiplier: number;
   /** 자속보정 배율. 기본 1.5, 적응력이면 2.0 */
@@ -78,13 +81,8 @@ export function resolveMoveContext(
         1,
       )
     : 1;
-  let abilityDefenseMultiplier = resolveAbilityDefense(
-    defenderAbility,
-    effectiveMove,
-    defenderHpIsFull,
-    defenderHasStatusCondition,
-    field,
-  );
+  const abilityDefense = resolveAbilityDefense(defenderAbility, effectiveMove, defenderHpIsFull, defenderHasStatusCondition, field);
+  let abilityDefenseMultiplier = abilityDefense.multiplier;
   const stabMultiplier = resolveStabMultiplier(attackerAbility);
 
   // 배짱처럼 특정 타입의 면역만 무시하는 특성(공격측)이거나, 검은철구처럼 방어측이 스스로 땅타입
@@ -153,15 +151,17 @@ export function resolveMoveContext(
 
   // 하드록/필터/프리즘아머: 효과가 굉장한(상성 > 1) 공격이면 데미지를 이 배율(0.75)로 줄인다.
   // abilityDefenseMultiplier는 "내구력 배율"이라 데미지는 그 역수 — 데미지 ×0.75 = 내구력 ÷0.75.
-  let finalDefenseMultiplier = 1;
+  let finalDefenseMultiplier = abilityDefense.finalMultiplier;
   if (defenderAbility?.reducesSuperEffectiveDamageMultiplier !== undefined && typeEffectiveness > 1) {
-    finalDefenseMultiplier = 1 / defenderAbility.reducesSuperEffectiveDamageMultiplier;
-    abilityDefenseMultiplier *= finalDefenseMultiplier;
+    const superEffectiveShare = 1 / defenderAbility.reducesSuperEffectiveDamageMultiplier;
+    finalDefenseMultiplier *= superEffectiveShare;
+    abilityDefenseMultiplier *= superEffectiveShare;
   }
 
   return {
     effectiveMove,
     abilityOffenseMultiplier: abilityOffense.multiplier * auraMultiplier,
+    statOffenseMultiplier: abilityOffense.statMultiplier,
     abilityDefenseMultiplier,
     finalDefenseMultiplier,
     stabMultiplier,

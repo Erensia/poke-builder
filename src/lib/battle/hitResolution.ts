@@ -47,6 +47,8 @@ interface HitResolutionInput {
   sheerForceAbilityName: string | undefined;
   defenderBerriesBlocked: boolean;
   abilityOffenseMultiplier: number;
+  /** abilityOffenseMultiplier 중 공격 스탯 단계 몫(맹화류·선파워) — moveContext 참고 */
+  statOffenseMultiplier: number;
   abilityDefenseMultiplier: number;
   /** abilityDefenseMultiplier 중 최종 보정 단계 몫(하드록·필터) — moveContext 참고 */
   finalDefenseMultiplier: number;
@@ -54,7 +56,7 @@ interface HitResolutionInput {
 }
 
 export function resolveHitAndApplyDamage(input: HitResolutionInput) {
-  const { state, defenderKey, move, effectiveMove, random, attacker, defender, attackerAbility, defenderAbility, attackerItem, defenderItem, typeEffectiveness, blockedByProtect, blockedBySubstitute, unseenFistPiercing, hitChance, evadedByCharge, defenderHideType, gemMultiplier, ownMoveTypeBoostMultiplier, rivalryMultiplier, sheerForceAbilityName, defenderBerriesBlocked, abilityOffenseMultiplier, abilityDefenseMultiplier, finalDefenseMultiplier, stabMultiplier } = input;
+  const { state, defenderKey, move, effectiveMove, random, attacker, defender, attackerAbility, defenderAbility, attackerItem, defenderItem, typeEffectiveness, blockedByProtect, blockedBySubstitute, unseenFistPiercing, hitChance, evadedByCharge, defenderHideType, gemMultiplier, ownMoveTypeBoostMultiplier, rivalryMultiplier, sheerForceAbilityName, defenderBerriesBlocked, abilityOffenseMultiplier, statOffenseMultiplier, abilityDefenseMultiplier, finalDefenseMultiplier, stabMultiplier } = input;
   // status 기술(도깨비불·최면술 등 위력 없는 변화기)은 데미지 계산을 건너뛴다.
   // 예전엔 여기서 바로 return 해버려서 이런 기술들의 랭크변화/상태이상 부여가 전혀 발동하지 않는
   // 버그가 있었다 — 명중만 하면 데미지 유무와 무관하게 아래 효과 적용까지 항상 도달해야 한다.
@@ -234,13 +236,14 @@ export function resolveHitAndApplyDamage(input: HitResolutionInput) {
     const result = computeDamage(attacker.realStats, defenderStatsForDamage, attacker.types, hitMove, {
       typeEffectiveness,
       abilityMultiplier:
-        abilityOffenseMultiplier *
+        (abilityOffenseMultiplier / statOffenseMultiplier) *
         statusAttackMultiplier *
         hidingBypassMultiplier *
         ownMoveTypeBoostMultiplier *
         rivalryMultiplier *
         hustleMultiplier *
         overlordMultiplier,
+      attackStatMultiplier: statOffenseMultiplier,
       weatherMultiplier,
       fieldMultiplier,
       itemMultiplier: itemMultiplier * gemMultiplier,

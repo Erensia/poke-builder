@@ -68,6 +68,12 @@ export interface AbilityModifier {
   condition?: AbilityModifierCondition;
   /** offense 전용. 조건을 만족하면 기술의 실제 타입을 이걸로 바꿔서 자속/상성을 계산 (페어리스킨) */
   overrideMoveType?: PokemonType;
+  /**
+   * 데미지 공식에서 곱해지는 단계(2.5 사용자 사례로 확정). 생략하면 offense=위력 단계, defense=방어 스탯 단계.
+   *  - "attackStat"(offense): 공격 스탯에 곱해 내림 — 맹화·급류·심록·벌레의알림·선파워
+   *  - "final"(defense): 최종 데미지에 곱함(내림 쪽 반올림) — 멀티스케일·복슬복슬·펑크록·파동의방호
+   */
+  stage?: "attackStat" | "final";
 }
 
 /**

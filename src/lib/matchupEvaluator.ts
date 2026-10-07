@@ -10,11 +10,10 @@ import { getPokemon, getAbility, getItem } from "./data";
 import { getBerryDefenseResult, getItemBasePowerMultiplier, getItemFinalMultiplier, getItemOffenseMultiplier, getItemSpeedMultiplier } from "./itemEffects";
 import { getEffectiveForm, getEffectiveGender, type FormSource } from "./pokemonForm";
 import { computeRealStats } from "./statCalculator";
-import { applyMoveStatChanges } from "./statStages";
 import { getWeatherDamageMultiplier, getWeatherDefenseMultiplier, applyWeatherBall } from "./weatherEffects";
 import { applyFieldPulse, getFieldPowerMultiplier, getFieldDamageMultiplier } from "./fieldEffects";
 import { resolveMoveContext } from "./moveContext";
-import type { DamageParts } from "./damageFormula";
+import { koChanceByUses, DAMAGE_ROLL_STEP_COUNT, type DamageParts } from "./damageFormula";
 import { resolveEffectiveDefenderAbility } from "./abilityModifiers";
 import { NEUTRAL_STAGES, type StatStages } from "../types/battleStats";
 import {
@@ -23,7 +22,6 @@ import {
   computeBulkPower,
   computeAttackTerm,
   computeEffectiveSpeed,
-  evaluateMatchupChance,
   rankStageMultiplier,
   reversalPowerFromHp,
   gyroBallPowerFromSpeeds,
@@ -36,6 +34,7 @@ import {
   rivalryDamageMultiplier,
   hustleDamageMultiplier,
   screenMultiplierFromFlags,
+  type MatchupChance,
   type MatchupVerdict,
 } from "./battlePower";
 
@@ -51,11 +50,6 @@ export interface SlotMatchupOptions {
   attackerStages?: StatStages;
   /** 이번 턴 전까지 누적된 방어측 랭크 상태. 기본은 전부 0랭크 */
   defenderStages?: StatStages;
-  /**
-   * 이 기술 자체가 주는 랭크 변화까지 반영할지 (기본 false). 데미지 기술의 부가 효과(상대 방어 하락·자신의 능력 하락·상승)는 데미지를
-   * 준 뒤에 적용되므로 이번 타의 계산에 넣으면 틀린다(2.4 B3 — 아쿠아브레이크 방어 −1이 먼저 걸려 데미지가 부풀던 문제). 연속 사용 가정용.
-   */
-  applyMoveOwnStatChanges?: boolean;
   /**
    * 트리플악셀처럼 다단히트 기술일 때 몇 타까지 맞은 걸로 계산할지 (1부터 시작).
    * move.multiHitPowers가 있을 때만 의미가 있고, 해당 타수까지의 위력을 합산해서 쓴다.
@@ -169,22 +163,6 @@ export interface EvaluatorSlot extends FormSource {
    */
   gender?: PokemonGender;
 }
-
-// 심술꾸러기(Contrary): 랭크 변화를 받는 쪽이 이 특성이면 move.statChanges의 delta 부호를 뒤집는다.
-// evaluateSlotMatchup·computeSoloOffensePower 둘 다 쓰는 작은 헬퍼라 모듈 최상위로 뺐다.
-function contraryMove(m: Move, invert: boolean | undefined): Move {
-  return !invert || !m.statChanges
-    ? m
-    : {
-        ...m,
-        statChanges: m.statChanges.map((s) => ({
-          ...s,
-          delta: s.delta === undefined ? undefined : -s.delta,
-          setTo: s.setTo === undefined ? undefined : -s.setTo,
-        })),
-      };
-}
-
 export type { DamageParts } from "./damageFormula";
 
 export interface SlotMatchupResult {
@@ -233,9 +211,8 @@ export function evaluateSlotMatchup(
   // 가변 위력을 확정해보고, 그래도 null이면 computeOffensePower가 null을 반환해 걸러진다.
 
   const {
-    attackerStages: baseAttackerStages = NEUTRAL_STAGES,
-    defenderStages: baseDefenderStages = NEUTRAL_STAGES,
-    applyMoveOwnStatChanges = false,
+    attackerStages = NEUTRAL_STAGES,
+    defenderStages = NEUTRAL_STAGES,
     weather,
     field,
     abilityMultiplier: manualAbilityMultiplier,
@@ -310,20 +287,6 @@ export function evaluateSlotMatchup(
   const defenderRealStats =
     defenderRuntime?.realStats ?? computeRealStats(defenderForm.baseStats, defenderSlot.points, defenderSlot.nature);
 
-  // 이 기술 자체가 주는 랭크 변화(예: 칼춤을 쓴 다음 그 위력으로 계산하고 싶을 때)까지 반영.
-  // weather: 성장(쾌청이면 +1 추가로 얹어 총 +2)처럼 날씨 조건부 statChanges 항목 판정용.
-  const attackerStages = applyMoveOwnStatChanges
-    ? applyMoveStatChanges(baseAttackerStages, contraryMove(move, attackerAbility?.invertsStatChanges), "self", {
-        userTypes: attackerForm.types,
-        weather: effectiveWeather,
-      })
-    : baseAttackerStages;
-  const defenderStages = applyMoveOwnStatChanges
-    ? applyMoveStatChanges(baseDefenderStages, contraryMove(move, defenderAbility?.invertsStatChanges), "opponent", {
-        userTypes: attackerForm.types,
-        weather: effectiveWeather,
-      })
-    : baseDefenderStages;
 
   // 지닌 도구: 직접 지정한 배율이 없으면 실제 장착한 도구에서 자동으로 구한다. defenderItem은
   // resolveMoveContext의 검은철구(땅타입 면역 무시) 판정에도 필요해서 여기서 먼저 구해둔다.
@@ -477,6 +440,7 @@ export function evaluateSlotMatchup(
   const {
     effectiveMove,
     abilityOffenseMultiplier,
+    statOffenseMultiplier,
     abilityDefenseMultiplier: abilityDefense,
     finalDefenseMultiplier,
     stabMultiplier,
@@ -643,17 +607,19 @@ export function evaluateSlotMatchup(
     criticalApplies ? clampStages(defenderStages, "positive") : defenderStages,
   );
   const useAutoDefense = manualBulkMultiplier === undefined;
+  // 맹화류·선파워는 공격 스탯 단계 — 직접 지정한 특성 배율이 있으면 그 값 전체를 위력 단계로 본다
+  const abilityStatMultiplier = manualAbilityMultiplier === undefined ? statOffenseMultiplier : 1;
   const itemBaseMultiplier = itemMultiplier ?? getItemBasePowerMultiplier(attackerItem, effectiveMove);
   const itemFinalMultiplier = itemMultiplier !== undefined ? 1 : getItemFinalMultiplier(attackerItem, typeEffectiveness, 1);
   const damageParts: DamageParts | undefined =
     hitPowers.length > 0 && attackTerm > 0
       ? {
           hitPowers,
-          attackTerm,
+          attackTerm: Math.floor(attackTerm + 1e-9) * abilityStatMultiplier,
           defenseKey,
           defenseRankMultiplier: rankStageMultiplier(bulkDefenderStages[defenseKey]),
           baseMultiplier:
-            (manualAbilityMultiplier ?? abilityOffenseMultiplier) * rivalryMultiplier * hustleMultiplier * extraOffenseMultiplier *
+            ((manualAbilityMultiplier ?? abilityOffenseMultiplier) / abilityStatMultiplier) * rivalryMultiplier * hustleMultiplier * extraOffenseMultiplier *
             itemBaseMultiplier * (manualFieldMultiplier ?? autoFieldDamageMultiplier),
           bulkMultiplier: manualBulkMultiplier ?? (abilityDefense / finalDefenseMultiplier) * weatherDefenseMultiplier,
           weatherMultiplier: manualWeatherMultiplier ?? autoWeatherDamageMultiplier,
@@ -666,7 +632,7 @@ export function evaluateSlotMatchup(
         }
       : undefined;
 
-  const chance = evaluateMatchupChance(offensePower, bulkPower);
+  const chance = judgeByIntegerDamage(damageParts, defenderRealStats[defenseKey], defenderRealStats.hp);
   return {
     offensePower,
     rawOffensePower,
@@ -679,6 +645,24 @@ export function evaluateSlotMatchup(
     criticalBlocked: critical && !criticalApplies ? true : undefined,
     koChance: chance.koChance,
     killingRolls: chance.killingRolls,
+  };
+}
+
+/**
+ * 정수 데미지 공식(난수표와 같은 값)으로 낸 판정 배지. 다단히트는 타별 독립 난수의 정확한 격파 확률(2.5 D4-a·D5).
+ * 위력이 없거나 면역이면 3타 이상(null).
+ */
+function judgeByIntegerDamage(parts: DamageParts | undefined, defenseStat: number, hp: number): MatchupChance {
+  const ko = parts ? koChanceByUses(parts, defenseStat, hp) : null;
+  if (!ko) return { verdict: "needs-3hit-plus", koChance: null };
+  if (ko.probability === 1) return { verdict: ko.uses === 1 ? "guaranteed-1hit" : "guaranteed-2hit", koChance: 1 };
+  if (ko.uses === 2) return { verdict: "random-2hit", koChance: ko.probability };
+  // 단타만 "16난수 중 n개"로 센다(다단히트는 난수가 타마다 독립이라 16개로 환원되지 않는다)
+  const single = parts!.hitPowers.length === 1;
+  return {
+    verdict: "random-1hit",
+    koChance: ko.probability,
+    killingRolls: single ? [Math.round(ko.probability * DAMAGE_ROLL_STEP_COUNT), DAMAGE_ROLL_STEP_COUNT] : undefined,
   };
 }
 
@@ -730,7 +714,6 @@ function conditionalPowerDoubled(
 
 export interface SoloOffensePowerOptions {
   attackerStages?: StatStages;
-  applyMoveOwnStatChanges?: boolean;
   multiHitCount?: number;
   stockpileCount?: number;
   weather?: WeatherKind;
@@ -772,8 +755,7 @@ export function computeSoloOffensePower(
   if (move.usesTargetAttackStat || move.gyroBallPower) return null;
 
   const {
-    attackerStages: baseAttackerStages = NEUTRAL_STAGES,
-    applyMoveOwnStatChanges = false,
+    attackerStages = NEUTRAL_STAGES,
     weather,
     field,
     multiHitCount,
@@ -805,12 +787,6 @@ export function computeSoloOffensePower(
 
   const attackerRealStats = computeRealStats(attackerForm.baseStats, attackerSlot.points, attackerSlot.nature);
 
-  const attackerStages = applyMoveOwnStatChanges
-    ? applyMoveStatChanges(baseAttackerStages, contraryMove(move, attackerAbility?.invertsStatChanges), "self", {
-        userTypes: attackerForm.types,
-        weather: effectiveWeather,
-      })
-    : baseAttackerStages;
 
   const attackerItem = attackerSlot.item ? getItem(attackerSlot.item) : undefined;
 

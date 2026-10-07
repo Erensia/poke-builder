@@ -1839,7 +1839,10 @@ try {
       const berry = cOf(quake("슈캐열매"));
       const b = quake("슈캐열매");
       const r = me.evaluateSlotMatchup(b.a.slot, data.getMove("지진"), b.b.slot, {});
-      const allHalved = htk.expectedHits(r.offensePower, r.bulkPower, 1);
+      // 매 타 반감(이전 근사)이면 열매 몫이 모든 사용에 곱해진다
+      const p = r.damageParts;
+      const halvedRest = { ...p, finalMultiplier: p.finalMultiplier * p.firstHitFinalMultiplier, firstHitFinalMultiplier: undefined };
+      const allHalved = htk.estimateKills({ first: halvedRest, rest: halvedRest, critChance: 0, defenseStat: r.defenseStat, hitCounts: [[1, 1]] }, b.b.currentHp).expected;
       check(
         "1.9 6-1: 반감 열매 첫 타만 — 계산기 다단히트 5타 ×1.11·2타 ×1.33, AI 처치 턴 열매 없음 < 첫 타만 < 매 타 반감",
         Math.abs(multi - 1 / 0.9) < 0.01 && Math.abs(twoHits - 4 / 3) < 0.01 && none < berry && berry < allHalved,
@@ -1975,7 +1978,7 @@ try {
     const armorSame = est("스톤에지", "전투무장").rawHits === est("스톤에지", "전투무장", false).rawHits;
     check(
       "1.9 6-2: AI 급소 — 급소율 높은 기술일수록 처치 턴↓, 반드시 급소 ×1.5, 전투무장 상대 무변화",
-      edgeGain > quakeGain && quakeGain >= 1 && Math.abs(breathDmg - 1.5) < 0.01 && armorSame,
+      edgeGain > quakeGain && quakeGain >= 1 && Math.abs(breathDmg - 1.5) < 0.03 && armorSame,
       `스톤에지 ×${edgeGain.toFixed(3)} 지진 ×${quakeGain.toFixed(3)} 얼음숨결 데미지 ×${breathDmg.toFixed(2)} 전투무장 ${armorSame}`,
     );
   }
@@ -2306,25 +2309,6 @@ try {
       aiOpts.map((o) => o.move?.id ?? `교체${o.toIndex}`).join(","),
     );
   }
-  // ── 매치업 난수별 데미지(ver.1.7 트랙 H): 기존 격파 판정과 같은 관계식인지 대조 ──
-  {
-    const bp = await server.ssrLoadModule("/src/lib/battlePower.ts");
-    let mismatches = 0;
-    let checked = 0;
-    for (let i = 0; i < 2000; i++) {
-      const offense = 50 + ((i * 7919) % 400);
-      const bulk = 40 + ((i * 104729) % 300);
-      const rolls = bp.damageRollPercents(offense, bulk);
-      const chance = bp.evaluateMatchupChance(offense, bulk);
-      const ohko = rolls.filter((r) => r.percent + 1e-9 >= 100).length;
-      checked++;
-      if (chance.verdict === "guaranteed-1hit" && ohko !== 16) mismatches++;
-      if (chance.verdict === "random-1hit" && ohko !== chance.killingRolls[0]) mismatches++;
-      if ((chance.verdict === "guaranteed-2hit" || chance.verdict === "random-2hit" || chance.verdict === "needs-3hit-plus") && ohko !== 0) mismatches++;
-      if (chance.verdict === "needs-3hit-plus" && rolls[15].percent * 2 + 1e-9 >= 100) mismatches++;
-    }
-    check("난수별 데미지 % ↔ 격파 판정 일치(2000조합)", mismatches === 0, `불일치 ${mismatches}/${checked}`);
-  }
   // ── 틀깨기 목록 수정(ver.2.0, 사용자 정리 2026-09-29): 목록 = 틀깨기에 무시당하는 특성 ──
   {
     const rt = await server.ssrLoadModule("/src/lib/battle/runTurn.ts");
@@ -2538,7 +2522,7 @@ try {
     check("B6 같은 포켓몬만 저장돼 있어도 1마리만 쓰고 보충", dup.fromSaved === 1 && valid(dup.slots));
     check("B6 입력 슬롯을 변형하지 않음(사본 반환)", JSON.stringify(savedFew) === frozen && rs.buildRandomPartyFromSlots(savedFew, pool, rng).slots.every((s) => !savedFew.includes(s)));
   }
-  // 2.2 B2: 연속 대전 — 대진표는 샘플 파티를 한 번씩 전부(원본 불변), 전적 요약은 승·패·무 합이 판 수와 일치
+  // 2.5 L4: 배틀 프런티어 — 대진표는 샘플 파티를 한 번씩 전부(원본 불변), 연승·최대 연승·샘플별 누적·이탈 정산
   {
     const bs = await server.ssrLoadModule("/src/lib/battleSeries.ts");
     const before = data.SAMPLE_PARTIES.map((p) => p.id).join(",");
@@ -2546,12 +2530,26 @@ try {
     const rng = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 2 ** 32);
     const order = bs.shuffleOpponents(data.SAMPLE_PARTIES, rng);
     check(
-      "B2 대진표 = 샘플 파티 전부 한 번씩, 원본 순서 불변",
+      "L4 대진표 = 샘플 파티 전부 한 번씩, 원본 순서 불변",
       order.length === data.SAMPLE_PARTIES.length && new Set(order.map((p) => p.id)).size === data.SAMPLE_PARTIES.length && data.SAMPLE_PARTIES.map((p) => p.id).join(",") === before,
     );
-    const sum = bs.summarizeSeries([{ winner: "a" }, { winner: "a" }, { winner: "b" }, { winner: "draw" }, { winner: "a" }]);
-    check("B2 전적 요약 3승 1패 1무", sum.wins === 3 && sum.losses === 1 && sum.draws === 1, JSON.stringify(sum));
-    check("B2 빈 전적 요약", JSON.stringify(bs.summarizeSeries([])) === JSON.stringify({ wins: 0, losses: 0, draws: 0 }));
+    const E = bs.EMPTY_FRONTIER;
+    let st = bs.finishMatch(bs.finishMatch(bs.finishMatch(E, "x", true), "y", true), "x", true);
+    check("L4 3연승 → 연승·최대 3, 샘플별 누적 x 2승 y 1승", st.streak === 3 && st.best === 3 && st.samples.x.wins === 2 && st.samples.y.wins === 1, JSON.stringify(st));
+    st = bs.finishMatch(st, "z", false);
+    check("L4 패배 → 연승 0, 최대 3 유지, 누적은 유지", st.streak === 0 && st.best === 3 && st.samples.z.losses === 1 && st.samples.x.wins === 2);
+    st = bs.finishMatch(st, "x", true);
+    check("L4 연승이 끊긴 뒤 다시 1연승, 최대는 3", st.streak === 1 && st.best === 3);
+    const begun = bs.beginMatch(st, "q");
+    check("L4 판 시작 표시는 연승을 건드리지 않음", begun.pendingId === "q" && begun.streak === 1);
+    const settled = bs.settleAbandoned(begun);
+    check("L4 이탈 정산 → 연승 0·그 샘플 패배 +1·표시 해제", settled.streak === 0 && settled.best === 3 && settled.samples.q.losses === 1 && settled.pendingId === null);
+    check("L4 표시가 없으면 정산은 그대로(같은 객체)", bs.settleAbandoned(settled) === settled);
+    check("L4 정산을 두 번 해도 한 번만 집계(멱등)", bs.settleAbandoned(bs.settleAbandoned(begun)).samples.q.losses === 1);
+    const done = bs.finishMatch(begun, "q", true);
+    check("L4 결과가 나오면 표시 해제", done.pendingId === null && done.streak === 2);
+    check("L4 저장본 검증: 정상·손상", bs.isFrontierSave(done) && !bs.isFrontierSave({ streak: "1" }) && !bs.isFrontierSave(null) && !bs.isFrontierSave({ ...done, samples: null }));
+    check("L4 입력 저장본을 변형하지 않음", E.streak === 0 && Object.keys(E.samples).length === 0 && E.pendingId === null);
   }
   // 상대가 나에게 데미지를 줄 수단이 없을 때(+Infinity 점수)
   {

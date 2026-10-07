@@ -18,7 +18,7 @@ import { MAX_ABILITY_POINTS_PER_STAT, MAX_ABILITY_POINTS_TOTAL } from "./statCal
  *
  * 게임은 상대 HP를 정수 %(100~0)로만 보여 준다. 후보(HP 포인트 × 방어 포인트 × 특방 포인트 × 성격)마다
  * 관측을 순서대로 재생해서(난수 16단계를 전부 시험) 화면 %와 하나라도 맞는 후보만 남긴다.
- * 데미지는 배틀 엔진(computeDamage)과 같은 정수 공식으로 낸다 — 매치업 화면의 연속값 근사(damageRollPercents)가 아니다.
+ * 데미지는 배틀 엔진(computeDamage)과 같은 정수 공식으로 낸다.
  * 상세: docs/00_기획문서/02_backlog/02_ver.2.0/2.1-backlog.md C.
  */
 
@@ -38,6 +38,11 @@ export interface InferenceObservation {
   before: number;
   /** 맞은 뒤 화면 % (정수) */
   after: number;
+  /**
+   * 이 관측을 맞을 때 상대가 메가진화한 상태면 그 메가폼 이름(`MegaEvolution.form`). 없으면 `InferenceInput.defender`의 폼(2.5 L1).
+   * 메가진화는 HP 종족값·포인트·성격이 그대로라, 같은 배분 후보가 관측마다 그 폼의 방어·특방 종족값으로 검사된다.
+   */
+  megaForm?: string;
 }
 
 export interface InferenceInput {
@@ -45,6 +50,8 @@ export interface InferenceInput {
   attacker: EvaluatorSlot;
   /**
    * 상대 포켓몬의 종·폼. ability/item은 "이렇다고 가정"한 값(모르면 null), nature/points는 무시한다(역산 대상).
+   * 관측에 메가폼 태그(`megaForm`)가 하나라도 있으면 메가스톤을 들고 있었던 것이라 모든 관측에서 도구 가정을 끄고,
+   * 태그가 붙은 관측은 그 메가폼의 특성으로 계산한다.
    */
   defender: EvaluatorSlot;
   observations: InferenceObservation[];
@@ -211,12 +218,23 @@ interface PreparedObservation {
   parts: DamageParts;
   before: number;
   after: number;
+  /** 이 관측 시점 폼의 방어·특방 종족값 */
+  baseDef: number;
+  baseSpd: number;
 }
 
 /** 관측마다 evaluateSlotMatchup으로 정수 데미지 공식 조각을 구한다. 실패하면 사유 문자열. */
 function prepareObservations(input: InferenceInput): { prepared: PreparedObservation[]; errors: (string | null)[] } {
   const { attacker, defender, observations, attackerStages, attackerStatus, defenderStages, weather, field, screen } = input;
-  const probeDefender: EvaluatorSlot = { ...defender, nature: null, points: { ...EMPTY_ABILITY_POINTS } };
+  const pokemon = getPokemon(defender.pokemonId);
+  // 메가 전·후를 섞은 관측이면 메가스톤 보유 → 반감 열매 가정을 모든 관측에서 끈다
+  const hasMega = observations.some((o) => o.megaForm);
+  const probeDefender: EvaluatorSlot = {
+    ...defender,
+    item: hasMega ? null : defender.item,
+    nature: null,
+    points: { ...EMPTY_ABILITY_POINTS },
+  };
   const prepared: PreparedObservation[] = [];
   const errors: (string | null)[] = [];
   let itemConsumed = false;
@@ -226,6 +244,12 @@ function prepareObservations(input: InferenceInput): { prepared: PreparedObserva
       errors.push(unsupported);
       return;
     }
+    const mega = obs.megaForm ? pokemon?.megaEvolutions?.find((m) => m.form === obs.megaForm) : undefined;
+    if (obs.megaForm && !mega) {
+      errors.push("이 포켓몬에게 없는 메가폼이에요");
+      return;
+    }
+    const slotAtHit: EvaluatorSlot = mega ? { ...probeDefender, activeMegaForm: mega.form, ability: mega.ability } : probeDefender;
     if (!(obs.before >= 0 && obs.before <= 100) || !(obs.after >= 0 && obs.after <= 100)) {
       errors.push("%는 0~100 사이 정수여야 해요");
       return;
@@ -234,7 +258,7 @@ function prepareObservations(input: InferenceInput): { prepared: PreparedObserva
       errors.push("맞은 뒤 %가 맞기 전 %보다 클 수 없어요");
       return;
     }
-    const res = evaluateSlotMatchup(attacker, obs.move, probeDefender, {
+    const res = evaluateSlotMatchup(attacker, obs.move, slotAtHit, {
       attackerStages,
       defenderStages,
       weather,
@@ -244,7 +268,6 @@ function prepareObservations(input: InferenceInput): { prepared: PreparedObserva
       // 멀티스케일 등: 처음 맞는 한 방만 풀피
       defenderHpIsFull: i === 0 && obs.before >= 100,
       defenderItemConsumed: itemConsumed,
-      applyMoveOwnStatChanges: false,
       attackerStatus: attackerStatus ?? null,
       // 근성류 상승은 위력 단계, 화상 ×0.5는 최종 단계(2.4 B3)
       extraOffenseMultiplier: statusedAttackBoost(
@@ -268,7 +291,8 @@ function prepareObservations(input: InferenceInput): { prepared: PreparedObserva
     }
     if (res.berryBulkMultiplier > 1) itemConsumed = true;
     errors.push(null);
-    prepared.push({ parts: res.damageParts, before: obs.before, after: obs.after });
+    const { baseStats } = getEffectiveForm(pokemon!, slotAtHit);
+    prepared.push({ parts: res.damageParts, before: obs.before, after: obs.after, baseDef: baseStats.def, baseSpd: baseStats.spd });
   });
   return { prepared, errors };
 }
@@ -336,6 +360,8 @@ class WeightedValues {
   }
 }
 
+const realStat = (natureMult: number, baseStat: number, points: number): number => Math.floor((baseStat + 20 + points) * natureMult);
+
 /** HP·방어·특방 포인트 배분 후보 [hp, def, spd] — 합계 66 이하, 관측이 없는 쪽 스탯은 0 고정 */
 function enumerateAllocations(useDef: boolean, useSpd: boolean): [number, number, number][] {
   const out: [number, number, number][] = [];
@@ -355,7 +381,10 @@ function runCandidates(input: InferenceInput, prepared: PreparedObservation[], d
   const n = prepared.length;
   const pokemon = getPokemon(input.defender.pokemonId);
   if (!pokemon) return emptyResult("invalid", n);
+  // HP 종족값은 메가 전·후가 같다. 표시용 방어·특방 실수치와 내구 지수는 그 스탯을 쓴 마지막 관측(현재 폼) 기준
   const base = getEffectiveForm(pokemon, input.defender).baseStats;
+  const lastDef = prepared.findLast((o) => o.parts.defenseKey === "def");
+  const lastSpd = prepared.findLast((o) => o.parts.defenseKey === "spd");
   const tol = input.tolerance ?? 0;
   const useDef = prepared.some((o) => o.parts.defenseKey === "def");
   const useSpd = prepared.some((o) => o.parts.defenseKey === "spd");
@@ -414,11 +443,13 @@ function runCandidates(input: InferenceInput, prepared: PreparedObservation[], d
     const maxHp = Math.floor(base.hp + 75 + hpP);
     for (let c = 0; c < combos.length; c++) {
       const combo = combos[c];
-      const defStat = Math.floor((base.def + 20 + defP) * combo.defMult);
-      const spdStat = Math.floor((base.spd + 20 + spdP) * combo.spdMult);
+      const defStat = realStat(combo.defMult, lastDef?.baseDef ?? base.def, defP);
+      const spdStat = realStat(combo.spdMult, lastSpd?.baseSpd ?? base.spd, spdP);
       total++;
       groups[c].total++;
-      const rolls = prepared.map((o, i) => rollsFor(i, o.parts.defenseKey === "def" ? defStat : spdStat));
+      const rolls = prepared.map((o, i) =>
+        o.parts.defenseKey === "def" ? rollsFor(i, realStat(combo.defMult, o.baseDef, defP)) : rollsFor(i, realStat(combo.spdMult, o.baseSpd, spdP)),
+      );
       const likelihood = candidateLikelihood(maxHp, rolls, prepared, tol);
       if (likelihood <= 0) continue;
       feasible++;

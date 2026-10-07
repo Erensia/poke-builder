@@ -1,4 +1,5 @@
 import { type Move } from "@/types/move";
+import type { DamageParts } from "@/lib/damageFormula";
 import { type PokemonType } from "@/types/pokemon-type";
 import { getPokemon } from "@/lib/data";
 import { getEffectiveForm } from "@/lib/pokemonForm";
@@ -17,7 +18,7 @@ import { abilityOf, activeWeather, hasSheerForceSecondaryEffect, isFainted, type
 import { computeBattleHitChance } from "../hitChance";
 import { computeTurnOrderPriority, effectiveHeldItem } from "../turnOrderInputs";
 import { isGrounded } from "../grounding";
-import { estimateHits, meanDamageFraction, worstCaseFromMatchup, type CritModel } from "./hitsToKill";
+import { estimateKills, hitCountDistribution, meanUseDamage, type KillModel } from "./hitsToKill";
 import { attackChanceOf, requiresTargetAttack } from "./opponentMoveModel";
 import { applySurvivalGuard } from "./survivalGuard";
 import type { HitsEstimate } from "./types";
@@ -331,16 +332,6 @@ function estimateMoveHitsCore(ctx: MoveHitContext, baseMove: Move): MoveHitEstim
     return applySurvivalGuard({ ...estimate, rawHits: hits, accuracy, typeEffectiveness, damageFraction }, defender, defenderAbility, defenderItem, defenderHp);
   }
 
-  const alwaysMaxHits = !!attackerAbility?.multiHitAlwaysMax;
-  let multiHitCount: number | undefined;
-  let hitCountScale = 1;
-  if (move.multiHitPowers) {
-    multiHitCount = move.multiHitPowers.length;
-  } else if (move.minHits !== undefined && move.maxHits !== undefined) {
-    if (alwaysMaxHits) multiHitCount = move.maxHits;
-    else hitCountScale = expectedMultiHitCount(move.minHits, move.maxHits);
-  }
-
   const ownTypeBoost = move.type ? (attacker.ownMoveTypeBoosts[move.type] ?? 1) : 1;
   const electroBoost = attacker.electroChargedForElectric && move.type === "전기" ? 2 : 1;
   const burnMultiplier = computeStatusAttackMultiplier(
@@ -362,11 +353,10 @@ function estimateMoveHitsCore(ctx: MoveHitContext, baseMove: Move): MoveHitEstim
   const matchupOptions: SlotMatchupOptions = {
     attackerStages: attacker.stages,
     defenderStages: defender.stages,
-    applyMoveOwnStatChanges: false,
     weather: state.weather,
     field: state.field,
     screen: attackerAbility?.bypassesScreensAndSubstitute ? undefined : screenFor(defenderSide, move.category),
-    multiHitCount,
+    multiHitCount: move.multiHitPowers ? move.multiHitPowers.length : move.minHits !== undefined && move.maxHits !== undefined ? move.maxHits : undefined,
     stockpileCount: attacker.stockpileCount ?? 0,
     attackerHpFraction: attacker.currentHp / attacker.maxHp,
     defenderHpIsFull: defenderHp === defender.maxHp,
@@ -386,46 +376,37 @@ function estimateMoveHitsCore(ctx: MoveHitContext, baseMove: Move): MoveHitEstim
   const result = evaluateSlotMatchup(attacker.slot, move, defender.slot, matchupOptions);
   if (!result) return null;
 
-  // 급소(ver.1.9 6-2): 엔진 hitResolution과 같은 확률 규칙. 급소 데미지 비는 계산기 급소 가정(랭크·벽 무시·×1.5)으로 낸다.
-  // 단타는 처치 타수 분포에 급소를 섞고, 다단히트(타마다 따로 굴림)는 기대 데미지 배율로 근사한다.
-  const critP = critAware ? critChanceOf(attacker, defender, move, attackerAbility, defenderAbility, attackerItem) : 0;
-  let crit: CritModel | undefined;
-  let critMeanScale = 1;
-  if (critP > 0 && result.offensePower > 0) {
-    const critResult = evaluateSlotMatchup(attacker.slot, move, defender.slot, { ...matchupOptions, critical: true });
-    const scale = critResult ? critResult.offensePower / critResult.bulkPower / (result.offensePower / result.bulkPower) : 1;
-    if (scale > 1) {
-      if (hitCountScale > 1 || (multiHitCount ?? 1) > 1) critMeanScale = 1 + critP * (scale - 1);
-      else crit = { chance: critP, scale };
-    }
-  }
+  const parts = result.damageParts;
+  if (!parts) return applySurvivalGuard({ ...NO_DAMAGE, accuracy, typeEffectiveness }, defender, defenderAbility, defenderItem, defenderHp);
 
-  // 반감 열매는 첫 타에 소모된다(ver.1.9 6-1): 열매 없는 내구력으로 처치 타수를 내고 첫 번 사용만 데미지를 줄인다.
-  // 계산기는 고정 타수 다단히트면 첫 타만 반감한 배율을 이미 넣었고, 2~5회 기대 타수(hitCountScale)는 여기서 나눈다.
-  let bulkPower = result.bulkPower;
-  let firstHitScale = 1;
-  if (result.berryBulkMultiplier > 1) {
-    bulkPower = result.bulkPower / result.berryAppliedMultiplier;
-    firstHitScale =
-      hitCountScale > 1
-        ? 1 / hitCountScale / result.berryBulkMultiplier + (1 - 1 / hitCountScale)
-        : 1 / result.berryAppliedMultiplier;
-  }
-  // 분함의발구르기·열불내기(ver.1.9): 직전 턴 실패 기록이 있으면 이번 한 번만 위력 2배 — 첫 번 사용만 데미지 ×2
-  if (move.conditionalDoublePower === "user-move-failed-last-turn" && attacker.lastTurnMoveFailed) firstHitScale *= 2;
-  const estimate = estimateHits(result.offensePower * hitCountScale * critMeanScale, bulkPower, {
-    hpFraction: defenderHp / defender.maxHp,
-    accuracy,
-    firstHitScale,
-    crit,
-  });
-  // 하드 오버라이드용 worst_case는 급소 없는 값(급소는 기대 턴 수에만) — 반드시 급소인 기술만 급소 값
-  const certainCritScale = critP >= 1 ? (crit?.scale ?? critMeanScale) : 1;
-  if (critMeanScale > 1 || certainCritScale > 1) {
-    estimate.worstCase = worstCaseFromMatchup(result.offensePower * hitCountScale * firstHitScale * certainCritScale, bulkPower, defenderHp / defender.maxHp);
-  }
+  // 타수 분포: 랜덤 타수(2~5회 등)는 분포, 스킬링크류·고정 타수는 한 값
+  const hitCounts: [number, number][] =
+    move.minHits !== undefined && move.maxHits !== undefined && !move.multiHitPowers
+      ? attackerAbility?.multiHitAlwaysMax
+        ? [[move.maxHits, 1]]
+        : hitCountDistribution(move.minHits, move.maxHits)
+      : [[parts.hitPowers.length, 1]];
+
+  // 첫 사용만 다른 요소(반감 열매 — 조각의 firstHitFinalMultiplier가 첫 타에 곱해진다 / 분함의발구르기·열불내기: 직전 턴 실패 시 이번 한 번만 위력 2배)
+  const failedBonus = move.conditionalDoublePower === "user-move-failed-last-turn" && attacker.lastTurnMoveFailed;
+  const variant = (extra: SlotMatchupOptions) => evaluateSlotMatchup(attacker.slot, move, defender.slot, { ...matchupOptions, ...extra })?.damageParts;
+  // 급소(ver.1.9 6-2): 엔진 hitResolution과 같은 확률 규칙. 급소 조각은 계산기 급소 가정(랭크·벽 무시·×1.5)
+  const critP = critAware ? critChanceOf(attacker, defender, move, attackerAbility, defenderAbility, attackerItem) : 0;
+  const critParts = critP > 0 ? variant({ critical: true }) : undefined;
+  const bonusParts = failedBonus ? variant({ attackerMoveFailedLastTurn: true }) : undefined;
+  const bonusCrit = failedBonus && critParts ? variant({ critical: true, attackerMoveFailedLastTurn: true }) : undefined;
+  const afterFirst = (p: DamageParts | undefined) => (p ? { ...p, firstHitFinalMultiplier: undefined } : undefined);
+  const model: KillModel = {
+    first: bonusParts ?? parts,
+    rest: afterFirst(parts)!,
+    firstCrit: bonusCrit ?? critParts,
+    restCrit: afterFirst(critParts),
+    critChance: critParts ? Math.min(1, critP) : 0,
+    defenseStat: result.defenseStat,
+    hitCounts,
+  };
+  const estimate = estimateKills(model, defenderHp, accuracy);
   const rawHits = accuracy > 0 ? estimate.expected * accuracy : Infinity;
-  const critMean = crit ? 1 + crit.chance * (crit.scale - 1) : critMeanScale;
-  const damageFraction = meanDamageFraction(result.offensePower * hitCountScale * critMean, result.bulkPower) * accuracy;
+  const damageFraction = defender.maxHp > 0 ? (meanUseDamage({ ...model, first: parts, firstCrit: critParts }) / defender.maxHp) * accuracy : 0;
   return applySurvivalGuard({ ...estimate, rawHits, accuracy, typeEffectiveness, damageFraction }, defender, defenderAbility, defenderItem, defenderHp);
 }

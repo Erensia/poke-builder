@@ -155,6 +155,7 @@ function BattleSetupScreen({
   onOpenAiMemory,
   onLoadRandomSample,
   onLoadRandomSlotParty,
+  opponentLocked,
 }: {
   setup: ReturnType<typeof useBattleSetup>;
   hasPartyPresets: boolean;
@@ -175,6 +176,8 @@ function BattleSetupScreen({
   onLoadRandomSample: (side: Side) => void;
   /** 저장해 둔 슬롯 프리셋에서 마리 단위로 6마리를 뽑아 랜덤 파티로 불러온다(2.2 B6) */
   onLoadRandomSlotParty: (side: Side) => void;
+  /** 배틀 프런티어 중에는 상대 편을 수동으로 바꿀 수 없다 */
+  opponentLocked: boolean;
 }) {
   const sideCtls = (side: Side) => (side === "a" ? setup.a : setup.b);
   const slotCtl = (side: Side, i: SlotIndex) => sideCtls(side)[i];
@@ -218,7 +221,8 @@ function BattleSetupScreen({
     <div className="battle-setup-board">
       {(["a", "b"] as const).map((side) => (
         <Fragment key={side}>
-          <div className="battle-setup-column">
+          <div className={`battle-setup-column${side === "b" && opponentLocked ? " is-locked" : ""}`} inert={side === "b" && opponentLocked}>
+            {side === "b" && opponentLocked && <p className="battle-lock-warning">배틀 프런티어 중에는 상대를 바꿀 수 없어요.</p>}
             <div className="battle-setup-actions">
               {hasPartyPresets && (
                 <button
@@ -481,7 +485,7 @@ function BattleBoard({
   learnedBattles,
   seriesNext,
 }: {
-  /** 연속 대전(2.2 B2) 진행 중이면 결과 배너의 "대전 이어하기"를 이 라벨의 "다음 상대" 버튼으로 바꾼다 */
+  /** 배틀 프런티어 진행 중이면 결과 배너의 "대전 이어하기"를 이 라벨의 "다음 상대" 버튼으로 바꾼다 */
   seriesNext: { label: string; onNext: () => void } | null;
   /** 컴퓨터(배틀 AI)가 조작하는 편. 사람이 양쪽 다 조작하면 null */
   aiSide: Side | null;
@@ -1210,8 +1214,10 @@ export function BattleLogPage() {
   const [showAiMemory, setShowAiMemory] = useState(false);
   /** 이번 대전을 학습했으면 누적 판 수(결과 배너 한 줄), 아니면 null */
   const [learnedBattles, setLearnedBattles] = useState<number | null>(null);
-  /** 연속 대전(2.2 B2) */
+  /** 배틀 프런티어(2.5 L4, 전 연속 대전) */
   const series = useBattleSeries();
+  /** 프런티어 중 내 선출 고정 — 첫 판에 고른 빌드 슬롯 인덱스(프런티어를 새로 켜면 다시 고른다) */
+  const [frontierSelection, setFrontierSelection] = useState<SlotIndex[] | null>(null);
 
   const sideCtls = (side: Side) => (side === "a" ? setup.a : setup.b);
   const slotCtl = (side: Side, i: SlotIndex) => sideCtls(side)[i];
@@ -1374,17 +1380,21 @@ export function BattleLogPage() {
   const canProceed =
     !hasMovelessSlot && (["a", "b"] as const).every((side) => buildableIndices(side).length >= 1);
 
-  /** 연속 대전 시작은 AI 상대 + 내 쪽에 빌드가 있을 때만 — 이유를 버튼 툴팁으로 보여 준다 */
+  /** 배틀 프런티어 시작은 AI 상대 + 내 쪽에 빌드가 있을 때만 — 이유를 버튼 툴팁으로 보여 준다 */
   const seriesStartBlockedReason = !aiOpponent
-    ? "\"AI가 조작\"을 켜야 연속 대전을 할 수 있어요"
+    ? "\"AI가 조작\"을 켜야 배틀 프런티어를 할 수 있어요"
     : buildableIndices("a").length < 1
       ? "내 파티에 포켓몬을 먼저 구성해 주세요"
       : movelessIndices("a").length > 0
         ? "기술이 없는 슬롯이 있어요"
         : null;
+  /** 프런티어 중 이미 고정한 내 선출(그 사이 빌드가 바뀌어 못 쓰게 됐으면 null → 다시 고른다) */
+  const fixedSelectionA =
+    series.active && frontierSelection?.every((i) => buildableIndices("a").includes(i)) ? frontierSelection : null;
+  const selectsA = needsSelection("a") && !fixedSelectionA;
   /** 셋업 화면 VS 버튼이 무엇을 하는지 (선출 화면을 거치면 "다음 (선출)", 아니면 바로 "대전 시작") */
   // AI 편 선출은 자동(비공개)이라, 내 편이 고를 게 없으면 바로 대전
-  const proceedLabel = needsSelection("a") || (needsSelection("b") && !aiOpponent) ? "다음 (선출)" : "대전 시작";
+  const proceedLabel = selectsA || (needsSelection("b") && !aiOpponent) ? "다음 (선출)" : "대전 시작";
 
   /** 선출된 빌드 슬롯 인덱스 목록으로 배틀 상태를 만들고 대전을 시작한다 */
   function startBattleWith(sel: { a: SlotIndex[]; b: SlotIndex[] }) {
@@ -1393,6 +1403,10 @@ export function BattleLogPage() {
     const aParty = partyOf("a");
     const bParty = partyOf("b");
     if (aParty.length < 1 || bParty.length < 1) return;
+    if (series.active) {
+      setFrontierSelection(sel.a);
+      series.begin();
+    }
     const movesOf = (s: PartySlot) => s.moves.filter((id): id is string => id !== null).map((id) => getMove(id)!);
     const state = createBattleState({
       a: { slots: aParty, movesList: aParty.map(movesOf) },
@@ -1439,9 +1453,15 @@ export function BattleLogPage() {
     if (!canProceed) return;
     const aiSelects = aiOpponent && needsSelection("b");
     const autoSel = (side: Side) =>
-      side === "b" && aiSelects ? aiSelectionFor("b") : needsSelection(side) ? [] : buildableIndices(side).slice(0, BATTLE_SELECT_SIZE);
+      side === "b" && aiSelects
+        ? aiSelectionFor("b")
+        : side === "a" && fixedSelectionA
+          ? fixedSelectionA
+          : needsSelection(side)
+            ? []
+            : buildableIndices(side).slice(0, BATTLE_SELECT_SIZE);
     const sel = { a: autoSel("a"), b: autoSel("b") };
-    if (!needsSelection("a") && (!needsSelection("b") || aiSelects)) {
+    if (!selectsA && (!needsSelection("b") || aiSelects)) {
       startBattleWith(sel);
     } else {
       setSelection(sel);
@@ -1702,7 +1722,7 @@ export function BattleLogPage() {
     });
     // 1-C: AI 대전이면 이번 대전 관측을 누적 학습에 합친다("대전에서 계속 학습"이 꺼져 있으면 합치지 않음)
     if (aiSide && aiMemory.commit(aiSessionRef.current)) setLearnedBattles(aiMemory.memory.battles + 1);
-    series.record(winner === "draw" ? "draw" : winner);
+    series.record(winner);
     aiSessionRef.current = emptyOpponentMemory();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [winner]);
@@ -1724,7 +1744,14 @@ export function BattleLogPage() {
       </header>
 
       {!battleState && !selecting && (
-        <BattleSeriesPanel series={series} startBlockedReason={seriesStartBlockedReason} onStart={(first) => loadSample("b", first)} />
+        <BattleSeriesPanel
+          series={series}
+          startBlockedReason={seriesStartBlockedReason}
+          onStart={(first) => {
+            setFrontierSelection(null);
+            loadSample("b", first);
+          }}
+        />
       )}
 
       {!battleState && !selecting && (
@@ -1745,6 +1772,7 @@ export function BattleLogPage() {
           onOpenAiMemory={() => setShowAiMemory(true)}
           onLoadRandomSample={loadRandomSample}
           onLoadRandomSlotParty={loadRandomSlotParty}
+          opponentLocked={series.active}
         />
       )}
 
@@ -1797,17 +1825,15 @@ export function BattleLogPage() {
           aiThinking={aiThinking}
           learnedBattles={learnedBattles}
           seriesNext={
-            series.state && !series.state.finished
+            series.active && series.current
               ? {
-                  label: series.current ? "다음 상대 →" : "연속 대전 요약 보기",
+                  label: "다음 상대 →",
                   onNext: () => {
-                    if (series.current) loadSample("b", series.current);
+                    loadSample("b", series.current!);
                     resetToSetup();
                   },
                 }
-              : series.state
-                ? { label: "연속 대전 요약 보기", onNext: resetToSetup }
-                : null
+              : null
           }
         />
       )}
