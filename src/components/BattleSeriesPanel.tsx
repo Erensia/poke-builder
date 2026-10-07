@@ -50,6 +50,17 @@ export function BattleSeriesPanel({ series, startBlockedReason, onStart }: Battl
               </li>
             ))}
           </ul>
+          {!active && (
+            <button
+              type="button"
+              className="battle-setup-load-party battle-series-reset"
+              onClick={() => {
+                if (window.confirm("연승·최대 연승·샘플 파티별 승패 기록을 모두 지울까요?")) series.reset();
+              }}
+            >
+              기록 초기화
+            </button>
+          )}
         </details>
       )}
     </div>

@@ -123,6 +123,8 @@ export interface SlotMatchupOptions {
    */
   critical?: boolean;
   defenderItemConsumed?: boolean;
+  /** 판정 배지(verdict·koChance·killingRolls)를 계산하지 않는다 — 데미지 조각만 쓰는 배틀 AI용(3.0 P1). 이때 verdict는 의미 없는 값 */
+  skipVerdict?: boolean;
   /**
    * 배틀 AI용 — 슬롯 원본 대신 실전 파이터의 현재 값(메가진화·변신·변환자재·트레이스·도구 소모 반영)을
    * 쓴다. 생략하면 기존처럼 슬롯에서 폼·실능·특성·도구를 계산한다.
@@ -632,7 +634,9 @@ export function evaluateSlotMatchup(
         }
       : undefined;
 
-  const chance = judgeByIntegerDamage(damageParts, defenderRealStats[defenseKey], defenderRealStats.hp);
+  const chance: MatchupChance = options.skipVerdict
+    ? { verdict: "needs-3hit-plus", koChance: null }
+    : judgeByIntegerDamage(damageParts, defenderRealStats[defenseKey], defenderRealStats.hp);
   return {
     offensePower,
     rawOffensePower,

@@ -372,6 +372,7 @@ function estimateMoveHitsCore(ctx: MoveHitContext, baseMove: Move): MoveHitEstim
     attackerRuntime: runtimeOf(attacker, ctx.attackerTypes, state),
     defenderRuntime: runtimeOf(defender, defenderTypes, state),
     extraOffenseMultiplier: ownTypeBoost * electroBoost * burnMultiplier * overlordMultiplier * avalancheMultiplier * analyticMultiplier,
+    skipVerdict: true,
   };
   const result = evaluateSlotMatchup(attacker.slot, move, defender.slot, matchupOptions);
   if (!result) return null;
@@ -407,6 +408,8 @@ function estimateMoveHitsCore(ctx: MoveHitContext, baseMove: Move): MoveHitEstim
   };
   const estimate = estimateKills(model, defenderHp, accuracy);
   const rawHits = accuracy > 0 ? estimate.expected * accuracy : Infinity;
-  const damageFraction = defender.maxHp > 0 ? (meanUseDamage({ ...model, first: parts, firstCrit: critParts }) / defender.maxHp) * accuracy : 0;
+  // 직전 턴 실패 보너스가 없으면 첫 사용 조각이 같아 estimateKills가 만든 분포를 그대로 쓴다
+  const meanModel = failedBonus ? { ...model, first: parts, firstCrit: critParts } : model;
+  const damageFraction = defender.maxHp > 0 ? (meanUseDamage(meanModel) / defender.maxHp) * accuracy : 0;
   return applySurvivalGuard({ ...estimate, rawHits, accuracy, typeEffectiveness, damageFraction }, defender, defenderAbility, defenderItem, defenderHp);
 }
