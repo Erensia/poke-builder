@@ -248,6 +248,121 @@ try {
     if (bad?.status !== "invalid" || !bad.observationErrors[0]?.includes("메가폼")) fail("없는 메가폼 태그가 invalid로 안 잡힘");
   }
 
+  // 3.1 C2-b) 공격 역산 왕복 — 진짜 공격 배분(포인트·성격)으로 "받은 데미지" 관측을 만들어 넣으면 진짜 값이 후보에 남는지.
+  // 내 포켓몬(방어자)은 능력을 전부 아는 쪽, 상대 공격(특공) 포인트·성격을 역산한다.
+  {
+    const ai = await server.ssrLoadModule("/src/lib/attackInference.ts");
+    const attackMoves = data.MOVES.filter((m) => ai.attackInferenceUnsupportedReason(m) === null && m.power !== null && m.power > 0);
+    // 진짜 상대(oppTrue)가 내 포켓몬(mySlot)에게 실제로 입힐 데미지로 관측 하나를 만든다. 내 HP가 남지 않는 공격은 제외
+    const makeAttackObservation = (cands, oppTrue, mySlot, maxHp, hp) => {
+      for (let tries = 0; tries < 20; tries++) {
+        const move = pick(cands);
+        const res = ev.evaluateSlotMatchup(oppTrue, move, mySlot, { defenderHpIsFull: hp >= maxHp, skipVerdict: true });
+        const p = res?.damageParts;
+        if (!p || p.typeEffectiveness === 0) continue;
+        const damage = fm.integerTotalDamage(p, res.defenseStat, (85 + Math.floor(rnd() * 16)) / 100);
+        if (damage < hp) return { move, critical: false, hpBefore: hp, hpAfter: hp - damage };
+      }
+      return null;
+    };
+    let ok = 0;
+    let tried = 0;
+    let sumWidth = 0;
+    let sumRealWidth = 0;
+    let sumCombos = 0;
+    let rangeCount = 0;
+    const addWidths = (result) => {
+      for (const [r, real] of [[result.atk, result.realAtk], [result.spa, result.realSpa]]) {
+        if (!r) continue;
+        sumWidth += r.max - r.min;
+        sumRealWidth += real.max - real.min;
+        rangeCount++;
+      }
+    };
+    // 같은 종류(물리) 관측을 k개 모았을 때 실수치 범위가 얼마나 좁아지는지(관측이 늘수록 좁아져야 한다)
+    const narrowing = (k) => {
+      let width = 0;
+      let count = 0;
+      for (let t = 0; t < 40; t++) {
+        const opp = pick(species);
+        const oppTrue = slot(opp.id, { points: pts({ atk: Math.floor(rnd() * 33) }), nature: pick(natureIds) });
+        const mySlot = slot(pick(species).id, { points: pts({ hp: 32, def: Math.floor(rnd() * 20) }), nature: pick(natureIds) });
+        const myMax = stat.computeRealStats(form.getEffectiveForm(data.getPokemon(mySlot.pokemonId), mySlot).baseStats, mySlot.points, mySlot.nature).hp;
+        const obs = [];
+        for (let i = 0; i < k; i++) {
+          // 매 관측 전에 HP를 가득 채운 상태로(회복했다고 보고) 독립 관측을 만든다
+          const o = makeAttackObservation(attackMoves.filter((m) => m.category === "physical"), oppTrue, mySlot, myMax, myMax);
+          if (o) obs.push(o);
+        }
+        if (obs.length < k) continue;
+        const r = ai.inferAttack({ attacker: slot(opp.id), defender: mySlot, observations: obs });
+        if (r?.realAtk) {
+          width += r.realAtk.max - r.realAtk.min;
+          count++;
+        }
+      }
+      return count ? width / count : NaN;
+    };
+    for (let t = 0; t < 120; t++) {
+      const opp = pick(species);
+      const mine = pick(species);
+      const truth = { atk: Math.floor(rnd() * 33), spa: Math.floor(rnd() * 33), nature: pick(natureIds) };
+      const oppTrue = slot(opp.id, { points: pts({ atk: truth.atk, spa: truth.spa }), nature: truth.nature });
+      const mySlot = slot(mine.id, {
+        points: pts({ hp: Math.floor(rnd() * 33), def: Math.floor(rnd() * 20), spd: Math.floor(rnd() * 20) }),
+        nature: pick(natureIds),
+      });
+      const myForm = form.getEffectiveForm(data.getPokemon(mine.id), mySlot);
+      const myReal = stat.computeRealStats(myForm.baseStats, mySlot.points, mySlot.nature);
+      // 물리 1개 + 특수 1개 관측(내 HP가 남는 동안)
+      const observations = [];
+      let hp = myReal.hp;
+      for (const cat of rnd() < 0.5 ? ["physical"] : ["physical", "special"]) {
+        const obs = makeAttackObservation(attackMoves.filter((m) => m.category === cat), oppTrue, mySlot, myReal.hp, hp);
+        if (!obs) continue;
+        observations.push(obs);
+        hp = obs.hpAfter;
+      }
+      if (observations.length === 0) continue;
+      tried++;
+      const result = ai.inferAttack({ attacker: slot(opp.id), defender: mySlot, observations });
+      const nat = data.NATURES.find((n) => n.id === truth.nature);
+      const inAtk = !result?.atk || (result.atk.min <= truth.atk && truth.atk <= result.atk.max);
+      const inSpa = !result?.spa || (result.spa.min <= truth.spa && truth.spa <= result.spa.max);
+      const groupOk = result?.groups.some((g) => g.feasible > 0 && g.natureNames.includes(nat.name));
+      if (result?.status === "ok" && inAtk && inSpa && groupOk) {
+        ok++;
+        addWidths(result);
+        sumCombos += result.groups.filter((g) => g.feasible > 0).length;
+      } else fail(`공격 역산 왕복: 진짜 배분이 빠짐 opp=${opp.id} truth=${JSON.stringify(truth)} 상태=${result?.status} atk=${JSON.stringify(result?.atk)} spa=${JSON.stringify(result?.spa)}`);
+    }
+    console.log(
+      `공격 역산 왕복 ${ok}/${tried} 통과 · 스탯 하나당 평균 포인트 범위 폭 ${(sumWidth / Math.max(1, rangeCount)).toFixed(1)} · 실수치 범위 폭 ${(sumRealWidth / Math.max(1, rangeCount)).toFixed(1)} · 남은 성격 묶음 ${(sumCombos / Math.max(1, ok)).toFixed(1)}개`,
+    );
+    if (tried === 0) fail("공격 역산 왕복 시행이 0건");
+    const w1 = narrowing(1);
+    const w3 = narrowing(3);
+    const w6 = narrowing(6);
+    console.log(`공격 역산 관측 수별 실수치 범위 폭(물리, 평균): 1회 ${w1.toFixed(1)} · 3회 ${w3.toFixed(1)} · 6회 ${w6.toFixed(1)}`);
+    if (!(w3 < w1 && w6 < w3)) fail("공격 역산: 관측이 늘어도 범위가 좁아지지 않음");
+    // 일부러 틀린 관측(불가능한 데미지)은 모순이어야 한다
+    const mine = slot("한카리아스", { points: pts({ hp: 20 }), nature: "조심" });
+    const myMax = stat.computeRealStats(form.getEffectiveForm(data.getPokemon("한카리아스"), mine).baseStats, mine.points, mine.nature).hp;
+    const contradiction = ai.inferAttack({
+      attacker: slot("망나뇽"),
+      defender: mine,
+      observations: [{ move: data.getMove("아이언헤드"), critical: false, hpBefore: myMax, hpAfter: myMax - 3 }],
+    });
+    const faint = ai.inferAttack({ attacker: slot("망나뇽"), defender: mine, observations: [{ move: data.getMove("아이언헤드"), critical: false, hpBefore: 30, hpAfter: 0 }] });
+    const badHp = ai.inferAttack({ attacker: slot("망나뇽"), defender: mine, observations: [{ move: data.getMove("아이언헤드"), critical: false, hpBefore: myMax + 5, hpAfter: 10 }] });
+    const noMove = ai.inferAttack({ attacker: slot("망나뇽"), defender: mine, observations: [{ move: data.getMove("자이로볼"), critical: false, hpBefore: myMax, hpAfter: myMax - 40 }] });
+    if (contradiction?.status !== "contradiction") fail(`공격 역산: 불가능한 데미지가 ${contradiction?.status}`);
+    if (faint?.status !== "invalid" || !faint.observationErrors[0]?.includes("쓰러진")) fail("공격 역산: 쓰러진 관측이 invalid로 안 잡힘");
+    if (badHp?.status !== "invalid" || !badHp.observationErrors[0]?.includes("최대 HP")) fail("공격 역산: 최대 HP 초과가 invalid로 안 잡힘");
+    if (noMove?.status !== "invalid" || !noMove.observationErrors[0]?.includes("스피드")) fail("공격 역산: 스피드 위력 기술이 invalid로 안 잡힘");
+    console.log(`공격 역산 예외: 모순 ${contradiction?.status} · 쓰러짐 ${faint?.status} · HP 초과 ${badHp?.status} · 자이로볼 ${noMove?.status}`);
+  }
+
   // 3) 모순 / 면역 ----------------------------------------------------------------------------
   {
     const atk = slot("한카리아스", { points: pts({ atk: 32 }), nature: "고집" });
