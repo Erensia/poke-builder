@@ -523,3 +523,13 @@
   font-weight: 700;
   color: var(--violet);
 }
+
+/* 극보정 형태 칸(3.1 C2-a) — 가능 여부와 별개로 점선 테두리만 표시 */
+.dinf-cell.is-extreme {
+  outline: 1px dashed var(--text-muted);
+  outline-offset: -1px;
+}
+
+.dinf-extreme-none strong {
+  color: var(--danger);
+}

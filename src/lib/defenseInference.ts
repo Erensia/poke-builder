@@ -136,6 +136,28 @@ export interface InferenceResult {
 /** 분포 격자 한 변 칸 수(포인트 0~32) */
 export const GRID = MAX_ABILITY_POINTS_PER_STAT + 1;
 
+/**
+ * 극보정 형태인지(3.1 C2-a) — 능력 포인트를 최대(32)로 몰아 넣는 흔한 샘플 배분의 모양: 32가 두 개 이하이고, 32가 아닌 나머지는
+ * 합쳐 2 이하(합계 66 = 32 + 32 + 남은 2). 어디까지나 **표시용**이라 역산 계산·가중에는 쓰지 않는다 — 극보정이 아닌 배분을 잡아내는 게
+ * 역산의 가치이고, 극보정 후보가 하나도 없으면 "일반적이지 않은 배분"이라는 정보가 된다.
+ */
+export function isExtremePoints(values: readonly number[]): boolean {
+  const rest = values.filter((v) => v !== MAX_ABILITY_POINTS_PER_STAT);
+  return values.length - rest.length <= 2 && rest.reduce((sum, v) => sum + v, 0) <= 2;
+}
+
+/** 분포 격자(가로 HP × 세로 방어/특방 포인트)에서 가능한 칸 수와 그중 극보정 형태인 칸 수 */
+export function countExtremeCells(grid: Uint8Array): { feasible: number; extreme: number } {
+  let feasible = 0;
+  let extreme = 0;
+  grid.forEach((on, i) => {
+    if (!on) return;
+    feasible++;
+    if (isExtremePoints([i % GRID, Math.floor(i / GRID)])) extreme++;
+  });
+  return { feasible, extreme };
+}
+
 /** 다단히트·고정 데미지·변화기는 정수 데미지 공식이 맞지 않아 역산에서 뺀다 */
 export function inferenceUnsupportedReason(move: Move): string | null {
   if (move.category === "status" || move.category === null) return "데미지를 주지 않는 기술";
