@@ -62,8 +62,25 @@ function hitDist(
   return out;
 }
 
-/** 기술을 한 번 쓴 총 데미지 분포. minHitsOnly면 가장 적게 맞는 타수만(하드 오버라이드용 보수적 판정) */
+/**
+ * 모델 하나에서 같은 분포를 여러 번 만들지 않게 메모한다(기대 횟수·worst_case·평균 데미지가 같은 첫/이후 사용 분포를 공유 — 3.0 P1).
+ * 급소 조각이 없으면 급소 확률은 결과에 영향이 없고, 타수가 하나뿐이면 minHitsOnly도 결과가 같아서 키에서 정규화한다.
+ */
+const distMemo = new WeakMap<KillModel, Map<string, Dist>>();
+
 function singleUseDist(model: KillModel, isFirstUse: boolean, critChance: number, minHitsOnly: boolean): Dist {
+  const hasCrit = !!(isFirstUse ? model.firstCrit : model.restCrit);
+  const minOnly = minHitsOnly && model.hitCounts.length > 1;
+  const key = `${isFirstUse ? 1 : 0}|${hasCrit ? critChance : 0}|${minOnly ? 1 : 0}`;
+  let perModel = distMemo.get(model);
+  if (!perModel) distMemo.set(model, (perModel = new Map()));
+  let dist = perModel.get(key);
+  if (!dist) perModel.set(key, (dist = buildSingleUseDist(model, isFirstUse, critChance, minOnly)));
+  return dist;
+}
+
+/** 기술을 한 번 쓴 총 데미지 분포. minHitsOnly면 가장 적게 맞는 타수만(하드 오버라이드용 보수적 판정) */
+function buildSingleUseDist(model: KillModel, isFirstUse: boolean, critChance: number, minHitsOnly: boolean): Dist {
   const parts = isFirstUse ? model.first : model.rest;
   const crit = isFirstUse ? model.firstCrit : model.restCrit;
   const counts = minHitsOnly ? [[Math.min(...model.hitCounts.map(([n]) => n)), 1] as const] : model.hitCounts;
@@ -89,31 +106,50 @@ export function meanUseDamage(model: KillModel): number {
   return mean(singleUseDist(model, true, model.critChance, false));
 }
 
-/** 기대 사용 횟수 E[N] = Σ_{n≥0} P(N>n): 합계가 HP 미만인 상태의 확률을 사용 횟수마다 밀어 나간다 */
+/** 분포를 [데미지, 확률] 배열로 푼 것 — Map을 매번 순회하지 않게 분포마다 한 번만 만든다(삽입 순서 그대로: 부동소수 누적 순서 유지) */
+const entriesMemo = new WeakMap<Dist, { ds: number[]; qs: number[]; min: number }>();
+
+function entriesOf(dist: Dist) {
+  let e = entriesMemo.get(dist);
+  if (!e) {
+    const ds = [...dist.keys()];
+    entriesMemo.set(dist, (e = { ds, qs: [...dist.values()], min: Math.min(...ds) }));
+  }
+  return e;
+}
+
+/**
+ * 기대 사용 횟수 E[N] = Σ_{n≥0} P(N>n): 합계가 HP 미만인 상태의 확률을 사용 횟수마다 밀어 나간다.
+ * 살아 있는 합계는 n회 뒤 최소 n×(한 번 최소 데미지) 이상이라, 앞쪽 0 구간(lo 미만)은 훑지 않는다.
+ */
 function expectedUses(model: KillModel, hp: number): number {
   const first = singleUseDist(model, true, model.critChance, false);
   const rest = singleUseDist(model, false, model.critChance, false);
   let alive = new Float64Array(hp);
+  let next = new Float64Array(hp);
   alive[0] = 1;
+  let lo = 0;
   let total = 1; // P(N > 0)
   let dist = first;
   let massLeft = 1;
   for (let n = 1; n <= MAX_USES_TRACKED && massLeft >= 1e-12; n++) {
-    const next = new Float64Array(hp);
+    const { ds, qs, min } = entriesOf(dist);
+    next.fill(0);
     massLeft = 0;
-    for (let s = 0; s < hp; s++) {
+    for (let s = lo; s < hp; s++) {
       const a = alive[s];
       if (a === 0) continue;
-      for (const [d, q] of dist) {
-        const t = s + d;
+      for (let j = 0; j < ds.length; j++) {
+        const t = s + ds[j];
         if (t < hp) {
-          next[t] += a * q;
-          massLeft += a * q;
+          next[t] += a * qs[j];
+          massLeft += a * qs[j];
         }
       }
     }
     total += massLeft;
-    alive = next;
+    [alive, next] = [next, alive];
+    lo += min;
     dist = rest;
   }
   if (massLeft >= 1e-12) total += Math.max(0, hp / mean(rest) - MAX_USES_TRACKED);
