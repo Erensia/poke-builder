@@ -2528,7 +2528,7 @@ try {
     const before = data.SAMPLE_PARTIES.map((p) => p.id).join(",");
     let seed = 11;
     const rng = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 2 ** 32);
-    const order = bs.shuffleOpponents(data.SAMPLE_PARTIES, rng);
+    const order = bs.shuffled(data.SAMPLE_PARTIES, rng);
     check(
       "L4 대진표 = 샘플 파티 전부 한 번씩, 원본 순서 불변",
       order.length === data.SAMPLE_PARTIES.length && new Set(order.map((p) => p.id)).size === data.SAMPLE_PARTIES.length && data.SAMPLE_PARTIES.map((p) => p.id).join(",") === before,
@@ -2550,6 +2550,21 @@ try {
     check("L4 결과가 나오면 표시 해제", done.pendingId === null && done.streak === 2);
     check("L4 저장본 검증: 정상·손상", bs.isFrontierSave(done) && !bs.isFrontierSave({ streak: "1" }) && !bs.isFrontierSave(null) && !bs.isFrontierSave({ ...done, samples: null }));
     check("L4 입력 저장본을 변형하지 않음", E.streak === 0 && Object.keys(E.samples).length === 0 && E.pendingId === null);
+    // 3.0 L4-a: 대기열 — 저장·정산·재충전
+    const ids = ["a", "b", "c"];
+    let q = bs.refillQueue(E, ids, rng);
+    check("L4-a 빈 대기열 → 샘플 전부를 섞어 채움", q.queue.length === 3 && new Set(q.queue).size === 3 && q.queue.every((id) => ids.includes(id)));
+    check("L4-a 남은 대기열이 있으면 그대로(같은 객체)", bs.refillQueue(q, ids, rng) === q);
+    const head = q.queue[0];
+    const after = bs.finishMatch(bs.beginMatch(q, head), head, true);
+    check("L4-a 만난 상대는 대기열 맨 앞에서 빠짐", after.queue.length === 2 && after.queue.join() === q.queue.slice(1).join());
+    const lost = bs.settleAbandoned(bs.beginMatch(q, head));
+    check("L4-a 이탈 정산도 그 상대를 대기열에서 뺌(새로고침해도 같은 상대 재등장 없음)", lost.queue.join() === q.queue.slice(1).join() && lost.samples[head].losses === 1);
+    const drained = bs.refillQueue({ ...q, queue: [] }, ids, rng);
+    check("L4-a 한 바퀴를 다 돌면 다시 섞어 채움", drained.queue.length === 3);
+    check("L4-a 없는 샘플 id는 대기열에서 걸러냄", bs.refillQueue({ ...q, queue: ["x", "a"] }, ids, rng).queue.join() === "a" && bs.refillQueue({ ...q, queue: ["x"] }, ids, rng).queue.length === 3);
+    check("L4-a 2.5 저장본(queue 없음)도 유효, 잘못된 queue는 거부", bs.isFrontierSave({ streak: 1, best: 2, samples: {}, pendingId: null }) && !bs.isFrontierSave({ ...E, queue: [1] }) && !bs.isFrontierSave({ ...E, queue: "a" }));
+    check("L4-a 입력 저장본을 변형하지 않음(대기열)", E.queue.length === 0 && q.queue.length === 3);
   }
   // 상대가 나에게 데미지를 줄 수단이 없을 때(+Infinity 점수)
   {

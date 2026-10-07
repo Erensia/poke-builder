@@ -1161,6 +1161,11 @@ function BattleBoard({
           턴 진행
         </button>
         {lockWarning && <div className="battle-lock-warning">{lockWarning}</div>}
+        {seriesNext && (
+          <p className="battle-ai-learned-note">
+            배틀 프런티어 진행 중 — 결과가 나오기 전에 나가면(탭 이동·새로고침·창 닫기) 이 판은 패배로 기록되고 연승이 끊겨요.
+          </p>
+        )}
       </>
     )}
 

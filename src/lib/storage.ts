@@ -160,7 +160,8 @@ const battleFrontierStore = createLocalStorageStore<FrontierSave>(BATTLE_FRONTIE
 
 /** 배틀 프런티어 저장본을 불러온다. 없거나 손상됐으면 빈 기록 */
 export function loadBattleFrontier(): FrontierSave {
-  return battleFrontierStore.load();
+  // 2.5 저장본에는 queue가 없어서 기본값으로 채운다
+  return { ...EMPTY_FRONTIER, ...battleFrontierStore.load() };
 }
 
 export function saveBattleFrontier(save: FrontierSave): void {
