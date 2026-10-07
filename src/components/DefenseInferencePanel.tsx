@@ -15,6 +15,8 @@ import {
   DEFENSE_ABILITY_CANDIDATES,
   DEFENSE_ITEM_CANDIDATES,
   GRID,
+  countExtremeCells,
+  isExtremePoints,
   inferenceUnsupportedReason,
   type InferenceInput,
   type InferenceObservation,
@@ -197,9 +199,9 @@ function AllocationGrid({
             Array.from({ length: GRID }, (_, x) => (
               <span
                 key={`${x}-${y}`}
-                className={grid[y * GRID + x] ? "dinf-cell is-on" : "dinf-cell"}
+                className={`${grid[y * GRID + x] ? "dinf-cell is-on" : "dinf-cell"}${isExtremePoints([x, y]) ? " is-extreme" : ""}`}
                 style={grid[y * GRID + x] && weights ? { opacity: 0.45 + 0.55 * weights[y * GRID + x] } : undefined}
-                title={`HP ${x} · ${yLabel} ${y}${
+                title={`HP ${x} · ${yLabel} ${y}${isExtremePoints([x, y]) ? " · 극보정 형태" : ""}${
                   grid[y * GRID + x] ? (weights ? ` (가능 · 그럴듯함 ${Math.round(weights[y * GRID + x] * 100)}%)` : " (가능)") : ""
                 }`}
               />
@@ -215,7 +217,9 @@ function AllocationGrid({
         </div>
         <span className="dinf-axis-name dinf-axis-name-x">HP 포인트</span>
       </div>
-      <span className="dinf-grid-axis">보라색 칸 = 관측과 맞는 배분, 진할수록 그럴듯해요. 칸에 마우스를 올리면 수치가 보여요.</span>
+      <span className="dinf-grid-axis">
+        보라색 칸 = 관측과 맞는 배분, 진할수록 그럴듯해요. 점선 테두리 = 극보정 형태(32 또는 합 2 이하). 칸에 마우스를 올리면 수치가 보여요.
+      </span>
     </div>
   );
 }
@@ -252,6 +256,31 @@ function ObservationTips({ observations }: { observations: InferenceObservation[
         </p>
       )}
     </details>
+  );
+}
+
+/**
+ * 극보정 형태와 맞는 후보 수(3.1 C2-a) — 계산·가중에는 반영하지 않는 참고 표시. 하나도 없으면 일반적이지 않은 배분일 수 있다.
+ * 격자(HP×방어, HP×특방)의 가능한 칸 가운데 32 또는 합 2 이하 모양인 칸을 센다.
+ */
+function ExtremeSummary({ result }: { result: InferenceResult }) {
+  const parts = [
+    { label: "HP × 방어", grid: result.hpDefGrid },
+    { label: "HP × 특방", grid: result.hpSpdGrid },
+  ].flatMap(({ label, grid }) => (grid ? [{ label, ...countExtremeCells(grid) }] : []));
+  if (parts.length === 0) return null;
+  const none = parts.every((p) => p.extreme === 0);
+  return (
+    <p className={`dinf-note${none ? " dinf-extreme-none" : ""}`}>
+      극보정 형태(능력 포인트 32 또는 합 2 이하)와 맞는 후보:{" "}
+      {parts.map((p, i) => (
+        <span key={p.label}>
+          {i > 0 && " · "}
+          {p.label} <strong>{p.extreme}칸</strong> / 가능 {p.feasible}칸
+        </span>
+      ))}
+      {none ? " — 극보정 후보가 하나도 없어요. 일반적이지 않은 배분(포인트를 나눠 투자)일 수 있어요." : ""} 계산에는 반영하지 않는 참고 표시예요.
+    </p>
   );
 }
 
@@ -385,6 +414,8 @@ function ResultView({
           </span>
         ))}
       </div>
+
+      <ExtremeSummary result={result} />
 
       <details className="dinf-details">
         <summary>HP × 방어 분포 보기</summary>
