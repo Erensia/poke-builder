@@ -515,3 +515,11 @@
   background: var(--violet-soft);
   color: var(--violet);
 }
+
+/* 내가 받은 데미지 관측(3.1 C2-b) — 소제목 */
+.dinf-subhead {
+  margin: 0.9rem 0 0.4rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--violet);
+}

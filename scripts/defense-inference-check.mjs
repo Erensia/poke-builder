@@ -345,6 +345,49 @@ try {
     const w6 = narrowing(6);
     console.log(`공격 역산 관측 수별 실수치 범위 폭(물리, 평균): 1회 ${w1.toFixed(1)} · 3회 ${w3.toFixed(1)} · 6회 ${w6.toFixed(1)}`);
     if (!(w3 < w1 && w6 < w3)) fail("공격 역산: 관측이 늘어도 범위가 좁아지지 않음");
+    // 메가 전→후 혼합: 같은 공격 배분으로 메가 전(첫 관측)·메가 후(둘째 관측, 메가폼 공격 종족값·특성)에 맞은 기록이 진짜 값을 남기는지,
+    // 태그를 떼면(둘 다 메가 전으로 계산) 진짜 값이 빠지는 사례가 있는지(=관측별 폼이 실제로 쓰이는지)
+    const megaSpecies = species.filter((p) => p.megaEvolutions?.length);
+    let megaOk = 0;
+    let megaTried = 0;
+    let untaggedMissed = 0;
+    for (let t = 0; t < 80; t++) {
+      const poke = pick(megaSpecies);
+      const mega = pick(poke.megaEvolutions);
+      const truth = { atk: Math.floor(rnd() * 33), nature: pick(natureIds) };
+      const pre = slot(poke.id, { points: pts({ atk: truth.atk }), nature: truth.nature });
+      const post = slot(poke.id, { points: pts({ atk: truth.atk }), nature: truth.nature, activeMegaForm: mega.form, ability: mega.ability });
+      const mySlot = slot(pick(species).id, { points: pts({ hp: 32, def: Math.floor(rnd() * 20) }), nature: pick(natureIds) });
+      const myMax = stat.computeRealStats(form.getEffectiveForm(data.getPokemon(mySlot.pokemonId), mySlot).baseStats, mySlot.points, mySlot.nature).hp;
+      const physical = attackMoves.filter((m) => m.category === "physical");
+      const first = makeAttackObservation(physical, pre, mySlot, myMax, myMax);
+      const second = first && makeAttackObservation(physical, post, mySlot, myMax, first.hpAfter);
+      if (!second) continue;
+      megaTried++;
+      const observations = [first, { ...second, megaForm: mega.form }];
+      const mixed = ai.inferAttack({ attacker: slot(poke.id), defender: mySlot, observations });
+      if (mixed?.status === "ok" && mixed.atk.min <= truth.atk && truth.atk <= mixed.atk.max) megaOk++;
+      else fail(`공격 역산 메가 혼합: 진짜 값이 빠짐 ${mega.form} truth=${JSON.stringify(truth)} 상태=${mixed?.status}`);
+      const untagged = ai.inferAttack({ attacker: slot(poke.id), defender: mySlot, observations: observations.map((o) => ({ ...o, megaForm: undefined })) });
+      if (untagged?.status !== "ok" || untagged.atk.min > truth.atk || truth.atk > untagged.atk.max) untaggedMissed++;
+    }
+    console.log(`공격 역산 메가 전→후 혼합 ${megaOk}/${megaTried} 통과 · 태그 없이는 진짜 값이 빠진 경우 ${untaggedMissed}건`);
+    if (megaTried === 0) fail("공격 역산 메가 혼합 시행이 0건");
+    if (untaggedMissed === 0) fail("공격 역산 메가 혼합: 태그 유무 차이가 전혀 없음(태그가 반영되지 않는 듯)");
+    const badForm = ai.inferAttack({
+      attacker: slot("한카리아스"),
+      defender: slot("망나뇽", { points: pts({ hp: 20 }) }),
+      observations: [{ move: data.getMove("지진"), critical: false, hpBefore: 100, hpAfter: 50, megaForm: "없는폼" }],
+    });
+    if (badForm?.status !== "invalid" || !badForm.observationErrors[0]?.includes("메가폼")) fail("공격 역산: 없는 메가폼 태그가 invalid로 안 잡힘");
+    // 공격 보정 후보 목록(화면의 "상대 공격 보정 특성·도구 가정") — 대표 항목이 들어 있고 방어 후보(반감 열매 등)는 섞이지 않는다
+    const atkItems = new Set(ai.ATTACK_ITEM_CANDIDATES.map((i) => i.id));
+    const atkAbilities = new Set(ai.ATTACK_ABILITY_CANDIDATES.map((x) => x.id));
+    if (!["생명의구슬", "달인의띠", "힘의머리띠", "박식안경", "실크스카프"].every((id) => atkItems.has(id)) || ai.ATTACK_ITEM_CANDIDATES.some((i) => i.resistsSuperEffectiveType !== undefined)) {
+      fail("공격 보정 도구 후보가 이상함");
+    }
+    if (!["테크니션", "근성", "천하장사", "맹화"].every((id) => atkAbilities.has(id))) fail("공격 보정 특성 후보가 이상함");
+    console.log(`공격 보정 후보: 도구 ${atkItems.size}종 · 특성 ${atkAbilities.size}종`);
     // 일부러 틀린 관측(불가능한 데미지)은 모순이어야 한다
     const mine = slot("한카리아스", { points: pts({ hp: 20 }), nature: "조심" });
     const myMax = stat.computeRealStats(form.getEffectiveForm(data.getPokemon("한카리아스"), mine).baseStats, mine.points, mine.nature).hp;

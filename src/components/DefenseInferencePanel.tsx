@@ -7,6 +7,7 @@ import { MovePickerModal } from "./MovePickerModal";
 import { PokemonAvatar } from "./PokemonAvatar";
 import { TypeBadge } from "./TypeBadge";
 import { getAbility, getItem, getMove, getPokemon } from "../lib/data";
+import type { Ability } from "../types/ability";
 import { getEffectiveForm } from "../lib/pokemonForm";
 import { NEUTRAL_STAGES } from "../types/battleStats";
 import {
@@ -22,13 +23,26 @@ import {
   type InferenceResult,
   type Range,
 } from "../lib/defenseInference";
-import { MAX_ABILITY_POINTS_PER_STAT } from "../lib/statCalculator";
+import {
+  ATTACK_ABILITY_CANDIDATES,
+  ATTACK_ITEM_CANDIDATES,
+  attackInferenceUnsupportedReason,
+  inferAttack,
+  type AttackInferenceInput,
+  type AttackInferenceResult,
+  type AttackObservation,
+} from "../lib/attackInference";
+import { computeRealStats, MAX_ABILITY_POINTS_PER_STAT } from "../lib/statCalculator";
 import "./DefenseInferencePanel.css";
 
 type Screen = "reflect" | "lightScreen" | "auroraVeil";
 
+/** dealt = 내가 입힌 데미지(상대 HP %) → 상대 HP·방어 역산, received = 내가 받은 데미지(내 HP 수치) → 상대 공격 역산 */
+type RowKind = "dealt" | "received";
+
 interface ObservationRow {
   id: number;
+  kind: RowKind;
   moveId: string | null;
   critical: boolean;
   before: string;
@@ -61,14 +75,18 @@ function megaOf(row: ObservationRow, megas: MegaEvolution[] | undefined): string
   return megas?.find((m) => m.form === row.megaForm)?.form ?? "";
 }
 
+function parseHp(text: string): number | null {
+  return /^\d{1,4}$/.test(text.trim()) ? Number(text) : null;
+}
+
 function parsePercent(text: string): number | null {
   if (!/^\d{1,3}$/.test(text.trim())) return null;
   const v = Number(text);
   return v >= 0 && v <= 100 ? v : null;
 }
 
-/** 이 종(폼 변종 포함)이 가질 수 있는 특성 중 방어에 영향을 주는 것 */
-function defenseRelevantAbilities(pokemon: Pokemon): string[] {
+/** 이 종(폼 변종 포함)이 가질 수 있는 특성 중 후보 목록(방어·공격 영향 특성)에 드는 것 */
+function relevantAbilities(pokemon: Pokemon, candidates: Ability[]): string[] {
   const names = new Set<string>();
   const add = (list: string[], hidden?: string) => {
     list.forEach((a) => names.add(a));
@@ -76,7 +94,7 @@ function defenseRelevantAbilities(pokemon: Pokemon): string[] {
   };
   add(pokemon.abilities, pokemon.hiddenAbility);
   pokemon.formVariants?.forEach((f) => add(f.abilities, f.hiddenAbility));
-  const relevant = new Set(DEFENSE_ABILITY_CANDIDATES.map((a) => a.id));
+  const relevant = new Set(candidates.map((a) => a.id));
   return [...names].filter((id) => relevant.has(id));
 }
 
@@ -238,6 +256,46 @@ function ObservationTips({ observations }: { observations: InferenceObservation[
   );
 }
 
+/** 상대 공격(특공) 역산 결과(3.1 C2-b) — 내가 받은 데미지 관측으로 좁힌 값 */
+function AttackResultView({ result, rowNos }: { result: AttackInferenceResult; rowNos: number[] }) {
+  if (result.status === "invalid") {
+    return <p className="dinf-warn">관측을 계산할 수 없어요. 위 관측 줄의 안내를 확인해 주세요.</p>;
+  }
+  if (result.status === "contradiction") {
+    return (
+      <div className="dinf-contradiction">
+        <strong>이 관측과 맞는 공격 배분이 없어요.</strong>
+        {result.culprits.length > 0 ? (
+          <p>관측 {result.culprits.map((c) => `#${rowNos[c]}`).join(", ")}을(를) 빼면 맞는 배분이 나와요. 그 관측의 HP 입력·급소 체크를 다시 확인해 보세요.</p>
+        ) : (
+          <p>급소 여부, 상대 공격 보정 가정(도구·특성), 상대 공격 랭크·화상, 내 쪽 벽·랭크를 확인해 보세요. 턴 종료 효과가 섞인 HP를 넣었다면 맞지 않아요.</p>
+        )}
+      </div>
+    );
+  }
+  return (
+    <div className="dinf-result">
+      <p className="dinf-summary">
+        가능한 공격 배분 <strong>{result.feasible.toLocaleString()}</strong> / {result.total.toLocaleString()} 가지
+      </p>
+      <RangeBar label="공격 포인트" range={result.atk} central={result.atkCentral} real={result.realAtk} />
+      <RangeBar label="특공 포인트" range={result.spa} central={result.spaCentral} real={result.realSpa} />
+      <div className="dinf-natures">
+        <span className="dinf-subtitle">공격·특공 보정</span>
+        {result.groups.map((g) => (
+          <span key={g.id} className={`dinf-nature-chip${g.feasible === 0 ? " is-no" : ""}`} title={g.natureNames.join(", ")}>
+            {g.label} <em>{g.feasible === 0 ? "불가" : `${Math.round(g.weight * 100)}%`}</em>
+          </span>
+        ))}
+      </div>
+      <p className="dinf-note">
+        관측이 1번이면 난수(±7%)와 성격(±10%) 때문에 범위가 넓어요. 같은 종류(물리/특수)의 공격을 여러 번 모을수록 좁아져요. 방어 쪽(내가 입힌 데미지)
+        결과와는 아직 따로 계산해요.
+      </p>
+    </div>
+  );
+}
+
 function ResultView({
   result,
   rowIdsByObservation,
@@ -314,7 +372,7 @@ export function DefenseInferencePanel({
   weather,
   field,
 }: DefenseInferencePanelProps) {
-  const [rows, setRows] = useState<ObservationRow[]>([{ id: 1, moveId: null, critical: false, before: "100", after: "", megaForm: "" }]);
+  const [rows, setRows] = useState<ObservationRow[]>([{ id: 1, kind: "dealt", moveId: null, critical: false, before: "100", after: "", megaForm: "" }]);
   const [nextId, setNextId] = useState(2);
   const [movePickerRow, setMovePickerRow] = useState<number | null>(null);
   const [abilityId, setAbilityId] = useState<string>("");
@@ -323,6 +381,13 @@ export function DefenseInferencePanel({
   const [defStage, setDefStage] = useState(0);
   const [spdStage, setSpdStage] = useState(0);
   const [tolerant, setTolerant] = useState(false);
+  // 내가 받은 데미지 관측용 가정(3.1 C2-b) — 상대 공격 보정 특성·도구, 상대 공격·특공 랭크, 상대 화상, 내 쪽 벽
+  const [atkAbilityId, setAtkAbilityId] = useState<string>("");
+  const [atkItemId, setAtkItemId] = useState<string>("");
+  const [atkStage, setAtkStage] = useState(0);
+  const [spaStage, setSpaStage] = useState(0);
+  const [oppBurned, setOppBurned] = useState(false);
+  const [myScreen, setMyScreen] = useState<Screen | "">("");
 
   const attackerPokemon = attacker.pokemonId ? getPokemon(attacker.pokemonId) : undefined;
   const defenderPokemon = defender.pokemonId ? getPokemon(defender.pokemonId) : undefined;
@@ -330,9 +395,13 @@ export function DefenseInferencePanel({
   const megas = defenderPokemon?.megaEvolutions;
   const defenderForm = defenderPokemon ? getEffectiveForm(defenderPokemon, { ...defender, item: null, activeMegaForm: undefined }) : undefined;
 
-  const abilityOptions = defenderPokemon ? defenseRelevantAbilities(defenderPokemon) : [];
+  const abilityOptions = defenderPokemon ? relevantAbilities(defenderPokemon, DEFENSE_ABILITY_CANDIDATES) : [];
   // 종이 바뀌면 그 종이 가질 수 없는 특성 가정은 자동으로 해제
   const activeAbilityId = abilityOptions.includes(abilityId) ? abilityId : "";
+  const atkAbilityOptions = defenderPokemon ? relevantAbilities(defenderPokemon, ATTACK_ABILITY_CANDIDATES) : [];
+  const activeAtkAbilityId = atkAbilityOptions.includes(atkAbilityId) ? atkAbilityId : "";
+  // 내 포켓몬(받는 쪽)의 실제 최대 HP — 내가 받은 데미지 줄의 "맞기 전 HP" 기본값·검사 안내에 쓴다
+  const myMaxHp = attackerPokemon ? computeRealStats(getEffectiveForm(attackerPokemon, attacker).baseStats, attacker.points, attacker.nature).hp : null;
 
   function updateRow(id: number, patch: Partial<ObservationRow>) {
     setRows((prev) => {
@@ -340,8 +409,8 @@ export function DefenseInferencePanel({
       if (index < 0) return prev;
       const oldAfter = prev[index].after;
       const next = prev.map((r) => (r.id === id ? { ...r, ...patch } : r));
-      // 다음 줄의 "맞기 전 %"가 이 줄의 옛 "맞은 뒤 %"와 같았으면(직접 안 고친 값) 같이 따라간다
-      if (patch.after !== undefined && index + 1 < next.length && next[index + 1].before === oldAfter) {
+      // 다음 줄(같은 종류)의 "맞기 전 값"이 이 줄의 옛 "맞은 뒤 값"과 같았으면(직접 안 고친 값) 같이 따라간다
+      if (patch.after !== undefined && index + 1 < next.length && next[index + 1].kind === next[index].kind && next[index + 1].before === oldAfter) {
         next[index + 1] = { ...next[index + 1], before: patch.after };
       }
       return next;
@@ -351,8 +420,16 @@ export function DefenseInferencePanel({
   function addRow() {
     const last = rows[rows.length - 1];
     // 메가진화는 되돌릴 수 없어서 새 줄은 직전 줄의 폼을 이어받는다
-    setRows([...rows, { id: nextId, moveId: null, critical: false, before: last?.after ?? "100", after: "", megaForm: last ? megaOf(last, megas) : "" }]);
+    setRows([
+      ...rows,
+      { id: nextId, kind: last?.kind ?? "dealt", moveId: null, critical: false, before: last?.after ?? "100", after: "", megaForm: last ? megaOf(last, megas) : "" },
+    ]);
     setNextId(nextId + 1);
+  }
+
+  /** 줄 종류를 바꾸면 고른 기술(다른 포켓몬의 기술)·값 입력을 비운다 — 받은 데미지는 맞기 전 HP를 내 최대 HP로 채워 둔다 */
+  function changeKind(id: number, kind: RowKind) {
+    updateRow(id, { kind, moveId: null, before: kind === "received" ? String(myMaxHp ?? "") : "100", after: "" });
   }
 
   function removeRow(id: number) {
@@ -364,10 +441,27 @@ export function DefenseInferencePanel({
     const out: { row: ObservationRow; obs: InferenceObservation }[] = [];
     const defenderMegas = defender.pokemonId ? getPokemon(defender.pokemonId)?.megaEvolutions : undefined;
     for (const row of rows) {
+      if (row.kind !== "dealt") continue;
       const move = row.moveId ? getMove(row.moveId) : undefined;
       const before = parsePercent(row.before);
       const after = parsePercent(row.after);
       if (move && before !== null && after !== null) out.push({ row, obs: { move, critical: row.critical, before, after, megaForm: megaOf(row, defenderMegas) || undefined } });
+    }
+    return out;
+  }, [rows, defender.pokemonId]);
+
+  // 완성된 "내가 받은 데미지" 줄(상대 기술 + 내 HP 두 수치)
+  const completeReceived = useMemo(() => {
+    const out: { row: ObservationRow; obs: AttackObservation }[] = [];
+    const opponentMegas = defender.pokemonId ? getPokemon(defender.pokemonId)?.megaEvolutions : undefined;
+    for (const row of rows) {
+      if (row.kind !== "received") continue;
+      const move = row.moveId ? getMove(row.moveId) : undefined;
+      const hpBefore = parseHp(row.before);
+      const hpAfter = parseHp(row.after);
+      if (move && hpBefore !== null && hpAfter !== null) {
+        out.push({ row, obs: { move, critical: row.critical, hpBefore, hpAfter, megaForm: megaOf(row, opponentMegas) || undefined } });
+      }
     }
     return out;
   }, [rows, defender.pokemonId]);
@@ -402,8 +496,38 @@ export function DefenseInferencePanel({
   const anyMega = complete.some((c) => c.obs.megaForm);
   const rowIdsByObservation = complete.map((c) => rows.indexOf(c.row) + 1);
 
+  // 상대 공격(특공) 역산(3.1 C2-b) — 내 포켓몬이 맞는 쪽, 상대가 때리는 쪽
+  const anyMegaReceived = completeReceived.some((c) => c.obs.megaForm);
+  const attackInput = useMemo<AttackInferenceInput | null>(() => {
+    if (!attacker.pokemonId || !defender.pokemonId || completeReceived.length === 0) return null;
+    return {
+      attacker: {
+        ...defender,
+        pokemonId: defender.pokemonId,
+        activeMegaForm: undefined,
+        ability: activeAtkAbilityId || null,
+        item: anyMegaReceived ? null : atkItemId || null,
+      },
+      defender: { ...attacker, pokemonId: attacker.pokemonId },
+      observations: completeReceived.map((c) => c.obs),
+      attackerStages: { ...NEUTRAL_STAGES, atk: atkStage, spa: spaStage },
+      attackerStatus: oppBurned ? "burn" : null,
+      defenderStages: attacker.stages,
+      weather: weather ?? undefined,
+      field: field ?? undefined,
+      screen: myScreen || undefined,
+    };
+  }, [attacker, defender, completeReceived, anyMegaReceived, activeAtkAbilityId, atkItemId, atkStage, spaStage, oppBurned, weather, field, myScreen]);
+  const deferredAttackInput = useDeferredValue(attackInput);
+  const attackResult = useMemo(() => (deferredAttackInput ? inferAttack(deferredAttackInput) : null), [deferredAttackInput]);
+  const attackPending = attackInput !== deferredAttackInput;
+  const receivedRowNos = completeReceived.map((c) => rows.indexOf(c.row) + 1);
+  const hasReceivedRows = rows.some((r) => r.kind === "received");
+  const hasDealtRows = rows.some((r) => r.kind === "dealt");
+
   function rowMessage(row: ObservationRow): { text: string; kind: "error" | "ok" } | null {
     const move = row.moveId ? getMove(row.moveId) : undefined;
+    if (row.kind === "received") return receivedRowMessage(row, move);
     if (move) {
       const reason = inferenceUnsupportedReason(move);
       if (reason) return { text: reason, kind: "error" };
@@ -424,11 +548,33 @@ export function DefenseInferencePanel({
     return null;
   }
 
+  function receivedRowMessage(row: ObservationRow, move: ReturnType<typeof getMove>): { text: string; kind: "error" | "ok" } | null {
+    if (move) {
+      const reason = attackInferenceUnsupportedReason(move);
+      if (reason) return { text: reason, kind: "error" };
+    }
+    const before = parseHp(row.before);
+    const after = parseHp(row.after);
+    if ((row.before.trim() !== "" && before === null) || (row.after.trim() !== "" && after === null)) return { text: "HP는 정수", kind: "error" };
+    if (before !== null && myMaxHp !== null && before > myMaxHp) return { text: `최대 HP(${myMaxHp})보다 클 수 없어요`, kind: "error" };
+    if (before !== null && after !== null && after >= before) return { text: "맞은 뒤 HP가 더 작아야 해요", kind: "error" };
+    if (after === 0) return { text: "쓰러진 공격은 정확한 데미지를 몰라요", kind: "error" };
+    const index = completeReceived.findIndex((c) => c.row.id === row.id);
+    if (index >= 0 && attackResult && !attackPending) {
+      const message = attackResult.observationErrors[index];
+      if (message) return { text: message, kind: "error" };
+      if (attackResult.status !== "invalid" && attackResult.singleFeasible[index] === false) return { text: "이 관측만으로도 맞는 배분이 없어요", kind: "error" };
+      if (attackResult.status === "ok" && attackResult.singleFeasible[index]) return { text: "가능", kind: "ok" };
+    }
+    return null;
+  }
+
   return (
     <div className="dinf">
       <p className="dinf-intro">
         내 포켓몬이 상대를 때린 뒤 상대 HP가 몇 %가 됐는지 입력하면, 상대의 <strong>HP·방어(특방) 능력 포인트와 성격</strong>이 될 수 있는 범위를 좁혀 줘요.
-        게임의 상대 HP는 정수 %로만 보이고 데미지에는 난수가 있어서, 정답 하나가 아니라 <strong>가능한 범위</strong>로 보여 줍니다.
+        반대로 상대가 나를 때려서 내 HP가 얼마가 됐는지 입력하면 상대의 <strong>공격(특공) 포인트와 성격 보정</strong>도 좁힐 수 있어요(내 HP는 정확한 수치라 더 정밀해요).
+        데미지에는 난수가 있어서, 정답 하나가 아니라 <strong>가능한 범위</strong>로 보여 줍니다.
       </p>
 
       <div className="dinf-board">
@@ -484,7 +630,7 @@ export function DefenseInferencePanel({
               </span>
             </div>
             <p className="dinf-unknown">
-              역산 대상: <strong>HP · 방어 · 특방 포인트, 성격</strong>
+              역산 대상: <strong>HP · 방어 · 특방 · 공격 · 특공 포인트, 성격</strong>
             </p>
           </div>
         ) : (
@@ -502,6 +648,8 @@ export function DefenseInferencePanel({
 
       <section className="dinf-section">
         <h3>가정 · 조건</h3>
+        {hasDealtRows && (
+          <>
         <div className="dinf-conditions">
           <label>
             상대 특성
@@ -559,26 +707,96 @@ export function DefenseInferencePanel({
           <input type="checkbox" checked={tolerant} onChange={(e) => setTolerant(e.target.checked)} />
           <span>여유 있게 보기 (화면 %를 ±1%까지 허용 — 게임의 % 표시 방식이 다를 때 대비)</span>
         </label>
+          </>
+        )}
+        {hasReceivedRows && (
+          <>
+            <h4 className="dinf-subhead">내가 받은 데미지 관측용 가정</h4>
+            <div className="dinf-conditions">
+              <label>
+                상대 공격 보정 특성
+                <select value={activeAtkAbilityId} onChange={(e) => setAtkAbilityId(e.target.value)} disabled={!defenderPokemon}>
+                  <option value="">{anyMegaReceived ? "모름 (메가 전 관측에 적용)" : "모름 (보정 특성 없음으로 가정)"}</option>
+                  {atkAbilityOptions.map((id) => (
+                    <option key={id} value={id}>
+                      {getAbility(id)?.name ?? id}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                상대 공격 보정 도구
+                <select value={anyMegaReceived ? "" : atkItemId} onChange={(e) => setAtkItemId(e.target.value)} disabled={anyMegaReceived}>
+                  <option value="">{anyMegaReceived ? "메가스톤 (보정 도구 사용 불가)" : "모름 (보정 도구 없음으로 가정)"}</option>
+                  {ATTACK_ITEM_CANDIDATES.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {getItem(item.id)?.name ?? item.id}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                내 쪽 벽
+                <select value={myScreen} onChange={(e) => setMyScreen(e.target.value as Screen | "")}>
+                  <option value="">없음</option>
+                  <option value="reflect">리플렉터</option>
+                  <option value="lightScreen">빛의장막</option>
+                  <option value="auroraVeil">오로라베일</option>
+                </select>
+              </label>
+              <label>
+                상대 공격 랭크
+                <select value={atkStage} onChange={(e) => setAtkStage(Number(e.target.value))}>
+              {STAGE_OPTIONS.map((st) => (
+                <option key={st} value={st}>
+                  {st > 0 ? `+${st}` : st}
+                </option>
+              ))}
+                </select>
+              </label>
+              <label>
+                상대 특공 랭크
+                <select value={spaStage} onChange={(e) => setSpaStage(Number(e.target.value))}>
+              {STAGE_OPTIONS.map((st) => (
+                <option key={st} value={st}>
+                  {st > 0 ? `+${st}` : st}
+                </option>
+              ))}
+                </select>
+              </label>
+            </div>
+            <label className="dinf-check">
+              <input type="checkbox" checked={oppBurned} onChange={(e) => setOppBurned(e.target.checked)} />
+              <span>상대가 화상 (물리 공격 반감 — 근성·객기는 예외)</span>
+            </label>
+          </>
+        )}
         <p className="dinf-note">날씨·필드는 위쪽 선택기 값을, 내 랭크·특성·도구는 내 포켓몬 카드 값을 그대로 써요.</p>
       </section>
 
       <section className="dinf-section">
-        <h3>관측 (내가 때린 결과)</h3>
+        <h3>관측</h3>
         <ol className="dinf-rows">
           {rows.map((row, index) => {
             const move = row.moveId ? getMove(row.moveId) : undefined;
             const message = rowMessage(row);
+            const received = row.kind === "received";
+            const pickerOwner = received ? defenderPokemon : attackerPokemon;
             return (
               <li key={row.id} className="dinf-row">
                 <span className="dinf-row-no">#{index + 1}</span>
+                <select aria-label={`관측 ${index + 1} 종류`} value={row.kind} onChange={(e) => changeKind(row.id, e.target.value as RowKind)}>
+                  <option value="dealt">내가 입힌 데미지</option>
+                  <option value="received">내가 받은 데미지</option>
+                </select>
                 <button
                   type="button"
                   className="dinf-move-btn"
                   onClick={() => setMovePickerRow(row.id)}
-                  disabled={!attackerPokemon}
-                  title={attackerPokemon ? undefined : "먼저 내 포켓몬을 골라 주세요"}
+                  disabled={!pickerOwner}
+                  title={pickerOwner ? undefined : received ? "먼저 상대 포켓몬을 골라 주세요" : "먼저 내 포켓몬을 골라 주세요"}
                 >
-                  {move ? move.name : "기술 선택"}
+                  {move ? move.name : received ? "상대 기술 선택" : "기술 선택"}
                 </button>
                 {megas && megas.length > 0 && (
                   <select
@@ -602,20 +820,20 @@ export function DefenseInferencePanel({
                   <input
                     className="dinf-percent"
                     inputMode="numeric"
-                    aria-label={`관측 ${index + 1} 맞기 전 %`}
+                    aria-label={`관측 ${index + 1} 맞기 전 ${received ? "HP" : "%"}`}
                     value={row.before}
                     onChange={(e) => updateRow(row.id, { before: e.target.value })}
                   />
-                  <span>% →</span>
+                  <span>{received ? "HP →" : "% →"}</span>
                   <input
                     className="dinf-percent"
                     inputMode="numeric"
-                    aria-label={`관측 ${index + 1} 맞은 뒤 %`}
+                    aria-label={`관측 ${index + 1} 맞은 뒤 ${received ? "HP" : "%"}`}
                     placeholder="?"
                     value={row.after}
                     onChange={(e) => updateRow(row.id, { after: e.target.value })}
                   />
-                  <span>%</span>
+                  <span>{received ? "HP" : "%"}</span>
                 </span>
                 {message && <span className={`dinf-row-msg is-${message.kind}`}>{message.text}</span>}
                 {rows.length > 1 && (
@@ -630,46 +848,77 @@ export function DefenseInferencePanel({
         <button type="button" className="dinf-add" onClick={addRow}>
           + 관측 추가
         </button>
-        <p className="dinf-note">관측 사이에 상대가 HP를 회복하지 않았다고 가정해요. 다단히트·고정 데미지 기술은 아직 지원하지 않아요.</p>
+        <p className="dinf-note">
+          내가 입힌 데미지는 관측 사이에 상대가 HP를 회복하지 않았다고 가정해요. 내가 받은 데미지는 맞은 직후 내 HP 수치를 넣어 주세요(먹다남은음식·독 같은 턴 종료 효과가
+          섞이면 맞지 않아요){myMaxHp !== null && hasReceivedRows ? ` — 내 최대 HP는 ${myMaxHp}예요` : ""}. 다단히트·고정 데미지 기술은 아직 지원하지 않아요.
+        </p>
       </section>
 
       <section className="dinf-section dinf-result-section" aria-live="polite">
         <h3>
-          결과 {pending && <span className="dinf-pending">계산 중…</span>}
+          결과 {(pending || attackPending) && <span className="dinf-pending">계산 중…</span>}
         </h3>
         {!attackerPokemon || !defenderPokemon ? (
           <p className="dinf-hint">내 포켓몬과 상대 포켓몬을 먼저 골라 주세요.</p>
-        ) : !result ? (
-          <p className="dinf-hint">관측의 기술과 맞은 뒤 %를 입력하면 결과가 나와요.</p>
+        ) : !result && !attackResult ? (
+          <p className="dinf-hint">관측의 기술과 맞은 뒤 값을 입력하면 결과가 나와요.</p>
         ) : (
-          <div className={pending ? "dinf-stale" : undefined}>
-            <ResultView result={result} rowIdsByObservation={rowIdsByObservation} />
-          </div>
+          <>
+            {result && (
+              <div className={pending ? "dinf-stale" : undefined}>
+                {attackResult && <h4 className="dinf-subhead">방어 쪽 — 내가 입힌 데미지</h4>}
+                <ResultView result={result} rowIdsByObservation={rowIdsByObservation} />
+              </div>
+            )}
+            {attackResult && (
+              <div className={attackPending ? "dinf-stale" : undefined}>
+                <h4 className="dinf-subhead">공격 쪽 — 내가 받은 데미지</h4>
+                <AttackResultView result={attackResult} rowNos={receivedRowNos} />
+              </div>
+            )}
+          </>
         )}
-        <ObservationTips observations={complete.map((c) => c.obs)} />
-        <p className="dinf-assume">
-          가정: 화면 %는 내림(HP가 남으면 최소 1%) · 상대 특성{" "}
-          {activeAbilityId ? getAbility(activeAbilityId)?.name : "없음(모름)"}{anyMega ? " (메가 후 관측은 메가폼 특성)" : ""} · 상대 도구{" "}
-          {anyMega ? "메가스톤" : itemId ? getItem(itemId)?.name : "없음(모름)"} · 관측 사이 회복 없음{tolerant ? " · ±1% 여유" : ""}
-        </p>
+        {complete.length > 0 && <ObservationTips observations={complete.map((c) => c.obs)} />}
+        {hasDealtRows && (
+          <p className="dinf-assume">
+            가정(내가 입힌 데미지): 화면 %는 내림(HP가 남으면 최소 1%) · 상대 특성{" "}
+            {activeAbilityId ? getAbility(activeAbilityId)?.name : "없음(모름)"}{anyMega ? " (메가 후 관측은 메가폼 특성)" : ""} · 상대 도구{" "}
+            {anyMega ? "메가스톤" : itemId ? getItem(itemId)?.name : "없음(모름)"} · 관측 사이 회복 없음{tolerant ? " · ±1% 여유" : ""}
+          </p>
+        )}
+        {hasReceivedRows && (
+          <p className="dinf-assume">
+            가정(내가 받은 데미지): 상대 공격 보정 특성 {activeAtkAbilityId ? getAbility(activeAtkAbilityId)?.name : "없음(모름)"}
+            {anyMegaReceived ? " (메가 후 관측은 메가폼 특성)" : ""} · 상대 공격 보정 도구 {anyMegaReceived ? "메가스톤" : atkItemId ? getItem(atkItemId)?.name : "없음(모름)"} · 상대 공격{" "}
+            {atkStage > 0 ? `+${atkStage}` : atkStage}·특공 {spaStage > 0 ? `+${spaStage}` : spaStage}랭크{oppBurned ? " · 상대 화상" : ""}
+            {myScreen ? ` · 내 쪽 ${{ reflect: "리플렉터", lightScreen: "빛의장막", auroraVeil: "오로라베일" }[myScreen]}` : ""}
+          </p>
+        )}
       </section>
 
-      {movePickerRow !== null && attackerPokemon && (
-        <MovePickerModal
-          pokemon={attackerPokemon}
-          formVariant={attacker.formVariant}
-          currentMoveIds={[rows.find((r) => r.id === movePickerRow)?.moveId ?? null]}
-          onClose={() => setMovePickerRow(null)}
-          onSelect={(moveId) => {
-            updateRow(movePickerRow, { moveId });
-            setMovePickerRow(null);
-          }}
-          onClear={() => {
-            updateRow(movePickerRow, { moveId: null });
-            setMovePickerRow(null);
-          }}
-        />
-      )}
+      {movePickerRow !== null &&
+        (() => {
+          const pickerRow = rows.find((r) => r.id === movePickerRow);
+          const received = pickerRow?.kind === "received";
+          const owner = received ? defenderPokemon : attackerPokemon;
+          if (!owner) return null;
+          return (
+            <MovePickerModal
+              pokemon={owner}
+              formVariant={received ? defender.formVariant : attacker.formVariant}
+              currentMoveIds={[pickerRow?.moveId ?? null]}
+              onClose={() => setMovePickerRow(null)}
+              onSelect={(moveId) => {
+                updateRow(movePickerRow, { moveId });
+                setMovePickerRow(null);
+              }}
+              onClear={() => {
+                updateRow(movePickerRow, { moveId: null });
+                setMovePickerRow(null);
+              }}
+            />
+          );
+        })()}
     </div>
   );
 }
