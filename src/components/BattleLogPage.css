@@ -74,6 +74,11 @@
   gap: 0.8rem;
 }
 
+/* 배틀 프런티어 중 상대 편(2.5 L4): 수동으로 바꿀 수 없다(inert) */
+.battle-setup-column.is-locked {
+  opacity: 0.6;
+}
+
 /* 파티 열 머리: 불러오기 버튼 4개 한 줄 + 제목 한 줄(2.2 B6 UI 정리) */
 .battle-setup-actions {
   display: flex;

@@ -2522,7 +2522,7 @@ try {
     check("B6 같은 포켓몬만 저장돼 있어도 1마리만 쓰고 보충", dup.fromSaved === 1 && valid(dup.slots));
     check("B6 입력 슬롯을 변형하지 않음(사본 반환)", JSON.stringify(savedFew) === frozen && rs.buildRandomPartyFromSlots(savedFew, pool, rng).slots.every((s) => !savedFew.includes(s)));
   }
-  // 2.2 B2: 연속 대전 — 대진표는 샘플 파티를 한 번씩 전부(원본 불변), 전적 요약은 승·패·무 합이 판 수와 일치
+  // 2.5 L4: 배틀 프런티어 — 대진표는 샘플 파티를 한 번씩 전부(원본 불변), 연승·최대 연승·샘플별 누적·이탈 정산
   {
     const bs = await server.ssrLoadModule("/src/lib/battleSeries.ts");
     const before = data.SAMPLE_PARTIES.map((p) => p.id).join(",");
@@ -2530,12 +2530,26 @@ try {
     const rng = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 2 ** 32);
     const order = bs.shuffleOpponents(data.SAMPLE_PARTIES, rng);
     check(
-      "B2 대진표 = 샘플 파티 전부 한 번씩, 원본 순서 불변",
+      "L4 대진표 = 샘플 파티 전부 한 번씩, 원본 순서 불변",
       order.length === data.SAMPLE_PARTIES.length && new Set(order.map((p) => p.id)).size === data.SAMPLE_PARTIES.length && data.SAMPLE_PARTIES.map((p) => p.id).join(",") === before,
     );
-    const sum = bs.summarizeSeries([{ winner: "a" }, { winner: "a" }, { winner: "b" }, { winner: "draw" }, { winner: "a" }]);
-    check("B2 전적 요약 3승 1패 1무", sum.wins === 3 && sum.losses === 1 && sum.draws === 1, JSON.stringify(sum));
-    check("B2 빈 전적 요약", JSON.stringify(bs.summarizeSeries([])) === JSON.stringify({ wins: 0, losses: 0, draws: 0 }));
+    const E = bs.EMPTY_FRONTIER;
+    let st = bs.finishMatch(bs.finishMatch(bs.finishMatch(E, "x", true), "y", true), "x", true);
+    check("L4 3연승 → 연승·최대 3, 샘플별 누적 x 2승 y 1승", st.streak === 3 && st.best === 3 && st.samples.x.wins === 2 && st.samples.y.wins === 1, JSON.stringify(st));
+    st = bs.finishMatch(st, "z", false);
+    check("L4 패배 → 연승 0, 최대 3 유지, 누적은 유지", st.streak === 0 && st.best === 3 && st.samples.z.losses === 1 && st.samples.x.wins === 2);
+    st = bs.finishMatch(st, "x", true);
+    check("L4 연승이 끊긴 뒤 다시 1연승, 최대는 3", st.streak === 1 && st.best === 3);
+    const begun = bs.beginMatch(st, "q");
+    check("L4 판 시작 표시는 연승을 건드리지 않음", begun.pendingId === "q" && begun.streak === 1);
+    const settled = bs.settleAbandoned(begun);
+    check("L4 이탈 정산 → 연승 0·그 샘플 패배 +1·표시 해제", settled.streak === 0 && settled.best === 3 && settled.samples.q.losses === 1 && settled.pendingId === null);
+    check("L4 표시가 없으면 정산은 그대로(같은 객체)", bs.settleAbandoned(settled) === settled);
+    check("L4 정산을 두 번 해도 한 번만 집계(멱등)", bs.settleAbandoned(bs.settleAbandoned(begun)).samples.q.losses === 1);
+    const done = bs.finishMatch(begun, "q", true);
+    check("L4 결과가 나오면 표시 해제", done.pendingId === null && done.streak === 2);
+    check("L4 저장본 검증: 정상·손상", bs.isFrontierSave(done) && !bs.isFrontierSave({ streak: "1" }) && !bs.isFrontierSave(null) && !bs.isFrontierSave({ ...done, samples: null }));
+    check("L4 입력 저장본을 변형하지 않음", E.streak === 0 && Object.keys(E.samples).length === 0 && E.pendingId === null);
   }
   // 상대가 나에게 데미지를 줄 수단이 없을 때(+Infinity 점수)
   {

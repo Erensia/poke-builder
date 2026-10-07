@@ -1,4 +1,4 @@
-/* 연속 대전 패널 (2.2 B2) */
+/* 배틀 프런티어 패널 (2.5 L4, 전 연속 대전 2.2 B2) */
 .battle-series {
   display: flex;
   flex-wrap: wrap;
@@ -21,20 +21,12 @@
   color: var(--text);
 }
 
-.battle-series.is-summary {
-  flex-direction: column;
-  align-items: stretch;
+.battle-series-details {
+  flex: 1 1 100%;
 }
 
-.battle-series-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.6rem;
-}
-
-.battle-series-head span {
-  flex: 1;
+.battle-series-details summary {
+  cursor: pointer;
   color: var(--text-muted);
 }
 
@@ -42,7 +34,7 @@
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
   gap: 0.3rem 0.8rem;
-  margin: 0;
+  margin: 0.4rem 0 0;
   padding: 0;
   list-style: none;
 }
@@ -53,12 +45,6 @@
   gap: 0.4rem;
 }
 
-.battle-series-no {
-  width: 1.4rem;
-  color: var(--text-muted);
-  text-align: right;
-}
-
 .battle-series-style {
   flex: 1;
   color: var(--text-muted);
@@ -67,12 +53,4 @@
 
 .battle-series-result {
   font-weight: 700;
-}
-
-.battle-series-list li.is-a .battle-series-result {
-  color: var(--violet);
-}
-
-.battle-series-list li.is-b .battle-series-result {
-  color: #d64545;
 }
