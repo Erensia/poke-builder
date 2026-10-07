@@ -3,7 +3,9 @@ import type { StatStages } from "../types/battleStats";
 import type { WeatherKind } from "../types/weather";
 import type { FieldKind } from "../types/field";
 import type { StatusCondition } from "../types/status";
-import { NATURES, getAbility, getPokemon } from "./data";
+import { ABILITIES, ITEMS, NATURES, getAbility, getPokemon } from "./data";
+import type { Ability } from "../types/ability";
+import type { Item } from "../types/item";
 import { getEffectiveForm } from "./pokemonForm";
 import { burnDamageMultiplier, ignoresBurnAttackPenalty, statusedAttackBoost } from "./statusConditions";
 import { damageRollTotals } from "./damageFormula";
@@ -21,6 +23,26 @@ import { inferenceUnsupportedReason, natureMult, WeightedValues, type CentralRan
  * 상세: docs/00_기획문서/02_backlog/03_ver.3.0/3.1-backlog.md C2-b.
  */
 
+/** 공격(위력·공격 스탯)에 영향을 주는 특성 — 역산 화면의 "상대 공격 보정 특성 가정" 목록 */
+export const ATTACK_ABILITY_CANDIDATES: Ability[] = ABILITIES.filter(
+  (a) =>
+    a.modifiers?.some((m) => m.scope === "offense") ||
+    a.physicalAttackMultiplierWhenStatused !== undefined ||
+    a.changesUserTypeToMoveType ||
+    a.tradesSecondaryEffectForPower ||
+    a.powerMultiplierWhenMovingLast !== undefined,
+);
+
+/** 공격에 영향을 주는 도구 — 생명의구슬·달인의띠·타입 강화·분류 강화·메트로놈 */
+export const ATTACK_ITEM_CANDIDATES: Item[] = ITEMS.filter(
+  (i) =>
+    i.moveTypeMultiplier !== undefined ||
+    i.moveCategoryMultiplier !== undefined ||
+    i.powerMultiplier !== undefined ||
+    i.superEffectiveMultiplier !== undefined ||
+    i.consecutiveSameMoveMultiplier !== undefined,
+);
+
 export interface AttackObservation {
   /** 상대가 쓴 공격 기술 */
   move: Move;
@@ -29,12 +51,15 @@ export interface AttackObservation {
   hpBefore: number;
   /** 맞은 직후 내 HP 수치 (턴 종료 효과가 섞이지 않은 값) — 쓰러지면 정확한 데미지를 알 수 없어 지원하지 않는다 */
   hpAfter: number;
+  /** 이 관측을 줄 때 상대가 메가진화한 상태면 그 메가폼 이름. 없으면 `attacker`의 폼. 메가폼은 공격 종족값·특성이 달라진다 */
+  megaForm?: string;
 }
 
 export interface AttackInferenceInput {
   /**
    * 상대 포켓몬의 종·폼. ability/item은 "이렇다고 가정"한 값(모르면 null — 생명의구슬·달인의띠·테크니션 등 공격 보정은 가정으로 넣는다),
-   * nature/points는 무시한다(역산 대상).
+   * nature/points는 무시한다(역산 대상). 관측에 메가폼 태그(`megaForm`)가 하나라도 있으면 메가스톤을 들고 있었던 것이라 모든 관측에서
+   * 도구 가정을 끄고, 태그가 붙은 관측은 그 메가폼의 특성으로 계산한다.
    */
   attacker: EvaluatorSlot;
   /** 내 포켓몬 — 능력(포인트·성격)·특성·도구를 전부 알고 있는 방어자 */
@@ -89,6 +114,8 @@ interface NatureCombo {
 
 interface PreparedObservation {
   key: AttackKey;
+  /** 이 관측 시점 폼의 공격·특공 종족값(결과의 실수치 범위 표시용) */
+  baseStat: number;
   /** 이 관측에서 받은 데미지 */
   damage: number;
   /** 후보(성격·포인트)로 상대 슬롯을 만들어 이 관측의 16단계 난수 데미지를 낸다. 계산할 수 없으면 null */
@@ -153,7 +180,10 @@ function prepareObservations(input: AttackInferenceInput): { prepared: PreparedO
   const errors: (string | null)[] = [];
   const myPokemon = getPokemon(defender.pokemonId);
   const myMaxHp = myPokemon ? computeRealStats(getEffectiveForm(myPokemon, defender).baseStats, defender.points, defender.nature).hp : 0;
-  const probe: EvaluatorSlot = { ...attacker, nature: null, points: { ...EMPTY_ABILITY_POINTS } };
+  const attackerPokemon = getPokemon(attacker.pokemonId);
+  // 메가 전·후를 섞은 관측이면 메가스톤 보유 → 공격 보정 도구 가정을 모든 관측에서 끈다
+  const hasMega = observations.some((o) => o.megaForm);
+  const baseAttacker: EvaluatorSlot = { ...attacker, item: hasMega ? null : attacker.item };
   let itemConsumed = false;
 
   observations.forEach((obs) => {
@@ -162,6 +192,13 @@ function prepareObservations(input: AttackInferenceInput): { prepared: PreparedO
       errors.push(unsupported);
       return;
     }
+    const mega = obs.megaForm ? attackerPokemon?.megaEvolutions?.find((m) => m.form === obs.megaForm) : undefined;
+    if (obs.megaForm && !mega) {
+      errors.push("이 포켓몬에게 없는 메가폼이에요");
+      return;
+    }
+    const attackerAtHit: EvaluatorSlot = mega ? { ...baseAttacker, activeMegaForm: mega.form, ability: mega.ability } : baseAttacker;
+    const probe: EvaluatorSlot = { ...attackerAtHit, nature: null, points: { ...EMPTY_ABILITY_POINTS } };
     if (!(Number.isInteger(obs.hpBefore) && Number.isInteger(obs.hpAfter)) || obs.hpBefore < 1 || obs.hpAfter < 0) {
       errors.push("HP는 1 이상의 정수여야 해요");
       return;
@@ -193,9 +230,9 @@ function prepareObservations(input: AttackInferenceInput): { prepared: PreparedO
       extraOffenseMultiplier: statusedAttackBoost(
         attackerStatus ?? null,
         obs.move.category,
-        attacker.ability ? getAbility(attacker.ability)?.physicalAttackMultiplierWhenStatused : undefined,
+        attackerAtHit.ability ? getAbility(attackerAtHit.ability)?.physicalAttackMultiplierWhenStatused : undefined,
       ),
-      finalOffenseMultiplier: burnDamageMultiplier(attackerStatus ?? null, obs.move.category, ignoresBurnAttackPenalty(attacker.ability ?? undefined, obs.move.id)),
+      finalOffenseMultiplier: burnDamageMultiplier(attackerStatus ?? null, obs.move.category, ignoresBurnAttackPenalty(attackerAtHit.ability ?? undefined, obs.move.id)),
     };
     const res = evaluateSlotMatchup(probe, obs.move, defender, { ...options, skipVerdict: true });
     if (!res || !res.damageParts) {
@@ -208,13 +245,15 @@ function prepareObservations(input: AttackInferenceInput): { prepared: PreparedO
     }
     if (res.berryBulkMultiplier > 1) itemConsumed = true;
     const memo = new Map<string, number[] | null>();
+    const baseStats = getEffectiveForm(attackerPokemon!, attackerAtHit).baseStats;
     prepared.push({
       key: attackKeyOf(obs.move),
+      baseStat: baseStats[attackKeyOf(obs.move)],
       damage: obs.hpBefore - obs.hpAfter,
       rolls: (natureId, points) => {
         const memoKey = `${natureId}|${points}`;
         if (memo.has(memoKey)) return memo.get(memoKey)!;
-        const slot: EvaluatorSlot = { ...attacker, nature: natureId, points: { ...EMPTY_ABILITY_POINTS, [attackKeyOf(obs.move)]: points } };
+        const slot: EvaluatorSlot = { ...attackerAtHit, nature: natureId, points: { ...EMPTY_ABILITY_POINTS, [attackKeyOf(obs.move)]: points } };
         const r = evaluateSlotMatchup(slot, obs.move, defender, { ...options, skipVerdict: true });
         const rolls = r?.damageParts ? damageRollTotals(r.damageParts, r.defenseStat) : null;
         memo.set(memoKey, rolls);
@@ -244,7 +283,8 @@ function runCandidates(input: AttackInferenceInput, prepared: PreparedObservatio
   const n = prepared.length;
   const pokemon = getPokemon(input.attacker.pokemonId);
   if (!pokemon) return emptyResult("invalid", n);
-  const base = getEffectiveForm(pokemon, input.attacker).baseStats;
+  // 실수치 범위(표시용)는 그 스탯을 쓴 마지막 관측(현재 폼)의 종족값 기준
+  const baseOf = (key: AttackKey) => prepared.findLast((o) => o.key === key)?.baseStat ?? getEffectiveForm(pokemon, input.attacker).baseStats[key];
   const useAtk = prepared.some((o) => o.key === "atk");
   const useSpa = prepared.some((o) => o.key === "spa");
   const combos = buildNatureCombos(useAtk, useSpa);
@@ -284,13 +324,13 @@ function runCandidates(input: AttackInferenceInput, prepared: PreparedObservatio
     atkCandidates.forEach((p, i) => {
       if (!useAtk || atkL[i] <= 0) return;
       grow(atkRange, p);
-      grow(realAtk, Math.floor((base.atk + 20 + p) * combo.atkMult));
+      grow(realAtk, Math.floor((baseOf("atk") + 20 + p) * combo.atkMult));
       atkW.add(p, atkL[i] * spaSum);
     });
     spaCandidates.forEach((p, i) => {
       if (!useSpa || spaL[i] <= 0) return;
       grow(spaRange, p);
-      grow(realSpa, Math.floor((base.spa + 20 + p) * combo.spaMult));
+      grow(realSpa, Math.floor((baseOf("spa") + 20 + p) * combo.spaMult));
       spaW.add(p, spaL[i] * atkSum);
     });
   });
