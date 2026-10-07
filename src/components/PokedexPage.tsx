@@ -10,6 +10,7 @@ import { compareDexOrder } from "../lib/dexOrder";
 import { POKEMON_TYPES, type PokemonType } from "../types/pokemon-type";
 import type { FormVariant, Pokemon, MegaEvolution } from "../types/pokemon";
 import type { BaseStats } from "../types/stats";
+import { TypeChartTable } from "./TypeChartTable";
 import "./PokedexPage.css";
 
 /** 챔피언스 로스터 종족값 막대의 기준선. 실제 최고치(라이츄메가X/Y 585 등)보다 넉넉하게 잡아
@@ -317,7 +318,7 @@ export function PokedexPage({ onSelectMove }: PokedexPageProps) {
         <p>로스터 {POKEMON.length}종의 타입·종족값·특성·메가진화·기술을 한눈에 확인합니다.</p>
       </header>
 
-      <div className="pokedex-board">
+      <div className={`pokedex-board${selected ? "" : " is-fit"}`}>
         <div className="pokedex-list-panel">
           <ul className="pokedex-list">
             {filtered.map((p) => (
@@ -346,11 +347,18 @@ export function PokedexPage({ onSelectMove }: PokedexPageProps) {
           />
         </div>
 
-        <div className="pokedex-detail-panel">
-          {selected ? (
-            <PokedexDetail key={selected.id} pokemon={selected} onSelectMove={onSelectMove} />
-          ) : (
-            <div className="pokedex-detail-empty">포켓몬을 선택하세요.</div>
+        <div className="pokedex-detail-column">
+          <div className="pokedex-detail-panel">
+            {selected ? (
+              <PokedexDetail key={selected.id} pokemon={selected} onSelectMove={onSelectMove} />
+            ) : (
+              <div className="pokedex-detail-empty">포켓몬을 선택하세요.</div>
+            )}
+          </div>
+          {!selected && (
+            <div className="pokedex-detail-panel pokedex-chart-card">
+              <TypeChartTable />
+            </div>
           )}
         </div>
       </div>
