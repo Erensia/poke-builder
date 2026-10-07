@@ -1,0 +1,136 @@
+/* 도감 타입 상성표 (3.0 N1) */
+/* 도감 우측 카드가 높이를 정해 주면(PokedexPage .is-fit) 표가 남은 높이를 행 높이로 나눠 채운다 */
+.tc {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.tc-title {
+  margin: 0 0 0.35rem;
+  font-size: 0.95rem;
+}
+
+.tc-legend {
+  margin: 0 0 0.6rem;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.tc-table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  flex: 1;
+}
+
+.tc-table th,
+.tc-table td {
+  padding: 0;
+  height: 1.2rem;
+  text-align: center;
+  vertical-align: middle;
+  font-size: 0.72rem;
+  border: 1px solid var(--border);
+}
+
+.tc-table th:first-child {
+  width: 1.7rem;
+}
+
+.tc-table th.is-hl,
+.tc-table td.is-hl {
+  background: var(--violet-soft);
+}
+
+/* 아이콘은 블록으로 두고 가운데 정렬 — 인라인이면 줄 높이(기준선) 여백 때문에 칸 안에서 위로 쏠린다 */
+.tc-icon {
+  display: block;
+  line-height: 0;
+}
+
+.tc-icon .type-badge {
+  display: block;
+  width: 1rem;
+  height: 1rem;
+  margin: 0 auto;
+}
+
+.tc-chip {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  color: #fff;
+  font-size: 0.6rem;
+  font-weight: 700;
+}
+
+.tc-table td.is-super,
+.tc-key.is-super {
+  background: var(--safe-bg);
+  color: var(--safe);
+  font-weight: 700;
+}
+
+.tc-table td.is-resist,
+.tc-key.is-resist {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.tc-table td.is-immune,
+.tc-key.is-immune {
+  background: var(--text);
+  color: var(--bg);
+  font-weight: 700;
+}
+
+/* 호버 강조가 칸 색을 덮지 않게, 강조 행·열의 효과 칸은 색을 유지한다 */
+.tc-table td.is-hl.is-super {
+  background: var(--safe-bg);
+}
+
+.tc-table td.is-hl.is-resist {
+  background: var(--danger-bg);
+}
+
+.tc-table td.is-hl.is-immune {
+  background: var(--text);
+}
+
+.tc-key {
+  display: inline-block;
+  min-width: 1.2rem;
+  padding: 0 0.25rem;
+  border-radius: 4px;
+  text-align: center;
+}
+
+/* 좁은 화면: 가로 스크롤 없이 폭에 맞춰 줄인다(칸 약 16px) — 아이콘 대신 색 칸 + 첫 글자 */
+@media (max-width: 760px) {
+  .tc-table th,
+  .tc-table td {
+    height: 1.1rem;
+    font-size: 0.6rem;
+  }
+
+  .tc-table th:first-child {
+    width: 1.1rem;
+  }
+
+  .tc-icon {
+    display: none;
+  }
+
+  .tc-chip {
+    display: flex;
+  }
+
+  .tc-legend {
+    font-size: 0.66rem;
+  }
+}
