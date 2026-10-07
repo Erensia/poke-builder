@@ -388,6 +388,76 @@ try {
     }
     if (!["테크니션", "근성", "천하장사", "맹화"].every((id) => atkAbilities.has(id))) fail("공격 보정 특성 후보가 이상함");
     console.log(`공격 보정 후보: 도구 ${atkItems.size}종 · 특성 ${atkAbilities.size}종`);
+    // 방어·공격 결합(성격 공유 + 포인트 예산): 같은 상대의 진짜 배분으로 두 종류 관측을 만들어 결합해도 진짜 값이 남고,
+    // 결합 전(각각)보다 후보가 늘지 않으며, 실제로 좁아지는 사례가 있는지
+    const cb = await server.ssrLoadModule("/src/lib/combinedInference.ts");
+    let cbTried = 0;
+    let cbOk = 0;
+    let defNarrowed = 0;
+    let atkNarrowed = 0;
+    let sumNaturesBefore = 0;
+    let sumMs = 0;
+    let maxMs = 0;
+    let sumNaturesAfter = 0;
+    for (let t = 0; t < 200; t++) {
+      const opp = pick(species);
+      const truth = { hp: Math.floor(rnd() * 33), def: Math.floor(rnd() * 33), spd: Math.floor(rnd() * 33), atk: Math.floor(rnd() * 33), spa: Math.floor(rnd() * 33), nature: pick(natureIds) };
+      if (truth.hp + truth.def + truth.spd + truth.atk + truth.spa > 66) continue;
+      const oppTrue = slot(opp.id, { points: pts(truth), nature: truth.nature });
+      const mySlot = slot(pick(species).id, { points: pts({ hp: 32, atk: 32, spa: 32, def: Math.floor(rnd() * 20), spd: Math.floor(rnd() * 20) }), nature: pick(natureIds) });
+      const myForm = form.getEffectiveForm(data.getPokemon(mySlot.pokemonId), mySlot);
+      const myReal = stat.computeRealStats(myForm.baseStats, mySlot.points, mySlot.nature);
+      const oppReal = stat.computeRealStats(form.getEffectiveForm(data.getPokemon(opp.id), oppTrue).baseStats, oppTrue.points, oppTrue.nature);
+      // 방어 쪽: 내가 입힌 데미지(물리+특수), 공격 쪽: 내가 받은 데미지(물리+특수)
+      const dealt = [];
+      let oppHp = oppReal.hp;
+      for (const cat of ["physical", "special"]) {
+        const made = makeObservation(usable.filter((m) => m.category === cat), mySlot, oppTrue, oppReal, oppHp);
+        if (!made) continue;
+        dealt.push(made.observation);
+        oppHp -= made.damage;
+      }
+      const received = [];
+      let myHp = myReal.hp;
+      for (const cat of ["physical", "special"]) {
+        const obs = makeAttackObservation(attackMoves.filter((m) => m.category === cat), oppTrue, mySlot, myReal.hp, myHp);
+        if (!obs) continue;
+        received.push(obs);
+        myHp = obs.hpAfter;
+      }
+      if (dealt.length === 0 || received.length === 0) continue;
+      cbTried++;
+      const defenseInput = { attacker: mySlot, defender: slot(opp.id), observations: dealt };
+      const attackInput = { attacker: slot(opp.id), defender: mySlot, observations: received };
+      const d0 = inf.inferDefense(defenseInput);
+      const a0 = ai.inferAttack(attackInput);
+      const t0 = performance.now();
+      const c = cb.inferCombined(defenseInput, attackInput);
+      const ms = performance.now() - t0;
+      sumMs += ms;
+      maxMs = Math.max(maxMs, ms);
+      const inR = (r, v) => !r || (r.min <= v && v <= r.max);
+      const okAll =
+        c.conflict === null && c.defense?.status === "ok" && c.attack?.status === "ok" &&
+        inR(c.defense.hp, truth.hp) && inR(c.defense.def, truth.def) && inR(c.defense.spd, truth.spd) &&
+        inR(c.attack.atk, truth.atk) && inR(c.attack.spa, truth.spa) &&
+        c.natures?.some((n) => n.name === data.NATURES.find((x) => x.id === truth.nature).name) &&
+        c.defense.feasible <= d0.feasible && c.attack.feasible <= a0.feasible;
+      if (okAll) {
+        cbOk++;
+        if (c.defense.feasible < d0.feasible) defNarrowed++;
+        if (c.attack.feasible < a0.feasible) atkNarrowed++;
+        sumNaturesBefore += data.NATURES.filter((n) => d0.groups.some((g) => g.feasible > 0 && g.natureNames.includes(n.name))).length;
+        sumNaturesAfter += c.natures.length;
+      } else fail(`결합 왕복: 진짜 배분이 빠지거나 후보가 늘었음 opp=${opp.id} truth=${JSON.stringify(truth)} 충돌=${c.conflict} 방어=${c.defense?.status} 공격=${c.attack?.status}`);
+    }
+    console.log(
+      `방어·공격 결합 왕복 ${cbOk}/${cbTried} 통과 · 후보가 줄어든 사례 방어 ${defNarrowed}건·공격 ${atkNarrowed}건 · 성격 후보 평균 ${(sumNaturesBefore / Math.max(1, cbOk)).toFixed(1)}개(방어 쪽만) → ${(sumNaturesAfter / Math.max(1, cbOk)).toFixed(1)}개(결합)`,
+    );
+    if (cbTried === 0) fail("방어·공격 결합 왕복 시행이 0건");
+    console.log(`방어·공격 결합 계산 시간: 평균 ${(sumMs / Math.max(1, cbTried)).toFixed(0)}ms · 최대 ${maxMs.toFixed(0)}ms`);
+    if (maxMs > 5000) fail(`방어·공격 결합이 너무 느림(${maxMs.toFixed(0)}ms)`);
+    if (defNarrowed + atkNarrowed === 0) fail("방어·공격 결합: 후보가 줄어든 사례가 전혀 없음(결합이 반영되지 않는 듯)");
     // 일부러 틀린 관측(불가능한 데미지)은 모순이어야 한다
     const mine = slot("한카리아스", { points: pts({ hp: 20 }), nature: "조심" });
     const myMax = stat.computeRealStats(form.getEffectiveForm(data.getPokemon("한카리아스"), mine).baseStats, mine.points, mine.nature).hp;

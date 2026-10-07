@@ -10,7 +10,7 @@ import { getEffectiveForm } from "./pokemonForm";
 import { burnDamageMultiplier, ignoresBurnAttackPenalty, statusedAttackBoost } from "./statusConditions";
 import { damageRollTotals } from "./damageFormula";
 import { evaluateSlotMatchup, type EvaluatorSlot } from "./matchupEvaluator";
-import { computeRealStats, MAX_ABILITY_POINTS_PER_STAT } from "./statCalculator";
+import { computeRealStats, MAX_ABILITY_POINTS_PER_STAT, MAX_ABILITY_POINTS_TOTAL } from "./statCalculator";
 import { EMPTY_ABILITY_POINTS } from "../types/party";
 import { inferenceUnsupportedReason, natureMult, WeightedValues, type CentralRange, type NatureGroup, type Range } from "./defenseInference";
 
@@ -74,6 +74,10 @@ export interface AttackInferenceInput {
   weather?: WeatherKind;
   field?: FieldKind;
   screen?: "reflect" | "lightScreen" | "auroraVeil";
+  /** 후보로 볼 성격 id 목록 — 방어 역산이 이미 걸러낸 성격을 넘겨 같은 상대의 성격을 공유한다. 생략하면 전부 */
+  natureIds?: readonly string[];
+  /** 공격+특공 포인트 합의 상한 — 방어 쪽(HP+방어+특방)이 이미 쓴 최소 포인트를 뺀 값(포인트 예산). 생략하면 66 */
+  maxPointsSum?: number;
 }
 
 export interface AttackInferenceResult {
@@ -135,9 +139,10 @@ export function attackInferenceUnsupportedReason(move: Move): string | null {
 }
 
 /** 상대 공격·특공 보정 묶음(성격 15종 → 관측이 쓰는 스탯의 보정이 같은 것끼리) */
-function buildNatureCombos(useAtk: boolean, useSpa: boolean): NatureCombo[] {
+function buildNatureCombos(useAtk: boolean, useSpa: boolean, allowed?: ReadonlySet<string>): NatureCombo[] {
   const map = new Map<string, NatureCombo>();
   for (const n of NATURES) {
+    if (allowed && !allowed.has(n.id)) continue;
     const atkMult = useAtk ? natureMult("atk", n.increased, n.decreased) : 1;
     const spaMult = useSpa ? natureMult("spa", n.increased, n.decreased) : 1;
     const key = `${atkMult}|${spaMult}`;
@@ -287,7 +292,8 @@ function runCandidates(input: AttackInferenceInput, prepared: PreparedObservatio
   const baseOf = (key: AttackKey) => prepared.findLast((o) => o.key === key)?.baseStat ?? getEffectiveForm(pokemon, input.attacker).baseStats[key];
   const useAtk = prepared.some((o) => o.key === "atk");
   const useSpa = prepared.some((o) => o.key === "spa");
-  const combos = buildNatureCombos(useAtk, useSpa);
+  const combos = buildNatureCombos(useAtk, useSpa, input.natureIds ? new Set(input.natureIds) : undefined);
+  const maxSum = Math.min(MAX_ABILITY_POINTS_TOTAL, input.maxPointsSum ?? MAX_ABILITY_POINTS_TOTAL);
   const groups: NatureGroup[] = combos.map((c) => ({ id: c.key, label: c.label, natureNames: c.natureNames, feasible: 0, total: 0, weight: 0 }));
   const pointRange = Array.from({ length: MAX_ABILITY_POINTS_PER_STAT + 1 }, (_, p) => p);
   const emptyRange = (): Range => ({ min: Infinity, max: -Infinity });
@@ -310,29 +316,37 @@ function runCandidates(input: AttackInferenceInput, prepared: PreparedObservatio
     groups[c].total += atkCandidates.length * spaCandidates.length;
     const atkL = atkCandidates.map((p) => (useAtk ? sideLikelihood(prepared, "atk", combo, p) : 1));
     const spaL = spaCandidates.map((p) => (useSpa ? sideLikelihood(prepared, "spa", combo, p) : 1));
-    const atkSum = atkL.reduce((a, b) => a + b, 0);
-    const spaSum = spaL.reduce((a, b) => a + b, 0);
-    const atkOk = atkL.filter((l) => l > 0).length;
-    const spaOk = spaL.filter((l) => l > 0).length;
-    if (atkOk === 0 || spaOk === 0) return;
-    feasible += atkOk * spaOk;
-    groups[c].feasible += atkOk * spaOk;
-    const weight = atkSum * spaSum;
-    totalWeight += weight;
-    groups[c].weight += weight;
-    // 한 스탯의 가능도는 다른 쪽 합(성격 묶음이 같을 때의 가능 정도)을 곱해 가중한다
-    atkCandidates.forEach((p, i) => {
-      if (!useAtk || atkL[i] <= 0) return;
-      grow(atkRange, p);
-      grow(realAtk, Math.floor((baseOf("atk") + 20 + p) * combo.atkMult));
-      atkW.add(p, atkL[i] * spaSum);
+    // 공격+특공 포인트 합이 상한을 넘는 쌍은 뺀다(포인트 예산). 한 가지만 쓰는 관측이면 그 포인트 하나가 상한 이하여야 한다
+    const atkWeight = new Float64Array(atkCandidates.length);
+    const spaWeight = new Float64Array(spaCandidates.length);
+    let comboWeight = 0;
+    let okPairs = 0;
+    atkCandidates.forEach((a, i) => {
+      if (atkL[i] <= 0) return;
+      spaCandidates.forEach((b, j) => {
+        if (spaL[j] <= 0 || a + b > maxSum) return;
+        const w = atkL[i] * spaL[j];
+        okPairs++;
+        comboWeight += w;
+        atkWeight[i] += w;
+        spaWeight[j] += w;
+        if (useAtk) {
+          grow(atkRange, a);
+          grow(realAtk, Math.floor((baseOf("atk") + 20 + a) * combo.atkMult));
+        }
+        if (useSpa) {
+          grow(spaRange, b);
+          grow(realSpa, Math.floor((baseOf("spa") + 20 + b) * combo.spaMult));
+        }
+      });
     });
-    spaCandidates.forEach((p, i) => {
-      if (!useSpa || spaL[i] <= 0) return;
-      grow(spaRange, p);
-      grow(realSpa, Math.floor((baseOf("spa") + 20 + p) * combo.spaMult));
-      spaW.add(p, spaL[i] * atkSum);
-    });
+    if (okPairs === 0) return;
+    feasible += okPairs;
+    groups[c].feasible += okPairs;
+    totalWeight += comboWeight;
+    groups[c].weight += comboWeight;
+    if (useAtk) atkCandidates.forEach((p, i) => atkWeight[i] > 0 && atkW.add(p, atkWeight[i]));
+    if (useSpa) spaCandidates.forEach((p, j) => spaWeight[j] > 0 && spaW.add(p, spaWeight[j]));
   });
 
   if (totalWeight > 0) for (const g of groups) g.weight /= totalWeight;
@@ -358,14 +372,14 @@ function runCandidates(input: AttackInferenceInput, prepared: PreparedObservatio
  * 관측 전체와 맞는 상대 공격(특공) 포인트·성격 묶음을 좁힌다. 관측이 없으면 null.
  * 관측 사이에 내 HP가 회복하지 않았다고 가정한다(관측마다 맞기 전 HP를 직접 받으므로 사실상 상관없다).
  */
-export function inferAttack(input: AttackInferenceInput): AttackInferenceResult | null {
+export function inferAttack(input: AttackInferenceInput, diagnostics = true): AttackInferenceResult | null {
   const total = input.observations.length;
   if (total === 0) return null;
   const { prepared, errors } = prepareObservations(input);
   if (errors.some((e) => e !== null)) return { ...emptyResult("invalid", total), observationErrors: errors };
   const result = runCandidates(input, prepared);
   result.observationErrors = errors;
-  if (total > 1) {
+  if (total > 1 && diagnostics) {
     result.singleFeasible = prepared.map((o) => runCandidates(input, [o]).status === "ok");
     if (result.status === "contradiction") {
       result.culprits = prepared

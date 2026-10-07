@@ -10,11 +10,11 @@ import { getAbility, getItem, getMove, getPokemon } from "../lib/data";
 import type { Ability } from "../types/ability";
 import { getEffectiveForm } from "../lib/pokemonForm";
 import { NEUTRAL_STAGES } from "../types/battleStats";
+import { inferCombined, type CombinedInference } from "../lib/combinedInference";
 import {
   DEFENSE_ABILITY_CANDIDATES,
   DEFENSE_ITEM_CANDIDATES,
   GRID,
-  inferDefense,
   inferenceUnsupportedReason,
   type InferenceInput,
   type InferenceObservation,
@@ -27,7 +27,6 @@ import {
   ATTACK_ABILITY_CANDIDATES,
   ATTACK_ITEM_CANDIDATES,
   attackInferenceUnsupportedReason,
-  inferAttack,
   type AttackInferenceInput,
   type AttackInferenceResult,
   type AttackObservation,
@@ -256,8 +255,40 @@ function ObservationTips({ observations }: { observations: InferenceObservation[
   );
 }
 
+/** 방어·공격 결합 결과(3.1 C2-b) — 두 쪽이 합친 성격 후보와 반영한 포인트 상한, 서로 안 맞을 때의 안내 */
+function CombinedView({ combined }: { combined: CombinedInference }) {
+  if (combined.conflict === "nature") {
+    return (
+      <p className="dinf-warn">방어 쪽(내가 입힌 데미지)과 공격 쪽(내가 받은 데미지)에서 가능한 성격이 하나도 겹치지 않아요. 급소·가정·메가 선택을 확인해 보세요.</p>
+    );
+  }
+  if (combined.conflict === "points") {
+    return (
+      <p className="dinf-warn">두 쪽 관측이 요구하는 포인트를 더하면 합계 66을 넘어요. 급소·가정·메가 선택을 확인해 보세요.</p>
+    );
+  }
+  if (!combined.natures || !combined.budget) return null;
+  const { defenseMax, attackMax } = combined.budget;
+  return (
+    <div className="dinf-result">
+      <h4 className="dinf-subhead">두 쪽을 합친 결과</h4>
+      <div className="dinf-natures">
+        <span className="dinf-subtitle">성격</span>
+        {combined.natures.map((n) => (
+          <span key={n.name} className="dinf-nature-chip">
+            {n.name} <em>{n.weight >= 0.01 ? `${Math.round(n.weight * 100)}%` : "<1%"}</em>
+          </span>
+        ))}
+      </div>
+      <p className="dinf-note">
+        성격은 한 값이라 방어 쪽과 공격 쪽에서 모두 가능한 성격만 남겼어요. 포인트 합계는 66을 넘을 수 없어서 HP+방어+특방은 {defenseMax} 이하, 공격+특공은 {attackMax} 이하로 따졌어요.
+      </p>
+    </div>
+  );
+}
+
 /** 상대 공격(특공) 역산 결과(3.1 C2-b) — 내가 받은 데미지 관측으로 좁힌 값 */
-function AttackResultView({ result, rowNos }: { result: AttackInferenceResult; rowNos: number[] }) {
+function AttackResultView({ result, rowNos, combinedOn }: { result: AttackInferenceResult; rowNos: number[]; combinedOn: boolean }) {
   if (result.status === "invalid") {
     return <p className="dinf-warn">관측을 계산할 수 없어요. 위 관측 줄의 안내를 확인해 주세요.</p>;
   }
@@ -289,8 +320,10 @@ function AttackResultView({ result, rowNos }: { result: AttackInferenceResult; r
         ))}
       </div>
       <p className="dinf-note">
-        관측이 1번이면 난수(±7%)와 성격(±10%) 때문에 범위가 넓어요. 같은 종류(물리/특수)의 공격을 여러 번 모을수록 좁아져요. 방어 쪽(내가 입힌 데미지)
-        결과와는 아직 따로 계산해요.
+        관측이 1번이면 난수(±7%)와 성격(±10%) 때문에 범위가 넓어요. 같은 종류(물리/특수)의 공격을 여러 번 모을수록 좁아져요.{" "}
+        {combinedOn
+          ? "성격과 포인트 합계(66)는 방어 쪽(내가 입힌 데미지) 결과와 합쳐 따졌어요."
+          : "방어 쪽(내가 입힌 데미지) 관측도 함께 넣으면 성격과 포인트 합계(66)를 같이 따져 더 좁아져요."}
       </p>
     </div>
   );
@@ -489,10 +522,6 @@ export function DefenseInferencePanel({
     };
   }, [attacker, defender, complete, activeAbilityId, itemId, weather, field, screen, defStage, spdStage, tolerant]);
 
-  // 계산이 무거울 수 있어(물리+특수 관측이 함께면 수십만 후보) 입력은 즉시 반영하고 결과만 뒤따라 그린다
-  const deferredInput = useDeferredValue(input);
-  const result = useMemo(() => (deferredInput ? inferDefense(deferredInput) : null), [deferredInput]);
-  const pending = input !== deferredInput;
   const anyMega = complete.some((c) => c.obs.megaForm);
   const rowIdsByObservation = complete.map((c) => rows.indexOf(c.row) + 1);
 
@@ -518,8 +547,14 @@ export function DefenseInferencePanel({
       screen: myScreen || undefined,
     };
   }, [attacker, defender, completeReceived, anyMegaReceived, activeAtkAbilityId, atkItemId, atkStage, spaStage, oppBurned, weather, field, myScreen]);
+  // 계산이 무거울 수 있어(물리+특수 관측이 함께면 수십만 후보) 입력은 즉시 반영하고 결과만 뒤따라 그린다.
+  // 방어·공격 두 쪽은 같이 계산해 성격을 공유하고 포인트 합계(66)를 따진다(3.1 C2-b 결합).
+  const deferredInput = useDeferredValue(input);
   const deferredAttackInput = useDeferredValue(attackInput);
-  const attackResult = useMemo(() => (deferredAttackInput ? inferAttack(deferredAttackInput) : null), [deferredAttackInput]);
+  const combined = useMemo(() => inferCombined(deferredInput, deferredAttackInput), [deferredInput, deferredAttackInput]);
+  const result = combined.defense;
+  const attackResult = combined.attack;
+  const pending = input !== deferredInput;
   const attackPending = attackInput !== deferredAttackInput;
   const receivedRowNos = completeReceived.map((c) => rows.indexOf(c.row) + 1);
   const hasReceivedRows = rows.some((r) => r.kind === "received");
@@ -873,9 +908,10 @@ export function DefenseInferencePanel({
             {attackResult && (
               <div className={attackPending ? "dinf-stale" : undefined}>
                 <h4 className="dinf-subhead">공격 쪽 — 내가 받은 데미지</h4>
-                <AttackResultView result={attackResult} rowNos={receivedRowNos} />
+                <AttackResultView result={attackResult} rowNos={receivedRowNos} combinedOn={combined.natures !== null} />
               </div>
             )}
+            <CombinedView combined={combined} />
           </>
         )}
         {complete.length > 0 && <ObservationTips observations={complete.map((c) => c.obs)} />}
