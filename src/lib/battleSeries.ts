@@ -16,9 +16,11 @@ export interface FrontierSave {
   pendingId: string | null;
   /** 아직 안 만난 상대 샘플 id 순서(맨 앞 = 다음 상대). 새로고침해도 같은 순서로 이어 간다(3.0 L4-a) */
   queue: string[];
+  /** 내 샘플(3.1 S2)도 상대 풀에 넣는지 — 기본 끔(켜면 풀이 사용자마다 달라져 기록의 의미가 바뀐다) */
+  includeMine: boolean;
 }
 
-export const EMPTY_FRONTIER: FrontierSave = { streak: 0, best: 0, samples: {}, pendingId: null, queue: [] };
+export const EMPTY_FRONTIER: FrontierSave = { streak: 0, best: 0, samples: {}, pendingId: null, queue: [], includeMine: false };
 
 export function isFrontierSave(value: unknown): value is FrontierSave {
   const v = value as FrontierSave;
@@ -31,7 +33,8 @@ export function isFrontierSave(value: unknown): value is FrontierSave {
     v.samples !== null &&
     (v.pendingId === null || typeof v.pendingId === "string") &&
     // 2.5 저장본에는 queue가 없다 — 없으면 허용하고 불러올 때 빈 배열로 채운다
-    (v.queue === undefined || (Array.isArray(v.queue) && v.queue.every((id) => typeof id === "string")))
+    (v.queue === undefined || (Array.isArray(v.queue) && v.queue.every((id) => typeof id === "string"))) &&
+    (v.includeMine === undefined || typeof v.includeMine === "boolean")
   );
 }
 
@@ -50,6 +53,7 @@ export function finishMatch(save: FrontierSave, sampleId: string, won: boolean):
     samples: { ...save.samples, [sampleId]: won ? { ...prev, wins: prev.wins + 1 } : { ...prev, losses: prev.losses + 1 } },
     pendingId: null,
     queue: save.queue[0] === sampleId ? save.queue.slice(1) : save.queue,
+    includeMine: save.includeMine,
   };
 }
 

@@ -78,3 +78,26 @@
   gap: 0.3rem;
   margin-top: 0.45rem;
 }
+
+/* 내 샘플 저장 폼(3.1 S2 스파이크) — 입력·버튼은 파티 프리셋 저장 폼의 .preset-save-* 를 그대로 쓴다 */
+.sample-party-save {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  margin-bottom: 0.8rem;
+  font-size: 0.8rem;
+}
+
+.sample-party-save .preset-save-row {
+  margin-bottom: 0;
+}
+
+.sample-party-save-group {
+  flex: 0 0 auto;
+  width: 7.5rem;
+}
+
+.sample-party-save-note {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+}
