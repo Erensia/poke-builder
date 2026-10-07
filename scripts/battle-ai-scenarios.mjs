@@ -2565,6 +2565,19 @@ try {
     check("L4-a 없는 샘플 id는 대기열에서 걸러냄", bs.refillQueue({ ...q, queue: ["x", "a"] }, ids, rng).queue.join() === "a" && bs.refillQueue({ ...q, queue: ["x"] }, ids, rng).queue.length === 3);
     check("L4-a 2.5 저장본(queue 없음)도 유효, 잘못된 queue는 거부", bs.isFrontierSave({ streak: 1, best: 2, samples: {}, pendingId: null }) && !bs.isFrontierSave({ ...E, queue: [1] }) && !bs.isFrontierSave({ ...E, queue: "a" }));
     check("L4-a 입력 저장본을 변형하지 않음(대기열)", E.queue.length === 0 && q.queue.length === 3);
+    // 3.1 S2: 내 샘플 — 프런티어 풀 옵션 저장·쓸 수 있는 샘플 판정
+    check("S2 includeMine 기본 끔, 결과 정산 후에도 유지", E.includeMine === false && bs.finishMatch({ ...E, includeMine: true }, "x", true).includeMine === true);
+    check("S2 저장본 검증: includeMine 없음(2.5·3.0 저장본)은 유효, 잘못된 값은 거부", bs.isFrontierSave({ streak: 0, best: 0, samples: {}, pendingId: null }) && !bs.isFrontierSave({ ...E, includeMine: "yes" }));
+    const ms = await server.ssrLoadModule("/src/lib/mySamples.ts");
+    const sampleOk = structuredClone(data.SAMPLE_PARTIES[0]);
+    check("S2 기본 샘플은 쓸 수 있는 샘플로 판정", ms.isUsableSample(sampleOk));
+    const brokenMon = structuredClone(sampleOk);
+    brokenMon.slots[2].pokemonId = "없는포켓몬";
+    const brokenMove = structuredClone(sampleOk);
+    brokenMove.slots[0].moves[1] = "없는기술";
+    const short = structuredClone(sampleOk);
+    short.slots.pop();
+    check("S2 없는 포켓몬·없는 기술·6마리가 아닌 샘플은 거름", !ms.isUsableSample(brokenMon) && !ms.isUsableSample(brokenMove) && !ms.isUsableSample(short));
   }
   // 상대가 나에게 데미지를 줄 수단이 없을 때(+Infinity 점수)
   {

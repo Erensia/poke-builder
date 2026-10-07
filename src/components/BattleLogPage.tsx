@@ -16,6 +16,8 @@ import { BattleTurnLog } from "./BattleTurnLog";
 import { useBattleSetup, BATTLE_SELECT_SIZE } from "../hooks/useBattleSetup";
 import { useSlotPresets } from "../hooks/useSlotPresets";
 import { usePartyPresets } from "../hooks/usePartyPresets";
+import { useMySamples } from "../hooks/useMySamples";
+import { isUsableSample } from "../lib/mySamples";
 import { useBattleVideos } from "../hooks/useBattleVideos";
 import type { BattleVideo } from "../types/battleVideo";
 import { Modal } from "./Modal";
@@ -42,6 +44,7 @@ export function BattleLogPage() {
   const setup = useBattleSetup();
   const slotPresets = useSlotPresets();
   const partyPresets = usePartyPresets();
+  const mySamples = useMySamples();
   const battleVideos = useBattleVideos();
   // 배틀비디오 목록/다시보기 토글(§6). "list"면 목록 모달, BattleVideo 객체면 그 비디오의 로그를 보여준다.
   const [battleVideoView, setBattleVideoView] = useState<"list" | BattleVideo | null>(null);
@@ -85,7 +88,7 @@ export function BattleLogPage() {
   /** 이번 대전을 학습했으면 누적 판 수(결과 배너 한 줄), 아니면 null */
   const [learnedBattles, setLearnedBattles] = useState<number | null>(null);
   /** 배틀 프런티어(2.5 L4, 전 연속 대전) */
-  const series = useBattleSeries();
+  const series = useBattleSeries(mySamples.samples);
   /** 프런티어 중 내 선출 고정 — 첫 판에 고른 빌드 슬롯 인덱스(프런티어를 새로 켜면 다시 고른다) */
   const [frontierSelection, setFrontierSelection] = useState<SlotIndex[] | null>(null);
 
@@ -97,7 +100,9 @@ export function BattleLogPage() {
     setup.loadSide(side, structuredClone(sample.slots));
   }
   function loadRandomSample(side: Side) {
-    loadSample(side, SAMPLE_PARTIES[Math.floor(Math.random() * SAMPLE_PARTIES.length)]);
+    // 기본 샘플 + 쓸 수 있는 내 샘플(3.1 S2)에서 무작위로 고른다
+    const pool = [...SAMPLE_PARTIES, ...mySamples.samples.filter(isUsableSample)];
+    loadSample(side, pool[Math.floor(Math.random() * pool.length)]);
   }
   /** 저장 슬롯 프리셋 조합 랜덤 파티(2.2 B6) — 저장 파티·슬롯 프리셋 원본은 그대로, 사본만 진영에 채운다 */
   function loadRandomSlotParty(side: Side) {
@@ -901,6 +906,10 @@ export function BattleLogPage() {
               targetHasPokemon={SLOT_INDICES.some((i) => slotCtl(side, i).slot !== null)}
               onClose={() => setPicker(null)}
               onLoad={(sample) => loadSample(side, sample)}
+              mySamples={mySamples.samples}
+              currentSlots={SLOT_INDICES.map((i) => slotCtl(side, i).slot)}
+              onSaveMySample={mySamples.addSample}
+              onDeleteMySample={mySamples.removeSample}
             />
           );
         })()}
