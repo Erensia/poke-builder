@@ -64,6 +64,10 @@ export interface InferenceInput {
   screen?: "reflect" | "lightScreen" | "auroraVeil";
   /** 화면 % 판정 여유(±%). 0 = 정확히 일치, 1 = ±1% 허용 */
   tolerance?: number;
+  /** 후보로 볼 성격 id 목록 — 공격 역산이 이미 걸러낸 성격을 넘겨 같은 상대의 성격을 공유한다(3.1 C2-b). 생략하면 전부 */
+  natureIds?: readonly string[];
+  /** HP+방어+특방 포인트 합의 상한 — 공격·특공 쪽에 이미 쓴 최소 포인트를 뺀 값(3.1 C2-b 포인트 예산). 생략하면 66 */
+  maxPointsSum?: number;
 }
 
 export interface NatureGroup {
@@ -167,9 +171,10 @@ export function natureMult(stat: "atk" | "def" | "spa" | "spd", increased: strin
   return 1;
 }
 
-function buildNatureCombos(useDef: boolean, useSpd: boolean): NatureCombo[] {
+function buildNatureCombos(useDef: boolean, useSpd: boolean, allowed?: ReadonlySet<string>): NatureCombo[] {
   const map = new Map<string, NatureCombo>();
   for (const n of NATURES) {
+    if (allowed && !allowed.has(n.id)) continue;
     const defMult = useDef ? natureMult("def", n.increased, n.decreased) : 1;
     const spdMult = useSpd ? natureMult("spd", n.increased, n.decreased) : 1;
     const key = `${defMult}|${spdMult}`;
@@ -362,15 +367,15 @@ export class WeightedValues {
 
 const realStat = (natureMult: number, baseStat: number, points: number): number => Math.floor((baseStat + 20 + points) * natureMult);
 
-/** HP·방어·특방 포인트 배분 후보 [hp, def, spd] — 합계 66 이하, 관측이 없는 쪽 스탯은 0 고정 */
-function enumerateAllocations(useDef: boolean, useSpd: boolean): [number, number, number][] {
+/** HP·방어·특방 포인트 배분 후보 [hp, def, spd] — 합계 maxSum(기본 66) 이하, 관측이 없는 쪽 스탯은 0 고정 */
+function enumerateAllocations(useDef: boolean, useSpd: boolean, maxSum: number): [number, number, number][] {
   const out: [number, number, number][] = [];
   const maxDef = useDef ? MAX_ABILITY_POINTS_PER_STAT : 0;
   const maxSpd = useSpd ? MAX_ABILITY_POINTS_PER_STAT : 0;
   for (let hp = 0; hp <= MAX_ABILITY_POINTS_PER_STAT; hp++) {
     for (let def = 0; def <= maxDef; def++) {
       for (let spd = 0; spd <= maxSpd; spd++) {
-        if (hp + def + spd <= MAX_ABILITY_POINTS_TOTAL) out.push([hp, def, spd]);
+        if (hp + def + spd <= maxSum) out.push([hp, def, spd]);
       }
     }
   }
@@ -388,7 +393,7 @@ function runCandidates(input: InferenceInput, prepared: PreparedObservation[], d
   const tol = input.tolerance ?? 0;
   const useDef = prepared.some((o) => o.parts.defenseKey === "def");
   const useSpd = prepared.some((o) => o.parts.defenseKey === "spd");
-  const combos = buildNatureCombos(useDef, useSpd);
+  const combos = buildNatureCombos(useDef, useSpd, input.natureIds ? new Set(input.natureIds) : undefined);
   const groups: NatureGroup[] = combos.map((c) => ({ id: c.key, label: c.label, natureNames: c.natureNames, feasible: 0, total: 0, weight: 0 }));
 
   // 방어 스탯 값별 난수 데미지 캐시 (관측 번호 × 스탯 값)
@@ -439,7 +444,7 @@ function runCandidates(input: InferenceInput, prepared: PreparedObservation[], d
     }
   };
 
-  for (const [hpP, defP, spdP] of enumerateAllocations(useDef, useSpd)) {
+  for (const [hpP, defP, spdP] of enumerateAllocations(useDef, useSpd, Math.min(MAX_ABILITY_POINTS_TOTAL, input.maxPointsSum ?? MAX_ABILITY_POINTS_TOTAL))) {
     const maxHp = Math.floor(base.hp + 75 + hpP);
     for (let c = 0; c < combos.length; c++) {
       const combo = combos[c];
@@ -522,7 +527,7 @@ function runCandidates(input: InferenceInput, prepared: PreparedObservation[], d
  * 관측 전체와 맞는 상대 배분 후보를 좁힌다. 관측이 없으면 null.
  * 관측 사이에 상대가 회복하지 않았다고 가정한다(먹다남은음식·재생력 등은 2차).
  */
-export function inferDefense(input: InferenceInput): InferenceResult | null {
+export function inferDefense(input: InferenceInput, diagnostics = true): InferenceResult | null {
   const total = input.observations.length;
   if (total === 0) return null;
   const { prepared, errors } = prepareObservations(input);
@@ -532,7 +537,7 @@ export function inferDefense(input: InferenceInput): InferenceResult | null {
   const result = runCandidates(input, prepared, true);
   result.observationErrors = errors;
 
-  if (total > 1) {
+  if (total > 1 && diagnostics) {
     // 관측 하나씩만 봤을 때 가능한지 + 모순이면 어느 관측을 빼면 풀리는지
     result.singleFeasible = prepared.map((o) => runCandidates(input, [o]).status === "ok");
     if (result.status === "contradiction") {
