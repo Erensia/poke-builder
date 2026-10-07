@@ -161,7 +161,7 @@ interface NatureCombo {
   natureNames: string[];
 }
 
-function natureMult(stat: "def" | "spd", increased: string | null | undefined, decreased: string | null | undefined): number {
+export function natureMult(stat: "atk" | "def" | "spa" | "spd", increased: string | null | undefined, decreased: string | null | undefined): number {
   if (increased === stat) return 1.1;
   if (decreased === stat) return 0.9;
   return 1;
@@ -338,7 +338,7 @@ function candidateLikelihood(maxHp: number, rolls: number[][], obs: PreparedObse
 }
 
 /** 값(정수)별 가중치를 쌓았다가 중심 80%(10%~90%) 구간과 중앙값을 낸다 */
-class WeightedValues {
+export class WeightedValues {
   private readonly bins = new Map<number, number>();
   private total = 0;
   add(value: number, weight: number): void {
