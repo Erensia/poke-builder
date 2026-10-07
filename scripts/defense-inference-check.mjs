@@ -87,10 +87,10 @@ try {
   console.log(`공식 대조 ${formulaChecked}건`);
 
   // 진짜 배분(defTrue)에 실제로 입힐 데미지로 관측 하나를 만든다. 쓰러뜨리는 관측(0%)은 제외.
-  const makeObservation = (cands, atk, defTrue, dReal, hp) => {
+  const makeObservation = (cands, atk, defTrue, dReal, hp, notFull = false) => {
     for (let tries = 0; tries < 20; tries++) {
       const move = pick(cands);
-      const res = ev.evaluateSlotMatchup(atk, move, defTrue);
+      const res = ev.evaluateSlotMatchup(atk, move, defTrue, notFull ? { defenderHpIsFull: false } : undefined);
       const p = res?.damageParts;
       if (!p || p.typeEffectiveness === 0) continue;
       const roll = (85 + Math.floor(rnd() * 16)) / 100;
@@ -208,6 +208,44 @@ try {
     }
     console.log(`메가 왕복 ${megaOk}/${megaTried} 통과`);
     if (megaTried === 0) fail("메가 왕복 시행이 0건");
+  }
+
+  // 2.5 L1) 메가 전→후 혼합 — 같은 포인트 배분으로 메가 전(첫 관측)·메가 후(둘째 관측)를 맞은 기록이 진짜 배분을 남기는지,
+  // 그리고 메가 후 관측을 메가 전 폼으로 잘못 계산하면 진짜 배분이 빠지는지(=관측별 폼 태그가 실제로 쓰이는지)
+  {
+    const megaSpecies = data.POKEMON.filter((p) => p.megaEvolutions?.length && p.megaEvolutions.some((m) => m.baseStats.hp === p.baseStats.hp));
+    let mixOk = 0;
+    let mixTried = 0;
+    let untaggedMissed = 0;
+    for (let t = 0; t < 80; t++) {
+      const poke = pick(megaSpecies);
+      const mega = pick(poke.megaEvolutions.filter((m) => m.baseStats.hp === poke.baseStats.hp));
+      const truth = { hp: Math.floor(rnd() * 33), def: Math.floor(rnd() * 33), spd: Math.floor(rnd() * 33), nature: pick(natureIds) };
+      if (truth.hp + truth.def + truth.spd > 66) continue;
+      const atk = slot(pick(species).id, { points: pts({ atk: 32, spa: 32 }), nature: pick(natureIds) });
+      const pre = slot(poke.id, { points: pts(truth), nature: truth.nature });
+      const post = slot(poke.id, { points: pts(truth), nature: truth.nature, activeMegaForm: mega.form, ability: mega.ability });
+      const preReal = stat.computeRealStats(poke.baseStats, pre.points, pre.nature);
+      const postReal = stat.computeRealStats(mega.baseStats, post.points, post.nature);
+      const physical = usable.filter((m) => m.category === "physical");
+      const first = makeObservation(physical, atk, pre, preReal, preReal.hp);
+      if (!first) continue;
+      const second = makeObservation(physical, atk, post, postReal, preReal.hp - first.damage, true);
+      if (!second) continue;
+      mixTried++;
+      const observations = [first.observation, { ...second.observation, megaForm: mega.form }];
+      const mixed = inf.inferDefense({ attacker: atk, defender: slot(poke.id), observations });
+      if (mixed?.status === "ok" && mixed.hpDefGrid[truth.def * 33 + truth.hp] === 1) mixOk++;
+      else fail(`메가 전→후 혼합: 진짜 배분이 빠짐 ${mega.form} truth=${JSON.stringify(truth)} 상태=${mixed?.status}`);
+      // 태그를 떼면(둘 다 메가 전으로 계산) 방어 종족값이 다른 경우 진짜 배분이 빠지거나 모순이 나야 한다 — 빠지는 사례가 하나라도 있어야 태그가 의미 있다
+      const untagged = inf.inferDefense({ attacker: atk, defender: slot(poke.id), observations: observations.map((o) => ({ ...o, megaForm: undefined })) });
+      if (untagged?.status !== "ok" || untagged.hpDefGrid[truth.def * 33 + truth.hp] !== 1) untaggedMissed++;
+    }
+    console.log(`메가 전→후 혼합 ${mixOk}/${mixTried} 통과 · 태그 없이는 진짜 배분이 빠진 경우 ${untaggedMissed}건`);
+    if (mixTried === 0) fail("메가 전→후 혼합 시행이 0건");
+    if (untaggedMissed === 0) fail("메가 전→후 혼합: 태그 유무 차이가 전혀 없음(태그가 반영되지 않는 듯)");
+    const bad = inf.inferDefense({ attacker: slot("한카리아스"), defender: slot("갑주무사"), observations: [{ move: data.getMove("지진"), critical: false, before: 100, after: 50, megaForm: "없는폼" }] });
+    if (bad?.status !== "invalid" || !bad.observationErrors[0]?.includes("메가폼")) fail("없는 메가폼 태그가 invalid로 안 잡힘");
   }
 
   // 3) 모순 / 면역 ----------------------------------------------------------------------------
