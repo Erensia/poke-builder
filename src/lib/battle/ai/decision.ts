@@ -6,27 +6,13 @@ import type { SearchParams } from "./search";
 import { partyRaceValue, partyValueAfterTurn, type ChainParams, type PartyDuel, type PartyEffect } from "./partyEval";
 
 /**
- * decision-layer §9 파라미터(튜닝 대상) + extension §2-2 w_survival.
- * scoring:
- *  - "spec": 문서 원안 — 교체 템포 페널티 상수(switchTempoPenalty), 회복·랭크업은 연장분 × w_survival
- *  - "tempo": 공격하지 않는 모든 행동(교체·회복·랭크업)을 "이번 턴 공격 기회를 잃음 = 처치 턴 +1"로
- *    exchange_advantage와 같은 단위에서 계산한다.
+ * decision-layer §9 파라미터(튜닝 대상). 채점은 HP 교환식(trade) 하나다 — 문서 원안(spec)·tempo 채점은 3.0에서 삭제했다
+ * (기본값이 1.7부터 trade였다). 모든 옵션을 "상대 HP 제거 비율 − 내 HP 손실 비율"(최대 HP 대비)로 비교한다.
  */
 export interface DecisionParams {
-  /**
-   * "trade": HP 교환 채점 — 모든 옵션을 "상대 HP 제거 비율 − 내 HP 손실 비율"(최대 HP 대비)로 비교한다.
-   *   포켓몬마다 몸이 달라 서로 비교할 수 없는 "여유 턴 수"(d − c) 대신 같은 단위를 쓴다.
-   */
-  scoring: "spec" | "tempo" | "trade";
-  /** trade 채점의 랭크업기 보유 상대 경계 페널티(HP 비율 단위) */
+  /** 랭크업기 보유 상대 경계 페널티(HP 비율 단위) */
   tradeRiskPenaltyBase: number;
-  entryCostWeight: number;
-  switchTempoPenalty: number;
-  riskFlagPenaltyBase: number;
   tieThreshold: number;
-  wSurvival: number;
-  /** "tempo" 채점에서 교체 옵션에 추가로 빼는 값("처치 턴 +1"에 더해) */
-  switchExtraPenalty: number;
   /** trade 채점에서 유턴류를 "공격 + 교체"로 평가할지. false면 교체 효과를 무시한 일반 공격기로 본다(비교용) */
   pivotAware: boolean;
   /**
@@ -159,10 +145,6 @@ export const DEFAULT_OPPONENT_MODEL: OpponentModelParams = { tau: 0.2, alpha: 0.
  * "이미 이기는 대면에서도 튼튼한 후보로 갈아타는" 결함이 있었다 — decision-layer.md §11 참고.
  */
 export const DEFAULT_DECISION_PARAMS: DecisionParams = {
-  scoring: "trade",
-  entryCostWeight: 1.5,
-  switchTempoPenalty: 0.3,
-  switchExtraPenalty: 0,
   tradeRiskPenaltyBase: 0.1,
   pivotAware: true,
   statusAware: true,
@@ -178,9 +160,7 @@ export const DEFAULT_DECISION_PARAMS: DecisionParams = {
   threatSharpness: DEFAULT_THREAT_MODEL.sharpness,
   threatStrictWaste: DEFAULT_THREAT_MODEL.strictWaste,
   threatStatusThreat: true,
-  riskFlagPenaltyBase: 0.4,
   tieThreshold: 0.1,
-  wSurvival: 1.0,
   partyAware: true,
   partyCountWeight: 0.5,
   partyDuelNoise: 0.5,
@@ -218,11 +198,6 @@ export interface ScoredOption {
   nan?: boolean;
 }
 
-/** 선공 +0.5 / 동속 0 / 후공 −0.5 — 선제공격손톱 확률까지 선형으로 섞인다(extension §3-4) */
-function speedAdjustment(option: AiOption): number {
-  return option.firstProbability - 0.5;
-}
-
 /** decision-layer §6 + extension §7-3: 확실한 선공 + 확정 1타 + 필중일 때만 */
 export function isHardOverride(option: AiOption): boolean {
   return (
@@ -232,13 +207,6 @@ export function isHardOverride(option: AiOption): boolean {
     option.hitsToKill.worstCase.certainty === "guaranteed" &&
     option.accuracy === 1
   );
-}
-
-/** a − b. 둘 다 무한대면(서로 못 쓰러뜨림) 0, NaN은 −Infinity */
-function diff(a: number, b: number): number {
-  if (a === Infinity && b === Infinity) return 0;
-  const d = a - b;
-  return Number.isNaN(d) ? -Infinity : d;
 }
 
 /**
@@ -663,44 +631,14 @@ export function scoreOption(option: AiOption, riskAversion: number, params: Deci
     );
     return (1 - q) * stay + q * read;
   }
-  if (params.scoring === "trade") {
-    const previous = [opponentIdleChance, lostShift] as const;
-    opponentIdleChance = option.opponentIdleChance ?? 0;
-    lostShift = option.lostShift ?? 0;
-    try {
-      return tradeScore(option, riskAversion, params);
-    } finally {
-      [opponentIdleChance, lostShift] = previous;
-    }
+  const previous = [opponentIdleChance, lostShift] as const;
+  opponentIdleChance = option.opponentIdleChance ?? 0;
+  lostShift = option.lostShift ?? 0;
+  try {
+    return tradeScore(option, riskAversion, params);
+  } finally {
+    [opponentIdleChance, lostShift] = previous;
   }
-  const riskPenalty = option.riskFlag ? params.riskFlagPenaltyBase * riskAversion : 0;
-  const speedAdj = speedAdjustment(option);
-  const tempo = params.scoring === "tempo";
-
-  if (option.support) {
-    const { kind, before, after, bestKillTurns } = option.support;
-    // 그 외 변화기(설치기·상태이상 부여 등)는 원안 채점식에서는 고르지 않는다(trade 채점 전용 §4-1).
-    if (kind === "other" || kind === "effect" || option.support.extended) return -Infinity;
-    let value: number;
-    if (tempo) {
-      // 회복: 늘어난 생존 턴 − (이번 턴을 쓴 만큼 늦어진 처치 턴) / 랭크업: 지금 생존 턴 − (1 + 강화 후 처치 턴)
-      value =
-        kind === "heal"
-          ? diff(after, bestKillTurns + 1)
-          : diff(option.hitsToBeKilled.expected, after + 1);
-    } else {
-      const gain = kind === "heal" ? diff(after, before) : diff(before, after);
-      value = gain * params.wSurvival;
-    }
-    return value + speedAdj - riskPenalty;
-  }
-
-  const killTurns = option.hitsToKill.expected + (tempo && option.optionType === "switch" ? 1 : 0);
-  const exchangeAdvantage = diff(option.hitsToBeKilled.expected, killTurns);
-  const entryPenalty = option.maxHp > 0 ? (option.entryCost / option.maxHp) * params.entryCostWeight : 0;
-  const tempoPenalty =
-    option.optionType === "switch" ? (tempo ? params.switchExtraPenalty : params.switchTempoPenalty) : 0;
-  return exchangeAdvantage + speedAdj - entryPenalty - tempoPenalty - riskPenalty;
 }
 
 /**
