@@ -93,6 +93,8 @@ function describeConditions(c: SpeedConditions): string[] {
   if (c.oppTailwind) out.push("상대 순풍");
   if (c.myParalyzed) out.push("내 마비");
   if (c.oppParalyzed) out.push("상대 마비");
+  if (c.myOtherStatus) out.push("내 상태이상");
+  if (c.oppOtherStatus) out.push("상대 상태이상");
   if (c.oppStage !== 0) out.push(`상대 스피드 ${c.oppStage > 0 ? "+" : ""}${c.oppStage}랭크`);
   if (c.oppItemId) out.push(getItem(c.oppItemId)?.name ?? c.oppItemId);
   if (c.oppAbilityId) out.push(getAbility(c.oppAbilityId)?.name ?? c.oppAbilityId);
@@ -524,6 +526,7 @@ function SpeedConditionsEditor({
   abilityOptions,
   megaRow,
   itemDisabled,
+  myQuickFeet,
 }: {
   cond: SpeedConditions;
   onChange: (patch: Partial<SpeedConditions>) => void;
@@ -532,6 +535,8 @@ function SpeedConditionsEditor({
   megaRow: boolean;
   /** 메가 관측이 하나라도 있으면 메가스톤이라 속도 보정 도구를 쓸 수 없다 */
   itemDisabled: boolean;
+  /** 내 포켓몬 특성이 속보 — 마비 외 상태이상 체크를 보여 준다 */
+  myQuickFeet: boolean;
 }) {
   const active = describeConditions(cond);
   const checks: [keyof SpeedConditions, string][] = [
@@ -578,7 +583,7 @@ function SpeedConditionsEditor({
           상대 속도 보정 특성
           <select
             value={megaRow ? "" : (cond.oppAbilityId ?? "")}
-            onChange={(e) => onChange({ oppAbilityId: e.target.value || null, oppUnburden: false })}
+            onChange={(e) => onChange({ oppAbilityId: e.target.value || null, oppUnburden: false, oppOtherStatus: false })}
             disabled={megaRow}
           >
             <option value="">{megaRow ? "메가폼 특성 사용" : "모름 (보정 특성 없음으로 가정)"}</option>
@@ -590,6 +595,22 @@ function SpeedConditionsEditor({
           </select>
         </label>
       </div>
+      {(myQuickFeet || (cond.oppAbilityId === "속보" && !megaRow)) && (
+        <div className="dinf-speed-checks">
+          {myQuickFeet && (
+            <label className="dinf-crit">
+              <input type="checkbox" checked={cond.myOtherStatus} onChange={(e) => onChange({ myOtherStatus: e.target.checked })} />
+              내 상태이상 (속보 ×1.5)
+            </label>
+          )}
+          {cond.oppAbilityId === "속보" && !megaRow && (
+            <label className="dinf-crit">
+              <input type="checkbox" checked={cond.oppOtherStatus} onChange={(e) => onChange({ oppOtherStatus: e.target.checked })} />
+              상대 상태이상 (속보 ×1.5)
+            </label>
+          )}
+        </div>
+      )}
       {cond.oppAbilityId === "곡예" && !megaRow && (
         <label className="dinf-check">
           <input type="checkbox" checked={cond.oppUnburden} onChange={(e) => onChange({ oppUnburden: e.target.checked })} />
@@ -856,6 +877,7 @@ export function DefenseInferencePanel({
   // 상대 스피드 역산(3.1 C2-c) — 선후공 줄은 항상 완성(누가 먼저만 고르면 됨). 조건은 줄마다 다르다.
   const speedRows = useMemo(() => rows.filter((r) => r.kind === "speed"), [rows]);
   const speedAbilityOptions = defenderPokemon ? relevantAbilities(defenderPokemon, SPEED_ABILITY_CANDIDATES) : [];
+  const myQuickFeet = getAbility(attacker.ability ?? "")?.speedMultiplierWhenStatused !== undefined;
   const anyMegaSpeed = speedRows.some((r) => megaOf(r, megas));
   const speedInput = useMemo<SpeedInferenceInput | null>(() => {
     const opponent = defender.pokemonId ? getPokemon(defender.pokemonId) : undefined;
@@ -867,7 +889,13 @@ export function DefenseInferencePanel({
       return {
         first: r.first,
         megaForm: megaOf(r, opponent.megaEvolutions) || undefined,
-        conditions: { ...r.cond, oppAbilityId, oppUnburden: oppAbilityId === "곡예" && r.cond.oppUnburden },
+        conditions: {
+          ...r.cond,
+          oppAbilityId,
+          oppUnburden: oppAbilityId === "곡예" && r.cond.oppUnburden,
+          oppOtherStatus: oppAbilityId === "속보" && r.cond.oppOtherStatus,
+          myOtherStatus: myQuickFeet && r.cond.myOtherStatus,
+        },
       };
     });
     return {
@@ -880,7 +908,7 @@ export function DefenseInferencePanel({
       observations,
       viewMegaForms,
     };
-  }, [attacker, defender, speedRows, weather, field, viewMegaForms]);
+  }, [attacker, defender, speedRows, weather, field, viewMegaForms, myQuickFeet]);
 
   // 계산이 무거울 수 있어(물리+특수 관측이 함께면 수십만 후보) 입력은 즉시 반영하고 결과만 뒤따라 그린다.
   // 방어·공격·스피드는 같이 계산해 성격을 공유하고 포인트 합계(66)를 따진다(3.1 C2-b·C2-c 결합).
@@ -1260,6 +1288,7 @@ export function DefenseInferencePanel({
                     abilityOptions={speedAbilityOptions}
                     megaRow={!!megaOf(row, megas)}
                     itemDisabled={anyMegaSpeed}
+                    myQuickFeet={myQuickFeet}
                   />
                 )}
               </li>

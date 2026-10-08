@@ -127,8 +127,9 @@ export function burnDamageMultiplier(
   return !ignorePenalty && condition === "burn" && moveCategory === "physical" ? 0.5 : 1;
 }
 
-/** 마비는 스피드를 0.5배로 낮춘다 */
-export function computeStatusSpeedMultiplier(condition: StatusCondition | null): number {
+/** 마비는 스피드를 0.5배로 낮춘다. 속보(quickFeet 배율)면 상태이상일 때 그 배율이고 마비 반감은 무시한다 */
+export function computeStatusSpeedMultiplier(condition: StatusCondition | null, quickFeet?: number): number {
+  if (quickFeet && condition) return quickFeet;
   return condition === "paralysis" ? 0.5 : 1;
 }
 
