@@ -21,6 +21,7 @@
   - rebase merge는 비활성화
 - 로컬에서 직접 머지하기 직전에는 `git fetch`를 먼저 하도록 안내한다.
 - **브랜치 정리**: `dev`/`main`을 제외한 모든 브랜치는 머지와 동시에 로컬·원격 모두 삭제한다(`git branch -D` + `git push origin --delete`). 저장소 설정이 `delete_branch_on_merge: false`라 자동 삭제되지 않는다.
+- **샘플 파티 추가**: 기능 브랜치·PR 없이 `dev`에 커밋·push한 뒤 **곧바로 `main`에도 머지**한다(dev → main은 merge commit, 머지 직전 `git fetch`). `src/data/samplePartyPresets.json`·README 수 문구만 다루고 `validate:data`·`test:ai`가 통과한 경우에 한한다.
 
 ## 문서
 
