@@ -12,6 +12,8 @@ import { damageRollTotals } from "./damageFormula";
 import { evaluateSlotMatchup, type EvaluatorSlot, type DamageParts } from "./matchupEvaluator";
 import { EMPTY_ABILITY_POINTS } from "../types/party";
 import { MAX_ABILITY_POINTS_PER_STAT, MAX_ABILITY_POINTS_TOTAL } from "./statCalculator";
+import type { BaseStats } from "../types/stats";
+import type { Pokemon } from "../types/pokemon";
 
 /**
  * 상대 실능치 역산(ver.2.1 C) — 상대의 HP·방어(특방) 능력 포인트와 성격을 "내가 입힌 데미지 %"로 거꾸로 좁힌다.
@@ -64,6 +66,12 @@ export interface InferenceInput {
   screen?: "reflect" | "lightScreen" | "auroraVeil";
   /** 화면 % 판정 여유(±%). 0 = 정확히 일치, 1 = ±1% 허용 */
   tolerance?: number;
+  /** 후보로 볼 성격 id 목록 — 공격 역산이 이미 걸러낸 성격을 넘겨 같은 상대의 성격을 공유한다(3.1 C2-b). 생략하면 전부 */
+  natureIds?: readonly string[];
+  /** HP+방어+특방 포인트 합의 상한 — 공격·특공 쪽에 이미 쓴 최소 포인트를 뺀 값(3.1 C2-b 포인트 예산). 생략하면 66 */
+  maxPointsSum?: number;
+  /** 다른 쪽 관측(공격·스피드)에 쓰인 메가폼 이름 — 이 쪽에 메가 태그가 없어도 메가 전·후를 나란히 보이려고 받는다(3.1 L1-b) */
+  viewMegaForms?: readonly string[];
 }
 
 export interface NatureGroup {
@@ -93,6 +101,43 @@ export interface BulkEstimate {
   support: Range;
   central: CentralRange;
 }
+
+/** 폼별 표시값(3.1 L1-b) — 같은 포인트·성격 후보가 그 폼의 종족값에서 낳는 실수치 범위·내구 지수. 메가 태그가 있을 때만 만든다 */
+export interface FormView {
+  /** 메가폼 이름(`MegaEvolution.form`), 메가 전은 "" */
+  form: string;
+  label: string;
+  real: Partial<Record<"hp" | "def" | "spd" | "atk" | "spa" | "spe", Range>>;
+  bulkPhysical?: BulkEstimate | null;
+  bulkSpecial?: BulkEstimate | null;
+}
+
+export interface FormBase {
+  form: string;
+  label: string;
+  baseStats: BaseStats;
+}
+
+/**
+ * 표시할 폼 목록 — 메가 태그(관측에 붙은 것 + 다른 쪽 관측이 쓴 것 `extra`)가 하나라도 있으면 [메가 전, 나온 메가폼들], 없으면 [].
+ * 메가진화는 포인트·성격이 그대로라 폼마다 종족값만 바꿔 실수치를 낸다.
+ */
+export function viewForms(pokemon: Pokemon, slot: EvaluatorSlot, tags: (string | undefined)[], extra: readonly string[] = []): FormBase[] {
+  const megas = [...new Set([...tags, ...extra].filter((t): t is string => !!t))].filter((f) => pokemon.megaEvolutions?.some((m) => m.form === f));
+  if (megas.length === 0) return [];
+  const statsOf = (activeMegaForm?: string) => getEffectiveForm(pokemon, { ...slot, activeMegaForm }).baseStats;
+  return [
+    { form: "", label: "메가 전", baseStats: statsOf() },
+    ...megas.map((f) => ({ form: f, label: `메가 후 (${f.replace(/^.*?-/, "")})`, baseStats: statsOf(f) })),
+  ];
+}
+
+export const emptyRange = (): Range => ({ min: Infinity, max: -Infinity });
+export const growRange = (r: Range, v: number) => {
+  r.min = Math.min(r.min, v);
+  r.max = Math.max(r.max, v);
+};
+export const finishRange = (r: Range): Range | null => (r.min === Infinity ? null : r);
 
 export interface InferenceResult {
   status: "ok" | "contradiction" | "invalid";
@@ -127,10 +172,34 @@ export interface InferenceResult {
   /** 분포 격자의 가중 값(0~1, 가장 그럴듯한 칸 = 1). hpDefGrid와 같은 배치 */
   hpDefWeights: Float32Array | null;
   hpSpdWeights: Float32Array | null;
+  /** 메가 전·후 실수치·내구 지수 나란히 보기(3.1 L1-b) — 메가 태그가 없으면 빈 배열 */
+  formViews: FormView[];
 }
 
 /** 분포 격자 한 변 칸 수(포인트 0~32) */
 export const GRID = MAX_ABILITY_POINTS_PER_STAT + 1;
+
+/**
+ * 극보정 형태인지(3.1 C2-a) — 능력 포인트를 최대(32)로 몰아 넣는 흔한 샘플 배분의 모양: 32가 두 개 이하이고, 32가 아닌 나머지는
+ * 합쳐 2 이하(합계 66 = 32 + 32 + 남은 2). 어디까지나 **표시용**이라 역산 계산·가중에는 쓰지 않는다 — 극보정이 아닌 배분을 잡아내는 게
+ * 역산의 가치이고, 극보정 후보가 하나도 없으면 "일반적이지 않은 배분"이라는 정보가 된다.
+ */
+export function isExtremePoints(values: readonly number[]): boolean {
+  const rest = values.filter((v) => v !== MAX_ABILITY_POINTS_PER_STAT);
+  return values.length - rest.length <= 2 && rest.reduce((sum, v) => sum + v, 0) <= 2;
+}
+
+/** 분포 격자(가로 HP × 세로 방어/특방 포인트)에서 가능한 칸 수와 그중 극보정 형태인 칸 수 */
+export function countExtremeCells(grid: Uint8Array): { feasible: number; extreme: number } {
+  let feasible = 0;
+  let extreme = 0;
+  grid.forEach((on, i) => {
+    if (!on) return;
+    feasible++;
+    if (isExtremePoints([i % GRID, Math.floor(i / GRID)])) extreme++;
+  });
+  return { feasible, extreme };
+}
 
 /** 다단히트·고정 데미지·변화기는 정수 데미지 공식이 맞지 않아 역산에서 뺀다 */
 export function inferenceUnsupportedReason(move: Move): string | null {
@@ -138,6 +207,8 @@ export function inferenceUnsupportedReason(move: Move): string | null {
   if (move.multiHitPowers || move.minHits !== undefined) return "다단히트 기술은 아직 지원하지 않아요";
   if (move.fixedDamage !== undefined) return "고정 데미지 기술은 역산할 수 없어요";
   if (move.usesTargetAttackStat) return "상대의 공격 스탯을 쓰는 기술은 아직 지원하지 않아요";
+  // 셸암즈: 물리/특수가 역산 대상 능력(상대 방어·공격)에 따라 정해져 관측만으로 분류를 고정할 수 없다
+  if (move.dynamicCategoryByHigherDamage) return "물리/특수가 능력치에 따라 바뀌는 기술은 아직 지원하지 않아요";
   return null;
 }
 
@@ -161,15 +232,16 @@ interface NatureCombo {
   natureNames: string[];
 }
 
-function natureMult(stat: "def" | "spd", increased: string | null | undefined, decreased: string | null | undefined): number {
+export function natureMult(stat: "atk" | "def" | "spa" | "spd" | "spe", increased: string | null | undefined, decreased: string | null | undefined): number {
   if (increased === stat) return 1.1;
   if (decreased === stat) return 0.9;
   return 1;
 }
 
-function buildNatureCombos(useDef: boolean, useSpd: boolean): NatureCombo[] {
+function buildNatureCombos(useDef: boolean, useSpd: boolean, allowed?: ReadonlySet<string>): NatureCombo[] {
   const map = new Map<string, NatureCombo>();
   for (const n of NATURES) {
+    if (allowed && !allowed.has(n.id)) continue;
     const defMult = useDef ? natureMult("def", n.increased, n.decreased) : 1;
     const spdMult = useSpd ? natureMult("spd", n.increased, n.decreased) : 1;
     const key = `${defMult}|${spdMult}`;
@@ -211,6 +283,7 @@ function emptyResult(status: InferenceResult["status"], n: number): InferenceRes
     bulkSpecial: null,
     hpDefWeights: null,
     hpSpdWeights: null,
+    formViews: [],
   };
 }
 
@@ -338,7 +411,7 @@ function candidateLikelihood(maxHp: number, rolls: number[][], obs: PreparedObse
 }
 
 /** 값(정수)별 가중치를 쌓았다가 중심 80%(10%~90%) 구간과 중앙값을 낸다 */
-class WeightedValues {
+export class WeightedValues {
   private readonly bins = new Map<number, number>();
   private total = 0;
   add(value: number, weight: number): void {
@@ -362,19 +435,50 @@ class WeightedValues {
 
 const realStat = (natureMult: number, baseStat: number, points: number): number => Math.floor((baseStat + 20 + points) * natureMult);
 
-/** HP·방어·특방 포인트 배분 후보 [hp, def, spd] — 합계 66 이하, 관측이 없는 쪽 스탯은 0 고정 */
-function enumerateAllocations(useDef: boolean, useSpd: boolean): [number, number, number][] {
+/** HP·방어·특방 포인트 배분 후보 [hp, def, spd] — 합계 maxSum(기본 66) 이하, 관측이 없는 쪽 스탯은 0 고정 */
+function enumerateAllocations(useDef: boolean, useSpd: boolean, maxSum: number): [number, number, number][] {
   const out: [number, number, number][] = [];
   const maxDef = useDef ? MAX_ABILITY_POINTS_PER_STAT : 0;
   const maxSpd = useSpd ? MAX_ABILITY_POINTS_PER_STAT : 0;
   for (let hp = 0; hp <= MAX_ABILITY_POINTS_PER_STAT; hp++) {
     for (let def = 0; def <= maxDef; def++) {
       for (let spd = 0; spd <= maxSpd; spd++) {
-        if (hp + def + spd <= MAX_ABILITY_POINTS_TOTAL) out.push([hp, def, spd]);
+        if (hp + def + spd <= maxSum) out.push([hp, def, spd]);
       }
     }
   }
   return out;
+}
+
+interface FormAccumulator {
+  f: FormBase;
+  real: { hp: Range; def: Range; spd: Range };
+  phys: { w: WeightedValues; r: Range };
+  spec: { w: WeightedValues; r: Range };
+}
+
+/** 후보 하나(포인트·성격)를 이 폼의 종족값으로 환산해 실수치 범위·내구 지수 가중에 더한다 */
+function accumulateForm(
+  a: FormAccumulator,
+  [hpP, defP, spdP]: [number, number, number],
+  combo: NatureCombo,
+  [useDef, useSpd]: [boolean, boolean],
+  likelihood: number,
+): void {
+  const hp = Math.floor(a.f.baseStats.hp + 75 + hpP);
+  growRange(a.real.hp, hp);
+  if (useDef) {
+    const d = realStat(combo.defMult, a.f.baseStats.def, defP);
+    growRange(a.real.def, d);
+    a.phys.w.add(hp * d, likelihood);
+    growRange(a.phys.r, hp * d);
+  }
+  if (useSpd) {
+    const d = realStat(combo.spdMult, a.f.baseStats.spd, spdP);
+    growRange(a.real.spd, d);
+    a.spec.w.add(hp * d, likelihood);
+    growRange(a.spec.r, hp * d);
+  }
 }
 
 function runCandidates(input: InferenceInput, prepared: PreparedObservation[], detailed = false): InferenceResult {
@@ -388,7 +492,7 @@ function runCandidates(input: InferenceInput, prepared: PreparedObservation[], d
   const tol = input.tolerance ?? 0;
   const useDef = prepared.some((o) => o.parts.defenseKey === "def");
   const useSpd = prepared.some((o) => o.parts.defenseKey === "spd");
-  const combos = buildNatureCombos(useDef, useSpd);
+  const combos = buildNatureCombos(useDef, useSpd, input.natureIds ? new Set(input.natureIds) : undefined);
   const groups: NatureGroup[] = combos.map((c) => ({ id: c.key, label: c.label, natureNames: c.natureNames, feasible: 0, total: 0, weight: 0 }));
 
   // 방어 스탯 값별 난수 데미지 캐시 (관측 번호 × 스탯 값)
@@ -415,15 +519,19 @@ function runCandidates(input: InferenceInput, prepared: PreparedObservation[], d
   const bulkPhysRange: Range = { min: Infinity, max: -Infinity };
   const bulkSpecRange: Range = { min: Infinity, max: -Infinity };
   let totalWeight = 0;
-  const emptyRange = (): Range => ({ min: Infinity, max: -Infinity });
   const [hpRange, defRange, spdRange, realHp, realDef, realSpd] = Array.from({ length: 6 }, emptyRange);
   let total = 0;
   let feasible = 0;
+  // 메가 전·후 표시(3.1 L1-b): 폼마다 같은 후보를 그 폼의 종족값으로 환산해 실수치 범위·내구 지수를 따로 모은다(가중 계산을 하는 detailed일 때만)
+  const forms = detailed ? viewForms(pokemon, input.defender, input.observations.map((o) => o.megaForm), input.viewMegaForms) : [];
+  const formAcc: FormAccumulator[] = forms.map((f) => ({
+    f,
+    real: { hp: emptyRange(), def: emptyRange(), spd: emptyRange() },
+    phys: { w: new WeightedValues(), r: emptyRange() },
+    spec: { w: new WeightedValues(), r: emptyRange() },
+  }));
 
-  const grow = (r: Range, v: number) => {
-    r.min = Math.min(r.min, v);
-    r.max = Math.max(r.max, v);
-  };
+  const grow = growRange;
   const record = (hpP: number, defP: number, spdP: number, maxHp: number, defStat: number, spdStat: number) => {
     grow(hpRange, hpP);
     grow(realHp, maxHp);
@@ -439,7 +547,7 @@ function runCandidates(input: InferenceInput, prepared: PreparedObservation[], d
     }
   };
 
-  for (const [hpP, defP, spdP] of enumerateAllocations(useDef, useSpd)) {
+  for (const [hpP, defP, spdP] of enumerateAllocations(useDef, useSpd, Math.min(MAX_ABILITY_POINTS_TOTAL, input.maxPointsSum ?? MAX_ABILITY_POINTS_TOTAL))) {
     const maxHp = Math.floor(base.hp + 75 + hpP);
     for (let c = 0; c < combos.length; c++) {
       const combo = combos[c];
@@ -475,6 +583,7 @@ function runCandidates(input: InferenceInput, prepared: PreparedObservation[], d
           bulkSpecRange.min = Math.min(bulkSpecRange.min, bulk);
           bulkSpecRange.max = Math.max(bulkSpecRange.max, bulk);
         }
+        for (const a of formAcc) accumulateForm(a, [hpP, defP, spdP], combo, [useDef, useSpd], likelihood);
       }
     }
   }
@@ -515,6 +624,17 @@ function runCandidates(input: InferenceInput, prepared: PreparedObservation[], d
     bulkSpecial: useSpd ? bulkOf(bulkSpecW, bulkSpecRange) : null,
     hpDefWeights: normalize(hpDefWeights),
     hpSpdWeights: normalize(hpSpdWeights),
+    formViews: formAcc.map((a) => ({
+      form: a.f.form,
+      label: a.f.label,
+      real: {
+        hp: finishRange(a.real.hp) ?? undefined,
+        def: useDef ? (finishRange(a.real.def) ?? undefined) : undefined,
+        spd: useSpd ? (finishRange(a.real.spd) ?? undefined) : undefined,
+      },
+      bulkPhysical: useDef ? bulkOf(a.phys.w, a.phys.r) : null,
+      bulkSpecial: useSpd ? bulkOf(a.spec.w, a.spec.r) : null,
+    })),
   };
 }
 
@@ -522,7 +642,7 @@ function runCandidates(input: InferenceInput, prepared: PreparedObservation[], d
  * 관측 전체와 맞는 상대 배분 후보를 좁힌다. 관측이 없으면 null.
  * 관측 사이에 상대가 회복하지 않았다고 가정한다(먹다남은음식·재생력 등은 2차).
  */
-export function inferDefense(input: InferenceInput): InferenceResult | null {
+export function inferDefense(input: InferenceInput, diagnostics = true): InferenceResult | null {
   const total = input.observations.length;
   if (total === 0) return null;
   const { prepared, errors } = prepareObservations(input);
@@ -532,7 +652,7 @@ export function inferDefense(input: InferenceInput): InferenceResult | null {
   const result = runCandidates(input, prepared, true);
   result.observationErrors = errors;
 
-  if (total > 1) {
+  if (total > 1 && diagnostics) {
     // 관측 하나씩만 봤을 때 가능한지 + 모순이면 어느 관측을 빼면 풀리는지
     result.singleFeasible = prepared.map((o) => runCandidates(input, [o]).status === "ok");
     if (result.status === "contradiction") {
