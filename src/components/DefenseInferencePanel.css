@@ -533,3 +533,16 @@
 .dinf-extreme-none strong {
   color: var(--danger);
 }
+
+/* 선후공 관측(3.1 C2-c) — 줄 아래 접이식 조건 영역 */
+.dinf-speed-cond {
+  flex-basis: 100%;
+  margin-top: 0;
+}
+
+.dinf-speed-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1rem;
+  margin: 0.6rem 0;
+}
