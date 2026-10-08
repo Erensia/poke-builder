@@ -546,3 +546,31 @@
   gap: 0.4rem 1rem;
   margin: 0.6rem 0;
 }
+
+/* 메가 전·후 비교(3.1 L1-b) */
+.dinf-form-scroll {
+  overflow-x: auto;
+}
+
+.dinf-form-table {
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+
+.dinf-form-table th,
+.dinf-form-table td {
+  padding: 0.3rem 0.8rem 0.3rem 0;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.dinf-form-table thead th {
+  color: var(--violet);
+  font-weight: 700;
+  border-bottom: 1px solid var(--border);
+}
+
+.dinf-form-table tbody th {
+  color: var(--text-muted);
+  font-weight: 400;
+}

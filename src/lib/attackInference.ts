@@ -12,7 +12,19 @@ import { damageRollTotals } from "./damageFormula";
 import { evaluateSlotMatchup, type EvaluatorSlot } from "./matchupEvaluator";
 import { computeRealStats, MAX_ABILITY_POINTS_PER_STAT, MAX_ABILITY_POINTS_TOTAL } from "./statCalculator";
 import { EMPTY_ABILITY_POINTS } from "../types/party";
-import { inferenceUnsupportedReason, natureMult, WeightedValues, type CentralRange, type NatureGroup, type Range } from "./defenseInference";
+import {
+  emptyRange,
+  finishRange,
+  growRange,
+  inferenceUnsupportedReason,
+  natureMult,
+  viewForms,
+  WeightedValues,
+  type CentralRange,
+  type FormView,
+  type NatureGroup,
+  type Range,
+} from "./defenseInference";
 
 /**
  * 상대 공격(특공) 포인트·성격 역산(3.1 C2-b) — 상대가 내게 입힌 데미지(내 HP 수치 "맞기 전 → 맞은 뒤")로 상대 공격 능력을 거꾸로 좁힌다.
@@ -78,6 +90,8 @@ export interface AttackInferenceInput {
   natureIds?: readonly string[];
   /** 공격+특공 포인트 합의 상한 — 방어 쪽(HP+방어+특방)이 이미 쓴 최소 포인트를 뺀 값(포인트 예산). 생략하면 66 */
   maxPointsSum?: number;
+  /** 다른 쪽 관측(방어·스피드)에 쓰인 메가폼 이름 — 이 쪽에 메가 태그가 없어도 메가 전·후를 나란히 보이려고 받는다(3.1 L1-b) */
+  viewMegaForms?: readonly string[];
 }
 
 export interface AttackInferenceResult {
@@ -102,6 +116,8 @@ export interface AttackInferenceResult {
   realSpa: Range | null;
   /** 공격·특공 보정 묶음별 가능 여부·가능도 가중 비율 — 방어 역산의 성격 묶음과 같은 모양 */
   groups: NatureGroup[];
+  /** 메가 전·후 실수치 나란히 보기(3.1 L1-b) — 메가 태그가 없으면 빈 배열 */
+  formViews: FormView[];
 }
 
 type AttackKey = "atk" | "spa";
@@ -175,6 +191,7 @@ function emptyResult(status: AttackInferenceResult["status"], n: number): Attack
     realAtk: null,
     realSpa: null,
     groups: [],
+    formViews: [],
   };
 }
 
@@ -296,12 +313,14 @@ function runCandidates(input: AttackInferenceInput, prepared: PreparedObservatio
   const maxSum = Math.min(MAX_ABILITY_POINTS_TOTAL, input.maxPointsSum ?? MAX_ABILITY_POINTS_TOTAL);
   const groups: NatureGroup[] = combos.map((c) => ({ id: c.key, label: c.label, natureNames: c.natureNames, feasible: 0, total: 0, weight: 0 }));
   const pointRange = Array.from({ length: MAX_ABILITY_POINTS_PER_STAT + 1 }, (_, p) => p);
-  const emptyRange = (): Range => ({ min: Infinity, max: -Infinity });
   const [atkRange, spaRange, realAtk, realSpa] = Array.from({ length: 4 }, emptyRange);
-  const grow = (r: Range, v: number) => {
-    r.min = Math.min(r.min, v);
-    r.max = Math.max(r.max, v);
-  };
+  const grow = growRange;
+  // 메가 전·후 표시(3.1 L1-b): 폼마다 같은 후보를 그 폼의 종족값으로 환산한 실수치 범위
+  const formAcc = viewForms(pokemon, input.attacker, input.observations.map((o) => o.megaForm), input.viewMegaForms).map((f) => ({
+    f,
+    atk: emptyRange(),
+    spa: emptyRange(),
+  }));
   const atkW = new WeightedValues();
   const spaW = new WeightedValues();
   let total = 0;
@@ -333,10 +352,12 @@ function runCandidates(input: AttackInferenceInput, prepared: PreparedObservatio
         if (useAtk) {
           grow(atkRange, a);
           grow(realAtk, Math.floor((baseOf("atk") + 20 + a) * combo.atkMult));
+          for (const x of formAcc) grow(x.atk, Math.floor((x.f.baseStats.atk + 20 + a) * combo.atkMult));
         }
         if (useSpa) {
           grow(spaRange, b);
           grow(realSpa, Math.floor((baseOf("spa") + 20 + b) * combo.spaMult));
+          for (const x of formAcc) grow(x.spa, Math.floor((x.f.baseStats.spa + 20 + b) * combo.spaMult));
         }
       });
     });
@@ -350,7 +371,7 @@ function runCandidates(input: AttackInferenceInput, prepared: PreparedObservatio
   });
 
   if (totalWeight > 0) for (const g of groups) g.weight /= totalWeight;
-  const range = (r: Range): Range | null => (r.min === Infinity ? null : r);
+  const range = finishRange;
   return {
     status: feasible > 0 ? "ok" : "contradiction",
     observationErrors: Array(n).fill(null),
@@ -365,6 +386,11 @@ function runCandidates(input: AttackInferenceInput, prepared: PreparedObservatio
     realAtk: useAtk ? range(realAtk) : null,
     realSpa: useSpa ? range(realSpa) : null,
     groups,
+    formViews: formAcc.map((x) => ({
+      form: x.f.form,
+      label: x.f.label,
+      real: { atk: useAtk ? (range(x.atk) ?? undefined) : undefined, spa: useSpa ? (range(x.spa) ?? undefined) : undefined },
+    })),
   };
 }
 

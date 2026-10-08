@@ -9,7 +9,18 @@ import { getEffectiveForm } from "./pokemonForm";
 import { evaluateSpeedMatchup, type EvaluatorSlot } from "./matchupEvaluator";
 import { MAX_ABILITY_POINTS_PER_STAT, MAX_ABILITY_POINTS_TOTAL } from "./statCalculator";
 import { EMPTY_ABILITY_POINTS } from "../types/party";
-import { natureMult, WeightedValues, type CentralRange, type NatureGroup, type Range } from "./defenseInference";
+import {
+  emptyRange,
+  finishRange,
+  growRange,
+  natureMult,
+  viewForms,
+  WeightedValues,
+  type CentralRange,
+  type FormView,
+  type NatureGroup,
+  type Range,
+} from "./defenseInference";
 
 /**
  * 상대 스피드 포인트·성격 보정 역산(3.1 C2-c) — "이번 턴 누가 먼저 움직였나"(우선도가 같은 기술끼리)로 상대 스피드를 좁힌다.
@@ -71,6 +82,8 @@ export interface SpeedInferenceInput {
   natureIds?: readonly string[];
   /** 스피드 포인트 상한 — 합계 66에서 다른 스탯의 최소를 뺀 값(포인트 예산). 생략하면 32 */
   maxPoints?: number;
+  /** 다른 쪽 관측(방어·공격)에 쓰인 메가폼 이름 — 이 쪽에 메가 태그가 없어도 메가 전·후를 나란히 보이려고 받는다(3.1 L1-b) */
+  viewMegaForms?: readonly string[];
 }
 
 export interface SpeedInferenceResult {
@@ -88,6 +101,8 @@ export interface SpeedInferenceResult {
   realSpe: Range | null;
   /** 스피드 보정(↑/↓/없음) 묶음별 가능 여부·가능도 가중 */
   groups: NatureGroup[];
+  /** 메가 전·후 스피드 실수치 나란히 보기(3.1 L1-b) — 메가 태그가 없으면 빈 배열 */
+  formViews: FormView[];
 }
 
 /** 속도 보정 특성 후보 — 날씨·필드 속도 특성, 곡예(발동 후 ×2), 시간벌기(항상 마지막). 속보(상태이상 ×1.5)는 선후공 판정에 없어 뺀다 */
@@ -131,7 +146,7 @@ function buildCombos(allowed?: ReadonlySet<string>): SpeedCombo[] {
 }
 
 function emptyResult(status: SpeedInferenceResult["status"], n: number): SpeedInferenceResult {
-  return { status, observationErrors: Array(n).fill(null), singleFeasible: Array(n).fill(false), culprits: [], total: 0, feasible: 0, spe: null, speCentral: null, realSpe: null, groups: [] };
+  return { status, observationErrors: Array(n).fill(null), singleFeasible: Array(n).fill(false), culprits: [], total: 0, feasible: 0, spe: null, speCentral: null, realSpe: null, groups: [], formViews: [] };
 }
 
 function prepareObservations(input: SpeedInferenceInput): { prepared: PreparedObservation[]; errors: (string | null)[] } {
@@ -190,8 +205,9 @@ function runCandidates(input: SpeedInferenceInput, prepared: PreparedObservation
   const groups: NatureGroup[] = combos.map((c) => ({ id: c.key, label: c.label, natureNames: c.natureNames, feasible: 0, total: 0, weight: 0 }));
   const maxPoints = Math.min(MAX_ABILITY_POINTS_PER_STAT, input.maxPoints ?? MAX_ABILITY_POINTS_TOTAL);
   const lastBase = prepared[prepared.length - 1]?.baseSpe ?? getEffectiveForm(pokemon, input.attacker).baseStats.spe;
-  const speRange: Range = { min: Infinity, max: -Infinity };
-  const realRange: Range = { min: Infinity, max: -Infinity };
+  const speRange = emptyRange();
+  const realRange = emptyRange();
+  const formAcc = viewForms(pokemon, input.attacker, input.observations.map((o) => o.megaForm), input.viewMegaForms).map((f) => ({ f, real: emptyRange() }));
   const speW = new WeightedValues();
   let total = 0;
   let feasible = 0;
@@ -212,11 +228,9 @@ function runCandidates(input: SpeedInferenceInput, prepared: PreparedObservation
       groups[c].weight += likelihood;
       totalWeight += likelihood;
       speW.add(p, likelihood);
-      speRange.min = Math.min(speRange.min, p);
-      speRange.max = Math.max(speRange.max, p);
-      const real = Math.floor((lastBase + 20 + p) * combo.mult);
-      realRange.min = Math.min(realRange.min, real);
-      realRange.max = Math.max(realRange.max, real);
+      growRange(speRange, p);
+      growRange(realRange, Math.floor((lastBase + 20 + p) * combo.mult));
+      for (const x of formAcc) growRange(x.real, Math.floor((x.f.baseStats.spe + 20 + p) * combo.mult));
     }
   });
   if (totalWeight > 0) for (const g of groups) g.weight /= totalWeight;
@@ -231,6 +245,7 @@ function runCandidates(input: SpeedInferenceInput, prepared: PreparedObservation
     speCentral: speW.central(),
     realSpe: feasible > 0 ? realRange : null,
     groups,
+    formViews: formAcc.map((x) => ({ form: x.f.form, label: x.f.label, real: { spe: finishRange(x.real) ?? undefined } })),
   };
 }
 

@@ -12,6 +12,8 @@ import { damageRollTotals } from "./damageFormula";
 import { evaluateSlotMatchup, type EvaluatorSlot, type DamageParts } from "./matchupEvaluator";
 import { EMPTY_ABILITY_POINTS } from "../types/party";
 import { MAX_ABILITY_POINTS_PER_STAT, MAX_ABILITY_POINTS_TOTAL } from "./statCalculator";
+import type { BaseStats } from "../types/stats";
+import type { Pokemon } from "../types/pokemon";
 
 /**
  * 상대 실능치 역산(ver.2.1 C) — 상대의 HP·방어(특방) 능력 포인트와 성격을 "내가 입힌 데미지 %"로 거꾸로 좁힌다.
@@ -68,6 +70,8 @@ export interface InferenceInput {
   natureIds?: readonly string[];
   /** HP+방어+특방 포인트 합의 상한 — 공격·특공 쪽에 이미 쓴 최소 포인트를 뺀 값(3.1 C2-b 포인트 예산). 생략하면 66 */
   maxPointsSum?: number;
+  /** 다른 쪽 관측(공격·스피드)에 쓰인 메가폼 이름 — 이 쪽에 메가 태그가 없어도 메가 전·후를 나란히 보이려고 받는다(3.1 L1-b) */
+  viewMegaForms?: readonly string[];
 }
 
 export interface NatureGroup {
@@ -97,6 +101,43 @@ export interface BulkEstimate {
   support: Range;
   central: CentralRange;
 }
+
+/** 폼별 표시값(3.1 L1-b) — 같은 포인트·성격 후보가 그 폼의 종족값에서 낳는 실수치 범위·내구 지수. 메가 태그가 있을 때만 만든다 */
+export interface FormView {
+  /** 메가폼 이름(`MegaEvolution.form`), 메가 전은 "" */
+  form: string;
+  label: string;
+  real: Partial<Record<"hp" | "def" | "spd" | "atk" | "spa" | "spe", Range>>;
+  bulkPhysical?: BulkEstimate | null;
+  bulkSpecial?: BulkEstimate | null;
+}
+
+export interface FormBase {
+  form: string;
+  label: string;
+  baseStats: BaseStats;
+}
+
+/**
+ * 표시할 폼 목록 — 메가 태그(관측에 붙은 것 + 다른 쪽 관측이 쓴 것 `extra`)가 하나라도 있으면 [메가 전, 나온 메가폼들], 없으면 [].
+ * 메가진화는 포인트·성격이 그대로라 폼마다 종족값만 바꿔 실수치를 낸다.
+ */
+export function viewForms(pokemon: Pokemon, slot: EvaluatorSlot, tags: (string | undefined)[], extra: readonly string[] = []): FormBase[] {
+  const megas = [...new Set([...tags, ...extra].filter((t): t is string => !!t))].filter((f) => pokemon.megaEvolutions?.some((m) => m.form === f));
+  if (megas.length === 0) return [];
+  const statsOf = (activeMegaForm?: string) => getEffectiveForm(pokemon, { ...slot, activeMegaForm }).baseStats;
+  return [
+    { form: "", label: "메가 전", baseStats: statsOf() },
+    ...megas.map((f) => ({ form: f, label: `메가 후 (${f.replace(/^.*?-/, "")})`, baseStats: statsOf(f) })),
+  ];
+}
+
+export const emptyRange = (): Range => ({ min: Infinity, max: -Infinity });
+export const growRange = (r: Range, v: number) => {
+  r.min = Math.min(r.min, v);
+  r.max = Math.max(r.max, v);
+};
+export const finishRange = (r: Range): Range | null => (r.min === Infinity ? null : r);
 
 export interface InferenceResult {
   status: "ok" | "contradiction" | "invalid";
@@ -131,6 +172,8 @@ export interface InferenceResult {
   /** 분포 격자의 가중 값(0~1, 가장 그럴듯한 칸 = 1). hpDefGrid와 같은 배치 */
   hpDefWeights: Float32Array | null;
   hpSpdWeights: Float32Array | null;
+  /** 메가 전·후 실수치·내구 지수 나란히 보기(3.1 L1-b) — 메가 태그가 없으면 빈 배열 */
+  formViews: FormView[];
 }
 
 /** 분포 격자 한 변 칸 수(포인트 0~32) */
@@ -240,6 +283,7 @@ function emptyResult(status: InferenceResult["status"], n: number): InferenceRes
     bulkSpecial: null,
     hpDefWeights: null,
     hpSpdWeights: null,
+    formViews: [],
   };
 }
 
@@ -406,6 +450,37 @@ function enumerateAllocations(useDef: boolean, useSpd: boolean, maxSum: number):
   return out;
 }
 
+interface FormAccumulator {
+  f: FormBase;
+  real: { hp: Range; def: Range; spd: Range };
+  phys: { w: WeightedValues; r: Range };
+  spec: { w: WeightedValues; r: Range };
+}
+
+/** 후보 하나(포인트·성격)를 이 폼의 종족값으로 환산해 실수치 범위·내구 지수 가중에 더한다 */
+function accumulateForm(
+  a: FormAccumulator,
+  [hpP, defP, spdP]: [number, number, number],
+  combo: NatureCombo,
+  [useDef, useSpd]: [boolean, boolean],
+  likelihood: number,
+): void {
+  const hp = Math.floor(a.f.baseStats.hp + 75 + hpP);
+  growRange(a.real.hp, hp);
+  if (useDef) {
+    const d = realStat(combo.defMult, a.f.baseStats.def, defP);
+    growRange(a.real.def, d);
+    a.phys.w.add(hp * d, likelihood);
+    growRange(a.phys.r, hp * d);
+  }
+  if (useSpd) {
+    const d = realStat(combo.spdMult, a.f.baseStats.spd, spdP);
+    growRange(a.real.spd, d);
+    a.spec.w.add(hp * d, likelihood);
+    growRange(a.spec.r, hp * d);
+  }
+}
+
 function runCandidates(input: InferenceInput, prepared: PreparedObservation[], detailed = false): InferenceResult {
   const n = prepared.length;
   const pokemon = getPokemon(input.defender.pokemonId);
@@ -444,15 +519,19 @@ function runCandidates(input: InferenceInput, prepared: PreparedObservation[], d
   const bulkPhysRange: Range = { min: Infinity, max: -Infinity };
   const bulkSpecRange: Range = { min: Infinity, max: -Infinity };
   let totalWeight = 0;
-  const emptyRange = (): Range => ({ min: Infinity, max: -Infinity });
   const [hpRange, defRange, spdRange, realHp, realDef, realSpd] = Array.from({ length: 6 }, emptyRange);
   let total = 0;
   let feasible = 0;
+  // 메가 전·후 표시(3.1 L1-b): 폼마다 같은 후보를 그 폼의 종족값으로 환산해 실수치 범위·내구 지수를 따로 모은다(가중 계산을 하는 detailed일 때만)
+  const forms = detailed ? viewForms(pokemon, input.defender, input.observations.map((o) => o.megaForm), input.viewMegaForms) : [];
+  const formAcc: FormAccumulator[] = forms.map((f) => ({
+    f,
+    real: { hp: emptyRange(), def: emptyRange(), spd: emptyRange() },
+    phys: { w: new WeightedValues(), r: emptyRange() },
+    spec: { w: new WeightedValues(), r: emptyRange() },
+  }));
 
-  const grow = (r: Range, v: number) => {
-    r.min = Math.min(r.min, v);
-    r.max = Math.max(r.max, v);
-  };
+  const grow = growRange;
   const record = (hpP: number, defP: number, spdP: number, maxHp: number, defStat: number, spdStat: number) => {
     grow(hpRange, hpP);
     grow(realHp, maxHp);
@@ -504,6 +583,7 @@ function runCandidates(input: InferenceInput, prepared: PreparedObservation[], d
           bulkSpecRange.min = Math.min(bulkSpecRange.min, bulk);
           bulkSpecRange.max = Math.max(bulkSpecRange.max, bulk);
         }
+        for (const a of formAcc) accumulateForm(a, [hpP, defP, spdP], combo, [useDef, useSpd], likelihood);
       }
     }
   }
@@ -544,6 +624,17 @@ function runCandidates(input: InferenceInput, prepared: PreparedObservation[], d
     bulkSpecial: useSpd ? bulkOf(bulkSpecW, bulkSpecRange) : null,
     hpDefWeights: normalize(hpDefWeights),
     hpSpdWeights: normalize(hpSpdWeights),
+    formViews: formAcc.map((a) => ({
+      form: a.f.form,
+      label: a.f.label,
+      real: {
+        hp: finishRange(a.real.hp) ?? undefined,
+        def: useDef ? (finishRange(a.real.def) ?? undefined) : undefined,
+        spd: useSpd ? (finishRange(a.real.spd) ?? undefined) : undefined,
+      },
+      bulkPhysical: useDef ? bulkOf(a.phys.w, a.phys.r) : null,
+      bulkSpecial: useSpd ? bulkOf(a.spec.w, a.spec.r) : null,
+    })),
   };
 }
 
