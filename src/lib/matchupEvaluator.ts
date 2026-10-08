@@ -947,6 +947,11 @@ export interface SpeedMatchupOptions {
   /** 마비 상태라고 가정 — 해당 측 스피드 0.5배(battleSimulator의 computeStatusSpeedMultiplier 미러) */
   attackerParalyzed?: boolean;
   defenderParalyzed?: boolean;
+  /** 순풍이 불고 있다고 가정 — 해당 측 스피드 2배(엔진 computeTurnOrderSpeed 미러, 3.1 C2-c 스피드 역산용) */
+  attackerTailwind?: boolean;
+  defenderTailwind?: boolean;
+  /** 필드 — 서핑테일 같은 필드 스피드 특성(엔진 fieldSpeedMultiplier 미러). 기본은 없음 */
+  field?: FieldKind;
   /** 트릭룸이 걸려 있다고 가정 — 우선도가 같을 때 느린 쪽이 먼저 움직인다(동속은 그대로 랜덤) */
   trickRoom?: boolean;
   /** 누적된 랭크 상태. 기본은 전부 0랭크 */
@@ -976,6 +981,9 @@ export function evaluateSpeedMatchup(
     defenderUnburden,
     attackerParalyzed,
     defenderParalyzed,
+    attackerTailwind,
+    defenderTailwind,
+    field,
     trickRoom = false,
     attackerStages = NEUTRAL_STAGES,
     defenderStages = NEUTRAL_STAGES,
@@ -994,6 +1002,7 @@ export function evaluateSpeedMatchup(
     stages: StatStages,
     unburden: boolean,
     paralyzed: boolean,
+    tailwind: boolean,
   ): number => {
     const form = getEffectiveForm(pokemon, slot);
     const realStats = computeRealStats(form.baseStats, slot.points, slot.nature);
@@ -1002,17 +1011,21 @@ export function evaluateSpeedMatchup(
     const weatherBoost = ability?.weatherSpeedMultiplier;
     const weatherSpeedMultiplier =
       weatherBoost && weatherBoost.weather === weatherForSpeed ? weatherBoost.multiplier : 1;
+    const fieldBoost = ability?.fieldSpeedMultiplier;
+    const fieldSpeedMultiplier = fieldBoost && fieldBoost.field === field ? fieldBoost.multiplier : 1;
     const base =
       realStats.spe *
       getItemSpeedMultiplier(item) *
       weatherSpeedMultiplier *
+      fieldSpeedMultiplier *
       (paralyzed ? 0.5 : 1) *
-      (unburden ? 2 : 1);
+      (unburden ? 2 : 1) *
+      (tailwind ? 2 : 1);
     return computeEffectiveSpeed(base, stages);
   };
 
-  const attackerSpeed = speedOf(attackerSlot, attackerPokemon, attackerStages, !!attackerUnburden, !!attackerParalyzed);
-  const defenderSpeed = speedOf(defenderSlot, defenderPokemon, defenderStages, !!defenderUnburden, !!defenderParalyzed);
+  const attackerSpeed = speedOf(attackerSlot, attackerPokemon, attackerStages, !!attackerUnburden, !!attackerParalyzed, !!attackerTailwind);
+  const defenderSpeed = speedOf(defenderSlot, defenderPokemon, defenderStages, !!defenderUnburden, !!defenderParalyzed, !!defenderTailwind);
 
   // 시간벌기: 우선도가 같다는 전제에서 한쪽만 "항상 마지막"이면 스피드 무관하게 그쪽이 나중.
   const attackerStall = !!attackerAbility?.movesLastInPriorityBracket;

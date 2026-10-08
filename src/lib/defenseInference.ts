@@ -187,7 +187,7 @@ interface NatureCombo {
   natureNames: string[];
 }
 
-export function natureMult(stat: "atk" | "def" | "spa" | "spd", increased: string | null | undefined, decreased: string | null | undefined): number {
+export function natureMult(stat: "atk" | "def" | "spa" | "spd" | "spe", increased: string | null | undefined, decreased: string | null | undefined): number {
   if (increased === stat) return 1.1;
   if (decreased === stat) return 0.9;
   return 1;
