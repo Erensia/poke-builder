@@ -1,3 +1,4 @@
+import type { StatusCondition } from "../types/status";
 import type { StatStages } from "../types/battleStats";
 import { NEUTRAL_STAGES } from "../types/battleStats";
 import type { WeatherKind } from "../types/weather";
@@ -38,6 +39,9 @@ export interface SpeedConditions {
   oppTailwind: boolean;
   myParalyzed: boolean;
   oppParalyzed: boolean;
+  /** 마비 외 상태이상(화상·독 등) — 속보 특성일 때만 스피드에 영향을 준다(×1.5). 마비 체크가 우선 */
+  myOtherStatus: boolean;
+  oppOtherStatus: boolean;
   /** 상대 스피드 랭크(-6~6) */
   oppStage: number;
   /** 상대 속도 보정 도구 가정(구애스카프·검은철구). 모르면 null */
@@ -54,6 +58,8 @@ export const NEUTRAL_SPEED_CONDITIONS: SpeedConditions = {
   oppTailwind: false,
   myParalyzed: false,
   oppParalyzed: false,
+  myOtherStatus: false,
+  oppOtherStatus: false,
   oppStage: 0,
   oppItemId: null,
   oppAbilityId: null,
@@ -105,10 +111,20 @@ export interface SpeedInferenceResult {
   formViews: FormView[];
 }
 
-/** 속도 보정 특성 후보 — 날씨·필드 속도 특성, 곡예(발동 후 ×2), 시간벌기(항상 마지막). 속보(상태이상 ×1.5)는 선후공 판정에 없어 뺀다 */
+/** 속도 보정 특성 후보 — 날씨·필드 속도 특성, 곡예(발동 후 ×2), 시간벌기(항상 마지막), 속보(상태이상 ×1.5) */
 export const SPEED_ABILITY_CANDIDATES: Ability[] = ABILITIES.filter(
-  (a) => a.weatherSpeedMultiplier !== undefined || a.fieldSpeedMultiplier !== undefined || a.movesLastInPriorityBracket || a.id === "곡예",
+  (a) =>
+    a.weatherSpeedMultiplier !== undefined ||
+    a.fieldSpeedMultiplier !== undefined ||
+    a.speedMultiplierWhenStatused !== undefined ||
+    a.movesLastInPriorityBracket ||
+    a.id === "곡예",
 );
+
+/** 조건 체크 → 선후공 판정용 상태이상. 마비 외에는 화상으로 대신한다(속도에는 화상이 영향 없고 속보만 "상태이상"으로 본다) */
+function statusOf(paralyzed: boolean, other: boolean): StatusCondition | null {
+  return paralyzed ? "paralysis" : other ? "burn" : null;
+}
 
 /** 속도 보정 도구 후보 — 구애스카프(×1.5)·검은철구(×0.5) */
 export const SPEED_ITEM_CANDIDATES: Item[] = ITEMS.filter((i) => i.speedMultiplier !== undefined);
@@ -178,8 +194,8 @@ function prepareObservations(input: SpeedInferenceInput): { prepared: PreparedOb
         const res = evaluateSpeedMatchup(slot, defender, {
           weather,
           field,
-          attackerParalyzed: c.oppParalyzed,
-          defenderParalyzed: c.myParalyzed,
+          attackerStatus: statusOf(c.oppParalyzed, c.oppOtherStatus),
+          defenderStatus: statusOf(c.myParalyzed, c.myOtherStatus),
           attackerTailwind: c.oppTailwind,
           defenderTailwind: c.myTailwind,
           attackerUnburden: c.oppUnburden,

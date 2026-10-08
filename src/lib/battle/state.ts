@@ -646,9 +646,7 @@ export function electroBallPowerValue(
 
 /** 상태이상 스피드 배율 — 마비 반감, 속보(ver.1.9 A5)면 상태이상일 때 ×1.5이고 마비 반감 무시 */
 export function statusSpeedMultiplierOf(fighter: BattleFighterState): number {
-  const quickFeet = abilityOf(fighter)?.speedMultiplierWhenStatused;
-  if (quickFeet && fighter.status.condition) return quickFeet;
-  return computeStatusSpeedMultiplier(fighter.status.condition);
+  return computeStatusSpeedMultiplier(fighter.status.condition, abilityOf(fighter)?.speedMultiplierWhenStatused);
 }
 
 /** 스피드 비교 위력 기술(자이로볼·일렉트릭볼)의 실효 스피드 — 실능 × 스피드 랭크 × 마비(속보) × 도구 */
