@@ -164,6 +164,8 @@ export function inferenceUnsupportedReason(move: Move): string | null {
   if (move.multiHitPowers || move.minHits !== undefined) return "다단히트 기술은 아직 지원하지 않아요";
   if (move.fixedDamage !== undefined) return "고정 데미지 기술은 역산할 수 없어요";
   if (move.usesTargetAttackStat) return "상대의 공격 스탯을 쓰는 기술은 아직 지원하지 않아요";
+  // 셸암즈: 물리/특수가 역산 대상 능력(상대 방어·공격)에 따라 정해져 관측만으로 분류를 고정할 수 없다
+  if (move.dynamicCategoryByHigherDamage) return "물리/특수가 능력치에 따라 바뀌는 기술은 아직 지원하지 않아요";
   return null;
 }
 

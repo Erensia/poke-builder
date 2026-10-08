@@ -250,21 +250,21 @@ try {
 
   // 3.1 C2-b) 공격 역산 왕복 — 진짜 공격 배분(포인트·성격)으로 "받은 데미지" 관측을 만들어 넣으면 진짜 값이 후보에 남는지.
   // 내 포켓몬(방어자)은 능력을 전부 아는 쪽, 상대 공격(특공) 포인트·성격을 역산한다.
+  const ai = await server.ssrLoadModule("/src/lib/attackInference.ts");
+  const attackMoves = data.MOVES.filter((m) => ai.attackInferenceUnsupportedReason(m) === null && m.power !== null && m.power > 0);
+  // 진짜 상대(oppTrue)가 내 포켓몬(mySlot)에게 실제로 입힐 데미지로 관측 하나를 만든다. 내 HP가 남지 않는 공격은 제외
+  const makeAttackObservation = (cands, oppTrue, mySlot, maxHp, hp) => {
+    for (let tries = 0; tries < 20; tries++) {
+      const move = pick(cands);
+      const res = ev.evaluateSlotMatchup(oppTrue, move, mySlot, { defenderHpIsFull: hp >= maxHp, skipVerdict: true });
+      const p = res?.damageParts;
+      if (!p || p.typeEffectiveness === 0) continue;
+      const damage = fm.integerTotalDamage(p, res.defenseStat, (85 + Math.floor(rnd() * 16)) / 100);
+      if (damage < hp) return { move, critical: false, hpBefore: hp, hpAfter: hp - damage };
+    }
+    return null;
+  };
   {
-    const ai = await server.ssrLoadModule("/src/lib/attackInference.ts");
-    const attackMoves = data.MOVES.filter((m) => ai.attackInferenceUnsupportedReason(m) === null && m.power !== null && m.power > 0);
-    // 진짜 상대(oppTrue)가 내 포켓몬(mySlot)에게 실제로 입힐 데미지로 관측 하나를 만든다. 내 HP가 남지 않는 공격은 제외
-    const makeAttackObservation = (cands, oppTrue, mySlot, maxHp, hp) => {
-      for (let tries = 0; tries < 20; tries++) {
-        const move = pick(cands);
-        const res = ev.evaluateSlotMatchup(oppTrue, move, mySlot, { defenderHpIsFull: hp >= maxHp, skipVerdict: true });
-        const p = res?.damageParts;
-        if (!p || p.typeEffectiveness === 0) continue;
-        const damage = fm.integerTotalDamage(p, res.defenseStat, (85 + Math.floor(rnd() * 16)) / 100);
-        if (damage < hp) return { move, critical: false, hpBefore: hp, hpAfter: hp - damage };
-      }
-      return null;
-    };
     let ok = 0;
     let tried = 0;
     let sumWidth = 0;
@@ -582,6 +582,82 @@ try {
     const bad = si.inferSpeed({ ...base, observations: [{ first: "me", conditions: { ...neutral, oppStage: 9 } }] });
     if (bad?.status !== "invalid" || !bad.observationErrors[0]?.includes("랭크")) fail("스피드 역산: 잘못된 랭크가 invalid로 안 잡힘");
     console.log(`스피드 역산 사례: 상대가 먼저 → 포인트 ${faster.spe.min}~${faster.spe.max} · 내가 먼저 → ${slower.spe.min}~${slower.spe.max} · 트릭룸 → ${trickFirst.spe.min}~${trickFirst.spe.max}`);
+
+    // 셸암즈는 물리/특수가 능력치로 정해져 방어·공격 역산 모두 지원하지 않는다(과거: 공격 역산에서 진짜 값이 빠졌음)
+    const shell = data.getMove("셸암즈");
+    if (!inf.inferenceUnsupportedReason(shell) || !ai.attackInferenceUnsupportedReason(shell)) fail("셸암즈가 역산 미지원으로 안 잡힘");
+
+    // 3.1 PR5-b) 성격 후보가 줄수록 스피드 하한이 올라간다 — 상대가 먼저(내 132 추월): 스피드↑ 0 / 무보정 10 / 스피드↓ 25
+    const idsByMult = (want) => data.NATURES.filter((n) => inf.natureMult("spe", n.increased, n.decreased) === want).map((n) => n.id);
+    const minFor = (ids) => si.inferSpeed({ ...base, observations: [{ first: "opponent", conditions: neutral }], natureIds: ids })?.spe?.min;
+    const mins = [minFor(idsByMult(1.1)), minFor(idsByMult(1)), minFor(idsByMult(0.9))];
+    if (mins.join() !== "0,10,25") fail(`스피드 하한이 성격 후보별로 다름: ${mins.join()} (기대 0,10,25)`);
+
+    // 방어·공격·스피드 세 쪽 결합 왕복 — 세 종류 관측을 진짜 배분으로 만들어 합쳐도 진짜 값이 남고, 각각보다 후보가 늘지 않는다
+    const cb3 = await server.ssrLoadModule("/src/lib/combinedInference.ts");
+    let tried3 = 0;
+    let ok3 = 0;
+    let speNarrowed = 0;
+    let maxMs3 = 0;
+    for (let t = 0; t < 300; t++) {
+      const v = () => Math.floor(rnd() * (rnd() < 0.5 ? 33 : 11));
+      const opp = pick(species);
+      const truth = { hp: v(), def: v(), spd: v(), atk: v(), spa: v(), spe: v(), nature: pick(natureIds) };
+      if (truth.hp + truth.def + truth.spd + truth.atk + truth.spa + truth.spe > 66) continue;
+      const oppTrue = slot(opp.id, { points: pts(truth), nature: truth.nature });
+      const mySlot = slot(pick(species).id, { points: pts({ hp: 32, atk: 32, spa: 32, spe: Math.floor(rnd() * 33), def: Math.floor(rnd() * 20), spd: Math.floor(rnd() * 20) }), nature: pick(natureIds) });
+      const myReal = stat.computeRealStats(form.getEffectiveForm(data.getPokemon(mySlot.pokemonId), mySlot).baseStats, mySlot.points, mySlot.nature);
+      const oppReal = stat.computeRealStats(form.getEffectiveForm(data.getPokemon(opp.id), oppTrue).baseStats, oppTrue.points, oppTrue.nature);
+      const dealt = [];
+      let oppHp = oppReal.hp;
+      for (const cat of ["physical", "special"]) {
+        const made = makeObservation(usable.filter((m) => m.category === cat), mySlot, oppTrue, oppReal, oppHp);
+        if (!made) continue;
+        dealt.push(made.observation);
+        oppHp -= made.damage;
+      }
+      const received = [];
+      let myHp = myReal.hp;
+      for (const cat of ["physical", "special"]) {
+        const obs = makeAttackObservation(attackMoves.filter((m) => m.category === cat), oppTrue, mySlot, myReal.hp, myHp);
+        if (!obs) continue;
+        received.push(obs);
+        myHp = obs.hpAfter;
+      }
+      if (dealt.length === 0 || received.length === 0) continue;
+      const speedObs = Array.from({ length: 4 }, () => {
+        const conditions = randomConditions();
+        return { first: actualFirst(oppTrue, mySlot, conditions, flatStages), conditions };
+      });
+      tried3++;
+      const defenseInput = { attacker: mySlot, defender: slot(opp.id), observations: dealt };
+      const attackInput = { attacker: slot(opp.id), defender: mySlot, observations: received };
+      const speedInput = { attacker: slot(opp.id), defender: mySlot, observations: speedObs };
+      const s0 = si.inferSpeed(speedInput);
+      const t0 = performance.now();
+      const c = cb3.inferCombined(defenseInput, attackInput, speedInput);
+      maxMs3 = Math.max(maxMs3, performance.now() - t0);
+      const inR = (r, v) => !r || (r.min <= v && v <= r.max);
+      const natName = data.NATURES.find((x) => x.id === truth.nature).name;
+      const good =
+        c.conflict === null && c.parts.length === 3 &&
+        inR(c.defense.hp, truth.hp) && inR(c.defense.def, truth.def) && inR(c.defense.spd, truth.spd) &&
+        inR(c.attack.atk, truth.atk) && inR(c.attack.spa, truth.spa) && inR(c.speed.spe, truth.spe) &&
+        c.natures?.some((n) => n.name === natName) && c.speed.feasible <= s0.feasible;
+      if (good) {
+        ok3++;
+        if (c.speed.feasible < s0.feasible) speNarrowed++;
+      } else fail(`3쪽 결합 왕복: 진짜 배분이 빠지거나 후보가 늘었음 opp=${opp.id} truth=${JSON.stringify(truth)} 충돌=${c.conflict}`);
+      // 방어+스피드·공격+스피드 두 쪽 결합도 같은 규칙 — 한쪽만 있으면 결합 없이 그대로
+      const cd = cb3.inferCombined(defenseInput, null, speedInput);
+      const ca = cb3.inferCombined(null, attackInput, speedInput);
+      const one = cb3.inferCombined(null, null, speedInput);
+      if (cd.conflict !== null || ca.conflict !== null || !inR(cd.speed.spe, truth.spe) || !inR(ca.speed.spe, truth.spe)) fail(`2쪽 결합(스피드)에서 진짜 값이 빠짐 opp=${opp.id}`);
+      if (one.natures !== null || one.budget !== null || one.parts.join() !== "speed") fail("스피드 한쪽만 있을 때 결합이 일어남");
+    }
+    console.log(`방어·공격·스피드 결합 왕복 ${ok3}/${tried3} 통과 · 스피드 후보가 줄어든 사례 ${speNarrowed}건 · 최대 ${maxMs3.toFixed(0)}ms`);
+    if (tried3 === 0) fail("3쪽 결합 왕복 시행이 0건");
+    if (maxMs3 > 5000) fail(`3쪽 결합이 너무 느림(${maxMs3.toFixed(0)}ms)`);
   }
 
   // 3) 모순 / 면역 ----------------------------------------------------------------------------

@@ -33,13 +33,22 @@ import {
   type AttackInferenceResult,
   type AttackObservation,
 } from "../lib/attackInference";
+import {
+  NEUTRAL_SPEED_CONDITIONS,
+  SPEED_ABILITY_CANDIDATES,
+  SPEED_ITEM_CANDIDATES,
+  type SpeedConditions,
+  type SpeedInferenceInput,
+  type SpeedInferenceResult,
+  type SpeedObservation,
+} from "../lib/speedInference";
 import { computeRealStats, MAX_ABILITY_POINTS_PER_STAT } from "../lib/statCalculator";
 import "./DefenseInferencePanel.css";
 
 type Screen = "reflect" | "lightScreen" | "auroraVeil";
 
-/** dealt = 내가 입힌 데미지(상대 HP %) → 상대 HP·방어 역산, received = 내가 받은 데미지(내 HP 수치) → 상대 공격 역산 */
-type RowKind = "dealt" | "received";
+/** dealt = 내가 입힌 데미지(상대 HP %) → 상대 HP·방어 역산, received = 내가 받은 데미지(내 HP 수치) → 상대 공격 역산, speed = 선후공 → 상대 스피드 역산 */
+type RowKind = "dealt" | "received" | "speed";
 
 interface ObservationRow {
   id: number;
@@ -50,6 +59,10 @@ interface ObservationRow {
   after: string;
   /** 이 관측을 맞을 때 상대가 메가진화한 폼("" = 메가 전) */
   megaForm: string;
+  /** 선후공 줄: 이번 턴 먼저 움직인 쪽 */
+  first: "me" | "opponent";
+  /** 선후공 줄: 이 관측의 조건(행마다 따로) */
+  cond: SpeedConditions;
 }
 
 interface DefenderActions {
@@ -70,6 +83,23 @@ interface DefenseInferencePanelProps {
 }
 
 const STAGE_OPTIONS = [-6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6];
+
+/** 선후공 줄의 조건 중 기본값과 다른 것을 짧게 이름 붙인다(접힌 "조건" 요약줄용) */
+function describeConditions(c: SpeedConditions): string[] {
+  const out: string[] = [];
+  if (c.trickRoom) out.push("트릭룸");
+  if (c.myTailwind) out.push("내 순풍");
+  if (c.oppTailwind) out.push("상대 순풍");
+  if (c.myParalyzed) out.push("내 마비");
+  if (c.oppParalyzed) out.push("상대 마비");
+  if (c.oppStage !== 0) out.push(`상대 스피드 ${c.oppStage > 0 ? "+" : ""}${c.oppStage}랭크`);
+  if (c.oppItemId) out.push(getItem(c.oppItemId)?.name ?? c.oppItemId);
+  if (c.oppAbilityId) out.push(getAbility(c.oppAbilityId)?.name ?? c.oppAbilityId);
+  if (c.oppUnburden) out.push("곡예 발동 후");
+  return out;
+}
+
+const PART_LABELS = { defense: "내가 입힌 데미지(방어)", attack: "내가 받은 데미지(공격)", speed: "선후공(스피드)" } as const;
 
 /** 줄에 고른 메가폼이 이 종에 실제로 있는 폼이면 그 이름, 아니면 메가 전("") */
 function megaOf(row: ObservationRow, megas: MegaEvolution[] | undefined): string {
@@ -284,20 +314,22 @@ function ExtremeSummary({ result }: { result: InferenceResult }) {
   );
 }
 
-/** 방어·공격 결합 결과(3.1 C2-b) — 두 쪽이 합친 성격 후보와 반영한 포인트 상한, 서로 안 맞을 때의 안내 */
+/** 방어·공격·스피드 결합 결과(3.1 C2-b·C2-c) — 관측이 있는 쪽들이 합친 성격 후보와 반영한 포인트 상한, 서로 안 맞을 때의 안내 */
 function CombinedView({ combined }: { combined: CombinedInference }) {
+  const names = combined.parts.map((p) => PART_LABELS[p]).join(" · ");
   if (combined.conflict === "nature") {
-    return (
-      <p className="dinf-warn">방어 쪽(내가 입힌 데미지)과 공격 쪽(내가 받은 데미지)에서 가능한 성격이 하나도 겹치지 않아요. 급소·가정·메가 선택을 확인해 보세요.</p>
-    );
+    return <p className="dinf-warn">{names} 쪽에서 가능한 성격이 하나도 겹치지 않아요. 급소·가정·메가·조건 선택을 확인해 보세요.</p>;
   }
   if (combined.conflict === "points") {
-    return (
-      <p className="dinf-warn">두 쪽 관측이 요구하는 포인트를 더하면 합계 66을 넘어요. 급소·가정·메가 선택을 확인해 보세요.</p>
-    );
+    return <p className="dinf-warn">{names} 쪽 관측이 요구하는 포인트를 더하면 합계 66을 넘어요. 급소·가정·메가·조건 선택을 확인해 보세요.</p>;
   }
   if (!combined.natures || !combined.budget) return null;
-  const { defenseMax, attackMax } = combined.budget;
+  const { defenseMax, attackMax, speedMax } = combined.budget;
+  const limits = [
+    defenseMax !== null && `HP+방어+특방은 ${defenseMax} 이하`,
+    attackMax !== null && `공격+특공은 ${attackMax} 이하`,
+    speedMax !== null && `스피드는 ${speedMax} 이하`,
+  ].filter(Boolean);
   return (
     <div className="dinf-result">
       <h4 className="dinf-subhead">두 쪽을 합친 결과</h4>
@@ -310,7 +342,8 @@ function CombinedView({ combined }: { combined: CombinedInference }) {
         ))}
       </div>
       <p className="dinf-note">
-        성격은 한 값이라 방어 쪽과 공격 쪽에서 모두 가능한 성격만 남겼어요. 포인트 합계는 66을 넘을 수 없어서 HP+방어+특방은 {defenseMax} 이하, 공격+특공은 {attackMax} 이하로 따졌어요.
+        성격은 한 값이라 {names} 쪽에서 모두 가능한 성격만 남겼어요. 포인트 합계는 66을 넘을 수 없어서 {limits.join(", ")}로 따졌어요.
+        {combined.speed && " 스피드 하한은 남은 성격 후보를 모두 고려한 최솟값이라, 성격 후보가 줄수록 올라가 다른 쪽 상한을 더 낮춰요."}
       </p>
     </div>
   );
@@ -351,10 +384,135 @@ function AttackResultView({ result, rowNos, combinedOn }: { result: AttackInfere
       <p className="dinf-note">
         관측이 1번이면 난수(±7%)와 성격(±10%) 때문에 범위가 넓어요. 같은 종류(물리/특수)의 공격을 여러 번 모을수록 좁아져요.{" "}
         {combinedOn
-          ? "성격과 포인트 합계(66)는 방어 쪽(내가 입힌 데미지) 결과와 합쳐 따졌어요."
-          : "방어 쪽(내가 입힌 데미지) 관측도 함께 넣으면 성격과 포인트 합계(66)를 같이 따져 더 좁아져요."}
+          ? "성격과 포인트 합계(66)는 다른 쪽 관측 결과와 합쳐 따졌어요."
+          : "내가 입힌 데미지·선후공 관측도 함께 넣으면 성격과 포인트 합계(66)를 같이 따져 더 좁아져요."}
       </p>
     </div>
+  );
+}
+
+/** 상대 스피드 역산 결과(3.1 C2-c) — 선후공 관측으로 좁힌 값 */
+function SpeedResultView({ result, rowNos, combinedOn }: { result: SpeedInferenceResult; rowNos: number[]; combinedOn: boolean }) {
+  if (result.status === "invalid") {
+    return <p className="dinf-warn">관측을 계산할 수 없어요. 위 관측 줄의 안내를 확인해 주세요.</p>;
+  }
+  if (result.status === "contradiction") {
+    return (
+      <div className="dinf-contradiction">
+        <strong>이 관측과 맞는 스피드가 없어요.</strong>
+        {result.culprits.length > 0 ? (
+          <p>관측 {result.culprits.map((c) => `#${rowNos[c]}`).join(", ")}을(를) 빼면 맞는 스피드가 나와요. 그 관측의 누가 먼저·조건을 다시 확인해 보세요.</p>
+        ) : (
+          <p>트릭룸·순풍·마비·랭크 조건, 상대 속도 보정 도구·특성 가정을 확인해 보세요. 관측 사이에 상대의 랭크가 바뀌었다면 줄마다 조건을 따로 넣어야 해요.</p>
+        )}
+      </div>
+    );
+  }
+  return (
+    <div className="dinf-result">
+      <p className="dinf-summary">
+        가능한 스피드 후보 <strong>{result.feasible.toLocaleString()}</strong> / {result.total.toLocaleString()} 가지
+      </p>
+      <RangeBar label="스피드 포인트" range={result.spe} central={result.speCentral} real={result.realSpe} />
+      <div className="dinf-natures">
+        <span className="dinf-subtitle">스피드 보정</span>
+        {result.groups.map((g) => (
+          <span key={g.id} className={`dinf-nature-chip${g.feasible === 0 ? " is-no" : ""}`} title={g.natureNames.join(", ")}>
+            {g.label} <em>{g.feasible === 0 ? "불가" : `${Math.round(g.weight * 100)}%`}</em>
+          </span>
+        ))}
+      </div>
+      <p className="dinf-note">
+        선후공은 “이 값보다 빠르다/느리다”만 알려 줘서, 상대 속도가 내 속도 근처일 때만 정보가 커요(관측을 8번 모아도 실수치 폭이 평균 35 정도 남아요). 내 순풍·상대
+        랭크·마비 같은 조건을 바꿔 가며 모을수록 좁아져요. 실수치는 조건 배율을 적용하기 전 값이에요.{" "}
+        {combinedOn
+          ? "성격과 포인트 합계(66)는 다른 쪽 관측 결과와 합쳐 따졌어요."
+          : "내가 입힌·받은 데미지 관측도 함께 넣으면 성격과 포인트 합계(66)를 같이 따져 더 좁아져요."}
+      </p>
+    </div>
+  );
+}
+
+/** 선후공 줄 한 개의 조건 입력 — 접이식. 내 랭크·특성·도구는 내 카드, 날씨·필드는 위쪽 선택기 값을 쓴다 */
+function SpeedConditionsEditor({
+  cond,
+  onChange,
+  abilityOptions,
+  megaRow,
+  itemDisabled,
+}: {
+  cond: SpeedConditions;
+  onChange: (patch: Partial<SpeedConditions>) => void;
+  abilityOptions: string[];
+  /** 이 줄이 메가 후 관측이면 상대 특성은 메가폼 값을 쓴다 */
+  megaRow: boolean;
+  /** 메가 관측이 하나라도 있으면 메가스톤이라 속도 보정 도구를 쓸 수 없다 */
+  itemDisabled: boolean;
+}) {
+  const active = describeConditions(cond);
+  const checks: [keyof SpeedConditions, string][] = [
+    ["trickRoom", "트릭룸"],
+    ["myTailwind", "내 쪽 순풍"],
+    ["oppTailwind", "상대 쪽 순풍"],
+    ["myParalyzed", "내 마비"],
+    ["oppParalyzed", "상대 마비"],
+  ];
+  return (
+    <details className="dinf-details dinf-speed-cond">
+      <summary>조건{active.length > 0 ? ` · ${active.join(", ")}` : " (기본)"}</summary>
+      <div className="dinf-speed-checks">
+        {checks.map(([key, label]) => (
+          <label key={key} className="dinf-crit">
+            <input type="checkbox" checked={cond[key] as boolean} onChange={(e) => onChange({ [key]: e.target.checked })} />
+            {label}
+          </label>
+        ))}
+      </div>
+      <div className="dinf-conditions">
+        <label>
+          상대 스피드 랭크
+          <select value={cond.oppStage} onChange={(e) => onChange({ oppStage: Number(e.target.value) })}>
+            {STAGE_OPTIONS.map((st) => (
+              <option key={st} value={st}>
+                {st > 0 ? `+${st}` : st}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          상대 속도 보정 도구
+          <select value={itemDisabled ? "" : (cond.oppItemId ?? "")} onChange={(e) => onChange({ oppItemId: e.target.value || null })} disabled={itemDisabled}>
+            <option value="">{itemDisabled ? "메가스톤 (보정 도구 사용 불가)" : "모름 (보정 도구 없음으로 가정)"}</option>
+            {SPEED_ITEM_CANDIDATES.map((item) => (
+              <option key={item.id} value={item.id}>
+                {getItem(item.id)?.name ?? item.id}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          상대 속도 보정 특성
+          <select
+            value={megaRow ? "" : (cond.oppAbilityId ?? "")}
+            onChange={(e) => onChange({ oppAbilityId: e.target.value || null, oppUnburden: false })}
+            disabled={megaRow}
+          >
+            <option value="">{megaRow ? "메가폼 특성 사용" : "모름 (보정 특성 없음으로 가정)"}</option>
+            {abilityOptions.map((id) => (
+              <option key={id} value={id}>
+                {getAbility(id)?.name ?? id}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      {cond.oppAbilityId === "곡예" && !megaRow && (
+        <label className="dinf-check">
+          <input type="checkbox" checked={cond.oppUnburden} onChange={(e) => onChange({ oppUnburden: e.target.checked })} />
+          <span>곡예 발동 후 (도구를 잃어 상대 스피드 ×2)</span>
+        </label>
+      )}
+    </details>
   );
 }
 
@@ -436,7 +594,9 @@ export function DefenseInferencePanel({
   weather,
   field,
 }: DefenseInferencePanelProps) {
-  const [rows, setRows] = useState<ObservationRow[]>([{ id: 1, kind: "dealt", moveId: null, critical: false, before: "100", after: "", megaForm: "" }]);
+  const [rows, setRows] = useState<ObservationRow[]>([
+    { id: 1, kind: "dealt", moveId: null, critical: false, before: "100", after: "", megaForm: "", first: "me", cond: NEUTRAL_SPEED_CONDITIONS },
+  ]);
   const [nextId, setNextId] = useState(2);
   const [movePickerRow, setMovePickerRow] = useState<number | null>(null);
   const [abilityId, setAbilityId] = useState<string>("");
@@ -481,19 +641,42 @@ export function DefenseInferencePanel({
     });
   }
 
+  /** 가장 가까운 선후공 줄의 조건 — 새 선후공 줄이 이어받는다(턴마다 크게 안 바뀌는 조건이 많아서) */
+  const lastSpeedCond = () => [...rows].reverse().find((r) => r.kind === "speed")?.cond ?? NEUTRAL_SPEED_CONDITIONS;
+
   function addRow() {
     const last = rows[rows.length - 1];
     // 메가진화는 되돌릴 수 없어서 새 줄은 직전 줄의 폼을 이어받는다
     setRows([
       ...rows,
-      { id: nextId, kind: last?.kind ?? "dealt", moveId: null, critical: false, before: last?.after ?? "100", after: "", megaForm: last ? megaOf(last, megas) : "" },
+      {
+        id: nextId,
+        kind: last?.kind ?? "dealt",
+        moveId: null,
+        critical: false,
+        before: last?.kind === "speed" ? "" : (last?.after ?? "100"),
+        after: "",
+        megaForm: last ? megaOf(last, megas) : "",
+        first: "me",
+        cond: lastSpeedCond(),
+      },
     ]);
     setNextId(nextId + 1);
   }
 
   /** 줄 종류를 바꾸면 고른 기술(다른 포켓몬의 기술)·값 입력을 비운다 — 받은 데미지는 맞기 전 HP를 내 최대 HP로 채워 둔다 */
   function changeKind(id: number, kind: RowKind) {
-    updateRow(id, { kind, moveId: null, before: kind === "received" ? String(myMaxHp ?? "") : "100", after: "" });
+    updateRow(id, {
+      kind,
+      moveId: null,
+      before: kind === "received" ? String(myMaxHp ?? "") : kind === "speed" ? "" : "100",
+      after: "",
+      cond: lastSpeedCond(),
+    });
+  }
+
+  function updateCond(id: number, patch: Partial<SpeedConditions>) {
+    setRows((prev) => prev.map((r) => (r.id === id ? { ...r, cond: { ...r.cond, ...patch } } : r)));
   }
 
   function removeRow(id: number) {
@@ -578,22 +761,58 @@ export function DefenseInferencePanel({
       screen: myScreen || undefined,
     };
   }, [attacker, defender, completeReceived, anyMegaReceived, activeAtkAbilityId, atkItemId, atkStage, spaStage, oppBurned, weather, field, myScreen]);
+  // 상대 스피드 역산(3.1 C2-c) — 선후공 줄은 항상 완성(누가 먼저만 고르면 됨). 조건은 줄마다 다르다.
+  const speedRows = useMemo(() => rows.filter((r) => r.kind === "speed"), [rows]);
+  const speedAbilityOptions = defenderPokemon ? relevantAbilities(defenderPokemon, SPEED_ABILITY_CANDIDATES) : [];
+  const anyMegaSpeed = speedRows.some((r) => megaOf(r, megas));
+  const speedInput = useMemo<SpeedInferenceInput | null>(() => {
+    const opponent = defender.pokemonId ? getPokemon(defender.pokemonId) : undefined;
+    if (!attacker.pokemonId || !defender.pokemonId || !opponent || speedRows.length === 0) return null;
+    const abilityOptions = relevantAbilities(opponent, SPEED_ABILITY_CANDIDATES);
+    const observations: SpeedObservation[] = speedRows.map((r) => {
+      // 종이 바뀌어 그 종이 가질 수 없는 특성 가정은 해제하고, 곡예가 아니면 발동 후 체크는 무시
+      const oppAbilityId = r.cond.oppAbilityId && abilityOptions.includes(r.cond.oppAbilityId) ? r.cond.oppAbilityId : null;
+      return {
+        first: r.first,
+        megaForm: megaOf(r, opponent.megaEvolutions) || undefined,
+        conditions: { ...r.cond, oppAbilityId, oppUnburden: oppAbilityId === "곡예" && r.cond.oppUnburden },
+      };
+    });
+    return {
+      // 상대: 종·폼만 쓰고 특성·도구는 줄별 조건에서 정한다. 나: 능력·특성·도구를 전부 아는 쪽
+      attacker: { ...defender, pokemonId: defender.pokemonId, activeMegaForm: undefined, ability: null, item: null },
+      defender: { ...attacker, pokemonId: attacker.pokemonId },
+      defenderStages: attacker.stages,
+      weather: weather ?? undefined,
+      field: field ?? undefined,
+      observations,
+    };
+  }, [attacker, defender, speedRows, weather, field]);
+
   // 계산이 무거울 수 있어(물리+특수 관측이 함께면 수십만 후보) 입력은 즉시 반영하고 결과만 뒤따라 그린다.
-  // 방어·공격 두 쪽은 같이 계산해 성격을 공유하고 포인트 합계(66)를 따진다(3.1 C2-b 결합).
+  // 방어·공격·스피드는 같이 계산해 성격을 공유하고 포인트 합계(66)를 따진다(3.1 C2-b·C2-c 결합).
   const deferredInput = useDeferredValue(input);
   const deferredAttackInput = useDeferredValue(attackInput);
-  const combined = useMemo(() => inferCombined(deferredInput, deferredAttackInput), [deferredInput, deferredAttackInput]);
+  const deferredSpeedInput = useDeferredValue(speedInput);
+  const combined = useMemo(
+    () => inferCombined(deferredInput, deferredAttackInput, deferredSpeedInput),
+    [deferredInput, deferredAttackInput, deferredSpeedInput],
+  );
   const result = combined.defense;
   const attackResult = combined.attack;
+  const speedResult = combined.speed;
   const pending = input !== deferredInput;
   const attackPending = attackInput !== deferredAttackInput;
+  const speedPending = speedInput !== deferredSpeedInput;
   const receivedRowNos = completeReceived.map((c) => rows.indexOf(c.row) + 1);
+  const speedRowNos = speedRows.map((r) => rows.indexOf(r) + 1);
   const hasReceivedRows = rows.some((r) => r.kind === "received");
   const hasDealtRows = rows.some((r) => r.kind === "dealt");
 
   function rowMessage(row: ObservationRow): { text: string; kind: "error" | "ok" } | null {
     const move = row.moveId ? getMove(row.moveId) : undefined;
     if (row.kind === "received") return receivedRowMessage(row, move);
+    if (row.kind === "speed") return speedRowMessage(row);
     if (move) {
       const reason = inferenceUnsupportedReason(move);
       if (reason) return { text: reason, kind: "error" };
@@ -611,6 +830,16 @@ export function DefenseInferencePanel({
       }
       if (result.status === "ok" && result.singleFeasible[index]) return { text: "가능", kind: "ok" };
     }
+    return null;
+  }
+
+  function speedRowMessage(row: ObservationRow): { text: string; kind: "error" | "ok" } | null {
+    const index = speedRows.findIndex((r) => r.id === row.id);
+    if (index < 0 || !speedResult || speedPending) return null;
+    const message = speedResult.observationErrors[index];
+    if (message) return { text: message, kind: "error" };
+    if (speedResult.status !== "invalid" && speedResult.singleFeasible[index] === false) return { text: "이 관측만으로도 맞는 스피드가 없어요", kind: "error" };
+    if (speedResult.status === "ok" && speedResult.singleFeasible[index]) return { text: "가능", kind: "ok" };
     return null;
   }
 
@@ -640,6 +869,7 @@ export function DefenseInferencePanel({
       <p className="dinf-intro">
         내 포켓몬이 상대를 때린 뒤 상대 HP가 몇 %가 됐는지 입력하면, 상대의 <strong>HP·방어(특방) 능력 포인트와 성격</strong>이 될 수 있는 범위를 좁혀 줘요.
         반대로 상대가 나를 때려서 내 HP가 얼마가 됐는지 입력하면 상대의 <strong>공격(특공) 포인트와 성격 보정</strong>도 좁힐 수 있어요(내 HP는 정확한 수치라 더 정밀해요).
+        이번 턴 누가 먼저 움직였는지(<strong>선후공</strong>)를 넣으면 상대의 <strong>스피드 포인트와 성격 보정</strong>을 좁혀요.
         데미지에는 난수가 있어서, 정답 하나가 아니라 <strong>가능한 범위</strong>로 보여 줍니다.
       </p>
 
@@ -694,9 +924,12 @@ export function DefenseInferencePanel({
               <span>
                 특방 <strong>{defenderForm.baseStats.spd}</strong>
               </span>
+              <span>
+                스피드 <strong>{defenderForm.baseStats.spe}</strong>
+              </span>
             </div>
             <p className="dinf-unknown">
-              역산 대상: <strong>HP · 방어 · 특방 · 공격 · 특공 포인트, 성격</strong>
+              역산 대상: <strong>HP · 방어 · 특방 · 공격 · 특공 · 스피드 포인트, 성격</strong>
             </p>
           </div>
         ) : (
@@ -847,6 +1080,7 @@ export function DefenseInferencePanel({
             const move = row.moveId ? getMove(row.moveId) : undefined;
             const message = rowMessage(row);
             const received = row.kind === "received";
+            const speed = row.kind === "speed";
             const pickerOwner = received ? defenderPokemon : attackerPokemon;
             return (
               <li key={row.id} className="dinf-row">
@@ -854,16 +1088,24 @@ export function DefenseInferencePanel({
                 <select aria-label={`관측 ${index + 1} 종류`} value={row.kind} onChange={(e) => changeKind(row.id, e.target.value as RowKind)}>
                   <option value="dealt">내가 입힌 데미지</option>
                   <option value="received">내가 받은 데미지</option>
+                  <option value="speed">선후공</option>
                 </select>
-                <button
-                  type="button"
-                  className="dinf-move-btn"
-                  onClick={() => setMovePickerRow(row.id)}
-                  disabled={!pickerOwner}
-                  title={pickerOwner ? undefined : received ? "먼저 상대 포켓몬을 골라 주세요" : "먼저 내 포켓몬을 골라 주세요"}
-                >
-                  {move ? move.name : received ? "상대 기술 선택" : "기술 선택"}
-                </button>
+                {speed ? (
+                  <select aria-label={`관측 ${index + 1} 먼저 움직인 쪽`} value={row.first} onChange={(e) => updateRow(row.id, { first: e.target.value as "me" | "opponent" })}>
+                    <option value="me">내가 먼저</option>
+                    <option value="opponent">상대가 먼저</option>
+                  </select>
+                ) : (
+                  <button
+                    type="button"
+                    className="dinf-move-btn"
+                    onClick={() => setMovePickerRow(row.id)}
+                    disabled={!pickerOwner}
+                    title={pickerOwner ? undefined : received ? "먼저 상대 포켓몬을 골라 주세요" : "먼저 내 포켓몬을 골라 주세요"}
+                  >
+                    {move ? move.name : received ? "상대 기술 선택" : "기술 선택"}
+                  </button>
+                )}
                 {megas && megas.length > 0 && (
                   <select
                     aria-label={`관측 ${index + 1} 상대 폼`}
@@ -878,34 +1120,47 @@ export function DefenseInferencePanel({
                     ))}
                   </select>
                 )}
-                <label className="dinf-crit">
-                  <input type="checkbox" checked={row.critical} onChange={(e) => updateRow(row.id, { critical: e.target.checked })} />
-                  급소
-                </label>
-                <span className="dinf-percent-pair">
-                  <input
-                    className="dinf-percent"
-                    inputMode="numeric"
-                    aria-label={`관측 ${index + 1} 맞기 전 ${received ? "HP" : "%"}`}
-                    value={row.before}
-                    onChange={(e) => updateRow(row.id, { before: e.target.value })}
-                  />
-                  <span>{received ? "HP →" : "% →"}</span>
-                  <input
-                    className="dinf-percent"
-                    inputMode="numeric"
-                    aria-label={`관측 ${index + 1} 맞은 뒤 ${received ? "HP" : "%"}`}
-                    placeholder="?"
-                    value={row.after}
-                    onChange={(e) => updateRow(row.id, { after: e.target.value })}
-                  />
-                  <span>{received ? "HP" : "%"}</span>
-                </span>
+                {!speed && (
+                  <>
+                    <label className="dinf-crit">
+                      <input type="checkbox" checked={row.critical} onChange={(e) => updateRow(row.id, { critical: e.target.checked })} />
+                      급소
+                    </label>
+                    <span className="dinf-percent-pair">
+                      <input
+                        className="dinf-percent"
+                        inputMode="numeric"
+                        aria-label={`관측 ${index + 1} 맞기 전 ${received ? "HP" : "%"}`}
+                        value={row.before}
+                        onChange={(e) => updateRow(row.id, { before: e.target.value })}
+                      />
+                      <span>{received ? "HP →" : "% →"}</span>
+                      <input
+                        className="dinf-percent"
+                        inputMode="numeric"
+                        aria-label={`관측 ${index + 1} 맞은 뒤 ${received ? "HP" : "%"}`}
+                        placeholder="?"
+                        value={row.after}
+                        onChange={(e) => updateRow(row.id, { after: e.target.value })}
+                      />
+                      <span>{received ? "HP" : "%"}</span>
+                    </span>
+                  </>
+                )}
                 {message && <span className={`dinf-row-msg is-${message.kind}`}>{message.text}</span>}
                 {rows.length > 1 && (
                   <button type="button" className="dinf-row-remove" onClick={() => removeRow(row.id)} aria-label={`관측 ${index + 1} 삭제`}>
                     ✕
                   </button>
+                )}
+                {speed && (
+                  <SpeedConditionsEditor
+                    cond={row.cond}
+                    onChange={(patch) => updateCond(row.id, patch)}
+                    abilityOptions={speedAbilityOptions}
+                    megaRow={!!megaOf(row, megas)}
+                    itemDisabled={anyMegaSpeed}
+                  />
                 )}
               </li>
             );
@@ -917,22 +1172,23 @@ export function DefenseInferencePanel({
         <p className="dinf-note">
           내가 입힌 데미지는 관측 사이에 상대가 HP를 회복하지 않았다고 가정해요. 내가 받은 데미지는 맞은 직후 내 HP 수치를 넣어 주세요(먹다남은음식·독 같은 턴 종료 효과가
           섞이면 맞지 않아요){myMaxHp !== null && hasReceivedRows ? ` — 내 최대 HP는 ${myMaxHp}예요` : ""}. 다단히트·고정 데미지 기술은 아직 지원하지 않아요.
+          선후공은 우선도가 같은 기술끼리 누가 먼저 움직였는지만 넣고, 그 턴의 조건(트릭룸·순풍·마비·상대 랭크 등)은 줄의 “조건”에서 골라 주세요. 새 줄은 직전 선후공 줄의 조건을 이어받아요.
         </p>
       </section>
 
       <section className="dinf-section dinf-result-section" aria-live="polite">
         <h3>
-          결과 {(pending || attackPending) && <span className="dinf-pending">계산 중…</span>}
+          결과 {(pending || attackPending || speedPending) && <span className="dinf-pending">계산 중…</span>}
         </h3>
         {!attackerPokemon || !defenderPokemon ? (
           <p className="dinf-hint">내 포켓몬과 상대 포켓몬을 먼저 골라 주세요.</p>
-        ) : !result && !attackResult ? (
-          <p className="dinf-hint">관측의 기술과 맞은 뒤 값을 입력하면 결과가 나와요.</p>
+        ) : !result && !attackResult && !speedResult ? (
+          <p className="dinf-hint">관측의 기술과 맞은 뒤 값을 입력하거나, 선후공 줄을 추가하면 결과가 나와요.</p>
         ) : (
           <>
             {result && (
               <div className={pending ? "dinf-stale" : undefined}>
-                {attackResult && <h4 className="dinf-subhead">방어 쪽 — 내가 입힌 데미지</h4>}
+                {(attackResult || speedResult) && <h4 className="dinf-subhead">방어 쪽 — 내가 입힌 데미지</h4>}
                 <ResultView result={result} rowIdsByObservation={rowIdsByObservation} />
               </div>
             )}
@@ -940,6 +1196,12 @@ export function DefenseInferencePanel({
               <div className={attackPending ? "dinf-stale" : undefined}>
                 <h4 className="dinf-subhead">공격 쪽 — 내가 받은 데미지</h4>
                 <AttackResultView result={attackResult} rowNos={receivedRowNos} combinedOn={combined.natures !== null} />
+              </div>
+            )}
+            {speedResult && (
+              <div className={speedPending ? "dinf-stale" : undefined}>
+                <h4 className="dinf-subhead">스피드 쪽 — 선후공</h4>
+                <SpeedResultView result={speedResult} rowNos={speedRowNos} combinedOn={combined.natures !== null} />
               </div>
             )}
             <CombinedView combined={combined} />
