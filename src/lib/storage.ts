@@ -1,4 +1,4 @@
-import type { Party, PartySlots, SlotPreset } from "../types/party";
+import type { Party, PartySlots, SamplePartyPreset, SlotPreset } from "../types/party";
 import type { BattleVideo } from "../types/battleVideo";
 import { EMPTY_FRONTIER, isFrontierSave, type FrontierSave } from "./battleSeries";
 import { emptyOpponentMemory, isOpponentMemory, type OpponentMemory } from "./battle/ai/opponentMemory";
@@ -17,6 +17,8 @@ const BATTLE_VIDEOS_STORAGE_KEY = "champions-party-sim.battle-videos.v1";
  * 배틀타워 AI의 사용자 패턴 학습(ver.2.0 1-C) — 파티 자동저장(STORAGE_KEY)과 별도 키. 집계 통계만(최대 약 25KB), 학습 켬/끔 설정 포함.
  */
 const AI_MEMORY_STORAGE_KEY = "champions-party-sim.ai-memory.v1";
+/** 내 샘플 파티(3.1 S2 스파이크) — 기본 제공 샘플(마스터 데이터)과 별개로 사용자가 저장한 샘플. 다른 저장 키와 겹치지 않는 별도 키 */
+const MY_SAMPLES_STORAGE_KEY = "champions-party-sim.my-samples.v1";
 /** 배틀 프런티어(2.5 L4) 연승·전적 — 파티 자동저장(STORAGE_KEY)·프리셋 키와 별도 키 */
 const BATTLE_FRONTIER_STORAGE_KEY = "champions-party-sim.battle-frontier.v1";
 
@@ -160,9 +162,21 @@ const battleFrontierStore = createLocalStorageStore<FrontierSave>(BATTLE_FRONTIE
 
 /** 배틀 프런티어 저장본을 불러온다. 없거나 손상됐으면 빈 기록 */
 export function loadBattleFrontier(): FrontierSave {
-  return battleFrontierStore.load();
+  // 2.5 저장본에는 queue가 없어서 기본값으로 채운다
+  return { ...EMPTY_FRONTIER, ...battleFrontierStore.load() };
 }
 
 export function saveBattleFrontier(save: FrontierSave): void {
   battleFrontierStore.save(save);
+}
+
+const mySamplesStore = createLocalStorageStore<SamplePartyPreset[]>(MY_SAMPLES_STORAGE_KEY, (v): v is SamplePartyPreset[] => Array.isArray(v), []);
+
+/** 사용자가 저장한 샘플 파티 목록. 없거나 손상됐으면 빈 배열 */
+export function loadMySamples(): SamplePartyPreset[] {
+  return mySamplesStore.load();
+}
+
+export function saveMySamples(samples: SamplePartyPreset[]): void {
+  mySamplesStore.save(samples);
 }

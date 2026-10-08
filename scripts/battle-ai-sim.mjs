@@ -18,7 +18,7 @@
  *            대전은 양쪽 같은 어려움 AI. 인자 4·5번째가 A·B 선출 옵션 JSON — chooseAiSelection 옵션({...}) 또는 {"kind":"random"|"first"}(비AI 기준).
  *            환경변수 POOL=samples(기본, 기본 제공 샘플 파티 중 서로 다른 둘 — 2.2 B5에서 26개가 돼 같은 시드의 대진이 2.1 때(20개)와 달라졌으니 그 기준값은 재현되지 않는다) | random(무작위 6마리 빌드).
  *
- * 예) npm run sim:ai -- greedy 150 '{"scoring":"spec"}'   ← 파라미터 튜닝: 값을 바꿔 승률 비교
+ * 예) npm run sim:ai -- greedy 150 '{"tieThreshold":0.2}'   ← 파라미터 튜닝: 값을 바꿔 승률 비교
  * 환경변수 POOL=samples(regress 제외 3마리 모드 전부, 2.2 B3): 편마다 기본 제공 샘플 파티 하나에서 3마리를 뽑는다(기본은 무작위 빌드).
  *     selectvs의 POOL(samples|random)과는 별개 — 그쪽은 6마리 파티 풀. PIVOT 등 기술 치환 환경변수는 샘플 파티에는 걸리지 않는다.
  * 환경변수 PIVOT=1: 유턴류를 배울 수 있는 포켓몬은 기술 하나를 유턴류로 바꿔 파티를 만든다(유턴 판단 검증용)
@@ -34,7 +34,7 @@
  *     각 판은 시드로만 정해지므로 조각의 합은 한 번에 돌린 결과와 같다.
  * 환경변수 SIM_ROOT=<체크아웃 경로>: 이 스크립트 대신 그 체크아웃의 src/를 불러온다(다른 커밋을 이 하네스로 벤치).
  *   h2h에 OPP_ROOT=<다른 체크아웃 경로>를 주면 B 쪽 AI를 그 코드에서 불러온다(예: ver.1.7 끝 대비 — 엔진·데이터는 이 체크아웃).
- *     (PowerShell에서는 JSON 따옴표를 '{\"scoring\":\"spec\"}' 처럼 이스케이프)
+ *     (PowerShell에서는 JSON 따옴표를 '{\"tieThreshold\":0.2}' 처럼 이스케이프)
  */
 import { createServer } from "vite";
 import { createHash } from "node:crypto";
@@ -140,7 +140,7 @@ try {
       moves: moves.map((m) => data.getMove(m)),
     };
   }
-  // POOL=samples(2.2 B3): 무작위 빌드 대신 기본 제공 샘플 파티 하나에서 3마리를 뽑아 편을 만든다(실전형 조합으로 벤치 다양성 확보).
+  // POOL=samples(2.2 B3): 무작위 빌드 대신 기본 제공 샘플 파티 하나에서 3마리를 뽑아 편을 만든다(심화샘플 조합으로 벤치 다양성 확보).
   // PIVOT·SETUP·PROTECT·STATUS 기술 치환은 무작위 빌드(makeSlot)에만 걸린다. 기본값(POOL 없음)은 기존과 동일.
   function sampleSide(rng) {
     const party = data.SAMPLE_PARTIES[Math.floor(rng() * data.SAMPLE_PARTIES.length)];

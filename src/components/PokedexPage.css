@@ -135,8 +135,37 @@
 
 /* 상세 패널 */
 
-.pokedex-detail-panel {
+/* 우측 열: 상세 패널(미선택이면 안내) 아래에 타입 상성표 카드(3.0 N1)를 따로 쌓는다 */
+.pokedex-detail-column {
   flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+/* 미선택(상성표 표시) 상태: 우측 열을 좌측 목록 패널과 같은 높이로 맞춘다(PC). contain: size로 우측 내용이 행 높이를
+   키우지 않게 하고(행 높이 = 목록 패널), 상성표 카드가 남은 높이를 채운다. 목록이 검색으로 짧아져도 상성표가 안 잘리게
+   min-height를 둔다(안내 카드 + 상성표 자연 높이 이상). */
+@media (min-width: 761px) {
+  .pokedex-board.is-fit {
+    align-items: stretch;
+  }
+
+  .pokedex-board.is-fit .pokedex-detail-column {
+    contain: size;
+    min-height: 660px;
+  }
+
+  .pokedex-chart-card {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+}
+
+.pokedex-detail-panel {
   min-width: 0;
   background: var(--surface);
   -webkit-backdrop-filter: blur(var(--glass-blur));
@@ -488,12 +517,9 @@
   }
 
   /* ver.1.6 §2-4 — 미선택 상태 안내 블록이 문구 높이만큼만 차지해서 위 리스트 블록(320px)보다
-     훨씬 작아 보이던 문제. 리스트와 같은 높이를 주고 문구를 가운데로 옮긴다. */
+     훨씬 작아 보이던 문제. 3.0 N1부터 그 아래 상성표가 높이를 채우므로 문구 블록은 줄여 둔다. */
   .pokedex-detail-empty {
-    min-height: 320px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0;
+    min-height: 0;
+    padding: 0.5rem 0 1rem;
   }
 }

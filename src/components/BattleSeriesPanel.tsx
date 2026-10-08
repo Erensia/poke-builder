@@ -1,5 +1,4 @@
 import type { useBattleSeries } from "../hooks/useBattleSeries";
-import { SAMPLE_PARTIES } from "../lib/data";
 import type { SamplePartyPreset } from "../types/party";
 import "./BattleSeriesPanel.css";
 
@@ -16,13 +15,13 @@ interface BattleSeriesPanelProps {
  * 켜져 있으면 지금 상대를 안내하고, 상대는 수동으로 바꿀 수 없다(설정 화면이 상대 편을 잠근다).
  */
 export function BattleSeriesPanel({ series, startBlockedReason, onStart }: BattleSeriesPanelProps) {
-  const { save, active, current } = series;
-  const played = SAMPLE_PARTIES.filter((s) => save.samples[s.id]);
+  const { save, active, current, pool, catalog, usableMine } = series;
+  const played = catalog.filter((s) => save.samples[s.id]);
 
   return (
     <div className="battle-series">
       <span className="battle-series-text">
-        <strong>배틀 프런티어</strong> — 선출을 고정하고 샘플 파티 {SAMPLE_PARTIES.length}개를 무작위로 상대하며 연승을 쌓아요. 한 판 지면 연승이 끊기고, 도중에 나가면 진 걸로 쳐요.
+        <strong>배틀 프런티어</strong> — 선출을 고정하고 샘플 파티 {pool.length}개를 무작위로 상대하며 연승을 쌓아요. 한 판 지면 연승이 끊기고, 도중에 나가면 진 걸로 쳐요.
         <br />
         현재 <strong>{save.streak}연승</strong> · 최대 <strong>{save.best}연승</strong>
         {active && current && ` · 지금 상대: ${current.name} (${current.style})`}
@@ -35,6 +34,12 @@ export function BattleSeriesPanel({ series, startBlockedReason, onStart }: Battl
         <button type="button" className="battle-setup-load-party" disabled={!!startBlockedReason} title={startBlockedReason ?? undefined} onClick={() => onStart(series.start())}>
           시작하기
         </button>
+      )}
+      {(usableMine > 0 || save.includeMine) && (
+        <label className="battle-series-mine">
+          <input type="checkbox" checked={save.includeMine} disabled={active} onChange={(e) => series.setIncludeMine(e.target.checked)} />
+          <span>내 샘플 {usableMine}개도 상대로 쓰기{active ? " (프런티어 종료 후 바꿀 수 있어요)" : ""}</span>
+        </label>
       )}
       {played.length > 0 && (
         <details className="battle-series-details">
@@ -50,6 +55,17 @@ export function BattleSeriesPanel({ series, startBlockedReason, onStart }: Battl
               </li>
             ))}
           </ul>
+          {!active && (
+            <button
+              type="button"
+              className="battle-setup-load-party battle-series-reset"
+              onClick={() => {
+                if (window.confirm("연승·최대 연승·샘플 파티별 승패 기록을 모두 지울까요?")) series.reset();
+              }}
+            >
+              기록 초기화
+            </button>
+          )}
         </details>
       )}
     </div>

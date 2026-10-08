@@ -515,3 +515,62 @@
   background: var(--violet-soft);
   color: var(--violet);
 }
+
+/* 내가 받은 데미지 관측(3.1 C2-b) — 소제목 */
+.dinf-subhead {
+  margin: 0.9rem 0 0.4rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--violet);
+}
+
+/* 극보정 형태 칸(3.1 C2-a) — 가능 여부와 별개로 점선 테두리만 표시 */
+.dinf-cell.is-extreme {
+  outline: 1px dashed var(--text-muted);
+  outline-offset: -1px;
+}
+
+.dinf-extreme-none strong {
+  color: var(--danger);
+}
+
+/* 선후공 관측(3.1 C2-c) — 줄 아래 접이식 조건 영역 */
+.dinf-speed-cond {
+  flex-basis: 100%;
+  margin-top: 0;
+}
+
+.dinf-speed-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1rem;
+  margin: 0.6rem 0;
+}
+
+/* 메가 전·후 비교(3.1 L1-b) */
+.dinf-form-scroll {
+  overflow-x: auto;
+}
+
+.dinf-form-table {
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+
+.dinf-form-table th,
+.dinf-form-table td {
+  padding: 0.3rem 0.8rem 0.3rem 0;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.dinf-form-table thead th {
+  color: var(--violet);
+  font-weight: 700;
+  border-bottom: 1px solid var(--border);
+}
+
+.dinf-form-table tbody th {
+  color: var(--text-muted);
+  font-weight: 400;
+}

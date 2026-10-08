@@ -357,13 +357,24 @@ function memoOf(ctx: ChainContext): Map<string, number> {
   return memo;
 }
 
+/** 문맥(λ·노이즈·교체 파라미터)마다 같은 키 접두 — 위치마다 다시 조립하지 않게 문맥별로 한 번만 만든다(3.0 P1) */
+const contextKeyMemo = new WeakMap<ChainContext, string>();
+
+function contextKey(ctx: ChainContext): string {
+  let key = contextKeyMemo.get(ctx);
+  if (key === undefined) {
+    const sw =
+      (ctx.oppSwitch ? `${ctx.oppSwitch.margin}/${ctx.oppSwitch.limit}/${ctx.oppSwitch.weight}` : "-") +
+      (ctx.mySwitch ? `m${ctx.mySwitch.margin}/${ctx.mySwitch.limit}` : "");
+    contextKeyMemo.set(ctx, (key = `${ctx.lambda}:${ctx.noise}:${sw}:`));
+  }
+  return key;
+}
+
 function positionKey(ctx: ChainContext, pos: ChainPosition): string {
   const turns = (x: number) => (x === Infinity ? "i" : Math.round(x * 100));
-  const sw =
-    (ctx.oppSwitch ? `${ctx.oppSwitch.margin}/${ctx.oppSwitch.limit}/${ctx.oppSwitch.weight}` : "-") +
-    (ctx.mySwitch ? `m${ctx.mySwitch.margin}/${ctx.mySwitch.limit}` : "");
   return (
-    `${ctx.lambda}:${ctx.noise}:${sw}:${turns(pos.effectLeft)}|${pos.mi},${pos.oi},${pos.myStaged ? 1 : 0}${pos.oppStaged ? 1 : 0},` +
+    `${contextKey(ctx)}${turns(pos.effectLeft)}|${pos.mi},${pos.oi},${pos.myStaged ? 1 : 0}${pos.oppStaged ? 1 : 0},` +
     `${pos.oppSwitches},${pos.mySwitches}|${turns(pos.myPerish)},${turns(pos.oppPerish)}|${pos.my.map(round).join(",")}|${pos.opp.map(round).join(",")}`
   );
 }

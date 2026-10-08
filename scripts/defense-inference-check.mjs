@@ -39,6 +39,7 @@ try {
   const species = data.POKEMON.filter((p) => !p.formVariants && !p.sizeForms);
   const natureIds = data.NATURES.map((n) => n.id);
 
+  const within = (r, v) => !!r && r.min <= v && v <= r.max;
   const slot = (pokemonId, extra = {}) => ({ pokemonId, ability: null, item: null, nature: null, points: pts(), ...extra });
 
   // 1) 공식 대조 ------------------------------------------------------------------------------
@@ -237,6 +238,16 @@ try {
       const mixed = inf.inferDefense({ attacker: atk, defender: slot(poke.id), observations });
       if (mixed?.status === "ok" && mixed.hpDefGrid[truth.def * 33 + truth.hp] === 1) mixOk++;
       else fail(`메가 전→후 혼합: 진짜 배분이 빠짐 ${mega.form} truth=${JSON.stringify(truth)} 상태=${mixed?.status}`);
+      // 3.1 L1-b) 메가 전·후 나란히: 폼마다 그 폼의 종족값으로 환산한 진짜 실수치·내구 지수가 범위에 들어야 한다
+      const fv = mixed?.formViews ?? [];
+      const bulkPre = preReal.hp * preReal.def;
+      const bulkPost = postReal.hp * postReal.def;
+      if (
+        fv.length !== 2 || fv[0].form !== "" || fv[1].form !== mega.form ||
+        !within(fv[0].real.def, preReal.def) || !within(fv[1].real.def, postReal.def) ||
+        !within(fv[1].real.hp, postReal.hp) || fv[0].real.spd !== undefined ||
+        !within(fv[0].bulkPhysical?.support, bulkPre) || !within(fv[1].bulkPhysical?.support, bulkPost)
+      ) fail(`메가 전·후 나란히(방어): 폼별 진짜 실수치가 범위에 없음 ${mega.form} truth=${JSON.stringify(truth)} 폼=${fv.map((v) => v.form).join("|")}`);
       // 태그를 떼면(둘 다 메가 전으로 계산) 방어 종족값이 다른 경우 진짜 배분이 빠지거나 모순이 나야 한다 — 빠지는 사례가 하나라도 있어야 태그가 의미 있다
       const untagged = inf.inferDefense({ attacker: atk, defender: slot(poke.id), observations: observations.map((o) => ({ ...o, megaForm: undefined })) });
       if (untagged?.status !== "ok" || untagged.hpDefGrid[truth.def * 33 + truth.hp] !== 1) untaggedMissed++;
@@ -246,6 +257,457 @@ try {
     if (untaggedMissed === 0) fail("메가 전→후 혼합: 태그 유무 차이가 전혀 없음(태그가 반영되지 않는 듯)");
     const bad = inf.inferDefense({ attacker: slot("한카리아스"), defender: slot("갑주무사"), observations: [{ move: data.getMove("지진"), critical: false, before: 100, after: 50, megaForm: "없는폼" }] });
     if (bad?.status !== "invalid" || !bad.observationErrors[0]?.includes("메가폼")) fail("없는 메가폼 태그가 invalid로 안 잡힘");
+  }
+
+  // 3.1 C2-b) 공격 역산 왕복 — 진짜 공격 배분(포인트·성격)으로 "받은 데미지" 관측을 만들어 넣으면 진짜 값이 후보에 남는지.
+  // 내 포켓몬(방어자)은 능력을 전부 아는 쪽, 상대 공격(특공) 포인트·성격을 역산한다.
+  const ai = await server.ssrLoadModule("/src/lib/attackInference.ts");
+  const attackMoves = data.MOVES.filter((m) => ai.attackInferenceUnsupportedReason(m) === null && m.power !== null && m.power > 0);
+  // 진짜 상대(oppTrue)가 내 포켓몬(mySlot)에게 실제로 입힐 데미지로 관측 하나를 만든다. 내 HP가 남지 않는 공격은 제외
+  const makeAttackObservation = (cands, oppTrue, mySlot, maxHp, hp) => {
+    for (let tries = 0; tries < 20; tries++) {
+      const move = pick(cands);
+      const res = ev.evaluateSlotMatchup(oppTrue, move, mySlot, { defenderHpIsFull: hp >= maxHp, skipVerdict: true });
+      const p = res?.damageParts;
+      if (!p || p.typeEffectiveness === 0) continue;
+      const damage = fm.integerTotalDamage(p, res.defenseStat, (85 + Math.floor(rnd() * 16)) / 100);
+      if (damage < hp) return { move, critical: false, hpBefore: hp, hpAfter: hp - damage };
+    }
+    return null;
+  };
+  {
+    let ok = 0;
+    let tried = 0;
+    let sumWidth = 0;
+    let sumRealWidth = 0;
+    let sumCombos = 0;
+    let rangeCount = 0;
+    const addWidths = (result) => {
+      for (const [r, real] of [[result.atk, result.realAtk], [result.spa, result.realSpa]]) {
+        if (!r) continue;
+        sumWidth += r.max - r.min;
+        sumRealWidth += real.max - real.min;
+        rangeCount++;
+      }
+    };
+    // 같은 종류(물리) 관측을 k개 모았을 때 실수치 범위가 얼마나 좁아지는지(관측이 늘수록 좁아져야 한다)
+    const narrowing = (k) => {
+      let width = 0;
+      let count = 0;
+      for (let t = 0; t < 40; t++) {
+        const opp = pick(species);
+        const oppTrue = slot(opp.id, { points: pts({ atk: Math.floor(rnd() * 33) }), nature: pick(natureIds) });
+        const mySlot = slot(pick(species).id, { points: pts({ hp: 32, def: Math.floor(rnd() * 20) }), nature: pick(natureIds) });
+        const myMax = stat.computeRealStats(form.getEffectiveForm(data.getPokemon(mySlot.pokemonId), mySlot).baseStats, mySlot.points, mySlot.nature).hp;
+        const obs = [];
+        for (let i = 0; i < k; i++) {
+          // 매 관측 전에 HP를 가득 채운 상태로(회복했다고 보고) 독립 관측을 만든다
+          const o = makeAttackObservation(attackMoves.filter((m) => m.category === "physical"), oppTrue, mySlot, myMax, myMax);
+          if (o) obs.push(o);
+        }
+        if (obs.length < k) continue;
+        const r = ai.inferAttack({ attacker: slot(opp.id), defender: mySlot, observations: obs });
+        if (r?.realAtk) {
+          width += r.realAtk.max - r.realAtk.min;
+          count++;
+        }
+      }
+      return count ? width / count : NaN;
+    };
+    for (let t = 0; t < 120; t++) {
+      const opp = pick(species);
+      const mine = pick(species);
+      const truth = { atk: Math.floor(rnd() * 33), spa: Math.floor(rnd() * 33), nature: pick(natureIds) };
+      const oppTrue = slot(opp.id, { points: pts({ atk: truth.atk, spa: truth.spa }), nature: truth.nature });
+      const mySlot = slot(mine.id, {
+        points: pts({ hp: Math.floor(rnd() * 33), def: Math.floor(rnd() * 20), spd: Math.floor(rnd() * 20) }),
+        nature: pick(natureIds),
+      });
+      const myForm = form.getEffectiveForm(data.getPokemon(mine.id), mySlot);
+      const myReal = stat.computeRealStats(myForm.baseStats, mySlot.points, mySlot.nature);
+      // 물리 1개 + 특수 1개 관측(내 HP가 남는 동안)
+      const observations = [];
+      let hp = myReal.hp;
+      for (const cat of rnd() < 0.5 ? ["physical"] : ["physical", "special"]) {
+        const obs = makeAttackObservation(attackMoves.filter((m) => m.category === cat), oppTrue, mySlot, myReal.hp, hp);
+        if (!obs) continue;
+        observations.push(obs);
+        hp = obs.hpAfter;
+      }
+      if (observations.length === 0) continue;
+      tried++;
+      const result = ai.inferAttack({ attacker: slot(opp.id), defender: mySlot, observations });
+      const nat = data.NATURES.find((n) => n.id === truth.nature);
+      const inAtk = !result?.atk || (result.atk.min <= truth.atk && truth.atk <= result.atk.max);
+      const inSpa = !result?.spa || (result.spa.min <= truth.spa && truth.spa <= result.spa.max);
+      const groupOk = result?.groups.some((g) => g.feasible > 0 && g.natureNames.includes(nat.name));
+      if (result?.status === "ok" && inAtk && inSpa && groupOk) {
+        ok++;
+        addWidths(result);
+        sumCombos += result.groups.filter((g) => g.feasible > 0).length;
+      } else fail(`공격 역산 왕복: 진짜 배분이 빠짐 opp=${opp.id} truth=${JSON.stringify(truth)} 상태=${result?.status} atk=${JSON.stringify(result?.atk)} spa=${JSON.stringify(result?.spa)}`);
+    }
+    console.log(
+      `공격 역산 왕복 ${ok}/${tried} 통과 · 스탯 하나당 평균 포인트 범위 폭 ${(sumWidth / Math.max(1, rangeCount)).toFixed(1)} · 실수치 범위 폭 ${(sumRealWidth / Math.max(1, rangeCount)).toFixed(1)} · 남은 성격 묶음 ${(sumCombos / Math.max(1, ok)).toFixed(1)}개`,
+    );
+    if (tried === 0) fail("공격 역산 왕복 시행이 0건");
+    const w1 = narrowing(1);
+    const w3 = narrowing(3);
+    const w6 = narrowing(6);
+    console.log(`공격 역산 관측 수별 실수치 범위 폭(물리, 평균): 1회 ${w1.toFixed(1)} · 3회 ${w3.toFixed(1)} · 6회 ${w6.toFixed(1)}`);
+    if (!(w3 < w1 && w6 < w3)) fail("공격 역산: 관측이 늘어도 범위가 좁아지지 않음");
+    // 메가 전→후 혼합: 같은 공격 배분으로 메가 전(첫 관측)·메가 후(둘째 관측, 메가폼 공격 종족값·특성)에 맞은 기록이 진짜 값을 남기는지,
+    // 태그를 떼면(둘 다 메가 전으로 계산) 진짜 값이 빠지는 사례가 있는지(=관측별 폼이 실제로 쓰이는지)
+    const megaSpecies = species.filter((p) => p.megaEvolutions?.length);
+    let megaOk = 0;
+    let megaTried = 0;
+    let untaggedMissed = 0;
+    for (let t = 0; t < 80; t++) {
+      const poke = pick(megaSpecies);
+      const mega = pick(poke.megaEvolutions);
+      const truth = { atk: Math.floor(rnd() * 33), nature: pick(natureIds) };
+      const pre = slot(poke.id, { points: pts({ atk: truth.atk }), nature: truth.nature });
+      const post = slot(poke.id, { points: pts({ atk: truth.atk }), nature: truth.nature, activeMegaForm: mega.form, ability: mega.ability });
+      const mySlot = slot(pick(species).id, { points: pts({ hp: 32, def: Math.floor(rnd() * 20) }), nature: pick(natureIds) });
+      const myMax = stat.computeRealStats(form.getEffectiveForm(data.getPokemon(mySlot.pokemonId), mySlot).baseStats, mySlot.points, mySlot.nature).hp;
+      const physical = attackMoves.filter((m) => m.category === "physical");
+      const first = makeAttackObservation(physical, pre, mySlot, myMax, myMax);
+      const second = first && makeAttackObservation(physical, post, mySlot, myMax, first.hpAfter);
+      if (!second) continue;
+      megaTried++;
+      const observations = [first, { ...second, megaForm: mega.form }];
+      const mixed = ai.inferAttack({ attacker: slot(poke.id), defender: mySlot, observations });
+      if (mixed?.status === "ok" && mixed.atk.min <= truth.atk && truth.atk <= mixed.atk.max) megaOk++;
+      else fail(`공격 역산 메가 혼합: 진짜 값이 빠짐 ${mega.form} truth=${JSON.stringify(truth)} 상태=${mixed?.status}`);
+      // 3.1 L1-b) 메가 전·후 나란히: 폼별 종족값으로 환산한 진짜 공격 실수치가 범위에 있어야 한다
+      const fv = mixed?.formViews ?? [];
+      if (
+        fv.length !== 2 || fv[1].form !== mega.form ||
+        !within(fv[0].real.atk, stat.computeRealStats(poke.baseStats, pre.points, pre.nature).atk) ||
+        !within(fv[1].real.atk, stat.computeRealStats(mega.baseStats, post.points, post.nature).atk)
+      ) fail(`메가 전·후 나란히(공격): 폼별 진짜 실수치가 범위에 없음 ${mega.form} truth=${JSON.stringify(truth)}`);
+      const untagged = ai.inferAttack({ attacker: slot(poke.id), defender: mySlot, observations: observations.map((o) => ({ ...o, megaForm: undefined })) });
+      if (untagged?.status !== "ok" || untagged.atk.min > truth.atk || truth.atk > untagged.atk.max) untaggedMissed++;
+    }
+    console.log(`공격 역산 메가 전→후 혼합 ${megaOk}/${megaTried} 통과 · 태그 없이는 진짜 값이 빠진 경우 ${untaggedMissed}건`);
+    if (megaTried === 0) fail("공격 역산 메가 혼합 시행이 0건");
+    if (untaggedMissed === 0) fail("공격 역산 메가 혼합: 태그 유무 차이가 전혀 없음(태그가 반영되지 않는 듯)");
+    const badForm = ai.inferAttack({
+      attacker: slot("한카리아스"),
+      defender: slot("망나뇽", { points: pts({ hp: 20 }) }),
+      observations: [{ move: data.getMove("지진"), critical: false, hpBefore: 100, hpAfter: 50, megaForm: "없는폼" }],
+    });
+    if (badForm?.status !== "invalid" || !badForm.observationErrors[0]?.includes("메가폼")) fail("공격 역산: 없는 메가폼 태그가 invalid로 안 잡힘");
+    // 공격 보정 후보 목록(화면의 "상대 공격 보정 특성·도구 가정") — 대표 항목이 들어 있고 방어 후보(반감 열매 등)는 섞이지 않는다
+    const atkItems = new Set(ai.ATTACK_ITEM_CANDIDATES.map((i) => i.id));
+    const atkAbilities = new Set(ai.ATTACK_ABILITY_CANDIDATES.map((x) => x.id));
+    if (!["생명의구슬", "달인의띠", "힘의머리띠", "박식안경", "실크스카프"].every((id) => atkItems.has(id)) || ai.ATTACK_ITEM_CANDIDATES.some((i) => i.resistsSuperEffectiveType !== undefined)) {
+      fail("공격 보정 도구 후보가 이상함");
+    }
+    if (!["테크니션", "근성", "천하장사", "맹화"].every((id) => atkAbilities.has(id))) fail("공격 보정 특성 후보가 이상함");
+    console.log(`공격 보정 후보: 도구 ${atkItems.size}종 · 특성 ${atkAbilities.size}종`);
+    // 방어·공격 결합(성격 공유 + 포인트 예산): 같은 상대의 진짜 배분으로 두 종류 관측을 만들어 결합해도 진짜 값이 남고,
+    // 결합 전(각각)보다 후보가 늘지 않으며, 실제로 좁아지는 사례가 있는지
+    const cb = await server.ssrLoadModule("/src/lib/combinedInference.ts");
+    let cbTried = 0;
+    let cbOk = 0;
+    let defNarrowed = 0;
+    let atkNarrowed = 0;
+    let sumNaturesBefore = 0;
+    let sumMs = 0;
+    let maxMs = 0;
+    let sumNaturesAfter = 0;
+    for (let t = 0; t < 200; t++) {
+      const opp = pick(species);
+      const truth = { hp: Math.floor(rnd() * 33), def: Math.floor(rnd() * 33), spd: Math.floor(rnd() * 33), atk: Math.floor(rnd() * 33), spa: Math.floor(rnd() * 33), nature: pick(natureIds) };
+      if (truth.hp + truth.def + truth.spd + truth.atk + truth.spa > 66) continue;
+      const oppTrue = slot(opp.id, { points: pts(truth), nature: truth.nature });
+      const mySlot = slot(pick(species).id, { points: pts({ hp: 32, atk: 32, spa: 32, def: Math.floor(rnd() * 20), spd: Math.floor(rnd() * 20) }), nature: pick(natureIds) });
+      const myForm = form.getEffectiveForm(data.getPokemon(mySlot.pokemonId), mySlot);
+      const myReal = stat.computeRealStats(myForm.baseStats, mySlot.points, mySlot.nature);
+      const oppReal = stat.computeRealStats(form.getEffectiveForm(data.getPokemon(opp.id), oppTrue).baseStats, oppTrue.points, oppTrue.nature);
+      // 방어 쪽: 내가 입힌 데미지(물리+특수), 공격 쪽: 내가 받은 데미지(물리+특수)
+      const dealt = [];
+      let oppHp = oppReal.hp;
+      for (const cat of ["physical", "special"]) {
+        const made = makeObservation(usable.filter((m) => m.category === cat), mySlot, oppTrue, oppReal, oppHp);
+        if (!made) continue;
+        dealt.push(made.observation);
+        oppHp -= made.damage;
+      }
+      const received = [];
+      let myHp = myReal.hp;
+      for (const cat of ["physical", "special"]) {
+        const obs = makeAttackObservation(attackMoves.filter((m) => m.category === cat), oppTrue, mySlot, myReal.hp, myHp);
+        if (!obs) continue;
+        received.push(obs);
+        myHp = obs.hpAfter;
+      }
+      if (dealt.length === 0 || received.length === 0) continue;
+      cbTried++;
+      const defenseInput = { attacker: mySlot, defender: slot(opp.id), observations: dealt };
+      const attackInput = { attacker: slot(opp.id), defender: mySlot, observations: received };
+      const d0 = inf.inferDefense(defenseInput);
+      const a0 = ai.inferAttack(attackInput);
+      const t0 = performance.now();
+      const c = cb.inferCombined(defenseInput, attackInput);
+      const ms = performance.now() - t0;
+      sumMs += ms;
+      maxMs = Math.max(maxMs, ms);
+      const inR = (r, v) => !r || (r.min <= v && v <= r.max);
+      const okAll =
+        c.conflict === null && c.defense?.status === "ok" && c.attack?.status === "ok" &&
+        inR(c.defense.hp, truth.hp) && inR(c.defense.def, truth.def) && inR(c.defense.spd, truth.spd) &&
+        inR(c.attack.atk, truth.atk) && inR(c.attack.spa, truth.spa) &&
+        c.natures?.some((n) => n.name === data.NATURES.find((x) => x.id === truth.nature).name) &&
+        c.defense.feasible <= d0.feasible && c.attack.feasible <= a0.feasible;
+      if (okAll) {
+        cbOk++;
+        if (c.defense.feasible < d0.feasible) defNarrowed++;
+        if (c.attack.feasible < a0.feasible) atkNarrowed++;
+        sumNaturesBefore += data.NATURES.filter((n) => d0.groups.some((g) => g.feasible > 0 && g.natureNames.includes(n.name))).length;
+        sumNaturesAfter += c.natures.length;
+      } else fail(`결합 왕복: 진짜 배분이 빠지거나 후보가 늘었음 opp=${opp.id} truth=${JSON.stringify(truth)} 충돌=${c.conflict} 방어=${c.defense?.status} 공격=${c.attack?.status}`);
+    }
+    console.log(
+      `방어·공격 결합 왕복 ${cbOk}/${cbTried} 통과 · 후보가 줄어든 사례 방어 ${defNarrowed}건·공격 ${atkNarrowed}건 · 성격 후보 평균 ${(sumNaturesBefore / Math.max(1, cbOk)).toFixed(1)}개(방어 쪽만) → ${(sumNaturesAfter / Math.max(1, cbOk)).toFixed(1)}개(결합)`,
+    );
+    if (cbTried === 0) fail("방어·공격 결합 왕복 시행이 0건");
+    console.log(`방어·공격 결합 계산 시간: 평균 ${(sumMs / Math.max(1, cbTried)).toFixed(0)}ms · 최대 ${maxMs.toFixed(0)}ms`);
+    if (maxMs > 5000) fail(`방어·공격 결합이 너무 느림(${maxMs.toFixed(0)}ms)`);
+    if (defNarrowed + atkNarrowed === 0) fail("방어·공격 결합: 후보가 줄어든 사례가 전혀 없음(결합이 반영되지 않는 듯)");
+    // 일부러 틀린 관측(불가능한 데미지)은 모순이어야 한다
+    const mine = slot("한카리아스", { points: pts({ hp: 20 }), nature: "조심" });
+    const myMax = stat.computeRealStats(form.getEffectiveForm(data.getPokemon("한카리아스"), mine).baseStats, mine.points, mine.nature).hp;
+    const contradiction = ai.inferAttack({
+      attacker: slot("망나뇽"),
+      defender: mine,
+      observations: [{ move: data.getMove("아이언헤드"), critical: false, hpBefore: myMax, hpAfter: myMax - 3 }],
+    });
+    const faint = ai.inferAttack({ attacker: slot("망나뇽"), defender: mine, observations: [{ move: data.getMove("아이언헤드"), critical: false, hpBefore: 30, hpAfter: 0 }] });
+    const badHp = ai.inferAttack({ attacker: slot("망나뇽"), defender: mine, observations: [{ move: data.getMove("아이언헤드"), critical: false, hpBefore: myMax + 5, hpAfter: 10 }] });
+    const noMove = ai.inferAttack({ attacker: slot("망나뇽"), defender: mine, observations: [{ move: data.getMove("자이로볼"), critical: false, hpBefore: myMax, hpAfter: myMax - 40 }] });
+    if (contradiction?.status !== "contradiction") fail(`공격 역산: 불가능한 데미지가 ${contradiction?.status}`);
+    if (faint?.status !== "invalid" || !faint.observationErrors[0]?.includes("쓰러진")) fail("공격 역산: 쓰러진 관측이 invalid로 안 잡힘");
+    if (badHp?.status !== "invalid" || !badHp.observationErrors[0]?.includes("최대 HP")) fail("공격 역산: 최대 HP 초과가 invalid로 안 잡힘");
+    if (noMove?.status !== "invalid" || !noMove.observationErrors[0]?.includes("스피드")) fail("공격 역산: 스피드 위력 기술이 invalid로 안 잡힘");
+    console.log(`공격 역산 예외: 모순 ${contradiction?.status} · 쓰러짐 ${faint?.status} · HP 초과 ${badHp?.status} · 자이로볼 ${noMove?.status}`);
+  }
+
+  // 3.1 C2-a) 극보정 형태 표시 — 32가 두 개 이하이고 나머지 합이 2 이하. 표시용이라 계산엔 영향이 없다.
+  {
+    const ext = inf.isExtremePoints;
+    const cases = [
+      [[32, 32], true], [[32, 2], true], [[2, 32], true], [[1, 1], true], [[0, 0], true], [[2, 0], true],
+      [[2, 2], false], [[31, 1], false], [[16, 16], false], [[32, 3], false], [[32, 32, 32], false], [[32, 32, 2], true], [[32, 32, 3], false],
+    ];
+    const bad = cases.filter(([v, want]) => ext(v) !== want);
+    if (bad.length) fail(`극보정 형태 판정이 다름: ${JSON.stringify(bad)}`);
+    // HP×방어 격자 전체(33×33)에서 극보정 칸은 13개(32·32 1 + 32와 0~2 6 + 합 2 이하 6)
+    const full = new Uint8Array(33 * 33).fill(1);
+    const counted = inf.countExtremeCells(full);
+    if (counted.feasible !== 1089 || counted.extreme !== 13) fail(`극보정 칸 수가 13이 아님: ${JSON.stringify(counted)}`);
+    // 기본 샘플의 실제 배분 중 극보정 형태 비율(정의가 실사용과 맞는지 점검 — 나머지는 내구를 나눠 투자한 배분)
+    let total = 0;
+    let extremeSlots = 0;
+    for (const party of data.SAMPLE_PARTIES) {
+      for (const sl of party.slots) {
+        total++;
+        if (ext(Object.values(sl.points))) extremeSlots++;
+      }
+    }
+    console.log(`극보정 형태 판정 ${cases.length}건 통과 · 격자 극보정 칸 ${counted.extreme}개 · 기본 샘플 슬롯 중 극보정 형태 ${extremeSlots}/${total} (${((extremeSlots / total) * 100).toFixed(0)}%)`);
+    if (extremeSlots / total < 0.5) fail("극보정 형태 정의가 기본 샘플 배분과 너무 안 맞음");
+  }
+
+  // 3.1 C2-c) 스피드 역산 — 진짜 스피드 포인트·성격으로 선후공 관측을 만들어 넣으면 진짜 값이 후보에 남는지, 조건이 다른
+  // 관측을 모을수록 좁아지는지, 트릭룸·순풍·스카프 가정·동속 처리.
+  {
+    const si = await server.ssrLoadModule("/src/lib/speedInference.ts");
+    const neutral = si.NEUTRAL_SPEED_CONDITIONS;
+    // 진짜 상대(oppTrue)와 나(mySlot)가 이 조건에서 실제로 어느 쪽이 먼저인지(동속이면 임의로 한쪽)
+    const actualFirst = (oppTrue, mySlot, c, myStages) => {
+      const res = ev.evaluateSpeedMatchup(
+        { ...oppTrue, item: c.oppItemId, ability: c.oppAbilityId },
+        mySlot,
+        {
+          attackerParalyzed: c.oppParalyzed, defenderParalyzed: c.myParalyzed, attackerTailwind: c.oppTailwind, defenderTailwind: c.myTailwind,
+          attackerUnburden: c.oppUnburden, trickRoom: c.trickRoom, attackerStages: { atk: 0, def: 0, spa: 0, spd: 0, spe: c.oppStage }, defenderStages: myStages,
+        },
+      );
+      return res.firstMover === "tie" ? (rnd() < 0.5 ? "me" : "opponent") : res.firstMover === "attacker" ? "opponent" : "me";
+    };
+    const randomConditions = () => ({
+      ...neutral,
+      oppStage: Math.floor(rnd() * 7) - 3,
+      myTailwind: rnd() < 0.3,
+      oppTailwind: rnd() < 0.2,
+      oppParalyzed: rnd() < 0.1,
+      trickRoom: rnd() < 0.15,
+    });
+    const flatStages = { atk: 0, def: 0, spa: 0, spd: 0, spe: 0 };
+    // 관측 k개로 역산해 진짜 값이 남는지 확인하고 실수치 범위 폭을 돌려준다(빠지면 실패 기록 후 null)
+    const speedCase = (k, oppId, truth, oppTrue, mySlot) => {
+      const observations = Array.from({ length: k }, () => {
+        const conditions = randomConditions();
+        return { first: actualFirst(oppTrue, mySlot, conditions, flatStages), conditions };
+      });
+      const r = si.inferSpeed({ attacker: slot(oppId), defender: mySlot, observations });
+      const natName = data.NATURES.find((n) => n.id === truth.nature).name;
+      const inRange = r?.status === "ok" && r.spe.min <= truth.spe && truth.spe <= r.spe.max;
+      if (inRange && r.groups.some((g) => g.feasible > 0 && g.natureNames.includes(natName))) return r.realSpe.max - r.realSpe.min;
+      fail(`스피드 역산 왕복: 진짜 값이 빠짐 opp=${oppId} truth=${JSON.stringify(truth)} 관측=${k} 상태=${r?.status}`);
+      return null;
+    };
+    let speOk = 0;
+    let speTried = 0;
+    const widths = { 1: 0, 3: 0, 8: 0 };
+    const counts = { 1: 0, 3: 0, 8: 0 };
+    for (let t = 0; t < 150; t++) {
+      const oppId = pick(species).id;
+      const truth = { spe: Math.floor(rnd() * 33), nature: pick(natureIds) };
+      const oppTrue = slot(oppId, { points: pts({ spe: truth.spe }), nature: truth.nature });
+      const mySlot = slot(pick(species).id, { points: pts({ spe: Math.floor(rnd() * 33) }), nature: pick(natureIds) });
+      for (const k of [1, 3, 8]) {
+        const r = speedCase(k, oppId, truth, oppTrue, mySlot);
+        if (r === null) continue;
+        widths[k] += r;
+        counts[k]++;
+        if (k === 1) speOk++;
+      }
+      speTried++;
+    }
+    console.log(
+      `스피드 역산 왕복 ${speOk}/${speTried} 통과 · 관측 수별 실수치 범위 폭(평균): 1회 ${(widths[1] / counts[1]).toFixed(1)} · 3회 ${(widths[3] / counts[3]).toFixed(1)} · 8회 ${(widths[8] / counts[8]).toFixed(1)}`,
+    );
+    if (!(widths[3] / counts[3] < widths[1] / counts[1] && widths[8] / counts[8] < widths[3] / counts[3])) fail("스피드 역산: 관측이 늘어도 범위가 좁아지지 않음");
+
+    // 손으로 확인하는 사례: 상대 한카리아스(기본 종족값 102), 나 망나뇽(종족값 80, 스피드 포인트 32 무보정) — 내 스피드 실수치 132
+    const me = slot("망나뇽", { points: pts({ spe: 32 }), nature: null });
+    const base = { attacker: slot("한카리아스"), defender: me };
+    const faster = si.inferSpeed({ ...base, observations: [{ first: "opponent", conditions: neutral }] });
+    const slower = si.inferSpeed({ ...base, observations: [{ first: "me", conditions: neutral }] });
+    // 상대가 먼저 → 상대 스피드 ≥ 132: 한카리아스 실수치 = (102+20+p)×성격. 무보정이면 p ≥ 10이지만 스피드↑(×1.1)이면 p=0도 134라 가능 → 0~32
+    if (faster?.status !== "ok" || faster.spe.min > 10 || faster.spe.max !== 32) fail(`스피드 역산 사례: 상대가 먼저 ${JSON.stringify(faster?.spe)}`);
+    // 내가 먼저 → 상대 스피드 ≤ 132: 무보정 p ≤ 10, 스피드↓(×0.9)면 p ≤ 24까지(25는 (122+25)×0.9=132.3→132) → 0~25
+    if (slower?.status !== "ok" || slower.spe.min !== 0) fail(`스피드 역산 사례: 내가 먼저 ${JSON.stringify(slower?.spe)}`);
+    // 트릭룸이면 방향이 반대 — 트릭룸에서 상대가 먼저면 상대가 더 느리다
+    const trickFirst = si.inferSpeed({ ...base, observations: [{ first: "opponent", conditions: { ...neutral, trickRoom: true } }] });
+    if (trickFirst?.status !== "ok" || trickFirst.spe.min !== 0 || trickFirst.spe.max >= 32) fail(`스피드 역산 사례: 트릭룸 ${JSON.stringify(trickFirst?.spe)}`);
+    // 서로 모순인 관측(같은 조건에서 둘 다 먼저)은 모순이어야 한다
+    const both = si.inferSpeed({ ...base, observations: [{ first: "opponent", conditions: neutral }, { first: "me", conditions: neutral }] });
+    if (both?.status !== "ok" && both?.status !== "contradiction") fail("스피드 역산: 동속 처리 이상");
+    const bad = si.inferSpeed({ ...base, observations: [{ first: "me", conditions: { ...neutral, oppStage: 9 } }] });
+    if (bad?.status !== "invalid" || !bad.observationErrors[0]?.includes("랭크")) fail("스피드 역산: 잘못된 랭크가 invalid로 안 잡힘");
+    console.log(`스피드 역산 사례: 상대가 먼저 → 포인트 ${faster.spe.min}~${faster.spe.max} · 내가 먼저 → ${slower.spe.min}~${slower.spe.max} · 트릭룸 → ${trickFirst.spe.min}~${trickFirst.spe.max}`);
+
+    // 3.1 L1-b) 메가 전→후 스피드: 같은 포인트·성격으로 메가 전·후 선후공을 만들면 진짜 값이 남고, 폼별 실수치 범위에 폼별 진짜 실수치가 들어간다.
+    // 태그가 없어도 다른 쪽이 알려 준 메가폼(viewMegaForms)이 있으면 나란히 만든다.
+    {
+      const megaSpecies = species.filter((p) => p.megaEvolutions?.length);
+      let tried = 0;
+      for (let t = 0; t < 60; t++) {
+        const poke = pick(megaSpecies);
+        const mega = pick(poke.megaEvolutions);
+        const truth = { spe: Math.floor(rnd() * 33), nature: pick(natureIds) };
+        const pre = slot(poke.id, { points: pts({ spe: truth.spe }), nature: truth.nature });
+        const post = slot(poke.id, { points: pts({ spe: truth.spe }), nature: truth.nature, activeMegaForm: mega.form, ability: mega.ability });
+        const mySlot = slot(pick(species).id, { points: pts({ spe: Math.floor(rnd() * 33) }), nature: pick(natureIds) });
+        const observations = [];
+        for (let k = 0; k < 6; k++) {
+          const conditions = randomConditions();
+          const isPost = k >= 3;
+          observations.push({ first: actualFirst(isPost ? post : pre, mySlot, conditions, flatStages), conditions, ...(isPost ? { megaForm: mega.form } : {}) });
+        }
+        const r = si.inferSpeed({ attacker: slot(poke.id), defender: mySlot, observations });
+        const preSpe = stat.computeRealStats(poke.baseStats, pre.points, pre.nature).spe;
+        const postSpe = stat.computeRealStats(mega.baseStats, post.points, post.nature).spe;
+        tried++;
+        if (r?.status !== "ok" || !within(r.spe, truth.spe)) fail(`스피드 메가 전→후: 진짜 값이 빠짐 ${mega.form} truth=${JSON.stringify(truth)} 상태=${r?.status}`);
+        else if (r.formViews.length !== 2 || !within(r.formViews[0].real.spe, preSpe) || !within(r.formViews[1].real.spe, postSpe)) fail(`메가 전·후 나란히(스피드): 폼별 진짜 실수치가 범위에 없음 ${mega.form} truth=${JSON.stringify(truth)}`);
+        const untagged = si.inferSpeed({ attacker: slot(poke.id), defender: mySlot, observations: observations.slice(0, 3), viewMegaForms: [mega.form] });
+        if (untagged?.formViews.length !== 2) fail("viewMegaForms가 있는데 폼별 표시가 안 만들어짐");
+        const plain = si.inferSpeed({ attacker: slot(poke.id), defender: mySlot, observations: observations.slice(0, 3) });
+        if (plain?.formViews.length !== 0) fail("메가 태그가 없는데 폼별 표시가 만들어짐");
+      }
+      console.log(`스피드 메가 전→후·폼별 표시 ${tried}건 통과`);
+    }
+
+    // 셸암즈는 물리/특수가 능력치로 정해져 방어·공격 역산 모두 지원하지 않는다(과거: 공격 역산에서 진짜 값이 빠졌음)
+    const shell = data.getMove("셸암즈");
+    if (!inf.inferenceUnsupportedReason(shell) || !ai.attackInferenceUnsupportedReason(shell)) fail("셸암즈가 역산 미지원으로 안 잡힘");
+
+    // 3.1 PR5-b) 성격 후보가 줄수록 스피드 하한이 올라간다 — 상대가 먼저(내 132 추월): 스피드↑ 0 / 무보정 10 / 스피드↓ 25
+    const idsByMult = (want) => data.NATURES.filter((n) => inf.natureMult("spe", n.increased, n.decreased) === want).map((n) => n.id);
+    const minFor = (ids) => si.inferSpeed({ ...base, observations: [{ first: "opponent", conditions: neutral }], natureIds: ids })?.spe?.min;
+    const mins = [minFor(idsByMult(1.1)), minFor(idsByMult(1)), minFor(idsByMult(0.9))];
+    if (mins.join() !== "0,10,25") fail(`스피드 하한이 성격 후보별로 다름: ${mins.join()} (기대 0,10,25)`);
+
+    // 방어·공격·스피드 세 쪽 결합 왕복 — 세 종류 관측을 진짜 배분으로 만들어 합쳐도 진짜 값이 남고, 각각보다 후보가 늘지 않는다
+    const cb3 = await server.ssrLoadModule("/src/lib/combinedInference.ts");
+    let tried3 = 0;
+    let ok3 = 0;
+    let speNarrowed = 0;
+    let maxMs3 = 0;
+    for (let t = 0; t < 300; t++) {
+      const v = () => Math.floor(rnd() * (rnd() < 0.5 ? 33 : 11));
+      const opp = pick(species);
+      const truth = { hp: v(), def: v(), spd: v(), atk: v(), spa: v(), spe: v(), nature: pick(natureIds) };
+      if (truth.hp + truth.def + truth.spd + truth.atk + truth.spa + truth.spe > 66) continue;
+      const oppTrue = slot(opp.id, { points: pts(truth), nature: truth.nature });
+      const mySlot = slot(pick(species).id, { points: pts({ hp: 32, atk: 32, spa: 32, spe: Math.floor(rnd() * 33), def: Math.floor(rnd() * 20), spd: Math.floor(rnd() * 20) }), nature: pick(natureIds) });
+      const myReal = stat.computeRealStats(form.getEffectiveForm(data.getPokemon(mySlot.pokemonId), mySlot).baseStats, mySlot.points, mySlot.nature);
+      const oppReal = stat.computeRealStats(form.getEffectiveForm(data.getPokemon(opp.id), oppTrue).baseStats, oppTrue.points, oppTrue.nature);
+      const dealt = [];
+      let oppHp = oppReal.hp;
+      for (const cat of ["physical", "special"]) {
+        const made = makeObservation(usable.filter((m) => m.category === cat), mySlot, oppTrue, oppReal, oppHp);
+        if (!made) continue;
+        dealt.push(made.observation);
+        oppHp -= made.damage;
+      }
+      const received = [];
+      let myHp = myReal.hp;
+      for (const cat of ["physical", "special"]) {
+        const obs = makeAttackObservation(attackMoves.filter((m) => m.category === cat), oppTrue, mySlot, myReal.hp, myHp);
+        if (!obs) continue;
+        received.push(obs);
+        myHp = obs.hpAfter;
+      }
+      if (dealt.length === 0 || received.length === 0) continue;
+      const speedObs = Array.from({ length: 4 }, () => {
+        const conditions = randomConditions();
+        return { first: actualFirst(oppTrue, mySlot, conditions, flatStages), conditions };
+      });
+      tried3++;
+      const defenseInput = { attacker: mySlot, defender: slot(opp.id), observations: dealt };
+      const attackInput = { attacker: slot(opp.id), defender: mySlot, observations: received };
+      const speedInput = { attacker: slot(opp.id), defender: mySlot, observations: speedObs };
+      const s0 = si.inferSpeed(speedInput);
+      const t0 = performance.now();
+      const c = cb3.inferCombined(defenseInput, attackInput, speedInput);
+      maxMs3 = Math.max(maxMs3, performance.now() - t0);
+      const inR = (r, v) => !r || (r.min <= v && v <= r.max);
+      const natName = data.NATURES.find((x) => x.id === truth.nature).name;
+      const good =
+        c.conflict === null && c.parts.length === 3 &&
+        inR(c.defense.hp, truth.hp) && inR(c.defense.def, truth.def) && inR(c.defense.spd, truth.spd) &&
+        inR(c.attack.atk, truth.atk) && inR(c.attack.spa, truth.spa) && inR(c.speed.spe, truth.spe) &&
+        c.natures?.some((n) => n.name === natName) && c.speed.feasible <= s0.feasible;
+      if (good) {
+        ok3++;
+        if (c.speed.feasible < s0.feasible) speNarrowed++;
+      } else fail(`3쪽 결합 왕복: 진짜 배분이 빠지거나 후보가 늘었음 opp=${opp.id} truth=${JSON.stringify(truth)} 충돌=${c.conflict}`);
+      // 방어+스피드·공격+스피드 두 쪽 결합도 같은 규칙 — 한쪽만 있으면 결합 없이 그대로
+      const cd = cb3.inferCombined(defenseInput, null, speedInput);
+      const ca = cb3.inferCombined(null, attackInput, speedInput);
+      const one = cb3.inferCombined(null, null, speedInput);
+      if (cd.conflict !== null || ca.conflict !== null || !inR(cd.speed.spe, truth.spe) || !inR(ca.speed.spe, truth.spe)) fail(`2쪽 결합(스피드)에서 진짜 값이 빠짐 opp=${opp.id}`);
+      if (one.natures !== null || one.budget !== null || one.parts.join() !== "speed") fail("스피드 한쪽만 있을 때 결합이 일어남");
+    }
+    console.log(`방어·공격·스피드 결합 왕복 ${ok3}/${tried3} 통과 · 스피드 후보가 줄어든 사례 ${speNarrowed}건 · 최대 ${maxMs3.toFixed(0)}ms`);
+    if (tried3 === 0) fail("3쪽 결합 왕복 시행이 0건");
+    if (maxMs3 > 5000) fail(`3쪽 결합이 너무 느림(${maxMs3.toFixed(0)}ms)`);
   }
 
   // 3) 모순 / 면역 ----------------------------------------------------------------------------
