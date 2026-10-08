@@ -39,6 +39,7 @@ try {
   const species = data.POKEMON.filter((p) => !p.formVariants && !p.sizeForms);
   const natureIds = data.NATURES.map((n) => n.id);
 
+  const within = (r, v) => !!r && r.min <= v && v <= r.max;
   const slot = (pokemonId, extra = {}) => ({ pokemonId, ability: null, item: null, nature: null, points: pts(), ...extra });
 
   // 1) 공식 대조 ------------------------------------------------------------------------------
@@ -237,6 +238,16 @@ try {
       const mixed = inf.inferDefense({ attacker: atk, defender: slot(poke.id), observations });
       if (mixed?.status === "ok" && mixed.hpDefGrid[truth.def * 33 + truth.hp] === 1) mixOk++;
       else fail(`메가 전→후 혼합: 진짜 배분이 빠짐 ${mega.form} truth=${JSON.stringify(truth)} 상태=${mixed?.status}`);
+      // 3.1 L1-b) 메가 전·후 나란히: 폼마다 그 폼의 종족값으로 환산한 진짜 실수치·내구 지수가 범위에 들어야 한다
+      const fv = mixed?.formViews ?? [];
+      const bulkPre = preReal.hp * preReal.def;
+      const bulkPost = postReal.hp * postReal.def;
+      if (
+        fv.length !== 2 || fv[0].form !== "" || fv[1].form !== mega.form ||
+        !within(fv[0].real.def, preReal.def) || !within(fv[1].real.def, postReal.def) ||
+        !within(fv[1].real.hp, postReal.hp) || fv[0].real.spd !== undefined ||
+        !within(fv[0].bulkPhysical?.support, bulkPre) || !within(fv[1].bulkPhysical?.support, bulkPost)
+      ) fail(`메가 전·후 나란히(방어): 폼별 진짜 실수치가 범위에 없음 ${mega.form} truth=${JSON.stringify(truth)} 폼=${fv.map((v) => v.form).join("|")}`);
       // 태그를 떼면(둘 다 메가 전으로 계산) 방어 종족값이 다른 경우 진짜 배분이 빠지거나 모순이 나야 한다 — 빠지는 사례가 하나라도 있어야 태그가 의미 있다
       const untagged = inf.inferDefense({ attacker: atk, defender: slot(poke.id), observations: observations.map((o) => ({ ...o, megaForm: undefined })) });
       if (untagged?.status !== "ok" || untagged.hpDefGrid[truth.def * 33 + truth.hp] !== 1) untaggedMissed++;
@@ -368,6 +379,13 @@ try {
       const mixed = ai.inferAttack({ attacker: slot(poke.id), defender: mySlot, observations });
       if (mixed?.status === "ok" && mixed.atk.min <= truth.atk && truth.atk <= mixed.atk.max) megaOk++;
       else fail(`공격 역산 메가 혼합: 진짜 값이 빠짐 ${mega.form} truth=${JSON.stringify(truth)} 상태=${mixed?.status}`);
+      // 3.1 L1-b) 메가 전·후 나란히: 폼별 종족값으로 환산한 진짜 공격 실수치가 범위에 있어야 한다
+      const fv = mixed?.formViews ?? [];
+      if (
+        fv.length !== 2 || fv[1].form !== mega.form ||
+        !within(fv[0].real.atk, stat.computeRealStats(poke.baseStats, pre.points, pre.nature).atk) ||
+        !within(fv[1].real.atk, stat.computeRealStats(mega.baseStats, post.points, post.nature).atk)
+      ) fail(`메가 전·후 나란히(공격): 폼별 진짜 실수치가 범위에 없음 ${mega.form} truth=${JSON.stringify(truth)}`);
       const untagged = ai.inferAttack({ attacker: slot(poke.id), defender: mySlot, observations: observations.map((o) => ({ ...o, megaForm: undefined })) });
       if (untagged?.status !== "ok" || untagged.atk.min > truth.atk || truth.atk > untagged.atk.max) untaggedMissed++;
     }
@@ -582,6 +600,38 @@ try {
     const bad = si.inferSpeed({ ...base, observations: [{ first: "me", conditions: { ...neutral, oppStage: 9 } }] });
     if (bad?.status !== "invalid" || !bad.observationErrors[0]?.includes("랭크")) fail("스피드 역산: 잘못된 랭크가 invalid로 안 잡힘");
     console.log(`스피드 역산 사례: 상대가 먼저 → 포인트 ${faster.spe.min}~${faster.spe.max} · 내가 먼저 → ${slower.spe.min}~${slower.spe.max} · 트릭룸 → ${trickFirst.spe.min}~${trickFirst.spe.max}`);
+
+    // 3.1 L1-b) 메가 전→후 스피드: 같은 포인트·성격으로 메가 전·후 선후공을 만들면 진짜 값이 남고, 폼별 실수치 범위에 폼별 진짜 실수치가 들어간다.
+    // 태그가 없어도 다른 쪽이 알려 준 메가폼(viewMegaForms)이 있으면 나란히 만든다.
+    {
+      const megaSpecies = species.filter((p) => p.megaEvolutions?.length);
+      let tried = 0;
+      for (let t = 0; t < 60; t++) {
+        const poke = pick(megaSpecies);
+        const mega = pick(poke.megaEvolutions);
+        const truth = { spe: Math.floor(rnd() * 33), nature: pick(natureIds) };
+        const pre = slot(poke.id, { points: pts({ spe: truth.spe }), nature: truth.nature });
+        const post = slot(poke.id, { points: pts({ spe: truth.spe }), nature: truth.nature, activeMegaForm: mega.form, ability: mega.ability });
+        const mySlot = slot(pick(species).id, { points: pts({ spe: Math.floor(rnd() * 33) }), nature: pick(natureIds) });
+        const observations = [];
+        for (let k = 0; k < 6; k++) {
+          const conditions = randomConditions();
+          const isPost = k >= 3;
+          observations.push({ first: actualFirst(isPost ? post : pre, mySlot, conditions, flatStages), conditions, ...(isPost ? { megaForm: mega.form } : {}) });
+        }
+        const r = si.inferSpeed({ attacker: slot(poke.id), defender: mySlot, observations });
+        const preSpe = stat.computeRealStats(poke.baseStats, pre.points, pre.nature).spe;
+        const postSpe = stat.computeRealStats(mega.baseStats, post.points, post.nature).spe;
+        tried++;
+        if (r?.status !== "ok" || !within(r.spe, truth.spe)) fail(`스피드 메가 전→후: 진짜 값이 빠짐 ${mega.form} truth=${JSON.stringify(truth)} 상태=${r?.status}`);
+        else if (r.formViews.length !== 2 || !within(r.formViews[0].real.spe, preSpe) || !within(r.formViews[1].real.spe, postSpe)) fail(`메가 전·후 나란히(스피드): 폼별 진짜 실수치가 범위에 없음 ${mega.form} truth=${JSON.stringify(truth)}`);
+        const untagged = si.inferSpeed({ attacker: slot(poke.id), defender: mySlot, observations: observations.slice(0, 3), viewMegaForms: [mega.form] });
+        if (untagged?.formViews.length !== 2) fail("viewMegaForms가 있는데 폼별 표시가 안 만들어짐");
+        const plain = si.inferSpeed({ attacker: slot(poke.id), defender: mySlot, observations: observations.slice(0, 3) });
+        if (plain?.formViews.length !== 0) fail("메가 태그가 없는데 폼별 표시가 만들어짐");
+      }
+      console.log(`스피드 메가 전→후·폼별 표시 ${tried}건 통과`);
+    }
 
     // 셸암즈는 물리/특수가 능력치로 정해져 방어·공격 역산 모두 지원하지 않는다(과거: 공격 역산에서 진짜 값이 빠졌음)
     const shell = data.getMove("셸암즈");

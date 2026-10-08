@@ -22,6 +22,7 @@ import {
   type InferenceObservation,
   type BulkEstimate,
   type CentralRange,
+  type FormView,
   type InferenceResult,
   type Range,
 } from "../lib/defenseInference";
@@ -433,6 +434,89 @@ function SpeedResultView({ result, rowNos, combinedOn }: { result: SpeedInferenc
   );
 }
 
+const FORM_STAT_ROWS = [
+  ["hp", "HP"],
+  ["def", "방어"],
+  ["spd", "특방"],
+  ["atk", "공격"],
+  ["spa", "특공"],
+  ["spe", "스피드"],
+] as const;
+
+/**
+ * 메가 전·후 비교(3.1 L1-b) — 방어·공격·스피드 결과의 폼별 표시값을 폼 하나당 한 열로 합친다.
+ * 메가진화는 포인트·성격이 그대로라, 같은 후보를 각 폼의 종족값으로 환산한 실수치다. 위쪽 각 결과의 실수치·내구 지수는 마지막 관측 폼 기준.
+ */
+function FormCompare({ views }: { views: FormView[][] }) {
+  const forms = new Map<string, FormView>();
+  for (const list of views) {
+    for (const v of list) {
+      const prev = forms.get(v.form);
+      forms.set(v.form, prev ? { ...prev, real: { ...prev.real, ...v.real }, bulkPhysical: prev.bulkPhysical ?? v.bulkPhysical, bulkSpecial: prev.bulkSpecial ?? v.bulkSpecial } : v);
+    }
+  }
+  const columns = [...forms.values()].sort((a, b) => Number(!!a.form) - Number(!!b.form));
+  if (columns.length < 2) return null;
+  const span = (min: number, max: number) => (min === max ? String(min) : `${min} ~ ${max}`);
+  const bulkCell = (b: FormView["bulkPhysical"]) =>
+    b ? (
+      <>
+        <strong>{b.central.median.toLocaleString()}</strong>
+        <span className="dinf-range-real">
+          {" "}
+          ({b.central.lo.toLocaleString()} ~ {b.central.hi.toLocaleString()})
+        </span>
+      </>
+    ) : (
+      "—"
+    );
+  const statRows = FORM_STAT_ROWS.filter(([key]) => columns.some((c) => c.real[key]));
+  const bulkRows = [
+    { label: "물리 내구 지수", pick: (c: FormView) => c.bulkPhysical },
+    { label: "특수 내구 지수", pick: (c: FormView) => c.bulkSpecial },
+  ].filter((r) => columns.some((c) => r.pick(c)));
+  return (
+    <div className="dinf-result">
+      <h4 className="dinf-subhead">메가 전·후 비교</h4>
+      <div className="dinf-form-scroll">
+        <table className="dinf-form-table">
+          <thead>
+            <tr>
+              <th scope="col" />
+              {columns.map((c) => (
+                <th key={c.form} scope="col">
+                  {c.label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {statRows.map(([key, label]) => (
+              <tr key={key}>
+                <th scope="row">{label} 실수치</th>
+                {columns.map((c) => (
+                  <td key={c.form}>{c.real[key] ? span(c.real[key].min, c.real[key].max) : "—"}</td>
+                ))}
+              </tr>
+            ))}
+            {bulkRows.map((r) => (
+              <tr key={r.label}>
+                <th scope="row">{r.label}</th>
+                {columns.map((c) => (
+                  <td key={c.form}>{bulkCell(r.pick(c))}</td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="dinf-note">
+        메가진화는 능력 포인트와 성격이 그대로라서, 같은 후보를 폼마다 그 폼의 종족값으로 환산했어요. 내구 지수는 가장 그럴듯한 80% 구간(괄호)과 중앙값이에요.
+      </p>
+    </div>
+  );
+}
+
 /** 선후공 줄 한 개의 조건 입력 — 접이식. 내 랭크·특성·도구는 내 카드, 날씨·필드는 위쪽 선택기 값을 쓴다 */
 function SpeedConditionsEditor({
   cond,
@@ -633,6 +717,8 @@ export function DefenseInferencePanel({
       if (index < 0) return prev;
       const oldAfter = prev[index].after;
       const next = prev.map((r) => (r.id === id ? { ...r, ...patch } : r));
+      // 메가진화는 되돌릴 수 없다(3.1 L1-a): 이 줄을 메가 후로 고르면 뒤의 모든 줄도 같은 메가 후 폼으로 맞춘다
+      if (patch.megaForm) for (let j = index + 1; j < next.length; j++) next[j] = { ...next[j], megaForm: patch.megaForm };
       // 다음 줄(같은 종류)의 "맞기 전 값"이 이 줄의 옛 "맞은 뒤 값"과 같았으면(직접 안 고친 값) 같이 따라간다
       if (patch.after !== undefined && index + 1 < next.length && next[index + 1].kind === next[index].kind && next[index + 1].before === oldAfter) {
         next[index + 1] = { ...next[index + 1], before: patch.after };
@@ -713,6 +799,10 @@ export function DefenseInferencePanel({
     return out;
   }, [rows, defender.pokemonId]);
 
+  // 어느 종류 줄에서든 쓰인 메가폼 — 세 역산 모두에 넘겨 메가 전·후 비교(3.1 L1-b)를 같은 폼 목록으로 만든다. 문자열 키로 만들어 값이 같으면 배열도 그대로 둔다
+  const megaKey = [...new Set(rows.map((r) => megaOf(r, megas)).filter(Boolean))].join("|");
+  const viewMegaForms = useMemo(() => (megaKey ? megaKey.split("|") : []), [megaKey]);
+
   const input = useMemo<InferenceInput | null>(() => {
     if (!attacker.pokemonId || !defender.pokemonId || complete.length === 0) return null;
     return {
@@ -733,8 +823,9 @@ export function DefenseInferencePanel({
       field: field ?? undefined,
       screen: screen || undefined,
       tolerance: tolerant ? 1 : 0,
+      viewMegaForms,
     };
-  }, [attacker, defender, complete, activeAbilityId, itemId, weather, field, screen, defStage, spdStage, tolerant]);
+  }, [attacker, defender, complete, activeAbilityId, itemId, weather, field, screen, defStage, spdStage, tolerant, viewMegaForms]);
 
   const anyMega = complete.some((c) => c.obs.megaForm);
   const rowIdsByObservation = complete.map((c) => rows.indexOf(c.row) + 1);
@@ -759,8 +850,9 @@ export function DefenseInferencePanel({
       weather: weather ?? undefined,
       field: field ?? undefined,
       screen: myScreen || undefined,
+      viewMegaForms,
     };
-  }, [attacker, defender, completeReceived, anyMegaReceived, activeAtkAbilityId, atkItemId, atkStage, spaStage, oppBurned, weather, field, myScreen]);
+  }, [attacker, defender, completeReceived, anyMegaReceived, activeAtkAbilityId, atkItemId, atkStage, spaStage, oppBurned, weather, field, myScreen, viewMegaForms]);
   // 상대 스피드 역산(3.1 C2-c) — 선후공 줄은 항상 완성(누가 먼저만 고르면 됨). 조건은 줄마다 다르다.
   const speedRows = useMemo(() => rows.filter((r) => r.kind === "speed"), [rows]);
   const speedAbilityOptions = defenderPokemon ? relevantAbilities(defenderPokemon, SPEED_ABILITY_CANDIDATES) : [];
@@ -786,8 +878,9 @@ export function DefenseInferencePanel({
       weather: weather ?? undefined,
       field: field ?? undefined,
       observations,
+      viewMegaForms,
     };
-  }, [attacker, defender, speedRows, weather, field]);
+  }, [attacker, defender, speedRows, weather, field, viewMegaForms]);
 
   // 계산이 무거울 수 있어(물리+특수 관측이 함께면 수십만 후보) 입력은 즉시 반영하고 결과만 뒤따라 그린다.
   // 방어·공격·스피드는 같이 계산해 성격을 공유하고 포인트 합계(66)를 따진다(3.1 C2-b·C2-c 결합).
@@ -1081,6 +1174,8 @@ export function DefenseInferencePanel({
             const message = rowMessage(row);
             const received = row.kind === "received";
             const speed = row.kind === "speed";
+            // 앞 줄 중 메가 후인 줄이 있으면 그 폼(메가진화는 되돌릴 수 없다 — 3.1 L1-a)
+            const lockedMega = rows.slice(0, index).map((r) => megaOf(r, megas)).find(Boolean) ?? "";
             const pickerOwner = received ? defenderPokemon : attackerPokemon;
             return (
               <li key={row.id} className="dinf-row">
@@ -1111,13 +1206,18 @@ export function DefenseInferencePanel({
                     aria-label={`관측 ${index + 1} 상대 폼`}
                     value={megaOf(row, megas)}
                     onChange={(e) => updateRow(row.id, { megaForm: e.target.value })}
+                    disabled={!!lockedMega}
+                    title={lockedMega ? "앞 줄에서 이미 메가진화했어요 (되돌릴 수 없어요)" : undefined}
                   >
-                    <option value="">메가 전</option>
-                    {megas.map((m) => (
-                      <option key={m.form} value={m.form}>
-                        {m.form.replace(/^.*?-/, "")}
-                      </option>
-                    ))}
+                    {/* 앞 줄에서 메가진화했으면 이 줄은 그 폼으로 고정 — 메가 전·다른 폼을 고를 수 없다 */}
+                    {!lockedMega && <option value="">메가 전</option>}
+                    {megas
+                      .filter((m) => !lockedMega || m.form === lockedMega)
+                      .map((m) => (
+                        <option key={m.form} value={m.form}>
+                          {m.form.replace(/^.*?-/, "")}
+                        </option>
+                      ))}
                   </select>
                 )}
                 {!speed && (
@@ -1204,6 +1304,7 @@ export function DefenseInferencePanel({
                 <SpeedResultView result={speedResult} rowNos={speedRowNos} combinedOn={combined.natures !== null} />
               </div>
             )}
+            <FormCompare views={[result, attackResult, speedResult].map((r) => r?.formViews ?? [])} />
             <CombinedView combined={combined} />
           </>
         )}
