@@ -2578,6 +2578,52 @@ try {
     const short = structuredClone(sampleOk);
     short.slots.pop();
     check("S2 없는 포켓몬·없는 기술·6마리가 아닌 샘플은 거름", !ms.isUsableSample(brokenMon) && !ms.isUsableSample(brokenMove) && !ms.isUsableSample(short));
+    // 3.2 V3: 내 샘플 내보내기·가져오기 — 파일은 믿을 수 없는 입력
+    const exported = (samples) => ms.exportMySamples(samples);
+    const all = ms.parseMySamples(exported(data.SAMPLE_PARTIES));
+    check(
+      "V3 기본 샘플 전부를 내보내 다시 읽으면 하나도 안 빠지고 내용이 같음",
+      all?.skipped === 0 &&
+        all.samples.length === data.SAMPLE_PARTIES.length &&
+        all.samples.every((x, i) => ms.sampleKey(x) === ms.sampleKey(data.SAMPLE_PARTIES[i]) && JSON.stringify(x.slots.map((t) => t.points)) === JSON.stringify(data.SAMPLE_PARTIES[i].slots.map((t) => t.points))),
+      `읽음=${all?.samples.length} 건너뜀=${all?.skipped}`,
+    );
+    check("V3 읽은 샘플에는 받은 id를 넘기지 않음", all.samples.every((x) => !("id" in x)));
+    check(
+      "V3 내보내기 파일이 아니면 null",
+      ms.parseMySamples("not json") === null && ms.parseMySamples("{}") === null && ms.parseMySamples("[]") === null && ms.parseMySamples(JSON.stringify({ kind: "other", samples: [] })) === null && ms.parseMySamples(JSON.stringify({ kind: "champions-my-samples", samples: "x" })) === null,
+    );
+    const mutate = (fn) => {
+      const c = structuredClone(sampleOk);
+      fn(c);
+      return c;
+    };
+    const bad = [
+      mutate((c) => (c.slots[0].pokemonId = "없는포켓몬")),
+      mutate((c) => (c.slots[0].moves[1] = "없는기술")),
+      mutate((c) => (c.slots[0].ability = "없는특성")),
+      mutate((c) => (c.slots[0].item = "없는도구")),
+      mutate((c) => (c.slots[0].nature = "없는성격")),
+      mutate((c) => (c.slots[0].points.atk = 33)),
+      mutate((c) => (c.slots[0].points.atk = 1.5)),
+      mutate((c) => (c.slots[0].points = { hp: 32, atk: 32, def: 32, spa: 0, spd: 0, spe: 0 })),
+      mutate((c) => (c.slots[0].points = null)),
+      mutate((c) => (c.slots[0].moves = ["a"])),
+      mutate((c) => (c.slots[0].gender = "x")),
+      mutate((c) => (c.slots[0].formVariant = 3)),
+      mutate((c) => c.slots.pop()),
+      mutate((c) => (c.slots[2] = null)),
+      mutate((c) => (c.group = "x")),
+      mutate((c) => (c.name = "  ")),
+      mutate((c) => (c.description = 5)),
+      null,
+      7,
+    ];
+    const mixed = ms.parseMySamples(exported([sampleOk, ...bad]));
+    check("V3 틀린 샘플은 건너뛰고 멀쩡한 샘플만 읽음", mixed?.samples.length === 1 && mixed.skipped === bad.length, `읽음=${mixed?.samples.length} 건너뜀=${mixed?.skipped}/${bad.length}`);
+    const trimmed = ms.parseMySamples(exported([mutate((c) => (c.name = "  이름  "))]));
+    check("V3 이름은 앞뒤 공백을 지움", trimmed?.samples[0]?.name === "이름");
+    check("V3 같은 샘플은 같은 열쇠, 이름·포켓몬·기술이 다르면 다른 열쇠", ms.sampleKey(sampleOk) === ms.sampleKey(structuredClone(sampleOk)) && ms.sampleKey(sampleOk) !== ms.sampleKey(brokenMove) && ms.sampleKey(sampleOk) !== ms.sampleKey({ ...sampleOk, name: "다른 이름" }));
   }
   // 상대가 나에게 데미지를 줄 수단이 없을 때(+Infinity 점수)
   {
