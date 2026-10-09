@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useState, type ChangeEvent } from "react";
 import { Modal } from "./Modal";
 import { PokemonAvatarWithItem } from "./PokemonAvatarWithItem";
 import { SAMPLE_PARTIES, getPokemon } from "../lib/data";
 import { eulReul } from "../lib/josa";
+import { MAX_IMPORT_BYTES, exportMySamples, parseMySamples } from "../lib/mySamples";
 import type { PartySlot, SamplePartyPreset } from "../types/party";
 import "./PresetListModal.css";
 import "./SamplePartiesModal.css";
@@ -36,6 +37,8 @@ interface SamplePartiesModalProps {
   currentSlots: (PartySlot | null)[];
   onSaveMySample: (fields: SampleFields, slots: PartySlot[]) => void;
   onDeleteMySample: (id: string) => void;
+  /** 가져온 샘플을 합치고 실제로 넣은 개수를 돌려준다(3.2 V3) */
+  onImportMySamples: (samples: Omit<SamplePartyPreset, "id">[]) => number;
 }
 
 /**
@@ -52,9 +55,11 @@ export function SamplePartiesModal({
   currentSlots,
   onSaveMySample,
   onDeleteMySample,
+  onImportMySamples,
 }: SamplePartiesModalProps) {
   const [filter, setFilter] = useState<GroupFilter>("all");
   const [query, setQuery] = useState("");
+  const [notice, setNotice] = useState("");
   const [draft, setDraft] = useState<SampleFields>({ name: "", style: "", group: "textbook", description: "" });
   const isMine = filter === "mine";
   const filledSlots = currentSlots.filter((slot): slot is PartySlot => slot !== null);
@@ -71,6 +76,34 @@ export function SamplePartiesModal({
     if (!canSave) return;
     onSaveMySample({ ...draft, name: draft.name.trim(), style: draft.style.trim(), description: draft.description.trim() }, filledSlots);
     setDraft({ name: "", style: "", group: draft.group, description: "" });
+  }
+
+  /** 내 샘플을 JSON 파일로 저장(브라우저 데이터를 지워도 남도록) */
+  function handleExport() {
+    const url = URL.createObjectURL(new Blob([exportMySamples(mySamples)], { type: "application/json" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `my-samples-${new Date().toISOString().slice(0, 10)}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function handleImport(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // 같은 파일을 다시 골라도 change가 오게
+    if (!file) return;
+    if (file.size > MAX_IMPORT_BYTES) return setNotice("파일이 너무 커요(1MB 이하만 가져와요).");
+    let text: string;
+    try {
+      text = await file.text();
+    } catch {
+      return setNotice("파일을 읽지 못했어요.");
+    }
+    const parsed = parseMySamples(text);
+    if (!parsed) return setNotice("내 샘플 내보내기 파일이 아니에요.");
+    const added = onImportMySamples(parsed.samples);
+    const duplicates = parsed.samples.length - added;
+    setNotice(`${added}개 가져왔어요${duplicates ? ` · 이미 있는 ${duplicates}개는 제외` : ""}${parsed.skipped ? ` · 형식이 맞지 않아 ${parsed.skipped}개 건너뜀` : ""}.`);
   }
 
   function handleLoad(sample: SamplePartyPreset) {
@@ -102,9 +135,22 @@ export function SamplePartiesModal({
       </div>
       <p className="sample-party-hint">
         {isMine
-          ? "내가 저장한 샘플이에요. 기본 샘플과 따로 이 브라우저에만 저장되고, 무작위 샘플에도 함께 뽑혀요."
+          ? "내가 저장한 샘플이에요. 기본 샘플과 따로 이 브라우저에만 저장되고(브라우저 데이터를 지우면 사라져요 — 내보내기로 백업하세요), 무작위 샘플에도 함께 뽑혀요."
           : "심화샘플은 자주 볼 법한 강한 조합, 기초샘플은 한 가지 전술을 순수하게 보여 주는 표본이에요. 불러와서 고쳐도 원본은 바뀌지 않아요."}
       </p>
+
+      {isMine && (
+        <div className="sample-party-backup">
+          <button type="button" onClick={handleExport} disabled={mySamples.length === 0}>
+            내보내기
+          </button>
+          <label>
+            가져오기
+            <input type="file" accept=".json,application/json" hidden onChange={handleImport} />
+          </label>
+          {notice && <span role="status">{notice}</span>}
+        </div>
+      )}
 
       {isMine && (
         <div className="sample-party-save">

@@ -750,7 +750,7 @@ try {
 
   // 4) 3.2 V2 저장 복원 — 깨진 저장본은 기본값, 사라진 id는 비우고, 정상 저장본은 그대로 돌아온다
   {
-    const { restoreInference } = await server.ssrLoadModule("/src/components/DefenseInferencePanel.tsx");
+    const { restoreInference } = await server.ssrLoadModule("/src/lib/inferenceDraft.ts");
     for (const bad of [undefined, null, 5, "x", [], { rows: "x" }, { rows: [null, 3, { kind: "zzz" }] }]) {
       const r = restoreInference(bad);
       if (r.rows.length !== 1 || r.rows[0].kind !== "dealt" || r.rows[0].before !== "100" || r.defStage !== 0 || r.screen !== "") fail(`깨진 저장본이 기본값이 아님: ${JSON.stringify(bad)}`);
