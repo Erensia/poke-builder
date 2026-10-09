@@ -1,4 +1,4 @@
-import { useDeferredValue, useMemo, useState, type ReactNode } from "react";
+import { useDeferredValue, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { MatchupSlot } from "../types/matchup";
 import type { MegaEvolution, Pokemon } from "../types/pokemon";
 import type { WeatherKind } from "../types/weather";
@@ -44,6 +44,7 @@ import {
   type SpeedObservation,
 } from "../lib/speedInference";
 import { computeRealStats, MAX_ABILITY_POINTS_PER_STAT } from "../lib/statCalculator";
+import { loadMatchupDraft, saveMatchupDraft } from "../lib/storage";
 import "./DefenseInferencePanel.css";
 
 type Screen = "reflect" | "lightScreen" | "auroraVeil";
@@ -66,6 +67,63 @@ interface ObservationRow {
   cond: SpeedConditions;
 }
 
+const SCREENS: readonly unknown[] = ["reflect", "lightScreen", "auroraVeil"] satisfies Screen[];
+const ROW_KINDS: readonly unknown[] = ["dealt", "received", "speed"] satisfies RowKind[];
+
+function firstRow(): ObservationRow {
+  return { id: 1, kind: "dealt", moveId: null, critical: false, before: "100", after: "", megaForm: "", first: "me", cond: NEUTRAL_SPEED_CONDITIONS };
+}
+
+/**
+ * 저장된 입력을 불러온다(3.2 V2) — 새로고침·탭 이동에도 관측이 남게. localStorage는 믿을 수 없는 입력이라
+ * 모양이 깨졌거나 데이터에서 사라진 id는 기본값으로 바꾼다. 줄 id는 1부터 다시 매긴다.
+ */
+export function restoreInference(raw: unknown) {
+  const d = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  const str = (v: unknown) => (typeof v === "string" ? v : "");
+  const stage = (v: unknown) => (Number.isInteger(v) && Math.abs(v as number) <= 6 ? (v as number) : 0);
+  const screenOf = (v: unknown): Screen | "" => (SCREENS.includes(v) ? (v as Screen) : "");
+  const idOf = (v: unknown, exists: (id: string) => unknown) => (typeof v === "string" && exists(v) ? v : "");
+  const rows = (Array.isArray(d.rows) ? d.rows : []).flatMap((item, index): ObservationRow[] => {
+    const r = (item && typeof item === "object" ? item : {}) as Record<string, unknown>;
+    if (!ROW_KINDS.includes(r.kind)) return [];
+    const c = (r.cond && typeof r.cond === "object" ? r.cond : {}) as Record<string, unknown>;
+    const cond: Record<string, unknown> = { ...NEUTRAL_SPEED_CONDITIONS };
+    for (const k of Object.keys(cond)) if (typeof c[k] === "boolean" && typeof cond[k] === "boolean") cond[k] = c[k];
+    cond.oppStage = stage(c.oppStage);
+    cond.oppItemId = idOf(c.oppItemId, getItem) || null;
+    cond.oppAbilityId = idOf(c.oppAbilityId, getAbility) || null;
+    return [
+      {
+        id: index + 1,
+        kind: r.kind as RowKind,
+        moveId: idOf(r.moveId, getMove) || null,
+        critical: r.critical === true,
+        before: str(r.before),
+        after: str(r.after),
+        megaForm: str(r.megaForm),
+        first: r.first === "opponent" ? "opponent" : "me",
+        cond: cond as unknown as SpeedConditions,
+      },
+    ];
+  });
+  return {
+    rows: rows.length > 0 ? rows : [firstRow()],
+    abilityId: idOf(d.abilityId, getAbility),
+    itemId: idOf(d.itemId, getItem),
+    screen: screenOf(d.screen),
+    defStage: stage(d.defStage),
+    spdStage: stage(d.spdStage),
+    tolerant: d.tolerant === true,
+    atkAbilityId: idOf(d.atkAbilityId, getAbility),
+    atkItemId: idOf(d.atkItemId, getItem),
+    atkStage: stage(d.atkStage),
+    spaStage: stage(d.spaStage),
+    oppBurned: d.oppBurned === true,
+    myScreen: screenOf(d.myScreen),
+  };
+}
+
 interface DefenderActions {
   onPickPokemon: () => void;
   onClear: () => void;
@@ -81,6 +139,8 @@ interface DefenseInferencePanelProps {
   defenderActions: DefenderActions;
   weather: WeatherKind | null;
   field: FieldKind | null;
+  /** 관측·가정 입력을 모두 지운다(저장본 포함) — 부모가 이 패널을 새로 띄운다 */
+  onReset: () => void;
 }
 
 const STAGE_OPTIONS = [-6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6];
@@ -698,25 +758,31 @@ export function DefenseInferencePanel({
   defenderActions,
   weather,
   field,
+  onReset,
 }: DefenseInferencePanelProps) {
-  const [rows, setRows] = useState<ObservationRow[]>([
-    { id: 1, kind: "dealt", moveId: null, critical: false, before: "100", after: "", megaForm: "", first: "me", cond: NEUTRAL_SPEED_CONDITIONS },
-  ]);
-  const [nextId, setNextId] = useState(2);
+  const [saved] = useState(() => restoreInference(loadMatchupDraft().inference));
+  const [rows, setRows] = useState<ObservationRow[]>(saved.rows);
+  const [nextId, setNextId] = useState(saved.rows.length + 1);
   const [movePickerRow, setMovePickerRow] = useState<number | null>(null);
-  const [abilityId, setAbilityId] = useState<string>("");
-  const [itemId, setItemId] = useState<string>("");
-  const [screen, setScreen] = useState<Screen | "">("");
-  const [defStage, setDefStage] = useState(0);
-  const [spdStage, setSpdStage] = useState(0);
-  const [tolerant, setTolerant] = useState(false);
+  const [abilityId, setAbilityId] = useState<string>(saved.abilityId);
+  const [itemId, setItemId] = useState<string>(saved.itemId);
+  const [screen, setScreen] = useState<Screen | "">(saved.screen);
+  const [defStage, setDefStage] = useState(saved.defStage);
+  const [spdStage, setSpdStage] = useState(saved.spdStage);
+  const [tolerant, setTolerant] = useState(saved.tolerant);
   // 내가 받은 데미지 관측용 가정(3.1 C2-b) — 상대 공격 보정 특성·도구, 상대 공격·특공 랭크, 상대 화상, 내 쪽 벽
-  const [atkAbilityId, setAtkAbilityId] = useState<string>("");
-  const [atkItemId, setAtkItemId] = useState<string>("");
-  const [atkStage, setAtkStage] = useState(0);
-  const [spaStage, setSpaStage] = useState(0);
-  const [oppBurned, setOppBurned] = useState(false);
-  const [myScreen, setMyScreen] = useState<Screen | "">("");
+  const [atkAbilityId, setAtkAbilityId] = useState<string>(saved.atkAbilityId);
+  const [atkItemId, setAtkItemId] = useState<string>(saved.atkItemId);
+  const [atkStage, setAtkStage] = useState(saved.atkStage);
+  const [spaStage, setSpaStage] = useState(saved.spaStage);
+  const [oppBurned, setOppBurned] = useState(saved.oppBurned);
+  const [myScreen, setMyScreen] = useState<Screen | "">(saved.myScreen);
+
+  useEffect(() => {
+    saveMatchupDraft({
+      inference: { rows, abilityId, itemId, screen, defStage, spdStage, tolerant, atkAbilityId, atkItemId, atkStage, spaStage, oppBurned, myScreen } satisfies ReturnType<typeof restoreInference>,
+    });
+  }, [rows, abilityId, itemId, screen, defStage, spdStage, tolerant, atkAbilityId, atkItemId, atkStage, spaStage, oppBurned, myScreen]);
 
   const attackerPokemon = attacker.pokemonId ? getPokemon(attacker.pokemonId) : undefined;
   const defenderPokemon = defender.pokemonId ? getPokemon(defender.pokemonId) : undefined;
@@ -1297,6 +1363,13 @@ export function DefenseInferencePanel({
         </ol>
         <button type="button" className="dinf-add" onClick={addRow}>
           + 관측 추가
+        </button>{" "}
+        <button
+          type="button"
+          className="dinf-add"
+          onClick={() => window.confirm("관측과 가정 입력을 모두 지울까요? (내 포켓몬·상대 포켓몬은 그대로예요)") && onReset()}
+        >
+          입력 지우기
         </button>
         <p className="dinf-note">
           내가 입힌 데미지는 관측 사이에 상대가 HP를 회복하지 않았다고 가정해요. 내가 받은 데미지는 맞은 직후 내 HP 수치를 넣어 주세요(먹다남은음식·독 같은 턴 종료 효과가

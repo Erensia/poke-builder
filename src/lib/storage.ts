@@ -180,3 +180,34 @@ export function loadMySamples(): SamplePartyPreset[] {
 export function saveMySamples(samples: SamplePartyPreset[]): void {
   mySamplesStore.save(samples);
 }
+
+/** 매치업 화면 자동저장(3.2 V2) — 새로고침해도 역산 관측이 안 날아가게. 파티·프리셋 키와 겹치지 않는 별도 키 */
+const MATCHUP_STORAGE_KEY = "champions-party-sim.matchup.v1";
+
+/**
+ * 저장 형태: 두 탭이 공유하는 슬롯·날씨·필드(useMatchup)와 역산 탭의 입력(inference — 형태·검증은 DefenseInferencePanel이 맡는다).
+ * 쓰는 쪽이 둘이라 save는 일부만 받아 합쳐 쓴다.
+ */
+export interface MatchupDraft {
+  version: 1;
+  attacker?: unknown;
+  defender?: unknown;
+  weather?: unknown;
+  field?: unknown;
+  trickRoom?: unknown;
+  inference?: unknown;
+}
+
+const matchupStore = createLocalStorageStore<MatchupDraft>(
+  MATCHUP_STORAGE_KEY,
+  (v): v is MatchupDraft => !!v && typeof v === "object" && (v as MatchupDraft).version === 1,
+  { version: 1 },
+);
+
+export function loadMatchupDraft(): MatchupDraft {
+  return matchupStore.load();
+}
+
+export function saveMatchupDraft(patch: Partial<MatchupDraft>): void {
+  matchupStore.save({ ...matchupStore.load(), ...patch, version: 1 });
+}
