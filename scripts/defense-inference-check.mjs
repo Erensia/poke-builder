@@ -747,6 +747,30 @@ try {
     if (immune?.status !== "invalid" || !immune.observationErrors[0]?.includes("효과가 없는")) fail("타입 면역 관측이 invalid로 안 잡힘");
     console.log(`모순 시나리오: ${contradiction?.status} · 면역 관측: ${immune?.status}`);
   }
+
+  // 4) 3.2 V2 저장 복원 — 깨진 저장본은 기본값, 사라진 id는 비우고, 정상 저장본은 그대로 돌아온다
+  {
+    const { restoreInference } = await server.ssrLoadModule("/src/components/DefenseInferencePanel.tsx");
+    for (const bad of [undefined, null, 5, "x", [], { rows: "x" }, { rows: [null, 3, { kind: "zzz" }] }]) {
+      const r = restoreInference(bad);
+      if (r.rows.length !== 1 || r.rows[0].kind !== "dealt" || r.rows[0].before !== "100" || r.defStage !== 0 || r.screen !== "") fail(`깨진 저장본이 기본값이 아님: ${JSON.stringify(bad)}`);
+    }
+    const good = {
+      rows: [
+        { id: 7, kind: "received", moveId: "지진", critical: true, before: "150", after: "90", megaForm: "", first: "me", cond: {} },
+        { id: 9, kind: "speed", moveId: null, critical: false, before: "", after: "", megaForm: "", first: "opponent", cond: { trickRoom: true, oppStage: 2, oppItemId: "구애스카프", oppAbilityId: "없는특성" } },
+      ],
+      abilityId: "없는특성", itemId: "구애스카프", screen: "reflect", defStage: -2, spdStage: 99, tolerant: true,
+      atkAbilityId: "", atkItemId: "", atkStage: 1, spaStage: 0, oppBurned: true, myScreen: "bogus",
+    };
+    const r = restoreInference(JSON.parse(JSON.stringify(good)));
+    const ok =
+      r.rows.length === 2 && r.rows[0].id === 1 && r.rows[1].id === 2 && r.rows[0].moveId === "지진" && r.rows[0].critical && r.rows[0].after === "90" &&
+      r.rows[1].first === "opponent" && r.rows[1].cond.trickRoom === true && r.rows[1].cond.oppStage === 2 && r.rows[1].cond.oppItemId === "구애스카프" && r.rows[1].cond.oppAbilityId === null &&
+      r.abilityId === "" && r.itemId === "구애스카프" && r.screen === "reflect" && r.defStage === -2 && r.spdStage === 0 && r.tolerant && r.atkStage === 1 && r.oppBurned && r.myScreen === "";
+    if (!ok) fail(`저장 복원 결과가 기대와 다름: ${JSON.stringify(r)}`);
+    console.log("저장 복원(깨진 입력 7종·정상 1종)", failed === 0 ? "통과" : "실패");
+  }
 } finally {
   await server.close();
 }

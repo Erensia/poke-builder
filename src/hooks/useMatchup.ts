@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { MatchupSlot, PowerConditionKey } from "../types/matchup";
 import type { AbilityPoints, PartySlot } from "../types/party";
 import type { BattleStatKey } from "../types/battleStats";
@@ -6,7 +6,8 @@ import type { WeatherKind } from "../types/weather";
 import type { FieldKind } from "../types/field";
 import { EMPTY_ABILITY_POINTS } from "../types/party";
 import { NEUTRAL_STAGES } from "../types/battleStats";
-import { getMove } from "../lib/data";
+import { getAbility, getItem, getMove, getPokemon } from "../lib/data";
+import { loadMatchupDraft, saveMatchupDraft } from "../lib/storage";
 import {
   applyItemToSlot,
   cycleFormOnSlot,
@@ -30,8 +31,21 @@ export const EMPTY_MATCHUP_SLOT: MatchupSlot = {
   stockpileCount: 3,
 };
 
-function useMatchupSlot() {
-  const [slot, setSlot] = useState<MatchupSlot>(EMPTY_MATCHUP_SLOT);
+/** 저장본 슬롯을 불러온다 — 데이터에서 사라진 포켓몬이면 빈 슬롯, 사라진 특성·도구·기술은 비운다(3.2 V2) */
+function restoreSlot(saved: unknown): MatchupSlot {
+  const s = saved as MatchupSlot | undefined;
+  if (!s || typeof s !== "object" || !s.pokemonId || !getPokemon(s.pokemonId)) return EMPTY_MATCHUP_SLOT;
+  return {
+    ...EMPTY_MATCHUP_SLOT,
+    ...s,
+    ability: s.ability && getAbility(s.ability) ? s.ability : null,
+    item: s.item && getItem(s.item) ? s.item : null,
+    moveId: s.moveId && getMove(s.moveId) ? s.moveId : null,
+  };
+}
+
+function useMatchupSlot(saved: unknown) {
+  const [slot, setSlot] = useState<MatchupSlot>(() => restoreSlot(saved));
 
   function setPokemon(pokemonId: string) {
     setSlot({ ...EMPTY_MATCHUP_SLOT, pokemonId });
@@ -208,13 +222,22 @@ function useMatchupSlot() {
   };
 }
 
+const WEATHERS: readonly unknown[] = ["쾌청", "비", "모래바람", "눈"] satisfies WeatherKind[];
+const FIELDS: readonly unknown[] = ["그래스필드", "미스트필드", "사이코필드", "일렉트릭필드"] satisfies FieldKind[];
+
 export function useMatchup() {
-  const attacker = useMatchupSlot();
-  const defender = useMatchupSlot();
-  const [weather, setWeather] = useState<WeatherKind | null>(null);
-  const [field, setField] = useState<FieldKind | null>(null);
+  const [saved] = useState(loadMatchupDraft);
+  const attacker = useMatchupSlot(saved.attacker);
+  const defender = useMatchupSlot(saved.defender);
+  const [weather, setWeather] = useState<WeatherKind | null>(WEATHERS.includes(saved.weather) ? (saved.weather as WeatherKind) : null);
+  const [field, setField] = useState<FieldKind | null>(FIELDS.includes(saved.field) ? (saved.field as FieldKind) : null);
   /** Phase 6.5 §2 — 트릭룸이 걸려 있다고 가정(스피드 비교 전용, 느린 쪽이 먼저 움직임) */
-  const [trickRoom, setTrickRoom] = useState(false);
+  const [trickRoom, setTrickRoom] = useState(saved.trickRoom === true);
+
+  // 3.2 V2: 두 탭이 공유하는 상태를 자동저장 — 역산 관측은 내 포켓몬·상대 종이 있어야 의미가 있어서 같이 복원한다
+  useEffect(() => {
+    saveMatchupDraft({ attacker: attacker.slot, defender: defender.slot, weather, field, trickRoom });
+  }, [attacker.slot, defender.slot, weather, field, trickRoom]);
 
   return { attacker, defender, weather, setWeather, field, setField, trickRoom, setTrickRoom };
 }
