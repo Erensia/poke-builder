@@ -10,6 +10,7 @@ import { getPokemon, getAbility, getItem } from "./data";
 import { getBerryDefenseResult, getItemBasePowerMultiplier, getItemFinalMultiplier, getItemOffenseMultiplier, getItemSpeedMultiplier } from "./itemEffects";
 import { getEffectiveForm, getEffectiveGender, type FormSource } from "./pokemonForm";
 import { computeRealStats } from "./statCalculator";
+import { computeStatusSpeedMultiplier } from "./statusConditions";
 import { getWeatherDamageMultiplier, getWeatherDefenseMultiplier, applyWeatherBall } from "./weatherEffects";
 import { applyFieldPulse, getFieldPowerMultiplier, getFieldDamageMultiplier } from "./fieldEffects";
 import { resolveMoveContext } from "./moveContext";
@@ -944,9 +945,9 @@ export interface SpeedMatchupOptions {
   /** 곡예(Unburden) 발동 후라고 가정 — 해당 측 스피드 2배 */
   attackerUnburden?: boolean;
   defenderUnburden?: boolean;
-  /** 마비 상태라고 가정 — 해당 측 스피드 0.5배(battleSimulator의 computeStatusSpeedMultiplier 미러) */
-  attackerParalyzed?: boolean;
-  defenderParalyzed?: boolean;
+  /** 상태이상이라고 가정 — 마비면 해당 측 스피드 0.5배, 속보 특성이면 어떤 상태이상이든 ×1.5(엔진 statusSpeedMultiplierOf 미러) */
+  attackerStatus?: StatusCondition | null;
+  defenderStatus?: StatusCondition | null;
   /** 순풍이 불고 있다고 가정 — 해당 측 스피드 2배(엔진 computeTurnOrderSpeed 미러, 3.1 C2-c 스피드 역산용) */
   attackerTailwind?: boolean;
   defenderTailwind?: boolean;
@@ -963,7 +964,7 @@ export interface SpeedMatchupOptions {
  * 양쪽 슬롯의 실효 스피드를 비교해 어느 쪽이 먼저 움직이는지 판정한다(Phase 6.5 §2).
  * battleSimulator의 runTurn 스피드 공식(realStats.spe × 도구배율 × 날씨특성배율 × 마비 0.5배 ×
  * 곡예 2배, 그 뒤 스피드 랭크 반영)을 그대로 미러한다. 마비·트릭룸은 매치업 페이지에 상태 개념이
- * 없어 "가정 토글"(options.attackerParalyzed 등)로만 들어온다. 선제공격손톱은 랜덤이라 반영하지 않는다.
+ * 없어 "가정 토글"(options.attackerStatus 등)로만 들어온다. 선제공격손톱은 랜덤이라 반영하지 않는다.
  * 포켓몬을 찾을 수 없으면 null.
  */
 export function evaluateSpeedMatchup(
@@ -979,8 +980,8 @@ export function evaluateSpeedMatchup(
     weather,
     attackerUnburden,
     defenderUnburden,
-    attackerParalyzed,
-    defenderParalyzed,
+    attackerStatus,
+    defenderStatus,
     attackerTailwind,
     defenderTailwind,
     field,
@@ -1001,7 +1002,7 @@ export function evaluateSpeedMatchup(
     pokemon: NonNullable<ReturnType<typeof getPokemon>>,
     stages: StatStages,
     unburden: boolean,
-    paralyzed: boolean,
+    status: StatusCondition | null,
     tailwind: boolean,
   ): number => {
     const form = getEffectiveForm(pokemon, slot);
@@ -1018,14 +1019,14 @@ export function evaluateSpeedMatchup(
       getItemSpeedMultiplier(item) *
       weatherSpeedMultiplier *
       fieldSpeedMultiplier *
-      (paralyzed ? 0.5 : 1) *
+      computeStatusSpeedMultiplier(status, ability?.speedMultiplierWhenStatused) *
       (unburden ? 2 : 1) *
       (tailwind ? 2 : 1);
     return computeEffectiveSpeed(base, stages);
   };
 
-  const attackerSpeed = speedOf(attackerSlot, attackerPokemon, attackerStages, !!attackerUnburden, !!attackerParalyzed, !!attackerTailwind);
-  const defenderSpeed = speedOf(defenderSlot, defenderPokemon, defenderStages, !!defenderUnburden, !!defenderParalyzed, !!defenderTailwind);
+  const attackerSpeed = speedOf(attackerSlot, attackerPokemon, attackerStages, !!attackerUnburden, attackerStatus ?? null, !!attackerTailwind);
+  const defenderSpeed = speedOf(defenderSlot, defenderPokemon, defenderStages, !!defenderUnburden, defenderStatus ?? null, !!defenderTailwind);
 
   // 시간벌기: 우선도가 같다는 전제에서 한쪽만 "항상 마지막"이면 스피드 무관하게 그쪽이 나중.
   const attackerStall = !!attackerAbility?.movesLastInPriorityBracket;

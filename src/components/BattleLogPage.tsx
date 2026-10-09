@@ -910,6 +910,7 @@ export function BattleLogPage() {
               currentSlots={SLOT_INDICES.map((i) => slotCtl(side, i).slot)}
               onSaveMySample={mySamples.addSample}
               onDeleteMySample={mySamples.removeSample}
+              onImportMySamples={mySamples.importSamples}
             />
           );
         })()}

@@ -531,7 +531,7 @@ try {
         { ...oppTrue, item: c.oppItemId, ability: c.oppAbilityId },
         mySlot,
         {
-          attackerParalyzed: c.oppParalyzed, defenderParalyzed: c.myParalyzed, attackerTailwind: c.oppTailwind, defenderTailwind: c.myTailwind,
+          attackerStatus: c.oppParalyzed ? "paralysis" : c.oppOtherStatus ? "burn" : null, defenderStatus: c.myParalyzed ? "paralysis" : c.myOtherStatus ? "burn" : null, attackerTailwind: c.oppTailwind, defenderTailwind: c.myTailwind,
           attackerUnburden: c.oppUnburden, trickRoom: c.trickRoom, attackerStages: { atk: 0, def: 0, spa: 0, spd: 0, spe: c.oppStage }, defenderStages: myStages,
         },
       );
@@ -600,6 +600,22 @@ try {
     const bad = si.inferSpeed({ ...base, observations: [{ first: "me", conditions: { ...neutral, oppStage: 9 } }] });
     if (bad?.status !== "invalid" || !bad.observationErrors[0]?.includes("랭크")) fail("스피드 역산: 잘못된 랭크가 invalid로 안 잡힘");
     console.log(`스피드 역산 사례: 상대가 먼저 → 포인트 ${faster.spe.min}~${faster.spe.max} · 내가 먼저 → ${slower.spe.min}~${slower.spe.max} · 트릭룸 → ${trickFirst.spe.min}~${trickFirst.spe.max}`);
+
+    // 3.2 V1) 속보: 상태이상이면 스피드 ×1.5(마비 반감 무시). 속보가 아니면 마비만 ×0.5, 화상은 영향 없음
+    {
+      const spd = (ability, status) =>
+        ev.evaluateSpeedMatchup(slot("쥬피썬더", { points: pts({ spe: 32 }), ability }), slot("망나뇽"), { attackerStatus: status }).attackerSpeed;
+      const plain = spd(null, null);
+      if (spd(null, "burn") !== plain || spd(null, "paralysis") !== Math.floor(plain * 0.5)) fail("선후공: 속보 아닐 때 상태이상 스피드 배율 이상");
+      if (spd("속보", null) !== plain || spd("속보", "burn") !== Math.floor(plain * 1.5) || spd("속보", "paralysis") !== spd("속보", "burn")) fail("선후공: 속보 ×1.5 이상");
+      // 역산: 내 쥬피썬더(스피드 182)를 상대(쥬피썬더)가 앞질렀다 — 속보 + 상태이상이면 ×1.5라 더 적은 포인트로도 가능하다
+      const jolt = { attacker: slot("쥬피썬더"), defender: slot("쥬피썬더", { points: pts({ spe: 32 }) }) };
+      const cond = { ...neutral, oppAbilityId: "속보" };
+      const calm = si.inferSpeed({ ...jolt, observations: [{ first: "opponent", conditions: cond }] });
+      const statused = si.inferSpeed({ ...jolt, observations: [{ first: "opponent", conditions: { ...cond, oppOtherStatus: true } }] });
+      if (calm?.status !== "ok" || statused?.status !== "ok" || statused.spe.min >= calm.spe.min) fail(`스피드 역산: 속보 상태이상이 하한을 낮추지 못함 ${JSON.stringify([calm?.spe, statused?.spe])}`);
+      else console.log(`속보 선후공: 스피드 ${plain} → 상태이상 ${spd("속보", "burn")} · 역산 "상대가 먼저" 포인트 하한 ${calm.spe.min} → ${statused.spe.min}`);
+    }
 
     // 3.1 L1-b) 메가 전→후 스피드: 같은 포인트·성격으로 메가 전·후 선후공을 만들면 진짜 값이 남고, 폼별 실수치 범위에 폼별 진짜 실수치가 들어간다.
     // 태그가 없어도 다른 쪽이 알려 준 메가폼(viewMegaForms)이 있으면 나란히 만든다.
@@ -730,6 +746,30 @@ try {
     });
     if (immune?.status !== "invalid" || !immune.observationErrors[0]?.includes("효과가 없는")) fail("타입 면역 관측이 invalid로 안 잡힘");
     console.log(`모순 시나리오: ${contradiction?.status} · 면역 관측: ${immune?.status}`);
+  }
+
+  // 4) 3.2 V2 저장 복원 — 깨진 저장본은 기본값, 사라진 id는 비우고, 정상 저장본은 그대로 돌아온다
+  {
+    const { restoreInference } = await server.ssrLoadModule("/src/lib/inferenceDraft.ts");
+    for (const bad of [undefined, null, 5, "x", [], { rows: "x" }, { rows: [null, 3, { kind: "zzz" }] }]) {
+      const r = restoreInference(bad);
+      if (r.rows.length !== 1 || r.rows[0].kind !== "dealt" || r.rows[0].before !== "100" || r.defStage !== 0 || r.screen !== "") fail(`깨진 저장본이 기본값이 아님: ${JSON.stringify(bad)}`);
+    }
+    const good = {
+      rows: [
+        { id: 7, kind: "received", moveId: "지진", critical: true, before: "150", after: "90", megaForm: "", first: "me", cond: {} },
+        { id: 9, kind: "speed", moveId: null, critical: false, before: "", after: "", megaForm: "", first: "opponent", cond: { trickRoom: true, oppStage: 2, oppItemId: "구애스카프", oppAbilityId: "없는특성" } },
+      ],
+      abilityId: "없는특성", itemId: "구애스카프", screen: "reflect", defStage: -2, spdStage: 99, tolerant: true,
+      atkAbilityId: "", atkItemId: "", atkStage: 1, spaStage: 0, oppBurned: true, myScreen: "bogus",
+    };
+    const r = restoreInference(JSON.parse(JSON.stringify(good)));
+    const ok =
+      r.rows.length === 2 && r.rows[0].id === 1 && r.rows[1].id === 2 && r.rows[0].moveId === "지진" && r.rows[0].critical && r.rows[0].after === "90" &&
+      r.rows[1].first === "opponent" && r.rows[1].cond.trickRoom === true && r.rows[1].cond.oppStage === 2 && r.rows[1].cond.oppItemId === "구애스카프" && r.rows[1].cond.oppAbilityId === null &&
+      r.abilityId === "" && r.itemId === "구애스카프" && r.screen === "reflect" && r.defStage === -2 && r.spdStage === 0 && r.tolerant && r.atkStage === 1 && r.oppBurned && r.myScreen === "";
+    if (!ok) fail(`저장 복원 결과가 기대와 다름: ${JSON.stringify(r)}`);
+    console.log("저장 복원(깨진 입력 7종·정상 1종)", failed === 0 ? "통과" : "실패");
   }
 } finally {
   await server.close();

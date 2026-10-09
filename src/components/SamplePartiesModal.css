@@ -101,3 +101,34 @@
   color: var(--text-muted);
   font-size: 0.72rem;
 }
+
+/* 내 샘플 백업(3.2 V3) — 내보내기/가져오기 */
+.sample-party-backup {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.7rem;
+}
+
+.sample-party-backup button,
+.sample-party-backup label {
+  font: inherit;
+  font-size: 0.78rem;
+  padding: 0.3rem 0.85rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.sample-party-backup button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.sample-party-backup span {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}

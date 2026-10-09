@@ -1,4 +1,4 @@
-import { useDeferredValue, useMemo, useState, type ReactNode } from "react";
+import { useDeferredValue, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { MatchupSlot } from "../types/matchup";
 import type { MegaEvolution, Pokemon } from "../types/pokemon";
 import type { WeatherKind } from "../types/weather";
@@ -44,27 +44,9 @@ import {
   type SpeedObservation,
 } from "../lib/speedInference";
 import { computeRealStats, MAX_ABILITY_POINTS_PER_STAT } from "../lib/statCalculator";
+import { loadMatchupDraft, saveMatchupDraft } from "../lib/storage";
+import { restoreInference, type ObservationRow, type RowKind, type Screen } from "../lib/inferenceDraft";
 import "./DefenseInferencePanel.css";
-
-type Screen = "reflect" | "lightScreen" | "auroraVeil";
-
-/** dealt = 내가 입힌 데미지(상대 HP %) → 상대 HP·방어 역산, received = 내가 받은 데미지(내 HP 수치) → 상대 공격 역산, speed = 선후공 → 상대 스피드 역산 */
-type RowKind = "dealt" | "received" | "speed";
-
-interface ObservationRow {
-  id: number;
-  kind: RowKind;
-  moveId: string | null;
-  critical: boolean;
-  before: string;
-  after: string;
-  /** 이 관측을 맞을 때 상대가 메가진화한 폼("" = 메가 전) */
-  megaForm: string;
-  /** 선후공 줄: 이번 턴 먼저 움직인 쪽 */
-  first: "me" | "opponent";
-  /** 선후공 줄: 이 관측의 조건(행마다 따로) */
-  cond: SpeedConditions;
-}
 
 interface DefenderActions {
   onPickPokemon: () => void;
@@ -81,6 +63,8 @@ interface DefenseInferencePanelProps {
   defenderActions: DefenderActions;
   weather: WeatherKind | null;
   field: FieldKind | null;
+  /** 관측·가정 입력을 모두 지운다(저장본 포함) — 부모가 이 패널을 새로 띄운다 */
+  onReset: () => void;
 }
 
 const STAGE_OPTIONS = [-6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6];
@@ -93,6 +77,8 @@ function describeConditions(c: SpeedConditions): string[] {
   if (c.oppTailwind) out.push("상대 순풍");
   if (c.myParalyzed) out.push("내 마비");
   if (c.oppParalyzed) out.push("상대 마비");
+  if (c.myOtherStatus) out.push("내 상태이상");
+  if (c.oppOtherStatus) out.push("상대 상태이상");
   if (c.oppStage !== 0) out.push(`상대 스피드 ${c.oppStage > 0 ? "+" : ""}${c.oppStage}랭크`);
   if (c.oppItemId) out.push(getItem(c.oppItemId)?.name ?? c.oppItemId);
   if (c.oppAbilityId) out.push(getAbility(c.oppAbilityId)?.name ?? c.oppAbilityId);
@@ -524,6 +510,7 @@ function SpeedConditionsEditor({
   abilityOptions,
   megaRow,
   itemDisabled,
+  myQuickFeet,
 }: {
   cond: SpeedConditions;
   onChange: (patch: Partial<SpeedConditions>) => void;
@@ -532,6 +519,8 @@ function SpeedConditionsEditor({
   megaRow: boolean;
   /** 메가 관측이 하나라도 있으면 메가스톤이라 속도 보정 도구를 쓸 수 없다 */
   itemDisabled: boolean;
+  /** 내 포켓몬 특성이 속보 — 마비 외 상태이상 체크를 보여 준다 */
+  myQuickFeet: boolean;
 }) {
   const active = describeConditions(cond);
   const checks: [keyof SpeedConditions, string][] = [
@@ -578,7 +567,7 @@ function SpeedConditionsEditor({
           상대 속도 보정 특성
           <select
             value={megaRow ? "" : (cond.oppAbilityId ?? "")}
-            onChange={(e) => onChange({ oppAbilityId: e.target.value || null, oppUnburden: false })}
+            onChange={(e) => onChange({ oppAbilityId: e.target.value || null, oppUnburden: false, oppOtherStatus: false })}
             disabled={megaRow}
           >
             <option value="">{megaRow ? "메가폼 특성 사용" : "모름 (보정 특성 없음으로 가정)"}</option>
@@ -590,6 +579,22 @@ function SpeedConditionsEditor({
           </select>
         </label>
       </div>
+      {(myQuickFeet || (cond.oppAbilityId === "속보" && !megaRow)) && (
+        <div className="dinf-speed-checks">
+          {myQuickFeet && (
+            <label className="dinf-crit">
+              <input type="checkbox" checked={cond.myOtherStatus} onChange={(e) => onChange({ myOtherStatus: e.target.checked })} />
+              내 상태이상 (속보 ×1.5)
+            </label>
+          )}
+          {cond.oppAbilityId === "속보" && !megaRow && (
+            <label className="dinf-crit">
+              <input type="checkbox" checked={cond.oppOtherStatus} onChange={(e) => onChange({ oppOtherStatus: e.target.checked })} />
+              상대 상태이상 (속보 ×1.5)
+            </label>
+          )}
+        </div>
+      )}
       {cond.oppAbilityId === "곡예" && !megaRow && (
         <label className="dinf-check">
           <input type="checkbox" checked={cond.oppUnburden} onChange={(e) => onChange({ oppUnburden: e.target.checked })} />
@@ -677,25 +682,31 @@ export function DefenseInferencePanel({
   defenderActions,
   weather,
   field,
+  onReset,
 }: DefenseInferencePanelProps) {
-  const [rows, setRows] = useState<ObservationRow[]>([
-    { id: 1, kind: "dealt", moveId: null, critical: false, before: "100", after: "", megaForm: "", first: "me", cond: NEUTRAL_SPEED_CONDITIONS },
-  ]);
-  const [nextId, setNextId] = useState(2);
+  const [saved] = useState(() => restoreInference(loadMatchupDraft().inference));
+  const [rows, setRows] = useState<ObservationRow[]>(saved.rows);
+  const [nextId, setNextId] = useState(saved.rows.length + 1);
   const [movePickerRow, setMovePickerRow] = useState<number | null>(null);
-  const [abilityId, setAbilityId] = useState<string>("");
-  const [itemId, setItemId] = useState<string>("");
-  const [screen, setScreen] = useState<Screen | "">("");
-  const [defStage, setDefStage] = useState(0);
-  const [spdStage, setSpdStage] = useState(0);
-  const [tolerant, setTolerant] = useState(false);
+  const [abilityId, setAbilityId] = useState<string>(saved.abilityId);
+  const [itemId, setItemId] = useState<string>(saved.itemId);
+  const [screen, setScreen] = useState<Screen | "">(saved.screen);
+  const [defStage, setDefStage] = useState(saved.defStage);
+  const [spdStage, setSpdStage] = useState(saved.spdStage);
+  const [tolerant, setTolerant] = useState(saved.tolerant);
   // 내가 받은 데미지 관측용 가정(3.1 C2-b) — 상대 공격 보정 특성·도구, 상대 공격·특공 랭크, 상대 화상, 내 쪽 벽
-  const [atkAbilityId, setAtkAbilityId] = useState<string>("");
-  const [atkItemId, setAtkItemId] = useState<string>("");
-  const [atkStage, setAtkStage] = useState(0);
-  const [spaStage, setSpaStage] = useState(0);
-  const [oppBurned, setOppBurned] = useState(false);
-  const [myScreen, setMyScreen] = useState<Screen | "">("");
+  const [atkAbilityId, setAtkAbilityId] = useState<string>(saved.atkAbilityId);
+  const [atkItemId, setAtkItemId] = useState<string>(saved.atkItemId);
+  const [atkStage, setAtkStage] = useState(saved.atkStage);
+  const [spaStage, setSpaStage] = useState(saved.spaStage);
+  const [oppBurned, setOppBurned] = useState(saved.oppBurned);
+  const [myScreen, setMyScreen] = useState<Screen | "">(saved.myScreen);
+
+  useEffect(() => {
+    saveMatchupDraft({
+      inference: { rows, abilityId, itemId, screen, defStage, spdStage, tolerant, atkAbilityId, atkItemId, atkStage, spaStage, oppBurned, myScreen } satisfies ReturnType<typeof restoreInference>,
+    });
+  }, [rows, abilityId, itemId, screen, defStage, spdStage, tolerant, atkAbilityId, atkItemId, atkStage, spaStage, oppBurned, myScreen]);
 
   const attackerPokemon = attacker.pokemonId ? getPokemon(attacker.pokemonId) : undefined;
   const defenderPokemon = defender.pokemonId ? getPokemon(defender.pokemonId) : undefined;
@@ -856,6 +867,7 @@ export function DefenseInferencePanel({
   // 상대 스피드 역산(3.1 C2-c) — 선후공 줄은 항상 완성(누가 먼저만 고르면 됨). 조건은 줄마다 다르다.
   const speedRows = useMemo(() => rows.filter((r) => r.kind === "speed"), [rows]);
   const speedAbilityOptions = defenderPokemon ? relevantAbilities(defenderPokemon, SPEED_ABILITY_CANDIDATES) : [];
+  const myQuickFeet = getAbility(attacker.ability ?? "")?.speedMultiplierWhenStatused !== undefined;
   const anyMegaSpeed = speedRows.some((r) => megaOf(r, megas));
   const speedInput = useMemo<SpeedInferenceInput | null>(() => {
     const opponent = defender.pokemonId ? getPokemon(defender.pokemonId) : undefined;
@@ -867,7 +879,13 @@ export function DefenseInferencePanel({
       return {
         first: r.first,
         megaForm: megaOf(r, opponent.megaEvolutions) || undefined,
-        conditions: { ...r.cond, oppAbilityId, oppUnburden: oppAbilityId === "곡예" && r.cond.oppUnburden },
+        conditions: {
+          ...r.cond,
+          oppAbilityId,
+          oppUnburden: oppAbilityId === "곡예" && r.cond.oppUnburden,
+          oppOtherStatus: oppAbilityId === "속보" && r.cond.oppOtherStatus,
+          myOtherStatus: myQuickFeet && r.cond.myOtherStatus,
+        },
       };
     });
     return {
@@ -880,7 +898,7 @@ export function DefenseInferencePanel({
       observations,
       viewMegaForms,
     };
-  }, [attacker, defender, speedRows, weather, field, viewMegaForms]);
+  }, [attacker, defender, speedRows, weather, field, viewMegaForms, myQuickFeet]);
 
   // 계산이 무거울 수 있어(물리+특수 관측이 함께면 수십만 후보) 입력은 즉시 반영하고 결과만 뒤따라 그린다.
   // 방어·공격·스피드는 같이 계산해 성격을 공유하고 포인트 합계(66)를 따진다(3.1 C2-b·C2-c 결합).
@@ -1260,6 +1278,7 @@ export function DefenseInferencePanel({
                     abilityOptions={speedAbilityOptions}
                     megaRow={!!megaOf(row, megas)}
                     itemDisabled={anyMegaSpeed}
+                    myQuickFeet={myQuickFeet}
                   />
                 )}
               </li>
@@ -1268,6 +1287,13 @@ export function DefenseInferencePanel({
         </ol>
         <button type="button" className="dinf-add" onClick={addRow}>
           + 관측 추가
+        </button>{" "}
+        <button
+          type="button"
+          className="dinf-add"
+          onClick={() => window.confirm("관측과 가정 입력을 모두 지울까요? (내 포켓몬·상대 포켓몬은 그대로예요)") && onReset()}
+        >
+          입력 지우기
         </button>
         <p className="dinf-note">
           내가 입힌 데미지는 관측 사이에 상대가 HP를 회복하지 않았다고 가정해요. 내가 받은 데미지는 맞은 직후 내 HP 수치를 넣어 주세요(먹다남은음식·독 같은 턴 종료 효과가

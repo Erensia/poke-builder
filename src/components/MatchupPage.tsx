@@ -17,6 +17,7 @@ import { CosmeticFormPickerModal } from "./CosmeticFormPickerModal";
 import { SlotPresetsModal } from "./SlotPresetsModal";
 import { useMatchup } from "../hooks/useMatchup";
 import { useSlotPresets } from "../hooks/useSlotPresets";
+import { saveMatchupDraft } from "../lib/storage";
 import { getPokemon, getMove, getAbility } from "../lib/data";
 import { getEffectiveForm } from "../lib/pokemonForm";
 import { computeRealStats } from "../lib/statCalculator";
@@ -47,6 +48,8 @@ export function MatchupPage() {
   const [picker, setPicker] = useState<PickerState>(null);
   // 2.1 C — 결정력 계산 / 상대 실능치 역산 탭. 두 탭이 같은 내 포켓몬·상대 종·날씨·필드 상태를 공유한다
   const [tab, setTab] = useState<"calc" | "inference">("calc");
+  // 역산 입력 지우기 — 키가 바뀌면 패널이 저장본 없이 새로 뜬다(3.2 V2)
+  const [inferenceResetKey, setInferenceResetKey] = useState(0);
 
   const sideOf = (side: Side) => (side === "attacker" ? attacker : defender);
 
@@ -186,8 +189,8 @@ export function MatchupPage() {
         weather: weather ?? undefined,
         attackerUnburden: attacker.slot.unburdenAssumed,
         defenderUnburden: defender.slot.unburdenAssumed,
-        attackerParalyzed: attacker.slot.statusAssumed === "paralysis",
-        defenderParalyzed: defender.slot.statusAssumed === "paralysis",
+        attackerStatus: attacker.slot.statusAssumed,
+        defenderStatus: defender.slot.statusAssumed,
         trickRoom,
         attackerStages: attacker.slot.stages,
         defenderStages: defender.slot.stages,
@@ -343,6 +346,11 @@ export function MatchupPage() {
 
       {tab === "inference" && (
         <DefenseInferencePanel
+          key={inferenceResetKey}
+          onReset={() => {
+            saveMatchupDraft({ inference: undefined });
+            setInferenceResetKey((k) => k + 1);
+          }}
           attacker={attacker.slot}
           defender={defender.slot}
           weather={weather}
