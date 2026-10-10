@@ -2633,6 +2633,46 @@ try {
     check("상대 공격 불가 상황 처리", d.action.kind === "move", d.scored.map((s) => s.score).join(","));
   }
 
+  // E1(3.3): 회복형 상대(블래키)가 변화기만 쓸 때 tb-snow의 교체 왕복 — 히스테리시스가 교체 수를 줄인다
+  {
+    const rt = await server.ssrLoadModule("/src/lib/battle/runTurn.ts");
+    const sw = await server.ssrLoadModule("/src/lib/battle/switching.ts");
+    const se = await server.ssrLoadModule("/src/lib/battle/ai/search.ts");
+    const presets = JSON.parse((await import("node:fs")).readFileSync(new URL("../src/data/samplePartyPresets.json", import.meta.url), "utf8"));
+    const snowAll = presets.find((p) => p.id === "tb-snow").slots.filter((s) => ["맘모꾸리", "툰베어", "글레이시아"].includes(s.pokemonId));
+    const blacky = mon("블래키", ["하품", "속임수", "바크아웃", "달빛"], null, "먹다남은음식", pts({ hp: 21, def: 10, spd: 25, spe: 10 }));
+    blacky.slot.nature = "차분";
+    const cycle = ["속임수", "달빛", "바크아웃", "하품", "달빛", "바크아웃"];
+    // 선봉 3가지 × 난수 2가지 = 6판의 12턴 안 자발적 교체 합
+    const switchesWith = (stalemateSwitchMargin) => {
+      let n = 0;
+      for (const lead of snowAll) {
+        const snow = [lead, ...snowAll.filter((s) => s !== lead)];
+        for (const seed of [7, 11]) {
+          let st = state.createBattleState({
+            a: { slots: [blacky.slot], movesList: [blacky.moves] },
+            b: { slots: snow, movesList: snow.map((s) => s.moves.filter(Boolean).map((m) => data.getMove(m))) },
+          });
+          const rng = (() => { let s = seed; return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 2 ** 32); })();
+          const decisionParams = { search: se.PRODUCT_SEARCH_PARAMS, opponentModel: dec.DEFAULT_OPPONENT_MODEL, stalemateSwitchMargin };
+          for (let t = 0; t < 12; t++) {
+            const b = ai.chooseAiAction(st, "b", 0.5, { decisionParams }).action;
+            if (b.kind === "switch") n++;
+            const out = rt.runTurn(st, { kind: "move", move: data.getMove(cycle[t % cycle.length]) }, b, rng);
+            if ("awaitingSelfSwitch" in out) break;
+            st = out.nextState;
+            if (out.result.winner) break;
+            if (out.forcedSwitch?.b) st = sw.applySwitch(st, "b", st.sideB.party.findIndex((f, i) => i !== st.sideB.activeIndex && f.currentHp > 0)).nextState;
+          }
+        }
+      }
+      return n;
+    };
+    const off = switchesWith(0);
+    const on = switchesWith(dec.DEFAULT_DECISION_PARAMS.stalemateSwitchMargin);
+    check("E1(3.3) 회복형 상대 앞 교체 왕복 감소", on < off, `억제 끔=${off} 켬=${on} (6판×12턴)`);
+  }
+
   console.table(rows);
   const failed = rows.filter((r) => !r.ok).length;
   console.log(failed === 0 ? "ALL PASS" : `${failed} FAILED`);
