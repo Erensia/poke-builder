@@ -1,3 +1,4 @@
+import { useSlotSwapDnd } from "../hooks/useSlotSwapDnd";
 import type { MatchupSlot, PowerConditionKey } from "../types/matchup";
 import type { Move } from "../types/move";
 import type { StatusCondition } from "../types/status";
@@ -42,6 +43,8 @@ const STATUS_OPTIONS: readonly (readonly [StatusCondition | null, string])[] = [
 
 interface MatchupSlotCardProps {
   role: "attacker" | "defender";
+  /** 반대쪽 카드를 이 카드 위에 놓았을 때 — 두 자리를 바꾼다(3.3 U1). 없으면 드래그 교체를 끈다(역산 탭) */
+  onSwapDrop?: () => void;
   label: string;
   slot: MatchupSlot;
   offensePower?: number | null;
@@ -115,6 +118,7 @@ interface MatchupSlotCardProps {
 
 export function MatchupSlotCard({
   role,
+  onSwapDrop,
   label,
   slot,
   offensePower,
@@ -158,6 +162,7 @@ export function MatchupSlotCard({
   onSetStockpileCount,
   onSetScreen,
 }: MatchupSlotCardProps) {
+  const { dropProps, dragProps, dragOverClass } = useSlotSwapDnd(role, onSwapDrop);
   const pokemon = slot.pokemonId ? getPokemon(slot.pokemonId) : undefined;
   // ver.1.9 가정 토글 — 관련 기술·특성을 골랐을 때만 보인다
   const ability = slot.ability ? getAbility(slot.ability) : undefined;
@@ -168,7 +173,7 @@ export function MatchupSlotCard({
 
   if (!pokemon) {
     return (
-      <div className="matchup-slot matchup-slot-empty">
+      <div className={`matchup-slot matchup-slot-empty${dragOverClass}`} {...dropProps}>
         <span className="matchup-slot-label">{label}</span>
         <button type="button" className="matchup-slot-empty-main" onClick={onPickPokemon}>
           <span className="matchup-slot-plus" aria-hidden="true">
@@ -192,13 +197,18 @@ export function MatchupSlotCard({
   const activeStageCount = Object.values(slot.stages).filter((v) => v !== 0).length;
 
   return (
-    <div className="matchup-slot matchup-slot-filled">
+    <div className={`matchup-slot matchup-slot-filled${dragOverClass}`} {...dropProps}>
       <span className="matchup-slot-label">{label}</span>
       <button type="button" className="matchup-slot-clear" onClick={onClearPokemon} aria-label="슬롯 비우기">
         ✕
       </button>
 
-      <button type="button" className="matchup-slot-main" onClick={onPickPokemon}>
+      <button
+        type="button"
+        className="matchup-slot-main"
+        onClick={onPickPokemon}
+        {...dragProps}
+      >
         <PokemonAvatarWithItem
           pokemon={pokemon}
           size={42}

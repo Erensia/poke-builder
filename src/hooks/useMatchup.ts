@@ -191,6 +191,7 @@ function useMatchupSlot(saved: unknown) {
 
   return {
     slot,
+    setSlot,
     setPokemon,
     clearPokemon,
     loadFromPartySlot,
@@ -239,5 +240,13 @@ export function useMatchup() {
     saveMatchupDraft({ attacker: attacker.slot, defender: defender.slot, weather, field, trickRoom });
   }, [attacker.slot, defender.slot, weather, field, trickRoom]);
 
-  return { attacker, defender, weather, setWeather, field, setField, trickRoom, setTrickRoom };
+  /** 내 포켓몬과 상대 포켓몬 자리를 서로 바꾼다(3.3 U1). 기술은 공격측 전용이라 비우고, 가정 토글은 포켓몬을 따라간다 */
+  function swapSides() {
+    const a = attacker.slot;
+    const d = defender.slot;
+    attacker.setSlot({ ...d, moveId: null, multiHitCount: undefined });
+    defender.setSlot({ ...a, moveId: null, multiHitCount: undefined });
+  }
+
+  return { attacker, defender, swapSides, weather, setWeather, field, setField, trickRoom, setTrickRoom };
 }
