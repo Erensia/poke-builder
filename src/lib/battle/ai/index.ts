@@ -11,6 +11,15 @@ import { withModelToggles } from "./modelToggles";
 import { paramsFor } from "./decision";
 import { DEFAULT_SEARCH_PARAMS, searchDecide, type SearchPolicy, type SearchResult } from "./search";
 
+/** 교착 교체 억제(ver.3.3 E1): 내 공격기가 전부 처치 불가(c=∞)면 교체 점수에서 마진을 뺀다 — 능력치 하락·랭크 초기화 이득만 보고 교체 왕복하는 것을 막는다. 지금 자리에서 확정 처치(1타)를 맞을 수 있으면 면제 */
+function applyStalemateMargin(options: AiOption[], margin: number): AiOption[] {
+  if (margin <= 0) return options;
+  const attacks = options.filter((o) => o.optionType === "move" && o.move?.category !== "status");
+  if (attacks.length === 0 || attacks.some((o) => Number.isFinite(o.hitsToKill.expected))) return options;
+  if (options.some((o) => o.optionType === "move" && o.hitsToBeKilled.worstCase.count === 1)) return options;
+  return options.map((o) => (o.optionType === "switch" ? { ...o, switchPenalty: margin } : o));
+}
+
 export { chooseAiSelection } from "./teamSelect";
 
 export type { AiOption } from "./evaluator";
@@ -89,6 +98,7 @@ export function chooseAiAction(
         : undefined;
       return withThreatOverride(override, () => {
         let evaluated = evaluateOptions(state, key, options);
+        evaluated = applyStalemateMargin(evaluated, params.stalemateSwitchMargin);
         if (dist) evaluated = attachSwitchRead(state, key, evaluated, dist, params.opponentModel!);
         if (!params.search) return decide(evaluated, riskAversion, params);
         const search = { ...DEFAULT_SEARCH_PARAMS, ...params.search };

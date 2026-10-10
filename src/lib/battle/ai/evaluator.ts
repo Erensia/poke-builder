@@ -210,6 +210,8 @@ export interface AiOption {
    * 숨어 있는데 내가 먼저 치는 공격이면 + 선공 확률(빗나감).
    */
   lostShift?: number;
+  /** 교체 교착 억제(ver.3.3 E1): 교착 상태에서 교체 선택지의 점수 감산(index.ts가 설정) */
+  switchPenalty?: number;
   /**
    * 교체 읽기(ver.2.0 1-B): 상대가 확률 q로 교체한다고 볼 때, 들어올 포켓몬(확률 weight)을 상대로 같은 기술을 쓴 평가(그 턴 상대는
    * 교체로 행동을 씀). 결정 레이어가 (1 − q) × 이 옵션 점수 + Σ weight × 대안 점수(lost −1)로 섞는다. 공격기에만 붙는다.
