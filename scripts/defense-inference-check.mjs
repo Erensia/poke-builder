@@ -664,12 +664,21 @@ try {
     let tried3 = 0;
     let ok3 = 0;
     let speNarrowed = 0;
+    let floorUsed = 0;
     let maxMs3 = 0;
     for (let t = 0; t < 300; t++) {
       const v = () => Math.floor(rnd() * (rnd() < 0.5 ? 33 : 11));
       const opp = pick(species);
       const truth = { hp: v(), def: v(), spd: v(), atk: v(), spa: v(), spe: v(), nature: pick(natureIds) };
       if (truth.hp + truth.def + truth.spd + truth.atk + truth.spa + truth.spe > 66) continue;
+      // 합계 66은 항상 다 쓴다(사용자 결정, 3.3 V5 포인트 하한) — 모자란 만큼 32 미만인 스탯에 무작위로 채운다
+      for (let left = 66 - (truth.hp + truth.def + truth.spd + truth.atk + truth.spa + truth.spe); left > 0; ) {
+        const k = pick(["hp", "def", "spd", "atk", "spa", "spe"]);
+        if (truth[k] < 32) {
+          truth[k]++;
+          left--;
+        }
+      }
       const oppTrue = slot(opp.id, { points: pts(truth), nature: truth.nature });
       const mySlot = slot(pick(species).id, { points: pts({ hp: 32, atk: 32, spa: 32, spe: Math.floor(rnd() * 33), def: Math.floor(rnd() * 20), spd: Math.floor(rnd() * 20) }), nature: pick(natureIds) });
       const myReal = stat.computeRealStats(form.getEffectiveForm(data.getPokemon(mySlot.pokemonId), mySlot).baseStats, mySlot.points, mySlot.nature);
@@ -710,6 +719,7 @@ try {
         inR(c.defense.hp, truth.hp) && inR(c.defense.def, truth.def) && inR(c.defense.spd, truth.spd) &&
         inR(c.attack.atk, truth.atk) && inR(c.attack.spa, truth.spa) && inR(c.speed.spe, truth.spe) &&
         c.natures?.some((n) => n.name === natName) && c.speed.feasible <= s0.feasible;
+      if (c.budget && (c.budget.defenseMin > 0 || c.budget.attackMin > 0 || c.budget.speedMin > 0)) floorUsed++;
       if (good) {
         ok3++;
         if (c.speed.feasible < s0.feasible) speNarrowed++;
@@ -721,7 +731,7 @@ try {
       if (cd.conflict !== null || ca.conflict !== null || !inR(cd.speed.spe, truth.spe) || !inR(ca.speed.spe, truth.spe)) fail(`2쪽 결합(스피드)에서 진짜 값이 빠짐 opp=${opp.id}`);
       if (one.natures !== null || one.budget !== null || one.parts.join() !== "speed") fail("스피드 한쪽만 있을 때 결합이 일어남");
     }
-    console.log(`방어·공격·스피드 결합 왕복 ${ok3}/${tried3} 통과 · 스피드 후보가 줄어든 사례 ${speNarrowed}건 · 최대 ${maxMs3.toFixed(0)}ms`);
+    console.log(`방어·공격·스피드 결합 왕복 ${ok3}/${tried3} 통과 · 스피드 후보가 줄어든 사례 ${speNarrowed}건 · 포인트 하한이 걸린 사례 ${floorUsed}건 · 최대 ${maxMs3.toFixed(0)}ms`);
     if (tried3 === 0) fail("3쪽 결합 왕복 시행이 0건");
     if (maxMs3 > 5000) fail(`3쪽 결합이 너무 느림(${maxMs3.toFixed(0)}ms)`);
   }

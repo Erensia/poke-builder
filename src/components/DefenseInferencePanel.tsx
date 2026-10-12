@@ -304,6 +304,9 @@ function ExtremeSummary({ result }: { result: InferenceResult }) {
   );
 }
 
+/** 포인트 합의 범위 문구 — 하한이 0이면 상한만(3.3 V5: 합계 66을 다 쓴다고 보아 하한이 생기기도 한다) */
+const rangeText = (min: number, max: number) => (min > 0 ? `${min}~${max}` : `${max} 이하`);
+
 /** 방어·공격·스피드 결합 결과(3.1 C2-b·C2-c) — 관측이 있는 쪽들이 합친 성격 후보와 반영한 포인트 상한, 서로 안 맞을 때의 안내 */
 function CombinedView({ combined }: { combined: CombinedInference }) {
   const names = combined.parts.map((p) => PART_LABELS[p]).join(" · ");
@@ -314,11 +317,11 @@ function CombinedView({ combined }: { combined: CombinedInference }) {
     return <p className="dinf-warn">{names} 쪽 관측이 요구하는 포인트를 더하면 합계 66을 넘어요. 급소·가정·메가·조건 선택을 확인해 보세요.</p>;
   }
   if (!combined.natures || !combined.budget) return null;
-  const { defenseMax, attackMax, speedMax } = combined.budget;
+  const { defenseMax, attackMax, speedMax, defenseMin, attackMin, speedMin } = combined.budget;
   const limits = [
-    defenseMax !== null && `HP+방어+특방은 ${defenseMax} 이하`,
-    attackMax !== null && `공격+특공은 ${attackMax} 이하`,
-    speedMax !== null && `스피드는 ${speedMax} 이하`,
+    defenseMax !== null && `HP+방어+특방은 ${rangeText(defenseMin, defenseMax)}`,
+    attackMax !== null && `공격+특공은 ${rangeText(attackMin, attackMax)}`,
+    speedMax !== null && `스피드는 ${rangeText(speedMin, speedMax)}`,
   ].filter(Boolean);
   return (
     <div className="dinf-result">
@@ -332,7 +335,7 @@ function CombinedView({ combined }: { combined: CombinedInference }) {
         ))}
       </div>
       <p className="dinf-note">
-        성격은 한 값이라 {names} 쪽에서 모두 가능한 성격만 남겼어요. 포인트 합계는 66을 넘을 수 없어서 {limits.join(", ")}로 따졌어요.
+        성격은 한 값이라 {names} 쪽에서 모두 가능한 성격만 남겼어요. 포인트 합계는 66을 다 쓴다고 보고 {limits.join(", ")}로 따졌어요.
         {combined.speed && " 스피드 하한은 남은 성격 후보를 모두 고려한 최솟값이라, 성격 후보가 줄수록 올라가 다른 쪽 상한을 더 낮춰요."}
       </p>
     </div>
