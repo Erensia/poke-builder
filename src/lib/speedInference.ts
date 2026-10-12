@@ -88,6 +88,8 @@ export interface SpeedInferenceInput {
   natureIds?: readonly string[];
   /** 스피드 포인트 상한 — 합계 66에서 다른 스탯의 최소를 뺀 값(포인트 예산). 생략하면 32 */
   maxPoints?: number;
+  /** 스피드 포인트 하한 — 합계 66을 다 쓴다는 전제에서 다른 쪽 최대치를 뺀 값(3.3 V5). 생략하면 0 */
+  minPoints?: number;
   /** 다른 쪽 관측(방어·공격)에 쓰인 메가폼 이름 — 이 쪽에 메가 태그가 없어도 메가 전·후를 나란히 보이려고 받는다(3.1 L1-b) */
   viewMegaForms?: readonly string[];
 }
@@ -232,7 +234,7 @@ function runCandidates(input: SpeedInferenceInput, prepared: PreparedObservation
     for (let p = 0; p <= MAX_ABILITY_POINTS_PER_STAT; p++) {
       total++;
       groups[c].total++;
-      if (p > maxPoints) continue;
+      if (p > maxPoints || p < (input.minPoints ?? 0)) continue;
       let likelihood = 1;
       for (const o of prepared) {
         likelihood *= o.fit(combo.repNatureId, p);

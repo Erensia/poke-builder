@@ -90,6 +90,8 @@ export interface AttackInferenceInput {
   natureIds?: readonly string[];
   /** 공격+특공 포인트 합의 상한 — 방어 쪽(HP+방어+특방)이 이미 쓴 최소 포인트를 뺀 값(포인트 예산). 생략하면 66 */
   maxPointsSum?: number;
+  /** 공격+특공 포인트 합의 하한(3.3 V5) — 합계 66을 다 쓴다는 전제에서 다른 쪽 최대치를 뺀 값. 관측하지 않은 쪽은 남는 포인트를 흡수할 수 있어 그만큼 낮춰 적용한다. 생략하면 0 */
+  minPointsSum?: number;
   /** 다른 쪽 관측(방어·스피드)에 쓰인 메가폼 이름 — 이 쪽에 메가 태그가 없어도 메가 전·후를 나란히 보이려고 받는다(3.1 L1-b) */
   viewMegaForms?: readonly string[];
 }
@@ -311,6 +313,7 @@ function runCandidates(input: AttackInferenceInput, prepared: PreparedObservatio
   const useSpa = prepared.some((o) => o.key === "spa");
   const combos = buildNatureCombos(useAtk, useSpa, input.natureIds ? new Set(input.natureIds) : undefined);
   const maxSum = Math.min(MAX_ABILITY_POINTS_TOTAL, input.maxPointsSum ?? MAX_ABILITY_POINTS_TOTAL);
+  const minSum = (input.minPointsSum ?? 0) - MAX_ABILITY_POINTS_PER_STAT * (Number(!useAtk) + Number(!useSpa));
   const groups: NatureGroup[] = combos.map((c) => ({ id: c.key, label: c.label, natureNames: c.natureNames, feasible: 0, total: 0, weight: 0 }));
   const pointRange = Array.from({ length: MAX_ABILITY_POINTS_PER_STAT + 1 }, (_, p) => p);
   const [atkRange, spaRange, realAtk, realSpa] = Array.from({ length: 4 }, emptyRange);
@@ -343,7 +346,7 @@ function runCandidates(input: AttackInferenceInput, prepared: PreparedObservatio
     atkCandidates.forEach((a, i) => {
       if (atkL[i] <= 0) return;
       spaCandidates.forEach((b, j) => {
-        if (spaL[j] <= 0 || a + b > maxSum) return;
+        if (spaL[j] <= 0 || a + b > maxSum || a + b < minSum) return;
         const w = atkL[i] * spaL[j];
         okPairs++;
         comboWeight += w;

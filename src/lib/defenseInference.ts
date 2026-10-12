@@ -70,6 +70,8 @@ export interface InferenceInput {
   natureIds?: readonly string[];
   /** HP+방어+특방 포인트 합의 상한 — 공격·특공 쪽에 이미 쓴 최소 포인트를 뺀 값(3.1 C2-b 포인트 예산). 생략하면 66 */
   maxPointsSum?: number;
+  /** HP+방어+특방 포인트 합의 하한 — 합계 66을 다 쓴다는 전제에서 다른 쪽이 최대로 쓸 수 있는 포인트를 뺀 값(3.3 V5). 관측하지 않은 방어·특방은 남는 포인트를 흡수할 수 있어 그만큼 낮춰 적용한다. 생략하면 0 */
+  minPointsSum?: number;
   /** 다른 쪽 관측(공격·스피드)에 쓰인 메가폼 이름 — 이 쪽에 메가 태그가 없어도 메가 전·후를 나란히 보이려고 받는다(3.1 L1-b) */
   viewMegaForms?: readonly string[];
 }
@@ -436,14 +438,14 @@ export class WeightedValues {
 const realStat = (natureMult: number, baseStat: number, points: number): number => Math.floor((baseStat + 20 + points) * natureMult);
 
 /** HP·방어·특방 포인트 배분 후보 [hp, def, spd] — 합계 maxSum(기본 66) 이하, 관측이 없는 쪽 스탯은 0 고정 */
-function enumerateAllocations(useDef: boolean, useSpd: boolean, maxSum: number): [number, number, number][] {
+function enumerateAllocations(useDef: boolean, useSpd: boolean, maxSum: number, minSum = 0): [number, number, number][] {
   const out: [number, number, number][] = [];
   const maxDef = useDef ? MAX_ABILITY_POINTS_PER_STAT : 0;
   const maxSpd = useSpd ? MAX_ABILITY_POINTS_PER_STAT : 0;
   for (let hp = 0; hp <= MAX_ABILITY_POINTS_PER_STAT; hp++) {
     for (let def = 0; def <= maxDef; def++) {
       for (let spd = 0; spd <= maxSpd; spd++) {
-        if (hp + def + spd <= maxSum) out.push([hp, def, spd]);
+        if (hp + def + spd <= maxSum && hp + def + spd >= minSum) out.push([hp, def, spd]);
       }
     }
   }
@@ -547,7 +549,12 @@ function runCandidates(input: InferenceInput, prepared: PreparedObservation[], d
     }
   };
 
-  for (const [hpP, defP, spdP] of enumerateAllocations(useDef, useSpd, Math.min(MAX_ABILITY_POINTS_TOTAL, input.maxPointsSum ?? MAX_ABILITY_POINTS_TOTAL))) {
+  for (const [hpP, defP, spdP] of enumerateAllocations(
+    useDef,
+    useSpd,
+    Math.min(MAX_ABILITY_POINTS_TOTAL, input.maxPointsSum ?? MAX_ABILITY_POINTS_TOTAL),
+    (input.minPointsSum ?? 0) - MAX_ABILITY_POINTS_PER_STAT * (Number(!useDef) + Number(!useSpd)),
+  )) {
     const maxHp = Math.floor(base.hp + 75 + hpP);
     for (let c = 0; c < combos.length; c++) {
       const combo = combos[c];
