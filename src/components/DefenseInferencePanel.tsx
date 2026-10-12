@@ -19,6 +19,7 @@ import {
   countExtremeCells,
   isExtremePoints,
   inferenceUnsupportedReason,
+  multiHitRange,
   type InferenceInput,
   type InferenceObservation,
   type BulkEstimate,
@@ -92,6 +93,9 @@ function describeConditions(c: SpeedConditions): string[] {
 const PART_LABELS = { defense: "내가 입힌 데미지(방어)", attack: "내가 받은 데미지(공격)", speed: "선후공(스피드)" } as const;
 
 /** 줄에 고른 메가폼이 이 종에 실제로 있는 폼이면 그 이름, 아니면 메가 전("") */
+/** 줄에 고른 다단히트 타수(3.3 V4) — 안 골랐으면 undefined(타수가 정해진 기술은 계산 쪽에서 채운다) */
+const hitsOf = (row: ObservationRow) => (row.hits ? Number(row.hits) : undefined);
+
 function megaOf(row: ObservationRow, megas: MegaEvolution[] | undefined): string {
   return megas?.find((m) => m.form === row.megaForm)?.form ?? "";
 }
@@ -759,6 +763,7 @@ export function DefenseInferencePanel({
         kind: last?.kind ?? "dealt",
         moveId: null,
         critical: false,
+        hits: "",
         before: last?.kind === "speed" ? "" : (last?.after ?? "100"),
         after: "",
         megaForm: last ? megaOf(last, megas) : "",
@@ -774,6 +779,7 @@ export function DefenseInferencePanel({
     updateRow(id, {
       kind,
       moveId: null,
+      hits: "",
       before: kind === "received" ? String(myMaxHp ?? "") : kind === "speed" ? "" : "100",
       after: "",
       cond: lastSpeedCond(),
@@ -797,7 +803,7 @@ export function DefenseInferencePanel({
       const move = row.moveId ? getMove(row.moveId) : undefined;
       const before = parsePercent(row.before);
       const after = parsePercent(row.after);
-      if (move && before !== null && after !== null) out.push({ row, obs: { move, critical: row.critical, before, after, megaForm: megaOf(row, defenderMegas) || undefined } });
+      if (move && before !== null && after !== null) out.push({ row, obs: { move, critical: row.critical, before, after, hits: hitsOf(row), megaForm: megaOf(row, defenderMegas) || undefined } });
     }
     return out;
   }, [rows, defender.pokemonId]);
@@ -812,7 +818,7 @@ export function DefenseInferencePanel({
       const hpBefore = parseHp(row.before);
       const hpAfter = parseHp(row.after);
       if (move && hpBefore !== null && hpAfter !== null) {
-        out.push({ row, obs: { move, critical: row.critical, hpBefore, hpAfter, megaForm: megaOf(row, opponentMegas) || undefined } });
+        out.push({ row, obs: { move, critical: row.critical, hpBefore, hpAfter, hits: hitsOf(row), megaForm: megaOf(row, opponentMegas) || undefined } });
       }
     }
     return out;
@@ -1227,6 +1233,20 @@ export function DefenseInferencePanel({
                     {move ? move.name : received ? "상대 기술 선택" : "기술 선택"}
                   </button>
                 )}
+                {(() => {
+                  const range = move && !speed ? multiHitRange(move) : null;
+                  if (!range || range.min === range.max) return null;
+                  return (
+                    <select aria-label={`관측 ${index + 1} 맞은 타수`} value={row.hits} onChange={(e) => updateRow(row.id, { hits: e.target.value })}>
+                      <option value="">타수</option>
+                      {Array.from({ length: range.max - range.min + 1 }, (_, k) => range.min + k).map((n) => (
+                        <option key={n} value={n}>
+                          {n}타
+                        </option>
+                      ))}
+                    </select>
+                  );
+                })()}
                 {megas && megas.length > 0 && (
                   <select
                     aria-label={`관측 ${index + 1} 상대 폼`}
@@ -1373,11 +1393,11 @@ export function DefenseInferencePanel({
               currentMoveIds={[pickerRow?.moveId ?? null]}
               onClose={() => setMovePickerRow(null)}
               onSelect={(moveId) => {
-                updateRow(movePickerRow, { moveId });
+                updateRow(movePickerRow, { moveId, hits: "" });
                 setMovePickerRow(null);
               }}
               onClear={() => {
-                updateRow(movePickerRow, { moveId: null });
+                updateRow(movePickerRow, { moveId: null, hits: "" });
                 setMovePickerRow(null);
               }}
             />

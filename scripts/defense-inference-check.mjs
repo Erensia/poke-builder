@@ -35,7 +35,7 @@ try {
   const pick = (arr) => arr[Math.floor(rnd() * arr.length)];
   const pts = (o = {}) => ({ hp: 0, atk: 0, def: 0, spa: 0, spd: 0, spe: 0, ...o });
 
-  const usable = data.MOVES.filter((m) => inf.inferenceUnsupportedReason(m) === null && m.power !== null && m.power > 0);
+  const usable = data.MOVES.filter((m) => inf.inferenceUnsupportedReason(m) === null && !inf.multiHitRange(m) && m.power !== null && m.power > 0);
   const species = data.POKEMON.filter((p) => !p.formVariants && !p.sizeForms);
   const natureIds = data.NATURES.map((n) => n.id);
 
@@ -262,7 +262,7 @@ try {
   // 3.1 C2-b) 공격 역산 왕복 — 진짜 공격 배분(포인트·성격)으로 "받은 데미지" 관측을 만들어 넣으면 진짜 값이 후보에 남는지.
   // 내 포켓몬(방어자)은 능력을 전부 아는 쪽, 상대 공격(특공) 포인트·성격을 역산한다.
   const ai = await server.ssrLoadModule("/src/lib/attackInference.ts");
-  const attackMoves = data.MOVES.filter((m) => ai.attackInferenceUnsupportedReason(m) === null && m.power !== null && m.power > 0);
+  const attackMoves = data.MOVES.filter((m) => ai.attackInferenceUnsupportedReason(m) === null && !inf.multiHitRange(m) && m.power !== null && m.power > 0);
   // 진짜 상대(oppTrue)가 내 포켓몬(mySlot)에게 실제로 입힐 데미지로 관측 하나를 만든다. 내 HP가 남지 않는 공격은 제외
   const makeAttackObservation = (cands, oppTrue, mySlot, maxHp, hp) => {
     for (let tries = 0; tries < 20; tries++) {
@@ -658,6 +658,67 @@ try {
     const minFor = (ids) => si.inferSpeed({ ...base, observations: [{ first: "opponent", conditions: neutral }], natureIds: ids })?.spe?.min;
     const mins = [minFor(idsByMult(1.1)), minFor(idsByMult(1)), minFor(idsByMult(0.9))];
     if (mins.join() !== "0,10,25") fail(`스피드 하한이 성격 후보별로 다름: ${mins.join()} (기대 0,10,25)`);
+
+    // 다단히트 왕복(3.3 V4) — 타마다 독립 난수로 만든 총 데미지를 관측으로 넣어도 진짜 배분이 남는다(방어·공격 둘 다)
+    {
+      const multi = data.MOVES.filter((m) => inf.multiHitRange(m) && ai.attackInferenceUnsupportedReason(m) === null);
+      // 엔진처럼 타마다 난수를 따로 굴린 총 데미지
+      const rollTotal = (parts, defStat) =>
+        parts.hitPowers.reduce((sum, power, i) => sum + fm.integerHitDamage(parts, power, defStat, (85 + Math.floor(rnd() * 16)) / 100, i === 0, parts.firstHitFinalMultiplier ?? 1), 0);
+      const counts = { triedDef: 0, okDef: 0, okAtk: 0, noHits: 0, maxMs: 0 };
+      // 방어 역산: 내가 입힌 다단히트의 %
+      const checkDealt = (c) => {
+        const res = ev.evaluateSlotMatchup(c.mySlot, c.move, c.oppTrue, { multiHitCount: c.hits, skipVerdict: true });
+        if (!res?.damageParts || res.damageParts.typeEffectiveness === 0) return;
+        const oppReal = stat.computeRealStats(form.getEffectiveForm(data.getPokemon(c.opp.id), c.oppTrue).baseStats, c.oppTrue.points, c.oppTrue.nature);
+        const dmg = rollTotal(res.damageParts, res.defenseStat);
+        if (dmg >= oppReal.hp) return;
+        counts.triedDef++;
+        const t0 = performance.now();
+        const obs = { move: c.move, critical: false, before: 100, after: inf.displayPercent(oppReal.hp - dmg, oppReal.hp), hits: c.hits };
+        const r = inf.inferDefense({ attacker: c.mySlot, defender: slot(c.opp.id), observations: [obs] }, false);
+        counts.maxMs = Math.max(counts.maxMs, performance.now() - t0);
+        const defKey = res.damageParts.defenseKey;
+        if (r.status === "ok" && within(r.hp, c.truth.hp) && within(r[defKey], c.truth[defKey])) counts.okDef++;
+        else fail(`다단히트 방어 역산 왕복에서 진짜 배분이 빠짐: ${c.move.id} ${c.hits}타 opp=${c.opp.id} truth=${JSON.stringify(c.truth)} status=${r.status}`);
+        if (c.range.min === c.range.max) return;
+        const none = inf.inferDefense({ attacker: c.mySlot, defender: slot(c.opp.id), observations: [{ ...obs, hits: undefined }] }, false);
+        if (none.observationErrors[0] === null) fail(`타수 없는 다단히트가 오류가 아님: ${c.move.id}`);
+        else counts.noHits++;
+      };
+      // 공격 역산: 상대가 쓴 다단히트로 내가 입은 정확한 데미지
+      const checkReceived = (c) => {
+        const myReal = stat.computeRealStats(form.getEffectiveForm(data.getPokemon(c.mySlot.pokemonId), c.mySlot).baseStats, c.mySlot.points, c.mySlot.nature);
+        const res = ev.evaluateSlotMatchup(c.oppTrue, c.move, c.mySlot, { multiHitCount: c.hits, defenderHpIsFull: true, skipVerdict: true });
+        if (!res?.damageParts || res.damageParts.typeEffectiveness === 0) return;
+        const dmg = rollTotal(res.damageParts, res.defenseStat);
+        if (dmg >= myReal.hp) return;
+        const obs = { move: c.move, critical: false, hpBefore: myReal.hp, hpAfter: myReal.hp - dmg, hits: c.hits };
+        const r = ai.inferAttack({ attacker: slot(c.opp.id), defender: c.mySlot, observations: [obs] }, false);
+        const key = c.move.category === "special" ? "spa" : "atk";
+        if (r.status === "ok" && within(r[key], c.truth[key])) counts.okAtk++;
+        else fail(`다단히트 공격 역산 왕복에서 진짜 값이 빠짐: ${c.move.id} ${c.hits}타 opp=${c.opp.id} truth=${JSON.stringify(c.truth)} status=${r.status}`);
+      };
+      for (let t = 0; t < 120; t++) {
+        const move = pick(multi);
+        const range = inf.multiHitRange(move);
+        const opp = pick(species);
+        const truth = { hp: Math.floor(rnd() * 33), def: Math.floor(rnd() * 33), spd: Math.floor(rnd() * 33), atk: Math.floor(rnd() * 33), spa: Math.floor(rnd() * 33), nature: pick(natureIds) };
+        const c = {
+          move,
+          range,
+          hits: range.min + Math.floor(rnd() * (range.max - range.min + 1)),
+          opp,
+          truth,
+          oppTrue: slot(opp.id, { points: pts(truth), nature: truth.nature }),
+          mySlot: slot(pick(species).id, { points: pts({ hp: 32, atk: 32, spa: 32, spe: 10, def: 10, spd: 10 }), nature: pick(natureIds) }),
+        };
+        checkDealt(c);
+        checkReceived(c);
+      }
+      console.log(`다단히트 왕복 방어 ${counts.okDef}/${counts.triedDef} · 공격 ${counts.okAtk}건 통과 · 타수 누락 오류 ${counts.noHits}건 · 방어 계산 최대 ${counts.maxMs.toFixed(0)}ms`);
+      if (counts.triedDef === 0) fail("다단히트 왕복 시행이 0건");
+    }
 
     // 방어·공격·스피드 세 쪽 결합 왕복 — 세 종류 관측을 진짜 배분으로 만들어 합쳐도 진짜 값이 남고, 각각보다 후보가 늘지 않는다
     const cb3 = await server.ssrLoadModule("/src/lib/combinedInference.ts");

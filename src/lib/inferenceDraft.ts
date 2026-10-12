@@ -13,6 +13,8 @@ export interface ObservationRow {
   kind: RowKind;
   moveId: string | null;
   critical: boolean;
+  /** 다단히트 기술이 맞은 타수(3.3 V4) — 숫자 문자열, 고르지 않았으면 "" */
+  hits: string;
   before: string;
   after: string;
   /** 이 관측을 맞을 때 상대가 메가진화한 폼("" = 메가 전) */
@@ -27,7 +29,7 @@ const SCREENS: readonly unknown[] = ["reflect", "lightScreen", "auroraVeil"] sat
 const ROW_KINDS: readonly unknown[] = ["dealt", "received", "speed"] satisfies RowKind[];
 
 function firstRow(): ObservationRow {
-  return { id: 1, kind: "dealt", moveId: null, critical: false, before: "100", after: "", megaForm: "", first: "me", cond: NEUTRAL_SPEED_CONDITIONS };
+  return { id: 1, kind: "dealt", moveId: null, critical: false, hits: "", before: "100", after: "", megaForm: "", first: "me", cond: NEUTRAL_SPEED_CONDITIONS };
 }
 
 /**
@@ -55,6 +57,7 @@ export function restoreInference(raw: unknown) {
         kind: r.kind as RowKind,
         moveId: idOf(r.moveId, getMove) || null,
         critical: r.critical === true,
+        hits: typeof r.hits === "string" && /^d{1,2}$/.test(r.hits) ? r.hits : "",
         before: str(r.before),
         after: str(r.after),
         megaForm: str(r.megaForm),

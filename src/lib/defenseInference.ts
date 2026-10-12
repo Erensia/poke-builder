@@ -8,7 +8,7 @@ import type { StatusCondition } from "../types/status";
 import { ABILITIES, ITEMS, NATURES, getAbility, getPokemon } from "./data";
 import { getEffectiveForm } from "./pokemonForm";
 import { burnDamageMultiplier, ignoresBurnAttackPenalty, statusedAttackBoost } from "./statusConditions";
-import { damageRollTotals } from "./damageFormula";
+import { damageRollSet, type RollSet } from "./damageFormula";
 import { evaluateSlotMatchup, type EvaluatorSlot, type DamageParts } from "./matchupEvaluator";
 import { EMPTY_ABILITY_POINTS } from "../types/party";
 import { MAX_ABILITY_POINTS_PER_STAT, MAX_ABILITY_POINTS_TOTAL } from "./statCalculator";
@@ -45,6 +45,8 @@ export interface InferenceObservation {
    * 메가진화는 HP 종족값·포인트·성격이 그대로라, 같은 배분 후보가 관측마다 그 폼의 방어·특방 종족값으로 검사된다.
    */
   megaForm?: string;
+  /** 다단히트 기술이 실제로 맞은 타수(3.3 V4). 타수가 하나뿐인 기술은 생략해도 된다 */
+  hits?: number;
 }
 
 export interface InferenceInput {
@@ -203,10 +205,25 @@ export function countExtremeCells(grid: Uint8Array): { feasible: number; extreme
   return { feasible, extreme };
 }
 
-/** 다단히트·고정 데미지·변화기는 정수 데미지 공식이 맞지 않아 역산에서 뺀다 */
+/** 다단히트 기술의 가능한 타수 범위. 다단히트가 아니면 null (3.3 V4) */
+export function multiHitRange(move: Move): Range | null {
+  if (move.multiHitPowers) return { min: move.minHits ?? 1, max: Math.min(move.maxHits ?? move.multiHitPowers.length, move.multiHitPowers.length) };
+  if (move.minHits !== undefined && move.maxHits !== undefined) return { min: move.minHits, max: move.maxHits };
+  return null;
+}
+
+/** 다단히트 기술에 타수가 맞게 들어왔는지 — 타수가 정해진 기술(더블어택)은 생략 가능. 맞으면 null */
+export function multiHitError(move: Move, hits: number | undefined): string | null {
+  const range = multiHitRange(move);
+  if (!range) return null;
+  const n = hits ?? (range.min === range.max ? range.min : undefined);
+  if (n === undefined) return "맞은 타수를 골라 주세요";
+  return Number.isInteger(n) && n >= range.min && n <= range.max ? null : `타수는 ${range.min}~${range.max}회예요`;
+}
+
+/** 고정 데미지·변화기 등은 정수 데미지 공식이 맞지 않아 역산에서 뺀다 */
 export function inferenceUnsupportedReason(move: Move): string | null {
   if (move.category === "status" || move.category === null) return "데미지를 주지 않는 기술";
-  if (move.multiHitPowers || move.minHits !== undefined) return "다단히트 기술은 아직 지원하지 않아요";
   if (move.fixedDamage !== undefined) return "고정 데미지 기술은 역산할 수 없어요";
   if (move.usesTargetAttackStat) return "상대의 공격 스탯을 쓰는 기술은 아직 지원하지 않아요";
   // 셸암즈: 물리/특수가 역산 대상 능력(상대 방어·공격)에 따라 정해져 관측만으로 분류를 고정할 수 없다
@@ -333,7 +350,18 @@ function prepareObservations(input: InferenceInput): { prepared: PreparedObserva
       errors.push("맞은 뒤 %가 맞기 전 %보다 클 수 없어요");
       return;
     }
+    const hitsError = multiHitError(obs.move, obs.hits);
+    if (hitsError) {
+      errors.push(hitsError);
+      return;
+    }
+    // 멀티스케일·섀도실드는 첫 타에만 듣는데 계산은 전 타에 곱하므로 다단히트에서는 뺀다
+    if (multiHitRange(obs.move) && slotAtHit.ability && getAbility(slotAtHit.ability)?.modifiers?.some((m) => m.condition?.defenderHpIsFull === true)) {
+      errors.push("풀피에서 첫 타만 줄이는 특성(멀티스케일 등)을 가정한 상대의 다단히트는 아직 지원하지 않아요");
+      return;
+    }
     const res = evaluateSlotMatchup(attacker, obs.move, slotAtHit, {
+      multiHitCount: multiHitRange(obs.move) ? (obs.hits ?? multiHitRange(obs.move)!.min) : undefined,
       attackerStages,
       defenderStages,
       weather,
@@ -373,9 +401,9 @@ function prepareObservations(input: InferenceInput): { prepared: PreparedObserva
 }
 
 /** 방어측 방어 스탯 D에서 16단계 난수 데미지를 낸다 (엔진 computeDamage·난수표와 같은 damageFormula 정수식). 가능도 계산이라 중복도 그대로 둔다 */
-function damageRolls(parts: DamageParts, defenseRealStat: number): number[] {
+function damageRolls(parts: DamageParts, defenseRealStat: number): RollSet {
   // 타입 면역(상성 0)은 prepareObservations에서 걸러져 여기 오지 않는다
-  return damageRollTotals(parts, defenseRealStat);
+  return damageRollSet(parts, defenseRealStat);
 }
 
 /**
@@ -383,7 +411,7 @@ function damageRolls(parts: DamageParts, defenseRealStat: number): number[] {
  * 첫 관측 "맞기 전 %"에 맞는 HP는 균등하다고 보고, 매 관측마다 난수 16단계를 같은 확률(1/16)로 굴려 화면 %가 맞는 경우만 이어 간다.
  * 이어서 오는 관측은 "맞기 전 %"가 직전 결과와 맞는 HP만 남긴다(관측 사이 회복 없음 가정).
  */
-function candidateLikelihood(maxHp: number, rolls: number[][], obs: PreparedObservation[], tol: number): number {
+function candidateLikelihood(maxHp: number, rolls: RollSet[], obs: PreparedObservation[], tol: number): number {
   let current = new Map<number, number>();
   for (let h = 1; h <= maxHp; h++) {
     if (Math.abs(displayPercent(h, maxHp) - obs[0].before) <= tol) current.set(h, 1);
@@ -399,9 +427,10 @@ function candidateLikelihood(maxHp: number, rolls: number[][], obs: PreparedObse
     }
     const next = new Map<number, number>();
     for (const [h, w] of current) {
-      for (const d of rolls[i]) {
-        const h2 = Math.max(0, h - d);
-        if (Math.abs(displayPercent(h2, maxHp) - obs[i].after) <= tol) next.set(h2, (next.get(h2) ?? 0) + w / rolls[i].length);
+      const { values, probs } = rolls[i];
+      for (let k = 0; k < values.length; k++) {
+        const h2 = Math.max(0, h - values[k]);
+        if (Math.abs(displayPercent(h2, maxHp) - obs[i].after) <= tol) next.set(h2, (next.get(h2) ?? 0) + w * (probs ? probs[k] : 1 / values.length));
       }
     }
     if (next.size === 0) return 0;
@@ -498,8 +527,8 @@ function runCandidates(input: InferenceInput, prepared: PreparedObservation[], d
   const groups: NatureGroup[] = combos.map((c) => ({ id: c.key, label: c.label, natureNames: c.natureNames, feasible: 0, total: 0, weight: 0 }));
 
   // 방어 스탯 값별 난수 데미지 캐시 (관측 번호 × 스탯 값)
-  const cache = prepared.map(() => new Map<number, number[]>());
-  const rollsFor = (i: number, stat: number): number[] => {
+  const cache = prepared.map(() => new Map<number, RollSet>());
+  const rollsFor = (i: number, stat: number): RollSet => {
     let v = cache[i].get(stat);
     if (!v) {
       v = damageRolls(prepared[i].parts, stat);
