@@ -8,7 +8,7 @@ import type { Ability } from "../types/ability";
 import type { Item } from "../types/item";
 import { getEffectiveForm } from "./pokemonForm";
 import { burnDamageMultiplier, ignoresBurnAttackPenalty, statusedAttackBoost } from "./statusConditions";
-import { damageRollTotals } from "./damageFormula";
+import { damageRollSet, type RollSet } from "./damageFormula";
 import { evaluateSlotMatchup, type EvaluatorSlot } from "./matchupEvaluator";
 import { computeRealStats, MAX_ABILITY_POINTS_PER_STAT, MAX_ABILITY_POINTS_TOTAL } from "./statCalculator";
 import { EMPTY_ABILITY_POINTS } from "../types/party";
@@ -17,6 +17,8 @@ import {
   finishRange,
   growRange,
   inferenceUnsupportedReason,
+  multiHitError,
+  multiHitRange,
   natureMult,
   viewForms,
   WeightedValues,
@@ -65,6 +67,8 @@ export interface AttackObservation {
   hpAfter: number;
   /** 이 관측을 줄 때 상대가 메가진화한 상태면 그 메가폼 이름. 없으면 `attacker`의 폼. 메가폼은 공격 종족값·특성이 달라진다 */
   megaForm?: string;
+  /** 다단히트 기술이 실제로 맞은 타수(3.3 V4). 타수가 하나뿐인 기술은 생략해도 된다 */
+  hits?: number;
 }
 
 export interface AttackInferenceInput {
@@ -90,6 +94,8 @@ export interface AttackInferenceInput {
   natureIds?: readonly string[];
   /** 공격+특공 포인트 합의 상한 — 방어 쪽(HP+방어+특방)이 이미 쓴 최소 포인트를 뺀 값(포인트 예산). 생략하면 66 */
   maxPointsSum?: number;
+  /** 공격+특공 포인트 합의 하한(3.3 V5) — 합계 66을 다 쓴다는 전제에서 다른 쪽 최대치를 뺀 값. 관측하지 않은 쪽은 남는 포인트를 흡수할 수 있어 그만큼 낮춰 적용한다. 생략하면 0 */
+  minPointsSum?: number;
   /** 다른 쪽 관측(방어·스피드)에 쓰인 메가폼 이름 — 이 쪽에 메가 태그가 없어도 메가 전·후를 나란히 보이려고 받는다(3.1 L1-b) */
   viewMegaForms?: readonly string[];
 }
@@ -139,7 +145,7 @@ interface PreparedObservation {
   /** 이 관측에서 받은 데미지 */
   damage: number;
   /** 후보(성격·포인트)로 상대 슬롯을 만들어 이 관측의 16단계 난수 데미지를 낸다. 계산할 수 없으면 null */
-  rolls: (natureId: string, points: number) => number[] | null;
+  rolls: (natureId: string, points: number) => RollSet | null;
 }
 
 /** 이 관측이 읽는 상대 공격 스탯 — 물리는 공격, 특수는 특공 */
@@ -237,7 +243,18 @@ function prepareObservations(input: AttackInferenceInput): { prepared: PreparedO
       errors.push("쓰러진 공격은 정확한 데미지를 알 수 없어 지원하지 않아요");
       return;
     }
+    const hitsError = multiHitError(obs.move, obs.hits);
+    if (hitsError) {
+      errors.push(hitsError);
+      return;
+    }
+    // 멀티스케일·섀도실드는 첫 타에만 듣는데 계산은 전 타에 곱하므로 다단히트에서는 뺀다
+    if (multiHitRange(obs.move) && defender.ability && getAbility(defender.ability)?.modifiers?.some((m) => m.condition?.defenderHpIsFull === true)) {
+      errors.push("풀피에서 첫 타만 줄이는 특성(멀티스케일 등)을 가진 내 포켓몬이 맞은 다단히트는 아직 지원하지 않아요");
+      return;
+    }
     const options = {
+      multiHitCount: multiHitRange(obs.move) ? (obs.hits ?? multiHitRange(obs.move)!.min) : undefined,
       attackerStages,
       defenderStages,
       weather,
@@ -266,7 +283,7 @@ function prepareObservations(input: AttackInferenceInput): { prepared: PreparedO
       return;
     }
     if (res.berryBulkMultiplier > 1) itemConsumed = true;
-    const memo = new Map<string, number[] | null>();
+    const memo = new Map<string, RollSet | null>();
     const baseStats = getEffectiveForm(attackerPokemon!, attackerAtHit).baseStats;
     prepared.push({
       key: attackKeyOf(obs.move),
@@ -277,7 +294,7 @@ function prepareObservations(input: AttackInferenceInput): { prepared: PreparedO
         if (memo.has(memoKey)) return memo.get(memoKey)!;
         const slot: EvaluatorSlot = { ...attackerAtHit, nature: natureId, points: { ...EMPTY_ABILITY_POINTS, [attackKeyOf(obs.move)]: points } };
         const r = evaluateSlotMatchup(slot, obs.move, defender, { ...options, skipVerdict: true });
-        const rolls = r?.damageParts ? damageRollTotals(r.damageParts, r.defenseStat) : null;
+        const rolls = r?.damageParts ? damageRollSet(r.damageParts, r.defenseStat) : null;
         memo.set(memoKey, rolls);
         return rolls;
       },
@@ -294,9 +311,12 @@ function sideLikelihood(prepared: PreparedObservation[], key: AttackKey, combo: 
     if (o.key !== key) continue;
     const rolls = o.rolls(combo.repNatureId, points);
     if (!rolls) return 0;
-    const hit = rolls.filter((d) => d === o.damage).length;
+    let hit = 0;
+    rolls.values.forEach((d, k) => {
+      if (d === o.damage) hit += rolls.probs ? rolls.probs[k] : 1 / rolls.values.length;
+    });
     if (hit === 0) return 0;
-    likelihood *= hit / rolls.length;
+    likelihood *= hit;
   }
   return likelihood;
 }
@@ -311,6 +331,7 @@ function runCandidates(input: AttackInferenceInput, prepared: PreparedObservatio
   const useSpa = prepared.some((o) => o.key === "spa");
   const combos = buildNatureCombos(useAtk, useSpa, input.natureIds ? new Set(input.natureIds) : undefined);
   const maxSum = Math.min(MAX_ABILITY_POINTS_TOTAL, input.maxPointsSum ?? MAX_ABILITY_POINTS_TOTAL);
+  const minSum = (input.minPointsSum ?? 0) - MAX_ABILITY_POINTS_PER_STAT * (Number(!useAtk) + Number(!useSpa));
   const groups: NatureGroup[] = combos.map((c) => ({ id: c.key, label: c.label, natureNames: c.natureNames, feasible: 0, total: 0, weight: 0 }));
   const pointRange = Array.from({ length: MAX_ABILITY_POINTS_PER_STAT + 1 }, (_, p) => p);
   const [atkRange, spaRange, realAtk, realSpa] = Array.from({ length: 4 }, emptyRange);
@@ -343,7 +364,7 @@ function runCandidates(input: AttackInferenceInput, prepared: PreparedObservatio
     atkCandidates.forEach((a, i) => {
       if (atkL[i] <= 0) return;
       spaCandidates.forEach((b, j) => {
-        if (spaL[j] <= 0 || a + b > maxSum) return;
+        if (spaL[j] <= 0 || a + b > maxSum || a + b < minSum) return;
         const w = atkL[i] * spaL[j];
         okPairs++;
         comboWeight += w;

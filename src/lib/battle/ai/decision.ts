@@ -122,6 +122,8 @@ export interface DecisionParams {
   healGainWeight: number;
   /** 3단계 튜닝용(기본 1 — 이전 동작): 교체 선택지의 "이번 턴 행동 손실" 턴 수. 0단계에서 평가식이 교체를 낮게 보는 경향 */
   switchLostTurns: number;
+  /** 교착 교체 억제(ver.3.3 E1): 내 공격기가 모두 처치 불가(c=∞)인 교착에서 교체 점수에서 빼는 마진. 0이면 끔. 확정 처치 위험을 피하는 교체는 면제 */
+  stalemateSwitchMargin: number;
   /**
    * 상대 모델 ver2(ver.2.0 1-B) — 한 단계 추론: 상대 행동 확률 ∝ exp(상대 관점 점수 / tau)를 지금 대면의 상대 기술 모델과 alpha로 섞고,
    * readSwitch면 상대 교체 확률 q ≥ minSwitchProb일 때 공격기 점수를 들어올 포켓몬 기준과 섞는다(교체 읽기). undefined면 끔(이전 동작).
@@ -184,6 +186,7 @@ export const DEFAULT_DECISION_PARAMS: DecisionParams = {
   chanceEffectsAware: true,
   healGainWeight: 1,
   switchLostTurns: 1,
+  stalemateSwitchMargin: 1,
 };
 
 /** 기본 파라미터 위에 decisionParams(시뮬레이터 튜닝용)를 덮어쓴 최종 파라미터 */
@@ -629,13 +632,13 @@ export function scoreOption(option: AiOption, riskAversion: number, params: Deci
       (sum, a) => sum + a.weight * scoreOption({ ...a.option, lostShift: (a.option.lostShift ?? 0) - 1 }, riskAversion, params),
       0,
     );
-    return (1 - q) * stay + q * read;
+    return (1 - q) * stay + q * read - (option.switchPenalty ?? 0);
   }
   const previous = [opponentIdleChance, lostShift] as const;
   opponentIdleChance = option.opponentIdleChance ?? 0;
   lostShift = option.lostShift ?? 0;
   try {
-    return tradeScore(option, riskAversion, params);
+    return tradeScore(option, riskAversion, params) - (option.switchPenalty ?? 0);
   } finally {
     [opponentIdleChance, lostShift] = previous;
   }

@@ -288,7 +288,7 @@ export function searchDecide(ctx: SearchContext, options: AiOption[]): SearchRes
       used += close.length * theirs.length;
     }
   }
-  const values = tallies.map((t) => ({ option: t.option, value: valueOf(t) }));
+  const values = tallies.map((t) => ({ option: t.option, value: valueOf(t) - (t.option.switchPenalty ?? 0) }));
   const best = values.reduce((a, b) => (b.value > a.value ? b : a));
   return { chosen: best.option, baseChosen: base.chosen, values, scored };
 }

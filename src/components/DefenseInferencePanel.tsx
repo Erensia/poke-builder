@@ -1,4 +1,5 @@
 import { useDeferredValue, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useSlotSwapDnd } from "../hooks/useSlotSwapDnd";
 import type { MatchupSlot } from "../types/matchup";
 import type { MegaEvolution, Pokemon } from "../types/pokemon";
 import type { WeatherKind } from "../types/weather";
@@ -18,6 +19,7 @@ import {
   countExtremeCells,
   isExtremePoints,
   inferenceUnsupportedReason,
+  multiHitRange,
   type InferenceInput,
   type InferenceObservation,
   type BulkEstimate,
@@ -61,6 +63,8 @@ interface DefenseInferencePanelProps {
   attacker: MatchupSlot;
   defender: MatchupSlot;
   defenderActions: DefenderActions;
+  /** 내 포켓몬 ⇄ 상대 포켓몬 드래그 교체(3.3 U1) */
+  onSwapDrop: () => void;
   weather: WeatherKind | null;
   field: FieldKind | null;
   /** 관측·가정 입력을 모두 지운다(저장본 포함) — 부모가 이 패널을 새로 띄운다 */
@@ -89,6 +93,9 @@ function describeConditions(c: SpeedConditions): string[] {
 const PART_LABELS = { defense: "내가 입힌 데미지(방어)", attack: "내가 받은 데미지(공격)", speed: "선후공(스피드)" } as const;
 
 /** 줄에 고른 메가폼이 이 종에 실제로 있는 폼이면 그 이름, 아니면 메가 전("") */
+/** 줄에 고른 다단히트 타수(3.3 V4) — 안 골랐으면 undefined(타수가 정해진 기술은 계산 쪽에서 채운다) */
+const hitsOf = (row: ObservationRow) => (row.hits ? Number(row.hits) : undefined);
+
 function megaOf(row: ObservationRow, megas: MegaEvolution[] | undefined): string {
   return megas?.find((m) => m.form === row.megaForm)?.form ?? "";
 }
@@ -301,6 +308,9 @@ function ExtremeSummary({ result }: { result: InferenceResult }) {
   );
 }
 
+/** 포인트 합의 범위 문구 — 하한이 0이면 상한만(3.3 V5: 합계 66을 다 쓴다고 보아 하한이 생기기도 한다) */
+const rangeText = (min: number, max: number) => (min > 0 ? `${min}~${max}` : `${max} 이하`);
+
 /** 방어·공격·스피드 결합 결과(3.1 C2-b·C2-c) — 관측이 있는 쪽들이 합친 성격 후보와 반영한 포인트 상한, 서로 안 맞을 때의 안내 */
 function CombinedView({ combined }: { combined: CombinedInference }) {
   const names = combined.parts.map((p) => PART_LABELS[p]).join(" · ");
@@ -311,11 +321,11 @@ function CombinedView({ combined }: { combined: CombinedInference }) {
     return <p className="dinf-warn">{names} 쪽 관측이 요구하는 포인트를 더하면 합계 66을 넘어요. 급소·가정·메가·조건 선택을 확인해 보세요.</p>;
   }
   if (!combined.natures || !combined.budget) return null;
-  const { defenseMax, attackMax, speedMax } = combined.budget;
+  const { defenseMax, attackMax, speedMax, defenseMin, attackMin, speedMin } = combined.budget;
   const limits = [
-    defenseMax !== null && `HP+방어+특방은 ${defenseMax} 이하`,
-    attackMax !== null && `공격+특공은 ${attackMax} 이하`,
-    speedMax !== null && `스피드는 ${speedMax} 이하`,
+    defenseMax !== null && `HP+방어+특방은 ${rangeText(defenseMin, defenseMax)}`,
+    attackMax !== null && `공격+특공은 ${rangeText(attackMin, attackMax)}`,
+    speedMax !== null && `스피드는 ${rangeText(speedMin, speedMax)}`,
   ].filter(Boolean);
   return (
     <div className="dinf-result">
@@ -329,7 +339,7 @@ function CombinedView({ combined }: { combined: CombinedInference }) {
         ))}
       </div>
       <p className="dinf-note">
-        성격은 한 값이라 {names} 쪽에서 모두 가능한 성격만 남겼어요. 포인트 합계는 66을 넘을 수 없어서 {limits.join(", ")}로 따졌어요.
+        성격은 한 값이라 {names} 쪽에서 모두 가능한 성격만 남겼어요. 포인트 합계는 66을 다 쓴다고 보고 {limits.join(", ")}로 따졌어요.
         {combined.speed && " 스피드 하한은 남은 성격 후보를 모두 고려한 최솟값이라, 성격 후보가 줄수록 올라가 다른 쪽 상한을 더 낮춰요."}
       </p>
     </div>
@@ -680,10 +690,12 @@ export function DefenseInferencePanel({
   attacker,
   defender,
   defenderActions,
+  onSwapDrop,
   weather,
   field,
   onReset,
 }: DefenseInferencePanelProps) {
+  const { dropProps, dragProps, dragOverClass } = useSlotSwapDnd("defender", onSwapDrop);
   const [saved] = useState(() => restoreInference(loadMatchupDraft().inference));
   const [rows, setRows] = useState<ObservationRow[]>(saved.rows);
   const [nextId, setNextId] = useState(saved.rows.length + 1);
@@ -751,6 +763,7 @@ export function DefenseInferencePanel({
         kind: last?.kind ?? "dealt",
         moveId: null,
         critical: false,
+        hits: "",
         before: last?.kind === "speed" ? "" : (last?.after ?? "100"),
         after: "",
         megaForm: last ? megaOf(last, megas) : "",
@@ -766,6 +779,7 @@ export function DefenseInferencePanel({
     updateRow(id, {
       kind,
       moveId: null,
+      hits: "",
       before: kind === "received" ? String(myMaxHp ?? "") : kind === "speed" ? "" : "100",
       after: "",
       cond: lastSpeedCond(),
@@ -789,7 +803,7 @@ export function DefenseInferencePanel({
       const move = row.moveId ? getMove(row.moveId) : undefined;
       const before = parsePercent(row.before);
       const after = parsePercent(row.after);
-      if (move && before !== null && after !== null) out.push({ row, obs: { move, critical: row.critical, before, after, megaForm: megaOf(row, defenderMegas) || undefined } });
+      if (move && before !== null && after !== null) out.push({ row, obs: { move, critical: row.critical, before, after, hits: hitsOf(row), megaForm: megaOf(row, defenderMegas) || undefined } });
     }
     return out;
   }, [rows, defender.pokemonId]);
@@ -804,7 +818,7 @@ export function DefenseInferencePanel({
       const hpBefore = parseHp(row.before);
       const hpAfter = parseHp(row.after);
       if (move && hpBefore !== null && hpAfter !== null) {
-        out.push({ row, obs: { move, critical: row.critical, hpBefore, hpAfter, megaForm: megaOf(row, opponentMegas) || undefined } });
+        out.push({ row, obs: { move, critical: row.critical, hpBefore, hpAfter, hits: hitsOf(row), megaForm: megaOf(row, opponentMegas) || undefined } });
       }
     }
     return out;
@@ -988,12 +1002,12 @@ export function DefenseInferencePanel({
         {attackerCard}
 
         {defenderPokemon && defenderForm ? (
-          <div className="matchup-slot matchup-slot-filled dinf-defender">
+          <div className={`matchup-slot matchup-slot-filled dinf-defender${dragOverClass}`} {...dropProps}>
             <span className="matchup-slot-label">상대 포켓몬</span>
             <button type="button" className="matchup-slot-clear" onClick={defenderActions.onClear} aria-label="상대 비우기">
               ✕
             </button>
-            <button type="button" className="matchup-slot-main" onClick={defenderActions.onPickPokemon}>
+            <button type="button" className="matchup-slot-main" onClick={defenderActions.onPickPokemon} {...dragProps}>
               <PokemonAvatar
                 pokemon={defenderPokemon}
                 size={42}
@@ -1044,7 +1058,7 @@ export function DefenseInferencePanel({
             </p>
           </div>
         ) : (
-          <div className="matchup-slot matchup-slot-empty dinf-defender">
+          <div className={`matchup-slot matchup-slot-empty dinf-defender${dragOverClass}`} {...dropProps}>
             <span className="matchup-slot-label">상대 포켓몬</span>
             <button type="button" className="matchup-slot-empty-main" onClick={defenderActions.onPickPokemon}>
               <span className="matchup-slot-plus" aria-hidden="true">
@@ -1219,6 +1233,20 @@ export function DefenseInferencePanel({
                     {move ? move.name : received ? "상대 기술 선택" : "기술 선택"}
                   </button>
                 )}
+                {(() => {
+                  const range = move && !speed ? multiHitRange(move) : null;
+                  if (!range || range.min === range.max) return null;
+                  return (
+                    <select aria-label={`관측 ${index + 1} 맞은 타수`} value={row.hits} onChange={(e) => updateRow(row.id, { hits: e.target.value })}>
+                      <option value="">타수</option>
+                      {Array.from({ length: range.max - range.min + 1 }, (_, k) => range.min + k).map((n) => (
+                        <option key={n} value={n}>
+                          {n}타
+                        </option>
+                      ))}
+                    </select>
+                  );
+                })()}
                 {megas && megas.length > 0 && (
                   <select
                     aria-label={`관측 ${index + 1} 상대 폼`}
@@ -1365,11 +1393,11 @@ export function DefenseInferencePanel({
               currentMoveIds={[pickerRow?.moveId ?? null]}
               onClose={() => setMovePickerRow(null)}
               onSelect={(moveId) => {
-                updateRow(movePickerRow, { moveId });
+                updateRow(movePickerRow, { moveId, hits: "" });
                 setMovePickerRow(null);
               }}
               onClear={() => {
-                updateRow(movePickerRow, { moveId: null });
+                updateRow(movePickerRow, { moveId: null, hits: "" });
                 setMovePickerRow(null);
               }}
             />

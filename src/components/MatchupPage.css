@@ -271,3 +271,9 @@
   color: #fff;
   font-weight: 600;
 }
+
+/* 내/상대 포켓몬 드래그 교체(3.3 U1) — 놓을 자리 하이라이트 */
+.matchup-slot.is-drag-over {
+  border-color: var(--violet);
+  box-shadow: 0 0 0 2px var(--violet-soft);
+}
