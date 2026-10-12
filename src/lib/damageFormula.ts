@@ -97,6 +97,22 @@ export function damageRollTotals(parts: DamageParts, defenseRealStat: number): n
   );
 }
 
+/** 총 데미지 후보 — values[k]가 나올 확률이 probs[k](없으면 모두 같은 확률) */
+export interface RollSet {
+  values: number[];
+  probs?: number[];
+}
+
+/**
+ * 역산용 총 데미지 후보(3.3 V4): 단타는 16단계 난수 그대로, 다단히트는 타마다 독립 난수를 합성곱한 분포.
+ * 같은 값은 합쳐서 값 수를 줄인다(3타 4096가지 → 수백 가지).
+ */
+export function damageRollSet(parts: DamageParts, defenseRealStat: number): RollSet {
+  if (parts.hitPowers.length <= 1) return { values: damageRollTotals(parts, defenseRealStat) };
+  const dist = singleUseDistribution(parts, defenseRealStat, true);
+  return { values: [...dist.keys()], probs: [...dist.values()] };
+}
+
 /** 기술을 한 번 쓴 총 데미지 분포(총합 → 확률). 다단히트는 타마다 독립 난수를 합성곱한다(D5). 반감 열매는 첫 사용의 첫 타에만 */
 function singleUseDistribution(parts: DamageParts, defenseRealStat: number, isFirstUse: boolean): Map<number, number> {
   let dist = new Map<number, number>([[0, 1]]);
