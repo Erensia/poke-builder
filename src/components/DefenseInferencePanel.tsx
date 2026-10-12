@@ -1,4 +1,5 @@
 import { useDeferredValue, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useSlotSwapDnd } from "../hooks/useSlotSwapDnd";
 import type { MatchupSlot } from "../types/matchup";
 import type { MegaEvolution, Pokemon } from "../types/pokemon";
 import type { WeatherKind } from "../types/weather";
@@ -61,6 +62,8 @@ interface DefenseInferencePanelProps {
   attacker: MatchupSlot;
   defender: MatchupSlot;
   defenderActions: DefenderActions;
+  /** 내 포켓몬 ⇄ 상대 포켓몬 드래그 교체(3.3 U1) */
+  onSwapDrop: () => void;
   weather: WeatherKind | null;
   field: FieldKind | null;
   /** 관측·가정 입력을 모두 지운다(저장본 포함) — 부모가 이 패널을 새로 띄운다 */
@@ -680,10 +683,12 @@ export function DefenseInferencePanel({
   attacker,
   defender,
   defenderActions,
+  onSwapDrop,
   weather,
   field,
   onReset,
 }: DefenseInferencePanelProps) {
+  const { dropProps, dragProps, dragOverClass } = useSlotSwapDnd("defender", onSwapDrop);
   const [saved] = useState(() => restoreInference(loadMatchupDraft().inference));
   const [rows, setRows] = useState<ObservationRow[]>(saved.rows);
   const [nextId, setNextId] = useState(saved.rows.length + 1);
@@ -988,12 +993,12 @@ export function DefenseInferencePanel({
         {attackerCard}
 
         {defenderPokemon && defenderForm ? (
-          <div className="matchup-slot matchup-slot-filled dinf-defender">
+          <div className={`matchup-slot matchup-slot-filled dinf-defender${dragOverClass}`} {...dropProps}>
             <span className="matchup-slot-label">상대 포켓몬</span>
             <button type="button" className="matchup-slot-clear" onClick={defenderActions.onClear} aria-label="상대 비우기">
               ✕
             </button>
-            <button type="button" className="matchup-slot-main" onClick={defenderActions.onPickPokemon}>
+            <button type="button" className="matchup-slot-main" onClick={defenderActions.onPickPokemon} {...dragProps}>
               <PokemonAvatar
                 pokemon={defenderPokemon}
                 size={42}
@@ -1044,7 +1049,7 @@ export function DefenseInferencePanel({
             </p>
           </div>
         ) : (
-          <div className="matchup-slot matchup-slot-empty dinf-defender">
+          <div className={`matchup-slot matchup-slot-empty dinf-defender${dragOverClass}`} {...dropProps}>
             <span className="matchup-slot-label">상대 포켓몬</span>
             <button type="button" className="matchup-slot-empty-main" onClick={defenderActions.onPickPokemon}>
               <span className="matchup-slot-plus" aria-hidden="true">

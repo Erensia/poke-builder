@@ -42,7 +42,7 @@ type PickerState =
   | null;
 
 export function MatchupPage() {
-  const { attacker, defender, weather, setWeather, field, setField, trickRoom, setTrickRoom } =
+  const { attacker, defender, swapSides, weather, setWeather, field, setField, trickRoom, setTrickRoom } =
     useMatchup();
   const slotPresets = useSlotPresets();
   const [picker, setPicker] = useState<PickerState>(null);
@@ -50,6 +50,13 @@ export function MatchupPage() {
   const [tab, setTab] = useState<"calc" | "inference">("calc");
   // 역산 입력 지우기 — 키가 바뀌면 패널이 저장본 없이 새로 뜬다(3.2 V2)
   const [inferenceResetKey, setInferenceResetKey] = useState(0);
+
+  // 역산 탭의 교체 — 관측·가정 입력은 상대 종에 묶여 있어 자리를 바꾸면 지운다(저장본 포함)
+  const swapInference = () => {
+    swapSides();
+    saveMatchupDraft({ inference: undefined });
+    setInferenceResetKey((k) => k + 1);
+  };
 
   const sideOf = (side: Side) => (side === "attacker" ? attacker : defender);
 
@@ -234,6 +241,7 @@ export function MatchupPage() {
       <div className="matchup-board" style={{ background: environmentTintBackground(weather, field) }}>
         <MatchupSlotCard
           role="attacker"
+          onSwapDrop={swapSides}
           label="내 포켓몬"
           slot={attacker.slot}
           offensePower={fullResult?.offensePower}
@@ -282,6 +290,7 @@ export function MatchupPage() {
 
         <MatchupSlotCard
           role="defender"
+          onSwapDrop={swapSides}
           label="상대 포켓몬"
           slot={defender.slot}
           bulkPhysical={baseBulk?.physical}
@@ -355,6 +364,7 @@ export function MatchupPage() {
           defender={defender.slot}
           weather={weather}
           field={field}
+          onSwapDrop={swapInference}
           defenderActions={{
             onPickPokemon: () => setPicker({ kind: "pokemon", side: "defender" }),
             onClear: defender.clearPokemon,
@@ -364,6 +374,7 @@ export function MatchupPage() {
           attackerCard={
             <MatchupSlotCard
               role="attacker"
+              onSwapDrop={swapInference}
               label="내 포켓몬"
               slot={attacker.slot}
               hideMoveSlot
