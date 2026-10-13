@@ -113,6 +113,10 @@
   padding: 1rem 0 0;
   cursor: pointer;
   text-align: left;
+  /* 길게 눌러 끌기(3.4 U1-b) 중 글자 선택·이미지 저장 메뉴가 뜨지 않게 */
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .matchup-slot-main:hover .matchup-slot-name {
