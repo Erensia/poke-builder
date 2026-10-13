@@ -152,6 +152,7 @@ export function PartyBoard() {
             onDragOverSlot={() => handleSlotDragOver(i)}
             onDrop={() => handleSlotDrop(i)}
             onDragEnd={handleSlotDragEnd}
+            onTouchReorder={(to) => reorderSlots(i, to)}
           />
         ))}
       </div>
