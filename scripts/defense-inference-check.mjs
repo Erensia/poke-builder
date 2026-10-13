@@ -842,6 +842,55 @@ try {
     if (!ok) fail(`저장 복원 결과가 기대와 다름: ${JSON.stringify(r)}`);
     console.log("저장 복원(깨진 입력 7종·정상 1종)", failed === 0 ? "통과" : "실패");
   }
+  // 5) 3.4 T1 스피드 표 — 식이 computeRealStats와 같고, 이웃·개수가 전체 표를 정렬해 센 결과와 같다
+  {
+    const st = await server.ssrLoadModule("/src/lib/speedTable.ts");
+    const before = failed;
+    const names = st.SPEED_FORMS.map((f) => f.name);
+    if (new Set(names).size !== names.length) fail("스피드 표 폼 이름이 중복됨");
+    if (!names.includes("리자몽-메가X")) fail("메가폼이 스피드 표에 없음");
+    // 식 대조: 보정 없음/↑/↓ 성격 + 포인트 전 구간
+    const natureOf = (mult) => data.NATURES.find((n) => (mult === 1 ? !n.increased : mult > 1 ? n.increased === "spe" : n.decreased === "spe"))?.id ?? null;
+    const combos = st.SPEED_FORMS.flatMap((f) => [1, 1.1, 0.9].flatMap((mult) => Array.from({ length: 33 }, (_, p) => ({ f, mult, p }))));
+    for (const { f, mult, p } of combos) {
+      const real = stat.computeRealStats({ hp: 0, atk: 0, def: 0, spa: 0, spd: 0, spe: f.baseSpe }, pts({ spe: p }), natureOf(mult)).spe;
+      if (st.speedValue(f.baseSpe, mult, p) !== real) fail(`스피드 식 불일치 ${f.name} ×${mult} ${p}pt: ${st.speedValue(f.baseSpe, mult, p)} vs ${real}`);
+    }
+    const formulaChecked = combos.length;
+    // 이웃 대조: 모든 (폼, 성격, 포인트) 줄을 한 번에 펴서 센다
+    const all = st.SPEED_FORMS.flatMap((f) => [1, 1.1, 0.9].flatMap((mult) => Array.from({ length: 33 }, (_, p) => ({ name: f.name, value: st.speedValue(f.baseSpe, mult, p) }))));
+    // 값 순으로 훑어 폼마다 처음 나온 줄(= 가장 가까운 값)만 모으고, 5폼 + 5번째와 같은 값의 폼까지를 라인으로 묶는다
+    const expectLines = (rows) => {
+      const first = new Map();
+      for (const r of rows) if (!first.has(r.name)) first.set(r.name, r.value);
+      const near = [...first];
+      const cut = near[Math.min(4, near.length - 1)]?.[1];
+      const lines = new Map();
+      for (const [name, value] of near.filter(([, v], i) => i < 5 || v === cut)) lines.set(value, [...(lines.get(value) ?? []), name]);
+      return JSON.stringify([...lines].map(([value, names]) => [value, names.sort()]));
+    };
+    const lineKey = (lines) => JSON.stringify(lines.map((l) => [l.value, l.rows.map((r) => r.name).sort()]));
+    const samples = [60, 100, 135, 150.5, 172, 200, 5, 400, ...Array.from({ length: 12 }, () => 40 + Math.floor(rnd() * 220))];
+    for (const speed of samples) {
+      const n = st.speedNeighbors(speed);
+      const up = expectLines(all.filter((r) => r.value > speed).sort((a, b) => a.value - b.value));
+      const down = expectLines(all.filter((r) => r.value < speed).sort((a, b) => b.value - a.value));
+      if (lineKey([...n.above].reverse()) !== up) fail(`위 라인 불일치 @${speed}`);
+      if (lineKey(n.below) !== down) fail(`아래 라인 불일치 @${speed}`);
+      const tieNames = new Set(all.filter((r) => r.value === speed).map((r) => r.name));
+      if (n.tie.length !== tieNames.size || n.tie.some((r) => r.value !== speed || !tieNames.has(r.name))) fail(`동속 불일치 @${speed}`);
+      const range = (f) => [st.speedValue(f.baseSpe, 0.9, 0), st.speedValue(f.baseSpe, 1.1, 32)];
+      const faster = st.SPEED_FORMS.filter((f) => range(f)[0] > speed).length;
+      const slower = st.SPEED_FORMS.filter((f) => range(f)[1] < speed).length;
+      if (n.alwaysFaster !== faster || n.alwaysSlower !== slower || n.mixed !== st.SPEED_FORMS.length - faster - slower) fail(`항상 빠름/느림 개수 불일치 @${speed}`);
+      for (const r of [...n.above.flatMap((l) => l.rows), ...n.tie, ...n.below.flatMap((l) => l.rows)]) {
+        const f = st.SPEED_FORMS.find((x) => x.name === r.name);
+        const mult = r.nature === "스피드↑" ? 1.1 : r.nature === "스피드↓" ? 0.9 : 1;
+        if (!f || st.speedValue(f.baseSpe, mult, r.points) !== r.value) fail(`줄의 성격·포인트가 값과 안 맞음 ${r.name} @${speed}`);
+      }
+    }
+    console.log(`스피드 표(폼 ${st.SPEED_FORMS.length}개, 식 ${formulaChecked}건·기준 ${samples.length}개)`, failed === before ? "통과" : "실패");
+  }
 } finally {
   await server.close();
 }
