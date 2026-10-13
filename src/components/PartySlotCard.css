@@ -379,3 +379,12 @@
     padding-right: 6.3rem;
   }
 }
+
+/* 터치 길게 눌러 끌기(3.4 U1-b 후속) 중 글자 선택·길게 누르기 메뉴가 뜨지 않게 */
+@media (pointer: coarse) {
+  .party-slot {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+}
