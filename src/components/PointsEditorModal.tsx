@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useRef, useState, type MouseEvent } from "react";
 import { Modal } from "./Modal";
 import {
   computeRealStats,
@@ -8,6 +8,7 @@ import {
 } from "../lib/statCalculator";
 import { STAT_LABELS, STAT_ORDER } from "../lib/statLabels";
 import { getNature } from "../lib/data";
+import { hpMarks, hpMarkInfo, relevantHpRules, type MarkInfo } from "../lib/hpMagic";
 import type { AbilityPoints } from "../types/party";
 import type { BaseStats } from "../types/stats";
 import type { StatKey, Nature } from "../types/nature";
@@ -18,6 +19,9 @@ interface PointsEditorModalProps {
   baseStats: BaseStats;
   points: AbilityPoints;
   natureId: string | null;
+  /** 슬롯의 도구·기술 — HP 눈금 중 이 포켓몬에게 유리한 조건(먹다남은음식·자뭉열매·대타출동·생명의구슬)을 강조한다 */
+  itemId?: string | null;
+  moveIds?: readonly (string | null)[];
   /** 숫자 입력창·슬라이더 직접 수정용 (절대값) */
   onChange: (stat: StatKey, value: number) => void;
   /** +/- 버튼용 (이전 상태 기준 증감, 연속 클릭에도 안전) */
@@ -59,15 +63,14 @@ interface PointsSliderProps {
   max: number;
   /** 지금 남은 총 예산까지 고려해 실제로 올릴 수 있는 상한. 이 지점 뒤는 흐리게 표시 */
   cap: number;
-  magicPoints: number[];
   /** 클릭·드래그로 절대값 지정 */
   onSet: (value: number) => void;
   /** 방향키 ±1 — 이전 상태 기준 증감이라 키 반복(길게 누름)에도 안전 */
   onStep: (delta: number) => void;
 }
 
-/** 로딩바 형태의 포인트 슬라이더. 매직 넘버 위치엔 굵은 눈금을 그린다. 클릭·드래그·방향키로 조절. */
-function PointsSlider({ label, value, max, cap, magicPoints, onSet, onStep }: PointsSliderProps) {
+/** 로딩바 형태의 포인트 슬라이더(매직 넘버·HP 눈금은 아래 MarkStrip). 클릭·드래그·방향키로 조절. */
+function PointsSlider({ label, value, max, cap, onSet, onStep }: PointsSliderProps) {
   const trackRef = useRef<HTMLDivElement>(null);
   const pct = max > 0 ? (value / max) * 100 : 0;
   const capPct = max > 0 ? (cap / max) * 100 : 100;
@@ -121,15 +124,67 @@ function PointsSlider({ label, value, max, cap, magicPoints, onSet, onStep }: Po
           aria-hidden="true"
         />
       )}
-      {magicPoints.map((p) => (
-        <span
-          key={p}
-          className={`points-slider-magic${p <= value ? " is-reached" : ""}`}
-          style={{ left: `${max > 0 ? (p / max) * 100 : 0}%` }}
-          title={`${p}포인트 — 실수치 +2 구간`}
-        />
-      ))}
     </div>
+  );
+}
+
+/** 슬라이더 아래 눈금 하나 — level은 막대 높이(0 = 막대 없음, 마름모만) */
+interface StripMark {
+  points: number;
+  level: 0 | 1 | 2 | 3 | 4;
+  orb?: boolean;
+  relevant?: boolean;
+  info: MarkInfo;
+}
+
+/**
+ * 슬라이더 아래 눈금 띠(3.4 H1) — HP는 최적 수치(막대 높이 = 등급, 마름모 = 생명의구슬 10n+9),
+ * 성격 ▲ 스탯은 매직 넘버(실수치 +2)를 같은 모양으로 보인다. 누르면(클릭·탭) 아래에 설명 패널이 열리고 다시 누르면
+ * 닫힌다 — 띠 어디를 눌러도 가장 가까운 눈금이 대상. 호버는 패널이 생겼다 사라지며 줄 높이가 흔들려 쓰지 않는다.
+ * 도구·기술에 해당하는 눈금이 있으면 그것만 강조하고 나머지는 흐리게 한다.
+ */
+function MarkStrip({ marks, value, max, label }: { marks: StripMark[]; value: number; max: number; label: string }) {
+  const [open, setOpen] = useState<number | null>(null);
+  if (marks.length === 0) return null;
+  const emphasize = marks.some((m) => m.relevant);
+  const shown = marks.find((m) => m.points === open);
+
+  function toggleNearest(e: MouseEvent<HTMLDivElement>) {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const at = ((e.clientX - rect.left) / rect.width) * max;
+    const nearest = marks.reduce((best, m) => (Math.abs(m.points - at) < Math.abs(best.points - at) ? m : best));
+    setOpen((o) => (o === nearest.points ? null : nearest.points));
+  }
+
+  return (
+    <>
+      <div className="mark-strip" role="group" aria-label={`${label} 눈금`} onClick={toggleNearest}>
+        {marks.map((m) => (
+          <span
+            key={m.points}
+            className={`mark level-${m.level}${m.orb ? " has-orb" : ""}${m.points <= value ? " is-reached" : ""}${m.points === open ? " is-open" : ""}${emphasize ? (m.relevant ? " is-relevant" : " is-dim") : ""}`}
+            style={{ left: `${(m.points / max) * 100}%` }}
+          >
+            <i className="mark-bar" />
+            {m.orb && <i className="mark-orb" />}
+          </span>
+        ))}
+      </div>
+      {shown && (
+        <div className="mark-tip">
+          <strong>{shown.info.header}</strong>
+          {shown.info.rows.map((r) => (
+            <div key={r.label} className={`mark-tip-row${r.relevant ? " is-relevant" : ""}`}>
+              <b>
+                {r.relevant ? "★ " : ""}
+                {r.label}
+              </b>
+              <span>{r.effects}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </>
   );
 }
 
@@ -138,6 +193,8 @@ export function PointsEditorModal({
   baseStats,
   points,
   natureId,
+  itemId,
+  moveIds,
   onChange,
   onStep,
   onClose,
@@ -146,6 +203,22 @@ export function PointsEditorModal({
   const remaining = MAX_ABILITY_POINTS_TOTAL - used;
   const realStats = computeRealStats(baseStats, points, natureId);
   const nature = natureId ? getNature(natureId) : undefined;
+  const relevant = relevantHpRules(itemId, moveIds);
+
+  // 슬라이더 아래 눈금: HP는 최적 수치, 그 외는 성격 ▲ 스탯의 매직 넘버(실수치 +2)
+  function marksFor(stat: StatKey): StripMark[] {
+    if (stat === "hp") {
+      return hpMarks(baseStats.hp, MAX_ABILITY_POINTS_PER_STAT).map((m) => {
+        const info = hpMarkInfo(m, relevant);
+        return { points: m.points, level: m.chain.length as StripMark["level"], orb: m.orb, relevant: info.rows.some((r) => r.relevant), info };
+      });
+    }
+    return magicPointsFor(stat, baseStats[stat], MAX_ABILITY_POINTS_PER_STAT, nature).map((p) => ({
+      points: p,
+      level: 4,
+      info: { header: `${STAT_LABELS[stat]} ${p}포인트`, rows: [{ label: "매직 넘버", effects: "이 포인트에서 실수치가 한 번에 2 오릅니다(▲ 성격 보정)", relevant: false }] },
+    }));
+  }
 
   return (
     <Modal title={`${pokemonName} · 능력 포인트`} onClose={onClose}>
@@ -165,7 +238,6 @@ export function PointsEditorModal({
           );
           const boosted = nature?.increased === stat;
           const lowered = nature?.decreased === stat;
-          const magicPoints = magicPointsFor(stat, baseStats[stat], MAX_ABILITY_POINTS_PER_STAT, nature);
           return (
             <div className="points-row" key={stat}>
               <span
@@ -201,15 +273,17 @@ export function PointsEditorModal({
               >
                 ＋
               </button>
-              <PointsSlider
-                label={STAT_LABELS[stat]}
-                value={value}
-                max={MAX_ABILITY_POINTS_PER_STAT}
-                cap={maxForStat}
-                magicPoints={magicPoints}
-                onSet={(v) => onChange(stat, v)}
-                onStep={(d) => onStep(stat, d)}
-              />
+              <div className="points-slider-wrap">
+                <PointsSlider
+                  label={STAT_LABELS[stat]}
+                  value={value}
+                  max={MAX_ABILITY_POINTS_PER_STAT}
+                  cap={maxForStat}
+                  onSet={(v) => onChange(stat, v)}
+                  onStep={(d) => onStep(stat, d)}
+                />
+                <MarkStrip marks={marksFor(stat)} value={value} max={MAX_ABILITY_POINTS_PER_STAT} label={STAT_LABELS[stat]} />
+              </div>
               <span className="points-real">실수치 {realStats[stat]}</span>
             </div>
           );

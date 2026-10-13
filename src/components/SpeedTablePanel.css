@@ -68,7 +68,7 @@
 
 /* 아이콘 크기는 이 변수 하나로 조절 */
 .speedtab-result {
-  --speedtab-icon: 36px;
+  --speedtab-icon: 30px;
 }
 
 .speedtab-chip {

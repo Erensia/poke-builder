@@ -505,6 +505,8 @@ export function MatchupPage() {
               baseStats={form.baseStats}
               points={slotState.slot.points}
               natureId={slotState.slot.nature}
+              itemId={slotState.slot.item}
+              moveIds={[slotState.slot.moveId]}
               onClose={() => setPicker(null)}
               onChange={(stat, value) => slotState.setPoint(stat, value)}
               onStep={(stat, delta) => slotState.stepPoint(stat, delta)}
