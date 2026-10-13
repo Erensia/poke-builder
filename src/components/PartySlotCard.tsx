@@ -1,4 +1,5 @@
 import type { DragEvent } from "react";
+import { useLongPressDrag } from "../hooks/useLongPressDrag";
 import type { PartySlot } from "../types/party";
 import { getPokemon, getMove, getAbility, getItem, getNature } from "../lib/data";
 import {
@@ -50,6 +51,8 @@ interface PartySlotCardProps {
   onDragOverSlot: () => void;
   onDrop: () => void;
   onDragEnd: () => void;
+  /** 터치 길게 눌러 끌기로 다른 슬롯 위에서 손가락을 뗐을 때 — 받는 슬롯 번호(0부터) */
+  onTouchReorder: (toIndex: number) => void;
 }
 
 export function PartySlotCard({
@@ -76,13 +79,28 @@ export function PartySlotCard({
   onDragOverSlot,
   onDrop,
   onDragEnd,
+  onTouchReorder,
 }: PartySlotCardProps) {
   const pokemon = slot ? getPokemon(slot.pokemonId) : undefined;
+  // 터치·펜(3.4 U1-b 후속): 카드를 길게 눌러 다른 슬롯 위에서 떼면 자리가 바뀐다(마우스 드래그는 그대로)
+  const touch = useLongPressDrag(
+    true,
+    (x, y) => {
+      const t = document.elementFromPoint(x, y)?.closest("[data-party-slot]") ?? null;
+      return t && t.getAttribute("data-party-slot") !== String(index) ? t : null;
+    },
+    (t) => onTouchReorder(Number(t.getAttribute("data-party-slot"))),
+  );
 
   // 카드 전체를 드래그 소스 겸 드롭 타겟으로 쓴다(§3) — 별도 손잡이 없이 카드를 그대로 잡아 옮긴다.
   const dragHandlers = {
-    draggable: true,
-    onDragStart,
+    ...touch.touchProps,
+    "data-party-slot": index,
+    draggable: !touch.coarse,
+    onDragStart: (e: DragEvent) => {
+      if (touch.isTouch()) e.preventDefault();
+      else onDragStart();
+    },
     onDragOver: (e: DragEvent) => {
       e.preventDefault();
       onDragOverSlot();
@@ -93,7 +111,7 @@ export function PartySlotCard({
     },
     onDragEnd,
   };
-  const dragStateClass = `${isDragging ? " is-dragging" : ""}${isDragOver ? " is-drag-over" : ""}`;
+  const dragStateClass = `${isDragging || touch.dragging ? " is-dragging" : ""}${isDragOver ? " is-drag-over" : ""}`;
 
   if (!pokemon) {
     return (

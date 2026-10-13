@@ -842,6 +842,91 @@ try {
     if (!ok) fail(`저장 복원 결과가 기대와 다름: ${JSON.stringify(r)}`);
     console.log("저장 복원(깨진 입력 7종·정상 1종)", failed === 0 ? "통과" : "실패");
   }
+  // 5) 3.4 T1 스피드 표 — 식이 computeRealStats와 같고, 이웃·개수가 전체 표를 정렬해 센 결과와 같다
+  {
+    const st = await server.ssrLoadModule("/src/lib/speedTable.ts");
+    const before = failed;
+    const names = st.SPEED_FORMS.map((f) => f.name);
+    if (new Set(names).size !== names.length) fail("스피드 표 폼 이름이 중복됨");
+    if (!names.includes("리자몽-메가X")) fail("메가폼이 스피드 표에 없음");
+    // 식 대조: 보정 없음/↑/↓ 성격 + 포인트 전 구간
+    const natureOf = (mult) => data.NATURES.find((n) => (mult === 1 ? !n.increased : mult > 1 ? n.increased === "spe" : n.decreased === "spe"))?.id ?? null;
+    const combos = st.SPEED_FORMS.flatMap((f) => [1, 1.1, 0.9].flatMap((mult) => Array.from({ length: 33 }, (_, p) => ({ f, mult, p }))));
+    for (const { f, mult, p } of combos) {
+      const real = stat.computeRealStats({ hp: 0, atk: 0, def: 0, spa: 0, spd: 0, spe: f.baseSpe }, pts({ spe: p }), natureOf(mult)).spe;
+      if (st.speedValue(f.baseSpe, mult, p) !== real) fail(`스피드 식 불일치 ${f.name} ×${mult} ${p}pt: ${st.speedValue(f.baseSpe, mult, p)} vs ${real}`);
+    }
+    const formulaChecked = combos.length;
+    // 이웃 대조: 모든 (폼, 성격, 포인트) 줄을 한 번에 펴서 센다
+    const all = st.SPEED_FORMS.flatMap((f) => [1, 1.1, 0.9].flatMap((mult) => Array.from({ length: 33 }, (_, p) => ({ name: f.name, value: st.speedValue(f.baseSpe, mult, p) }))));
+    // 값 순으로 훑어 폼마다 처음 나온 줄(= 가장 가까운 값)만 모으고, 5폼 + 5번째와 같은 값의 폼까지를 라인으로 묶는다
+    const expectLines = (rows) => {
+      const first = new Map();
+      for (const r of rows) if (!first.has(r.name)) first.set(r.name, r.value);
+      const near = [...first];
+      const cut = near[Math.min(4, near.length - 1)]?.[1];
+      const lines = new Map();
+      for (const [name, value] of near.filter(([, v], i) => i < 5 || v === cut)) lines.set(value, [...(lines.get(value) ?? []), name]);
+      return JSON.stringify([...lines].map(([value, names]) => [value, names.sort()]));
+    };
+    const lineKey = (lines) => JSON.stringify(lines.map((l) => [l.value, l.rows.map((r) => r.name).sort()]));
+    const samples = [60, 100, 135, 150.5, 172, 200, 5, 400, ...Array.from({ length: 12 }, () => 40 + Math.floor(rnd() * 220))];
+    for (const speed of samples) {
+      const n = st.speedNeighbors(speed);
+      const up = expectLines(all.filter((r) => r.value > speed).sort((a, b) => a.value - b.value));
+      const down = expectLines(all.filter((r) => r.value < speed).sort((a, b) => b.value - a.value));
+      if (lineKey([...n.above].reverse()) !== up) fail(`위 라인 불일치 @${speed}`);
+      if (lineKey(n.below) !== down) fail(`아래 라인 불일치 @${speed}`);
+      const tieNames = new Set(all.filter((r) => r.value === speed).map((r) => r.name));
+      if (n.tie.length !== tieNames.size || n.tie.some((r) => r.value !== speed || !tieNames.has(r.name))) fail(`동속 불일치 @${speed}`);
+      const range = (f) => [st.speedValue(f.baseSpe, 0.9, 0), st.speedValue(f.baseSpe, 1.1, 32)];
+      const faster = st.SPEED_FORMS.filter((f) => range(f)[0] > speed).length;
+      const slower = st.SPEED_FORMS.filter((f) => range(f)[1] < speed).length;
+      if (n.alwaysFaster !== faster || n.alwaysSlower !== slower || n.mixed !== st.SPEED_FORMS.length - faster - slower) fail(`항상 빠름/느림 개수 불일치 @${speed}`);
+      for (const r of [...n.above.flatMap((l) => l.rows), ...n.tie, ...n.below.flatMap((l) => l.rows)]) {
+        const f = st.SPEED_FORMS.find((x) => x.name === r.name);
+        const mult = r.nature === "스피드↑" ? 1.1 : r.nature === "스피드↓" ? 0.9 : 1;
+        if (!f || st.speedValue(f.baseSpe, mult, r.points) !== r.value) fail(`줄의 성격·포인트가 값과 안 맞음 ${r.name} @${speed}`);
+      }
+    }
+    console.log(`스피드 표(폼 ${st.SPEED_FORMS.length}개, 식 ${formulaChecked}건·기준 ${samples.length}개)`, failed === before ? "통과" : "실패");
+  }
+  // 6) 3.4 H1 HP 최적 수치 눈금 — 사용자 표의 예시와 전 종족값 전수 대조
+  {
+    const hm = await server.ssrLoadModule("/src/lib/hpMagic.ts");
+    const before = failed;
+    const bases = [...new Set(data.POKEMON.map((p) => p.baseStats.hp))];
+    const checkBase = (base) => {
+      const marks = hm.hpMarks(base, 32);
+      const byP = new Map(marks.map((m) => [m.points, m]));
+      for (let p = 0; p <= 32; p++) {
+        const hp = stat.computeRealStats({ hp: base, atk: 0, def: 0, spa: 0, spd: 0, spe: 0 }, pts({ hp: p }), null).hp;
+        const chain = [16, 8, 4, 2].filter((d) => hp % d === d - 1).length;
+        const orb = hp % 10 === 9;
+        const m = byP.get(p);
+        const got = m ? [m.hp, m.chain.length, m.orb] : [hp, 0, false];
+        if (JSON.stringify(got) !== JSON.stringify([hp, chain, orb])) fail(`HP 눈금 불일치 base ${base} ${p}pt: ${got} vs ${[hp, chain, orb]}`);
+        if ((chain > 0 || orb) !== !!m) fail(`HP 눈금 유무 불일치 base ${base} ${p}pt`);
+      }
+    };
+    bases.forEach(checkBase);
+    // 사용자 표: 종족값 100 → 16n+15는 0·16·32포인트(175·191·207), 10n+9는 4·14·24포인트(179·189·199)
+    const m100 = hm.hpMarks(100, 32);
+    const at = (p) => m100.find((m) => m.points === p);
+    for (const p of [0, 16, 32]) if (at(p)?.chain.length !== 4) fail(`종족값 100 ${p}포인트가 16n+15가 아님`);
+    for (const p of [4, 14, 24]) if (!at(p)?.orb) fail(`종족값 100 ${p}포인트가 10n+9가 아님`);
+    if (m100.some((m) => m.orb && m.chain.length === 4)) fail("종족값 100은 16n+15와 10n+9가 겹치면 안 됨");
+    // 80의 배수−1(159·239)은 둘이 겹침: 종족값 84·0포인트, 종족값 132·32포인트
+    for (const [base, p] of [[84, 0], [132, 32]]) {
+      const m = hm.hpMarks(base, 32).find((x) => x.points === p);
+      if (!m || m.chain.length !== 4 || !m.orb) fail(`종족값 ${base} ${p}포인트가 16n+15 + 10n+9가 아님`);
+    }
+    const info = hm.hpMarkInfo(at(16), new Set(["16n+15"]));
+    if (info.header !== "HP 191 (16포인트)" || info.rows.length !== 4 || !info.rows[0].relevant || info.rows.slice(1).some((r) => r.relevant)) fail("HP 눈금 설명 형식이 다름");
+    const rel = (item, moves) => [...hm.relevantHpRules(item, moves)].sort().join();
+    if (rel("먹다남은음식") !== "16n+15" || rel("자뭉열매") !== "4n+3" || rel(null, [null, "대타출동"]) !== "4n+3" || rel("생명의구슬") !== "10n+9" || rel("구애스카프", ["지진"]) !== "") fail("슬롯 도구·기술 강조 대상이 다름");
+    console.log(`HP 최적 수치 눈금(종족값 ${bases.length}종·33포인트 전수 + 표 예시)`, failed === before ? "통과" : "실패");
+  }
 } finally {
   await server.close();
 }

@@ -152,6 +152,7 @@ export function PartyBoard() {
             onDragOverSlot={() => handleSlotDragOver(i)}
             onDrop={() => handleSlotDrop(i)}
             onDragEnd={handleSlotDragEnd}
+            onTouchReorder={(to) => reorderSlots(i, to)}
           />
         ))}
       </div>
@@ -276,6 +277,8 @@ export function PartyBoard() {
               baseStats={form.baseStats}
               points={slot.points}
               natureId={slot.nature}
+              itemId={slot.item}
+              moveIds={slot.moves}
               onClose={() => setPicker(null)}
               onChange={(stat, value) => setPoint(picker.slotIndex, stat, value)}
               onStep={(stat, delta) => stepPoint(picker.slotIndex, stat, delta)}

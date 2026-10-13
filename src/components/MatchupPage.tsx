@@ -5,6 +5,7 @@ import { DamageRollBlock } from "./DamageRollBlock";
 import { WeatherPicker } from "./WeatherPicker";
 import { FieldPicker } from "./FieldPicker";
 import { DefenseInferencePanel } from "./DefenseInferencePanel";
+import { SpeedTablePanel } from "./SpeedTablePanel";
 import { PokemonPickerModal } from "./PokemonPickerModal";
 import { MovePickerModal } from "./MovePickerModal";
 import { AbilityPickerModal } from "./AbilityPickerModal";
@@ -46,8 +47,8 @@ export function MatchupPage() {
     useMatchup();
   const slotPresets = useSlotPresets();
   const [picker, setPicker] = useState<PickerState>(null);
-  // 2.1 C — 결정력 계산 / 상대 실능치 역산 탭. 두 탭이 같은 내 포켓몬·상대 종·날씨·필드 상태를 공유한다
-  const [tab, setTab] = useState<"calc" | "inference">("calc");
+  // 2.1 C — 결정력 계산 / 상대 실능치 역산 / 스피드 표(3.4 T1) 탭. 탭들이 같은 내 포켓몬·상대 종·날씨·필드 상태를 공유한다
+  const [tab, setTab] = useState<"calc" | "inference" | "speed">("calc");
   // 역산 입력 지우기 — 키가 바뀌면 패널이 저장본 없이 새로 뜬다(3.2 V2)
   const [inferenceResetKey, setInferenceResetKey] = useState(0);
 
@@ -59,6 +60,29 @@ export function MatchupPage() {
   };
 
   const sideOf = (side: Side) => (side === "attacker" ? attacker : defender);
+
+  // 기술 칸이 없는 탭(역산·스피드 표)의 슬롯 카드가 공유하는 편집 콜백
+  const cardActions = (side: Side) => {
+    const s = sideOf(side);
+    return {
+      onPickPokemon: () => setPicker({ kind: "pokemon", side }),
+      onClearPokemon: s.clearPokemon,
+      onPickAbility: () => setPicker({ kind: "ability", side }),
+      onPickItem: () => setPicker({ kind: "item", side }),
+      onPickNature: () => setPicker({ kind: "nature", side }),
+      onPickPoints: () => setPicker({ kind: "points", side }),
+      onPickStages: () => setPicker({ kind: "stages", side }),
+      onCycleSizeForm: s.cycleSizeForm,
+      onCycleFormVariant: s.cycleFormVariant,
+      onCycleCosmeticForm: s.cycleCosmeticForm,
+      onPickCosmeticForm: () => setPicker({ kind: "cosmeticForm", side }),
+      hasSamples: slotPresets.presets.length > 0,
+      onOpenSamplePicker: () => setPicker({ kind: "slotPresets", side }),
+      onToggleItemStolen: s.setItemStolen,
+      onToggleUnburden: s.setUnburdenAssumed,
+      onSetStatus: s.setStatusAssumed,
+    };
+  };
 
   const attackerPokemon = attacker.slot.pokemonId ? getPokemon(attacker.slot.pokemonId) : undefined;
   const defenderPokemon = defender.slot.pokemonId ? getPokemon(defender.slot.pokemonId) : undefined;
@@ -213,7 +237,9 @@ export function MatchupPage() {
           <p>
             {tab === "calc"
               ? "내 포켓몬과 상대 포켓몬을 고르고, 기술을 선택하면 타수 판정을 확인할 수 있습니다."
-              : "내가 입힌 데미지(상대 HP %)로 상대의 HP·방어 능력 포인트와 성격이 될 수 있는 범위를 추정합니다."}
+              : tab === "inference"
+                ? "내가 입힌 데미지(상대 HP %)로 상대의 HP·방어 능력 포인트와 성격이 될 수 있는 범위를 추정합니다."
+                : "내 포켓몬의 스피드 실수치가 로스터 전체 스피드 표에서 어디쯤인지, 위아래로 가까운 실수치 라인의 포켓몬과 함께 보여줍니다."}
           </p>
         </div>
         <div className="matchup-tabs" role="tablist" aria-label="계산기 종류">
@@ -228,6 +254,9 @@ export function MatchupPage() {
             onClick={() => setTab("inference")}
           >
             상대 실능치 역산
+          </button>
+          <button type="button" role="tab" aria-selected={tab === "speed"} className={tab === "speed" ? "is-active" : undefined} onClick={() => setTab("speed")}>
+            스피드 표
           </button>
         </div>
         <div className="matchup-env-pickers">
@@ -379,24 +408,18 @@ export function MatchupPage() {
               slot={attacker.slot}
               hideMoveSlot
               hideTurnAssumptions
-              onPickPokemon={() => setPicker({ kind: "pokemon", side: "attacker" })}
-              onClearPokemon={attacker.clearPokemon}
-              onPickAbility={() => setPicker({ kind: "ability", side: "attacker" })}
-              onPickItem={() => setPicker({ kind: "item", side: "attacker" })}
-              onPickNature={() => setPicker({ kind: "nature", side: "attacker" })}
-              onPickPoints={() => setPicker({ kind: "points", side: "attacker" })}
-              onPickStages={() => setPicker({ kind: "stages", side: "attacker" })}
-              onCycleSizeForm={attacker.cycleSizeForm}
-              onCycleFormVariant={attacker.cycleFormVariant}
-              onCycleCosmeticForm={attacker.cycleCosmeticForm}
-              onPickCosmeticForm={() => setPicker({ kind: "cosmeticForm", side: "attacker" })}
-              hasSamples={slotPresets.presets.length > 0}
-              onOpenSamplePicker={() => setPicker({ kind: "slotPresets", side: "attacker" })}
-              onToggleItemStolen={attacker.setItemStolen}
-              onToggleUnburden={attacker.setUnburdenAssumed}
-              onSetStatus={attacker.setStatusAssumed}
+              {...cardActions("attacker")}
             />
           }
+        />
+      )}
+
+      {tab === "speed" && (
+        <SpeedTablePanel
+          slot={attacker.slot}
+          weather={weather}
+          field={field}
+          card={<MatchupSlotCard role="attacker" label="내 포켓몬" slot={attacker.slot} hideMoveSlot hideTurnAssumptions {...cardActions("attacker")} />}
         />
       )}
 
@@ -482,6 +505,8 @@ export function MatchupPage() {
               baseStats={form.baseStats}
               points={slotState.slot.points}
               natureId={slotState.slot.nature}
+              itemId={slotState.slot.item}
+              moveIds={[slotState.slot.moveId]}
               onClose={() => setPicker(null)}
               onChange={(stat, value) => slotState.setPoint(stat, value)}
               onStep={(stat, delta) => slotState.stepPoint(stat, delta)}

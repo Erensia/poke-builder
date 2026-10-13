@@ -1,0 +1,127 @@
+/* 스피드 실수치 표 탭(3.4 T1) — 내 포켓몬 카드 옆(좁으면 아래)에 실수치 라인 목록 */
+.speedtab-board {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 1rem;
+}
+
+.speedtab-result {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  flex: 1 1 320px;
+  max-width: 640px;
+  font-size: 0.82rem;
+}
+
+.speedtab-summary,
+.speedtab-note {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.speedtab-note {
+  font-size: 0.74rem;
+}
+
+.speedtab-summary strong {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.speedtab-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+
+/* 한 줄 = 같은 실수치 라인. 왼쪽 값, 오른쪽에 포켓몬 칩을 가로로 나열 */
+.speedtab-line {
+  display: flex;
+  align-items: baseline;
+  gap: 0.7rem;
+  padding: 0.4rem 0.7rem;
+  border-top: 1px solid var(--border);
+}
+
+.speedtab-line:first-child {
+  border-top: none;
+}
+
+.speedtab-line-value {
+  flex: 0 0 3rem;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.speedtab-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.5rem;
+}
+
+/* 아이콘 크기는 이 변수 하나로 조절 */
+.speedtab-result {
+  --speedtab-icon: 30px;
+}
+
+.speedtab-chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--speedtab-icon);
+  min-height: var(--speedtab-icon);
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  font: inherit;
+  font-size: 0.7rem;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.speedtab-chip img {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.speedtab-chip.is-picked {
+  border-color: var(--violet);
+  background: var(--violet-soft);
+}
+
+/* 스피드↑/↓ 표시 — 아이콘 모서리에 작게 */
+.speedtab-chip-mark {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  font-style: normal;
+  font-size: 0.65rem;
+  line-height: 1;
+  color: var(--text);
+  text-shadow: 0 0 2px var(--surface-2), 0 0 2px var(--surface-2);
+}
+
+.speedtab-me {
+  font-weight: 700;
+  align-self: center;
+}
+
+.speedtab-picked {
+  margin: 0;
+  min-height: 1.2em;
+  color: var(--text-muted);
+}
+
+.speedtab-line.is-me {
+  background: var(--violet-soft);
+}

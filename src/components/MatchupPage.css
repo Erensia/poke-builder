@@ -277,3 +277,8 @@
   border-color: var(--violet);
   box-shadow: 0 0 0 2px var(--violet-soft);
 }
+
+/* 터치 길게 눌러 끌기(3.4 U1-b) — 끄는 카드는 살짝 흐리게 */
+.matchup-slot.is-touch-dragging {
+  opacity: 0.6;
+}

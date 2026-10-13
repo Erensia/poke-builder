@@ -814,6 +814,8 @@ export function BattleLogPage() {
               baseStats={form.baseStats}
               points={ctl.slot.points}
               natureId={ctl.slot.nature}
+              itemId={ctl.slot.item}
+              moveIds={ctl.slot.moves}
               onClose={() => setPicker(null)}
               onChange={(stat, value) => ctl.setPoint(stat, value)}
               onStep={(stat, delta) => ctl.stepPoint(stat, delta)}
