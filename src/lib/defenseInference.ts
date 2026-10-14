@@ -34,6 +34,19 @@ export function displayPercent(hp: number, maxHp: number): number {
   return Math.min(100, Math.max(1, Math.floor((hp * 100) / maxHp)));
 }
 
+/** 턴 종료 HP 변화(3.7 A4) — 최대 HP의 n/16을 버림한 값을 더한다(+ 회복, − 피해). 독은 1/8 = 2/16 */
+export const END_TURN_EFFECTS = [
+  { id: "leftovers", label: "먹다남은음식", sixteenths: 1 },
+  { id: "grassy", label: "그래스필드", sixteenths: 1 },
+  { id: "poison", label: "독", sixteenths: -2 },
+  { id: "leechSeed", label: "씨뿌리기", sixteenths: -2 },
+  { id: "burn", label: "화상", sixteenths: -1 },
+  { id: "sandstorm", label: "모래바람", sixteenths: -1 },
+] as const;
+
+/** 맹독은 경과 턴 n에 따라 n/16 — id를 `toxic<n>`(1~15)으로 쓴다 */
+export const TOXIC_ID = /^toxic([1-9]|1[0-5])$/;
+
 export interface InferenceObservation {
   move: Move;
   critical: boolean;
@@ -48,6 +61,8 @@ export interface InferenceObservation {
   megaForm?: string;
   /** 다단히트 기술이 실제로 맞은 타수(3.3 V4). 타수가 하나뿐인 기술은 생략해도 된다 */
   hits?: number;
+  /** 맞은 뒤 다음 관측 전까지 일어난 턴 종료 효과(`END_TURN_EFFECTS`의 id). 마지막 관측에서는 쓰지 않는다 */
+  endTurn?: readonly string[];
 }
 
 export interface InferenceInput {
@@ -335,9 +350,18 @@ interface PreparedObservation {
   parts: DamageParts;
   before: number;
   after: number;
+  /** 턴 종료 효과의 16분율(부호 있음) 목록 */
+  endTurn: number[];
   /** 이 관측 시점 폼의 방어·특방 종족값 */
   baseDef: number;
   baseSpd: number;
+}
+
+function endTurnSixteenths(ids: readonly string[] | undefined): number[] {
+  return (ids ?? []).flatMap((id) => {
+    const toxic = TOXIC_ID.exec(id);
+    return toxic ? -Number(toxic[1]) : (END_TURN_EFFECTS.find((e) => e.id === id)?.sixteenths ?? []);
+  });
 }
 
 /** 관측마다 evaluateSlotMatchup으로 정수 데미지 공식 조각을 구한다. 실패하면 사유 문자열. */
@@ -420,7 +444,7 @@ function prepareObservations(input: InferenceInput): { prepared: PreparedObserva
     if (res.berryBulkMultiplier > 1) itemConsumed = true;
     errors.push(null);
     const { baseStats } = getEffectiveForm(pokemon!, slotAtHit);
-    prepared.push({ parts: res.damageParts, before: obs.before, after: obs.after, baseDef: baseStats.def, baseSpd: baseStats.spd });
+    prepared.push({ parts: res.damageParts, before: obs.before, after: obs.after, endTurn: endTurnSixteenths(obs.endTurn), baseDef: baseStats.def, baseSpd: baseStats.spd });
   });
   return { prepared, errors };
 }
@@ -451,7 +475,7 @@ function percentTable(maxHp: number): Uint8Array {
 /**
  * 후보 하나(최대 HP + 관측별 16단계 난수 데미지)가 관측 전체와 얼마나 맞는지(가능도, 0~1). 0이면 불가능.
  * 첫 관측 "맞기 전 %"에 맞는 HP는 균등하다고 보고, 매 관측마다 난수 16단계를 같은 확률(1/16)로 굴려 화면 %가 맞는 경우만 이어 간다.
- * 이어서 오는 관측은 "맞기 전 %"가 직전 결과와 맞는 HP만 남긴다(관측 사이 회복 없음 가정).
+ * 이어서 오는 관측은 "맞기 전 %"가 직전 결과(+ 턴 종료 효과)와 맞는 HP만 남긴다. 효과를 고르지 않으면 관측 사이 회복 없음.
  * HP별 가중치를 배열(curW)에 두고 살아 있는 HP를 처음 들어온 순서대로 목록(curList)에 둔다 — Map과 같은 순서로 더해 결과가 같다.
  */
 function candidateLikelihood(maxHp: number, rolls: RollSet[], obs: PreparedObservation[], tol: number): number {
@@ -474,7 +498,10 @@ function candidateLikelihood(maxHp: number, rolls: RollSet[], obs: PreparedObser
     }
     const { values, probs } = rolls[i];
     const equal = 1 / values.length;
-    const after = obs[i].after;
+    const { after, endTurn } = obs[i];
+    // 턴 종료 효과는 후보 최대 HP로 정해지는 상수 — 맞은 뒤 %를 판정한 다음 HP에 더해 이어 간다
+    let delta = 0;
+    for (const k of endTurn) delta += Math.sign(k) * Math.floor((maxHp * Math.abs(k)) / 16);
     seenStamp++;
     let m = 0;
     for (let j = 0; j < n; j++) {
@@ -484,11 +511,12 @@ function candidateLikelihood(maxHp: number, rolls: RollSet[], obs: PreparedObser
         const h2 = Math.max(0, h - values[k]);
         if (Math.abs(pct[h2] - after) > tol) continue;
         const add = w * (probs ? probs[k] : equal);
-        if (nextSeen[h2] === seenStamp) nextW[h2] += add;
+        const h3 = h2 > 0 ? Math.min(maxHp, Math.max(0, h2 + delta)) : 0;
+        if (nextSeen[h3] === seenStamp) nextW[h3] += add;
         else {
-          nextSeen[h2] = seenStamp;
-          nextW[h2] = add;
-          nextList[m++] = h2;
+          nextSeen[h3] = seenStamp;
+          nextW[h3] = add;
+          nextList[m++] = h3;
         }
       }
     }
