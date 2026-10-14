@@ -12,7 +12,7 @@
 
 .points-remaining strong {
   font-family: var(--display);
-  font-size: 1.05rem;
+  font-size: 0.95rem;
   font-weight: 700;
   color: var(--text);
   font-variant-numeric: tabular-nums;
@@ -231,15 +231,15 @@
   box-sizing: border-box;
   height: 9.4rem;
   margin-bottom: 0.8rem;
-  padding: 0.6rem 0.9rem;
+  padding: 0.4rem 0.9rem;
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
+  gap: 0.2rem;
   overflow-y: auto;
   border-radius: 10px;
   background: var(--surface-2);
-  font-size: 0.8rem;
-  line-height: 1.4;
+  font-size: 0.74rem;
+  line-height: 1.3;
   color: var(--text-muted);
 }
 
@@ -267,11 +267,11 @@
 
 /* 알약은 너비를 고정하고 글자를 가운데에 둔다 — 규칙 이름 길이가 달라도 같은 크기로 줄이 맞는다 */
 .mark-tip-row b {
-  padding: 0.22rem 0;
+  padding: 0.12rem 0;
   border-radius: 999px;
   background: color-mix(in srgb, var(--violet) 14%, transparent);
   color: var(--violet);
-  font-size: 0.76rem;
+  font-size: 0.7rem;
   font-weight: 700;
   line-height: 1.2;
   text-align: center;
