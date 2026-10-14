@@ -14,6 +14,7 @@ import { EMPTY_ABILITY_POINTS } from "../types/party";
 import { MAX_ABILITY_POINTS_PER_STAT, MAX_ABILITY_POINTS_TOTAL } from "./statCalculator";
 import type { BaseStats } from "../types/stats";
 import type { Pokemon } from "../types/pokemon";
+import { rollMatchOf, TOTAL_POINTS, TopLists, type CandidateLists } from "./candidateCards";
 
 /**
  * 상대 실능치 역산(ver.2.1 C) — 상대의 HP·방어(특방) 능력 포인트와 성격을 "내가 입힌 데미지 %"로 거꾸로 좁힌다.
@@ -180,6 +181,8 @@ export interface InferenceResult {
   hpSpdWeights: Float32Array | null;
   /** 메가 전·후 실수치·내구 지수 나란히 보기(3.1 L1-b) — 메가 태그가 없으면 빈 배열 */
   formViews: FormView[];
+  /** 구체적인 후보 카드(3.6 I2) — 남은 SP 순·가능도 순 상위 목록. 후보가 없거나 가중 계산을 하지 않은 호출이면 null */
+  candidates: CandidateLists | null;
 }
 
 /**
@@ -324,6 +327,7 @@ function emptyResult(status: InferenceResult["status"], n: number): InferenceRes
     hpDefWeights: null,
     hpSpdWeights: null,
     formViews: [],
+    candidates: null,
   };
 }
 
@@ -625,6 +629,8 @@ function runCandidates(input: InferenceInput, prepared: PreparedObservation[], d
     spec: { w: new WeightedValues(), r: emptyRange() },
   }));
 
+  // 구체적인 후보 카드용 상위 목록(3.6 I2) — 가중 계산을 하는 detailed일 때만
+  const top = detailed ? new TopLists<[number, number, number, number]>() : null;
   const grow = growRange;
   const record = (hpP: number, defP: number, spdP: number, maxHp: number, defStat: number, spdStat: number) => {
     grow(hpRange, hpP);
@@ -669,6 +675,7 @@ function runCandidates(input: InferenceInput, prepared: PreparedObservation[], d
       groups[c].feasible++;
       record(hpP, defP, spdP, maxHp, defStat, spdStat);
       if (detailed) {
+        top!.add(TOTAL_POINTS - (hpP + defP + spdP), likelihood, () => [hpP, defP, spdP, c]);
         totalWeight += likelihood;
         groups[c].weight += likelihood;
         hpW.add(hpP, likelihood);
@@ -693,6 +700,20 @@ function runCandidates(input: InferenceInput, prepared: PreparedObservation[], d
     }
   }
 
+  const buildCard = ([hpP, defP, spdP, c]: [number, number, number, number], spare: number, likelihood: number) => {
+    const combo = combos[c];
+    const maxHp = Math.floor(base.hp + 75 + hpP);
+    const rollSets = prepared.map((o, i) => rollsFor(i, o.parts.defenseKey === "def" ? realStat(combo.defMult, o.baseDef, defP) : realStat(combo.spdMult, o.baseSpd, spdP)));
+    return {
+      natureLabel: combo.label,
+      natureNames: combo.natureNames,
+      points: [{ label: "HP", value: hpP }, ...(useDef ? [{ label: "방어", value: defP }] : []), ...(useSpd ? [{ label: "특방", value: spdP }] : [])],
+      spare,
+      likelihood,
+      rollMatch: rollMatchOf(likelihood, n, rollSets[0].values.length, !rollSets[0].probs),
+      damagePercent: rollSets.map((r) => ({ min: (Math.min(...r.values) * 100) / maxHp, max: (Math.max(...r.values) * 100) / maxHp })),
+    };
+  };
   const range = (r: Range): Range | null => (r.min === Infinity ? null : r);
   const normalize = (w: Float32Array | null): Float32Array | null => {
     if (!w) return null;
@@ -730,6 +751,7 @@ function runCandidates(input: InferenceInput, prepared: PreparedObservation[], d
     bulkSpecial: useSpd ? bulkOf(bulkSpecW, bulkSpecRange) : null,
     hpDefWeights: normalize(hpDefWeights),
     hpSpdWeights: normalize(hpSpdWeights),
+    candidates: top && feasible > 0 ? top.toCards(buildCard) : null,
     formViews: formAcc.map((a) => ({
       form: a.f.form,
       label: a.f.label,

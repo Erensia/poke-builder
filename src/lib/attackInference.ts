@@ -12,6 +12,7 @@ import { damageRollSet, type RollSet } from "./damageFormula";
 import { evaluateSlotMatchup, type EvaluatorSlot } from "./matchupEvaluator";
 import { computeRealStats, MAX_ABILITY_POINTS_PER_STAT, MAX_ABILITY_POINTS_TOTAL } from "./statCalculator";
 import { EMPTY_ABILITY_POINTS } from "../types/party";
+import { rollMatchOf, TOTAL_POINTS, TopLists, type CandidateLists } from "./candidateCards";
 import {
   emptyRange,
   finishRange,
@@ -126,6 +127,8 @@ export interface AttackInferenceResult {
   groups: NatureGroup[];
   /** 메가 전·후 실수치 나란히 보기(3.1 L1-b) — 메가 태그가 없으면 빈 배열 */
   formViews: FormView[];
+  /** 구체적인 후보 카드(3.6 I2) — 남은 SP 순·가능도 순 상위 목록. 후보가 없거나 카드를 만들지 않은 호출이면 null */
+  candidates: CandidateLists | null;
 }
 
 type AttackKey = "atk" | "spa";
@@ -144,6 +147,8 @@ interface PreparedObservation {
   key: AttackKey;
   /** 이 관측 시점 폼의 공격·특공 종족값(결과의 실수치 범위 표시용) */
   baseStat: number;
+  /** 내 최대 HP(데미지 %를 낼 때 쓴다) */
+  maxHp: number;
   /** 이 관측에서 받은 데미지. 쓰러진 공격(`ko`)이면 최소 데미지 */
   damage: number;
   /** 쓰러진 공격 — 정확한 데미지를 몰라 `damage` 이상이면 맞는다 */
@@ -203,6 +208,7 @@ function emptyResult(status: AttackInferenceResult["status"], n: number): Attack
     realSpa: null,
     groups: [],
     formViews: [],
+    candidates: null,
   };
 }
 
@@ -294,6 +300,7 @@ function prepareObservations(input: AttackInferenceInput): { prepared: PreparedO
     prepared.push({
       key: attackKeyOf(obs.move),
       baseStat: baseStats[attackKeyOf(obs.move)],
+      maxHp: myMaxHp,
       damage: obs.hpBefore - obs.hpAfter,
       ko: obs.hpAfter === 0,
       rolls: (natureId, points) => {
@@ -328,7 +335,7 @@ function sideLikelihood(prepared: PreparedObservation[], key: AttackKey, combo: 
   return likelihood;
 }
 
-function runCandidates(input: AttackInferenceInput, prepared: PreparedObservation[]): AttackInferenceResult {
+function runCandidates(input: AttackInferenceInput, prepared: PreparedObservation[], detailed = false): AttackInferenceResult {
   const n = prepared.length;
   const pokemon = getPokemon(input.attacker.pokemonId);
   if (!pokemon) return emptyResult("invalid", n);
@@ -354,6 +361,8 @@ function runCandidates(input: AttackInferenceInput, prepared: PreparedObservatio
   let total = 0;
   let feasible = 0;
   let totalWeight = 0;
+  // 구체적인 후보 카드용 상위 목록(3.6 I2) — 카드를 만드는 detailed일 때만
+  const top = detailed ? new TopLists<[number, number, number]>() : null;
 
   combos.forEach((combo, c) => {
     // 관측이 쓰는 쪽만 센다 — 안 쓰는 쪽은 한 칸(=그냥 통과)
@@ -374,6 +383,7 @@ function runCandidates(input: AttackInferenceInput, prepared: PreparedObservatio
         if (spaL[j] <= 0 || a + b > maxSum || a + b < minSum) return;
         const w = atkL[i] * spaL[j];
         okPairs++;
+        top?.add(TOTAL_POINTS - (a + b), w, () => [a, b, c]);
         grow(sumRange, a + b);
         comboWeight += w;
         atkWeight[i] += w;
@@ -400,6 +410,19 @@ function runCandidates(input: AttackInferenceInput, prepared: PreparedObservatio
   });
 
   if (totalWeight > 0) for (const g of groups) g.weight /= totalWeight;
+  const buildCard = ([a, b, c]: [number, number, number], spare: number, likelihood: number) => {
+    const combo = combos[c];
+    const rollSets = prepared.map((o) => o.rolls(combo.repNatureId, o.key === "atk" ? a : b)!);
+    return {
+      natureLabel: combo.label,
+      natureNames: combo.natureNames,
+      points: [...(useAtk ? [{ label: "공격", value: a }] : []), ...(useSpa ? [{ label: "특공", value: b }] : [])],
+      spare,
+      likelihood,
+      rollMatch: rollMatchOf(likelihood, n, rollSets[0].values.length, !rollSets[0].probs),
+      damagePercent: rollSets.map((r, i) => ({ min: (Math.min(...r.values) * 100) / prepared[i].maxHp, max: (Math.max(...r.values) * 100) / prepared[i].maxHp })),
+    };
+  };
   const range = finishRange;
   return {
     status: feasible > 0 ? "ok" : "contradiction",
@@ -416,6 +439,7 @@ function runCandidates(input: AttackInferenceInput, prepared: PreparedObservatio
     realAtk: useAtk ? range(realAtk) : null,
     realSpa: useSpa ? range(realSpa) : null,
     groups,
+    candidates: top && feasible > 0 ? top.toCards(buildCard) : null,
     formViews: formAcc.map((x) => ({
       form: x.f.form,
       label: x.f.label,
@@ -433,7 +457,7 @@ export function inferAttack(input: AttackInferenceInput, diagnostics = true): At
   if (total === 0) return null;
   const { prepared, errors } = prepareObservations(input);
   if (errors.some((e) => e !== null)) return { ...emptyResult("invalid", total), observationErrors: errors };
-  const result = runCandidates(input, prepared);
+  const result = runCandidates(input, prepared, true);
   result.observationErrors = errors;
   if (total > 1 && diagnostics) {
     result.singleFeasible = prepared.map((o) => runCandidates(input, [o]).status === "ok");
