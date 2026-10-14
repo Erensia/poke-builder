@@ -48,13 +48,14 @@ export interface CombinedInference {
 const MAX_ROUNDS = 64;
 const PER_STAT = 32;
 
-const defenseMinPoints = (r: InferenceResult | null) => (r ? (r.hp?.min ?? 0) + (r.def?.min ?? 0) + (r.spd?.min ?? 0) : 0);
-const attackMinPoints = (r: AttackInferenceResult | null) => (r ? (r.atk?.min ?? 0) + (r.spa?.min ?? 0) : 0);
+// 이 쪽이 쓰는 최소 포인트 합 — 후보 전체의 합 범위(스탯별 범위를 더한 것보다 좁다, 3.6 I1-d). 스피드는 스탯 하나라 그 범위가 곧 합이다
+const defenseMinPoints = (r: InferenceResult | null) => r?.sums?.min ?? 0;
+const attackMinPoints = (r: AttackInferenceResult | null) => r?.sums?.min ?? 0;
 const speedMinPoints = (r: SpeedInferenceResult | null) => r?.spe?.min ?? 0;
 
 // 쓸 수 있는 최대 포인트 합 — 관측하지 않은 스탯(결과 범위가 없음)은 스탯당 32, 관측 자체가 없는 쪽은 그 쪽 전체 용량
-const defenseMaxPoints = (r: InferenceResult | null) => (r ? (r.hp?.max ?? PER_STAT) + (r.def?.max ?? PER_STAT) + (r.spd?.max ?? PER_STAT) : 3 * PER_STAT);
-const attackMaxPoints = (r: AttackInferenceResult | null) => (r ? (r.atk?.max ?? PER_STAT) + (r.spa?.max ?? PER_STAT) : 2 * PER_STAT);
+const defenseMaxPoints = (r: InferenceResult | null) => (r ? (r.sums?.max ?? 0) + PER_STAT * (Number(!r.def) + Number(!r.spd)) : 3 * PER_STAT);
+const attackMaxPoints = (r: AttackInferenceResult | null) => (r ? (r.sums?.max ?? 0) + PER_STAT * (Number(!r.atk) + Number(!r.spa)) : 2 * PER_STAT);
 const speedMaxPoints = (r: SpeedInferenceResult | null) => (r ? (r.spe?.max ?? PER_STAT) : PER_STAT);
 
 /** 가능한 묶음에 든 성격 이름 */

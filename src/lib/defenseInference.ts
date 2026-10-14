@@ -156,6 +156,8 @@ export interface InferenceResult {
   hp: Range | null;
   def: Range | null;
   spd: Range | null;
+  /** 남은 후보 전체에서 본 HP+방어+특방 포인트 합의 범위 — 스탯별 범위를 더한 것보다 좁다(HP·방어는 서로 보완하는 관계). 결합의 포인트 예산이 쓴다(3.6 I1-d) */
+  sums: Range | null;
   groups: NatureGroup[];
   /** 남은 후보의 HP 포인트(가로 0~32) × 방어/특방 포인트(세로 0~32) 분포. 관측이 없는 쪽은 null */
   hpDefGrid: Uint8Array | null;
@@ -307,6 +309,7 @@ function emptyResult(status: InferenceResult["status"], n: number): InferenceRes
     hp: null,
     def: null,
     spd: null,
+    sums: null,
     groups: [],
     hpDefGrid: null,
     hpSpdGrid: null,
@@ -610,7 +613,7 @@ function runCandidates(input: InferenceInput, prepared: PreparedObservation[], d
   const bulkPhysRange: Range = { min: Infinity, max: -Infinity };
   const bulkSpecRange: Range = { min: Infinity, max: -Infinity };
   let totalWeight = 0;
-  const [hpRange, defRange, spdRange, realHp, realDef, realSpd] = Array.from({ length: 6 }, emptyRange);
+  const [hpRange, defRange, spdRange, realHp, realDef, realSpd, sumRange] = Array.from({ length: 7 }, emptyRange);
   let total = 0;
   let feasible = 0;
   // 메가 전·후 표시(3.1 L1-b): 폼마다 같은 후보를 그 폼의 종족값으로 환산해 실수치 범위·내구 지수를 따로 모은다(가중 계산을 하는 detailed일 때만)
@@ -625,6 +628,7 @@ function runCandidates(input: InferenceInput, prepared: PreparedObservation[], d
   const grow = growRange;
   const record = (hpP: number, defP: number, spdP: number, maxHp: number, defStat: number, spdStat: number) => {
     grow(hpRange, hpP);
+    grow(sumRange, hpP + defP + spdP);
     grow(realHp, maxHp);
     if (hpDefGrid) {
       grow(defRange, defP);
@@ -712,6 +716,7 @@ function runCandidates(input: InferenceInput, prepared: PreparedObservation[], d
     hp: range(hpRange),
     def: useDef ? range(defRange) : null,
     spd: useSpd ? range(spdRange) : null,
+    sums: range(sumRange),
     groups,
     hpDefGrid,
     hpSpdGrid,

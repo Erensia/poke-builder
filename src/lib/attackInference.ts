@@ -114,6 +114,8 @@ export interface AttackInferenceResult {
   /** 공격·특공 포인트 가능 범위(그 스탯을 쓰는 관측이 없으면 null) */
   atk: Range | null;
   spa: Range | null;
+  /** 남은 후보 전체에서 본 공격+특공 포인트 합의 범위 — 성격 묶음마다 가능한 쌍이 달라 스탯별 범위를 더한 것보다 좁다(3.6 I1-d) */
+  sums: Range | null;
   /** 가능도 가중 중심 구간(10%~90%)과 중앙값 */
   atkCentral: CentralRange | null;
   spaCentral: CentralRange | null;
@@ -192,6 +194,7 @@ function emptyResult(status: AttackInferenceResult["status"], n: number): Attack
     feasible: 0,
     atk: null,
     spa: null,
+    sums: null,
     atkCentral: null,
     spaCentral: null,
     realAtk: null,
@@ -334,7 +337,7 @@ function runCandidates(input: AttackInferenceInput, prepared: PreparedObservatio
   const minSum = (input.minPointsSum ?? 0) - MAX_ABILITY_POINTS_PER_STAT * (Number(!useAtk) + Number(!useSpa));
   const groups: NatureGroup[] = combos.map((c) => ({ id: c.key, label: c.label, natureNames: c.natureNames, feasible: 0, total: 0, weight: 0 }));
   const pointRange = Array.from({ length: MAX_ABILITY_POINTS_PER_STAT + 1 }, (_, p) => p);
-  const [atkRange, spaRange, realAtk, realSpa] = Array.from({ length: 4 }, emptyRange);
+  const [atkRange, spaRange, realAtk, realSpa, sumRange] = Array.from({ length: 5 }, emptyRange);
   const grow = growRange;
   // 메가 전·후 표시(3.1 L1-b): 폼마다 같은 후보를 그 폼의 종족값으로 환산한 실수치 범위
   const formAcc = viewForms(pokemon, input.attacker, input.observations.map((o) => o.megaForm), input.viewMegaForms).map((f) => ({
@@ -367,6 +370,7 @@ function runCandidates(input: AttackInferenceInput, prepared: PreparedObservatio
         if (spaL[j] <= 0 || a + b > maxSum || a + b < minSum) return;
         const w = atkL[i] * spaL[j];
         okPairs++;
+        grow(sumRange, a + b);
         comboWeight += w;
         atkWeight[i] += w;
         spaWeight[j] += w;
@@ -402,6 +406,7 @@ function runCandidates(input: AttackInferenceInput, prepared: PreparedObservatio
     feasible,
     atk: useAtk ? range(atkRange) : null,
     spa: useSpa ? range(spaRange) : null,
+    sums: range(sumRange),
     atkCentral: useAtk ? atkW.central() : null,
     spaCentral: useSpa ? spaW.central() : null,
     realAtk: useAtk ? range(realAtk) : null,
