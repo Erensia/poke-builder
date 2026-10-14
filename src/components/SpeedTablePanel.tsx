@@ -1,4 +1,5 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import { environmentTintBackground } from "../lib/environmentBackground";
 import { getPokemon } from "../lib/data";
 import { resolvePokemonSpriteUrl } from "../lib/sprites";
 import { getEffectiveForm } from "../lib/pokemonForm";
@@ -145,7 +146,9 @@ export function SpeedTablePanel({ slot, weather, field, card }: SpeedTablePanelP
   return (
     <div className="speedtab-board">
       <div className="speedtab-side">
-        {card(tailwindToggle)}
+        <div className="speedtab-card" style={{ "--env-tint": environmentTintBackground(weather, field) } as CSSProperties}>
+          {card(tailwindToggle)}
+        </div>
         {speedAt && (
           <Fold title="목표 포켓몬">
             <div className="speedtab-target-head">

@@ -42,12 +42,15 @@ type PickerState =
   | { kind: "slotPresets"; side: Side }
   | null;
 
+/** 탭 버튼과 페이지 제목에 같이 쓰는 이름 */
+const TAB_LABEL = { calc: "결정력 계산", inference: "노력치 역산", speed: "스피드 조정" } as const;
+
 export function MatchupPage() {
   const { attacker, defender, swapSides, weather, setWeather, field, setField, trickRoom, setTrickRoom } =
     useMatchup();
   const slotPresets = useSlotPresets();
   const [picker, setPicker] = useState<PickerState>(null);
-  // 2.1 C — 결정력 계산 / 상대 실능치 역산 / 스피드 표(3.4 T1) 탭. 탭들이 같은 내 포켓몬·상대 종·날씨·필드 상태를 공유한다
+  // 2.1 C — 결정력 계산 / 노력치 역산 / 스피드 조정(3.4 T1·3.6 T2) 탭. 탭들이 같은 내 포켓몬·상대 종·날씨·필드 상태를 공유한다
   const [tab, setTab] = useState<"calc" | "inference" | "speed">("calc");
   // 역산 입력 지우기 — 키가 바뀌면 패널이 저장본 없이 새로 뜬다(3.2 V2)
   const [inferenceResetKey, setInferenceResetKey] = useState(0);
@@ -61,7 +64,7 @@ export function MatchupPage() {
 
   const sideOf = (side: Side) => (side === "attacker" ? attacker : defender);
 
-  // 기술 칸이 없는 탭(역산·스피드 표)의 슬롯 카드가 공유하는 편집 콜백
+  // 기술 칸이 없는 탭(역산·스피드 조정)의 슬롯 카드가 공유하는 편집 콜백
   const cardActions = (side: Side) => {
     const s = sideOf(side);
     return {
@@ -233,18 +236,18 @@ export function MatchupPage() {
     <section className="matchup-page">
       <header className="matchup-page-header">
         <div>
-          <h2>결정력 &amp; 내구력</h2>
+          <h2>{TAB_LABEL[tab]}</h2>
           <p>
             {tab === "calc"
               ? "내 포켓몬과 상대 포켓몬을 고르고, 기술을 선택하면 타수 판정을 확인할 수 있습니다."
               : tab === "inference"
                 ? "내가 입힌 데미지(상대 HP %)로 상대의 HP·방어 능력 포인트와 성격이 될 수 있는 범위를 추정합니다."
-                : "내 포켓몬의 스피드 실수치가 로스터 전체 스피드 표에서 어디쯤인지, 위아래로 가까운 실수치 라인의 포켓몬과 함께 보여줍니다."}
+                : "내 포켓몬의 스피드로 어떤 포켓몬을 추월하는지 보고, 포인트 분배를 얼마나 줘야 목표 포켓몬을 넘는지 확인합니다"}
           </p>
         </div>
         <div className="matchup-tabs" role="tablist" aria-label="계산기 종류">
           <button type="button" role="tab" aria-selected={tab === "calc"} className={tab === "calc" ? "is-active" : undefined} onClick={() => setTab("calc")}>
-            결정력 계산
+            {TAB_LABEL.calc}
           </button>
           <button
             type="button"
@@ -253,10 +256,10 @@ export function MatchupPage() {
             className={tab === "inference" ? "is-active" : undefined}
             onClick={() => setTab("inference")}
           >
-            상대 실능치 역산
+            {TAB_LABEL.inference}
           </button>
           <button type="button" role="tab" aria-selected={tab === "speed"} className={tab === "speed" ? "is-active" : undefined} onClick={() => setTab("speed")}>
-            스피드 표
+            {TAB_LABEL.speed}
           </button>
         </div>
         <div className="matchup-env-pickers">
@@ -382,7 +385,7 @@ export function MatchupPage() {
         </>
       )}
 
-      {tab === "inference" && (
+    {tab === "inference" && (
         <DefenseInferencePanel
           key={inferenceResetKey}
           onReset={() => {

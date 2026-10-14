@@ -20,6 +20,16 @@
   justify-content: center;
   gap: 1rem;
   flex-wrap: wrap;
+  /* 날씨/필드 틴트가 형태를 갖도록 — 결정력 계산 탭의 matchup-board와 같은 여백·모서리 */
+  padding: 0.7rem;
+  border-radius: 16px;
+  transition: background 0.3s ease;
+}
+
+@media (max-width: 760px) {
+  .dinf-board {
+    padding: 0.5rem;
+  }
 }
 
 .dinf-defender {

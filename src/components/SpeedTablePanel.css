@@ -103,7 +103,7 @@
 .speedtab-side {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 1.25rem;
   flex: 0 0 280px;
   max-width: 100%;
 }
@@ -115,6 +115,23 @@
     flex: 1 1 100%;
     max-width: 320px;
   }
+}
+
+/* 날씨/필드 틴트 — 내 포켓몬 카드 뒤에만. 레이아웃은 그대로 두고 카드보다 살짝 큰 판을 뒤에 깐다 */
+.speedtab-card {
+  position: relative;
+  isolation: isolate;
+}
+
+.speedtab-card::before {
+  content: "";
+  position: absolute;
+  inset: -0.6rem;
+  z-index: -1;
+  border-radius: 16px;
+  background: var(--env-tint, transparent);
+  transition: background 0.3s ease;
+  pointer-events: none;
 }
 
 /* 접고 펼 수 있는 구역 */
