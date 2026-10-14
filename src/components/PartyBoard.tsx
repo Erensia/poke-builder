@@ -34,6 +34,7 @@ export function PartyBoard() {
     setPokemon,
     clearSlot,
     setMove,
+    swapMoves,
     setAbility,
     setItem,
     setNature,
@@ -134,6 +135,7 @@ export function PartyBoard() {
             onPickPokemon={() => setPicker({ kind: "pokemon", slotIndex: i })}
             onClearPokemon={() => clearSlot(i)}
             onPickMove={(moveIndex) => setPicker({ kind: "move", slotIndex: i, moveIndex })}
+            onSwapMoves={(from, to) => swapMoves(i, from, to)}
             onPickAbility={() => setPicker({ kind: "ability", slotIndex: i })}
             onPickItem={() => setPicker({ kind: "item", slotIndex: i })}
             onPickNature={() => setPicker({ kind: "nature", slotIndex: i })}

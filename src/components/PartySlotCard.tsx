@@ -1,4 +1,4 @@
-import type { DragEvent } from "react";
+import { useState, type DragEvent } from "react";
 import { useLongPressDrag } from "../hooks/useLongPressDrag";
 import type { PartySlot } from "../types/party";
 import { getPokemon, getMove, getAbility, getItem, getNature } from "../lib/data";
@@ -23,6 +23,8 @@ interface PartySlotCardProps {
   onPickPokemon: () => void;
   onClearPokemon: () => void;
   onPickMove: (moveIndex: 0 | 1 | 2 | 3) => void;
+  /** 같은 슬롯 안에서 기술 칸 `from`과 `to`의 자리를 맞바꾼다(길게 눌러 끌기·드래그) */
+  onSwapMoves: (from: number, to: number) => void;
   onPickAbility: () => void;
   onPickItem: () => void;
   onPickNature: () => void;
@@ -61,6 +63,7 @@ export function PartySlotCard({
   onPickPokemon,
   onClearPokemon,
   onPickMove,
+  onSwapMoves,
   onPickAbility,
   onPickItem,
   onPickNature,
@@ -185,21 +188,16 @@ export function PartySlotCard({
       </button>
 
       <div className="party-slot-moves">
-        {slot!.moves.map((moveId, i) => {
-          const move = moveId ? getMove(moveId) : undefined;
-          const moveColor = move?.type ? TYPE_COLORS[move.type] : undefined;
-          return (
-            <button
-              key={i}
-              type="button"
-              className={`party-move-pip${move ? " has-type" : " is-empty"}`}
-              style={moveColor ? { background: moveColor } : undefined}
-              onClick={() => onPickMove(i as 0 | 1 | 2 | 3)}
-            >
-              {move ? move.name : "＋"}
-            </button>
-          );
-        })}
+        {slot!.moves.map((moveId, i) => (
+          <MovePip
+            key={i}
+            slotIndex={index}
+            moveIndex={i}
+            moveId={moveId}
+            onPick={() => onPickMove(i as 0 | 1 | 2 | 3)}
+            onSwap={onSwapMoves}
+          />
+        ))}
       </div>
 
       <div className="party-slot-meta">
@@ -291,5 +289,84 @@ export function PartySlotCard({
         </div>
       </div>
     </div>
+  );
+}
+
+/** 지금 HTML5 드래그로 잡고 있는 기술 칸(3.5 M1) — dataTransfer는 dragover 중 읽을 수 없어 모듈 변수에 둔다 */
+let draggedMovePip: { slot: number; move: number } | null = null;
+
+interface MovePipProps {
+  slotIndex: number;
+  moveIndex: number;
+  moveId: string | null;
+  onPick: () => void;
+  onSwap: (from: number, to: number) => void;
+}
+
+/**
+ * 기술 칸 하나(3.5 M1) — 같은 슬롯 안의 다른 칸(빈 칸 포함)으로 끌어다 놓으면 자리가 바뀐다.
+ * 마우스는 HTML5 드래그, 터치·펜은 길게 눌러 끌기(useLongPressDrag). 카드 전체의 슬롯 교체 드래그와 겹치지 않게
+ * 칸에서 시작한 pointerdown·dragstart는 카드로 올리지 않는다.
+ */
+function MovePip({ slotIndex, moveIndex, moveId, onPick, onSwap }: MovePipProps) {
+  const [dragging, setDragging] = useState(false);
+  const [over, setOver] = useState(false);
+  const move = moveId ? getMove(moveId) : undefined;
+  const moveColor = move?.type ? TYPE_COLORS[move.type] : undefined;
+  const pipKey = (m: number) => `${slotIndex}-${m}`;
+
+  const touch = useLongPressDrag(
+    !!moveId,
+    (x, y) => {
+      const t = document.elementFromPoint(x, y)?.closest("[data-move-pip]") ?? null;
+      const key = t?.getAttribute("data-move-pip") ?? "";
+      return key.startsWith(`${slotIndex}-`) && key !== pipKey(moveIndex) ? t : null;
+    },
+    (t) => onSwap(moveIndex, Number(t.getAttribute("data-move-pip")!.split("-")[1])),
+  );
+  const canDrop = () => draggedMovePip?.slot === slotIndex && draggedMovePip.move !== moveIndex;
+
+  return (
+    <button
+      type="button"
+      data-move-pip={pipKey(moveIndex)}
+      className={`party-move-pip${move ? " has-type" : " is-empty"}${dragging || touch.dragging ? " is-dragging" : ""}${over ? " is-drag-over" : ""}`}
+      style={moveColor ? { background: moveColor } : undefined}
+      onClick={onPick}
+      {...touch.touchProps}
+      onPointerDown={(e) => {
+        e.stopPropagation();
+        touch.touchProps.onPointerDown(e);
+      }}
+      draggable={!!moveId && !touch.coarse}
+      onDragStart={(e) => {
+        e.stopPropagation();
+        if (touch.isTouch()) return e.preventDefault();
+        e.dataTransfer.setData("text/plain", "");
+        draggedMovePip = { slot: slotIndex, move: moveIndex };
+        setDragging(true);
+      }}
+      onDragOver={(e) => {
+        if (!canDrop()) return;
+        e.preventDefault();
+        e.stopPropagation();
+        setOver(true);
+      }}
+      onDragLeave={() => setOver(false)}
+      onDrop={(e) => {
+        if (!canDrop()) return;
+        e.preventDefault();
+        e.stopPropagation();
+        setOver(false);
+        onSwap(draggedMovePip!.move, moveIndex);
+      }}
+      onDragEnd={(e) => {
+        e.stopPropagation();
+        draggedMovePip = null;
+        setDragging(false);
+      }}
+    >
+      {move ? move.name : "＋"}
+    </button>
   );
 }
