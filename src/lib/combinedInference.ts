@@ -1,6 +1,6 @@
 import { NATURES } from "./data";
 import { MAX_ABILITY_POINTS_TOTAL } from "./statCalculator";
-import { inferDefense, type InferenceInput, type InferenceResult, type NatureGroup } from "./defenseInference";
+import { createLikelihoodCache, inferDefense, type InferenceInput, type InferenceResult, type NatureGroup } from "./defenseInference";
 import { inferAttack, type AttackInferenceInput, type AttackInferenceResult } from "./attackInference";
 import { inferSpeed, type SpeedInferenceInput, type SpeedInferenceResult } from "./speedInference";
 
@@ -94,8 +94,10 @@ export function inferCombined(
   attackInput: AttackInferenceInput | null,
   speedInput: SpeedInferenceInput | null = null,
 ): CombinedInference {
+  // 되풀이마다 성격·포인트 합 제한만 바뀌고 후보의 가능도는 그대로라 방어 쪽은 한 번 계산한 값을 재사용한다(3.6 I1-a)
+  const defenseCache = createLikelihoodCache();
   const first: Results = {
-    defense: defenseInput ? inferDefense(defenseInput) : null,
+    defense: defenseInput ? inferDefense(defenseInput, true, defenseCache) : null,
     attack: attackInput ? inferAttack(attackInput) : null,
     speed: speedInput ? inferSpeed(speedInput) : null,
   };
@@ -131,7 +133,7 @@ export function inferCombined(
       speedMin: floor(dMax + aMax),
     };
     const next: Results = {
-      defense: defenseInput && cur.defense ? inferDefense({ ...defenseInput, natureIds, maxPointsSum: nextBudget.defenseMax!, minPointsSum: nextBudget.defenseMin }, false) : null,
+      defense: defenseInput && cur.defense ? inferDefense({ ...defenseInput, natureIds, maxPointsSum: nextBudget.defenseMax!, minPointsSum: nextBudget.defenseMin }, false, defenseCache) : null,
       attack: attackInput && cur.attack ? inferAttack({ ...attackInput, natureIds, maxPointsSum: nextBudget.attackMax!, minPointsSum: nextBudget.attackMin }, false) : null,
       speed: speedInput && cur.speed ? inferSpeed({ ...speedInput, natureIds, maxPoints: nextBudget.speedMax!, minPoints: nextBudget.speedMin }, false) : null,
     };
