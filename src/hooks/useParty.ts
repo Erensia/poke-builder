@@ -91,6 +91,20 @@ export function useParty() {
     });
   }
 
+  /** 한 슬롯 안에서 기술 두 칸의 자리를 맞바꾼다(빈 칸과도 가능) — 길게 눌러 끌기·드래그 */
+  function swapMoves(slotIndex: number, a: number, b: number) {
+    if (a === b) return;
+    setSlots((prev) => {
+      const slot = prev[slotIndex];
+      if (!slot) return prev;
+      const next = [...prev] as PartySlots;
+      const moves = [...slot.moves] as PartySlot["moves"];
+      [moves[a], moves[b]] = [moves[b], moves[a]];
+      next[slotIndex] = { ...slot, moves };
+      return next;
+    });
+  }
+
   function setAbility(slotIndex: number, abilityId: string | null) {
     setSlots((prev) => {
       const slot = prev[slotIndex];
@@ -217,6 +231,7 @@ export function useParty() {
     setPokemon,
     clearSlot,
     setMove,
+    swapMoves,
     setAbility,
     setItem,
     setNature,

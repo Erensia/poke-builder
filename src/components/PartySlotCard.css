@@ -283,6 +283,16 @@
   border-color: transparent;
 }
 
+/* 기술 칸 끌어서 순서 변경(3.5 M1) */
+.party-move-pip.is-dragging {
+  opacity: 0.4;
+}
+
+.party-move-pip.is-drag-over {
+  outline: 2px solid var(--violet);
+  outline-offset: 1px;
+}
+
 .party-slot-meta {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
