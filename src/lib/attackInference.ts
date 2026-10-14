@@ -335,6 +335,19 @@ function sideLikelihood(prepared: PreparedObservation[], key: AttackKey, combo: 
   return likelihood;
 }
 
+/** 이 스탯을 쓰는 관측 전체에서 후보 데미지 범위의 중앙(%)과 관측한 데미지(%)의 차이를 더한다(3.6 I2). 스탯 하나의 후보 안에서만 정해져 공격·특공 쌍에서는 단순 합이다 */
+function sideCenterGap(prepared: PreparedObservation[], key: AttackKey, combo: NatureCombo, points: number): number {
+  let gap = 0;
+  for (const o of prepared) {
+    if (o.key !== key) continue;
+    const rolls = o.rolls(combo.repNatureId, points);
+    if (!rolls) continue;
+    const center = (Math.min(...rolls.values) + Math.max(...rolls.values)) / 2;
+    gap += Math.abs(((center - o.damage) * 100) / o.maxHp);
+  }
+  return gap;
+}
+
 function runCandidates(input: AttackInferenceInput, prepared: PreparedObservation[], detailed = false): AttackInferenceResult {
   const n = prepared.length;
   const pokemon = getPokemon(input.attacker.pokemonId);
@@ -372,6 +385,9 @@ function runCandidates(input: AttackInferenceInput, prepared: PreparedObservatio
     groups[c].total += atkCandidates.length * spaCandidates.length;
     const atkL = atkCandidates.map((p) => (useAtk ? sideLikelihood(prepared, "atk", combo, p) : 1));
     const spaL = spaCandidates.map((p) => (useSpa ? sideLikelihood(prepared, "spa", combo, p) : 1));
+    // 후보 카드의 "범위 중앙" 정렬용 — 카드를 만들 때만(가능도가 0인 칸은 쓰이지 않아 건너뛴다)
+    const atkGap = top ? atkCandidates.map((p, i) => (useAtk && atkL[i] > 0 ? sideCenterGap(prepared, "atk", combo, p) : 0)) : [];
+    const spaGap = top ? spaCandidates.map((p, j) => (useSpa && spaL[j] > 0 ? sideCenterGap(prepared, "spa", combo, p) : 0)) : [];
     // 공격+특공 포인트 합이 상한을 넘는 쌍은 뺀다(포인트 예산). 한 가지만 쓰는 관측이면 그 포인트 하나가 상한 이하여야 한다
     const atkWeight = new Float64Array(atkCandidates.length);
     const spaWeight = new Float64Array(spaCandidates.length);
@@ -383,7 +399,7 @@ function runCandidates(input: AttackInferenceInput, prepared: PreparedObservatio
         if (spaL[j] <= 0 || a + b > maxSum || a + b < minSum) return;
         const w = atkL[i] * spaL[j];
         okPairs++;
-        top?.add(TOTAL_POINTS - (a + b), w, () => [a, b, c]);
+        top?.add(TOTAL_POINTS - (a + b), w, atkGap[i] + spaGap[j], () => [a, b, c]);
         grow(sumRange, a + b);
         comboWeight += w;
         atkWeight[i] += w;
@@ -410,7 +426,7 @@ function runCandidates(input: AttackInferenceInput, prepared: PreparedObservatio
   });
 
   if (totalWeight > 0) for (const g of groups) g.weight /= totalWeight;
-  const buildCard = ([a, b, c]: [number, number, number], spare: number, likelihood: number) => {
+  const buildCard = ([a, b, c]: [number, number, number], spare: number, likelihood: number, gap: number) => {
     const combo = combos[c];
     const rollSets = prepared.map((o) => o.rolls(combo.repNatureId, o.key === "atk" ? a : b)!);
     return {
@@ -421,6 +437,7 @@ function runCandidates(input: AttackInferenceInput, prepared: PreparedObservatio
       likelihood,
       rollMatch: rollMatchOf(likelihood, n, rollSets[0].values.length, !rollSets[0].probs),
       damagePercent: rollSets.map((r, i) => ({ min: (Math.min(...r.values) * 100) / prepared[i].maxHp, max: (Math.max(...r.values) * 100) / prepared[i].maxHp })),
+      centerGap: gap,
     };
   };
   const range = finishRange;

@@ -964,12 +964,12 @@ try {
     };
     const cp = (arr) => arr[Math.floor(cr() * arr.length)];
     const eps = 1e-9;
-    const checkLists = (lists, sums, label) => {
+    const checkLists = (lists, sums, label, observed) => {
       if (!lists) {
         fail(`${label}: 후보 카드가 없음`);
         return false;
       }
-      for (const [name, cards] of [["남은 SP 순", lists.bySpare], ["가능도 순", lists.byLikelihood]]) {
+      for (const [name, cards] of [["남은 SP 순", lists.bySpare], ["가능도 순", lists.byLikelihood], ["범위 중앙 순", lists.byCenter]]) {
         if (cards.length === 0 || cards.length > 60) fail(`${label} ${name}: 카드 수 ${cards.length}`);
         for (const card of cards) {
           const sum = card.points.reduce((a, pt) => a + pt.value, 0);
@@ -981,6 +981,14 @@ try {
       }
       if (lists.bySpare.some((card, i) => i > 0 && card.spare > lists.bySpare[i - 1].spare)) fail(`${label}: 남은 SP 순 정렬이 아님`);
       if (lists.byLikelihood.some((card, i) => i > 0 && card.likelihood > lists.byLikelihood[i - 1].likelihood + eps)) fail(`${label}: 가능도 순 정렬이 아님`);
+      if (lists.byCenter.some((card, i) => i > 0 && card.centerGap < lists.byCenter[i - 1].centerGap - eps)) fail(`${label}: 범위 중앙 순 정렬이 아님`);
+      // 관측이 하나라 카드의 차이 값은 그 카드 자신의 데미지 범위 중앙과 관측값의 차이와 같아야 하고, 중앙 순 맨 앞은 어느 목록에서도 이보다 작은 카드가 없어야 한다
+      for (const card of [...lists.bySpare, ...lists.byLikelihood, ...lists.byCenter]) {
+        const own = Math.abs((card.damagePercent[0].min + card.damagePercent[0].max) / 2 - observed);
+        if (Math.abs(card.centerGap - own) > 1e-6) fail(`${label}: 범위 중앙 차이 값이 카드 범위와 다름 ${card.centerGap} vs ${own}`);
+      }
+      const minOther = Math.min(...[...lists.bySpare, ...lists.byLikelihood].map((card) => card.centerGap));
+      if (lists.byCenter[0].centerGap > minOther + eps) fail(`${label}: 범위 중앙 순 맨 앞보다 더 중앙에 가까운 카드가 있음`);
       if (lists.bySpare[0].spare !== 66 - sums.min) fail(`${label}: 남은 SP가 가장 많은 카드가 최소 투자 합과 다름`);
       return true;
     };
@@ -998,9 +1006,9 @@ try {
         fail(`방어 후보 카드 시나리오가 ok가 아님(${r?.status})`);
         return false;
       }
-      if (!checkLists(r.candidates, r.sums, "방어 후보 카드")) return false;
       // 표시 손실 %는 (lost−1, lost] 안의 난수가 만든다 — 모든 카드의 범위가 이 구간과 겹쳐야 한다
       const lost = 100 - after;
+      if (!checkLists(r.candidates, r.sums, "방어 후보 카드", lost)) return false;
       const bad = [...r.candidates.bySpare, ...r.candidates.byLikelihood].filter((card) => card.damagePercent[0].min > lost + eps || card.damagePercent[0].max <= lost - 1 - eps);
       if (bad.length > 0) fail(`방어 후보 카드의 데미지 범위가 관측과 안 맞음 ${bad.length}장 (손실 ${lost}%)`);
       return true;
@@ -1018,8 +1026,8 @@ try {
         fail(`공격 후보 카드 시나리오가 ok가 아님(${r?.status})`);
         return false;
       }
-      if (!checkLists(r.candidates, r.sums, "공격 후보 카드")) return false;
       const percent = (damage * 100) / myReal.hp;
+      if (!checkLists(r.candidates, r.sums, "공격 후보 카드", percent)) return false;
       const bad = [...r.candidates.bySpare, ...r.candidates.byLikelihood].filter((card) => card.damagePercent[0].min > percent + eps || card.damagePercent[0].max < percent - eps);
       if (bad.length > 0) fail(`공격 후보 카드의 데미지 범위에 관측이 없음 ${bad.length}장 (${percent.toFixed(1)}%)`);
       return true;
@@ -1037,7 +1045,7 @@ try {
       if (checkAttack(mine, opp, oppTrue, myReal)) atkChecked++;
     }
     if (defChecked === 0 || atkChecked === 0) fail(`후보 카드 검증 시행이 부족함(방어 ${defChecked}·공격 ${atkChecked})`);
-    console.log(`후보 카드(방어 ${defChecked}건·공격 ${atkChecked}건: 정렬·남은 SP·최소 투자·데미지 범위)`, failed === before ? "통과" : "실패");
+    console.log(`후보 카드(방어 ${defChecked}건·공격 ${atkChecked}건: 세 정렬·남은 SP·최소 투자·데미지 범위·범위 중앙)`, failed === before ? "통과" : "실패");
   }
   // 6) 3.4 H1 HP 최적 수치 눈금 — 사용자 표의 예시와 전 종족값 전수 대조
   {
