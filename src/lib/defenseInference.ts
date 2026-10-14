@@ -14,6 +14,7 @@ import { EMPTY_ABILITY_POINTS } from "../types/party";
 import { MAX_ABILITY_POINTS_PER_STAT, MAX_ABILITY_POINTS_TOTAL } from "./statCalculator";
 import type { BaseStats } from "../types/stats";
 import type { Pokemon } from "../types/pokemon";
+import { rollMatchOf, TOTAL_POINTS, TopLists, type CandidateLists } from "./candidateCards";
 
 /**
  * 상대 실능치 역산(ver.2.1 C) — 상대의 HP·방어(특방) 능력 포인트와 성격을 "내가 입힌 데미지 %"로 거꾸로 좁힌다.
@@ -156,6 +157,8 @@ export interface InferenceResult {
   hp: Range | null;
   def: Range | null;
   spd: Range | null;
+  /** 남은 후보 전체에서 본 HP+방어+특방 포인트 합의 범위 — 스탯별 범위를 더한 것보다 좁다(HP·방어는 서로 보완하는 관계). 결합의 포인트 예산이 쓴다(3.6 I1-d) */
+  sums: Range | null;
   groups: NatureGroup[];
   /** 남은 후보의 HP 포인트(가로 0~32) × 방어/특방 포인트(세로 0~32) 분포. 관측이 없는 쪽은 null */
   hpDefGrid: Uint8Array | null;
@@ -178,6 +181,26 @@ export interface InferenceResult {
   hpSpdWeights: Float32Array | null;
   /** 메가 전·후 실수치·내구 지수 나란히 보기(3.1 L1-b) — 메가 태그가 없으면 빈 배열 */
   formViews: FormView[];
+  /** 구체적인 후보 카드(3.6 I2) — 남은 SP 순·가능도 순 상위 목록. 후보가 없거나 가중 계산을 하지 않은 호출이면 null */
+  candidates: CandidateLists | null;
+}
+
+/**
+ * 후보(HP·방어·특방 포인트 × 성격 묶음)별 가능도 캐시 — 결합 되풀이(`inferCombined`)처럼 **같은 관측**으로 성격·포인트 합 제한만 바꿔 여러 번 부를 때
+ * 후보 하나의 가능도가 그대로라 다시 계산하지 않는다(3.6 I1-a). 관측·상대 종·가정이 바뀌면 새로 만들어야 한다.
+ */
+export interface LikelihoodCache {
+  /** [hp][def][spd][성격 묶음 칸] 가능도 — 음수는 아직 계산하지 않음 */
+  values: Float64Array;
+  /** 성격 묶음 key(`방어배율|특방배율`) → 칸 번호 */
+  slots: Map<string, number>;
+}
+
+/** 성격 묶음은 방어·특방 보정 3×3 = 최대 9가지 */
+const COMBO_SLOTS = 9;
+
+export function createLikelihoodCache(): LikelihoodCache {
+  return { values: new Float64Array(33 * 33 * 33 * COMBO_SLOTS).fill(-1), slots: new Map() };
 }
 
 /** 분포 격자 한 변 칸 수(포인트 0~32) */
@@ -289,6 +312,7 @@ function emptyResult(status: InferenceResult["status"], n: number): InferenceRes
     hp: null,
     def: null,
     spd: null,
+    sums: null,
     groups: [],
     hpDefGrid: null,
     hpSpdGrid: null,
@@ -303,6 +327,7 @@ function emptyResult(status: InferenceResult["status"], n: number): InferenceRes
     hpDefWeights: null,
     hpSpdWeights: null,
     formViews: [],
+    candidates: null,
   };
 }
 
@@ -406,38 +431,74 @@ function damageRolls(parts: DamageParts, defenseRealStat: number): RollSet {
   return damageRollSet(parts, defenseRealStat);
 }
 
+// 가능도 계산용 재사용 버퍼 — 후보마다 Map을 새로 만들지 않는다. HP 실수치는 400을 넘지 않는다(종족값 255 + 75 + 32)
+const HP_BUF = 1024;
+let curW = new Float64Array(HP_BUF);
+let curList = new Int32Array(HP_BUF);
+let nextW = new Float64Array(HP_BUF);
+let nextList = new Int32Array(HP_BUF);
+const nextSeen = new Int32Array(HP_BUF);
+let seenStamp = 0;
+
+/** 최대 HP별 화면 % 표(`displayPercent(h, maxHp)`를 h = 0..maxHp에 미리 계산) — 가능도 계산이 같은 값을 수없이 되묻는다 */
+const percentTables = new Map<number, Uint8Array>();
+function percentTable(maxHp: number): Uint8Array {
+  let table = percentTables.get(maxHp);
+  if (!table) percentTables.set(maxHp, (table = Uint8Array.from({ length: maxHp + 1 }, (_, h) => displayPercent(h, maxHp))));
+  return table;
+}
+
 /**
  * 후보 하나(최대 HP + 관측별 16단계 난수 데미지)가 관측 전체와 얼마나 맞는지(가능도, 0~1). 0이면 불가능.
  * 첫 관측 "맞기 전 %"에 맞는 HP는 균등하다고 보고, 매 관측마다 난수 16단계를 같은 확률(1/16)로 굴려 화면 %가 맞는 경우만 이어 간다.
  * 이어서 오는 관측은 "맞기 전 %"가 직전 결과와 맞는 HP만 남긴다(관측 사이 회복 없음 가정).
+ * HP별 가중치를 배열(curW)에 두고 살아 있는 HP를 처음 들어온 순서대로 목록(curList)에 둔다 — Map과 같은 순서로 더해 결과가 같다.
  */
 function candidateLikelihood(maxHp: number, rolls: RollSet[], obs: PreparedObservation[], tol: number): number {
-  let current = new Map<number, number>();
+  const pct = percentTable(maxHp);
+  let n = 0;
   for (let h = 1; h <= maxHp; h++) {
-    if (Math.abs(displayPercent(h, maxHp) - obs[0].before) <= tol) current.set(h, 1);
+    if (Math.abs(pct[h] - obs[0].before) <= tol) curList[n++] = h;
   }
-  if (current.size === 0) return 0;
-  for (const h of current.keys()) current.set(h, 1 / current.size);
+  if (n === 0) return 0;
+  for (let j = 0; j < n; j++) curW[curList[j]] = 1 / n;
   for (let i = 0; i < obs.length; i++) {
     if (i > 0) {
-      for (const h of current.keys()) {
-        if (Math.abs(displayPercent(h, maxHp) - obs[i].before) > tol) current.delete(h);
+      let kept = 0;
+      for (let j = 0; j < n; j++) {
+        const h = curList[j];
+        if (Math.abs(pct[h] - obs[i].before) <= tol) curList[kept++] = h;
       }
-      if (current.size === 0) return 0;
+      n = kept;
+      if (n === 0) return 0;
     }
-    const next = new Map<number, number>();
-    for (const [h, w] of current) {
-      const { values, probs } = rolls[i];
+    const { values, probs } = rolls[i];
+    const equal = 1 / values.length;
+    const after = obs[i].after;
+    seenStamp++;
+    let m = 0;
+    for (let j = 0; j < n; j++) {
+      const h = curList[j];
+      const w = curW[h];
       for (let k = 0; k < values.length; k++) {
         const h2 = Math.max(0, h - values[k]);
-        if (Math.abs(displayPercent(h2, maxHp) - obs[i].after) <= tol) next.set(h2, (next.get(h2) ?? 0) + w * (probs ? probs[k] : 1 / values.length));
+        if (Math.abs(pct[h2] - after) > tol) continue;
+        const add = w * (probs ? probs[k] : equal);
+        if (nextSeen[h2] === seenStamp) nextW[h2] += add;
+        else {
+          nextSeen[h2] = seenStamp;
+          nextW[h2] = add;
+          nextList[m++] = h2;
+        }
       }
     }
-    if (next.size === 0) return 0;
-    current = next;
+    if (m === 0) return 0;
+    [curW, nextW] = [nextW, curW];
+    [curList, nextList] = [nextList, curList];
+    n = m;
   }
   let sum = 0;
-  for (const w of current.values()) sum += w;
+  for (let j = 0; j < n; j++) sum += curW[curList[j]];
   return sum;
 }
 
@@ -512,7 +573,7 @@ function accumulateForm(
   }
 }
 
-function runCandidates(input: InferenceInput, prepared: PreparedObservation[], detailed = false): InferenceResult {
+function runCandidates(input: InferenceInput, prepared: PreparedObservation[], detailed = false, likeCache?: LikelihoodCache): InferenceResult {
   const n = prepared.length;
   const pokemon = getPokemon(input.defender.pokemonId);
   if (!pokemon) return emptyResult("invalid", n);
@@ -525,6 +586,12 @@ function runCandidates(input: InferenceInput, prepared: PreparedObservation[], d
   const useSpd = prepared.some((o) => o.parts.defenseKey === "spd");
   const combos = buildNatureCombos(useDef, useSpd, input.natureIds ? new Set(input.natureIds) : undefined);
   const groups: NatureGroup[] = combos.map((c) => ({ id: c.key, label: c.label, natureNames: c.natureNames, feasible: 0, total: 0, weight: 0 }));
+  const comboSlot = combos.map((c) => {
+    if (!likeCache) return 0;
+    let slot = likeCache.slots.get(c.key);
+    if (slot === undefined) likeCache.slots.set(c.key, (slot = likeCache.slots.size));
+    return slot;
+  });
 
   // 방어 스탯 값별 난수 데미지 캐시 (관측 번호 × 스탯 값)
   const cache = prepared.map(() => new Map<number, RollSet>());
@@ -550,7 +617,7 @@ function runCandidates(input: InferenceInput, prepared: PreparedObservation[], d
   const bulkPhysRange: Range = { min: Infinity, max: -Infinity };
   const bulkSpecRange: Range = { min: Infinity, max: -Infinity };
   let totalWeight = 0;
-  const [hpRange, defRange, spdRange, realHp, realDef, realSpd] = Array.from({ length: 6 }, emptyRange);
+  const [hpRange, defRange, spdRange, realHp, realDef, realSpd, sumRange] = Array.from({ length: 7 }, emptyRange);
   let total = 0;
   let feasible = 0;
   // 메가 전·후 표시(3.1 L1-b): 폼마다 같은 후보를 그 폼의 종족값으로 환산해 실수치 범위·내구 지수를 따로 모은다(가중 계산을 하는 detailed일 때만)
@@ -562,9 +629,32 @@ function runCandidates(input: InferenceInput, prepared: PreparedObservation[], d
     spec: { w: new WeightedValues(), r: emptyRange() },
   }));
 
+  // 후보 데미지 범위의 중앙(%)과 관측한 손실 %의 차이(3.6 I2) — 방어 스탯 값별로 한 번만 계산한다
+  const centers = prepared.map(() => new Float64Array(1024).fill(Number.NaN));
+  const observedLoss = prepared.map((o) => o.before - o.after);
+  const centerOf = (i: number, stat: number): number => {
+    let v = centers[i][stat];
+    if (Number.isNaN(v)) {
+      const { values } = rollsFor(i, stat);
+      centers[i][stat] = v = (Math.min(...values) + Math.max(...values)) / 2;
+    }
+    return v;
+  };
+  const centerGap = (combo: NatureCombo, defP: number, spdP: number, maxHp: number): number => {
+    let gap = 0;
+    for (let i = 0; i < n; i++) {
+      const o = prepared[i];
+      const stat = o.parts.defenseKey === "def" ? realStat(combo.defMult, o.baseDef, defP) : realStat(combo.spdMult, o.baseSpd, spdP);
+      gap += Math.abs((centerOf(i, stat) * 100) / maxHp - observedLoss[i]);
+    }
+    return gap;
+  };
+  // 구체적인 후보 카드용 상위 목록(3.6 I2) — 가중 계산을 하는 detailed일 때만
+  const top = detailed ? new TopLists<[number, number, number, number]>() : null;
   const grow = growRange;
   const record = (hpP: number, defP: number, spdP: number, maxHp: number, defStat: number, spdStat: number) => {
     grow(hpRange, hpP);
+    grow(sumRange, hpP + defP + spdP);
     grow(realHp, maxHp);
     if (hpDefGrid) {
       grow(defRange, defP);
@@ -591,15 +681,21 @@ function runCandidates(input: InferenceInput, prepared: PreparedObservation[], d
       const spdStat = realStat(combo.spdMult, lastSpd?.baseSpd ?? base.spd, spdP);
       total++;
       groups[c].total++;
-      const rolls = prepared.map((o, i) =>
-        o.parts.defenseKey === "def" ? rollsFor(i, realStat(combo.defMult, o.baseDef, defP)) : rollsFor(i, realStat(combo.spdMult, o.baseSpd, spdP)),
-      );
-      const likelihood = candidateLikelihood(maxHp, rolls, prepared, tol);
+      const cacheIdx = likeCache ? ((hpP * GRID + defP) * GRID + spdP) * COMBO_SLOTS + comboSlot[c] : -1;
+      let likelihood = likeCache ? likeCache.values[cacheIdx] : -1;
+      if (likelihood < 0) {
+        const rolls = prepared.map((o, i) =>
+          o.parts.defenseKey === "def" ? rollsFor(i, realStat(combo.defMult, o.baseDef, defP)) : rollsFor(i, realStat(combo.spdMult, o.baseSpd, spdP)),
+        );
+        likelihood = candidateLikelihood(maxHp, rolls, prepared, tol);
+        if (likeCache) likeCache.values[cacheIdx] = likelihood;
+      }
       if (likelihood <= 0) continue;
       feasible++;
       groups[c].feasible++;
       record(hpP, defP, spdP, maxHp, defStat, spdStat);
       if (detailed) {
+        top!.add(TOTAL_POINTS - (hpP + defP + spdP), likelihood, centerGap(combo, defP, spdP, maxHp), () => [hpP, defP, spdP, c]);
         totalWeight += likelihood;
         groups[c].weight += likelihood;
         hpW.add(hpP, likelihood);
@@ -624,6 +720,21 @@ function runCandidates(input: InferenceInput, prepared: PreparedObservation[], d
     }
   }
 
+  const buildCard = ([hpP, defP, spdP, c]: [number, number, number, number], spare: number, likelihood: number, gap: number) => {
+    const combo = combos[c];
+    const maxHp = Math.floor(base.hp + 75 + hpP);
+    const rollSets = prepared.map((o, i) => rollsFor(i, o.parts.defenseKey === "def" ? realStat(combo.defMult, o.baseDef, defP) : realStat(combo.spdMult, o.baseSpd, spdP)));
+    return {
+      natureLabel: combo.label,
+      natureNames: combo.natureNames,
+      points: [{ label: "HP", value: hpP }, ...(useDef ? [{ label: "방어", value: defP }] : []), ...(useSpd ? [{ label: "특방", value: spdP }] : [])],
+      spare,
+      likelihood,
+      rollMatch: rollMatchOf(likelihood, n, rollSets[0].values.length, !rollSets[0].probs),
+      damagePercent: rollSets.map((r) => ({ min: (Math.min(...r.values) * 100) / maxHp, max: (Math.max(...r.values) * 100) / maxHp })),
+      centerGap: gap,
+    };
+  };
   const range = (r: Range): Range | null => (r.min === Infinity ? null : r);
   const normalize = (w: Float32Array | null): Float32Array | null => {
     if (!w) return null;
@@ -647,6 +758,7 @@ function runCandidates(input: InferenceInput, prepared: PreparedObservation[], d
     hp: range(hpRange),
     def: useDef ? range(defRange) : null,
     spd: useSpd ? range(spdRange) : null,
+    sums: range(sumRange),
     groups,
     hpDefGrid,
     hpSpdGrid,
@@ -660,6 +772,7 @@ function runCandidates(input: InferenceInput, prepared: PreparedObservation[], d
     bulkSpecial: useSpd ? bulkOf(bulkSpecW, bulkSpecRange) : null,
     hpDefWeights: normalize(hpDefWeights),
     hpSpdWeights: normalize(hpSpdWeights),
+    candidates: top && feasible > 0 ? top.toCards(buildCard) : null,
     formViews: formAcc.map((a) => ({
       form: a.f.form,
       label: a.f.label,
@@ -678,14 +791,14 @@ function runCandidates(input: InferenceInput, prepared: PreparedObservation[], d
  * 관측 전체와 맞는 상대 배분 후보를 좁힌다. 관측이 없으면 null.
  * 관측 사이에 상대가 회복하지 않았다고 가정한다(먹다남은음식·재생력 등은 2차).
  */
-export function inferDefense(input: InferenceInput, diagnostics = true): InferenceResult | null {
+export function inferDefense(input: InferenceInput, diagnostics = true, cache?: LikelihoodCache): InferenceResult | null {
   const total = input.observations.length;
   if (total === 0) return null;
   const { prepared, errors } = prepareObservations(input);
   if (errors.some((e) => e !== null)) {
     return { ...emptyResult("invalid", total), observationErrors: errors };
   }
-  const result = runCandidates(input, prepared, true);
+  const result = runCandidates(input, prepared, true, cache);
   result.observationErrors = errors;
 
   if (total > 1 && diagnostics) {

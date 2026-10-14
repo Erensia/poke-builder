@@ -1,4 +1,4 @@
-/* 스피드 실수치 표 탭(3.4 T1) — 내 포켓몬 카드 옆(좁으면 아래)에 실수치 라인 목록 */
+/* 스피드 표 탭 — 왼쪽 열(내 포켓몬 카드·목표 포켓몬), 오른쪽(좁으면 아래)에 상대 단계별 추월·포인트 조정 */
 .speedtab-board {
   display: flex;
   flex-wrap: wrap;
@@ -42,18 +42,6 @@
 }
 
 /* 한 줄 = 같은 실수치 라인. 왼쪽 값, 오른쪽에 포켓몬 칩을 가로로 나열 */
-.speedtab-line {
-  display: flex;
-  align-items: baseline;
-  gap: 0.7rem;
-  padding: 0.4rem 0.7rem;
-  border-top: 1px solid var(--border);
-}
-
-.speedtab-line:first-child {
-  border-top: none;
-}
-
 .speedtab-line-value {
   flex: 0 0 3rem;
   font-variant-numeric: tabular-nums;
@@ -111,17 +99,216 @@
   text-shadow: 0 0 2px var(--surface-2), 0 0 2px var(--surface-2);
 }
 
-.speedtab-me {
-  font-weight: 700;
-  align-self: center;
+/* 3.6 T2 — 왼쪽 열(카드 + 목표 포켓몬) */
+.speedtab-side {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  flex: 0 0 280px;
+  max-width: 100%;
 }
 
-.speedtab-picked {
-  margin: 0;
-  min-height: 1.2em;
+/* 모바일(≤760px)에서는 세로로 쌓이므로 오른쪽 영역도 왼쪽 열(카드)과 같은 폭으로 맞춘다 */
+@media (max-width: 760px) {
+  .speedtab-side,
+  .speedtab-result {
+    flex: 1 1 100%;
+    max-width: 320px;
+  }
+}
+
+/* 날씨/필드 틴트 — 내 포켓몬 카드 뒤에만. 레이아웃은 그대로 두고 카드보다 살짝 큰 판을 뒤에 깐다 */
+.speedtab-card {
+  position: relative;
+  isolation: isolate;
+}
+
+.speedtab-card::before {
+  content: "";
+  position: absolute;
+  inset: -0.6rem;
+  z-index: -1;
+  border-radius: 16px;
+  background: var(--env-tint, transparent);
+  transition: background 0.3s ease;
+  pointer-events: none;
+}
+
+/* 접고 펼 수 있는 구역 */
+.speedtab-fold > summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.speedtab-fold > summary::-webkit-details-marker {
+  display: none;
+}
+
+.speedtab-fold > summary::before {
+  content: "▾";
+  display: inline-block;
+  width: 1.1em;
   color: var(--text-muted);
 }
 
-.speedtab-line.is-me {
+.speedtab-fold:not([open]) > summary::before {
+  content: "▸";
+}
+
+.speedtab-fold-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.4rem;
+}
+
+.speedtab-title small {
+  margin-left: 0.4rem;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+/* 3.6 T2 — 상대 단계별 추월·포인트 조정 */
+.speedtab-title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.speedtab-title strong {
+  font-variant-numeric: tabular-nums;
+}
+
+.speedtab-tier {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+
+.speedtab-head {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.speedtab-head small {
+  margin-left: 0.3rem;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+/* 라벨 + 칩 묶음. details일 때는 summary가 라벨 */
+.speedtab-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.6rem;
+}
+
+.speedtab-group-label,
+.speedtab-group > summary {
+  flex: 0 0 auto;
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.speedtab-group > summary {
+  cursor: pointer;
+}
+
+.speedtab-group[open] > summary {
+  flex-basis: 100%;
+}
+
+.speedtab-bp {
+  display: flex;
+  align-items: baseline;
+  gap: 0.7rem;
+  padding: 0.4rem 0.7rem;
+  border-top: 1px solid var(--border);
+}
+
+.speedtab-bp:first-child {
+  border-top: none;
+}
+
+.speedtab-bp-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.speedtab-bp-speed {
+  font-variant-numeric: tabular-nums;
+}
+
+.speedtab-bp.is-me {
   background: var(--violet-soft);
+}
+
+.speedtab-target-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.speedtab-target-btn {
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  background: var(--surface-2);
+  font: inherit;
+  font-size: 0.8rem;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.speedtab-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.speedtab-table th,
+.speedtab-table td {
+  padding: 0.3rem 0.4rem;
+  border-top: 1px solid var(--border);
+  text-align: center;
+}
+
+.speedtab-table th:first-child {
+  text-align: left;
+}
+
+.speedtab-table td small {
+  display: block;
+  font-size: 0.66rem;
+  color: var(--text-muted);
+}
+
+.speedtab-table td.is-pass {
+  background: var(--violet-soft);
+  font-weight: 700;
+}
+
+/* 칩을 누르면 보이는 설명 — 다른 유리 패널과 같은 모양, 스크롤해도 보이도록 위에 붙임 */
+.speedtab-picked {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  margin: 0;
+  padding: 0.4rem 0.7rem;
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  background: var(--surface);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
+  box-shadow: var(--glass-shadow);
+  font-size: 0.8rem;
+  color: var(--text-muted);
 }

@@ -8,11 +8,15 @@
  */
 import { createServer } from "vite";
 import { fileURLToPath } from "node:url";
+import { createHash } from "node:crypto";
 
 const trials = Number(process.argv[2] ?? 150);
 const root = fileURLToPath(new URL("..", import.meta.url));
 const server = await createServer({ root, server: { middlewareMode: true, hmr: false }, appType: "custom", logLevel: "error" });
 let failed = 0;
+// 결합 결과 해시 — 속도 최적화 전후로 결과가 한 비트도 달라지지 않았는지 대조한다(3.6 I1-a)
+const combinedDigest = createHash("sha1");
+const digestResult = (c) => combinedDigest.update(JSON.stringify(c, (k, v) => (k === "rounds" || k === "converged" || k === "candidates" ? undefined : ArrayBuffer.isView(v) ? Array.from(v) : v)));
 const fail = (msg) => {
   failed++;
   console.log("FAIL", msg);
@@ -416,6 +420,7 @@ try {
     let sumNaturesBefore = 0;
     let sumMs = 0;
     let maxMs = 0;
+    let maxRounds = 0;
     let sumNaturesAfter = 0;
     for (let t = 0; t < 200; t++) {
       const opp = pick(species);
@@ -452,6 +457,9 @@ try {
       const t0 = performance.now();
       const c = cb.inferCombined(defenseInput, attackInput);
       const ms = performance.now() - t0;
+      digestResult(c);
+      maxRounds = Math.max(maxRounds, c.rounds);
+      if (!c.converged) fail(`결합 되풀이가 수렴하지 않고 상한에서 끊김 opp=${opp.id}`);
       sumMs += ms;
       maxMs = Math.max(maxMs, ms);
       const inR = (r, v) => !r || (r.min <= v && v <= r.max);
@@ -473,7 +481,7 @@ try {
       `방어·공격 결합 왕복 ${cbOk}/${cbTried} 통과 · 후보가 줄어든 사례 방어 ${defNarrowed}건·공격 ${atkNarrowed}건 · 성격 후보 평균 ${(sumNaturesBefore / Math.max(1, cbOk)).toFixed(1)}개(방어 쪽만) → ${(sumNaturesAfter / Math.max(1, cbOk)).toFixed(1)}개(결합)`,
     );
     if (cbTried === 0) fail("방어·공격 결합 왕복 시행이 0건");
-    console.log(`방어·공격 결합 계산 시간: 평균 ${(sumMs / Math.max(1, cbTried)).toFixed(0)}ms · 최대 ${maxMs.toFixed(0)}ms`);
+    console.log(`방어·공격 결합 계산 시간: 평균 ${(sumMs / Math.max(1, cbTried)).toFixed(0)}ms · 최대 ${maxMs.toFixed(0)}ms · 되풀이 최대 ${maxRounds}번`);
     if (maxMs > 5000) fail(`방어·공격 결합이 너무 느림(${maxMs.toFixed(0)}ms)`);
     if (defNarrowed + atkNarrowed === 0) fail("방어·공격 결합: 후보가 줄어든 사례가 전혀 없음(결합이 반영되지 않는 듯)");
     // 일부러 틀린 관측(불가능한 데미지)은 모순이어야 한다
@@ -488,10 +496,49 @@ try {
     const badHp = ai.inferAttack({ attacker: slot("망나뇽"), defender: mine, observations: [{ move: data.getMove("아이언헤드"), critical: false, hpBefore: myMax + 5, hpAfter: 10 }] });
     const noMove = ai.inferAttack({ attacker: slot("망나뇽"), defender: mine, observations: [{ move: data.getMove("자이로볼"), critical: false, hpBefore: myMax, hpAfter: myMax - 40 }] });
     if (contradiction?.status !== "contradiction") fail(`공격 역산: 불가능한 데미지가 ${contradiction?.status}`);
-    if (faint?.status !== "invalid" || !faint.observationErrors[0]?.includes("쓰러진")) fail("공격 역산: 쓰러진 관측이 invalid로 안 잡힘");
+    // 쓰러진 공격(3.6 I1-e): 데미지가 맞기 전 HP 이상이라는 부등식 — 가능한 쓰러짐은 ok, 풀피에서 한 방에 쓰러질 수 없는 조합은 모순, 다단히트는 invalid
+    const faintFull = ai.inferAttack({ attacker: slot("망나뇽"), defender: mine, observations: [{ move: data.getMove("아이언헤드"), critical: false, hpBefore: myMax, hpAfter: 0 }] });
+    const faintMulti = ai.inferAttack({ attacker: slot("망나뇽"), defender: mine, observations: [{ move: data.getMove("더블어택"), critical: false, hpBefore: 30, hpAfter: 0, hits: 2 }] });
+    if (faint?.status !== "ok") fail(`공격 역산: 쓰러진 관측이 ok가 아님(${faint?.status})`);
+    if (faintFull?.status !== "contradiction") fail(`공격 역산: 풀피에서 한 방에 쓰러지는 관측이 ${faintFull?.status}`);
+    if (faintMulti?.status !== "invalid" || !faintMulti.observationErrors[0]?.includes("쓰러진 다단히트")) fail("공격 역산: 쓰러진 다단히트가 invalid로 안 잡힘");
     if (badHp?.status !== "invalid" || !badHp.observationErrors[0]?.includes("최대 HP")) fail("공격 역산: 최대 HP 초과가 invalid로 안 잡힘");
     if (noMove?.status !== "invalid" || !noMove.observationErrors[0]?.includes("스피드")) fail("공격 역산: 스피드 위력 기술이 invalid로 안 잡힘");
     console.log(`공격 역산 예외: 모순 ${contradiction?.status} · 쓰러짐 ${faint?.status} · HP 초과 ${badHp?.status} · 자이로볼 ${noMove?.status}`);
+    // 쓰러진 공격 왕복: 진짜 배분이 실제로 쓰러뜨릴 만한 데미지를 낼 때 "맞기 전 HP → 0"으로 넣어도 진짜 값이 후보에 남아야 한다
+    {
+      // 공용 난수열(rnd)을 쓰면 뒤 시나리오가 바뀌어 결합 결과 해시 대조가 깨지므로 이 블록은 따로 굴린다
+      let koSeed = 777;
+      const koRnd = () => {
+        koSeed = (koSeed * 1664525 + 1013904223) >>> 0;
+        return koSeed / 2 ** 32;
+      };
+      const koPick = (arr) => arr[Math.floor(koRnd() * arr.length)];
+      let koTried = 0;
+      let koOk = 0;
+      for (let t = 0; t < 120; t++) {
+        const opp = koPick(species);
+        const truthKo = { atk: Math.floor(koRnd() * 33), spa: Math.floor(koRnd() * 33), nature: koPick(natureIds) };
+        const oppTrue = slot(opp.id, { points: pts(truthKo), nature: truthKo.nature });
+        const my = slot(koPick(species).id, { points: pts({ hp: Math.floor(koRnd() * 33), def: Math.floor(koRnd() * 33), spd: Math.floor(koRnd() * 33) }), nature: koPick(natureIds) });
+        const myReal = stat.computeRealStats(form.getEffectiveForm(data.getPokemon(my.pokemonId), my).baseStats, my.points, my.nature);
+        const cat = koRnd() < 0.5 ? "physical" : "special";
+        const move = koPick(attackMoves.filter((m) => m.category === cat));
+        const res = ev.evaluateSlotMatchup(oppTrue, move, my, { defenderHpIsFull: true, skipVerdict: true });
+        const parts = res?.damageParts;
+        if (!parts || parts.typeEffectiveness === 0) continue;
+        const damage = fm.integerTotalDamage(parts, res.defenseStat, (85 + Math.floor(koRnd() * 16)) / 100);
+        const hpBefore = 1 + Math.floor(koRnd() * Math.min(damage, myReal.hp));
+        const input = (hpAfter) => ({ attacker: slot(opp.id), defender: my, observations: [{ move, critical: false, hpBefore, hpAfter }] });
+        const ko = ai.inferAttack(input(0));
+        koTried++;
+        const r = ko?.[cat === "physical" ? "atk" : "spa"];
+        if (ko?.status === "ok" && within(r, truthKo[cat === "physical" ? "atk" : "spa"])) koOk++;
+        else fail(`쓰러진 공격 왕복: 진짜 값이 빠짐 opp=${opp.id} ${move.id} hp ${hpBefore}→0 상태=${ko?.status}`);
+      }
+      if (koTried === 0) fail("쓰러진 공격 왕복 시행이 0건");
+      console.log(`쓰러진 공격 왕복 ${koOk}/${koTried} 통과`);
+    }
   }
 
   // 3.1 C2-a) 극보정 형태 표시 — 32가 두 개 이하이고 나머지 합이 2 이하. 표시용이라 계산엔 영향이 없다.
@@ -727,6 +774,7 @@ try {
     let speNarrowed = 0;
     let floorUsed = 0;
     let maxMs3 = 0;
+    let maxRounds3 = 0;
     for (let t = 0; t < 300; t++) {
       const v = () => Math.floor(rnd() * (rnd() < 0.5 ? 33 : 11));
       const opp = pick(species);
@@ -773,6 +821,9 @@ try {
       const t0 = performance.now();
       const c = cb3.inferCombined(defenseInput, attackInput, speedInput);
       maxMs3 = Math.max(maxMs3, performance.now() - t0);
+      digestResult(c);
+      maxRounds3 = Math.max(maxRounds3, c.rounds);
+      if (!c.converged) fail(`3쪽 결합 되풀이가 수렴하지 않고 상한에서 끊김 opp=${opp.id}`);
       const inR = (r, v) => !r || (r.min <= v && v <= r.max);
       const natName = data.NATURES.find((x) => x.id === truth.nature).name;
       const good =
@@ -792,7 +843,7 @@ try {
       if (cd.conflict !== null || ca.conflict !== null || !inR(cd.speed.spe, truth.spe) || !inR(ca.speed.spe, truth.spe)) fail(`2쪽 결합(스피드)에서 진짜 값이 빠짐 opp=${opp.id}`);
       if (one.natures !== null || one.budget !== null || one.parts.join() !== "speed") fail("스피드 한쪽만 있을 때 결합이 일어남");
     }
-    console.log(`방어·공격·스피드 결합 왕복 ${ok3}/${tried3} 통과 · 스피드 후보가 줄어든 사례 ${speNarrowed}건 · 포인트 하한이 걸린 사례 ${floorUsed}건 · 최대 ${maxMs3.toFixed(0)}ms`);
+    console.log(`방어·공격·스피드 결합 왕복 ${ok3}/${tried3} 통과 · 스피드 후보가 줄어든 사례 ${speNarrowed}건 · 포인트 하한이 걸린 사례 ${floorUsed}건 · 최대 ${maxMs3.toFixed(0)}ms · 되풀이 최대 ${maxRounds3}번`);
     if (tried3 === 0) fail("3쪽 결합 왕복 시행이 0건");
     if (maxMs3 > 5000) fail(`3쪽 결합이 너무 느림(${maxMs3.toFixed(0)}ms)`);
   }
@@ -842,7 +893,7 @@ try {
     if (!ok) fail(`저장 복원 결과가 기대와 다름: ${JSON.stringify(r)}`);
     console.log("저장 복원(깨진 입력 7종·정상 1종)", failed === 0 ? "통과" : "실패");
   }
-  // 5) 3.4 T1 스피드 표 — 식이 computeRealStats와 같고, 이웃·개수가 전체 표를 정렬해 센 결과와 같다
+  // 5) 3.4 T1 스피드 표 — 식이 computeRealStats와 같다
   {
     const st = await server.ssrLoadModule("/src/lib/speedTable.ts");
     const before = failed;
@@ -857,39 +908,144 @@ try {
       if (st.speedValue(f.baseSpe, mult, p) !== real) fail(`스피드 식 불일치 ${f.name} ×${mult} ${p}pt: ${st.speedValue(f.baseSpe, mult, p)} vs ${real}`);
     }
     const formulaChecked = combos.length;
-    // 이웃 대조: 모든 (폼, 성격, 포인트) 줄을 한 번에 펴서 센다
-    const all = st.SPEED_FORMS.flatMap((f) => [1, 1.1, 0.9].flatMap((mult) => Array.from({ length: 33 }, (_, p) => ({ name: f.name, value: st.speedValue(f.baseSpe, mult, p) }))));
-    // 값 순으로 훑어 폼마다 처음 나온 줄(= 가장 가까운 값)만 모으고, 5폼 + 5번째와 같은 값의 폼까지를 라인으로 묶는다
-    const expectLines = (rows) => {
-      const first = new Map();
-      for (const r of rows) if (!first.has(r.name)) first.set(r.name, r.value);
-      const near = [...first];
-      const cut = near[Math.min(4, near.length - 1)]?.[1];
-      const lines = new Map();
-      for (const [name, value] of near.filter(([, v], i) => i < 5 || v === cut)) lines.set(value, [...(lines.get(value) ?? []), name]);
-      return JSON.stringify([...lines].map(([value, names]) => [value, names.sort()]));
-    };
-    const lineKey = (lines) => JSON.stringify(lines.map((l) => [l.value, l.rows.map((r) => r.name).sort()]));
-    const samples = [60, 100, 135, 150.5, 172, 200, 5, 400, ...Array.from({ length: 12 }, () => 40 + Math.floor(rnd() * 220))];
-    for (const speed of samples) {
-      const n = st.speedNeighbors(speed);
-      const up = expectLines(all.filter((r) => r.value > speed).sort((a, b) => a.value - b.value));
-      const down = expectLines(all.filter((r) => r.value < speed).sort((a, b) => b.value - a.value));
-      if (lineKey([...n.above].reverse()) !== up) fail(`위 라인 불일치 @${speed}`);
-      if (lineKey(n.below) !== down) fail(`아래 라인 불일치 @${speed}`);
-      const tieNames = new Set(all.filter((r) => r.value === speed).map((r) => r.name));
-      if (n.tie.length !== tieNames.size || n.tie.some((r) => r.value !== speed || !tieNames.has(r.name))) fail(`동속 불일치 @${speed}`);
-      const range = (f) => [st.speedValue(f.baseSpe, 0.9, 0), st.speedValue(f.baseSpe, 1.1, 32)];
-      const faster = st.SPEED_FORMS.filter((f) => range(f)[0] > speed).length;
-      const slower = st.SPEED_FORMS.filter((f) => range(f)[1] < speed).length;
-      if (n.alwaysFaster !== faster || n.alwaysSlower !== slower || n.mixed !== st.SPEED_FORMS.length - faster - slower) fail(`항상 빠름/느림 개수 불일치 @${speed}`);
-      for (const r of [...n.above.flatMap((l) => l.rows), ...n.tie, ...n.below.flatMap((l) => l.rows)]) {
-        const f = st.SPEED_FORMS.find((x) => x.name === r.name);
-        const mult = r.nature === "스피드↑" ? 1.1 : r.nature === "스피드↓" ? 0.9 : 1;
-        if (!f || st.speedValue(f.baseSpe, mult, r.points) !== r.value) fail(`줄의 성격·포인트가 값과 안 맞음 ${r.name} @${speed}`);
+    console.log(`스피드 표(폼 ${st.SPEED_FORMS.length}개, 식 ${formulaChecked}건)`, failed === before ? "통과" : "실패");
+  }
+  // 5-b) 3.6 T2 스피드 표 단계 — 단계 값이 computeRealStats와 같고, 추월 분류·최소 포인트·포인트 지점이 전수 대조와 같다
+  {
+    const st = await server.ssrLoadModule("/src/lib/speedTable.ts");
+    const before = failed;
+    const natureOf = (label) => data.NATURES.find((n) => (label === "보정 없음" ? !n.increased && !n.decreased : label === "스피드↑" ? n.increased === "spe" : n.decreased === "spe"))?.id ?? null;
+    const key = (r) => `${r.name}|${r.nature}|${r.points}`;
+    const rowsOf = (t) => st.SPEED_FORMS.map((f) => st.tierRow(f, t));
+    if (st.SPEED_TIERS.map((t) => t.label).join() !== "최속,준속,무투자,최저속") fail("스피드 단계 구성이 다름");
+    for (const t of st.SPEED_TIERS) {
+      for (const r of rowsOf(t)) {
+        const real = stat.computeRealStats({ hp: 0, atk: 0, def: 0, spa: 0, spd: 0, spe: r.form.baseSpe }, pts({ spe: t.points }), natureOf(r.nature)).spe;
+        if (r.value !== real || r.points !== t.points) fail(`단계 값 불일치 ${t.label} ${r.name}: ${r.value} vs ${real}`);
       }
     }
-    console.log(`스피드 표(폼 ${st.SPEED_FORMS.length}개, 식 ${formulaChecked}건·기준 ${samples.length}개)`, failed === before ? "통과" : "실패");
+    // 추월·동속·못 추월 분류와 정렬(가까운 순)
+    const speeds = [1, 60, 100, 135, 150, 172, 200, 400, ...Array.from({ length: 12 }, () => 40 + Math.floor(rnd() * 220))];
+    for (const speed of speeds) {
+      st.speedOutlook(speed).forEach((o, i) => {
+        const all = rowsOf(st.SPEED_TIERS[i]);
+        const names = (rows) => rows.map(key).sort().join();
+        if (names(o.fail) !== names(all.filter((r) => r.value > speed)) || names(o.tie) !== names(all.filter((r) => r.value === speed)) || names(o.pass) !== names(all.filter((r) => r.value < speed))) fail(`추월 분류 불일치 ${o.tier.label} @${speed}`);
+        if (o.fail.some((r, k) => k && r.value < o.fail[k - 1].value) || o.pass.some((r, k) => k && r.value > o.pass[k - 1].value)) fail(`추월 목록이 가까운 순이 아님 ${o.tier.label} @${speed}`);
+      });
+    }
+    // 최소 포인트·포인트 지점: 임의 종족값·성격 배율의 스피드 곡선(포인트 0~32)으로 대조
+    for (const [base, mult] of [[100, 1], [60, 1.1], [135, 0.9], [38, 1.1], [150, 1]]) {
+      const speedAt = Array.from({ length: 33 }, (_, p) => st.speedValue(base, mult, p));
+      for (const r of st.SPEED_TIERS.flatMap(rowsOf)) {
+        const need = st.minPointsToPass(speedAt, r.value);
+        const brute = speedAt.findIndex((v) => v > r.value);
+        if (need !== (brute < 0 ? null : brute) || (need !== null && (speedAt[need] <= r.value || (need > 0 && speedAt[need - 1] > r.value)))) fail(`최소 포인트 불일치 base${base}×${mult} ${r.nature}${r.points}pt ${r.name}: ${need}`);
+      }
+      const keep = 17;
+      const bps = st.speedBreakpoints(speedAt, keep);
+      const byP = new Map(bps.map((b) => [b.points, b]));
+      if (!byP.has(0) || !byP.has(keep)) fail(`지점에 0pt·현재 포인트가 없음 base${base}×${mult}`);
+      for (let p = 1; p <= 32; p++) {
+        const brute = st.SPEED_TIERS.map((t) => rowsOf(t).filter((r) => r.value >= speedAt[p - 1] && r.value < speedAt[p]).map(key).sort().join());
+        const got = byP.get(p)?.gains.map((g) => g.map(key).sort().join()) ?? brute.map(() => "");
+        if (brute.some((b, i) => b !== got[i]) || (!byP.has(p) && brute.some(Boolean))) fail(`포인트 지점 불일치 base${base}×${mult} ${p}pt`);
+      }
+    }
+    console.log(`스피드 단계(폼 ${st.SPEED_FORMS.length}개 × 4단계, 기준 ${speeds.length}개, 곡선 5개)`, failed === before ? "통과" : "실패");
+  }
+  // 5-c) 3.6 I2 후보 카드 — 정렬·남은 SP·최소 투자 후보·데미지 범위가 결과와 맞는다(공용 난수열을 건드리지 않게 별도 난수)
+  {
+    const before = failed;
+    let cs = 4242;
+    const cr = () => {
+      cs = (cs * 1664525 + 1013904223) >>> 0;
+      return cs / 2 ** 32;
+    };
+    const cp = (arr) => arr[Math.floor(cr() * arr.length)];
+    const eps = 1e-9;
+    const checkLists = (lists, sums, label, observed) => {
+      if (!lists) {
+        fail(`${label}: 후보 카드가 없음`);
+        return false;
+      }
+      for (const [name, cards] of [["남은 SP 순", lists.bySpare], ["가능도 순", lists.byLikelihood], ["범위 중앙 순", lists.byCenter]]) {
+        if (cards.length === 0 || cards.length > 60) fail(`${label} ${name}: 카드 수 ${cards.length}`);
+        for (const card of cards) {
+          const sum = card.points.reduce((a, pt) => a + pt.value, 0);
+          if (card.spare !== 66 - sum || card.spare < 0) fail(`${label} ${name}: 남은 SP가 66 − 합계와 다름`);
+          if (!(card.likelihood > 0 && card.likelihood <= 1 + eps)) fail(`${label} ${name}: 가능도 ${card.likelihood}`);
+          if (card.damagePercent.some((r) => !(r.min <= r.max))) fail(`${label} ${name}: 데미지 범위가 뒤집힘`);
+          if (card.rollMatch === null || card.rollMatch < 1 - eps || card.rollMatch > 16 + eps) fail(`${label} ${name}: 일치 난수 ${card.rollMatch}`);
+        }
+      }
+      if (lists.bySpare.some((card, i) => i > 0 && card.spare > lists.bySpare[i - 1].spare)) fail(`${label}: 남은 SP 순 정렬이 아님`);
+      if (lists.byLikelihood.some((card, i) => i > 0 && card.likelihood > lists.byLikelihood[i - 1].likelihood + eps)) fail(`${label}: 가능도 순 정렬이 아님`);
+      if (lists.byCenter.some((card, i) => i > 0 && card.centerGap < lists.byCenter[i - 1].centerGap - eps)) fail(`${label}: 범위 중앙 순 정렬이 아님`);
+      // 관측이 하나라 카드의 차이 값은 그 카드 자신의 데미지 범위 중앙과 관측값의 차이와 같아야 하고, 중앙 순 맨 앞은 어느 목록에서도 이보다 작은 카드가 없어야 한다
+      for (const card of [...lists.bySpare, ...lists.byLikelihood, ...lists.byCenter]) {
+        const own = Math.abs((card.damagePercent[0].min + card.damagePercent[0].max) / 2 - observed);
+        if (Math.abs(card.centerGap - own) > 1e-6) fail(`${label}: 범위 중앙 차이 값이 카드 범위와 다름 ${card.centerGap} vs ${own}`);
+      }
+      const minOther = Math.min(...[...lists.bySpare, ...lists.byLikelihood].map((card) => card.centerGap));
+      if (lists.byCenter[0].centerGap > minOther + eps) fail(`${label}: 범위 중앙 순 맨 앞보다 더 중앙에 가까운 카드가 있음`);
+      if (lists.bySpare[0].spare !== 66 - sums.min) fail(`${label}: 남은 SP가 가장 많은 카드가 최소 투자 합과 다름`);
+      return true;
+    };
+    // 방어 쪽: 풀피 상대에게 한 방. 시나리오가 성립해 검사했으면 true
+    const checkDefense = (mine, opp, oppTrue, oppReal) => {
+      const move = cp(usable);
+      const res = ev.evaluateSlotMatchup(mine, move, oppTrue);
+      const parts = res?.damageParts;
+      if (!parts || parts.typeEffectiveness === 0) return false;
+      const damage = fm.integerTotalDamage(parts, oppReal[parts.defenseKey], (85 + Math.floor(cr() * 16)) / 100);
+      if (damage >= oppReal.hp) return false;
+      const after = inf.displayPercent(oppReal.hp - damage, oppReal.hp);
+      const r = inf.inferDefense({ attacker: mine, defender: slot(opp.id), observations: [{ move, critical: false, before: 100, after }] });
+      if (r?.status !== "ok") {
+        fail(`방어 후보 카드 시나리오가 ok가 아님(${r?.status})`);
+        return false;
+      }
+      // 표시 손실 %는 (lost−1, lost] 안의 난수가 만든다 — 모든 카드의 범위가 이 구간과 겹쳐야 한다
+      const lost = 100 - after;
+      if (!checkLists(r.candidates, r.sums, "방어 후보 카드", lost)) return false;
+      const bad = [...r.candidates.bySpare, ...r.candidates.byLikelihood].filter((card) => card.damagePercent[0].min > lost + eps || card.damagePercent[0].max <= lost - 1 - eps);
+      if (bad.length > 0) fail(`방어 후보 카드의 데미지 범위가 관측과 안 맞음 ${bad.length}장 (손실 ${lost}%)`);
+      return true;
+    };
+    // 공격 쪽: 상대가 풀피인 나를 한 방에 쓰러뜨리지 않는 공격
+    const checkAttack = (mine, opp, oppTrue, myReal) => {
+      const move = cp(attackMoves);
+      const res = ev.evaluateSlotMatchup(oppTrue, move, mine, { defenderHpIsFull: true, skipVerdict: true });
+      const parts = res?.damageParts;
+      if (!parts || parts.typeEffectiveness === 0) return false;
+      const damage = fm.integerTotalDamage(parts, res.defenseStat, (85 + Math.floor(cr() * 16)) / 100);
+      if (damage >= myReal.hp) return false;
+      const r = ai.inferAttack({ attacker: slot(opp.id), defender: mine, observations: [{ move, critical: false, hpBefore: myReal.hp, hpAfter: myReal.hp - damage }] });
+      if (r?.status !== "ok") {
+        fail(`공격 후보 카드 시나리오가 ok가 아님(${r?.status})`);
+        return false;
+      }
+      const percent = (damage * 100) / myReal.hp;
+      if (!checkLists(r.candidates, r.sums, "공격 후보 카드", percent)) return false;
+      const bad = [...r.candidates.bySpare, ...r.candidates.byLikelihood].filter((card) => card.damagePercent[0].min > percent + eps || card.damagePercent[0].max < percent - eps);
+      if (bad.length > 0) fail(`공격 후보 카드의 데미지 범위에 관측이 없음 ${bad.length}장 (${percent.toFixed(1)}%)`);
+      return true;
+    };
+    let defChecked = 0;
+    let atkChecked = 0;
+    for (let t = 0; t < 40; t++) {
+      const opp = cp(species);
+      const truth = { hp: Math.floor(cr() * 33), def: Math.floor(cr() * 33), spd: Math.floor(cr() * 33), nature: cp(natureIds) };
+      const oppTrue = slot(opp.id, { points: pts(truth), nature: truth.nature });
+      const mine = slot(cp(species).id, { points: pts({ atk: 32, spa: 32, hp: Math.floor(cr() * 33) }), nature: cp(natureIds) });
+      const oppReal = stat.computeRealStats(form.getEffectiveForm(data.getPokemon(opp.id), oppTrue).baseStats, oppTrue.points, oppTrue.nature);
+      const myReal = stat.computeRealStats(form.getEffectiveForm(data.getPokemon(mine.pokemonId), mine).baseStats, mine.points, mine.nature);
+      if (checkDefense(mine, opp, oppTrue, oppReal)) defChecked++;
+      if (checkAttack(mine, opp, oppTrue, myReal)) atkChecked++;
+    }
+    if (defChecked === 0 || atkChecked === 0) fail(`후보 카드 검증 시행이 부족함(방어 ${defChecked}·공격 ${atkChecked})`);
+    console.log(`후보 카드(방어 ${defChecked}건·공격 ${atkChecked}건: 세 정렬·남은 SP·최소 투자·데미지 범위·범위 중앙)`, failed === before ? "통과" : "실패");
   }
   // 6) 3.4 H1 HP 최적 수치 눈금 — 사용자 표의 예시와 전 종족값 전수 대조
   {
@@ -930,5 +1086,6 @@ try {
 } finally {
   await server.close();
 }
+console.log(`결합 결과 해시 ${combinedDigest.digest("hex").slice(0, 16)}`);
 console.log(failed === 0 ? "ALL PASS" : `${failed} FAIL`);
 process.exit(failed === 0 ? 0 : 1);

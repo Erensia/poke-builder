@@ -12,6 +12,7 @@ import { damageRollSet, type RollSet } from "./damageFormula";
 import { evaluateSlotMatchup, type EvaluatorSlot } from "./matchupEvaluator";
 import { computeRealStats, MAX_ABILITY_POINTS_PER_STAT, MAX_ABILITY_POINTS_TOTAL } from "./statCalculator";
 import { EMPTY_ABILITY_POINTS } from "../types/party";
+import { rollMatchOf, TOTAL_POINTS, TopLists, type CandidateLists } from "./candidateCards";
 import {
   emptyRange,
   finishRange,
@@ -63,7 +64,7 @@ export interface AttackObservation {
   critical: boolean;
   /** 맞기 전 내 HP 수치 */
   hpBefore: number;
-  /** 맞은 직후 내 HP 수치 (턴 종료 효과가 섞이지 않은 값) — 쓰러지면 정확한 데미지를 알 수 없어 지원하지 않는다 */
+  /** 맞은 직후 내 HP 수치 (턴 종료 효과가 섞이지 않은 값). 0이면 쓰러진 공격 — 데미지가 `hpBefore` 이상이라는 것만 알아 "최소 이만큼"으로 계산한다(3.6 I1-e) */
   hpAfter: number;
   /** 이 관측을 줄 때 상대가 메가진화한 상태면 그 메가폼 이름. 없으면 `attacker`의 폼. 메가폼은 공격 종족값·특성이 달라진다 */
   megaForm?: string;
@@ -114,6 +115,8 @@ export interface AttackInferenceResult {
   /** 공격·특공 포인트 가능 범위(그 스탯을 쓰는 관측이 없으면 null) */
   atk: Range | null;
   spa: Range | null;
+  /** 남은 후보 전체에서 본 공격+특공 포인트 합의 범위 — 성격 묶음마다 가능한 쌍이 달라 스탯별 범위를 더한 것보다 좁다(3.6 I1-d) */
+  sums: Range | null;
   /** 가능도 가중 중심 구간(10%~90%)과 중앙값 */
   atkCentral: CentralRange | null;
   spaCentral: CentralRange | null;
@@ -124,6 +127,8 @@ export interface AttackInferenceResult {
   groups: NatureGroup[];
   /** 메가 전·후 실수치 나란히 보기(3.1 L1-b) — 메가 태그가 없으면 빈 배열 */
   formViews: FormView[];
+  /** 구체적인 후보 카드(3.6 I2) — 남은 SP 순·가능도 순 상위 목록. 후보가 없거나 카드를 만들지 않은 호출이면 null */
+  candidates: CandidateLists | null;
 }
 
 type AttackKey = "atk" | "spa";
@@ -142,8 +147,12 @@ interface PreparedObservation {
   key: AttackKey;
   /** 이 관측 시점 폼의 공격·특공 종족값(결과의 실수치 범위 표시용) */
   baseStat: number;
-  /** 이 관측에서 받은 데미지 */
+  /** 내 최대 HP(데미지 %를 낼 때 쓴다) */
+  maxHp: number;
+  /** 이 관측에서 받은 데미지. 쓰러진 공격(`ko`)이면 최소 데미지 */
   damage: number;
+  /** 쓰러진 공격 — 정확한 데미지를 몰라 `damage` 이상이면 맞는다 */
+  ko: boolean;
   /** 후보(성격·포인트)로 상대 슬롯을 만들어 이 관측의 16단계 난수 데미지를 낸다. 계산할 수 없으면 null */
   rolls: (natureId: string, points: number) => RollSet | null;
 }
@@ -192,12 +201,14 @@ function emptyResult(status: AttackInferenceResult["status"], n: number): Attack
     feasible: 0,
     atk: null,
     spa: null,
+    sums: null,
     atkCentral: null,
     spaCentral: null,
     realAtk: null,
     realSpa: null,
     groups: [],
     formViews: [],
+    candidates: null,
   };
 }
 
@@ -239,13 +250,14 @@ function prepareObservations(input: AttackInferenceInput): { prepared: PreparedO
       errors.push("맞은 뒤 HP가 맞기 전 HP보다 작아야 해요");
       return;
     }
-    if (obs.hpAfter === 0) {
-      errors.push("쓰러진 공격은 정확한 데미지를 알 수 없어 지원하지 않아요");
-      return;
-    }
     const hitsError = multiHitError(obs.move, obs.hits);
     if (hitsError) {
       errors.push(hitsError);
+      return;
+    }
+    // 다단히트는 몇 타째에 쓰러졌는지 몰라 합계의 하한을 말할 수 없다
+    if (obs.hpAfter === 0 && multiHitRange(obs.move)) {
+      errors.push("쓰러진 다단히트는 아직 지원하지 않아요");
       return;
     }
     // 멀티스케일·섀도실드는 첫 타에만 듣는데 계산은 전 타에 곱하므로 다단히트에서는 뺀다
@@ -288,7 +300,9 @@ function prepareObservations(input: AttackInferenceInput): { prepared: PreparedO
     prepared.push({
       key: attackKeyOf(obs.move),
       baseStat: baseStats[attackKeyOf(obs.move)],
+      maxHp: myMaxHp,
       damage: obs.hpBefore - obs.hpAfter,
+      ko: obs.hpAfter === 0,
       rolls: (natureId, points) => {
         const memoKey = `${natureId}|${points}`;
         if (memo.has(memoKey)) return memo.get(memoKey)!;
@@ -313,7 +327,7 @@ function sideLikelihood(prepared: PreparedObservation[], key: AttackKey, combo: 
     if (!rolls) return 0;
     let hit = 0;
     rolls.values.forEach((d, k) => {
-      if (d === o.damage) hit += rolls.probs ? rolls.probs[k] : 1 / rolls.values.length;
+      if (o.ko ? d >= o.damage : d === o.damage) hit += rolls.probs ? rolls.probs[k] : 1 / rolls.values.length;
     });
     if (hit === 0) return 0;
     likelihood *= hit;
@@ -321,7 +335,20 @@ function sideLikelihood(prepared: PreparedObservation[], key: AttackKey, combo: 
   return likelihood;
 }
 
-function runCandidates(input: AttackInferenceInput, prepared: PreparedObservation[]): AttackInferenceResult {
+/** 이 스탯을 쓰는 관측 전체에서 후보 데미지 범위의 중앙(%)과 관측한 데미지(%)의 차이를 더한다(3.6 I2). 스탯 하나의 후보 안에서만 정해져 공격·특공 쌍에서는 단순 합이다 */
+function sideCenterGap(prepared: PreparedObservation[], key: AttackKey, combo: NatureCombo, points: number): number {
+  let gap = 0;
+  for (const o of prepared) {
+    if (o.key !== key) continue;
+    const rolls = o.rolls(combo.repNatureId, points);
+    if (!rolls) continue;
+    const center = (Math.min(...rolls.values) + Math.max(...rolls.values)) / 2;
+    gap += Math.abs(((center - o.damage) * 100) / o.maxHp);
+  }
+  return gap;
+}
+
+function runCandidates(input: AttackInferenceInput, prepared: PreparedObservation[], detailed = false): AttackInferenceResult {
   const n = prepared.length;
   const pokemon = getPokemon(input.attacker.pokemonId);
   if (!pokemon) return emptyResult("invalid", n);
@@ -334,7 +361,7 @@ function runCandidates(input: AttackInferenceInput, prepared: PreparedObservatio
   const minSum = (input.minPointsSum ?? 0) - MAX_ABILITY_POINTS_PER_STAT * (Number(!useAtk) + Number(!useSpa));
   const groups: NatureGroup[] = combos.map((c) => ({ id: c.key, label: c.label, natureNames: c.natureNames, feasible: 0, total: 0, weight: 0 }));
   const pointRange = Array.from({ length: MAX_ABILITY_POINTS_PER_STAT + 1 }, (_, p) => p);
-  const [atkRange, spaRange, realAtk, realSpa] = Array.from({ length: 4 }, emptyRange);
+  const [atkRange, spaRange, realAtk, realSpa, sumRange] = Array.from({ length: 5 }, emptyRange);
   const grow = growRange;
   // 메가 전·후 표시(3.1 L1-b): 폼마다 같은 후보를 그 폼의 종족값으로 환산한 실수치 범위
   const formAcc = viewForms(pokemon, input.attacker, input.observations.map((o) => o.megaForm), input.viewMegaForms).map((f) => ({
@@ -347,6 +374,8 @@ function runCandidates(input: AttackInferenceInput, prepared: PreparedObservatio
   let total = 0;
   let feasible = 0;
   let totalWeight = 0;
+  // 구체적인 후보 카드용 상위 목록(3.6 I2) — 카드를 만드는 detailed일 때만
+  const top = detailed ? new TopLists<[number, number, number]>() : null;
 
   combos.forEach((combo, c) => {
     // 관측이 쓰는 쪽만 센다 — 안 쓰는 쪽은 한 칸(=그냥 통과)
@@ -356,6 +385,9 @@ function runCandidates(input: AttackInferenceInput, prepared: PreparedObservatio
     groups[c].total += atkCandidates.length * spaCandidates.length;
     const atkL = atkCandidates.map((p) => (useAtk ? sideLikelihood(prepared, "atk", combo, p) : 1));
     const spaL = spaCandidates.map((p) => (useSpa ? sideLikelihood(prepared, "spa", combo, p) : 1));
+    // 후보 카드의 "범위 중앙" 정렬용 — 카드를 만들 때만(가능도가 0인 칸은 쓰이지 않아 건너뛴다)
+    const atkGap = top ? atkCandidates.map((p, i) => (useAtk && atkL[i] > 0 ? sideCenterGap(prepared, "atk", combo, p) : 0)) : [];
+    const spaGap = top ? spaCandidates.map((p, j) => (useSpa && spaL[j] > 0 ? sideCenterGap(prepared, "spa", combo, p) : 0)) : [];
     // 공격+특공 포인트 합이 상한을 넘는 쌍은 뺀다(포인트 예산). 한 가지만 쓰는 관측이면 그 포인트 하나가 상한 이하여야 한다
     const atkWeight = new Float64Array(atkCandidates.length);
     const spaWeight = new Float64Array(spaCandidates.length);
@@ -367,6 +399,8 @@ function runCandidates(input: AttackInferenceInput, prepared: PreparedObservatio
         if (spaL[j] <= 0 || a + b > maxSum || a + b < minSum) return;
         const w = atkL[i] * spaL[j];
         okPairs++;
+        top?.add(TOTAL_POINTS - (a + b), w, atkGap[i] + spaGap[j], () => [a, b, c]);
+        grow(sumRange, a + b);
         comboWeight += w;
         atkWeight[i] += w;
         spaWeight[j] += w;
@@ -392,6 +426,20 @@ function runCandidates(input: AttackInferenceInput, prepared: PreparedObservatio
   });
 
   if (totalWeight > 0) for (const g of groups) g.weight /= totalWeight;
+  const buildCard = ([a, b, c]: [number, number, number], spare: number, likelihood: number, gap: number) => {
+    const combo = combos[c];
+    const rollSets = prepared.map((o) => o.rolls(combo.repNatureId, o.key === "atk" ? a : b)!);
+    return {
+      natureLabel: combo.label,
+      natureNames: combo.natureNames,
+      points: [...(useAtk ? [{ label: "공격", value: a }] : []), ...(useSpa ? [{ label: "특공", value: b }] : [])],
+      spare,
+      likelihood,
+      rollMatch: rollMatchOf(likelihood, n, rollSets[0].values.length, !rollSets[0].probs),
+      damagePercent: rollSets.map((r, i) => ({ min: (Math.min(...r.values) * 100) / prepared[i].maxHp, max: (Math.max(...r.values) * 100) / prepared[i].maxHp })),
+      centerGap: gap,
+    };
+  };
   const range = finishRange;
   return {
     status: feasible > 0 ? "ok" : "contradiction",
@@ -402,11 +450,13 @@ function runCandidates(input: AttackInferenceInput, prepared: PreparedObservatio
     feasible,
     atk: useAtk ? range(atkRange) : null,
     spa: useSpa ? range(spaRange) : null,
+    sums: range(sumRange),
     atkCentral: useAtk ? atkW.central() : null,
     spaCentral: useSpa ? spaW.central() : null,
     realAtk: useAtk ? range(realAtk) : null,
     realSpa: useSpa ? range(realSpa) : null,
     groups,
+    candidates: top && feasible > 0 ? top.toCards(buildCard) : null,
     formViews: formAcc.map((x) => ({
       form: x.f.form,
       label: x.f.label,
@@ -424,7 +474,7 @@ export function inferAttack(input: AttackInferenceInput, diagnostics = true): At
   if (total === 0) return null;
   const { prepared, errors } = prepareObservations(input);
   if (errors.some((e) => e !== null)) return { ...emptyResult("invalid", total), observationErrors: errors };
-  const result = runCandidates(input, prepared);
+  const result = runCandidates(input, prepared, true);
   result.observationErrors = errors;
   if (total > 1 && diagnostics) {
     result.singleFeasible = prepared.map((o) => runCandidates(input, [o]).status === "ok");

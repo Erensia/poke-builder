@@ -18,6 +18,7 @@
 - 머지 방식 (`Erensia/poke-builder`)
   - feature → dev: **squash merge**
   - dev → main: **merge commit** (squash로 하면 dev/main 이력이 갈린다)
+  - dev → main 버전 업데이트 PR의 제목은 `ver<해당 버전>`으로 통일한다(예: `ver3.6`). `release:` 같은 접두사·부제를 붙이지 않는다.
   - rebase merge는 비활성화
 - 로컬에서 직접 머지하기 직전에는 `git fetch`를 먼저 하도록 안내한다.
 - **브랜치 정리**: `dev`/`main`을 제외한 모든 브랜치는 머지와 동시에 로컬·원격 모두 삭제한다(`git branch -D` + `git push origin --delete`). 저장소 설정이 `delete_branch_on_merge: false`라 자동 삭제되지 않는다.

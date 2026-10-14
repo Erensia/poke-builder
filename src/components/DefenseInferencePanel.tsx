@@ -1,4 +1,5 @@
 import { useDeferredValue, useEffect, useMemo, useState, type ReactNode } from "react";
+import { environmentTintBackground } from "../lib/environmentBackground";
 import { useSlotSwapDnd } from "../hooks/useSlotSwapDnd";
 import type { MatchupSlot } from "../types/matchup";
 import type { MegaEvolution, Pokemon } from "../types/pokemon";
@@ -48,6 +49,7 @@ import {
 import { computeRealStats, MAX_ABILITY_POINTS_PER_STAT } from "../lib/statCalculator";
 import { loadMatchupDraft, saveMatchupDraft } from "../lib/storage";
 import { restoreInference, type ObservationRow, type RowKind, type Screen } from "../lib/inferenceDraft";
+import { CandidateCards } from "./CandidateCards";
 import "./DefenseInferencePanel.css";
 
 interface DefenderActions {
@@ -378,6 +380,7 @@ function AttackResultView({ result, rowNos, combinedOn }: { result: AttackInfere
           </span>
         ))}
       </div>
+      <CandidateCards lists={result.candidates} />
       <p className="dinf-note">
         관측이 1번이면 난수(±7%)와 성격(±10%) 때문에 범위가 넓어요. 같은 종류(물리/특수)의 공격을 여러 번 모을수록 좁아져요.{" "}
         {combinedOn
@@ -673,6 +676,8 @@ function ResultView({
       </div>
 
       <ExtremeSummary result={result} />
+
+      <CandidateCards lists={result.candidates} />
 
       <details className="dinf-details">
         <summary>HP × 방어 분포 보기</summary>
@@ -978,13 +983,12 @@ export function DefenseInferencePanel({
     if ((row.before.trim() !== "" && before === null) || (row.after.trim() !== "" && after === null)) return { text: "HP는 정수", kind: "error" };
     if (before !== null && myMaxHp !== null && before > myMaxHp) return { text: `최대 HP(${myMaxHp})보다 클 수 없어요`, kind: "error" };
     if (before !== null && after !== null && after >= before) return { text: "맞은 뒤 HP가 더 작아야 해요", kind: "error" };
-    if (after === 0) return { text: "쓰러진 공격은 정확한 데미지를 몰라요", kind: "error" };
     const index = completeReceived.findIndex((c) => c.row.id === row.id);
     if (index >= 0 && attackResult && !attackPending) {
       const message = attackResult.observationErrors[index];
       if (message) return { text: message, kind: "error" };
       if (attackResult.status !== "invalid" && attackResult.singleFeasible[index] === false) return { text: "이 관측만으로도 맞는 배분이 없어요", kind: "error" };
-      if (attackResult.status === "ok" && attackResult.singleFeasible[index]) return { text: "가능", kind: "ok" };
+      if (attackResult.status === "ok" && attackResult.singleFeasible[index]) return { text: after === 0 ? "가능 (쓰러져서 최소 데미지로 계산)" : "가능", kind: "ok" };
     }
     return null;
   }
@@ -998,7 +1002,7 @@ export function DefenseInferencePanel({
         데미지에는 난수가 있어서, 정답 하나가 아니라 <strong>가능한 범위</strong>로 보여 줍니다.
       </p>
 
-      <div className="dinf-board">
+      <div className="dinf-board" style={{ background: environmentTintBackground(weather, field) }}>
         {attackerCard}
 
         {defenderPokemon && defenderForm ? (
