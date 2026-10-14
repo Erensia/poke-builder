@@ -17,6 +17,8 @@ export interface CandidateCard {
   rollMatch: number | null;
   /** 관측마다 이 후보가 낼 수 있는 데미지 범위(맞는 쪽 최대 HP 대비 %) */
   damagePercent: { min: number; max: number }[];
+  /** 관측한 데미지(%)와 후보 범위 중앙(%)의 차이를 관측마다 더한 값 — 작을수록 관측이 범위 한가운데에 가깝다(표시용 기준) */
+  centerGap: number;
 }
 
 export interface CandidateLists {
@@ -24,15 +26,20 @@ export interface CandidateLists {
   bySpare: CandidateCard[];
   /** 가능도가 높은 순 */
   byLikelihood: CandidateCard[];
+  /** 관측이 후보의 데미지 범위 중앙에 가까운 순 */
+  byCenter: CandidateCard[];
 }
 
 export const CANDIDATE_LIMIT = 60;
 
 export const TOTAL_POINTS = 66;
 
+export type CandidateSort = "spare" | "likelihood" | "center";
+
 interface Ranked<P> {
   spare: number;
   likelihood: number;
+  gap: number;
   payload: P;
 }
 
@@ -40,50 +47,51 @@ interface Ranked<P> {
 export class TopList<P> {
   readonly items: Ranked<P>[] = [];
   private readonly limit: number;
-  private readonly byLikelihood: boolean;
+  private readonly sort: CandidateSort;
 
-  constructor(limit: number, byLikelihood: boolean) {
+  constructor(limit: number, sort: CandidateSort) {
     this.limit = limit;
-    this.byLikelihood = byLikelihood;
+    this.sort = sort;
   }
 
-  private before(aSpare: number, aLikelihood: number, b: Ranked<P>): boolean {
-    return this.byLikelihood
-      ? aLikelihood > b.likelihood || (aLikelihood === b.likelihood && aSpare > b.spare)
-      : aSpare > b.spare || (aSpare === b.spare && aLikelihood > b.likelihood);
+  /** (spare, likelihood, gap)가 b보다 앞서는가 — 기준마다 첫째·둘째·셋째 키가 다르다 */
+  private before(spare: number, likelihood: number, gap: number, b: Ranked<P>): boolean {
+    if (this.sort === "spare") return spare !== b.spare ? spare > b.spare : likelihood > b.likelihood;
+    if (this.sort === "likelihood") return likelihood !== b.likelihood ? likelihood > b.likelihood : spare > b.spare;
+    if (gap !== b.gap) return gap < b.gap;
+    return likelihood !== b.likelihood ? likelihood > b.likelihood : spare > b.spare;
   }
 
   /** 들어갈 수 있는지 — 후보가 수만 개라 들어가지 못할 것은 payload를 만들기 전에 거른다 */
-  accepts(spare: number, likelihood: number): boolean {
-    return this.items.length < this.limit || this.before(spare, likelihood, this.items[this.items.length - 1]);
+  accepts(spare: number, likelihood: number, gap: number): boolean {
+    return this.items.length < this.limit || this.before(spare, likelihood, gap, this.items[this.items.length - 1]);
   }
 
-  add(spare: number, likelihood: number, payload: P): void {
+  add(spare: number, likelihood: number, gap: number, payload: P): void {
     let i = this.items.length;
-    while (i > 0 && this.before(spare, likelihood, this.items[i - 1])) i--;
-    this.items.splice(i, 0, { spare, likelihood, payload });
+    while (i > 0 && this.before(spare, likelihood, gap, this.items[i - 1])) i--;
+    this.items.splice(i, 0, { spare, likelihood, gap, payload });
     if (this.items.length > this.limit) this.items.pop();
   }
 }
 
-/** 두 정렬 기준의 상위 목록을 한 번에 채운다 */
+/** 세 정렬 기준의 상위 목록을 한 번에 채운다 */
 export class TopLists<P> {
-  readonly bySpare = new TopList<P>(CANDIDATE_LIMIT, false);
-  readonly byLikelihood = new TopList<P>(CANDIDATE_LIMIT, true);
+  readonly bySpare = new TopList<P>(CANDIDATE_LIMIT, "spare");
+  readonly byLikelihood = new TopList<P>(CANDIDATE_LIMIT, "likelihood");
+  readonly byCenter = new TopList<P>(CANDIDATE_LIMIT, "center");
 
-  add(spare: number, likelihood: number, payload: () => P): void {
-    const a = this.bySpare.accepts(spare, likelihood);
-    const b = this.byLikelihood.accepts(spare, likelihood);
-    if (!a && !b) return;
+  add(spare: number, likelihood: number, gap: number, payload: () => P): void {
+    const lists = [this.bySpare, this.byLikelihood, this.byCenter].filter((l) => l.accepts(spare, likelihood, gap));
+    if (lists.length === 0) return;
     const p = payload();
-    if (a) this.bySpare.add(spare, likelihood, p);
-    if (b) this.byLikelihood.add(spare, likelihood, p);
+    for (const l of lists) l.add(spare, likelihood, gap, p);
   }
 
-  /** 상위 목록의 항목을 카드로 바꾼다(같은 후보가 두 목록에 들면 두 번 만든다 — 최대 120장이라 가볍다) */
-  toCards(build: (payload: P, spare: number, likelihood: number) => CandidateCard): CandidateLists {
-    const cards = (list: TopList<P>) => list.items.map((r) => build(r.payload, r.spare, r.likelihood));
-    return { bySpare: cards(this.bySpare), byLikelihood: cards(this.byLikelihood) };
+  /** 상위 목록의 항목을 카드로 바꾼다(같은 후보가 여러 목록에 들면 여러 번 만든다 — 최대 180장이라 가볍다) */
+  toCards(build: (payload: P, spare: number, likelihood: number, gap: number) => CandidateCard): CandidateLists {
+    const cards = (list: TopList<P>) => list.items.map((r) => build(r.payload, r.spare, r.likelihood, r.gap));
+    return { bySpare: cards(this.bySpare), byLikelihood: cards(this.byLikelihood), byCenter: cards(this.byCenter) };
   }
 }
 

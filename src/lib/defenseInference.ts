@@ -629,6 +629,26 @@ function runCandidates(input: InferenceInput, prepared: PreparedObservation[], d
     spec: { w: new WeightedValues(), r: emptyRange() },
   }));
 
+  // 후보 데미지 범위의 중앙(%)과 관측한 손실 %의 차이(3.6 I2) — 방어 스탯 값별로 한 번만 계산한다
+  const centers = prepared.map(() => new Float64Array(1024).fill(Number.NaN));
+  const observedLoss = prepared.map((o) => o.before - o.after);
+  const centerOf = (i: number, stat: number): number => {
+    let v = centers[i][stat];
+    if (Number.isNaN(v)) {
+      const { values } = rollsFor(i, stat);
+      centers[i][stat] = v = (Math.min(...values) + Math.max(...values)) / 2;
+    }
+    return v;
+  };
+  const centerGap = (combo: NatureCombo, defP: number, spdP: number, maxHp: number): number => {
+    let gap = 0;
+    for (let i = 0; i < n; i++) {
+      const o = prepared[i];
+      const stat = o.parts.defenseKey === "def" ? realStat(combo.defMult, o.baseDef, defP) : realStat(combo.spdMult, o.baseSpd, spdP);
+      gap += Math.abs((centerOf(i, stat) * 100) / maxHp - observedLoss[i]);
+    }
+    return gap;
+  };
   // 구체적인 후보 카드용 상위 목록(3.6 I2) — 가중 계산을 하는 detailed일 때만
   const top = detailed ? new TopLists<[number, number, number, number]>() : null;
   const grow = growRange;
@@ -675,7 +695,7 @@ function runCandidates(input: InferenceInput, prepared: PreparedObservation[], d
       groups[c].feasible++;
       record(hpP, defP, spdP, maxHp, defStat, spdStat);
       if (detailed) {
-        top!.add(TOTAL_POINTS - (hpP + defP + spdP), likelihood, () => [hpP, defP, spdP, c]);
+        top!.add(TOTAL_POINTS - (hpP + defP + spdP), likelihood, centerGap(combo, defP, spdP, maxHp), () => [hpP, defP, spdP, c]);
         totalWeight += likelihood;
         groups[c].weight += likelihood;
         hpW.add(hpP, likelihood);
@@ -700,7 +720,7 @@ function runCandidates(input: InferenceInput, prepared: PreparedObservation[], d
     }
   }
 
-  const buildCard = ([hpP, defP, spdP, c]: [number, number, number, number], spare: number, likelihood: number) => {
+  const buildCard = ([hpP, defP, spdP, c]: [number, number, number, number], spare: number, likelihood: number, gap: number) => {
     const combo = combos[c];
     const maxHp = Math.floor(base.hp + 75 + hpP);
     const rollSets = prepared.map((o, i) => rollsFor(i, o.parts.defenseKey === "def" ? realStat(combo.defMult, o.baseDef, defP) : realStat(combo.spdMult, o.baseSpd, spdP)));
@@ -712,6 +732,7 @@ function runCandidates(input: InferenceInput, prepared: PreparedObservation[], d
       likelihood,
       rollMatch: rollMatchOf(likelihood, n, rollSets[0].values.length, !rollSets[0].probs),
       damagePercent: rollSets.map((r) => ({ min: (Math.min(...r.values) * 100) / maxHp, max: (Math.max(...r.values) * 100) / maxHp })),
+      centerGap: gap,
     };
   };
   const range = (r: Range): Range | null => (r.min === Infinity ? null : r);
