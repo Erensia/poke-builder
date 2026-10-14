@@ -312,3 +312,18 @@
   font-size: 0.8rem;
   color: var(--text-muted);
 }
+
+/* 내구 조정 탭 — 생존 목표·벽·급소 알약 줄 */
+.bulktab-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.6rem 0.8rem;
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+
+.bulktab-controls .matchup-assume-grave-label {
+  flex: 0 0 4.2rem;
+  padding-top: 0.25rem;
+}
