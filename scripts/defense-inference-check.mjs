@@ -1081,6 +1081,18 @@ try {
     if (info.header !== "HP 191 (16포인트)" || info.rows.length !== 4 || !info.rows[0].relevant || info.rows.slice(1).some((r) => r.relevant)) fail("HP 눈금 설명 형식이 다름");
     const rel = (item, moves) => [...hm.relevantHpRules(item, moves)].sort().join();
     if (rel("먹다남은음식") !== "16n+15" || rel("자뭉열매") !== "4n+3" || rel(null, [null, "대타출동"]) !== "4n+3" || rel("생명의구슬") !== "10n+9" || rel("구애스카프", ["지진"]) !== "") fail("슬롯 도구·기술 강조 대상이 다름");
+    // 3.7 H1-b: 스텔스록은 타입의 바위 상성 배율로, 배북·철제광선·저주(고스트)는 홀수로 강조
+    const relT = (types, moves = []) => [...hm.relevantHpRules(null, moves, types)].sort().join();
+    const stealth = [[["노말"], "8n+7"], [["강철"], "16n+15"], [["땅", "강철"], "16n+15"], [["불꽃"], "4n+3"], [["불꽃", "비행"], "홀수"]];
+    for (const [types, want] of stealth) if (relT(types) !== want) fail(`스텔스록 강조 ${types} → ${relT(types)} (기대 ${want})`);
+    if (relT(["노말"], ["배북"]) !== "8n+7,홀수" || relT(["노말"], ["철제광선"]) !== "8n+7,홀수") fail("배북·철제광선 홀수 강조가 다름");
+    if (relT(["고스트"], ["저주"]) !== "8n+7,홀수" || relT(["노말"], ["저주"]) !== "8n+7") fail("저주는 고스트 타입일 때만 홀수");
+    // 가장 강한 필요 조건 기준 — 먹다남은음식(16n+15) + 스텔스록 등배(8n+7)면 16n+15 눈금만 강조, 구슬이면 10n+9 눈금도
+    const need = hm.relevantHpRules("먹다남은음식", [], ["노말"]);
+    const marks100 = hm.hpMarks(100, 32);
+    for (const m of marks100) if (hm.isRelevantMark(m, need) !== (m.chain.length === 4)) fail(`강조 판정 ${m.points}pt`);
+    const orbNeed = hm.relevantHpRules("생명의구슬", [], ["노말"]);
+    for (const m of marks100) if (hm.isRelevantMark(m, orbNeed) !== (m.chain.length >= 3 || m.orb)) fail(`구슬+스텔스록 강조 판정 ${m.points}pt`);
     console.log(`HP 최적 수치 눈금(종족값 ${bases.length}종·33포인트 전수 + 표 예시)`, failed === before ? "통과" : "실패");
   }
 } finally {

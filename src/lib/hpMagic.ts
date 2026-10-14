@@ -4,6 +4,9 @@
  * 16n+15는 8n+7·4n+3·홀수를 모두 포함하므로 사슬(chain)로 두고, 생명의구슬 10n+9는 따로 본다.
  */
 
+import { getEffectiveness } from "./typeEffectiveness";
+import type { PokemonType } from "../types/pokemon-type";
+
 export interface HpRule {
   label: string;
   mod: number;
@@ -17,7 +20,7 @@ export const HP_CHAIN: HpRule[] = [
   { label: "16n+15", mod: 16, rem: 15, effects: "스텔스록(반감)·화상·모래바람·맹독·먹다남은음식" },
   { label: "8n+7", mod: 8, rem: 7, effects: "스텔스록(등배)·독·씨뿌리기" },
   { label: "4n+3", mod: 4, rem: 3, effects: "스텔스록(약점 2배)·자뭉열매·대타출동(4n은 피하기)" },
-  { label: "홀수", mod: 2, rem: 1, effects: "스텔스록(약점 4배)" },
+  { label: "홀수", mod: 2, rem: 1, effects: "스텔스록(약점 4배)·배북·철제광선·저주(고스트)" },
 ];
 
 export const HP_ORB_RULE: HpRule = { label: "10n+9", mod: 10, rem: 9, effects: "생명의구슬 반동" };
@@ -61,11 +64,40 @@ export function hpMarkInfo(m: HpMark, relevant: ReadonlySet<string>): MarkInfo {
   };
 }
 
-/** 이 슬롯의 도구·기술이 득을 보는 조건 라벨들 — 먹다남은음식 16n+15, 자뭉열매·대타출동 4n+3, 생명의구슬 10n+9 */
-export function relevantHpRules(itemId: string | null | undefined, moveIds: readonly (string | null)[] = []): Set<string> {
+/**
+ * 눈금을 강조할지 — 필요한 사슬 규칙 중 가장 강한 것(16n+15 > 8n+7 > 4n+3 > 홀수)을 만족하거나, 구슬이 필요하고 10n+9일 때.
+ * 약한 규칙까지 "하나라도"로 보면 항상 붙는 스텔스록(8n+7 등)이 먹다남은음식의 16n+15를 묻어 버린다.
+ */
+export function isRelevantMark(m: HpMark, relevant: ReadonlySet<string>): boolean {
+  const need = HP_CHAIN.find((r) => relevant.has(r.label));
+  return (!!need && m.chain.includes(need)) || (m.orb && relevant.has(HP_ORB_RULE.label));
+}
+
+/** 스텔스록 등장 데미지는 ⌊HP × 바위 상성 / 8⌋ — 배율별로 득을 보는 조건(0.25배는 ⌊HP/32⌋라 가장 가까운 16n+15로 본다) */
+function stealthRockRule(types: readonly PokemonType[]): string {
+  const eff = getEffectiveness("바위", [...types]);
+  return eff >= 4 ? "홀수" : eff >= 2 ? "4n+3" : eff >= 1 ? "8n+7" : "16n+15";
+}
+
+/** HP를 ⌊HP/2⌋ 깎는 기술 — 홀수일 때 같은 소모로 HP가 더 높다. 저주는 고스트 타입이 쓸 때만 HP를 깎는다 */
+function halvesOwnHp(moveId: string | null, types: readonly PokemonType[]): boolean {
+  return moveId === "배북" || moveId === "철제광선" || (moveId === "저주" && types.includes("고스트"));
+}
+
+/**
+ * 이 슬롯이 득을 보는 조건 라벨들 — 먹다남은음식 16n+15, 자뭉열매·대타출동 4n+3, 생명의구슬 10n+9,
+ * 배북·철제광선·저주(고스트) 홀수, 스텔스록은 타입(교체 등장 시점이라 메가 전 타입)의 바위 상성 배율에 따라
+ */
+export function relevantHpRules(
+  itemId: string | null | undefined,
+  moveIds: readonly (string | null)[] = [],
+  types: readonly PokemonType[] = [],
+): Set<string> {
   const out = new Set<string>();
   if (itemId === "먹다남은음식") out.add("16n+15");
   if (itemId === "자뭉열매" || moveIds.includes("대타출동")) out.add("4n+3");
   if (itemId === "생명의구슬") out.add(HP_ORB_RULE.label);
+  if (moveIds.some((id) => halvesOwnHp(id, types))) out.add("홀수");
+  if (types.length > 0) out.add(stealthRockRule(types));
   return out;
 }

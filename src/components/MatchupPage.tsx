@@ -510,6 +510,7 @@ export function MatchupPage() {
               natureId={slotState.slot.nature}
               itemId={slotState.slot.item}
               moveIds={[slotState.slot.moveId]}
+              types={getEffectiveForm(pokemon, slotState.slot, { ignoreMega: true }).types}
               onClose={() => setPicker(null)}
               onChange={(stat, value) => slotState.setPoint(stat, value)}
               onStep={(stat, delta) => slotState.stepPoint(stat, delta)}
