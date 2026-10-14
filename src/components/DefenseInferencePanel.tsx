@@ -1,4 +1,5 @@
 import { useDeferredValue, useEffect, useMemo, useState, type ReactNode } from "react";
+import { environmentTintBackground } from "../lib/environmentBackground";
 import { useSlotSwapDnd } from "../hooks/useSlotSwapDnd";
 import type { MatchupSlot } from "../types/matchup";
 import type { MegaEvolution, Pokemon } from "../types/pokemon";
@@ -998,7 +999,7 @@ export function DefenseInferencePanel({
         데미지에는 난수가 있어서, 정답 하나가 아니라 <strong>가능한 범위</strong>로 보여 줍니다.
       </p>
 
-      <div className="dinf-board">
+      <div className="dinf-board" style={{ background: environmentTintBackground(weather, field) }}>
         {attackerCard}
 
         {defenderPokemon && defenderForm ? (

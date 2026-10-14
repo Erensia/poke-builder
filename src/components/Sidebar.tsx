@@ -94,7 +94,7 @@ function IconMenuToggle({ open }: { open: boolean }) {
 
 const NAV_ITEMS: { label: string; icon: ReactNode; view: AppView | null }[] = [
   { label: "파티 샘플 작성", icon: <IconHexagon />, view: "party" },
-  { label: "결정력 & 내구력", icon: <IconSwords />, view: "matchup" },
+  { label: "계산 기능", icon: <IconSwords />, view: "matchup" },
   { label: "배틀타워", icon: <IconScroll />, view: "battle-log" },
   { label: "포켓몬 도감", icon: <IconGrid />, view: "pokedex" },
   { label: "도구 도감", icon: <IconBag />, view: "itemdex" },
