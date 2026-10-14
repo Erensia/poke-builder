@@ -496,10 +496,49 @@ try {
     const badHp = ai.inferAttack({ attacker: slot("망나뇽"), defender: mine, observations: [{ move: data.getMove("아이언헤드"), critical: false, hpBefore: myMax + 5, hpAfter: 10 }] });
     const noMove = ai.inferAttack({ attacker: slot("망나뇽"), defender: mine, observations: [{ move: data.getMove("자이로볼"), critical: false, hpBefore: myMax, hpAfter: myMax - 40 }] });
     if (contradiction?.status !== "contradiction") fail(`공격 역산: 불가능한 데미지가 ${contradiction?.status}`);
-    if (faint?.status !== "invalid" || !faint.observationErrors[0]?.includes("쓰러진")) fail("공격 역산: 쓰러진 관측이 invalid로 안 잡힘");
+    // 쓰러진 공격(3.6 I1-e): 데미지가 맞기 전 HP 이상이라는 부등식 — 가능한 쓰러짐은 ok, 풀피에서 한 방에 쓰러질 수 없는 조합은 모순, 다단히트는 invalid
+    const faintFull = ai.inferAttack({ attacker: slot("망나뇽"), defender: mine, observations: [{ move: data.getMove("아이언헤드"), critical: false, hpBefore: myMax, hpAfter: 0 }] });
+    const faintMulti = ai.inferAttack({ attacker: slot("망나뇽"), defender: mine, observations: [{ move: data.getMove("더블어택"), critical: false, hpBefore: 30, hpAfter: 0, hits: 2 }] });
+    if (faint?.status !== "ok") fail(`공격 역산: 쓰러진 관측이 ok가 아님(${faint?.status})`);
+    if (faintFull?.status !== "contradiction") fail(`공격 역산: 풀피에서 한 방에 쓰러지는 관측이 ${faintFull?.status}`);
+    if (faintMulti?.status !== "invalid" || !faintMulti.observationErrors[0]?.includes("쓰러진 다단히트")) fail("공격 역산: 쓰러진 다단히트가 invalid로 안 잡힘");
     if (badHp?.status !== "invalid" || !badHp.observationErrors[0]?.includes("최대 HP")) fail("공격 역산: 최대 HP 초과가 invalid로 안 잡힘");
     if (noMove?.status !== "invalid" || !noMove.observationErrors[0]?.includes("스피드")) fail("공격 역산: 스피드 위력 기술이 invalid로 안 잡힘");
     console.log(`공격 역산 예외: 모순 ${contradiction?.status} · 쓰러짐 ${faint?.status} · HP 초과 ${badHp?.status} · 자이로볼 ${noMove?.status}`);
+    // 쓰러진 공격 왕복: 진짜 배분이 실제로 쓰러뜨릴 만한 데미지를 낼 때 "맞기 전 HP → 0"으로 넣어도 진짜 값이 후보에 남아야 한다
+    {
+      // 공용 난수열(rnd)을 쓰면 뒤 시나리오가 바뀌어 결합 결과 해시 대조가 깨지므로 이 블록은 따로 굴린다
+      let koSeed = 777;
+      const koRnd = () => {
+        koSeed = (koSeed * 1664525 + 1013904223) >>> 0;
+        return koSeed / 2 ** 32;
+      };
+      const koPick = (arr) => arr[Math.floor(koRnd() * arr.length)];
+      let koTried = 0;
+      let koOk = 0;
+      for (let t = 0; t < 120; t++) {
+        const opp = koPick(species);
+        const truthKo = { atk: Math.floor(koRnd() * 33), spa: Math.floor(koRnd() * 33), nature: koPick(natureIds) };
+        const oppTrue = slot(opp.id, { points: pts(truthKo), nature: truthKo.nature });
+        const my = slot(koPick(species).id, { points: pts({ hp: Math.floor(koRnd() * 33), def: Math.floor(koRnd() * 33), spd: Math.floor(koRnd() * 33) }), nature: koPick(natureIds) });
+        const myReal = stat.computeRealStats(form.getEffectiveForm(data.getPokemon(my.pokemonId), my).baseStats, my.points, my.nature);
+        const cat = koRnd() < 0.5 ? "physical" : "special";
+        const move = koPick(attackMoves.filter((m) => m.category === cat));
+        const res = ev.evaluateSlotMatchup(oppTrue, move, my, { defenderHpIsFull: true, skipVerdict: true });
+        const parts = res?.damageParts;
+        if (!parts || parts.typeEffectiveness === 0) continue;
+        const damage = fm.integerTotalDamage(parts, res.defenseStat, (85 + Math.floor(koRnd() * 16)) / 100);
+        const hpBefore = 1 + Math.floor(koRnd() * Math.min(damage, myReal.hp));
+        const input = (hpAfter) => ({ attacker: slot(opp.id), defender: my, observations: [{ move, critical: false, hpBefore, hpAfter }] });
+        const ko = ai.inferAttack(input(0));
+        koTried++;
+        const r = ko?.[cat === "physical" ? "atk" : "spa"];
+        if (ko?.status === "ok" && within(r, truthKo[cat === "physical" ? "atk" : "spa"])) koOk++;
+        else fail(`쓰러진 공격 왕복: 진짜 값이 빠짐 opp=${opp.id} ${move.id} hp ${hpBefore}→0 상태=${ko?.status}`);
+      }
+      if (koTried === 0) fail("쓰러진 공격 왕복 시행이 0건");
+      console.log(`쓰러진 공격 왕복 ${koOk}/${koTried} 통과`);
+    }
   }
 
   // 3.1 C2-a) 극보정 형태 표시 — 32가 두 개 이하이고 나머지 합이 2 이하. 표시용이라 계산엔 영향이 없다.
