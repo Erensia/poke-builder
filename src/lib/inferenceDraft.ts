@@ -1,4 +1,5 @@
 import { getAbility, getItem, getMove } from "./data";
+import { END_TURN_EFFECTS, TOXIC_ID } from "./defenseInference";
 import { NEUTRAL_SPEED_CONDITIONS, type SpeedConditions } from "./speedInference";
 
 /** 역산 탭 입력의 저장·복원(3.2 V2) — 화면 파일에서 분리(컴포넌트 파일은 컴포넌트만 내보낸다) */
@@ -17,6 +18,8 @@ export interface ObservationRow {
   hits: string;
   before: string;
   after: string;
+  /** 맞은 뒤 턴 종료 효과 id 목록(3.7 A4) */
+  endTurn: string[];
   /** 이 관측을 맞을 때 상대가 메가진화한 폼("" = 메가 전) */
   megaForm: string;
   /** 선후공 줄: 이번 턴 먼저 움직인 쪽 */
@@ -29,7 +32,7 @@ const SCREENS: readonly unknown[] = ["reflect", "lightScreen", "auroraVeil"] sat
 const ROW_KINDS: readonly unknown[] = ["dealt", "received", "speed"] satisfies RowKind[];
 
 function firstRow(): ObservationRow {
-  return { id: 1, kind: "dealt", moveId: null, critical: false, hits: "", before: "100", after: "", megaForm: "", first: "me", cond: NEUTRAL_SPEED_CONDITIONS };
+  return { id: 1, kind: "dealt", moveId: null, critical: false, hits: "", before: "100", after: "", endTurn: [], megaForm: "", first: "me", cond: NEUTRAL_SPEED_CONDITIONS };
 }
 
 /**
@@ -60,6 +63,7 @@ export function restoreInference(raw: unknown) {
         hits: typeof r.hits === "string" && /^d{1,2}$/.test(r.hits) ? r.hits : "",
         before: str(r.before),
         after: str(r.after),
+        endTurn: (Array.isArray(r.endTurn) ? r.endTurn : []).filter((id): id is string => typeof id === "string" && (TOXIC_ID.test(id) || END_TURN_EFFECTS.some((e) => e.id === id))),
         megaForm: str(r.megaForm),
         first: r.first === "opponent" ? "opponent" : "me",
         cond: cond as unknown as SpeedConditions,

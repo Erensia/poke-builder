@@ -1095,6 +1095,39 @@ try {
     for (const m of marks100) if (hm.isRelevantMark(m, orbNeed) !== (m.chain.length >= 3 || m.orb)) fail(`구슬+스텔스록 강조 판정 ${m.points}pt`);
     console.log(`HP 최적 수치 눈금(종족값 ${bases.length}종·33포인트 전수 + 표 예시)`, failed === before ? "통과" : "실패");
   }
+
+  // (난수 순서가 달라지면 위 결합 결과 해시가 바뀌므로 맨 끝에 둔다)
+  // 3.7 A4) 턴 종료 효과 — 첫 관측 뒤 먹다남은음식(+1/16)·독(−2/16)을 반영해 만든 2관측 기록이 진짜 배분을 남기는지,
+  // 효과를 빼고 넣으면 (같은 기록이 모순돼) 진짜 배분이 빠지는 경우가 실제로 있는지(=효과가 가능도에 쓰이는지)
+  {
+    let ok = 0;
+    let tried = 0;
+    let dropped = 0;
+    for (let t = 0; t < trials * 3 && tried < 60; t++) {
+      const atk = slot(pick(species).id, { points: pts({ atk: 32, spa: 32 }), nature: pick(natureIds) });
+      const defId = pick(species).id;
+      const truth = { hp: Math.floor(rnd() * 33), def: Math.floor(rnd() * 33), spd: 0, nature: pick(natureIds) };
+      const defTrue = slot(defId, { points: pts(truth), nature: truth.nature });
+      const dReal = stat.computeRealStats(form.getEffectiveForm(data.getPokemon(defId), defTrue).baseStats, defTrue.points, defTrue.nature);
+      const first = makeObservation(usable.filter((m) => m.category === "physical"), atk, defTrue, dReal, dReal.hp);
+      if (!first) continue;
+      const effects = pick([["leftovers"], ["leftovers", "poison"], ["toxic3"], ["leftovers", "toxic2"]]);
+      const hpAfterEffect = dReal.hp - first.damage + effects.reduce((sum, id) => sum + Math.trunc((dReal.hp * { leftovers: 1, poison: -2, toxic3: -3, toxic2: -2 }[id]) / 16), 0);
+      if (hpAfterEffect <= 0 || hpAfterEffect > dReal.hp) continue;
+      const second = makeObservation(usable.filter((m) => m.category === "physical"), atk, defTrue, dReal, hpAfterEffect, true);
+      if (!second) continue;
+      tried++;
+      const observations = [{ ...first.observation, endTurn: effects }, second.observation];
+      const withEffect = inf.inferDefense({ attacker: atk, defender: slot(defId), observations });
+      if (withEffect?.status === "ok" && withEffect.hp.min <= truth.hp && truth.hp <= withEffect.hp.max && withEffect.def.min <= truth.def && truth.def <= withEffect.def.max) ok++;
+      else fail(`턴 종료 왕복: 진짜 배분이 빠짐 ${effects} truth=${JSON.stringify(truth)} 상태=${withEffect?.status}`);
+      const without = inf.inferDefense({ attacker: atk, defender: slot(defId), observations: observations.map((o) => ({ ...o, endTurn: undefined })) });
+      if (without?.status !== "ok" || without.hp.min > truth.hp || truth.hp > without.hp.max) dropped++;
+    }
+    console.log(`턴 종료 효과 왕복 ${ok}/${tried} 통과 · 효과를 빼면 어긋나는 경우 ${dropped}건`);
+    if (tried === 0) fail("턴 종료 왕복 시행이 0건");
+    if (dropped === 0) fail("효과를 빼도 항상 맞으면 효과가 쓰이는지 알 수 없음");
+  }
 } finally {
   await server.close();
 }
