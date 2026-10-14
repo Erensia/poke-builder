@@ -16,7 +16,7 @@ const server = await createServer({ root, server: { middlewareMode: true, hmr: f
 let failed = 0;
 // 결합 결과 해시 — 속도 최적화 전후로 결과가 한 비트도 달라지지 않았는지 대조한다(3.6 I1-a)
 const combinedDigest = createHash("sha1");
-const digestResult = (c) => combinedDigest.update(JSON.stringify(c, (_, v) => (ArrayBuffer.isView(v) ? Array.from(v) : v)));
+const digestResult = (c) => combinedDigest.update(JSON.stringify(c, (k, v) => (k === "rounds" || k === "converged" ? undefined : ArrayBuffer.isView(v) ? Array.from(v) : v)));
 const fail = (msg) => {
   failed++;
   console.log("FAIL", msg);
@@ -420,6 +420,7 @@ try {
     let sumNaturesBefore = 0;
     let sumMs = 0;
     let maxMs = 0;
+    let maxRounds = 0;
     let sumNaturesAfter = 0;
     for (let t = 0; t < 200; t++) {
       const opp = pick(species);
@@ -457,6 +458,8 @@ try {
       const c = cb.inferCombined(defenseInput, attackInput);
       const ms = performance.now() - t0;
       digestResult(c);
+      maxRounds = Math.max(maxRounds, c.rounds);
+      if (!c.converged) fail(`결합 되풀이가 수렴하지 않고 상한에서 끊김 opp=${opp.id}`);
       sumMs += ms;
       maxMs = Math.max(maxMs, ms);
       const inR = (r, v) => !r || (r.min <= v && v <= r.max);
@@ -478,7 +481,7 @@ try {
       `방어·공격 결합 왕복 ${cbOk}/${cbTried} 통과 · 후보가 줄어든 사례 방어 ${defNarrowed}건·공격 ${atkNarrowed}건 · 성격 후보 평균 ${(sumNaturesBefore / Math.max(1, cbOk)).toFixed(1)}개(방어 쪽만) → ${(sumNaturesAfter / Math.max(1, cbOk)).toFixed(1)}개(결합)`,
     );
     if (cbTried === 0) fail("방어·공격 결합 왕복 시행이 0건");
-    console.log(`방어·공격 결합 계산 시간: 평균 ${(sumMs / Math.max(1, cbTried)).toFixed(0)}ms · 최대 ${maxMs.toFixed(0)}ms`);
+    console.log(`방어·공격 결합 계산 시간: 평균 ${(sumMs / Math.max(1, cbTried)).toFixed(0)}ms · 최대 ${maxMs.toFixed(0)}ms · 되풀이 최대 ${maxRounds}번`);
     if (maxMs > 5000) fail(`방어·공격 결합이 너무 느림(${maxMs.toFixed(0)}ms)`);
     if (defNarrowed + atkNarrowed === 0) fail("방어·공격 결합: 후보가 줄어든 사례가 전혀 없음(결합이 반영되지 않는 듯)");
     // 일부러 틀린 관측(불가능한 데미지)은 모순이어야 한다
@@ -732,6 +735,7 @@ try {
     let speNarrowed = 0;
     let floorUsed = 0;
     let maxMs3 = 0;
+    let maxRounds3 = 0;
     for (let t = 0; t < 300; t++) {
       const v = () => Math.floor(rnd() * (rnd() < 0.5 ? 33 : 11));
       const opp = pick(species);
@@ -779,6 +783,8 @@ try {
       const c = cb3.inferCombined(defenseInput, attackInput, speedInput);
       maxMs3 = Math.max(maxMs3, performance.now() - t0);
       digestResult(c);
+      maxRounds3 = Math.max(maxRounds3, c.rounds);
+      if (!c.converged) fail(`3쪽 결합 되풀이가 수렴하지 않고 상한에서 끊김 opp=${opp.id}`);
       const inR = (r, v) => !r || (r.min <= v && v <= r.max);
       const natName = data.NATURES.find((x) => x.id === truth.nature).name;
       const good =
@@ -798,7 +804,7 @@ try {
       if (cd.conflict !== null || ca.conflict !== null || !inR(cd.speed.spe, truth.spe) || !inR(ca.speed.spe, truth.spe)) fail(`2쪽 결합(스피드)에서 진짜 값이 빠짐 opp=${opp.id}`);
       if (one.natures !== null || one.budget !== null || one.parts.join() !== "speed") fail("스피드 한쪽만 있을 때 결합이 일어남");
     }
-    console.log(`방어·공격·스피드 결합 왕복 ${ok3}/${tried3} 통과 · 스피드 후보가 줄어든 사례 ${speNarrowed}건 · 포인트 하한이 걸린 사례 ${floorUsed}건 · 최대 ${maxMs3.toFixed(0)}ms`);
+    console.log(`방어·공격·스피드 결합 왕복 ${ok3}/${tried3} 통과 · 스피드 후보가 줄어든 사례 ${speNarrowed}건 · 포인트 하한이 걸린 사례 ${floorUsed}건 · 최대 ${maxMs3.toFixed(0)}ms · 되풀이 최대 ${maxRounds3}번`);
     if (tried3 === 0) fail("3쪽 결합 왕복 시행이 0건");
     if (maxMs3 > 5000) fail(`3쪽 결합이 너무 느림(${maxMs3.toFixed(0)}ms)`);
   }

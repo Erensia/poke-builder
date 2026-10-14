@@ -35,10 +35,17 @@ export interface CombinedInference {
   /** 결합에 들어간(관측이 있고 계산이 된) 쪽 */
   parts: CombinedPart[];
   /** 반영한 포인트 상한(HP+방어+특방 / 공격+특공 / 스피드) — 결합이 일어났을 때만. 결합에 안 든 쪽은 null */
+  /** 되풀이한 횟수(결합이 없으면 0)와 고정점에 닿았는지 — 안전 상한 MAX_ROUNDS에 걸려 끊겼을 때만 false (3.6 I1-b) */
+  rounds: number;
+  converged: boolean;
   budget: { defenseMax: number | null; attackMax: number | null; speedMax: number | null; defenseMin: number; attackMin: number; speedMin: number } | null;
 }
 
-const MAX_ROUNDS = 6;
+/**
+ * 되풀이 안전 상한. 되풀이마다 성격 후보는 줄고(부분집합) 포인트 상한은 내려가고 하한은 올라갈 뿐이라 반드시 끝난다(정수 범위가 유한).
+ * 실제로는 1~2번에 안정된다(test:inference 시나리오 전체 기준). 상한에 걸려 끊기면 결과가 고정점이 아니므로 `converged`가 false가 된다.
+ */
+const MAX_ROUNDS = 64;
 const PER_STAT = 32;
 
 const defenseMinPoints = (r: InferenceResult | null) => (r ? (r.hp?.min ?? 0) + (r.def?.min ?? 0) + (r.spd?.min ?? 0) : 0);
@@ -105,7 +112,7 @@ export function inferCombined(
   if (first.defense) parts.push("defense");
   if (first.attack) parts.push("attack");
   if (first.speed) parts.push("speed");
-  const plain: CombinedInference = { ...first, natures: null, conflict: null, parts, budget: null };
+  const plain: CombinedInference = { ...first, natures: null, conflict: null, parts, rounds: 0, converged: true, budget: null };
   // 한쪽만 있거나 한쪽이라도 계산 불가·모순이면 결합할 게 없다(각자의 안내를 그대로 보여 준다)
   const statuses = [first.defense?.status, first.attack?.status, first.speed?.status].filter((s) => s !== undefined);
   if (statuses.length < 2 || statuses.some((s) => s !== "ok")) return plain;
@@ -115,6 +122,8 @@ export function inferCombined(
   if (allowed.size === 0) return { ...plain, conflict: "nature" };
   let budget: NonNullable<CombinedInference["budget"]> = { defenseMax: null, attackMax: null, speedMax: null, defenseMin: 0, attackMin: 0, speedMin: 0 };
 
+  let rounds = 0;
+  let converged = false;
   for (let round = 0; round < MAX_ROUNDS; round++) {
     const natureIds = NATURES.filter((n) => allowed.has(n.name)).map((n) => n.id);
     const dMin = defenseMinPoints(cur.defense);
@@ -150,7 +159,9 @@ export function inferCombined(
     cur = next;
     allowed = nextAllowed;
     budget = nextBudget;
-    if (stable || allowed.size === 0) break;
+    rounds = round + 1;
+    converged = stable || allowed.size === 0;
+    if (converged) break;
   }
   if (allowed.size === 0) return { ...plain, conflict: "nature" };
   // 관측 하나씩 따져 본 결과는 결합 전(각 쪽 관측만) 기준으로 유지한다 — 다른 쪽 제약 때문에 "이 관측만으로도 안 맞아요"로 오해되지 않게
@@ -159,5 +170,5 @@ export function inferCombined(
   const defense = keep(cur.defense, first.defense);
   const attack = keep(cur.attack, first.attack);
   const speed = keep(cur.speed, first.speed);
-  return { defense, attack, speed, natures: combineNatures(activeGroups({ defense, attack, speed })), conflict: null, parts, budget };
+  return { defense, attack, speed, natures: combineNatures(activeGroups({ defense, attack, speed })), conflict: null, parts, rounds, converged, budget };
 }
