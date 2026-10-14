@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { useSlotSwapDnd } from "../hooks/useSlotSwapDnd";
 import type { MatchupSlot, PowerConditionKey } from "../types/matchup";
 import type { Move } from "../types/move";
@@ -77,6 +78,8 @@ interface MatchupSlotCardProps {
   hideMoveSlot?: boolean;
   /** 도구 강탈·곡예 가정처럼 결정력 계산 전용인 토글을 숨긴다(실능치 역산 탭) */
   hideTurnAssumptions?: boolean;
+  /** 상태이상 줄 바로 아래에 끼워 넣을 가정 토글(스피드 표 탭의 순풍) */
+  statusExtra?: ReactNode;
   /** 저장된 샘플(빌드)이 하나라도 있는지 — Phase 6 §1-3, 없으면 버튼 자체를 숨긴다 */
   hasSamples: boolean;
   /** 저장된 샘플 목록에서 이 슬롯에 불러올 것을 고르는 모달 열기(불러오기 전용 — 저장 없음) */
@@ -142,6 +145,7 @@ export function MatchupSlotCard({
   onPickMove,
   hideMoveSlot,
   hideTurnAssumptions,
+  statusExtra,
   hasSamples,
   onOpenSamplePicker,
   onToggleItemStolen,
@@ -377,6 +381,7 @@ export function MatchupSlotCard({
             ))}
           </div>
         </div>
+        {statusExtra}
         {role === "attacker" && onToggleCrit && (
           <label className="matchup-assume-toggle">
             <input type="checkbox" checked={!!slot.critAssumed} onChange={(e) => onToggleCrit(e.target.checked)} />
