@@ -281,6 +281,7 @@ export function PartyBoard() {
               natureId={slot.nature}
               itemId={slot.item}
               moveIds={slot.moves}
+              types={getEffectiveForm(pokemon, slot, { ignoreMega: true }).types}
               onClose={() => setPicker(null)}
               onChange={(stat, value) => setPoint(picker.slotIndex, stat, value)}
               onStep={(stat, delta) => stepPoint(picker.slotIndex, stat, delta)}

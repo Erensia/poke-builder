@@ -584,3 +584,15 @@
   color: var(--text-muted);
   font-weight: 400;
 }
+
+.dinf-endturn {
+  font-size: 0.76rem;
+}
+
+.dinf-endturn label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-right: 0.6rem;
+  cursor: pointer;
+}

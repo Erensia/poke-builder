@@ -816,6 +816,7 @@ export function BattleLogPage() {
               natureId={ctl.slot.nature}
               itemId={ctl.slot.item}
               moveIds={ctl.slot.moves}
+              types={getEffectiveForm(pokemon, ctl.slot, { ignoreMega: true }).types}
               onClose={() => setPicker(null)}
               onChange={(stat, value) => ctl.setPoint(stat, value)}
               onStep={(stat, delta) => ctl.stepPoint(stat, delta)}

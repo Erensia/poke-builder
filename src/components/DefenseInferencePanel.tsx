@@ -21,6 +21,8 @@ import {
   isExtremePoints,
   inferenceUnsupportedReason,
   multiHitRange,
+  END_TURN_EFFECTS,
+  TOXIC_ID,
   type InferenceInput,
   type InferenceObservation,
   type BulkEstimate,
@@ -771,6 +773,7 @@ export function DefenseInferencePanel({
         hits: "",
         before: last?.kind === "speed" ? "" : (last?.after ?? "100"),
         after: "",
+        endTurn: [],
         megaForm: last ? megaOf(last, megas) : "",
         first: "me",
         cond: lastSpeedCond(),
@@ -785,6 +788,7 @@ export function DefenseInferencePanel({
       kind,
       moveId: null,
       hits: "",
+      endTurn: [],
       before: kind === "received" ? String(myMaxHp ?? "") : kind === "speed" ? "" : "100",
       after: "",
       cond: lastSpeedCond(),
@@ -808,7 +812,7 @@ export function DefenseInferencePanel({
       const move = row.moveId ? getMove(row.moveId) : undefined;
       const before = parsePercent(row.before);
       const after = parsePercent(row.after);
-      if (move && before !== null && after !== null) out.push({ row, obs: { move, critical: row.critical, before, after, hits: hitsOf(row), megaForm: megaOf(row, defenderMegas) || undefined } });
+      if (move && before !== null && after !== null) out.push({ row, obs: { move, critical: row.critical, before, after, hits: hitsOf(row), endTurn: row.endTurn, megaForm: megaOf(row, defenderMegas) || undefined } });
     }
     return out;
   }, [rows, defender.pokemonId]);
@@ -1296,6 +1300,33 @@ export function DefenseInferencePanel({
                       <span>{received ? "HP" : "%"}</span>
                     </span>
                   </>
+                )}
+                {!speed && !received && index < rows.length - 1 && (
+                  <details className="dinf-endturn">
+                    <summary>턴 종료 효과{row.endTurn.length > 0 && ` (${row.endTurn.length})`}</summary>
+                    {END_TURN_EFFECTS.map((e) => (
+                      <label key={e.id}>
+                        <input
+                          type="checkbox"
+                          checked={row.endTurn.includes(e.id)}
+                          onChange={(ev) => updateRow(row.id, { endTurn: ev.target.checked ? [...row.endTurn, e.id] : row.endTurn.filter((x) => x !== e.id) })}
+                        />
+                        {e.label}
+                      </label>
+                    ))}
+                    <select
+                      aria-label={`관측 ${index + 1} 맹독 경과 턴`}
+                      value={row.endTurn.find((x) => TOXIC_ID.test(x)) ?? ""}
+                      onChange={(ev) => updateRow(row.id, { endTurn: [...row.endTurn.filter((x) => !TOXIC_ID.test(x)), ...(ev.target.value ? [ev.target.value] : [])] })}
+                    >
+                      <option value="">맹독 없음</option>
+                      {Array.from({ length: 15 }, (_, k) => (
+                        <option key={k} value={`toxic${k + 1}`}>
+                          맹독 {k + 1}턴째
+                        </option>
+                      ))}
+                    </select>
+                  </details>
                 )}
                 {message && <span className={`dinf-row-msg is-${message.kind}`}>{message.text}</span>}
                 {rows.length > 1 && (

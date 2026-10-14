@@ -6,6 +6,7 @@ import { WeatherPicker } from "./WeatherPicker";
 import { FieldPicker } from "./FieldPicker";
 import { DefenseInferencePanel } from "./DefenseInferencePanel";
 import { SpeedTablePanel } from "./SpeedTablePanel";
+import { BulkAdjustPanel } from "./BulkAdjustPanel";
 import { PokemonPickerModal } from "./PokemonPickerModal";
 import { MovePickerModal } from "./MovePickerModal";
 import { AbilityPickerModal } from "./AbilityPickerModal";
@@ -38,12 +39,12 @@ type PickerState =
   | { kind: "points"; side: Side }
   | { kind: "stages"; side: Side }
   | { kind: "cosmeticForm"; side: Side }
-  | { kind: "move" }
+  | { kind: "move"; side: Side }
   | { kind: "slotPresets"; side: Side }
   | null;
 
 /** 탭 버튼과 페이지 제목에 같이 쓰는 이름 */
-const TAB_LABEL = { calc: "결정력 계산", inference: "노력치 역산", speed: "스피드 조정" } as const;
+const TAB_LABEL = { calc: "결정력 계산", inference: "노력치 역산", speed: "스피드 조정", bulk: "내구 조정" } as const;
 
 export function MatchupPage() {
   const { attacker, defender, swapSides, weather, setWeather, field, setField, trickRoom, setTrickRoom } =
@@ -51,7 +52,7 @@ export function MatchupPage() {
   const slotPresets = useSlotPresets();
   const [picker, setPicker] = useState<PickerState>(null);
   // 2.1 C — 결정력 계산 / 노력치 역산 / 스피드 조정(3.4 T1·3.6 T2) 탭. 탭들이 같은 내 포켓몬·상대 종·날씨·필드 상태를 공유한다
-  const [tab, setTab] = useState<"calc" | "inference" | "speed">("calc");
+  const [tab, setTab] = useState<"calc" | "inference" | "speed" | "bulk">("calc");
   // 역산 입력 지우기 — 키가 바뀌면 패널이 저장본 없이 새로 뜬다(3.2 V2)
   const [inferenceResetKey, setInferenceResetKey] = useState(0);
 
@@ -242,7 +243,9 @@ export function MatchupPage() {
               ? "내 포켓몬과 상대 포켓몬을 고르고, 기술을 선택하면 타수 판정을 확인할 수 있습니다."
               : tab === "inference"
                 ? "내가 입힌 데미지(상대 HP %)로 상대의 HP·방어 능력 포인트와 성격이 될 수 있는 범위를 추정합니다."
-                : "내 포켓몬의 스피드로 어떤 포켓몬을 추월하는지 보고, 포인트 분배를 얼마나 줘야 목표 포켓몬을 넘는지 확인합니다"}
+                : tab === "speed"
+                  ? "내 포켓몬의 스피드로 어떤 포켓몬을 추월하는지 보고, 포인트 분배를 얼마나 줘야 목표 포켓몬을 넘는지 확인합니다"
+                  : "상대의 기술을 버티려면 내 포켓몬에 HP·방어(특방) 포인트를 최소 얼마나 줘야 하는지 확인합니다"}
           </p>
         </div>
         <div className="matchup-tabs" role="tablist" aria-label="계산기 종류">
@@ -260,6 +263,9 @@ export function MatchupPage() {
           </button>
           <button type="button" role="tab" aria-selected={tab === "speed"} className={tab === "speed" ? "is-active" : undefined} onClick={() => setTab("speed")}>
             {TAB_LABEL.speed}
+          </button>
+          <button type="button" role="tab" aria-selected={tab === "bulk"} className={tab === "bulk" ? "is-active" : undefined} onClick={() => setTab("bulk")}>
+            {TAB_LABEL.bulk}
           </button>
         </div>
         <div className="matchup-env-pickers">
@@ -292,7 +298,7 @@ export function MatchupPage() {
           onCycleFormVariant={attacker.cycleFormVariant}
           onCycleCosmeticForm={attacker.cycleCosmeticForm}
           onPickCosmeticForm={() => setPicker({ kind: "cosmeticForm", side: "attacker" })}
-          onPickMove={() => setPicker({ kind: "move" })}
+          onPickMove={() => setPicker({ kind: "move", side: "attacker" })}
           hasSamples={slotPresets.presets.length > 0}
           onOpenSamplePicker={() => setPicker({ kind: "slotPresets", side: "attacker" })}
           onToggleItemStolen={attacker.setItemStolen}
@@ -426,6 +432,29 @@ export function MatchupPage() {
         />
       )}
 
+      {tab === "bulk" && (
+        <BulkAdjustPanel
+          slot={attacker.slot}
+          opponent={defender.slot}
+          weather={weather}
+          field={field}
+          myCard={<MatchupSlotCard role="attacker" label="내 포켓몬" slot={attacker.slot} hideMoveSlot hideTurnAssumptions {...cardActions("attacker")} />}
+          opponentCard={
+            <MatchupSlotCard
+              role="attacker"
+              label="상대 포켓몬"
+              slot={defender.slot}
+              hideTurnAssumptions
+              selectedMove={defender.slot.moveId ? getMove(defender.slot.moveId) : undefined}
+              multiHitCount={defender.slot.multiHitCount}
+              onSetMultiHitCount={defender.setMultiHitCount}
+              {...cardActions("defender")}
+              onPickMove={() => setPicker({ kind: "move", side: "defender" })}
+            />
+          }
+        />
+      )}
+
       {picker?.kind === "pokemon" && (
         <PokemonPickerModal
           onClose={() => setPicker(null)}
@@ -510,6 +539,7 @@ export function MatchupPage() {
               natureId={slotState.slot.nature}
               itemId={slotState.slot.item}
               moveIds={[slotState.slot.moveId]}
+              types={getEffectiveForm(pokemon, slotState.slot, { ignoreMega: true }).types}
               onClose={() => setPicker(null)}
               onChange={(stat, value) => slotState.setPoint(stat, value)}
               onStep={(stat, delta) => slotState.stepPoint(stat, delta)}
@@ -557,23 +587,27 @@ export function MatchupPage() {
         })()}
 
       {picker?.kind === "move" &&
-        attackerPokemon &&
-        (() => (
-          <MovePickerModal
-            pokemon={attackerPokemon}
-            formVariant={attacker.slot.formVariant}
-            currentMoveIds={[attacker.slot.moveId]}
-            onClose={() => setPicker(null)}
-            onSelect={(moveId) => {
-              attacker.setMove(moveId);
-              setPicker(null);
-            }}
-            onClear={() => {
-              attacker.setMove(null);
-              setPicker(null);
-            }}
-          />
-        ))()}
+        (() => {
+          const side = sideOf(picker.side);
+          const pokemon = picker.side === "attacker" ? attackerPokemon : defenderPokemon;
+          if (!pokemon) return null;
+          return (
+            <MovePickerModal
+              pokemon={pokemon}
+              formVariant={side.slot.formVariant}
+              currentMoveIds={[side.slot.moveId]}
+              onClose={() => setPicker(null)}
+              onSelect={(moveId) => {
+                side.setMove(moveId);
+                setPicker(null);
+              }}
+              onClear={() => {
+                side.setMove(null);
+                setPicker(null);
+              }}
+            />
+          );
+        })()}
 
       {picker?.kind === "slotPresets" && (
         <SlotPresetsModal
