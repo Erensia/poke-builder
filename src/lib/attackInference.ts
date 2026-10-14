@@ -63,7 +63,7 @@ export interface AttackObservation {
   critical: boolean;
   /** 맞기 전 내 HP 수치 */
   hpBefore: number;
-  /** 맞은 직후 내 HP 수치 (턴 종료 효과가 섞이지 않은 값) — 쓰러지면 정확한 데미지를 알 수 없어 지원하지 않는다 */
+  /** 맞은 직후 내 HP 수치 (턴 종료 효과가 섞이지 않은 값). 0이면 쓰러진 공격 — 데미지가 `hpBefore` 이상이라는 것만 알아 "최소 이만큼"으로 계산한다(3.6 I1-e) */
   hpAfter: number;
   /** 이 관측을 줄 때 상대가 메가진화한 상태면 그 메가폼 이름. 없으면 `attacker`의 폼. 메가폼은 공격 종족값·특성이 달라진다 */
   megaForm?: string;
@@ -144,8 +144,10 @@ interface PreparedObservation {
   key: AttackKey;
   /** 이 관측 시점 폼의 공격·특공 종족값(결과의 실수치 범위 표시용) */
   baseStat: number;
-  /** 이 관측에서 받은 데미지 */
+  /** 이 관측에서 받은 데미지. 쓰러진 공격(`ko`)이면 최소 데미지 */
   damage: number;
+  /** 쓰러진 공격 — 정확한 데미지를 몰라 `damage` 이상이면 맞는다 */
+  ko: boolean;
   /** 후보(성격·포인트)로 상대 슬롯을 만들어 이 관측의 16단계 난수 데미지를 낸다. 계산할 수 없으면 null */
   rolls: (natureId: string, points: number) => RollSet | null;
 }
@@ -242,13 +244,14 @@ function prepareObservations(input: AttackInferenceInput): { prepared: PreparedO
       errors.push("맞은 뒤 HP가 맞기 전 HP보다 작아야 해요");
       return;
     }
-    if (obs.hpAfter === 0) {
-      errors.push("쓰러진 공격은 정확한 데미지를 알 수 없어 지원하지 않아요");
-      return;
-    }
     const hitsError = multiHitError(obs.move, obs.hits);
     if (hitsError) {
       errors.push(hitsError);
+      return;
+    }
+    // 다단히트는 몇 타째에 쓰러졌는지 몰라 합계의 하한을 말할 수 없다
+    if (obs.hpAfter === 0 && multiHitRange(obs.move)) {
+      errors.push("쓰러진 다단히트는 아직 지원하지 않아요");
       return;
     }
     // 멀티스케일·섀도실드는 첫 타에만 듣는데 계산은 전 타에 곱하므로 다단히트에서는 뺀다
@@ -292,6 +295,7 @@ function prepareObservations(input: AttackInferenceInput): { prepared: PreparedO
       key: attackKeyOf(obs.move),
       baseStat: baseStats[attackKeyOf(obs.move)],
       damage: obs.hpBefore - obs.hpAfter,
+      ko: obs.hpAfter === 0,
       rolls: (natureId, points) => {
         const memoKey = `${natureId}|${points}`;
         if (memo.has(memoKey)) return memo.get(memoKey)!;
@@ -316,7 +320,7 @@ function sideLikelihood(prepared: PreparedObservation[], key: AttackKey, combo: 
     if (!rolls) return 0;
     let hit = 0;
     rolls.values.forEach((d, k) => {
-      if (d === o.damage) hit += rolls.probs ? rolls.probs[k] : 1 / rolls.values.length;
+      if (o.ko ? d >= o.damage : d === o.damage) hit += rolls.probs ? rolls.probs[k] : 1 / rolls.values.length;
     });
     if (hit === 0) return 0;
     likelihood *= hit;

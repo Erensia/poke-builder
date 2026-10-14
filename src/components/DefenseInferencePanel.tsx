@@ -979,13 +979,12 @@ export function DefenseInferencePanel({
     if ((row.before.trim() !== "" && before === null) || (row.after.trim() !== "" && after === null)) return { text: "HP는 정수", kind: "error" };
     if (before !== null && myMaxHp !== null && before > myMaxHp) return { text: `최대 HP(${myMaxHp})보다 클 수 없어요`, kind: "error" };
     if (before !== null && after !== null && after >= before) return { text: "맞은 뒤 HP가 더 작아야 해요", kind: "error" };
-    if (after === 0) return { text: "쓰러진 공격은 정확한 데미지를 몰라요", kind: "error" };
     const index = completeReceived.findIndex((c) => c.row.id === row.id);
     if (index >= 0 && attackResult && !attackPending) {
       const message = attackResult.observationErrors[index];
       if (message) return { text: message, kind: "error" };
       if (attackResult.status !== "invalid" && attackResult.singleFeasible[index] === false) return { text: "이 관측만으로도 맞는 배분이 없어요", kind: "error" };
-      if (attackResult.status === "ok" && attackResult.singleFeasible[index]) return { text: "가능", kind: "ok" };
+      if (attackResult.status === "ok" && attackResult.singleFeasible[index]) return { text: after === 0 ? "가능 (쓰러져서 최소 데미지로 계산)" : "가능", kind: "ok" };
     }
     return null;
   }
