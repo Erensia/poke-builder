@@ -1128,6 +1128,40 @@ try {
     if (tried === 0) fail("턴 종료 왕복 시행이 0건");
     if (dropped === 0) fail("효과를 빼도 항상 맞으면 효과가 쓰이는지 알 수 없음");
   }
+  // 3.7 A3) 내구 조정 — 찾은 조합은 최대 난수에도 버티고(엔진 실수치·정수 공식 대조), 방어 포인트 −1이면 못 버티며,
+  // 합계 최소는 1,089칸 전수 탐색과 같다
+  {
+    const bulk = await server.ssrLoadModule("/src/lib/bulkAdjust.ts");
+    let checked = 0;
+    for (let t = 0; t < 30; t++) {
+      const atk = slot(pick(species).id, { points: pts({ atk: 32, spa: 32 }), nature: pick(natureIds) });
+      const defId = pick(species).id;
+      const mine = slot(defId, { points: pts({ spe: 10 }), nature: pick(natureIds) });
+      const res = ev.evaluateSlotMatchup(atk, pick(usable), mine);
+      const p = res?.damageParts;
+      if (!p || p.typeEffectiveness === 0) continue;
+      const dForm = form.getEffectiveForm(data.getPokemon(defId), mine);
+      const key = p.defenseKey;
+      const survives = (hp, d) => {
+        const real = stat.computeRealStats(dForm.baseStats, { ...mine.points, hp, [key]: d }, mine.nature);
+        return Math.max(...Array.from({ length: 16 }, (_, k) => fm.integerTotalDamage(p, real[key], (85 + k) / 100))) < real.hp;
+      };
+      const sums = Array.from({ length: 33 * 33 }, (_, i) => [Math.floor(i / 33), i % 33]).filter(([hp, d]) => survives(hp, d)).map(([hp, d]) => hp + d);
+      const best = sums.length ? Math.min(...sums) : Infinity;
+      const opts = bulk.bulkOptions(p, dForm.baseStats, mine.nature, mine.points, 1);
+      if ((opts[0]?.hpPoints ?? 0) + (opts[0]?.defPoints ?? 0) !== (opts.length ? best : 0) || (opts.length === 0) !== (best === Infinity)) {
+        fail(`내구 조정: 최소 합계 ${opts[0]?.hpPoints + opts[0]?.defPoints} vs 전수 ${best} (${defId})`);
+        continue;
+      }
+      for (const o of opts) {
+        if (!survives(o.hpPoints, o.defPoints)) fail(`내구 조정: 못 버티는 조합 ${defId} ${o.hpPoints}/${o.defPoints}`);
+        if (o.defPoints > 0 && survives(o.hpPoints, o.defPoints - 1)) fail(`내구 조정: 방어 −1도 버팀 ${defId} ${o.hpPoints}/${o.defPoints}`);
+      }
+      checked++;
+    }
+    console.log(`내구 조정 ${checked}건 (최대 난수 생존·방어 −1 경계·합계 최소 전수 대조) ${checked > 10 ? "통과" : "시행 부족"}`);
+    if (checked <= 10) fail("내구 조정 시행 부족");
+  }
 } finally {
   await server.close();
 }
