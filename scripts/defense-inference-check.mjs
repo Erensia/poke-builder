@@ -842,7 +842,7 @@ try {
     if (!ok) fail(`저장 복원 결과가 기대와 다름: ${JSON.stringify(r)}`);
     console.log("저장 복원(깨진 입력 7종·정상 1종)", failed === 0 ? "통과" : "실패");
   }
-  // 5) 3.4 T1 스피드 표 — 식이 computeRealStats와 같고, 이웃·개수가 전체 표를 정렬해 센 결과와 같다
+  // 5) 3.4 T1 스피드 표 — 식이 computeRealStats와 같다
   {
     const st = await server.ssrLoadModule("/src/lib/speedTable.ts");
     const before = failed;
@@ -857,39 +857,51 @@ try {
       if (st.speedValue(f.baseSpe, mult, p) !== real) fail(`스피드 식 불일치 ${f.name} ×${mult} ${p}pt: ${st.speedValue(f.baseSpe, mult, p)} vs ${real}`);
     }
     const formulaChecked = combos.length;
-    // 이웃 대조: 모든 (폼, 성격, 포인트) 줄을 한 번에 펴서 센다
-    const all = st.SPEED_FORMS.flatMap((f) => [1, 1.1, 0.9].flatMap((mult) => Array.from({ length: 33 }, (_, p) => ({ name: f.name, value: st.speedValue(f.baseSpe, mult, p) }))));
-    // 값 순으로 훑어 폼마다 처음 나온 줄(= 가장 가까운 값)만 모으고, 5폼 + 5번째와 같은 값의 폼까지를 라인으로 묶는다
-    const expectLines = (rows) => {
-      const first = new Map();
-      for (const r of rows) if (!first.has(r.name)) first.set(r.name, r.value);
-      const near = [...first];
-      const cut = near[Math.min(4, near.length - 1)]?.[1];
-      const lines = new Map();
-      for (const [name, value] of near.filter(([, v], i) => i < 5 || v === cut)) lines.set(value, [...(lines.get(value) ?? []), name]);
-      return JSON.stringify([...lines].map(([value, names]) => [value, names.sort()]));
-    };
-    const lineKey = (lines) => JSON.stringify(lines.map((l) => [l.value, l.rows.map((r) => r.name).sort()]));
-    const samples = [60, 100, 135, 150.5, 172, 200, 5, 400, ...Array.from({ length: 12 }, () => 40 + Math.floor(rnd() * 220))];
-    for (const speed of samples) {
-      const n = st.speedNeighbors(speed);
-      const up = expectLines(all.filter((r) => r.value > speed).sort((a, b) => a.value - b.value));
-      const down = expectLines(all.filter((r) => r.value < speed).sort((a, b) => b.value - a.value));
-      if (lineKey([...n.above].reverse()) !== up) fail(`위 라인 불일치 @${speed}`);
-      if (lineKey(n.below) !== down) fail(`아래 라인 불일치 @${speed}`);
-      const tieNames = new Set(all.filter((r) => r.value === speed).map((r) => r.name));
-      if (n.tie.length !== tieNames.size || n.tie.some((r) => r.value !== speed || !tieNames.has(r.name))) fail(`동속 불일치 @${speed}`);
-      const range = (f) => [st.speedValue(f.baseSpe, 0.9, 0), st.speedValue(f.baseSpe, 1.1, 32)];
-      const faster = st.SPEED_FORMS.filter((f) => range(f)[0] > speed).length;
-      const slower = st.SPEED_FORMS.filter((f) => range(f)[1] < speed).length;
-      if (n.alwaysFaster !== faster || n.alwaysSlower !== slower || n.mixed !== st.SPEED_FORMS.length - faster - slower) fail(`항상 빠름/느림 개수 불일치 @${speed}`);
-      for (const r of [...n.above.flatMap((l) => l.rows), ...n.tie, ...n.below.flatMap((l) => l.rows)]) {
-        const f = st.SPEED_FORMS.find((x) => x.name === r.name);
-        const mult = r.nature === "스피드↑" ? 1.1 : r.nature === "스피드↓" ? 0.9 : 1;
-        if (!f || st.speedValue(f.baseSpe, mult, r.points) !== r.value) fail(`줄의 성격·포인트가 값과 안 맞음 ${r.name} @${speed}`);
+    console.log(`스피드 표(폼 ${st.SPEED_FORMS.length}개, 식 ${formulaChecked}건)`, failed === before ? "통과" : "실패");
+  }
+  // 5-b) 3.6 T2 스피드 표 단계 — 단계 값이 computeRealStats와 같고, 추월 분류·최소 포인트·포인트 지점이 전수 대조와 같다
+  {
+    const st = await server.ssrLoadModule("/src/lib/speedTable.ts");
+    const before = failed;
+    const natureOf = (label) => data.NATURES.find((n) => (label === "보정 없음" ? !n.increased && !n.decreased : label === "스피드↑" ? n.increased === "spe" : n.decreased === "spe"))?.id ?? null;
+    const key = (r) => `${r.name}|${r.nature}|${r.points}`;
+    const rowsOf = (t) => st.SPEED_FORMS.map((f) => st.tierRow(f, t));
+    if (st.SPEED_TIERS.map((t) => t.label).join() !== "최속,준속,무투자,최저속") fail("스피드 단계 구성이 다름");
+    for (const t of st.SPEED_TIERS) {
+      for (const r of rowsOf(t)) {
+        const real = stat.computeRealStats({ hp: 0, atk: 0, def: 0, spa: 0, spd: 0, spe: r.form.baseSpe }, pts({ spe: t.points }), natureOf(r.nature)).spe;
+        if (r.value !== real || r.points !== t.points) fail(`단계 값 불일치 ${t.label} ${r.name}: ${r.value} vs ${real}`);
       }
     }
-    console.log(`스피드 표(폼 ${st.SPEED_FORMS.length}개, 식 ${formulaChecked}건·기준 ${samples.length}개)`, failed === before ? "통과" : "실패");
+    // 추월·동속·못 추월 분류와 정렬(가까운 순)
+    const speeds = [1, 60, 100, 135, 150, 172, 200, 400, ...Array.from({ length: 12 }, () => 40 + Math.floor(rnd() * 220))];
+    for (const speed of speeds) {
+      st.speedOutlook(speed).forEach((o, i) => {
+        const all = rowsOf(st.SPEED_TIERS[i]);
+        const names = (rows) => rows.map(key).sort().join();
+        if (names(o.fail) !== names(all.filter((r) => r.value > speed)) || names(o.tie) !== names(all.filter((r) => r.value === speed)) || names(o.pass) !== names(all.filter((r) => r.value < speed))) fail(`추월 분류 불일치 ${o.tier.label} @${speed}`);
+        if (o.fail.some((r, k) => k && r.value < o.fail[k - 1].value) || o.pass.some((r, k) => k && r.value > o.pass[k - 1].value)) fail(`추월 목록이 가까운 순이 아님 ${o.tier.label} @${speed}`);
+      });
+    }
+    // 최소 포인트·포인트 지점: 임의 종족값·성격 배율의 스피드 곡선(포인트 0~32)으로 대조
+    for (const [base, mult] of [[100, 1], [60, 1.1], [135, 0.9], [38, 1.1], [150, 1]]) {
+      const speedAt = Array.from({ length: 33 }, (_, p) => st.speedValue(base, mult, p));
+      for (const r of st.SPEED_TIERS.flatMap(rowsOf)) {
+        const need = st.minPointsToPass(speedAt, r.value);
+        const brute = speedAt.findIndex((v) => v > r.value);
+        if (need !== (brute < 0 ? null : brute) || (need !== null && (speedAt[need] <= r.value || (need > 0 && speedAt[need - 1] > r.value)))) fail(`최소 포인트 불일치 base${base}×${mult} ${r.nature}${r.points}pt ${r.name}: ${need}`);
+      }
+      const keep = 17;
+      const bps = st.speedBreakpoints(speedAt, keep);
+      const byP = new Map(bps.map((b) => [b.points, b]));
+      if (!byP.has(0) || !byP.has(keep)) fail(`지점에 0pt·현재 포인트가 없음 base${base}×${mult}`);
+      for (let p = 1; p <= 32; p++) {
+        const brute = st.SPEED_TIERS.map((t) => rowsOf(t).filter((r) => r.value >= speedAt[p - 1] && r.value < speedAt[p]).map(key).sort().join());
+        const got = byP.get(p)?.gains.map((g) => g.map(key).sort().join()) ?? brute.map(() => "");
+        if (brute.some((b, i) => b !== got[i]) || (!byP.has(p) && brute.some(Boolean))) fail(`포인트 지점 불일치 base${base}×${mult} ${p}pt`);
+      }
+    }
+    console.log(`스피드 단계(폼 ${st.SPEED_FORMS.length}개 × 4단계, 기준 ${speeds.length}개, 곡선 5개)`, failed === before ? "통과" : "실패");
   }
   // 6) 3.4 H1 HP 최적 수치 눈금 — 사용자 표의 예시와 전 종족값 전수 대조
   {

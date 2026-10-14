@@ -419,7 +419,7 @@ export function MatchupPage() {
           slot={attacker.slot}
           weather={weather}
           field={field}
-          card={<MatchupSlotCard role="attacker" label="내 포켓몬" slot={attacker.slot} hideMoveSlot hideTurnAssumptions {...cardActions("attacker")} />}
+          card={(statusExtra) => <MatchupSlotCard role="attacker" label="내 포켓몬" slot={attacker.slot} hideMoveSlot hideTurnAssumptions statusExtra={statusExtra} {...cardActions("attacker")} />}
         />
       )}
 
