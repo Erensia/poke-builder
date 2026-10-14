@@ -8,11 +8,15 @@
  */
 import { createServer } from "vite";
 import { fileURLToPath } from "node:url";
+import { createHash } from "node:crypto";
 
 const trials = Number(process.argv[2] ?? 150);
 const root = fileURLToPath(new URL("..", import.meta.url));
 const server = await createServer({ root, server: { middlewareMode: true, hmr: false }, appType: "custom", logLevel: "error" });
 let failed = 0;
+// 결합 결과 해시 — 속도 최적화 전후로 결과가 한 비트도 달라지지 않았는지 대조한다(3.6 I1-a)
+const combinedDigest = createHash("sha1");
+const digestResult = (c) => combinedDigest.update(JSON.stringify(c, (_, v) => (ArrayBuffer.isView(v) ? Array.from(v) : v)));
 const fail = (msg) => {
   failed++;
   console.log("FAIL", msg);
@@ -452,6 +456,7 @@ try {
       const t0 = performance.now();
       const c = cb.inferCombined(defenseInput, attackInput);
       const ms = performance.now() - t0;
+      digestResult(c);
       sumMs += ms;
       maxMs = Math.max(maxMs, ms);
       const inR = (r, v) => !r || (r.min <= v && v <= r.max);
@@ -773,6 +778,7 @@ try {
       const t0 = performance.now();
       const c = cb3.inferCombined(defenseInput, attackInput, speedInput);
       maxMs3 = Math.max(maxMs3, performance.now() - t0);
+      digestResult(c);
       const inR = (r, v) => !r || (r.min <= v && v <= r.max);
       const natName = data.NATURES.find((x) => x.id === truth.nature).name;
       const good =
@@ -942,5 +948,6 @@ try {
 } finally {
   await server.close();
 }
+console.log(`결합 결과 해시 ${combinedDigest.digest("hex").slice(0, 16)}`);
 console.log(failed === 0 ? "ALL PASS" : `${failed} FAIL`);
 process.exit(failed === 0 ? 0 : 1);
