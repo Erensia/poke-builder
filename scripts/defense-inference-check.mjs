@@ -16,7 +16,7 @@ const server = await createServer({ root, server: { middlewareMode: true, hmr: f
 let failed = 0;
 // 결합 결과 해시 — 속도 최적화 전후로 결과가 한 비트도 달라지지 않았는지 대조한다(3.6 I1-a)
 const combinedDigest = createHash("sha1");
-const digestResult = (c) => combinedDigest.update(JSON.stringify(c, (k, v) => (k === "rounds" || k === "converged" ? undefined : ArrayBuffer.isView(v) ? Array.from(v) : v)));
+const digestResult = (c) => combinedDigest.update(JSON.stringify(c, (k, v) => (k === "rounds" || k === "converged" || k === "candidates" ? undefined : ArrayBuffer.isView(v) ? Array.from(v) : v)));
 const fail = (msg) => {
   failed++;
   console.log("FAIL", msg);
@@ -953,6 +953,91 @@ try {
       }
     }
     console.log(`스피드 단계(폼 ${st.SPEED_FORMS.length}개 × 4단계, 기준 ${speeds.length}개, 곡선 5개)`, failed === before ? "통과" : "실패");
+  }
+  // 5-c) 3.6 I2 후보 카드 — 정렬·남은 SP·최소 투자 후보·데미지 범위가 결과와 맞는다(공용 난수열을 건드리지 않게 별도 난수)
+  {
+    const before = failed;
+    let cs = 4242;
+    const cr = () => {
+      cs = (cs * 1664525 + 1013904223) >>> 0;
+      return cs / 2 ** 32;
+    };
+    const cp = (arr) => arr[Math.floor(cr() * arr.length)];
+    const eps = 1e-9;
+    const checkLists = (lists, sums, label) => {
+      if (!lists) {
+        fail(`${label}: 후보 카드가 없음`);
+        return false;
+      }
+      for (const [name, cards] of [["남은 SP 순", lists.bySpare], ["가능도 순", lists.byLikelihood]]) {
+        if (cards.length === 0 || cards.length > 60) fail(`${label} ${name}: 카드 수 ${cards.length}`);
+        for (const card of cards) {
+          const sum = card.points.reduce((a, pt) => a + pt.value, 0);
+          if (card.spare !== 66 - sum || card.spare < 0) fail(`${label} ${name}: 남은 SP가 66 − 합계와 다름`);
+          if (!(card.likelihood > 0 && card.likelihood <= 1 + eps)) fail(`${label} ${name}: 가능도 ${card.likelihood}`);
+          if (card.damagePercent.some((r) => !(r.min <= r.max))) fail(`${label} ${name}: 데미지 범위가 뒤집힘`);
+          if (card.rollMatch === null || card.rollMatch < 1 - eps || card.rollMatch > 16 + eps) fail(`${label} ${name}: 일치 난수 ${card.rollMatch}`);
+        }
+      }
+      if (lists.bySpare.some((card, i) => i > 0 && card.spare > lists.bySpare[i - 1].spare)) fail(`${label}: 남은 SP 순 정렬이 아님`);
+      if (lists.byLikelihood.some((card, i) => i > 0 && card.likelihood > lists.byLikelihood[i - 1].likelihood + eps)) fail(`${label}: 가능도 순 정렬이 아님`);
+      if (lists.bySpare[0].spare !== 66 - sums.min) fail(`${label}: 남은 SP가 가장 많은 카드가 최소 투자 합과 다름`);
+      return true;
+    };
+    // 방어 쪽: 풀피 상대에게 한 방. 시나리오가 성립해 검사했으면 true
+    const checkDefense = (mine, opp, oppTrue, oppReal) => {
+      const move = cp(usable);
+      const res = ev.evaluateSlotMatchup(mine, move, oppTrue);
+      const parts = res?.damageParts;
+      if (!parts || parts.typeEffectiveness === 0) return false;
+      const damage = fm.integerTotalDamage(parts, oppReal[parts.defenseKey], (85 + Math.floor(cr() * 16)) / 100);
+      if (damage >= oppReal.hp) return false;
+      const after = inf.displayPercent(oppReal.hp - damage, oppReal.hp);
+      const r = inf.inferDefense({ attacker: mine, defender: slot(opp.id), observations: [{ move, critical: false, before: 100, after }] });
+      if (r?.status !== "ok") {
+        fail(`방어 후보 카드 시나리오가 ok가 아님(${r?.status})`);
+        return false;
+      }
+      if (!checkLists(r.candidates, r.sums, "방어 후보 카드")) return false;
+      // 표시 손실 %는 (lost−1, lost] 안의 난수가 만든다 — 모든 카드의 범위가 이 구간과 겹쳐야 한다
+      const lost = 100 - after;
+      const bad = [...r.candidates.bySpare, ...r.candidates.byLikelihood].filter((card) => card.damagePercent[0].min > lost + eps || card.damagePercent[0].max <= lost - 1 - eps);
+      if (bad.length > 0) fail(`방어 후보 카드의 데미지 범위가 관측과 안 맞음 ${bad.length}장 (손실 ${lost}%)`);
+      return true;
+    };
+    // 공격 쪽: 상대가 풀피인 나를 한 방에 쓰러뜨리지 않는 공격
+    const checkAttack = (mine, opp, oppTrue, myReal) => {
+      const move = cp(attackMoves);
+      const res = ev.evaluateSlotMatchup(oppTrue, move, mine, { defenderHpIsFull: true, skipVerdict: true });
+      const parts = res?.damageParts;
+      if (!parts || parts.typeEffectiveness === 0) return false;
+      const damage = fm.integerTotalDamage(parts, res.defenseStat, (85 + Math.floor(cr() * 16)) / 100);
+      if (damage >= myReal.hp) return false;
+      const r = ai.inferAttack({ attacker: slot(opp.id), defender: mine, observations: [{ move, critical: false, hpBefore: myReal.hp, hpAfter: myReal.hp - damage }] });
+      if (r?.status !== "ok") {
+        fail(`공격 후보 카드 시나리오가 ok가 아님(${r?.status})`);
+        return false;
+      }
+      if (!checkLists(r.candidates, r.sums, "공격 후보 카드")) return false;
+      const percent = (damage * 100) / myReal.hp;
+      const bad = [...r.candidates.bySpare, ...r.candidates.byLikelihood].filter((card) => card.damagePercent[0].min > percent + eps || card.damagePercent[0].max < percent - eps);
+      if (bad.length > 0) fail(`공격 후보 카드의 데미지 범위에 관측이 없음 ${bad.length}장 (${percent.toFixed(1)}%)`);
+      return true;
+    };
+    let defChecked = 0;
+    let atkChecked = 0;
+    for (let t = 0; t < 40; t++) {
+      const opp = cp(species);
+      const truth = { hp: Math.floor(cr() * 33), def: Math.floor(cr() * 33), spd: Math.floor(cr() * 33), nature: cp(natureIds) };
+      const oppTrue = slot(opp.id, { points: pts(truth), nature: truth.nature });
+      const mine = slot(cp(species).id, { points: pts({ atk: 32, spa: 32, hp: Math.floor(cr() * 33) }), nature: cp(natureIds) });
+      const oppReal = stat.computeRealStats(form.getEffectiveForm(data.getPokemon(opp.id), oppTrue).baseStats, oppTrue.points, oppTrue.nature);
+      const myReal = stat.computeRealStats(form.getEffectiveForm(data.getPokemon(mine.pokemonId), mine).baseStats, mine.points, mine.nature);
+      if (checkDefense(mine, opp, oppTrue, oppReal)) defChecked++;
+      if (checkAttack(mine, opp, oppTrue, myReal)) atkChecked++;
+    }
+    if (defChecked === 0 || atkChecked === 0) fail(`후보 카드 검증 시행이 부족함(방어 ${defChecked}·공격 ${atkChecked})`);
+    console.log(`후보 카드(방어 ${defChecked}건·공격 ${atkChecked}건: 정렬·남은 SP·최소 투자·데미지 범위)`, failed === before ? "통과" : "실패");
   }
   // 6) 3.4 H1 HP 최적 수치 눈금 — 사용자 표의 예시와 전 종족값 전수 대조
   {

@@ -49,6 +49,7 @@ import {
 import { computeRealStats, MAX_ABILITY_POINTS_PER_STAT } from "../lib/statCalculator";
 import { loadMatchupDraft, saveMatchupDraft } from "../lib/storage";
 import { restoreInference, type ObservationRow, type RowKind, type Screen } from "../lib/inferenceDraft";
+import { CandidateCards } from "./CandidateCards";
 import "./DefenseInferencePanel.css";
 
 interface DefenderActions {
@@ -379,6 +380,7 @@ function AttackResultView({ result, rowNos, combinedOn }: { result: AttackInfere
           </span>
         ))}
       </div>
+      <CandidateCards lists={result.candidates} />
       <p className="dinf-note">
         관측이 1번이면 난수(±7%)와 성격(±10%) 때문에 범위가 넓어요. 같은 종류(물리/특수)의 공격을 여러 번 모을수록 좁아져요.{" "}
         {combinedOn
@@ -674,6 +676,8 @@ function ResultView({
       </div>
 
       <ExtremeSummary result={result} />
+
+      <CandidateCards lists={result.candidates} />
 
       <details className="dinf-details">
         <summary>HP × 방어 분포 보기</summary>

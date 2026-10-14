@@ -1,0 +1,56 @@
+/* 역산 후보 카드(3.6 I2) — 기존 역산 결과의 유리 패널 톤을 따른다 */
+.cand-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.cand-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 0.5rem;
+}
+
+.cand-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  background: var(--surface-2);
+  font-size: 0.78rem;
+}
+
+.cand-nature small {
+  margin-left: 0.25rem;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.cand-points {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.cand-meta {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.cand-more {
+  align-self: flex-start;
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  background: var(--surface-2);
+  font: inherit;
+  font-size: 0.8rem;
+  color: var(--text);
+  cursor: pointer;
+}
