@@ -77,10 +77,10 @@ import type { SpeedOrder } from "./speed";
  * 데미지 없는 변화기 옵션의 종류(extension §2-2, decision-layer §4-1).
  * effect = 상태이상 부여·상대 랭크다운·벽·설치기 — "효과를 적용한 state로 대면을 다시 평가"해서 점수를 매긴다.
  */
-export type SupportKind = "heal" | "setup" | "effect" | "protect" | "other";
+type SupportKind = "heal" | "setup" | "effect" | "protect" | "other";
 
 /** 방어류 시뮬레이션 한 갈래(상대 행동 1개): 그 턴이 끝난 뒤 양쪽 HP 비율과, 둘 다 살아 있으면 이어지는 대면 */
-export interface ProtectOutcome {
+interface ProtectOutcome {
   weight: number;
   myAfter: number;
   oppAfter: number;
@@ -90,7 +90,7 @@ export interface ProtectOutcome {
 }
 
 /** 방어류 평가(decision-layer §4-4) */
-export interface ProtectEvaluation {
+interface ProtectEvaluation {
   group: ProtectGroup;
   /** 연속 사용 성공 확률 (1/3)^연속 횟수 */
   successChance: number;
@@ -109,7 +109,7 @@ export interface RaceInputs {
 }
 
 /** effect 변화기의 평가값(decision-layer §4-1) */
-export interface EffectEvaluation {
+interface EffectEvaluation {
   /** 효과가 걸린 뒤의 대면(지속 턴으로 자른 값) */
   hit: RaceInputs;
   /** 빗나갔을 때 = 지금 그대로의 대면 */
@@ -148,7 +148,7 @@ export interface EffectEvaluation {
  * 울부짖기·날려버리기(AI-A2): 우선도 −6이라 상대가 먼저 한 번 때리고(hitLoss), 상대 예비 중 무작위 하나가 끌려 나와
  * 설치물 등장 비용(entry)을 치른다. 원래 상대의 랭크 변화는 사라진다(물러남). branches = 예비마다 그 뒤의 대면.
  */
-export interface PhazeEvaluation {
+interface PhazeEvaluation {
   hitLoss: number;
   branches: {
     race: RaceInputs;
@@ -166,7 +166,7 @@ export interface PhazeEvaluation {
  * 랭크업기 → 다음 턴 배턴터치(decision-layer §4-2). hitLoss = 랭크업 후 상대 공격 한 번에 잃는 HP 비율,
  * candidates = 올린 랭크를 이어받은 교대 후보, firstProbability = 다음 턴 배턴터치 시 내가 먼저 움직일 확률.
  */
-export interface BatonFollowUp {
+interface BatonFollowUp {
   candidates: AiOption[];
   hitLoss: number;
   firstProbability: number;
@@ -428,7 +428,7 @@ let trapModelAware = true;
 
 /**
  * fn 실행 동안만 교체 봉쇄 판단(ver.1.9 6-3 — 그림자꿰매기 가두기 가치·배수의진 자기 봉쇄 비용)을 켜고 끈다. 비교용 토글
- * (DecisionParams.trapMoveAware), withEndOfTurnModel과 같은 방식.
+ * (테스트 대조용 — 운영 경로는 항상 켬).
  */
 export function withTrapModel<T>(enabled: boolean, fn: () => T): T {
   const previous = trapModelAware;

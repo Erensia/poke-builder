@@ -124,14 +124,11 @@ function useBattleSetupSlot() {
 }
 
 /**
- * 편측 빌드 슬롯 개수. 백로그 §3 — 6마리 빌드 → 3마리 선출. 3마리 이하만 빌드하면 선출 화면을
- * 건너뛰고 빌드 순서대로 선출된다(첫 슬롯이 리드).
- */
-export const BATTLE_BUILD_SIZE = 6;
-/** 선출 인원 — 4마리 이상 빌드한 편은 이 수만큼 순서까지 골라야 한다. */
+ * 백로그 §3 — 6마리 빌드 → 3마리 선출. 3마리 이하만 빌드하면 선출 화면을 건너뛰고 빌드 순서대로 선출된다(첫 슬롯이 리드).
+ * 선출 인원 — 4마리 이상 빌드한 편은 이 수만큼 순서까지 골라야 한다. */
 export const BATTLE_SELECT_SIZE = 3;
 
-export type BattleSetupSlot = ReturnType<typeof useBattleSetupSlot>;
+type BattleSetupSlot = ReturnType<typeof useBattleSetupSlot>;
 
 /**
  * 한 진영의 빌드 슬롯 6개. 훅 규칙상 반복문으로 못 만들지만 개수가 고정(6)이라 나란히 호출한다.

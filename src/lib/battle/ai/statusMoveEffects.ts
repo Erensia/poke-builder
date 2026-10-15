@@ -206,14 +206,14 @@ export const TIER2_EFFECT_KINDS: ReadonlySet<EffectMoveKind> = new Set([
 export const PHASE3_EFFECT_KINDS: ReadonlySet<EffectMoveKind> = new Set(["weather", "field", "trickRoom", "taunt", "encore", "disable"]);
 
 /** 신비의부적 지속 턴(finishTurn이 5에서 센다) */
-export const SAFEGUARD_DURATION = 5;
+const SAFEGUARD_DURATION = 5;
 /** 혼란 지속 턴 기대값(1~4턴 균등 — rollConfusionDuration) */
-export const EXPECTED_CONFUSION_TURNS = 2.5;
+const EXPECTED_CONFUSION_TURNS = 2.5;
 
 /** 독압정으로 걸린 독이 상대 대기 포켓몬에게 몇 턴 동안 데미지를 준다고 볼지(이월 항 근사) */
-export const HAZARD_POISON_TURNS = 3;
+const HAZARD_POISON_TURNS = 3;
 /** 끈적끈적네트: 접지한 상대 대기 포켓몬 1마리당 이월 가치(스피드 −1의 고정 근사, HP 비율 단위) */
-export const STICKY_WEB_VALUE_PER_TARGET = 0.1;
+const STICKY_WEB_VALUE_PER_TARGET = 0.1;
 
 export function effectKindOf(move: Move): EffectMoveKind | undefined {
   if (move.category !== "status") return undefined;
@@ -885,7 +885,7 @@ function applyDebuff(clone: BattleState, key: FighterKey, move: Move): boolean {
 }
 
 /** 벽 지속 턴(빛의점토 보너스 포함) */
-export function screenDuration(user: BattleFighterState): number {
+function screenDuration(user: BattleFighterState): number {
   return SCREEN_DURATION + (effectiveHeldItem(user)?.screenDurationBonus ?? 0);
 }
 

@@ -56,7 +56,7 @@ export function currentAccumulationSteps(): number {
 
 /**
  * 확률 턴 종료 효과(ver.1.9 6-4): 탈피(매 턴 확률로 상태이상 치료)·수확(매 턴 확률로 먹은 열매 복구)을 대면 턴 수에 기대값으로
- * 센다. 비교용 토글(DecisionParams.chanceEffectsAware) — 턴 종료 효과 토글(endOfTurnAware)이 켜져 있을 때만 쓴다.
+ * 센다. 테스트 대조용 토글(운영 경로는 항상 켬) — 턴 종료 효과 토글(endOfTurnAware)이 켜져 있을 때만 쓴다.
  */
 let chanceEffectsAware = true;
 
@@ -181,7 +181,7 @@ function thresholdBerryHp(state: BattleState, fighter: BattleFighterState, oppon
  * 상태이상 지속 데미지가 매 턴 현재 HP의 몇 비율을 깎는지(engine-extension §1-2, finishTurn과 같은 규칙).
  * 포이즌힐이면 음수(회복), 매직가드면 0, 내열이면 화상 데미지 절반.
  */
-export function residualDamageFraction(fighter: BattleFighterState, hp = fighter.currentHp, opponent?: BattleFighterState): number {
+function residualDamageFraction(fighter: BattleFighterState, hp = fighter.currentHp, opponent?: BattleFighterState): number {
   if (hp <= 0) return 0;
   return statusResidualFraction(fighter, hp) + volatileResidualFraction(fighter, hp, opponent);
 }
@@ -252,7 +252,7 @@ function statusResidualFraction(fighter: BattleFighterState, hp: number, toxicHo
  * 매 턴 행동할 확률(잠듦·얼음은 blockedTurns로, 혼란은 남은 턴이 있어 turnsToKo에서 따로 셈):
  * 마비(행동불능 25%) × 헤롱헤롱(50%, 교체 전까지 유지).
  */
-export function actionFactor(fighter: BattleFighterState): number {
+function actionFactor(fighter: BattleFighterState): number {
   const paralysis = fighter.status.condition === "paralysis" ? 1 - PARALYSIS_ACTION_FAIL_CHANCE : 1;
   const attract = hasVolatile(fighter.volatile, "attract") ? 1 - ATTRACT_ACTION_BLOCK_CHANCE : 1;
   return paralysis * attract;
@@ -266,7 +266,7 @@ function confusionTurns(fighter: BattleFighterState): number {
 /**
  * 혼란 자멸 1회 데미지(최대 HP 대비) — preHitEffects와 같은 식(자기 실능끼리 위력 40 물리, 난수 중간값).
  */
-export function confusionSelfHitFraction(fighter: BattleFighterState): number {
+function confusionSelfHitFraction(fighter: BattleFighterState): number {
   if (fighter.maxHp <= 0) return 0;
   const hit = computeDamage(fighter.realStats, fighter.realStats, fighter.types, CONFUSION_SELF_HIT_MOVE, { randomRoll: 0.925 });
   return (hit?.damage ?? 0) / fighter.maxHp;

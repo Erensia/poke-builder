@@ -38,7 +38,7 @@ export interface MoveHitEstimate extends HitsEstimate {
   selfHpRate?: number;
 }
 
-export interface MoveHitContext {
+interface MoveHitContext {
   state: BattleState;
   attacker: BattleFighterState;
   defender: BattleFighterState;
@@ -58,7 +58,7 @@ export interface MoveHitContext {
 }
 
 /** 실전 파이터의 현재 값을 evaluateSlotMatchup 런타임 입력으로 옮긴다. */
-export function runtimeOf(fighter: BattleFighterState, types?: PokemonType[], state?: BattleState): RuntimeCombatant {
+function runtimeOf(fighter: BattleFighterState, types?: PokemonType[], state?: BattleState): RuntimeCombatant {
   const pokemon = getPokemon(fighter.slot.pokemonId);
   // 슬롯에 메가스톤이 있으면 getEffectiveForm이 메가폼으로 계산하므로, 아직 메가진화 전이면 무시한다.
   const weightKg = pokemon ? getEffectiveForm(pokemon, fighter.slot, { ignoreMega: !fighter.hasMegaEvolved }).weightKg : undefined;
@@ -129,7 +129,7 @@ function supremeOverlordCountFor(state: BattleState, attacker: BattleFighterStat
 let critAware = true;
 
 /**
- * fn 실행 동안만 급소 기대 데미지(ver.1.9 6-2)를 켜고 끈다 — 비교용 토글(DecisionParams.critAware). withEndOfTurnModel과 같은 방식.
+ * fn 실행 동안만 급소 기대 데미지(ver.1.9 6-2)를 켜고 끈다 — 테스트 대조용 토글(운영 경로는 항상 켬).
  */
 export function withCritModel<T>(enabled: boolean, fn: () => T): T {
   const previous = critAware;

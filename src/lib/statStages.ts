@@ -19,17 +19,12 @@ export function setStage(stages: StatStages, stat: BattleStatKey, value: number)
   return { ...stages, [stat]: clampStage(value) };
 }
 
-/** 모든 랭크를 초기화한다 (흑안개, 교체 등) */
-export function resetStages(): StatStages {
-  return { ...NEUTRAL_STAGES };
-}
-
-/** 하양허브: 마이너스 랭크만 0으로 되돌린다. 플러스 랭크는 그대로 둔다(resetStages와 다른 점) */
+/** 하양허브: 마이너스 랭크만 0으로 되돌린다. 플러스 랭크는 그대로 둔다 */
 export function clampStagesToNonNegative(stages: StatStages): StatStages {
   return Object.fromEntries(Object.entries(stages).map(([key, value]) => [key, Math.max(0, value)])) as StatStages;
 }
 
-export interface ApplyMoveStatChangesOptions {
+interface ApplyMoveStatChangesOptions {
   /** 조건부 효과(저주 등) 판정에 쓸, 기술을 사용한 쪽의 실제 타입 */
   userTypes?: PokemonType[];
   /** 확률부여 효과(아이언테일 등)를 포함할지. 기본 true(적중한다고 가정) */

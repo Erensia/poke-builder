@@ -21,7 +21,7 @@ export type MoveClassification =
   | "바람"
   | "가루";
 
-export interface StatChangeEffect {
+interface StatChangeEffect {
   target: "self" | "opponent";
   /** 기존 5스탯(atk/def/spa/spd/spe) + 명중률/회피율 + 급소율("critStage")까지 대상이 될 수 있다 */
   stat: EffectStatKey;

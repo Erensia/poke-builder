@@ -14,7 +14,7 @@ import { getEffectiveness } from "./typeEffectiveness";
  * 한 곳으로 모아 양쪽이 재사용하게 만들었다 — Phase 1.5 문서에 적어뒀던 "evaluateSlotMatchup을
  * 재사용 가능하게 설계"를 실제로 지키는 지점.
  */
-export interface MoveContext {
+interface MoveContext {
   /** 특성으로 타입이 바뀌었으면(페어리스킨 등) 그 타입이 반영된 기술. 안 바뀌었으면 원본과 동일 */
   effectiveMove: Move;
   /** 공격측 특성이 이 기술에 주는 배율 (테크니션/모래의힘/메가런처 등) */
@@ -42,7 +42,7 @@ export interface MoveContext {
 }
 
 /** resolveMoveContext의 전투 상황 입력. 안 넘긴 값은 매치업 페이지 기본값(1턴 스냅샷) */
-export interface MoveContextOptions {
+interface MoveContextOptions {
   weather?: WeatherKind;
   defenderItem?: Item;
   /** 맹화·급류·심록·벌레의알림(HP 1/3 이하 조건)용. 안 넘기면 풀피로 간주 */

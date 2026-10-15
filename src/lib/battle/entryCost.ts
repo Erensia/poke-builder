@@ -13,7 +13,7 @@ const STEALTH_ROCK_BASE_FRACTION = 1 / 8;
  * 비행 타입, 부유·천정부지(땅 면역 특성) 보유자는 비접지. 에어벌룬·텔레키네시스 등은
  * 로스터에 없어 미반영(fieldEffects와 동일한 단순화). 스텔스록은 접지 무관이라 이 판정을 안 쓴다.
  */
-export function isGroundedForHazards(types: PokemonType[], ability: Ability | undefined): boolean {
+function isGroundedForHazards(types: PokemonType[], ability: Ability | undefined): boolean {
   if (types.includes("비행")) return false;
   if (ability?.grantsImmunityToTypes?.includes("땅")) return false;
   return true;

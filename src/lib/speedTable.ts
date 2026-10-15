@@ -7,7 +7,7 @@ import type { SpriteFormOptions } from "./sprites";
  * 도구·순풍·랭크 같은 배율은 표 쪽엔 걸지 않는다 — 기준 포켓몬의 실효 스피드를 넘겨 받는 쪽에서 적용한다.
  */
 
-export interface SpeedForm {
+interface SpeedForm {
   name: string;
   baseSpe: number;
   /** 스프라이트를 찾는 데 쓰는 종 id·폼 옵션 */
@@ -52,7 +52,7 @@ export const SPEED_TIERS = [
   { label: "무투자", note: "보정 없음 · 0pt", nature: 0, points: 0 },
   { label: "최저속", note: "스피드↓ · 0pt", nature: 2, points: 0 },
 ] as const;
-export type SpeedTier = (typeof SPEED_TIERS)[number];
+type SpeedTier = (typeof SPEED_TIERS)[number];
 
 export function tierRow(f: SpeedForm, t: SpeedTier): SpeedRow {
   const n = SPEED_NATURES[t.nature];
@@ -87,7 +87,7 @@ export function minPointsToPass(speedAt: readonly number[], value: number): numb
   return p < 0 ? null : p;
 }
 
-export interface SpeedBreakpoint {
+interface SpeedBreakpoint {
   points: number;
   speed: number;
   /** 단계(SPEED_TIERS 순)마다 이 포인트에서 새로 추월하게 된 폼 */
