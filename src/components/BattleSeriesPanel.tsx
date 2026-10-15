@@ -36,10 +36,12 @@ export function BattleSeriesPanel({ series, startBlockedReason, onStart }: Battl
         </button>
       )}
       {(usableMine > 0 || save.includeMine) && (
-        <label className="battle-series-mine">
-          <input type="checkbox" checked={save.includeMine} disabled={active} onChange={(e) => series.setIncludeMine(e.target.checked)} />
-          <span>내 샘플 {usableMine}개도 상대로 쓰기{active ? " (프런티어 종료 후 바꿀 수 있어요)" : ""}</span>
-        </label>
+        <div className="battle-series-mine">
+          <label className="toggle-pill">
+            <input type="checkbox" checked={save.includeMine} disabled={active} onChange={(e) => series.setIncludeMine(e.target.checked)} />
+            <span>내 샘플 {usableMine}개도 상대로 쓰기{active ? " (프런티어 종료 후 바꿀 수 있어요)" : ""}</span>
+          </label>
+        </div>
       )}
       {played.length > 0 && (
         <details className="battle-series-details">

@@ -48,6 +48,7 @@ type PickerState =
 const WEATHERS: WeatherKind[] = ["쾌청", "비", "모래바람", "눈"];
 const FIELDS: FieldKind[] = ["그래스필드", "미스트필드", "사이코필드", "일렉트릭필드"];
 const SCREENS = ["reflect", "lightScreen", "auroraVeil"] as const;
+const ROOMS = ["트릭룸"] as const;
 const SCREEN_LABELS = { reflect: "리플렉터", lightScreen: "빛의장막", auroraVeil: "오로라베일" } as const;
 
 /** 탭 버튼과 페이지 제목에 같이 쓰는 이름 */
@@ -392,7 +393,7 @@ function MatchupPickers({ s }: { s: ReturnType<typeof useMatchupPageState> }) {
 
 /** MatchupPage의 일부 화면 — 세션(useMatchupPageState 결과)에서 필요한 값만 꺼내 쓴다 */
 function MatchupCalcTab({ s }: { s: ReturnType<typeof useMatchupPageState> }) {
-  const { tab, weather, field, swapSides, attacker, fullResult, defenderPokemon, soloOffensePower, setPicker, slotPresets, attackerMove, defender, baseBulk, speedResult, trickRoom, setTrickRoom } = s;
+  const { tab, weather, field, swapSides, attacker, fullResult, defenderPokemon, soloOffensePower, setPicker, slotPresets, attackerMove, defender, baseBulk, speedResult } = s;
   return (
     <>
       {tab === "calc" && (
@@ -498,14 +499,6 @@ function MatchupCalcTab({ s }: { s: ReturnType<typeof useMatchupPageState> }) {
               상대 <strong>{Math.round(speedResult.defenderSpeed).toLocaleString()}</strong>
             </span>
           </div>
-          <label className="matchup-assume-toggle matchup-speed-trickroom">
-            <input
-              type="checkbox"
-              checked={trickRoom}
-              onChange={(e) => setTrickRoom(e.target.checked)}
-            />
-            <span>트릭룸 가정 (느린 쪽이 먼저)</span>
-          </label>
         </div>
       )}
         </>
@@ -516,7 +509,7 @@ function MatchupCalcTab({ s }: { s: ReturnType<typeof useMatchupPageState> }) {
 
 export function MatchupPage() {
   const session = useMatchupPageState();
-  const { tab, setTab, weather, setWeather, field, setField, attacker, defender, swapSides, setPicker, inferenceResetKey, setInferenceResetKey, swapInference, cardActions } = session;
+  const { tab, setTab, weather, setWeather, field, setField, attacker, defender, swapSides, setPicker, inferenceResetKey, setInferenceResetKey, swapInference, cardActions, trickRoom, setTrickRoom } = session;
 
 
   return (
@@ -559,6 +552,7 @@ export function MatchupPage() {
           <ChipPicker label="필드" options={FIELDS} value={field} onChange={setField} />
           <ChipPicker label="내 쪽 스크린" options={SCREENS} textOf={(s) => SCREEN_LABELS[s]} value={attacker.slot.screen} onChange={(s) => attacker.setScreen(s ?? undefined)} />
           <ChipPicker label="상대 쪽 스크린" options={SCREENS} textOf={(s) => SCREEN_LABELS[s]} value={defender.slot.screen} onChange={(s) => defender.setScreen(s ?? undefined)} />
+          <ChipPicker label="룸" options={ROOMS} value={trickRoom ? "트릭룸" : null} onChange={(r) => setTrickRoom(r !== null)} />
         </div>
       </header>
 

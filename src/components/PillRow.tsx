@@ -6,12 +6,14 @@ interface PillRowProps<T> {
   onChange: (value: T) => void;
   /** 알약 줄에 더 붙일 클래스 */
   rowClass?: string;
+  /** 보이는 제목 없이 쓸 때 스크린리더용 그룹 이름 */
+  ariaLabel?: string;
 }
 
 /** 결정력·역산·스피드·내구 조정 카드가 같이 쓰는 알약 버튼 줄 — 값이 같은 알약이 켜진 상태(is-active) */
-export function PillRow<T>({ label, options, value, onChange, rowClass }: PillRowProps<T>) {
+export function PillRow<T>({ label, options, value, onChange, rowClass, ariaLabel }: PillRowProps<T>) {
   const row = (
-    <div className={`matchup-hitcount-row${rowClass ? ` ${rowClass}` : ""}`}>
+    <div className={`matchup-hitcount-row${rowClass ? ` ${rowClass}` : ""}`} role={ariaLabel ? "group" : undefined} aria-label={ariaLabel}>
       {options.map((o) => (
         <button key={o.label} type="button" className={`matchup-hitcount-pip${o.value === value ? " is-active" : ""}`} onClick={() => onChange(o.value)}>
           {o.label}

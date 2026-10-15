@@ -122,11 +122,6 @@
   margin-top: 0;
 }
 
-.matchup-speed-trickroom {
-  justify-content: center;
-  margin-top: 0.5rem;
-}
-
 /* ver.1.7 트랙 H — 난수별 데미지(스피드 판정 위). 폭은 스피드 블록과 같은 카드 열 전체 폭 */
 .matchup-roll-block {
   margin-top: 1rem;
