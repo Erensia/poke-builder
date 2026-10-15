@@ -526,7 +526,7 @@
 
 .battle-fighter-mega-tag {
   font-family: var(--display);
-  font-size: 0.6rem;
+  font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.03em;
   color: #fff;
@@ -581,7 +581,7 @@
 
 .battle-fighter-ai-tag {
   font-family: var(--display);
-  font-size: 0.6rem;
+  font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.03em;
   color: var(--violet);
@@ -605,7 +605,7 @@
 
 .battle-status-tag {
   white-space: nowrap; /* "빛의장막 5턴" 같은 태그는 통째로 다음 줄로 */
-  font-size: 0.7rem;
+  font-size: 0.72rem;
   font-weight: 700;
   padding: 0.1rem 0.45rem;
   border-radius: 999px;
@@ -665,7 +665,7 @@
   background: var(--surface-2);
   border-radius: 7px;
   padding: 0.22rem 0.45rem;
-  font-size: 0.68rem;
+  font-size: 0.72rem;
   min-width: 0;
 }
 
@@ -693,7 +693,7 @@
 }
 
 .battle-real-stat-stage {
-  font-size: 0.58rem;
+  font-size: 0.72rem;
   font-weight: 700;
   margin-left: 0.12rem;
   vertical-align: super;
@@ -721,7 +721,7 @@
 }
 
 .battle-roster-chip-name {
-  font-size: 0.64rem;
+  font-size: 0.72rem;
   color: var(--text-muted);
   white-space: nowrap;
   overflow: hidden;
@@ -786,7 +786,7 @@
 }
 
 .battle-move-pp {
-  font-size: 0.7rem;
+  font-size: 0.72rem;
   color: var(--text-muted);
 }
 
@@ -887,7 +887,7 @@
   border: 1px solid var(--border);
   border-radius: 7px;
   background: var(--surface-2);
-  font-size: 0.7rem;
+  font-size: 0.72rem;
 }
 
 .battle-party-chip.is-active {

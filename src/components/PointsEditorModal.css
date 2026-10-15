@@ -54,7 +54,7 @@
 }
 
 .points-nature-mark {
-  font-size: 0.62rem;
+  font-size: 0.72rem;
 }
 
 .points-step {
@@ -95,7 +95,6 @@
 }
 
 .points-input:focus {
-  outline: none;
   border-color: var(--violet);
 }
 
@@ -271,7 +270,7 @@
   border-radius: 999px;
   background: color-mix(in srgb, var(--violet) 14%, transparent);
   color: var(--violet);
-  font-size: 0.7rem;
+  font-size: 0.72rem;
   font-weight: 700;
   line-height: 1.2;
   text-align: center;
@@ -324,7 +323,7 @@
     font-size: 0.78rem;
   }
   .points-real {
-    font-size: 0.7rem;
+    font-size: 0.72rem;
   }
 }
 

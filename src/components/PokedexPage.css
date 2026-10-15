@@ -60,7 +60,6 @@
 }
 
 .pokedex-search:focus {
-  outline: none;
   border-color: var(--glass-focus-border);
 }
 
@@ -120,7 +119,7 @@
 }
 
 .pokedex-list-mega {
-  font-size: 0.65rem;
+  font-size: 0.72rem;
   color: var(--violet);
   font-weight: 600;
   flex-shrink: 0;
@@ -376,7 +375,7 @@
 
 .pokedex-hidden-tag {
   margin-left: 0.45rem;
-  font-size: 0.66rem;
+  font-size: 0.72rem;
   font-weight: 600;
   color: var(--violet);
   border: 1px solid var(--violet);
@@ -441,7 +440,7 @@
 }
 
 .pokedex-meta-label {
-  font-size: 0.68rem;
+  font-size: 0.72rem;
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.03em;

@@ -341,7 +341,7 @@ export function PokedexPage({ onSelectMove }: PokedexPageProps) {
           <input
             type="text"
             className="pokedex-search"
-            placeholder="이름으로 검색"
+            aria-label="이름으로 검색" placeholder="이름으로 검색"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />

@@ -78,7 +78,7 @@ export function PartyPresetsModal({
           <input
             type="text"
             className="preset-save-input"
-            placeholder="현재 파티를 이 이름으로 저장"
+            aria-label="현재 파티를 이 이름으로 저장" placeholder="현재 파티를 이 이름으로 저장"
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
             onKeyDown={(e) => {
@@ -136,7 +136,7 @@ export function PartyPresetsModal({
       <input
         type="text"
         className="preset-search-input"
-        placeholder="파티 이름으로 검색"
+        aria-label="파티 이름으로 검색" placeholder="파티 이름으로 검색"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
       />

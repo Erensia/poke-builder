@@ -106,7 +106,7 @@
 .tm-mon-form {
   display: block;
   margin-top: 0.1rem;
-  font-size: 0.6rem;
+  font-size: 0.72rem;
   font-weight: 600;
   color: var(--violet);
 }
@@ -133,7 +133,7 @@
 }
 
 .cnt {
-  font-size: 0.66rem;
+  font-size: 0.72rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   padding: 0.05rem 0.35rem;
@@ -188,7 +188,7 @@
 /* 종합 열 */
 .tm-verdict {
   font-weight: 700;
-  font-size: 0.7rem;
+  font-size: 0.72rem;
 }
 
 .tm-verdict-weak {
