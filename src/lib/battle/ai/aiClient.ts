@@ -30,7 +30,7 @@ export interface AiWorkerRequest {
 }
 
 /** Worker ↔ 화면 사이 분포 전달용(Map은 배열로) */
-export interface SerializedDistribution {
+interface SerializedDistribution {
   moveWeights: [string, number][];
   switchProb: number;
   switches: { toIndex: number; weight: number }[];
@@ -41,17 +41,17 @@ export function serializeDistribution(d: LevelOneDistribution): SerializedDistri
   return { moveWeights: [...d.moveWeights], switchProb: d.switchProb, switches: d.switches, megaOf: [...d.megaOf] };
 }
 
-export function deserializeDistribution(d: SerializedDistribution): LevelOneDistribution {
+function deserializeDistribution(d: SerializedDistribution): LevelOneDistribution {
   return { moveWeights: new Map(d.moveWeights), switchProb: d.switchProb, switches: d.switches, megaOf: new Map(d.megaOf) };
 }
 
 /** AI 행동 + (상대 모델이 켜져 있으면) 보정 전 상대 행동 예측 — 사용자 선택과 짝지어 학습 기록에 쓴다 */
-export interface AiActionResult {
+interface AiActionResult {
   action: TurnAction;
   opponentDistribution?: LevelOneDistribution;
 }
 
-export type AiWorkerAction = { kind: "move"; moveId: string; mega?: boolean } | { kind: "switch"; toIndex: number };
+type AiWorkerAction = { kind: "move"; moveId: string; mega?: boolean } | { kind: "switch"; toIndex: number };
 export type AiWorkerResponse = { id: number; action: AiWorkerAction; dist?: SerializedDistribution } | { id: number; error: string };
 
 let worker: Worker | null | undefined;

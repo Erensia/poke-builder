@@ -14,7 +14,7 @@ export function bulkMovesOf(slot: MatchupSlot): (BulkMove | null)[] {
 }
 
 /** 내구 조정(3.7 A3): 이 공격(들)을 맞아도 버티는 HP·방어·특방 포인트 조합 */
-export interface BulkOption {
+interface BulkOption {
   hpPoints: number;
   defPoints: number;
   spdPoints: number;

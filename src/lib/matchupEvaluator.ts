@@ -168,7 +168,7 @@ export interface EvaluatorSlot extends FormSource {
 }
 export type { DamageParts } from "./damageFormula";
 
-export interface SlotMatchupResult {
+interface SlotMatchupResult {
   /** 상대 타입 상성까지 반영된 최종 결정력. 판정(verdict)은 이 값 기준 */
   offensePower: number;
   /** 상대 타입 상성을 곱하기 전의 결정력 (자속/랭크/특성/도구/날씨는 반영됨) */
@@ -717,7 +717,7 @@ function conditionalPowerDoubled(
   );
 }
 
-export interface SoloOffensePowerOptions {
+interface SoloOffensePowerOptions {
   attackerStages?: StatStages;
   multiHitCount?: number;
   stockpileCount?: number;
@@ -930,7 +930,7 @@ export function computeSoloOffensePower(
   });
 }
 
-export interface SpeedMatchupResult {
+interface SpeedMatchupResult {
   /** 스피드 랭크까지 반영한 실효 스피드 (반올림 전) */
   attackerSpeed: number;
   defenderSpeed: number;
@@ -940,7 +940,7 @@ export interface SpeedMatchupResult {
   trickRoom: boolean;
 }
 
-export interface SpeedMatchupOptions {
+interface SpeedMatchupOptions {
   weather?: WeatherKind;
   /** 곡예(Unburden) 발동 후라고 가정 — 해당 측 스피드 2배 */
   attackerUnburden?: boolean;

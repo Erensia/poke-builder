@@ -6,7 +6,7 @@ import type { BattleStatKey } from "./battleStats";
 import type { StatusCondition, VolatileCondition } from "./status";
 
 /** 랭크를 이만큼(stat, delta) 바꾼다는 짧은 서술 — 여러 특성이 같은 모양을 재사용한다 */
-export interface AbilityStatBoost {
+interface AbilityStatBoost {
   stat: BattleStatKey;
   delta: number;
 }
@@ -61,7 +61,7 @@ export interface AbilityModifierCondition {
   moveHasRecoilDamage?: boolean;
 }
 
-export interface AbilityModifier {
+interface AbilityModifier {
   scope: "offense" | "defense";
   /** 조건을 만족하면 곱해지는 배율 */
   multiplier: number;
@@ -169,7 +169,7 @@ export interface AbilityHitTrigger {
  * 덮어쓰고, battleSimulator.ts가 명중한 시점(카테고리 무관 — 상태이상 기술도 흡수한다)에 아래
  * 효과를 적용한다. 정전기 등 hitTrigger와 달리 damage > 0을 요구하지 않는다(애초에 데미지가 없다).
  */
-export interface AbilityTypeAbsorb {
+interface AbilityTypeAbsorb {
   /** 이 타입의 기술을 완전히 무효화한다 */
   type: PokemonType;
   /** 무효화한 그 즉시 자신의 랭크를 이 목록만큼 바꾼다(피뢰침: 특공 +1) */

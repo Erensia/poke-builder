@@ -23,7 +23,7 @@ function fl(x: number): number {
 }
 
 /** 0.5는 내림 쪽으로 반올림(본가 pokeRound). 1e-9는 부동소수점 경계 보정 */
-export function roundHalfDown(x: number): number {
+function roundHalfDown(x: number): number {
   return Math.ceil(x - 0.5 - 1e-9);
 }
 

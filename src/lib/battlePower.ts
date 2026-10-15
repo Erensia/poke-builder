@@ -221,7 +221,7 @@ export function computeAttackTerm(
   return stat * rankStageMultiplier(stage);
 }
 
-export interface OffensePowerOptions {
+interface OffensePowerOptions {
   /** 타입 상성 배율 (0, 0.25, 0.5, 1, 2, 4). 상대를 모르면 생략 = 1 */
   typeEffectiveness?: number;
   /** 특성으로 인한 배율 (예: 천하장사 물리 2배) */
@@ -292,9 +292,9 @@ export function computeOffensePower(
  * 내구력(결정력과 비교하는 연속값 지표) 기준 상수 — 레벨 50 공식 `HP×방어 ÷ (0.44 × 난수)`의 평균 난수 지점. 판정·AI 처치 타수는
  * 정수 데미지 공식(damageFormula)으로 옮겨 갔고, 결정력&내구력 페이지의 내구력 표시에만 남아 있다.
  */
-export const BULK_BASELINE_DIVISOR = 0.411;
+const BULK_BASELINE_DIVISOR = 0.411;
 
-export interface DefensePowerOptions {
+interface DefensePowerOptions {
   /** 방어자의 현재 랭크 상태. 카테고리에 맞춰 방어/특방 랭크를 자동으로 골라 쓴다 */
   defenderStages?: StatStages;
   /** 방어 관련 특성/도구 배율 (예: 두꺼운지방으로 해당 타입 데미지 절반 → 내구력 2배로 표현 가능) */
@@ -337,7 +337,7 @@ export type MatchupVerdict =
   | "needs-3hit-plus";
 
 /** 데미지 난수(damage roll)의 최고값 */
-export const MAX_DAMAGE_ROLL = 1.0;
+const MAX_DAMAGE_ROLL = 1.0;
 
 export interface MatchupChance {
   verdict: MatchupVerdict;
@@ -354,7 +354,7 @@ export interface MatchupChance {
  */
 export const CRITICAL_DAMAGE_MULTIPLIER = 1.5;
 
-export interface DamageOptions {
+interface DamageOptions {
   typeEffectiveness?: number;
   abilityMultiplier?: number;
   /** 공격 스탯 단계 배율(맹화류·선파워) — 공격 스탯에 곱해 내린다. abilityMultiplier(위력 단계)에는 넣지 않는다. 생략하면 1 */
@@ -379,7 +379,7 @@ export interface DamageOptions {
   randomRoll?: number;
 }
 
-export interface DamageResult {
+interface DamageResult {
   /** 실제 데미지 정수값 */
   damage: number;
   /** 방어측 최대 HP 대비 비율 (0~1 초과 가능) */

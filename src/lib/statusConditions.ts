@@ -133,7 +133,7 @@ export function computeStatusSpeedMultiplier(condition: StatusCondition | null, 
   return condition === "paralysis" ? 0.5 : 1;
 }
 
-export interface StatusActionCheckResult {
+interface StatusActionCheckResult {
   /** 이번 턴 행동이 막혔는지 */
   blocked: boolean;
   /** 잠듦/얼음이 이번 판정에서 풀렸거나 해제 카운터가 늘어났으면 갱신된 상태. 그 외엔 입력과 동일 */

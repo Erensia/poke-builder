@@ -18,7 +18,7 @@ import {
 import { applyStageDelta, setStage } from "../lib/statStages";
 import { BULK_MOVE_SLOTS, bulkMovesOf } from "../lib/bulkAdjust";
 
-export const EMPTY_MATCHUP_SLOT: MatchupSlot = {
+const EMPTY_MATCHUP_SLOT: MatchupSlot = {
   pokemonId: null,
   ability: null,
   item: null,

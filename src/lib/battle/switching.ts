@@ -203,7 +203,7 @@ function applyEntryHazardsOnSwitchIn(state: BattleState, key: FighterKey, log: s
 }
 
 /** 틀깨기류 등장 안내(ver.2.0) — 배틀 시작 리드(state.ts)와 교체·메가진화 등장이 같은 문구를 쓴다 */
-export function moldBreakerAnnouncement(pokemonName: string, abilityName: string): string {
+function moldBreakerAnnouncement(pokemonName: string, abilityName: string): string {
   return `${pokemonName}의 ${abilityName}!`;
 }
 
@@ -362,7 +362,7 @@ export function applyMegaEvolution(state: BattleState, key: FighterKey, log: str
  * 설치물 발동(스텔스록 등장 데미지 등)은 §5에서 이 함수의 "등장 파이프라인" 지점에 붙는다.
  * toIndex가 현재 활성이거나 범위를 벗어나면 아무것도 안 한다.
  */
-export interface PerformSwitchOptions {
+interface PerformSwitchOptions {
   /** 자기 의지로 교체했으면 true(runTurn 교체 액션, 기본값). 기절 후 강제 교체(applySwitch)면 false — 가속 발동. */
   voluntary?: boolean;
   /** 배턴터치: 물러나는 포켓몬의 랭크·급소랭크·대타·멸망카운트·일부 volatile을 새로 나온 포켓몬이 이어받는다. */

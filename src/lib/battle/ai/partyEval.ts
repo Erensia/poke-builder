@@ -45,7 +45,7 @@ import { turnsToKo } from "./turnRates";
  */
 
 /** 대면표 한 칸: 내 포켓몬 i vs 상대 포켓몬 j */
-export interface PartyPair {
+interface PartyPair {
   /** 내가 턴당 깎는 상대 HP(상대 최대 HP 대비, 명중률 포함) */
   myRate: number;
   /** 상대가 턴당 깎는 내 HP(내 최대 HP 대비, 상대 기술 사용 확률 모델 기준) */
@@ -237,7 +237,7 @@ function turnsAt(rate: number, attacker: BattleFighterState, target: BattleFight
 }
 
 /** 대면 한 갈래: 확률 weight로 두 포켓몬이 이 HP 비율로 끝난다 */
-export interface DuelBranch {
+interface DuelBranch {
   weight: number;
   my: number;
   opp: number;
@@ -318,14 +318,14 @@ interface ChainPosition {
  * 상대 자발적 교체(로드맵 3): 교체 쪽이 margin 이상 나을 때만, 한 계산 안에서 limit번까지. weight = 교체 갈래를 섞는
  * 비율(1이면 상대가 항상 최선으로 교체, 0.5면 반반 — 상대가 늘 최선을 두지는 않는다는 완화)
  */
-export interface OppSwitchParams {
+interface OppSwitchParams {
   margin: number;
   limit: number;
   weight: number;
 }
 
 /** 내 자발적 교체(ver.1.8 한계점 정리 ④): 교체 쪽이 margin 이상 나을 때만, 한 계산 안에서 limit번까지(나는 최선을 고른다) */
-export interface MySwitchParams {
+interface MySwitchParams {
   margin: number;
   limit: number;
 }

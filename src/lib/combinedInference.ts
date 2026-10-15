@@ -15,14 +15,14 @@ import { inferSpeed, type SpeedInferenceInput, type SpeedInferenceResult } from 
  * 상한·하한은 서로의 결과로 정해지고 한쪽이 좁히면 결과가 다시 좁아질 수 있어서, 바뀌지 않을 때까지(최대 MAX_ROUNDS번) 되풀이한다.
  */
 
-export interface CombinedNature {
+interface CombinedNature {
   name: string;
   /** 가능도 가중 비율(0~1, 전체 합 1) */
   weight: number;
 }
 
 /** 결합에 들어간 쪽 — 화면 안내 문구에 쓴다 */
-export type CombinedPart = "defense" | "attack" | "speed";
+type CombinedPart = "defense" | "attack" | "speed";
 
 export interface CombinedInference {
   defense: InferenceResult | null;

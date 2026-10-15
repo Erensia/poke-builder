@@ -11,7 +11,7 @@
  * - 로토무의 가전제품 폼(히트/워시/프로스트/스핀/커트로토무)은 이 데이터에서 별도 최상위
  *   항목이지만 전부 로토무 원종과 같은 번호(479)다(본가 규칙).
  */
-export const DEX_ORDER: Record<string, number> = {
+const DEX_ORDER: Record<string, number> = {
   "이상해꽃": 3,
   "리자몽": 6,
   "거북왕": 9,

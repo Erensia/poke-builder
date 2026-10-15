@@ -30,7 +30,7 @@ export interface CandidateLists {
   byCenter: CandidateCard[];
 }
 
-export const CANDIDATE_LIMIT = 60;
+const CANDIDATE_LIMIT = 60;
 
 export const TOTAL_POINTS = 66;
 
@@ -44,7 +44,7 @@ interface Ranked<P> {
 }
 
 /** 정렬 기준에서 앞서는 항목만 `limit`개 남기는 목록. 동률이면 먼저 들어온 쪽이 앞이다 */
-export class TopList<P> {
+class TopList<P> {
   readonly items: Ranked<P>[] = [];
   private readonly limit: number;
   private readonly sort: CandidateSort;
