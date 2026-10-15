@@ -1162,6 +1162,52 @@ try {
     console.log(`내구 조정 ${checked}건 (최대 난수 생존·방어 −1 경계·합계 최소 전수 대조) ${checked > 10 ? "통과" : "시행 부족"}`);
     if (checked <= 10) fail("내구 조정 시행 부족");
   }
+  // 4.0 F2) 자뭉열매 — 맞은 뒤 HP가 1/2 이하라 먹으면 화면 %에는 회복(최대 HP÷4)이 섞인다. 켠 채로 넣은 기록이 진짜 배분을 남기는지,
+  // 켜지 않으면 모순돼 진짜 배분이 빠지는 경우가 실제로 있는지, 절반 초과인데 켜거나 두 번 켜면 거부되는지
+  {
+    let ok = 0;
+    let tried = 0;
+    let dropped = 0;
+    for (let t = 0; t < trials * 6 && tried < 40; t++) {
+      const atk = slot(pick(species).id, { points: pts({ atk: 32, spa: 32 }), nature: pick(natureIds) });
+      const defId = pick(species).id;
+      const truth = { hp: Math.floor(rnd() * 33), def: Math.floor(rnd() * 33), spd: 0, nature: pick(natureIds) };
+      const defTrue = slot(defId, { points: pts(truth), nature: truth.nature });
+      const dReal = stat.computeRealStats(form.getEffectiveForm(data.getPokemon(defId), defTrue).baseStats, defTrue.points, defTrue.nature);
+      const first = makeObservation(usable.filter((m) => m.category === "physical"), atk, defTrue, dReal, dReal.hp);
+      if (!first) continue;
+      const hpHit = dReal.hp - first.damage;
+      if (hpHit * 2 > dReal.hp) continue; // 절반 이하로 맞은 경우만 먹는다
+      const hpEaten = Math.min(dReal.hp, hpHit + Math.floor(dReal.hp / 4));
+      const second = makeObservation(usable.filter((m) => m.category === "physical"), atk, defTrue, dReal, hpEaten, true);
+      if (!second) continue;
+      tried++;
+      const observations = [{ ...first.observation, after: inf.displayPercent(hpEaten, dReal.hp), endTurn: ["sitrus"] }, second.observation];
+      const withBerry = inf.inferDefense({ attacker: atk, defender: slot(defId), observations });
+      if (withBerry?.status === "ok" && withBerry.hp.min <= truth.hp && truth.hp <= withBerry.hp.max && withBerry.def.min <= truth.def && truth.def <= withBerry.def.max) ok++;
+      else fail(`자뭉열매 왕복: 진짜 배분이 빠짐 truth=${JSON.stringify(truth)} 상태=${withBerry?.status}`);
+      const without = inf.inferDefense({ attacker: atk, defender: slot(defId), observations: observations.map((o) => ({ ...o, endTurn: undefined })) });
+      if (without?.status !== "ok" || without.hp.min > truth.hp || truth.hp > without.hp.max) dropped++;
+      // 두 줄 다 켜면 거부, 절반 초과로 맞은 줄에 켜면 후보가 없다
+      const twice = inf.inferDefense({ attacker: atk, defender: slot(defId), observations: observations.map((o) => ({ ...o, endTurn: ["sitrus"] })) });
+      if (!twice || twice.observationErrors.every((e) => !e)) fail("자뭉열매를 두 줄에 켜도 거부되지 않음");
+    }
+    console.log(`자뭉열매 왕복 ${ok}/${tried} 통과 · 열매를 빼면 어긋나는 경우 ${dropped}건`);
+    if (tried < 10) fail("자뭉열매 왕복 시행 부족");
+    if (dropped === 0) fail("열매를 빼도 항상 맞으면 열매가 쓰이는지 알 수 없음");
+    // 절반 초과 입력: 100% → 70%에 열매를 켜면 어떤 HP로도 불가능
+    const sample = slot(pick(species).id);
+    const impossible = inf.inferDefense({ attacker: slot(pick(species).id, { points: pts({ atk: 32, spa: 32 }) }), defender: sample, observations: [{ move: pick(usable), critical: false, before: 100, after: 70, endTurn: ["sitrus"] }] });
+    if (impossible?.status === "ok") fail("절반 초과로 맞은 줄에 자뭉열매를 켰는데 가능으로 나옴");
+    // 메가진화하는 포켓몬은 메가스톤을 들어 도구 효과(자뭉열매·먹다남은음식)가 무시된다 — 켜든 안 켜든 결과가 같다
+    const megaSpecies = data.POKEMON.find((p) => p.megaEvolutions?.length);
+    const megaForm = megaSpecies.megaEvolutions[0].form;
+    const megaAtk = slot(pick(species).id, { points: pts({ atk: 32, spa: 32 }) });
+    const megaObs = (endTurn) => [{ move: pick(usable.filter((m) => m.category === "physical")), critical: false, before: 100, after: 70, megaForm, endTurn }];
+    const megaMove = megaObs(undefined)[0].move;
+    const run = (endTurn) => JSON.stringify(inf.inferDefense({ attacker: megaAtk, defender: slot(megaSpecies.id), observations: [{ ...megaObs(endTurn)[0], move: megaMove }] })?.hp);
+    if (run(["sitrus", "leftovers"]) !== run(undefined)) fail("메가 관측에서 도구 효과가 무시되지 않음");
+  }
 } finally {
   await server.close();
 }

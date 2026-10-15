@@ -250,6 +250,14 @@
   color: var(--violet);
 }
 
+.dinf-endturn label:has(input:disabled) {
+  opacity: 0.5;
+  cursor: not-allowed;
+  border-color: var(--border);
+  background: var(--surface-2);
+  color: var(--text-muted);
+}
+
 .dinf-crit:has(input:focus-visible),
 .dinf-check:has(input:focus-visible),
 .dinf-endturn label:has(input:focus-visible) {
