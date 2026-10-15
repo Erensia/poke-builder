@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { MatchupSlot, PowerConditionKey } from "../types/matchup";
+import type { Move } from "../types/move";
 import type { AbilityPoints, PartySlot } from "../types/party";
 import type { BattleStatKey } from "../types/battleStats";
 import type { WeatherKind } from "../types/weather";
@@ -15,6 +16,7 @@ import {
   stepAbilityPointOnSlot,
 } from "../lib/slotMutations";
 import { applyStageDelta, setStage } from "../lib/statStages";
+import { BULK_MOVE_SLOTS, bulkMovesOf } from "../lib/bulkAdjust";
 
 export const EMPTY_MATCHUP_SLOT: MatchupSlot = {
   pokemonId: null,
@@ -41,7 +43,13 @@ function restoreSlot(saved: unknown): MatchupSlot {
     ability: s.ability && getAbility(s.ability) ? s.ability : null,
     item: s.item && getItem(s.item) ? s.item : null,
     moveId: s.moveId && getMove(s.moveId) ? s.moveId : null,
+    bulkMoves: Array.isArray(s.bulkMoves) ? s.bulkMoves.slice(0, BULK_MOVE_SLOTS).map((m) => (m && typeof m.moveId === "string" && getMove(m.moveId) ? m : null)) : undefined,
   };
+}
+
+/** 다단히트 기술을 고르면 적중 타수를 최대치로 기본 설정한다 */
+function defaultHits(move: Move | undefined): number | undefined {
+  return move?.multiHitPowers ? move.multiHitPowers.length : move?.minHits !== undefined && move?.maxHits !== undefined ? move.maxHits : undefined;
 }
 
 function useMatchupSlot(saved: unknown) {
@@ -109,15 +117,20 @@ function useMatchupSlot(saved: unknown) {
 
   /** 기술을 고르면 다단히트 기술 여부에 따라 적중 타수를 최대치로 기본 설정한다 */
   function setMove(moveId: string | null) {
+    setSlot((prev) => ({ ...prev, moveId, multiHitCount: defaultHits(moveId ? getMove(moveId) : undefined) }));
+  }
+
+  /** 내구 조정 탭 상대 기술 칸 설정(4.0 F3) — null이면 칸을 비운다 */
+  function setBulkMove(index: number, moveId: string | null) {
     setSlot((prev) => {
-      const move = moveId ? getMove(moveId) : undefined;
-      const multiHitCount = move?.multiHitPowers
-        ? move.multiHitPowers.length
-        : move?.minHits !== undefined && move?.maxHits !== undefined
-          ? move.maxHits
-          : undefined;
-      return { ...prev, moveId, multiHitCount };
+      const moves = bulkMovesOf(prev);
+      moves[index] = moveId ? { moveId, hits: defaultHits(getMove(moveId)) } : null;
+      return { ...prev, bulkMoves: moves };
     });
+  }
+
+  function setBulkHits(index: number, hits: number) {
+    setSlot((prev) => ({ ...prev, bulkMoves: prev.bulkMoves?.map((m, i) => (i === index && m ? { ...m, hits } : m)) }));
   }
 
   function setMultiHitCount(count: number) {
@@ -203,6 +216,8 @@ function useMatchupSlot(saved: unknown) {
     cycleCosmeticForm,
     setCosmeticForm,
     setMove,
+    setBulkMove,
+    setBulkHits,
     setMultiHitCount,
     setStockpileCount,
     setItemStolen,
@@ -244,8 +259,9 @@ export function useMatchup() {
   function swapSides() {
     const a = attacker.slot;
     const d = defender.slot;
-    attacker.setSlot({ ...d, moveId: null, multiHitCount: undefined });
-    defender.setSlot({ ...a, moveId: null, multiHitCount: undefined });
+    // 스크린은 포켓몬이 아니라 편에 걸려 있어서 자리를 바꿔도 그 편에 남긴다
+    attacker.setSlot({ ...d, moveId: null, multiHitCount: undefined, bulkMoves: undefined, screen: a.screen });
+    defender.setSlot({ ...a, moveId: null, multiHitCount: undefined, bulkMoves: undefined, screen: d.screen });
   }
 
   return { attacker, defender, swapSides, weather, setWeather, field, setField, trickRoom, setTrickRoom };

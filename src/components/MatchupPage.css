@@ -273,6 +273,23 @@
   font-weight: 600;
 }
 
+/* 모바일: 탭 4개가 폭을 똑같이 나눠 갖고, 글자는 띄어쓰기에서만 줄바꿈한다("결정력 / 계산") */
+@media (max-width: 760px) {
+  .matchup-tabs {
+    display: flex;
+    align-self: stretch;
+    border-radius: 18px;
+  }
+  .matchup-tabs button {
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 0.35rem 0.25rem;
+    border-radius: 14px;
+    line-height: 1.25;
+    word-break: keep-all;
+  }
+}
+
 /* 내/상대 포켓몬 드래그 교체(3.3 U1) — 놓을 자리 하이라이트 */
 .matchup-slot.is-drag-over {
   border-color: var(--violet);

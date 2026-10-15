@@ -4,7 +4,6 @@ import { NEUTRAL_SPEED_CONDITIONS, type SpeedConditions } from "./speedInference
 
 /** 역산 탭 입력의 저장·복원(3.2 V2) — 화면 파일에서 분리(컴포넌트 파일은 컴포넌트만 내보낸다) */
 
-export type Screen = "reflect" | "lightScreen" | "auroraVeil";
 
 /** dealt = 내가 입힌 데미지(상대 HP %) → 상대 HP·방어 역산, received = 내가 받은 데미지(내 HP 수치) → 상대 공격 역산, speed = 선후공 → 상대 스피드 역산 */
 export type RowKind = "dealt" | "received" | "speed";
@@ -28,7 +27,6 @@ export interface ObservationRow {
   cond: SpeedConditions;
 }
 
-const SCREENS: readonly unknown[] = ["reflect", "lightScreen", "auroraVeil"] satisfies Screen[];
 const ROW_KINDS: readonly unknown[] = ["dealt", "received", "speed"] satisfies RowKind[];
 
 function firstRow(): ObservationRow {
@@ -43,7 +41,6 @@ export function restoreInference(raw: unknown) {
   const d = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
   const str = (v: unknown) => (typeof v === "string" ? v : "");
   const stage = (v: unknown) => (Number.isInteger(v) && Math.abs(v as number) <= 6 ? (v as number) : 0);
-  const screenOf = (v: unknown): Screen | "" => (SCREENS.includes(v) ? (v as Screen) : "");
   const idOf = (v: unknown, exists: (id: string) => unknown) => (typeof v === "string" && exists(v) ? v : "");
   const rows = (Array.isArray(d.rows) ? d.rows : []).flatMap((item, index): ObservationRow[] => {
     const r = (item && typeof item === "object" ? item : {}) as Record<string, unknown>;
@@ -74,7 +71,6 @@ export function restoreInference(raw: unknown) {
     rows: rows.length > 0 ? rows : [firstRow()],
     abilityId: idOf(d.abilityId, getAbility),
     itemId: idOf(d.itemId, getItem),
-    screen: screenOf(d.screen),
     defStage: stage(d.defStage),
     spdStage: stage(d.spdStage),
     tolerant: d.tolerant === true,
@@ -83,6 +79,5 @@ export function restoreInference(raw: unknown) {
     atkStage: stage(d.atkStage),
     spaStage: stage(d.spaStage),
     oppBurned: d.oppBurned === true,
-    myScreen: screenOf(d.myScreen),
   };
 }

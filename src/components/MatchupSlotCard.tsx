@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { useSlotSwapDnd } from "../hooks/useSlotSwapDnd";
-import type { MatchupSlot, PowerConditionKey } from "../types/matchup";
+import type { BulkMove, MatchupSlot, PowerConditionKey } from "../types/matchup";
 import type { Move } from "../types/move";
 import type { StatusCondition } from "../types/status";
 import { getPokemon, getMove, getAbility, getItem, getNature } from "../lib/data";
@@ -42,10 +42,39 @@ const STATUS_OPTIONS: readonly (readonly [StatusCondition | null, string])[] = [
   ["freeze", "얼음"],
 ];
 
+/** 다단히트 기술의 적중 타수 선택지 — 록블라스트·스케일샷류(minHits~maxHits)는 타수별 위력이 같아도 x2~x5를 비교한다(Phase 6.5 §5). 고정 타수는 빈 목록 */
+function hitCounts(move: Move): number[] {
+  if (move.multiHitPowers) return move.multiHitPowers.map((_, i) => i + 1);
+  if (move.minHits === undefined || move.maxHits === undefined || move.minHits === move.maxHits) return [];
+  return Array.from({ length: move.maxHits - move.minHits + 1 }, (_, i) => move.minHits! + i);
+}
+
+/** 기술 칸 하나 — 기술 버튼과(다단히트면) 타수 알약. 결정력 탭과 내구 조정 탭이 같이 쓴다 */
+function MoveSlot({ move, hits, emptyLabel, onPick, onSetHits }: { move: Move | undefined; hits?: number; emptyLabel: string; onPick?: () => void; onSetHits?: (hits: number) => void }) {
+  return (
+    <>
+      <button type="button" className={`matchup-move-pip${move ? " has-type" : ""}`} style={move?.type ? { background: TYPE_COLORS[move.type] } : undefined} onClick={onPick}>
+        {move ? move.name : emptyLabel}
+      </button>
+      {move && onSetHits && hitCounts(move).length > 0 && (
+        <div className="matchup-hitcount-row">
+          {hitCounts(move).map((n) => (
+            <button key={n} type="button" className={`matchup-hitcount-pip${hits === n ? " is-active" : ""}`} onClick={() => onSetHits(n)}>
+              ×{n}
+            </button>
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
+
 interface MatchupSlotCardProps {
   role: "attacker" | "defender";
   /** 반대쪽 카드를 이 카드 위에 놓았을 때 — 두 자리를 바꾼다(3.3 U1). 없으면 드래그 교체를 끈다(역산 탭) */
   onSwapDrop?: () => void;
+  /** 교체 드래그에서 쓰는 쪽 — 내구 조정 탭은 두 카드가 모두 role="attacker"라 상대 카드가 "defender"로 구분해 달라고 넘긴다 */
+  swapRole?: "attacker" | "defender";
   label: string;
   slot: MatchupSlot;
   offensePower?: number | null;
@@ -92,6 +121,10 @@ interface MatchupSlotCardProps {
   onSetStatus: (status: StatusCondition | null) => void;
   /** 공격 슬롯 전용 — 고른 기술(조건부 위력·HP 비례 위력 기술일 때만 관련 가정을 보인다) */
   selectedMove?: Move;
+  /** 기술이 여러 개일 때(내구 조정 탭) — 하나라도 해당하면 가정 토글·HP 슬라이더를 보인다. 있으면 selectedMove보다 우선 */
+  selectedMoves?: Move[];
+  /** 기술 칸을 여러 개(내구 조정 탭 상대, 4.0 F3) 둘 때 — 있으면 기술 한 칸(onPickMove) 대신 이 칸들을 보인다 */
+  bulkMoves?: { moves: (BulkMove | null)[]; onPick: (index: number) => void; onSetHits: (index: number, hits: number) => void };
   /** 공격 슬롯 전용(ver.1.9) — 조건부 위력 가정 토글. 고른 기술에 해당하는 조건만 보인다(POWER_CONDITION_TOGGLES) */
   onSetPowerCondition?: (key: PowerConditionKey, value: boolean) => void;
   /** 공격 슬롯 전용(ver.1.9 6-2) — 급소 가정. 기술을 골랐을 때 항상 보인다 */
@@ -116,12 +149,12 @@ interface MatchupSlotCardProps {
   stockpileCount?: number;
   onSetStockpileCount?: (count: number) => void;
   /** 방어 슬롯 전용 — 이 슬롯에 걸린 스크린 가정(리플렉터/빛의장막/오로라베일) */
-  onSetScreen?: (screen: MatchupSlot["screen"]) => void;
 }
 
 export function MatchupSlotCard({
   role,
   onSwapDrop,
+  swapRole,
   label,
   slot,
   offensePower,
@@ -152,6 +185,8 @@ export function MatchupSlotCard({
   onToggleUnburden,
   onSetStatus,
   selectedMove,
+  selectedMoves,
+  bulkMoves,
   onSetPowerCondition,
   onToggleCrit,
   onToggleTypeShift,
@@ -164,16 +199,16 @@ export function MatchupSlotCard({
   moveIsSpitUp,
   stockpileCount,
   onSetStockpileCount,
-  onSetScreen,
 }: MatchupSlotCardProps) {
-  const { dropProps, dragProps, dragOverClass } = useSlotSwapDnd(role, onSwapDrop);
+  const { dropProps, dragProps, dragOverClass } = useSlotSwapDnd(swapRole ?? role, onSwapDrop);
   const pokemon = slot.pokemonId ? getPokemon(slot.pokemonId) : undefined;
   // ver.1.9 가정 토글 — 관련 기술·특성을 골랐을 때만 보인다
   const ability = slot.ability ? getAbility(slot.ability) : undefined;
-  const powerConditions = selectedMove ? POWER_CONDITION_TOGGLES.filter((t) => t.relevant(selectedMove)) : [];
+  const relevantMoves = selectedMoves ?? (selectedMove ? [selectedMove] : []);
+  const powerConditions = POWER_CONDITION_TOGGLES.filter((t) => relevantMoves.some(t.relevant));
   const pinchRelevant = !!ability?.modifiers?.some((m) => m.condition?.attackerHpAtMostFraction !== undefined);
   const fullHpRelevant = !!ability?.modifiers?.some((m) => m.condition?.defenderHpIsFull === true);
-  const hpPowerRelevant = !!selectedMove && (!!selectedMove.reversalPower || !!selectedMove.userHpScaledPower);
+  const hpPowerRelevant = relevantMoves.some((m) => !!m.reversalPower || !!m.userHpScaledPower);
 
   if (!pokemon) {
     return (
@@ -469,85 +504,21 @@ export function MatchupSlotCard({
             </div>
           </div>
         )}
-        {role === "defender" && onSetScreen && (
-          <div className="matchup-assume-grave">
-            <span className="matchup-assume-grave-label">스크린</span>
-            <div className="matchup-hitcount-row">
-              {(
-                [
-                  [undefined, "없음"],
-                  ["reflect", "리플렉터"],
-                  ["lightScreen", "빛의장막"],
-                  ["auroraVeil", "오로라베일"],
-                ] as const
-              ).map(([value, text]) => (
-                <button
-                  key={text}
-                  type="button"
-                  className={`matchup-hitcount-pip${(slot.screen ?? undefined) === value ? " is-active" : ""}`}
-                  onClick={() => onSetScreen(value)}
-                >
-                  {text}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
 
-      {role === "attacker" && !hideMoveSlot && (
-        <div className="matchup-move-section">
-          <button
-            type="button"
-            className={`matchup-move-pip${move ? " has-type" : ""}`}
-            style={move?.type ? { background: TYPE_COLORS[move.type] } : undefined}
-            onClick={onPickMove}
-          >
-            {move ? move.name : "기술 선택"}
-          </button>
-          {move?.multiHitPowers && onSetMultiHitCount && (
-            <div className="matchup-hitcount-row">
-              {move.multiHitPowers.map((_, i) => {
-                const hits = i + 1;
-                return (
-                  <button
-                    key={hits}
-                    type="button"
-                    className={`matchup-hitcount-pip${multiHitCount === hits ? " is-active" : ""}`}
-                    onClick={() => onSetMultiHitCount(hits)}
-                  >
-                    ×{hits}
-                  </button>
-                );
-              })}
+      {role === "attacker" && !hideMoveSlot && bulkMoves && (
+        <div className="matchup-move-row">
+          {bulkMoves.moves.map((m, i) => (
+            <div key={i} className="matchup-move-cell">
+              <MoveSlot move={m ? getMove(m.moveId) : undefined} hits={m?.hits} emptyLabel="기술 선택" onPick={() => bulkMoves.onPick(i)} onSetHits={(n) => bulkMoves.onSetHits(i, n)} />
             </div>
-          )}
-          {/* 록블라스트·스케일샷류(minHits~maxHits, 타수별 위력 동일) — x2~x5 결정력 비교(Phase 6.5 §5).
-              고정 타수(더블어택 등 min===max)는 선택지가 없으니 행을 띄우지 않는다(계산엔 항상 반영). */}
-          {move &&
-            !move.multiHitPowers &&
-            move.minHits !== undefined &&
-            move.maxHits !== undefined &&
-            move.minHits !== move.maxHits &&
-            onSetMultiHitCount &&
-            (() => {
-              const lo = move.minHits;
-              const hi = move.maxHits;
-              return (
-                <div className="matchup-hitcount-row">
-                  {Array.from({ length: hi - lo + 1 }, (_, i) => lo + i).map((hits) => (
-                    <button
-                      key={hits}
-                      type="button"
-                      className={`matchup-hitcount-pip${multiHitCount === hits ? " is-active" : ""}`}
-                      onClick={() => onSetMultiHitCount(hits)}
-                    >
-                      ×{hits}
-                    </button>
-                  ))}
-                </div>
-              );
-            })()}
+          ))}
+        </div>
+      )}
+
+      {role === "attacker" && !hideMoveSlot && !bulkMoves && (
+        <div className="matchup-move-section">
+          <MoveSlot move={move} hits={multiHitCount} emptyLabel="기술 선택" onPick={onPickMove} onSetHits={onSetMultiHitCount} />
           {move && rawOffensePower !== undefined && rawOffensePower !== null && (
             <div className="matchup-power-readout">
               결정력 <span className="matchup-power-caveat">(상대 타입 반영)</span>{" "}

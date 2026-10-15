@@ -259,6 +259,30 @@
   gap: 0.35rem;
 }
 
+/* 기술 칸을 여러 개 둘 때(내구 조정 탭 상대) — 결정력 탭과 같은 알약을 가로로 3칸. 이 클래스 안에서만 폭을 줄이고 말줄임을 쓴다 */
+.matchup-move-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: start;
+  gap: 0.4rem;
+}
+
+.matchup-move-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+.matchup-move-row .matchup-move-pip {
+  width: 100%;
+  padding-inline: 0.3rem;
+  overflow: hidden;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .matchup-move-pip {
   border: 1px solid var(--border);
   background: var(--surface-2);

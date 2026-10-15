@@ -2,6 +2,11 @@ import type { StatusCondition } from "./status";
 import type { AbilityPoints } from "./party";
 import type { StatStages } from "./battleStats";
 
+export interface BulkMove {
+  moveId: string;
+  hits?: number;
+}
+
 /** 결정력·내구력 매치업 화면의 한쪽(내 포켓몬 또는 상대 포켓몬) 상태 */
 export interface MatchupSlot {
   pokemonId: string | null;
@@ -19,6 +24,8 @@ export interface MatchupSlot {
   stages: StatStages;
   /** 공격측 전용. 상대측은 항상 null로 둔다 */
   moveId: string | null;
+  /** 내구 조정 탭 상대 기술(최대 3칸, 4.0 F3). 빈 칸은 null. 다단히트 기술은 칸마다 타수를 따로 가진다 */
+  bulkMoves?: (BulkMove | null)[];
   /**
    * 트리플악셀처럼 다단히트 기술일 때 선택한 적중 타수 (1~기술의 타수).
    * 단일 위력 기술이거나 아직 안 골랐으면 undefined.
