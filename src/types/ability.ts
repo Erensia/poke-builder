@@ -35,7 +35,7 @@ export interface AbilityModifierCondition {
   /**
    * 공격측 현재 HP가 최대 HP의 이 비율 이하일 때만(맹화·급류·심록·벌레의알림: 1/3). 매치업
    * 페이지(evaluateSlotMatchup)는 "현재 HP" 개념이 없는 1턴 스냅샷이라 항상 풀피로 간주해서
-   * 이 조건이 있는 특성은 거기서는 발동하지 않는다 — 배틀 시뮬레이터(battleSimulator.ts)에서만
+   * 이 조건이 있는 특성은 거기서는 발동하지 않는다 — 배틀 시뮬레이터(배틀 엔진)에서만
    * attacker.currentHp/maxHp를 실제로 넘겨준다.
    */
   attackerHpAtMostFraction?: number;
@@ -43,14 +43,14 @@ export interface AbilityModifierCondition {
    * 방어측 현재 HP가 최대 HP와 정확히 같을 때(=풀피)만(멀티스케일). 매치업 페이지
    * (evaluateSlotMatchup)는 "현재 HP" 개념이 없는 1턴 스냅샷이라 항상 풀피로 간주해서
    * 이 조건은 거기서는 항상 발동한다 — attackerHpAtMostFraction과 반대 방향의 기본값이다.
-   * 배틀 시뮬레이터(battleSimulator.ts)에서만 defender.currentHp === defender.maxHp를 실제로 넘겨준다.
+   * 배틀 시뮬레이터(배틀 엔진)에서만 defender.currentHp === defender.maxHp를 실제로 넘겨준다.
    */
   defenderHpIsFull?: boolean;
   /**
    * 방어측이 주 상태이상(화상/마비/독/잠듦/얼음 중 하나)에 걸려 있을 때만(이상한비늘). 매치업
    * 페이지(evaluateSlotMatchup)는 "현재 상태이상" 개념이 없는 1턴 스냅샷이라 항상 상태이상 없음
    * (false)으로 간주해서 이 조건은 거기서는 발동하지 않는다 — defenderHpIsFull과 반대 방향의
-   * 기본값이다. 배틀 시뮬레이터(battleSimulator.ts)에서만 defender.status.condition !== null을
+   * 기본값이다. 배틀 시뮬레이터(배틀 엔진)에서만 defender.status.condition !== null을
    * 실제로 넘겨준다.
    */
   defenderHasStatusCondition?: boolean;
@@ -166,7 +166,7 @@ export interface AbilityHitTrigger {
  * 타오르는불꽃·피뢰침처럼 "이 타입 기술에 맞으면 데미지를 완전히 무효화하고 대신 이득을 본다"는
  * 특성 하나를 기술한다 — bypassesImmunityForTypes(공격측이 상대 면역을 무시)의 정반대 방향으로,
  * 방어측이 원래 없던 면역을 스스로 얻는다. moveContext.ts에서 typeEffectiveness를 무조건 0으로
- * 덮어쓰고, battleSimulator.ts가 명중한 시점(카테고리 무관 — 상태이상 기술도 흡수한다)에 아래
+ * 덮어쓰고, 배틀 엔진이 명중한 시점(카테고리 무관 — 상태이상 기술도 흡수한다)에 아래
  * 효과를 적용한다. 정전기 등 hitTrigger와 달리 damage > 0을 요구하지 않는다(애초에 데미지가 없다).
  */
 interface AbilityTypeAbsorb {
@@ -262,7 +262,7 @@ export interface Ability {
   auraMoveTypeMultiplier?: { type: PokemonType; multiplier: number };
   /**
    * 승기: 자신의 능력치가(무엇이든, 자기 기술 자기 랭크변화든 상대 기술로 내려갔든) 하락하면
-   * 그 즉시 이 랭크변화가 붙는다(승기: 특공 +2). battleSimulator.ts가 자신/상대 양쪽
+   * 그 즉시 이 랭크변화가 붙는다(승기: 특공 +2). 배틀 엔진이 자신/상대 양쪽
    * statChanges 적용 전후로 랭크를 비교해서 실제로 내려간 스탯이 하나라도 있을 때만 발동시킨다
    * (이미 -6으로 클램프돼 있어 실질적으로 변화가 없었으면 발동하지 않음).
    */
@@ -315,7 +315,7 @@ export interface Ability {
    * 확률(chance) 유무와 무관하다(연옥 100% 화상·일렉트릭네트 100% 스피드↓도 추가효과).
    * 막지 않는 것: 변화기(도깨비불·전기자석파 등)의 주효과, 자기 대상 효과(반동·자기 랭크변화).
    * 왕의징표석(도구발 추가 풀죽음)도 이 특성이 막는다.
-   * battleSimulator에서 hasSheerForceSecondaryEffect(우격다짐)와 같은 "추가효과" 정의를 공유하되,
+   * 배틀 엔진에서 hasSheerForceSecondaryEffect(우격다짐)와 같은 "추가효과" 정의를 공유하되,
    * 우격다짐은 여기에 자기 랭크업까지 얹어 제거 후 위력을 올리는 공격측 특성이라는 점만 다르다.
    */
   blocksSecondaryEffects?: boolean;
@@ -323,7 +323,7 @@ export interface Ability {
    * 방음(Soundproof): 소리 기술(classification "소리" — 돌림노래·멸망의노래·하이퍼보이스·폭음파·
    * 노래하기 등)이 자신에게 통하지 않는다 — 데미지기·변화기 모두. 자신이 쓰는 소리 기술에는
    * 영향이 없다(피격 시에만 판정). resolveMoveContext에서 typeEffectiveness를 0으로 덮어쓰고,
-   * battleSimulator가 opponentEffectsBlocked에 더해 상대 방향 부가효과까지 전부 차단한다.
+   * 배틀 엔진이 opponentEffectsBlocked에 더해 상대 방향 부가효과까지 전부 차단한다.
    * 4세대 로스터의 바리톱스·눈설왕이 보유.
    */
   blocksSound?: boolean;
@@ -561,7 +561,7 @@ export interface Ability {
   /**
    * 헤비메탈(2)·라이트메탈(0.5): 몸무게 관련 계산에서 자신의 몸무게에 이 배율을 곱한다. 헤비봄버·
    * 히트스탬프(자신이 공격측일 때 위력 ↑)와 풀묶기·안다리걸기(자신이 방어측일 때 받는 데미지 ↑)
-   * 양쪽에 반영된다 — battleSimulator weightOf / matchupEvaluator의 폼 몸무게 조회 지점에서 곱한다.
+   * 양쪽에 반영된다 — 배틀 엔진 weightOf / matchupEvaluator의 폼 몸무게 조회 지점에서 곱한다.
    */
   weightMultiplier?: number;
   /**
@@ -583,13 +583,13 @@ export interface Ability {
   negatesWeather?: boolean;
   /**
    * 기분파(Forecast) — 캐스퐁 전용. 날씨에 따라 타입이 바뀐다: 쾌청→불꽃, 비→물, 눈→얼음,
-   * 그 외(모래바람·날씨 없음·날씨부정)→노말. battleSimulator가 턴 시작·날씨 변동·등장 시점에
+   * 그 외(모래바람·날씨 없음·날씨부정)→노말. 배틀 엔진이 턴 시작·날씨 변동·등장 시점에
    * fighter.types를 다시 계산한다. 종족값·특성은 그대로.
    */
   weatherFormChange?: boolean;
   /**
    * 투쟁심(Rivalry): 상대와 성별이 같으면 위력 ×1.25, 다르면 ×0.75. 어느 한쪽이라도 성별
-   * 불명(genderless)이면 ×1.0. 양쪽 성별을 알아야 해서 modifiers가 아니라 battleSimulator·
+   * 불명(genderless)이면 ×1.0. 양쪽 성별을 알아야 해서 modifiers가 아니라 배틀 엔진·
    * matchupEvaluator에서 직접 곱한다.
    */
   rivalryDamage?: boolean;
@@ -627,13 +627,13 @@ export interface Ability {
   /**
    * 심술꾸러기(Contrary): 이 포켓몬의 능력치 랭크 변화가 전부 반대로 적용된다(오르면 내려가고
    * 내려가면 올라간다). 기술·특성이 거는 의도적 랭크 변화(자기 것이든 상대가 건 것이든)에 적용되며,
-   * 흑안개·하양허브 같은 "초기화/복구"에는 적용되지 않는다. battleSimulator가 랭크 변경 지점에서
+   * 흑안개·하양허브 같은 "초기화/복구"에는 적용되지 않는다. 배틀 엔진이 랭크 변경 지점에서
    * delta를 부호 반전한다.
    */
   invertsStatChanges?: boolean;
   /**
    * 의태(Mimicry): 필드 상태에 따라 자신의 타입이 바뀐다 — 일렉트릭필드→전기, 사이코필드→에스퍼,
-   * 그래스필드→풀, 미스트필드→페어리, 필드 없음→원래 타입. battleSimulator가 턴 시작 시점에
+   * 그래스필드→풀, 미스트필드→페어리, 필드 없음→원래 타입. 배틀 엔진이 턴 시작 시점에
    * fighter.types를 다시 계산하고 바뀌면 turnStartAnnouncements로 알린다.
    */
   terrainTypeChange?: boolean;
@@ -641,7 +641,7 @@ export interface Ability {
    * 방탄(Bulletproof): 구슬·폭탄 계열 기술(tags에 "구슬" 또는 "폭탄"이 있는 기술 —
    * 기합구슬·오물폭탄·섀도볼·에너지볼·파동탄·록블라스트·전자포·암석포 등, 데미지기·변화기 모두)이
    * 자신에게 통하지 않는다. 방음(blocksSound)과 완전히 같은 처리 — resolveMoveContext에서
-   * typeEffectiveness를 0으로 덮고, battleSimulator가 opponentEffectsBlocked에 합류시킨다.
+   * typeEffectiveness를 0으로 덮고, 배틀 엔진이 opponentEffectsBlocked에 합류시킨다.
    */
   blocksBallBomb?: boolean;
   /**
@@ -664,7 +664,7 @@ export interface Ability {
   /**
    * 아로마베일(Aroma Veil): 자신을 겨냥한 "마음을 옭아매는" 변화기의 효과를 받지 않는다 —
    * 헤롱헤롱(attract)·도발(taunt)·기술봉인(disable)·앙코르(encore). (본가의 트집·회복봉인은 이
-   * 엔진에 volatile로 모델링돼 있지 않아 대상 없음.) battleSimulator가 해당 volatile 부여 직전에 차단한다.
+   * 엔진에 volatile로 모델링돼 있지 않아 대상 없음.) 배틀 엔진이 해당 volatile 부여 직전에 차단한다.
    */
   blocksMentalMoves?: boolean;
   /**
@@ -758,7 +758,7 @@ export interface Ability {
   chargesOnDamageTaken?: boolean;
   /**
    * 편승(Opportunist): 상대의 능력치 랭크가 올라가면(자기 강화기·부가효과 등 원인 무관) 자신도
-   * 같은 능력치를 같은 폭만큼 올린다. battleSimulator가 기술 한 번의 랭크 변화가 전부 반영된 뒤,
+   * 같은 능력치를 같은 폭만큼 올린다. 배틀 엔진이 기술 한 번의 랭크 변화가 전부 반영된 뒤,
    * 상대가 이번 기술로 얻은 양(+)의 랭크 상승분을 이 특성 소유자에게 그대로 복사한다(심술꾸러기·
    * 클리어바디류는 복사 적용 시점에서 그대로 존중). 자기 자신의 상승은 복사하지 않는다.
    */

@@ -1,5 +1,6 @@
 import { getPokemon } from "../lib/data";
-import { opponentKey, type FighterKey, type TurnResult } from "../lib/battleSimulator";
+import { opponentKey } from "../lib/battle/state";
+import type { FighterKey, TurnResult } from "../types/battle";
 import { eunNeun } from "../lib/josa";
 import { STATUS_CURE_TEXT } from "../lib/battleLogText";
 import { ActionEffectLines } from "./turnLog/ActionEffectLines";

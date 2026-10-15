@@ -82,7 +82,7 @@ export interface SlotMatchupOptions {
   bulkMultiplier?: number;
   /**
    * 방어측에 걸린 스크린 가정(Phase 6.5 §5). 해당 카테고리 데미지가 절반이 된다 —
-   * reflect=물리, lightScreen=특수, auroraVeil=둘 다. battleSimulator의 screenMultiplier를 미러하고,
+   * reflect=물리, lightScreen=특수, auroraVeil=둘 다. 배틀 엔진의 screenMultiplier를 미러하고,
    * 공격측이 틈새포착(bypassesScreensAndSubstitute)이면 무시된다.
    */
   screen?: "reflect" | "lightScreen" | "auroraVeil";
@@ -439,7 +439,7 @@ export function evaluateSlotMatchup(
   };
 
   // 특성 배율(공격측 테크니션/모래의힘/메가런처/페어리스킨, 방어측 두꺼운지방 등) + 타입 변경 +
-  // 자속 + 상대 타입 상성을 한 번에 계산 — battleSimulator의 resolveAction과 공유하는 로직
+  // 자속 + 상대 타입 상성을 한 번에 계산 — 배틀 엔진의 resolveAction과 공유하는 로직
   const {
     effectiveMove,
     abilityOffenseMultiplier,
@@ -495,7 +495,7 @@ export function evaluateSlotMatchup(
   })();
 
   // 부자유친: 단일타 데미지 기술이 데미지를 준 직후 위력 × mult 짜리 추가타가 한 번 더 나간다
-  // (battleSimulator와 동일 조건 — 다단히트·고정데미지는 제외). 매치업은 1턴 스냅샷이라 "추가타까지
+  // (배틀 엔진과 동일 조건 — 다단히트·고정데미지는 제외). 매치업은 1턴 스냅샷이라 "추가타까지
   // 다 맞은" 상황으로 보고 결정력 위력에 합산한다. 추가타 위력은 엔진과 똑같이 round(위력 × mult).
   const followUpMultiplier = attackerAbility?.followUpHitPowerMultiplier;
   const effectiveMoveFinal =
@@ -522,7 +522,7 @@ export function evaluateSlotMatchup(
     !!defenderAbility?.doublesBerryEffect, // 숙성 — 실전 엔진(hitResolution)과 같은 판정
   );
 
-  // 날씨/필드 데미지 배율은 (타입 변경까지 끝난) effectiveMove.type 기준으로 구한다 — battleSimulator와 동일.
+  // 날씨/필드 데미지 배율은 (타입 변경까지 끝난) effectiveMove.type 기준으로 구한다 — 배틀 엔진과 동일.
   const autoWeatherDamageMultiplier = getWeatherDamageMultiplier(effectiveWeather, effectiveMove.type);
   const autoFieldDamageMultiplier = getFieldDamageMultiplier(field, effectiveMove.type, attackerRuntime?.grounded, defenderRuntime?.grounded);
 
@@ -560,7 +560,7 @@ export function evaluateSlotMatchup(
 
   // 스크린(리플렉터/빛의장막/오로라베일): 해당 카테고리 데미지 절반 = 내구력 2배 — 틈새포착이면 무시.
   // 이쪽은 1턴 스냅샷이라 진영 상태 대신 단일 screen 옵션에서 두 불리언을 도출하고,
-  // 실제 곱셈 공식은 battlePower.screenMultiplierFromFlags로 battleSimulator와 공유한다(§5).
+  // 실제 곱셈 공식은 battlePower.screenMultiplierFromFlags로 배틀 엔진과 공유한다(§5).
   const screenBypassed = !!attackerAbility?.bypassesScreensAndSubstitute || criticalApplies;
   const auroraVeilActive = !screenBypassed && screen === "auroraVeil";
   const categoryScreenActive =
@@ -962,7 +962,7 @@ interface SpeedMatchupOptions {
 
 /**
  * 양쪽 슬롯의 실효 스피드를 비교해 어느 쪽이 먼저 움직이는지 판정한다(Phase 6.5 §2).
- * battleSimulator의 runTurn 스피드 공식(realStats.spe × 도구배율 × 날씨특성배율 × 마비 0.5배 ×
+ * 배틀 엔진의 runTurn 스피드 공식(realStats.spe × 도구배율 × 날씨특성배율 × 마비 0.5배 ×
  * 곡예 2배, 그 뒤 스피드 랭크 반영)을 그대로 미러한다. 마비·트릭룸은 매치업 페이지에 상태 개념이
  * 없어 "가정 토글"(options.attackerStatus 등)로만 들어온다. 선제공격손톱은 랜덤이라 반영하지 않는다.
  * 포켓몬을 찾을 수 없으면 null.

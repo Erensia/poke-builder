@@ -1,6 +1,8 @@
 import { getPokemon } from "../../lib/data";
 import { environmentTintBackground } from "../../lib/environmentBackground";
-import { type BattleState, type FighterKey, type RunTurnContext } from "../../lib/battleSimulator";
+import type { BattleState } from "../../lib/battle/state";
+import type { FighterKey } from "../../types/battle";
+import type { RunTurnContext } from "../../lib/battle/runTurn";
 
 export type Side = "a" | "b";
 

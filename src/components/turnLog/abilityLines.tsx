@@ -1,5 +1,5 @@
 import { type ReactNode } from "react";
-import { type HitAbilityEvent } from "../../lib/battleSimulator";
+import type { HitAbilityEvent } from "../../types/battle";
 import { STAT_LABELS } from "../../lib/statLabels";
 import { eunNeun, iGa, eulReul, waGwa, roEuro } from "../../lib/josa";
 import { VOLATILE_LABELS } from "../../lib/battleLogLabels";

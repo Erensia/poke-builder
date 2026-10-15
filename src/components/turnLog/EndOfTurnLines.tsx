@@ -1,4 +1,4 @@
-import { type FighterKey, type TurnResult } from "../../lib/battleSimulator";
+import type { FighterKey, TurnResult } from "../../types/battle";
 import type { EndOfTurnLogEntry } from "../../types/battle";
 import { STAT_LABELS } from "../../lib/statLabels";
 import { eunNeun, iGa, eulReul } from "../../lib/josa";

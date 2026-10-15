@@ -25,7 +25,7 @@ export function computeEffectiveSpeed(realSpeed: number, stages: StatStages = NE
 /**
  * 투쟁심(Rivalry): 공격측이 이 특성일 때 상대와의 성별 관계로 데미지 배율을 낸다.
  * 같은 성별 ×1.25 · 다른 성별 ×0.75 · 어느 한쪽이라도 성별 불명(null) ×1.0.
- * battleSimulator(실전)·matchupEvaluator(매치업 스냅샷) 양쪽이 공유한다(ver.1.5 §5).
+ * 배틀 엔진(실전)·matchupEvaluator(매치업 스냅샷) 양쪽이 공유한다(ver.1.5 §5).
  */
 export function rivalryDamageMultiplier(
   ability: Ability | undefined,
@@ -49,7 +49,7 @@ export function supremeOverlordMultiplier(ability: Ability | undefined, faintedC
 
 /**
  * 의욕(Hustle): 물리 기술 위력 ×1.5 (명중률 페널티는 결정력 계산 대상이 아니라 별도 처리).
- * battleSimulator(실전)·matchupEvaluator(매치업 스냅샷) 양쪽이 공유한다(ver.1.5 §5).
+ * 배틀 엔진(실전)·matchupEvaluator(매치업 스냅샷) 양쪽이 공유한다(ver.1.5 §5).
  */
 export function hustleDamageMultiplier(category: MoveCategory | null, ability: Ability | undefined): number {
   return category === "physical" && ability?.hustleAttackMultiplier !== undefined
@@ -60,9 +60,9 @@ export function hustleDamageMultiplier(category: MoveCategory | null, ability: A
 /**
  * 리플렉터/빛의장막(카테고리 전용)·오로라베일(물리·특수 공통)이 동시에 걸려있을 수 있는 축을
  * 곱셈으로 합산한다 — 급소·틈새포착 등 "스크린을 아예 무시할지"는 호출부가 각자의 상태 모양에
- * 맞춰 미리 판정해서 두 불리언으로 넘긴다(battleSimulator는 진영 상태 그대로, matchupEvaluator는
+ * 맞춰 미리 판정해서 두 불리언으로 넘긴다(배틀 엔진은 진영 상태 그대로, matchupEvaluator는
  * 1턴 스냅샷의 단일 screen 옵션에서 도출 — 입력 모양이 달라 이 부분만은 각자 유지).
- * battleSimulator(실전)·matchupEvaluator(매치업 스냅샷) 양쪽이 공유한다(ver.1.5 §5).
+ * 배틀 엔진(실전)·matchupEvaluator(매치업 스냅샷) 양쪽이 공유한다(ver.1.5 §5).
  */
 export function screenMultiplierFromFlags(categoryScreenActive: boolean, auroraVeilActive: boolean): number {
   return (categoryScreenActive ? 2 : 1) * (auroraVeilActive ? 2 : 1);
@@ -72,7 +72,7 @@ export function screenMultiplierFromFlags(categoryScreenActive: boolean, auroraV
  * 기사회생(Reversal)·바둥바둥(Flail) 위력표 — 사용자 현재 HP 비율(%)로 갈린다(사용자 제공 수치, F-2).
  * 71~100 → 20 / 36~70 → 40 / 21~35 → 80 / 11~20 → 100 / 5~10 → 150 / 1~4 → 200.
  * (경계는 백분율 내림 기준 — 예: 35.9%는 "35 이하" 구간이 아니라 "36 이상"으로 본다.)
- * battleSimulator(실 HP)와 matchupEvaluator(스냅샷 HP 비율)가 공유한다.
+ * 배틀 엔진(실 HP)와 matchupEvaluator(스냅샷 HP 비율)가 공유한다.
  */
 export function reversalPowerFromHp(currentHp: number, maxHp: number): number {
   const pct = (currentHp / maxHp) * 100;

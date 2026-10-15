@@ -16,7 +16,7 @@ const BADLY_POISONED_MAX_TURNS = 15;
 
 /**
  * 타입에 따른 상태이상 면역 (사용자 확인): 전기=마비, 독/강철=독·맹독, 불꽃=화상, 얼음=얼음 면역.
- * 쾌청 날씨의 얼음 면역(타입이 아니라 날씨 조건)은 별도 — battleSimulator.ts의 inflictsStatus 처리에서
+ * 쾌청 날씨의 얼음 면역(타입이 아니라 날씨 조건)은 별도 — 배틀 엔진의 inflictsStatus 처리에서
  * state.weather === "쾌청"이면 얼음을 걸지 않도록 따로 분기한다(이 함수는 타입 기준 면역만 다룸).
  */
 export function isImmuneToStatus(

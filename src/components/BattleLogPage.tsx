@@ -25,7 +25,11 @@ import { BattleVideoListModal } from "./BattleVideoListModal";
 import { getPokemon, getMove, SAMPLE_PARTIES } from "../lib/data";
 import { getEffectiveForm } from "../lib/pokemonForm";
 import { eulReul, eunNeun } from "../lib/josa";
-import { applySwitch, choiceLockedMoveOf, createBattleState, forcedLockedAction, hasUsableMove, runTurn, resumeTurn, STRUGGLE_MOVE, type BattleSide, type BattleState, type FighterKey, type TurnAction, type TurnResult } from "../lib/battleSimulator";
+import { applySwitch } from "../lib/battle/switching";
+import { choiceLockedMoveOf, createBattleState, hasUsableMove, STRUGGLE_MOVE, type BattleSide, type BattleState } from "../lib/battle/state";
+import { forcedLockedAction } from "../lib/battle/lockedAction";
+import { runTurn, resumeTurn } from "../lib/battle/runTurn";
+import type { FighterKey, TurnAction, TurnResult } from "../types/battle";
 import { chooseAiForcedSwitch, chooseAiSelection, sampleRiskAversion } from "../lib/battle/ai";
 import { APP_DECISION_PARAMS, chooseAiActionAsync, prewarmAiWorker } from "../lib/battle/ai/aiClient";
 import { combinedMemory, emptyOpponentMemory, observeOpponent } from "../lib/battle/ai/opponentMemory";
@@ -178,7 +182,7 @@ export function BattleLogPage() {
 
   /**
    * 도발/사슬묶기/앙코르: 이 쪽이 지금 이 기술을 고르면 왜 안 되는지(있다면) 문구로 돌려준다.
-   * 구애스카프(choiceLockedMoveId)와 달리 판정 엔진(battleSimulator)의 volatile 상태를 그대로
+   * 구애스카프(choiceLockedMoveId)와 달리 판정 엔진(배틀 엔진)의 volatile 상태를 그대로
    * 읽는다 — 로그를 다시 훑을 필요 없이 battleState에 이미 반영돼있다.
    */
   function moveRestrictionMessage(side: Side, moveId: string): string | null {
