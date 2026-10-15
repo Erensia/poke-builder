@@ -943,6 +943,11 @@ export function DefenseInferencePanel({
   const hasReceivedRows = rows.some((r) => r.kind === "received");
   const hasDealtRows = rows.some((r) => r.kind === "dealt");
 
+  /** 맹독 경과 턴(1~15, 0이면 해제) — 맹독 id는 `toxic<n>`이라 다른 효과와 따로 갈아 끼운다 */
+  function setToxicTurn(row: ObservationRow, n: number) {
+    updateRow(row.id, { endTurn: [...row.endTurn.filter((x) => !TOXIC_ID.test(x)), ...(n > 0 ? [`toxic${n}`] : [])] });
+  }
+
   function rowMessage(row: ObservationRow): { text: string; kind: "error" | "ok" } | null {
     const move = row.moveId ? getMove(row.moveId) : undefined;
     if (row.kind === "received") return receivedRowMessage(row, move);
@@ -1217,12 +1222,13 @@ export function DefenseInferencePanel({
             // 앞 줄 중 메가 후인 줄이 있으면 그 폼(메가진화는 되돌릴 수 없다 — 3.1 L1-a)
             const lockedMega = rows.slice(0, index).map((r) => megaOf(r, megas)).find(Boolean) ?? "";
             const pickerOwner = received ? defenderPokemon : attackerPokemon;
+            const toxicTurn = Number(row.endTurn.find((x) => TOXIC_ID.test(x))?.slice(5) ?? 0);
             return (
               <li key={row.id} className="dinf-row">
                 <span className="dinf-row-no">#{index + 1}</span>
                 <select aria-label={`관측 ${index + 1} 종류`} value={row.kind} onChange={(e) => changeKind(row.id, e.target.value as RowKind)}>
-                  <option value="dealt">내가 입힌 데미지</option>
-                  <option value="received">내가 받은 데미지</option>
+                  <option value="dealt">입힌 데미지</option>
+                  <option value="received">받은 데미지</option>
                   <option value="speed">선후공</option>
                 </select>
                 {speed ? (
@@ -1241,45 +1247,43 @@ export function DefenseInferencePanel({
                     {move ? move.name : received ? "상대 기술 선택" : "기술 선택"}
                   </button>
                 )}
-                {(() => {
-                  const range = move && !speed ? multiHitRange(move) : null;
-                  if (!range || range.min === range.max) return null;
-                  return (
-                    <select aria-label={`관측 ${index + 1} 맞은 타수`} value={row.hits} onChange={(e) => updateRow(row.id, { hits: e.target.value })}>
-                      <option value="">타수</option>
-                      {Array.from({ length: range.max - range.min + 1 }, (_, k) => range.min + k).map((n) => (
-                        <option key={n} value={n}>
-                          {n}타
-                        </option>
-                      ))}
+                <span className="dinf-row-opts">
+                  {(() => {
+                    const range = move && !speed ? multiHitRange(move) : null;
+                    if (!range || range.min === range.max) return null;
+                    return (
+                      <select aria-label={`관측 ${index + 1} 맞은 타수`} value={row.hits} onChange={(e) => updateRow(row.id, { hits: e.target.value })}>
+                        <option value="">타수</option>
+                        {Array.from({ length: range.max - range.min + 1 }, (_, k) => range.min + k).map((n) => (
+                          <option key={n} value={n}>
+                            {n}타
+                          </option>
+                        ))}
+                      </select>
+                    );
+                  })()}
+                  {megas && megas.length > 0 && (
+                    <select
+                      aria-label={`관측 ${index + 1} 상대 폼`}
+                      value={megaOf(row, megas)}
+                      onChange={(e) => updateRow(row.id, { megaForm: e.target.value })}
+                      disabled={!!lockedMega}
+                      title={lockedMega ? "앞 줄에서 이미 메가진화했어요 (되돌릴 수 없어요)" : undefined}
+                    >
+                      {/* 앞 줄에서 메가진화했으면 이 줄은 그 폼으로 고정 — 메가 전·다른 폼을 고를 수 없다 */}
+                      {!lockedMega && <option value="">메가 전</option>}
+                      {megas
+                        .filter((m) => !lockedMega || m.form === lockedMega)
+                        .map((m) => (
+                          <option key={m.form} value={m.form}>
+                            {m.form.replace(/^.*?-/, "")}
+                          </option>
+                        ))}
                     </select>
-                  );
-                })()}
-                {megas && megas.length > 0 && (
-                  <select
-                    aria-label={`관측 ${index + 1} 상대 폼`}
-                    value={megaOf(row, megas)}
-                    onChange={(e) => updateRow(row.id, { megaForm: e.target.value })}
-                    disabled={!!lockedMega}
-                    title={lockedMega ? "앞 줄에서 이미 메가진화했어요 (되돌릴 수 없어요)" : undefined}
-                  >
-                    {/* 앞 줄에서 메가진화했으면 이 줄은 그 폼으로 고정 — 메가 전·다른 폼을 고를 수 없다 */}
-                    {!lockedMega && <option value="">메가 전</option>}
-                    {megas
-                      .filter((m) => !lockedMega || m.form === lockedMega)
-                      .map((m) => (
-                        <option key={m.form} value={m.form}>
-                          {m.form.replace(/^.*?-/, "")}
-                        </option>
-                      ))}
-                  </select>
-                )}
+                  )}
+                </span>
                 {!speed && (
                   <>
-                    <label className="dinf-crit">
-                      <input type="checkbox" checked={row.critical} onChange={(e) => updateRow(row.id, { critical: e.target.checked })} />
-                      급소
-                    </label>
                     <span className="dinf-percent-pair">
                       <input
                         className="dinf-percent"
@@ -1299,11 +1303,21 @@ export function DefenseInferencePanel({
                       />
                       <span>{received ? "HP" : "%"}</span>
                     </span>
+                    <label className="dinf-crit">
+                      <input type="checkbox" checked={row.critical} onChange={(e) => updateRow(row.id, { critical: e.target.checked })} />
+                      급소
+                    </label>
                   </>
                 )}
+                {message && <span className={`dinf-row-msg is-${message.kind}`}>{message.text}</span>}
+                {rows.length > 1 && (
+                  <button type="button" className="dinf-row-remove" onClick={() => removeRow(row.id)} aria-label={`관측 ${index + 1} 삭제`}>
+                    ✕
+                  </button>
+                )}
                 {!speed && !received && index < rows.length - 1 && (
-                  <details className="dinf-endturn">
-                    <summary>턴 종료 효과{row.endTurn.length > 0 && ` (${row.endTurn.length})`}</summary>
+                  <div className="dinf-endturn">
+                    <span className="dinf-endturn-title">턴 종료 효과</span>
                     {END_TURN_EFFECTS.map((e) => (
                       <label key={e.id}>
                         <input
@@ -1314,25 +1328,22 @@ export function DefenseInferencePanel({
                         {e.label}
                       </label>
                     ))}
-                    <select
-                      aria-label={`관측 ${index + 1} 맹독 경과 턴`}
-                      value={row.endTurn.find((x) => TOXIC_ID.test(x)) ?? ""}
-                      onChange={(ev) => updateRow(row.id, { endTurn: [...row.endTurn.filter((x) => !TOXIC_ID.test(x)), ...(ev.target.value ? [ev.target.value] : [])] })}
-                    >
-                      <option value="">맹독 없음</option>
-                      {Array.from({ length: 15 }, (_, k) => (
-                        <option key={k} value={`toxic${k + 1}`}>
-                          맹독 {k + 1}턴째
-                        </option>
-                      ))}
-                    </select>
-                  </details>
-                )}
-                {message && <span className={`dinf-row-msg is-${message.kind}`}>{message.text}</span>}
-                {rows.length > 1 && (
-                  <button type="button" className="dinf-row-remove" onClick={() => removeRow(row.id)} aria-label={`관측 ${index + 1} 삭제`}>
-                    ✕
-                  </button>
+                    <label>
+                      <input type="checkbox" checked={toxicTurn > 0} onChange={(ev) => setToxicTurn(row, ev.target.checked ? 1 : 0)} />
+                      맹독
+                    </label>
+                    {toxicTurn > 0 && (
+                      <span className="dinf-stepper">
+                        <button type="button" aria-label={`관측 ${index + 1} 맹독 경과 턴 줄이기`} onClick={() => setToxicTurn(row, Math.max(1, toxicTurn - 1))}>
+                          −
+                        </button>
+                        <span>{toxicTurn}턴째</span>
+                        <button type="button" aria-label={`관측 ${index + 1} 맹독 경과 턴 늘리기`} onClick={() => setToxicTurn(row, Math.min(15, toxicTurn + 1))}>
+                          +
+                        </button>
+                      </span>
+                    )}
+                  </div>
                 )}
                 {speed && (
                   <SpeedConditionsEditor
