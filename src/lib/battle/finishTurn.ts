@@ -15,6 +15,7 @@ import { getDrainHealMultiplier, getHpThresholdBerryHeal } from "@/lib/itemEffec
 import { SANDSTORM_IMMUNE_ABILITY_NAMES, activeWeather, applyForecastForm, consumeItem, contraryDelta, hasLivingReserve, isFainted, opponentKey, sideOf, statDropBlockStatsOf, statusImmunitiesOf, type BattleFighterState, type BattleState } from "./state";
 import { type RunTurnContext, type RunTurnOutcome } from "./runTurn";
 import { actionFailed } from "./moveFailure";
+import { type ActionLogEntry, type SwitchLogEntry } from "@/types/battle";
 
 interface EndOfTurnFighterContext {
   state: BattleState;
@@ -670,57 +671,73 @@ function applyCudChew(ctx: EndOfTurnFighterContext): void {
   });
 }
 
-export function finishTurn(ctx: RunTurnContext): RunTurnOutcome {
-  const { state, order, actions, switches, turnStartAnnouncements, selfDestructComboKey, speedA, speedB, random } = ctx;
-  let winner: FighterKey | "draw" | undefined;
+/** finishTurn의 단계 사이에서 공유되는 값 — 한 단계 안에서만 쓰는 변수는 각 단계 함수의 지역 변수다 */
+interface FinishCtx {
+  state: BattleState;
+  order: [FighterKey, FighterKey];
+  actions: ActionLogEntry[];
+  switches: SwitchLogEntry[];
+  turnStartAnnouncements: string[];
+  selfDestructComboKey: FighterKey | undefined;
+  speedA: number;
+  speedB: number;
+  random: () => number;
+  winner: FighterKey | "draw" | undefined;
+  endOfTurn: EndOfTurnLogEntry[];
+  perishFaintedKeys: Set<FighterKey>;
+  forcedSwitch: { a?: boolean; b?: boolean } | undefined;
+  fieldExpired: boolean;
+  trickRoomExpired: boolean;
+  expiredFieldEffects: ("wonderRoom" | "magicRoom" | "gravity")[];
+  expiredMagnetRise: FighterKey[];
+  weatherExpired: boolean;
+  expiredScreens: { actor: FighterKey; screen: "reflect" | "lightScreen" | "auroraVeil" }[];
+  expiredSafeguard: FighterKey[];
+  expiredTailwind: FighterKey[];
+}
 
-  // 분함의발구르기·열불내기(ver.1.9): 이번 턴 자기 행동이 실패였는지 기록 — 다음 턴 위력 2배 판정. 이번 턴 행동하지 않았으면
-  // (교체로 나옴·쓰러짐 등) 실패 아님. 턴 중 유턴류로 바뀐 경우 행동한 포켓몬이 아니므로 종 id로 맞춘다.
-  for (const key of ["a", "b"] as const) {
-    const fighter = state[key];
-    const own = actions.find((a) => a.actor === key && a.actorPokemonId === fighter.slot.pokemonId);
-    fighter.lastTurnMoveFailed = own && actionFailed(own) ? true : undefined;
-  }
+/** 턴 종료 효과(endOfTurn)와 멸망의노래로 쓰러진 쪽 처리, 승패 판정 */
+function resolveEndOfTurnAndPerish(c: FinishCtx) {
 
-  const endOfTurn: EndOfTurnLogEntry[] = [];
+  c.endOfTurn = [];
   // 멸망의노래로 이번 턴 종료에 쓰러진 쪽(F-4) — 양쪽 다면 스피드 느린 쪽이 승리한다.
-  const perishFaintedKeys = new Set<FighterKey>();
+  c.perishFaintedKeys = new Set<FighterKey>();
 
   // 이번 턴 쓰러진 쪽은 건너뛰고, 살아 있는 쪽은 상대가 쓰러졌어도 턴 종료 처리를 받는다(ver.2.0 버그 수정 — 플레이테스트
   // 사용자 제보: 이전엔 한쪽이라도 쓰러지면 양쪽 다 건너뛰어, 상대를 쓰러뜨린 턴에 하품 졸음이 잠듦으로 넘어가지 않고
   // 먹다남은음식·독·모래바람 등도 한 턴씩 빠졌다). 상대에게 매인 효과는 opponentFainted로 각 단계가 거른다.
   // 자폭 콤보로 양쪽 다 쓰러졌으면 둘 다 건너뛴다.
-  if (!winner) {
+  if (!c.winner) {
     for (const key of (["a", "b"] as const)) {
-      const fighter = state[key];
+      const fighter = c.state[key];
       if (isFainted(fighter)) continue;
-      const opponentFainted = isFainted(state[opponentKey(key)]);
+      const opponentFainted = isFainted(c.state[opponentKey(key)]);
       const fighterAbility = fighter.effectiveAbilityId ? getAbility(fighter.effectiveAbilityId) : undefined;
-      const fighterItem = fighterAbility?.disablesOwnItemEffects || itemsSuppressedByRoom(state)
+      const fighterItem = fighterAbility?.disablesOwnItemEffects || itemsSuppressedByRoom(c.state)
         ? undefined
         : fighter.currentItemId
           ? getItem(fighter.currentItemId)
           : undefined;
       // 긴장감: 상대가 이 특성이면 이 포켓몬의 나무열매(자뭉열매/오랭열매 등)가 막힌다 —
       // 먹다남은음식은 나무열매가 아니라서 이 플래그와 무관하게 그대로 발동한다.
-      const opponentAbilityForItem = state[opponentKey(key)].effectiveAbilityId
-        ? getAbility(state[opponentKey(key)].effectiveAbilityId!)
+      const opponentAbilityForItem = c.state[opponentKey(key)].effectiveAbilityId
+        ? getAbility(c.state[opponentKey(key)].effectiveAbilityId!)
         : undefined;
       const fighterBerriesBlocked = !opponentFainted && !!opponentAbilityForItem?.preventsOpponentBerries;
       const eotCtx: EndOfTurnFighterContext = {
-        state,
+        state: c.state,
         key,
         fighter,
         fighterAbility,
         fighterItem,
         fighterBerriesBlocked,
-        random,
-        endOfTurn,
+        random: c.random,
+        endOfTurn: c.endOfTurn,
         opponentFainted,
       };
 
       if (applyPerishSongCountdown(eotCtx)) {
-        perishFaintedKeys.add(key);
+        c.perishFaintedKeys.add(key);
         continue; // 이미 쓰러졌으니 이 포켓몬의 나머지 턴 종료 처리(회복 등)는 건너뛴다
       }
       applyAbilityImmunityCure(eotCtx);
@@ -747,26 +764,30 @@ export function finishTurn(ctx: RunTurnContext): RunTurnOutcome {
       applyCudChew(eotCtx);
     }
   }
+}
+
+/** 활성 슬롯이 기절했을 때의 승패·무승부·강제 교체 대상 결정 */
+function decideWinnerAndForcedSwitch(c: FinishCtx) {
 
   // 활성 슬롯이 기절해도 파티에 아직 안 쓰러진 슬롯이 있으면 그 편의 패배가 아니라 강제 교체다.
   // (파티 길이 1이면 hasLivingReserve가 항상 false라 아래 로직은 기존 1v1과 완전히 동일하게 동작.)
-  const aHasReserve = hasLivingReserve(state.sideA);
-  const bHasReserve = hasLivingReserve(state.sideB);
+  const aHasReserve = hasLivingReserve(c.state.sideA);
+  const bHasReserve = hasLivingReserve(c.state.sideB);
 
   // 자폭 콤보로 활성끼리 동반 기절한 경우(§7-1). 아래 generic 무승부 블록은 "각자 따로
   // 쓰러진 것이라 인과가 없다"는 전제라 여기에 흘리면 예비 슬롯이 남아도 배틀이 끝나버린다.
   // 콤보를 실행한 쪽이 상대를 먼저 쓰러뜨렸다는 인과를 살려, 예비 슬롯을 보고 여기서 가른다.
-  if (!winner && selfDestructComboKey) {
-    const comboKey = selfDestructComboKey;
+  if (!c.winner && c.selfDestructComboKey) {
+    const comboKey = c.selfDestructComboKey;
     const foeKey = opponentKey(comboKey);
     const comboHasReserve = comboKey === "a" ? aHasReserve : bHasReserve;
     const foeHasReserve = foeKey === "a" ? aHasReserve : bHasReserve;
     if (!comboHasReserve && !foeHasReserve) {
-      winner = comboKey; // 양쪽 다 예비 없음 → 상대를 먼저 쓰러뜨린 콤보 실행 쪽 승리
+      c.winner = comboKey; // 양쪽 다 예비 없음 → 상대를 먼저 쓰러뜨린 콤보 실행 쪽 승리
     } else if (!comboHasReserve) {
-      winner = foeKey; // 콤보 실행 쪽만 전멸
+      c.winner = foeKey; // 콤보 실행 쪽만 전멸
     } else if (!foeHasReserve) {
-      winner = comboKey; // 상대만 전멸
+      c.winner = comboKey; // 상대만 전멸
     }
     // 둘 다 예비 있음 → winner 미정: 아래 forcedSwitch가 양쪽 강제 교체를 요구한다
   }
@@ -774,112 +795,119 @@ export function finishTurn(ctx: RunTurnContext): RunTurnOutcome {
   // 멸망의노래로 양쪽이 동시에 쓰러졌으면 무승부가 아니라 스피드가 느린 쪽이 승리한다(F-4) —
   // 빠른 쪽이 먼저 쓰러지는 것으로 취급. 랭크 반영 실효 스피드로 비교(트릭룸은 무관).
   // 단 어느 한쪽이라도 교대할 슬롯이 남아 있으면 배틀은 안 끝나고 강제 교체로 넘어간다(§3).
-  if (!winner && perishFaintedKeys.size === 2 && !aHasReserve && !bHasReserve) {
-    const effSpeedA = speedA * rankStageMultiplier(state.a.stages.spe);
-    const effSpeedB = speedB * rankStageMultiplier(state.b.stages.spe);
-    winner = effSpeedA <= effSpeedB ? "a" : "b";
+  if (!c.winner && c.perishFaintedKeys.size === 2 && !aHasReserve && !bHasReserve) {
+    const effSpeedA = c.speedA * rankStageMultiplier(c.state.a.stages.spe);
+    const effSpeedB = c.speedB * rankStageMultiplier(c.state.b.stages.spe);
+    c.winner = effSpeedA <= effSpeedB ? "a" : "b";
   }
 
   // 턴 종료 시점에 활성이 기절해 있고 교대할 슬롯도 없으면 그 편이 진다. 양쪽 다면 무승부 —
   // 어느 한 쪽이 상대를 쓰러뜨린 게 아니라 각자 자기 상태이상 등으로 따로 쓰러진 것이라 인과가 없다.
-  if (!winner) {
-    const aOut = isFainted(state.a) && !aHasReserve;
-    const bOut = isFainted(state.b) && !bHasReserve;
-    if (aOut && bOut) winner = "draw";
-    else if (aOut) winner = "b";
-    else if (bOut) winner = "a";
+  if (!c.winner) {
+    const aOut = isFainted(c.state.a) && !aHasReserve;
+    const bOut = isFainted(c.state.b) && !bHasReserve;
+    if (aOut && bOut) c.winner = "draw";
+    else if (aOut) c.winner = "b";
+    else if (bOut) c.winner = "a";
   }
 
   // 배틀이 안 끝났는데 활성이 기절해 있으면(=교대할 슬롯이 남음) 다음 턴 전에 강제 교체를 요구한다.
-  const forcedSwitch: { a?: boolean; b?: boolean } | undefined =
-    !winner && ((isFainted(state.a) && aHasReserve) || (isFainted(state.b) && bHasReserve))
+  c.forcedSwitch = !c.winner && ((isFainted(c.state.a) && aHasReserve) || (isFainted(c.state.b) && bHasReserve))
       ? {
-          a: isFainted(state.a) && aHasReserve ? true : undefined,
-          b: isFainted(state.b) && bHasReserve ? true : undefined,
+          a: isFainted(c.state.a) && aHasReserve ? true : undefined,
+          b: isFainted(c.state.b) && bHasReserve ? true : undefined,
         }
       : undefined;
+}
+
+/** 필드·트릭룸·원더룸·매직룸·중력·페어리록·전자부유·날씨의 지속 턴 카운트다운 */
+function expireFieldAndWeather(c: FinishCtx) {
 
   // (유턴류 자체 교체(§7-2)는 runActionPhase에서 턴 중간에 멈춰 resumeTurn으로 이미 처리된다.)
 
   // 필드 지속 턴 카운트다운. 0이 되면 이번 턴을 끝으로 필드가 사라진다.
-  let fieldExpired = false;
-  if (state.field && state.fieldTurnsRemaining !== undefined) {
-    state.fieldTurnsRemaining -= 1;
-    if (state.fieldTurnsRemaining <= 0) {
-      state.field = undefined;
-      state.fieldTurnsRemaining = undefined;
-      fieldExpired = true;
+  c.fieldExpired = false;
+  if (c.state.field && c.state.fieldTurnsRemaining !== undefined) {
+    c.state.fieldTurnsRemaining -= 1;
+    if (c.state.fieldTurnsRemaining <= 0) {
+      c.state.field = undefined;
+      c.state.fieldTurnsRemaining = undefined;
+      c.fieldExpired = true;
     }
   }
 
   // 트릭룸도 같은 방식으로 카운트다운한다.
-  let trickRoomExpired = false;
-  if (state.trickRoomTurnsRemaining !== undefined) {
-    state.trickRoomTurnsRemaining -= 1;
-    if (state.trickRoomTurnsRemaining <= 0) {
-      state.trickRoomTurnsRemaining = undefined;
-      trickRoomExpired = true;
+  c.trickRoomExpired = false;
+  if (c.state.trickRoomTurnsRemaining !== undefined) {
+    c.state.trickRoomTurnsRemaining -= 1;
+    if (c.state.trickRoomTurnsRemaining <= 0) {
+      c.state.trickRoomTurnsRemaining = undefined;
+      c.trickRoomExpired = true;
     }
   }
 
   // 트랙 M4: 원더룸·매직룸·중력(장 전체)과 전자부유(활성 포켓몬별)도 같은 방식으로 카운트다운한다.
-  const expiredFieldEffects: ("wonderRoom" | "magicRoom" | "gravity")[] = [];
+  c.expiredFieldEffects = [];
   const countDown = (key: "wonderRoomTurnsRemaining" | "magicRoomTurnsRemaining" | "gravityTurnsRemaining", name: "wonderRoom" | "magicRoom" | "gravity") => {
-    const left = state[key];
+    const left = c.state[key];
     if (left === undefined) return;
     if (left - 1 <= 0) {
-      state[key] = undefined;
-      expiredFieldEffects.push(name);
+      c.state[key] = undefined;
+      c.expiredFieldEffects.push(name);
     } else {
-      state[key] = left - 1;
+      c.state[key] = left - 1;
     }
   };
   countDown("wonderRoomTurnsRemaining", "wonderRoom");
   countDown("magicRoomTurnsRemaining", "magicRoom");
   countDown("gravityTurnsRemaining", "gravity");
   // 페어리록(트랙 M6): 걸린 턴 끝에 2 → 1(다음 턴이 봉쇄 턴), 그 턴 끝에 해제 — 해제 로그는 따로 내지 않는다
-  if (state.fairyLockTurnsRemaining !== undefined) {
-    state.fairyLockTurnsRemaining -= 1;
-    if (state.fairyLockTurnsRemaining <= 0) state.fairyLockTurnsRemaining = undefined;
+  if (c.state.fairyLockTurnsRemaining !== undefined) {
+    c.state.fairyLockTurnsRemaining -= 1;
+    if (c.state.fairyLockTurnsRemaining <= 0) c.state.fairyLockTurnsRemaining = undefined;
   }
-  const expiredMagnetRise: FighterKey[] = [];
+  c.expiredMagnetRise = [];
   for (const key of ["a", "b"] as const) {
-    const f = state[key];
+    const f = c.state[key];
     if (f.magnetRiseTurnsRemaining === undefined) continue;
     f.magnetRiseTurnsRemaining -= 1;
     if (f.magnetRiseTurnsRemaining <= 0) {
       f.magnetRiseTurnsRemaining = undefined;
-      if (!isFainted(f)) expiredMagnetRise.push(key);
+      if (!isFainted(f)) c.expiredMagnetRise.push(key);
     }
   }
 
   // 날씨도 같은 방식으로 카운트다운한다. weatherTurnsRemaining은 날씨가 아예 없을 때만
   // undefined이고, 특성/수동/기술 어느 경로로 걸렸든 항상 유한 턴수를 갖는다(챔피언스 규칙).
-  let weatherExpired = false;
-  if (state.weatherTurnsRemaining !== undefined) {
-    state.weatherTurnsRemaining -= 1;
-    if (state.weatherTurnsRemaining <= 0) {
-      state.weather = undefined;
-      state.weatherTurnsRemaining = undefined;
-      weatherExpired = true;
+  c.weatherExpired = false;
+  if (c.state.weatherTurnsRemaining !== undefined) {
+    c.state.weatherTurnsRemaining -= 1;
+    if (c.state.weatherTurnsRemaining <= 0) {
+      c.state.weather = undefined;
+      c.state.weatherTurnsRemaining = undefined;
+      c.weatherExpired = true;
       // 기분파(캐스퐁): 날씨가 사라지면 노말로 되돌린다.
-      applyForecastForm(state.a, activeWeather(state));
-      applyForecastForm(state.b, activeWeather(state));
+      applyForecastForm(c.state.a, activeWeather(c.state));
+      applyForecastForm(c.state.b, activeWeather(c.state));
     }
   }
+}
+
+/** 리플렉터·빛의장막·오로라베일·신비의부적·순풍의 편 단위 카운트다운 */
+function expireSideEffects(c: FinishCtx) {
 
   // 리플렉터/빛의장막/오로라베일은 필드/날씨와 달리 "양쪽 편이 따로" 걸릴 수 있어 각자
   // 카운트다운한다. 편(side) 단위 상태라 이번 턴 교체가 있었어도 그대로 이어서 줄어든다(§6-3).
-  const expiredScreens: { actor: FighterKey; screen: "reflect" | "lightScreen" | "auroraVeil" }[] = [];
+  c.expiredScreens = [];
   for (const key of (["a", "b"] as const)) {
-    const side = sideOf(state, key);
+    const side = sideOf(c.state, key);
     for (const screenType of ["reflect", "lightScreen", "auroraVeil"] as const) {
       const remaining = side.screens[screenType];
       if (remaining === undefined) continue;
       const next = remaining - 1;
       if (next <= 0) {
         side.screens = { ...side.screens, [screenType]: undefined };
-        expiredScreens.push({ actor: key, screen: screenType });
+        c.expiredScreens.push({ actor: key, screen: screenType });
       } else {
         side.screens = { ...side.screens, [screenType]: next };
       }
@@ -888,57 +916,89 @@ export function finishTurn(ctx: RunTurnContext): RunTurnOutcome {
 
   // 신비의부적(세이프가드)도 스크린과 같은 편 단위 카운트다운 — 종류가 하나뿐이라 배열은
   // "어느 편에서 사라졌는지"만 담는다.
-  const expiredSafeguard: FighterKey[] = [];
+  c.expiredSafeguard = [];
   for (const key of (["a", "b"] as const)) {
-    const side = sideOf(state, key);
+    const side = sideOf(c.state, key);
     if (side.safeguardTurnsRemaining === undefined) continue;
     const next = side.safeguardTurnsRemaining - 1;
     if (next <= 0) {
       side.safeguardTurnsRemaining = undefined;
-      expiredSafeguard.push(key);
+      c.expiredSafeguard.push(key);
     } else {
       side.safeguardTurnsRemaining = next;
     }
   }
 
   // 순풍(트랙 M1)도 같은 편 단위 카운트다운
-  const expiredTailwind: FighterKey[] = [];
+  c.expiredTailwind = [];
   for (const key of (["a", "b"] as const)) {
-    const side = sideOf(state, key);
+    const side = sideOf(c.state, key);
     if (side.tailwindTurnsRemaining === undefined) continue;
     const next = side.tailwindTurnsRemaining - 1;
     if (next <= 0) {
       side.tailwindTurnsRemaining = undefined;
-      expiredTailwind.push(key);
+      c.expiredTailwind.push(key);
     } else {
       side.tailwindTurnsRemaining = next;
     }
   }
+}
+
+/** 턴 결과를 모아 돌려준다 */
+function collectResult(c: FinishCtx) {
 
   return {
-    nextState: state,
+    nextState: c.state,
     result: {
-      turnNumber: state.turnNumber,
-      order,
-      actions,
-      endOfTurn,
-      winner,
-      field: state.field,
-      fieldTurnsRemaining: state.fieldTurnsRemaining,
-      fieldExpired,
-      trickRoomTurnsRemaining: state.trickRoomTurnsRemaining,
-      trickRoomExpired,
-      weatherTurnsRemaining: state.weatherTurnsRemaining,
-      weatherExpired,
-      expiredScreens,
-      expiredSafeguard,
-      expiredTailwind: expiredTailwind.length > 0 ? expiredTailwind : undefined,
-      expiredFieldEffects: expiredFieldEffects.length > 0 ? expiredFieldEffects : undefined,
-      expiredMagnetRise: expiredMagnetRise.length > 0 ? expiredMagnetRise : undefined,
-      turnStartAnnouncements,
-      switches,
-      activePokemonIds: { a: state.a.slot.pokemonId, b: state.b.slot.pokemonId },
+      turnNumber: c.state.turnNumber,
+      order: c.order,
+      actions: c.actions,
+      endOfTurn: c.endOfTurn,
+      winner: c.winner,
+      field: c.state.field,
+      fieldTurnsRemaining: c.state.fieldTurnsRemaining,
+      fieldExpired: c.fieldExpired,
+      trickRoomTurnsRemaining: c.state.trickRoomTurnsRemaining,
+      trickRoomExpired: c.trickRoomExpired,
+      weatherTurnsRemaining: c.state.weatherTurnsRemaining,
+      weatherExpired: c.weatherExpired,
+      expiredScreens: c.expiredScreens,
+      expiredSafeguard: c.expiredSafeguard,
+      expiredTailwind: c.expiredTailwind.length > 0 ? c.expiredTailwind : undefined,
+      expiredFieldEffects: c.expiredFieldEffects.length > 0 ? c.expiredFieldEffects : undefined,
+      expiredMagnetRise: c.expiredMagnetRise.length > 0 ? c.expiredMagnetRise : undefined,
+      turnStartAnnouncements: c.turnStartAnnouncements,
+      switches: c.switches,
+      activePokemonIds: { a: c.state.a.slot.pokemonId, b: c.state.b.slot.pokemonId },
     },
-    forcedSwitch,
+    forcedSwitch: c.forcedSwitch,
   };
+}
+
+export function finishTurn(ctx: RunTurnContext): RunTurnOutcome {
+  const c = {} as FinishCtx;
+
+  c.state = ctx.state;
+  c.order = ctx.order;
+  c.actions = ctx.actions;
+  c.switches = ctx.switches;
+  c.turnStartAnnouncements = ctx.turnStartAnnouncements;
+  c.selfDestructComboKey = ctx.selfDestructComboKey;
+  c.speedA = ctx.speedA;
+  c.speedB = ctx.speedB;
+  c.random = ctx.random;
+
+
+  // 분함의발구르기·열불내기(ver.1.9): 이번 턴 자기 행동이 실패였는지 기록 — 다음 턴 위력 2배 판정. 이번 턴 행동하지 않았으면
+  // (교체로 나옴·쓰러짐 등) 실패 아님. 턴 중 유턴류로 바뀐 경우 행동한 포켓몬이 아니므로 종 id로 맞춘다.
+  for (const key of ["a", "b"] as const) {
+    const fighter = c.state[key];
+    const own = c.actions.find((a) => a.actor === key && a.actorPokemonId === fighter.slot.pokemonId);
+    fighter.lastTurnMoveFailed = own && actionFailed(own) ? true : undefined;
+  }
+  resolveEndOfTurnAndPerish(c);
+  decideWinnerAndForcedSwitch(c);
+  expireFieldAndWeather(c);
+  expireSideEffects(c);
+  return collectResult(c);
 }
