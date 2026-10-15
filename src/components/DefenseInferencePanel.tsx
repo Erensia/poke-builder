@@ -23,6 +23,8 @@ import {
   multiHitRange,
   END_TURN_EFFECTS,
   TOXIC_ID,
+  endTurnSixteenths,
+  ITEM_END_TURN_IDS,
   type InferenceInput,
   type InferenceObservation,
   type BulkEstimate,
@@ -112,6 +114,22 @@ function parsePercent(text: string): number | null {
   if (!/^\d{1,3}$/.test(text.trim())) return null;
   const v = Number(text);
   return v >= 0 && v <= 100 ? v : null;
+}
+
+/**
+ * 다음 줄 "맞기 전 %"의 기본값(4.0 F2) — 맞은 뒤 %에 턴 종료 효과의 회복·피해(16분율 합 ÷ 16, 반올림)를 더한 예상치.
+ * 효과를 안 골랐거나 값이 비었으면 맞은 뒤 값 그대로. 실제 화면 %와 1쯤 어긋날 수 있어 직접 고칠 수 있다.
+ */
+function followValue(row: ObservationRow): string {
+  const after = parsePercent(row.after);
+  if (row.kind !== "dealt" || after === null) return row.after;
+  const sum = endTurnSixteenths(row.endTurn).reduce((a, b) => a + b, 0);
+  return sum === 0 ? row.after : String(Math.min(100, Math.max(0, after + Math.round((sum * 100) / 16))));
+}
+
+/** 줄을 바꾼 뒤, 다음 줄(같은 종류)의 "맞기 전 값"이 직접 안 고친 값(옛 기본값)이었으면 새 기본값으로 따라가게 한다 */
+function followRows(prev: ObservationRow[], next: ObservationRow[]): ObservationRow[] {
+  return next.map((r, i) => (i > 0 && r.kind === next[i - 1].kind && prev[i].before === followValue(prev[i - 1]) ? { ...r, before: followValue(next[i - 1]) } : r));
 }
 
 /** 이 종(폼 변종 포함)이 가질 수 있는 특성 중 후보 목록(방어·공격 영향 특성)에 드는 것 */
@@ -745,15 +763,12 @@ export function DefenseInferencePanel({
     setRows((prev) => {
       const index = prev.findIndex((r) => r.id === id);
       if (index < 0) return prev;
-      const oldAfter = prev[index].after;
       const next = prev.map((r) => (r.id === id ? { ...r, ...patch } : r));
       // 메가진화는 되돌릴 수 없다(3.1 L1-a): 이 줄을 메가 후로 고르면 뒤의 모든 줄도 같은 메가 후 폼으로 맞춘다
       if (patch.megaForm) for (let j = index + 1; j < next.length; j++) next[j] = { ...next[j], megaForm: patch.megaForm };
-      // 다음 줄(같은 종류)의 "맞기 전 값"이 이 줄의 옛 "맞은 뒤 값"과 같았으면(직접 안 고친 값) 같이 따라간다
-      if (patch.after !== undefined && index + 1 < next.length && next[index + 1].kind === next[index].kind && next[index + 1].before === oldAfter) {
-        next[index + 1] = { ...next[index + 1], before: patch.after };
-      }
-      return next;
+      // 메가스톤을 들고 있으니 도구 효과(먹다남은음식·자뭉열매)는 모든 줄에서 끈다
+      if (patch.megaForm) for (let j = 0; j < next.length; j++) next[j] = { ...next[j], endTurn: next[j].endTurn.filter((id) => !ITEM_END_TURN_IDS.includes(id)) };
+      return patch.after !== undefined || patch.endTurn !== undefined || patch.megaForm ? followRows(prev, next) : next;
     });
   }
 
@@ -771,7 +786,7 @@ export function DefenseInferencePanel({
         moveId: null,
         critical: false,
         hits: "",
-        before: last?.kind === "speed" ? "" : (last?.after ?? "100"),
+        before: last?.kind === "speed" ? "" : last ? followValue(last) : "100",
         after: "",
         endTurn: [],
         megaForm: last ? megaOf(last, megas) : "",
@@ -1222,6 +1237,8 @@ export function DefenseInferencePanel({
             // 앞 줄 중 메가 후인 줄이 있으면 그 폼(메가진화는 되돌릴 수 없다 — 3.1 L1-a)
             const lockedMega = rows.slice(0, index).map((r) => megaOf(r, megas)).find(Boolean) ?? "";
             const pickerOwner = received ? defenderPokemon : attackerPokemon;
+            const hasNext = index < rows.length - 1;
+            const itemLocked = rows.some((r) => megaOf(r, megas));
             const toxicTurn = Number(row.endTurn.find((x) => TOXIC_ID.test(x))?.slice(5) ?? 0);
             return (
               <li key={row.id} className="dinf-row">
@@ -1315,24 +1332,36 @@ export function DefenseInferencePanel({
                     ✕
                   </button>
                 )}
-                {!speed && !received && index < rows.length - 1 && (
+                {!speed && !received && (
                   <div className="dinf-endturn">
-                    <span className="dinf-endturn-title">턴 종료 효과</span>
-                    {END_TURN_EFFECTS.map((e) => (
-                      <label key={e.id}>
+                    <span className="dinf-endturn-title">{hasNext ? "턴 종료 효과" : "맞은 직후 효과"}</span>
+                    {END_TURN_EFFECTS.filter((e) => hasNext || e.id === "sitrus").map((e) => (
+                      <label
+                        key={e.id}
+                        title={
+                          itemLocked && ITEM_END_TURN_IDS.includes(e.id)
+                            ? "메가진화하는 포켓몬은 메가스톤을 들고 있어 도구 효과를 쓸 수 없어요"
+                            : e.id === "sitrus"
+                              ? "상대가 맞은 직후 자뭉열매를 먹었을 때 켜세요 — 화면의 맞은 뒤 %에 회복(최대 HP의 1/4)이 이미 섞여 있어요"
+                              : undefined
+                        }
+                      >
                         <input
                           type="checkbox"
+                          disabled={itemLocked && ITEM_END_TURN_IDS.includes(e.id)}
                           checked={row.endTurn.includes(e.id)}
                           onChange={(ev) => updateRow(row.id, { endTurn: ev.target.checked ? [...row.endTurn, e.id] : row.endTurn.filter((x) => x !== e.id) })}
                         />
                         {e.label}
                       </label>
                     ))}
+                    {hasNext && (
                     <label>
                       <input type="checkbox" checked={toxicTurn > 0} onChange={(ev) => setToxicTurn(row, ev.target.checked ? 1 : 0)} />
                       맹독
                     </label>
-                    {toxicTurn > 0 && (
+                    )}
+                    {hasNext && toxicTurn > 0 && (
                       <span className="dinf-stepper">
                         <button type="button" aria-label={`관측 ${index + 1} 맹독 경과 턴 줄이기`} onClick={() => setToxicTurn(row, Math.max(1, toxicTurn - 1))}>
                           −
@@ -1370,7 +1399,8 @@ export function DefenseInferencePanel({
           입력 지우기
         </button>
         <p className="dinf-note">
-          내가 입힌 데미지는 관측 사이에 상대가 HP를 회복하지 않았다고 가정해요. 내가 받은 데미지는 맞은 직후 내 HP 수치를 넣어 주세요(먹다남은음식·독 같은 턴 종료 효과가
+          내가 입힌 데미지는 턴 종료 효과를 고르지 않으면 관측 사이에 상대가 HP를 회복하지 않았다고 가정해요 — 효과를 고르면 다음 줄 “맞기 전 %”가 예상값으로 채워지니 화면과 다르면 직접 고쳐 주세요.
+          상대가 맞은 직후 자뭉열매를 먹었으면 그 줄에서 “자뭉열매 발동”을 켜세요(화면 %에 회복이 섞여 있어요). 내가 받은 데미지는 맞은 직후 내 HP 수치를 넣어 주세요(먹다남은음식·독 같은 턴 종료 효과가
           섞이면 맞지 않아요){myMaxHp !== null && hasReceivedRows ? ` — 내 최대 HP는 ${myMaxHp}예요` : ""}. 다단히트·고정 데미지 기술은 아직 지원하지 않아요.
           선후공은 우선도가 같은 기술끼리 누가 먼저 움직였는지만 넣고, 그 턴의 조건(트릭룸·순풍·마비·상대 랭크 등)은 줄의 “조건”에서 골라 주세요. 새 줄은 직전 선후공 줄의 조건을 이어받아요.
         </p>

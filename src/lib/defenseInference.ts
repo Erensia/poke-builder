@@ -42,7 +42,15 @@ export const END_TURN_EFFECTS = [
   { id: "leechSeed", label: "씨뿌리기", sixteenths: -2 },
   { id: "burn", label: "화상", sixteenths: -1 },
   { id: "sandstorm", label: "모래바람", sixteenths: -1 },
+  // 자뭉열매는 턴 종료 효과가 아니라 맞은 직후 먹는다 — 화면의 "맞은 뒤 %"에 회복이 이미 섞여 있다는 표시(4.0 F2). 16분율 값은 쓰지 않는다
+  { id: "sitrus", label: "자뭉열매 발동", sixteenths: 0 },
 ] as const;
+
+/** 도구가 있어야 일어나는 효과 — 메가진화하는 포켓몬은 메가스톤을 들고 있어 쓸 수 없다 */
+export const ITEM_END_TURN_IDS: readonly string[] = ["leftovers", "sitrus"];
+
+/** 자뭉열매: 맞은 뒤 HP가 최대 HP 1/2 이하면 1회 최대 HP ÷ 이 값만큼 회복(숙성이면 2배) */
+const SITRUS_DENOMINATOR = ITEMS.find((i) => i.id === "자뭉열매")?.healsBelowHalfHpDenominator ?? 4;
 
 /** 맹독은 경과 턴 n에 따라 n/16 — id를 `toxic<n>`(1~15)으로 쓴다 */
 export const TOXIC_ID = /^toxic([1-9]|1[0-5])$/;
@@ -352,15 +360,17 @@ interface PreparedObservation {
   after: number;
   /** 턴 종료 효과의 16분율(부호 있음) 목록 */
   endTurn: number[];
+  /** 자뭉열매를 맞은 직후 먹은 관측이면 회복 배수(1, 숙성 2). 아니면 0 */
+  berry: number;
   /** 이 관측 시점 폼의 방어·특방 종족값 */
   baseDef: number;
   baseSpd: number;
 }
 
-function endTurnSixteenths(ids: readonly string[] | undefined): number[] {
+export function endTurnSixteenths(ids: readonly string[] | undefined): number[] {
   return (ids ?? []).flatMap((id) => {
     const toxic = TOXIC_ID.exec(id);
-    return toxic ? -Number(toxic[1]) : (END_TURN_EFFECTS.find((e) => e.id === id)?.sixteenths ?? []);
+    return toxic ? -Number(toxic[1]) : (END_TURN_EFFECTS.find((e) => e.id === id)?.sixteenths || []);
   });
 }
 
@@ -379,6 +389,7 @@ function prepareObservations(input: InferenceInput): { prepared: PreparedObserva
   const prepared: PreparedObservation[] = [];
   const errors: (string | null)[] = [];
   let itemConsumed = false;
+  let berryEaten = false;
   observations.forEach((obs, i) => {
     const unsupported = inferenceUnsupportedReason(obs.move);
     if (unsupported) {
@@ -395,10 +406,18 @@ function prepareObservations(input: InferenceInput): { prepared: PreparedObserva
       errors.push("%는 0~100 사이 정수여야 해요");
       return;
     }
-    if (obs.after > obs.before) {
+    // 메가 전·후를 섞은 관측이면 메가스톤을 들었으므로 도구 효과(먹다남은음식·자뭉열매)는 무시한다
+    const endTurn = hasMega ? obs.endTurn?.filter((id) => !ITEM_END_TURN_IDS.includes(id)) : obs.endTurn;
+    const berry = endTurn?.includes("sitrus") ? (getAbility(slotAtHit.ability ?? "")?.doublesBerryEffect ? 2 : 1) : 0;
+    if (berry && berryEaten) {
+      errors.push("자뭉열매는 한 번만 먹을 수 있어요");
+      return;
+    }
+    if (obs.after > obs.before && !berry) {
       errors.push("맞은 뒤 %가 맞기 전 %보다 클 수 없어요");
       return;
     }
+    if (berry) berryEaten = true;
     const hitsError = multiHitError(obs.move, obs.hits);
     if (hitsError) {
       errors.push(hitsError);
@@ -444,7 +463,7 @@ function prepareObservations(input: InferenceInput): { prepared: PreparedObserva
     if (res.berryBulkMultiplier > 1) itemConsumed = true;
     errors.push(null);
     const { baseStats } = getEffectiveForm(pokemon!, slotAtHit);
-    prepared.push({ parts: res.damageParts, before: obs.before, after: obs.after, endTurn: endTurnSixteenths(obs.endTurn), baseDef: baseStats.def, baseSpd: baseStats.spd });
+    prepared.push({ parts: res.damageParts, before: obs.before, after: obs.after, endTurn: endTurnSixteenths(endTurn), berry, baseDef: baseStats.def, baseSpd: baseStats.spd });
   });
   return { prepared, errors };
 }
@@ -470,6 +489,11 @@ function percentTable(maxHp: number): Uint8Array {
   let table = percentTables.get(maxHp);
   if (!table) percentTables.set(maxHp, (table = Uint8Array.from({ length: maxHp + 1 }, (_, h) => displayPercent(h, maxHp))));
   return table;
+}
+
+/** 자뭉열매를 먹은 줄 — 맞은 뒤 HP가 1/2 이하일 때만 가능(아니면 -1)하고, 화면 %는 회복한 뒤의 HP로 만든다 */
+function eatSitrus(hpHit: number, maxHp: number, mult: number): number {
+  return hpHit === 0 || hpHit * 2 > maxHp ? -1 : Math.min(maxHp, hpHit + Math.floor(maxHp / SITRUS_DENOMINATOR) * mult);
 }
 
 /**
@@ -498,7 +522,7 @@ function candidateLikelihood(maxHp: number, rolls: RollSet[], obs: PreparedObser
     }
     const { values, probs } = rolls[i];
     const equal = 1 / values.length;
-    const { after, endTurn } = obs[i];
+    const { after, endTurn, berry } = obs[i];
     // 턴 종료 효과는 후보 최대 HP로 정해지는 상수 — 맞은 뒤 %를 판정한 다음 HP에 더해 이어 간다
     let delta = 0;
     for (const k of endTurn) delta += Math.sign(k) * Math.floor((maxHp * Math.abs(k)) / 16);
@@ -508,8 +532,8 @@ function candidateLikelihood(maxHp: number, rolls: RollSet[], obs: PreparedObser
       const h = curList[j];
       const w = curW[h];
       for (let k = 0; k < values.length; k++) {
-        const h2 = Math.max(0, h - values[k]);
-        if (Math.abs(pct[h2] - after) > tol) continue;
+        const h2 = berry ? eatSitrus(Math.max(0, h - values[k]), maxHp, berry) : Math.max(0, h - values[k]);
+        if (h2 < 0 || Math.abs(pct[h2] - after) > tol) continue;
         const add = w * (probs ? probs[k] : equal);
         const h3 = h2 > 0 ? Math.min(maxHp, Math.max(0, h2 + delta)) : 0;
         if (nextSeen[h3] === seenStamp) nextW[h3] += add;
@@ -673,7 +697,9 @@ function runCandidates(input: InferenceInput, prepared: PreparedObservation[], d
     for (let i = 0; i < n; i++) {
       const o = prepared[i];
       const stat = o.parts.defenseKey === "def" ? realStat(combo.defMult, o.baseDef, defP) : realStat(combo.spdMult, o.baseSpd, spdP);
-      gap += Math.abs((centerOf(i, stat) * 100) / maxHp - observedLoss[i]);
+      // 열매를 먹은 줄은 화면 %에 회복이 섞여 있어 그만큼 더한 값이 실제 손실이다
+      const loss = observedLoss[i] + (o.berry ? (Math.floor(maxHp / SITRUS_DENOMINATOR) * o.berry * 100) / maxHp : 0);
+      gap += Math.abs((centerOf(i, stat) * 100) / maxHp - loss);
     }
     return gap;
   };
