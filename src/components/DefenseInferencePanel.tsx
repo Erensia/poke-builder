@@ -568,7 +568,7 @@ function SpeedConditionsEditor({
       <summary>조건{active.length > 0 ? ` · ${active.join(", ")}` : " (기본)"}</summary>
       <div className="dinf-speed-checks">
         {checks.map(([key, label]) => (
-          <label key={key} className="dinf-crit">
+          <label key={key} className="toggle-pill">
             <input type="checkbox" checked={cond[key] as boolean} onChange={(e) => onChange({ [key]: e.target.checked })} />
             {label}
           </label>
@@ -615,13 +615,13 @@ function SpeedConditionsEditor({
       {(myQuickFeet || (cond.oppAbilityId === "속보" && !megaRow)) && (
         <div className="dinf-speed-checks">
           {myQuickFeet && (
-            <label className="dinf-crit">
+            <label className="toggle-pill">
               <input type="checkbox" checked={cond.myOtherStatus} onChange={(e) => onChange({ myOtherStatus: e.target.checked })} />
               내 상태이상 (속보 ×1.5)
             </label>
           )}
           {cond.oppAbilityId === "속보" && !megaRow && (
-            <label className="dinf-crit">
+            <label className="toggle-pill">
               <input type="checkbox" checked={cond.oppOtherStatus} onChange={(e) => onChange({ oppOtherStatus: e.target.checked })} />
               상대 상태이상 (속보 ×1.5)
             </label>
@@ -629,7 +629,7 @@ function SpeedConditionsEditor({
         </div>
       )}
       {cond.oppAbilityId === "곡예" && !megaRow && (
-        <label className="dinf-check">
+        <label className="toggle-pill">
           <input type="checkbox" checked={cond.oppUnburden} onChange={(e) => onChange({ oppUnburden: e.target.checked })} />
           <span>곡예 발동 후 (도구를 잃어 상대 스피드 ×2)</span>
         </label>
@@ -1121,7 +1121,7 @@ function ObservationsSection({ s }: { s: ReturnType<typeof useDefenseInferenceSt
                       />
                       <span>{received ? "HP" : "%"}</span>
                     </span>
-                    <label className="dinf-crit">
+                    <label className="toggle-pill">
                       <input type="checkbox" checked={row.critical} onChange={(e) => updateRow(row.id, { critical: e.target.checked })} />
                       급소
                     </label>
@@ -1138,6 +1138,7 @@ function ObservationsSection({ s }: { s: ReturnType<typeof useDefenseInferenceSt
                     <span className="dinf-endturn-title">{hasNext ? "턴 종료 효과" : "맞은 직후 효과"}</span>
                     {END_TURN_EFFECTS.filter((e) => hasNext || e.id === "sitrus").map((e) => (
                       <label
+                        className="toggle-pill"
                         key={e.id}
                         title={
                           itemLocked && ITEM_END_TURN_IDS.includes(e.id)
@@ -1157,7 +1158,7 @@ function ObservationsSection({ s }: { s: ReturnType<typeof useDefenseInferenceSt
                       </label>
                     ))}
                     {hasNext && (
-                    <label>
+                    <label className="toggle-pill">
                       <input type="checkbox" checked={toxicTurn > 0} onChange={(ev) => setToxicTurn(row, ev.target.checked ? 1 : 0)} />
                       맹독
                     </label>
@@ -1263,7 +1264,7 @@ function AssumptionsSection({ s }: { s: ReturnType<typeof useDefenseInferenceSta
             </select>
           </label>
         </div>
-        <label className="dinf-check">
+        <label className="toggle-pill">
           <input type="checkbox" checked={tolerant} onChange={(e) => setTolerant(e.target.checked)} />
           <span>여유 있게 보기 (화면 %를 ±1%까지 허용 — 게임의 % 표시 방식이 다를 때 대비)</span>
         </label>
@@ -1316,7 +1317,7 @@ function AssumptionsSection({ s }: { s: ReturnType<typeof useDefenseInferenceSta
                 </select>
               </label>
             </div>
-            <label className="dinf-check">
+            <label className="toggle-pill">
               <input type="checkbox" checked={oppBurned} onChange={(e) => setOppBurned(e.target.checked)} />
               <span>상대가 화상 (물리 공격 반감 — 근성·객기는 예외)</span>
             </label>

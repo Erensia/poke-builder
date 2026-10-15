@@ -113,18 +113,7 @@
 
 /* 배틀 AI: 상대 편을 컴퓨터가 조작할지 */
 .battle-ai-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
   margin-left: auto;
-  font-size: 0.72rem;
-  font-weight: 600;
-  padding: 0.2rem 0.55rem;
-  border: 1px solid var(--violet);
-  border-radius: 6px;
-  background: var(--violet-soft);
-  color: var(--text);
-  cursor: pointer;
 }
 
 /* ver.2.0 1-C: AI 학습 칩(상대 파티 제목 줄) — "AI가 조작"과 같은 알약형 */
@@ -152,10 +141,6 @@
   margin: 0.35rem 0 0;
   font-size: 0.75rem;
   color: var(--text-muted);
-}
-
-.battle-ai-toggle input {
-  cursor: pointer;
 }
 
 .battle-setup-load-party {
@@ -949,23 +934,9 @@
 
 /* §4: 메가진화 선언 토글 */
 .battle-mega-toggle {
-  display: flex;
-  align-items: center;
   gap: 0.4rem;
-  margin-bottom: 0.5rem;
-  padding: 0.35rem 0.55rem;
-  border: 1px solid var(--violet);
-  border-radius: 8px;
-  background: var(--violet-soft);
-  font-size: 0.8rem;
-  font-weight: 700;
-  color: var(--violet);
-  cursor: pointer;
+  margin: 0 auto 0.5rem;
   user-select: none;
-}
-
-.battle-mega-toggle input {
-  cursor: pointer;
 }
 
 .battle-mega-toggle-icon {

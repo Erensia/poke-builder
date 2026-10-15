@@ -138,16 +138,6 @@
   border-top: 1px solid rgba(127, 127, 127, 0.18);
 }
 
-.ai-memory-switch {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: var(--text);
-  cursor: pointer;
-}
-
 .ai-memory-confirm {
   display: inline-flex;
   flex-wrap: wrap;

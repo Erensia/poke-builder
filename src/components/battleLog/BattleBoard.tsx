@@ -577,7 +577,7 @@ export function BattleBoard({
                     fighter.megaStone &&
                     !battleSide(side)?.megaUsed &&
                     !fighter.hasMegaEvolved && (
-                      <label className="battle-mega-toggle">
+                      <label className="toggle-pill battle-mega-toggle">
                         <input
                           type="checkbox"
                           checked={megaDeclared[side]}

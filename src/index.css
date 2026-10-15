@@ -247,3 +247,53 @@ button {
   outline: 2px solid var(--violet);
   outline-offset: 2px;
 }
+
+/* 켜고 끄는 체크박스는 전부 알약 토글로(4.0 D2) — 체크박스는 투명하게 겹쳐 키보드·스크린리더 동작을 유지한다. matchup-hitcount-pip과 같은 토큰 */
+.toggle-pill {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: fit-content;
+  max-width: 100%;
+  padding: 0.2rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font-size: 0.76rem;
+  font-weight: 600;
+  line-height: 1.35;
+  cursor: pointer;
+}
+
+.toggle-pill:hover {
+  border-color: var(--violet);
+  color: var(--violet);
+}
+
+.toggle-pill:has(input:checked) {
+  border-color: var(--violet);
+  background: var(--violet-soft);
+  color: var(--violet);
+}
+
+.toggle-pill:has(input:disabled) {
+  opacity: 0.5;
+  cursor: not-allowed;
+  border-color: var(--border);
+  background: var(--surface-2);
+  color: var(--text-muted);
+}
+
+.toggle-pill:has(input:focus-visible) {
+  outline: 2px solid var(--violet);
+  outline-offset: 1px;
+}
+
+.toggle-pill input {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  opacity: 0;
+  cursor: inherit;
+}

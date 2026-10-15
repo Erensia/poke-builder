@@ -185,24 +185,6 @@
 }
 
 /* 체크박스는 전부 알약 토글로 — matchup-hitcount-pip과 같은 토큰(4.0 F1). 체크박스는 투명하게 겹쳐 키보드·스크린리더 동작을 유지한다 */
-.dinf-crit,
-.dinf-check,
-.dinf-endturn label {
-  position: relative;
-  display: flex;
-  align-items: center;
-  width: fit-content;
-  max-width: 100%;
-  padding: 0.2rem 0.55rem;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--surface-2);
-  color: var(--text-muted);
-  font-size: 0.76rem;
-  font-weight: 600;
-  line-height: 1.35;
-  cursor: pointer;
-}
 
 .dinf-stepper {
   display: inline-flex;
@@ -233,46 +215,6 @@
 
 .dinf-stepper button:hover {
   background: var(--surface-2);
-}
-
-.dinf-crit:hover,
-.dinf-check:hover,
-.dinf-endturn label:hover {
-  border-color: var(--violet);
-  color: var(--violet);
-}
-
-.dinf-crit:has(input:checked),
-.dinf-check:has(input:checked),
-.dinf-endturn label:has(input:checked) {
-  border-color: var(--violet);
-  background: var(--violet-soft);
-  color: var(--violet);
-}
-
-.dinf-endturn label:has(input:disabled) {
-  opacity: 0.5;
-  cursor: not-allowed;
-  border-color: var(--border);
-  background: var(--surface-2);
-  color: var(--text-muted);
-}
-
-.dinf-crit:has(input:focus-visible),
-.dinf-check:has(input:focus-visible),
-.dinf-endturn label:has(input:focus-visible) {
-  outline: 2px solid var(--violet);
-  outline-offset: 1px;
-}
-
-.dinf-crit input,
-.dinf-check input,
-.dinf-endturn label input {
-  position: absolute;
-  inset: 0;
-  margin: 0;
-  opacity: 0;
-  cursor: pointer;
 }
 
 .dinf-percent-pair {

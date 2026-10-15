@@ -132,7 +132,7 @@ export function BattleSetupScreen({
               {side === "a" ? "내 파티" : "상대 파티"}{" "}
               <span className="battle-setup-column-hint">6마리까지 빌드 · 4마리 이상이면 3마리 선출</span>
               {side === "b" && (
-                <label className="battle-ai-toggle">
+                <label className="toggle-pill battle-ai-toggle">
                   <input
                     type="checkbox"
                     checked={aiOpponent}

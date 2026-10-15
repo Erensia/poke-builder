@@ -34,7 +34,6 @@ const POWER_CONDITION_TOGGLES: { key: PowerConditionKey; label: string; relevant
 
 /** ver.1.9 상태이상 가정 선택지 */
 const STATUS_OPTIONS: readonly { value: StatusCondition | null; label: string }[] = [
-  { value: null, label: "없음" },
   { value: "burn", label: "화상" },
   { value: "poison", label: "독" },
   { value: "badly-poisoned", label: "맹독" },
@@ -372,74 +371,38 @@ export function MatchupSlotCard({
         )}
       </div>
 
-      {/* Phase 6.5 §1 — "이전 턴 가정" 토글. 켜기 전까지는 지금까지와 동일한 계산 */}
+      {/* 가정 토글 — 상태이상 → 도구 강탈·곡예·급소 한 줄. 켜기 전까지는 지금까지와 동일한 계산 */}
       <div className="matchup-assume-section">
-        {!hideTurnAssumptions && (
-          <>
-        <label className="matchup-assume-toggle">
-          <input
-            type="checkbox"
-            checked={!!slot.itemStolenFromOpponent}
-            onChange={(e) => onToggleItemStolen(e.target.checked)}
-          />
-          <span>상대 도구 강탈 가정</span>
-        </label>
-        <label className="matchup-assume-toggle">
-          <input
-            type="checkbox"
-            checked={!!slot.unburdenAssumed}
-            onChange={(e) => onToggleUnburden(e.target.checked)}
-          />
-          <span>곡예 발동(스피드 2배) 가정</span>
-        </label>
-          </>
-        )}
-        <PillRow label="상태이상" rowClass="matchup-status-row" options={STATUS_OPTIONS} value={slot.statusAssumed ?? null} onChange={onSetStatus} />
+        <PillRow ariaLabel="상태이상" rowClass="matchup-status-row" options={STATUS_OPTIONS} value={slot.statusAssumed ?? null} onChange={(v) => onSetStatus(v === (slot.statusAssumed ?? null) ? null : v)} />
         {statusExtra}
-        {role === "attacker" && onToggleCrit && (
-          <label className="matchup-assume-toggle">
-            <input type="checkbox" checked={!!slot.critAssumed} onChange={(e) => onToggleCrit(e.target.checked)} />
-            <span>{critBlocked ? "급소 가정 — 상대 특성으로 급소에 맞지 않음" : "급소 가정"}</span>
-          </label>
-        )}
-        {role === "attacker" &&
-          onSetPowerCondition &&
-          powerConditions.map((t) => (
-            <label key={t.key} className="matchup-assume-toggle">
-              <input type="checkbox" checked={!!slot[t.key]} onChange={(e) => onSetPowerCondition(t.key, e.target.checked)} />
-              <span>{t.label}</span>
+        {(!hideTurnAssumptions || (role === "attacker" && onToggleCrit)) && (
+          <div className="matchup-toggle-row">
+            {!hideTurnAssumptions && (
+              <>
+                <label className="toggle-pill" title="상대 도구를 빼앗은 것으로 계산(매지션·곡예)">
+                  <input
+                    type="checkbox"
+                    checked={!!slot.itemStolenFromOpponent}
+                    onChange={(e) => onToggleItemStolen(e.target.checked)}
+                  />
+                  <span>도구 강탈</span>
+                </label>
+                <label className="toggle-pill" title="곡예 발동 후라고 가정 — 스피드 2배">
+                  <input
+                    type="checkbox"
+                    checked={!!slot.unburdenAssumed}
+                    onChange={(e) => onToggleUnburden(e.target.checked)}
+                  />
+                  <span>곡예 발동</span>
+                </label>
+              </>
+            )}
+          {role === "attacker" && onToggleCrit && (
+            <label className="toggle-pill" title={critBlocked ? "상대 특성으로 급소에 맞지 않음" : "급소에 맞았다고 가정"}>
+              <input type="checkbox" checked={!!slot.critAssumed} onChange={(e) => onToggleCrit(e.target.checked)} />
+              <span>{critBlocked ? "급소 (무효)" : "급소"}</span>
             </label>
-          ))}
-        {role === "attacker" && ability?.changesUserTypeToMoveType && onToggleTypeShift && (
-          <label className="matchup-assume-toggle">
-            <input type="checkbox" checked={!!slot.typeShiftAssumed} onChange={(e) => onToggleTypeShift(e.target.checked)} />
-            <span>리베로•변환자재 자속보정</span>
-          </label>
-        )}
-        {role === "attacker" && pinchRelevant && onTogglePinch && (
-          <label className="matchup-assume-toggle">
-            <input type="checkbox" checked={!!slot.pinchAssumed} onChange={(e) => onTogglePinch(e.target.checked)} />
-            <span>HP 1/3 이하 가정</span>
-          </label>
-        )}
-        {role === "defender" && fullHpRelevant && onToggleFullHp && (
-          <label className="matchup-assume-toggle">
-            <input type="checkbox" checked={slot.fullHpAssumed ?? true} onChange={(e) => onToggleFullHp(e.target.checked)} />
-            <span>HP 가득 가정({ability?.name} 발동)</span>
-          </label>
-        )}
-        {role === "attacker" && hpPowerRelevant && onSetHpPercent && (
-          <div className="matchup-assume-grave">
-            <span className="matchup-assume-grave-label">현재 HP {slot.hpPercent ?? 100}%</span>
-            <input
-              type="range"
-              className="matchup-hp-slider"
-              min={1}
-              max={100}
-              value={slot.hpPercent ?? 100}
-              onChange={(e) => onSetHpPercent(Number(e.target.value))}
-              aria-label="현재 HP 퍼센트"
-            />
+          )}
           </div>
         )}
         {slot.itemStolenFromOpponent && (
@@ -448,12 +411,6 @@ export function MatchupSlotCard({
               ? "이 슬롯의 도구는 무시하고 상대 도구를 가져온 것으로 계산합니다(강탈은 무도구 상태에서 성립)."
               : "상대 도구를 가져온 것으로, 상대는 무도구로 계산합니다."}
           </p>
-        )}
-        {role === "attacker" && moveIsGraveVisit && onSetGraveVisit && (
-          <PillRow label="쓰러진 동료" options={([0, 1, 2] as const).map((n) => ({ value: n, label: `${n}마리` }))} value={slot.graveVisitFaintedAllies ?? 0} onChange={onSetGraveVisit} />
-        )}
-        {role === "attacker" && moveIsSpitUp && onSetStockpileCount && (
-          <PillRow label="비축 스택" options={([1, 2, 3] as const).map((n) => ({ value: n, label: `×${n}` }))} value={stockpileCount ?? 3} onChange={onSetStockpileCount} />
         )}
       </div>
 
@@ -505,6 +462,56 @@ export function MatchupSlotCard({
             )}
         </div>
       )}
+
+      {/* 선택한 기술에 따라 나타나는 가정 */}
+      <div className="matchup-assume-section">
+        {role === "attacker" &&
+          onSetPowerCondition &&
+          powerConditions.map((t) => (
+            <label key={t.key} className="toggle-pill">
+              <input type="checkbox" checked={!!slot[t.key]} onChange={(e) => onSetPowerCondition(t.key, e.target.checked)} />
+              <span>{t.label}</span>
+            </label>
+          ))}
+        {role === "attacker" && ability?.changesUserTypeToMoveType && onToggleTypeShift && (
+          <label className="toggle-pill">
+            <input type="checkbox" checked={!!slot.typeShiftAssumed} onChange={(e) => onToggleTypeShift(e.target.checked)} />
+            <span>리베로•변환자재 자속보정</span>
+          </label>
+        )}
+        {role === "attacker" && pinchRelevant && onTogglePinch && (
+          <label className="toggle-pill">
+            <input type="checkbox" checked={!!slot.pinchAssumed} onChange={(e) => onTogglePinch(e.target.checked)} />
+            <span>HP 1/3 이하 가정</span>
+          </label>
+        )}
+        {role === "defender" && fullHpRelevant && onToggleFullHp && (
+          <label className="toggle-pill">
+            <input type="checkbox" checked={slot.fullHpAssumed ?? true} onChange={(e) => onToggleFullHp(e.target.checked)} />
+            <span>HP 가득 가정({ability?.name} 발동)</span>
+          </label>
+        )}
+        {role === "attacker" && hpPowerRelevant && onSetHpPercent && (
+          <div className="matchup-assume-grave">
+            <span className="matchup-assume-grave-label">현재 HP {slot.hpPercent ?? 100}%</span>
+            <input
+              type="range"
+              className="matchup-hp-slider"
+              min={1}
+              max={100}
+              value={slot.hpPercent ?? 100}
+              onChange={(e) => onSetHpPercent(Number(e.target.value))}
+              aria-label="현재 HP 퍼센트"
+            />
+          </div>
+        )}
+        {role === "attacker" && moveIsGraveVisit && onSetGraveVisit && (
+          <PillRow label="쓰러진 동료" options={([0, 1, 2] as const).map((n) => ({ value: n, label: `${n}마리` }))} value={slot.graveVisitFaintedAllies ?? 0} onChange={onSetGraveVisit} />
+        )}
+        {role === "attacker" && moveIsSpitUp && onSetStockpileCount && (
+          <PillRow label="비축 스택" options={([1, 2, 3] as const).map((n) => ({ value: n, label: `×${n}` }))} value={stockpileCount ?? 3} onChange={onSetStockpileCount} />
+        )}
+      </div>
 
       {role === "defender" && bulkPhysical !== undefined && bulkSpecial !== undefined && (
         <div className="matchup-move-section">

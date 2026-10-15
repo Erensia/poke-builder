@@ -371,21 +371,6 @@
   border-top: 1px dashed var(--border);
 }
 
-.matchup-assume-toggle {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-size: 0.72rem;
-  color: var(--text-muted);
-  cursor: pointer;
-}
-
-.matchup-assume-toggle input {
-  cursor: pointer;
-  accent-color: var(--violet);
-  margin: 0;
-}
-
 .matchup-assume-hint {
   margin: 0;
   font-size: 0.72rem;
@@ -421,4 +406,11 @@
 .matchup-hp-slider {
   width: 100%;
   accent-color: var(--violet);
+}
+
+/* 도구 강탈·곡예·급소 가정 토글을 한 줄에(4.0 D2) */
+.matchup-toggle-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
 }
