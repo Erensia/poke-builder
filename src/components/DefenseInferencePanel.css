@@ -120,21 +120,6 @@
   padding: 0.35rem 0.5rem;
 }
 
-.dinf-check {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.45rem;
-  font-size: 0.76rem;
-  color: var(--text);
-  cursor: pointer;
-}
-
-.dinf-check input,
-.dinf-crit input {
-  accent-color: var(--violet);
-  margin-top: 0.15rem;
-}
-
 .dinf-note {
   margin: 0.55rem 0 0;
   font-size: 0.7rem;
@@ -152,13 +137,33 @@
 }
 
 .dinf-row {
+  position: relative;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.45rem 0.7rem;
-  padding: 0.5rem 0.6rem;
+  gap: 0.45rem 0.55rem;
+  padding: 0.5rem 2.2rem 0.5rem 0.6rem;
   border-radius: 10px;
   background: var(--surface-2);
+}
+
+/* 행 안 컨트롤은 높이를 맞춘다 — 네이티브 select가 버튼·입력칸보다 커 보이던 문제(4.0 F1) */
+.dinf-row select,
+.dinf-row .dinf-move-btn,
+.dinf-row .dinf-percent {
+  box-sizing: border-box;
+  height: 2rem;
+}
+
+/* 높이를 고정했으므로 위아래 여백은 빼야 글자 아래가 잘리지 않는다 — select는 글자를 세로 가운데에 맞춘다 */
+.dinf-row select {
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+/* 타수·메가 선택 묶음 — PC는 행에 그대로 섞이고, 모바일은 있을 때만 자기 줄을 쓴다 */
+.dinf-row-opts {
+  display: contents;
 }
 
 .dinf-row-no {
@@ -169,7 +174,7 @@
 }
 
 .dinf-move-btn {
-  min-width: 7.5rem;
+  min-width: 6rem;
   text-align: left;
   cursor: pointer;
 }
@@ -179,11 +184,86 @@
   cursor: not-allowed;
 }
 
-.dinf-crit {
+/* 체크박스는 전부 알약 토글로 — matchup-hitcount-pip과 같은 토큰(4.0 F1). 체크박스는 투명하게 겹쳐 키보드·스크린리더 동작을 유지한다 */
+.dinf-crit,
+.dinf-check,
+.dinf-endturn label {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 0.3rem;
+  width: fit-content;
+  max-width: 100%;
+  padding: 0.2rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-2);
+  color: var(--text-muted);
   font-size: 0.76rem;
+  font-weight: 600;
+  line-height: 1.35;
+  cursor: pointer;
+}
+
+.dinf-stepper {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--violet);
+  border-radius: 6px;
+  background: var(--violet-soft);
+  color: var(--violet);
+  font-size: 0.76rem;
+  font-weight: 600;
+  overflow: hidden;
+}
+
+.dinf-stepper span {
+  padding: 0.2rem 0.3rem;
+  min-width: 3.2rem;
+  text-align: center;
+}
+
+.dinf-stepper button {
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  padding: 0.2rem 0.55rem;
+  cursor: pointer;
+}
+
+.dinf-stepper button:hover {
+  background: var(--surface-2);
+}
+
+.dinf-crit:hover,
+.dinf-check:hover,
+.dinf-endturn label:hover {
+  border-color: var(--violet);
+  color: var(--violet);
+}
+
+.dinf-crit:has(input:checked),
+.dinf-check:has(input:checked),
+.dinf-endturn label:has(input:checked) {
+  border-color: var(--violet);
+  background: var(--violet-soft);
+  color: var(--violet);
+}
+
+.dinf-crit:has(input:focus-visible),
+.dinf-check:has(input:focus-visible),
+.dinf-endturn label:has(input:focus-visible) {
+  outline: 2px solid var(--violet);
+  outline-offset: 1px;
+}
+
+.dinf-crit input,
+.dinf-check input,
+.dinf-endturn label input {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  opacity: 0;
   cursor: pointer;
 }
 
@@ -215,7 +295,10 @@
 }
 
 .dinf-row-remove {
-  margin-left: auto;
+  position: absolute;
+  top: 0.5rem;
+  right: 0.45rem;
+  height: 2rem;
   border: none;
   background: transparent;
   color: var(--text-muted);
@@ -512,8 +595,67 @@
   .dinf-defender {
     margin-top: 0;
   }
+  /* 관측 행(4.0 F1) — 1행: 종류·기술 / 2행: 급소 알약·HP 변화 / 3행: 턴 종료 효과. #번호·✕는 왼쪽 여백에 쌓는다 */
   .dinf-row {
-    align-items: flex-start;
+    align-items: center;
+    padding: 0.5rem 0.6rem 0.5rem 2rem;
+    min-height: 5.6rem;
+  }
+  .dinf-row-no {
+    position: absolute;
+    left: 0.55rem;
+    top: 0.5rem;
+    min-width: 0;
+    line-height: 1.85rem;
+  }
+  .dinf-row-remove {
+    left: 0.3rem;
+    right: auto;
+    top: 2.6rem;
+    height: auto;
+    padding: 0.2rem 0.35rem;
+  }
+  /* 선택 상자 글씨가 잘리지 않게 안쪽 여백을 줄인다 */
+  .dinf-row select,
+  .dinf-row .dinf-move-btn {
+    padding-left: 0.3rem;
+    padding-right: 0.2rem;
+  }
+  .dinf-row-no + select,
+  .dinf-row-no + select + * {
+    min-width: 0;
+    flex: 0 0 auto;
+  }
+  .dinf-row-no + select,
+  .dinf-row-no + select + * {
+    flex-basis: calc(50% - 0.35rem);
+  }
+  .dinf-row .dinf-percent {
+    width: 3rem;
+  }
+  .dinf-row-opts {
+    display: flex;
+    flex: 1 0 100%;
+    gap: 0.45rem 0.7rem;
+  }
+  .dinf-row-opts:empty {
+    display: none;
+  }
+  /* "가능"은 ✕ 아래 여백에, 오류 문구는 길어서 행 아래 전 폭으로 */
+  .dinf-row-msg.is-ok {
+    position: absolute;
+    left: 0.45rem;
+    top: 4.3rem;
+    padding: 0;
+  }
+  .dinf-row-msg.is-error {
+    flex: 1 0 100%;
+    border-radius: 8px;
+  }
+  .dinf-move-btn {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .dinf-range {
     grid-template-columns: 4.6rem 1fr;
@@ -585,14 +727,17 @@
   font-weight: 400;
 }
 
+/* 턴 종료 효과 — 접지 않고 늘 행 아래 한 줄로 둔다(4.0 F1). 체크해야 계산에 반영된다 */
 .dinf-endturn {
+  flex: 1 0 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem 0.6rem;
   font-size: 0.76rem;
 }
 
-.dinf-endturn label {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-  margin-right: 0.6rem;
-  cursor: pointer;
+.dinf-endturn-title {
+  color: var(--text-muted);
+  font-weight: 600;
 }
