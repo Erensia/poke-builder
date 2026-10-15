@@ -38,6 +38,10 @@ import {
   type MatchupChance,
   type MatchupVerdict,
 } from "./battlePower";
+import { type Ability } from "@/types/ability";
+import { type EffectiveForm } from "@/lib/pokemonForm";
+import { type Item } from "@/types/item";
+import { type Pokemon } from "@/types/pokemon";
 
 /** 2.2 F1 — 리베로·변환자재 자속보정 토글이 켜졌고 특성이 해당하면 자속 판정용 타입을 기술 타입 하나로 */
 function offenseTypes(types: PokemonType[], ability: { changesUserTypeToMoveType?: boolean } | undefined, move: Move, on: boolean | undefined): PokemonType[] {
@@ -194,6 +198,509 @@ interface SlotMatchupResult {
   killingRolls?: readonly [number, number];
 }
 
+/** evaluateSlotMatchup의 단계 사이에서 공유되는 값 — 한 단계 안에서만 쓰는 변수는 각 단계 함수의 지역 변수다 */
+interface SlotMatchupCtx {
+  attackerSlot: EvaluatorSlot;
+  move: Move;
+  defenderSlot: EvaluatorSlot;
+  options: SlotMatchupOptions;
+  attackerPokemon: Pokemon;
+  defenderPokemon: Pokemon;
+  attackerStages: StatStages;
+  defenderStages: StatStages;
+  weather: WeatherKind | undefined;
+  field: FieldKind | undefined;
+  manualAbilityMultiplier: number | undefined;
+  itemMultiplier: number | undefined;
+  manualWeatherMultiplier: number | undefined;
+  manualFieldMultiplier: number | undefined;
+  manualBulkMultiplier: number | undefined;
+  screen: "reflect" | "lightScreen" | "auroraVeil" | undefined;
+  multiHitCount: number | undefined;
+  stockpileCount: number | undefined;
+  attackerHpFraction: number | undefined;
+  defenderHpIsFull: boolean | undefined;
+  defenderHpFraction: number;
+  defenderHasStatusCondition: boolean | undefined;
+  attackerStatus: StatusCondition | null | undefined;
+  defenderStatus: StatusCondition | null | undefined;
+  abilityHpFraction: number | undefined;
+  attackerMovesLast: boolean | undefined;
+  attackerTookDamageThisTurn: boolean | undefined;
+  attackerMoveFailedLastTurn: boolean | undefined;
+  attackerStatLoweredThisTurn: boolean | undefined;
+  defenderDamagedThisTurn: boolean | undefined;
+  defenderMinimized: boolean | undefined;
+  critical: boolean;
+  attackerTypeToMoveType: boolean | undefined;
+  defenderItemConsumed: boolean | undefined;
+  attackerRuntime: RuntimeCombatant | undefined;
+  defenderRuntime: RuntimeCombatant | undefined;
+  extraOffenseMultiplier: number;
+  finalOffenseMultiplier: number;
+  attackerForm: EffectiveForm;
+  defenderForm: EffectiveForm;
+  attackerAbility: Ability | undefined;
+  defenderAbility: Ability | undefined;
+  effectiveWeather: WeatherKind | undefined;
+  attackerWeightKg: number | undefined;
+  defenderWeightKg: number | undefined;
+  attackerRealStats: BaseStats;
+  defenderRealStats: BaseStats;
+  attackerItem: Item | undefined;
+  defenderItem: Item | undefined;
+  resolvedCategory: "physical" | "special";
+  fieldAdjustedMove: Move;
+  effectiveMove: Move;
+  abilityOffenseMultiplier: number;
+  statOffenseMultiplier: number;
+  abilityDefense: number;
+  finalDefenseMultiplier: number;
+  stabMultiplier: number;
+  typeEffectiveness: number;
+  firstHitShare: number;
+  effectiveMoveWithHits: Move;
+  effectiveMoveFinal: Move;
+  berryResult: { bulkMultiplier: number; consumed: boolean; };
+  autoWeatherDamageMultiplier: number;
+  autoFieldDamageMultiplier: number;
+  rivalryMultiplier: number;
+  hustleMultiplier: number;
+  criticalApplies: boolean;
+  critMultiplier: number;
+  attackTypesForStab: ("노말" | "불꽃" | "물" | "풀" | "전기" | "얼음" | "격투" | "독" | "땅" | "비행" | "에스퍼" | "벌레" | "바위" | "고스트" | "드래곤" | "악" | "강철" | "페어리")[];
+  rawOffensePower: number;
+  offensePower: number;
+  screenMultiplier: number;
+  weatherDefenseMultiplier: number;
+  berryHitsMultiplier: number;
+  bulkDefenderStages: StatStages;
+  bulkPower: number;
+  defenseKey: "def" | "spd";
+  damageParts: DamageParts | undefined;
+  chance: MatchupChance;
+}
+
+/** 폼·특성·날씨·몸무게·실능치·도구 같은 두 슬롯의 기본 상태 해석 */
+function resolveFormsAndAbilities(c: SlotMatchupCtx) {
+
+  c.attackerForm = getEffectiveForm(c.attackerPokemon, c.attackerSlot);
+  c.defenderForm = getEffectiveForm(c.defenderPokemon, c.defenderSlot);
+  if (c.attackerRuntime) {
+    c.attackerForm.types = c.attackerRuntime.types;
+    c.attackerForm.weightKg = c.attackerRuntime.weightKg ?? c.attackerForm.weightKg;
+  }
+  if (c.defenderRuntime) {
+    c.defenderForm.types = c.defenderRuntime.types;
+    c.defenderForm.weightKg = c.defenderRuntime.weightKg ?? c.defenderForm.weightKg;
+  }
+  const attackerAbilityId = c.attackerRuntime ? c.attackerRuntime.abilityId : c.attackerSlot.ability;
+  const defenderAbilityId = c.defenderRuntime ? c.defenderRuntime.abilityId : c.defenderSlot.ability;
+  c.attackerAbility = attackerAbilityId ? getAbility(attackerAbilityId) : undefined;
+  const rawDefenderAbility = defenderAbilityId ? getAbility(defenderAbilityId) : undefined;
+  // 틀깨기: 매치업 페이지(1턴 스냅샷)도 배틀 시뮬레이터와 동일하게 반영한다.
+  c.defenderAbility = resolveEffectiveDefenderAbility(c.attackerAbility, rawDefenderAbility);
+
+  // 날씨부정(에어록/날씨부정): 양쪽 중 누구든 이 특성이면 매치업에서도 날씨 효과를 전부 무시한다
+  // (선택한 날씨 자체는 UI에 남지만 데미지 배율·조건 특성·웨더볼·기분파에 반영하지 않는다).
+  c.effectiveWeather = c.attackerAbility?.negatesWeather || c.defenderAbility?.negatesWeather ? undefined : c.weather;
+
+  // 기분파(캐스퐁): 유효 날씨에 맞춰 타입을 바꾼 폼으로 계산한다. 쾌청→불꽃, 비→물, 눈→얼음, 그 외→노말.
+  const forecastTypes = (base: PokemonType[], hasForecast: boolean | undefined): PokemonType[] => {
+    if (!hasForecast) return base;
+    const map: Partial<Record<WeatherKind, PokemonType>> = { 쾌청: "불꽃", 비: "물", 눈: "얼음" };
+    return [(c.effectiveWeather && map[c.effectiveWeather]) || "노말"];
+  };
+  c.attackerForm.types = forecastTypes(c.attackerForm.types, c.attackerAbility?.weatherFormChange);
+  c.defenderForm.types = forecastTypes(c.defenderForm.types, c.defenderAbility?.weatherFormChange);
+
+  // 헤비메탈(2)·라이트메탈(0.5): 몸무게 기반 기술(헤비봄버·풀묶기 등) 계산에 쓸 유효 몸무게.
+  c.attackerWeightKg = c.attackerForm.weightKg !== undefined ? c.attackerForm.weightKg * (c.attackerAbility?.weightMultiplier ?? 1) : undefined;
+  c.defenderWeightKg = c.defenderForm.weightKg !== undefined ? c.defenderForm.weightKg * (c.defenderAbility?.weightMultiplier ?? 1) : undefined;
+
+  c.attackerRealStats = c.attackerRuntime?.realStats ?? computeRealStats(c.attackerForm.baseStats, c.attackerSlot.points, c.attackerSlot.nature);
+  c.defenderRealStats = c.defenderRuntime?.realStats ?? computeRealStats(c.defenderForm.baseStats, c.defenderSlot.points, c.defenderSlot.nature);
+
+
+  // 지닌 도구: 직접 지정한 배율이 없으면 실제 장착한 도구에서 자동으로 구한다. defenderItem은
+  // resolveMoveContext의 검은철구(땅타입 면역 무시) 판정에도 필요해서 여기서 먼저 구해둔다.
+  const attackerItemId = c.attackerRuntime ? c.attackerRuntime.itemId : c.attackerSlot.item;
+  const defenderItemId = c.defenderRuntime ? c.defenderRuntime.itemId : c.defenderSlot.item;
+  c.attackerItem = attackerItemId ? getItem(attackerItemId) : undefined;
+  c.defenderItem = defenderItemId ? getItem(defenderItemId) : undefined;
+}
+
+/** 가변 위력·레이징불·셸암즈·분화·누르기·솔라빔·웨더볼·필드 위력으로 이번 기술 조정 */
+function resolveVariablePowerMove(c: SlotMatchupCtx) {
+
+  // 가변 위력 기술(§3 증분 B-2·B-3·B-3몸무게): computeOffensePower 전에 위력을 먼저 확정한다.
+  //  - reversalPower(기사회생·바둥바둥): 매치업은 HP 개념이 없어 풀피(=최소 위력 20) 가정
+  //  - gyroBallPower(자이로볼): 양측 실효 스피드(실능 × 스피드 랭크 × 도구 배율)로 산출. 마비는
+  //    매치업에 상태 개념이 없어 미반영(evaluateSpeedMatchup의 가정 토글과 동일 정책).
+  //  - powerFromPositiveStages(기어오르기·어시스트파워): 넘겨받은 attackerStages 기준
+  //  - spitUpPower(토해내기): options.stockpileCount(생략 시 3) × 100
+  //  - weightRatioPower / targetAbsoluteWeightPower: pokemon.weightKg 기반, 미입력이면 폴백 위력
+  let variablePowerMove: Move = c.move;
+  // 레이징불: 사용자 종(팔데아 켄타로스 3품종)에 따라 실제 타입이 바뀐다 — 위력 확정·상성 계산 전에 먼저.
+  const speciesTypedType = c.move.typeByUserSpecies?.[c.attackerSlot.pokemonId];
+  if (speciesTypedType) variablePowerMove = { ...variablePowerMove, type: speciesTypedType };
+
+  // 셸암즈(dynamicCategoryByHigherDamage): 물리·특수 결정력을 둘 다 내보고 큰 쪽 판정으로 고정한다.
+  // 매치업 페이지는 1턴 스냅샷이라 "동점 시 무작위"를 표현할 수 없어 동점이면 물리로 확정(결정적).
+  c.resolvedCategory = c.move.category as "physical" | "special"; // 상태 기술·null은 앞에서 이미 걸렀다
+  if (c.move.dynamicCategoryByHigherDamage) {
+    const dmgOpts = { attackerStages: c.attackerStages, defenderRealStats: c.defenderRealStats, defenderStages: c.defenderStages, stabMultiplier: 1.5 };
+    const phys =
+      computeOffensePower(c.attackerRealStats, c.attackerForm.types, { ...variablePowerMove, category: "physical" }, dmgOpts) ?? 0;
+    const spec =
+      computeOffensePower(c.attackerRealStats, c.attackerForm.types, { ...variablePowerMove, category: "special" }, dmgOpts) ?? 0;
+    c.resolvedCategory = phys >= spec ? "physical" : "special";
+    variablePowerMove = {
+      ...variablePowerMove,
+      category: c.resolvedCategory,
+      makesContact: c.resolvedCategory === "physical",
+    };
+  }
+
+  if (c.move.reversalPower) {
+    // 공격측 HP 비율(배틀 AI의 현재 HP·페이지의 HP 슬라이더), 생략하면 풀피(최소 위력 20)
+    variablePowerMove = { ...variablePowerMove, power: reversalPowerFromHp(c.attackerHpFraction ?? 1, 1) };
+  } else if (c.move.gyroBallPower) {
+    const effSpeed = (
+      spe: number,
+      stages: StatStages,
+      item: Parameters<typeof getItemSpeedMultiplier>[0],
+    ) => spe * rankStageMultiplier(stages.spe) * getItemSpeedMultiplier(item);
+    variablePowerMove = {
+      ...variablePowerMove,
+      power: gyroBallPowerFromSpeeds(
+        effSpeed(c.attackerRealStats.spe, c.attackerStages, c.attackerItem),
+        effSpeed(c.defenderRealStats.spe, c.defenderStages, c.defenderItem),
+      ),
+    };
+  } else if (c.move.flingsHeldItem) {
+    // 내던지기(트랙 M5): 지닌 도구의 flingPower. 던질 도구가 없으면 위력 없음(데미지 0)
+    variablePowerMove = { ...variablePowerMove, power: c.attackerItem?.flingPower ?? null };
+  } else if (c.move.electroBallPower) {
+    // 일렉트릭볼(트랙 M5): 자이로볼과 같은 실효 스피드, 본가 비율표
+    const effSpeed = (spe: number, stages: StatStages, item: Parameters<typeof getItemSpeedMultiplier>[0]) =>
+      spe * rankStageMultiplier(stages.spe) * getItemSpeedMultiplier(item);
+    variablePowerMove = {
+      ...variablePowerMove,
+      power: electroBallPowerFromSpeeds(
+        effSpeed(c.attackerRealStats.spe, c.attackerStages, c.attackerItem),
+        effSpeed(c.defenderRealStats.spe, c.defenderStages, c.defenderItem),
+      ),
+    };
+  } else if (c.move.targetHpRatioPower) {
+    // 하드프레스(트랙 M5): 상대 남은 HP 비율(매치업 페이지는 풀피)
+    variablePowerMove = { ...variablePowerMove, power: Math.max(1, Math.floor(c.move.targetHpRatioPower * c.defenderHpFraction)) };
+  } else if (c.move.powerFromPositiveStages) {
+    const { base, perStage } = c.move.powerFromPositiveStages;
+    variablePowerMove = { ...variablePowerMove, power: positiveStagesPowerValue(c.attackerStages, base, perStage) };
+  } else if (c.move.spitUpPower) {
+    const stacks = Math.max(0, Math.min(3, c.stockpileCount ?? 3));
+    variablePowerMove = { ...variablePowerMove, power: stacks * 100 };
+  } else if (c.move.weightRatioPower) {
+    // 메가폼이면 그 폼의 몸무게, 헤비메탈/라이트메탈이면 그 배율까지 반영한 유효 몸무게를 쓴다.
+    variablePowerMove = {
+      ...variablePowerMove,
+      power:
+        c.attackerWeightKg !== undefined && c.defenderWeightKg !== undefined
+          ? weightRatioPowerValue(c.attackerWeightKg, c.defenderWeightKg)
+          : WEIGHT_MOVE_FALLBACK_POWER,
+    };
+  } else if (c.move.targetAbsoluteWeightPower) {
+    variablePowerMove = {
+      ...variablePowerMove,
+      power:
+        c.defenderWeightKg !== undefined
+          ? absoluteWeightPowerValue(c.defenderWeightKg)
+          : WEIGHT_MOVE_FALLBACK_POWER,
+    };
+  }
+  // 분화·해수스파우팅(ver.1.9): 위력 = 최대 위력 × 공격측 HP 비율(생략하면 풀피)
+  if (variablePowerMove.userHpScaledPower) {
+    variablePowerMove = {
+      ...variablePowerMove,
+      power: userHpScaledPowerValue(variablePowerMove.userHpScaledPower, c.attackerHpFraction ?? 1),
+    };
+  }
+  if (
+    variablePowerMove.power !== null &&
+    conditionalPowerDoubled(variablePowerMove, {
+      attackerHasItem: !!c.attackerItem,
+      attackerStatus: c.attackerStatus,
+      defenderStatus: c.defenderStatus,
+      defenderHasStatusCondition: c.defenderHasStatusCondition,
+      attackerMovesLast: c.attackerMovesLast,
+      attackerTookDamageThisTurn: c.attackerTookDamageThisTurn,
+      attackerMoveFailedLastTurn: c.attackerMoveFailedLastTurn,
+      attackerStatLoweredThisTurn: c.attackerStatLoweredThisTurn,
+      defenderDamagedThisTurn: c.defenderDamagedThisTurn,
+    })
+  ) {
+    variablePowerMove = { ...variablePowerMove, power: variablePowerMove.power * 2 };
+  }
+  // 누르기·드래곤다이브·플라잉프레스(ver.1.9): 대상이 작아지기를 썼으면 위력 2배(엔진 preHitEffects와 같게)
+  if (variablePowerMove.power !== null && variablePowerMove.bonusVsMinimize && c.defenderMinimized) {
+    variablePowerMove = { ...variablePowerMove, power: variablePowerMove.power * 2 };
+  }
+
+  // 솔라빔(§1-10): chargeSkipWeather(쾌청)가 아닌 날씨에서는 위력 절반. matchupEvaluator는
+  // 선택한 날씨를 정확히 알고 있어(§1-7 성장과 같은 근거) 항상 정확히 판정한다.
+  if (
+    variablePowerMove.halvesPowerOutsideChargeSkipWeather &&
+    variablePowerMove.power !== null &&
+    variablePowerMove.chargeSkipWeather !== undefined &&
+    c.effectiveWeather !== variablePowerMove.chargeSkipWeather
+  ) {
+    variablePowerMove = { ...variablePowerMove, power: Math.floor(variablePowerMove.power / 2) };
+  }
+
+  // 웨더볼(날씨판 대지의파동): 타입·위력 변경을 fieldPulse보다 먼저.
+  // 이 아래 fieldPulse/powerMultiplierInField(대지의파동·미스트버스트류)까지가 "특성 배율 계산 전
+  // 타입/위력 확정" 구간 — 타입이 바뀐 상태여야 resolveMoveContext의 상성 계산에 반영된다.
+  const weatherBall = applyWeatherBall(variablePowerMove, c.effectiveWeather);
+  const weatherBallMove: Move = { ...variablePowerMove, type: weatherBall.type, power: weatherBall.power };
+
+  // 접지 조건(ver.1.8) — runtime이 없으면(매치업 페이지) 땅에 있다고 본다
+  const fieldPulse = applyFieldPulse(weatherBallMove, c.field, c.attackerRuntime?.grounded ?? true);
+  const fieldPowerMultiplier = getFieldPowerMultiplier(weatherBallMove, c.field, c.attackerRuntime?.grounded ?? true, c.defenderRuntime?.grounded ?? true);
+  c.fieldAdjustedMove = {
+    ...weatherBallMove,
+    type: fieldPulse.type,
+    power: fieldPulse.power === null ? null : Math.round(fieldPulse.power * fieldPowerMultiplier),
+  };
+}
+
+/** 특성·다단히트·도구·날씨/필드·투쟁심·급소를 반영한 결정력 */
+function computeOffense(c: SlotMatchupCtx) {
+
+  // 특성 배율(공격측 테크니션/모래의힘/메가런처/페어리스킨, 방어측 두꺼운지방 등) + 타입 변경 +
+  // 자속 + 상대 타입 상성을 한 번에 계산 — 배틀 엔진의 resolveAction과 공유하는 로직
+  const _d0 = resolveMoveContext(c.attackerAbility, c.fieldAdjustedMove, c.defenderForm.types, c.defenderAbility, {
+    weather: c.effectiveWeather,
+    defenderItem: c.defenderItem,
+    // 매치업 페이지는 가정 토글로 넘긴다(생략하면 풀피/상태이상 없음). 특성 HP 조건은 abilityHpFraction 우선.
+    attackerHpFraction: c.abilityHpFraction ?? c.attackerHpFraction,
+    defenderHpIsFull: c.defenderHpIsFull,
+    defenderHasStatusCondition: c.defenderHasStatusCondition,
+    field: c.field,
+    defenderGrounded: c.defenderRuntime?.grounded,
+  });
+  c.effectiveMove = _d0.effectiveMove;
+  c.abilityOffenseMultiplier = _d0.abilityOffenseMultiplier;
+  c.statOffenseMultiplier = _d0.statOffenseMultiplier;
+  c.abilityDefense = _d0.abilityDefenseMultiplier;
+  c.finalDefenseMultiplier = _d0.finalDefenseMultiplier;
+  c.stabMultiplier = _d0.stabMultiplier;
+  c.typeEffectiveness = _d0.typeEffectiveness;
+
+  // 다단히트 기술이면, 특성/타입 조건 판정은 원래 기술(1타 위력) 기준으로 이미 끝났으니 여기서만
+  // 선택한 타수까지의 위력을 합산해서 결정력 계산에 쓸 위력으로 바꿔치기한다.
+  //  - 트리플악셀류(multiHitPowers): 타수별 위력이 다르므로 배열을 잘라 합산.
+  //  - 록블라스트/스케일샷류(minHits~maxHits, multiHitPowers 없음): 매 타 위력이 동일하므로 위력 × 타수.
+  // 반감 열매는 첫 타에만 적용되므로 첫 타 위력 비중(firstHitShare)도 같이 낸다.
+  c.firstHitShare = (() => {
+    if (c.move.multiHitPowers && c.multiHitCount) {
+      const powers = c.move.multiHitPowers.slice(0, c.multiHitCount);
+      const total = powers.reduce((sum, p) => sum + p, 0);
+      return total > 0 ? powers[0] / total : 1;
+    }
+    if (c.move.minHits !== undefined && c.move.maxHits !== undefined && c.multiHitCount) {
+      return 1 / Math.max(c.move.minHits, Math.min(c.move.maxHits, c.multiHitCount));
+    }
+    return 1;
+  })();
+  c.effectiveMoveWithHits = (() => {
+    if (c.move.multiHitPowers && c.multiHitCount) {
+      return {
+        ...c.effectiveMove,
+        power: c.move.multiHitPowers.slice(0, c.multiHitCount).reduce((sum, p) => sum + p, 0),
+      };
+    }
+    if (
+      c.move.minHits !== undefined &&
+      c.move.maxHits !== undefined &&
+      c.multiHitCount &&
+      c.effectiveMove.power !== null
+    ) {
+      const clampedHits = Math.max(c.move.minHits, Math.min(c.move.maxHits, c.multiHitCount));
+      return { ...c.effectiveMove, power: c.effectiveMove.power * clampedHits };
+    }
+    return c.effectiveMove;
+  })();
+
+  // 부자유친: 단일타 데미지 기술이 데미지를 준 직후 위력 × mult 짜리 추가타가 한 번 더 나간다
+  // (배틀 엔진과 동일 조건 — 다단히트·고정데미지는 제외). 매치업은 1턴 스냅샷이라 "추가타까지
+  // 다 맞은" 상황으로 보고 결정력 위력에 합산한다. 추가타 위력은 엔진과 똑같이 round(위력 × mult).
+  const followUpMultiplier = c.attackerAbility?.followUpHitPowerMultiplier;
+  c.effectiveMoveFinal = followUpMultiplier !== undefined &&
+    !c.move.multiHitPowers &&
+    c.move.minHits === undefined &&
+    c.move.fixedDamage === undefined &&
+    c.effectiveMoveWithHits.power !== null
+      ? {
+          ...c.effectiveMoveWithHits,
+          power:
+            c.effectiveMoveWithHits.power +
+            Math.round(c.effectiveMoveWithHits.power * followUpMultiplier),
+        }
+      : c.effectiveMoveWithHits;
+
+  // 메트로놈(연속 사용 보너스)은 매치업 화면이 여러 턴 이력이 없는 1턴 스냅샷이라 스트릭=1(보너스 없음)로 고정.
+  const autoItemMultiplier = getItemOffenseMultiplier(c.attackerItem, c.effectiveMove, c.typeEffectiveness, 1);
+  c.berryResult = getBerryDefenseResult(
+    c.defenderItem,
+    c.effectiveMove.type,
+    c.typeEffectiveness,
+    c.defenderItemConsumed ?? false,
+    !!c.defenderAbility?.doublesBerryEffect, // 숙성 — 실전 엔진(hitResolution)과 같은 판정
+  );
+
+  // 날씨/필드 데미지 배율은 (타입 변경까지 끝난) effectiveMove.type 기준으로 구한다 — 배틀 엔진과 동일.
+  c.autoWeatherDamageMultiplier = getWeatherDamageMultiplier(c.effectiveWeather, c.effectiveMove.type);
+  c.autoFieldDamageMultiplier = getFieldDamageMultiplier(c.field, c.effectiveMove.type, c.attackerRuntime?.grounded, c.defenderRuntime?.grounded);
+
+  // 투쟁심: 양쪽 슬롯 성별로 ×1.25(동성)/×0.75(이성)/×1.0(불명). battlePower.rivalryDamageMultiplier 공유(§5).
+  c.rivalryMultiplier = rivalryDamageMultiplier(
+    c.attackerAbility,
+    getEffectiveGender(c.attackerPokemon, c.attackerSlot),
+    getEffectiveGender(c.defenderPokemon, c.defenderSlot),
+  );
+
+  // 의욕(Hustle): 물리 기술 위력 ×1.5(명중률 페널티는 결정력 계산 대상이 아님).
+  // battlePower.hustleDamageMultiplier 공유(§5).
+  c.hustleMultiplier = hustleDamageMultiplier(c.resolvedCategory, c.attackerAbility);
+
+  // 상대 타입 상성을 곱하기 전의 결정력. offensePower는 여기에 typeEffectiveness만 곱한 값이라
+  // 매번 다시 계산하는 대신 이 값에 typeEffectiveness를 곱해서 구한다.
+  // 급소(ver.1.9 6-2): 공격 쪽 랭크는 음수를 0으로(속임수는 방어자 공격 랭크가 공격 랭크라 같은 쪽), 방어 랭크는 양수를 0으로
+  c.criticalApplies = c.critical && !c.defenderAbility?.preventsCritsAgainstSelf;
+  c.critMultiplier = c.criticalApplies ? (c.attackerAbility?.critDamageMultiplier ?? CRITICAL_DAMAGE_MULTIPLIER) : 1;
+  c.attackTypesForStab = offenseTypes(c.attackerForm.types, c.attackerAbility, c.effectiveMoveFinal, c.attackerTypeToMoveType);
+  const rawOffensePower = computeOffensePower(c.attackerRealStats, c.attackTypesForStab, c.effectiveMoveFinal, {
+    abilityMultiplier:
+      (c.manualAbilityMultiplier ?? c.abilityOffenseMultiplier) * c.rivalryMultiplier * c.hustleMultiplier * c.extraOffenseMultiplier * c.finalOffenseMultiplier * c.critMultiplier,
+    itemMultiplier: c.itemMultiplier ?? autoItemMultiplier,
+    weatherMultiplier: c.manualWeatherMultiplier ?? c.autoWeatherDamageMultiplier,
+    fieldMultiplier: c.manualFieldMultiplier ?? c.autoFieldDamageMultiplier,
+    attackerStages: c.criticalApplies ? clampStages(c.attackerStages, "positive") : c.attackerStages,
+    stabMultiplier: c.stabMultiplier,
+    // 속임수(usesTargetAttackStat): 방어자의 공격 실능·랭크로 결정력을 낸다
+    defenderRealStats: c.defenderRealStats,
+    defenderStages: c.criticalApplies ? clampStages(c.defenderStages, "positive") : c.defenderStages,
+  });
+  if (rawOffensePower === null) return { value: null };
+  c.rawOffensePower = rawOffensePower;
+  c.offensePower = rawOffensePower * c.typeEffectiveness;
+}
+
+/** 스크린·날씨 방어·반감 열매·랭크를 반영한 내구력과 방어 스탯 */
+function computeBulk(c: SlotMatchupCtx) {
+
+  // 스크린(리플렉터/빛의장막/오로라베일): 해당 카테고리 데미지 절반 = 내구력 2배 — 틈새포착이면 무시.
+  // 이쪽은 1턴 스냅샷이라 진영 상태 대신 단일 screen 옵션에서 두 불리언을 도출하고,
+  // 실제 곱셈 공식은 battlePower.screenMultiplierFromFlags로 배틀 엔진과 공유한다(§5).
+  const screenBypassed = !!c.attackerAbility?.bypassesScreensAndSubstitute || c.criticalApplies;
+  const auroraVeilActive = !screenBypassed && c.screen === "auroraVeil";
+  const categoryScreenActive =
+    !screenBypassed &&
+    ((c.screen === "reflect" && c.resolvedCategory === "physical") ||
+      (c.screen === "lightScreen" && c.resolvedCategory === "special"));
+  c.screenMultiplier = screenMultiplierFromFlags(categoryScreenActive, auroraVeilActive);
+  // 모래바람 바위 특방·눈 얼음 방어 1.5배(Tier 2-C에서 발견한 누락) — hitResolution과 같은 판정
+  c.weatherDefenseMultiplier = getWeatherDefenseMultiplier(
+    c.effectiveWeather,
+    c.defenderForm.types,
+    c.move.hitsDefensiveStat ?? (c.resolvedCategory === "physical" ? "def" : "spd"),
+  );
+
+  // 반감 열매는 첫 타만(ver.1.9 6-1): 다단히트 전체 데미지 = 첫 타 몫 / 배율 + 나머지 몫 → 내구력 배율 = 1 / 그 비율
+  c.berryHitsMultiplier = c.berryResult.bulkMultiplier === 1 ? 1 : 1 / (c.firstHitShare / c.berryResult.bulkMultiplier + (1 - c.firstHitShare));
+  const finalBulkMultiplier =
+    (c.manualBulkMultiplier ?? c.abilityDefense * c.berryHitsMultiplier * c.weatherDefenseMultiplier) * c.screenMultiplier;
+  c.bulkDefenderStages = c.criticalApplies ? clampStages(c.defenderStages, "negative") : c.defenderStages;
+  c.bulkPower = computeBulkPower(c.defenderRealStats, c.resolvedCategory, {
+    defenderStages: c.bulkDefenderStages,
+    bulkMultiplier: finalBulkMultiplier,
+    // 사이코쇼크(hitsDefensiveStat): 특수기지만 내구력은 방어자의 물리 방어로 낸다
+    defensiveStatOverride: c.move.hitsDefensiveStat,
+  });
+
+  // 정수 데미지 공식 조각(damageFormula.ts, 2.4 B3) — 위의 연속식 결정력·내구력과 같은 입력을 단계별로 나눠 담는다.
+  // 위력 단계: 특성·투쟁심·의욕·추가 배율·위력계 도구(타입 강화 등)·필드 / 날씨·급소·자속·상성은 각자 단계 / 최종 단계: 구슬·달인의띠·화상 ×,
+  // 벽·하드록·반감 열매는 내구력 배율의 역수로. 반감 열매는 첫 타에만(다단히트) 곱한다.
+  c.defenseKey = c.move.hitsDefensiveStat ?? (c.resolvedCategory === "physical" ? "def" : "spd");
+}
+
+/** 정수 데미지 공식 조각(damageParts)과 판정 확률 구성 */
+function buildDamageParts(c: SlotMatchupCtx) {
+  const unitPower = c.effectiveMove.power;
+  const hitPowers = (() => {
+    if (unitPower === null) return [];
+    if (c.move.multiHitPowers && c.multiHitCount) return c.move.multiHitPowers.slice(0, c.multiHitCount);
+    if (c.move.minHits !== undefined && c.move.maxHits !== undefined && c.multiHitCount) {
+      return Array<number>(Math.max(c.move.minHits, Math.min(c.move.maxHits, c.multiHitCount))).fill(unitPower);
+    }
+    if (c.effectiveMoveFinal.power !== c.effectiveMoveWithHits.power) return [unitPower, c.effectiveMoveFinal.power! - unitPower];
+    return [unitPower];
+  })();
+  const attackTerm = computeAttackTerm(
+    c.attackerRealStats,
+    c.effectiveMoveFinal,
+    c.criticalApplies ? clampStages(c.attackerStages, "positive") : c.attackerStages,
+    c.defenderRealStats,
+    c.criticalApplies ? clampStages(c.defenderStages, "positive") : c.defenderStages,
+  );
+  const useAutoDefense = c.manualBulkMultiplier === undefined;
+  // 맹화류·선파워는 공격 스탯 단계 — 직접 지정한 특성 배율이 있으면 그 값 전체를 위력 단계로 본다
+  const abilityStatMultiplier = c.manualAbilityMultiplier === undefined ? c.statOffenseMultiplier : 1;
+  const itemBaseMultiplier = c.itemMultiplier ?? getItemBasePowerMultiplier(c.attackerItem, c.effectiveMove);
+  const itemFinalMultiplier = c.itemMultiplier !== undefined ? 1 : getItemFinalMultiplier(c.attackerItem, c.typeEffectiveness, 1);
+  c.damageParts = hitPowers.length > 0 && attackTerm > 0
+      ? {
+          hitPowers,
+          attackTerm: Math.floor(attackTerm + 1e-9) * abilityStatMultiplier,
+          defenseKey: c.defenseKey,
+          defenseRankMultiplier: rankStageMultiplier(c.bulkDefenderStages[c.defenseKey]),
+          baseMultiplier:
+            ((c.manualAbilityMultiplier ?? c.abilityOffenseMultiplier) / abilityStatMultiplier) * c.rivalryMultiplier * c.hustleMultiplier * c.extraOffenseMultiplier *
+            itemBaseMultiplier * (c.manualFieldMultiplier ?? c.autoFieldDamageMultiplier),
+          bulkMultiplier: c.manualBulkMultiplier ?? (c.abilityDefense / c.finalDefenseMultiplier) * c.weatherDefenseMultiplier,
+          weatherMultiplier: c.manualWeatherMultiplier ?? c.autoWeatherDamageMultiplier,
+          critMultiplier: c.critMultiplier,
+          stabMultiplier: c.effectiveMoveFinal.type && c.attackTypesForStab.includes(c.effectiveMoveFinal.type) ? c.stabMultiplier : 1,
+          typeEffectiveness: c.typeEffectiveness,
+          finalMultiplier:
+            (itemFinalMultiplier * c.finalOffenseMultiplier) / (c.screenMultiplier * (useAutoDefense ? c.finalDefenseMultiplier : 1)),
+          firstHitFinalMultiplier: useAutoDefense ? 1 / c.berryResult.bulkMultiplier : 1,
+        }
+      : undefined;
+
+  c.chance = c.options.skipVerdict
+    ? { verdict: "needs-3hit-plus", koChance: null }
+    : judgeByIntegerDamage(c.damageParts, c.defenderRealStats[c.defenseKey], c.defenderRealStats.hp);
+}
+
+/** 결과를 모아 돌려준다 */
+function collectResult(c: SlotMatchupCtx) {
+  return {
+    offensePower: c.offensePower,
+    rawOffensePower: c.rawOffensePower,
+    bulkPower: c.bulkPower,
+    damageParts: c.damageParts,
+    defenseStat: c.defenderRealStats[c.defenseKey],
+    verdict: c.chance.verdict,
+    berryBulkMultiplier: c.manualBulkMultiplier === undefined ? c.berryResult.bulkMultiplier : 1,
+    berryAppliedMultiplier: c.manualBulkMultiplier === undefined ? c.berryHitsMultiplier : 1,
+    criticalBlocked: c.critical && !c.criticalApplies ? true : undefined,
+    koChance: c.chance.koChance,
+    killingRolls: c.chance.killingRolls,
+  };
+}
+
 /**
  * 파티 슬롯 두 개(공격측/방어측)와 기술 하나로 결정력·내구력·판정을 한번에 계산한다.
  * 실수치 계산, 메가폼, 타입 상성, 랭크 상태, 특성 배율(테크니션/적응력/모래의힘/두꺼운지방/
@@ -206,451 +713,62 @@ export function evaluateSlotMatchup(
   defenderSlot: EvaluatorSlot,
   options: SlotMatchupOptions = {},
 ): SlotMatchupResult | null {
-  const attackerPokemon = getPokemon(attackerSlot.pokemonId);
-  const defenderPokemon = getPokemon(defenderSlot.pokemonId);
+  const c = {} as SlotMatchupCtx;
+  c.attackerSlot = attackerSlot;
+  c.defenderSlot = defenderSlot;
+  c.move = move;
+  c.options = options;
+
+  const attackerPokemon = getPokemon(c.attackerSlot.pokemonId);
+  const defenderPokemon = getPokemon(c.defenderSlot.pokemonId);
   if (!attackerPokemon || !defenderPokemon) return null;
-  if (move.category === "status" || move.category === null) return null;
+  c.attackerPokemon = attackerPokemon;
+  c.defenderPokemon = defenderPokemon;
+  if (c.move.category === "status" || c.move.category === null) return null;
   // move.power === null(자이로볼·바둥바둥·토해내기 등)은 여기서 바로 거르지 않는다 — 아래에서
   // 가변 위력을 확정해보고, 그래도 null이면 computeOffensePower가 null을 반환해 걸러진다.
 
-  const {
-    attackerStages = NEUTRAL_STAGES,
-    defenderStages = NEUTRAL_STAGES,
-    weather,
-    field,
-    abilityMultiplier: manualAbilityMultiplier,
-    itemMultiplier,
-    weatherMultiplier: manualWeatherMultiplier,
-    fieldMultiplier: manualFieldMultiplier,
-    bulkMultiplier: manualBulkMultiplier,
-    screen,
-    multiHitCount,
-    stockpileCount,
-    attackerHpFraction,
-    defenderHpIsFull,
-    defenderHpFraction = 1,
-    defenderHasStatusCondition,
-    attackerStatus,
-    defenderStatus,
-    abilityHpFraction,
-    attackerMovesLast,
-    attackerTookDamageThisTurn,
-    attackerMoveFailedLastTurn,
-    attackerStatLoweredThisTurn,
-    defenderDamagedThisTurn,
-    defenderMinimized,
-    critical = false,
-    attackerTypeToMoveType,
-    defenderItemConsumed,
-    attackerRuntime,
-    defenderRuntime,
-    extraOffenseMultiplier = 1,
-    finalOffenseMultiplier = 1,
-  } = options;
-
-  const attackerForm = getEffectiveForm(attackerPokemon, attackerSlot);
-  const defenderForm = getEffectiveForm(defenderPokemon, defenderSlot);
-  if (attackerRuntime) {
-    attackerForm.types = attackerRuntime.types;
-    attackerForm.weightKg = attackerRuntime.weightKg ?? attackerForm.weightKg;
+  c.attackerStages = c.options.attackerStages === undefined ? NEUTRAL_STAGES : c.options.attackerStages;
+  c.defenderStages = c.options.defenderStages === undefined ? NEUTRAL_STAGES : c.options.defenderStages;
+  c.weather = c.options.weather;
+  c.field = c.options.field;
+  c.manualAbilityMultiplier = c.options.abilityMultiplier;
+  c.itemMultiplier = c.options.itemMultiplier;
+  c.manualWeatherMultiplier = c.options.weatherMultiplier;
+  c.manualFieldMultiplier = c.options.fieldMultiplier;
+  c.manualBulkMultiplier = c.options.bulkMultiplier;
+  c.screen = c.options.screen;
+  c.multiHitCount = c.options.multiHitCount;
+  c.stockpileCount = c.options.stockpileCount;
+  c.attackerHpFraction = c.options.attackerHpFraction;
+  c.defenderHpIsFull = c.options.defenderHpIsFull;
+  c.defenderHpFraction = c.options.defenderHpFraction === undefined ? 1 : c.options.defenderHpFraction;
+  c.defenderHasStatusCondition = c.options.defenderHasStatusCondition;
+  c.attackerStatus = c.options.attackerStatus;
+  c.defenderStatus = c.options.defenderStatus;
+  c.abilityHpFraction = c.options.abilityHpFraction;
+  c.attackerMovesLast = c.options.attackerMovesLast;
+  c.attackerTookDamageThisTurn = c.options.attackerTookDamageThisTurn;
+  c.attackerMoveFailedLastTurn = c.options.attackerMoveFailedLastTurn;
+  c.attackerStatLoweredThisTurn = c.options.attackerStatLoweredThisTurn;
+  c.defenderDamagedThisTurn = c.options.defenderDamagedThisTurn;
+  c.defenderMinimized = c.options.defenderMinimized;
+  c.critical = c.options.critical === undefined ? false : c.options.critical;
+  c.attackerTypeToMoveType = c.options.attackerTypeToMoveType;
+  c.defenderItemConsumed = c.options.defenderItemConsumed;
+  c.attackerRuntime = c.options.attackerRuntime;
+  c.defenderRuntime = c.options.defenderRuntime;
+  c.extraOffenseMultiplier = c.options.extraOffenseMultiplier === undefined ? 1 : c.options.extraOffenseMultiplier;
+  c.finalOffenseMultiplier = c.options.finalOffenseMultiplier === undefined ? 1 : c.options.finalOffenseMultiplier;
+  resolveFormsAndAbilities(c);
+  resolveVariablePowerMove(c);
+  {
+    const r = computeOffense(c);
+    if (r) return r.value;
   }
-  if (defenderRuntime) {
-    defenderForm.types = defenderRuntime.types;
-    defenderForm.weightKg = defenderRuntime.weightKg ?? defenderForm.weightKg;
-  }
-  const attackerAbilityId = attackerRuntime ? attackerRuntime.abilityId : attackerSlot.ability;
-  const defenderAbilityId = defenderRuntime ? defenderRuntime.abilityId : defenderSlot.ability;
-  const attackerAbility = attackerAbilityId ? getAbility(attackerAbilityId) : undefined;
-  const rawDefenderAbility = defenderAbilityId ? getAbility(defenderAbilityId) : undefined;
-  // 틀깨기: 매치업 페이지(1턴 스냅샷)도 배틀 시뮬레이터와 동일하게 반영한다.
-  const defenderAbility = resolveEffectiveDefenderAbility(attackerAbility, rawDefenderAbility);
-
-  // 날씨부정(에어록/날씨부정): 양쪽 중 누구든 이 특성이면 매치업에서도 날씨 효과를 전부 무시한다
-  // (선택한 날씨 자체는 UI에 남지만 데미지 배율·조건 특성·웨더볼·기분파에 반영하지 않는다).
-  const effectiveWeather =
-    attackerAbility?.negatesWeather || defenderAbility?.negatesWeather ? undefined : weather;
-
-  // 기분파(캐스퐁): 유효 날씨에 맞춰 타입을 바꾼 폼으로 계산한다. 쾌청→불꽃, 비→물, 눈→얼음, 그 외→노말.
-  const forecastTypes = (base: PokemonType[], hasForecast: boolean | undefined): PokemonType[] => {
-    if (!hasForecast) return base;
-    const map: Partial<Record<WeatherKind, PokemonType>> = { 쾌청: "불꽃", 비: "물", 눈: "얼음" };
-    return [(effectiveWeather && map[effectiveWeather]) || "노말"];
-  };
-  attackerForm.types = forecastTypes(attackerForm.types, attackerAbility?.weatherFormChange);
-  defenderForm.types = forecastTypes(defenderForm.types, defenderAbility?.weatherFormChange);
-
-  // 헤비메탈(2)·라이트메탈(0.5): 몸무게 기반 기술(헤비봄버·풀묶기 등) 계산에 쓸 유효 몸무게.
-  const attackerWeightKg =
-    attackerForm.weightKg !== undefined ? attackerForm.weightKg * (attackerAbility?.weightMultiplier ?? 1) : undefined;
-  const defenderWeightKg =
-    defenderForm.weightKg !== undefined ? defenderForm.weightKg * (defenderAbility?.weightMultiplier ?? 1) : undefined;
-
-  const attackerRealStats =
-    attackerRuntime?.realStats ?? computeRealStats(attackerForm.baseStats, attackerSlot.points, attackerSlot.nature);
-  const defenderRealStats =
-    defenderRuntime?.realStats ?? computeRealStats(defenderForm.baseStats, defenderSlot.points, defenderSlot.nature);
-
-
-  // 지닌 도구: 직접 지정한 배율이 없으면 실제 장착한 도구에서 자동으로 구한다. defenderItem은
-  // resolveMoveContext의 검은철구(땅타입 면역 무시) 판정에도 필요해서 여기서 먼저 구해둔다.
-  const attackerItemId = attackerRuntime ? attackerRuntime.itemId : attackerSlot.item;
-  const defenderItemId = defenderRuntime ? defenderRuntime.itemId : defenderSlot.item;
-  const attackerItem = attackerItemId ? getItem(attackerItemId) : undefined;
-  const defenderItem = defenderItemId ? getItem(defenderItemId) : undefined;
-
-  // 가변 위력 기술(§3 증분 B-2·B-3·B-3몸무게): computeOffensePower 전에 위력을 먼저 확정한다.
-  //  - reversalPower(기사회생·바둥바둥): 매치업은 HP 개념이 없어 풀피(=최소 위력 20) 가정
-  //  - gyroBallPower(자이로볼): 양측 실효 스피드(실능 × 스피드 랭크 × 도구 배율)로 산출. 마비는
-  //    매치업에 상태 개념이 없어 미반영(evaluateSpeedMatchup의 가정 토글과 동일 정책).
-  //  - powerFromPositiveStages(기어오르기·어시스트파워): 넘겨받은 attackerStages 기준
-  //  - spitUpPower(토해내기): options.stockpileCount(생략 시 3) × 100
-  //  - weightRatioPower / targetAbsoluteWeightPower: pokemon.weightKg 기반, 미입력이면 폴백 위력
-  let variablePowerMove: Move = move;
-  // 레이징불: 사용자 종(팔데아 켄타로스 3품종)에 따라 실제 타입이 바뀐다 — 위력 확정·상성 계산 전에 먼저.
-  const speciesTypedType = move.typeByUserSpecies?.[attackerSlot.pokemonId];
-  if (speciesTypedType) variablePowerMove = { ...variablePowerMove, type: speciesTypedType };
-
-  // 셸암즈(dynamicCategoryByHigherDamage): 물리·특수 결정력을 둘 다 내보고 큰 쪽 판정으로 고정한다.
-  // 매치업 페이지는 1턴 스냅샷이라 "동점 시 무작위"를 표현할 수 없어 동점이면 물리로 확정(결정적).
-  let resolvedCategory: Move["category"] = move.category;
-  if (move.dynamicCategoryByHigherDamage) {
-    const dmgOpts = { attackerStages, defenderRealStats, defenderStages, stabMultiplier: 1.5 };
-    const phys =
-      computeOffensePower(attackerRealStats, attackerForm.types, { ...variablePowerMove, category: "physical" }, dmgOpts) ?? 0;
-    const spec =
-      computeOffensePower(attackerRealStats, attackerForm.types, { ...variablePowerMove, category: "special" }, dmgOpts) ?? 0;
-    resolvedCategory = phys >= spec ? "physical" : "special";
-    variablePowerMove = {
-      ...variablePowerMove,
-      category: resolvedCategory,
-      makesContact: resolvedCategory === "physical",
-    };
-  }
-
-  if (move.reversalPower) {
-    // 공격측 HP 비율(배틀 AI의 현재 HP·페이지의 HP 슬라이더), 생략하면 풀피(최소 위력 20)
-    variablePowerMove = { ...variablePowerMove, power: reversalPowerFromHp(attackerHpFraction ?? 1, 1) };
-  } else if (move.gyroBallPower) {
-    const effSpeed = (
-      spe: number,
-      stages: StatStages,
-      item: Parameters<typeof getItemSpeedMultiplier>[0],
-    ) => spe * rankStageMultiplier(stages.spe) * getItemSpeedMultiplier(item);
-    variablePowerMove = {
-      ...variablePowerMove,
-      power: gyroBallPowerFromSpeeds(
-        effSpeed(attackerRealStats.spe, attackerStages, attackerItem),
-        effSpeed(defenderRealStats.spe, defenderStages, defenderItem),
-      ),
-    };
-  } else if (move.flingsHeldItem) {
-    // 내던지기(트랙 M5): 지닌 도구의 flingPower. 던질 도구가 없으면 위력 없음(데미지 0)
-    variablePowerMove = { ...variablePowerMove, power: attackerItem?.flingPower ?? null };
-  } else if (move.electroBallPower) {
-    // 일렉트릭볼(트랙 M5): 자이로볼과 같은 실효 스피드, 본가 비율표
-    const effSpeed = (spe: number, stages: StatStages, item: Parameters<typeof getItemSpeedMultiplier>[0]) =>
-      spe * rankStageMultiplier(stages.spe) * getItemSpeedMultiplier(item);
-    variablePowerMove = {
-      ...variablePowerMove,
-      power: electroBallPowerFromSpeeds(
-        effSpeed(attackerRealStats.spe, attackerStages, attackerItem),
-        effSpeed(defenderRealStats.spe, defenderStages, defenderItem),
-      ),
-    };
-  } else if (move.targetHpRatioPower) {
-    // 하드프레스(트랙 M5): 상대 남은 HP 비율(매치업 페이지는 풀피)
-    variablePowerMove = { ...variablePowerMove, power: Math.max(1, Math.floor(move.targetHpRatioPower * defenderHpFraction)) };
-  } else if (move.powerFromPositiveStages) {
-    const { base, perStage } = move.powerFromPositiveStages;
-    variablePowerMove = { ...variablePowerMove, power: positiveStagesPowerValue(attackerStages, base, perStage) };
-  } else if (move.spitUpPower) {
-    const stacks = Math.max(0, Math.min(3, stockpileCount ?? 3));
-    variablePowerMove = { ...variablePowerMove, power: stacks * 100 };
-  } else if (move.weightRatioPower) {
-    // 메가폼이면 그 폼의 몸무게, 헤비메탈/라이트메탈이면 그 배율까지 반영한 유효 몸무게를 쓴다.
-    variablePowerMove = {
-      ...variablePowerMove,
-      power:
-        attackerWeightKg !== undefined && defenderWeightKg !== undefined
-          ? weightRatioPowerValue(attackerWeightKg, defenderWeightKg)
-          : WEIGHT_MOVE_FALLBACK_POWER,
-    };
-  } else if (move.targetAbsoluteWeightPower) {
-    variablePowerMove = {
-      ...variablePowerMove,
-      power:
-        defenderWeightKg !== undefined
-          ? absoluteWeightPowerValue(defenderWeightKg)
-          : WEIGHT_MOVE_FALLBACK_POWER,
-    };
-  }
-  // 분화·해수스파우팅(ver.1.9): 위력 = 최대 위력 × 공격측 HP 비율(생략하면 풀피)
-  if (variablePowerMove.userHpScaledPower) {
-    variablePowerMove = {
-      ...variablePowerMove,
-      power: userHpScaledPowerValue(variablePowerMove.userHpScaledPower, attackerHpFraction ?? 1),
-    };
-  }
-  if (
-    variablePowerMove.power !== null &&
-    conditionalPowerDoubled(variablePowerMove, {
-      attackerHasItem: !!attackerItem,
-      attackerStatus,
-      defenderStatus,
-      defenderHasStatusCondition,
-      attackerMovesLast,
-      attackerTookDamageThisTurn,
-      attackerMoveFailedLastTurn,
-      attackerStatLoweredThisTurn,
-      defenderDamagedThisTurn,
-    })
-  ) {
-    variablePowerMove = { ...variablePowerMove, power: variablePowerMove.power * 2 };
-  }
-  // 누르기·드래곤다이브·플라잉프레스(ver.1.9): 대상이 작아지기를 썼으면 위력 2배(엔진 preHitEffects와 같게)
-  if (variablePowerMove.power !== null && variablePowerMove.bonusVsMinimize && defenderMinimized) {
-    variablePowerMove = { ...variablePowerMove, power: variablePowerMove.power * 2 };
-  }
-
-  // 솔라빔(§1-10): chargeSkipWeather(쾌청)가 아닌 날씨에서는 위력 절반. matchupEvaluator는
-  // 선택한 날씨를 정확히 알고 있어(§1-7 성장과 같은 근거) 항상 정확히 판정한다.
-  if (
-    variablePowerMove.halvesPowerOutsideChargeSkipWeather &&
-    variablePowerMove.power !== null &&
-    variablePowerMove.chargeSkipWeather !== undefined &&
-    effectiveWeather !== variablePowerMove.chargeSkipWeather
-  ) {
-    variablePowerMove = { ...variablePowerMove, power: Math.floor(variablePowerMove.power / 2) };
-  }
-
-  // 웨더볼(날씨판 대지의파동): 타입·위력 변경을 fieldPulse보다 먼저.
-  // 이 아래 fieldPulse/powerMultiplierInField(대지의파동·미스트버스트류)까지가 "특성 배율 계산 전
-  // 타입/위력 확정" 구간 — 타입이 바뀐 상태여야 resolveMoveContext의 상성 계산에 반영된다.
-  const weatherBall = applyWeatherBall(variablePowerMove, effectiveWeather);
-  const weatherBallMove: Move = { ...variablePowerMove, type: weatherBall.type, power: weatherBall.power };
-
-  // 접지 조건(ver.1.8) — runtime이 없으면(매치업 페이지) 땅에 있다고 본다
-  const fieldPulse = applyFieldPulse(weatherBallMove, field, attackerRuntime?.grounded ?? true);
-  const fieldPowerMultiplier = getFieldPowerMultiplier(weatherBallMove, field, attackerRuntime?.grounded ?? true, defenderRuntime?.grounded ?? true);
-  const fieldAdjustedMove: Move = {
-    ...weatherBallMove,
-    type: fieldPulse.type,
-    power: fieldPulse.power === null ? null : Math.round(fieldPulse.power * fieldPowerMultiplier),
-  };
-
-  // 특성 배율(공격측 테크니션/모래의힘/메가런처/페어리스킨, 방어측 두꺼운지방 등) + 타입 변경 +
-  // 자속 + 상대 타입 상성을 한 번에 계산 — 배틀 엔진의 resolveAction과 공유하는 로직
-  const {
-    effectiveMove,
-    abilityOffenseMultiplier,
-    statOffenseMultiplier,
-    abilityDefenseMultiplier: abilityDefense,
-    finalDefenseMultiplier,
-    stabMultiplier,
-    typeEffectiveness,
-  } = resolveMoveContext(attackerAbility, fieldAdjustedMove, defenderForm.types, defenderAbility, {
-    weather: effectiveWeather,
-    defenderItem,
-    // 매치업 페이지는 가정 토글로 넘긴다(생략하면 풀피/상태이상 없음). 특성 HP 조건은 abilityHpFraction 우선.
-    attackerHpFraction: abilityHpFraction ?? attackerHpFraction,
-    defenderHpIsFull,
-    defenderHasStatusCondition,
-    field,
-    defenderGrounded: defenderRuntime?.grounded,
-  });
-
-  // 다단히트 기술이면, 특성/타입 조건 판정은 원래 기술(1타 위력) 기준으로 이미 끝났으니 여기서만
-  // 선택한 타수까지의 위력을 합산해서 결정력 계산에 쓸 위력으로 바꿔치기한다.
-  //  - 트리플악셀류(multiHitPowers): 타수별 위력이 다르므로 배열을 잘라 합산.
-  //  - 록블라스트/스케일샷류(minHits~maxHits, multiHitPowers 없음): 매 타 위력이 동일하므로 위력 × 타수.
-  // 반감 열매는 첫 타에만 적용되므로 첫 타 위력 비중(firstHitShare)도 같이 낸다.
-  const firstHitShare = (() => {
-    if (move.multiHitPowers && multiHitCount) {
-      const powers = move.multiHitPowers.slice(0, multiHitCount);
-      const total = powers.reduce((sum, p) => sum + p, 0);
-      return total > 0 ? powers[0] / total : 1;
-    }
-    if (move.minHits !== undefined && move.maxHits !== undefined && multiHitCount) {
-      return 1 / Math.max(move.minHits, Math.min(move.maxHits, multiHitCount));
-    }
-    return 1;
-  })();
-  const effectiveMoveWithHits = (() => {
-    if (move.multiHitPowers && multiHitCount) {
-      return {
-        ...effectiveMove,
-        power: move.multiHitPowers.slice(0, multiHitCount).reduce((sum, p) => sum + p, 0),
-      };
-    }
-    if (
-      move.minHits !== undefined &&
-      move.maxHits !== undefined &&
-      multiHitCount &&
-      effectiveMove.power !== null
-    ) {
-      const clampedHits = Math.max(move.minHits, Math.min(move.maxHits, multiHitCount));
-      return { ...effectiveMove, power: effectiveMove.power * clampedHits };
-    }
-    return effectiveMove;
-  })();
-
-  // 부자유친: 단일타 데미지 기술이 데미지를 준 직후 위력 × mult 짜리 추가타가 한 번 더 나간다
-  // (배틀 엔진과 동일 조건 — 다단히트·고정데미지는 제외). 매치업은 1턴 스냅샷이라 "추가타까지
-  // 다 맞은" 상황으로 보고 결정력 위력에 합산한다. 추가타 위력은 엔진과 똑같이 round(위력 × mult).
-  const followUpMultiplier = attackerAbility?.followUpHitPowerMultiplier;
-  const effectiveMoveFinal =
-    followUpMultiplier !== undefined &&
-    !move.multiHitPowers &&
-    move.minHits === undefined &&
-    move.fixedDamage === undefined &&
-    effectiveMoveWithHits.power !== null
-      ? {
-          ...effectiveMoveWithHits,
-          power:
-            effectiveMoveWithHits.power +
-            Math.round(effectiveMoveWithHits.power * followUpMultiplier),
-        }
-      : effectiveMoveWithHits;
-
-  // 메트로놈(연속 사용 보너스)은 매치업 화면이 여러 턴 이력이 없는 1턴 스냅샷이라 스트릭=1(보너스 없음)로 고정.
-  const autoItemMultiplier = getItemOffenseMultiplier(attackerItem, effectiveMove, typeEffectiveness, 1);
-  const berryResult = getBerryDefenseResult(
-    defenderItem,
-    effectiveMove.type,
-    typeEffectiveness,
-    defenderItemConsumed ?? false,
-    !!defenderAbility?.doublesBerryEffect, // 숙성 — 실전 엔진(hitResolution)과 같은 판정
-  );
-
-  // 날씨/필드 데미지 배율은 (타입 변경까지 끝난) effectiveMove.type 기준으로 구한다 — 배틀 엔진과 동일.
-  const autoWeatherDamageMultiplier = getWeatherDamageMultiplier(effectiveWeather, effectiveMove.type);
-  const autoFieldDamageMultiplier = getFieldDamageMultiplier(field, effectiveMove.type, attackerRuntime?.grounded, defenderRuntime?.grounded);
-
-  // 투쟁심: 양쪽 슬롯 성별로 ×1.25(동성)/×0.75(이성)/×1.0(불명). battlePower.rivalryDamageMultiplier 공유(§5).
-  const rivalryMultiplier = rivalryDamageMultiplier(
-    attackerAbility,
-    getEffectiveGender(attackerPokemon, attackerSlot),
-    getEffectiveGender(defenderPokemon, defenderSlot),
-  );
-
-  // 의욕(Hustle): 물리 기술 위력 ×1.5(명중률 페널티는 결정력 계산 대상이 아님).
-  // battlePower.hustleDamageMultiplier 공유(§5).
-  const hustleMultiplier = hustleDamageMultiplier(resolvedCategory, attackerAbility);
-
-  // 상대 타입 상성을 곱하기 전의 결정력. offensePower는 여기에 typeEffectiveness만 곱한 값이라
-  // 매번 다시 계산하는 대신 이 값에 typeEffectiveness를 곱해서 구한다.
-  // 급소(ver.1.9 6-2): 공격 쪽 랭크는 음수를 0으로(속임수는 방어자 공격 랭크가 공격 랭크라 같은 쪽), 방어 랭크는 양수를 0으로
-  const criticalApplies = critical && !defenderAbility?.preventsCritsAgainstSelf;
-  const critMultiplier = criticalApplies ? (attackerAbility?.critDamageMultiplier ?? CRITICAL_DAMAGE_MULTIPLIER) : 1;
-  const attackTypesForStab = offenseTypes(attackerForm.types, attackerAbility, effectiveMoveFinal, attackerTypeToMoveType);
-  const rawOffensePower = computeOffensePower(attackerRealStats, attackTypesForStab, effectiveMoveFinal, {
-    abilityMultiplier:
-      (manualAbilityMultiplier ?? abilityOffenseMultiplier) * rivalryMultiplier * hustleMultiplier * extraOffenseMultiplier * finalOffenseMultiplier * critMultiplier,
-    itemMultiplier: itemMultiplier ?? autoItemMultiplier,
-    weatherMultiplier: manualWeatherMultiplier ?? autoWeatherDamageMultiplier,
-    fieldMultiplier: manualFieldMultiplier ?? autoFieldDamageMultiplier,
-    attackerStages: criticalApplies ? clampStages(attackerStages, "positive") : attackerStages,
-    stabMultiplier,
-    // 속임수(usesTargetAttackStat): 방어자의 공격 실능·랭크로 결정력을 낸다
-    defenderRealStats,
-    defenderStages: criticalApplies ? clampStages(defenderStages, "positive") : defenderStages,
-  });
-  if (rawOffensePower === null) return null;
-  const offensePower = rawOffensePower * typeEffectiveness;
-
-  // 스크린(리플렉터/빛의장막/오로라베일): 해당 카테고리 데미지 절반 = 내구력 2배 — 틈새포착이면 무시.
-  // 이쪽은 1턴 스냅샷이라 진영 상태 대신 단일 screen 옵션에서 두 불리언을 도출하고,
-  // 실제 곱셈 공식은 battlePower.screenMultiplierFromFlags로 배틀 엔진과 공유한다(§5).
-  const screenBypassed = !!attackerAbility?.bypassesScreensAndSubstitute || criticalApplies;
-  const auroraVeilActive = !screenBypassed && screen === "auroraVeil";
-  const categoryScreenActive =
-    !screenBypassed &&
-    ((screen === "reflect" && resolvedCategory === "physical") ||
-      (screen === "lightScreen" && resolvedCategory === "special"));
-  const screenMultiplier = screenMultiplierFromFlags(categoryScreenActive, auroraVeilActive);
-  // 모래바람 바위 특방·눈 얼음 방어 1.5배(Tier 2-C에서 발견한 누락) — hitResolution과 같은 판정
-  const weatherDefenseMultiplier = getWeatherDefenseMultiplier(
-    effectiveWeather,
-    defenderForm.types,
-    move.hitsDefensiveStat ?? (resolvedCategory === "physical" ? "def" : "spd"),
-  );
-
-  // 반감 열매는 첫 타만(ver.1.9 6-1): 다단히트 전체 데미지 = 첫 타 몫 / 배율 + 나머지 몫 → 내구력 배율 = 1 / 그 비율
-  const berryHitsMultiplier =
-    berryResult.bulkMultiplier === 1 ? 1 : 1 / (firstHitShare / berryResult.bulkMultiplier + (1 - firstHitShare));
-  const finalBulkMultiplier =
-    (manualBulkMultiplier ?? abilityDefense * berryHitsMultiplier * weatherDefenseMultiplier) * screenMultiplier;
-  const bulkDefenderStages = criticalApplies ? clampStages(defenderStages, "negative") : defenderStages;
-  const bulkPower = computeBulkPower(defenderRealStats, resolvedCategory, {
-    defenderStages: bulkDefenderStages,
-    bulkMultiplier: finalBulkMultiplier,
-    // 사이코쇼크(hitsDefensiveStat): 특수기지만 내구력은 방어자의 물리 방어로 낸다
-    defensiveStatOverride: move.hitsDefensiveStat,
-  });
-
-  // 정수 데미지 공식 조각(damageFormula.ts, 2.4 B3) — 위의 연속식 결정력·내구력과 같은 입력을 단계별로 나눠 담는다.
-  // 위력 단계: 특성·투쟁심·의욕·추가 배율·위력계 도구(타입 강화 등)·필드 / 날씨·급소·자속·상성은 각자 단계 / 최종 단계: 구슬·달인의띠·화상 ×,
-  // 벽·하드록·반감 열매는 내구력 배율의 역수로. 반감 열매는 첫 타에만(다단히트) 곱한다.
-  const defenseKey = move.hitsDefensiveStat ?? (resolvedCategory === "physical" ? "def" : "spd");
-  const unitPower = effectiveMove.power;
-  const hitPowers = (() => {
-    if (unitPower === null) return [];
-    if (move.multiHitPowers && multiHitCount) return move.multiHitPowers.slice(0, multiHitCount);
-    if (move.minHits !== undefined && move.maxHits !== undefined && multiHitCount) {
-      return Array<number>(Math.max(move.minHits, Math.min(move.maxHits, multiHitCount))).fill(unitPower);
-    }
-    if (effectiveMoveFinal.power !== effectiveMoveWithHits.power) return [unitPower, effectiveMoveFinal.power! - unitPower];
-    return [unitPower];
-  })();
-  const attackTerm = computeAttackTerm(
-    attackerRealStats,
-    effectiveMoveFinal,
-    criticalApplies ? clampStages(attackerStages, "positive") : attackerStages,
-    defenderRealStats,
-    criticalApplies ? clampStages(defenderStages, "positive") : defenderStages,
-  );
-  const useAutoDefense = manualBulkMultiplier === undefined;
-  // 맹화류·선파워는 공격 스탯 단계 — 직접 지정한 특성 배율이 있으면 그 값 전체를 위력 단계로 본다
-  const abilityStatMultiplier = manualAbilityMultiplier === undefined ? statOffenseMultiplier : 1;
-  const itemBaseMultiplier = itemMultiplier ?? getItemBasePowerMultiplier(attackerItem, effectiveMove);
-  const itemFinalMultiplier = itemMultiplier !== undefined ? 1 : getItemFinalMultiplier(attackerItem, typeEffectiveness, 1);
-  const damageParts: DamageParts | undefined =
-    hitPowers.length > 0 && attackTerm > 0
-      ? {
-          hitPowers,
-          attackTerm: Math.floor(attackTerm + 1e-9) * abilityStatMultiplier,
-          defenseKey,
-          defenseRankMultiplier: rankStageMultiplier(bulkDefenderStages[defenseKey]),
-          baseMultiplier:
-            ((manualAbilityMultiplier ?? abilityOffenseMultiplier) / abilityStatMultiplier) * rivalryMultiplier * hustleMultiplier * extraOffenseMultiplier *
-            itemBaseMultiplier * (manualFieldMultiplier ?? autoFieldDamageMultiplier),
-          bulkMultiplier: manualBulkMultiplier ?? (abilityDefense / finalDefenseMultiplier) * weatherDefenseMultiplier,
-          weatherMultiplier: manualWeatherMultiplier ?? autoWeatherDamageMultiplier,
-          critMultiplier,
-          stabMultiplier: effectiveMoveFinal.type && attackTypesForStab.includes(effectiveMoveFinal.type) ? stabMultiplier : 1,
-          typeEffectiveness,
-          finalMultiplier:
-            (itemFinalMultiplier * finalOffenseMultiplier) / (screenMultiplier * (useAutoDefense ? finalDefenseMultiplier : 1)),
-          firstHitFinalMultiplier: useAutoDefense ? 1 / berryResult.bulkMultiplier : 1,
-        }
-      : undefined;
-
-  const chance: MatchupChance = options.skipVerdict
-    ? { verdict: "needs-3hit-plus", koChance: null }
-    : judgeByIntegerDamage(damageParts, defenderRealStats[defenseKey], defenderRealStats.hp);
-  return {
-    offensePower,
-    rawOffensePower,
-    bulkPower,
-    damageParts,
-    defenseStat: defenderRealStats[defenseKey],
-    verdict: chance.verdict,
-    berryBulkMultiplier: manualBulkMultiplier === undefined ? berryResult.bulkMultiplier : 1,
-    berryAppliedMultiplier: manualBulkMultiplier === undefined ? berryHitsMultiplier : 1,
-    criticalBlocked: critical && !criticalApplies ? true : undefined,
-    koChance: chance.koChance,
-    killingRolls: chance.killingRolls,
-  };
+  computeBulk(c);
+  buildDamageParts(c);
+  return collectResult(c);
 }
 
 /**

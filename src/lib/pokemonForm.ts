@@ -54,7 +54,7 @@ export function resolveLearnset(pokemon: Pokemon, slot: { formVariant?: string }
   return resolveFormVariant(pokemon, slot)?.learnset ?? pokemon.learnset;
 }
 
-interface EffectiveForm {
+export interface EffectiveForm {
   /** 메가진화 상태면 해당 폼, 아니면 undefined */
   mega?: MegaEvolution;
   types: PokemonType[];
