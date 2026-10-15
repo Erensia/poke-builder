@@ -133,58 +133,28 @@ function useMatchupSlot(saved: unknown) {
     setSlot((prev) => ({ ...prev, bulkMoves: prev.bulkMoves?.map((m, i) => (i === index && m ? { ...m, hits } : m)) }));
   }
 
-  function setMultiHitCount(count: number) {
-    setSlot((prev) => ({ ...prev, multiHitCount: count }));
-  }
-
-  function setStockpileCount(count: number) {
-    setSlot((prev) => ({ ...prev, stockpileCount: count }));
-  }
-
-  function setItemStolen(value: boolean) {
-    setSlot((prev) => ({ ...prev, itemStolenFromOpponent: value }));
-  }
-
-  function setUnburdenAssumed(value: boolean) {
-    setSlot((prev) => ({ ...prev, unburdenAssumed: value }));
-  }
-
-  function setStatusAssumed(value: MatchupSlot["statusAssumed"]) {
-    setSlot((prev) => ({ ...prev, statusAssumed: value }));
-  }
-
   /** ver.1.9 조건부 위력 가정 토글(보복·눈사태·분함의발구르기·분풀이·승부굳히기·작아지기) */
   function setPowerCondition(key: PowerConditionKey, value: boolean) {
     setSlot((prev) => ({ ...prev, [key]: value }));
-  }
-
-  function setCritAssumed(value: boolean) {
-    setSlot((prev) => ({ ...prev, critAssumed: value }));
-  }
-
-  function setTypeShiftAssumed(value: boolean) {
-    setSlot((prev) => ({ ...prev, typeShiftAssumed: value }));
-  }
-
-  function setPinchAssumed(value: boolean) {
-    setSlot((prev) => ({ ...prev, pinchAssumed: value }));
-  }
-
-  function setFullHpAssumed(value: boolean) {
-    setSlot((prev) => ({ ...prev, fullHpAssumed: value }));
   }
 
   function setHpPercent(value: number) {
     setSlot((prev) => ({ ...prev, hpPercent: Math.max(1, Math.min(100, Math.round(value))) }));
   }
 
-  function setScreen(value: MatchupSlot["screen"]) {
-    setSlot((prev) => ({ ...prev, screen: value }));
-  }
-
-  function setGraveVisitFaintedAllies(count: 0 | 1 | 2) {
-    setSlot((prev) => ({ ...prev, graveVisitFaintedAllies: count }));
-  }
+  /** 슬롯의 값 하나를 바꾸는 setter를 만든다 — 가정 토글들이 같이 쓴다 */
+  const slotField = <K extends keyof MatchupSlot>(key: K) => (value: MatchupSlot[K]) => setSlot((prev) => ({ ...prev, [key]: value }));
+  const setMultiHitCount = slotField("multiHitCount");
+  const setStockpileCount = slotField("stockpileCount");
+  const setItemStolen = slotField("itemStolenFromOpponent");
+  const setUnburdenAssumed = slotField("unburdenAssumed");
+  const setStatusAssumed = slotField("statusAssumed");
+  const setCritAssumed = slotField("critAssumed");
+  const setTypeShiftAssumed = slotField("typeShiftAssumed");
+  const setPinchAssumed = slotField("pinchAssumed");
+  const setFullHpAssumed = slotField("fullHpAssumed");
+  const setScreen = slotField("screen");
+  const setGraveVisitFaintedAllies = slotField("graveVisitFaintedAllies");
 
   function setPoint(stat: keyof AbilityPoints, value: number) {
     setSlot((prev) => setAbilityPointOnSlot(prev, stat, value));

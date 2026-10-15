@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { PillRow } from "./PillRow";
 import type { CandidateCard, CandidateLists, CandidateSort } from "../lib/candidateCards";
 import "./CandidateCards.css";
 
@@ -45,13 +46,7 @@ export function CandidateCards({ lists }: { lists: CandidateLists | null }) {
     <details className="dinf-details cand">
       <summary>후보 카드 보기</summary>
       <div className="cand-body">
-        <div className="matchup-hitcount-row">
-          {SORTS.map((x) => (
-            <button key={x.id} type="button" className={`matchup-hitcount-pip${sort === x.id ? " is-active" : ""}`} onClick={() => setSort(x.id)}>
-              {x.label}
-            </button>
-          ))}
-        </div>
+        <PillRow options={SORTS.map((x) => ({ value: x.id, label: x.label }))} value={sort} onChange={setSort} />
         {sameOrder && <p className="dinf-note">이 관측에서는 앞쪽 후보들의 기준 값이 같아서(같으면 남은 SP가 많은 쪽을 먼저 보여줘요) 남은 SP 순과 같아요. 관측을 더 넣으면 갈려요.</p>}
         <ul className="cand-grid">
           {cards.slice(0, all ? cards.length : FIRST_PAGE).map((c, i) => (
