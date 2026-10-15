@@ -949,6 +949,389 @@ export function evaluateOptions(rawState: BattleState, key: FighterKey, options:
   return withAccumulationSteps(steps, () => evaluateOptionsOn(state, key, options));
 }
 
+/** buildMoveOption이(가) 바깥 함수(evaluateOptionsOn)에서 캡처하던 값 */
+interface MoveOptionEnv {
+  state: BattleState;
+  key: FighterKey;
+  oppKey: FighterKey;
+  mega: boolean;
+  moveState: BattleState;
+  me: BattleFighterState;
+  opponent: BattleFighterState;
+  myMoveSide: BattleSide;
+  oppMoveSide: BattleSide;
+  myMoves: Move[];
+  raceMoves: Move[];
+  baseThreat: OpponentThreat;
+  myBest: AttackPick | undefined;
+  bench: number[];
+  benchOptions: () => AiOption[];
+}
+
+  // speedMove: 흉내쟁이(트랙 M2)처럼 다른 기술로 나가도 행동 순서는 원래 고른 기술(speedMove)의 우선도로 정해진다
+  /** buildMoveOptionFor의 단계 사이에서 공유되는 값 — 한 단계 안에서만 쓰는 변수는 각 단계 함수의 지역 변수다 */
+interface MoveOptionCtx {
+  env: MoveOptionEnv;
+  move: Move;
+  speed: { probability: number; order: SpeedOrder; };
+  iMoveSecond: boolean;
+  threat: OpponentThreat;
+  estimate: MoveHitEstimate | null;
+  option: AiOption;
+}
+
+/** 1회용(첫 턴 전용) 기술과 난동 — 이어지는 대면을 나머지 기술/혼란 기준으로 잡는다 */
+function applyOneShotAndRampage(c: MoveOptionCtx) {
+
+    // 1회용(첫 턴 전용) 기술: 이번 턴 한 번 맞히고, 그 뒤는 나머지 기술 중 최선으로 대면을 이어간다.
+    if (isOneShotMove(c.move) && c.estimate && Number.isFinite(c.estimate.rawHits) && c.estimate.rawHits > 1) {
+      const opponentHpAfter = Math.max(1, Math.round(c.env.opponent.currentHp * (1 - 1 / c.estimate.rawHits)));
+      const follow = (hp?: number) =>
+        turnsFor(
+          c.env.moveState,
+          bestAttack({ state: c.env.moveState, attacker: c.env.me, defender: c.env.opponent, defenderSide: c.env.oppMoveSide, moves: c.env.raceMoves, attackerMovesSecond: c.iMoveSecond, defenderHp: hp })?.estimate,
+          c.env.me,
+          c.env.opponent,
+          hp,
+        ).expected;
+      const acc = c.estimate.accuracy;
+      // 가중치 0인 항은 빼야 0 × ∞ = NaN이 안 생긴다(나머지 공격기가 없으면 후속 처치 턴이 ∞).
+      const afterHit = acc > 0 ? acc * follow(opponentHpAfter) : 0;
+      const afterMiss = acc < 1 ? (1 - acc) * follow() : 0;
+      c.option.hitsToKill = { ...c.option.hitsToKill, expected: 1 + afterHit + afterMiss };
+    }
+
+    // 난동(ver.1.9): 역린류를 새로 쓰면 평균 2.5턴(2·3턴 각 50%) 이어 쓰고 끝나면 혼란 — 그 뒤로도 대면이 이어지면 혼란(행동의 1/3
+    // 자해, 평균 2.5턴) 상태로 본다. 이어 쓰는 동안 교체할 수 없는 비용은 이 대면을 끝까지 싸우는 계산이라 따로 넣지 않는다.
+    if (
+      c.move.rampage === "confuse" &&
+      !c.env.me.volatile.active.rampage &&
+      !hasVolatile(c.env.me.volatile, "confusion") &&
+      !abilityOf(c.env.me)?.immuneToConfusion &&
+      c.option.hitsToKill.expected > RAMPAGE_AVERAGE_TURNS
+    ) {
+      const confused = cloneBattleState(c.env.moveState);
+      confused[c.env.key].volatile = {
+        active: { ...confused[c.env.key].volatile.active, confusion: { turnsRemaining: RAMPAGE_AVERAGE_TURNS } },
+      };
+      const after = currentRace(confused, c.env.key, c.env.raceMoves);
+      const blended = blendRace(
+        { killTurns: c.option.hitsToKill.expected, survivalTurns: c.option.hitsToBeKilled.expected, firstProbability: c.option.firstProbability },
+        after,
+        RAMPAGE_AVERAGE_TURNS,
+      );
+      c.option.hitsToKill = { ...c.option.hitsToKill, expected: blended.killTurns };
+      c.option.hitsToBeKilled = { ...c.option.hitsToBeKilled, expected: blended.survivalTurns };
+    }
+}
+
+/** 목숨걸기·자폭류: 주고 기절하는 기술을 그 state에서 이어지는 판세로 평가 */
+function evaluateSacrificeAttack(c: MoveOptionCtx) {
+
+    // 목숨걸기·자폭류(트랙 M5): 주고 기절 — 추억의선물처럼 "그 state에서 이어지는 판세"로 평가(파티 모드 전용).
+    // 목숨걸기는 내 HP만큼, 자폭류(대폭발·자폭·미스트버스트)는 한 번 맞혔을 때의 평균 데미지만큼. 후공인데 이번 턴에
+    // 쓰러지면 데미지 없이 기절만 한다(자폭류는 빗나가도 기절).
+    const sacrificeAttack = c.move.damageEqualsUserHp || (c.move.selfFaints && c.move.category !== "status");
+    if (sacrificeAttack) {
+      const bestKillTurns = turnsFor(c.env.moveState, c.env.myBest?.estimate, c.env.me, c.env.opponent).expected;
+      if (!c.estimate || c.estimate.typeEffectiveness === 0 || c.estimate.accuracy <= 0) {
+        c.option.support = { kind: "other", before: 0, after: 0, bestKillTurns };
+        return { value: c.option };
+      }
+      const dealt = c.move.damageEqualsUserHp
+        ? c.env.me.currentHp
+        : Math.round((c.estimate.damageFraction / Math.max(c.estimate.accuracy, 1e-9)) * c.env.opponent.maxHp);
+      const after = cloneBattleState(c.env.moveState);
+      after[c.env.oppKey].currentHp = Math.max(0, after[c.env.oppKey].currentHp - dealt);
+      after[c.env.key].currentHp = 0;
+      const failed = cloneBattleState(c.env.moveState);
+      failed[c.env.key].currentHp = 0;
+      const survivesTurn = c.threat.hitsToBeKilled.expected > 1;
+      const success = c.estimate.accuracy * (c.speed.probability + (1 - c.speed.probability) * (survivesTurn ? 1 : 0));
+      const race: RaceInputs = { killTurns: c.option.hitsToKill.expected, survivalTurns: c.option.hitsToBeKilled.expected, firstProbability: c.speed.probability };
+      c.option.support = {
+        kind: "effect",
+        before: 0,
+        after: 0,
+        bestKillTurns,
+        extended: true,
+        effect: {
+          hit: race,
+          base: race,
+          hitChance: 1,
+          carry: 0,
+          kind: c.move.damageEqualsUserHp ? "finalGambit" : "selfDestruct",
+          sacrifice: { success, afterModel: createPartyModel(after, c.env.key), failModel: createPartyModel(failed, c.env.key) },
+        },
+      };
+      return { value: c.option };
+    }
+}
+
+/** 그림자꿰매기(상대 교체 봉쇄)·유턴류·잠꼬대 */
+function applyTrapPivotAndTalk(c: MoveOptionCtx) {
+
+    // 그림자꿰매기(ver.1.9 6-3): 맞히면 상대 교체 봉쇄 — 이어지는 대면을 상대가 갇힌 state의 대면표로 본다(한 방에 쓰러뜨리면 무의미)
+    if (
+      trapModelAware &&
+      c.estimate &&
+      c.estimate.accuracy > 0 &&
+      c.estimate.rawHits > 1 &&
+      c.move.inflictsVolatile?.some((v) => v.volatile === "meanLook" && v.target === "opponent" && v.chance === undefined) &&
+      !isTrappedFromSwitching(c.env.opponent, c.env.moveState) &&
+      !c.env.opponent.types.includes("고스트")
+    ) {
+      const trapped = cloneBattleState(c.env.moveState);
+      trapped[c.env.oppKey].volatile = inflictVolatile(trapped[c.env.oppKey].volatile, "meanLook");
+      c.option.trapPartyModel = createPartyModel(trapped, c.env.key);
+    }
+
+    // 유턴류: 맞히면(상대 기절 여부 무관) 교대할 포켓몬이 있는 한 엔진이 교체를 강제한다. 한 방에 쓰러뜨리면
+    // 다음 상대를 모르므로 일반 공격기로만 평가한다.
+    if (c.move.selfSwitchAfterDamage && c.estimate && c.estimate.rawHits > 1 && Number.isFinite(c.estimate.rawHits) && c.env.bench.length > 0) {
+      const hitRate = 1 / c.estimate.rawHits;
+      const opponentHpAfter = Math.max(1, Math.round(c.env.opponent.currentHp * (1 - hitRate)));
+      const d = c.threat.hitsToBeKilled.expected;
+      c.option.pivot = {
+        hitRate,
+        activeHitLoss: (c.env.me.currentHp / c.env.me.maxHp) * Math.min(1, d > 0 ? 1 / d : 1),
+        candidates: c.env.bench.map((index) => evaluateSwitchCandidate(c.env.state, c.env.key, index, opponentHpAfter)),
+      };
+    }
+
+    // 잠꼬대(AI-A2): 잠든 동안(사용 조건은 selectableMoves가 이미 거름) 배운 다른 기술 중 무작위 하나가 나간다 —
+    // 잠든 턴 동안은 그 기대 피해로, 깬 뒤에는 최선 공격기로 대면을 이어간다.
+    if (c.move.callsRandomLearnedMove) {
+      const sleepTalk = sleepTalkKillTurns(c.env.moveState, c.env.key, c.move, turnsFor(c.env.moveState, c.env.myBest?.estimate, c.env.me, c.env.opponent).expected, c.iMoveSecond);
+      if (sleepTalk) {
+        c.option.hitsToKill = { expected: sleepTalk.killTurns, worstCase: { count: 3, certainty: "random", probability: 0 } };
+        c.option.typeMatchup = { ...c.option.typeMatchup, offensive: sleepTalk.bestTypeEffectiveness };
+        c.option.accuracy = 1;
+      } else {
+        c.option.support = { kind: "other", before: 0, after: 0, bestKillTurns: turnsFor(c.env.moveState, c.env.myBest?.estimate, c.env.me, c.env.opponent).expected };
+      }
+      return { value: c.option };
+    }
+}
+
+/** 변화기: 방어류·랭크업·회복·효과 기술의 지원 가치 */
+function evaluateStatusSupport(c: MoveOptionCtx) {
+
+    if (c.move.category === "status") {
+      const idle = targetAttackOnlyWeight(c.threat);
+      if (idle > 0) c.option.opponentIdleChance = idle;
+      const kind = classifySupport(c.move);
+      const bestKillTurns = turnsFor(c.env.moveState, c.env.myBest?.estimate, c.env.me, c.env.opponent).expected;
+      if (protectGroupOf(c.move)) {
+        c.option.support = {
+          kind: "protect",
+          before: 0,
+          after: 0,
+          bestKillTurns,
+          protect: evaluateProtectMove({ state: c.env.state, moveState: c.env.moveState, key: c.env.key, move: c.move, mega: c.option.mega, raceMoves: c.env.raceMoves, threat: c.threat }),
+          extended: true,
+        };
+      } else if (kind === "heal" && c.move.restSleep) {
+        // 잠자기: HP·상태이상 완전 회복 + 2턴 잠듦 — 잠든 상태로 대면을 다시 평가한다(잠든 턴은 turnsToKo가 더함).
+        const rested = cloneBattleState(c.env.moveState);
+        rested[c.env.key].currentHp = c.env.me.maxHp;
+        rested[c.env.key].status = inflictRestSleep();
+        const race = currentRace(rested, c.env.key, c.env.raceMoves);
+        c.option.support = {
+          kind,
+          before: c.threat.hitsToBeKilled.expected,
+          after: race.survivalTurns,
+          bestKillTurns: race.killTurns,
+          healedHpFraction: 1,
+          healNetGain: healNetGain(
+            c.env.me.currentHp / c.env.me.maxHp,
+            1,
+            evaluateOpponentThreat({ state: rested, opponent: c.env.opponent, target: rested[c.env.key], targetSide: sideOf(rested, c.env.key), opponentMovesSecond: !c.iMoveSecond }).bestHitFraction,
+            1 + blockedTurns(rested[c.env.key]),
+          ),
+          extended: true,
+        };
+      } else if (kind === "heal") {
+        const healWeather = abilityOf(c.env.me)?.treatsOwnWeatherAsSun ? "쾌청" : activeWeather(c.env.moveState);
+        const fraction = c.move.healsWeatherDependent ? computeWeatherHealFraction(healWeather) : (c.move.healsFraction ?? 0);
+        let healedHp = Math.min(c.env.me.maxHp, c.env.me.currentHp + Math.floor(c.env.me.maxHp * fraction));
+        // 희망사항(AI-A1): 회복은 다음 턴 종료 — 그 사이 한 번 더 맞은 뒤 최대 HP 절반을 받는다. 이미 예약돼 있으면
+        // 실패(엔진 mirroredEffects), 받기 전에 쓰러지면(이번 턴 + 다음 턴에 쓰러짐) 회복 없음 → 순이득 ≤ 0.
+        let wishFails = false;
+        // 꿀꺽(트랙 M1): 비축 1/2/3 → 1/4·1/2·전부. 비축이 없으면 실패(비축 랭크를 되돌리는 손해는 아직 안 셈)
+        if (c.move.healsByStockpile) {
+          const spent = c.env.me.stockpileCount ?? 0;
+          const stockFraction = spent >= 3 ? 1 : spent === 2 ? 0.5 : spent === 1 ? 0.25 : 0;
+          healedHp = Math.min(c.env.me.maxHp, c.env.me.currentHp + Math.floor(c.env.me.maxHp * stockFraction));
+          wishFails = spent === 0;
+        }
+        if (isWish(c.move)) {
+          const perTurnLoss = c.threat.hitsToBeKilled.expected > 0 ? c.env.me.currentHp / c.threat.hitsToBeKilled.expected : c.env.me.currentHp;
+          const hpBeforeHeal = c.env.me.currentHp - perTurnLoss;
+          wishFails = !!c.env.myMoveSide.wish || c.env.me.currentHp - 2 * perTurnLoss <= 0;
+          healedHp = Math.max(0, Math.min(c.env.me.maxHp, hpBeforeHeal + Math.floor(c.env.me.maxHp / 2)));
+        }
+        const after = evaluateOpponentThreat({ state: c.env.moveState, opponent: c.env.opponent, target: c.env.me, targetSide: c.env.myMoveSide, opponentMovesSecond: !c.iMoveSecond, targetHp: healedHp });
+        c.option.support = {
+          kind,
+          before: c.threat.hitsToBeKilled.expected,
+          after: after.hitsToBeKilled.expected,
+          bestKillTurns,
+          healedHpFraction: healedHp / c.env.me.maxHp,
+          healNetGain: wishFails ? -1 : healNetGain(c.env.me.currentHp / c.env.me.maxHp, healedHp / c.env.me.maxHp, after.bestHitFraction, 1),
+          extended: c.move.healsWeatherDependent || isWish(c.move) || c.move.healsByStockpile || undefined,
+        };
+      } else if (kind === "effect") {
+        const effect = evaluateEffectMove({
+          state: c.env.moveState,
+          key: c.env.key,
+          move: c.move,
+          myMoves: c.env.raceMoves,
+          moveFirstProbability: c.speed.probability,
+          benchOptions: () => c.env.benchOptions(),
+        });
+        c.option.support = { kind: effect ? "effect" : "other", before: 0, after: 0, bestKillTurns, effect, extended: true };
+      } else if (c.move.shedTail && c.env.bench.length > 0) {
+        // 꼬리자르기(Tier 2-C): 최대 HP 1/2로 대타를 세워 후보에게 넘기는 교체. 후보는 대타를 가진 채로 평가한다.
+        // 이미 대타가 있거나 HP가 절반 이하면 실패하고, 후공이면 먼저 맞아 HP가 절반 이하로 떨어져도 실패한다.
+        const cost = Math.floor(c.env.me.maxHp / 2);
+        const d = c.threat.hitsToBeKilled.expected;
+        const activeHitLoss = (c.env.me.currentHp / c.env.me.maxHp) * Math.min(1, d > 0 ? 1 / d : 1);
+        if (c.env.me.substituteHp === undefined && c.env.me.currentHp > cost) {
+          const passed = cloneBattleState(c.env.state);
+          passed[c.env.key].currentHp -= cost;
+          const side = sideOf(passed, c.env.key);
+          const secondOk = c.env.me.currentHp - activeHitLoss * c.env.me.maxHp > cost;
+          c.option.pivot = {
+            hitRate: 0,
+            hitChance: c.speed.probability + (1 - c.speed.probability) * (secondOk ? 1 : 0),
+            activeHitLoss,
+            selfCost: cost / c.env.me.maxHp,
+            tier2: true,
+            candidates: c.env.bench.map((index) => {
+              side.party[index].substituteHp = cost;
+              const candidate = evaluateSwitchCandidate(passed, c.env.key, index);
+              side.party[index].substituteHp = undefined;
+              return candidate;
+            }),
+          };
+        }
+        c.option.support = { kind: "other", before: 0, after: 0, bestKillTurns, extended: true };
+      } else if (c.move.setsWeather && c.move.selfSwitchAfterUse && c.env.bench.length > 0) {
+        // 썰렁개그(Tier 2-C): 눈을 내리게 한 뒤 교체 — 후보는 눈이 내리는 state로 평가한다(이미 눈이어도 교체는 한다).
+        const snowed = cloneBattleState(c.env.state);
+        if (snowed.weather !== c.move.setsWeather) {
+          const item = effectiveHeldItem(c.env.me);
+          snowed.weather = c.move.setsWeather;
+          snowed.weatherTurnsRemaining = WEATHER_DURATION + (item?.weatherDurationBonus?.weather === c.move.setsWeather ? item.weatherDurationBonus.bonus : 0);
+        }
+        const d = c.threat.hitsToBeKilled.expected;
+        c.option.pivot = {
+          hitRate: 0,
+          hitChance: 1,
+          activeHitLoss: (c.env.me.currentHp / c.env.me.maxHp) * Math.min(1, d > 0 ? 1 / d : 1),
+          tier2: true,
+          candidates: c.env.bench.map((index) => evaluateSwitchCandidate(snowed, c.env.key, index)),
+        };
+        c.option.support = { kind: "other", before: 0, after: 0, bestKillTurns, extended: true };
+      } else if (isBatonPass(c.move) && c.env.bench.length > 0) {
+        // 배턴터치: 유턴류와 같은 "교체" 평가 — 데미지는 0, 후보는 내 랭크 변화를 이어받은 상태로 평가한다.
+        const d = c.threat.hitsToBeKilled.expected;
+        c.option.pivot = {
+          hitRate: 0,
+          hitChance: 1,
+          activeHitLoss: (c.env.me.currentHp / c.env.me.maxHp) * Math.min(1, d > 0 ? 1 / d : 1),
+          candidates: batonCandidates(c.env.state, c.env.key, c.env.bench, c.env.state[c.env.key]),
+        };
+        c.option.support = { kind: "other", before: 0, after: 0, bestKillTurns, extended: true };
+      } else if (kind === "setup") {
+        const boosted = applyMoveStatChanges(c.env.me.stages, c.move, "self", { userTypes: c.env.me.types });
+        const after = bestAttack({
+          state: c.env.moveState,
+          attacker: c.env.me,
+          defender: c.env.opponent,
+          defenderSide: c.env.oppMoveSide,
+          moves: c.env.raceMoves,
+          attackerMovesSecond: c.iMoveSecond,
+          stagesOverride: boosted,
+        });
+        const setup = evaluateSetupMove({
+          state: c.env.moveState,
+          key: c.env.key,
+          move: c.move,
+          raceMoves: c.env.raceMoves,
+          batonBench: c.env.myMoves.some(isBatonPass) ? c.env.bench : [],
+        });
+        c.option.support = {
+          kind,
+          before: bestKillTurns,
+          after: turnsFor(c.env.moveState, after?.estimate, c.env.me, c.env.opponent).expected,
+          bestKillTurns,
+          effect: setup.effect,
+          batonFollowUp: setup.batonFollowUp,
+          setupFailed: setup.failed,
+        };
+      } else {
+        c.option.support = { kind, before: 0, after: 0, bestKillTurns };
+      }
+    }
+}
+
+/** 옵션을 돌려준다 */
+function collectResult(c: MoveOptionCtx) {
+    return c.option;
+}
+
+function buildMoveOptionFor(env: MoveOptionEnv, move: Move, speedMove: Move): AiOption {
+  const c = {} as MoveOptionCtx;
+  c.env = env;
+  c.move = move;
+
+    c.speed = firstProbability(c.env.moveState, c.env.me, speedMove, c.env.opponent, c.env.baseThreat.bestMove);
+    c.iMoveSecond = c.speed.probability < 0.5;
+    const myTypes = proteanTypes(c.env.me, c.move);
+    c.threat = evaluateOpponentThreat({
+      state: c.env.moveState,
+      opponent: c.env.opponent,
+      target: c.env.me,
+      targetSide: c.env.myMoveSide,
+      opponentMovesSecond: !c.iMoveSecond,
+      targetTypes: myTypes,
+    });
+    c.estimate = estimateMoveHits(
+      { state: c.env.moveState, attacker: c.env.me, defender: c.env.opponent, defenderSide: c.env.oppMoveSide, attackerMovesSecond: c.iMoveSecond, attackerTypes: myTypes },
+      c.move,
+    );
+
+    c.option = {
+      optionType: "move",
+      move: c.move,
+      mega: c.env.mega || undefined,
+      typeMatchup: { offensive: c.estimate?.typeEffectiveness ?? 0, defensive: c.threat.defensiveMatchup },
+      speedOrder: c.speed.order,
+      firstProbability: c.speed.probability,
+      hitsToKill: selfAdjusted(turnsFor(c.env.moveState, c.estimate ?? undefined, c.env.me, c.env.opponent), c.threat.selfHpRate, c.env.opponent),
+      hitsToBeKilled: selfAdjusted(c.threat.hitsToBeKilled, c.estimate?.selfHpRate, c.env.me),
+      entryCost: 0,
+      maxHp: c.env.me.maxHp,
+      hpFraction: c.env.me.currentHp / c.env.me.maxHp,
+      opponentHpFraction: c.env.opponent.currentHp / c.env.opponent.maxHp,
+      riskFlag: c.threat.riskFlag,
+      accuracy: c.estimate?.accuracy ?? 0,
+    };
+  applyOneShotAndRampage(c);
+  {
+    const r = evaluateSacrificeAttack(c);
+    if (r) return r.value;
+  }
+  {
+    const r = applyTrapPivotAndTalk(c);
+    if (r) return r.value;
+  }
+  evaluateStatusSupport(c);
+  return collectResult(c);
+}
+
 function evaluateOptionsOn(state: BattleState, key: FighterKey, options: EvaluateOptions): AiOption[] {
   const oppKey = opponentKey(key);
   const mySide = sideOf(state, key);
@@ -971,324 +1354,9 @@ function evaluateOptionsOn(state: BattleState, key: FighterKey, options: Evaluat
   const bench = benchIndices(mySide);
   let benchCache: AiOption[] | undefined;
   const benchOptions = () => (benchCache ??= bench.map((index) => evaluateSwitchCandidate(state, key, index)));
+  const buildMoveOptionEnv: MoveOptionEnv = { state, key, oppKey, mega, moveState, me, opponent, myMoveSide, oppMoveSide, myMoves, raceMoves, baseThreat, myBest, bench, benchOptions };
+  const buildMoveOption = (move: Move, speedMove: Move = move): AiOption => buildMoveOptionFor(buildMoveOptionEnv, move, speedMove);
 
-  // speedMove: 흉내쟁이(트랙 M2)처럼 다른 기술로 나가도 행동 순서는 원래 고른 기술(speedMove)의 우선도로 정해진다
-  const buildMoveOption = (move: Move, speedMove: Move = move): AiOption => {
-    const speed = firstProbability(moveState, me, speedMove, opponent, baseThreat.bestMove);
-    const iMoveSecond = speed.probability < 0.5;
-    const myTypes = proteanTypes(me, move);
-    const threat: OpponentThreat = evaluateOpponentThreat({
-      state: moveState,
-      opponent,
-      target: me,
-      targetSide: myMoveSide,
-      opponentMovesSecond: !iMoveSecond,
-      targetTypes: myTypes,
-    });
-    const estimate = estimateMoveHits(
-      { state: moveState, attacker: me, defender: opponent, defenderSide: oppMoveSide, attackerMovesSecond: iMoveSecond, attackerTypes: myTypes },
-      move,
-    );
-
-    const option: AiOption = {
-      optionType: "move",
-      move,
-      mega: mega || undefined,
-      typeMatchup: { offensive: estimate?.typeEffectiveness ?? 0, defensive: threat.defensiveMatchup },
-      speedOrder: speed.order,
-      firstProbability: speed.probability,
-      hitsToKill: selfAdjusted(turnsFor(moveState, estimate ?? undefined, me, opponent), threat.selfHpRate, opponent),
-      hitsToBeKilled: selfAdjusted(threat.hitsToBeKilled, estimate?.selfHpRate, me),
-      entryCost: 0,
-      maxHp: me.maxHp,
-      hpFraction: me.currentHp / me.maxHp,
-      opponentHpFraction: opponent.currentHp / opponent.maxHp,
-      riskFlag: threat.riskFlag,
-      accuracy: estimate?.accuracy ?? 0,
-    };
-
-    // 1회용(첫 턴 전용) 기술: 이번 턴 한 번 맞히고, 그 뒤는 나머지 기술 중 최선으로 대면을 이어간다.
-    if (isOneShotMove(move) && estimate && Number.isFinite(estimate.rawHits) && estimate.rawHits > 1) {
-      const opponentHpAfter = Math.max(1, Math.round(opponent.currentHp * (1 - 1 / estimate.rawHits)));
-      const follow = (hp?: number) =>
-        turnsFor(
-          moveState,
-          bestAttack({ state: moveState, attacker: me, defender: opponent, defenderSide: oppMoveSide, moves: raceMoves, attackerMovesSecond: iMoveSecond, defenderHp: hp })?.estimate,
-          me,
-          opponent,
-          hp,
-        ).expected;
-      const acc = estimate.accuracy;
-      // 가중치 0인 항은 빼야 0 × ∞ = NaN이 안 생긴다(나머지 공격기가 없으면 후속 처치 턴이 ∞).
-      const afterHit = acc > 0 ? acc * follow(opponentHpAfter) : 0;
-      const afterMiss = acc < 1 ? (1 - acc) * follow() : 0;
-      option.hitsToKill = { ...option.hitsToKill, expected: 1 + afterHit + afterMiss };
-    }
-
-    // 난동(ver.1.9): 역린류를 새로 쓰면 평균 2.5턴(2·3턴 각 50%) 이어 쓰고 끝나면 혼란 — 그 뒤로도 대면이 이어지면 혼란(행동의 1/3
-    // 자해, 평균 2.5턴) 상태로 본다. 이어 쓰는 동안 교체할 수 없는 비용은 이 대면을 끝까지 싸우는 계산이라 따로 넣지 않는다.
-    if (
-      move.rampage === "confuse" &&
-      !me.volatile.active.rampage &&
-      !hasVolatile(me.volatile, "confusion") &&
-      !abilityOf(me)?.immuneToConfusion &&
-      option.hitsToKill.expected > RAMPAGE_AVERAGE_TURNS
-    ) {
-      const confused = cloneBattleState(moveState);
-      confused[key].volatile = {
-        active: { ...confused[key].volatile.active, confusion: { turnsRemaining: RAMPAGE_AVERAGE_TURNS } },
-      };
-      const after = currentRace(confused, key, raceMoves);
-      const blended = blendRace(
-        { killTurns: option.hitsToKill.expected, survivalTurns: option.hitsToBeKilled.expected, firstProbability: option.firstProbability },
-        after,
-        RAMPAGE_AVERAGE_TURNS,
-      );
-      option.hitsToKill = { ...option.hitsToKill, expected: blended.killTurns };
-      option.hitsToBeKilled = { ...option.hitsToBeKilled, expected: blended.survivalTurns };
-    }
-
-    // 목숨걸기·자폭류(트랙 M5): 주고 기절 — 추억의선물처럼 "그 state에서 이어지는 판세"로 평가(파티 모드 전용).
-    // 목숨걸기는 내 HP만큼, 자폭류(대폭발·자폭·미스트버스트)는 한 번 맞혔을 때의 평균 데미지만큼. 후공인데 이번 턴에
-    // 쓰러지면 데미지 없이 기절만 한다(자폭류는 빗나가도 기절).
-    const sacrificeAttack = move.damageEqualsUserHp || (move.selfFaints && move.category !== "status");
-    if (sacrificeAttack) {
-      const bestKillTurns = turnsFor(moveState, myBest?.estimate, me, opponent).expected;
-      if (!estimate || estimate.typeEffectiveness === 0 || estimate.accuracy <= 0) {
-        option.support = { kind: "other", before: 0, after: 0, bestKillTurns };
-        return option;
-      }
-      const dealt = move.damageEqualsUserHp
-        ? me.currentHp
-        : Math.round((estimate.damageFraction / Math.max(estimate.accuracy, 1e-9)) * opponent.maxHp);
-      const after = cloneBattleState(moveState);
-      after[oppKey].currentHp = Math.max(0, after[oppKey].currentHp - dealt);
-      after[key].currentHp = 0;
-      const failed = cloneBattleState(moveState);
-      failed[key].currentHp = 0;
-      const survivesTurn = threat.hitsToBeKilled.expected > 1;
-      const success = estimate.accuracy * (speed.probability + (1 - speed.probability) * (survivesTurn ? 1 : 0));
-      const race: RaceInputs = { killTurns: option.hitsToKill.expected, survivalTurns: option.hitsToBeKilled.expected, firstProbability: speed.probability };
-      option.support = {
-        kind: "effect",
-        before: 0,
-        after: 0,
-        bestKillTurns,
-        extended: true,
-        effect: {
-          hit: race,
-          base: race,
-          hitChance: 1,
-          carry: 0,
-          kind: move.damageEqualsUserHp ? "finalGambit" : "selfDestruct",
-          sacrifice: { success, afterModel: createPartyModel(after, key), failModel: createPartyModel(failed, key) },
-        },
-      };
-      return option;
-    }
-
-    // 그림자꿰매기(ver.1.9 6-3): 맞히면 상대 교체 봉쇄 — 이어지는 대면을 상대가 갇힌 state의 대면표로 본다(한 방에 쓰러뜨리면 무의미)
-    if (
-      trapModelAware &&
-      estimate &&
-      estimate.accuracy > 0 &&
-      estimate.rawHits > 1 &&
-      move.inflictsVolatile?.some((v) => v.volatile === "meanLook" && v.target === "opponent" && v.chance === undefined) &&
-      !isTrappedFromSwitching(opponent, moveState) &&
-      !opponent.types.includes("고스트")
-    ) {
-      const trapped = cloneBattleState(moveState);
-      trapped[oppKey].volatile = inflictVolatile(trapped[oppKey].volatile, "meanLook");
-      option.trapPartyModel = createPartyModel(trapped, key);
-    }
-
-    // 유턴류: 맞히면(상대 기절 여부 무관) 교대할 포켓몬이 있는 한 엔진이 교체를 강제한다. 한 방에 쓰러뜨리면
-    // 다음 상대를 모르므로 일반 공격기로만 평가한다.
-    if (move.selfSwitchAfterDamage && estimate && estimate.rawHits > 1 && Number.isFinite(estimate.rawHits) && bench.length > 0) {
-      const hitRate = 1 / estimate.rawHits;
-      const opponentHpAfter = Math.max(1, Math.round(opponent.currentHp * (1 - hitRate)));
-      const d = threat.hitsToBeKilled.expected;
-      option.pivot = {
-        hitRate,
-        activeHitLoss: (me.currentHp / me.maxHp) * Math.min(1, d > 0 ? 1 / d : 1),
-        candidates: bench.map((index) => evaluateSwitchCandidate(state, key, index, opponentHpAfter)),
-      };
-    }
-
-    // 잠꼬대(AI-A2): 잠든 동안(사용 조건은 selectableMoves가 이미 거름) 배운 다른 기술 중 무작위 하나가 나간다 —
-    // 잠든 턴 동안은 그 기대 피해로, 깬 뒤에는 최선 공격기로 대면을 이어간다.
-    if (move.callsRandomLearnedMove) {
-      const sleepTalk = sleepTalkKillTurns(moveState, key, move, turnsFor(moveState, myBest?.estimate, me, opponent).expected, iMoveSecond);
-      if (sleepTalk) {
-        option.hitsToKill = { expected: sleepTalk.killTurns, worstCase: { count: 3, certainty: "random", probability: 0 } };
-        option.typeMatchup = { ...option.typeMatchup, offensive: sleepTalk.bestTypeEffectiveness };
-        option.accuracy = 1;
-      } else {
-        option.support = { kind: "other", before: 0, after: 0, bestKillTurns: turnsFor(moveState, myBest?.estimate, me, opponent).expected };
-      }
-      return option;
-    }
-
-    if (move.category === "status") {
-      const idle = targetAttackOnlyWeight(threat);
-      if (idle > 0) option.opponentIdleChance = idle;
-      const kind = classifySupport(move);
-      const bestKillTurns = turnsFor(moveState, myBest?.estimate, me, opponent).expected;
-      if (protectGroupOf(move)) {
-        option.support = {
-          kind: "protect",
-          before: 0,
-          after: 0,
-          bestKillTurns,
-          protect: evaluateProtectMove({ state, moveState, key, move, mega: option.mega, raceMoves, threat }),
-          extended: true,
-        };
-      } else if (kind === "heal" && move.restSleep) {
-        // 잠자기: HP·상태이상 완전 회복 + 2턴 잠듦 — 잠든 상태로 대면을 다시 평가한다(잠든 턴은 turnsToKo가 더함).
-        const rested = cloneBattleState(moveState);
-        rested[key].currentHp = me.maxHp;
-        rested[key].status = inflictRestSleep();
-        const race = currentRace(rested, key, raceMoves);
-        option.support = {
-          kind,
-          before: threat.hitsToBeKilled.expected,
-          after: race.survivalTurns,
-          bestKillTurns: race.killTurns,
-          healedHpFraction: 1,
-          healNetGain: healNetGain(
-            me.currentHp / me.maxHp,
-            1,
-            evaluateOpponentThreat({ state: rested, opponent, target: rested[key], targetSide: sideOf(rested, key), opponentMovesSecond: !iMoveSecond }).bestHitFraction,
-            1 + blockedTurns(rested[key]),
-          ),
-          extended: true,
-        };
-      } else if (kind === "heal") {
-        const healWeather = abilityOf(me)?.treatsOwnWeatherAsSun ? "쾌청" : activeWeather(moveState);
-        const fraction = move.healsWeatherDependent ? computeWeatherHealFraction(healWeather) : (move.healsFraction ?? 0);
-        let healedHp = Math.min(me.maxHp, me.currentHp + Math.floor(me.maxHp * fraction));
-        // 희망사항(AI-A1): 회복은 다음 턴 종료 — 그 사이 한 번 더 맞은 뒤 최대 HP 절반을 받는다. 이미 예약돼 있으면
-        // 실패(엔진 mirroredEffects), 받기 전에 쓰러지면(이번 턴 + 다음 턴에 쓰러짐) 회복 없음 → 순이득 ≤ 0.
-        let wishFails = false;
-        // 꿀꺽(트랙 M1): 비축 1/2/3 → 1/4·1/2·전부. 비축이 없으면 실패(비축 랭크를 되돌리는 손해는 아직 안 셈)
-        if (move.healsByStockpile) {
-          const spent = me.stockpileCount ?? 0;
-          const stockFraction = spent >= 3 ? 1 : spent === 2 ? 0.5 : spent === 1 ? 0.25 : 0;
-          healedHp = Math.min(me.maxHp, me.currentHp + Math.floor(me.maxHp * stockFraction));
-          wishFails = spent === 0;
-        }
-        if (isWish(move)) {
-          const perTurnLoss = threat.hitsToBeKilled.expected > 0 ? me.currentHp / threat.hitsToBeKilled.expected : me.currentHp;
-          const hpBeforeHeal = me.currentHp - perTurnLoss;
-          wishFails = !!myMoveSide.wish || me.currentHp - 2 * perTurnLoss <= 0;
-          healedHp = Math.max(0, Math.min(me.maxHp, hpBeforeHeal + Math.floor(me.maxHp / 2)));
-        }
-        const after = evaluateOpponentThreat({ state: moveState, opponent, target: me, targetSide: myMoveSide, opponentMovesSecond: !iMoveSecond, targetHp: healedHp });
-        option.support = {
-          kind,
-          before: threat.hitsToBeKilled.expected,
-          after: after.hitsToBeKilled.expected,
-          bestKillTurns,
-          healedHpFraction: healedHp / me.maxHp,
-          healNetGain: wishFails ? -1 : healNetGain(me.currentHp / me.maxHp, healedHp / me.maxHp, after.bestHitFraction, 1),
-          extended: move.healsWeatherDependent || isWish(move) || move.healsByStockpile || undefined,
-        };
-      } else if (kind === "effect") {
-        const effect = evaluateEffectMove({
-          state: moveState,
-          key,
-          move,
-          myMoves: raceMoves,
-          moveFirstProbability: speed.probability,
-          benchOptions: () => benchOptions(),
-        });
-        option.support = { kind: effect ? "effect" : "other", before: 0, after: 0, bestKillTurns, effect, extended: true };
-      } else if (move.shedTail && bench.length > 0) {
-        // 꼬리자르기(Tier 2-C): 최대 HP 1/2로 대타를 세워 후보에게 넘기는 교체. 후보는 대타를 가진 채로 평가한다.
-        // 이미 대타가 있거나 HP가 절반 이하면 실패하고, 후공이면 먼저 맞아 HP가 절반 이하로 떨어져도 실패한다.
-        const cost = Math.floor(me.maxHp / 2);
-        const d = threat.hitsToBeKilled.expected;
-        const activeHitLoss = (me.currentHp / me.maxHp) * Math.min(1, d > 0 ? 1 / d : 1);
-        if (me.substituteHp === undefined && me.currentHp > cost) {
-          const passed = cloneBattleState(state);
-          passed[key].currentHp -= cost;
-          const side = sideOf(passed, key);
-          const secondOk = me.currentHp - activeHitLoss * me.maxHp > cost;
-          option.pivot = {
-            hitRate: 0,
-            hitChance: speed.probability + (1 - speed.probability) * (secondOk ? 1 : 0),
-            activeHitLoss,
-            selfCost: cost / me.maxHp,
-            tier2: true,
-            candidates: bench.map((index) => {
-              side.party[index].substituteHp = cost;
-              const candidate = evaluateSwitchCandidate(passed, key, index);
-              side.party[index].substituteHp = undefined;
-              return candidate;
-            }),
-          };
-        }
-        option.support = { kind: "other", before: 0, after: 0, bestKillTurns, extended: true };
-      } else if (move.setsWeather && move.selfSwitchAfterUse && bench.length > 0) {
-        // 썰렁개그(Tier 2-C): 눈을 내리게 한 뒤 교체 — 후보는 눈이 내리는 state로 평가한다(이미 눈이어도 교체는 한다).
-        const snowed = cloneBattleState(state);
-        if (snowed.weather !== move.setsWeather) {
-          const item = effectiveHeldItem(me);
-          snowed.weather = move.setsWeather;
-          snowed.weatherTurnsRemaining = WEATHER_DURATION + (item?.weatherDurationBonus?.weather === move.setsWeather ? item.weatherDurationBonus.bonus : 0);
-        }
-        const d = threat.hitsToBeKilled.expected;
-        option.pivot = {
-          hitRate: 0,
-          hitChance: 1,
-          activeHitLoss: (me.currentHp / me.maxHp) * Math.min(1, d > 0 ? 1 / d : 1),
-          tier2: true,
-          candidates: bench.map((index) => evaluateSwitchCandidate(snowed, key, index)),
-        };
-        option.support = { kind: "other", before: 0, after: 0, bestKillTurns, extended: true };
-      } else if (isBatonPass(move) && bench.length > 0) {
-        // 배턴터치: 유턴류와 같은 "교체" 평가 — 데미지는 0, 후보는 내 랭크 변화를 이어받은 상태로 평가한다.
-        const d = threat.hitsToBeKilled.expected;
-        option.pivot = {
-          hitRate: 0,
-          hitChance: 1,
-          activeHitLoss: (me.currentHp / me.maxHp) * Math.min(1, d > 0 ? 1 / d : 1),
-          candidates: batonCandidates(state, key, bench, state[key]),
-        };
-        option.support = { kind: "other", before: 0, after: 0, bestKillTurns, extended: true };
-      } else if (kind === "setup") {
-        const boosted = applyMoveStatChanges(me.stages, move, "self", { userTypes: me.types });
-        const after = bestAttack({
-          state: moveState,
-          attacker: me,
-          defender: opponent,
-          defenderSide: oppMoveSide,
-          moves: raceMoves,
-          attackerMovesSecond: iMoveSecond,
-          stagesOverride: boosted,
-        });
-        const setup = evaluateSetupMove({
-          state: moveState,
-          key,
-          move,
-          raceMoves,
-          batonBench: myMoves.some(isBatonPass) ? bench : [],
-        });
-        option.support = {
-          kind,
-          before: bestKillTurns,
-          after: turnsFor(moveState, after?.estimate, me, opponent).expected,
-          bestKillTurns,
-          effect: setup.effect,
-          batonFollowUp: setup.batonFollowUp,
-          setupFailed: setup.failed,
-        };
-      } else {
-        option.support = { kind, before: 0, after: 0, bestKillTurns };
-      }
-    }
-    return option;
-  };
 
   /**
    * 흉내쟁이(트랙 M2): 선공이면 배틀에서 직전에 나온 기술, 후공이면 이번 턴 상대가 낼 기술(사용 확률 모델)을
