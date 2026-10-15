@@ -110,12 +110,13 @@ export function MoveDexPage({ initialMoveId, onInitialMoveConsumed }: MoveDexPag
         <input
           type="text"
           className="movedex-search"
-          placeholder="기술 이름으로 검색"
+          aria-label="기술 이름으로 검색" placeholder="기술 이름으로 검색"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
 
         <select
+          aria-label="기술 타입 필터"
           className="movedex-type-select"
           value={typeFilter}
           onChange={(e) => setTypeFilter(e.target.value as PokemonType | "all")}

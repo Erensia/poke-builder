@@ -22,7 +22,6 @@
 }
 
 .picker-search:focus {
-  outline: none;
   border-color: var(--glass-focus-border);
 }
 
@@ -80,13 +79,13 @@
 }
 
 .pokemon-picker-mega {
-  font-size: 0.68rem;
+  font-size: 0.72rem;
   color: var(--violet);
   font-weight: 600;
 }
 
 .pokemon-picker-taken {
-  font-size: 0.68rem;
+  font-size: 0.72rem;
   color: var(--text-muted);
   font-weight: 600;
   white-space: nowrap;

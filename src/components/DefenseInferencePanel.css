@@ -122,7 +122,7 @@
 
 .dinf-note {
   margin: 0.55rem 0 0;
-  font-size: 0.7rem;
+  font-size: 0.72rem;
   line-height: 1.45;
   color: var(--text-muted);
 }
@@ -528,7 +528,7 @@
 }
 
 .dinf-axis-name {
-  font-size: 0.68rem;
+  font-size: 0.72rem;
   color: var(--text-muted);
 }
 
@@ -549,7 +549,7 @@
 
 .dinf-tick {
   position: absolute;
-  font-size: 0.64rem;
+  font-size: 0.72rem;
   line-height: 1;
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
@@ -583,7 +583,7 @@
 }
 
 .dinf-grid-axis {
-  font-size: 0.66rem;
+  font-size: 0.72rem;
   color: var(--text-muted);
 }
 
@@ -591,7 +591,7 @@
   margin: 0.9rem 0 0;
   padding-top: 0.6rem;
   border-top: 1px dashed var(--border);
-  font-size: 0.7rem;
+  font-size: 0.72rem;
   color: var(--text-muted);
 }
 

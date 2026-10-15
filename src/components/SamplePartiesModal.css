@@ -39,7 +39,7 @@
 
 .sample-party-tag {
   margin-left: 0.45rem;
-  font-size: 0.66rem;
+  font-size: 0.72rem;
   font-weight: 600;
   padding: 0.1rem 0.45rem;
   border-radius: 999px;
@@ -59,7 +59,7 @@
 
 .sample-party-style {
   margin-left: 0.4rem;
-  font-size: 0.7rem;
+  font-size: 0.72rem;
   font-weight: 400;
   color: var(--text-muted);
 }

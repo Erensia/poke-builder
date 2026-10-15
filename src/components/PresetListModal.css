@@ -15,7 +15,6 @@
 }
 
 .preset-save-input:focus {
-  outline: none;
   border-color: var(--violet);
 }
 
@@ -40,7 +39,6 @@
 }
 
 .preset-search-input:focus {
-  outline: none;
   border-color: var(--glass-focus-border);
 }
 
@@ -97,7 +95,7 @@
 }
 
 .preset-item-meta {
-  font-size: 0.68rem;
+  font-size: 0.72rem;
   color: var(--text-muted);
 }
 

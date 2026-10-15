@@ -69,7 +69,7 @@
 .sidebar-logo-text small {
   font-family: var(--sans);
   font-weight: 500;
-  font-size: 0.68rem;
+  font-size: 0.72rem;
   letter-spacing: 0.02em;
   color: var(--text-muted);
   -webkit-text-fill-color: var(--text-muted);

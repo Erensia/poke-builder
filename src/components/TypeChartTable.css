@@ -65,7 +65,7 @@
   width: 100%;
   height: 100%;
   color: #fff;
-  font-size: 0.6rem;
+  font-size: 0.72rem;
   font-weight: 700;
 }
 
@@ -115,7 +115,7 @@
   .tc-table th,
   .tc-table td {
     height: 1.1rem;
-    font-size: 0.6rem;
+    font-size: 0.72rem;
   }
 
   .tc-table th:first-child {
@@ -131,6 +131,6 @@
   }
 
   .tc-legend {
-    font-size: 0.66rem;
+    font-size: 0.72rem;
   }
 }

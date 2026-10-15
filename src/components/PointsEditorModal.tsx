@@ -293,6 +293,7 @@ export function PointsEditorModal({
               </button>
               <input
                 type="number"
+                aria-label={`${STAT_LABELS[stat]} 포인트`}
                 className="points-input"
                 min={0}
                 max={maxForStat}
