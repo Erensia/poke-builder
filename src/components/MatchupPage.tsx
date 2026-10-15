@@ -2,9 +2,9 @@ import { useMemo, useState } from "react";
 import { MatchupSlotCard } from "./MatchupSlotCard";
 import { VerdictBadge } from "./VerdictBadge";
 import { DamageRollBlock } from "./DamageRollBlock";
-import { WeatherPicker } from "./WeatherPicker";
-import { FieldPicker } from "./FieldPicker";
-import { ScreenPicker } from "./ScreenPicker";
+import { ChipPicker } from "./ChipPicker";
+import type { WeatherKind } from "../types/weather";
+import type { FieldKind } from "../types/field";
 import { DefenseInferencePanel } from "./DefenseInferencePanel";
 import { SpeedTablePanel } from "./SpeedTablePanel";
 import { BulkAdjustPanel } from "./BulkAdjustPanel";
@@ -21,14 +21,14 @@ import { SlotPresetsModal } from "./SlotPresetsModal";
 import { useMatchup } from "../hooks/useMatchup";
 import { useSlotPresets } from "../hooks/useSlotPresets";
 import { saveMatchupDraft } from "../lib/storage";
-import { getPokemon, getMove, getAbility } from "../lib/data";
+import { getPokemon, getMove } from "../lib/data";
 import { getEffectiveForm } from "../lib/pokemonForm";
 import { computeRealStats } from "../lib/statCalculator";
 import { computeBulkPower } from "../lib/battlePower";
 import { environmentTintBackground } from "../lib/environmentBackground";
 import { evaluateSlotMatchup, evaluateSpeedMatchup, computeSoloOffensePower } from "../lib/matchupEvaluator";
-import { burnDamageMultiplier, ignoresBurnAttackPenalty, statusedAttackBoost } from "../lib/statusConditions";
 import { bulkMovesOf } from "../lib/bulkAdjust";
+import { assumedMatchupOptions } from "../lib/matchupAssumptions";
 import { BATTLE_STAT_KEYS } from "../types/battleStats";
 import "./MatchupPage.css";
 
@@ -44,6 +44,11 @@ type PickerState =
   | { kind: "move"; side: Side; bulkIndex?: number }
   | { kind: "slotPresets"; side: Side }
   | null;
+
+const WEATHERS: WeatherKind[] = ["쾌청", "비", "모래바람", "눈"];
+const FIELDS: FieldKind[] = ["그래스필드", "미스트필드", "사이코필드", "일렉트릭필드"];
+const SCREENS = ["reflect", "lightScreen", "auroraVeil"] as const;
+const SCREEN_LABELS = { reflect: "리플렉터", lightScreen: "빛의장막", auroraVeil: "오로라베일" } as const;
 
 /** 탭 버튼과 페이지 제목에 같이 쓰는 이름 */
 const TAB_LABEL = { calc: "결정력 계산", inference: "노력치 역산", speed: "스피드 조정", bulk: "내구 조정" } as const;
@@ -135,37 +140,8 @@ export function MatchupPage() {
     };
   }, [attacker.slot, defender.slot, attackerMove]);
 
-  // ver.1.9 가정 토글 → 계산 옵션. 화상 물리 반감(근성·객기 예외)은 배틀 AI처럼 추가 공격 배율로 넘긴다.
-  const assumeOptions = useMemo(() => {
-    const status = attacker.slot.statusAssumed ?? null;
-    return {
-      attackerStatus: status,
-      defenderStatus: defender.slot.statusAssumed ?? null,
-      defenderHasStatusCondition: !!defender.slot.statusAssumed,
-      attackerHpFraction: (attacker.slot.hpPercent ?? 100) / 100,
-      abilityHpFraction: attacker.slot.pinchAssumed ? 1 / 3 : 1,
-      attackerMovesLast: !!attacker.slot.movesLastAssumed,
-      attackerTookDamageThisTurn: !!attacker.slot.tookDamageAssumed,
-      attackerMoveFailedLastTurn: !!attacker.slot.moveFailedAssumed,
-      attackerStatLoweredThisTurn: !!attacker.slot.statLoweredAssumed,
-      defenderDamagedThisTurn: !!attacker.slot.targetDamagedAssumed,
-      defenderMinimized: !!attacker.slot.targetMinimizedAssumed,
-      critical: !!attacker.slot.critAssumed,
-      attackerTypeToMoveType: !!attacker.slot.typeShiftAssumed,
-      defenderHpIsFull: defender.slot.fullHpAssumed ?? true,
-      // 근성류 상승은 위력 단계, 화상 ×0.5는 최종 단계로 따로 넘긴다(2.4 B3 — 정수 데미지 공식의 단계 구분)
-      extraOffenseMultiplier: effMove
-        ? statusedAttackBoost(
-            status,
-            effMove.category,
-            attacker.slot.ability ? getAbility(attacker.slot.ability)?.physicalAttackMultiplierWhenStatused : undefined,
-          )
-        : 1,
-      finalOffenseMultiplier: effMove
-        ? burnDamageMultiplier(status, effMove.category, ignoresBurnAttackPenalty(attacker.slot.ability ?? undefined, effMove.id))
-        : 1,
-    };
-  }, [attacker.slot, defender.slot, effMove]);
+  // ver.1.9 가정 토글 → 계산 옵션(lib/matchupAssumptions)
+  const assumeOptions = useMemo(() => assumedMatchupOptions(attacker.slot, defender.slot, effMove), [attacker.slot, defender.slot, effMove]);
 
   // 양쪽 다 준비되고 기술까지 골랐을 때: 정확한 결정력/내구력/판정
   const fullResult = useMemo(() => {
@@ -271,10 +247,10 @@ export function MatchupPage() {
           </button>
         </div>
         <div className="matchup-env-pickers">
-          <WeatherPicker weather={weather} onChange={setWeather} />
-          <FieldPicker field={field} onChange={setField} />
-          <ScreenPicker label="내 쪽 스크린" screen={attacker.slot.screen} onChange={attacker.setScreen} />
-          <ScreenPicker label="상대 쪽 스크린" screen={defender.slot.screen} onChange={defender.setScreen} />
+          <ChipPicker label="날씨" options={WEATHERS} value={weather} onChange={setWeather} />
+          <ChipPicker label="필드" options={FIELDS} value={field} onChange={setField} />
+          <ChipPicker label="내 쪽 스크린" options={SCREENS} textOf={(s) => SCREEN_LABELS[s]} value={attacker.slot.screen} onChange={(s) => attacker.setScreen(s ?? undefined)} />
+          <ChipPicker label="상대 쪽 스크린" options={SCREENS} textOf={(s) => SCREEN_LABELS[s]} value={defender.slot.screen} onChange={(s) => defender.setScreen(s ?? undefined)} />
         </div>
       </header>
 

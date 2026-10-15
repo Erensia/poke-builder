@@ -1,14 +1,15 @@
 import { useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import { environmentTintBackground } from "../lib/environmentBackground";
-import { getAbility, getMove, getPokemon } from "../lib/data";
+import { getMove, getPokemon } from "../lib/data";
 import { bulkMovesOf, bulkOptions, bulkSurvival } from "../lib/bulkAdjust";
 import type { DamageParts } from "../lib/damageFormula";
 import { evaluateSlotMatchup } from "../lib/matchupEvaluator";
 import { getEffectiveForm } from "../lib/pokemonForm";
-import { burnDamageMultiplier, ignoresBurnAttackPenalty, statusedAttackBoost } from "../lib/statusConditions";
+import { assumedMatchupOptions } from "../lib/matchupAssumptions";
 import type { MatchupSlot } from "../types/matchup";
 import type { WeatherKind } from "../types/weather";
 import type { FieldKind } from "../types/field";
+import { PillRow } from "./PillRow";
 import "./SpeedTablePanel.css";
 
 interface BulkAdjustPanelProps {
@@ -31,22 +32,6 @@ const TARGETS = [
 
 const pct = (p: number) => `${p >= 1 ? 100 : Math.floor(p * 1000) / 10}%`;
 
-/** 다른 카드의 토글(순풍·타수)과 같은 알약 버튼 줄 */
-function Pips<T extends string | number | boolean>({ label, options, value, onChange }: { label: string; options: readonly { value: T; label: string }[]; value: T; onChange: (v: T) => void }) {
-  return (
-    <div className="matchup-assume-grave">
-      <span className="matchup-assume-grave-label">{label}</span>
-      <div className="matchup-hitcount-row">
-        {options.map((o) => (
-          <button key={String(o.value)} type="button" className={`matchup-hitcount-pip${o.value === value ? " is-active" : ""}`} onClick={() => onChange(o.value)}>
-            {o.label}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 /** 내 포켓몬이 상대의 기술(최대 3개)을 모두 맞고도 버티는 최소 HP·방어·특방 포인트 조합 — 스피드 조정 탭처럼 왼쪽 카드, 오른쪽 결과 */
 export function BulkAdjustPanel({ slot, opponent, weather, field, myCard, opponentCard }: BulkAdjustPanelProps) {
   const [target, setTarget] = useState(1);
@@ -60,7 +45,6 @@ export function BulkAdjustPanel({ slot, opponent, weather, field, myCard, oppone
     const list: DamageParts[] = [];
     const skippedNames: string[] = [];
     if (!mine || !theirs) return { partsList: list, skipped: skippedNames };
-    const status = opponent.statusAssumed ?? null;
     for (const m of bulkMovesOf(opponent)) {
       const move = m ? getMove(m.moveId) : undefined;
       if (!m || !move) continue;
@@ -71,22 +55,8 @@ export function BulkAdjustPanel({ slot, opponent, weather, field, myCard, oppone
         attackerStages: opponent.stages,
         defenderStages: slot.stages,
         screen: slot.screen,
+        ...assumedMatchupOptions(opponent, slot, move),
         critical,
-        attackerStatus: status,
-        defenderStatus: slot.statusAssumed ?? null,
-        defenderHasStatusCondition: !!slot.statusAssumed,
-        defenderHpIsFull: slot.fullHpAssumed ?? true,
-        attackerHpFraction: (opponent.hpPercent ?? 100) / 100,
-        abilityHpFraction: opponent.pinchAssumed ? 1 / 3 : 1,
-        attackerMovesLast: !!opponent.movesLastAssumed,
-        attackerTookDamageThisTurn: !!opponent.tookDamageAssumed,
-        attackerMoveFailedLastTurn: !!opponent.moveFailedAssumed,
-        attackerStatLoweredThisTurn: !!opponent.statLoweredAssumed,
-        defenderDamagedThisTurn: !!opponent.targetDamagedAssumed,
-        defenderMinimized: !!opponent.targetMinimizedAssumed,
-        attackerTypeToMoveType: !!opponent.typeShiftAssumed,
-        extraOffenseMultiplier: statusedAttackBoost(status, move.category, opponent.ability ? getAbility(opponent.ability)?.physicalAttackMultiplierWhenStatused : undefined),
-        finalOffenseMultiplier: burnDamageMultiplier(status, move.category, ignoresBurnAttackPenalty(opponent.ability ?? undefined, move.id)),
       })?.damageParts;
       if (parts) list.push(parts);
       else skippedNames.push(move.name);
@@ -118,8 +88,8 @@ export function BulkAdjustPanel({ slot, opponent, weather, field, myCard, oppone
       </div>
       <div className="speedtab-result">
         <div className="bulktab-controls">
-          <Pips label="생존 목표" options={TARGETS} value={target} onChange={setTarget} />
-          <Pips label="급소" options={[{ value: true, label: "있음" }]} value={critical} onChange={(v) => setCritical(!critical && v)} />
+          <PillRow label="생존 목표" options={TARGETS} value={target} onChange={setTarget} />
+          <PillRow label="급소" options={[{ value: true, label: "있음" }]} value={critical} onChange={(v) => setCritical(!critical && v)} />
         </div>
         {hint && <p className="speedtab-note">{hint}</p>}
         {skipped.length > 0 && !hint && <p className="speedtab-note">계산할 수 없어 뺀 기술: {skipped.join(", ")}</p>}
