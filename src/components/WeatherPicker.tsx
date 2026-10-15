@@ -13,19 +13,12 @@ export function WeatherPicker({ weather, onChange }: WeatherPickerProps) {
     <div className="weather-picker">
       <span className="weather-picker-label">날씨</span>
       <div className="weather-picker-options">
-        <button
-          type="button"
-          className={`weather-chip${weather === null ? " is-active" : ""}`}
-          onClick={() => onChange(null)}
-        >
-          없음
-        </button>
         {WEATHERS.map((w) => (
           <button
             key={w}
             type="button"
             className={`weather-chip${weather === w ? " is-active" : ""}`}
-            onClick={() => onChange(w)}
+            onClick={() => onChange(weather === w ? null : w)}
           >
             {w}
           </button>

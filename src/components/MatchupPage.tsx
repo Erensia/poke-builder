@@ -4,6 +4,7 @@ import { VerdictBadge } from "./VerdictBadge";
 import { DamageRollBlock } from "./DamageRollBlock";
 import { WeatherPicker } from "./WeatherPicker";
 import { FieldPicker } from "./FieldPicker";
+import { ScreenPicker } from "./ScreenPicker";
 import { DefenseInferencePanel } from "./DefenseInferencePanel";
 import { SpeedTablePanel } from "./SpeedTablePanel";
 import { BulkAdjustPanel } from "./BulkAdjustPanel";
@@ -27,6 +28,7 @@ import { computeBulkPower } from "../lib/battlePower";
 import { environmentTintBackground } from "../lib/environmentBackground";
 import { evaluateSlotMatchup, evaluateSpeedMatchup, computeSoloOffensePower } from "../lib/matchupEvaluator";
 import { burnDamageMultiplier, ignoresBurnAttackPenalty, statusedAttackBoost } from "../lib/statusConditions";
+import { bulkMovesOf } from "../lib/bulkAdjust";
 import { BATTLE_STAT_KEYS } from "../types/battleStats";
 import "./MatchupPage.css";
 
@@ -39,7 +41,7 @@ type PickerState =
   | { kind: "points"; side: Side }
   | { kind: "stages"; side: Side }
   | { kind: "cosmeticForm"; side: Side }
-  | { kind: "move"; side: Side }
+  | { kind: "move"; side: Side; bulkIndex?: number }
   | { kind: "slotPresets"; side: Side }
   | null;
 
@@ -244,7 +246,7 @@ export function MatchupPage() {
               : tab === "inference"
                 ? "내가 입힌 데미지(상대 HP %)로 상대의 HP·방어 능력 포인트와 성격이 될 수 있는 범위를 추정합니다."
                 : tab === "speed"
-                  ? "내 포켓몬의 스피드로 어떤 포켓몬을 추월하는지 보고, 포인트 분배를 얼마나 줘야 목표 포켓몬을 넘는지 확인합니다"
+                  ? "내 포켓몬의 스피드로 어떤 포켓몬을 추월하는지 보고, 포인트를 얼마나 줘야 목표 포켓몬을 넘는지 확인합니다"
                   : "상대의 기술을 버티려면 내 포켓몬에 HP·방어(특방) 포인트를 최소 얼마나 줘야 하는지 확인합니다"}
           </p>
         </div>
@@ -271,6 +273,8 @@ export function MatchupPage() {
         <div className="matchup-env-pickers">
           <WeatherPicker weather={weather} onChange={setWeather} />
           <FieldPicker field={field} onChange={setField} />
+          <ScreenPicker label="내 쪽 스크린" screen={attacker.slot.screen} onChange={attacker.setScreen} />
+          <ScreenPicker label="상대 쪽 스크린" screen={defender.slot.screen} onChange={defender.setScreen} />
         </div>
       </header>
 
@@ -350,7 +354,6 @@ export function MatchupPage() {
           onToggleUnburden={defender.setUnburdenAssumed}
           onSetStatus={defender.setStatusAssumed}
           onToggleFullHp={defender.setFullHpAssumed}
-          onSetScreen={defender.setScreen}
         />
       </div>
 
@@ -438,18 +441,26 @@ export function MatchupPage() {
           opponent={defender.slot}
           weather={weather}
           field={field}
-          myCard={<MatchupSlotCard role="attacker" label="내 포켓몬" slot={attacker.slot} hideMoveSlot hideTurnAssumptions {...cardActions("attacker")} />}
+          myCard={<MatchupSlotCard role="attacker" onSwapDrop={swapSides} label="내 포켓몬" slot={attacker.slot} hideMoveSlot hideTurnAssumptions {...cardActions("attacker")} />}
           opponentCard={
             <MatchupSlotCard
               role="attacker"
+              swapRole="defender"
+              onSwapDrop={swapSides}
               label="상대 포켓몬"
               slot={defender.slot}
               hideTurnAssumptions
-              selectedMove={defender.slot.moveId ? getMove(defender.slot.moveId) : undefined}
-              multiHitCount={defender.slot.multiHitCount}
-              onSetMultiHitCount={defender.setMultiHitCount}
+              bulkMoves={{
+                moves: bulkMovesOf(defender.slot),
+                onPick: (index) => setPicker({ kind: "move", side: "defender", bulkIndex: index }),
+                onSetHits: defender.setBulkHits,
+              }}
+              selectedMoves={bulkMovesOf(defender.slot).flatMap((m) => (m && getMove(m.moveId)) || [])}
+              onSetPowerCondition={defender.setPowerCondition}
+              onTogglePinch={defender.setPinchAssumed}
+              onToggleTypeShift={defender.setTypeShiftAssumed}
+              onSetHpPercent={defender.setHpPercent}
               {...cardActions("defender")}
-              onPickMove={() => setPicker({ kind: "move", side: "defender" })}
             />
           }
         />
@@ -595,14 +606,16 @@ export function MatchupPage() {
             <MovePickerModal
               pokemon={pokemon}
               formVariant={side.slot.formVariant}
-              currentMoveIds={[side.slot.moveId]}
+              currentMoveIds={picker.bulkIndex === undefined ? [side.slot.moveId] : bulkMovesOf(side.slot).map((m) => m?.moveId ?? null)}
               onClose={() => setPicker(null)}
               onSelect={(moveId) => {
-                side.setMove(moveId);
+                if (picker.bulkIndex === undefined) side.setMove(moveId);
+                else side.setBulkMove(picker.bulkIndex, moveId);
                 setPicker(null);
               }}
               onClear={() => {
-                side.setMove(null);
+                if (picker.bulkIndex === undefined) side.setMove(null);
+                else side.setBulkMove(picker.bulkIndex, null);
                 setPicker(null);
               }}
             />

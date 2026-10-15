@@ -13,19 +13,12 @@ export function FieldPicker({ field, onChange }: FieldPickerProps) {
     <div className="field-picker">
       <span className="field-picker-label">필드</span>
       <div className="field-picker-options">
-        <button
-          type="button"
-          className={`field-chip${field === null ? " is-active" : ""}`}
-          onClick={() => onChange(null)}
-        >
-          없음
-        </button>
         {FIELDS.map((f) => (
           <button
             key={f}
             type="button"
             className={`field-chip${field === f ? " is-active" : ""}`}
-            onClick={() => onChange(f)}
+            onClick={() => onChange(field === f ? null : f)}
           >
             {f}
           </button>

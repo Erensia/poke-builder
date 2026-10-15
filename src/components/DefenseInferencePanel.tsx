@@ -52,7 +52,7 @@ import {
 } from "../lib/speedInference";
 import { computeRealStats, MAX_ABILITY_POINTS_PER_STAT } from "../lib/statCalculator";
 import { loadMatchupDraft, saveMatchupDraft } from "../lib/storage";
-import { restoreInference, type ObservationRow, type RowKind, type Screen } from "../lib/inferenceDraft";
+import { restoreInference, type ObservationRow, type RowKind } from "../lib/inferenceDraft";
 import { CandidateCards } from "./CandidateCards";
 import "./DefenseInferencePanel.css";
 
@@ -727,23 +727,24 @@ export function DefenseInferencePanel({
   const [movePickerRow, setMovePickerRow] = useState<number | null>(null);
   const [abilityId, setAbilityId] = useState<string>(saved.abilityId);
   const [itemId, setItemId] = useState<string>(saved.itemId);
-  const [screen, setScreen] = useState<Screen | "">(saved.screen);
   const [defStage, setDefStage] = useState(saved.defStage);
   const [spdStage, setSpdStage] = useState(saved.spdStage);
   const [tolerant, setTolerant] = useState(saved.tolerant);
-  // 내가 받은 데미지 관측용 가정(3.1 C2-b) — 상대 공격 보정 특성·도구, 상대 공격·특공 랭크, 상대 화상, 내 쪽 벽
+  // 내가 받은 데미지 관측용 가정(3.1 C2-b) — 상대 공격 보정 특성·도구, 상대 공격·특공 랭크, 상대 화상
   const [atkAbilityId, setAtkAbilityId] = useState<string>(saved.atkAbilityId);
   const [atkItemId, setAtkItemId] = useState<string>(saved.atkItemId);
   const [atkStage, setAtkStage] = useState(saved.atkStage);
   const [spaStage, setSpaStage] = useState(saved.spaStage);
   const [oppBurned, setOppBurned] = useState(saved.oppBurned);
-  const [myScreen, setMyScreen] = useState<Screen | "">(saved.myScreen);
+  // 벽은 위쪽 "내 쪽/상대 쪽 스크린" 선택기 값 — 입힌 데미지는 상대 쪽, 받은 데미지는 내 쪽
+  const screen = defender.screen ?? "";
+  const myScreen = attacker.screen ?? "";
 
   useEffect(() => {
     saveMatchupDraft({
-      inference: { rows, abilityId, itemId, screen, defStage, spdStage, tolerant, atkAbilityId, atkItemId, atkStage, spaStage, oppBurned, myScreen } satisfies ReturnType<typeof restoreInference>,
+      inference: { rows, abilityId, itemId, defStage, spdStage, tolerant, atkAbilityId, atkItemId, atkStage, spaStage, oppBurned } satisfies ReturnType<typeof restoreInference>,
     });
-  }, [rows, abilityId, itemId, screen, defStage, spdStage, tolerant, atkAbilityId, atkItemId, atkStage, spaStage, oppBurned, myScreen]);
+  }, [rows, abilityId, itemId, defStage, spdStage, tolerant, atkAbilityId, atkItemId, atkStage, spaStage, oppBurned]);
 
   const attackerPokemon = attacker.pokemonId ? getPokemon(attacker.pokemonId) : undefined;
   const defenderPokemon = defender.pokemonId ? getPokemon(defender.pokemonId) : undefined;
@@ -1126,15 +1127,6 @@ export function DefenseInferencePanel({
             </select>
           </label>
           <label>
-            벽
-            <select value={screen} onChange={(e) => setScreen(e.target.value as Screen | "")}>
-              <option value="">없음</option>
-              <option value="reflect">리플렉터</option>
-              <option value="lightScreen">빛의장막</option>
-              <option value="auroraVeil">오로라베일</option>
-            </select>
-          </label>
-          <label>
             상대 방어 랭크
             <select value={defStage} onChange={(e) => setDefStage(Number(e.target.value))}>
               {STAGE_OPTIONS.map((s) => (
@@ -1185,15 +1177,6 @@ export function DefenseInferencePanel({
                       {getItem(item.id)?.name ?? item.id}
                     </option>
                   ))}
-                </select>
-              </label>
-              <label>
-                내 쪽 벽
-                <select value={myScreen} onChange={(e) => setMyScreen(e.target.value as Screen | "")}>
-                  <option value="">없음</option>
-                  <option value="reflect">리플렉터</option>
-                  <option value="lightScreen">빛의장막</option>
-                  <option value="auroraVeil">오로라베일</option>
                 </select>
               </label>
               <label>

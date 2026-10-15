@@ -327,3 +327,39 @@
   flex: 0 0 4.2rem;
   padding-top: 0.25rem;
 }
+
+/* 내구 조정 탭(4.0 F3) — 두 카드를 가로로 놓고 생존 목표·결과는 그 아래에 한 줄 폭으로 둔다(좁은 화면에서는 카드가 줄바꿈되어 세로로 쌓인다) */
+.bulktab-board {
+  flex-direction: column;
+  align-items: center;
+}
+
+.bulktab-board .speedtab-side {
+  flex: 0 1 auto;
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: center;
+  max-width: 100%;
+}
+
+.bulktab-board {
+  --bulk-card: 280px;
+}
+
+.bulktab-board .speedtab-card {
+  flex: 0 0 var(--bulk-card);
+  max-width: 100%;
+}
+
+/* 생존 목표·결과는 카드 두 장이 나란히 놓인 폭과 같게 — 카드가 세로로 쌓이는 좁은 화면에서는 카드 한 장 폭 */
+.bulktab-board .speedtab-result {
+  flex: 0 0 auto;
+  width: 100%;
+  max-width: calc(var(--bulk-card) * 2 + 1.25rem);
+}
+
+@media (max-width: 640px) {
+  .bulktab-board .speedtab-result {
+    max-width: var(--bulk-card);
+  }
+}
