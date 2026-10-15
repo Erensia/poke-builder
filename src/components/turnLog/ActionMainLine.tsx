@@ -1,5 +1,5 @@
 import { type ReactNode } from "react";
-import { type ActionLogEntry, type FighterKey } from "../../lib/battleSimulator";
+import type { ActionLogEntry, FighterKey } from "../../types/battle";
 import { statOrAccuracyLabel } from "../../lib/statLabels";
 import { eunNeun, iGa, eulReul, waGwa, roEuro } from "../../lib/josa";
 import { VOLATILE_LABELS, SCREEN_LABELS } from "../../lib/battleLogLabels";

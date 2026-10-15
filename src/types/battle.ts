@@ -1,7 +1,7 @@
-// 배틀 엔진의 "로그/결과" 타입 모음 — lib/battleSimulator.ts에서 추출(ver.1.5 §4).
+// 배틀 엔진의 "로그/결과" 타입 모음 — 옛 lib/battleSimulator.ts에서 추출(ver.1.5 §4, 4.0에서 배럴 삭제).
 // BattleFighterState/BattleSide/BattleState 등 "살아있는 배틀 상태" 축은 EvaluatorSlot
 // (lib/matchupEvaluator.ts)에 의존해서 여기로 옮기면 types/ -> lib/ 역전이 그대로 남으므로
-// battleSimulator.ts에 남겨뒀다 — 이 파일은 그 의존이 없는 로그/결과 타입만 담는다.
+// 배틀 엔진에 남겨뒀다 — 이 파일은 그 의존이 없는 로그/결과 타입만 담는다.
 import type { Move } from "./move";
 import type { WeatherKind } from "./weather";
 import type { FieldKind } from "./field";

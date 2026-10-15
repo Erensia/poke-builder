@@ -1,6 +1,6 @@
 import type { BattleVideo } from "../types/battleVideo";
 import { loadBattleVideos, saveBattleVideos } from "../lib/storage";
-import type { FighterKey, TurnResult } from "../lib/battleSimulator";
+import type { FighterKey, TurnResult } from "../types/battle";
 import { useStoredList } from "./useStoredList";
 
 /** 배틀비디오 최대 보관 개수(§6) — 4번째가 생기면 가장 오래된 것부터 삭제(FIFO). */

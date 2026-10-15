@@ -1,5 +1,5 @@
 import { Fragment } from "react";
-import { type ActionLogEntry } from "../../lib/battleSimulator";
+import type { ActionLogEntry } from "../../types/battle";
 import { hitAbilityEventLines } from "./abilityLines";
 
 /**

@@ -1,5 +1,6 @@
 import { getPokemon } from "../../lib/data";
-import { opponentKey, type FighterKey, type TurnResult } from "../../lib/battleSimulator";
+import { opponentKey } from "../../lib/battle/state";
+import type { FighterKey, TurnResult } from "../../types/battle";
 import { eunNeun } from "../../lib/josa";
 
 /** 턴 시작 시점의 자발적 교체(빌드에서 고른 순서대로) — 유일하게 `action`과 무관하다 */

@@ -1,5 +1,6 @@
 import { getPokemon } from "../../lib/data";
-import { STRUGGLE_MOVE, type ActionLogEntry } from "../../lib/battleSimulator";
+import { STRUGGLE_MOVE } from "../../lib/battle/state";
+import type { ActionLogEntry } from "../../types/battle";
 import { STAT_LABELS, statOrAccuracyLabel } from "../../lib/statLabels";
 import { typeLabel } from "../../types/pokemon-type";
 import { eunNeun, iGa, eulReul, roEuro } from "../../lib/josa";
@@ -414,7 +415,7 @@ export function ActionEffectLines({
         </div>
       )}
       {/* 황금몸 — 명중한 변화기의 효과를 통째로 무효화(§4-5). 빗나감(C-5)과 헷갈리지
-          않도록 battleSimulator에서 hit까지 확인해서 내려준다 */}
+          않도록 배틀 엔진에서 hit까지 확인해서 내려준다 */}
       {!action.blockedReason && action.goodAsGoldBlockedByAbilityName && (
         <div className="battle-turn-line is-muted">
           {defenderName}의 {action.goodAsGoldBlockedByAbilityName}!
