@@ -396,6 +396,20 @@
     width: 100%;
     max-width: 320px;
   }
+
+  /* 4.0 D4 — ✕ 버튼을 손가락 타깃으로(22→30px, 아래 coarse 블록에서 터치 영역 44px 근처까지) */
+  .matchup-slot-clear {
+    width: 30px;
+    height: 30px;
+  }
+}
+
+@media (pointer: coarse) {
+  .matchup-slot-clear::after {
+    content: '';
+    position: absolute;
+    inset: -7px;
+  }
 }
 
 /* ver.1.9 — 상태이상 가정(선택지 7개라 줄바꿈 허용)·HP 슬라이더 */
