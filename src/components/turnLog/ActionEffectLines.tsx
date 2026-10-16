@@ -6,6 +6,7 @@ import { typeLabel } from "../../types/pokemon-type";
 import { eunNeun, iGa, eulReul, roEuro } from "../../lib/josa";
 import { VOLATILE_LABELS } from "../../lib/battleLogLabels";
 import { stageRiseAdverb, STATUS_ONSET_TEXT, STATUS_TRIGGER_TEXT, STATUS_CURE_TEXT } from "../../lib/battleLogText";
+import { useActionHp } from "./hpFormat";
 import { MultiHitLines } from "./MultiHitLines";
 import { abilityDamageLine, abilityDefenderStatsLines, abilityDisabledMoveLine, abilityLoweredAttackerStatsLine, abilityPickpocketLine, abilityStatusLine, abilityVolatileLine, sandSpitWeatherLine, setFieldOnHitLine, wanderingSpiritLine } from "./abilityLines";
 
@@ -19,25 +20,16 @@ export function ActionEffectLines({
   action,
   actorName,
   defenderName,
+  percentOnly = false,
 }: {
   action: ActionLogEntry;
   actorName: string;
   defenderName: string;
+  percentOnly?: boolean;
 }) {
+  const { actorHp, defHp } = useActionHp(action);
   return (
     <>
-      {/* §2-4: 변환자재/리베로 타입 변경 — 데미지 줄 인라인에서 분리해 2줄로 */}
-      {!action.blockedReason && action.changedOwnTypeTo && (
-        <>
-          <div className="battle-turn-line is-muted">
-            {actorName}의 {action.changedOwnTypeAbilityName}!
-          </div>
-          <div className="battle-turn-line is-muted">
-            {actorName}
-            {eunNeun(actorName)} {action.changedOwnTypeTo}타입이 되었다!
-          </div>
-        </>
-      )}
       {/* PR-C1: 전광쌍격 — 사용 후 자기 타입 소실(빗나가도 표시) */}
       {!action.blockedReason && action.lostTypeAfterUse && (
         <div className="battle-turn-line is-muted">
@@ -105,6 +97,8 @@ export function ActionEffectLines({
           hitCount={action.hitCount}
           actorName={actorName}
           defenderName={defenderName}
+          percentOnly={percentOnly}
+          actorHp={actorHp}
         />
       )}
       {/* C-4 급소 — 데미지 줄 인라인에서 분리 (다단히트는 "(급소 포함)" 인라인 유지) */}
@@ -210,7 +204,7 @@ export function ActionEffectLines({
               {name}
               {eunNeun(name)} {b.name}
               {eulReul(b.name)} 먹었다!
-              {b.healed ? ` HP를 ${b.healed} 회복했다!` : ""}
+              {b.healed ? ` HP를 ${(who === "self" ? actorHp : defHp)(b.healed)} 회복했다!` : ""}
               {b.curedStatus ? ` ${STATUS_CURE_TEXT[b.curedStatus](name)}` : ""}
               {b.curedConfusion ? " 혼란이 풀렸다!" : ""}
             </div>
@@ -324,7 +318,7 @@ export function ActionEffectLines({
         <div className="battle-turn-line is-muted">
           {abilityDamageLine(
             action.abilityDamageAbilityName,
-            action.abilityDamageToAttacker,
+            actorHp(action.abilityDamageToAttacker),
             actorName,
             defenderName,
           )}
@@ -334,7 +328,7 @@ export function ActionEffectLines({
       {!action.blockedReason && !!action.rockyHelmetDamage && (
         <div className="battle-turn-line is-muted">
           {defenderName}의 {action.rockyHelmetItemName}! {actorName}
-          {eunNeun(actorName)} {action.rockyHelmetDamage} 데미지를 입었다!
+          {eunNeun(actorName)} {actorHp(action.rockyHelmetDamage)} 데미지를 입었다!
         </div>
       )}
       {/* PR-C4a: 노말주얼 등 타입 젬 — 소모되며 위력 상승 */}
@@ -399,7 +393,7 @@ export function ActionEffectLines({
         <div className="battle-turn-line is-muted">
           {defenderName}의 {action.abilityAbsorbAbilityName}! {typeLabel(action.abilityAbsorbedMoveType)}
           {eunNeun(typeLabel(action.abilityAbsorbedMoveType))} 전혀 효과가 없었다!
-          {!!action.abilityAbsorbHealAmount && <> 체력을 {action.abilityAbsorbHealAmount} 회복했다!</>}
+          {!!action.abilityAbsorbHealAmount && <> 체력을 {defHp(action.abilityAbsorbHealAmount)} 회복했다!</>}
         </div>
       )}
       {/* 방음 — 소리 기술을 통째로 무효화 */}
@@ -446,7 +440,7 @@ export function ActionEffectLines({
           {defenderName}
           {eunNeun(defenderName)} {action.flingEffect.berry.name}
           {eulReul(action.flingEffect.berry.name)} 먹었다!
-          {action.flingEffect.berry.healed ? ` HP를 ${action.flingEffect.berry.healed} 회복했다!` : ""}
+          {action.flingEffect.berry.healed ? ` HP를 ${defHp(action.flingEffect.berry.healed)} 회복했다!` : ""}
           {action.flingEffect.berry.curedStatus ? ` ${STATUS_CURE_TEXT[action.flingEffect.berry.curedStatus](defenderName)}` : ""}
           {action.flingEffect.berry.curedConfusion ? " 혼란이 풀렸다!" : ""}
         </div>
@@ -522,7 +516,8 @@ export function ActionEffectLines({
       {/* 볼주머니 — 나무열매를 먹어 추가 회복 */}
       {!action.blockedReason && !!action.cheekPouchHeal && (
         <div className="battle-turn-line is-muted">
-          볼주머니! 체력을 {action.cheekPouchHeal} 회복했다!
+          {/* 공격자·방어자 합산이라 누구 몫인지 모른다 — AI가 낀 행동이면 수치를 감춘다 */}
+          볼주머니! 체력을 {actorHp(action.cheekPouchHeal) === action.cheekPouchHeal && defHp(action.cheekPouchHeal) === action.cheekPouchHeal ? `${action.cheekPouchHeal} ` : ""}회복했다!
         </div>
       )}
       {/* 소울비트 — HP 소비 / HP 부족 실패 */}
@@ -532,7 +527,7 @@ export function ActionEffectLines({
       {!action.blockedReason && !!action.soulBeatHpCost && (
         <div className="battle-turn-line is-muted">
           {actorName}
-          {eunNeun(actorName)} 혼을 실어 HP를 {action.soulBeatHpCost} 소비했다!
+          {eunNeun(actorName)} 혼을 실어 HP를 {actorHp(action.soulBeatHpCost)} 소비했다!
         </div>
       )}
       {/* 부리캐논 — 가열 중 접촉기로 맞아 공격자 화상 */}
@@ -594,7 +589,7 @@ export function ActionEffectLines({
       {!action.blockedReason && action.hit && !!action.liquidOozeDamage && (
         <div className="battle-turn-line is-muted">
           {defenderName}의 {action.liquidOozeAbilityName ?? "해감액"}! {actorName}
-          {eunNeun(actorName)} 체력을 흡수해 오히려 {action.liquidOozeDamage} 데미지를 입었다!
+          {eunNeun(actorName)} 체력을 흡수해 오히려 {actorHp(action.liquidOozeDamage)} 데미지를 입었다!
         </div>
       )}
       {/* 마법가루 — 상대 타입을 단일 타입으로 치환 */}
@@ -678,7 +673,7 @@ export function ActionEffectLines({
         <div className="battle-turn-line is-muted">
           {defenderName}의 {action.hitNegatedByAbilityName}! {defenderName}의 정체가 드러났다!{" "}
           {defenderName}
-          {eunNeun(defenderName)} 반동으로 {action.disguiseRecoilDamage} 데미지를 입었다!
+          {eunNeun(defenderName)} 반동으로 {action.disguiseRecoilDamage === undefined ? "" : defHp(action.disguiseRecoilDamage)} 데미지를 입었다!
         </div>
       )}
       {/* 일루전(§6-1) — 기술 데미지를 받는 순간 위장이 풀린다 */}
@@ -695,7 +690,7 @@ export function ActionEffectLines({
       {!action.blockedReason && action.move.id === STRUGGLE_MOVE.id && action.selfDamage > 0 && (
         <div className="battle-turn-line is-muted">
           {actorName}
-          {eunNeun(actorName)} 반동으로 {action.selfDamage} 데미지를 입었다
+          {eunNeun(actorName)} 반동으로 {actorHp(action.selfDamage)} 데미지를 입었다
         </div>
       )}
       {/* 플레어드라이브·웨이브태클 등 recoilFraction 기술의 반동. 발버둥과 계산 기준이
@@ -703,7 +698,7 @@ export function ActionEffectLines({
       {!action.blockedReason && action.recoilDamage > 0 && (
         <div className="battle-turn-line is-muted">
           {actorName}
-          {eunNeun(actorName)} 반동으로 {action.recoilDamage} 데미지를 입었다
+          {eunNeun(actorName)} 반동으로 {actorHp(action.recoilDamage)} 데미지를 입었다
         </div>
       )}
       {/* 생명의구슬처럼 도구가 주는 반동 — 데미지 기준 반동(recoilDamage)과 달리
@@ -711,7 +706,7 @@ export function ActionEffectLines({
       {!action.blockedReason && !!action.itemRecoilDamage && (
         <div className="battle-turn-line is-muted">
           {actorName}
-          {eunNeun(actorName)} {action.itemRecoilItemName}의 반동으로 {action.itemRecoilDamage} 데미지를 입었다
+          {eunNeun(actorName)} {action.itemRecoilItemName}의 반동으로 {actorHp(action.itemRecoilDamage)} 데미지를 입었다
         </div>
       )}
       {/* E-2 무릎차기 반동 (빗나감·방어류·타입면역) */}
@@ -725,14 +720,14 @@ export function ActionEffectLines({
       {!!action.selfDamageOnUse && (
         <div className="battle-turn-line is-muted">
           {actorName}
-          {eunNeun(actorName)} {action.move.name}의 반동으로 {action.selfDamageOnUse} 데미지를 입었다
+          {eunNeun(actorName)} {action.move.name}의 반동으로 {actorHp(action.selfDamageOnUse)} 데미지를 입었다
         </div>
       )}
       {/* F-1 미러코트 반격 / 실패 */}
       {!action.blockedReason && !!action.counterDamage && (
         <div className="battle-turn-line is-muted">
           {actorName}
-          {eunNeun(actorName)} 받은 데미지를 그대로 되돌려줬다! ({action.counterDamage} 데미지)
+          {eunNeun(actorName)} 받은 데미지를 그대로 되돌려줬다! ({defHp(action.counterDamage)} 데미지)
         </div>
       )}
       {!action.blockedReason && action.counterFailed && (
@@ -790,7 +785,7 @@ export function ActionEffectLines({
       {/* 조개껍질방울 — 흡수기(drainHealAmount)와 별개 축이라 따로 표시 */}
       {!action.blockedReason && !!action.shellBellHealAmount && (
         <div className="battle-turn-line is-muted">
-          {actorName}의 조개껍질방울로 체력을 {action.shellBellHealAmount} 회복했다!
+          {actorName}의 조개껍질방울로 체력을 {actorHp(action.shellBellHealAmount)} 회복했다!
         </div>
       )}
       {/* 과사열매 — PP 0이 된 기술을 즉시 복구 */}
@@ -811,13 +806,13 @@ export function ActionEffectLines({
       {!action.blockedReason && !!action.attackerBerryHealAmount && (
         <div className="battle-turn-line is-muted">
           {actorName}의 {action.attackerBerryHealItemName}
-          {roEuro(action.attackerBerryHealItemName ?? "")} 체력을 {action.attackerBerryHealAmount} 회복했다!
+          {roEuro(action.attackerBerryHealItemName ?? "")} 체력을 {actorHp(action.attackerBerryHealAmount)} 회복했다!
         </div>
       )}
       {!action.blockedReason && !!action.defenderBerryHealAmount && (
         <div className="battle-turn-line is-muted">
           {defenderName}의 {action.defenderBerryHealItemName}
-          {roEuro(action.defenderBerryHealItemName ?? "")} 체력을 {action.defenderBerryHealAmount} 회복했다!
+          {roEuro(action.defenderBerryHealItemName ?? "")} 체력을 {defHp(action.defenderBerryHealAmount)} 회복했다!
         </div>
       )}
       {/* 기합의띠·기합의머리띠 — 기절할 데미지를 버티고 HP 1로 남았을 때 */}
@@ -977,7 +972,7 @@ export function ActionEffectLines({
         <div className="battle-turn-line is-muted">
           {actorName}
           {eunNeun(actorName)} {action.protectContactPenaltyMoveName}의 가시에 부딪혀{" "}
-          {action.protectContactDamage} 데미지를 입었다!
+          {actorHp(action.protectContactDamage)} 데미지를 입었다!
         </div>
       )}
       {/* 하양허브 — 자신/상대 어느 쪽에서 발동했는지 따로 표시 */}

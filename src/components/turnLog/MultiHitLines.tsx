@@ -13,26 +13,32 @@ export function MultiHitLines({
   hitCount,
   actorName,
   defenderName,
+  percentOnly = false,
+  actorHp,
 }: {
   hits: NonNullable<ActionLogEntry["hits"]>;
   moveName: string;
   hitCount: number | undefined;
   actorName: string;
   defenderName: string;
+  percentOnly?: boolean;
+  actorHp?: (n: number) => number | string;
 }) {
   if (hits.length === 0) return null;
   return (
     <>
       {hits[0].critical && <div className="battle-turn-line is-muted">급소에 맞았다!</div>}
-      {hits[0].abilityEvent && hitAbilityEventLines(hits[0].abilityEvent, actorName, defenderName, "he-0")}
+      {hits[0].abilityEvent && hitAbilityEventLines(hits[0].abilityEvent, actorName, defenderName, "he-0", actorHp)}
       {hits.slice(1).map((h, i) => (
         <Fragment key={i}>
           <div className="battle-turn-line">
-            {actorName}의 {moveName} — {h.damage} 데미지 (
-            {(h.damagePercent * 100).toFixed(1)}%)
+            {actorName}의 {moveName} —{" "}
+            {percentOnly
+              ? `체력 ${(h.damagePercent * 100).toFixed(1)}% 감소`
+              : `${h.damage} 데미지 (${(h.damagePercent * 100).toFixed(1)}%)`}
           </div>
           {h.critical && <div className="battle-turn-line is-muted">급소에 맞았다!</div>}
-          {h.abilityEvent && hitAbilityEventLines(h.abilityEvent, actorName, defenderName, `he-${i + 1}`)}
+          {h.abilityEvent && hitAbilityEventLines(h.abilityEvent, actorName, defenderName, `he-${i + 1}`, actorHp)}
         </Fragment>
       ))}
       <div className="battle-turn-line is-muted">{hitCount}번 맞았다!</div>

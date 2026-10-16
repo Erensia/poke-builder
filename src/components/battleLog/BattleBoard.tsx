@@ -115,6 +115,10 @@ export function BattleBoard({
   playTurn: () => void;
   resetToSetup: () => void;
 }) {
+  // 턴 종료 줄의 AI HP 수치를 %로 바꾸는 데 쓰는 종 id → 최대 HP (로그의 activePokemonIds는 slot.pokemonId 기준)
+  const aiMaxHp = aiSide
+    ? Object.fromEntries((battleSide(aiSide)?.party ?? []).map((f) => [f.slot.pokemonId, f.maxHp]))
+    : undefined;
   return (
     <>
     <div className="battle-board" style={{ background: battleBoardBackground(battleState) }}>
@@ -332,7 +336,9 @@ export function BattleBoard({
                   <span className="battle-status-tag is-major">멸망 {fighter.perishCount}</span>
                 )}
                 {fighter.substituteHp !== undefined && (
-                  <span className="battle-status-tag is-volatile">대타 HP {fighter.substituteHp}</span>
+                  <span className="battle-status-tag is-volatile">
+                    {side === aiSide ? "대타" : `대타 HP ${fighter.substituteHp}`}
+                  </span>
                 )}
                 {fighter.unburdenActive && (
                   <span className="battle-status-tag is-volatile">곡예(스피드 2배)</span>
@@ -346,7 +352,8 @@ export function BattleBoard({
               />
             </div>
             <div className="battle-hp-numbers">
-              {fighter.currentHp} / {fighter.maxHp}
+              {/* 상대(AI)는 실수치로 최대 HP·능력치를 역산하지 못하게 비율만 보여준다. 올림해서 생존 중엔 0%가 안 되게 */}
+              {side === aiSide ? `${Math.ceil(hpPercent)}%` : `${fighter.currentHp} / ${fighter.maxHp}`}
             </div>
 
             {/* 2.3 B2: 배틀타워에서 상대(AI) 실능치는 숨기고, 그 자리에 상대 파티 6마리를 이미지로
@@ -760,7 +767,7 @@ export function BattleBoard({
       </>
     )}
 
-    <BattleTurnLog log={log} />
+    <BattleTurnLog log={log} aiSide={aiSide} aiMaxHp={aiMaxHp} />
     </>
   );
 }
