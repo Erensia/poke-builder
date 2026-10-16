@@ -8,14 +8,14 @@
 }
 
 .movedex-page-header h2 {
-  font-size: 1.3rem;
+  font-size: var(--fs-2xl);
   margin-bottom: 0.3rem;
 }
 
 .movedex-page-header p {
   margin: 0;
   color: var(--text-muted);
-  font-size: 0.82rem;
+  font-size: var(--fs-sm);
 }
 
 /* 컨트롤 바 */
@@ -31,14 +31,14 @@
   flex: 1;
   min-width: 12em;
   padding: 0.55rem 0.75rem;
-  border-radius: 10px;
+  border-radius: var(--r-md);
   border: 1px solid var(--glass-border);
   background: var(--surface-2);
   -webkit-backdrop-filter: blur(var(--glass-blur));
   backdrop-filter: blur(var(--glass-blur));
   box-shadow: var(--glass-shadow);
   color: var(--text);
-  font-size: 0.85rem;
+  font-size: var(--fs-md);
 }
 
 .movedex-search:focus,
@@ -49,14 +49,14 @@
 
 .movedex-type-select {
   padding: 0.55rem 0.75rem;
-  border-radius: 10px;
+  border-radius: var(--r-md);
   border: 1px solid var(--glass-border);
   background: var(--surface-2);
   -webkit-backdrop-filter: blur(var(--glass-blur));
   backdrop-filter: blur(var(--glass-blur));
   box-shadow: var(--glass-shadow);
   color: var(--text);
-  font-size: 0.85rem;
+  font-size: var(--fs-md);
 }
 
 .movedex-category-tabs {
@@ -66,7 +66,7 @@
   -webkit-backdrop-filter: blur(var(--glass-blur));
   backdrop-filter: blur(var(--glass-blur));
   border: 1px solid var(--glass-border);
-  border-radius: 10px;
+  border-radius: var(--r-md);
   padding: 0.25rem;
   box-shadow: var(--glass-shadow);
 }
@@ -75,10 +75,10 @@
   border: none;
   background: transparent;
   color: var(--text-muted);
-  font-size: 0.82rem;
+  font-size: var(--fs-sm);
   font-weight: 600;
   padding: 0.35rem 0.7rem;
-  border-radius: 7px;
+  border-radius: var(--r-sm);
   cursor: pointer;
 }
 
@@ -104,7 +104,7 @@
 
 .movedex-count {
   color: var(--text-muted);
-  font-size: 0.78rem;
+  font-size: var(--fs-sm);
 }
 
 .movedex-sort-controls {
@@ -115,27 +115,27 @@
 
 .movedex-sort-select {
   padding: 0.4rem 0.6rem;
-  border-radius: 10px;
+  border-radius: var(--r-md);
   border: 1px solid var(--glass-border);
   background: var(--surface-2);
   -webkit-backdrop-filter: blur(var(--glass-blur));
   backdrop-filter: blur(var(--glass-blur));
   box-shadow: var(--glass-shadow);
   color: var(--text);
-  font-size: 0.8rem;
+  font-size: var(--fs-sm);
 }
 
 .movedex-sort-dir {
   width: 2rem;
   height: 2rem;
-  border-radius: 10px;
+  border-radius: var(--r-md);
   border: 1px solid var(--glass-border);
   background: var(--surface-2);
   -webkit-backdrop-filter: blur(var(--glass-blur));
   backdrop-filter: blur(var(--glass-blur));
   box-shadow: var(--glass-shadow);
   color: var(--violet);
-  font-size: 0.75rem;
+  font-size: var(--fs-xs);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -153,7 +153,7 @@
   -webkit-backdrop-filter: blur(var(--glass-blur));
   backdrop-filter: blur(var(--glass-blur));
   border: 1px solid var(--glass-border);
-  border-radius: 14px;
+  border-radius: var(--r-lg);
   box-shadow: var(--glass-shadow);
   padding: 1rem;
 }
@@ -177,7 +177,7 @@
   gap: 0.3rem;
   background: var(--surface-2);
   border: 1px solid var(--glass-border);
-  border-radius: 12px;
+  border-radius: var(--r-lg);
   padding: 0.65rem 0.75rem;
 }
 
@@ -196,23 +196,23 @@
 
 .movedex-card-name {
   font-weight: 600;
-  font-size: 0.9rem;
+  font-size: var(--fs-md);
 }
 
 .movedex-card-notype {
   color: var(--text-muted);
-  font-size: 0.8rem;
+  font-size: var(--fs-sm);
 }
 
 .movedex-classification {
-  font-size: 0.72rem;
+  font-size: var(--fs-xs);
   color: var(--violet);
 }
 
 .movedex-effect {
   margin: 0;
   color: var(--text-muted);
-  font-size: 0.76rem;
+  font-size: var(--fs-xs);
   line-height: 1.4;
 }
 
@@ -232,14 +232,14 @@
 }
 
 .movedex-stat-label {
-  font-size: 0.72rem;
+  font-size: var(--fs-xs);
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.03em;
 }
 
 .movedex-stat-value {
-  font-size: 0.82rem;
+  font-size: var(--fs-sm);
   font-variant-numeric: tabular-nums;
 }
 
@@ -253,7 +253,7 @@
   padding: 2rem;
   text-align: center;
   color: var(--text-muted);
-  font-size: 0.85rem;
+  font-size: var(--fs-md);
 }
 
 @media (max-width: 760px) {

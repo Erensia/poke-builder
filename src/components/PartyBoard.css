@@ -21,14 +21,14 @@
 }
 
 .party-board-header h2 {
-  font-size: 1.3rem;
+  font-size: var(--fs-2xl);
   margin-bottom: 0.3rem;
 }
 
 .party-board-header p {
   margin: 0;
   color: var(--text-muted);
-  font-size: 0.82rem;
+  font-size: var(--fs-sm);
   max-width: 34ch;
 }
 
@@ -46,16 +46,16 @@
 .party-board-count {
   font-family: var(--display);
   font-weight: 700;
-  font-size: 0.9rem;
+  font-size: var(--fs-md);
   padding: 0.3rem 0.7rem;
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   background: var(--gradient);
-  color: #fff;
+  color: var(--on-color);
   white-space: nowrap;
 }
 
 .party-board-autosave {
-  font-size: 0.72rem;
+  font-size: var(--fs-xs);
   color: var(--text-muted);
   white-space: nowrap;
 }
@@ -64,10 +64,10 @@
   border: 1px solid var(--border);
   background: transparent;
   color: var(--text-muted);
-  font-size: 0.76rem;
+  font-size: var(--fs-xs);
   font-weight: 500;
   padding: 0.32rem 0.65rem;
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   cursor: pointer;
   white-space: nowrap;
 }
