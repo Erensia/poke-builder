@@ -7,6 +7,7 @@ import { PokemonAvatarWithItem } from "../PokemonAvatarWithItem";
 import { TYPE_COLORS } from "../../lib/typeColors";
 import { rankStageMultiplier } from "../../lib/battlePower";
 import { VOLATILE_LABELS, SCREEN_LABELS } from "../../lib/battleLogLabels";
+import { SIDE_NAME } from "../../lib/battleLogText";
 import { eunNeun } from "../../lib/josa";
 import { forcedLockedAction, isRecharging } from "../../lib/battle/lockedAction";
 import { isTrappedFromSwitching } from "../../lib/battle/switching";
@@ -57,7 +58,6 @@ export function BattleBoard({
   setLockWarning,
   log,
   battleBoardBackground,
-  fighterLabel,
   activeMoveIds,
   choiceLockedMoveId,
   battleSide,
@@ -98,7 +98,6 @@ export function BattleBoard({
   setLockWarning: Dispatch<SetStateAction<string | null>>;
   log: TurnResult[];
   battleBoardBackground: (state: BattleState) => string | undefined;
-  fighterLabel: (state: BattleState, key: FighterKey) => string;
   activeMoveIds: (side: Side) => (string | null)[];
   choiceLockedMoveId: (side: Side) => string | null;
   battleSide: (side: Side) => BattleSide | undefined;
@@ -728,7 +727,7 @@ export function BattleBoard({
     {winner ? (
       <>
         <div className={`battle-result-banner${winner === "draw" ? " is-draw" : ""}`}>
-          {winner === "draw" ? "🤝 무승부! 양쪽 다 기절했어요" : `🏆 ${fighterLabel(battleState, winner)} 승리!`}
+          {winner === "draw" ? "🤝 무승부! 양쪽 다 기절했어요" : `🏆 ${SIDE_NAME[winner]} 승리!`}
           <button type="button" className="battle-reset-button" onClick={seriesNext ? seriesNext.onNext : resetToSetup}>
             {seriesNext ? seriesNext.label : "대전 이어하기"}
           </button>
