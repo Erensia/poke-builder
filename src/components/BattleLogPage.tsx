@@ -41,7 +41,7 @@ import type { PartySlot, SamplePartyPreset } from "../types/party";
 import { BattleBoard } from "./battleLog/BattleBoard";
 import { BattleSelectScreen } from "./battleLog/BattleSelectScreen";
 import { BattleSetupScreen } from "./battleLog/BattleSetupScreen";
-import { SLOT_INDICES, battleBoardBackground, fighterLabel, type InputModeState, type MegaDeclaredState, type PendingForcedSwitchState, type PendingPivotState, type PickerState, type SelectedState, type Side, type SlotIndex } from "./battleLog/shared";
+import { SLOT_INDICES, battleBoardBackground, type InputModeState, type MegaDeclaredState, type PendingForcedSwitchState, type PendingPivotState, type PickerState, type SelectedState, type Side, type SlotIndex } from "./battleLog/shared";
 import "./BattleLogPage.css";
 
 /** BattleLogPage의 상태·핸들러 — 화면(JSX)이 쓰는 값만 돌려준다 */
@@ -898,7 +898,6 @@ export function BattleLogPage() {
           setLockWarning={setLockWarning}
           log={log}
           battleBoardBackground={battleBoardBackground}
-          fighterLabel={fighterLabel}
           activeMoveIds={activeMoveIds}
           choiceLockedMoveId={choiceLockedMoveId}
           battleSide={battleSide}

@@ -85,3 +85,6 @@ export function hpAsPercent(e: EndOfTurnLogEntry, maxHp: number | undefined): En
   }
   return out as unknown as EndOfTurnLogEntry;
 }
+
+/** 승리 문구용 편 이름 — 활성 포켓몬 이름을 쓰면 쓰러진 포켓몬이 승리자처럼 보인다(편에 예비가 남아 이긴 경우). a=내 파티·b=상대 파티 고정 축 */
+export const SIDE_NAME = { a: "내 파티", b: "상대 파티" } as const;
