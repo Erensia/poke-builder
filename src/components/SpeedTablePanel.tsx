@@ -10,6 +10,7 @@ import type { MatchupSlot } from "../types/matchup";
 import type { WeatherKind } from "../types/weather";
 import type { FieldKind } from "../types/field";
 import { PokemonPickerModal } from "./PokemonPickerModal";
+import { PillRow } from "./PillRow";
 import "./SpeedTablePanel.css";
 
 interface SpeedTablePanelProps {
@@ -132,16 +133,7 @@ export function SpeedTablePanel({ slot, weather, field, card }: SpeedTablePanelP
   const name = pokemon ? (getEffectiveForm(pokemon, slot).formLabel ?? pokemon.name) : "";
   const targetForms = target ? SPEED_FORMS.filter((f) => f.pokemonId === target) : [];
 
-  const tailwindToggle = (
-    <div className="matchup-assume-grave">
-      <span className="matchup-assume-grave-label">순풍</span>
-      <div className="matchup-hitcount-row">
-        <button type="button" className={`matchup-hitcount-pip${tailwind ? " is-active" : ""}`} onClick={() => setTailwind((t) => !t)}>
-          있음
-        </button>
-      </div>
-    </div>
-  );
+  const tailwindToggle = <PillRow label="순풍" options={[{ value: true, label: "있음" }]} value={tailwind} onChange={() => setTailwind((t) => !t)} />;
 
   return (
     <div className="speedtab-board">

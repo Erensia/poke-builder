@@ -103,7 +103,7 @@ export function AiMemoryModal({
 
         <div className="ai-memory-footer">
           <InfoTooltip text={LEARNING_SWITCH_HELP}>
-            <label className="ai-memory-switch">
+            <label className="toggle-pill">
               <input type="checkbox" checked={learningEnabled} onChange={(e) => onToggleLearning(e.target.checked)} />
               <span>대전에서 계속 학습</span>
             </label>

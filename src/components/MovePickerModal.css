@@ -17,14 +17,14 @@
   border: 1px solid var(--border);
   background: var(--surface-2);
   color: var(--text-muted);
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   cursor: pointer;
   line-height: 1;
 }
 
 .move-picker-chip {
   padding: 0.3rem 0.65rem;
-  font-size: 0.76rem;
+  font-size: var(--fs-xs);
 }
 
 .move-picker-type-chip {
@@ -46,7 +46,7 @@
 .move-picker-empty {
   padding: 0.7rem 0.8rem;
   color: var(--text-muted);
-  font-size: 0.82rem;
+  font-size: var(--fs-sm);
   text-align: center;
 }
 
@@ -55,9 +55,9 @@
   border: 1px dashed var(--border);
   background: transparent;
   color: var(--text-muted);
-  border-radius: 10px;
+  border-radius: var(--r-md);
   padding: 0.45rem;
-  font-size: 0.82rem;
+  font-size: var(--fs-sm);
   cursor: pointer;
   margin-bottom: 0.6rem;
 }
@@ -85,10 +85,10 @@
   border: 1px solid transparent;
   background: var(--surface-2);
   padding: 0.5rem 0.7rem;
-  border-radius: 10px;
+  border-radius: var(--r-md);
   cursor: pointer;
   text-align: left;
-  font-size: 0.8rem;
+  font-size: var(--fs-sm);
 }
 
 .move-picker-item:hover {
@@ -129,10 +129,10 @@
   margin: 0;
   padding: 0.7rem 0.8rem;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--r-md);
   background: var(--surface-2);
   color: var(--text-muted);
-  font-size: 0.82rem;
+  font-size: var(--fs-sm);
   line-height: 1.5;
 }
 

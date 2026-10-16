@@ -25,13 +25,31 @@
   --scrollbar-thumb: rgba(109, 84, 214, 0.28);
   --scrollbar-thumb-hover: rgba(109, 84, 214, 0.5);
 
-  --danger: #c1382c;
+  --danger: #b83227;
   --danger-bg: #fbe2dd;
   --danger-strong: #d1453a;
   --safe: #2f7a4f;
   --safe-bg: #e0f2e6;
-  --warn: #a06a12;
+  --warn: #8a590f;
   --warn-bg: #f5e6c8;
+  /* 타입색·보라 그라데이션 위 글자(다크에서도 흰색)와 금색(승자 테두리·포인트 마크·HP바 경고) */
+  --on-color: #fff;
+  --amber: #f2b705;
+  --amber-light: #ffdd66;
+
+  /* 4.0 D3 — 글자 크기·모서리 반경 단계(새 값은 이 단계 중에서 고른다) */
+  --fs-xs: 0.72rem;
+  --fs-sm: 0.8rem;
+  --fs-md: 0.88rem;
+  --fs-lg: 1rem;
+  --fs-xl: 1.15rem;
+  --fs-2xl: 1.35rem;
+  --r-xs: 4px;
+  --r-sm: 8px;
+  --r-md: 10px;
+  --r-lg: 14px;
+  --r-xl: 16px;
+  --r-pill: 999px;
 
   --sans: 'Noto Sans KR', 'Pretendard', system-ui, -apple-system, sans-serif;
   --display: 'Rajdhani', var(--sans);
@@ -223,7 +241,7 @@ button {
 
 *::-webkit-scrollbar-thumb {
   background: var(--scrollbar-thumb);
-  border-radius: 999px;
+  border-radius: var(--r-pill);
 }
 
 *::-webkit-scrollbar-thumb:hover {
@@ -239,5 +257,91 @@ button {
   select,
   textarea {
     font-size: 16px !important;
+  }
+}
+
+/* 키보드 포커스 링(4.0 D1) — 버튼·탭·링크·요약·입력칸 공통. 컴포넌트가 따로 정한 :focus-visible이 있으면 그쪽이 우선한다 */
+:where(button, a, summary, select, input, textarea, [role='tab'], [tabindex]):focus-visible {
+  outline: 2px solid var(--violet);
+  outline-offset: 2px;
+}
+
+/* 켜고 끄는 체크박스는 전부 알약 토글로(4.0 D2) — 체크박스는 투명하게 겹쳐 키보드·스크린리더 동작을 유지한다. matchup-hitcount-pip과 같은 토큰 */
+.toggle-pill {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: fit-content;
+  max-width: 100%;
+  padding: 0.2rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  line-height: 1.35;
+  cursor: pointer;
+}
+
+.toggle-pill:hover {
+  border-color: var(--violet);
+  color: var(--violet);
+}
+
+.toggle-pill:has(input:checked) {
+  border-color: var(--violet);
+  background: var(--violet-soft);
+  color: var(--violet);
+}
+
+.toggle-pill:has(input:disabled) {
+  opacity: 0.5;
+  cursor: not-allowed;
+  border-color: var(--border);
+  background: var(--surface-2);
+  color: var(--text-muted);
+}
+
+.toggle-pill:has(input:focus-visible) {
+  outline: 2px solid var(--violet);
+  outline-offset: 1px;
+}
+
+.toggle-pill input {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  opacity: 0;
+  cursor: inherit;
+}
+
+/* 4.0 D4 — 터치 기기(pointer: coarse)에서 작은 칩·알약·탭 버튼의 눌리는 영역만 세로 44px 근처까지 넓힌다(모양·배치 불변).
+   overflow: hidden인 .party-move-pip·.dinf-stepper는 ::after가 잘려 제외. 새 칩/알약 클래스는 여기에 추가한다. */
+@media (pointer: coarse) {
+  :is(
+    .matchup-hitcount-pip, .party-meta-pip, .matchup-meta-pip, .matchup-move-pip, .chip-picker-chip,
+    .move-picker-chip, .dinf-nature-chip, .dinf-defender-forms button, .sample-party-filters button,
+    .matchup-tabs button, .movedex-category-tab, .pokedex-form-tab, .pokedex-move-chip,
+    .speedtab-target-btn, .points-step, .battle-select-num, .battle-input-toggle-btn,
+    .battle-ai-memory-chip, .preset-item-actions button, .party-board-reset, .movedex-sort-dir,
+    .modal-close, .info-tooltip-icon, .battle-video-toggle, .matchup-roll-toggle, .dinf-add,
+    .battle-setup-load-party, .party-slot-sample-link, .matchup-slot-sample-link, .toggle-pill
+  ) {
+    position: relative;
+  }
+
+  :is(
+    .matchup-hitcount-pip, .party-meta-pip, .matchup-meta-pip, .matchup-move-pip, .chip-picker-chip,
+    .move-picker-chip, .dinf-nature-chip, .dinf-defender-forms button, .sample-party-filters button,
+    .matchup-tabs button, .movedex-category-tab, .pokedex-form-tab, .pokedex-move-chip,
+    .speedtab-target-btn, .points-step, .battle-select-num, .battle-input-toggle-btn,
+    .battle-ai-memory-chip, .preset-item-actions button, .party-board-reset, .movedex-sort-dir,
+    .modal-close, .info-tooltip-icon, .battle-video-toggle, .matchup-roll-toggle, .dinf-add,
+    .battle-setup-load-party, .party-slot-sample-link, .matchup-slot-sample-link, .toggle-pill
+  )::after {
+    content: '';
+    position: absolute;
+    inset: -8px -2px;
   }
 }

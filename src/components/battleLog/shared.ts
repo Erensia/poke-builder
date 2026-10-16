@@ -1,6 +1,6 @@
-import { getPokemon } from "../../lib/data";
 import { environmentTintBackground } from "../../lib/environmentBackground";
-import { type BattleState, type FighterKey, type RunTurnContext } from "../../lib/battleSimulator";
+import type { BattleState } from "../../lib/battle/state";
+import type { RunTurnContext } from "../../lib/battle/runTurn";
 
 export type Side = "a" | "b";
 
@@ -55,9 +55,4 @@ export const SLOT_INDICES: SlotIndex[] = [0, 1, 2, 3, 4, 5];
 /** 날씨/필드 배경 틴트 — 매치업 페이지와 공유하는 environmentTintBackground에 위임한다. */
 export function battleBoardBackground(state: BattleState): string | undefined {
   return environmentTintBackground(state.weather, state.field);
-}
-
-export function fighterLabel(state: BattleState, key: FighterKey): string {
-  const pokemon = getPokemon(state[key].slot.pokemonId);
-  return pokemon?.name ?? key;
 }

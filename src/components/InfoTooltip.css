@@ -9,7 +9,7 @@
   border: none;
   background: none;
   padding: 0 0.1rem;
-  font-size: 0.85rem;
+  font-size: var(--fs-md);
   line-height: 1;
   color: var(--text-muted);
   cursor: pointer;
@@ -23,10 +23,10 @@
   width: max-content;
   max-width: min(280px, 80vw);
   padding: 0.5rem 0.65rem;
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   background: var(--text);
   color: var(--bg, #fff);
-  font-size: 0.75rem;
+  font-size: var(--fs-xs);
   font-weight: 500;
   line-height: 1.45;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);

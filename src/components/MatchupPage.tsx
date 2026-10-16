@@ -2,8 +2,9 @@ import { useMemo, useState } from "react";
 import { MatchupSlotCard } from "./MatchupSlotCard";
 import { VerdictBadge } from "./VerdictBadge";
 import { DamageRollBlock } from "./DamageRollBlock";
-import { WeatherPicker } from "./WeatherPicker";
-import { FieldPicker } from "./FieldPicker";
+import { ChipPicker } from "./ChipPicker";
+import type { WeatherKind } from "../types/weather";
+import type { FieldKind } from "../types/field";
 import { DefenseInferencePanel } from "./DefenseInferencePanel";
 import { SpeedTablePanel } from "./SpeedTablePanel";
 import { BulkAdjustPanel } from "./BulkAdjustPanel";
@@ -20,13 +21,14 @@ import { SlotPresetsModal } from "./SlotPresetsModal";
 import { useMatchup } from "../hooks/useMatchup";
 import { useSlotPresets } from "../hooks/useSlotPresets";
 import { saveMatchupDraft } from "../lib/storage";
-import { getPokemon, getMove, getAbility } from "../lib/data";
+import { getPokemon, getMove } from "../lib/data";
 import { getEffectiveForm } from "../lib/pokemonForm";
 import { computeRealStats } from "../lib/statCalculator";
 import { computeBulkPower } from "../lib/battlePower";
 import { environmentTintBackground } from "../lib/environmentBackground";
 import { evaluateSlotMatchup, evaluateSpeedMatchup, computeSoloOffensePower } from "../lib/matchupEvaluator";
-import { burnDamageMultiplier, ignoresBurnAttackPenalty, statusedAttackBoost } from "../lib/statusConditions";
+import { bulkMovesOf } from "../lib/bulkAdjust";
+import { assumedMatchupOptions } from "../lib/matchupAssumptions";
 import { BATTLE_STAT_KEYS } from "../types/battleStats";
 import "./MatchupPage.css";
 
@@ -39,14 +41,21 @@ type PickerState =
   | { kind: "points"; side: Side }
   | { kind: "stages"; side: Side }
   | { kind: "cosmeticForm"; side: Side }
-  | { kind: "move"; side: Side }
+  | { kind: "move"; side: Side; bulkIndex?: number }
   | { kind: "slotPresets"; side: Side }
   | null;
+
+const WEATHERS: WeatherKind[] = ["쾌청", "비", "모래바람", "눈"];
+const FIELDS: FieldKind[] = ["그래스필드", "미스트필드", "사이코필드", "일렉트릭필드"];
+const SCREENS = ["reflect", "lightScreen", "auroraVeil"] as const;
+const ROOMS = ["트릭룸"] as const;
+const SCREEN_LABELS = { reflect: "리플렉터", lightScreen: "빛의장막", auroraVeil: "오로라베일" } as const;
 
 /** 탭 버튼과 페이지 제목에 같이 쓰는 이름 */
 const TAB_LABEL = { calc: "결정력 계산", inference: "노력치 역산", speed: "스피드 조정", bulk: "내구 조정" } as const;
 
-export function MatchupPage() {
+/** MatchupPage의 상태·핸들러 — 화면(JSX)이 쓰는 값만 돌려준다 */
+function useMatchupPageState() {
   const { attacker, defender, swapSides, weather, setWeather, field, setField, trickRoom, setTrickRoom } =
     useMatchup();
   const slotPresets = useSlotPresets();
@@ -133,37 +142,8 @@ export function MatchupPage() {
     };
   }, [attacker.slot, defender.slot, attackerMove]);
 
-  // ver.1.9 가정 토글 → 계산 옵션. 화상 물리 반감(근성·객기 예외)은 배틀 AI처럼 추가 공격 배율로 넘긴다.
-  const assumeOptions = useMemo(() => {
-    const status = attacker.slot.statusAssumed ?? null;
-    return {
-      attackerStatus: status,
-      defenderStatus: defender.slot.statusAssumed ?? null,
-      defenderHasStatusCondition: !!defender.slot.statusAssumed,
-      attackerHpFraction: (attacker.slot.hpPercent ?? 100) / 100,
-      abilityHpFraction: attacker.slot.pinchAssumed ? 1 / 3 : 1,
-      attackerMovesLast: !!attacker.slot.movesLastAssumed,
-      attackerTookDamageThisTurn: !!attacker.slot.tookDamageAssumed,
-      attackerMoveFailedLastTurn: !!attacker.slot.moveFailedAssumed,
-      attackerStatLoweredThisTurn: !!attacker.slot.statLoweredAssumed,
-      defenderDamagedThisTurn: !!attacker.slot.targetDamagedAssumed,
-      defenderMinimized: !!attacker.slot.targetMinimizedAssumed,
-      critical: !!attacker.slot.critAssumed,
-      attackerTypeToMoveType: !!attacker.slot.typeShiftAssumed,
-      defenderHpIsFull: defender.slot.fullHpAssumed ?? true,
-      // 근성류 상승은 위력 단계, 화상 ×0.5는 최종 단계로 따로 넘긴다(2.4 B3 — 정수 데미지 공식의 단계 구분)
-      extraOffenseMultiplier: effMove
-        ? statusedAttackBoost(
-            status,
-            effMove.category,
-            attacker.slot.ability ? getAbility(attacker.slot.ability)?.physicalAttackMultiplierWhenStatused : undefined,
-          )
-        : 1,
-      finalOffenseMultiplier: effMove
-        ? burnDamageMultiplier(status, effMove.category, ignoresBurnAttackPenalty(attacker.slot.ability ?? undefined, effMove.id))
-        : 1,
-    };
-  }, [attacker.slot, defender.slot, effMove]);
+  // ver.1.9 가정 토글 → 계산 옵션(lib/matchupAssumptions)
+  const assumeOptions = useMemo(() => assumedMatchupOptions(attacker.slot, defender.slot, effMove), [attacker.slot, defender.slot, effMove]);
 
   // 양쪽 다 준비되고 기술까지 골랐을 때: 정확한 결정력/내구력/판정
   const fullResult = useMemo(() => {
@@ -233,228 +213,14 @@ export function MatchupPage() {
     );
   }, [attackerPokemon, defenderPokemon, effAttackerSlot, effDefenderSlot, attacker.slot, defender.slot, weather, trickRoom]);
 
+  return { tab, setTab, weather, setWeather, field, setField, attacker, defender, swapSides, fullResult, defenderPokemon, soloOffensePower, setPicker, slotPresets, attackerMove, baseBulk, speedResult, trickRoom, setTrickRoom, inferenceResetKey, setInferenceResetKey, swapInference, cardActions, picker, sideOf, attackerPokemon };
+}
+
+/** MatchupPage의 일부 화면 — 세션(useMatchupPageState 결과)에서 필요한 값만 꺼내 쓴다 */
+function MatchupPickers({ s }: { s: ReturnType<typeof useMatchupPageState> }) {
+  const { picker, setPicker, sideOf, attackerPokemon, defenderPokemon, slotPresets } = s;
   return (
-    <section className="matchup-page">
-      <header className="matchup-page-header">
-        <div>
-          <h2>{TAB_LABEL[tab]}</h2>
-          <p>
-            {tab === "calc"
-              ? "내 포켓몬과 상대 포켓몬을 고르고, 기술을 선택하면 타수 판정을 확인할 수 있습니다."
-              : tab === "inference"
-                ? "내가 입힌 데미지(상대 HP %)로 상대의 HP·방어 능력 포인트와 성격이 될 수 있는 범위를 추정합니다."
-                : tab === "speed"
-                  ? "내 포켓몬의 스피드로 어떤 포켓몬을 추월하는지 보고, 포인트 분배를 얼마나 줘야 목표 포켓몬을 넘는지 확인합니다"
-                  : "상대의 기술을 버티려면 내 포켓몬에 HP·방어(특방) 포인트를 최소 얼마나 줘야 하는지 확인합니다"}
-          </p>
-        </div>
-        <div className="matchup-tabs" role="tablist" aria-label="계산기 종류">
-          <button type="button" role="tab" aria-selected={tab === "calc"} className={tab === "calc" ? "is-active" : undefined} onClick={() => setTab("calc")}>
-            {TAB_LABEL.calc}
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={tab === "inference"}
-            className={tab === "inference" ? "is-active" : undefined}
-            onClick={() => setTab("inference")}
-          >
-            {TAB_LABEL.inference}
-          </button>
-          <button type="button" role="tab" aria-selected={tab === "speed"} className={tab === "speed" ? "is-active" : undefined} onClick={() => setTab("speed")}>
-            {TAB_LABEL.speed}
-          </button>
-          <button type="button" role="tab" aria-selected={tab === "bulk"} className={tab === "bulk" ? "is-active" : undefined} onClick={() => setTab("bulk")}>
-            {TAB_LABEL.bulk}
-          </button>
-        </div>
-        <div className="matchup-env-pickers">
-          <WeatherPicker weather={weather} onChange={setWeather} />
-          <FieldPicker field={field} onChange={setField} />
-        </div>
-      </header>
-
-      {tab === "calc" && (
-        <>
-      <div className="matchup-board" style={{ background: environmentTintBackground(weather, field) }}>
-        <MatchupSlotCard
-          role="attacker"
-          onSwapDrop={swapSides}
-          label="내 포켓몬"
-          slot={attacker.slot}
-          offensePower={fullResult?.offensePower}
-          rawOffensePower={fullResult?.rawOffensePower}
-          soloOffensePower={!defenderPokemon ? soloOffensePower : undefined}
-          multiHitCount={attacker.slot.multiHitCount}
-          onSetMultiHitCount={attacker.setMultiHitCount}
-          onPickPokemon={() => setPicker({ kind: "pokemon", side: "attacker" })}
-          onClearPokemon={attacker.clearPokemon}
-          onPickAbility={() => setPicker({ kind: "ability", side: "attacker" })}
-          onPickItem={() => setPicker({ kind: "item", side: "attacker" })}
-          onPickNature={() => setPicker({ kind: "nature", side: "attacker" })}
-          onPickPoints={() => setPicker({ kind: "points", side: "attacker" })}
-          onPickStages={() => setPicker({ kind: "stages", side: "attacker" })}
-          onCycleSizeForm={attacker.cycleSizeForm}
-          onCycleFormVariant={attacker.cycleFormVariant}
-          onCycleCosmeticForm={attacker.cycleCosmeticForm}
-          onPickCosmeticForm={() => setPicker({ kind: "cosmeticForm", side: "attacker" })}
-          onPickMove={() => setPicker({ kind: "move", side: "attacker" })}
-          hasSamples={slotPresets.presets.length > 0}
-          onOpenSamplePicker={() => setPicker({ kind: "slotPresets", side: "attacker" })}
-          onToggleItemStolen={attacker.setItemStolen}
-          onToggleUnburden={attacker.setUnburdenAssumed}
-          onSetStatus={attacker.setStatusAssumed}
-          selectedMove={attackerMove ?? undefined}
-          onSetPowerCondition={attacker.setPowerCondition}
-          onToggleCrit={attacker.setCritAssumed}
-          onToggleTypeShift={attacker.setTypeShiftAssumed}
-          critBlocked={!!fullResult?.criticalBlocked}
-          onTogglePinch={attacker.setPinchAssumed}
-          onSetHpPercent={attacker.setHpPercent}
-          moveIsGraveVisit={!!attackerMove?.powerPerFaintedAlly}
-          onSetGraveVisit={attacker.setGraveVisitFaintedAllies}
-          moveIsSpitUp={!!attackerMove?.spitUpPower}
-          stockpileCount={attacker.slot.stockpileCount}
-          onSetStockpileCount={attacker.setStockpileCount}
-        />
-
-        <div className="matchup-verdict-row">
-          <VerdictBadge
-            verdict={fullResult?.verdict ?? null}
-            koChance={fullResult?.koChance}
-            killingRolls={fullResult?.killingRolls}
-          />
-        </div>
-
-        <MatchupSlotCard
-          role="defender"
-          onSwapDrop={swapSides}
-          label="상대 포켓몬"
-          slot={defender.slot}
-          bulkPhysical={baseBulk?.physical}
-          bulkSpecial={baseBulk?.special}
-          onPickPokemon={() => setPicker({ kind: "pokemon", side: "defender" })}
-          onClearPokemon={defender.clearPokemon}
-          onPickAbility={() => setPicker({ kind: "ability", side: "defender" })}
-          onPickItem={() => setPicker({ kind: "item", side: "defender" })}
-          onPickNature={() => setPicker({ kind: "nature", side: "defender" })}
-          onPickPoints={() => setPicker({ kind: "points", side: "defender" })}
-          onPickStages={() => setPicker({ kind: "stages", side: "defender" })}
-          onCycleSizeForm={defender.cycleSizeForm}
-          onCycleFormVariant={defender.cycleFormVariant}
-          onCycleCosmeticForm={defender.cycleCosmeticForm}
-          onPickCosmeticForm={() => setPicker({ kind: "cosmeticForm", side: "defender" })}
-          hasSamples={slotPresets.presets.length > 0}
-          onOpenSamplePicker={() => setPicker({ kind: "slotPresets", side: "defender" })}
-          onToggleItemStolen={defender.setItemStolen}
-          onToggleUnburden={defender.setUnburdenAssumed}
-          onSetStatus={defender.setStatusAssumed}
-          onToggleFullHp={defender.setFullHpAssumed}
-          onSetScreen={defender.setScreen}
-        />
-      </div>
-
-      {fullResult?.damageParts && baseBulk && (
-        <DamageRollBlock parts={fullResult.damageParts} defenseStat={fullResult.defenseStat} defenderMaxHp={baseBulk.maxHp} />
-      )}
-
-      {speedResult && (
-        <div className="matchup-speed-block">
-          <div className="matchup-speed-row">
-            <span className="matchup-speed-side">
-              내 포켓몬 <strong>{Math.round(speedResult.attackerSpeed).toLocaleString()}</strong>
-            </span>
-            <span className="matchup-speed-verdict">
-              {speedResult.firstMover === "tie"
-                ? "동속 — 선공은 랜덤"
-                : speedResult.firstMover === "attacker"
-                  ? "⚡ 내 포켓몬이 먼저 움직여요"
-                  : "⚡ 상대가 먼저 움직여요"}
-              {speedResult.trickRoom && speedResult.firstMover !== "tie" && (
-                <span className="matchup-speed-note"> (트릭룸)</span>
-              )}
-            </span>
-            <span className="matchup-speed-side">
-              상대 <strong>{Math.round(speedResult.defenderSpeed).toLocaleString()}</strong>
-            </span>
-          </div>
-          <label className="matchup-assume-toggle matchup-speed-trickroom">
-            <input
-              type="checkbox"
-              checked={trickRoom}
-              onChange={(e) => setTrickRoom(e.target.checked)}
-            />
-            <span>트릭룸 가정 (느린 쪽이 먼저)</span>
-          </label>
-        </div>
-      )}
-        </>
-      )}
-
-    {tab === "inference" && (
-        <DefenseInferencePanel
-          key={inferenceResetKey}
-          onReset={() => {
-            saveMatchupDraft({ inference: undefined });
-            setInferenceResetKey((k) => k + 1);
-          }}
-          attacker={attacker.slot}
-          defender={defender.slot}
-          weather={weather}
-          field={field}
-          onSwapDrop={swapInference}
-          defenderActions={{
-            onPickPokemon: () => setPicker({ kind: "pokemon", side: "defender" }),
-            onClear: defender.clearPokemon,
-            onCycleFormVariant: defender.cycleFormVariant,
-            onCycleSizeForm: defender.cycleSizeForm,
-          }}
-          attackerCard={
-            <MatchupSlotCard
-              role="attacker"
-              onSwapDrop={swapInference}
-              label="내 포켓몬"
-              slot={attacker.slot}
-              hideMoveSlot
-              hideTurnAssumptions
-              {...cardActions("attacker")}
-            />
-          }
-        />
-      )}
-
-      {tab === "speed" && (
-        <SpeedTablePanel
-          slot={attacker.slot}
-          weather={weather}
-          field={field}
-          card={(statusExtra) => <MatchupSlotCard role="attacker" label="내 포켓몬" slot={attacker.slot} hideMoveSlot hideTurnAssumptions statusExtra={statusExtra} {...cardActions("attacker")} />}
-        />
-      )}
-
-      {tab === "bulk" && (
-        <BulkAdjustPanel
-          slot={attacker.slot}
-          opponent={defender.slot}
-          weather={weather}
-          field={field}
-          myCard={<MatchupSlotCard role="attacker" label="내 포켓몬" slot={attacker.slot} hideMoveSlot hideTurnAssumptions {...cardActions("attacker")} />}
-          opponentCard={
-            <MatchupSlotCard
-              role="attacker"
-              label="상대 포켓몬"
-              slot={defender.slot}
-              hideTurnAssumptions
-              selectedMove={defender.slot.moveId ? getMove(defender.slot.moveId) : undefined}
-              multiHitCount={defender.slot.multiHitCount}
-              onSetMultiHitCount={defender.setMultiHitCount}
-              {...cardActions("defender")}
-              onPickMove={() => setPicker({ kind: "move", side: "defender" })}
-            />
-          }
-        />
-      )}
-
+    <>
       {picker?.kind === "pokemon" && (
         <PokemonPickerModal
           onClose={() => setPicker(null)}
@@ -595,14 +361,16 @@ export function MatchupPage() {
             <MovePickerModal
               pokemon={pokemon}
               formVariant={side.slot.formVariant}
-              currentMoveIds={[side.slot.moveId]}
+              currentMoveIds={picker.bulkIndex === undefined ? [side.slot.moveId] : bulkMovesOf(side.slot).map((m) => m?.moveId ?? null)}
               onClose={() => setPicker(null)}
               onSelect={(moveId) => {
-                side.setMove(moveId);
+                if (picker.bulkIndex === undefined) side.setMove(moveId);
+                else side.setBulkMove(picker.bulkIndex, moveId);
                 setPicker(null);
               }}
               onClear={() => {
-                side.setMove(null);
+                if (picker.bulkIndex === undefined) side.setMove(null);
+                else side.setBulkMove(picker.bulkIndex, null);
                 setPicker(null);
               }}
             />
@@ -619,6 +387,250 @@ export function MatchupPage() {
           onDelete={slotPresets.deletePreset}
         />
       )}
+    </>
+  );
+}
+
+/** MatchupPage의 일부 화면 — 세션(useMatchupPageState 결과)에서 필요한 값만 꺼내 쓴다 */
+function MatchupCalcTab({ s }: { s: ReturnType<typeof useMatchupPageState> }) {
+  const { tab, weather, field, swapSides, attacker, fullResult, defenderPokemon, soloOffensePower, setPicker, slotPresets, attackerMove, defender, baseBulk, speedResult } = s;
+  return (
+    <>
+      {tab === "calc" && (
+        <>
+      <div className="matchup-board" style={{ background: environmentTintBackground(weather, field) }}>
+        <MatchupSlotCard
+          role="attacker"
+          onSwapDrop={swapSides}
+          label="내 포켓몬"
+          slot={attacker.slot}
+          offensePower={fullResult?.offensePower}
+          rawOffensePower={fullResult?.rawOffensePower}
+          soloOffensePower={!defenderPokemon ? soloOffensePower : undefined}
+          multiHitCount={attacker.slot.multiHitCount}
+          onSetMultiHitCount={attacker.setMultiHitCount}
+          onPickPokemon={() => setPicker({ kind: "pokemon", side: "attacker" })}
+          onClearPokemon={attacker.clearPokemon}
+          onPickAbility={() => setPicker({ kind: "ability", side: "attacker" })}
+          onPickItem={() => setPicker({ kind: "item", side: "attacker" })}
+          onPickNature={() => setPicker({ kind: "nature", side: "attacker" })}
+          onPickPoints={() => setPicker({ kind: "points", side: "attacker" })}
+          onPickStages={() => setPicker({ kind: "stages", side: "attacker" })}
+          onCycleSizeForm={attacker.cycleSizeForm}
+          onCycleFormVariant={attacker.cycleFormVariant}
+          onCycleCosmeticForm={attacker.cycleCosmeticForm}
+          onPickCosmeticForm={() => setPicker({ kind: "cosmeticForm", side: "attacker" })}
+          onPickMove={() => setPicker({ kind: "move", side: "attacker" })}
+          hasSamples={slotPresets.presets.length > 0}
+          onOpenSamplePicker={() => setPicker({ kind: "slotPresets", side: "attacker" })}
+          onToggleItemStolen={attacker.setItemStolen}
+          onToggleUnburden={attacker.setUnburdenAssumed}
+          onSetStatus={attacker.setStatusAssumed}
+          selectedMove={attackerMove ?? undefined}
+          onSetPowerCondition={attacker.setPowerCondition}
+          onToggleCrit={attacker.setCritAssumed}
+          onToggleTypeShift={attacker.setTypeShiftAssumed}
+          critBlocked={!!fullResult?.criticalBlocked}
+          onTogglePinch={attacker.setPinchAssumed}
+          onSetHpPercent={attacker.setHpPercent}
+          moveIsGraveVisit={!!attackerMove?.powerPerFaintedAlly}
+          onSetGraveVisit={attacker.setGraveVisitFaintedAllies}
+          moveIsSpitUp={!!attackerMove?.spitUpPower}
+          stockpileCount={attacker.slot.stockpileCount}
+          onSetStockpileCount={attacker.setStockpileCount}
+        />
+
+        <div className="matchup-verdict-row">
+          <VerdictBadge
+            verdict={fullResult?.verdict ?? null}
+            koChance={fullResult?.koChance}
+            killingRolls={fullResult?.killingRolls}
+          />
+        </div>
+
+        <MatchupSlotCard
+          role="defender"
+          onSwapDrop={swapSides}
+          label="상대 포켓몬"
+          slot={defender.slot}
+          bulkPhysical={baseBulk?.physical}
+          bulkSpecial={baseBulk?.special}
+          onPickPokemon={() => setPicker({ kind: "pokemon", side: "defender" })}
+          onClearPokemon={defender.clearPokemon}
+          onPickAbility={() => setPicker({ kind: "ability", side: "defender" })}
+          onPickItem={() => setPicker({ kind: "item", side: "defender" })}
+          onPickNature={() => setPicker({ kind: "nature", side: "defender" })}
+          onPickPoints={() => setPicker({ kind: "points", side: "defender" })}
+          onPickStages={() => setPicker({ kind: "stages", side: "defender" })}
+          onCycleSizeForm={defender.cycleSizeForm}
+          onCycleFormVariant={defender.cycleFormVariant}
+          onCycleCosmeticForm={defender.cycleCosmeticForm}
+          onPickCosmeticForm={() => setPicker({ kind: "cosmeticForm", side: "defender" })}
+          hasSamples={slotPresets.presets.length > 0}
+          onOpenSamplePicker={() => setPicker({ kind: "slotPresets", side: "defender" })}
+          onToggleItemStolen={defender.setItemStolen}
+          onToggleUnburden={defender.setUnburdenAssumed}
+          onSetStatus={defender.setStatusAssumed}
+          onToggleFullHp={defender.setFullHpAssumed}
+        />
+      </div>
+
+      {fullResult?.damageParts && baseBulk && (
+        <DamageRollBlock parts={fullResult.damageParts} defenseStat={fullResult.defenseStat} defenderMaxHp={baseBulk.maxHp} />
+      )}
+
+      {speedResult && (
+        <div className="matchup-speed-block">
+          <div className="matchup-speed-row">
+            <span className="matchup-speed-side">
+              내 포켓몬 <strong>{Math.round(speedResult.attackerSpeed).toLocaleString()}</strong>
+            </span>
+            <span className="matchup-speed-verdict">
+              {speedResult.firstMover === "tie"
+                ? "동속 — 선공은 랜덤"
+                : speedResult.firstMover === "attacker"
+                  ? "⚡ 내 포켓몬이 먼저 움직여요"
+                  : "⚡ 상대가 먼저 움직여요"}
+              {speedResult.trickRoom && speedResult.firstMover !== "tie" && (
+                <span className="matchup-speed-note"> (트릭룸)</span>
+              )}
+            </span>
+            <span className="matchup-speed-side">
+              상대 <strong>{Math.round(speedResult.defenderSpeed).toLocaleString()}</strong>
+            </span>
+          </div>
+        </div>
+      )}
+        </>
+      )}
+    </>
+  );
+}
+
+export function MatchupPage() {
+  const session = useMatchupPageState();
+  const { tab, setTab, weather, setWeather, field, setField, attacker, defender, swapSides, setPicker, inferenceResetKey, setInferenceResetKey, swapInference, cardActions, trickRoom, setTrickRoom } = session;
+
+
+  return (
+    <section className="matchup-page">
+      <header className="matchup-page-header">
+        <div>
+          <h2>{TAB_LABEL[tab]}</h2>
+          <p>
+            {tab === "calc"
+              ? "내 포켓몬과 상대 포켓몬을 고르고, 기술을 선택하면 타수 판정을 확인할 수 있습니다."
+              : tab === "inference"
+                ? "내가 입힌 데미지(상대 HP %)로 상대의 HP·방어 능력 포인트와 성격이 될 수 있는 범위를 추정합니다."
+                : tab === "speed"
+                  ? "내 포켓몬의 스피드로 어떤 포켓몬을 추월하는지 보고, 포인트를 얼마나 줘야 목표 포켓몬을 넘는지 확인합니다"
+                  : "상대의 기술을 버티려면 내 포켓몬에 HP·방어(특방) 포인트를 최소 얼마나 줘야 하는지 확인합니다"}
+          </p>
+        </div>
+        <div className="matchup-tabs" role="tablist" aria-label="계산기 종류">
+          <button type="button" role="tab" aria-selected={tab === "calc"} className={tab === "calc" ? "is-active" : undefined} onClick={() => setTab("calc")}>
+            {TAB_LABEL.calc}
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === "inference"}
+            className={tab === "inference" ? "is-active" : undefined}
+            onClick={() => setTab("inference")}
+          >
+            {TAB_LABEL.inference}
+          </button>
+          <button type="button" role="tab" aria-selected={tab === "speed"} className={tab === "speed" ? "is-active" : undefined} onClick={() => setTab("speed")}>
+            {TAB_LABEL.speed}
+          </button>
+          <button type="button" role="tab" aria-selected={tab === "bulk"} className={tab === "bulk" ? "is-active" : undefined} onClick={() => setTab("bulk")}>
+            {TAB_LABEL.bulk}
+          </button>
+        </div>
+        <div className="matchup-env-pickers">
+          <ChipPicker label="날씨" options={WEATHERS} value={weather} onChange={setWeather} />
+          <ChipPicker label="필드" options={FIELDS} value={field} onChange={setField} />
+          <ChipPicker label="내 쪽 스크린" options={SCREENS} textOf={(s) => SCREEN_LABELS[s]} value={attacker.slot.screen} onChange={(s) => attacker.setScreen(s ?? undefined)} />
+          <ChipPicker label="상대 쪽 스크린" options={SCREENS} textOf={(s) => SCREEN_LABELS[s]} value={defender.slot.screen} onChange={(s) => defender.setScreen(s ?? undefined)} />
+          <ChipPicker label="룸" options={ROOMS} value={trickRoom ? "트릭룸" : null} onChange={(r) => setTrickRoom(r !== null)} />
+        </div>
+      </header>
+
+      <MatchupCalcTab s={session} />
+
+    {tab === "inference" && (
+        <DefenseInferencePanel
+          key={inferenceResetKey}
+          onReset={() => {
+            saveMatchupDraft({ inference: undefined });
+            setInferenceResetKey((k) => k + 1);
+          }}
+          attacker={attacker.slot}
+          defender={defender.slot}
+          weather={weather}
+          field={field}
+          onSwapDrop={swapInference}
+          defenderActions={{
+            onPickPokemon: () => setPicker({ kind: "pokemon", side: "defender" }),
+            onClear: defender.clearPokemon,
+            onCycleFormVariant: defender.cycleFormVariant,
+            onCycleSizeForm: defender.cycleSizeForm,
+          }}
+          attackerCard={
+            <MatchupSlotCard
+              role="attacker"
+              onSwapDrop={swapInference}
+              label="내 포켓몬"
+              slot={attacker.slot}
+              hideMoveSlot
+              hideTurnAssumptions
+              {...cardActions("attacker")}
+            />
+          }
+        />
+      )}
+
+      {tab === "speed" && (
+        <SpeedTablePanel
+          slot={attacker.slot}
+          weather={weather}
+          field={field}
+          card={(statusExtra) => <MatchupSlotCard role="attacker" label="내 포켓몬" slot={attacker.slot} hideMoveSlot hideTurnAssumptions statusExtra={statusExtra} {...cardActions("attacker")} />}
+        />
+      )}
+
+      {tab === "bulk" && (
+        <BulkAdjustPanel
+          slot={attacker.slot}
+          opponent={defender.slot}
+          weather={weather}
+          field={field}
+          myCard={<MatchupSlotCard role="attacker" onSwapDrop={swapSides} label="내 포켓몬" slot={attacker.slot} hideMoveSlot hideTurnAssumptions {...cardActions("attacker")} />}
+          opponentCard={
+            <MatchupSlotCard
+              role="attacker"
+              swapRole="defender"
+              onSwapDrop={swapSides}
+              label="상대 포켓몬"
+              slot={defender.slot}
+              hideTurnAssumptions
+              bulkMoves={{
+                moves: bulkMovesOf(defender.slot),
+                onPick: (index) => setPicker({ kind: "move", side: "defender", bulkIndex: index }),
+                onSetHits: defender.setBulkHits,
+              }}
+              selectedMoves={bulkMovesOf(defender.slot).flatMap((m) => (m && getMove(m.moveId)) || [])}
+              onSetPowerCondition={defender.setPowerCondition}
+              onTogglePinch={defender.setPinchAssumed}
+              onToggleTypeShift={defender.setTypeShiftAssumed}
+              onSetHpPercent={defender.setHpPercent}
+              {...cardActions("defender")}
+            />
+          }
+        />
+      )}
+
+      <MatchupPickers s={session} />
     </section>
   );
 }

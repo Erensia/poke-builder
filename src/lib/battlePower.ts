@@ -25,7 +25,7 @@ export function computeEffectiveSpeed(realSpeed: number, stages: StatStages = NE
 /**
  * 투쟁심(Rivalry): 공격측이 이 특성일 때 상대와의 성별 관계로 데미지 배율을 낸다.
  * 같은 성별 ×1.25 · 다른 성별 ×0.75 · 어느 한쪽이라도 성별 불명(null) ×1.0.
- * battleSimulator(실전)·matchupEvaluator(매치업 스냅샷) 양쪽이 공유한다(ver.1.5 §5).
+ * 배틀 엔진(실전)·matchupEvaluator(매치업 스냅샷) 양쪽이 공유한다(ver.1.5 §5).
  */
 export function rivalryDamageMultiplier(
   ability: Ability | undefined,
@@ -49,7 +49,7 @@ export function supremeOverlordMultiplier(ability: Ability | undefined, faintedC
 
 /**
  * 의욕(Hustle): 물리 기술 위력 ×1.5 (명중률 페널티는 결정력 계산 대상이 아니라 별도 처리).
- * battleSimulator(실전)·matchupEvaluator(매치업 스냅샷) 양쪽이 공유한다(ver.1.5 §5).
+ * 배틀 엔진(실전)·matchupEvaluator(매치업 스냅샷) 양쪽이 공유한다(ver.1.5 §5).
  */
 export function hustleDamageMultiplier(category: MoveCategory | null, ability: Ability | undefined): number {
   return category === "physical" && ability?.hustleAttackMultiplier !== undefined
@@ -60,9 +60,9 @@ export function hustleDamageMultiplier(category: MoveCategory | null, ability: A
 /**
  * 리플렉터/빛의장막(카테고리 전용)·오로라베일(물리·특수 공통)이 동시에 걸려있을 수 있는 축을
  * 곱셈으로 합산한다 — 급소·틈새포착 등 "스크린을 아예 무시할지"는 호출부가 각자의 상태 모양에
- * 맞춰 미리 판정해서 두 불리언으로 넘긴다(battleSimulator는 진영 상태 그대로, matchupEvaluator는
+ * 맞춰 미리 판정해서 두 불리언으로 넘긴다(배틀 엔진은 진영 상태 그대로, matchupEvaluator는
  * 1턴 스냅샷의 단일 screen 옵션에서 도출 — 입력 모양이 달라 이 부분만은 각자 유지).
- * battleSimulator(실전)·matchupEvaluator(매치업 스냅샷) 양쪽이 공유한다(ver.1.5 §5).
+ * 배틀 엔진(실전)·matchupEvaluator(매치업 스냅샷) 양쪽이 공유한다(ver.1.5 §5).
  */
 export function screenMultiplierFromFlags(categoryScreenActive: boolean, auroraVeilActive: boolean): number {
   return (categoryScreenActive ? 2 : 1) * (auroraVeilActive ? 2 : 1);
@@ -72,7 +72,7 @@ export function screenMultiplierFromFlags(categoryScreenActive: boolean, auroraV
  * 기사회생(Reversal)·바둥바둥(Flail) 위력표 — 사용자 현재 HP 비율(%)로 갈린다(사용자 제공 수치, F-2).
  * 71~100 → 20 / 36~70 → 40 / 21~35 → 80 / 11~20 → 100 / 5~10 → 150 / 1~4 → 200.
  * (경계는 백분율 내림 기준 — 예: 35.9%는 "35 이하" 구간이 아니라 "36 이상"으로 본다.)
- * battleSimulator(실 HP)와 matchupEvaluator(스냅샷 HP 비율)가 공유한다.
+ * 배틀 엔진(실 HP)와 matchupEvaluator(스냅샷 HP 비율)가 공유한다.
  */
 export function reversalPowerFromHp(currentHp: number, maxHp: number): number {
   const pct = (currentHp / maxHp) * 100;
@@ -221,7 +221,7 @@ export function computeAttackTerm(
   return stat * rankStageMultiplier(stage);
 }
 
-export interface OffensePowerOptions {
+interface OffensePowerOptions {
   /** 타입 상성 배율 (0, 0.25, 0.5, 1, 2, 4). 상대를 모르면 생략 = 1 */
   typeEffectiveness?: number;
   /** 특성으로 인한 배율 (예: 천하장사 물리 2배) */
@@ -292,9 +292,9 @@ export function computeOffensePower(
  * 내구력(결정력과 비교하는 연속값 지표) 기준 상수 — 레벨 50 공식 `HP×방어 ÷ (0.44 × 난수)`의 평균 난수 지점. 판정·AI 처치 타수는
  * 정수 데미지 공식(damageFormula)으로 옮겨 갔고, 결정력&내구력 페이지의 내구력 표시에만 남아 있다.
  */
-export const BULK_BASELINE_DIVISOR = 0.411;
+const BULK_BASELINE_DIVISOR = 0.411;
 
-export interface DefensePowerOptions {
+interface DefensePowerOptions {
   /** 방어자의 현재 랭크 상태. 카테고리에 맞춰 방어/특방 랭크를 자동으로 골라 쓴다 */
   defenderStages?: StatStages;
   /** 방어 관련 특성/도구 배율 (예: 두꺼운지방으로 해당 타입 데미지 절반 → 내구력 2배로 표현 가능) */
@@ -337,7 +337,7 @@ export type MatchupVerdict =
   | "needs-3hit-plus";
 
 /** 데미지 난수(damage roll)의 최고값 */
-export const MAX_DAMAGE_ROLL = 1.0;
+const MAX_DAMAGE_ROLL = 1.0;
 
 export interface MatchupChance {
   verdict: MatchupVerdict;
@@ -354,7 +354,7 @@ export interface MatchupChance {
  */
 export const CRITICAL_DAMAGE_MULTIPLIER = 1.5;
 
-export interface DamageOptions {
+interface DamageOptions {
   typeEffectiveness?: number;
   abilityMultiplier?: number;
   /** 공격 스탯 단계 배율(맹화류·선파워) — 공격 스탯에 곱해 내린다. abilityMultiplier(위력 단계)에는 넣지 않는다. 생략하면 1 */
@@ -379,7 +379,7 @@ export interface DamageOptions {
   randomRoll?: number;
 }
 
-export interface DamageResult {
+interface DamageResult {
   /** 실제 데미지 정수값 */
   damage: number;
   /** 방어측 최대 HP 대비 비율 (0~1 초과 가능) */

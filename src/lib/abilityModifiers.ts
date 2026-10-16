@@ -56,7 +56,7 @@ function conditionMatches(condition: AbilityModifierCondition | undefined, move:
   return true;
 }
 
-export interface AbilityOffenseResult {
+interface AbilityOffenseResult {
   multiplier: number;
   /** multiplier 중 공격 스탯 단계에 곱하는 몫(맹화류·선파워, stage "attackStat") — 나머지는 위력 단계 */
   statMultiplier: number;

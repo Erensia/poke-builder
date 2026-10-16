@@ -4,7 +4,7 @@ import { getPokemon } from "./data";
 import { getEffectiveForm } from "./pokemonForm";
 import type { PartySlots } from "../types/party";
 
-export interface PartyMember {
+interface PartyMember {
   pokemonId: string;
   name: string;
   types: PokemonType[];
@@ -13,7 +13,7 @@ export interface PartyMember {
 }
 
 /** 파티에 채워진 포켓몬을, 메가스톤 장착 여부까지 반영한 실제 타입으로 계산해 반환한다 */
-export function getPartyMembers(slots: PartySlots): PartyMember[] {
+function getPartyMembers(slots: PartySlots): PartyMember[] {
   return slots
     .filter((s): s is NonNullable<typeof s> => s !== null)
     .map((slot) => {
@@ -33,7 +33,7 @@ export function getPartyMembers(slots: PartySlots): PartyMember[] {
 /** 파티 전체가 이 공격 타입 행에 대해 어떤 상태인지 (백로그 §1-3 확정 규칙, 2026-09-02) */
 export type PartyDefenseVerdict = "취약" | "보통" | "강점";
 
-export interface PartyDefenseRow {
+interface PartyDefenseRow {
   /** 공격 타입 (방어 상성 기준) */
   type: PokemonType;
   /** members와 같은 순서의 방어 배율. 등배(×1)면 null(=빈 칸) */
@@ -41,7 +41,7 @@ export interface PartyDefenseRow {
   verdict: PartyDefenseVerdict;
 }
 
-export interface PartyDefenseMatrix {
+interface PartyDefenseMatrix {
   /** 표의 열 헤더 — 빌드한 포켓몬 전부(선출로 좁히지 않음), 최대 6 */
   members: PartyMember[];
   /** 18행 고정 — POKEMON_TYPES 배열 순서 */

@@ -269,6 +269,234 @@ export function runTurn(
   return runActionPhase(ctx);
 }
 
+/** 교체 슬롯을 고르러 행동 루프를 멈춘 결과 — 호출부가 교체를 확정한 뒤 resumeTurn으로 이어간다 */
+function pauseForSwitch(ctx: RunTurnContext, awaitingSelfSwitch: RunTurnPaused["awaitingSelfSwitch"]): RunTurnPaused {
+  const { state, order, switches, actions } = ctx;
+  return {
+    awaitingSelfSwitch,
+    nextState: state,
+    partialResult: {
+      turnNumber: state.turnNumber,
+      order,
+      actions: [...actions],
+      endOfTurn: [],
+      winner: undefined,
+      expiredScreens: [],
+      expiredSafeguard: [],
+      turnStartAnnouncements: ctx.turnStartAnnouncements,
+      switches: [...switches],
+      activePokemonIds: { a: state.a.slot.pokemonId, b: state.b.slot.pokemonId },
+    },
+    _ctx: ctx,
+  };
+}
+
+/**
+ * 무작위 예비 포켓몬으로 즉시 강제 교체한다(유저 선택 없음) — 레드카드(공격자)·드래곤테일류(상대) 공통.
+ * voluntary=false — 기절 후 강제 교체와 같은 취급(가속 발동, 등장 파이프라인은 그대로 탐).
+ */
+function forceRandomSwitch(ctx: RunTurnContext, key: FighterKey, extra: { redCardItemName?: string } = {}): void {
+  const { state, random, switches } = ctx;
+  const side = sideOf(state, key);
+  const fromIndex = side.activeIndex;
+  const reserveIdxs = side.party.map((_f, idx) => idx).filter((idx) => idx !== fromIndex && !isFainted(side.party[idx]));
+  const toIndex = reserveIdxs[Math.floor(random() * reserveIdxs.length)];
+  const outgoing = side.party[fromIndex];
+  const entryMessages: string[] = [];
+  performSwitch(state, key, toIndex, entryMessages, { voluntary: false });
+  const inFighter = side.party[toIndex];
+  switches.push({
+    side: key,
+    fromIndex,
+    toIndex,
+    outPokemonId: outgoing.illusionAs ?? outgoing.slot.pokemonId,
+    inPokemonId: inFighter.illusionAs ?? inFighter.slot.pokemonId,
+    entryMessages,
+    afterMove: true,
+    forced: true,
+    ...extra,
+  });
+}
+
+/** 유턴·볼트체인지·배턴터치·썰렁개그·꼬리자르기: 사용측이 교체 슬롯을 고르러 멈춘다 — 멈추면 그 결과, 아니면 undefined */
+function selfSwitchPause(ctx: RunTurnContext, key: FighterKey, action: ActionLogEntry): RunTurnPaused | undefined {
+  const { state } = ctx;
+  // 유턴·볼트체인지·배턴터치(§7-2): 명중해서 효과를 줬고 사용측이 살아 있고 교대 슬롯이 있으면
+  // — 여기서 멈춘다. 상대 행동·턴 종료 처리는 교체가 확정된 뒤에(resumeTurn) 새 포켓몬 기준으로
+  // 이어진다. 유턴·볼트체인지는 데미지 기술이라 완전 무효(0배)·방어류 차단·특성 흡수로 효과가
+  // 전혀 없었으면 교체도 안 한다(본가 규칙 — 땅타입에 볼트체인지가 무효면 교체 안 함). 배턴터치는
+  // 상대를 전혀 공격하지 않는 순수 자가효과라 이 타입/특성 상호작용 전부가 무의미하다 — 고스트
+  // 상대에게 썼다고(노말타입 대 고스트 0배) 교체가 막히면 안 된다(2.3 B1 버그 수정, 사용자 확인
+  // — "교체 UI 미표시·턴 종료"는 이 typeEffectiveness===0 오탐이 원인이었다). 탈(hitNegatedByAbilityName)은
+  // 데미지만 막을 뿐 기술은 명중했으므로 교체를 막지 않는다(탈 따라큐에 유턴 → 교체 UI 미표시 버그 수정).
+  const mv = action.move;
+  if (
+    (mv.selfSwitchAfterDamage || mv.passesStatsOnSelfSwitch) &&
+    !action.blockedReason &&
+    action.hit &&
+    (mv.passesStatsOnSelfSwitch ||
+      (action.typeEffectiveness !== 0 &&
+        !action.blockedByProtectMoveName &&
+        !action.abilityAbsorbAbilityName)) &&
+    !isFainted(state[key]) &&
+    hasLivingReserve(sideOf(state, key))
+  ) {
+    ctx.pendingPivot = { side: key, passBaton: !!mv.passesStatsOnSelfSwitch };
+    return pauseForSwitch(ctx, { side: key, passBaton: !!mv.passesStatsOnSelfSwitch });
+  }
+
+  // 썰렁개그(Move.selfSwitchAfterUse): 기술을 쓰기만 했으면(행동불능 등으로 못 쓴 경우 제외) 날씨 설정
+  // 성공 여부와 무관하게 교체한다 — 이미 눈이라 실패해도 교체(사용자 확인). 유턴류와 달리 효과 실패가
+  // 교체를 막지 않는다.
+  if (mv.selfSwitchAfterUse && !action.blockedReason && !isFainted(state[key]) && hasLivingReserve(sideOf(state, key))) {
+    ctx.pendingPivot = { side: key, passBaton: false, returnsToTrainer: true };
+    return pauseForSwitch(ctx, { side: key, passBaton: false });
+  }
+
+  // 꼬리자르기(§4-1): 대타 세팅이 성공했으면(HP·대타·예비 조건 통과) 유턴류처럼 여기서 멈추고
+  // 교체 슬롯을 받는다. 세운 대타는 새로 나온 포켓몬이 이어받는다(passSubstitute). 실패했으면
+  // action.shedTailSucceeded가 false라 이 블록은 건너뛴다.
+  if (
+    action.shedTailSucceeded &&
+    !isFainted(state[key]) &&
+    hasLivingReserve(sideOf(state, key))
+  ) {
+    ctx.pendingPivot = { side: key, passBaton: false, passSubstitute: true };
+    return pauseForSwitch(ctx, { side: key, passBaton: false });
+  }
+  return undefined;
+}
+
+/** 레드카드(Item.forcesAttackerSwitchOnHit): 데미지를 받은 방어측의 카드로 공격자를 무작위 예비와 강제 교체 */
+function applyRedCard(ctx: RunTurnContext, key: FighterKey, action: ActionLogEntry): void {
+  const { state } = ctx;
+  const oppKey = opponentKey(key);
+  // 레드카드(Item.forcesAttackerSwitchOnHit): 데미지를 받은 방어측(홀더)이 이 도구를 지녔으면
+  // 공격자(key)를 무작위 예비 포켓몬으로 강제 교체시키고 카드를 소모한다. 드래곤테일과 같은
+  // 방향(무작위·pause 없음)이지만 대상이 반대다 — 여기선 "공격자"가 밀려난다. 홀더가 이 피격으로
+  // 기절했으면(카드를 쓸 수 없어) 발동하지 않는다. 도구는 "데미지를 받는 순간" 발동하는
+  // 효과라 드래곤테일 등 기술 자체의 강제 교체(아래 블록)보다 먼저 판정한다.
+  {
+    const holder = state[oppKey];
+    const holderAbility = holder.effectiveAbilityId ? getAbility(holder.effectiveAbilityId) : undefined;
+    const holderItem = holderAbility?.disablesOwnItemEffects || itemsSuppressedByRoom(state)
+      ? undefined
+      : holder.currentItemId
+        ? getItem(holder.currentItemId)
+        : undefined;
+    if (
+      holderItem?.forcesAttackerSwitchOnHit &&
+      action.hit &&
+      action.damage > 0 &&
+      !action.blockedByProtectMoveName &&
+      !action.blockedBySubstituteMoveName &&
+      !action.hitNegatedByAbilityName &&
+      !action.abilityAbsorbAbilityName &&
+      !isFainted(holder) &&
+      !isFainted(state[key]) &&
+      !ctx.didSwitch[key] &&
+      hasLivingReserve(sideOf(state, key)) &&
+      !isForcedSwitchBlocked(state[key])
+    ) {
+      forceRandomSwitch(ctx, key, { redCardItemName: holderItem.name });
+      ctx.didSwitch[key] = true;
+      consumeItem(holder);
+    }
+  }
+}
+
+/** 드래곤테일류 강제 교체 — 상대를 끌어내면 true */
+function forceTargetSwitch(ctx: RunTurnContext, key: FighterKey, action: ActionLogEntry): boolean {
+  const { state } = ctx;
+  const mv = action.move;
+  const oppKey = opponentKey(key);
+  let oppForcedOut = false;
+  // 드래곤테일·배대뒤치기·울부짖기·날려버리기: 명중해서(빗나감·행동불능·방어·대타·방음·매직미러·
+  // 특성 무효 제외) 상대에게 살아있는 예비가 있고 흡반·뿌리박기로 저항하지 않으면 — 상대를 무작위
+  // 예비 포켓몬으로 강제 교체한다. 데미지 기술은 데미지를 이미 준 뒤이고 타입 면역(0배)이면 발동
+  // 안 한다. 유저 선택이 없는 엔진 내부 처리라 pendingPivot 같은 일시정지 없이 여기서 즉시 끝낸다.
+  // 레드카드로 이미 이번 피격에 교체가 확정됐으면(didSwitch[oppKey]는 없지만 방향이 반대라
+  // 무관 — 레드카드는 key를, 이 블록은 oppKey를 움직인다) 그대로 진행해도 안전하다.
+  if (
+    mv.forcesTargetSwitch &&
+    !action.blockedReason &&
+    action.hit &&
+    action.typeEffectiveness !== 0 &&
+    !action.fainted &&
+    !action.blockedByProtectMoveName &&
+    !action.blockedBySubstituteMoveName &&
+    !action.hitNegatedByAbilityName &&
+    !action.abilityAbsorbAbilityName &&
+    !action.soundproofBlockedByAbilityName &&
+    !action.bouncedMoveName &&
+    !isFainted(state[oppKey]) &&
+    hasLivingReserve(sideOf(state, oppKey)) &&
+    !isForcedSwitchBlocked(state[oppKey], state[key].effectiveAbilityId ? getAbility(state[key].effectiveAbilityId) : undefined)
+  ) {
+    forceRandomSwitch(ctx, oppKey);
+    // 아직 안 움직였다면 이번 턴 행동을 못 하게 막는다(끌려나온 포켓몬). 우선도 -6이라 대개
+    // 상대는 이미 움직인 뒤라 이 플래그는 무해하게 무시된다.
+    ctx.didSwitch[oppKey] = true;
+    oppForcedOut = true;
+  }
+  return oppForcedOut;
+}
+
+/** 위기회피·탈출버튼: 방어측이 물러나려 교체 슬롯을 고르러 멈춘다 — 멈추면 그 결과, 아니면 undefined */
+function defenderExitPause(ctx: RunTurnContext, key: FighterKey, action: ActionLogEntry, oppForcedOut: boolean): RunTurnPaused | undefined {
+  const { state } = ctx;
+  const oppKey = opponentKey(key);
+  // 위기회피(Emergency Exit): 이번 공격으로 방어측 HP가 절반 이하로 떨어졌고 방어측에 살아있는
+  // 예비가 있으며 도망봉인·뿌리박기가 아니면 — 유턴류와 같은 pause 흐름으로 방어측을 물러나게
+  // 한다(유저가 나올 포켓몬을 고른다). 드래곤테일 등으로 이번 피격에 이미 교체됐으면(oppForcedOut) 스킵.
+  // didSwitch[oppKey]는 턴 시작 자발 교체로도 서므로(그 턴 행동 생략용) 이 가드엔 쓰면 안 된다.
+  if (
+    action.triggersDefenderEmergencyExit &&
+    !isFainted(state[oppKey]) &&
+    !oppForcedOut &&
+    hasLivingReserve(sideOf(state, oppKey)) &&
+    !isForcedSwitchBlocked(state[oppKey]) &&
+    !isTrappedFromSwitching(state[oppKey])
+  ) {
+    ctx.didSwitch[oppKey] = true;
+    ctx.pendingPivot = { side: oppKey, passBaton: false };
+    return pauseForSwitch(ctx, { side: oppKey, passBaton: false, emergencyExit: true });
+  }
+
+  // 탈출버튼(Item.exitsFieldOnHit): 데미지를 받은 방어측(홀더)이 이 도구를 지녔으면 HP 문턱
+  // 없이(위기회피와 달리) 곧바로 물러난다 — 유턴류·위기회피와 같은 pause 흐름. 이미 다른
+  // 강제 교체가 확정됐으면(드래곤테일·위기회피) oppForcedOut으로 걸러진다.
+  {
+    const holder = state[oppKey];
+    const holderAbility = holder.effectiveAbilityId ? getAbility(holder.effectiveAbilityId) : undefined;
+    const holderItem = holderAbility?.disablesOwnItemEffects || itemsSuppressedByRoom(state)
+      ? undefined
+      : holder.currentItemId
+        ? getItem(holder.currentItemId)
+        : undefined;
+    if (
+      holderItem?.exitsFieldOnHit &&
+      action.hit &&
+      action.damage > 0 &&
+      !action.blockedByProtectMoveName &&
+      !action.blockedBySubstituteMoveName &&
+      !action.hitNegatedByAbilityName &&
+      !action.abilityAbsorbAbilityName &&
+      !isFainted(holder) &&
+      !oppForcedOut &&
+      hasLivingReserve(sideOf(state, oppKey)) &&
+      !isForcedSwitchBlocked(holder) &&
+      !isTrappedFromSwitching(holder)
+    ) {
+      ctx.didSwitch[oppKey] = true;
+      ctx.pendingPivot = { side: oppKey, passBaton: false };
+      consumeItem(holder);
+      return pauseForSwitch(ctx, { side: oppKey, passBaton: false, ejectItemName: holderItem.name });
+    }
+  }
+  return undefined;
+}
+
 /**
  * 한 편이 이번 턴에 하는 행동을 스피드 순서대로 처리하는 루프. 유턴·볼트체인지·배턴터치가
  * 명중해서 효과를 줬고 사용측에 교대 슬롯이 있으면, 그 자리에서 멈추고 RunTurnPaused를 돌려준다
@@ -276,7 +504,7 @@ export function runTurn(
  * 나온 포켓몬 기준으로 이뤄진다). 그 외에는 루프를 끝까지 돌리고 finishTurn을 호출한다.
  */
 function runActionPhase(ctx: RunTurnContext): RunTurnOutcome | RunTurnPaused {
-  const { state, order, moves, random, switches, actions } = ctx;
+  const { state, order, moves, random, actions } = ctx;
 
   // 교체로 나온 포켓몬이 등장 설치물(스텔스록 등)로 그 자리에서 쓰러졌으면, 본가처럼 행동이 시작되기
   // 전에 대체 포켓몬을 먼저 내보낸다 — 안 그러면 상대(살아 있는 쪽)의 이번 턴 행동이 "쓰러진 상대"
@@ -287,23 +515,7 @@ function runActionPhase(ctx: RunTurnContext): RunTurnOutcome | RunTurnPaused {
       ctx.faintReplacementHandled[key] = true;
       if (!hasLivingReserve(sideOf(state, key))) continue; // 남은 슬롯이 없으면 finishTurn에서 패배 처리
       ctx.pendingPivot = { side: key, passBaton: false, faintReplacement: true };
-      return {
-        awaitingSelfSwitch: { side: key, passBaton: false, faintReplacement: true },
-        nextState: state,
-        partialResult: {
-          turnNumber: state.turnNumber,
-          order,
-          actions: [],
-          endOfTurn: [],
-          winner: undefined,
-          expiredScreens: [],
-          expiredSafeguard: [],
-          turnStartAnnouncements: ctx.turnStartAnnouncements,
-          switches: [...switches],
-          activePokemonIds: { a: state.a.slot.pokemonId, b: state.b.slot.pokemonId },
-        },
-        _ctx: ctx,
-      };
+      return pauseForSwitch(ctx, { side: key, passBaton: false, faintReplacement: true }); // actions가 비어 있어 [...actions]와 같다
     }
   }
 
@@ -321,283 +533,12 @@ function runActionPhase(ctx: RunTurnContext): RunTurnOutcome | RunTurnPaused {
     updateRampage(state, key, action, random);
     refreshUproar(state, action);
 
-    // 유턴·볼트체인지·배턴터치(§7-2): 명중해서 효과를 줬고 사용측이 살아 있고 교대 슬롯이 있으면
-    // — 여기서 멈춘다. 상대 행동·턴 종료 처리는 교체가 확정된 뒤에(resumeTurn) 새 포켓몬 기준으로
-    // 이어진다. 유턴·볼트체인지는 데미지 기술이라 완전 무효(0배)·방어류 차단·특성 흡수로 효과가
-    // 전혀 없었으면 교체도 안 한다(본가 규칙 — 땅타입에 볼트체인지가 무효면 교체 안 함). 배턴터치는
-    // 상대를 전혀 공격하지 않는 순수 자가효과라 이 타입/특성 상호작용 전부가 무의미하다 — 고스트
-    // 상대에게 썼다고(노말타입 대 고스트 0배) 교체가 막히면 안 된다(2.3 B1 버그 수정, 사용자 확인
-    // — "교체 UI 미표시·턴 종료"는 이 typeEffectiveness===0 오탐이 원인이었다). 탈(hitNegatedByAbilityName)은
-    // 데미지만 막을 뿐 기술은 명중했으므로 교체를 막지 않는다(탈 따라큐에 유턴 → 교체 UI 미표시 버그 수정).
-    const mv = action.move;
-    if (
-      (mv.selfSwitchAfterDamage || mv.passesStatsOnSelfSwitch) &&
-      !action.blockedReason &&
-      action.hit &&
-      (mv.passesStatsOnSelfSwitch ||
-        (action.typeEffectiveness !== 0 &&
-          !action.blockedByProtectMoveName &&
-          !action.abilityAbsorbAbilityName)) &&
-      !isFainted(state[key]) &&
-      hasLivingReserve(sideOf(state, key))
-    ) {
-      ctx.pendingPivot = { side: key, passBaton: !!mv.passesStatsOnSelfSwitch };
-      return {
-        awaitingSelfSwitch: { side: key, passBaton: !!mv.passesStatsOnSelfSwitch },
-        nextState: state,
-        partialResult: {
-          turnNumber: state.turnNumber,
-          order,
-          actions: [...actions],
-          endOfTurn: [],
-          winner: undefined,
-          expiredScreens: [],
-          expiredSafeguard: [],
-          turnStartAnnouncements: ctx.turnStartAnnouncements,
-          switches: [...switches],
-          activePokemonIds: { a: state.a.slot.pokemonId, b: state.b.slot.pokemonId },
-        },
-        _ctx: ctx,
-      };
-    }
-
-    // 썰렁개그(Move.selfSwitchAfterUse): 기술을 쓰기만 했으면(행동불능 등으로 못 쓴 경우 제외) 날씨 설정
-    // 성공 여부와 무관하게 교체한다 — 이미 눈이라 실패해도 교체(사용자 확인). 유턴류와 달리 효과 실패가
-    // 교체를 막지 않는다.
-    if (mv.selfSwitchAfterUse && !action.blockedReason && !isFainted(state[key]) && hasLivingReserve(sideOf(state, key))) {
-      ctx.pendingPivot = { side: key, passBaton: false, returnsToTrainer: true };
-      return {
-        awaitingSelfSwitch: { side: key, passBaton: false },
-        nextState: state,
-        partialResult: {
-          turnNumber: state.turnNumber,
-          order,
-          actions: [...actions],
-          endOfTurn: [],
-          winner: undefined,
-          expiredScreens: [],
-          expiredSafeguard: [],
-          turnStartAnnouncements: ctx.turnStartAnnouncements,
-          switches: [...switches],
-          activePokemonIds: { a: state.a.slot.pokemonId, b: state.b.slot.pokemonId },
-        },
-        _ctx: ctx,
-      };
-    }
-
-    // 꼬리자르기(§4-1): 대타 세팅이 성공했으면(HP·대타·예비 조건 통과) 유턴류처럼 여기서 멈추고
-    // 교체 슬롯을 받는다. 세운 대타는 새로 나온 포켓몬이 이어받는다(passSubstitute). 실패했으면
-    // action.shedTailSucceeded가 false라 이 블록은 건너뛴다.
-    if (
-      action.shedTailSucceeded &&
-      !isFainted(state[key]) &&
-      hasLivingReserve(sideOf(state, key))
-    ) {
-      ctx.pendingPivot = { side: key, passBaton: false, passSubstitute: true };
-      return {
-        awaitingSelfSwitch: { side: key, passBaton: false },
-        nextState: state,
-        partialResult: {
-          turnNumber: state.turnNumber,
-          order,
-          actions: [...actions],
-          endOfTurn: [],
-          winner: undefined,
-          expiredScreens: [],
-          expiredSafeguard: [],
-          turnStartAnnouncements: ctx.turnStartAnnouncements,
-          switches: [...switches],
-          activePokemonIds: { a: state.a.slot.pokemonId, b: state.b.slot.pokemonId },
-        },
-        _ctx: ctx,
-      };
-    }
-
-    const oppKey = opponentKey(key);
-
-    // 레드카드(Item.forcesAttackerSwitchOnHit): 데미지를 받은 방어측(홀더)이 이 도구를 지녔으면
-    // 공격자(key)를 무작위 예비 포켓몬으로 강제 교체시키고 카드를 소모한다. 드래곤테일과 같은
-    // 방향(무작위·pause 없음)이지만 대상이 반대다 — 여기선 "공격자"가 밀려난다. 홀더가 이 피격으로
-    // 기절했으면(카드를 쓸 수 없어) 발동하지 않는다. 도구는 "데미지를 받는 순간" 발동하는
-    // 효과라 드래곤테일 등 기술 자체의 강제 교체(아래 블록)보다 먼저 판정한다.
-    {
-      const holder = state[oppKey];
-      const holderAbility = holder.effectiveAbilityId ? getAbility(holder.effectiveAbilityId) : undefined;
-      const holderItem = holderAbility?.disablesOwnItemEffects || itemsSuppressedByRoom(state)
-        ? undefined
-        : holder.currentItemId
-          ? getItem(holder.currentItemId)
-          : undefined;
-      if (
-        holderItem?.forcesAttackerSwitchOnHit &&
-        action.hit &&
-        action.damage > 0 &&
-        !action.blockedByProtectMoveName &&
-        !action.blockedBySubstituteMoveName &&
-        !action.hitNegatedByAbilityName &&
-        !action.abilityAbsorbAbilityName &&
-        !isFainted(holder) &&
-        !isFainted(state[key]) &&
-        !ctx.didSwitch[key] &&
-        hasLivingReserve(sideOf(state, key)) &&
-        !isForcedSwitchBlocked(state[key])
-      ) {
-        const attackerSide = sideOf(state, key);
-        const fromIndex = attackerSide.activeIndex;
-        const reserveIdxs = attackerSide.party
-          .map((_f, idx) => idx)
-          .filter((idx) => idx !== fromIndex && !isFainted(attackerSide.party[idx]));
-        const toIndex = reserveIdxs[Math.floor(random() * reserveIdxs.length)];
-        const outgoing = attackerSide.party[fromIndex];
-        const entryMessages: string[] = [];
-        performSwitch(state, key, toIndex, entryMessages, { voluntary: false });
-        const inFighter = attackerSide.party[toIndex];
-        switches.push({
-          side: key,
-          fromIndex,
-          toIndex,
-          outPokemonId: outgoing.illusionAs ?? outgoing.slot.pokemonId,
-          inPokemonId: inFighter.illusionAs ?? inFighter.slot.pokemonId,
-          entryMessages,
-          afterMove: true,
-          forced: true,
-          redCardItemName: holderItem.name,
-        });
-        ctx.didSwitch[key] = true;
-        consumeItem(holder);
-      }
-    }
-
-    // 드래곤테일·배대뒤치기·울부짖기·날려버리기: 명중해서(빗나감·행동불능·방어·대타·방음·매직미러·
-    // 특성 무효 제외) 상대에게 살아있는 예비가 있고 흡반·뿌리박기로 저항하지 않으면 — 상대를 무작위
-    // 예비 포켓몬으로 강제 교체한다. 데미지 기술은 데미지를 이미 준 뒤이고 타입 면역(0배)이면 발동
-    // 안 한다. 유저 선택이 없는 엔진 내부 처리라 pendingPivot 같은 일시정지 없이 여기서 즉시 끝낸다.
-    // 레드카드로 이미 이번 피격에 교체가 확정됐으면(didSwitch[oppKey]는 없지만 방향이 반대라
-    // 무관 — 레드카드는 key를, 이 블록은 oppKey를 움직인다) 그대로 진행해도 안전하다.
-    let oppForcedOut = false;
-    if (
-      mv.forcesTargetSwitch &&
-      !action.blockedReason &&
-      action.hit &&
-      action.typeEffectiveness !== 0 &&
-      !action.fainted &&
-      !action.blockedByProtectMoveName &&
-      !action.blockedBySubstituteMoveName &&
-      !action.hitNegatedByAbilityName &&
-      !action.abilityAbsorbAbilityName &&
-      !action.soundproofBlockedByAbilityName &&
-      !action.bouncedMoveName &&
-      !isFainted(state[oppKey]) &&
-      hasLivingReserve(sideOf(state, oppKey)) &&
-      !isForcedSwitchBlocked(state[oppKey], state[key].effectiveAbilityId ? getAbility(state[key].effectiveAbilityId) : undefined)
-    ) {
-      const oppSide = sideOf(state, oppKey);
-      const fromIndex = oppSide.activeIndex;
-      const reserveIdxs = oppSide.party
-        .map((_f, idx) => idx)
-        .filter((idx) => idx !== fromIndex && !isFainted(oppSide.party[idx]));
-      const toIndex = reserveIdxs[Math.floor(random() * reserveIdxs.length)];
-      const outgoing = oppSide.party[fromIndex];
-      const entryMessages: string[] = [];
-      // voluntary=false — 기절 후 강제 교체와 같은 취급(가속 발동, 등장 파이프라인은 그대로 탐).
-      performSwitch(state, oppKey, toIndex, entryMessages, { voluntary: false });
-      const inFighter = oppSide.party[toIndex];
-      switches.push({
-        side: oppKey,
-        fromIndex,
-        toIndex,
-        outPokemonId: outgoing.illusionAs ?? outgoing.slot.pokemonId,
-        inPokemonId: inFighter.illusionAs ?? inFighter.slot.pokemonId,
-        entryMessages,
-        afterMove: true,
-        forced: true,
-      });
-      // 아직 안 움직였다면 이번 턴 행동을 못 하게 막는다(끌려나온 포켓몬). 우선도 -6이라 대개
-      // 상대는 이미 움직인 뒤라 이 플래그는 무해하게 무시된다.
-      ctx.didSwitch[oppKey] = true;
-      oppForcedOut = true;
-    }
-
-    // 위기회피(Emergency Exit): 이번 공격으로 방어측 HP가 절반 이하로 떨어졌고 방어측에 살아있는
-    // 예비가 있으며 도망봉인·뿌리박기가 아니면 — 유턴류와 같은 pause 흐름으로 방어측을 물러나게
-    // 한다(유저가 나올 포켓몬을 고른다). 드래곤테일 등으로 이번 피격에 이미 교체됐으면(oppForcedOut) 스킵.
-    // didSwitch[oppKey]는 턴 시작 자발 교체로도 서므로(그 턴 행동 생략용) 이 가드엔 쓰면 안 된다.
-    if (
-      action.triggersDefenderEmergencyExit &&
-      !isFainted(state[oppKey]) &&
-      !oppForcedOut &&
-      hasLivingReserve(sideOf(state, oppKey)) &&
-      !isForcedSwitchBlocked(state[oppKey]) &&
-      !isTrappedFromSwitching(state[oppKey])
-    ) {
-      ctx.didSwitch[oppKey] = true;
-      ctx.pendingPivot = { side: oppKey, passBaton: false };
-      return {
-        awaitingSelfSwitch: { side: oppKey, passBaton: false, emergencyExit: true },
-        nextState: state,
-        partialResult: {
-          turnNumber: state.turnNumber,
-          order,
-          actions: [...actions],
-          endOfTurn: [],
-          winner: undefined,
-          expiredScreens: [],
-          expiredSafeguard: [],
-          turnStartAnnouncements: ctx.turnStartAnnouncements,
-          switches: [...switches],
-          activePokemonIds: { a: state.a.slot.pokemonId, b: state.b.slot.pokemonId },
-        },
-        _ctx: ctx,
-      };
-    }
-
-    // 탈출버튼(Item.exitsFieldOnHit): 데미지를 받은 방어측(홀더)이 이 도구를 지녔으면 HP 문턱
-    // 없이(위기회피와 달리) 곧바로 물러난다 — 유턴류·위기회피와 같은 pause 흐름. 이미 다른
-    // 강제 교체가 확정됐으면(드래곤테일·위기회피) oppForcedOut으로 걸러진다.
-    {
-      const holder = state[oppKey];
-      const holderAbility = holder.effectiveAbilityId ? getAbility(holder.effectiveAbilityId) : undefined;
-      const holderItem = holderAbility?.disablesOwnItemEffects || itemsSuppressedByRoom(state)
-        ? undefined
-        : holder.currentItemId
-          ? getItem(holder.currentItemId)
-          : undefined;
-      if (
-        holderItem?.exitsFieldOnHit &&
-        action.hit &&
-        action.damage > 0 &&
-        !action.blockedByProtectMoveName &&
-        !action.blockedBySubstituteMoveName &&
-        !action.hitNegatedByAbilityName &&
-        !action.abilityAbsorbAbilityName &&
-        !isFainted(holder) &&
-        !oppForcedOut &&
-        hasLivingReserve(sideOf(state, oppKey)) &&
-        !isForcedSwitchBlocked(holder) &&
-        !isTrappedFromSwitching(holder)
-      ) {
-        ctx.didSwitch[oppKey] = true;
-        ctx.pendingPivot = { side: oppKey, passBaton: false };
-        consumeItem(holder);
-        return {
-          awaitingSelfSwitch: { side: oppKey, passBaton: false, ejectItemName: holderItem.name },
-          nextState: state,
-          partialResult: {
-            turnNumber: state.turnNumber,
-            order,
-            actions: [...actions],
-            endOfTurn: [],
-            winner: undefined,
-            expiredScreens: [],
-            expiredSafeguard: [],
-            turnStartAnnouncements: ctx.turnStartAnnouncements,
-            switches: [...switches],
-            activePokemonIds: { a: state.a.slot.pokemonId, b: state.b.slot.pokemonId },
-          },
-          _ctx: ctx,
-        };
-      }
-    }
+    const selfPause = selfSwitchPause(ctx, key, action);
+    if (selfPause) return selfPause;
+    applyRedCard(ctx, key, action);
+    const oppForcedOut = forceTargetSwitch(ctx, key, action);
+    const exitPause = defenderExitPause(ctx, key, action, oppForcedOut);
+    if (exitPause) return exitPause;
 
     // 발버둥 반동이나 자폭류로 "상대를 쓰러뜨리면서 자신도 같이 쓰러지는" 행동 하나 안에서는
     // resolveAction이 항상 상대 데미지를 먼저 적용한 뒤에 반동/자멸을 적용하도록 순서를 지킨다

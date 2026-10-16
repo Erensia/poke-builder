@@ -28,7 +28,8 @@ type PickerState =
   | { kind: "slotPresets"; slotIndex: number }
   | null;
 
-export function PartyBoard() {
+/** PartyBoard의 상태·핸들러 — 화면(JSX)이 쓰는 값만 돌려준다 */
+function usePartyBoardState() {
   const {
     slots,
     setPokemon,
@@ -96,6 +97,14 @@ export function PartyBoard() {
     }
   }
 
+  return { filledCount, setShowPartyPresets, handleReset, slots, setPicker, clearSlot, swapMoves, slotPresets, handleSaveSlotAsSample, toggleGender, cycleSizeForm, cycleFormVariant, cycleCosmeticForm, draggedIndex, dragOverIndex, handleSlotDragStart, handleSlotDragOver, handleSlotDrop, handleSlotDragEnd, reorderSlots, picker, setPokemon, setMove, setAbility, setItem, setNature, setPoint, stepPoint, setCosmeticForm, loadSlot, showPartyPresets, partyPresets, loadSlots };
+}
+
+export function PartyBoard() {
+  const session = usePartyBoardState();
+  const { filledCount, setShowPartyPresets, handleReset, slots, setPicker, clearSlot, swapMoves, slotPresets, handleSaveSlotAsSample, toggleGender, cycleSizeForm, cycleFormVariant, cycleCosmeticForm, draggedIndex, dragOverIndex, handleSlotDragStart, handleSlotDragOver, handleSlotDrop, handleSlotDragEnd, reorderSlots } = session;
+
+
   return (
     <section className="party-board">
       <header className="party-board-header">
@@ -161,6 +170,15 @@ export function PartyBoard() {
 
       <TypeCoverageSummary slots={slots} />
 
+      <PartyBoardPickers s={session} />
+    </section>
+  );
+}
+/** PartyBoard의 일부 화면 — 세션(usePartyBoardState 결과)에서 필요한 값만 꺼내 쓴다 */
+function PartyBoardPickers({ s }: { s: ReturnType<typeof usePartyBoardState> }) {
+  const { picker, setPicker, slots, setPokemon, setMove, setAbility, setItem, setNature, setPoint, stepPoint, setCosmeticForm, slotPresets, loadSlot, showPartyPresets, partyPresets, setShowPartyPresets, loadSlots } = s;
+  return (
+    <>
       {picker?.kind === "pokemon" && (
         <PokemonPickerModal
           onClose={() => setPicker(null)}
@@ -333,6 +351,8 @@ export function PartyBoard() {
           onDelete={partyPresets.deletePreset}
         />
       )}
-    </section>
+    </>
   );
 }
+
+

@@ -147,7 +147,7 @@ export function ItemDexPage() {
           <input
             type="text"
             className="itemdex-search"
-            placeholder="이름으로 검색"
+            aria-label="이름으로 검색" placeholder="이름으로 검색"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />

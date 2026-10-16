@@ -1,5 +1,5 @@
 /** 샘플 파티 하나에 대한 누적 전적 */
-export interface SampleRecord {
+interface SampleRecord {
   wins: number;
   losses: number;
 }

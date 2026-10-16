@@ -21,9 +21,9 @@
   gap: 0.15rem;
   padding: 0.5rem 0.65rem;
   border: 1px solid var(--glass-border);
-  border-radius: 10px;
+  border-radius: var(--r-md);
   background: var(--surface-2);
-  font-size: 0.78rem;
+  font-size: var(--fs-sm);
 }
 
 .cand-nature small {
@@ -38,7 +38,7 @@
 }
 
 .cand-meta {
-  font-size: 0.72rem;
+  font-size: var(--fs-xs);
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
 }
@@ -47,10 +47,10 @@
   align-self: flex-start;
   padding: 0.3rem 0.7rem;
   border: 1px solid var(--glass-border);
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   background: var(--surface-2);
   font: inherit;
-  font-size: 0.8rem;
+  font-size: var(--fs-sm);
   color: var(--text);
   cursor: pointer;
 }

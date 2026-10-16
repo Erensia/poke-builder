@@ -234,7 +234,7 @@ export function withThreatModel<T>(model: ThreatModelParams, fn: () => T): T {
  * (기술 id → 확률, 상대가 교체하지 않는다는 조건부)와 섞는다 — 확률 = alpha × 추론 + (1 − alpha) × 고정 규칙. 교체 후보·대면표 등
  * 다른 짝은 고정 규칙 그대로. slot은 state 복제(cloneFighter)에도 같은 객체라 효과 변화기 재평가 복제본에도 적용된다.
  */
-export interface ThreatOverride {
+interface ThreatOverride {
   opponentSlot: object;
   targetSlot: object;
   weights: ReadonlyMap<string, number>;
@@ -264,14 +264,14 @@ function blendWeights(ctx: ThreatContext, moves: Move[], fixed: number[]): numbe
 }
 
 /** 공격 관련 스탯(공격·특공)을 올리는 자기 대상 변화기 */
-export function isOffensiveSetupMove(move: Move): boolean {
+function isOffensiveSetupMove(move: Move): boolean {
   return (
     move.category === "status" &&
     !!move.statChanges?.some((s) => s.target === "self" && (s.stat === "atk" || s.stat === "spa") && (s.delta ?? 0) > 0)
   );
 }
 
-export interface ThreatContext {
+interface ThreatContext {
   state: BattleState;
   opponent: BattleFighterState;
   /** 공격받는 쪽(내 활성 포켓몬 또는 교체 후보) */

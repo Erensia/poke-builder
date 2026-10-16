@@ -9,12 +9,12 @@ import { getEffectiveness } from "./typeEffectiveness";
 
 /**
  * 기술 하나가 공격측→방어측으로 나갈 때 항상 필요한 배율/실효 기술을 한 번에 계산한다.
- * evaluateSlotMatchup(1턴 스냅샷 판정)과 battleSimulator의 resolveAction(다중 턴 엔진)이
+ * evaluateSlotMatchup(1턴 스냅샷 판정)과 배틀 엔진의 resolveAction(다중 턴 엔진)이
  * 둘 다 "특성 배율 + 타입 변경 + 자속 + 상대 타입 상성"을 똑같이 구해야 해서, 이 계산을
  * 한 곳으로 모아 양쪽이 재사용하게 만들었다 — Phase 1.5 문서에 적어뒀던 "evaluateSlotMatchup을
  * 재사용 가능하게 설계"를 실제로 지키는 지점.
  */
-export interface MoveContext {
+interface MoveContext {
   /** 특성으로 타입이 바뀌었으면(페어리스킨 등) 그 타입이 반영된 기술. 안 바뀌었으면 원본과 동일 */
   effectiveMove: Move;
   /** 공격측 특성이 이 기술에 주는 배율 (테크니션/모래의힘/메가런처 등) */
@@ -42,7 +42,7 @@ export interface MoveContext {
 }
 
 /** resolveMoveContext의 전투 상황 입력. 안 넘긴 값은 매치업 페이지 기본값(1턴 스냅샷) */
-export interface MoveContextOptions {
+interface MoveContextOptions {
   weather?: WeatherKind;
   defenderItem?: Item;
   /** 맹화·급류·심록·벌레의알림(HP 1/3 이하 조건)용. 안 넘기면 풀피로 간주 */
@@ -100,7 +100,7 @@ export function resolveMoveContext(
   const absorbedByDefenderAbility = !!(effectiveMove.type && effectiveMove.type === defenderAbility?.absorbsType?.type);
   // 부유: 방어측이 원래 없던 면역을 스스로 얻는다(bypassImmunity와 반대 방향). bypassImmunity가
   // 이미 참이면(배짱류·검은철구) 이 면역은 뚫린 것으로 취급 — 위 두 경로가 이 필드보다 우선한다.
-  // 풍선(Item.grantsGroundImmunity)도 같은 축의 땅타입 한정 버전 — 터지면(battleSimulator가
+  // 풍선(Item.grantsGroundImmunity)도 같은 축의 땅타입 한정 버전 — 터지면(배틀 엔진이
   // 데미지를 준 뒤 소모) 다음 판정부터는 자연히 이 조건이 꺼진다.
   const grantsImmunity =
     effectiveMove.type === "땅" && defenderGrounded !== undefined

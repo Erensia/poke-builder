@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { MatchupSlot, PowerConditionKey } from "../types/matchup";
+import type { Move } from "../types/move";
 import type { AbilityPoints, PartySlot } from "../types/party";
 import type { BattleStatKey } from "../types/battleStats";
 import type { WeatherKind } from "../types/weather";
@@ -15,8 +16,9 @@ import {
   stepAbilityPointOnSlot,
 } from "../lib/slotMutations";
 import { applyStageDelta, setStage } from "../lib/statStages";
+import { BULK_MOVE_SLOTS, bulkMovesOf } from "../lib/bulkAdjust";
 
-export const EMPTY_MATCHUP_SLOT: MatchupSlot = {
+const EMPTY_MATCHUP_SLOT: MatchupSlot = {
   pokemonId: null,
   ability: null,
   item: null,
@@ -41,7 +43,13 @@ function restoreSlot(saved: unknown): MatchupSlot {
     ability: s.ability && getAbility(s.ability) ? s.ability : null,
     item: s.item && getItem(s.item) ? s.item : null,
     moveId: s.moveId && getMove(s.moveId) ? s.moveId : null,
+    bulkMoves: Array.isArray(s.bulkMoves) ? s.bulkMoves.slice(0, BULK_MOVE_SLOTS).map((m) => (m && typeof m.moveId === "string" && getMove(m.moveId) ? m : null)) : undefined,
   };
+}
+
+/** 다단히트 기술을 고르면 적중 타수를 최대치로 기본 설정한다 */
+function defaultHits(move: Move | undefined): number | undefined {
+  return move?.multiHitPowers ? move.multiHitPowers.length : move?.minHits !== undefined && move?.maxHits !== undefined ? move.maxHits : undefined;
 }
 
 function useMatchupSlot(saved: unknown) {
@@ -109,35 +117,20 @@ function useMatchupSlot(saved: unknown) {
 
   /** 기술을 고르면 다단히트 기술 여부에 따라 적중 타수를 최대치로 기본 설정한다 */
   function setMove(moveId: string | null) {
+    setSlot((prev) => ({ ...prev, moveId, multiHitCount: defaultHits(moveId ? getMove(moveId) : undefined) }));
+  }
+
+  /** 내구 조정 탭 상대 기술 칸 설정(4.0 F3) — null이면 칸을 비운다 */
+  function setBulkMove(index: number, moveId: string | null) {
     setSlot((prev) => {
-      const move = moveId ? getMove(moveId) : undefined;
-      const multiHitCount = move?.multiHitPowers
-        ? move.multiHitPowers.length
-        : move?.minHits !== undefined && move?.maxHits !== undefined
-          ? move.maxHits
-          : undefined;
-      return { ...prev, moveId, multiHitCount };
+      const moves = bulkMovesOf(prev);
+      moves[index] = moveId ? { moveId, hits: defaultHits(getMove(moveId)) } : null;
+      return { ...prev, bulkMoves: moves };
     });
   }
 
-  function setMultiHitCount(count: number) {
-    setSlot((prev) => ({ ...prev, multiHitCount: count }));
-  }
-
-  function setStockpileCount(count: number) {
-    setSlot((prev) => ({ ...prev, stockpileCount: count }));
-  }
-
-  function setItemStolen(value: boolean) {
-    setSlot((prev) => ({ ...prev, itemStolenFromOpponent: value }));
-  }
-
-  function setUnburdenAssumed(value: boolean) {
-    setSlot((prev) => ({ ...prev, unburdenAssumed: value }));
-  }
-
-  function setStatusAssumed(value: MatchupSlot["statusAssumed"]) {
-    setSlot((prev) => ({ ...prev, statusAssumed: value }));
+  function setBulkHits(index: number, hits: number) {
+    setSlot((prev) => ({ ...prev, bulkMoves: prev.bulkMoves?.map((m, i) => (i === index && m ? { ...m, hits } : m)) }));
   }
 
   /** ver.1.9 조건부 위력 가정 토글(보복·눈사태·분함의발구르기·분풀이·승부굳히기·작아지기) */
@@ -145,33 +138,23 @@ function useMatchupSlot(saved: unknown) {
     setSlot((prev) => ({ ...prev, [key]: value }));
   }
 
-  function setCritAssumed(value: boolean) {
-    setSlot((prev) => ({ ...prev, critAssumed: value }));
-  }
-
-  function setTypeShiftAssumed(value: boolean) {
-    setSlot((prev) => ({ ...prev, typeShiftAssumed: value }));
-  }
-
-  function setPinchAssumed(value: boolean) {
-    setSlot((prev) => ({ ...prev, pinchAssumed: value }));
-  }
-
-  function setFullHpAssumed(value: boolean) {
-    setSlot((prev) => ({ ...prev, fullHpAssumed: value }));
-  }
-
   function setHpPercent(value: number) {
     setSlot((prev) => ({ ...prev, hpPercent: Math.max(1, Math.min(100, Math.round(value))) }));
   }
 
-  function setScreen(value: MatchupSlot["screen"]) {
-    setSlot((prev) => ({ ...prev, screen: value }));
-  }
-
-  function setGraveVisitFaintedAllies(count: 0 | 1 | 2) {
-    setSlot((prev) => ({ ...prev, graveVisitFaintedAllies: count }));
-  }
+  /** 슬롯의 값 하나를 바꾸는 setter를 만든다 — 가정 토글들이 같이 쓴다 */
+  const slotField = <K extends keyof MatchupSlot>(key: K) => (value: MatchupSlot[K]) => setSlot((prev) => ({ ...prev, [key]: value }));
+  const setMultiHitCount = slotField("multiHitCount");
+  const setStockpileCount = slotField("stockpileCount");
+  const setItemStolen = slotField("itemStolenFromOpponent");
+  const setUnburdenAssumed = slotField("unburdenAssumed");
+  const setStatusAssumed = slotField("statusAssumed");
+  const setCritAssumed = slotField("critAssumed");
+  const setTypeShiftAssumed = slotField("typeShiftAssumed");
+  const setPinchAssumed = slotField("pinchAssumed");
+  const setFullHpAssumed = slotField("fullHpAssumed");
+  const setScreen = slotField("screen");
+  const setGraveVisitFaintedAllies = slotField("graveVisitFaintedAllies");
 
   function setPoint(stat: keyof AbilityPoints, value: number) {
     setSlot((prev) => setAbilityPointOnSlot(prev, stat, value));
@@ -203,6 +186,8 @@ function useMatchupSlot(saved: unknown) {
     cycleCosmeticForm,
     setCosmeticForm,
     setMove,
+    setBulkMove,
+    setBulkHits,
     setMultiHitCount,
     setStockpileCount,
     setItemStolen,
@@ -244,8 +229,9 @@ export function useMatchup() {
   function swapSides() {
     const a = attacker.slot;
     const d = defender.slot;
-    attacker.setSlot({ ...d, moveId: null, multiHitCount: undefined });
-    defender.setSlot({ ...a, moveId: null, multiHitCount: undefined });
+    // 스크린은 포켓몬이 아니라 편에 걸려 있어서 자리를 바꿔도 그 편에 남긴다
+    attacker.setSlot({ ...d, moveId: null, multiHitCount: undefined, bulkMoves: undefined, screen: a.screen });
+    defender.setSlot({ ...a, moveId: null, multiHitCount: undefined, bulkMoves: undefined, screen: d.screen });
   }
 
   return { attacker, defender, swapSides, weather, setWeather, field, setField, trickRoom, setTrickRoom };

@@ -1,11 +1,12 @@
 import { type ReactNode } from "react";
-import { type ActionLogEntry, type FighterKey } from "../../lib/battleSimulator";
+import type { ActionLogEntry, FighterKey } from "../../types/battle";
 import { statOrAccuracyLabel } from "../../lib/statLabels";
 import { eunNeun, iGa, eulReul, waGwa, roEuro } from "../../lib/josa";
 import { VOLATILE_LABELS, SCREEN_LABELS } from "../../lib/battleLogLabels";
 import { FIELD_ENTRY_ANNOUNCEMENT } from "../../lib/fieldEffects";
 import { CHARGE_TURN_MESSAGE, WEATHER_MOVE_LINES } from "../../lib/battleLogText";
 import { abilityMummifiedLine } from "./abilityLines";
+import { useActionHp } from "./hpFormat";
 
 /** 액션 로그 한 줄 안에 "OO 발동!"으로 뭉뚱그리기보다 전용 문구를 따로 쓰는 volatile들 */
 const VOLATILES_WITH_DEDICATED_LOG_LINE = new Set(["drowsy", "wish", "encore", "imprison", "meanLook", "lockOn", "noRetreat"]);
@@ -38,13 +39,17 @@ export function ActionMainLine({
   defenderName,
   headDamage,
   headDamagePercent,
+  percentOnly = false,
 }: {
   action: ActionLogEntry;
   actorName: string;
   defenderName: string;
   headDamage: number;
   headDamagePercent: number;
+  /** true면 실수치 없이 줄어든 체력 %만 표기(AI 상대에게 입힌 데미지) */
+  percentOnly?: boolean;
 }) {
+  const { actorHp, defHp } = useActionHp(action);
   return (
     <div className="battle-turn-line">
       {/* 흉내쟁이(트랙 M2): "OO의 흉내쟁이!" 다음 줄에 따라 쓴 기술 — action.move는 따라 쓴 기술이다 */}
@@ -65,7 +70,7 @@ export function ActionMainLine({
       {action.blockedReason === "flinch" && " — 풀이 죽어서 움직일 수 없었다!"}
       {action.blockedReason === "recharge" && " — 반동으로 움직일 수 없었다!"}
       {action.blockedReason === "confusion" &&
-        ` — 자기자신을 공격했다! (${action.selfDamage} 데미지)`}
+        ` — 자기자신을 공격했다! (${actorHp(action.selfDamage)} 데미지)`}
       {action.blockedReason === "attract" && " — 헤롱헤롱에 빠져 행동 불가"}
       {action.blockedReason === "psychicFieldPriority" && psychicFieldBlockedLine(action.actor, defenderName)}
       {action.blockedReason === "queenlyMajesty" && (
@@ -87,7 +92,9 @@ export function ActionMainLine({
       {!action.blockedReason && action.hit && action.damage > 0 && (
         <>
           {" "}
-          — {headDamage} 데미지 ({(headDamagePercent * 100).toFixed(1)}%)
+          {percentOnly
+            ? `— 체력 ${(headDamagePercent * 100).toFixed(1)}% 감소`
+            : `— ${headDamage} 데미지 (${(headDamagePercent * 100).toFixed(1)}%)`}
         </>
       )}
       {!action.blockedReason &&
@@ -184,7 +191,7 @@ export function ActionMainLine({
           · {actorName}
           {eunNeun(actorName)} {action.ateBerryName}
           {eulReul(action.ateBerryName)} 먹었다!
-          {!!action.ateBerryHeal && <> HP {action.ateBerryHeal} 회복!</>}
+          {!!action.ateBerryHeal && <> HP {actorHp(action.ateBerryHeal)} 회복!</>}
         </>
       )}
       {!action.blockedReason && action.berryEatFailed && <> · 그러나 나무열매가 없어 실패했다!</>}
@@ -268,12 +275,12 @@ export function ActionMainLine({
           {" "}
           · {action.healedTarget === "opponent" ? defenderName : actorName}
           {roEuro(action.healedTarget === "opponent" ? defenderName : actorName)} 체력을{" "}
-          {action.healedAmount} 회복했다!
+          {(action.healedTarget === "opponent" ? defHp : actorHp)(action.healedAmount)} 회복했다!
         </>
       )}
       {!action.blockedReason && action.hit && action.restSlept && <> · 잠들었다!</>}
       {!action.blockedReason && action.hit && !!action.drainHealAmount && (
-        <> · 체력을 {action.drainHealAmount} 흡수했다!</>
+        <> · 체력을 {actorHp(action.drainHealAmount)} 흡수했다!</>
       )}
       {!action.blockedReason && action.hit && action.setRegenVolatile && (
         <> · {VOLATILE_LABELS[action.setRegenVolatile]} 발동!</>

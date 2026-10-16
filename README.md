@@ -72,7 +72,6 @@ src/
 │                스피드/내구 조정(speedTable·bulkAdjust)·HP 눈금(hpMagic)·조사 자동 판별·로컬 저장(storage.ts, 팩토리 기반)
 │  └─ battle/    다중 턴 배틀 시뮬레이터(ver.1.5에 8개 파일로 분리) — state/switching/
 │                hitResolution/preHitEffects/mirroredEffects/resolveAction/runTurn/finishTurn.ts
-│                (battleSimulator.ts는 공개 표면만 재export하는 얇은 배럴로 유지)
 │     └─ ai/     배틀 AI(ver.1.7) — evaluator(옵션 평가)·decision(HP 교환 점수식)·opponentMoveModel
 │                (상대 기술 확률 모델)·partyEval(파티 대면표)·moveDamage·hitsToKill(처치 타수 DP)·
 │                turnRates(턴 종료 효과)·statusMoveEffects·protectMoves 등
@@ -91,7 +90,7 @@ scripts/         데이터·에셋 유지보수 도구 — scripts/README.md 참
 - [1.x 요약](docs/00_기획문서/02_backlog/01_ver.1.0/README.md) — ver.1.0.x ~ 1.9: 빌더·배틀타워·엔진 감사·글래스모피즘 UI·배틀타워 AI
 - [2.x 요약](docs/00_기획문서/02_backlog/02_ver.2.0/README.md) — ver.2.0 ~ 2.5: AI 판단 강화(탐색 오라클)·상대 실능치 역산·정수 데미지 공식
 - [3.x 요약](docs/00_기획문서/02_backlog/03_ver.3.0/README.md) — ver.3.0 ~ 3.7: 도감 상성표·프런티어·역산 2차·스피드 조정·내구 조정
-- [4.0-backlog.md](docs/00_기획문서/02_backlog/04_ver.4.0/4.0-backlog.md) — ver.4.0(착수 전): 코드 전체 `ponytail` 리팩토링 + 전체 디자인 검수 → 엔진·기능 테스트
+- [4.x 요약](docs/00_기획문서/02_backlog/04_ver.4.0/README.md) — ver.4.0: 모바일 관측 행·방어 역산 턴 종료 효과·내구 조정 한계 해소, 코드 전체 리팩토링, 디자인 검수(접근성·토글 통일·글자/반경/색 토큰·터치 영역), AI 상대 HP 비율 표기
 - [데이터변경이력.md](docs/데이터변경이력.md) — 기존 항목 수치·학습셋 변경(밸런스 패치) 기록. ver.1.4부터 시작
 
 ver.1.0 이전(Phase 1~8) 회고·기획 문서도 같은 폴더에 있다 — 초기 아키텍처 결정과 단계별 개발 이력이 궁금하면 참고.

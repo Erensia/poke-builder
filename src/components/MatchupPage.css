@@ -12,14 +12,14 @@
 }
 
 .matchup-page-header h2 {
-  font-size: 1.3rem;
+  font-size: var(--fs-2xl);
   margin-bottom: 0.3rem;
 }
 
 .matchup-page-header p {
   margin: 0;
   color: var(--text-muted);
-  font-size: 0.82rem;
+  font-size: var(--fs-sm);
   max-width: 42ch;
 }
 
@@ -39,7 +39,7 @@
   gap: 1rem;
   /* 날씨/필드 틴트(environmentTintBackground)가 형태를 갖도록 — 대전 로그 battle-board와 같은 톤 */
   padding: 0.7rem;
-  border-radius: 16px;
+  border-radius: var(--r-xl);
   transition: background 0.3s ease;
 }
 
@@ -67,11 +67,11 @@
   margin-top: 1rem;
   padding: 0.6rem 0.9rem;
   border: 1px solid var(--glass-border);
-  border-radius: 10px;
+  border-radius: var(--r-md);
   background: var(--surface-2);
   -webkit-backdrop-filter: blur(var(--glass-blur));
   backdrop-filter: blur(var(--glass-blur));
-  font-size: 0.82rem;
+  font-size: var(--fs-sm);
   color: var(--text-muted);
 }
 
@@ -83,7 +83,7 @@
 
 .matchup-speed-side strong {
   font-family: var(--display);
-  font-size: 1.05rem;
+  font-size: var(--fs-lg);
   color: var(--text);
   font-variant-numeric: tabular-nums;
   margin-left: 0.25rem;
@@ -122,11 +122,6 @@
   margin-top: 0;
 }
 
-.matchup-speed-trickroom {
-  justify-content: center;
-  margin-top: 0.5rem;
-}
-
 /* ver.1.7 트랙 H — 난수별 데미지(스피드 판정 위). 폭은 스피드 블록과 같은 카드 열 전체 폭 */
 .matchup-roll-block {
   margin-top: 1rem;
@@ -136,11 +131,11 @@
   margin-right: auto;
   padding: 0.6rem 0.9rem;
   border: 1px solid var(--glass-border);
-  border-radius: 10px;
+  border-radius: var(--r-md);
   background: var(--surface-2);
   -webkit-backdrop-filter: blur(var(--glass-blur));
   backdrop-filter: blur(var(--glass-blur));
-  font-size: 0.82rem;
+  font-size: var(--fs-sm);
   color: var(--text-muted);
 }
 
@@ -159,17 +154,17 @@
 
 .matchup-roll-range strong {
   font-family: var(--display);
-  font-size: 1.05rem;
+  font-size: var(--fs-lg);
   color: var(--text);
   font-variant-numeric: tabular-nums;
 }
 
 .matchup-roll-toggle {
   border: 1px solid var(--glass-border);
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   background: transparent;
   color: var(--text-muted);
-  font-size: 0.72rem;
+  font-size: var(--fs-xs);
   padding: 0.15rem 0.6rem;
   cursor: pointer;
 }
@@ -251,17 +246,17 @@
   align-self: flex-start;
   gap: 0.25rem;
   padding: 0.25rem;
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   background: var(--surface-2);
   border: 1px solid var(--border);
 }
 
 .matchup-tabs button {
   font: inherit;
-  font-size: 0.82rem;
+  font-size: var(--fs-sm);
   padding: 0.35rem 0.95rem;
   border: none;
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;
@@ -269,8 +264,25 @@
 
 .matchup-tabs button.is-active {
   background: var(--gradient);
-  color: #fff;
+  color: var(--on-color);
   font-weight: 600;
+}
+
+/* 모바일: 탭 4개가 폭을 똑같이 나눠 갖고, 글자는 띄어쓰기에서만 줄바꿈한다("결정력 / 계산") */
+@media (max-width: 760px) {
+  .matchup-tabs {
+    display: flex;
+    align-self: stretch;
+    border-radius: var(--r-xl);
+  }
+  .matchup-tabs button {
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 0.35rem 0.25rem;
+    border-radius: var(--r-lg);
+    line-height: 1.25;
+    word-break: keep-all;
+  }
 }
 
 /* 내/상대 포켓몬 드래그 교체(3.3 U1) — 놓을 자리 하이라이트 */

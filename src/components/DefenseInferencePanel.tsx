@@ -23,6 +23,8 @@ import {
   multiHitRange,
   END_TURN_EFFECTS,
   TOXIC_ID,
+  endTurnSixteenths,
+  ITEM_END_TURN_IDS,
   type InferenceInput,
   type InferenceObservation,
   type BulkEstimate,
@@ -50,7 +52,7 @@ import {
 } from "../lib/speedInference";
 import { computeRealStats, MAX_ABILITY_POINTS_PER_STAT } from "../lib/statCalculator";
 import { loadMatchupDraft, saveMatchupDraft } from "../lib/storage";
-import { restoreInference, type ObservationRow, type RowKind, type Screen } from "../lib/inferenceDraft";
+import { restoreInference, type ObservationRow, type RowKind } from "../lib/inferenceDraft";
 import { CandidateCards } from "./CandidateCards";
 import "./DefenseInferencePanel.css";
 
@@ -112,6 +114,22 @@ function parsePercent(text: string): number | null {
   if (!/^\d{1,3}$/.test(text.trim())) return null;
   const v = Number(text);
   return v >= 0 && v <= 100 ? v : null;
+}
+
+/**
+ * 다음 줄 "맞기 전 %"의 기본값(4.0 F2) — 맞은 뒤 %에 턴 종료 효과의 회복·피해(16분율 합 ÷ 16, 반올림)를 더한 예상치.
+ * 효과를 안 골랐거나 값이 비었으면 맞은 뒤 값 그대로. 실제 화면 %와 1쯤 어긋날 수 있어 직접 고칠 수 있다.
+ */
+function followValue(row: ObservationRow): string {
+  const after = parsePercent(row.after);
+  if (row.kind !== "dealt" || after === null) return row.after;
+  const sum = endTurnSixteenths(row.endTurn).reduce((a, b) => a + b, 0);
+  return sum === 0 ? row.after : String(Math.min(100, Math.max(0, after + Math.round((sum * 100) / 16))));
+}
+
+/** 줄을 바꾼 뒤, 다음 줄(같은 종류)의 "맞기 전 값"이 직접 안 고친 값(옛 기본값)이었으면 새 기본값으로 따라가게 한다 */
+function followRows(prev: ObservationRow[], next: ObservationRow[]): ObservationRow[] {
+  return next.map((r, i) => (i > 0 && r.kind === next[i - 1].kind && prev[i].before === followValue(prev[i - 1]) ? { ...r, before: followValue(next[i - 1]) } : r));
 }
 
 /** 이 종(폼 변종 포함)이 가질 수 있는 특성 중 후보 목록(방어·공격 영향 특성)에 드는 것 */
@@ -550,7 +568,7 @@ function SpeedConditionsEditor({
       <summary>조건{active.length > 0 ? ` · ${active.join(", ")}` : " (기본)"}</summary>
       <div className="dinf-speed-checks">
         {checks.map(([key, label]) => (
-          <label key={key} className="dinf-crit">
+          <label key={key} className="toggle-pill">
             <input type="checkbox" checked={cond[key] as boolean} onChange={(e) => onChange({ [key]: e.target.checked })} />
             {label}
           </label>
@@ -597,13 +615,13 @@ function SpeedConditionsEditor({
       {(myQuickFeet || (cond.oppAbilityId === "속보" && !megaRow)) && (
         <div className="dinf-speed-checks">
           {myQuickFeet && (
-            <label className="dinf-crit">
+            <label className="toggle-pill">
               <input type="checkbox" checked={cond.myOtherStatus} onChange={(e) => onChange({ myOtherStatus: e.target.checked })} />
               내 상태이상 (속보 ×1.5)
             </label>
           )}
           {cond.oppAbilityId === "속보" && !megaRow && (
-            <label className="dinf-crit">
+            <label className="toggle-pill">
               <input type="checkbox" checked={cond.oppOtherStatus} onChange={(e) => onChange({ oppOtherStatus: e.target.checked })} />
               상대 상태이상 (속보 ×1.5)
             </label>
@@ -611,7 +629,7 @@ function SpeedConditionsEditor({
         </div>
       )}
       {cond.oppAbilityId === "곡예" && !megaRow && (
-        <label className="dinf-check">
+        <label className="toggle-pill">
           <input type="checkbox" checked={cond.oppUnburden} onChange={(e) => onChange({ oppUnburden: e.target.checked })} />
           <span>곡예 발동 후 (도구를 잃어 상대 스피드 ×2)</span>
         </label>
@@ -692,7 +710,8 @@ function ResultView({
   );
 }
 
-export function DefenseInferencePanel({
+/** DefenseInferencePanel의 상태·핸들러 — 화면(JSX)이 쓰는 값만 돌려준다 */
+function useDefenseInferenceState({
   attackerCard,
   attacker,
   defender,
@@ -709,23 +728,24 @@ export function DefenseInferencePanel({
   const [movePickerRow, setMovePickerRow] = useState<number | null>(null);
   const [abilityId, setAbilityId] = useState<string>(saved.abilityId);
   const [itemId, setItemId] = useState<string>(saved.itemId);
-  const [screen, setScreen] = useState<Screen | "">(saved.screen);
   const [defStage, setDefStage] = useState(saved.defStage);
   const [spdStage, setSpdStage] = useState(saved.spdStage);
   const [tolerant, setTolerant] = useState(saved.tolerant);
-  // 내가 받은 데미지 관측용 가정(3.1 C2-b) — 상대 공격 보정 특성·도구, 상대 공격·특공 랭크, 상대 화상, 내 쪽 벽
+  // 내가 받은 데미지 관측용 가정(3.1 C2-b) — 상대 공격 보정 특성·도구, 상대 공격·특공 랭크, 상대 화상
   const [atkAbilityId, setAtkAbilityId] = useState<string>(saved.atkAbilityId);
   const [atkItemId, setAtkItemId] = useState<string>(saved.atkItemId);
   const [atkStage, setAtkStage] = useState(saved.atkStage);
   const [spaStage, setSpaStage] = useState(saved.spaStage);
   const [oppBurned, setOppBurned] = useState(saved.oppBurned);
-  const [myScreen, setMyScreen] = useState<Screen | "">(saved.myScreen);
+  // 벽은 위쪽 "내 쪽/상대 쪽 스크린" 선택기 값 — 입힌 데미지는 상대 쪽, 받은 데미지는 내 쪽
+  const screen = defender.screen ?? "";
+  const myScreen = attacker.screen ?? "";
 
   useEffect(() => {
     saveMatchupDraft({
-      inference: { rows, abilityId, itemId, screen, defStage, spdStage, tolerant, atkAbilityId, atkItemId, atkStage, spaStage, oppBurned, myScreen } satisfies ReturnType<typeof restoreInference>,
+      inference: { rows, abilityId, itemId, defStage, spdStage, tolerant, atkAbilityId, atkItemId, atkStage, spaStage, oppBurned } satisfies ReturnType<typeof restoreInference>,
     });
-  }, [rows, abilityId, itemId, screen, defStage, spdStage, tolerant, atkAbilityId, atkItemId, atkStage, spaStage, oppBurned, myScreen]);
+  }, [rows, abilityId, itemId, defStage, spdStage, tolerant, atkAbilityId, atkItemId, atkStage, spaStage, oppBurned]);
 
   const attackerPokemon = attacker.pokemonId ? getPokemon(attacker.pokemonId) : undefined;
   const defenderPokemon = defender.pokemonId ? getPokemon(defender.pokemonId) : undefined;
@@ -745,15 +765,12 @@ export function DefenseInferencePanel({
     setRows((prev) => {
       const index = prev.findIndex((r) => r.id === id);
       if (index < 0) return prev;
-      const oldAfter = prev[index].after;
       const next = prev.map((r) => (r.id === id ? { ...r, ...patch } : r));
       // 메가진화는 되돌릴 수 없다(3.1 L1-a): 이 줄을 메가 후로 고르면 뒤의 모든 줄도 같은 메가 후 폼으로 맞춘다
       if (patch.megaForm) for (let j = index + 1; j < next.length; j++) next[j] = { ...next[j], megaForm: patch.megaForm };
-      // 다음 줄(같은 종류)의 "맞기 전 값"이 이 줄의 옛 "맞은 뒤 값"과 같았으면(직접 안 고친 값) 같이 따라간다
-      if (patch.after !== undefined && index + 1 < next.length && next[index + 1].kind === next[index].kind && next[index + 1].before === oldAfter) {
-        next[index + 1] = { ...next[index + 1], before: patch.after };
-      }
-      return next;
+      // 메가스톤을 들고 있으니 도구 효과(먹다남은음식·자뭉열매)는 모든 줄에서 끈다
+      if (patch.megaForm) for (let j = 0; j < next.length; j++) next[j] = { ...next[j], endTurn: next[j].endTurn.filter((id) => !ITEM_END_TURN_IDS.includes(id)) };
+      return patch.after !== undefined || patch.endTurn !== undefined || patch.megaForm ? followRows(prev, next) : next;
     });
   }
 
@@ -771,7 +788,7 @@ export function DefenseInferencePanel({
         moveId: null,
         critical: false,
         hits: "",
-        before: last?.kind === "speed" ? "" : (last?.after ?? "100"),
+        before: last?.kind === "speed" ? "" : last ? followValue(last) : "100",
         after: "",
         endTurn: [],
         megaForm: last ? megaOf(last, megas) : "",
@@ -943,6 +960,11 @@ export function DefenseInferencePanel({
   const hasReceivedRows = rows.some((r) => r.kind === "received");
   const hasDealtRows = rows.some((r) => r.kind === "dealt");
 
+  /** 맹독 경과 턴(1~15, 0이면 해제) — 맹독 id는 `toxic<n>`이라 다른 효과와 따로 갈아 끼운다 */
+  function setToxicTurn(row: ObservationRow, n: number) {
+    updateRow(row.id, { endTurn: [...row.endTurn.filter((x) => !TOXIC_ID.test(x)), ...(n > 0 ? [`toxic${n}`] : [])] });
+  }
+
   function rowMessage(row: ObservationRow): { text: string; kind: "error" | "ok" } | null {
     const move = row.moveId ? getMove(row.moveId) : undefined;
     if (row.kind === "received") return receivedRowMessage(row, move);
@@ -996,6 +1018,330 @@ export function DefenseInferencePanel({
     }
     return null;
   }
+
+  return { weather, field, attackerCard, defenderPokemon, defenderForm, dragOverClass, dropProps, defenderActions, dragProps, defender, hasDealtRows, activeAbilityId, setAbilityId, anyMega, abilityOptions, itemId, setItemId, defStage, setDefStage, spdStage, setSpdStage, tolerant, setTolerant, hasReceivedRows, activeAtkAbilityId, setAtkAbilityId, anyMegaReceived, atkAbilityOptions, atkItemId, setAtkItemId, atkStage, setAtkStage, spaStage, setSpaStage, oppBurned, setOppBurned, rows, rowMessage, megas, attackerPokemon, changeKind, updateRow, setMovePickerRow, removeRow, setToxicTurn, updateCond, speedAbilityOptions, anyMegaSpeed, myQuickFeet, addRow, onReset, myMaxHp, pending, attackPending, speedPending, result, attackResult, speedResult, rowIdsByObservation, receivedRowNos, combined, speedRowNos, complete, myScreen, movePickerRow, attacker };
+}
+
+/** DefenseInferencePanel의 일부 화면 — 세션(useDefenseInferenceState 결과)에서 필요한 값만 꺼내 쓴다 */
+function ObservationsSection({ s }: { s: ReturnType<typeof useDefenseInferenceState> }) {
+  const { rows, rowMessage, megas, defenderPokemon, attackerPokemon, changeKind, updateRow, setMovePickerRow, removeRow, setToxicTurn, updateCond, speedAbilityOptions, anyMegaSpeed, myQuickFeet, addRow, onReset, myMaxHp, hasReceivedRows } = s;
+  return (
+    <>
+      <section className="dinf-section">
+        <h3>관측</h3>
+        <ol className="dinf-rows">
+          {rows.map((row, index) => {
+            const move = row.moveId ? getMove(row.moveId) : undefined;
+            const message = rowMessage(row);
+            const received = row.kind === "received";
+            const speed = row.kind === "speed";
+            // 앞 줄 중 메가 후인 줄이 있으면 그 폼(메가진화는 되돌릴 수 없다 — 3.1 L1-a)
+            const lockedMega = rows.slice(0, index).map((r) => megaOf(r, megas)).find(Boolean) ?? "";
+            const pickerOwner = received ? defenderPokemon : attackerPokemon;
+            const hasNext = index < rows.length - 1;
+            const itemLocked = rows.some((r) => megaOf(r, megas));
+            const toxicTurn = Number(row.endTurn.find((x) => TOXIC_ID.test(x))?.slice(5) ?? 0);
+            return (
+              <li key={row.id} className="dinf-row">
+                <span className="dinf-row-no">#{index + 1}</span>
+                <select aria-label={`관측 ${index + 1} 종류`} value={row.kind} onChange={(e) => changeKind(row.id, e.target.value as RowKind)}>
+                  <option value="dealt">입힌 데미지</option>
+                  <option value="received">받은 데미지</option>
+                  <option value="speed">선후공</option>
+                </select>
+                {speed ? (
+                  <select aria-label={`관측 ${index + 1} 먼저 움직인 쪽`} value={row.first} onChange={(e) => updateRow(row.id, { first: e.target.value as "me" | "opponent" })}>
+                    <option value="me">내가 먼저</option>
+                    <option value="opponent">상대가 먼저</option>
+                  </select>
+                ) : (
+                  <button
+                    type="button"
+                    className="dinf-move-btn"
+                    onClick={() => setMovePickerRow(row.id)}
+                    disabled={!pickerOwner}
+                    title={pickerOwner ? undefined : received ? "먼저 상대 포켓몬을 골라 주세요" : "먼저 내 포켓몬을 골라 주세요"}
+                  >
+                    {move ? move.name : received ? "상대 기술 선택" : "기술 선택"}
+                  </button>
+                )}
+                <span className="dinf-row-opts">
+                  {(() => {
+                    const range = move && !speed ? multiHitRange(move) : null;
+                    if (!range || range.min === range.max) return null;
+                    return (
+                      <select aria-label={`관측 ${index + 1} 맞은 타수`} value={row.hits} onChange={(e) => updateRow(row.id, { hits: e.target.value })}>
+                        <option value="">타수</option>
+                        {Array.from({ length: range.max - range.min + 1 }, (_, k) => range.min + k).map((n) => (
+                          <option key={n} value={n}>
+                            {n}타
+                          </option>
+                        ))}
+                      </select>
+                    );
+                  })()}
+                  {megas && megas.length > 0 && (
+                    <select
+                      aria-label={`관측 ${index + 1} 상대 폼`}
+                      value={megaOf(row, megas)}
+                      onChange={(e) => updateRow(row.id, { megaForm: e.target.value })}
+                      disabled={!!lockedMega}
+                      title={lockedMega ? "앞 줄에서 이미 메가진화했어요 (되돌릴 수 없어요)" : undefined}
+                    >
+                      {/* 앞 줄에서 메가진화했으면 이 줄은 그 폼으로 고정 — 메가 전·다른 폼을 고를 수 없다 */}
+                      {!lockedMega && <option value="">메가 전</option>}
+                      {megas
+                        .filter((m) => !lockedMega || m.form === lockedMega)
+                        .map((m) => (
+                          <option key={m.form} value={m.form}>
+                            {m.form.replace(/^.*?-/, "")}
+                          </option>
+                        ))}
+                    </select>
+                  )}
+                </span>
+                {!speed && (
+                  <>
+                    <span className="dinf-percent-pair">
+                      <input
+                        className="dinf-percent"
+                        inputMode="numeric"
+                        aria-label={`관측 ${index + 1} 맞기 전 ${received ? "HP" : "%"}`}
+                        value={row.before}
+                        onChange={(e) => updateRow(row.id, { before: e.target.value })}
+                      />
+                      <span>{received ? "HP →" : "% →"}</span>
+                      <input
+                        className="dinf-percent"
+                        inputMode="numeric"
+                        aria-label={`관측 ${index + 1} 맞은 뒤 ${received ? "HP" : "%"}`}
+                        placeholder="?"
+                        value={row.after}
+                        onChange={(e) => updateRow(row.id, { after: e.target.value })}
+                      />
+                      <span>{received ? "HP" : "%"}</span>
+                    </span>
+                    <label className="toggle-pill">
+                      <input type="checkbox" checked={row.critical} onChange={(e) => updateRow(row.id, { critical: e.target.checked })} />
+                      급소
+                    </label>
+                  </>
+                )}
+                {message && <span className={`dinf-row-msg is-${message.kind}`}>{message.text}</span>}
+                {rows.length > 1 && (
+                  <button type="button" className="dinf-row-remove" onClick={() => removeRow(row.id)} aria-label={`관측 ${index + 1} 삭제`}>
+                    ✕
+                  </button>
+                )}
+                {!speed && !received && (
+                  <div className="dinf-endturn">
+                    <span className="dinf-endturn-title">{hasNext ? "턴 종료 효과" : "맞은 직후 효과"}</span>
+                    {END_TURN_EFFECTS.filter((e) => hasNext || e.id === "sitrus").map((e) => (
+                      <label
+                        className="toggle-pill"
+                        key={e.id}
+                        title={
+                          itemLocked && ITEM_END_TURN_IDS.includes(e.id)
+                            ? "메가진화하는 포켓몬은 메가스톤을 들고 있어 도구 효과를 쓸 수 없어요"
+                            : e.id === "sitrus"
+                              ? "상대가 맞은 직후 자뭉열매를 먹었을 때 켜세요 — 화면의 맞은 뒤 %에 회복(최대 HP의 1/4)이 이미 섞여 있어요"
+                              : undefined
+                        }
+                      >
+                        <input
+                          type="checkbox"
+                          disabled={itemLocked && ITEM_END_TURN_IDS.includes(e.id)}
+                          checked={row.endTurn.includes(e.id)}
+                          onChange={(ev) => updateRow(row.id, { endTurn: ev.target.checked ? [...row.endTurn, e.id] : row.endTurn.filter((x) => x !== e.id) })}
+                        />
+                        {e.label}
+                      </label>
+                    ))}
+                    {hasNext && (
+                    <label className="toggle-pill">
+                      <input type="checkbox" checked={toxicTurn > 0} onChange={(ev) => setToxicTurn(row, ev.target.checked ? 1 : 0)} />
+                      맹독
+                    </label>
+                    )}
+                    {hasNext && toxicTurn > 0 && (
+                      <span className="dinf-stepper">
+                        <button type="button" aria-label={`관측 ${index + 1} 맹독 경과 턴 줄이기`} onClick={() => setToxicTurn(row, Math.max(1, toxicTurn - 1))}>
+                          −
+                        </button>
+                        <span>{toxicTurn}턴째</span>
+                        <button type="button" aria-label={`관측 ${index + 1} 맹독 경과 턴 늘리기`} onClick={() => setToxicTurn(row, Math.min(15, toxicTurn + 1))}>
+                          +
+                        </button>
+                      </span>
+                    )}
+                  </div>
+                )}
+                {speed && (
+                  <SpeedConditionsEditor
+                    cond={row.cond}
+                    onChange={(patch) => updateCond(row.id, patch)}
+                    abilityOptions={speedAbilityOptions}
+                    megaRow={!!megaOf(row, megas)}
+                    itemDisabled={anyMegaSpeed}
+                    myQuickFeet={myQuickFeet}
+                  />
+                )}
+              </li>
+            );
+          })}
+        </ol>
+        <button type="button" className="dinf-add" onClick={addRow}>
+          + 관측 추가
+        </button>{" "}
+        <button
+          type="button"
+          className="dinf-add"
+          onClick={() => window.confirm("관측과 가정 입력을 모두 지울까요? (내 포켓몬·상대 포켓몬은 그대로예요)") && onReset()}
+        >
+          입력 지우기
+        </button>
+        <p className="dinf-note">
+          내가 입힌 데미지는 턴 종료 효과를 고르지 않으면 관측 사이에 상대가 HP를 회복하지 않았다고 가정해요 — 효과를 고르면 다음 줄 “맞기 전 %”가 예상값으로 채워지니 화면과 다르면 직접 고쳐 주세요.
+          상대가 맞은 직후 자뭉열매를 먹었으면 그 줄에서 “자뭉열매 발동”을 켜세요(화면 %에 회복이 섞여 있어요). 내가 받은 데미지는 맞은 직후 내 HP 수치를 넣어 주세요(먹다남은음식·독 같은 턴 종료 효과가
+          섞이면 맞지 않아요){myMaxHp !== null && hasReceivedRows ? ` — 내 최대 HP는 ${myMaxHp}예요` : ""}. 다단히트·고정 데미지 기술은 아직 지원하지 않아요.
+          선후공은 우선도가 같은 기술끼리 누가 먼저 움직였는지만 넣고, 그 턴의 조건(트릭룸·순풍·마비·상대 랭크 등)은 줄의 “조건”에서 골라 주세요. 새 줄은 직전 선후공 줄의 조건을 이어받아요.
+        </p>
+      </section>
+    </>
+  );
+}
+
+/** DefenseInferencePanel의 일부 화면 — 세션(useDefenseInferenceState 결과)에서 필요한 값만 꺼내 쓴다 */
+function AssumptionsSection({ s }: { s: ReturnType<typeof useDefenseInferenceState> }) {
+  const { hasDealtRows, activeAbilityId, setAbilityId, defenderPokemon, anyMega, abilityOptions, itemId, setItemId, defStage, setDefStage, spdStage, setSpdStage, tolerant, setTolerant, hasReceivedRows, activeAtkAbilityId, setAtkAbilityId, anyMegaReceived, atkAbilityOptions, atkItemId, setAtkItemId, atkStage, setAtkStage, spaStage, setSpaStage, oppBurned, setOppBurned } = s;
+  return (
+    <>
+      <section className="dinf-section">
+        <h3>가정 · 조건</h3>
+        {hasDealtRows && (
+          <>
+        <div className="dinf-conditions">
+          <label>
+            상대 특성
+            <select value={activeAbilityId} onChange={(e) => setAbilityId(e.target.value)} disabled={!defenderPokemon}>
+              <option value="">{anyMega ? "모름 (메가 전 관측에 적용)" : "모름 (방어 특성 없음으로 가정)"}</option>
+              {abilityOptions.map((id) => (
+                <option key={id} value={id}>
+                  {getAbility(id)?.name ?? id}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            상대 도구
+            <select value={anyMega ? "" : itemId} onChange={(e) => setItemId(e.target.value)} disabled={anyMega}>
+              <option value="">{anyMega ? "메가스톤 (반감 열매 사용 불가)" : "모름 (도구 없음으로 가정)"}</option>
+              {DEFENSE_ITEM_CANDIDATES.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {getItem(item.id)?.name ?? item.id}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            상대 방어 랭크
+            <select value={defStage} onChange={(e) => setDefStage(Number(e.target.value))}>
+              {STAGE_OPTIONS.map((s) => (
+                <option key={s} value={s}>
+                  {s > 0 ? `+${s}` : s}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            상대 특방 랭크
+            <select value={spdStage} onChange={(e) => setSpdStage(Number(e.target.value))}>
+              {STAGE_OPTIONS.map((s) => (
+                <option key={s} value={s}>
+                  {s > 0 ? `+${s}` : s}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <label className="toggle-pill">
+          <input type="checkbox" checked={tolerant} onChange={(e) => setTolerant(e.target.checked)} />
+          <span>여유 있게 보기 (화면 %를 ±1%까지 허용 — 게임의 % 표시 방식이 다를 때 대비)</span>
+        </label>
+          </>
+        )}
+        {hasReceivedRows && (
+          <>
+            <h4 className="dinf-subhead">내가 받은 데미지 관측용 가정</h4>
+            <div className="dinf-conditions">
+              <label>
+                상대 공격 보정 특성
+                <select value={activeAtkAbilityId} onChange={(e) => setAtkAbilityId(e.target.value)} disabled={!defenderPokemon}>
+                  <option value="">{anyMegaReceived ? "모름 (메가 전 관측에 적용)" : "모름 (보정 특성 없음으로 가정)"}</option>
+                  {atkAbilityOptions.map((id) => (
+                    <option key={id} value={id}>
+                      {getAbility(id)?.name ?? id}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                상대 공격 보정 도구
+                <select value={anyMegaReceived ? "" : atkItemId} onChange={(e) => setAtkItemId(e.target.value)} disabled={anyMegaReceived}>
+                  <option value="">{anyMegaReceived ? "메가스톤 (보정 도구 사용 불가)" : "모름 (보정 도구 없음으로 가정)"}</option>
+                  {ATTACK_ITEM_CANDIDATES.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {getItem(item.id)?.name ?? item.id}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                상대 공격 랭크
+                <select value={atkStage} onChange={(e) => setAtkStage(Number(e.target.value))}>
+              {STAGE_OPTIONS.map((st) => (
+                <option key={st} value={st}>
+                  {st > 0 ? `+${st}` : st}
+                </option>
+              ))}
+                </select>
+              </label>
+              <label>
+                상대 특공 랭크
+                <select value={spaStage} onChange={(e) => setSpaStage(Number(e.target.value))}>
+              {STAGE_OPTIONS.map((st) => (
+                <option key={st} value={st}>
+                  {st > 0 ? `+${st}` : st}
+                </option>
+              ))}
+                </select>
+              </label>
+            </div>
+            <label className="toggle-pill">
+              <input type="checkbox" checked={oppBurned} onChange={(e) => setOppBurned(e.target.checked)} />
+              <span>상대가 화상 (물리 공격 반감 — 근성·객기는 예외)</span>
+            </label>
+          </>
+        )}
+        <p className="dinf-note">날씨·필드는 위쪽 선택기 값을, 내 랭크·특성·도구는 내 포켓몬 카드 값을 그대로 써요.</p>
+      </section>
+    </>
+  );
+}
+
+export function DefenseInferencePanel({
+  attackerCard,
+  attacker,
+  defender,
+  defenderActions,
+  onSwapDrop,
+  weather,
+  field,
+  onReset,
+}: DefenseInferencePanelProps) {
+  const session = useDefenseInferenceState({ attackerCard, attacker, defender, defenderActions, onSwapDrop, weather, field, onReset });
+  const { defenderPokemon, defenderForm, dragOverClass, dropProps, dragProps, hasDealtRows, activeAbilityId, anyMega, itemId, tolerant, hasReceivedRows, activeAtkAbilityId, anyMegaReceived, atkItemId, atkStage, spaStage, oppBurned, rows, attackerPokemon, updateRow, setMovePickerRow, pending, attackPending, speedPending, result, attackResult, speedResult, rowIdsByObservation, receivedRowNos, combined, speedRowNos, complete, myScreen, movePickerRow } = session;
+
 
   return (
     <div className="dinf">
@@ -1078,292 +1424,9 @@ export function DefenseInferencePanel({
         )}
       </div>
 
-      <section className="dinf-section">
-        <h3>가정 · 조건</h3>
-        {hasDealtRows && (
-          <>
-        <div className="dinf-conditions">
-          <label>
-            상대 특성
-            <select value={activeAbilityId} onChange={(e) => setAbilityId(e.target.value)} disabled={!defenderPokemon}>
-              <option value="">{anyMega ? "모름 (메가 전 관측에 적용)" : "모름 (방어 특성 없음으로 가정)"}</option>
-              {abilityOptions.map((id) => (
-                <option key={id} value={id}>
-                  {getAbility(id)?.name ?? id}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            상대 도구
-            <select value={anyMega ? "" : itemId} onChange={(e) => setItemId(e.target.value)} disabled={anyMega}>
-              <option value="">{anyMega ? "메가스톤 (반감 열매 사용 불가)" : "모름 (도구 없음으로 가정)"}</option>
-              {DEFENSE_ITEM_CANDIDATES.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {getItem(item.id)?.name ?? item.id}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            벽
-            <select value={screen} onChange={(e) => setScreen(e.target.value as Screen | "")}>
-              <option value="">없음</option>
-              <option value="reflect">리플렉터</option>
-              <option value="lightScreen">빛의장막</option>
-              <option value="auroraVeil">오로라베일</option>
-            </select>
-          </label>
-          <label>
-            상대 방어 랭크
-            <select value={defStage} onChange={(e) => setDefStage(Number(e.target.value))}>
-              {STAGE_OPTIONS.map((s) => (
-                <option key={s} value={s}>
-                  {s > 0 ? `+${s}` : s}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            상대 특방 랭크
-            <select value={spdStage} onChange={(e) => setSpdStage(Number(e.target.value))}>
-              {STAGE_OPTIONS.map((s) => (
-                <option key={s} value={s}>
-                  {s > 0 ? `+${s}` : s}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-        <label className="dinf-check">
-          <input type="checkbox" checked={tolerant} onChange={(e) => setTolerant(e.target.checked)} />
-          <span>여유 있게 보기 (화면 %를 ±1%까지 허용 — 게임의 % 표시 방식이 다를 때 대비)</span>
-        </label>
-          </>
-        )}
-        {hasReceivedRows && (
-          <>
-            <h4 className="dinf-subhead">내가 받은 데미지 관측용 가정</h4>
-            <div className="dinf-conditions">
-              <label>
-                상대 공격 보정 특성
-                <select value={activeAtkAbilityId} onChange={(e) => setAtkAbilityId(e.target.value)} disabled={!defenderPokemon}>
-                  <option value="">{anyMegaReceived ? "모름 (메가 전 관측에 적용)" : "모름 (보정 특성 없음으로 가정)"}</option>
-                  {atkAbilityOptions.map((id) => (
-                    <option key={id} value={id}>
-                      {getAbility(id)?.name ?? id}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                상대 공격 보정 도구
-                <select value={anyMegaReceived ? "" : atkItemId} onChange={(e) => setAtkItemId(e.target.value)} disabled={anyMegaReceived}>
-                  <option value="">{anyMegaReceived ? "메가스톤 (보정 도구 사용 불가)" : "모름 (보정 도구 없음으로 가정)"}</option>
-                  {ATTACK_ITEM_CANDIDATES.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {getItem(item.id)?.name ?? item.id}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                내 쪽 벽
-                <select value={myScreen} onChange={(e) => setMyScreen(e.target.value as Screen | "")}>
-                  <option value="">없음</option>
-                  <option value="reflect">리플렉터</option>
-                  <option value="lightScreen">빛의장막</option>
-                  <option value="auroraVeil">오로라베일</option>
-                </select>
-              </label>
-              <label>
-                상대 공격 랭크
-                <select value={atkStage} onChange={(e) => setAtkStage(Number(e.target.value))}>
-              {STAGE_OPTIONS.map((st) => (
-                <option key={st} value={st}>
-                  {st > 0 ? `+${st}` : st}
-                </option>
-              ))}
-                </select>
-              </label>
-              <label>
-                상대 특공 랭크
-                <select value={spaStage} onChange={(e) => setSpaStage(Number(e.target.value))}>
-              {STAGE_OPTIONS.map((st) => (
-                <option key={st} value={st}>
-                  {st > 0 ? `+${st}` : st}
-                </option>
-              ))}
-                </select>
-              </label>
-            </div>
-            <label className="dinf-check">
-              <input type="checkbox" checked={oppBurned} onChange={(e) => setOppBurned(e.target.checked)} />
-              <span>상대가 화상 (물리 공격 반감 — 근성·객기는 예외)</span>
-            </label>
-          </>
-        )}
-        <p className="dinf-note">날씨·필드는 위쪽 선택기 값을, 내 랭크·특성·도구는 내 포켓몬 카드 값을 그대로 써요.</p>
-      </section>
+      <AssumptionsSection s={session} />
 
-      <section className="dinf-section">
-        <h3>관측</h3>
-        <ol className="dinf-rows">
-          {rows.map((row, index) => {
-            const move = row.moveId ? getMove(row.moveId) : undefined;
-            const message = rowMessage(row);
-            const received = row.kind === "received";
-            const speed = row.kind === "speed";
-            // 앞 줄 중 메가 후인 줄이 있으면 그 폼(메가진화는 되돌릴 수 없다 — 3.1 L1-a)
-            const lockedMega = rows.slice(0, index).map((r) => megaOf(r, megas)).find(Boolean) ?? "";
-            const pickerOwner = received ? defenderPokemon : attackerPokemon;
-            return (
-              <li key={row.id} className="dinf-row">
-                <span className="dinf-row-no">#{index + 1}</span>
-                <select aria-label={`관측 ${index + 1} 종류`} value={row.kind} onChange={(e) => changeKind(row.id, e.target.value as RowKind)}>
-                  <option value="dealt">내가 입힌 데미지</option>
-                  <option value="received">내가 받은 데미지</option>
-                  <option value="speed">선후공</option>
-                </select>
-                {speed ? (
-                  <select aria-label={`관측 ${index + 1} 먼저 움직인 쪽`} value={row.first} onChange={(e) => updateRow(row.id, { first: e.target.value as "me" | "opponent" })}>
-                    <option value="me">내가 먼저</option>
-                    <option value="opponent">상대가 먼저</option>
-                  </select>
-                ) : (
-                  <button
-                    type="button"
-                    className="dinf-move-btn"
-                    onClick={() => setMovePickerRow(row.id)}
-                    disabled={!pickerOwner}
-                    title={pickerOwner ? undefined : received ? "먼저 상대 포켓몬을 골라 주세요" : "먼저 내 포켓몬을 골라 주세요"}
-                  >
-                    {move ? move.name : received ? "상대 기술 선택" : "기술 선택"}
-                  </button>
-                )}
-                {(() => {
-                  const range = move && !speed ? multiHitRange(move) : null;
-                  if (!range || range.min === range.max) return null;
-                  return (
-                    <select aria-label={`관측 ${index + 1} 맞은 타수`} value={row.hits} onChange={(e) => updateRow(row.id, { hits: e.target.value })}>
-                      <option value="">타수</option>
-                      {Array.from({ length: range.max - range.min + 1 }, (_, k) => range.min + k).map((n) => (
-                        <option key={n} value={n}>
-                          {n}타
-                        </option>
-                      ))}
-                    </select>
-                  );
-                })()}
-                {megas && megas.length > 0 && (
-                  <select
-                    aria-label={`관측 ${index + 1} 상대 폼`}
-                    value={megaOf(row, megas)}
-                    onChange={(e) => updateRow(row.id, { megaForm: e.target.value })}
-                    disabled={!!lockedMega}
-                    title={lockedMega ? "앞 줄에서 이미 메가진화했어요 (되돌릴 수 없어요)" : undefined}
-                  >
-                    {/* 앞 줄에서 메가진화했으면 이 줄은 그 폼으로 고정 — 메가 전·다른 폼을 고를 수 없다 */}
-                    {!lockedMega && <option value="">메가 전</option>}
-                    {megas
-                      .filter((m) => !lockedMega || m.form === lockedMega)
-                      .map((m) => (
-                        <option key={m.form} value={m.form}>
-                          {m.form.replace(/^.*?-/, "")}
-                        </option>
-                      ))}
-                  </select>
-                )}
-                {!speed && (
-                  <>
-                    <label className="dinf-crit">
-                      <input type="checkbox" checked={row.critical} onChange={(e) => updateRow(row.id, { critical: e.target.checked })} />
-                      급소
-                    </label>
-                    <span className="dinf-percent-pair">
-                      <input
-                        className="dinf-percent"
-                        inputMode="numeric"
-                        aria-label={`관측 ${index + 1} 맞기 전 ${received ? "HP" : "%"}`}
-                        value={row.before}
-                        onChange={(e) => updateRow(row.id, { before: e.target.value })}
-                      />
-                      <span>{received ? "HP →" : "% →"}</span>
-                      <input
-                        className="dinf-percent"
-                        inputMode="numeric"
-                        aria-label={`관측 ${index + 1} 맞은 뒤 ${received ? "HP" : "%"}`}
-                        placeholder="?"
-                        value={row.after}
-                        onChange={(e) => updateRow(row.id, { after: e.target.value })}
-                      />
-                      <span>{received ? "HP" : "%"}</span>
-                    </span>
-                  </>
-                )}
-                {!speed && !received && index < rows.length - 1 && (
-                  <details className="dinf-endturn">
-                    <summary>턴 종료 효과{row.endTurn.length > 0 && ` (${row.endTurn.length})`}</summary>
-                    {END_TURN_EFFECTS.map((e) => (
-                      <label key={e.id}>
-                        <input
-                          type="checkbox"
-                          checked={row.endTurn.includes(e.id)}
-                          onChange={(ev) => updateRow(row.id, { endTurn: ev.target.checked ? [...row.endTurn, e.id] : row.endTurn.filter((x) => x !== e.id) })}
-                        />
-                        {e.label}
-                      </label>
-                    ))}
-                    <select
-                      aria-label={`관측 ${index + 1} 맹독 경과 턴`}
-                      value={row.endTurn.find((x) => TOXIC_ID.test(x)) ?? ""}
-                      onChange={(ev) => updateRow(row.id, { endTurn: [...row.endTurn.filter((x) => !TOXIC_ID.test(x)), ...(ev.target.value ? [ev.target.value] : [])] })}
-                    >
-                      <option value="">맹독 없음</option>
-                      {Array.from({ length: 15 }, (_, k) => (
-                        <option key={k} value={`toxic${k + 1}`}>
-                          맹독 {k + 1}턴째
-                        </option>
-                      ))}
-                    </select>
-                  </details>
-                )}
-                {message && <span className={`dinf-row-msg is-${message.kind}`}>{message.text}</span>}
-                {rows.length > 1 && (
-                  <button type="button" className="dinf-row-remove" onClick={() => removeRow(row.id)} aria-label={`관측 ${index + 1} 삭제`}>
-                    ✕
-                  </button>
-                )}
-                {speed && (
-                  <SpeedConditionsEditor
-                    cond={row.cond}
-                    onChange={(patch) => updateCond(row.id, patch)}
-                    abilityOptions={speedAbilityOptions}
-                    megaRow={!!megaOf(row, megas)}
-                    itemDisabled={anyMegaSpeed}
-                    myQuickFeet={myQuickFeet}
-                  />
-                )}
-              </li>
-            );
-          })}
-        </ol>
-        <button type="button" className="dinf-add" onClick={addRow}>
-          + 관측 추가
-        </button>{" "}
-        <button
-          type="button"
-          className="dinf-add"
-          onClick={() => window.confirm("관측과 가정 입력을 모두 지울까요? (내 포켓몬·상대 포켓몬은 그대로예요)") && onReset()}
-        >
-          입력 지우기
-        </button>
-        <p className="dinf-note">
-          내가 입힌 데미지는 관측 사이에 상대가 HP를 회복하지 않았다고 가정해요. 내가 받은 데미지는 맞은 직후 내 HP 수치를 넣어 주세요(먹다남은음식·독 같은 턴 종료 효과가
-          섞이면 맞지 않아요){myMaxHp !== null && hasReceivedRows ? ` — 내 최대 HP는 ${myMaxHp}예요` : ""}. 다단히트·고정 데미지 기술은 아직 지원하지 않아요.
-          선후공은 우선도가 같은 기술끼리 누가 먼저 움직였는지만 넣고, 그 턴의 조건(트릭룸·순풍·마비·상대 랭크 등)은 줄의 “조건”에서 골라 주세요. 새 줄은 직전 선후공 줄의 조건을 이어받아요.
-        </p>
-      </section>
+      <ObservationsSection s={session} />
 
       <section className="dinf-section dinf-result-section" aria-live="polite">
         <h3>

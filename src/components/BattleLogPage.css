@@ -27,14 +27,14 @@
 
 .battle-log-header h2 {
   font-family: var(--display);
-  font-size: 1.3rem;
+  font-size: var(--fs-2xl);
   margin: 0 0 0.3rem;
 }
 
 .battle-log-header p {
   margin: 0;
   color: var(--text-muted);
-  font-size: 0.9rem;
+  font-size: var(--fs-md);
   max-width: 60ch;
 }
 
@@ -43,10 +43,10 @@
   border: 1px solid var(--border);
   background: transparent;
   color: var(--text-muted);
-  font-size: 0.76rem;
+  font-size: var(--fs-xs);
   font-weight: 500;
   padding: 0.32rem 0.65rem;
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   cursor: pointer;
   white-space: nowrap;
   align-self: flex-start;
@@ -100,31 +100,20 @@
   align-items: center;
   flex-wrap: wrap;
   gap: 0.25rem 0.4rem;
-  font-size: 0.9rem;
+  font-size: var(--fs-md);
   font-weight: 700;
   color: var(--text);
 }
 
 .battle-setup-column-hint {
-  font-size: 0.72rem;
+  font-size: var(--fs-xs);
   font-weight: 500;
   color: var(--text-muted);
 }
 
 /* 배틀 AI: 상대 편을 컴퓨터가 조작할지 */
 .battle-ai-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
   margin-left: auto;
-  font-size: 0.72rem;
-  font-weight: 600;
-  padding: 0.2rem 0.55rem;
-  border: 1px solid var(--violet);
-  border-radius: 6px;
-  background: var(--violet-soft);
-  color: var(--text);
-  cursor: pointer;
 }
 
 /* ver.2.0 1-C: AI 학습 칩(상대 파티 제목 줄) — "AI가 조작"과 같은 알약형 */
@@ -132,11 +121,11 @@
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
-  font-size: 0.72rem;
+  font-size: var(--fs-xs);
   font-weight: 600;
   padding: 0.2rem 0.6rem;
   border: 1px solid var(--violet);
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   background: var(--violet-soft);
   color: var(--violet);
   cursor: pointer;
@@ -144,26 +133,22 @@
 
 .battle-ai-memory-chip:hover {
   background: var(--violet);
-  color: #fff;
+  color: var(--on-color);
 }
 
 /* 결과 배너 아래 한 줄 */
 .battle-ai-learned-note {
   margin: 0.35rem 0 0;
-  font-size: 0.75rem;
+  font-size: var(--fs-xs);
   color: var(--text-muted);
 }
 
-.battle-ai-toggle input {
-  cursor: pointer;
-}
-
 .battle-setup-load-party {
-  font-size: 0.72rem;
+  font-size: var(--fs-xs);
   font-weight: 600;
   padding: 0.2rem 0.55rem;
   border: 1px solid var(--violet);
-  border-radius: 7px;
+  border-radius: var(--r-sm);
   background: var(--violet-soft);
   color: var(--violet);
   cursor: pointer;
@@ -171,7 +156,7 @@
 
 .battle-setup-load-party:hover {
   background: var(--violet);
-  color: #fff;
+  color: var(--on-color);
 }
 
 /* 앱 공통 말풍선(InfoTooltip)과 같은 모양의 CSS 툴팁 — 브라우저 기본 title 대신 data-tip을 쓴다 */
@@ -188,10 +173,10 @@
   width: max-content;
   max-width: min(260px, 80vw);
   padding: 0.5rem 0.65rem;
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   background: var(--text);
   color: var(--bg, #fff);
-  font-size: 0.75rem;
+  font-size: var(--fs-xs);
   font-weight: 500;
   line-height: 1.45;
   text-align: left;
@@ -241,7 +226,7 @@
   color: var(--text-muted);
   padding: 0.35rem 0.9rem;
   border: 2px solid var(--border);
-  border-radius: 9px;
+  border-radius: var(--r-sm);
   background: var(--surface);
   transform: skewX(-8deg);
   user-select: none;
@@ -254,7 +239,7 @@
 }
 
 .battle-setup-vs:not(:disabled):hover {
-  color: #fff;
+  color: var(--on-color);
   border-color: transparent;
   background: var(--gradient);
 }
@@ -270,12 +255,12 @@
 
 .battle-start-button {
   background: var(--gradient);
-  color: #fff;
+  color: var(--on-color);
   border: none;
-  border-radius: 10px;
+  border-radius: var(--r-md);
   padding: 0.65rem 1.4rem;
   font-weight: 700;
-  font-size: 0.95rem;
+  font-size: var(--fs-lg);
   cursor: pointer;
   box-shadow: var(--shadow-sm);
 }
@@ -321,13 +306,13 @@
   width: 240px;
   padding: 0.6rem 0.8rem;
   border: 1px solid var(--glass-border);
-  border-radius: 10px;
+  border-radius: var(--r-md);
   background: var(--surface);
   -webkit-backdrop-filter: blur(var(--glass-blur));
   backdrop-filter: blur(var(--glass-blur));
   cursor: pointer;
   text-align: left;
-  font-size: 0.9rem;
+  font-size: var(--fs-md);
 }
 
 .battle-select-mon:disabled {
@@ -346,10 +331,10 @@
   width: 1.5rem;
   height: 1.5rem;
   flex-shrink: 0;
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   border: 1px dashed var(--border);
   font-weight: 800;
-  font-size: 0.8rem;
+  font-size: var(--fs-sm);
   color: var(--text-muted);
 }
 
@@ -357,7 +342,7 @@
   border-style: solid;
   border-color: transparent;
   background: var(--gradient);
-  color: #fff;
+  color: var(--on-color);
 }
 
 .battle-select-mon .avatar-with-item {
@@ -377,10 +362,10 @@
 .battle-lock-warning {
   margin-top: 0.5rem;
   padding: 0.55rem 0.8rem;
-  border-radius: 10px;
+  border-radius: var(--r-md);
   background: var(--danger-bg);
   color: var(--danger);
-  font-size: 0.82rem;
+  font-size: var(--fs-sm);
   font-weight: 600;
 }
 
@@ -389,7 +374,7 @@
   grid-template-columns: 1fr 1fr;
   gap: 1.2rem;
   padding: 0.7rem;
-  border-radius: 16px;
+  border-radius: var(--r-xl);
   transition: background 0.3s ease;
 }
 
@@ -404,18 +389,18 @@
 .battle-environment-tag {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   padding: 0.2rem 0.7rem;
-  font-size: 0.78rem;
+  font-size: var(--fs-sm);
   font-weight: 600;
   color: var(--text-muted);
 }
 
 .battle-entry-announcements {
   background: var(--surface-2);
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   padding: 0.5rem 0.8rem;
-  font-size: 0.82rem;
+  font-size: var(--fs-sm);
   color: var(--text-muted);
 }
 
@@ -425,7 +410,7 @@
   -webkit-backdrop-filter: blur(var(--glass-blur));
   backdrop-filter: blur(var(--glass-blur));
   border: 1px solid var(--glass-border);
-  border-radius: 14px;
+  border-radius: var(--r-lg);
   padding: 0.9rem 1rem;
   box-shadow: var(--glass-shadow);
 }
@@ -433,7 +418,7 @@
 /* 승리한 편의 활성 포켓몬을 금색 테두리 + 맥동 광휘 + 주기적 반짝임으로 강조한다.
    같은 종끼리 맞붙으면 배너 문구만으로는 어느 쪽이 이겼는지 헷갈린다는 피드백. */
 .battle-fighter.is-winner {
-  border-color: #f2b705;
+  border-color: var(--amber);
   animation: battle-winner-glow 1.5s ease-in-out infinite;
 }
 
@@ -454,11 +439,11 @@
 @keyframes battle-winner-glow {
   0%,
   100% {
-    border-color: #f2b705;
+    border-color: var(--amber);
     box-shadow: 0 0 0 1px rgba(242, 183, 5, 0.5), 0 0 10px 1px rgba(242, 183, 5, 0.35);
   }
   50% {
-    border-color: #ffdd66;
+    border-color: var(--amber-light);
     box-shadow: 0 0 0 1px rgba(255, 221, 102, 0.9), 0 0 22px 5px rgba(242, 183, 5, 0.6);
   }
 }
@@ -526,13 +511,13 @@
 
 .battle-fighter-mega-tag {
   font-family: var(--display);
-  font-size: 0.6rem;
+  font-size: var(--fs-xs);
   font-weight: 700;
   letter-spacing: 0.03em;
-  color: #fff;
+  color: var(--on-color);
   background: var(--gradient);
   padding: 0.05rem 0.35rem;
-  border-radius: 4px;
+  border-radius: var(--r-xs);
   margin-left: 0.35rem;
 }
 
@@ -581,13 +566,13 @@
 
 .battle-fighter-ai-tag {
   font-family: var(--display);
-  font-size: 0.6rem;
+  font-size: var(--fs-xs);
   font-weight: 700;
   letter-spacing: 0.03em;
   color: var(--violet);
   border: 1px solid var(--violet);
   padding: 0.05rem 0.35rem;
-  border-radius: 4px;
+  border-radius: var(--r-xs);
   margin-left: 0.35rem;
 }
 
@@ -605,10 +590,10 @@
 
 .battle-status-tag {
   white-space: nowrap; /* "빛의장막 5턴" 같은 태그는 통째로 다음 줄로 */
-  font-size: 0.7rem;
+  font-size: var(--fs-xs);
   font-weight: 700;
   padding: 0.1rem 0.45rem;
-  border-radius: 999px;
+  border-radius: var(--r-pill);
 }
 
 .battle-status-tag.is-major {
@@ -624,7 +609,7 @@
 .battle-hp-bar {
   width: 100%;
   height: 8px;
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   background: var(--surface-2);
   overflow: hidden;
   margin-bottom: 0.2rem;
@@ -637,7 +622,7 @@
 }
 
 .battle-hp-fill.is-warn {
-  background: var(--warn);
+  background: var(--amber);
 }
 
 .battle-hp-fill.is-danger {
@@ -645,7 +630,7 @@
 }
 
 .battle-hp-numbers {
-  font-size: 0.78rem;
+  font-size: var(--fs-sm);
   color: var(--text-muted);
   margin-bottom: 0.6rem;
 }
@@ -663,9 +648,9 @@
   justify-content: space-between;
   gap: 0.3rem;
   background: var(--surface-2);
-  border-radius: 7px;
+  border-radius: var(--r-sm);
   padding: 0.22rem 0.45rem;
-  font-size: 0.68rem;
+  font-size: var(--fs-xs);
   min-width: 0;
 }
 
@@ -693,7 +678,7 @@
 }
 
 .battle-real-stat-stage {
-  font-size: 0.58rem;
+  font-size: var(--fs-xs);
   font-weight: 700;
   margin-left: 0.12rem;
   vertical-align: super;
@@ -716,12 +701,12 @@
   align-items: center;
   gap: 0.2rem;
   background: var(--surface-2);
-  border-radius: 9px;
+  border-radius: var(--r-sm);
   padding: 0.4rem 0.2rem;
 }
 
 .battle-roster-chip-name {
-  font-size: 0.64rem;
+  font-size: var(--fs-xs);
   color: var(--text-muted);
   white-space: nowrap;
   overflow: hidden;
@@ -750,7 +735,7 @@
   gap: 0.1rem;
   background: var(--surface-2);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   padding: 0.4rem 0.55rem;
   cursor: pointer;
   text-align: left;
@@ -769,7 +754,7 @@
 /* 셋업 카드의 party-move-pip.has-type와 동일한 톤. 배경색은 인라인 style로 타입별 색을 받는다 */
 .battle-move-button.has-type {
   border-color: transparent;
-  color: #fff;
+  color: var(--on-color);
   text-shadow: 0 1px 1px rgba(0, 0, 0, 0.25);
 }
 
@@ -781,12 +766,12 @@
 }
 
 .battle-move-name {
-  font-size: 0.85rem;
+  font-size: var(--fs-md);
   font-weight: 600;
 }
 
 .battle-move-pp {
-  font-size: 0.7rem;
+  font-size: var(--fs-xs);
   color: var(--text-muted);
 }
 
@@ -795,11 +780,11 @@
 }
 
 .battle-struggle-notice {
-  font-size: 0.82rem;
+  font-size: var(--fs-sm);
   color: var(--text-muted);
   background: var(--surface-2);
   border: 1px dashed var(--border);
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   padding: 0.55rem 0.7rem;
   text-align: center;
 }
@@ -810,7 +795,7 @@
   gap: 1rem;
   background: var(--safe-bg);
   color: var(--safe);
-  border-radius: 10px;
+  border-radius: var(--r-md);
   padding: 0.7rem 1rem;
   font-weight: 700;
 }
@@ -823,7 +808,7 @@
 .battle-reset-button {
   background: none;
   border: 1px solid currentColor;
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   padding: 0.3rem 0.8rem;
   color: inherit;
   font-weight: 600;
@@ -839,25 +824,25 @@
 .battle-turn-card {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--r-md);
   padding: 0.6rem 0.9rem;
 }
 
 .battle-turn-title {
   font-weight: 700;
-  font-size: 0.85rem;
+  font-size: var(--fs-md);
   margin-bottom: 0.3rem;
   color: var(--text-muted);
 }
 
 .battle-turn-line {
-  font-size: 0.88rem;
+  font-size: var(--fs-md);
   line-height: 1.6;
 }
 
 .battle-turn-line.is-muted {
   color: var(--text-muted);
-  font-size: 0.8rem;
+  font-size: var(--fs-sm);
 }
 
 .battle-turn-line.is-winner {
@@ -885,9 +870,9 @@
   gap: 0.15rem;
   padding: 0.3rem 0.4rem;
   border: 1px solid var(--border);
-  border-radius: 7px;
+  border-radius: var(--r-sm);
   background: var(--surface-2);
-  font-size: 0.7rem;
+  font-size: var(--fs-xs);
 }
 
 .battle-party-chip.is-active {
@@ -921,11 +906,11 @@
 .battle-party-chip-fill {
   display: block;
   height: 100%;
-  background: var(--ok, #3fb950);
+  background: var(--ok, var(--safe));
 }
 
 .battle-party-chip-fill.is-warn {
-  background: #d0a215;
+  background: var(--amber);
 }
 
 .battle-party-chip-fill.is-danger {
@@ -942,30 +927,16 @@
 /* PR-C1b: 도망봉인 안내 — 교체 토글 자리 대체 */
 .battle-input-hint.is-muted {
   margin-bottom: 0.4rem;
-  font-size: 0.78rem;
+  font-size: var(--fs-sm);
   font-weight: 600;
-  color: var(--text-muted, #7a7a8c);
+  color: var(--text-muted, var(--text-muted));
 }
 
 /* §4: 메가진화 선언 토글 */
 .battle-mega-toggle {
-  display: flex;
-  align-items: center;
   gap: 0.4rem;
-  margin-bottom: 0.5rem;
-  padding: 0.35rem 0.55rem;
-  border: 1px solid var(--violet);
-  border-radius: 8px;
-  background: var(--violet-soft);
-  font-size: 0.8rem;
-  font-weight: 700;
-  color: var(--violet);
-  cursor: pointer;
+  margin: 0 auto 0.5rem;
   user-select: none;
-}
-
-.battle-mega-toggle input {
-  cursor: pointer;
 }
 
 .battle-mega-toggle-icon {
@@ -979,9 +950,9 @@
   flex: 1;
   padding: 0.25rem 0.5rem;
   border: 1px solid var(--border);
-  border-radius: 7px;
+  border-radius: var(--r-sm);
   background: var(--surface-2);
-  font-size: 0.78rem;
+  font-size: var(--fs-sm);
   font-weight: 600;
   cursor: pointer;
 }
@@ -995,13 +966,13 @@
 .battle-switch-panel {
   margin-top: 5px;
   border: 1px solid var(--danger);
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   padding: 0.5rem;
   background: color-mix(in srgb, var(--danger) 8%, transparent);
 }
 
 .battle-switch-panel-title {
-  font-size: 0.8rem;
+  font-size: var(--fs-sm);
   font-weight: 700;
   margin-bottom: 0.4rem;
 }
@@ -1015,9 +986,9 @@
 .battle-switch-button {
   padding: 0.4rem 0.55rem;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   background: var(--surface-2);
-  font-size: 0.82rem;
+  font-size: var(--fs-sm);
   cursor: pointer;
   text-align: left;
 }
@@ -1072,6 +1043,6 @@
   }
 
   .battle-log-header h2 {
-    font-size: 1.15rem;
+    font-size: var(--fs-xl);
   }
 }

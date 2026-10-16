@@ -25,7 +25,11 @@ import { BattleVideoListModal } from "./BattleVideoListModal";
 import { getPokemon, getMove, SAMPLE_PARTIES } from "../lib/data";
 import { getEffectiveForm } from "../lib/pokemonForm";
 import { eulReul, eunNeun } from "../lib/josa";
-import { applySwitch, choiceLockedMoveOf, createBattleState, forcedLockedAction, hasUsableMove, runTurn, resumeTurn, STRUGGLE_MOVE, type BattleSide, type BattleState, type FighterKey, type TurnAction, type TurnResult } from "../lib/battleSimulator";
+import { applySwitch } from "../lib/battle/switching";
+import { choiceLockedMoveOf, createBattleState, hasUsableMove, STRUGGLE_MOVE, type BattleSide, type BattleState } from "../lib/battle/state";
+import { forcedLockedAction } from "../lib/battle/lockedAction";
+import { runTurn, resumeTurn } from "../lib/battle/runTurn";
+import type { FighterKey, TurnAction, TurnResult } from "../types/battle";
 import { chooseAiForcedSwitch, chooseAiSelection, sampleRiskAversion } from "../lib/battle/ai";
 import { APP_DECISION_PARAMS, chooseAiActionAsync, prewarmAiWorker } from "../lib/battle/ai/aiClient";
 import { combinedMemory, emptyOpponentMemory, observeOpponent } from "../lib/battle/ai/opponentMemory";
@@ -37,10 +41,11 @@ import type { PartySlot, SamplePartyPreset } from "../types/party";
 import { BattleBoard } from "./battleLog/BattleBoard";
 import { BattleSelectScreen } from "./battleLog/BattleSelectScreen";
 import { BattleSetupScreen } from "./battleLog/BattleSetupScreen";
-import { SLOT_INDICES, battleBoardBackground, fighterLabel, type InputModeState, type MegaDeclaredState, type PendingForcedSwitchState, type PendingPivotState, type PickerState, type SelectedState, type Side, type SlotIndex } from "./battleLog/shared";
+import { SLOT_INDICES, battleBoardBackground, type InputModeState, type MegaDeclaredState, type PendingForcedSwitchState, type PendingPivotState, type PickerState, type SelectedState, type Side, type SlotIndex } from "./battleLog/shared";
 import "./BattleLogPage.css";
 
-export function BattleLogPage() {
+/** BattleLogPage의 상태·핸들러 — 화면(JSX)이 쓰는 값만 돌려준다 */
+function useBattleLogSession() {
   const setup = useBattleSetup();
   const slotPresets = useSlotPresets();
   const partyPresets = usePartyPresets();
@@ -178,7 +183,7 @@ export function BattleLogPage() {
 
   /**
    * 도발/사슬묶기/앙코르: 이 쪽이 지금 이 기술을 고르면 왜 안 되는지(있다면) 문구로 돌려준다.
-   * 구애스카프(choiceLockedMoveId)와 달리 판정 엔진(battleSimulator)의 volatile 상태를 그대로
+   * 구애스카프(choiceLockedMoveId)와 달리 판정 엔진(배틀 엔진)의 volatile 상태를 그대로
    * 읽는다 — 로그를 다시 훑을 필요 없이 battleState에 이미 반영돼있다.
    */
   function moveRestrictionMessage(side: Side, moveId: string): string | null {
@@ -602,127 +607,14 @@ export function BattleLogPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [winner]);
 
+  return { setBattleVideoView, battleVideos, battleState, selecting, series, seriesStartBlockedReason, setFrontierSelection, loadSample, setup, partyPresets, slotPresets, movelessWarningFor, handleSaveSlotAsSample, setPicker, canProceed, proceedLabel, hasMovelessSlot, handleProceed, aiOpponent, setAiOpponent, aiMemory, setShowAiMemory, loadRandomSample, loadRandomSlotParty, selection, buildableIndices, needsSelection, pokemonAt, slotCtl, toggleSelection, setSelecting, selectionComplete, startBattleWith, winner, selected, setSelected, inputMode, setInputMode, megaDeclared, setMegaDeclared, pendingForcedSwitch, pendingPivot, lockWarning, setLockWarning, log, activeMoveIds, choiceLockedMoveId, battleSide, switchableIndices, resolveForcedSwitch, resolvePivot, isStruggling, moveRestrictionMessage, playTurn, resetToSetup, aiSide, aiThinking, learnedBattles, showAiMemory, picker, sideCtls, mySamples, battleVideoView };
+}
+
+/** BattleLogPage의 일부 화면 — 세션(useBattleLogSession 결과)에서 필요한 값만 꺼내 쓴다 */
+function BattleLogPickers({ s }: { s: ReturnType<typeof useBattleLogSession> }) {
+  const { picker, setPicker, sideCtls, slotCtl, pokemonAt, slotPresets, partyPresets, setup, loadSample, mySamples } = s;
   return (
-    <section className="battle-log-page">
-      <header className="battle-log-header">
-        <div>
-          <h2>배틀타워</h2>
-          <p>실전 배틀 시뮬레이션</p>
-        </div>
-        <button
-          type="button"
-          className="battle-video-toggle"
-          onClick={() => setBattleVideoView("list")}
-        >
-          배틀비디오{battleVideos.videos.length > 0 && ` (${battleVideos.videos.length})`}
-        </button>
-      </header>
-
-      {!battleState && !selecting && (
-        <BattleSeriesPanel
-          series={series}
-          startBlockedReason={seriesStartBlockedReason}
-          onStart={(first) => {
-            setFrontierSelection(null);
-            loadSample("b", first);
-          }}
-        />
-      )}
-
-      {!battleState && !selecting && (
-        <BattleSetupScreen
-          setup={setup}
-          hasPartyPresets={partyPresets.presets.length > 0}
-          hasSlotPresets={slotPresets.presets.length > 0}
-          movelessWarningFor={movelessWarningFor}
-          onSaveSlotAsSample={handleSaveSlotAsSample}
-          onOpenPicker={setPicker}
-          canProceed={canProceed}
-          proceedLabel={proceedLabel}
-          hasMovelessSlot={hasMovelessSlot}
-          onProceed={handleProceed}
-          aiOpponent={aiOpponent}
-          onToggleAiOpponent={setAiOpponent}
-          aiMemoryBattles={aiMemory.memory.battles}
-          onOpenAiMemory={() => setShowAiMemory(true)}
-          onLoadRandomSample={loadRandomSample}
-          onLoadRandomSlotParty={loadRandomSlotParty}
-          opponentLocked={series.active}
-        />
-      )}
-
-      {!battleState && selecting && (
-        <BattleSelectScreen
-          selection={selection}
-          buildableIndices={buildableIndices}
-          needsSelection={needsSelection}
-          pokemonAt={pokemonAt}
-          slotAt={(side, i) => slotCtl(side, i).slot}
-          onToggleSelection={toggleSelection}
-          onBack={() => setSelecting(false)}
-          selectionComplete={selectionComplete}
-          onStartBattle={() => startBattleWith(selection)}
-          hiddenSide={aiOpponent ? "b" : null}
-        />
-      )}
-
-      {battleState && (
-        <BattleBoard
-          battleState={battleState}
-          winner={winner}
-          selected={selected}
-          setSelected={setSelected}
-          inputMode={inputMode}
-          setInputMode={setInputMode}
-          megaDeclared={megaDeclared}
-          setMegaDeclared={setMegaDeclared}
-          pendingForcedSwitch={pendingForcedSwitch}
-          pendingPivot={pendingPivot}
-          lockWarning={lockWarning}
-          setLockWarning={setLockWarning}
-          log={log}
-          battleBoardBackground={battleBoardBackground}
-          fighterLabel={fighterLabel}
-          activeMoveIds={activeMoveIds}
-          choiceLockedMoveId={choiceLockedMoveId}
-          battleSide={battleSide}
-          switchableIndices={switchableIndices}
-          resolveForcedSwitch={resolveForcedSwitch}
-          resolvePivot={resolvePivot}
-          isStruggling={isStruggling}
-          moveRestrictionMessage={moveRestrictionMessage}
-          buildableIndices={buildableIndices}
-          pokemonAt={pokemonAt}
-          selection={selection}
-          playTurn={playTurn}
-          resetToSetup={resetToSetup}
-          aiSide={aiSide}
-          aiThinking={aiThinking}
-          learnedBattles={learnedBattles}
-          seriesNext={
-            series.active && series.current
-              ? {
-                  label: "다음 상대 →",
-                  onNext: () => {
-                    loadSample("b", series.current!);
-                    resetToSetup();
-                  },
-                }
-              : null
-          }
-        />
-      )}
-
-      {showAiMemory && (
-        <AiMemoryModal
-          memory={aiMemory.memory}
-          learningEnabled={aiMemory.learningEnabled}
-          onToggleLearning={aiMemory.setLearningEnabled}
-          onReset={aiMemory.reset}
-          onClose={() => setShowAiMemory(false)}
-        />
-      )}
-
+    <>
       {picker?.kind === "pokemon" && (
         <PokemonPickerModal
           onClose={() => setPicker(null)}
@@ -917,6 +809,136 @@ export function BattleLogPage() {
             />
           );
         })()}
+    </>
+  );
+}
+
+export function BattleLogPage() {
+  const session = useBattleLogSession();
+  const { setBattleVideoView, battleVideos, battleState, selecting, series, seriesStartBlockedReason, setFrontierSelection, loadSample, setup, partyPresets, slotPresets, movelessWarningFor, handleSaveSlotAsSample, setPicker, canProceed, proceedLabel, hasMovelessSlot, handleProceed, aiOpponent, setAiOpponent, aiMemory, setShowAiMemory, loadRandomSample, loadRandomSlotParty, selection, buildableIndices, needsSelection, pokemonAt, slotCtl, toggleSelection, setSelecting, selectionComplete, startBattleWith, winner, selected, setSelected, inputMode, setInputMode, megaDeclared, setMegaDeclared, pendingForcedSwitch, pendingPivot, lockWarning, setLockWarning, log, activeMoveIds, choiceLockedMoveId, battleSide, switchableIndices, resolveForcedSwitch, resolvePivot, isStruggling, moveRestrictionMessage, playTurn, resetToSetup, aiSide, aiThinking, learnedBattles, showAiMemory, battleVideoView } = session;
+
+
+  return (
+    <section className="battle-log-page">
+      <header className="battle-log-header">
+        <div>
+          <h2>배틀타워</h2>
+          <p>실전 배틀 시뮬레이션</p>
+        </div>
+        <button
+          type="button"
+          className="battle-video-toggle"
+          onClick={() => setBattleVideoView("list")}
+        >
+          배틀비디오{battleVideos.videos.length > 0 && ` (${battleVideos.videos.length})`}
+        </button>
+      </header>
+
+      {!battleState && !selecting && (
+        <BattleSeriesPanel
+          series={series}
+          startBlockedReason={seriesStartBlockedReason}
+          onStart={(first) => {
+            setFrontierSelection(null);
+            loadSample("b", first);
+          }}
+        />
+      )}
+
+      {!battleState && !selecting && (
+        <BattleSetupScreen
+          setup={setup}
+          hasPartyPresets={partyPresets.presets.length > 0}
+          hasSlotPresets={slotPresets.presets.length > 0}
+          movelessWarningFor={movelessWarningFor}
+          onSaveSlotAsSample={handleSaveSlotAsSample}
+          onOpenPicker={setPicker}
+          canProceed={canProceed}
+          proceedLabel={proceedLabel}
+          hasMovelessSlot={hasMovelessSlot}
+          onProceed={handleProceed}
+          aiOpponent={aiOpponent}
+          onToggleAiOpponent={setAiOpponent}
+          aiMemoryBattles={aiMemory.memory.battles}
+          onOpenAiMemory={() => setShowAiMemory(true)}
+          onLoadRandomSample={loadRandomSample}
+          onLoadRandomSlotParty={loadRandomSlotParty}
+          opponentLocked={series.active}
+        />
+      )}
+
+      {!battleState && selecting && (
+        <BattleSelectScreen
+          selection={selection}
+          buildableIndices={buildableIndices}
+          needsSelection={needsSelection}
+          pokemonAt={pokemonAt}
+          slotAt={(side, i) => slotCtl(side, i).slot}
+          onToggleSelection={toggleSelection}
+          onBack={() => setSelecting(false)}
+          selectionComplete={selectionComplete}
+          onStartBattle={() => startBattleWith(selection)}
+          hiddenSide={aiOpponent ? "b" : null}
+        />
+      )}
+
+      {battleState && (
+        <BattleBoard
+          battleState={battleState}
+          winner={winner}
+          selected={selected}
+          setSelected={setSelected}
+          inputMode={inputMode}
+          setInputMode={setInputMode}
+          megaDeclared={megaDeclared}
+          setMegaDeclared={setMegaDeclared}
+          pendingForcedSwitch={pendingForcedSwitch}
+          pendingPivot={pendingPivot}
+          lockWarning={lockWarning}
+          setLockWarning={setLockWarning}
+          log={log}
+          battleBoardBackground={battleBoardBackground}
+          activeMoveIds={activeMoveIds}
+          choiceLockedMoveId={choiceLockedMoveId}
+          battleSide={battleSide}
+          switchableIndices={switchableIndices}
+          resolveForcedSwitch={resolveForcedSwitch}
+          resolvePivot={resolvePivot}
+          isStruggling={isStruggling}
+          moveRestrictionMessage={moveRestrictionMessage}
+          buildableIndices={buildableIndices}
+          pokemonAt={pokemonAt}
+          selection={selection}
+          playTurn={playTurn}
+          resetToSetup={resetToSetup}
+          aiSide={aiSide}
+          aiThinking={aiThinking}
+          learnedBattles={learnedBattles}
+          seriesNext={
+            series.active && series.current
+              ? {
+                  label: "다음 상대 →",
+                  onNext: () => {
+                    loadSample("b", series.current!);
+                    resetToSetup();
+                  },
+                }
+              : null
+          }
+        />
+      )}
+
+      {showAiMemory && (
+        <AiMemoryModal
+          memory={aiMemory.memory}
+          learningEnabled={aiMemory.learningEnabled}
+          onToggleLearning={aiMemory.setLearningEnabled}
+          onReset={aiMemory.reset}
+          onClose={() => setShowAiMemory(false)}
+        />
+      )}
+
+      <BattleLogPickers s={session} />
 
       {battleVideoView === "list" && (
         <BattleVideoListModal

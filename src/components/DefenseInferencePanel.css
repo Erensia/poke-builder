@@ -7,7 +7,7 @@
 
 .dinf-intro {
   margin: 0;
-  font-size: 0.82rem;
+  font-size: var(--fs-sm);
   line-height: 1.55;
   color: var(--text-muted);
   max-width: 62ch;
@@ -22,7 +22,7 @@
   flex-wrap: wrap;
   /* 날씨/필드 틴트가 형태를 갖도록 — 결정력 계산 탭의 matchup-board와 같은 여백·모서리 */
   padding: 0.7rem;
-  border-radius: 16px;
+  border-radius: var(--r-xl);
   transition: background 0.3s ease;
 }
 
@@ -44,9 +44,9 @@
 }
 
 .dinf-defender-forms button {
-  font-size: 0.72rem;
+  font-size: var(--fs-xs);
   padding: 0.25rem 0.6rem;
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   border: 1px solid var(--border);
   background: var(--surface-2);
   color: var(--text);
@@ -58,7 +58,7 @@
   flex-wrap: wrap;
   gap: 0.2rem 0.8rem;
   margin-top: 0.6rem;
-  font-size: 0.75rem;
+  font-size: var(--fs-xs);
   color: var(--text-muted);
 }
 
@@ -70,7 +70,7 @@
   margin: 0.6rem 0 0;
   padding-top: 0.5rem;
   border-top: 1px dashed var(--border);
-  font-size: 0.74rem;
+  font-size: var(--fs-xs);
   color: var(--text-muted);
 }
 
@@ -83,14 +83,14 @@
   -webkit-backdrop-filter: blur(var(--glass-blur));
   backdrop-filter: blur(var(--glass-blur));
   border: 1px solid var(--glass-border);
-  border-radius: 14px;
+  border-radius: var(--r-lg);
   box-shadow: var(--glass-shadow);
   padding: 0.9rem 1rem;
 }
 
 .dinf-section h3 {
   margin: 0 0 0.7rem;
-  font-size: 0.95rem;
+  font-size: var(--fs-lg);
 }
 
 .dinf-conditions {
@@ -104,7 +104,7 @@
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
-  font-size: 0.72rem;
+  font-size: var(--fs-xs);
   color: var(--text-muted);
 }
 
@@ -112,32 +112,17 @@
 .dinf-percent,
 .dinf-move-btn {
   font: inherit;
-  font-size: 0.82rem;
+  font-size: var(--fs-sm);
   color: var(--text);
   background: var(--surface-2);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   padding: 0.35rem 0.5rem;
-}
-
-.dinf-check {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.45rem;
-  font-size: 0.76rem;
-  color: var(--text);
-  cursor: pointer;
-}
-
-.dinf-check input,
-.dinf-crit input {
-  accent-color: var(--violet);
-  margin-top: 0.15rem;
 }
 
 .dinf-note {
   margin: 0.55rem 0 0;
-  font-size: 0.7rem;
+  font-size: var(--fs-xs);
   line-height: 1.45;
   color: var(--text-muted);
 }
@@ -152,24 +137,44 @@
 }
 
 .dinf-row {
+  position: relative;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.45rem 0.7rem;
-  padding: 0.5rem 0.6rem;
-  border-radius: 10px;
+  gap: 0.45rem 0.55rem;
+  padding: 0.5rem 2.2rem 0.5rem 0.6rem;
+  border-radius: var(--r-md);
   background: var(--surface-2);
+}
+
+/* 행 안 컨트롤은 높이를 맞춘다 — 네이티브 select가 버튼·입력칸보다 커 보이던 문제(4.0 F1) */
+.dinf-row select,
+.dinf-row .dinf-move-btn,
+.dinf-row .dinf-percent {
+  box-sizing: border-box;
+  height: 2rem;
+}
+
+/* 높이를 고정했으므로 위아래 여백은 빼야 글자 아래가 잘리지 않는다 — select는 글자를 세로 가운데에 맞춘다 */
+.dinf-row select {
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+/* 타수·메가 선택 묶음 — PC는 행에 그대로 섞이고, 모바일은 있을 때만 자기 줄을 쓴다 */
+.dinf-row-opts {
+  display: contents;
 }
 
 .dinf-row-no {
   font-weight: 700;
-  font-size: 0.8rem;
+  font-size: var(--fs-sm);
   color: var(--violet);
   min-width: 1.6rem;
 }
 
 .dinf-move-btn {
-  min-width: 7.5rem;
+  min-width: 6rem;
   text-align: left;
   cursor: pointer;
 }
@@ -179,19 +184,44 @@
   cursor: not-allowed;
 }
 
-.dinf-crit {
-  display: flex;
+/* 체크박스는 전부 알약 토글로 — matchup-hitcount-pip과 같은 토큰(4.0 F1). 체크박스는 투명하게 겹쳐 키보드·스크린리더 동작을 유지한다 */
+
+.dinf-stepper {
+  display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
-  font-size: 0.76rem;
+  border: 1px solid var(--violet);
+  border-radius: var(--r-sm);
+  background: var(--violet-soft);
+  color: var(--violet);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  overflow: hidden;
+}
+
+.dinf-stepper span {
+  padding: 0.2rem 0.3rem;
+  min-width: 3.2rem;
+  text-align: center;
+}
+
+.dinf-stepper button {
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  padding: 0.2rem 0.55rem;
   cursor: pointer;
+}
+
+.dinf-stepper button:hover {
+  background: var(--surface-2);
 }
 
 .dinf-percent-pair {
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
-  font-size: 0.8rem;
+  font-size: var(--fs-sm);
 }
 
 .dinf-percent {
@@ -200,9 +230,9 @@
 }
 
 .dinf-row-msg {
-  font-size: 0.72rem;
+  font-size: var(--fs-xs);
   padding: 0.1rem 0.5rem;
-  border-radius: 999px;
+  border-radius: var(--r-pill);
 }
 
 .dinf-row-msg.is-error {
@@ -215,20 +245,23 @@
 }
 
 .dinf-row-remove {
-  margin-left: auto;
+  position: absolute;
+  top: 0.5rem;
+  right: 0.45rem;
+  height: 2rem;
   border: none;
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;
-  font-size: 0.9rem;
+  font-size: var(--fs-md);
 }
 
 .dinf-add {
   margin-top: 0.6rem;
   font: inherit;
-  font-size: 0.8rem;
+  font-size: var(--fs-sm);
   padding: 0.4rem 0.9rem;
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   border: 1px dashed var(--violet);
   background: var(--violet-soft);
   color: var(--violet);
@@ -237,12 +270,12 @@
 
 .dinf-hint {
   margin: 0;
-  font-size: 0.82rem;
+  font-size: var(--fs-sm);
   color: var(--text-muted);
 }
 
 .dinf-pending {
-  font-size: 0.72rem;
+  font-size: var(--fs-xs);
   font-weight: 400;
   color: var(--text-muted);
 }
@@ -255,10 +288,10 @@
 .dinf-contradiction {
   margin: 0;
   padding: 0.7rem 0.9rem;
-  border-radius: 10px;
+  border-radius: var(--r-md);
   background: var(--danger-bg);
   color: var(--danger);
-  font-size: 0.82rem;
+  font-size: var(--fs-sm);
 }
 
 .dinf-contradiction p {
@@ -267,16 +300,16 @@
 
 .dinf-summary {
   margin: 0 0 0.7rem;
-  font-size: 0.95rem;
+  font-size: var(--fs-lg);
 }
 
 .dinf-summary strong {
   color: var(--violet);
-  font-size: 1.15rem;
+  font-size: var(--fs-xl);
 }
 
 .dinf-summary-sub {
-  font-size: 0.75rem;
+  font-size: var(--fs-xs);
   color: var(--text-muted);
 }
 
@@ -291,7 +324,7 @@
 
 .dinf-range-label {
   grid-area: label;
-  font-size: 0.78rem;
+  font-size: var(--fs-sm);
   color: var(--text-muted);
 }
 
@@ -299,7 +332,7 @@
   grid-area: track;
   position: relative;
   height: 9px;
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   background: var(--surface-2);
   border: 1px solid var(--border);
 }
@@ -308,7 +341,7 @@
   position: absolute;
   top: 0;
   bottom: 0;
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   background: var(--gradient);
 }
 
@@ -316,7 +349,7 @@
   position: absolute;
   top: -2px;
   bottom: -2px;
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   background: var(--violet);
 }
 
@@ -326,23 +359,23 @@
 
 .dinf-bulk {
   margin-bottom: 0.45rem;
-  font-size: 0.86rem;
+  font-size: var(--fs-md);
 }
 
 .dinf-bulk-label {
   display: inline-block;
   min-width: 6.8rem;
-  font-size: 0.78rem;
+  font-size: var(--fs-sm);
   color: var(--text-muted);
 }
 
 .dinf-bulk-value strong {
   color: var(--violet);
-  font-size: 1.05rem;
+  font-size: var(--fs-lg);
 }
 
 .dinf-bulk-error {
-  font-size: 0.78rem;
+  font-size: var(--fs-sm);
   color: var(--text-muted);
 }
 
@@ -354,11 +387,11 @@
 
 .dinf-range-text {
   grid-area: text;
-  font-size: 0.82rem;
+  font-size: var(--fs-sm);
 }
 
 .dinf-range-real {
-  font-size: 0.72rem;
+  font-size: var(--fs-xs);
   color: var(--text-muted);
 }
 
@@ -371,15 +404,15 @@
 }
 
 .dinf-subtitle {
-  font-size: 0.78rem;
+  font-size: var(--fs-sm);
   color: var(--text-muted);
   margin-right: 0.2rem;
 }
 
 .dinf-nature-chip {
-  font-size: 0.74rem;
+  font-size: var(--fs-xs);
   padding: 0.2rem 0.6rem;
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   background: var(--violet-soft);
   color: var(--violet);
 }
@@ -397,7 +430,7 @@
 
 .dinf-details {
   margin-top: 0.9rem;
-  font-size: 0.8rem;
+  font-size: var(--fs-sm);
 }
 
 .dinf-details summary {
@@ -420,7 +453,7 @@
 }
 
 .dinf-grid-title {
-  font-size: 0.76rem;
+  font-size: var(--fs-xs);
   font-weight: 600;
 }
 
@@ -437,7 +470,7 @@
 }
 
 .dinf-axis-name {
-  font-size: 0.68rem;
+  font-size: var(--fs-xs);
   color: var(--text-muted);
 }
 
@@ -458,7 +491,7 @@
 
 .dinf-tick {
   position: absolute;
-  font-size: 0.64rem;
+  font-size: var(--fs-xs);
   line-height: 1;
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
@@ -478,7 +511,7 @@
   grid-area: grid;
   display: grid;
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: var(--r-xs);
   overflow: hidden;
   background: var(--surface-2);
 }
@@ -492,7 +525,7 @@
 }
 
 .dinf-grid-axis {
-  font-size: 0.66rem;
+  font-size: var(--fs-xs);
   color: var(--text-muted);
 }
 
@@ -500,7 +533,7 @@
   margin: 0.9rem 0 0;
   padding-top: 0.6rem;
   border-top: 1px dashed var(--border);
-  font-size: 0.7rem;
+  font-size: var(--fs-xs);
   color: var(--text-muted);
 }
 
@@ -512,8 +545,67 @@
   .dinf-defender {
     margin-top: 0;
   }
+  /* 관측 행(4.0 F1) — 1행: 종류·기술 / 2행: 급소 알약·HP 변화 / 3행: 턴 종료 효과. #번호·✕는 왼쪽 여백에 쌓는다 */
   .dinf-row {
-    align-items: flex-start;
+    align-items: center;
+    padding: 0.5rem 0.6rem 0.5rem 2rem;
+    min-height: 5.6rem;
+  }
+  .dinf-row-no {
+    position: absolute;
+    left: 0.55rem;
+    top: 0.5rem;
+    min-width: 0;
+    line-height: 1.85rem;
+  }
+  .dinf-row-remove {
+    left: 0.3rem;
+    right: auto;
+    top: 2.6rem;
+    height: auto;
+    padding: 0.2rem 0.35rem;
+  }
+  /* 선택 상자 글씨가 잘리지 않게 안쪽 여백을 줄인다 */
+  .dinf-row select,
+  .dinf-row .dinf-move-btn {
+    padding-left: 0.3rem;
+    padding-right: 0.2rem;
+  }
+  .dinf-row-no + select,
+  .dinf-row-no + select + * {
+    min-width: 0;
+    flex: 0 0 auto;
+  }
+  .dinf-row-no + select,
+  .dinf-row-no + select + * {
+    flex-basis: calc(50% - 0.35rem);
+  }
+  .dinf-row .dinf-percent {
+    width: 3rem;
+  }
+  .dinf-row-opts {
+    display: flex;
+    flex: 1 0 100%;
+    gap: 0.45rem 0.7rem;
+  }
+  .dinf-row-opts:empty {
+    display: none;
+  }
+  /* "가능"은 ✕ 아래 여백에, 오류 문구는 길어서 행 아래 전 폭으로 */
+  .dinf-row-msg.is-ok {
+    position: absolute;
+    left: 0.45rem;
+    top: 4.3rem;
+    padding: 0;
+  }
+  .dinf-row-msg.is-error {
+    flex: 1 0 100%;
+    border-radius: var(--r-sm);
+  }
+  .dinf-move-btn {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .dinf-range {
     grid-template-columns: 4.6rem 1fr;
@@ -529,7 +621,7 @@
 /* 내가 받은 데미지 관측(3.1 C2-b) — 소제목 */
 .dinf-subhead {
   margin: 0.9rem 0 0.4rem;
-  font-size: 0.82rem;
+  font-size: var(--fs-sm);
   font-weight: 700;
   color: var(--violet);
 }
@@ -564,7 +656,7 @@
 
 .dinf-form-table {
   border-collapse: collapse;
-  font-size: 0.8rem;
+  font-size: var(--fs-sm);
 }
 
 .dinf-form-table th,
@@ -585,14 +677,17 @@
   font-weight: 400;
 }
 
+/* 턴 종료 효과 — 접지 않고 늘 행 아래 한 줄로 둔다(4.0 F1). 체크해야 계산에 반영된다 */
 .dinf-endturn {
-  font-size: 0.76rem;
+  flex: 1 0 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem 0.6rem;
+  font-size: var(--fs-xs);
 }
 
-.dinf-endturn label {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-  margin-right: 0.6rem;
-  cursor: pointer;
+.dinf-endturn-title {
+  color: var(--text-muted);
+  font-weight: 600;
 }
