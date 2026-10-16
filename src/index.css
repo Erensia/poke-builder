@@ -32,6 +32,24 @@
   --safe-bg: #e0f2e6;
   --warn: #8a590f;
   --warn-bg: #f5e6c8;
+  /* 타입색·보라 그라데이션 위 글자(다크에서도 흰색)와 금색(승자 테두리·포인트 마크·HP바 경고) */
+  --on-color: #fff;
+  --amber: #f2b705;
+  --amber-light: #ffdd66;
+
+  /* 4.0 D3 — 글자 크기·모서리 반경 단계(새 값은 이 단계 중에서 고른다) */
+  --fs-xs: 0.72rem;
+  --fs-sm: 0.8rem;
+  --fs-md: 0.88rem;
+  --fs-lg: 1rem;
+  --fs-xl: 1.15rem;
+  --fs-2xl: 1.35rem;
+  --r-xs: 4px;
+  --r-sm: 8px;
+  --r-md: 10px;
+  --r-lg: 14px;
+  --r-xl: 16px;
+  --r-pill: 999px;
 
   --sans: 'Noto Sans KR', 'Pretendard', system-ui, -apple-system, sans-serif;
   --display: 'Rajdhani', var(--sans);
@@ -223,7 +241,7 @@ button {
 
 *::-webkit-scrollbar-thumb {
   background: var(--scrollbar-thumb);
-  border-radius: 999px;
+  border-radius: var(--r-pill);
 }
 
 *::-webkit-scrollbar-thumb:hover {
@@ -257,10 +275,10 @@ button {
   max-width: 100%;
   padding: 0.2rem 0.55rem;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--r-sm);
   background: var(--surface-2);
   color: var(--text-muted);
-  font-size: 0.76rem;
+  font-size: var(--fs-xs);
   font-weight: 600;
   line-height: 1.35;
   cursor: pointer;

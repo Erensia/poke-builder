@@ -5,20 +5,20 @@
 }
 
 .type-coverage-header h2 {
-  font-size: 1.15rem;
+  font-size: var(--fs-xl);
   margin-bottom: 0.3rem;
 }
 
 .type-coverage-header p {
   margin: 0 0 1rem;
   color: var(--text-muted);
-  font-size: 0.8rem;
+  font-size: var(--fs-sm);
   max-width: 50ch;
 }
 
 .type-coverage-empty {
   color: var(--text-muted);
-  font-size: 0.85rem;
+  font-size: var(--fs-md);
   padding: 1rem 0;
 }
 
@@ -28,7 +28,7 @@
 .type-matrix-scroll {
   overflow-x: auto;
   border: 1px solid var(--glass-border);
-  border-radius: 12px;
+  border-radius: var(--r-lg);
   -webkit-backdrop-filter: blur(var(--glass-blur));
   backdrop-filter: blur(var(--glass-blur));
   background:
@@ -43,7 +43,7 @@
      1~2px 새어 보이는 문제를 피한다. border-spacing 0으로 셀은 붙여 둔다. */
   border-collapse: separate;
   border-spacing: 0;
-  font-size: 0.72rem;
+  font-size: var(--fs-xs);
   width: max-content;
   min-width: 100%;
 }
@@ -106,7 +106,7 @@
 .tm-mon-form {
   display: block;
   margin-top: 0.1rem;
-  font-size: 0.72rem;
+  font-size: var(--fs-xs);
   font-weight: 600;
   color: var(--violet);
 }
@@ -133,15 +133,15 @@
 }
 
 .cnt {
-  font-size: 0.72rem;
+  font-size: var(--fs-xs);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   padding: 0.05rem 0.35rem;
-  border-radius: 5px;
+  border-radius: var(--r-xs);
 }
 
 .cnt-quad {
-  color: #fff;
+  color: var(--on-color);
   background: var(--danger-strong);
 }
 
@@ -156,7 +156,7 @@
 }
 
 .cnt-quadresist {
-  color: #fff;
+  color: var(--on-color);
   background: var(--safe);
 }
 
@@ -180,7 +180,7 @@
 
 .tm-foot-count {
   font-weight: 700;
-  font-size: 0.72rem;
+  font-size: var(--fs-xs);
   font-variant-numeric: tabular-nums;
   color: var(--text);
 }
@@ -188,7 +188,7 @@
 /* 종합 열 */
 .tm-verdict {
   font-weight: 700;
-  font-size: 0.72rem;
+  font-size: var(--fs-xs);
 }
 
 .tm-verdict-weak {

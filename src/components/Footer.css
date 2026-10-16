@@ -9,7 +9,7 @@
 .app-footer-legal {
   margin: 0 auto;
   max-width: 24rem;
-  font-size: 0.72rem;
+  font-size: var(--fs-xs);
   line-height: 1.55;
   letter-spacing: 0.01em;
   opacity: 0.8;
@@ -22,6 +22,6 @@
   }
 
   .app-footer-legal {
-    font-size: 0.72rem;
+    font-size: var(--fs-xs);
   }
 }

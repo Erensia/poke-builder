@@ -8,14 +8,14 @@
 }
 
 .itemdex-page-header h2 {
-  font-size: 1.3rem;
+  font-size: var(--fs-2xl);
   margin-bottom: 0.3rem;
 }
 
 .itemdex-page-header p {
   margin: 0;
   color: var(--text-muted);
-  font-size: 0.82rem;
+  font-size: var(--fs-sm);
 }
 
 .itemdex-board {
@@ -36,7 +36,7 @@
   -webkit-backdrop-filter: blur(var(--glass-blur));
   backdrop-filter: blur(var(--glass-blur));
   border: 1px solid var(--glass-border);
-  border-radius: 14px;
+  border-radius: var(--r-lg);
   padding: 0.75rem;
   box-shadow: var(--glass-shadow);
   max-height: 680px;
@@ -47,14 +47,14 @@
 .itemdex-search {
   width: 100%;
   padding: 0.55rem 0.75rem;
-  border-radius: 10px;
+  border-radius: var(--r-md);
   border: 1px solid var(--glass-border);
   background: var(--surface-2);
   -webkit-backdrop-filter: blur(var(--glass-blur));
   backdrop-filter: blur(var(--glass-blur));
   box-shadow: var(--glass-shadow);
   color: var(--text);
-  font-size: 0.85rem;
+  font-size: var(--fs-md);
   flex-shrink: 0;
 }
 
@@ -80,7 +80,7 @@
   border: 1px solid transparent;
   background: transparent;
   padding: 0.4rem 0.5rem;
-  border-radius: 10px;
+  border-radius: var(--r-md);
   cursor: pointer;
   text-align: left;
 }
@@ -99,7 +99,7 @@
 }
 
 .itemdex-list-name {
-  font-size: 0.85rem;
+  font-size: var(--fs-md);
   font-weight: 600;
   flex: 1;
   overflow: hidden;
@@ -108,7 +108,7 @@
 }
 
 .itemdex-list-mega {
-  font-size: 0.72rem;
+  font-size: var(--fs-xs);
   color: var(--violet);
   font-weight: 600;
   flex-shrink: 0;
@@ -118,7 +118,7 @@
   padding: 1rem;
   text-align: center;
   color: var(--text-muted);
-  font-size: 0.85rem;
+  font-size: var(--fs-md);
 }
 
 /* 상세 패널 */
@@ -130,7 +130,7 @@
   -webkit-backdrop-filter: blur(var(--glass-blur));
   backdrop-filter: blur(var(--glass-blur));
   border: 1px solid var(--glass-border);
-  border-radius: 14px;
+  border-radius: var(--r-lg);
   padding: 1.25rem 1.4rem;
   box-shadow: var(--glass-shadow);
 }
@@ -139,7 +139,7 @@
   color: var(--text-muted);
   text-align: center;
   padding: 3rem 0;
-  font-size: 0.9rem;
+  font-size: var(--fs-md);
 }
 
 .itemdex-detail-head {
@@ -157,7 +157,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #fff;
+  color: var(--on-color);
   font-weight: 700;
   font-size: 1.35rem;
   font-family: var(--display);
@@ -176,16 +176,16 @@
 }
 
 .itemdex-detail-head h3 {
-  font-size: 1.15rem;
+  font-size: var(--fs-xl);
   margin-bottom: 0.35rem;
 }
 
 .itemdex-category-badge {
   display: inline-block;
-  font-size: 0.72rem;
+  font-size: var(--fs-xs);
   font-weight: 600;
   padding: 0.1rem 0.5rem;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   border: 1px solid var(--violet);
   color: var(--violet);
 }
@@ -199,7 +199,7 @@
 }
 
 .itemdex-detail-section h4 {
-  font-size: 0.8rem;
+  font-size: var(--fs-sm);
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--text-muted);
@@ -208,7 +208,7 @@
 
 .itemdex-description {
   margin: 0;
-  font-size: 0.88rem;
+  font-size: var(--fs-md);
   line-height: 1.55;
 }
 
@@ -220,7 +220,7 @@
 
 .itemdex-mega-block {
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--r-lg);
   padding: 0.8rem 0.9rem;
   background: var(--violet-soft);
 }
@@ -232,16 +232,16 @@
 }
 
 .itemdex-mega-pokemon {
-  font-size: 0.9rem;
+  font-size: var(--fs-md);
   font-weight: 600;
 }
 
 .itemdex-mega-tag {
-  font-size: 0.72rem;
+  font-size: var(--fs-xs);
   font-weight: 700;
   color: var(--violet);
   border: 1px solid var(--violet);
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   padding: 0.1rem 0.45rem;
 }
 
@@ -252,14 +252,14 @@
 
 .itemdex-mega-ability {
   margin-top: 0.65rem;
-  font-size: 0.85rem;
+  font-size: var(--fs-md);
   display: flex;
   flex-direction: column;
   gap: 0.15rem;
 }
 
 .itemdex-meta-label {
-  font-size: 0.72rem;
+  font-size: var(--fs-xs);
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.03em;
@@ -268,7 +268,7 @@
 .itemdex-ability-desc {
   margin: 0.3rem 0 0;
   color: var(--text-muted);
-  font-size: 0.8rem;
+  font-size: var(--fs-sm);
   line-height: 1.45;
 }
 

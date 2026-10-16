@@ -7,9 +7,9 @@
   padding: 0.6rem 0.85rem;
   margin-bottom: 0.8rem;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--r-lg);
   background: var(--surface-2);
-  font-size: 0.8rem;
+  font-size: var(--fs-sm);
 }
 
 .battle-series-text {
@@ -48,7 +48,7 @@
 .battle-series-style {
   flex: 1;
   color: var(--text-muted);
-  font-size: 0.72rem;
+  font-size: var(--fs-xs);
 }
 
 .battle-series-result {

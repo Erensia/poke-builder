@@ -7,11 +7,11 @@
 .preset-save-input {
   flex: 1;
   padding: 0.55rem 0.75rem;
-  border-radius: 10px;
+  border-radius: var(--r-md);
   border: 1px solid var(--border);
   background: var(--surface-2);
   color: var(--text);
-  font-size: 0.85rem;
+  font-size: var(--fs-md);
 }
 
 .preset-save-input:focus {
@@ -25,14 +25,14 @@
   box-sizing: border-box;
   padding: 0.55rem 0.75rem;
   margin-top: 0.6rem;
-  border-radius: 10px;
+  border-radius: var(--r-md);
   border: 1px solid var(--glass-border);
   background: var(--surface-2);
   -webkit-backdrop-filter: blur(var(--glass-blur));
   backdrop-filter: blur(var(--glass-blur));
   box-shadow: var(--glass-shadow);
   color: var(--text);
-  font-size: 0.85rem;
+  font-size: var(--fs-md);
   position: sticky;
   bottom: 0;
   z-index: 1;
@@ -45,11 +45,11 @@
 .preset-save-button {
   border: none;
   background: var(--gradient);
-  color: #fff;
+  color: var(--on-color);
   font-weight: 600;
-  font-size: 0.82rem;
+  font-size: var(--fs-sm);
   padding: 0 1rem;
-  border-radius: 10px;
+  border-radius: var(--r-md);
   cursor: pointer;
   white-space: nowrap;
 }
@@ -75,7 +75,7 @@
   border: 1px solid var(--border);
   background: var(--surface-2);
   padding: 0.55rem 0.7rem;
-  border-radius: 10px;
+  border-radius: var(--r-md);
 }
 
 .preset-item-info {
@@ -88,14 +88,14 @@
 
 .preset-item-name {
   font-weight: 600;
-  font-size: 0.88rem;
+  font-size: var(--fs-md);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .preset-item-meta {
-  font-size: 0.72rem;
+  font-size: var(--fs-xs);
   color: var(--text-muted);
 }
 
@@ -109,10 +109,10 @@
   border: 1px solid var(--border);
   background: transparent;
   color: var(--text);
-  font-size: 0.72rem;
+  font-size: var(--fs-xs);
   font-weight: 500;
   padding: 0.3rem 0.55rem;
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   cursor: pointer;
   white-space: nowrap;
 }
@@ -141,5 +141,5 @@
   padding: 1rem;
   text-align: center;
   color: var(--text-muted);
-  font-size: 0.85rem;
+  font-size: var(--fs-md);
 }

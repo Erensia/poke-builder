@@ -6,7 +6,7 @@
 }
 
 .chip-picker-label {
-  font-size: 0.78rem;
+  font-size: var(--fs-sm);
   color: var(--text-muted);
   font-weight: 600;
 }
@@ -21,9 +21,9 @@
   border: 1px solid var(--border);
   background: var(--surface);
   color: var(--text-muted);
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   padding: 0.3rem 0.75rem;
-  font-size: 0.78rem;
+  font-size: var(--fs-sm);
   font-weight: 500;
   cursor: pointer;
 }
@@ -36,6 +36,6 @@
 .chip-picker-chip.is-active {
   background: var(--gradient);
   border-color: transparent;
-  color: #fff;
+  color: var(--on-color);
   font-weight: 700;
 }

@@ -7,17 +7,17 @@
 
 .ai-memory-meta {
   margin: 0;
-  font-size: 0.78rem;
+  font-size: var(--fs-sm);
   color: var(--text-muted);
 }
 
 .ai-memory-warmup {
   margin: 0;
   padding: 0.5rem 0.7rem;
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   background: var(--violet-soft);
   color: var(--violet);
-  font-size: 0.78rem;
+  font-size: var(--fs-sm);
   font-weight: 600;
 }
 
@@ -38,20 +38,20 @@
   flex-direction: column;
   gap: 0.35rem;
   padding: 0.7rem 0.8rem;
-  border-radius: 10px;
+  border-radius: var(--r-md);
   background: var(--surface-2);
   border: 1px solid var(--border, rgba(0, 0, 0, 0.06));
 }
 
 .ai-memory-card-title {
-  font-size: 0.75rem;
+  font-size: var(--fs-xs);
   font-weight: 700;
   color: var(--text-muted);
 }
 
 .ai-memory-bar {
   height: 6px;
-  border-radius: 3px;
+  border-radius: var(--r-xs);
   background: rgba(127, 127, 127, 0.18);
   overflow: hidden;
 }
@@ -59,7 +59,7 @@
 .ai-memory-bar-fill {
   display: block;
   height: 100%;
-  border-radius: 3px;
+  border-radius: var(--r-xs);
   background: var(--violet);
 }
 
@@ -68,7 +68,7 @@
 }
 
 .ai-memory-card-level {
-  font-size: 0.95rem;
+  font-size: var(--fs-lg);
   font-weight: 700;
   color: var(--text);
 }
@@ -78,25 +78,25 @@
 }
 
 .ai-memory-card-count {
-  font-size: 0.95rem;
+  font-size: var(--fs-lg);
   font-weight: 700;
   color: var(--text);
 }
 
 .ai-memory-card-detail {
-  font-size: 0.72rem;
+  font-size: var(--fs-xs);
   color: var(--text-muted);
 }
 
 .ai-memory-section {
   margin: 0.2rem 0 0;
-  font-size: 0.8rem;
+  font-size: var(--fs-sm);
   color: var(--text);
 }
 
 .ai-memory-empty {
   margin: 0;
-  font-size: 0.78rem;
+  font-size: var(--fs-sm);
   color: var(--text-muted);
 }
 
@@ -115,7 +115,7 @@
   display: flex;
   align-items: center;
   gap: 0.55rem;
-  font-size: 0.8rem;
+  font-size: var(--fs-sm);
 }
 
 .ai-memory-species-name {
@@ -143,15 +143,15 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 0.4rem;
-  font-size: 0.78rem;
+  font-size: var(--fs-sm);
   color: var(--text);
 }
 
 .ai-memory-reset {
-  font-size: 0.75rem;
+  font-size: var(--fs-xs);
   font-weight: 600;
   padding: 0.25rem 0.7rem;
-  border-radius: 7px;
+  border-radius: var(--r-sm);
   border: 1px solid var(--text-muted);
   background: none;
   color: var(--text);
@@ -159,6 +159,6 @@
 }
 
 .ai-memory-reset.is-danger {
-  border-color: #d14b4b;
-  color: #d14b4b;
+  border-color: var(--danger);
+  color: var(--danger);
 }
