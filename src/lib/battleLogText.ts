@@ -4,6 +4,7 @@
  * 이쪽은 문장(서술) 단위 텍스트를 모은다.
  */
 
+import type { EndOfTurnLogEntry } from "../types/battle";
 import type { StatusCondition } from "../types/status";
 import { eunNeun } from "./josa";
 
@@ -63,3 +64,24 @@ export const STATUS_CURE_TEXT: Record<StatusCondition, (name: string) => string>
   sleep: (name) => `${name}${eunNeun(name)} 눈을 떴다!`,
   freeze: (name) => `${name}의 얼음이 녹았다!`,
 };
+
+const HP_AMOUNT_KEYS = [
+  "damage", "remainingHp", "fieldHeal", "itemHeal", "abilityWeatherHeal", "regenHeal", "leechSeedDamage",
+  "leechSeedHealAmount", "wishHeal", "berryHeal", "poisonHealAmount", "abilityWeatherDamage", "cheekPouchHeal",
+] as const;
+
+/**
+ * AI 상대의 턴 종료 줄: HP 수치(데미지·회복량·남은 HP)를 최대 HP 대비 "x.x%" 문자열로 바꿔 최대 HP·실수치를
+ * 역산하지 못하게 한다. 렌더 쪽은 `{e.damage}` 식으로 그대로 찍으므로 숫자 자리에 문자열을 넣으면 되고, 분기에
+ * 쓰는 truthiness를 지키려고 0·undefined는 그대로 둔다(remainingHp만 0도 "0.0%"로).
+ * ponytail: 최대 HP를 모르면(aiMaxHp에 없는 종) 원본 그대로 — 같은 종이 파티에 둘이면 뒤의 것이 이긴다.
+ */
+export function hpAsPercent(e: EndOfTurnLogEntry, maxHp: number | undefined): EndOfTurnLogEntry {
+  if (!maxHp) return e;
+  const out: Record<string, unknown> = { ...e };
+  for (const k of HP_AMOUNT_KEYS) {
+    const v = e[k];
+    if (typeof v === "number" && (v || k === "remainingHp")) out[k] = `${((v / maxHp) * 100).toFixed(1)}%`;
+  }
+  return out as unknown as EndOfTurnLogEntry;
+}
