@@ -7,7 +7,6 @@ import { withThreatModel, withThreatOverride, type ThreatModelParams } from "./o
 import { attachSwitchRead, levelOneDistribution, type LevelOneDistribution } from "./levelOne";
 import { calibrateDistribution, type OpponentMemory } from "./opponentMemory";
 import { getMove } from "@/lib/data";
-import { withModelToggles } from "./modelToggles";
 import { paramsFor } from "./decision";
 import { DEFAULT_SEARCH_PARAMS, searchDecide, type SearchPolicy, type SearchResult } from "./search";
 
@@ -40,7 +39,7 @@ function threatModelOf(params: DecisionParams): ThreatModelParams {
   };
 }
 
-export interface AiDecision {
+interface AiDecision {
   action: TurnAction;
   chosen?: AiOption;
   /** 디버그·튜닝용 — 모든 옵션의 평가값과 점수 */
@@ -52,7 +51,7 @@ export interface AiDecision {
   opponentDistribution?: LevelOneDistribution;
 }
 
-export interface ChooseAiOptions extends EvaluateOptions {
+interface ChooseAiOptions extends EvaluateOptions {
   decisionParams?: Partial<DecisionParams>;
   /**
    * 상대 패턴 학습(ver.2.0 1-C): 누적본 + 이번 대전 세션을 합친 기록. 상대 모델(opponentModel)이 켜져 있으면 추론 분포를 이것으로
@@ -75,38 +74,35 @@ export function chooseAiAction(
   const forced = forcedLockedAction(state[key]);
   if (forced) return { action: forced, scored: [] };
   const params = paramsFor(options.decisionParams);
-  // 모델 토글(턴 종료 효과 등)은 평가(대면 턴 수)와 점수 계산(이어지는 대면)에 모두 걸린다
   let rawDistribution: LevelOneDistribution | undefined;
-  const decision = withModelToggles(params, (): (Partial<SearchResult> & { chosen: AiOption; scored: ScoredOption[] }) | null => {
-    // 점수 계산(파티 대면표는 이때 계산됨)도 같은 상대 기술 모델로
-    return withThreatModel(threatModelOf(params), () => {
-      // 탐색·상대 모델을 뺀 파라미터 — 상대 쪽 추론(재귀 한 단계)과 오라클 롤아웃 안의 지금 AI가 쓴다
-      const { search: _search, opponentModel: _opponentModel, ...plainParams } = params;
-      // 상대 모델 ver2(1-B): 상대 행동 분포를 먼저 추론하고(이때 덮어쓰기 없음 — 상대는 나를 고정 규칙으로 본다), 지금 대면의 평가·채점을
-      // 그 분포로. 꺼져 있어도 undefined로 명시해 바깥(오라클 롤아웃 등)의 덮어쓰기가 새지 않게 한다.
-      rawDistribution = params.opponentModel
-        ? withThreatOverride(undefined, () => levelOneDistribution(state, key, plainParams, params.opponentModel!))
-        : undefined;
-      // 1-C: 이 상대에게서 배운 성향으로 보정(기록이 없으면 교체 확률만 사전값 0.15배로 — 교체 읽기가 거의 안 켜진다)
-      const opponent = state[opponentKey(key)];
-      const dist =
-        rawDistribution && options.opponentMemory
-          ? calibrateDistribution(rawDistribution, options.opponentMemory, opponent.slot.pokemonId, statusMoveIdsOf(rawDistribution))
-          : rawDistribution;
-      const override = dist
-        ? { opponentSlot: state[opponentKey(key)].slot, targetSlot: state[key].slot, weights: dist.moveWeights, alpha: params.opponentModel!.alpha }
-        : undefined;
-      return withThreatOverride(override, () => {
-        let evaluated = evaluateOptions(state, key, options);
-        evaluated = applyStalemateMargin(evaluated, params.stalemateSwitchMargin);
-        if (dist) evaluated = attachSwitchRead(state, key, evaluated, dist, params.opponentModel!);
-        if (!params.search) return decide(evaluated, riskAversion, params);
-        const search = { ...DEFAULT_SEARCH_PARAMS, ...params.search };
-        return searchDecide(
-          { state, key, riskAversion, params: plainParams, search, policy: searchPolicy(riskAversion, plainParams), opponent: dist },
-          evaluated,
-        );
-      });
+  // 점수 계산(파티 대면표는 이때 계산됨)도 같은 상대 기술 모델로
+  const decision: (Partial<SearchResult> & { chosen: AiOption; scored: ScoredOption[] }) | null = withThreatModel(threatModelOf(params), () => {
+    // 탐색·상대 모델을 뺀 파라미터 — 상대 쪽 추론(재귀 한 단계)과 오라클 롤아웃 안의 지금 AI가 쓴다
+    const { search: _search, opponentModel: _opponentModel, ...plainParams } = params;
+    // 상대 모델 ver2(1-B): 상대 행동 분포를 먼저 추론하고(이때 덮어쓰기 없음 — 상대는 나를 고정 규칙으로 본다), 지금 대면의 평가·채점을
+    // 그 분포로. 꺼져 있어도 undefined로 명시해 바깥(오라클 롤아웃 등)의 덮어쓰기가 새지 않게 한다.
+    rawDistribution = params.opponentModel
+      ? withThreatOverride(undefined, () => levelOneDistribution(state, key, plainParams, params.opponentModel!))
+      : undefined;
+    // 1-C: 이 상대에게서 배운 성향으로 보정(기록이 없으면 교체 확률만 사전값 0.15배로 — 교체 읽기가 거의 안 켜진다)
+    const opponent = state[opponentKey(key)];
+    const dist =
+      rawDistribution && options.opponentMemory
+        ? calibrateDistribution(rawDistribution, options.opponentMemory, opponent.slot.pokemonId, statusMoveIdsOf(rawDistribution))
+        : rawDistribution;
+    const override = dist
+      ? { opponentSlot: state[opponentKey(key)].slot, targetSlot: state[key].slot, weights: dist.moveWeights, alpha: params.opponentModel!.alpha }
+      : undefined;
+    return withThreatOverride(override, () => {
+      let evaluated = evaluateOptions(state, key, options);
+      evaluated = applyStalemateMargin(evaluated, params.stalemateSwitchMargin);
+      if (dist) evaluated = attachSwitchRead(state, key, evaluated, dist, params.opponentModel!);
+      if (!params.search) return decide(evaluated, riskAversion, params);
+      const search = { ...DEFAULT_SEARCH_PARAMS, ...params.search };
+      return searchDecide(
+        { state, key, riskAversion, params: plainParams, search, policy: searchPolicy(riskAversion, plainParams), opponent: dist },
+        evaluated,
+      );
     });
   });
   if (!decision) return { action: { kind: "move", move: STRUGGLE_MOVE }, scored: [] };
@@ -143,14 +139,12 @@ export function chooseAiForcedSwitch(
   decisionParams?: Partial<DecisionParams>,
 ): number | undefined {
   const params = paramsFor(decisionParams);
-  return withModelToggles(params, () => {
-    return withThreatModel(threatModelOf(params), () => {
-      const switches = evaluateOptions(state, key).filter((o) => o.optionType === "switch");
-      if (switches.length === 0) return undefined;
-      const best = switches
-        .map((option) => ({ option, score: scoreOption({ ...option, optionType: "move" }, riskAversion, params) }))
-        .reduce((a, b) => (b.score > a.score ? b : a));
-      return best.option.toIndex;
-    });
+  return withThreatModel(threatModelOf(params), () => {
+    const switches = evaluateOptions(state, key).filter((o) => o.optionType === "switch");
+    if (switches.length === 0) return undefined;
+    const best = switches
+      .map((option) => ({ option, score: scoreOption({ ...option, optionType: "move" }, riskAversion, params) }))
+      .reduce((a, b) => (b.score > a.score ? b : a));
+    return best.option.toIndex;
   });
 }

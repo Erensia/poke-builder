@@ -72,7 +72,6 @@ src/
 │                스피드/내구 조정(speedTable·bulkAdjust)·HP 눈금(hpMagic)·조사 자동 판별·로컬 저장(storage.ts, 팩토리 기반)
 │  └─ battle/    다중 턴 배틀 시뮬레이터(ver.1.5에 8개 파일로 분리) — state/switching/
 │                hitResolution/preHitEffects/mirroredEffects/resolveAction/runTurn/finishTurn.ts
-│                (battleSimulator.ts는 공개 표면만 재export하는 얇은 배럴로 유지)
 │     └─ ai/     배틀 AI(ver.1.7) — evaluator(옵션 평가)·decision(HP 교환 점수식)·opponentMoveModel
 │                (상대 기술 확률 모델)·partyEval(파티 대면표)·moveDamage·hitsToKill(처치 타수 DP)·
 │                turnRates(턴 종료 효과)·statusMoveEffects·protectMoves 등

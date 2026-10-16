@@ -16,7 +16,7 @@ const BADLY_POISONED_MAX_TURNS = 15;
 
 /**
  * 타입에 따른 상태이상 면역 (사용자 확인): 전기=마비, 독/강철=독·맹독, 불꽃=화상, 얼음=얼음 면역.
- * 쾌청 날씨의 얼음 면역(타입이 아니라 날씨 조건)은 별도 — battleSimulator.ts의 inflictsStatus 처리에서
+ * 쾌청 날씨의 얼음 면역(타입이 아니라 날씨 조건)은 별도 — 배틀 엔진의 inflictsStatus 처리에서
  * state.weather === "쾌청"이면 얼음을 걸지 않도록 따로 분기한다(이 함수는 타입 기준 면역만 다룸).
  */
 export function isImmuneToStatus(
@@ -133,7 +133,7 @@ export function computeStatusSpeedMultiplier(condition: StatusCondition | null, 
   return condition === "paralysis" ? 0.5 : 1;
 }
 
-export interface StatusActionCheckResult {
+interface StatusActionCheckResult {
   /** 이번 턴 행동이 막혔는지 */
   blocked: boolean;
   /** 잠듦/얼음이 이번 판정에서 풀렸거나 해제 카운터가 늘어났으면 갱신된 상태. 그 외엔 입력과 동일 */

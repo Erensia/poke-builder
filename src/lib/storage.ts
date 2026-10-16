@@ -188,7 +188,7 @@ const MATCHUP_STORAGE_KEY = "champions-party-sim.matchup.v1";
  * 저장 형태: 두 탭이 공유하는 슬롯·날씨·필드(useMatchup)와 역산 탭의 입력(inference — 형태·검증은 DefenseInferencePanel이 맡는다).
  * 쓰는 쪽이 둘이라 save는 일부만 받아 합쳐 쓴다.
  */
-export interface MatchupDraft {
+interface MatchupDraft {
   version: 1;
   attacker?: unknown;
   defender?: unknown;

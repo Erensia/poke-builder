@@ -13,7 +13,7 @@
   gap: 0.5rem;
   flex: 1 1 320px;
   max-width: 640px;
-  font-size: 0.82rem;
+  font-size: var(--fs-sm);
 }
 
 .speedtab-summary,
@@ -23,7 +23,7 @@
 }
 
 .speedtab-note {
-  font-size: 0.74rem;
+  font-size: var(--fs-xs);
 }
 
 .speedtab-summary strong {
@@ -36,7 +36,7 @@
   margin: 0;
   padding: 0;
   border: 1px solid var(--glass-border);
-  border-radius: 10px;
+  border-radius: var(--r-md);
   background: var(--surface-2);
   overflow: hidden;
 }
@@ -68,10 +68,10 @@
   min-height: var(--speedtab-icon);
   padding: 0;
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   background: transparent;
   font: inherit;
-  font-size: 0.7rem;
+  font-size: var(--fs-xs);
   color: var(--text);
   cursor: pointer;
 }
@@ -93,7 +93,7 @@
   right: 0;
   bottom: 0;
   font-style: normal;
-  font-size: 0.65rem;
+  font-size: var(--fs-xs);
   line-height: 1;
   color: var(--text);
   text-shadow: 0 0 2px var(--surface-2), 0 0 2px var(--surface-2);
@@ -128,7 +128,7 @@
   position: absolute;
   inset: -0.6rem;
   z-index: -1;
-  border-radius: 16px;
+  border-radius: var(--r-xl);
   background: var(--env-tint, transparent);
   transition: background 0.3s ease;
   pointer-events: none;
@@ -171,7 +171,7 @@
 /* 3.6 T2 — 상대 단계별 추월·포인트 조정 */
 .speedtab-title {
   margin: 0;
-  font-size: 0.95rem;
+  font-size: var(--fs-lg);
   font-weight: 700;
 }
 
@@ -185,13 +185,13 @@
   gap: 0.35rem;
   padding: 0.55rem 0.7rem;
   border: 1px solid var(--glass-border);
-  border-radius: 10px;
+  border-radius: var(--r-md);
   background: var(--surface-2);
 }
 
 .speedtab-head {
   margin: 0;
-  font-size: 0.9rem;
+  font-size: var(--fs-md);
 }
 
 .speedtab-head small {
@@ -211,7 +211,7 @@
 .speedtab-group-label,
 .speedtab-group > summary {
   flex: 0 0 auto;
-  font-size: 0.74rem;
+  font-size: var(--fs-xs);
   font-weight: 600;
   color: var(--text-muted);
 }
@@ -259,10 +259,10 @@
 .speedtab-target-btn {
   padding: 0.3rem 0.7rem;
   border: 1px solid var(--glass-border);
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   background: var(--surface-2);
   font: inherit;
-  font-size: 0.8rem;
+  font-size: var(--fs-sm);
   color: var(--text);
   cursor: pointer;
 }
@@ -270,7 +270,7 @@
 .speedtab-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.78rem;
+  font-size: var(--fs-sm);
   font-variant-numeric: tabular-nums;
 }
 
@@ -287,7 +287,7 @@
 
 .speedtab-table td small {
   display: block;
-  font-size: 0.66rem;
+  font-size: var(--fs-xs);
   color: var(--text-muted);
 }
 
@@ -304,12 +304,12 @@
   margin: 0;
   padding: 0.4rem 0.7rem;
   border: 1px solid var(--glass-border);
-  border-radius: 10px;
+  border-radius: var(--r-md);
   background: var(--surface);
   -webkit-backdrop-filter: blur(var(--glass-blur));
   backdrop-filter: blur(var(--glass-blur));
   box-shadow: var(--glass-shadow);
-  font-size: 0.8rem;
+  font-size: var(--fs-sm);
   color: var(--text-muted);
 }
 
@@ -319,7 +319,7 @@
   flex-direction: column;
   gap: 0.4rem;
   padding: 0.6rem 0.8rem;
-  border-radius: 10px;
+  border-radius: var(--r-md);
   background: var(--surface-2);
 }
 
@@ -358,6 +358,7 @@
   max-width: calc(var(--bulk-card) * 2 + 1.25rem);
 }
 
+/* 640px는 760px 표준 분기점과 별개로 일괄 탭 카드 폭 기준 — 760으로 합치면 641~760px에서 레이아웃이 달라져 4.0 D4에서 유지 */
 @media (max-width: 640px) {
   .bulktab-board .speedtab-result {
     max-width: var(--bulk-card);

@@ -2,7 +2,6 @@ import { type FighterKey } from "@/types/battle";
 import { opponentKey, sideOf, type BattleState } from "../state";
 import { chainParams, paramsFor, type DecisionParams } from "./decision";
 import { createPartyModel, partyMatchValue } from "./partyEval";
-import { withModelToggles } from "./modelToggles";
 
 /**
  * 3선출 AI(ver.1.8 로드맵 7, 결정 레이어 §4-13): 팀 프리뷰처럼 상대 빌드 전체는 알고 상대 선출은 모르는 상태에서, 내 선출
@@ -10,7 +9,7 @@ import { withModelToggles } from "./modelToggles";
  * 평균과 최악을 섞어 점수로 삼고, 상위권에서 소프트맥스로 고른다.
  */
 
-export interface TeamSelectOptions {
+interface TeamSelectOptions {
   decisionParams?: Partial<DecisionParams>;
   random?: () => number;
   /** 선출 인원(기본 3) */
@@ -68,19 +67,17 @@ export function chooseAiSelection(state: BattleState, key: FighterKey, options: 
   const theirs = candidatesOf(oppCount, size);
   // 상대 자발적 교체 갈래는 끈다 — 3600판 가까운 대전을 한 번에 재야 해서 켜면 약 4초, 끄면 약 1초(선출 판단엔 근사로 충분)
   const chain = { ...chainParams(params), oppSwitch: undefined, mySwitch: undefined };
-  const scored = withModelToggles(params, () => {
-    const model = createPartyModel(state, key);
-    return mine.map((candidate) => {
-      const myHp = hpFor(myCount, candidate.members);
-      let sum = 0;
-      let worst = Infinity;
-      for (const opp of theirs) {
-        const value = partyMatchValue(model, myHp, hpFor(oppCount, opp.members), candidate.lead, opp.lead, chain);
-        sum += value;
-        worst = Math.min(worst, value);
-      }
-      return { candidate, score: MEAN_WEIGHT * (sum / theirs.length) + (1 - MEAN_WEIGHT) * worst };
-    });
+  const model = createPartyModel(state, key);
+  const scored = mine.map((candidate) => {
+    const myHp = hpFor(myCount, candidate.members);
+    let sum = 0;
+    let worst = Infinity;
+    for (const opp of theirs) {
+      const value = partyMatchValue(model, myHp, hpFor(oppCount, opp.members), candidate.lead, opp.lead, chain);
+      sum += value;
+      worst = Math.min(worst, value);
+    }
+    return { candidate, score: MEAN_WEIGHT * (sum / theirs.length) + (1 - MEAN_WEIGHT) * worst };
   });
   const best = Math.max(...scored.map((s) => s.score));
   const weights = scored.map((s) => Math.exp((s.score - best) / SELECT_TEMPERATURE));

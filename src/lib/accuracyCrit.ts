@@ -74,7 +74,7 @@ export function critChance(stage: number = NEUTRAL_CRIT_STAGE, highCritRatio = f
   return CRIT_CHANCE_TABLE[effectiveStage];
 }
 
-export interface ApplyStatusStagesOptions {
+interface ApplyStatusStagesOptions {
   /** 조건부 효과(저주 등) 판정에 쓸, 기술을 사용한 쪽의 실제 타입 */
   userTypes?: PokemonType[];
   /** 확률부여 효과를 포함할지. 기본 true(적중한다고 가정) */

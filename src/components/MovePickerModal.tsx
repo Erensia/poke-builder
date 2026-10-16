@@ -45,7 +45,7 @@ export function MovePickerModal({
       <input
         type="text"
         className="picker-search"
-        placeholder="기술 이름으로 검색"
+        aria-label="기술 이름으로 검색" placeholder="기술 이름으로 검색"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         autoFocus

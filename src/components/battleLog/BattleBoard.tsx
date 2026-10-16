@@ -7,8 +7,12 @@ import { PokemonAvatarWithItem } from "../PokemonAvatarWithItem";
 import { TYPE_COLORS } from "../../lib/typeColors";
 import { rankStageMultiplier } from "../../lib/battlePower";
 import { VOLATILE_LABELS, SCREEN_LABELS } from "../../lib/battleLogLabels";
+import { SIDE_NAME } from "../../lib/battleLogText";
 import { eunNeun } from "../../lib/josa";
-import { forcedLockedAction, isRecharging, isTrappedFromSwitching, type BattleSide, type BattleState, type FighterKey, type TurnResult } from "../../lib/battleSimulator";
+import { forcedLockedAction, isRecharging } from "../../lib/battle/lockedAction";
+import { isTrappedFromSwitching } from "../../lib/battle/switching";
+import type { BattleSide, BattleState } from "../../lib/battle/state";
+import type { FighterKey, TurnResult } from "../../types/battle";
 import type { StatusCondition } from "../../types/status";
 import type { BaseStats } from "../../types/stats";
 import type { Pokemon } from "../../types/pokemon";
@@ -54,7 +58,6 @@ export function BattleBoard({
   setLockWarning,
   log,
   battleBoardBackground,
-  fighterLabel,
   activeMoveIds,
   choiceLockedMoveId,
   battleSide,
@@ -95,7 +98,6 @@ export function BattleBoard({
   setLockWarning: Dispatch<SetStateAction<string | null>>;
   log: TurnResult[];
   battleBoardBackground: (state: BattleState) => string | undefined;
-  fighterLabel: (state: BattleState, key: FighterKey) => string;
   activeMoveIds: (side: Side) => (string | null)[];
   choiceLockedMoveId: (side: Side) => string | null;
   battleSide: (side: Side) => BattleSide | undefined;
@@ -112,6 +114,10 @@ export function BattleBoard({
   playTurn: () => void;
   resetToSetup: () => void;
 }) {
+  // 턴 종료 줄의 AI HP 수치를 %로 바꾸는 데 쓰는 종 id → 최대 HP (로그의 activePokemonIds는 slot.pokemonId 기준)
+  const aiMaxHp = aiSide
+    ? Object.fromEntries((battleSide(aiSide)?.party ?? []).map((f) => [f.slot.pokemonId, f.maxHp]))
+    : undefined;
   return (
     <>
     <div className="battle-board" style={{ background: battleBoardBackground(battleState) }}>
@@ -329,7 +335,9 @@ export function BattleBoard({
                   <span className="battle-status-tag is-major">멸망 {fighter.perishCount}</span>
                 )}
                 {fighter.substituteHp !== undefined && (
-                  <span className="battle-status-tag is-volatile">대타 HP {fighter.substituteHp}</span>
+                  <span className="battle-status-tag is-volatile">
+                    {side === aiSide ? "대타" : `대타 HP ${fighter.substituteHp}`}
+                  </span>
                 )}
                 {fighter.unburdenActive && (
                   <span className="battle-status-tag is-volatile">곡예(스피드 2배)</span>
@@ -343,7 +351,8 @@ export function BattleBoard({
               />
             </div>
             <div className="battle-hp-numbers">
-              {fighter.currentHp} / {fighter.maxHp}
+              {/* 상대(AI)는 실수치로 최대 HP·능력치를 역산하지 못하게 비율만 보여준다. 올림해서 생존 중엔 0%가 안 되게 */}
+              {side === aiSide ? `${Math.ceil(hpPercent)}%` : `${fighter.currentHp} / ${fighter.maxHp}`}
             </div>
 
             {/* 2.3 B2: 배틀타워에서 상대(AI) 실능치는 숨기고, 그 자리에 상대 파티 6마리를 이미지로
@@ -574,7 +583,7 @@ export function BattleBoard({
                     fighter.megaStone &&
                     !battleSide(side)?.megaUsed &&
                     !fighter.hasMegaEvolved && (
-                      <label className="battle-mega-toggle">
+                      <label className="toggle-pill battle-mega-toggle">
                         <input
                           type="checkbox"
                           checked={megaDeclared[side]}
@@ -718,7 +727,7 @@ export function BattleBoard({
     {winner ? (
       <>
         <div className={`battle-result-banner${winner === "draw" ? " is-draw" : ""}`}>
-          {winner === "draw" ? "🤝 무승부! 양쪽 다 기절했어요" : `🏆 ${fighterLabel(battleState, winner)} 승리!`}
+          {winner === "draw" ? "🤝 무승부! 양쪽 다 기절했어요" : `🏆 ${SIDE_NAME[winner]} 승리!`}
           <button type="button" className="battle-reset-button" onClick={seriesNext ? seriesNext.onNext : resetToSetup}>
             {seriesNext ? seriesNext.label : "대전 이어하기"}
           </button>
@@ -757,7 +766,7 @@ export function BattleBoard({
       </>
     )}
 
-    <BattleTurnLog log={log} />
+    <BattleTurnLog log={log} aiSide={aiSide} aiMaxHp={aiMaxHp} />
     </>
   );
 }

@@ -221,7 +221,7 @@ function leafValue(
  * 탐색 오라클 결정. 하드 오버라이드(확정 처치)는 평가식 그대로 먼저, 점수가 −∞인 선택지는 후보에서 뺀다.
  * 후보가 하나뿐이면 롤아웃하지 않는다.
  */
-export interface SearchContext {
+interface SearchContext {
   state: BattleState;
   key: FighterKey;
   riskAversion: number;

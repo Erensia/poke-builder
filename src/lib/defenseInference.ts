@@ -140,7 +140,7 @@ export interface FormView {
   bulkSpecial?: BulkEstimate | null;
 }
 
-export interface FormBase {
+interface FormBase {
   form: string;
   label: string;
   baseStats: BaseStats;
@@ -212,7 +212,7 @@ export interface InferenceResult {
  * 후보(HP·방어·특방 포인트 × 성격 묶음)별 가능도 캐시 — 결합 되풀이(`inferCombined`)처럼 **같은 관측**으로 성격·포인트 합 제한만 바꿔 여러 번 부를 때
  * 후보 하나의 가능도가 그대로라 다시 계산하지 않는다(3.6 I1-a). 관측·상대 종·가정이 바뀌면 새로 만들어야 한다.
  */
-export interface LikelihoodCache {
+interface LikelihoodCache {
   /** [hp][def][spd][성격 묶음 칸] 가능도 — 음수는 아직 계산하지 않음 */
   values: Float64Array;
   /** 성격 묶음 key(`방어배율|특방배율`) → 칸 번호 */

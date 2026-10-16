@@ -156,20 +156,20 @@ export function SamplePartiesModal({
         <div className="sample-party-save">
           <strong>{loadTargetLabel}를 내 샘플로 저장</strong>
           <div className="preset-save-row">
-            <input type="text" className="preset-save-input" placeholder="이름" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
+            <input type="text" className="preset-save-input" aria-label="이름" placeholder="이름" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
             <select className="preset-save-input sample-party-save-group" value={draft.group} onChange={(e) => setDraft({ ...draft, group: e.target.value as SamplePartyPreset["group"] })} aria-label="분류">
               <option value="textbook">기초샘플</option>
               <option value="real">심화샘플</option>
             </select>
           </div>
           <div className="preset-save-row">
-            <input type="text" className="preset-save-input" placeholder="성향(예: 날씨(쾌청))" value={draft.style} onChange={(e) => setDraft({ ...draft, style: e.target.value })} />
+            <input type="text" className="preset-save-input" aria-label="성향(예: 날씨(쾌청))" placeholder="성향(예: 날씨(쾌청))" value={draft.style} onChange={(e) => setDraft({ ...draft, style: e.target.value })} />
           </div>
           <div className="preset-save-row">
             <input
               type="text"
               className="preset-save-input"
-              placeholder="설명"
+              aria-label="설명" placeholder="설명"
               value={draft.description}
               onChange={(e) => setDraft({ ...draft, description: e.target.value })}
               onKeyDown={(e) => {
@@ -243,7 +243,7 @@ export function SamplePartiesModal({
       <input
         type="text"
         className="preset-search-input"
-        placeholder="파티 이름·포켓몬으로 검색"
+        aria-label="파티 이름·포켓몬으로 검색" placeholder="파티 이름·포켓몬으로 검색"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
       />

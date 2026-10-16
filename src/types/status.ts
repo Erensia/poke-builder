@@ -119,7 +119,7 @@ export interface VolatileInflictEffect {
   chance?: number;
 }
 
-export interface VolatileConditionEntry {
+interface VolatileConditionEntry {
   /** 이번 판정 이후 몇 턴 더 남았는지. 0 이하가 되면 제거된다 */
   turnsRemaining: number;
   /** 사슬묶기(막힌 기술)·앙코르(강제된 기술)·난동(이어 쓰는 기술) 전용 — 대상 기술 id. 그 외 volatile은 사용하지 않는다 */

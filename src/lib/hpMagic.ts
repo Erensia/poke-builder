@@ -7,7 +7,7 @@
 import { getEffectiveness } from "./typeEffectiveness";
 import type { PokemonType } from "../types/pokemon-type";
 
-export interface HpRule {
+interface HpRule {
   label: string;
   mod: number;
   rem: number;
@@ -16,16 +16,16 @@ export interface HpRule {
 }
 
 /** 강한 조건 순 — HP가 만족하는 규칙 수가 곧 등급(4 = 16n+15) */
-export const HP_CHAIN: HpRule[] = [
+const HP_CHAIN: HpRule[] = [
   { label: "16n+15", mod: 16, rem: 15, effects: "스텔스록(반감)·화상·모래바람·맹독·먹다남은음식" },
   { label: "8n+7", mod: 8, rem: 7, effects: "스텔스록(등배)·독·씨뿌리기" },
   { label: "4n+3", mod: 4, rem: 3, effects: "스텔스록(약점 2배)·자뭉열매·대타출동(4n은 피하기)" },
   { label: "홀수", mod: 2, rem: 1, effects: "스텔스록(약점 4배)·배북·철제광선·저주(고스트)" },
 ];
 
-export const HP_ORB_RULE: HpRule = { label: "10n+9", mod: 10, rem: 9, effects: "생명의구슬 반동" };
+const HP_ORB_RULE: HpRule = { label: "10n+9", mod: 10, rem: 9, effects: "생명의구슬 반동" };
 
-export interface HpMark {
+interface HpMark {
   points: number;
   hp: number;
   /** 만족하는 사슬 규칙(강한 순) — 길이가 등급 */
@@ -43,7 +43,7 @@ export function hpMarks(baseHp: number, maxPoints: number): HpMark[] {
   }).filter((m) => m.chain.length > 0 || m.orb);
 }
 
-export interface MarkInfoRow {
+interface MarkInfoRow {
   label: string;
   effects: string;
   /** 슬롯의 도구·기술에 해당하는 조건 */

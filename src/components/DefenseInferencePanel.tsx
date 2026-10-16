@@ -568,7 +568,7 @@ function SpeedConditionsEditor({
       <summary>조건{active.length > 0 ? ` · ${active.join(", ")}` : " (기본)"}</summary>
       <div className="dinf-speed-checks">
         {checks.map(([key, label]) => (
-          <label key={key} className="dinf-crit">
+          <label key={key} className="toggle-pill">
             <input type="checkbox" checked={cond[key] as boolean} onChange={(e) => onChange({ [key]: e.target.checked })} />
             {label}
           </label>
@@ -615,13 +615,13 @@ function SpeedConditionsEditor({
       {(myQuickFeet || (cond.oppAbilityId === "속보" && !megaRow)) && (
         <div className="dinf-speed-checks">
           {myQuickFeet && (
-            <label className="dinf-crit">
+            <label className="toggle-pill">
               <input type="checkbox" checked={cond.myOtherStatus} onChange={(e) => onChange({ myOtherStatus: e.target.checked })} />
               내 상태이상 (속보 ×1.5)
             </label>
           )}
           {cond.oppAbilityId === "속보" && !megaRow && (
-            <label className="dinf-crit">
+            <label className="toggle-pill">
               <input type="checkbox" checked={cond.oppOtherStatus} onChange={(e) => onChange({ oppOtherStatus: e.target.checked })} />
               상대 상태이상 (속보 ×1.5)
             </label>
@@ -629,7 +629,7 @@ function SpeedConditionsEditor({
         </div>
       )}
       {cond.oppAbilityId === "곡예" && !megaRow && (
-        <label className="dinf-check">
+        <label className="toggle-pill">
           <input type="checkbox" checked={cond.oppUnburden} onChange={(e) => onChange({ oppUnburden: e.target.checked })} />
           <span>곡예 발동 후 (도구를 잃어 상대 스피드 ×2)</span>
         </label>
@@ -710,7 +710,8 @@ function ResultView({
   );
 }
 
-export function DefenseInferencePanel({
+/** DefenseInferencePanel의 상태·핸들러 — 화면(JSX)이 쓰는 값만 돌려준다 */
+function useDefenseInferenceState({
   attackerCard,
   attacker,
   defender,
@@ -1018,197 +1019,14 @@ export function DefenseInferencePanel({
     return null;
   }
 
+  return { weather, field, attackerCard, defenderPokemon, defenderForm, dragOverClass, dropProps, defenderActions, dragProps, defender, hasDealtRows, activeAbilityId, setAbilityId, anyMega, abilityOptions, itemId, setItemId, defStage, setDefStage, spdStage, setSpdStage, tolerant, setTolerant, hasReceivedRows, activeAtkAbilityId, setAtkAbilityId, anyMegaReceived, atkAbilityOptions, atkItemId, setAtkItemId, atkStage, setAtkStage, spaStage, setSpaStage, oppBurned, setOppBurned, rows, rowMessage, megas, attackerPokemon, changeKind, updateRow, setMovePickerRow, removeRow, setToxicTurn, updateCond, speedAbilityOptions, anyMegaSpeed, myQuickFeet, addRow, onReset, myMaxHp, pending, attackPending, speedPending, result, attackResult, speedResult, rowIdsByObservation, receivedRowNos, combined, speedRowNos, complete, myScreen, movePickerRow, attacker };
+}
+
+/** DefenseInferencePanel의 일부 화면 — 세션(useDefenseInferenceState 결과)에서 필요한 값만 꺼내 쓴다 */
+function ObservationsSection({ s }: { s: ReturnType<typeof useDefenseInferenceState> }) {
+  const { rows, rowMessage, megas, defenderPokemon, attackerPokemon, changeKind, updateRow, setMovePickerRow, removeRow, setToxicTurn, updateCond, speedAbilityOptions, anyMegaSpeed, myQuickFeet, addRow, onReset, myMaxHp, hasReceivedRows } = s;
   return (
-    <div className="dinf">
-      <p className="dinf-intro">
-        내 포켓몬이 상대를 때린 뒤 상대 HP가 몇 %가 됐는지 입력하면, 상대의 <strong>HP·방어(특방) 능력 포인트와 성격</strong>이 될 수 있는 범위를 좁혀 줘요.
-        반대로 상대가 나를 때려서 내 HP가 얼마가 됐는지 입력하면 상대의 <strong>공격(특공) 포인트와 성격 보정</strong>도 좁힐 수 있어요(내 HP는 정확한 수치라 더 정밀해요).
-        이번 턴 누가 먼저 움직였는지(<strong>선후공</strong>)를 넣으면 상대의 <strong>스피드 포인트와 성격 보정</strong>을 좁혀요.
-        데미지에는 난수가 있어서, 정답 하나가 아니라 <strong>가능한 범위</strong>로 보여 줍니다.
-      </p>
-
-      <div className="dinf-board" style={{ background: environmentTintBackground(weather, field) }}>
-        {attackerCard}
-
-        {defenderPokemon && defenderForm ? (
-          <div className={`matchup-slot matchup-slot-filled dinf-defender${dragOverClass}`} {...dropProps}>
-            <span className="matchup-slot-label">상대 포켓몬</span>
-            <button type="button" className="matchup-slot-clear" onClick={defenderActions.onClear} aria-label="상대 비우기">
-              ✕
-            </button>
-            <button type="button" className="matchup-slot-main" onClick={defenderActions.onPickPokemon} {...dragProps}>
-              <PokemonAvatar
-                pokemon={defenderPokemon}
-                size={42}
-                radius={11}
-                gradientTypes={defenderForm.types}
-                className="matchup-slot-avatar"
-                form={{ activeMegaForm: undefined, formVariant: defender.formVariant, sizeForm: defender.sizeForm, cosmeticForm: defender.cosmeticForm, item: null }}
-              />
-              <span className="matchup-slot-info">
-                <span className="matchup-slot-name">{defenderPokemon.name}</span>
-                <span className="matchup-slot-types">
-                  {defenderForm.types.map((t) => (
-                    <TypeBadge key={t} type={t} />
-                  ))}
-                </span>
-              </span>
-            </button>
-            {(defenderPokemon.formVariants || defenderPokemon.sizeForms) && (
-              <div className="dinf-defender-forms">
-                {defenderPokemon.formVariants && (
-                  <button type="button" onClick={defenderActions.onCycleFormVariant}>
-                    폼 바꾸기{defenderForm.formLabel ? ` (${defenderForm.formLabel})` : ""}
-                  </button>
-                )}
-                {defenderPokemon.sizeForms && (
-                  <button type="button" onClick={defenderActions.onCycleSizeForm}>
-                    크기 바꾸기{defenderForm.formLabel ? ` (${defenderForm.formLabel})` : ""}
-                  </button>
-                )}
-              </div>
-            )}
-            <div className="dinf-defender-base">
-              <span>
-                종족값 HP <strong>{defenderForm.baseStats.hp}</strong>
-              </span>
-              <span>
-                방어 <strong>{defenderForm.baseStats.def}</strong>
-              </span>
-              <span>
-                특방 <strong>{defenderForm.baseStats.spd}</strong>
-              </span>
-              <span>
-                스피드 <strong>{defenderForm.baseStats.spe}</strong>
-              </span>
-            </div>
-            <p className="dinf-unknown">
-              역산 대상: <strong>HP · 방어 · 특방 · 공격 · 특공 · 스피드 포인트, 성격</strong>
-            </p>
-          </div>
-        ) : (
-          <div className={`matchup-slot matchup-slot-empty dinf-defender${dragOverClass}`} {...dropProps}>
-            <span className="matchup-slot-label">상대 포켓몬</span>
-            <button type="button" className="matchup-slot-empty-main" onClick={defenderActions.onPickPokemon}>
-              <span className="matchup-slot-plus" aria-hidden="true">
-                +
-              </span>
-              <span className="matchup-slot-empty-text">상대 포켓몬 선택</span>
-            </button>
-          </div>
-        )}
-      </div>
-
-      <section className="dinf-section">
-        <h3>가정 · 조건</h3>
-        {hasDealtRows && (
-          <>
-        <div className="dinf-conditions">
-          <label>
-            상대 특성
-            <select value={activeAbilityId} onChange={(e) => setAbilityId(e.target.value)} disabled={!defenderPokemon}>
-              <option value="">{anyMega ? "모름 (메가 전 관측에 적용)" : "모름 (방어 특성 없음으로 가정)"}</option>
-              {abilityOptions.map((id) => (
-                <option key={id} value={id}>
-                  {getAbility(id)?.name ?? id}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            상대 도구
-            <select value={anyMega ? "" : itemId} onChange={(e) => setItemId(e.target.value)} disabled={anyMega}>
-              <option value="">{anyMega ? "메가스톤 (반감 열매 사용 불가)" : "모름 (도구 없음으로 가정)"}</option>
-              {DEFENSE_ITEM_CANDIDATES.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {getItem(item.id)?.name ?? item.id}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            상대 방어 랭크
-            <select value={defStage} onChange={(e) => setDefStage(Number(e.target.value))}>
-              {STAGE_OPTIONS.map((s) => (
-                <option key={s} value={s}>
-                  {s > 0 ? `+${s}` : s}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            상대 특방 랭크
-            <select value={spdStage} onChange={(e) => setSpdStage(Number(e.target.value))}>
-              {STAGE_OPTIONS.map((s) => (
-                <option key={s} value={s}>
-                  {s > 0 ? `+${s}` : s}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-        <label className="dinf-check">
-          <input type="checkbox" checked={tolerant} onChange={(e) => setTolerant(e.target.checked)} />
-          <span>여유 있게 보기 (화면 %를 ±1%까지 허용 — 게임의 % 표시 방식이 다를 때 대비)</span>
-        </label>
-          </>
-        )}
-        {hasReceivedRows && (
-          <>
-            <h4 className="dinf-subhead">내가 받은 데미지 관측용 가정</h4>
-            <div className="dinf-conditions">
-              <label>
-                상대 공격 보정 특성
-                <select value={activeAtkAbilityId} onChange={(e) => setAtkAbilityId(e.target.value)} disabled={!defenderPokemon}>
-                  <option value="">{anyMegaReceived ? "모름 (메가 전 관측에 적용)" : "모름 (보정 특성 없음으로 가정)"}</option>
-                  {atkAbilityOptions.map((id) => (
-                    <option key={id} value={id}>
-                      {getAbility(id)?.name ?? id}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                상대 공격 보정 도구
-                <select value={anyMegaReceived ? "" : atkItemId} onChange={(e) => setAtkItemId(e.target.value)} disabled={anyMegaReceived}>
-                  <option value="">{anyMegaReceived ? "메가스톤 (보정 도구 사용 불가)" : "모름 (보정 도구 없음으로 가정)"}</option>
-                  {ATTACK_ITEM_CANDIDATES.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {getItem(item.id)?.name ?? item.id}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                상대 공격 랭크
-                <select value={atkStage} onChange={(e) => setAtkStage(Number(e.target.value))}>
-              {STAGE_OPTIONS.map((st) => (
-                <option key={st} value={st}>
-                  {st > 0 ? `+${st}` : st}
-                </option>
-              ))}
-                </select>
-              </label>
-              <label>
-                상대 특공 랭크
-                <select value={spaStage} onChange={(e) => setSpaStage(Number(e.target.value))}>
-              {STAGE_OPTIONS.map((st) => (
-                <option key={st} value={st}>
-                  {st > 0 ? `+${st}` : st}
-                </option>
-              ))}
-                </select>
-              </label>
-            </div>
-            <label className="dinf-check">
-              <input type="checkbox" checked={oppBurned} onChange={(e) => setOppBurned(e.target.checked)} />
-              <span>상대가 화상 (물리 공격 반감 — 근성·객기는 예외)</span>
-            </label>
-          </>
-        )}
-        <p className="dinf-note">날씨·필드는 위쪽 선택기 값을, 내 랭크·특성·도구는 내 포켓몬 카드 값을 그대로 써요.</p>
-      </section>
-
+    <>
       <section className="dinf-section">
         <h3>관측</h3>
         <ol className="dinf-rows">
@@ -1303,7 +1121,7 @@ export function DefenseInferencePanel({
                       />
                       <span>{received ? "HP" : "%"}</span>
                     </span>
-                    <label className="dinf-crit">
+                    <label className="toggle-pill">
                       <input type="checkbox" checked={row.critical} onChange={(e) => updateRow(row.id, { critical: e.target.checked })} />
                       급소
                     </label>
@@ -1320,6 +1138,7 @@ export function DefenseInferencePanel({
                     <span className="dinf-endturn-title">{hasNext ? "턴 종료 효과" : "맞은 직후 효과"}</span>
                     {END_TURN_EFFECTS.filter((e) => hasNext || e.id === "sitrus").map((e) => (
                       <label
+                        className="toggle-pill"
                         key={e.id}
                         title={
                           itemLocked && ITEM_END_TURN_IDS.includes(e.id)
@@ -1339,7 +1158,7 @@ export function DefenseInferencePanel({
                       </label>
                     ))}
                     {hasNext && (
-                    <label>
+                    <label className="toggle-pill">
                       <input type="checkbox" checked={toxicTurn > 0} onChange={(ev) => setToxicTurn(row, ev.target.checked ? 1 : 0)} />
                       맹독
                     </label>
@@ -1388,6 +1207,226 @@ export function DefenseInferencePanel({
           선후공은 우선도가 같은 기술끼리 누가 먼저 움직였는지만 넣고, 그 턴의 조건(트릭룸·순풍·마비·상대 랭크 등)은 줄의 “조건”에서 골라 주세요. 새 줄은 직전 선후공 줄의 조건을 이어받아요.
         </p>
       </section>
+    </>
+  );
+}
+
+/** DefenseInferencePanel의 일부 화면 — 세션(useDefenseInferenceState 결과)에서 필요한 값만 꺼내 쓴다 */
+function AssumptionsSection({ s }: { s: ReturnType<typeof useDefenseInferenceState> }) {
+  const { hasDealtRows, activeAbilityId, setAbilityId, defenderPokemon, anyMega, abilityOptions, itemId, setItemId, defStage, setDefStage, spdStage, setSpdStage, tolerant, setTolerant, hasReceivedRows, activeAtkAbilityId, setAtkAbilityId, anyMegaReceived, atkAbilityOptions, atkItemId, setAtkItemId, atkStage, setAtkStage, spaStage, setSpaStage, oppBurned, setOppBurned } = s;
+  return (
+    <>
+      <section className="dinf-section">
+        <h3>가정 · 조건</h3>
+        {hasDealtRows && (
+          <>
+        <div className="dinf-conditions">
+          <label>
+            상대 특성
+            <select value={activeAbilityId} onChange={(e) => setAbilityId(e.target.value)} disabled={!defenderPokemon}>
+              <option value="">{anyMega ? "모름 (메가 전 관측에 적용)" : "모름 (방어 특성 없음으로 가정)"}</option>
+              {abilityOptions.map((id) => (
+                <option key={id} value={id}>
+                  {getAbility(id)?.name ?? id}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            상대 도구
+            <select value={anyMega ? "" : itemId} onChange={(e) => setItemId(e.target.value)} disabled={anyMega}>
+              <option value="">{anyMega ? "메가스톤 (반감 열매 사용 불가)" : "모름 (도구 없음으로 가정)"}</option>
+              {DEFENSE_ITEM_CANDIDATES.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {getItem(item.id)?.name ?? item.id}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            상대 방어 랭크
+            <select value={defStage} onChange={(e) => setDefStage(Number(e.target.value))}>
+              {STAGE_OPTIONS.map((s) => (
+                <option key={s} value={s}>
+                  {s > 0 ? `+${s}` : s}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            상대 특방 랭크
+            <select value={spdStage} onChange={(e) => setSpdStage(Number(e.target.value))}>
+              {STAGE_OPTIONS.map((s) => (
+                <option key={s} value={s}>
+                  {s > 0 ? `+${s}` : s}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <label className="toggle-pill">
+          <input type="checkbox" checked={tolerant} onChange={(e) => setTolerant(e.target.checked)} />
+          <span>여유 있게 보기 (화면 %를 ±1%까지 허용 — 게임의 % 표시 방식이 다를 때 대비)</span>
+        </label>
+          </>
+        )}
+        {hasReceivedRows && (
+          <>
+            <h4 className="dinf-subhead">내가 받은 데미지 관측용 가정</h4>
+            <div className="dinf-conditions">
+              <label>
+                상대 공격 보정 특성
+                <select value={activeAtkAbilityId} onChange={(e) => setAtkAbilityId(e.target.value)} disabled={!defenderPokemon}>
+                  <option value="">{anyMegaReceived ? "모름 (메가 전 관측에 적용)" : "모름 (보정 특성 없음으로 가정)"}</option>
+                  {atkAbilityOptions.map((id) => (
+                    <option key={id} value={id}>
+                      {getAbility(id)?.name ?? id}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                상대 공격 보정 도구
+                <select value={anyMegaReceived ? "" : atkItemId} onChange={(e) => setAtkItemId(e.target.value)} disabled={anyMegaReceived}>
+                  <option value="">{anyMegaReceived ? "메가스톤 (보정 도구 사용 불가)" : "모름 (보정 도구 없음으로 가정)"}</option>
+                  {ATTACK_ITEM_CANDIDATES.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {getItem(item.id)?.name ?? item.id}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                상대 공격 랭크
+                <select value={atkStage} onChange={(e) => setAtkStage(Number(e.target.value))}>
+              {STAGE_OPTIONS.map((st) => (
+                <option key={st} value={st}>
+                  {st > 0 ? `+${st}` : st}
+                </option>
+              ))}
+                </select>
+              </label>
+              <label>
+                상대 특공 랭크
+                <select value={spaStage} onChange={(e) => setSpaStage(Number(e.target.value))}>
+              {STAGE_OPTIONS.map((st) => (
+                <option key={st} value={st}>
+                  {st > 0 ? `+${st}` : st}
+                </option>
+              ))}
+                </select>
+              </label>
+            </div>
+            <label className="toggle-pill">
+              <input type="checkbox" checked={oppBurned} onChange={(e) => setOppBurned(e.target.checked)} />
+              <span>상대가 화상 (물리 공격 반감 — 근성·객기는 예외)</span>
+            </label>
+          </>
+        )}
+        <p className="dinf-note">날씨·필드는 위쪽 선택기 값을, 내 랭크·특성·도구는 내 포켓몬 카드 값을 그대로 써요.</p>
+      </section>
+    </>
+  );
+}
+
+export function DefenseInferencePanel({
+  attackerCard,
+  attacker,
+  defender,
+  defenderActions,
+  onSwapDrop,
+  weather,
+  field,
+  onReset,
+}: DefenseInferencePanelProps) {
+  const session = useDefenseInferenceState({ attackerCard, attacker, defender, defenderActions, onSwapDrop, weather, field, onReset });
+  const { defenderPokemon, defenderForm, dragOverClass, dropProps, dragProps, hasDealtRows, activeAbilityId, anyMega, itemId, tolerant, hasReceivedRows, activeAtkAbilityId, anyMegaReceived, atkItemId, atkStage, spaStage, oppBurned, rows, attackerPokemon, updateRow, setMovePickerRow, pending, attackPending, speedPending, result, attackResult, speedResult, rowIdsByObservation, receivedRowNos, combined, speedRowNos, complete, myScreen, movePickerRow } = session;
+
+
+  return (
+    <div className="dinf">
+      <p className="dinf-intro">
+        내 포켓몬이 상대를 때린 뒤 상대 HP가 몇 %가 됐는지 입력하면, 상대의 <strong>HP·방어(특방) 능력 포인트와 성격</strong>이 될 수 있는 범위를 좁혀 줘요.
+        반대로 상대가 나를 때려서 내 HP가 얼마가 됐는지 입력하면 상대의 <strong>공격(특공) 포인트와 성격 보정</strong>도 좁힐 수 있어요(내 HP는 정확한 수치라 더 정밀해요).
+        이번 턴 누가 먼저 움직였는지(<strong>선후공</strong>)를 넣으면 상대의 <strong>스피드 포인트와 성격 보정</strong>을 좁혀요.
+        데미지에는 난수가 있어서, 정답 하나가 아니라 <strong>가능한 범위</strong>로 보여 줍니다.
+      </p>
+
+      <div className="dinf-board" style={{ background: environmentTintBackground(weather, field) }}>
+        {attackerCard}
+
+        {defenderPokemon && defenderForm ? (
+          <div className={`matchup-slot matchup-slot-filled dinf-defender${dragOverClass}`} {...dropProps}>
+            <span className="matchup-slot-label">상대 포켓몬</span>
+            <button type="button" className="matchup-slot-clear" onClick={defenderActions.onClear} aria-label="상대 비우기">
+              ✕
+            </button>
+            <button type="button" className="matchup-slot-main" onClick={defenderActions.onPickPokemon} {...dragProps}>
+              <PokemonAvatar
+                pokemon={defenderPokemon}
+                size={42}
+                radius={11}
+                gradientTypes={defenderForm.types}
+                className="matchup-slot-avatar"
+                form={{ activeMegaForm: undefined, formVariant: defender.formVariant, sizeForm: defender.sizeForm, cosmeticForm: defender.cosmeticForm, item: null }}
+              />
+              <span className="matchup-slot-info">
+                <span className="matchup-slot-name">{defenderPokemon.name}</span>
+                <span className="matchup-slot-types">
+                  {defenderForm.types.map((t) => (
+                    <TypeBadge key={t} type={t} />
+                  ))}
+                </span>
+              </span>
+            </button>
+            {(defenderPokemon.formVariants || defenderPokemon.sizeForms) && (
+              <div className="dinf-defender-forms">
+                {defenderPokemon.formVariants && (
+                  <button type="button" onClick={defenderActions.onCycleFormVariant}>
+                    폼 바꾸기{defenderForm.formLabel ? ` (${defenderForm.formLabel})` : ""}
+                  </button>
+                )}
+                {defenderPokemon.sizeForms && (
+                  <button type="button" onClick={defenderActions.onCycleSizeForm}>
+                    크기 바꾸기{defenderForm.formLabel ? ` (${defenderForm.formLabel})` : ""}
+                  </button>
+                )}
+              </div>
+            )}
+            <div className="dinf-defender-base">
+              <span>
+                종족값 HP <strong>{defenderForm.baseStats.hp}</strong>
+              </span>
+              <span>
+                방어 <strong>{defenderForm.baseStats.def}</strong>
+              </span>
+              <span>
+                특방 <strong>{defenderForm.baseStats.spd}</strong>
+              </span>
+              <span>
+                스피드 <strong>{defenderForm.baseStats.spe}</strong>
+              </span>
+            </div>
+            <p className="dinf-unknown">
+              역산 대상: <strong>HP · 방어 · 특방 · 공격 · 특공 · 스피드 포인트, 성격</strong>
+            </p>
+          </div>
+        ) : (
+          <div className={`matchup-slot matchup-slot-empty dinf-defender${dragOverClass}`} {...dropProps}>
+            <span className="matchup-slot-label">상대 포켓몬</span>
+            <button type="button" className="matchup-slot-empty-main" onClick={defenderActions.onPickPokemon}>
+              <span className="matchup-slot-plus" aria-hidden="true">
+                +
+              </span>
+              <span className="matchup-slot-empty-text">상대 포켓몬 선택</span>
+            </button>
+          </div>
+        )}
+      </div>
+
+      <AssumptionsSection s={session} />
+
+      <ObservationsSection s={session} />
 
       <section className="dinf-section dinf-result-section" aria-live="polite">
         <h3>

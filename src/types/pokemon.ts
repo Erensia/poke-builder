@@ -40,7 +40,7 @@ export type PokemonGender = "male" | "female";
  * baseStats/weightKg를 덮어쓴다. `standard: true`인 항목이 종의 기준값(Pokemon.baseStats와 동일)이며,
  * slot.sizeForm이 없으면 이 기준 크기로 취급한다.
  */
-export interface SizeForm {
+interface SizeForm {
   /** 크기 변종 고유 id (예: "small" | "medium" | "large" | "super") */
   id: string;
   /** 표시 라벨 ("소과종" 등) */
@@ -105,7 +105,7 @@ export interface CosmeticForm {
  *  - "genderless": 성별 개념이 없음(강철/에스퍼 무생물 모티브, 전설 등). 헤롱헤롱류는 이 종에
  *    아예 걸리지 않는다.
  */
-export type PokemonGenderCategory = "both" | "male-only" | "female-only" | "genderless";
+type PokemonGenderCategory = "both" | "male-only" | "female-only" | "genderless";
 
 export interface Pokemon {
   id: string;

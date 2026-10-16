@@ -3,7 +3,7 @@
   display: inline-flex;
   gap: 0.25rem;
   padding: 0.25rem;
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   background: var(--surface-2);
   border: 1px solid var(--border);
   margin-bottom: 0.5rem;
@@ -11,10 +11,10 @@
 
 .sample-party-filters button {
   font: inherit;
-  font-size: 0.78rem;
+  font-size: var(--fs-sm);
   padding: 0.3rem 0.85rem;
   border: none;
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;
@@ -22,13 +22,13 @@
 
 .sample-party-filters button.is-active {
   background: var(--gradient);
-  color: #fff;
+  color: var(--on-color);
   font-weight: 600;
 }
 
 .sample-party-hint {
   margin: 0 0 0.7rem;
-  font-size: 0.72rem;
+  font-size: var(--fs-xs);
   line-height: 1.5;
   color: var(--text-muted);
 }
@@ -39,10 +39,10 @@
 
 .sample-party-tag {
   margin-left: 0.45rem;
-  font-size: 0.66rem;
+  font-size: var(--fs-xs);
   font-weight: 600;
   padding: 0.1rem 0.45rem;
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   vertical-align: middle;
 }
 
@@ -59,7 +59,7 @@
 
 .sample-party-style {
   margin-left: 0.4rem;
-  font-size: 0.7rem;
+  font-size: var(--fs-xs);
   font-weight: 400;
   color: var(--text-muted);
 }
@@ -67,7 +67,7 @@
 .sample-party-desc {
   display: block;
   margin-top: 0.2rem;
-  font-size: 0.74rem;
+  font-size: var(--fs-xs);
   line-height: 1.45;
   color: var(--text-muted);
 }
@@ -85,7 +85,7 @@
   flex-direction: column;
   gap: 0.45rem;
   margin-bottom: 0.8rem;
-  font-size: 0.8rem;
+  font-size: var(--fs-sm);
 }
 
 .sample-party-save .preset-save-row {
@@ -99,7 +99,7 @@
 
 .sample-party-save-note {
   color: var(--text-muted);
-  font-size: 0.72rem;
+  font-size: var(--fs-xs);
 }
 
 /* 내 샘플 백업(3.2 V3) — 내보내기/가져오기 */
@@ -114,9 +114,9 @@
 .sample-party-backup button,
 .sample-party-backup label {
   font: inherit;
-  font-size: 0.78rem;
+  font-size: var(--fs-sm);
   padding: 0.3rem 0.85rem;
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   border: 1px solid var(--border);
   background: var(--surface-2);
   color: var(--text);
@@ -129,6 +129,6 @@
 }
 
 .sample-party-backup span {
-  font-size: 0.72rem;
+  font-size: var(--fs-xs);
   color: var(--text-muted);
 }

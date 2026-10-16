@@ -4,7 +4,7 @@
   -webkit-backdrop-filter: blur(var(--glass-blur));
   backdrop-filter: blur(var(--glass-blur));
   border: 1px solid var(--glass-border);
-  border-radius: 14px;
+  border-radius: var(--r-lg);
   box-shadow: var(--glass-shadow);
   padding: 0.85rem 1rem;
   width: 280px;
@@ -16,7 +16,7 @@
   top: 0.6rem;
   left: 0.85rem;
   font-family: var(--display);
-  font-size: 0.7rem;
+  font-size: var(--fs-xs);
   font-weight: 700;
   letter-spacing: 0.04em;
   color: var(--text-muted);
@@ -57,7 +57,7 @@
 }
 
 .matchup-slot-empty-text {
-  font-size: 0.8rem;
+  font-size: var(--fs-sm);
   font-weight: 500;
 }
 
@@ -65,7 +65,7 @@
   border: none;
   background: transparent;
   color: var(--text-muted);
-  font-size: 0.68rem;
+  font-size: var(--fs-xs);
   text-decoration: underline;
   cursor: pointer;
   padding: 0;
@@ -92,7 +92,7 @@
   border: none;
   background: var(--surface-2);
   color: var(--text-muted);
-  font-size: 0.64rem;
+  font-size: var(--fs-xs);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -126,12 +126,12 @@
 .matchup-slot-avatar {
   width: 42px;
   height: 42px;
-  border-radius: 11px;
+  border-radius: var(--r-md);
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #fff;
+  color: var(--on-color);
   font-family: var(--display);
   font-weight: 700;
   font-size: 1.15rem;
@@ -146,7 +146,7 @@
 
 .matchup-slot-name {
   font-weight: 700;
-  font-size: 1.05rem;
+  font-size: var(--fs-lg);
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
@@ -155,12 +155,12 @@
 
 .matchup-slot-mega-tag {
   font-family: var(--display);
-  font-size: 0.62rem;
+  font-size: var(--fs-xs);
   font-weight: 700;
-  color: #fff;
+  color: var(--on-color);
   background: var(--gradient);
   padding: 0.05rem 0.4rem;
-  border-radius: 4px;
+  border-radius: var(--r-xs);
 }
 
 .matchup-slot-types {
@@ -180,19 +180,19 @@
   align-items: center;
   gap: 0.1rem;
   background: var(--surface-2);
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   padding: 0.35rem 0.1rem;
 }
 
 .matchup-stat-label {
-  font-size: 0.62rem;
+  font-size: var(--fs-xs);
   color: var(--text-muted);
 }
 
 .matchup-stat-value {
   font-family: var(--display);
   font-weight: 700;
-  font-size: 0.92rem;
+  font-size: var(--fs-md);
   font-variant-numeric: tabular-nums;
 }
 
@@ -210,7 +210,7 @@
 }
 
 .matchup-stat-stage {
-  font-size: 0.6rem;
+  font-size: var(--fs-xs);
   font-weight: 700;
   margin-left: 0.15rem;
   vertical-align: super;
@@ -229,9 +229,9 @@
   border: 1px solid var(--border);
   background: transparent;
   color: var(--text);
-  border-radius: 7px;
+  border-radius: var(--r-sm);
   padding: 0.3rem 0.5rem;
-  font-size: 0.7rem;
+  font-size: var(--fs-xs);
   cursor: pointer;
   min-width: 0;
 }
@@ -287,9 +287,9 @@
   border: 1px solid var(--border);
   background: var(--surface-2);
   color: var(--text);
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   padding: 0.4rem 0.7rem;
-  font-size: 0.82rem;
+  font-size: var(--fs-sm);
   font-weight: 600;
   cursor: pointer;
 }
@@ -301,24 +301,24 @@
 
 .matchup-move-pip.has-type {
   border-color: transparent;
-  color: #fff;
+  color: var(--on-color);
   text-shadow: 0 1px 1px rgba(0, 0, 0, 0.25);
 }
 
 .matchup-move-pip.has-type:hover {
-  color: #fff;
+  color: var(--on-color);
   filter: brightness(1.1);
   border-color: transparent;
 }
 
 .matchup-power-readout {
-  font-size: 0.82rem;
+  font-size: var(--fs-sm);
   color: var(--text-muted);
 }
 
 .matchup-power-readout strong {
   font-family: var(--display);
-  font-size: 1.05rem;
+  font-size: var(--fs-lg);
   color: var(--text);
   font-variant-numeric: tabular-nums;
   margin-left: 0.2rem;
@@ -329,7 +329,7 @@
 }
 
 .matchup-power-caveat {
-  font-size: 0.68rem;
+  font-size: var(--fs-xs);
   color: var(--text-muted);
 }
 
@@ -343,9 +343,9 @@
   border: 1px solid var(--border);
   background: var(--surface-2);
   color: var(--text-muted);
-  border-radius: 6px;
+  border-radius: var(--r-sm);
   padding: 0.2rem 0.55rem;
-  font-size: 0.75rem;
+  font-size: var(--fs-xs);
   font-weight: 600;
   cursor: pointer;
 }
@@ -371,24 +371,9 @@
   border-top: 1px dashed var(--border);
 }
 
-.matchup-assume-toggle {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-size: 0.72rem;
-  color: var(--text-muted);
-  cursor: pointer;
-}
-
-.matchup-assume-toggle input {
-  cursor: pointer;
-  accent-color: var(--violet);
-  margin: 0;
-}
-
 .matchup-assume-hint {
   margin: 0;
-  font-size: 0.66rem;
+  font-size: var(--fs-xs);
   line-height: 1.4;
   color: var(--text-muted);
 }
@@ -400,7 +385,7 @@
 }
 
 .matchup-assume-grave-label {
-  font-size: 0.72rem;
+  font-size: var(--fs-xs);
   color: var(--text-muted);
   flex-shrink: 0;
 }
@@ -410,6 +395,20 @@
   .matchup-slot {
     width: 100%;
     max-width: 320px;
+  }
+
+  /* 4.0 D4 — ✕ 버튼을 손가락 타깃으로(22→30px, 아래 coarse 블록에서 터치 영역 44px 근처까지) */
+  .matchup-slot-clear {
+    width: 30px;
+    height: 30px;
+  }
+}
+
+@media (pointer: coarse) {
+  .matchup-slot-clear::after {
+    content: '';
+    position: absolute;
+    inset: -7px;
   }
 }
 
@@ -421,4 +420,11 @@
 .matchup-hp-slider {
   width: 100%;
   accent-color: var(--violet);
+}
+
+/* 도구 강탈·곡예·급소 가정 토글을 한 줄에(4.0 D2) */
+.matchup-toggle-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
 }

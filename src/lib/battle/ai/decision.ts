@@ -100,17 +100,6 @@ export interface DecisionParams {
   mySwitchMargin: number;
   mySwitchLimit: number;
   /**
-   * 턴 종료 효과(ver.1.8) — 대면 턴 수에 먹다남은음식·그래스필드·모래바람·날씨 특성·속박·소금절이·자뭉/오랭열매를 센다.
-   * false면 이전 동작(비교용). 평가·점수 계산 전체를 withEndOfTurnModel로 감싸 적용한다(index.ts).
-   */
-  endOfTurnAware: boolean;
-  /** 급소 기대 데미지(ver.1.9 6-2) — 처치 턴 수에 급소 확률을 섞는다. false면 이전 동작(비교용), withCritModel로 적용(index.ts) */
-  critAware: boolean;
-  /** 교체 봉쇄 판단(ver.1.9 6-3) — 그림자꿰매기 가두기 가치·배수의진 자기 봉쇄 비용. false면 이전 동작(비교용), withTrapModel(index.ts) */
-  trapMoveAware: boolean;
-  /** 확률 턴 종료 효과(ver.1.9 6-4) — 탈피·수확을 대면 턴 수에 기대값으로. false면 이전 동작(비교용), withChanceEffectsModel */
-  chanceEffectsAware: boolean;
-  /**
    * 탐색 오라클(ver.2.0 0단계): 켜면 후보 행동마다 엔진으로 롤아웃해 고른다(search.ts). 시뮬레이터 측정 전용 — 기본 끔(undefined).
    * 값은 DEFAULT_SEARCH_PARAMS 위에 덮어쓸 부분.
    */
@@ -180,10 +169,6 @@ export const DEFAULT_DECISION_PARAMS: DecisionParams = {
   mySwitchAware: true,
   mySwitchMargin: 0.1,
   mySwitchLimit: 1,
-  endOfTurnAware: true,
-  critAware: true,
-  trapMoveAware: true,
-  chanceEffectsAware: true,
   healGainWeight: 1,
   switchLostTurns: 1,
   stalemateSwitchMargin: 1,
@@ -306,7 +291,7 @@ function switchInValue(candidate: AiOption, lost: number, params: DecisionParams
  * 지속 턴 효과면 원래 대면표 + 효과 대면표·남은 턴을 함께 넘긴다(§4-5 ②).
  */
 /** §4-5 ② 효과 종류(partyEffectKinds) */
-export type PartyEffectCategory = "selfBoost" | "hazard" | "field" | "status" | "oppVolatile" | "oppStages" | "protect" | "other";
+type PartyEffectCategory = "selfBoost" | "hazard" | "field" | "status" | "oppVolatile" | "oppStages" | "protect" | "other";
 
 const CATEGORY_OF_KIND: Partial<Record<EffectMoveKind, PartyEffectCategory>> = {
   acupressure: "selfBoost",

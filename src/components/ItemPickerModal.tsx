@@ -42,7 +42,7 @@ export function ItemPickerModal({
       <input
         type="text"
         className="picker-search"
-        placeholder="도구 이름으로 검색"
+        aria-label="도구 이름으로 검색" placeholder="도구 이름으로 검색"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         autoFocus

@@ -8,10 +8,10 @@ import { abilityOf, statusImmunitiesOf, type BattleFighterState } from "./state"
  */
 
 /** 교환·덮어쓰기·무효화가 안 되는 특성 — 폼 변화 특성과 일루전 */
-export const FIXED_ABILITY_IDS: ReadonlySet<string> = new Set(["일루전", "배틀스위치", "탈", "마이티체인지"]);
+const FIXED_ABILITY_IDS: ReadonlySet<string> = new Set(["일루전", "배틀스위치", "탈", "마이티체인지"]);
 
 /** 복사(역할·트레이스)·건네기(동료만들기)의 원본이 될 수 없는 특성 */
-export const UNCOPYABLE_ABILITY_IDS: ReadonlySet<string> = new Set([...FIXED_ABILITY_IDS, "트레이스", "괴짜", "리시버"]);
+const UNCOPYABLE_ABILITY_IDS: ReadonlySet<string> = new Set([...FIXED_ABILITY_IDS, "트레이스", "괴짜", "리시버"]);
 
 export function isFixedAbility(abilityId: string | null | undefined): boolean {
   return !!abilityId && FIXED_ABILITY_IDS.has(abilityId);

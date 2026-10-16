@@ -1,5 +1,5 @@
 import { type ReactNode } from "react";
-import { type HitAbilityEvent } from "../../lib/battleSimulator";
+import type { HitAbilityEvent } from "../../types/battle";
 import { STAT_LABELS } from "../../lib/statLabels";
 import { eunNeun, iGa, eulReul, waGwa, roEuro } from "../../lib/josa";
 import { VOLATILE_LABELS } from "../../lib/battleLogLabels";
@@ -39,7 +39,7 @@ export function abilityVolatileLine(
 
 export function abilityDamageLine(
   abilityName: string | undefined,
-  damage: number,
+  damage: number | string,
   actorName: string,
   defenderName: string,
 ): ReactNode {
@@ -185,6 +185,7 @@ export function hitAbilityEventLines(
   actorName: string,
   defenderName: string,
   keyPrefix: string,
+  actorHp: (n: number) => number | string = (n) => n,
 ): ReactNode[] {
   const lines: ReactNode[] = [];
   const push = (node: ReactNode) =>
@@ -201,7 +202,7 @@ export function hitAbilityEventLines(
     push(abilityVolatileLine(ev.abilityName, ev.volatileOnAttacker, actorName, defenderName));
   }
   if (ev.damageToAttacker) {
-    push(abilityDamageLine(ev.abilityName, ev.damageToAttacker, actorName, defenderName));
+    push(abilityDamageLine(ev.abilityName, actorHp(ev.damageToAttacker), actorName, defenderName));
   }
   if (ev.loweredDefenderStats?.length || ev.raisedDefenderStats?.length) {
     const { lowered, raised } = abilityDefenderStatsLines(

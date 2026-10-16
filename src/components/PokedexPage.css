@@ -8,14 +8,14 @@
 }
 
 .pokedex-page-header h2 {
-  font-size: 1.3rem;
+  font-size: var(--fs-2xl);
   margin-bottom: 0.3rem;
 }
 
 .pokedex-page-header p {
   margin: 0;
   color: var(--text-muted);
-  font-size: 0.82rem;
+  font-size: var(--fs-sm);
 }
 
 .pokedex-board {
@@ -36,7 +36,7 @@
   -webkit-backdrop-filter: blur(var(--glass-blur));
   backdrop-filter: blur(var(--glass-blur));
   border: 1px solid var(--glass-border);
-  border-radius: 14px;
+  border-radius: var(--r-lg);
   padding: 0.75rem;
   box-shadow: var(--glass-shadow);
   max-height: 680px;
@@ -48,19 +48,18 @@
 .pokedex-search {
   width: 100%;
   padding: 0.55rem 0.75rem;
-  border-radius: 10px;
+  border-radius: var(--r-md);
   border: 1px solid var(--glass-border);
   background: var(--surface-2);
   -webkit-backdrop-filter: blur(var(--glass-blur));
   backdrop-filter: blur(var(--glass-blur));
   box-shadow: var(--glass-shadow);
   color: var(--text);
-  font-size: 0.85rem;
+  font-size: var(--fs-md);
   flex-shrink: 0;
 }
 
 .pokedex-search:focus {
-  outline: none;
   border-color: var(--glass-focus-border);
 }
 
@@ -82,7 +81,7 @@
   border: 1px solid transparent;
   background: transparent;
   padding: 0.4rem 0.5rem;
-  border-radius: 10px;
+  border-radius: var(--r-md);
   cursor: pointer;
   text-align: left;
 }
@@ -104,14 +103,14 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #fff;
+  color: var(--on-color);
   font-weight: 700;
   font-size: 0.8rem;
   font-family: var(--display);
 }
 
 .pokedex-list-name {
-  font-size: 0.85rem;
+  font-size: var(--fs-md);
   font-weight: 600;
   flex: 1;
   overflow: hidden;
@@ -120,7 +119,7 @@
 }
 
 .pokedex-list-mega {
-  font-size: 0.65rem;
+  font-size: var(--fs-xs);
   color: var(--violet);
   font-weight: 600;
   flex-shrink: 0;
@@ -130,7 +129,7 @@
   padding: 1rem;
   text-align: center;
   color: var(--text-muted);
-  font-size: 0.85rem;
+  font-size: var(--fs-md);
 }
 
 /* 상세 패널 */
@@ -171,7 +170,7 @@
   -webkit-backdrop-filter: blur(var(--glass-blur));
   backdrop-filter: blur(var(--glass-blur));
   border: 1px solid var(--glass-border);
-  border-radius: 14px;
+  border-radius: var(--r-lg);
   padding: 1.25rem 1.4rem;
   box-shadow: var(--glass-shadow);
 }
@@ -180,7 +179,7 @@
   color: var(--text-muted);
   text-align: center;
   padding: 3rem 0;
-  font-size: 0.9rem;
+  font-size: var(--fs-md);
 }
 
 .pokedex-detail-head {
@@ -198,14 +197,14 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #fff;
+  color: var(--on-color);
   font-weight: 700;
   font-size: 1.35rem;
   font-family: var(--display);
 }
 
 .pokedex-detail-head h3 {
-  font-size: 1.15rem;
+  font-size: var(--fs-xl);
   margin-bottom: 0.35rem;
 }
 
@@ -223,7 +222,7 @@
 }
 
 .pokedex-detail-section h4 {
-  font-size: 0.8rem;
+  font-size: var(--fs-sm);
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--text-muted);
@@ -237,7 +236,7 @@
   font-weight: 400;
   text-transform: none;
   letter-spacing: 0;
-  font-size: 0.76rem;
+  font-size: var(--fs-xs);
 }
 
 /* 종족값 막대 */
@@ -253,7 +252,7 @@
   grid-template-columns: 3.2em 1fr 2.6em;
   align-items: center;
   gap: 0.5rem;
-  font-size: 0.82rem;
+  font-size: var(--fs-sm);
 }
 
 .pokedex-stat-label {
@@ -262,14 +261,14 @@
 
 .pokedex-stat-track {
   height: 8px;
-  border-radius: 4px;
+  border-radius: var(--r-xs);
   background: var(--surface-2);
   overflow: hidden;
 }
 
 .pokedex-stat-fill {
   height: 100%;
-  border-radius: 4px;
+  border-radius: var(--r-xs);
   background: var(--gradient);
 }
 
@@ -284,7 +283,7 @@
   justify-content: flex-end;
   gap: 0.4rem;
   margin-top: 0.15rem;
-  font-size: 0.82rem;
+  font-size: var(--fs-sm);
   color: var(--text-muted);
 }
 
@@ -297,7 +296,7 @@
 .pokedex-defense-empty {
   margin: 0;
   color: var(--text-muted);
-  font-size: 0.82rem;
+  font-size: var(--fs-sm);
 }
 
 .pokedex-defense-groups {
@@ -313,17 +312,17 @@
 }
 
 .pokedex-defense-label {
-  font-size: 0.72rem;
+  font-size: var(--fs-xs);
   font-weight: 700;
   padding: 0.1rem 0.5rem;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   flex-shrink: 0;
   width: 4.6em;
   text-align: center;
 }
 
 .pokedex-defense-label.is-quad {
-  color: #fff;
+  color: var(--on-color);
   background: var(--danger-strong);
 }
 
@@ -338,7 +337,7 @@
 }
 
 .pokedex-defense-label.is-quadresist {
-  color: #fff;
+  color: var(--on-color);
   background: var(--safe);
 }
 
@@ -366,21 +365,21 @@
 
 .pokedex-ability-list li {
   background: var(--surface-2);
-  border-radius: 10px;
+  border-radius: var(--r-md);
   padding: 0.55rem 0.8rem;
 }
 
 .pokedex-ability-list strong {
-  font-size: 0.88rem;
+  font-size: var(--fs-md);
 }
 
 .pokedex-hidden-tag {
   margin-left: 0.45rem;
-  font-size: 0.66rem;
+  font-size: var(--fs-xs);
   font-weight: 600;
   color: var(--violet);
   border: 1px solid var(--violet);
-  border-radius: 5px;
+  border-radius: var(--r-xs);
   padding: 0.05rem 0.35rem;
   vertical-align: middle;
 }
@@ -388,7 +387,7 @@
 .pokedex-ability-desc {
   margin: 0.3rem 0 0;
   color: var(--text-muted);
-  font-size: 0.8rem;
+  font-size: var(--fs-sm);
   line-height: 1.45;
 }
 
@@ -402,7 +401,7 @@
 
 .pokedex-mega-block {
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--r-lg);
   padding: 0.8rem 0.9rem;
   background: var(--violet-soft);
 }
@@ -419,11 +418,11 @@
 }
 
 .pokedex-mega-tag {
-  font-size: 0.72rem;
+  font-size: var(--fs-xs);
   font-weight: 700;
   color: var(--violet);
   border: 1px solid var(--violet);
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   padding: 0.1rem 0.45rem;
 }
 
@@ -434,14 +433,14 @@
 
 .pokedex-mega-ability {
   margin-bottom: 0.65rem;
-  font-size: 0.85rem;
+  font-size: var(--fs-md);
   display: flex;
   flex-direction: column;
   gap: 0.15rem;
 }
 
 .pokedex-meta-label {
-  font-size: 0.68rem;
+  font-size: var(--fs-xs);
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.03em;
@@ -457,9 +456,9 @@
 }
 
 .pokedex-form-tab {
-  font-size: 0.8rem;
+  font-size: var(--fs-sm);
   padding: 0.28rem 0.7rem;
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   border: 1.5px solid var(--border);
   background: var(--surface-2);
   color: var(--text);
@@ -486,9 +485,9 @@
 }
 
 .pokedex-move-chip {
-  font-size: 0.76rem;
+  font-size: var(--fs-xs);
   padding: 0.22rem 0.55rem;
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   border: 1.5px solid var(--border);
   background: var(--surface-2);
   color: var(--text);

@@ -21,7 +21,7 @@ export type MoveClassification =
   | "바람"
   | "가루";
 
-export interface StatChangeEffect {
+interface StatChangeEffect {
   target: "self" | "opponent";
   /** 기존 5스탯(atk/def/spa/spd/spe) + 명중률/회피율 + 급소율("critStage")까지 대상이 될 수 있다 */
   stat: EffectStatKey;
@@ -210,7 +210,7 @@ export interface Move {
    * "all-other-moves-used"(비장의무기 — 자신의 나머지 기술을 전부 한 번씩 사용하기 전까지는 실패.
    * 사용 여부는 BattleFighterState.usedMoveIds로 추적하며, 명중/빗나감과 무관하게 "그 기술로
    * 행동을 실제로 개시하면" 사용한 것으로 친다).
-   * 조건을 안 채우면 battleSimulator가 blockedReason: "usageCondition"으로 실패시킨다.
+   * 조건을 안 채우면 배틀 엔진이 blockedReason: "usageCondition"으로 실패시킨다.
    */
   usageCondition?:
     | "sleep-only"
@@ -481,7 +481,7 @@ export interface Move {
   setsTargetHpToUserHp?: boolean;
   /**
    * 기사회생(Reversal)·바둥바둥(Flail): 사용자의 현재 HP 비율에 따라 위력이 달라지는 기술.
-   * power는 이 표의 최고값과 무관하게 null로 두고, 이 플래그가 있으면 battleSimulator가 HP
+   * power는 이 표의 최고값과 무관하게 null로 두고, 이 플래그가 있으면 배틀 엔진이 HP
    * 비율로 위력을 정한다(reversalPowerFromHp 표 공유).
    */
   reversalPower?: boolean;
@@ -500,9 +500,9 @@ export interface Move {
    *    제외 — 본가 규칙)
    *  - "target-status-poisoned"(베놈쇼크): 상대가 독 또는 맹독 상태이면
    * 뒤의 두 조건(분풀이·분함의발구르기)은 현행 1v1 엔진에 "이번 턴/직전 턴 랭크변화·기술실패"
-   * 이력 상태가 없어 **battleSimulator에선 항상 미충족(기본 위력)**으로 처리하고,
+   * 이력 상태가 없어 **배틀 엔진에선 항상 미충족(기본 위력)**으로 처리하고,
    * **matchupEvaluator(결정력·내구력 페이지)에선 항상 충족(×2)으로 상정**한다(§3 증분 B-3, 사용자 지시).
-   * 객기·베놈쇼크는 battleSimulator엔 실제 상태이상 추적이 있어 정확히 판정되지만,
+   * 객기·베놈쇼크는 배틀 엔진엔 실제 상태이상 추적이 있어 정확히 판정되지만,
    * matchupEvaluator는 상태이상 개념 자체가 없는 1턴 스냅샷이라(ability.ts의
    * defenderHasStatusCondition 정책과 동일) 이 둘도 항상 미충족(기본 위력)으로 둔다.
    * 웨더볼(타입+위력)·질투의불꽃(조건부 화상)은 별개 축이라 여기 안 넣는다.

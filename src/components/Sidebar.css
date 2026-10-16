@@ -36,7 +36,7 @@
 .sidebar-logo-mark {
   width: 30px;
   height: 30px;
-  border-radius: 9px;
+  border-radius: var(--r-sm);
   background: var(--gradient);
   flex-shrink: 0;
 }
@@ -46,7 +46,7 @@
   flex-direction: column;
   font-family: var(--display);
   font-weight: 700;
-  font-size: 0.92rem;
+  font-size: var(--fs-md);
   letter-spacing: 0.04em;
   line-height: 1.2;
   background: var(--gradient);
@@ -69,7 +69,7 @@
 .sidebar-logo-text small {
   font-family: var(--sans);
   font-weight: 500;
-  font-size: 0.68rem;
+  font-size: var(--fs-xs);
   letter-spacing: 0.02em;
   color: var(--text-muted);
   -webkit-text-fill-color: var(--text-muted);
@@ -94,13 +94,13 @@
   border: none;
   background: transparent;
   color: var(--text-muted);
-  font-size: 0.88rem;
+  font-size: var(--fs-md);
   font-weight: 500;
   /* 접혔을 때는 레일 안쪽 폭(31px)에 맞춰 좌우 패딩을 작게 — 2.3rem처럼 큰 왼쪽 패딩을
      상시로 걸어두면 그 패딩값 자체가 좁은 레일 폭을 넘어버려서 버튼(=강조 배경) 박스가
      부모보다 넓어지고, 그 튀어나온 부분이 사이드바의 overflow:hidden에 잘려 보인다. */
   padding: 0 0.7rem;
-  border-radius: 9px;
+  border-radius: var(--r-sm);
   text-align: left;
   cursor: pointer;
   transition: background 0.15s ease, color 0.15s ease,
@@ -175,7 +175,7 @@
   align-items: center;
   justify-content: center;
   border: 1px solid var(--glass-border);
-  border-radius: 10px;
+  border-radius: var(--r-md);
   background: var(--surface);
   -webkit-backdrop-filter: blur(var(--glass-blur));
   backdrop-filter: blur(var(--glass-blur));

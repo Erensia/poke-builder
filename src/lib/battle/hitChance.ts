@@ -6,7 +6,7 @@ import { getItemAccuracyMultiplier } from "@/lib/itemEffects";
 import { hasVolatile } from "@/lib/volatileConditions";
 import { activeWeather, type BattleFighterState, type BattleState } from "./state";
 
-export interface BattleHitChanceInput {
+interface BattleHitChanceInput {
   state: BattleState;
   attacker: BattleFighterState;
   defender: BattleFighterState;

@@ -24,7 +24,7 @@ export interface OpponentMemory {
   species: Record<string, { seen: number; lastBattle: number; moves: Record<string, { actual: number; pred: number }> }>;
 }
 
-export const MEMORY_DECAY_PER_BATTLE = 0.99;
+const MEMORY_DECAY_PER_BATTLE = 0.99;
 const SWITCH_PRIOR = 0.15;
 const SWITCH_PRIOR_STRENGTH = 10;
 const STATUS_PRIOR_STRENGTH = 10;
@@ -39,7 +39,7 @@ export function emptyOpponentMemory(): OpponentMemory {
 }
 
 /** 관측 한 번에 필요한 것: 그 순간의 원래(보정 전) 추론 분포와 상대가 실제로 고른 행동 */
-export interface OpponentObservation {
+interface OpponentObservation {
   dist: LevelOneDistribution;
   speciesId: string;
   action: { kind: "switch" } | { kind: "move"; moveId: string; isStatus: boolean };

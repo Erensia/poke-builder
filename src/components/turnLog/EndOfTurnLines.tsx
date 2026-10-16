@@ -1,9 +1,9 @@
-import { type FighterKey, type TurnResult } from "../../lib/battleSimulator";
+import type { FighterKey, TurnResult } from "../../types/battle";
 import type { EndOfTurnLogEntry } from "../../types/battle";
 import { STAT_LABELS } from "../../lib/statLabels";
 import { eunNeun, iGa, eulReul } from "../../lib/josa";
 import { VOLATILE_LABELS, SCREEN_LABELS } from "../../lib/battleLogLabels";
-import { STATUS_ONSET_TEXT, STATUS_TRIGGER_TEXT, STATUS_CURE_TEXT } from "../../lib/battleLogText";
+import { SIDE_NAME, STATUS_ONSET_TEXT, STATUS_TRIGGER_TEXT, STATUS_CURE_TEXT } from "../../lib/battleLogText";
 
 /** 마이페이스·둔감이 턴 끝에 푼 행동방해(ver.2.0 틀깨기 목록 수정) */
 const ABILITY_CURED_VOLATILE_TEXT: Record<"confusion" | "attract" | "taunt", string> = {
@@ -246,7 +246,7 @@ export function TurnFooterLines({
       ))}
       {turn.winner && (
         <div className="battle-turn-line is-winner">
-          {turn.winner === "draw" ? "🤝 무승부!" : `🏆 ${turnName(turn.winner)} 승리!`}
+          {turn.winner === "draw" ? "🤝 무승부!" : `🏆 ${SIDE_NAME[turn.winner]} 승리!`}
         </div>
       )}
     </>

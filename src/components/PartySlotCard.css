@@ -4,7 +4,7 @@
   -webkit-backdrop-filter: blur(var(--glass-blur));
   backdrop-filter: blur(var(--glass-blur));
   border: 1px solid var(--glass-border);
-  border-radius: 14px;
+  border-radius: var(--r-lg);
   box-shadow: var(--glass-shadow);
   padding: 0.7rem 0.8rem;
   min-height: 178px;
@@ -28,7 +28,7 @@
   top: 0.55rem;
   left: 0.7rem;
   font-family: var(--display);
-  font-size: 0.7rem;
+  font-size: var(--fs-xs);
   font-weight: 700;
   color: var(--text-muted);
   letter-spacing: 0.04em;
@@ -71,7 +71,7 @@
 }
 
 .party-slot-empty-label {
-  font-size: 0.76rem;
+  font-size: var(--fs-xs);
   font-weight: 500;
 }
 
@@ -79,7 +79,7 @@
   border: none;
   background: transparent;
   color: var(--text-muted);
-  font-size: 0.68rem;
+  font-size: var(--fs-xs);
   text-decoration: underline;
   cursor: pointer;
   padding: 0;
@@ -112,7 +112,7 @@
   border: none;
   background: var(--surface-2);
   color: var(--text-muted);
-  font-size: 0.62rem;
+  font-size: var(--fs-xs);
   line-height: 1;
   cursor: pointer;
   display: flex;
@@ -136,7 +136,7 @@
   border: none;
   background: var(--surface-2);
   color: var(--text-muted);
-  font-size: 0.62rem;
+  font-size: var(--fs-xs);
   line-height: 1;
   cursor: pointer;
   display: flex;
@@ -161,7 +161,7 @@
   border: none;
   background: var(--surface-2);
   color: var(--text-muted);
-  font-size: 0.62rem;
+  font-size: var(--fs-xs);
   line-height: 1;
   cursor: pointer;
   display: flex;
@@ -183,7 +183,7 @@
   padding: 0.9rem 0 0;
   cursor: pointer;
   text-align: left;
-  border-radius: 10px;
+  border-radius: var(--r-md);
 }
 
 .party-slot-main:hover .party-slot-name {
@@ -193,12 +193,12 @@
 .party-slot-avatar {
   width: 36px;
   height: 36px;
-  border-radius: 10px;
+  border-radius: var(--r-md);
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #fff;
+  color: var(--on-color);
   font-family: var(--display);
   font-weight: 700;
   font-size: 1rem;
@@ -213,7 +213,7 @@
 
 .party-slot-name {
   font-weight: 600;
-  font-size: 0.92rem;
+  font-size: var(--fs-md);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -225,13 +225,13 @@
 
 .party-slot-mega-tag {
   font-family: var(--display);
-  font-size: 0.6rem;
+  font-size: var(--fs-xs);
   font-weight: 700;
   letter-spacing: 0.03em;
-  color: #fff;
+  color: var(--on-color);
   background: var(--gradient);
   padding: 0.05rem 0.35rem;
-  border-radius: 4px;
+  border-radius: var(--r-xs);
   flex-shrink: 0;
 }
 
@@ -250,9 +250,9 @@
   border: 1px solid var(--border);
   background: var(--surface-2);
   color: var(--text);
-  border-radius: 7px;
+  border-radius: var(--r-sm);
   padding: 0.3rem 0.4rem;
-  font-size: 0.7rem;
+  font-size: var(--fs-xs);
   font-weight: 500;
   cursor: pointer;
   white-space: nowrap;
@@ -273,12 +273,12 @@
 
 .party-move-pip.has-type {
   border-color: transparent;
-  color: #fff;
+  color: var(--on-color);
   text-shadow: 0 1px 1px rgba(0, 0, 0, 0.25);
 }
 
 .party-move-pip.has-type:hover {
-  color: #fff;
+  color: var(--on-color);
   filter: brightness(1.1);
   border-color: transparent;
 }
@@ -306,9 +306,9 @@
   border: 1px solid var(--border);
   background: transparent;
   color: var(--text);
-  border-radius: 7px;
+  border-radius: var(--r-sm);
   padding: 0.28rem 0.5rem;
-  font-size: 0.68rem;
+  font-size: var(--fs-xs);
   cursor: pointer;
   min-width: 0;
 }
@@ -341,9 +341,9 @@
   justify-content: space-between;
   gap: 0.3rem;
   background: var(--surface-2);
-  border-radius: 7px;
+  border-radius: var(--r-sm);
   padding: 0.28rem 0.5rem;
-  font-size: 0.68rem;
+  font-size: var(--fs-xs);
   min-width: 0;
 }
 
@@ -361,32 +361,33 @@
 }
 
 /* 모바일(≤760px): 코너 아이콘 버튼(✕ 슬롯 비우기 · 💾 샘플 저장)을 손가락 타깃으로 키운다
-   (백로그 §2-7, §2-3 B에서 보류했던 항목). 커진 만큼 이름 줄이 가리지 않게 오른쪽 여백 확보. */
+   (백로그 §2-7, §2-3 B에서 보류했던 항목). 커진 만큼 이름 줄이 가리지 않게 오른쪽 여백 확보.
+   4.0 D4 — 28→36px(+아래 coarse 블록의 터치 영역 확장으로 44px 근처). */
 @media (max-width: 760px) {
   .party-slot-clear,
   .party-slot-save-sample,
   .party-slot-swap {
-    width: 28px;
-    height: 28px;
-    font-size: 0.72rem;
+    width: 36px;
+    height: 36px;
+    font-size: var(--fs-xs);
   }
 
   .party-slot-save-sample {
-    right: calc(0.5rem + 28px + 6px);
+    right: calc(0.5rem + 36px + 6px);
   }
 
   /* ver.1.6 §4-3 — 종 변경 버튼도 데스크톱과 같은 규칙(버튼 하나 폭 + 여백)으로 이어 붙인다 */
   .party-slot-swap {
-    right: calc(0.5rem + 28px + 6px + 28px + 6px);
+    right: calc(0.5rem + 36px + 6px + 36px + 6px);
   }
 
   .party-slot-main {
-    padding-right: 4.2rem;
+    padding-right: 5.4rem;
   }
 
   /* ver.1.6 §4-3 — 배틀타워 편성 펼침 카드는 코너 아이콘이 3개(✕·💾·🔀)라 더 넓게 비운다 */
   .party-slot-main-has-swap {
-    padding-right: 6.3rem;
+    padding-right: 8rem;
   }
 }
 
@@ -396,5 +397,14 @@
     -webkit-touch-callout: none;
     -webkit-user-select: none;
     user-select: none;
+  }
+
+  /* 4.0 D4 — 코너 아이콘 터치 영역(36px 아이콘 → 세로 44px). 가로는 아이콘 간격(6px)의 절반씩만 넓혀 이웃과 겹치지 않게 */
+  .party-slot-clear::after,
+  .party-slot-save-sample::after,
+  .party-slot-swap::after {
+    content: '';
+    position: absolute;
+    inset: -4px -3px;
   }
 }
