@@ -358,6 +358,7 @@
   max-width: calc(var(--bulk-card) * 2 + 1.25rem);
 }
 
+/* 640px는 760px 표준 분기점과 별개로 일괄 탭 카드 폭 기준 — 760으로 합치면 641~760px에서 레이아웃이 달라져 4.0 D4에서 유지 */
 @media (max-width: 640px) {
   .bulktab-board .speedtab-result {
     max-width: var(--bulk-card);

@@ -27,6 +27,7 @@
   gap: 0.6rem;
 }
 
+/* 560px는 760px 표준 분기점이 아니라 모달 폭 기준(카드 2열이 좁아지는 지점) — 4.0 D4에서 유지하기로 확인 */
 @media (max-width: 560px) {
   .ai-memory-cards {
     grid-template-columns: 1fr;

@@ -315,3 +315,33 @@ button {
   opacity: 0;
   cursor: inherit;
 }
+
+/* 4.0 D4 — 터치 기기(pointer: coarse)에서 작은 칩·알약·탭 버튼의 눌리는 영역만 세로 44px 근처까지 넓힌다(모양·배치 불변).
+   overflow: hidden인 .party-move-pip·.dinf-stepper는 ::after가 잘려 제외. 새 칩/알약 클래스는 여기에 추가한다. */
+@media (pointer: coarse) {
+  :is(
+    .matchup-hitcount-pip, .party-meta-pip, .matchup-meta-pip, .matchup-move-pip, .chip-picker-chip,
+    .move-picker-chip, .dinf-nature-chip, .dinf-defender-forms button, .sample-party-filters button,
+    .matchup-tabs button, .movedex-category-tab, .pokedex-form-tab, .pokedex-move-chip,
+    .speedtab-target-btn, .points-step, .battle-select-num, .battle-input-toggle-btn,
+    .battle-ai-memory-chip, .preset-item-actions button, .party-board-reset, .movedex-sort-dir,
+    .modal-close, .info-tooltip-icon, .battle-video-toggle, .matchup-roll-toggle, .dinf-add,
+    .battle-setup-load-party, .party-slot-sample-link, .matchup-slot-sample-link, .toggle-pill
+  ) {
+    position: relative;
+  }
+
+  :is(
+    .matchup-hitcount-pip, .party-meta-pip, .matchup-meta-pip, .matchup-move-pip, .chip-picker-chip,
+    .move-picker-chip, .dinf-nature-chip, .dinf-defender-forms button, .sample-party-filters button,
+    .matchup-tabs button, .movedex-category-tab, .pokedex-form-tab, .pokedex-move-chip,
+    .speedtab-target-btn, .points-step, .battle-select-num, .battle-input-toggle-btn,
+    .battle-ai-memory-chip, .preset-item-actions button, .party-board-reset, .movedex-sort-dir,
+    .modal-close, .info-tooltip-icon, .battle-video-toggle, .matchup-roll-toggle, .dinf-add,
+    .battle-setup-load-party, .party-slot-sample-link, .matchup-slot-sample-link, .toggle-pill
+  )::after {
+    content: '';
+    position: absolute;
+    inset: -8px -2px;
+  }
+}
