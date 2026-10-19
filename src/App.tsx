@@ -22,7 +22,8 @@ function App() {
         <main className="app-main">
           {view === "party" && <PartyBoard />}
           {view === "matchup" && <MatchupPage />}
-          {view === "battle-log" && <BattleLogPage />}
+          {view === "battle-log" && <BattleLogPage mode="free" />}
+          {view === "rank-battle" && <BattleLogPage mode="rank" />}
           {view === "pokedex" && (
             <PokedexPage
               onSelectMove={(moveId) => {
