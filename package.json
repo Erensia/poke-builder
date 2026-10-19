@@ -14,7 +14,8 @@
     "bench": "node scripts/bench.mjs",
     "test:ai": "node scripts/battle-ai-scenarios.mjs",
     "test:inference": "node scripts/defense-inference-check.mjs",
-    "test:damage": "node scripts/damage-formula-check.mjs"
+    "test:damage": "node scripts/damage-formula-check.mjs",
+    "test:rank": "node scripts/rank-check.mjs"
   },
   "dependencies": {
     "react": "^19.2.8",

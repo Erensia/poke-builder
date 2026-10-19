@@ -52,6 +52,7 @@ npm run sprites  # public/sprites/ 스캔 → src/data/spriteManifest.json 재�
 npm run test:ai  # 배틀 AI·엔진 규칙 시나리오(실패 시 exit 1)
 npm run test:inference  # 상대 실능치 역산·내구 조정: 엔진 데미지 공식 대조 + 왕복·전수 검증(ver.2.1~)
 npm run test:damage     # 정수 데미지 공식 난수표 + 엔진 대조
+npm run test:rank       # 랭크배틀 규칙표(게이지·마스터볼 진입·레이팅·챔피언) 검증
 npm run validate:data   # 데이터 정합성 검사(build가 먼저 실행)
 npm run sim:ai -- regress   # 엔진 동작 불변 확인용 로그 해시(모드: regress|ai|greedy|h2h|diag|logidx)
 npm run bench -- compare <이전 체크아웃>   # AI 벤치(그리디·STATUS·h2h, 코어 수만큼 병렬 — toggle 모드는 켬/끔 비교)
