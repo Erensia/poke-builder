@@ -332,3 +332,23 @@ button {
     inset: -8px -2px;
   }
 }
+
+/* 시스템 "동작 줄이기"(4.1 A3) — 전체 움직임을 이 한 블록에서 조절한다. 새 transition·animation도 자동으로 걸린다.
+   - 전환(transition)은 끄지 않고 짧게만 한다(--reduced-transition). 딜레이는 그대로 둬서 "폭이 바뀐 뒤 글자가 나타난다" 같은 단계 순서가 유지된다.
+     (0.01ms로 끄고 딜레이까지 지웠더니 사이드바 단계 전환이 어색하고 모바일에서 깜빡였다.) 더 줄이려면 값만 낮춘다.
+   - 반복·키프레임 애니메이션은 끝낸다. 끝 상태를 직접 정해야 하는 것(우승 글로우·AI 생각 중 점 등)은 각 CSS의 reduce 블록에서 따로 정한다. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --reduced-transition: 0.08s;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0s !important;
+    transition-duration: var(--reduced-transition) !important;
+    scroll-behavior: auto !important;
+  }
+}
