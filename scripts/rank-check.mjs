@@ -73,6 +73,41 @@ try {
   check("2500 미만으로 내려가면 마스터볼 표시, 달성 이력·최대 레이팅은 유지", rankOf(c2).ball === "master" && c2.champion && c2.maxRating === 2500, show(c2));
   check("챔피언 도달 못 하면 달성 여부 false, 최대 레이팅만", !win(M(), 35).state.champion && win(M(), 35).state.maxRating === 1520);
 
+  // ── 저장·정산·시즌 (lib/battleRankSave.ts) ──
+  const { EMPTY_RANK_SAVE, isRankSave, beginRankMatch, finishRankMatch, settleAbandonedRank, resetSeason } = await server.ssrLoadModule("/src/lib/battleRankSave.ts");
+  const party = Array(6).fill(null);
+  const play = (save, won, now = 1000) => finishRankMatch(beginRankMatch(save, "s1", party, now), won ? { won: true, turns: 25 } : { won: false }, now + 1);
+
+  const b1 = beginRankMatch(EMPTY_RANK_SAVE, "s1", party, 1000);
+  check("판 시작: 진행 표시·사용 파티·시즌 시작 시각", b1.pendingId === "s1" && b1.lastParty === party && b1.seasonStartedAt === 1000);
+  check("시즌 시작 시각은 첫 판 때만 정해진다", beginRankMatch(play(b1, true), "s2", party, 5000).seasonStartedAt === 1000);
+  const f1 = play(EMPTY_RANK_SAVE, true);
+  check("승리 반영: 게이지·진행 표시 해제", f1.state.gauge === 1 && f1.pendingId === null);
+  const h = f1.history[0];
+  check("이력 한 줄: 상대·승·턴·변화·판 뒤 랭크", h.opponentId === "s1" && h.result === "win" && h.turns === 25 && h.change.kind === "gauge" && h.after.ball === "monster" && h.after.fill === 1 && h.rating === null && h.at === 1001, show(h));
+  check("진행 표시 없이 결과가 오면 그대로", finishRankMatch(EMPTY_RANK_SAVE, { won: false }, 1) === EMPTY_RANK_SAVE);
+  let many = EMPTY_RANK_SAVE;
+  for (let i = 0; i < 60; i++) many = play(many, i % 2 === 0, 1000 + i * 10);
+  check("이력은 최근 50판, 최신이 맨 앞", many.history.length === 50 && many.history[0].at === 1000 + 59 * 10 + 1 && many.history[49].at === 1000 + 10 * 10 + 1);
+  check("이력이 잘려도 승패수는 전부 센다", many.state.wins + many.state.losses === 60);
+  const ab = settleAbandonedRank(b1, 2000);
+  check("이탈 정산: 패배·연패 +1, 이력 abandon, 표시 해제", ab.state.losses === 1 && ab.state.lossStreak === 1 && ab.history[0].result === "abandon" && ab.pendingId === null);
+  check("진행 표시가 없으면 이탈 정산도 그대로", settleAbandonedRank(f1, 2000) === f1);
+
+  const nothing = resetSeason({ ...EMPTY_RANK_SAVE, seasons: [{ season: 1 }] }, 9000);
+  check("한 판도 안 한 시즌은 기록하지 않고, 이전 시즌은 유지", nothing.seasons.length === 1 && show(nothing.state) === show(EMPTY_RANK));
+  const played = play(play(play(EMPTY_RANK_SAVE, true), true), false);
+  const r1 = resetSeason(played, 9000);
+  const rec = r1.seasons[0];
+  check("시즌 기록: 번호·시작/끝·직전 랭크·최대·챔피언·승수·파티", rec.season === 1 && rec.startedAt === 1000 && rec.endedAt === 9000 && rec.finalRank.ball === "monster" && rec.finalRank.fill === 2 && rec.finalRating === null && rec.maxRating === 0 && !rec.champion && rec.wins === 2 && rec.party === party, show(rec));
+  check("초기화 뒤: 몬스터볼 4, 이력·시작 시각·파티 비움", show(r1.state) === show(EMPTY_RANK) && r1.history.length === 0 && r1.seasonStartedAt === null && r1.lastParty === null);
+  check("두 번째 시즌은 2시즌, 1시즌 기록 유지", resetSeason(play(r1, true), 20000).seasons.map((x) => x.season).join() === "1,2");
+  check("판 진행 중에는 초기화하지 않는다", resetSeason(b1, 9000) === b1);
+  const champ = resetSeason({ ...EMPTY_RANK_SAVE, state: { ...EMPTY_RANK, wins: 40, losses: 3, rating: 2600, maxRating: 2650, champion: true } }, 9000).seasons[0];
+  check("챔피언 시즌 기록", champ.champion && champ.finalRank.ball === "champion" && champ.finalRating === 2600 && champ.maxRating === 2650 && champ.wins === 40);
+  check("저장 검증: 빈 기록·직렬화 왕복 통과", isRankSave(EMPTY_RANK_SAVE) && isRankSave(JSON.parse(JSON.stringify(many))) && isRankSave(JSON.parse(JSON.stringify(r1))));
+  check("저장 검증: 손상된 값 거부", [null, {}, { ...EMPTY_RANK_SAVE, state: null }, { ...EMPTY_RANK_SAVE, history: {} }, { ...EMPTY_RANK_SAVE, state: { ...EMPTY_RANK, gauge: 1.5 } }, { ...EMPTY_RANK_SAVE, lastParty: [null] }].every((v) => !isRankSave(v)));
+
   // ── 불변·범위 (무작위 판 2만 번) ──
   let seed = 7;
   const rng = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 2 ** 32);
