@@ -95,7 +95,7 @@ export function MoveDexPage({ initialMoveId, onInitialMoveConsumed }: MoveDexPag
   useEffect(() => {
     if (!initialMoveId) return;
     const el = cardRefs.current.get(initialMoveId);
-    el?.scrollIntoView({ behavior: "smooth", block: "center" });
+    el?.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "center" });
     onInitialMoveConsumed?.();
   }, [initialMoveId, onInitialMoveConsumed]);
 
