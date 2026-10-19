@@ -1,6 +1,7 @@
 import type { Party, PartySlots, SamplePartyPreset, SlotPreset } from "../types/party";
 import type { BattleVideo } from "../types/battleVideo";
 import { EMPTY_FRONTIER, isFrontierSave, type FrontierSave } from "./battleSeries";
+import { EMPTY_RANK_SAVE, isRankSave, type RankSave } from "./battleRankSave";
 import { emptyOpponentMemory, isOpponentMemory, type OpponentMemory } from "./battle/ai/opponentMemory";
 
 const STORAGE_KEY = "champions-party-sim.party.v1";
@@ -21,6 +22,8 @@ const AI_MEMORY_STORAGE_KEY = "champions-party-sim.ai-memory.v1";
 const MY_SAMPLES_STORAGE_KEY = "champions-party-sim.my-samples.v1";
 /** 배틀 프런티어(2.5 L4) 연승·전적 — 파티 자동저장(STORAGE_KEY)·프리셋 키와 별도 키 */
 const BATTLE_FRONTIER_STORAGE_KEY = "champions-party-sim.battle-frontier.v1";
+/** 랭크배틀(5.0 R1 ⓑ) 랭크·이력·시즌 기록 — 프런티어·파티 자동저장 키와 별도 키 */
+const BATTLE_RANK_STORAGE_KEY = "champions-party-sim.battle-rank.v1";
 
 /**
  * localStorage에 JSON 하나를 저장/로드하는 공용 팩토리(ver.1.5 §10). party/partyPresets/
@@ -168,6 +171,17 @@ export function loadBattleFrontier(): FrontierSave {
 
 export function saveBattleFrontier(save: FrontierSave): void {
   battleFrontierStore.save(save);
+}
+
+const battleRankStore = createLocalStorageStore<RankSave>(BATTLE_RANK_STORAGE_KEY, isRankSave, EMPTY_RANK_SAVE);
+
+/** 랭크배틀 저장본을 불러온다. 없거나 손상됐으면 빈 기록 */
+export function loadBattleRank(): RankSave {
+  return battleRankStore.load();
+}
+
+export function saveBattleRank(save: RankSave): void {
+  battleRankStore.save(save);
 }
 
 const mySamplesStore = createLocalStorageStore<SamplePartyPreset[]>(MY_SAMPLES_STORAGE_KEY, (v): v is SamplePartyPreset[] => Array.isArray(v), []);
