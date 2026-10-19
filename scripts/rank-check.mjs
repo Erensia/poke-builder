@@ -19,7 +19,7 @@ const check = (name, ok, detail = "") => {
   }
 };
 try {
-  const { EMPTY_RANK, applyRankResult, rankOf } = await server.ssrLoadModule("/src/lib/battleRank.ts");
+  const { EMPTY_RANK, applyRankResult, rankOf, rankLabel } = await server.ssrLoadModule("/src/lib/battleRank.ts");
   const S = (o = {}) => Object.freeze({ ...EMPTY_RANK, ...o });
   const win = (s, turns = 35) => applyRankResult(s, { won: true, turns });
   const lose = (s) => applyRankResult(s, { won: false });
@@ -39,6 +39,8 @@ try {
   check("연패 카운트는 쌓이고 승리로 리셋", lose(lose(S()).state).state.lossStreak === 2 && win(S({ lossStreak: 4 })).state.lossStreak === 0);
   check("승패수는 이탈 포함 누적", (({ state: s }) => s.wins === 1 && s.losses === 1)(lose(win(S()).state)));
   check("표시: 처음·하이퍼볼 1 끝", show(rankOf(S())) === show({ ball: "monster", step: 4, fill: 0 }) && show(rankOf(S({ gauge: 47 }))) === show({ ball: "hyper", step: 1, fill: 3 }));
+
+  check("표시 이름", rankLabel(rankOf(S())) === "몬스터볼 4" && rankLabel(rankOf(S({ gauge: 47 }))) === "하이퍼볼 1" && rankLabel(rankOf(S({ rating: 1500 }))) === "마스터볼" && rankLabel(rankOf(S({ rating: 2500 }))) === "챔피언");
 
   // ── 마스터볼 진입 (1300 + 2×승수, 조건부 ×1.1) ──
   // 사용자 가계산: 누적 30승 · 7연승으로 진입 = 1496.00

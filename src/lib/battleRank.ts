@@ -51,6 +51,11 @@ export interface RankDisplay {
 
 const round2 = (x: number) => Math.round(x * 100) / 100;
 
+const BALL_NAME = { monster: "몬스터볼", super: "슈퍼볼", hyper: "하이퍼볼", master: "마스터볼", champion: "챔피언" } as const;
+
+/** "하이퍼볼 2", "마스터볼", "챔피언" 같은 표시 이름 */
+export const rankLabel = (d: RankDisplay) => (d.step === null ? BALL_NAME[d.ball] : `${BALL_NAME[d.ball]} ${d.step}`);
+
 /** 현재 랭크를 표시용으로 푼다. 챔피언은 지금 레이팅이 2500 이상일 때만(내려가면 마스터볼) */
 export function rankOf(state: RankState): RankDisplay {
   if (state.rating !== null) return { ball: state.rating >= CHAMPION_RATING ? "champion" : "master", step: null, fill: 0 };

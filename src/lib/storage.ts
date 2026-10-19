@@ -14,6 +14,8 @@ const SLOT_PRESETS_STORAGE_KEY = "champions-party-sim.slot-presets.v1";
  * 유지하는 FIFO 로직은 useBattleVideos 훅에서 처리하고, 여기는 단순 로드/저장만 담당한다.
  */
 const BATTLE_VIDEOS_STORAGE_KEY = "champions-party-sim.battle-videos.v1";
+/** 랭크배틀(5.0 R1) 배틀비디오 — 배틀타워 목록(위 키)과 별도로 보관한다 */
+const RANK_BATTLE_VIDEOS_STORAGE_KEY = "champions-party-sim.battle-videos-rank.v1";
 /**
  * 배틀타워 AI의 사용자 패턴 학습(ver.2.0 1-C) — 파티 자동저장(STORAGE_KEY)과 별도 키. 집계 통계만(최대 약 25KB), 학습 켬/끔 설정 포함.
  */
@@ -127,6 +129,16 @@ export function loadBattleVideos(): BattleVideo[] {
 
 export function saveBattleVideos(videos: BattleVideo[]): void {
   battleVideosStore.save(videos);
+}
+
+const rankBattleVideosStore = createLocalStorageStore<BattleVideo[]>(RANK_BATTLE_VIDEOS_STORAGE_KEY, isBattleVideoList, []);
+
+export function loadRankBattleVideos(): BattleVideo[] {
+  return rankBattleVideosStore.load();
+}
+
+export function saveRankBattleVideos(videos: BattleVideo[]): void {
+  rankBattleVideosStore.save(videos);
 }
 
 /** 저장 형태: 학습 기록 + "대전에서 계속 학습" 스위치 */
