@@ -114,10 +114,8 @@ export function BattleBoard({
   playTurn: () => void;
   resetToSetup: () => void;
 }) {
-  // 턴 종료 줄의 AI HP 수치를 %로 바꾸는 데 쓰는 종 id → 최대 HP (로그의 activePokemonIds는 slot.pokemonId 기준)
-  const aiMaxHp = aiSide
-    ? Object.fromEntries((battleSide(aiSide)?.party ?? []).map((f) => [f.slot.pokemonId, f.maxHp]))
-    : undefined;
+  // 로그의 AI HP 수치를 %로 바꾸는 데 쓰는 AI 파티의 종 id·최대 HP(파티 인덱스 순 — 같은 종이 둘이어도 개체별로 구분되도록 인덱스로 찾는다)
+  const aiParty = aiSide ? battleSide(aiSide)?.party.map((f) => ({ id: f.slot.pokemonId, maxHp: f.maxHp })) : undefined;
   return (
     <>
     <div className="battle-board" style={{ background: battleBoardBackground(battleState) }}>
@@ -766,7 +764,7 @@ export function BattleBoard({
       </>
     )}
 
-    <BattleTurnLog log={log} aiSide={aiSide} aiMaxHp={aiMaxHp} />
+    <BattleTurnLog log={log} aiSide={aiSide} aiParty={aiParty} />
     </>
   );
 }

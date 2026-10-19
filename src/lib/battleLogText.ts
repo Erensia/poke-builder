@@ -4,7 +4,7 @@
  * 이쪽은 문장(서술) 단위 텍스트를 모은다.
  */
 
-import type { EndOfTurnLogEntry } from "../types/battle";
+import type { EndOfTurnLogEntry, FighterKey, TurnResult } from "../types/battle";
 import type { StatusCondition } from "../types/status";
 import { eunNeun } from "./josa";
 
@@ -74,7 +74,7 @@ const HP_AMOUNT_KEYS = [
  * AI 상대의 턴 종료 줄: HP 수치(데미지·회복량·남은 HP)를 최대 HP 대비 "x.x%" 문자열로 바꿔 최대 HP·실수치를
  * 역산하지 못하게 한다. 렌더 쪽은 `{e.damage}` 식으로 그대로 찍으므로 숫자 자리에 문자열을 넣으면 되고, 분기에
  * 쓰는 truthiness를 지키려고 0·undefined는 그대로 둔다(remainingHp만 0도 "0.0%"로).
- * ponytail: 최대 HP를 모르면(aiMaxHp에 없는 종) 원본 그대로 — 같은 종이 파티에 둘이면 뒤의 것이 이긴다.
+ * 최대 HP를 모르면(파티 인덱스 밖) 원본 그대로.
  */
 export function hpAsPercent(e: EndOfTurnLogEntry, maxHp: number | undefined): EndOfTurnLogEntry {
   if (!maxHp) return e;
@@ -84,6 +84,30 @@ export function hpAsPercent(e: EndOfTurnLogEntry, maxHp: number | undefined): En
     if (typeof v === "number" && (v || k === "remainingHp")) out[k] = `${((v / maxHp) * 100).toFixed(1)}%`;
   }
   return out as unknown as EndOfTurnLogEntry;
+}
+
+/**
+ * 로그에는 종 id뿐이라 같은 종이 둘인 파티에서 개체를 가르지 못한다. 교체 기록(switches)을 따라가며 한 편의
+ * 활성 파티 인덱스를 되짚는다(대전은 항상 0번 리드로 시작, partyIds는 그 편 파티의 종 id). 턴마다 행동 시점의
+ * 인덱스와 턴 끝 인덱스. 행동 전 교체는 턴 시작에 반영하고, 행동 도중 교체(유턴류·강제 교체·탈출버튼 등 — 누가
+ * 일으켰는지 필드로는 안 가려진다)는 행동에 찍힌 종이 맞는 후보를 앞에서부터 고른다.
+ * ponytail: 행동 도중 교체 전후가 같은 종이면 앞의 것으로 본다(그 한 행동의 최대 HP만 틀릴 수 있다).
+ */
+export function activeIndexTrace(log: TurnResult[], side: FighterKey, partyIds: readonly string[]): { actions: number[]; end: number }[] {
+  let idx = 0;
+  return log.map((turn) => {
+    for (const sw of turn.switches) if (sw.side === side && !sw.afterMove) idx = sw.toIndex;
+    const chain = [idx, ...turn.switches.filter((sw) => sw.side === side && sw.afterMove).map((sw) => sw.toIndex)];
+    let p = 0;
+    const actions = turn.actions.map((a) => {
+      const id = a.actor === side ? a.actorPokemonId : a.defenderPokemonId;
+      const hit = chain.findIndex((c, k) => k >= p && partyIds[c] === id);
+      if (hit >= 0) p = hit;
+      return chain[p];
+    });
+    idx = chain[chain.length - 1];
+    return { actions, end: idx };
+  });
 }
 
 /** 승리 문구용 편 이름 — 활성 포켓몬 이름을 쓰면 쓰러진 포켓몬이 승리자처럼 보인다(편에 예비가 남아 이긴 경우). a=내 파티·b=상대 파티 고정 축 */

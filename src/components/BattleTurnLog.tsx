@@ -2,7 +2,7 @@ import { getPokemon } from "../lib/data";
 import { opponentKey } from "../lib/battle/state";
 import type { FighterKey, TurnResult } from "../types/battle";
 import { eunNeun } from "../lib/josa";
-import { hpAsPercent, STATUS_CURE_TEXT } from "../lib/battleLogText";
+import { activeIndexTrace, hpAsPercent, STATUS_CURE_TEXT } from "../lib/battleLogText";
 import { ActionEffectLines } from "./turnLog/ActionEffectLines";
 import { HpFormatContext } from "./turnLog/hpFormat";
 import { ActionMainLine } from "./turnLog/ActionMainLine";
@@ -17,22 +17,23 @@ import { ForcedOpponentSwitchLines, PreMoveSwitchLines, RedCardSwitchLines, Self
 export function BattleTurnLog({
   log,
   aiSide = null,
-  aiMaxHp,
+  aiParty,
 }: {
   log: TurnResult[];
   aiSide?: FighterKey | null;
-  /** AI 파티 종 id → 최대 HP. 턴 종료 줄의 HP 수치를 %로 바꾸는 데 쓴다 */
-  aiMaxHp?: Record<string, number>;
+  /** AI 파티(파티 인덱스 순)의 종 id·최대 HP. HP 수치를 %로 바꾸는 데 쓴다(같은 종이 둘이어도 개체별로 맞도록 인덱스로 찾는다) */
+  aiParty?: { id: string; maxHp: number }[];
 }) {
   // AI 쪽 포켓몬의 행동 줄 HP 수치(회복·반동 등)도 최대 HP 대비 %로 바꾼다. 최대 HP를 모르면 실수치 그대로.
-  const fmtHp = (n: number, key: FighterKey, pokemonId: string) => {
-    const maxHp = aiSide !== null && key === aiSide ? aiMaxHp?.[pokemonId] : undefined;
-    return maxHp ? `${((n / maxHp) * 100).toFixed(1)}%` : n;
-  };
+  const fmtHp = (maxHp: number | undefined) => (n: number, key: FighterKey) =>
+    maxHp && aiSide !== null && key === aiSide ? `${((n / maxHp) * 100).toFixed(1)}%` : n;
+  // 로그엔 종 id뿐이라 AI 편의 활성 파티 인덱스를 교체 기록으로 되짚는다(시간순 → 아래 표시는 역순)
+  const aiTrace = aiSide !== null && aiParty ? activeIndexTrace(log, aiSide, aiParty.map((p) => p.id)) : null;
   return (
-    <HpFormatContext.Provider value={fmtHp}>
+    <>
           <div className="battle-turn-log">
             {[...log].reverse().map((turn, turnIdx) => {
+              const trace = aiTrace?.[log.length - 1 - turnIdx];
               // 턴 종료 처리(회복·상태이상)는 그 시점의 활성 기준이라 activePokemonIds(턴 끝 스냅샷)로 되짚는다.
               const turnName = (key: FighterKey) => getPokemon(turn.activePokemonIds[key])?.name ?? key;
               // 강제 교체는 actions·endOfTurn이 비고 switches만 있는 합성 카드(fromIndex -1) — 제목을 다르게 준다.
@@ -99,16 +100,18 @@ export function BattleTurnLog({
                       )}
                       {/* 메인 라인: 누가 무슨 기술을 써서 어떻게 됐는지("빗나감"/데미지 수치)까지만.
                           기절 같은 "상태"는 아래에서 별도 줄로 분리한다. */}
-                      <ActionMainLine
-                        action={action}
-                        actorName={actorName}
-                        defenderName={defenderName}
-                        headDamage={headDamage}
-                        headDamagePercent={headDamagePercent}
-                        percentOnly={percentOnly}
-                      />
-                      {/* 타입변화·방어·상태·스탯변화·도구·특성반응 계열(§15-5) */}
-                      <ActionEffectLines action={action} actorName={actorName} defenderName={defenderName} percentOnly={percentOnly} />
+                      <HpFormatContext.Provider value={fmtHp(aiParty?.[trace?.actions[i] ?? -1]?.maxHp)}>
+                        <ActionMainLine
+                          action={action}
+                          actorName={actorName}
+                          defenderName={defenderName}
+                          headDamage={headDamage}
+                          headDamagePercent={headDamagePercent}
+                          percentOnly={percentOnly}
+                        />
+                        {/* 타입변화·방어·상태·스탯변화·도구·특성반응 계열(§15-5) */}
+                        <ActionEffectLines action={action} actorName={actorName} defenderName={defenderName} percentOnly={percentOnly} />
+                      </HpFormatContext.Provider>
                       {/* 유턴류 자체 교체: 이 행동 직후에(§7-2) 시간 순서대로 렌더 */}
                       <SelfSwitchAfterMoveLines switches={turn.switches} actor={action.actor} />
                       {/* 드래곤테일·울부짖기류: 이 기술로 상대가 강제로 끌려나온 교체 */}
@@ -125,7 +128,7 @@ export function BattleTurnLog({
                 {turn.endOfTurn.map((e, i) => (
                   <EndOfTurnLine
                     key={i}
-                    entry={aiSide !== null && e.actor === aiSide ? hpAsPercent(e, aiMaxHp?.[turn.activePokemonIds[e.actor]]) : e}
+                    entry={aiSide !== null && e.actor === aiSide ? hpAsPercent(e, aiParty?.[trace?.end ?? -1]?.maxHp) : e}
                     turnName={turnName}
                   />
                 ))}
@@ -134,6 +137,6 @@ export function BattleTurnLog({
               );
             })}
           </div>
-    </HpFormatContext.Provider>
+    </>
   );
 }
