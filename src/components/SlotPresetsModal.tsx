@@ -79,7 +79,7 @@ export function SlotPresetsModal({
                   {isTaken && " · 다른 슬롯에 있음"}
                 </span>
               </div>
-              <div className="preset-item-actions">
+              <div className="preset-item-actions tap-targets">
                 <button type="button" disabled={isTaken} onClick={() => handleLoad(preset)}>
                   불러오기
                 </button>

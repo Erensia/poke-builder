@@ -355,7 +355,7 @@ function CombinedView({ combined }: { combined: CombinedInference }) {
       <div className="dinf-natures">
         <span className="dinf-subtitle">성격</span>
         {combined.natures.map((n) => (
-          <span key={n.name} className="dinf-nature-chip">
+          <span key={n.name} className="dinf-nature-chip tap-target">
             {n.name} <em>{n.weight >= 0.01 ? `${Math.round(n.weight * 100)}%` : "<1%"}</em>
           </span>
         ))}
@@ -395,7 +395,7 @@ function AttackResultView({ result, rowNos, combinedOn }: { result: AttackInfere
       <div className="dinf-natures">
         <span className="dinf-subtitle">공격·특공 보정</span>
         {result.groups.map((g) => (
-          <span key={g.id} className={`dinf-nature-chip${g.feasible === 0 ? " is-no" : ""}`} title={g.natureNames.join(", ")}>
+          <span key={g.id} className={`dinf-nature-chip tap-target${g.feasible === 0 ? " is-no" : ""}`} title={g.natureNames.join(", ")}>
             {g.label} <em>{g.feasible === 0 ? "불가" : `${Math.round(g.weight * 100)}%`}</em>
           </span>
         ))}
@@ -437,7 +437,7 @@ function SpeedResultView({ result, rowNos, combinedOn }: { result: SpeedInferenc
       <div className="dinf-natures">
         <span className="dinf-subtitle">스피드 보정</span>
         {result.groups.map((g) => (
-          <span key={g.id} className={`dinf-nature-chip${g.feasible === 0 ? " is-no" : ""}`} title={g.natureNames.join(", ")}>
+          <span key={g.id} className={`dinf-nature-chip tap-target${g.feasible === 0 ? " is-no" : ""}`} title={g.natureNames.join(", ")}>
             {g.label} <em>{g.feasible === 0 ? "불가" : `${Math.round(g.weight * 100)}%`}</em>
           </span>
         ))}
@@ -568,7 +568,7 @@ function SpeedConditionsEditor({
       <summary>조건{active.length > 0 ? ` · ${active.join(", ")}` : " (기본)"}</summary>
       <div className="dinf-speed-checks">
         {checks.map(([key, label]) => (
-          <label key={key} className="toggle-pill">
+          <label key={key} className="toggle-pill tap-target">
             <input type="checkbox" checked={cond[key] as boolean} onChange={(e) => onChange({ [key]: e.target.checked })} />
             {label}
           </label>
@@ -615,13 +615,13 @@ function SpeedConditionsEditor({
       {(myQuickFeet || (cond.oppAbilityId === "속보" && !megaRow)) && (
         <div className="dinf-speed-checks">
           {myQuickFeet && (
-            <label className="toggle-pill">
+            <label className="toggle-pill tap-target">
               <input type="checkbox" checked={cond.myOtherStatus} onChange={(e) => onChange({ myOtherStatus: e.target.checked })} />
               내 상태이상 (속보 ×1.5)
             </label>
           )}
           {cond.oppAbilityId === "속보" && !megaRow && (
-            <label className="toggle-pill">
+            <label className="toggle-pill tap-target">
               <input type="checkbox" checked={cond.oppOtherStatus} onChange={(e) => onChange({ oppOtherStatus: e.target.checked })} />
               상대 상태이상 (속보 ×1.5)
             </label>
@@ -629,7 +629,7 @@ function SpeedConditionsEditor({
         </div>
       )}
       {cond.oppAbilityId === "곡예" && !megaRow && (
-        <label className="toggle-pill">
+        <label className="toggle-pill tap-target">
           <input type="checkbox" checked={cond.oppUnburden} onChange={(e) => onChange({ oppUnburden: e.target.checked })} />
           <span>곡예 발동 후 (도구를 잃어 상대 스피드 ×2)</span>
         </label>
@@ -687,7 +687,7 @@ function ResultView({
         {result.groups.map((g) => (
           <span
             key={g.id}
-            className={`dinf-nature-chip${g.feasible === 0 ? " is-no" : ""}`}
+            className={`dinf-nature-chip tap-target${g.feasible === 0 ? " is-no" : ""}`}
             title={g.natureNames.join(", ")}
           >
             {g.label} <em>{g.feasible === 0 ? "불가" : `${Math.round(g.weight * 100)}%`}</em>
@@ -1121,7 +1121,7 @@ function ObservationsSection({ s }: { s: ReturnType<typeof useDefenseInferenceSt
                       />
                       <span>{received ? "HP" : "%"}</span>
                     </span>
-                    <label className="toggle-pill">
+                    <label className="toggle-pill tap-target">
                       <input type="checkbox" checked={row.critical} onChange={(e) => updateRow(row.id, { critical: e.target.checked })} />
                       급소
                     </label>
@@ -1138,7 +1138,7 @@ function ObservationsSection({ s }: { s: ReturnType<typeof useDefenseInferenceSt
                     <span className="dinf-endturn-title">{hasNext ? "턴 종료 효과" : "맞은 직후 효과"}</span>
                     {END_TURN_EFFECTS.filter((e) => hasNext || e.id === "sitrus").map((e) => (
                       <label
-                        className="toggle-pill"
+                        className="toggle-pill tap-target"
                         key={e.id}
                         title={
                           itemLocked && ITEM_END_TURN_IDS.includes(e.id)
@@ -1158,13 +1158,13 @@ function ObservationsSection({ s }: { s: ReturnType<typeof useDefenseInferenceSt
                       </label>
                     ))}
                     {hasNext && (
-                    <label className="toggle-pill">
+                    <label className="toggle-pill tap-target">
                       <input type="checkbox" checked={toxicTurn > 0} onChange={(ev) => setToxicTurn(row, ev.target.checked ? 1 : 0)} />
                       맹독
                     </label>
                     )}
                     {hasNext && toxicTurn > 0 && (
-                      <span className="dinf-stepper">
+                      <span className="dinf-stepper tap-targets">
                         <button type="button" aria-label={`관측 ${index + 1} 맹독 경과 턴 줄이기`} onClick={() => setToxicTurn(row, Math.max(1, toxicTurn - 1))}>
                           −
                         </button>
@@ -1190,12 +1190,12 @@ function ObservationsSection({ s }: { s: ReturnType<typeof useDefenseInferenceSt
             );
           })}
         </ol>
-        <button type="button" className="dinf-add" onClick={addRow}>
+        <button type="button" className="dinf-add tap-target" onClick={addRow}>
           + 관측 추가
         </button>{" "}
         <button
           type="button"
-          className="dinf-add"
+          className="dinf-add tap-target"
           onClick={() => window.confirm("관측과 가정 입력을 모두 지울까요? (내 포켓몬·상대 포켓몬은 그대로예요)") && onReset()}
         >
           입력 지우기
@@ -1264,7 +1264,7 @@ function AssumptionsSection({ s }: { s: ReturnType<typeof useDefenseInferenceSta
             </select>
           </label>
         </div>
-        <label className="toggle-pill">
+        <label className="toggle-pill tap-target">
           <input type="checkbox" checked={tolerant} onChange={(e) => setTolerant(e.target.checked)} />
           <span>여유 있게 보기 (화면 %를 ±1%까지 허용 — 게임의 % 표시 방식이 다를 때 대비)</span>
         </label>
@@ -1317,7 +1317,7 @@ function AssumptionsSection({ s }: { s: ReturnType<typeof useDefenseInferenceSta
                 </select>
               </label>
             </div>
-            <label className="toggle-pill">
+            <label className="toggle-pill tap-target">
               <input type="checkbox" checked={oppBurned} onChange={(e) => setOppBurned(e.target.checked)} />
               <span>상대가 화상 (물리 공격 반감 — 근성·객기는 예외)</span>
             </label>
@@ -1380,7 +1380,7 @@ export function DefenseInferencePanel({
               </span>
             </button>
             {(defenderPokemon.formVariants || defenderPokemon.sizeForms) && (
-              <div className="dinf-defender-forms">
+              <div className="dinf-defender-forms tap-targets">
                 {defenderPokemon.formVariants && (
                   <button type="button" onClick={defenderActions.onCycleFormVariant}>
                     폼 바꾸기{defenderForm.formLabel ? ` (${defenderForm.formLabel})` : ""}

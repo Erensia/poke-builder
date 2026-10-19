@@ -144,11 +144,11 @@ export function SpeedTablePanel({ slot, weather, field, card }: SpeedTablePanelP
         {speedAt && (
           <Fold title="목표 포켓몬">
             <div className="speedtab-target-head">
-              <button type="button" className="speedtab-target-btn" onClick={() => setPickingTarget(true)}>
+              <button type="button" className="speedtab-target-btn tap-target" onClick={() => setPickingTarget(true)}>
                 {target ? `${getPokemon(target)?.name ?? target} (바꾸기)` : "목표 포켓몬 고르기"}
               </button>
               {target && (
-                <button type="button" className="speedtab-target-btn" onClick={() => setTarget(null)}>
+                <button type="button" className="speedtab-target-btn tap-target" onClick={() => setTarget(null)}>
                   지우기
                 </button>
               )}

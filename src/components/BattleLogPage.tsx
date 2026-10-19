@@ -827,7 +827,7 @@ export function BattleLogPage() {
         </div>
         <button
           type="button"
-          className="battle-video-toggle"
+          className="battle-video-toggle tap-target"
           onClick={() => setBattleVideoView("list")}
         >
           배틀비디오{battleVideos.videos.length > 0 && ` (${battleVideos.videos.length})`}

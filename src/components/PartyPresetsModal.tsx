@@ -108,7 +108,7 @@ export function PartyPresetsModal({
                   {filledCount} / 6마리 · {new Date(preset.savedAt).toLocaleDateString()}
                 </span>
               </div>
-              <div className="preset-item-actions">
+              <div className="preset-item-actions tap-targets">
                 <button type="button" onClick={() => handleLoad(preset)}>
                   불러오기
                 </button>

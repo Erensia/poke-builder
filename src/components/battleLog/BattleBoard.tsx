@@ -556,7 +556,7 @@ export function BattleBoard({
                         <button
                           key={m}
                           type="button"
-                          className={`battle-input-toggle-btn${mode === m ? " is-on" : ""}`}
+                          className={`battle-input-toggle-btn tap-target${mode === m ? " is-on" : ""}`}
                           onClick={() => {
                             setInputMode((p) => ({ ...p, [side]: m }));
                             setSelected((p) => ({ ...p, [side]: null }));
@@ -581,7 +581,7 @@ export function BattleBoard({
                     fighter.megaStone &&
                     !battleSide(side)?.megaUsed &&
                     !fighter.hasMegaEvolved && (
-                      <label className="toggle-pill battle-mega-toggle">
+                      <label className="toggle-pill tap-target battle-mega-toggle">
                         <input
                           type="checkbox"
                           checked={megaDeclared[side]}

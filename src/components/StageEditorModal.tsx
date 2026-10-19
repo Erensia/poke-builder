@@ -33,7 +33,7 @@ export function StageEditorModal({
               <span className="points-label">{STAT_LABELS[stat]}</span>
               <button
                 type="button"
-                className="points-step"
+                className="points-step tap-target"
                 onClick={() => onStep(stat, -1)}
                 disabled={value <= -6}
                 aria-label={`${STAT_LABELS[stat]} 랭크 감소`}
@@ -45,7 +45,7 @@ export function StageEditorModal({
               </span>
               <button
                 type="button"
-                className="points-step"
+                className="points-step tap-target"
                 onClick={() => onStep(stat, 1)}
                 disabled={value >= 6}
                 aria-label={`${STAT_LABELS[stat]} 랭크 증가`}

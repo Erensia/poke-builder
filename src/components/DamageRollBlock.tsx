@@ -40,7 +40,7 @@ export function DamageRollBlock({
           <strong>{min.damage}</strong> ~ <strong>{max.damage}</strong> ({min.percent.toFixed(1)}% ~ {max.percent.toFixed(1)}%)
         </span>
         <span className="matchup-roll-summary">({summary})</span>
-        <button type="button" className="matchup-roll-toggle" aria-expanded={expanded} onClick={() => setExpanded((v) => !v)}>
+        <button type="button" className="matchup-roll-toggle tap-target" aria-expanded={expanded} onClick={() => setExpanded((v) => !v)}>
           {expanded ? "접기 ▴" : "16개 전부 보기 ▾"}
         </button>
       </div>
