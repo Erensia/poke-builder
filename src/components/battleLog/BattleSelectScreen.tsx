@@ -74,7 +74,7 @@ export function BattleSelectScreen({
                       disabled={!manual}
                       onClick={() => onToggleSelection(side, i)}
                     >
-                      <span className={`battle-select-num${num ? " is-on" : ""}`}>{num ?? ""}</span>
+                      <span className={`battle-select-num tap-target${num ? " is-on" : ""}`}>{num ?? ""}</span>
                       {/* 2.3 B2 보완(사용자 확인): 선출 화면은 내 카드까지 포함해 양쪽 다 도구
                           이미지를 숨긴다(itemId 생략) — 배틀 판은 여전히 상대만 숨긴다. */}
                       {pk && pkSlot && (

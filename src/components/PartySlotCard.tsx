@@ -127,7 +127,7 @@ export function PartySlotCard({
           <span className="party-slot-empty-label">포켓몬 선택</span>
         </button>
         {hasSamples && (
-          <button type="button" className="party-slot-sample-link" onClick={onOpenSamplePicker}>
+          <button type="button" className="party-slot-sample-link tap-target" onClick={onOpenSamplePicker}>
             저장된 샘플에서 불러오기
           </button>
         )}
@@ -201,39 +201,39 @@ export function PartySlotCard({
       </div>
 
       <div className="party-slot-meta">
-        <button type="button" className="party-meta-pip" onClick={onPickAbility}>
+        <button type="button" className="party-meta-pip tap-target" onClick={onPickAbility}>
           <span className="party-meta-label">특성</span>
           <span className="party-meta-value">
             {slot!.ability ? getAbility(slot!.ability)?.name : "미지정"}
           </span>
         </button>
-        <button type="button" className="party-meta-pip" onClick={onPickItem}>
+        <button type="button" className="party-meta-pip tap-target" onClick={onPickItem}>
           <span className="party-meta-label">도구</span>
           <span className="party-meta-value">
             {slot!.item ? getItem(slot!.item)?.name : "미지정"}
           </span>
         </button>
-        <button type="button" className="party-meta-pip" onClick={onPickNature}>
+        <button type="button" className="party-meta-pip tap-target" onClick={onPickNature}>
           <span className="party-meta-label">성격</span>
           <span className="party-meta-value">
             {slot!.nature ? getNature(slot!.nature)?.name : "미지정"}
           </span>
         </button>
-        <button type="button" className="party-meta-pip" onClick={onPickPoints}>
+        <button type="button" className="party-meta-pip tap-target" onClick={onPickPoints}>
           <span className="party-meta-label">포인트</span>
           <span className="party-meta-value">{totalAbilityPoints(slot!.points)} / 66</span>
         </button>
         {/* 종족 성별이 양성 다 가능("both")할 때만 노출 — 단일성별/무성별 종은 고를 게 없어 아예 숨긴다.
             에써르류(formVariantByGender)는 이 핍이 formVariant(=폼)까지 토글하며, 아래 "모습" 핍은 숨긴다. */}
         {pokemon.genderCategory === "both" && (
-          <button type="button" className="party-meta-pip" onClick={onToggleGender}>
+          <button type="button" className="party-meta-pip tap-target" onClick={onToggleGender}>
             <span className="party-meta-label">성별</span>
             <span className="party-meta-value">{genderLabel(getEffectiveGender(pokemon, slot!) ?? "male")}</span>
           </button>
         )}
         {/* 펌킨인 계열 크기 변종 — sizeForms가 있는 종만 노출. 클릭하면 다음 크기로 순환 */}
         {pokemon.sizeForms && (
-          <button type="button" className="party-meta-pip" onClick={onCycleSizeForm}>
+          <button type="button" className="party-meta-pip tap-target" onClick={onCycleSizeForm}>
             <span className="party-meta-label">크기</span>
             <span className="party-meta-value">
               {(() => {
@@ -247,7 +247,7 @@ export function PartySlotCard({
         {/* 루가루암 계열 폼 변종 — formVariants가 있는 종만 노출. 클릭하면 다음 폼으로 순환.
             에써르류(formVariantByGender)는 위 "성별" 핍이 이 역할을 하므로 숨긴다. */}
         {pokemon.formVariants && !pokemon.formVariantByGender && (
-          <button type="button" className="party-meta-pip" onClick={onCycleFormVariant}>
+          <button type="button" className="party-meta-pip tap-target" onClick={onCycleFormVariant}>
             <span className="party-meta-label">모습</span>
             <span className="party-meta-value">
               {(() => {
@@ -263,7 +263,7 @@ export function PartySlotCard({
         {pokemon.cosmeticForms && (
           <button
             type="button"
-            className="party-meta-pip"
+            className="party-meta-pip tap-target"
             onClick={
               pokemon.cosmeticForms.length <= COSMETIC_FORM_CYCLE_MAX
                 ? onCycleCosmeticForm
@@ -330,7 +330,7 @@ function MovePip({ slotIndex, moveIndex, moveId, onPick, onSwap }: MovePipProps)
     <button
       type="button"
       data-move-pip={pipKey(moveIndex)}
-      className={`party-move-pip${move ? " has-type" : " is-empty"}${dragging || touch.dragging ? " is-dragging" : ""}${over ? " is-drag-over" : ""}`}
+      className={`party-move-pip tap-target${move ? " has-type" : " is-empty"}${dragging || touch.dragging ? " is-dragging" : ""}${over ? " is-drag-over" : ""}`}
       style={moveColor ? { background: moveColor } : undefined}
       onClick={onPick}
       {...touch.touchProps}
@@ -366,7 +366,7 @@ function MovePip({ slotIndex, moveIndex, moveId, onPick, onSwap }: MovePipProps)
         setDragging(false);
       }}
     >
-      {move ? move.name : "＋"}
+      <span className="party-move-pip-text">{move ? move.name : "＋"}</span>
     </button>
   );
 }

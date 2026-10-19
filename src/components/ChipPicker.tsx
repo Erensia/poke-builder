@@ -17,7 +17,7 @@ export function ChipPicker<T extends string>({ label, options, value, onChange, 
       <span className="chip-picker-label">{label}</span>
       <div className="chip-picker-options">
         {options.map((o) => (
-          <button key={o} type="button" className={`chip-picker-chip${value === o ? " is-active" : ""}`} onClick={() => onChange(value === o ? null : o)}>
+          <button key={o} type="button" className={`chip-picker-chip tap-target${value === o ? " is-active" : ""}`} onClick={() => onChange(value === o ? null : o)}>
             {textOf ? textOf(o) : o}
           </button>
         ))}

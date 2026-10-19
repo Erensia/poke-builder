@@ -15,7 +15,7 @@ export function PillRow<T>({ label, options, value, onChange, rowClass, ariaLabe
   const row = (
     <div className={`matchup-hitcount-row${rowClass ? ` ${rowClass}` : ""}`} role={ariaLabel ? "group" : undefined} aria-label={ariaLabel}>
       {options.map((o) => (
-        <button key={o.label} type="button" className={`matchup-hitcount-pip${o.value === value ? " is-active" : ""}`} onClick={() => onChange(o.value)}>
+        <button key={o.label} type="button" className={`matchup-hitcount-pip tap-target${o.value === value ? " is-active" : ""}`} onClick={() => onChange(o.value)}>
           {o.label}
         </button>
       ))}

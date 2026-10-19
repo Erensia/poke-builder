@@ -19,7 +19,7 @@ export function Modal({ title, onClose, children }: ModalProps) {
       >
         <div className="modal-header">
           <h3>{title}</h3>
-          <button type="button" className="modal-close" onClick={onClose} aria-label="닫기">
+          <button type="button" className="modal-close tap-target" onClick={onClose} aria-label="닫기">
             ✕
           </button>
         </div>

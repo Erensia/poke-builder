@@ -1,5 +1,6 @@
 import { Fragment, useState } from "react";
 import { BattleSetupCard } from "../BattleSetupCard";
+import { InfoTooltip } from "../InfoTooltip";
 import { useBattleSetup } from "../../hooks/useBattleSetup";
 import { SLOT_INDICES, type PickerState, type Side, type SlotIndex } from "./shared";
 
@@ -48,6 +49,16 @@ export function BattleSetupScreen({
   /** 배틀 프런티어 중에는 상대 편을 수동으로 바꿀 수 없다 */
   opponentLocked: boolean;
 }) {
+  // 제목 옆 ⓘ 설명 — 버튼 줄이 꽉 차서 버튼마다 ⓘ를 둘 수 없고, 터치에는 호버가 없어 버튼별 툴팁 대신 한 곳에 모은다(랜덤 구축은 저장 샘플이 있을 때만 보인다)
+  const loadButtonsHelp = (side: Side) => {
+    const who = side === "a" ? "내 파티" : "상대 파티";
+    return (
+      `무작위 샘플: ${who}를 기본 제공 샘플 파티 중 무작위 하나로 바꿉니다.` +
+      (hasSlotPresets
+        ? `\n랜덤 구축: 저장해 둔 포켓몬 샘플에서 6마리를 무작위로 뽑아 ${who}를 만듭니다(중복 포켓몬·도구 없음, 메가 2마리 이하). 저장 샘플이 모자라면 기본 제공 샘플로 채웁니다.`
+        : "")
+    );
+  };
   const sideCtls = (side: Side) => (side === "a" ? setup.a : setup.b);
   const slotCtl = (side: Side, i: SlotIndex) => sideCtls(side)[i];
 
@@ -96,7 +107,7 @@ export function BattleSetupScreen({
               {hasPartyPresets && (
                 <button
                   type="button"
-                  className="battle-setup-load-party"
+                  className="battle-setup-load-party tap-target"
                   onClick={() => onOpenPicker({ kind: "loadParty", side })}
                 >
                   파티 불러오기
@@ -104,35 +115,33 @@ export function BattleSetupScreen({
               )}
               <button
                 type="button"
-                className="battle-setup-load-party"
+                className="battle-setup-load-party tap-target"
                 onClick={() => onOpenPicker({ kind: "sampleParty", side })}
               >
                 샘플 파티
               </button>
               <button
                 type="button"
-                className="battle-setup-load-party has-tip"
+                className="battle-setup-load-party tap-target"
                 onClick={() => onLoadRandomSample(side)}
-                data-tip={`${side === "a" ? "내 파티" : "상대 파티"}를 기본 제공 샘플 파티 중 무작위 하나로 바꿉니다`}
               >
                 무작위 샘플
               </button>
               {hasSlotPresets && (
                 <button
                   type="button"
-                  className="battle-setup-load-party has-tip"
+                  className="battle-setup-load-party tap-target"
                   onClick={() => onLoadRandomSlotParty(side)}
-                  data-tip={`저장해 둔 포켓몬 샘플에서 6마리를 무작위로 뽑아 ${side === "a" ? "내 파티" : "상대 파티"}를 만듭니다(중복 포켓몬·도구 없음, 메가 2마리 이하). 저장 샘플이 모자라면 기본 제공 샘플로 채웁니다`}
                 >
                   랜덤 구축
                 </button>
               )}
             </div>
             <div className="battle-setup-column-title">
-              {side === "a" ? "내 파티" : "상대 파티"}{" "}
+              <InfoTooltip text={loadButtonsHelp(side)}>{side === "a" ? "내 파티" : "상대 파티"}</InfoTooltip>{" "}
               <span className="battle-setup-column-hint">6마리까지 빌드 · 4마리 이상이면 3마리 선출</span>
               {side === "b" && (
-                <label className="toggle-pill battle-ai-toggle">
+                <label className="toggle-pill tap-target battle-ai-toggle">
                   <input
                     type="checkbox"
                     checked={aiOpponent}
@@ -142,7 +151,7 @@ export function BattleSetupScreen({
                 </label>
               )}
               {side === "b" && aiOpponent && (
-                <button type="button" className="battle-ai-memory-chip" onClick={onOpenAiMemory}>
+                <button type="button" className="battle-ai-memory-chip tap-target" onClick={onOpenAiMemory}>
                   🧠 AI 학습 {aiMemoryBattles}판
                 </button>
               )}

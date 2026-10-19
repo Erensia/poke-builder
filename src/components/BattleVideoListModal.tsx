@@ -45,7 +45,7 @@ export function BattleVideoListModal({ videos, onClose, onView, onDelete }: Batt
                 {winnerLabel(video)} · {new Date(video.savedAt).toLocaleString()}
               </span>
             </div>
-            <div className="preset-item-actions">
+            <div className="preset-item-actions tap-targets">
               <button type="button" onClick={() => onView(video)}>
                 보기
               </button>

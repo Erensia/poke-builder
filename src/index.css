@@ -316,32 +316,39 @@ button {
   cursor: inherit;
 }
 
-/* 4.0 D4 — 터치 기기(pointer: coarse)에서 작은 칩·알약·탭 버튼의 눌리는 영역만 세로 44px 근처까지 넓힌다(모양·배치 불변).
-   overflow: hidden인 .party-move-pip·.dinf-stepper는 ::after가 잘려 제외. 새 칩/알약 클래스는 여기에 추가한다. */
+/* 터치 기기(pointer: coarse)에서 작은 칩·알약·탭 버튼의 눌리는 영역만 세로 44px 근처까지 넓힌다(모양·배치 불변; 4.0 D4, 4.1 A2에서 마커 방식으로).
+   새 칩·알약·작은 버튼은 className에 tap-target을 붙이면 된다. 같은 종류 버튼 묶음은 부모에 tap-targets(안의 button 전부).
+   :where라 명시도가 0이어서 요소가 이미 position: absolute/fixed를 쓰면 그쪽이 이긴다.
+   확장 영역은 ::before에 만든다(::after는 툴팁처럼 요소가 직접 쓰는 일이 많아, 예전에 inset이 새어 들어가 툴팁이 깨졌었다).
+   그래서 요소가 이미 ::before를 쓰면(예: .speedtab-card, summary) 마커를 쓰지 않는다. overflow: hidden인 요소도 ::before가 잘리니 쓰지 않는다. */
 @media (pointer: coarse) {
-  :is(
-    .matchup-hitcount-pip, .party-meta-pip, .matchup-meta-pip, .matchup-move-pip, .chip-picker-chip,
-    .move-picker-chip, .dinf-nature-chip, .dinf-defender-forms button, .sample-party-filters button,
-    .matchup-tabs button, .movedex-category-tab, .pokedex-form-tab, .pokedex-move-chip,
-    .speedtab-target-btn, .points-step, .battle-select-num, .battle-input-toggle-btn,
-    .battle-ai-memory-chip, .preset-item-actions button, .party-board-reset, .movedex-sort-dir,
-    .modal-close, .info-tooltip-icon, .battle-video-toggle, .matchup-roll-toggle, .dinf-add,
-    .battle-setup-load-party, .party-slot-sample-link, .matchup-slot-sample-link, .toggle-pill
-  ) {
+  :where(.tap-target, .tap-targets button) {
     position: relative;
   }
 
-  :is(
-    .matchup-hitcount-pip, .party-meta-pip, .matchup-meta-pip, .matchup-move-pip, .chip-picker-chip,
-    .move-picker-chip, .dinf-nature-chip, .dinf-defender-forms button, .sample-party-filters button,
-    .matchup-tabs button, .movedex-category-tab, .pokedex-form-tab, .pokedex-move-chip,
-    .speedtab-target-btn, .points-step, .battle-select-num, .battle-input-toggle-btn,
-    .battle-ai-memory-chip, .preset-item-actions button, .party-board-reset, .movedex-sort-dir,
-    .modal-close, .info-tooltip-icon, .battle-video-toggle, .matchup-roll-toggle, .dinf-add,
-    .battle-setup-load-party, .party-slot-sample-link, .matchup-slot-sample-link, .toggle-pill
-  )::after {
+  :where(.tap-target, .tap-targets button)::before {
     content: '';
     position: absolute;
     inset: -8px -2px;
+  }
+}
+
+/* 시스템 "동작 줄이기"(4.1 A3) — 전체 움직임을 이 한 블록에서 조절한다. 새 transition·animation도 자동으로 걸린다.
+   - 전환(transition)은 끄지 않고 짧게만 한다(--reduced-transition). 딜레이는 그대로 둬서 "폭이 바뀐 뒤 글자가 나타난다" 같은 단계 순서가 유지된다.
+     (0.01ms로 끄고 딜레이까지 지웠더니 사이드바 단계 전환이 어색하고 모바일에서 깜빡였다.) 더 줄이려면 값만 낮춘다.
+   - 반복·키프레임 애니메이션은 끝낸다. 끝 상태를 직접 정해야 하는 것(우승 글로우·AI 생각 중 점 등)은 각 CSS의 reduce 블록에서 따로 정한다. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --reduced-transition: 0.08s;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0s !important;
+    transition-duration: var(--reduced-transition) !important;
+    scroll-behavior: auto !important;
   }
 }

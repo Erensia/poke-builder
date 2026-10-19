@@ -5,7 +5,9 @@
  *   npm run sim:ai -- <mode> [판 수] [결정 파라미터 JSON]
  *
  *   regress  무작위 행동끼리 돌려 전체 로그 해시를 출력 — 엔진 수정 전후 해시가 같으면 동작 무변경
- *   ai       AI 대 무작위 봇 + AI 대 AI 승률, 턴당 판단 시간, NaN 점수 개수
+ *   logidx   무작위 행동끼리 돌려, 로그만으로 되짚은 활성 파티 인덱스(battleLogText.activeIndexTrace)가 턴마다 실제 엔진 상태와 같은지 대조(4.1 A1)
+ *            DUP=1이면 편마다 같은 종 3마리로 돌려 개체 구분을 시험한다
+ *   ai      AI 대 무작위 봇 + AI 대 AI 승률, 턴당 판단 시간, NaN 점수 개수
  *   greedy   AI 대 그리디 봇(교체 없이 매 턴 가장 빨리 처치하는 기술만) — 파티를 좌우 바꿔 한 번 더
  *   diag     AI가 교체를 고른 순간의 모든 옵션 점수·c·d 출력(판단 이상 사례 찾기)
  *   style    AI(파라미터 A) 대 스타일 봇(환경변수 STYLE=switcher | setup | noisy), 파티 좌우 교대(ver.2.0 1-A — 상대 모델 판정용).
@@ -73,8 +75,8 @@ try {
   const state = await server.ssrLoadModule("/src/lib/battle/state.ts");
   const rt = await server.ssrLoadModule("/src/lib/battle/runTurn.ts");
   const sw = await server.ssrLoadModule("/src/lib/battle/switching.ts");
-  const ai = mode === "regress" ? null : await server.ssrLoadModule("/src/lib/battle/ai/index.ts");
-  const ev = mode === "regress" ? null : await server.ssrLoadModule("/src/lib/battle/ai/evaluator.ts");
+  const ai = mode === "regress" || mode === "logidx" ? null : await server.ssrLoadModule("/src/lib/battle/ai/index.ts");
+  const ev = mode === "regress" || mode === "logidx" ? null : await server.ssrLoadModule("/src/lib/battle/ai/evaluator.ts");
   const fx = await server.ssrLoadModule("/src/lib/battle/ai/statusMoveEffects.ts");
   // 변화기 종류 라벨(집계용)
   const pm = await server.ssrLoadModule("/src/lib/battle/ai/protectMoves.ts");
@@ -155,6 +157,8 @@ try {
   function makeSide(rng) {
     if (process.env.POOL === "samples") return sampleSide(rng);
     const members = [makeSlot(rng), makeSlot(rng), makeSlot(rng)];
+    // DUP=1(logidx용): 3마리 모두 같은 종(빌드·노력치는 각자) — 로그 종 id로는 개체를 못 가르는 파티
+    if (process.env.DUP === "1") members[1].slot.pokemonId = members[2].slot.pokemonId = members[0].slot.pokemonId;
     return { slots: members.map((m) => m.slot), movesList: members.map((m) => m.moves) };
   }
 
@@ -220,6 +224,9 @@ try {
     const partyRng = mulberry32(seed ^ 0x9e3779b9);
     let st = initial ?? state.createBattleState({ a: makeSide(partyRng), b: makeSide(partyRng) });
     const trace = [];
+    // logidx용: 화면 로그와 같게 강제 교체 합성 카드(BattleLogPage.resolveForcedSwitch)를 끼운 로그와, 각 항목 직후의 실제 활성 인덱스
+    const uiLog = [];
+    const actualEnd = [];
     const timings = [];
     for (let turn = 0; turn < 80; turn++) {
       const t0 = performance.now();
@@ -236,13 +243,25 @@ try {
       }
       if ("awaitingSelfSwitch" in out) throw new Error("stuck in pause");
       trace.push(out.result);
+      uiLog.push(out.result);
       st = out.nextState;
-      if (out.result.winner) return { winner: out.result.winner, trace, turns: turn + 1, timings };
+      actualEnd.push({ a: st.sideA.activeIndex, b: st.sideB.activeIndex });
+      if (out.result.winner) return { winner: out.result.winner, trace, turns: turn + 1, timings, uiLog, actualEnd, final: st };
       for (const key of ["a", "b"]) {
-        if (out.forcedSwitch?.[key]) st = sw.applySwitch(st, key, forced[key](st, key)).nextState;
+        if (out.forcedSwitch?.[key]) {
+          const toIndex = forced[key](st, key);
+          const applied = sw.applySwitch(st, key, toIndex);
+          st = applied.nextState;
+          uiLog.push({
+            turnNumber: st.turnNumber, order: ["a", "b"], activePokemonIds: { a: st.a.slot.pokemonId, b: st.b.slot.pokemonId },
+            actions: [], endOfTurn: [], expiredScreens: [], expiredSafeguard: [], turnStartAnnouncements: [],
+            switches: [{ side: key, fromIndex: -1, toIndex, outPokemonId: applied.outPokemonId, inPokemonId: applied.inPokemonId, entryMessages: applied.entryMessages }],
+          });
+          actualEnd.push({ a: st.sideA.activeIndex, b: st.sideB.activeIndex });
+        }
       }
     }
-    return { winner: "timeout", trace, turns: 80, timings };
+    return { winner: "timeout", trace, turns: 80, timings, uiLog, actualEnd, final: st };
   }
 
   if (mode === "regress") {
@@ -257,6 +276,33 @@ try {
       winners[r.winner]++;
     }
     console.log(JSON.stringify({ battles, turns, winners, hash: hash.digest("hex") }));
+  } else if (mode === "logidx") {
+    // 턴(합성 카드 포함)마다 되짚은 끝 인덱스 == 실제 인덱스, 행동마다 되짚은 인덱스의 종 == 로그에 찍힌 행동/피격 종.
+    // DUP=1이면 편마다 같은 종 3마리(빌드는 각각)라 종 비교는 의미가 없고 끝 인덱스 일치만 본다. 일루전 파티는 로그 종이 위장 종이라 종 비교에서 뺀다.
+    const { activeIndexTrace } = await server.ssrLoadModule("/src/lib/battleLogText.ts");
+    let entries = 0, actions = 0, switchTurns = 0;
+    const bad = [];
+    for (let s = 1; s <= battles; s++) {
+      const rng = mulberry32(s * 7919);
+      const r = runBattle(s, { a: randomPolicy(rng), b: randomPolicy(rng) }, { a: forcedSwitchRandom(rng), b: forcedSwitchRandom(rng) });
+      for (const side of ["a", "b"]) {
+        const party = (side === "a" ? r.final.sideA : r.final.sideB).party;
+        const ids = party.map((f) => f.slot.pokemonId);
+        const checkSpecies = process.env.DUP !== "1" && !ids.some((id) => id.includes("조로아크"));
+        activeIndexTrace(r.uiLog, side, ids).forEach((t, i) => {
+          entries++;
+          if (r.uiLog[i].switches.length) switchTurns++;
+          if (t.end !== r.actualEnd[i][side]) bad.push(`seed ${s} 턴${i} ${side} 끝 ${t.end} != ${r.actualEnd[i][side]}`);
+          r.uiLog[i].actions.forEach((a, j) => {
+            actions++;
+            const want = a.actor === side ? a.actorPokemonId : a.defenderPokemonId;
+            if (checkSpecies && ids[t.actions[j]] !== want) bad.push(`seed ${s} 턴${i} ${side} 행동${j} ${ids[t.actions[j]]} != ${want}`);
+          });
+        });
+      }
+    }
+    console.log(JSON.stringify({ battles, entries, actions, switchTurns, mismatches: bad.length, sample: bad.slice(0, 8) }));
+    if (bad.length) process.exitCode = 1;
   } else if (mode === "diag") {
     const name = (f) => data.getPokemon(f.slot.pokemonId)?.name;
     const fmt = (x) => (Number.isFinite(x) ? x.toFixed(2) : String(x));

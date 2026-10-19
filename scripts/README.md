@@ -109,6 +109,7 @@ python scripts/normalize_sprites.py x.png --category 포켓몬 --fix   # 트리 
 | `greedy` | AI 대 그리디 봇(교체 없이 가장 빨리 잡는 기술만), 파티 좌우 교대 — 파라미터 튜닝 기준 |
 | `h2h` | AI(파라미터 A) 대 AI(파라미터 B) — 상대 모델처럼 그리디 봇이 편향되는 변경의 비교용 |
 | `diag` | AI가 교체(또는 `DIAG`로 고른 행동)를 고른 순간의 옵션별 점수 덤프 |
+| `logidx` | 무작위 행동끼리 배틀하며, 로그만으로 되짚은 활성 파티 인덱스(`battleLogText.activeIndexTrace`)가 턴마다 실제 엔진 상태와 같은지 대조(4.1 A1) — 불일치가 있으면 종료 코드 1. `DUP=1`이면 편마다 같은 종 3마리 |
 
 환경변수로 파티 구성을 바꿀 수 있다: `PIVOT=1`(유턴류), `STATUS=1`(변화기), `SETUP=1`(랭크업기·배턴터치),
 `PROTECT=1`(방어류), `POOL=samples`(무작위 빌드 대신 기본 제공 샘플 파티에서 편마다 3마리 — `regress` 포함 3마리 모드 전부, 기본 해시는 불변; 기술 치환 환경변수는 샘플에 안 걸림). 파라미터·해시 기준값은 `docs/00_기획문서/03_battleAI_DEV/battle-ai-decision-layer.md` §12 참고.

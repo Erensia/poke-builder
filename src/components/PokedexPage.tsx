@@ -137,7 +137,7 @@ function FormTabs({
           type="button"
           role="tab"
           aria-selected={f.id === selectedId}
-          className={`pokedex-form-tab${f.id === selectedId ? " is-active" : ""}`}
+          className={`pokedex-form-tab tap-target${f.id === selectedId ? " is-active" : ""}`}
           onClick={() => onSelect(f.id)}
         >
           {f.label}
@@ -267,7 +267,7 @@ function PokedexDetail({ pokemon, onSelectMove }: { pokemon: Pokemon; onSelectMo
               <button
                 key={moveId}
                 type="button"
-                className="pokedex-move-chip"
+                className="pokedex-move-chip tap-target"
                 style={color ? { borderColor: color } : undefined}
                 onClick={() => onSelectMove(moveId)}
               >
