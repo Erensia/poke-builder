@@ -246,7 +246,7 @@
   gap: 0.3rem;
 }
 
-/* overflow를 버튼이 아니라 안쪽 글자 칸에 둔다 — 버튼에 overflow: hidden이 있으면 터치 확장(tap-target ::after)이 잘린다 */
+/* overflow를 버튼이 아니라 안쪽 글자 칸에 둔다 — 버튼에 overflow: hidden이 있으면 터치 확장(tap-target ::before)이 잘린다 */
 .party-move-pip {
   border: 1px solid var(--border);
   background: var(--surface-2);

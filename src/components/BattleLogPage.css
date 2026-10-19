@@ -188,10 +188,14 @@
   transition: opacity 0.12s ease, transform 0.12s ease;
 }
 
-.has-tip:hover::after,
-.has-tip:focus-visible::after {
-  opacity: 1;
-  transform: translateY(0);
+/* 호버가 되는 기기에서만 띄운다 — 터치에서는 누르는 순간 동작이 실행되는데 호버가 남아 말풍선이 계속 떠 있고,
+   버튼이 화면 오른쪽에 있으면 left: 0 기준이라 말풍선이 화면 밖으로 잘린다 */
+@media (hover: hover) {
+  .has-tip:hover::after,
+  .has-tip:focus-visible::after {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
