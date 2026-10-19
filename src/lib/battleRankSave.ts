@@ -4,6 +4,9 @@ import { applyRankResult, EMPTY_RANK, rankOf, type RankChange, type RankDisplay,
 /** 판별 이력은 최근 50판만 보관한다 */
 const HISTORY_LIMIT = 50;
 
+/** 시즌은 첫 랭크 판을 한 날부터 30일 */
+export const SEASON_MS = 30 * 24 * 60 * 60 * 1000;
+
 /** 랭크 판 한 줄(최근 순으로 쌓는다). 이탈은 패배와 같게 계산되지만 표시는 따로 한다 */
 export interface RankHistoryEntry {
   at: number;
@@ -96,7 +99,7 @@ export function settleAbandonedRank(save: RankSave, now: number): RankSave {
 }
 
 /**
- * 시즌 초기화 — 이번 시즌 기록을 남기고 랭크·이력을 처음으로 되돌린다(이전 시즌 기록은 유지).
+ * 시즌 초기화 — 이번 시즌 기록을 남기고 랭크·이력을 처음으로 되돌린다(이전 시즌 기록은 유지). 30일이 지나면 expireSeason이 자동으로 부른다.
  * 한 판도 안 한 시즌은 기록하지 않는다. 판이 진행 중이면 초기화하지 않는다(이탈=패배 우회 방지).
  */
 export function resetSeason(save: RankSave, now: number): RankSave {
@@ -115,4 +118,13 @@ export function resetSeason(save: RankSave, now: number): RankSave {
     party: save.lastParty,
   };
   return { ...EMPTY_RANK_SAVE, seasons: [...save.seasons, record] };
+}
+
+/**
+ * 30일 자동 초기화(5.0 R1 ⓓ) — 시즌 시작(첫 랭크 판)에서 30일이 지났으면 그 시즌을 닫는다. 앱을 열 때와 랭크 배틀을 시작할 때 부른다.
+ * 시즌 종료일은 점검한 시각이 아니라 시작 + 30일로 기록한다. 시작 시각이 없으면(= 이번 시즌 한 판도 안 함) 할 일이 없다.
+ */
+export function expireSeason(save: RankSave, now: number): RankSave {
+  if (save.seasonStartedAt === null || now - save.seasonStartedAt < SEASON_MS) return save;
+  return resetSeason(save, save.seasonStartedAt + SEASON_MS);
 }

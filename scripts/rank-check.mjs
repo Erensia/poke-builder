@@ -76,7 +76,7 @@ try {
   check("챔피언 도달 못 하면 달성 여부 false, 최대 레이팅만", !win(M(), 35).state.champion && win(M(), 35).state.maxRating === 1520);
 
   // ── 저장·정산·시즌 (lib/battleRankSave.ts) ──
-  const { EMPTY_RANK_SAVE, isRankSave, beginRankMatch, finishRankMatch, settleAbandonedRank, resetSeason } = await server.ssrLoadModule("/src/lib/battleRankSave.ts");
+  const { EMPTY_RANK_SAVE, isRankSave, beginRankMatch, finishRankMatch, settleAbandonedRank, resetSeason, expireSeason, SEASON_MS } = await server.ssrLoadModule("/src/lib/battleRankSave.ts");
   const party = Array(6).fill(null);
   const play = (save, won, now = 1000) => finishRankMatch(beginRankMatch(save, "s1", party, now), won ? { won: true, turns: 25 } : { won: false }, now + 1);
 
@@ -109,6 +109,21 @@ try {
   check("챔피언 시즌 기록", champ.champion && champ.finalRank.ball === "champion" && champ.finalRating === 2600 && champ.maxRating === 2650 && champ.wins === 40);
   check("저장 검증: 빈 기록·직렬화 왕복 통과", isRankSave(EMPTY_RANK_SAVE) && isRankSave(JSON.parse(JSON.stringify(many))) && isRankSave(JSON.parse(JSON.stringify(r1))));
   check("저장 검증: 손상된 값 거부", [null, {}, { ...EMPTY_RANK_SAVE, state: null }, { ...EMPTY_RANK_SAVE, history: {} }, { ...EMPTY_RANK_SAVE, state: { ...EMPTY_RANK, gauge: 1.5 } }, { ...EMPTY_RANK_SAVE, lastParty: [null] }].every((v) => !isRankSave(v)));
+
+  // ── 30일 자동 초기화 (ⓓ) ──
+  const DAY = 86400000;
+  const t0 = 1_000_000;
+  const p30 = play(play(EMPTY_RANK_SAVE, true, t0), false, t0 + 1000);
+  check("시즌 길이는 30일", SEASON_MS === 30 * DAY);
+  check("30일 전에는 그대로", expireSeason(p30, t0 + 30 * DAY - 1) === p30);
+  check("한 판도 안 한 시즌(시작 시각 없음)은 아무 일도 없다", expireSeason(EMPTY_RANK_SAVE, t0 + 999 * DAY) === EMPTY_RANK_SAVE);
+  const ex = expireSeason(p30, t0 + 45 * DAY);
+  check("30일이 지나면 시즌을 닫는다: 종료일은 시작+30일", ex.seasons.length === 1 && ex.seasons[0].season === 1 && ex.seasons[0].startedAt === t0 && ex.seasons[0].endedAt === t0 + 30 * DAY && ex.seasons[0].wins === 1, show(ex.seasons));
+  check("닫은 뒤 처음 상태·시작 시각·이력 비움", show(ex.state) === show(EMPTY_RANK) && ex.seasonStartedAt === null && ex.history.length === 0);
+  check("정확히 30일이면 닫는다", expireSeason(p30, t0 + 30 * DAY).seasons.length === 1);
+  check("판이 진행 중이면 닫지 않는다", expireSeason(beginRankMatch(p30, "s9", party, t0 + 1), t0 + 40 * DAY).seasons.length === 0);
+  const s2 = play(ex, true, t0 + 50 * DAY);
+  check("다음 시즌은 다음 첫 판부터 다시 30일", s2.seasonStartedAt === t0 + 50 * DAY && expireSeason(s2, t0 + 79 * DAY) === s2 && expireSeason(s2, t0 + 80 * DAY).seasons.map((x) => x.season).join() === "1,2");
 
   // ── 불변·범위 (무작위 판 2만 번) ──
   let seed = 7;
