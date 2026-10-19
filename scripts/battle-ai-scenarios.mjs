@@ -2673,6 +2673,24 @@ try {
     check("E1(3.3) 회복형 상대 앞 교체 왕복 감소", on < off, `억제 끔=${off} 켬=${on} (6판×12턴)`);
   }
 
+  // 실수 모델(5.0 R3): 꺼짐·rate 0은 원래 선택 그대로, rate 1은 차선책, 같은 난수면 같은 선택, 확정 처치(하드 오버라이드)는 제외
+  {
+    const lcg = (seed) => () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 2 ** 32);
+    const idOf = (st, decisionParams, seed) => {
+      const d = ai.chooseAiAction(st, "a", 0.5, { decisionParams, rng: lcg(seed) });
+      return d.action.kind === "move" ? d.action.move.id : `교체${d.action.toIndex}`;
+    };
+    const st = battle([mon("한카리아스", ["스톤에지", "지진", "용성군"].filter((m) => data.getMove(m)))], [mon("핫삼", ["불꽃펀치"], null, null, pts({ hp: 32, def: 32 }))]);
+    const base = idOf(st, undefined, 1);
+    const seeds = [1, 2, 3, 4, 5, 6, 7, 8];
+    const wide = { mistake: { rate: 1, margin: 1e9 } };
+    check("실수 모델 꺼짐·rate 0 → 원래 선택", seeds.every((sd) => idOf(st, { mistake: { rate: 0, margin: 1e9 } }, sd) === base), base);
+    check("실수 모델 rate 1 → 차선책 선택", seeds.every((sd) => idOf(st, wide, sd) !== base), seeds.map((sd) => idOf(st, wide, sd)).join(","));
+    check("실수 모델 같은 난수 → 같은 선택", seeds.every((sd) => idOf(st, wide, sd) === idOf(st, wide, sd)));
+    const sure = battle([mon("한카리아스", ["불꽃펀치", "지진"])], [mon("핫삼", ["코멧펀치"], null, null, pts())]);
+    check("실수 모델 확정 처치는 제외", seeds.every((sd) => idOf(sure, wide, sd) === "불꽃펀치"));
+  }
+
   console.table(rows);
   const failed = rows.filter((r) => !r.ok).length;
   console.log(failed === 0 ? "ALL PASS" : `${failed} FAILED`);

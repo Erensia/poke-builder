@@ -1,7 +1,7 @@
 import { type FighterKey, type TurnAction } from "@/types/battle";
 import { STRUGGLE_MOVE, opponentKey, type BattleState } from "../state";
 import { forcedLockedAction } from "../lockedAction";
-import { decide, scoreOption, type DecisionParams, type ScoredOption } from "./decision";
+import { decide, isHardOverride, scoreOption, type DecisionParams, type MistakeParams, type ScoredOption } from "./decision";
 import { evaluateOptions, type AiOption, type EvaluateOptions } from "./evaluator";
 import { withThreatModel, withThreatOverride, type ThreatModelParams } from "./opponentMoveModel";
 import { attachSwitchRead, levelOneDistribution, type LevelOneDistribution } from "./levelOne";
@@ -58,6 +58,17 @@ interface ChooseAiOptions extends EvaluateOptions {
    * 보정한다(교체 확률·변화기 확률·그 종의 기술별 습관).
    */
   opponentMemory?: OpponentMemory;
+  /** 실수 모델(params.mistake)의 난수 — 시뮬레이터가 판마다 시드 고정 난수를 넘겨 재현성을 얻는다. 기본 Math.random */
+  rng?: () => number;
+}
+
+/** 실수 모델: 확정 처치가 아니고 탐색이 꺼진 판단에서, 확률 rate로 "최선 − margin 이내" 차선책 중 하나를 균등 선택. 후보가 없으면 원래 선택 */
+function applyMistake(chosen: AiOption, scored: ScoredOption[], mistake: MistakeParams, rng: () => number): AiOption {
+  if (isHardOverride(chosen)) return chosen;
+  const best = Math.max(...scored.map((s) => s.score));
+  if (!Number.isFinite(best)) return chosen;
+  const alts = scored.filter((s) => s.option !== chosen && Number.isFinite(s.score) && best - s.score <= mistake.margin);
+  return alts.length > 0 && rng() < mistake.rate ? alts[Math.floor(rng() * alts.length)].option : chosen;
 }
 
 /**
@@ -78,7 +89,7 @@ export function chooseAiAction(
   // 점수 계산(파티 대면표는 이때 계산됨)도 같은 상대 기술 모델로
   const decision: (Partial<SearchResult> & { chosen: AiOption; scored: ScoredOption[] }) | null = withThreatModel(threatModelOf(params), () => {
     // 탐색·상대 모델을 뺀 파라미터 — 상대 쪽 추론(재귀 한 단계)과 오라클 롤아웃 안의 지금 AI가 쓴다
-    const { search: _search, opponentModel: _opponentModel, ...plainParams } = params;
+    const { search: _search, opponentModel: _opponentModel, mistake: _mistake, ...plainParams } = params;
     // 상대 모델 ver2(1-B): 상대 행동 분포를 먼저 추론하고(이때 덮어쓰기 없음 — 상대는 나를 고정 규칙으로 본다), 지금 대면의 평가·채점을
     // 그 분포로. 꺼져 있어도 undefined로 명시해 바깥(오라클 롤아웃 등)의 덮어쓰기가 새지 않게 한다.
     rawDistribution = params.opponentModel
@@ -106,7 +117,8 @@ export function chooseAiAction(
     });
   });
   if (!decision) return { action: { kind: "move", move: STRUGGLE_MOVE }, scored: [] };
-  const { chosen, scored } = decision;
+  const { scored } = decision;
+  const chosen = params.mistake && !params.search ? applyMistake(decision.chosen, scored, params.mistake, options.rng ?? Math.random) : decision.chosen;
   const action: TurnAction =
     chosen.optionType === "switch"
       ? { kind: "switch", toIndex: chosen.toIndex! }
