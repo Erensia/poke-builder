@@ -198,7 +198,7 @@
   line-height: 1.35; /* 옆의 맹독 같은 .toggle-pill과 세로 크기를 맞춘다(버튼은 font: inherit로 따라온다) */
 }
 
-/* 둥근 모서리는 overflow: hidden 대신 양끝 버튼의 반경으로 — overflow가 있으면 터치 확장(tap-target ::after)이 잘린다 */
+/* 둥근 모서리는 overflow: hidden 대신 양끝 버튼의 반경으로 — overflow가 있으면 터치 확장(tap-target ::before)이 잘린다 */
 .dinf-stepper button:first-child {
   border-radius: calc(var(--r-sm) - 1px) 0 0 calc(var(--r-sm) - 1px);
 }
