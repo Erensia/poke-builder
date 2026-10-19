@@ -119,7 +119,7 @@ export function SamplePartiesModal({
 
   return (
     <Modal title="샘플 파티" onClose={onClose}>
-      <div className="sample-party-filters" role="tablist" aria-label="샘플 파티 종류">
+      <div className="sample-party-filters tap-targets" role="tablist" aria-label="샘플 파티 종류">
         {FILTERS.map((f) => (
           <button
             key={f.key}
@@ -220,7 +220,7 @@ export function SamplePartiesModal({
                 })}
               </span>
             </div>
-            <div className="preset-item-actions">
+            <div className="preset-item-actions tap-targets">
               <button type="button" onClick={() => handleLoad(sample)}>
                 불러오기
               </button>

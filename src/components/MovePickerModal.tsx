@@ -54,7 +54,7 @@ export function MovePickerModal({
         <div className="move-picker-type-filter">
           <button
             type="button"
-            className={`move-picker-chip${typeFilter === null ? " is-active" : ""}`}
+            className={`move-picker-chip tap-target${typeFilter === null ? " is-active" : ""}`}
             onClick={() => setTypeFilter(null)}
           >
             전체
@@ -77,7 +77,7 @@ export function MovePickerModal({
             <button
               key={c}
               type="button"
-              className={`move-picker-chip${categoryFilter === c ? " is-active" : ""}`}
+              className={`move-picker-chip tap-target${categoryFilter === c ? " is-active" : ""}`}
               onClick={() => setCategoryFilter(categoryFilter === c ? null : c)}
             >
               {CATEGORY_LABEL[c]}

@@ -134,7 +134,7 @@ export function MoveDexPage({ initialMoveId, onInitialMoveConsumed }: MoveDexPag
             <button
               key={c.value}
               type="button"
-              className={`movedex-category-tab${categoryFilter === c.value ? " is-active" : ""}`}
+              className={`movedex-category-tab tap-target${categoryFilter === c.value ? " is-active" : ""}`}
               onClick={() => setCategoryFilter(c.value)}
             >
               {c.label}
@@ -160,7 +160,7 @@ export function MoveDexPage({ initialMoveId, onInitialMoveConsumed }: MoveDexPag
           </select>
           <button
             type="button"
-            className="movedex-sort-dir"
+            className="movedex-sort-dir tap-target"
             onClick={() => setSortDir((d) => (d === "asc" ? "desc" : "asc"))}
             aria-label={sortDir === "asc" ? "오름차순" : "내림차순"}
             title={sortDir === "asc" ? "오름차순" : "내림차순"}

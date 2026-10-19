@@ -242,10 +242,11 @@
 
 .party-slot-moves {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.3rem;
 }
 
+/* overflow를 버튼이 아니라 안쪽 글자 칸에 둔다 — 버튼에 overflow: hidden이 있으면 터치 확장(tap-target ::after)이 잘린다 */
 .party-move-pip {
   border: 1px solid var(--border);
   background: var(--surface-2);
@@ -255,10 +256,15 @@
   font-size: var(--fs-xs);
   font-weight: 500;
   cursor: pointer;
+  min-width: 0;
+  text-align: center;
+}
+
+.party-move-pip-text {
+  display: block;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  text-align: center;
 }
 
 .party-move-pip:hover {

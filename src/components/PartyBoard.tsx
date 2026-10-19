@@ -119,14 +119,14 @@ export function PartyBoard() {
           <span className="party-board-autosave">브라우저에 자동 저장됨</span>
           <button
             type="button"
-            className="party-board-reset"
+            className="party-board-reset tap-target"
             onClick={() => setShowPartyPresets(true)}
           >
             저장된 파티
           </button>
           <button
             type="button"
-            className="party-board-reset"
+            className="party-board-reset tap-target"
             onClick={handleReset}
             disabled={filledCount === 0}
           >

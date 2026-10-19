@@ -18,7 +18,7 @@ export function InfoTooltip({ text, children }: { text: string; children: ReactN
   return (
     <span className="info-tooltip" ref={ref}>
       {children}
-      <button type="button" className="info-tooltip-icon" aria-label="설명 보기" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+      <button type="button" className="info-tooltip-icon tap-target" aria-label="설명 보기" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
         ⓘ
       </button>
       <span className={`info-tooltip-bubble${open ? " is-open" : ""}`} role="tooltip">

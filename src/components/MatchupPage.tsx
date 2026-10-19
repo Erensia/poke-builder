@@ -527,7 +527,7 @@ export function MatchupPage() {
                   : "상대의 기술을 버티려면 내 포켓몬에 HP·방어(특방) 포인트를 최소 얼마나 줘야 하는지 확인합니다"}
           </p>
         </div>
-        <div className="matchup-tabs" role="tablist" aria-label="계산기 종류">
+        <div className="matchup-tabs tap-targets" role="tablist" aria-label="계산기 종류">
           <button type="button" role="tab" aria-selected={tab === "calc"} className={tab === "calc" ? "is-active" : undefined} onClick={() => setTab("calc")}>
             {TAB_LABEL.calc}
           </button>

@@ -27,17 +27,17 @@ export function BattleSeriesPanel({ series, startBlockedReason, onStart }: Battl
         {active && current && ` · 지금 상대: ${current.name} (${current.style})`}
       </span>
       {active ? (
-        <button type="button" className="battle-setup-load-party" onClick={series.stop}>
+        <button type="button" className="battle-setup-load-party tap-target" onClick={series.stop}>
           종료하기
         </button>
       ) : (
-        <button type="button" className="battle-setup-load-party" disabled={!!startBlockedReason} title={startBlockedReason ?? undefined} onClick={() => onStart(series.start())}>
+        <button type="button" className="battle-setup-load-party tap-target" disabled={!!startBlockedReason} title={startBlockedReason ?? undefined} onClick={() => onStart(series.start())}>
           시작하기
         </button>
       )}
       {(usableMine > 0 || save.includeMine) && (
         <div className="battle-series-mine">
-          <label className="toggle-pill">
+          <label className="toggle-pill tap-target">
             <input type="checkbox" checked={save.includeMine} disabled={active} onChange={(e) => series.setIncludeMine(e.target.checked)} />
             <span>내 샘플 {usableMine}개도 상대로 쓰기{active ? " (프런티어 종료 후 바꿀 수 있어요)" : ""}</span>
           </label>
@@ -60,7 +60,7 @@ export function BattleSeriesPanel({ series, startBlockedReason, onStart }: Battl
           {!active && (
             <button
               type="button"
-              className="battle-setup-load-party battle-series-reset"
+              className="battle-setup-load-party tap-target battle-series-reset"
               onClick={() => {
                 if (window.confirm("연승·최대 연승·샘플 파티별 승패 기록을 모두 지울까요?")) series.reset();
               }}

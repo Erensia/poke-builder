@@ -115,7 +115,7 @@ export function BattleSetupCard({
           <span className="party-slot-empty-label">포켓몬 선택</span>
         </button>
         {hasSamples && (
-          <button type="button" className="party-slot-sample-link" onClick={onOpenSamplePicker}>
+          <button type="button" className="party-slot-sample-link tap-target" onClick={onOpenSamplePicker}>
             저장된 샘플에서 불러오기
           </button>
         )}
@@ -219,43 +219,43 @@ export function BattleSetupCard({
             <button
               key={i}
               type="button"
-              className={`party-move-pip${move ? " has-type" : " is-empty"}`}
+              className={`party-move-pip tap-target${move ? " has-type" : " is-empty"}`}
               style={moveColor ? { background: moveColor } : undefined}
               onClick={() => onPickMove(i as 0 | 1 | 2 | 3)}
             >
-              {move ? move.name : "＋"}
+              <span className="party-move-pip-text">{move ? move.name : "＋"}</span>
             </button>
           );
         })}
       </div>
 
       <div className="party-slot-meta">
-        <button type="button" className="party-meta-pip" onClick={onPickAbility}>
+        <button type="button" className="party-meta-pip tap-target" onClick={onPickAbility}>
           <span className="party-meta-label">특성</span>
           <span className="party-meta-value">
             {slot!.ability ? getAbility(slot!.ability)?.name : "미지정"}
           </span>
         </button>
-        <button type="button" className="party-meta-pip" onClick={onPickItem}>
+        <button type="button" className="party-meta-pip tap-target" onClick={onPickItem}>
           <span className="party-meta-label">도구</span>
           <span className="party-meta-value">{slot!.item ? getItem(slot!.item)?.name : "미지정"}</span>
         </button>
-        <button type="button" className="party-meta-pip" onClick={onPickNature}>
+        <button type="button" className="party-meta-pip tap-target" onClick={onPickNature}>
           <span className="party-meta-label">성격</span>
           <span className="party-meta-value">{slot!.nature ? getNature(slot!.nature)?.name : "미지정"}</span>
         </button>
-        <button type="button" className="party-meta-pip" onClick={onPickPoints}>
+        <button type="button" className="party-meta-pip tap-target" onClick={onPickPoints}>
           <span className="party-meta-label">포인트</span>
           <span className="party-meta-value">{totalAbilityPoints(slot!.points)} / 66</span>
         </button>
         {pokemon.genderCategory === "both" && (
-          <button type="button" className="party-meta-pip" onClick={onToggleGender}>
+          <button type="button" className="party-meta-pip tap-target" onClick={onToggleGender}>
             <span className="party-meta-label">성별</span>
             <span className="party-meta-value">{genderLabel(getEffectiveGender(pokemon, slot!) ?? "male")}</span>
           </button>
         )}
         {pokemon.sizeForms && (
-          <button type="button" className="party-meta-pip" onClick={onCycleSizeForm}>
+          <button type="button" className="party-meta-pip tap-target" onClick={onCycleSizeForm}>
             <span className="party-meta-label">크기</span>
             <span className="party-meta-value">
               {(() => {
@@ -267,7 +267,7 @@ export function BattleSetupCard({
           </button>
         )}
         {pokemon.formVariants && !pokemon.formVariantByGender && (
-          <button type="button" className="party-meta-pip" onClick={onCycleFormVariant}>
+          <button type="button" className="party-meta-pip tap-target" onClick={onCycleFormVariant}>
             <span className="party-meta-label">모습</span>
             <span className="party-meta-value">
               {(() => {
@@ -281,7 +281,7 @@ export function BattleSetupCard({
         {pokemon.cosmeticForms && (
           <button
             type="button"
-            className="party-meta-pip"
+            className="party-meta-pip tap-target"
             onClick={
               pokemon.cosmeticForms.length <= COSMETIC_FORM_CYCLE_MAX
                 ? onCycleCosmeticForm

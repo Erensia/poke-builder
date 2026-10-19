@@ -284,7 +284,7 @@ export function PointsEditorModal({
               </span>
               <button
                 type="button"
-                className="points-step"
+                className="points-step tap-target"
                 onClick={() => onStep(stat, -1)}
                 disabled={value <= 0}
                 aria-label={`${STAT_LABELS[stat]} 포인트 감소`}
@@ -302,7 +302,7 @@ export function PointsEditorModal({
               />
               <button
                 type="button"
-                className="points-step"
+                className="points-step tap-target"
                 onClick={() => onStep(stat, 1)}
                 disabled={value >= maxForStat}
                 aria-label={`${STAT_LABELS[stat]} 포인트 증가`}

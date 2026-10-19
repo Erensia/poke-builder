@@ -53,7 +53,7 @@ function hitCounts(move: Move): number[] {
 function MoveSlot({ move, hits, emptyLabel, onPick, onSetHits }: { move: Move | undefined; hits?: number; emptyLabel: string; onPick?: () => void; onSetHits?: (hits: number) => void }) {
   return (
     <>
-      <button type="button" className={`matchup-move-pip${move ? " has-type" : ""}`} style={move?.type ? { background: TYPE_COLORS[move.type] } : undefined} onClick={onPick}>
+      <button type="button" className={`matchup-move-pip tap-target${move ? " has-type" : ""}`} style={move?.type ? { background: TYPE_COLORS[move.type] } : undefined} onClick={onPick}>
         {move ? move.name : emptyLabel}
       </button>
       {move && onSetHits && hitCounts(move).length > 0 && <PillRow options={hitCounts(move).map((n) => ({ value: n, label: `×${n}` }))} value={hits} onChange={onSetHits} />}
@@ -213,7 +213,7 @@ export function MatchupSlotCard({
           <span className="matchup-slot-empty-text">포켓몬 선택</span>
         </button>
         {hasSamples && (
-          <button type="button" className="matchup-slot-sample-link" onClick={onOpenSamplePicker}>
+          <button type="button" className="matchup-slot-sample-link tap-target" onClick={onOpenSamplePicker}>
             저장된 샘플에서 불러오기
           </button>
         )}
@@ -300,36 +300,36 @@ export function MatchupSlotCard({
       </div>
 
       <div className="matchup-meta-row">
-        <button type="button" className="matchup-meta-pip" onClick={onPickAbility}>
+        <button type="button" className="matchup-meta-pip tap-target" onClick={onPickAbility}>
           <span className="matchup-meta-label">특성</span>
           <span className="matchup-meta-value">
             {slot.ability ? getAbility(slot.ability)?.name : "미지정"}
           </span>
         </button>
-        <button type="button" className="matchup-meta-pip" onClick={onPickItem}>
+        <button type="button" className="matchup-meta-pip tap-target" onClick={onPickItem}>
           <span className="matchup-meta-label">도구</span>
           <span className="matchup-meta-value">
             {slot.item ? getItem(slot.item)?.name : "미지정"}
           </span>
         </button>
-        <button type="button" className="matchup-meta-pip" onClick={onPickNature}>
+        <button type="button" className="matchup-meta-pip tap-target" onClick={onPickNature}>
           <span className="matchup-meta-label">성격</span>
           <span className="matchup-meta-value">
             {slot.nature ? getNature(slot.nature)?.name : "미지정"}
           </span>
         </button>
-        <button type="button" className="matchup-meta-pip" onClick={onPickPoints}>
+        <button type="button" className="matchup-meta-pip tap-target" onClick={onPickPoints}>
           <span className="matchup-meta-label">포인트</span>
           <span className="matchup-meta-value">{usedPoints} / 66</span>
         </button>
-        <button type="button" className="matchup-meta-pip" onClick={onPickStages}>
+        <button type="button" className="matchup-meta-pip tap-target" onClick={onPickStages}>
           <span className="matchup-meta-label">랭크</span>
           <span className="matchup-meta-value">
             {activeStageCount > 0 ? `${activeStageCount}개 변경` : "0랭크"}
           </span>
         </button>
         {pokemon?.sizeForms && (
-          <button type="button" className="matchup-meta-pip" onClick={onCycleSizeForm}>
+          <button type="button" className="matchup-meta-pip tap-target" onClick={onCycleSizeForm}>
             <span className="matchup-meta-label">크기</span>
             <span className="matchup-meta-value">
               {(() => {
@@ -341,7 +341,7 @@ export function MatchupSlotCard({
           </button>
         )}
         {pokemon?.formVariants && (
-          <button type="button" className="matchup-meta-pip" onClick={onCycleFormVariant}>
+          <button type="button" className="matchup-meta-pip tap-target" onClick={onCycleFormVariant}>
             {/* 매치업엔 성별 핍이 없어 formVariantByGender 종은 이 핍이 성별 선택을 겸한다. */}
             <span className="matchup-meta-label">{pokemon.formVariantByGender ? "성별" : "모습"}</span>
             <span className="matchup-meta-value">
@@ -356,7 +356,7 @@ export function MatchupSlotCard({
         {pokemon?.cosmeticForms && (
           <button
             type="button"
-            className="matchup-meta-pip"
+            className="matchup-meta-pip tap-target"
             onClick={
               pokemon.cosmeticForms.length <= COSMETIC_FORM_CYCLE_MAX
                 ? onCycleCosmeticForm
@@ -379,7 +379,7 @@ export function MatchupSlotCard({
           <div className="matchup-toggle-row">
             {!hideTurnAssumptions && (
               <>
-                <label className="toggle-pill" title="상대 도구를 빼앗은 것으로 계산(매지션·곡예)">
+                <label className="toggle-pill tap-target" title="상대 도구를 빼앗은 것으로 계산(매지션·곡예)">
                   <input
                     type="checkbox"
                     checked={!!slot.itemStolenFromOpponent}
@@ -387,7 +387,7 @@ export function MatchupSlotCard({
                   />
                   <span>도구 강탈</span>
                 </label>
-                <label className="toggle-pill" title="곡예 발동 후라고 가정 — 스피드 2배">
+                <label className="toggle-pill tap-target" title="곡예 발동 후라고 가정 — 스피드 2배">
                   <input
                     type="checkbox"
                     checked={!!slot.unburdenAssumed}
@@ -398,7 +398,7 @@ export function MatchupSlotCard({
               </>
             )}
           {role === "attacker" && onToggleCrit && (
-            <label className="toggle-pill" title={critBlocked ? "상대 특성으로 급소에 맞지 않음" : "급소에 맞았다고 가정"}>
+            <label className="toggle-pill tap-target" title={critBlocked ? "상대 특성으로 급소에 맞지 않음" : "급소에 맞았다고 가정"}>
               <input type="checkbox" checked={!!slot.critAssumed} onChange={(e) => onToggleCrit(e.target.checked)} />
               <span>{critBlocked ? "급소 (무효)" : "급소"}</span>
             </label>
@@ -468,25 +468,25 @@ export function MatchupSlotCard({
         {role === "attacker" &&
           onSetPowerCondition &&
           powerConditions.map((t) => (
-            <label key={t.key} className="toggle-pill">
+            <label key={t.key} className="toggle-pill tap-target">
               <input type="checkbox" checked={!!slot[t.key]} onChange={(e) => onSetPowerCondition(t.key, e.target.checked)} />
               <span>{t.label}</span>
             </label>
           ))}
         {role === "attacker" && ability?.changesUserTypeToMoveType && onToggleTypeShift && (
-          <label className="toggle-pill">
+          <label className="toggle-pill tap-target">
             <input type="checkbox" checked={!!slot.typeShiftAssumed} onChange={(e) => onToggleTypeShift(e.target.checked)} />
             <span>리베로•변환자재 자속보정</span>
           </label>
         )}
         {role === "attacker" && pinchRelevant && onTogglePinch && (
-          <label className="toggle-pill">
+          <label className="toggle-pill tap-target">
             <input type="checkbox" checked={!!slot.pinchAssumed} onChange={(e) => onTogglePinch(e.target.checked)} />
             <span>HP 1/3 이하 가정</span>
           </label>
         )}
         {role === "defender" && fullHpRelevant && onToggleFullHp && (
-          <label className="toggle-pill">
+          <label className="toggle-pill tap-target">
             <input type="checkbox" checked={slot.fullHpAssumed ?? true} onChange={(e) => onToggleFullHp(e.target.checked)} />
             <span>HP 가득 가정({ability?.name} 발동)</span>
           </label>
