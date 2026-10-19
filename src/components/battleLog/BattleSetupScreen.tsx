@@ -50,8 +50,8 @@ export function BattleSetupScreen({
   onLoadRandomSlotParty: (side: Side) => void;
   /** 배틀 프런티어 중에는 상대 편을 수동으로 바꿀 수 없다 */
   opponentLocked: boolean;
-  /** 상대 편이 잠겼을 때 안내 문구 */
-  lockedNote: string;
+  /** 상대 편이 잠겼을 때 안내 문구(없으면 표시하지 않는다) */
+  lockedNote: string | null;
   /** 대전 시작이 막혔을 때 파티 문제 대신 보여 줄 이유(없으면 기본 안내) */
   proceedBlockedReason?: string;
 }) {
@@ -110,7 +110,7 @@ export function BattleSetupScreen({
       {(["a", "b"] as const).map((side) => (
         <Fragment key={side}>
           <div className={`battle-setup-column${side === "b" && opponentLocked ? " is-locked" : ""}`} inert={side === "b" && opponentLocked}>
-            {side === "b" && opponentLocked && <p className="battle-lock-warning">{lockedNote}</p>}
+            {side === "b" && opponentLocked && lockedNote && <p className="battle-lock-warning">{lockedNote}</p>}
             <div className="battle-setup-actions">
               {hasPartyPresets && (
                 <button

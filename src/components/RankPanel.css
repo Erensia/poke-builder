@@ -126,16 +126,6 @@
   font-size: var(--fs-xs);
 }
 
-.rank-reset {
-  margin-top: 0.5rem;
-}
-
-.rank-confirm-actions {
-  display: flex;
-  gap: 0.5rem;
-  justify-content: flex-end;
-}
-
 /* 승패 직후 계산 내역 */
 .rank-result {
   margin: 0.5rem 0;

@@ -1,9 +1,8 @@
-import { useState } from "react";
 import { rankLabel, rankOf } from "../lib/battleRank";
+import { SEASON_MS } from "../lib/battleRankSave";
 import { getPokemon, SAMPLE_PARTIES } from "../lib/data";
 import type { useRankBattle } from "../hooks/useRankBattle";
 import type { SamplePartyPreset } from "../types/party";
-import { Modal } from "./Modal";
 import { RankGauge } from "./RankGauge";
 import { describeChange } from "../lib/battleRankText";
 import "./RankPanel.css";
@@ -11,6 +10,8 @@ import "./RankPanel.css";
 const RESULT_LABEL = { win: "승", loss: "패", abandon: "이탈" } as const;
 const date = (ms: number) => new Date(ms).toLocaleDateString("ko-KR");
 const dateTime = (ms: number) => new Date(ms).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
+/** 시즌 남은 일수(오늘 포함 올림) */
+const daysLeft = (startedAt: number) => Math.max(0, Math.ceil((startedAt + SEASON_MS - Date.now()) / 86_400_000));
 const opponentName = (id: string) => SAMPLE_PARTIES.find((p) => p.id === id)?.name ?? id;
 
 interface RankPanelProps {
@@ -23,10 +24,9 @@ interface RankPanelProps {
 
 /** 랭크배틀 프로필 — 랭크·게이지·레이팅·연승, 시작/종료, 이력과 시즌 기록, 초기화. 대전 설정 화면 맨 위에 둔다 */
 export function RankPanel({ rank, startBlockedReason, onStart }: RankPanelProps) {
-  const { save, active, current } = rank;
+  const { save, active } = rank;
   const { state } = save;
   const display = rankOf(state);
-  const [confirmReset, setConfirmReset] = useState(false);
 
   return (
     <div className="rank-panel">
@@ -44,8 +44,7 @@ export function RankPanel({ rank, startBlockedReason, onStart }: RankPanelProps)
             {state.streak}연승 · {state.lossStreak}연패 · 이번 시즌 {state.wins}승 {state.losses}패
           </span>
           <span className="rank-sub">
-            {save.seasons.length + 1}시즌{save.seasonStartedAt !== null && ` · ${date(save.seasonStartedAt)} 시작`}
-            {active && current && ` · 지금 상대: ${current.name} (${current.style})`}
+            {save.seasons.length + 1}시즌{save.seasonStartedAt !== null && ` · ${date(save.seasonStartedAt)} 시작 · ${daysLeft(save.seasonStartedAt)}일 남음(30일 시즌, 끝나면 자동 초기화)`}
           </span>
           <span className="rank-sub">결과가 나오기 전에 나가면(탭 이동·새로고침·창 닫기) 이 판은 패배로 기록돼요.</span>
         </div>
@@ -106,37 +105,6 @@ export function RankPanel({ rank, startBlockedReason, onStart }: RankPanelProps)
             ))}
           </ul>
         </details>
-      )}
-
-      {!active && (state.wins + state.losses > 0 || save.seasons.length > 0) && (
-        <button type="button" className="battle-setup-load-party tap-target rank-reset" onClick={() => setConfirmReset(true)}>
-          랭크 초기화
-        </button>
-      )}
-
-      {confirmReset && (
-        <Modal title="랭크 초기화" onClose={() => setConfirmReset(false)}>
-          <p>
-            {state.wins + state.losses > 0
-              ? `${save.seasons.length + 1}시즌 기록(마지막 랭크·최대 레이팅·챔피언 달성 여부·승수·마지막 파티)을 저장하고, 랭크를 몬스터볼 4로 되돌려요. 이력도 비워져요.`
-              : "아직 한 판도 안 해서 시즌 기록은 남기지 않아요."}
-          </p>
-          <div className="rank-confirm-actions">
-            <button type="button" className="battle-setup-load-party tap-target" onClick={() => setConfirmReset(false)}>
-              취소
-            </button>
-            <button
-              type="button"
-              className="battle-setup-load-party tap-target"
-              onClick={() => {
-                rank.reset();
-                setConfirmReset(false);
-              }}
-            >
-              초기화
-            </button>
-          </div>
-        </Modal>
       )}
     </div>
   );
