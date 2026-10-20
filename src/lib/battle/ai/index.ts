@@ -64,7 +64,7 @@ interface ChooseAiOptions extends EvaluateOptions {
 
 /** 실수 모델: 확정 처치가 아니고 탐색이 꺼진 판단에서, 확률 rate로 "최선 − margin 이내" 차선책 중 하나를 균등 선택. 후보가 없으면 원래 선택 */
 function applyMistake(chosen: AiOption, scored: ScoredOption[], mistake: MistakeParams, rng: () => number): AiOption {
-  if (isHardOverride(chosen)) return chosen;
+  if (!mistake.hardOverride && isHardOverride(chosen)) return chosen;
   const best = Math.max(...scored.map((s) => s.score));
   if (!Number.isFinite(best)) return chosen;
   const alts = scored.filter((s) => s.option !== chosen && Number.isFinite(s.score) && best - s.score <= mistake.margin);
