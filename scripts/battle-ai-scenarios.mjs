@@ -2689,6 +2689,7 @@ try {
     check("실수 모델 같은 난수 → 같은 선택", seeds.every((sd) => idOf(st, wide, sd) === idOf(st, wide, sd)));
     const sure = battle([mon("한카리아스", ["불꽃펀치", "지진"])], [mon("핫삼", ["코멧펀치"], null, null, pts())]);
     check("실수 모델 확정 처치는 제외", seeds.every((sd) => idOf(sure, wide, sd) === "불꽃펀치"));
+    check("실수 모델 hardOverride면 확정 처치도 대상", seeds.some((sd) => idOf(sure, { mistake: { ...wide.mistake, hardOverride: true } }, sd) !== "불꽃펀치"));
   }
 
   console.table(rows);

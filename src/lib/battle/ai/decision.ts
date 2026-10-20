@@ -128,6 +128,8 @@ export interface DecisionParams {
 export interface MistakeParams {
   rate: number;
   margin: number;
+  /** true면 확정 처치 선택도 실수 대상(기본 false) — 약한 프로필이 막타를 놓치게 할 때 */
+  hardOverride?: boolean;
 }
 
 export interface OpponentModelParams {
