@@ -34,6 +34,7 @@ import { forcedLockedAction } from "../lib/battle/lockedAction";
 import { runTurn, resumeTurn } from "../lib/battle/runTurn";
 import type { FighterKey, TurnAction, TurnResult } from "../types/battle";
 import { chooseAiForcedSwitch, chooseAiSelection, sampleRiskAversion } from "../lib/battle/ai";
+import { RANK_AI_PROFILES } from "../lib/battle/ai/rankProfile";
 import { APP_DECISION_PARAMS, chooseAiActionAsync, prewarmAiWorker } from "../lib/battle/ai/aiClient";
 import { combinedMemory, emptyOpponentMemory, observeOpponent } from "../lib/battle/ai/opponentMemory";
 import { statusMoveIdsOf } from "../lib/battle/ai";
@@ -553,7 +554,7 @@ function useBattleLogSession(mode: BattleMode) {
       key: aiSide!,
       riskAversion: aiRiskAversion,
       legalMoveIds: selectableMoveIds(aiSide!),
-      decisionParams: APP_DECISION_PARAMS,
+      decisionParams: mode === "rank" ? RANK_AI_PROFILES[rank.aiLevel] : APP_DECISION_PARAMS,
       opponentMemory: combinedMemory(aiMemory.memory, aiSessionRef.current),
     }).then((result) => {
       if (requestId !== aiRequestRef.current) return; // 계산 도중 초기화·새 대전

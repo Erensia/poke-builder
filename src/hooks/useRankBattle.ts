@@ -2,6 +2,7 @@ import { useState } from "react";
 import { SAMPLE_PARTIES } from "../lib/data";
 import type { RankState } from "../lib/battleRank";
 import { beginRankMatch, expireSeason, finishRankMatch, settleAbandonedRank, type RankHistoryEntry, type RankSave } from "../lib/battleRankSave";
+import { pickRankOpponent, resolveRankAiPolicy } from "../lib/battle/ai/rankProfile";
 import { loadBattleRank, saveBattleRank } from "../lib/storage";
 import type { PartySlots, SamplePartyPreset } from "../types/party";
 
@@ -9,12 +10,6 @@ import type { PartySlots, SamplePartyPreset } from "../types/party";
 export interface RankLastResult {
   before: RankState;
   entry: RankHistoryEntry;
-}
-
-// ponytail: 상대는 기본 샘플 파티 무작위(직전 상대 제외). 랭크·연패에 맞춘 상대 선택은 R3에서 이 함수를 바꾼다
-function pickOpponent(prevId?: string): SamplePartyPreset {
-  const pool = SAMPLE_PARTIES.filter((p) => p.id !== prevId);
-  return pool[Math.floor(Math.random() * pool.length)];
 }
 
 /**
@@ -32,6 +27,7 @@ export function useRankBattle() {
   });
   const [active, setActive] = useState(false);
   const [current, setCurrent] = useState<SamplePartyPreset | null>(null);
+  const [aiLevel, setAiLevel] = useState(0);
   const [lastResult, setLastResult] = useState<RankLastResult | null>(null);
 
   function update(next: RankSave) {
@@ -39,12 +35,19 @@ export function useRankBattle() {
     saveBattleRank(next);
   }
 
+  /** 지금 랭크·연패에 맞는 상대 파티와 AI 단계를 정한다(정책: rankProfile.ts) */
+  function choose(state: RankState, prevId?: string): SamplePartyPreset {
+    const policy = resolveRankAiPolicy(state);
+    setAiLevel(policy.level);
+    return pickRankOpponent(SAMPLE_PARTIES, policy.tier, prevId);
+  }
+
   /** 랭크배틀을 켜고 첫 상대를 돌려준다. 랭크·연승은 이어진다 */
   function start(): SamplePartyPreset {
     // 탭을 오래 켜 둔 채 30일이 지났으면 시즌을 먼저 닫는다
     const fresh = expireSeason(save, Date.now());
     if (fresh !== save) update(fresh);
-    const first = pickOpponent();
+    const first = choose(fresh.state);
     setCurrent(first);
     setActive(true);
     setLastResult(null);
@@ -68,7 +71,7 @@ export function useRankBattle() {
 
   /** 다음 상대로 넘어간다 */
   function next(): SamplePartyPreset {
-    const opponent = pickOpponent(current?.id);
+    const opponent = choose(save.state, current?.id);
     setCurrent(opponent);
     return opponent;
   }
@@ -78,5 +81,5 @@ export function useRankBattle() {
     setCurrent(null);
   }
 
-  return { save, active, current, lastResult, start, begin, record, next, stop };
+  return { save, active, current, aiLevel, lastResult, start, begin, record, next, stop };
 }
