@@ -118,6 +118,16 @@ export interface DecisionParams {
    * readSwitch면 상대 교체 확률 q ≥ minSwitchProb일 때 공격기 점수를 들어올 포켓몬 기준과 섞는다(교체 읽기). undefined면 끔(이전 동작).
    */
   opponentModel?: OpponentModelParams;
+  /**
+   * 실수 모델(ver.5.0 R3 — 랭크배틀 약한 AI 프로필): 확률 rate로 점수가 (최선 − margin) 이내인 차선책 중 하나를 균등 선택한다. undefined면 끔(이전 동작).
+   * 탐색(search)이 켜지면 적용하지 않는다(탐색 값이 scored와 달라 합성이 복잡). 확정 처치(isHardOverride)·강제 교체는 실수에서 제외.
+   */
+  mistake?: MistakeParams;
+}
+
+export interface MistakeParams {
+  rate: number;
+  margin: number;
 }
 
 export interface OpponentModelParams {

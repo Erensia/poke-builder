@@ -482,9 +482,12 @@ try {
       o.optionType === "switch" ? "switch" : o.move.category === "status" ? statusLabel(o.move) : o.move.selfSwitchAfterDamage ? "pivot" : "attack";
     // LEARN=1: A 쪽(파라미터 A)이 B를 대전 간 누적 학습
     const learner = makeLearner();
-    const policy = (params, risk, which = ai, learn = null) => (st, key) => {
+    const policy = (params, risk, which = ai, learn = null) => {
+      // 실수 모델(params.mistake)의 난수 — 판의 risk(시드에서 나옴)로 고정해 같은 시드면 같은 실수
+      const rng = mulberry32(Math.floor(risk * 2 ** 31) ^ 0x6d157a4e);
+      return (st, key) => {
       const t0 = performance.now();
-      const d = which.chooseAiAction(st, key, risk, { decisionParams: params, ...learn?.options() });
+      const d = which.chooseAiAction(st, key, risk, { decisionParams: params, rng, ...learn?.options() });
       learn?.note(d, st, key);
       if (d.baseChosen) {
         const ms = performance.now() - t0;
@@ -509,6 +512,7 @@ try {
         }
       }
       return remap(d.action);
+      };
     };
     const forced = (params, risk, which = ai) => (st, key) => which.chooseAiForcedSwitch(st, key, risk, params) ?? living(st, key)[0];
     const res = { aWins: 0, bWins: 0, other: 0 };
