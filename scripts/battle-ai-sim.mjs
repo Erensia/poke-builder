@@ -19,6 +19,9 @@
  *   selectvs 3선출 방식 A 대 B(ver.2.1 A-0): 같은 파티 두 개를 두고 A·B 각각이 양쪽 파티 선출을 맡아 좌우·파티를 바꿔 4판씩(시드당 4판).
  *            대전은 양쪽 같은 어려움 AI. 인자 4·5번째가 A·B 선출 옵션 JSON — chooseAiSelection 옵션({...}) 또는 {"kind":"random"|"first"}(비AI 기준).
  *            환경변수 POOL=samples(기본, 기본 제공 샘플 파티 중 서로 다른 둘 — 2.2 B5에서 26개가 돼 같은 시드의 대진이 2.1 때(20개)와 달라졌으니 그 기준값은 재현되지 않는다) | random(무작위 6마리 빌드).
+ *   partyvs  샘플 파티 두 개의 강도 비교(ver.5.0 R3 S1): 환경변수 PAIRS="i-j,i-j,..."(SAMPLE_PARTIES 인덱스 쌍, 필수)마다 [판 수]개 시드를 돌고,
+ *            시드당 P가 a편·b편인 2판(양쪽 같은 AI — 인자 4번째 JSON이 결정 파라미터, 3선출은 chooseAiSelection 기본). 결과는 쌍별 {pWins,qWins,other,aSideWins}.
+ *            scripts/rank-party-tiers.mjs가 쌍을 나눠 병렬 실행·합산해 등급을 매긴다.
  *
  * 예) npm run sim:ai -- greedy 150 '{"tieThreshold":0.2}'   ← 파라미터 튜닝: 값을 바꿔 승률 비교
  * 환경변수 POOL=samples(regress 제외 3마리 모드 전부, 2.2 B3): 편마다 기본 제공 샘플 파티 하나에서 3마리를 뽑는다(기본은 무작위 빌드).
@@ -621,6 +624,35 @@ try {
       }
     }
     console.log(JSON.stringify({ battles: (seedTo - seedFrom + 1) * 4, pool: poolKind, A: selectA, B: selectB, res, ...time }));
+  } else if (mode === "partyvs") {
+    const pairs = (process.env.PAIRS ?? "").split(",").filter(Boolean).map((x) => x.split("-").map(Number));
+    if (pairs.length === 0) throw new Error("PAIRS=i-j,... 필요");
+    const sixOf = (party) => ({ slots: party.slots, movesList: party.slots.map((sl) => sl.moves.filter((m) => m).map((m) => data.getMove(m))) });
+    const pickSide = (side6, sel) => ({ slots: sel.map((i) => side6.slots[i]), movesList: sel.map((i) => side6.movesList[i]) });
+    const policy = (risk) => (st, key) => ai.chooseAiAction(st, key, risk, { decisionParams }).action;
+    const forced = (risk) => (st, key) => ai.chooseAiForcedSwitch(st, key, risk, decisionParams) ?? living(st, key)[0];
+    const playGame = (P, Q, sd, sideP, risk) => {
+      const sideQ = sideP === "a" ? "b" : "a";
+      const full = state.createBattleState({ [sideP]: P, [sideQ]: Q });
+      const sel = (side, six) => pickSide(six, ai.chooseAiSelection(full, side, { random: mulberry32(sd * 131 + (side === "a" ? 1 : 2)) }));
+      const initial = state.createBattleState({ [sideP]: sel(sideP, P), [sideQ]: sel(sideQ, Q) });
+      const g = runBattle(sd, { a: policy(risk), b: policy(1 - risk) }, { a: forced(risk), b: forced(1 - risk) }, initial);
+      return { kind: g.winner === sideP ? "pWins" : g.winner === sideQ ? "qWins" : "other", aSide: g.winner === "a" };
+    };
+    const playPair = (P, Q) => {
+      const r = { pWins: 0, qWins: 0, other: 0, aSideWins: 0 };
+      for (let sd = seedFrom; sd <= seedTo; sd++) {
+        for (const sideP of ["a", "b"]) {
+          const g = playGame(P, Q, sd, sideP, mulberry32(sd)());
+          r[g.kind]++;
+          if (g.aSide) r.aSideWins++;
+        }
+      }
+      return r;
+    };
+    const out = {};
+    for (const [i, j] of pairs) out[`${i}-${j}`] = playPair(sixOf(data.SAMPLE_PARTIES[i]), sixOf(data.SAMPLE_PARTIES[j]));
+    console.log(JSON.stringify({ seeds: battles, A: decisionParams ?? {}, pairs: out }));
   } else if (mode === "ai") {
     const results = { aiVsRandom: { a: 0, b: 0, draw: 0, timeout: 0 }, aiVsAi: { a: 0, b: 0, draw: 0, timeout: 0 } };
     let maxMs = 0;
