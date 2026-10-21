@@ -2,7 +2,7 @@ import type { PartySlot } from "../types/party";
 import { getPokemon } from "./data";
 import { findMegaFormByStone } from "./pokemonForm";
 
-const PARTY_SIZE = 6;
+export const PARTY_SIZE = 6;
 /** 메가스톤 든 포켓몬은 최대 2마리 — 배틀에서 메가진화는 편당 한 번뿐이라 2마리 이상은 선출·전략 선택지일 뿐 규칙 위반은 아니다 */
 const MAX_MEGAS = 2;
 

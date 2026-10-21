@@ -2,6 +2,8 @@ import { rankOf, type RankState } from "../../battleRank";
 import tiersJson from "../../../data/samplePartyTiers.json";
 import { APP_DECISION_PARAMS } from "./aiClient";
 import type { DecisionParams } from "./decision";
+import { buildRandomPartyFromSlots, PARTY_SIZE } from "../../randomSlotParty";
+import type { SamplePartyPreset } from "../../../types/party";
 
 /**
  * 랭크배틀 AI 정책(5.0 R3 S3) — 랭크·연패에서 "AI 단계(P0~P4)"와 "상대 샘플 파티 등급"만 정한다. 판단은 하지 않는다(설계·측정은 5.0-backlog.md R3).
@@ -22,10 +24,15 @@ export type PartyTier = "하" | "중" | "상";
 const TIERS: PartyTier[] = ["하", "중", "상"];
 const BASE_TIER = { monster: 0, super: 1, hyper: 2, master: 2, champion: 2 } as const;
 
+/** 랭크 볼별 "랜덤 구축 상대" 확률 — 낮은 랭크일수록 랜덤 구축으로 다양하게, 높을수록 선별된 샘플 파티(5.0 R3 확장) */
+const RANDOM_RATE = { monster: 1, super: 0.7, hyper: 0.5, master: 0.3, champion: 0.4 } as const;
+
 export interface RankAiPolicy {
   /** RANK_AI_PROFILES 인덱스 */
   level: number;
   tier: PartyTier;
+  /** 상대를 샘플 대신 같은 등급 샘플 슬롯으로 랜덤 구축할 확률 */
+  randomRate: number;
 }
 
 /**
@@ -44,15 +51,34 @@ export function resolveRankAiPolicy(state: RankState): RankAiPolicy {
     tier -= tierDrop;
     level = Math.max(0, level - (drop - tierDrop));
   }
-  return { level, tier: TIERS[tier] };
+  return { level, tier: TIERS[tier], randomRate: RANDOM_RATE[ball] };
 }
 
 const TIER_OF: Record<string, PartyTier> = tiersJson as Record<string, PartyTier>;
 
-/** 등급에 맞는 상대를 고른다(직전 상대 제외). 등급 없는 새 샘플은 중등급, 후보가 비면 전체에서 */
-export function pickRankOpponent<T extends { id: string }>(parties: T[], tier: PartyTier, prevId?: string, rng: () => number = Math.random): T {
-  const others = parties.filter((p) => p.id !== prevId);
-  const inTier = others.filter((p) => (TIER_OF[p.id] ?? "중") === tier);
-  const pool = inTier.length ? inTier : others;
+const tierOf = (id: string): PartyTier => TIER_OF[id] ?? "중";
+
+/**
+ * 등급에 맞는 상대를 고른다. 확률 randomRate로 같은 등급 샘플의 슬롯만 모아 랜덤 구축(저장 슬롯 프리셋은 쓰지 않는다 — 등급이 유지된다),
+ * 아니면 샘플 파티를 고르되 최근 상대(recentIds)는 제외. 등급 없는 새 샘플은 중등급, 후보가 비면 전체에서.
+ * 랜덤 구축 상대의 id는 `random:<등급>`(이력 표시용).
+ */
+export function pickRankOpponent<T extends SamplePartyPreset>(
+  parties: T[],
+  tier: PartyTier,
+  recentIds: readonly string[] = [],
+  rng: () => number = Math.random,
+  randomRate = 0,
+): SamplePartyPreset {
+  if (randomRate > 0 && rng() < randomRate) {
+    const slots = parties.filter((p) => tierOf(p.id) === tier).flatMap((p) => p.slots);
+    const { slots: built } = buildRandomPartyFromSlots([], slots, rng);
+    if (built.length === PARTY_SIZE) {
+      return { id: `random:${tier}`, name: "랜덤 구축", style: "랜덤", group: "real", description: `${tier}등급 샘플 슬롯으로 무작위 구축`, slots: built };
+    }
+  }
+  const others = parties.filter((p) => !recentIds.includes(p.id));
+  const inTier = others.filter((p) => tierOf(p.id) === tier);
+  const pool = inTier.length ? inTier : others.length ? others : parties;
   return pool[Math.floor(rng() * pool.length)];
 }
