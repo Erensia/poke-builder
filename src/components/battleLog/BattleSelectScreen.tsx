@@ -82,13 +82,14 @@ export function BattleSelectScreen({
                           pokemon={pk}
                           size={28}
                           radius={8}
-                          gradientTypes={getEffectiveForm(pk, pkSlot).types}
+                          gradientTypes={getEffectiveForm(pk, pkSlot, { ignoreMega: hidden }).types}
                           form={{
                             gender: getEffectiveGender(pk, pkSlot),
                             cosmeticForm: pkSlot.cosmeticForm,
                             formVariant: pkSlot.formVariant,
                             sizeForm: pkSlot.sizeForm,
-                            activeMegaForm: pkSlot.activeMegaForm,
+                            // AI 편은 선출을 숨기는 것과 같이 메가 여부도 숨긴다 — 기본형 스프라이트·타입으로 표시(실전 팀 프리뷰처럼)
+                            activeMegaForm: hidden ? undefined : pkSlot.activeMegaForm,
                           }}
                         />
                       )}
