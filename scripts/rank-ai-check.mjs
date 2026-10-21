@@ -47,16 +47,34 @@ try {
   // 상대 선택
   const seq = [0.0, 0.3, 0.6, 0.99];
   for (const tier of ["하", "중", "상"]) {
-    const ok = seq.every((r) => tiers[pickRankOpponent(SAMPLE_PARTIES, tier, undefined, () => r).id] === tier);
+    const ok = seq.every((r) => tiers[pickRankOpponent(SAMPLE_PARTIES, tier, [], () => r).id] === tier);
     check(`${tier}등급 풀에서만 선택`, ok);
   }
-  const a = pickRankOpponent(SAMPLE_PARTIES, "상", undefined, () => 0.5).id;
-  check("같은 난수 → 같은 선택", a === pickRankOpponent(SAMPLE_PARTIES, "상", undefined, () => 0.5).id);
-  check("직전 상대 제외", seq.every((r) => pickRankOpponent(SAMPLE_PARTIES, "상", a, () => r).id !== a));
+  const a = pickRankOpponent(SAMPLE_PARTIES, "상", [], () => 0.5).id;
+  check("같은 난수 → 같은 선택", a === pickRankOpponent(SAMPLE_PARTIES, "상", [], () => 0.5).id);
+  check("직전 상대 제외", seq.every((r) => pickRankOpponent(SAMPLE_PARTIES, "상", [a], () => r).id !== a));
   const fresh = [{ id: "새샘플" }];
-  check("등급 없는 샘플은 중등급", pickRankOpponent([...fresh, { id: "real-m6-rank2" }], "중", undefined, () => 0).id === "새샘플");
-  check("후보 없으면 전체에서", pickRankOpponent(fresh, "상", undefined, () => 0).id === "새샘플");
+  check("등급 없는 샘플은 중등급", pickRankOpponent([...fresh, { id: "real-m6-rank2" }], "중", [], () => 0).id === "새샘플");
+  check("후보 없으면 전체에서", pickRankOpponent(fresh, "상", [], () => 0).id === "새샘플");
   check("샘플 전부 등급 보유", SAMPLE_PARTIES.every((p) => tiers[p.id]), SAMPLE_PARTIES.filter((p) => !tiers[p.id]).map((p) => p.id).join());
+
+  // 최근 상대 제외 · 랜덤 구축 비율(5.0 R3 확장)
+  const recent = SAMPLE_PARTIES.filter((p) => tiers[p.id] === "상").slice(0, 4).map((p) => p.id);
+  check("최근 4판 상대 제외", [0, 0.2, 0.5, 0.8, 0.99].every((r) => !recent.includes(pickRankOpponent(SAMPLE_PARTIES, "상", recent, () => r).id)));
+  const rate = (o) => at(o).randomRate;
+  check("볼별 랜덤 구축 확률", rate({ gauge: 0 }) === 1 && rate({ gauge: 16 }) === 0.7 && rate({ gauge: 32 }) === 0.5 && rate({ rating: 1500 }) === 0.3 && rate({ rating: 2600 }) === 0.4,
+    [rate({ gauge: 0 }), rate({ gauge: 16 }), rate({ gauge: 32 }), rate({ rating: 1500 }), rate({ rating: 2600 })].join());
+  for (const tier of ["하", "중", "상"]) {
+    const pool = new Set(SAMPLE_PARTIES.filter((p) => tiers[p.id] === tier).flatMap((p) => p.slots.map((sl) => JSON.stringify(sl))));
+    for (const r of [0.01, 0.37, 0.74]) {
+      let k = 0;
+      const rng = () => ((k += 1), (r * 7 + k * 0.137) % 1);
+      const built = pickRankOpponent(SAMPLE_PARTIES, tier, [], rng, 1);
+      check(`${tier}등급 랜덤 구축: 6마리·같은 등급 슬롯만·id`, built.id === `random:${tier}` && built.slots.length === 6 && built.slots.every((sl) => pool.has(JSON.stringify(sl))));
+    }
+  }
+  check("확률 0이면 샘플", !pickRankOpponent(SAMPLE_PARTIES, "중", [], () => 0.1, 0).id.startsWith("random:"));
+  check("확률 1이면 항상 랜덤 구축", pickRankOpponent(SAMPLE_PARTIES, "중", [], () => 0.1, 1).id === "random:중");
 
   // 학습 메모리 감쇠(랭크 0.995 > 배틀타워 0.99): 같은 누적본·세션이면 랭크가 옛 기록을 더 많이 남긴다
   const { commitBattle, emptyOpponentMemory, MEMORY_DECAY_PER_BATTLE, RANK_MEMORY_DECAY_PER_BATTLE } = await server.ssrLoadModule("/src/lib/battle/ai/opponentMemory.ts");

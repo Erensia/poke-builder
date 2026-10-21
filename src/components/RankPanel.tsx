@@ -12,7 +12,7 @@ const date = (ms: number) => new Date(ms).toLocaleDateString("ko-KR");
 const dateTime = (ms: number) => new Date(ms).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
 /** 시즌 남은 일수(오늘 포함 올림) */
 const daysLeft = (startedAt: number) => Math.max(0, Math.ceil((startedAt + SEASON_MS - Date.now()) / 86_400_000));
-const opponentName = (id: string) => SAMPLE_PARTIES.find((p) => p.id === id)?.name ?? id;
+const opponentName = (id: string) => (id.startsWith("random:") ? `랜덤 구축(${id.slice(7)})` : (SAMPLE_PARTIES.find((p) => p.id === id)?.name ?? id));
 
 interface RankPanelProps {
   rank: ReturnType<typeof useRankBattle>;

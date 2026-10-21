@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { SAMPLE_PARTIES } from "../lib/data";
 import type { RankState } from "../lib/battleRank";
 import { beginRankMatch, expireSeason, finishRankMatch, settleAbandonedRank, type RankHistoryEntry, type RankSave } from "../lib/battleRankSave";
@@ -7,6 +7,9 @@ import { loadBattleRank, saveBattleRank } from "../lib/storage";
 import type { PartySlots, SamplePartyPreset } from "../types/party";
 
 /** 직전 판 결과 — 계산 내역 카드가 판 전 상태와 비교해 승급·강등·챔피언 달성을 보여 준다 */
+/** 최근 몇 판의 샘플 상대를 다시 만나지 않게 제외할지 */
+const RECENT_OPPONENTS = 4;
+
 export interface RankLastResult {
   before: RankState;
   entry: RankHistoryEntry;
@@ -29,6 +32,7 @@ export function useRankBattle() {
   const [current, setCurrent] = useState<SamplePartyPreset | null>(null);
   const [aiLevel, setAiLevel] = useState(0);
   const [lastResult, setLastResult] = useState<RankLastResult | null>(null);
+  const recentRef = useRef<string[]>([]);
 
   function update(next: RankSave) {
     setSave(next);
@@ -36,10 +40,12 @@ export function useRankBattle() {
   }
 
   /** 지금 랭크·연패에 맞는 상대 파티와 AI 단계를 정한다(정책: rankProfile.ts) */
-  function choose(state: RankState, prevId?: string): SamplePartyPreset {
+  function choose(state: RankState): SamplePartyPreset {
     const policy = resolveRankAiPolicy(state);
     setAiLevel(policy.level);
-    return pickRankOpponent(SAMPLE_PARTIES, policy.tier, prevId);
+    const picked = pickRankOpponent(SAMPLE_PARTIES, policy.tier, recentRef.current, Math.random, policy.randomRate);
+    recentRef.current = [picked.id, ...recentRef.current].slice(0, RECENT_OPPONENTS);
+    return picked;
   }
 
   /** 랭크배틀을 켜고 첫 상대를 돌려준다. 랭크·연승은 이어진다 */
@@ -71,7 +77,7 @@ export function useRankBattle() {
 
   /** 다음 상대로 넘어간다 */
   function next(): SamplePartyPreset {
-    const opponent = choose(save.state, current?.id);
+    const opponent = choose(save.state);
     setCurrent(opponent);
     return opponent;
   }
