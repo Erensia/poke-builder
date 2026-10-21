@@ -1,5 +1,6 @@
 /**
  * 랭크배틀 AI 정책(5.0 R3 S3) 검증 — `lib/battle/ai/rankProfile.ts`: 랭크별 기본 단계, 연패 보정(파티 등급 먼저 → AI 단계), 마스터볼 이상 무보정, 복구, 상대 선택.
+ * 랭크 학습 메모리 감쇠(`opponentMemory.ts` commitBattle)도 확인한다.
  *
  *   npm run test:rank-ai
  */
@@ -56,6 +57,14 @@ try {
   check("등급 없는 샘플은 중등급", pickRankOpponent([...fresh, { id: "real-m6-rank2" }], "중", undefined, () => 0).id === "새샘플");
   check("후보 없으면 전체에서", pickRankOpponent(fresh, "상", undefined, () => 0).id === "새샘플");
   check("샘플 전부 등급 보유", SAMPLE_PARTIES.every((p) => tiers[p.id]), SAMPLE_PARTIES.filter((p) => !tiers[p.id]).map((p) => p.id).join());
+
+  // 학습 메모리 감쇠(랭크 0.995 > 배틀타워 0.99): 같은 누적본·세션이면 랭크가 옛 기록을 더 많이 남긴다
+  const { commitBattle, emptyOpponentMemory, MEMORY_DECAY_PER_BATTLE, RANK_MEMORY_DECAY_PER_BATTLE } = await server.ssrLoadModule("/src/lib/battle/ai/opponentMemory.ts");
+  const saved = { ...emptyOpponentMemory(), battles: 5, decisions: 100 };
+  const session = emptyOpponentMemory();
+  check("감쇠 기본값은 배틀타워 0.99", commitBattle(saved, session).decisions === 100 * MEMORY_DECAY_PER_BATTLE);
+  check("랭크 감쇠 0.995", commitBattle(saved, session, RANK_MEMORY_DECAY_PER_BATTLE).decisions === 100 * 0.995);
+  check("판 수는 감쇠와 무관하게 +1", commitBattle(saved, session, RANK_MEMORY_DECAY_PER_BATTLE).battles === 6);
 } finally {
   await server.close();
 }

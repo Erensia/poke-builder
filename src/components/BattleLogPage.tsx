@@ -96,7 +96,7 @@ function useBattleLogSession(mode: BattleMode) {
   const [aiThinking, setAiThinking] = useState(false);
   const aiRequestRef = useRef(0);
   // 사용자 패턴 학습(ver.2.0 1-C): 누적본은 useAiMemory(localStorage), 이번 대전 관측은 세션 기록 — 대전이 끝나면 합친다
-  const aiMemory = useAiMemory();
+  const aiMemory = useAiMemory(mode);
   const aiSessionRef = useRef(emptyOpponentMemory());
   const [showAiMemory, setShowAiMemory] = useState(false);
   /** 이번 대전을 학습했으면 누적 판 수(결과 배너 한 줄), 아니면 null */
@@ -963,6 +963,7 @@ export function BattleLogPage({ mode }: { mode: BattleMode }) {
       {showAiMemory && (
         <AiMemoryModal
           memory={aiMemory.memory}
+          recentBattles={aiMemory.recentBattles}
           learningEnabled={aiMemory.learningEnabled}
           onToggleLearning={aiMemory.setLearningEnabled}
           onReset={aiMemory.reset}

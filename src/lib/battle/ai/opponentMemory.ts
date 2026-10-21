@@ -24,7 +24,10 @@ export interface OpponentMemory {
   species: Record<string, { seen: number; lastBattle: number; moves: Record<string, { actual: number; pred: number }> }>;
 }
 
-const MEMORY_DECAY_PER_BATTLE = 0.99;
+/** 배틀타워(파티 시험대) 감쇠 — 유효 창 약 100판 */
+export const MEMORY_DECAY_PER_BATTLE = 0.99;
+/** 랭크배틀(실전 무대) 감쇠 — 유효 창 약 200판. 메모리는 배틀타워와 따로 쌓는다(5.0 R3) */
+export const RANK_MEMORY_DECAY_PER_BATTLE = 0.995;
 const SWITCH_PRIOR = 0.15;
 const SWITCH_PRIOR_STRENGTH = 10;
 const STATUS_PRIOR_STRENGTH = 10;
@@ -101,9 +104,9 @@ function addMemory(a: OpponentMemory, b: OpponentMemory, decay: number, battles:
   return out;
 }
 
-/** 대전이 끝나면: 누적본을 × 0.99로 감쇠한 뒤 이번 대전(세션)을 더한다(새 객체) */
-export function commitBattle(saved: OpponentMemory, session: OpponentMemory): OpponentMemory {
-  return addMemory(saved, session, MEMORY_DECAY_PER_BATTLE, saved.battles + 1);
+/** 대전이 끝나면: 누적본을 × decay(기본 0.99)로 감쇠한 뒤 이번 대전(세션)을 더한다(새 객체) */
+export function commitBattle(saved: OpponentMemory, session: OpponentMemory, decay = MEMORY_DECAY_PER_BATTLE): OpponentMemory {
+  return addMemory(saved, session, decay, saved.battles + 1);
 }
 
 /** 누적본 + 이번 대전 세션(감쇠 없이) — 대전 중 보정에 쓴다 */

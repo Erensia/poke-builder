@@ -20,6 +20,8 @@ const RANK_BATTLE_VIDEOS_STORAGE_KEY = "champions-party-sim.battle-videos-rank.v
  * 배틀타워 AI의 사용자 패턴 학습(ver.2.0 1-C) — 파티 자동저장(STORAGE_KEY)과 별도 키. 집계 통계만(최대 약 25KB), 학습 켬/끔 설정 포함.
  */
 const AI_MEMORY_STORAGE_KEY = "champions-party-sim.ai-memory.v1";
+/** 랭크배틀(5.0 R3)의 AI 학습 — 배틀타워 학습(위 키)과 따로 쌓는다 */
+const RANK_AI_MEMORY_STORAGE_KEY = "champions-party-sim.ai-memory-rank.v1";
 /** 내 샘플 파티(3.1 S2 스파이크) — 기본 제공 샘플(마스터 데이터)과 별개로 사용자가 저장한 샘플. 다른 저장 키와 겹치지 않는 별도 키 */
 const MY_SAMPLES_STORAGE_KEY = "champions-party-sim.my-samples.v1";
 /** 배틀 프런티어(2.5 L4) 연승·전적 — 파티 자동저장(STORAGE_KEY)·프리셋 키와 별도 키 */
@@ -153,24 +155,22 @@ function isStoredAiMemory(value: unknown): value is StoredAiMemory {
   return !!v && typeof v === "object" && v.version === 1 && typeof v.learningEnabled === "boolean" && isOpponentMemory(v.memory);
 }
 
-const aiMemoryStore = createLocalStorageStore<StoredAiMemory>(AI_MEMORY_STORAGE_KEY, isStoredAiMemory, {
-  version: 1,
-  learningEnabled: true,
-  memory: emptyOpponentMemory(),
-});
+const aiMemoryStoreOf = (key: string) =>
+  createLocalStorageStore<StoredAiMemory>(key, isStoredAiMemory, { version: 1, learningEnabled: true, memory: emptyOpponentMemory() });
+const aiMemoryStores = { free: aiMemoryStoreOf(AI_MEMORY_STORAGE_KEY), rank: aiMemoryStoreOf(RANK_AI_MEMORY_STORAGE_KEY) };
 
-/** AI 학습 기록을 불러온다. 없거나 손상됐으면 빈 기록(학습 켬) */
-export function loadAiMemory(): StoredAiMemory {
-  return aiMemoryStore.load();
+/** AI 학습 기록을 불러온다(mode별 따로 보관). 없거나 손상됐으면 빈 기록(학습 켬) */
+export function loadAiMemory(mode: "free" | "rank"): StoredAiMemory {
+  return aiMemoryStores[mode].load();
 }
 
-export function saveAiMemory(value: StoredAiMemory): void {
-  aiMemoryStore.save(value);
+export function saveAiMemory(mode: "free" | "rank", value: StoredAiMemory): void {
+  aiMemoryStores[mode].save(value);
 }
 
-/** 학습 초기화 — 이 키만 지운다(파티 자동저장 등 다른 키는 건드리지 않는다) */
-export function clearAiMemory(): void {
-  aiMemoryStore.clear();
+/** 학습 초기화 — 그 모드의 키만 지운다(파티 자동저장·다른 모드 학습은 건드리지 않는다) */
+export function clearAiMemory(mode: "free" | "rank"): void {
+  aiMemoryStores[mode].clear();
 }
 
 const battleFrontierStore = createLocalStorageStore<FrontierSave>(BATTLE_FRONTIER_STORAGE_KEY, isFrontierSave, EMPTY_FRONTIER);

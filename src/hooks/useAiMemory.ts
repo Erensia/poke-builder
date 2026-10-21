@@ -1,23 +1,24 @@
 import { useState } from "react";
 import { clearAiMemory, loadAiMemory, saveAiMemory, type StoredAiMemory } from "../lib/storage";
-import { commitBattle, emptyOpponentMemory, type OpponentMemory } from "../lib/battle/ai/opponentMemory";
+import { commitBattle, emptyOpponentMemory, MEMORY_DECAY_PER_BATTLE, RANK_MEMORY_DECAY_PER_BATTLE, type OpponentMemory } from "../lib/battle/ai/opponentMemory";
 
 /**
- * 배틀타워 AI의 사용자 패턴 학습(ver.2.0 1-C) 저장본 관리. 대전 중 관측은 화면이 세션 기록에 모으고, 대전이 끝나면 commit으로 누적본에
- * 합쳐(× 0.99 감쇠) 저장한다. "대전에서 계속 학습"이 꺼져 있으면 commit이 아무것도 하지 않는다(쌓인 학습은 계속 쓴다).
+ * AI의 사용자 패턴 학습(ver.2.0 1-C) 저장본 관리. 배틀타워(free)와 랭크배틀(rank)은 각자 저장본을 따로 쌓고, 감쇠도 다르다(0.99 / 0.995).
+ * 대전 중 관측은 화면이 세션 기록에 모으고, 대전이 끝나면 commit으로 누적본에 합쳐(감쇠) 저장한다. "대전에서 계속 학습"이 꺼져 있으면 commit이 아무것도 하지 않는다(쌓인 학습은 계속 쓴다).
  */
-export function useAiMemory() {
-  const [stored, setStored] = useState<StoredAiMemory>(() => loadAiMemory());
+export function useAiMemory(mode: "free" | "rank") {
+  const decay = mode === "rank" ? RANK_MEMORY_DECAY_PER_BATTLE : MEMORY_DECAY_PER_BATTLE;
+  const [stored, setStored] = useState<StoredAiMemory>(() => loadAiMemory(mode));
 
   function update(next: StoredAiMemory) {
     setStored(next);
-    saveAiMemory(next);
+    saveAiMemory(mode, next);
   }
 
   /** 대전 한 판의 세션 기록을 누적본에 합친다. 합쳤으면 true(결과 배너 문구용) */
   function commit(session: OpponentMemory): boolean {
     if (!stored.learningEnabled || session.decisions <= 0) return false;
-    update({ ...stored, memory: commitBattle(stored.memory, session) });
+    update({ ...stored, memory: commitBattle(stored.memory, session, decay) });
     return true;
   }
 
@@ -26,10 +27,10 @@ export function useAiMemory() {
   }
 
   function reset() {
-    clearAiMemory();
+    clearAiMemory(mode);
     setStored({ version: 1, learningEnabled: stored.learningEnabled, memory: emptyOpponentMemory() });
-    saveAiMemory({ version: 1, learningEnabled: stored.learningEnabled, memory: emptyOpponentMemory() });
+    saveAiMemory(mode, { version: 1, learningEnabled: stored.learningEnabled, memory: emptyOpponentMemory() });
   }
 
-  return { memory: stored.memory, learningEnabled: stored.learningEnabled, commit, setLearningEnabled, reset };
+  return { memory: stored.memory, recentBattles: Math.round(1 / (1 - decay)), learningEnabled: stored.learningEnabled, commit, setLearningEnabled, reset };
 }
