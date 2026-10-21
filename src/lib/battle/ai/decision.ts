@@ -123,6 +123,15 @@ export interface DecisionParams {
    * 탐색(search)이 켜지면 적용하지 않는다(탐색 값이 scored와 달라 합성이 복잡). 확정 처치(isHardOverride)·강제 교체는 실수에서 제외.
    */
   mistake?: MistakeParams;
+  /** 랭크배틀 학습 메모리 활용(5.0 R3). 없으면 보정을 그대로 쓰고 관측용 분포는 계산하지 않는다(이전 동작) */
+  learn?: LearnParams;
+}
+
+export interface LearnParams {
+  /** 학습 보정을 적용하는 정도 0~1 — 각 보정 배율에 거듭제곱(0 = 보정 없음, 1 = 그대로). 상대 모델이 켜진 프로필에서만 의미가 있다 */
+  use: number;
+  /** 상대 모델이 꺼진 프로필도 관측용 분포만 계산해 돌려준다(판단에는 쓰지 않음) — 약한 단계에서도 습관을 쌓아 두기 위함 */
+  observe?: boolean;
 }
 
 export interface MistakeParams {

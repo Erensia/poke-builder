@@ -24,13 +24,24 @@ try {
   const at = (o) => resolveRankAiPolicy({ ...EMPTY_RANK, ...o });
   const is = (name, got, level, tier) => check(name, got.level === level && got.tier === tier, JSON.stringify(got));
 
-  check("프로필 5단", RANK_AI_PROFILES.length === 5);
+  check("프로필 8단", RANK_AI_PROFILES.length === 8);
   // 기본 단계: 게이지 0 몬스터 · 12칸×4=게이지 16/32 슈퍼·하이퍼 시작
   is("몬스터볼 P0·하", at({}), 0, "하");
   is("슈퍼볼 P1·중", at({ gauge: 16 }), 1, "중");
   is("하이퍼볼 P2·상", at({ gauge: 32 }), 2, "상");
-  is("마스터볼 P3·상", at({ rating: 1500 }), 3, "상");
-  is("챔피언 P4·상", at({ rating: 2600 }), 4, "상");
+  // 마스터볼 4~1: 레이팅 구간 경계 1600/1900/2200, 챔피언 2500(현재 레이팅 기준)
+  is("마스터볼 4 (1300)", at({ rating: 1300 }), 3, "상");
+  is("마스터볼 4 상단 (1599.99)", at({ rating: 1599.99 }), 3, "상");
+  is("마스터볼 3 하단 (1600)", at({ rating: 1600 }), 4, "상");
+  is("마스터볼 2 하단 (1900)", at({ rating: 1900 }), 5, "상");
+  is("마스터볼 1 하단 (2200)", at({ rating: 2200 }), 6, "상");
+  is("마스터볼 1 상단 (2499.99)", at({ rating: 2499.99 }), 6, "상");
+  is("챔피언 (2500)", at({ rating: 2500 }), 7, "상");
+  is("챔피언 (2600)", at({ rating: 2600 }), 7, "상");
+  // 학습: 몬스터~하이퍼는 관측만(λ 0), 마스터볼 4~1은 λ 0.25/0.5/0.75/1.0, 챔피언 1.0
+  const learnOf = (lv) => RANK_AI_PROFILES[lv].learn ?? { use: 1 };
+  check("몬스터~하이퍼볼은 관측만", [0, 1, 2].every((lv) => learnOf(lv).use === 0 && learnOf(lv).observe === true && !RANK_AI_PROFILES[lv].opponentModel));
+  check("마스터볼 4~1·챔피언 학습 사용률", [0.25, 0.5, 0.75, 1, 1].every((u, i) => learnOf(3 + i).use === u && !!RANK_AI_PROFILES[3 + i].opponentModel));
   // 연패 보정
   is("2연패 무보정", at({ gauge: 32, lossStreak: 2 }), 2, "상");
   is("3연패 파티 한 등급", at({ gauge: 32, lossStreak: 3 }), 2, "중");
@@ -43,7 +54,7 @@ try {
   is("몬스터볼은 보정 여지 없음", at({ lossStreak: 9 }), 0, "하");
   is("이기면 즉시 복구(연패 0)", at({ gauge: 32, lossStreak: 0 }), 2, "상");
   is("마스터볼 연패 무보정", at({ rating: 1500, lossStreak: 9 }), 3, "상");
-  is("챔피언 연패 무보정", at({ rating: 2600, lossStreak: 9 }), 4, "상");
+  is("챔피언 연패 무보정", at({ rating: 2600, lossStreak: 9 }), 7, "상");
   // 상대 선택
   const seq = [0.0, 0.3, 0.6, 0.99];
   for (const tier of ["하", "중", "상"]) {
@@ -75,6 +86,32 @@ try {
   }
   check("확률 0이면 샘플", !pickRankOpponent(SAMPLE_PARTIES, "중", [], () => 0.1, 0).id.startsWith("random:"));
   check("확률 1이면 항상 랜덤 구축", pickRankOpponent(SAMPLE_PARTIES, "중", [], () => 0.1, 1).id === "random:중");
+
+  // 학습 사용률 λ(calibrateDistribution strength): 0 = 보정 없음, 1 = 기본, 중간은 그 사이
+  const { calibrateDistribution, emptyOpponentMemory: emptyMemory } = await server.ssrLoadModule("/src/lib/battle/ai/opponentMemory.ts");
+  const dist = { moveWeights: new Map([["a", 0.5], ["b", 0.5]]), switches: [{ toIndex: 1, weight: 1 }], switchProb: 0.2, megaOf: new Map() };
+  const memory = { ...emptyMemory(), switchActual: 30, switchPred: 3, species: { x: { seen: 20, lastBattle: 1, moves: { a: { actual: 20, pred: 2 }, b: { actual: 0, pred: 18 } } } } };
+  const at0 = calibrateDistribution(dist, memory, "x", new Set(), 0);
+  const at1 = calibrateDistribution(dist, memory, "x", new Set());
+  const atHalf = calibrateDistribution(dist, memory, "x", new Set(), 0.5);
+  check("λ 0이면 보정 없음", at0.switchProb === dist.switchProb && at0.moveWeights.get("a") === 0.5);
+  check("λ 기본은 1", calibrateDistribution(dist, memory, "x", new Set(), 1).switchProb === at1.switchProb);
+  check("λ 1은 교체·기술 보정이 걸림", at1.switchProb > dist.switchProb && at1.moveWeights.get("a") > 0.5);
+  check("λ 0.5는 0과 1 사이", atHalf.switchProb > at0.switchProb && atHalf.switchProb < at1.switchProb && atHalf.moveWeights.get("a") > 0.5 && atHalf.moveWeights.get("a") < at1.moveWeights.get("a"));
+
+  // 관측만 하는 프로필: 모델이 없어도 분포를 돌려주되 판단은 학습 설정이 없을 때와 같다
+  const stateMod = await server.ssrLoadModule("/src/lib/battle/state.ts");
+  const { chooseAiAction } = await server.ssrLoadModule("/src/lib/battle/ai/index.ts");
+  const { getMove } = await server.ssrLoadModule("/src/lib/data.ts");
+  const sideOf = (party) => { const slots = party.slots.slice(0, 3); return { slots, movesList: slots.map((sl) => sl.moves.filter(Boolean).map((m) => getMove(m))) }; };
+  const battle = stateMod.createBattleState({ a: sideOf(SAMPLE_PARTIES[0]), b: sideOf(SAMPLE_PARTIES[1]) });
+  const rng = () => 0.5;
+  const plain = { ...RANK_AI_PROFILES[0] };
+  delete plain.learn;
+  const watched = chooseAiAction(battle, "a", 0.5, { decisionParams: RANK_AI_PROFILES[0], rng });
+  const unwatched = chooseAiAction(battle, "a", 0.5, { decisionParams: plain, rng });
+  check("관측만 프로필은 분포를 돌려준다", !!watched.opponentDistribution && unwatched.opponentDistribution === undefined);
+  check("관측만 해도 판단은 그대로", JSON.stringify(watched.action) === JSON.stringify(unwatched.action));
 
   // 학습 메모리 감쇠(랭크 0.995 > 배틀타워 0.99): 같은 누적본·세션이면 랭크가 옛 기록을 더 많이 남긴다
   const { commitBattle, emptyOpponentMemory, MEMORY_DECAY_PER_BATTLE, RANK_MEMORY_DECAY_PER_BATTLE } = await server.ssrLoadModule("/src/lib/battle/ai/opponentMemory.ts");
