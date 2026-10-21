@@ -130,15 +130,19 @@ export function calibrateDistribution(
   memory: OpponentMemory,
   speciesId: string,
   statusMoveIds: ReadonlySet<string>,
+  /** 학습 사용률 0~1: 각 배율에 거듭제곱(5.0 R3 — 랭크 마스터볼 구간 단계 활용). 1이면 그대로 */
+  strength = 1,
 ): LevelOneDistribution {
-  const { switchFactor, statusFactor } = memoryFactors(memory);
+  const { switchFactor: rawSwitch, statusFactor: rawStatus } = memoryFactors(memory);
+  const switchFactor = rawSwitch ** strength;
+  const statusFactor = rawStatus ** strength;
   const sp = memory.species[speciesId];
   const weights = new Map<string, number>();
   let total = 0;
   for (const [id, w] of dist.moveWeights) {
     const m = sp?.moves[id];
     // 그 종으로 이 기술을 실제로 쓴 횟수 / 예측 합(사전: 예측대로 MOVE_PRIOR_STRENGTH번 쓴 셈)
-    const moveFactor = m ? (m.actual + MOVE_PRIOR_STRENGTH) / (m.pred + MOVE_PRIOR_STRENGTH) : 1;
+    const moveFactor = m ? ((m.actual + MOVE_PRIOR_STRENGTH) / (m.pred + MOVE_PRIOR_STRENGTH)) ** strength : 1;
     const v = w * (statusMoveIds.has(id) ? statusFactor : 1) * moveFactor;
     weights.set(id, v);
     total += v;

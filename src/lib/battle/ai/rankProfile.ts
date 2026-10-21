@@ -1,13 +1,15 @@
 import { rankOf, type RankState } from "../../battleRank";
 import tiersJson from "../../../data/samplePartyTiers.json";
 import { APP_DECISION_PARAMS } from "./aiClient";
-import type { DecisionParams } from "./decision";
+import { DEFAULT_OPPONENT_MODEL, type DecisionParams } from "./decision";
 import { buildRandomPartyFromSlots, PARTY_SIZE } from "../../randomSlotParty";
 import type { SamplePartyPreset } from "../../../types/party";
 
 /**
  * 랭크배틀 AI 정책(5.0 R3 S3) — 랭크·연패에서 "AI 단계(P0~P4)"와 "상대 샘플 파티 등급"만 정한다. 판단은 하지 않는다(설계·측정은 5.0-backlog.md R3).
  * 단계는 S2 측정(인접 직접 대전 승률 P1↔P0 68.8·P2↔P1 67.5·P3↔P2 64.8·P4↔P3 60.1%)으로 확정했다.
+ * 마스터볼은 레이팅 4구간으로 나눠(5.0 R3 확장) 학습 메모리를 단계적으로 활용한다: 모델만(L5) → 앱 AI. 측정 L5↔L4 54.7%·앱 AI↔L5 53.2%,
+ * 탐색 예산(8/16/24)은 강도 차이가 없어 구간은 학습 사용률 λ로만 가른다.
  */
 
 /** 탐색·상대 모델·`*Aware`를 전부 끈 기반(측정의 c7) */
@@ -17,12 +19,34 @@ const OFF: Partial<DecisionParams> = {
 };
 const noisy = (rate: number, hardOverride?: boolean): Partial<DecisionParams> => ({ ...OFF, mistake: { rate, margin: 1e9, hardOverride } });
 
-/** P0(약)~P4(현재 앱 AI). ponytail: 앱 AI보다 강한 챔피언 전용 단계는 수단이 없어 P4 = 앱 AI — 챔피언은 상등급 파티로만 차별 */
-export const RANK_AI_PROFILES: Partial<DecisionParams>[] = [noisy(1, true), noisy(0.7), noisy(0.3), OFF, APP_DECISION_PARAMS];
+/** 상대 모델만(탐색 없음) — 마스터볼 4·3 */
+const MODEL_ONLY: Partial<DecisionParams> = { opponentModel: DEFAULT_OPPONENT_MODEL };
+/** 학습 사용률 λ를 붙인다 */
+const learn = (params: Partial<DecisionParams>, use: number): Partial<DecisionParams> => ({ ...params, learn: { use } });
+/** 모델이 없는 약한 단계도 습관을 쌓아 둔다(관측만 — 판단에는 쓰지 않아 측정한 강도는 그대로) */
+const watch = (params: Partial<DecisionParams>): Partial<DecisionParams> => ({ ...params, learn: { use: 0, observe: true } });
+
+/**
+ * 인덱스 = 단계: 0~2 몬스터·슈퍼·하이퍼(관측만), 3~6 마스터볼 4·3·2·1(λ 0.25·0.5·0.75·1.0), 7 챔피언(앱 AI).
+ * ponytail: 앱 AI보다 강한 챔피언 전용 단계는 수단이 없어 챔피언 = 마스터볼 1과 같은 AI — 파티 등급으로만 차별(최상 풀은 후속)
+ */
+export const RANK_AI_PROFILES: Partial<DecisionParams>[] = [
+  watch(noisy(1, true)),
+  watch(noisy(0.7)),
+  watch(noisy(0.3)),
+  learn(MODEL_ONLY, 0.25),
+  learn(MODEL_ONLY, 0.5),
+  learn(APP_DECISION_PARAMS, 0.75),
+  APP_DECISION_PARAMS,
+  APP_DECISION_PARAMS,
+];
 
 export type PartyTier = "하" | "중" | "상";
 const TIERS: PartyTier[] = ["하", "중", "상"];
 const BASE_TIER = { monster: 0, super: 1, hyper: 2, master: 2, champion: 2 } as const;
+/** 마스터볼 레이팅 구간 경계: 4 = ~1600 미만 · 3 = 1600~1900 · 2 = 1900~2200 · 1 = 2200~(챔피언 2500은 별도) → RANK_AI_PROFILES 3~6 */
+const MASTER_BANDS = [1600, 1900, 2200];
+const masterBand = (rating: number) => MASTER_BANDS.filter((edge) => rating >= edge).length;
 
 /** 랭크 볼별 "랜덤 구축 상대" 확률 — 낮은 랭크일수록 랜덤 구축으로 다양하게, 높을수록 선별된 샘플 파티(5.0 R3 확장) */
 const RANDOM_RATE = { monster: 1, super: 0.7, hyper: 0.5, master: 0.3, champion: 0.4 } as const;
@@ -36,14 +60,14 @@ export interface RankAiPolicy {
 }
 
 /**
- * 몬스터볼 P0·하 → 슈퍼볼 P1·중 → 하이퍼볼 P2·상 → 마스터볼 P3·상 → 챔피언 P4·상.
+ * 몬스터볼 0·하 → 슈퍼볼 1·중 → 하이퍼볼 2·상 → 마스터볼 4~1(레이팅 구간) 3~6·상 → 챔피언 7·상.
  * 연패 보정(경험치제만 — 마스터볼 이상은 연패 배율이 있다): 3연패 한 칸, 5연패 두 칸, 이후 연패마다 한 칸씩 내리되
  * 파티 등급을 먼저, 하등급에서도 남는 칸은 AI 단계에 쓴다(P0 아래로는 없음). 이기면 연패가 0이라 즉시 복구.
  */
 export function resolveRankAiPolicy(state: RankState): RankAiPolicy {
   const { ball } = rankOf(state);
   let tier = BASE_TIER[ball];
-  let level = { monster: 0, super: 1, hyper: 2, master: 3, champion: 4 }[ball];
+  let level = ball === "master" ? 3 + masterBand(state.rating ?? 0) : { monster: 0, super: 1, hyper: 2, champion: 7 }[ball];
   if (state.rating === null) {
     const n = state.lossStreak;
     const drop = n >= 5 ? n - 3 : n >= 3 ? 1 : 0;

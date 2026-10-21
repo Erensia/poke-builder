@@ -964,6 +964,7 @@ export function BattleLogPage({ mode }: { mode: BattleMode }) {
         <AiMemoryModal
           memory={aiMemory.memory}
           recentBattles={aiMemory.recentBattles}
+          note={mode === "rank" ? "랭크 AI는 몬스터볼~하이퍼볼에서는 습관을 쌓아 두기만 하고, 마스터볼부터 단계적으로 활용합니다." : undefined}
           learningEnabled={aiMemory.learningEnabled}
           onToggleLearning={aiMemory.setLearningEnabled}
           onReset={aiMemory.reset}

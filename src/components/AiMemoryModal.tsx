@@ -41,6 +41,7 @@ function FactorCard({ title, factor, detail }: { title: string; factor: number; 
 export function AiMemoryModal({
   memory,
   recentBattles,
+  note,
   learningEnabled,
   onToggleLearning,
   onReset,
@@ -49,6 +50,8 @@ export function AiMemoryModal({
   memory: OpponentMemory;
   /** 감쇠에서 나온 유효 창(판) — 배틀타워 약 100, 랭크 약 200 */
   recentBattles: number;
+  /** 모드별 안내 한 줄(랭크: 학습을 쓰는 구간) */
+  note?: string;
   learningEnabled: boolean;
   onToggleLearning: (on: boolean) => void;
   onReset: () => void;
@@ -64,6 +67,7 @@ export function AiMemoryModal({
     <Modal title="AI가 본 내 습관" onClose={onClose}>
       <div className="ai-memory">
         <p className="ai-memory-meta">최근 약 {recentBattles}판 기준 · 누적 {memory.battles}판</p>
+        {note && <p className="ai-memory-meta">{note}</p>}
         {memory.battles < LEARNING_WARMUP_BATTLES && (
           <p className="ai-memory-warmup">아직 학습 중 — {LEARNING_WARMUP_BATTLES}판 정도부터 AI가 습관을 반영하기 시작합니다.</p>
         )}
