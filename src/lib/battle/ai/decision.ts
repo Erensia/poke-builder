@@ -127,7 +127,7 @@ export interface DecisionParams {
   learn?: LearnParams;
 }
 
-export interface LearnParams {
+interface LearnParams {
   /** 학습 보정을 적용하는 정도 0~1 — 각 보정 배율에 거듭제곱(0 = 보정 없음, 1 = 그대로). 상대 모델이 켜진 프로필에서만 의미가 있다 */
   use: number;
   /** 상대 모델이 꺼진 프로필도 관측용 분포만 계산해 돌려준다(판단에는 쓰지 않음) — 약한 단계에서도 습관을 쌓아 두기 위함 */

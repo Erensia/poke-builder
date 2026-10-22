@@ -21,7 +21,7 @@ export interface RankHistoryEntry {
 }
 
 /** 수동 초기화(이후 30일 자동 초기화)로 닫힌 시즌의 기록 */
-export interface SeasonRecord {
+interface SeasonRecord {
   /** 1시즌, 2시즌 … */
   season: number;
   startedAt: number;

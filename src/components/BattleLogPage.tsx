@@ -49,7 +49,7 @@ import { SLOT_INDICES, battleBoardBackground, type InputModeState, type MegaDecl
 import "./BattleLogPage.css";
 
 /** 배틀타워(free)와 랭크배틀(rank)이 같은 화면을 쓴다 — rank는 상대가 자동·AI 고정이고 결과가 랭크에 반영된다 */
-export type BattleMode = "free" | "rank";
+type BattleMode = "free" | "rank";
 
 /** BattleLogPage의 상태·핸들러 — 화면(JSX)이 쓰는 값만 돌려준다 */
 function useBattleLogSession(mode: BattleMode) {
