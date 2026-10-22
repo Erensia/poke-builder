@@ -118,29 +118,17 @@ function isBattleVideoList(value: unknown): value is BattleVideo[] {
   return Array.isArray(value);
 }
 
-const battleVideosStore = createLocalStorageStore<BattleVideo[]>(
-  BATTLE_VIDEOS_STORAGE_KEY,
-  isBattleVideoList,
-  [],
-);
+const battleVideoStores = {
+  free: createLocalStorageStore<BattleVideo[]>(BATTLE_VIDEOS_STORAGE_KEY, isBattleVideoList, []),
+  rank: createLocalStorageStore<BattleVideo[]>(RANK_BATTLE_VIDEOS_STORAGE_KEY, isBattleVideoList, []),
+};
 
-/** 저장된 배틀비디오 목록을 불러온다. 저장된 적 없거나 손상됐으면 빈 배열 */
-export function loadBattleVideos(): BattleVideo[] {
-  return battleVideosStore.load();
-}
-
-export function saveBattleVideos(videos: BattleVideo[]): void {
-  battleVideosStore.save(videos);
-}
-
-const rankBattleVideosStore = createLocalStorageStore<BattleVideo[]>(RANK_BATTLE_VIDEOS_STORAGE_KEY, isBattleVideoList, []);
-
-export function loadRankBattleVideos(): BattleVideo[] {
-  return rankBattleVideosStore.load();
-}
-
-export function saveRankBattleVideos(videos: BattleVideo[]): void {
-  rankBattleVideosStore.save(videos);
+/**
+ * 배틀비디오 저장소(배틀타워 free·랭크배틀 rank가 따로). `load`는 저장된 적 없거나 손상됐으면 빈 배열을 돌려준다.
+ * load·save는 렌더마다 바뀌지 않는 참조라 useStoredList에 그대로 넘길 수 있다.
+ */
+export function battleVideoStore(mode: "free" | "rank") {
+  return battleVideoStores[mode];
 }
 
 /** 저장 형태: 학습 기록 + "대전에서 계속 학습" 스위치 */
