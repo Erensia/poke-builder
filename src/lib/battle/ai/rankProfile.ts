@@ -42,7 +42,7 @@ export const RANK_AI_PROFILES: Partial<DecisionParams>[] = [
 ];
 
 /** 최상 = 상등급 안에서도 상위(5.0 챔피언 전용 풀, 상등급 내부 라운드로빈 상위 5개 — 상 풀에도 포함된다) */
-export type PartyTier = "하" | "중" | "상" | "최상";
+type PartyTier = "하" | "중" | "상" | "최상";
 const TIERS: PartyTier[] = ["하", "중", "상", "최상"];
 const BASE_TIER = { monster: 0, super: 1, hyper: 2, master: 2, champion: 3 } as const;
 /** 최근 몇 판의 샘플 상대를 다시 만나지 않게 제외할지 — 챔피언은 풀(최상 5개)이 작아 2판 */
@@ -54,7 +54,7 @@ const masterBand = (rating: number) => MASTER_BANDS.filter((edge) => rating >= e
 /** 랭크 볼별 "랜덤 구축 상대" 확률 — 낮은 랭크일수록 랜덤 구축으로 다양하게, 높을수록 선별된 샘플 파티(5.0 R3 확장) */
 const RANDOM_RATE = { monster: 1, super: 0.7, hyper: 0.5, master: 0.3, champion: 0.4 } as const;
 
-export interface RankAiPolicy {
+interface RankAiPolicy {
   /** RANK_AI_PROFILES 인덱스 */
   level: number;
   tier: PartyTier;
