@@ -61,7 +61,7 @@ export function BattleSetupScreen({
     return (
       `무작위 샘플: ${who}를 기본 제공 샘플 파티 중 무작위 하나로 바꿉니다.` +
       (hasSlotPresets
-        ? `\n랜덤 구축: 저장해 둔 포켓몬 샘플에서 6마리를 무작위로 뽑아 ${who}를 만듭니다(중복 포켓몬·도구 없음, 메가 2마리 이하). 저장 샘플이 모자라면 기본 제공 샘플로 채웁니다.`
+        ? `\n랜덤 구축: 저장해 둔 포켓몬 샘플에서 6마리를 무작위로 뽑아 ${who}를 만듭니다(중복 포켓몬·도구 없음, 메가진화 포켓몬은 최대 2마리). 저장 샘플이 모자라면 기본 제공 샘플로 채웁니다.`
         : "")
     );
   };
@@ -191,6 +191,7 @@ export function BattleSetupScreen({
                 onToggleExpand={() => toggleExpanded(side, i)}
                 isDragging={draggedSlot?.side === side && draggedSlot.index === i}
                 isDragOver={dragOverSlot?.side === side && dragOverSlot.index === i}
+                concealBuild={side === "b" && opponentLocked}
                 onDragStart={() => handleSlotDragStart(side, i)}
                 onDragOverSlot={() => handleSlotDragOver(side, i)}
                 onDrop={() => handleSlotDrop(side, i)}
