@@ -1,5 +1,5 @@
 import type { BattleVideo } from "../types/battleVideo";
-import { loadBattleVideos, loadRankBattleVideos, saveBattleVideos, saveRankBattleVideos } from "../lib/storage";
+import { battleVideoStore } from "../lib/storage";
 import type { FighterKey, TurnResult } from "../types/battle";
 import { useStoredList } from "./useStoredList";
 
@@ -13,11 +13,8 @@ const MAX_BATTLE_VIDEOS = { free: 3, rank: 5 } as const;
  * `setItems`로 캡을 구현한다(억지 통합 안 함).
  */
 export function useBattleVideos(mode: "free" | "rank") {
-  const rank = mode === "rank";
-  const { items: videos, setItems: setVideos, removeItem: deleteVideo } = useStoredList<BattleVideo>(
-    rank ? loadRankBattleVideos : loadBattleVideos,
-    rank ? saveRankBattleVideos : saveBattleVideos,
-  );
+  const { load, save } = battleVideoStore(mode);
+  const { items: videos, setItems: setVideos, removeItem: deleteVideo } = useStoredList<BattleVideo>(load, save);
 
   /** 대전 종료 시점의 로그를 새 배틀비디오로 저장한다. 최신이 맨 앞, 상한을 넘으면 가장 오래된 것부터 버려진다 */
   function addVideo(params: { labelA: string; labelB: string; winner: FighterKey | "draw"; log: TurnResult[] }) {
