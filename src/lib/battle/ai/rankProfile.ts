@@ -41,9 +41,12 @@ export const RANK_AI_PROFILES: Partial<DecisionParams>[] = [
   APP_DECISION_PARAMS,
 ];
 
-export type PartyTier = "하" | "중" | "상";
-const TIERS: PartyTier[] = ["하", "중", "상"];
-const BASE_TIER = { monster: 0, super: 1, hyper: 2, master: 2, champion: 2 } as const;
+/** 최상 = 상등급 안에서도 상위(5.0 챔피언 전용 풀, 상등급 내부 라운드로빈 상위 5개 — 상 풀에도 포함된다) */
+export type PartyTier = "하" | "중" | "상" | "최상";
+const TIERS: PartyTier[] = ["하", "중", "상", "최상"];
+const BASE_TIER = { monster: 0, super: 1, hyper: 2, master: 2, champion: 3 } as const;
+/** 최근 몇 판의 샘플 상대를 다시 만나지 않게 제외할지 — 챔피언은 풀(최상 5개)이 작아 2판 */
+const RECENT_OPPONENTS = { default: 4, champion: 2 } as const;
 /** 마스터볼 레이팅 구간 경계: 4 = ~1600 미만 · 3 = 1600~1900 · 2 = 1900~2200 · 1 = 2200~(챔피언 2500은 별도) → RANK_AI_PROFILES 3~6 */
 const MASTER_BANDS = [1600, 1900, 2200];
 const masterBand = (rating: number) => MASTER_BANDS.filter((edge) => rating >= edge).length;
@@ -57,10 +60,12 @@ export interface RankAiPolicy {
   tier: PartyTier;
   /** 상대를 샘플 대신 같은 등급 샘플 슬롯으로 랜덤 구축할 확률 */
   randomRate: number;
+  /** 최근 몇 판의 샘플 상대를 제외할지 */
+  recent: number;
 }
 
 /**
- * 몬스터볼 0·하 → 슈퍼볼 1·중 → 하이퍼볼 2·상 → 마스터볼 4~1(레이팅 구간) 3~6·상 → 챔피언 7·상.
+ * 몬스터볼 0·하 → 슈퍼볼 1·중 → 하이퍼볼 2·상 → 마스터볼 4~1(레이팅 구간) 3~6·상 → 챔피언 7·최상.
  * 연패 보정(경험치제만 — 마스터볼 이상은 연패 배율이 있다): 3연패 한 칸, 5연패 두 칸, 이후 연패마다 한 칸씩 내리되
  * 파티 등급을 먼저, 하등급에서도 남는 칸은 AI 단계에 쓴다(P0 아래로는 없음). 이기면 연패가 0이라 즉시 복구.
  */
@@ -75,16 +80,18 @@ export function resolveRankAiPolicy(state: RankState): RankAiPolicy {
     tier -= tierDrop;
     level = Math.max(0, level - (drop - tierDrop));
   }
-  return { level, tier: TIERS[tier], randomRate: RANDOM_RATE[ball] };
+  return { level, tier: TIERS[tier], randomRate: RANDOM_RATE[ball], recent: RECENT_OPPONENTS[ball === "champion" ? "champion" : "default"] };
 }
 
 const TIER_OF: Record<string, PartyTier> = tiersJson as Record<string, PartyTier>;
 
 const tierOf = (id: string): PartyTier => TIER_OF[id] ?? "중";
+/** 상 풀은 최상 파티도 포함, 나머지는 같은 등급만 */
+const inPool = (id: string, tier: PartyTier) => (tier === "상" ? tierOf(id) === "상" || tierOf(id) === "최상" : tierOf(id) === tier);
 
 /**
  * 등급에 맞는 상대를 고른다. 확률 randomRate로 같은 등급 샘플의 슬롯만 모아 랜덤 구축(저장 슬롯 프리셋은 쓰지 않는다 — 등급이 유지된다),
- * 아니면 샘플 파티를 고르되 최근 상대(recentIds)는 제외. 등급 없는 새 샘플은 중등급, 후보가 비면 전체에서.
+ * 아니면 샘플 파티를 고르되 최근 상대(recentIds)는 제외. 등급 없는 새 샘플은 중등급. 최근 제외로 후보가 비면 제외를 풀고, 그 등급 파티가 아예 없으면 전체에서.
  * 랜덤 구축 상대의 id는 `random:<등급>`(이력 표시용).
  */
 export function pickRankOpponent<T extends SamplePartyPreset>(
@@ -95,14 +102,15 @@ export function pickRankOpponent<T extends SamplePartyPreset>(
   randomRate = 0,
 ): SamplePartyPreset {
   if (randomRate > 0 && rng() < randomRate) {
-    const slots = parties.filter((p) => tierOf(p.id) === tier).flatMap((p) => p.slots);
+    const slots = parties.filter((p) => inPool(p.id, tier)).flatMap((p) => p.slots);
     const { slots: built } = buildRandomPartyFromSlots([], slots, rng);
     if (built.length === PARTY_SIZE) {
       return { id: `random:${tier}`, name: "랜덤 구축", style: "랜덤", group: "real", description: `${tier}등급 샘플 슬롯으로 무작위 구축`, slots: built };
     }
   }
+  const inTier = parties.filter((p) => inPool(p.id, tier));
+  const fresh = inTier.filter((p) => !recentIds.includes(p.id));
   const others = parties.filter((p) => !recentIds.includes(p.id));
-  const inTier = others.filter((p) => tierOf(p.id) === tier);
-  const pool = inTier.length ? inTier : others.length ? others : parties;
+  const pool = fresh.length ? fresh : inTier.length ? inTier : others.length ? others : parties;
   return pool[Math.floor(rng() * pool.length)];
 }

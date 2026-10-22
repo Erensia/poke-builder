@@ -7,9 +7,6 @@ import { loadBattleRank, saveBattleRank } from "../lib/storage";
 import type { PartySlots, SamplePartyPreset } from "../types/party";
 
 /** 직전 판 결과 — 계산 내역 카드가 판 전 상태와 비교해 승급·강등·챔피언 달성을 보여 준다 */
-/** 최근 몇 판의 샘플 상대를 다시 만나지 않게 제외할지 */
-const RECENT_OPPONENTS = 4;
-
 export interface RankLastResult {
   before: RankState;
   entry: RankHistoryEntry;
@@ -44,7 +41,7 @@ export function useRankBattle() {
     const policy = resolveRankAiPolicy(state);
     setAiLevel(policy.level);
     const picked = pickRankOpponent(SAMPLE_PARTIES, policy.tier, recentRef.current, Math.random, policy.randomRate);
-    recentRef.current = [picked.id, ...recentRef.current].slice(0, RECENT_OPPONENTS);
+    recentRef.current = [picked.id, ...recentRef.current].slice(0, policy.recent);
     return picked;
   }
 

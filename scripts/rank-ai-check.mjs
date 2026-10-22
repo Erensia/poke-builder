@@ -36,8 +36,8 @@ try {
   is("마스터볼 2 하단 (1900)", at({ rating: 1900 }), 5, "상");
   is("마스터볼 1 하단 (2200)", at({ rating: 2200 }), 6, "상");
   is("마스터볼 1 상단 (2499.99)", at({ rating: 2499.99 }), 6, "상");
-  is("챔피언 (2500)", at({ rating: 2500 }), 7, "상");
-  is("챔피언 (2600)", at({ rating: 2600 }), 7, "상");
+  is("챔피언 (2500)", at({ rating: 2500 }), 7, "최상");
+  is("챔피언 (2600)", at({ rating: 2600 }), 7, "최상");
   // 학습: 몬스터~하이퍼는 관측만(λ 0), 마스터볼 4~1은 λ 0.25/0.5/0.75/1.0, 챔피언 1.0
   const learnOf = (lv) => RANK_AI_PROFILES[lv].learn ?? { use: 1 };
   check("몬스터~하이퍼볼은 관측만", [0, 1, 2].every((lv) => learnOf(lv).use === 0 && learnOf(lv).observe === true && !RANK_AI_PROFILES[lv].opponentModel));
@@ -54,11 +54,13 @@ try {
   is("몬스터볼은 보정 여지 없음", at({ lossStreak: 9 }), 0, "하");
   is("이기면 즉시 복구(연패 0)", at({ gauge: 32, lossStreak: 0 }), 2, "상");
   is("마스터볼 연패 무보정", at({ rating: 1500, lossStreak: 9 }), 3, "상");
-  is("챔피언 연패 무보정", at({ rating: 2600, lossStreak: 9 }), 7, "상");
+  is("챔피언 연패 무보정", at({ rating: 2600, lossStreak: 9 }), 7, "최상");
   // 상대 선택
   const seq = [0.0, 0.3, 0.6, 0.99];
-  for (const tier of ["하", "중", "상"]) {
-    const ok = seq.every((r) => tiers[pickRankOpponent(SAMPLE_PARTIES, tier, [], () => r).id] === tier);
+  // 상 풀은 최상 파티도 포함, 나머지는 같은 등급만
+  const inPool = (id, tier) => (tier === "상" ? ["상", "최상"].includes(tiers[id]) : tiers[id] === tier);
+  for (const tier of ["하", "중", "상", "최상"]) {
+    const ok = seq.every((r) => inPool(pickRankOpponent(SAMPLE_PARTIES, tier, [], () => r).id, tier));
     check(`${tier}등급 풀에서만 선택`, ok);
   }
   const a = pickRankOpponent(SAMPLE_PARTIES, "상", [], () => 0.5).id;
@@ -68,6 +70,12 @@ try {
   check("등급 없는 샘플은 중등급", pickRankOpponent([...fresh, { id: "real-m6-rank2" }], "중", [], () => 0).id === "새샘플");
   check("후보 없으면 전체에서", pickRankOpponent(fresh, "상", [], () => 0).id === "새샘플");
   check("샘플 전부 등급 보유", SAMPLE_PARTIES.every((p) => tiers[p.id]), SAMPLE_PARTIES.filter((p) => !tiers[p.id]).map((p) => p.id).join());
+  check("등급 값은 하·중·상·최상", SAMPLE_PARTIES.every((p) => ["하", "중", "상", "최상"].includes(tiers[p.id])));
+  const topIds = SAMPLE_PARTIES.filter((p) => tiers[p.id] === "최상").map((p) => p.id);
+  check("최상 풀은 5개", topIds.length === 5, topIds.join());
+  // 최상 풀이 작아 최근 제외로 비면 제외를 풀고 같은 풀에서 고른다(다른 등급으로 새지 않는다)
+  check("최상 풀 전부 최근이어도 최상에서 선택", seq.every((r) => topIds.includes(pickRankOpponent(SAMPLE_PARTIES, "최상", topIds, () => r).id)));
+  check("최근 제외 수: 챔피언 2 · 그 외 4", at({ rating: 2600 }).recent === 2 && at({ rating: 1500 }).recent === 4 && at({}).recent === 4);
 
   // 최근 상대 제외 · 랜덤 구축 비율(5.0 R3 확장)
   const recent = SAMPLE_PARTIES.filter((p) => tiers[p.id] === "상").slice(0, 4).map((p) => p.id);
@@ -75,8 +83,8 @@ try {
   const rate = (o) => at(o).randomRate;
   check("볼별 랜덤 구축 확률", rate({ gauge: 0 }) === 1 && rate({ gauge: 16 }) === 0.7 && rate({ gauge: 32 }) === 0.5 && rate({ rating: 1500 }) === 0.3 && rate({ rating: 2600 }) === 0.4,
     [rate({ gauge: 0 }), rate({ gauge: 16 }), rate({ gauge: 32 }), rate({ rating: 1500 }), rate({ rating: 2600 })].join());
-  for (const tier of ["하", "중", "상"]) {
-    const pool = new Set(SAMPLE_PARTIES.filter((p) => tiers[p.id] === tier).flatMap((p) => p.slots.map((sl) => JSON.stringify(sl))));
+  for (const tier of ["하", "중", "상", "최상"]) {
+    const pool = new Set(SAMPLE_PARTIES.filter((p) => inPool(p.id, tier)).flatMap((p) => p.slots.map((sl) => JSON.stringify(sl))));
     for (const r of [0.01, 0.37, 0.74]) {
       let k = 0;
       const rng = () => ((k += 1), (r * 7 + k * 0.137) % 1);
