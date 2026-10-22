@@ -2489,7 +2489,7 @@ try {
     const noLibero = atk("맹화");
     check("F1 리베로가 아닌 특성은 토글 켜도 무변화", me.computeSoloOffensePower(noLibero, kick, { attackerTypeToMoveType: true }) === me.computeSoloOffensePower(noLibero, kick, {}));
   }
-  // 2.2 B6: 저장 슬롯 조합 랜덤 파티 — 6마리·중복 포켓몬/도구 없음·메가 1마리 이하, 모자라면 기본 제공 슬롯으로 보충, 입력 불변
+  // 2.2 B6: 저장 슬롯 조합 랜덤 파티 — 6마리·중복 포켓몬/도구 없음·메가 최대 2마리, 모자라면 기본 제공 슬롯으로 보충, 입력 불변
   {
     const rs = await server.ssrLoadModule("/src/lib/randomSlotParty.ts");
     const pf = await server.ssrLoadModule("/src/lib/pokemonForm.ts");
