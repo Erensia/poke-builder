@@ -24,7 +24,10 @@ export interface OpponentMemory {
   species: Record<string, { seen: number; lastBattle: number; moves: Record<string, { actual: number; pred: number }> }>;
 }
 
-const MEMORY_DECAY_PER_BATTLE = 0.99;
+/** 배틀타워(파티 시험대) 감쇠 — 유효 창 약 100판 */
+export const MEMORY_DECAY_PER_BATTLE = 0.99;
+/** 랭크배틀(실전 무대) 감쇠 — 유효 창 약 200판. 메모리는 배틀타워와 따로 쌓는다(5.0 R3) */
+export const RANK_MEMORY_DECAY_PER_BATTLE = 0.995;
 const SWITCH_PRIOR = 0.15;
 const SWITCH_PRIOR_STRENGTH = 10;
 const STATUS_PRIOR_STRENGTH = 10;
@@ -101,9 +104,9 @@ function addMemory(a: OpponentMemory, b: OpponentMemory, decay: number, battles:
   return out;
 }
 
-/** 대전이 끝나면: 누적본을 × 0.99로 감쇠한 뒤 이번 대전(세션)을 더한다(새 객체) */
-export function commitBattle(saved: OpponentMemory, session: OpponentMemory): OpponentMemory {
-  return addMemory(saved, session, MEMORY_DECAY_PER_BATTLE, saved.battles + 1);
+/** 대전이 끝나면: 누적본을 × decay(기본 0.99)로 감쇠한 뒤 이번 대전(세션)을 더한다(새 객체) */
+export function commitBattle(saved: OpponentMemory, session: OpponentMemory, decay = MEMORY_DECAY_PER_BATTLE): OpponentMemory {
+  return addMemory(saved, session, decay, saved.battles + 1);
 }
 
 /** 누적본 + 이번 대전 세션(감쇠 없이) — 대전 중 보정에 쓴다 */
@@ -127,15 +130,19 @@ export function calibrateDistribution(
   memory: OpponentMemory,
   speciesId: string,
   statusMoveIds: ReadonlySet<string>,
+  /** 학습 사용률 0~1: 각 배율에 거듭제곱(5.0 R3 — 랭크 마스터볼 구간 단계 활용). 1이면 그대로 */
+  strength = 1,
 ): LevelOneDistribution {
-  const { switchFactor, statusFactor } = memoryFactors(memory);
+  const { switchFactor: rawSwitch, statusFactor: rawStatus } = memoryFactors(memory);
+  const switchFactor = rawSwitch ** strength;
+  const statusFactor = rawStatus ** strength;
   const sp = memory.species[speciesId];
   const weights = new Map<string, number>();
   let total = 0;
   for (const [id, w] of dist.moveWeights) {
     const m = sp?.moves[id];
     // 그 종으로 이 기술을 실제로 쓴 횟수 / 예측 합(사전: 예측대로 MOVE_PRIOR_STRENGTH번 쓴 셈)
-    const moveFactor = m ? (m.actual + MOVE_PRIOR_STRENGTH) / (m.pred + MOVE_PRIOR_STRENGTH) : 1;
+    const moveFactor = m ? ((m.actual + MOVE_PRIOR_STRENGTH) / (m.pred + MOVE_PRIOR_STRENGTH)) ** strength : 1;
     const v = w * (statusMoveIds.has(id) ? statusFactor : 1) * moveFactor;
     weights.set(id, v);
     total += v;

@@ -1,4 +1,4 @@
-import { type Dispatch, type SetStateAction } from "react";
+import { type Dispatch, type ReactNode, type SetStateAction } from "react";
 import { BattleTurnLog } from "../BattleTurnLog";
 import { getPokemon, getMove } from "../../lib/data";
 import { getEffectiveForm, getEffectiveGender, megaBadgeLabel } from "../../lib/pokemonForm";
@@ -75,9 +75,12 @@ export function BattleBoard({
   aiThinking,
   learnedBattles,
   seriesNext,
+  resultExtra,
 }: {
-  /** 배틀 프런티어 진행 중이면 결과 배너의 "대전 이어하기"를 이 라벨의 "다음 상대" 버튼으로 바꾼다 */
-  seriesNext: { label: string; onNext: () => void } | null;
+  /** 배틀 프런티어·랭크배틀 진행 중이면 결과 배너의 "대전 이어하기"를 이 라벨의 "다음 상대" 버튼으로 바꾼다. note는 대전 중 안내 */
+  seriesNext: { label: string; onNext: () => void; note: string } | null;
+  /** 결과 배너 아래에 붙일 내용(랭크배틀의 계산 내역) */
+  resultExtra?: ReactNode;
   /** 컴퓨터(배틀 AI)가 조작하는 편. 사람이 양쪽 다 조작하면 null */
   aiSide: Side | null;
   /** AI가 이번 턴 행동을 계산하는 중(ver.2.0 2-B — Web Worker) — 점 세 개 표시, 턴 진행 버튼 잠금 */
@@ -730,6 +733,7 @@ export function BattleBoard({
             {seriesNext ? seriesNext.label : "대전 이어하기"}
           </button>
         </div>
+        {resultExtra}
         {learnedBattles !== null && (
           <p className="battle-ai-learned-note">AI가 이번 대전을 학습했습니다 (누적 {learnedBattles}판)</p>
         )}
@@ -757,9 +761,7 @@ export function BattleBoard({
         </button>
         {lockWarning && <div className="battle-lock-warning">{lockWarning}</div>}
         {seriesNext && (
-          <p className="battle-ai-learned-note">
-            배틀 프런티어 진행 중 — 결과가 나오기 전에 나가면(탭 이동·새로고침·창 닫기) 이 판은 패배로 기록되고 연승이 끊겨요.
-          </p>
+          <p className="battle-ai-learned-note">{seriesNext.note}</p>
         )}
       </>
     )}

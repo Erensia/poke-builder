@@ -549,7 +549,7 @@ export function performSwitch(
   // TODO(§8): 추격(Pursuit)은 로스터에 없어 미구현 — 교체 대상을 위력 2배로 선타하는 예외.
 }
 
-export interface ApplySwitchOutcome {
+interface ApplySwitchOutcome {
   nextState: BattleState;
   /** 이 교체로 처리된 등장/퇴장 안내(재생력·자연회복·위협·날씨 등). 없으면 빈 배열 */
   entryMessages: string[];

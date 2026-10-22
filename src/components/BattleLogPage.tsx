@@ -11,6 +11,9 @@ import { SamplePartiesModal } from "./SamplePartiesModal";
 import { buildRandomPartyFromSlots } from "../lib/randomSlotParty";
 import { BattleSeriesPanel } from "./BattleSeriesPanel";
 import { useBattleSeries } from "../hooks/useBattleSeries";
+import { RankPanel } from "./RankPanel";
+import { RankResultCard } from "./RankResultCard";
+import { useRankBattle } from "../hooks/useRankBattle";
 import { CosmeticFormPickerModal } from "./CosmeticFormPickerModal";
 import { BattleTurnLog } from "./BattleTurnLog";
 import { useBattleSetup, BATTLE_SELECT_SIZE } from "../hooks/useBattleSetup";
@@ -31,26 +34,30 @@ import { forcedLockedAction } from "../lib/battle/lockedAction";
 import { runTurn, resumeTurn } from "../lib/battle/runTurn";
 import type { FighterKey, TurnAction, TurnResult } from "../types/battle";
 import { chooseAiForcedSwitch, chooseAiSelection, sampleRiskAversion } from "../lib/battle/ai";
+import { RANK_AI_PROFILES } from "../lib/battle/ai/rankProfile";
 import { APP_DECISION_PARAMS, chooseAiActionAsync, prewarmAiWorker } from "../lib/battle/ai/aiClient";
 import { combinedMemory, emptyOpponentMemory, observeOpponent } from "../lib/battle/ai/opponentMemory";
 import { statusMoveIdsOf } from "../lib/battle/ai";
 import type { LevelOneDistribution } from "../lib/battle/ai/levelOne";
 import { useAiMemory } from "../hooks/useAiMemory";
 import { AiMemoryModal } from "./AiMemoryModal";
-import type { PartySlot, SamplePartyPreset } from "../types/party";
+import type { PartySlot, PartySlots, SamplePartyPreset } from "../types/party";
 import { BattleBoard } from "./battleLog/BattleBoard";
 import { BattleSelectScreen } from "./battleLog/BattleSelectScreen";
 import { BattleSetupScreen } from "./battleLog/BattleSetupScreen";
 import { SLOT_INDICES, battleBoardBackground, type InputModeState, type MegaDeclaredState, type PendingForcedSwitchState, type PendingPivotState, type PickerState, type SelectedState, type Side, type SlotIndex } from "./battleLog/shared";
 import "./BattleLogPage.css";
 
+/** 배틀타워(free)와 랭크배틀(rank)이 같은 화면을 쓴다 — rank는 상대가 자동·AI 고정이고 결과가 랭크에 반영된다 */
+type BattleMode = "free" | "rank";
+
 /** BattleLogPage의 상태·핸들러 — 화면(JSX)이 쓰는 값만 돌려준다 */
-function useBattleLogSession() {
+function useBattleLogSession(mode: BattleMode) {
   const setup = useBattleSetup();
   const slotPresets = useSlotPresets();
   const partyPresets = usePartyPresets();
   const mySamples = useMySamples();
-  const battleVideos = useBattleVideos();
+  const battleVideos = useBattleVideos(mode);
   // 배틀비디오 목록/다시보기 토글(§6). "list"면 목록 모달, BattleVideo 객체면 그 비디오의 로그를 보여준다.
   const [battleVideoView, setBattleVideoView] = useState<"list" | BattleVideo | null>(null);
   const [picker, setPicker] = useState<PickerState>(null);
@@ -80,20 +87,24 @@ function useBattleLogSession() {
   const [megaDeclared, setMegaDeclared] = useState<MegaDeclaredState>({ a: false, b: false });
   // 배틀 AI: 셋업 화면 토글(상대 편을 AI가 조작할지)과, 대전 시작 시점에 확정된 AI 편·위험 회피 성향.
   // 위험 회피 성향은 대전마다 1회만 뽑아 끝까지 쓴다(decision-layer §5).
-  const [aiOpponent, setAiOpponent] = useState(true);
+  const [aiOpponentChoice, setAiOpponent] = useState(true);
+  // 랭크배틀은 사람이 양쪽을 조작해 승리를 만들 수 없게 AI 상대로 고정한다
+  const aiOpponent = mode === "rank" || aiOpponentChoice;
   const [aiSide, setAiSide] = useState<Side | null>(null);
   const [aiRiskAversion, setAiRiskAversion] = useState(0.5);
   // AI 행동 계산 중(ver.2.0 2-B) — 요청 번호로, 계산 도중 초기화·새 대전이 시작되면 늦게 온 답을 버린다
   const [aiThinking, setAiThinking] = useState(false);
   const aiRequestRef = useRef(0);
   // 사용자 패턴 학습(ver.2.0 1-C): 누적본은 useAiMemory(localStorage), 이번 대전 관측은 세션 기록 — 대전이 끝나면 합친다
-  const aiMemory = useAiMemory();
+  const aiMemory = useAiMemory(mode);
   const aiSessionRef = useRef(emptyOpponentMemory());
   const [showAiMemory, setShowAiMemory] = useState(false);
   /** 이번 대전을 학습했으면 누적 판 수(결과 배너 한 줄), 아니면 null */
   const [learnedBattles, setLearnedBattles] = useState<number | null>(null);
   /** 배틀 프런티어(2.5 L4, 전 연속 대전) */
   const series = useBattleSeries(mySamples.samples);
+  /** 랭크배틀(5.0 R1) — 프런티어와 별도 저장·연승 */
+  const rank = useRankBattle();
   /** 프런티어 중 내 선출 고정 — 첫 판에 고른 빌드 슬롯 인덱스(프런티어를 새로 켜면 다시 고른다) */
   const [frontierSelection, setFrontierSelection] = useState<SlotIndex[] | null>(null);
 
@@ -257,10 +268,11 @@ function useBattleLogSession() {
   const needsSelection = (side: Side) => buildableIndices(side).length > BATTLE_SELECT_SIZE;
 
   /** 양쪽 다 유효 빌드가 1마리 이상이고, 기술 없는 슬롯이 하나도 없어야 다음 단계로 갈 수 있다 */
+  const rankNotStarted = mode === "rank" && !rank.active;
   const canProceed =
-    !hasMovelessSlot && (["a", "b"] as const).every((side) => buildableIndices(side).length >= 1);
+    !hasMovelessSlot && (["a", "b"] as const).every((side) => buildableIndices(side).length >= 1) && !rankNotStarted;
 
-  /** 배틀 프런티어 시작은 AI 상대 + 내 쪽에 빌드가 있을 때만 — 이유를 버튼 툴팁으로 보여 준다 */
+  /** 배틀 프런티어·랭크배틀 시작은 AI 상대 + 내 쪽에 빌드가 있을 때만 — 이유를 버튼 툴팁으로 보여 준다 */
   const seriesStartBlockedReason = !aiOpponent
     ? "\"AI가 조작\"을 켜야 배틀 프런티어를 할 수 있어요"
     : buildableIndices("a").length < 1
@@ -287,6 +299,8 @@ function useBattleLogSession() {
       setFrontierSelection(sel.a);
       series.begin();
     }
+    // 랭크배틀: 이탈 정산용 표시와 시즌 기록용 내 빌드(6슬롯)를 남긴다. 선출은 판마다 새로 고른다
+    if (rank.active) rank.begin(SLOT_INDICES.map((i) => slotCtl("a", i).slot) as PartySlots);
     const movesOf = (s: PartySlot) => s.moves.filter((id): id is string => id !== null).map((id) => getMove(id)!);
     const state = createBattleState({
       a: { slots: aParty, movesList: aParty.map(movesOf) },
@@ -540,7 +554,7 @@ function useBattleLogSession() {
       key: aiSide!,
       riskAversion: aiRiskAversion,
       legalMoveIds: selectableMoveIds(aiSide!),
-      decisionParams: APP_DECISION_PARAMS,
+      decisionParams: mode === "rank" ? RANK_AI_PROFILES[rank.aiLevel] : APP_DECISION_PARAMS,
       opponentMemory: combinedMemory(aiMemory.memory, aiSessionRef.current),
     }).then((result) => {
       if (requestId !== aiRequestRef.current) return; // 계산 도중 초기화·새 대전
@@ -603,11 +617,12 @@ function useBattleLogSession() {
     // 1-C: AI 대전이면 이번 대전 관측을 누적 학습에 합친다("대전에서 계속 학습"이 꺼져 있으면 합치지 않음)
     if (aiSide && aiMemory.commit(aiSessionRef.current)) setLearnedBattles(aiMemory.memory.battles + 1);
     series.record(winner);
+    rank.record(winner, log.at(-1)?.turnNumber ?? 0);
     aiSessionRef.current = emptyOpponentMemory();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [winner]);
 
-  return { setBattleVideoView, battleVideos, battleState, selecting, series, seriesStartBlockedReason, setFrontierSelection, loadSample, setup, partyPresets, slotPresets, movelessWarningFor, handleSaveSlotAsSample, setPicker, canProceed, proceedLabel, hasMovelessSlot, handleProceed, aiOpponent, setAiOpponent, aiMemory, setShowAiMemory, loadRandomSample, loadRandomSlotParty, selection, buildableIndices, needsSelection, pokemonAt, slotCtl, toggleSelection, setSelecting, selectionComplete, startBattleWith, winner, selected, setSelected, inputMode, setInputMode, megaDeclared, setMegaDeclared, pendingForcedSwitch, pendingPivot, lockWarning, setLockWarning, log, activeMoveIds, choiceLockedMoveId, battleSide, switchableIndices, resolveForcedSwitch, resolvePivot, isStruggling, moveRestrictionMessage, playTurn, resetToSetup, aiSide, aiThinking, learnedBattles, showAiMemory, picker, sideCtls, mySamples, battleVideoView };
+  return { mode, rank, rankNotStarted, setBattleVideoView, battleVideos, battleState, selecting, series, seriesStartBlockedReason, setFrontierSelection, loadSample, setup, partyPresets, slotPresets, movelessWarningFor, handleSaveSlotAsSample, setPicker, canProceed, proceedLabel, hasMovelessSlot, handleProceed, aiOpponent, setAiOpponent, aiMemory, setShowAiMemory, loadRandomSample, loadRandomSlotParty, selection, buildableIndices, needsSelection, pokemonAt, slotCtl, toggleSelection, setSelecting, selectionComplete, startBattleWith, winner, selected, setSelected, inputMode, setInputMode, megaDeclared, setMegaDeclared, pendingForcedSwitch, pendingPivot, lockWarning, setLockWarning, log, activeMoveIds, choiceLockedMoveId, battleSide, switchableIndices, resolveForcedSwitch, resolvePivot, isStruggling, moveRestrictionMessage, playTurn, resetToSetup, aiSide, aiThinking, learnedBattles, showAiMemory, picker, sideCtls, mySamples, battleVideoView };
 }
 
 /** BattleLogPage의 일부 화면 — 세션(useBattleLogSession 결과)에서 필요한 값만 꺼내 쓴다 */
@@ -813,17 +828,17 @@ function BattleLogPickers({ s }: { s: ReturnType<typeof useBattleLogSession> }) 
   );
 }
 
-export function BattleLogPage() {
-  const session = useBattleLogSession();
-  const { setBattleVideoView, battleVideos, battleState, selecting, series, seriesStartBlockedReason, setFrontierSelection, loadSample, setup, partyPresets, slotPresets, movelessWarningFor, handleSaveSlotAsSample, setPicker, canProceed, proceedLabel, hasMovelessSlot, handleProceed, aiOpponent, setAiOpponent, aiMemory, setShowAiMemory, loadRandomSample, loadRandomSlotParty, selection, buildableIndices, needsSelection, pokemonAt, slotCtl, toggleSelection, setSelecting, selectionComplete, startBattleWith, winner, selected, setSelected, inputMode, setInputMode, megaDeclared, setMegaDeclared, pendingForcedSwitch, pendingPivot, lockWarning, setLockWarning, log, activeMoveIds, choiceLockedMoveId, battleSide, switchableIndices, resolveForcedSwitch, resolvePivot, isStruggling, moveRestrictionMessage, playTurn, resetToSetup, aiSide, aiThinking, learnedBattles, showAiMemory, battleVideoView } = session;
+export function BattleLogPage({ mode }: { mode: BattleMode }) {
+  const session = useBattleLogSession(mode);
+  const { rank, rankNotStarted, setBattleVideoView, battleVideos, battleState, selecting, series, seriesStartBlockedReason, setFrontierSelection, loadSample, setup, partyPresets, slotPresets, movelessWarningFor, handleSaveSlotAsSample, setPicker, canProceed, proceedLabel, hasMovelessSlot, handleProceed, aiOpponent, setAiOpponent, aiMemory, setShowAiMemory, loadRandomSample, loadRandomSlotParty, selection, buildableIndices, needsSelection, pokemonAt, slotCtl, toggleSelection, setSelecting, selectionComplete, startBattleWith, winner, selected, setSelected, inputMode, setInputMode, megaDeclared, setMegaDeclared, pendingForcedSwitch, pendingPivot, lockWarning, setLockWarning, log, activeMoveIds, choiceLockedMoveId, battleSide, switchableIndices, resolveForcedSwitch, resolvePivot, isStruggling, moveRestrictionMessage, playTurn, resetToSetup, aiSide, aiThinking, learnedBattles, showAiMemory, battleVideoView } = session;
 
 
   return (
     <section className="battle-log-page">
       <header className="battle-log-header">
         <div>
-          <h2>배틀타워</h2>
-          <p>실전 배틀 시뮬레이션</p>
+          <h2>{mode === "rank" ? "랭크배틀" : "배틀타워"}</h2>
+          <p>{mode === "rank" ? "AI와 랭크를 겨루는 배틀" : "실전 배틀 시뮬레이션"}</p>
         </div>
         <button
           type="button"
@@ -834,7 +849,7 @@ export function BattleLogPage() {
         </button>
       </header>
 
-      {!battleState && !selecting && (
+      {!battleState && !selecting && mode === "free" && (
         <BattleSeriesPanel
           series={series}
           startBlockedReason={seriesStartBlockedReason}
@@ -843,6 +858,10 @@ export function BattleLogPage() {
             loadSample("b", first);
           }}
         />
+      )}
+
+      {!battleState && !selecting && mode === "rank" && (
+        <RankPanel rank={rank} startBlockedReason={seriesStartBlockedReason} onStart={(first) => loadSample("b", first)} />
       )}
 
       {!battleState && !selecting && (
@@ -863,7 +882,9 @@ export function BattleLogPage() {
           onOpenAiMemory={() => setShowAiMemory(true)}
           onLoadRandomSample={loadRandomSample}
           onLoadRandomSlotParty={loadRandomSlotParty}
-          opponentLocked={series.active}
+          opponentLocked={series.active || mode === "rank"}
+          lockedNote={mode === "rank" ? null : "배틀 프런티어 중에는 상대를 바꿀 수 없어요."}
+          proceedBlockedReason={rankNotStarted ? "위쪽의 \"랭크 배틀 시작\"을 먼저 눌러 주세요" : undefined}
         />
       )}
 
@@ -918,19 +939,32 @@ export function BattleLogPage() {
             series.active && series.current
               ? {
                   label: "다음 상대 →",
+                  note: "배틀 프런티어 진행 중 — 결과가 나오기 전에 나가면(탭 이동·새로고침·창 닫기) 이 판은 패배로 기록되고 연승이 끊겨요.",
                   onNext: () => {
                     loadSample("b", series.current!);
                     resetToSetup();
                   },
                 }
-              : null
+              : rank.active && rank.current
+                ? {
+                    label: "다음 상대 →",
+                    note: "랭크배틀 진행 중 — 결과가 나오기 전에 나가면(탭 이동·새로고침·창 닫기) 이 판은 패배로 기록돼요.",
+                    onNext: () => {
+                      loadSample("b", rank.next());
+                      resetToSetup();
+                    },
+                  }
+                : null
           }
+          resultExtra={rank.active && rank.lastResult ? <RankResultCard result={rank.lastResult} /> : null}
         />
       )}
 
       {showAiMemory && (
         <AiMemoryModal
           memory={aiMemory.memory}
+          recentBattles={aiMemory.recentBattles}
+          note={mode === "rank" ? "랭크 AI는 몬스터볼~하이퍼볼에서는 습관을 쌓아 두기만 하고, 마스터볼부터 단계적으로 활용합니다." : undefined}
           learningEnabled={aiMemory.learningEnabled}
           onToggleLearning={aiMemory.setLearningEnabled}
           onReset={aiMemory.reset}

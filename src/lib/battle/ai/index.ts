@@ -1,7 +1,7 @@
 import { type FighterKey, type TurnAction } from "@/types/battle";
 import { STRUGGLE_MOVE, opponentKey, type BattleState } from "../state";
 import { forcedLockedAction } from "../lockedAction";
-import { decide, scoreOption, type DecisionParams, type ScoredOption } from "./decision";
+import { decide, DEFAULT_DECISION_PARAMS, DEFAULT_OPPONENT_MODEL, isHardOverride, scoreOption, type DecisionParams, type MistakeParams, type ScoredOption } from "./decision";
 import { evaluateOptions, type AiOption, type EvaluateOptions } from "./evaluator";
 import { withThreatModel, withThreatOverride, type ThreatModelParams } from "./opponentMoveModel";
 import { attachSwitchRead, levelOneDistribution, type LevelOneDistribution } from "./levelOne";
@@ -9,6 +9,9 @@ import { calibrateDistribution, type OpponentMemory } from "./opponentMemory";
 import { getMove } from "@/lib/data";
 import { paramsFor } from "./decision";
 import { DEFAULT_SEARCH_PARAMS, searchDecide, type SearchPolicy, type SearchResult } from "./search";
+
+/** 관측용 상대 분포(learn.observe)를 만들 때 쓰는 기본 파라미터 — 학습 기록이 앱 AI의 예측과 같은 기준으로 쌓이게 한다 */
+const { search: _s, opponentModel: _om, mistake: _m, learn: _l, ...OBSERVE_PARAMS } = DEFAULT_DECISION_PARAMS;
 
 /** 교착 교체 억제(ver.3.3 E1): 내 공격기가 전부 처치 불가(c=∞)면 교체 점수에서 마진을 뺀다 — 능력치 하락·랭크 초기화 이득만 보고 교체 왕복하는 것을 막는다. 지금 자리에서 확정 처치(1타)를 맞을 수 있으면 면제 */
 function applyStalemateMargin(options: AiOption[], margin: number): AiOption[] {
@@ -58,6 +61,17 @@ interface ChooseAiOptions extends EvaluateOptions {
    * 보정한다(교체 확률·변화기 확률·그 종의 기술별 습관).
    */
   opponentMemory?: OpponentMemory;
+  /** 실수 모델(params.mistake)의 난수 — 시뮬레이터가 판마다 시드 고정 난수를 넘겨 재현성을 얻는다. 기본 Math.random */
+  rng?: () => number;
+}
+
+/** 실수 모델: 확정 처치가 아니고 탐색이 꺼진 판단에서, 확률 rate로 "최선 − margin 이내" 차선책 중 하나를 균등 선택. 후보가 없으면 원래 선택 */
+function applyMistake(chosen: AiOption, scored: ScoredOption[], mistake: MistakeParams, rng: () => number): AiOption {
+  if (!mistake.hardOverride && isHardOverride(chosen)) return chosen;
+  const best = Math.max(...scored.map((s) => s.score));
+  if (!Number.isFinite(best)) return chosen;
+  const alts = scored.filter((s) => s.option !== chosen && Number.isFinite(s.score) && best - s.score <= mistake.margin);
+  return alts.length > 0 && rng() < mistake.rate ? alts[Math.floor(rng() * alts.length)].option : chosen;
 }
 
 /**
@@ -75,20 +89,26 @@ export function chooseAiAction(
   if (forced) return { action: forced, scored: [] };
   const params = paramsFor(options.decisionParams);
   let rawDistribution: LevelOneDistribution | undefined;
+  let observed: LevelOneDistribution | undefined;
   // 점수 계산(파티 대면표는 이때 계산됨)도 같은 상대 기술 모델로
   const decision: (Partial<SearchResult> & { chosen: AiOption; scored: ScoredOption[] }) | null = withThreatModel(threatModelOf(params), () => {
     // 탐색·상대 모델을 뺀 파라미터 — 상대 쪽 추론(재귀 한 단계)과 오라클 롤아웃 안의 지금 AI가 쓴다
-    const { search: _search, opponentModel: _opponentModel, ...plainParams } = params;
+    const { search: _search, opponentModel: _opponentModel, mistake: _mistake, learn: _learn, ...plainParams } = params;
     // 상대 모델 ver2(1-B): 상대 행동 분포를 먼저 추론하고(이때 덮어쓰기 없음 — 상대는 나를 고정 규칙으로 본다), 지금 대면의 평가·채점을
     // 그 분포로. 꺼져 있어도 undefined로 명시해 바깥(오라클 롤아웃 등)의 덮어쓰기가 새지 않게 한다.
     rawDistribution = params.opponentModel
       ? withThreatOverride(undefined, () => levelOneDistribution(state, key, plainParams, params.opponentModel!))
       : undefined;
+    // 5.0 R3: 상대 모델이 없는 프로필도 learn.observe면 관측용 분포만 계산한다(기본 파라미터로 — 판단에는 쓰지 않는다)
+    observed =
+      !rawDistribution && params.learn?.observe
+        ? withThreatOverride(undefined, () => levelOneDistribution(state, key, OBSERVE_PARAMS, DEFAULT_OPPONENT_MODEL))
+        : undefined;
     // 1-C: 이 상대에게서 배운 성향으로 보정(기록이 없으면 교체 확률만 사전값 0.15배로 — 교체 읽기가 거의 안 켜진다)
     const opponent = state[opponentKey(key)];
     const dist =
       rawDistribution && options.opponentMemory
-        ? calibrateDistribution(rawDistribution, options.opponentMemory, opponent.slot.pokemonId, statusMoveIdsOf(rawDistribution))
+        ? calibrateDistribution(rawDistribution, options.opponentMemory, opponent.slot.pokemonId, statusMoveIdsOf(rawDistribution), params.learn?.use)
         : rawDistribution;
     const override = dist
       ? { opponentSlot: state[opponentKey(key)].slot, targetSlot: state[key].slot, weights: dist.moveWeights, alpha: params.opponentModel!.alpha }
@@ -106,12 +126,13 @@ export function chooseAiAction(
     });
   });
   if (!decision) return { action: { kind: "move", move: STRUGGLE_MOVE }, scored: [] };
-  const { chosen, scored } = decision;
+  const { scored } = decision;
+  const chosen = params.mistake && !params.search ? applyMistake(decision.chosen, scored, params.mistake, options.rng ?? Math.random) : decision.chosen;
   const action: TurnAction =
     chosen.optionType === "switch"
       ? { kind: "switch", toIndex: chosen.toIndex! }
       : { kind: "move", move: chosen.move!, mega: chosen.mega };
-  const base: AiDecision = { action, chosen, scored, ...(rawDistribution && { opponentDistribution: rawDistribution }) };
+  const base: AiDecision = { action, chosen, scored, ...((rawDistribution ?? observed) && { opponentDistribution: rawDistribution ?? observed }) };
   return decision.baseChosen ? { ...base, baseChosen: decision.baseChosen, searchValues: decision.values } : base;
 }
 

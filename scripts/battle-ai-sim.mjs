@@ -19,6 +19,10 @@
  *   selectvs 3선출 방식 A 대 B(ver.2.1 A-0): 같은 파티 두 개를 두고 A·B 각각이 양쪽 파티 선출을 맡아 좌우·파티를 바꿔 4판씩(시드당 4판).
  *            대전은 양쪽 같은 어려움 AI. 인자 4·5번째가 A·B 선출 옵션 JSON — chooseAiSelection 옵션({...}) 또는 {"kind":"random"|"first"}(비AI 기준).
  *            환경변수 POOL=samples(기본, 기본 제공 샘플 파티 중 서로 다른 둘 — 2.2 B5에서 26개가 돼 같은 시드의 대진이 2.1 때(20개)와 달라졌으니 그 기준값은 재현되지 않는다) | random(무작위 6마리 빌드).
+ *   partyvs  샘플 파티 두 개의 강도 비교(ver.5.0 R3 S1): 환경변수 PAIRS="i-j,i-j,..."(SAMPLE_PARTIES 인덱스 쌍, 필수)마다 [판 수]개 시드를 돌고,
+ *            시드당 P가 a편·b편인 2판(양쪽 같은 AI — 인자 4번째 JSON이 결정 파라미터, 3선출은 chooseAiSelection 기본). 결과는 쌍별 {pWins,qWins,other,aSideWins}.
+ *            scripts/rank-party-tiers.mjs가 쌍을 나눠 병렬 실행·합산해 등급을 매긴다.
+ *            RANDOM_TIER=하|중|상이면 Q편이 시드마다 그 등급 샘플 슬롯으로 랜덤 구축한 파티로 바뀐다(랭크 상대 랜덤 구축 강도 확인용, PAIRS의 j는 무시).
  *
  * 예) npm run sim:ai -- greedy 150 '{"tieThreshold":0.2}'   ← 파라미터 튜닝: 값을 바꿔 승률 비교
  * 환경변수 POOL=samples(regress 제외 3마리 모드 전부, 2.2 B3): 편마다 기본 제공 샘플 파티 하나에서 3마리를 뽑는다(기본은 무작위 빌드).
@@ -32,7 +36,7 @@
  *     diag 모드에 DIAG=status를 주면 그 변화기를 고른 순간을 덤프한다.
  * 환경변수 LEARN=1(greedy·style, ver.2.0 1-C): AI 쪽이 상대가 실제로 고른 행동을 대전 간 누적 학습(한 프로세스 안에서 이어짐) —
  *     상대 모델(opponentModel)이 켜진 파라미터에서만 보정이 걸린다. 결과에 learned(누적 대전 수·교체/변화기 보정 배율).
- * 환경변수 SEED_FROM=<n>(greedy·style·h2h·select): 시드 n부터 [판 수]개만 돈다(기본 1) — 벤치를 조각내 병렬로 돌린 뒤 합산(scripts/bench.mjs).
+ * 환경변수 SEED_FROM=<n>(greedy·style·h2h): 시드 n부터 [판 수]개만 돈다(기본 1) — 벤치를 조각내 병렬로 돌린 뒤 합산(scripts/bench.mjs).
  *     각 판은 시드로만 정해지므로 조각의 합은 한 번에 돌린 결과와 같다.
  * 환경변수 SIM_ROOT=<체크아웃 경로>: 이 스크립트 대신 그 체크아웃의 src/를 불러온다(다른 커밋을 이 하네스로 벤치).
  *   h2h에 OPP_ROOT=<다른 체크아웃 경로>를 주면 B 쪽 AI를 그 코드에서 불러온다(예: ver.1.7 끝 대비 — 엔진·데이터는 이 체크아웃).
@@ -51,8 +55,6 @@ const seedTo = seedFrom + battles - 1;
 // hmr: false — 병렬 실행 시 HMR 웹소켓 포트(24678) 충돌로 프로세스가 죽는 걸 막는다.
 const server = await createServer({ root, server: { middlewareMode: true, hmr: false }, appType: "custom", logLevel: "error" });
 const opponentParams = process.argv[5] ? JSON.parse(process.argv[5]) : undefined;
-// 3선출 소프트맥스 선택용 시드 고정 난수(배틀 결과 재현)
-const choiceRng = mulberry32(0x5eed);
 // h2h 모드: OPP_ROOT=<다른 체크아웃 경로>면 B 쪽 AI를 그 코드(예: ver.1.7 끝)에서 불러온다 — 엔진·데이터는 이 체크아웃 것.
 const oppServer = process.env.OPP_ROOT
   ? await createServer({ root: process.env.OPP_ROOT, server: { middlewareMode: true, hmr: false }, appType: "custom", logLevel: "error" })
@@ -482,9 +484,12 @@ try {
       o.optionType === "switch" ? "switch" : o.move.category === "status" ? statusLabel(o.move) : o.move.selfSwitchAfterDamage ? "pivot" : "attack";
     // LEARN=1: A 쪽(파라미터 A)이 B를 대전 간 누적 학습
     const learner = makeLearner();
-    const policy = (params, risk, which = ai, learn = null) => (st, key) => {
+    const policy = (params, risk, which = ai, learn = null) => {
+      // 실수 모델(params.mistake)의 난수 — 판의 risk(시드에서 나옴)로 고정해 같은 시드면 같은 실수
+      const rng = mulberry32(Math.floor(risk * 2 ** 31) ^ 0x6d157a4e);
+      return (st, key) => {
       const t0 = performance.now();
-      const d = which.chooseAiAction(st, key, risk, { decisionParams: params, ...learn?.options() });
+      const d = which.chooseAiAction(st, key, risk, { decisionParams: params, rng, ...learn?.options() });
       learn?.note(d, st, key);
       if (d.baseChosen) {
         const ms = performance.now() - t0;
@@ -509,6 +514,7 @@ try {
         }
       }
       return remap(d.action);
+      };
     };
     const forced = (params, risk, which = ai) => (st, key) => which.chooseAiForcedSwitch(st, key, risk, params) ?? living(st, key)[0];
     const res = { aWins: 0, bWins: 0, other: 0 };
@@ -529,39 +535,6 @@ try {
     }
     const search = searchStats.decisions > 0 ? { search: searchStats } : {};
     console.log(JSON.stringify({ battles: battles * 2, A: { ...decisionParams }, B: { ...opponentParams }, res, ...search }));
-  } else if (mode === "select") {
-    // 3선출 AI(로드맵 7): 양쪽 6마리 빌드 → 한쪽은 AI 선출, 다른 쪽은 SELECT_B(random | first, 기본 random) → 양쪽 AI로 대전.
-    // 좌우 교대.
-    const baseline = process.env.SELECT_B ?? "random";
-    const make6 = (rng) => {
-      const members = Array.from({ length: 6 }, () => makeSlot(rng));
-      return { slots: members.map((m) => m.slot), movesList: members.map((m) => m.moves) };
-    };
-    const pickSide = (side6, sel) => ({ slots: sel.map((i) => side6.slots[i]), movesList: sel.map((i) => side6.movesList[i]) });
-    const policy = (risk) => (st, key) => ai.chooseAiAction(st, key, risk, {}).action;
-    const forced = (risk) => (st, key) => ai.chooseAiForcedSwitch(st, key, risk) ?? living(st, key)[0];
-    const res = { aiSelectWins: 0, baselineWins: 0, other: 0 };
-    let selectMs = 0;
-    let selects = 0;
-    for (let s = seedFrom; s <= seedTo; s++) {
-      const partyRng = mulberry32(s ^ 0x51ec7);
-      const six = { a: make6(partyRng), b: make6(partyRng) };
-      const full = state.createBattleState(six);
-      const risk = mulberry32(s)();
-      for (const aiSide of ["a", "b"]) {
-        const other = aiSide === "a" ? "b" : "a";
-        const t0 = performance.now();
-        const aiSel = ai.chooseAiSelection(full, aiSide, { random: choiceRng });
-        selectMs += performance.now() - t0;
-        selects++;
-        const baseSel =
-          baseline === "first" ? [0, 1, 2] : (() => { const r = mulberry32(s * 97 + (aiSide === "a" ? 1 : 2)); const idx = [0, 1, 2, 3, 4, 5]; for (let i = 5; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [idx[i], idx[j]] = [idx[j], idx[i]]; } return idx.slice(0, 3); })();
-        const initial = state.createBattleState({ [aiSide]: pickSide(six[aiSide], aiSel), [other]: pickSide(six[other], baseSel) });
-        const r = runBattle(s, { a: policy(risk), b: policy(1 - risk) }, { a: forced(risk), b: forced(1 - risk) }, initial);
-        res[r.winner === aiSide ? "aiSelectWins" : r.winner === other ? "baselineWins" : "other"]++;
-      }
-    }
-    console.log(JSON.stringify({ battles: battles * 2, baseline, res, avgSelectMs: +(selectMs / selects).toFixed(1) }));
   } else if (mode === "selectvs") {
     // 3선출 방식 A 대 B(ver.2.1 A-0). 같은 파티 P·Q를 두고 (A→P·B→Q) × (P가 a편·b편) 조합 4판 — 파티 강약과 편 차이를 상쇄한다.
     // 선출의 난수는 시드에서 파생시켜(조각 병렬 실행 합 = 한 번에 돌린 결과) 재현 가능하다.
@@ -617,6 +590,39 @@ try {
       }
     }
     console.log(JSON.stringify({ battles: (seedTo - seedFrom + 1) * 4, pool: poolKind, A: selectA, B: selectB, res, ...time }));
+  } else if (mode === "partyvs") {
+    const pairs = (process.env.PAIRS ?? "").split(",").filter(Boolean).map((x) => x.split("-").map(Number));
+    if (pairs.length === 0) throw new Error("PAIRS=i-j,... 필요");
+    const sixOf = (party) => ({ slots: party.slots, movesList: party.slots.map((sl) => sl.moves.filter((m) => m).map((m) => data.getMove(m))) });
+    const pickSide = (side6, sel) => ({ slots: sel.map((i) => side6.slots[i]), movesList: sel.map((i) => side6.movesList[i]) });
+    const policy = (risk) => (st, key) => ai.chooseAiAction(st, key, risk, { decisionParams }).action;
+    const forced = (risk) => (st, key) => ai.chooseAiForcedSwitch(st, key, risk, decisionParams) ?? living(st, key)[0];
+    const playGame = (P, Q, sd, sideP, risk) => {
+      const sideQ = sideP === "a" ? "b" : "a";
+      const full = state.createBattleState({ [sideP]: P, [sideQ]: Q });
+      const sel = (side, six) => pickSide(six, ai.chooseAiSelection(full, side, { random: mulberry32(sd * 131 + (side === "a" ? 1 : 2)) }));
+      const initial = state.createBattleState({ [sideP]: sel(sideP, P), [sideQ]: sel(sideQ, Q) });
+      const g = runBattle(sd, { a: policy(risk), b: policy(1 - risk) }, { a: forced(risk), b: forced(1 - risk) }, initial);
+      return { kind: g.winner === sideP ? "pWins" : g.winner === sideQ ? "qWins" : "other", aSide: g.winner === "a" };
+    };
+    // RANDOM_TIER=하|중|상이면 Q편을 시드마다 그 등급 샘플 슬롯으로 랜덤 구축(랭크 상대 — rankProfile.pickRankOpponent)한 파티로 바꾼다(PAIRS의 j는 무시)
+    const randomTier = process.env.RANDOM_TIER;
+    const rankProfile = randomTier ? await server.ssrLoadModule("/src/lib/battle/ai/rankProfile.ts") : null;
+    const qOf = (Q, sd) => (rankProfile ? sixOf(rankProfile.pickRankOpponent(data.SAMPLE_PARTIES, randomTier, [], mulberry32(sd * 7919 + 3), 1)) : Q);
+    const playPair = (P, Q) => {
+      const r = { pWins: 0, qWins: 0, other: 0, aSideWins: 0 };
+      for (let sd = seedFrom; sd <= seedTo; sd++) {
+        for (const sideP of ["a", "b"]) {
+          const g = playGame(P, qOf(Q, sd), sd, sideP, mulberry32(sd)());
+          r[g.kind]++;
+          if (g.aSide) r.aSideWins++;
+        }
+      }
+      return r;
+    };
+    const out = {};
+    for (const [i, j] of pairs) out[`${i}-${j}`] = playPair(sixOf(data.SAMPLE_PARTIES[i]), sixOf(data.SAMPLE_PARTIES[j]));
+    console.log(JSON.stringify({ seeds: battles, A: decisionParams ?? {}, pairs: out }));
   } else if (mode === "ai") {
     const results = { aiVsRandom: { a: 0, b: 0, draw: 0, timeout: 0 }, aiVsAi: { a: 0, b: 0, draw: 0, timeout: 0 } };
     let maxMs = 0;
@@ -653,7 +659,7 @@ try {
     }
     console.log(JSON.stringify({ battles, results, avgTurnMs: +(totalMs / decisions).toFixed(2), maxTurnMs: +maxMs.toFixed(1), nanScores }));
   } else {
-    console.error(`알 수 없는 모드: ${mode} (regress | ai | greedy | diag | style | h2h | select | selectvs)`);
+    console.error(`알 수 없는 모드: ${mode} (regress | ai | greedy | diag | style | h2h | selectvs)`);
     process.exitCode = 1;
   }
 } finally {

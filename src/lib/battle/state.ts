@@ -998,7 +998,7 @@ function resolveEntryAbilityEffects(
 }
 
 /** 한 진영의 초기 구성. 배틀타워는 slots 3개, 향후 다른 포맷을 위해 길이는 고정하지 않는다. */
-export interface SideInit {
+interface SideInit {
   slots: EvaluatorSlot[];
   /** slots와 같은 순서의 기술 목록. movesList[i]가 slots[i]의 지닌 기술. */
   movesList: Move[][];

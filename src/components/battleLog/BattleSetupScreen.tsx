@@ -26,6 +26,8 @@ export function BattleSetupScreen({
   onLoadRandomSample,
   onLoadRandomSlotParty,
   opponentLocked,
+  lockedNote,
+  proceedBlockedReason,
 }: {
   setup: ReturnType<typeof useBattleSetup>;
   hasPartyPresets: boolean;
@@ -48,6 +50,10 @@ export function BattleSetupScreen({
   onLoadRandomSlotParty: (side: Side) => void;
   /** 배틀 프런티어 중에는 상대 편을 수동으로 바꿀 수 없다 */
   opponentLocked: boolean;
+  /** 상대 편이 잠겼을 때 안내 문구(없으면 표시하지 않는다) */
+  lockedNote: string | null;
+  /** 대전 시작이 막혔을 때 파티 문제 대신 보여 줄 이유(없으면 기본 안내) */
+  proceedBlockedReason?: string;
 }) {
   // 제목 옆 ⓘ 설명 — 버튼 줄이 꽉 차서 버튼마다 ⓘ를 둘 수 없고, 터치에는 호버가 없어 버튼별 툴팁 대신 한 곳에 모은다(랜덤 구축은 저장 샘플이 있을 때만 보인다)
   const loadButtonsHelp = (side: Side) => {
@@ -55,7 +61,7 @@ export function BattleSetupScreen({
     return (
       `무작위 샘플: ${who}를 기본 제공 샘플 파티 중 무작위 하나로 바꿉니다.` +
       (hasSlotPresets
-        ? `\n랜덤 구축: 저장해 둔 포켓몬 샘플에서 6마리를 무작위로 뽑아 ${who}를 만듭니다(중복 포켓몬·도구 없음, 메가 2마리 이하). 저장 샘플이 모자라면 기본 제공 샘플로 채웁니다.`
+        ? `\n랜덤 구축: 저장해 둔 포켓몬 샘플에서 6마리를 무작위로 뽑아 ${who}를 만듭니다(중복 포켓몬·도구 없음, 메가진화 포켓몬은 최대 2마리). 저장 샘플이 모자라면 기본 제공 샘플로 채웁니다.`
         : "")
     );
   };
@@ -97,12 +103,14 @@ export function BattleSetupScreen({
     });
   }
 
+  const blockedReason = proceedBlockedReason ?? (hasMovelessSlot ? "기술을 배정하지 않은 포켓몬이 있습니다" : "양쪽 파티를 먼저 완성하세요");
+
   return (
     <div className="battle-setup-board">
       {(["a", "b"] as const).map((side) => (
         <Fragment key={side}>
           <div className={`battle-setup-column${side === "b" && opponentLocked ? " is-locked" : ""}`} inert={side === "b" && opponentLocked}>
-            {side === "b" && opponentLocked && <p className="battle-lock-warning">배틀 프런티어 중에는 상대를 바꿀 수 없어요.</p>}
+            {side === "b" && opponentLocked && lockedNote && <p className="battle-lock-warning">{lockedNote}</p>}
             <div className="battle-setup-actions">
               {hasPartyPresets && (
                 <button
@@ -183,6 +191,7 @@ export function BattleSetupScreen({
                 onToggleExpand={() => toggleExpanded(side, i)}
                 isDragging={draggedSlot?.side === side && draggedSlot.index === i}
                 isDragOver={dragOverSlot?.side === side && dragOverSlot.index === i}
+                concealBuild={side === "b" && opponentLocked}
                 onDragStart={() => handleSlotDragStart(side, i)}
                 onDragOverSlot={() => handleSlotDragOver(side, i)}
                 onDrop={() => handleSlotDrop(side, i)}
@@ -197,8 +206,8 @@ export function BattleSetupScreen({
                 className="battle-setup-vs"
                 disabled={!canProceed}
                 onClick={onProceed}
-                aria-label={canProceed ? proceedLabel : hasMovelessSlot ? "기술을 배정하지 않은 포켓몬이 있습니다" : "양쪽 파티를 먼저 완성하세요"}
-                title={canProceed ? proceedLabel : hasMovelessSlot ? "기술을 배정하지 않은 포켓몬이 있습니다" : "양쪽 파티를 먼저 완성하세요"}
+                aria-label={canProceed ? proceedLabel : blockedReason}
+                title={canProceed ? proceedLabel : blockedReason}
               >
                 VS
               </button>

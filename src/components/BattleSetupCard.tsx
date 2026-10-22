@@ -52,6 +52,8 @@ interface BattleSetupCardProps {
   onDragOverSlot: () => void;
   onDrop: () => void;
   onDragEnd: () => void;
+  /** 잠긴 상대 편(랭크배틀·프런티어): 선출 화면처럼 메가폼·도구 이미지를 숨기고 기본형 프로필만, 압축 뷰로 고정 */
+  concealBuild?: boolean;
 }
 
 /**
@@ -85,6 +87,7 @@ export function BattleSetupCard({
   onDragOverSlot,
   onDrop,
   onDragEnd,
+  concealBuild = false,
 }: BattleSetupCardProps) {
   const pokemon = slot ? getPokemon(slot.pokemonId) : undefined;
 
@@ -123,7 +126,7 @@ export function BattleSetupCard({
     );
   }
 
-  const form = getEffectiveForm(pokemon, slot!);
+  const form = getEffectiveForm(pokemon, slot!, { ignoreMega: concealBuild });
 
   const avatar = (
     <PokemonAvatarWithItem
@@ -132,20 +135,20 @@ export function BattleSetupCard({
       radius={10}
       gradientTypes={form.types}
       avatarClassName="party-slot-avatar"
-      itemId={slot!.item}
+      itemId={concealBuild ? null : slot!.item}
       form={{
         gender: getEffectiveGender(pokemon, slot!),
         cosmeticForm: slot!.cosmeticForm,
         formVariant: slot!.formVariant,
         sizeForm: slot!.sizeForm,
-        activeMegaForm: slot!.activeMegaForm,
-        item: slot!.item,
+        activeMegaForm: concealBuild ? undefined : slot!.activeMegaForm,
+        item: concealBuild ? undefined : slot!.item,
       }}
     />
   );
 
   // 압축 뷰(ver.1.6 §4-3) — 프로필 사진+이름만. 사진을 클릭하면 펼쳐진다.
-  if (!expanded) {
+  if (!expanded || concealBuild) {
     return (
       <div className={`party-slot party-slot-filled party-slot-compact${dragStateClass}`} {...dragHandlers}>
         <span className="party-slot-num">{label}</span>

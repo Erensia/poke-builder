@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import "./Sidebar.css";
 
-export type AppView = "party" | "matchup" | "battle-log" | "pokedex" | "movedex" | "itemdex";
+export type AppView = "party" | "matchup" | "battle-log" | "rank-battle" | "pokedex" | "movedex" | "itemdex";
 
 // 유니코드 글자 아이콘(⬡⚔▤≡)은 폰트마다 그려지는 실제 위치(광학 중심)가 제각각이라
 // 박스를 아무리 맞춰도 어긋나 보일 수 있다. viewBox가 고정된 SVG로 바꿔서 확실히 정렬한다.
@@ -24,6 +24,19 @@ function IconSwords() {
       <line x1="5" x2="9" y1="14" y2="18" />
       <line x1="4" x2="6" y1="17" y2="19" />
       <line x1="3" x2="5" y1="19" y2="21" />
+    </svg>
+  );
+}
+
+function IconTrophy() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" />
+      <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" />
+      <path d="M4 22h16" />
+      <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22" />
+      <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22" />
+      <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" />
     </svg>
   );
 }
@@ -96,6 +109,7 @@ const NAV_ITEMS: { label: string; icon: ReactNode; view: AppView | null }[] = [
   { label: "파티 샘플 작성", icon: <IconHexagon />, view: "party" },
   { label: "계산 기능", icon: <IconSwords />, view: "matchup" },
   { label: "배틀타워", icon: <IconScroll />, view: "battle-log" },
+  { label: "랭크배틀", icon: <IconTrophy />, view: "rank-battle" },
   { label: "포켓몬 도감", icon: <IconGrid />, view: "pokedex" },
   { label: "도구 도감", icon: <IconBag />, view: "itemdex" },
   { label: "기술표", icon: <IconList />, view: "movedex" },

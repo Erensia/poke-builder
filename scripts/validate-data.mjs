@@ -247,7 +247,7 @@ for (const [key, url] of Object.entries(MANIFEST))
 
 // ── 4) 샘플 파티(samplePartyPresets.json) ───────────────────────────────────────────────
 // 기본 제공 파티는 사용자가 그대로 불러와 대전하므로 데이터 규칙을 어기면 안 된다:
-// 존재하는 id, 그 종이 배우는 기술·가질 수 있는 특성, 포인트 상한(합 66·스탯당 32), 파티당 6마리·같은 포켓몬/도구 중복 없음, 메가 2마리 이하(배틀 메가진화는 편당 1회 — 2.2 B5에서 1→2로 완화).
+// 존재하는 id, 그 종이 배우는 기술·가질 수 있는 특성, 포인트 상한(합 66·스탯당 32), 파티당 6마리·같은 포켓몬/도구 중복 없음, 메가 마리 수 제한 없음(배틀 메가진화는 편당 1회뿐이라 파티의 메가 수는 전략 — 5.0 SP에서 제한 삭제, 이전 2.2 B5에서 1→2로 완화).
 {
   const SAMPLES = read("samplePartyPresets.json");
   const pokemonById = new Map(POKEMON.map((p) => [p.id, p]));
@@ -267,7 +267,6 @@ for (const [key, url] of Object.entries(MANIFEST))
     }
     const names = new Set();
     const items = new Set();
-    let megas = 0;
     party.slots.forEach((slot, i) => {
       const sat = `${at} #${i + 1}(${slot.pokemonId})`;
       const poke = pokemonById.get(slot.pokemonId);
@@ -295,7 +294,6 @@ for (const [key, url] of Object.entries(MANIFEST))
       }
       const mega = (poke.megaEvolutions ?? []).find((m) => m.megaStone === slot.item);
       if (mega) {
-        megas++;
         if (slot.activeMegaForm !== mega.form) err(`${sat}: 메가스톤인데 activeMegaForm 이 "${mega.form}" 가 아님`);
       } else if (slot.activeMegaForm) err(`${sat}: 메가스톤이 아닌데 activeMegaForm 이 있음`);
       const pts = slot.points ?? {};
@@ -303,7 +301,6 @@ for (const [key, url] of Object.entries(MANIFEST))
       if (values.some((v) => !Number.isInteger(v) || v < 0 || v > 32)) err(`${sat}: 포인트는 스탯당 0~32 정수`);
       if (values.reduce((a, b) => a + b, 0) > 66) err(`${sat}: 포인트 합계 66 초과`);
     });
-    if (megas > 2) err(`${at}: 메가스톤을 든 포켓몬이 ${megas}마리 (2마리 이하)`);
   }
 }
 

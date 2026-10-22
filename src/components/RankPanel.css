@@ -1,0 +1,202 @@
+/* 랭크배틀 프로필·계산 내역 (5.0 R1 ⓒ) */
+.rank-panel {
+  padding: 0.7rem 0.9rem;
+  margin-bottom: 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--surface-2);
+  font-size: var(--fs-sm);
+}
+
+.rank-profile {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.9rem;
+}
+
+.rank-info {
+  display: flex;
+  flex: 1 1 14rem;
+  flex-direction: column;
+  gap: 0.15rem;
+  color: var(--text-muted);
+}
+
+.rank-name {
+  color: var(--text);
+  font-size: 1.15rem;
+}
+
+.rank-info strong {
+  color: var(--text);
+}
+
+.rank-sub {
+  font-size: var(--fs-xs);
+}
+
+/* 원형 게이지: 4눈금 고리 + 가운데 아이콘 */
+.rank-gauge {
+  position: relative;
+  flex: 0 0 auto;
+  width: 7.5rem;
+  height: 7.5rem;
+}
+
+.rank-gauge svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* 고리는 아이콘 뒤에 깐다. 두께 22칸 = 프로필(7.5rem)에서 약 16.5px */
+.rank-gauge circle {
+  fill: none;
+  stroke: var(--border);
+  stroke-width: 22;
+  transition: stroke-dasharray 0.3s;
+}
+
+.rank-gauge circle.is-on {
+  stroke: var(--amber);
+}
+
+.rank-gauge img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.rank-details {
+  margin-top: 0.5rem;
+}
+
+.rank-details summary {
+  cursor: pointer;
+  color: var(--text-muted);
+}
+
+.rank-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  max-height: 18rem;
+  margin: 0.4rem 0 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.rank-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.1rem 0.5rem;
+}
+
+.rank-list-when {
+  color: var(--text-muted);
+  font-size: var(--fs-xs);
+}
+
+.rank-list-result {
+  font-weight: 700;
+}
+
+.rank-list-result.is-win {
+  color: var(--safe);
+}
+
+.rank-list-result.is-loss,
+.rank-list-result.is-abandon {
+  color: var(--danger);
+}
+
+.rank-list-main {
+  font-weight: 600;
+}
+
+.rank-list-sub {
+  flex: 1 1 100%;
+  color: var(--text-muted);
+  font-size: var(--fs-xs);
+}
+
+/* 승패 직후 계산 내역 */
+.rank-result {
+  margin: 0.5rem 0;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--surface-2);
+  font-size: var(--fs-sm);
+  text-align: center;
+}
+
+.rank-result-visual {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+}
+
+.rank-result .rank-gauge {
+  width: 5.5rem;
+  height: 5.5rem;
+}
+
+.rank-result-arrow {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  color: var(--text-muted);
+  font-size: 1.4rem;
+  line-height: 1;
+}
+
+.rank-result-arrow small {
+  color: var(--text);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+}
+
+.rank-result-line {
+  margin: 0.15rem 0;
+}
+
+.rank-result-formula {
+  color: var(--text-muted);
+  font-size: var(--fs-xs);
+}
+
+.rank-champion-banner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  margin-bottom: 0.4rem;
+  animation: rank-champion-pop 0.9s ease-out;
+}
+
+.rank-champion-banner strong {
+  color: var(--amber);
+  font-size: 1.3rem;
+}
+
+@keyframes rank-champion-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+  100% {
+    transform: scale(1);
+  }
+}

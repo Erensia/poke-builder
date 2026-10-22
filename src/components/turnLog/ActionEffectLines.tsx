@@ -997,27 +997,17 @@ export function ActionEffectLines({
       )}
       {/* D-2 길동무 — "삼았다!" 한 줄 + "쓰러졌다" 한 줄로 분리 */}
       {action.selfFainted && action.triggeredDestinyBond && (
-        <>
-          <div className="battle-turn-line is-muted">
-            {defenderName}
-            {eunNeun(defenderName)} {actorName}
-            {eulReul(actorName)} 길동무로 삼았다!
-          </div>
-          <div className="battle-turn-line is-fainted">
-            {actorName}
-            {eunNeun(actorName)} 쓰러졌다
-          </div>
-        </>
+        <div className="battle-turn-line is-muted">
+          {defenderName}
+          {eunNeun(defenderName)} {actorName}
+          {eulReul(actorName)} 길동무로 삼았다!
+        </div>
       )}
-      {/* 자신이 쓰러졌는지 여부(자폭류·발버둥 반동·혼란 자멸) — 원인을 그대로 붙인다 */}
-      {action.selfFainted && !action.triggeredDestinyBond && (
+      {/* 자신이 쓰러졌는지 여부(자폭류·발버둥·생명의구슬·반동·혼란 자멸·길동무) — 본가처럼 원인 없이 "쓰러졌다"만. 원인은 앞 줄(반동 데미지 등)이 보여 준다 */}
+      {action.selfFainted && (
         <div className="battle-turn-line is-fainted">
           {actorName}
-          {eunNeun(actorName)}{" "}
-          {action.blockedReason === "confusion"
-            ? "혼란으로 인한 데미지"
-            : `${action.move.name}의 여파`}
-          로 쓰러졌다
+          {eunNeun(actorName)} 쓰러졌다
         </div>
       )}
     </>
