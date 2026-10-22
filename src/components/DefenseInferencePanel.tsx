@@ -54,6 +54,7 @@ import { computeRealStats, MAX_ABILITY_POINTS_PER_STAT } from "../lib/statCalcul
 import { loadMatchupDraft, saveMatchupDraft } from "../lib/storage";
 import { restoreInference, type ObservationRow, type RowKind } from "../lib/inferenceDraft";
 import { CandidateCards } from "./CandidateCards";
+import { InfoTooltip } from "./InfoTooltip";
 import "./DefenseInferencePanel.css";
 
 interface DefenderActions {
@@ -1060,9 +1061,8 @@ function ObservationsSection({ s }: { s: ReturnType<typeof useDefenseInferenceSt
                     className="dinf-move-btn"
                     onClick={() => setMovePickerRow(row.id)}
                     disabled={!pickerOwner}
-                    title={pickerOwner ? undefined : received ? "먼저 상대 포켓몬을 골라 주세요" : "먼저 내 포켓몬을 골라 주세요"}
                   >
-                    {move ? move.name : received ? "상대 기술 선택" : "기술 선택"}
+                    {move ? move.name : !pickerOwner ? (received ? "상대 포켓몬부터 선택" : "내 포켓몬부터 선택") : received ? "상대 기술 선택" : "기술 선택"}
                   </button>
                 )}
                 <span className="dinf-row-opts">
@@ -1086,7 +1086,6 @@ function ObservationsSection({ s }: { s: ReturnType<typeof useDefenseInferenceSt
                       value={megaOf(row, megas)}
                       onChange={(e) => updateRow(row.id, { megaForm: e.target.value })}
                       disabled={!!lockedMega}
-                      title={lockedMega ? "앞 줄에서 이미 메가진화했어요 (되돌릴 수 없어요)" : undefined}
                     >
                       {/* 앞 줄에서 메가진화했으면 이 줄은 그 폼으로 고정 — 메가 전·다른 폼을 고를 수 없다 */}
                       {!lockedMega && <option value="">메가 전</option>}
@@ -1099,6 +1098,7 @@ function ObservationsSection({ s }: { s: ReturnType<typeof useDefenseInferenceSt
                         ))}
                     </select>
                   )}
+                  {lockedMega && <span className="dinf-hint">앞 줄에서 이미 메가진화했어요 (되돌릴 수 없어요)</span>}
                 </span>
                 {!speed && (
                   <>
@@ -1135,19 +1135,18 @@ function ObservationsSection({ s }: { s: ReturnType<typeof useDefenseInferenceSt
                 )}
                 {!speed && !received && (
                   <div className="dinf-endturn">
-                    <span className="dinf-endturn-title">{hasNext ? "턴 종료 효과" : "맞은 직후 효과"}</span>
+                    <InfoTooltip
+                      text={[
+                        "자뭉열매: 상대가 맞은 직후 자뭉열매를 먹었을 때 켜세요 — 화면의 맞은 뒤 %에 회복(최대 HP의 1/4)이 이미 섞여 있어요",
+                        itemLocked && "메가진화하는 포켓몬은 메가스톤을 들고 있어 도구 효과를 쓸 수 없어요",
+                      ]
+                        .filter(Boolean)
+                        .join("\n")}
+                    >
+                      <span className="dinf-endturn-title">{hasNext ? "턴 종료 효과" : "맞은 직후 효과"}</span>
+                    </InfoTooltip>
                     {END_TURN_EFFECTS.filter((e) => hasNext || e.id === "sitrus").map((e) => (
-                      <label
-                        className="toggle-pill tap-target"
-                        key={e.id}
-                        title={
-                          itemLocked && ITEM_END_TURN_IDS.includes(e.id)
-                            ? "메가진화하는 포켓몬은 메가스톤을 들고 있어 도구 효과를 쓸 수 없어요"
-                            : e.id === "sitrus"
-                              ? "상대가 맞은 직후 자뭉열매를 먹었을 때 켜세요 — 화면의 맞은 뒤 %에 회복(최대 HP의 1/4)이 이미 섞여 있어요"
-                              : undefined
-                        }
-                      >
+                      <label className="toggle-pill tap-target" key={e.id}>
                         <input
                           type="checkbox"
                           disabled={itemLocked && ITEM_END_TURN_IDS.includes(e.id)}

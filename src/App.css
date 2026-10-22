@@ -5,7 +5,8 @@
 /* 사이드바(64px 레일) 오른쪽 영역. 본문 + 푸터를 세로로 쌓고, 짧은 페이지에서도
    푸터가 화면 바닥에 붙도록 최소 높이를 화면 전체로 잡는다. */
 .app-body {
-  margin-left: 64px;
+  margin-left: calc(64px + env(safe-area-inset-left, 0px));
+  padding-right: env(safe-area-inset-right, 0px);
   min-height: 100svh;
   display: flex;
   flex-direction: column;
@@ -18,14 +19,28 @@
   justify-content: center;
 }
 
-/* 공통 모바일 브레이크포인트: 760px (§2-3). 사이드바가 오버레이 드로어로 바뀌므로
-   본문은 왼쪽 레일 자리를 비우지 않고, 상단에 고정 햄버거 버튼 높이만 확보한다. */
+/* 랭크 대전 중 화면 이동 확인 모달 — "계속 대전"이 기본 포커스 */
+.rank-leave-note {
+  margin: 0 0 0.9rem;
+}
+
+.rank-leave-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+
+/* 공통 모바일 브레이크포인트: 760px (§2-3). 사이드바 레일이 하단 탭으로 바뀌므로(5.1 A6)
+   본문은 왼쪽 레일 자리를 비우지 않고, 아래에 고정 하단 탭 높이(--bottom-nav-total)만 확보한다.
+   푸터가 .app-body 안에 있어 같이 탭 위로 올라온다. */
 @media (max-width: 760px) {
   .app-body {
     margin-left: 0;
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-bottom: var(--bottom-nav-total);
   }
 
   .app-main {
-    padding: 3.75rem 0.85rem 1.5rem;
+    padding: 1rem 0.85rem 1.5rem;
   }
 }

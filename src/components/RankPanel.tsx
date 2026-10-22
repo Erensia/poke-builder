@@ -46,6 +46,7 @@ export function RankPanel({ rank, startBlockedReason, onStart }: RankPanelProps)
           <span className="rank-sub">
             {save.seasons.length + 1}시즌{save.seasonStartedAt !== null && ` · ${date(save.seasonStartedAt)} 시작 · ${daysLeft(save.seasonStartedAt)}일 남음(30일 시즌, 끝나면 자동 초기화)`}
           </span>
+          {!active && startBlockedReason && <span className="rank-sub">{startBlockedReason}</span>}
           <span className="rank-sub">결과가 나오기 전에 나가면(탭 이동·새로고침·창 닫기) 이 판은 패배로 기록돼요.</span>
         </div>
         {active ? (
@@ -53,7 +54,7 @@ export function RankPanel({ rank, startBlockedReason, onStart }: RankPanelProps)
             종료하기
           </button>
         ) : (
-          <button type="button" className="battle-setup-load-party tap-target" disabled={!!startBlockedReason} title={startBlockedReason ?? undefined} onClick={() => onStart(rank.start())}>
+          <button type="button" className="battle-setup-load-party tap-target" disabled={!!startBlockedReason} onClick={() => onStart(rank.start())}>
             랭크 배틀 시작
           </button>
         )}

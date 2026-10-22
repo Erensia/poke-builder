@@ -35,3 +35,7 @@ dist-ssr
 # python
 __pycache__/
 *.pyc
+
+# trail(@trailhq/trail-code) — 회사 PC에서만 쓰는 로컬 도구. 집 PC에는 설치돼 있지 않아 커밋하면 pull할 때 꼬이므로 올리지 않는다
+.trail/
+AGENTS.md
