@@ -23,6 +23,9 @@
 - 로컬에서 직접 머지하기 직전에는 `git fetch`를 먼저 하도록 안내한다.
 - **브랜치 정리**: `dev`/`main`을 제외한 모든 브랜치는 머지와 동시에 로컬·원격 모두 삭제한다(`git branch -D` + `git push origin --delete`). 저장소 설정이 `delete_branch_on_merge: false`라 자동 삭제되지 않는다.
 - **샘플 파티 추가**: 기능 브랜치·PR 없이 `dev`에 커밋·push한 뒤 **곧바로 `main`에도 머지**한다(dev → main은 merge commit, 머지 직전 `git fetch`). `src/data/samplePartyPresets.json`·README 수 문구만 다루고 `validate:data`·`test:ai`가 통과한 경우에 한한다.
+  - **`dev`가 `main`보다 앞서 있으면**(미배포 작업이 쌓인 동안, 예: 버전 작업 중) `main`으로 머지하면 그 작업까지 함께 나가므로 **`dev`에만 반영**하고 `main`은 다음 버전 릴리스(`dev` → `main` PR) 때 함께 나가게 한다. 머지 전 `git rev-list --count main..dev`로 확인한다.
+  - 샘플을 추가하면 `src/data/samplePartyTiers.json`에도 등급을 넣는다(측정 전이면 임시 `"중"` — `npm run test:rank-ai`가 모든 샘플의 등급 보유를 확인한다). 원본 txt는 `docs/03_샘플파티추가/`에 보관하고, 커밋할 때 `git add`는 **파일을 지정**한다(디렉터리 단위 add는 untracked 파일을 휩쓴다).
+  - JSON은 재직렬화 전에 바이트 동일성(`indent=1`·CRLF·끝 줄바꿈 없음)을 확인해 전체 재포맷 diff를 피한다. 파티의 메가진화 포켓몬 수에는 제한이 없다(`validate:data`도 검사하지 않는다).
 
 ## 문서
 
