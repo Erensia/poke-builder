@@ -36,7 +36,7 @@
  *     diag 모드에 DIAG=status를 주면 그 변화기를 고른 순간을 덤프한다.
  * 환경변수 LEARN=1(greedy·style, ver.2.0 1-C): AI 쪽이 상대가 실제로 고른 행동을 대전 간 누적 학습(한 프로세스 안에서 이어짐) —
  *     상대 모델(opponentModel)이 켜진 파라미터에서만 보정이 걸린다. 결과에 learned(누적 대전 수·교체/변화기 보정 배율).
- * 환경변수 SEED_FROM=<n>(greedy·style·h2h·select): 시드 n부터 [판 수]개만 돈다(기본 1) — 벤치를 조각내 병렬로 돌린 뒤 합산(scripts/bench.mjs).
+ * 환경변수 SEED_FROM=<n>(greedy·style·h2h): 시드 n부터 [판 수]개만 돈다(기본 1) — 벤치를 조각내 병렬로 돌린 뒤 합산(scripts/bench.mjs).
  *     각 판은 시드로만 정해지므로 조각의 합은 한 번에 돌린 결과와 같다.
  * 환경변수 SIM_ROOT=<체크아웃 경로>: 이 스크립트 대신 그 체크아웃의 src/를 불러온다(다른 커밋을 이 하네스로 벤치).
  *   h2h에 OPP_ROOT=<다른 체크아웃 경로>를 주면 B 쪽 AI를 그 코드에서 불러온다(예: ver.1.7 끝 대비 — 엔진·데이터는 이 체크아웃).
@@ -55,8 +55,6 @@ const seedTo = seedFrom + battles - 1;
 // hmr: false — 병렬 실행 시 HMR 웹소켓 포트(24678) 충돌로 프로세스가 죽는 걸 막는다.
 const server = await createServer({ root, server: { middlewareMode: true, hmr: false }, appType: "custom", logLevel: "error" });
 const opponentParams = process.argv[5] ? JSON.parse(process.argv[5]) : undefined;
-// 3선출 소프트맥스 선택용 시드 고정 난수(배틀 결과 재현)
-const choiceRng = mulberry32(0x5eed);
 // h2h 모드: OPP_ROOT=<다른 체크아웃 경로>면 B 쪽 AI를 그 코드(예: ver.1.7 끝)에서 불러온다 — 엔진·데이터는 이 체크아웃 것.
 const oppServer = process.env.OPP_ROOT
   ? await createServer({ root: process.env.OPP_ROOT, server: { middlewareMode: true, hmr: false }, appType: "custom", logLevel: "error" })
@@ -537,39 +535,6 @@ try {
     }
     const search = searchStats.decisions > 0 ? { search: searchStats } : {};
     console.log(JSON.stringify({ battles: battles * 2, A: { ...decisionParams }, B: { ...opponentParams }, res, ...search }));
-  } else if (mode === "select") {
-    // 3선출 AI(로드맵 7): 양쪽 6마리 빌드 → 한쪽은 AI 선출, 다른 쪽은 SELECT_B(random | first, 기본 random) → 양쪽 AI로 대전.
-    // 좌우 교대.
-    const baseline = process.env.SELECT_B ?? "random";
-    const make6 = (rng) => {
-      const members = Array.from({ length: 6 }, () => makeSlot(rng));
-      return { slots: members.map((m) => m.slot), movesList: members.map((m) => m.moves) };
-    };
-    const pickSide = (side6, sel) => ({ slots: sel.map((i) => side6.slots[i]), movesList: sel.map((i) => side6.movesList[i]) });
-    const policy = (risk) => (st, key) => ai.chooseAiAction(st, key, risk, {}).action;
-    const forced = (risk) => (st, key) => ai.chooseAiForcedSwitch(st, key, risk) ?? living(st, key)[0];
-    const res = { aiSelectWins: 0, baselineWins: 0, other: 0 };
-    let selectMs = 0;
-    let selects = 0;
-    for (let s = seedFrom; s <= seedTo; s++) {
-      const partyRng = mulberry32(s ^ 0x51ec7);
-      const six = { a: make6(partyRng), b: make6(partyRng) };
-      const full = state.createBattleState(six);
-      const risk = mulberry32(s)();
-      for (const aiSide of ["a", "b"]) {
-        const other = aiSide === "a" ? "b" : "a";
-        const t0 = performance.now();
-        const aiSel = ai.chooseAiSelection(full, aiSide, { random: choiceRng });
-        selectMs += performance.now() - t0;
-        selects++;
-        const baseSel =
-          baseline === "first" ? [0, 1, 2] : (() => { const r = mulberry32(s * 97 + (aiSide === "a" ? 1 : 2)); const idx = [0, 1, 2, 3, 4, 5]; for (let i = 5; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [idx[i], idx[j]] = [idx[j], idx[i]]; } return idx.slice(0, 3); })();
-        const initial = state.createBattleState({ [aiSide]: pickSide(six[aiSide], aiSel), [other]: pickSide(six[other], baseSel) });
-        const r = runBattle(s, { a: policy(risk), b: policy(1 - risk) }, { a: forced(risk), b: forced(1 - risk) }, initial);
-        res[r.winner === aiSide ? "aiSelectWins" : r.winner === other ? "baselineWins" : "other"]++;
-      }
-    }
-    console.log(JSON.stringify({ battles: battles * 2, baseline, res, avgSelectMs: +(selectMs / selects).toFixed(1) }));
   } else if (mode === "selectvs") {
     // 3선출 방식 A 대 B(ver.2.1 A-0). 같은 파티 P·Q를 두고 (A→P·B→Q) × (P가 a편·b편) 조합 4판 — 파티 강약과 편 차이를 상쇄한다.
     // 선출의 난수는 시드에서 파생시켜(조각 병렬 실행 합 = 한 번에 돌린 결과) 재현 가능하다.
@@ -694,7 +659,7 @@ try {
     }
     console.log(JSON.stringify({ battles, results, avgTurnMs: +(totalMs / decisions).toFixed(2), maxTurnMs: +maxMs.toFixed(1), nanScores }));
   } else {
-    console.error(`알 수 없는 모드: ${mode} (regress | ai | greedy | diag | style | h2h | select | selectvs)`);
+    console.error(`알 수 없는 모드: ${mode} (regress | ai | greedy | diag | style | h2h | selectvs)`);
     process.exitCode = 1;
   }
 } finally {
