@@ -6,7 +6,7 @@
  *
  * 쌍당 시드 수 10 = 20판. 파티당 상대 34개 × 20판 = 680판이라 파티별 승률 95% 신뢰구간이 약 ±4%p. 실측: 12코어(병렬 시 판당 약 4.6초)에서 시드 1(쌍당 2판, 1190판)이 약 12분 → 시드 10은 약 2시간, 시드 5는 약 1시간(±6%p).
  * --params 기본 {}(탐색·상대 모델 끈 기본 AI) — 탐색 켠 앱 AI는 10배 이상 느려 전수에는 쓰지 않는다. ponytail: 등급은 이 AI 기준이라 앱 AI에서의 순서와 같다는 보장은 없다 — 합격선 판정(S2) 때 상·하등급 몇 쌍만 앱 AI로 확인.
- * --write면 src/data/samplePartyTiers.json({ 파티 id: "하"|"중"|"상" })을 쓴다 — 승률 순으로 위 1/3 상, 아래 1/3 하. 경계 근처 파티는 승률 차가 오차 안이니 표를 보고 판단한다.
+ * --write면 src/data/samplePartyTiers.json({ 파티 id: "하"|"중"|"상"|"최상" })을 쓴다(최상은 따로 정한 표시를 유지) — 승률 순으로 위 1/3 상, 아래 1/3 하. 경계 근처 파티는 승률 차가 오차 안이니 표를 보고 판단한다.
  * 출력: 진행은 stderr, 파티별 승률 표는 stdout.
  */
 import { spawn } from "node:child_process";
@@ -58,6 +58,8 @@ rows.forEach((r, k) => (r.tier = cut(k)));
 console.log(`시드 ${seeds}/쌍 · AI ${params} · a편 승 ${((100 * aSide) / games).toFixed(1)}% (${games}판)`);
 for (const r of rows) console.log(`${r.tier} ${(100 * r.rate).toFixed(1).padStart(5)}%  ${r.id}  ${r.name}`);
 if (args.includes("--write")) {
-  writeFileSync(tiersPath, JSON.stringify(Object.fromEntries(rows.map((r) => [r.id, r.tier])), null, 2) + "\n");
+  // "최상"(챔피언 전용, 상등급 내부 라운드로빈으로 따로 정함 — 5.0)은 측정 결과가 여전히 상이면 그대로 둔다
+  const prev = JSON.parse(readFileSync(tiersPath, "utf8"));
+  writeFileSync(tiersPath, JSON.stringify(Object.fromEntries(rows.map((r) => [r.id, prev[r.id] === "최상" && r.tier === "상" ? "최상" : r.tier])), null, 2) + "\n");
   console.error(`${tiersPath} 저장`);
 }
