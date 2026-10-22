@@ -1,0 +1,15 @@
+{
+  "name": "챔피언스 파티 빌더",
+  "short_name": "파티 빌더",
+  "description": "포켓몬 챔피언스 파티 빌더 — 파티 편성, 데미지 계산, 배틀 시뮬레이션, 랭크배틀",
+  "lang": "ko",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f4f2f9",
+  "theme_color": "#f4f2f9",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
