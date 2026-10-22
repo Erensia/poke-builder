@@ -25,13 +25,19 @@ export function BattleSeriesPanel({ series, startBlockedReason, onStart }: Battl
         <br />
         현재 <strong>{save.streak}연승</strong> · 최대 <strong>{save.best}연승</strong>
         {active && current && ` · 지금 상대: ${current.name} (${current.style})`}
+        {!active && startBlockedReason && (
+          <>
+            <br />
+            {startBlockedReason}
+          </>
+        )}
       </span>
       {active ? (
         <button type="button" className="battle-setup-load-party tap-target" onClick={series.stop}>
           종료하기
         </button>
       ) : (
-        <button type="button" className="battle-setup-load-party tap-target" disabled={!!startBlockedReason} title={startBlockedReason ?? undefined} onClick={() => onStart(series.start())}>
+        <button type="button" className="battle-setup-load-party tap-target" disabled={!!startBlockedReason} onClick={() => onStart(series.start())}>
           시작하기
         </button>
       )}

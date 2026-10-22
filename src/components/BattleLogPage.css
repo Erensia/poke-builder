@@ -212,6 +212,14 @@
   cursor: not-allowed;
 }
 
+.battle-setup-vs-hint {
+  margin: 0;
+  max-width: 8rem;
+  text-align: center;
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+}
+
 .battle-start-button {
   background: var(--gradient);
   color: var(--on-color);
@@ -685,6 +693,12 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 0.4rem;
+}
+
+.battle-move-note {
+  margin: 0.3rem 0 0;
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
 }
 
 .battle-move-button {

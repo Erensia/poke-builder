@@ -18,6 +18,7 @@ import { PokemonAvatarWithItem } from "./PokemonAvatarWithItem";
 import { STAT_ORDER, STAT_LABELS } from "../lib/statLabels";
 import { TYPE_COLORS } from "../lib/typeColors";
 import { PillRow } from "./PillRow";
+import { InfoTooltip } from "./InfoTooltip";
 import "./MatchupSlotCard.css";
 
 /**
@@ -377,9 +378,19 @@ export function MatchupSlotCard({
         {statusExtra}
         {(!hideTurnAssumptions || (role === "attacker" && onToggleCrit)) && (
           <div className="matchup-toggle-row">
+            {/* 터치에는 호버가 없어 토글 설명(title)을 ⓘ 하나로 모았다(5.1 A5) — 말풍선이 오른쪽으로 잘리지 않게 줄 맨 앞에 둔다 */}
+            <InfoTooltip
+              text={[
+                !hideTurnAssumptions && "도구 강탈: 상대 도구를 빼앗은 것으로 계산(매지션·곡예)",
+                !hideTurnAssumptions && "곡예 발동: 곡예 발동 후라고 가정 — 스피드 2배",
+                role === "attacker" && onToggleCrit && (critBlocked ? "급소: 상대 특성으로 급소에 맞지 않음" : "급소: 급소에 맞았다고 가정"),
+              ]
+                .filter(Boolean)
+                .join("\n")}
+            />
             {!hideTurnAssumptions && (
               <>
-                <label className="toggle-pill tap-target" title="상대 도구를 빼앗은 것으로 계산(매지션·곡예)">
+                <label className="toggle-pill tap-target">
                   <input
                     type="checkbox"
                     checked={!!slot.itemStolenFromOpponent}
@@ -387,7 +398,7 @@ export function MatchupSlotCard({
                   />
                   <span>도구 강탈</span>
                 </label>
-                <label className="toggle-pill tap-target" title="곡예 발동 후라고 가정 — 스피드 2배">
+                <label className="toggle-pill tap-target">
                   <input
                     type="checkbox"
                     checked={!!slot.unburdenAssumed}
@@ -398,7 +409,7 @@ export function MatchupSlotCard({
               </>
             )}
           {role === "attacker" && onToggleCrit && (
-            <label className="toggle-pill tap-target" title={critBlocked ? "상대 특성으로 급소에 맞지 않음" : "급소에 맞았다고 가정"}>
+            <label className="toggle-pill tap-target">
               <input type="checkbox" checked={!!slot.critAssumed} onChange={(e) => onToggleCrit(e.target.checked)} />
               <span>{critBlocked ? "급소 (무효)" : "급소"}</span>
             </label>

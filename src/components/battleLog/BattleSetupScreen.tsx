@@ -207,10 +207,11 @@ export function BattleSetupScreen({
                 disabled={!canProceed}
                 onClick={onProceed}
                 aria-label={canProceed ? proceedLabel : blockedReason}
-                title={canProceed ? proceedLabel : blockedReason}
+                title={canProceed ? proceedLabel : undefined}
               >
                 VS
               </button>
+              {!canProceed && <p className="battle-setup-vs-hint">{blockedReason}</p>}
             </div>
           )}
         </Fragment>
