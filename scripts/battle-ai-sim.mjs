@@ -13,7 +13,7 @@
  *   style    AI(파라미터 A) 대 스타일 봇(환경변수 STYLE=switcher | setup | noisy), 파티 좌우 교대(ver.2.0 1-A — 상대 모델 판정용).
  *            봇은 지금 AI(기본 파라미터)의 점수를 보고 성향대로 비튼다: switcher = 교체 점수가 최선 −0.3 안이면 교체,
  *            setup = 변화기 점수가 최선 −0.5 안이면 변화기, noisy = 25%로 차선책(사람 실수 흉내).
- *   h2h      AI(파라미터 A) 대 AI(파라미터 B, 5번째 인자 — 생략하면 기본값), 파티 좌우 교대. 그리디 봇은 항상
+ *   h2h      AI(파라미터 A) 대 AI(파라미터 B, 5번째 인자 — 생략하면 기본값), 파티 좌우 교대. 파라미터는 JSON 또는 "rank:N"(랭크 AI 단계 N). 그리디 봇은 항상
  *            최선기만 써서 "상대 모델" 튜닝에 편향되므로, 모델 변경은 이 모드로도 비교한다.
  *
  *   selectvs 3선출 방식 A 대 B(ver.2.1 A-0): 같은 파티 두 개를 두고 A·B 각각이 양쪽 파티 선출을 맡아 좌우·파티를 바꿔 4판씩(시드당 4판).
@@ -48,13 +48,21 @@ import { fileURLToPath } from "node:url";
 
 const mode = process.argv[2] ?? "regress";
 const battles = Number(process.argv[3] ?? 200);
-const decisionParams = process.argv[4] ? JSON.parse(process.argv[4]) : undefined;
 const root = process.env.SIM_ROOT ?? fileURLToPath(new URL("..", import.meta.url));
 const seedFrom = Number(process.env.SEED_FROM ?? 1);
 const seedTo = seedFrom + battles - 1;
 // hmr: false — 병렬 실행 시 HMR 웹소켓 포트(24678) 충돌로 프로세스가 죽는 걸 막는다.
 const server = await createServer({ root, server: { middlewareMode: true, hmr: false }, appType: "custom", logLevel: "error" });
-const opponentParams = process.argv[5] ? JSON.parse(process.argv[5]) : undefined;
+// 파라미터 인자(4·5번째): JSON 또는 "rank:N" = 랭크 AI 단계 N(rankProfile.ts의 RANK_AI_PROFILES[N], 5.2 — 사다리 측정 scripts/rank-ladder.mjs)
+const parseParams = async (arg) => {
+  if (!arg) return undefined;
+  if (!arg.startsWith("rank:")) return JSON.parse(arg);
+  const profile = (await server.ssrLoadModule("/src/lib/battle/ai/rankProfile.ts")).RANK_AI_PROFILES[Number(arg.slice(5))];
+  if (!profile) throw new Error(`랭크 단계 없음: ${arg}`);
+  return profile;
+};
+const decisionParams = await parseParams(process.argv[4]);
+const opponentParams = await parseParams(process.argv[5]);
 // h2h 모드: OPP_ROOT=<다른 체크아웃 경로>면 B 쪽 AI를 그 코드(예: ver.1.7 끝)에서 불러온다 — 엔진·데이터는 이 체크아웃 것.
 const oppServer = process.env.OPP_ROOT
   ? await createServer({ root: process.env.OPP_ROOT, server: { middlewareMode: true, hmr: false }, appType: "custom", logLevel: "error" })
