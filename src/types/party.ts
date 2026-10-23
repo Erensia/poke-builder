@@ -85,6 +85,11 @@ export interface SamplePartyPreset {
   /** real = 심화샘플(자주 볼 법한 강한 조합), textbook = 기초샘플(한 전술을 순수하게 보여 주는 표본) */
   group: "real" | "textbook";
   description: string;
+  /**
+   * 작성자가 어떤 상황에서도 선출에 넣는다고 한 포켓몬 id(0~3개, 이 파티 슬롯의 종). 선출안이 여러 갈래면 모든 안에 공통으로 들어가는 마리만 적는다.
+   * 생략·빈 배열이면 선출 정보 없음(전부 AI 선출). 선출 AI·벤치(selectvs)가 읽는다 — 앱 화면은 아직 쓰지 않는다.
+   */
+  fixedPicks?: string[];
   /** 항상 6마리 */
   slots: PartySlot[];
 }
