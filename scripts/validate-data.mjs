@@ -301,6 +301,12 @@ for (const [key, url] of Object.entries(MANIFEST))
       if (values.some((v) => !Number.isInteger(v) || v < 0 || v > 32)) err(`${sat}: 포인트는 스탯당 0~32 정수`);
       if (values.reduce((a, b) => a + b, 0) > 66) err(`${sat}: 포인트 합계 66 초과`);
     });
+    const fp = party.fixedPicks;
+    if (fp !== undefined && (!Array.isArray(fp) || fp.length > 3)) err(`${at}: fixedPicks 는 0~3개 배열`);
+    else if (fp !== undefined) {
+      if (new Set(fp).size !== fp.length) err(`${at}: fixedPicks 중복`);
+      for (const id of fp) if (!names.has(id)) err(`${at}: fixedPicks "${id}" 는 이 파티 슬롯의 종이 아님`);
+    }
   }
 }
 

@@ -1584,6 +1584,16 @@ try {
         sel.length === 3 && new Set(sel).size === 3 && sel.every((i) => [1, 3, 5].includes(i)),
         `선출 ${sel.join(",")}`,
       );
+      // 고정 선출(5.2 C5): 고정한 마리는 AI가 안 고를 마리(공격기 없는 빌드)여도 항상 들어가고, 3마리를 고정하면 그 3마리, 빈 배열은 AI 선출과 같다
+      const pickWith = (fixed) => ai.chooseAiSelection(full, "a", { random: () => 0.5, fixed });
+      const f1 = pickWith([0]);
+      const f2 = pickWith([0, 2]);
+      const f3 = pickWith([1, 3, 5]);
+      check(
+        "고정 선출: 고정 마리는 항상 포함 · 3마리 고정이면 그 3마리 · 빈 배열은 AI 선출과 같음",
+        f1.length === 3 && f1.includes(0) && f2.length === 3 && f2.includes(0) && f2.includes(2) && f3.length === 3 && [1, 3, 5].every((i) => f3.includes(i)) && pickWith([]).join() === sel.join(),
+        `1마리 ${f1.join(",")} · 2마리 ${f2.join(",")} · 3마리 ${f3.join(",")}`,
+      );
     }
     // 한계점 정리(ver.1.8): 필드 기술 접지 조건(엔진) · 페어리록 평가 · 끈적끈적네트 대면표 반영
     {
