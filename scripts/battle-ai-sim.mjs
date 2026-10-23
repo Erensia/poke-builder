@@ -13,12 +13,12 @@
  *   style    AI(파라미터 A) 대 스타일 봇(환경변수 STYLE=switcher | setup | noisy), 파티 좌우 교대(ver.2.0 1-A — 상대 모델 판정용).
  *            봇은 지금 AI(기본 파라미터)의 점수를 보고 성향대로 비튼다: switcher = 교체 점수가 최선 −0.3 안이면 교체,
  *            setup = 변화기 점수가 최선 −0.5 안이면 변화기, noisy = 25%로 차선책(사람 실수 흉내).
- *   h2h      AI(파라미터 A) 대 AI(파라미터 B, 5번째 인자 — 생략하면 기본값), 파티 좌우 교대. 그리디 봇은 항상
+ *   h2h      AI(파라미터 A) 대 AI(파라미터 B, 5번째 인자 — 생략하면 기본값), 파티 좌우 교대. 파라미터는 JSON 또는 "rank:N"(랭크 AI 단계 N). 그리디 봇은 항상
  *            최선기만 써서 "상대 모델" 튜닝에 편향되므로, 모델 변경은 이 모드로도 비교한다.
  *
  *   selectvs 3선출 방식 A 대 B(ver.2.1 A-0): 같은 파티 두 개를 두고 A·B 각각이 양쪽 파티 선출을 맡아 좌우·파티를 바꿔 4판씩(시드당 4판).
- *            대전은 양쪽 같은 어려움 AI. 인자 4·5번째가 A·B 선출 옵션 JSON — chooseAiSelection 옵션({...}) 또는 {"kind":"random"|"first"}(비AI 기준).
- *            환경변수 POOL=samples(기본, 기본 제공 샘플 파티 중 서로 다른 둘 — 2.2 B5에서 26개가 돼 같은 시드의 대진이 2.1 때(20개)와 달라졌으니 그 기준값은 재현되지 않는다) | random(무작위 6마리 빌드).
+ *            대전은 양쪽 같은 어려움 AI. 인자 4·5번째가 A·B 선출 옵션 JSON — chooseAiSelection 옵션({...}) 또는 {"kind":"random"|"first"}(비AI 기준) 또는 {"kind":"fixed"}(샘플 fixedPicks를 포함한 조합에서 AI가 나머지를 고름 — 5.2 C5. fixedPicks가 없는 파티는 AI 선출과 같다).
+ *            환경변수 POOL=picks면 fixedPicks가 있는 샘플 파티만 풀로 쓴다(고정 선출 대 AI 선출 비교용, 5.2 C5). 환경변수 POOL=samples(기본, 기본 제공 샘플 파티 중 서로 다른 둘 — 2.2 B5에서 26개가 돼 같은 시드의 대진이 2.1 때(20개)와 달라졌으니 그 기준값은 재현되지 않는다) | random(무작위 6마리 빌드).
  *   partyvs  샘플 파티 두 개의 강도 비교(ver.5.0 R3 S1): 환경변수 PAIRS="i-j,i-j,..."(SAMPLE_PARTIES 인덱스 쌍, 필수)마다 [판 수]개 시드를 돌고,
  *            시드당 P가 a편·b편인 2판(양쪽 같은 AI — 인자 4번째 JSON이 결정 파라미터, 3선출은 chooseAiSelection 기본). 결과는 쌍별 {pWins,qWins,other,aSideWins}.
  *            scripts/rank-party-tiers.mjs가 쌍을 나눠 병렬 실행·합산해 등급을 매긴다.
@@ -48,13 +48,21 @@ import { fileURLToPath } from "node:url";
 
 const mode = process.argv[2] ?? "regress";
 const battles = Number(process.argv[3] ?? 200);
-const decisionParams = process.argv[4] ? JSON.parse(process.argv[4]) : undefined;
 const root = process.env.SIM_ROOT ?? fileURLToPath(new URL("..", import.meta.url));
 const seedFrom = Number(process.env.SEED_FROM ?? 1);
 const seedTo = seedFrom + battles - 1;
 // hmr: false — 병렬 실행 시 HMR 웹소켓 포트(24678) 충돌로 프로세스가 죽는 걸 막는다.
 const server = await createServer({ root, server: { middlewareMode: true, hmr: false }, appType: "custom", logLevel: "error" });
-const opponentParams = process.argv[5] ? JSON.parse(process.argv[5]) : undefined;
+// 파라미터 인자(4·5번째): JSON 또는 "rank:N" = 랭크 AI 단계 N(rankProfile.ts의 RANK_AI_PROFILES[N], 5.2 — 사다리 측정 scripts/rank-ladder.mjs)
+const parseParams = async (arg) => {
+  if (!arg) return undefined;
+  if (!arg.startsWith("rank:")) return JSON.parse(arg);
+  const profile = (await server.ssrLoadModule("/src/lib/battle/ai/rankProfile.ts")).RANK_AI_PROFILES[Number(arg.slice(5))];
+  if (!profile) throw new Error(`랭크 단계 없음: ${arg}`);
+  return profile;
+};
+const decisionParams = await parseParams(process.argv[4]);
+const opponentParams = await parseParams(process.argv[5]);
 // h2h 모드: OPP_ROOT=<다른 체크아웃 경로>면 B 쪽 AI를 그 코드(예: ver.1.7 끝)에서 불러온다 — 엔진·데이터는 이 체크아웃 것.
 const oppServer = process.env.OPP_ROOT
   ? await createServer({ root: process.env.OPP_ROOT, server: { middlewareMode: true, hmr: false }, appType: "custom", logLevel: "error" })
@@ -542,15 +550,16 @@ try {
     const selectB = opponentParams ?? {};
     const poolKind = process.env.POOL ?? "samples";
     const samples = data.SAMPLE_PARTIES;
-    const sixOf = (party) => ({ slots: party.slots, movesList: party.slots.map((sl) => sl.moves.filter((m) => m).map((m) => data.getMove(m))) });
+    const pool = poolKind === "picks" ? samples.filter((s) => s.fixedPicks?.length) : samples;
+    const sixOf = (party) => ({ slots: party.slots, movesList: party.slots.map((sl) => sl.moves.filter((m) => m).map((m) => data.getMove(m))), fixed: (party.fixedPicks ?? []).map((id) => party.slots.findIndex((sl) => sl.pokemonId === id)).filter((i) => i >= 0) });
     const make6 = (rng) => {
       const members = Array.from({ length: 6 }, () => makeSlot(rng));
       return { slots: members.map((m) => m.slot), movesList: members.map((m) => m.moves) };
     };
     const pickSide = (side6, sel) => ({ slots: sel.map((i) => side6.slots[i]), movesList: sel.map((i) => side6.movesList[i]) });
     const shuffle3 = (rng) => { const idx = [0, 1, 2, 3, 4, 5]; for (let i = 5; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [idx[i], idx[j]] = [idx[j], idx[i]]; } return idx.slice(0, 3); };
-    const choose = (opts, full, side, rng) =>
-      opts.kind === "random" ? shuffle3(rng) : opts.kind === "first" ? [0, 1, 2] : ai.chooseAiSelection(full, side, { ...opts, random: rng });
+    const choose = (opts, full, side, rng, six) =>
+      opts.kind === "random" ? shuffle3(rng) : opts.kind === "first" ? [0, 1, 2] : ai.chooseAiSelection(full, side, { ...opts, random: rng, ...(opts.kind === "fixed" ? { fixed: six.fixed } : {}) });
     const policy = (risk) => (st, key) => ai.chooseAiAction(st, key, risk, {}).action;
     const forced = (risk) => (st, key) => ai.chooseAiForcedSwitch(st, key, risk) ?? living(st, key)[0];
     const res = { aWins: 0, bWins: 0, other: 0 };
@@ -562,10 +571,10 @@ try {
         P = make6(partyRng);
         Q = make6(partyRng);
       } else {
-        const i = Math.floor(partyRng() * samples.length);
-        const j = (i + 1 + Math.floor(partyRng() * (samples.length - 1))) % samples.length;
-        P = sixOf(samples[i]);
-        Q = sixOf(samples[j]);
+        const i = Math.floor(partyRng() * pool.length);
+        const j = (i + 1 + Math.floor(partyRng() * (pool.length - 1))) % pool.length;
+        P = sixOf(pool[i]);
+        Q = sixOf(pool[j]);
       }
       const risk = mulberry32(s)();
       for (let c = 0; c < 4; c++) {
@@ -576,7 +585,7 @@ try {
         const full = state.createBattleState({ [sideP]: P, [sideQ]: Q });
         const selectFor = (method, side, six) => {
           const t0 = performance.now();
-          const sel = choose(method === "A" ? selectA : selectB, full, side, mulberry32(s * 131 + c * 7 + (side === "a" ? 1 : 2)));
+          const sel = choose(method === "A" ? selectA : selectB, full, side, mulberry32(s * 131 + c * 7 + (side === "a" ? 1 : 2)), six);
           const ms = performance.now() - t0;
           time[`selectMs${method}`] += ms;
           time[`selects${method}`]++;

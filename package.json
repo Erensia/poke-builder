@@ -16,7 +16,8 @@
     "test:inference": "node scripts/defense-inference-check.mjs",
     "test:damage": "node scripts/damage-formula-check.mjs",
     "test:rank": "node scripts/rank-check.mjs",
-    "test:rank-ai": "node scripts/rank-ai-check.mjs"
+    "test:rank-ai": "node scripts/rank-ai-check.mjs",
+    "test:sample": "node scripts/add-sample-check.mjs"
   },
   "dependencies": {
     "react": "^19.2.8",

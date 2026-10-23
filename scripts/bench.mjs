@@ -9,7 +9,7 @@
  * 스타일 봇(ver.2.0 1-A, --style N으로 켬 — 기본 0): 교체형·변화기형·무작위 섞음 봇 상대 각 N(켬·끔, STATUS=1).
  * ver.2.0 3단계: --h2h-plain N(일반 파티 h2h, 기본 0) · --seed-offset N(모든 종류의 시드를 N만큼 뒤로 — 스크리닝과 다른 파티로 재확인).
  * ver.2.1 A-0: --select N(3선출 방식 A 대 B, 기본 0) — 켬 JSON(--on)이 A, 끔 JSON(toggle 대상)이 B인 **선출 옵션**({...} 또는 {"kind":"random"|"first"}),
- *   시드당 4판(× 파티·편 교대)이라 N=100이면 400판. --pool samples|random(기본 samples — 기본 제공 샘플 파티 20개에서 서로 다른 둘).
+ *   시드당 4판(× 파티·편 교대)이라 N=100이면 400판. --pool samples|random|picks(picks = fixedPicks가 있는 샘플만, 5.2 C5; 기본 samples — 기본 제공 샘플 파티 20개에서 서로 다른 둘).
  *   예) npm run bench -- toggle '{"kind":"random"}' --greedy 0 --status 0 --h2h 0 --select 100
  * 옵션: --root <체크아웃>(벤치할 코드, 기본 이 리포) · --on '<JSON>' · --greedy N · --status N · --h2h N · --style N · --chunk N(조각당 시드 수,
  *       기본 50) · --jobs N(동시 실행 수, 기본 CPU 코어 수)

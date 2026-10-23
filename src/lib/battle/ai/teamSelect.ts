@@ -14,6 +14,8 @@ interface TeamSelectOptions {
   random?: () => number;
   /** 선출 인원(기본 3) */
   size?: number;
+  /** 반드시 선출에 넣을 내 파티 인덱스(샘플 fixedPicks) — 이 마리를 포함한 조합에서만 고른다. 비거나 생략하면 전부 AI가 고른다 */
+  fixed?: number[];
 }
 
 /** 평균·최악 섞는 비율(평균 쪽) */
@@ -62,7 +64,9 @@ export function chooseAiSelection(state: BattleState, key: FighterKey, options: 
   const params = paramsFor(options.decisionParams);
   const myCount = sideOf(state, key).party.length;
   const oppCount = sideOf(state, opponentKey(key)).party.length;
-  const mine = candidatesOf(myCount, size);
+  const all = candidatesOf(myCount, size);
+  const kept = options.fixed?.length ? all.filter((c) => options.fixed!.every((i) => c.members.includes(i))) : all;
+  const mine = kept.length ? kept : all;
   if (mine.length <= 1) return mine.length ? orderOf(mine[0]) : [];
   const theirs = candidatesOf(oppCount, size);
   // 상대 자발적 교체 갈래는 끈다 — 3600판 가까운 대전을 한 번에 재야 해서 켜면 약 4초, 끄면 약 1초(선출 판단엔 근사로 충분)
