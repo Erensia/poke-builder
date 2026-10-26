@@ -7469,5 +7469,141 @@
     "activeMegaForm": "루카리오-메가Z"
    }
   ]
+ },
+ {
+  "id": "real-m7-master3-fixed3",
+  "name": "M-7 시즌 마스터3 달성 파티",
+  "style": "밸런스",
+  "group": "real",
+  "description": "고정 선출 3명(드닐레이브·스코빌런·픽시)만 사용해 온 파티. 메타그로스·에써르·타부자고는 파티에 있지만 선출하지 않았다.",
+  "fixedPicks": [
+   "드닐레이브",
+   "스코빌런",
+   "픽시"
+  ],
+  "slots": [
+   {
+    "pokemonId": "메타그로스",
+    "moves": [
+     "불릿펀치",
+     "사이코팽",
+     "지진",
+     "번개펀치"
+    ],
+    "ability": "클리어바디",
+    "item": "메타그로스나이트",
+    "nature": "장난꾸러기",
+    "points": {
+     "hp": 32,
+     "atk": 0,
+     "def": 20,
+     "spa": 0,
+     "spd": 14,
+     "spe": 0
+    },
+    "activeMegaForm": "메타그로스-메가"
+   },
+   {
+    "pokemonId": "에써르",
+    "moves": [
+     "와이드포스",
+     "매지컬플레임",
+     "치유소원",
+     "앙코르"
+    ],
+    "ability": "사이코메이커",
+    "item": "사이코시드",
+    "nature": "겁쟁이",
+    "points": {
+     "hp": 2,
+     "atk": 0,
+     "def": 23,
+     "spa": 15,
+     "spd": 0,
+     "spe": 26
+    }
+   },
+   {
+    "pokemonId": "드닐레이브",
+    "moves": [
+     "얼음뭉치",
+     "고드름떨구기",
+     "지진",
+     "대검돌격"
+    ],
+    "ability": "열교환",
+    "item": "기합의띠",
+    "nature": "고집",
+    "points": {
+     "hp": 1,
+     "atk": 32,
+     "def": 1,
+     "spa": 0,
+     "spd": 0,
+     "spe": 32
+    }
+   },
+   {
+    "pokemonId": "타부자고",
+    "moves": [
+     "골드러시",
+     "섀도볼",
+     "HP회복",
+     "나쁜음모"
+    ],
+    "ability": "황금몸",
+    "item": "풍선",
+    "nature": "조심",
+    "points": {
+     "hp": 31,
+     "atk": 0,
+     "def": 0,
+     "spa": 26,
+     "spd": 0,
+     "spe": 9
+    }
+   },
+   {
+    "pokemonId": "스코빌런",
+    "moves": [
+     "방어",
+     "대타출동",
+     "화염방사",
+     "씨뿌리기"
+    ],
+    "ability": "변덕쟁이",
+    "item": "먹다남은음식",
+    "nature": "대담",
+    "points": {
+     "hp": 5,
+     "atk": 0,
+     "def": 32,
+     "spa": 0,
+     "spd": 29,
+     "spe": 0
+    }
+   },
+   {
+    "pokemonId": "픽시",
+    "moves": [
+     "문포스",
+     "화염방사",
+     "달빛",
+     "코스믹파워"
+    ],
+    "ability": "천진",
+    "item": "픽시나이트",
+    "nature": "대담",
+    "points": {
+     "hp": 32,
+     "atk": 0,
+     "def": 32,
+     "spa": 0,
+     "spd": 2,
+     "spe": 0
+    },
+    "activeMegaForm": "픽시-메가"
+   }
+  ]
  }
 ]
