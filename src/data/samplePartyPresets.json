@@ -6936,5 +6936,276 @@
     }
    }
   ]
+ },
+ {
+  "id": "real-offcontest-runnerup",
+  "name": "오프 대회 준우승 파티",
+  "style": "랭크업",
+  "group": "real",
+  "description": "용의춤 망나뇽과 AS풍선 대도각참이 강력했다, 또한 루카리오를 파티에 넣어둠으로써 엑자몽을 신경쓰지 않아도 되는게 딱 좋았다.",
+  "fixedPicks": [
+   "망나뇽",
+   "대도각참"
+  ],
+  "slots": [
+   {
+    "pokemonId": "루카리오",
+    "moves": [
+     "불릿펀치",
+     "인파이트",
+     "코멧펀치",
+     "칼춤"
+    ],
+    "ability": "정신력",
+    "item": "루카리오나이트",
+    "nature": "명랑",
+    "points": {
+     "hp": 2,
+     "atk": 32,
+     "def": 0,
+     "spa": 0,
+     "spd": 0,
+     "spe": 32
+    },
+    "activeMegaForm": "루카리오-메가"
+   },
+   {
+    "pokemonId": "리자몽",
+    "moves": [
+     "플레어드라이브",
+     "드래곤클로",
+     "번개펀치",
+     "용의춤"
+    ],
+    "ability": "맹화",
+    "item": "리자몽나이트X",
+    "nature": "명랑",
+    "points": {
+     "hp": 2,
+     "atk": 32,
+     "def": 0,
+     "spa": 0,
+     "spd": 0,
+     "spe": 32
+    },
+    "activeMegaForm": "리자몽-메가X"
+   },
+   {
+    "pokemonId": "망나뇽",
+    "moves": [
+     "스케일샷",
+     "지진",
+     "번개펀치",
+     "용의춤"
+    ],
+    "ability": "멀티스케일",
+    "item": "생명의구슬",
+    "nature": "고집",
+    "points": {
+     "hp": 1,
+     "atk": 32,
+     "def": 3,
+     "spa": 0,
+     "spd": 0,
+     "spe": 30
+    }
+   },
+   {
+    "pokemonId": "맘모꾸리",
+    "moves": [
+     "얼음뭉치",
+     "스텔스록",
+     "지진",
+     "고드름떨구기"
+    ],
+    "ability": "둔감",
+    "item": "기합의띠",
+    "nature": "고집",
+    "points": {
+     "hp": 0,
+     "atk": 32,
+     "def": 19,
+     "spa": 0,
+     "spd": 0,
+     "spe": 15
+    }
+   },
+   {
+    "pokemonId": "대도각참",
+    "moves": [
+     "기습",
+     "도각참",
+     "아이언헤드",
+     "칼춤"
+    ],
+    "ability": "오기",
+    "item": "풍선",
+    "nature": "고집",
+    "points": {
+     "hp": 0,
+     "atk": 32,
+     "def": 2,
+     "spa": 0,
+     "spd": 0,
+     "spe": 32
+    }
+   },
+   {
+    "pokemonId": "누리레느",
+    "moves": [
+     "아쿠아제트",
+     "물거품아리아",
+     "문포스",
+     "퀵턴"
+    ],
+    "ability": "급류",
+    "item": "자뭉열매",
+    "nature": "냉정",
+    "points": {
+     "hp": 32,
+     "atk": 0,
+     "def": 21,
+     "spa": 0,
+     "spd": 7,
+     "spe": 6
+    }
+   }
+  ]
+ },
+ {
+  "id": "real-wall-absol-z",
+  "name": "벽 전개 메가앱솔Z 스윕 파티",
+  "style": "랭크업",
+  "group": "real",
+  "description": "대짱이로 하품·스텔스록 등 전개의 기반을 쌓으며 기점을 잡고, 알로라 나인테일의 오로라베일로 벽을 깐 뒤 메가앱솔Z가 칼춤을 쌓아 스윕하는 전개 구축.",
+  "fixedPicks": [
+   "대짱이",
+   "알로라나인테일",
+   "앱솔"
+  ],
+  "slots": [
+   {
+    "pokemonId": "대짱이",
+    "moves": [
+     "하품",
+     "스텔스록",
+     "지진",
+     "퀵턴"
+    ],
+    "ability": "급류",
+    "item": "자뭉열매",
+    "nature": "장난꾸러기",
+    "points": {
+     "hp": 32,
+     "atk": 0,
+     "def": 32,
+     "spa": 0,
+     "spd": 2,
+     "spe": 0
+    }
+   },
+   {
+    "pokemonId": "알로라나인테일",
+    "moves": [
+     "오로라베일",
+     "문포스",
+     "프리즈드라이",
+     "앙코르"
+    ],
+    "ability": "눈퍼뜨리기",
+    "item": "빛의점토",
+    "nature": "겁쟁이",
+    "points": {
+     "hp": 27,
+     "atk": 0,
+     "def": 0,
+     "spa": 7,
+     "spd": 0,
+     "spe": 32
+    }
+   },
+   {
+    "pokemonId": "루카리오",
+    "moves": [
+     "진공파",
+     "악의파동",
+     "파동탄",
+     "러스터캐논"
+    ],
+    "ability": "정신력",
+    "item": "루카리오나이트Z",
+    "nature": "겁쟁이",
+    "points": {
+     "hp": 2,
+     "atk": 0,
+     "def": 0,
+     "spa": 32,
+     "spd": 0,
+     "spe": 32
+    },
+    "activeMegaForm": "루카리오-메가Z"
+   },
+   {
+    "pokemonId": "킬라플로르",
+    "moves": [
+     "파워젬",
+     "오물웨이브",
+     "대지의힘",
+     "에너지볼"
+    ],
+    "ability": "독치장",
+    "item": "기합의띠",
+    "nature": "조심",
+    "points": {
+     "hp": 1,
+     "atk": 0,
+     "def": 0,
+     "spa": 32,
+     "spd": 1,
+     "spe": 32
+    }
+   },
+   {
+    "pokemonId": "히트로토무",
+    "moves": [
+     "도깨비불",
+     "속임수",
+     "오버히트",
+     "볼트체인지"
+    ],
+    "ability": "부유",
+    "item": "먹다남은음식",
+    "nature": "대담",
+    "points": {
+     "hp": 32,
+     "atk": 0,
+     "def": 11,
+     "spa": 0,
+     "spd": 23,
+     "spe": 0
+    }
+   },
+   {
+    "pokemonId": "앱솔",
+    "moves": [
+     "기습",
+     "섀도클로",
+     "인파이트",
+     "칼춤"
+    ],
+    "ability": "정의의마음",
+    "item": "앱솔나이트Z",
+    "nature": "명랑",
+    "points": {
+     "hp": 1,
+     "atk": 32,
+     "def": 1,
+     "spa": 0,
+     "spd": 0,
+     "spe": 32
+    },
+    "activeMegaForm": "앱솔-메가Z"
+   }
+  ]
  }
 ]
