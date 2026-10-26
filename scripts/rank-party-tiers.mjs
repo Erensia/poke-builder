@@ -12,7 +12,8 @@
  * --write면 src/data/samplePartyTiers.json({ 파티 id: "하"|"중"|"상"|"최상" })을 프리셋 순서로 쓴다(최상은 따로 정한 표시를 유지).
  * 등급 규칙(5.2 C4, 히스테리시스): 승률 순 위 1/3 상·아래 1/3 하(순수 3등분)가 기본이되, 이미 등급이 있는 파티는 승률이 이전 등급 구간에서 경계로부터
  * ±2SE(판수로 계산한 표준오차의 2배, 파티당 약 880판이면 ≈3.4%p) 안이면 이전 등급을 유지한다 — 샘플이 늘 때 오차 안의 파티 등급이 흔들리지 않게 한다.
- * 갓 추가한 파티(임시 "중")는 --new id,id로 알려야 이전 등급이 없는 것으로 보고 순수 3등분을 따른다. --fresh면 모든 파티를 순수 3등분한다.
+ * 등급을 아직 확정하지 않은 새 파티(임시 "중")는 이전 등급이 없는 것으로 보고 순수 3등분을 따른다 — 표 파일의 tiered(--write로 등급을 확정한 파티 id)에 없는 파티를 자동으로
+ * 새 파티로 본다(측정이 중간에 끊겨 쌍이 일부만 있어도 같다). --new id,id는 수동으로 더 지정한다(tiered가 없는 옛 표는 이쪽만). --fresh면 모든 파티를 순수 3등분한다.
  * 출력: 진행은 stderr, 파티별 승률 표는 stdout.
  */
 import { spawn } from "node:child_process";
@@ -42,7 +43,7 @@ if (existsSync(tablePath) && !args.includes("--all")) {
 }
 // 쌍마다 한 줄 — 새 쌍이 추가돼도 diff가 그 줄들만 바뀐다
 const save = () =>
-  writeFileSync(tablePath, `{"seeds":${table.seeds},"params":${JSON.stringify(table.params)},"pairs":{\n${Object.keys(table.pairs).sort().map((k) => `${JSON.stringify(k)}:${JSON.stringify(table.pairs[k])}`).join(",\n")}\n}}\n`);
+  writeFileSync(tablePath, `{"seeds":${table.seeds},"params":${JSON.stringify(table.params)},${table.tiered ? `"tiered":${JSON.stringify(table.tiered)},` : ""}"pairs":{\n${Object.keys(table.pairs).sort().map((k) => `${JSON.stringify(k)}:${JSON.stringify(table.pairs[k])}`).join(",\n")}\n}}\n`);
 
 const run = (pairs) =>
   new Promise((resolve, reject) => {
@@ -55,6 +56,10 @@ const run = (pairs) =>
 const missing = [];
 for (let i = 0; i < parties.length; i++) for (let j = i + 1; j < parties.length; j++) if (!table.pairs[keyOf(parties[i].id, parties[j].id)]) missing.push(`${i}-${j}`);
 console.error(`측정할 쌍 ${missing.length}개 (전체 ${(parties.length * (parties.length - 1)) / 2}쌍, 저장된 표 ${Object.keys(table.pairs).length}쌍)`);
+// ponytail: --all 은 옛 등급을 그대로 쓰던 동작을 유지하려고 자동 판별을 끈다. --write 없이 측정만 끝낸 파티는 tiered에 없어 계속 새 파티로 본다(의도한 동작)
+const auto = table.tiered && !args.includes("--all") ? parties.map((p) => p.id).filter((id) => !table.tiered.includes(id)) : [];
+const isNew = new Set([...opt("new", "").split(",").filter(Boolean), ...auto]);
+if (auto.length) console.error(`새 파티 ${auto.length}개(등급 미확정 — 순수 3등분): ${auto.join(", ")}`);
 
 // 작은 조각을 일꾼이 하나씩 가져가고 끝날 때마다 저장 — 중간에 죽어도 이어서 돌린다
 const CHUNK = 20;
@@ -89,7 +94,6 @@ const rows = parties
   .sort((a, b) => b.rate - a.rate);
 const prev = JSON.parse(readFileSync(tiersPath, "utf8"));
 const fresh = args.includes("--fresh");
-const isNew = new Set(opt("new", "").split(",").filter(Boolean));
 const cut = (k) => (k < rows.length / 3 ? "상" : k < (rows.length * 2) / 3 ? "중" : "하");
 const edge = (k) => (rows[k - 1].rate + rows[k].rate) / 2; // k번째 순위 앞뒤 승률의 중간 = 등급 경계
 const b1 = edge(Math.ceil(rows.length / 3)), b2 = edge(Math.ceil((2 * rows.length) / 3));
@@ -106,5 +110,7 @@ if (args.includes("--write")) {
   // "최상"(챔피언 전용, 상등급 내부 라운드로빈으로 따로 정함 — 5.0)은 측정 결과가 여전히 상이면 그대로 둔다
   const tierOf = Object.fromEntries(rows.map((r) => [r.id, prev[r.id] === "최상" && r.tier === "상" ? "최상" : r.tier]));
   writeFileSync(tiersPath, JSON.stringify(Object.fromEntries(parties.map((p) => [p.id, tierOf[p.id]])), null, 2) + "\n");
+  table.tiered = parties.map((p) => p.id);
+  save();
   console.error(`${tiersPath} 저장`);
 }
