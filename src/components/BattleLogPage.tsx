@@ -113,7 +113,7 @@ function useBattleLogSession(mode: BattleMode) {
 
   /** 기본 제공 샘플 파티(ver.2.1 B)를 한 진영에 사본으로 채운다 — 원본 데이터와 사용자 저장 파티는 그대로 */
   function loadSample(side: Side, sample: SamplePartyPreset) {
-    setup.loadSide(side, structuredClone(sample.slots));
+    setup.loadSide(side, structuredClone(sample.slots), sample.fixedPicks);
   }
   function loadRandomSample(side: Side) {
     // 기본 샘플 + 쓸 수 있는 내 샘플(3.1 S2)에서 무작위로 고른다
@@ -342,6 +342,10 @@ function useBattleLogSession(mode: BattleMode) {
     return chooseAiSelection(full, side, { size: BATTLE_SELECT_SIZE }).map((p) => pool[p]);
   }
 
+  /** 샘플의 fixedPicks(5.4 E3)를 현재 빌드 슬롯 인덱스로 바꾼다 — 그 사이 빠지거나 기술이 없어진 마리는 건너뛴다 */
+  const fixedPickIndices = (side: Side): SlotIndex[] =>
+    setup.fixedPicks[side].flatMap((id) => buildableIndices(side).filter((i) => slotCtl(side, i).slot?.pokemonId === id));
+
   /** 빌드 화면 "다음/대전 시작" — 양쪽 다 3마리 이하면 선출을 건너뛰고 바로 대전, 아니면 선출 화면으로 */
   function handleProceed() {
     if (!canProceed) return;
@@ -352,7 +356,7 @@ function useBattleLogSession(mode: BattleMode) {
         : side === "a" && fixedSelectionA
           ? fixedSelectionA
           : needsSelection(side)
-            ? []
+            ? fixedPickIndices(side)
             : buildableIndices(side).slice(0, BATTLE_SELECT_SIZE);
     const sel = { a: autoSel("a"), b: autoSel("b") };
     if (!selectsA && (!needsSelection("b") || aiSelects)) {
@@ -622,7 +626,7 @@ function useBattleLogSession(mode: BattleMode) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [winner]);
 
-  return { mode, rank, rankNotStarted, setBattleVideoView, battleVideos, battleState, selecting, series, seriesStartBlockedReason, setFrontierSelection, loadSample, setup, partyPresets, slotPresets, movelessWarningFor, handleSaveSlotAsSample, setPicker, canProceed, proceedLabel, hasMovelessSlot, handleProceed, aiOpponent, setAiOpponent, aiMemory, setShowAiMemory, loadRandomSample, loadRandomSlotParty, selection, buildableIndices, needsSelection, pokemonAt, slotCtl, toggleSelection, setSelecting, selectionComplete, startBattleWith, winner, selected, setSelected, inputMode, setInputMode, megaDeclared, setMegaDeclared, pendingForcedSwitch, pendingPivot, lockWarning, setLockWarning, log, activeMoveIds, choiceLockedMoveId, battleSide, switchableIndices, resolveForcedSwitch, resolvePivot, isStruggling, moveRestrictionMessage, playTurn, resetToSetup, aiSide, aiThinking, learnedBattles, showAiMemory, picker, sideCtls, mySamples, battleVideoView };
+  return { mode, rank, rankNotStarted, setBattleVideoView, battleVideos, battleState, selecting, series, seriesStartBlockedReason, setFrontierSelection, loadSample, setup, partyPresets, slotPresets, movelessWarningFor, handleSaveSlotAsSample, setPicker, canProceed, proceedLabel, hasMovelessSlot, handleProceed, aiOpponent, setAiOpponent, aiMemory, setShowAiMemory, loadRandomSample, loadRandomSlotParty, selection, buildableIndices, fixedPickIndices, needsSelection, pokemonAt, slotCtl, toggleSelection, setSelecting, selectionComplete, startBattleWith, winner, selected, setSelected, inputMode, setInputMode, megaDeclared, setMegaDeclared, pendingForcedSwitch, pendingPivot, lockWarning, setLockWarning, log, activeMoveIds, choiceLockedMoveId, battleSide, switchableIndices, resolveForcedSwitch, resolvePivot, isStruggling, moveRestrictionMessage, playTurn, resetToSetup, aiSide, aiThinking, learnedBattles, showAiMemory, picker, sideCtls, mySamples, battleVideoView };
 }
 
 /** BattleLogPage의 일부 화면 — 세션(useBattleLogSession 결과)에서 필요한 값만 꺼내 쓴다 */
@@ -830,7 +834,7 @@ function BattleLogPickers({ s }: { s: ReturnType<typeof useBattleLogSession> }) 
 
 export function BattleLogPage({ mode }: { mode: BattleMode }) {
   const session = useBattleLogSession(mode);
-  const { rank, rankNotStarted, setBattleVideoView, battleVideos, battleState, selecting, series, seriesStartBlockedReason, setFrontierSelection, loadSample, setup, partyPresets, slotPresets, movelessWarningFor, handleSaveSlotAsSample, setPicker, canProceed, proceedLabel, hasMovelessSlot, handleProceed, aiOpponent, setAiOpponent, aiMemory, setShowAiMemory, loadRandomSample, loadRandomSlotParty, selection, buildableIndices, needsSelection, pokemonAt, slotCtl, toggleSelection, setSelecting, selectionComplete, startBattleWith, winner, selected, setSelected, inputMode, setInputMode, megaDeclared, setMegaDeclared, pendingForcedSwitch, pendingPivot, lockWarning, setLockWarning, log, activeMoveIds, choiceLockedMoveId, battleSide, switchableIndices, resolveForcedSwitch, resolvePivot, isStruggling, moveRestrictionMessage, playTurn, resetToSetup, aiSide, aiThinking, learnedBattles, showAiMemory, battleVideoView } = session;
+  const { rank, rankNotStarted, setBattleVideoView, battleVideos, battleState, selecting, series, seriesStartBlockedReason, setFrontierSelection, loadSample, setup, partyPresets, slotPresets, movelessWarningFor, handleSaveSlotAsSample, setPicker, canProceed, proceedLabel, hasMovelessSlot, handleProceed, aiOpponent, setAiOpponent, aiMemory, setShowAiMemory, loadRandomSample, loadRandomSlotParty, selection, buildableIndices, fixedPickIndices, needsSelection, pokemonAt, slotCtl, toggleSelection, setSelecting, selectionComplete, startBattleWith, winner, selected, setSelected, inputMode, setInputMode, megaDeclared, setMegaDeclared, pendingForcedSwitch, pendingPivot, lockWarning, setLockWarning, log, activeMoveIds, choiceLockedMoveId, battleSide, switchableIndices, resolveForcedSwitch, resolvePivot, isStruggling, moveRestrictionMessage, playTurn, resetToSetup, aiSide, aiThinking, learnedBattles, showAiMemory, battleVideoView } = session;
 
 
   return (
@@ -900,6 +904,7 @@ export function BattleLogPage({ mode }: { mode: BattleMode }) {
           selectionComplete={selectionComplete}
           onStartBattle={() => startBattleWith(selection)}
           hiddenSide={aiOpponent ? "b" : null}
+          isFixedPick={(side, i) => fixedPickIndices(side).includes(i)}
         />
       )}
 
