@@ -147,18 +147,22 @@ function useBattleSetupSide(): BattleSetupSlot[] {
 export function useBattleSetup() {
   const a = useBattleSetupSide();
   const b = useBattleSetupSide();
+  // 5.4 E3 — 샘플을 불러온 진영의 fixedPicks(포켓몬 id). 선출 화면에서 미리 골라 둔다. 다른 파티를 불러오면 비운다.
+  const [fixedPicks, setFixedPicks] = useState<{ a: string[]; b: string[] }>({ a: [], b: [] });
 
   /**
    * 저장된 파티 프리셋의 6칸을 한 진영 빌드에 통째로 적용한다(백로그 §3-2). `PartySlot`이
    * 배틀 셋업 슬롯 타입과 같아 변환 없이 그대로 넣고, 빈 칸은 비운다.
+   * 샘플이면 `picks`(SamplePartyPreset.fixedPicks)를 같이 넘긴다.
    */
-  function loadSide(sideKey: "a" | "b", slots: readonly (PartySlot | null)[]) {
+  function loadSide(sideKey: "a" | "b", slots: readonly (PartySlot | null)[], picks: readonly string[] = []) {
     const target = sideKey === "a" ? a : b;
     target.forEach((ctl, i) => {
       const src = slots[i] ?? null;
       if (src) ctl.loadSlot(src);
       else ctl.clearPokemon();
     });
+    setFixedPicks((prev) => ({ ...prev, [sideKey]: [...picks] }));
   }
 
   /** 드래그앤드롭으로 두 슬롯의 내용을 맞바꾼다(ver.1.6 §4-2). PartyBoard의 reorderSlots와 동일하게 스왑 방식. */
@@ -173,5 +177,5 @@ export function useBattleSetup() {
     else target[toIndex].clearPokemon();
   }
 
-  return { a, b, loadSide, reorderSlots };
+  return { a, b, fixedPicks, loadSide, reorderSlots };
 }
