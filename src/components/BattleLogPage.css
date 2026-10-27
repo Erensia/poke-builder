@@ -258,6 +258,19 @@
   flex-direction: column;
   gap: 0.7rem;
   min-width: 240px;
+  width: max-content; /* 가장 긴 이름(예: 켄타로스(팔데아/블레이즈종))이 한 줄에 들어가도록 컬럼 폭을 내용에 맞춘다 */
+}
+
+/* 샘플이 지정한 고정 선출 표시(5.4 E3) — 줄을 늘리지 않아 두 컬럼 높이·가로 배치가 그대로다 */
+.battle-select-fixed {
+  margin-left: auto;
+  flex-shrink: 0;
+  padding: 0.05rem 0.4rem;
+  border: 1px solid var(--violet);
+  border-radius: var(--r-pill);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  color: var(--violet);
 }
 
 .battle-select-list {
@@ -270,7 +283,7 @@
   display: flex;
   align-items: center;
   gap: 0.7rem;
-  width: 240px;
+  width: 100%;
   padding: 0.6rem 0.8rem;
   border: 1px solid var(--glass-border);
   border-radius: var(--r-md);
@@ -318,6 +331,7 @@
 
 .battle-select-name {
   font-weight: 600;
+  white-space: nowrap;
 }
 
 .battle-select-actions {
@@ -1002,7 +1016,7 @@
     order: 0;
   }
 
-  /* 선출 화면: 고정 폭(240px) 제거하고 폭에 맞춘다 */
+  /* 선출 화면: 내용 폭 대신 화면 폭에 맞추고, 긴 이름은 줄바꿈한다 */
   .battle-select-board {
     gap: 1.2rem;
   }
@@ -1011,8 +1025,9 @@
     width: 100%;
     max-width: 340px;
   }
-  .battle-select-mon {
-    width: 100%;
+  .battle-select-name {
+    min-width: 0;
+    white-space: normal;
   }
 
   .battle-log-header h2 {

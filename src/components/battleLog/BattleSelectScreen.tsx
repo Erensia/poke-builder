@@ -20,9 +20,12 @@ export function BattleSelectScreen({
   selectionComplete,
   onStartBattle,
   hiddenSide,
+  isFixedPick,
 }: {
   /** AI가 선출한 편 — 대전 시작 전까지 선출을 공개하지 않는다(3선출 AI, ver.1.8) */
   hiddenSide: Side | null;
+  /** 이 슬롯이 불러온 샘플의 고정 선출(fixedPicks)인지(5.4 E3) — 카드에 "고정" 칩을 붙인다 */
+  isFixedPick: (side: Side, i: SlotIndex) => boolean;
   selection: { a: SlotIndex[]; b: SlotIndex[] };
   buildableIndices: (side: Side) => SlotIndex[];
   needsSelection: (side: Side) => boolean;
@@ -94,6 +97,7 @@ export function BattleSelectScreen({
                         />
                       )}
                       <span className="battle-select-name">{pk?.name ?? "포켓몬"}</span>
+                      {manual && isFixedPick(side, i) && <span className="battle-select-fixed">고정선출</span>}
                     </button>
                   );
                 })}
