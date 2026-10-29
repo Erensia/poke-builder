@@ -7,6 +7,6 @@ import { useNamedList } from "./useStoredList";
  * 완전히 별개 축 — 여러 개를 만들어두고 나중에 이름으로 골라서 불러올 수 있다.
  */
 export function usePartyPresets() {
-  const { savePreset, ...rest } = useNamedList<Party>(loadPartyPresets, savePartyPresets);
+  const { savePreset, ...rest } = useNamedList<Party>(loadPartyPresets, savePartyPresets, "partyPresets");
   return { ...rest, savePreset: (name: string, slots: PartySlots) => savePreset(name, { slots }) };
 }

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { User } from "firebase/auth";
+import { startCloudSync } from "../lib/cloudSync";
 import { firebaseConfigured, loadAuth } from "../lib/firebase";
 
 const IGNORED = ["auth/popup-closed-by-user", "auth/cancelled-popup-request"];
@@ -20,6 +21,7 @@ export function useAuthUser() {
 
   useEffect(() => {
     if (!firebaseConfigured) return;
+    startCloudSync(); // 이 창에서 로그인하면 바로 동기화가 시작되게(이미 시작됐으면 아무 일도 안 한다)
     let alive = true;
     let off = () => {};
     loadAuth()

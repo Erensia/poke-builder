@@ -8,6 +8,6 @@ import { useNamedList } from "./useStoredList";
  * 재사용할 때 쓴다.
  */
 export function useSlotPresets() {
-  const { savePreset, ...rest } = useNamedList<SlotPreset>(loadSlotPresets, saveSlotPresets);
+  const { savePreset, ...rest } = useNamedList<SlotPreset>(loadSlotPresets, saveSlotPresets, "slotPresets");
   return { ...rest, savePreset: (name: string, slot: PartySlot) => savePreset(name, { slot }) };
 }
