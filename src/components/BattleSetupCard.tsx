@@ -1,19 +1,11 @@
 import type { DragEvent } from "react";
 import type { PartySlot } from "../types/party";
-import { getPokemon, getMove, getAbility, getItem, getNature } from "../lib/data";
-import {
-  getEffectiveForm,
-  getEffectiveGender,
-  genderLabel,
-  megaBadgeLabel,
-  resolveCosmeticForm,
-  COSMETIC_FORM_CYCLE_MAX,
-} from "../lib/pokemonForm";
-import { computeRealStats, totalAbilityPoints } from "../lib/statCalculator";
-import { computeBulkPower } from "../lib/battlePower";
+import { getPokemon, getMove } from "../lib/data";
+import { getEffectiveForm, getEffectiveGender, megaBadgeLabel } from "../lib/pokemonForm";
 import { TypeBadge } from "./TypeBadge";
 import { PokemonAvatarWithItem } from "./PokemonAvatarWithItem";
 import { TYPE_COLORS } from "../lib/typeColors";
+import { SlotMetaRow, SlotBulkRow } from "./SlotMetaRow";
 import "./PartySlotCard.css";
 
 interface BattleSetupCardProps {
@@ -165,9 +157,6 @@ export function BattleSetupCard({
     );
   }
 
-  const realStats = computeRealStats(form.baseStats, slot!.points, slot!.nature);
-  const bulkPhysical = computeBulkPower(realStats, "physical");
-  const bulkSpecial = computeBulkPower(realStats, "special");
 
   return (
     <div className={`party-slot party-slot-filled${dragStateClass}`} {...dragHandlers}>
@@ -232,83 +221,9 @@ export function BattleSetupCard({
         })}
       </div>
 
-      <div className="party-slot-meta">
-        <button type="button" className="party-meta-pip tap-target" onClick={onPickAbility}>
-          <span className="party-meta-label">특성</span>
-          <span className="party-meta-value">
-            {slot!.ability ? getAbility(slot!.ability)?.name : "미지정"}
-          </span>
-        </button>
-        <button type="button" className="party-meta-pip tap-target" onClick={onPickItem}>
-          <span className="party-meta-label">도구</span>
-          <span className="party-meta-value">{slot!.item ? getItem(slot!.item)?.name : "미지정"}</span>
-        </button>
-        <button type="button" className="party-meta-pip tap-target" onClick={onPickNature}>
-          <span className="party-meta-label">성격</span>
-          <span className="party-meta-value">{slot!.nature ? getNature(slot!.nature)?.name : "미지정"}</span>
-        </button>
-        <button type="button" className="party-meta-pip tap-target" onClick={onPickPoints}>
-          <span className="party-meta-label">포인트</span>
-          <span className="party-meta-value">{totalAbilityPoints(slot!.points)} / 66</span>
-        </button>
-        {pokemon.genderCategory === "both" && (
-          <button type="button" className="party-meta-pip tap-target" onClick={onToggleGender}>
-            <span className="party-meta-label">성별</span>
-            <span className="party-meta-value">{genderLabel(getEffectiveGender(pokemon, slot!) ?? "male")}</span>
-          </button>
-        )}
-        {pokemon.sizeForms && (
-          <button type="button" className="party-meta-pip tap-target" onClick={onCycleSizeForm}>
-            <span className="party-meta-label">크기</span>
-            <span className="party-meta-value">
-              {(() => {
-                const forms = pokemon.sizeForms;
-                const currentId = slot!.sizeForm ?? forms.find((f) => f.standard)?.id ?? forms[0].id;
-                return forms.find((f) => f.id === currentId)?.label ?? forms[0].label;
-              })()}
-            </span>
-          </button>
-        )}
-        {pokemon.formVariants && !pokemon.formVariantByGender && (
-          <button type="button" className="party-meta-pip tap-target" onClick={onCycleFormVariant}>
-            <span className="party-meta-label">모습</span>
-            <span className="party-meta-value">
-              {(() => {
-                const forms = pokemon.formVariants;
-                const currentId = slot!.formVariant ?? forms.find((f) => f.standard)?.id ?? forms[0].id;
-                return forms.find((f) => f.id === currentId)?.label ?? forms[0].label;
-              })()}
-            </span>
-          </button>
-        )}
-        {pokemon.cosmeticForms && (
-          <button
-            type="button"
-            className="party-meta-pip tap-target"
-            onClick={
-              pokemon.cosmeticForms.length <= COSMETIC_FORM_CYCLE_MAX
-                ? onCycleCosmeticForm
-                : onPickCosmeticForm
-            }
-          >
-            <span className="party-meta-label">모습</span>
-            <span className="party-meta-value">
-              {resolveCosmeticForm(pokemon, slot!)?.label ?? pokemon.cosmeticForms[0].label}
-            </span>
-          </button>
-        )}
-      </div>
+      <SlotMetaRow slot={slot!} pokemon={pokemon} onPickAbility={onPickAbility} onPickItem={onPickItem} onPickNature={onPickNature} onPickPoints={onPickPoints} onToggleGender={onToggleGender} onCycleSizeForm={onCycleSizeForm} onCycleFormVariant={onCycleFormVariant} onCycleCosmeticForm={onCycleCosmeticForm} onPickCosmeticForm={onPickCosmeticForm} />
 
-      <div className="party-slot-bulk">
-        <div className="party-bulk-item">
-          <span className="party-bulk-label">물리내구</span>
-          <span className="party-bulk-value">{Math.round(bulkPhysical).toLocaleString()}</span>
-        </div>
-        <div className="party-bulk-item">
-          <span className="party-bulk-label">특수내구</span>
-          <span className="party-bulk-value">{Math.round(bulkSpecial).toLocaleString()}</span>
-        </div>
-      </div>
+      <SlotBulkRow slot={slot!} pokemon={pokemon} ignoreMega={concealBuild} />
     </div>
   );
 }
