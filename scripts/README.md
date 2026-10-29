@@ -97,6 +97,7 @@ python scripts/normalize_sprites.py x.png --category 포켓몬 --fix   # 트리 
 기합의띠·하드 오버라이드·명중률·메가진화·유턴류·변화기(상태이상·벽·설치기·날씨·트릭룸·앙코르 등)·방어류 묶음별
 판단·엔진 날씨 규칙·공격기 랭크 변화·매치업 난수별 데미지 대조. 실패가 하나라도 있으면 exit 1.
 브라우저 없이 Vite `ssrLoadModule`로 `src/`의 실제 코드를 불러온다.
+공용 도우미는 `battle-ai-scenarios.mjs`에, 시나리오는 `battle-ai-scenarios/NN-*.mjs`(영역별, 이름순 = 실행 순서)에 있다.
 
 ## battle-ai-sim.mjs — `npm run sim:ai -- <모드> [판 수] [파라미터 JSON] [상대 파라미터 JSON]`
 
