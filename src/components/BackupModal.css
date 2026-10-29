@@ -58,3 +58,15 @@
   font-size: var(--fs-xs);
   color: var(--text-muted);
 }
+
+.backup-cloud {
+  margin-top: 1rem;
+  padding-top: 0.8rem;
+  border-top: 1px solid var(--border);
+}
+
+.backup-cloud-title {
+  margin: 0 0 0.4rem;
+  font-size: var(--fs-sm);
+  color: var(--text);
+}

@@ -1,4 +1,5 @@
 import { useRef, useState, type ChangeEvent } from "react";
+import { CloudBackup } from "./CloudBackup";
 import { Modal } from "./Modal";
 import { exportBackup, MAX_BACKUP_BYTES, parseBackup } from "../lib/backup";
 import type { Party, SlotPreset } from "../types/party";
@@ -98,6 +99,7 @@ export function BackupModal({ partyPresets, slotPresets, onClose, onImport }: Ba
           {notice}
         </p>
       )}
+      <CloudBackup />
     </Modal>
   );
 }
