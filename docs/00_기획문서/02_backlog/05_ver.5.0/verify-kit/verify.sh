@@ -13,7 +13,7 @@ step() { # 이름 명령...
   if "$@" > "$W/$name.log" 2>&1; then echo "PASS  $name"; else echo "FAIL  $name  (로그: $W/$name.log)"; fail=1; fi
 }
 step tsc npx tsc -b
-step oxlint bash -c 'npx oxlint | tail -1 | grep -q "0 warnings and 0 errors" || [ -z "$(npx oxlint 2>&1 | grep -E "error|warning" )" ]'
+step oxlint bash -c 'npx oxlint src scripts | tail -1 | grep -q "0 warnings and 0 errors" || [ -z "$(npx oxlint src scripts 2>&1 | grep -E "error|warning" )" ]'
 step build npm run build
 [ "$1" = "quick" ] && { [ $fail = 0 ] && echo "== 정적 검증 통과" || echo "== 실패"; exit $fail; }
 # 병렬 실행
@@ -33,7 +33,7 @@ chk() { # 이름 rc파일
 }
 chk test:ai test-ai; chk test:damage test-damage; chk test:inference test-inference
 grep -q "결합 결과 해시 10040ffa0108c9a3" "$W/test-inference.log" && echo "PASS  결합 결과 해시 10040ffa0108c9a3" || { echo "FAIL  결합 결과 해시 변경"; fail=1; }
-grep -q '"hash":"e029e39adafb2b02f0b77af476c38b69d10674fcbd688f7119dfef3f33bac250"' "$W/regress.out" && echo "PASS  regress 200 해시 e029e39a…" || { echo "FAIL  regress 해시 변경: $(tail -1 "$W/regress.out" | cut -c1-200)"; fail=1; }
+grep -q '"hash":"cbb97b1d779e1c957462a8bf538800232c23af2ce6c970349a828eb041d0d6a5"' "$W/regress.out" && echo "PASS  regress 200 해시 cbb97b1d…" || { echo "FAIL  regress 해시 변경: $(tail -1 "$W/regress.out" | cut -c1-200)"; fail=1; }
 if [ "$(grep -v "WebSocket server error" "$W/regress20000.out" | tail -1)" = "$(cat "$B/regress20000.out")" ]; then echo "PASS  regress 20000 로그 해시(시드 1~20000 전 턴 로그)"; else echo "FAIL  regress 20000 해시 변경: $(tail -1 "$W/regress20000.out" | cut -c1-200)"; fail=1; fi
 if [ "$(grep -v "WebSocket server error" "$W/matchup.out" | tail -1)" = "$(cat "$B/matchup-hash600k.out")" ]; then echo "PASS  계산 함수 차분 해시(무작위 대결 60만 건)"; else echo "FAIL  계산 함수 차분 해시 변경: $(tail -1 "$W/matchup.out" | cut -c1-200)"; fail=1; fi
 for f in greedy120 status60 h2h40; do

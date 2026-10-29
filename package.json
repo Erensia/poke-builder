@@ -19,7 +19,7 @@
     "test:rank-ai": "node scripts/rank-ai-check.mjs",
     "test:sample": "node scripts/add-sample-check.mjs",
     "test:sync": "node scripts/cloud-sync-check.mjs",
-    "test:rules":"npx firebase-tools@15 emulators:exec --only firestore --project demo-poke \"node scripts/firestore-rules-check.mjs\""
+    "test:rules": "npx firebase-tools@15 emulators:exec --only firestore --project demo-poke \"node scripts/firestore-rules-check.mjs\""
   },
   "dependencies": {
     "firebase": "^13.1.0",
@@ -35,5 +35,8 @@
     "oxlint": "^1.75.0",
     "typescript": "~6.0.2",
     "vite": "^8.2.0"
+  },
+  "overrides": {
+    "@grpc/grpc-js": "^1.14.6"
   }
 }
