@@ -55,5 +55,10 @@ export function useNamedList<T extends { id: string; name: string; savedAt: numb
     setItems((prev) => prev.map((p) => (p.id === id ? { ...p, name: trimmed } : p)));
   }
 
-  return { presets, savePreset, renamePreset, deletePreset };
+  /** 목록을 통째로 바꾼다(백업 가져오기 5.5 G1) — 저장은 useStoredList의 이펙트가 한다 */
+  function replaceAll(next: T[]) {
+    setItems(next);
+  }
+
+  return { presets, savePreset, renamePreset, deletePreset, replaceAll };
 }
