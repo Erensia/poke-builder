@@ -4,4 +4,4 @@
 
 - [6.0-backlog.md](6.0-backlog.md) — ver.6.0 **종료**(2026-10-29, PR `ver6.0`): K 하나만 — Firebase(Firestore + Google 로그인) 로컬 우선 + 클라우드 백업(K0 실측·K1 Firebase 설정·K2 로그인 UI·K3 동기화 계층·K4 검증), 동기화 대상은 저장한 포켓몬 빌드·저장한 파티뿐, 메이저 버전 마무리 리팩토링(K5, R-1만 실행 — PR #351)
 - [6.0-리팩토링설계.md](6.0-리팩토링설계.md) — 6.0 종료 시 `ponytail` 코드 전체 리팩토링 설계(2026-10-29): `ponytail-audit` 실측(안 쓰이는 `export` 4개뿐·뺄 의존성 없음), 범위 후보 R-1~R-7, 검증 세트(엔진 검증은 집 PC), 기능 테스트 체크리스트. **R-1만 실행**(PR #351), R-2~R-6은 6.1
-- [6.1-backlog.md](6.1-backlog.md) — ver.6.1 **초안**(2026-10-29): 집 PC 확인 결과로 범위가 갈린다 — 문제가 나오면 수정 버전(L0), 없으면 6.0 리팩토링 후보 R-2~R-6(L1~L5: `BattleLogPage`·`BattleBoard`·`DefenseInferencePanel`·큰 카드·테스트 스크립트 분할)
+- [6.1-backlog.md](6.1-backlog.md) — ver.6.1 **작성 중**(2026-10-29): 집 PC 확인 문제 없음 → 리팩토링 버전으로 확정, 6.0 리팩토링 후보 R-2~R-6 중 고른 항목(L1~L5: `BattleLogPage`·`BattleBoard`·`DefenseInferencePanel`·큰 카드·테스트 스크립트 분할)
