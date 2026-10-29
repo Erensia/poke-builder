@@ -65,6 +65,11 @@
   border-top: 1px solid var(--border);
 }
 
+.backup-conflict-line {
+  display: block;
+  margin: 0.2rem 0;
+}
+
 .backup-cloud-title {
   margin: 0 0 0.4rem;
   font-size: var(--fs-sm);
