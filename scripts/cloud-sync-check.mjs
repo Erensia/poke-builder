@@ -35,6 +35,10 @@ try {
   const parties = [party("a", "첫 파티", 10), party("b", "둘째", 20)];
   const c1 = canonical("partyPresets", parties);
   check("정규형은 id·savedAt을 그대로 둔다", c1.items[0].id === "a" && c1.items[1].savedAt === 20, JSON.stringify(c1.items[0]).slice(0, 80));
+  // 클라우드에 이미 저장된 문서와 같은 문자열이어야 한다 — 키 순서가 바뀌면 모든 목록이 "바뀐 것"으로 보여 한꺼번에 다시 올라간다
+  check("정규형의 키 순서 고정(파티: id·name·slots·savedAt)", c1.json.startsWith('[{"id":"a","name":"첫 파티","slots":[') && c1.json.includes('],"savedAt":10},{"id":"b"'), c1.json.slice(0, 60));
+  const cs = canonical("slotPresets", [slotPreset("s", "라이츄", 7)]);
+  check("정규형의 키 순서 고정(포켓몬: id·name·slot·savedAt)", cs.json.startsWith('[{"id":"s","name":"라이츄","slot":{') && cs.json.endsWith(',"savedAt":7}]'), cs.json.slice(0, 60));
   check("정규형은 멱등이다(정규형을 다시 정규화해도 같다)", canonical("partyPresets", JSON.parse(c1.json)).json === c1.json);
   const shuffled = [{ ...slotPreset("s1", "라이츄"), slot: reorder(slot) }];
   check("키 순서가 달라도 같은 정규형이다", canonical("slotPresets", shuffled).json === canonical("slotPresets", [slotPreset("s1", "라이츄")]).json);

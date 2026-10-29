@@ -25,7 +25,7 @@ const MAX_BYTES = 900_000;
 const SAVE_DELAY_MS = 3000;
 const LABELS: Record<PresetListName, string> = { partyPresets: "저장된 파티", slotPresets: "저장한 포켓몬" };
 
-export interface Conflict {
+interface Conflict {
   name: PresetListName;
   label: string;
   local: number;
@@ -34,7 +34,7 @@ export interface Conflict {
   remoteUpdatedAt: number;
 }
 
-export interface SyncStatus {
+interface SyncStatus {
   signedIn: boolean;
   syncing: boolean;
   error: string;

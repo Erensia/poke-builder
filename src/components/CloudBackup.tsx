@@ -1,7 +1,7 @@
-import { resolveConflicts, syncNow } from "../lib/cloudSync";
+import { useSyncExternalStore } from "react";
+import { getSyncStatus, resolveConflicts, subscribeSyncStatus, syncNow } from "../lib/cloudSync";
 import { firebaseConfigured } from "../lib/firebase";
 import { useAuthUser } from "../hooks/useAuthUser";
-import { useCloudSyncStatus } from "../hooks/useCloudSyncStatus";
 
 const formatTime = (t: number) => new Date(t).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
 
@@ -12,7 +12,7 @@ const formatTime = (t: number) => new Date(t).toLocaleString("ko-KR", { month: "
  */
 export function CloudBackup() {
   const { user, error: authError, signIn, signOut } = useAuthUser();
-  const sync = useCloudSyncStatus();
+  const sync = useSyncExternalStore(subscribeSyncStatus, getSyncStatus); // 동기화는 앱 전체에서 돌고, 이 구역은 상태를 보여 주기만 한다
   if (!firebaseConfigured) return null;
   const error = authError || sync.error;
 

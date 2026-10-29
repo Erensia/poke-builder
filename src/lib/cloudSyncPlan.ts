@@ -29,7 +29,7 @@ export function hashOf(s: string): string {
   return `${(h >>> 0).toString(16)}:${s.length}`;
 }
 
-export type Plan = "none" | "adopt" | "push" | "pull" | "conflict";
+type Plan = "none" | "adopt" | "push" | "pull" | "conflict";
 
 const isEmpty = (json: string) => json === "[]";
 
