@@ -339,7 +339,9 @@ function useBattleLogSession(mode: BattleMode) {
       b: { slots: bBuilds, movesList: bBuilds.map(movesOf) },
     });
     const pool = buildableIndices(side);
-    return chooseAiSelection(full, side, { size: BATTLE_SELECT_SIZE }).map((p) => pool[p]);
+    // 5.5 F1 — 샘플의 fixedPicks는 풀 위치로 바꿔 넘긴다(chooseAiSelection의 fixed는 파티 인덱스). 남은 자리는 AI가 고른다
+    const fixed = fixedPickIndices(side).map((i) => pool.indexOf(i));
+    return chooseAiSelection(full, side, { size: BATTLE_SELECT_SIZE, fixed }).map((p) => pool[p]);
   }
 
   /** 샘플의 fixedPicks(5.4 E3)를 현재 빌드 슬롯 인덱스로 바꾼다 — 그 사이 빠지거나 기술이 없어진 마리는 건너뛴다 */
