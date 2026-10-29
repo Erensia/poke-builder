@@ -2634,6 +2634,62 @@ try {
     const trimmed = ms.parseMySamples(exported([mutate((c) => (c.name = "  이름  "))]));
     check("V3 이름은 앞뒤 공백을 지움", trimmed?.samples[0]?.name === "이름");
     check("V3 같은 샘플은 같은 열쇠, 이름·포켓몬·기술이 다르면 다른 열쇠", ms.sampleKey(sampleOk) === ms.sampleKey(structuredClone(sampleOk)) && ms.sampleKey(sampleOk) !== ms.sampleKey(brokenMove) && ms.sampleKey(sampleOk) !== ms.sampleKey({ ...sampleOk, name: "다른 이름" }));
+    // 5.5 G1: 저장한 파티·포켓몬 빌드 백업/복원 — 파일은 믿을 수 없는 입력, 가져오기는 덮어쓰기라 읽기만 검증한다
+    const bk = await server.ssrLoadModule("/src/lib/backup.ts");
+    const gSlots = structuredClone(sampleOk.slots);
+    const sig = (s) => (s === null ? "-" : [s.pokemonId, s.ability, s.item, s.nature, s.moves.join(","), JSON.stringify(s.points)].join("|"));
+    const gFull = { id: "p1", name: "내 파티", savedAt: 1700000000000, slots: gSlots };
+    const gHole = { id: "p2", name: "구멍 파티", savedAt: 1700000001000, slots: [gSlots[0], null, gSlots[2], null, null, null] };
+    const gSlot = { id: "s1", name: "내 빌드", savedAt: 1700000002000, slot: gSlots[1] };
+    const gRound = bk.parseBackup(bk.exportBackup([gFull, gHole], [gSlot]));
+    check(
+      "G1 내보낸 백업을 다시 읽으면 하나도 안 빠지고 이름·저장 시각·슬롯(빈 슬롯 포함)이 같음",
+      gRound?.skipped === 0 &&
+        gRound.partyPresets.length === 2 &&
+        gRound.slotPresets.length === 1 &&
+        [gFull, gHole].every((p, i) => gRound.partyPresets[i].name === p.name && gRound.partyPresets[i].savedAt === p.savedAt && gRound.partyPresets[i].slots.map(sig).join("/") === p.slots.map(sig).join("/")) &&
+        gRound.slotPresets[0].name === gSlot.name && gRound.slotPresets[0].savedAt === gSlot.savedAt && sig(gRound.slotPresets[0].slot) === sig(gSlot.slot),
+      `파티=${gRound?.partyPresets.length} 빌드=${gRound?.slotPresets.length} 건너뜀=${gRound?.skipped}`,
+    );
+    const gIds = [...gRound.partyPresets, ...gRound.slotPresets].map((x) => x.id);
+    check("G1 받은 id를 믿지 않고 새로 매김(겹치지 않음)", new Set(gIds).size === 3 && gIds.every((id) => !["p1", "p2", "s1"].includes(id)));
+    const gEmpty = bk.parseBackup(bk.exportBackup([], []));
+    check("G1 비어 있는 백업도 백업 파일(null 아님, 0개·0개)", gEmpty?.partyPresets.length === 0 && gEmpty.slotPresets.length === 0 && gEmpty.skipped === 0);
+    check(
+      "G1 백업 파일이 아니면 null (내 샘플 내보내기 파일 포함)",
+      bk.parseBackup("not json") === null && bk.parseBackup("{}") === null && bk.parseBackup("[]") === null && bk.parseBackup("null") === null &&
+        bk.parseBackup(JSON.stringify({ kind: "other", partyPresets: [], slotPresets: [] })) === null &&
+        bk.parseBackup(JSON.stringify({ kind: "champions-backup", partyPresets: [] })) === null &&
+        bk.parseBackup(JSON.stringify({ kind: "champions-backup", partyPresets: "x", slotPresets: [] })) === null &&
+        bk.parseBackup(ms.exportMySamples([sampleOk])) === null,
+    );
+    const gBadParty = (fn) => {
+      const c = structuredClone(gFull);
+      fn(c);
+      return c;
+    };
+    const gBadParties = [
+      gBadParty((c) => (c.slots[0].pokemonId = "없는포켓몬")),
+      gBadParty((c) => (c.slots[0].moves[1] = "없는기술")),
+      gBadParty((c) => (c.slots[0].points.atk = 33)),
+      gBadParty((c) => c.slots.pop()),
+      gBadParty((c) => (c.slots[1] = 5)),
+      gBadParty((c) => (c.name = "  ")),
+      gBadParty((c) => (c.slots = "x")),
+      null,
+      7,
+    ];
+    const gBadSlots = [{ ...gSlot, slot: null }, { ...gSlot, slot: { ...gSlots[1], pokemonId: "없는포켓몬" } }, { ...gSlot, name: " " }, null, 7];
+    const gMixed = bk.parseBackup(bk.exportBackup([gFull, ...gBadParties], [gSlot, ...gBadSlots]));
+    check(
+      "G1 틀린 파티·빌드는 건너뛰고 멀쩡한 것만 읽음",
+      gMixed?.partyPresets.length === 1 && gMixed.slotPresets.length === 1 && gMixed.skipped === gBadParties.length + gBadSlots.length,
+      `파티=${gMixed?.partyPresets.length} 빌드=${gMixed?.slotPresets.length} 건너뜀=${gMixed?.skipped}/${gBadParties.length + gBadSlots.length}`,
+    );
+    const gAllBad = bk.parseBackup(bk.exportBackup(gBadParties, gBadSlots));
+    check("G1 읽을 수 있는 항목이 하나도 없으면 0개·0개로 돌려줌(화면이 덮어쓰기를 막는 근거)", gAllBad?.partyPresets.length === 0 && gAllBad.slotPresets.length === 0 && gAllBad.skipped === gBadParties.length + gBadSlots.length);
+    const gOddMeta = bk.parseBackup(bk.exportBackup([{ ...gFull, name: "  공백  ", savedAt: "어제" }], []));
+    check("G1 이름은 앞뒤 공백을 지우고 저장 시각이 숫자가 아니면 지금 시각으로", gOddMeta?.partyPresets[0]?.name === "공백" && Number.isFinite(gOddMeta.partyPresets[0].savedAt) && gOddMeta.partyPresets[0].savedAt !== "어제");
   }
   // 상대가 나에게 데미지를 줄 수단이 없을 때(+Infinity 점수)
   {
