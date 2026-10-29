@@ -1,0 +1,60 @@
+.backup-hint {
+  margin: 0 0 0.8rem;
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.backup-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.7rem;
+}
+
+.backup-actions button {
+  font: inherit;
+  font-size: var(--fs-sm);
+  padding: 0.3rem 0.85rem;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.backup-actions button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.backup-actions button.is-danger {
+  border-color: var(--danger);
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.backup-confirm {
+  margin-bottom: 0.7rem;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid var(--danger);
+  border-radius: var(--r-md);
+  background: var(--danger-bg);
+}
+
+.backup-confirm p {
+  margin: 0 0 0.6rem;
+  font-size: var(--fs-sm);
+  color: var(--danger);
+  line-height: 1.5;
+}
+
+.backup-confirm .backup-actions {
+  margin-bottom: 0;
+}
+
+.backup-notice {
+  margin: 0;
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+}

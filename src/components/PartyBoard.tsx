@@ -7,6 +7,7 @@ import { ItemPickerModal } from "./ItemPickerModal";
 import { NaturePickerModal } from "./NaturePickerModal";
 import { PointsEditorModal } from "./PointsEditorModal";
 import { CosmeticFormPickerModal } from "./CosmeticFormPickerModal";
+import { BackupModal } from "./BackupModal";
 import { PartyPresetsModal } from "./PartyPresetsModal";
 import { SlotPresetsModal } from "./SlotPresetsModal";
 import { TypeCoverageSummary } from "./TypeCoverageSummary";
@@ -55,6 +56,7 @@ function usePartyBoardState() {
   const slotPresets = useSlotPresets();
   const [picker, setPicker] = useState<PickerState>(null);
   const [showPartyPresets, setShowPartyPresets] = useState(false);
+  const [showBackup, setShowBackup] = useState(false);
   // 드래그앤드랍으로 슬롯 순서 변경(§3) — 잡고 있는 슬롯과 지금 위에 올라와 있는 슬롯을 각각 추적.
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
@@ -97,12 +99,12 @@ function usePartyBoardState() {
     }
   }
 
-  return { filledCount, setShowPartyPresets, handleReset, slots, setPicker, clearSlot, swapMoves, slotPresets, handleSaveSlotAsSample, toggleGender, cycleSizeForm, cycleFormVariant, cycleCosmeticForm, draggedIndex, dragOverIndex, handleSlotDragStart, handleSlotDragOver, handleSlotDrop, handleSlotDragEnd, reorderSlots, picker, setPokemon, setMove, setAbility, setItem, setNature, setPoint, stepPoint, setCosmeticForm, loadSlot, showPartyPresets, partyPresets, loadSlots };
+  return { filledCount, setShowPartyPresets, setShowBackup, showBackup, handleReset, slots, setPicker, clearSlot, swapMoves, slotPresets, handleSaveSlotAsSample, toggleGender, cycleSizeForm, cycleFormVariant, cycleCosmeticForm, draggedIndex, dragOverIndex, handleSlotDragStart, handleSlotDragOver, handleSlotDrop, handleSlotDragEnd, reorderSlots, picker, setPokemon, setMove, setAbility, setItem, setNature, setPoint, stepPoint, setCosmeticForm, loadSlot, showPartyPresets, partyPresets, loadSlots };
 }
 
 export function PartyBoard() {
   const session = usePartyBoardState();
-  const { filledCount, setShowPartyPresets, handleReset, slots, setPicker, clearSlot, swapMoves, slotPresets, handleSaveSlotAsSample, toggleGender, cycleSizeForm, cycleFormVariant, cycleCosmeticForm, draggedIndex, dragOverIndex, handleSlotDragStart, handleSlotDragOver, handleSlotDrop, handleSlotDragEnd, reorderSlots } = session;
+  const { filledCount, setShowPartyPresets, setShowBackup, handleReset, slots, setPicker, clearSlot, swapMoves, slotPresets, handleSaveSlotAsSample, toggleGender, cycleSizeForm, cycleFormVariant, cycleCosmeticForm, draggedIndex, dragOverIndex, handleSlotDragStart, handleSlotDragOver, handleSlotDrop, handleSlotDragEnd, reorderSlots } = session;
 
 
   return (
@@ -123,6 +125,9 @@ export function PartyBoard() {
             onClick={() => setShowPartyPresets(true)}
           >
             저장된 파티
+          </button>
+          <button type="button" className="party-board-reset tap-target" onClick={() => setShowBackup(true)}>
+            백업
           </button>
           <button
             type="button"
@@ -176,7 +181,7 @@ export function PartyBoard() {
 }
 /** PartyBoard의 일부 화면 — 세션(usePartyBoardState 결과)에서 필요한 값만 꺼내 쓴다 */
 function PartyBoardPickers({ s }: { s: ReturnType<typeof usePartyBoardState> }) {
-  const { picker, setPicker, slots, setPokemon, setMove, setAbility, setItem, setNature, setPoint, stepPoint, setCosmeticForm, slotPresets, loadSlot, showPartyPresets, partyPresets, setShowPartyPresets, loadSlots } = s;
+  const { picker, setPicker, slots, setPokemon, setMove, setAbility, setItem, setNature, setPoint, stepPoint, setCosmeticForm, slotPresets, loadSlot, showPartyPresets, partyPresets, setShowPartyPresets, showBackup, setShowBackup, loadSlots } = s;
   return (
     <>
       {picker?.kind === "pokemon" && (
@@ -349,6 +354,18 @@ function PartyBoardPickers({ s }: { s: ReturnType<typeof usePartyBoardState> }) 
           onLoad={(preset) => loadSlots(preset.slots)}
           onRename={partyPresets.renamePreset}
           onDelete={partyPresets.deletePreset}
+        />
+      )}
+
+      {showBackup && (
+        <BackupModal
+          partyPresets={partyPresets.presets}
+          slotPresets={slotPresets.presets}
+          onClose={() => setShowBackup(false)}
+          onImport={(parties, slotsList) => {
+            partyPresets.replaceAll(parties);
+            slotPresets.replaceAll(slotsList);
+          }}
         />
       )}
     </>

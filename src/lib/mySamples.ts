@@ -28,7 +28,7 @@ const knownOrNull = (v: unknown, exists: (id: string) => unknown) => v === null 
 const optionalString = (v: unknown) => v === undefined || typeof v === "string";
 
 /** 가져온 슬롯 하나 검증 — 믿을 수 없는 입력이라 모양·id·포인트 범위를 다 본다. 틀리면 null(그 샘플은 건너뜀) */
-function cleanSlot(raw: unknown): PartySlot | null {
+export function cleanSlot(raw: unknown): PartySlot | null {
   const s = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
   const p = (s.points && typeof s.points === "object" ? s.points : {}) as Record<string, unknown>;
   const stats = Object.keys(EMPTY_ABILITY_POINTS) as (keyof typeof EMPTY_ABILITY_POINTS)[];
