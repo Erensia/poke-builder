@@ -146,7 +146,7 @@ export interface SyncBase {
   /** 그때 클라우드 문서의 updatedAt */
   remoteUpdatedAt: number;
 }
-export interface CloudSyncMeta {
+interface CloudSyncMeta {
   lastUid: string | null;
   lastSyncedAt: number | null;
   bases: Record<string, Partial<Record<PresetListName, SyncBase>>>;

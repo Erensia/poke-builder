@@ -31,27 +31,33 @@ function cleanParty(raw: unknown): PartySlots | null {
 const idOf = (r: Record<string, unknown>, keepIds: boolean) => (keepIds && typeof r.id === "string" && r.id ? r.id : crypto.randomUUID());
 const asRecord = (raw: unknown) => (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
 
-export function cleanPartyPresets(raw: unknown[], keepIds = false): { items: Party[]; skipped: number } {
-  const items: Party[] = [];
+/** 이름·id·savedAt 검증은 두 목록이 같고 본문(slots / slot)만 다르다. 키 순서(id·name·본문·savedAt)는 클라우드에 저장된 문자열과 같아야 하니 바꾸지 않는다 */
+function cleanNamed<T extends { id: string; name: string; savedAt: number }>(
+  raw: unknown[],
+  keepIds: boolean,
+  body: (r: Record<string, unknown>) => Omit<T, "id" | "name" | "savedAt"> | null,
+): { items: T[]; skipped: number } {
+  const items: T[] = [];
   for (const x of raw) {
     const r = asRecord(x);
-    const slots = cleanParty(r.slots);
+    const b = body(r);
     const name = cleanName(r.name);
-    if (slots && name) items.push({ id: idOf(r, keepIds), name, slots, savedAt: cleanSavedAt(r.savedAt, keepIds ? 0 : Date.now()) });
+    if (b && name) items.push({ id: idOf(r, keepIds), name, ...b, savedAt: cleanSavedAt(r.savedAt, keepIds ? 0 : Date.now()) } as T);
   }
   return { items, skipped: raw.length - items.length };
 }
 
-export function cleanSlotPresets(raw: unknown[], keepIds = false): { items: SlotPreset[]; skipped: number } {
-  const items: SlotPreset[] = [];
-  for (const x of raw) {
-    const r = asRecord(x);
+export const cleanPartyPresets = (raw: unknown[], keepIds = false) =>
+  cleanNamed<Party>(raw, keepIds, (r) => {
+    const slots = cleanParty(r.slots);
+    return slots && { slots };
+  });
+
+export const cleanSlotPresets = (raw: unknown[], keepIds = false) =>
+  cleanNamed<SlotPreset>(raw, keepIds, (r) => {
     const slot = cleanSlot(r.slot);
-    const name = cleanName(r.name);
-    if (slot && name) items.push({ id: idOf(r, keepIds), name, slot, savedAt: cleanSavedAt(r.savedAt, keepIds ? 0 : Date.now()) });
-  }
-  return { items, skipped: raw.length - items.length };
-}
+    return slot && { slot };
+  });
 
 /** 백업 파일 내용을 읽어 쓸 수 있는 항목만 돌려준다. 파일 형식이 아니면 null. 건너뛴 항목 수는 skipped */
 export function parseBackup(text: string): { partyPresets: Party[]; slotPresets: SlotPreset[]; skipped: number } | null {
