@@ -97,6 +97,7 @@ export function loadPartyPresets(): Party[] {
 
 export function savePartyPresets(presets: Party[]): void {
   partyPresetsStore.save(presets);
+  presetSavedListeners.forEach((fn) => fn("partyPresets"));
 }
 
 function isSlotPresetList(value: unknown): value is SlotPreset[] {
@@ -112,6 +113,63 @@ export function loadSlotPresets(): SlotPreset[] {
 
 export function saveSlotPresets(presets: SlotPreset[]): void {
   slotPresetsStore.save(presets);
+  presetSavedListeners.forEach((fn) => fn("slotPresets"));
+}
+
+/**
+ * 저장한 파티·포켓몬 빌드 목록의 변화를 클라우드 동기화(6.0 K3)에 알린다. 저장 직후 호출되는 쪽(Saved)과, 동기화가 클라우드 내용을
+ * 로컬에 써 넣어 화면의 목록 상태를 다시 읽게 하는 쪽(Replaced) 둘이다. 목록 상태는 훅마다 따로 들고 있어서 `localStorage`만
+ * 바꾸면 켜져 있는 화면이 옛 상태로 되돌려 쓴다.
+ */
+export type PresetListName = "partyPresets" | "slotPresets";
+const presetSavedListeners = new Set<(name: PresetListName) => void>();
+const presetReplacedListeners = new Set<(name: PresetListName) => void>();
+
+export function onPresetListSaved(fn: (name: PresetListName) => void): () => void {
+  presetSavedListeners.add(fn);
+  return () => void presetSavedListeners.delete(fn);
+}
+
+export function onPresetListReplaced(fn: (name: PresetListName) => void): () => void {
+  presetReplacedListeners.add(fn);
+  return () => void presetReplacedListeners.delete(fn);
+}
+
+export function notifyPresetListReplaced(name: PresetListName): void {
+  presetReplacedListeners.forEach((fn) => fn(name));
+}
+
+/** 클라우드 동기화 기록(6.0 K3) — 마지막 로그인 uid와 목록별 "마지막으로 맞춘 시점"(uid마다). 로그인 여부를 앱 시작 때 싸게 알아내는 데도 쓴다 */
+export interface SyncBase {
+  /** 마지막으로 맞춘 목록의 해시 */
+  hash: string;
+  /** 그때 클라우드 문서의 updatedAt */
+  remoteUpdatedAt: number;
+}
+interface CloudSyncMeta {
+  lastUid: string | null;
+  lastSyncedAt: number | null;
+  bases: Record<string, Partial<Record<PresetListName, SyncBase>>>;
+}
+const CLOUD_SYNC_STORAGE_KEY = "champions-party-sim.cloud-sync.v1";
+
+function isCloudSyncMeta(value: unknown): value is CloudSyncMeta {
+  const v = value as CloudSyncMeta | null;
+  return !!v && typeof v === "object" && typeof v.bases === "object" && v.bases !== null;
+}
+
+const cloudSyncStore = createLocalStorageStore<CloudSyncMeta>(CLOUD_SYNC_STORAGE_KEY, isCloudSyncMeta, {
+  lastUid: null,
+  lastSyncedAt: null,
+  bases: {},
+});
+
+export function loadCloudSyncMeta(): CloudSyncMeta {
+  return cloudSyncStore.load();
+}
+
+export function saveCloudSyncMeta(meta: CloudSyncMeta): void {
+  cloudSyncStore.save(meta);
 }
 
 function isBattleVideoList(value: unknown): value is BattleVideo[] {

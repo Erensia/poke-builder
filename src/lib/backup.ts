@@ -14,7 +14,7 @@ export function exportBackup(partyPresets: Party[], slotPresets: SlotPreset[]): 
 }
 
 const cleanName = (v: unknown) => (typeof v === "string" ? v.trim() : "");
-const cleanSavedAt = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : Date.now());
+const cleanSavedAt = (v: unknown, fallback: number) => (typeof v === "number" && Number.isFinite(v) ? v : fallback);
 
 /** 파티는 빈 슬롯(null)을 허용한다. 6칸이 아니거나 채워진 칸 하나라도 틀리면 null(그 파티는 건너뜀) */
 function cleanParty(raw: unknown): PartySlots | null {
@@ -24,9 +24,42 @@ function cleanParty(raw: unknown): PartySlots | null {
 }
 
 /**
- * 백업 파일 내용을 읽어 쓸 수 있는 항목만 돌려준다. 파일 형식이 아니면 null. 이름이 비었거나 슬롯이 틀린 항목은
- * 건너뛰고 skipped로 센다.
+ * 목록 하나를 검증해 쓸 수 있는 항목만 돌려준다(이름이 비었거나 슬롯이 틀린 항목은 건너뛰고 skipped로 센다).
+ * 백업 가져오기는 id를 새로 매기지만(keepIds=false), 클라우드 동기화(6.0 K3)는 같은 항목을 알아봐야 하므로 받은 id와
+ * savedAt을 그대로 둔다(keepIds=true — savedAt이 틀리면 매번 달라지지 않게 현재 시각 대신 0).
  */
+const idOf = (r: Record<string, unknown>, keepIds: boolean) => (keepIds && typeof r.id === "string" && r.id ? r.id : crypto.randomUUID());
+const asRecord = (raw: unknown) => (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+
+/** 이름·id·savedAt 검증은 두 목록이 같고 본문(slots / slot)만 다르다. 키 순서(id·name·본문·savedAt)는 클라우드에 저장된 문자열과 같아야 하니 바꾸지 않는다 */
+function cleanNamed<T extends { id: string; name: string; savedAt: number }>(
+  raw: unknown[],
+  keepIds: boolean,
+  body: (r: Record<string, unknown>) => Omit<T, "id" | "name" | "savedAt"> | null,
+): { items: T[]; skipped: number } {
+  const items: T[] = [];
+  for (const x of raw) {
+    const r = asRecord(x);
+    const b = body(r);
+    const name = cleanName(r.name);
+    if (b && name) items.push({ id: idOf(r, keepIds), name, ...b, savedAt: cleanSavedAt(r.savedAt, keepIds ? 0 : Date.now()) } as T);
+  }
+  return { items, skipped: raw.length - items.length };
+}
+
+export const cleanPartyPresets = (raw: unknown[], keepIds = false) =>
+  cleanNamed<Party>(raw, keepIds, (r) => {
+    const slots = cleanParty(r.slots);
+    return slots && { slots };
+  });
+
+export const cleanSlotPresets = (raw: unknown[], keepIds = false) =>
+  cleanNamed<SlotPreset>(raw, keepIds, (r) => {
+    const slot = cleanSlot(r.slot);
+    return slot && { slot };
+  });
+
+/** 백업 파일 내용을 읽어 쓸 수 있는 항목만 돌려준다. 파일 형식이 아니면 null. 건너뛴 항목 수는 skipped */
 export function parseBackup(text: string): { partyPresets: Party[]; slotPresets: SlotPreset[]; skipped: number } | null {
   let data: unknown;
   try {
@@ -36,20 +69,7 @@ export function parseBackup(text: string): { partyPresets: Party[]; slotPresets:
   }
   const file = data as { kind?: unknown; partyPresets?: unknown; slotPresets?: unknown };
   if (!file || file.kind !== EXPORT_KIND || !Array.isArray(file.partyPresets) || !Array.isArray(file.slotPresets)) return null;
-  const partyPresets: Party[] = [];
-  const slotPresets: SlotPreset[] = [];
-  for (const raw of file.partyPresets) {
-    const r = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
-    const slots = cleanParty(r.slots);
-    const name = cleanName(r.name);
-    if (slots && name) partyPresets.push({ id: crypto.randomUUID(), name, slots, savedAt: cleanSavedAt(r.savedAt) });
-  }
-  for (const raw of file.slotPresets) {
-    const r = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
-    const slot = cleanSlot(r.slot);
-    const name = cleanName(r.name);
-    if (slot && name) slotPresets.push({ id: crypto.randomUUID(), name, slot, savedAt: cleanSavedAt(r.savedAt) });
-  }
-  const total = file.partyPresets.length + file.slotPresets.length;
-  return { partyPresets, slotPresets, skipped: total - partyPresets.length - slotPresets.length };
+  const parties = cleanPartyPresets(file.partyPresets);
+  const slots = cleanSlotPresets(file.slotPresets);
+  return { partyPresets: parties.items, slotPresets: slots.items, skipped: parties.skipped + slots.skipped };
 }

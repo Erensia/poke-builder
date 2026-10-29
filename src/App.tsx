@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Sidebar, type AppView } from "./components/Sidebar";
 import { PartyBoard } from "./components/PartyBoard";
 import { MatchupPage } from "./components/MatchupPage";
@@ -8,7 +8,8 @@ import { MoveDexPage } from "./components/MoveDexPage";
 import { ItemDexPage } from "./components/ItemDexPage";
 import { Footer } from "./components/Footer";
 import { Modal } from "./components/Modal";
-import { loadBattleRank } from "./lib/storage";
+import { startCloudSync } from "./lib/cloudSync";
+import { loadBattleRank, loadCloudSyncMeta } from "./lib/storage";
 import "./App.css";
 
 function App() {
@@ -18,6 +19,11 @@ function App() {
   const [pendingMoveId, setPendingMoveId] = useState<string | null>(null);
   // 이동하려던 화면 — 랭크 대전 중이면 확인 모달이 이 값을 들고 있다가 "나가기"에서 이동한다
   const [leaveTo, setLeaveTo] = useState<AppView | null>(null);
+
+  // 지난번에 클라우드 로그인을 했던 브라우저만 시작할 때 동기화를 이어간다(그 외에는 Firebase를 내려받지 않는다)
+  useEffect(() => {
+    if (loadCloudSyncMeta().lastUid) startCloudSync();
+  }, []);
 
   // 랭크 판이 시작됐는데 결과가 없는 채(`pendingId` 표시가 저장돼 있다) 화면을 벗어나면 이탈(= 패배)로 정산되므로, 이동 전에 한 번 묻는다.
   // 하단 탭(5.1 A6)은 엄지로 쉽게 눌려 오조작이 잦을 수 있다. 표시는 localStorage가 원본이라 App이 상태를 따로 받지 않고 이동 시점에 읽는다.

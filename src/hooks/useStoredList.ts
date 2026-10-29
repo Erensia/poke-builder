@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { onPresetListReplaced, type PresetListName } from "../lib/storage";
 
 /**
  * id로 식별되는 목록을 로컬 스토리지와 동기화하는 공용 훅(ver.1.5 §11).
@@ -40,8 +41,12 @@ export function useStoredList<T extends { id: string }>(
 export function useNamedList<T extends { id: string; name: string; savedAt: number }>(
   loadFn: () => T[],
   saveFn: (items: T[]) => void,
+  listName: PresetListName,
 ) {
   const { items: presets, prependItem, removeItem: deletePreset, setItems } = useStoredList<T>(loadFn, saveFn);
+
+  // 클라우드 동기화(6.0 K3)가 클라우드 내용을 `localStorage`에 써 넣었으면 화면의 목록 상태도 다시 읽는다(안 읽으면 옛 상태를 되돌려 쓴다)
+  useEffect(() => onPresetListReplaced((name) => name === listName && setItems(loadFn())), [listName, loadFn, setItems]);
 
   function savePreset(name: string, rest: Omit<T, "id" | "name" | "savedAt">) {
     const trimmed = name.trim();

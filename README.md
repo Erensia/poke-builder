@@ -4,7 +4,7 @@ Pokémon Champions 파티 빌더 — 6슬롯 파티를 구성하고 타입 상�
 
 - **배포**: [poke-builder-two.vercel.app](https://poke-builder-two.vercel.app/) — Vercel에 `main` 브랜치 자동 배포
 - **저장소**: [github.com/Erensia/poke-builder](https://github.com/Erensia/poke-builder)
-- **현재 버전**: ver.5.0 — 상세는 [문서](#문서) 참고
+- **현재 버전**: ver.6.0 — 상세는 [문서](#문서) 참고
 
 ## 주요 기능
 
@@ -26,6 +26,7 @@ Pokémon Champions 파티 빌더 — 6슬롯 파티를 구성하고 타입 상�
 - **레귤레이션 M-C 대응**: 신규 포켓몬 26종 + 전용 기술·특성·지닌 도구를 엔진에 배선
 - **글래스모피즘 UI + 모바일 대응(≤760px)**: 반투명·블러 기반 디자인 토큰, 하단 탭 네비(5.1 — 파티·계산·배틀타워·랭크배틀·도감 시트, 랭크 대전 중 이동 확인, 홈 화면 추가용 PWA 설정과 홈 인디케이터·노치 안전 영역), 모달 하단 시트화, 검색창 하단 고정, 입력 확대 방지
 - **로컬 자동 저장**: 편성 내용이 `localStorage`에 자동 저장, 새로고침해도 복원
+- **백업·클라우드 동기화**(파티 빌더 헤더 "백업" 버튼): 저장한 파티·저장한 포켓몬 빌드를 JSON 파일로 내보내기·가져오기(ver.5.5). **선택 기능**으로 Google 로그인하면 두 목록이 Firebase(Firestore)에 자동 백업되고 같은 계정의 다른 기기와 맞춰진다(ver.6.0) — 한쪽만 바뀌면 자동 반영, 양쪽이 다 바뀌었으면 화면에서 고른다. 로그인하지 않으면 지금처럼 `localStorage`만 쓴다
 - **한국어 조사 자동 처리**: 로그·모달 문구의 조사를 받침 기반으로 자동 판별
 
 ## 데이터 규모
@@ -40,7 +41,7 @@ Pokémon Champions 파티 빌더 — 6슬롯 파티를 구성하고 타입 상�
 
 ## 기술 스택
 
-React 19 + TypeScript + Vite 8. 별도 백엔드 없이 로컬 JSON 데이터 + `localStorage`로 동작하는 순수 정적 SPA. `@/`는 `src/`를 가리키는 경로 별칭(ver.1.5). 린트는 oxlint, 테스트 러너는 없음 — 엔진·AI 검증은 Vite `ssrLoadModule`로 `src/`를 직접 불러오는 스크립트(`npm run test:ai`·`npm run sim:ai`, ver.1.7)로 한다.
+React 19 + TypeScript + Vite 8. 서버 코드 없는 정적 SPA — 기본은 로컬 JSON 데이터 + `localStorage`로 동작하고, 선택 기능인 클라우드 백업만 Firebase(Authentication·Firestore, 로그인 화면을 열 때 지연 로딩)를 쓴다(ver.6.0). `@/`는 `src/`를 가리키는 경로 별칭(ver.1.5). 린트는 oxlint, 테스트 러너는 없음 — 엔진·AI 검증은 Vite `ssrLoadModule`로 `src/`를 직접 불러오는 스크립트(`npm run test:ai`·`npm run sim:ai`, ver.1.7)로 한다.
 
 ## 시작하기
 
@@ -55,10 +56,14 @@ npm run test:inference  # 상대 실능치 역산·내구 조정: 엔진 데미�
 npm run test:damage     # 정수 데미지 공식 난수표 + 엔진 대조
 npm run test:rank       # 랭크배틀 규칙표(게이지·마스터볼 진입·레이팅·챔피언) 검증
 npm run test:rank-ai    # 랭크 AI 정책(단계·구간·연패 보정·상대 선택·랜덤 구축·학습 사용률) 검증
+npm run test:sync       # 클라우드 동기화 판정·정규화(6.0, 네트워크 없음)
+npm run test:rules      # Firestore 보안 규칙(에뮬레이터, Java 21 이상 필요)
 npm run validate:data   # 데이터 정합성 검사(build가 먼저 실행)
 npm run sim:ai -- regress   # 엔진 동작 불변 확인용 로그 해시(모드: regress|ai|greedy|style|h2h|selectvs|partyvs|diag|logidx)
 npm run bench -- compare <이전 체크아웃>   # AI 벤치(그리디·STATUS·h2h, 코어 수만큼 병렬 — toggle 모드는 켬/끔 비교)
 ```
+
+클라우드 로그인(선택)을 쓰려면 프로젝트 루트에 `.env.local`을 만들어 `VITE_FIREBASE_API_KEY`·`VITE_FIREBASE_AUTH_DOMAIN`·`VITE_FIREBASE_PROJECT_ID`·`VITE_FIREBASE_APP_ID` 4개를 넣는다(값은 Firebase 콘솔 → 프로젝트 설정 → 내 앱. 웹 설정은 비밀이 아니고 `*.local`은 git에 올라가지 않는다). 없으면 "클라우드 백업" 구역만 보이지 않고 나머지는 그대로 동작한다. 규칙 검증(`npm run test:rules`)은 Java 21 이상이 필요하다.
 
 ## 배포 & 개발 워크플로
 
@@ -88,13 +93,14 @@ scripts/         데이터·에셋 유지보수 도구 — scripts/README.md 참
 
 ## 문서
 
-기획·백로그 문서는 `docs/00_기획문서/`에 있다 — 초기 개발 phase 문서는 `01_phase/`, 버전 백로그·세션 인계 문서는 `02_backlog/`(1.x는 `01_ver.1.0/`, 2.x는 `02_ver.2.0/`, 3.x는 `03_ver.3.0/`, 4.x는 `04_ver.4.0/`, 5.x는 `05_ver.5.0/`), 배틀 AI 설계 문서는 `03_battleAI_DEV/`, 샘플 파티 초안은 `04_sample_DEV/`. (`docs/` 바로 아래의 `03_샘플파티추가/`에는 샘플 파티 추가용 원본 txt를 모아 둔다.) 버전별 배포 내역은 메이저 버전마다 요약 문서 하나로 묶었다:
+기획·백로그 문서는 `docs/00_기획문서/`에 있다 — 초기 개발 phase 문서는 `01_phase/`, 버전 백로그·세션 인계 문서는 `02_backlog/`(1.x는 `01_ver.1.0/`, 2.x는 `02_ver.2.0/`, 3.x는 `03_ver.3.0/`, 4.x는 `04_ver.4.0/`, 5.x는 `05_ver.5.0/`, 6.x는 `06_ver.6.0/`), 배틀 AI 설계 문서는 `03_battleAI_DEV/`, 샘플 파티 초안은 `04_sample_DEV/`. (`docs/` 바로 아래의 `03_샘플파티추가/`에는 샘플 파티 추가용 원본 txt를 모아 둔다.) 버전별 배포 내역은 메이저 버전마다 요약 문서 하나로 묶었다:
 
 - [1.x 요약](docs/00_기획문서/02_backlog/01_ver.1.0/README.md) — ver.1.0.x ~ 1.9: 빌더·배틀타워·엔진 감사·글래스모피즘 UI·배틀타워 AI
 - [2.x 요약](docs/00_기획문서/02_backlog/02_ver.2.0/README.md) — ver.2.0 ~ 2.5: AI 판단 강화(탐색 오라클)·상대 실능치 역산·정수 데미지 공식
 - [3.x 요약](docs/00_기획문서/02_backlog/03_ver.3.0/README.md) — ver.3.0 ~ 3.7: 도감 상성표·프런티어·역산 2차·스피드 조정·내구 조정
 - [4.x 요약](docs/00_기획문서/02_backlog/04_ver.4.0/README.md) — ver.4.0: 모바일 관측 행·방어 역산 턴 종료 효과·내구 조정 한계 해소, 코드 전체 리팩토링, 디자인 검수(접근성·토글 통일·글자/반경/색 토큰·터치 영역), AI 상대 HP 비율 표기 · ver.4.1: 터치 영역 마커 클래스·reduce 모션 전역 규칙·편성 화면 설명 ⓘ
 - [5.x 요약](docs/00_기획문서/02_backlog/05_ver.5.0/README.md) — ver.5.0: 배틀타워 랭크배틀 시스템(몬스터볼~챔피언·레이팅제)·랭크별 AI 5단계와 마스터볼 구간 학습 활용·샘플 파티 강도 등급·최상 파티 풀, 코드 정리
+- [6.x 요약](docs/00_기획문서/02_backlog/06_ver.6.0/README.md) — ver.6.0: 계정 + 클라우드 백업(Firebase 로컬 우선 동기화)으로 저장한 파티·포켓몬 빌드 유실 방지, 새 코드 정리 · ver.6.1(초안): 집 PC 확인 결과에 따른 수정 또는 큰 컴포넌트 분할
 - [데이터변경이력.md](docs/데이터변경이력.md) — 기존 항목 수치·학습셋 변경(밸런스 패치) 기록. ver.1.4부터 시작
 
 ver.1.0 이전(Phase 1~8) 회고·기획 문서도 같은 폴더에 있다 — 초기 아키텍처 결정과 단계별 개발 이력이 궁금하면 참고.
