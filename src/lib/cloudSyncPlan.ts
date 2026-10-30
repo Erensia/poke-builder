@@ -2,6 +2,7 @@ import { cleanPartyPresets, cleanSlotPresets } from "./backup";
 import { applyRankResult, rankOf, type RankResult, type RankState } from "./battleRank";
 import { EMPTY_RANK_SAVE, HISTORY_LIMIT, isRankSave, type RankHistoryEntry, type RankSave } from "./battleRankSave";
 import { EMPTY_FRONTIER, isFrontierSave } from "./battleSeries";
+import { emptyOpponentMemory, isOpponentMemory } from "./battle/ai/opponentMemory";
 import { cleanMySamples } from "./mySamples";
 import type { PresetListName, SyncBase } from "./storage";
 
@@ -16,7 +17,8 @@ export interface RemoteDoc {
 }
 
 /** 목록이 아니라 통째로 하나인 문서(랭크·프런티어 기록, 6.2 C5) — 항목 단위로 합칠 수 없어 충돌하면 사용자가 고른다 */
-export const isObjectDoc = (name: PresetListName) => name === "battleRank" || name === "battleFrontier";
+export const isObjectDoc = (name: PresetListName) =>
+  name === "battleRank" || name === "battleFrontier" || name === "aiMemory" || name === "aiMemoryRank";
 
 /**
  * 진행 중인 판(pendingId)은 동기화하지 않는다 — 받은 쪽 앱이 열릴 때 이탈 패배로 정산해 버린다. 그래서 정규형에서는 항상 null이다.
@@ -29,6 +31,12 @@ function objectDoc(name: PresetListName, raw: unknown): string {
     const { state: s, history, seasons, seasonStartedAt, lastParty } = raw;
     const state = { gauge: s.gauge, wins: s.wins, losses: s.losses, streak: s.streak, lossStreak: s.lossStreak, rating: s.rating, maxRating: s.maxRating, champion: s.champion };
     return JSON.stringify({ state, history, seasons, pendingId: null, seasonStartedAt, lastParty });
+  }
+  // AI 학습 기억(6.3 A1): 학습 스위치 + 감쇠 집계. 종 기록은 100종 상한이라 문서가 1MB를 넘지 않는다. 안쪽은 앱이 만든 값을 믿는다(위 ponytail와 같다)
+  if (name === "aiMemory" || name === "aiMemoryRank") {
+    const v = raw as { version?: unknown; learningEnabled?: unknown; memory?: unknown };
+    if (!v || v.version !== 1 || typeof v.learningEnabled !== "boolean" || !isOpponentMemory(v.memory)) throw new Error("bad-remote");
+    return JSON.stringify({ version: 1, learningEnabled: v.learningEnabled, memory: v.memory });
   }
   if (!isFrontierSave(raw) || !Object.values(raw.samples).every((r) => Number.isInteger(r?.wins) && Number.isInteger(r?.losses))) throw new Error("bad-remote");
   return JSON.stringify({ streak: raw.streak, best: raw.best, samples: raw.samples, pendingId: null, queue: raw.queue ?? [], includeMine: raw.includeMine ?? false });
@@ -98,7 +106,16 @@ export function mergeRank(baseJson: string | null, localJson: string, remoteJson
 
 /** "아직 아무것도 안 한" 문서의 정규형 — 목록은 "[]", 랭크·프런티어는 기록이 없는 저장본 */
 export const emptyJson = (name: PresetListName) =>
-  isObjectDoc(name) ? canonical(name, name === "battleRank" ? EMPTY_RANK_SAVE : EMPTY_FRONTIER).json : "[]";
+  isObjectDoc(name)
+    ? canonical(
+        name,
+        name === "battleRank"
+          ? EMPTY_RANK_SAVE
+          : name === "battleFrontier"
+            ? EMPTY_FRONTIER
+            : { version: 1, learningEnabled: true, memory: emptyOpponentMemory() },
+      ).json
+    : "[]";
 
 /**
  * 32비트 FNV-1a + 길이. 마지막으로 맞춘 목록과 지금 목록이 같은지 보는 용도라 암호학적 해시는 필요 없다.

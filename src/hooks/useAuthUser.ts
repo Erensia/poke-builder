@@ -43,7 +43,10 @@ export function useAuthUser() {
     setError("");
     try {
       const { auth, mod } = await loadAuth();
-      await mod.signInWithPopup(auth, new mod.GoogleAuthProvider());
+      // select_account: 구글 계정이 하나만 로그인돼 있어도 계정 선택 화면을 띄운다(여러 계정으로 두 기기 테스트·계정 전환)
+      const provider = new mod.GoogleAuthProvider();
+      provider.setCustomParameters({ prompt: "select_account" });
+      await mod.signInWithPopup(auth, provider);
     } catch (e) {
       const code = (e as { code?: string }).code;
       if (!code || !IGNORED.includes(code)) setError(messageOf(code));

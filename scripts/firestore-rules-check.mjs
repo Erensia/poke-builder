@@ -22,6 +22,8 @@ const cases = [
     await assertSucceeds(setDoc(doc(me, path("alice", "mySamples")), good));
     await assertSucceeds(setDoc(doc(me, path("alice", "battleRank")), good));
     await assertSucceeds(setDoc(doc(me, path("alice", "battleFrontier")), good));
+    await assertSucceeds(setDoc(doc(me, path("alice", "aiMemory")), good));
+    await assertSucceeds(setDoc(doc(me, path("alice", "aiMemoryRank")), good));
     await assertSucceeds(getDoc(doc(me, path("alice", "slotPresets"))));
     await assertSucceeds(deleteDoc(doc(me, path("alice", "slotPresets"))));
   }],
@@ -37,6 +39,7 @@ const cases = [
     await assertFails(setDoc(doc(other, path("alice", "slotPresets")), good));
     await assertFails(setDoc(doc(other, path("alice", "mySamples")), good));
     await assertFails(setDoc(doc(other, path("alice", "battleRank")), good));
+    await assertFails(setDoc(doc(other, path("alice", "aiMemoryRank")), good));
     await assertFails(deleteDoc(doc(other, path("alice", "partyPresets"))));
   }],
   ["비로그인: 읽기·쓰기 거부", async () => {

@@ -5,6 +5,7 @@ import type { FrontierSave } from "./battleSeries";
 import { canonical, emptyJson, hashOf, isObjectDoc, itemHashes, mergeLists, mergeRank, planSync, type RemoteDoc } from "./cloudSyncPlan";
 import { firebaseConfigured, loadAuth, loadFirestore } from "./firebase";
 import {
+  loadAiMemory,
   loadBattleFrontier,
   loadBattleRank,
   loadCloudSyncMeta,
@@ -13,6 +14,7 @@ import {
   loadSlotPresets,
   notifyPresetListReplaced,
   onPresetListSaved,
+  saveAiMemory,
   saveBattleFrontier,
   saveBattleRank,
   saveCloudSyncMeta,
@@ -21,6 +23,7 @@ import {
   saveSlotPresets,
   type PresetListName,
   type SyncBase,
+  type StoredAiMemory,
 } from "./storage";
 
 /**
@@ -29,12 +32,17 @@ import {
  * 판정(올리기/받기/충돌)은 `cloudSyncPlan.ts`의 순수 함수가 한다. 양쪽이 다 바뀌면 목록(파티·포켓몬·내 샘플)은 항목 단위로 합치고(6.2 C4),
  * 통째로 하나인 문서(랭크·프런티어 기록, 6.2 C5)는 합칠 수 없어 사용자가 고른다.
  */
-const NAMES: PresetListName[] = ["partyPresets", "slotPresets", "mySamples", "battleRank", "battleFrontier"];
+const NAMES: PresetListName[] = ["partyPresets", "slotPresets", "mySamples", "battleRank", "battleFrontier", "aiMemory", "aiMemoryRank"];
 /** 문서 1MB 한도 안의 여유. firestore.rules의 문자 수 상한(900000자)과 맞춘다 */
 const MAX_BYTES = 900_000;
 const SAVE_DELAY_MS = 3000;
 
-const LABELS: Partial<Record<PresetListName, string>> = { battleRank: "랭크배틀 기록", battleFrontier: "프런티어 기록" };
+const LABELS: Partial<Record<PresetListName, string>> = {
+  battleRank: "랭크배틀 기록",
+  battleFrontier: "프런티어 기록",
+  aiMemory: "AI 학습 기록(배틀타워)",
+  aiMemoryRank: "AI 학습 기록(랭크배틀)",
+};
 
 interface Conflict {
   name: PresetListName;
@@ -78,20 +86,27 @@ const read = (name: PresetListName): unknown =>
         ? loadMySamples()
         : name === "battleRank"
           ? loadBattleRank()
-          : loadBattleFrontier();
+          : name === "battleFrontier"
+            ? loadBattleFrontier()
+            : loadAiMemory(name === "aiMemoryRank" ? "rank" : "free");
 /** 받은 값을 로컬에 쓴다. 랭크·프런티어는 진행 중인 판 표시(pendingId)를 지금 로컬 것으로 유지한다 — 판 도중에 받아도 그 판의 결과가 반영되게 */
 const write = (name: PresetListName, value: unknown) => {
   if (name === "partyPresets") savePartyPresets(value as Party[]);
   else if (name === "slotPresets") saveSlotPresets(value as SlotPreset[]);
   else if (name === "mySamples") saveMySamples(value as SamplePartyPreset[]);
   else if (name === "battleRank") saveBattleRank({ ...(value as RankSave), pendingId: loadBattleRank().pendingId });
-  else saveBattleFrontier({ ...(value as FrontierSave), pendingId: loadBattleFrontier().pendingId });
+  else if (name === "battleFrontier") saveBattleFrontier({ ...(value as FrontierSave), pendingId: loadBattleFrontier().pendingId });
+  else saveAiMemory(name === "aiMemoryRank" ? "rank" : "free", value as StoredAiMemory);
 };
 /** 충돌 창에 보여 줄 한 줄 요약 */
 function summarize(name: PresetListName, json: string): string {
   if (name === "battleRank") {
     const { state } = JSON.parse(json) as RankSave;
     return `${rankLabel(rankOf(state))}${state.rating === null ? "" : ` ${state.rating}`} · ${state.wins}승 ${state.losses}패`;
+  }
+  if (name === "aiMemory" || name === "aiMemoryRank") {
+    const v = JSON.parse(json) as StoredAiMemory;
+    return `누적 ${v.memory.battles}판 · 포켓몬 ${Object.keys(v.memory.species).length}종`;
   }
   const v = JSON.parse(json) as FrontierSave;
   return `최고 ${v.best}연승 · 현재 ${v.streak}연승`;
