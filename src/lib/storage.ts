@@ -145,6 +145,8 @@ export interface SyncBase {
   hash: string;
   /** 그때 클라우드 문서의 updatedAt */
   remoteUpdatedAt: number;
+  /** 그때 목록의 항목 id → 항목 해시(6.2 C4). 항목 단위 병합에서 바뀐 항목·지워진 항목을 알아내는 기준. 6.1까지의 기록에는 없다 */
+  items?: Record<string, string>;
 }
 interface CloudSyncMeta {
   lastUid: string | null;

@@ -20,7 +20,7 @@ const check = (name, ok, detail = "") => {
   }
 };
 try {
-  const { canonical, hashOf, planSync } = await server.ssrLoadModule("/src/lib/cloudSyncPlan.ts");
+  const { canonical, hashOf, itemHashes, mergeLists, planSync } = await server.ssrLoadModule("/src/lib/cloudSyncPlan.ts");
   const { cleanPartyPresets, cleanSlotPresets, parseBackup, exportBackup } = await server.ssrLoadModule("/src/lib/backup.ts");
 
   // 실제 샘플 데이터로 목록을 만든다(검증을 통과하는 진짜 슬롯)
@@ -75,6 +75,83 @@ try {
   check("양쪽 다 바뀌었으면 충돌", plan(R, remote(canonical("partyPresets", [party("c", "또 다른")]).json, 200), base(L, 100)) === "conflict");
   check("클라우드에서 전부 지워졌고 로컬은 그대로면 받는다(빈 목록)", plan(L, remote(E, 200), base(L, 100)) === "pull");
   check("로컬을 비웠고 클라우드는 그대로면 올린다(빈 목록)", plan(E, remote(L, 100), base(L, 100)) === "push");
+
+  // ── 항목 단위 병합(6.2 C4) ──
+  const P = "partyPresets";
+  const list = (...items) => canonical(P, items).json;
+  const ids = (json) => JSON.parse(json).map((i) => i.id).join("");
+  const A = party("a", "A", 10);
+  const B = party("b", "B", 20);
+  const C = party("c", "C", 30);
+  const baseOf = (...items) => itemHashes(list(...items));
+  const merge = (local, remote, base) => mergeLists(P, local, remote, base);
+
+  check("itemHashes는 id마다 해시를 준다", Object.keys(baseOf(A, B)).join() === "a,b" && baseOf(A)["a"] !== baseOf({ ...A, name: "다른 이름" })["a"]);
+  check("각자 추가한 항목은 둘 다 남고 최근 저장 순이다", ids(merge(list(A, B), list(A, C), baseOf(A))) === "cba");
+  check("내가 지운 항목은 상대가 안 바꿨으면 같이 지운다", ids(merge(list(), list(A, C), baseOf(A))) === "c");
+  check("상대가 지운 항목은 내가 안 바꿨으면 같이 지운다", ids(merge(list(A, B), list(), baseOf(A))) === "b");
+  check("수정 vs 삭제는 수정을 남긴다(내가 수정)", merge(list({ ...A, name: "바꿈" }, B), list(C), baseOf(A)).includes('"name":"바꿈"'));
+  check("수정 vs 삭제는 수정을 남긴다(상대가 수정)", merge(list(B), list({ ...A, name: "상대가 바꿈" }, C), baseOf(A)).includes("상대가 바꿈"));
+  const renamed = (x, name) => ({ ...x, name });
+  check("한쪽만 이름을 바꿨으면 그쪽(상대)", merge(list(A, B), list(renamed(A, "R"), C), baseOf(A)).includes('"name":"R"'));
+  check("한쪽만 이름을 바꿨으면 그쪽(나)", merge(list(renamed(A, "L"), B), list(A, C), baseOf(A)).includes('"name":"L"'));
+  check("둘 다 이름을 바꿨으면 이 기기 것", (() => { const m = merge(list(renamed(A, "L"), B), list(renamed(A, "R"), C), baseOf(A)); return m.includes('"name":"L"') && !m.includes('"name":"R"'); })());
+  check("기준이 없으면 합집합이고 같은 id는 이 기기 것", (() => { const m = merge(list(renamed(A, "L"), B), list(renamed(A, "R"), C), null); return ids(m) === "cba" && m.includes('"name":"L"'); })());
+  check("병합 결과는 정규형이고 멱등이다", (() => { const m = merge(list(A, B), list(A, C), baseOf(A)); return canonical(P, JSON.parse(m)).json === m && merge(m, m, baseOf(A)) === m; })());
+  check("항목이 없던 기준(빈 목록)에서는 양쪽 추가분이 모두 남는다", ids(merge(list(A), list(B), {})) === "ba");
+
+  // ── 두 기기 시나리오 — 판정(planSync)과 병합을 cloudSync.syncList와 같은 순서로 엮어 본다 ──
+  const mkBase = (json, at) => ({ hash: hashOf(json), remoteUpdatedAt: at, items: itemHashes(json) });
+  const net = { cloud: null, at: 0 };
+  const dev = () => ({ local: list(), base: null });
+  const add = (d, item) => (d.local = list(item, ...JSON.parse(d.local)));
+  const del = (d, id) => (d.local = list(...JSON.parse(d.local).filter((i) => i.id !== id)));
+  const rename = (d, id, name) => (d.local = list(...JSON.parse(d.local).map((i) => (i.id === id ? { ...i, name } : i))));
+  function sync(d) {
+    const p = planSync(d.local, net.cloud, d.base);
+    const publish = (json) => {
+      net.cloud = { json, updatedAt: ++net.at };
+      return net.at;
+    };
+    if (p === "adopt") d.base = mkBase(d.local, net.cloud?.updatedAt ?? 0);
+    else if (p === "pull") {
+      d.local = net.cloud.json;
+      d.base = mkBase(d.local, net.cloud.updatedAt);
+    }
+    else if (p === "push") d.base = mkBase(d.local, publish(d.local));
+    else if (p === "conflict") {
+      const m = merge(d.local, net.cloud.json, d.base?.items ?? null);
+      const at = m === net.cloud.json ? net.cloud.updatedAt : publish(m);
+      d.local = m;
+      d.base = mkBase(m, at);
+    }
+    return p;
+  }
+  const x = dev();
+  const y = dev();
+  add(x, A);
+  sync(x);
+  check("[2기기] 빈 기기는 받아 온다", sync(y) === "pull" && ids(y.local) === "a");
+  add(x, B);
+  add(y, C);
+  sync(x);
+  check("[2기기] 따로 추가하면 합쳐진다(뒤에 동기화한 쪽)", sync(y) === "conflict" && ids(y.local) === "cba");
+  check("[2기기] 먼저 올린 쪽은 받아서 같아진다", sync(x) === "pull" && x.local === y.local);
+  check("[2기기] 같아진 뒤에는 더 올리거나 받을 것이 없다", ["none", "adopt"].includes(sync(x)) && ["none", "adopt"].includes(sync(y)) && x.local === y.local);
+  del(x, "a");
+  sync(x);
+  check("[2기기] 지운 항목이 상대에게 전해진다", sync(y) === "pull" && ids(y.local) === "cb");
+  add(y, party("d", "D", 40));
+  del(x, "b");
+  sync(x);
+  check("[2기기] 한쪽은 삭제·한쪽은 추가해도 둘 다 반영된다", sync(y) === "conflict" && ids(y.local) === "dc" && sync(x) === "pull" && x.local === y.local);
+  rename(x, "c", "수정됨");
+  del(y, "c");
+  sync(x);
+  check("[2기기] 수정 vs 삭제는 수정이 살아남는다", sync(y) === "conflict" && ids(y.local) === "dc" && y.local.includes("수정됨"));
+  const z = dev();
+  add(z, party("z", "Z", 5));
+  check("[2기기] 처음 연결인데 양쪽에 있으면 합집합(예전에는 충돌 선택)", sync(z) === "conflict" && ids(z.local) === "dcz");
 
   console.log(failed ? `\n${failed}/${total}개 실패` : `\n${total}개 통과`);
 } finally {
