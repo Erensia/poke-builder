@@ -1,0 +1,22 @@
+.sync-dot {
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  margin-left: 0.3rem;
+  flex: none;
+  border-radius: 50%;
+  background: var(--danger-strong);
+}
+
+/* 사이드바·하단 탭에서는 아이콘 오른쪽 위 모서리에 얹는다 */
+.sidebar-nav-icon .sync-dot,
+.bottom-nav-icon .sync-dot {
+  position: absolute;
+  top: -0.2rem;
+  right: -0.25rem;
+  margin: 0;
+}
+
+.bottom-nav-icon {
+  position: relative;
+}
