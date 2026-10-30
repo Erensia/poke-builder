@@ -121,7 +121,7 @@ export function saveSlotPresets(presets: SlotPreset[]): void {
  * 로컬에 써 넣어 화면의 목록 상태를 다시 읽게 하는 쪽(Replaced) 둘이다. 목록 상태는 훅마다 따로 들고 있어서 `localStorage`만
  * 바꾸면 켜져 있는 화면이 옛 상태로 되돌려 쓴다.
  */
-export type PresetListName = "partyPresets" | "slotPresets" | "mySamples";
+export type PresetListName = "partyPresets" | "slotPresets" | "mySamples" | "battleRank" | "battleFrontier";
 const presetSavedListeners = new Set<(name: PresetListName) => void>();
 const presetReplacedListeners = new Set<(name: PresetListName) => void>();
 
@@ -231,6 +231,7 @@ export function loadBattleFrontier(): FrontierSave {
 
 export function saveBattleFrontier(save: FrontierSave): void {
   battleFrontierStore.save(save);
+  presetSavedListeners.forEach((fn) => fn("battleFrontier"));
 }
 
 const battleRankStore = createLocalStorageStore<RankSave>(BATTLE_RANK_STORAGE_KEY, isRankSave, EMPTY_RANK_SAVE);
@@ -242,6 +243,7 @@ export function loadBattleRank(): RankSave {
 
 export function saveBattleRank(save: RankSave): void {
   battleRankStore.save(save);
+  presetSavedListeners.forEach((fn) => fn("battleRank"));
 }
 
 const mySamplesStore = createLocalStorageStore<SamplePartyPreset[]>(MY_SAMPLES_STORAGE_KEY, (v): v is SamplePartyPreset[] => Array.isArray(v), []);

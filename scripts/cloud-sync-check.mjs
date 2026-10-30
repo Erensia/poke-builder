@@ -167,6 +167,37 @@ try {
   check("내 샘플 병합: savedAt이 없어도 양쪽 추가분이 남고 이 기기 순서 뒤에 붙는다", JSON.parse(mm).map((i) => i.id).join() === "my-a,my-b,my-c", mm.slice(0, 60));
   check("내 샘플 병합: 상대가 지운 샘플은 안 바꿨으면 같이 지운다", JSON.parse(mergeLists("mySamples", mlist(MA, MB), mlist(), itemHashes(mlist(MA)))).map((i) => i.id).join() === "my-b");
 
+  // ── 랭크배틀·프런티어 기록(6.2 C5) ──
+  const { EMPTY_RANK_SAVE } = await server.ssrLoadModule("/src/lib/battleRankSave.ts");
+  const { EMPTY_FRONTIER } = await server.ssrLoadModule("/src/lib/battleSeries.ts");
+  const { emptyJson, isObjectDoc } = await server.ssrLoadModule("/src/lib/cloudSyncPlan.ts");
+  const played = { ...EMPTY_RANK_SAVE, state: { ...EMPTY_RANK_SAVE.state, gauge: 0, wins: 12, losses: 5, streak: 3, rating: 2143.5, maxRating: 2200.25, champion: false }, seasonStartedAt: 1730000000000, pendingId: "sample-x" };
+  const rj = canonical("battleRank", played).json;
+  const rp = JSON.parse(rj);
+  check("랭크 정규형: 진행 중인 판(pendingId)은 항상 null", rp.pendingId === null && JSON.parse(canonical("battleRank", { ...played, pendingId: null }).json).pendingId === null);
+  check("랭크 정규형: 마스터볼 레이팅·최대 레이팅·승패가 그대로 전달된다", rp.state.rating === 2143.5 && rp.state.maxRating === 2200.25 && rp.state.wins === 12 && rp.state.losses === 5 && rp.state.streak === 3);
+  check("랭크 정규형의 키 순서 고정", rj.startsWith('{"state":{"gauge":0,"wins":12,"losses":5,"streak":3,"lossStreak":0,"rating":2143.5,"maxRating":2200.25,"champion":false},"history":[],"seasons":[],"pendingId":null,"seasonStartedAt":1730000000000,"lastParty":null}'), rj.slice(0, 120));
+  check("랭크 정규형은 멱등이다", canonical("battleRank", JSON.parse(rj)).json === rj);
+  check("진행 중 판만 다른 두 저장본은 같은 정규형이다(판이 시작돼도 올릴 것이 없다)", canonical("battleRank", { ...played, pendingId: null }).json === rj);
+  check("틀린 랭크 문서는 던진다(bad-remote)", (() => { try { canonical("battleRank", { state: 1 }); return false; } catch (e) { return e.message === "bad-remote"; } })());
+  const fj = canonical("battleFrontier", { streak: 4, best: 9, samples: { s1: { wins: 2, losses: 1 } }, pendingId: "s2", queue: ["s3"], includeMine: true }).json;
+  check("프런티어 정규형: pendingId는 null, 나머지는 그대로, 키 순서 고정", fj === '{"streak":4,"best":9,"samples":{"s1":{"wins":2,"losses":1}},"pendingId":null,"queue":["s3"],"includeMine":true}', fj);
+  check("프런티어 정규형: 옛 저장본(queue·includeMine 없음)은 기본값으로 채운다", canonical("battleFrontier", { streak: 0, best: 0, samples: {}, pendingId: null }).json === canonical("battleFrontier", EMPTY_FRONTIER).json);
+  check("틀린 프런티어 문서(전적이 정수가 아님)는 던진다", (() => { try { canonical("battleFrontier", { ...EMPTY_FRONTIER, samples: { a: { wins: "x", losses: 1 } } }); return false; } catch (e) { return e.message === "bad-remote"; } })());
+  check("랭크·프런티어는 통째 문서이고 목록은 아니다", isObjectDoc("battleRank") && isObjectDoc("battleFrontier") && !isObjectDoc("partyPresets"));
+  const RE = emptyJson("battleRank");
+  const FE = emptyJson("battleFrontier");
+  check("빈 문서의 정규형은 기록 없는 저장본이다", RE === canonical("battleRank", EMPTY_RANK_SAVE).json && FE === canonical("battleFrontier", EMPTY_FRONTIER).json && emptyJson("partyPresets") === "[]");
+  const rplan = (local, rem, b) => planSync(local, rem, b, RE);
+  check("랭크: 한 판도 안 했고 클라우드에도 없으면 아무것도 안 한다", rplan(RE, null, null) === "none");
+  check("랭크: 클라우드에 없고 기록이 있으면 올린다", rplan(rj, null, null) === "push");
+  check("랭크: 이 기기가 비었으면 클라우드 기록을 받는다", rplan(RE, remote(rj), null) === "pull");
+  check("랭크: 클라우드가 비었으면 이 기기 기록을 올린다", rplan(rj, remote(RE), null) === "push");
+  const rj2 = canonical("battleRank", { ...played, state: { ...played.state, wins: 20 } }).json;
+  check("랭크: 처음 연결인데 양쪽에 기록이 다르면 충돌(합치지 않는다)", rplan(rj, remote(rj2), null) === "conflict");
+  check("랭크: 한쪽만 바뀌었으면 자동으로 옮긴다", rplan(rj2, remote(rj, 100), base(rj, 100)) === "push" && rplan(rj, remote(rj2, 200), base(rj, 100)) === "pull");
+  check("랭크: 양쪽이 다 바뀌었으면 충돌", rplan(rj2, remote(canonical("battleRank", { ...played, state: { ...played.state, wins: 30 } }).json, 200), base(rj, 100)) === "conflict");
+
   console.log(failed ? `\n${failed}/${total}개 실패` : `\n${total}개 통과`);
 } finally {
   await server.close();

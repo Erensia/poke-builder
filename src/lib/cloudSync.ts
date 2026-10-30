@@ -1,13 +1,20 @@
 import type { Party, SamplePartyPreset, SlotPreset } from "../types/party";
-import { canonical, hashOf, itemHashes, mergeLists, planSync, type RemoteDoc } from "./cloudSyncPlan";
+import { rankLabel, rankOf } from "./battleRank";
+import type { RankSave } from "./battleRankSave";
+import type { FrontierSave } from "./battleSeries";
+import { canonical, emptyJson, hashOf, isObjectDoc, itemHashes, mergeLists, planSync, type RemoteDoc } from "./cloudSyncPlan";
 import { firebaseConfigured, loadAuth, loadFirestore } from "./firebase";
 import {
+  loadBattleFrontier,
+  loadBattleRank,
   loadCloudSyncMeta,
   loadMySamples,
   loadPartyPresets,
   loadSlotPresets,
   notifyPresetListReplaced,
   onPresetListSaved,
+  saveBattleFrontier,
+  saveBattleRank,
   saveCloudSyncMeta,
   saveMySamples,
   savePartyPresets,
@@ -19,18 +26,22 @@ import {
 /**
  * 저장한 파티·포켓몬 빌드의 클라우드 백업(6.0 K3). `localStorage`가 원본이고 클라우드는 복사본이다 — 로그인하지 않았거나 오프라인이어도
  * 앱은 지금처럼 동작한다. 목록마다 문서 하나(`users/{uid}/lists/{name}`: `{ json, updatedAt, version }`, firestore.rules와 같다).
- * 판정(올리기/받기/충돌)은 `cloudSyncPlan.ts`의 순수 함수가 한다.
+ * 판정(올리기/받기/충돌)은 `cloudSyncPlan.ts`의 순수 함수가 한다. 양쪽이 다 바뀌면 목록(파티·포켓몬·내 샘플)은 항목 단위로 합치고(6.2 C4),
+ * 통째로 하나인 문서(랭크·프런티어 기록, 6.2 C5)는 합칠 수 없어 사용자가 고른다.
  */
-const NAMES: PresetListName[] = ["partyPresets", "slotPresets", "mySamples"];
+const NAMES: PresetListName[] = ["partyPresets", "slotPresets", "mySamples", "battleRank", "battleFrontier"];
 /** 문서 1MB 한도 안의 여유. firestore.rules의 문자 수 상한(900000자)과 맞춘다 */
 const MAX_BYTES = 900_000;
 const SAVE_DELAY_MS = 3000;
 
+const LABELS: Partial<Record<PresetListName, string>> = { battleRank: "랭크배틀 기록", battleFrontier: "프런티어 기록" };
+
 interface Conflict {
   name: PresetListName;
   label: string;
-  local: number;
-  remote: number;
+  /** 양쪽 내용을 한 줄로 요약한 것(예: "마스터볼 2143.5 · 12승 5패") */
+  local: string;
+  remote: string;
   remoteJson: string;
   remoteUpdatedAt: number;
 }
@@ -58,13 +69,33 @@ function setStatus(patch: Partial<SyncStatus>) {
   subscribers.forEach((fn) => fn());
 }
 
-const read = (name: PresetListName): unknown[] =>
-  name === "partyPresets" ? loadPartyPresets() : name === "slotPresets" ? loadSlotPresets() : loadMySamples();
-const write = (name: PresetListName, items: unknown[]) => {
-  if (name === "partyPresets") savePartyPresets(items as Party[]);
-  else if (name === "slotPresets") saveSlotPresets(items as SlotPreset[]);
-  else saveMySamples(items as SamplePartyPreset[]);
+const read = (name: PresetListName): unknown =>
+  name === "partyPresets"
+    ? loadPartyPresets()
+    : name === "slotPresets"
+      ? loadSlotPresets()
+      : name === "mySamples"
+        ? loadMySamples()
+        : name === "battleRank"
+          ? loadBattleRank()
+          : loadBattleFrontier();
+/** 받은 값을 로컬에 쓴다. 랭크·프런티어는 진행 중인 판 표시(pendingId)를 지금 로컬 것으로 유지한다 — 판 도중에 받아도 그 판의 결과가 반영되게 */
+const write = (name: PresetListName, value: unknown) => {
+  if (name === "partyPresets") savePartyPresets(value as Party[]);
+  else if (name === "slotPresets") saveSlotPresets(value as SlotPreset[]);
+  else if (name === "mySamples") saveMySamples(value as SamplePartyPreset[]);
+  else if (name === "battleRank") saveBattleRank({ ...(value as RankSave), pendingId: loadBattleRank().pendingId });
+  else saveBattleFrontier({ ...(value as FrontierSave), pendingId: loadBattleFrontier().pendingId });
 };
+/** 충돌 창에 보여 줄 한 줄 요약 */
+function summarize(name: PresetListName, json: string): string {
+  if (name === "battleRank") {
+    const { state } = JSON.parse(json) as RankSave;
+    return `${rankLabel(rankOf(state))}${state.rating === null ? "" : ` ${state.rating}`} · ${state.wins}승 ${state.losses}패`;
+  }
+  const v = JSON.parse(json) as FrontierSave;
+  return `최고 ${v.best}연승 · 현재 ${v.streak}연승`;
+}
 const localJson = (name: PresetListName) => canonical(name, read(name)).json;
 
 let uid: string | null = null;
@@ -82,7 +113,7 @@ function baseOf(name: PresetListName): SyncBase | null {
 function setBase(name: PresetListName, json: string, remoteUpdatedAt: number) {
   const meta = loadCloudSyncMeta();
   const key = uid ?? "";
-  const base: SyncBase = { hash: hashOf(json), remoteUpdatedAt, items: itemHashes(json) };
+  const base: SyncBase = { hash: hashOf(json), remoteUpdatedAt, ...(!isObjectDoc(name) && { items: itemHashes(json) }) };
   saveCloudSyncMeta({ ...meta, bases: { ...meta.bases, [key]: { ...meta.bases[key], [name]: base } } });
 }
 function stamp() {
@@ -123,7 +154,7 @@ async function readRemote(name: PresetListName): Promise<RemoteDoc | null> {
   } catch {
     throw new Error("bad-remote");
   }
-  if (!Array.isArray(parsed)) throw new Error("bad-remote");
+  if (!isObjectDoc(name) && !Array.isArray(parsed)) throw new Error("bad-remote");
   return { json: canonical(name, parsed).json, updatedAt: d.updatedAt };
 }
 
@@ -149,7 +180,7 @@ async function push(name: PresetListName, json: string, expected: number | null 
 function applyRemote(name: PresetListName, remote: RemoteDoc) {
   applying = true;
   try {
-    write(name, JSON.parse(remote.json) as unknown[]);
+    write(name, JSON.parse(remote.json));
   } finally {
     applying = false;
   }
@@ -160,7 +191,7 @@ function applyRemote(name: PresetListName, remote: RemoteDoc) {
 async function syncList(name: PresetListName): Promise<Conflict | null> {
   const local = localJson(name);
   const remote = await readRemote(name);
-  switch (planSync(local, remote, baseOf(name))) {
+  switch (planSync(local, remote, baseOf(name), emptyJson(name))) {
     case "adopt":
       setBase(name, local, remote?.updatedAt ?? 0);
       return null;
@@ -176,8 +207,10 @@ async function syncList(name: PresetListName): Promise<Conflict | null> {
       return null;
     }
     case "conflict": {
-      // 양쪽이 다 바뀐 목록은 항목 단위로 합쳐 양쪽에 반영한다(6.2 C4). 사용자에게 고르게 하지 않는다
       const r = remote as RemoteDoc;
+      // 랭크·프런티어 기록은 합칠 수 없다 — 사용자가 고를 때까지 멈춘다
+      if (isObjectDoc(name)) return { name, label: LABELS[name] ?? name, local: summarize(name, local), remote: summarize(name, r.json), remoteJson: r.json, remoteUpdatedAt: r.updatedAt };
+      // 양쪽이 다 바뀐 목록은 항목 단위로 합쳐 양쪽에 반영한다(6.2 C4). 사용자에게 고르게 하지 않는다
       const merged = mergeLists(name, local, r.json, baseOf(name)?.items ?? null);
       assertSize(merged);
       const at = merged === r.json ? r.updatedAt : await push(name, merged, r.updatedAt);
@@ -194,7 +227,7 @@ async function syncList(name: PresetListName): Promise<Conflict | null> {
     case "none": {
       // 6.1까지의 기록에는 항목 해시가 없다 — 양쪽이 같은 상태일 때 채워 둬야 다음 병합에서 지운 항목을 알아본다
       const b = baseOf(name);
-      if (b && !b.items) setBase(name, local, b.remoteUpdatedAt);
+      if (b && !b.items && !isObjectDoc(name)) setBase(name, local, b.remoteUpdatedAt);
       return null;
     }
     default:
