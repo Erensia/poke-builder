@@ -29,7 +29,39 @@ export function hashOf(s: string): string {
   return `${(h >>> 0).toString(16)}:${s.length}`;
 }
 
-type Plan = "none" | "adopt" | "push" | "pull" | "conflict";
+/** 목록의 항목 id → 항목 해시. 본문을 들고 있지 않아도 다음 동기화 때 "바뀐 항목"·"지워진 항목"을 알 수 있다(6.2 C4) */
+export function itemHashes(json: string): Record<string, string> {
+  return Object.fromEntries((JSON.parse(json) as { id: string }[]).map((i) => [i.id, hashOf(JSON.stringify(i))]));
+}
+
+/**
+ * 양쪽이 다 바뀐 목록을 항목 단위로 합친다(6.2 C4). base는 마지막으로 맞춘 목록의 `itemHashes`(없으면 null — 처음 연결 등).
+ * 기준에 있던 항목이 한쪽에 없으면 그쪽이 지운 것이고, 기준과 해시가 다르면 그쪽이 바꾼 것이다.
+ *  - 한쪽에만 있다: 새로 추가했거나 상대가 지운 것. 추가했거나 바꿨으면 남기고, 안 바꾼 채 상대가 지웠으면 같이 지운다(수정 vs 삭제는 수정을 남긴다).
+ *  - 양쪽에 있고 다르다: 한쪽만 바꿨으면 그쪽, 둘 다 바꿨으면(이름 변경끼리) 이 기기 것.
+ * 기준이 없으면 지운 것을 알 수 없어 합집합이 된다(잃는 것은 없다). 결과는 최근 저장 순으로 정렬한 정규형 JSON.
+ */
+export function mergeLists(name: PresetListName, localJson: string, remoteJson: string, base: Record<string, string> | null): string {
+  type Item = { id: string; savedAt: number };
+  const L = JSON.parse(localJson) as Item[];
+  const R = JSON.parse(remoteJson) as Item[];
+  const hash = (i: Item) => hashOf(JSON.stringify(i));
+  /** 이 쪽 항목이 기준에서 새로 생겼거나 바뀌었는지 */
+  const edited = (i: Item) => base?.[i.id] === undefined || hash(i) !== base[i.id];
+  const remoteById = new Map(R.map((r) => [r.id, r]));
+  const localIds = new Set(L.map((l) => l.id));
+  const items = [
+    ...L.flatMap((l) => {
+      const r = remoteById.get(l.id);
+      if (!r) return edited(l) ? [l] : [];
+      return [hash(l) !== hash(r) && !edited(l) ? r : l];
+    }),
+    ...R.filter((r) => !localIds.has(r.id) && edited(r)),
+  ].sort((a, b) => b.savedAt - a.savedAt);
+  return canonical(name, items).json;
+}
+
+type Plan ="none" | "adopt" | "push" | "pull" | "conflict";
 
 const isEmpty = (json: string) => json === "[]";
 

@@ -1,5 +1,5 @@
 import type { Party, SlotPreset } from "../types/party";
-import { canonical, hashOf, planSync, type RemoteDoc } from "./cloudSyncPlan";
+import { canonical, hashOf, itemHashes, mergeLists, planSync, type RemoteDoc } from "./cloudSyncPlan";
 import { firebaseConfigured, loadAuth, loadFirestore } from "./firebase";
 import {
   loadCloudSyncMeta,
@@ -23,7 +23,6 @@ const NAMES: PresetListName[] = ["partyPresets", "slotPresets"];
 /** 문서 1MB 한도 안의 여유. firestore.rules의 문자 수 상한(900000자)과 맞춘다 */
 const MAX_BYTES = 900_000;
 const SAVE_DELAY_MS = 3000;
-const LABELS: Record<PresetListName, string> = { partyPresets: "저장된 파티", slotPresets: "저장한 포켓몬" };
 
 interface Conflict {
   name: PresetListName;
@@ -63,7 +62,6 @@ const write = (name: PresetListName, items: unknown[]) => {
   else saveSlotPresets(items as SlotPreset[]);
 };
 const localJson = (name: PresetListName) => canonical(name, read(name)).json;
-const countOf = (json: string) => (JSON.parse(json) as unknown[]).length;
 
 let uid: string | null = null;
 let timer: ReturnType<typeof setTimeout> | undefined;
@@ -76,9 +74,11 @@ let started = false;
 function baseOf(name: PresetListName): SyncBase | null {
   return loadCloudSyncMeta().bases[uid ?? ""]?.[name] ?? null;
 }
-function setBase(name: PresetListName, base: SyncBase) {
+/** 방금 맞춘 목록(json)과 그때의 클라우드 updatedAt을 "마지막으로 맞춘 시점"으로 기록한다 */
+function setBase(name: PresetListName, json: string, remoteUpdatedAt: number) {
   const meta = loadCloudSyncMeta();
   const key = uid ?? "";
+  const base: SyncBase = { hash: hashOf(json), remoteUpdatedAt, items: itemHashes(json) };
   saveCloudSyncMeta({ ...meta, bases: { ...meta.bases, [key]: { ...meta.bases[key], [name]: base } } });
 }
 function stamp() {
@@ -149,7 +149,7 @@ function applyRemote(name: PresetListName, remote: RemoteDoc) {
   } finally {
     applying = false;
   }
-  setBase(name, { hash: hashOf(remote.json), remoteUpdatedAt: remote.updatedAt });
+  setBase(name, remote.json, remote.updatedAt);
   notifyPresetListReplaced(name);
 }
 
@@ -158,7 +158,7 @@ async function syncList(name: PresetListName): Promise<Conflict | null> {
   const remote = await readRemote(name);
   switch (planSync(local, remote, baseOf(name))) {
     case "adopt":
-      setBase(name, { hash: hashOf(local), remoteUpdatedAt: remote?.updatedAt ?? 0 });
+      setBase(name, local, remote?.updatedAt ?? 0);
       return null;
     case "pull":
       applyRemote(name, remote as RemoteDoc);
@@ -168,12 +168,30 @@ async function syncList(name: PresetListName): Promise<Conflict | null> {
       assertSize(local);
       const at = await push(name, local, remote ? remote.updatedAt : null);
       if (at === null) rerun = true; // 그 사이 클라우드가 바뀌었다 — 처음부터 다시 판정한다
-      else setBase(name, { hash: hashOf(local), remoteUpdatedAt: at });
+      else setBase(name, local, at);
       return null;
     }
     case "conflict": {
+      // 양쪽이 다 바뀐 목록은 항목 단위로 합쳐 양쪽에 반영한다(6.2 C4). 사용자에게 고르게 하지 않는다
       const r = remote as RemoteDoc;
-      return { name, label: LABELS[name], local: countOf(local), remote: countOf(r.json), remoteJson: r.json, remoteUpdatedAt: r.updatedAt };
+      const merged = mergeLists(name, local, r.json, baseOf(name)?.items ?? null);
+      assertSize(merged);
+      const at = merged === r.json ? r.updatedAt : await push(name, merged, r.updatedAt);
+      // 그 사이 클라우드가 바뀌었거나 사용자가 목록을 고쳤으면 반영하지 않고 처음부터 다시 판정한다
+      if (at === null || localJson(name) !== local) {
+        rerun = true;
+        return null;
+      }
+      if (merged === local) setBase(name, merged, at);
+      else applyRemote(name, { json: merged, updatedAt: at });
+      setStatus({ notice: "두 기기의 변경을 합쳤어요." });
+      return null;
+    }
+    case "none": {
+      // 6.1까지의 기록에는 항목 해시가 없다 — 양쪽이 같은 상태일 때 채워 둬야 다음 병합에서 지운 항목을 알아본다
+      const b = baseOf(name);
+      if (b && !b.items) setBase(name, local, b.remoteUpdatedAt);
+      return null;
     }
     default:
       return null;
@@ -238,7 +256,7 @@ export async function resolveConflicts(choice: "cloud" | "local" | "later") {
         const json = localJson(c.name);
         assertSize(json);
         const at = await push(c.name, json, undefined);
-        setBase(c.name, { hash: hashOf(json), remoteUpdatedAt: at ?? 0 });
+        setBase(c.name, json, at ?? 0);
       }
     }
     setStatus({ conflicts: [] });
