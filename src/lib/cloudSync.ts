@@ -105,6 +105,8 @@ let rerun = false;
 /** 클라우드 내용을 로컬에 써 넣는 중 — 그 저장은 "내가 바꾼 것"이 아니므로 올리지 않는다 */
 let applying = false;
 let started = false;
+/** 저장 알림·온라인 복귀 구독은 처음 시작할 때 한 번만 건다(오프라인에서 실패해 다시 시작해도 겹치지 않게) */
+let listening = false;
 
 function baseOf(name: PresetListName): SyncBase | null {
   return loadCloudSyncMeta().bases[uid ?? ""]?.[name] ?? null;
@@ -312,7 +314,12 @@ export async function resolveConflicts(choice: "cloud" | "local" | "later") {
 export function startCloudSync() {
   if (!firebaseConfigured || started) return;
   started = true;
-  onPresetListSaved(onSaved);
+  if (!listening) {
+    listening = true;
+    onPresetListSaved(onSaved);
+    // 오프라인이었다가 돌아오면 한 번 더 맞춘다(6.2 C2). 시작할 때 오프라인이라 Firebase를 못 받았으면(started=false) 그때 시작한다
+    window.addEventListener("online", () => (started ? syncNow() : startCloudSync()));
+  }
   loadAuth()
     .then(({ auth, mod }) =>
       mod.onAuthStateChanged(auth, (user) => {
@@ -324,6 +331,6 @@ export function startCloudSync() {
       }),
     )
     .catch(() => {
-      started = false; // 오프라인 등 — 다음에 다시 시도한다
+      started = false; // 오프라인 등 — 온라인으로 돌아오면 위 구독이 다시 시작한다
     });
 }

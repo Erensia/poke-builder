@@ -59,6 +59,28 @@
   color: var(--text-muted);
 }
 
+/* 클라우드 오류(6.2 C2) — 상태 문구(.backup-notice)와 같은 색이라 오류인지 알아보기 힘들었다. 색만으로 전달하지 않도록 아이콘을 함께 쓴다 */
+.backup-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.45rem;
+  margin: 0.6rem 0 0;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--danger);
+  border-radius: var(--r-md);
+  background: var(--danger-bg);
+  color: var(--danger);
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+}
+
+.backup-error svg {
+  flex: none;
+  width: 1.1rem;
+  height: 1.1rem;
+  margin-top: 0.1rem;
+}
+
 .backup-cloud {
   margin-top: 1rem;
   padding-top: 0.8rem;
