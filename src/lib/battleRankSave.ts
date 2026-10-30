@@ -2,7 +2,7 @@ import type { PartySlots } from "../types/party";
 import { applyRankResult, EMPTY_RANK, rankOf, type RankChange, type RankDisplay, type RankResult, type RankState } from "./battleRank";
 
 /** 판별 이력은 최근 50판만 보관한다 */
-const HISTORY_LIMIT = 50;
+export const HISTORY_LIMIT = 50;
 
 /** 시즌은 첫 랭크 판을 한 날부터 30일 */
 export const SEASON_MS = 30 * 24 * 60 * 60 * 1000;

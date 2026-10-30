@@ -1,5 +1,6 @@
 import { cleanPartyPresets, cleanSlotPresets } from "./backup";
-import { EMPTY_RANK_SAVE, isRankSave } from "./battleRankSave";
+import { applyRankResult, rankOf, type RankResult, type RankState } from "./battleRank";
+import { EMPTY_RANK_SAVE, HISTORY_LIMIT, isRankSave, type RankHistoryEntry, type RankSave } from "./battleRankSave";
 import { EMPTY_FRONTIER, isFrontierSave } from "./battleSeries";
 import { cleanMySamples } from "./mySamples";
 import type { PresetListName, SyncBase } from "./storage";
@@ -39,6 +40,60 @@ export function canonical(name: PresetListName, raw: unknown): { json: string; i
   const { items } =
     name === "partyPresets" ? cleanPartyPresets(list, true) : name === "slotPresets" ? cleanSlotPresets(list, true) : cleanMySamples(list);
   return { json: JSON.stringify(items), items };
+}
+
+/** 같은 판인지 보는 열쇠 — 시각(ms)이 있어 서로 다른 판이 겹치지 않는다 */
+const gameKey = (e: RankHistoryEntry) => `${e.at}|${e.opponentId}|${e.result}`;
+const stateKey = (s: RankState) => JSON.stringify([s.gauge, s.wins, s.losses, s.streak, s.lossStreak, s.rating, s.maxRating, s.champion]);
+const resultOf = (e: RankHistoryEntry): RankResult => (e.result === "win" ? { won: true, turns: e.turns ?? 0 } : { won: false });
+
+/**
+ * 기준(base) 이후 한 쪽이 치른 판을 오래된 순으로. 기준에서 그 판들만 이어 붙여 지금 상태가 재현되지 않으면(시즌 초기화 등 다른 변화가 낌)
+ * 이어졌다고 믿을 수 없어 null. 기록 상한(50판)까지 전부 새 판이면 더 있었는데 잘렸을 수 있어 null.
+ */
+function gamesSince(base: RankSave, side: RankSave): RankHistoryEntry[] | null {
+  const had = new Set(base.history.map(gameKey));
+  const fresh = side.history.filter((e) => !had.has(gameKey(e))).reverse();
+  if (fresh.length >= HISTORY_LIMIT) return null;
+  const replayed = fresh.reduce((s, e) => applyRankResult(s, resultOf(e)).state, base.state);
+  return stateKey(replayed) === stateKey(side.state) ? fresh : null;
+}
+
+/**
+ * 두 기기에서 따로 플레이한 랭크 기록을 합친다(6.2 C6). 마지막으로 맞춘 저장본(baseJson)의 상태에서 시작해, 양쪽의 그 이후 판을 시각 순으로
+ * `applyRankResult`로 다시 계산한다 — 레이팅·게이지·연승이 한 기기에서 순서대로 한 것처럼 정확히 재현된다(계산이 이전 상태와 승패·턴 수만 쓴다).
+ * 합칠 수 없으면 null이고, 그때는 사용자가 고른다: 기준이 없거나 / 시즌 기록이 달라졌거나(사이에 시즌이 끝남) / 한쪽 상태가 판 기록만으로 재현되지 않거나 / 한쪽이 상한 50판을 넘겼을 때.
+ */
+export function mergeRank(baseJson: string | null, localJson: string, remoteJson: string): string | null {
+  if (!baseJson) return null;
+  const B = JSON.parse(baseJson) as RankSave;
+  const L = JSON.parse(localJson) as RankSave;
+  const R = JSON.parse(remoteJson) as RankSave;
+  const seasons = JSON.stringify(B.seasons);
+  if (JSON.stringify(L.seasons) !== seasons || JSON.stringify(R.seasons) !== seasons) return null;
+  const gl = gamesSince(B, L);
+  const gr = gamesSince(B, R);
+  if (!gl || !gr) return null;
+  const seen = new Set<string>();
+  const games = [...gl, ...gr].filter((g) => !seen.has(gameKey(g)) && seen.add(gameKey(g))).sort((a, b) => a.at - b.at);
+  let state = B.state;
+  const fresh: RankHistoryEntry[] = [];
+  for (const g of games) {
+    const r = applyRankResult(state, resultOf(g));
+    state = r.state;
+    fresh.unshift({ at: g.at, opponentId: g.opponentId, result: g.result, turns: g.turns, change: r.change, after: rankOf(state), rating: state.rating });
+  }
+  const newest = (g: RankHistoryEntry[]) => g[g.length - 1]?.at ?? -1;
+  const starts = [B, L, R].flatMap((s) => (s.seasonStartedAt === null ? [] : [s.seasonStartedAt]));
+  const merged: RankSave = {
+    state,
+    history: [...fresh, ...B.history].slice(0, HISTORY_LIMIT),
+    seasons: B.seasons,
+    pendingId: null,
+    seasonStartedAt: starts.length ? Math.min(...starts) : null,
+    lastParty: (newest(gr) > newest(gl) ? R : L).lastParty,
+  };
+  return canonical("battleRank", merged).json;
 }
 
 /** "아직 아무것도 안 한" 문서의 정규형 — 목록은 "[]", 랭크·프런티어는 기록이 없는 저장본 */

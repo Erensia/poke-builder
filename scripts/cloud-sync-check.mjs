@@ -198,6 +198,43 @@ try {
   check("랭크: 한쪽만 바뀌었으면 자동으로 옮긴다", rplan(rj2, remote(rj, 100), base(rj, 100)) === "push" && rplan(rj, remote(rj2, 200), base(rj, 100)) === "pull");
   check("랭크: 양쪽이 다 바뀌었으면 충돌", rplan(rj2, remote(canonical("battleRank", { ...played, state: { ...played.state, wins: 30 } }).json, 200), base(rj, 100)) === "conflict");
 
+  // ── 랭크 기록 재생 병합(6.2 C6) ──
+  const { beginRankMatch, finishRankMatch, resetSeason } = await server.ssrLoadModule("/src/lib/battleRankSave.ts");
+  const { mergeRank } = await server.ssrLoadModule("/src/lib/cloudSyncPlan.ts");
+  const party6 = Array(6).fill(null);
+  // 한 기기에서 순서대로 한 판: 시작(진행 중 표시) → 결과
+  const play = (save, opp, won, at, turns = 20) => finishRankMatch(beginRankMatch(save, opp, party6, at), won ? { won: true, turns } : { won: false }, at);
+  const cj = (s) => canonical("battleRank", s).json;
+  const gaugeBase = [1, 2, 3].reduce((s, at) => play(s, "o" + at, true, at), EMPTY_RANK_SAVE);
+
+  // 시각 순서가 L(10)·R(20)·L(30)으로 섞인 경우 — 한 기기에서 그 순서로 한 것과 완전히 같아야 한다
+  const L1 = play(play(gaugeBase, "x", true, 10), "x2", false, 30);
+  const R1 = play(gaugeBase, "y", true, 20);
+  const seq1 = play(play(play(gaugeBase, "x", true, 10), "y", true, 20), "x2", false, 30);
+  check("랭크 병합: 두 기기의 판이 한 기기에서 시각 순서대로 한 것과 같다(게이지 구간)", mergeRank(cj(gaugeBase), cj(L1), cj(R1)) === cj(seq1));
+  check("랭크 병합: 승패 합과 기록 순서(최근 순)", (() => { const m = JSON.parse(mergeRank(cj(gaugeBase), cj(L1), cj(R1))); return m.state.wins === 5 && m.state.losses === 1 && m.history.map((h) => h.at).join() === "30,20,10,3,2,1"; })());
+
+  // 마스터볼(레이팅) — 연승 배율이 판 순서에 달려 있다
+  const masterBase = { ...EMPTY_RANK_SAVE, state: { ...EMPTY_RANK_SAVE.state, wins: 30, losses: 10, rating: 2000, maxRating: 2000 }, seasonStartedAt: 1 };
+  const L2 = play(play(masterBase, "a", true, 100), "c", true, 300);
+  const R2 = play(masterBase, "b", true, 200);
+  const seq2 = play(play(play(masterBase, "a", true, 100), "b", true, 200), "c", true, 300);
+  check("랭크 병합: 마스터볼 레이팅·연승 배율도 정확히 재현된다", mergeRank(cj(masterBase), cj(L2), cj(R2)) === cj(seq2) && JSON.parse(cj(seq2)).state.rating > 2000);
+  check("랭크 병합: 한쪽이 지고 한쪽이 이겨도 순서대로 계산된다", (() => { const l = play(masterBase, "a", false, 100); const r = play(play(masterBase, "b", true, 50), "c", true, 150); return mergeRank(cj(masterBase), cj(l), cj(r)) === cj(play(play(play(masterBase, "b", true, 50), "a", false, 100), "c", true, 150)); })());
+
+  // 같은 결과를 다시 합쳐도 그대로(멱등), 한쪽에 새 판이 없어도 된다
+  const M1 = mergeRank(cj(gaugeBase), cj(L1), cj(R1));
+  check("랭크 병합: 합친 결과를 양쪽으로 다시 합쳐도 같다", mergeRank(cj(gaugeBase), M1, M1) === M1);
+  check("랭크 병합: 한쪽에 새 판이 없어도 합쳐진다(진행 중 표시만 있는 경우)", (() => { const m = JSON.parse(mergeRank(cj(gaugeBase), cj(beginRankMatch(gaugeBase, "z", party6, 40)), cj(R1))); return m.state.wins === 4 && m.history.length === 4; })());
+  check("랭크 병합: 결과의 진행 중 표시(pendingId)는 null", JSON.parse(mergeRank(cj(gaugeBase), cj(beginRankMatch(L1, "z", party6, 50)), cj(R1))).pendingId === null);
+
+  // 폴백(null) — 사용자가 고르게 한다
+  check("랭크 병합 폴백: 기준 저장본이 없으면 합치지 않는다", mergeRank(null, cj(L1), cj(R1)) === null);
+  check("랭크 병합 폴백: 사이에 시즌이 끝났으면 합치지 않는다", mergeRank(cj(masterBase), cj(resetSeason(play(masterBase, "a", true, 10), 99)), cj(R2)) === null);
+  check("랭크 병합 폴백: 판 기록만으로 상태가 재현되지 않으면 합치지 않는다", (() => { const bad = { ...L1, state: { ...L1.state, wins: L1.state.wins + 1 } }; return mergeRank(cj(gaugeBase), cj(bad), cj(R1)) === null; })());
+  check("랭크 병합 폴백: 한쪽이 기록 상한(50판)을 넘겼으면 합치지 않는다", (() => { let s = masterBase; for (let i = 0; i < 50; i++) s = play(s, "n" + i, i % 3 !== 0, 1000 + i); return mergeRank(cj(masterBase), cj(s), cj(R2)) === null; })());
+  check("랭크 병합 폴백: 49판까지는 합친다", (() => { let s = masterBase; for (let i = 0; i < 49; i++) s = play(s, "n" + i, i % 3 !== 0, 1000 + i); return mergeRank(cj(masterBase), cj(s), cj(R2)) !== null; })());
+
   console.log(failed ? `\n${failed}/${total}개 실패` : `\n${total}개 통과`);
 } finally {
   await server.close();
