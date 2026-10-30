@@ -31,9 +31,12 @@ const watch = (params: Partial<DecisionParams>): Partial<DecisionParams> => ({ .
  * ponytail: 앱 AI보다 강한 챔피언 전용 단계는 수단이 없어 챔피언 = 마스터볼 1과 같은 AI — 파티 등급으로만 차별(최상 풀은 후속)
  */
 export const RANK_AI_PROFILES: Partial<DecisionParams>[] = [
-  watch(noisy(1, true)),
-  watch(noisy(0.7)),
-  watch(noisy(0.3)),
+  // 6.3 A2 — 인접 단계 직접 대전 승률이 위 단계 ≈ 60~62%가 되도록 위에서부터 하나씩 맞췄다(rank-sweep.mjs: P3 대 후보 → P2 대 후보 → P1 대 후보).
+  // 앱 AI 대비 강도는 단계끼리 더해지지 않아(실수율 1.0은 앱 AI에겐 약해 보여도 실수율이 낮은 상대에겐 훨씬 약하다) 이웃끼리 직접 재야 한다. 이전 값(1 hard·0.7·0.3)은 P1/P0 77%·P3/P2 71%로 벌어졌다
+  // (실수율: P0 0.5 확정 처치도 무시 · P1 0.4 · P2 0.12. 선출 포함 사다리 시드 300: P1/P0 62.2% · P2/P1 64.4% · P3/P2 64.8% · P6/P3 59.8%)
+  watch(noisy(0.5, true)),
+  watch(noisy(0.4)),
+  watch(noisy(0.12)),
   learn(MODEL_ONLY, 0.25),
   learn(MODEL_ONLY, 0.5),
   learn(APP_DECISION_PARAMS, 0.75),

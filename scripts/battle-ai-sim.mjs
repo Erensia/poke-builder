@@ -525,16 +525,33 @@ try {
       };
     };
     const forced = (params, risk, which = ai) => (st, key) => which.chooseAiForcedSwitch(st, key, risk, params) ?? living(st, key)[0];
+    // SELECT=1(6.3 A2): 샘플 파티 6마리 두 개를 두고 양쪽 모두 기본 선출 AI로 3선출한다. A는 두 판에서 P·Q를 한 번씩 받는다. 꺼져 있으면 undefined(3마리 무작위 파티)
+    const selectedStart = (s, aSide, bSide) => {
+      if (process.env.SELECT !== "1") return undefined;
+      const prng = mulberry32(s ^ 0x51ec7);
+      const samples = data.SAMPLE_PARTIES;
+      const i = Math.floor(prng() * samples.length);
+      const j = (i + 1 + Math.floor(prng() * (samples.length - 1))) % samples.length;
+      const six = (party) => ({ slots: party.slots, movesList: party.slots.map((sl) => sl.moves.filter((m) => m).map((m) => data.getMove(m))), fixed: (party.fixedPicks ?? []).map((id) => party.slots.findIndex((sl) => sl.pokemonId === id)).filter((k) => k >= 0) });
+      const sixes = { [aSide]: six(samples[aSide === "a" ? i : j]), [bSide]: six(samples[aSide === "a" ? j : i]) };
+      const full = state.createBattleState({ a: sixes.a, b: sixes.b });
+      const pick = (side) => {
+        const sel = ai.chooseAiSelection(full, side, { random: mulberry32(s * 131 + (side === "a" ? 1 : 2)), fixed: sixes[side].fixed });
+        return { slots: sel.map((x) => sixes[side].slots[x]), movesList: sel.map((x) => sixes[side].movesList[x]) };
+      };
+      return state.createBattleState({ [aSide]: pick(aSide), [bSide]: pick(bSide) });
+    };
     const res = { aWins: 0, bWins: 0, other: 0 };
     for (let s = seedFrom; s <= seedTo; s++) {
       const risk = mulberry32(s)();
       for (const aSide of ["a", "b"]) {
         const bSide = aSide === "a" ? "b" : "a";
+        const initial = selectedStart(s, aSide, bSide);
         const r = runBattle(
           s,
           { [aSide]: policy(decisionParams, risk, ai, learner), [bSide]: policy(opponentParams, risk, oppAi) },
           { [aSide]: forced(decisionParams, risk), [bSide]: forced(opponentParams, risk, oppAi) },
-          undefined,
+          initial,
           (x, y) => learner?.observe(aSide === "a" ? y : x),
         );
         learner?.endBattle();
