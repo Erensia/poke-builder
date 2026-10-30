@@ -188,6 +188,8 @@ interface ActionCtx {
   regenSetFailed: boolean;
   leechSeedSetFailed: boolean;
   leechSeedBlockedByGrass: boolean;
+  curseHpCost: number;
+  curseSetFailed: boolean;
   abilitySwappedTargetToName: string | undefined;
   abilitySwapFailed: boolean;
   substituteSetFailed: boolean;
@@ -319,6 +321,8 @@ function resolveMirroredPhase(c: ActionCtx) {
   c.regenSetFailed = mirrorResult.regenSetFailed;
   c.leechSeedSetFailed = mirrorResult.leechSeedSetFailed;
   c.leechSeedBlockedByGrass = mirrorResult.leechSeedBlockedByGrass;
+  c.curseHpCost = mirrorResult.curseHpCost;
+  c.curseSetFailed = mirrorResult.curseSetFailed;
   c.abilitySwappedTargetToName = mirrorResult.abilitySwappedTargetToName;
   c.abilitySwapFailed = mirrorResult.abilitySwapFailed;
   c.substituteSetFailed = mirrorResult.substituteSetFailed;
@@ -787,6 +791,8 @@ function collectResult(c: ActionCtx) {
     setLeechSeed: c.leechSeedSetFailed || c.leechSeedBlockedByGrass ? undefined : c.effectiveMove.setsLeechSeed,
     leechSeedSetFailed: c.leechSeedSetFailed,
     leechSeedBlockedByGrass: c.leechSeedBlockedByGrass || undefined,
+    curseHpCost: c.curseHpCost || undefined,
+    curseSetFailed: c.curseSetFailed || undefined,
     setSubstitute: c.substituteSetFailed ? undefined : c.effectiveMove.setsSubstitute,
     substituteSetFailed: c.substituteSetFailed,
     shedTailSucceeded: c.shedTailSucceeded || undefined,

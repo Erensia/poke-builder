@@ -550,7 +550,8 @@ function proteanTypes(me: BattleFighterState, move: Move): PokemonType[] | undef
   return [move.type];
 }
 
-function classifySupport(move: Move): SupportKind {
+function classifySupport(move: Move, me: BattleFighterState): SupportKind {
+  if (effectKindOf(move, me) === "curse") return "effect";
   if (move.healsFraction && move.healsTarget !== "opponent") return "heal";
   if (move.healsWeatherDependent || move.restSleep || isWish(move) || move.healsByStockpile) return "heal";
   // 배북처럼 랭크를 +n이 아니라 특정 값으로 "설정"(setTo)하는 것도 랭크업기다.
@@ -608,7 +609,7 @@ interface EffectContext {
  */
 function evaluateEffectMove(ctx: EffectContext): EffectEvaluation | undefined {
   const { state, key, move, myMoves } = ctx;
-  const kind = effectKindOf(move);
+  const kind = effectKindOf(move, state[key]);
   if (!kind || effectMoveFails(state, key, move)) return undefined;
   const base = currentRace(state, key, myMoves);
   if (kind === "phaze") return evaluatePhaze(ctx, base);
@@ -672,7 +673,7 @@ function evaluateEffectMove(ctx: EffectContext): EffectEvaluation | undefined {
   const partyModel = createPartyModel(clone, key);
   if (duration === undefined) {
     // 대타출동: 최대 HP 1/4을 쓰고 대면은 깎인 HP에서 시작(selfCost — 랭크업기의 HP 비용과 같은 처리)
-    const selfCost = kind === "substitute" ? Math.floor(me.maxHp / 4) / me.maxHp : undefined;
+    const selfCost = kind === "substitute" ? Math.floor(me.maxHp / 4) / me.maxHp : kind === "curse" ? Math.floor(me.maxHp / 2) / me.maxHp : undefined;
     // 아픔나누기: 두 포켓몬 HP가 바뀐 채로 대면을 시작한다
     const oppAfterFighter = clone[opponentKey(key)];
     const hpAfter =
@@ -1120,7 +1121,7 @@ function evaluateStatusSupport(c: MoveOptionCtx) {
     if (c.move.category === "status") {
       const idle = targetAttackOnlyWeight(c.threat);
       if (idle > 0) c.option.opponentIdleChance = idle;
-      const kind = classifySupport(c.move);
+      const kind = classifySupport(c.move, c.env.me);
       const bestKillTurns = turnsFor(c.env.moveState, c.env.myBest?.estimate, c.env.me, c.env.opponent).expected;
       if (protectGroupOf(c.move)) {
         c.option.support = {

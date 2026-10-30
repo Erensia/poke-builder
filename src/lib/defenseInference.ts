@@ -40,6 +40,7 @@ export const END_TURN_EFFECTS = [
   { id: "grassy", label: "그래스필드", sixteenths: 1 },
   { id: "poison", label: "독", sixteenths: -2 },
   { id: "leechSeed", label: "씨뿌리기", sixteenths: -2 },
+  { id: "curse", label: "저주", sixteenths: -4 },
   { id: "burn", label: "화상", sixteenths: -1 },
   { id: "sandstorm", label: "모래바람", sixteenths: -1 },
   // 자뭉열매는 턴 종료 효과가 아니라 맞은 직후 먹는다 — 화면의 "맞은 뒤 %"에 회복이 이미 섞여 있다는 표시(4.0 F2). 16분율 값은 쓰지 않는다

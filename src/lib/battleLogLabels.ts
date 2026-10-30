@@ -13,6 +13,7 @@ export const VOLATILE_LABELS = {
   ingrain: "뿌리박기",
   aquaRing: "아쿠아링",
   leechSeed: "씨앗",
+  curse: "저주",
   taunt: "도발",
   disable: "사슬묶기",
   encore: "앙코르",

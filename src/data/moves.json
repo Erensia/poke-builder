@@ -3026,6 +3026,7 @@
       "랭크",
       "저주"
     ],
+    "setsCurse": true,
     "statChanges": [
       {
         "target": "self",

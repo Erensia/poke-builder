@@ -274,6 +274,10 @@ export interface ActionLogEntry {
   leechSeedSetFailed?: boolean;
   /** 씨뿌리기를 풀타입 상대에게 써서 통하지 않았으면 true */
   leechSeedBlockedByGrass?: boolean;
+  /** 고스트 저주 — 자기 HP를 소비하고 상대에게 저주를 걸었으면 그 소비량 */
+  curseHpCost?: number;
+  /** 고스트 저주 — 상대가 이미 저주 상태라 실패했으면 true */
+  curseSetFailed?: boolean;
   /** 이 행동으로 대타가 새로 세워졌으면 true */
   setSubstitute?: boolean;
   /** 대타출동을 썼지만 이미 대타가 있거나 HP가 부족해서 실패했으면 true */
@@ -613,6 +617,8 @@ export interface EndOfTurnLogEntry {
   regenSource?: "ingrain" | "aquaRing";
   /** 씨뿌리기로 이번 턴 잃은 HP(씨앗이 걸린 쪽의 로그) */
   leechSeedDamage?: number;
+  /** 저주 상태로 이번 턴 종료에 잃은 HP(저주가 걸린 쪽의 로그) */
+  curseDamage?: number;
   /** 씨뿌리기로 상대에게서 흡수해 회복한 양(시드를 심은 쪽의 로그, 큰뿌리 배율 반영 후) */
   leechSeedHealAmount?: number;
   /** 해감액: 씨뿌리기 흡수가 회복 대신 데미지로 반사됐으면 true(damage에 실제 수치) */

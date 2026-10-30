@@ -59,6 +59,11 @@ export function EndOfTurnLine({
           {e.remainingHp})
           {e.fainted && " · 기절!"}
         </>
+      ) : e.curseDamage ? (
+        <>
+          {turnName(e.actor)}는 저주받아 {e.curseDamage} 데미지를 입었다 (남은 HP {e.remainingHp})
+          {e.fainted && " · 기절!"}
+        </>
       ) : e.leechSeedHealAmount ? (
         <>
           {turnName(e.actor)}가 씨앗으로 체력을 {e.leechSeedHealAmount} 회복 (남은 HP{" "}
