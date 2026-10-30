@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { SAMPLE_PARTIES } from "../lib/data";
 import { beginMatch, EMPTY_FRONTIER, finishMatch, refillQueue, settleAbandoned, type FrontierSave } from "../lib/battleSeries";
 import { isUsableSample } from "../lib/mySamples";
-import { loadBattleFrontier, saveBattleFrontier } from "../lib/storage";
+import { loadBattleFrontier, onPresetListReplaced, saveBattleFrontier } from "../lib/storage";
 import type { SamplePartyPreset } from "../types/party";
 
 /**
@@ -18,6 +18,8 @@ export function useBattleSeries(mySamples: SamplePartyPreset[]) {
     if (settled !== loaded) saveBattleFrontier(settled);
     return settled;
   });
+  // 클라우드 동기화(6.2 C5)가 다른 기기의 기록을 받아 `localStorage`에 썼으면 화면 상태도 다시 읽는다(안 읽으면 옛 상태로 되돌려 쓴다)
+  useEffect(() => onPresetListReplaced((name) => name === "battleFrontier" && setSave(loadBattleFrontier())), []);
   const [active, setActive] = useState(false);
 
   /** 상대 풀: 기본 샘플 + (옵션이 켜져 있으면) 쓸 수 있는 내 샘플 */

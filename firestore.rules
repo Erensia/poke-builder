@@ -1,15 +1,17 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // 6.0 K: 로그인한 사용자가 자기 uid 아래 목록 문서 셋만 읽고 쓴다. 나머지 경로는 전부 거부(기본).
+    // 6.0 K: 로그인한 사용자가 자기 uid 아래 문서 다섯만 읽고 쓴다. 나머지 경로는 전부 거부(기본).
     //   users/{uid}/lists/slotPresets  — 저장한 포켓몬 빌드(slot-presets)
     //   users/{uid}/lists/partyPresets — 저장한 파티(party-presets)
     //   users/{uid}/lists/mySamples    — 내 샘플(my-samples, 6.2 C3)
+    //   users/{uid}/lists/battleRank   — 랭크배틀 기록(battle-rank, 6.2 C5)
+    //   users/{uid}/lists/battleFrontier — 프런티어 기록(battle-frontier, 6.2 C5)
     // 문서 모양: { json: 목록을 JSON.stringify한 문자열, updatedAt: ms, version: 1 }
     match /users/{uid}/lists/{name} {
       allow read, delete: if request.auth != null && request.auth.uid == uid;
       allow create, update: if request.auth != null && request.auth.uid == uid
-        && name in ['slotPresets', 'partyPresets', 'mySamples']
+        && name in ['slotPresets', 'partyPresets', 'mySamples', 'battleRank', 'battleFrontier']
         && request.resource.data.keys().hasOnly(['json', 'updatedAt', 'version'])
         && request.resource.data.keys().hasAll(['json', 'updatedAt', 'version'])
         && request.resource.data.json is string

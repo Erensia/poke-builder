@@ -22,7 +22,7 @@ export function CloudBackup() {
       {user ? (
         <>
           <p className="backup-hint">
-            {user.email ?? "Google 계정"}으로 로그인했어요. 저장한 파티·포켓몬·내 샘플이 자동으로 클라우드에 백업되고, 같은 계정으로 로그인한 다른 기기와 맞춰져요.
+            {user.email ?? "Google 계정"}으로 로그인했어요. 저장한 파티·포켓몬·내 샘플과 랭크배틀·프런티어 기록이 자동으로 클라우드에 백업되고, 같은 계정으로 로그인한 다른 기기와 맞춰져요.
           </p>
           {sync.conflicts.length > 0 ? (
             <div className="backup-confirm" role="group" aria-label="클라우드와 내용이 달라요">
@@ -30,7 +30,7 @@ export function CloudBackup() {
                 이 기기와 클라우드의 내용이 서로 달라요.
                 {sync.conflicts.map((c) => (
                   <span key={c.name} className="backup-conflict-line">
-                    {c.label}: 이 기기 {c.local}개 · 클라우드 {c.remote}개 (클라우드 저장 {formatTime(c.remoteUpdatedAt)})
+                    {c.label}: 이 기기 {c.local} · 클라우드 {c.remote} (클라우드 저장 {formatTime(c.remoteUpdatedAt)})
                   </span>
                 ))}
                 고르지 않은 쪽의 내용은 사라져요.
