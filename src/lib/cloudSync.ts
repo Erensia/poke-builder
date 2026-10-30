@@ -1,13 +1,15 @@
-import type { Party, SlotPreset } from "../types/party";
+import type { Party, SamplePartyPreset, SlotPreset } from "../types/party";
 import { canonical, hashOf, itemHashes, mergeLists, planSync, type RemoteDoc } from "./cloudSyncPlan";
 import { firebaseConfigured, loadAuth, loadFirestore } from "./firebase";
 import {
   loadCloudSyncMeta,
+  loadMySamples,
   loadPartyPresets,
   loadSlotPresets,
   notifyPresetListReplaced,
   onPresetListSaved,
   saveCloudSyncMeta,
+  saveMySamples,
   savePartyPresets,
   saveSlotPresets,
   type PresetListName,
@@ -19,7 +21,7 @@ import {
  * 앱은 지금처럼 동작한다. 목록마다 문서 하나(`users/{uid}/lists/{name}`: `{ json, updatedAt, version }`, firestore.rules와 같다).
  * 판정(올리기/받기/충돌)은 `cloudSyncPlan.ts`의 순수 함수가 한다.
  */
-const NAMES: PresetListName[] = ["partyPresets", "slotPresets"];
+const NAMES: PresetListName[] = ["partyPresets", "slotPresets", "mySamples"];
 /** 문서 1MB 한도 안의 여유. firestore.rules의 문자 수 상한(900000자)과 맞춘다 */
 const MAX_BYTES = 900_000;
 const SAVE_DELAY_MS = 3000;
@@ -56,10 +58,12 @@ function setStatus(patch: Partial<SyncStatus>) {
   subscribers.forEach((fn) => fn());
 }
 
-const read = (name: PresetListName): unknown[] => (name === "partyPresets" ? loadPartyPresets() : loadSlotPresets());
+const read = (name: PresetListName): unknown[] =>
+  name === "partyPresets" ? loadPartyPresets() : name === "slotPresets" ? loadSlotPresets() : loadMySamples();
 const write = (name: PresetListName, items: unknown[]) => {
   if (name === "partyPresets") savePartyPresets(items as Party[]);
-  else saveSlotPresets(items as SlotPreset[]);
+  else if (name === "slotPresets") saveSlotPresets(items as SlotPreset[]);
+  else saveMySamples(items as SamplePartyPreset[]);
 };
 const localJson = (name: PresetListName) => canonical(name, read(name)).json;
 

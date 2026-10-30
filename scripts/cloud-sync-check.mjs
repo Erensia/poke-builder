@@ -153,6 +153,20 @@ try {
   add(z, party("z", "Z", 5));
   check("[2기기] 처음 연결인데 양쪽에 있으면 합집합(예전에는 충돌 선택)", sync(z) === "conflict" && ids(z.local) === "dcz");
 
+  // ── 내 샘플(6.2 C3) ──
+  const mySample = (id, name, extra = {}) => ({ id, name, style: "테스트", group: "real", description: "설명", slots: sample[0].slots, ...extra });
+  const cm = canonical("mySamples", [mySample("my-1", "첫 샘플"), mySample("my-2", "둘째")]);
+  check("내 샘플 정규형의 키 순서 고정(id·name·style·group·description·slots)", cm.json.startsWith('[{"id":"my-1","name":"첫 샘플","style":"테스트","group":"real","description":"설명","slots":['), cm.json.slice(0, 90));
+  check("내 샘플 정규형은 멱등이고 id를 그대로 둔다", canonical("mySamples", JSON.parse(cm.json)).json === cm.json && cm.items[1].id === "my-2");
+  check("틀린 내 샘플(id 없음·분류 오류·슬롯 5개)은 건너뛴다", canonical("mySamples", [mySample("my-1", "ok"), { ...mySample("x", "n"), id: undefined }, mySample("y", "g", { group: "?" }), mySample("z", "s", { slots: sample[0].slots.slice(0, 5) })]).items.length === 1);
+  const MA = mySample("my-a", "A");
+  const MB = mySample("my-b", "B");
+  const MC = mySample("my-c", "C");
+  const mlist = (...items) => canonical("mySamples", items).json;
+  const mm = mergeLists("mySamples", mlist(MA, MB), mlist(MA, MC), itemHashes(mlist(MA)));
+  check("내 샘플 병합: savedAt이 없어도 양쪽 추가분이 남고 이 기기 순서 뒤에 붙는다", JSON.parse(mm).map((i) => i.id).join() === "my-a,my-b,my-c", mm.slice(0, 60));
+  check("내 샘플 병합: 상대가 지운 샘플은 안 바꿨으면 같이 지운다", JSON.parse(mergeLists("mySamples", mlist(MA, MB), mlist(), itemHashes(mlist(MA)))).map((i) => i.id).join() === "my-b");
+
   console.log(failed ? `\n${failed}/${total}개 실패` : `\n${total}개 통과`);
 } finally {
   await server.close();
