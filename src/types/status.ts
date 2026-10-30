@@ -53,6 +53,8 @@ export const NO_STATUS_CONDITION: StatusConditionState = { condition: null, turn
  *    회복량이 1.3배가 된다(itemEffects.getDrainHealMultiplier).
  *  - leechSeed(씨뿌리기): 걸린 쪽은 매 턴 종료 시 최대 HP 1/8을 잃고, 상대가 그만큼(+큰뿌리
  *    소지 시 1.3배) 회복한다. ingrain/aquaRing과 마찬가지로 턴 카운터 없이 배틀 끝까지 유지.
+ *  - curse(저주, 고스트 타입이 쓴 경우): 걸린 쪽은 매 턴 종료 시 최대 HP 1/4을 잃는다(매직가드면 면제).
+ *    leechSeed처럼 턴 카운터 없이 걸린 쪽이 물러날 때까지 유지되고, 건 쪽이 쓰러져도 남는다.
  *  - taunt(도발): 3턴 동안 변화기(카테고리 status)를 선택할 수 없다. 매 턴 이 포켓몬이 행동을
  *    시도하는 시점(resolveAction)에 지속 턴수가 1씩 줄어든다.
  *  - disable(사슬묶기): 4턴 동안 걸린 시점의 "상대가 바로 직전에 쓴 기술" 하나만 선택할 수
@@ -91,6 +93,7 @@ export type VolatileCondition =
   | "ingrain"
   | "aquaRing"
   | "leechSeed"
+  | "curse"
   | "taunt"
   | "disable"
   | "encore"

@@ -306,6 +306,10 @@ export function ActionMainLineTail({ action, actorName, defenderName }: ActionMa
       {!action.blockedReason && action.hit && action.leechSeedBlockedByGrass && (
         <> · 그러나 풀타입 {defenderName}에게는 통하지 않는다!</>
       )}
+      {!action.blockedReason && action.hit && !!action.curseHpCost && (
+        <> · 자신의 체력을 깎아 {defenderName}에게 저주를 걸었다!</>
+      )}
+      {!action.blockedReason && action.hit && action.curseSetFailed && <> · 그러나 실패했다!</>}
       {!action.blockedReason && action.hit && action.setSubstitute && <> · 대타를 세웠다!</>}
       {!action.blockedReason && action.hit && action.substituteSetFailed && (
         <> · 그러나 실패하고 말았다!</>

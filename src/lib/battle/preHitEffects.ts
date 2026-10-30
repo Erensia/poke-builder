@@ -529,6 +529,7 @@ function checkDefenderImmunities(c: PreHitCtx) {
   // 틈새포착: 공격측이 이 특성이면 대타출동도 소리 계열과 마찬가지로 무시하고 본체에 직접 적중한다.
   c.blockedBySubstitute = c.defender.substituteHp !== undefined &&
     !(c.move.classification ?? []).includes("소리") &&
+    !(c.move.setsCurse && c.attacker.types.includes("고스트")) &&
     !c.attackerAbility?.bypassesScreensAndSubstitute;
 
   // 가루/포자 기술(수면가루·저리가루·독가루·목화포자·분노가루)은 풀타입 포켓몬에게 통하지 않는다

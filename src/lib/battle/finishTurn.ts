@@ -215,6 +215,15 @@ function applyLeechSeedDamage(ctx: EndOfTurnFighterContext): void {
   }
 }
 
+/** 저주(curse): 걸린 쪽은 매 턴 종료 시 최대 HP 1/4을 잃는다. 매직가드면 면제(leechSeed 패턴). */
+function applyCurseDamage(ctx: EndOfTurnFighterContext): void {
+  const { key, fighter, fighterAbility, endOfTurn } = ctx;
+  if (!hasVolatile(fighter.volatile, "curse") || fighterAbility?.negatesIndirectDamage) return;
+  const curseDamage = Math.min(fighter.currentHp, Math.floor(fighter.maxHp / 4));
+  fighter.currentHp -= curseDamage;
+  endOfTurn.push({ actor: key, damage: 0, remainingHp: fighter.currentHp, fainted: isFainted(fighter), curseDamage });
+}
+
 /**
  * 속박(bound): 조이기·엉겨붙기·집게덫류에 걸린 쪽은 매 턴 종료 시 최대 HP 1/8을 잃고,
  * 턴 종료마다 카운터가 1씩 줄어 0에서 자동 해제된다. 매직가드면 데미지 면제(카운터는 진행).
@@ -747,6 +756,7 @@ function resolveEndOfTurnAndPerish(c: FinishCtx) {
       applyWeatherDamageAbility(eotCtx);
       applyIngrainAquaRingHeal(eotCtx);
       applyLeechSeedDamage(eotCtx);
+      applyCurseDamage(eotCtx);
       applyBoundDamage(eotCtx);
       applySaltCureDamage(eotCtx);
       applySyrupCoatDrop(eotCtx);

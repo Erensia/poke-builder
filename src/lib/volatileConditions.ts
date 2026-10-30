@@ -48,6 +48,7 @@ function defaultDuration(volatile: VolatileCondition, random: () => number): num
     volatile === "ingrain" ||
     volatile === "aquaRing" ||
     volatile === "leechSeed" ||
+    volatile === "curse" ||
     volatile === "attract" ||
     volatile === "saltCure" ||
     volatile === "octolock" ||
