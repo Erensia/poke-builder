@@ -2,7 +2,7 @@ import type { Party, SamplePartyPreset, SlotPreset } from "../types/party";
 import { rankLabel, rankOf } from "./battleRank";
 import type { RankSave } from "./battleRankSave";
 import type { FrontierSave } from "./battleSeries";
-import { canonical, emptyJson, hashOf, isObjectDoc, itemHashes, mergeLists, planSync, type RemoteDoc } from "./cloudSyncPlan";
+import { canonical, emptyJson, hashOf, isObjectDoc, itemHashes, mergeLists, mergeRank, planSync, type RemoteDoc } from "./cloudSyncPlan";
 import { firebaseConfigured, loadAuth, loadFirestore } from "./firebase";
 import {
   loadBattleFrontier,
@@ -115,7 +115,12 @@ function baseOf(name: PresetListName): SyncBase | null {
 function setBase(name: PresetListName, json: string, remoteUpdatedAt: number) {
   const meta = loadCloudSyncMeta();
   const key = uid ?? "";
-  const base: SyncBase = { hash: hashOf(json), remoteUpdatedAt, ...(!isObjectDoc(name) && { items: itemHashes(json) }) };
+  const base: SyncBase = {
+    hash: hashOf(json),
+    remoteUpdatedAt,
+    ...(!isObjectDoc(name) && { items: itemHashes(json) }),
+    ...(name === "battleRank" && { snapshot: json }),
+  };
   saveCloudSyncMeta({ ...meta, bases: { ...meta.bases, [key]: { ...meta.bases[key], [name]: base } } });
 }
 function stamp() {
@@ -210,10 +215,14 @@ async function syncList(name: PresetListName): Promise<Conflict | null> {
     }
     case "conflict": {
       const r = remote as RemoteDoc;
-      // 랭크·프런티어 기록은 합칠 수 없다 — 사용자가 고를 때까지 멈춘다
-      if (isObjectDoc(name)) return { name, label: LABELS[name] ?? name, local: summarize(name, local), remote: summarize(name, r.json), remoteJson: r.json, remoteUpdatedAt: r.updatedAt };
-      // 양쪽이 다 바뀐 목록은 항목 단위로 합쳐 양쪽에 반영한다(6.2 C4). 사용자에게 고르게 하지 않는다
-      const merged = mergeLists(name, local, r.json, baseOf(name)?.items ?? null);
+      // 양쪽이 다 바뀐 목록은 항목 단위로(6.2 C4), 랭크 기록은 두 기기의 판을 다시 계산해(6.2 C6) 합쳐 양쪽에 반영한다. 사용자에게 고르게 하지 않는다
+      const merged = !isObjectDoc(name)
+        ? mergeLists(name, local, r.json, baseOf(name)?.items ?? null)
+        : name === "battleRank"
+          ? mergeRank(baseOf(name)?.snapshot ?? null, local, r.json)
+          : null;
+      // 합칠 수 없는 경우(프런티어 기록, 기준이 없거나 시즌이 끼는 등 랭크 기록의 폴백)는 사용자가 고를 때까지 멈춘다
+      if (merged === null) return { name, label: LABELS[name] ?? name, local: summarize(name, local), remote: summarize(name, r.json), remoteJson: r.json, remoteUpdatedAt: r.updatedAt };
       assertSize(merged);
       const at = merged === r.json ? r.updatedAt : await push(name, merged, r.updatedAt);
       // 그 사이 클라우드가 바뀌었거나 사용자가 목록을 고쳤으면 반영하지 않고 처음부터 다시 판정한다
@@ -227,9 +236,9 @@ async function syncList(name: PresetListName): Promise<Conflict | null> {
       return null;
     }
     case "none": {
-      // 6.1까지의 기록에는 항목 해시가 없다 — 양쪽이 같은 상태일 때 채워 둬야 다음 병합에서 지운 항목을 알아본다
+      // 이전 기록에는 병합 기준(목록의 항목 해시, 랭크의 저장본)이 없다 — 양쪽이 같은 상태일 때 채워 둬야 다음 병합에서 쓸 수 있다
       const b = baseOf(name);
-      if (b && !b.items && !isObjectDoc(name)) setBase(name, local, b.remoteUpdatedAt);
+      if (b && (name === "battleRank" ? !b.snapshot : !isObjectDoc(name) && !b.items)) setBase(name, local, b.remoteUpdatedAt);
       return null;
     }
     default:
