@@ -1,2 +1,0 @@
-[31mWebSocket server error: Port 24678 is already in use[39m
-{"battles":240,"res":{"aiWins":149,"greedyWins":91,"other":0},"aiActionMix":{"move":2251,"pivot":33,"switch":374,"status":478},"statusMix":{"confuse":8,"debuff":35,"setup":158,"status":50,"screen":29,"weather":32,"heal":77,"field":7,"hazard":10,"protect:block":8,"painSplit":17,"disable":7,"substitute":12,"phaze":3,"taunt":4,"chillyReception":2,"encore":3,"tailwind":4,"yawn":2,"trickRoom":1,"regen":2,"itemSwap":3,"protect:endure":1,"copyStages":1,"leechSeed":2}}
