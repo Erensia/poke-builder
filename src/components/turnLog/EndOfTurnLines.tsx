@@ -75,6 +75,11 @@ export function EndOfTurnLine({
           {eunNeun(turnName(e.actor))} 해감액을 빨아들여 {e.damage} 데미지 (남은 HP {e.remainingHp})
           {e.fainted && " · 기절!"}
         </>
+      ) : e.futureSightMoveName ? (
+        <>
+          {turnName(e.actor)}에게 {e.futureSightMoveName}{iGa(e.futureSightMoveName)} 내리꽂혔다! {e.damage} 데미지 (남은 HP {e.remainingHp})
+          {e.fainted && " · 기절!"}
+        </>
       ) : e.wishHeal ? (
         <>
           {turnName(e.actor)}의 희망사항으로 체력을 {e.wishHeal} 회복 (남은 HP{" "}

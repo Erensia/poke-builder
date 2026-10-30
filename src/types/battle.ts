@@ -66,6 +66,13 @@ export interface HitAbilityEvent {
 }
 
 /** 내던지기(트랙 M5)로 맞은 상대에게 일어난 도구 효과 — 로그용 */
+/** 6.3 B2 — 데미지 기술이 상대 도구에 일으킨 효과(로그용). eatBerry면 먹은 열매 효과가 berry에 담긴다 */
+export interface ItemEffectLog {
+  kind: "knockOff" | "steal" | "eatBerry";
+  itemName: string;
+  berry?: NonNullable<FlingEffectResult["berry"]>;
+}
+
 export interface FlingEffectResult {
   /** 걸린 상태이상(전기구슬 → 마비, 독바늘 → 독) */
   status?: NonNullable<StatusConditionState["condition"]>;
@@ -91,7 +98,7 @@ export interface ActionLogEntry {
   /** blockedReason이 "status"일 때, 정확히 어떤 상태이상 때문인지(마비/잠듦/얼음) — UI가 "몸이 저려서"/"쿨쿨 잠들어"/"얼어 버려서" 문구를 골라 쓰는 데 필요 */
   blockedByStatus?: StatusConditionState["condition"];
   /** blockedReason이 "moveRestricted"일 때, 도발/사슬묶기/앙코르 중 무엇 때문에 막혔는지 */
-  moveRestrictionKind?: "taunt" | "disable" | "encore" | "torment" | "imprison" | "gravity";
+  moveRestrictionKind?: "taunt" | "disable" | "encore" | "torment" | "imprison" | "gravity" | "healBlock" | "throatChop";
   /** 회피/빗나감 여부. 필중기는 항상 true. blockedReason이 있으면 의미 없음 */
   hit: boolean;
   critical: boolean;
@@ -179,6 +186,10 @@ export interface ActionLogEntry {
   /** 치료방울(Tier 2): 상태이상을 고친 대기 포켓몬 수 */
   partyStatusCuredCount?: number;
   meltFailed?: boolean;
+  /** 6.3 B2 — 탁쳐서떨구기(knockOff)·도둑질/탐내기(steal)·벌레먹기/쪼아대기(eatBerry)의 도구 효과 */
+  itemEffect?: ItemEffectLog;
+  /** 클리어스모그로 상대의 능력 랭크를 원래대로 돌렸으면 true */
+  targetStagesReset?: boolean;
   magneticFluxFailed?: boolean;
   fairyLockSet?: boolean;
   fairyLockFailed?: boolean;
@@ -236,6 +247,9 @@ export interface ActionLogEntry {
   }[];
   /** 공중날기 등 차지 기술의 준비 턴(1턴째)이면 true — 데미지 없이 "숨었다"만 기록 */
   charging?: boolean;
+  /** 미래예지(6.3 B2): 공격을 예약했으면 true / 이미 예약돼 있어 실패했으면 futureSightFailed */
+  futureSightSet?: boolean;
+  futureSightFailed?: boolean;
   /** 상대가 차지 기술로 무적인 동안 그 무적을 못 뚫는 기술을 써서 빗나갔으면 true */
   evadedByCharge?: boolean;
   /** 생명의구슬처럼 도구 때문에 입은 반동 데미지(최대 HP 비율 고정) — recoilDamage와 계산 기준이 달라 분리 */
@@ -588,6 +602,8 @@ export interface ActionLogEntry {
 /** 턴 종료 시 상태이상 데미지 로그 */
 export interface EndOfTurnLogEntry {
   actor: FighterKey;
+  /** 미래예지가 이번 턴 종료에 들어갔으면 그 기술 이름(damage·remainingHp에 결과) */
+  futureSightMoveName?: string;
   damage: number;
   remainingHp: number;
   fainted: boolean;

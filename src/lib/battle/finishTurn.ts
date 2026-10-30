@@ -9,10 +9,11 @@ import { getAbility, getItem } from "@/lib/data";
 import { applyStageDelta } from "@/lib/statStages";
 import { advanceStatusTurn, computeStatusEndOfTurnDamage, inflictStatus, isImmuneToStatus } from "@/lib/statusConditions";
 import { consumeVolatileTurn, hasVolatile } from "@/lib/volatileConditions";
-import { rankStageMultiplier } from "@/lib/battlePower";
+import { computeDamage, rankStageMultiplier } from "@/lib/battlePower";
+import { getEffectiveness } from "@/lib/typeEffectiveness";
 import { computeFieldEndOfTurnHeal, isStatusBlockedByField } from "@/lib/fieldEffects";
 import { getDrainHealMultiplier, getHpThresholdBerryHeal } from "@/lib/itemEffects";
-import { SANDSTORM_IMMUNE_ABILITY_NAMES, activeWeather, applyForecastForm, consumeItem, contraryDelta, hasLivingReserve, isFainted, opponentKey, sideOf, statDropBlockStatsOf, statusImmunitiesOf, type BattleFighterState, type BattleState } from "./state";
+import { MIN_DAMAGE_ROLL, SANDSTORM_IMMUNE_ABILITY_NAMES, activeWeather, applyForecastForm, consumeItem, contraryDelta, hasLivingReserve, isFainted, opponentKey, sideOf, statDropBlockStatsOf, statusImmunitiesOf, type BattleFighterState, type BattleState } from "./state";
 import { type RunTurnContext, type RunTurnOutcome } from "./runTurn";
 import { actionFailed } from "./moveFailure";
 import { type ActionLogEntry, type SwitchLogEntry } from "@/types/battle";
@@ -58,7 +59,7 @@ function applyPerishSongCountdown(ctx: EndOfTurnFighterContext): boolean {
 function applyFieldEndOfTurnHeal(ctx: EndOfTurnFighterContext): void {
   const { state, key, fighter, endOfTurn } = ctx;
   // 트랙 M4: 그래스필드 회복은 땅에 있는 포켓몬만
-  const fieldHeal = isGrounded(state, fighter) ? computeFieldEndOfTurnHeal(state.field, fighter.maxHp) : 0;
+  const fieldHeal = isGrounded(state, fighter) && !hasVolatile(fighter.volatile, "healBlock") ? computeFieldEndOfTurnHeal(state.field, fighter.maxHp) : 0;
   if (fieldHeal > 0) {
     fighter.currentHp = Math.min(fighter.maxHp, fighter.currentHp + fieldHeal);
     endOfTurn.push({ actor: key, damage: 0, remainingHp: fighter.currentHp, fainted: false, fieldHeal });
@@ -68,7 +69,7 @@ function applyFieldEndOfTurnHeal(ctx: EndOfTurnFighterContext): void {
 /** 먹다남은음식: 턴 종료 시 항상(생존해 있으면) 최대 HP의 1/6 회복 */
 function applyLeftoversHeal(ctx: EndOfTurnFighterContext): void {
   const { key, fighter, fighterItem, endOfTurn } = ctx;
-  if (!fighterItem?.endOfTurnHealDenominator) return;
+  if (!fighterItem?.endOfTurnHealDenominator || hasVolatile(fighter.volatile, "healBlock")) return;
   const itemHeal = Math.min(
     fighter.maxHp - fighter.currentHp,
     Math.floor(fighter.maxHp / fighterItem.endOfTurnHealDenominator),
@@ -93,7 +94,7 @@ function applyLeftoversHeal(ctx: EndOfTurnFighterContext): void {
 function applyWeatherHealAbility(ctx: EndOfTurnFighterContext): void {
   const { state, key, fighter, fighterAbility, endOfTurn } = ctx;
   const weatherHealBoost = fighterAbility?.weatherEndOfTurnHealDenominator;
-  if (!weatherHealBoost || weatherHealBoost.weather !== activeWeather(state)) return;
+  if (!weatherHealBoost || weatherHealBoost.weather !== activeWeather(state) || hasVolatile(fighter.volatile, "healBlock")) return;
   const abilityWeatherHeal = Math.min(
     fighter.maxHp - fighter.currentHp,
     Math.floor(fighter.maxHp / weatherHealBoost.denominator),
@@ -148,7 +149,7 @@ function applyIngrainAquaRingHeal(ctx: EndOfTurnFighterContext): void {
     : hasVolatile(fighter.volatile, "aquaRing")
       ? "aquaRing"
       : undefined;
-  if (!regenSource) return;
+  if (!regenSource || hasVolatile(fighter.volatile, "healBlock")) return;
   const regenHeal = Math.min(
     fighter.maxHp - fighter.currentHp,
     Math.floor((fighter.maxHp / 16) * getDrainHealMultiplier(fighterItem)),
@@ -178,7 +179,7 @@ function applyLeechSeedDamage(ctx: EndOfTurnFighterContext): void {
     leechSeedDamage: seedDamage,
   });
   const healer = state[opponentKey(key)];
-  if (seedDamage > 0 && !isFainted(healer)) {
+  if (seedDamage > 0 && !isFainted(healer) && !hasVolatile(healer.volatile, "healBlock")) {
     if (fighterAbility?.reverseDrainHealsToDamage) {
       // 해감액: 씨뿌리기로 빨아들이려던 상대가 회복 대신 같은 양의 데미지를 입는다.
       const oozeDmg = Math.min(healer.currentHp, seedDamage);
@@ -212,6 +213,36 @@ function applyLeechSeedDamage(ctx: EndOfTurnFighterContext): void {
         });
       }
     }
+  }
+}
+
+/** 미래예지: 예약 카운터가 0이 되는 턴 종료에 이 자리의 포켓몬을 때린다(방어·대타 무시, 타입 상성만 적용) */
+function applyFutureSight(ctx: EndOfTurnFighterContext): void {
+  const { state, key, fighter, random, endOfTurn } = ctx;
+  const side = sideOf(state, key);
+  const queued = side.futureSight;
+  if (!queued) return;
+  queued.turnsRemaining -= 1;
+  if (queued.turnsRemaining > 0) return;
+  side.futureSight = undefined;
+  if (isFainted(fighter)) return;
+  const typeEffectiveness = queued.move.type ? getEffectiveness(queued.move.type, fighter.types) : 1;
+  const result = computeDamage(queued.realStats, fighter.realStats, queued.types, queued.move, {
+    typeEffectiveness,
+    attackerStages: queued.stages,
+    defenderStages: fighter.stages,
+    randomRoll: MIN_DAMAGE_ROLL + random() * (1 - MIN_DAMAGE_ROLL),
+  });
+  const damage = Math.min(fighter.currentHp, result?.damage ?? 0);
+  fighter.currentHp -= damage;
+  endOfTurn.push({ actor: key, damage, remainingHp: fighter.currentHp, fainted: isFainted(fighter), futureSightMoveName: queued.move.name });
+}
+
+/** 회복봉인·지옥찌르기: 턴 종료마다 카운터가 줄어 0에서 해제된다(걸린 턴도 1턴으로 센다). 이 턴 종료 회복 판정 뒤에 부른다 */
+function tickBlockVolatiles(ctx: EndOfTurnFighterContext): void {
+  const { fighter } = ctx;
+  for (const v of ["healBlock", "throatChop"] as const) {
+    if (hasVolatile(fighter.volatile, v)) fighter.volatile = consumeVolatileTurn(fighter.volatile, v);
   }
 }
 
@@ -337,7 +368,7 @@ function applyWishHeal(ctx: EndOfTurnFighterContext): void {
   wishQueue.turnsRemaining -= 1;
   if (triggersNow) {
     if (!isFainted(fighter)) {
-      const wishHeal = Math.min(fighter.maxHp - fighter.currentHp, wishQueue.healAmount);
+      const wishHeal = hasVolatile(fighter.volatile, "healBlock") ? 0 : Math.min(fighter.maxHp - fighter.currentHp, wishQueue.healAmount);
       if (wishHeal > 0) {
         fighter.currentHp += wishHeal;
         endOfTurn.push({ actor: key, damage: 0, remainingHp: fighter.currentHp, fainted: false, wishHeal });
@@ -419,7 +450,7 @@ function applyStatusEndOfTurnTick(ctx: EndOfTurnFighterContext): void {
     (statusCondition === "poison" || statusCondition === "badly-poisoned") &&
     !isFainted(fighter)
   ) {
-    const heal = Math.min(fighter.maxHp - fighter.currentHp, Math.floor(fighter.maxHp / poisonHealDenom));
+    const heal = hasVolatile(fighter.volatile, "healBlock") ? 0 : Math.min(fighter.maxHp - fighter.currentHp, Math.floor(fighter.maxHp / poisonHealDenom));
     fighter.currentHp += heal;
     fighter.status = advanceStatusTurn(fighter.status);
     if (heal > 0) {
@@ -755,6 +786,7 @@ function resolveEndOfTurnAndPerish(c: FinishCtx) {
       applyWeatherHealAbility(eotCtx);
       applyWeatherDamageAbility(eotCtx);
       applyIngrainAquaRingHeal(eotCtx);
+      applyFutureSight(eotCtx);
       applyLeechSeedDamage(eotCtx);
       applyCurseDamage(eotCtx);
       applyBoundDamage(eotCtx);
@@ -762,6 +794,7 @@ function resolveEndOfTurnAndPerish(c: FinishCtx) {
       applySyrupCoatDrop(eotCtx);
       applyOctolockDrop(eotCtx);
       applyWishHeal(eotCtx);
+      tickBlockVolatiles(eotCtx);
       applyDrowsySleepOnset(eotCtx);
       applySandstormDamage(eotCtx);
       applyStatusEndOfTurnTick(eotCtx);

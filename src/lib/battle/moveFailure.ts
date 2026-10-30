@@ -43,6 +43,7 @@ export function actionFailed(action: ActionLogEntry): boolean {
     action.ohkoImmune ||
     action.leechSeedBlockedByGrass ||
     action.curseSetFailed ||
+    action.futureSightFailed ||
     action.blockedBySubstituteMoveName
   ) {
     return true;

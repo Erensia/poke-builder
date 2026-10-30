@@ -1,6 +1,6 @@
 import { type Move } from "@/types/move";
 import { type FieldKind } from "@/types/field";
-import { type ActionLogEntry, type FighterKey } from "@/types/battle";
+import { type ActionLogEntry, type FighterKey, type ItemEffectLog } from "@/types/battle";
 import { BATTLE_STAT_KEYS } from "@/types/battleStats";
 import { getAbility, getItem, getMove } from "@/lib/data";
 import { effectiveHeldItem } from "./turnOrderInputs";
@@ -229,6 +229,8 @@ interface ActionCtx {
   smackedDownTarget: boolean;
   meltedItemName: string | undefined;
   meltFailed: boolean;
+  itemEffect: ItemEffectLog | undefined;
+  targetStagesReset: boolean;
   magneticFluxFailed: boolean;
   partyStatusCuredCount: number;
   teaTime: { self?: ReturnType<typeof eatBerryNow>; opponent?: ReturnType<typeof eatBerryNow>; } | undefined;
@@ -362,6 +364,8 @@ function resolveMirroredPhase(c: ActionCtx) {
   c.smackedDownTarget = mirrorResult.smackedDownTarget;
   c.meltedItemName = mirrorResult.meltedItemName;
   c.meltFailed = mirrorResult.meltFailed;
+  c.itemEffect = mirrorResult.itemEffect;
+  c.targetStagesReset = mirrorResult.targetStagesReset;
   c.magneticFluxFailed = mirrorResult.magneticFluxFailed;
   c.partyStatusCuredCount = mirrorResult.partyStatusCuredCount;
   c.teaTime = mirrorResult.teaTime;
@@ -827,6 +831,8 @@ function collectResult(c: ActionCtx) {
     teaTime: c.teaTime,
     teaTimeFailed: c.teaTimeFailed || undefined,
     meltFailed: c.meltFailed || undefined,
+    itemEffect: c.itemEffect,
+    targetStagesReset: c.targetStagesReset || undefined,
     magneticFluxFailed: c.magneticFluxFailed || undefined,
     fairyLockSet: c.fairyLockSet || undefined,
     fairyLockFailed: c.fairyLockFailed || undefined,

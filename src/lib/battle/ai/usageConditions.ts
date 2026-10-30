@@ -1,6 +1,6 @@
 import { type Move } from "@/types/move";
 import { hasVolatile } from "@/lib/volatileConditions";
-import { abilityOf, activeWeather, type BattleFighterState, type BattleState } from "../state";
+import { abilityOf, activeWeather, isHealingMove, type BattleFighterState, type BattleState } from "../state";
 import { effectiveHeldItem } from "../turnOrderInputs";
 
 /**
@@ -13,6 +13,9 @@ export function isUsageBlocked(state: BattleState, fighter: BattleFighterState, 
   if (move.blockedByGravity && state.gravityTurnsRemaining !== undefined) return true;
   // 내던지기(트랙 M5): 던질 수 있는 도구(서투름·매직룸 제외)가 없으면 실패
   if (move.flingsHeldItem && !effectiveHeldItem(fighter, state)?.flingPower) return true;
+  // 회복봉인·지옥찌르기(6.3 B2): 걸린 동안 회복 기술 / 소리 기술은 못 쓴다
+  if (hasVolatile(fighter.volatile, "healBlock") && isHealingMove(move)) return true;
+  if (hasVolatile(fighter.volatile, "throatChop") && (move.classification ?? []).includes("소리")) return true;
   switch (move.usageCondition) {
     case "first-turn-only":
       if (fighter.hasActedSinceSwitchIn) return true;
@@ -25,6 +28,9 @@ export function isUsageBlocked(state: BattleState, fighter: BattleFighterState, 
       break;
     case "sleep-only":
       if (fighter.status.condition !== "sleep") return true;
+      break;
+    case "target-has-item":
+      if (!opponent.currentItemId) return true;
       break;
     case "not-no-retreat":
       if (hasVolatile(fighter.volatile, "noRetreat")) return true;
