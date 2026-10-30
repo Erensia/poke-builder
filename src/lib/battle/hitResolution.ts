@@ -954,7 +954,7 @@ function applyRecoilAndDrain(c: HitCtx) {
       c.attacker.currentHp -= c.liquidOozeDamage;
       c.liquidOozeAbilityName = c.defenderAbility.name;
     } else {
-      c.drainHealAmount = rawDrain;
+      c.drainHealAmount = hasVolatile(c.attacker.volatile, "healBlock") ? 0 : rawDrain;
       c.attacker.currentHp = Math.min(c.attacker.maxHp, c.attacker.currentHp + c.drainHealAmount);
     }
   }
@@ -963,7 +963,7 @@ function applyRecoilAndDrain(c: HitCtx) {
   // 흡수기와는 별개 축이라 같은 행동에서 동시에 발동할 수 있다.
   c.shellBellHealAmount = 0;
   if (c.isDamaging && c.actualDamageDealt > 0 && c.attackerItem?.damageDealtHealDenominator) {
-    c.shellBellHealAmount = Math.floor(c.actualDamageDealt / c.attackerItem.damageDealtHealDenominator);
+    c.shellBellHealAmount = hasVolatile(c.attacker.volatile, "healBlock") ? 0 : Math.floor(c.actualDamageDealt / c.attackerItem.damageDealtHealDenominator);
     c.attacker.currentHp = Math.min(c.attacker.maxHp, c.attacker.currentHp + c.shellBellHealAmount);
   }
 }

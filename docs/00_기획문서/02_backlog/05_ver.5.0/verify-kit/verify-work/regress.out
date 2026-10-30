@@ -1,0 +1,2 @@
+[31mWebSocket server error: Port 24678 is already in use[39m
+{"battles":200,"turns":5543,"winners":{"a":95,"b":103,"draw":0,"timeout":2},"hash":"f46af161cdf7688254dcd2e3ce3b5e65ac47481b0be51d44aeb583c9fa85433b"}

@@ -215,6 +215,14 @@
     "pp": 8,
     "priority": 0,
     "effect": "기합을 높여서 혼신의 힘을 방출한다. 10% 확률로 상대의 특수방어를 떨어뜨린다.",
+    "statChanges": [
+      {
+        "target": "opponent",
+        "stat": "spd",
+        "delta": -1,
+        "chance": 10
+      }
+    ],
     "tags": [
       "랭크",
       "비접촉",
@@ -336,6 +344,7 @@
     "pp": 16,
     "priority": 0,
     "effect": "노래로 상대를 공격한다. 함께 돌림노래를 하면 계속해서 쓸 수 있고 위력도 2배로 올라간다.",
+    "doublesPowerPerConsecutiveUse": true,
     "tags": [
       "소리"
     ],
@@ -978,6 +987,12 @@
     "pp": 12,
     "priority": 0,
     "effect": "불쾌한 음파를 상대에게 날려서 공격한다. 2턴 동안 상대는 기술이나 특성 또는 지니고 있는 도구로 HP를 회복할 수 없게 된다.",
+    "inflictsVolatile": [
+      {
+        "volatile": "healBlock",
+        "target": "opponent"
+      }
+    ],
     "tags": [
       "비접촉",
       "소리",
@@ -1055,6 +1070,13 @@
     "pp": 12,
     "priority": 0,
     "effect": "큰 바위를 세차게 부딪쳐서 공격한다. 30% 확률로 상대를 풀죽게 만든다.",
+    "inflictsVolatile": [
+      {
+        "volatile": "flinch",
+        "target": "opponent",
+        "chance": 30
+      }
+    ],
     "tags": [
       "광역-상대",
       "비접촉",
@@ -1143,6 +1165,13 @@
     "pp": 12,
     "priority": 0,
     "effect": "굉장한 살기로 위압하면서 몸통박치기한다. 20% 확률로 상대를 풀죽게 만든다. 대상이 작아지기를 사용했었다면 필중하며 대미지가 2배다.",
+    "inflictsVolatile": [
+      {
+        "volatile": "flinch",
+        "target": "opponent",
+        "chance": 20
+      }
+    ],
     "tags": [
       "압박",
       "접촉",
@@ -1187,6 +1216,14 @@
     "pp": 16,
     "priority": 0,
     "effect": "단단한 꼬리로 상대를 힘껏 쳐서 공격한다. 30%의 확률로 상대의 방어를 떨어뜨린다.",
+    "statChanges": [
+      {
+        "target": "opponent",
+        "stat": "def",
+        "delta": -1,
+        "chance": 30
+      }
+    ],
     "tags": [
       "랭크",
       "접촉"
@@ -1303,6 +1340,8 @@
     "pp": 20,
     "priority": 0,
     "effect": "상대의 지닌 물건을 탁 쳐서 떨어뜨려 배틀이 끝날 때까지 사용할 수 없게 한다. 물건을 가진 상대에게는 데미지를 더 준다.",
+    "knocksOffTargetItem": true,
+    "targetItemPowerMultiplier": 1.5,
     "tags": [
       "접촉"
     ],
@@ -1432,6 +1471,13 @@
     "pp": 16,
     "priority": 3,
     "effect": "움직임에 반응하여 손바닥으로 밀쳐서 상대를 풀죽게 만든다. 상대가 쓴 기술이 선제공격 기술이 아니면 실패한다.",
+    "usageCondition": "opponent-priority-move-only",
+    "inflictsVolatile": [
+      {
+        "volatile": "flinch",
+        "target": "opponent"
+      }
+    ],
     "tags": [
       "선공",
       "접촉",
@@ -2105,6 +2151,14 @@
     "pp": 12,
     "priority": 0,
     "effect": "혜성과 같은 펀치를 날려서 공격한다. 20%의 확률로 자신의 공격이 올라간다.",
+    "statChanges": [
+      {
+        "target": "self",
+        "stat": "atk",
+        "delta": 1,
+        "chance": 20
+      }
+    ],
     "tags": [
       "랭크",
       "접촉",
@@ -2562,6 +2616,7 @@
     "pp": 20,
     "priority": 0,
     "effect": "순간적으로 빈틈을 노려 상대를 베어 버린다. 급소에 맞을 확률이 높다.",
+    "highCritRatio": true,
     "tags": [
       "급소",
       "접촉",
@@ -2682,6 +2737,7 @@
     "pp": 20,
     "priority": 0,
     "effect": "공격과 동시에 도구를 훔친다. 자신이 도구를 지니고 있을 경우에는 훔칠 수 없다.",
+    "stealsTargetItem": true,
     "tags": [
       "접촉"
     ],
@@ -2733,6 +2789,7 @@
     "pp": 20,
     "priority": 0,
     "effect": "물어서 공격한다. 상대가 나무열매를 지니고 있을 때 먹어서 나무열매의 효과를 받을 수 있다.",
+    "eatsTargetBerry": true,
     "tags": [
       "접촉"
     ],
@@ -4213,6 +4270,14 @@
     "pp": 12,
     "priority": 0,
     "effect": "상대에게 치근거리며 공격한다. 10% 확률로 상대의 공격을 떨어뜨린다.",
+    "statChanges": [
+      {
+        "target": "opponent",
+        "stat": "atk",
+        "delta": -1,
+        "chance": 10
+      }
+    ],
     "tags": [
       "랭크",
       "접촉"
@@ -4809,6 +4874,13 @@
     "pp": 12,
     "priority": 0,
     "effect": "천사와도 같은 노랫소리로 상대를 공격한다. 그 턴에 능력이 올라간 포켓몬을 혼란 상태로 만든다.",
+    "inflictsVolatile": [
+      {
+        "volatile": "confusion",
+        "target": "opponent",
+        "condition": "target-stat-rose-this-turn"
+      }
+    ],
     "tags": [
       "비접촉",
       "소리",
@@ -5001,6 +5073,12 @@
     "pp": 16,
     "priority": 0,
     "effect": "이 기술에 맞은 상대는 지옥의 고통 때문에 2턴 동안 소리 기술을 낼 수 없다.",
+    "inflictsVolatile": [
+      {
+        "volatile": "throatChop",
+        "target": "opponent"
+      }
+    ],
     "tags": [
       "접촉",
       "상태이상-기타"
@@ -5017,6 +5095,7 @@
     "pp": 20,
     "priority": 0,
     "effect": "귀엽게 애교부리며 상대에게 다가가 지니고 있는 도구를 뺏는다.",
+    "stealsTargetItem": true,
     "tags": [
       "접촉"
     ],
@@ -5387,6 +5466,7 @@
     "pp": 16,
     "priority": 0,
     "effect": "특수한 진흙 덩어리를 상대에게 내던져서 공격한다. 능력 변화를 원래대로 돌린다.",
+    "resetsTargetStages": true,
     "tags": [
       "필중",
       "비접촉"
@@ -5418,6 +5498,12 @@
     "pp": 16,
     "priority": 0,
     "effect": "불꽃을 두르고 돌진한다. 자신도 대상에게 준 피해의 ⅓만큼 반동 피해를 받는다. 10%의 확률로 상대를 화상 상태로 만든다.",
+    "inflictsStatus": [
+      {
+        "status": "burn",
+        "chance": 10
+      }
+    ],
     "tags": [
       "반동",
       "접촉",
@@ -5454,6 +5540,7 @@
     "pp": 12,
     "priority": 0,
     "effect": "엎친 데 덮친 격으로 공격한다. 상태 이상인 상대에게 큰 데미지를 준다.",
+    "conditionalDoublePower": "target-has-status",
     "tags": [
       "비접촉"
     ],
@@ -5528,6 +5615,7 @@
     "pp": 8,
     "priority": 0,
     "effect": "상대가 지닌 물건을 조종해서 공격한다. 상대가 도구를 지니고 있지 않으면 실패한다.",
+    "usageCondition": "target-has-item",
     "tags": [
       "비접촉"
     ],
@@ -5927,6 +6015,13 @@
     "pp": 16,
     "priority": 0,
     "effect": "불꽃을 두른 이빨로 문다. 10% 확률로 상대를 풀죽게 하거나 화상 상태로 만든다.",
+    "inflictsVolatile": [
+      {
+        "volatile": "flinch",
+        "target": "opponent",
+        "chance": 10
+      }
+    ],
     "tags": [
       "접촉",
       "턱",
@@ -5954,6 +6049,12 @@
     "pp": 8,
     "priority": 0,
     "effect": "폭발하는 불꽃으로 상대를 태워서 공격한다. 사용 후 1턴간 행동할 수 없다.",
+    "inflictsVolatile": [
+      {
+        "volatile": "recharge",
+        "target": "self"
+      }
+    ],
     "tags": [
       "반동-휴식",
       "비접촉"
@@ -6392,6 +6493,7 @@
     "pp": 12,
     "priority": 0,
     "effect": "기술을 사용한 2턴 뒤에 상대에게 염동력의 덩어리를 보내어 공격한다. 방어 계열 기술을 무시한다.",
+    "delayedAttackTurns": 2,
     "tags": [
       "비접촉"
     ],
@@ -6481,6 +6583,7 @@
     "pp": 12,
     "priority": 0,
     "effect": "사이코 파워로 물어서 상대를 공격한다. 빛의장막이나 리플렉터도 파괴할 수 있다.",
+    "breaksScreensOnHit": true,
     "tags": [
       "턱",
       "접촉"
@@ -6552,6 +6655,13 @@
     "pp": 16,
     "priority": 0,
     "effect": "전기를 모은 이빨로 문다. 10% 확률로 상대를 풀죽게 하거나 마비 상태로 만든다.",
+    "inflictsVolatile": [
+      {
+        "volatile": "flinch",
+        "target": "opponent",
+        "chance": 10
+      }
+    ],
     "tags": [
       "접촉",
       "턱",
@@ -6598,6 +6708,13 @@
     "pp": 16,
     "priority": 0,
     "effect": "냉기를 품은 이빨로 문다. 10% 확률로 상대를 풀죽게 하거나 얼음 상태로 만든다.",
+    "inflictsVolatile": [
+      {
+        "volatile": "flinch",
+        "target": "opponent",
+        "chance": 10
+      }
+    ],
     "tags": [
       "접촉",
       "턱",
@@ -6839,6 +6956,7 @@
     "pp": 20,
     "priority": 0,
     "effect": "부리로 공격한다. 상대가 나무열매를 지니고 있을 때 쪼아서 나무열매의 효과를 받을 수 있다.",
+    "eatsTargetBerry": true,
     "tags": [
       "접촉"
     ],

@@ -179,7 +179,8 @@ function withTurnCost(ctx: MoveHitContext, move: Move, e: MoveHitEstimate): Move
   if (!Number.isFinite(e.expected) || e.expected <= 0) return e;
   const { state, attacker } = ctx;
   const alreadyCharging = attacker.chargingMoveId === move.id;
-  const charge = !!move.chargeTurn && !skipsChargeTurn(state, attacker, move);
+  // 미래예지(6.3 B2)는 데미지가 2턴 뒤라 모으기와 같은 비용으로 센다(그 사이 다른 행동을 할 수 있는 이득은 무시 — 단순화)
+  const charge = (!!move.chargeTurn && !skipsChargeTurn(state, attacker, move)) || !!move.delayedAttackTurns;
   const recharge = !!move.inflictsVolatile?.some((v) => v.volatile === "recharge" && v.target === "self");
   if (!charge && !recharge) return e;
   const uses = e.expected;
