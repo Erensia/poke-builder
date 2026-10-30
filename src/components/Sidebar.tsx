@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { SyncDot } from "./SyncDot";
 import "./Sidebar.css";
 
 export type AppView = "party" | "matchup" | "battle-log" | "rank-battle" | "pokedex" | "movedex" | "itemdex";
@@ -174,6 +175,7 @@ function BottomNav({ activeView, onSelectView }: SidebarProps) {
           >
             <span className="bottom-nav-icon" aria-hidden="true">
               {item.icon}
+              {item.view === "party" && <SyncDot />}
             </span>
             <span className="bottom-nav-label">{item.short ?? item.label}</span>
           </button>
@@ -229,6 +231,7 @@ export function Sidebar({ activeView, onSelectView }: SidebarProps) {
             >
               <span className="sidebar-nav-icon" aria-hidden="true">
                 {item.icon}
+                {item.view === "party" && <SyncDot />}
               </span>
               <span className="sidebar-nav-label">{item.label}</span>
             </button>

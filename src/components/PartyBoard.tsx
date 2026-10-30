@@ -10,6 +10,7 @@ import { CosmeticFormPickerModal } from "./CosmeticFormPickerModal";
 import { BackupModal } from "./BackupModal";
 import { PartyPresetsModal } from "./PartyPresetsModal";
 import { SlotPresetsModal } from "./SlotPresetsModal";
+import { SyncDot } from "./SyncDot";
 import { TypeCoverageSummary } from "./TypeCoverageSummary";
 import { useParty } from "../hooks/useParty";
 import { usePartyPresets } from "../hooks/usePartyPresets";
@@ -128,6 +129,7 @@ export function PartyBoard() {
           </button>
           <button type="button" className="party-board-reset tap-target" onClick={() => setShowBackup(true)}>
             백업
+            <SyncDot />
           </button>
           <button
             type="button"
