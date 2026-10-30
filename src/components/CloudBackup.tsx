@@ -22,7 +22,7 @@ export function CloudBackup() {
       {user ? (
         <>
           <p className="backup-hint">
-            {user.email ?? "Google 계정"}으로 로그인했어요. 저장한 파티와 포켓몬이 자동으로 클라우드에 백업되고, 같은 계정으로 로그인한 다른 기기와 맞춰져요.
+            {user.email ?? "Google 계정"}으로 로그인했어요. 저장한 파티·포켓몬·내 샘플이 자동으로 클라우드에 백업되고, 같은 계정으로 로그인한 다른 기기와 맞춰져요.
           </p>
           {sync.conflicts.length > 0 ? (
             <div className="backup-confirm" role="group" aria-label="클라우드와 내용이 달라요">

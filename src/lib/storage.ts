@@ -121,7 +121,7 @@ export function saveSlotPresets(presets: SlotPreset[]): void {
  * 로컬에 써 넣어 화면의 목록 상태를 다시 읽게 하는 쪽(Replaced) 둘이다. 목록 상태는 훅마다 따로 들고 있어서 `localStorage`만
  * 바꾸면 켜져 있는 화면이 옛 상태로 되돌려 쓴다.
  */
-export type PresetListName = "partyPresets" | "slotPresets";
+export type PresetListName = "partyPresets" | "slotPresets" | "mySamples";
 const presetSavedListeners = new Set<(name: PresetListName) => void>();
 const presetReplacedListeners = new Set<(name: PresetListName) => void>();
 
@@ -253,6 +253,7 @@ export function loadMySamples(): SamplePartyPreset[] {
 
 export function saveMySamples(samples: SamplePartyPreset[]): void {
   mySamplesStore.save(samples);
+  presetSavedListeners.forEach((fn) => fn("mySamples"));
 }
 
 /** 매치업 화면 자동저장(3.2 V2) — 새로고침해도 역산 관측이 안 날아가게. 파티·프리셋 키와 겹치지 않는 별도 키 */

@@ -1,4 +1,5 @@
 import { cleanPartyPresets, cleanSlotPresets } from "./backup";
+import { cleanMySamples } from "./mySamples";
 import type { PresetListName, SyncBase } from "./storage";
 
 /**
@@ -12,7 +13,8 @@ export interface RemoteDoc {
 }
 
 export function canonical(name: PresetListName, raw: unknown[]): { json: string; items: unknown[] } {
-  const { items } = name === "partyPresets" ? cleanPartyPresets(raw, true) : cleanSlotPresets(raw, true);
+  const { items } =
+    name === "partyPresets" ? cleanPartyPresets(raw, true) : name === "slotPresets" ? cleanSlotPresets(raw, true) : cleanMySamples(raw);
   return { json: JSON.stringify(items), items };
 }
 
@@ -42,7 +44,7 @@ export function itemHashes(json: string): Record<string, string> {
  * 기준이 없으면 지운 것을 알 수 없어 합집합이 된다(잃는 것은 없다). 결과는 최근 저장 순으로 정렬한 정규형 JSON.
  */
 export function mergeLists(name: PresetListName, localJson: string, remoteJson: string, base: Record<string, string> | null): string {
-  type Item = { id: string; savedAt: number };
+  type Item = { id: string; savedAt?: number }; // 내 샘플에는 savedAt이 없다 — 그 목록은 정렬하지 않고 이 기기 순서 뒤에 상대 것을 붙인다
   const L = JSON.parse(localJson) as Item[];
   const R = JSON.parse(remoteJson) as Item[];
   const hash = (i: Item) => hashOf(JSON.stringify(i));
@@ -57,7 +59,7 @@ export function mergeLists(name: PresetListName, localJson: string, remoteJson: 
       return [hash(l) !== hash(r) && !edited(l) ? r : l];
     }),
     ...R.filter((r) => !localIds.has(r.id) && edited(r)),
-  ].sort((a, b) => b.savedAt - a.savedAt);
+  ].sort((a, b) => (b.savedAt ?? 0) - (a.savedAt ?? 0));
   return canonical(name, items).json;
 }
 
