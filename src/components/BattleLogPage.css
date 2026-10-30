@@ -245,12 +245,15 @@
   gap: 1.4rem;
 }
 
+/* 6.2 G2: 두 컬럼이 같은 폭이다. 폭이 정해지지 않은 grid의 fr 트랙은 가장 넓은 항목의 max-content로 같아지므로, 더 긴 쪽 내용
+   (예: 켄타로스(팔데아/블레이즈종))에 맞춰 둘 다 한 줄에 들어간다. 화면이 좁아지면 트랙이 같이 줄고 이름만 줄바꿈한다 */
 .battle-select-board {
-  display: flex;
-  flex-direction: row;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   justify-content: center;
   gap: 2.5rem;
-  flex-wrap: wrap;
+  width: fit-content;
+  max-width: 100%;
 }
 
 .battle-select-column {
@@ -258,7 +261,6 @@
   flex-direction: column;
   gap: 0.7rem;
   min-width: 240px;
-  width: max-content; /* 가장 긴 이름(예: 켄타로스(팔데아/블레이즈종))이 한 줄에 들어가도록 컬럼 폭을 내용에 맞춘다 */
 }
 
 /* 샘플이 지정한 고정 선출 표시(5.4 E3) — 줄을 늘리지 않아 두 컬럼 높이·가로 배치가 그대로다 */
@@ -331,7 +333,7 @@
 
 .battle-select-name {
   font-weight: 600;
-  white-space: nowrap;
+  min-width: 0;
 }
 
 .battle-select-actions {
@@ -1016,18 +1018,15 @@
     order: 0;
   }
 
-  /* 선출 화면: 내용 폭 대신 화면 폭에 맞추고, 긴 이름은 줄바꿈한다 */
+  /* 선출 화면: 한 컬럼씩 세로로 쌓고 화면 폭에 맞춘다. 긴 이름은 줄바꿈한다 */
   .battle-select-board {
+    grid-template-columns: minmax(0, 1fr);
     gap: 1.2rem;
-  }
-  .battle-select-column {
-    min-width: 0;
     width: 100%;
     max-width: 340px;
   }
-  .battle-select-name {
+  .battle-select-column {
     min-width: 0;
-    white-space: normal;
   }
 
   .battle-log-header h2 {
