@@ -107,6 +107,9 @@ let applying = false;
 let started = false;
 /** 저장 알림·온라인 복귀 구독은 처음 시작할 때 한 번만 건다(오프라인에서 실패해 다시 시작해도 겹치지 않게) */
 let listening = false;
+/** 마지막으로 동기화를 시작한 시각 — 창으로 돌아올 때마다 연달아 읽지 않도록 간격을 둔다(6.2 C7). Spark 읽기 한도(하루 5만)에는 한참 못 미치는 값 */
+let lastRunAt = 0;
+const RETURN_SYNC_GAP_MS = 30_000;
 
 function baseOf(name: PresetListName): SyncBase | null {
   return loadCloudSyncMeta().bases[uid ?? ""]?.[name] ?? null;
@@ -253,6 +256,7 @@ async function run() {
     return;
   }
   running = true;
+  lastRunAt = Date.now();
   setStatus({ syncing: true, error: "", notice: "" });
   try {
     // ponytail: 두 기기가 동시에 올리면 다시 판정하는 것을 3번까지만 한다. 그래도 계속 어긋나면 다음 동기화 때 이어간다.
@@ -282,6 +286,12 @@ function schedule(ms: number) {
 
 /** 로그인 직후·"지금 동기화"·앱 시작에서 바로 한 번 맞춘다 */
 export const syncNow = () => schedule(0);
+
+/** 다른 탭·창에 있다가 돌아오면 그 사이 다른 기기가 바꾼 내용을 받아 온다(6.2 C7). 선택을 기다리는 충돌이 있거나 방금 맞췄으면 건너뛴다 */
+function onReturn() {
+  if (!uid || document.visibilityState !== "visible" || status.conflicts.length || Date.now() - lastRunAt < RETURN_SYNC_GAP_MS) return;
+  syncNow();
+}
 
 /** 사용자가 목록을 바꿨을 때 — 마지막으로 맞춘 내용과 같으면(화면을 열 때의 재저장 등) 네트워크를 쓰지 않는다 */
 function onSaved(name: PresetListName) {
@@ -328,6 +338,8 @@ export function startCloudSync() {
     onPresetListSaved(onSaved);
     // 오프라인이었다가 돌아오면 한 번 더 맞춘다(6.2 C2). 시작할 때 오프라인이라 Firebase를 못 받았으면(started=false) 그때 시작한다
     window.addEventListener("online", () => (started ? syncNow() : startCloudSync()));
+    document.addEventListener("visibilitychange", onReturn);
+    window.addEventListener("focus", onReturn);
   }
   loadAuth()
     .then(({ auth, mod }) =>
