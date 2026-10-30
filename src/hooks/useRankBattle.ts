@@ -1,9 +1,9 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { SAMPLE_PARTIES } from "../lib/data";
 import type { RankState } from "../lib/battleRank";
 import { beginRankMatch, expireSeason, finishRankMatch, settleAbandonedRank, type RankHistoryEntry, type RankSave } from "../lib/battleRankSave";
 import { pickRankOpponent, resolveRankAiPolicy } from "../lib/battle/ai/rankProfile";
-import { loadBattleRank, saveBattleRank } from "../lib/storage";
+import { loadBattleRank, onPresetListReplaced, saveBattleRank } from "../lib/storage";
 import type { PartySlots, SamplePartyPreset } from "../types/party";
 
 /** 직전 판 결과 — 계산 내역 카드가 판 전 상태와 비교해 승급·강등·챔피언 달성을 보여 준다 */
@@ -25,6 +25,8 @@ export function useRankBattle() {
     if (settled !== loaded) saveBattleRank(settled);
     return settled;
   });
+  // 클라우드 동기화(6.2 C5)가 다른 기기의 기록을 받아 `localStorage`에 썼으면 화면 상태도 다시 읽는다(안 읽으면 옛 상태로 되돌려 쓴다)
+  useEffect(() => onPresetListReplaced((name) => name === "battleRank" && setSave(loadBattleRank())), []);
   const [active, setActive] = useState(false);
   const [current, setCurrent] = useState<SamplePartyPreset | null>(null);
   const [aiLevel, setAiLevel] = useState(0);

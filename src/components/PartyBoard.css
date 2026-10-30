@@ -61,6 +61,9 @@
 }
 
 .party-board-reset {
+  /* 알림 점(SyncDot)이 붙어도 글자 줄의 세로 중앙에 맞도록 flex로 정렬한다 — inline-block + vertical-align: middle은 한글에서 점이 아래로 처진다 */
+  display: inline-flex;
+  align-items: center;
   border: 1px solid var(--border);
   background: transparent;
   color: var(--text-muted);

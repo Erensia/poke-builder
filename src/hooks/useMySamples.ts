@@ -5,7 +5,7 @@ import { useStoredList } from "./useStoredList";
 
 /** 사용자가 저장한 "내 샘플"(3.1 S2 스파이크) — 마스터 샘플과 같은 모양이라 내보낸 JSON을 그대로 마스터에 반영할 수 있다 */
 export function useMySamples() {
-  const { items, setItems, prependItem, removeItem } = useStoredList<SamplePartyPreset>(loadMySamples, saveMySamples);
+  const { items, setItems, prependItem, removeItem } = useStoredList<SamplePartyPreset>(loadMySamples, saveMySamples, "mySamples");
 
   function addSample(fields: Pick<SamplePartyPreset, "name" | "style" | "group" | "description">, slots: PartySlot[]) {
     const name = fields.name.trim();

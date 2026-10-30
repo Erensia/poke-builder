@@ -15,12 +15,16 @@ import { onPresetListReplaced, type PresetListName } from "../lib/storage";
 export function useStoredList<T extends { id: string }>(
   loadFn: () => T[],
   saveFn: (items: T[]) => void,
+  listName?: PresetListName,
 ) {
   const [items, setItems] = useState<T[]>(() => loadFn());
 
   useEffect(() => {
     saveFn(items);
   }, [items, saveFn]);
+
+  // 클라우드 동기화(6.0 K3)가 클라우드 내용을 `localStorage`에 써 넣었으면 화면의 목록 상태도 다시 읽는다(안 읽으면 옛 상태를 되돌려 쓴다)
+  useEffect(() => (listName ? onPresetListReplaced((name) => name === listName && setItems(loadFn())) : undefined), [listName, loadFn]);
 
   /** 새 항목을 맨 앞에 추가한다(최신순 정렬 — 기존 usePartyPresets/useSlotPresets 동작과 동일) */
   function prependItem(item: T) {
@@ -43,10 +47,7 @@ export function useNamedList<T extends { id: string; name: string; savedAt: numb
   saveFn: (items: T[]) => void,
   listName: PresetListName,
 ) {
-  const { items: presets, prependItem, removeItem: deletePreset, setItems } = useStoredList<T>(loadFn, saveFn);
-
-  // 클라우드 동기화(6.0 K3)가 클라우드 내용을 `localStorage`에 써 넣었으면 화면의 목록 상태도 다시 읽는다(안 읽으면 옛 상태를 되돌려 쓴다)
-  useEffect(() => onPresetListReplaced((name) => name === listName && setItems(loadFn())), [listName, loadFn, setItems]);
+  const { items: presets, prependItem, removeItem: deletePreset, setItems } = useStoredList<T>(loadFn, saveFn, listName);
 
   function savePreset(name: string, rest: Omit<T, "id" | "name" | "savedAt">) {
     const trimmed = name.trim();

@@ -72,15 +72,30 @@ export function parseMySamples(text: string): { samples: Omit<SamplePartyPreset,
   }
   const file = data as { kind?: unknown; samples?: unknown };
   if (!file || file.kind !== EXPORT_KIND || !Array.isArray(file.samples)) return null;
-  const samples: Omit<SamplePartyPreset, "id">[] = [];
-  for (const raw of file.samples) {
-    const r = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
-    const slots = Array.isArray(r.slots) && r.slots.length === 6 ? r.slots.map(cleanSlot) : null;
-    const name = typeof r.name === "string" ? r.name.trim() : "";
-    if (!slots || slots.includes(null) || !name || typeof r.style !== "string" || typeof r.description !== "string" || (r.group !== "real" && r.group !== "textbook")) continue;
-    samples.push({ name, style: r.style, group: r.group, description: r.description, slots: slots as PartySlot[] });
-  }
+  const samples = file.samples.flatMap((raw) => cleanSample(raw) ?? []);
   return { samples, skipped: file.samples.length - samples.length };
+}
+
+/** 샘플 하나 검증(id 제외) — 이름·분류·6마리 슬롯이 틀리면 null */
+function cleanSample(raw: unknown): Omit<SamplePartyPreset, "id"> | null {
+  const r = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  const slots = Array.isArray(r.slots) && r.slots.length === 6 ? r.slots.map(cleanSlot) : null;
+  const name = typeof r.name === "string" ? r.name.trim() : "";
+  if (!slots || slots.includes(null) || !name || typeof r.style !== "string" || typeof r.description !== "string" || (r.group !== "real" && r.group !== "textbook")) return null;
+  return { name, style: r.style, group: r.group, description: r.description, slots: slots as PartySlot[] };
+}
+
+/**
+ * 클라우드 동기화(6.2 C3)용 목록 검증 — 같은 샘플을 알아봐야 하니 받은 id를 그대로 두고(없으면 건너뜀), 클라우드에 저장되는
+ * 문자열과 같도록 키 순서(id·name·style·group·description·slots)를 고정한다. 바꾸면 모든 목록이 "바뀐 것"으로 보인다.
+ */
+export function cleanMySamples(raw: unknown[]): { items: SamplePartyPreset[]; skipped: number } {
+  const items = raw.flatMap((x) => {
+    const sample = cleanSample(x);
+    const id = (x as { id?: unknown } | null)?.id;
+    return sample && typeof id === "string" && id ? [{ id, ...sample }] : [];
+  });
+  return { items, skipped: raw.length - items.length };
 }
 
 /** 같은 샘플인지 보는 열쇠(이름 + 6마리의 종·도구·기술) — 같은 파일을 두 번 가져와도 겹치지 않게. ponytail: 포인트·성격까지는 안 본다 */

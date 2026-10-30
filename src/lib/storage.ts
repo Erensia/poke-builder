@@ -121,7 +121,7 @@ export function saveSlotPresets(presets: SlotPreset[]): void {
  * 로컬에 써 넣어 화면의 목록 상태를 다시 읽게 하는 쪽(Replaced) 둘이다. 목록 상태는 훅마다 따로 들고 있어서 `localStorage`만
  * 바꾸면 켜져 있는 화면이 옛 상태로 되돌려 쓴다.
  */
-export type PresetListName = "partyPresets" | "slotPresets";
+export type PresetListName = "partyPresets" | "slotPresets" | "mySamples" | "battleRank" | "battleFrontier";
 const presetSavedListeners = new Set<(name: PresetListName) => void>();
 const presetReplacedListeners = new Set<(name: PresetListName) => void>();
 
@@ -145,6 +145,10 @@ export interface SyncBase {
   hash: string;
   /** 그때 클라우드 문서의 updatedAt */
   remoteUpdatedAt: number;
+  /** 그때 목록의 항목 id → 항목 해시(6.2 C4). 항목 단위 병합에서 바뀐 항목·지워진 항목을 알아내는 기준. 6.1까지의 기록에는 없다 */
+  items?: Record<string, string>;
+  /** 그때 랭크 저장본의 정규형 JSON(6.2 C6). 두 기기의 판을 기준 상태에서 다시 계산해 합치는 데 쓴다. 랭크 기록에만 있다 */
+  snapshot?: string;
 }
 interface CloudSyncMeta {
   lastUid: string | null;
@@ -229,6 +233,7 @@ export function loadBattleFrontier(): FrontierSave {
 
 export function saveBattleFrontier(save: FrontierSave): void {
   battleFrontierStore.save(save);
+  presetSavedListeners.forEach((fn) => fn("battleFrontier"));
 }
 
 const battleRankStore = createLocalStorageStore<RankSave>(BATTLE_RANK_STORAGE_KEY, isRankSave, EMPTY_RANK_SAVE);
@@ -240,6 +245,7 @@ export function loadBattleRank(): RankSave {
 
 export function saveBattleRank(save: RankSave): void {
   battleRankStore.save(save);
+  presetSavedListeners.forEach((fn) => fn("battleRank"));
 }
 
 const mySamplesStore = createLocalStorageStore<SamplePartyPreset[]>(MY_SAMPLES_STORAGE_KEY, (v): v is SamplePartyPreset[] => Array.isArray(v), []);
@@ -251,6 +257,7 @@ export function loadMySamples(): SamplePartyPreset[] {
 
 export function saveMySamples(samples: SamplePartyPreset[]): void {
   mySamplesStore.save(samples);
+  presetSavedListeners.forEach((fn) => fn("mySamples"));
 }
 
 /** 매치업 화면 자동저장(3.2 V2) — 새로고침해도 역산 관측이 안 날아가게. 파티·프리셋 키와 겹치지 않는 별도 키 */

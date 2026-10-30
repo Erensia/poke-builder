@@ -1,13 +1,22 @@
-import type { Party, SlotPreset } from "../types/party";
-import { canonical, hashOf, planSync, type RemoteDoc } from "./cloudSyncPlan";
+import type { Party, SamplePartyPreset, SlotPreset } from "../types/party";
+import { rankLabel, rankOf } from "./battleRank";
+import type { RankSave } from "./battleRankSave";
+import type { FrontierSave } from "./battleSeries";
+import { canonical, emptyJson, hashOf, isObjectDoc, itemHashes, mergeLists, mergeRank, planSync, type RemoteDoc } from "./cloudSyncPlan";
 import { firebaseConfigured, loadAuth, loadFirestore } from "./firebase";
 import {
+  loadBattleFrontier,
+  loadBattleRank,
   loadCloudSyncMeta,
+  loadMySamples,
   loadPartyPresets,
   loadSlotPresets,
   notifyPresetListReplaced,
   onPresetListSaved,
+  saveBattleFrontier,
+  saveBattleRank,
   saveCloudSyncMeta,
+  saveMySamples,
   savePartyPresets,
   saveSlotPresets,
   type PresetListName,
@@ -17,19 +26,22 @@ import {
 /**
  * 저장한 파티·포켓몬 빌드의 클라우드 백업(6.0 K3). `localStorage`가 원본이고 클라우드는 복사본이다 — 로그인하지 않았거나 오프라인이어도
  * 앱은 지금처럼 동작한다. 목록마다 문서 하나(`users/{uid}/lists/{name}`: `{ json, updatedAt, version }`, firestore.rules와 같다).
- * 판정(올리기/받기/충돌)은 `cloudSyncPlan.ts`의 순수 함수가 한다.
+ * 판정(올리기/받기/충돌)은 `cloudSyncPlan.ts`의 순수 함수가 한다. 양쪽이 다 바뀌면 목록(파티·포켓몬·내 샘플)은 항목 단위로 합치고(6.2 C4),
+ * 통째로 하나인 문서(랭크·프런티어 기록, 6.2 C5)는 합칠 수 없어 사용자가 고른다.
  */
-const NAMES: PresetListName[] = ["partyPresets", "slotPresets"];
+const NAMES: PresetListName[] = ["partyPresets", "slotPresets", "mySamples", "battleRank", "battleFrontier"];
 /** 문서 1MB 한도 안의 여유. firestore.rules의 문자 수 상한(900000자)과 맞춘다 */
 const MAX_BYTES = 900_000;
 const SAVE_DELAY_MS = 3000;
-const LABELS: Record<PresetListName, string> = { partyPresets: "저장된 파티", slotPresets: "저장한 포켓몬" };
+
+const LABELS: Partial<Record<PresetListName, string>> = { battleRank: "랭크배틀 기록", battleFrontier: "프런티어 기록" };
 
 interface Conflict {
   name: PresetListName;
   label: string;
-  local: number;
-  remote: number;
+  /** 양쪽 내용을 한 줄로 요약한 것(예: "마스터볼 2143.5 · 12승 5패") */
+  local: string;
+  remote: string;
   remoteJson: string;
   remoteUpdatedAt: number;
 }
@@ -57,13 +69,34 @@ function setStatus(patch: Partial<SyncStatus>) {
   subscribers.forEach((fn) => fn());
 }
 
-const read = (name: PresetListName): unknown[] => (name === "partyPresets" ? loadPartyPresets() : loadSlotPresets());
-const write = (name: PresetListName, items: unknown[]) => {
-  if (name === "partyPresets") savePartyPresets(items as Party[]);
-  else saveSlotPresets(items as SlotPreset[]);
+const read = (name: PresetListName): unknown =>
+  name === "partyPresets"
+    ? loadPartyPresets()
+    : name === "slotPresets"
+      ? loadSlotPresets()
+      : name === "mySamples"
+        ? loadMySamples()
+        : name === "battleRank"
+          ? loadBattleRank()
+          : loadBattleFrontier();
+/** 받은 값을 로컬에 쓴다. 랭크·프런티어는 진행 중인 판 표시(pendingId)를 지금 로컬 것으로 유지한다 — 판 도중에 받아도 그 판의 결과가 반영되게 */
+const write = (name: PresetListName, value: unknown) => {
+  if (name === "partyPresets") savePartyPresets(value as Party[]);
+  else if (name === "slotPresets") saveSlotPresets(value as SlotPreset[]);
+  else if (name === "mySamples") saveMySamples(value as SamplePartyPreset[]);
+  else if (name === "battleRank") saveBattleRank({ ...(value as RankSave), pendingId: loadBattleRank().pendingId });
+  else saveBattleFrontier({ ...(value as FrontierSave), pendingId: loadBattleFrontier().pendingId });
 };
+/** 충돌 창에 보여 줄 한 줄 요약 */
+function summarize(name: PresetListName, json: string): string {
+  if (name === "battleRank") {
+    const { state } = JSON.parse(json) as RankSave;
+    return `${rankLabel(rankOf(state))}${state.rating === null ? "" : ` ${state.rating}`} · ${state.wins}승 ${state.losses}패`;
+  }
+  const v = JSON.parse(json) as FrontierSave;
+  return `최고 ${v.best}연승 · 현재 ${v.streak}연승`;
+}
 const localJson = (name: PresetListName) => canonical(name, read(name)).json;
-const countOf = (json: string) => (JSON.parse(json) as unknown[]).length;
 
 let uid: string | null = null;
 let timer: ReturnType<typeof setTimeout> | undefined;
@@ -72,13 +105,25 @@ let rerun = false;
 /** 클라우드 내용을 로컬에 써 넣는 중 — 그 저장은 "내가 바꾼 것"이 아니므로 올리지 않는다 */
 let applying = false;
 let started = false;
+/** 저장 알림·온라인 복귀 구독은 처음 시작할 때 한 번만 건다(오프라인에서 실패해 다시 시작해도 겹치지 않게) */
+let listening = false;
+/** 마지막으로 동기화를 시작한 시각 — 창으로 돌아올 때마다 연달아 읽지 않도록 간격을 둔다(6.2 C7). Spark 읽기 한도(하루 5만)에는 한참 못 미치는 값 */
+let lastRunAt = 0;
+const RETURN_SYNC_GAP_MS = 30_000;
 
 function baseOf(name: PresetListName): SyncBase | null {
   return loadCloudSyncMeta().bases[uid ?? ""]?.[name] ?? null;
 }
-function setBase(name: PresetListName, base: SyncBase) {
+/** 방금 맞춘 목록(json)과 그때의 클라우드 updatedAt을 "마지막으로 맞춘 시점"으로 기록한다 */
+function setBase(name: PresetListName, json: string, remoteUpdatedAt: number) {
   const meta = loadCloudSyncMeta();
   const key = uid ?? "";
+  const base: SyncBase = {
+    hash: hashOf(json),
+    remoteUpdatedAt,
+    ...(!isObjectDoc(name) && { items: itemHashes(json) }),
+    ...(name === "battleRank" && { snapshot: json }),
+  };
   saveCloudSyncMeta({ ...meta, bases: { ...meta.bases, [key]: { ...meta.bases[key], [name]: base } } });
 }
 function stamp() {
@@ -119,7 +164,7 @@ async function readRemote(name: PresetListName): Promise<RemoteDoc | null> {
   } catch {
     throw new Error("bad-remote");
   }
-  if (!Array.isArray(parsed)) throw new Error("bad-remote");
+  if (!isObjectDoc(name) && !Array.isArray(parsed)) throw new Error("bad-remote");
   return { json: canonical(name, parsed).json, updatedAt: d.updatedAt };
 }
 
@@ -145,20 +190,20 @@ async function push(name: PresetListName, json: string, expected: number | null 
 function applyRemote(name: PresetListName, remote: RemoteDoc) {
   applying = true;
   try {
-    write(name, JSON.parse(remote.json) as unknown[]);
+    write(name, JSON.parse(remote.json));
   } finally {
     applying = false;
   }
-  setBase(name, { hash: hashOf(remote.json), remoteUpdatedAt: remote.updatedAt });
+  setBase(name, remote.json, remote.updatedAt);
   notifyPresetListReplaced(name);
 }
 
 async function syncList(name: PresetListName): Promise<Conflict | null> {
   const local = localJson(name);
   const remote = await readRemote(name);
-  switch (planSync(local, remote, baseOf(name))) {
+  switch (planSync(local, remote, baseOf(name), emptyJson(name))) {
     case "adopt":
-      setBase(name, { hash: hashOf(local), remoteUpdatedAt: remote?.updatedAt ?? 0 });
+      setBase(name, local, remote?.updatedAt ?? 0);
       return null;
     case "pull":
       applyRemote(name, remote as RemoteDoc);
@@ -168,12 +213,36 @@ async function syncList(name: PresetListName): Promise<Conflict | null> {
       assertSize(local);
       const at = await push(name, local, remote ? remote.updatedAt : null);
       if (at === null) rerun = true; // 그 사이 클라우드가 바뀌었다 — 처음부터 다시 판정한다
-      else setBase(name, { hash: hashOf(local), remoteUpdatedAt: at });
+      else setBase(name, local, at);
       return null;
     }
     case "conflict": {
       const r = remote as RemoteDoc;
-      return { name, label: LABELS[name], local: countOf(local), remote: countOf(r.json), remoteJson: r.json, remoteUpdatedAt: r.updatedAt };
+      // 양쪽이 다 바뀐 목록은 항목 단위로(6.2 C4), 랭크 기록은 두 기기의 판을 다시 계산해(6.2 C6) 합쳐 양쪽에 반영한다. 사용자에게 고르게 하지 않는다
+      const merged = !isObjectDoc(name)
+        ? mergeLists(name, local, r.json, baseOf(name)?.items ?? null)
+        : name === "battleRank"
+          ? mergeRank(baseOf(name)?.snapshot ?? null, local, r.json)
+          : null;
+      // 합칠 수 없는 경우(프런티어 기록, 기준이 없거나 시즌이 끼는 등 랭크 기록의 폴백)는 사용자가 고를 때까지 멈춘다
+      if (merged === null) return { name, label: LABELS[name] ?? name, local: summarize(name, local), remote: summarize(name, r.json), remoteJson: r.json, remoteUpdatedAt: r.updatedAt };
+      assertSize(merged);
+      const at = merged === r.json ? r.updatedAt : await push(name, merged, r.updatedAt);
+      // 그 사이 클라우드가 바뀌었거나 사용자가 목록을 고쳤으면 반영하지 않고 처음부터 다시 판정한다
+      if (at === null || localJson(name) !== local) {
+        rerun = true;
+        return null;
+      }
+      if (merged === local) setBase(name, merged, at);
+      else applyRemote(name, { json: merged, updatedAt: at });
+      setStatus({ notice: "두 기기의 변경을 합쳤어요." });
+      return null;
+    }
+    case "none": {
+      // 이전 기록에는 병합 기준(목록의 항목 해시, 랭크의 저장본)이 없다 — 양쪽이 같은 상태일 때 채워 둬야 다음 병합에서 쓸 수 있다
+      const b = baseOf(name);
+      if (b && (name === "battleRank" ? !b.snapshot : !isObjectDoc(name) && !b.items)) setBase(name, local, b.remoteUpdatedAt);
+      return null;
     }
     default:
       return null;
@@ -187,6 +256,7 @@ async function run() {
     return;
   }
   running = true;
+  lastRunAt = Date.now();
   setStatus({ syncing: true, error: "", notice: "" });
   try {
     // ponytail: 두 기기가 동시에 올리면 다시 판정하는 것을 3번까지만 한다. 그래도 계속 어긋나면 다음 동기화 때 이어간다.
@@ -217,6 +287,12 @@ function schedule(ms: number) {
 /** 로그인 직후·"지금 동기화"·앱 시작에서 바로 한 번 맞춘다 */
 export const syncNow = () => schedule(0);
 
+/** 다른 탭·창에 있다가 돌아오면 그 사이 다른 기기가 바꾼 내용을 받아 온다(6.2 C7). 선택을 기다리는 충돌이 있거나 방금 맞췄으면 건너뛴다 */
+function onReturn() {
+  if (!uid || document.visibilityState !== "visible" || status.conflicts.length || Date.now() - lastRunAt < RETURN_SYNC_GAP_MS) return;
+  syncNow();
+}
+
 /** 사용자가 목록을 바꿨을 때 — 마지막으로 맞춘 내용과 같으면(화면을 열 때의 재저장 등) 네트워크를 쓰지 않는다 */
 function onSaved(name: PresetListName) {
   if (!uid || applying || status.conflicts.length) return;
@@ -238,7 +314,7 @@ export async function resolveConflicts(choice: "cloud" | "local" | "later") {
         const json = localJson(c.name);
         assertSize(json);
         const at = await push(c.name, json, undefined);
-        setBase(c.name, { hash: hashOf(json), remoteUpdatedAt: at ?? 0 });
+        setBase(c.name, json, at ?? 0);
       }
     }
     setStatus({ conflicts: [] });
@@ -257,7 +333,14 @@ export async function resolveConflicts(choice: "cloud" | "local" | "later") {
 export function startCloudSync() {
   if (!firebaseConfigured || started) return;
   started = true;
-  onPresetListSaved(onSaved);
+  if (!listening) {
+    listening = true;
+    onPresetListSaved(onSaved);
+    // 오프라인이었다가 돌아오면 한 번 더 맞춘다(6.2 C2). 시작할 때 오프라인이라 Firebase를 못 받았으면(started=false) 그때 시작한다
+    window.addEventListener("online", () => (started ? syncNow() : startCloudSync()));
+    document.addEventListener("visibilitychange", onReturn);
+    window.addEventListener("focus", onReturn);
+  }
   loadAuth()
     .then(({ auth, mod }) =>
       mod.onAuthStateChanged(auth, (user) => {
@@ -269,6 +352,6 @@ export function startCloudSync() {
       }),
     )
     .catch(() => {
-      started = false; // 오프라인 등 — 다음에 다시 시도한다
+      started = false; // 오프라인 등 — 온라인으로 돌아오면 위 구독이 다시 시작한다
     });
 }
