@@ -44,6 +44,7 @@
  */
 import { createServer } from "vite";
 import { createHash } from "node:crypto";
+import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 
 const mode = process.argv[2] ?? "regress";
@@ -684,6 +685,59 @@ try {
       }
     }
     console.log(JSON.stringify({ battles, results, avgTurnMs: +(totalMs / decisions).toFixed(2), maxTurnMs: +maxMs.toFixed(1), nanScores }));
+  } else if (mode === "collect") {
+    // 6.3 G4 방향 A Stage 1: 앱 AI 자기대전의 매 턴 시작 state → 특징 + 최종 승패. 한 줄 = 한 판(JSON): { s: 시드, w: 승자(a|b|timeout), turns, rows: [{ t: 턴, a: 특징(a 시점), b: 특징(b 시점) }] }.
+    // OUT=<파일>에 이어 쓰고(조각 병렬은 파일을 나눈다), 학습은 scripts/value-train.mjs. 특징 이름은 FEATURES.
+    const pe = await server.ssrLoadModule("/src/lib/battle/ai/partyEval.ts");
+    const dc = await server.ssrLoadModule("/src/lib/battle/ai/decision.ts");
+    const cl = await server.ssrLoadModule("/src/lib/battle/ai/aiClient.ts");
+    const pw = await server.ssrLoadModule("/src/lib/battlePower.ts");
+    const chain = dc.chainParams(dc.paramsFor({}));
+    const FEATURES = ["leaf", "hpDiff", "aliveDiff", "myAlive", "oppAlive", "myActiveHp", "oppActiveHp", "myBenchHp", "oppBenchHp", "speedAhead", "myAtkStage", "myDefStage", "mySpeStage", "oppAtkStage", "oppDefStage", "oppSpeStage", "myStatus", "oppStatus", "myHazards", "oppHazards", "myScreens", "oppScreens", "myTailwind", "oppTailwind", "turn"];
+    const featuresOf = (st, key) => {
+      const me = state.sideOf(st, key);
+      const op = state.sideOf(st, state.opponentKey(key));
+      const hp = (f) => (state.isFainted(f) || f.maxHp <= 0 ? 0 : f.currentHp / f.maxHp);
+      const sum = (side) => side.party.reduce((acc, f) => acc + hp(f), 0);
+      const alive = (side) => side.party.filter((f) => !state.isFainted(f)).length;
+      const mA = me.party[me.activeIndex];
+      const oA = op.party[op.activeIndex];
+      const spd = (f) => f.realStats.spe * pw.rankStageMultiplier(f.stages.spe);
+      const hz = (h) => (h.stealthRock ? 1 : 0) + h.spikesLayers + h.toxicSpikesLayers + (h.stickyWeb ? 1 : 0);
+      const model = pe.createPartyModel(st, key);
+      // Stage 1b: 쌍 표(내 슬롯 i × 상대 슬롯 j: 내가 깎는 속도·상대가 깎는 속도·내 선공 확률, 3×3), 슬롯별 HP, 활성 위치(원핫)
+      const pairs = [];
+      for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) {
+        if (i < me.party.length && j < op.party.length) { const q = model.pair(i, true, j, true); pairs.push(q.myRate, q.oppRate, q.firstProbability); } else pairs.push(0, 0, 0);
+      }
+      const slotHp = (side) => [0, 1, 2].map((i) => (i < side.party.length ? hp(side.party[i]) : 0));
+      const onehot = (side) => [0, 1, 2].map((i) => (side.activeIndex === i ? 1 : 0));
+      return [
+        pe.partyValueAfterTurn(model, model, chain), sum(me) - sum(op), alive(me) - alive(op), alive(me), alive(op), hp(mA), hp(oA), sum(me) - hp(mA), sum(op) - hp(oA),
+        spd(mA) > spd(oA) ? 1 : spd(mA) < spd(oA) ? -1 : 0,
+        mA.stages.atk + mA.stages.spa, mA.stages.def + mA.stages.spd, mA.stages.spe, oA.stages.atk + oA.stages.spa, oA.stages.def + oA.stages.spd, oA.stages.spe,
+        mA.status.condition ? 1 : 0, oA.status.condition ? 1 : 0, hz(me.hazards), hz(op.hazards), Object.keys(me.screens).length, Object.keys(op.screens).length,
+        me.tailwindTurnsRemaining ? 1 : 0, op.tailwindTurnsRemaining ? 1 : 0, st.turnNumber / 40,
+        ...pairs, ...slotHp(me), ...slotHp(op), ...onehot(me), ...onehot(op),
+      ].map((x) => (Number.isFinite(x) ? Math.round(x * 1e4) / 1e4 : 0));
+    };
+    const out = process.env.OUT;
+    if (!out) throw new Error("OUT=<파일> 필요");
+    const APP = cl.APP_DECISION_PARAMS;
+    let done = 0;
+    for (let s = seedFrom; s <= seedTo; s++) {
+      const risk = mulberry32(s)();
+      const rows = [];
+      const policy = (st, key) => {
+        if (key === "a") rows.push({ t: st.turnNumber, a: featuresOf(st, "a"), b: featuresOf(st, "b") });
+        return ai.chooseAiAction(st, key, risk, { decisionParams: APP }).action;
+      };
+      const forced = (st, key) => ai.chooseAiForcedSwitch(st, key, risk, APP) ?? living(st, key)[0];
+      const r = runBattle(s, { a: policy, b: policy }, { a: forced, b: forced });
+      fs.appendFileSync(out, JSON.stringify({ s, w: r.winner, turns: r.turns, rows }) + "\n");
+      done++;
+    }
+    console.log(JSON.stringify({ mode: "collect", battles: done, features: FEATURES }));
   } else {
     console.error(`알 수 없는 모드: ${mode} (regress | ai | greedy | diag | style | h2h | selectvs)`);
     process.exitCode = 1;
