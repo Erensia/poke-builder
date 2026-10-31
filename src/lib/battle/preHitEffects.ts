@@ -19,7 +19,7 @@ import { WEIGHT_MOVE_FALLBACK_POWER, absoluteWeightPowerValue, computeDamage, po
 import { applyWeatherBall } from "@/lib/weatherEffects";
 import { applyFieldPulse, getFieldPowerMultiplier, isOpponentTargetingMove, isPriorityMoveBlockedByField, isStatusBlockedByField } from "@/lib/fieldEffects";
 import { computeBattleHitChance } from "./hitChance";
-import { CONFUSION_SELF_HIT_MOVE, MIN_DAMAGE_ROLL, STRUGGLE_MOVE, abilityOf, activeWeather, consumeItem, contraryDelta, electroBallPowerValue, gyroBallPowerValue, hasSheerForceSecondaryEffect, isFainted, opponentKey, sideOf, statusImmunitiesOf, type BattleFighterState, type BattleState } from "./state";
+import { CONFUSION_SELF_HIT_MOVE, MIN_DAMAGE_ROLL, STRUGGLE_MOVE, abilityOf, activeWeather, consumeItem, contraryDelta, electroBallPowerValue, gyroBallPowerValue, hasSheerForceSecondaryEffect, isFainted, isHealingMove, isItemRemovable, opponentKey, sideOf, statusImmunitiesOf, type BattleFighterState, type BattleState } from "./state";
 
 /** resolvePreHitEffects의 단계 사이에서 공유되는 값 — 한 단계 안에서만 쓰는 변수는 각 단계 함수의 지역 변수다 */
 interface PreHitCtx {
@@ -286,6 +286,19 @@ function checkUsageGates(c: PreHitCtx) {
   ) {
     return { value: c.blocked("usageCondition") };
   }
+  // 폴터가이스트: 상대가 도구를 지니고 있지 않으면 실패한다(매직룸·무기력 등 효과 정지와는 무관하게 "지니고 있는지"만 본다)
+  if (c.move.usageCondition === "target-has-item" && !c.defender.currentItemId) {
+    return { value: c.blocked("usageCondition") };
+  }
+  // 기선제압: 상대가 이번 턴 고른 기술이 선제기(우선도 > 0 데미지 기술)이고 내가 먼저 움직여야 성공한다
+  if (
+    c.move.usageCondition === "opponent-priority-move-only" &&
+    (c.movesSecond ||
+      (c.defenderMove.category !== "physical" && c.defenderMove.category !== "special") ||
+      c.defenderMove.priority <= 0)
+  ) {
+    return { value: c.blocked("usageCondition") };
+  }
   // 습기: 자신이든 상대든 이 특성이 있으면 자폭류 기술(대폭발 등) 자체를 쓸 수 없다.
   if (c.move.selfFaints && (c.attackerAbility?.preventsSelfFaintMoves || c.defenderAbility?.preventsSelfFaintMoves)) {
     return { value: c.blocked("usageCondition") };
@@ -336,7 +349,7 @@ function checkActionBlockers(c: PreHitCtx) {
   // 자연히 턴당 1회 소모) — 여러 제약이 동시에 걸려있어도 전부 소모시킨 뒤 첫 번째로 걸린
   // 이유(도발 > 사슬묶기 > 앙코르 순)만 대표로 보고한다.
   if (!c.releasingCharge) {
-    let restrictionBlockedKind: "taunt" | "disable" | "encore" | "torment" | "imprison" | "gravity" | undefined;
+    let restrictionBlockedKind: "taunt" | "disable" | "encore" | "torment" | "imprison" | "gravity" | "healBlock" | "throatChop" | undefined;
     if (hasVolatile(c.attacker.volatile, "taunt")) {
       if (c.move.category === "status") restrictionBlockedKind = "taunt";
       c.attacker.volatile = consumeVolatileTurn(c.attacker.volatile, "taunt");
@@ -357,6 +370,9 @@ function checkActionBlockers(c: PreHitCtx) {
     if (hasVolatile(c.defender.volatile, "imprison") && c.defender.remainingPp[c.move.id] !== undefined) {
       restrictionBlockedKind ??= "imprison";
     }
+    // 회복봉인·지옥찌르기(6.3 B2): 걸린 동안 회복 기술 / 소리 기술은 못 쓴다 (턴 종료에 카운터가 줄어든다)
+    if (hasVolatile(c.attacker.volatile, "healBlock") && isHealingMove(c.move)) restrictionBlockedKind ??= "healBlock";
+    if (hasVolatile(c.attacker.volatile, "throatChop") && (c.move.classification ?? []).includes("소리")) restrictionBlockedKind ??= "throatChop";
     // 중력(트랙 M4): 공중으로 뛰어오르는 기술은 못 쓴다
     if (c.state.gravityTurnsRemaining !== undefined && c.move.blockedByGravity) restrictionBlockedKind ??= "gravity";
     // 발버둥은 이 제약들을 전부 무시하고 나간다(본가 규칙): 앙코르로 변화기가 강제됐는데 도발로
@@ -464,6 +480,41 @@ function handleChargeAndCopyMoves(c: PreHitCtx) {
     }
   }
 
+  // 6.3 B2 미래예지: 데미지 없이 상대 편에 공격을 예약한다(이미 예약돼 있으면 실패). 2턴 뒤 턴 종료에 finishTurn이 때린다.
+  if (c.move.delayedAttackTurns) {
+    const side = sideOf(c.state, c.defenderKey);
+    const failed = !!side.futureSight;
+    if (!failed) {
+      side.futureSight = {
+        turnsRemaining: c.move.delayedAttackTurns + 1,
+        move: c.move,
+        realStats: { ...c.attacker.realStats },
+        types: [...c.attacker.types],
+        stages: { ...c.attacker.stages },
+      };
+    }
+    return { value: {
+      actor: c.actorKey,
+      actorPokemonId: c.actorPokemonId,
+      defenderPokemonId: c.defenderPokemonId,
+      move: c.move,
+      hit: true,
+      critical: false,
+      damage: 0,
+      damagePercent: 0,
+      typeEffectiveness: 1,
+      defenderRemainingHp: c.defender.currentHp,
+      selfDamage: 0,
+      attackerRemainingHp: c.attacker.currentHp,
+      fainted: false,
+      selfFainted: false,
+      recoilDamage: 0,
+      futureSightSet: failed ? undefined : true,
+      futureSightFailed: failed || undefined,
+      leppaRestoredPpItemName: c.leppaRestoredPpItemName,
+    } };
+  }
+
   // 잠꼬대: 여기까지 왔다는 건 잠든 채로 이 기술을 실제로 선택했다는 뜻(usageCondition 게이트를
   // 이미 통과) — 이 시점부터는 잠꼬대 자신 대신 자신이 배운 다른 기술 중 하나를 무작위로 대신
   // 발동시킨다. PP는 잠꼬대 자신만 이미 위에서 소모했고, 대신 나가는 기술의 PP는 건드리지 않는다
@@ -529,6 +580,7 @@ function checkDefenderImmunities(c: PreHitCtx) {
   // 틈새포착: 공격측이 이 특성이면 대타출동도 소리 계열과 마찬가지로 무시하고 본체에 직접 적중한다.
   c.blockedBySubstitute = c.defender.substituteHp !== undefined &&
     !(c.move.classification ?? []).includes("소리") &&
+    !(c.move.setsCurse && c.attacker.types.includes("고스트")) &&
     !c.attackerAbility?.bypassesScreensAndSubstitute;
 
   // 가루/포자 기술(수면가루·저리가루·독가루·목화포자·분노가루)은 풀타입 포켓몬에게 통하지 않는다
@@ -839,6 +891,18 @@ function applyConditionalPower(c: PreHitCtx) {
                         ? c.defender.hpAtTurnStart !== undefined && c.defender.currentHp < c.defender.hpAtTurnStart
                         : false;
     if (met) c.effectiveMove = { ...c.effectiveMove, power: c.effectiveMove.power * 2 };
+  }
+
+  // 탁쳐서떨구기: 떨어뜨릴 수 있는 도구를 지닌 상대에게는 위력 배율(1.5)
+  if (c.effectiveMove.targetItemPowerMultiplier && c.effectiveMove.power !== null && isItemRemovable(c.defender, c.defenderAbility)) {
+    c.effectiveMove = { ...c.effectiveMove, power: Math.floor(c.effectiveMove.power * c.effectiveMove.targetItemPowerMultiplier) };
+  }
+  // 돌림노래: 직전 턴에도 썼으면 2배씩(상한 200). 이번 사용을 기록해 다음 턴에 이어지게 한다
+  if (c.effectiveMove.doublesPowerPerConsecutiveUse && c.effectiveMove.power !== null) {
+    const prev = c.attacker.echoStreak;
+    const count = prev && prev.turn === c.state.turnNumber - 1 ? prev.count + 1 : 1;
+    c.attacker.echoStreak = { turn: c.state.turnNumber, count };
+    c.effectiveMove = { ...c.effectiveMove, power: Math.min(200, c.effectiveMove.power * 2 ** (count - 1)) };
   }
 
   // 솔라빔(§1-10): chargeSkipWeather(쾌청)가 아닌 날씨에서는 위력 절반. 메가솔라(치지직 등)로

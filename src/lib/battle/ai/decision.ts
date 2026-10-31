@@ -335,6 +335,7 @@ const CATEGORY_OF_KIND: Partial<Record<EffectMoveKind, PartyEffectCategory>> = {
   encore: "oppVolatile",
   disable: "oppVolatile",
   leechSeed: "oppVolatile",
+  curse: "oppVolatile",
   confuse: "oppVolatile",
   attract: "oppVolatile",
   torment: "oppVolatile",

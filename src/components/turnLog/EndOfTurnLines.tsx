@@ -59,6 +59,11 @@ export function EndOfTurnLine({
           {e.remainingHp})
           {e.fainted && " · 기절!"}
         </>
+      ) : e.curseDamage ? (
+        <>
+          {turnName(e.actor)}는 저주받아 {e.curseDamage} 데미지를 입었다 (남은 HP {e.remainingHp})
+          {e.fainted && " · 기절!"}
+        </>
       ) : e.leechSeedHealAmount ? (
         <>
           {turnName(e.actor)}가 씨앗으로 체력을 {e.leechSeedHealAmount} 회복 (남은 HP{" "}
@@ -68,6 +73,11 @@ export function EndOfTurnLine({
         <>
           {turnName(e.actor)}
           {eunNeun(turnName(e.actor))} 해감액을 빨아들여 {e.damage} 데미지 (남은 HP {e.remainingHp})
+          {e.fainted && " · 기절!"}
+        </>
+      ) : e.futureSightMoveName ? (
+        <>
+          {turnName(e.actor)}에게 {e.futureSightMoveName}{iGa(e.futureSightMoveName)} 내리꽂혔다! {e.damage} 데미지 (남은 HP {e.remainingHp})
           {e.fainted && " · 기절!"}
         </>
       ) : e.wishHeal ? (

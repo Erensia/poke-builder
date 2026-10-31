@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { clearAiMemory, loadAiMemory, saveAiMemory, type StoredAiMemory } from "../lib/storage";
+import { useEffect, useState } from "react";
+import { clearAiMemory, loadAiMemory, onPresetListReplaced, saveAiMemory, type StoredAiMemory } from "../lib/storage";
 import { commitBattle, emptyOpponentMemory, MEMORY_DECAY_PER_BATTLE, RANK_MEMORY_DECAY_PER_BATTLE, type OpponentMemory } from "../lib/battle/ai/opponentMemory";
 
 /**
@@ -9,6 +9,8 @@ import { commitBattle, emptyOpponentMemory, MEMORY_DECAY_PER_BATTLE, RANK_MEMORY
 export function useAiMemory(mode: "free" | "rank") {
   const decay = mode === "rank" ? RANK_MEMORY_DECAY_PER_BATTLE : MEMORY_DECAY_PER_BATTLE;
   const [stored, setStored] = useState<StoredAiMemory>(() => loadAiMemory(mode));
+  // 클라우드 동기화(6.3 A1)가 다른 기기의 학습 기록을 받아 `localStorage`에 썼으면 다시 읽는다(안 읽으면 옛 기록으로 되돌려 쓴다)
+  useEffect(() => onPresetListReplaced((name) => name === (mode === "rank" ? "aiMemoryRank" : "aiMemory") && setStored(loadAiMemory(mode))), [mode]);
 
   function update(next: StoredAiMemory) {
     setStored(next);

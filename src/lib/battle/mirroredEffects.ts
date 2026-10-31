@@ -16,8 +16,9 @@ import { FIELD_DURATION, isConfusionBlockedByField, isOpponentTargetingMove, isS
 import { getConfusionCureBerryResult, getExtraFlinchTriggered, getMentalHerbCureResult, getStatusCureBerryResult, shouldTriggerWhiteHerb } from "@/lib/itemEffects";
 import { isGrounded } from "./grounding";
 import { eatBerryNow } from "./fling";
+import { type ItemEffectLog } from "@/types/battle";
 import { cureConditionsBlockedByAbility, isFixedAbility, isUncopyableAbility } from "./abilityChange";
-import { activeWeather, applyTransform, consumeItem, contraryDelta, contraryMoveFor, emptyHazardState, hasLivingReserve, isFainted, sideOf, statDropBlockStatsOf, statusImmunitiesOf, type BattleFighterState, type BattleState } from "./state";
+import { activeWeather, applyTransform, consumeItem, contraryDelta, contraryMoveFor, emptyHazardState, hasLivingReserve, isFainted, isItemRemovable, sideOf, statDropBlockStatsOf, statusImmunitiesOf, type BattleFighterState, type BattleState } from "./state";
 import { triggerTerrainSeeds } from "./switching";
 
 interface MirroredMoveEffectsInput {
@@ -150,12 +151,16 @@ interface MirroredCtx {
   acupressureFailed: boolean;
   meltedItemName: string | undefined;
   meltFailed: boolean;
+  itemEffect: ItemEffectLog | undefined;
+  targetStagesReset: boolean;
   magneticFluxFailed: boolean;
   transformedIntoName: string | undefined;
   transformFailed: boolean;
   regenSetFailed: boolean;
   leechSeedSetFailed: boolean;
   leechSeedBlockedByGrass: boolean;
+  curseHpCost: number;
+  curseSetFailed: boolean;
   smackedDownTarget: boolean;
   abilitySwappedTargetToName: string | undefined;
   abilitySwapFailed: boolean;
@@ -824,6 +829,13 @@ function statusCureAndVolatile(c: MirroredCtx) {
       }
       // 그림자꿰매기: 상대가 쓰러졌으면 걸지 않는다
       if (effect.volatile === "meanLook" && effect.target !== "self" && isFainted(c.defender)) continue;
+      // 매혹의보이스: 이번 턴 능력 랭크가 오른 상대에게만(질투의불꽃과 같은 턴 시작 스냅샷 비교)
+      if (
+        effect.condition === "target-stat-rose-this-turn" &&
+        !BATTLE_STAT_KEYS.some((stat) => c.defender.stages[stat] > (c.defender.statStagesAtTurnStart?.[stat] ?? 0))
+      ) {
+        continue;
+      }
       const chance = effect.chance !== undefined ? effect.chance / 100 : 1;
       if (c.random() >= chance) continue;
       if (effect.target === "self") {
@@ -1334,6 +1346,38 @@ function miscMoveEffects(c: MirroredCtx) {
     }
   }
 
+  // 6.3 B2 — 데미지 기술의 도구 효과: 탁쳐서떨구기(떨어뜨리기)·도둑질/탐내기(빼앗기)·벌레먹기/쪼아대기(상대 열매 먹기).
+  // 데미지를 줬고 대타가 아니라 본체에 닿았을 때만. 메가스톤·점착(preventsItemLoss)이면 아무 일도 없다(조용히 무산).
+  c.itemEffect = undefined;
+  const itemHit = c.hit && c.damage > 0 && !c.hitSubstitute && !c.opponentEffectsBlocked && !isFainted(c.attacker);
+  if (itemHit && isItemRemovable(c.defender, c.defenderAbility)) {
+    const item = getItem(c.defender.currentItemId!)!;
+    if (c.effectiveMove.knocksOffTargetItem) {
+      c.itemEffect = { kind: "knockOff", itemName: item.name };
+      c.defender.currentItemId = null;
+      c.defender.choiceLockedMoveId = undefined;
+    } else if (c.effectiveMove.stealsTargetItem && !c.attacker.currentItemId) {
+      c.itemEffect = { kind: "steal", itemName: item.name };
+      c.attacker.currentItemId = item.id;
+      c.attacker.itemConsumed = false;
+      c.attacker.choiceLockedMoveId = undefined;
+      c.defender.currentItemId = null;
+      c.defender.choiceLockedMoveId = undefined;
+    } else if (c.effectiveMove.eatsTargetBerry && item.name.endsWith("열매")) {
+      c.itemEffect = { kind: "eatBerry", itemName: item.name, berry: eatBerryNow(c.attacker, item) };
+      c.defender.currentItemId = null;
+      c.defender.choiceLockedMoveId = undefined;
+    }
+  }
+
+  // 클리어스모그(resetsTargetStages): 데미지를 줬으면 상대의 랭크·명중/회피 랭크를 원래대로(자신은 그대로)
+  c.targetStagesReset = false;
+  if (c.effectiveMove.resetsTargetStages && c.hit && c.damage > 0 && !c.hitSubstitute && !c.opponentEffectsBlocked && !isFainted(c.defender)) {
+    c.defender.stages = { ...NEUTRAL_STAGES };
+    c.defender.accuracyStages = { ...NEUTRAL_ACCURACY_STAGES };
+    c.targetStagesReset = true;
+  }
+
   // 자기장조작(boostsDefensesIfPlusMinus, 트랙 M6): 플러스·마이너스면 방어·특방 +1(자기 랭크업 로그로), 아니면 실패.
   c.magneticFluxFailed = false;
   if (c.effectiveMove.boostsDefensesIfPlusMinus) {
@@ -1383,6 +1427,20 @@ function miscMoveEffects(c: MirroredCtx) {
       c.leechSeedSetFailed = true;
     } else {
       c.defender.volatile = inflictVolatile(c.defender.volatile, "leechSeed", c.random);
+    }
+  }
+
+  // 저주(고스트): 최대 HP 1/2을 소비(0까지 깎여 쓰러질 수 있다 — 본가 그대로)하고 상대에게 curse를 건다.
+  // 이미 걸려있으면 HP 소비 없이 실패. 고스트가 아니면 statChanges(userIsNotType)가 처리하므로 여기선 건너뛴다.
+  c.curseHpCost = 0;
+  c.curseSetFailed = false;
+  if (c.effectiveMove.setsCurse && c.attacker.types.includes("고스트")) {
+    if (hasVolatile(c.defender.volatile, "curse")) {
+      c.curseSetFailed = true;
+    } else {
+      c.curseHpCost = Math.min(c.attacker.currentHp, Math.floor(c.attacker.maxHp / 2));
+      c.attacker.currentHp -= c.curseHpCost;
+      c.defender.volatile = inflictVolatile(c.defender.volatile, "curse", c.random);
     }
   }
 
@@ -1711,7 +1769,7 @@ function collectResult(c: MirroredCtx) {
     [c.attackerItem, c.defenderItem] = [c.defenderItem, c.attackerItem];
   }
   return {
-    defenderAbility: c.defenderAbility, attacker: c.attacker, defender: c.defender, attackerAbility: c.attackerAbility, attackerItem: c.attackerItem, defenderItem: c.defenderItem, abilityInflictedStatusOnAttacker: c.abilityInflictedStatusOnAttacker, abilityInflictedStatusAbilityName: c.abilityInflictedStatusAbilityName, statusCureBerryItemName: c.statusCureBerryItemName, mentalMoveBlockedByAbilityName: c.mentalMoveBlockedByAbilityName, bouncedMoveName: c.bouncedMoveName, bouncedByAbilityName: c.bouncedByAbilityName, secondaryBlockedByAbilityName: c.secondaryBlockedByAbilityName, berryEatFailed: c.berryEatFailed, stuffCheeksBerryHeal: c.stuffCheeksBerryHeal, stuffCheeksBerryName: c.stuffCheeksBerryName, costHpFailed: c.costHpFailed, soulBeatHpCost: c.soulBeatHpCost, selfStatRises: c.selfStatRises, selfStatsAtMax: c.selfStatsAtMax, selfStatDrops: c.selfStatDrops, reflectedStatDropAbilityName: c.reflectedStatDropAbilityName, reflectedStatDrops: c.reflectedStatDrops, restoredStatsSelfItemName: c.restoredStatsSelfItemName, restoredStatsOpponentItemName: c.restoredStatsOpponentItemName, opportunistCopiedStats: c.opportunistCopiedStats, opportunistAbilityName: c.opportunistAbilityName, opponentStatDrops: c.opponentStatDrops, invertedTargetStages: c.invertedTargetStages, addedTypeToTarget: c.addedTypeToTarget, overwroteTargetType: c.overwroteTargetType, targetMoveTypeOverride: c.targetMoveTypeOverride, inflictedStatus: c.inflictedStatus, statusInflictFailed: c.statusInflictFailed, beakBlastBurnedAttacker: c.beakBlastBurnedAttacker, curedStatus: c.curedStatus, curedStatusTarget: c.curedStatusTarget, inflictedVolatile: c.inflictedVolatile, tidyUpDone: c.tidyUpDone, courtChangeDone: c.courtChangeDone, defogFieldCleared: c.defogFieldCleared, revivedPartyName: c.revivedPartyName, reviveFailed: c.reviveFailed, saltCureApplied: c.saltCureApplied, balloonPoppedItemName: c.balloonPoppedItemName, octolockApplied: c.octolockApplied, jawLockApplied: c.jawLockApplied, selfWokeBeforeMove: c.selfWokeBeforeMove, restSlept: c.restSlept, healedAmount: c.healedAmount, healedTarget: c.healedTarget, averagedDefensesMoveName: c.averagedDefensesMoveName, swappedSpeedMoveName: c.swappedSpeedMoveName, transformedIntoName: c.transformedIntoName, transformFailed: c.transformFailed, regenSetFailed: c.regenSetFailed, leechSeedSetFailed: c.leechSeedSetFailed, leechSeedBlockedByGrass: c.leechSeedBlockedByGrass, abilitySwappedTargetToName: c.abilitySwappedTargetToName, abilitySwapFailed: c.abilitySwapFailed, substituteSetFailed: c.substituteSetFailed, shedTailFailed: c.shedTailFailed, shedTailSucceeded: c.shedTailSucceeded, setDisabledMoveName: c.setDisabledMoveName, disableSetFailed: c.disableSetFailed, setEncoreMoveName: c.setEncoreMoveName, encoreSetFailed: c.encoreSetFailed, swappedStatsMoveName: c.swappedStatsMoveName, swappedStagesMoveName: c.swappedStagesMoveName, protectSucceeded: c.protectSucceeded, protectFailed: c.protectFailed, protectStanceEntered: c.protectStanceEntered, fieldSetFailed: c.fieldSetFailed, stealthRockSetForSide: c.stealthRockSetForSide, spikesSetForSide: c.spikesSetForSide, toxicSpikesSetForSide: c.toxicSpikesSetForSide, stickyWebSetForSide: c.stickyWebSetForSide, hazardSetFailed: c.hazardSetFailed, swappedItems: c.swappedItems, itemSwapFailed: c.itemSwapFailed, painSplitHp: c.painSplitHp, stockpileHealFailed: c.stockpileHealFailed, recycledItemName: c.recycledItemName, recycleFailed: c.recycleFailed, copiedStagesFromName: c.copiedStagesFromName, averagedAttacksMoveName: c.averagedAttacksMoveName, spitePp: c.spitePp, spiteFailed: c.spiteFailed, acupressureRaised: c.acupressureRaised, acupressureFailed: c.acupressureFailed, volatileBlockedByAbility: c.volatileBlockedByAbility, abilityChange: c.abilityChange, abilityChangeFailed: c.abilityChangeFailed, copiedTypes: c.copiedTypes, smackedDownTarget: c.smackedDownTarget, meltedItemName: c.meltedItemName, meltFailed: c.meltFailed, magneticFluxFailed: c.magneticFluxFailed, partyStatusCuredCount: c.partyStatusCuredCount, teaTime: c.teaTime, teaTimeFailed: c.teaTimeFailed,
+    defenderAbility: c.defenderAbility, attacker: c.attacker, defender: c.defender, attackerAbility: c.attackerAbility, attackerItem: c.attackerItem, defenderItem: c.defenderItem, abilityInflictedStatusOnAttacker: c.abilityInflictedStatusOnAttacker, abilityInflictedStatusAbilityName: c.abilityInflictedStatusAbilityName, statusCureBerryItemName: c.statusCureBerryItemName, mentalMoveBlockedByAbilityName: c.mentalMoveBlockedByAbilityName, bouncedMoveName: c.bouncedMoveName, bouncedByAbilityName: c.bouncedByAbilityName, secondaryBlockedByAbilityName: c.secondaryBlockedByAbilityName, berryEatFailed: c.berryEatFailed, stuffCheeksBerryHeal: c.stuffCheeksBerryHeal, stuffCheeksBerryName: c.stuffCheeksBerryName, costHpFailed: c.costHpFailed, soulBeatHpCost: c.soulBeatHpCost, selfStatRises: c.selfStatRises, selfStatsAtMax: c.selfStatsAtMax, selfStatDrops: c.selfStatDrops, reflectedStatDropAbilityName: c.reflectedStatDropAbilityName, reflectedStatDrops: c.reflectedStatDrops, restoredStatsSelfItemName: c.restoredStatsSelfItemName, restoredStatsOpponentItemName: c.restoredStatsOpponentItemName, opportunistCopiedStats: c.opportunistCopiedStats, opportunistAbilityName: c.opportunistAbilityName, opponentStatDrops: c.opponentStatDrops, invertedTargetStages: c.invertedTargetStages, addedTypeToTarget: c.addedTypeToTarget, overwroteTargetType: c.overwroteTargetType, targetMoveTypeOverride: c.targetMoveTypeOverride, inflictedStatus: c.inflictedStatus, statusInflictFailed: c.statusInflictFailed, beakBlastBurnedAttacker: c.beakBlastBurnedAttacker, curedStatus: c.curedStatus, curedStatusTarget: c.curedStatusTarget, inflictedVolatile: c.inflictedVolatile, tidyUpDone: c.tidyUpDone, courtChangeDone: c.courtChangeDone, defogFieldCleared: c.defogFieldCleared, revivedPartyName: c.revivedPartyName, reviveFailed: c.reviveFailed, saltCureApplied: c.saltCureApplied, balloonPoppedItemName: c.balloonPoppedItemName, octolockApplied: c.octolockApplied, jawLockApplied: c.jawLockApplied, selfWokeBeforeMove: c.selfWokeBeforeMove, restSlept: c.restSlept, healedAmount: c.healedAmount, healedTarget: c.healedTarget, averagedDefensesMoveName: c.averagedDefensesMoveName, swappedSpeedMoveName: c.swappedSpeedMoveName, transformedIntoName: c.transformedIntoName, transformFailed: c.transformFailed, regenSetFailed: c.regenSetFailed, leechSeedSetFailed: c.leechSeedSetFailed, leechSeedBlockedByGrass: c.leechSeedBlockedByGrass, curseHpCost: c.curseHpCost, curseSetFailed: c.curseSetFailed, abilitySwappedTargetToName: c.abilitySwappedTargetToName, abilitySwapFailed: c.abilitySwapFailed, substituteSetFailed: c.substituteSetFailed, shedTailFailed: c.shedTailFailed, shedTailSucceeded: c.shedTailSucceeded, setDisabledMoveName: c.setDisabledMoveName, disableSetFailed: c.disableSetFailed, setEncoreMoveName: c.setEncoreMoveName, encoreSetFailed: c.encoreSetFailed, swappedStatsMoveName: c.swappedStatsMoveName, swappedStagesMoveName: c.swappedStagesMoveName, protectSucceeded: c.protectSucceeded, protectFailed: c.protectFailed, protectStanceEntered: c.protectStanceEntered, fieldSetFailed: c.fieldSetFailed, stealthRockSetForSide: c.stealthRockSetForSide, spikesSetForSide: c.spikesSetForSide, toxicSpikesSetForSide: c.toxicSpikesSetForSide, stickyWebSetForSide: c.stickyWebSetForSide, hazardSetFailed: c.hazardSetFailed, swappedItems: c.swappedItems, itemSwapFailed: c.itemSwapFailed, painSplitHp: c.painSplitHp, stockpileHealFailed: c.stockpileHealFailed, recycledItemName: c.recycledItemName, recycleFailed: c.recycleFailed, copiedStagesFromName: c.copiedStagesFromName, averagedAttacksMoveName: c.averagedAttacksMoveName, spitePp: c.spitePp, spiteFailed: c.spiteFailed, acupressureRaised: c.acupressureRaised, acupressureFailed: c.acupressureFailed, volatileBlockedByAbility: c.volatileBlockedByAbility, abilityChange: c.abilityChange, abilityChangeFailed: c.abilityChangeFailed, copiedTypes: c.copiedTypes, smackedDownTarget: c.smackedDownTarget, meltedItemName: c.meltedItemName, meltFailed: c.meltFailed, itemEffect: c.itemEffect, targetStagesReset: c.targetStagesReset, magneticFluxFailed: c.magneticFluxFailed, partyStatusCuredCount: c.partyStatusCuredCount, teaTime: c.teaTime, teaTimeFailed: c.teaTimeFailed,
   };
 }
 

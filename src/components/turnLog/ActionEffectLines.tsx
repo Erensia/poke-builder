@@ -152,6 +152,10 @@ export function ActionEffectLines({
             `${actorName}${eunNeun(actorName)} 트집 때문에 같은 기술을 연속으로 쓸 수 없다!`}
           {action.moveRestrictionKind === "imprison" &&
             `${actorName}${eunNeun(actorName)} 봉인 때문에 ${action.move.name}${eulReul(action.move.name)} 사용하지 못한다!`}
+          {action.moveRestrictionKind === "healBlock" &&
+            `${actorName}${eunNeun(actorName)} 회복봉인 때문에 ${action.move.name}${eulReul(action.move.name)} 사용하지 못한다!`}
+          {action.moveRestrictionKind === "throatChop" &&
+            `${actorName}${eunNeun(actorName)} 소리 봉인 때문에 ${action.move.name}${eulReul(action.move.name)} 사용하지 못한다!`}
           {action.moveRestrictionKind === "gravity" &&
             `${actorName}${eunNeun(actorName)} 중력 때문에 ${action.move.name}${eulReul(action.move.name)} 사용하지 못한다!`}
         </div>
@@ -250,6 +254,37 @@ export function ActionEffectLines({
           {defenderName}의 {action.meltedItemName}
           {iGa(action.meltedItemName)} 녹아버렸다!
         </div>
+      )}
+      {/* 6.3 B2 — 탁쳐서떨구기·도둑질·탐내기·벌레먹기·쪼아대기의 도구 효과, 클리어스모그 */}
+      {!action.blockedReason && action.itemEffect && (
+        <div className="battle-turn-line is-muted">
+          {action.itemEffect.kind === "knockOff" && (
+            <>
+              {defenderName}의 {action.itemEffect.itemName}
+              {eulReul(action.itemEffect.itemName)} 떨어뜨렸다!
+            </>
+          )}
+          {action.itemEffect.kind === "steal" && (
+            <>
+              {actorName}
+              {eunNeun(actorName)} {defenderName}의 {action.itemEffect.itemName}
+              {eulReul(action.itemEffect.itemName)} 빼앗았다!
+            </>
+          )}
+          {action.itemEffect.kind === "eatBerry" && (
+            <>
+              {actorName}
+              {eunNeun(actorName)} {defenderName}의 {action.itemEffect.itemName}
+              {eulReul(action.itemEffect.itemName)} 먹어 버렸다!
+              {action.itemEffect.berry?.healed ? ` HP를 ${actorHp(action.itemEffect.berry.healed)} 회복했다!` : ""}
+              {action.itemEffect.berry?.curedStatus ? ` ${STATUS_CURE_TEXT[action.itemEffect.berry.curedStatus](actorName)}` : ""}
+              {action.itemEffect.berry?.curedConfusion ? " 혼란이 풀렸다!" : ""}
+            </>
+          )}
+        </div>
+      )}
+      {!action.blockedReason && action.targetStagesReset && (
+        <div className="battle-turn-line is-muted">{defenderName}의 능력 변화가 원래대로 돌아왔다!</div>
       )}
       {!action.blockedReason && action.hit && action.inflictedVolatile === "imprison" && (
         <div className="battle-turn-line is-muted">

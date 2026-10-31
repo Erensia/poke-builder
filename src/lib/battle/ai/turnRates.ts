@@ -198,6 +198,9 @@ function volatileResidualFraction(fighter: BattleFighterState, hp: number, oppon
   if (hasVolatile(fighter.volatile, "leechSeed") && !ability?.negatesIndirectDamage) {
     damage += Math.floor(fighter.maxHp / LEECH_SEED_DENOMINATOR);
   }
+  if (hasVolatile(fighter.volatile, "curse") && !ability?.negatesIndirectDamage) {
+    damage += Math.floor(fighter.maxHp / 4);
+  }
   if (hasVolatile(fighter.volatile, "aquaRing") || hasVolatile(fighter.volatile, "ingrain")) {
     damage -= Math.floor(fighter.maxHp / REGEN_DENOMINATOR);
   }

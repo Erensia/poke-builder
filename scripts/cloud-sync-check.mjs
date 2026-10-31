@@ -235,6 +235,26 @@ try {
   check("랭크 병합 폴백: 한쪽이 기록 상한(50판)을 넘겼으면 합치지 않는다", (() => { let s = masterBase; for (let i = 0; i < 50; i++) s = play(s, "n" + i, i % 3 !== 0, 1000 + i); return mergeRank(cj(masterBase), cj(s), cj(R2)) === null; })());
   check("랭크 병합 폴백: 49판까지는 합친다", (() => { let s = masterBase; for (let i = 0; i < 49; i++) s = play(s, "n" + i, i % 3 !== 0, 1000 + i); return mergeRank(cj(masterBase), cj(s), cj(R2)) !== null; })());
 
+  // ── 6.3 A1 AI 학습 기록 ──
+  {
+    const { emptyOpponentMemory } = await server.ssrLoadModule("/src/lib/battle/ai/opponentMemory.ts");
+    const learned = { ...emptyOpponentMemory(), battles: 12, decisions: 40.5, species: { 한카리아스: { seen: 3, lastBattle: 12, moves: { 지진: { actual: 2, pred: 1.5 } } } } };
+    const doc = { version: 1, learningEnabled: true, memory: learned };
+    const aj = canonical("aiMemoryRank", doc).json;
+    check("AI 기록 정규형은 멱등이고 키 순서가 고정이다", canonical("aiMemoryRank", JSON.parse(aj)).json === aj && aj.startsWith('{"version":1,"learningEnabled":true,"memory"'));
+    check("AI 기록은 통째 문서이고 배틀타워·랭크 두 이름이다", isObjectDoc("aiMemory") && isObjectDoc("aiMemoryRank"));
+    check("틀린 AI 기록은 던진다(bad-remote)", [{ version: 1, memory: learned }, { version: 2, learningEnabled: true, memory: learned }, { version: 1, learningEnabled: true, memory: 1 }, null].every((bad) => { try { canonical("aiMemory", bad); return false; } catch (e) { return e.message === "bad-remote"; } }));
+    const AE = emptyJson("aiMemory");
+    check("빈 AI 기록 정규형: 학습 켬 + 기록 없음", AE === canonical("aiMemory", { version: 1, learningEnabled: true, memory: emptyOpponentMemory() }).json);
+    check("AI 기록: 클라우드에 없고 로컬이 비었으면 아무것도 안 한다 / 학습한 기록은 올린다", planSync(AE, null, null, AE) === "none" && planSync(aj, null, null, AE) === "push");
+    check("AI 기록: 같은 내용이면 맞췄다고 본다 / 한쪽만 바뀌면 받거나 올린다", planSync(aj, { json: aj, updatedAt: 5 }, null, AE) === "adopt" && planSync(aj, { json: AE, updatedAt: 5 }, { hash: hashOf(AE), remoteUpdatedAt: 5 }, AE) === "push");
+    // 크기: 종 100종 × 기술 40개를 채워도 문서 상한(900000자)의 한참 아래다
+    const big = emptyOpponentMemory();
+    for (let s = 0; s < 100; s++) big.species["종" + s] = { seen: 3.5, lastBattle: 20, moves: Object.fromEntries(Array.from({ length: 40 }, (_, m) => ["기술" + m, { actual: 1.2345678, pred: 2.3456789 }])) };
+    const bigJson = canonical("aiMemoryRank", { version: 1, learningEnabled: true, memory: big }).json;
+    check("AI 기록 최대 크기(100종×기술 40개)는 문서 상한 안이다", bigJson.length < 400_000, String(bigJson.length));
+  }
+
   console.log(failed ? `\n${failed}/${total}개 실패` : `\n${total}개 통과`);
 } finally {
   await server.close();

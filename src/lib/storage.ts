@@ -121,7 +121,7 @@ export function saveSlotPresets(presets: SlotPreset[]): void {
  * 로컬에 써 넣어 화면의 목록 상태를 다시 읽게 하는 쪽(Replaced) 둘이다. 목록 상태는 훅마다 따로 들고 있어서 `localStorage`만
  * 바꾸면 켜져 있는 화면이 옛 상태로 되돌려 쓴다.
  */
-export type PresetListName = "partyPresets" | "slotPresets" | "mySamples" | "battleRank" | "battleFrontier";
+export type PresetListName = "partyPresets" | "slotPresets" | "mySamples" | "battleRank" | "battleFrontier" | "aiMemory" | "aiMemoryRank";
 const presetSavedListeners = new Set<(name: PresetListName) => void>();
 const presetReplacedListeners = new Set<(name: PresetListName) => void>();
 
@@ -216,6 +216,7 @@ export function loadAiMemory(mode: "free" | "rank"): StoredAiMemory {
 
 export function saveAiMemory(mode: "free" | "rank", value: StoredAiMemory): void {
   aiMemoryStores[mode].save(value);
+  presetSavedListeners.forEach((fn) => fn(mode === "rank" ? "aiMemoryRank" : "aiMemory"));
 }
 
 /** 학습 초기화 — 그 모드의 키만 지운다(파티 자동저장·다른 모드 학습은 건드리지 않는다) */

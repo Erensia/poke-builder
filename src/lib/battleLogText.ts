@@ -66,7 +66,7 @@ export const STATUS_CURE_TEXT: Record<StatusCondition, (name: string) => string>
 };
 
 const HP_AMOUNT_KEYS = [
-  "damage", "remainingHp", "fieldHeal", "itemHeal", "abilityWeatherHeal", "regenHeal", "leechSeedDamage",
+  "damage", "remainingHp", "fieldHeal", "itemHeal", "abilityWeatherHeal", "regenHeal", "leechSeedDamage", "curseDamage",
   "leechSeedHealAmount", "wishHeal", "berryHeal", "poisonHealAmount", "abilityWeatherDamage", "cheekPouchHeal",
 ] as const;
 

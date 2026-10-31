@@ -217,6 +217,10 @@ export interface Move {
     | "first-turn-only"
     | "field-required"
     | "opponent-damaging-move-only"
+    // 폴터가이스트: 상대가 도구를 지니고 있지 않으면 실패
+    | "target-has-item"
+    // 기선제압: 상대가 이번 턴 고른 기술이 선제기(우선도 > 0 데미지 기술)가 아니면 실패
+    | "opponent-priority-move-only"
     | "weather-required"
     | "all-other-moves-used"
     // 배수의진(ver.1.9): 이미 배수의진 상태(noRetreat)면 실패
@@ -335,6 +339,12 @@ export interface Move {
    * 그만큼(자신이 큰뿌리를 지녔으면 1.3배) 회복하게 한다. 상대가 이미 걸려있으면 실패.
    */
   setsLeechSeed?: boolean;
+  /**
+   * 저주 전용. 사용자가 고스트 타입이면 최대 HP 1/2을 소비(쓰러질 수도 있다)하고 상대에게 curse를 걸어
+   * 매 턴 종료 시 상대가 최대 HP 1/4을 잃게 한다. 상대가 이미 걸려있으면 HP 소비 없이 실패. 대타를
+   * 통과한다. 고스트가 아니면 이 필드는 무시되고 statChanges(userIsNotType)가 적용된다.
+   */
+  setsCurse?: boolean;
   /**
    * 조이기·엉겨붙기·모래지옥·바다회오리·회오리불꽃·김밥말이·집게덫 — 명중 시 상대를 4~5턴 동안
    * 속박(volatile "bound")한다. 매 턴 종료 시 상대가 최대 HP 1/8을 잃고, 4~5턴 뒤 자동 해제된다
@@ -686,6 +696,27 @@ export interface Move {
   setsHealingWish?: boolean;
   /** 부식가스(트랙 M6): 상대 도구를 녹여 없앤다(리사이클로 회수 불가). 메가스톤·점착이면 실패 */
   removesTargetItem?: boolean;
+  /**
+   * 미래예지: 쓴 턴에는 데미지 없이 상대 쪽에 공격을 예약하고, 이 턴수(2) 뒤 턴 종료에 그 자리의 포켓몬에게 들어간다.
+   * 방어·대타·명중 판정과 무관하게 맞고(타입 상성만 적용), 데미지는 쓴 시점 사용자의 능력치·랭크·타입으로 계산한다
+   * (사용자가 물러나거나 쓰러져도 들어간다). 상대 편에 이미 예약돼 있으면 실패한다.
+   */
+  delayedAttackTurns?: number;
+  /**
+   * 탁쳐서떨구기: 데미지를 줬고(대타 제외) 상대가 도구를 지니고 있으면 그 도구를 떨어뜨린다(배틀 끝까지 못 씀, 리사이클 불가).
+   * 메가스톤·점착(preventsItemLoss)이면 떨어지지 않는다. 데미지 기술이라 도구가 없어도 "실패"로 알리지 않는다.
+   */
+  knocksOffTargetItem?: boolean;
+  /** 탁쳐서떨구기: 떨어뜨릴 수 있는 도구를 지닌 상대에게는 위력이 이 배율만큼 올라간다(1.5) */
+  targetItemPowerMultiplier?: number;
+  /** 도둑질·탐내기: 데미지를 줬고(대타 제외) 자신이 도구가 없으면 상대 도구를 빼앗는다. 메가스톤·점착이면 못 빼앗는다 */
+  stealsTargetItem?: boolean;
+  /** 벌레먹기·쪼아대기: 데미지를 줬고(대타 제외) 상대가 나무열매를 지니고 있으면 그 열매를 먹어 효과를 받는다(상대는 열매를 잃는다). 점착이면 못 먹는다 */
+  eatsTargetBerry?: boolean;
+  /** 클리어스모그: 데미지를 줬으면(대타 제외) 상대의 능력 랭크·명중/회피 랭크를 원래대로 돌린다(자신은 그대로) */
+  resetsTargetStages?: boolean;
+  /** 돌림노래: 직전 턴에도 이 기술을 썼으면 위력이 2배씩 올라간다(상한 200). 상대와의 연쇄는 세지 않고 자신의 연속 사용만 센다 */
+  doublesPowerPerConsecutiveUse?: boolean;
   /** 자기장조작(트랙 M6): 자신이 플러스·마이너스면 방어·특방 +1, 아니면 실패 */
   boostsDefensesIfPlusMinus?: boolean;
   /**

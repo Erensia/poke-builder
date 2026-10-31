@@ -1,6 +1,6 @@
 import { type Move } from "@/types/move";
 import { type FieldKind } from "@/types/field";
-import { type ActionLogEntry, type FighterKey } from "@/types/battle";
+import { type ActionLogEntry, type FighterKey, type ItemEffectLog } from "@/types/battle";
 import { BATTLE_STAT_KEYS } from "@/types/battleStats";
 import { getAbility, getItem, getMove } from "@/lib/data";
 import { effectiveHeldItem } from "./turnOrderInputs";
@@ -188,6 +188,8 @@ interface ActionCtx {
   regenSetFailed: boolean;
   leechSeedSetFailed: boolean;
   leechSeedBlockedByGrass: boolean;
+  curseHpCost: number;
+  curseSetFailed: boolean;
   abilitySwappedTargetToName: string | undefined;
   abilitySwapFailed: boolean;
   substituteSetFailed: boolean;
@@ -227,6 +229,8 @@ interface ActionCtx {
   smackedDownTarget: boolean;
   meltedItemName: string | undefined;
   meltFailed: boolean;
+  itemEffect: ItemEffectLog | undefined;
+  targetStagesReset: boolean;
   magneticFluxFailed: boolean;
   partyStatusCuredCount: number;
   teaTime: { self?: ReturnType<typeof eatBerryNow>; opponent?: ReturnType<typeof eatBerryNow>; } | undefined;
@@ -319,6 +323,8 @@ function resolveMirroredPhase(c: ActionCtx) {
   c.regenSetFailed = mirrorResult.regenSetFailed;
   c.leechSeedSetFailed = mirrorResult.leechSeedSetFailed;
   c.leechSeedBlockedByGrass = mirrorResult.leechSeedBlockedByGrass;
+  c.curseHpCost = mirrorResult.curseHpCost;
+  c.curseSetFailed = mirrorResult.curseSetFailed;
   c.abilitySwappedTargetToName = mirrorResult.abilitySwappedTargetToName;
   c.abilitySwapFailed = mirrorResult.abilitySwapFailed;
   c.substituteSetFailed = mirrorResult.substituteSetFailed;
@@ -358,6 +364,8 @@ function resolveMirroredPhase(c: ActionCtx) {
   c.smackedDownTarget = mirrorResult.smackedDownTarget;
   c.meltedItemName = mirrorResult.meltedItemName;
   c.meltFailed = mirrorResult.meltFailed;
+  c.itemEffect = mirrorResult.itemEffect;
+  c.targetStagesReset = mirrorResult.targetStagesReset;
   c.magneticFluxFailed = mirrorResult.magneticFluxFailed;
   c.partyStatusCuredCount = mirrorResult.partyStatusCuredCount;
   c.teaTime = mirrorResult.teaTime;
@@ -787,6 +795,8 @@ function collectResult(c: ActionCtx) {
     setLeechSeed: c.leechSeedSetFailed || c.leechSeedBlockedByGrass ? undefined : c.effectiveMove.setsLeechSeed,
     leechSeedSetFailed: c.leechSeedSetFailed,
     leechSeedBlockedByGrass: c.leechSeedBlockedByGrass || undefined,
+    curseHpCost: c.curseHpCost || undefined,
+    curseSetFailed: c.curseSetFailed || undefined,
     setSubstitute: c.substituteSetFailed ? undefined : c.effectiveMove.setsSubstitute,
     substituteSetFailed: c.substituteSetFailed,
     shedTailSucceeded: c.shedTailSucceeded || undefined,
@@ -821,6 +831,8 @@ function collectResult(c: ActionCtx) {
     teaTime: c.teaTime,
     teaTimeFailed: c.teaTimeFailed || undefined,
     meltFailed: c.meltFailed || undefined,
+    itemEffect: c.itemEffect,
+    targetStagesReset: c.targetStagesReset || undefined,
     magneticFluxFailed: c.magneticFluxFailed || undefined,
     fairyLockSet: c.fairyLockSet || undefined,
     fairyLockFailed: c.fairyLockFailed || undefined,

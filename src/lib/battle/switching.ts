@@ -456,6 +456,7 @@ export function performSwitch(
   outgoing.damageTakenThisTurn = { physical: 0, special: 0 };
   outgoing.consecutiveLockMoveId = undefined;
   outgoing.consecutiveLockUntilTurn = undefined;
+  outgoing.echoStreak = undefined;
   // 곡예(Unburden): 본가는 "도구를 잃은 뒤 교체하기 전까지"만 2배 유지 — 교체로 물러나면 해제(§8).
   outgoing.unburdenActive = undefined;
   // 일루전(§6-1): 물러나면 위장 해제 — 다시 나올 때 파티 상태에 맞춰 재계산된다.

@@ -65,6 +65,8 @@ export type EffectMoveKind =
   | "safeguard"
   | "regen"
   | "leechSeed"
+  // 6.3 B1: 고스트 타입이 쓰는 저주(HP 1/2 소비 + 상대에게 매 턴 1/4 피해). 사용자 타입을 알아야 해서 effectKindOf(move, user)로만 나온다
+  | "curse"
   | "confuse"
   | "attract"
   | "yawn"
@@ -215,8 +217,9 @@ const HAZARD_POISON_TURNS = 3;
 /** 끈적끈적네트: 접지한 상대 대기 포켓몬 1마리당 이월 가치(스피드 −1의 고정 근사, HP 비율 단위) */
 const STICKY_WEB_VALUE_PER_TARGET = 0.1;
 
-export function effectKindOf(move: Move): EffectMoveKind | undefined {
+export function effectKindOf(move: Move, user?: BattleFighterState): EffectMoveKind | undefined {
   if (move.category !== "status") return undefined;
+  if (move.setsCurse && user?.types.includes("고스트")) return "curse";
   if (move.setsScreen) return "screen";
   if (move.setsHazard) return "hazard";
   if (move.inflictsStatus?.length) return "status";
@@ -356,7 +359,8 @@ export function effectMoveFails(state: BattleState, key: FighterKey, move: Move)
     }
   }
 
-  const kind = effectKindOf(move);
+  const kind = effectKindOf(move, me);
+  if (kind === "curse") return hasVolatile(target.volatile, "curse") || !!targetAbility?.negatesIndirectDamage;
   if (kind === "haze") {
     const neutral = (f: BattleFighterState) =>
       Object.values(f.stages).every((v) => v === 0) && Object.values(f.accuracyStages).every((v) => v === 0);
@@ -546,7 +550,7 @@ function confusionCuredOnInflict(target: BattleFighterState): boolean {
 export function effectDuration(state: BattleState, key: FighterKey, move: Move): number | undefined {
   const user = state[key];
   const item = effectiveHeldItem(user);
-  switch (effectKindOf(move)) {
+  switch (effectKindOf(move, user)) {
     case "screen":
       return screenDuration(user);
     case "weather":
@@ -589,8 +593,8 @@ function volatileDuration(volatile: "taunt" | "encore" | "disable"): number {
  * 설치기는 현재 대면에 영향이 없으므로 아무것도 바꾸지 않고 true(이득은 hazardCarry로 따로 센다).
  */
 export function applyEffectMove(clone: BattleState, key: FighterKey, move: Move): boolean {
-  const kind = effectKindOf(move);
   const me = clone[key];
+  const kind = effectKindOf(move, me);
   const target = clone[opponentKey(key)];
   switch (kind) {
     case "hazard":
@@ -635,6 +639,10 @@ export function applyEffectMove(clone: BattleState, key: FighterKey, move: Move)
       return true;
     case "leechSeed":
       target.volatile = inflictVolatile(target.volatile, "leechSeed", () => 0);
+      return true;
+    case "curse":
+      me.currentHp = Math.max(0, me.currentHp - Math.floor(me.maxHp / 2));
+      target.volatile = inflictVolatile(target.volatile, "curse", () => 0);
       return true;
     case "confuse": {
       // 혼란 턴은 기대값(2.5)으로 — turnsToKo가 남은 턴만큼만 행동 손실·자멸을 센다.

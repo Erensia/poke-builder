@@ -315,6 +315,8 @@ export interface BattleFighterState {
    */
   choiceLockedMoveId?: string;
   consecutiveLockUntilTurn?: number;
+  /** 돌림노래(doublesPowerPerConsecutiveUse): 마지막으로 쓴 턴과 연속 사용 횟수. 물러나면 지운다 */
+  echoStreak?: { turn: number; count: number };
   /**
    * 이번 턴에 "자기 의지로" 교체해서 나왔으면 true(Phase 8 §8). 가속(Speed Boost)이 이 턴
    * 종료에 발동하지 않게 막는 데 쓴다. runTurn이 매 턴 시작 시 지우고, 교체 선처리에서 자발적
@@ -392,6 +394,8 @@ export interface BattleSide {
    * 유지된다. healAmount는 시전 시점 시전자 최대 HP의 절반(고정).
    */
   wish?: { turnsRemaining: number; healAmount: number };
+  /** 미래예지 예약(6.3 B2) — 이 편의 자리에 들어갈 공격. 쓴 시점 사용자 능력치를 스냅샷으로 들고 있다 */
+  futureSight?: { turnsRemaining: number; move: Move; realStats: BaseStats; types: PokemonType[]; stages: StatStages };
   /** 메가진화는 팀당 1회(백로그 §4). 이 편이 이미 썼으면 true. */
   megaUsed?: boolean;
 }
@@ -671,6 +675,23 @@ export function hasSheerForceSecondaryEffect(move: Move): boolean {
  * 묶었다 — 둘 중 하나만 갱신하면 곡예가 오작동한다(예: itemConsumed만 세팅하면 나무열매를 쓴
  * 뒤에도 currentItemId가 그대로 남아있어 곡예가 영영 발동하지 않는다).
  */
+/** 회복봉인 중엔 쓸 수 없는 회복 기술 — 자기 회복·잠자기·비축 회복·희망사항·힘흡수·흡수기 (힘흡수는 회복이 본체) */
+export function isHealingMove(move: Move): boolean {
+  return (
+    (move.healsFraction !== undefined && move.healsTarget !== "opponent") ||
+    !!move.healsWeatherDependent ||
+    !!move.restSleep ||
+    !!move.healsByStockpile ||
+    !!move.drainsFromTargetAttackStat ||
+    !!move.inflictsVolatile?.some((v) => v.volatile === "wish")
+  );
+}
+
+/** 도구를 지니고 있고 메가스톤이 아니며 점착(preventsItemLoss)이 아니면 떨어뜨리기·빼앗기·먹기 대상이 된다 */
+export function isItemRemovable(fighter: BattleFighterState, ability: Ability | undefined): boolean {
+  return !!fighter.currentItemId && getItem(fighter.currentItemId)?.category !== "mega-stone" && !ability?.preventsItemLoss;
+}
+
 export function consumeItem(fighter: BattleFighterState): void {
   const consumedId = fighter.currentItemId;
   fighter.itemConsumed = true;
@@ -1107,6 +1128,7 @@ export function cloneSide(side: BattleSide): BattleSide {
     tailwindTurnsRemaining: side.tailwindTurnsRemaining,
     healingWishPending: side.healingWishPending,
     wish: side.wish ? { ...side.wish } : undefined,
+    futureSight: side.futureSight ? { ...side.futureSight, realStats: { ...side.futureSight.realStats }, types: [...side.futureSight.types], stages: { ...side.futureSight.stages } } : undefined,
     megaUsed: side.megaUsed,
   };
 }

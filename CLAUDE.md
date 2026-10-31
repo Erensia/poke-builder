@@ -1,5 +1,12 @@
 # 작업 규칙
 
+## 작업 시작 전 동기화
+
+- 사용자가 어떤 작업을 지시하든, 착수 전에 **원격과 로컬(`dev`·`main`)을 비교해 최신화**한다. 따로 요청받지 않아도 한다.
+  - `git fetch --prune origin` → 브랜치마다 `git rev-list --count b..origin/b`(뒤처짐)·`origin/b..b`(앞섬) 확인. 앞선 커밋이 없을 때만 fast-forward한다(체크아웃된 브랜치는 `git merge --ff-only origin/<b>`, 아닌 브랜치는 `git fetch origin <b>:<b>`).
+  - 작업 트리의 수정·untracked 파일은 건드리지 않는다(`git checkout -- .`·`reset --hard` 금지). 로컬이 앞서 있거나 갈렸으면 임의로 맞추지 말고 사용자에게 보고한다.
+  - 동기화 후 `package.json`·lock이 바뀌었으면 `npm install`.
+
 ## 코드 작성
 
 - 코드를 작성·수정할 때는 `ponytail` 스킬을 사용한다.
@@ -51,6 +58,8 @@
 
 - 테스트 러너는 없다. 정적 검증은 `npx tsc -b`, `npx oxlint`, `npm run build`.
 - **엔진 검증은 직접 수행한다.** Vite `ssrLoadModule`로 CLI에서 실행한다: `npm run test:ai`, `npm run sim:ai` (`scripts/battle-ai-*.mjs` 참고).
+- **화면 확인이 필요한 변경**(UI·로그 문구 등)은 해당 feature 브랜치로 전환한 뒤 `npm run dev`를 백그라운드로 띄우고 접속 주소·확인 방법을 안내한다. 사용자가 확인했다고 하면 서버를 종료한다(포트 점유 프로세스 종료).
+- **머지 자동화**: 사용자가 화면 확인을 마쳤다고 알리면 별도 승인 없이 PR을 squash 머지하고, 곧바로 `dev`로 복귀·`origin/dev` ff 갱신·feature 브랜치 로컬·원격 삭제까지 마친다(사용자 지시 2026-10-30).
 - **브라우저가 필요한 검증**(모바일 뷰포트, 드래그앤드롭, 화면 조작 등)은 `claude-in-chrome`을 직접 호출하지 않고 사용자에게 위임한다. 토큰 소모가 크기 때문이다.
   - 실행할 정확한 명령·스니펫·체크리스트를 주고 결과만 보고받는다.
   - 부탁하기 전에 로컬 브랜치를 사용자가 봐야 할 브랜치로 먼저 전환해 둔다.
