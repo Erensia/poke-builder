@@ -5,6 +5,7 @@
  *   node scripts/rank-sweep.mjs [시드 수=200] [--vs rank:6] [--chunk 25] [--jobs N] 이름=JSON|rank:N ...
  *   예) node scripts/rank-sweep.mjs 200 r.8='{"mistake":{"rate":0.8,"margin":1e9}}' rank:2
  *
+ * Windows 하이브리드 CPU에서 CPU 사용률이 25% 안팎에 머물면 효율 코어에 갇힌 것이다 — 측정 중에 scripts/win-unthrottle.ps1을 따로 실행한다.
  * 승률은 무승부 제외, 강도 = ln(승률/(1-승률))(기준 대비 로짓, 0이면 같은 강도). POOL=samples(사다리와 같다), SELECT=1이면 선출 포함.
  */
 import { spawn } from "node:child_process";
@@ -21,6 +22,8 @@ const rest = args.filter((a, i) => !a.startsWith("--") && !optValues.has(i));
 const seeds = /^\d+$/.test(rest[0] ?? "") ? Number(rest.shift()) : 200;
 const vs = opt("vs", "rank:6");
 const chunk = Number(opt("chunk", 25));
+// SEED_OFFSET=200이면 시드 201부터 — 같은 조건을 새 시드로 이어서 쌓을 때
+const seedOffset = Number(process.env.SEED_OFFSET ?? 0);
 const concurrency = Number(opt("jobs", availableParallelism()));
 const sim = fileURLToPath(new URL("./battle-ai-sim.mjs", import.meta.url));
 const cands = rest.map((a) => {
@@ -29,7 +32,9 @@ const cands = rest.map((a) => {
 });
 
 const sums = Object.fromEntries(cands.map((c) => [c.name, { aWins: 0, bWins: 0, other: 0 }]));
-const queue = cands.flatMap((c) => Array.from({ length: Math.ceil(seeds / chunk) }, (_, k) => ({ c, from: 1 + k * chunk, count: Math.min(chunk, seeds - k * chunk) })));
+// 탐색(search)이 켜진 후보는 판단 시간(조각 합산)도 모은다
+const timing = Object.fromEntries(cands.map((c) => [c.name, { decisions: 0, ms: 0, maxMs: 0 }]));
+const queue = cands.flatMap((c) => Array.from({ length: Math.ceil(seeds / chunk) }, (_, k) => ({ c, from: seedOffset + 1 + k * chunk, count: Math.min(chunk, seeds - k * chunk) })));
 const total = queue.length;
 let done = 0;
 
@@ -44,8 +49,14 @@ const run = ({ c, from, count }) =>
     child.on("close", (code) => {
       const line = out.trim().split("\n").filter((l) => l.startsWith("{")).pop();
       if (code !== 0 || !line) return reject(new Error(`${c.name} 시드 ${from}: exit ${code}\n${err}`));
-      const { res } = JSON.parse(line);
+      const { res, search } = JSON.parse(line);
       for (const k of Object.keys(sums[c.name])) sums[c.name][k] += res[k];
+      if (search) {
+        const tm = timing[c.name];
+        tm.decisions += search.decisions;
+        tm.ms += search.ms;
+        tm.maxMs = Math.max(tm.maxMs, search.maxMs);
+      }
       console.error(`[${++done}/${total}] ${c.name} 시드 ${from}~${from + count - 1}`);
       resolve();
     });
@@ -58,5 +69,7 @@ for (const c of cands) {
   const { aWins, bWins, other } = sums[c.name];
   const rate = aWins / (aWins + bWins);
   const logit = Math.log(rate / (1 - rate));
-  console.log(`${c.name.padEnd(12)} ${aWins}:${bWins}${other ? ` (무 ${other})` : ""}  승률 ${(rate * 100).toFixed(1)}%  강도 ${logit.toFixed(2)}`);
+  const tm = timing[c.name];
+  const ms = tm.decisions ? `  판단 평균 ${(tm.ms / tm.decisions).toFixed(0)}ms · 최대 ${(tm.maxMs / 1000).toFixed(1)}초(${tm.decisions}회, 병렬 부하 포함)` : "";
+  console.log(`${c.name.padEnd(12)} ${aWins}:${bWins}${other ? ` (무 ${other})` : ""}  승률 ${(rate * 100).toFixed(1)}%  강도 ${logit.toFixed(2)}${ms}`);
 }

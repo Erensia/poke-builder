@@ -107,6 +107,10 @@ try {
   check("λ 1은 교체·기술 보정이 걸림", at1.switchProb > dist.switchProb && at1.moveWeights.get("a") > 0.5);
   check("λ 0.5는 0과 1 사이", atHalf.switchProb > at0.switchProb && atHalf.switchProb < at1.switchProb && atHalf.moveWeights.get("a") > 0.5 && atHalf.moveWeights.get("a") < at1.moveWeights.get("a"));
 
+  // 챔피언(6.3 G4 v0): 앱 AI와 같은 설정에 탐색 깊이 2만 더한다. 다른 단계는 깊이 1(기본)이다
+  check("챔피언은 깊이 2 탐색, 나머지는 깊이 1", RANK_AI_PROFILES[7].search?.depth === 2 && RANK_AI_PROFILES.slice(3, 7).every((p) => (p.search?.depth ?? 1) === 1));
+  check("챔피언은 마스터볼 1과 탐색 폭·상대 모델이 같다", RANK_AI_PROFILES[7].search.topK === RANK_AI_PROFILES[6].search.topK && RANK_AI_PROFILES[7].search.budget === RANK_AI_PROFILES[6].search.budget && !!RANK_AI_PROFILES[7].opponentModel);
+
   // 관측만 하는 프로필: 모델이 없어도 분포를 돌려주되 판단은 학습 설정이 없을 때와 같다
   const stateMod = await server.ssrLoadModule("/src/lib/battle/state.ts");
   const { chooseAiAction } = await server.ssrLoadModule("/src/lib/battle/ai/index.ts");
@@ -120,6 +124,10 @@ try {
   const unwatched = chooseAiAction(battle, "a", 0.5, { decisionParams: plain, rng });
   check("관측만 프로필은 분포를 돌려준다", !!watched.opponentDistribution && unwatched.opponentDistribution === undefined);
   check("관측만 해도 판단은 그대로", JSON.stringify(watched.action) === JSON.stringify(unwatched.action));
+  const started = performance.now();
+  const champion = chooseAiAction(battle, "a", 0.5, { decisionParams: RANK_AI_PROFILES[7], rng });
+  const championMs = performance.now() - started;
+  check("챔피언 프로필이 정상 행동을 고르고 5초 안에 끝난다", (champion.action.kind === "move" || champion.action.kind === "switch") && championMs < 5000, `${championMs.toFixed(0)}ms`);
 
   // 학습 메모리 감쇠(랭크 0.995 > 배틀타워 0.99): 같은 누적본·세션이면 랭크가 옛 기록을 더 많이 남긴다
   const { commitBattle, emptyOpponentMemory, MEMORY_DECAY_PER_BATTLE, RANK_MEMORY_DECAY_PER_BATTLE } = await server.ssrLoadModule("/src/lib/battle/ai/opponentMemory.ts");

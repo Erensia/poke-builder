@@ -18,6 +18,13 @@ import { PRODUCT_SEARCH_PARAMS } from "./search";
  */
 export const APP_DECISION_PARAMS: Partial<DecisionParams> = { search: PRODUCT_SEARCH_PARAMS, opponentModel: DEFAULT_OPPONENT_MODEL };
 
+/**
+ * 챔피언 AI 설정(6.3 G4 v0): 앱 AI + 탐색 깊이 2(롤아웃 뒤 양쪽이 지금 AI 정책으로 한 턴 더). 앱 AI 대비 h2h 400판 54.8%(217:179, z 1.9),
+ * 판단 평균 약 0.6~1초(앱 AI의 약 4배). 후보·응수·예산을 넓혀도 54~55%로 같고 후보를 2개로 줄이면 51%라 이 설정이 평평한 지점이다
+ * (decision-layer 설계 `6.3-G4-챔피언AI-설계.md` §9). 제한 시간은 5초(CHAMPION_TIMEOUT_MS).
+ */
+export const CHAMPION_DECISION_PARAMS: Partial<DecisionParams> = { ...APP_DECISION_PARAMS, search: { ...PRODUCT_SEARCH_PARAMS, depth: 2 } };
+
 export interface AiWorkerRequest {
   id: number;
   state: BattleState;
@@ -113,11 +120,13 @@ export function prewarmAiWorker(): void {
 /** 제한 시간: 워커가 준비됐으면 2초(사용자 합의 — 최대 판단 시간), 로드 중이면 넉넉히 */
 const READY_TIMEOUT_MS = 2000;
 const LOADING_TIMEOUT_MS = 8000;
+/** 챔피언(깊이 2 탐색)은 판단이 더 오래 걸린다 — 사용자 합의(2026-10-31): 평균 1초·최대 5초 */
+const CHAMPION_TIMEOUT_MS = 5000;
 
 export function chooseAiActionAsync(request: Omit<AiWorkerRequest, "id">): Promise<AiActionResult> {
   const w = getWorker();
   if (!w) return Promise.resolve(fallback(request));
-  const timeoutMs = workerReady ? READY_TIMEOUT_MS : LOADING_TIMEOUT_MS;
+  const timeoutMs = workerReady ? (request.decisionParams?.search?.depth === 2 ? CHAMPION_TIMEOUT_MS : READY_TIMEOUT_MS) : LOADING_TIMEOUT_MS;
   const id = nextId++;
   return new Promise((resolve) => {
     const timer = setTimeout(() => {
