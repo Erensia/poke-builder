@@ -7,6 +7,7 @@ import { PokedexPage } from "./components/PokedexPage";
 import { MoveDexPage } from "./components/MoveDexPage";
 import { ItemDexPage } from "./components/ItemDexPage";
 import { Footer } from "./components/Footer";
+import { SyncAnnouncer } from "./components/SyncDot";
 import { Modal } from "./components/Modal";
 import { startCloudSync } from "./lib/cloudSync";
 import { loadBattleRank, loadCloudSyncMeta } from "./lib/storage";
@@ -34,6 +35,7 @@ function App() {
 
   return (
     <div className="app-shell">
+      <SyncAnnouncer />
       <Sidebar activeView={view} onSelectView={requestView} />
       <div className="app-body">
         <main className="app-main">
