@@ -20,3 +20,14 @@
 .bottom-nav-icon {
   position: relative;
 }
+
+/* 화면에서는 숨기고 스크린리더에만 읽힌다(공용 클래스가 없어 여기에 둔다) */
+.sync-announcer {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
