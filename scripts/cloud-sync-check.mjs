@@ -200,7 +200,7 @@ try {
 
   // ── 랭크 기록 재생 병합(6.2 C6) ──
   const { beginRankMatch, finishRankMatch, resetSeason } = await server.ssrLoadModule("/src/lib/battleRankSave.ts");
-  const { mergeRank } = await server.ssrLoadModule("/src/lib/cloudSyncPlan.ts");
+  const { mergeRank, mergeFrontier } = await server.ssrLoadModule("/src/lib/cloudSyncPlan.ts");
   const party6 = Array(6).fill(null);
   // 한 기기에서 순서대로 한 판: 시작(진행 중 표시) → 결과
   const play = (save, opp, won, at, turns = 20) => finishRankMatch(beginRankMatch(save, opp, party6, at), won ? { won: true, turns } : { won: false }, at);
@@ -234,6 +234,64 @@ try {
   check("랭크 병합 폴백: 판 기록만으로 상태가 재현되지 않으면 합치지 않는다", (() => { const bad = { ...L1, state: { ...L1.state, wins: L1.state.wins + 1 } }; return mergeRank(cj(gaugeBase), cj(bad), cj(R1)) === null; })());
   check("랭크 병합 폴백: 한쪽이 기록 상한(50판)을 넘겼으면 합치지 않는다", (() => { let s = masterBase; for (let i = 0; i < 50; i++) s = play(s, "n" + i, i % 3 !== 0, 1000 + i); return mergeRank(cj(masterBase), cj(s), cj(R2)) === null; })());
   check("랭크 병합 폴백: 49판까지는 합친다", (() => { let s = masterBase; for (let i = 0; i < 49; i++) s = play(s, "n" + i, i % 3 !== 0, 1000 + i); return mergeRank(cj(masterBase), cj(s), cj(R2)) !== null; })());
+
+  // ── 프런티어 기록 부분 병합(6.4 F1) ──
+  {
+    const { finishMatch, beginMatch } = await server.ssrLoadModule("/src/lib/battleSeries.ts");
+    const fp = (s) => canonical("battleFrontier", s).json;
+    const fplay = (s, id, won) => finishMatch(beginMatch(s, id), id, won);
+    const Q = ["a", "b", "c", "d", "e"];
+    const fbase = fplay(fplay({ ...EMPTY_FRONTIER, queue: Q }, "a", true), "b", false); // 기준: a 승, b 패 — 대기열 [c, d, e]
+    const FB = fp(fbase);
+
+    // 두 기기가 서로 다른 상대와 싸웠다 — 한 기기에서 둘 다 한 것과 전적 합계가 같다
+    const L = fplay(fbase, "c", true); // 이 기기: c 승
+    const R = fplay(fplay(fbase, "c", false), "d", true); // 다른 기기: c 패, d 승
+    const m = JSON.parse(mergeFrontier(FB, fp(L), fp(R)));
+    check(
+      "프런티어 병합: 샘플별 전적은 기준 + 각 기기의 증가분이다",
+      JSON.stringify(m.samples) === JSON.stringify({ a: { wins: 1, losses: 0 }, b: { wins: 0, losses: 1 }, c: { wins: 1, losses: 1 }, d: { wins: 1, losses: 0 } }),
+    );
+    const total = (x) => Object.values(x.samples).reduce((n, v) => n + v.wins + v.losses, 0);
+    check("프런티어 병합: 승패 총합이 기준 + 두 기기가 치른 판 수(3판)와 같다", total(m) === total(fbase) + 3);
+    check("프런티어 병합: 대기열은 더 많이 진행한 쪽(양쪽이 만난 상대는 둘 다 뺀다)", m.queue.join() === "e");
+    check("프런티어 병합: 진행 중 표시는 null, 최고 연승은 큰 값", m.pendingId === null && m.best >= Math.max(L.best, R.best));
+    check("프런티어 병합: 결과는 정규형이다(다시 정규화해도 같다)", (() => { const j = mergeFrontier(FB, fp(L), fp(R)); return canonical("battleFrontier", JSON.parse(j)).json === j; })());
+
+    // 합친 뒤에는 그 결과가 새 기준이다 · 한쪽에 새 판이 없어도 된다 · 진행 중 표시만 있는 경우
+    const M = mergeFrontier(FB, fp(L), fp(R));
+    check("프런티어 병합: 합친 결과를 기준으로 삼으면 더 합칠 것이 없다(멱등)", mergeFrontier(M, M, M) === M);
+    // 올리는 사이 이 기기에서 한 판이 더 끝난 경우: 기준을 "합치기 전 이 기기 저장본"으로 옮겨 다시 합치면 이미 합친 몫이 두 번 더해지지 않는다
+    const Lx = fplay(L, "d", false); // 이 기기가 합치는 사이 d에게 졌다
+    const again = JSON.parse(mergeFrontier(fp(L), fp(Lx), M));
+    check("프런티어 병합: 올리는 사이 한 판이 더 끝나도 이미 합친 몫은 두 번 더해지지 않는다", total(again) === total(JSON.parse(M)) + 1 && again.samples.d.wins === 1 && again.samples.d.losses === 1);
+    check("프런티어 병합: 기준을 옮기지 않고 다시 합치면 두 번 더해진다(그래서 옮긴다)", total(JSON.parse(mergeFrontier(FB, fp(Lx), M))) > total(JSON.parse(M)) + 1);
+    check("프런티어 병합: 한쪽에 새 판이 없어도 합쳐진다", JSON.parse(mergeFrontier(FB, fp(fbase), fp(R))).samples.c.losses === 1);
+    check("프런티어 병합: 한쪽이 판을 시작만 한 상태(진행 중 표시)여도 합쳐진다", mergeFrontier(FB, fp(beginMatch(fbase, "c")), fp(R)) !== null);
+    check("프런티어 병합: 기준에 없던 샘플도 더해진다", JSON.parse(mergeFrontier(FB, fp(fplay(fbase, "x", true)), fp(fplay(fbase, "y", false)))).samples.x.wins === 1);
+
+    // 추가 설정은 저장본에서 바뀐 쪽을 따른다
+    const mine = fp({ ...fbase, includeMine: true });
+    check("프런티어 병합: includeMine은 바꾼 쪽을 따른다", JSON.parse(mergeFrontier(FB, mine, FB)).includeMine === true && JSON.parse(mergeFrontier(FB, FB, mine)).includeMine === true);
+
+    // 폴백(null) — 사용자가 고르게 한다
+    check("프런티어 병합 폴백: 기준 저장본이 없으면 합치지 않는다", mergeFrontier(null, fp(L), fp(R)) === null);
+    check("프런티어 병합 폴백: 한쪽 전적이 기준보다 줄었으면(기록 초기화 등) 합치지 않는다", mergeFrontier(FB, fp({ ...EMPTY_FRONTIER, queue: Q.slice(2) }), fp(R)) === null);
+    check("프런티어 병합 폴백: 한쪽 대기열이 기준의 뒷부분이 아니면(새로 섞였으면) 합치지 않는다", mergeFrontier(FB, fp({ ...L, queue: ["z", "c", "d"] }), fp(R)) === null);
+    check("프런티어 병합 폴백: 대기열이 다 비어 새로 채워졌으면 합치지 않는다", mergeFrontier(FB, fp({ ...L, queue: ["q", "r", "s", "t", "u"] }), fp(R)) === null);
+
+    // planSync: 양쪽이 다 바뀌었으면 여전히 충돌이고, 병합은 그 충돌을 푸는 단계다
+    check("프런티어: 양쪽이 다 바뀌면 충돌(병합 대상)", planSync(fp(L), { json: fp(R), updatedAt: 200 }, { hash: hashOf(FB), remoteUpdatedAt: 100 }, FE) === "conflict");
+
+    // 같은 기준에서 같은 상대에게 같은 결과로 진 두 판은 내용이 똑같다 — 같다고 맞췄다고 보면 한 판이 사라진다
+    const lossC = fplay(fbase, "c", false); // 두 기기가 각자 c에게 패
+    const sbase = { hash: hashOf(FB), remoteUpdatedAt: 100, snapshot: FB };
+    check("프런티어: 두 기기가 같은 결과를 따로 만들었으면(기준 대비 양쪽 변경) 같은 내용이어도 합친다", planSync(fp(lossC), { json: fp(lossC), updatedAt: 200 }, sbase, FE, true) === "conflict");
+    check("프런티어: 그 병합은 두 판을 모두 센다(c 패 2회)", JSON.parse(mergeFrontier(FB, fp(lossC), fp(lossC))).samples.c.losses === 2);
+    check("프런티어: 이 기기가 받아 온 것(기준과 같음)이면 맞춘 것이다", planSync(FB, { json: FB, updatedAt: 100 }, sbase, FE, true) === "adopt" && planSync(fp(lossC), { json: fp(lossC), updatedAt: 100 }, { ...sbase, hash: hashOf(fp(lossC)) }, FE, true) === "adopt");
+    check("프런티어: 기준 저장본이 없으면 같은 내용은 그대로 맞춘 것으로 본다(선택 창을 띄우지 않는다)", planSync(fp(lossC), { json: fp(lossC), updatedAt: 200 }, { hash: hashOf(FB), remoteUpdatedAt: 100 }, FE, true) === "adopt");
+    check("목록·랭크는 같은 내용이면 기준과 상관없이 맞춘 것이다(additive 아님)", planSync(fp(lossC), { json: fp(lossC), updatedAt: 200 }, sbase, FE) === "adopt");
+  }
 
   // ── 6.3 A1 AI 학습 기록 ──
   {
