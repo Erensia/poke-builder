@@ -1,4 +1,4 @@
-import { Fragment, useState } from "react";
+import { Fragment, useLayoutEffect, useRef, useState } from "react";
 import { BattleSetupCard } from "../BattleSetupCard";
 import { InfoTooltip } from "../InfoTooltip";
 import { useBattleSetup } from "../../hooks/useBattleSetup";
@@ -103,13 +103,62 @@ export function BattleSetupScreen({
     });
   }
 
-  const blockedReason = proceedBlockedReason ?? (hasMovelessSlot ? "기술을 배정하지 않은 포켓몬이 있습니다" : "양쪽 파티를 먼저 완성하세요");
+  // VS 아래 안내는 "이유가 분명하고 사용자가 고칠 수 있는 것"만 보인다(랭크 시작 전·기술 없는 슬롯). 빈 슬롯 때문에 막힌 것은 슬롯이 비어 보여서 따로 말하지 않는다.
+  const hintText = proceedBlockedReason ?? (hasMovelessSlot ? "기술을 배정하지 않은 포켓몬이 있습니다" : null);
+  const showHint = !canProceed && hintText !== null;
+  const blockedReason = hintText ?? "양쪽 파티를 먼저 완성하세요"; // VS 버튼의 접근성 이름 전용(화면에는 보이지 않는다)
+
+  // 랭크 "배틀 시작" 연출(6.4 U2) — 1초 버전(0.8초 버전의 앞부분 + 충돌 뒤 잦아드는 꼬리): 시작 안내가 떠 있다가 VS가 가능해지는 순간, 양쪽 파티가 바깥으로 빠르게 당겨졌다가 → 점점 빨라져 제자리로 돌진 → 쾅(찌그러짐 + VS 펀치) → 튕겨 나와 안착한다.
+  // 레이아웃은 그대로 두고 transform만 쓴다(열 폭이 변하면 제목 줄의 AI 알약이 다시 줄바꿈된다). 처음부터 가능한 채로 열 때·자유 대전의 파티 완성 때는 재생하지 않는다. 세로 배치(모바일)는 가로 이동이 보이지 않아 건너뛴다.
+  const colEls = useRef<(HTMLDivElement | null)[]>([]);
+  const vsEl = useRef<HTMLButtonElement>(null);
+  const wasReady = useRef(canProceed);
+  const waitedForRank = useRef(false); // 직전에 랭크 시작 안내가 떠 있었는지
+  useLayoutEffect(() => {
+    if (proceedBlockedReason) waitedForRank.current = true;
+    if (canProceed === wasReady.current) return;
+    wasReady.current = canProceed;
+    if (!canProceed) return;
+    const played = waitedForRank.current;
+    waitedForRank.current = false;
+    if (!played || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    colEls.current.forEach((el, i) => {
+      if (!el) return;
+      const out = i === 0 ? -1 : 1; // 바깥쪽 방향(왼쪽 열은 왼쪽, 오른쪽 열은 오른쪽)
+      el.style.transformOrigin = i === 0 ? "right center" : "left center"; // 서로 맞닿는 쪽 모서리 기준으로 찌그러진다
+      el.animate(
+        [
+          { transform: "none", easing: "ease-out" }, // 0~0.17s: 바깥으로 빠르게 당겨진다
+          { offset: 0.17, transform: `translateX(${out * 26}px)`, easing: "cubic-bezier(0.6, 0, 1, 0.4)" }, // 0.17~0.58s: 점점 빨라져 돌진
+          { offset: 0.58, transform: "translateX(0) scaleX(0.94)", easing: "ease-out" }, // 0.58s: 쾅 — 맞닿는 쪽으로 찌그러진다
+          { offset: 0.69, transform: `translateX(${out * 9}px) scaleX(1.025)`, easing: "ease-in-out" }, // 튕겨 나온다
+          { offset: 0.8, transform: `translateX(${-out * 2}px) scaleX(0.98)`, easing: "ease-in-out" }, // 한 번 더 눌렸다가
+          { offset: 0.9, transform: `translateX(${out * 3}px) scaleX(1.008)`, easing: "ease-in-out" }, // 살짝 반동하며
+          { transform: "none" }, // 잦아든다
+        ],
+        { duration: 1000, easing: "linear" },
+      );
+    });
+    const vs = vsEl.current;
+    if (!vs) return;
+    vs.classList.remove("is-hit");
+    void vs.offsetWidth; // 클래스를 뗐다 붙여 애니메이션을 처음부터 다시 재생
+    vs.classList.add("is-hit");
+    const t = setTimeout(() => vs.classList.remove("is-hit"), 1300);
+    return () => clearTimeout(t);
+  }, [canProceed, proceedBlockedReason]);
 
   return (
     <div className="battle-setup-board">
       {(["a", "b"] as const).map((side) => (
         <Fragment key={side}>
-          <div className={`battle-setup-column${side === "b" && opponentLocked ? " is-locked" : ""}`} inert={side === "b" && opponentLocked}>
+          <div
+            ref={(el) => {
+              colEls.current[side === "a" ? 0 : 1] = el;
+            }}
+            className={`battle-setup-column${side === "b" && opponentLocked ? " is-locked" : ""}`}
+            inert={side === "b" && opponentLocked}
+          >
             {side === "b" && opponentLocked && lockedNote && <p className="battle-lock-warning">{lockedNote}</p>}
             <div className="battle-setup-actions">
               {hasPartyPresets && (
@@ -202,6 +251,7 @@ export function BattleSetupScreen({
           {side === "a" && (
             <div className="battle-setup-center">
               <button
+                ref={vsEl}
                 type="button"
                 className="battle-setup-vs"
                 disabled={!canProceed}
@@ -211,7 +261,9 @@ export function BattleSetupScreen({
               >
                 VS
               </button>
-              {!canProceed && <p className="battle-setup-vs-hint">{blockedReason}</p>}
+              <div className={`battle-setup-vs-hint-box${showHint ? "" : " is-closed"}`} aria-hidden={!showHint}>
+                <p className="battle-setup-vs-hint">{hintText}</p>
+              </div>
             </div>
           )}
         </Fragment>
