@@ -147,7 +147,7 @@ export interface SyncBase {
   remoteUpdatedAt: number;
   /** 그때 목록의 항목 id → 항목 해시(6.2 C4). 항목 단위 병합에서 바뀐 항목·지워진 항목을 알아내는 기준. 6.1까지의 기록에는 없다 */
   items?: Record<string, string>;
-  /** 그때 랭크 저장본의 정규형 JSON(6.2 C6). 두 기기의 판을 기준 상태에서 다시 계산해 합치는 데 쓴다. 랭크 기록에만 있다 */
+  /** 그때 저장본의 정규형 JSON. 랭크(6.2 C6)는 두 기기의 판을 기준 상태에서 다시 계산해, 프런티어(6.4 F1)는 샘플별 전적의 증가분을 더해 합치는 데 쓴다. 랭크·프런티어 기록에만 있다 */
   snapshot?: string;
 }
 interface CloudSyncMeta {
