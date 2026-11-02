@@ -3,6 +3,7 @@ import { SEASON_MS } from "../lib/battleRankSave";
 import { getPokemon, SAMPLE_PARTIES } from "../lib/data";
 import type { useRankBattle } from "../hooks/useRankBattle";
 import type { SamplePartyPreset } from "../types/party";
+import { InfoTooltip } from "./InfoTooltip";
 import { RankGauge } from "./RankGauge";
 import { describeChange } from "../lib/battleRankText";
 import "./RankPanel.css";
@@ -10,6 +11,10 @@ import "./RankPanel.css";
 const RESULT_LABEL = { win: "승", loss: "패", abandon: "이탈" } as const;
 const date = (ms: number) => new Date(ms).toLocaleDateString("ko-KR");
 const dateTime = (ms: number) => new Date(ms).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
+const monthDay = (ms: number) => {
+  const d = new Date(ms);
+  return `${d.getMonth() + 1}.${d.getDate()}`;
+};
 /** 시즌 남은 일수(오늘 포함 올림) */
 const daysLeft = (startedAt: number) => Math.max(0, Math.ceil((startedAt + SEASON_MS - Date.now()) / 86_400_000));
 const opponentName = (id: string) => (id.startsWith("random:") ? `랜덤 구축(${id.slice(7)})` : (SAMPLE_PARTIES.find((p) => p.id === id)?.name ?? id));
@@ -44,18 +49,24 @@ export function RankPanel({ rank, startBlockedReason, onStart }: RankPanelProps)
             {state.streak}연승 · {state.lossStreak}연패 · 이번 시즌 {state.wins}승 {state.losses}패
           </span>
           <span className="rank-sub">
-            {save.seasons.length + 1}시즌{save.seasonStartedAt !== null && ` · ${date(save.seasonStartedAt)} 시작 · ${daysLeft(save.seasonStartedAt)}일 남음(30일 시즌, 끝나면 자동 초기화)`}
+            {save.seasons.length + 1}시즌
+            {save.seasonStartedAt !== null && (
+              <>
+                {` · ${monthDay(save.seasonStartedAt)} 시작 · ${daysLeft(save.seasonStartedAt)}일 남음 `}
+                <InfoTooltip text="한 시즌은 30일이고, 끝나면 자동으로 초기화돼요." />
+              </>
+            )}
           </span>
           {!active && startBlockedReason && <span className="rank-sub">{startBlockedReason}</span>}
-          <span className="rank-sub">결과가 나오기 전에 나가면(탭 이동·새로고침·창 닫기) 이 판은 패배로 기록돼요.</span>
+          <span className="rank-sub">결과 전에 나가면(탭 이동·새로고침·창 닫기) 패배로 기록돼요.</span>
         </div>
         {active ? (
           <button type="button" className="battle-setup-load-party tap-target" onClick={rank.stop}>
-            종료하기
+            배틀 종료
           </button>
         ) : (
           <button type="button" className="battle-setup-load-party tap-target" disabled={!!startBlockedReason} onClick={() => onStart(rank.start())}>
-            랭크 배틀 시작
+            배틀 시작
           </button>
         )}
       </div>

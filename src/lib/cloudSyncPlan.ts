@@ -1,7 +1,7 @@
 import { cleanPartyPresets, cleanSlotPresets } from "./backup";
 import { applyRankResult, rankOf, type RankResult, type RankState } from "./battleRank";
 import { EMPTY_RANK_SAVE, HISTORY_LIMIT, isRankSave, type RankHistoryEntry, type RankSave } from "./battleRankSave";
-import { EMPTY_FRONTIER, isFrontierSave } from "./battleSeries";
+import { EMPTY_FRONTIER, isFrontierSave, type FrontierSave } from "./battleSeries";
 import { emptyOpponentMemory, isOpponentMemory } from "./battle/ai/opponentMemory";
 import { cleanMySamples } from "./mySamples";
 import type { PresetListName, SyncBase } from "./storage";
@@ -104,6 +104,43 @@ export function mergeRank(baseJson: string | null, localJson: string, remoteJson
   return canonical("battleRank", merged).json;
 }
 
+/** q가 base의 뒷부분인지 — 대기열은 앞에서만 빠지며 줄어든다(다 비면 새로 섞어 채우므로 그때는 뒷부분이 아니다) */
+const isTail = (base: string[], q: string[]) => q.length <= base.length && q.every((id, i) => id === base[base.length - q.length + i]);
+
+/**
+ * 두 기기에서 따로 플레이한 프런티어 기록을 합친다(6.4 F1). 프런티어 기록에는 판 시각이 없어 랭크처럼 판을 다시 재생할 수는 없고,
+ * 순서에 달리지 않은 것만 합친다. 합칠 수 없으면 null이고 그때는 사용자가 고른다.
+ *  - 샘플별 전적: 마지막으로 맞춘 저장본(baseJson) 대비 각 기기의 증가분을 더한다. 어느 쪽이든 줄었으면(기록 초기화 등) 증가분으로 설명되지 않아 null.
+ *  - 대기열: 각 기기의 대기열이 저장본의 뒷부분이어야 하고(아니면 새로 섞였다는 뜻이라 null), 더 짧은 쪽을 쓴다(양쪽이 만난 상대는 둘 다 뺀다).
+ *  - 최고 연승은 큰 값, 추가 설정(includeMine)은 저장본에서 바뀐 쪽, 진행 중 표시(pendingId)는 항상 null.
+ * ponytail: 현재 연승은 판 순서에 달려 있는데 판 시각이 없어 둘 중 큰 값을 쓴다(실제와 다를 수 있다). 정확히 하려면 기록에 판 시각을 넣어야 한다(저장 형식·규칙 변경).
+ */
+export function mergeFrontier(baseJson: string | null, localJson: string, remoteJson: string): string | null {
+  if (!baseJson) return null;
+  const B = JSON.parse(baseJson) as FrontierSave;
+  const L = JSON.parse(localJson) as FrontierSave;
+  const R = JSON.parse(remoteJson) as FrontierSave;
+  const none = { wins: 0, losses: 0 };
+  const samples: FrontierSave["samples"] = {};
+  for (const id of [...new Set([...Object.keys(B.samples), ...Object.keys(L.samples), ...Object.keys(R.samples)])].sort()) {
+    const b = B.samples[id] ?? none;
+    const l = L.samples[id] ?? none;
+    const r = R.samples[id] ?? none;
+    if (l.wins < b.wins || l.losses < b.losses || r.wins < b.wins || r.losses < b.losses) return null;
+    samples[id] = { wins: l.wins + r.wins - b.wins, losses: l.losses + r.losses - b.losses };
+  }
+  if (!isTail(B.queue, L.queue) || !isTail(B.queue, R.queue)) return null;
+  const streak = Math.max(L.streak, R.streak);
+  return canonical("battleFrontier", {
+    streak,
+    best: Math.max(B.best, L.best, R.best, streak),
+    samples,
+    pendingId: null,
+    queue: L.queue.length <= R.queue.length ? L.queue : R.queue,
+    includeMine: L.includeMine !== B.includeMine ? L.includeMine : R.includeMine,
+  }).json;
+}
+
 /** "아직 아무것도 안 한" 문서의 정규형 — 목록은 "[]", 랭크·프런티어는 기록이 없는 저장본 */
 export const emptyJson = (name: PresetListName) =>
   isObjectDoc(name)
@@ -167,11 +204,14 @@ type Plan ="none" | "adopt" | "push" | "pull" | "conflict";
 /**
  * local: 지금 로컬 목록(정규형), remote: 클라우드 문서(없으면 null), base: 마지막으로 맞춘 시점(처음이면 null), empty: 빈 문서의 정규형.
  * 한쪽만 바뀌었으면 잃을 것이 없어 자동으로 옮기고(push/pull), 양쪽이 다 바뀌었거나 처음 연결인데 서로 다르면 conflict.
+ * additive: 전적처럼 "기준 대비 증가분을 더해 합치는" 기록(프런티어, 6.4 F1). 두 기기가 같은 기준에서 같은 상대에게 같은 결과로 진 두 판은 내용이 똑같아져
+ * 내용이 같다는 이유로 맞췄다고 보면 한 판이 사라진다 — 기준 저장본이 있고 기준 대비 양쪽이 다 바뀌었으면 같은 내용이어도 합치러 보낸다.
  */
-export function planSync(local: string, remote: RemoteDoc | null, base: SyncBase | null, empty = "[]"): Plan {
+export function planSync(local: string, remote: RemoteDoc | null, base: SyncBase | null, empty = "[]", additive = false): Plan {
   const isEmpty = (json: string) => json === empty;
   if (!remote) return isEmpty(local) ? "none" : "push";
-  if (local === remote.json) return "adopt";
+  const bothChanged = !!base && hashOf(local) !== base.hash && remote.updatedAt !== base.remoteUpdatedAt;
+  if (local === remote.json && !(additive && base?.snapshot && bothChanged)) return "adopt";
   if (!base) {
     if (isEmpty(local)) return "pull";
     if (isEmpty(remote.json)) return "push";

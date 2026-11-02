@@ -2,7 +2,7 @@ import type { Party, SamplePartyPreset, SlotPreset } from "../types/party";
 import { rankLabel, rankOf } from "./battleRank";
 import type { RankSave } from "./battleRankSave";
 import type { FrontierSave } from "./battleSeries";
-import { canonical, emptyJson, hashOf, isObjectDoc, itemHashes, mergeLists, mergeRank, planSync, type RemoteDoc } from "./cloudSyncPlan";
+import { canonical, emptyJson, hashOf, isObjectDoc, itemHashes, mergeFrontier, mergeLists, mergeRank, planSync, type RemoteDoc } from "./cloudSyncPlan";
 import { firebaseConfigured, loadAuth, loadFirestore } from "./firebase";
 import {
   loadAiMemory,
@@ -126,6 +126,9 @@ let listening = false;
 let lastRunAt = 0;
 const RETURN_SYNC_GAP_MS = 30_000;
 
+/** 두 기기의 기록을 기준 저장본에서 이어 합치는 문서(랭크 6.2 C6, 프런티어 6.4 F1) — 마지막으로 맞춘 저장본을 같이 들고 있어야 한다 */
+const hasSnapshot = (name: PresetListName) => name === "battleRank" || name === "battleFrontier";
+
 function baseOf(name: PresetListName): SyncBase | null {
   return loadCloudSyncMeta().bases[uid ?? ""]?.[name] ?? null;
 }
@@ -137,7 +140,7 @@ function setBase(name: PresetListName, json: string, remoteUpdatedAt: number) {
     hash: hashOf(json),
     remoteUpdatedAt,
     ...(!isObjectDoc(name) && { items: itemHashes(json) }),
-    ...(name === "battleRank" && { snapshot: json }),
+    ...(hasSnapshot(name) && { snapshot: json }),
   };
   saveCloudSyncMeta({ ...meta, bases: { ...meta.bases, [key]: { ...meta.bases[key], [name]: base } } });
 }
@@ -216,7 +219,7 @@ function applyRemote(name: PresetListName, remote: RemoteDoc) {
 async function syncList(name: PresetListName): Promise<Conflict | null> {
   const local = localJson(name);
   const remote = await readRemote(name);
-  switch (planSync(local, remote, baseOf(name), emptyJson(name))) {
+  switch (planSync(local, remote, baseOf(name), emptyJson(name), name === "battleFrontier")) {
     case "adopt":
       setBase(name, local, remote?.updatedAt ?? 0);
       return null;
@@ -233,18 +236,23 @@ async function syncList(name: PresetListName): Promise<Conflict | null> {
     }
     case "conflict": {
       const r = remote as RemoteDoc;
-      // 양쪽이 다 바뀐 목록은 항목 단위로(6.2 C4), 랭크 기록은 두 기기의 판을 다시 계산해(6.2 C6) 합쳐 양쪽에 반영한다. 사용자에게 고르게 하지 않는다
+      // 양쪽이 다 바뀐 목록은 항목 단위로(6.2 C4), 랭크 기록은 두 기기의 판을 다시 계산해(6.2 C6), 프런티어 기록은 샘플별 전적 증가분을 더해(6.4 F1) 합쳐 양쪽에 반영한다. 사용자에게 고르게 하지 않는다
       const merged = !isObjectDoc(name)
         ? mergeLists(name, local, r.json, baseOf(name)?.items ?? null)
         : name === "battleRank"
           ? mergeRank(baseOf(name)?.snapshot ?? null, local, r.json)
-          : null;
-      // 합칠 수 없는 경우(프런티어 기록, 기준이 없거나 시즌이 끼는 등 랭크 기록의 폴백)는 사용자가 고를 때까지 멈춘다
+          : name === "battleFrontier"
+            ? mergeFrontier(baseOf(name)?.snapshot ?? null, local, r.json)
+            : null;
+      // 합칠 수 없는 경우(기준이 없거나 시즌이 끼는 등 랭크·프런티어 기록의 폴백, AI 학습 기록)는 사용자가 고를 때까지 멈춘다
       if (merged === null) return { name, label: LABELS[name] ?? name, local: summarize(name, local), remote: summarize(name, r.json), remoteJson: r.json, remoteUpdatedAt: r.updatedAt };
       assertSize(merged);
       const at = merged === r.json ? r.updatedAt : await push(name, merged, r.updatedAt);
       // 그 사이 클라우드가 바뀌었거나 사용자가 목록을 고쳤으면 반영하지 않고 처음부터 다시 판정한다
       if (at === null || localJson(name) !== local) {
+        // 프런티어의 병합은 "기준 대비 증가분"을 더해서 같은 변경을 두 번 합치면 두 번 더해진다. 올리는 데 성공했는데 그 사이 사용자가 한 판을 더 마쳤다면,
+        // 다음 판정의 기준을 "방금 합친 이 기기의 저장본"으로 옮겨 이 기기의 새 변경과 클라우드(방금 올린 결과)의 차이만 다시 합치게 한다(기준의 remoteUpdatedAt은 올리기 전 값이라 충돌로 판정된다)
+        if (at !== null && name === "battleFrontier") setBase(name, local, r.updatedAt);
         rerun = true;
         return null;
       }
@@ -254,9 +262,9 @@ async function syncList(name: PresetListName): Promise<Conflict | null> {
       return null;
     }
     case "none": {
-      // 이전 기록에는 병합 기준(목록의 항목 해시, 랭크의 저장본)이 없다 — 양쪽이 같은 상태일 때 채워 둬야 다음 병합에서 쓸 수 있다
+      // 이전 기록에는 병합 기준(목록의 항목 해시, 랭크·프런티어의 저장본)이 없다 — 양쪽이 같은 상태일 때 채워 둬야 다음 병합에서 쓸 수 있다
       const b = baseOf(name);
-      if (b && (name === "battleRank" ? !b.snapshot : !isObjectDoc(name) && !b.items)) setBase(name, local, b.remoteUpdatedAt);
+      if (b && (hasSnapshot(name) ? !b.snapshot : !isObjectDoc(name) && !b.items)) setBase(name, local, b.remoteUpdatedAt);
       return null;
     }
     default:
