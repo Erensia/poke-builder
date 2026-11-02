@@ -69,7 +69,7 @@ export function BattleLogPage({ mode }: { mode: BattleMode }) {
           onLoadRandomSlotParty={loadRandomSlotParty}
           opponentLocked={series.active || mode === "rank"}
           lockedNote={mode === "rank" ? null : "배틀 프런티어 중에는 상대를 바꿀 수 없어요."}
-          proceedBlockedReason={rankNotStarted ? "위쪽의 \"랭크 배틀 시작\"을 먼저 눌러 주세요" : undefined}
+          proceedBlockedReason={rankNotStarted ? "위쪽의 \"배틀 시작\"을 먼저 눌러 주세요" : undefined}
         />
       )}
 
