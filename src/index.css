@@ -51,6 +51,9 @@
   --r-xl: 16px;
   --r-pill: 999px;
 
+  /* 6.5 M1 — 앱 전체 모션 길이(6.4 U2 충돌 연출과 같은 결). 새 모션은 여기 값을 쓴다 */
+  --motion-enter: 0.18s;
+
   --sans: 'Noto Sans KR', 'Pretendard', system-ui, -apple-system, sans-serif;
   --display: 'Rajdhani', var(--sans);
 
@@ -330,6 +333,19 @@ button {
     content: '';
     position: absolute;
     inset: -8px -2px;
+  }
+}
+
+/* 6.5 M1 A — 화면 이동·탭 전환 때 새 내용이 아래에서 올라오며 나타난다. key가 바뀌어 다시 만들어질 때만 보인다.
+   동작 줄이기에서는 아래 전역 규칙이 길이를 거의 0으로 만든다 */
+.page-enter {
+  animation: page-enter var(--motion-enter) ease-out;
+}
+
+@keyframes page-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
   }
 }
 
