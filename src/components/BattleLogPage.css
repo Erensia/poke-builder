@@ -433,6 +433,21 @@
   box-shadow: var(--glass-shadow);
 }
 
+/* 기절한 활성 포켓몬은 가라앉으며 회색조·반투명이 된다 — 쓰러지는 순간(--faint-delay)에 맞춰 전환한다(6.5 M1 G) */
+.battle-fighter-top {
+  transition:
+    filter 0.4s ease var(--faint-delay, 0s),
+    opacity 0.4s ease var(--faint-delay, 0s),
+    translate 0.4s ease var(--faint-delay, 0s);
+}
+
+/* 교체·기술 입력 영역은 기절해도 구별돼야 해서 카드 부분(.battle-fighter-top)에만 건다 */
+.battle-fighter.is-fainted > .battle-fighter-top {
+  filter: grayscale(0.85);
+  opacity: 0.6;
+  translate: 0 6px;
+}
+
 /* 승리한 편의 활성 포켓몬을 금색 테두리 + 맥동 광휘 + 주기적 반짝임으로 강조한다.
    같은 종끼리 맞붙으면 배너 문구만으로는 어느 쪽이 이겼는지 헷갈린다는 피드백. */
 .battle-fighter.is-winner {
@@ -636,7 +651,8 @@
 .battle-hp-fill {
   height: 100%;
   background: var(--safe);
-  transition: width 0.2s ease;
+  /* 6.5 M1 G — 맞는 순간(--hp-delay, useTurnFx가 심는다)에 맞춰 0.5초 동안 줄어든다 */
+  transition: width 0.5s ease var(--hp-delay, 0s);
 }
 
 .battle-hp-fill.is-warn {
