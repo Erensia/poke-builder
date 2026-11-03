@@ -1,3 +1,4 @@
+import { useSwStatus } from "../hooks/useSwStatus";
 import "./Footer.css";
 
 /**
@@ -6,8 +7,22 @@ import "./Footer.css";
  * 않고 전 화면에 노출한다(백로그 §1-6).
  */
 export function Footer() {
+  const { status: sw, warm } = useSwStatus();
   return (
     <footer className="app-footer">
+      {sw !== "hidden" && (
+        <p className="app-footer-sw" role="status">
+          {sw === "ready" && `오프라인 사용 가능${warm && warm.done < warm.total ? ` · 이미지 준비 중 ${warm.done}/${warm.total}` : ""}`}
+          {sw === "installing" && "오프라인 준비 중…"}
+          {sw === "failed" && "오프라인 준비에 실패했어요"}
+          {sw === "off-build" && "오프라인 캐시 꺼짐"}
+          {sw === "off-flag" && (
+            <>
+              오프라인 캐시 꺼짐 · <a href="?sw=on">켜기</a>
+            </>
+          )}
+        </p>
+      )}
       <p className="app-footer-legal">
         Pokémon and Pokémon character names are trademarks of Nintendo. Pokémon content and
         materials are trademarks and copyrights of Nintendo or its licensors. All rights reserved.
