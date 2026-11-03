@@ -24,6 +24,14 @@ interface MovePipProps {
 export function MovePip({ group, moveIndex, moveId, onPick, onSwap }: MovePipProps) {
   const [dragging, setDragging] = useState(false);
   const [over, setOver] = useState(false);
+  // 6.5 M1 — 칸의 기술이 바뀌면(맞바꾸기·고르기·샘플 불러오기) 짧게 튕겨 자리를 잡는다. 처음 그릴 때는 없다.
+  // 렌더 중에 이전 값과 비교하는 방식(effect에서 setState 하지 않는다)
+  const [prevMoveId, setPrevMoveId] = useState(moveId);
+  const [pop, setPop] = useState(false);
+  if (prevMoveId !== moveId) {
+    setPrevMoveId(moveId);
+    setPop(true);
+  }
   const move = moveId ? getMove(moveId) : undefined;
   const moveColor = move?.type ? TYPE_COLORS[move.type] : undefined;
   const pipKey = (m: number) => `${group}:${m}`;
@@ -43,7 +51,8 @@ export function MovePip({ group, moveIndex, moveId, onPick, onSwap }: MovePipPro
     <button
       type="button"
       data-move-pip={pipKey(moveIndex)}
-      className={`party-move-pip tap-target${move ? " has-type" : " is-empty"}${dragging || touch.dragging ? " is-dragging" : ""}${over ? " is-drag-over" : ""}`}
+      className={`party-move-pip tap-target${move ? " has-type" : " is-empty"}${dragging || touch.dragging ? " is-dragging" : ""}${over ? " is-drag-over" : ""}${pop ? " is-pop" : ""}`}
+      onAnimationEnd={() => setPop(false)}
       style={moveColor ? { background: moveColor } : undefined}
       onClick={onPick}
       {...touch.touchProps}
