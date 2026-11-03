@@ -55,6 +55,7 @@
   --motion-enter: 0.18s;
   /* 튀어 오르는(오버슈트) 등장 — 6.4 U2 VS 펀치와 같은 이징 */
   --motion-pop: 0.28s;
+  --motion-press: 0.1s;
   --ease-spring: cubic-bezier(0.2, 0.9, 0.3, 1.3);
 
   --sans: 'Noto Sans KR', 'Pretendard', system-ui, -apple-system, sans-serif;
@@ -337,6 +338,18 @@ button {
     position: absolute;
     inset: -8px -2px;
   }
+}
+
+/* 6.5 M1 C — 버튼을 누르는 동안 살짝 눌렸다 튕겨 돌아온다. 칩·알약·작은 버튼은 tap-target 규칙(위)을 그대로 따르고,
+   tap-target이 없는 액션 버튼만 아래에 따로 적었다. :where라 명시도가 낮아서 자체 transform이나 :active 규칙이 있는 요소가 이긴다(사이드바 항목·VS 버튼 등) */
+button:where(.tap-target, .battle-start-button, .battle-reset-button, .preset-save-button, .ai-memory-reset, .move-clear-btn, .cand-more),
+:where(.tap-targets) button {
+  transition: transform var(--motion-press) var(--ease-spring);
+}
+
+button:where(.tap-target, .battle-start-button, .battle-reset-button, .preset-save-button, .ai-memory-reset, .move-clear-btn, .cand-more):where(:not(:disabled):active),
+:where(.tap-targets) button:where(:not(:disabled):active) {
+  transform: scale(0.96);
 }
 
 /* 6.5 M1 A — 화면 이동·탭 전환 때 새 내용이 아래에서 올라오며 나타난다. key가 바뀌어 다시 만들어질 때만 보인다.
