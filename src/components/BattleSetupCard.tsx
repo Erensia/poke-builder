@@ -1,5 +1,6 @@
 import type { DragEvent } from "react";
 import { useLongPressDrag } from "../hooks/useLongPressDrag";
+import { useCardMotion } from "../hooks/usePop";
 import type { PartySlot } from "../types/party";
 import { getPokemon } from "../lib/data";
 import { getEffectiveForm, getEffectiveGender, megaBadgeLabel } from "../lib/pokemonForm";
@@ -94,6 +95,8 @@ export function BattleSetupCard({
   const pokemon = slot ? getPokemon(slot.pokemonId) : undefined;
 
   // 터치·펜: 카드를 길게 눌러 다른 카드 위에서 떼면 자리가 바뀐다(마우스 드래그는 그대로)
+  // 6.5 M1 D — 포켓몬이 바뀌어 카드가 채워지면 카드가 튕겨 자리를 잡는다(비울 때는 없음)
+  const [cardRef, cardMotion] = useCardMotion(slot?.pokemonId ?? null, onClearPokemon);
   const touch = useLongPressDrag(
     true,
     (x, y) => {
@@ -106,6 +109,7 @@ export function BattleSetupCard({
   // 카드 전체를 드래그 소스 겸 드롭 타겟으로 쓴다(PartySlotCard와 동일 패턴).
   const dragHandlers = {
     ...touch.touchProps,
+    onAnimationEnd: cardMotion.onAnimationEnd,
     "data-setup-slot": dragId,
     draggable: !touch.coarse,
     onDragStart: (e: DragEvent) => {
@@ -122,11 +126,11 @@ export function BattleSetupCard({
     },
     onDragEnd,
   };
-  const dragStateClass = `${isDragging || touch.dragging ? " is-dragging" : ""}${isDragOver ? " is-drag-over" : ""}`;
+  const dragStateClass = `${isDragging || touch.dragging ? " is-dragging" : ""}${isDragOver ? " is-drag-over" : ""}${cardMotion.motionClass}`;
 
   if (!pokemon) {
     return (
-      <div className={`party-slot party-slot-empty${dragStateClass}`} {...dragHandlers}>
+      <div className={`party-slot party-slot-empty${dragStateClass}`} ref={cardRef} {...dragHandlers}>
         <span className="party-slot-num">{label}</span>
         <button type="button" className="party-slot-empty-main" onClick={onPickPokemon}>
           <span className="party-slot-plus" aria-hidden="true">
@@ -167,9 +171,9 @@ export function BattleSetupCard({
   // 압축 뷰(ver.1.6 §4-3) — 프로필 사진+이름만. 사진을 클릭하면 펼쳐진다.
   if (!expanded || concealBuild) {
     return (
-      <div className={`party-slot party-slot-filled party-slot-compact${dragStateClass}`} {...dragHandlers}>
+      <div className={`party-slot party-slot-filled party-slot-compact${dragStateClass}`} ref={cardRef} {...dragHandlers}>
         <span className="party-slot-num">{label}</span>
-        <button type="button" className="party-slot-clear" onClick={onClearPokemon} aria-label="슬롯 비우기">
+        <button type="button" className="party-slot-clear" onClick={cardMotion.clear} aria-label="슬롯 비우기">
           ✕
         </button>
         <button type="button" className="party-slot-main" onClick={onToggleExpand}>
@@ -184,7 +188,7 @@ export function BattleSetupCard({
 
 
   return (
-    <div className={`party-slot party-slot-filled${dragStateClass}`} {...dragHandlers}>
+    <div className={`party-slot party-slot-filled${dragStateClass}`} ref={cardRef} {...dragHandlers}>
       <span className="party-slot-num">{label}</span>
       <button
         type="button"
@@ -204,7 +208,7 @@ export function BattleSetupCard({
       >
         💾
       </button>
-      <button type="button" className="party-slot-clear" onClick={onClearPokemon} aria-label="슬롯 비우기">
+      <button type="button" className="party-slot-clear" onClick={cardMotion.clear} aria-label="슬롯 비우기">
         ✕
       </button>
 

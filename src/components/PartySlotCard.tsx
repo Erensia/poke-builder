@@ -1,5 +1,6 @@
 import type { DragEvent } from "react";
 import { useLongPressDrag } from "../hooks/useLongPressDrag";
+import { useCardMotion } from "../hooks/usePop";
 import type { PartySlot } from "../types/party";
 import { getPokemon } from "../lib/data";
 import { getEffectiveForm, getEffectiveGender, megaBadgeLabel } from "../lib/pokemonForm";
@@ -78,6 +79,8 @@ export function PartySlotCard({
 }: PartySlotCardProps) {
   const pokemon = slot ? getPokemon(slot.pokemonId) : undefined;
   // 터치·펜(3.4 U1-b 후속): 카드를 길게 눌러 다른 슬롯 위에서 떼면 자리가 바뀐다(마우스 드래그는 그대로)
+  // 6.5 M1 D — 포켓몬이 바뀌어 카드가 채워지면 카드가 튕겨 자리를 잡는다(비울 때는 없음)
+  const [cardRef, cardMotion] = useCardMotion(slot?.pokemonId ?? null, onClearPokemon);
   const touch = useLongPressDrag(
     true,
     (x, y) => {
@@ -90,6 +93,7 @@ export function PartySlotCard({
   // 카드 전체를 드래그 소스 겸 드롭 타겟으로 쓴다(§3) — 별도 손잡이 없이 카드를 그대로 잡아 옮긴다.
   const dragHandlers = {
     ...touch.touchProps,
+    onAnimationEnd: cardMotion.onAnimationEnd,
     "data-party-slot": index,
     draggable: !touch.coarse,
     onDragStart: (e: DragEvent) => {
@@ -106,11 +110,11 @@ export function PartySlotCard({
     },
     onDragEnd,
   };
-  const dragStateClass = `${isDragging || touch.dragging ? " is-dragging" : ""}${isDragOver ? " is-drag-over" : ""}`;
+  const dragStateClass = `${isDragging || touch.dragging ? " is-dragging" : ""}${isDragOver ? " is-drag-over" : ""}${cardMotion.motionClass}`;
 
   if (!pokemon) {
     return (
-      <div className={`party-slot party-slot-empty${dragStateClass}`} {...dragHandlers}>
+      <div className={`party-slot party-slot-empty${dragStateClass}`} ref={cardRef} {...dragHandlers}>
         <span className="party-slot-num">{index + 1}</span>
         <button type="button" className="party-slot-empty-main" onClick={onPickPokemon}>
           <span className="party-slot-plus" aria-hidden="true">
@@ -131,7 +135,7 @@ export function PartySlotCard({
   // 파티 빌더는 랭크 개념이 없으니 0랭크 기준 내구력만 참고용으로 보여준다
 
   return (
-    <div className={`party-slot party-slot-filled${dragStateClass}`} {...dragHandlers}>
+    <div className={`party-slot party-slot-filled${dragStateClass}`} ref={cardRef} {...dragHandlers}>
       <span className="party-slot-num">{index + 1}</span>
       <button
         type="button"
@@ -142,7 +146,7 @@ export function PartySlotCard({
       >
         💾
       </button>
-      <button type="button" className="party-slot-clear" onClick={onClearPokemon} aria-label="슬롯 비우기">
+      <button type="button" className="party-slot-clear" onClick={cardMotion.clear} aria-label="슬롯 비우기">
         ✕
       </button>
 
