@@ -291,6 +291,32 @@
   max-width: 100%;
 }
 
+/* 6.5 M1 I — 단계가 앞으로 나아갈 때(셋업 → 선출 → 배틀) 양쪽 편이 서로를 향해 들어온다(6.4 U2 충돌 연출의 연장).
+   각 단계의 요소가 단계마다 새로 만들어질 때만 보인다. 승자 글로우(.is-winner)가 animation을 덮어써도 입장은 이미 끝난 뒤다 */
+.battle-select-column:first-child,
+.battle-fighter-a {
+  animation: battle-stage-in-left var(--motion-pop) var(--ease-spring) backwards;
+}
+
+.battle-select-column:last-child,
+.battle-fighter-b {
+  animation: battle-stage-in-right var(--motion-pop) var(--ease-spring) backwards;
+}
+
+@keyframes battle-stage-in-left {
+  from {
+    opacity: 0;
+    transform: translateX(-28px);
+  }
+}
+
+@keyframes battle-stage-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(28px);
+  }
+}
+
 .battle-select-column {
   display: flex;
   flex-direction: column;
