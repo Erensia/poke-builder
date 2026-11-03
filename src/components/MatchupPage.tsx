@@ -3,6 +3,7 @@ import { MatchupSlotCard } from "./MatchupSlotCard";
 import { VerdictBadge } from "./VerdictBadge";
 import { DamageRollBlock } from "./DamageRollBlock";
 import { EnvPicker } from "./EnvPicker";
+import { Punch } from "./Punch";
 import { DefenseInferencePanel } from "./DefenseInferencePanel";
 import { SpeedTablePanel } from "./SpeedTablePanel";
 import { BulkAdjustPanel } from "./BulkAdjustPanel";
@@ -478,7 +479,7 @@ function MatchupCalcTab({ s }: { s: ReturnType<typeof useMatchupPageState> }) {
               <span className="matchup-speed-side">
                 내 포켓몬 <strong>{Math.round(speedResult.attackerSpeed).toLocaleString()}</strong>
               </span>
-              <span className="matchup-speed-verdict">
+              <Punch k={speedResult.firstMover} className="matchup-speed-verdict">
                 {speedResult.firstMover === "tie"
                   ? "동속 — 선공은 랜덤"
                   : speedResult.firstMover === "attacker"
@@ -487,7 +488,7 @@ function MatchupCalcTab({ s }: { s: ReturnType<typeof useMatchupPageState> }) {
                 {speedResult.trickRoom && speedResult.firstMover !== "tie" && (
                   <span className="matchup-speed-note"> (트릭룸)</span>
                 )}
-              </span>
+              </Punch>
               <span className="matchup-speed-side">
                 상대 <strong>{Math.round(speedResult.defenderSpeed).toLocaleString()}</strong>
               </span>
