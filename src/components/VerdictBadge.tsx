@@ -1,4 +1,5 @@
 import type { MatchupVerdict } from "../lib/battlePower";
+import { usePop } from "../hooks/usePop";
 import "./VerdictBadge.css";
 
 const VERDICT_LABEL: Record<MatchupVerdict, string> = {
@@ -59,6 +60,8 @@ function chanceDisplay(
 }
 
 export function VerdictBadge({ verdict, koChance, killingRolls }: VerdictBadgeProps) {
+  // 6.5 M1 E — 판정이 바뀌면 배지가 한 번 튄다(판정이 비는 경우는 제외)
+  const { pop, onAnimationEnd } = usePop(verdict, false);
   if (!verdict) {
     return (
       <div className="verdict-badge verdict-pending">
@@ -71,7 +74,7 @@ export function VerdictBadge({ verdict, koChance, killingRolls }: VerdictBadgePr
   const chance = chanceDisplay(verdict, koChance, killingRolls);
 
   return (
-    <div className={`verdict-badge ${VERDICT_CLASS[verdict]}`}>
+    <div className={`verdict-badge ${VERDICT_CLASS[verdict]}${pop ? " punch" : ""}`} onAnimationEnd={onAnimationEnd}>
       <strong>{VERDICT_LABEL[verdict]}</strong>
       {chance && (
         <span className={`verdict-chance${chance.muted ? " verdict-chance-muted" : ""}`}>

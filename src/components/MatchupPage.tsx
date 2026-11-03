@@ -2,9 +2,8 @@ import { useMemo, useState } from "react";
 import { MatchupSlotCard } from "./MatchupSlotCard";
 import { VerdictBadge } from "./VerdictBadge";
 import { DamageRollBlock } from "./DamageRollBlock";
-import { ChipPicker } from "./ChipPicker";
-import type { WeatherKind } from "../types/weather";
-import type { FieldKind } from "../types/field";
+import { EnvPicker } from "./EnvPicker";
+import { Punch } from "./Punch";
 import { DefenseInferencePanel } from "./DefenseInferencePanel";
 import { SpeedTablePanel } from "./SpeedTablePanel";
 import { BulkAdjustPanel } from "./BulkAdjustPanel";
@@ -45,11 +44,6 @@ type PickerState =
   | { kind: "slotPresets"; side: Side }
   | null;
 
-const WEATHERS: WeatherKind[] = ["쾌청", "비", "모래바람", "눈"];
-const FIELDS: FieldKind[] = ["그래스필드", "미스트필드", "사이코필드", "일렉트릭필드"];
-const SCREENS = ["reflect", "lightScreen", "auroraVeil"] as const;
-const ROOMS = ["트릭룸"] as const;
-const SCREEN_LABELS = { reflect: "리플렉터", lightScreen: "빛의장막", auroraVeil: "오로라베일" } as const;
 
 /** 탭 버튼과 페이지 제목에 같이 쓰는 이름 */
 const TAB_LABEL = { calc: "결정력 계산", inference: "노력치 역산", speed: "스피드 조정", bulk: "내구 조정" } as const;
@@ -475,30 +469,31 @@ function MatchupCalcTab({ s }: { s: ReturnType<typeof useMatchupPageState> }) {
         />
       </div>
 
-      {fullResult?.damageParts && baseBulk && (
-        <DamageRollBlock parts={fullResult.damageParts} defenseStat={fullResult.defenseStat} defenderMaxHp={baseBulk.maxHp} />
-      )}
-
-      {speedResult && (
-        <div className="matchup-speed-block">
-          <div className="matchup-speed-row">
-            <span className="matchup-speed-side">
-              내 포켓몬 <strong>{Math.round(speedResult.attackerSpeed).toLocaleString()}</strong>
-            </span>
-            <span className="matchup-speed-verdict">
-              {speedResult.firstMover === "tie"
-                ? "동속 — 선공은 랜덤"
-                : speedResult.firstMover === "attacker"
-                  ? "⚡ 내 포켓몬이 먼저 움직여요"
-                  : "⚡ 상대가 먼저 움직여요"}
-              {speedResult.trickRoom && speedResult.firstMover !== "tie" && (
-                <span className="matchup-speed-note"> (트릭룸)</span>
-              )}
-            </span>
-            <span className="matchup-speed-side">
-              상대 <strong>{Math.round(speedResult.defenderSpeed).toLocaleString()}</strong>
-            </span>
-          </div>
+      {((fullResult?.damageParts && baseBulk) || speedResult) && (
+        <div className="matchup-result">
+          {fullResult?.damageParts && baseBulk && (
+            <DamageRollBlock parts={fullResult.damageParts} defenseStat={fullResult.defenseStat} defenderMaxHp={baseBulk.maxHp} />
+          )}
+          {speedResult && (
+            <div className="matchup-speed-row">
+              <span className="matchup-speed-side">
+                내 포켓몬 <strong>{Math.round(speedResult.attackerSpeed).toLocaleString()}</strong>
+              </span>
+              <Punch k={speedResult.firstMover} className="matchup-speed-verdict">
+                {speedResult.firstMover === "tie"
+                  ? "동속 — 선공은 랜덤"
+                  : speedResult.firstMover === "attacker"
+                    ? "⚡ 내 포켓몬이 먼저 움직여요"
+                    : "⚡ 상대가 먼저 움직여요"}
+                {speedResult.trickRoom && speedResult.firstMover !== "tie" && (
+                  <span className="matchup-speed-note"> (트릭룸)</span>
+                )}
+              </Punch>
+              <span className="matchup-speed-side">
+                상대 <strong>{Math.round(speedResult.defenderSpeed).toLocaleString()}</strong>
+              </span>
+            </div>
+          )}
         </div>
       )}
         </>
@@ -547,88 +542,96 @@ export function MatchupPage() {
             {TAB_LABEL.bulk}
           </button>
         </div>
-        <div className="matchup-env-pickers">
-          <ChipPicker label="날씨" options={WEATHERS} value={weather} onChange={setWeather} />
-          <ChipPicker label="필드" options={FIELDS} value={field} onChange={setField} />
-          <ChipPicker label="내 쪽 스크린" options={SCREENS} textOf={(s) => SCREEN_LABELS[s]} value={attacker.slot.screen} onChange={(s) => attacker.setScreen(s ?? undefined)} />
-          <ChipPicker label="상대 쪽 스크린" options={SCREENS} textOf={(s) => SCREEN_LABELS[s]} value={defender.slot.screen} onChange={(s) => defender.setScreen(s ?? undefined)} />
-          <ChipPicker label="룸" options={ROOMS} value={trickRoom ? "트릭룸" : null} onChange={(r) => setTrickRoom(r !== null)} />
-        </div>
+        <EnvPicker
+          weather={weather}
+          onWeather={setWeather}
+          field={field}
+          onField={setField}
+          room={trickRoom ? "트릭룸" : null}
+          onRoom={(r) => setTrickRoom(r !== null)}
+          mineScreen={attacker.slot.screen}
+          oppScreen={defender.slot.screen}
+          onMineScreen={attacker.setScreen}
+          onOppScreen={defender.setScreen}
+        />
       </header>
 
-      <MatchupCalcTab s={session} />
+      <div key={tab} className="page-enter">
+        <MatchupCalcTab s={session} />
 
-    {tab === "inference" && (
-        <DefenseInferencePanel
-          key={inferenceResetKey}
-          onReset={() => {
-            saveMatchupDraft({ inference: undefined });
-            setInferenceResetKey((k) => k + 1);
-          }}
-          attacker={attacker.slot}
-          defender={defender.slot}
-          weather={weather}
-          field={field}
-          onSwapDrop={swapInference}
-          defenderActions={{
-            onPickPokemon: () => setPicker({ kind: "pokemon", side: "defender" }),
-            onClear: defender.clearPokemon,
-            onCycleFormVariant: defender.cycleFormVariant,
-            onCycleSizeForm: defender.cycleSizeForm,
-          }}
-          attackerCard={
-            <MatchupSlotCard
-              role="attacker"
-              onSwapDrop={swapInference}
-              label="내 포켓몬"
-              slot={attacker.slot}
-              hideMoveSlot
-              hideTurnAssumptions
-              {...cardActions("attacker")}
-            />
-          }
-        />
-      )}
+      {tab === "inference" && (
+          <DefenseInferencePanel
+            key={inferenceResetKey}
+            onReset={() => {
+              saveMatchupDraft({ inference: undefined });
+              setInferenceResetKey((k) => k + 1);
+            }}
+            attacker={attacker.slot}
+            defender={defender.slot}
+            weather={weather}
+            field={field}
+            onSwapDrop={swapInference}
+            defenderActions={{
+              onPickPokemon: () => setPicker({ kind: "pokemon", side: "defender" }),
+              onClear: defender.clearPokemon,
+              onCycleFormVariant: defender.cycleFormVariant,
+              onCycleSizeForm: defender.cycleSizeForm,
+            }}
+            attackerCard={
+              <MatchupSlotCard
+                role="attacker"
+                onSwapDrop={swapInference}
+                label="내 포켓몬"
+                slot={attacker.slot}
+                hideMoveSlot
+                hideTurnAssumptions
+                {...cardActions("attacker")}
+              />
+            }
+          />
+        )}
 
-      {tab === "speed" && (
-        <SpeedTablePanel
-          slot={attacker.slot}
-          weather={weather}
-          field={field}
-          card={(statusExtra) => <MatchupSlotCard role="attacker" label="내 포켓몬" slot={attacker.slot} hideMoveSlot hideTurnAssumptions statusExtra={statusExtra} {...cardActions("attacker")} />}
-        />
-      )}
+        {tab === "speed" && (
+          <SpeedTablePanel
+            slot={attacker.slot}
+            weather={weather}
+            field={field}
+            card={(statusExtra) => <MatchupSlotCard role="attacker" label="내 포켓몬" slot={attacker.slot} hideMoveSlot hideTurnAssumptions statusExtra={statusExtra} {...cardActions("attacker")} />}
+          />
+        )}
 
-      {tab === "bulk" && (
-        <BulkAdjustPanel
-          slot={attacker.slot}
-          opponent={defender.slot}
-          weather={weather}
-          field={field}
-          myCard={<MatchupSlotCard role="attacker" onSwapDrop={swapSides} label="내 포켓몬" slot={attacker.slot} hideMoveSlot hideTurnAssumptions {...cardActions("attacker")} />}
-          opponentCard={
-            <MatchupSlotCard
-              role="attacker"
-              swapRole="defender"
-              onSwapDrop={swapSides}
-              label="상대 포켓몬"
-              slot={defender.slot}
-              hideTurnAssumptions
-              bulkMoves={{
-                moves: bulkMovesOf(defender.slot),
-                onPick: (index) => setPicker({ kind: "move", side: "defender", bulkIndex: index }),
-                onSetHits: defender.setBulkHits,
-              }}
-              selectedMoves={bulkMovesOf(defender.slot).flatMap((m) => (m && getMove(m.moveId)) || [])}
-              onSetPowerCondition={defender.setPowerCondition}
-              onTogglePinch={defender.setPinchAssumed}
-              onToggleTypeShift={defender.setTypeShiftAssumed}
-              onSetHpPercent={defender.setHpPercent}
-              {...cardActions("defender")}
-            />
-          }
-        />
-      )}
+        {tab === "bulk" && (
+          <BulkAdjustPanel
+            slot={attacker.slot}
+            opponent={defender.slot}
+            weather={weather}
+            field={field}
+            myCard={<MatchupSlotCard role="attacker" onSwapDrop={swapSides} label="내 포켓몬" slot={attacker.slot} hideMoveSlot hideTurnAssumptions {...cardActions("attacker")} />}
+            opponentCard={
+              <MatchupSlotCard
+                role="attacker"
+                swapRole="defender"
+                onSwapDrop={swapSides}
+                label="상대 포켓몬"
+                slot={defender.slot}
+                hideTurnAssumptions
+                bulkMoves={{
+                  moves: bulkMovesOf(defender.slot),
+                  onPick: (index) => setPicker({ kind: "move", side: "defender", bulkIndex: index }),
+                  onSetHits: defender.setBulkHits,
+                }}
+                selectedMoves={bulkMovesOf(defender.slot).flatMap((m) => (m && getMove(m.moveId)) || [])}
+                onSetPowerCondition={defender.setPowerCondition}
+                onTogglePinch={defender.setPinchAssumed}
+                onToggleTypeShift={defender.setTypeShiftAssumed}
+                onSetHpPercent={defender.setHpPercent}
+                {...cardActions("defender")}
+              />
+            }
+          />
+        )}
+
+      </div>
 
       <MatchupPickers s={session} />
     </section>

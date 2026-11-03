@@ -6,6 +6,17 @@
   color: var(--text-muted);
 }
 
+/* 오프라인 캐시(서비스 워커) 상태 한 줄(6.5 P1) */
+.app-footer-sw {
+  margin: 0 auto 0.3rem;
+  font-size: var(--fs-xs);
+  opacity: 0.85;
+}
+
+.app-footer-sw a {
+  color: var(--violet);
+}
+
 .app-footer-legal {
   margin: 0 auto;
   max-width: 24rem;

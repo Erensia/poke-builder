@@ -1,0 +1,164 @@
+/* 보드와 같은 날씨·필드 색조(environmentTintBackground)를 입혀, 조작하는 곳과 반영되는 곳이 한 전장으로 읽히게 한다 */
+.env-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding: 0.5rem 0.75rem 0.6rem;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-xl);
+  background-color: var(--surface-2);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
+  transition: background-image 0.3s ease;
+}
+
+/* 헤더: 위쪽 "결정력 계산…" 탭 줄과 겹쳐 보이지 않게 작고 얇은 밑줄형 */
+.env-heads {
+  display: flex;
+  gap: 1.1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.env-head {
+  border: 0;
+  background: none;
+  padding: 0.25rem 0.1rem;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color var(--motion-press), box-shadow var(--motion-press);
+}
+
+.env-head:hover,
+.env-head.is-open {
+  color: var(--violet);
+}
+
+.env-head.is-open {
+  box-shadow: 0 2px 0 var(--violet);
+}
+
+/* 값이 들어 있는 헤더의 점 — 닫혀 있어도 알 수 있다 */
+.env-head.has-value::after {
+  content: "";
+  display: inline-block;
+  width: 0.4rem;
+  height: 0.4rem;
+  margin-left: 0.3rem;
+  border-radius: 50%;
+  background: var(--violet);
+  vertical-align: middle;
+  animation: env-dot-in var(--motion-pop) var(--ease-spring);
+}
+
+@keyframes env-dot-in {
+  from {
+    transform: scale(0);
+  }
+}
+
+/* 열린 헤더가 바뀌면 key로 다시 만들어져 줄이 올라오며 나타난다(6.5 M1 F) */
+.env-pills {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+  animation: page-enter var(--motion-enter) ease-out;
+}
+
+.env-pill {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+  border-radius: var(--r-pill);
+  /* 아래만 2px 더 — 띄워 놓은 쪽 막대가 글자에 붙어 답답해 보이지 않게(모든 알약 공통이라 높이는 같다) */
+  padding: 0.3rem 0.75rem calc(0.3rem + 2px);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  cursor: pointer;
+}
+
+/* 스크린 알약의 쪽 막대는 알약 아래 가장자리에 띄운다 — 흐름에 넣으면 스크린 줄만 높아져 다른 헤더와 높이가 달라진다 */
+.env-pill > .env-side {
+  position: absolute;
+  left: 50%;
+  bottom: 2px;
+  translate: -50% 0;
+}
+
+.env-pill:hover {
+  border-color: var(--violet);
+  color: var(--violet);
+}
+
+.env-pill.is-active {
+  background: var(--gradient);
+  border-color: transparent;
+  color: var(--on-color);
+  font-weight: 700;
+}
+
+.env-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem var(--env-summary-gap);
+  margin: 0;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  --env-summary-gap: 0.9rem;
+}
+
+.env-summary > span {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  /* 값이 바뀌면 key로 다시 만들어져 그때마다 나타난다 */
+  animation: page-enter var(--motion-enter) ease-out;
+}
+
+/* 높이만 차지하는 보이지 않는 칸 — 폭은 0이고 flex 간격만큼 당겨서 첫 항목의 위치를 밀지 않는다 */
+.env-summary > .env-summary-ghost {
+  visibility: hidden;
+  width: 0;
+  margin-right: calc(-1 * var(--env-summary-gap));
+  animation: none;
+}
+
+/* 쪽 막대 — 왼쪽 반 = 내 쪽, 오른쪽 반 = 상대 쪽(보드의 좌·우와 같다). 두 반쪽의 색이 따로 바뀌며 전환된다(6.5 M1 F).
+   켜진 알약(보라→파랑 배경) 안에서는 막대를 흰색으로 */
+.env-side {
+  --mine: color-mix(in srgb, var(--violet) 60%, transparent);
+  --opp: color-mix(in srgb, var(--blue) 60%, transparent);
+  --track: var(--border);
+  display: flex;
+  width: 1.6rem;
+  height: 4px;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.env-side > b {
+  flex: 1;
+  background: var(--track);
+  transition: background-color var(--motion-press);
+}
+
+.env-side[data-side="mine"] > b:first-child,
+.env-side[data-side="both"] > b:first-child {
+  background: var(--mine);
+}
+
+.env-side[data-side="opp"] > b:last-child,
+.env-side[data-side="both"] > b:last-child {
+  background: var(--opp);
+}
+
+.env-pill.is-active .env-side {
+  --mine: #fff;
+  --opp: #fff;
+  --track: rgb(255 255 255 / 0.3);
+}

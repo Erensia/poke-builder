@@ -4,7 +4,7 @@ Pokémon Champions 파티 빌더 — 6슬롯 파티를 구성하고 타입 상�
 
 - **배포**: [poke-builder-two.vercel.app](https://poke-builder-two.vercel.app/) — Vercel에 `main` 브랜치 자동 배포
 - **저장소**: [github.com/Erensia/poke-builder](https://github.com/Erensia/poke-builder)
-- **현재 버전**: ver.6.4 — 상세는 [문서](#문서) 참고
+- **현재 버전**: ver.6.5 — 상세는 [문서](#문서) 참고
 
 ## 주요 기능
 

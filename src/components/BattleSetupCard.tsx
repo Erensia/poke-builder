@@ -1,10 +1,12 @@
 import type { DragEvent } from "react";
+import { useLongPressDrag } from "../hooks/useLongPressDrag";
+import { useCardMotion } from "../hooks/usePop";
 import type { PartySlot } from "../types/party";
-import { getPokemon, getMove } from "../lib/data";
+import { getPokemon } from "../lib/data";
 import { getEffectiveForm, getEffectiveGender, megaBadgeLabel } from "../lib/pokemonForm";
 import { TypeBadge } from "./TypeBadge";
 import { PokemonAvatarWithItem } from "./PokemonAvatarWithItem";
-import { TYPE_COLORS } from "../lib/typeColors";
+import { MovePip } from "./MovePip";
 import { SlotMetaRow, SlotBulkRow } from "./SlotMetaRow";
 import "./PartySlotCard.css";
 
@@ -14,6 +16,12 @@ interface BattleSetupCardProps {
   onPickPokemon: () => void;
   onClearPokemon: () => void;
   onPickMove: (moveIndex: 0 | 1 | 2 | 3) => void;
+  /** 기술 두 칸의 자리를 맞바꾼다(끌어다 놓기·길게 눌러 끌기) */
+  onSwapMoves: (from: number, to: number) => void;
+  /** 이 카드의 자리 식별자(예: "a:2") — 터치로 끌어 놓을 대상을 DOM에서 찾는 데 쓴다 */
+  dragId: string;
+  /** 터치·펜으로 길게 눌러 다른 카드 위에서 뗐을 때(그 카드의 dragId). 편이 다르면 부모가 무시한다 */
+  onTouchReorder: (targetDragId: string) => void;
   onPickAbility: () => void;
   onPickItem: () => void;
   onPickNature: () => void;
@@ -59,6 +67,9 @@ export function BattleSetupCard({
   onPickPokemon,
   onClearPokemon,
   onPickMove,
+  onSwapMoves,
+  dragId,
+  onTouchReorder,
   onPickAbility,
   onPickItem,
   onPickNature,
@@ -83,10 +94,28 @@ export function BattleSetupCard({
 }: BattleSetupCardProps) {
   const pokemon = slot ? getPokemon(slot.pokemonId) : undefined;
 
+  // 터치·펜: 카드를 길게 눌러 다른 카드 위에서 떼면 자리가 바뀐다(마우스 드래그는 그대로)
+  // 6.5 M1 D — 포켓몬이 바뀌어 카드가 채워지면 카드가 튕겨 자리를 잡는다(비울 때는 없음)
+  const [cardRef, cardMotion] = useCardMotion(slot?.pokemonId ?? null, onClearPokemon);
+  const touch = useLongPressDrag(
+    true,
+    (x, y) => {
+      const t = document.elementFromPoint(x, y)?.closest("[data-setup-slot]") ?? null;
+      return t && t.getAttribute("data-setup-slot") !== dragId ? t : null;
+    },
+    (t) => onTouchReorder(t.getAttribute("data-setup-slot")!),
+  );
+
   // 카드 전체를 드래그 소스 겸 드롭 타겟으로 쓴다(PartySlotCard와 동일 패턴).
   const dragHandlers = {
-    draggable: true,
-    onDragStart,
+    ...touch.touchProps,
+    onAnimationEnd: cardMotion.onAnimationEnd,
+    "data-setup-slot": dragId,
+    draggable: !touch.coarse,
+    onDragStart: (e: DragEvent) => {
+      if (touch.isTouch()) e.preventDefault();
+      else onDragStart();
+    },
     onDragOver: (e: DragEvent) => {
       e.preventDefault();
       onDragOverSlot();
@@ -97,11 +126,11 @@ export function BattleSetupCard({
     },
     onDragEnd,
   };
-  const dragStateClass = `${isDragging ? " is-dragging" : ""}${isDragOver ? " is-drag-over" : ""}`;
+  const dragStateClass = `${isDragging || touch.dragging ? " is-dragging" : ""}${isDragOver ? " is-drag-over" : ""}${cardMotion.motionClass}`;
 
   if (!pokemon) {
     return (
-      <div className={`party-slot party-slot-empty${dragStateClass}`} {...dragHandlers}>
+      <div className={`party-slot party-slot-empty${dragStateClass}`} ref={cardRef} {...dragHandlers}>
         <span className="party-slot-num">{label}</span>
         <button type="button" className="party-slot-empty-main" onClick={onPickPokemon}>
           <span className="party-slot-plus" aria-hidden="true">
@@ -142,9 +171,9 @@ export function BattleSetupCard({
   // 압축 뷰(ver.1.6 §4-3) — 프로필 사진+이름만. 사진을 클릭하면 펼쳐진다.
   if (!expanded || concealBuild) {
     return (
-      <div className={`party-slot party-slot-filled party-slot-compact${dragStateClass}`} {...dragHandlers}>
+      <div className={`party-slot party-slot-filled party-slot-compact${dragStateClass}`} ref={cardRef} {...dragHandlers}>
         <span className="party-slot-num">{label}</span>
-        <button type="button" className="party-slot-clear" onClick={onClearPokemon} aria-label="슬롯 비우기">
+        <button type="button" className="party-slot-clear" onClick={cardMotion.clear} aria-label="슬롯 비우기">
           ✕
         </button>
         <button type="button" className="party-slot-main" onClick={onToggleExpand}>
@@ -159,7 +188,7 @@ export function BattleSetupCard({
 
 
   return (
-    <div className={`party-slot party-slot-filled${dragStateClass}`} {...dragHandlers}>
+    <div className={`party-slot party-slot-filled${dragStateClass}`} ref={cardRef} {...dragHandlers}>
       <span className="party-slot-num">{label}</span>
       <button
         type="button"
@@ -179,7 +208,7 @@ export function BattleSetupCard({
       >
         💾
       </button>
-      <button type="button" className="party-slot-clear" onClick={onClearPokemon} aria-label="슬롯 비우기">
+      <button type="button" className="party-slot-clear" onClick={cardMotion.clear} aria-label="슬롯 비우기">
         ✕
       </button>
 
@@ -204,21 +233,9 @@ export function BattleSetupCard({
       </button>
 
       <div className="party-slot-moves">
-        {slot!.moves.map((moveId, i) => {
-          const move = moveId ? getMove(moveId) : undefined;
-          const moveColor = move?.type ? TYPE_COLORS[move.type] : undefined;
-          return (
-            <button
-              key={i}
-              type="button"
-              className={`party-move-pip tap-target${move ? " has-type" : " is-empty"}`}
-              style={moveColor ? { background: moveColor } : undefined}
-              onClick={() => onPickMove(i as 0 | 1 | 2 | 3)}
-            >
-              <span className="party-move-pip-text">{move ? move.name : "＋"}</span>
-            </button>
-          );
-        })}
+        {slot!.moves.map((moveId, i) => (
+          <MovePip key={i} group={label} moveIndex={i} moveId={moveId} onPick={() => onPickMove(i as 0 | 1 | 2 | 3)} onSwap={onSwapMoves} />
+        ))}
       </div>
 
       <SlotMetaRow slot={slot!} pokemon={pokemon} onPickAbility={onPickAbility} onPickItem={onPickItem} onPickNature={onPickNature} onPickPoints={onPickPoints} onToggleGender={onToggleGender} onCycleSizeForm={onCycleSizeForm} onCycleFormVariant={onCycleFormVariant} onCycleCosmeticForm={onCycleCosmeticForm} onPickCosmeticForm={onPickCosmeticForm} />

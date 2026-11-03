@@ -17,7 +17,7 @@ export function BattleTurnPanel(props: BattleBoardProps) {
 
     {winner ? (
       <>
-        <div className={`battle-result-banner${winner === "draw" ? " is-draw" : ""}`}>
+        <div className={`battle-result-banner result-in${winner === "draw" ? " is-draw" : ""}`}>
           {winner === "draw" ? "🤝 무승부! 양쪽 다 기절했어요" : `🏆 ${SIDE_NAME[winner]} 승리!`}
           <button type="button" className="battle-reset-button" onClick={seriesNext ? seriesNext.onNext : resetToSetup}>
             {seriesNext ? seriesNext.label : "대전 이어하기"}

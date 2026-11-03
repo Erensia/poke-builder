@@ -1,3 +1,4 @@
+import { useCardMotion } from "../hooks/usePop";
 import type { PowerConditionKey } from "../types/matchup";
 import type { Move } from "../types/move";
 import { useSlotSwapDnd } from "../hooks/useSlotSwapDnd";
@@ -25,7 +26,12 @@ const POWER_CONDITION_TOGGLES: { key: PowerConditionKey; label: string; relevant
 export function MatchupSlotCard(props: MatchupSlotCardProps) {
   const { role, onSwapDrop, swapRole, label, slot, onPickPokemon, onClearPokemon, hasSamples, onOpenSamplePicker, selectedMove, selectedMoves } = props;
   const { dropProps, dragProps, dragOverClass } = useSlotSwapDnd(swapRole ?? role, onSwapDrop);
+  // 윗선 색: 상대 쪽 카드만 is-opp(내 쪽은 기본). 내구 조정의 상대 카드는 role=attacker·swapRole=defender라 swapRole 기준
+  const sideClass = (swapRole ?? role) === "defender" ? " is-opp" : "";
   const pokemon = slot.pokemonId ? getPokemon(slot.pokemonId) : undefined;
+  // 6.5 M1 D — 포켓몬이 바뀌어 카드가 채워지면 카드가 튕겨 자리를 잡는다(비울 때는 없음)
+  const [cardRef, cardMotion] = useCardMotion(slot.pokemonId ?? null, onClearPokemon);
+  const popClass = cardMotion.motionClass;
   // ver.1.9 가정 토글 — 관련 기술·특성을 골랐을 때만 보인다
   const ability = slot.ability ? getAbility(slot.ability) : undefined;
   const relevantMoves = selectedMoves ?? (selectedMove ? [selectedMove] : []);
@@ -36,7 +42,7 @@ export function MatchupSlotCard(props: MatchupSlotCardProps) {
 
   if (!pokemon) {
     return (
-      <div className={`matchup-slot matchup-slot-empty${dragOverClass}`} {...dropProps}>
+      <div className={`matchup-slot matchup-slot-empty${sideClass}${dragOverClass}${popClass}`} ref={cardRef} {...dropProps} onAnimationEnd={cardMotion.onAnimationEnd}>
         <span className="matchup-slot-label">{label}</span>
         <button type="button" className="matchup-slot-empty-main" onClick={onPickPokemon}>
           <span className="matchup-slot-plus" aria-hidden="true">
@@ -61,9 +67,9 @@ export function MatchupSlotCard(props: MatchupSlotCardProps) {
   const derived = { pokemon, form, realStats, move, usedPoints, activeStageCount, ability, relevantMoves, powerConditions, pinchRelevant, fullHpRelevant, hpPowerRelevant };
 
   return (
-    <div className={`matchup-slot matchup-slot-filled${dragOverClass}`} {...dropProps}>
+    <div className={`matchup-slot matchup-slot-filled${sideClass}${dragOverClass}${popClass}`} ref={cardRef} {...dropProps} onAnimationEnd={cardMotion.onAnimationEnd}>
       <span className="matchup-slot-label">{label}</span>
-      <button type="button" className="matchup-slot-clear" onClick={onClearPokemon} aria-label="슬롯 비우기">
+      <button type="button" className="matchup-slot-clear" onClick={cardMotion.clear} aria-label="슬롯 비우기">
         ✕
       </button>
 

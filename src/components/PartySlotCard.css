@@ -294,6 +294,17 @@
   opacity: 0.4;
 }
 
+/* 기술이 바뀐 칸이 튕기며 자리를 잡는다(6.5 M1) */
+.party-move-pip.is-pop {
+  animation: party-move-pip-pop var(--motion-pop) var(--ease-spring);
+}
+
+@keyframes party-move-pip-pop {
+  from {
+    transform: scale(0.88);
+  }
+}
+
 .party-move-pip.is-drag-over {
   outline: 2px solid var(--violet);
   outline-offset: 1px;

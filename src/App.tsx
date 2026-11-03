@@ -38,7 +38,7 @@ function App() {
       <SyncAnnouncer />
       <Sidebar activeView={view} onSelectView={requestView} />
       <div className="app-body">
-        <main className="app-main">
+        <main key={view} className="app-main page-enter">
           {view === "party" && <PartyBoard />}
           {view === "matchup" && <MatchupPage />}
           {view === "battle-log" && <BattleLogPage mode="free" />}

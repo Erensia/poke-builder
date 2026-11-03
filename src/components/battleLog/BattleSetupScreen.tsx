@@ -224,6 +224,12 @@ export function BattleSetupScreen({
                 onPickPokemon={() => onOpenPicker({ kind: "pokemon", side, slotIndex: i })}
                 onClearPokemon={slotCtl(side, i).clearPokemon}
                 onPickMove={(moveIndex) => onOpenPicker({ kind: "move", side, slotIndex: i, moveIndex })}
+                onSwapMoves={slotCtl(side, i).swapMoves}
+                dragId={`${side}:${i}`}
+                onTouchReorder={(id) => {
+                  const [s, n] = id.split(":");
+                  if (s === side) setup.reorderSlots(side, i, Number(n) as SlotIndex);
+                }}
                 onPickAbility={() => onOpenPicker({ kind: "ability", side, slotIndex: i })}
                 onPickItem={() => onOpenPicker({ kind: "item", side, slotIndex: i })}
                 onPickNature={() => onOpenPicker({ kind: "nature", side, slotIndex: i })}
