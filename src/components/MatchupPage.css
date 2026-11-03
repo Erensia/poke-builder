@@ -11,20 +11,16 @@
   margin-bottom: 1rem;
 }
 
-/* 제목은 아래 탭 이름과 같은 글자라 화면에서는 숨기고 낭독·문서 구조용으로만 둔다 */
 .matchup-page-header h2 {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
+  font-size: var(--fs-2xl);
+  margin-bottom: 0.3rem;
 }
 
 .matchup-page-header p {
   margin: 0;
   color: var(--text-muted);
-  font-size: var(--fs-xs);
+  font-size: var(--fs-sm);
+  max-width: 42ch;
 }
 
 /* 좌: 내 포켓몬 / 가운데: 판정 / 우: 상대 포켓몬(15px 아래로 오프셋) — 파티 빌더 2열 리듬과 동일 */
@@ -281,8 +277,3 @@
 .matchup-slot.is-touch-dragging {
   opacity: 0.6;
 }
-
-/* 헤더 순서: 탭 → 설명 한 줄 → 환경 선택기 (DOM은 제목·설명이 먼저라 낭독 순서는 그대로) */
-.matchup-page-header > .matchup-tabs { order: 0; }
-.matchup-page-header > div:first-child { order: 1; }
-.matchup-page-header > .env-picker { order: 2; }
