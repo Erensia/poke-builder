@@ -25,6 +25,8 @@ const POWER_CONDITION_TOGGLES: { key: PowerConditionKey; label: string; relevant
 export function MatchupSlotCard(props: MatchupSlotCardProps) {
   const { role, onSwapDrop, swapRole, label, slot, onPickPokemon, onClearPokemon, hasSamples, onOpenSamplePicker, selectedMove, selectedMoves } = props;
   const { dropProps, dragProps, dragOverClass } = useSlotSwapDnd(swapRole ?? role, onSwapDrop);
+  // 윗선 색: 상대 쪽 카드만 is-opp(내 쪽은 기본). 내구 조정의 상대 카드는 role=attacker·swapRole=defender라 swapRole 기준
+  const sideClass = (swapRole ?? role) === "defender" ? " is-opp" : "";
   const pokemon = slot.pokemonId ? getPokemon(slot.pokemonId) : undefined;
   // ver.1.9 가정 토글 — 관련 기술·특성을 골랐을 때만 보인다
   const ability = slot.ability ? getAbility(slot.ability) : undefined;
@@ -36,7 +38,7 @@ export function MatchupSlotCard(props: MatchupSlotCardProps) {
 
   if (!pokemon) {
     return (
-      <div className={`matchup-slot matchup-slot-empty${dragOverClass}`} {...dropProps}>
+      <div className={`matchup-slot matchup-slot-empty${sideClass}${dragOverClass}`} {...dropProps}>
         <span className="matchup-slot-label">{label}</span>
         <button type="button" className="matchup-slot-empty-main" onClick={onPickPokemon}>
           <span className="matchup-slot-plus" aria-hidden="true">
@@ -61,7 +63,7 @@ export function MatchupSlotCard(props: MatchupSlotCardProps) {
   const derived = { pokemon, form, realStats, move, usedPoints, activeStageCount, ability, relevantMoves, powerConditions, pinchRelevant, fullHpRelevant, hpPowerRelevant };
 
   return (
-    <div className={`matchup-slot matchup-slot-filled${dragOverClass}`} {...dropProps}>
+    <div className={`matchup-slot matchup-slot-filled${sideClass}${dragOverClass}`} {...dropProps}>
       <span className="matchup-slot-label">{label}</span>
       <button type="button" className="matchup-slot-clear" onClick={onClearPokemon} aria-label="슬롯 비우기">
         ✕
