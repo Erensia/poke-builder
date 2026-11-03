@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Punch } from "./Punch";
 import { DAMAGE_ROLL_MIN_PERCENT, damageRollTotals, type DamageParts } from "../lib/damageFormula";
 
 /**
@@ -36,9 +37,9 @@ export function DamageRollBlock({
     <div className="matchup-roll-block">
       <div className="matchup-roll-row">
         <span className="matchup-roll-title">난수별 데미지</span>
-        <span className="matchup-roll-range">
+        <Punch k={`${min.damage}-${max.damage}`} className="matchup-roll-range">
           <strong>{min.damage}</strong> ~ <strong>{max.damage}</strong> ({min.percent.toFixed(1)}% ~ {max.percent.toFixed(1)}%)
-        </span>
+        </Punch>
         <span className="matchup-roll-summary">({summary})</span>
         <button type="button" className="matchup-roll-toggle tap-target" aria-expanded={expanded} onClick={() => setExpanded((v) => !v)}>
           {expanded ? "접기 ▴" : "16개 전부 보기 ▾"}
