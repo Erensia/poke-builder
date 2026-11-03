@@ -29,7 +29,8 @@
   margin: 0;
   color: var(--text-muted);
   font-size: var(--fs-sm);
-  max-width: 34ch;
+  /* 설명이 한 줄로 보이게(34ch 제한에서 "요!"만 아래로 내려갔다). 좁은 화면은 아래 미디어 쿼리에서 줄바꿈 허용 */
+  white-space: nowrap;
 }
 
 .party-board-title-accent {
@@ -109,7 +110,7 @@
   }
 
   .party-board-header p {
-    max-width: none;
+    white-space: normal;
   }
 
   .party-grid {
