@@ -1,0 +1,131 @@
+/* 보드와 같은 날씨·필드 색조(environmentTintBackground)를 입혀, 조작하는 곳과 반영되는 곳이 한 전장으로 읽히게 한다 */
+.env-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding: 0.5rem 0.75rem 0.6rem;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-xl);
+  background-color: var(--surface-2);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
+  transition: background-image 0.3s ease;
+}
+
+/* 헤더: 위쪽 "결정력 계산…" 탭 줄과 겹쳐 보이지 않게 작고 얇은 밑줄형 */
+.env-heads {
+  display: flex;
+  gap: 1.1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.env-head {
+  border: 0;
+  background: none;
+  padding: 0.25rem 0.1rem;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.env-head:hover,
+.env-head.is-open {
+  color: var(--violet);
+}
+
+.env-head.is-open {
+  box-shadow: 0 2px 0 var(--violet);
+}
+
+/* 값이 들어 있는 헤더의 점 — 닫혀 있어도 알 수 있다 */
+.env-head.has-value::after {
+  content: "";
+  display: inline-block;
+  width: 0.4rem;
+  height: 0.4rem;
+  margin-left: 0.3rem;
+  border-radius: 50%;
+  background: var(--violet);
+  vertical-align: middle;
+}
+
+.env-pills {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.env-pill {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+  border-radius: var(--r-pill);
+  padding: 0.3rem 0.75rem;
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.env-pill:hover {
+  border-color: var(--violet);
+  color: var(--violet);
+}
+
+.env-pill.is-active {
+  background: var(--gradient);
+  border-color: transparent;
+  color: var(--on-color);
+  font-weight: 700;
+}
+
+.env-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.9rem;
+  margin: 0;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+.env-summary > span {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+}
+
+/* 쪽 막대 — 왼쪽 반 = 내 쪽, 오른쪽 반 = 상대 쪽(보드의 좌·우와 같다). 켜진 알약 안에서는 흰색·노랑으로 바꿔 보이게 한다 */
+.env-side {
+  --mine: color-mix(in srgb, var(--violet) 60%, transparent);
+  --opp: color-mix(in srgb, var(--blue) 60%, transparent);
+  --track: var(--border);
+  display: block;
+  width: 1.6rem;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--track);
+}
+
+.env-side[data-side="mine"] {
+  background: linear-gradient(90deg, var(--mine) 50%, var(--track) 50%);
+}
+
+.env-side[data-side="opp"] {
+  background: linear-gradient(90deg, var(--track) 50%, var(--opp) 50%);
+}
+
+.env-side[data-side="both"] {
+  background: linear-gradient(90deg, var(--mine) 50%, var(--opp) 50%);
+}
+
+/* 켜진 알약(보라→파랑 배경) 안에서는 막대를 흰색으로 */
+.env-pill.is-active .env-side {
+  --mine: #fff;
+  --opp: #fff;
+  --track: rgb(255 255 255 / 0.3);
+}
