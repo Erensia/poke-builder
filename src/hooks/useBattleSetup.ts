@@ -51,6 +51,17 @@ function useBattleSetupSlot() {
     });
   }
 
+  /** 기술 두 칸의 자리를 맞바꾼다(빈 칸과도 가능) — useParty.swapMoves와 같다 */
+  function swapMoves(a: number, b: number) {
+    if (a === b) return;
+    setSlot((prev) => {
+      if (!prev) return prev;
+      const moves = [...prev.moves] as PartySlot["moves"];
+      [moves[a], moves[b]] = [moves[b], moves[a]];
+      return { ...prev, moves };
+    });
+  }
+
   function setAbility(abilityId: string | null) {
     setSlot((prev) => (prev ? { ...prev, ability: abilityId } : prev));
   }
@@ -110,6 +121,7 @@ function useBattleSetupSlot() {
     clearPokemon,
     loadSlot,
     setMove,
+    swapMoves,
     setAbility,
     setItem,
     setNature,
