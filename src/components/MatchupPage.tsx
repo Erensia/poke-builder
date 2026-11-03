@@ -555,79 +555,82 @@ export function MatchupPage() {
         />
       </header>
 
-      <MatchupCalcTab s={session} />
+      <div key={tab} className="page-enter">
+        <MatchupCalcTab s={session} />
 
-    {tab === "inference" && (
-        <DefenseInferencePanel
-          key={inferenceResetKey}
-          onReset={() => {
-            saveMatchupDraft({ inference: undefined });
-            setInferenceResetKey((k) => k + 1);
-          }}
-          attacker={attacker.slot}
-          defender={defender.slot}
-          weather={weather}
-          field={field}
-          onSwapDrop={swapInference}
-          defenderActions={{
-            onPickPokemon: () => setPicker({ kind: "pokemon", side: "defender" }),
-            onClear: defender.clearPokemon,
-            onCycleFormVariant: defender.cycleFormVariant,
-            onCycleSizeForm: defender.cycleSizeForm,
-          }}
-          attackerCard={
-            <MatchupSlotCard
-              role="attacker"
-              onSwapDrop={swapInference}
-              label="내 포켓몬"
-              slot={attacker.slot}
-              hideMoveSlot
-              hideTurnAssumptions
-              {...cardActions("attacker")}
-            />
-          }
-        />
-      )}
+      {tab === "inference" && (
+          <DefenseInferencePanel
+            key={inferenceResetKey}
+            onReset={() => {
+              saveMatchupDraft({ inference: undefined });
+              setInferenceResetKey((k) => k + 1);
+            }}
+            attacker={attacker.slot}
+            defender={defender.slot}
+            weather={weather}
+            field={field}
+            onSwapDrop={swapInference}
+            defenderActions={{
+              onPickPokemon: () => setPicker({ kind: "pokemon", side: "defender" }),
+              onClear: defender.clearPokemon,
+              onCycleFormVariant: defender.cycleFormVariant,
+              onCycleSizeForm: defender.cycleSizeForm,
+            }}
+            attackerCard={
+              <MatchupSlotCard
+                role="attacker"
+                onSwapDrop={swapInference}
+                label="내 포켓몬"
+                slot={attacker.slot}
+                hideMoveSlot
+                hideTurnAssumptions
+                {...cardActions("attacker")}
+              />
+            }
+          />
+        )}
 
-      {tab === "speed" && (
-        <SpeedTablePanel
-          slot={attacker.slot}
-          weather={weather}
-          field={field}
-          card={(statusExtra) => <MatchupSlotCard role="attacker" label="내 포켓몬" slot={attacker.slot} hideMoveSlot hideTurnAssumptions statusExtra={statusExtra} {...cardActions("attacker")} />}
-        />
-      )}
+        {tab === "speed" && (
+          <SpeedTablePanel
+            slot={attacker.slot}
+            weather={weather}
+            field={field}
+            card={(statusExtra) => <MatchupSlotCard role="attacker" label="내 포켓몬" slot={attacker.slot} hideMoveSlot hideTurnAssumptions statusExtra={statusExtra} {...cardActions("attacker")} />}
+          />
+        )}
 
-      {tab === "bulk" && (
-        <BulkAdjustPanel
-          slot={attacker.slot}
-          opponent={defender.slot}
-          weather={weather}
-          field={field}
-          myCard={<MatchupSlotCard role="attacker" onSwapDrop={swapSides} label="내 포켓몬" slot={attacker.slot} hideMoveSlot hideTurnAssumptions {...cardActions("attacker")} />}
-          opponentCard={
-            <MatchupSlotCard
-              role="attacker"
-              swapRole="defender"
-              onSwapDrop={swapSides}
-              label="상대 포켓몬"
-              slot={defender.slot}
-              hideTurnAssumptions
-              bulkMoves={{
-                moves: bulkMovesOf(defender.slot),
-                onPick: (index) => setPicker({ kind: "move", side: "defender", bulkIndex: index }),
-                onSetHits: defender.setBulkHits,
-              }}
-              selectedMoves={bulkMovesOf(defender.slot).flatMap((m) => (m && getMove(m.moveId)) || [])}
-              onSetPowerCondition={defender.setPowerCondition}
-              onTogglePinch={defender.setPinchAssumed}
-              onToggleTypeShift={defender.setTypeShiftAssumed}
-              onSetHpPercent={defender.setHpPercent}
-              {...cardActions("defender")}
-            />
-          }
-        />
-      )}
+        {tab === "bulk" && (
+          <BulkAdjustPanel
+            slot={attacker.slot}
+            opponent={defender.slot}
+            weather={weather}
+            field={field}
+            myCard={<MatchupSlotCard role="attacker" onSwapDrop={swapSides} label="내 포켓몬" slot={attacker.slot} hideMoveSlot hideTurnAssumptions {...cardActions("attacker")} />}
+            opponentCard={
+              <MatchupSlotCard
+                role="attacker"
+                swapRole="defender"
+                onSwapDrop={swapSides}
+                label="상대 포켓몬"
+                slot={defender.slot}
+                hideTurnAssumptions
+                bulkMoves={{
+                  moves: bulkMovesOf(defender.slot),
+                  onPick: (index) => setPicker({ kind: "move", side: "defender", bulkIndex: index }),
+                  onSetHits: defender.setBulkHits,
+                }}
+                selectedMoves={bulkMovesOf(defender.slot).flatMap((m) => (m && getMove(m.moveId)) || [])}
+                onSetPowerCondition={defender.setPowerCondition}
+                onTogglePinch={defender.setPinchAssumed}
+                onToggleTypeShift={defender.setTypeShiftAssumed}
+                onSetHpPercent={defender.setHpPercent}
+                {...cardActions("defender")}
+              />
+            }
+          />
+        )}
+
+      </div>
 
       <MatchupPickers s={session} />
     </section>
