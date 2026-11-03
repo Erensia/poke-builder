@@ -8,6 +8,29 @@
   justify-content: center;
   padding: 1.5rem;
   z-index: 100;
+  /* 6.5 M1 B — 열릴 때만 보인다(닫힘은 즉시). 동작 줄이기는 index.css 전역 규칙이 처리 */
+  animation: modal-backdrop-in var(--motion-enter) ease-out;
+}
+
+@keyframes modal-backdrop-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes modal-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(6px);
+  }
+}
+
+/* 모바일 시트는 아래 가장자리에 붙어 있어 오버슈트하면 틈이 보인다 — 이징 없이 올라온다 */
+@keyframes modal-sheet-in {
+  from {
+    opacity: 0;
+    transform: translateY(32px);
+  }
 }
 
 .modal-panel {
@@ -22,6 +45,7 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  animation: modal-pop var(--motion-pop) var(--ease-spring);
 }
 
 .modal-header {
@@ -77,6 +101,7 @@
     padding-bottom: env(safe-area-inset-bottom, 0px);
     border-radius: var(--r-xl) var(--r-xl) 0 0;
     border-bottom: none;
+    animation: modal-sheet-in var(--motion-pop) cubic-bezier(0.2, 0.9, 0.3, 1);
   }
 
   .modal-header {
