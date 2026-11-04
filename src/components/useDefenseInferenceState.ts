@@ -1,24 +1,21 @@
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
-import { NEUTRAL_STAGES } from "../types/battleStats";
 import { useSlotSwapDnd } from "../hooks/useSlotSwapDnd";
 import { getAbility, getMove, getPokemon } from "../lib/data";
 import { getEffectiveForm } from "../lib/pokemonForm";
 import { inferCombined } from "../lib/combinedInference";
 import {
   DEFENSE_ABILITY_CANDIDATES,
-  inferenceUnsupportedReason,
   TOXIC_ID,
   ITEM_END_TURN_IDS,
   type InferenceInput,
   type InferenceObservation,
 } from "../lib/defenseInference";
-import { ATTACK_ABILITY_CANDIDATES, attackInferenceUnsupportedReason, type AttackInferenceInput, type AttackObservation } from "../lib/attackInference";
+import { ATTACK_ABILITY_CANDIDATES, type AttackInferenceInput, type AttackObservation } from "../lib/attackInference";
 import {
   NEUTRAL_SPEED_CONDITIONS,
   SPEED_ABILITY_CANDIDATES,
   type SpeedConditions,
   type SpeedInferenceInput,
-  type SpeedObservation,
 } from "../lib/speedInference";
 import { computeRealStats } from "../lib/statCalculator";
 import { loadMatchupDraft, saveMatchupDraft } from "../lib/storage";
@@ -33,6 +30,7 @@ import {
   relevantAbilities,
   type DefenseInferencePanelProps,
 } from "./defenseInferenceHelpers";
+import { buildAttackInput, buildDefenseInput, buildSpeedInput, rowMessageOf } from "./defenseInferenceCalc";
 
 /** DefenseInferencePanel의 상태·핸들러 — 화면(JSX)이 쓰는 값만 돌려준다 */
 export function useDefenseInferenceState({
@@ -178,91 +176,29 @@ export function useDefenseInferenceState({
   const megaKey = [...new Set(rows.map((r) => megaOf(r, megas)).filter(Boolean))].join("|");
   const viewMegaForms = useMemo(() => (megaKey ? megaKey.split("|") : []), [megaKey]);
 
-  const input = useMemo<InferenceInput | null>(() => {
-    if (!attacker.pokemonId || !defender.pokemonId || complete.length === 0) return null;
-    return {
-      attacker: { ...attacker, pokemonId: attacker.pokemonId },
-      // 메가진화한 관측은 특성을 메가폼 값으로 계산하고, 하나라도 있으면 메가스톤이라 반감 열매 가정을 쓰지 못한다(엔진 쪽 처리)
-      defender: {
-        ...defender,
-        pokemonId: defender.pokemonId,
-        activeMegaForm: undefined,
-        ability: activeAbilityId || null,
-        item: itemId || null,
-      },
-      observations: complete.map((c) => c.obs),
-      attackerStages: attacker.stages,
-      attackerStatus: attacker.statusAssumed ?? null,
-      defenderStages: { ...NEUTRAL_STAGES, def: defStage, spd: spdStage },
-      weather: weather ?? undefined,
-      field: field ?? undefined,
-      screen: screen || undefined,
-      tolerance: tolerant ? 1 : 0,
-      viewMegaForms,
-    };
-  }, [attacker, defender, complete, activeAbilityId, itemId, weather, field, screen, defStage, spdStage, tolerant, viewMegaForms]);
+  const input = useMemo<InferenceInput | null>(
+    () => buildDefenseInput({ attacker, defender, complete, activeAbilityId, itemId, weather, field, screen, defStage, spdStage, tolerant, viewMegaForms }),
+    [attacker, defender, complete, activeAbilityId, itemId, weather, field, screen, defStage, spdStage, tolerant, viewMegaForms],
+  );
 
   const anyMega = complete.some((c) => c.obs.megaForm);
   const rowIdsByObservation = complete.map((c) => rows.indexOf(c.row) + 1);
 
   // 상대 공격(특공) 역산(3.1 C2-b) — 내 포켓몬이 맞는 쪽, 상대가 때리는 쪽
   const anyMegaReceived = completeReceived.some((c) => c.obs.megaForm);
-  const attackInput = useMemo<AttackInferenceInput | null>(() => {
-    if (!attacker.pokemonId || !defender.pokemonId || completeReceived.length === 0) return null;
-    return {
-      attacker: {
-        ...defender,
-        pokemonId: defender.pokemonId,
-        activeMegaForm: undefined,
-        ability: activeAtkAbilityId || null,
-        item: anyMegaReceived ? null : atkItemId || null,
-      },
-      defender: { ...attacker, pokemonId: attacker.pokemonId },
-      observations: completeReceived.map((c) => c.obs),
-      attackerStages: { ...NEUTRAL_STAGES, atk: atkStage, spa: spaStage },
-      attackerStatus: oppBurned ? "burn" : null,
-      defenderStages: attacker.stages,
-      weather: weather ?? undefined,
-      field: field ?? undefined,
-      screen: myScreen || undefined,
-      viewMegaForms,
-    };
-  }, [attacker, defender, completeReceived, anyMegaReceived, activeAtkAbilityId, atkItemId, atkStage, spaStage, oppBurned, weather, field, myScreen, viewMegaForms]);
+  const attackInput = useMemo<AttackInferenceInput | null>(
+    () => buildAttackInput({ attacker, defender, completeReceived, anyMegaReceived, activeAtkAbilityId, atkItemId, atkStage, spaStage, oppBurned, weather, field, myScreen, viewMegaForms }),
+    [attacker, defender, completeReceived, anyMegaReceived, activeAtkAbilityId, atkItemId, atkStage, spaStage, oppBurned, weather, field, myScreen, viewMegaForms],
+  );
   // 상대 스피드 역산(3.1 C2-c) — 선후공 줄은 항상 완성(누가 먼저만 고르면 됨). 조건은 줄마다 다르다.
   const speedRows = useMemo(() => rows.filter((r) => r.kind === "speed"), [rows]);
   const speedAbilityOptions = defenderPokemon ? relevantAbilities(defenderPokemon, SPEED_ABILITY_CANDIDATES) : [];
   const myQuickFeet = getAbility(attacker.ability ?? "")?.speedMultiplierWhenStatused !== undefined;
   const anyMegaSpeed = speedRows.some((r) => megaOf(r, megas));
-  const speedInput = useMemo<SpeedInferenceInput | null>(() => {
-    const opponent = defender.pokemonId ? getPokemon(defender.pokemonId) : undefined;
-    if (!attacker.pokemonId || !defender.pokemonId || !opponent || speedRows.length === 0) return null;
-    const abilityOptions = relevantAbilities(opponent, SPEED_ABILITY_CANDIDATES);
-    const observations: SpeedObservation[] = speedRows.map((r) => {
-      // 종이 바뀌어 그 종이 가질 수 없는 특성 가정은 해제하고, 곡예가 아니면 발동 후 체크는 무시
-      const oppAbilityId = r.cond.oppAbilityId && abilityOptions.includes(r.cond.oppAbilityId) ? r.cond.oppAbilityId : null;
-      return {
-        first: r.first,
-        megaForm: megaOf(r, opponent.megaEvolutions) || undefined,
-        conditions: {
-          ...r.cond,
-          oppAbilityId,
-          oppUnburden: oppAbilityId === "곡예" && r.cond.oppUnburden,
-          oppOtherStatus: oppAbilityId === "속보" && r.cond.oppOtherStatus,
-          myOtherStatus: myQuickFeet && r.cond.myOtherStatus,
-        },
-      };
-    });
-    return {
-      // 상대: 종·폼만 쓰고 특성·도구는 줄별 조건에서 정한다. 나: 능력·특성·도구를 전부 아는 쪽
-      attacker: { ...defender, pokemonId: defender.pokemonId, activeMegaForm: undefined, ability: null, item: null },
-      defender: { ...attacker, pokemonId: attacker.pokemonId },
-      defenderStages: attacker.stages,
-      weather: weather ?? undefined,
-      field: field ?? undefined,
-      observations,
-      viewMegaForms,
-    };
-  }, [attacker, defender, speedRows, weather, field, viewMegaForms, myQuickFeet]);
+  const speedInput = useMemo<SpeedInferenceInput | null>(
+    () => buildSpeedInput({ attacker, defender, speedRows, myQuickFeet, weather, field, viewMegaForms }),
+    [attacker, defender, speedRows, weather, field, viewMegaForms, myQuickFeet],
+  );
 
   // 계산이 무거울 수 있어(물리+특수 관측이 함께면 수십만 후보) 입력은 즉시 반영하고 결과만 뒤따라 그린다.
   // 방어·공격·스피드는 같이 계산해 성격을 공유하고 포인트 합계(66)를 따진다(3.1 C2-b·C2-c 결합).
@@ -289,59 +225,8 @@ export function useDefenseInferenceState({
     updateRow(row.id, { endTurn: [...row.endTurn.filter((x) => !TOXIC_ID.test(x)), ...(n > 0 ? [`toxic${n}`] : [])] });
   }
 
-  function rowMessage(row: ObservationRow): { text: string; kind: "error" | "ok" } | null {
-    const move = row.moveId ? getMove(row.moveId) : undefined;
-    if (row.kind === "received") return receivedRowMessage(row, move);
-    if (row.kind === "speed") return speedRowMessage(row);
-    if (move) {
-      const reason = inferenceUnsupportedReason(move);
-      if (reason) return { text: reason, kind: "error" };
-    }
-    const before = parsePercent(row.before);
-    const after = parsePercent(row.after);
-    if (row.after.trim() !== "" && after === null) return { text: "%는 0~100 정수", kind: "error" };
-    if (before !== null && after !== null && after > before) return { text: "맞은 뒤 %가 더 클 수 없어요", kind: "error" };
-    const index = complete.findIndex((c) => c.row.id === row.id);
-    if (index >= 0 && result && !pending) {
-      const message = result.observationErrors[index];
-      if (message) return { text: message, kind: "error" };
-      if (result.status !== "invalid" && result.singleFeasible[index] === false) {
-        return { text: "이 관측만으로도 맞는 배분이 없어요", kind: "error" };
-      }
-      if (result.status === "ok" && result.singleFeasible[index]) return { text: "가능", kind: "ok" };
-    }
-    return null;
-  }
-
-  function speedRowMessage(row: ObservationRow): { text: string; kind: "error" | "ok" } | null {
-    const index = speedRows.findIndex((r) => r.id === row.id);
-    if (index < 0 || !speedResult || speedPending) return null;
-    const message = speedResult.observationErrors[index];
-    if (message) return { text: message, kind: "error" };
-    if (speedResult.status !== "invalid" && speedResult.singleFeasible[index] === false) return { text: "이 관측만으로도 맞는 스피드가 없어요", kind: "error" };
-    if (speedResult.status === "ok" && speedResult.singleFeasible[index]) return { text: "가능", kind: "ok" };
-    return null;
-  }
-
-  function receivedRowMessage(row: ObservationRow, move: ReturnType<typeof getMove>): { text: string; kind: "error" | "ok" } | null {
-    if (move) {
-      const reason = attackInferenceUnsupportedReason(move);
-      if (reason) return { text: reason, kind: "error" };
-    }
-    const before = parseHp(row.before);
-    const after = parseHp(row.after);
-    if ((row.before.trim() !== "" && before === null) || (row.after.trim() !== "" && after === null)) return { text: "HP는 정수", kind: "error" };
-    if (before !== null && myMaxHp !== null && before > myMaxHp) return { text: `최대 HP(${myMaxHp})보다 클 수 없어요`, kind: "error" };
-    if (before !== null && after !== null && after >= before) return { text: "맞은 뒤 HP가 더 작아야 해요", kind: "error" };
-    const index = completeReceived.findIndex((c) => c.row.id === row.id);
-    if (index >= 0 && attackResult && !attackPending) {
-      const message = attackResult.observationErrors[index];
-      if (message) return { text: message, kind: "error" };
-      if (attackResult.status !== "invalid" && attackResult.singleFeasible[index] === false) return { text: "이 관측만으로도 맞는 배분이 없어요", kind: "error" };
-      if (attackResult.status === "ok" && attackResult.singleFeasible[index]) return { text: after === 0 ? "가능 (쓰러져서 최소 데미지로 계산)" : "가능", kind: "ok" };
-    }
-    return null;
-  }
+  const messageCtx = { complete, completeReceived, speedRows, result, pending, attackResult, attackPending, speedResult, speedPending, myMaxHp };
+  const rowMessage = (row: ObservationRow) => rowMessageOf(row, messageCtx);
 
   return { weather, field, attackerCard, defenderPokemon, defenderForm, dragOverClass, dropProps, defenderActions, dragProps, defender, hasDealtRows, activeAbilityId, setAbilityId, anyMega, abilityOptions, itemId, setItemId, defStage, setDefStage, spdStage, setSpdStage, tolerant, setTolerant, hasReceivedRows, activeAtkAbilityId, setAtkAbilityId, anyMegaReceived, atkAbilityOptions, atkItemId, setAtkItemId, atkStage, setAtkStage, spaStage, setSpaStage, oppBurned, setOppBurned, rows, rowMessage, megas, attackerPokemon, changeKind, updateRow, setMovePickerRow, removeRow, setToxicTurn, updateCond, speedAbilityOptions, anyMegaSpeed, myQuickFeet, addRow, onReset, myMaxHp, pending, attackPending, speedPending, result, attackResult, speedResult, rowIdsByObservation, receivedRowNos, combined, speedRowNos, complete, myScreen, movePickerRow, attacker };
 }
