@@ -126,7 +126,7 @@ export interface MatchupSlotCardProps {
 }
 
 /** MatchupSlotCard가 렌더 앞에서 계산해 하위 줄에 넘기는 값 */
-export interface MatchupSlotDerived {
+interface MatchupSlotDerived {
   pokemon: Pokemon;
   form: ReturnType<typeof getEffectiveForm>;
   realStats: ReturnType<typeof computeRealStats>;
