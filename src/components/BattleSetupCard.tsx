@@ -96,7 +96,8 @@ export function BattleSetupCard({
 
   // 터치·펜: 카드를 길게 눌러 다른 카드 위에서 떼면 자리가 바뀐다(마우스 드래그는 그대로)
   // 6.5 M1 D — 포켓몬이 바뀌어 카드가 채워지면 카드가 튕겨 자리를 잡는다(비울 때는 없음)
-  const [cardRef, cardMotion] = useCardMotion(slot?.pokemonId ?? null, onClearPokemon);
+  // 6.6 M3b — 압축 ↔ 펼침을 오갈 때도 높이가 이어서 변한다(압축 조건은 아래 렌더 분기와 같다)
+  const [cardRef, cardMotion] = useCardMotion(slot?.pokemonId ?? null, onClearPokemon, !expanded || concealBuild ? "compact" : "full");
   const touch = useLongPressDrag(
     true,
     (x, y) => {
