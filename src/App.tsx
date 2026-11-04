@@ -8,6 +8,7 @@ import { MoveDexPage } from "./components/MoveDexPage";
 import { ItemDexPage } from "./components/ItemDexPage";
 import { Footer } from "./components/Footer";
 import { SyncAnnouncer } from "./components/SyncDot";
+import { UpdateBar } from "./components/UpdateBar";
 import { Modal } from "./components/Modal";
 import { startCloudSync } from "./lib/cloudSync";
 import { loadBattleRank, loadCloudSyncMeta } from "./lib/storage";
@@ -36,6 +37,7 @@ function App() {
   return (
     <div className="app-shell">
       <SyncAnnouncer />
+      <UpdateBar />
       <Sidebar activeView={view} onSelectView={requestView} />
       <div className="app-body">
         <main key={view} className="app-main page-enter">

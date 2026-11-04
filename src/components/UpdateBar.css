@@ -1,0 +1,31 @@
+/* 새 버전 안내 바(6.6 P2) — 하단 탭(모바일) 바로 위에 뜬다. --bottom-nav-total은 모바일에서만 정의된다 */
+.update-bar {
+  position: fixed;
+  left: 50%;
+  bottom: calc(var(--bottom-nav-total, 0px) + 0.75rem);
+  z-index: 40; /* 하단 탭(30) 위, 모달(100) 아래 */
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  max-width: min(32rem, calc(100vw - 2rem));
+  padding: 0.6rem 0.9rem;
+  color: var(--text);
+  font-size: 0.9rem;
+  background: var(--surface);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--border);
+  border-radius: 0.9rem;
+  box-shadow: var(--shadow-md);
+  transform: translateX(-50%);
+  animation: update-bar-in var(--motion-pop) var(--ease-spring);
+}
+
+@keyframes update-bar-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 0.75rem);
+  }
+}
