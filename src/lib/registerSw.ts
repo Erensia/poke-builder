@@ -23,6 +23,17 @@ const flag = {
   },
 };
 
+/** 열려 있는 탭을 새 서비스 워커가 넘겨받았는지(6.6 P2) — UpdateBar가 구독한다. 처음 설치(이전에 맡던 워커가 없을 때)는 알리지 않는다 */
+let updated = false;
+const listeners = new Set<() => void>();
+export const getSwUpdated = () => updated;
+export function subscribeSwUpdate(f: () => void) {
+  listeners.add(f);
+  return () => void listeners.delete(f);
+}
+/** 오래 열어 둔 탭이 새 배포를 알아채게, 탭으로 돌아올 때 이 간격 이상 지났으면 서비스 워커를 다시 확인한다 */
+const RECHECK_MS = 30 * 60_000;
+
 /** 서비스 워커를 쓰지 않는 이유(쓰는 중이면 null). 푸터가 이 값으로 상태를 보여 준다 — flag는 ?sw=off로 이 기기에서 꺼 둔 경우 */
 export function swDisabledReason(): "unsupported" | "dev" | "build" | "flag" | null {
   if (!("serviceWorker" in navigator)) return "unsupported";
@@ -55,11 +66,25 @@ export function registerSw() {
     void unregisterAll();
     return;
   }
+  let controlled = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (controlled && !updated) {
+      updated = true;
+      listeners.forEach((f) => f());
+    }
+    controlled = true;
+  });
   window.addEventListener("load", () => {
     navigator.serviceWorker
       .register("/sw.js")
       .then(() => navigator.serviceWorker.ready)
       .then((reg) => {
+        let last = Date.now();
+        document.addEventListener("visibilitychange", () => {
+          if (document.visibilityState !== "visible" || Date.now() - last < RECHECK_MS) return;
+          last = Date.now();
+          reg.update().catch(() => {}); // 오프라인이면 실패해도 그대로 둔다
+        });
         // 오프라인에서도 이미지가 보이도록 스프라이트를 백그라운드로 미리 받게 한다(온라인이고 한가할 때)
         if (!navigator.onLine) return;
         const ask = () => reg.active?.postMessage({ type: "warm-sprites" });

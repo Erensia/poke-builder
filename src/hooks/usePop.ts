@@ -41,7 +41,14 @@ export function useHeightTween(key: string) {
     // 동작 줄이기에서는 생략(웹 애니메이션 API는 CSS 미디어 쿼리의 영향을 받지 않는다)
     if (!changed || !before || Math.abs(before - height) < 2 || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     // 커지는 쪽은 새 내용이 애니메이션 높이보다 길어 넘치므로 애니메이션 동안만 overflow를 가린다(키프레임에 같이 넣으면 끝나고 저절로 원래대로)
-    node.animate([{ height: `${before}px`, overflow: "hidden" }, { height: `${height}px`, overflow: "hidden" }], { duration: 200, easing: "cubic-bezier(0.2, 0.9, 0.3, 1)" });
+    // 빈 슬롯처럼 min-height가 있는 요소는 height만 키우면 min-height가 즉시 받쳐서 점프하므로 minHeight도 같이 옮긴다(6.6 M3b)
+    node.animate(
+      [
+        { height: `${before}px`, minHeight: `${before}px`, overflow: "hidden" },
+        { height: `${height}px`, minHeight: `${height}px`, overflow: "hidden" },
+      ],
+      { duration: 200, easing: "cubic-bezier(0.2, 0.9, 0.3, 1)" },
+    );
   });
   return setNode;
 }
@@ -54,10 +61,11 @@ export function useHeightTween(key: string) {
  * 카드 높이가 달라지면(빈 슬롯 ↔ 채워진 카드) 이전 높이에서 새 높이로 이어서 변한다(ref를 카드 맨 바깥 요소에 단다).
  * 애니메이션 종료가 오지 않는 경우(탭이 숨겨짐 등)를 대비해 안전 타이머(400ms)로 반드시 비운다.
  */
-export function useCardMotion(pokemonId: string | null, onClear: () => void) {
+export function useCardMotion(pokemonId: string | null, onClear: () => void, variant = "") {
   const { pop, onAnimationEnd: popEnd } = usePop(pokemonId, false);
   const [leaving, setLeaving] = useState(false);
-  const attach = useHeightTween(pokemonId ?? "");
+  // variant(압축 ↔ 펼침 같은 모양 구분)가 바뀌어도 높이가 이어서 변한다(6.6 M3b)
+  const attach = useHeightTween(`${pokemonId ?? ""}|${variant}`);
   const finish = () => {
     setLeaving(false);
     onClear();
