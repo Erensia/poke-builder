@@ -1,6 +1,6 @@
 // 7.3 B2 방어/판별/킹실드류: 내가 이번 턴 마지막에 행동하면(상대가 교체했거나, 방어끼리 겹쳐 우선도 +4 속도 순서에서 늦을 때) 사용 이펙트 없이 실패하고
 // 연속 횟수가 0으로 돌아가 다음 턴 방어는 확정 성공한다. 버티기·길동무·패스트가드는 그대로.
-export default async function ({ server, data, mon, battle, pts, check }) {
+export default async function ({ server, data, ev, opt, mon, battle, pts, check }) {
   const rt = await server.ssrLoadModule("/src/lib/battle/runTurn.ts");
   const move = (id) => ({ kind: "move", move: data.getMove(id) });
   const rng = () => 0.99; // 연속 사용 확률 1(streak 0)은 통과, 그 미만은 실패
@@ -50,4 +50,26 @@ export default async function ({ server, data, mon, battle, pts, check }) {
   const near = (x, y) => Math.abs(x - y) / y < 0.1;
   check("7.3 B3 멀티스케일: 풀피 첫 타만 반감(둘째 타는 반감 없음)", ms.length >= 2 && near(ms[0] * 2, plain[0]) && near(ms[1], plain[1]), `멀티스케일 ${fmt(ms)} 일반 ${fmt(plain)}`);
   check("7.3 B3 멀티스케일: HP가 깎여 있으면 첫 타부터 반감 없음", hurt.length >= 2 && near(hurt[0], plain[0]) && near(hurt[1], plain[1]), fmt(hurt));
+  // 7.3 B3 계산기·AI 조각: 멀티스케일은 첫 타만 반감(firstHitFinalMultiplier), 둘째 타부터는 풀 데미지
+  const me = await server.ssrLoadModule("/src/lib/matchupEvaluator.ts");
+  const df = await server.ssrLoadModule("/src/lib/damageFormula.ts");
+  const calcHits = (ability, o) => {
+    const st = battle([mon("한카리아스", ["스케일샷"], null, null, pts({ atk: 32, spe: 32 }))], [mon("망나뇽", ["날개쉬기"], ability, null, pts({ hp: 32 }))]);
+    const res = me.evaluateSlotMatchup(st.a.slot, data.getMove("스케일샷"), st.b.slot, { multiHitCount: 3, ...o });
+    const p = res.damageParts;
+    return p.hitPowers.map((power, i) => df.integerHitDamage(p, power, res.defenseStat, 1, i === 0, p.firstHitFinalMultiplier ?? 1));
+  };
+  const cMs = calcHits("멀티스케일");
+  const cPlain = calcHits("정신력");
+  const cHurt = calcHits("멀티스케일", { defenderHpIsFull: false });
+  check("7.3 B3 계산기: 멀티스케일 풀피 가정 → 첫 타만 반감(3타)", cMs.length === 3 && near(cMs[0] * 2, cPlain[0]) && near(cMs[1], cPlain[1]) && near(cMs[2], cPlain[2]), `멀티스케일 ${cMs.join("/")} 일반 ${cPlain.join("/")}`);
+  check("7.3 B3 계산기: HP가 깎인 가정이면 첫 타부터 반감 없음", near(cHurt[0], cPlain[0]) && near(cHurt[1], cPlain[1]), cHurt.join("/"));
+  // 7.3 B3 AI: 멀티스케일 상대에게 다단히트가 전 타 반감으로 평가되지 않는다(첫 타만 반감)
+  const aiHits = (ability) => {
+    const st = battle([mon("한카리아스", ["스케일샷"], null, null, pts({ atk: 32, spe: 32 }))], [mon("망나뇽", ["날개쉬기"], ability, null, pts({ hp: 32 }))]);
+    return opt(ev.evaluateOptions(st, "a"), "스케일샷").hitsToKill.expected;
+  };
+  const aiMs = aiHits("멀티스케일");
+  const aiPlain = aiHits("정신력");
+  check("7.3 B3 AI: 멀티스케일 풀피 상대의 스케일샷 기대 횟수가 전 타 반감(약 2배)이 아니다", aiMs >= aiPlain && aiMs < aiPlain * 1.35, `멀티스케일 ${aiMs.toFixed(2)} 일반 ${aiPlain.toFixed(2)}`);
 }

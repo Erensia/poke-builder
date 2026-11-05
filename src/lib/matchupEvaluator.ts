@@ -15,7 +15,7 @@ import { getWeatherDamageMultiplier, getWeatherDefenseMultiplier, applyWeatherBa
 import { applyFieldPulse, getFieldPowerMultiplier, getFieldDamageMultiplier } from "./fieldEffects";
 import { resolveMoveContext } from "./moveContext";
 import { koChanceByUses, DAMAGE_ROLL_STEP_COUNT, type DamageParts } from "./damageFormula";
-import { resolveEffectiveDefenderAbility } from "./abilityModifiers";
+import { defenseChangeWhenHpNotFull, resolveEffectiveDefenderAbility } from "./abilityModifiers";
 import { NEUTRAL_STAGES, type StatStages } from "../types/battleStats";
 import {
   computeOffensePower,
@@ -655,6 +655,13 @@ function buildDamageParts(c: SlotMatchupCtx) {
     c.criticalApplies ? clampStages(c.defenderStages, "positive") : c.defenderStages,
   );
   const useAutoDefense = c.manualBulkMultiplier === undefined;
+  // 멀티스케일류(풀피일 때만 듣는 방어 특성)는 첫 타만 듣는다. 풀피 가정이면 finalMultiplier는 HP가 깎인 상태(둘째 타 이후) 기준으로 두고,
+  // 첫 타에만 그 몫(hpLost.finalMultiplier)을 되돌려 곱한다. 풀피 조건 특성이 없으면 1이라 결과가 그대로다. 최종 단계(stage "final")가
+  // 아닌 풀피 조건 방어 특성은 데이터에 없어 bulkMultiplier 쪽은 따로 다루지 않는다.
+  const hpLost =
+    useAutoDefense && c.defenderHpIsFull !== false
+      ? defenseChangeWhenHpNotFull(c.defenderAbility, c.effectiveMove, !!c.defenderHasStatusCondition, c.field)
+      : { multiplier: 1, finalMultiplier: 1 };
   // 맹화류·선파워는 공격 스탯 단계 — 직접 지정한 특성 배율이 있으면 그 값 전체를 위력 단계로 본다
   const abilityStatMultiplier = c.manualAbilityMultiplier === undefined ? c.statOffenseMultiplier : 1;
   const itemBaseMultiplier = c.itemMultiplier ?? getItemBasePowerMultiplier(c.attackerItem, c.effectiveMove);
@@ -674,8 +681,8 @@ function buildDamageParts(c: SlotMatchupCtx) {
           stabMultiplier: c.effectiveMoveFinal.type && c.attackTypesForStab.includes(c.effectiveMoveFinal.type) ? c.stabMultiplier : 1,
           typeEffectiveness: c.typeEffectiveness,
           finalMultiplier:
-            (itemFinalMultiplier * c.finalOffenseMultiplier) / (c.screenMultiplier * (useAutoDefense ? c.finalDefenseMultiplier : 1)),
-          firstHitFinalMultiplier: useAutoDefense ? 1 / c.berryResult.bulkMultiplier : 1,
+            (itemFinalMultiplier * c.finalOffenseMultiplier) / (c.screenMultiplier * (useAutoDefense ? c.finalDefenseMultiplier * hpLost.finalMultiplier : 1)),
+          firstHitFinalMultiplier: useAutoDefense ? hpLost.finalMultiplier / c.berryResult.bulkMultiplier : 1,
         }
       : undefined;
 
