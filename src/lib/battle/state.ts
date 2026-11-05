@@ -71,6 +71,9 @@ export const CONFUSION_SELF_HIT_MOVE: Move = {
   effect: "혼란 상태에서 스스로에게 가하는 데미지",
 };
 
+/** 교체한 쪽의 이번 턴 행동을 대신하는 센티넬 기술 id(runTurn). 교체한 쪽은 기술을 쓰지 않는다. */
+export const SWITCH_PASS_MOVE_ID = "__switch_pass__";
+
 /**
  * 발버둥. 4개 기술 PP가 전부 0이 되면 자동으로 나가는 비상 기술이라 moves.json에는 없다(사용자 확인).
  * ???타입(=type null → resolveMoveContext/computeDamage가 이미 null-safe해서 자속·상성 없이 항상 등배로 처리됨)·

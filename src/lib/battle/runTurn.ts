@@ -5,7 +5,7 @@ import { eunNeun } from "@/lib/josa";
 import { hasVolatile } from "@/lib/volatileConditions";
 import { compareTurnOrder } from "@/lib/turnOrder";
 import { buildTurnOrderActor, itemsSuppressedByRoom, quickFirstChances } from "./turnOrderInputs";
-import { STRUGGLE_MOVE, activeWeather, applyForecastForm, applyMimicryForm, cloneSide, consumeItem, hasLivingReserve, isFainted, isForcedSwitchBlocked, opponentKey, sideOf, type BattleState } from "./state";
+import { STRUGGLE_MOVE, SWITCH_PASS_MOVE_ID, activeWeather, applyForecastForm, applyMimicryForm, cloneSide, consumeItem, hasLivingReserve, isFainted, isForcedSwitchBlocked, opponentKey, sideOf, type BattleState } from "./state";
 import { applyMegaEvolution, isTrappedFromSwitching, performSwitch } from "./switching";
 import { resolveAction } from "./resolveAction";
 import { finishTurn } from "./finishTurn";
@@ -150,7 +150,7 @@ export function runTurn(
 
   // 교체한 쪽은 이번 턴 행동하지 않는다. 아래 로직은 전부 Move 객체를 전제하므로, 교체 액션은
   // 절대 실행되지 않는 무해한 센티넬로 대체한다(순서 계산의 우선도만 0으로 참여).
-  const SWITCH_PASS_MOVE: Move = { ...STRUGGLE_MOVE, id: "__switch_pass__", name: "교체", category: "status", power: null };
+  const SWITCH_PASS_MOVE: Move = { ...STRUGGLE_MOVE, id: SWITCH_PASS_MOVE_ID, name: "교체", category: "status", power: null };
   const moveA: Move = actionA.kind === "move" ? actionA.move : SWITCH_PASS_MOVE;
   const moveB: Move = actionB.kind === "move" ? actionB.move : SWITCH_PASS_MOVE;
 
