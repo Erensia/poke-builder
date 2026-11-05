@@ -72,4 +72,20 @@ export default async function ({ server, data, ev, opt, mon, battle, pts, check 
   const aiMs = aiHits("멀티스케일");
   const aiPlain = aiHits("정신력");
   check("7.3 B3 AI: 멀티스케일 풀피 상대의 스케일샷 기대 횟수가 전 타 반감(약 2배)이 아니다", aiMs >= aiPlain && aiMs < aiPlain * 1.35, `멀티스케일 ${aiMs.toFixed(2)} 일반 ${aiPlain.toFixed(2)}`);
+  // 7.3 B4 먼저 움직인 쪽이 자기 반동으로 쓰러져도, 뒤에 행동하는 쪽의 자기 대상·필드 기술은 실행되고 쓰러진 상대를 노리는 기술은 "실패"로 기록된다
+  const faintTurn = (foeMove) => {
+    const st = battle([mon("따라큐", ["우드해머"], null, "생명의구슬", pts({ atk: 32, spe: 32 }))], [mon("갑주무사", [foeMove], null, null, pts({ hp: 32 }))]);
+    st.a.currentHp = 3; // 우드해머·생명의구슬 반동으로 쓰러진다
+    const out = rt.runTurn(st, move("우드해머"), move(foeMove), () => 0.5);
+    const res = out.result ?? out.partialResult;
+    return { fainted: out.nextState.a.currentHp === 0, foeAction: res.actions.find((a) => a.actor === "b"), foe: out.nextState.b };
+  };
+  const dance = faintTurn("칼춤");
+  check("7.3 B4 반동으로 쓰러진 턴에도 상대의 자기 대상 기술(칼춤)은 실행된다", dance.fainted && !!dance.foeAction && !dance.foeAction.blockedReason && dance.foe.stages.atk === 2, `기절=${dance.fainted} 행동=${!!dance.foeAction} 공격랭크=${dance.foe.stages.atk}`);
+  const rocks = faintTurn("스텔스록");
+  check("7.3 B4 필드 기술(스텔스록)도 실행된다", rocks.fainted && !!rocks.foeAction && !rocks.foeAction.blockedReason, `기절=${rocks.fainted} 행동=${!!rocks.foeAction} 사유=${rocks.foeAction?.blockedReason}`);
+  for (const id of ["불꽃펀치", "독가루", "변신", "파워스왑"]) {
+    const r = faintTurn(id);
+    check(`7.3 B4 쓰러진 상대를 노리는 기술(${id})은 실패로 기록되고 효과가 없다`, r.fainted && r.foeAction?.blockedReason === "usageCondition" && r.foe.stages.atk === 0 && !r.foe.transformed, `기절=${r.fainted} 사유=${r.foeAction?.blockedReason} 랭크=${r.foe.stages.atk}`);
+  }
 }

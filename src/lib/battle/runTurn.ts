@@ -524,7 +524,9 @@ function runActionPhase(ctx: RunTurnContext): RunTurnOutcome | RunTurnPaused {
     ctx.actionIdx = i + 1;
     if (ctx.didSwitch[key]) continue; // 이번 턴 교체한 쪽은 행동하지 않는다(교체가 곧 그 턴 행동)
     if (isFainted(state[key])) continue; // 이미 쓰러진 쪽은 행동 못 함
-    if (isFainted(state[opponentKey(key)])) break; // 상대가 이미 쓰러졌으면 더 진행할 필요 없음
+    // 턴 시작 전부터 상대가 쓰러져 있었으면 더 진행하지 않는다. 먼저 움직인 상대가 이번 턴에 자기 반동 등으로 쓰러진 경우는 계속 진행한다
+    // — 자기 대상·필드 기술(칼춤·스텔스록 등)은 실행되고, 쓰러진 상대를 노리는 기술은 resolveAction이 "실패"로 처리한다(교체는 턴 끝).
+    if (isFainted(state[opponentKey(key)]) && actions.length === 0) break;
     // 포커스렌즈 판정용 — 이번 턴 order 기준으로 상대보다 늦게 움직이는 쪽인지
     const movesSecond = order[1] === key;
     const action = resolveAction(state, key, moves[key], random, movesSecond, moves[opponentKey(key)]);
