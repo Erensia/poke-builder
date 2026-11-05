@@ -1,12 +1,14 @@
 import { useState } from "react";
 import type { AbilityPoints, PartySlot } from "../types/party";
-import { EMPTY_ABILITY_POINTS } from "../types/party";
-import { getPokemon } from "../lib/data";
 import {
   applyItemToSlot,
   cycleFormOnSlot,
+  emptyPartySlot,
   setAbilityPointOnSlot,
+  setMoveOnSlot,
   stepAbilityPointOnSlot,
+  swapMovesOnSlot,
+  toggleGenderOnSlot,
 } from "../lib/slotMutations";
 
 /**
@@ -15,22 +17,11 @@ import {
  * createBattleState에 바로 넘길 수 있다. 랭크·상태이상 등 배틀 중 바뀌는 값은 BattleFighterState
  * 쪽 책임이라 여기엔 없다.
  */
-function emptySlot(pokemonId: string): PartySlot {
-  return {
-    pokemonId,
-    moves: [null, null, null, null],
-    ability: null,
-    item: null,
-    nature: null,
-    points: { ...EMPTY_ABILITY_POINTS },
-  };
-}
-
 function useBattleSetupSlot() {
   const [slot, setSlot] = useState<PartySlot | null>(null);
 
   function setPokemon(pokemonId: string) {
-    setSlot(emptySlot(pokemonId));
+    setSlot(emptyPartySlot(pokemonId));
   }
 
   function clearPokemon() {
@@ -42,77 +33,64 @@ function useBattleSetupSlot() {
     setSlot(nextSlot);
   }
 
+  /** 빈 슬롯이면 그대로, 아니면 fn으로 고친다(useParty.updateSlot과 같은 규칙의 한 슬롯판) */
+  function update(fn: (slot: PartySlot) => PartySlot) {
+    setSlot((prev) => (prev ? fn(prev) : prev));
+  }
+
   function setMove(moveIndex: 0 | 1 | 2 | 3, moveId: string | null) {
-    setSlot((prev) => {
-      if (!prev) return prev;
-      const moves = [...prev.moves] as PartySlot["moves"];
-      moves[moveIndex] = moveId;
-      return { ...prev, moves };
-    });
+    update((slot) => setMoveOnSlot(slot, moveIndex, moveId));
   }
 
   /** 기술 두 칸의 자리를 맞바꾼다(빈 칸과도 가능) — useParty.swapMoves와 같다 */
   function swapMoves(a: number, b: number) {
     if (a === b) return;
-    setSlot((prev) => {
-      if (!prev) return prev;
-      const moves = [...prev.moves] as PartySlot["moves"];
-      [moves[a], moves[b]] = [moves[b], moves[a]];
-      return { ...prev, moves };
-    });
+    update((slot) => swapMovesOnSlot(slot, a, b));
   }
 
   function setAbility(abilityId: string | null) {
-    setSlot((prev) => (prev ? { ...prev, ability: abilityId } : prev));
+    update((slot) => ({ ...slot, ability: abilityId }));
   }
 
   function setItem(itemId: string | null) {
-    setSlot((prev) => (prev ? applyItemToSlot(prev, itemId) : prev));
+    update((slot) => applyItemToSlot(slot, itemId));
   }
 
   function setNature(natureId: string | null) {
-    setSlot((prev) => (prev ? { ...prev, nature: natureId } : prev));
+    update((slot) => ({ ...slot, nature: natureId }));
   }
 
-  /** 수컷/암컷을 바로 뒤집는다(미지정이면 수컷을 기본값으로 취급해서 그 반대인 암컷으로).
-   *  에써르류(formVariantByGender)는 성별 = 폼이라 formVariant 를 토글하고 특성 선택을 초기화한다. */
+  /** 수컷/암컷을 바로 뒤집는다(에써르류는 성별 = 폼 — 자세한 규칙은 toggleGenderOnSlot) */
   function toggleGender() {
-    setSlot((prev) => {
-      if (!prev) return prev;
-      if (getPokemon(prev.pokemonId)?.formVariantByGender) {
-        const nextForm = (prev.formVariant ?? "male") === "male" ? "female" : "male";
-        return { ...prev, formVariant: nextForm, ability: null };
-      }
-      return { ...prev, gender: (prev.gender ?? "male") === "male" ? "female" : "male" };
-    });
+    update(toggleGenderOnSlot);
   }
 
   /** 펌킨인 계열 크기 변종을 다음 크기로 돌린다(sizeForms 순서 순환) */
   function cycleSizeForm() {
-    setSlot((prev) => (prev ? cycleFormOnSlot(prev, "sizeForm") : prev));
+    update((slot) => cycleFormOnSlot(slot, "sizeForm"));
   }
 
   /** 루가루암 계열 폼 변종을 다음 폼으로 돌린다(폼별 특성이 달라 특성 선택은 초기화) */
   function cycleFormVariant() {
-    setSlot((prev) => (prev ? cycleFormOnSlot(prev, "formVariant") : prev));
+    update((slot) => cycleFormOnSlot(slot, "formVariant"));
   }
 
   /** 마휘핑 계열 겉모습을 다음 모습으로 돌린다(cosmeticForms 순서 순환). 이미지에만 영향 */
   function cycleCosmeticForm() {
-    setSlot((prev) => (prev ? cycleFormOnSlot(prev, "cosmeticForm") : prev));
+    update((slot) => cycleFormOnSlot(slot, "cosmeticForm"));
   }
 
   /** 마휘핑 계열 겉모습을 리스트에서 고른 id로 바로 설정한다(옵션 5개 이상인 종용) */
   function setCosmeticForm(formId: string) {
-    setSlot((prev) => (prev ? { ...prev, cosmeticForm: formId } : prev));
+    update((slot) => ({ ...slot, cosmeticForm: formId }));
   }
 
   function setPoint(stat: keyof AbilityPoints, value: number) {
-    setSlot((prev) => (prev ? setAbilityPointOnSlot(prev, stat, value) : prev));
+    update((slot) => setAbilityPointOnSlot(slot, stat, value));
   }
 
   function stepPoint(stat: keyof AbilityPoints, delta: number) {
-    setSlot((prev) => (prev ? stepAbilityPointOnSlot(prev, stat, delta) : prev));
+    update((slot) => stepAbilityPointOnSlot(slot, stat, delta));
   }
 
   return {
