@@ -112,6 +112,21 @@ export function resolveAbilityDefense(
   return result;
 }
 
+/**
+ * 풀피일 때만 듣는 방어 특성(멀티스케일 등)이 HP가 깎여 사라지면서 생기는 배율 변화(깎인 뒤 ÷ 풀피 때).
+ * 다단히트는 첫 타만 반감이라, 풀피로 시작해 계산해 둔 배율에 둘째 타부터 곱해서 그 몫을 뺀다. 해당 특성이 없으면 1.
+ */
+export function defenseChangeWhenHpNotFull(
+  ability: Ability | undefined,
+  move: Move,
+  defenderHasStatusCondition = false,
+  field?: FieldKind,
+): { multiplier: number; finalMultiplier: number } {
+  const full = resolveAbilityDefense(ability, move, true, defenderHasStatusCondition, field);
+  const now = resolveAbilityDefense(ability, move, false, defenderHasStatusCondition, field);
+  return { multiplier: now.multiplier / full.multiplier, finalMultiplier: now.finalMultiplier / full.finalMultiplier };
+}
+
 /** 자속보정 배율. 적응력이면 2.0, 그 외에는 표준 1.5 */
 export function resolveStabMultiplier(ability: Ability | undefined): number {
   return ability?.stabOverride ?? 1.5;
