@@ -1,4 +1,4 @@
-import type { AbilityPoints } from "../types/party";
+import { EMPTY_ABILITY_POINTS, type AbilityPoints, type PartySlot } from "../types/party";
 import { getPokemon } from "./data";
 import { findMegaFormByStone } from "./pokemonForm";
 import { MAX_ABILITY_POINTS_PER_STAT, MAX_ABILITY_POINTS_TOTAL, totalAbilityPoints } from "./statCalculator";
@@ -82,4 +82,42 @@ export function stepAbilityPointOnSlot<T extends PointsSlot>(
   const nextValue = Math.min(Math.max(0, currentValue + delta), maxForStat);
   if (nextValue === currentValue) return slot;
   return { ...slot, points: { ...slot.points, [stat]: nextValue } };
+}
+
+/** 포켓몬만 고른 빈 빌드 슬롯(기술·특성·도구·성격 없음, 능력 포인트 0) — useParty/useBattleSetup 공용(7.0 R-4) */
+export function emptyPartySlot(pokemonId: string): PartySlot {
+  return {
+    pokemonId,
+    moves: [null, null, null, null],
+    ability: null,
+    item: null,
+    nature: null,
+    points: { ...EMPTY_ABILITY_POINTS },
+  };
+}
+
+/** 기술 한 칸을 바꾼다 */
+export function setMoveOnSlot(slot: PartySlot, moveIndex: 0 | 1 | 2 | 3, moveId: string | null): PartySlot {
+  const moves = [...slot.moves] as PartySlot["moves"];
+  moves[moveIndex] = moveId;
+  return { ...slot, moves };
+}
+
+/** 기술 두 칸의 자리를 맞바꾼다(빈 칸과도 가능) */
+export function swapMovesOnSlot(slot: PartySlot, a: number, b: number): PartySlot {
+  const moves = [...slot.moves] as PartySlot["moves"];
+  [moves[a], moves[b]] = [moves[b], moves[a]];
+  return { ...slot, moves };
+}
+
+/**
+ * 수컷/암컷을 바로 뒤집는다(미지정이면 수컷을 기본값으로 취급해서 그 반대인 암컷으로).
+ * 에써르류(formVariantByGender)는 성별 = 폼이라 formVariant를 토글하고 특성 선택을 초기화한다.
+ */
+export function toggleGenderOnSlot(slot: PartySlot): PartySlot {
+  if (getPokemon(slot.pokemonId)?.formVariantByGender) {
+    const nextForm = (slot.formVariant ?? "male") === "male" ? "female" : "male";
+    return { ...slot, formVariant: nextForm, ability: null };
+  }
+  return { ...slot, gender: (slot.gender ?? "male") === "male" ? "female" : "male" };
 }

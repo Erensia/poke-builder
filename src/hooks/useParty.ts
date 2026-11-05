@@ -1,27 +1,18 @@
 import { useEffect, useState } from "react";
 import type { AbilityPoints, PartySlot, PartySlots } from "../types/party";
-import { EMPTY_ABILITY_POINTS } from "../types/party";
-import { getPokemon } from "../lib/data";
 import { loadParty, saveParty, clearSavedParty } from "../lib/storage";
 import {
   applyItemToSlot,
   cycleFormOnSlot,
+  emptyPartySlot,
   setAbilityPointOnSlot,
+  setMoveOnSlot,
   stepAbilityPointOnSlot,
+  swapMovesOnSlot,
+  toggleGenderOnSlot,
 } from "../lib/slotMutations";
 
 const EMPTY_SLOTS: PartySlots = [null, null, null, null, null, null];
-
-function emptySlot(pokemonId: string): PartySlot {
-  return {
-    pokemonId,
-    moves: [null, null, null, null],
-    ability: null,
-    item: null,
-    nature: null,
-    points: { ...EMPTY_ABILITY_POINTS },
-  };
-}
 
 export function useParty() {
   const [slots, setSlots] = useState<PartySlots>(() => loadParty() ?? EMPTY_SLOTS);
@@ -66,7 +57,7 @@ export function useParty() {
   function setPokemon(index: number, pokemonId: string) {
     setSlots((prev) => {
       const next = [...prev] as PartySlots;
-      next[index] = emptySlot(pokemonId);
+      next[index] = emptyPartySlot(pokemonId);
       return next;
     });
   }
@@ -79,151 +70,74 @@ export function useParty() {
     });
   }
 
-  function setMove(slotIndex: number, moveIndex: 0 | 1 | 2 | 3, moveId: string | null) {
+  /** 한 슬롯을 fn으로 고친다. 빈 슬롯이거나 fn이 같은 슬롯을 돌려주면(변화 없음) 상태를 그대로 둔다 */
+  function updateSlot(index: number, fn: (slot: PartySlot) => PartySlot) {
     setSlots((prev) => {
-      const slot = prev[slotIndex];
+      const slot = prev[index];
       if (!slot) return prev;
+      const nextSlot = fn(slot);
+      if (nextSlot === slot) return prev;
       const next = [...prev] as PartySlots;
-      const moves = [...slot.moves] as PartySlot["moves"];
-      moves[moveIndex] = moveId;
-      next[slotIndex] = { ...slot, moves };
+      next[index] = nextSlot;
       return next;
     });
+  }
+
+  function setMove(slotIndex: number, moveIndex: 0 | 1 | 2 | 3, moveId: string | null) {
+    updateSlot(slotIndex, (slot) => setMoveOnSlot(slot, moveIndex, moveId));
   }
 
   /** 한 슬롯 안에서 기술 두 칸의 자리를 맞바꾼다(빈 칸과도 가능) — 길게 눌러 끌기·드래그 */
   function swapMoves(slotIndex: number, a: number, b: number) {
     if (a === b) return;
-    setSlots((prev) => {
-      const slot = prev[slotIndex];
-      if (!slot) return prev;
-      const next = [...prev] as PartySlots;
-      const moves = [...slot.moves] as PartySlot["moves"];
-      [moves[a], moves[b]] = [moves[b], moves[a]];
-      next[slotIndex] = { ...slot, moves };
-      return next;
-    });
+    updateSlot(slotIndex, (slot) => swapMovesOnSlot(slot, a, b));
   }
 
   function setAbility(slotIndex: number, abilityId: string | null) {
-    setSlots((prev) => {
-      const slot = prev[slotIndex];
-      if (!slot) return prev;
-      const next = [...prev] as PartySlots;
-      next[slotIndex] = { ...slot, ability: abilityId };
-      return next;
-    });
+    updateSlot(slotIndex, (slot) => ({ ...slot, ability: abilityId }));
   }
 
   function setItem(slotIndex: number, itemId: string | null) {
-    setSlots((prev) => {
-      const slot = prev[slotIndex];
-      if (!slot) return prev;
-      const next = [...prev] as PartySlots;
-      next[slotIndex] = applyItemToSlot(slot, itemId);
-      return next;
-    });
+    updateSlot(slotIndex, (slot) => applyItemToSlot(slot, itemId));
   }
 
   function setNature(slotIndex: number, natureId: string | null) {
-    setSlots((prev) => {
-      const slot = prev[slotIndex];
-      if (!slot) return prev;
-      const next = [...prev] as PartySlots;
-      next[slotIndex] = { ...slot, nature: natureId };
-      return next;
-    });
+    updateSlot(slotIndex, (slot) => ({ ...slot, nature: natureId }));
   }
 
-  /** 수컷/암컷을 바로 뒤집는다(미지정이면 수컷을 기본값으로 취급해서 그 반대인 암컷으로) */
+  /** 수컷/암컷을 바로 뒤집는다(에써르류는 성별 = 폼 — 자세한 규칙은 toggleGenderOnSlot) */
   function toggleGender(slotIndex: number) {
-    setSlots((prev) => {
-      const slot = prev[slotIndex];
-      if (!slot) return prev;
-      const next = [...prev] as PartySlots;
-      // 에써르류(formVariantByGender): 성별 = 폼. formVariant 를 토글하고 특성 선택은 초기화한다.
-      if (getPokemon(slot.pokemonId)?.formVariantByGender) {
-        const nextForm = (slot.formVariant ?? "male") === "male" ? "female" : "male";
-        next[slotIndex] = { ...slot, formVariant: nextForm, ability: null };
-      } else {
-        next[slotIndex] = { ...slot, gender: (slot.gender ?? "male") === "male" ? "female" : "male" };
-      }
-      return next;
-    });
+    updateSlot(slotIndex, toggleGenderOnSlot);
   }
 
   /** 펌킨인 계열 크기 변종을 다음 크기로 돌린다(sizeForms 순서 순환, 끝에서 처음으로) */
   function cycleSizeForm(slotIndex: number) {
-    setSlots((prev) => {
-      const slot = prev[slotIndex];
-      if (!slot) return prev;
-      const nextSlot = cycleFormOnSlot(slot, "sizeForm");
-      if (nextSlot === slot) return prev;
-      const next = [...prev] as PartySlots;
-      next[slotIndex] = nextSlot;
-      return next;
-    });
+    updateSlot(slotIndex, (slot) => cycleFormOnSlot(slot, "sizeForm"));
   }
 
   /** 루가루암 계열 폼 변종을 다음 폼으로 돌린다. 폼별로 특성 목록이 달라 특성 선택은 초기화한다 */
   function cycleFormVariant(slotIndex: number) {
-    setSlots((prev) => {
-      const slot = prev[slotIndex];
-      if (!slot) return prev;
-      const nextSlot = cycleFormOnSlot(slot, "formVariant");
-      if (nextSlot === slot) return prev;
-      const next = [...prev] as PartySlots;
-      next[slotIndex] = nextSlot;
-      return next;
-    });
+    updateSlot(slotIndex, (slot) => cycleFormOnSlot(slot, "formVariant"));
   }
 
   /** 마휘핑 계열 겉모습을 다음 모습으로 돌린다(cosmeticForms 순서 순환). 이미지에만 영향 — 특성/스탯 불변 */
   function cycleCosmeticForm(slotIndex: number) {
-    setSlots((prev) => {
-      const slot = prev[slotIndex];
-      if (!slot) return prev;
-      const nextSlot = cycleFormOnSlot(slot, "cosmeticForm");
-      if (nextSlot === slot) return prev;
-      const next = [...prev] as PartySlots;
-      next[slotIndex] = nextSlot;
-      return next;
-    });
+    updateSlot(slotIndex, (slot) => cycleFormOnSlot(slot, "cosmeticForm"));
   }
 
   /** 마휘핑 계열 겉모습을 리스트에서 고른 id로 바로 설정한다(옵션이 5개 이상이라 순환이 불편한 종용) */
   function setCosmeticForm(slotIndex: number, formId: string) {
-    setSlots((prev) => {
-      const slot = prev[slotIndex];
-      if (!slot) return prev;
-      const next = [...prev] as PartySlots;
-      next[slotIndex] = { ...slot, cosmeticForm: formId };
-      return next;
-    });
+    updateSlot(slotIndex, (slot) => ({ ...slot, cosmeticForm: formId }));
   }
 
   /** 합산 66 / 스탯당 32를 넘지 않도록 클램프해서 능력 포인트 한 스탯을 절대값으로 설정한다 (직접 입력용) */
   function setPoint(slotIndex: number, stat: keyof AbilityPoints, value: number) {
-    setSlots((prev) => {
-      const slot = prev[slotIndex];
-      if (!slot) return prev;
-      const next = [...prev] as PartySlots;
-      next[slotIndex] = setAbilityPointOnSlot(slot, stat, value);
-      return next;
-    });
+    updateSlot(slotIndex, (slot) => setAbilityPointOnSlot(slot, stat, value));
   }
 
   /** 이전 상태를 기준으로 증감시킨다 (버튼용) — 빠르게 연속 클릭해도 각 클릭이 누락되지 않는다 */
   function stepPoint(slotIndex: number, stat: keyof AbilityPoints, delta: number) {
-    setSlots((prev) => {
-      const slot = prev[slotIndex];
-      if (!slot) return prev;
-      const nextSlot = stepAbilityPointOnSlot(slot, stat, delta);
-      if (nextSlot === slot) return prev;
-      const next = [...prev] as PartySlots;
-      next[slotIndex] = nextSlot;
-      return next;
-    });
+    updateSlot(slotIndex, (slot) => stepAbilityPointOnSlot(slot, stat, delta));
   }
 
   return {
