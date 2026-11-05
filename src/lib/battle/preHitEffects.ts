@@ -17,7 +17,7 @@ import { ATTRACT_ACTION_BLOCK_CHANCE, CONFUSION_SELF_HIT_CHANCE, consumeVolatile
 import { resolveMoveContext } from "@/lib/moveContext";
 import { WEIGHT_MOVE_FALLBACK_POWER, absoluteWeightPowerValue, computeDamage, positiveStagesPowerValue, reversalPowerFromHp, targetHpRatioPowerValue, userHpScaledPowerValue, faintedAllyPowerValue, rivalryDamageMultiplier, weightRatioPowerValue } from "@/lib/battlePower";
 import { applyWeatherBall } from "@/lib/weatherEffects";
-import { applyFieldPulse, getFieldPowerMultiplier, isOpponentTargetingMove, isPriorityMoveBlockedByField, isStatusBlockedByField } from "@/lib/fieldEffects";
+import { applyFieldPulse, getFieldPowerMultiplier, isOpponentTargetingMove, isPriorityMoveBlockedByField, isStatusBlockedByField, needsLivingTarget } from "@/lib/fieldEffects";
 import { computeBattleHitChance } from "./hitChance";
 import { CONFUSION_SELF_HIT_MOVE, MIN_DAMAGE_ROLL, STRUGGLE_MOVE, abilityOf, activeWeather, consumeItem, contraryDelta, electroBallPowerValue, gyroBallPowerValue, hasSheerForceSecondaryEffect, isFainted, isHealingMove, isItemRemovable, opponentKey, sideOf, statusImmunitiesOf, type BattleFighterState, type BattleState } from "./state";
 
@@ -236,6 +236,9 @@ function checkUsageGates(c: PreHitCtx) {
   // resolveAction이 이 파이터에 대해 돌았다는 건 이번 턴에 자기 행동을 개시했다는 뜻 —
   // 이후 usageCondition 실패로 막히거나 마비·풀죽음으로 못 움직여도 속이기 창은 소진된 것.
   c.attacker.hasActedSinceSwitchIn = true;
+  // 먼저 움직인 상대가 이번 턴 자기 반동 등으로 쓰러졌으면, 살아 있는 대상이 필요한 기술은 "그러나 실패했다!"로 처리한다(7.3 B4).
+  // 자기 대상·필드 기술(칼춤·스텔스록 등)은 그대로 실행된다.
+  if (isFainted(c.defender) && needsLivingTarget(c.move)) return { value: c.blocked("usageCondition") };
   // 아이언롤러: 활성화된 필드가 하나도 없으면 실패한다(본가 규칙)
   if (c.move.usageCondition === "field-required" && !c.state.field) {
     return { value: c.blocked("usageCondition") };

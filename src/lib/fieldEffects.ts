@@ -88,6 +88,31 @@ export function isOpponentTargetingMove(move: Move): boolean {
 }
 
 /**
+ * 상대(대상)가 살아 있어야 실행되는 기술인지(7.3 B4). isOpponentTargetingMove에 더해, 대상의 능력 랭크·특성·타입·스피드를 읽거나
+ * 바꾸는 변화기(변신·미러타입·역할·자기암시·가드스왑·파워스왑·파워셰어·가드셰어·스피드스왑·힘흡수·뒤집어엎기·송전)와 강제 교체(울부짖기·날려버리기)를 포함한다.
+ * 이 기술들은 방어·사이코필드 판정에는 쓰이지 않아 isOpponentTargetingMove는 그대로 둔다. 먼저 움직인 상대가 쓰러진 턴에 뒤 행동을 생략할지 판단하는 데 쓴다.
+ */
+export function needsLivingTarget(move: Move): boolean {
+  return (
+    isOpponentTargetingMove(move) ||
+    !!(
+      move.forcesTargetSwitch ||
+      move.copiesTargetStages ||
+      move.swapsStagesWithTarget ||
+      move.copiesTargetTypes ||
+      move.copiesTargetAbility ||
+      move.averagesAttacksWithTarget ||
+      move.averagesDefensesWithTarget ||
+      move.transformsIntoTarget ||
+      move.swapsSpeedWithTarget ||
+      move.drainsFromTargetAttackStat ||
+      move.invertsTargetStatStages ||
+      move.changesTargetMoveTypeThisTurn
+    )
+  );
+}
+
+/**
  * 사이코필드: 우선도 +1 이상인 기술이 상대를 노리면 그 기술 자체가 실패한다. 짓궂은마음처럼
  * 특성으로 우선도가 올라간 변화기라도, 그 기술 자체가 상대를 겨냥하지 않으면(순풍·리플렉터·
  * 빛의장막 등 자신/필드 전역 효과) 막히지 않는다(사용자 확인 — Phase 5 §4-3에서 우선도만 보고
