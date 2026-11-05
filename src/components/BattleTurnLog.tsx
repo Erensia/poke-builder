@@ -44,14 +44,14 @@ export function BattleTurnLog({
                 turn.actions.length === 0 &&
                 turn.endOfTurn.length === 0 &&
                 !turn.winner;
-              // "먼저 행동"은 첫 행동 주체(유턴 턴 중간 교체 전이라 activePokemonIds와 다를 수 있음).
-              const firstActorName =
-                getPokemon(turn.actions[0]?.actorPokemonId ?? turn.activePokemonIds[turn.order[0]])?.name ??
-                turn.order[0];
+              // "먼저 행동"은 포켓몬 이름이 아니라 팀으로 적는다(양쪽이 같은 포켓몬이어도 구분). 첫 행동 주체는 실제 행동한 쪽
+              // (turn.actions[0].actor) — 없으면 정해진 순서. 우리팀은 AI 대전이면 AI 반대편, 그 외(다시보기·수동 대전)는 a편.
+              const myTeam: FighterKey = aiSide ? opponentKey(aiSide) : "a";
+              const firstActorTeam = (turn.actions[0]?.actor ?? turn.order[0]) === myTeam ? "우리팀" : "상대팀";
               return (
               <div key={`${turn.turnNumber}-${turnIdx}`} className="battle-turn-card">
                 <div className="battle-turn-title">
-                  {isForcedSwitchCard ? `턴 ${turn.turnNumber} · 교체` : `턴 ${turn.turnNumber} · 먼저 행동: ${firstActorName}`}
+                  {isForcedSwitchCard ? `턴 ${turn.turnNumber} · 교체` : `턴 ${turn.turnNumber} · 먼저 행동: ${firstActorTeam}`}
                 </div>
                 <PreMoveSwitchLines switches={turn.switches} />
                 {turn.turnStartAnnouncements.map((text, i) => (
