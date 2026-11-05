@@ -58,6 +58,8 @@ export function computeBattleHitChance(input: BattleHitChanceInput): number | nu
       : defender.accuracyStages.evasion;
   const minimizeBonusActive = !!(move.bonusVsMinimize && defender.usedMoveIds?.["작아지기"]);
   if (attackerAbility?.alwaysHits || defenderAbility?.alwaysHits || minimizeBonusActive) return null;
+  // 눈보라(눈)·번개·폭풍(비): 해당 날씨면 필중. 날씨 무효 특성이면 activeWeather가 undefined라 적용되지 않는다.
+  if (move.alwaysHitsInWeather && move.alwaysHitsInWeather === activeWeather(state)) return null;
   // 록온(트랙 M6): 다음 기술은 반드시 맞는다(일격기 포함)
   if (hasVolatile(attacker.volatile, "lockOn")) return null;
   // 일격기(트랙 M5): 명중 30% 고정(레벨 50 동일 가정) — 명중·회피 랭크와 명중 보정을 받지 않는다. 절대영도는 얼음 타입이
@@ -67,5 +69,8 @@ export function computeBattleHitChance(input: BattleHitChanceInput): number | nu
     const accuracy = reduced && !attacker.types.includes(reduced.type) ? reduced.accuracy : (move.accuracy ?? 30);
     return accuracy / 100;
   }
-  return computeHitChance(move.accuracy, attacker.accuracyStages.accuracy, effectiveDefenderEvasion, accuracyExtraMultiplier);
+  // 폭풍: 쾌청이면 명중률 수치가 50이 된다(그 위에 랭크·보정이 곱해진다). 날씨 무효면 activeWeather가 undefined.
+  const weatherAcc = move.accuracyInWeather;
+  const baseAccuracy = weatherAcc && weatherAcc.weather === activeWeather(state) ? weatherAcc.accuracy : move.accuracy;
+  return computeHitChance(baseAccuracy, attacker.accuracyStages.accuracy, effectiveDefenderEvasion, accuracyExtraMultiplier);
 }
