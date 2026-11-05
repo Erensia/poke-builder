@@ -260,11 +260,6 @@ function prepareObservations(input: AttackInferenceInput): { prepared: PreparedO
       errors.push("쓰러진 다단히트는 아직 지원하지 않아요");
       return;
     }
-    // 멀티스케일·섀도실드는 첫 타에만 듣는데 계산은 전 타에 곱하므로 다단히트에서는 뺀다
-    if (multiHitRange(obs.move) && defender.ability && getAbility(defender.ability)?.modifiers?.some((m) => m.condition?.defenderHpIsFull === true)) {
-      errors.push("풀피에서 첫 타만 줄이는 특성(멀티스케일 등)을 가진 내 포켓몬이 맞은 다단히트는 아직 지원하지 않아요");
-      return;
-    }
     const options = {
       multiHitCount: multiHitRange(obs.move) ? (obs.hits ?? multiHitRange(obs.move)!.min) : undefined,
       attackerStages,

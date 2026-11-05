@@ -5,7 +5,7 @@ import { eunNeun } from "@/lib/josa";
 import { hasVolatile } from "@/lib/volatileConditions";
 import { compareTurnOrder } from "@/lib/turnOrder";
 import { buildTurnOrderActor, itemsSuppressedByRoom, quickFirstChances } from "./turnOrderInputs";
-import { STRUGGLE_MOVE, activeWeather, applyForecastForm, applyMimicryForm, cloneSide, consumeItem, hasLivingReserve, isFainted, isForcedSwitchBlocked, opponentKey, sideOf, type BattleState } from "./state";
+import { STRUGGLE_MOVE, SWITCH_PASS_MOVE_ID, activeWeather, applyForecastForm, applyMimicryForm, cloneSide, consumeItem, hasLivingReserve, isFainted, isForcedSwitchBlocked, opponentKey, sideOf, type BattleState } from "./state";
 import { applyMegaEvolution, isTrappedFromSwitching, performSwitch } from "./switching";
 import { resolveAction } from "./resolveAction";
 import { finishTurn } from "./finishTurn";
@@ -150,7 +150,7 @@ export function runTurn(
 
   // 교체한 쪽은 이번 턴 행동하지 않는다. 아래 로직은 전부 Move 객체를 전제하므로, 교체 액션은
   // 절대 실행되지 않는 무해한 센티넬로 대체한다(순서 계산의 우선도만 0으로 참여).
-  const SWITCH_PASS_MOVE: Move = { ...STRUGGLE_MOVE, id: "__switch_pass__", name: "교체", category: "status", power: null };
+  const SWITCH_PASS_MOVE: Move = { ...STRUGGLE_MOVE, id: SWITCH_PASS_MOVE_ID, name: "교체", category: "status", power: null };
   const moveA: Move = actionA.kind === "move" ? actionA.move : SWITCH_PASS_MOVE;
   const moveB: Move = actionB.kind === "move" ? actionB.move : SWITCH_PASS_MOVE;
 
@@ -524,7 +524,9 @@ function runActionPhase(ctx: RunTurnContext): RunTurnOutcome | RunTurnPaused {
     ctx.actionIdx = i + 1;
     if (ctx.didSwitch[key]) continue; // 이번 턴 교체한 쪽은 행동하지 않는다(교체가 곧 그 턴 행동)
     if (isFainted(state[key])) continue; // 이미 쓰러진 쪽은 행동 못 함
-    if (isFainted(state[opponentKey(key)])) break; // 상대가 이미 쓰러졌으면 더 진행할 필요 없음
+    // 턴 시작 전부터 상대가 쓰러져 있었으면 더 진행하지 않는다. 먼저 움직인 상대가 이번 턴에 자기 반동 등으로 쓰러진 경우는 계속 진행한다
+    // — 자기 대상·필드 기술(칼춤·스텔스록 등)은 실행되고, 쓰러진 상대를 노리는 기술은 resolveAction이 "실패"로 처리한다(교체는 턴 끝).
+    if (isFainted(state[opponentKey(key)]) && actions.length === 0) break;
     // 포커스렌즈 판정용 — 이번 턴 order 기준으로 상대보다 늦게 움직이는 쪽인지
     const movesSecond = order[1] === key;
     const action = resolveAction(state, key, moves[key], random, movesSecond, moves[opponentKey(key)]);

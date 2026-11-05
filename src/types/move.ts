@@ -262,6 +262,10 @@ export interface Move {
   chargeHideType?: ChargeHideType;
   /** 솔라빔처럼 특정 날씨(쾌청)면 준비 턴 없이 1턴만에 발동하는 기술만 채운다. */
   chargeSkipWeather?: WeatherKind;
+  /** 눈보라(눈)·번개·폭풍(비)처럼 현재 날씨가 이 값이면 명중률 무시하고 반드시 맞는 기술만 채운다(computeBattleHitChance). */
+  alwaysHitsInWeather?: WeatherKind;
+  /** 폭풍처럼 특정 날씨(쾌청)면 기술의 명중률 수치 자체가 바뀌는 기술만 채운다(폭풍 쾌청=50). 명중·회피 랭크와 보정은 그대로 받는다. */
+  accuracyInWeather?: { weather: WeatherKind; accuracy: number };
   /**
    * 솔라빔처럼 "chargeSkipWeather가 아닌 날씨에는 위력이 절반"인 기술만 채운다(§1-10). 솔라블레이드는
    * 같은 차지-스킵 기술이지만 effect 텍스트에 이 조항이 없어 false(생략) — chargeSkipWeather와

@@ -56,6 +56,34 @@ export default async function ({ server, data, pts, mon, battle, check }) {
     const entered = sw.applySwitch(entry, "a", 1).nextState;
     check("같은 날씨 특성 등장 → 턴 유지", entered.weatherTurnsRemaining === 2, `남은턴=${entered.weatherTurnsRemaining}`);
   }
+  // ── 7.3 B1: 눈보라(눈)·번개·폭풍(비) 날씨 필중 ──
+  {
+    const hc = await server.ssrLoadModule("/src/lib/battle/hitChance.ts");
+    const chance = (moveId, weather, defenderAbilityId) => {
+      const st = battle([mon("한카리아스", [moveId])], [mon("핫삼", ["불꽃펀치"], defenderAbilityId)]);
+      st.weather = weather;
+      return hc.computeBattleHitChance({
+        state: st, attacker: st.a, defender: st.b, move: data.getMove(moveId),
+        attackerAbility: undefined, defenderAbility: defenderAbilityId ? data.getAbility(defenderAbilityId) : undefined,
+        attackerItem: undefined, defenderItem: undefined, attackerMovesSecond: false,
+      });
+    };
+    const cases = [["눈보라", "눈", "비"], ["번개", "비", "눈"], ["폭풍", "비", "눈"]];    for (const [id, own, other] of cases) {
+      const hit = chance(id, own);
+      const off = chance(id, other);
+      const none = chance(id, undefined);
+      const negated = chance(id, own, "날씨부정");
+      check(`${id}: ${own}이면 필중, 그 외 날씨·무날씨는 70%, 날씨부정이면 70%`, hit === null && Math.abs(off - 0.7) < 1e-9 && Math.abs(none - 0.7) < 1e-9 && Math.abs(negated - 0.7) < 1e-9, `필중=${hit} 다른날씨=${off} 무날씨=${none} 날씨부정=${negated}`);
+    }
+    // 번개·폭풍: 쾌청이면 명중률 50, 날씨부정이면 70. 눈보라는 쾌청 영향 없음(70)
+    for (const id of ["번개", "폭풍"]) {
+      const sun = chance(id, "쾌청");
+      const sunNegated = chance(id, "쾌청", "날씨부정");
+      check(`${id}: 쾌청이면 명중 50%, 날씨부정이면 70%`, Math.abs(sun - 0.5) < 1e-9 && Math.abs(sunNegated - 0.7) < 1e-9, `쾌청=${sun} 날씨부정=${sunNegated}`);
+    }
+    const blizzardSun = chance("눈보라", "쾌청");
+    check("눈보라: 쾌청에서도 70%(영향 없음)", Math.abs(blizzardSun - 0.7) < 1e-9, `쾌청=${blizzardSun}`);
+  }
   // ── 도감 특성 배선(ver.1.8 트랙 J): 갈지자걸음·총대장 ──
   {
     const hc = await server.ssrLoadModule("/src/lib/battle/hitChance.ts");

@@ -774,6 +774,11 @@
   max-width: 100%;
 }
 
+/* 7.3 B6: 나온 적 있는 포켓몬의 체력바 — 파티 칩 바(battle-party-chip-bar/-fill) 그대로, 폭만 이미지(40px)에 맞춘다 */
+.battle-roster-chip .battle-party-chip-bar {
+  width: 40px;
+}
+
 .battle-roster-chip.is-fainted {
   opacity: 0.45;
 }

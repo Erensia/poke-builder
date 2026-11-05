@@ -12,6 +12,7 @@ import { getItem, getMove } from "@/lib/data";
 import { applyStageDelta } from "@/lib/statStages";
 import { hitTriggerMatchesMove } from "@/lib/abilityHitTriggers";
 import { critChance } from "@/lib/accuracyCrit";
+import { defenseChangeWhenHpNotFull } from "@/lib/abilityModifiers";
 import { burnDamageMultiplier, ignoresBurnAttackPenalty, statusedAttackBoost, inflictStatus, isImmuneToStatus } from "@/lib/statusConditions";
 import { hasVolatile, inflictVolatile } from "@/lib/volatileConditions";
 import { DAMAGE_ROLL_MIN_PERCENT, DAMAGE_ROLL_STEP_COUNT } from "@/lib/damageFormula";
@@ -121,7 +122,7 @@ interface HitCtx {
   seedSowerField: FieldKind | undefined;
   terrainSeedMessages: string[];
   hidingBypassMultiplier: number;
-  resolveHit: (hitMove: Move) => { damage: number; isCritical: boolean; };
+  resolveHit: (hitMove: Move, hpFullEffectLost?: boolean) => { damage: number; isCritical: boolean; };
   enduredItemName: string | undefined;
   enduredAbilityName: string | undefined;
   enduredProtectMoveName: string | undefined;
@@ -163,7 +164,14 @@ function defineResolveHit(c: HitCtx) {
    * 급소를 타수마다 따로 굴린다(사용자 확인) — highCritRatio/alwaysCrit는 항상 원본 기술
    * (effectiveMove) 기준으로 판정하고, hitMove는 트리플악셀처럼 타수별 위력만 다를 때 쓴다.
    */
-  c.resolveHit = function resolveHit(hitMove: Move): { damage: number; isCritical: boolean } {
+  c.resolveHit = function resolveHit(hitMove: Move, hpFullEffectLost = false): { damage: number; isCritical: boolean } {
+    // 멀티스케일류(풀피일 때만 듣는 방어 특성)는 첫 타만 듣는다. 방어 배율은 행동 시작(풀피) 기준으로 한 번 계산돼 있으므로,
+    // 풀피로 시작했는데 이번 타 전에 HP가 깎였으면(hpFullEffectLost) 그 몫을 뺀다.
+    const hpLost = hpFullEffectLost
+      ? defenseChangeWhenHpNotFull(c.defenderAbility, c.effectiveMove, c.defender.status.condition !== null, c.state.field)
+      : { multiplier: 1, finalMultiplier: 1 };
+    const abilityDefenseMultiplier = c.abilityDefenseMultiplier * hpLost.multiplier;
+    const finalDefenseMultiplier = c.finalDefenseMultiplier * hpLost.finalMultiplier;
     // 대운: 급소율 카운터가 상시 +raisesCritStageBy(1). 조가비갑옷/전투무장: 방어측이면 급소 자체가 안 뜬다(alwaysCrit 포함).
     const critStageForHit =
       c.attacker.critStage +
@@ -277,14 +285,14 @@ function defineResolveHit(c: HitCtx) {
       defenderStages: defenderStagesForDamage,
       // 방어 스탯 단계 배율(두꺼운지방 등). 하드록·필터는 최종 단계라 뺀다(2.4 B3).
       bulkMultiplier:
-        (c.abilityDefenseMultiplier / c.finalDefenseMultiplier) *
+        (abilityDefenseMultiplier / finalDefenseMultiplier) *
         // 모래바람 바위 특방·눈 얼음 방어 1.5배(날씨 무효 특성이면 activeWeather가 없음)
         getWeatherDefenseMultiplier(activeWeather(c.state), c.defender.types, contactDefenseStat),
       // 최종 보정 단계(상성 뒤): 도구(생명의구슬·달인의띠)·화상 ×데미지, 하드록·반감 열매·벽·대검돌격(방어측 약점 상태면 받는 데미지 2배)은
       // 내구력 배율 형태라 역수로 곱한다.
       finalMultiplier:
         (itemFinalMultiplier * burnMultiplier) /
-        (c.finalDefenseMultiplier * berryResult.bulkMultiplier * screenMultiplier * (c.defender.glaiveRushVulnerable ? 0.5 : 1)),
+        (finalDefenseMultiplier * berryResult.bulkMultiplier * screenMultiplier * (c.defender.glaiveRushVulnerable ? 0.5 : 1)),
       isCritical: critical,
       // 스나이퍼: 급소 데미지 배율을 2.25로 올린다(기본 1.5).
       critDamageMultiplier: c.attackerAbility?.critDamageMultiplier,
@@ -741,6 +749,7 @@ function resolveMainHit(c: HitCtx) {
         : rollMultiHitCount(c.effectiveMove.minHits, c.effectiveMove.maxHits, c.random);
 
     let landed = 0;
+    const startedAtFullHp = c.defender.currentHp === c.defender.maxHp;
     c.perHitLog = [];
     for (let i = 0; i < totalHits; i++) {
       if (i > 0 && perHitAccuracyCheck) {
@@ -750,7 +759,7 @@ function resolveMainHit(c: HitCtx) {
       const hitPower = c.effectiveMove.multiHitPowers?.[i] ?? c.effectiveMove.power;
       if (hitPower === null || hitPower === undefined) break;
       const hitMove = c.effectiveMove.multiHitPowers ? { ...c.effectiveMove, power: hitPower } : c.effectiveMove;
-      const hitResult = c.resolveHit(hitMove);
+      const hitResult = c.resolveHit(hitMove, startedAtFullHp && c.defender.currentHp < c.defender.maxHp);
       c.damage += hitResult.damage;
       if (hitResult.isCritical) c.isCritical = true;
       landed += 1;
