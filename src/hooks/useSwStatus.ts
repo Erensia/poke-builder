@@ -2,10 +2,10 @@ import { useEffect, useState } from "react";
 import { swDisabledReason } from "../lib/registerSw";
 
 /** 오프라인 캐시(서비스 워커) 상태 — 푸터에 보여 준다(6.5 P1). hidden은 개발 서버·미지원 브라우저라 표시하지 않는다 */
-export type SwStatus = "hidden" | "off-flag" | "off-build" | "installing" | "ready" | "failed";
+type SwStatus = "hidden" | "off-flag" | "off-build" | "installing" | "ready" | "failed";
 
 /** 스프라이트 미리 받기 진행(서비스 워커가 알려 준다). 아직 소식이 없으면 null */
-export type SwWarm = { done: number; total: number } | null;
+type SwWarm = { done: number; total: number } | null;
 
 export function useSwStatus(): { status: SwStatus; warm: SwWarm } {
   const reason = swDisabledReason();
