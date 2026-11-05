@@ -1,8 +1,20 @@
-import { Fragment, useLayoutEffect, useRef, useState } from "react";
+import { Fragment } from "react";
 import { BattleSetupCard } from "../BattleSetupCard";
 import { InfoTooltip } from "../InfoTooltip";
 import { useBattleSetup } from "../../hooks/useBattleSetup";
 import { SLOT_INDICES, type PickerState, type Side, type SlotIndex } from "./shared";
+import { useClashMotion, useExpandedSlots, useSlotDnd } from "./useSetupBoardUi";
+
+/** 제목 옆 ⓘ 설명 — 버튼 줄이 꽉 차서 버튼마다 ⓘ를 둘 수 없고, 터치에는 호버가 없어 버튼별 툴팁 대신 한 곳에 모은다(랜덤 구축은 저장 샘플이 있을 때만 보인다) */
+const loadButtonsHelp = (side: Side, hasSlotPresets: boolean) => {
+  const who = side === "a" ? "내 파티" : "상대 파티";
+  return (
+    `무작위 샘플: ${who}를 기본 제공 샘플 파티 중 무작위 하나로 바꿉니다.` +
+    (hasSlotPresets
+      ? `\n랜덤 구축: 저장해 둔 포켓몬 샘플에서 6마리를 무작위로 뽑아 ${who}를 만듭니다(중복 포켓몬·도구 없음, 메가진화 포켓몬은 최대 2마리). 저장 샘플이 모자라면 기본 제공 샘플로 채웁니다.`
+      : "")
+  );
+};
 
 /**
  * 빌드(6슬롯) 화면 — 양쪽 파티를 편성하는 단계(§16). `BattleLogPage`가 쥔 `setup`(훅
@@ -55,107 +67,26 @@ export function BattleSetupScreen({
   /** 대전 시작이 막혔을 때 파티 문제 대신 보여 줄 이유(없으면 기본 안내) */
   proceedBlockedReason?: string;
 }) {
-  // 제목 옆 ⓘ 설명 — 버튼 줄이 꽉 차서 버튼마다 ⓘ를 둘 수 없고, 터치에는 호버가 없어 버튼별 툴팁 대신 한 곳에 모은다(랜덤 구축은 저장 샘플이 있을 때만 보인다)
-  const loadButtonsHelp = (side: Side) => {
-    const who = side === "a" ? "내 파티" : "상대 파티";
-    return (
-      `무작위 샘플: ${who}를 기본 제공 샘플 파티 중 무작위 하나로 바꿉니다.` +
-      (hasSlotPresets
-        ? `\n랜덤 구축: 저장해 둔 포켓몬 샘플에서 6마리를 무작위로 뽑아 ${who}를 만듭니다(중복 포켓몬·도구 없음, 메가진화 포켓몬은 최대 2마리). 저장 샘플이 모자라면 기본 제공 샘플로 채웁니다.`
-        : "")
-    );
-  };
   const sideCtls = (side: Side) => (side === "a" ? setup.a : setup.b);
   const slotCtl = (side: Side, i: SlotIndex) => sideCtls(side)[i];
 
-  // 드래그앤드롭으로 슬롯 순서 변경(ver.1.6 §4-2) — PartyBoard와 동일한 패턴. 편(side)이
-  // 다르면 맞바꾸지 않는다(내 파티 ↔ 상대 파티 사이 드래그는 의미가 없다).
-  const [draggedSlot, setDraggedSlot] = useState<{ side: Side; index: SlotIndex } | null>(null);
-  const [dragOverSlot, setDragOverSlot] = useState<{ side: Side; index: SlotIndex } | null>(null);
-
-  function handleSlotDragStart(side: Side, index: SlotIndex) {
-    setDraggedSlot({ side, index });
-  }
-  function handleSlotDragOver(side: Side, index: SlotIndex) {
-    if (!draggedSlot || draggedSlot.side !== side || draggedSlot.index === index) return;
-    setDragOverSlot({ side, index });
-  }
-  function handleSlotDrop(side: Side, index: SlotIndex) {
-    if (draggedSlot && draggedSlot.side === side) setup.reorderSlots(side, draggedSlot.index, index);
-    setDraggedSlot(null);
-    setDragOverSlot(null);
-  }
-  function handleSlotDragEnd() {
-    setDraggedSlot(null);
-    setDragOverSlot(null);
-  }
-
-  // 압축 뷰(ver.1.6 §4-3) — 기본은 압축(프로필 사진+이름만), 펼친 슬롯만 이 집합에 담는다.
-  const [expandedSlots, setExpandedSlots] = useState<Set<string>>(new Set());
-  const slotKey = (side: Side, i: SlotIndex) => `${side}-${i}`;
-  function toggleExpanded(side: Side, i: SlotIndex) {
-    const key = slotKey(side, i);
-    setExpandedSlots((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-  }
+  // 슬롯 드래그 순서 변경·압축 뷰·랭크 시작 충돌 모션은 useSetupBoardUi.ts의 훅이다(호출 순서는 그대로)
+  const dnd = useSlotDnd(setup.reorderSlots);
+  const expand = useExpandedSlots();
 
   // VS 아래 안내는 "이유가 분명하고 사용자가 고칠 수 있는 것"만 보인다(랭크 시작 전·기술 없는 슬롯). 빈 슬롯 때문에 막힌 것은 슬롯이 비어 보여서 따로 말하지 않는다.
   const hintText = proceedBlockedReason ?? (hasMovelessSlot ? "기술을 배정하지 않은 포켓몬이 있습니다" : null);
   const showHint = !canProceed && hintText !== null;
   const blockedReason = hintText ?? "양쪽 파티를 먼저 완성하세요"; // VS 버튼의 접근성 이름 전용(화면에는 보이지 않는다)
 
-  // 랭크 "배틀 시작" 연출(6.4 U2) — 1초 버전(0.8초 버전의 앞부분 + 충돌 뒤 잦아드는 꼬리): 시작 안내가 떠 있다가 VS가 가능해지는 순간, 양쪽 파티가 바깥으로 빠르게 당겨졌다가 → 점점 빨라져 제자리로 돌진 → 쾅(찌그러짐 + VS 펀치) → 튕겨 나와 안착한다.
-  // 레이아웃은 그대로 두고 transform만 쓴다(열 폭이 변하면 제목 줄의 AI 알약이 다시 줄바꿈된다). 처음부터 가능한 채로 열 때·자유 대전의 파티 완성 때는 재생하지 않는다. 세로 배치(모바일)는 가로 이동이 보이지 않아 건너뛴다.
-  const colEls = useRef<(HTMLDivElement | null)[]>([]);
-  const vsEl = useRef<HTMLButtonElement>(null);
-  const wasReady = useRef(canProceed);
-  const waitedForRank = useRef(false); // 직전에 랭크 시작 안내가 떠 있었는지
-  useLayoutEffect(() => {
-    if (proceedBlockedReason) waitedForRank.current = true;
-    if (canProceed === wasReady.current) return;
-    wasReady.current = canProceed;
-    if (!canProceed) return;
-    const played = waitedForRank.current;
-    waitedForRank.current = false;
-    if (!played || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    colEls.current.forEach((el, i) => {
-      if (!el) return;
-      const out = i === 0 ? -1 : 1; // 바깥쪽 방향(왼쪽 열은 왼쪽, 오른쪽 열은 오른쪽)
-      el.style.transformOrigin = i === 0 ? "right center" : "left center"; // 서로 맞닿는 쪽 모서리 기준으로 찌그러진다
-      el.animate(
-        [
-          { transform: "none", easing: "ease-out" }, // 0~0.17s: 바깥으로 빠르게 당겨진다
-          { offset: 0.17, transform: `translateX(${out * 26}px)`, easing: "cubic-bezier(0.6, 0, 1, 0.4)" }, // 0.17~0.58s: 점점 빨라져 돌진
-          { offset: 0.58, transform: "translateX(0) scaleX(0.94)", easing: "ease-out" }, // 0.58s: 쾅 — 맞닿는 쪽으로 찌그러진다
-          { offset: 0.69, transform: `translateX(${out * 9}px) scaleX(1.025)`, easing: "ease-in-out" }, // 튕겨 나온다
-          { offset: 0.8, transform: `translateX(${-out * 2}px) scaleX(0.98)`, easing: "ease-in-out" }, // 한 번 더 눌렸다가
-          { offset: 0.9, transform: `translateX(${out * 3}px) scaleX(1.008)`, easing: "ease-in-out" }, // 살짝 반동하며
-          { transform: "none" }, // 잦아든다
-        ],
-        { duration: 1000, easing: "linear" },
-      );
-    });
-    const vs = vsEl.current;
-    if (!vs) return;
-    vs.classList.remove("is-hit");
-    void vs.offsetWidth; // 클래스를 뗐다 붙여 애니메이션을 처음부터 다시 재생
-    vs.classList.add("is-hit");
-    const t = setTimeout(() => vs.classList.remove("is-hit"), 1300);
-    return () => clearTimeout(t);
-  }, [canProceed, proceedBlockedReason]);
+  const [columnRef, vsEl] = useClashMotion(canProceed, proceedBlockedReason);
 
   return (
     <div className="battle-setup-board">
       {(["a", "b"] as const).map((side) => (
         <Fragment key={side}>
           <div
-            ref={(el) => {
-              colEls.current[side === "a" ? 0 : 1] = el;
-            }}
+            ref={columnRef(side === "a" ? 0 : 1)}
             className={`battle-setup-column${side === "b" && opponentLocked ? " is-locked" : ""}`}
             inert={side === "b" && opponentLocked}
           >
@@ -195,7 +126,7 @@ export function BattleSetupScreen({
               )}
             </div>
             <div className="battle-setup-column-title">
-              <InfoTooltip text={loadButtonsHelp(side)}>{side === "a" ? "내 파티" : "상대 파티"}</InfoTooltip>{" "}
+              <InfoTooltip text={loadButtonsHelp(side, hasSlotPresets)}>{side === "a" ? "내 파티" : "상대 파티"}</InfoTooltip>{" "}
               <span className="battle-setup-column-hint">6마리까지 빌드 · 4마리 이상이면 3마리 선출</span>
               {side === "b" && (
                 <label className="toggle-pill tap-target battle-ai-toggle">
@@ -242,15 +173,15 @@ export function BattleSetupScreen({
                 hasSamples={hasSlotPresets}
                 onSaveAsSample={() => onSaveSlotAsSample(side, i)}
                 onOpenSamplePicker={() => onOpenPicker({ kind: "slotPresets", side, slotIndex: i })}
-                expanded={expandedSlots.has(slotKey(side, i))}
-                onToggleExpand={() => toggleExpanded(side, i)}
-                isDragging={draggedSlot?.side === side && draggedSlot.index === i}
-                isDragOver={dragOverSlot?.side === side && dragOverSlot.index === i}
+                expanded={expand.isExpanded(side, i)}
+                onToggleExpand={() => expand.toggle(side, i)}
+                isDragging={dnd.isDragging(side, i)}
+                isDragOver={dnd.isDragOver(side, i)}
                 concealBuild={side === "b" && opponentLocked}
-                onDragStart={() => handleSlotDragStart(side, i)}
-                onDragOverSlot={() => handleSlotDragOver(side, i)}
-                onDrop={() => handleSlotDrop(side, i)}
-                onDragEnd={handleSlotDragEnd}
+                onDragStart={() => dnd.onDragStart(side, i)}
+                onDragOverSlot={() => dnd.onDragOver(side, i)}
+                onDrop={() => dnd.onDrop(side, i)}
+                onDragEnd={dnd.onDragEnd}
               />
             ))}
           </div>
