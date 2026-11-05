@@ -41,6 +41,134 @@ interface SamplePartiesModalProps {
   onImportMySamples: (samples: Omit<SamplePartyPreset, "id">[]) => number;
 }
 
+/** "내 샘플" 탭의 내보내기·가져오기 줄. 안내 문구(notice) 상태는 탭을 오가도 남도록 부모가 쥔다 */
+function MySamplesBackup({
+  canExport,
+  notice,
+  onExport,
+  onImport,
+}: {
+  canExport: boolean;
+  notice: string;
+  onExport: () => void;
+  onImport: (e: ChangeEvent<HTMLInputElement>) => void;
+}) {
+  return (
+    <div className="sample-party-backup">
+      <button type="button" onClick={onExport} disabled={!canExport}>
+        내보내기
+      </button>
+      <label>
+        가져오기
+        <input type="file" accept=".json,application/json" hidden onChange={onImport} />
+      </label>
+      {notice && <span role="status">{notice}</span>}
+    </div>
+  );
+}
+
+/** "내 샘플" 탭의 "이 진영을 내 샘플로 저장" 폼. 입력값(draft)은 탭을 오가도 남도록 부모가 쥔다 */
+function MySampleSaveForm({
+  targetLabel,
+  draft,
+  setDraft,
+  filledCount,
+  totalCount,
+  canSave,
+  onSave,
+}: {
+  targetLabel: string;
+  draft: SampleFields;
+  setDraft: (draft: SampleFields) => void;
+  filledCount: number;
+  totalCount: number;
+  canSave: boolean;
+  onSave: () => void;
+}) {
+  return (
+    <div className="sample-party-save">
+      <strong>{targetLabel}를 내 샘플로 저장</strong>
+      <div className="preset-save-row">
+        <input type="text" className="preset-save-input" aria-label="이름" placeholder="이름" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
+        <select className="preset-save-input sample-party-save-group" value={draft.group} onChange={(e) => setDraft({ ...draft, group: e.target.value as SamplePartyPreset["group"] })} aria-label="분류">
+          <option value="textbook">기초샘플</option>
+          <option value="real">심화샘플</option>
+        </select>
+      </div>
+      <div className="preset-save-row">
+        <input type="text" className="preset-save-input" aria-label="성향(예: 날씨(쾌청))" placeholder="성향(예: 날씨(쾌청))" value={draft.style} onChange={(e) => setDraft({ ...draft, style: e.target.value })} />
+      </div>
+      <div className="preset-save-row">
+        <input
+          type="text"
+          className="preset-save-input"
+          aria-label="설명" placeholder="설명"
+          value={draft.description}
+          onChange={(e) => setDraft({ ...draft, description: e.target.value })}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") onSave();
+          }}
+        />
+        <button type="button" className="preset-save-button" onClick={onSave} disabled={!canSave}>
+          저장
+        </button>
+      </div>
+      {filledCount < totalCount && (
+        <span className="sample-party-save-note">6마리를 모두 채워야 저장할 수 있어요(지금 {filledCount}마리).</span>
+      )}
+    </div>
+  );
+}
+
+/** 샘플 목록의 한 줄 — 이름·분류·성향·설명·포켓몬 아이콘과 불러오기(내 샘플이면 삭제) 버튼 */
+function SampleItem({ sample, isMine, onLoad, onDelete }: { sample: SamplePartyPreset; isMine: boolean; onLoad: () => void; onDelete: () => void }) {
+  return (
+    <li className="preset-item sample-party-item">
+      <div className="preset-item-info">
+        <span className="preset-item-name">
+          {sample.name}
+          <span className={`sample-party-tag is-${sample.group}`}>{GROUP_LABEL[sample.group]}</span>
+          <span className="sample-party-style">{sample.style}</span>
+        </span>
+        <span className="sample-party-desc">{sample.description}</span>
+        <span className="sample-party-mons">
+          {sample.slots.map((slot) => {
+            const pokemon = getPokemon(slot.pokemonId);
+            if (!pokemon) return null;
+            return (
+              <span key={slot.pokemonId} className="sample-party-mon" title={`${pokemon.name} · ${slot.item ?? "도구 없음"}`}>
+                <PokemonAvatarWithItem
+                  pokemon={pokemon}
+                  size={34}
+                  radius={9}
+                  itemId={slot.item}
+                  form={{
+                    formVariant: slot.formVariant,
+                    sizeForm: slot.sizeForm,
+                    cosmeticForm: slot.cosmeticForm,
+                    activeMegaForm: slot.activeMegaForm,
+                    item: slot.item,
+                  }}
+                />
+              </span>
+            );
+          })}
+        </span>
+      </div>
+      <div className="preset-item-actions tap-targets">
+        <button type="button" onClick={onLoad}>
+          불러오기
+        </button>
+        {isMine && (
+          <button type="button" onClick={onDelete}>
+            삭제
+          </button>
+        )}
+      </div>
+    </li>
+  );
+}
+
 /**
  * 기본 제공 샘플 파티 목록(ver.2.1 B). 기본 샘플은 읽기 전용 데이터라 저장·이름변경·삭제가 없다 —
  * 불러오면 그 진영에만 사본이 채워지고, 사용자가 저장한 파티는 건드리지 않는다. "내 샘플" 탭만 사용자가
@@ -117,6 +245,10 @@ export function SamplePartiesModal({
     onClose();
   }
 
+  function handleDelete(sample: SamplePartyPreset) {
+    if (window.confirm(`"${sample.name}"${eulReul(sample.name)} 삭제할까요?`)) onDeleteMySample(sample.id);
+  }
+
   return (
     <Modal title="샘플 파티" onClose={onClose}>
       <div className="sample-party-filters tap-targets" role="tablist" aria-label="샘플 파티 종류">
@@ -139,103 +271,23 @@ export function SamplePartiesModal({
           : "심화샘플은 자주 볼 법한 강한 조합, 기초샘플은 한 가지 전술을 순수하게 보여 주는 표본이에요. 불러와서 고쳐도 원본은 바뀌지 않아요."}
       </p>
 
-      {isMine && (
-        <div className="sample-party-backup">
-          <button type="button" onClick={handleExport} disabled={mySamples.length === 0}>
-            내보내기
-          </button>
-          <label>
-            가져오기
-            <input type="file" accept=".json,application/json" hidden onChange={handleImport} />
-          </label>
-          {notice && <span role="status">{notice}</span>}
-        </div>
-      )}
+      {isMine && <MySamplesBackup canExport={mySamples.length > 0} notice={notice} onExport={handleExport} onImport={handleImport} />}
 
       {isMine && (
-        <div className="sample-party-save">
-          <strong>{loadTargetLabel}를 내 샘플로 저장</strong>
-          <div className="preset-save-row">
-            <input type="text" className="preset-save-input" aria-label="이름" placeholder="이름" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
-            <select className="preset-save-input sample-party-save-group" value={draft.group} onChange={(e) => setDraft({ ...draft, group: e.target.value as SamplePartyPreset["group"] })} aria-label="분류">
-              <option value="textbook">기초샘플</option>
-              <option value="real">심화샘플</option>
-            </select>
-          </div>
-          <div className="preset-save-row">
-            <input type="text" className="preset-save-input" aria-label="성향(예: 날씨(쾌청))" placeholder="성향(예: 날씨(쾌청))" value={draft.style} onChange={(e) => setDraft({ ...draft, style: e.target.value })} />
-          </div>
-          <div className="preset-save-row">
-            <input
-              type="text"
-              className="preset-save-input"
-              aria-label="설명" placeholder="설명"
-              value={draft.description}
-              onChange={(e) => setDraft({ ...draft, description: e.target.value })}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") handleSave();
-              }}
-            />
-            <button type="button" className="preset-save-button" onClick={handleSave} disabled={!canSave}>
-              저장
-            </button>
-          </div>
-          {filledSlots.length < currentSlots.length && (
-            <span className="sample-party-save-note">6마리를 모두 채워야 저장할 수 있어요(지금 {filledSlots.length}마리).</span>
-          )}
-        </div>
+        <MySampleSaveForm
+          targetLabel={loadTargetLabel}
+          draft={draft}
+          setDraft={setDraft}
+          filledCount={filledSlots.length}
+          totalCount={currentSlots.length}
+          canSave={canSave}
+          onSave={handleSave}
+        />
       )}
 
       <ul className="preset-list">
         {shown.map((sample) => (
-          <li key={sample.id} className="preset-item sample-party-item">
-            <div className="preset-item-info">
-              <span className="preset-item-name">
-                {sample.name}
-                <span className={`sample-party-tag is-${sample.group}`}>{GROUP_LABEL[sample.group]}</span>
-                <span className="sample-party-style">{sample.style}</span>
-              </span>
-              <span className="sample-party-desc">{sample.description}</span>
-              <span className="sample-party-mons">
-                {sample.slots.map((slot) => {
-                  const pokemon = getPokemon(slot.pokemonId);
-                  if (!pokemon) return null;
-                  return (
-                    <span key={slot.pokemonId} className="sample-party-mon" title={`${pokemon.name} · ${slot.item ?? "도구 없음"}`}>
-                      <PokemonAvatarWithItem
-                        pokemon={pokemon}
-                        size={34}
-                        radius={9}
-                        itemId={slot.item}
-                        form={{
-                          formVariant: slot.formVariant,
-                          sizeForm: slot.sizeForm,
-                          cosmeticForm: slot.cosmeticForm,
-                          activeMegaForm: slot.activeMegaForm,
-                          item: slot.item,
-                        }}
-                      />
-                    </span>
-                  );
-                })}
-              </span>
-            </div>
-            <div className="preset-item-actions tap-targets">
-              <button type="button" onClick={() => handleLoad(sample)}>
-                불러오기
-              </button>
-              {isMine && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (window.confirm(`"${sample.name}"${eulReul(sample.name)} 삭제할까요?`)) onDeleteMySample(sample.id);
-                  }}
-                >
-                  삭제
-                </button>
-              )}
-            </div>
-          </li>
+          <SampleItem key={sample.id} sample={sample} isMine={isMine} onLoad={() => handleLoad(sample)} onDelete={() => handleDelete(sample)} />
         ))}
         {shown.length === 0 && <li className="preset-list-empty">{isMine && !q ? "저장한 내 샘플이 없어요." : "검색 결과가 없습니다."}</li>}
       </ul>
