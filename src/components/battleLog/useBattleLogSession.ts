@@ -12,10 +12,10 @@ import type { BattleVideo } from "../../types/battleVideo";
 import { getPokemon, getMove, SAMPLE_PARTIES } from "../../lib/data";
 import { eunNeun } from "../../lib/josa";
 import { applySwitch } from "../../lib/battle/switching";
-import { createBattleState, STRUGGLE_MOVE, type BattleState } from "../../lib/battle/state";
+import type { BattleState } from "../../lib/battle/state";
 import { forcedLockedAction } from "../../lib/battle/lockedAction";
 import { runTurn, resumeTurn } from "../../lib/battle/runTurn";
-import type { FighterKey, TurnAction, TurnResult } from "../../types/battle";
+import type { TurnAction, TurnResult } from "../../types/battle";
 import { chooseAiForcedSwitch, chooseAiSelection, sampleRiskAversion } from "../../lib/battle/ai";
 import { RANK_AI_PROFILES } from "../../lib/battle/ai/rankProfile";
 import { APP_DECISION_PARAMS, chooseAiActionAsync, prewarmAiWorker } from "../../lib/battle/ai/aiClient";
@@ -26,6 +26,7 @@ import { useAiMemory } from "../../hooks/useAiMemory";
 import type { PartySlot, PartySlots, SamplePartyPreset } from "../../types/party";
 import { SLOT_INDICES, type InputModeState, type MegaDeclaredState, type PendingForcedSwitchState, type PendingPivotState, type PickerState, type SelectedState, type Side, type SlotIndex } from "./shared";
 import { battleRules } from "./battleRules";
+import { buildableIndicesOf, buildTurnActions, createStateFromParties, forcedSwitchLogEntry, movelessIndicesOf, movelessWarningOf, type SlotAt } from "./battleSessionHelpers";
 
 /** 배틀타워(free)와 랭크배틀(rank)이 같은 화면을 쓴다 — rank는 상대가 자동·AI 고정이고 결과가 랭크에 반영된다 */
 export type BattleMode = "free" | "rank";
@@ -89,6 +90,7 @@ export function useBattleLogSession(mode: BattleMode) {
 
   const sideCtls = (side: Side) => (side === "a" ? setup.a : setup.b);
   const slotCtl = (side: Side, i: SlotIndex) => sideCtls(side)[i];
+  const slotAt: SlotAt = (side, i) => slotCtl(side, i).slot;
 
   /** 기본 제공 샘플 파티(ver.2.1 B)를 한 진영에 사본으로 채운다 — 원본 데이터와 사용자 저장 파티는 그대로 */
   function loadSample(side: Side, sample: SamplePartyPreset) {
@@ -123,37 +125,11 @@ export function useBattleLogSession(mode: BattleMode) {
   }
 
 
-  /** 이 편에서 포켓몬이 있고 기술이 1개 이상인 빌드 슬롯 인덱스(빌드 순서). 이게 곧 "선출 가능" 후보. */
-  const buildableIndices = (side: Side): SlotIndex[] =>
-    SLOT_INDICES.filter((i) => {
-      const s = slotCtl(side, i).slot;
-      return s !== null && s.moves.some((m) => m !== null);
-    });
-
-  /**
-   * 포켓몬은 골랐는데 기술을 하나도 안 배정한 슬롯(§4-2). buildableIndices가 이런 슬롯을
-   * "선출 가능" 후보에서 조용히 빼버려서, 배턴터치·유턴처럼 자체 교체를 하려는 기술이 예비가
-   * 없는 것처럼 취급돼 아무 안내 없이 무산되는 문제로 이어졌다 — 대전 시작 시점에 미리 막아서
-   * 애초에 그 상태로 대전에 들어가지 못하게 한다.
-   */
-  const movelessIndices = (side: Side): SlotIndex[] =>
-    SLOT_INDICES.filter((i) => {
-      const s = slotCtl(side, i).slot;
-      return s !== null && s.moves.every((m) => m === null);
-    });
-
-  /**
-   * movelessIndices가 하나라도 있으면 그 편 소속 포켓몬 이름만 모아 그 편 전용 경고 문구를
-   * 만든다(양쪽을 한 줄로 합치지 않음 — 각자 파티 상단에 표시하려면 편별로 갈라져 있어야 함).
-   */
-  const movelessWarningFor = (side: Side): string | null => {
-    const names = movelessIndices(side).map((i) => {
-      const s = slotCtl(side, i).slot;
-      return s ? (getPokemon(s.pokemonId)?.name ?? "포켓몬") : "포켓몬";
-    });
-    if (names.length === 0) return null;
-    return `${names.join(", ")}에게 기술을 최소 1개 배정해야 대전을 시작할 수 있습니다.`;
-  };
+  /** 이 편에서 포켓몬이 있고 기술이 1개 이상인 빌드 슬롯 인덱스(빌드 순서). 이게 곧 "선출 가능" 후보. 설명은 battleSessionHelpers.ts */
+  const buildableIndices = (side: Side): SlotIndex[] => buildableIndicesOf(slotAt, side);
+  const movelessIndices = (side: Side): SlotIndex[] => movelessIndicesOf(slotAt, side);
+  /** 기술 없는 슬롯이 있는 편 전용 경고 문구(없으면 null) */
+  const movelessWarningFor = (side: Side): string | null => movelessWarningOf(slotAt, side);
 
   /** 양쪽 중 어느 편이든 기술 없는 슬롯이 있으면 true — canProceed·VS 버튼 문구용 */
   const hasMovelessSlot = (["a", "b"] as const).some((side) => movelessIndices(side).length > 0);
@@ -182,6 +158,17 @@ export function useBattleLogSession(mode: BattleMode) {
   // AI 편 선출은 자동(비공개)이라, 내 편이 고를 게 없으면 바로 대전
   const proceedLabel = selectsA || (needsSelection("b") && !aiOpponent) ? "다음 (선출)" : "대전 시작";
 
+  /** 대전을 시작하거나 셋업으로 돌아갈 때 같이 비우는 턴 입력 상태 */
+  function clearTurnState() {
+    setSelected({ a: null, b: null });
+    setInputMode({ a: "move", b: "move" });
+    setPendingForcedSwitch(null);
+    setPendingPivot(null);
+    setLockWarning(null);
+    setSelecting(false);
+    setMegaDeclared({ a: false, b: false });
+  }
+
   /** 선출된 빌드 슬롯 인덱스 목록으로 배틀 상태를 만들고 대전을 시작한다 */
   function startBattleWith(sel: { a: SlotIndex[]; b: SlotIndex[] }) {
     const partyOf = (side: Side) =>
@@ -195,21 +182,11 @@ export function useBattleLogSession(mode: BattleMode) {
     }
     // 랭크배틀: 이탈 정산용 표시와 시즌 기록용 내 빌드(6슬롯)를 남긴다. 선출은 판마다 새로 고른다
     if (rank.active) rank.begin(SLOT_INDICES.map((i) => slotCtl("a", i).slot) as PartySlots);
-    const movesOf = (s: PartySlot) => s.moves.filter((id): id is string => id !== null).map((id) => getMove(id)!);
-    const state = createBattleState({
-      a: { slots: aParty, movesList: aParty.map(movesOf) },
-      b: { slots: bParty, movesList: bParty.map(movesOf) },
-    });
+    const state = createStateFromParties(aParty, bParty);
     setPartySlots({ a: aParty, b: bParty });
     setBattleState(state);
     setLog([]);
-    setSelected({ a: null, b: null });
-    setInputMode({ a: "move", b: "move" });
-    setPendingForcedSwitch(null);
-    setPendingPivot(null);
-    setLockWarning(null);
-    setSelecting(false);
-    setMegaDeclared({ a: false, b: false });
+    clearTurnState();
     setAiSide(aiOpponent ? "b" : null);
     if (aiOpponent) prewarmAiWorker();
     setAiRiskAversion(sampleRiskAversion());
@@ -225,13 +202,7 @@ export function useBattleLogSession(mode: BattleMode) {
    */
   function aiSelectionFor(side: Side): SlotIndex[] {
     const buildsOf = (s: Side) => buildableIndices(s).map((i) => slotCtl(s, i).slot).filter((x): x is PartySlot => x !== null);
-    const movesOf = (slot: PartySlot) => slot.moves.filter((id): id is string => id !== null).map((id) => getMove(id)!);
-    const aBuilds = buildsOf("a");
-    const bBuilds = buildsOf("b");
-    const full = createBattleState({
-      a: { slots: aBuilds, movesList: aBuilds.map(movesOf) },
-      b: { slots: bBuilds, movesList: bBuilds.map(movesOf) },
-    });
+    const full = createStateFromParties(buildsOf("a"), buildsOf("b"));
     const pool = buildableIndices(side);
     // 5.5 F1 — 샘플의 fixedPicks는 풀 위치로 바꿔 넘긴다(chooseAiSelection의 fixed는 파티 인덱스). 남은 자리는 AI가 고른다
     const fixed = fixedPickIndices(side).map((i) => pool.indexOf(i));
@@ -285,14 +256,8 @@ export function useBattleLogSession(mode: BattleMode) {
     setBattleState(null);
     setLog([]);
     setPartySlots({ a: [], b: [] });
-    setSelected({ a: null, b: null });
-    setInputMode({ a: "move", b: "move" });
-    setPendingForcedSwitch(null);
-    setPendingPivot(null);
-    setLockWarning(null);
-    setSelecting(false);
+    clearTurnState();
     setSelection({ a: [], b: [] });
-    setMegaDeclared({ a: false, b: false });
     setAiSide(null);
   }
 
@@ -345,20 +310,7 @@ export function useBattleLogSession(mode: BattleMode) {
     const inFainted = nextState[side].currentHp <= 0;
     const hasReserve = inSide.party.some((f, i) => i !== inSide.activeIndex && f.currentHp > 0);
     // 강제 교체는 턴 밖 조작이라 별도 로그 카드로 남긴다(등장 파이프라인 문구까지 함께).
-    const synthetic: TurnResult = {
-      turnNumber: nextState.turnNumber,
-      order: ["a", "b"],
-      activePokemonIds: { a: nextState.a.slot.pokemonId, b: nextState.b.slot.pokemonId },
-      actions: [],
-      endOfTurn: [],
-      winner: inFainted && !hasReserve ? (side === "a" ? "b" : "a") : undefined,
-      expiredScreens: [],
-      expiredSafeguard: [],
-      turnStartAnnouncements: [],
-      switches: [
-        { side: side as FighterKey, fromIndex: -1, toIndex, outPokemonId, inPokemonId, entryMessages },
-      ],
-    };
+    const synthetic = forcedSwitchLogEntry(nextState, side, toIndex, { outPokemonId, inPokemonId, entryMessages }, inFainted, hasReserve);
     setLog((prev) => [...prev, synthetic]);
     // 새로 나온 포켓몬이 또 쓰러졌고 남은 슬롯이 있으면 강제 교체를 계속 요구한다.
     setPendingForcedSwitch((prev) => {
@@ -445,23 +397,9 @@ export function useBattleLogSession(mode: BattleMode) {
 
     function executeTurn(aiAction: TurnAction | null, opponentDistribution?: LevelOneDistribution) {
     if (!battleState) return;
-    const actionFor = (side: Side): TurnAction | null => {
-      if (side === aiSide && aiAction) return aiAction;
-      const sel = selected[side];
-      if (sel?.kind === "switch") return { kind: "switch", toIndex: sel.toIndex };
-      const mega = megaDeclared[side] || undefined; // 메가진화는 기술 행동에만 실린다
-      if (struggling[side]) return { kind: "move", move: STRUGGLE_MOVE, mega };
-      if (charging[side]) {
-        const forced = forcedLockedAction(battleState[side]);
-        return forced?.kind === "move" ? { ...forced, mega } : null;
-      }
-      const m = sel?.kind === "move" ? getMove(sel.moveId) : undefined;
-      if (!m) return null;
-      return { kind: "move", move: m, ...(mega ? { mega } : {}) };
-    };
-    const actionA = actionFor("a");
-    const actionB = actionFor("b");
-    if (!actionA || !actionB) return;
+    const actions = buildTurnActions({ battleState, selected, megaDeclared, struggling, charging, aiSide, aiAction });
+    if (!actions) return;
+    const { a: actionA, b: actionB } = actions;
 
     // 1-C: AI가 예측한 사용자 행동 분포와 사용자가 실제로 고른 행동을 짝지어 이번 대전 세션 기록에 더한다
     if (aiSide && opponentDistribution) {
