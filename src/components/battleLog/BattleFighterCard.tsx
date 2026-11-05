@@ -184,8 +184,11 @@ function PartyTracker({ bs }: { bs: BattleSide }) {
 
 /** 한 편의 카드 윗부분 — 이름·상태 태그·HP·실능치(또는 상대 파티)·파티 트래커 */
 export function BattleFighterCard(props: BattleBoardProps & { side: Side; pokemon: Pokemon }) {
-  const { side, pokemon, battleState, battleSide, buildableIndices, pokemonAt, selection, aiSide, aiThinking } = props;
+  const { side, pokemon, battleState, battleSide, buildableIndices, pokemonAt, selection, aiSide, aiThinking, log } = props;
   const fighter = battleState[side];
+  // 7.3 B6: AI 편에서 한 번이라도 나온 파티 인덱스 — 대전은 0번 리드로 시작하고, 이후는 교체 기록(toIndex)과 지금 활성 슬롯
+  const appearedIdx = new Set<number>([0, battleSide(side)?.activeIndex ?? 0]);
+  for (const turn of log) for (const sw of turn.switches) if (sw.side === side) appearedIdx.add(sw.toIndex);
   const displayName = fighter.illusionAs ? getPokemon(fighter.illusionAs)?.name ?? pokemon.name : pokemon.name;
   // 셋업 카드와 동일하게 메가진화 여부를 반영해서 이름 옆에 배지를 그린다.
   // fighter.slot(EvaluatorSlot)은 FormSource를 만족하므로 getEffectiveForm을 그대로 쓸 수 있다.
@@ -244,10 +247,18 @@ export function BattleFighterCard(props: BattleBoardProps & { side: Side; pokemo
             const pk = pokemonAt(side, i);
             if (!pk) return null;
             const battleIdx = selection[side].indexOf(i);
-            const fainted = battleIdx >= 0 && (battleSide(side)?.party[battleIdx]?.currentHp ?? 1) <= 0;
+            const member = battleIdx >= 0 ? battleSide(side)?.party[battleIdx] : undefined;
+            const fainted = battleIdx >= 0 && (member?.currentHp ?? 1) <= 0;
+            // 7.3 B6: 한 번이라도 배틀에 나온 포켓몬(리드·현재 활성·교체 기록)만 체력바를 보여 준다 — 안 나온 칸은 비공개 그대로
+            const hpPct = member && appearedIdx.has(battleIdx) ? Math.max(0, Math.min(100, (member.currentHp / member.maxHp) * 100)) : null;
             return (
               <div key={i} className={`battle-roster-chip${fainted ? " is-fainted" : ""}`}>
                 <PokemonAvatarWithItem pokemon={pk} size={40} radius={9} />
+                {hpPct !== null && (
+                  <span className="battle-party-chip-bar">
+                    <span className={`battle-party-chip-fill${hpPct <= 20 ? " is-danger" : hpPct <= 50 ? " is-warn" : ""}`} style={{ width: `${hpPct}%` }} />
+                  </span>
+                )}
                 <span className="battle-roster-chip-name">{pk.name}</span>
               </div>
             );
