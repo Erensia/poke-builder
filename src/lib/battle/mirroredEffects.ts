@@ -18,7 +18,7 @@ import { isGrounded } from "./grounding";
 import { eatBerryNow } from "./fling";
 import { type ItemEffectLog } from "@/types/battle";
 import { cureConditionsBlockedByAbility, isFixedAbility, isUncopyableAbility } from "./abilityChange";
-import { activeWeather, applyTransform, consumeItem, contraryDelta, contraryMoveFor, emptyHazardState, hasLivingReserve, isFainted, isItemRemovable, sideOf, statDropBlockStatsOf, statusImmunitiesOf, type BattleFighterState, type BattleState } from "./state";
+import { SWITCH_PASS_MOVE_ID, activeWeather, applyTransform, consumeItem, contraryDelta, contraryMoveFor, emptyHazardState, hasLivingReserve, isFainted, isItemRemovable, sideOf, statDropBlockStatsOf, statusImmunitiesOf, type BattleFighterState, type BattleState } from "./state";
 import { triggerTerrainSeeds } from "./switching";
 
 interface MirroredMoveEffectsInput {
@@ -1672,7 +1672,11 @@ function protectAndFieldSetup(c: MirroredCtx) {
   if (c.effectiveMove.protectEffect && !c.bounceActive) {
     const streak = c.attacker.protectStreak ?? 0;
     const successChance = Math.pow(1 / 3, streak);
-    const rollPassed = c.random() < successChance;
+    // 방어/판별/킹실드류(block): 이번 턴 내 뒤에 행동할 기술이 없으면(내가 마지막 = 더 늦게 움직이거나 상대가 교체)
+    // 사용 이펙트 없이 실패하고 연속 횟수는 0으로 돌아간다(다음 턴 방어는 확정 성공). 굴림 전에 판정해 난수를 쓰지 않는다.
+    const lastToAct =
+      c.effectiveMove.protectEffect === "block" && (c.movesSecond || c.defenderMove.id === SWITCH_PASS_MOVE_ID);
+    const rollPassed = !lastToAct && c.random() < successChance;
     // 패스트가드는 상대 기술이 자신을 겨냥했어도 priority가 0 이하면 애초에 막을 게 없다 —
     // "몸을 지켜냈다!"를 잘못 띄우지 않게 targetedSelf 판정에도 그 조건을 같이 건다.
     const targetedSelf =
