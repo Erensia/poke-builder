@@ -1,22 +1,14 @@
 import { useState } from "react";
 import { PartySlotCard } from "./PartySlotCard";
-import { PokemonPickerModal } from "./PokemonPickerModal";
-import { MovePickerModal } from "./MovePickerModal";
-import { AbilityPickerModal } from "./AbilityPickerModal";
-import { ItemPickerModal } from "./ItemPickerModal";
-import { NaturePickerModal } from "./NaturePickerModal";
-import { PointsEditorModal } from "./PointsEditorModal";
-import { CosmeticFormPickerModal } from "./CosmeticFormPickerModal";
 import { BackupModal } from "./BackupModal";
 import { PartyPresetsModal } from "./PartyPresetsModal";
-import { SlotPresetsModal } from "./SlotPresetsModal";
+import { SlotPickers } from "./SlotPickers";
 import { SyncDot } from "./SyncDot";
 import { TypeCoverageSummary } from "./TypeCoverageSummary";
 import { useParty } from "../hooks/useParty";
 import { usePartyPresets } from "../hooks/usePartyPresets";
 import { useSlotPresets } from "../hooks/useSlotPresets";
 import { getPokemon } from "../lib/data";
-import { getEffectiveForm } from "../lib/pokemonForm";
 import "./PartyBoard.css";
 
 type PickerState =
@@ -186,165 +178,33 @@ function PartyBoardPickers({ s }: { s: ReturnType<typeof usePartyBoardState> }) 
   const { picker, setPicker, slots, setPokemon, setMove, setAbility, setItem, setNature, setPoint, stepPoint, setCosmeticForm, slotPresets, loadSlot, showPartyPresets, partyPresets, setShowPartyPresets, showBackup, setShowBackup, loadSlots } = s;
   return (
     <>
-      {picker?.kind === "pokemon" && (
-        <PokemonPickerModal
-          onClose={() => setPicker(null)}
+      {/* 슬롯 하나를 고치는 피커 8종은 SlotPickers(대전 셋업과 공용, 7.0 R-4)가 그린다 */}
+      {picker && (
+        <SlotPickers
+          kind={picker.kind}
+          moveIndex={picker.kind === "move" ? picker.moveIndex : undefined}
+          slot={slots[picker.slotIndex]}
           usedPokemonIds={slots
             .filter((_, i) => i !== picker.slotIndex)
             .map((s) => s?.pokemonId)
             .filter((id): id is string => id !== undefined)}
-          onSelect={(pokemonId) => {
-            setPokemon(picker.slotIndex, pokemonId);
-            setPicker(null);
+          usedItemIds={slots
+            .filter((_, i) => i !== picker.slotIndex)
+            .map((s) => s?.item)
+            .filter((id): id is string => !!id)}
+          slotPresets={slotPresets}
+          actions={{
+            setPokemon: (pokemonId) => setPokemon(picker.slotIndex, pokemonId),
+            setMove: (moveIndex, moveId) => setMove(picker.slotIndex, moveIndex, moveId),
+            setAbility: (abilityId) => setAbility(picker.slotIndex, abilityId),
+            setItem: (itemId) => setItem(picker.slotIndex, itemId),
+            setNature: (natureId) => setNature(picker.slotIndex, natureId),
+            setPoint: (stat, value) => setPoint(picker.slotIndex, stat, value),
+            stepPoint: (stat, delta) => stepPoint(picker.slotIndex, stat, delta),
+            setCosmeticForm: (formId) => setCosmeticForm(picker.slotIndex, formId),
+            loadSlot: (slot) => loadSlot(picker.slotIndex, slot),
           }}
-        />
-      )}
-
-      {picker?.kind === "move" &&
-        (() => {
-          const slot = slots[picker.slotIndex];
-          const pokemon = slot ? getPokemon(slot.pokemonId) : undefined;
-          if (!slot || !pokemon) return null;
-          return (
-            <MovePickerModal
-              pokemon={pokemon}
-              formVariant={slot.formVariant}
-              currentMoveIds={slot.moves}
-              onClose={() => setPicker(null)}
-              onSelect={(moveId) => {
-                setMove(picker.slotIndex, picker.moveIndex, moveId);
-                setPicker(null);
-              }}
-              onClear={() => {
-                setMove(picker.slotIndex, picker.moveIndex, null);
-                setPicker(null);
-              }}
-            />
-          );
-        })()}
-
-      {picker?.kind === "ability" &&
-        (() => {
-          const slot = slots[picker.slotIndex];
-          const pokemon = slot ? getPokemon(slot.pokemonId) : undefined;
-          if (!slot || !pokemon) return null;
-          return (
-            <AbilityPickerModal
-              pokemon={pokemon}
-              slot={slot}
-              currentAbilityId={slot.ability}
-              onClose={() => setPicker(null)}
-              onSelect={(abilityId) => {
-                setAbility(picker.slotIndex, abilityId);
-                setPicker(null);
-              }}
-              onClear={() => {
-                setAbility(picker.slotIndex, null);
-                setPicker(null);
-              }}
-            />
-          );
-        })()}
-
-      {picker?.kind === "item" &&
-        (() => {
-          const slot = slots[picker.slotIndex];
-          const pokemon = slot ? getPokemon(slot.pokemonId) : undefined;
-          if (!slot || !pokemon) return null;
-          return (
-            <ItemPickerModal
-              pokemon={pokemon}
-              currentItemId={slot.item}
-              usedItemIds={slots
-                .filter((_, i) => i !== picker.slotIndex)
-                .map((s) => s?.item)
-                .filter((id): id is string => !!id)}
-              onClose={() => setPicker(null)}
-              onSelect={(itemId) => {
-                setItem(picker.slotIndex, itemId);
-                setPicker(null);
-              }}
-              onClear={() => {
-                setItem(picker.slotIndex, null);
-                setPicker(null);
-              }}
-            />
-          );
-        })()}
-
-      {picker?.kind === "nature" &&
-        (() => {
-          const slot = slots[picker.slotIndex];
-          if (!slot) return null;
-          return (
-            <NaturePickerModal
-              currentNatureId={slot.nature}
-              onClose={() => setPicker(null)}
-              onSelect={(natureId) => {
-                setNature(picker.slotIndex, natureId);
-                setPicker(null);
-              }}
-              onClear={() => {
-                setNature(picker.slotIndex, null);
-                setPicker(null);
-              }}
-            />
-          );
-        })()}
-
-      {picker?.kind === "points" &&
-        (() => {
-          const slot = slots[picker.slotIndex];
-          const pokemon = slot ? getPokemon(slot.pokemonId) : undefined;
-          if (!slot || !pokemon) return null;
-          const form = getEffectiveForm(pokemon, slot);
-          return (
-            <PointsEditorModal
-              pokemonName={pokemon.name}
-              baseStats={form.baseStats}
-              points={slot.points}
-              natureId={slot.nature}
-              itemId={slot.item}
-              moveIds={slot.moves}
-              types={getEffectiveForm(pokemon, slot, { ignoreMega: true }).types}
-              onClose={() => setPicker(null)}
-              onChange={(stat, value) => setPoint(picker.slotIndex, stat, value)}
-              onStep={(stat, delta) => stepPoint(picker.slotIndex, stat, delta)}
-            />
-          );
-        })()}
-
-      {picker?.kind === "cosmeticForm" &&
-        (() => {
-          const slot = slots[picker.slotIndex];
-          const pokemon = slot ? getPokemon(slot.pokemonId) : undefined;
-          if (!slot || !pokemon?.cosmeticForms) return null;
-          return (
-            <CosmeticFormPickerModal
-              pokemonName={pokemon.name}
-              forms={pokemon.cosmeticForms}
-              currentFormId={slot.cosmeticForm ?? null}
-              onClose={() => setPicker(null)}
-              onSelect={(formId) => {
-                setCosmeticForm(picker.slotIndex, formId);
-                setPicker(null);
-              }}
-            />
-          );
-        })()}
-
-      {picker?.kind === "slotPresets" && (
-        <SlotPresetsModal
-          presets={slotPresets.presets}
-          slotIsFilled={slots[picker.slotIndex] !== null}
-          usedPokemonIds={slots
-            .filter((_, i) => i !== picker.slotIndex)
-            .map((s) => s?.pokemonId)
-            .filter((id): id is string => id !== undefined)}
-          onClose={() => setPicker(null)}
-          onLoad={(preset) => loadSlot(picker.slotIndex, preset.slot)}
-          onRename={slotPresets.renamePreset}
-          onDelete={slotPresets.deletePreset}
+          close={() => setPicker(null)}
         />
       )}
 
