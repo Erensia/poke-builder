@@ -36,4 +36,18 @@ export default async function ({ server, data, mon, battle, pts, check }) {
   check("7.3 B2 버티기는 상대 방어보다 늦게 움직여도 그대로 발동", slowEndure.nextState.a.activeProtect?.effect === "endure" && slowEndure.nextState.a.protectStreak === 1, `${slowEndure.nextState.a.activeProtect?.effect} streak=${slowEndure.nextState.a.protectStreak}`);
   const slowBond = rt.runTurn(battle(slowGuard(), foe()), move("길동무"), move("지진"), rng);
   check("7.3 B2 길동무는 늦게 움직여도 그대로 발동", slowBond.result.actions.find(mine).protectSucceeded === true,`succeeded=${slowBond.result.actions.find(mine)?.protectSucceeded}`);
+  // 7.3 B3 풀피 멀티스케일은 다단히트의 첫 타만 반감한다(둘째 타부터는 HP가 깎여 풀 데미지)
+  const hitsOf = (ability, prepare) => {
+    const st = battle([mon("한카리아스", ["스케일샷"], null, null, pts({ atk: 32, spe: 32 }))], [mon("망나뇽", ["날개쉬기"], ability, null, pts({ hp: 32 }))]);
+    prepare?.(st);
+    const out = rt.runTurn(st, move("스케일샷"), move("날개쉬기"), () => 0.5);
+    return out.result.actions.find(mine).hits.map((h) => h.damagePercent);
+  };
+  const fmt = (hits) => hits.map((x) => (x * 100).toFixed(1)).join("/");
+  const ms = hitsOf("멀티스케일");
+  const plain = hitsOf("정신력");
+  const hurt = hitsOf("멀티스케일", (st) => { st.b.currentHp = st.b.maxHp - 1; });
+  const near = (x, y) => Math.abs(x - y) / y < 0.1;
+  check("7.3 B3 멀티스케일: 풀피 첫 타만 반감(둘째 타는 반감 없음)", ms.length >= 2 && near(ms[0] * 2, plain[0]) && near(ms[1], plain[1]), `멀티스케일 ${fmt(ms)} 일반 ${fmt(plain)}`);
+  check("7.3 B3 멀티스케일: HP가 깎여 있으면 첫 타부터 반감 없음", hurt.length >= 2 && near(hurt[0], plain[0]) && near(hurt[1], plain[1]), fmt(hurt));
 }
