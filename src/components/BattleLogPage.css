@@ -1243,12 +1243,6 @@
   gap: 0.4rem;
 }
 
-.battle-move-note {
-  margin: 0.3rem 0 0;
-  font-size: var(--fs-xs);
-  color: var(--text-muted);
-}
-
 .battle-move-button {
   display: flex;
   flex-direction: column;
@@ -1499,6 +1493,11 @@
   font-size: var(--fs-sm);
   font-weight: 600;
   cursor: pointer;
+}
+
+.battle-input-toggle-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .battle-input-toggle-btn.is-on {
