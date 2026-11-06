@@ -2,7 +2,9 @@ import { useLayoutEffect, useRef, useState } from "react";
 import { STATUS_LABELS } from "../../lib/battleLogLabels";
 import type { BattleState } from "../../lib/battle/state";
 import { statOrAccuracyLabel } from "../../lib/statLabels";
+import { FIELD_DISPLAY_TYPE } from "../../lib/fieldEffects";
 import { TYPE_COLORS, typeColorRgba } from "../../lib/typeColors";
+import { WEATHER_ACCENT_TYPE } from "../../lib/weatherEffects";
 import type { StatusCondition } from "../../types/status";
 import type { ActionLogEntry, EndOfTurnLogEntry, FighterKey, TurnResult } from "../../types/battle";
 
@@ -47,6 +49,8 @@ export interface TurnFxView {
   showPrev: Partial<Record<FighterKey, boolean>>;
   /** 이 턴이 시작하기 직전의 배틀 상태 */
   prev: BattleState;
+  /** 날씨·필드가 바뀌는 행동이 공개되기 전까지 보여 줄 이전 날씨·필드(7.4 E9) — 바뀐 뒤에는 없다(실제 상태) */
+  env?: Pick<BattleState, "weather" | "field">;
 }
 
 /**
@@ -87,6 +91,11 @@ export function useTurnFx(log: TurnResult[], battleState: BattleState) {
   const mounted = useRef(false);
   // 직전 렌더의 배틀 상태 — 다음 턴의 단계 재생 시작 HP·팝업 비율(HP 변화 ÷ 최대 HP)·교체 전 포켓몬에 쓴다
   const prevState = useRef(battleState);
+  // 이번 커밋의 최신 배틀 상태 — 아래 재생 효과보다 먼저 선언해야 같은 커밋에서 새 상태를 읽는다(효과의 의존성에 넣으면 상태가 바뀔 때마다 재생이 끊긴다)
+  const live = useRef(battleState);
+  useLayoutEffect(() => {
+    live.current = battleState;
+  });
 
   useLayoutEffect(() => {
     const last = log[log.length - 1];
@@ -192,6 +201,21 @@ export function useTurnFx(log: TurnResult[], battleState: BattleState) {
         { duration: 420, delay, easing: "ease-out", fill: "backwards" },
       );
     };
+    // 판 전체를 한 번 훑는 색 물결(날씨·필드·룸이 바뀔 때) — 필드는 바닥에서 올라오고 나머지는 판 전체가 물든다
+    const board = nodeA.parentElement;
+    const wash = (hex: string, delay: number, fromBottom: boolean) => {
+      if (!board) return;
+      const el = document.createElement("div");
+      el.className = "battle-fx-wash";
+      el.style.background = fromBottom
+        ? `linear-gradient(to top, ${typeColorRgba(hex, 0.85)}, transparent 90%)`
+        : `radial-gradient(ellipse at center, ${typeColorRgba(hex, 0.5)}, transparent 80%)`;
+      board.append(el);
+      el.animate(
+        [{ opacity: 0, transform: fromBottom ? "translateY(35%)" : "scale(0.9)" }, { opacity: 1, transform: "none", offset: 0.35 }, { opacity: 0, transform: "none" }],
+        { duration: 1500, delay, easing: "ease-out", fill: "both" },
+      ).onfinish = () => el.remove();
+    };
     const pulse = (who: FighterKey, delay: number) => {
       nodes[who].animate([{ transform: "none" }, { transform: "scale(1.04)", offset: 0.4 }, { transform: "none" }], { duration: 260, delay, easing: EASE });
     };
@@ -282,6 +306,9 @@ export function useTurnFx(log: TurnResult[], battleState: BattleState) {
         flash(foe, 0.55, t, c);
         pop(foe, `${STATUS_LABELS[e.inflictedStatus]}!`, "", t, undefined, c);
       }
+      if (e.setWeather) wash(TYPE_COLORS[WEATHER_ACCENT_TYPE[e.setWeather]], t, false);
+      if (e.setField) wash(TYPE_COLORS[FIELD_DISPLAY_TYPE[e.setField]], t, true);
+      if (e.setTrickRoom || e.roomChange?.on) wash(TYPE_COLORS.에스퍼, t, false);
       rank(e.actor, e.selfStatRises, true, t);
       rank(e.actor, e.selfStatDrops, false, t);
       rank(foe, e.opponentStatDrops, false, t);
@@ -307,11 +334,22 @@ export function useTurnFx(log: TurnResult[], battleState: BattleState) {
     // HP는 시작값(직전 턴 끝 HP)에서 행동마다 로그의 남은 HP로 바뀐다. 교체가 있었던 편은 중간값 없이 실제 HP를 쓴다.
     // 나가는 모션이 끝날 때까지 교체하는 편의 카드는 교체 전 포켓몬을 보여 준다(showPrev).
     // ponytail: 로그에 없는 HP 변화(드물다)는 SETTLE 뒤 재생이 끝날 때 실제 HP로 맞춰지고, 유턴 전에 맞은 HP는 나가는 카드에 반영되지 않는다.
+    // 날씨·필드가 바뀌는 시각 — 그때까지는 이전 날씨·필드를 보여 준다(상태는 이미 턴 끝 값이라 안 그러면 연출보다 먼저 배경이 바뀐다)
+    const envTimes = newActions.flatMap((e, k) => (e.setWeather || e.setField || e.destroyedField ? [startOf(k) + IMPACT] : []));
+    if (!endDone && (last.weatherExpired || last.fieldExpired)) envTimes.push(endStart);
+    // 특성으로 펼쳐지는 날씨·필드(그래스메이커·가뭄 등)는 로그에 기술이 없다 — 상태를 직전과 비교해 기술이 설명하지 못하는 변화는
+    // 새 포켓몬이 나오는 순간(교체가 없으면 턴 시작)에 배경·입자가 부드럽게 나타나게 한다. 색 물결은 교체 모션 위에 얹으면 튀어서 뺐다.
+    const entryAt = swaps.length ? Math.min(...swaps.map((s) => swapAt(s.after) + (s.enter ? OUT_MS : 0))) : 0;
+    const now = live.current;
+    const was = prevState.current;
+    if (now.weather && now.weather !== was.weather && !newActions.some((e) => e.setWeather)) envTimes.push(entryAt);
+    if (now.field && now.field !== was.field && !newActions.some((e) => e.setField)) envTimes.push(entryAt);
+    const envAt = envTimes.length ? Math.min(...envTimes) : -1;
     const outUntil = swaps.filter((s) => s.enter).map((s) => ({ side: s.side, until: swapAt(s.after) + OUT_MS }));
     // 행동 전 교체 줄은 그 교체의 새 포켓몬이 나오는 순간(나가는 모션이 끝난 뒤)에 공개한다
     // 이어지는 결과(중간 → 완성본)에서는 행동 전 교체 줄이 이미 나와 있으니 다시 숨기지 않는다
     const preAt = same ? 0 : Math.max(0, ...swaps.filter((s) => !s.afterMove).map((s) => (s.enter ? OUT_MS : 0)));
-    const times = [...new Set([0, preAt, ...newActions.map((_, k) => startOf(k) + IMPACT), ...(endDone ? [] : [endStart]), ...outUntil.map((o) => o.until)])].sort((x, y) => x - y);
+    const times = [...new Set([0, preAt, ...newActions.map((_, k) => startOf(k) + IMPACT), ...(endDone ? [] : [endStart]), ...outUntil.map((o) => o.until), ...(envAt > 0 ? [envAt] : [])])].sort((x, y) => x - y);
     const frames = times.map((t): [number, TurnFxView] => {
       const shown = newActions.filter((_, k) => startOf(k) + IMPACT <= t).length;
       const endShown = endDone || t >= endStart;
@@ -324,6 +362,7 @@ export function useTurnFx(log: TurnResult[], battleState: BattleState) {
           hp: endShown && shown === newActions.length ? steps[newActions.length] : shown ? steps[shown - 1] : init,
           showPrev: { a: outUntil.some((o) => o.side === "a" && t < o.until), b: outUntil.some((o) => o.side === "b" && t < o.until) },
           prev: prevState.current,
+          env: envAt >= 0 && t < envAt ? { weather: prevState.current.weather, field: prevState.current.field } : undefined,
         },
       ];
     });
