@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { SpeedInsights } from "@vercel/speed-insights/react";
 import { Sidebar, type AppView } from "./components/Sidebar";
 import { PartyBoard } from "./components/PartyBoard";
 import { MatchupPage } from "./components/MatchupPage";
@@ -80,6 +81,7 @@ function App() {
           </div>
         </Modal>
       )}
+      <SpeedInsights />
     </div>
   );
 }
