@@ -73,6 +73,10 @@ const SETTLE = 350;
 const SWITCH_MS = 700;
 const OUT_MS = 300;
 const SWITCH_PX = 26;
+/** 메가진화 연출(7.4 E8) — 빛이 모여드는 MEGA_PEAK(ms)에 폼이 바뀌고, 터져 나가며 MEGA_MS가 끝난다. 그만큼 그 턴 일정이 밀린다 */
+const MEGA_MS = 1000;
+const MEGA_PEAK = 500;
+const MEGA_HEX = "#d86cff";
 
 const other = (k: FighterKey): FighterKey => (k === "a" ? "b" : "a");
 
@@ -425,6 +429,44 @@ export function useTurnFx(log: TurnResult[], battleState: BattleState) {
       board.append(el);
       el.animate([{ opacity: 0 }, { opacity: 1, offset: 0.15 }, { opacity: 0 }], { duration: 500, delay, fill: "both" }).onfinish = () => el.remove();
     };
+    // 메가진화(E8): 무지갯빛 고리가 모여들다 정점에서 하얗게 터지며 폼이 바뀌고, 반짝이가 사방으로 퍼진다
+    const megaFx = (who: FighterKey, delay: number) => {
+      const node = nodes[who];
+      const ring = document.createElement("div");
+      ring.className = "battle-fx-megaring";
+      const burst = document.createElement("div");
+      burst.className = "battle-fx-megaburst";
+      node.append(ring, burst);
+      ring.animate(
+        [
+          { opacity: 0, transform: "translate(-50%, -50%) scale(1.9) rotate(0deg)" },
+          { opacity: 1, transform: "translate(-50%, -50%) scale(1) rotate(360deg)", offset: 0.5 },
+          { opacity: 1, transform: "translate(-50%, -50%) scale(1.1) rotate(540deg)", offset: 0.6 },
+          { opacity: 0, transform: "translate(-50%, -50%) scale(2.4) rotate(720deg)" },
+        ],
+        { duration: MEGA_MS, delay, easing: "ease-in-out", fill: "both" },
+      ).onfinish = () => ring.remove();
+      burst.animate([{ opacity: 0, transform: "scale(0.3)" }, { opacity: 0, offset: 0.45 }, { opacity: 1, transform: "scale(1)", offset: 0.55 }, { opacity: 0, transform: "scale(1.5)" }], { duration: MEGA_MS, delay, fill: "both" }).onfinish = () => burst.remove();
+      for (let i = 0; i < 8; i++) {
+        const el = document.createElement("div");
+        el.className = "battle-fx-float is-stars";
+        el.style.left = "50%";
+        el.style.top = "38%";
+        el.style.filter = `hue-rotate(${i * 45}deg)`;
+        node.append(el);
+        const a = (i / 8) * Math.PI * 2 + Math.random() * 0.4;
+        const d = 60 + Math.random() * 50;
+        el.animate(
+          [
+            { opacity: 0, transform: "translate(-50%, -50%) scale(0.4)" },
+            { opacity: 1, transform: `translate(calc(-50% + ${Math.cos(a) * d * 0.5}px), calc(-50% + ${Math.sin(a) * d * 0.5}px)) scale(1.2)`, offset: 0.3 },
+            { opacity: 0, transform: `translate(calc(-50% + ${Math.cos(a) * d}px), calc(-50% + ${Math.sin(a) * d}px)) scale(0.6) rotate(${i % 2 ? 160 : -160}deg)` },
+          ],
+          { duration: MEGA_MS - MEGA_PEAK, delay: delay + MEGA_PEAK, easing: "ease-out", fill: "both" },
+        ).onfinish = () => el.remove();
+      }
+      pop(who, "메가진화!", "", delay + MEGA_PEAK, undefined, MEGA_HEX);
+    };
     const pulse = (who: FighterKey, delay: number) => {
       nodes[who].animate([{ transform: "none" }, { transform: "scale(1.04)", offset: 0.4 }, { transform: "none" }], { duration: 260, delay, easing: EASE });
     };
@@ -442,9 +484,17 @@ export function useTurnFx(log: TurnResult[], battleState: BattleState) {
       const idx = sw.afterMove ? last.actions.findIndex((a) => a.actor === (sw.forced ? other(sw.side) : sw.side)) : -1;
       return { side: sw.side, enter: sw.fromIndex >= 0, afterMove: !!sw.afterMove, after: Math.max(idx - doneActions, -1), messages: sw.entryMessages };
     });
-    const groups = [...new Set(swaps.map((s) => s.after))];
-    // 행동 k의 시작 시각 — 그보다 앞서 일어난 교체 그룹 수만큼 SWITCH_MS씩 밀린다
-    const startOf = (k: number) => k * STEP + groups.filter((g) => g < k).length * SWITCH_MS;
+    // 메가진화(E8) — 로그에 정보가 없어서 직전 상태와 비교한다(이번 턴 교체한 편은 제외). 행동 전에 일어난다
+    const nowState = live.current;
+    const wasState = prevState.current;
+    const megas = (["a", "b"] as const).filter((k) => nowState[k].hasMegaEvolved && !wasState[k].hasMegaEvolved && !swapped.has(k));
+    // 일정을 미는 지점별 시간 — after(행동 번호 뒤, -1 = 행동 전)마다 교체는 SWITCH_MS, 메가진화는 MEGA_MS(같은 지점이면 긴 쪽)
+    const gapMs = new Map<number, number>();
+    swaps.forEach((s) => gapMs.set(s.after, Math.max(gapMs.get(s.after) ?? 0, SWITCH_MS)));
+    if (megas.length) gapMs.set(-1, Math.max(gapMs.get(-1) ?? 0, MEGA_MS));
+    const shiftBefore = (k: number) => [...gapMs].reduce((sum, [g, ms]) => (g < k ? sum + ms : sum), 0);
+    // 행동 k의 시작 시각 — 그보다 앞서 일어난 교체·메가진화 시간만큼 밀린다
+    const startOf = (k: number) => k * STEP + shiftBefore(k);
     const swapAt = (g: number) => (g < 0 ? 0 : startOf(g) + IMPACT + 150);
     swaps.forEach((sw) => {
       const t = swapAt(sw.after);
@@ -452,6 +502,7 @@ export function useTurnFx(log: TurnResult[], battleState: BattleState) {
       swapIn(sw.side, t + (sw.enter ? OUT_MS : 0));
       hazardHit(sw.side, sw.messages, t + (sw.enter ? OUT_MS : 0) + 150);
     });
+    megas.forEach((k) => megaFx(k, 0));
     // HP가 오른 편은 녹색 회복 효과, 내려간 편은 붉은 팝업 — 로그 필드를 일일이 모으지 않고 HP 단계의 증감으로 본다.
     // skip: 타격 연출(E1)이 이미 보여 준 피격 대상. hurtFlash: 턴 종료 피해는 아래 기존 번쩍임이 있어 끈다.
     const hpFx = (before: TurnFxView["hp"], after: TurnFxView["hp"], delay: number, skip?: FighterKey, hurtFlash = true) => {
@@ -560,7 +611,7 @@ export function useTurnFx(log: TurnResult[], battleState: BattleState) {
       hpFx(k === 0 ? init : steps[k - 1], steps[k], t, !e.blockedReason && e.move.category !== "status" && e.hit && e.damage > 0 ? target : undefined);
     });
     // 턴 종료 피해는 행동이 다 끝난 뒤 맞은 쪽만 약하게 번쩍인다(새로 들어온 턴 종료 기록만)
-    const endStart = newActions.length * STEP + groups.length * SWITCH_MS;
+    const endStart = newActions.length * STEP + shiftBefore(Infinity);
     if (!endDone) {
       last.endOfTurn.forEach((e) => {
         if (e.damage > 0) flash(e.actor, 0.3, endStart);
@@ -604,12 +655,13 @@ export function useTurnFx(log: TurnResult[], battleState: BattleState) {
     // 특성으로 펼쳐지는 날씨·필드(그래스메이커·가뭄 등)는 로그에 기술이 없다 — 상태를 직전과 비교해 기술이 설명하지 못하는 변화는
     // 새 포켓몬이 나오는 순간(교체가 없으면 턴 시작)에 배경·입자가 부드럽게 나타나게 한다. 색 물결은 교체 모션 위에 얹으면 튀어서 뺐다.
     const entryAt = swaps.length ? Math.min(...swaps.map((s) => swapAt(s.after) + (s.enter ? OUT_MS : 0))) : 0;
-    const now = live.current;
-    const was = prevState.current;
-    if (now.weather && now.weather !== was.weather && !newActions.some((e) => e.setWeather || e.sandSpitWeather)) envTimes.push(entryAt);
-    if (now.field && now.field !== was.field && !newActions.some((e) => e.setField)) envTimes.push(entryAt);
+    if (nowState.weather && nowState.weather !== wasState.weather && !newActions.some((e) => e.setWeather || e.sandSpitWeather)) envTimes.push(entryAt);
+    if (nowState.field && nowState.field !== wasState.field && !newActions.some((e) => e.setField)) envTimes.push(entryAt);
     const envAt = envTimes.length ? Math.min(...envTimes) : -1;
-    const outUntil = swaps.filter((s) => s.enter).map((s) => ({ side: s.side, until: swapAt(s.after) + OUT_MS }));
+    const outUntil = swaps
+      .filter((s) => s.enter)
+      .map((s) => ({ side: s.side, until: swapAt(s.after) + OUT_MS }))
+      .concat(megas.map((k) => ({ side: k, until: MEGA_PEAK })));
     // 행동 전 교체 줄은 그 교체의 새 포켓몬이 나오는 순간(나가는 모션이 끝난 뒤)에 공개한다
     // 이어지는 결과(중간 → 완성본)에서는 행동 전 교체 줄이 이미 나와 있으니 다시 숨기지 않는다
     const preAt = same ? 0 : Math.max(0, ...swaps.filter((s) => !s.afterMove).map((s) => (s.enter ? OUT_MS : 0)));

@@ -588,6 +588,33 @@
   }
 }
 
+/* 7.4 E8 — 메가진화: 무지갯빛 고리가 모여들다 정점에서 하얗게 터진다(useTurnFx가 만들고 스스로 지운다) */
+.battle-fx-megaring {
+  position: absolute;
+  left: 50%;
+  top: 38%;
+  width: 110px;
+  height: 110px;
+  border-radius: 50%;
+  background: conic-gradient(#ff5d6c, #ffd84a, #6ee07a, #4ecbff, #8a6bff, #ff5df0, #ff5d6c);
+  -webkit-mask: radial-gradient(circle closest-side, transparent 62%, #000 64%);
+  mask: radial-gradient(circle closest-side, transparent 62%, #000 64%);
+  filter: drop-shadow(0 0 8px rgba(216, 108, 255, 0.8));
+  pointer-events: none;
+  opacity: 0;
+  z-index: 2;
+}
+
+.battle-fx-megaburst {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--r-lg);
+  background: radial-gradient(circle at 50% 38%, rgba(255, 255, 255, 0.95), rgba(255, 160, 240, 0.55) 35%, transparent 70%);
+  pointer-events: none;
+  opacity: 0;
+  z-index: 2;
+}
+
 /* 7.4 E4 — 기절할 때 카드 아래에서 양옆으로 퍼지는 먼지(useTurnFx가 만들고 스스로 지운다) */
 .battle-fx-dust {
   position: absolute;
