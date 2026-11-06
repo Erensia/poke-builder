@@ -7,6 +7,7 @@
  *   regress  무작위 행동끼리 돌려 전체 로그 해시를 출력 — 엔진 수정 전후 해시가 같으면 동작 무변경
  *   logidx   무작위 행동끼리 돌려, 로그만으로 되짚은 활성 파티 인덱스(battleLogText.activeIndexTrace)가 턴마다 실제 엔진 상태와 같은지 대조(4.1 A1)
  *            DUP=1이면 편마다 같은 종 3마리로 돌려 개체 구분을 시험한다
+ *   fxhp     무작위 행동끼리 돌려, 화면의 HP 단계 재생(useTurnFx.hpSteps — 행동마다 로그의 남은 HP)이 턴 끝에서 실제 엔진 HP와 같은지 턴마다 대조(7.4 E7)
  *   ai      AI 대 무작위 봇 + AI 대 AI 승률, 턴당 판단 시간, NaN 점수 개수
  *   greedy   AI 대 그리디 봇(교체 없이 매 턴 가장 빨리 처치하는 기술만) — 파티를 좌우 바꿔 한 번 더
  *   diag     AI가 교체를 고른 순간의 모든 옵션 점수·c·d 출력(판단 이상 사례 찾기)
@@ -85,8 +86,8 @@ try {
   const state = await server.ssrLoadModule("/src/lib/battle/state.ts");
   const rt = await server.ssrLoadModule("/src/lib/battle/runTurn.ts");
   const sw = await server.ssrLoadModule("/src/lib/battle/switching.ts");
-  const ai = mode === "regress" || mode === "logidx" ? null : await server.ssrLoadModule("/src/lib/battle/ai/index.ts");
-  const ev = mode === "regress" || mode === "logidx" ? null : await server.ssrLoadModule("/src/lib/battle/ai/evaluator.ts");
+  const ai = mode === "regress" || mode === "logidx" || mode === "fxhp" ? null : await server.ssrLoadModule("/src/lib/battle/ai/index.ts");
+  const ev = mode === "regress" || mode === "logidx" || mode === "fxhp" ? null : await server.ssrLoadModule("/src/lib/battle/ai/evaluator.ts");
   const fx = await server.ssrLoadModule("/src/lib/battle/ai/statusMoveEffects.ts");
   // 변화기 종류 라벨(집계용)
   const pm = await server.ssrLoadModule("/src/lib/battle/ai/protectMoves.ts");
@@ -237,6 +238,9 @@ try {
     // logidx용: 화면 로그와 같게 강제 교체 합성 카드(BattleLogPage.resolveForcedSwitch)를 끼운 로그와, 각 항목 직후의 실제 활성 인덱스
     const uiLog = [];
     const actualEnd = [];
+    // fxhp용: 시작 HP와 각 항목 직후의 실제 활성 HP(actualEnd와 같은 자리)
+    const hpStart = { a: st.a.currentHp, b: st.b.currentHp };
+    const hpEnd = [];
     const timings = [];
     for (let turn = 0; turn < 80; turn++) {
       const t0 = performance.now();
@@ -256,7 +260,8 @@ try {
       uiLog.push(out.result);
       st = out.nextState;
       actualEnd.push({ a: st.sideA.activeIndex, b: st.sideB.activeIndex });
-      if (out.result.winner) return { winner: out.result.winner, trace, turns: turn + 1, timings, uiLog, actualEnd, final: st };
+      hpEnd.push({ a: st.a.currentHp, b: st.b.currentHp });
+      if (out.result.winner) return { winner: out.result.winner, trace, turns: turn + 1, timings, uiLog, actualEnd, hpStart, hpEnd, final: st };
       for (const key of ["a", "b"]) {
         if (out.forcedSwitch?.[key]) {
           const toIndex = forced[key](st, key);
@@ -268,10 +273,11 @@ try {
             switches: [{ side: key, fromIndex: -1, toIndex, outPokemonId: applied.outPokemonId, inPokemonId: applied.inPokemonId, entryMessages: applied.entryMessages }],
           });
           actualEnd.push({ a: st.sideA.activeIndex, b: st.sideB.activeIndex });
+          hpEnd.push({ a: st.a.currentHp, b: st.b.currentHp });
         }
       }
     }
-    return { winner: "timeout", trace, turns: 80, timings, uiLog, actualEnd, final: st };
+    return { winner: "timeout", trace, turns: 80, timings, uiLog, actualEnd, hpStart, hpEnd, final: st };
   }
 
   if (mode === "regress") {
@@ -312,6 +318,28 @@ try {
       }
     }
     console.log(JSON.stringify({ battles, entries, actions, switchTurns, mismatches: bad.length, sample: bad.slice(0, 8) }));
+    if (bad.length) process.exitCode = 1;
+  } else if (mode === "fxhp") {
+    // 항목(합성 카드 포함)마다: 직전 항목 끝 HP에서 hpSteps를 돌린 마지막 값 == 이 항목 끝 실제 HP. 교체가 낀 편은 화면도 실제 HP를 쓰니 뺀다.
+    const { hpSteps } = await server.ssrLoadModule("/src/components/battleLog/useTurnFx.ts");
+    let checked = 0, skipped = 0, steps = 0;
+    const bad = [];
+    for (let s = 1; s <= battles; s++) {
+      const rng = mulberry32(s * 7919);
+      const r = runBattle(s, { a: randomPolicy(rng), b: randomPolicy(rng) }, { a: forcedSwitchRandom(rng), b: forcedSwitchRandom(rng) });
+      r.uiLog.forEach((turn, i) => {
+        const swapped = new Set(turn.switches.map((x) => x.side));
+        const got = hpSteps(i === 0 ? r.hpStart : r.hpEnd[i - 1], turn.actions, turn.endOfTurn, swapped);
+        steps += got.length;
+        for (const side of ["a", "b"]) {
+          if (swapped.has(side)) { skipped++; continue; }
+          checked++;
+          const end = got[got.length - 1][side];
+          if (end !== r.hpEnd[i][side]) bad.push(`seed ${s} 턴${turn.turnNumber}(항목 ${i}) ${side} 단계 ${end} != 실제 ${r.hpEnd[i][side]}`);
+        }
+      });
+    }
+    console.log(JSON.stringify({ battles, steps, checked, skippedSwitched: skipped, mismatches: bad.length, sample: bad.slice(0, 8) }));
     if (bad.length) process.exitCode = 1;
   } else if (mode === "diag") {
     const name = (f) => data.getPokemon(f.slot.pokemonId)?.name;

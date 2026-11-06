@@ -18,11 +18,14 @@ export function BattleTurnLog({
   log,
   aiSide = null,
   aiParty,
+  reveal,
 }: {
   log: TurnResult[];
   aiSide?: FighterKey | null;
   /** AI 파티(파티 인덱스 순)의 종 id·최대 HP. HP 수치를 %로 바꾸는 데 쓴다(같은 종이 둘이어도 개체별로 맞도록 인덱스로 찾는다) */
   aiParty?: { id: string; maxHp: number }[];
+  /** 7.4 E7: 최신 턴이 이펙트와 함께 재생 중일 때 공개된 범위 — 아직 안 나온 행동·턴 종료 줄은 자리만 차지한 채 숨긴다. 없으면 전부 공개 */
+  reveal?: { pre: boolean; actions: number; end: boolean };
 }) {
   // AI 쪽 포켓몬의 행동 줄 HP 수치(회복·반동 등)도 최대 HP 대비 %로 바꾼다. 최대 HP를 모르면 실수치 그대로.
   const fmtHp = (maxHp: number | undefined) => (n: number, key: FighterKey) =>
@@ -47,13 +50,18 @@ export function BattleTurnLog({
               // "먼저 행동"은 포켓몬 이름이 아니라 팀으로 적는다(양쪽이 같은 포켓몬이어도 구분). 첫 행동 주체는 실제 행동한 쪽
               // (turn.actions[0].actor) — 없으면 정해진 순서. 우리팀은 AI 대전이면 AI 반대편, 그 외(다시보기·수동 대전)는 a편.
               const myTeam: FighterKey = aiSide ? opponentKey(aiSide) : "a";
+              // 재생 중이 아니면 undefined — 최신 턴(역순 0번)만 해당
+              const rv = turnIdx === 0 ? reveal : undefined;
+              const pending = (shown: boolean) => (rv && !shown ? "battle-turn-pending" : rv ? "battle-turn-reveal" : undefined);
               const firstActorTeam = (turn.actions[0]?.actor ?? turn.order[0]) === myTeam ? "우리팀" : "상대팀";
               return (
               <div key={`${turn.turnNumber}-${turnIdx}`} className="battle-turn-card">
                 <div className="battle-turn-title">
                   {isForcedSwitchCard ? `턴 ${turn.turnNumber} · 교체` : `턴 ${turn.turnNumber} · 먼저 행동: ${firstActorTeam}`}
                 </div>
-                <PreMoveSwitchLines switches={turn.switches} />
+                <div className={pending(rv?.pre ?? true)}>
+                  <PreMoveSwitchLines switches={turn.switches} />
+                </div>
                 {turn.turnStartAnnouncements.map((text, i) => (
                   <div key={`tsa-${i}`} className="battle-turn-line is-muted">
                     {text}
@@ -70,7 +78,7 @@ export function BattleTurnLog({
                   // AI 상대전에서 내가 상대에게 입힌 데미지는 실수치 대신 줄어든 체력 %만 보여준다(최대 HP 역산 방지).
                   const percentOnly = aiSide !== null && action.actor !== aiSide;
                   return (
-                    <div key={i}>
+                    <div key={i} className={pending(i < (rv?.actions ?? 0))}>
                       {/* 움직이기 전 상태 판정 — 잠듦/얼음이 이번 행동 시작 시점에 풀렸으면 기술 줄보다
                           먼저 알려준다("잠든 포켓몬은 눈을 떴다!" 순서). */}
                       {action.selfWokeBeforeMove && (
@@ -125,14 +133,16 @@ export function BattleTurnLog({
                     </div>
                   );
                 })}
-                {turn.endOfTurn.map((e, i) => (
-                  <EndOfTurnLine
-                    key={i}
-                    entry={aiSide !== null && e.actor === aiSide ? hpAsPercent(e, aiParty?.[trace?.end ?? -1]?.maxHp) : e}
-                    turnName={turnName}
-                  />
-                ))}
-                <TurnFooterLines turn={turn} turnName={turnName} />
+                <div className={pending(rv?.end ?? false)}>
+                  {turn.endOfTurn.map((e, i) => (
+                    <EndOfTurnLine
+                      key={i}
+                      entry={aiSide !== null && e.actor === aiSide ? hpAsPercent(e, aiParty?.[trace?.end ?? -1]?.maxHp) : e}
+                      turnName={turnName}
+                    />
+                  ))}
+                  <TurnFooterLines turn={turn} turnName={turnName} />
+                </div>
               </div>
               );
             })}

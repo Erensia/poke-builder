@@ -2,6 +2,7 @@
  * 대전 로그 표시 라벨. 실시간 배틀판(BattleLogPage의 상태 태그)과 턴 히스토리(BattleTurnLog·
  * 배틀비디오 다시보기)가 똑같이 참조해야 해서 두 쪽 다 임포트할 수 있는 공유 위치에 둔다.
  */
+import type { StatusCondition } from "../types/status";
 
 /** 지속효과(volatile) 표시 라벨. */
 export const VOLATILE_LABELS = {
@@ -34,4 +35,14 @@ export const VOLATILE_LABELS = {
 } as const;
 
 /** 리플렉터(물리 반감)/빛의장막(특수 반감)/오로라베일(양쪽 반감) 표시 라벨. */
+/** 주 상태이상 이름 — 파티 트래커·상태 태그·턴 이펙트 팝업이 같이 쓴다 */
+export const STATUS_LABELS: Record<StatusCondition, string> = {
+  burn: "화상",
+  poison: "독",
+  "badly-poisoned": "맹독",
+  paralysis: "마비",
+  freeze: "얼음",
+  sleep: "잠듦",
+};
+
 export const SCREEN_LABELS = { reflect: "리플렉터", lightScreen: "빛의장막", auroraVeil: "오로라베일" } as const;

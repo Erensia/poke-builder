@@ -22,6 +22,7 @@
     "test:rules": "npx firebase-tools@15 emulators:exec --only firestore --project demo-poke \"node scripts/firestore-rules-check.mjs\""
   },
   "dependencies": {
+    "@vercel/speed-insights": "^2.1.0",
     "firebase": "^13.1.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
