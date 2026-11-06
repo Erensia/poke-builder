@@ -38,6 +38,19 @@ const HAZARD_TRIGGERS: [HazardKind, string][] = [
   ["toxic", "몸에 맹독이 퍼졌다"],
   ["web", "끈적끈적네트에 걸려"],
 ];
+/** 기술 고유 연출 입자(7.4 E9c) — n개가 카드 위에서 오르거나(기본) 내린다. 모양은 CSS(.battle-fx-float.is-종류) */
+const FLOAT = { stars: { n: 5 } } as const;
+type FloatKind = keyof typeof FLOAT;
+/**
+ * 기술별 고유 연출 표 — 기술 id → 연출 종류·대상·성공 판정. 새 기술은 한 줄 추가한다.
+ * 달빛(보름달이 빛을 내리쬔다)은 E2의 회복 번쩍임 위에 얹는 기술 고유 모양이다. 상태이상을 거는 기술은 기술별이 아니라 상태이상 종류별로 따로 다룬다(E10).
+ */
+const MOVE_FX: Record<string, { kind: FloatKind | "moon"; on: "self" | "foe"; landed: (e: ActionLogEntry) => boolean }> = {
+  희망사항: { kind: "stars", on: "self", landed: (e) => e.inflictedVolatile === "wish" },
+  달빛: { kind: "moon", on: "self", landed: (e) => (e.healedAmount ?? 0) > 0 },
+};
+const MOON_HEX = "#e2cf6a";
+const WISH_HEX = "#f5c542";
 const popTags = (e: ActionLogEntry) => [e.critical && "급소!", e.typeEffectiveness >= 2 && "효과 굉장!", e.typeEffectiveness < 1 && "별로…"].filter(Boolean).join(" ");
 /** 마지막 공개 뒤 줄이 나타나는 모션(0.25s)이 끝나도록 기다렸다가 재생 상태를 걷는다 */
 const SETTLE = 350;
@@ -264,6 +277,40 @@ export function useTurnFx(log: TurnResult[], battleState: BattleState) {
       });
       if (messages.some((m) => m.includes("독압정을 흡수"))) pop(who, "독압정 제거!", "", delay, undefined, HAZARD.toxic.hex);
     };
+    // 기술 고유 연출 입자 — 카드 위에서 흩어지며 오르거나(reverse면 내리며) 사라진다
+    const drift = (who: FighterKey, kind: FloatKind, delay: number, reverse = false) => {
+      const h = nodes[who].offsetHeight;
+      const spec = FLOAT[kind];
+      for (let i = 0; i < spec.n; i++) {
+        const el = document.createElement("div");
+        el.className = `battle-fx-float is-${kind}`;
+        el.style.left = `${12 + Math.random() * 70}%`;
+        el.style.top = "0";
+        const dy = (reverse ? -1 : 1) * h * (0.45 + Math.random() * 0.2);
+        const dx = (Math.random() * 2 - 1) * 14;
+        nodes[who].append(el);
+        el.animate(
+          [
+            { opacity: 0, transform: "translate(0, 0) scale(0.6)" },
+            { opacity: 1, transform: `translate(${dx * 0.3}px, ${dy * 0.25}px) scale(1)`, offset: 0.2 },
+            { opacity: 1, transform: `translate(${dx * 0.7}px, ${dy * 0.7}px) scale(1)`, offset: 0.7 },
+            { opacity: 0, transform: `translate(${dx}px, ${dy}px) scale(0.9)` },
+          ],
+          { duration: 1000 + Math.random() * 300, delay: delay + i * 120, easing: "ease-out", fill: "both" },
+        ).onfinish = () => el.remove();
+      }
+    };
+    // 달빛: 카드 위에 보름달이 떠올라 아래로 빛을 내리쬔다
+    const moonlight = (who: FighterKey, delay: number) => {
+      const beam = document.createElement("div");
+      beam.className = "battle-fx-moonbeam";
+      const moon = document.createElement("div");
+      moon.className = "battle-fx-moon";
+      nodes[who].append(beam, moon);
+      const life = { duration: 1500, delay, easing: "ease-out", fill: "both" } as const;
+      beam.animate([{ opacity: 0 }, { opacity: 1, offset: 0.3 }, { opacity: 1, offset: 0.7 }, { opacity: 0 }], life).onfinish = () => beam.remove();
+      moon.animate([{ opacity: 0, transform: "translateY(-14px) scale(0.7)" }, { opacity: 1, transform: "none", offset: 0.25 }, { opacity: 1, transform: "none", offset: 0.75 }, { opacity: 0, transform: "translateY(-6px)" }], life).onfinish = () => moon.remove();
+    };
     const pulse = (who: FighterKey, delay: number) => {
       nodes[who].animate([{ transform: "none" }, { transform: "scale(1.04)", offset: 0.4 }, { transform: "none" }], { duration: 260, delay, easing: EASE });
     };
@@ -371,6 +418,18 @@ export function useTurnFx(log: TurnResult[], battleState: BattleState) {
       if (weatherSet) wash(TYPE_COLORS[WEATHER_ACCENT_TYPE[weatherSet]], t, false);
       if (e.setField) wash(TYPE_COLORS[FIELD_DISPLAY_TYPE[e.setField]], t, true);
       if (e.setTrickRoom || e.roomChange?.on) wash(TYPE_COLORS.에스퍼, t, false);
+      // 기술 고유 연출(하품·맹독·희망사항·달빛 …) — 표에 있는 기술이 성공했을 때만
+      const mf = MOVE_FX[e.move.id];
+      if (mf && !e.blockedReason && mf.landed(e)) {
+        const who = mf.on === "self" ? e.actor : foe;
+        if (mf.kind === "moon") {
+          moonlight(who, t);
+          aura(e.actor, t, MOON_HEX);
+        } else {
+          drift(who, mf.kind, t);
+          if (mf.kind === "stars") aura(e.actor, t, WISH_HEX, 700);
+        }
+      }
       rank(e.actor, e.selfStatRises, true, t);
       rank(e.actor, e.selfStatDrops, false, t);
       rank(foe, e.opponentStatDrops, false, t);
@@ -381,6 +440,11 @@ export function useTurnFx(log: TurnResult[], battleState: BattleState) {
     if (!endDone) {
       last.endOfTurn.forEach((e) => {
         if (e.damage > 0) flash(e.actor, 0.3, endStart);
+        // 희망사항이 이루어져 회복할 때
+        if (e.wishHeal) {
+          aura(e.actor, endStart, WISH_HEX);
+          drift(e.actor, "stars", endStart, true);
+        }
         if (e.fainted) faintAt[e.actor] = endStart + 250;
       });
       hpFx(newActions.length ? steps[newActions.length - 1] : init, steps[newActions.length], endStart, undefined, false);
