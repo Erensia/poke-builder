@@ -17,7 +17,7 @@ export function BattleBoard(props: BattleBoardProps) {
   const { battleState, winner, battleBoardBackground, battleSide, aiSide, log } = props;
   // 6.5 M1 G — 새 턴 결과가 들어오면 행동 순서대로 카드에 돌진·피격 효과를 겹쳐 재생한다.
   // 7.4 E7 — fx는 재생 중인 턴의 로그 공개 범위·HP(이펙트에 맞춰 단계 재생). 재생이 아니면 null
-  const [attachA, attachB, fx] = useTurnFx(log, { a: battleState.a.currentHp, b: battleState.b.currentHp }, { a: battleState.a.maxHp, b: battleState.b.maxHp });
+  const [attachA, attachB, fx] = useTurnFx(log, battleState);
   // 로그의 AI HP 수치를 %로 바꾸는 데 쓰는 AI 파티의 종 id·최대 HP(파티 인덱스 순 — 같은 종이 둘이어도 개체별로 구분되도록 인덱스로 찾는다)
   const aiParty = aiSide ? battleSide(aiSide)?.party.map((f) => ({ id: f.slot.pokemonId, maxHp: f.maxHp })) : undefined;
   return (
@@ -27,6 +27,9 @@ export function BattleBoard(props: BattleBoardProps) {
       {(["a", "b"] as const).map((side) => {
         const pokemon = getPokemon(battleState[side].slot.pokemonId);
         if (!pokemon) return null;
+        // 7.4 E3: 교체하는 편은 나가는 모션 동안 교체 전 포켓몬 카드를 보여 준다(입력 영역은 실제 상태 그대로)
+        const shownState = fx?.showPrev[side] ? fx.prev : battleState;
+        const shownPokemon = getPokemon(shownState[side].slot.pokemonId) ?? pokemon;
         return (
           <div
             key={side}
@@ -35,7 +38,7 @@ export function BattleBoard(props: BattleBoardProps) {
           >
             {/* 기절 효과(회색조·가라앉음)는 카드 부분에만 걸고, 아래 교체·기술 입력 영역은 그대로 둔다 */}
             <div className="battle-fighter-top">
-              <BattleFighterCard {...props} side={side} pokemon={pokemon} shownHp={fx?.hp[side]} />
+              <BattleFighterCard {...props} battleState={shownState} side={side} pokemon={shownPokemon} shownHp={fx?.hp[side]} />
             </div>
             <BattleFighterInput {...props} side={side} pokemon={pokemon} />
           </div>

@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { STATUS_LABELS } from "../../lib/battleLogLabels";
+import type { BattleState } from "../../lib/battle/state";
 import { statOrAccuracyLabel } from "../../lib/statLabels";
 import { TYPE_COLORS, typeColorRgba } from "../../lib/typeColors";
 import type { StatusCondition } from "../../types/status";
@@ -22,6 +23,10 @@ const GHOST_HEX = "#9b6fd0";
 const popTags = (e: ActionLogEntry) => [e.critical && "급소!", e.typeEffectiveness >= 2 && "효과 굉장!", e.typeEffectiveness < 1 && "별로…"].filter(Boolean).join(" ");
 /** 마지막 공개 뒤 줄이 나타나는 모션(0.25s)이 끝나도록 기다렸다가 재생 상태를 걷는다 */
 const SETTLE = 350;
+/** 교체 한 번이 차지하는 시간(ms) — 나가는 카드가 뒤로 물러나고(OUT_MS) 새 카드가 앞으로 나온다. 그만큼 뒤 행동 일정이 밀린다(7.4 E3) */
+const SWITCH_MS = 700;
+const OUT_MS = 300;
+const SWITCH_PX = 26;
 
 const other = (k: FighterKey): FighterKey => (k === "a" ? "b" : "a");
 
@@ -30,12 +35,18 @@ const other = (k: FighterKey): FighterKey => (k === "a" ? "b" : "a");
  * null이면 재생이 아니다(전부 공개·실제 HP).
  */
 export interface TurnFxView {
+  /** 행동 전 교체 줄이 공개됐는지 — 새 포켓몬이 나오는 순간에 나온다 */
+  pre: boolean;
   /** 앞에서부터 공개된 행동 수 */
   actions: number;
   /** 턴 종료 줄·꼬리 줄이 공개됐는지 */
   end: boolean;
   /** 지금 보여줄 HP(편별). 없는 편은 실제 HP — 교체가 있었던 편은 카드 안 포켓몬이 바뀌어 중간값을 안 쓴다 */
   hp: Partial<Record<FighterKey, number>>;
+  /** 교체 중인 편(true)은 카드가 교체 전 포켓몬(prev)을 보여 준다 — 상태는 이미 새 포켓몬이라 물러나는 모션 동안만 붙들어 둔다(7.4 E3) */
+  showPrev: Partial<Record<FighterKey, boolean>>;
+  /** 이 턴이 시작하기 직전의 배틀 상태 */
+  prev: BattleState;
 }
 
 /**
@@ -65,17 +76,17 @@ export function hpSteps(start: Record<FighterKey, number>, actions: ActionLogEnt
  * 처음 그릴 때(이미 진행 중인 대전을 다시 열 때)는 재생하지 않고, 같은 턴의 부분 결과가 완성본으로 바뀔 때는 이미 재생한 행동을 건너뛴다.
  * 동작 줄이기(prefers-reduced-motion)에서는 이펙트·공개 지연을 전부 생략한다(웹 애니메이션 API는 CSS 미디어 쿼리의 영향을 받지 않는다).
  * 돌려주는 값은 [a편 카드의 ref, b편 카드의 ref, view] — 콜백 ref(state)라 린트가 렌더 중 ref 접근으로 보지 않는다.
- * hp는 두 편 활성 포켓몬의 실제(턴 끝) HP — 단계 재생의 시작값(직전 턴 끝 HP)을 기억하는 데 쓴다.
+ * 7.4 E3: 교체는 나가는 카드가 상대에게서 멀어지는 쪽으로 물러나 사라지고 새 카드가 앞으로 나온다. 교체가 있는 만큼 뒤 행동 일정이 밀린다.
+ * battleState는 단계 재생의 시작값(직전 턴 끝 HP)과 교체 전 포켓몬을 기억하는 데 쓴다.
  */
-export function useTurnFx(log: TurnResult[], hp: Record<FighterKey, number>, maxHp: Record<FighterKey, number>) {
+export function useTurnFx(log: TurnResult[], battleState: BattleState) {
   const [nodeA, setNodeA] = useState<HTMLElement | null>(null);
   const [nodeB, setNodeB] = useState<HTMLElement | null>(null);
   const [view, setView] = useState<TurnFxView | null>(null);
-  const seen = useRef<{ turn: number; actions: number; ended: boolean } | null>(null);
+  const seen = useRef<{ turn: number; actions: number; ended: boolean; switches: number } | null>(null);
   const mounted = useRef(false);
-  // 직전 렌더 값 — 다음 턴의 단계 재생 시작 HP와 팝업 비율(HP 변화 ÷ 최대 HP)에 쓴다
-  const prevHp = useRef(hp);
-  const prevMaxHp = useRef(maxHp);
+  // 직전 렌더의 배틀 상태 — 다음 턴의 단계 재생 시작 HP·팝업 비율(HP 변화 ÷ 최대 HP)·교체 전 포켓몬에 쓴다
+  const prevState = useRef(battleState);
 
   useLayoutEffect(() => {
     const last = log[log.length - 1];
@@ -89,7 +100,8 @@ export function useTurnFx(log: TurnResult[], hp: Record<FighterKey, number>, max
     const same = prev && prev.turn === last.turnNumber && last.actions.length >= prev.actions;
     const doneActions = same ? prev.actions : 0;
     const endDone = same ? prev.ended : false;
-    seen.current = { turn: last.turnNumber, actions: last.actions.length, ended: last.endOfTurn.length > 0 || endDone };
+    const doneSwitches = same ? prev.switches : 0;
+    seen.current = { turn: last.turnNumber, actions: last.actions.length, ended: last.endOfTurn.length > 0 || endDone, switches: last.switches.length };
     // 처음 그릴 때는 기록만 하고 재생하지 않는다
     if (!mounted.current) {
       mounted.current = true;
@@ -159,6 +171,27 @@ export function useTurnFx(log: TurnResult[], hp: Record<FighterKey, number>, max
     const aura = (who: FighterKey, delay: number, hex: string, duration = 900) => {
       nodes[who].animate([{ boxShadow: `0 0 0 0 ${typeColorRgba(hex, 0)}` }, { boxShadow: `0 0 26px 8px ${typeColorRgba(hex, 0.85)}`, offset: 0.4 }, { boxShadow: `0 0 0 0 ${typeColorRgba(hex, 0)}` }], { duration, delay });
     };
+    // 교체 모션 — 나가는 카드는 상대에게서 멀어지는 쪽으로 물러나며 사라지고, 들어오는 카드는 그쪽에서 앞으로 나온다
+    const away = (who: FighterKey) => {
+      const me = nodes[who].getBoundingClientRect();
+      const op = nodes[other(who)].getBoundingClientRect();
+      const dx = me.left + me.width / 2 - (op.left + op.width / 2);
+      const dy = me.top + me.height / 2 - (op.top + op.height / 2);
+      const d = Math.hypot(dx, dy) || 1;
+      return [(dx / d) * SWITCH_PX, (dy / d) * SWITCH_PX] as const;
+    };
+    const swapOut = (who: FighterKey, delay: number) => {
+      const [x, y] = away(who);
+      const gone = { transform: `translate(${x}px, ${y}px) scale(0.9)`, opacity: 0 };
+      nodes[who].animate([{ transform: "none", opacity: 1 }, { ...gone, offset: 0.9 }, gone], { duration: OUT_MS + 40, delay, easing: "ease-in" });
+    };
+    const swapIn = (who: FighterKey, delay: number) => {
+      const [x, y] = away(who);
+      nodes[who].animate(
+        [{ transform: `translate(${x}px, ${y}px) scale(0.9)`, opacity: 0 }, { transform: `translate(${-x * 0.4}px, ${-y * 0.4}px) scale(1.04)`, opacity: 1, offset: 0.65 }, { transform: "none", opacity: 1 }],
+        { duration: 420, delay, easing: "ease-out", fill: "backwards" },
+      );
+    };
     const pulse = (who: FighterKey, delay: number) => {
       nodes[who].animate([{ transform: "none" }, { transform: "scale(1.04)", offset: 0.4 }, { transform: "none" }], { duration: 260, delay, easing: EASE });
     };
@@ -166,8 +199,25 @@ export function useTurnFx(log: TurnResult[], hp: Record<FighterKey, number>, max
     const newActions = last.actions.slice(doneActions);
     // HP 단계(공개·HP 일정표와 회복·피해 팝업이 같이 쓴다). 교체가 있었던 편은 중간값 없이 실제 HP를 쓴다.
     const swapped = new Set(last.switches.map((s) => s.side));
-    const steps = hpSteps(prevHp.current, newActions, endDone ? [] : last.endOfTurn, swapped);
-    const init = hpSteps(prevHp.current, [], [], swapped)[0];
+    const startHp = { a: prevState.current.a.currentHp, b: prevState.current.b.currentHp };
+    const steps = hpSteps(startHp, newActions, endDone ? [] : last.endOfTurn, swapped);
+    const init = hpSteps(startHp, [], [], swapped)[0];
+    // 교체 일정 — after: 이 새 행동 번호 뒤에 일어난다(-1 = 행동 전 교체, 이미 재생한 행동 뒤의 교체도 -1). 유턴류는 쓴 쪽의 행동 뒤, 끌려나온 교체는 상대의 행동 뒤
+    // enter: 나가는 포켓몬이 있는 교체(강제 교체 합성 카드의 fromIndex -1은 들어오는 모션만)
+    // 이미 재생한 교체는 건너뛴다 — 양쪽이 유턴을 쓰면 결과가 두 번(선공 교체 뒤 중간 결과, 후공 교체 뒤 완성본)에 걸쳐 들어오는데 완성본에도 선공 교체가 들어 있다
+    const swaps = last.switches.slice(doneSwitches).map((sw) => {
+      const idx = sw.afterMove ? last.actions.findIndex((a) => a.actor === (sw.forced ? other(sw.side) : sw.side)) : -1;
+      return { side: sw.side, enter: sw.fromIndex >= 0, afterMove: !!sw.afterMove, after: Math.max(idx - doneActions, -1) };
+    });
+    const groups = [...new Set(swaps.map((s) => s.after))];
+    // 행동 k의 시작 시각 — 그보다 앞서 일어난 교체 그룹 수만큼 SWITCH_MS씩 밀린다
+    const startOf = (k: number) => k * STEP + groups.filter((g) => g < k).length * SWITCH_MS;
+    const swapAt = (g: number) => (g < 0 ? 0 : startOf(g) + IMPACT + 150);
+    swaps.forEach((sw) => {
+      const t = swapAt(sw.after);
+      if (sw.enter) swapOut(sw.side, t);
+      swapIn(sw.side, t + (sw.enter ? OUT_MS : 0));
+    });
     // HP가 오른 편은 녹색 회복 효과, 내려간 편은 붉은 팝업 — 로그 필드를 일일이 모으지 않고 HP 단계의 증감으로 본다.
     // skip: 타격 연출(E1)이 이미 보여 준 피격 대상. hurtFlash: 턴 종료 피해는 아래 기존 번쩍임이 있어 끈다.
     const hpFx = (before: TurnFxView["hp"], after: TurnFxView["hp"], delay: number, skip?: FighterKey, hurtFlash = true) => {
@@ -175,7 +225,7 @@ export function useTurnFx(log: TurnResult[], hp: Record<FighterKey, number>, max
         const was = before[s];
         const now = after[s];
         if (was === undefined || now === undefined || now === was || s === skip) continue;
-        const pct = Math.max(1, Math.round((Math.abs(now - was) / prevMaxHp.current[s]) * 100));
+        const pct = Math.max(1, Math.round((Math.abs(now - was) / prevState.current[s].maxHp) * 100));
         if (now > was) {
           flash(s, 0.5, delay, HEAL_HEX);
           pop(s, `+${pct}%`, "is-good", delay);
@@ -189,7 +239,7 @@ export function useTurnFx(log: TurnResult[], hp: Record<FighterKey, number>, max
     const rank = (who: FighterKey, list: ActionLogEntry["selfStatRises"], up: boolean, delay: number) =>
       list?.forEach(({ stat, delta }) => pop(who, `${(up ? "▲" : "▼").repeat(Math.min(Math.abs(delta), 3))} ${statOrAccuracyLabel(stat)}`, up ? "is-good" : "is-bad", delay));
     newActions.forEach((e: ActionLogEntry, k) => {
-      const start = k * STEP;
+      const start = startOf(k);
       const target = other(e.actor);
       if (e.blockedReason) {
         shake(e.actor, 3, start, 220);
@@ -238,7 +288,7 @@ export function useTurnFx(log: TurnResult[], hp: Record<FighterKey, number>, max
       hpFx(k === 0 ? init : steps[k - 1], steps[k], t, !e.blockedReason && e.move.category !== "status" && e.hit && e.damage > 0 ? target : undefined);
     });
     // 턴 종료 피해는 행동이 다 끝난 뒤 맞은 쪽만 약하게 번쩍인다(새로 들어온 턴 종료 기록만)
-    const endStart = newActions.length * STEP;
+    const endStart = newActions.length * STEP + groups.length * SWITCH_MS;
     if (!endDone) {
       last.endOfTurn.forEach((e) => {
         if (e.damage > 0) flash(e.actor, 0.3, endStart);
@@ -255,10 +305,28 @@ export function useTurnFx(log: TurnResult[], hp: Record<FighterKey, number>, max
 
     // 공개·HP 일정표: [시각, 그 시각에 보이는 상태]. 행동 블록은 충돌 순간에, 턴 종료 줄은 턴 종료 시각에 나온다.
     // HP는 시작값(직전 턴 끝 HP)에서 행동마다 로그의 남은 HP로 바뀐다. 교체가 있었던 편은 중간값 없이 실제 HP를 쓴다.
-    // ponytail: 로그에 없는 HP 변화(드물다)는 SETTLE 뒤 재생이 끝날 때 실제 HP로 맞춰진다.
-    const frames: [number, TurnFxView][] = [[0, { actions: doneActions, end: endDone, hp: init }]];
-    newActions.forEach((_, k) => frames.push([k * STEP + IMPACT, { actions: doneActions + k + 1, end: endDone, hp: steps[k] }]));
-    if (!endDone) frames.push([endStart, { actions: last.actions.length, end: true, hp: steps[newActions.length] }]);
+    // 나가는 모션이 끝날 때까지 교체하는 편의 카드는 교체 전 포켓몬을 보여 준다(showPrev).
+    // ponytail: 로그에 없는 HP 변화(드물다)는 SETTLE 뒤 재생이 끝날 때 실제 HP로 맞춰지고, 유턴 전에 맞은 HP는 나가는 카드에 반영되지 않는다.
+    const outUntil = swaps.filter((s) => s.enter).map((s) => ({ side: s.side, until: swapAt(s.after) + OUT_MS }));
+    // 행동 전 교체 줄은 그 교체의 새 포켓몬이 나오는 순간(나가는 모션이 끝난 뒤)에 공개한다
+    // 이어지는 결과(중간 → 완성본)에서는 행동 전 교체 줄이 이미 나와 있으니 다시 숨기지 않는다
+    const preAt = same ? 0 : Math.max(0, ...swaps.filter((s) => !s.afterMove).map((s) => (s.enter ? OUT_MS : 0)));
+    const times = [...new Set([0, preAt, ...newActions.map((_, k) => startOf(k) + IMPACT), ...(endDone ? [] : [endStart]), ...outUntil.map((o) => o.until)])].sort((x, y) => x - y);
+    const frames = times.map((t): [number, TurnFxView] => {
+      const shown = newActions.filter((_, k) => startOf(k) + IMPACT <= t).length;
+      const endShown = endDone || t >= endStart;
+      return [
+        t,
+        {
+          pre: t >= preAt,
+          actions: doneActions + shown,
+          end: endShown,
+          hp: endShown && shown === newActions.length ? steps[newActions.length] : shown ? steps[shown - 1] : init,
+          showPrev: { a: outUntil.some((o) => o.side === "a" && t < o.until), b: outUntil.some((o) => o.side === "b" && t < o.until) },
+          prev: prevState.current,
+        },
+      ];
+    });
     // 0ms 이하 상태는 그리기 전에 바로 적용하고(깜빡임 방지), 나머지는 타이머로 건다
     setView(frames.filter(([t]) => t <= 0).pop()![1]);
     const timers = frames.filter(([t]) => t > 0).map(([t, v]) => setTimeout(() => setView(v), t));
@@ -269,13 +337,10 @@ export function useTurnFx(log: TurnResult[], hp: Record<FighterKey, number>, max
     };
   }, [log, nodeA, nodeB]);
 
-  // 다음 턴의 단계 재생이 시작할 HP — 위 효과보다 뒤에 선언해야 새 턴이 들어온 커밋에서도 직전 턴 끝 값을 읽는다
-  const { a: hpA, b: hpB } = hp;
-  const { a: maxA, b: maxB } = maxHp;
+  // 다음 턴이 시작할 때 읽을 직전 상태 — 위 효과보다 뒤에 선언해야 새 턴이 들어온 커밋에서도 직전 턴 끝 값을 읽는다
   useLayoutEffect(() => {
-    prevHp.current = { a: hpA, b: hpB };
-    prevMaxHp.current = { a: maxA, b: maxB };
-  }, [hpA, hpB, maxA, maxB]);
+    prevState.current = battleState;
+  }, [battleState]);
 
   return [setNodeA, setNodeB, view] as const;
 }
