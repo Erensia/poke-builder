@@ -493,6 +493,15 @@
   border-color: var(--danger-strong);
 }
 
+.battle-fx-pop.is-good {
+  color: var(--safe);
+  border-color: var(--safe);
+}
+
+.battle-fx-pop.is-bad {
+  color: var(--danger-strong);
+}
+
 .battle-fx-pop.is-weak {
   color: var(--text-muted);
 }

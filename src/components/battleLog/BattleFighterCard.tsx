@@ -3,22 +3,12 @@ import { getEffectiveForm, getEffectiveGender, megaBadgeLabel } from "../../lib/
 import type { SpriteFormOptions } from "../../lib/sprites";
 import { PokemonAvatarWithItem } from "../PokemonAvatarWithItem";
 import { rankStageMultiplier } from "../../lib/battlePower";
-import { VOLATILE_LABELS, SCREEN_LABELS } from "../../lib/battleLogLabels";
+import { VOLATILE_LABELS, SCREEN_LABELS, STATUS_LABELS } from "../../lib/battleLogLabels";
 import type { BattleSide, BattleState } from "../../lib/battle/state";
-import type { StatusCondition } from "../../types/status";
 import type { BaseStats } from "../../types/stats";
 import type { Pokemon } from "../../types/pokemon";
 import type { Side } from "./shared";
 import type { BattleBoardProps } from "./battleBoardTypes";
-
-const STATUS_LABELS: Record<StatusCondition, string> = {
-  burn: "화상",
-  poison: "독",
-  "badly-poisoned": "맹독",
-  paralysis: "마비",
-  freeze: "얼음",
-  sleep: "잠듦",
-};
 
 /** 대전 중 실능치 패널에 표시할 6개 스탯을 표 순서(HP·공격·방어·특공·특방·스피드)대로 나열 */
 const REAL_STAT_LABELS: { key: keyof BaseStats; label: string }[] = [
