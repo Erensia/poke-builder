@@ -18,6 +18,21 @@ const FLASH = (alpha: number, hex?: string) => `0 0 0 5px ${hex ? typeColorRgba(
 /** 피해 팝업에 붙는 문구 — 급소·상성(둘 다면 둘 다) */
 /** 상태이상 걸림 번쩍임·팝업 색 — 앱의 타입 색을 빌린다 */
 const STATUS_HEX: Record<StatusCondition, string> = { burn: TYPE_COLORS.불꽃, poison: TYPE_COLORS.독, "badly-poisoned": TYPE_COLORS.독, paralysis: TYPE_COLORS.전기, freeze: TYPE_COLORS.얼음, sleep: TYPE_COLORS.에스퍼 };
+/**
+ * 상태이상 연출 입자 한 벌(7.4 E10) — 기술별이 아니라 상태이상 종류별이라 새 기술도 자동으로 따라온다.
+ * rise = 카드 아래쪽에서 떠오름, spark = 카드 곳곳에서 반짝임, orbit = 머리 위를 돎(혼란의 병아리). 모양은 CSS(.battle-fx-status.is-종류)
+ */
+type StatusFxKind = "burn" | "poison" | "paralysis" | "sleep" | "freeze" | "confusion" | "attract";
+const STATUS_FX: Record<StatusFxKind, { n: number; gap: number; mode: "rise" | "spark" | "orbit"; text?: string }> = {
+  burn: { n: 6, gap: 90, mode: "rise" },
+  poison: { n: 7, gap: 90, mode: "rise" },
+  paralysis: { n: 5, gap: 80, mode: "spark" },
+  sleep: { n: 3, gap: 220, mode: "rise", text: "Z" },
+  freeze: { n: 7, gap: 70, mode: "spark" },
+  confusion: { n: 3, gap: 0, mode: "orbit" },
+  attract: { n: 5, gap: 110, mode: "rise", text: "♥" },
+};
+const STATUS_KIND: Record<StatusCondition, StatusFxKind> = { burn: "burn", poison: "poison", "badly-poisoned": "poison", paralysis: "paralysis", sleep: "sleep", freeze: "freeze" };
 /** 회복 번쩍임 색(--safe 계열) */
 const HEAL_HEX = "#4caf6d";
 /** 길동무 보랏빛 기운 — 고스트 타입 색(#684870)은 다크 테마에서 안 보여 더 밝게 잡았다 */
@@ -311,6 +326,66 @@ export function useTurnFx(log: TurnResult[], battleState: BattleState) {
       beam.animate([{ opacity: 0 }, { opacity: 1, offset: 0.3 }, { opacity: 1, offset: 0.7 }, { opacity: 0 }], life).onfinish = () => beam.remove();
       moon.animate([{ opacity: 0, transform: "translateY(-14px) scale(0.7)" }, { opacity: 1, transform: "none", offset: 0.25 }, { opacity: 1, transform: "none", offset: 0.75 }, { opacity: 0, transform: "translateY(-6px)" }], life).onfinish = () => moon.remove();
     };
+    // 상태이상 연출 입자 — 종류별 모양은 CSS, 움직임은 mode별(떠오름·반짝임·궤도). 끝나면 스스로 지운다
+    const statusFx = (who: FighterKey, kind: StatusFxKind, delay: number) => {
+      const node = nodes[who];
+      const h = node.offsetHeight;
+      const w = node.offsetWidth;
+      const spec = STATUS_FX[kind];
+      for (let i = 0; i < spec.n; i++) {
+        const el = document.createElement("div");
+        el.className = `battle-fx-status is-${kind}`;
+        if (spec.text) el.textContent = spec.text;
+        const at = delay + i * spec.gap;
+        node.append(el);
+        let anim: Animation;
+        if (spec.mode === "orbit") {
+          // 머리 위 타원 궤도를 도는 병아리 — 뒤쪽은 작고 흐리게, 앞쪽은 크고 선명하게. 2바퀴
+          el.style.left = "50%";
+          el.style.top = "4px";
+          el.style.marginLeft = "-8px";
+          const rx = Math.min(w * 0.3, 56);
+          const phase = (i / spec.n) * Math.PI * 2;
+          const frames = Array.from({ length: 25 }, (_, f) => {
+            const a = phase + (f / 24) * Math.PI * 2;
+            const depth = (Math.sin(a) + 1) / 2;
+            return { transform: `translate(${Math.cos(a) * rx}px, ${Math.sin(a) * 9}px) scale(${0.75 + depth * 0.4})`, opacity: 0.55 + depth * 0.45 };
+          });
+          anim = el.animate(frames, { duration: 1100, iterations: 2, delay: at, fill: "both" });
+        } else if (spec.mode === "spark") {
+          el.style.left = `${8 + Math.random() * 84}%`;
+          el.style.top = `${5 + Math.random() * 70}%`;
+          el.style.rotate = `${Math.random() * 60 - 30}deg`;
+          anim = el.animate(
+            [
+              { opacity: 0, transform: "scale(0.4)" },
+              { opacity: 1, transform: "scale(1.2)", offset: 0.2 },
+              { opacity: 0.2, transform: "scale(1)", offset: 0.4 },
+              { opacity: 1, transform: "scale(1)", offset: 0.6 },
+              { opacity: 0, transform: "scale(0.6)" },
+            ],
+            { duration: 650, delay: at, fill: "both" },
+          );
+        } else {
+          el.style.left = `${10 + Math.random() * 76}%`;
+          el.style.top = `${h * 0.6}px`;
+          if (kind === "sleep") el.style.fontSize = `${0.9 + i * 0.35}rem`;
+          if (kind === "poison") el.style.setProperty("--s", `${8 + Math.random() * 8}px`);
+          const dy = -h * (0.35 + Math.random() * 0.2);
+          const dx = (Math.random() * 2 - 1) * 14 + (kind === "sleep" ? 10 + i * 8 : 0);
+          anim = el.animate(
+            [
+              { opacity: 0, transform: "translate(0, 0) scale(0.6)" },
+              { opacity: 1, transform: `translate(${dx * 0.3}px, ${dy * 0.25}px) scale(1)`, offset: 0.2 },
+              { opacity: 1, transform: `translate(${dx * 0.7}px, ${dy * 0.7}px) scale(1)`, offset: 0.7 },
+              { opacity: 0, transform: `translate(${dx}px, ${dy}px) scale(0.9)` },
+            ],
+            { duration: kind === "burn" ? 800 : 1100, delay: at, easing: "ease-out", fill: "both" },
+          );
+        }
+        anim.onfinish = () => el.remove();
+      }
+    };
     const pulse = (who: FighterKey, delay: number) => {
       nodes[who].animate([{ transform: "none" }, { transform: "scale(1.04)", offset: 0.4 }, { transform: "none" }], { duration: 260, delay, easing: EASE });
     };
@@ -418,7 +493,17 @@ export function useTurnFx(log: TurnResult[], battleState: BattleState) {
       if (weatherSet) wash(TYPE_COLORS[WEATHER_ACCENT_TYPE[weatherSet]], t, false);
       if (e.setField) wash(TYPE_COLORS[FIELD_DISPLAY_TYPE[e.setField]], t, true);
       if (e.setTrickRoom || e.roomChange?.on) wash(TYPE_COLORS.에스퍼, t, false);
-      // 기술 고유 연출(하품·맹독·희망사항·달빛 …) — 표에 있는 기술이 성공했을 때만
+      // 상태이상 연출(E10) — 상태이상을 거는 변화기 / 하품(졸음)·잠자기 / 상태이상으로 못 움직이는 턴 / 혼란 자멸
+      if (e.move.category === "status" && !e.blockedReason) {
+        if (e.inflictedStatus) statusFx(foe, STATUS_KIND[e.inflictedStatus], t);
+        if (e.inflictedVolatile === "confusion") statusFx(foe, "confusion", t);
+        if (e.inflictedVolatile === "attract") statusFx(foe, "attract", t);
+        if (e.inflictedVolatile === "drowsy") statusFx(foe, "sleep", t);
+        if (e.restSlept) statusFx(e.actor, "sleep", t);
+      }
+      if (e.blockedReason === "confusion") statusFx(e.actor, "confusion", start);
+      else if (e.blockedReason === "status" && e.blockedByStatus) statusFx(e.actor, STATUS_KIND[e.blockedByStatus], start);
+      // 기술 고유 연출(희망사항·달빛 …) — 표에 있는 기술이 성공했을 때만
       const mf = MOVE_FX[e.move.id];
       if (mf && !e.blockedReason && mf.landed(e)) {
         const who = mf.on === "self" ? e.actor : foe;
@@ -440,6 +525,14 @@ export function useTurnFx(log: TurnResult[], battleState: BattleState) {
     if (!endDone) {
       last.endOfTurn.forEach((e) => {
         if (e.damage > 0) flash(e.actor, 0.3, endStart);
+        // 상태이상 피해(화상·독·맹독)가 들어갈 때 / 하품의 졸음이 터져 잠들 때
+        if (e.damage > 0 && e.statusCondition) statusFx(e.actor, STATUS_KIND[e.statusCondition], endStart);
+        if (e.inflictedDelayedStatus) {
+          const hex = STATUS_HEX[e.inflictedDelayedStatus];
+          flash(e.actor, 0.55, endStart, hex);
+          statusFx(e.actor, STATUS_KIND[e.inflictedDelayedStatus], endStart);
+          pop(e.actor, `${STATUS_LABELS[e.inflictedDelayedStatus]}!`, "", endStart, undefined, hex);
+        }
         // 희망사항이 이루어져 회복할 때
         if (e.wishHeal) {
           aura(e.actor, endStart, WISH_HEX);

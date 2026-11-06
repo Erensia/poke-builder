@@ -588,6 +588,90 @@
   }
 }
 
+/* 7.4 E10 — 상태이상 연출 입자(화상=불씨, 독=독 방울, 마비=전기 불꽃, 잠듦=Z, 얼음=결정, 혼란=병아리, 헤롱헤롱=하트). useTurnFx가 만들고 스스로 지운다 */
+.battle-fx-status {
+  position: absolute;
+  pointer-events: none;
+  opacity: 0;
+  z-index: 2;
+}
+
+.battle-fx-status.is-burn {
+  width: 12px;
+  height: 12px;
+  border-radius: 0 50% 50% 50%;
+  rotate: -45deg;
+  background: linear-gradient(135deg, #ffb347, #e5482c);
+  box-shadow: 0 0 6px #ff8a3c;
+}
+
+.battle-fx-status.is-poison {
+  --s: 11px;
+  width: var(--s);
+  height: var(--s);
+  border-radius: 50%;
+  border: 1.5px solid #a06cd5;
+  background: rgba(160, 108, 213, 0.28);
+}
+
+.battle-fx-status.is-paralysis {
+  width: 12px;
+  height: 18px;
+  background: #fbb917;
+  clip-path: polygon(40% 0, 100% 0, 60% 45%, 90% 45%, 30% 100%, 45% 55%, 15% 55%);
+}
+
+.battle-fx-status.is-sleep {
+  color: #5b9bff;
+  font-weight: 800;
+  line-height: 1;
+  text-shadow: 0 0 4px var(--surface);
+}
+
+.battle-fx-status.is-freeze {
+  width: 11px;
+  height: 14px;
+  background: linear-gradient(135deg, #e8f9ff, #7cc8ee);
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+}
+
+.battle-fx-status.is-attract {
+  color: #ff5d8f;
+  font-size: 1rem;
+  line-height: 1;
+  text-shadow: 0 0 4px var(--surface);
+}
+
+/* 혼란: 병아리 — 노란 몸 + 눈 + 부리 */
+.battle-fx-status.is-confusion {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #ffd84a;
+  box-shadow: inset -2px -2px 0 #f0b72b;
+}
+
+.battle-fx-status.is-confusion::before {
+  content: "";
+  position: absolute;
+  top: 5px;
+  right: 4px;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: #3a2f1e;
+}
+
+.battle-fx-status.is-confusion::after {
+  content: "";
+  position: absolute;
+  top: 8px;
+  right: -3px;
+  border-left: 5px solid #f08a24;
+  border-top: 2.5px solid transparent;
+  border-bottom: 2.5px solid transparent;
+}
+
 /* 7.4 E9c — 기술 고유 연출 입자(희망사항=별)와 달빛(보름달+내리쬐는 빛). useTurnFx가 만들고 스스로 지운다 */
 .battle-fx-float {
   position: absolute;
