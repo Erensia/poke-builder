@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { STATUS_LABELS } from "../../lib/battleLogLabels";
-import type { BattleState } from "../../lib/battle/state";
+import { sideOf, type BattleState } from "../../lib/battle/state";
 import { statOrAccuracyLabel } from "../../lib/statLabels";
 import { FIELD_DISPLAY_TYPE } from "../../lib/fieldEffects";
 import { TYPE_COLORS, typeColorRgba } from "../../lib/typeColors";
@@ -213,6 +213,8 @@ export function useTurnFx(log: TurnResult[], battleState: BattleState) {
     const entryIdx = log.length - 1;
     const resultKey = `${log.length}:${last.turnNumber}`;
     const play = (): number => {
+    // 이 재생이 새로 만든 애니메이션만 끝 시각에 센다(이미 돌던 CSS 애니메이션이 다음 항목을 밀지 않게)
+    const existing = new Set((nodeA.parentElement ?? nodeA).getAnimations({ subtree: true }));
     const faintAt: Partial<Record<FighterKey, number>> = {};
     const lunge = (who: FighterKey, delay: number) => {
       const from = nodes[who].getBoundingClientRect();
@@ -531,7 +533,12 @@ export function useTurnFx(log: TurnResult[], battleState: BattleState) {
     // 메가진화(E8) — 로그에 정보가 없어서 직전 상태와 비교한다(이번 턴 교체한 편은 제외). 행동 전에 일어난다
     const nowState = liveSnap;
     const wasState = prevSnap;
-    const megas = (["a", "b"] as const).filter((k) => nowState[k].hasMegaEvolved && !wasState[k].hasMegaEvolved && !swapped.has(k));
+    // 같은 턴에 유턴 등으로 나간 편은 지금 상태의 활성 포켓몬이 이미 바뀌었으니, 나가기 전 자리(파티)의 포켓몬으로 본다
+    const megaFighter = (k: FighterKey) => (swapped.has(k) ? sideOf(nowState, k).party[sideOf(wasState, k).activeIndex] : nowState[k]);
+    const megas = (["a", "b"] as const).filter((k) => megaFighter(k)?.hasMegaEvolved && !wasState[k].hasMegaEvolved);
+    // 메가진화한 채 나가는 편은 폼이 바뀐 뒤(MEGA_PEAK)부터 나가는 모션이 끝날 때까지 메가진화한 모습을 보여 준다 — HP는 아직 턴 시작 값
+    const megaPrev: BattleState = { ...prevSnap };
+    megas.filter((k) => swapped.has(k)).forEach((k) => (megaPrev[k] = { ...megaFighter(k), currentHp: wasState[k].currentHp }));
     // 일정을 미는 지점별 시간 — after(행동 번호 뒤, -1 = 행동 전)마다 교체는 SWITCH_MS, 메가진화는 MEGA_MS(같은 지점이면 긴 쪽)
     const gapMs = new Map<number, number>();
     swaps.forEach((s) => gapMs.set(s.after, Math.max(gapMs.get(s.after) ?? 0, SWITCH_MS)));
@@ -722,7 +729,7 @@ export function useTurnFx(log: TurnResult[], battleState: BattleState) {
           end: endShown,
           hp: endShown && shown === newActions.length ? steps[newActions.length] : shown ? steps[shown - 1] : init,
           showPrev: { a: outUntil.some((o) => o.side === "a" && t < o.until), b: outUntil.some((o) => o.side === "b" && t < o.until) },
-          prev: prevSnap,
+          prev: t >= MEGA_PEAK ? megaPrev : prevSnap,
           entry: entryIdx,
           live: liveSnap,
           env: envAt >= 0 && t < envAt ? { weather: prevSnap.weather, field: prevSnap.field } : undefined,
@@ -733,7 +740,7 @@ export function useTurnFx(log: TurnResult[], battleState: BattleState) {
     setView(frames.filter(([t]) => t <= 0).pop()![1]);
     fxq.current.timers.push(...frames.filter(([t]) => t > 0).map(([t, v]) => window.setTimeout(() => setView(v), t)));
     // 다음 항목이 시작해도 되는 시각 — 공개 일정이 끝난 뒤이자, 방금 건 웹 애니메이션(먼지·입자·팝업)과 기절 전환이 전부 끝난 뒤
-    const anims = (board ?? nodeA).getAnimations({ subtree: true }).map((an) => {
+    const anims = (board ?? nodeA).getAnimations({ subtree: true }).filter((an) => !existing.has(an)).map((an) => {
       const end = an.effect?.getComputedTiming().endTime;
       return typeof end === "number" && Number.isFinite(end) ? end - Number(an.currentTime ?? 0) : 0;
     });

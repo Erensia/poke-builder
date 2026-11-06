@@ -22,6 +22,8 @@ export function BattleBoard(props: BattleBoardProps) {
   const cur = fx?.live ?? battleState;
   // 7.4 E9: 날씨·필드가 바뀌는 행동이 나오기 전까지는 이전 날씨·필드를 보여 준다
   const env = fx?.env ?? cur;
+  // 연출(기절 등)이 재생되는 동안은 선택 UI를 미룬다 — 상태는 이미 "내보낼 포켓몬을 고르는 중"이라 안 그러면 연출보다 먼저 뜬다(7.5)
+  const holdChoice = fx !== null && !!(props.pendingForcedSwitch || props.pendingPivot);
   // 로그의 AI HP 수치를 %로 바꾸는 데 쓰는 AI 파티의 종 id·최대 HP(파티 인덱스 순 — 같은 종이 둘이어도 개체별로 구분되도록 인덱스로 찾는다)
   const aiParty = aiSide ? battleSide(aiSide)?.party.map((f) => ({ id: f.slot.pokemonId, maxHp: f.maxHp })) : undefined;
   return (
@@ -45,13 +47,17 @@ export function BattleBoard(props: BattleBoardProps) {
             <div className="battle-fighter-top">
               <BattleFighterCard {...props} battleState={shownState} side={side} pokemon={shownPokemon} shownHp={fx?.hp[side]} />
             </div>
-            <BattleFighterInput {...props} side={side} pokemon={pokemon} />
+            {/* 자리는 유지한 채 숨겨 카드 높이가 흔들리지 않게 한다 */}
+            <div style={{ display: "contents", visibility: holdChoice && (props.pendingForcedSwitch?.[side] || props.pendingPivot?.side === side) ? "hidden" : undefined }}>
+              <BattleFighterInput {...props} side={side} pokemon={pokemon} />
+            </div>
           </div>
         );
       })}
     </div>
 
-    <BattleTurnPanel {...props} resultDelay={resultMs} />
+    {/* 대전을 끝내는 항목이 재생 대기 중이거나 선택(교체)을 기다리는 중이면 연출이 끝날 때까지 배너·안내를 미룬다(7.5) */}
+    {!(winner && fx && fx.entry < log.length - 1) && !holdChoice && <BattleTurnPanel {...props} resultDelay={resultMs} />}
 
     <BattleTurnLog log={log} aiSide={aiSide} aiParty={aiParty} reveal={fx ?? undefined} />
     </>

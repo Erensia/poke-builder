@@ -40,7 +40,7 @@ function SwitchPanel({ title, bench, onPick }: { title: ReactNode; bench: BenchO
 
 /** 한 편의 이번 턴 입력 영역 — AI 대기·강제 교체·유턴류 교대·기술/교체 선택·메가진화 토글 */
 export function BattleFighterInput(props: BattleBoardProps & { side: Side; pokemon: Pokemon }) {
-  const { side, pokemon, battleState, winner, selected, setSelected, inputMode, setInputMode, megaDeclared, setMegaDeclared, pendingForcedSwitch, pendingPivot, setLockWarning, activeMoveIds, choiceLockedMoveId, battleSide, switchableIndices, resolveForcedSwitch, resolvePivot, isStruggling, moveRestrictionMessage, aiSide } = props;
+  const { side, pokemon, battleState, winner, selected, setSelected, inputMode, setInputMode, megaDeclared, setMegaDeclared, pendingForcedSwitch, pendingPivot, setLockWarning, activeMoveIds, battleSide, switchableIndices, resolveForcedSwitch, resolvePivot, isStruggling, aiSide } = props;
   const fighter = battleState[side];
   const form = getEffectiveForm(pokemon, fighter.slot);
   const moveIds: (string | null)[] = activeMoveIds(side);
@@ -49,25 +49,6 @@ export function BattleFighterInput(props: BattleBoardProps & { side: Side; pokem
     .map((id) => getMove(id))
     .filter((m): m is NonNullable<typeof m> => m !== undefined);
   // 구애스카프: 이미 잠긴 기술이 있으면(대전 시작 후 첫 사용 이후) 그 id를 미리 구해둔다
-  const lockedMoveId = choiceLockedMoveId(side);
-  // 기술 칸 사유 — 실제 배틀에서도 조건을 안 채웠다고 기술 자체를 못 내는 건 아니고, 내봤자
-  // 실패하는 것뿐이다(사용자 확인) — 코골기(잠든 상태 전용)·속이기(첫 턴 전용) 등은 조건
-  // 불충족이어도 버튼은 그대로 선택 가능하게 두고, resolveAction이 "usageCondition"으로 실패
-  // 처리하는 걸 로그에서 그대로 보여준다. 터치에는 호버(title)가 없어 기술 칸 아래 줄로 보여 준다(5.1 A5).
-  // 기습은 상대가 이번 턴 뭘 낼지(동시 비공개 선택이라) 미리 알 수 없어 "지금 조건 충족 여부"를
-  // 판정할 수 없다 — 매번 고정 안내만 띄운다.
-  const moveNote = (move: (typeof moves)[number]): string | null => {
-    const unmet =
-      (move.usageCondition === "sleep-only" && fighter.status.condition !== "sleep" && "잠든 상태에서만 사용 가능") ||
-      (move.usageCondition === "first-turn-only" && battleState.turnNumber !== 0 && "등장 후 첫 턴에만 사용 가능") ||
-      (move.usageCondition === "field-required" && !battleState.field && "필드가 있을 때만 사용 가능") ||
-      (move.usageCondition === "weather-required" && battleState.weather !== move.requiresWeather && `${move.requiresWeather} 날씨일 때만 사용 가능`);
-    if (unmet) return `${unmet} — 지금 쓰면 실패해요`;
-    if (move.usageCondition === "opponent-damaging-move-only") return "상대보다 먼저 움직이면서, 상대가 데미지 기술을 낼 때만 성공해요";
-    if (lockedMoveId !== null && move.id !== lockedMoveId) return "구애스카프 때문에 지금은 이 기술을 쓸 수 없다";
-    return moveRestrictionMessage(side, move.id);
-  };
-
   const bs = side === "a" ? battleState.sideA : battleState.sideB;
   const benchIdx = switchableIndices(side);
   const bench: BenchOption[] = benchIdx.map((i) => ({
@@ -150,25 +131,25 @@ export function BattleFighterInput(props: BattleBoardProps & { side: Side; pokem
 
   return (
     <>
-      {canSwitch && (
-        <div className="battle-input-toggle">
-          {(["move", "switch"] as const).map((m) => (
-            <button
-              key={m}
-              type="button"
-              className={`battle-input-toggle-btn tap-target${mode === m ? " is-on" : ""}`}
-              onClick={() => {
-                setInputMode((p) => ({ ...p, [side]: m }));
-                setSelected((p) => ({ ...p, [side]: null }));
-              }}
-            >
-              {m === "move" ? "기술" : "교체"}
-            </button>
-          ))}
-        </div>
-      )}
+      {/* 교체할 수 없어도(남은 포켓몬이 없거나 도망봉인·반동 등) 알약은 두고 교체만 비활성으로 — 양쪽 모양을 통일한다(7.5) */}
+      <div className="battle-input-toggle">
+        {(["move", "switch"] as const).map((m) => (
+          <button
+            key={m}
+            type="button"
+            disabled={m === "switch" && !canSwitch}
+            className={`battle-input-toggle-btn tap-target${mode === m ? " is-on" : ""}`}
+            onClick={() => {
+              setInputMode((p) => ({ ...p, [side]: m }));
+              setSelected((p) => ({ ...p, [side]: null }));
+            }}
+          >
+            {m === "move" ? "기술" : "교체"}
+          </button>
+        ))}
+      </div>
 
-      {/* PR-C1b: 도망봉인(문어굳히기·물고버티기) 안내 — 교체 토글이 사라진 이유 표시 */}
+      {/* PR-C1b: 도망봉인(문어굳히기·물고버티기) 안내 — 교체 알약이 비활성인 이유 표시 */}
       {trapped && benchIdx.length > 0 && fighter.currentHp > 0 && (
         <div className="battle-input-hint is-muted">교체할 수 없다! (도망봉인)</div>
       )}
@@ -255,10 +236,6 @@ export function BattleFighterInput(props: BattleBoardProps & { side: Side; pokem
               );
             })}
           </div>
-          {moves.map((move) => {
-            const note = moveNote(move);
-            return note && <p key={move.id} className="battle-move-note">{move.name} — {note}</p>;
-          })}
         </>
       ) : (
         // PP 전부 0 / 구애류 잠긴 기술 PP 0 / 앙코르·도발 등으로 고를 수 있는
