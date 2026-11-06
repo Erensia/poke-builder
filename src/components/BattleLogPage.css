@@ -414,12 +414,188 @@
 }
 
 .battle-board {
+  position: relative;
+  isolation: isolate;
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 1.2rem;
   padding: 0.7rem;
   border-radius: var(--r-xl);
   transition: background 0.3s ease;
+}
+
+/* 7.4 E9 — 날씨가 유지되는 동안 보드 뒤(카드 아래)로 흐르는 입자. 카드는 반투명 유리라 비치게 보인다 */
+.battle-board[data-weather]::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  animation-duration: 1s;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+.battle-board[data-weather="비"]::before {
+  background-image:
+    linear-gradient(100deg, transparent 47%, rgba(120, 170, 255, 0.55) 50%, transparent 53%),
+    linear-gradient(100deg, transparent 47%, rgba(150, 195, 255, 0.4) 50%, transparent 53%);
+  background-size: 26px 64px, 41px 97px;
+  animation-name: battle-rain;
+  animation-duration: 0.55s;
+}
+
+.battle-board[data-weather="눈"]::before {
+  background-image:
+    radial-gradient(circle, rgba(255, 255, 255, 0.95) 0 2px, transparent 3px),
+    radial-gradient(circle, rgba(220, 240, 255, 0.8) 0 1.5px, transparent 2.5px);
+  background-size: 46px 46px, 71px 71px;
+  animation-name: battle-snow;
+  animation-duration: 4s;
+}
+
+.battle-board[data-weather="모래바람"]::before {
+  background-image:
+    linear-gradient(90deg, transparent, rgba(214, 178, 110, 0.24), transparent),
+    linear-gradient(90deg, transparent, rgba(190, 150, 90, 0.18), transparent);
+  background-size: 240px 36px, 330px 52px;
+  animation-name: battle-sand;
+  animation-duration: 1.2s;
+}
+
+.battle-board[data-weather="쾌청"]::before {
+  background: radial-gradient(circle at 88% -8%, rgba(255, 196, 80, 0.55), transparent 55%);
+  animation-name: battle-sun;
+  animation-duration: 3.2s;
+  animation-timing-function: ease-in-out;
+  animation-direction: alternate;
+}
+
+@keyframes battle-rain {
+  to {
+    background-position: -13px 64px, -20px 97px;
+  }
+}
+
+@keyframes battle-snow {
+  to {
+    background-position: 20px 46px, -30px 71px;
+  }
+}
+
+@keyframes battle-sand {
+  to {
+    background-position: 240px 0, 330px 0;
+  }
+}
+
+@keyframes battle-sun {
+  from {
+    opacity: 0.55;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* 7.4 E9 — 필드가 유지되는 동안 카드 뒤 보드 배경 하단에 깔리는 띠(그래스=풀잎, 일렉트릭=불꽃, 사이코=파동, 미스트=안개).
+   보드 높이를 바꾸지 않고(z-index -1 = 카드 뒤, 보드 배경 위) 반투명 유리 카드 사이로 비쳐 보인다.
+   정지해도 읽히는 모양이라 동작 줄이기에서도 그대로 둔다 */
+.battle-board[data-field]::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2.6rem;
+  z-index: -1;
+  border-radius: 0 0 var(--r-xl) var(--r-xl);
+  pointer-events: none;
+  animation: battle-field-in 0.5s ease backwards;
+}
+
+@keyframes battle-field-in {
+  from {
+    opacity: 0;
+  }
+}
+
+.battle-board[data-field="그래스필드"]::after {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='22' height='16' viewBox='0 0 22 16'%3E%3Cg fill='%2366a945'%3E%3Cpolygon points='1,16 5,4 9,16'/%3E%3Cpolygon points='8,16 12,0 16,16'/%3E%3Cpolygon points='14,16 18,6 22,16'/%3E%3C/g%3E%3Cg fill='%234f8a33' fill-opacity='.8'%3E%3Cpolygon points='5,16 7,9 10,16'/%3E%3Cpolygon points='16,16 18,10 21,16'/%3E%3C/g%3E%3C/svg%3E"), linear-gradient(to top, rgba(102, 169, 69, 0.45), transparent);
+  background-size: 22px 16px, 100% 100%;
+  background-repeat: repeat-x, no-repeat;
+  background-position: 0 100%, 0 0;
+  animation: battle-field-in 0.5s ease backwards, battle-grass-sway 2.4s ease-in-out infinite alternate;
+}
+
+.battle-board[data-field="일렉트릭필드"]::after {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='34' height='16' viewBox='0 0 34 16'%3E%3Cpolyline points='0,13 6,5 11,11 17,1 23,10 28,4 34,13' fill='none' stroke='%23fbb917' stroke-width='2' stroke-linejoin='round' stroke-linecap='round'/%3E%3C/svg%3E"), linear-gradient(to top, rgba(251, 185, 23, 0.4), transparent);
+  background-size: 34px 16px, 100% 100%;
+  background-repeat: repeat-x, no-repeat;
+  background-position: 0 100%, 0 0;
+  filter: drop-shadow(0 0 3px #fbb917);
+  animation: battle-field-in 0.5s ease backwards, battle-spark 0.9s steps(2, jump-none) infinite;
+}
+
+.battle-board[data-field="사이코필드"]::after {
+  background: linear-gradient(90deg, rgba(221, 107, 123, 0.5), rgba(138, 107, 208, 0.55), rgba(221, 107, 123, 0.5));
+  background-size: 200% 100%;
+  mask-image: linear-gradient(to top, #000, transparent);
+  -webkit-mask-image: linear-gradient(to top, #000, transparent);
+  animation: battle-field-in 0.5s ease backwards, battle-psychic 3s ease-in-out infinite alternate;
+}
+
+.battle-board[data-field="미스트필드"]::after {
+  background-image:
+    radial-gradient(ellipse 90px 22px at 30% 100%, rgba(255, 230, 245, 0.75), transparent),
+    radial-gradient(ellipse 120px 26px at 70% 100%, rgba(218, 180, 212, 0.7), transparent);
+  background-size: 50% 100%, 60% 100%;
+  background-repeat: repeat-x;
+  animation: battle-field-in 0.5s ease backwards, battle-mist 6s linear infinite;
+}
+
+@keyframes battle-grass-sway {
+  to {
+    background-position: 8px 100%, 0 0;
+  }
+}
+
+@keyframes battle-spark {
+  from {
+    background-position: 0 100%, 0 0;
+  }
+  to {
+    background-position: 17px 100%, 0 0;
+  }
+}
+
+@keyframes battle-psychic {
+  to {
+    background-position: 100% 0;
+  }
+}
+
+@keyframes battle-mist {
+  to {
+    background-position: 100% 0, -120% 0;
+  }
+}
+
+/* 동작 줄이기: 입자가 멈춘 채 남지 않게 상시 날씨 연출은 숨긴다 */
+@media (prefers-reduced-motion: reduce) {
+  .battle-board[data-weather]::before {
+    display: none;
+  }
+}
+
+/* 7.4 E9 — 날씨·필드·룸이 바뀔 때 판 전체를 훑는 색 물결(useTurnFx가 만들고 스스로 지운다) */
+.battle-fx-wash {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  z-index: 3;
 }
 
 /* 날씨/필드가 적용 중일 때 배틀 보드 위에 뜨는 안내 배지. 두 칸짜리 grid를 그대로 넘어가야 해서 span */

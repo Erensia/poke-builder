@@ -18,11 +18,13 @@ export function BattleBoard(props: BattleBoardProps) {
   // 6.5 M1 G — 새 턴 결과가 들어오면 행동 순서대로 카드에 돌진·피격 효과를 겹쳐 재생한다.
   // 7.4 E7 — fx는 재생 중인 턴의 로그 공개 범위·HP(이펙트에 맞춰 단계 재생). 재생이 아니면 null
   const [attachA, attachB, fx] = useTurnFx(log, battleState);
+  // 7.4 E9: 날씨·필드가 바뀌는 행동이 나오기 전까지는 이전 날씨·필드를 보여 준다
+  const env = fx?.env ?? battleState;
   // 로그의 AI HP 수치를 %로 바꾸는 데 쓰는 AI 파티의 종 id·최대 HP(파티 인덱스 순 — 같은 종이 둘이어도 개체별로 구분되도록 인덱스로 찾는다)
   const aiParty = aiSide ? battleSide(aiSide)?.party.map((f) => ({ id: f.slot.pokemonId, maxHp: f.maxHp })) : undefined;
   return (
     <>
-    <div className="battle-board" style={{ background: battleBoardBackground(battleState) }}>
+    <div className="battle-board" data-weather={env.weather} data-field={env.field} style={{ background: battleBoardBackground({ ...battleState, ...env }) }}>
       <BattleFieldStatus battleState={battleState} />
       {(["a", "b"] as const).map((side) => {
         const pokemon = getPokemon(battleState[side].slot.pokemonId);
