@@ -588,6 +588,18 @@
   }
 }
 
+/* 7.4 E4 — 기절할 때 카드 아래에서 양옆으로 퍼지는 먼지(useTurnFx가 만들고 스스로 지운다) */
+.battle-fx-dust {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(150, 150, 150, 0.85), rgba(150, 150, 150, 0));
+  pointer-events: none;
+  opacity: 0;
+  z-index: 2;
+}
+
 /* 7.4 E10 — 상태이상 연출 입자(화상=불씨, 독=독 방울, 마비=전기 불꽃, 잠듦=Z, 얼음=결정, 혼란=병아리, 헤롱헤롱=하트). useTurnFx가 만들고 스스로 지운다 */
 .battle-fx-status {
   position: absolute;

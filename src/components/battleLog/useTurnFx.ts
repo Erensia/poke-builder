@@ -131,6 +131,8 @@ export function useTurnFx(log: TurnResult[], battleState: BattleState) {
   const [nodeA, setNodeA] = useState<HTMLElement | null>(null);
   const [nodeB, setNodeB] = useState<HTMLElement | null>(null);
   const [view, setView] = useState<TurnFxView | null>(null);
+  // 대전이 끝난 턴이면 결과 배너가 나타날 시각(ms) — 마지막 기절 연출이 끝난 뒤. 어느 로그 항목의 값인지 key를 붙여, 지금 로그와 안 맞으면(이전 대전 값) 쓰지 않는다
+  const [result, setResult] = useState<{ key: string; ms: number } | null>(null);
   const seen = useRef<{ turn: number; actions: number; ended: boolean; switches: number } | null>(null);
   const mounted = useRef(false);
   // 직전 렌더의 배틀 상태 — 다음 턴의 단계 재생 시작 HP·팝업 비율(HP 변화 ÷ 최대 HP)·교체 전 포켓몬에 쓴다
@@ -386,6 +388,43 @@ export function useTurnFx(log: TurnResult[], battleState: BattleState) {
         anim.onfinish = () => el.remove();
       }
     };
+    // 기절(E4): 카드 부분이 쿵 하고 가라앉고, 먼지가 양옆으로 퍼지고, "기절!" 팝업이 뜬다
+    const faintFx = (who: FighterKey, delay: number) => {
+      const node = nodes[who];
+      const top = node.querySelector<HTMLElement>(".battle-fighter-top");
+      top?.animate([{ transform: "none" }, { transform: "translateY(14px) rotate(-3deg) scale(0.97)", offset: 0.45 }, { transform: "none" }], { duration: 500, delay, easing: "ease-in-out" });
+      const ground = top ? top.offsetTop + top.offsetHeight - 6 : node.offsetHeight * 0.5;
+      for (let i = 0; i < 6; i++) {
+        const el = document.createElement("div");
+        el.className = "battle-fx-dust";
+        el.style.top = `${ground}px`;
+        el.style.left = `${38 + Math.random() * 24}%`;
+        node.append(el);
+        const side = i % 2 ? 1 : -1;
+        el.animate(
+          [
+            { opacity: 0, transform: "translate(0, 0) scale(0.5)" },
+            { opacity: 0.7, offset: 0.25 },
+            { opacity: 0, transform: `translate(${side * (20 + Math.random() * 34)}px, ${-6 - Math.random() * 12}px) scale(1.6)` },
+          ],
+          { duration: 700, delay: delay + i * 30, easing: "ease-out", fill: "both" },
+        ).onfinish = () => el.remove();
+      }
+      pop(who, "기절!", "is-bad", delay);
+    };
+    // 마지막 한 마리가 쓰러지는 순간 판 전체가 흔들리고 번쩍인다(대전 종료)
+    const impact = (delay: number) => {
+      if (!board) return;
+      board.animate(
+        [{ transform: "none" }, { transform: "translateX(-7px)", offset: 0.15 }, { transform: "translateX(7px)", offset: 0.35 }, { transform: "translateX(-4px)", offset: 0.55 }, { transform: "translateX(2px)", offset: 0.75 }, { transform: "none" }],
+        { duration: 450, delay },
+      );
+      const el = document.createElement("div");
+      el.className = "battle-fx-wash";
+      el.style.background = "rgba(255, 255, 255, 0.65)";
+      board.append(el);
+      el.animate([{ opacity: 0 }, { opacity: 1, offset: 0.15 }, { opacity: 0 }], { duration: 500, delay, fill: "both" }).onfinish = () => el.remove();
+    };
     const pulse = (who: FighterKey, delay: number) => {
       nodes[who].animate([{ transform: "none" }, { transform: "scale(1.04)", offset: 0.4 }, { transform: "none" }], { duration: 260, delay, easing: EASE });
     };
@@ -548,6 +587,12 @@ export function useTurnFx(log: TurnResult[], battleState: BattleState) {
       if (ms === undefined) nodes[k].style.removeProperty("--faint-delay");
       else nodes[k].style.setProperty("--faint-delay", `${ms}ms`);
     });
+    // 기절 연출과 대전 종료 연출(E4) — 결과 배너는 마지막 기절 연출이 끝난 뒤에 나온다
+    const faints = (["a", "b"] as const).flatMap((k) => (faintAt[k] === undefined ? [] : [[k, faintAt[k]] as const]));
+    faints.forEach(([k, ms]) => faintFx(k, ms));
+    const lastFaint = faints.length ? Math.max(...faints.map(([, ms]) => ms)) : endStart;
+    if (last.winner) impact(lastFaint);
+    if (last.winner) setResult({ key: `${log.length}:${last.turnNumber}`, ms: lastFaint + 650 });
 
     // 공개·HP 일정표: [시각, 그 시각에 보이는 상태]. 행동 블록은 충돌 순간에, 턴 종료 줄은 턴 종료 시각에 나온다.
     // HP는 시작값(직전 턴 끝 HP)에서 행동마다 로그의 남은 HP로 바뀐다. 교체가 있었던 편은 중간값 없이 실제 HP를 쓴다.
@@ -600,5 +645,7 @@ export function useTurnFx(log: TurnResult[], battleState: BattleState) {
     prevState.current = battleState;
   }, [battleState]);
 
-  return [setNodeA, setNodeB, view] as const;
+  const lastEntry = log[log.length - 1];
+  const resultMs = lastEntry && result?.key === `${log.length}:${lastEntry.turnNumber}` ? result.ms : null;
+  return [setNodeA, setNodeB, view, resultMs] as const;
 }
