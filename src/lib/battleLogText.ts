@@ -7,6 +7,27 @@
 import type { EndOfTurnLogEntry, FighterKey, TurnResult } from "../types/battle";
 import type { StatusCondition } from "../types/status";
 import { eunNeun } from "./josa";
+import { opponentKey } from "./battle/state";
+
+/**
+ * 한 턴에서 쓰러진 편의 순서(7.5 F2) — 행동 순서대로 맞은 쪽(fainted)·쓴 쪽(selfFainted), 그다음 턴 종료 항목 순서.
+ * 같은 행동에서 둘이 같이 쓰러지면 맞은 쪽이 먼저다(자폭·반동기·길동무 모두 실제 처리 순서가 그렇다).
+ * 강제 교체 로그 정렬과 AI 자동 교체 대기가 같은 규칙을 쓴다.
+ */
+export function faintOrder(turn: TurnResult): FighterKey[] {
+  const order: FighterKey[] = [];
+  const add = (k: FighterKey) => order.includes(k) || order.push(k);
+  for (const a of turn.actions) {
+    if (a.fainted) add(opponentKey(a.actor));
+    if (a.selfFainted) add(a.actor);
+  }
+  for (const e of turn.endOfTurn) if (e.fainted) add(e.actor);
+  return order;
+}
+
+/** 기절 뒤 강제 교체 합성 카드인가(7.5 F2에서 직전 턴 카드 안으로 묶는다) — 행동·턴 종료 없이 fromIndex -1 교체만 있다 */
+export const isForcedSwitchEntry = (t: TurnResult) =>
+  t.switches.length > 0 && t.actions.length === 0 && t.endOfTurn.length === 0 && t.switches.every((sw) => sw.fromIndex < 0);
 
 /**
  * 날씨 기술의 성공/실패 문구를 기술별로 바꿔 쓸 때(key는 move.id). 없으면 공통 문구

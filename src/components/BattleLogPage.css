@@ -1374,6 +1374,11 @@
   color: var(--text-muted);
 }
 
+.battle-turn-switch-sep {
+  border-top: 1px solid var(--border);
+  margin: 0.4rem 0;
+}
+
 .battle-turn-line {
   font-size: var(--fs-md);
   line-height: 1.6;
