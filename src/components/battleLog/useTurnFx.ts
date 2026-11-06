@@ -17,6 +17,8 @@ const FLASH = (alpha: number, hex?: string) => `0 0 0 5px ${hex ? typeColorRgba(
 const STATUS_HEX: Record<StatusCondition, string> = { burn: TYPE_COLORS.불꽃, poison: TYPE_COLORS.독, "badly-poisoned": TYPE_COLORS.독, paralysis: TYPE_COLORS.전기, freeze: TYPE_COLORS.얼음, sleep: TYPE_COLORS.에스퍼 };
 /** 회복 번쩍임 색(--safe 계열) */
 const HEAL_HEX = "#4caf6d";
+/** 길동무 보랏빛 기운 — 고스트 타입 색(#684870)은 다크 테마에서 안 보여 더 밝게 잡았다 */
+const GHOST_HEX = "#9b6fd0";
 const popTags = (e: ActionLogEntry) => [e.critical && "급소!", e.typeEffectiveness >= 2 && "효과 굉장!", e.typeEffectiveness < 1 && "별로…"].filter(Boolean).join(" ");
 /** 마지막 공개 뒤 줄이 나타나는 모션(0.25s)이 끝나도록 기다렸다가 재생 상태를 걷는다 */
 const SETTLE = 350;
@@ -141,6 +143,22 @@ export function useTurnFx(log: TurnResult[], hp: Record<FighterKey, number>, max
         { duration: 1100, delay, easing: "ease-out", fill: "both" },
       ).onfinish = () => el.remove();
     };
+    // 방어류 보호막(벌집 무늬는 CSS 배경) — 태세에 들어갈 때(stance)는 육각 막이 퍼졌다가 오래 남고, 공격을 막는 순간(hit)은 한 번 강하게 번쩍인다
+    const shield = (who: FighterKey, delay: number, hit: boolean) => {
+      const el = document.createElement("div");
+      el.className = "battle-fx-shield";
+      nodes[who].append(el);
+      el.animate(
+        hit
+          ? [{ opacity: 0, transform: "scale(0.98)" }, { opacity: 1, transform: "scale(1.06)", offset: 0.2 }, { opacity: 0, transform: "scale(1.02)" }]
+          : [{ opacity: 0, transform: "scale(0.85)" }, { opacity: 0.9, transform: "scale(1)", offset: 0.2 }, { opacity: 0.6, transform: "scale(1)", offset: 0.8 }, { opacity: 0, transform: "scale(1)" }],
+        { duration: hit ? 500 : STEP + IMPACT + 400, delay, easing: "ease-out", fill: "both" },
+      ).onfinish = () => el.remove();
+    };
+    // 카드를 감싸는 은은한 빛(길동무 보랏빛 기운)
+    const aura = (who: FighterKey, delay: number, hex: string, duration = 900) => {
+      nodes[who].animate([{ boxShadow: `0 0 0 0 ${typeColorRgba(hex, 0)}` }, { boxShadow: `0 0 26px 8px ${typeColorRgba(hex, 0.85)}`, offset: 0.4 }, { boxShadow: `0 0 0 0 ${typeColorRgba(hex, 0)}` }], { duration, delay });
+    };
     const pulse = (who: FighterKey, delay: number) => {
       nodes[who].animate([{ transform: "none" }, { transform: "scale(1.04)", offset: 0.4 }, { transform: "none" }], { duration: 260, delay, easing: EASE });
     };
@@ -189,6 +207,22 @@ export function useTurnFx(log: TurnResult[], hp: Record<FighterKey, number>, max
         if (e.selfFainted) faintAt[e.actor] = start + IMPACT + 250;
       } else {
         lunge(e.actor, start); // 빗나감·무효: 돌진만
+      }
+      // 방어류: 태세에 들어가면 보호막이 퍼지고, 상대 공격을 막으면 막은 쪽 보호막이 번쩍인다(막힌 쪽은 위 else에서 돌진만 했다)
+      if (e.protectStanceEntered) shield(e.actor, start, false);
+      if (e.blockedByProtectMoveName) {
+        shield(target, start + IMPACT, true);
+        shake(target, 3, start + IMPACT);
+      }
+      // 길동무: 쓰면 보랏빛 기운이 감싸고, 길동무로 쓰러뜨린 공격자가 같이 쓰러질 때는 공격자 쪽에 기운이 덮친다
+      if (e.protectSucceeded && e.move.protectEffect === "destinyBond") {
+        aura(e.actor, start, GHOST_HEX);
+        pop(e.actor, "길동무!", "", start + IMPACT, undefined, GHOST_HEX);
+      }
+      if (e.selfFainted && e.triggeredDestinyBond) {
+        aura(target, start + IMPACT, GHOST_HEX);
+        aura(e.actor, start + IMPACT + 250, GHOST_HEX, 1000);
+        pop(e.actor, "길동무!", "", start + IMPACT + 250, undefined, GHOST_HEX);
       }
       // 상태이상 걸림·랭크 변화·회복/반동(HP 증감) — 매직미러로 되돌아온 상대 방향 효과는 시전자에게 간다
       const t = start + IMPACT;
