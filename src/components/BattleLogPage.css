@@ -677,8 +677,8 @@
 .battle-hp-fill {
   height: 100%;
   background: var(--safe);
-  /* 6.5 M1 G — 맞는 순간(--hp-delay, useTurnFx가 심는다)에 맞춰 0.5초 동안 줄어든다 */
-  transition: width 0.5s ease var(--hp-delay, 0s);
+  /* 6.5 M1 G — useTurnFx가 맞는 순간에 HP를 바꾸면 0.5초 동안 줄어든다(7.4 E7: 지연 변수 대신 단계 재생) */
+  transition: width 0.5s ease;
 }
 
 .battle-hp-fill.is-warn {
@@ -898,6 +898,23 @@
   border: 1px solid var(--border);
   border-radius: var(--r-md);
   padding: 0.6rem 0.9rem;
+}
+
+/* 7.4 E7 — 이펙트와 함께 재생 중인 최신 턴: 아직 안 나온 줄은 자리만 차지한 채 숨겨 카드 높이가 변하지 않게 하고, 나올 때 떠오른다 */
+.battle-turn-pending {
+  visibility: hidden;
+  opacity: 0;
+}
+
+.battle-turn-reveal {
+  animation: battle-turn-reveal-in 0.25s ease;
+}
+
+@keyframes battle-turn-reveal-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
 }
 
 .battle-turn-title {

@@ -144,28 +144,29 @@ function RealStats({ fighter }: { fighter: Fighter }) {
   );
 }
 
-/** 파티 트래커 — 이 편 3마리의 HP·상태·기절, 활성 슬롯 표시 */
-function PartyTracker({ bs }: { bs: BattleSide }) {
+/** 파티 트래커 — 이 편 3마리의 HP·상태·기절, 활성 슬롯 표시. activeHp는 재생 중인 활성의 HP(7.4 E7) */
+function PartyTracker({ bs, activeHp }: { bs: BattleSide; activeHp?: number }) {
   if (bs.party.length <= 1) return null;
   return (
     <div className="battle-party-tracker">
       {bs.party.map((f, i) => {
         // 일루전(§6-1): 위장 중인 활성 조로아크는 트래커에서도 위장 대상 이름으로 보인다.
         const pk = getPokemon(f.illusionAs ?? f.slot.pokemonId);
-        const pct = Math.max(0, Math.min(100, (f.currentHp / f.maxHp) * 100));
-        const fainted = f.currentHp <= 0;
+        const hp = i === bs.activeIndex ? activeHp ?? f.currentHp : f.currentHp;
+        const pct = Math.max(0, Math.min(100, (hp / f.maxHp) * 100));
+        const fainted = hp <= 0;
         return (
           <div
             key={i}
             className={`battle-party-chip${i === bs.activeIndex ? " is-active" : ""}${fainted ? " is-fainted" : ""}`}
-            title={`${pk?.name ?? "포켓몬"} · ${f.currentHp}/${f.maxHp}${f.status.condition ? ` · ${STATUS_LABELS[f.status.condition]}` : ""}`}
+            title={`${pk?.name ?? "포켓몬"} · ${hp}/${f.maxHp}${f.status.condition ? ` · ${STATUS_LABELS[f.status.condition]}` : ""}`}
           >
             <span className="battle-party-chip-name">
               {i === bs.activeIndex ? "▶ " : ""}
               {pk?.name ?? "포켓몬"}
             </span>
             <span className="battle-party-chip-hp">
-              {fainted ? "기절" : `${f.currentHp}/${f.maxHp}`}
+              {fainted ? "기절" : `${hp}/${f.maxHp}`}
               {f.status.condition && !fainted && ` · ${STATUS_LABELS[f.status.condition]}`}
               {f.perishCount !== undefined && !fainted && ` · 멸망 ${f.perishCount}`}
             </span>
@@ -183,9 +184,11 @@ function PartyTracker({ bs }: { bs: BattleSide }) {
 }
 
 /** 한 편의 카드 윗부분 — 이름·상태 태그·HP·실능치(또는 상대 파티)·파티 트래커 */
-export function BattleFighterCard(props: BattleBoardProps & { side: Side; pokemon: Pokemon }) {
-  const { side, pokemon, battleState, battleSide, buildableIndices, pokemonAt, selection, aiSide, aiThinking, log } = props;
+export function BattleFighterCard(props: BattleBoardProps & { side: Side; pokemon: Pokemon; shownHp?: number }) {
+  const { side, pokemon, battleState, battleSide, buildableIndices, pokemonAt, selection, aiSide, aiThinking, log, shownHp } = props;
   const fighter = battleState[side];
+  // 7.4 E7: 턴 재생 중에는 이펙트에 맞춘 HP를 보여 준다(없으면 실제 HP)
+  const hp = shownHp ?? fighter.currentHp;
   // 7.3 B6: AI 편에서 한 번이라도 나온 파티 인덱스 — 대전은 0번 리드로 시작하고, 이후는 교체 기록(toIndex)과 지금 활성 슬롯
   const appearedIdx = new Set<number>([0, battleSide(side)?.activeIndex ?? 0]);
   for (const turn of log) for (const sw of turn.switches) if (sw.side === side) appearedIdx.add(sw.toIndex);
@@ -194,7 +197,7 @@ export function BattleFighterCard(props: BattleBoardProps & { side: Side; pokemo
   // fighter.slot(EvaluatorSlot)은 FormSource를 만족하므로 getEffectiveForm을 그대로 쓸 수 있다.
   // (메가진화 관련 용도 전용 — 변신 중에도 메타몽 자신의 메가 여부라 원본 종 기준 그대로 둔다.)
   const form = getEffectiveForm(pokemon, fighter.slot);
-  const hpPercent = Math.max(0, Math.min(100, (fighter.currentHp / fighter.maxHp) * 100));
+  const hpPercent = Math.max(0, Math.min(100, (hp / fighter.maxHp) * 100));
   const { avatarPokemon, avatarForm, illusionPokemon } = fighterAvatar(pokemon, fighter, form);
   return (
     <>
@@ -215,7 +218,7 @@ export function BattleFighterCard(props: BattleBoardProps & { side: Side; pokemo
             {!fighter.illusionAs && fighter.hasMegaEvolved && form.mega && (
               <span className="battle-fighter-mega-tag">{megaBadgeLabel(form.mega)}</span>
             )}
-            {fighter.currentHp <= 0 && <span className="battle-fighter-fainted"> (기절)</span>}
+            {hp <= 0 && <span className="battle-fighter-fainted"> (기절)</span>}
             {side === aiSide && <span className="battle-fighter-ai-tag">AI</span>}
             {side === aiSide && aiThinking && (
               <span className="battle-ai-thinking" role="status" aria-label="AI 생각 중">
@@ -236,7 +239,7 @@ export function BattleFighterCard(props: BattleBoardProps & { side: Side; pokemo
       </div>
       <div className="battle-hp-numbers">
         {/* 상대(AI)는 실수치로 최대 HP·능력치를 역산하지 못하게 비율만 보여준다. 올림해서 생존 중엔 0%가 안 되게 */}
-        {side === aiSide ? `${Math.ceil(hpPercent)}%` : `${fighter.currentHp} / ${fighter.maxHp}`}
+        {side === aiSide ? `${Math.ceil(hpPercent)}%` : `${hp} / ${fighter.maxHp}`}
       </div>
 
       {/* 2.3 B2: 배틀타워에서 상대(AI) 실능치는 숨기고, 그 자리에 상대 파티 6마리를 이미지로
@@ -248,9 +251,11 @@ export function BattleFighterCard(props: BattleBoardProps & { side: Side; pokemo
             if (!pk) return null;
             const battleIdx = selection[side].indexOf(i);
             const member = battleIdx >= 0 ? battleSide(side)?.party[battleIdx] : undefined;
-            const fainted = battleIdx >= 0 && (member?.currentHp ?? 1) <= 0;
+            const isActive = battleIdx === battleSide(side)?.activeIndex;
+            const memberHp = isActive ? hp : member?.currentHp;
+            const fainted = battleIdx >= 0 && (memberHp ?? 1) <= 0;
             // 7.3 B6: 한 번이라도 배틀에 나온 포켓몬(리드·현재 활성·교체 기록)만 체력바를 보여 준다 — 안 나온 칸은 비공개 그대로
-            const hpPct = member && appearedIdx.has(battleIdx) ? Math.max(0, Math.min(100, (member.currentHp / member.maxHp) * 100)) : null;
+            const hpPct = member && appearedIdx.has(battleIdx) ? Math.max(0, Math.min(100, ((memberHp ?? member.currentHp) / member.maxHp) * 100)) : null;
             return (
               <div key={i} className={`battle-roster-chip${fainted ? " is-fainted" : ""}`}>
                 <PokemonAvatarWithItem pokemon={pk} size={40} radius={9} />
@@ -270,7 +275,7 @@ export function BattleFighterCard(props: BattleBoardProps & { side: Side; pokemo
 
       {/* 파티 트래커 — 상대(AI) 쪽은 선출된 3마리가 그대로 드러나(이름·활성 슬롯) 2.3 B2의 "출전 여부 비공개"와
           어긋나서 숨긴다 — 그 칸은 위 battle-roster-icons가 대신 채운다(사용자 확인, 2.3 B2 보완). */}
-      {side !== aiSide && <PartyTracker bs={side === "a" ? battleState.sideA : battleState.sideB} />}
+      {side !== aiSide && <PartyTracker bs={side === "a" ? battleState.sideA : battleState.sideB} activeHp={shownHp} />}
     </>
   );
 }
