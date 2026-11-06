@@ -24,8 +24,8 @@ export function BattleTurnLog({
   aiSide?: FighterKey | null;
   /** AI 파티(파티 인덱스 순)의 종 id·최대 HP. HP 수치를 %로 바꾸는 데 쓴다(같은 종이 둘이어도 개체별로 맞도록 인덱스로 찾는다) */
   aiParty?: { id: string; maxHp: number }[];
-  /** 7.4 E7: 최신 턴이 이펙트와 함께 재생 중일 때 공개된 범위 — 아직 안 나온 행동·턴 종료 줄은 자리만 차지한 채 숨긴다. 없으면 전부 공개 */
-  reveal?: { pre: boolean; actions: number; end: boolean };
+  /** 7.4 E7: entry번째 항목이 이펙트와 함께 재생 중일 때 공개된 범위(그 뒤 항목은 대기 중이라 통째로 숨긴다, 7.5 F1) — 아직 안 나온 행동·턴 종료 줄은 자리만 차지한 채 숨긴다. 없으면 전부 공개 */
+  reveal?: { entry: number; pre: boolean; actions: number; end: boolean };
 }) {
   // AI 쪽 포켓몬의 행동 줄 HP 수치(회복·반동 등)도 최대 HP 대비 %로 바꾼다. 최대 HP를 모르면 실수치 그대로.
   const fmtHp = (maxHp: number | undefined) => (n: number, key: FighterKey) =>
@@ -50,12 +50,14 @@ export function BattleTurnLog({
               // "먼저 행동"은 포켓몬 이름이 아니라 팀으로 적는다(양쪽이 같은 포켓몬이어도 구분). 첫 행동 주체는 실제 행동한 쪽
               // (turn.actions[0].actor) — 없으면 정해진 순서. 우리팀은 AI 대전이면 AI 반대편, 그 외(다시보기·수동 대전)는 a편.
               const myTeam: FighterKey = aiSide ? opponentKey(aiSide) : "a";
-              // 재생 중이 아니면 undefined — 최신 턴(역순 0번)만 해당
-              const rv = turnIdx === 0 ? reveal : undefined;
+              // 재생 중이 아니면 undefined — 재생 중인 항목만 해당, 그 뒤 항목은 통째로 대기
+              const entryIdx = log.length - 1 - turnIdx;
+              const rv = reveal?.entry === entryIdx ? reveal : undefined;
+              const waiting = reveal !== undefined && entryIdx > reveal.entry;
               const pending = (shown: boolean) => (rv && !shown ? "battle-turn-pending" : rv ? "battle-turn-reveal" : undefined);
               const firstActorTeam = (turn.actions[0]?.actor ?? turn.order[0]) === myTeam ? "우리팀" : "상대팀";
               return (
-              <div key={`${turn.turnNumber}-${turnIdx}`} className="battle-turn-card">
+              <div key={`${turn.turnNumber}-${turnIdx}`} className={`battle-turn-card${waiting ? " battle-turn-pending" : ""}`}>
                 <div className="battle-turn-title">
                   {isForcedSwitchCard ? `턴 ${turn.turnNumber} · 교체` : `턴 ${turn.turnNumber} · 먼저 행동: ${firstActorTeam}`}
                 </div>

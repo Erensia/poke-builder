@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { STATUS_LABELS } from "../../lib/battleLogLabels";
 import type { BattleState } from "../../lib/battle/state";
 import { statOrAccuracyLabel } from "../../lib/statLabels";
@@ -31,6 +31,11 @@ const STATUS_FX: Record<StatusFxKind, { n: number; gap: number; mode: "rise" | "
   freeze: { n: 7, gap: 70, mode: "spark" },
   confusion: { n: 3, gap: 0, mode: "orbit" },
   attract: { n: 5, gap: 110, mode: "rise", text: "♥" },
+};
+/** 상태이상 입자 한 벌이 끝나기까지(ms) — 입자 간격 × (개수-1) + 한 입자의 길이(statusFx의 duration과 같다) */
+const statusFxMs = (kind: StatusFxKind) => {
+  const { n, gap, mode } = STATUS_FX[kind];
+  return (n - 1) * gap + (mode === "spark" ? 650 : kind === "burn" ? 800 : 1100);
 };
 const STATUS_KIND: Record<StatusCondition, StatusFxKind> = { burn: "burn", poison: "poison", "badly-poisoned": "poison", paralysis: "paralysis", sleep: "sleep", freeze: "freeze" };
 /** 회복 번쩍임 색(--safe 계열) */
@@ -78,6 +83,24 @@ const MEGA_MS = 1000;
 const MEGA_PEAK = 500;
 const MEGA_HEX = "#d86cff";
 
+/** 재생 대기열(7.5 F1) — 새 로그 항목은 앞 항목 연출이 전부 끝난 뒤에 시작한다. run은 연출을 시작하고 걸리는 시간(ms)을 돌려준다 */
+interface FxQueue {
+  queue: (() => number)[];
+  running: boolean;
+  timers: number[];
+}
+function pump(q: FxQueue, setView: (v: TurnFxView | null) => void) {
+  if (q.running) return;
+  const next = q.queue.shift();
+  if (!next) return setView(null);
+  q.running = true;
+  const ms = next();
+  q.timers.push(window.setTimeout(() => {
+    q.running = false;
+    pump(q, setView);
+  }, ms));
+}
+
 const other = (k: FighterKey): FighterKey => (k === "a" ? "b" : "a");
 
 /**
@@ -85,6 +108,10 @@ const other = (k: FighterKey): FighterKey => (k === "a" ? "b" : "a");
  * null이면 재생이 아니다(전부 공개·실제 HP).
  */
 export interface TurnFxView {
+  /** 재생 중인 로그 항목의 인덱스 — 그보다 뒤 항목(대기 중)은 통째로 숨기고 앞 항목은 전부 공개한다(7.5 F1) */
+  entry: number;
+  /** 이 항목이 끝난 시점의 배틀 상태 — 뒤 항목이 이미 상태를 바꿨어도 카드는 재생이 끝날 때까지 이 상태를 보여 준다(7.5 F1) */
+  live: BattleState;
   /** 행동 전 교체 줄이 공개됐는지 — 새 포켓몬이 나오는 순간에 나온다 */
   pre: boolean;
   /** 앞에서부터 공개된 행동 수 */
@@ -139,6 +166,8 @@ export function useTurnFx(log: TurnResult[], battleState: BattleState) {
   const [result, setResult] = useState<{ key: string; ms: number } | null>(null);
   const seen = useRef<{ turn: number; actions: number; ended: boolean; switches: number } | null>(null);
   const mounted = useRef(false);
+  const lastLog = useRef<TurnResult[] | null>(null);
+  const fxq = useRef<FxQueue>({ queue: [], running: false, timers: [] });
   // 직전 렌더의 배틀 상태 — 다음 턴의 단계 재생 시작 HP·팝업 비율(HP 변화 ÷ 최대 HP)·교체 전 포켓몬에 쓴다
   const prevState = useRef(battleState);
   // 이번 커밋의 최신 배틀 상태 — 아래 재생 효과보다 먼저 선언해야 같은 커밋에서 새 상태를 읽는다(효과의 의존성에 넣으면 상태가 바뀔 때마다 재생이 끊긴다)
@@ -152,6 +181,12 @@ export function useTurnFx(log: TurnResult[], battleState: BattleState) {
     if (!last) {
       seen.current = null;
       mounted.current = true;
+      lastLog.current = log;
+      const q = fxq.current;
+      q.timers.forEach(clearTimeout);
+      q.timers = [];
+      q.queue = [];
+      q.running = false;
       return;
     }
     const prev = seen.current;
@@ -164,11 +199,20 @@ export function useTurnFx(log: TurnResult[], battleState: BattleState) {
     // 처음 그릴 때는 기록만 하고 재생하지 않는다
     if (!mounted.current) {
       mounted.current = true;
+      lastLog.current = log;
       return;
     }
+    // 카드가 다시 붙어 효과만 다시 도는 경우(같은 로그)는 새 항목이 아니다
+    if (lastLog.current === log) return;
+    lastLog.current = log;
     if (!nodeA || !nodeB || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     const nodes = { a: nodeA, b: nodeB };
-
+    // 이 항목이 도착한 시점의 상태 — 대기 중에 상태가 더 바뀌어도 이 항목은 자기 시점으로 재생한다
+    const prevSnap = prevState.current;
+    const liveSnap = live.current;
+    const entryIdx = log.length - 1;
+    const resultKey = `${log.length}:${last.turnNumber}`;
+    const play = (): number => {
     const faintAt: Partial<Record<FighterKey, number>> = {};
     const lunge = (who: FighterKey, delay: number) => {
       const from = nodes[who].getBoundingClientRect();
@@ -474,7 +518,7 @@ export function useTurnFx(log: TurnResult[], battleState: BattleState) {
     const newActions = last.actions.slice(doneActions);
     // HP 단계(공개·HP 일정표와 회복·피해 팝업이 같이 쓴다). 교체가 있었던 편은 중간값 없이 실제 HP를 쓴다.
     const swapped = new Set(last.switches.map((s) => s.side));
-    const startHp = { a: prevState.current.a.currentHp, b: prevState.current.b.currentHp };
+    const startHp = { a: prevSnap.a.currentHp, b: prevSnap.b.currentHp };
     const steps = hpSteps(startHp, newActions, endDone ? [] : last.endOfTurn, swapped);
     const init = hpSteps(startHp, [], [], swapped)[0];
     // 교체 일정 — after: 이 새 행동 번호 뒤에 일어난다(-1 = 행동 전 교체, 이미 재생한 행동 뒤의 교체도 -1). 유턴류는 쓴 쪽의 행동 뒤, 끌려나온 교체는 상대의 행동 뒤
@@ -485,8 +529,8 @@ export function useTurnFx(log: TurnResult[], battleState: BattleState) {
       return { side: sw.side, enter: sw.fromIndex >= 0, afterMove: !!sw.afterMove, after: Math.max(idx - doneActions, -1), messages: sw.entryMessages };
     });
     // 메가진화(E8) — 로그에 정보가 없어서 직전 상태와 비교한다(이번 턴 교체한 편은 제외). 행동 전에 일어난다
-    const nowState = live.current;
-    const wasState = prevState.current;
+    const nowState = liveSnap;
+    const wasState = prevSnap;
     const megas = (["a", "b"] as const).filter((k) => nowState[k].hasMegaEvolved && !wasState[k].hasMegaEvolved && !swapped.has(k));
     // 일정을 미는 지점별 시간 — after(행동 번호 뒤, -1 = 행동 전)마다 교체는 SWITCH_MS, 메가진화는 MEGA_MS(같은 지점이면 긴 쪽)
     const gapMs = new Map<number, number>();
@@ -510,7 +554,7 @@ export function useTurnFx(log: TurnResult[], battleState: BattleState) {
         const was = before[s];
         const now = after[s];
         if (was === undefined || now === undefined || now === was || s === skip) continue;
-        const pct = Math.max(1, Math.round((Math.abs(now - was) / prevState.current[s].maxHp) * 100));
+        const pct = Math.max(1, Math.round((Math.abs(now - was) / prevSnap[s].maxHp) * 100));
         if (now > was) {
           flash(s, 0.5, delay, HEAL_HEX);
           pop(s, `+${pct}%`, "is-good", delay);
@@ -628,7 +672,8 @@ export function useTurnFx(log: TurnResult[], battleState: BattleState) {
           aura(e.actor, endStart, WISH_HEX);
           drift(e.actor, "stars", endStart, true);
         }
-        if (e.fainted) faintAt[e.actor] = endStart + 250;
+        // 상태이상 피해로 쓰러지면 기절 연출은 틱 입자가 다 끝난 뒤에(같은 카드에서 겹치지 않게, 7.5 F1)
+        if (e.fainted) faintAt[e.actor] = endStart + (e.damage > 0 && e.statusCondition ? Math.max(250, statusFxMs(STATUS_KIND[e.statusCondition])) : 250);
       });
       hpFx(newActions.length ? steps[newActions.length - 1] : init, steps[newActions.length], endStart, undefined, false);
     }
@@ -643,7 +688,7 @@ export function useTurnFx(log: TurnResult[], battleState: BattleState) {
     faints.forEach(([k, ms]) => faintFx(k, ms));
     const lastFaint = faints.length ? Math.max(...faints.map(([, ms]) => ms)) : endStart;
     if (last.winner) impact(lastFaint);
-    if (last.winner) setResult({ key: `${log.length}:${last.turnNumber}`, ms: lastFaint + 650 });
+    if (last.winner) setResult({ key: resultKey, ms: lastFaint + 650 });
 
     // 공개·HP 일정표: [시각, 그 시각에 보이는 상태]. 행동 블록은 충돌 순간에, 턴 종료 줄은 턴 종료 시각에 나온다.
     // HP는 시작값(직전 턴 끝 HP)에서 행동마다 로그의 남은 HP로 바뀐다. 교체가 있었던 편은 중간값 없이 실제 HP를 쓴다.
@@ -677,20 +722,37 @@ export function useTurnFx(log: TurnResult[], battleState: BattleState) {
           end: endShown,
           hp: endShown && shown === newActions.length ? steps[newActions.length] : shown ? steps[shown - 1] : init,
           showPrev: { a: outUntil.some((o) => o.side === "a" && t < o.until), b: outUntil.some((o) => o.side === "b" && t < o.until) },
-          prev: prevState.current,
-          env: envAt >= 0 && t < envAt ? { weather: prevState.current.weather, field: prevState.current.field } : undefined,
+          prev: prevSnap,
+          entry: entryIdx,
+          live: liveSnap,
+          env: envAt >= 0 && t < envAt ? { weather: prevSnap.weather, field: prevSnap.field } : undefined,
         },
       ];
     });
     // 0ms 이하 상태는 그리기 전에 바로 적용하고(깜빡임 방지), 나머지는 타이머로 건다
     setView(frames.filter(([t]) => t <= 0).pop()![1]);
-    const timers = frames.filter(([t]) => t > 0).map(([t, v]) => setTimeout(() => setView(v), t));
-    timers.push(setTimeout(() => setView(null), Math.max(...frames.map(([t]) => t)) + SETTLE));
-    return () => {
-      timers.forEach(clearTimeout);
-      setView(null);
+    fxq.current.timers.push(...frames.filter(([t]) => t > 0).map(([t, v]) => window.setTimeout(() => setView(v), t)));
+    // 다음 항목이 시작해도 되는 시각 — 공개 일정이 끝난 뒤이자, 방금 건 웹 애니메이션(먼지·입자·팝업)과 기절 전환이 전부 끝난 뒤
+    const anims = (board ?? nodeA).getAnimations({ subtree: true }).map((an) => {
+      const end = an.effect?.getComputedTiming().endTime;
+      return typeof end === "number" && Number.isFinite(end) ? end - Number(an.currentTime ?? 0) : 0;
+    });
+    return Math.max(Math.max(...frames.map(([t]) => t)) + SETTLE, faints.length ? lastFaint + 450 : 0, ...anims);
     };
+    fxq.current.queue.push(play);
+    pump(fxq.current, setView);
   }, [log, nodeA, nodeB]);
+
+  // 화면을 떠나면 대기 중인 재생을 버린다
+  useEffect(() => {
+    const q = fxq.current;
+    return () => {
+      q.timers.forEach(clearTimeout);
+      q.timers = [];
+      q.queue = [];
+      q.running = false;
+    };
+  }, []);
 
   // 다음 턴이 시작할 때 읽을 직전 상태 — 위 효과보다 뒤에 선언해야 새 턴이 들어온 커밋에서도 직전 턴 끝 값을 읽는다
   useLayoutEffect(() => {
