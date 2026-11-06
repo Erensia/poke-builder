@@ -1541,14 +1541,8 @@
   background: var(--violet-soft);
 }
 
-/* 공통 모바일 브레이크포인트 760px (§2-3). 이전엔 860px였으나 다른 페이지와 통일 —
-   battle-log-page max-width 980px라 760px 이하에서 2열이 확실히 좁아진다. */
-@media (max-width: 760px) {
-  .battle-board {
-    grid-template-columns: 1fr;
-    padding: 0.4rem;
-  }
-
+/* 셋업 보드는 카드 300px 2장 + VS 열이라 가로로 놓으려면 뷰포트가 약 890px 필요하다 — 760px에서 쌓으면 761~890px에서 넘친 오른쪽이 html의 overflow-x: hidden에 잘려 스크롤로도 닿지 못했다(7.5). 여유를 두고 920px부터 쌓는다 */
+@media (max-width: 920px) {
   /* 셋업: 두 파티 세로로 쌓고 VS(대전 시작)를 맨 아래로 */
   .battle-setup-board {
     flex-direction: column;
@@ -1581,6 +1575,15 @@
   }
   .battle-setup-column:last-of-type {
     order: 0;
+  }
+}
+
+/* 공통 모바일 브레이크포인트 760px (§2-3). 이전엔 860px였으나 다른 페이지와 통일 —
+   battle-log-page max-width 980px라 760px 이하에서 2열이 확실히 좁아진다. */
+@media (max-width: 760px) {
+  .battle-board {
+    grid-template-columns: 1fr;
+    padding: 0.4rem;
   }
 
   /* 선출 화면: 한 컬럼씩 세로로 쌓고 화면 폭에 맞춘다. 긴 이름은 줄바꿈한다 */
