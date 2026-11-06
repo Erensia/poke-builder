@@ -588,6 +588,54 @@
   }
 }
 
+/* 7.4 E9c — 기술 고유 연출 입자(희망사항=별)와 달빛(보름달+내리쬐는 빛). useTurnFx가 만들고 스스로 지운다 */
+.battle-fx-float {
+  position: absolute;
+  pointer-events: none;
+  opacity: 0;
+  z-index: 2;
+}
+
+.battle-fx-float.is-stars {
+  width: 15px;
+  height: 15px;
+  background: #f5c542;
+  clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
+}
+
+/* 달빛: 보름달이 카드 위쪽 가운데에 뜨고 그 아래로 빛줄기가 퍼진다 */
+.battle-fx-moon {
+  position: absolute;
+  top: 4px;
+  left: 50%;
+  translate: -50% 0;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 62% 66%, rgba(190, 170, 90, 0.5) 0 3px, transparent 4px),
+    radial-gradient(circle at 34% 40%, rgba(190, 170, 90, 0.45) 0 4px, transparent 5px),
+    radial-gradient(circle at 35% 35%, #fffbe0, #f4e58c 60%, #e2cf6a);
+  box-shadow: 0 0 14px 4px rgba(244, 226, 122, 0.8);
+  pointer-events: none;
+  opacity: 0;
+  z-index: 2;
+}
+
+.battle-fx-moonbeam {
+  position: absolute;
+  top: 26px;
+  left: 50%;
+  translate: -50% 0;
+  width: 86%;
+  height: 78%;
+  clip-path: polygon(42% 0, 58% 0, 100% 100%, 0 100%);
+  background: linear-gradient(to bottom, rgba(246, 218, 96, 0.65), rgba(246, 218, 96, 0));
+  pointer-events: none;
+  opacity: 0;
+  z-index: 1;
+}
+
 /* 7.4 E9b — 설치물(스텔스록·압정뿌리기·독압정·끈적끈적네트)을 깔 때 카드 위로 떨어지는 조각(useTurnFx가 만들고 스스로 지운다) */
 .battle-fx-debris {
   position: absolute;
