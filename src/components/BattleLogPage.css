@@ -588,6 +588,50 @@
   }
 }
 
+/* 7.4 E9b — 설치물(스텔스록·압정뿌리기·독압정·끈적끈적네트)을 깔 때 카드 위로 떨어지는 조각(useTurnFx가 만들고 스스로 지운다) */
+.battle-fx-debris {
+  position: absolute;
+  top: 0;
+  pointer-events: none;
+  opacity: 0;
+  z-index: 2;
+}
+
+/* 스텔스록: 마름모 돌 / 압정뿌리기·독압정(독치장 포함): 길고 뾰족한 삼각형 가시 */
+.battle-fx-debris.is-stealth {
+  width: 16px;
+  height: 19px;
+  background: linear-gradient(135deg, #c4b18d 0%, #a08c6a 50%, #7d6c50 100%);
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+}
+
+.battle-fx-debris.is-spikes {
+  width: 10px;
+  height: 17px;
+  background: linear-gradient(to bottom, #c3cad2, #7d858f);
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+}
+
+.battle-fx-debris.is-toxic {
+  width: 10px;
+  height: 17px;
+  background: linear-gradient(to bottom, #c59cf0, #7d4fb0);
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+}
+
+/* 거미줄: 바깥 테두리 없이 방사형 선 8개 + 안쪽 둘레 줄 두 겹(방사형 선과 비슷한 굵기). 선 끝은 가장자리로 갈수록 옅어진다.
+   밝은 테마·어두운 테마 모두에서 보이는 중간 톤 회청색 */
+.battle-fx-debris.is-web {
+  width: 28px;
+  height: 28px;
+  background:
+    repeating-conic-gradient(#7d8597 0 3deg, transparent 3deg 45deg),
+    radial-gradient(circle closest-side, transparent 33%, #7d8597 35% 38%, transparent 40%, transparent 61%, #7d8597 63% 66%, transparent 68%);
+  -webkit-mask-image: radial-gradient(circle closest-side, #000 60%, transparent 100%);
+  mask-image: radial-gradient(circle closest-side, #000 60%, transparent 100%);
+  filter: drop-shadow(0 0 2px rgba(255, 255, 255, 0.7));
+}
+
 /* 7.4 E9 — 날씨·필드·룸이 바뀔 때 판 전체를 훑는 색 물결(useTurnFx가 만들고 스스로 지운다) */
 .battle-fx-wash {
   position: absolute;
