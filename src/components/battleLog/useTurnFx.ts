@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef, useState } from "react";
+import { TYPE_COLORS, typeColorRgba } from "../../lib/typeColors";
 import type { ActionLogEntry, EndOfTurnLogEntry, FighterKey, TurnResult } from "../../types/battle";
 
 /** 행동 하나가 차지하는 시간(ms) — 돌진(0.26s) → 충돌 순간(IMPACT)에 맞은 쪽 흔들림(0.32s) */
@@ -6,8 +7,10 @@ const STEP = 700;
 const IMPACT = 200;
 const LUNGE_PX = 14;
 const EASE = "cubic-bezier(0.2, 0.9, 0.3, 1.3)";
-/** 맞은 카드를 덮는 붉은 테두리 플래시(색은 --danger-strong과 같다) */
-const FLASH = (alpha: number) => `0 0 0 5px rgba(209, 69, 58, ${alpha})`;
+/** 맞은 카드를 덮는 테두리 플래시 — 기술 타입 색(없으면 붉은색, --danger-strong과 같다) */
+const FLASH = (alpha: number, hex?: string) => `0 0 0 5px ${hex ? typeColorRgba(hex, alpha) : `rgba(209, 69, 58, ${alpha})`}`;
+/** 피해 팝업에 붙는 문구 — 급소·상성(둘 다면 둘 다) */
+const popTags = (e: ActionLogEntry) => [e.critical && "급소!", e.typeEffectiveness >= 2 && "효과 굉장!", e.typeEffectiveness < 1 && "별로…"].filter(Boolean).join(" ");
 /** 마지막 공개 뒤 줄이 나타나는 모션(0.25s)이 끝나도록 기다렸다가 재생 상태를 걷는다 */
 const SETTLE = 350;
 
@@ -99,8 +102,26 @@ export function useTurnFx(log: TurnResult[], hp: Record<FighterKey, number>) {
         { duration, delay },
       );
     };
-    const flash = (who: FighterKey, alpha: number, delay: number) => {
-      nodes[who].animate([{ boxShadow: FLASH(alpha), offset: 0.25 }], { duration: 360, delay });
+    const flash = (who: FighterKey, alpha: number, delay: number, hex?: string) => {
+      nodes[who].animate([{ boxShadow: FLASH(alpha, hex), offset: 0.25 }], { duration: 360, delay });
+    };
+    // 맞은 카드 위로 떠오르는 피해 팝업("-45%" + 급소·상성 문구) — 상대 실수치를 숨기려고 비율만 쓴다. 끝나면 스스로 지운다
+    const pop = (who: FighterKey, e: ActionLogEntry, delay: number) => {
+      const el = document.createElement("div");
+      el.className = `battle-fx-pop${e.typeEffectiveness >= 2 ? " is-super" : e.typeEffectiveness < 1 ? " is-weak" : ""}`;
+      el.textContent = `-${Math.min(100, Math.round(e.damagePercent * 100))}%`;
+      const tags = popTags(e);
+      if (tags) el.append(Object.assign(document.createElement("small"), { textContent: tags }));
+      nodes[who].append(el);
+      el.animate(
+        [
+          { opacity: 0, transform: "translateY(8px) scale(0.8)" },
+          { opacity: 1, transform: "translateY(-6px) scale(1.06)", offset: 0.2 },
+          { opacity: 1, transform: "translateY(-18px) scale(1)", offset: 0.7 },
+          { opacity: 0, transform: "translateY(-30px) scale(1)" },
+        ],
+        { duration: 1100, delay, easing: "ease-out", fill: "both" },
+      ).onfinish = () => el.remove();
     };
     const pulse = (who: FighterKey, delay: number) => {
       nodes[who].animate([{ transform: "none" }, { transform: "scale(1.04)", offset: 0.4 }, { transform: "none" }], { duration: 260, delay, easing: EASE });
@@ -120,7 +141,8 @@ export function useTurnFx(log: TurnResult[], hp: Record<FighterKey, number>) {
         const strong = e.critical || e.typeEffectiveness >= 2;
         const amp = e.critical && e.typeEffectiveness >= 2 ? 14 : strong ? 10 : e.typeEffectiveness < 1 ? 3 : 6;
         shake(target, amp, start + IMPACT);
-        flash(target, strong ? 0.75 : e.typeEffectiveness < 1 ? 0.3 : 0.5, start + IMPACT);
+        flash(target, strong ? 0.75 : e.typeEffectiveness < 1 ? 0.35 : 0.55, start + IMPACT, e.move.type ? TYPE_COLORS[e.move.type] : undefined);
+        pop(target, e, start + IMPACT);
         if (e.fainted) faintAt[target] = start + IMPACT + 250;
         if (e.selfFainted) faintAt[e.actor] = start + IMPACT + 250;
       } else {

@@ -460,6 +460,43 @@
 }
 
 /* 기절한 활성 포켓몬은 가라앉으며 회색조·반투명이 된다 — 쓰러지는 순간(--faint-delay)에 맞춰 전환한다(6.5 M1 G) */
+/* 7.4 E1 — 맞은 카드 위로 떠오르는 피해 팝업(useTurnFx가 만들고 스스로 지운다). 중앙 정렬은 translate 속성이라 애니메이션의 transform과 겹쳐 쓴다 */
+.battle-fx-pop {
+  position: absolute;
+  top: 10%;
+  left: 50%;
+  translate: -50% 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0.15rem 0.7rem;
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: var(--glass-shadow);
+  font-weight: 700;
+  font-size: var(--fs-md);
+  line-height: 1.3;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  z-index: 2;
+}
+
+.battle-fx-pop small {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+.battle-fx-pop.is-super {
+  color: var(--danger-strong);
+  border-color: var(--danger-strong);
+}
+
+.battle-fx-pop.is-weak {
+  color: var(--text-muted);
+}
+
 .battle-fighter-top {
   transition:
     filter 0.4s ease var(--faint-delay, 0s),
