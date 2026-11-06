@@ -11,6 +11,7 @@ import { useBattleVideos } from "../../hooks/useBattleVideos";
 import type { BattleVideo } from "../../types/battleVideo";
 import { getPokemon, getMove, SAMPLE_PARTIES } from "../../lib/data";
 import { eunNeun } from "../../lib/josa";
+import { faintOrder, isForcedSwitchEntry } from "../../lib/battleLogText";
 import { applySwitch } from "../../lib/battle/switching";
 import type { BattleState } from "../../lib/battle/state";
 import { forcedLockedAction } from "../../lib/battle/lockedAction";
@@ -327,6 +328,11 @@ export function useBattleLogSession(mode: BattleMode) {
       resolvePivot(chooseAiForcedSwitch(battleState, aiSide, aiRiskAversion) ?? switchableIndices(aiSide)[0] ?? -1);
       return;
     }
+    // 두 편이 다 교체를 기다릴 때는 먼저 쓰러진 편이 먼저 낸다 — 사람이 먼저 쓰러졌으면 사람이 고를 때까지 기다린다(등장 특성이 먼저 나온 쪽 기준으로 이어진다, 7.5 F2)
+    const human = aiSide === "a" ? "b" : "a";
+    const lastTurn = [...log].reverse().find((t) => !isForcedSwitchEntry(t));
+    const order = lastTurn ? faintOrder(lastTurn) : [];
+    if (pendingForcedSwitch?.[human] && order.indexOf(human) !== -1 && order.indexOf(human) < order.indexOf(aiSide)) return;
     if (pendingForcedSwitch?.[aiSide] && !pendingPivot) {
       const toIndex = chooseAiForcedSwitch(battleState, aiSide, aiRiskAversion) ?? switchableIndices(aiSide)[0];
       if (toIndex !== undefined) resolveForcedSwitch(aiSide, toIndex);

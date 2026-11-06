@@ -2,12 +2,12 @@ import { getPokemon } from "../lib/data";
 import { opponentKey } from "../lib/battle/state";
 import type { FighterKey, TurnResult } from "../types/battle";
 import { eunNeun } from "../lib/josa";
-import { activeIndexTrace, hpAsPercent, STATUS_CURE_TEXT } from "../lib/battleLogText";
+import { activeIndexTrace, faintOrder, hpAsPercent, isForcedSwitchEntry, STATUS_CURE_TEXT } from "../lib/battleLogText";
 import { ActionEffectLines } from "./turnLog/ActionEffectLines";
 import { HpFormatContext } from "./turnLog/hpFormat";
 import { ActionMainLine } from "./turnLog/ActionMainLine";
 import { EndOfTurnLine, TurnFooterLines } from "./turnLog/EndOfTurnLines";
-import { ForcedOpponentSwitchLines, PreMoveSwitchLines, RedCardSwitchLines, SelfSwitchAfterMoveLines } from "./turnLog/SwitchLines";
+import { ForcedOpponentSwitchLines, MergedSwitchLines, PreMoveSwitchLines, RedCardSwitchLines, SelfSwitchAfterMoveLines } from "./turnLog/SwitchLines";
 
 /**
  * 턴별 배틀 로그(실시간 배틀판·HP게이지·조작 UI에서 분리된, 텍스트 중심 히스토리) — 실시간
@@ -32,32 +32,43 @@ export function BattleTurnLog({
     maxHp && aiSide !== null && key === aiSide ? `${((n / maxHp) * 100).toFixed(1)}%` : n;
   // 로그엔 종 id뿐이라 AI 편의 활성 파티 인덱스를 교체 기록으로 되짚는다(시간순 → 아래 표시는 역순)
   const aiTrace = aiSide !== null && aiParty ? activeIndexTrace(log, aiSide, aiParty.map((p) => p.id)) : null;
+  // 기절 뒤 강제 교체 카드는 직전 턴 카드 안으로 묶는다(7.5 F2) — 로그 데이터는 그대로이고 그리기만 합친다
+  const groups: { idx: number; extras: number[] }[] = [];
+  log.forEach((t, i) => {
+    const head = groups.at(-1);
+    if (head && isForcedSwitchEntry(t) && !isForcedSwitchEntry(log[head.idx])) head.extras.push(i);
+    else groups.push({ idx: i, extras: [] });
+  });
   return (
     <>
           <div className="battle-turn-log">
-            {[...log].reverse().map((turn, turnIdx) => {
-              const trace = aiTrace?.[log.length - 1 - turnIdx];
+            {[...groups].reverse().map(({ idx: entryIdx, extras }) => {
+              const turn = log[entryIdx];
+              const trace = aiTrace?.[entryIdx];
               // 턴 종료 처리(회복·상태이상)는 그 시점의 활성 기준이라 activePokemonIds(턴 끝 스냅샷)로 되짚는다.
               const turnName = (key: FighterKey) => getPokemon(turn.activePokemonIds[key])?.name ?? key;
               // 강제 교체는 actions·endOfTurn이 비고 switches만 있는 합성 카드(fromIndex -1) — 제목을 다르게 준다.
               // 양쪽 다 교체한 실제 턴도 행동·턴 종료 로그가 비므로 fromIndex로 구분한다(실제 교체는 인덱스가 있음).
-              const isForcedSwitchCard =
-                turn.switches.length > 0 &&
-                turn.switches.every((sw) => sw.fromIndex < 0) &&
-                turn.actions.length === 0 &&
-                turn.endOfTurn.length === 0 &&
-                !turn.winner;
+              const isForcedSwitchCard = isForcedSwitchEntry(turn) && !turn.winner;
               // "먼저 행동"은 포켓몬 이름이 아니라 팀으로 적는다(양쪽이 같은 포켓몬이어도 구분). 첫 행동 주체는 실제 행동한 쪽
               // (turn.actions[0].actor) — 없으면 정해진 순서. 우리팀은 AI 대전이면 AI 반대편, 그 외(다시보기·수동 대전)는 a편.
               const myTeam: FighterKey = aiSide ? opponentKey(aiSide) : "a";
               // 재생 중이 아니면 undefined — 재생 중인 항목만 해당, 그 뒤 항목은 통째로 대기
-              const entryIdx = log.length - 1 - turnIdx;
               const rv = reveal?.entry === entryIdx ? reveal : undefined;
               const waiting = reveal !== undefined && entryIdx > reveal.entry;
               const pending = (shown: boolean) => (rv && !shown ? "battle-turn-pending" : rv ? "battle-turn-reveal" : undefined);
+              const team = (key: FighterKey) => (key === myTeam ? "우리팀" : "상대팀");
+              // 묶인 강제 교체 블록 — 먼저 쓰러진 쪽 먼저(같은 편의 연속 교체는 로그 순서 유지). 재생 중이면 도착한 것까지만 공개한다
+              const order = faintOrder(turn);
+              const rank = (i: number) => {
+                const r = order.indexOf(log[i].switches[0].side);
+                return r < 0 ? order.length : r;
+              };
+              const sorted = [...extras].sort((x, y) => rank(x) - rank(y));
+              const extraCls = (i: number) => (!reveal || reveal.entry > i ? undefined : reveal.entry === i && reveal.pre ? "battle-turn-reveal" : "battle-turn-pending");
               const firstActorTeam = (turn.actions[0]?.actor ?? turn.order[0]) === myTeam ? "우리팀" : "상대팀";
               return (
-              <div key={`${turn.turnNumber}-${turnIdx}`} className={`battle-turn-card${waiting ? " battle-turn-pending" : ""}`}>
+              <div key={`${turn.turnNumber}-${entryIdx}`} className={`battle-turn-card${waiting ? " battle-turn-pending" : ""}`}>
                 <div className="battle-turn-title">
                   {isForcedSwitchCard ? `턴 ${turn.turnNumber} · 교체` : `턴 ${turn.turnNumber} · 먼저 행동: ${firstActorTeam}`}
                 </div>
@@ -145,6 +156,12 @@ export function BattleTurnLog({
                   ))}
                   <TurnFooterLines turn={turn} turnName={turnName} />
                 </div>
+                {sorted.length > 0 && <div className={`battle-turn-switch-sep ${extraCls(sorted[0]) ?? ""}`} />}
+                {sorted.map((i) => (
+                  <div key={i} className={extraCls(i)}>
+                    <MergedSwitchLines switches={log[i].switches} team={team} />
+                  </div>
+                ))}
               </div>
               );
             })}
