@@ -22,6 +22,22 @@ const STATUS_HEX: Record<StatusCondition, string> = { burn: TYPE_COLORS.불꽃, 
 const HEAL_HEX = "#4caf6d";
 /** 길동무 보랏빛 기운 — 고스트 타입 색(#684870)은 다크 테마에서 안 보여 더 밝게 잡았다 */
 const GHOST_HEX = "#9b6fd0";
+/** 설치물(스텔스록 등) — 설치할 때 카드 위로 떨어지는 조각과, 등장 시 발동하는 팝업에 쓴다(7.4 E9b) */
+const HAZARD = {
+  stealth: { label: "스텔스록", hex: "#a08c6a" },
+  spikes: { label: "압정뿌리기", hex: "#9aa3ad" },
+  toxic: { label: "독압정", hex: "#a06cd5" },
+  web: { label: "끈적끈적네트", hex: "#7d8597" },
+} as const;
+type HazardKind = keyof typeof HAZARD;
+/** 설치물이 발동하면 엔진이 교체 기록(entryMessages)에 남기는 문구의 일부 — 발동 정보가 필드가 아니라 문구뿐이다 */
+const HAZARD_TRIGGERS: [HazardKind, string][] = [
+  ["stealth", "뾰족한 바위"],
+  ["spikes", "압정에 상처"],
+  ["toxic", "몸에 독이 퍼졌다"],
+  ["toxic", "몸에 맹독이 퍼졌다"],
+  ["web", "끈적끈적네트에 걸려"],
+];
 const popTags = (e: ActionLogEntry) => [e.critical && "급소!", e.typeEffectiveness >= 2 && "효과 굉장!", e.typeEffectiveness < 1 && "별로…"].filter(Boolean).join(" ");
 /** 마지막 공개 뒤 줄이 나타나는 모션(0.25s)이 끝나도록 기다렸다가 재생 상태를 걷는다 */
 const SETTLE = 350;
@@ -216,6 +232,38 @@ export function useTurnFx(log: TurnResult[], battleState: BattleState) {
         { duration: 1500, delay, easing: "ease-out", fill: "both" },
       ).onfinish = () => el.remove();
     };
+    // 설치물 조각이 카드 위로 떨어진다(설치할 때). 바위·가시·독 방울은 왼쪽부터 일정한 리듬으로, 거미줄은 위치·시점·회전·깊이가 제각각이다
+    const debris = (who: FighterKey, kind: HazardKind, delay: number) => {
+      const h = nodes[who].offsetHeight;
+      const loose = kind === "web";
+      [10, 26, 42, 58, 74, 90].forEach((even, i) => {
+        const el = document.createElement("div");
+        el.className = `battle-fx-debris is-${kind}`;
+        el.style.left = `${loose ? 6 + Math.random() * 88 : even}%`;
+        const spin = loose ? (Math.random() * 2 - 1) * 220 : (i % 2 ? 1 : -1) * (40 + i * 25);
+        const depth = h * (loose ? 0.6 + Math.random() * 0.26 : 0.78);
+        nodes[who].append(el);
+        el.animate(
+          [
+            { opacity: 0, transform: `translateY(${loose ? -20 - Math.random() * 30 : -30}px) rotate(0deg)` },
+            { opacity: 1, offset: 0.2 },
+            { opacity: 1, transform: `translateY(${depth}px) rotate(${spin}deg)`, offset: 0.75 },
+            { opacity: 0, transform: `translateY(${depth + h * 0.04}px) rotate(${spin}deg)` },
+          ],
+          { duration: loose ? 750 + Math.random() * 350 : 900, delay: delay + (loose ? Math.random() * 400 : i * 50), easing: "ease-in", fill: "both" },
+        ).onfinish = () => el.remove();
+      });
+    };
+    // 등장하는 편에 설치물이 발동했을 때(엔진이 입장 문구로만 남긴다) — 설치물 색 번쩍임·흔들림과 이름 팝업
+    const hazardHit = (who: FighterKey, messages: string[], delay: number) => {
+      const hits = new Set(HAZARD_TRIGGERS.filter(([, text]) => messages.some((m) => m.includes(text))).map(([kind]) => kind));
+      hits.forEach((kind) => {
+        flash(who, 0.6, delay, HAZARD[kind].hex);
+        shake(who, 4, delay, 260);
+        pop(who, `${HAZARD[kind].label}!`, "", delay, undefined, HAZARD[kind].hex);
+      });
+      if (messages.some((m) => m.includes("독압정을 흡수"))) pop(who, "독압정 제거!", "", delay, undefined, HAZARD.toxic.hex);
+    };
     const pulse = (who: FighterKey, delay: number) => {
       nodes[who].animate([{ transform: "none" }, { transform: "scale(1.04)", offset: 0.4 }, { transform: "none" }], { duration: 260, delay, easing: EASE });
     };
@@ -231,7 +279,7 @@ export function useTurnFx(log: TurnResult[], battleState: BattleState) {
     // 이미 재생한 교체는 건너뛴다 — 양쪽이 유턴을 쓰면 결과가 두 번(선공 교체 뒤 중간 결과, 후공 교체 뒤 완성본)에 걸쳐 들어오는데 완성본에도 선공 교체가 들어 있다
     const swaps = last.switches.slice(doneSwitches).map((sw) => {
       const idx = sw.afterMove ? last.actions.findIndex((a) => a.actor === (sw.forced ? other(sw.side) : sw.side)) : -1;
-      return { side: sw.side, enter: sw.fromIndex >= 0, afterMove: !!sw.afterMove, after: Math.max(idx - doneActions, -1) };
+      return { side: sw.side, enter: sw.fromIndex >= 0, afterMove: !!sw.afterMove, after: Math.max(idx - doneActions, -1), messages: sw.entryMessages };
     });
     const groups = [...new Set(swaps.map((s) => s.after))];
     // 행동 k의 시작 시각 — 그보다 앞서 일어난 교체 그룹 수만큼 SWITCH_MS씩 밀린다
@@ -241,6 +289,7 @@ export function useTurnFx(log: TurnResult[], battleState: BattleState) {
       const t = swapAt(sw.after);
       if (sw.enter) swapOut(sw.side, t);
       swapIn(sw.side, t + (sw.enter ? OUT_MS : 0));
+      hazardHit(sw.side, sw.messages, t + (sw.enter ? OUT_MS : 0) + 150);
     });
     // HP가 오른 편은 녹색 회복 효과, 내려간 편은 붉은 팝업 — 로그 필드를 일일이 모으지 않고 HP 단계의 증감으로 본다.
     // skip: 타격 연출(E1)이 이미 보여 준 피격 대상. hurtFlash: 턴 종료 피해는 아래 기존 번쩍임이 있어 끈다.
@@ -306,7 +355,20 @@ export function useTurnFx(log: TurnResult[], battleState: BattleState) {
         flash(foe, 0.55, t, c);
         pop(foe, `${STATUS_LABELS[e.inflictedStatus]}!`, "", t, undefined, c);
       }
-      if (e.setWeather) wash(TYPE_COLORS[WEATHER_ACCENT_TYPE[e.setWeather]], t, false);
+      // 설치물을 깔면 그 진영(= 받는 편 카드) 위로 조각이 떨어져 내려앉는다
+      const lay = (kind: HazardKind, side: FighterKey | undefined) => {
+        if (!side) return;
+        debris(side, kind, t);
+        pop(side, `${HAZARD[kind].label}!`, "", t + 450, undefined, HAZARD[kind].hex);
+      };
+      lay("stealth", e.stealthRockSetForSide);
+      lay("spikes", e.spikesSetForSide);
+      lay("toxic", e.toxicSpikesSetForSide);
+      lay("web", e.stickyWebSetForSide);
+      // 특성으로 거는 경우도 같다: 독치장(맞으면 공격자 편에 독압정)·모래뿜기(맞으면 모래바람)
+      if (e.toxicDebrisAbilityName) lay("toxic", e.actor);
+      const weatherSet = e.setWeather ?? e.sandSpitWeather;
+      if (weatherSet) wash(TYPE_COLORS[WEATHER_ACCENT_TYPE[weatherSet]], t, false);
       if (e.setField) wash(TYPE_COLORS[FIELD_DISPLAY_TYPE[e.setField]], t, true);
       if (e.setTrickRoom || e.roomChange?.on) wash(TYPE_COLORS.에스퍼, t, false);
       rank(e.actor, e.selfStatRises, true, t);
@@ -335,14 +397,14 @@ export function useTurnFx(log: TurnResult[], battleState: BattleState) {
     // 나가는 모션이 끝날 때까지 교체하는 편의 카드는 교체 전 포켓몬을 보여 준다(showPrev).
     // ponytail: 로그에 없는 HP 변화(드물다)는 SETTLE 뒤 재생이 끝날 때 실제 HP로 맞춰지고, 유턴 전에 맞은 HP는 나가는 카드에 반영되지 않는다.
     // 날씨·필드가 바뀌는 시각 — 그때까지는 이전 날씨·필드를 보여 준다(상태는 이미 턴 끝 값이라 안 그러면 연출보다 먼저 배경이 바뀐다)
-    const envTimes = newActions.flatMap((e, k) => (e.setWeather || e.setField || e.destroyedField ? [startOf(k) + IMPACT] : []));
+    const envTimes = newActions.flatMap((e, k) => (e.setWeather || e.sandSpitWeather || e.setField || e.destroyedField ? [startOf(k) + IMPACT] : []));
     if (!endDone && (last.weatherExpired || last.fieldExpired)) envTimes.push(endStart);
     // 특성으로 펼쳐지는 날씨·필드(그래스메이커·가뭄 등)는 로그에 기술이 없다 — 상태를 직전과 비교해 기술이 설명하지 못하는 변화는
     // 새 포켓몬이 나오는 순간(교체가 없으면 턴 시작)에 배경·입자가 부드럽게 나타나게 한다. 색 물결은 교체 모션 위에 얹으면 튀어서 뺐다.
     const entryAt = swaps.length ? Math.min(...swaps.map((s) => swapAt(s.after) + (s.enter ? OUT_MS : 0))) : 0;
     const now = live.current;
     const was = prevState.current;
-    if (now.weather && now.weather !== was.weather && !newActions.some((e) => e.setWeather)) envTimes.push(entryAt);
+    if (now.weather && now.weather !== was.weather && !newActions.some((e) => e.setWeather || e.sandSpitWeather)) envTimes.push(entryAt);
     if (now.field && now.field !== was.field && !newActions.some((e) => e.setField)) envTimes.push(entryAt);
     const envAt = envTimes.length ? Math.min(...envTimes) : -1;
     const outUntil = swaps.filter((s) => s.enter).map((s) => ({ side: s.side, until: swapAt(s.after) + OUT_MS }));
