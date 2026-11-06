@@ -520,18 +520,17 @@
   color: var(--text-muted);
 }
 
-.battle-fighter-top {
-  transition:
-    filter 0.4s ease var(--faint-delay, 0s),
-    opacity 0.4s ease var(--faint-delay, 0s),
-    translate 0.4s ease var(--faint-delay, 0s);
-}
-
-/* 교체·기술 입력 영역은 기절해도 구별돼야 해서 카드 부분(.battle-fighter-top)에만 건다 */
+/* 교체·기술 입력 영역은 기절해도 구별돼야 해서 카드 부분(.battle-fighter-top)에만 건다.
+   전환은 도착 상태의 규칙을 따르므로 transition을 기절 상태에만 둔다 — 쓰러질 때만 천천히 회색이 되고,
+   기절한 칸에 새 포켓몬이 나올 때(기절 해제)는 회색이 풀리는 전환 없이 바로 원래 색이다(7.4 E3) */
 .battle-fighter.is-fainted > .battle-fighter-top {
   filter: grayscale(0.85);
   opacity: 0.6;
   translate: 0 6px;
+  transition:
+    filter 0.4s ease var(--faint-delay, 0s),
+    opacity 0.4s ease var(--faint-delay, 0s),
+    translate 0.4s ease var(--faint-delay, 0s);
 }
 
 /* 승리한 편의 활성 포켓몬을 금색 테두리 + 맥동 광휘 + 주기적 반짝임으로 강조한다.

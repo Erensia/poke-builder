@@ -25,7 +25,7 @@ export function BattleTurnLog({
   /** AI 파티(파티 인덱스 순)의 종 id·최대 HP. HP 수치를 %로 바꾸는 데 쓴다(같은 종이 둘이어도 개체별로 맞도록 인덱스로 찾는다) */
   aiParty?: { id: string; maxHp: number }[];
   /** 7.4 E7: 최신 턴이 이펙트와 함께 재생 중일 때 공개된 범위 — 아직 안 나온 행동·턴 종료 줄은 자리만 차지한 채 숨긴다. 없으면 전부 공개 */
-  reveal?: { actions: number; end: boolean };
+  reveal?: { pre: boolean; actions: number; end: boolean };
 }) {
   // AI 쪽 포켓몬의 행동 줄 HP 수치(회복·반동 등)도 최대 HP 대비 %로 바꾼다. 최대 HP를 모르면 실수치 그대로.
   const fmtHp = (maxHp: number | undefined) => (n: number, key: FighterKey) =>
@@ -59,7 +59,9 @@ export function BattleTurnLog({
                 <div className="battle-turn-title">
                   {isForcedSwitchCard ? `턴 ${turn.turnNumber} · 교체` : `턴 ${turn.turnNumber} · 먼저 행동: ${firstActorTeam}`}
                 </div>
-                <PreMoveSwitchLines switches={turn.switches} />
+                <div className={pending(rv?.pre ?? true)}>
+                  <PreMoveSwitchLines switches={turn.switches} />
+                </div>
                 {turn.turnStartAnnouncements.map((text, i) => (
                   <div key={`tsa-${i}`} className="battle-turn-line is-muted">
                     {text}
