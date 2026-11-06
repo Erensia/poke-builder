@@ -502,6 +502,20 @@
   color: var(--danger-strong);
 }
 
+/* 7.4 E5 — 방어류 보호막(useTurnFx가 만들고 스스로 지운다): 작은 육각형을 벌집처럼 촘촘히 깔고 가장자리로 갈수록 옅어진다 */
+.battle-fx-shield {
+  position: absolute;
+  inset: -4px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48.00' height='27.71' viewBox='0 0 48.00 27.71'%3E%3Cg fill='%235bb8f0' fill-opacity='.12' stroke='%235bb8f0' stroke-width='1.3' stroke-linejoin='round'%3E%3Cpolygon points='14.50,0.00 7.25,12.56 -7.25,12.56 -14.50,0.00 -7.25,-12.56 7.25,-12.56'/%3E%3Cpolygon points='62.50,0.00 55.25,12.56 40.75,12.56 33.50,0.00 40.75,-12.56 55.25,-12.56'/%3E%3Cpolygon points='14.50,27.71 7.25,40.27 -7.25,40.27 -14.50,27.71 -7.25,15.16 7.25,15.16'/%3E%3Cpolygon points='62.50,27.71 55.25,40.27 40.75,40.27 33.50,27.71 40.75,15.16 55.25,15.16'/%3E%3Cpolygon points='38.50,13.86 31.25,26.41 16.75,26.41 9.50,13.86 16.75,1.30 31.25,1.30'/%3E%3C/g%3E%3C/svg%3E");
+  background-size: 48.00px 27.71px;
+  -webkit-mask-image: radial-gradient(ellipse at center, #000 40%, transparent 100%);
+  mask-image: radial-gradient(ellipse at center, #000 40%, transparent 100%);
+  filter: drop-shadow(0 0 3px #5bb8f0);
+  pointer-events: none;
+  opacity: 0;
+  z-index: 1;
+}
+
 .battle-fx-pop.is-weak {
   color: var(--text-muted);
 }
