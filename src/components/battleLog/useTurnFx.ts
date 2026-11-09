@@ -107,7 +107,7 @@ const other = (k: FighterKey): FighterKey => (k === "a" ? "b" : "a");
  * 재생 중인 턴의 보이는 상태(7.4 E7) — 로그 줄 공개와 HP 표시를 이펙트 일정에 맞춘다.
  * null이면 재생이 아니다(전부 공개·실제 HP).
  */
-export interface TurnFxView {
+interface TurnFxView {
   /** 재생 중인 로그 항목의 인덱스 — 그보다 뒤 항목(대기 중)은 통째로 숨기고 앞 항목은 전부 공개한다(7.5 F1) */
   entry: number;
   /** 이 항목이 끝난 시점의 배틀 상태 — 뒤 항목이 이미 상태를 바꿨어도 카드는 재생이 끝날 때까지 이 상태를 보여 준다(7.5 F1) */
