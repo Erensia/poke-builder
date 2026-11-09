@@ -1,0 +1,486 @@
+/* 7.4 E9 — 날씨가 유지되는 동안 보드 뒤(카드 아래)로 흐르는 입자. 카드는 반투명 유리라 비치게 보인다 */
+.battle-board[data-weather]::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  animation-duration: 1s;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+.battle-board[data-weather="비"]::before {
+  background-image:
+    linear-gradient(100deg, transparent 47%, rgba(120, 170, 255, 0.55) 50%, transparent 53%),
+    linear-gradient(100deg, transparent 47%, rgba(150, 195, 255, 0.4) 50%, transparent 53%);
+  background-size: 26px 64px, 41px 97px;
+  animation-name: battle-rain;
+  animation-duration: 0.55s;
+}
+
+.battle-board[data-weather="눈"]::before {
+  background-image:
+    radial-gradient(circle, rgba(255, 255, 255, 0.95) 0 2px, transparent 3px),
+    radial-gradient(circle, rgba(220, 240, 255, 0.8) 0 1.5px, transparent 2.5px);
+  background-size: 46px 46px, 71px 71px;
+  animation-name: battle-snow;
+  animation-duration: 4s;
+}
+
+.battle-board[data-weather="모래바람"]::before {
+  background-image:
+    linear-gradient(90deg, transparent, rgba(214, 178, 110, 0.24), transparent),
+    linear-gradient(90deg, transparent, rgba(190, 150, 90, 0.18), transparent);
+  background-size: 240px 36px, 330px 52px;
+  animation-name: battle-sand;
+  animation-duration: 1.2s;
+}
+
+.battle-board[data-weather="쾌청"]::before {
+  background: radial-gradient(circle at 88% -8%, rgba(255, 196, 80, 0.55), transparent 55%);
+  animation-name: battle-sun;
+  animation-duration: 3.2s;
+  animation-timing-function: ease-in-out;
+  animation-direction: alternate;
+}
+
+@keyframes battle-rain {
+  to {
+    background-position: -13px 64px, -20px 97px;
+  }
+}
+
+@keyframes battle-snow {
+  to {
+    background-position: 20px 46px, -30px 71px;
+  }
+}
+
+@keyframes battle-sand {
+  to {
+    background-position: 240px 0, 330px 0;
+  }
+}
+
+@keyframes battle-sun {
+  from {
+    opacity: 0.55;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* 7.4 E9 — 필드가 유지되는 동안 카드 뒤 보드 배경 하단에 깔리는 띠(그래스=풀잎, 일렉트릭=불꽃, 사이코=파동, 미스트=안개).
+   보드 높이를 바꾸지 않고(z-index -1 = 카드 뒤, 보드 배경 위) 반투명 유리 카드 사이로 비쳐 보인다.
+   정지해도 읽히는 모양이라 동작 줄이기에서도 그대로 둔다 */
+.battle-board[data-field]::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2.6rem;
+  z-index: -1;
+  border-radius: 0 0 var(--r-xl) var(--r-xl);
+  pointer-events: none;
+  animation: battle-field-in 0.5s ease backwards;
+}
+
+@keyframes battle-field-in {
+  from {
+    opacity: 0;
+  }
+}
+
+.battle-board[data-field="그래스필드"]::after {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='22' height='16' viewBox='0 0 22 16'%3E%3Cg fill='%2366a945'%3E%3Cpolygon points='1,16 5,4 9,16'/%3E%3Cpolygon points='8,16 12,0 16,16'/%3E%3Cpolygon points='14,16 18,6 22,16'/%3E%3C/g%3E%3Cg fill='%234f8a33' fill-opacity='.8'%3E%3Cpolygon points='5,16 7,9 10,16'/%3E%3Cpolygon points='16,16 18,10 21,16'/%3E%3C/g%3E%3C/svg%3E"), linear-gradient(to top, rgba(102, 169, 69, 0.45), transparent);
+  background-size: 22px 16px, 100% 100%;
+  background-repeat: repeat-x, no-repeat;
+  background-position: 0 100%, 0 0;
+  animation: battle-field-in 0.5s ease backwards, battle-grass-sway 2.4s ease-in-out infinite alternate;
+}
+
+.battle-board[data-field="일렉트릭필드"]::after {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='34' height='16' viewBox='0 0 34 16'%3E%3Cpolyline points='0,13 6,5 11,11 17,1 23,10 28,4 34,13' fill='none' stroke='%23fbb917' stroke-width='2' stroke-linejoin='round' stroke-linecap='round'/%3E%3C/svg%3E"), linear-gradient(to top, rgba(251, 185, 23, 0.4), transparent);
+  background-size: 34px 16px, 100% 100%;
+  background-repeat: repeat-x, no-repeat;
+  background-position: 0 100%, 0 0;
+  filter: drop-shadow(0 0 3px #fbb917);
+  animation: battle-field-in 0.5s ease backwards, battle-spark 0.9s steps(2, jump-none) infinite;
+}
+
+.battle-board[data-field="사이코필드"]::after {
+  background: linear-gradient(90deg, rgba(221, 107, 123, 0.5), rgba(138, 107, 208, 0.55), rgba(221, 107, 123, 0.5));
+  background-size: 200% 100%;
+  mask-image: linear-gradient(to top, #000, transparent);
+  -webkit-mask-image: linear-gradient(to top, #000, transparent);
+  animation: battle-field-in 0.5s ease backwards, battle-psychic 3s ease-in-out infinite alternate;
+}
+
+.battle-board[data-field="미스트필드"]::after {
+  background-image:
+    radial-gradient(ellipse 90px 22px at 30% 100%, rgba(255, 230, 245, 0.75), transparent),
+    radial-gradient(ellipse 120px 26px at 70% 100%, rgba(218, 180, 212, 0.7), transparent);
+  background-size: 50% 100%, 60% 100%;
+  background-repeat: repeat-x;
+  animation: battle-field-in 0.5s ease backwards, battle-mist 6s linear infinite;
+}
+
+@keyframes battle-grass-sway {
+  to {
+    background-position: 8px 100%, 0 0;
+  }
+}
+
+@keyframes battle-spark {
+  from {
+    background-position: 0 100%, 0 0;
+  }
+  to {
+    background-position: 17px 100%, 0 0;
+  }
+}
+
+@keyframes battle-psychic {
+  to {
+    background-position: 100% 0;
+  }
+}
+
+@keyframes battle-mist {
+  to {
+    background-position: 100% 0, -120% 0;
+  }
+}
+
+/* 동작 줄이기: 입자가 멈춘 채 남지 않게 상시 날씨 연출은 숨긴다 */
+@media (prefers-reduced-motion: reduce) {
+  .battle-board[data-weather]::before {
+    display: none;
+  }
+}
+
+/* 7.4 E8 — 메가진화: 무지갯빛 고리가 모여들다 정점에서 하얗게 터진다(useTurnFx가 만들고 스스로 지운다) */
+.battle-fx-megaring {
+  position: absolute;
+  left: 50%;
+  top: 38%;
+  width: 110px;
+  height: 110px;
+  border-radius: 50%;
+  background: conic-gradient(#ff5d6c, #ffd84a, #6ee07a, #4ecbff, #8a6bff, #ff5df0, #ff5d6c);
+  -webkit-mask: radial-gradient(circle closest-side, transparent 62%, #000 64%);
+  mask: radial-gradient(circle closest-side, transparent 62%, #000 64%);
+  filter: drop-shadow(0 0 8px rgba(216, 108, 255, 0.8));
+  pointer-events: none;
+  opacity: 0;
+  z-index: 2;
+}
+
+.battle-fx-megaburst {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--r-lg);
+  background: radial-gradient(circle at 50% 38%, rgba(255, 255, 255, 0.95), rgba(255, 160, 240, 0.55) 35%, transparent 70%);
+  pointer-events: none;
+  opacity: 0;
+  z-index: 2;
+}
+
+/* 7.4 E4 — 기절할 때 카드 아래에서 양옆으로 퍼지는 먼지(useTurnFx가 만들고 스스로 지운다) */
+.battle-fx-dust {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(150, 150, 150, 0.85), rgba(150, 150, 150, 0));
+  pointer-events: none;
+  opacity: 0;
+  z-index: 2;
+}
+
+/* 7.4 E10 — 상태이상 연출 입자(화상=불씨, 독=독 방울, 마비=전기 불꽃, 잠듦=Z, 얼음=결정, 혼란=병아리, 헤롱헤롱=하트). useTurnFx가 만들고 스스로 지운다 */
+.battle-fx-status {
+  position: absolute;
+  pointer-events: none;
+  opacity: 0;
+  z-index: 2;
+}
+
+.battle-fx-status.is-burn {
+  width: 12px;
+  height: 12px;
+  border-radius: 0 50% 50% 50%;
+  rotate: -45deg;
+  background: linear-gradient(135deg, #ffb347, #e5482c);
+  box-shadow: 0 0 6px #ff8a3c;
+}
+
+.battle-fx-status.is-poison {
+  --s: 11px;
+  width: var(--s);
+  height: var(--s);
+  border-radius: 50%;
+  border: 1.5px solid #a06cd5;
+  background: rgba(160, 108, 213, 0.28);
+}
+
+.battle-fx-status.is-paralysis {
+  width: 12px;
+  height: 18px;
+  background: #fbb917;
+  clip-path: polygon(40% 0, 100% 0, 60% 45%, 90% 45%, 30% 100%, 45% 55%, 15% 55%);
+}
+
+.battle-fx-status.is-sleep {
+  color: #5b9bff;
+  font-weight: 800;
+  line-height: 1;
+  text-shadow: 0 0 4px var(--surface);
+}
+
+.battle-fx-status.is-freeze {
+  width: 11px;
+  height: 14px;
+  background: linear-gradient(135deg, #e8f9ff, #7cc8ee);
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+}
+
+.battle-fx-status.is-attract {
+  color: #ff5d8f;
+  font-size: 1rem;
+  line-height: 1;
+  text-shadow: 0 0 4px var(--surface);
+}
+
+/* 혼란: 병아리 — 노란 몸 + 눈 + 부리 */
+.battle-fx-status.is-confusion {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #ffd84a;
+  box-shadow: inset -2px -2px 0 #f0b72b;
+}
+
+.battle-fx-status.is-confusion::before {
+  content: "";
+  position: absolute;
+  top: 5px;
+  right: 4px;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: #3a2f1e;
+}
+
+.battle-fx-status.is-confusion::after {
+  content: "";
+  position: absolute;
+  top: 8px;
+  right: -3px;
+  border-left: 5px solid #f08a24;
+  border-top: 2.5px solid transparent;
+  border-bottom: 2.5px solid transparent;
+}
+
+/* 7.4 E9c — 기술 고유 연출 입자(희망사항=별)와 달빛(보름달+내리쬐는 빛). useTurnFx가 만들고 스스로 지운다 */
+.battle-fx-float {
+  position: absolute;
+  pointer-events: none;
+  opacity: 0;
+  z-index: 2;
+}
+
+.battle-fx-float.is-stars {
+  width: 15px;
+  height: 15px;
+  background: #f5c542;
+  clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
+}
+
+/* 달빛: 보름달이 카드 위쪽 가운데에 뜨고 그 아래로 빛줄기가 퍼진다 */
+.battle-fx-moon {
+  position: absolute;
+  top: 4px;
+  left: 50%;
+  translate: -50% 0;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 62% 66%, rgba(190, 170, 90, 0.5) 0 3px, transparent 4px),
+    radial-gradient(circle at 34% 40%, rgba(190, 170, 90, 0.45) 0 4px, transparent 5px),
+    radial-gradient(circle at 35% 35%, #fffbe0, #f4e58c 60%, #e2cf6a);
+  box-shadow: 0 0 14px 4px rgba(244, 226, 122, 0.8);
+  pointer-events: none;
+  opacity: 0;
+  z-index: 2;
+}
+
+.battle-fx-moonbeam {
+  position: absolute;
+  top: 26px;
+  left: 50%;
+  translate: -50% 0;
+  width: 86%;
+  height: 78%;
+  clip-path: polygon(42% 0, 58% 0, 100% 100%, 0 100%);
+  background: linear-gradient(to bottom, rgba(246, 218, 96, 0.65), rgba(246, 218, 96, 0));
+  pointer-events: none;
+  opacity: 0;
+  z-index: 1;
+}
+
+/* 7.4 E9b — 설치물(스텔스록·압정뿌리기·독압정·끈적끈적네트)을 깔 때 카드 위로 떨어지는 조각(useTurnFx가 만들고 스스로 지운다) */
+.battle-fx-debris {
+  position: absolute;
+  top: 0;
+  pointer-events: none;
+  opacity: 0;
+  z-index: 2;
+}
+
+/* 스텔스록: 마름모 돌 / 압정뿌리기·독압정(독치장 포함): 길고 뾰족한 삼각형 가시 */
+.battle-fx-debris.is-stealth {
+  width: 16px;
+  height: 19px;
+  background: linear-gradient(135deg, #c4b18d 0%, #a08c6a 50%, #7d6c50 100%);
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+}
+
+.battle-fx-debris.is-spikes {
+  width: 10px;
+  height: 17px;
+  background: linear-gradient(to bottom, #c3cad2, #7d858f);
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+}
+
+.battle-fx-debris.is-toxic {
+  width: 10px;
+  height: 17px;
+  background: linear-gradient(to bottom, #c59cf0, #7d4fb0);
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+}
+
+/* 거미줄: 바깥 테두리 없이 방사형 선 8개 + 안쪽 둘레 줄 두 겹(방사형 선과 비슷한 굵기). 선 끝은 가장자리로 갈수록 옅어진다.
+   밝은 테마·어두운 테마 모두에서 보이는 중간 톤 회청색 */
+.battle-fx-debris.is-web {
+  width: 28px;
+  height: 28px;
+  background:
+    repeating-conic-gradient(#7d8597 0 3deg, transparent 3deg 45deg),
+    radial-gradient(circle closest-side, transparent 33%, #7d8597 35% 38%, transparent 40%, transparent 61%, #7d8597 63% 66%, transparent 68%);
+  -webkit-mask-image: radial-gradient(circle closest-side, #000 60%, transparent 100%);
+  mask-image: radial-gradient(circle closest-side, #000 60%, transparent 100%);
+  filter: drop-shadow(0 0 2px rgba(255, 255, 255, 0.7));
+}
+
+/* 7.4 E9 — 날씨·필드·룸이 바뀔 때 판 전체를 훑는 색 물결(useTurnFx가 만들고 스스로 지운다) */
+.battle-fx-wash {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  z-index: 3;
+}
+
+/* 날씨/필드가 적용 중일 때 배틀 보드 위에 뜨는 안내 배지. 두 칸짜리 grid를 그대로 넘어가야 해서 span */
+.battle-environment-tags {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.battle-environment-tag {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  padding: 0.2rem 0.7rem;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.battle-entry-announcements {
+  background: var(--surface-2);
+  border-radius: var(--r-sm);
+  padding: 0.5rem 0.8rem;
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+}
+
+.battle-fighter {
+  position: relative;
+  background: var(--surface);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-lg);
+  padding: 0.9rem 1rem;
+  box-shadow: var(--glass-shadow);
+}
+
+/* 기절한 활성 포켓몬은 가라앉으며 회색조·반투명이 된다 — 쓰러지는 순간(--faint-delay)에 맞춰 전환한다(6.5 M1 G) */
+/* 7.4 E1 — 맞은 카드 위로 떠오르는 피해 팝업(useTurnFx가 만들고 스스로 지운다). 중앙 정렬은 translate 속성이라 애니메이션의 transform과 겹쳐 쓴다 */
+.battle-fx-pop {
+  position: absolute;
+  top: 10%;
+  left: 50%;
+  translate: -50% 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0.15rem 0.7rem;
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: var(--glass-shadow);
+  font-weight: 700;
+  font-size: var(--fs-md);
+  line-height: 1.3;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  z-index: 2;
+}
+
+.battle-fx-pop small {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+.battle-fx-pop.is-super {
+  color: var(--danger-strong);
+  border-color: var(--danger-strong);
+}
+
+.battle-fx-pop.is-good {
+  color: var(--safe);
+  border-color: var(--safe);
+}
+
+.battle-fx-pop.is-bad {
+  color: var(--danger-strong);
+}
+
+/* 7.4 E5 — 방어류 보호막(useTurnFx가 만들고 스스로 지운다): 작은 육각형을 벌집처럼 촘촘히 깔고 가장자리로 갈수록 옅어진다 */
+.battle-fx-shield {
+  position: absolute;
+  inset: -4px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48.00' height='27.71' viewBox='0 0 48.00 27.71'%3E%3Cg fill='%235bb8f0' fill-opacity='.12' stroke='%235bb8f0' stroke-width='1.3' stroke-linejoin='round'%3E%3Cpolygon points='14.50,0.00 7.25,12.56 -7.25,12.56 -14.50,0.00 -7.25,-12.56 7.25,-12.56'/%3E%3Cpolygon points='62.50,0.00 55.25,12.56 40.75,12.56 33.50,0.00 40.75,-12.56 55.25,-12.56'/%3E%3Cpolygon points='14.50,27.71 7.25,40.27 -7.25,40.27 -14.50,27.71 -7.25,15.16 7.25,15.16'/%3E%3Cpolygon points='62.50,27.71 55.25,40.27 40.75,40.27 33.50,27.71 40.75,15.16 55.25,15.16'/%3E%3Cpolygon points='38.50,13.86 31.25,26.41 16.75,26.41 9.50,13.86 16.75,1.30 31.25,1.30'/%3E%3C/g%3E%3C/svg%3E");
+  background-size: 48.00px 27.71px;
+  -webkit-mask-image: radial-gradient(ellipse at center, #000 40%, transparent 100%);
+  mask-image: radial-gradient(ellipse at center, #000 40%, transparent 100%);
+  filter: drop-shadow(0 0 3px #5bb8f0);
+  pointer-events: none;
+  opacity: 0;
+  z-index: 1;
+}
+
+.battle-fx-pop.is-weak {
+  color: var(--text-muted);
+}
