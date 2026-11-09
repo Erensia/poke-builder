@@ -38,6 +38,7 @@
   - dev → main 버전 업데이트 PR의 제목은 `ver<해당 버전>`으로 통일한다(예: `ver3.6`). `release:` 같은 접두사·부제를 붙이지 않는다.
   - rebase merge는 비활성화
 - 로컬에서 직접 머지하기 직전에는 `git fetch`를 먼저 하도록 안내한다.
+- **Vercel 배포**: `vercel.json`으로 `dev` 브랜치 배포는 꺼져 있다(7.7 V1 — 릴리스 PR 머지 때 `main` Production 배포가 누락된 7.6 사고 때문). 릴리스 PR을 머지한 직후 `gh api "repos/Erensia/poke-builder/deployments?environment=Production&per_page=1"`로 최신 Production 배포의 sha가 머지 커밋인지 확인하고, 20~60초 안에 안 생기면 사용자에게 보고한다(`main`에 빈 커밋 push로 재트리거하는 것은 사용자 승인 후).
 - **브랜치 정리**: `dev`/`main`을 제외한 모든 브랜치는 머지와 동시에 로컬·원격 모두 삭제한다(`git branch -D` + `git push origin --delete`). 저장소 설정이 `delete_branch_on_merge: false`라 자동 삭제되지 않는다.
 - **샘플 파티 추가**: 기능 브랜치·PR 없이 `dev`에 커밋·push한 뒤 **곧바로 `main`에도 머지**한다(dev → main은 merge commit, 머지 직전 `git fetch`). `src/data/samplePartyPresets.json`·README 수 문구만 다루고 `validate:data`·`test:ai`가 통과한 경우에 한한다.
   - **`dev`가 `main`보다 앞서 있으면**(미배포 작업이 쌓인 동안, 예: 버전 작업 중) `main`으로 머지하면 그 작업까지 함께 나가므로 **`dev`에만 반영**하고 `main`은 다음 버전 릴리스(`dev` → `main` PR) 때 함께 나가게 한다. 머지 전 `git rev-list --count main..dev`로 확인한다.
