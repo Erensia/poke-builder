@@ -1,0 +1,481 @@
+/* 교체·기술 입력 영역은 기절해도 구별돼야 해서 카드 부분(.battle-fighter-top)에만 건다.
+   전환은 도착 상태의 규칙을 따르므로 transition을 기절 상태에만 둔다 — 쓰러질 때만 천천히 회색이 되고,
+   기절한 칸에 새 포켓몬이 나올 때(기절 해제)는 회색이 풀리는 전환 없이 바로 원래 색이다(7.4 E3) */
+.battle-fighter.is-fainted > .battle-fighter-top {
+  filter: grayscale(0.85);
+  opacity: 0.6;
+  translate: 0 6px;
+  transition:
+    filter 0.4s ease var(--faint-delay, 0s),
+    opacity 0.4s ease var(--faint-delay, 0s),
+    translate 0.4s ease var(--faint-delay, 0s);
+}
+
+/* 승리한 편의 활성 포켓몬을 금색 테두리 + 맥동 광휘 + 주기적 반짝임으로 강조한다.
+   같은 종끼리 맞붙으면 배너 문구만으로는 어느 쪽이 이겼는지 헷갈린다는 피드백. */
+.battle-fighter.is-winner {
+  border-color: var(--amber);
+  animation: battle-winner-glow 1.5s ease-in-out infinite;
+}
+
+.battle-fighter.is-winner::after {
+  content: "";
+  position: absolute;
+  top: -3px;
+  left: 0;
+  width: 44px;
+  height: 6px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0) 70%);
+  filter: blur(1px);
+  pointer-events: none;
+  animation: battle-winner-glint 2.4s linear infinite;
+}
+
+@keyframes battle-winner-glow {
+  0%,
+  100% {
+    border-color: var(--amber);
+    box-shadow: 0 0 0 1px rgba(242, 183, 5, 0.5), 0 0 10px 1px rgba(242, 183, 5, 0.35);
+  }
+  50% {
+    border-color: var(--amber-light);
+    box-shadow: 0 0 0 1px rgba(255, 221, 102, 0.9), 0 0 22px 5px rgba(242, 183, 5, 0.6);
+  }
+}
+
+@keyframes battle-winner-glint {
+  0% {
+    left: -44px;
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  50% {
+    left: 100%;
+    opacity: 1;
+  }
+  62%,
+  100% {
+    left: calc(100% + 44px);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .battle-fighter.is-winner {
+    animation: none;
+    box-shadow: 0 0 0 1px rgba(242, 183, 5, 0.6), 0 0 12px 2px rgba(242, 183, 5, 0.4);
+  }
+  .battle-fighter.is-winner::after {
+    display: none;
+  }
+}
+
+.battle-fighter-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap; /* 태그가 많으면 이름 영역을 누르지 않고 아래 줄로 내려간다(메가 배지 글자 쪼개짐 방지) */
+  gap: 0.3rem 0.5rem;
+  margin-bottom: 0.4rem;
+}
+
+.battle-fighter-ident {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 0 0 auto; /* 이름·배지는 제 폭을 유지 */
+  max-width: 100%;
+}
+
+.battle-fighter-name {
+  font-weight: 700;
+}
+
+.battle-fighter-fainted {
+  color: var(--danger);
+  font-weight: 700;
+}
+
+.battle-fighter-mega-tag,
+.battle-fighter-ai-tag,
+.battle-fighter-fainted {
+  white-space: nowrap; /* 배지·태그는 글자 중간에서 줄바꿈하지 않는다 */
+}
+
+.battle-fighter-mega-tag {
+  font-family: var(--display);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: var(--on-color);
+  background: var(--gradient);
+  padding: 0.05rem 0.35rem;
+  border-radius: var(--r-xs);
+  margin-left: 0.35rem;
+}
+
+/* ver.2.0 2-B: AI가 행동을 계산하는 동안 AI 태그 옆 점 세 개 */
+.battle-ai-thinking {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 0.4rem;
+  vertical-align: middle;
+}
+
+.battle-ai-thinking i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--violet);
+  animation: battle-ai-thinking-dot 1.1s ease-in-out infinite;
+}
+
+.battle-ai-thinking i:nth-child(2) {
+  animation-delay: 0.18s;
+}
+
+.battle-ai-thinking i:nth-child(3) {
+  animation-delay: 0.36s;
+}
+
+@keyframes battle-ai-thinking-dot {
+  0%, 80%, 100% {
+    opacity: 0.25;
+    transform: translateY(0);
+  }
+  40% {
+    opacity: 1;
+    transform: translateY(-3px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .battle-ai-thinking i {
+    animation: none;
+    opacity: 0.7;
+  }
+}
+
+.battle-fighter-ai-tag {
+  font-family: var(--display);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: var(--violet);
+  border: 1px solid var(--violet);
+  padding: 0.05rem 0.35rem;
+  border-radius: var(--r-xs);
+  margin-left: 0.35rem;
+}
+
+.battle-status-tags {
+  display: flex;
+  gap: 0.3rem;
+  flex: 1 1 8rem; /* 이름 옆에 최소 8rem이 안 나오면 다음 줄로 */
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.battle-status-tags:empty {
+  display: none; /* 태그가 없으면 줄바꿈 때 빈 줄 간격이 생기지 않게 */
+}
+
+.battle-status-tag {
+  white-space: nowrap; /* "빛의장막 5턴" 같은 태그는 통째로 다음 줄로 */
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  padding: 0.1rem 0.45rem;
+  border-radius: var(--r-pill);
+}
+
+.battle-status-tag.is-major {
+  background: var(--warn-bg);
+  color: var(--warn);
+}
+
+.battle-status-tag.is-volatile {
+  background: var(--violet-soft);
+  color: var(--violet);
+}
+
+.battle-hp-bar {
+  width: 100%;
+  height: 8px;
+  border-radius: var(--r-pill);
+  background: var(--surface-2);
+  overflow: hidden;
+  margin-bottom: 0.2rem;
+}
+
+.battle-hp-fill {
+  height: 100%;
+  background: var(--safe);
+  /* 6.5 M1 G — useTurnFx가 맞는 순간에 HP를 바꾸면 0.5초 동안 줄어든다(7.4 E7: 지연 변수 대신 단계 재생) */
+  transition: width 0.5s ease;
+}
+
+.battle-hp-fill.is-warn {
+  background: var(--amber);
+}
+
+.battle-hp-fill.is-danger {
+  background: var(--danger);
+}
+
+.battle-hp-numbers {
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+  margin-bottom: 0.6rem;
+}
+
+.battle-real-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.3rem;
+  margin-bottom: 0.6rem;
+}
+
+.battle-real-stat-item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.3rem;
+  background: var(--surface-2);
+  border-radius: var(--r-sm);
+  padding: 0.22rem 0.45rem;
+  font-size: var(--fs-xs);
+  min-width: 0;
+}
+
+.battle-real-stat-label {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.battle-real-stat-value {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Phase 6.5 §6-2 ⑧ — 랭크 변화가 반영된 실능치 강조 (매치업 페이지 실능치 칩과 같은 톤) */
+.battle-real-stat-item.is-boosted {
+  background: var(--violet-soft);
+}
+
+.battle-real-stat-item.is-boosted .battle-real-stat-value {
+  color: var(--violet);
+}
+
+.battle-real-stat-item.is-lowered .battle-real-stat-value {
+  color: var(--text-muted);
+}
+
+.battle-real-stat-stage {
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  margin-left: 0.12rem;
+  vertical-align: super;
+}
+
+/* 2.3 B2 — 상대(AI) 실능치·파티 트래커 대신 보여주는 파티 6마리 나열. 기절 여부만
+   표기(출전 여부는 안 보임). 실능치 칩(battle-real-stat-item)과 같은 배경·톤의 칩으로
+   만들어 3열 그리드를 꽉 채운다 — 아이콘만 떠 있으니 비어 보인다는 피드백 반영
+   (2.3 B2 보완). */
+.battle-roster-icons {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.4rem;
+  margin-bottom: 0.6rem;
+}
+
+.battle-roster-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  background: var(--surface-2);
+  border-radius: var(--r-sm);
+  padding: 0.4rem 0.2rem;
+}
+
+.battle-roster-chip-name {
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+/* 7.3 B6: 나온 적 있는 포켓몬의 체력바 — 파티 칩 바(battle-party-chip-bar/-fill) 그대로, 폭만 이미지(40px)에 맞춘다 */
+.battle-roster-chip .battle-party-chip-bar {
+  width: 40px;
+}
+
+.battle-roster-chip.is-fainted {
+  opacity: 0.45;
+}
+
+.battle-roster-chip.is-fainted .avatar-with-item {
+  filter: grayscale(1);
+}
+
+.battle-move-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.4rem;
+}
+
+.battle-move-button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.1rem;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: 0.4rem 0.55rem;
+  cursor: pointer;
+  text-align: left;
+}
+
+.battle-move-button.is-selected {
+  border-color: var(--violet);
+  background: var(--violet-soft);
+}
+
+.battle-move-button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* 셋업 카드의 party-move-pip.has-type와 동일한 톤. 배경색은 인라인 style로 타입별 색을 받는다 */
+.battle-move-button.has-type {
+  border-color: transparent;
+  color: var(--on-color);
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.25);
+}
+
+/* 타입 배경색(인라인 style)은 그대로 두고 선택 표시만 링으로 얹는다.
+   인라인 style이 background를 이미 고정하므로 여기선 background를 건드리지 않는다 */
+.battle-move-button.has-type.is-selected {
+  border-color: transparent;
+  box-shadow: 0 0 0 2px var(--violet);
+}
+
+.battle-move-name {
+  font-size: var(--fs-md);
+  font-weight: 600;
+}
+
+.battle-move-pp {
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+}
+
+.battle-move-button.has-type .battle-move-pp {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.battle-struggle-notice {
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+  background: var(--surface-2);
+  border: 1px dashed var(--border);
+  border-radius: var(--r-sm);
+  padding: 0.55rem 0.7rem;
+  text-align: center;
+}
+
+.battle-result-banner {
+  --result-delay: 1.1s; /* 마지막 타격 연출(useTurnFx)이 끝난 뒤에 나타난다 */
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  background: var(--safe-bg);
+  color: var(--safe);
+  border-radius: var(--r-md);
+  padding: 0.7rem 1rem;
+  font-weight: 700;
+}
+
+.battle-result-banner.is-draw {
+  background: var(--surface-2);
+  color: var(--text-muted);
+}
+
+.battle-reset-button {
+  background: none;
+  border: 1px solid currentColor;
+  border-radius: var(--r-sm);
+  padding: 0.3rem 0.8rem;
+  color: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.battle-turn-log {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.battle-turn-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 0.6rem 0.9rem;
+}
+
+/* 7.4 E7 — 이펙트와 함께 재생 중인 최신 턴: 아직 안 나온 줄은 자리만 차지한 채 숨겨 카드 높이가 변하지 않게 하고, 나올 때 떠오른다 */
+.battle-turn-pending {
+  visibility: hidden;
+  opacity: 0;
+}
+
+.battle-turn-reveal {
+  animation: battle-turn-reveal-in 0.25s ease;
+}
+
+@keyframes battle-turn-reveal-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+.battle-turn-title {
+  font-weight: 700;
+  font-size: var(--fs-md);
+  margin-bottom: 0.3rem;
+  color: var(--text-muted);
+}
+
+.battle-turn-switch-sep {
+  border-top: 1px solid var(--border);
+  margin: 0.4rem 0;
+}
+
+.battle-turn-line {
+  font-size: var(--fs-md);
+  line-height: 1.6;
+}
+
+.battle-turn-line.is-muted {
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+}
+
+.battle-turn-line.is-winner {
+  color: var(--safe);
+  font-weight: 700;
+}
+
+.battle-turn-line.is-fainted {
+  color: var(--danger);
+  font-weight: 600;
+}

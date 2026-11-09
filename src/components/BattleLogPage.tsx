@@ -10,6 +10,9 @@ import { BattleSelectScreen } from "./battleLog/BattleSelectScreen";
 import { BattleSetupScreen } from "./battleLog/BattleSetupScreen";
 import { battleBoardBackground } from "./battleLog/shared";
 import "./BattleLogPage.css";
+import "./battleLog/battleFx.css";
+import "./battleLog/battleCard.css";
+import "./battleLog/battleControls.css";
 import { useBattleLogSession, type BattleMode } from "./battleLog/useBattleLogSession";
 import { BattleLogPickers } from "./battleLog/BattleLogPickers";
 
