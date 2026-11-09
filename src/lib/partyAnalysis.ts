@@ -6,7 +6,7 @@ import { getEffectiveForm } from "./pokemonForm";
 import type { PartySlot, PartySlots } from "../types/party";
 import type { Move, MoveCategory } from "../types/move";
 
-export interface PartyMember {
+interface PartyMember {
   pokemonId: string;
   name: string;
   types: PokemonType[];
@@ -115,7 +115,7 @@ interface PartyAttackMemberTotal {
 }
 
 /** 방어 타입 목록(단일 타입 18개 또는 실제 타입 조합)에 대한 약점 커버 결과 */
-export interface PartyCoverage {
+interface PartyCoverage {
   /** 방어 타입 목록의 길이 */
   total: number;
   /** members와 같은 순서 — 그 포켓몬의 물리·특수 기술이 약점(×2 이상)을 찌를 수 있는 방어 타입 수 */
@@ -215,3 +215,6 @@ export function computePartyAttackMatrix(slots: PartySlots): PartyAttackMatrix {
   };
   return { members, rows, memberTotals, single: coverage(POKEMON_TYPES.map((t) => [t])), combo: coverage(DEFENDER_COMBOS) };
 }
+
+/** 메가·폼 라벨 축약 표시(타입 상성표 방어·공격 공용) */
+export const formTag = (formLabel: string): string => (formLabel.includes("메가") ? "메가" : formLabel);

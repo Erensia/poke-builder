@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { PartySlots } from "../types/party";
 import type { MoveCategory } from "../types/move";
-import { computePartyAttackMatrix, type MoveCount } from "../lib/partyAnalysis";
+import { computePartyAttackMatrix, formTag, type MoveCount } from "../lib/partyAnalysis";
 import { TypeBadge } from "./TypeBadge";
 import { Fold } from "./Fold";
 import { PillRow } from "./PillRow";
@@ -39,9 +39,6 @@ function MoveChips({ count }: { count: MoveCount }) {
     </>
   );
 }
-
-/** 메가·폼 라벨 축약 표시 (방어 표와 같은 규칙) */
-const formTag = (formLabel: string) => (formLabel.includes("메가") ? "메가" : formLabel);
 
 /**
  * 타입 상성표(공격) — 현재 파티의 기술을 타입별로 물리·특수·변화 개수로 센 표(7.6 T3)와,

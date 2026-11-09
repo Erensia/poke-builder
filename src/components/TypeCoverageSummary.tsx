@@ -1,5 +1,5 @@
 import type { PartySlots } from "../types/party";
-import { computePartyDefenseMatrix, type PartyDefenseVerdict } from "../lib/partyAnalysis";
+import { computePartyDefenseMatrix, formTag, type PartyDefenseVerdict } from "../lib/partyAnalysis";
 import { TypeBadge } from "./TypeBadge";
 import { Fold } from "./Fold";
 import "./TypeCoverageSummary.css";
@@ -32,11 +32,6 @@ const VERDICT_SLUG: Record<PartyDefenseVerdict, string> = {
   보통: "neutral",
   강점: "strong",
 };
-
-/** 메가·폼 라벨 축약 표시 */
-function formTag(formLabel: string): string {
-  return formLabel.includes("메가") ? "메가" : formLabel;
-}
 
 export function TypeCoverageSummary({ slots }: TypeCoverageSummaryProps) {
   const { members, rows, memberWeakCounts } = computePartyDefenseMatrix(slots);
