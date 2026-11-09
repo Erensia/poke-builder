@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { buildRandomPartyFromSlots } from "../../lib/randomSlotParty";
+import { useBattleAi } from "./useBattleAi";
 import { useBattleSeries } from "../../hooks/useBattleSeries";
 import { useRankBattle } from "../../hooks/useRankBattle";
 import { useBattleSetup, BATTLE_SELECT_SIZE } from "../../hooks/useBattleSetup";
@@ -11,19 +12,13 @@ import { useBattleVideos } from "../../hooks/useBattleVideos";
 import type { BattleVideo } from "../../types/battleVideo";
 import { getPokemon, getMove, SAMPLE_PARTIES } from "../../lib/data";
 import { eunNeun } from "../../lib/josa";
-import { faintOrder, isForcedSwitchEntry } from "../../lib/battleLogText";
 import { applySwitch } from "../../lib/battle/switching";
 import type { BattleState } from "../../lib/battle/state";
 import { forcedLockedAction } from "../../lib/battle/lockedAction";
 import { runTurn, resumeTurn } from "../../lib/battle/runTurn";
 import type { TurnAction, TurnResult } from "../../types/battle";
-import { chooseAiForcedSwitch, chooseAiSelection, sampleRiskAversion } from "../../lib/battle/ai";
-import { RANK_AI_PROFILES } from "../../lib/battle/ai/rankProfile";
-import { APP_DECISION_PARAMS, chooseAiActionAsync, prewarmAiWorker } from "../../lib/battle/ai/aiClient";
-import { combinedMemory, emptyOpponentMemory, observeOpponent } from "../../lib/battle/ai/opponentMemory";
-import { statusMoveIdsOf } from "../../lib/battle/ai";
+import { chooseAiSelection } from "../../lib/battle/ai";
 import type { LevelOneDistribution } from "../../lib/battle/ai/levelOne";
-import { useAiMemory } from "../../hooks/useAiMemory";
 import type { PartySlot, PartySlots, SamplePartyPreset } from "../../types/party";
 import { SLOT_INDICES, type InputModeState, type MegaDeclaredState, type PendingForcedSwitchState, type PendingPivotState, type PickerState, type SelectedState, type Side, type SlotIndex } from "./shared";
 import { battleRules } from "./battleRules";
@@ -71,17 +66,6 @@ export function useBattleLogSession(mode: BattleMode) {
   const [aiOpponentChoice, setAiOpponent] = useState(true);
   // 랭크배틀은 사람이 양쪽을 조작해 승리를 만들 수 없게 AI 상대로 고정한다
   const aiOpponent = mode === "rank" || aiOpponentChoice;
-  const [aiSide, setAiSide] = useState<Side | null>(null);
-  const [aiRiskAversion, setAiRiskAversion] = useState(0.5);
-  // AI 행동 계산 중(ver.2.0 2-B) — 요청 번호로, 계산 도중 초기화·새 대전이 시작되면 늦게 온 답을 버린다
-  const [aiThinking, setAiThinking] = useState(false);
-  const aiRequestRef = useRef(0);
-  // 사용자 패턴 학습(ver.2.0 1-C): 누적본은 useAiMemory(localStorage), 이번 대전 관측은 세션 기록 — 대전이 끝나면 합친다
-  const aiMemory = useAiMemory(mode);
-  const aiSessionRef = useRef(emptyOpponentMemory());
-  const [showAiMemory, setShowAiMemory] = useState(false);
-  /** 이번 대전을 학습했으면 누적 판 수(결과 배너 한 줄), 아니면 null */
-  const [learnedBattles, setLearnedBattles] = useState<number | null>(null);
   /** 배틀 프런티어(2.5 L4, 전 연속 대전) */
   const series = useBattleSeries(mySamples.samples);
   /** 랭크배틀(5.0 R1) — 프런티어와 별도 저장·연승 */
@@ -188,13 +172,7 @@ export function useBattleLogSession(mode: BattleMode) {
     setBattleState(state);
     setLog([]);
     clearTurnState();
-    setAiSide(aiOpponent ? "b" : null);
-    if (aiOpponent) prewarmAiWorker();
-    setAiRiskAversion(sampleRiskAversion());
-    aiSessionRef.current = emptyOpponentMemory();
-    setLearnedBattles(null);
-    aiRequestRef.current++;
-    setAiThinking(false);
+    ai.begin(aiOpponent);
   }
 
   /**
@@ -252,14 +230,12 @@ export function useBattleLogSession(mode: BattleMode) {
   );
 
   function resetToSetup() {
-    aiRequestRef.current++;
-    setAiThinking(false);
+    ai.reset();
     setBattleState(null);
     setLog([]);
     setPartySlots({ a: [], b: [] });
     clearTurnState();
     setSelection({ a: [], b: [] });
-    setAiSide(null);
   }
 
   /**
@@ -321,24 +297,8 @@ export function useBattleLogSession(mode: BattleMode) {
   }
 
 
-  // AI 편의 강제 교체(기절 후)·유턴류 교대는 사람 입력을 기다리지 않고 AI가 바로 고른다.
-  useEffect(() => {
-    if (!battleState || !aiSide) return;
-    if (pendingPivot?.side === aiSide) {
-      resolvePivot(chooseAiForcedSwitch(battleState, aiSide, aiRiskAversion) ?? switchableIndices(aiSide)[0] ?? -1);
-      return;
-    }
-    // 두 편이 다 교체를 기다릴 때는 먼저 쓰러진 편이 먼저 낸다 — 사람이 먼저 쓰러졌으면 사람이 고를 때까지 기다린다(등장 특성이 먼저 나온 쪽 기준으로 이어진다, 7.5 F2)
-    const human = aiSide === "a" ? "b" : "a";
-    const lastTurn = [...log].reverse().find((t) => !isForcedSwitchEntry(t));
-    const order = lastTurn ? faintOrder(lastTurn) : [];
-    if (pendingForcedSwitch?.[human] && order.indexOf(human) !== -1 && order.indexOf(human) < order.indexOf(aiSide)) return;
-    if (pendingForcedSwitch?.[aiSide] && !pendingPivot) {
-      const toIndex = chooseAiForcedSwitch(battleState, aiSide, aiRiskAversion) ?? switchableIndices(aiSide)[0];
-      if (toIndex !== undefined) resolveForcedSwitch(aiSide, toIndex);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pendingForcedSwitch, pendingPivot, battleState, aiSide]);
+  const ai = useBattleAi({ mode, rankAiLevel: rank.aiLevel, battleState, log, pendingForcedSwitch, pendingPivot, resolveForcedSwitch, resolvePivot, switchableIndices, selectableMoveIds });
+  const { aiSide, aiThinking, aiMemory, showAiMemory, setShowAiMemory, learnedBattles } = ai;
 
   function playTurn() {
     if (!battleState || pendingForcedSwitch || pendingPivot || aiThinking) return;
@@ -378,28 +338,13 @@ export function useBattleLogSession(mode: BattleMode) {
       }
     }
 
-    // AI 편: 발버둥·차지 2턴째는 사람과 같은 자동 처리를 따르고, 그 외엔 AI가 기술·교체·메가진화를 고른다.
-    // 고를 수 있는 기술은 사람에게 적용하는 규칙(PP·구애 고정·도발·사슬묶기·앙코르)과 똑같이 거른다.
-    // ver.2.0 2-B: 탐색 오라클을 Web Worker에서 계산한다(화면 멈춤 없음, 2초 안에 답이 없으면 지금 AI로 — aiClient.ts).
+    // AI 편: 발버둥·차지 2턴째는 사람과 같은 자동 처리를 따르고, 그 외엔 AI가 기술·교체·메가진화를 고른다(useBattleAi)
     const needsAi = !!aiSide && !struggling[aiSide] && !charging[aiSide];
     if (!needsAi) {
       executeTurn(null);
       return;
     }
-    const requestId = ++aiRequestRef.current;
-    setAiThinking(true);
-    void chooseAiActionAsync({
-      state: battleState,
-      key: aiSide!,
-      riskAversion: aiRiskAversion,
-      legalMoveIds: selectableMoveIds(aiSide!),
-      decisionParams: mode === "rank" ? RANK_AI_PROFILES[rank.aiLevel] : APP_DECISION_PARAMS,
-      opponentMemory: combinedMemory(aiMemory.memory, aiSessionRef.current),
-    }).then((result) => {
-      if (requestId !== aiRequestRef.current) return; // 계산 도중 초기화·새 대전
-      setAiThinking(false);
-      executeTurn(result.action, result.opponentDistribution);
-    });
+    ai.requestAction(battleState, executeTurn);
 
     function executeTurn(aiAction: TurnAction | null, opponentDistribution?: LevelOneDistribution) {
     if (!battleState) return;
@@ -407,16 +352,10 @@ export function useBattleLogSession(mode: BattleMode) {
     if (!actions) return;
     const { a: actionA, b: actionB } = actions;
 
-    // 1-C: AI가 예측한 사용자 행동 분포와 사용자가 실제로 고른 행동을 짝지어 이번 대전 세션 기록에 더한다
+    // 1-C: AI가 예측한 사용자 행동 분포와 사용자가 실제로 고른 행동을 이번 대전 학습 기록에 더한다
     if (aiSide && opponentDistribution) {
       const humanSide = aiSide === "a" ? "b" : "a";
-      const human = humanSide === "a" ? actionA : actionB;
-      observeOpponent(aiSessionRef.current, {
-        dist: opponentDistribution,
-        speciesId: battleState[humanSide].slot.pokemonId,
-        statusMoveIds: statusMoveIdsOf(opponentDistribution),
-        action: human.kind === "switch" ? { kind: "switch" } : { kind: "move", moveId: human.move.id, isStatus: human.move.category === "status" },
-      });
+      ai.observe(battleState, humanSide === "a" ? actionA : actionB, humanSide, opponentDistribution);
     }
 
     applyTurnOutcome(runTurn(battleState, actionA, actionB), false);
@@ -439,11 +378,9 @@ export function useBattleLogSession(mode: BattleMode) {
       winner,
       log,
     });
-    // 1-C: AI 대전이면 이번 대전 관측을 누적 학습에 합친다("대전에서 계속 학습"이 꺼져 있으면 합치지 않음)
-    if (aiSide && aiMemory.commit(aiSessionRef.current)) setLearnedBattles(aiMemory.memory.battles + 1);
+    ai.settle();
     series.record(winner);
     rank.record(winner, log.at(-1)?.turnNumber ?? 0);
-    aiSessionRef.current = emptyOpponentMemory();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [winner]);
 
