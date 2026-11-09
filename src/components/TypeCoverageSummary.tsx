@@ -43,7 +43,7 @@ export function TypeCoverageSummary({ slots }: TypeCoverageSummaryProps) {
 
   return (
     <section className="type-coverage">
-      <Fold title="타입 상성표(방어)" defaultOpen={false}>
+      <Fold title="타입 상성표(방어)" defaultOpen={false} storageKey="champions-party-sim.fold.type-defense.v1">
         <header className="type-coverage-header">
           <p>
             빌드한 포켓몬별 방어 배율입니다. 등배(×1)는 빈 칸, 마지막 열 <b>종합(상성별)</b>은 타입별

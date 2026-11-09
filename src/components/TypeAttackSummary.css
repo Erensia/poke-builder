@@ -55,3 +55,20 @@
 .atk-cover .type-badge {
   margin-right: 0.25rem;
 }
+
+/* 이중 타입 조합은 배지 둘을 붙여 한 덩어리로 (줄이 바뀌어도 쪼개지지 않게) */
+.atk-combo {
+  display: inline-flex;
+  margin-right: 0.35rem;
+  white-space: nowrap;
+}
+
+.atk-combo .type-badge {
+  margin-right: 0.1rem;
+}
+
+.atk-cover-note {
+  margin: 0;
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+}
