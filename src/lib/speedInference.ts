@@ -11,6 +11,7 @@ import { evaluateSpeedMatchup, type EvaluatorSlot } from "./matchupEvaluator";
 import { MAX_ABILITY_POINTS_PER_STAT, MAX_ABILITY_POINTS_TOTAL } from "./statCalculator";
 import { EMPTY_ABILITY_POINTS } from "../types/party";
 import {
+  diagnoseObservations,
   emptyRange,
   finishRange,
   growRange,
@@ -278,13 +279,6 @@ export function inferSpeed(input: SpeedInferenceInput, diagnostics = true): Spee
   if (errors.some((e) => e !== null)) return { ...emptyResult("invalid", total), observationErrors: errors };
   const result = runCandidates(input, prepared);
   result.observationErrors = errors;
-  if (total > 1 && diagnostics) {
-    result.singleFeasible = prepared.map((o) => runCandidates(input, [o]).status === "ok");
-    if (result.status === "contradiction") {
-      result.culprits = prepared
-        .map((_, skip) => skip)
-        .filter((skip) => runCandidates(input, prepared.filter((__, i) => i !== skip)).status === "ok");
-    }
-  }
+  if (total > 1 && diagnostics) diagnoseObservations(result, prepared, (subset) => runCandidates(input, subset));
   return result;
 }
