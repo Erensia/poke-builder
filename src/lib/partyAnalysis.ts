@@ -1,13 +1,16 @@
 import { POKEMON_TYPES, type PokemonType } from "../types/pokemon-type";
 import { getEffectiveness } from "./typeEffectiveness";
-import { getPokemon } from "./data";
+import { getMove, getPokemon } from "./data";
 import { getEffectiveForm } from "./pokemonForm";
-import type { PartySlots } from "../types/party";
+import type { PartySlot, PartySlots } from "../types/party";
+import type { Move, MoveCategory } from "../types/move";
 
-interface PartyMember {
+export interface PartyMember {
   pokemonId: string;
   name: string;
   types: PokemonType[];
+  /** 슬롯에 배치한 기술 id (빈 칸은 null) — 공격 표(7.6)가 쓴다 */
+  moves: PartySlot["moves"];
   /** 메가진화·폼 변화 중이면 그 폼 라벨 (예: "리자몽-메가X"), 아니면 null */
   formLabel: string | null;
 }
@@ -24,6 +27,7 @@ function getPartyMembers(slots: PartySlots): PartyMember[] {
         pokemonId: pokemon.id,
         name: pokemon.name,
         types: form.types,
+        moves: slot.moves,
         formLabel: form.formLabel,
       };
     })
@@ -85,4 +89,80 @@ export function computePartyDefenseMatrix(slots: PartySlots): PartyDefenseMatrix
     return { type: attacking, cells, verdict };
   });
   return { members, rows, memberWeakCounts };
+}
+
+/** 분류별 기술 개수 (공격 표의 한 칸) */
+export type MoveCount = Record<MoveCategory, number>;
+
+interface PartyAttackRow {
+  /** 기술 타입 */
+  type: PokemonType;
+  /** members와 같은 순서 — 그 포켓몬이 가진 이 타입 기술의 분류별 개수 */
+  cells: MoveCount[];
+  /** 파티 전체 합계 (표 마지막 열) */
+  total: MoveCount;
+}
+
+interface PartyAttackMemberTotal {
+  /** 물리 + 특수 기술 수 */
+  damage: number;
+  /** 변화 기술 수 */
+  status: number;
+  /** 이 포켓몬의 물리·특수 기술이 약점(×2 이상)을 찌를 수 있는 방어 타입 수 (단일 타입 18개 기준) */
+  covered: number;
+}
+
+interface PartyAttackMatrix {
+  members: PartyMember[];
+  /** 18행 고정 — POKEMON_TYPES 배열 순서 */
+  rows: PartyAttackRow[];
+  /** members와 같은 순서 (표 아래쪽 합계 행) */
+  memberTotals: PartyAttackMemberTotal[];
+  /** 파티 전체가 약점을 찌를 수 있는 방어 타입 / 못 찌르는 방어 타입 (POKEMON_TYPES 순서) */
+  coveredTypes: PokemonType[];
+  uncoveredTypes: PokemonType[];
+}
+
+/** 이 기술이 방어 타입 하나(단일 타입)를 ×2 이상으로 찌르는가 — 프리즈드라이처럼 상성을 덮어쓰는 기술을 반영 */
+function hitsSuperEffective(move: Move & { type: PokemonType }, defending: PokemonType): boolean {
+  const o = move.overridesTypeEffectivenessFor;
+  return (o && o.type === defending ? o.effectiveness : getEffectiveness(move.type, [defending])) >= 2;
+}
+
+/**
+ * 포켓몬 × 기술 타입 공격 매트릭스(7.6 T3·T4). 각 셀은 그 포켓몬이 가진 해당 타입 기술을 물리·특수·변화로 센 것이다.
+ * 기술 자체의 타입만 본다(특성 스킨·웨더볼 같은 가변 타입, 이중 타입 방어 조합은 반영하지 않는다 — ponytail: 단일 타입 18개 기준).
+ * 약점 커버는 물리·특수 기술(변화 제외) 하나라도 그 방어 타입을 ×2 이상으로 찌르면 "커버"다.
+ */
+export function computePartyAttackMatrix(slots: PartySlots): PartyAttackMatrix {
+  const members = getPartyMembers(slots);
+  const moves = members.map((m) =>
+    m.moves.flatMap((id) => {
+      const move = id ? getMove(id) : undefined;
+      return move?.type && move.category ? [{ move: move as Move & { type: PokemonType }, category: move.category }] : [];
+    }),
+  );
+  const empty = (): MoveCount => ({ physical: 0, special: 0, status: 0 });
+  const rows: PartyAttackRow[] = POKEMON_TYPES.map((type) => {
+    const total = empty();
+    const cells = moves.map((list) => {
+      const cell = empty();
+      for (const m of list) {
+        if (m.move.type !== type) continue;
+        cell[m.category]++;
+        total[m.category]++;
+      }
+      return cell;
+    });
+    return { type, cells, total };
+  });
+  const coveredBy = moves.map(
+    (list) => new Set(POKEMON_TYPES.filter((def) => list.some((m) => m.category !== "status" && hitsSuperEffective(m.move, def)))),
+  );
+  const memberTotals = moves.map((list, i) => {
+    const status = list.filter((m) => m.category === "status").length;
+    return { damage: list.length - status, status, covered: coveredBy[i].size };
+  });
+  const coveredTypes = POKEMON_TYPES.filter((t) => coveredBy.some((s) => s.has(t)));
+  return { members, rows, memberTotals, coveredTypes, uncoveredTypes: POKEMON_TYPES.filter((t) => !coveredTypes.includes(t)) };
 }

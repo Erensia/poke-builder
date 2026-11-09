@@ -1,0 +1,57 @@
+/* 7.6 T3·T4 — 타입 상성표(공격). 표 뼈대(.type-matrix 등)는 TypeCoverageSummary.css를 그대로 쓴다. */
+
+/* 분류별 기술 개수 칩 — 물리=빨강 계열, 특수=보라 계열, 변화=회색 (방어 표의 .cnt와 같은 크기·모서리) */
+.atk {
+  display: inline-block;
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  padding: 0.05rem 0.3rem;
+  border-radius: var(--r-xs);
+}
+
+.atk + .atk {
+  margin-left: 0.2rem;
+}
+
+.atk-physical {
+  color: var(--danger);
+  background: var(--danger-bg);
+}
+
+.atk-special {
+  color: var(--violet);
+  background: var(--violet-soft);
+}
+
+.atk-status {
+  color: var(--text-muted);
+  background: var(--surface-2);
+}
+
+/* 한 칸에 물·특·변 칩이 최대 3개 */
+.type-attack .tm-cell {
+  min-width: 4rem;
+}
+
+/* 합계 행이 3줄이라 두 번째 줄부터는 가는 선으로만 나눈다 (tfoot 첫 줄만 굵은 선) */
+.type-attack .type-matrix tfoot tr + tr th,
+.type-attack .type-matrix tfoot tr + tr td {
+  border-top: 1px solid var(--border);
+}
+
+.atk-cover {
+  margin: 0.6rem 0 0;
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+  line-height: 1.9;
+}
+
+.atk-cover strong {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.atk-cover .type-badge {
+  margin-right: 0.25rem;
+}
