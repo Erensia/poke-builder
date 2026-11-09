@@ -290,34 +290,43 @@ export const DEFENSE_ABILITY_CANDIDATES: Ability[] = ABILITIES.filter(
 /** 방어에 영향을 주는 도구 (반감 열매) */
 export const DEFENSE_ITEM_CANDIDATES: Item[] = ITEMS.filter((i) => i.resistsSuperEffectiveType !== undefined);
 
-interface NatureCombo {
-  key: string;
-  defMult: number;
-  spdMult: number;
-  label: string;
-  natureNames: string[];
-}
-
 export function natureMult(stat: "atk" | "def" | "spa" | "spd" | "spe", increased: string | null | undefined, decreased: string | null | undefined): number {
   if (increased === stat) return 1.1;
   if (decreased === stat) return 0.9;
   return 1;
 }
 
-function buildNatureCombos(useDef: boolean, useSpd: boolean, allowed?: ReadonlySet<string>): NatureCombo[] {
+/** 성격 보정을 읽는 두 스탯(공격 쪽 추론은 atk·spa, 방어 쪽은 def·spd) */
+type NatureStat = "atk" | "spa" | "def" | "spd";
+const NATURE_STAT_LABEL: Record<NatureStat, string> = { atk: "공격", spa: "특공", def: "방어", spd: "특방" };
+
+/** 성격 15종을 관측이 쓰는 두 스탯의 보정이 같은 것끼리 묶은 것 */
+export interface NatureCombo {
+  key: string;
+  multA: number;
+  multB: number;
+  label: string;
+  natureNames: string[];
+  /** 이 묶음의 대표 성격(evaluateSlotMatchup 호출용) */
+  repNatureId: string;
+}
+
+export function buildNatureCombos(statA: NatureStat, useA: boolean, statB: NatureStat, useB: boolean, allowed?: ReadonlySet<string>): NatureCombo[] {
+  const nameA = NATURE_STAT_LABEL[statA];
+  const nameB = NATURE_STAT_LABEL[statB];
   const map = new Map<string, NatureCombo>();
   for (const n of NATURES) {
     if (allowed && !allowed.has(n.id)) continue;
-    const defMult = useDef ? natureMult("def", n.increased, n.decreased) : 1;
-    const spdMult = useSpd ? natureMult("spd", n.increased, n.decreased) : 1;
-    const key = `${defMult}|${spdMult}`;
+    const multA = useA ? natureMult(statA, n.increased, n.decreased) : 1;
+    const multB = useB ? natureMult(statB, n.increased, n.decreased) : 1;
+    const key = `${multA}|${multB}`;
     let combo = map.get(key);
     if (!combo) {
       const parts: string[] = [];
-      if (useDef) parts.push(defMult > 1 ? "방어↑" : defMult < 1 ? "방어↓" : "");
-      if (useSpd) parts.push(spdMult > 1 ? "특방↑" : spdMult < 1 ? "특방↓" : "");
-      const label = parts.filter(Boolean).join("·") || (useDef && useSpd ? "방어·특방 보정 없음" : useDef ? "방어 보정 없음" : "특방 보정 없음");
-      combo = { key, defMult, spdMult, label, natureNames: [] };
+      if (useA) parts.push(multA > 1 ? `${nameA}↑` : multA < 1 ? `${nameA}↓` : "");
+      if (useB) parts.push(multB > 1 ? `${nameB}↑` : multB < 1 ? `${nameB}↓` : "");
+      const label = parts.filter(Boolean).join("·") || (useA && useB ? `${nameA}·${nameB} 보정 없음` : `${useA ? nameA : nameB} 보정 없음`);
+      combo = { key, multA, multB, label, natureNames: [], repNatureId: n.id };
       map.set(key, combo);
     }
     combo.natureNames.push(n.name);
@@ -608,13 +617,13 @@ function accumulateForm(
   const hp = Math.floor(a.f.baseStats.hp + 75 + hpP);
   growRange(a.real.hp, hp);
   if (useDef) {
-    const d = realStat(combo.defMult, a.f.baseStats.def, defP);
+    const d = realStat(combo.multA, a.f.baseStats.def, defP);
     growRange(a.real.def, d);
     a.phys.w.add(hp * d, likelihood);
     growRange(a.phys.r, hp * d);
   }
   if (useSpd) {
-    const d = realStat(combo.spdMult, a.f.baseStats.spd, spdP);
+    const d = realStat(combo.multB, a.f.baseStats.spd, spdP);
     growRange(a.real.spd, d);
     a.spec.w.add(hp * d, likelihood);
     growRange(a.spec.r, hp * d);
@@ -632,7 +641,7 @@ function runCandidates(input: InferenceInput, prepared: PreparedObservation[], d
   const tol = input.tolerance ?? 0;
   const useDef = prepared.some((o) => o.parts.defenseKey === "def");
   const useSpd = prepared.some((o) => o.parts.defenseKey === "spd");
-  const combos = buildNatureCombos(useDef, useSpd, input.natureIds ? new Set(input.natureIds) : undefined);
+  const combos = buildNatureCombos("def", useDef, "spd", useSpd, input.natureIds ? new Set(input.natureIds) : undefined);
   const groups: NatureGroup[] = combos.map((c) => ({ id: c.key, label: c.label, natureNames: c.natureNames, feasible: 0, total: 0, weight: 0 }));
   const comboSlot = combos.map((c) => {
     if (!likeCache) return 0;
@@ -692,7 +701,7 @@ function runCandidates(input: InferenceInput, prepared: PreparedObservation[], d
     let gap = 0;
     for (let i = 0; i < n; i++) {
       const o = prepared[i];
-      const stat = o.parts.defenseKey === "def" ? realStat(combo.defMult, o.baseDef, defP) : realStat(combo.spdMult, o.baseSpd, spdP);
+      const stat = o.parts.defenseKey === "def" ? realStat(combo.multA, o.baseDef, defP) : realStat(combo.multB, o.baseSpd, spdP);
       // 열매를 먹은 줄은 화면 %에 회복이 섞여 있어 그만큼 더한 값이 실제 손실이다
       const loss = observedLoss[i] + (o.berry ? (Math.floor(maxHp / SITRUS_DENOMINATOR) * o.berry * 100) / maxHp : 0);
       gap += Math.abs((centerOf(i, stat) * 100) / maxHp - loss);
@@ -727,15 +736,15 @@ function runCandidates(input: InferenceInput, prepared: PreparedObservation[], d
     const maxHp = Math.floor(base.hp + 75 + hpP);
     for (let c = 0; c < combos.length; c++) {
       const combo = combos[c];
-      const defStat = realStat(combo.defMult, lastDef?.baseDef ?? base.def, defP);
-      const spdStat = realStat(combo.spdMult, lastSpd?.baseSpd ?? base.spd, spdP);
+      const defStat = realStat(combo.multA, lastDef?.baseDef ?? base.def, defP);
+      const spdStat = realStat(combo.multB, lastSpd?.baseSpd ?? base.spd, spdP);
       total++;
       groups[c].total++;
       const cacheIdx = likeCache ? ((hpP * GRID + defP) * GRID + spdP) * COMBO_SLOTS + comboSlot[c] : -1;
       let likelihood = likeCache ? likeCache.values[cacheIdx] : -1;
       if (likelihood < 0) {
         const rolls = prepared.map((o, i) =>
-          o.parts.defenseKey === "def" ? rollsFor(i, realStat(combo.defMult, o.baseDef, defP)) : rollsFor(i, realStat(combo.spdMult, o.baseSpd, spdP)),
+          o.parts.defenseKey === "def" ? rollsFor(i, realStat(combo.multA, o.baseDef, defP)) : rollsFor(i, realStat(combo.multB, o.baseSpd, spdP)),
         );
         likelihood = candidateLikelihood(maxHp, rolls, prepared, tol);
         if (likeCache) likeCache.values[cacheIdx] = likelihood;
@@ -773,7 +782,7 @@ function runCandidates(input: InferenceInput, prepared: PreparedObservation[], d
   const buildCard = ([hpP, defP, spdP, c]: [number, number, number, number], spare: number, likelihood: number, gap: number) => {
     const combo = combos[c];
     const maxHp = Math.floor(base.hp + 75 + hpP);
-    const rollSets = prepared.map((o, i) => rollsFor(i, o.parts.defenseKey === "def" ? realStat(combo.defMult, o.baseDef, defP) : realStat(combo.spdMult, o.baseSpd, spdP)));
+    const rollSets = prepared.map((o, i) => rollsFor(i, o.parts.defenseKey === "def" ? realStat(combo.multA, o.baseDef, defP) : realStat(combo.multB, o.baseSpd, spdP)));
     return {
       natureLabel: combo.label,
       natureNames: combo.natureNames,
