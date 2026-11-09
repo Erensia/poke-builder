@@ -29,6 +29,26 @@ export function PreMoveSwitchLines({ switches }: { switches: TurnResult["switche
   );
 }
 
+/** 기절 뒤 강제 교체(턴 카드 맨 아래에 묶인 블록, 7.5 F2) — 팀 표시 줄 아래에 등장 때 발동한 문구를 흐리게 붙인다 */
+export function MergedSwitchLines({ switches, team }: { switches: TurnResult["switches"]; team: (side: FighterKey) => string }) {
+  return (
+    <>
+      {switches.map((sw, i) => (
+        <div key={i}>
+          <div className="battle-turn-line">
+            {team(sw.side)} ▸ 가라! {getPokemon(sw.inPokemonId)?.name ?? "포켓몬"}!
+          </div>
+          {sw.entryMessages.map((m, j) => (
+            <div key={j} className="battle-turn-line is-muted">
+              {m}
+            </div>
+          ))}
+        </div>
+      ))}
+    </>
+  );
+}
+
 /** 유턴류 자체 교체 — 이 행동 직후에(§7-2) 시간 순서대로 렌더 */
 export function SelfSwitchAfterMoveLines({
   switches,
