@@ -5,6 +5,7 @@ import { PartyPresetsModal } from "./PartyPresetsModal";
 import { SlotPickers } from "./SlotPickers";
 import { SyncDot } from "./SyncDot";
 import { TypeCoverageSummary } from "./TypeCoverageSummary";
+import { TypeAttackSummary } from "./TypeAttackSummary";
 import { useParty } from "../hooks/useParty";
 import { usePartyPresets } from "../hooks/usePartyPresets";
 import { useSlotPresets } from "../hooks/useSlotPresets";
@@ -168,6 +169,7 @@ export function PartyBoard() {
       </div>
 
       <TypeCoverageSummary slots={slots} />
+      <TypeAttackSummary slots={slots} />
 
       <PartyBoardPickers s={session} />
     </section>

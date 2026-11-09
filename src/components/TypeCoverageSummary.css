@@ -4,9 +4,9 @@
   margin-top: 2rem;
 }
 
-.type-coverage-header h2 {
-  font-size: var(--fs-xl);
-  margin-bottom: 0.3rem;
+/* 방어·공격 표를 위아래로 접어 둘 때는 간격을 좁힌다 (7.6) */
+.type-coverage + .type-coverage {
+  margin-top: 0.75rem;
 }
 
 .type-coverage-header p {

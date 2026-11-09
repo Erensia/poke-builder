@@ -1,0 +1,43 @@
+/* 접고 펼 수 있는 구역 (Fold.tsx) */
+.fold > summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.fold > summary::-webkit-details-marker {
+  display: none;
+}
+
+.fold > summary::before {
+  content: "▾";
+  display: inline-block;
+  width: 1.1em;
+  color: var(--text-muted);
+}
+
+.fold:not([open]) > summary::before {
+  content: "▸";
+}
+
+.fold-title {
+  margin: 0;
+  font-size: var(--fs-lg);
+  font-weight: 700;
+}
+
+.fold-title small {
+  margin-left: 0.4rem;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.fold-title strong {
+  font-variant-numeric: tabular-nums;
+}
+
+.fold-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.4rem;
+}

@@ -1,6 +1,7 @@
 import type { PartySlots } from "../types/party";
 import { computePartyDefenseMatrix, type PartyDefenseVerdict } from "../lib/partyAnalysis";
 import { TypeBadge } from "./TypeBadge";
+import { Fold } from "./Fold";
 import "./TypeCoverageSummary.css";
 
 interface TypeCoverageSummaryProps {
@@ -42,74 +43,75 @@ export function TypeCoverageSummary({ slots }: TypeCoverageSummaryProps) {
 
   return (
     <section className="type-coverage">
-      <header className="type-coverage-header">
-        <h2>타입 상성표</h2>
-        <p>
-          빌드한 포켓몬별 방어 배율입니다. 등배(×1)는 빈 칸, 마지막 열 <b>종합(상성별)</b>은 타입별
-          파티 전체 판정, 마지막 행 <b>종합(포켓몬별)</b>은 그 포켓몬의 약점 타입 수입니다.
-        </p>
-      </header>
+      <Fold title="타입 상성표(방어)" defaultOpen={false}>
+        <header className="type-coverage-header">
+          <p>
+            빌드한 포켓몬별 방어 배율입니다. 등배(×1)는 빈 칸, 마지막 열 <b>종합(상성별)</b>은 타입별
+            파티 전체 판정, 마지막 행 <b>종합(포켓몬별)</b>은 그 포켓몬의 약점 타입 수입니다.
+          </p>
+        </header>
 
-      {members.length === 0 ? (
-        <p className="type-coverage-empty">포켓몬을 배치하면 상성 요약이 표시됩니다.</p>
-      ) : (
-        <div className="type-matrix-scroll">
-          <table className="type-matrix">
-            <thead>
-              <tr>
-                <th className="tm-corner" aria-hidden="true" />
-                {members.map((m) => (
-                  <th
-                    key={m.pokemonId}
-                    className="tm-mon"
-                    title={m.formLabel ? `${m.name} (${m.formLabel})` : m.name}
-                  >
-                    <span className="tm-mon-name">{m.name}</span>
-                    {m.formLabel && <span className="tm-mon-form">{formTag(m.formLabel)}</span>}
-                  </th>
+        {members.length === 0 ? (
+          <p className="type-coverage-empty">포켓몬을 배치하면 상성 요약이 표시됩니다.</p>
+        ) : (
+          <div className="type-matrix-scroll">
+            <table className="type-matrix">
+              <thead>
+                <tr>
+                  <th className="tm-corner" aria-hidden="true" />
+                  {members.map((m) => (
+                    <th
+                      key={m.pokemonId}
+                      className="tm-mon"
+                      title={m.formLabel ? `${m.name} (${m.formLabel})` : m.name}
+                    >
+                      <span className="tm-mon-name">{m.name}</span>
+                      {m.formLabel && <span className="tm-mon-form">{formTag(m.formLabel)}</span>}
+                    </th>
+                  ))}
+                  <th className="tm-verdict-head">종합(상성별)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row) => (
+                  <tr key={row.type}>
+                    <th className="tm-type" scope="row" title={`${row.type}타입 기술을 받을 때`}>
+                      <TypeBadge type={row.type} />
+                    </th>
+                    {row.cells.map((cell, i) => (
+                      <td key={members[i].pokemonId} className="tm-cell">
+                        {cell !== null && (
+                          <span className={multClass(cell)} title={`×${cell}`}>
+                            {multLabel(cell)}
+                          </span>
+                        )}
+                      </td>
+                    ))}
+                    <td className={`tm-verdict tm-verdict-${VERDICT_SLUG[row.verdict]}`}>{row.verdict}</td>
+                  </tr>
                 ))}
-                <th className="tm-verdict-head">종합(상성별)</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <tr key={row.type}>
-                  <th className="tm-type" scope="row" title={`${row.type}타입 기술을 받을 때`}>
-                    <TypeBadge type={row.type} />
+              </tbody>
+              <tfoot>
+                <tr>
+                  <th className="tm-type tm-foot-label" scope="row">
+                    종합(포켓몬별)
                   </th>
-                  {row.cells.map((cell, i) => (
-                    <td key={members[i].pokemonId} className="tm-cell">
-                      {cell !== null && (
-                        <span className={multClass(cell)} title={`×${cell}`}>
-                          {multLabel(cell)}
-                        </span>
-                      )}
+                  {memberWeakCounts.map((count, i) => (
+                    <td
+                      key={members[i].pokemonId}
+                      className="tm-foot-count"
+                      title={`${members[i].name}의 약점 타입 ${count}개`}
+                    >
+                      {count}
                     </td>
                   ))}
-                  <td className={`tm-verdict tm-verdict-${VERDICT_SLUG[row.verdict]}`}>{row.verdict}</td>
+                  <td className="tm-foot-corner" aria-hidden="true" />
                 </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr>
-                <th className="tm-type tm-foot-label" scope="row">
-                  종합(포켓몬별)
-                </th>
-                {memberWeakCounts.map((count, i) => (
-                  <td
-                    key={members[i].pokemonId}
-                    className="tm-foot-count"
-                    title={`${members[i].name}의 약점 타입 ${count}개`}
-                  >
-                    {count}
-                  </td>
-                ))}
-                <td className="tm-foot-corner" aria-hidden="true" />
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-      )}
+              </tfoot>
+            </table>
+          </div>
+        )}
+      </Fold>
     </section>
   );
 }
