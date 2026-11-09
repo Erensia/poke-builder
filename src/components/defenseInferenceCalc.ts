@@ -15,7 +15,7 @@ type Slot = DefenseInferencePanelProps["attacker"];
 type Weather = DefenseInferencePanelProps["weather"];
 type Field = DefenseInferencePanelProps["field"];
 type Combined = ReturnType<typeof inferCombined>;
-export type RowMessage = { text: string; kind: "error" | "ok" } | null;
+type RowMessage = { text: string; kind: "error" | "ok" } | null;
 
 /** 방어 역산 입력 — 내가 입힌 데미지 줄이 하나도 없으면 null */
 export function buildDefenseInput(p: {
@@ -136,7 +136,7 @@ export function buildSpeedInput(p: {
 }
 
 /** 관측 줄 아래에 보이는 오류·가능 안내가 읽는 값 — 훅이 렌더마다 만들어 넘긴다 */
-export interface RowMessageCtx {
+interface RowMessageCtx {
   complete: { row: ObservationRow }[];
   completeReceived: { row: ObservationRow }[];
   speedRows: ObservationRow[];

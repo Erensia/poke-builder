@@ -17,7 +17,7 @@ import type { AbilityPoints, PartySlot } from "../types/party";
  * slotCtl(side, i))과 setter 모양만 달라서, 그 차이는 호출하는 쪽이 slot·actions로 메운다. 파티 불러오기·백업 같은
  * 화면 고유 모달은 합치지 않고 각 화면에 남겼다.
  */
-export interface SlotPickerActions {
+interface SlotPickerActions {
   setPokemon: (pokemonId: string) => void;
   setMove: (moveIndex: 0 | 1 | 2 | 3, moveId: string | null) => void;
   setAbility: (abilityId: string | null) => void;
