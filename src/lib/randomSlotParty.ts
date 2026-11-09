@@ -1,6 +1,7 @@
 import type { PartySlot } from "../types/party";
 import { getPokemon } from "./data";
 import { findMegaFormByStone } from "./pokemonForm";
+import { shuffled } from "./battleSeries";
 
 export const PARTY_SIZE = 6;
 /** 메가스톤 든 포켓몬은 최대 2마리 — 배틀에서 메가진화는 편당 한 번뿐이라 2마리 이상은 선출·전략 선택지일 뿐 규칙 위반은 아니다 */
@@ -9,15 +10,6 @@ const MAX_MEGAS = 2;
 function isMega(slot: PartySlot): boolean {
   const pokemon = getPokemon(slot.pokemonId);
   return !!slot.activeMegaForm || (!!pokemon && !!findMegaFormByStone(pokemon, slot.item));
-}
-
-function shuffled<T>(list: readonly T[], random: () => number): T[] {
-  const out = [...list];
-  for (let i = out.length - 1; i > 0; i--) {
-    const j = Math.floor(random() * (i + 1));
-    [out[i], out[j]] = [out[j], out[i]];
-  }
-  return out;
 }
 
 /**

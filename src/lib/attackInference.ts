@@ -3,7 +3,7 @@ import type { StatStages } from "../types/battleStats";
 import type { WeatherKind } from "../types/weather";
 import type { FieldKind } from "../types/field";
 import type { StatusCondition } from "../types/status";
-import { ABILITIES, ITEMS, NATURES, getAbility, getPokemon } from "./data";
+import { ABILITIES, ITEMS, getAbility, getPokemon } from "./data";
 import type { Ability } from "../types/ability";
 import type { Item } from "../types/item";
 import { getEffectiveForm } from "./pokemonForm";
@@ -20,7 +20,8 @@ import {
   inferenceUnsupportedReason,
   multiHitError,
   multiHitRange,
-  natureMult,
+  buildNatureCombos,
+  type NatureCombo,
   viewForms,
   WeightedValues,
   type CentralRange,
@@ -133,16 +134,6 @@ export interface AttackInferenceResult {
 
 type AttackKey = "atk" | "spa";
 
-interface NatureCombo {
-  key: string;
-  atkMult: number;
-  spaMult: number;
-  label: string;
-  natureNames: string[];
-  /** 이 묶음의 대표 성격(evaluateSlotMatchup 호출용) */
-  repNatureId: string;
-}
-
 interface PreparedObservation {
   key: AttackKey;
   /** 이 관측 시점 폼의 공격·특공 종족값(결과의 실수치 범위 표시용) */
@@ -167,28 +158,6 @@ export function attackInferenceUnsupportedReason(move: Move): string | null {
   if (move.gyroBallPower || move.electroBallPower) return "스피드로 위력이 정해지는 기술은 아직 지원하지 않아요";
   if (move.power === null) return "위력이 상황에 따라 달라지는 기술은 아직 지원하지 않아요";
   return null;
-}
-
-/** 상대 공격·특공 보정 묶음(성격 15종 → 관측이 쓰는 스탯의 보정이 같은 것끼리) */
-function buildNatureCombos(useAtk: boolean, useSpa: boolean, allowed?: ReadonlySet<string>): NatureCombo[] {
-  const map = new Map<string, NatureCombo>();
-  for (const n of NATURES) {
-    if (allowed && !allowed.has(n.id)) continue;
-    const atkMult = useAtk ? natureMult("atk", n.increased, n.decreased) : 1;
-    const spaMult = useSpa ? natureMult("spa", n.increased, n.decreased) : 1;
-    const key = `${atkMult}|${spaMult}`;
-    let combo = map.get(key);
-    if (!combo) {
-      const parts: string[] = [];
-      if (useAtk) parts.push(atkMult > 1 ? "공격↑" : atkMult < 1 ? "공격↓" : "");
-      if (useSpa) parts.push(spaMult > 1 ? "특공↑" : spaMult < 1 ? "특공↓" : "");
-      const label = parts.filter(Boolean).join("·") || (useAtk && useSpa ? "공격·특공 보정 없음" : useAtk ? "공격 보정 없음" : "특공 보정 없음");
-      combo = { key, atkMult, spaMult, label, natureNames: [], repNatureId: n.id };
-      map.set(key, combo);
-    }
-    combo.natureNames.push(n.name);
-  }
-  return [...map.values()];
 }
 
 function emptyResult(status: AttackInferenceResult["status"], n: number): AttackInferenceResult {
@@ -351,7 +320,7 @@ function runCandidates(input: AttackInferenceInput, prepared: PreparedObservatio
   const baseOf = (key: AttackKey) => prepared.findLast((o) => o.key === key)?.baseStat ?? getEffectiveForm(pokemon, input.attacker).baseStats[key];
   const useAtk = prepared.some((o) => o.key === "atk");
   const useSpa = prepared.some((o) => o.key === "spa");
-  const combos = buildNatureCombos(useAtk, useSpa, input.natureIds ? new Set(input.natureIds) : undefined);
+  const combos = buildNatureCombos("atk", useAtk, "spa", useSpa, input.natureIds ? new Set(input.natureIds) : undefined);
   const maxSum = Math.min(MAX_ABILITY_POINTS_TOTAL, input.maxPointsSum ?? MAX_ABILITY_POINTS_TOTAL);
   const minSum = (input.minPointsSum ?? 0) - MAX_ABILITY_POINTS_PER_STAT * (Number(!useAtk) + Number(!useSpa));
   const groups: NatureGroup[] = combos.map((c) => ({ id: c.key, label: c.label, natureNames: c.natureNames, feasible: 0, total: 0, weight: 0 }));
@@ -401,13 +370,13 @@ function runCandidates(input: AttackInferenceInput, prepared: PreparedObservatio
         spaWeight[j] += w;
         if (useAtk) {
           grow(atkRange, a);
-          grow(realAtk, Math.floor((baseOf("atk") + 20 + a) * combo.atkMult));
-          for (const x of formAcc) grow(x.atk, Math.floor((x.f.baseStats.atk + 20 + a) * combo.atkMult));
+          grow(realAtk, Math.floor((baseOf("atk") + 20 + a) * combo.multA));
+          for (const x of formAcc) grow(x.atk, Math.floor((x.f.baseStats.atk + 20 + a) * combo.multA));
         }
         if (useSpa) {
           grow(spaRange, b);
-          grow(realSpa, Math.floor((baseOf("spa") + 20 + b) * combo.spaMult));
-          for (const x of formAcc) grow(x.spa, Math.floor((x.f.baseStats.spa + 20 + b) * combo.spaMult));
+          grow(realSpa, Math.floor((baseOf("spa") + 20 + b) * combo.multB));
+          for (const x of formAcc) grow(x.spa, Math.floor((x.f.baseStats.spa + 20 + b) * combo.multB));
         }
       });
     });

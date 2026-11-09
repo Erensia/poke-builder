@@ -215,3 +215,6 @@ export function computePartyAttackMatrix(slots: PartySlots): PartyAttackMatrix {
   };
   return { members, rows, memberTotals, single: coverage(POKEMON_TYPES.map((t) => [t])), combo: coverage(DEFENDER_COMBOS) };
 }
+
+/** 메가·폼 라벨 축약 표시(타입 상성표 방어·공격 공용) */
+export const formTag = (formLabel: string): string => (formLabel.includes("메가") ? "메가" : formLabel);
