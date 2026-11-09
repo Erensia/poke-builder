@@ -4,7 +4,7 @@ Pokémon Champions 파티 빌더 — 6슬롯 파티를 구성하고 타입 상�
 
 - **배포**: [poke-builder-two.vercel.app](https://poke-builder-two.vercel.app/) — Vercel에 `main` 브랜치 자동 배포(`dev` 브랜치는 배포하지 않는다 — `vercel.json`, ver.7.7)
 - **저장소**: [github.com/Erensia/poke-builder](https://github.com/Erensia/poke-builder)
-- **현재 버전**: ver.7.7 — 상세는 [문서](#문서) 참고
+- **현재 버전**: ver.8.0 — 코드 전체 리팩토링(동작 불변), 상세는 [문서](#문서) 참고
 
 ## 주요 기능
 
@@ -61,7 +61,7 @@ npm run test:sync       # 클라우드 동기화 판정·정규화(6.0, 네트�
 npm run test:party-attack  # 타입 상성표(공격) 계산: 손계산 사례 + 샘플 파티 전수 정합성(7.6)
 npm run test:rules      # Firestore 보안 규칙(에뮬레이터, Java 21 이상 필요)
 npm run validate:data   # 데이터 정합성 검사(build가 먼저 실행)
-npm run sim:ai -- regress   # 엔진 동작 불변 확인용 로그 해시(모드: regress|ai|greedy|style|h2h|selectvs|partyvs|diag|logidx)
+npm run sim:ai -- regress   # 엔진 동작 불변 확인용 로그 해시(모드: regress|ai|greedy|style|h2h|selectvs|partyvs|diag|logidx|fxhp)
 npm run bench -- compare <이전 체크아웃>   # AI 벤치(그리디·STATUS·h2h, 코어 수만큼 병렬 — toggle 모드는 켬/끔 비교)
 ```
 
@@ -87,7 +87,8 @@ src/
 │                turnRates(턴 종료 효과)·statusMoveEffects·protectMoves 등
 ├─ hooks/        useParty · useMatchup · useBattleSetup · usePartyPresets · useSlotPresets · useMySamples · useBattleVideos · useBattleSeries · useAiMemory 등
 └─ components/   PartyBoard, MatchupPage(+ DefenseInferencePanel·SpeedTablePanel·BulkAdjustPanel 탭), PokedexPage(+ TypeChartTable), MoveDexPage(카드형 UI), ItemDexPage, 각종 PickerModal 등
-                 BattleLogPage(+ BattleSetupScreen/BattleSelectScreen/BattleBoard 화면 분리),
+                 BattleLogPage(+ battleLog/ 아래 BattleSetupScreen/BattleSelectScreen/BattleBoard 화면 분리, useBattleLogSession·useBattleAi 상태 훅,
+                 useTurnFx 연출 훅 + turnFxPrimitives(연출 도구)·turnFxSchedule(일정 계산), CSS 4파일),
                  BattleTurnLog(+ 로그 계열별 렌더러 9종 분리)
 public/sprites/  포켓몬·메가진화·도구·타입 스프라이트 (spriteManifest.json 생성 소스)
 scripts/         데이터·에셋 유지보수 도구 — scripts/README.md 참고
@@ -104,7 +105,7 @@ scripts/         데이터·에셋 유지보수 도구 — scripts/README.md 참
 - [5.x 요약](docs/00_기획문서/02_backlog/05_ver.5.0/README.md) — ver.5.0: 배틀타워 랭크배틀 시스템(몬스터볼~챔피언·레이팅제)·랭크별 AI 5단계와 마스터볼 구간 학습 활용·샘플 파티 강도 등급·최상 파티 풀, 코드 정리
 - [6.x 요약](docs/00_기획문서/02_backlog/06_ver.6.0/README.md) — ver.6.0: 계정 + 클라우드 백업(Firebase 로컬 우선 동기화)으로 저장한 파티·포켓몬 빌드 유실 방지, 새 코드 정리 · ver.6.1: 큰 컴포넌트·훅·테스트 스크립트 분할(동작 불변) · ver.6.2: 클라우드 동기화 개선(항목 단위 병합·내 샘플·랭크/프런티어 기록 동기화·창 복귀 자동 동기화 등) · ver.6.3: 배틀 AI 작업 전용 — 고스트 저주 구현·엔진 미배선 기술 수정·AI 학습 기록 동기화·랭크 AI 사다리 간격 조정·챔피언 AI 탐색 깊이 2 · ver.6.4: 모바일 랭크배틀 카드 정리·랭크 시작 충돌 연출·클라우드 충돌 스크린리더 안내·프런티어 기록 부분 병합 · ver.6.5: 결정력 계산 조건 UI·기술 순서 드래그·앱 전체 모션·PWA(오프라인) · ver.6.6: 새 버전 안내 바·대전 셋업 카드 높이 전환, 샘플 64개 등급 측정
 - [7.x 요약](docs/00_기획문서/02_backlog/07_ver.7.0/README.md) — ver.7.0: 코드 전체 리팩토링(동작 불변) · ver.7.3: 배틀 AI·엔진 작업(눈보라·번개 날씨 필중, 방어류 연속 사용 실패, 멀티스케일 다단히트, 로그 우리팀/상대팀, AI 파티 체력바) · ver.7.4: 샘플 등급 재측정, 배틀 중 효과(타격·상태이상·교체·기절·메가진화·날씨·설치물 연출), Speed Insights · ver.7.5: 연출 재생 대기열·강제 교체 카드 묶기 · ver.7.6: 타입 상성표 방어/공격 분리·접기·약점 커버 · ver.7.7: `dev` 브랜치 Vercel 배포 끄기, 상성표 이중 타입 조합 커버·가변 기술 타입 반영·펼침 상태 기억(7.x 마지막 버전)
-- [8.x 요약](docs/00_기획문서/02_backlog/08_ver.8.0/README.md) — ver.8.0(진행 예정): 코드 전체 리팩토링(동작 불변)과 지금까지의 한계 총괄표, 8.1·8.2 일반 버전·8.3 AI·엔진 전용 버전의 작업 분할
+- [8.x 요약](docs/00_기획문서/02_backlog/08_ver.8.0/README.md) — ver.8.0: 코드 전체 리팩토링(동작 불변 — 중복 제거·연출 훅/AI 훅/CSS 분리)과 지금까지의 한계 총괄표, 8.1·8.2 일반 버전·8.3 AI·엔진 전용 버전의 작업 분할
 - [데이터변경이력.md](docs/데이터변경이력.md) — 기존 항목 수치·학습셋 변경(밸런스 패치) 기록. ver.1.4부터 시작
 
 ver.1.0 이전(Phase 1~8) 회고·기획 문서도 같은 폴더에 있다 — 초기 아키텍처 결정과 단계별 개발 이력이 궁금하면 참고.
