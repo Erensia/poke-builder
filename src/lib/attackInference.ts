@@ -22,6 +22,7 @@ import {
   multiHitRange,
   buildNatureCombos,
   type NatureCombo,
+  diagnoseObservations,
   viewForms,
   WeightedValues,
   type CentralRange,
@@ -440,13 +441,6 @@ export function inferAttack(input: AttackInferenceInput, diagnostics = true): At
   if (errors.some((e) => e !== null)) return { ...emptyResult("invalid", total), observationErrors: errors };
   const result = runCandidates(input, prepared, true);
   result.observationErrors = errors;
-  if (total > 1 && diagnostics) {
-    result.singleFeasible = prepared.map((o) => runCandidates(input, [o]).status === "ok");
-    if (result.status === "contradiction") {
-      result.culprits = prepared
-        .map((_, skip) => skip)
-        .filter((skip) => runCandidates(input, prepared.filter((__, i) => i !== skip)).status === "ok");
-    }
-  }
+  if (total > 1 && diagnostics) diagnoseObservations(result, prepared, (subset) => runCandidates(input, subset));
   return result;
 }

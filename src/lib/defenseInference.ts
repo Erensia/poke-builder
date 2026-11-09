@@ -846,6 +846,18 @@ function runCandidates(input: InferenceInput, prepared: PreparedObservation[], d
   };
 }
 
+/** 관측 하나씩만 봤을 때 가능한지(singleFeasible) + 모순이면 어느 관측을 빼면 풀리는지(culprits)를 result에 채운다 — 추론 3종 공통 */
+export function diagnoseObservations<P>(
+  result: { status: string; singleFeasible: boolean[]; culprits: number[] },
+  prepared: P[],
+  run: (subset: P[]) => { status: string },
+): void {
+  result.singleFeasible = prepared.map((o) => run([o]).status === "ok");
+  if (result.status === "contradiction") {
+    result.culprits = prepared.map((_, skip) => skip).filter((skip) => run(prepared.filter((__, i) => i !== skip)).status === "ok");
+  }
+}
+
 /**
  * 관측 전체와 맞는 상대 배분 후보를 좁힌다. 관측이 없으면 null.
  * 관측 사이에 상대가 회복하지 않았다고 가정한다(먹다남은음식·재생력 등은 2차).
@@ -860,14 +872,6 @@ export function inferDefense(input: InferenceInput, diagnostics = true, cache?: 
   const result = runCandidates(input, prepared, true, cache);
   result.observationErrors = errors;
 
-  if (total > 1 && diagnostics) {
-    // 관측 하나씩만 봤을 때 가능한지 + 모순이면 어느 관측을 빼면 풀리는지
-    result.singleFeasible = prepared.map((o) => runCandidates(input, [o]).status === "ok");
-    if (result.status === "contradiction") {
-      result.culprits = prepared
-        .map((_, skip) => skip)
-        .filter((skip) => runCandidates(input, prepared.filter((__, i) => i !== skip)).status === "ok");
-    }
-  }
+  if (total > 1 && diagnostics) diagnoseObservations(result, prepared, (subset) => runCandidates(input, subset));
   return result;
 }
