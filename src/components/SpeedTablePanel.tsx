@@ -11,6 +11,7 @@ import type { WeatherKind } from "../types/weather";
 import type { FieldKind } from "../types/field";
 import { PokemonPickerModal } from "./PokemonPickerModal";
 import { PillRow } from "./PillRow";
+import { Fold } from "./Fold";
 import "./SpeedTablePanel.css";
 
 interface SpeedTablePanelProps {
@@ -53,16 +54,6 @@ function Chips({ rows, bare, ...pick }: PickProps & { rows: SpeedRow[]; bare?: b
         <Chip key={rowKey(r)} row={r} bare={bare} {...pick} />
       ))}
     </span>
-  );
-}
-
-/** 접고 펼 수 있는 구역 — 기본은 펼침 */
-function Fold({ title, children }: { title: ReactNode; children: ReactNode }) {
-  return (
-    <details className="speedtab-fold" open>
-      <summary className="speedtab-title">{title}</summary>
-      <div className="speedtab-fold-body">{children}</div>
-    </details>
   );
 }
 

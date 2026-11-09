@@ -134,51 +134,7 @@
   pointer-events: none;
 }
 
-/* 접고 펼 수 있는 구역 */
-.speedtab-fold > summary {
-  cursor: pointer;
-  list-style: none;
-}
-
-.speedtab-fold > summary::-webkit-details-marker {
-  display: none;
-}
-
-.speedtab-fold > summary::before {
-  content: "▾";
-  display: inline-block;
-  width: 1.1em;
-  color: var(--text-muted);
-}
-
-.speedtab-fold:not([open]) > summary::before {
-  content: "▸";
-}
-
-.speedtab-fold-body {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  margin-top: 0.4rem;
-}
-
-.speedtab-title small {
-  margin-left: 0.4rem;
-  font-weight: 400;
-  color: var(--text-muted);
-}
-
-/* 3.6 T2 — 상대 단계별 추월·포인트 조정 */
-.speedtab-title {
-  margin: 0;
-  font-size: var(--fs-lg);
-  font-weight: 700;
-}
-
-.speedtab-title strong {
-  font-variant-numeric: tabular-nums;
-}
-
+/* 3.6 T2 — 상대 단계별 추월·포인트 조정 (접기 구역은 Fold.css) */
 .speedtab-tier {
   display: flex;
   flex-direction: column;
