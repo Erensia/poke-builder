@@ -1,4 +1,5 @@
 import { useState, type ChangeEvent } from "react";
+import { InfoTooltip } from "./InfoTooltip";
 import { Modal } from "./Modal";
 import { PokemonAvatarWithItem } from "./PokemonAvatarWithItem";
 import { SAMPLE_PARTIES, getPokemon } from "../lib/data";
@@ -122,6 +123,12 @@ function MySampleSaveForm({
 
 /** 샘플 목록의 한 줄 — 이름·분류·성향·설명·포켓몬 아이콘과 불러오기(내 샘플이면 삭제) 버튼 */
 function SampleItem({ sample, isMine, onLoad, onDelete }: { sample: SamplePartyPreset; isMine: boolean; onLoad: () => void; onDelete: () => void }) {
+  const monsHelp = sample.slots
+    .flatMap((slot) => {
+      const pokemon = getPokemon(slot.pokemonId);
+      return pokemon ? [`${pokemon.name} · ${slot.item ?? "도구 없음"}`] : [];
+    })
+    .join("\n");
   return (
     <li className="preset-item sample-party-item">
       <div className="preset-item-info">
@@ -131,6 +138,8 @@ function SampleItem({ sample, isMine, onLoad, onDelete }: { sample: SamplePartyP
           <span className="sample-party-style">{sample.style}</span>
         </span>
         <span className="sample-party-desc">{sample.description}</span>
+        {/* 아이콘만 보이면 포켓몬 이름·도구를 title(호버)로만 알 수 있어 터치에서 안 보였다 — 줄 전체를 ⓘ 하나로 감싸 6마리의 "이름 · 도구"를 모아 보인다(8.1 U2) */}
+        <InfoTooltip text={monsHelp}>
         <span className="sample-party-mons">
           {sample.slots.map((slot) => {
             const pokemon = getPokemon(slot.pokemonId);
@@ -154,6 +163,7 @@ function SampleItem({ sample, isMine, onLoad, onDelete }: { sample: SamplePartyP
             );
           })}
         </span>
+        </InfoTooltip>
       </div>
       <div className="preset-item-actions tap-targets">
         <button type="button" onClick={onLoad}>

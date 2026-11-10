@@ -15,7 +15,12 @@ import type { AttackInferenceResult } from "../lib/attackInference";
 import { SPEED_ITEM_CANDIDATES, type SpeedConditions, type SpeedInferenceResult } from "../lib/speedInference";
 import { MAX_ABILITY_POINTS_PER_STAT } from "../lib/statCalculator";
 import { CandidateCards } from "./CandidateCards";
+import { InfoTooltip } from "./InfoTooltip";
 import { STAGE_OPTIONS, describeConditions, PART_LABELS } from "./defenseInferenceHelpers";
+
+/** 성격 묶음 칩은 묶음 이름만 보여서 어떤 성격이 들어 있는지는 칩의 title에만 있었다 — 터치에서도 보이게 소제목 옆 ⓘ 한 개에 묶음별 성격 목록을 모은다(8.1 U2) */
+const natureGroupsHelp = (groups: { label: string; natureNames: string[] }[]) =>
+  groups.map((g) => `${g.label}: ${g.natureNames.join(", ")}`).join("\n");
 
 function RangeBar({
   label,
@@ -265,7 +270,9 @@ export function AttackResultView({ result, rowNos, combinedOn }: { result: Attac
       <RangeBar label="공격 포인트" range={result.atk} central={result.atkCentral} real={result.realAtk} />
       <RangeBar label="특공 포인트" range={result.spa} central={result.spaCentral} real={result.realSpa} />
       <div className="dinf-natures">
-        <span className="dinf-subtitle">공격·특공 보정</span>
+        <InfoTooltip text={natureGroupsHelp(result.groups)}>
+          <span className="dinf-subtitle">공격·특공 보정</span>
+        </InfoTooltip>
         {result.groups.map((g) => (
           <span key={g.id} className={`dinf-nature-chip tap-target${g.feasible === 0 ? " is-no" : ""}`} title={g.natureNames.join(", ")}>
             {g.label} <em>{g.feasible === 0 ? "불가" : `${Math.round(g.weight * 100)}%`}</em>
@@ -307,7 +314,9 @@ export function SpeedResultView({ result, rowNos, combinedOn }: { result: SpeedI
       </p>
       <RangeBar label="스피드 포인트" range={result.spe} central={result.speCentral} real={result.realSpe} />
       <div className="dinf-natures">
-        <span className="dinf-subtitle">스피드 보정</span>
+        <InfoTooltip text={natureGroupsHelp(result.groups)}>
+          <span className="dinf-subtitle">스피드 보정</span>
+        </InfoTooltip>
         {result.groups.map((g) => (
           <span key={g.id} className={`dinf-nature-chip tap-target${g.feasible === 0 ? " is-no" : ""}`} title={g.natureNames.join(", ")}>
             {g.label} <em>{g.feasible === 0 ? "불가" : `${Math.round(g.weight * 100)}%`}</em>
@@ -555,7 +564,9 @@ export function ResultView({
       </p>
 
       <div className="dinf-natures">
-        <span className="dinf-subtitle">성격</span>
+        <InfoTooltip text={natureGroupsHelp(result.groups)}>
+          <span className="dinf-subtitle">성격</span>
+        </InfoTooltip>
         {result.groups.map((g) => (
           <span
             key={g.id}
