@@ -40,7 +40,7 @@ function Chip({ row, picked, onPick, bare }: PickProps & { row: SpeedRow; bare?:
   const url = pokemon ? resolvePokemonSpriteUrl(pokemon, row.form.sprite) : null;
   const mark = bare ? undefined : NATURE_MARK[row.nature];
   return (
-    <button type="button" className={`speedtab-chip${picked && rowKey(picked) === rowKey(row) ? " is-picked" : ""}`} title={rowLabel(row)} onClick={() => onPick(row)}>
+    <button type="button" className={`speedtab-chip tap-target${picked && rowKey(picked) === rowKey(row) ? " is-picked" : ""}`} title={rowLabel(row)} onClick={() => onPick(row)}>
       {url ? <img src={url} alt={row.name} loading="lazy" /> : <span className="speedtab-chip-name">{row.name}</span>}
       {mark && <i className="speedtab-chip-mark">{mark}</i>}
     </button>

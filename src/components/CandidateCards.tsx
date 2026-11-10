@@ -54,7 +54,7 @@ export function CandidateCards({ lists }: { lists: CandidateLists | null }) {
           ))}
         </ul>
         {cards.length > FIRST_PAGE && (
-          <button type="button" className="cand-more" onClick={() => setAll((v) => !v)}>
+          <button type="button" className="cand-more tap-target" onClick={() => setAll((v) => !v)}>
             {all ? `접기 (${FIRST_PAGE}장만 보기)` : `더 보기 (${cards.length}장까지)`}
           </button>
         )}
