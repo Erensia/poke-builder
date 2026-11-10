@@ -181,7 +181,7 @@ try {
   check("진행 중 판만 다른 두 저장본은 같은 정규형이다(판이 시작돼도 올릴 것이 없다)", canonical("battleRank", { ...played, pendingId: null }).json === rj);
   check("틀린 랭크 문서는 던진다(bad-remote)", (() => { try { canonical("battleRank", { state: 1 }); return false; } catch (e) { return e.message === "bad-remote"; } })());
   const fj = canonical("battleFrontier", { streak: 4, best: 9, samples: { s1: { wins: 2, losses: 1 } }, pendingId: "s2", queue: ["s3"], includeMine: true }).json;
-  check("프런티어 정규형: pendingId는 null, 나머지는 그대로, 키 순서 고정", fj === '{"streak":4,"best":9,"samples":{"s1":{"wins":2,"losses":1}},"pendingId":null,"queue":["s3"],"includeMine":true}', fj);
+  check("프런티어 정규형: pendingId는 null, 나머지는 그대로, 키 순서 고정", fj === '{"streak":4,"best":9,"samples":{"s1":{"wins":2,"losses":1}},"pendingId":null,"queue":["s3"],"includeMine":true,"games":[],"pendingAt":null}', fj);
   check("프런티어 정규형: 옛 저장본(queue·includeMine 없음)은 기본값으로 채운다", canonical("battleFrontier", { streak: 0, best: 0, samples: {}, pendingId: null }).json === canonical("battleFrontier", EMPTY_FRONTIER).json);
   check("틀린 프런티어 문서(전적이 정수가 아님)는 던진다", (() => { try { canonical("battleFrontier", { ...EMPTY_FRONTIER, samples: { a: { wins: "x", losses: 1 } } }); return false; } catch (e) { return e.message === "bad-remote"; } })());
   check("랭크·프런티어는 통째 문서이고 목록은 아니다", isObjectDoc("battleRank") && isObjectDoc("battleFrontier") && !isObjectDoc("partyPresets"));
@@ -237,7 +237,7 @@ try {
 
   // ── 프런티어 기록 부분 병합(6.4 F1) ──
   {
-    const { finishMatch, beginMatch } = await server.ssrLoadModule("/src/lib/battleSeries.ts");
+    const { finishMatch, beginMatch, settleAbandoned } = await server.ssrLoadModule("/src/lib/battleSeries.ts");
     const fp = (s) => canonical("battleFrontier", s).json;
     const fplay = (s, id, won) => finishMatch(beginMatch(s, id), id, won);
     const Q = ["a", "b", "c", "d", "e"];
@@ -257,6 +257,22 @@ try {
     check("프런티어 병합: 대기열은 더 많이 진행한 쪽(양쪽이 만난 상대는 둘 다 뺀다)", m.queue.join() === "e");
     check("프런티어 병합: 진행 중 표시는 null, 최고 연승은 큰 값", m.pendingId === null && m.best >= Math.max(L.best, R.best));
     check("프런티어 병합: 결과는 정규형이다(다시 정규화해도 같다)", (() => { const j = mergeFrontier(FB, fp(L), fp(R)); return canonical("battleFrontier", JSON.parse(j)).json === j; })());
+
+    // 판 시각 재생(8.2 I2): 현재 연승을 시각 순으로 다시 계산한다
+    const at = (s, id, won, t) => finishMatch(beginMatch(s, id, t - 1), id, won, t);
+    const T = (x) => JSON.parse(mergeFrontier(FB, fp(x[0]), fp(x[1])));
+    const win3 = at(at(at(fbase, "c", true, 1000), "d", true, 2000), "e", true, 3000); // 기기 A: 3연승(시각 1000~3000)
+    const lose1 = at(fbase, "c", false, 4000); // 기기 B: 나중에 1패
+    check("프런티어 병합(판 시각): 3연승 뒤 다른 기기의 1패 → 연승 0, 최고 연승은 기준 이후 3 이상", T([win3, lose1]).streak === 0 && T([win3, lose1]).best >= 3);
+    const lose0 = at(fbase, "c", false, 500); // 기기 B: 먼저 1패
+    check("프런티어 병합(판 시각): 1패 뒤 다른 기기의 3연승 → 연승 3 (순서가 반대면 결과도 반대)", T([win3, lose0]).streak === 3 && T([lose0, win3]).streak === 3);
+    check("프런티어 병합(판 시각): 같은 판이 양쪽에 있어도 한 번만 센다", T([win3, win3]).streak === 3);
+    check("프런티어 병합(판 시각): 합친 판 기록은 최신 순으로 합쳐진다", T([win3, lose1]).games.filter((g) => g.at < 10000).map((g) => g.at).join() === "4000,3000,2000,1000");
+    const old = { ...win3, games: undefined };
+    check("프런티어 병합(판 시각): 판 기록이 없는 구형 문서는 큰 연승으로 근사한다", T([old, lose1]).streak === Math.max(old.streak, lose1.streak));
+    const flood = Array.from({ length: 50 }, (_, i) => ({ at: 9000 + i, opponentId: "x", won: true }));
+    check("프런티어 병합(판 시각): 기준 이후 새 판이 50판 이상이면 재생하지 않고 큰 연승으로 근사한다", T([{ ...fbase, streak: 50, games: flood }, lose1]).streak === 50);
+    check("프런티어 이탈 정산: 판 시각은 앱을 다시 연 시각이 아니라 시작한 시각이다", settleAbandoned(beginMatch(fbase, "c", 777)).games[0].at === 777);
 
     // 합친 뒤에는 그 결과가 새 기준이다 · 한쪽에 새 판이 없어도 된다 · 진행 중 표시만 있는 경우
     const M = mergeFrontier(FB, fp(L), fp(R));
