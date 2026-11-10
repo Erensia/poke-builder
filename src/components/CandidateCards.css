@@ -32,6 +32,18 @@
   color: var(--text-muted);
 }
 
+/* "외 N" — 눌러서 숨겨진 성격까지 펼친다(8.1 U2). 글자처럼 보이되 눌리는 줄임 표시임을 밑줄·색으로 알린다 */
+.cand-names-toggle {
+  margin-left: 0.25rem;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--violet);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 .cand-points {
   font-weight: 700;
   font-variant-numeric: tabular-nums;
