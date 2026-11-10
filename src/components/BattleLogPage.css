@@ -317,6 +317,48 @@
   }
 }
 
+@keyframes battle-stage-in-top {
+  from {
+    opacity: 0;
+    transform: translateY(-28px);
+  }
+}
+
+@keyframes battle-stage-in-bottom {
+  from {
+    opacity: 0;
+    transform: translateY(28px);
+  }
+}
+
+/* 8.1 U3 — 열·카드가 위아래로 쌓인 배치에서는 위아래로 들어온다(좌우로 들어오면 360px 폰에서 화면 밖으로 잘리고 쌓인 배치에서는 방향도 어색하다).
+   모션 이름만 바꿔 기간·곡선·backwards는 위 규칙 그대로다. 쌓이는 곳: 선출 화면(≤760px) · 수동 2인 대전 보드(≤760px) · AI 상대 가로 배치가 안 맞는 360px 미만 보드.
+   AI 상대 가로 배치(has-ai, 360~760px)는 좌우로 놓이므로 그대로 좌우다.
+   fighter 쪽은 :where로 명시도를 올리지 않는다 — 승자 글로우(.battle-fighter.is-winner)가 같은 animation 속성을 쓰므로 그쪽이 계속 이겨야 한다 */
+@media (max-width: 760px) {
+  .battle-select-column:first-child {
+    animation-name: battle-stage-in-top;
+  }
+  .battle-select-column:last-child {
+    animation-name: battle-stage-in-bottom;
+  }
+  :where(.battle-board:not(.has-ai)) .battle-fighter-a {
+    animation-name: battle-stage-in-top;
+  }
+  :where(.battle-board:not(.has-ai)) .battle-fighter-b {
+    animation-name: battle-stage-in-bottom;
+  }
+}
+
+@media (max-width: 359px) {
+  :where(.battle-board.has-ai) .battle-fighter-a {
+    animation-name: battle-stage-in-top;
+  }
+  :where(.battle-board.has-ai) .battle-fighter-b {
+    animation-name: battle-stage-in-bottom;
+  }
+}
+
 .battle-select-column {
   display: flex;
   flex-direction: column;

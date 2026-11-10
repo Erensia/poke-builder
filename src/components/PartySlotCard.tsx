@@ -48,6 +48,8 @@ interface PartySlotCardProps {
   onDragEnd: () => void;
   /** 터치 길게 눌러 끌기로 다른 슬롯 위에서 손가락을 뗐을 때 — 받는 슬롯 번호(0부터) */
   onTouchReorder: (toIndex: number) => void;
+  /** 파티 프리셋을 불러올 때마다 바뀌는 값 — 바뀌면 채워진 카드가 다시 튕긴다(8.1 U7) */
+  reloadKey: number;
 }
 
 export function PartySlotCard({
@@ -76,11 +78,12 @@ export function PartySlotCard({
   onDrop,
   onDragEnd,
   onTouchReorder,
+  reloadKey,
 }: PartySlotCardProps) {
   const pokemon = slot ? getPokemon(slot.pokemonId) : undefined;
   // 터치·펜(3.4 U1-b 후속): 카드를 길게 눌러 다른 슬롯 위에서 떼면 자리가 바뀐다(마우스 드래그는 그대로)
   // 6.5 M1 D — 포켓몬이 바뀌어 카드가 채워지면 카드가 튕겨 자리를 잡는다(비울 때는 없음)
-  const [cardRef, cardMotion] = useCardMotion(slot?.pokemonId ?? null, onClearPokemon);
+  const [cardRef, cardMotion] = useCardMotion(slot?.pokemonId ?? null, onClearPokemon, "", reloadKey);
   const touch = useLongPressDrag(
     true,
     (x, y) => {

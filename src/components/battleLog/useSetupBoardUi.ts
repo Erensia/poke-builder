@@ -66,18 +66,23 @@ export function useClashMotion(canProceed: boolean, proceedBlockedReason: string
     const played = waitedForRank.current;
     waitedForRank.current = false;
     if (!played || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    // 8.1 U3: 두 열이 위아래로 쌓이는 폭(920px 이하, battleControls.css의 셋업 전환점과 같다)에서는 위아래로 부딪힌다.
+    // 좌우로 당기면 360px 폰에서 열(340px) + 26px이 화면 밖으로 나가 잘리고, 쌓인 배치에서는 방향도 어색했다
+    const stacked = window.matchMedia("(max-width: 920px)").matches;
+    const ax = stacked ? "Y" : "X"; // 움직이는 축
     colEls.current.forEach((el, i) => {
       if (!el) return;
-      const out = i === 0 ? -1 : 1; // 바깥쪽 방향(왼쪽 열은 왼쪽, 오른쪽 열은 오른쪽)
-      el.style.transformOrigin = i === 0 ? "right center" : "left center"; // 서로 맞닿는 쪽 모서리 기준으로 찌그러진다
+      const out = i === 0 ? -1 : 1; // 바깥쪽 방향(가로: 왼쪽 열은 왼쪽·오른쪽 열은 오른쪽, 세로: 위 열은 위·아래 열은 아래)
+      // 서로 맞닿는 쪽 모서리 기준으로 찌그러진다
+      el.style.transformOrigin = stacked ? (i === 0 ? "center bottom" : "center top") : i === 0 ? "right center" : "left center";
       el.animate(
         [
           { transform: "none", easing: "ease-out" }, // 0~0.17s: 바깥으로 빠르게 당겨진다
-          { offset: 0.17, transform: `translateX(${out * 26}px)`, easing: "cubic-bezier(0.6, 0, 1, 0.4)" }, // 0.17~0.58s: 점점 빨라져 돌진
-          { offset: 0.58, transform: "translateX(0) scaleX(0.94)", easing: "ease-out" }, // 0.58s: 쾅 — 맞닿는 쪽으로 찌그러진다
-          { offset: 0.69, transform: `translateX(${out * 9}px) scaleX(1.025)`, easing: "ease-in-out" }, // 튕겨 나온다
-          { offset: 0.8, transform: `translateX(${-out * 2}px) scaleX(0.98)`, easing: "ease-in-out" }, // 한 번 더 눌렸다가
-          { offset: 0.9, transform: `translateX(${out * 3}px) scaleX(1.008)`, easing: "ease-in-out" }, // 살짝 반동하며
+          { offset: 0.17, transform: `translate${ax}(${out * 26}px)`, easing: "cubic-bezier(0.6, 0, 1, 0.4)" }, // 0.17~0.58s: 점점 빨라져 돌진
+          { offset: 0.58, transform: `translate${ax}(0) scale${ax}(0.94)`, easing: "ease-out" }, // 0.58s: 쾅 — 맞닿는 쪽으로 찌그러진다
+          { offset: 0.69, transform: `translate${ax}(${out * 9}px) scale${ax}(1.025)`, easing: "ease-in-out" }, // 튕겨 나온다
+          { offset: 0.8, transform: `translate${ax}(${-out * 2}px) scale${ax}(0.98)`, easing: "ease-in-out" }, // 한 번 더 눌렸다가
+          { offset: 0.9, transform: `translate${ax}(${out * 3}px) scale${ax}(1.008)`, easing: "ease-in-out" }, // 살짝 반동하며
           { transform: "none" }, // 잦아든다
         ],
         { duration: 1000, easing: "linear" },

@@ -16,12 +16,23 @@ const SORTS: { id: CandidateSort; label: string; list: (l: CandidateLists) => Ca
 const cardKey = (c: CandidateCard) => `${c.natureLabel}|${c.points.map((p) => p.value).join(",")}`;
 
 function Card({ card }: { card: CandidateCard }) {
-  const names = card.natureNames.length > 3 ? `${card.natureNames.slice(0, 3).join("·")} 외 ${card.natureNames.length - 3}` : card.natureNames.join("·");
+  // 성격이 4개 이상이면 3개만 보이고 나머지는 title에만 있어 터치에서는 볼 수 없었다 — "외 N"을 눌러 전체를 펼친다(8.1 U2)
+  const [showAllNames, setShowAllNames] = useState(false);
+  const hiddenNames = card.natureNames.length - 3;
+  const names = hiddenNames > 0 && !showAllNames ? card.natureNames.slice(0, 3).join("·") : card.natureNames.join("·");
   const ranges = card.damagePercent.map((r, i) => `${card.damagePercent.length > 1 ? `${i + 1}) ` : ""}${pct(r.min)}–${pct(r.max)}%`).join(" · ");
   return (
     <li className="cand-card" title={card.natureNames.join(", ")}>
       <strong className="cand-nature">
-        {card.natureLabel} <small>{names}</small>
+        {card.natureLabel}{" "}
+        <small>
+          {names}
+          {hiddenNames > 0 && (
+            <button type="button" className="cand-names-toggle tap-target" aria-expanded={showAllNames} onClick={() => setShowAllNames((v) => !v)}>
+              {showAllNames ? "접기" : `외 ${hiddenNames}`}
+            </button>
+          )}
+        </small>
       </strong>
       <span className="cand-points">{card.points.map((p) => `${p.label} SP ${p.value}`).join(" / ")}</span>
       <span className="cand-meta">
@@ -54,7 +65,7 @@ export function CandidateCards({ lists }: { lists: CandidateLists | null }) {
           ))}
         </ul>
         {cards.length > FIRST_PAGE && (
-          <button type="button" className="cand-more" onClick={() => setAll((v) => !v)}>
+          <button type="button" className="cand-more tap-target" onClick={() => setAll((v) => !v)}>
             {all ? `접기 (${FIRST_PAGE}장만 보기)` : `더 보기 (${cards.length}장까지)`}
           </button>
         )}
