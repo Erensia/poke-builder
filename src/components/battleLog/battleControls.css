@@ -75,6 +75,21 @@
   color: var(--text-muted, var(--text-muted));
 }
 
+/* 기술·교체를 한 번 더 누르면 턴 진행(8.1 U8-b) — 자리를 항상 차지하고 보이기만 바꿔, 힌트가 나타나도 카드 높이·비율이 흔들리지 않는다 */
+.battle-tap-hint {
+  min-height: 1.4em;
+  margin-top: 0.3rem;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--text-muted);
+  text-align: center;
+  visibility: hidden;
+}
+
+.battle-tap-hint.is-on {
+  visibility: visible;
+}
+
 /* §4: 메가진화 선언 토글 */
 .battle-mega-toggle {
   gap: 0.4rem;
@@ -200,5 +215,10 @@
 
   .battle-log-header h2 {
     font-size: var(--fs-xl);
+  }
+
+  /* AI 상대에서 사람이 기술·교체를 직접 고르는 턴은 기술을 한 번 더 눌러 진행하므로 턴 진행 버튼을 숨겨 세로 공간을 쓴다(8.1 U8-b) */
+  .battle-start-button.is-tap-confirm {
+    display: none;
   }
 }

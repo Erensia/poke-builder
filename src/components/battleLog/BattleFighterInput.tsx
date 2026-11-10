@@ -9,6 +9,7 @@ import { isTrappedFromSwitching } from "../../lib/battle/switching";
 import type { Pokemon } from "../../types/pokemon";
 import type { Side } from "./shared";
 import type { BattleBoardProps } from "./battleBoardTypes";
+import { canPlayTurn } from "./battleRules";
 
 /** 교체 후보 한 마리 — 벤치(교체 가능한) 슬롯의 파티 인덱스와 표시 정보 */
 interface BenchOption {
@@ -39,8 +40,8 @@ function SwitchPanel({ title, bench, onPick }: { title: ReactNode; bench: BenchO
 }
 
 /** 한 편의 이번 턴 입력 영역 — AI 대기·강제 교체·유턴류 교대·기술/교체 선택·메가진화 토글 */
-export function BattleFighterInput(props: BattleBoardProps & { side: Side; pokemon: Pokemon }) {
-  const { side, pokemon, battleState, winner, selected, setSelected, inputMode, setInputMode, megaDeclared, setMegaDeclared, pendingForcedSwitch, pendingPivot, setLockWarning, activeMoveIds, battleSide, switchableIndices, resolveForcedSwitch, resolvePivot, isStruggling, aiSide } = props;
+export function BattleFighterInput(props: BattleBoardProps & { side: Side; pokemon: Pokemon; /** 사람이 고를 게 없는 턴을 자동으로 진행하기 전 쉬는 중(8.1 U8-b) */ autoWaiting?: boolean }) {
+  const { side, pokemon, battleState, winner, selected, setSelected, inputMode, setInputMode, megaDeclared, setMegaDeclared, pendingForcedSwitch, pendingPivot, setLockWarning, activeMoveIds, battleSide, switchableIndices, resolveForcedSwitch, resolvePivot, isStruggling, aiSide, playTurn } = props;
   const fighter = battleState[side];
   const form = getEffectiveForm(pokemon, fighter.slot);
   const moveIds: (string | null)[] = activeMoveIds(side);
@@ -64,7 +65,7 @@ export function BattleFighterInput(props: BattleBoardProps & { side: Side; pokem
     const waitingSwitch = pendingForcedSwitch?.[side] || pendingPivot?.side === side;
     return (
       <div className="battle-struggle-notice">
-        {waitingSwitch ? "AI가 내보낼 포켓몬을 고르고 있다..." : "AI가 이번 턴 행동을 고른다"}
+        {waitingSwitch ? "AI가 내보낼 포켓몬을 고르고 있다..." : props.autoWaiting ? "AI가 기술을 선택하는 중..." : "AI가 이번 턴 행동을 고른다"}
       </div>
     );
   }
@@ -128,6 +129,13 @@ export function BattleFighterInput(props: BattleBoardProps & { side: Side; pokem
   const recharging = isRecharging(fighter);
   const canSwitch = benchIdx.length > 0 && !fighter.chargingMoveId && !rampageMoveId && !recharging && fighter.currentHp > 0 && !trapped;
   const mode = canSwitch ? inputMode[side] : "move";
+  // 8.1 U8-b: AI 상대면 이미 고른 기술·교체를 한 번 더 눌러 턴을 진행한다. 힌트는 자리를 항상 잡고 보이기만 바꿔 카드 높이가 흔들리지 않게 한다
+  const tapToPlay = aiSide !== null && canPlayTurn(props);
+  const tapHint = aiSide !== null && (
+    <div className={`battle-tap-hint${selected[side] ? " is-on" : ""}`} aria-hidden={!selected[side]}>
+      한 번 더 누르면 턴 진행
+    </div>
+  );
 
   return (
     <>
@@ -176,6 +184,7 @@ export function BattleFighterInput(props: BattleBoardProps & { side: Side; pokem
         )}
 
       {mode === "switch" ? (
+        <>
         <div className="battle-switch-list">
           {bench.map((b) => {
             const chosen = selected[side]?.kind === "switch" && selected[side]!.toIndex === b.index;
@@ -185,6 +194,7 @@ export function BattleFighterInput(props: BattleBoardProps & { side: Side; pokem
                 type="button"
                 className={`battle-switch-button${chosen ? " is-selected" : ""}`}
                 onClick={() => {
+                  if (chosen && tapToPlay) return playTurn();
                   setLockWarning(null);
                   setSelected((p) => ({ ...p, [side]: { kind: "switch", toIndex: b.index } }));
                 }}
@@ -194,6 +204,8 @@ export function BattleFighterInput(props: BattleBoardProps & { side: Side; pokem
             );
           })}
         </div>
+        {tapHint}
+        </>
       ) : rampageMoveId ? (
         <div className="battle-struggle-notice">
           {pokemon.name}
@@ -202,7 +214,7 @@ export function BattleFighterInput(props: BattleBoardProps & { side: Side; pokem
       ) : recharging ? (
         <div className="battle-struggle-notice">
           {pokemon.name}
-          {eunNeun(pokemon.name)} 반동으로 움직일 수 없다! (턴 진행 시 자동으로 쉼)
+          {eunNeun(pokemon.name)} 반동으로 움직일 수 없다! (자동으로 쉼)
         </div>
       ) : fighter.chargingMoveId ? (
         <div className="battle-struggle-notice">{getMove(fighter.chargingMoveId)?.name ?? "기술"} 준비 중...</div>
@@ -214,16 +226,16 @@ export function BattleFighterInput(props: BattleBoardProps & { side: Side; pokem
               const disabled = pp <= 0 || fighter.currentHp <= 0 || !!winner;
               // 셋업 카드의 party-move-pip와 동일하게 기술 타입 배경색을 입힌다.
               const moveColor = move.type ? TYPE_COLORS[move.type] : undefined;
+              const chosen = selected[side]?.kind === "move" && selected[side]!.moveId === move.id;
               return (
                 <button
                   key={move.id}
                   type="button"
-                  className={`battle-move-button${moveColor ? " has-type" : ""}${
-                    selected[side]?.kind === "move" && selected[side]!.moveId === move.id ? " is-selected" : ""
-                  }`}
+                  className={`battle-move-button${moveColor ? " has-type" : ""}${chosen ? " is-selected" : ""}`}
                   style={moveColor ? { background: moveColor } : undefined}
                   disabled={disabled}
                   onClick={() => {
+                    if (chosen && tapToPlay) return playTurn();
                     setLockWarning(null);
                     setSelected((prev) => ({ ...prev, [side]: { kind: "move", moveId: move.id } }));
                   }}
@@ -236,6 +248,7 @@ export function BattleFighterInput(props: BattleBoardProps & { side: Side; pokem
               );
             })}
           </div>
+          {tapHint}
         </>
       ) : (
         // PP 전부 0 / 구애류 잠긴 기술 PP 0 / 앙코르·도발 등으로 고를 수 있는
