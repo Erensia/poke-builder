@@ -260,12 +260,14 @@ export function multiHitRange(move: Move): Range | null {
 }
 
 /** 다단히트 기술에 타수가 맞게 들어왔는지 — 타수가 정해진 기술(더블어택)은 생략 가능. 맞으면 null */
-export function multiHitError(move: Move, hits: number | undefined): string | null {
+export function multiHitError(move: Move, hits: number | undefined, fainted = false): string | null {
   const range = multiHitRange(move);
   if (!range) return null;
   const n = hits ?? (range.min === range.max ? range.min : undefined);
   if (n === undefined) return "맞은 타수를 골라 주세요";
-  return Number.isInteger(n) && n >= range.min && n <= range.max ? null : `타수는 ${range.min}~${range.max}회예요`;
+  // 쓰러뜨린 다단히트는 최소 타수에 못 미쳐도 멈춘다(8.2 I1) — 1타째에 쓰러졌어도 된다
+  const min = fainted ? 1 : range.min;
+  return Number.isInteger(n) && n >= min && n <= range.max ? null : `타수는 ${min}~${range.max}회예요`;
 }
 
 /** 고정 데미지·변화기 등은 정수 데미지 공식이 맞지 않아 역산에서 뺀다 */
