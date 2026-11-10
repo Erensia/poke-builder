@@ -2,7 +2,30 @@ import { getPokemon, getMove } from "../../lib/data";
 import { eulReul, eunNeun } from "../../lib/josa";
 import { choiceLockedMoveOf, hasUsableMove, type BattleSide, type BattleState } from "../../lib/battle/state";
 import type { PartySlot } from "../../types/party";
+import { forcedLockedAction } from "../../lib/battle/lockedAction";
+import type { BattleBoardProps } from "./battleBoardTypes";
 import { type Side } from "./shared";
+
+/**
+ * 사람이 조작하는 편 중에 이번 턴 행동을 직접 골라야 하는 편이 있는가 — 발버둥·난동·모으기·반동 턴에는 고를 게 없어 false.
+ * 전부 false면 연출이 끝난 뒤 잠깐 쉬고 턴을 자동으로 진행한다(8.1 U8-b).
+ */
+export function humanMustPick({ battleState, aiSide, isStruggling }: Pick<BattleBoardProps, "battleState" | "aiSide" | "isStruggling">): boolean {
+  return (["a", "b"] as const).some((side) => side !== aiSide && !isStruggling(side) && !forcedLockedAction(battleState[side]));
+}
+
+/**
+ * 이번 턴을 진행할 수 있는가 — AI 계산이 끝났고, 사람이 조작하는 편이 모두 행동(교체 포함)을 골랐거나 고를 필요가 없다(발버둥·난동·모으기·반동).
+ * `턴 진행` 버튼의 활성 조건이자 기술을 한 번 더 눌러 진행하는 조건(8.1 U8-b)이라 한 곳에 둔다.
+ */
+export function canPlayTurn({ battleState, selected, aiSide, aiThinking, isStruggling }: Pick<BattleBoardProps, "battleState" | "selected" | "aiSide" | "aiThinking" | "isStruggling">): boolean {
+  return (
+    !aiThinking &&
+    (["a", "b"] as const).every(
+      (side) => side === aiSide || !!selected[side] || isStruggling(side) || !!forcedLockedAction(battleState[side]),
+    )
+  );
+}
 
 /** 배틀 상태(+ 대전 시작 때의 편측 파티)에서 읽기만 하는 규칙들 — 활성 포켓몬·기술 제약(구애·도발·사슬묶기·앙코르 등)·발버둥 판정 */
 export function battleRules(battleState: BattleState | null, partySlots: { a: PartySlot[]; b: PartySlot[] }) {

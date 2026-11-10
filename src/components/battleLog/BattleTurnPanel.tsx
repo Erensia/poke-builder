@@ -1,7 +1,7 @@
 import type { CSSProperties } from "react";
 import { SIDE_NAME } from "../../lib/battleLogText";
-import { forcedLockedAction } from "../../lib/battle/lockedAction";
 import type { BattleBoardProps } from "./battleBoardTypes";
+import { canPlayTurn } from "./battleRules";
 
 /**
  * 배틀판 아래쪽 — 등장 안내·결과 배너·강제 교체 안내·턴 진행 버튼.
@@ -9,7 +9,9 @@ import type { BattleBoardProps } from "./battleBoardTypes";
  * 순서가 어긋나지 않게 랭크 대전에서는 쓰지 않고 기본 지연(1.1초)을 유지한다.
  */
 export function BattleTurnPanel(props: BattleBoardProps & { resultDelay?: number | null }) {
-  const { battleState, winner, selected, pendingForcedSwitch, pendingPivot, lockWarning, isStruggling, playTurn, resetToSetup, aiSide, aiThinking, learnedBattles, seriesNext, resultExtra } = props;
+  const { battleState, winner, pendingForcedSwitch, pendingPivot, lockWarning, playTurn, resetToSetup, aiSide, learnedBattles, seriesNext, resultExtra } = props;
+  // AI 상대면 고를 때는 기술을 한 번 더 눌러, 고를 게 없는 턴(난동·모으기·반동·발버둥)은 BattleBoard가 자동으로 진행하므로 모바일에서는 이 버튼을 숨긴다(8.1 U8-b)
+  const tapConfirm = aiSide !== null;
   return (
     <>
     {battleState.entryAnnouncements.length > 0 && (
@@ -44,15 +46,8 @@ export function BattleTurnPanel(props: BattleBoardProps & { resultDelay?: number
       <>
         <button
           type="button"
-          className="battle-start-button"
-          disabled={aiThinking || (["a", "b"] as const).some(
-            (side) =>
-              side !== aiSide &&
-              selected[side]?.kind !== "switch" &&
-              !isStruggling(side) &&
-              !forcedLockedAction(battleState[side]) &&
-              !selected[side],
-          )}
+          className={`battle-start-button${tapConfirm ? " is-tap-confirm" : ""}`}
+          disabled={!canPlayTurn(props)}
           onClick={playTurn}
         >
           턴 진행
