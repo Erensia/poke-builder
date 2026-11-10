@@ -90,6 +90,16 @@
   visibility: visible;
 }
 
+/* 8.1 U8-d — 카드 본문 래퍼는 배치에 영향을 주지 않는다. 상대 카드의 "능력치" 면과 면 전환 버튼은 좁은 화면 가로 배치에서만 보인다(아래 미디어 쿼리) */
+.battle-card-body {
+  display: contents;
+}
+
+.battle-card-body .battle-ai-stages,
+.battle-card-body .battle-ai-views {
+  display: none;
+}
+
 /* §4: 메가진화 선언 토글 */
 .battle-mega-toggle {
   gap: 0.4rem;
@@ -220,5 +230,115 @@
   /* AI 상대에서 사람이 기술·교체를 직접 고르는 턴은 기술을 한 번 더 눌러 진행하므로 턴 진행 버튼을 숨겨 세로 공간을 쓴다(8.1 U8-b) */
   .battle-start-button.is-tap-confirm {
     display: none;
+  }
+}
+
+/*
+ * 8.1 U8-d — AI 상대 대전을 좁은 화면(360~760px)에서 할 때 두 카드를 한 줄에 놓는다: 사람 편 약 60%, AI 편 약 40%.
+ * 세로로 쌓으면 내 카드·상대 카드·로그가 길게 이어져 한 화면에서 연출을 다 보기 어렵다. 360px 미만은 폭이 모자라 위의 세로 배치를 그대로 쓴다.
+ * 수동 2인 대전(has-ai 없음)은 세로 그대로다. 카드 DOM은 그대로라 연출(돌진·피격 등)은 카드 위치로 방향을 구하는 기존 코드가 따른다.
+ * 상대 카드는 한 번에 한 면만 보인다 — 포켓몬(이름·HP·상태이상) / 능력치 단계 / 파티 — 하단 버튼으로 전환한다.
+ */
+@media (max-width: 760px) and (min-width: 360px) {
+  .battle-board.has-ai {
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+    gap: 0.5rem;
+  }
+  .battle-board.has-ai.ai-a {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+  }
+  .battle-board.has-ai .battle-fighter {
+    min-width: 0;
+    padding: 0.55rem 0.6rem;
+  }
+
+  /* 사람 편(약 60%) — 좁아진 폭에 맞게 실능치는 2열, 기술 버튼·파티 칩은 글자를 줄인다 */
+  .battle-board.has-ai .battle-real-stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .battle-board.has-ai .battle-move-button {
+    padding: 0.3rem 0.4rem;
+  }
+  .battle-board.has-ai .battle-move-name {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: var(--fs-sm);
+  }
+  .battle-board.has-ai .battle-party-chip {
+    padding: 0.25rem 0.3rem;
+  }
+  .battle-board.has-ai .battle-party-chip-hp {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* 이름 옆 태그(AI·기절·메가)는 서로 붙은 nowrap 조각이라 줄바꿈 기회가 없어, 좁은 카드에서 한 덩어리로 카드 밖으로 넘치고 이름도 중간에서 꺾였다.
+     inline-block으로 만들면 조각 단위로 다음 줄로 내려간다 */
+  .battle-board.has-ai .battle-fighter-name {
+    min-width: 0;
+  }
+  .battle-board.has-ai .battle-fighter-ai-tag,
+  .battle-board.has-ai .battle-fighter-fainted,
+  .battle-board.has-ai .battle-fighter-mega-tag {
+    display: inline-block;
+  }
+  .battle-board.has-ai .battle-fighter-fainted {
+    margin-left: 0.25rem;
+  }
+  /* 상대(40%) 카드의 "(기절)" 글자는 회색조·가라앉음·HP 0%로 이미 보여 눈에는 중복이라 시각적으로만 숨긴다. display: none이 아니라 clip이라
+     스크린리더는 그대로 읽는다 — 기절은 이 글자가 스크린리더에 닿는 유일한 신호다(내 카드·데스크톱은 그대로 보인다) */
+  .battle-board.has-ai .battle-fighter.is-ai .battle-fighter-fainted {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    border: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  /* AI 편(약 40%) — 면 전환 버튼을 보이고, 면마다 보일 것만 남긴다 */
+  .battle-board.has-ai .battle-card-body[data-ai-view] .battle-ai-views {
+    display: flex;
+    gap: 0.3rem;
+    margin-top: 0.5rem;
+  }
+  .battle-board.has-ai .battle-ai-view-btn {
+    flex: 1;
+    min-width: 0;
+    padding: 0.3rem 0.2rem;
+    border: 1px solid var(--border);
+    border-radius: var(--r-sm);
+    background: var(--surface-2);
+    color: inherit;
+    font-size: var(--fs-xs);
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .battle-board.has-ai .battle-card-body[data-ai-view="main"] .battle-roster-icons,
+  .battle-board.has-ai .battle-card-body[data-ai-view="stats"] .battle-roster-icons,
+  .battle-board.has-ai .battle-card-body[data-ai-view="stats"] .battle-fighter-head,
+  .battle-board.has-ai .battle-card-body[data-ai-view="stats"] .battle-hp-bar,
+  .battle-board.has-ai .battle-card-body[data-ai-view="stats"] .battle-hp-numbers,
+  .battle-board.has-ai .battle-card-body[data-ai-view="party"] .battle-fighter-head,
+  .battle-board.has-ai .battle-card-body[data-ai-view="party"] .battle-hp-bar,
+  .battle-board.has-ai .battle-card-body[data-ai-view="party"] .battle-hp-numbers {
+    display: none;
+  }
+  .battle-board.has-ai .battle-card-body[data-ai-view="stats"] .battle-ai-stages {
+    display: grid;
+  }
+  /* 파티 면: 칩이 3열이면 아바타(40px)가 좁은 카드에서 넘치므로 2열 */
+  .battle-board.has-ai .battle-roster-icons {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  /* AI 편 입력 영역의 안내 문구는 좁은 폭에서 줄바꿈되므로 글자를 줄인다 */
+  .battle-board.has-ai .battle-fighter.is-ai .battle-struggle-notice {
+    font-size: var(--fs-xs);
   }
 }
