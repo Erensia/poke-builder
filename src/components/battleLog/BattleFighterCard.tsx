@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { getPokemon, getMove } from "../../lib/data";
 import { getEffectiveForm, getEffectiveGender, megaBadgeLabel } from "../../lib/pokemonForm";
 import type { SpriteFormOptions } from "../../lib/sprites";
@@ -21,6 +22,30 @@ const REAL_STAT_LABELS: { key: keyof BaseStats; label: string }[] = [
 ];
 
 type Fighter = BattleState["a"];
+
+/** 모바일 가로 배치(8.1 U8-d)에서 상대(AI) 카드가 보여 주는 면 — 포켓몬(기본)·능력치 단계·파티 */
+type AiView = "main" | "stats" | "party";
+
+/**
+ * 상대 카드의 "능력치" 면. 상대 실능치는 역산을 막으려 숨기는 설계(2.3 B2)라 실수치가 아니라 랭크 변화(능력치 단계)만 보인다 —
+ * 본가에서도 공개되는 정보다. 데스크톱·세로 배치에서는 CSS가 숨긴다.
+ */
+function AiStages({ fighter }: { fighter: Fighter }) {
+  return (
+    <div className="battle-ai-stages battle-real-stats">
+      {REAL_STAT_LABELS.map(({ key, label }) => {
+        if (key === "hp") return null;
+        const stage = fighter.stages[key];
+        return (
+          <div key={key} className={`battle-real-stat-item${stage > 0 ? " is-boosted" : stage < 0 ? " is-lowered" : ""}`}>
+            <span className="battle-real-stat-label">{label}</span>
+            <span className="battle-real-stat-value">{stage > 0 ? `+${stage}` : stage === 0 ? "—" : stage}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 /**
  * §1-4: 대전 화면 아바타. 일루전 중이면 위장 대상 종의 스프라이트를(상대가 안 눈치채도록, 도구 뱃지도 숨김),
@@ -189,8 +214,11 @@ export function BattleFighterCard(props: BattleBoardProps & { side: Side; pokemo
   const form = getEffectiveForm(pokemon, fighter.slot);
   const hpPercent = Math.max(0, Math.min(100, (hp / fighter.maxHp) * 100));
   const { avatarPokemon, avatarForm, illusionPokemon } = fighterAvatar(pokemon, fighter, form);
+  // 8.1 U8-d: 좁은 화면 가로 배치에서 상대 카드는 한 번에 한 면만 보인다(버튼으로 전환). 다른 화면에서는 CSS가 면 구분·버튼을 없앤다
+  const [aiView, setAiView] = useState<AiView>("main");
+  const isAi = side === aiSide;
   return (
-    <>
+    <div className="battle-card-body" data-ai-view={isAi ? aiView : undefined}>
       <div className="battle-fighter-head">
         <div className="battle-fighter-ident">
           {/* 2.3 B2: 배틀타워에서 상대(AI) 도구 이미지는 숨긴다. 내 포켓몬은 그대로 표기 */}
@@ -266,6 +294,18 @@ export function BattleFighterCard(props: BattleBoardProps & { side: Side; pokemo
       {/* 파티 트래커 — 상대(AI) 쪽은 선출된 3마리가 그대로 드러나(이름·활성 슬롯) 2.3 B2의 "출전 여부 비공개"와
           어긋나서 숨긴다 — 그 칸은 위 battle-roster-icons가 대신 채운다(사용자 확인, 2.3 B2 보완). */}
       {side !== aiSide && <PartyTracker bs={side === "a" ? battleState.sideA : battleState.sideB} activeHp={shownHp} />}
-    </>
+
+      {isAi && <AiStages fighter={fighter} />}
+      {isAi && (
+        <div className="battle-ai-views">
+          <button type="button" className="battle-ai-view-btn tap-target" onClick={() => setAiView((v) => (v === "stats" ? "main" : "stats"))}>
+            {aiView === "stats" ? "포켓몬" : "능력치"}
+          </button>
+          <button type="button" className="battle-ai-view-btn tap-target" onClick={() => setAiView((v) => (v === "party" ? "main" : "party"))}>
+            {aiView === "party" ? "포켓몬" : "파티"}
+          </button>
+        </div>
+      )}
+    </div>
   );
 }

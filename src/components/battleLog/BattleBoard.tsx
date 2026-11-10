@@ -46,7 +46,7 @@ export function BattleBoard(props: BattleBoardProps) {
   const aiParty = aiSide ? battleSide(aiSide)?.party.map((f) => ({ id: f.slot.pokemonId, maxHp: f.maxHp })) : undefined;
   return (
     <>
-    <div className="battle-board" data-weather={env.weather} data-field={env.field} style={{ background: battleBoardBackground({ ...cur, ...env }) }}>
+    <div className={`battle-board${aiSide ? ` has-ai ai-${aiSide}` : ""}`} data-weather={env.weather} data-field={env.field} style={{ background: battleBoardBackground({ ...cur, ...env }) }}>
       <BattleFieldStatus battleState={cur} />
       {(["a", "b"] as const).map((side) => {
         const pokemon = getPokemon(battleState[side].slot.pokemonId);
@@ -59,7 +59,7 @@ export function BattleBoard(props: BattleBoardProps) {
           <div
             key={side}
             ref={side === "a" ? attachA : attachB}
-            className={`battle-fighter battle-fighter-${side}${winner === side ? " is-winner" : ""}${shownLive.currentHp <= 0 ? " is-fainted" : ""}`}
+            className={`battle-fighter battle-fighter-${side}${side === aiSide ? " is-ai" : ""}${winner === side ? " is-winner" : ""}${shownLive.currentHp <= 0 ? " is-fainted" : ""}`}
           >
             {/* 기절 효과(회색조·가라앉음)는 카드 부분에만 걸고, 아래 교체·기술 입력 영역은 그대로 둔다 */}
             <div className="battle-fighter-top">
