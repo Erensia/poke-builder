@@ -48,7 +48,7 @@ export function ObservationsSection({ s }: { s: ReturnType<typeof useDefenseInfe
                 ) : (
                   <button
                     type="button"
-                    className="dinf-move-btn"
+                    className="dinf-move-btn tap-target"
                     onClick={() => setMovePickerRow(row.id)}
                     disabled={!pickerOwner}
                   >
@@ -119,7 +119,7 @@ export function ObservationsSection({ s }: { s: ReturnType<typeof useDefenseInfe
                 )}
                 {message && <span className={`dinf-row-msg is-${message.kind}`}>{message.text}</span>}
                 {rows.length > 1 && (
-                  <button type="button" className="dinf-row-remove" onClick={() => removeRow(row.id)} aria-label={`관측 ${index + 1} 삭제`}>
+                  <button type="button" className="dinf-row-remove tap-target" onClick={() => removeRow(row.id)} aria-label={`관측 ${index + 1} 삭제`}>
                     ✕
                   </button>
                 )}

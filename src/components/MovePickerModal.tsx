@@ -63,7 +63,7 @@ export function MovePickerModal({
             <button
               key={t}
               type="button"
-              className={`move-picker-type-chip${typeFilter === t ? " is-active" : ""}`}
+              className={`move-picker-type-chip tap-target${typeFilter === t ? " is-active" : ""}`}
               onClick={() => setTypeFilter(typeFilter === t ? null : t)}
               aria-label={t}
               title={t}
@@ -85,7 +85,7 @@ export function MovePickerModal({
           ))}
         </div>
       </div>
-      <button type="button" className="move-clear-btn" onClick={onClear}>
+      <button type="button" className="move-clear-btn tap-target" onClick={onClear}>
         슬롯 비우기
       </button>
       <ul className="move-picker-list">

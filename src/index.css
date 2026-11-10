@@ -333,10 +333,28 @@ button {
     position: relative;
   }
 
+  /* 8.1 U1 — 확장 폭은 고정값이 아니라 "눌리는 영역이 가로·세로 모두 44px가 되도록" 모자란 만큼의 절반씩 사방으로 넓힌다(이미 44px 이상이면 0).
+     top·bottom의 %는 요소 자신의 높이, left·right의 %는 폭이라 같은 식을 네 곳에 쓴다. 예전의 inset: -8px -2px는 24px 알약이 40px, 21px 아이콘이 25px에 그쳤다 */
   :where(.tap-target, .tap-targets button)::before {
     content: '';
     position: absolute;
-    inset: -8px -2px;
+    top: min(0px, calc((44px - 100%) / -2));
+    bottom: min(0px, calc((44px - 100%) / -2));
+    left: min(0px, calc((44px - 100%) / -2));
+    right: min(0px, calc((44px - 100%) / -2));
+  }
+
+  /* ::before를 못 쓰는 요소(입력창·select는 의사 요소가 안 생기고, 목록 행·summary는 자체 모양이 있다)는 터치 환경에서 최소 높이를 직접 준다.
+     :where라 명시도가 0이어서 각 컴포넌트가 따로 정한 높이가 이긴다 */
+  :where(input:not([type]), input[type="text"], input[type="search"], input[type="number"], select) {
+    min-height: 44px;
+  }
+  :where(.move-picker-item, .pokedex-list-item, .itemdex-list-item) {
+    min-height: 44px;
+  }
+  /* summary는 한 줄 높이(17~24px)라 위아래 여백으로 44px를 채운다(두 줄 이상이면 이미 커서 0) */
+  :where(details > summary) {
+    padding-block: max(0px, calc((44px - 1lh) / 2));
   }
 }
 

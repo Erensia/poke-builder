@@ -52,7 +52,7 @@ export function AbilityPickerModal({
 
   return (
     <Modal title={`${pokemon.name} · 특성 선택`} onClose={onClose}>
-      <button type="button" className="move-clear-btn" onClick={onClear}>
+      <button type="button" className="move-clear-btn tap-target" onClick={onClear}>
         특성 비우기
       </button>
       <ul className="move-picker-list">

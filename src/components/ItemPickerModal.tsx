@@ -47,7 +47,7 @@ export function ItemPickerModal({
         onChange={(e) => setQuery(e.target.value)}
         autoFocus
       />
-      <button type="button" className="move-clear-btn" onClick={onClear}>
+      <button type="button" className="move-clear-btn tap-target" onClick={onClear}>
         도구 비우기
       </button>
       <ul className="move-picker-list">
