@@ -158,6 +158,8 @@ const attackKeyOf = (move: Move): AttackKey => (move.category === "special" ? "s
 export function attackInferenceUnsupportedReason(move: Move): string | null {
   // 고정 데미지(8.2 I1)는 공격 스탯과 무관해 후보를 거르지 못하지만, 관측이 맞는지(고정 값과 같은지)는 확인한다
   if (move.fixedDamage !== undefined) return null;
+  // 속임수(8.2 I1): 맞는 쪽(내) 공격 스탯으로 데미지가 정해져 상대 공격은 거르지 못한다 — 관측이 맞는지만 본다
+  if (move.usesTargetAttackStat) return move.power === null ? "위력이 상황에 따라 달라지는 기술은 아직 지원하지 않아요" : null;
   const base = inferenceUnsupportedReason(move);
   if (base) return base;
   if (move.gyroBallPower || move.electroBallPower) return "스피드로 위력이 정해지는 기술은 아직 지원하지 않아요";
