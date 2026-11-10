@@ -64,7 +64,8 @@ try {
     return null;
   };
 
-  const attackMoves = data.MOVES.filter((m) => ai.attackInferenceUnsupportedReason(m) === null && !inf.multiHitRange(m) && m.power !== null && m.power > 0);
+  // 8.2 I1: 속임수는 공격 역산이 지원하지만 무작위 왕복 후보에서는 뺀다 — 난수열이 달라져 결합 결과 해시가 깨진다(13번 모듈이 따로 시험)
+  const attackMoves = data.MOVES.filter((m) => ai.attackInferenceUnsupportedReason(m) === null && !m.usesTargetAttackStat && !inf.multiHitRange(m) && m.power !== null && m.power > 0);
   // 진짜 상대(oppTrue)가 내 포켓몬(mySlot)에게 실제로 입힐 데미지로 관측 하나를 만든다. 내 HP가 남지 않는 공격은 제외
   const makeAttackObservation = (cands, oppTrue, mySlot, maxHp, hp) => {
     for (let tries = 0; tries < 20; tries++) {
