@@ -126,7 +126,7 @@
   /* 왼쪽 모서리는 부모의 overflow:hidden이 잘라주고, 채움 끝(오른쪽)은 직각으로 둔다 */
   border-radius: 0;
   pointer-events: none;
-  transition: width 0.08s linear;
+  /* width transition을 두지 않는다 — 드래그 중 막대가 마우스를 80ms 늦게 쫓아와 느려 보인다(8.1 U6) */
 }
 
 /* 지금 예산으론 못 올리는 구간 — 살짝 눌러서 "여긴 아직 못 감"을 표시 (+ 버튼 disabled와 같은 의미) */
