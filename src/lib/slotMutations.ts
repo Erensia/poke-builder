@@ -58,7 +58,10 @@ interface PointsSlot {
   points: AbilityPoints;
 }
 
-/** 합산 66 / 스탯당 32를 넘지 않도록 클램프해서 능력 포인트 한 스탯을 절대값으로 설정한다 (직접 입력용) */
+/**
+ * 합산 66 / 스탯당 32를 넘지 않도록 클램프해서 능력 포인트 한 스탯을 절대값으로 설정한다 (직접 입력·슬라이더용).
+ * 값이 그대로면 같은 참조를 돌려준다 — 슬라이더가 pointermove마다 같은 값을 거듭 설정해도 리렌더·저장이 일어나지 않는다(8.1 U6).
+ */
 export function setAbilityPointOnSlot<T extends PointsSlot>(
   slot: T,
   stat: keyof AbilityPoints,
@@ -67,7 +70,9 @@ export function setAbilityPointOnSlot<T extends PointsSlot>(
   const clampedValue = Math.max(0, value);
   const restTotal = totalAbilityPoints(slot.points) - slot.points[stat];
   const maxForStat = Math.min(MAX_ABILITY_POINTS_PER_STAT, MAX_ABILITY_POINTS_TOTAL - restTotal);
-  return { ...slot, points: { ...slot.points, [stat]: Math.min(clampedValue, maxForStat) } };
+  const nextValue = Math.min(clampedValue, maxForStat);
+  if (nextValue === slot.points[stat]) return slot;
+  return { ...slot, points: { ...slot.points, [stat]: nextValue } };
 }
 
 /** 이전 상태를 기준으로 증감시킨다 (버튼용) — 변화가 없으면 같은 참조를 그대로 돌려준다 */
