@@ -219,12 +219,12 @@ export default async function ({ server, data, inf, ev, stat, form, fm, ai, rnd,
     const badHp = ai.inferAttack({ attacker: slot("망나뇽"), defender: mine, observations: [{ move: data.getMove("아이언헤드"), critical: false, hpBefore: myMax + 5, hpAfter: 10 }] });
     const noMove = ai.inferAttack({ attacker: slot("망나뇽"), defender: mine, observations: [{ move: data.getMove("자이로볼"), critical: false, hpBefore: myMax, hpAfter: myMax - 40 }] });
     if (contradiction?.status !== "contradiction") fail(`공격 역산: 불가능한 데미지가 ${contradiction?.status}`);
-    // 쓰러진 공격(3.6 I1-e): 데미지가 맞기 전 HP 이상이라는 부등식 — 가능한 쓰러짐은 ok, 풀피에서 한 방에 쓰러질 수 없는 조합은 모순, 다단히트는 invalid
+    // 쓰러진 공격(3.6 I1-e): 데미지가 맞기 전 HP 이상이라는 부등식 — 가능한 쓰러짐은 ok, 풀피에서 한 방에 쓰러질 수 없는 조합은 모순, 다단히트는 8.2 I1부터 ok
     const faintFull = ai.inferAttack({ attacker: slot("망나뇽"), defender: mine, observations: [{ move: data.getMove("아이언헤드"), critical: false, hpBefore: myMax, hpAfter: 0 }] });
-    const faintMulti = ai.inferAttack({ attacker: slot("망나뇽"), defender: mine, observations: [{ move: data.getMove("더블어택"), critical: false, hpBefore: 30, hpAfter: 0, hits: 2 }] });
+    const faintMulti = ai.inferAttack({ attacker: slot("망나뇽"), defender: mine, observations: [{ move: data.getMove("더블어택"), critical: false, hpBefore: 30, hpAfter: 0, hits: 1 }] });
     if (faint?.status !== "ok") fail(`공격 역산: 쓰러진 관측이 ok가 아님(${faint?.status})`);
     if (faintFull?.status !== "contradiction") fail(`공격 역산: 풀피에서 한 방에 쓰러지는 관측이 ${faintFull?.status}`);
-    if (faintMulti?.status !== "invalid" || !faintMulti.observationErrors[0]?.includes("쓰러진 다단히트")) fail("공격 역산: 쓰러진 다단히트가 invalid로 안 잡힘");
+    if (faintMulti?.status !== "ok") fail(`공격 역산: 쓰러진 다단히트(8.2 I1)가 ${faintMulti?.status}`);
     if (badHp?.status !== "invalid" || !badHp.observationErrors[0]?.includes("최대 HP")) fail("공격 역산: 최대 HP 초과가 invalid로 안 잡힘");
     if (noMove?.status !== "invalid" || !noMove.observationErrors[0]?.includes("스피드")) fail("공격 역산: 스피드 위력 기술이 invalid로 안 잡힘");
     console.log(`공격 역산 예외: 모순 ${contradiction?.status} · 쓰러짐 ${faint?.status} · HP 초과 ${badHp?.status} · 자이로볼 ${noMove?.status}`);

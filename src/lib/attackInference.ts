@@ -147,6 +147,8 @@ interface PreparedObservation {
   ko: boolean;
   /** 후보(성격·포인트)로 상대 슬롯을 만들어 이 관측의 16단계 난수 데미지를 낸다. 계산할 수 없으면 null */
   rolls: (natureId: string, points: number) => RollSet | null;
+  /** 쓰러진 다단히트(8.2 I1): 마지막 한 타를 뺀 (타수-1)타의 난수. "직전 타까지는 안 쓰러졌다"는 조건을 건다 */
+  prevRolls?: (natureId: string, points: number) => RollSet | null;
 }
 
 /** 이 관측이 읽는 상대 공격 스탯 — 물리는 공격, 특수는 특공 */
@@ -154,6 +156,8 @@ const attackKeyOf = (move: Move): AttackKey => (move.category === "special" ? "s
 
 /** 스피드·HP 등 상대의 다른 스탯으로 위력이 정해져 공격 포인트만으로는 계산할 수 없는 기술을 거른다 */
 export function attackInferenceUnsupportedReason(move: Move): string | null {
+  // 고정 데미지(8.2 I1)는 공격 스탯과 무관해 후보를 거르지 못하지만, 관측이 맞는지(고정 값과 같은지)는 확인한다
+  if (move.fixedDamage !== undefined) return null;
   const base = inferenceUnsupportedReason(move);
   if (base) return base;
   if (move.gyroBallPower || move.electroBallPower) return "스피드로 위력이 정해지는 기술은 아직 지원하지 않아요";
@@ -220,14 +224,22 @@ function prepareObservations(input: AttackInferenceInput): { prepared: PreparedO
       errors.push("맞은 뒤 HP가 맞기 전 HP보다 작아야 해요");
       return;
     }
-    const hitsError = multiHitError(obs.move, obs.hits);
+    const hitsError = multiHitError(obs.move, obs.hits, obs.hpAfter === 0);
     if (hitsError) {
       errors.push(hitsError);
       return;
     }
-    // 다단히트는 몇 타째에 쓰러졌는지 몰라 합계의 하한을 말할 수 없다
-    if (obs.hpAfter === 0 && multiHitRange(obs.move)) {
-      errors.push("쓰러진 다단히트는 아직 지원하지 않아요");
+    if (obs.move.fixedDamage !== undefined) {
+      const fixed = obs.move.fixedDamage;
+      prepared.push({
+        key: attackKeyOf(obs.move),
+        baseStat: getEffectiveForm(attackerPokemon!, attackerAtHit).baseStats[attackKeyOf(obs.move)],
+        maxHp: myMaxHp,
+        damage: obs.hpBefore - obs.hpAfter,
+        ko: obs.hpAfter === 0,
+        rolls: () => ({ values: [fixed] }),
+      });
+      errors.push(null);
       return;
     }
     const options = {
@@ -262,6 +274,10 @@ function prepareObservations(input: AttackInferenceInput): { prepared: PreparedO
     if (res.berryBulkMultiplier > 1) itemConsumed = true;
     const memo = new Map<string, RollSet | null>();
     const baseStats = getEffectiveForm(attackerPokemon!, attackerAtHit).baseStats;
+    // 쓰러진 다단히트: n타째에 쓰러졌으니 n-1타까지의 합계는 맞기 전 HP 미만이어야 한다. 1타째면 조건이 없다
+    const nHits = options.multiHitCount;
+    const koMulti = obs.hpAfter === 0 && multiHitRange(obs.move) && nHits !== undefined && nHits >= 2;
+    const prevMemo = new Map<string, RollSet | null>();
     prepared.push({
       key: attackKeyOf(obs.move),
       baseStat: baseStats[attackKeyOf(obs.move)],
@@ -277,6 +293,17 @@ function prepareObservations(input: AttackInferenceInput): { prepared: PreparedO
         memo.set(memoKey, rolls);
         return rolls;
       },
+      prevRolls: koMulti
+        ? (natureId, points) => {
+            const memoKey = `${natureId}|${points}`;
+            if (prevMemo.has(memoKey)) return prevMemo.get(memoKey)!;
+            const slot: EvaluatorSlot = { ...attackerAtHit, nature: natureId, points: { ...EMPTY_ABILITY_POINTS, [attackKeyOf(obs.move)]: points } };
+            const r = evaluateSlotMatchup(slot, obs.move, defender, { ...options, multiHitCount: nHits! - 1, skipVerdict: true });
+            const rolls = r?.damageParts ? damageRollSet(r.damageParts, r.defenseStat) : null;
+            prevMemo.set(memoKey, rolls);
+            return rolls;
+          }
+        : undefined,
     });
     errors.push(null);
   });
@@ -290,11 +317,21 @@ function sideLikelihood(prepared: PreparedObservation[], key: AttackKey, combo: 
     if (o.key !== key) continue;
     const rolls = o.rolls(combo.repNatureId, points);
     if (!rolls) return 0;
-    let hit = 0;
-    rolls.values.forEach((d, k) => {
-      if (o.ko ? d >= o.damage : d === o.damage) hit += rolls.probs ? rolls.probs[k] : 1 / rolls.values.length;
-    });
-    if (hit === 0) return 0;
+    const matches = (r: RollSet, test: (d: number) => boolean) => {
+      let p = 0;
+      r.values.forEach((d, k) => {
+        if (test(d)) p += r.probs ? r.probs[k] : 1 / r.values.length;
+      });
+      return p;
+    };
+    let hit = matches(rolls, (d) => (o.ko ? d >= o.damage : d === o.damage));
+    if (o.prevRolls) {
+      const prev = o.prevRolls(combo.repNatureId, points);
+      if (!prev) return 0;
+      // n타 합계가 쓰러뜨리고(≥HP) n-1타 합계는 못 쓰러뜨린(<HP) 경우만 — 앞쪽 확률을 빼면 된다(n-1타로 쓰러뜨렸으면 n타도 쓰러뜨린다)
+      hit -= matches(prev, (d) => d >= o.damage);
+    }
+    if (hit <= 1e-12) return 0;
     likelihood *= hit;
   }
   return likelihood;

@@ -58,11 +58,13 @@ export function ObservationsSection({ s }: { s: ReturnType<typeof useDefenseInfe
                 <span className="dinf-row-opts">
                   {(() => {
                     const range = move && !speed ? multiHitRange(move) : null;
-                    if (!range || range.min === range.max) return null;
+                    // 받은 데미지에서 쓰러졌으면(맞은 뒤 HP 0) 몇 타째에 쓰러졌는지 1타부터 고른다(8.2 I1)
+                    const min = received && row.after.trim() === "0" ? 1 : range?.min;
+                    if (!range || min === undefined || min === range.max) return null;
                     return (
                       <select aria-label={`관측 ${index + 1} 맞은 타수`} value={row.hits} onChange={(e) => updateRow(row.id, { hits: e.target.value })}>
                         <option value="">타수</option>
-                        {Array.from({ length: range.max - range.min + 1 }, (_, k) => range.min + k).map((n) => (
+                        {Array.from({ length: range.max - min + 1 }, (_, k) => min + k).map((n) => (
                           <option key={n} value={n}>
                             {n}타
                           </option>
