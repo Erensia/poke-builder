@@ -148,7 +148,7 @@
 
 /* 셋업 보드는 카드 300px 2장 + VS 열이라 가로로 놓으려면 뷰포트가 약 890px 필요하다 — 760px에서 쌓으면 761~890px에서 넘친 오른쪽이 html의 overflow-x: hidden에 잘려 스크롤로도 닿지 못했다(7.5). 여유를 두고 920px부터 쌓는다 */
 @media (max-width: 920px) {
-  /* 셋업: 두 파티 세로로 쌓고 VS(대전 시작)를 맨 아래로 */
+  /* 셋업: 두 파티를 세로로 쌓는다. VS(대전 시작)는 DOM 순서 그대로 내 파티와 상대 파티 사이에 둔다 — 상대 파티는 선출 화면에서 어차피 다시 보이므로 시작 버튼이 맨 아래까지 스크롤하게 만들지 않는다(8.1 U8-a) */
   .battle-setup-board {
     flex-direction: column;
     align-items: center;
@@ -166,7 +166,6 @@
     align-self: center;
     flex: none;
     padding-top: 0;
-    order: 1; /* 좁은 화면에선 두 파티 사이가 아니라 맨 아래로 */
   }
   /* 세로 배치: 문구를 흐름 안에 둔다(VS 아래에 이어지는 내용이 있어 떠 있으면 겹친다) */
   .battle-setup-vs-hint-box {
@@ -177,9 +176,6 @@
   }
   .battle-setup-vs-hint-box.is-closed {
     display: none;
-  }
-  .battle-setup-column:last-of-type {
-    order: 0;
   }
 }
 
