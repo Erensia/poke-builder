@@ -8391,5 +8391,136 @@
     }
    }
   ]
+ },
+ {
+  "id": "real-hb-brimmune-trickroom",
+  "name": "HB브리무음 사용파티",
+  "style": "트릭룸",
+  "group": "real",
+  "description": "HB브리무음의 특성을 활용해 해로운 효과를 반사시키면서 후속 포켓몬이 나오기 쉬운 환경을 만들어주고, 트릭룸과 치유소원을 이용해 파티 케어도 가능한 샘플",
+  "slots": [
+   {
+    "pokemonId": "루카리오",
+    "moves": [
+     "파동탄",
+     "철제광선",
+     "악의파동",
+     "나쁜음모"
+    ],
+    "ability": "정신력",
+    "item": "루카리오나이트Z",
+    "nature": "겁쟁이",
+    "points": {
+     "hp": 2,
+     "atk": 0,
+     "def": 0,
+     "spa": 32,
+     "spd": 0,
+     "spe": 32
+    },
+    "activeMegaForm": "루카리오-메가Z"
+   },
+   {
+    "pokemonId": "하마돈",
+    "moves": [
+     "스텔스록",
+     "하품",
+     "지진",
+     "게으름피우기"
+    ],
+    "ability": "모래날림",
+    "item": "먹다남은음식",
+    "nature": "장난꾸러기",
+    "points": {
+     "hp": 32,
+     "atk": 0,
+     "def": 26,
+     "spa": 0,
+     "spd": 8,
+     "spe": 0
+    }
+   },
+   {
+    "pokemonId": "망나뇽",
+    "moves": [
+     "신속",
+     "용성군",
+     "10만볼트",
+     "화염방사"
+    ],
+    "ability": "멀티스케일",
+    "item": "망나뇽나이트",
+    "nature": "조심",
+    "points": {
+     "hp": 15,
+     "atk": 0,
+     "def": 0,
+     "spa": 31,
+     "spd": 0,
+     "spe": 20
+    },
+    "activeMegaForm": "망나뇽-메가"
+   },
+   {
+    "pokemonId": "마스카나",
+    "moves": [
+     "기습",
+     "트릭플라워",
+     "탁쳐서떨구기",
+     "압정뿌리기"
+    ],
+    "ability": "심록",
+    "item": "기합의띠",
+    "nature": "고집",
+    "points": {
+     "hp": 0,
+     "atk": 32,
+     "def": 2,
+     "spa": 0,
+     "spd": 0,
+     "spe": 32
+    }
+   },
+   {
+    "pokemonId": "브리무음",
+    "moves": [
+     "사이코노이즈",
+     "드레인키스",
+     "치유소원",
+     "트릭룸"
+    ],
+    "ability": "매직미러",
+    "item": "자뭉열매",
+    "nature": "대담",
+    "points": {
+     "hp": 32,
+     "atk": 0,
+     "def": 32,
+     "spa": 0,
+     "spd": 2,
+     "spe": 0
+    }
+   },
+   {
+    "pokemonId": "대쓰여너",
+    "moves": [
+     "아쿠아제트",
+     "웨이브태클",
+     "성묘",
+     "고속이동"
+    ],
+    "ability": "적응력",
+    "item": "생명의구슬",
+    "nature": "고집",
+    "points": {
+     "hp": 14,
+     "atk": 32,
+     "def": 3,
+     "spa": 0,
+     "spd": 14,
+     "spe": 3
+    }
+   }
+  ]
  }
 ]
