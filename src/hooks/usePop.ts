@@ -60,9 +60,10 @@ export function useHeightTween(key: string) {
  * (ref를 객체의 한 속성으로 돌려주면 린트가 그 객체 전체를 ref로 보고 나머지 접근을 렌더 중 ref 접근이라고 오탐한다)
  * 카드 높이가 달라지면(빈 슬롯 ↔ 채워진 카드) 이전 높이에서 새 높이로 이어서 변한다(ref를 카드 맨 바깥 요소에 단다).
  * 애니메이션 종료가 오지 않는 경우(탭이 숨겨짐 등)를 대비해 안전 타이머(400ms)로 반드시 비운다.
+ * reloadKey가 바뀌면(파티 프리셋 불러오기, 8.1 U7) 같은 포켓몬이 같은 칸에 들어와도 채워진 카드는 다시 튕긴다.
  */
-export function useCardMotion(pokemonId: string | null, onClear: () => void, variant = "") {
-  const { pop, onAnimationEnd: popEnd } = usePop(pokemonId, false);
+export function useCardMotion(pokemonId: string | null, onClear: () => void, variant = "", reloadKey = 0) {
+  const { pop, onAnimationEnd: popEnd } = usePop(pokemonId === null ? null : `${pokemonId}|${reloadKey}`, false);
   const [leaving, setLeaving] = useState(false);
   // variant(압축 ↔ 펼침 같은 모양 구분)가 바뀌어도 높이가 이어서 변한다(6.6 M3b)
   const attach = useHeightTween(`${pokemonId ?? ""}|${variant}`);

@@ -16,6 +16,8 @@ const EMPTY_SLOTS: PartySlots = [null, null, null, null, null, null];
 
 export function useParty() {
   const [slots, setSlots] = useState<PartySlots>(() => loadParty() ?? EMPTY_SLOTS);
+  // 프리셋을 불러온 횟수 — 카드가 "같은 포켓몬이 다시 들어와도" 불러왔음을 모션으로 보이게 하는 신호(8.1 U7)
+  const [loadCount, setLoadCount] = useState(0);
 
   // 슬롯이 바뀔 때마다 브라우저 로컬 스토리지에 자동 저장한다.
   useEffect(() => {
@@ -30,6 +32,7 @@ export function useParty() {
   /** 파티 프리셋 불러오기(Phase 6 §1-2) — 현재 편성 6슬롯을 통째로 덮어쓴다 */
   function loadSlots(nextSlots: PartySlots) {
     setSlots(nextSlots);
+    setLoadCount((n) => n + 1);
   }
 
   /** 샘플(빌드) 프리셋 불러오기(Phase 6 §1-3) — 슬롯 하나만 통째로 덮어쓴다 */
@@ -158,6 +161,7 @@ export function useParty() {
     stepPoint,
     resetParty,
     loadSlots,
+    loadCount,
     loadSlot,
     reorderSlots,
   };

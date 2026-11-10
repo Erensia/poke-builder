@@ -43,6 +43,7 @@ function usePartyBoardState() {
     stepPoint,
     resetParty,
     loadSlots,
+    loadCount,
     loadSlot,
     reorderSlots,
   } = useParty();
@@ -93,12 +94,12 @@ function usePartyBoardState() {
     }
   }
 
-  return { filledCount, setShowPartyPresets, setShowBackup, showBackup, handleReset, slots, setPicker, clearSlot, swapMoves, slotPresets, handleSaveSlotAsSample, toggleGender, cycleSizeForm, cycleFormVariant, cycleCosmeticForm, draggedIndex, dragOverIndex, handleSlotDragStart, handleSlotDragOver, handleSlotDrop, handleSlotDragEnd, reorderSlots, picker, setPokemon, setMove, setAbility, setItem, setNature, setPoint, stepPoint, setCosmeticForm, loadSlot, showPartyPresets, partyPresets, loadSlots };
+  return { filledCount, setShowPartyPresets, setShowBackup, showBackup, handleReset, slots, setPicker, clearSlot, swapMoves, slotPresets, handleSaveSlotAsSample, toggleGender, cycleSizeForm, cycleFormVariant, cycleCosmeticForm, draggedIndex, dragOverIndex, handleSlotDragStart, handleSlotDragOver, handleSlotDrop, handleSlotDragEnd, reorderSlots, picker, setPokemon, setMove, setAbility, setItem, setNature, setPoint, stepPoint, setCosmeticForm, loadSlot, showPartyPresets, partyPresets, loadSlots, loadCount };
 }
 
 export function PartyBoard() {
   const session = usePartyBoardState();
-  const { filledCount, setShowPartyPresets, setShowBackup, handleReset, slots, setPicker, clearSlot, swapMoves, slotPresets, handleSaveSlotAsSample, toggleGender, cycleSizeForm, cycleFormVariant, cycleCosmeticForm, draggedIndex, dragOverIndex, handleSlotDragStart, handleSlotDragOver, handleSlotDrop, handleSlotDragEnd, reorderSlots } = session;
+  const { filledCount, setShowPartyPresets, setShowBackup, handleReset, slots, setPicker, clearSlot, swapMoves, slotPresets, handleSaveSlotAsSample, toggleGender, cycleSizeForm, cycleFormVariant, cycleCosmeticForm, draggedIndex, dragOverIndex, handleSlotDragStart, handleSlotDragOver, handleSlotDrop, handleSlotDragEnd, reorderSlots, loadCount } = session;
 
 
   return (
@@ -164,6 +165,7 @@ export function PartyBoard() {
             onDrop={() => handleSlotDrop(i)}
             onDragEnd={handleSlotDragEnd}
             onTouchReorder={(to) => reorderSlots(i, to)}
+            reloadKey={loadCount}
           />
         ))}
       </div>
