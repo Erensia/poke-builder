@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { BattleTurnLog } from "../BattleTurnLog";
+import { Fold } from "../Fold";
 import { getPokemon } from "../../lib/data";
 import type { BattleBoardProps } from "./battleBoardTypes";
 import { canPlayTurn, humanMustPick } from "./battleRules";
@@ -77,7 +78,11 @@ export function BattleBoard(props: BattleBoardProps) {
     {/* 대전을 끝내는 항목이 재생 대기 중이거나 선택(교체)을 기다리는 중이면 연출이 끝날 때까지 배너·안내를 미룬다(7.5) */}
     {!(winner && fx && fx.entry < log.length - 1) && !holdChoice && <BattleTurnPanel {...props} resultDelay={resultMs} />}
 
-    <BattleTurnLog log={log} aiSide={aiSide} aiParty={aiParty} reveal={fx ?? undefined} />
+    {/* 8.1 U8-c: 좁은 화면(≤760px)에서는 로그를 기본 접어 둬 카드 연출로 상황을 보게 한다(데스크톱은 펼침). 접어도 마운트된 채라 공개·연출 타이밍은 그대로다.
+        접힘 상태는 기억하지 않는다 — 같은 브라우저에서 폭만 바꿔 볼 때 서로 번지지 않게 한다 */}
+    <Fold title={<>배틀 로그{log.length > 0 && <small>{log.at(-1)!.turnNumber}턴째</small>}</>} defaultOpen={!matchMedia("(max-width: 760px)").matches}>
+      <BattleTurnLog log={log} aiSide={aiSide} aiParty={aiParty} reveal={fx ?? undefined} />
+    </Fold>
     </>
   );
 }
