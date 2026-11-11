@@ -11,12 +11,8 @@ export default async function ({ data, inf, ev, stat, form, fm, ai, pts, slot, f
   const myReal = reals(mine);
   const rollOf = () => (85 + Math.floor(rnd() * 16)) / 100;
 
-  // 입력이 없으면 막는다(스피드·공격을 모르면 위력/결정력이 안 정해진다)
-  for (const m of [gyro, electro]) {
-    if (!inf.inferenceUnsupportedReason(m) || !ai.attackInferenceUnsupportedReason(m)) fail(`${m.name}: 상대 스피드 없이 통과`);
-    if (inf.inferenceUnsupportedReason(m, { speed: true }) || ai.attackInferenceUnsupportedReason(m, { speed: true })) fail(`${m.name}: 상대 스피드가 있는데 막힘`);
-  }
-  if (!inf.inferenceUnsupportedReason(foul) || inf.inferenceUnsupportedReason(foul, { attack: true })) fail("속임수 방어 역산 입력 조건이 어긋남");
+  // 8.2 I1 평균 방식: 입력이 없어도 지원한다(모르는 값은 후보 전체로 평균 — 15번 모듈). 여기서는 값을 직접 줬을 때(고정)를 시험한다
+  for (const m of [gyro, electro, foul]) if (inf.inferenceUnsupportedReason(m) || ai.attackInferenceUnsupportedReason(m)) fail(`${m.name}: 입력 없이도 지원해야 하는데 막힘`);
 
   // 공격 역산: 상대가 내게 쓴 자이로볼(물리)·일렉트릭볼(특수) — 진짜 공격/특공 포인트가 후보에 남는다 (일렉트릭볼은 땅 타입이 면역이라 받는 쪽을 바꾼다)
   const mine2 = slot("리자몽", { points: pts({ hp: 20, spd: 10, spe: 8 }), nature: "조심" });

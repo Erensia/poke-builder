@@ -153,8 +153,6 @@ interface RowMessageCtx {
   speedResult: Combined["speed"];
   speedPending: boolean;
   myMaxHp: number | null;
-  /** 상대 스피드·공격 실수치를 입력했는가 (8.2 I1) */
-  known: { speed: boolean; attack: boolean };
 }
 
 export function rowMessageOf(row: ObservationRow, c: RowMessageCtx): RowMessage {
@@ -162,7 +160,7 @@ export function rowMessageOf(row: ObservationRow, c: RowMessageCtx): RowMessage 
   if (row.kind === "received") return receivedRowMessage(row, move, c);
   if (row.kind === "speed") return speedRowMessage(row, c);
   if (move) {
-    const reason = inferenceUnsupportedReason(move, c.known);
+    const reason = inferenceUnsupportedReason(move);
     if (reason) return { text: reason, kind: "error" };
   }
   const before = parsePercent(row.before);
@@ -193,7 +191,7 @@ function speedRowMessage(row: ObservationRow, c: RowMessageCtx): RowMessage {
 
 function receivedRowMessage(row: ObservationRow, move: ReturnType<typeof getMove>, c: RowMessageCtx): RowMessage {
   if (move) {
-    const reason = attackInferenceUnsupportedReason(move, c.known);
+    const reason = attackInferenceUnsupportedReason(move);
     if (reason) return { text: reason, kind: "error" };
   }
   const before = parseHp(row.before);

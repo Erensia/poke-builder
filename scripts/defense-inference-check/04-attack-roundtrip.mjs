@@ -226,7 +226,8 @@ export default async function ({ server, data, inf, ev, stat, form, fm, ai, rnd,
     if (faintFull?.status !== "contradiction") fail(`공격 역산: 풀피에서 한 방에 쓰러지는 관측이 ${faintFull?.status}`);
     if (faintMulti?.status !== "ok") fail(`공격 역산: 쓰러진 다단히트(8.2 I1)가 ${faintMulti?.status}`);
     if (badHp?.status !== "invalid" || !badHp.observationErrors[0]?.includes("최대 HP")) fail("공격 역산: 최대 HP 초과가 invalid로 안 잡힘");
-    if (noMove?.status !== "invalid" || !noMove.observationErrors[0]?.includes("스피드")) fail("공격 역산: 스피드 위력 기술이 invalid로 안 잡힘");
+    // 8.2 I1: 상대 스피드를 몰라도 후보 전체를 평균내 역산한다(예전에는 invalid)
+    if (noMove?.status !== "ok") fail(`공격 역산: 스피드 위력 기술이 입력 없이 ${noMove?.status}`);
     console.log(`공격 역산 예외: 모순 ${contradiction?.status} · 쓰러짐 ${faint?.status} · HP 초과 ${badHp?.status} · 자이로볼 ${noMove?.status}`);
     // 쓰러진 공격 왕복: 진짜 배분이 실제로 쓰러뜨릴 만한 데미지를 낼 때 "맞기 전 HP → 0"으로 넣어도 진짜 값이 후보에 남아야 한다
     {

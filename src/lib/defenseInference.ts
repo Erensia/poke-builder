@@ -15,6 +15,7 @@ import { MAX_ABILITY_POINTS_PER_STAT, MAX_ABILITY_POINTS_TOTAL } from "./statCal
 import type { BaseStats } from "../types/stats";
 import type { Pokemon } from "../types/pokemon";
 import { rollMatchOf, TOTAL_POINTS, TopLists, type CandidateLists } from "./candidateCards";
+import { mixRollSets, statCandidates } from "./latentOpponent";
 
 /**
  * 상대 실능치 역산(ver.2.1 C) — 상대의 HP·방어(특방) 능력 포인트와 성격을 "내가 입힌 데미지 %"로 거꾸로 좁힌다.
@@ -93,10 +94,13 @@ export interface InferenceInput {
   screen?: "reflect" | "lightScreen" | "auroraVeil";
   /** 화면 % 판정 여유(±%). 0 = 정확히 일치, 1 = ±1% 허용 */
   tolerance?: number;
-  /** 상대 스피드 실수치(랭크·도구 반영 전, 8.2 I1) — 자이로볼·일렉트릭볼은 위력이 양측 스피드로 정해져 이 값이 있어야 역산한다 */
+  /** 상대 스피드 실수치(랭크·도구 반영 전, 8.2 I1) — 알면 고정한다. 자이로볼·일렉트릭볼은 위력이 양측 스피드로 정해진다. 비우면 가능한 값 전체를 평균낸다 */
   opponentSpeed?: number;
-  /** 상대 공격 실수치(랭크 반영 전, 8.2 I1) — 속임수는 상대(맞는 쪽)의 공격 스탯으로 데미지가 정해져 이 값이 있어야 역산한다 */
+  /** 상대 공격 실수치(랭크 반영 전, 8.2 I1) — 알면 고정한다. 속임수는 상대(맞는 쪽)의 공격 스탯으로 데미지가 정해진다. 비우면 가능한 값 전체를 평균낸다 */
   opponentAttack?: number;
+  /** 평균낼 때 후보를 이 범위 안으로 좁힌다 — 같은 상대의 스피드·공격 역산 결과(`inferCombined`가 채운다). 직접 입력이 있으면 쓰지 않는다 */
+  opponentSpeedRange?: Range;
+  opponentAttackRange?: Range;
   /** 후보로 볼 성격 id 목록 — 공격 역산이 이미 걸러낸 성격을 넘겨 같은 상대의 성격을 공유한다(3.1 C2-b). 생략하면 전부 */
   natureIds?: readonly string[];
   /** HP+방어+특방 포인트 합의 상한 — 공격·특공 쪽에 이미 쓴 최소 포인트를 뺀 값(3.1 C2-b 포인트 예산). 생략하면 66 */
@@ -275,12 +279,9 @@ export function multiHitError(move: Move, hits: number | undefined, fainted = fa
 }
 
 /** 고정 데미지·변화기 등은 정수 데미지 공식이 맞지 않아 역산에서 뺀다 */
-export function inferenceUnsupportedReason(move: Move, known: { speed?: boolean; attack?: boolean } = {}): string | null {
+export function inferenceUnsupportedReason(move: Move): string | null {
   if (move.category === "status" || move.category === null) return "데미지를 주지 않는 기술";
   if (move.fixedDamage !== undefined) return "고정 데미지 기술은 역산할 수 없어요";
-  // 8.2 I1: 상대 실수치를 입력받았으면 평가기에 덮어써 계산한다 (known은 입력 유무)
-  if (move.usesTargetAttackStat && !known.attack) return "속임수는 상대 공격 실수치를 입력해야 역산할 수 있어요";
-  if ((move.gyroBallPower || move.electroBallPower) && !known.speed) return "스피드로 위력이 정해지는 기술은 상대 스피드 실수치를 입력해야 역산할 수 있어요";
   // 셸암즈: 물리/특수가 역산 대상 능력(상대 방어·공격)에 따라 정해져 관측만으로 분류를 고정할 수 없다
   if (move.dynamicCategoryByHigherDamage) return "물리/특수가 능력치에 따라 바뀌는 기술은 아직 지원하지 않아요";
   return null;
@@ -383,6 +384,8 @@ interface PreparedObservation {
   /** 이 관측 시점 폼의 방어·특방 종족값 */
   baseDef: number;
   baseSpd: number;
+  /** 상대 스피드·공격을 모를 때(8.2 I1): 후보 실수치마다 만든 데미지 조각과 가중치(합 1). 데미지 분포를 이 가중치로 섞는다. `parts`는 그중 하나(방어 종류 확인용) */
+  alts?: { parts: DamageParts; weight: number }[];
 }
 
 export function endTurnSixteenths(ids: readonly string[] | undefined): number[] {
@@ -395,9 +398,8 @@ export function endTurnSixteenths(ids: readonly string[] | undefined): number[] 
 /** 관측마다 evaluateSlotMatchup으로 정수 데미지 공식 조각을 구한다. 실패하면 사유 문자열. */
 function prepareObservations(input: InferenceInput): { prepared: PreparedObservation[]; errors: (string | null)[] } {
   const { attacker, defender, observations, attackerStages, attackerStatus, defenderStages, weather, field, screen, opponentSpeed, opponentAttack } = input;
-  const known = { speed: opponentSpeed !== undefined, attack: opponentAttack !== undefined };
   // undefined 키가 있으면 평가기의 스프레드가 실수치를 지우므로 입력한 것만 담는다
-  const defenderRealStatsOverride = { ...(known.speed && { spe: opponentSpeed }), ...(known.attack && { atk: opponentAttack }) };
+  const fixedOverride = { ...(opponentSpeed !== undefined && { spe: opponentSpeed }), ...(opponentAttack !== undefined && { atk: opponentAttack }) };
   const pokemon = getPokemon(defender.pokemonId);
   // 메가 전·후를 섞은 관측이면 메가스톤 보유 → 반감 열매 가정을 모든 관측에서 끈다
   const hasMega = observations.some((o) => o.megaForm);
@@ -412,7 +414,7 @@ function prepareObservations(input: InferenceInput): { prepared: PreparedObserva
   let itemConsumed = false;
   let berryEaten = false;
   observations.forEach((obs, i) => {
-    const unsupported = inferenceUnsupportedReason(obs.move, known);
+    const unsupported = inferenceUnsupportedReason(obs.move);
     if (unsupported) {
       errors.push(unsupported);
       return;
@@ -444,8 +446,7 @@ function prepareObservations(input: InferenceInput): { prepared: PreparedObserva
       errors.push(hitsError);
       return;
     }
-    const res = evaluateSlotMatchup(attacker, obs.move, slotAtHit, {
-      defenderRealStatsOverride,
+    const evalOptions = {
       multiHitCount: multiHitRange(obs.move) ? (obs.hits ?? multiHitRange(obs.move)!.min) : undefined,
       attackerStages,
       defenderStages,
@@ -468,7 +469,12 @@ function prepareObservations(input: InferenceInput): { prepared: PreparedObserva
         obs.move.category,
         ignoresBurnAttackPenalty(attacker.ability ?? undefined, obs.move.id),
       ),
-    });
+    };
+    const { baseStats } = getEffectiveForm(pokemon!, slotAtHit);
+    // 모르는 상대 실수치(8.2 I1): 자이로볼·일렉트릭볼은 스피드, 속임수는 공격. 직접 입력이 없으면 후보 전체로 데미지 조각을 만든다
+    const latent = obs.move.usesTargetAttackStat && opponentAttack === undefined ? "atk" : (obs.move.gyroBallPower || obs.move.electroBallPower) && opponentSpeed === undefined ? "spe" : null;
+    const evaluate = (override: Partial<BaseStats>) => evaluateSlotMatchup(attacker, obs.move, slotAtHit, { ...evalOptions, defenderRealStatsOverride: { ...fixedOverride, ...override } });
+    const res = evaluate(latent ? { [latent]: statCandidates(baseStats[latent], latent === "spe" ? input.opponentSpeedRange : input.opponentAttackRange)[0].value } : {});
     if (!res || !res.damageParts) {
       errors.push("이 기술로는 데미지를 계산할 수 없어요");
       return;
@@ -479,8 +485,21 @@ function prepareObservations(input: InferenceInput): { prepared: PreparedObserva
     }
     if (res.berryBulkMultiplier > 1) itemConsumed = true;
     errors.push(null);
-    const { baseStats } = getEffectiveForm(pokemon!, slotAtHit);
-    prepared.push({ parts: res.damageParts, before: obs.before, after: obs.after, endTurn: endTurnSixteenths(endTurn), berry, baseDef: baseStats.def, baseSpd: baseStats.spd });
+    let alts: PreparedObservation["alts"];
+    if (latent) {
+      // 같은 조각(위력이 같은 스피드 등)은 가중치를 합쳐 접는다
+      const byKey = new Map<string, { parts: DamageParts; weight: number }>();
+      for (const c of statCandidates(baseStats[latent], latent === "spe" ? input.opponentSpeedRange : input.opponentAttackRange)) {
+        const parts = evaluate({ [latent]: c.value })?.damageParts;
+        if (!parts) continue;
+        const key = JSON.stringify(parts);
+        const found = byKey.get(key);
+        if (found) found.weight += c.weight;
+        else byKey.set(key, { parts, weight: c.weight });
+      }
+      alts = [...byKey.values()];
+    }
+    prepared.push({ parts: res.damageParts, before: obs.before, after: obs.after, endTurn: endTurnSixteenths(endTurn), berry, baseDef: baseStats.def, baseSpd: baseStats.spd, alts });
   });
   return { prepared, errors };
 }
@@ -667,7 +686,8 @@ function runCandidates(input: InferenceInput, prepared: PreparedObservation[], d
   const rollsFor = (i: number, stat: number): RollSet => {
     let v = cache[i].get(stat);
     if (!v) {
-      v = damageRolls(prepared[i].parts, stat);
+      const o = prepared[i];
+      v = o.alts ? mixRollSets(o.alts.map((a) => ({ rolls: damageRolls(a.parts, stat), weight: a.weight }))) : damageRolls(o.parts, stat);
       cache[i].set(stat, v);
     }
     return v;

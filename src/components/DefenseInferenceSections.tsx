@@ -316,28 +316,28 @@ export function AssumptionsSection({ s }: { s: ReturnType<typeof useDefenseInfer
         )}
         {(needsSpeed || needsAttack) && (
           <>
-            <h4 className="dinf-subhead">상대 실수치 입력 (이 기술들은 상대 능력치로 데미지가 정해져요)</h4>
+            <h4 className="dinf-subhead">상대 실수치 (알면 고정 · 모르면 비워 두세요)</h4>
             <div className="dinf-conditions">
               {needsSpeed && (
                 <label>
-                  상대 스피드 실수치 (자이로볼·일렉트릭볼)
+                  상대 스피드 실수치 (자이로볼·일렉트릭볼, 모르면 비움)
                   <input className="dinf-percent" inputMode="numeric" value={oppSpeed} onChange={(e) => setOppSpeed(e.target.value)} placeholder="예: 150" />
                   <button type="button" className="dinf-add tap-target" disabled={!fillSpeed} onClick={() => setOppSpeed(fillSpeed)}>
-                    스피드 역산 범위 가운데로 채우기
+                    스피드 역산 범위 가운데로 고정
                   </button>
                 </label>
               )}
               {needsAttack && (
                 <label>
-                  상대 공격 실수치 (속임수)
+                  상대 공격 실수치 (속임수, 모르면 비움)
                   <input className="dinf-percent" inputMode="numeric" value={oppAttack} onChange={(e) => setOppAttack(e.target.value)} placeholder="예: 130" />
                   <button type="button" className="dinf-add tap-target" disabled={!fillAttack} onClick={() => setOppAttack(fillAttack)}>
-                    공격 역산 범위 가운데로 채우기
+                    공격 역산 범위 가운데로 고정
                   </button>
                 </label>
               )}
             </div>
-            <p className="dinf-hint">랭크·도구 효과가 붙기 전의 능력치 수치예요. 채우기는 같은 상대의 스피드(선후공)·공격(받은 데미지) 역산 결과가 있을 때만 켜져요.</p>
+            <p className="dinf-hint">이 기술들은 상대 능력치로 데미지가 정해져요. 비워 두면 가능한 모든 값을 평균내서 계산하고, 같은 상대의 선후공(스피드)·받은 데미지(공격) 관측이 있으면 그 범위 안에서만 평균내서 더 좁아져요. 값은 랭크·도구 효과가 붙기 전의 능력치 수치예요. 정확한 값을 알면 넣어 고정하세요.</p>
           </>
         )}
         <p className="dinf-note">날씨·필드는 위쪽 선택기 값을, 내 랭크·특성·도구는 내 포켓몬 카드 값을 그대로 써요.</p>

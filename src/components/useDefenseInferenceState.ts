@@ -237,7 +237,7 @@ export function useDefenseInferenceState({
   const needsAttack = rows.some((r) => r.kind === "dealt" && !!rowMove(r)?.usesTargetAttackStat);
   const fillSpeed = midOf(speedResult?.realSpe);
   const fillAttack = midOf(attackResult?.realAtk);
-  const messageCtx = { complete, completeReceived, speedRows, result, pending, attackResult, attackPending, speedResult, speedPending, myMaxHp, known: { speed: opponentSpeed !== undefined, attack: opponentAttack !== undefined } };
+  const messageCtx = { complete, completeReceived, speedRows, result, pending, attackResult, attackPending, speedResult, speedPending, myMaxHp };
   const rowMessage = (row: ObservationRow) => rowMessageOf(row, messageCtx);
 
   return { weather, field, attackerCard, defenderPokemon, defenderForm, dragOverClass, dropProps, defenderActions, dragProps, defender, hasDealtRows, activeAbilityId, setAbilityId, anyMega, abilityOptions, itemId, setItemId, defStage, setDefStage, spdStage, setSpdStage, tolerant, setTolerant, hasReceivedRows, activeAtkAbilityId, setAtkAbilityId, anyMegaReceived, atkAbilityOptions, atkItemId, setAtkItemId, atkStage, setAtkStage, spaStage, setSpaStage, oppBurned, setOppBurned, rows, rowMessage, megas, attackerPokemon, changeKind, updateRow, setMovePickerRow, removeRow, setToxicTurn, updateCond, speedAbilityOptions, anyMegaSpeed, myQuickFeet, addRow, onReset, myMaxHp, pending, attackPending, speedPending, result, attackResult, speedResult, rowIdsByObservation, receivedRowNos, combined, speedRowNos, complete, myScreen, movePickerRow, attacker, oppSpeed, setOppSpeed, oppAttack, setOppAttack, needsSpeed, needsAttack, fillSpeed, fillAttack };

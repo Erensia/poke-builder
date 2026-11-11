@@ -41,7 +41,8 @@ try {
   const pick = (arr) => arr[Math.floor(rnd() * arr.length)];
   const pts = (o = {}) => ({ hp: 0, atk: 0, def: 0, spa: 0, spd: 0, spe: 0, ...o });
 
-  const usable = data.MOVES.filter((m) => inf.inferenceUnsupportedReason(m) === null && !inf.multiHitRange(m) && m.power !== null && m.power > 0);
+  // 속임수(8.2 I1 평균 방식)는 방어 역산이 지원하지만 난수열이 달라져 결합 해시가 깨지므로 여기서는 뺀다(14·15번 모듈이 따로 시험)
+  const usable = data.MOVES.filter((m) => inf.inferenceUnsupportedReason(m) === null && !m.usesTargetAttackStat && !inf.multiHitRange(m) && m.power !== null && m.power > 0);
   const species = data.POKEMON.filter((p) => !p.formVariants && !p.sizeForms);
   const natureIds = data.NATURES.map((n) => n.id);
 
