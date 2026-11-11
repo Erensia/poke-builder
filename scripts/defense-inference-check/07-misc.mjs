@@ -31,7 +31,7 @@ export default async function ({ server, data, inf, ev, stat, form, fm, ai, rnd,
     }
     const good = {
       rows: [
-        { id: 7, kind: "received", moveId: "지진", critical: true, before: "150", after: "90", megaForm: "", first: "me", cond: {} },
+        { id: 7, kind: "received", moveId: "지진", critical: true, hits: "3", before: "150", after: "90", megaForm: "", first: "me", cond: {} },
         { id: 9, kind: "speed", moveId: null, critical: false, before: "", after: "", megaForm: "", first: "opponent", cond: { trickRoom: true, oppStage: 2, oppItemId: "구애스카프", oppAbilityId: "없는특성" } },
       ],
       abilityId: "없는특성", itemId: "구애스카프", defStage: -2, spdStage: 99, tolerant: true,
@@ -39,7 +39,7 @@ export default async function ({ server, data, inf, ev, stat, form, fm, ai, rnd,
     };
     const r = restoreInference(JSON.parse(JSON.stringify(good)));
     const ok =
-      r.rows.length === 2 && r.rows[0].id === 1 && r.rows[1].id === 2 && r.rows[0].moveId === "지진" && r.rows[0].critical && r.rows[0].after === "90" &&
+      r.rows.length === 2 && r.rows[0].id === 1 && r.rows[1].id === 2 && r.rows[0].moveId === "지진" && r.rows[0].critical && r.rows[0].hits === "3" && r.rows[0].after === "90" &&
       r.rows[1].first === "opponent" && r.rows[1].cond.trickRoom === true && r.rows[1].cond.oppStage === 2 && r.rows[1].cond.oppItemId === "구애스카프" && r.rows[1].cond.oppAbilityId === null &&
       r.abilityId === "" && r.itemId === "구애스카프" && r.defStage === -2 && r.spdStage === 0 && r.tolerant && r.atkStage === 1 && r.oppBurned;
     if (!ok) fail(`저장 복원 결과가 기대와 다름: ${JSON.stringify(r)}`);
