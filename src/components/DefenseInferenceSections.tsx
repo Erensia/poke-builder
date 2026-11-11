@@ -58,8 +58,8 @@ export function ObservationsSection({ s }: { s: ReturnType<typeof useDefenseInfe
                 <span className="dinf-row-opts">
                   {(() => {
                     const range = move && !speed ? multiHitRange(move) : null;
-                    // 받은 데미지에서 쓰러졌으면(맞은 뒤 HP 0) 몇 타째에 쓰러졌는지 1타부터 고른다(8.2 I1)
-                    const min = received && row.after.trim() === "0" ? 1 : range?.min;
+                    // 쓰러졌으면(맞은 뒤 0) 몇 타째에 쓰러졌는지 1타부터 고른다 — 받은 데미지·입힌 데미지 모두(8.2 I1)
+                    const min = row.after.trim() === "0" ? 1 : range?.min;
                     if (!range || min === undefined || min === range.max) return null;
                     return (
                       <select aria-label={`관측 ${index + 1} 맞은 타수`} value={row.hits} onChange={(e) => updateRow(row.id, { hits: e.target.value })}>
@@ -193,8 +193,8 @@ export function ObservationsSection({ s }: { s: ReturnType<typeof useDefenseInfe
         </button>
         <p className="dinf-note">
           내가 입힌 데미지는 턴 종료 효과를 고르지 않으면 관측 사이에 상대가 HP를 회복하지 않았다고 가정해요 — 효과를 고르면 다음 줄 “맞기 전 %”가 예상값으로 채워지니 화면과 다르면 직접 고쳐 주세요.
-          상대가 맞은 직후 자뭉열매를 먹었으면 그 줄에서 “자뭉열매 발동”을 켜세요(화면 %에 회복이 섞여 있어요). 내가 받은 데미지는 맞은 직후 내 HP 수치를 넣어 주세요(먹다남은음식·독 같은 턴 종료 효과가
-          섞이면 맞지 않아요){myMaxHp !== null && hasReceivedRows ? ` — 내 최대 HP는 ${myMaxHp}예요` : ""}. 내가 입힌 데미지의 고정 데미지 기술은 아직 지원하지 않아요.
+          내가 쓰러뜨렸으면 맞은 뒤 %에 0을 넣고, 다단히트는 몇 타째에 쓰러졌는지 골라 주세요. 나이트헤드·지구던지기 같은 고정 데미지(50)는 방어를 읽지 않고 HP 후보만 좁혀요. 상대가 맞은 직후 자뭉열매를 먹었으면 그 줄에서 “자뭉열매 발동”을 켜세요(화면 %에 회복이 섞여 있어요). 내가 받은 데미지는 맞은 직후 내 HP 수치를 넣어 주세요(먹다남은음식·독 같은 턴 종료 효과가
+          섞이면 맞지 않아요){myMaxHp !== null && hasReceivedRows ? ` — 내 최대 HP는 ${myMaxHp}예요` : ""}.
           선후공은 우선도가 같은 기술끼리 누가 먼저 움직였는지만 넣고, 그 턴의 조건(트릭룸·순풍·마비·상대 랭크 등)은 줄의 “조건”에서 골라 주세요. 새 줄은 직전 선후공 줄의 조건을 이어받아요.
         </p>
       </section>
