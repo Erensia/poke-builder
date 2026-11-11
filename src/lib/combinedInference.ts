@@ -1,3 +1,4 @@
+import type { Move } from "../types/move";
 import { NATURES } from "./data";
 import { MAX_ABILITY_POINTS_TOTAL } from "./statCalculator";
 import { createLikelihoodCache, inferDefense, type InferenceInput, type InferenceResult, type NatureGroup } from "./defenseInference";
@@ -97,11 +98,37 @@ function allowedNatures(r: Results): Set<string> {
   return sets.reduce((acc, s) => intersect(acc, s));
 }
 
-export function inferCombined(
+/**
+ * 상대 스피드·공격을 몰라 후보 전체로 평균내는 기술(자이로볼·일렉트릭볼·속임수 방어, 8.2 I1)이 있으면 같은 상대의 스피드·공격 역산 결과 범위를
+ * 평균의 사전 범위로 넘긴다. 결합 입력이 결과를 다시 입력으로 쓰지 않도록 되풀이 전에 한 번만 앞서 계산한다(`8.2-I1-평균방식설계.md` §4).
+ * 관련 기술이 없으면 입력을 그대로 돌려줘 기존 경로와 같다.
+ */
+function withPriors(
   defenseInput: InferenceInput | null,
   attackInput: AttackInferenceInput | null,
+  speedInput: SpeedInferenceInput | null,
+): [InferenceInput | null, AttackInferenceInput | null] {
+  const speedPower = (m: Move) => !!(m.gyroBallPower || m.electroBallPower);
+  const needsSpeed =
+    (!!defenseInput && defenseInput.opponentSpeed === undefined && defenseInput.observations.some((o) => speedPower(o.move))) ||
+    (!!attackInput && attackInput.opponentSpeed === undefined && attackInput.observations.some((o) => speedPower(o.move)));
+  const needsAttack = !!defenseInput && defenseInput.opponentAttack === undefined && defenseInput.observations.some((o) => o.move.usesTargetAttackStat);
+  if (!needsSpeed && !needsAttack) return [defenseInput, attackInput];
+  // 앞선 역산이 계산 불가·모순이면 범위를 쓰지 않는다(전체 후보 평균)
+  const speed = needsSpeed && speedInput ? inferSpeed(speedInput, false) : null;
+  const opponentSpeedRange = speed?.status === "ok" && speed.realSpe ? speed.realSpe : undefined;
+  const attack = attackInput ? { ...attackInput, opponentSpeedRange } : null;
+  const attackResult = needsAttack && attack ? inferAttack(attack, false) : null;
+  const opponentAttackRange = attackResult?.status === "ok" && attackResult.realAtk ? attackResult.realAtk : undefined;
+  return [defenseInput ? { ...defenseInput, opponentSpeedRange, opponentAttackRange } : null, attack];
+}
+
+export function inferCombined(
+  rawDefenseInput: InferenceInput | null,
+  rawAttackInput: AttackInferenceInput | null,
   speedInput: SpeedInferenceInput | null = null,
 ): CombinedInference {
+  const [defenseInput, attackInput] = withPriors(rawDefenseInput, rawAttackInput, speedInput);
   // 되풀이마다 성격·포인트 합 제한만 바뀌고 후보의 가능도는 그대로라 방어 쪽은 한 번 계산한 값을 재사용한다(3.6 I1-a)
   const defenseCache = createLikelihoodCache();
   const first: Results = {

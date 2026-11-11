@@ -57,7 +57,7 @@ export function restoreInference(raw: unknown) {
         kind: r.kind as RowKind,
         moveId: idOf(r.moveId, getMove) || null,
         critical: r.critical === true,
-        hits: typeof r.hits === "string" && /^d{1,2}$/.test(r.hits) ? r.hits : "",
+        hits: typeof r.hits === "string" && /^\d{1,2}$/.test(r.hits) ? r.hits : "",
         before: str(r.before),
         after: str(r.after),
         endTurn: (Array.isArray(r.endTurn) ? r.endTurn : []).filter((id): id is string => typeof id === "string" && (TOXIC_ID.test(id) || END_TURN_EFFECTS.some((e) => e.id === id))),
@@ -79,5 +79,7 @@ export function restoreInference(raw: unknown) {
     atkStage: stage(d.atkStage),
     spaStage: stage(d.spaStage),
     oppBurned: d.oppBurned === true,
+    oppSpeed: str(d.oppSpeed),
+    oppAttack: str(d.oppAttack),
   };
 }

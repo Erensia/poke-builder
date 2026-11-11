@@ -63,6 +63,11 @@ export function parseHp(text: string): number | null {
   return /^\d{1,4}$/.test(text.trim()) ? Number(text) : null;
 }
 
+/** 입력 범위의 가운데 정수(채우기 버튼용) — 범위가 없으면 빈 문자열 */
+export function midOf(r: { min: number; max: number } | null | undefined): string {
+  return r ? String(Math.round((r.min + r.max) / 2)) : "";
+}
+
 export function parsePercent(text: string): number | null {
   if (!/^\d{1,3}$/.test(text.trim())) return null;
   const v = Number(text);

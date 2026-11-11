@@ -7,7 +7,7 @@ import fs from 'node:fs'
 
 const root = path.dirname(fileURLToPath(import.meta.url))
 
-// 6.5 P1 — 서비스 워커(dist/sw.js)를 빌드 때 만든다. 설계: docs/00_기획문서/02_backlog/06_ver.6.0/6.5-P1-PWA-설계.md
+// 6.5 P1 — 서비스 워커(dist/sw.js)를 빌드 때 만든다. 설계: docs/00_기획문서/02_backlog/06_ver.6.0/05_ver.6.5/6.5-P1-PWA-설계.md
 // 프리캐시 목록 = 번들 파일(해시 포함, index.html은 '/') + public의 아이콘·매니페스트·랭크 이미지. 스프라이트(public/sprites)는 설치를 지연시키지 않도록 프리캐시에서 빼고,
 // 목록만 서비스 워커에 넘겨 설치 뒤 백그라운드로 미리 받는다(페이지가 idle일 때 메시지로 시작).
 // off이면(VITE_PWA=off) 목록 대신 "캐시를 지우고 스스로 해제하는" 자기 파괴 서비스 워커를 내서, 재배포 한 번으로 모든 사용자에게서 제거한다.

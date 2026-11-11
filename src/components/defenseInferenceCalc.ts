@@ -31,6 +31,8 @@ export function buildDefenseInput(p: {
   spdStage: number;
   tolerant: boolean;
   viewMegaForms: string[];
+  opponentSpeed?: number;
+  opponentAttack?: number;
 }): InferenceInput | null {
   const { attacker, defender } = p;
   if (!attacker.pokemonId || !defender.pokemonId || p.complete.length === 0) return null;
@@ -53,6 +55,8 @@ export function buildDefenseInput(p: {
     screen: p.screen || undefined,
     tolerance: p.tolerant ? 1 : 0,
     viewMegaForms: p.viewMegaForms,
+    opponentSpeed: p.opponentSpeed,
+    opponentAttack: p.opponentAttack,
   };
 }
 
@@ -71,6 +75,7 @@ export function buildAttackInput(p: {
   field: Field;
   myScreen: Slot["screen"] | "";
   viewMegaForms: string[];
+  opponentSpeed?: number;
 }): AttackInferenceInput | null {
   const { attacker, defender } = p;
   if (!attacker.pokemonId || !defender.pokemonId || p.completeReceived.length === 0) return null;
@@ -91,6 +96,7 @@ export function buildAttackInput(p: {
     field: p.field ?? undefined,
     screen: p.myScreen || undefined,
     viewMegaForms: p.viewMegaForms,
+    opponentSpeed: p.opponentSpeed,
   };
 }
 

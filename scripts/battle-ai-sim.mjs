@@ -35,6 +35,7 @@
  * 환경변수 PROTECT=1: 방어류를 배울 수 있으면 4번째 기술을 방어류로 바꾼다. DIAG=protect면 방어류를 고른 순간을 덤프.
  * 환경변수 STATUS=1: AI가 점수 매기는 변화기를 배울 수 있으면 기술 하나를 그걸로 바꾼다(변화기 판단 검증용).
  *     diag 모드에 DIAG=status를 주면 그 변화기를 고른 순간을 덤프한다.
+ * 환경변수 RISK=0~1(h2h, 8.2 H1): 판마다 시드에서 뽑는 riskAversion을 이 값으로 고정한다(학습 단계 강도를 위험 성향과 분리해 잰다).
  * 환경변수 LEARN=1(greedy·style, ver.2.0 1-C): AI 쪽이 상대가 실제로 고른 행동을 대전 간 누적 학습(한 프로세스 안에서 이어짐) —
  *     상대 모델(opponentModel)이 켜진 파라미터에서만 보정이 걸린다. 결과에 learned(누적 대전 수·교체/변화기 보정 배율).
  * 환경변수 SEED_FROM=<n>(greedy·style·h2h): 시드 n부터 [판 수]개만 돈다(기본 1) — 벤치를 조각내 병렬로 돌린 뒤 합산(scripts/bench.mjs).
@@ -571,7 +572,7 @@ try {
     };
     const res = { aWins: 0, bWins: 0, other: 0 };
     for (let s = seedFrom; s <= seedTo; s++) {
-      const risk = mulberry32(s)();
+      const risk = process.env.RISK ? Number(process.env.RISK) : mulberry32(s)();
       for (const aSide of ["a", "b"]) {
         const bSide = aSide === "a" ? "b" : "a";
         const initial = selectedStart(s, aSide, bSide);
@@ -587,7 +588,7 @@ try {
       }
     }
     const search = searchStats.decisions > 0 ? { search: searchStats } : {};
-    console.log(JSON.stringify({ battles: battles * 2, A: { ...decisionParams }, B: { ...opponentParams }, res, ...search }));
+    console.log(JSON.stringify({ battles: battles * 2, A: { ...decisionParams }, B: { ...opponentParams }, res, ...(learner && { learned: learner.summary() }), ...search }));
   } else if (mode === "selectvs") {
     // 3선출 방식 A 대 B(ver.2.1 A-0). 같은 파티 P·Q를 두고 (A→P·B→Q) × (P가 a편·b편) 조합 4판 — 파티 강약과 편 차이를 상쇄한다.
     // 선출의 난수는 시드에서 파생시켜(조각 병렬 실행 합 = 한 번에 돌린 결과) 재현 가능하다.

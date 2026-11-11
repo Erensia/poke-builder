@@ -1,7 +1,7 @@
 import { cleanPartyPresets, cleanSlotPresets } from "./backup";
 import { applyRankResult, rankOf, type RankResult, type RankState } from "./battleRank";
 import { EMPTY_RANK_SAVE, HISTORY_LIMIT, isRankSave, type RankHistoryEntry, type RankSave } from "./battleRankSave";
-import { EMPTY_FRONTIER, isFrontierSave, type FrontierSave } from "./battleSeries";
+import { EMPTY_FRONTIER, FRONTIER_GAMES_LIMIT, isFrontierSave, type FrontierGame, type FrontierSave } from "./battleSeries";
 import { emptyOpponentMemory, isOpponentMemory } from "./battle/ai/opponentMemory";
 import { cleanMySamples } from "./mySamples";
 import type { PresetListName, SyncBase } from "./storage";
@@ -39,7 +39,7 @@ function objectDoc(name: PresetListName, raw: unknown): string {
     return JSON.stringify({ version: 1, learningEnabled: v.learningEnabled, memory: v.memory });
   }
   if (!isFrontierSave(raw) || !Object.values(raw.samples).every((r) => Number.isInteger(r?.wins) && Number.isInteger(r?.losses))) throw new Error("bad-remote");
-  return JSON.stringify({ streak: raw.streak, best: raw.best, samples: raw.samples, pendingId: null, queue: raw.queue ?? [], includeMine: raw.includeMine ?? false });
+  return JSON.stringify({ streak: raw.streak, best: raw.best, samples: raw.samples, pendingId: null, queue: raw.queue ?? [], includeMine: raw.includeMine ?? false, games: raw.games ?? [], pendingAt: null });
 }
 
 export function canonical(name: PresetListName, raw: unknown): { json: string; items: unknown[] } {
@@ -107,13 +107,27 @@ export function mergeRank(baseJson: string | null, localJson: string, remoteJson
 /** q가 base의 뒷부분인지 — 대기열은 앞에서만 빠지며 줄어든다(다 비면 새로 섞어 채우므로 그때는 뒷부분이 아니다) */
 const isTail = (base: string[], q: string[]) => q.length <= base.length && q.every((id, i) => id === base[base.length - q.length + i]);
 
+const frontierKey = (g: FrontierGame) => `${g.at}|${g.opponentId}|${g.won}`;
+const streakAfter = (start: number, games: FrontierGame[]) => games.reduce((s, g) => (g.won ? s + 1 : 0), start);
+
 /**
- * 두 기기에서 따로 플레이한 프런티어 기록을 합친다(6.4 F1). 프런티어 기록에는 판 시각이 없어 랭크처럼 판을 다시 재생할 수는 없고,
- * 순서에 달리지 않은 것만 합친다. 합칠 수 없으면 null이고 그때는 사용자가 고른다.
+ * 기준 이후 한 기기가 치른 판을 오래된 순으로(8.2 I2). 기준에서 그 판들만 이어 붙여 그 기기의 현재 연승이 재현되지 않거나
+ * (기록 초기화 등 다른 변화가 낌) 상한까지 전부 새 판이면(잘렸을 수 있다) null.
+ */
+function frontierGamesSince(base: FrontierSave, side: FrontierSave): FrontierGame[] | null {
+  const had = new Set((base.games ?? []).map(frontierKey));
+  const fresh = (side.games ?? []).filter((g) => !had.has(frontierKey(g))).reverse();
+  if (fresh.length >= FRONTIER_GAMES_LIMIT) return null;
+  return streakAfter(base.streak, fresh) === side.streak ? fresh : null;
+}
+
+/**
+ * 두 기기에서 따로 플레이한 프런티어 기록을 합친다(6.4 F1, 8.2 I2). 합칠 수 없으면 null이고 그때는 사용자가 고른다.
+ *  - 현재 연승: 기준 이후 양쪽의 판을 시각 순으로 다시 계산한다(8.2 I2). 판 기록이 없거나 재현되지 않으면 둘 중 큰 값으로 근사한다(8.1 이전 방식).
  *  - 샘플별 전적: 마지막으로 맞춘 저장본(baseJson) 대비 각 기기의 증가분을 더한다. 어느 쪽이든 줄었으면(기록 초기화 등) 증가분으로 설명되지 않아 null.
  *  - 대기열: 각 기기의 대기열이 저장본의 뒷부분이어야 하고(아니면 새로 섞였다는 뜻이라 null), 더 짧은 쪽을 쓴다(양쪽이 만난 상대는 둘 다 뺀다).
  *  - 최고 연승은 큰 값, 추가 설정(includeMine)은 저장본에서 바뀐 쪽, 진행 중 표시(pendingId)는 항상 null.
- * ponytail: 현재 연승은 판 순서에 달려 있는데 판 시각이 없어 둘 중 큰 값을 쓴다(실제와 다를 수 있다). 정확히 하려면 기록에 판 시각을 넣어야 한다(저장 형식·규칙 변경).
+ * shortcut: 구형 클라이언트가 저장해 판 기록이 없으면 연승이 큰 값으로 근사된다, 두 기기가 모두 새 버전이 되면 정확하다.
  */
 export function mergeFrontier(baseJson: string | null, localJson: string, remoteJson: string): string | null {
   if (!baseJson) return null;
@@ -130,7 +144,14 @@ export function mergeFrontier(baseJson: string | null, localJson: string, remote
     samples[id] = { wins: l.wins + r.wins - b.wins, losses: l.losses + r.losses - b.losses };
   }
   if (!isTail(B.queue, L.queue) || !isTail(B.queue, R.queue)) return null;
-  const streak = Math.max(L.streak, R.streak);
+  const gl = frontierGamesSince(B, L);
+  const gr = frontierGamesSince(B, R);
+  const seen = new Set<string>();
+  const fresh = gl && gr ? [...gl, ...gr].filter((g) => !seen.has(frontierKey(g)) && seen.add(frontierKey(g))).sort((a, b) => a.at - b.at) : null;
+  const streak = fresh ? streakAfter(B.streak, fresh) : Math.max(L.streak, R.streak);
+  const games = [...new Map([...(L.games ?? []), ...(R.games ?? []), ...(B.games ?? [])].map((g) => [frontierKey(g), g])).values()]
+    .sort((a, b) => b.at - a.at)
+    .slice(0, FRONTIER_GAMES_LIMIT);
   return canonical("battleFrontier", {
     streak,
     best: Math.max(B.best, L.best, R.best, streak),
@@ -138,6 +159,8 @@ export function mergeFrontier(baseJson: string | null, localJson: string, remote
     pendingId: null,
     queue: L.queue.length <= R.queue.length ? L.queue : R.queue,
     includeMine: L.includeMine !== B.includeMine ? L.includeMine : R.includeMine,
+    games,
+    pendingAt: null,
   }).json;
 }
 
