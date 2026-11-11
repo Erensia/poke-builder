@@ -93,6 +93,10 @@ export interface InferenceInput {
   screen?: "reflect" | "lightScreen" | "auroraVeil";
   /** 화면 % 판정 여유(±%). 0 = 정확히 일치, 1 = ±1% 허용 */
   tolerance?: number;
+  /** 상대 스피드 실수치(랭크·도구 반영 전, 8.2 I1) — 자이로볼·일렉트릭볼은 위력이 양측 스피드로 정해져 이 값이 있어야 역산한다 */
+  opponentSpeed?: number;
+  /** 상대 공격 실수치(랭크 반영 전, 8.2 I1) — 속임수는 상대(맞는 쪽)의 공격 스탯으로 데미지가 정해져 이 값이 있어야 역산한다 */
+  opponentAttack?: number;
   /** 후보로 볼 성격 id 목록 — 공격 역산이 이미 걸러낸 성격을 넘겨 같은 상대의 성격을 공유한다(3.1 C2-b). 생략하면 전부 */
   natureIds?: readonly string[];
   /** HP+방어+특방 포인트 합의 상한 — 공격·특공 쪽에 이미 쓴 최소 포인트를 뺀 값(3.1 C2-b 포인트 예산). 생략하면 66 */
@@ -271,10 +275,12 @@ export function multiHitError(move: Move, hits: number | undefined, fainted = fa
 }
 
 /** 고정 데미지·변화기 등은 정수 데미지 공식이 맞지 않아 역산에서 뺀다 */
-export function inferenceUnsupportedReason(move: Move): string | null {
+export function inferenceUnsupportedReason(move: Move, known: { speed?: boolean; attack?: boolean } = {}): string | null {
   if (move.category === "status" || move.category === null) return "데미지를 주지 않는 기술";
   if (move.fixedDamage !== undefined) return "고정 데미지 기술은 역산할 수 없어요";
-  if (move.usesTargetAttackStat) return "상대의 공격 스탯을 쓰는 기술은 아직 지원하지 않아요";
+  // 8.2 I1: 상대 실수치를 입력받았으면 평가기에 덮어써 계산한다 (known은 입력 유무)
+  if (move.usesTargetAttackStat && !known.attack) return "속임수는 상대 공격 실수치를 입력해야 역산할 수 있어요";
+  if ((move.gyroBallPower || move.electroBallPower) && !known.speed) return "스피드로 위력이 정해지는 기술은 상대 스피드 실수치를 입력해야 역산할 수 있어요";
   // 셸암즈: 물리/특수가 역산 대상 능력(상대 방어·공격)에 따라 정해져 관측만으로 분류를 고정할 수 없다
   if (move.dynamicCategoryByHigherDamage) return "물리/특수가 능력치에 따라 바뀌는 기술은 아직 지원하지 않아요";
   return null;
@@ -388,7 +394,10 @@ export function endTurnSixteenths(ids: readonly string[] | undefined): number[] 
 
 /** 관측마다 evaluateSlotMatchup으로 정수 데미지 공식 조각을 구한다. 실패하면 사유 문자열. */
 function prepareObservations(input: InferenceInput): { prepared: PreparedObservation[]; errors: (string | null)[] } {
-  const { attacker, defender, observations, attackerStages, attackerStatus, defenderStages, weather, field, screen } = input;
+  const { attacker, defender, observations, attackerStages, attackerStatus, defenderStages, weather, field, screen, opponentSpeed, opponentAttack } = input;
+  const known = { speed: opponentSpeed !== undefined, attack: opponentAttack !== undefined };
+  // undefined 키가 있으면 평가기의 스프레드가 실수치를 지우므로 입력한 것만 담는다
+  const defenderRealStatsOverride = { ...(known.speed && { spe: opponentSpeed }), ...(known.attack && { atk: opponentAttack }) };
   const pokemon = getPokemon(defender.pokemonId);
   // 메가 전·후를 섞은 관측이면 메가스톤 보유 → 반감 열매 가정을 모든 관측에서 끈다
   const hasMega = observations.some((o) => o.megaForm);
@@ -403,7 +412,7 @@ function prepareObservations(input: InferenceInput): { prepared: PreparedObserva
   let itemConsumed = false;
   let berryEaten = false;
   observations.forEach((obs, i) => {
-    const unsupported = inferenceUnsupportedReason(obs.move);
+    const unsupported = inferenceUnsupportedReason(obs.move, known);
     if (unsupported) {
       errors.push(unsupported);
       return;
@@ -436,6 +445,7 @@ function prepareObservations(input: InferenceInput): { prepared: PreparedObserva
       return;
     }
     const res = evaluateSlotMatchup(attacker, obs.move, slotAtHit, {
+      defenderRealStatsOverride,
       multiHitCount: multiHitRange(obs.move) ? (obs.hits ?? multiHitRange(obs.move)!.min) : undefined,
       attackerStages,
       defenderStages,

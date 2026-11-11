@@ -101,6 +101,8 @@ export interface AttackInferenceInput {
   minPointsSum?: number;
   /** 다른 쪽 관측(방어·스피드)에 쓰인 메가폼 이름 — 이 쪽에 메가 태그가 없어도 메가 전·후를 나란히 보이려고 받는다(3.1 L1-b) */
   viewMegaForms?: readonly string[];
+  /** 상대 스피드 실수치(랭크·도구 반영 전, 8.2 I1) — 자이로볼·일렉트릭볼은 위력이 양측 스피드로 정해져 이 값이 있어야 역산한다 */
+  opponentSpeed?: number;
 }
 
 export interface AttackInferenceResult {
@@ -155,15 +157,15 @@ interface PreparedObservation {
 const attackKeyOf = (move: Move): AttackKey => (move.category === "special" ? "spa" : "atk");
 
 /** 스피드·HP 등 상대의 다른 스탯으로 위력이 정해져 공격 포인트만으로는 계산할 수 없는 기술을 거른다 */
-export function attackInferenceUnsupportedReason(move: Move): string | null {
+export function attackInferenceUnsupportedReason(move: Move, known: { speed?: boolean } = {}): string | null {
   // 고정 데미지(8.2 I1)는 공격 스탯과 무관해 후보를 거르지 못하지만, 관측이 맞는지(고정 값과 같은지)는 확인한다
   if (move.fixedDamage !== undefined) return null;
   // 속임수(8.2 I1): 맞는 쪽(내) 공격 스탯으로 데미지가 정해져 상대 공격은 거르지 못한다 — 관측이 맞는지만 본다
   if (move.usesTargetAttackStat) return move.power === null ? "위력이 상황에 따라 달라지는 기술은 아직 지원하지 않아요" : null;
-  const base = inferenceUnsupportedReason(move);
+  const base = inferenceUnsupportedReason(move, known);
   if (base) return base;
-  if (move.gyroBallPower || move.electroBallPower) return "스피드로 위력이 정해지는 기술은 아직 지원하지 않아요";
-  if (move.power === null) return "위력이 상황에 따라 달라지는 기술은 아직 지원하지 않아요";
+  // 자이로볼·일렉트릭볼은 위력이 null이지만 상대 스피드를 받았으면 평가기가 위력을 낸다(8.2 I1)
+  if (move.power === null && !move.gyroBallPower && !move.electroBallPower) return "위력이 상황에 따라 달라지는 기술은 아직 지원하지 않아요";
   return null;
 }
 
@@ -190,7 +192,8 @@ function emptyResult(status: AttackInferenceResult["status"], n: number): Attack
 
 /** 관측마다 내 HP·상성·특성 상태를 확인하고, 후보로 데미지 난수를 내는 함수를 만든다. 실패하면 사유 문자열 */
 function prepareObservations(input: AttackInferenceInput): { prepared: PreparedObservation[]; errors: (string | null)[] } {
-  const { attacker, defender, observations, attackerStages, attackerStatus, defenderStages, weather, field, screen } = input;
+  const { attacker, defender, observations, attackerStages, attackerStatus, defenderStages, weather, field, screen, opponentSpeed } = input;
+  const known = { speed: opponentSpeed !== undefined };
   const prepared: PreparedObservation[] = [];
   const errors: (string | null)[] = [];
   const myPokemon = getPokemon(defender.pokemonId);
@@ -202,7 +205,7 @@ function prepareObservations(input: AttackInferenceInput): { prepared: PreparedO
   let itemConsumed = false;
 
   observations.forEach((obs) => {
-    const unsupported = attackInferenceUnsupportedReason(obs.move);
+    const unsupported = attackInferenceUnsupportedReason(obs.move, known);
     if (unsupported) {
       errors.push(unsupported);
       return;
@@ -245,6 +248,8 @@ function prepareObservations(input: AttackInferenceInput): { prepared: PreparedO
       return;
     }
     const options = {
+      // undefined 키가 있으면 평가기의 스프레드가 스피드를 지우므로 입력했을 때만 담는다
+      attackerRealStatsOverride: known.speed ? { spe: opponentSpeed } : undefined,
       multiHitCount: multiHitRange(obs.move) ? (obs.hits ?? multiHitRange(obs.move)!.min) : undefined,
       attackerStages,
       defenderStages,

@@ -31,6 +31,8 @@ export function buildDefenseInput(p: {
   spdStage: number;
   tolerant: boolean;
   viewMegaForms: string[];
+  opponentSpeed?: number;
+  opponentAttack?: number;
 }): InferenceInput | null {
   const { attacker, defender } = p;
   if (!attacker.pokemonId || !defender.pokemonId || p.complete.length === 0) return null;
@@ -53,6 +55,8 @@ export function buildDefenseInput(p: {
     screen: p.screen || undefined,
     tolerance: p.tolerant ? 1 : 0,
     viewMegaForms: p.viewMegaForms,
+    opponentSpeed: p.opponentSpeed,
+    opponentAttack: p.opponentAttack,
   };
 }
 
@@ -71,6 +75,7 @@ export function buildAttackInput(p: {
   field: Field;
   myScreen: Slot["screen"] | "";
   viewMegaForms: string[];
+  opponentSpeed?: number;
 }): AttackInferenceInput | null {
   const { attacker, defender } = p;
   if (!attacker.pokemonId || !defender.pokemonId || p.completeReceived.length === 0) return null;
@@ -91,6 +96,7 @@ export function buildAttackInput(p: {
     field: p.field ?? undefined,
     screen: p.myScreen || undefined,
     viewMegaForms: p.viewMegaForms,
+    opponentSpeed: p.opponentSpeed,
   };
 }
 
@@ -147,6 +153,8 @@ interface RowMessageCtx {
   speedResult: Combined["speed"];
   speedPending: boolean;
   myMaxHp: number | null;
+  /** 상대 스피드·공격 실수치를 입력했는가 (8.2 I1) */
+  known: { speed: boolean; attack: boolean };
 }
 
 export function rowMessageOf(row: ObservationRow, c: RowMessageCtx): RowMessage {
@@ -154,7 +162,7 @@ export function rowMessageOf(row: ObservationRow, c: RowMessageCtx): RowMessage 
   if (row.kind === "received") return receivedRowMessage(row, move, c);
   if (row.kind === "speed") return speedRowMessage(row, c);
   if (move) {
-    const reason = inferenceUnsupportedReason(move);
+    const reason = inferenceUnsupportedReason(move, c.known);
     if (reason) return { text: reason, kind: "error" };
   }
   const before = parsePercent(row.before);
@@ -185,7 +193,7 @@ function speedRowMessage(row: ObservationRow, c: RowMessageCtx): RowMessage {
 
 function receivedRowMessage(row: ObservationRow, move: ReturnType<typeof getMove>, c: RowMessageCtx): RowMessage {
   if (move) {
-    const reason = attackInferenceUnsupportedReason(move);
+    const reason = attackInferenceUnsupportedReason(move, c.known);
     if (reason) return { text: reason, kind: "error" };
   }
   const before = parseHp(row.before);

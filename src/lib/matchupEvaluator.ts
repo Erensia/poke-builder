@@ -49,6 +49,9 @@ function offenseTypes(types: PokemonType[], ability: { changesUserTypeToMoveType
 }
 
 export interface SlotMatchupOptions {
+  /** 8.2 I1 — 역산에서 상대가 모르는 실수치(자이로볼·일렉트릭볼의 스피드, 속임수의 공격)를 입력값으로 덮어쓴다. 랭크·도구 배율은 그 위에 지금처럼 곱한다 */
+  attackerRealStatsOverride?: Partial<BaseStats>;
+  defenderRealStatsOverride?: Partial<BaseStats>;
   /** 2.2 F1 — 리베로·변환자재 자속보정: 공격 쪽 타입을 이 기술의 타입으로 바꿔 자속(적응력이면 2배)을 판정. 기본 끔 */
   attackerTypeToMoveType?: boolean;
   /** 이번 턴 전까지 누적된 공격측 랭크 상태. 기본은 전부 0랭크 */
@@ -320,6 +323,9 @@ function resolveFormsAndAbilities(c: SlotMatchupCtx) {
 
   c.attackerRealStats = c.attackerRuntime?.realStats ?? computeRealStats(c.attackerForm.baseStats, c.attackerSlot.points, c.attackerSlot.nature);
   c.defenderRealStats = c.defenderRuntime?.realStats ?? computeRealStats(c.defenderForm.baseStats, c.defenderSlot.points, c.defenderSlot.nature);
+  // 8.2 I1: 역산 입력 덮어쓰기 — 없으면 객체를 복사하지 않는다(AI가 반복 호출하는 경로)
+  if (c.options.attackerRealStatsOverride) c.attackerRealStats = { ...c.attackerRealStats, ...c.options.attackerRealStatsOverride };
+  if (c.options.defenderRealStatsOverride) c.defenderRealStats = { ...c.defenderRealStats, ...c.options.defenderRealStatsOverride };
 
 
   // 지닌 도구: 직접 지정한 배율이 없으면 실제 장착한 도구에서 자동으로 구한다. defenderItem은
