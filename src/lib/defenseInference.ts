@@ -10,6 +10,7 @@ import { getEffectiveForm } from "./pokemonForm";
 import { burnDamageMultiplier, ignoresBurnAttackPenalty, statusedAttackBoost } from "./statusConditions";
 import { damageRollSet, type RollSet } from "./damageFormula";
 import { evaluateSlotMatchup, type EvaluatorSlot, type DamageParts } from "./matchupEvaluator";
+import { getEffectiveness } from "./typeEffectiveness";
 import { EMPTY_ABILITY_POINTS } from "../types/party";
 import { MAX_ABILITY_POINTS_PER_STAT, MAX_ABILITY_POINTS_TOTAL } from "./statCalculator";
 import type { BaseStats } from "../types/stats";
@@ -281,7 +282,6 @@ export function multiHitError(move: Move, hits: number | undefined, fainted = fa
 /** 고정 데미지·변화기 등은 정수 데미지 공식이 맞지 않아 역산에서 뺀다 */
 export function inferenceUnsupportedReason(move: Move): string | null {
   if (move.category === "status" || move.category === null) return "데미지를 주지 않는 기술";
-  if (move.fixedDamage !== undefined) return "고정 데미지 기술은 역산할 수 없어요";
   // 셸암즈: 물리/특수가 역산 대상 능력(상대 방어·공격)에 따라 정해져 관측만으로 분류를 고정할 수 없다
   if (move.dynamicCategoryByHigherDamage) return "물리/특수가 능력치에 따라 바뀌는 기술은 아직 지원하지 않아요";
   return null;
@@ -374,7 +374,14 @@ function emptyResult(status: InferenceResult["status"], n: number): InferenceRes
 }
 
 interface PreparedObservation {
-  parts: DamageParts;
+  /** 정수 데미지 공식 조각. 고정 데미지 관측은 방어 스탯을 읽지 않아 null */
+  parts: DamageParts | null;
+  /** 이 관측이 읽는 방어 스탯. 고정 데미지는 null — 후보의 방어·특방과 무관하고 HP만 거른다(8.2 I1) */
+  key: "def" | "spd" | null;
+  /** 고정 데미지 기술의 데미지(나이트헤드·지구던지기 50) */
+  fixed?: number;
+  /** 쓰러진 다단히트(8.2 I1): 마지막 한 타를 뺀 (타수-1)타의 조각. "직전 타까지는 안 쓰러졌다"는 조건을 건다 */
+  prevParts?: DamageParts;
   before: number;
   after: number;
   /** 턴 종료 효과의 16분율(부호 있음) 목록 */
@@ -441,9 +448,21 @@ function prepareObservations(input: InferenceInput): { prepared: PreparedObserva
       return;
     }
     if (berry) berryEaten = true;
-    const hitsError = multiHitError(obs.move, obs.hits);
+    const hitsError = multiHitError(obs.move, obs.hits, obs.after === 0);
     if (hitsError) {
       errors.push(hitsError);
+      return;
+    }
+    if (obs.move.fixedDamage !== undefined) {
+      // 고정 데미지(8.2 I1): 평가기는 위력이 없어 null을 주므로 타입 면역만 직접 본다(배짱 같은 면역 무시 특성은 예외)
+      const bypass = obs.move.type && attacker.ability && getAbility(attacker.ability)?.bypassesImmunityForTypes?.includes(obs.move.type);
+      if (obs.move.type && !bypass && getEffectiveness(obs.move.type, getEffectiveForm(pokemon!, slotAtHit).types) === 0) {
+        errors.push("상대에게 효과가 없는 기술이에요 (타입 면역)");
+        return;
+      }
+      errors.push(null);
+      const { baseStats } = getEffectiveForm(pokemon!, slotAtHit);
+      prepared.push({ parts: null, key: null, fixed: obs.move.fixedDamage, before: obs.before, after: obs.after, endTurn: endTurnSixteenths(endTurn), berry, baseDef: baseStats.def, baseSpd: baseStats.spd });
       return;
     }
     const evalOptions = {
@@ -473,7 +492,8 @@ function prepareObservations(input: InferenceInput): { prepared: PreparedObserva
     const { baseStats } = getEffectiveForm(pokemon!, slotAtHit);
     // 모르는 상대 실수치(8.2 I1): 자이로볼·일렉트릭볼은 스피드, 속임수는 공격. 직접 입력이 없으면 후보 전체로 데미지 조각을 만든다
     const latent = obs.move.usesTargetAttackStat && opponentAttack === undefined ? "atk" : (obs.move.gyroBallPower || obs.move.electroBallPower) && opponentSpeed === undefined ? "spe" : null;
-    const evaluate = (override: Partial<BaseStats>) => evaluateSlotMatchup(attacker, obs.move, slotAtHit, { ...evalOptions, defenderRealStatsOverride: { ...fixedOverride, ...override } });
+    const evaluate = (override: Partial<BaseStats>, multiHitCount = evalOptions.multiHitCount) =>
+      evaluateSlotMatchup(attacker, obs.move, slotAtHit, { ...evalOptions, multiHitCount, defenderRealStatsOverride: { ...fixedOverride, ...override } });
     const res = evaluate(latent ? { [latent]: statCandidates(baseStats[latent], latent === "spe" ? input.opponentSpeedRange : input.opponentAttackRange)[0].value } : {});
     if (!res || !res.damageParts) {
       errors.push("이 기술로는 데미지를 계산할 수 없어요");
@@ -499,7 +519,10 @@ function prepareObservations(input: InferenceInput): { prepared: PreparedObserva
       }
       alts = [...byKey.values()];
     }
-    prepared.push({ parts: res.damageParts, before: obs.before, after: obs.after, endTurn: endTurnSixteenths(endTurn), berry, baseDef: baseStats.def, baseSpd: baseStats.spd, alts });
+    // 쓰러진 다단히트: n타째에 쓰러졌으면 n-1타 합계는 HP 미만이어야 한다. 1타째면 조건이 없다
+    const nHits = evalOptions.multiHitCount;
+    const prevParts = obs.after === 0 && multiHitRange(obs.move) && nHits !== undefined && nHits >= 2 ? evaluate({}, nHits - 1)?.damageParts ?? undefined : undefined;
+    prepared.push({ parts: res.damageParts, key: res.damageParts.defenseKey, before: obs.before, after: obs.after, endTurn: endTurnSixteenths(endTurn), berry, baseDef: baseStats.def, baseSpd: baseStats.spd, alts, prevParts });
   });
   return { prepared, errors };
 }
@@ -538,7 +561,7 @@ function eatSitrus(hpHit: number, maxHp: number, mult: number): number {
  * 이어서 오는 관측은 "맞기 전 %"가 직전 결과(+ 턴 종료 효과)와 맞는 HP만 남긴다. 효과를 고르지 않으면 관측 사이 회복 없음.
  * HP별 가중치를 배열(curW)에 두고 살아 있는 HP를 처음 들어온 순서대로 목록(curList)에 둔다 — Map과 같은 순서로 더해 결과가 같다.
  */
-function candidateLikelihood(maxHp: number, rolls: RollSet[], obs: PreparedObservation[], tol: number): number {
+function candidateLikelihood(maxHp: number, rolls: RollSet[], prevs: (RollSet | undefined)[], obs: PreparedObservation[], tol: number): number {
   const pct = percentTable(maxHp);
   let n = 0;
   for (let h = 1; h <= maxHp; h++) {
@@ -555,6 +578,26 @@ function candidateLikelihood(maxHp: number, rolls: RollSet[], obs: PreparedObser
       }
       n = kept;
       if (n === 0) return 0;
+    }
+    const prev = prevs[i];
+    if (prev) {
+      // 쓰러진 다단히트(8.2 I1): 후보 HP h마다 "n타 합계 ≥ h"에서 "n-1타 합계 ≥ h"를 뺀다(n-1타로 쓰러졌으면 n타도 쓰러진다). 쓰러짐은 정확히 HP 0이라 여유(tol)는 쓰지 않는다
+      const tail = (r: RollSet, h: number) => {
+        let p = 0;
+        r.values.forEach((d, k) => {
+          if (d >= h) p += r.probs ? r.probs[k] : 1 / r.values.length;
+        });
+        return p;
+      };
+      let faint = 0;
+      for (let j = 0; j < n; j++) faint += curW[curList[j]] * Math.max(0, tail(rolls[i], curList[j]) - tail(prev, curList[j]));
+      if (faint <= 1e-12) return 0;
+      nextW[0] = faint;
+      nextList[0] = 0;
+      [curW, nextW] = [nextW, curW];
+      [curList, nextList] = [nextList, curList];
+      n = 1;
+      continue;
     }
     const { values, probs } = rolls[i];
     const equal = 1 / values.length;
@@ -667,11 +710,11 @@ function runCandidates(input: InferenceInput, prepared: PreparedObservation[], d
   if (!pokemon) return emptyResult("invalid", n);
   // HP 종족값은 메가 전·후가 같다. 표시용 방어·특방 실수치와 내구 지수는 그 스탯을 쓴 마지막 관측(현재 폼) 기준
   const base = getEffectiveForm(pokemon, input.defender).baseStats;
-  const lastDef = prepared.findLast((o) => o.parts.defenseKey === "def");
-  const lastSpd = prepared.findLast((o) => o.parts.defenseKey === "spd");
+  const lastDef = prepared.findLast((o) => o.key === "def");
+  const lastSpd = prepared.findLast((o) => o.key === "spd");
   const tol = input.tolerance ?? 0;
-  const useDef = prepared.some((o) => o.parts.defenseKey === "def");
-  const useSpd = prepared.some((o) => o.parts.defenseKey === "spd");
+  const useDef = prepared.some((o) => o.key === "def");
+  const useSpd = prepared.some((o) => o.key === "spd");
   const combos = buildNatureCombos("def", useDef, "spd", useSpd, input.natureIds ? new Set(input.natureIds) : undefined);
   const groups: NatureGroup[] = combos.map((c) => ({ id: c.key, label: c.label, natureNames: c.natureNames, feasible: 0, total: 0, weight: 0 }));
   const comboSlot = combos.map((c) => {
@@ -687,11 +730,22 @@ function runCandidates(input: InferenceInput, prepared: PreparedObservation[], d
     let v = cache[i].get(stat);
     if (!v) {
       const o = prepared[i];
-      v = o.alts ? mixRollSets(o.alts.map((a) => ({ rolls: damageRolls(a.parts, stat), weight: a.weight }))) : damageRolls(o.parts, stat);
+      v = o.fixed !== undefined ? { values: [o.fixed] } : o.alts ? mixRollSets(o.alts.map((a) => ({ rolls: damageRolls(a.parts, stat), weight: a.weight }))) : damageRolls(o.parts!, stat);
       cache[i].set(stat, v);
     }
     return v;
   };
+  const prevCache = prepared.map(() => new Map<number, RollSet>());
+  const prevRollsFor = (i: number, stat: number): RollSet | undefined => {
+    const parts = prepared[i].prevParts;
+    if (!parts) return undefined;
+    let v = prevCache[i].get(stat);
+    if (!v) prevCache[i].set(stat, (v = damageRolls(parts, stat)));
+    return v;
+  };
+  // 이 관측이 읽는 방어 스탯 실수치 — 고정 데미지는 방어와 무관해 0
+  const statOf = (o: PreparedObservation, combo: NatureCombo, defP: number, spdP: number) =>
+    o.key === "def" ? realStat(combo.multA, o.baseDef, defP) : o.key === "spd" ? realStat(combo.multB, o.baseSpd, spdP) : 0;
 
   const hpDefGrid = useDef ? new Uint8Array(GRID * GRID) : null;
   const hpSpdGrid = useSpd ? new Uint8Array(GRID * GRID) : null;
@@ -733,7 +787,7 @@ function runCandidates(input: InferenceInput, prepared: PreparedObservation[], d
     let gap = 0;
     for (let i = 0; i < n; i++) {
       const o = prepared[i];
-      const stat = o.parts.defenseKey === "def" ? realStat(combo.multA, o.baseDef, defP) : realStat(combo.multB, o.baseSpd, spdP);
+      const stat = statOf(o, combo, defP, spdP);
       // 열매를 먹은 줄은 화면 %에 회복이 섞여 있어 그만큼 더한 값이 실제 손실이다
       const loss = observedLoss[i] + (o.berry ? (Math.floor(maxHp / SITRUS_DENOMINATOR) * o.berry * 100) / maxHp : 0);
       gap += Math.abs((centerOf(i, stat) * 100) / maxHp - loss);
@@ -775,10 +829,10 @@ function runCandidates(input: InferenceInput, prepared: PreparedObservation[], d
       const cacheIdx = likeCache ? ((hpP * GRID + defP) * GRID + spdP) * COMBO_SLOTS + comboSlot[c] : -1;
       let likelihood = likeCache ? likeCache.values[cacheIdx] : -1;
       if (likelihood < 0) {
-        const rolls = prepared.map((o, i) =>
-          o.parts.defenseKey === "def" ? rollsFor(i, realStat(combo.multA, o.baseDef, defP)) : rollsFor(i, realStat(combo.multB, o.baseSpd, spdP)),
-        );
-        likelihood = candidateLikelihood(maxHp, rolls, prepared, tol);
+        const stats = prepared.map((o) => statOf(o, combo, defP, spdP));
+        const rolls = prepared.map((_, i) => rollsFor(i, stats[i]));
+        const prevs = prepared.map((_, i) => prevRollsFor(i, stats[i]));
+        likelihood = candidateLikelihood(maxHp, rolls, prevs, prepared, tol);
         if (likeCache) likeCache.values[cacheIdx] = likelihood;
       }
       if (likelihood <= 0) continue;
@@ -814,7 +868,7 @@ function runCandidates(input: InferenceInput, prepared: PreparedObservation[], d
   const buildCard = ([hpP, defP, spdP, c]: [number, number, number, number], spare: number, likelihood: number, gap: number) => {
     const combo = combos[c];
     const maxHp = Math.floor(base.hp + 75 + hpP);
-    const rollSets = prepared.map((o, i) => rollsFor(i, o.parts.defenseKey === "def" ? realStat(combo.multA, o.baseDef, defP) : realStat(combo.multB, o.baseSpd, spdP)));
+    const rollSets = prepared.map((o, i) => rollsFor(i, statOf(o, combo, defP, spdP)));
     return {
       natureLabel: combo.label,
       natureNames: combo.natureNames,
