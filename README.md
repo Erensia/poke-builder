@@ -65,7 +65,7 @@ npm run validate:data   # 데이터 정합성 검사(build가 먼저 실행)
 npm run sim:ai -- regress   # 엔진 동작 불변 확인용 로그 해시(모드: regress|ai|greedy|style|h2h|selectvs|partyvs|diag|logidx|fxhp)
 RISK=0.3 LEARN=1 npm run sim:ai -- h2h 40   # h2h 측정에서 riskAversion 고정(RISK)·학습 배율 출력(LEARN) — 8.2
 npm run bench -- compare <이전 체크아웃>   # AI 벤치(그리디·STATUS·h2h, 코어 수만큼 병렬 — toggle 모드는 켬/끔 비교)
-SERIAL=1 bash docs/00_기획문서/02_backlog/05_ver.5.0/verify-kit/verify.sh   # 통합 검증(RAM 작은 PC는 SERIAL=1 직렬 모드, 8.2). 의도한 기준 변화는 같은 폴더의 update-baseline.sh로 갱신
+SERIAL=1 bash scripts/verify-kit/verify.sh   # 통합 검증(RAM 작은 PC는 SERIAL=1 직렬 모드, 8.2). 의도한 기준 변화는 같은 폴더의 update-baseline.sh로 갱신
 ```
 
 클라우드 로그인(선택)을 쓰려면 프로젝트 루트에 `.env.local`을 만들어 `VITE_FIREBASE_API_KEY`·`VITE_FIREBASE_AUTH_DOMAIN`·`VITE_FIREBASE_PROJECT_ID`·`VITE_FIREBASE_APP_ID` 4개를 넣는다(값은 Firebase 콘솔 → 프로젝트 설정 → 내 앱. 웹 설정은 비밀이 아니고 `*.local`은 git에 올라가지 않는다). 없으면 "클라우드 백업" 구역만 보이지 않고 나머지는 그대로 동작한다. 규칙 검증(`npm run test:rules`)은 Java 21 이상이 필요하다.
