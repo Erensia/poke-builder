@@ -14,6 +14,7 @@ import { computeRealStats, MAX_ABILITY_POINTS_PER_STAT, MAX_ABILITY_POINTS_TOTAL
 import { EMPTY_ABILITY_POINTS } from "../types/party";
 import { rollMatchOf, TOTAL_POINTS, TopLists, type CandidateLists } from "./candidateCards";
 import { mixRollSets, statCandidates } from "./latentOpponent";
+import { computeDamage } from "./battlePower";
 import {
   emptyRange,
   finishRange,
@@ -141,7 +142,19 @@ export interface AttackInferenceResult {
 type AttackKey = "atk" | "spa";
 
 interface PreparedObservation {
-  key: AttackKey;
+  /** 이 관측이 읽는 상대 공격 스탯. 셸암즈는 분류가 (공격, 특공) 쌍으로 정해져 "pair"(8.2 I1) */
+  key: AttackKey | "pair";
+  /**
+   * 셸암즈(8.2 I1): 물리 분포는 공격 포인트, 특수 분포는 특공 포인트에만 달려 있어 따로 만들고, 쌍마다 엔진 규칙(실능·랭크로 낸
+   * 물리/특수 데미지 비교, 동점 50%)으로 어느 쪽을 쓸지 정한다. `rolls`는 쓰지 않는다
+   */
+  pair?: {
+    phys: (natureId: string, atkPoints: number) => RollSet | null;
+    spec: (natureId: string, spaPoints: number) => RollSet | null;
+    categoryOf: (natureId: string, atkPoints: number, spaPoints: number) => "physical" | "special" | "tie";
+  };
+  /** 셸암즈 관측 시점 폼의 공격·특공 종족값(결과의 실수치 범위 표시용) */
+  pairBase?: { atk: number; spa: number };
   /** 이 관측 시점 폼의 공격·특공 종족값(결과의 실수치 범위 표시용) */
   baseStat: number;
   /** 내 최대 HP(데미지 %를 낼 때 쓴다) */
@@ -285,6 +298,58 @@ function prepareObservations(input: AttackInferenceInput): { prepared: PreparedO
       return;
     }
     if (res.berryBulkMultiplier > 1) itemConsumed = true;
+    if (obs.move.dynamicCategoryByHigherDamage) {
+      // 셸암즈(8.2 I1): 분류를 평가기가 다시 정하지 않게 물리/특수 기술로 고정하고, 화상·근성류 보정도 분류별로 다시 구한다
+      const asCategory = (category: "physical" | "special"): Move => ({ ...obs.move, category, makesContact: category === "physical", dynamicCategoryByHigherDamage: undefined });
+      const optionsFor = (move: Move) => ({
+        ...options,
+        extraOffenseMultiplier: statusedAttackBoost(attackerStatus ?? null, move.category, attackerAtHit.ability ? getAbility(attackerAtHit.ability)?.physicalAttackMultiplierWhenStatused : undefined),
+        finalOffenseMultiplier: burnDamageMultiplier(attackerStatus ?? null, move.category, ignoresBurnAttackPenalty(attackerAtHit.ability ?? undefined, move.id)),
+        skipVerdict: true,
+      });
+      const memoOf = (category: "physical" | "special", statKey: "atk" | "spa") => {
+        const move = asCategory(category);
+        const cache = new Map<string, RollSet | null>();
+        return (natureId: string, points: number) => {
+          const k = `${natureId}|${points}`;
+          if (!cache.has(k)) {
+            const slot: EvaluatorSlot = { ...attackerAtHit, nature: natureId, points: { ...EMPTY_ABILITY_POINTS, [statKey]: points } };
+            const r = evaluateSlotMatchup(slot, move, defender, optionsFor(move));
+            cache.set(k, r?.damageParts ? damageRollSet(r.damageParts, r.defenseStat) : null);
+          }
+          return cache.get(k)!;
+        };
+      };
+      const myPokemon = getPokemon(defender.pokemonId)!;
+      const myForm = getEffectiveForm(myPokemon, defender);
+      const myReal = computeRealStats(myForm.baseStats, defender.points, defender.nature);
+      const oppForm = getEffectiveForm(attackerPokemon!, attackerAtHit);
+      const stages = { attackerStages, defenderStages };
+      const catMemo = new Map<string, "physical" | "special" | "tie">();
+      const categoryOf = (natureId: string, a: number, s: number) => {
+        const k = `${natureId}|${a}|${s}`;
+        let cat = catMemo.get(k);
+        if (!cat) {
+          const oppReal = computeRealStats(oppForm.baseStats, { ...EMPTY_ABILITY_POINTS, atk: a, spa: s }, natureId);
+          const phys = computeDamage(oppReal, myReal, oppForm.types, asCategory("physical"), stages)?.damage ?? 0;
+          const special = computeDamage(oppReal, myReal, oppForm.types, asCategory("special"), stages)?.damage ?? 0;
+          catMemo.set(k, (cat = phys > special ? "physical" : special > phys ? "special" : "tie"));
+        }
+        return cat;
+      };
+      prepared.push({
+        key: "pair",
+        baseStat: oppForm.baseStats.atk,
+        pairBase: { atk: oppForm.baseStats.atk, spa: oppForm.baseStats.spa },
+        maxHp: myMaxHp,
+        damage: obs.hpBefore - obs.hpAfter,
+        ko: obs.hpAfter === 0,
+        rolls: () => null,
+        pair: { phys: memoOf("physical", "atk"), spec: memoOf("special", "spa"), categoryOf },
+      });
+      errors.push(null);
+      return;
+    }
     const memo = new Map<string, RollSet | null>();
     let speedAlts: { speed: number; weight: number }[] | undefined;
     if (speedCands) {
@@ -342,6 +407,31 @@ function prepareObservations(input: AttackInferenceInput): { prepared: PreparedO
   return { prepared, errors };
 }
 
+/** 데미지 분포가 이 관측(받은 데미지)과 맞을 확률 */
+function hitProbability(o: PreparedObservation, rolls: RollSet): number {
+  let p = 0;
+  rolls.values.forEach((d, k) => {
+    if (o.ko ? d >= o.damage : d === o.damage) p += rolls.probs ? rolls.probs[k] : 1 / rolls.values.length;
+  });
+  return p;
+}
+
+/** 셸암즈 쌍 (공격 a, 특공 s)가 쌍 관측 전체와 맞는 가능도(8.2 I1). 쌍 관측이 없으면 1 */
+function pairLikelihood(pairObs: PreparedObservation[], combo: NatureCombo, a: number, s: number): number {
+  let likelihood = 1;
+  for (const o of pairObs) {
+    const { phys, spec, categoryOf } = o.pair!;
+    const cat = categoryOf(combo.repNatureId, a, s);
+    const p = phys(combo.repNatureId, a);
+    const q = spec(combo.repNatureId, s);
+    if (!p || !q) return 0;
+    const hit = cat === "physical" ? hitProbability(o, p) : cat === "special" ? hitProbability(o, q) : (hitProbability(o, p) + hitProbability(o, q)) / 2;
+    if (hit <= 1e-12) return 0;
+    likelihood *= hit;
+  }
+  return likelihood;
+}
+
 /** 후보(성격 묶음 c, 이 스탯 포인트 p)가 이 스탯을 쓰는 관측 전체와 얼마나 맞는지(가능도, 0~1). 0이면 불가능 */
 function sideLikelihood(prepared: PreparedObservation[], key: AttackKey, combo: NatureCombo, points: number): number {
   let likelihood = 1;
@@ -387,9 +477,12 @@ function runCandidates(input: AttackInferenceInput, prepared: PreparedObservatio
   const pokemon = getPokemon(input.attacker.pokemonId);
   if (!pokemon) return emptyResult("invalid", n);
   // 실수치 범위(표시용)는 그 스탯을 쓴 마지막 관측(현재 폼)의 종족값 기준
-  const baseOf = (key: AttackKey) => prepared.findLast((o) => o.key === key)?.baseStat ?? getEffectiveForm(pokemon, input.attacker).baseStats[key];
-  const useAtk = prepared.some((o) => o.key === "atk");
-  const useSpa = prepared.some((o) => o.key === "spa");
+  const baseOf = (key: AttackKey) => {
+    const o = prepared.findLast((x) => x.key === key || x.key === "pair");
+    return (o?.key === "pair" ? o.pairBase?.[key] : o?.baseStat) ?? getEffectiveForm(pokemon, input.attacker).baseStats[key];
+  };
+  const useAtk = prepared.some((o) => o.key === "atk" || o.key === "pair");
+  const useSpa = prepared.some((o) => o.key === "spa" || o.key === "pair");
   const combos = buildNatureCombos("atk", useAtk, "spa", useSpa, input.natureIds ? new Set(input.natureIds) : undefined);
   const maxSum = Math.min(MAX_ABILITY_POINTS_TOTAL, input.maxPointsSum ?? MAX_ABILITY_POINTS_TOTAL);
   const minSum = (input.minPointsSum ?? 0) - MAX_ABILITY_POINTS_PER_STAT * (Number(!useAtk) + Number(!useSpa));
@@ -427,11 +520,14 @@ function runCandidates(input: AttackInferenceInput, prepared: PreparedObservatio
     const spaWeight = new Float64Array(spaCandidates.length);
     let comboWeight = 0;
     let okPairs = 0;
+    const pairObs = prepared.filter((o) => o.pair);
     atkCandidates.forEach((a, i) => {
       if (atkL[i] <= 0) return;
       spaCandidates.forEach((b, j) => {
         if (spaL[j] <= 0 || a + b > maxSum || a + b < minSum) return;
-        const w = atkL[i] * spaL[j];
+        const pairL = pairLikelihood(pairObs, combo, a, b);
+        if (pairL <= 0) return;
+        const w = atkL[i] * spaL[j] * pairL;
         okPairs++;
         top?.add(TOTAL_POINTS - (a + b), w, atkGap[i] + spaGap[j], () => [a, b, c]);
         grow(sumRange, a + b);
@@ -462,7 +558,13 @@ function runCandidates(input: AttackInferenceInput, prepared: PreparedObservatio
   if (totalWeight > 0) for (const g of groups) g.weight /= totalWeight;
   const buildCard = ([a, b, c]: [number, number, number], spare: number, likelihood: number, gap: number) => {
     const combo = combos[c];
-    const rollSets = prepared.map((o) => o.rolls(combo.repNatureId, o.key === "atk" ? a : b)!);
+    const rollSets = prepared.map((o) => {
+      if (!o.pair) return o.rolls(combo.repNatureId, o.key === "atk" ? a : b)!;
+      const cat = o.pair.categoryOf(combo.repNatureId, a, b);
+      const p = o.pair.phys(combo.repNatureId, a)!;
+      const q = o.pair.spec(combo.repNatureId, b)!;
+      return cat === "physical" ? p : cat === "special" ? q : mixRollSets([{ rolls: p, weight: 0.5 }, { rolls: q, weight: 0.5 }]);
+    });
     return {
       natureLabel: combo.label,
       natureNames: combo.natureNames,

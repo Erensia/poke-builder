@@ -153,8 +153,9 @@ function AllocationGrid({
  */
 export function ObservationTips({ observations }: { observations: InferenceObservation[] }) {
   const small = observations.filter((o) => o.before - o.after > 0 && o.before - o.after < 15);
-  const hasPhysical = observations.some((o) => o.move.category === "physical");
-  const hasSpecial = observations.some((o) => o.move.category === "special");
+  // 셸암즈는 방어·특방을 둘 다 읽는다(분류가 후보에 따라 갈린다)
+  const hasPhysical = observations.some((o) => o.move.category === "physical" || o.move.dynamicCategoryByHigherDamage);
+  const hasSpecial = observations.some((o) => o.move.category === "special" || o.move.dynamicCategoryByHigherDamage);
   return (
     <details className="dinf-details dinf-tips">
       <summary>범위를 좁히는 관측 방법</summary>
