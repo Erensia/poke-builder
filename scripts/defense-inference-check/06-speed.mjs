@@ -129,9 +129,9 @@ export default async function ({ server, data, inf, ev, stat, form, fm, ai, rnd,
       console.log(`스피드 메가 전→후·폼별 표시 ${tried}건 통과`);
     }
 
-    // 셸암즈는 물리/특수가 능력치로 정해져 방어·공격 역산 모두 지원하지 않는다(과거: 공격 역산에서 진짜 값이 빠졌음)
+    // 셸암즈(물리/특수가 능력치로 정해짐)는 8.2 I1 4단계부터 방어·공격 역산 모두 지원한다(17번 모듈이 시험)
     const shell = data.getMove("셸암즈");
-    if (!inf.inferenceUnsupportedReason(shell) || !ai.attackInferenceUnsupportedReason(shell)) fail("셸암즈가 역산 미지원으로 안 잡힘");
+    if (inf.inferenceUnsupportedReason(shell) || ai.attackInferenceUnsupportedReason(shell)) fail("셸암즈가 역산 미지원으로 잡힘");
 
     // 3.1 PR5-b) 성격 후보가 줄수록 스피드 하한이 올라간다 — 상대가 먼저(내 132 추월): 스피드↑ 0 / 무보정 10 / 스피드↓ 25
     const idsByMult = (want) => data.NATURES.filter((n) => inf.natureMult("spe", n.increased, n.decreased) === want).map((n) => n.id);
