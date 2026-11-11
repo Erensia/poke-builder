@@ -13,6 +13,7 @@ import { evaluateSlotMatchup, type EvaluatorSlot } from "./matchupEvaluator";
 import { computeRealStats, MAX_ABILITY_POINTS_PER_STAT, MAX_ABILITY_POINTS_TOTAL } from "./statCalculator";
 import { EMPTY_ABILITY_POINTS } from "../types/party";
 import { rollMatchOf, TOTAL_POINTS, TopLists, type CandidateLists } from "./candidateCards";
+import { mixRollSets, statCandidates } from "./latentOpponent";
 import {
   emptyRange,
   finishRange,
@@ -101,8 +102,10 @@ export interface AttackInferenceInput {
   minPointsSum?: number;
   /** 다른 쪽 관측(방어·스피드)에 쓰인 메가폼 이름 — 이 쪽에 메가 태그가 없어도 메가 전·후를 나란히 보이려고 받는다(3.1 L1-b) */
   viewMegaForms?: readonly string[];
-  /** 상대 스피드 실수치(랭크·도구 반영 전, 8.2 I1) — 자이로볼·일렉트릭볼은 위력이 양측 스피드로 정해져 이 값이 있어야 역산한다 */
+  /** 상대 스피드 실수치(랭크·도구 반영 전, 8.2 I1) — 알면 고정한다. 자이로볼·일렉트릭볼은 위력이 양측 스피드로 정해진다. 비우면 가능한 값 전체를 평균낸다 */
   opponentSpeed?: number;
+  /** 평균낼 때 후보를 이 범위 안으로 좁힌다 — 같은 상대의 스피드 역산 결과(`inferCombined`가 채운다). 직접 입력이 있으면 쓰지 않는다 */
+  opponentSpeedRange?: Range;
 }
 
 export interface AttackInferenceResult {
@@ -157,14 +160,14 @@ interface PreparedObservation {
 const attackKeyOf = (move: Move): AttackKey => (move.category === "special" ? "spa" : "atk");
 
 /** 스피드·HP 등 상대의 다른 스탯으로 위력이 정해져 공격 포인트만으로는 계산할 수 없는 기술을 거른다 */
-export function attackInferenceUnsupportedReason(move: Move, known: { speed?: boolean } = {}): string | null {
+export function attackInferenceUnsupportedReason(move: Move): string | null {
   // 고정 데미지(8.2 I1)는 공격 스탯과 무관해 후보를 거르지 못하지만, 관측이 맞는지(고정 값과 같은지)는 확인한다
   if (move.fixedDamage !== undefined) return null;
   // 속임수(8.2 I1): 맞는 쪽(내) 공격 스탯으로 데미지가 정해져 상대 공격은 거르지 못한다 — 관측이 맞는지만 본다
   if (move.usesTargetAttackStat) return move.power === null ? "위력이 상황에 따라 달라지는 기술은 아직 지원하지 않아요" : null;
-  const base = inferenceUnsupportedReason(move, known);
+  const base = inferenceUnsupportedReason(move);
   if (base) return base;
-  // 자이로볼·일렉트릭볼은 위력이 null이지만 상대 스피드를 받았으면 평가기가 위력을 낸다(8.2 I1)
+  // 자이로볼·일렉트릭볼은 위력이 null이어도 상대 스피드(입력 또는 후보 평균)로 평가기가 위력을 낸다(8.2 I1)
   if (move.power === null && !move.gyroBallPower && !move.electroBallPower) return "위력이 상황에 따라 달라지는 기술은 아직 지원하지 않아요";
   return null;
 }
@@ -193,7 +196,6 @@ function emptyResult(status: AttackInferenceResult["status"], n: number): Attack
 /** 관측마다 내 HP·상성·특성 상태를 확인하고, 후보로 데미지 난수를 내는 함수를 만든다. 실패하면 사유 문자열 */
 function prepareObservations(input: AttackInferenceInput): { prepared: PreparedObservation[]; errors: (string | null)[] } {
   const { attacker, defender, observations, attackerStages, attackerStatus, defenderStages, weather, field, screen, opponentSpeed } = input;
-  const known = { speed: opponentSpeed !== undefined };
   const prepared: PreparedObservation[] = [];
   const errors: (string | null)[] = [];
   const myPokemon = getPokemon(defender.pokemonId);
@@ -205,7 +207,7 @@ function prepareObservations(input: AttackInferenceInput): { prepared: PreparedO
   let itemConsumed = false;
 
   observations.forEach((obs) => {
-    const unsupported = attackInferenceUnsupportedReason(obs.move, known);
+    const unsupported = attackInferenceUnsupportedReason(obs.move);
     if (unsupported) {
       errors.push(unsupported);
       return;
@@ -249,7 +251,7 @@ function prepareObservations(input: AttackInferenceInput): { prepared: PreparedO
     }
     const options = {
       // undefined 키가 있으면 평가기의 스프레드가 스피드를 지우므로 입력했을 때만 담는다
-      attackerRealStatsOverride: known.speed ? { spe: opponentSpeed } : undefined,
+      attackerRealStatsOverride: opponentSpeed !== undefined ? { spe: opponentSpeed } : undefined,
       multiHitCount: multiHitRange(obs.move) ? (obs.hits ?? multiHitRange(obs.move)!.min) : undefined,
       attackerStages,
       defenderStages,
@@ -269,7 +271,11 @@ function prepareObservations(input: AttackInferenceInput): { prepared: PreparedO
       ),
       finalOffenseMultiplier: burnDamageMultiplier(attackerStatus ?? null, obs.move.category, ignoresBurnAttackPenalty(attackerAtHit.ability ?? undefined, obs.move.id)),
     };
-    const res = evaluateSlotMatchup(probe, obs.move, defender, { ...options, skipVerdict: true });
+    // 모르는 상대 스피드(8.2 I1): 자이로볼·일렉트릭볼은 후보 스피드마다 위력이 달라진다. 위력(데미지 조각)이 같은 후보끼리 접어 대표 스피드 하나와 가중치만 남긴다
+    const baseStats = getEffectiveForm(attackerPokemon!, attackerAtHit).baseStats;
+    const speedCands = (obs.move.gyroBallPower || obs.move.electroBallPower) && opponentSpeed === undefined ? statCandidates(baseStats.spe, input.opponentSpeedRange) : null;
+    const withSpeed = (spe: number) => ({ ...options, attackerRealStatsOverride: { spe }, skipVerdict: true });
+    const res = evaluateSlotMatchup(probe, obs.move, defender, speedCands ? withSpeed(speedCands[0].value) : { ...options, skipVerdict: true });
     if (!res || !res.damageParts) {
       errors.push("이 기술로는 데미지를 계산할 수 없어요");
       return;
@@ -280,7 +286,19 @@ function prepareObservations(input: AttackInferenceInput): { prepared: PreparedO
     }
     if (res.berryBulkMultiplier > 1) itemConsumed = true;
     const memo = new Map<string, RollSet | null>();
-    const baseStats = getEffectiveForm(attackerPokemon!, attackerAtHit).baseStats;
+    let speedAlts: { speed: number; weight: number }[] | undefined;
+    if (speedCands) {
+      const byParts = new Map<string, { speed: number; weight: number }>();
+      for (const c of speedCands) {
+        const parts = evaluateSlotMatchup(probe, obs.move, defender, withSpeed(c.value))?.damageParts;
+        if (!parts) continue;
+        const key = JSON.stringify(parts);
+        const found = byParts.get(key);
+        if (found) found.weight += c.weight;
+        else byParts.set(key, { speed: c.value, weight: c.weight });
+      }
+      speedAlts = [...byParts.values()];
+    }
     // 쓰러진 다단히트: n타째에 쓰러졌으니 n-1타까지의 합계는 맞기 전 HP 미만이어야 한다. 1타째면 조건이 없다
     const nHits = options.multiHitCount;
     const koMulti = obs.hpAfter === 0 && multiHitRange(obs.move) && nHits !== undefined && nHits >= 2;
@@ -295,8 +313,15 @@ function prepareObservations(input: AttackInferenceInput): { prepared: PreparedO
         const memoKey = `${natureId}|${points}`;
         if (memo.has(memoKey)) return memo.get(memoKey)!;
         const slot: EvaluatorSlot = { ...attackerAtHit, nature: natureId, points: { ...EMPTY_ABILITY_POINTS, [attackKeyOf(obs.move)]: points } };
-        const r = evaluateSlotMatchup(slot, obs.move, defender, { ...options, skipVerdict: true });
-        const rolls = r?.damageParts ? damageRollSet(r.damageParts, r.defenseStat) : null;
+        const rollsAt = (opts: typeof options & { skipVerdict: boolean }) => {
+          const r = evaluateSlotMatchup(slot, obs.move, defender, opts);
+          return r?.damageParts ? damageRollSet(r.damageParts, r.defenseStat) : null;
+        };
+        let rolls: RollSet | null;
+        if (speedAlts) {
+          const sets = speedAlts.map((a) => ({ rolls: rollsAt(withSpeed(a.speed)), weight: a.weight }));
+          rolls = sets.every((s) => s.rolls) ? mixRollSets(sets as { rolls: RollSet; weight: number }[]) : null;
+        } else rolls = rollsAt({ ...options, skipVerdict: true });
         memo.set(memoKey, rolls);
         return rolls;
       },
