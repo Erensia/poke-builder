@@ -28,6 +28,7 @@ import {
   followValue,
   followRows,
   relevantAbilities,
+  midOf,
   type DefenseInferencePanelProps,
 } from "./defenseInferenceHelpers";
 import { buildAttackInput, buildDefenseInput, buildSpeedInput, rowMessageOf } from "./defenseInferenceCalc";
@@ -59,15 +60,20 @@ export function useDefenseInferenceState({
   const [atkStage, setAtkStage] = useState(saved.atkStage);
   const [spaStage, setSpaStage] = useState(saved.spaStage);
   const [oppBurned, setOppBurned] = useState(saved.oppBurned);
+  // 상대 실수치(8.2 I1) — 자이로볼·일렉트릭볼은 상대 스피드, 속임수(입힌 데미지)는 상대 공격이 있어야 역산한다
+  const [oppSpeed, setOppSpeed] = useState(saved.oppSpeed);
+  const [oppAttack, setOppAttack] = useState(saved.oppAttack);
+  const opponentSpeed = parseHp(oppSpeed) || undefined;
+  const opponentAttack = parseHp(oppAttack) || undefined;
   // 벽은 위쪽 "내 쪽/상대 쪽 스크린" 선택기 값 — 입힌 데미지는 상대 쪽, 받은 데미지는 내 쪽
   const screen = defender.screen ?? "";
   const myScreen = attacker.screen ?? "";
 
   useEffect(() => {
     saveMatchupDraft({
-      inference: { rows, abilityId, itemId, defStage, spdStage, tolerant, atkAbilityId, atkItemId, atkStage, spaStage, oppBurned } satisfies ReturnType<typeof restoreInference>,
+      inference: { rows, abilityId, itemId, defStage, spdStage, tolerant, atkAbilityId, atkItemId, atkStage, spaStage, oppBurned, oppSpeed, oppAttack } satisfies ReturnType<typeof restoreInference>,
     });
-  }, [rows, abilityId, itemId, defStage, spdStage, tolerant, atkAbilityId, atkItemId, atkStage, spaStage, oppBurned]);
+  }, [rows, abilityId, itemId, defStage, spdStage, tolerant, atkAbilityId, atkItemId, atkStage, spaStage, oppBurned, oppSpeed, oppAttack]);
 
   const attackerPokemon = attacker.pokemonId ? getPokemon(attacker.pokemonId) : undefined;
   const defenderPokemon = defender.pokemonId ? getPokemon(defender.pokemonId) : undefined;
@@ -177,8 +183,8 @@ export function useDefenseInferenceState({
   const viewMegaForms = useMemo(() => (megaKey ? megaKey.split("|") : []), [megaKey]);
 
   const input = useMemo<InferenceInput | null>(
-    () => buildDefenseInput({ attacker, defender, complete, activeAbilityId, itemId, weather, field, screen, defStage, spdStage, tolerant, viewMegaForms }),
-    [attacker, defender, complete, activeAbilityId, itemId, weather, field, screen, defStage, spdStage, tolerant, viewMegaForms],
+    () => buildDefenseInput({ attacker, defender, complete, activeAbilityId, itemId, weather, field, screen, defStage, spdStage, tolerant, viewMegaForms, opponentSpeed, opponentAttack }),
+    [attacker, defender, complete, activeAbilityId, itemId, weather, field, screen, defStage, spdStage, tolerant, viewMegaForms, opponentSpeed, opponentAttack],
   );
 
   const anyMega = complete.some((c) => c.obs.megaForm);
@@ -187,8 +193,8 @@ export function useDefenseInferenceState({
   // 상대 공격(특공) 역산(3.1 C2-b) — 내 포켓몬이 맞는 쪽, 상대가 때리는 쪽
   const anyMegaReceived = completeReceived.some((c) => c.obs.megaForm);
   const attackInput = useMemo<AttackInferenceInput | null>(
-    () => buildAttackInput({ attacker, defender, completeReceived, anyMegaReceived, activeAtkAbilityId, atkItemId, atkStage, spaStage, oppBurned, weather, field, myScreen, viewMegaForms }),
-    [attacker, defender, completeReceived, anyMegaReceived, activeAtkAbilityId, atkItemId, atkStage, spaStage, oppBurned, weather, field, myScreen, viewMegaForms],
+    () => buildAttackInput({ attacker, defender, completeReceived, anyMegaReceived, activeAtkAbilityId, atkItemId, atkStage, spaStage, oppBurned, weather, field, myScreen, viewMegaForms, opponentSpeed }),
+    [attacker, defender, completeReceived, anyMegaReceived, activeAtkAbilityId, atkItemId, atkStage, spaStage, oppBurned, weather, field, myScreen, viewMegaForms, opponentSpeed],
   );
   // 상대 스피드 역산(3.1 C2-c) — 선후공 줄은 항상 완성(누가 먼저만 고르면 됨). 조건은 줄마다 다르다.
   const speedRows = useMemo(() => rows.filter((r) => r.kind === "speed"), [rows]);
@@ -225,8 +231,14 @@ export function useDefenseInferenceState({
     updateRow(row.id, { endTurn: [...row.endTurn.filter((x) => !TOXIC_ID.test(x)), ...(n > 0 ? [`toxic${n}`] : [])] });
   }
 
-  const messageCtx = { complete, completeReceived, speedRows, result, pending, attackResult, attackPending, speedResult, speedPending, myMaxHp };
+  // 입력이 필요한 기술을 골랐을 때만 상대 실수치 칸을 보인다 — 채우기는 같은 상대의 스피드·공격 역산 결과 범위의 가운데
+  const rowMove = (r: ObservationRow) => (r.moveId ? getMove(r.moveId) : undefined);
+  const needsSpeed = rows.some((r) => r.kind !== "speed" && !!(rowMove(r)?.gyroBallPower || rowMove(r)?.electroBallPower));
+  const needsAttack = rows.some((r) => r.kind === "dealt" && !!rowMove(r)?.usesTargetAttackStat);
+  const fillSpeed = midOf(speedResult?.realSpe);
+  const fillAttack = midOf(attackResult?.realAtk);
+  const messageCtx = { complete, completeReceived, speedRows, result, pending, attackResult, attackPending, speedResult, speedPending, myMaxHp, known: { speed: opponentSpeed !== undefined, attack: opponentAttack !== undefined } };
   const rowMessage = (row: ObservationRow) => rowMessageOf(row, messageCtx);
 
-  return { weather, field, attackerCard, defenderPokemon, defenderForm, dragOverClass, dropProps, defenderActions, dragProps, defender, hasDealtRows, activeAbilityId, setAbilityId, anyMega, abilityOptions, itemId, setItemId, defStage, setDefStage, spdStage, setSpdStage, tolerant, setTolerant, hasReceivedRows, activeAtkAbilityId, setAtkAbilityId, anyMegaReceived, atkAbilityOptions, atkItemId, setAtkItemId, atkStage, setAtkStage, spaStage, setSpaStage, oppBurned, setOppBurned, rows, rowMessage, megas, attackerPokemon, changeKind, updateRow, setMovePickerRow, removeRow, setToxicTurn, updateCond, speedAbilityOptions, anyMegaSpeed, myQuickFeet, addRow, onReset, myMaxHp, pending, attackPending, speedPending, result, attackResult, speedResult, rowIdsByObservation, receivedRowNos, combined, speedRowNos, complete, myScreen, movePickerRow, attacker };
+  return { weather, field, attackerCard, defenderPokemon, defenderForm, dragOverClass, dropProps, defenderActions, dragProps, defender, hasDealtRows, activeAbilityId, setAbilityId, anyMega, abilityOptions, itemId, setItemId, defStage, setDefStage, spdStage, setSpdStage, tolerant, setTolerant, hasReceivedRows, activeAtkAbilityId, setAtkAbilityId, anyMegaReceived, atkAbilityOptions, atkItemId, setAtkItemId, atkStage, setAtkStage, spaStage, setSpaStage, oppBurned, setOppBurned, rows, rowMessage, megas, attackerPokemon, changeKind, updateRow, setMovePickerRow, removeRow, setToxicTurn, updateCond, speedAbilityOptions, anyMegaSpeed, myQuickFeet, addRow, onReset, myMaxHp, pending, attackPending, speedPending, result, attackResult, speedResult, rowIdsByObservation, receivedRowNos, combined, speedRowNos, complete, myScreen, movePickerRow, attacker, oppSpeed, setOppSpeed, oppAttack, setOppAttack, needsSpeed, needsAttack, fillSpeed, fillAttack };
 }

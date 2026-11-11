@@ -79,5 +79,7 @@ export function restoreInference(raw: unknown) {
     atkStage: stage(d.atkStage),
     spaStage: stage(d.spaStage),
     oppBurned: d.oppBurned === true,
+    oppSpeed: str(d.oppSpeed),
+    oppAttack: str(d.oppAttack),
   };
 }
