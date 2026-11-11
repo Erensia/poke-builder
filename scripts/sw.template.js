@@ -1,5 +1,5 @@
 /* 서비스 워커 템플릿(6.5 P1) — 빌드 때 vite.config.ts의 swPlugin이 아래 두 상수의 자리표시자를 빌드 ID·프리캐시 목록으로 바꿔 dist/sw.js로 낸다(자리표시자 문구는 이 주석에 쓰지 않는다 — 첫 번째 일치를 치환한다).
-   설계: docs/00_기획문서/02_backlog/06_ver.6.0/6.5-P1-PWA-설계.md. 이 파일은 src 밖이라 tsc·린트 대상이 아니다. */
+   설계: docs/00_기획문서/02_backlog/06_ver.6.0/05_ver.6.5/6.5-P1-PWA-설계.md. 이 파일은 src 밖이라 tsc·린트 대상이 아니다. */
 const BUILD_ID = __BUILD_ID__;
 const PRECACHE = __PRECACHE__; // ["/", "/assets/index-xxxx.js", ...] — 인코딩된 경로
 const SPRITE_LIST = __SPRITE_LIST__; // /sprites/** 전체 — 설치 뒤 백그라운드로 미리 받는다(오프라인 도감·파티 이미지)
