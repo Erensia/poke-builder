@@ -85,6 +85,8 @@ export function EndOfTurnLine({
           {turnName(e.actor)}의 희망사항으로 체력을 {e.wishHeal} 회복 (남은 HP{" "}
           {e.remainingHp})
         </>
+      ) : e.wishNoHeal ? (
+        <>{turnName(e.actor)}: 희망사항이 이루어졌지만 회복할 HP가 없었다</>
       ) : e.berryHeal ? (
         <>
           {turnName(e.actor)}의 {e.berryHealItemName}로 {e.berryHeal} 회복 (남은 HP{" "}
@@ -223,7 +225,6 @@ export function TurnFooterLines({
           날씨: 앞으로 {turn.weatherTurnsRemaining}턴 뒤 소멸
         </div>
       )}
-      {turn.weatherExpired && <div className="battle-turn-line is-muted">날씨가 원래대로 돌아갔다!</div>}
       {turn.expiredScreens.map((e, i) => (
         <div key={i} className="battle-turn-line is-muted">
           {turnName(e.actor)}의 {SCREEN_LABELS[e.screen]}

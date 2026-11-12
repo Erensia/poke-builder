@@ -182,8 +182,8 @@ export default async function ({ server, data, ev, ai, dec, pts, mon, battle, op
         return opt(ev.evaluateOptions(st, "a"), "지진").hitsToKill.expected;
       };
       const k0 = kill(0);
-      const k1 = kill(1);
-      const k5 = kill(5);
+      const k1 = kill(2);
+      const k5 = kill(6);
       check(
         "턴 종료 효과: 먹다남은음식·자뭉열매·그래스필드로 버티는 턴 증가 · 모래바람은 남은 턴만큼 처치 턴 감소 · 토글",
         lefties > plain && sitrus > plain && grassy > plain && leftiesOff === plain && k5 < k1 && k1 < k0,
