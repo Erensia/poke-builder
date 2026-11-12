@@ -1,6 +1,6 @@
 import { effectiveHeldItem, itemsSuppressedByRoom } from "./turnOrderInputs";
 import { isGrounded } from "./grounding";
-import { type FighterKey } from "@/types/battle";
+import { type FighterKey, type SwitchLogEntry } from "@/types/battle";
 import { isUncopyableAbility } from "./abilityChange";
 import { NEUTRAL_ACCURACY_STAGES, NEUTRAL_CRIT_STAGE, NEUTRAL_STAGES, type BattleStatKey } from "@/types/battleStats";
 import { NO_STATUS_CONDITION, type StatusCondition, type VolatileCondition, type VolatileConditionState } from "@/types/status";
@@ -556,6 +556,39 @@ interface ApplySwitchOutcome {
   /** 물러난/새로 나온 포켓몬 종 id. 강제 교체 로그 문구용 */
   outPokemonId: string;
   inPokemonId: string;
+}
+
+/**
+ * 무작위 예비 포켓몬으로 즉시 강제 교체한다(유저 선택 없음) — 레드카드(공격자·미래예지 사용자)·드래곤테일류(상대) 공통.
+ * voluntary=false — 기절 후 강제 교체와 같은 취급(가속 발동, 등장 파이프라인은 그대로 탐).
+ * 호출자가 살아 있는 예비가 있음을 보장한다. extra.endOfTurn=true면 턴 종료 시점의 교체(afterMove를 세우지 않는다 — 행동 기준 렌더러가 줄을 두 번 그리거나 턴 맨 앞에 놓지 않게).
+ */
+export function forceRandomSwitch(
+  state: BattleState,
+  random: () => number,
+  switches: SwitchLogEntry[],
+  key: FighterKey,
+  extra: { redCardItemName?: string; endOfTurn?: true } = {},
+): void {
+  const side = sideOf(state, key);
+  const fromIndex = side.activeIndex;
+  const reserveIdxs = side.party.map((_f, idx) => idx).filter((idx) => idx !== fromIndex && !isFainted(side.party[idx]));
+  const toIndex = reserveIdxs[Math.floor(random() * reserveIdxs.length)];
+  const outgoing = side.party[fromIndex];
+  const entryMessages: string[] = [];
+  performSwitch(state, key, toIndex, entryMessages, { voluntary: false });
+  const inFighter = side.party[toIndex];
+  switches.push({
+    side: key,
+    fromIndex,
+    toIndex,
+    outPokemonId: outgoing.illusionAs ?? outgoing.slot.pokemonId,
+    inPokemonId: inFighter.illusionAs ?? inFighter.slot.pokemonId,
+    entryMessages,
+    ...(extra.endOfTurn ? {} : { afterMove: true }),
+    forced: true,
+    ...extra,
+  });
 }
 
 /**

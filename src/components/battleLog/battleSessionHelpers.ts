@@ -92,15 +92,19 @@ export function buildTurnActions(p: {
 
 /**
  * 강제 교체는 턴 밖 조작이라 별도 로그 카드로 남긴다(등장 파이프라인 문구까지 함께).
- * inFainted: 새로 나온 포켓몬이 스텔스록·압정 등장 데미지로(§6) 그 자리에서 또 쓰러졌는지, hasReserve: 남은 슬롯이 있는지.
+ * after.inFainted: 새로 나온 포켓몬이 스텔스록·압정 등장 데미지로(§6) 그 자리에서 또 쓰러졌는지, after.hasReserve: 남은 슬롯이 있는지.
  */
 export function forcedSwitchLogEntry(
   nextState: BattleState,
   side: Side,
   toIndex: number,
   applied: Pick<ReturnType<typeof applySwitch>, "entryMessages" | "outPokemonId" | "inPokemonId">,
-  inFainted: boolean,
-  hasReserve: boolean,
+  { inFainted, hasReserve, outgoingAlive = false }: {
+    inFainted: boolean;
+    hasReserve: boolean;
+    /** 물러나는 포켓몬이 살아 있다(미래예지 적중 위기회피, 8.3 A4-b) — 연출이 나가는 모션을 보인다. 카드 묶기 판별은 fromIndex -1을 그대로 쓴다 */
+    outgoingAlive?: boolean;
+  },
 ): TurnResult {
   return {
     turnNumber: nextState.turnNumber,
@@ -120,6 +124,7 @@ export function forcedSwitchLogEntry(
         outPokemonId: applied.outPokemonId,
         inPokemonId: applied.inPokemonId,
         entryMessages: applied.entryMessages,
+        ...(outgoingAlive ? { outgoingAlive: true as const } : {}),
       },
     ],
   };

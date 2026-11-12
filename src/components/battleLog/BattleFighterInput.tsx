@@ -75,10 +75,17 @@ export function BattleFighterInput(props: BattleBoardProps & { side: Side; pokem
     return (
       <SwitchPanel
         title={
-          <>
-            {pokemon.name}
-            {eunNeun(pokemon.name)} 쓰러졌다!
-          </>
+          battleState[side].currentHp > 0 ? (
+            // 미래예지 적중 위기회피(8.3 A4-b): 활성이 살아 있는 채 물러난다
+            <>
+              {pokemon.name}의 위기회피! 위험을 피해 물러난다!
+            </>
+          ) : (
+            <>
+              {pokemon.name}
+              {eunNeun(pokemon.name)} 쓰러졌다!
+            </>
+          )
         }
         bench={bench}
         onPick={(i) => resolveForcedSwitch(side, i)}

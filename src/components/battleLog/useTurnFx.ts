@@ -105,9 +105,9 @@ export function useTurnFx(log: TurnResult[], battleState: BattleState) {
     const { lunge, shake, flash, pop, shield, aura, swapOut, swapIn, wash, debris, hazardHit, drift, moonlight, statusFx, faintFx, impact, megaFx, pulse } = createFx(nodes, board);
 
     const plan = planTurnFx({ last, doneActions, doneSwitches, endDone, prevSnap, liveSnap });
-    const { newActions, steps, init, swaps, megas, shiftBefore, startOf, swapAt } = plan;
+    const { newActions, steps, init, swaps, megas, shiftBefore, startOf, swapTime } = plan;
     swaps.forEach((sw) => {
-      const t = swapAt(sw.after);
+      const t = swapTime(sw);
       if (sw.enter) swapOut(sw.side, t);
       swapIn(sw.side, t + (sw.enter ? OUT_MS : 0));
       hazardHit(sw.side, sw.messages, t + (sw.enter ? OUT_MS : 0) + 150);

@@ -6,7 +6,7 @@ import { hasVolatile } from "@/lib/volatileConditions";
 import { compareTurnOrder } from "@/lib/turnOrder";
 import { buildTurnOrderActor, itemsSuppressedByRoom, quickFirstChances } from "./turnOrderInputs";
 import { STRUGGLE_MOVE, SWITCH_PASS_MOVE_ID, activeWeather, applyForecastForm, applyMimicryForm, cloneSide, consumeItem, hasLivingReserve, isFainted, isForcedSwitchBlocked, opponentKey, sideOf, type BattleState } from "./state";
-import { applyMegaEvolution, isTrappedFromSwitching, performSwitch } from "./switching";
+import { applyMegaEvolution, forceRandomSwitch, isTrappedFromSwitching, performSwitch } from "./switching";
 import { resolveAction } from "./resolveAction";
 import { finishTurn } from "./finishTurn";
 import { refreshUproar, updateRampage } from "./rampage";
@@ -291,33 +291,6 @@ function pauseForSwitch(ctx: RunTurnContext, awaitingSelfSwitch: RunTurnPaused["
   };
 }
 
-/**
- * 무작위 예비 포켓몬으로 즉시 강제 교체한다(유저 선택 없음) — 레드카드(공격자)·드래곤테일류(상대) 공통.
- * voluntary=false — 기절 후 강제 교체와 같은 취급(가속 발동, 등장 파이프라인은 그대로 탐).
- */
-function forceRandomSwitch(ctx: RunTurnContext, key: FighterKey, extra: { redCardItemName?: string } = {}): void {
-  const { state, random, switches } = ctx;
-  const side = sideOf(state, key);
-  const fromIndex = side.activeIndex;
-  const reserveIdxs = side.party.map((_f, idx) => idx).filter((idx) => idx !== fromIndex && !isFainted(side.party[idx]));
-  const toIndex = reserveIdxs[Math.floor(random() * reserveIdxs.length)];
-  const outgoing = side.party[fromIndex];
-  const entryMessages: string[] = [];
-  performSwitch(state, key, toIndex, entryMessages, { voluntary: false });
-  const inFighter = side.party[toIndex];
-  switches.push({
-    side: key,
-    fromIndex,
-    toIndex,
-    outPokemonId: outgoing.illusionAs ?? outgoing.slot.pokemonId,
-    inPokemonId: inFighter.illusionAs ?? inFighter.slot.pokemonId,
-    entryMessages,
-    afterMove: true,
-    forced: true,
-    ...extra,
-  });
-}
-
 /** 유턴·볼트체인지·배턴터치·썰렁개그·꼬리자르기: 사용측이 교체 슬롯을 고르러 멈춘다 — 멈추면 그 결과, 아니면 undefined */
 function selfSwitchPause(ctx: RunTurnContext, key: FighterKey, action: ActionLogEntry): RunTurnPaused | undefined {
   const { state } = ctx;
@@ -367,7 +340,29 @@ function selfSwitchPause(ctx: RunTurnContext, key: FighterKey, action: ActionLog
   return undefined;
 }
 
-/** 레드카드(Item.forcesAttackerSwitchOnHit): 데미지를 받은 방어측의 카드로 공격자를 무작위 예비와 강제 교체 */
+/**
+ * 레드카드·탈출버튼 공통(8.3 A4-b): 이번 행동이 방어측 본체에 닿았는가 — Showdown의 AfterMoveSecondary 대상 판정.
+ * 데미지량은 보지 않는다(탈이 벗겨지는 적중도 맞은 것). 빗나감·행동불능·타입 면역·방어/대타가 막음·대타가 깎임·흡수 특성 무효·상태 기술은 제외,
+ * 우격다짐이 추가효과를 위력으로 바꾼 행동(sheerForceAbilityName)은 이 효과들이 발동하지 않는다. 홀더 생존·예비 등 편 상태 조건은 호출부에서 본다.
+ * ponytail: 미래예지 경로(finishTurn.applyFutureSight)는 입력 형태가 달라 같은 조건을 따로 쓴다 — 세 번째 호출처가 생기면 공용 함수로 뽑는다.
+ */
+function hitReachedBody(action: ActionLogEntry): boolean {
+  return (
+    action.hit &&
+    action.move.category !== "status" &&
+    !action.blockedReason &&
+    action.typeEffectiveness !== 0 &&
+    !action.blockedByProtectMoveName &&
+    !action.blockedBySubstituteMoveName &&
+    !action.hitSubstitute &&
+    !action.abilityAbsorbAbilityName &&
+    !action.soundproofBlockedByAbilityName &&
+    !action.bouncedMoveName &&
+    !action.sheerForceAbilityName
+  );
+}
+
+/** 레드카드(Item.forcesAttackerSwitchOnHit): 맞은 방어측의 카드로 공격자를 무작위 예비와 강제 교체 */
 function applyRedCard(ctx: RunTurnContext, key: FighterKey, action: ActionLogEntry): void {
   const { state } = ctx;
   const oppKey = opponentKey(key);
@@ -384,23 +379,21 @@ function applyRedCard(ctx: RunTurnContext, key: FighterKey, action: ActionLogEnt
       : holder.currentItemId
         ? getItem(holder.currentItemId)
         : undefined;
+    // 8.3 A4-b(Showdown): 데미지량이 아니라 "맞았는가"로 판정한다(탈이 벗겨지는 적중 포함). 카드는 먼저 소모하고, 공격자가
+    // 뿌리박기·흡반이면 교체만 하지 않는다. 생명의구슬 반동은 끌려 나갈 때 hitResolution이 건너뛴다(같은 조건).
     if (
       holderItem?.forcesAttackerSwitchOnHit &&
-      action.hit &&
-      action.damage > 0 &&
-      !action.blockedByProtectMoveName &&
-      !action.blockedBySubstituteMoveName &&
-      !action.hitNegatedByAbilityName &&
-      !action.abilityAbsorbAbilityName &&
+      hitReachedBody(action) &&
       !isFainted(holder) &&
       !isFainted(state[key]) &&
       !ctx.didSwitch[key] &&
-      hasLivingReserve(sideOf(state, key)) &&
-      !isForcedSwitchBlocked(state[key])
+      hasLivingReserve(sideOf(state, key))
     ) {
-      forceRandomSwitch(ctx, key, { redCardItemName: holderItem.name });
-      ctx.didSwitch[key] = true;
       consumeItem(holder);
+      if (!isForcedSwitchBlocked(state[key])) {
+        forceRandomSwitch(ctx.state, ctx.random, ctx.switches, key, { redCardItemName: holderItem.name });
+        ctx.didSwitch[key] = true;
+      }
     }
   }
 }
@@ -433,7 +426,7 @@ function forceTargetSwitch(ctx: RunTurnContext, key: FighterKey, action: ActionL
     hasLivingReserve(sideOf(state, oppKey)) &&
     !isForcedSwitchBlocked(state[oppKey], state[key].effectiveAbilityId ? getAbility(state[key].effectiveAbilityId) : undefined)
   ) {
-    forceRandomSwitch(ctx, oppKey);
+    forceRandomSwitch(ctx.state, ctx.random, ctx.switches, oppKey);
     // 아직 안 움직였다면 이번 턴 행동을 못 하게 막는다(끌려나온 포켓몬). 우선도 -6이라 대개
     // 상대는 이미 움직인 뒤라 이 플래그는 무해하게 무시된다.
     ctx.didSwitch[oppKey] = true;
@@ -447,16 +440,15 @@ function defenderExitPause(ctx: RunTurnContext, key: FighterKey, action: ActionL
   const { state } = ctx;
   const oppKey = opponentKey(key);
   // 위기회피(Emergency Exit): 이번 공격으로 방어측 HP가 절반 이하로 떨어졌고 방어측에 살아있는
-  // 예비가 있으며 도망봉인·뿌리박기가 아니면 — 유턴류와 같은 pause 흐름으로 방어측을 물러나게
-  // 한다(유저가 나올 포켓몬을 고른다). 드래곤테일 등으로 이번 피격에 이미 교체됐으면(oppForcedOut) 스킵.
+  // 예비가 있으면 — 도망봉인·뿌리박기여도(Showdown은 canSwitch만 본다, 8.3 A4-b) 유턴류와 같은 pause 흐름으로 방어측을 물러나게
+  // 한다. 우격다짐이 추가효과를 위력으로 바꾼 행동이면 발동하지 않는다(유저가 나올 포켓몬을 고른다). 드래곤테일 등으로 이번 피격에 이미 교체됐으면(oppForcedOut) 스킵.
   // didSwitch[oppKey]는 턴 시작 자발 교체로도 서므로(그 턴 행동 생략용) 이 가드엔 쓰면 안 된다.
   if (
     action.triggersDefenderEmergencyExit &&
+    !action.sheerForceAbilityName &&
     !isFainted(state[oppKey]) &&
     !oppForcedOut &&
-    hasLivingReserve(sideOf(state, oppKey)) &&
-    !isForcedSwitchBlocked(state[oppKey]) &&
-    !isTrappedFromSwitching(state[oppKey])
+    hasLivingReserve(sideOf(state, oppKey))
   ) {
     ctx.didSwitch[oppKey] = true;
     ctx.pendingPivot = { side: oppKey, passBaton: false };
@@ -476,17 +468,10 @@ function defenderExitPause(ctx: RunTurnContext, key: FighterKey, action: ActionL
         : undefined;
     if (
       holderItem?.exitsFieldOnHit &&
-      action.hit &&
-      action.damage > 0 &&
-      !action.blockedByProtectMoveName &&
-      !action.blockedBySubstituteMoveName &&
-      !action.hitNegatedByAbilityName &&
-      !action.abilityAbsorbAbilityName &&
+      hitReachedBody(action) && // 8.3 A4-b: 데미지량이 아니라 "맞았는가"(탈 적중 포함), 뿌리박기·그림자밟기에도 발동(Showdown)
       !isFainted(holder) &&
       !oppForcedOut &&
-      hasLivingReserve(sideOf(state, oppKey)) &&
-      !isForcedSwitchBlocked(holder) &&
-      !isTrappedFromSwitching(holder)
+      hasLivingReserve(sideOf(state, oppKey))
     ) {
       ctx.didSwitch[oppKey] = true;
       ctx.pendingPivot = { side: oppKey, passBaton: false };

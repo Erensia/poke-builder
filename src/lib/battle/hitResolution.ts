@@ -20,7 +20,7 @@ import { computeDamage, hustleDamageMultiplier, screenMultiplierFromFlags, supre
 import { getWeatherDamageMultiplier, getWeatherDefenseMultiplier } from "@/lib/weatherEffects";
 import { FIELD_DURATION, getFieldDamageMultiplier } from "@/lib/fieldEffects";
 import { getBerryDefenseResult, getDrainHealMultiplier, getEnduranceResult, getItemCritStageBonus, getItemBasePowerMultiplier, getItemFinalMultiplier, getMentalHerbCureResult } from "@/lib/itemEffects";
-import { STRUGGLE_MOVE, WEATHER_DURATION, activeWeather, applyMimicryForm, consumeItem, contraryDelta, isFainted, rollMultiHitCount, sideOf, statDropBlockStatsOf, statusImmunitiesOf, type BattleFighterState, type BattleState } from "./state";
+import { STRUGGLE_MOVE, WEATHER_DURATION, activeWeather, applyMimicryForm, consumeItem, contraryDelta, hasLivingReserve, isFainted, isForcedSwitchBlocked, rollMultiHitCount, sideOf, statDropBlockStatsOf, statusImmunitiesOf, type BattleFighterState, type BattleState } from "./state";
 import { triggerTerrainSeeds } from "./switching";
 
 interface HitResolutionInput {
@@ -904,6 +904,17 @@ function resolveCountersAndFollowUp(c: HitCtx) {
 }
 
 /** 발버둥·반동·돌머리·생명의구슬·흡수기·해감액·조개껍질방울 */
+/**
+ * 레드카드가 이 행동에서 공격자를 끌어낼 것인가(8.3 A4-b, Showdown lifeorb `!source.forceSwitchFlag`) — 끌려 나가면 생명의구슬 반동이 없다.
+ * runTurn.applyRedCard의 발동 조건과 같다(본체에 닿았고 홀더가 살아 있고 공격자 편에 예비가 있고 공격자가 뿌리박기·흡반이 아님).
+ * ponytail: 조건 중복 — 반동이 resolveAction 안에서 먼저 적용되는 구조라 applyRedCard가 되돌릴 수 없다. 레드카드 조건을 고치면 둘 다 고친다.
+ */
+function redCardDragsAttacker(c: HitCtx): boolean {
+  if (!c.defenderItem?.forcesAttackerSwitchOnHit || !c.isDamaging || c.hitSubstitute || c.typeEffectiveness === 0 || isFainted(c.defender)) return false;
+  const attackerKey: FighterKey = c.defenderKey === "a" ? "b" : "a";
+  return hasLivingReserve(sideOf(c.state, attackerKey)) && !isForcedSwitchBlocked(c.attacker);
+}
+
 function applyRecoilAndDrain(c: HitCtx) {
 
   // 발버둥 반동: 필중이라 항상 이 지점까지 오고, 명중/기절 여부와 무관하게 사용자가
@@ -942,7 +953,8 @@ function applyRecoilAndDrain(c: HitCtx) {
     c.actualDamageDealt > 0 &&
     c.attackerItem?.selfRecoilFractionOfMaxHp &&
     !c.sheerForceAbilityName &&
-    !c.attackerAbility?.negatesIndirectDamage
+    !c.attackerAbility?.negatesIndirectDamage &&
+    !redCardDragsAttacker(c)
   ) {
     c.itemRecoilDamage = Math.floor(c.attacker.maxHp * c.attackerItem.selfRecoilFractionOfMaxHp);
     c.attacker.currentHp = Math.max(0, c.attacker.currentHp - c.itemRecoilDamage);

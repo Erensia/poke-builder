@@ -117,7 +117,7 @@ export function hpAsPercent(e: EndOfTurnLogEntry, maxHp: number | undefined): En
 export function activeIndexTrace(log: TurnResult[], side: FighterKey, partyIds: readonly string[]): { actions: number[]; end: number }[] {
   let idx = 0;
   return log.map((turn) => {
-    for (const sw of turn.switches) if (sw.side === side && !sw.afterMove) idx = sw.toIndex;
+    for (const sw of turn.switches) if (sw.side === side && !sw.afterMove && !sw.endOfTurn) idx = sw.toIndex;
     const chain = [idx, ...turn.switches.filter((sw) => sw.side === side && sw.afterMove).map((sw) => sw.toIndex)];
     let p = 0;
     const actions = turn.actions.map((a) => {
@@ -126,8 +126,10 @@ export function activeIndexTrace(log: TurnResult[], side: FighterKey, partyIds: 
       if (hit >= 0) p = hit;
       return chain[p];
     });
-    idx = chain[chain.length - 1];
-    return { actions, end: idx };
+    const end = chain[chain.length - 1];
+    // 턴 종료 교체(8.3 A4-b)는 턴 종료 줄이 끝난 뒤라 end는 물러나는 포켓몬 기준이고, 다음 턴은 끌려 들어온 포켓몬에서 시작한다
+    idx = turn.switches.filter((sw) => sw.side === side && sw.endOfTurn).reduce((_, sw) => sw.toIndex, end);
+    return { actions, end };
   });
 }
 
