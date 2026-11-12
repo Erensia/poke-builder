@@ -1,6 +1,6 @@
 import { type FighterKey, type TurnAction } from "@/types/battle";
 import { type Move } from "@/types/move";
-import { cloneSide, type BattleState } from "../state";
+import { cloneSide, type BattleFighterState, type BattleState } from "../state";
 import { resumeTurn, runTurn } from "../runTurn";
 
 /**
@@ -30,9 +30,14 @@ export function protectGroupOf(move: Move): ProtectGroup | undefined {
   }
 }
 
-/** 연속 사용 성공 확률 — 엔진(mirroredEffects)과 같은 (1/3)^연속 횟수 */
-export function protectSuccessChance(streak: number | undefined): number {
-  return Math.pow(1 / 3, streak ?? 0);
+/**
+ * 방어류 연속 사용 성공 확률 — 엔진(mirroredEffects)과 같다(8.3 A5): 방어·판별·킹실드·버티기 (1/3)^연속 횟수(상한 6 → 1/729),
+ * 패스트가드는 연속 사용 굴림이 없어 1, 길동무는 방어류 카운터와 무관하게 직전 성공 예약이 남아 있으면 0(100% 실패)·아니면 1.
+ */
+export function protectSuccessChance(fighter: BattleFighterState, group: ProtectGroup): number {
+  if (group === "priorityGuard") return 1;
+  if (group === "destinyBond") return fighter.destinyBondArmed ? 0 : 1;
+  return Math.pow(1 / 3, Math.min(fighter.protectStreak ?? 0, 6));
 }
 
 /** 시뮬레이션에 섞을 상대 행동: 확률 5% 미만은 버리고 큰 순 최대 4개, 합이 1이 되게 다시 나눈다 */

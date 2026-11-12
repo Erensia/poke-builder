@@ -252,8 +252,9 @@ export interface BattleFighterState {
     contactStatus?: StatusCondition;
   };
   /**
-   * 방어류 기술의 연속 성공 횟수. 다음 시도 성공 확률은 (1/3)^protectStreak. 계열이 아닌
-   * 다른 기술을 쓰거나 이번 시도가 실패하면 0으로 리셋된다(undefined와 0은 동일하게 취급).
+   * 방어류 기술의 연속 성공 횟수. 다음 시도 성공 확률은 (1/3)^min(protectStreak, 6). 계열이 아닌
+   * 다른 기술(길동무 포함)을 쓰거나 행동하지 못하거나 이번 시도가 실패하면 0으로 리셋된다(undefined와 0은
+   * 동일하게 취급). 패스트가드는 굴림 없이 성공 시 올리기만 하고, 길동무는 이 값을 올리지 않는다(8.3 A5).
    */
   protectStreak?: number;
   /**
