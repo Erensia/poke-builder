@@ -369,6 +369,8 @@ interface PerformSwitchOptions {
   passBaton?: boolean;
   /** 꼬리자르기: 물러나는 포켓몬이 세운 대타만 새로 나온 포켓몬에게 넘긴다(랭크 등은 안 넘김). */
   passSubstituteOnly?: boolean;
+  /** true면 등장 효과(설치물·등장 특성 등)를 돌리지 않는다 — 호출자가 runEntryEffects를 따로 부른다(8.3 A7 동시 교체) */
+  deferEntry?: boolean;
 }
 
 export function performSwitch(
@@ -378,7 +380,7 @@ export function performSwitch(
   log: string[] = [],
   options: PerformSwitchOptions = {},
 ): void {
-  const { voluntary = true, passBaton = false, passSubstituteOnly = false } = options;
+  const { voluntary = true, passBaton = false, passSubstituteOnly = false, deferEntry = false } = options;
   const side = sideOf(state, key);
   if (toIndex === side.activeIndex || toIndex < 0 || toIndex >= side.party.length) return;
   const outgoing = side.party[side.activeIndex];
@@ -525,7 +527,19 @@ export function performSwitch(
   applyForecastForm(incoming, activeWeather(state));
   applyMimicryForm(incoming, state.field);
 
-  // ── 등장 파이프라인 (Phase 8 §4·§6) ──
+  // ── 등장 파이프라인 (Phase 8 §4·§6) ── deferEntry면 호출자가 모든 교체를 끝낸 뒤 runEntryEffects로 따로 돌린다(8.3 A7 동시 교체)
+  if (!deferEntry) runEntryEffects(state, key, log);
+
+  // TODO(§8): 추격(Pursuit)은 로스터에 없어 미구현 — 교체 대상을 위력 2배로 선타하는 예외.
+}
+
+/**
+ * 교체로 나온 포켓몬의 등장 효과 — 설치물 → 등장 특성 → 시드 → 풍선 → 치유소원 순서(Phase 8 §4·§6). performSwitch가 보통 바로 부르고,
+ * 한 행동 뒤 양쪽이 동시에 교체할 때(8.3 A7)는 deferEntry로 교체만 먼저 끝낸 다음 들어온 포켓몬의 스피드순으로 이 함수를 따로 부른다.
+ */
+export function runEntryEffects(state: BattleState, key: FighterKey, log: string[] = []): void {
+  const side = sideOf(state, key);
+  const incoming = side.party[side.activeIndex];
   // 1. 설치물 발동 — 스텔스록 등장 데미지, 압정뿌리기 스택, 독압정 중독, 끈적끈적네트 스피드 다운,
   //    독타입이면 독압정 흡수. 스텔스록·압정 데미지는 매직가드가 막는다(ability.ts:307 주석 참조 —
   //    인분은 "기술의 추가효과"만 막아 설치물엔 무관).
@@ -545,8 +559,6 @@ export function performSwitch(
     const inName = getPokemon(incoming.illusionAs ?? incoming.slot.pokemonId)?.name ?? "포켓몬";
     log.push(`치유소원이 ${inName}${eulReul(inName)} 감쌌다! 체력과 상태이상이 모두 회복되었다!`);
   }
-
-  // TODO(§8): 추격(Pursuit)은 로스터에 없어 미구현 — 교체 대상을 위력 2배로 선타하는 예외.
 }
 
 interface ApplySwitchOutcome {

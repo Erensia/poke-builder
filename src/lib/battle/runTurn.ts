@@ -4,9 +4,9 @@ import { getAbility, getItem, getPokemon } from "@/lib/data";
 import { eunNeun } from "@/lib/josa";
 import { hasVolatile } from "@/lib/volatileConditions";
 import { compareTurnOrder } from "@/lib/turnOrder";
-import { buildTurnOrderActor, itemsSuppressedByRoom, quickFirstChances } from "./turnOrderInputs";
+import { buildTurnOrderActor, computeTurnOrderSpeed, itemsSuppressedByRoom, quickFirstChances } from "./turnOrderInputs";
 import { STRUGGLE_MOVE, SWITCH_PASS_MOVE_ID, activeWeather, applyForecastForm, applyMimicryForm, cloneSide, consumeItem, hasLivingReserve, isFainted, isForcedSwitchBlocked, opponentKey, sideOf, type BattleState } from "./state";
-import { applyMegaEvolution, forceRandomSwitch, isTrappedFromSwitching, performSwitch } from "./switching";
+import { applyMegaEvolution, forceRandomSwitch, isTrappedFromSwitching, performSwitch, runEntryEffects } from "./switching";
 import { resolveAction } from "./resolveAction";
 import { finishTurn } from "./finishTurn";
 import { refreshUproar, updateRampage } from "./rampage";
@@ -45,6 +45,17 @@ export interface RunTurnPaused {
   _ctx: RunTurnContext;
 }
 
+/** 교체 슬롯을 고르기를 기다리는 한 건 — 유턴류 자체 교체·위기회피·탈출버튼·행동 전 기절 대체 */
+interface PendingChoice {
+  side: FighterKey;
+  passBaton: boolean;
+  passSubstitute?: boolean;
+  returnsToTrainer?: boolean;
+  faintReplacement?: boolean;
+  emergencyExit?: boolean;
+  ejectItemName?: string;
+}
+
 /** runActionPhase ↔ resumeTurn ↔ finishTurn이 나눠 쓰는 턴 처리 상태. runTurn 밖에서 만들지 말 것. */
 export interface RunTurnContext {
   state: BattleState;
@@ -62,9 +73,11 @@ export interface RunTurnContext {
   actionIdx: number;
   selfDestructComboKey: FighterKey | undefined;
   /** passSubstitute: 꼬리자르기 — 세운 대타만 새로 나온 포켓몬에게 인계(랭크 등은 인계 안 함) */
-  pendingPivot:
-    | { side: FighterKey; passBaton: boolean; passSubstitute?: boolean; returnsToTrainer?: boolean; faintReplacement?: boolean }
-    | undefined;
+  pendingPivot: PendingChoice | undefined;
+  /** 8.3 A7: 한 행동 뒤 교체 선택이 둘 이상일 때 pendingPivot 뒤에 기다리는 선택들(공격자 → 방어측 순) */
+  pivotQueue: PendingChoice[];
+  /** 받은 선택들 — 대기열이 비면 한꺼번에 실행한다(동시 교체는 스피드순) */
+  choicesMade: { pivot: PendingChoice; toIndex: number }[];
   /** 행동 전 기절 대체(faintReplacement)를 이미 처리한(또는 슬롯이 없어 건너뛴) 편 — 같은 편을 다시 멈추지 않는다 */
   faintReplacementHandled: Record<FighterKey, boolean>;
 }
@@ -272,6 +285,8 @@ export function runTurn(
     actionIdx: 0,
     selfDestructComboKey: undefined,
     pendingPivot: undefined,
+    pivotQueue: [],
+    choicesMade: [],
     faintReplacementHandled: { a: false, b: false },
   };
   return runActionPhase(ctx);
@@ -300,9 +315,25 @@ function pauseForSwitch(ctx: RunTurnContext, awaitingSelfSwitch: RunTurnPaused["
   };
 }
 
-/** 유턴·볼트체인지·배턴터치·썰렁개그·꼬리자르기: 사용측이 교체 슬롯을 고르러 멈춘다 — 멈추면 그 결과, 아니면 undefined */
-function selfSwitchPause(ctx: RunTurnContext, key: FighterKey, action: ActionLogEntry): RunTurnPaused | undefined {
+/** 선택 한 건을 기다리며 멈춘다 — pendingPivot에 올리고 UI·AI가 읽는 awaitingSelfSwitch 모양으로 돌려준다 */
+function pauseForChoice(ctx: RunTurnContext, choice: PendingChoice): RunTurnPaused {
+  ctx.pendingPivot = choice;
+  return pauseForSwitch(ctx, {
+    side: choice.side,
+    passBaton: choice.passBaton,
+    emergencyExit: choice.emergencyExit,
+    faintReplacement: choice.faintReplacement,
+    ejectItemName: choice.ejectItemName,
+  });
+}
+
+/**
+ * 유턴·볼트체인지·배턴터치·썰렁개그·꼬리자르기: 사용측이 교체 슬롯을 골라야 하는지 판정한다(8.3 A7 — 멈추는 일은 호출부가 대기열로).
+ * 레드카드로 이미 끌려 나갔으면(didSwitch) 자체 교체는 취소된다(Showdown: 플래그를 가진 포켓몬이 사라짐).
+ */
+function selfPivotChoice(ctx: RunTurnContext, key: FighterKey, action: ActionLogEntry): PendingChoice | undefined {
   const { state } = ctx;
+  if (ctx.didSwitch[key]) return undefined;
   // 유턴·볼트체인지·배턴터치(§7-2): 명중해서 효과를 줬고 사용측이 살아 있고 교대 슬롯이 있으면
   // — 여기서 멈춘다. 상대 행동·턴 종료 처리는 교체가 확정된 뒤에(resumeTurn) 새 포켓몬 기준으로
   // 이어진다. 유턴·볼트체인지는 데미지 기술이라 완전 무효(0배)·방어류 차단·특성 흡수로 효과가
@@ -323,16 +354,14 @@ function selfSwitchPause(ctx: RunTurnContext, key: FighterKey, action: ActionLog
     !isFainted(state[key]) &&
     hasLivingReserve(sideOf(state, key))
   ) {
-    ctx.pendingPivot = { side: key, passBaton: !!mv.passesStatsOnSelfSwitch };
-    return pauseForSwitch(ctx, { side: key, passBaton: !!mv.passesStatsOnSelfSwitch });
+    return { side: key, passBaton: !!mv.passesStatsOnSelfSwitch };
   }
 
   // 썰렁개그(Move.selfSwitchAfterUse): 기술을 쓰기만 했으면(행동불능 등으로 못 쓴 경우 제외) 날씨 설정
   // 성공 여부와 무관하게 교체한다 — 이미 눈이라 실패해도 교체(사용자 확인). 유턴류와 달리 효과 실패가
   // 교체를 막지 않는다.
   if (mv.selfSwitchAfterUse && !action.blockedReason && !isFainted(state[key]) && hasLivingReserve(sideOf(state, key))) {
-    ctx.pendingPivot = { side: key, passBaton: false, returnsToTrainer: true };
-    return pauseForSwitch(ctx, { side: key, passBaton: false });
+    return { side: key, passBaton: false, returnsToTrainer: true };
   }
 
   // 꼬리자르기(§4-1): 대타 세팅이 성공했으면(HP·대타·예비 조건 통과) 유턴류처럼 여기서 멈추고
@@ -343,8 +372,7 @@ function selfSwitchPause(ctx: RunTurnContext, key: FighterKey, action: ActionLog
     !isFainted(state[key]) &&
     hasLivingReserve(sideOf(state, key))
   ) {
-    ctx.pendingPivot = { side: key, passBaton: false, passSubstitute: true };
-    return pauseForSwitch(ctx, { side: key, passBaton: false });
+    return { side: key, passBaton: false, passSubstitute: true };
   }
   return undefined;
 }
@@ -444,8 +472,8 @@ function forceTargetSwitch(ctx: RunTurnContext, key: FighterKey, action: ActionL
   return oppForcedOut;
 }
 
-/** 위기회피·탈출버튼: 방어측이 물러나려 교체 슬롯을 고르러 멈춘다 — 멈추면 그 결과, 아니면 undefined */
-function defenderExitPause(ctx: RunTurnContext, key: FighterKey, action: ActionLogEntry, oppForcedOut: boolean): RunTurnPaused | undefined {
+/** 위기회피(8.3 A7): 방어측이 물러나야 하는지 판정한다. 유턴 사용자를 취소하지 않는다(Showdown champions) — 호출부가 대기열에 함께 올린다 */
+function emergencyExitChoice(ctx: RunTurnContext, key: FighterKey, action: ActionLogEntry, oppForcedOut: boolean): PendingChoice | undefined {
   const { state } = ctx;
   const oppKey = opponentKey(key);
   // 위기회피(Emergency Exit): 이번 공격으로 방어측 HP가 절반 이하로 떨어졌고 방어측에 살아있는
@@ -460,10 +488,19 @@ function defenderExitPause(ctx: RunTurnContext, key: FighterKey, action: ActionL
     hasLivingReserve(sideOf(state, oppKey))
   ) {
     ctx.didSwitch[oppKey] = true;
-    ctx.pendingPivot = { side: oppKey, passBaton: false };
-    return pauseForSwitch(ctx, { side: oppKey, passBaton: false, emergencyExit: true });
+    return { side: oppKey, passBaton: false, emergencyExit: true };
   }
+  return undefined;
+}
 
+
+/**
+ * 탈출버튼(8.3 A7): 방어측 도구가 발동하는지 판정한다. Showdown 순서는 탈출버튼 → 레드카드 → 위기회피라 위기회피보다 먼저 부르고,
+ * 발동하면 위기회피는 평가하지 않는다. 유턴 사용자의 교체는 취소하지 않는다.
+ */
+function ejectButtonChoice(ctx: RunTurnContext, key: FighterKey, action: ActionLogEntry, oppForcedOut: boolean): PendingChoice | undefined {
+  const { state } = ctx;
+  const oppKey = opponentKey(key);
   // 탈출버튼(Item.exitsFieldOnHit): 데미지를 받은 방어측(홀더)이 이 도구를 지녔으면 HP 문턱
   // 없이(위기회피와 달리) 곧바로 물러난다 — 유턴류·위기회피와 같은 pause 흐름. 이미 다른
   // 강제 교체가 확정됐으면(드래곤테일·위기회피) oppForcedOut으로 걸러진다.
@@ -483,9 +520,8 @@ function defenderExitPause(ctx: RunTurnContext, key: FighterKey, action: ActionL
       hasLivingReserve(sideOf(state, oppKey))
     ) {
       ctx.didSwitch[oppKey] = true;
-      ctx.pendingPivot = { side: oppKey, passBaton: false };
       consumeItem(holder);
-      return pauseForSwitch(ctx, { side: oppKey, passBaton: false, ejectItemName: holderItem.name });
+      return { side: oppKey, passBaton: false, ejectItemName: holderItem.name };
     }
   }
   return undefined;
@@ -529,12 +565,18 @@ function runActionPhase(ctx: RunTurnContext): RunTurnOutcome | RunTurnPaused {
     updateRampage(state, key, action, random);
     refreshUproar(state, action);
 
-    const selfPause = selfSwitchPause(ctx, key, action);
-    if (selfPause) return selfPause;
+    // 방어측 효과 판정 → 교체 선택 대기열(8.3 A7). 판정 순서는 Showdown: 탈출버튼 → 레드카드 → 위기회피. 탈출버튼과 레드카드는 한 도구라 겹치지 않아
+    // 레드카드 → 드래곤테일류 → 탈출버튼 순으로 두어도 같다(탈출버튼은 드래곤테일로 이미 끌려 나갔으면 건너뛰는 기존 가드를 유지한다).
     applyRedCard(ctx, key, action);
     const oppForcedOut = forceTargetSwitch(ctx, key, action);
-    const exitPause = defenderExitPause(ctx, key, action, oppForcedOut);
-    if (exitPause) return exitPause;
+    const defenderExit = ejectButtonChoice(ctx, key, action, oppForcedOut) ?? emergencyExitChoice(ctx, key, action, oppForcedOut);
+    const selfPivot = selfPivotChoice(ctx, key, action);
+    const choices = [selfPivot, defenderExit].filter((c): c is PendingChoice => !!c);
+    if (choices.length) {
+      ctx.pivotQueue = choices.slice(1);
+      ctx.choicesMade = [];
+      return pauseForChoice(ctx, choices[0]);
+    }
 
     // 발버둥 반동이나 자폭류로 "상대를 쓰러뜨리면서 자신도 같이 쓰러지는" 행동 하나 안에서는
     // resolveAction이 항상 상대 데미지를 먼저 적용한 뒤에 반동/자멸을 적용하도록 순서를 지킨다
@@ -549,45 +591,83 @@ function runActionPhase(ctx: RunTurnContext): RunTurnOutcome | RunTurnPaused {
   return finishTurn(ctx);
 }
 
+/** 선택 한 건을 실제 교체로 옮긴다 — 유효하지 않은 슬롯이면 아무것도 안 하고 undefined. entryMessages 배열을 돌려준다(deferEntry면 등장 효과가 나중에 이 배열을 채운다) */
+function performChoice(ctx: RunTurnContext, pivot: PendingChoice, toIndex: number, deferEntry: boolean): string[] | undefined {
+  const side = sideOf(ctx.state, pivot.side);
+  if (!(toIndex >= 0 && toIndex < side.party.length && toIndex !== side.activeIndex && !isFainted(side.party[toIndex]))) return undefined;
+  const fromIndex = side.activeIndex;
+  const outgoing = side.party[fromIndex];
+  const entryMessages: string[] = [];
+  performSwitch(ctx.state, pivot.side, toIndex, entryMessages, {
+    // 기절 후 대체는 강제 교체와 같은 취급 — 가속 발동(억제 플래그 안 세움)
+    voluntary: !pivot.faintReplacement,
+    passBaton: pivot.passBaton,
+    passSubstituteOnly: pivot.passSubstitute,
+    deferEntry,
+  });
+  const inFighter = side.party[toIndex];
+  ctx.switches.push({
+    side: pivot.side,
+    // 기절 대체: 물러나는 줄("돌아와!") 없이 "가라!"만 — 강제 교체 합성 카드와 같은 표기(fromIndex -1)
+    fromIndex: pivot.faintReplacement ? -1 : fromIndex,
+    toIndex,
+    outPokemonId: outgoing.slot.pokemonId,
+    inPokemonId: inFighter.illusionAs ?? inFighter.slot.pokemonId, // §6-1
+    entryMessages,
+    afterMove: pivot.faintReplacement ? undefined : true,
+    shedTail: pivot.passSubstitute || undefined,
+    returnsToTrainer: pivot.returnsToTrainer || undefined,
+    defenderExit: pivot.emergencyExit || pivot.ejectItemName ? true : undefined,
+  });
+  return entryMessages;
+}
+
+/** 두 편의 교체 순서 — 스피드가 빠른 쪽이 먼저, 트릭룸이면 뒤집힘, 완전 동속은 난수(Showdown 실측, 8.3 A7). 기술 우선도·선공 도구는 쓰지 않는다 */
+function fasterFirst(ctx: RunTurnContext, keys: FighterKey[]): FighterKey[] {
+  if (keys.length < 2) return keys;
+  const { state } = ctx;
+  const actor = (k: FighterKey) => ({ realSpeed: computeTurnOrderSpeed(state, state[k]), move: { priority: 0 } as Move, stages: state[k].stages });
+  const aFirst = compareTurnOrder(actor(keys[0]), actor(keys[1]), ctx.random, state.trickRoomTurnsRemaining !== undefined) === 0;
+  return aFirst ? keys : [keys[1], keys[0]];
+}
+
+/** 받은 선택들을 실행한다. 하나뿐이면 기존 그대로 바로 처리하고, 둘이면(8.3 A7 동시 교체) 교체를 먼저 끝낸 뒤 들어온 포켓몬의 스피드순으로 등장 효과를 처리한다 */
+function executeChoices(ctx: RunTurnContext): void {
+  const made = ctx.choicesMade;
+  ctx.choicesMade = [];
+  if (made.length === 1) {
+    performChoice(ctx, made[0].pivot, made[0].toIndex, false);
+    return;
+  }
+  // ① 교체 실행 — 나가는 포켓몬의 스피드순
+  const outOrder = fasterFirst(ctx, made.map((m) => m.pivot.side));
+  const entered: FighterKey[] = [];
+  const msgs = new Map<FighterKey, string[]>();
+  for (const key of outOrder) {
+    const m = made.find((c) => c.pivot.side === key)!;
+    const entryMessages = performChoice(ctx, m.pivot, m.toIndex, true);
+    if (entryMessages) {
+      entered.push(key);
+      msgs.set(key, entryMessages);
+    }
+  }
+  // ② 등장 효과 — 양쪽 교체가 끝난 뒤 들어온 포켓몬의 스피드순(나가는 순서와 별개)
+  for (const key of fasterFirst(ctx, entered)) runEntryEffects(ctx.state, key, msgs.get(key)!);
+}
+
 /**
- * 유턴류 자체 교체 선택이 끝난 뒤 이어서 호출한다(§7-2). 사용측을 toIndex 슬롯으로 교체하고
- * (등장 파이프라인 포함), 아직 안 움직인 상대가 있으면 그 상대는 새로 나온 포켓몬을 상대하게
+ * 교체 선택이 끝난 뒤 이어서 호출한다(§7-2). 선택을 쌓고, 기다리는 선택이 더 있으면 아직 실행하지 않은 채 다음 선택으로 다시 멈춘다(8.3 A7).
+ * 모두 모이면 교체를 실행하고(포켓몬 등장 파이프라인 포함), 아직 안 움직인 상대가 있으면 그 상대는 새로 나온 포켓몬을 상대하게
  * runActionPhase를 이어 돌린다. toIndex가 유효한 슬롯이 아니면 교체 없이 이어간다.
  */
 export function resumeTurn(ctx: RunTurnContext, toIndex: number): RunTurnOutcome | RunTurnPaused {
   const pivot = ctx.pendingPivot;
   ctx.pendingPivot = undefined;
   if (pivot) {
-    const side = sideOf(ctx.state, pivot.side);
-    if (
-      toIndex >= 0 &&
-      toIndex < side.party.length &&
-      toIndex !== side.activeIndex &&
-      !isFainted(side.party[toIndex])
-    ) {
-      const fromIndex = side.activeIndex;
-      const outgoing = side.party[fromIndex];
-      const entryMessages: string[] = [];
-      performSwitch(ctx.state, pivot.side, toIndex, entryMessages, {
-        // 기절 후 대체는 강제 교체와 같은 취급 — 가속 발동(억제 플래그 안 세움)
-        voluntary: !pivot.faintReplacement,
-        passBaton: pivot.passBaton,
-        passSubstituteOnly: pivot.passSubstitute,
-      });
-      const inFighter = side.party[toIndex];
-      ctx.switches.push({
-        side: pivot.side,
-        // 기절 대체: 물러나는 줄("돌아와!") 없이 "가라!"만 — 강제 교체 합성 카드와 같은 표기(fromIndex -1)
-        fromIndex: pivot.faintReplacement ? -1 : fromIndex,
-        toIndex,
-        outPokemonId: outgoing.slot.pokemonId,
-        inPokemonId: inFighter.illusionAs ?? inFighter.slot.pokemonId, // §6-1
-        entryMessages,
-        afterMove: pivot.faintReplacement ? undefined : true,
-        shedTail: pivot.passSubstitute || undefined,
-        returnsToTrainer: pivot.returnsToTrainer || undefined,
-      });
-    }
+    ctx.choicesMade.push({ pivot, toIndex });
+    const next = ctx.pivotQueue.shift();
+    if (next) return pauseForChoice(ctx, next);
+    executeChoices(ctx);
   }
   return runActionPhase(ctx);
 }
