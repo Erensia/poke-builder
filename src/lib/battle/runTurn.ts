@@ -1,5 +1,5 @@
 import { type Move } from "@/types/move";
-import { type ActionLogEntry, type FighterKey, type SwitchLogEntry, type TurnAction, type TurnResult } from "@/types/battle";
+import { type ActionLogEntry, type FighterKey, type MegaEvolutionLogEntry, type SwitchLogEntry, type TurnAction, type TurnResult } from "@/types/battle";
 import { getAbility, getItem, getPokemon } from "@/lib/data";
 import { eunNeun } from "@/lib/josa";
 import { hasVolatile } from "@/lib/volatileConditions";
@@ -55,6 +55,7 @@ export interface RunTurnContext {
   speedB: number;
   didSwitch: Record<FighterKey, boolean>;
   turnStartAnnouncements: string[];
+  megaEvolutions: MegaEvolutionLogEntry[];
   actions: ActionLogEntry[];
   switches: SwitchLogEntry[];
   /** 다음에 처리할 order 인덱스(pause 후 resume 시작점) */
@@ -192,6 +193,7 @@ export function runTurn(
 
   // 의태(메더): 턴 시작 시점의 필드에 맞춰 타입을 다시 맞춘다. 필드 타입으로 바뀌면 안내한다.
   const turnStartAnnouncements: string[] = [];
+  const megaEvolutions: MegaEvolutionLogEntry[] = [];
   for (const key of ["a", "b"] as const) {
     const changedTo = applyMimicryForm(state[key], state.field);
     if (changedTo) {
@@ -206,7 +208,12 @@ export function runTurn(
   for (const key of prevState.a.realStats.spe >= prevState.b.realStats.spe ? (["a", "b"] as const) : (["b", "a"] as const)) {
     const action = key === "a" ? actionA : actionB;
     if (action.kind === "move" && action.mega && !didSwitch[key]) {
-      applyMegaEvolution(state, key, turnStartAnnouncements);
+      if (applyMegaEvolution(state, key, turnStartAnnouncements)) {
+        // 구조화 정보(8.3 B1): 화면 연출이 상태 비교로 추측하지 않도록 누가 어떤 폼으로 바뀌었는지 남긴다
+        const pokemon = getPokemon(state[key].slot.pokemonId);
+        const mega = pokemon?.megaEvolutions?.find((m) => m.megaStone === state[key].megaStone);
+        if (mega) megaEvolutions.push({ side: key, pokemonId: state[key].slot.pokemonId, megaForm: mega.form });
+      }
     }
   }
 
@@ -259,6 +266,7 @@ export function runTurn(
     speedB,
     didSwitch,
     turnStartAnnouncements,
+    megaEvolutions,
     actions: [],
     switches,
     actionIdx: 0,
@@ -284,6 +292,7 @@ function pauseForSwitch(ctx: RunTurnContext, awaitingSelfSwitch: RunTurnPaused["
       expiredScreens: [],
       expiredSafeguard: [],
       turnStartAnnouncements: ctx.turnStartAnnouncements,
+      megaEvolutions: ctx.megaEvolutions.length > 0 ? ctx.megaEvolutions : undefined,
       switches: [...switches],
       activePokemonIds: { a: state.a.slot.pokemonId, b: state.b.slot.pokemonId },
     },

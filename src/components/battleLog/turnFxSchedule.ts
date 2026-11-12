@@ -23,6 +23,8 @@ export interface TurnFxView {
   showPrev: Partial<Record<FighterKey, boolean>>;
   /** 이 턴이 시작하기 직전의 배틀 상태 */
   prev: BattleState;
+  /** 킬가르도 폼 변경 연출(8.3 A6): 이 편은 그 시각의 폼을 보여 준다 — 상태는 이미 턴 끝 폼이라 그대로 두면 기술 전에 바뀐 모습이 보인다. 폼 변경이 없는 턴은 없다 */
+  stance?: Partial<Record<FighterKey, "shield" | "blade">>;
   /** 날씨·필드가 바뀌는 행동이 공개되기 전까지 보여 줄 이전 날씨·필드(7.4 E9) — 바뀐 뒤에는 없다(실제 상태) */
   env?: Pick<BattleState, "weather" | "field">;
 }
@@ -62,12 +64,12 @@ export function planTurnFx({ last, doneActions, doneSwitches, endDone, prevSnap,
     // atEnd: 턴 종료 효과가 끝난 뒤의 교체(8.3 A4-b) — 행동 번호가 아니라 턴 종료 줄 시각 뒤에 놓는다. outgoingAlive: 살아 있는 채 물러나는 합성 카드도 나가는 모션을 보인다
     return { side: sw.side, enter: sw.fromIndex >= 0 || !!sw.outgoingAlive, afterMove: !!sw.afterMove, atEnd: !!sw.endOfTurn, after: Math.max(idx - doneActions, -1), messages: sw.entryMessages };
   });
-  // 메가진화(E8) — 로그에 정보가 없어서 직전 상태와 비교한다(이번 턴 교체한 편은 제외). 행동 전에 일어난다
+  // 메가진화(E8) — 로그의 구조화 필드(megaEvolutions)에서 읽는다. 이어지는 결과에 이미 재생한 메가진화가 다시 들어 있을 수 있어 직전 상태가 이미 메가인 편은 뺀다. 행동 전에 일어난다
   const nowState = liveSnap;
   const wasState = prevSnap;
   // 같은 턴에 유턴 등으로 나간 편은 지금 상태의 활성 포켓몬이 이미 바뀌었으니, 나가기 전 자리(파티)의 포켓몬으로 본다
   const megaFighter = (k: FighterKey) => (swapped.has(k) ? sideOf(nowState, k).party[sideOf(wasState, k).activeIndex] : nowState[k]);
-  const megas = (["a", "b"] as const).filter((k) => megaFighter(k)?.hasMegaEvolved && !wasState[k].hasMegaEvolved);
+  const megas = (last.megaEvolutions ?? []).map((m) => m.side).filter((k) => !wasState[k].hasMegaEvolved);
   // 메가진화한 채 나가는 편은 폼이 바뀐 뒤(MEGA_PEAK)부터 나가는 모션이 끝날 때까지 메가진화한 모습을 보여 준다 — HP는 아직 턴 시작 값
   const megaPrev: BattleState = { ...prevSnap };
   megas.filter((k) => swapped.has(k)).forEach((k) => (megaPrev[k] = { ...megaFighter(k), currentHp: wasState[k].currentHp }));
@@ -81,14 +83,16 @@ export function planTurnFx({ last, doneActions, doneSwitches, endDone, prevSnap,
   const swapAt = (g: number) => (g < 0 ? 0 : startOf(g) + IMPACT + 150);
   // 턴 종료 줄이 나오는 시각(useTurnFx의 endStart와 같다) 뒤에 턴 종료 교체를 놓는다
   const swapTime = (s: { atEnd: boolean; after: number }) => (s.atEnd ? newActions.length * STEP + shiftBefore(Infinity) + END_SWAP_MS : swapAt(s.after));
-  return { newActions, swapped, steps, init, swaps, megas, megaPrev, nowState, wasState, shiftBefore, startOf, swapAt, swapTime };
+  // 킬가르도 폼 변경(8.3 A6) — 행동 k가 공개되는 순간 바뀐다. 교체한 편은 카드 안 포켓몬이 바뀌어 건너뛴다
+  const stances = newActions.flatMap((e, k) => (e.stanceChange && !swapped.has(e.actor) ? [{ side: e.actor, k, to: e.stanceChange.to }] : []));
+  return { stances, newActions, swapped, steps, init, swaps, megas, megaPrev, nowState, wasState, shiftBefore, startOf, swapAt, swapTime };
 }
 
 /**
  * 공개·HP 일정표 — [시각, 그 시각에 보이는 화면 상태]의 열(순수 계산). 훅은 이 열을 타이머로 건다.
  */
 export function buildFxFrames({ plan, last, same, doneActions, endDone, endStart, entryIdx, prevSnap, liveSnap }: { plan: ReturnType<typeof planTurnFx>; last: TurnResult; same: boolean | null | undefined; doneActions: number; endDone: boolean; endStart: number; entryIdx: number; prevSnap: BattleState; liveSnap: BattleState }) {
-  const { newActions, steps, init, swaps, megas, megaPrev, nowState, wasState, startOf, swapTime } = plan;
+  const { newActions, steps, init, swaps, megas, megaPrev, nowState, wasState, startOf, swapTime, stances } = plan;
   // 공개·HP 일정표: [시각, 그 시각에 보이는 상태]. 행동 블록은 충돌 순간에, 턴 종료 줄은 턴 종료 시각에 나온다.
   // HP는 시작값(직전 턴 끝 HP)에서 행동마다 로그의 남은 HP로 바뀐다. 교체가 있었던 편은 중간값 없이 실제 HP를 쓴다.
   // 나가는 모션이 끝날 때까지 교체하는 편의 카드는 교체 전 포켓몬을 보여 준다(showPrev).
@@ -109,6 +113,18 @@ export function buildFxFrames({ plan, last, same, doneActions, endDone, endStart
   // 행동 전 교체 줄은 그 교체의 새 포켓몬이 나오는 순간(나가는 모션이 끝난 뒤)에 공개한다
   // 이어지는 결과(중간 → 완성본)에서는 행동 전 교체 줄이 이미 나와 있으니 다시 숨기지 않는다
   const preAt = same ? 0 : Math.max(0, ...swaps.filter((s) => !s.afterMove && !s.atEnd).map((s) => (s.enter ? OUT_MS : 0)));
+  // 시각 t에 보이는 폼 — 마지막으로 공개된 폼 변경의 값, 아직 하나도 없으면 첫 변경 직전의 폼(변경 전 폼 = 변경 후의 반대)
+  const stanceAt = (t: number): TurnFxView["stance"] => {
+    if (!stances.length) return undefined;
+    const out: NonNullable<TurnFxView["stance"]> = {};
+    for (const side of ["a", "b"] as const) {
+      const mine = stances.filter((s) => s.side === side);
+      if (!mine.length) continue;
+      const shown = mine.filter((s) => startOf(s.k) + IMPACT <= t).at(-1);
+      out[side] = shown ? shown.to : mine[0].to === "blade" ? "shield" : "blade";
+    }
+    return out;
+  };
   const times = [...new Set([0, preAt, ...newActions.map((_, k) => startOf(k) + IMPACT), ...(endDone ? [] : [endStart]), ...outUntil.map((o) => o.until), ...(envAt > 0 ? [envAt] : [])])].sort((x, y) => x - y);
   const frames = times.map((t): [number, TurnFxView] => {
     const shown = newActions.filter((_, k) => startOf(k) + IMPACT <= t).length;
@@ -124,6 +140,7 @@ export function buildFxFrames({ plan, last, same, doneActions, endDone, endStart
         prev: t >= MEGA_PEAK ? megaPrev : prevSnap,
         entry: entryIdx,
         live: liveSnap,
+        stance: stanceAt(t),
         env: envAt >= 0 && t < envAt ? { weather: prevSnap.weather, field: prevSnap.field } : undefined,
       },
     ];

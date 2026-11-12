@@ -46,6 +46,7 @@ interface ActionCtx {
   attackerItemIdBeforeAction: string | null;
   defenderItemIdBeforeAction: string | null;
   leppaRestoredPpItemName: string | undefined;
+  stanceChange: { to: "shield" | "blade" } | undefined;
   pressureExtraPpAbilityName: string | undefined;
   selfCuredStatus: StatusCondition | null | undefined;
   sleepTalkCalledMoveName: string | undefined;
@@ -786,6 +787,7 @@ function collectResult(c: ActionCtx) {
     itemRecoilItemName: c.itemRecoilItemName,
     berryReducedDamageItemName: c.berryReducedDamageItemName,
     leppaRestoredPpItemName: c.leppaRestoredPpItemName,
+    stanceChange: c.stanceChange,
     drainHealAmount: c.drainHealAmount || undefined,
     liquidOozeDamage: c.liquidOozeDamage || undefined,
     liquidOozeAbilityName: c.liquidOozeAbilityName,
@@ -983,6 +985,7 @@ export function resolveAction(
   c.attackerItemIdBeforeAction = c.pre.attackerItemIdBeforeAction;
   c.defenderItemIdBeforeAction = c.pre.defenderItemIdBeforeAction;
   c.leppaRestoredPpItemName = c.pre.leppaRestoredPpItemName;
+  c.stanceChange = c.pre.stanceChange;
   c.pressureExtraPpAbilityName = c.pre.pressureExtraPpAbilityName;
   c.selfCuredStatus = c.pre.selfCuredStatus;
   c.sleepTalkCalledMoveName = c.pre.sleepTalkCalledMoveName;

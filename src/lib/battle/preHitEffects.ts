@@ -44,6 +44,8 @@ interface PreHitCtx {
   attackerItemIdBeforeAction: string | null;
   defenderItemIdBeforeAction: string | null;
   leppaRestoredPpItemName: string | undefined;
+  /** 배틀스위치로 이번 행동에서 폼이 바뀌었으면 바뀐 폼 — 행동 로그의 stanceChange로 간다 */
+  stanceChange: { to: "shield" | "blade" } | undefined;
   recharging: boolean;
   pressureExtraPpAbilityName: string | undefined;
   blocked: (reason: ActionBlockReason, selfDamage?: number, extra?: Partial<ActionLogEntry>) => ActionLogEntry;
@@ -211,9 +213,27 @@ function payMovePp(c: PreHitCtx) {
     selfFainted: isFainted(c.attacker),
     recoilDamage: 0,
     leppaRestoredPpItemName: c.leppaRestoredPpItemName,
+    stanceChange: c.stanceChange,
     pressureExtraPpAbilityName: c.pressureExtraPpAbilityName,
     ...extra,
   });
+}
+
+/**
+ * 배틀스위치(킬가르도): 데미지 기술이면 블레이드폼, 킹실드(revertMoveId)면 실드폼, 그 외 변화기는 유지한다.
+ * Showdown 순서는 BeforeMove(행동 불가) → ModifyMove(여기) → onTry(성공 판정)이라 기술이 실패해도 바뀐다(8.3 R8).
+ * 스탯 재계산은 데미지 계산보다 먼저라 이번 공격에 새 폼의 실수치가 반영된다. 이미 그 폼이면 아무것도 안 한다(이벤트도 없다).
+ */
+function applyStanceChange(c: PreHitCtx, move: Move) {
+  const forms = c.attacker.stanceChangeForms;
+  if (!forms) return;
+  const nextForm: "shield" | "blade" =
+    move.id === forms.revertMoveId ? "shield" : move.category !== "status" ? "blade" : (c.attacker.currentStanceForm ?? "shield");
+  if (nextForm === c.attacker.currentStanceForm) return;
+  const nextBaseStats = nextForm === "blade" ? forms.bladeBaseStats : forms.shieldBaseStats;
+  c.attacker.realStats = computeRealStats(nextBaseStats, c.attacker.slot.points, c.attacker.slot.nature);
+  c.attacker.currentStanceForm = nextForm;
+  c.stanceChange = { to: nextForm };
 }
 
 /** 반동 턴·사용 조건·필드/날씨/중복 사용 제약 — 걸리면 실패로 끝난다 */
@@ -479,6 +499,7 @@ function handleChargeAndCopyMoves(c: PreHitCtx) {
         charging: true,
         selfStatRises: c.chargeStatRises.length ? c.chargeStatRises : undefined,
         leppaRestoredPpItemName: c.leppaRestoredPpItemName,
+        stanceChange: c.stanceChange,
       } };
     }
   }
@@ -509,6 +530,7 @@ function handleChargeAndCopyMoves(c: PreHitCtx) {
       futureSightSet: failed ? undefined : true,
       futureSightFailed: failed || undefined,
       leppaRestoredPpItemName: c.leppaRestoredPpItemName,
+      stanceChange: c.stanceChange,
     } };
   }
 
@@ -1007,26 +1029,6 @@ function recordUsageEffects(c: PreHitCtx) {
     }
   }
 
-  // 배틀스위치(킬가르도): 여기까지 왔다는 건 이번 기술을 실제로 사용한다는 뜻이라(위 lastMoveStreak
-  // 주석과 동일한 근거), 명중 여부와 무관하게 폼이 바뀐다 — 데미지 기술이면 블레이드폼(공격/특공↑),
-  // 킹실드(revertMoveId)를 쓰면 실드폼으로 되돌아간다. 그 외 변화기는 폼을 유지한다(본가 규칙 —
-  // 킹실드만 실드폼 복귀 트리거고 다른 변화기는 폼에 영향 없음). 이 스탯 재계산은 데미지 계산보다
-  // 먼저 일어나야 이번 공격 자체에 새 폼의 실수치가 반영된다.
-  if (c.attacker.stanceChangeForms) {
-    const forms = c.attacker.stanceChangeForms;
-    const nextForm: "shield" | "blade" =
-      c.effectiveMove.id === forms.revertMoveId
-        ? "shield"
-        : c.effectiveMove.category !== "status"
-          ? "blade"
-          : (c.attacker.currentStanceForm ?? "shield");
-    if (nextForm !== c.attacker.currentStanceForm) {
-      const nextBaseStats = nextForm === "blade" ? forms.bladeBaseStats : forms.shieldBaseStats;
-      c.attacker.realStats = computeRealStats(nextBaseStats, c.attacker.slot.points, c.attacker.slot.nature);
-      c.attacker.currentStanceForm = nextForm;
-    }
-  }
-
   // 변환자재/리베로: 여기까지 왔다는 건 상태이상·행동방해를 뚫고 실제로 이 기술을 쓴다는 뜻이라,
   // 명중 여부와 무관하게 자신의 타입이 이 기술의 타입으로 바뀐다(사용자 확인 — 실제로 타입이
   // 바뀌어서 이후 턴 방어에도 반영된다). **발동은 이번 등장 스탠스에서 1회뿐(본가 9세대)** —
@@ -1171,6 +1173,7 @@ function rollHit(c: PreHitCtx) {
       crashDamage: crashDamage || undefined,
       selfDamageOnUse: c.selfDamageOnUse || undefined,
       leppaRestoredPpItemName: c.leppaRestoredPpItemName,
+      stanceChange: c.stanceChange,
       // 변환자재/리베로는 명중 굴림 전에 이미 발동했다 — 빗나가도 타입은 바뀌고 로그 문구도 나와야 한다.
       changedOwnTypeTo: c.changedOwnTypeTo,
       changedOwnTypeAbilityName: c.changedOwnTypeAbilityName,
@@ -1257,7 +1260,7 @@ function applyProtectReactions(c: PreHitCtx) {
 /** 결과를 모아 돌려준다 */
 function collectResult(c: PreHitCtx) {
   return {
-    move: c.move, chargeStatRises: c.chargeStatRises, defenderKey: c.defenderKey, attacker: c.attacker, defender: c.defender, defenderHpAtActionStart: c.defenderHpAtActionStart, actorPokemonId: c.actorPokemonId, defenderPokemonId: c.defenderPokemonId, attackerAbility: c.attackerAbility, defenderAbility: c.defenderAbility, attackerBerriesBlocked: c.attackerBerriesBlocked, defenderBerriesBlocked: c.defenderBerriesBlocked, attackerItemIdBeforeAction: c.attackerItemIdBeforeAction, defenderItemIdBeforeAction: c.defenderItemIdBeforeAction, leppaRestoredPpItemName: c.leppaRestoredPpItemName, pressureExtraPpAbilityName: c.pressureExtraPpAbilityName, selfCuredStatus: c.selfCuredStatus, sleepTalkCalledMoveName: c.sleepTalkCalledMoveName, copycatCalledMoveName: c.copycatCalledMoveName, ohkoBlockedByAbilityName: c.ohkoBlockedByAbilityName, ohkoImmune: c.ohkoImmune, flungItemId: c.flungItemId, attackerItem: c.attackerItem, defenderItem: c.defenderItem, blockedByGoodAsGold: c.blockedByGoodAsGold, blockedBySubstitute: c.blockedBySubstitute, blockedByPowderImmunity: c.blockedByPowderImmunity, unseenFistPiercing: c.unseenFistPiercing, blockedByProtect: c.blockedByProtect, blockedByProtectMoveName: c.blockedByProtectMoveName, soundproofBlockedByAbilityName: c.soundproofBlockedByAbilityName, bulletproofBlockedByAbilityName: c.bulletproofBlockedByAbilityName, opponentEffectsBlocked: c.opponentEffectsBlocked, bouncedByMagicMirror: c.bouncedByMagicMirror, shellSideArmCategory: c.shellSideArmCategory, abilityOffenseMultiplier: c.abilityOffenseMultiplier, statOffenseMultiplier: c.statOffenseMultiplier, abilityDefenseMultiplier: c.abilityDefenseMultiplier, finalDefenseMultiplier: c.finalDefenseMultiplier, stabMultiplier: c.stabMultiplier, typeEffectiveness: c.typeEffectiveness, effectiveMove: c.effectiveMove, sheerForceAbilityName: c.sheerForceAbilityName, fickleBeamEmpowered: c.fickleBeamEmpowered, electromorphosisEmpoweredAbilityName: c.electromorphosisEmpoweredAbilityName, ownMoveTypeBoostMultiplier: c.ownMoveTypeBoostMultiplier, rivalryMultiplier: c.rivalryMultiplier, changedOwnTypeTo: c.changedOwnTypeTo, changedOwnTypeAbilityName: c.changedOwnTypeAbilityName, lostTypeAfterUse: c.lostTypeAfterUse, gemMultiplier: c.gemMultiplier, ateGemItemName: c.ateGemItemName, hitChance: c.hitChance, defenderHideType: c.defenderHideType, evadedByCharge: c.evadedByCharge, hit: c.hit, selfDamageOnUse: c.selfDamageOnUse, abilityAbsorbedMoveType: c.abilityAbsorbedMoveType, abilityAbsorbAbilityName: c.abilityAbsorbAbilityName, abilityAbsorbHealAmount: c.abilityAbsorbHealAmount, protectContactPenaltyMoveName: c.protectContactPenaltyMoveName, protectContactDamage: c.protectContactDamage, protectContactInflictedStatus: c.protectContactInflictedStatus,
+    move: c.move, chargeStatRises: c.chargeStatRises, defenderKey: c.defenderKey, attacker: c.attacker, defender: c.defender, defenderHpAtActionStart: c.defenderHpAtActionStart, actorPokemonId: c.actorPokemonId, defenderPokemonId: c.defenderPokemonId, attackerAbility: c.attackerAbility, defenderAbility: c.defenderAbility, attackerBerriesBlocked: c.attackerBerriesBlocked, defenderBerriesBlocked: c.defenderBerriesBlocked, attackerItemIdBeforeAction: c.attackerItemIdBeforeAction, defenderItemIdBeforeAction: c.defenderItemIdBeforeAction, leppaRestoredPpItemName: c.leppaRestoredPpItemName, stanceChange: c.stanceChange, pressureExtraPpAbilityName: c.pressureExtraPpAbilityName, selfCuredStatus: c.selfCuredStatus, sleepTalkCalledMoveName: c.sleepTalkCalledMoveName, copycatCalledMoveName: c.copycatCalledMoveName, ohkoBlockedByAbilityName: c.ohkoBlockedByAbilityName, ohkoImmune: c.ohkoImmune, flungItemId: c.flungItemId, attackerItem: c.attackerItem, defenderItem: c.defenderItem, blockedByGoodAsGold: c.blockedByGoodAsGold, blockedBySubstitute: c.blockedBySubstitute, blockedByPowderImmunity: c.blockedByPowderImmunity, unseenFistPiercing: c.unseenFistPiercing, blockedByProtect: c.blockedByProtect, blockedByProtectMoveName: c.blockedByProtectMoveName, soundproofBlockedByAbilityName: c.soundproofBlockedByAbilityName, bulletproofBlockedByAbilityName: c.bulletproofBlockedByAbilityName, opponentEffectsBlocked: c.opponentEffectsBlocked, bouncedByMagicMirror: c.bouncedByMagicMirror, shellSideArmCategory: c.shellSideArmCategory, abilityOffenseMultiplier: c.abilityOffenseMultiplier, statOffenseMultiplier: c.statOffenseMultiplier, abilityDefenseMultiplier: c.abilityDefenseMultiplier, finalDefenseMultiplier: c.finalDefenseMultiplier, stabMultiplier: c.stabMultiplier, typeEffectiveness: c.typeEffectiveness, effectiveMove: c.effectiveMove, sheerForceAbilityName: c.sheerForceAbilityName, fickleBeamEmpowered: c.fickleBeamEmpowered, electromorphosisEmpoweredAbilityName: c.electromorphosisEmpoweredAbilityName, ownMoveTypeBoostMultiplier: c.ownMoveTypeBoostMultiplier, rivalryMultiplier: c.rivalryMultiplier, changedOwnTypeTo: c.changedOwnTypeTo, changedOwnTypeAbilityName: c.changedOwnTypeAbilityName, lostTypeAfterUse: c.lostTypeAfterUse, gemMultiplier: c.gemMultiplier, ateGemItemName: c.ateGemItemName, hitChance: c.hitChance, defenderHideType: c.defenderHideType, evadedByCharge: c.evadedByCharge, hit: c.hit, selfDamageOnUse: c.selfDamageOnUse, abilityAbsorbedMoveType: c.abilityAbsorbedMoveType, abilityAbsorbAbilityName: c.abilityAbsorbAbilityName, abilityAbsorbHealAmount: c.abilityAbsorbHealAmount, protectContactPenaltyMoveName: c.protectContactPenaltyMoveName, protectContactDamage: c.protectContactDamage, protectContactInflictedStatus: c.protectContactInflictedStatus,
   };
 }
 
@@ -1311,16 +1314,22 @@ export function resolvePreHitEffects(
   payMovePp(c);
   {
     const r = checkUsageGates(c);
-    if (r) return r.value;
+    if (r) {
+      // 사용 조건 실패도 ModifyMove 뒤라 폼은 바뀐다(반동 턴은 BeforeMove라 제외). 상태이상과 겹치는 턴의 순서 차이는 알려진 한계(설계서 §3-1)
+      if (!c.recharging) applyStanceChange(c, c.move);
+      return { ...r.value, stanceChange: c.stanceChange };
+    }
   }
   {
     const r = checkActionBlockers(c);
     if (r) return r.value;
   }
+  applyStanceChange(c, c.move); // 차지 1턴째(조기 반환)도 폼이 바뀐다. 호출 기술(잠꼬대 등)은 변화기라 여기선 유지
   {
     const r = handleChargeAndCopyMoves(c);
     if (r) return r.value;
   }
+  applyStanceChange(c, c.move); // 호출 기술(잠꼬대·흉내쟁이)은 위 단계에서 c.move로 바뀌어 있다 — 정해진 뒤 한 번 더(같은 폼이면 무동작)
   checkDefenderImmunities(c);
   resolveDynamicMoveType(c);
   {

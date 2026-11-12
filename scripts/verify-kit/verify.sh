@@ -34,7 +34,7 @@ chk() { # 이름 rc파일
 }
 chk test:ai test-ai; chk test:damage test-damage; chk test:inference test-inference
 grep -q "결합 결과 해시 10040ffa0108c9a3" "$W/test-inference.log" && echo "PASS  결합 결과 해시 10040ffa0108c9a3" || { echo "FAIL  결합 결과 해시 변경"; fail=1; }
-grep -q '"hash":"5ea2453d67547c5a5ff3f1f62525caab98df6501d9abcad7161749bd8f41001e"' "$W/regress.out" && echo "PASS  regress 200 해시 5ea2453d…" || { echo "FAIL  regress 해시 변경: $(tail -1 "$W/regress.out" | cut -c1-200)"; fail=1; }
+grep -q '"hash":"227d107dd4b4da846a44619087cbfbf7cb9454c418051cc296d3c087fc37fc3d"' "$W/regress.out" && echo "PASS  regress 200 해시 227d107d…" || { echo "FAIL  regress 해시 변경: $(tail -1 "$W/regress.out" | cut -c1-200)"; fail=1; }
 if [ "$(grep -v "WebSocket server error" "$W/regress20000.out" | tail -1)" = "$(cat "$B/regress20000.out")" ]; then echo "PASS  regress 20000 로그 해시(시드 1~20000 전 턴 로그)"; else echo "FAIL  regress 20000 해시 변경: $(tail -1 "$W/regress20000.out" | cut -c1-200)"; fail=1; fi
 if [ "$(grep -v "WebSocket server error" "$W/matchup.out" | tail -1)" = "$(cat "$B/matchup-hash600k.out")" ]; then echo "PASS  계산 함수 차분 해시(무작위 대결 60만 건)"; else echo "FAIL  계산 함수 차분 해시 변경: $(tail -1 "$W/matchup.out" | cut -c1-200)"; fail=1; fi
 for f in greedy120 status60 h2h40; do

@@ -64,7 +64,7 @@ export function BattleBoard(props: BattleBoardProps) {
             {/* 기절 효과(회색조·가라앉음)는 카드 부분에만 걸고, 아래 교체·기술 입력 영역은 그대로 둔다 */}
             <div className="battle-fighter-top">
               {/* 자동 진행 대기 중에는 AI 쪽 이름 옆 점 세 개(aiThinking 표시)를 재사용해 "다음 턴을 준비하는 중"임을 보인다 */}
-              <BattleFighterCard {...props} aiThinking={props.aiThinking || autoPlay} battleState={shownState} side={side} pokemon={shownPokemon} shownHp={fx?.hp[side]} />
+              <BattleFighterCard {...props} aiThinking={props.aiThinking || autoPlay} battleState={shownState} side={side} pokemon={shownPokemon} shownHp={fx?.hp[side]} stanceForm={fx?.stance?.[side]} />
             </div>
             {/* 자리는 유지한 채 숨겨 카드 높이가 흔들리지 않게 한다 */}
             <div style={{ display: "contents", visibility: holdChoice && (props.pendingForcedSwitch?.[side] || props.pendingPivot?.side === side) ? "hidden" : undefined }}>

@@ -95,6 +95,8 @@ export interface SpriteFormOptions {
   sizeForm?: string;
   /** 활성 메가폼 id(예: "리자몽-메가X"). */
   activeMegaForm?: string;
+  /** 킬가르도(배틀스위치)의 현재 폼. 킬가르도 외 종에는 영향이 없다. */
+  stanceForm?: "shield" | "blade";
   /** 장착 도구 — 메가스톤이면 그 메가폼 스프라이트를 쓴다. activeMegaForm 이 우선. */
   item?: string | null;
 }
@@ -111,6 +113,12 @@ export function resolvePokemonSpriteUrl(pokemon: Pokemon, opts: SpriteFormOption
     findMegaFormByStone(pokemon, opts.item ?? null);
   if (mega) {
     const hit = look(megaFormFullName(mega));
+    if (hit) return hit;
+  }
+
+  // 1-2) 배틀스위치 폼(킬가르도) — 폼 파일이 없는 종이면 look이 null이라 다음 단계로 떨어진다
+  if (opts.stanceForm && pokemon.stanceChangeForms) {
+    const hit = look(`${pokemon.id}(${opts.stanceForm === "blade" ? "블레이드폼" : "실드폼"})`);
     if (hit) return hit;
   }
 

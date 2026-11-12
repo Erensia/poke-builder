@@ -53,7 +53,7 @@ function AiStages({ fighter }: { fighter: Fighter }) {
  * 메가스톤을 들어도 실제로 선언(hasMegaEvolved)해야 메가폼 스프라이트로 바뀐다 — 그래서 item은 스프라이트 옵션에 안 넘기고
  * (메가스톤이 스프라이트를 강제로 메가폼으로 만들기 때문) 뱃지로만 표시한다.
  */
-function fighterAvatar(pokemon: Pokemon, fighter: Fighter, form: ReturnType<typeof getEffectiveForm>) {
+function fighterAvatar(pokemon: Pokemon, fighter: Fighter, form: ReturnType<typeof getEffectiveForm>, stanceForm?: "shield" | "blade") {
   // 변신(§괴짜/변신, ver.1.6): 로그엔 "변신했다!"가 찍히는데 보드 표시가 안 바뀌던 버그 —
   // 이름은 원본 종 그대로 두되(본가 규칙), 스프라이트·타입 배지는 변신 대상 모습으로 보여준다.
   // fighter.types는 applyTransform이 이미 대상 것으로 갈아치워 둔 값이라 그대로 쓴다.
@@ -73,8 +73,14 @@ function fighterAvatar(pokemon: Pokemon, fighter: Fighter, form: ReturnType<type
           formVariant: fighter.slot.formVariant,
           sizeForm: fighter.slot.sizeForm,
           activeMegaForm: fighter.hasMegaEvolved ? form.mega?.form : undefined,
+          stanceForm,
         };
   return { avatarPokemon, avatarForm, illusionPokemon };
+}
+
+/** 킬가르도 폼 표시값 — 덮어쓰기가 있으면 그것, 없으면 실제 폼(킬가르도가 아니면 undefined) */
+function shownStance(fighter: Fighter, override?: "shield" | "blade") {
+  return fighter.stanceChangeForms ? (override ?? fighter.currentStanceForm ?? "shield") : undefined;
 }
 
 /** 이름 옆 상태 태그 줄 — 주 상태이상·휘발성 상태·편 단위 상태(스크린·희망사항·신비의부적 등) */
@@ -199,8 +205,10 @@ function PartyTracker({ bs, activeHp }: { bs: BattleSide; activeHp?: number }) {
 }
 
 /** 한 편의 카드 윗부분 — 이름·상태 태그·HP·실능치(또는 상대 파티)·파티 트래커 */
-export function BattleFighterCard(props: BattleBoardProps & { side: Side; pokemon: Pokemon; shownHp?: number }) {
+export function BattleFighterCard(props: BattleBoardProps & { side: Side; pokemon: Pokemon; shownHp?: number; stanceForm?: "shield" | "blade" }) {
   const { side, pokemon, battleState, battleSide, buildableIndices, pokemonAt, selection, aiSide, aiThinking, log, shownHp } = props;
+  // 킬가르도 폼: 재생 중에는 그 시각의 폼(stanceForm 덮어쓰기), 아니면 실제 폼. 변신·일루전 중에는 폼 개념이 없다
+  const stance = shownStance(props.battleState[side], props.stanceForm);
   const fighter = battleState[side];
   // 7.4 E7: 턴 재생 중에는 이펙트에 맞춘 HP를 보여 준다(없으면 실제 HP)
   const hp = shownHp ?? fighter.currentHp;
@@ -213,7 +221,7 @@ export function BattleFighterCard(props: BattleBoardProps & { side: Side; pokemo
   // (메가진화 관련 용도 전용 — 변신 중에도 메타몽 자신의 메가 여부라 원본 종 기준 그대로 둔다.)
   const form = getEffectiveForm(pokemon, fighter.slot);
   const hpPercent = Math.max(0, Math.min(100, (hp / fighter.maxHp) * 100));
-  const { avatarPokemon, avatarForm, illusionPokemon } = fighterAvatar(pokemon, fighter, form);
+  const { avatarPokemon, avatarForm, illusionPokemon } = fighterAvatar(pokemon, fighter, form, stance);
   // 8.1 U8-d: 좁은 화면 가로 배치에서 상대 카드는 한 번에 한 면만 보인다(버튼으로 전환). 다른 화면에서는 CSS가 면 구분·버튼을 없앤다
   const [aiView, setAiView] = useState<AiView>("main");
   const isAi = side === aiSide;
@@ -235,6 +243,9 @@ export function BattleFighterCard(props: BattleBoardProps & { side: Side; pokemo
             {/* §4: 스톤을 들어도 실제로 메가진화를 선언(hasMegaEvolved)해야 배지가 뜬다 */}
             {!fighter.illusionAs && fighter.hasMegaEvolved && form.mega && (
               <span className="battle-fighter-mega-tag">{megaBadgeLabel(form.mega)}</span>
+            )}
+            {stance && !fighter.illusionAs && !fighter.transformedIntoPokemonId && (
+              <span className="battle-fighter-stance-tag">{stance === "blade" ? "블레이드폼" : "실드폼"}</span>
             )}
             {hp <= 0 && <span className="battle-fighter-fainted"> (기절)</span>}
             {side === aiSide && <span className="battle-fighter-ai-tag">AI</span>}

@@ -19,7 +19,7 @@ import { actionFailed } from "./moveFailure";
 import { computeBattleHitChance } from "./hitChance";
 import { resolveHitAndApplyDamage } from "./hitResolution";
 import { forceRandomSwitch } from "./switching";
-import { type ActionLogEntry, type SwitchLogEntry } from "@/types/battle";
+import { type ActionLogEntry, type MegaEvolutionLogEntry, type SwitchLogEntry } from "@/types/battle";
 
 interface EndOfTurnFighterContext {
   state: BattleState;
@@ -822,6 +822,7 @@ interface FinishCtx {
   actions: ActionLogEntry[];
   switches: SwitchLogEntry[];
   turnStartAnnouncements: string[];
+  megaEvolutions: MegaEvolutionLogEntry[];
   selfDestructComboKey: FighterKey | undefined;
   speedA: number;
   speedB: number;
@@ -1167,6 +1168,7 @@ function collectResult(c: FinishCtx) {
       expiredFieldEffects: c.expiredFieldEffects.length > 0 ? c.expiredFieldEffects : undefined,
       expiredMagnetRise: c.expiredMagnetRise.length > 0 ? c.expiredMagnetRise : undefined,
       turnStartAnnouncements: c.turnStartAnnouncements,
+      megaEvolutions: c.megaEvolutions.length > 0 ? c.megaEvolutions : undefined,
       switches: c.switches,
       activePokemonIds: { a: c.state.a.slot.pokemonId, b: c.state.b.slot.pokemonId },
     },
@@ -1182,6 +1184,7 @@ export function finishTurn(ctx: RunTurnContext): RunTurnOutcome {
   c.actions = ctx.actions;
   c.switches = ctx.switches;
   c.turnStartAnnouncements = ctx.turnStartAnnouncements;
+  c.megaEvolutions = ctx.megaEvolutions;
   c.selfDestructComboKey = ctx.selfDestructComboKey;
   c.speedA = ctx.speedA;
   c.speedB = ctx.speedB;
