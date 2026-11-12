@@ -324,6 +324,18 @@ export function attackChanceOf(state: BattleState, user: BattleFighterState, tar
   return Math.max(0, 1 - statusCount * threatModel.statusWeight);
 }
 
+/**
+ * user가 이번 턴 돌림노래(doublesPowerAfterEchoThisTurn)를 고를 확률(8.3 A2) — 공격기 사용 확률(attackChanceOf)을 사용 가능한 공격기 수로 나눈다.
+ * 돌림노래가 없으면 0. 후공인 AI가 돌림노래의 기대 위력(상대가 먼저 쓰면 2배)을 셀 때 쓴다.
+ * ponytail: 공격기 균등 분배 — 상대 기술 사용 확률 모델의 데미지^sharpness 가중치로 바꿀 수 있으나 돌림노래 사용자가 흔치 않아 균등으로 둠. 측정에서 편향이 보이면 가중치로 교체.
+ */
+export function echoChanceOf(state: BattleState, user: BattleFighterState, target: BattleFighterState): number {
+  const attacks = allowedByVolatiles(user, usableMoves(user), target)
+    .filter((m) => !isUsageBlocked(state, user, m, target))
+    .filter((m) => m.category === "physical" || m.category === "special");
+  return attacks.some((m) => m.doublesPowerAfterEchoThisTurn) ? attackChanceOf(state, user, target) / attacks.length : 0;
+}
+
 /** 기습처럼 대상이 이번 턴 공격기를 골라야만 성공하는 기술 */
 export function requiresTargetAttack(move: Move): boolean {
   return move.usageCondition === "opponent-damaging-move-only";

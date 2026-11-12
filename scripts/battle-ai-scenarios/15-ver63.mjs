@@ -121,7 +121,8 @@ export default async function ({ server, data, ai, mon, battle, check }) {
     const t1 = run(st, "돌림노래", idle);
     const d1 = st.b.currentHp - t1.nextState.b.currentHp;
     const d2 = t1.nextState.b.currentHp - run(t1.nextState, "돌림노래", idle).nextState.b.currentHp;
-    check("6.3 B2 돌림노래: 연속 사용 시 데미지 증가", d2 > d1 * 1.5, `${d1} → ${d2}`);
+    // 8.3 A2로 규칙이 바뀌었다: 연속 턴 사용은 위력이 오르지 않고(같은 턴에 앞서 쓰인 돌림노래가 있을 때만 2배 — 18-ver83-a2.mjs)
+    check("6.3 B2 돌림노래: 연속 사용해도 데미지 증가 없음(8.3 A2 개정)", d1 > 0 && d2 === d1, `${d1} → ${d2}`);
   }
   // 회복봉인·소리 봉인·미래예지
   {

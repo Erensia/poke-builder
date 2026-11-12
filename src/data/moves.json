@@ -344,7 +344,7 @@
     "pp": 16,
     "priority": 0,
     "effect": "노래로 상대를 공격한다. 함께 돌림노래를 하면 계속해서 쓸 수 있고 위력도 2배로 올라간다.",
-    "doublesPowerPerConsecutiveUse": true,
+    "doublesPowerAfterEchoThisTurn": true,
     "tags": [
       "소리"
     ],
