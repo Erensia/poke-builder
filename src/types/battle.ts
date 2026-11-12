@@ -260,6 +260,8 @@ export interface ActionLogEntry {
   berryReducedDamageItemName?: string;
   /** 과사열매: 이번 행동으로 PP가 0이 된 기술의 PP를 복구했으면 그 도구 이름 */
   leppaRestoredPpItemName?: string;
+  /** 배틀스위치(킬가르도)로 이 행동에서 폼이 바뀌었으면 바뀐 폼. 기술 사용·실패 줄보다 앞에 "폼체인지" 줄로 보인다(8.3 A6) */
+  stanceChange?: { to: "shield" | "blade" };
   /** 노말주얼 등 타입 젬: 이번 기술로 소모되며 위력을 올렸으면 그 도구 이름 */
   ateGemItemName?: string;
   /** 풍선: 데미지를 받아 터져서 소모됐으면 그 도구 이름 */
@@ -701,6 +703,13 @@ export interface EndOfTurnLogEntry {
   hungerModeChangedTo?: "full" | "hangry";
 }
 
+/** 메가진화 한 건 — pokemonId는 선언 시점 종(교체 뒤에도 이름 고정), megaForm은 MegaEvolution.form id */
+export interface MegaEvolutionLogEntry {
+  side: FighterKey;
+  pokemonId: string;
+  megaForm: string;
+}
+
 export interface TurnResult {
   turnNumber: number;
   /** 이번 턴 실제로 먼저 행동한 쪽 */
@@ -747,6 +756,8 @@ export interface TurnResult {
   expiredMagnetRise?: FighterKey[];
   /** 턴 시작 시점에 발생한 안내 문구(의태 타입 변화 등). 없으면 빈 배열 */
   turnStartAnnouncements: string[];
+  /** 이번 턴 시작에 메가진화한 편(8.3 B1). 문구는 turnStartAnnouncements에 있고, 이 필드는 화면 연출이 상태 비교 없이 쓰는 구조화 정보다. 없으면 메가진화 없음 */
+  megaEvolutions?: MegaEvolutionLogEntry[];
   /**
    * 이번 턴 처리된 교체(Phase 8 §3). 한쪽 교체면 1개, 양쪽 교체면 2개, 교체 없으면 빈 배열.
    * 교체 우선도상 항상 기술보다 먼저 처리되므로 로그에서도 actions 앞에 놓는다.

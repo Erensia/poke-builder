@@ -99,6 +99,13 @@ export function BattleTurnLog({
                           {STATUS_CURE_TEXT[action.selfWokeBeforeMove](actorName)}
                         </div>
                       )}
+                      {/* 배틀스위치(킬가르도): 폼 변경은 기술 사용·실패 판정보다 먼저 일어나므로 기술 줄 앞에 알린다(8.3 A6) */}
+                      {action.stanceChange && (
+                        <div className="battle-turn-line is-muted">
+                          {actorName}
+                          {eunNeun(actorName)} {action.stanceChange.to === "blade" ? "블레이드폼" : "실드폼"}으로 폼체인지했다!
+                        </div>
+                      )}
                       {/* 썰렁개그처럼 기술을 실제로 쓸 때 기술 줄 앞에 붙는 대사("…은(는) 썰렁한 개그를 선보였다!").
                           행동불능 등으로 못 썼으면 나오지 않는다. */}
                       {!action.blockedReason && action.move.preUseUserAnnouncement && (

@@ -100,12 +100,14 @@
 }
 
 .battle-fighter-mega-tag,
+.battle-fighter-stance-tag,
 .battle-fighter-ai-tag,
 .battle-fighter-fainted {
   white-space: nowrap; /* 배지·태그는 글자 중간에서 줄바꿈하지 않는다 */
 }
 
-.battle-fighter-mega-tag {
+.battle-fighter-mega-tag,
+.battle-fighter-stance-tag {
   font-family: var(--display);
   font-size: var(--fs-xs);
   font-weight: 700;

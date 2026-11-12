@@ -113,6 +113,7 @@ export function useTurnFx(log: TurnResult[], battleState: BattleState) {
       hazardHit(sw.side, sw.messages, t + (sw.enter ? OUT_MS : 0) + 150);
     });
     megas.forEach((k) => megaFx(k, 0));
+    plan.stances.forEach((s) => pop(s.side, s.to === "blade" ? "블레이드폼!" : "실드폼!", "", startOf(s.k) + IMPACT));
     // HP가 오른 편은 녹색 회복 효과, 내려간 편은 붉은 팝업 — 로그 필드를 일일이 모으지 않고 HP 단계의 증감으로 본다.
     // skip: 타격 연출(E1)이 이미 보여 준 피격 대상. hurtFlash: 턴 종료 피해는 아래 기존 번쩍임이 있어 끈다.
     const hpFx = (before: TurnFxView["hp"], after: TurnFxView["hp"], delay: number, skip?: FighterKey, hurtFlash = true) => {
