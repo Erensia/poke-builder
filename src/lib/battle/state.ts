@@ -678,14 +678,19 @@ export function hasSheerForceSecondaryEffect(move: Move): boolean {
  * 묶었다 — 둘 중 하나만 갱신하면 곡예가 오작동한다(예: itemConsumed만 세팅하면 나무열매를 쓴
  * 뒤에도 currentItemId가 그대로 남아있어 곡예가 영영 발동하지 않는다).
  */
-/** 회복봉인 중엔 쓸 수 없는 회복 기술 — 자기 회복·잠자기·비축 회복·희망사항·힘흡수·흡수기 (힘흡수는 회복이 본체) */
+/**
+ * 회복봉인 중엔 쓸 수 없는 회복 기술 — Showdown의 `heal` 플래그 기술 전부(8.3 A3): 자기 회복·치유파동류(상대 회복)·잠자기·비축 회복·희망사항·
+ * 치유소원·힘흡수·흡수 기술(기가드레인 등). 흡수 기술도 회복만 0이 아니라 선택 불가·강제 시 cant다.
+ */
 export function isHealingMove(move: Move): boolean {
   return (
-    (move.healsFraction !== undefined && move.healsTarget !== "opponent") ||
+    move.healsFraction !== undefined ||
     !!move.healsWeatherDependent ||
     !!move.restSleep ||
     !!move.healsByStockpile ||
     !!move.drainsFromTargetAttackStat ||
+    move.drainFraction !== undefined ||
+    !!move.setsHealingWish ||
     !!move.inflictsVolatile?.some((v) => v.volatile === "wish")
   );
 }
@@ -718,7 +723,7 @@ export function consumeItem(fighter: BattleFighterState): void {
     fighter.cudChewTurnsLeft = 2;
   }
   const frac = abilityOf(fighter)?.berryHealFraction;
-  if (frac && fighter.currentHp > 0 && fighter.currentHp < fighter.maxHp) {
+  if (frac && fighter.currentHp > 0 && fighter.currentHp < fighter.maxHp && !hasVolatile(fighter.volatile, "healBlock")) {
     const heal = Math.min(fighter.maxHp - fighter.currentHp, Math.max(1, Math.floor(fighter.maxHp * frac)));
     fighter.currentHp += heal;
     fighter.pendingCheekPouchHeal = (fighter.pendingCheekPouchHeal ?? 0) + heal;

@@ -83,7 +83,8 @@ export function eatBerryNow(fighter: BattleFighterState, item: Item): NonNullabl
   const heal = item.healsBelowHalfHpDenominator
     ? Math.floor(fighter.maxHp / item.healsBelowHalfHpDenominator)
     : (item.healsBelowHalfHpFlat ?? 0);
-  if (heal > 0) {
+  // 회복봉인 중이면 열매는 먹히되 회복만 0(8.3 A3 — 던지기·다과회·벌레먹기/쪼아대기 공통)
+  if (heal > 0 && !hasVolatile(fighter.volatile, "healBlock")) {
     const healed = Math.min(fighter.maxHp - fighter.currentHp, heal);
     fighter.currentHp += healed;
     berry.healed = healed;

@@ -1283,6 +1283,23 @@ function collectResult(c: MoveOptionCtx) {
     return c.option;
 }
 
+/**
+ * 맞으면 상대에게 회복봉인·소리 봉인을 거는 공격기(사이코노이즈·지옥찌르기, 8.3 A3)의 가치 — 맞은 뒤 그 휘발성이 걸린 복제 state를 만든다.
+ * 그 state에서 처치 턴(상대의 회복 의존이 사라짐)과 상대 위협(소리 기술이 빠짐)을 다시 세면 새 평가 함수 없이 기존 isUsageBlocked·환경 모델이
+ * 효과를 읽는다(랭크업기 evaluateSetupMove와 같은 구조). 이미 걸려 있으면 undefined(가치 0).
+ * ponytail: 지속 2턴을 그대로 쓰는 단순 재평가 — 상대가 해제 후 회복을 되찾는 지연 효과는 반영하지 않음. 측정에서 과대평가가 보이면 지속 턴만큼만 섞는다.
+ */
+function restrictedAfterHit(c: MoveOptionCtx): { state: BattleState; me: BattleFighterState; opponent: BattleFighterState } | undefined {
+  const kinds = (c.move.inflictsVolatile ?? []).filter(
+    (v) => v.target === "opponent" && (v.volatile === "healBlock" || v.volatile === "throatChop") && v.chance === undefined && !hasVolatile(c.env.opponent.volatile, v.volatile),
+  );
+  if (kinds.length === 0) return undefined;
+  const clone = cloneBattleState(c.env.moveState);
+  const opponent = clone[c.env.oppKey];
+  for (const v of kinds) opponent.volatile = inflictVolatile(opponent.volatile, v.volatile);
+  return { state: clone, me: clone[c.env.key], opponent };
+}
+
 function buildMoveOptionFor(env: MoveOptionEnv, move: Move, speedMove: Move): AiOption {
   const c = {} as MoveOptionCtx;
   c.env = env;
@@ -1320,6 +1337,13 @@ function buildMoveOptionFor(env: MoveOptionEnv, move: Move, speedMove: Move): Ai
       riskFlag: c.threat.riskFlag,
       accuracy: c.estimate?.accuracy ?? 0,
     };
+  const restricted = restrictedAfterHit(c);
+  if (restricted) {
+    const mySide = c.env.key === "a" ? restricted.state.sideA : restricted.state.sideB;
+    const threat = evaluateOpponentThreat({ state: restricted.state, opponent: restricted.opponent, target: restricted.me, targetSide: mySide, opponentMovesSecond: !c.iMoveSecond, targetTypes: myTypes });
+    c.option.hitsToKill = selfAdjusted(turnsFor(restricted.state, c.estimate ?? undefined, restricted.me, restricted.opponent), threat.selfHpRate, restricted.opponent);
+    c.option.hitsToBeKilled = selfAdjusted(threat.hitsToBeKilled, c.estimate?.selfHpRate, restricted.me);
+  }
   applyOneShotAndRampage(c);
   {
     const r = evaluateSacrificeAttack(c);

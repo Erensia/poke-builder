@@ -9,6 +9,7 @@ import { applyStageDelta } from "@/lib/statStages";
 import { isOpponentTargetingMove } from "@/lib/fieldEffects";
 import { getHpThresholdBerryHeal } from "@/lib/itemEffects";
 import { GRAVITY_DURATION, MAGIC_ROOM_DURATION, MAGNET_RISE_DURATION, SCREEN_DURATION, TAILWIND_DURATION, TRICK_ROOM_DURATION, WONDER_ROOM_DURATION, WEATHER_DURATION, activeWeather, applyForecastForm, consumeItem, contraryDelta, hasLivingReserve, isFainted, isForcedSwitchBlocked, sideOf, type BattleState } from "./state";
+import { hasVolatile } from "@/lib/volatileConditions";
 import { isTrappedFromSwitching } from "./switching";
 import { resolvePreHitEffects } from "./preHitEffects";
 import { resolveHitAndApplyDamage } from "./hitResolution";
@@ -568,7 +569,8 @@ function triggerBerryHeals(c: ActionCtx) {
   // 임의지만, 도구는 각자 한 개씩만 지니므로 서로 간섭하지 않는다.
   c.attackerBerryHealAmount = 0;
 
-  if (!isFainted(c.attacker) && !c.attackerBerriesBlocked) {
+  // 회복봉인 중에는 HP 회복 열매를 먹지 않고 보존한다(8.3 A3 — 해제된 뒤 조건이 맞으면 그때 먹는다)
+  if (!isFainted(c.attacker) && !c.attackerBerriesBlocked && !hasVolatile(c.attacker.volatile, "healBlock")) {
     c.attackerBerryHealAmount = getHpThresholdBerryHeal(
       c.attackerItem,
       c.attacker.currentHp,
@@ -596,7 +598,7 @@ function triggerBerryHeals(c: ActionCtx) {
     !isTrappedFromSwitching(c.defender);
   c.defenderBerryHealAmount = 0;
 
-  if (!isFainted(c.defender) && !c.defenderBerriesBlocked && !defenderExitsAtHalf) {
+  if (!isFainted(c.defender) && !c.defenderBerriesBlocked && !defenderExitsAtHalf && !hasVolatile(c.defender.volatile, "healBlock")) {
     c.defenderBerryHealAmount = getHpThresholdBerryHeal(
       c.defenderItem,
       c.defender.currentHp,
