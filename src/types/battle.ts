@@ -604,6 +604,13 @@ export interface EndOfTurnLogEntry {
   actor: FighterKey;
   /** 미래예지가 이번 턴 종료에 들어갔으면 그 기술 이름(damage·remainingHp에 결과) */
   futureSightMoveName?: string;
+  /** 미래예지 적중 결과(8.3 A4): 빗나감(회피·무적 은신) / 급소 / 대타가 맞음("broke"면 대타가 깨짐) / 타입 면역 */
+  futureSightMiss?: true;
+  futureSightCritical?: true;
+  futureSightSubstitute?: "hit" | "broke";
+  futureSightImmune?: true;
+  /** 사용자가 필드에 있을 때 생명의구슬 같은 도구 때문에 입은 반동(damage·remainingHp는 사용자 쪽 값) — actor는 사용자 쪽 */
+  itemRecoilItemName?: string;
   damage: number;
   remainingHp: number;
   fainted: boolean;

@@ -488,13 +488,7 @@ function handleChargeAndCopyMoves(c: PreHitCtx) {
     const side = sideOf(c.state, c.defenderKey);
     const failed = !!side.futureSight;
     if (!failed) {
-      side.futureSight = {
-        turnsRemaining: c.move.delayedAttackTurns + 1,
-        move: c.move,
-        realStats: { ...c.attacker.realStats },
-        types: [...c.attacker.types],
-        stages: { ...c.attacker.stages },
-      };
+      side.futureSight = { turnsRemaining: c.move.delayedAttackTurns + 1, move: c.move, sourceIndex: sideOf(c.state, c.actorKey).activeIndex };
     }
     return { value: {
       actor: c.actorKey,

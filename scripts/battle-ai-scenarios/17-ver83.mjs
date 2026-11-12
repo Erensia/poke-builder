@@ -46,7 +46,7 @@ export default async function ({ server, data, mon, battle, pts, check }) {
   {
     const st = base();
     st.a.currentHp = Math.floor(st.a.maxHp * 0.7);
-    st.sideA.futureSight = { turnsRemaining: 1, move: data.getMove("미래예지"), realStats: { ...st.b.realStats }, types: [...st.b.types], stages: { ...st.b.stages } };
+    st.sideA.futureSight = { turnsRemaining: 1, move: data.getMove("미래예지"), sourceIndex: 0 };
     wishOn(st);
     const r = play(st);
     const f = at(r, (e) => A(e) && e.futureSightMoveName), w = at(r, (e) => A(e) && e.wishHeal);
@@ -108,7 +108,7 @@ export default async function ({ server, data, mon, battle, pts, check }) {
   {
     const st = battle([mon("잠만보", ["칼춤"], null, null, hp), mon("팬텀", ["칼춤"], null, null, hp)], [mon("한카리아스", ["지진"], null, null, hp)]);
     st.a.currentHp = 1;
-    st.sideA.futureSight = { turnsRemaining: 1, move: data.getMove("미래예지"), realStats: { ...st.b.realStats }, types: [...st.b.types], stages: { ...st.b.stages } };
+    st.sideA.futureSight = { turnsRemaining: 1, move: data.getMove("미래예지"), sourceIndex: 0 };
     wishOn(st, 2);
     const r = rt.runTurn(st, move("칼춤"), move("지진"), () => 0.5);
     check("8.3 A1 R6-j: 기절한 자리의 미래예지 소멸·희망사항 카운터 감소", r.nextState.a.currentHp === 0 && !r.nextState.sideA.futureSight && r.nextState.sideA.wish?.turnsRemaining === 1, `fs=${!!r.nextState.sideA.futureSight} wish=${r.nextState.sideA.wish?.turnsRemaining}`);

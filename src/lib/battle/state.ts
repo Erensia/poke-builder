@@ -395,8 +395,8 @@ export interface BattleSide {
    * 유지된다. healAmount는 시전 시점 시전자 최대 HP의 절반(고정).
    */
   wish?: { turnsRemaining: number; healAmount: number };
-  /** 미래예지 예약(6.3 B2) — 이 편의 자리에 들어갈 공격. 쓴 시점 사용자 능력치를 스냅샷으로 들고 있다 */
-  futureSight?: { turnsRemaining: number; move: Move; realStats: BaseStats; types: PokemonType[]; stages: StatStages };
+  /** 미래예지 예약(6.3 B2) — 이 편의 자리에 들어갈 공격. 사용자는 상대 편 `party[sourceIndex]`를 적중 시점에 읽는다(8.3 A4: 스냅샷 폐기) */
+  futureSight?: { turnsRemaining: number; move: Move; sourceIndex: number };
   /** 메가진화는 팀당 1회(백로그 §4). 이 편이 이미 썼으면 true. */
   megaUsed?: boolean;
 }
@@ -1136,7 +1136,7 @@ export function cloneSide(side: BattleSide): BattleSide {
     tailwindTurnsRemaining: side.tailwindTurnsRemaining,
     healingWishPending: side.healingWishPending,
     wish: side.wish ? { ...side.wish } : undefined,
-    futureSight: side.futureSight ? { ...side.futureSight, realStats: { ...side.futureSight.realStats }, types: [...side.futureSight.types], stages: { ...side.futureSight.stages } } : undefined,
+    futureSight: side.futureSight ? { ...side.futureSight } : undefined,
     megaUsed: side.megaUsed,
   };
 }

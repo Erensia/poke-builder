@@ -1,21 +1,23 @@
-import { itemsSuppressedByRoom } from "./turnOrderInputs";
+import { effectiveHeldItem, itemsSuppressedByRoom } from "./turnOrderInputs";
 import { isGrounded } from "./grounding";
 import { type EndOfTurnLogEntry, type FighterKey } from "@/types/battle";
 import { BATTLE_STAT_KEYS } from "@/types/battleStats";
 import { NO_STATUS_CONDITION } from "@/types/status";
 import { type Ability } from "@/types/ability";
 import { type Item } from "@/types/item";
-import { getAbility, getItem } from "@/lib/data";
+import { getAbility, getItem, getMove } from "@/lib/data";
 import { applyStageDelta } from "@/lib/statStages";
 import { advanceStatusTurn, computeStatusEndOfTurnDamage, inflictStatus, isImmuneToStatus } from "@/lib/statusConditions";
 import { consumeVolatileTurn, hasVolatile } from "@/lib/volatileConditions";
-import { computeDamage, rankStageMultiplier } from "@/lib/battlePower";
-import { getEffectiveness } from "@/lib/typeEffectiveness";
+import { rankStageMultiplier, rivalryDamageMultiplier } from "@/lib/battlePower";
+import { resolveMoveContext } from "@/lib/moveContext";
 import { computeFieldEndOfTurnHeal, isStatusBlockedByField } from "@/lib/fieldEffects";
 import { getDrainHealMultiplier, getHpThresholdBerryHeal } from "@/lib/itemEffects";
-import { MIN_DAMAGE_ROLL, SANDSTORM_IMMUNE_ABILITY_NAMES, activeWeather, applyForecastForm, consumeItem, contraryDelta, hasLivingReserve, isFainted, opponentKey, sideOf, statDropBlockStatsOf, statusImmunitiesOf, type BattleFighterState, type BattleState } from "./state";
+import { SANDSTORM_IMMUNE_ABILITY_NAMES, abilityOf, activeWeather, applyForecastForm, consumeItem, contraryDelta, hasLivingReserve, isFainted, opponentKey, sideOf, statDropBlockStatsOf, statusImmunitiesOf, type BattleFighterState, type BattleState } from "./state";
 import { type RunTurnContext, type RunTurnOutcome } from "./runTurn";
 import { actionFailed } from "./moveFailure";
+import { computeBattleHitChance } from "./hitChance";
+import { resolveHitAndApplyDamage } from "./hitResolution";
 import { type ActionLogEntry, type SwitchLogEntry } from "@/types/battle";
 
 interface EndOfTurnFighterContext {
@@ -216,7 +218,12 @@ function applyLeechSeedDamage(ctx: EndOfTurnFighterContext): void {
   }
 }
 
-/** 미래예지: 예약 카운터가 0이 되는 턴 종료에 이 자리의 포켓몬을 때린다(방어·대타 무시, 타입 상성만 적용) */
+/**
+ * 미래예지(8.3 A4, Showdown futuremove): 예약 카운터가 0이 되는 턴 종료에 이 자리의 활성 포켓몬을 정상 피격 파이프라인으로 때린다.
+ * 사용자는 상대 편 party[sourceIndex] — 필드에 없거나 기절했으면 특성·도구는 적용하지 않고(능력치·타입은 그 포켓몬의 현재 값, 랭크는 교체로 초기화),
+ * 방어는 무시하지만(blockedByProtect=false) 버티기는 그대로 적용된다. 명중·무적 은신 판정, 급소, 대타 흡수를 일반 공격처럼 거친다.
+ * delayedHit로 사용자 측 후 효과(반동·흡수·조개껍질방울·길동무·저주받은바디)는 끄고, 생명의구슬 반동·자기과신류는 여기서 직접 처리한다.
+ */
 function applyFutureSight(ctx: EndOfTurnFighterContext): void {
   const { state, key, fighter, random, endOfTurn } = ctx;
   const side = sideOf(state, key);
@@ -226,16 +233,77 @@ function applyFutureSight(ctx: EndOfTurnFighterContext): void {
   if (queued.turnsRemaining > 0) return;
   side.futureSight = undefined;
   if (isFainted(fighter)) return;
-  const typeEffectiveness = queued.move.type ? getEffectiveness(queued.move.type, fighter.types) : 1;
-  const result = computeDamage(queued.realStats, fighter.realStats, queued.types, queued.move, {
-    typeEffectiveness,
-    attackerStages: queued.stages,
-    defenderStages: fighter.stages,
-    randomRoll: MIN_DAMAGE_ROLL + random() * (1 - MIN_DAMAGE_ROLL),
+  const srcKey = opponentKey(key);
+  const srcSide = sideOf(state, srcKey);
+  const src = srcSide.party[queued.sourceIndex];
+  const onField = srcSide.activeIndex === queued.sourceIndex && !isFainted(src); // 교체됐다가 적중 전에 다시 나왔으면 필드에 있음
+  const move = queued.move;
+  const attackerAbility = onField ? abilityOf(src) : undefined;
+  const attackerItem = onField ? effectiveHeldItem(src, state) : undefined;
+  const defenderAbility = abilityOf(fighter); // 틀깨기 미적용: useMove를 거치지 않아 ModifyMove가 돌지 않는다
+  const defenderItem = effectiveHeldItem(fighter, state);
+  const hpBefore = fighter.currentHp;
+  // ponytail: 에스퍼 전용이라 흡수 특성(마중물류) 판정은 생략 — 타입이 다른 지연 공격기가 생기면 preHitEffects의 흡수 판정을 뽑아 재사용
+  // ponytail: 노멀스킨은 보유 종이 없어 생략(미래예지 26종 중 0종) — 생기면 onEnd처럼 type만 노말로 바꾼다(×1.2 없음)
+  const mc = resolveMoveContext(attackerAbility, move, fighter.types, defenderAbility, {
+    weather: activeWeather(state),
+    defenderItem,
+    defenderGrounded: isGrounded(state, fighter, defenderAbility),
+    attackerHpFraction: src.currentHp / src.maxHp,
+    defenderHpIsFull: fighter.currentHp === fighter.maxHp,
+    defenderHasStatusCondition: fighter.status.condition !== null,
+    field: state.field,
   });
-  const damage = Math.min(fighter.currentHp, result?.damage ?? 0);
-  fighter.currentHp -= damage;
-  endOfTurn.push({ actor: key, damage, remainingHp: fighter.currentHp, fainted: isFainted(fighter), futureSightMoveName: queued.move.name });
+  // rollHit(preHitEffects)과 같은 판정: 무적 은신(공중날기 등) 중이면 빗나가고, 아니면 명중·회피 랭크로 굴린다
+  const hideType = fighter.chargingMoveId ? getMove(fighter.chargingMoveId)?.chargeHideType : undefined;
+  const hitChance = computeBattleHitChance({
+    state, attacker: src, defender: fighter, move: mc.effectiveMove, hustleCategory: move.category,
+    attackerAbility, defenderAbility, attackerItem, defenderItem, attackerMovesSecond: false,
+  });
+  const missed = !!hideType || (hitChance !== null && random() >= hitChance);
+  const entry: EndOfTurnLogEntry = { actor: key, damage: 0, remainingHp: fighter.currentHp, fainted: false, futureSightMoveName: move.name };
+  endOfTurn.push(entry);
+  if (missed) entry.futureSightMiss = true;
+  else if (mc.typeEffectiveness === 0) entry.futureSightImmune = true;
+  else {
+    const res = resolveHitAndApplyDamage({
+      state, defenderKey: key, move, effectiveMove: mc.effectiveMove, random, attacker: src, defender: fighter,
+      attackerAbility, defenderAbility, attackerItem, defenderItem, typeEffectiveness: mc.typeEffectiveness,
+      blockedByProtect: false, // 방어류는 이 플래그로 무시된다(activeProtect는 비우지 않는다 — 버티기는 그대로 발동)
+      blockedBySubstitute: fighter.substituteHp !== undefined && !attackerAbility?.bypassesScreensAndSubstitute,
+      unseenFistPiercing: false, hitChance, evadedByCharge: false, defenderHideType: undefined,
+      gemMultiplier: 1,
+      ownMoveTypeBoostMultiplier: (mc.effectiveMove.type ? src.ownMoveTypeBoosts[mc.effectiveMove.type] : undefined) ?? 1,
+      rivalryMultiplier: rivalryDamageMultiplier(attackerAbility, src.gender, fighter.gender),
+      sheerForceAbilityName: undefined,
+      defenderBerriesBlocked: !!attackerAbility?.preventsOpponentBerries,
+      abilityOffenseMultiplier: mc.abilityOffenseMultiplier,
+      statOffenseMultiplier: mc.statOffenseMultiplier,
+      abilityDefenseMultiplier: mc.abilityDefenseMultiplier,
+      finalDefenseMultiplier: mc.finalDefenseMultiplier,
+      stabMultiplier: mc.stabMultiplier,
+      delayedHit: true,
+    });
+    entry.damage = hpBefore - fighter.currentHp; // 본체가 실제로 잃은 HP (대타가 맞으면 0)
+    entry.remainingHp = fighter.currentHp;
+    entry.fainted = isFainted(fighter);
+    if (res.isCritical) entry.futureSightCritical = true;
+    if (res.hitSubstitute) entry.futureSightSubstitute = res.substituteBroke ? "broke" : "hit";
+    // 쓰러뜨린 뒤 발동하는 특성(onSourceAfterFaint)은 필드에 있을 때 유지된다 — resolveAction.applyKnockoutAbilities와 같은 규칙
+    if (onField && res.damage > 0 && entry.fainted) {
+      if (attackerAbility?.boostsStatOnKo) src.stages = applyStageDelta(src.stages, attackerAbility.boostsStatOnKo.stat, contraryDelta(src, attackerAbility.boostsStatOnKo.delta));
+      if (attackerAbility?.boostsHighestStatOnKo) {
+        const highest = BATTLE_STAT_KEYS.reduce((a, b) => (src.realStats[b] > src.realStats[a] ? b : a));
+        src.stages = applyStageDelta(src.stages, highest, contraryDelta(src, 1));
+      }
+    }
+  }
+  // 생명의구슬 반동: onEnd가 결과를 보지 않고 부르므로 빗나감·무효·대타 적중에도 생긴다(대상이 적중 전에 기절했으면 위에서 이미 반환)
+  if (onField && attackerItem?.selfRecoilFractionOfMaxHp && !attackerAbility?.negatesIndirectDamage) {
+    const recoil = Math.min(src.currentHp, Math.floor(src.maxHp * attackerItem.selfRecoilFractionOfMaxHp));
+    src.currentHp -= recoil;
+    endOfTurn.push({ actor: srcKey, damage: recoil, remainingHp: src.currentHp, fainted: isFainted(src), itemRecoilItemName: attackerItem.name });
+  }
 }
 
 /** 회복봉인·지옥찌르기: 턴 종료마다 카운터가 줄어 0에서 해제된다(걸린 턴도 1턴으로 센다). 이 턴 종료 회복 판정 뒤에 부른다 */
