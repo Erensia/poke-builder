@@ -808,6 +808,11 @@ export interface SwitchLogEntry {
    * `forced`와 `redCardItemName`도 함께 서지만 `afterMove`는 세우지 않는다 — 행동 기준 렌더러(행동 줄 밑)·연출에 걸리지 않게.
    */
   endOfTurn?: true;
+  /**
+   * 위기회피·탈출버튼으로 맞은 방어측(`side`)이 물러난 교체면 true(8.3 A7). `afterMove`도 함께 true. 로그·연출은 이 교체를 `side`의 행동이 아니라
+   * 그 교체를 일으킨 **상대(공격자)의 행동 뒤**에 놓는다 — 홀더는 교체해서 행동하지 않았거나 먼저 행동했을 수 있다.
+   */
+  defenderExit?: true;
   /** 물러나는 포켓몬이 살아 있다(위기회피 교체 요구로 만든 합성 카드, 8.3 A4-b) — 연출이 나가는 모션을 보인다. 기절한 채 물러나는 교체엔 없다 */
   outgoingAlive?: true;
 }

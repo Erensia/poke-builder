@@ -80,7 +80,10 @@ export function EndOfTurnSwitchLines({ switches, holderName }: { switches: TurnR
   );
 }
 
-/** 유턴류 자체 교체 — 이 행동 직후에(§7-2) 시간 순서대로 렌더 */
+/**
+ * 유턴류 자체 교체 — 이 행동 직후에(§7-2) 시간 순서대로 렌더. 위기회피·탈출버튼으로 맞은 방어측이 물러난 교체(defenderExit, 8.3 A7)는
+ * 그 교체를 일으킨 **상대(공격자)의 행동** 직후에 놓는다 — 홀더 자신의 행동 블록은 없거나 앞서 있을 수 있다.
+ */
 export function SelfSwitchAfterMoveLines({
   switches,
   actor,
@@ -91,7 +94,7 @@ export function SelfSwitchAfterMoveLines({
   return (
     <>
       {switches
-        .filter((sw) => sw.afterMove && !sw.forced && sw.side === actor)
+        .filter((sw) => sw.afterMove && !sw.forced && (sw.defenderExit ? sw.side === opponentKey(actor) : sw.side === actor))
         .map((sw, j) => {
           const outN = getPokemon(sw.outPokemonId)?.name ?? "포켓몬";
           const inN = getPokemon(sw.inPokemonId)?.name ?? "포켓몬";

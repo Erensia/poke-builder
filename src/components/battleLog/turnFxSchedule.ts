@@ -60,7 +60,7 @@ export function planTurnFx({ last, doneActions, doneSwitches, endDone, prevSnap,
   // enter: 나가는 포켓몬이 있는 교체(강제 교체 합성 카드의 fromIndex -1은 들어오는 모션만)
   // 이미 재생한 교체는 건너뛴다 — 양쪽이 유턴을 쓰면 결과가 두 번(선공 교체 뒤 중간 결과, 후공 교체 뒤 완성본)에 걸쳐 들어오는데 완성본에도 선공 교체가 들어 있다
   const swaps = last.switches.slice(doneSwitches).map((sw) => {
-    const idx = sw.afterMove ? last.actions.findIndex((a) => a.actor === (sw.forced && !sw.redCardItemName ? other(sw.side) : sw.side)) : -1; // 레드카드 교체는 side가 끌려나온 공격자 자신이라 그 편의 행동 뒤(드래곤테일류만 상대 행동 뒤)
+    const idx = sw.afterMove ? last.actions.findIndex((a) => a.actor === ((sw.forced && !sw.redCardItemName) || sw.defenderExit ? other(sw.side) : sw.side)) : -1; // 위기회피·탈출버튼(defenderExit, 8.3 A7)은 교체를 일으킨 공격자의 행동 뒤. 레드카드 교체는 side가 끌려나온 공격자 자신이라 그 편의 행동 뒤(드래곤테일류만 상대 행동 뒤)
     // atEnd: 턴 종료 효과가 끝난 뒤의 교체(8.3 A4-b) — 행동 번호가 아니라 턴 종료 줄 시각 뒤에 놓는다. outgoingAlive: 살아 있는 채 물러나는 합성 카드도 나가는 모션을 보인다
     return { side: sw.side, enter: sw.fromIndex >= 0 || !!sw.outgoingAlive, afterMove: !!sw.afterMove, atEnd: !!sw.endOfTurn, after: Math.max(idx - doneActions, -1), messages: sw.entryMessages };
   });
