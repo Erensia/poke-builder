@@ -54,6 +54,8 @@ interface HitResolutionInput {
   /** abilityDefenseMultiplier 중 최종 보정 단계 몫(하드록·필터) — moveContext 참고 */
   finalDefenseMultiplier: number;
   stabMultiplier: number;
+  /** 미래예지 적중(8.3 A4): 사용자 측 기술 후 효과(반동·흡수·조개껍질방울·매지션·길동무)와 저주받은바디를 끈다 — Showdown의 futuremove 예외 */
+  delayedHit?: boolean;
 }
 
 /** resolveHitAndApplyDamage의 단계 사이에서 공유되는 값 — 한 단계 안에서만 쓰는 변수는 각 단계 함수의 지역 변수다 */
@@ -84,6 +86,7 @@ interface HitCtx {
   abilityDefenseMultiplier: number;
   finalDefenseMultiplier: number;
   stabMultiplier: number;
+  delayedHit: boolean;
   isDamaging: boolean;
   berryReducedDamageItemName: string | undefined;
   damage: number;
@@ -627,7 +630,7 @@ function defineAbilityHitEffect(c: HitCtx) {
         }
       }
     }
-    if (trigger.disablesAttackerMove && c.attacker.remainingPp[c.move.id] !== undefined) {
+    if (trigger.disablesAttackerMove && !c.delayedHit && c.attacker.remainingPp[c.move.id] !== undefined) {
       c.attacker.remainingPp[c.move.id] = 0;
       c.abilityDisabledMoveName = c.move.name;
       c.abilityDisableAbilityName = c.defenderAbility!.name;
@@ -1056,6 +1059,7 @@ export function resolveHitAndApplyDamage(input: HitResolutionInput) {
   c.abilityDefenseMultiplier = input.abilityDefenseMultiplier;
   c.finalDefenseMultiplier = input.finalDefenseMultiplier;
   c.stabMultiplier = input.stabMultiplier;
+  c.delayedHit = !!input.delayedHit;
   const { evadedByCharge, defenderHideType } = input;
   // status 기술(도깨비불·최면술 등 위력 없는 변화기)은 데미지 계산을 건너뛴다.
   // 예전엔 여기서 바로 return 해버려서 이런 기술들의 랭크변화/상태이상 부여가 전혀 발동하지 않는
@@ -1137,8 +1141,10 @@ export function resolveHitAndApplyDamage(input: HitResolutionInput) {
   defineAbilityHitEffect(c);
   resolveMainHit(c);
   resolveCountersAndFollowUp(c);
-  applyRecoilAndDrain(c);
-  applyThiefAndSelfDestruct(c);
+  if (!c.delayedHit) {
+    applyRecoilAndDrain(c);
+    applyThiefAndSelfDestruct(c);
+  }
   return collectResult(c);
 }
 
