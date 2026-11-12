@@ -206,7 +206,7 @@ function eatBerriesAndPayHp(c: MirroredCtx) {
         (berry.healsBelowHalfHpDenominator
           ? Math.floor(c.attacker.maxHp / berry.healsBelowHalfHpDenominator)
           : (berry.healsBelowHalfHpFlat ?? 0)) * ripenMult;
-      c.stuffCheeksBerryHeal = Math.min(c.attacker.maxHp - c.attacker.currentHp, rawHeal);
+      c.stuffCheeksBerryHeal = hasVolatile(c.attacker.volatile, "healBlock") ? 0 : Math.min(c.attacker.maxHp - c.attacker.currentHp, rawHeal); // 봉인 중이면 소비는 그대로, 회복만 0(8.3 A3)
       c.attacker.currentHp += c.stuffCheeksBerryHeal;
       consumeItem(c.attacker);
     }
@@ -819,7 +819,9 @@ function statusCureAndVolatile(c: MirroredCtx) {
           effect.volatile === "torment" ||
           effect.volatile === "imprison" ||
           effect.volatile === "meanLook" ||
-          effect.volatile === "lockOn") &&
+          effect.volatile === "lockOn" ||
+          effect.volatile === "healBlock" ||
+          effect.volatile === "throatChop") &&
           hasVolatile(target.volatile, effect.volatile)) ||
         (effect.volatile === "meanLook" && target.types.includes("고스트"))
       ) {

@@ -643,6 +643,8 @@ export interface EndOfTurnLogEntry {
   wishHeal?: number;
   /** 희망사항이 이루어졌지만 회복이 0이었음(HP 가득·회복봉인) — "회복할 HP가 없었다" 줄용 */
   wishNoHeal?: boolean;
+  /** 이번 턴 종료로 풀린 휘발성 상태(8.3 A3 — 회복봉인만. 지옥찌르기는 Showdown도 표시가 없어 기록하지 않는다) */
+  volatileEnded?: "healBlock";
   /** 자뭉열매/오랭열매가 턴 종료 시점에 발동해 회복한 양 */
   berryHeal?: number;
   /** berryHeal을 준 도구 이름 */

@@ -136,13 +136,25 @@ function environmentResidual(state: BattleState, fighter: BattleFighterState, op
   const ability = abilityOf(fighter);
   const magicGuard = !!ability?.negatesIndirectDamage;
   const item = effectiveHeldItem(fighter, state);
-  if (item?.endOfTurnHealDenominator) result.permanent -= Math.floor(maxHp / item.endOfTurnHealDenominator);
+  // 회복봉인(8.3 A3): 남은 봉인 턴 동안은 턴 종료 회복이 없다 — 회복 항목마다 그 기간만큼 상쇄 항목(+)을 더한다(엔진은 해제 후 다시 회복)
+  const blockedTurns = hasVolatile(fighter.volatile, "healBlock") ? (fighter.volatile.active.healBlock?.turnsRemaining ?? 0) : 0;
+  const cancelHeal = (amount: number, sourceTurns: number) => {
+    if (blockedTurns > 0 && amount > 0) result.timed.push({ amount, turns: Math.min(blockedTurns, sourceTurns) });
+  };
+  if (item?.endOfTurnHealDenominator) {
+    const leftovers = Math.floor(maxHp / item.endOfTurnHealDenominator);
+    result.permanent -= leftovers;
+    cancelHeal(leftovers, Infinity);
+  }
   if (hasVolatile(fighter.volatile, "saltCure") && !magicGuard) {
     const heavy = fighter.types.some((t) => t === "강철" || t === "물");
     result.permanent += Math.floor(maxHp / (heavy ? 8 : 16));
   }
   const fieldHeal = state.field && isGrounded(state, fighter, ability) ? computeFieldEndOfTurnHeal(state.field, maxHp) : 0;
-  if (fieldHeal > 0) result.timed.push({ amount: -fieldHeal, turns: state.fieldTurnsRemaining ?? Infinity });
+  if (fieldHeal > 0) {
+    result.timed.push({ amount: -fieldHeal, turns: state.fieldTurnsRemaining ?? Infinity });
+    cancelHeal(fieldHeal, state.fieldTurnsRemaining ?? Infinity);
+  }
   const weather = activeWeather(state);
   if (weather) {
     // 날씨는 턴 종료 효과보다 먼저 줄어 마지막 턴에는 피해·회복이 없다(8.3 A1) — 효과가 남은 턴보다 하나 적다
@@ -157,7 +169,11 @@ function environmentResidual(state: BattleState, fighter: BattleFighterState, op
       amount += Math.floor(maxHp / 16);
     }
     const heal = ability?.weatherEndOfTurnHealDenominator;
-    if (heal?.weather === weather) amount -= Math.floor(maxHp / heal.denominator);
+    if (heal?.weather === weather) {
+      const healAmount = Math.floor(maxHp / heal.denominator);
+      amount -= healAmount;
+      cancelHeal(healAmount, turns);
+    }
     const damage = ability?.weatherEndOfTurnDamageDenominator;
     if (damage?.weather === weather && !magicGuard) amount += Math.floor(maxHp / damage.denominator);
     if (amount !== 0 && turns > 0) result.timed.push({ amount, turns });
@@ -172,6 +188,7 @@ function environmentResidual(state: BattleState, fighter: BattleFighterState, op
 
 /** 자뭉열매·오랭열매: HP 절반 이하에서 한 번 회복(숙성 2배) — 버티는 HP에 더한다. 긴장감(상대)이면 못 먹는다 */
 function thresholdBerryHp(state: BattleState, fighter: BattleFighterState, opponent: BattleFighterState | undefined): number {
+  if (hasVolatile(fighter.volatile, "healBlock")) return 0; // 회복봉인 중엔 열매를 먹지 않는다(8.3 A3)
   if (fighter.itemConsumed || (opponent && abilityOf(opponent)?.preventsOpponentBerries)) return 0;
   const item = effectiveHeldItem(fighter, state);
   if (!item?.healsBelowHalfHpDenominator && !item?.healsBelowHalfHpFlat) return 0;

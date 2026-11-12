@@ -85,6 +85,8 @@ export function EndOfTurnLine({
           {turnName(e.actor)}의 희망사항으로 체력을 {e.wishHeal} 회복 (남은 HP{" "}
           {e.remainingHp})
         </>
+      ) : e.volatileEnded ? (
+        <>{turnName(e.actor)}의 회복봉인이 풀렸다!</>
       ) : e.wishNoHeal ? (
         <>{turnName(e.actor)}: 희망사항이 이루어졌지만 회복할 HP가 없었다</>
       ) : e.berryHeal ? (

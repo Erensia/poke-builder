@@ -1210,8 +1210,8 @@ function applyHitReactions(c: PreHitCtx) {
     if (absorb.boostsOwnMoveTypeMultiplier) {
       c.defender.ownMoveTypeBoosts = { ...c.defender.ownMoveTypeBoosts, [absorb.type]: absorb.boostsOwnMoveTypeMultiplier };
     }
-    // 저수: 랭크업 대신 무효화한 그 즉시 최대 HP 비율만큼 회복한다.
-    if (absorb.healsFraction) {
+    // 저수: 랭크업 대신 무효화한 그 즉시 최대 HP 비율만큼 회복한다. 회복봉인 중이면 무효화만 하고 회복은 없다(8.3 A3).
+    if (absorb.healsFraction && !hasVolatile(c.defender.volatile, "healBlock")) {
       c.abilityAbsorbHealAmount = Math.min(
         c.defender.maxHp - c.defender.currentHp,
         Math.floor(c.defender.maxHp * absorb.healsFraction),

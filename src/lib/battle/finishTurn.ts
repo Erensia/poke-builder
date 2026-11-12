@@ -240,9 +240,14 @@ function applyFutureSight(ctx: EndOfTurnFighterContext): void {
 
 /** 회복봉인·지옥찌르기: 턴 종료마다 카운터가 줄어 0에서 해제된다(걸린 턴도 1턴으로 센다). 이 턴 종료 회복 판정 뒤에 부른다 */
 function tickBlockVolatiles(ctx: EndOfTurnFighterContext): void {
-  const { fighter } = ctx;
+  const { key, fighter, endOfTurn } = ctx;
+  const healBlockWasActive = hasVolatile(fighter.volatile, "healBlock");
   for (const v of ["healBlock", "throatChop"] as const) {
     if (hasVolatile(fighter.volatile, v)) fighter.volatile = consumeVolatileTurn(fighter.volatile, v);
+  }
+  // 회복봉인이 풀렸으면 줄을 남긴다(8.3 A3). 지옥찌르기는 Showdown도 시작·해제 모두 표시가 없어 남기지 않는다.
+  if (healBlockWasActive && !hasVolatile(fighter.volatile, "healBlock")) {
+    endOfTurn.push({ actor: key, damage: 0, remainingHp: fighter.currentHp, fainted: false, volatileEnded: "healBlock" });
   }
 }
 
@@ -616,7 +621,7 @@ function applyMoodyRandomStages(ctx: EndOfTurnFighterContext): void {
  */
 function applyBerryHpThresholdHeal(ctx: EndOfTurnFighterContext): void {
   const { key, fighter, fighterAbility, fighterItem, fighterBerriesBlocked, endOfTurn } = ctx;
-  if (!isFainted(fighter) && !fighterBerriesBlocked) {
+  if (!isFainted(fighter) && !fighterBerriesBlocked && !hasVolatile(fighter.volatile, "healBlock")) { // 봉인 중이면 열매 보존(8.3 A3)
     const berryHeal = getHpThresholdBerryHeal(
       fighterItem,
       fighter.currentHp,
@@ -694,7 +699,8 @@ function applyCudChew(ctx: EndOfTurnFighterContext): void {
   if (!item || isFainted(fighter) || fighterBerriesBlocked) return;
   const ripen = fighterAbility?.doublesBerryEffect ? 2 : 1;
   const healBase = item.healsBelowHalfHpDenominator ? Math.floor(fighter.maxHp / item.healsBelowHalfHpDenominator) : (item.healsBelowHalfHpFlat ?? 0);
-  const heal = Math.min(fighter.maxHp - fighter.currentHp, healBase * ripen);
+  // 봉인 중이면 발동은 하되 회복 0(대기는 위에서 이미 소멸) — 해제 턴에는 ④에서 봉인이 먼저 풀려 회복한다(8.3 A3)
+  const heal = hasVolatile(fighter.volatile, "healBlock") ? 0 : Math.min(fighter.maxHp - fighter.currentHp, healBase * ripen);
   if (heal > 0) fighter.currentHp += heal;
   const curedStatus = fighter.status.condition && item.curesStatusOnInflict?.includes(fighter.status.condition) ? fighter.status.condition : undefined;
   if (curedStatus) fighter.status = { ...NO_STATUS_CONDITION };
