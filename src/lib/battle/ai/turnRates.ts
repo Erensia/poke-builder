@@ -145,7 +145,8 @@ function environmentResidual(state: BattleState, fighter: BattleFighterState, op
   if (fieldHeal > 0) result.timed.push({ amount: -fieldHeal, turns: state.fieldTurnsRemaining ?? Infinity });
   const weather = activeWeather(state);
   if (weather) {
-    const turns = state.weatherTurnsRemaining ?? Infinity;
+    // 날씨는 턴 종료 효과보다 먼저 줄어 마지막 턴에는 피해·회복이 없다(8.3 A1) — 효과가 남은 턴보다 하나 적다
+    const turns = (state.weatherTurnsRemaining ?? Infinity) - 1;
     let amount = 0;
     if (
       weather === "모래바람" &&
@@ -159,7 +160,7 @@ function environmentResidual(state: BattleState, fighter: BattleFighterState, op
     if (heal?.weather === weather) amount -= Math.floor(maxHp / heal.denominator);
     const damage = ability?.weatherEndOfTurnDamageDenominator;
     if (damage?.weather === weather && !magicGuard) amount += Math.floor(maxHp / damage.denominator);
-    if (amount !== 0) result.timed.push({ amount, turns });
+    if (amount !== 0 && turns > 0) result.timed.push({ amount, turns });
   }
   if (hasVolatile(fighter.volatile, "bound") && !magicGuard) {
     const binderItem = opponent ? effectiveHeldItem(opponent, state) : undefined;

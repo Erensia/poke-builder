@@ -369,10 +369,13 @@ function applyWishHeal(ctx: EndOfTurnFighterContext): void {
   if (triggersNow) {
     if (!isFainted(fighter)) {
       const wishHeal = hasVolatile(fighter.volatile, "healBlock") ? 0 : Math.min(fighter.maxHp - fighter.currentHp, wishQueue.healAmount);
-      if (wishHeal > 0) {
-        fighter.currentHp += wishHeal;
-        endOfTurn.push({ actor: key, damage: 0, remainingHp: fighter.currentHp, fainted: false, wishHeal });
-      }
+      fighter.currentHp += wishHeal;
+      // 회복이 0(HP 가득·회복봉인)이어도 줄을 남긴다(사용자 확정 2026-11-10) — 쓰러진 자리는 남기지 않는다
+      endOfTurn.push(
+        wishHeal > 0
+          ? { actor: key, damage: 0, remainingHp: fighter.currentHp, fainted: false, wishHeal }
+          : { actor: key, damage: 0, remainingHp: fighter.currentHp, fainted: false, wishNoHeal: true },
+      );
     }
     sideOf(state, key).wish = undefined;
   }
@@ -736,76 +739,101 @@ interface FinishCtx {
   expiredTailwind: FighterKey[];
 }
 
-/** 턴 종료 효과(endOfTurn)와 멸망의노래로 쓰러진 쪽 처리, 승패 판정 */
-function resolveEndOfTurnAndPerish(c: FinishCtx) {
+/** 턴 종료 효과를 처리하는 포켓몬 순서. ponytail: a→b 고정 — 스피드순(트릭룸이면 반대)은 8.3 A1-b, 이 함수만 바꾸면 된다 */
+function eotOrder(): readonly FighterKey[] {
+  return ["a", "b"];
+}
 
+/** 포켓몬 하나의 턴 종료 처리 컨텍스트 — 앞 단계에서 바뀐 도구·HP·상대 기절 여부를 읽도록 단계마다 새로 만든다 */
+function makeEotCtx(c: FinishCtx, key: FighterKey): EndOfTurnFighterContext {
+  const fighter = c.state[key];
+  const opponent = c.state[opponentKey(key)];
+  const fighterAbility = fighter.effectiveAbilityId ? getAbility(fighter.effectiveAbilityId) : undefined;
+  const fighterItem = fighterAbility?.disablesOwnItemEffects || itemsSuppressedByRoom(c.state)
+    ? undefined
+    : fighter.currentItemId
+      ? getItem(fighter.currentItemId)
+      : undefined;
+  // 긴장감: 상대가 이 특성이면 이 포켓몬의 나무열매(자뭉열매/오랭열매 등)가 막힌다 —
+  // 먹다남은음식은 나무열매가 아니라서 이 플래그와 무관하게 그대로 발동한다.
+  const opponentAbility = opponent.effectiveAbilityId ? getAbility(opponent.effectiveAbilityId) : undefined;
+  const opponentFainted = isFainted(opponent);
+  return {
+    state: c.state,
+    key,
+    fighter,
+    fighterAbility,
+    fighterItem,
+    fighterBerriesBlocked: !opponentFainted && !!opponentAbility?.preventsOpponentBerries,
+    random: c.random,
+    endOfTurn: c.endOfTurn,
+    opponentFainted,
+  };
+}
+
+/** 한 효과를 포켓몬 순서대로 한 단계로 돌린다 — 쓰러진 포켓몬은 건너뛴다 */
+function eachFighter(c: FinishCtx, step: (ctx: EndOfTurnFighterContext) => void) {
+  for (const key of eotOrder()) if (!isFainted(c.state[key])) step(makeEotCtx(c, key));
+}
+
+/**
+ * 턴 종료 효과(endOfTurn)와 멸망의노래로 쓰러진 쪽 처리 — 8.3 A1: 단계 우선, Showdown 순서(설계 8.3-A1-턴종료순서설계.md §3).
+ * ① 날씨 종료(expireWeather, 호출부) → ② 날씨 피해·특성 → ③ 미래예지 → 희망사항 → ④ 개별 효과 → ⑤ 멸망의노래·가속…·열매 재확인.
+ * 이번 턴 쓰러진 쪽은 건너뛰고, 살아 있는 쪽은 상대가 쓰러졌어도 턴 종료 처리를 받는다(ver.2.0 버그 수정 — 상대에게 매인 효과는
+ * opponentFainted로 각 단계가 거른다). 자폭 콤보로 양쪽 다 쓰러졌으면 둘 다 건너뛴다.
+ */
+function resolveEndOfTurnAndPerish(c: FinishCtx) {
   c.endOfTurn = [];
   // 멸망의노래로 이번 턴 종료에 쓰러진 쪽(F-4) — 양쪽 다면 스피드 느린 쪽이 승리한다.
   c.perishFaintedKeys = new Set<FighterKey>();
+  if (c.winner) return;
 
-  // 이번 턴 쓰러진 쪽은 건너뛰고, 살아 있는 쪽은 상대가 쓰러졌어도 턴 종료 처리를 받는다(ver.2.0 버그 수정 — 플레이테스트
-  // 사용자 제보: 이전엔 한쪽이라도 쓰러지면 양쪽 다 건너뛰어, 상대를 쓰러뜨린 턴에 하품 졸음이 잠듦으로 넘어가지 않고
-  // 먹다남은음식·독·모래바람 등도 한 턴씩 빠졌다). 상대에게 매인 효과는 opponentFainted로 각 단계가 거른다.
-  // 자폭 콤보로 양쪽 다 쓰러졌으면 둘 다 건너뛴다.
-  if (!c.winner) {
-    for (const key of (["a", "b"] as const)) {
-      const fighter = c.state[key];
-      if (isFainted(fighter)) continue;
-      const opponentFainted = isFainted(c.state[opponentKey(key)]);
-      const fighterAbility = fighter.effectiveAbilityId ? getAbility(fighter.effectiveAbilityId) : undefined;
-      const fighterItem = fighterAbility?.disablesOwnItemEffects || itemsSuppressedByRoom(c.state)
-        ? undefined
-        : fighter.currentItemId
-          ? getItem(fighter.currentItemId)
-          : undefined;
-      // 긴장감: 상대가 이 특성이면 이 포켓몬의 나무열매(자뭉열매/오랭열매 등)가 막힌다 —
-      // 먹다남은음식은 나무열매가 아니라서 이 플래그와 무관하게 그대로 발동한다.
-      const opponentAbilityForItem = c.state[opponentKey(key)].effectiveAbilityId
-        ? getAbility(c.state[opponentKey(key)].effectiveAbilityId!)
-        : undefined;
-      const fighterBerriesBlocked = !opponentFainted && !!opponentAbilityForItem?.preventsOpponentBerries;
-      const eotCtx: EndOfTurnFighterContext = {
-        state: c.state,
-        key,
-        fighter,
-        fighterAbility,
-        fighterItem,
-        fighterBerriesBlocked,
-        random: c.random,
-        endOfTurn: c.endOfTurn,
-        opponentFainted,
-      };
+  // ② 날씨 피해·특성
+  eachFighter(c, applySandstormDamage);
+  eachFighter(c, applyWeatherHealAbility);
+  eachFighter(c, applyWeatherDamageAbility);
 
-      if (applyPerishSongCountdown(eotCtx)) {
-        c.perishFaintedKeys.add(key);
-        continue; // 이미 쓰러졌으니 이 포켓몬의 나머지 턴 종료 처리(회복 등)는 건너뛴다
-      }
-      applyAbilityImmunityCure(eotCtx);
-      applyFieldEndOfTurnHeal(eotCtx);
-      applyLeftoversHeal(eotCtx);
-      applyWeatherHealAbility(eotCtx);
-      applyWeatherDamageAbility(eotCtx);
-      applyIngrainAquaRingHeal(eotCtx);
-      applyFutureSight(eotCtx);
-      applyLeechSeedDamage(eotCtx);
-      applyCurseDamage(eotCtx);
-      applyBoundDamage(eotCtx);
-      applySaltCureDamage(eotCtx);
-      applySyrupCoatDrop(eotCtx);
-      applyOctolockDrop(eotCtx);
-      applyWishHeal(eotCtx);
-      tickBlockVolatiles(eotCtx);
-      applyDrowsySleepOnset(eotCtx);
-      applySandstormDamage(eotCtx);
-      applyStatusEndOfTurnTick(eotCtx);
-      applyShedSkinCure(eotCtx);
-      applySpeedBoostAbility(eotCtx);
-      applyHungerSwitchToggle(eotCtx);
-      applyMoodyRandomStages(eotCtx);
-      applyBerryHpThresholdHeal(eotCtx);
-      applyHarvestRestore(eotCtx);
-      applyCudChew(eotCtx);
+  // ③ 자리(편) 효과 — 그 자리의 포켓몬이 쓰러졌어도 카운터는 줄고 효과만 실패하므로 쓰러진 쪽도 건너뛰지 않는다(Showdown slot condition)
+  for (const key of eotOrder()) {
+    const ctx = makeEotCtx(c, key);
+    applyFutureSight(ctx);
+    applyWishHeal(ctx);
+  }
+
+  // ④ 개별 효과 — 특성 면역 해제는 상태이상 틱보다 앞이고, 탈피는 먹다남은음식·독보다 앞이다
+  for (const key of eotOrder()) {
+    if (isFainted(c.state[key])) continue;
+    const ctx = makeEotCtx(c, key);
+    applyAbilityImmunityCure(ctx);
+    applyFieldEndOfTurnHeal(ctx);
+    applyShedSkinCure(ctx);
+    applyLeftoversHeal(ctx);
+    applyIngrainAquaRingHeal(ctx);
+    applyLeechSeedDamage(ctx);
+    applyStatusEndOfTurnTick(ctx);
+    applyCurseDamage(ctx);
+    applyBoundDamage(ctx);
+    applySaltCureDamage(ctx);
+    applySyrupCoatDrop(ctx);
+    applyOctolockDrop(ctx);
+    tickBlockVolatiles(ctx); // 회복 판정(희망사항·먹다남은음식 등)이 모두 끝난 뒤에 부른다
+    applyDrowsySleepOnset(ctx);
+  }
+
+  // ⑤ 멸망의노래(쓰러지면 이 포켓몬의 나머지는 건너뜀) → 가속·변덕쟁이·수확·되새김질 → 꼬르륵스위치 → 열매 재확인
+  for (const key of eotOrder()) {
+    if (isFainted(c.state[key])) continue;
+    const ctx = makeEotCtx(c, key);
+    if (applyPerishSongCountdown(ctx)) {
+      c.perishFaintedKeys.add(key);
+      continue;
     }
+    applySpeedBoostAbility(ctx);
+    applyMoodyRandomStages(ctx);
+    applyHarvestRestore(ctx);
+    applyCudChew(ctx);
+    applyHungerSwitchToggle(ctx);
+    applyBerryHpThresholdHeal(makeEotCtx(c, key)); // 수확으로 돌아온 열매를 읽도록 컨텍스트를 새로 만든다
   }
 }
 
@@ -863,7 +891,7 @@ function decideWinnerAndForcedSwitch(c: FinishCtx) {
       : undefined;
 }
 
-/** 필드·트릭룸·원더룸·매직룸·중력·페어리록·전자부유·날씨의 지속 턴 카운트다운 */
+/** 필드·트릭룸·원더룸·매직룸·중력·페어리록·전자부유의 지속 턴 카운트다운(날씨는 턴 종료 효과 앞의 expireWeather) */
 function expireFieldAndWeather(c: FinishCtx) {
 
   // (유턴류 자체 교체(§7-2)는 runActionPhase에서 턴 중간에 멈춰 resumeTurn으로 이미 처리된다.)
@@ -919,9 +947,13 @@ function expireFieldAndWeather(c: FinishCtx) {
       if (!isFainted(f)) c.expiredMagnetRise.push(key);
     }
   }
+}
 
-  // 날씨도 같은 방식으로 카운트다운한다. weatherTurnsRemaining은 날씨가 아예 없을 때만
-  // undefined이고, 특성/수동/기술 어느 경로로 걸렸든 항상 유한 턴수를 갖는다(챔피언스 규칙).
+/**
+ * 날씨 지속 턴 카운트다운(8.3 A1 ① — 턴 종료 효과보다 먼저, 그래서 마지막 턴에는 모래바람 피해·젖은접시 등이 없다).
+ * weatherTurnsRemaining은 날씨가 아예 없을 때만 undefined이고, 특성/수동/기술 어느 경로로 걸렸든 항상 유한 턴수를 갖는다(챔피언스 규칙).
+ */
+function expireWeather(c: FinishCtx) {
   c.weatherExpired = false;
   if (c.state.weatherTurnsRemaining !== undefined) {
     c.state.weatherTurnsRemaining -= 1;
@@ -1039,6 +1071,7 @@ export function finishTurn(ctx: RunTurnContext): RunTurnOutcome {
     const own = c.actions.find((a) => a.actor === key && a.actorPokemonId === fighter.slot.pokemonId);
     fighter.lastTurnMoveFailed = own && actionFailed(own) ? true : undefined;
   }
+  expireWeather(c);
   resolveEndOfTurnAndPerish(c);
   decideWinnerAndForcedSwitch(c);
   expireFieldAndWeather(c);

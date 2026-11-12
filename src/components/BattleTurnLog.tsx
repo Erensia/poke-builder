@@ -147,6 +147,8 @@ export function BattleTurnLog({
                   );
                 })}
                 <div className={pending(rv?.end ?? false)}>
+                  {/* 날씨 종료는 턴 종료 효과보다 먼저 일어난다(8.3 A1 ①) */}
+                  {turn.weatherExpired && <div className="battle-turn-line is-muted">날씨가 원래대로 돌아갔다!</div>}
                   {turn.endOfTurn.map((e, i) => (
                     <EndOfTurnLine
                       key={i}
