@@ -318,8 +318,6 @@ export interface BattleFighterState {
    */
   choiceLockedMoveId?: string;
   consecutiveLockUntilTurn?: number;
-  /** 돌림노래(doublesPowerPerConsecutiveUse): 마지막으로 쓴 턴과 연속 사용 횟수. 물러나면 지운다 */
-  echoStreak?: { turn: number; count: number };
   /**
    * 이번 턴에 "자기 의지로" 교체해서 나왔으면 true(Phase 8 §8). 가속(Speed Boost)이 이 턴
    * 종료에 발동하지 않게 막는 데 쓴다. runTurn이 매 턴 시작 시 지우고, 교체 선처리에서 자발적
@@ -432,6 +430,8 @@ export interface BattleState {
   fairyLockTurnsRemaining?: number;
   /** 흉내쟁이(트랙 M2): 배틀에서 직전에 실제로 나온 기술 id(누가 썼든). 발버둥은 기록하지 않는다 */
   lastMoveUsedId?: string;
+  /** 돌림노래(doublesPowerAfterEchoThisTurn): 마지막으로 쓰인 턴 번호. 2배는 앞선 포켓몬이 아니라 뒤에 대기 중인 행동에 붙으므로 교체돼도 유지한다(8.3 A2) */
+  echoTurn?: number;
   turnNumber: number;
   /** 배틀 시작 시점에 특성으로 날씨가 자동으로 바뀌었으면("○○의 잔비!") 그 안내 문구 */
   entryAnnouncements: string[];

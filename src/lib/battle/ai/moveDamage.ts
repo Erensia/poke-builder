@@ -19,7 +19,7 @@ import { computeBattleHitChance } from "../hitChance";
 import { computeTurnOrderPriority, effectiveHeldItem } from "../turnOrderInputs";
 import { isGrounded } from "../grounding";
 import { estimateKills, hitCountDistribution, meanUseDamage, type KillModel } from "./hitsToKill";
-import { attackChanceOf, requiresTargetAttack } from "./opponentMoveModel";
+import { attackChanceOf, echoChanceOf, requiresTargetAttack } from "./opponentMoveModel";
 import { applySurvivalGuard } from "./survivalGuard";
 import type { HitsEstimate } from "./types";
 
@@ -348,6 +348,9 @@ function estimateMoveHitsCore(ctx: MoveHitContext, baseMove: Move): MoveHitEstim
   // 늦게 행동하면 2배)은 후공 여부 그대로(ver.1.9 6-1 — 이전엔 AI가 항상 기본 위력으로 봤다).
   const avalancheMultiplier =
     move.conditionalDoublePower === "took-damage-this-turn" && attackerMovesSecond ? 1 + targetAttackChance : 1;
+  // 돌림노래(8.3 A2): 후공이면 상대가 이번 턴 돌림노래를 고를 확률만큼 2배를 기대 위력으로 섞는다(눈사태와 같은 방식). 선공이면 상대가 뒤에 쓰므로 영향 없다.
+  // (AI가 선공일 때 상대 돌림노래가 2배가 되는 위협 증가는 평가하지 않는다 — 8.3 백로그 후속 후보)
+  const echoMultiplier = move.doublesPowerAfterEchoThisTurn && attackerMovesSecond ? 1 + echoChanceOf(state, defender, attacker) : 1;
   // 애널라이즈(ver.1.9 A5): 후공이면 위력 ×1.3 — 엔진과 같은 판정(대상보다 늦게 행동)
   const analyticMultiplier = attackerMovesSecond ? (attackerAbility?.powerMultiplierWhenMovingLast ?? 1) : 1;
 
@@ -372,7 +375,7 @@ function estimateMoveHitsCore(ctx: MoveHitContext, baseMove: Move): MoveHitEstim
     defenderItemConsumed: !!defender.itemConsumed,
     attackerRuntime: runtimeOf(attacker, ctx.attackerTypes, state),
     defenderRuntime: runtimeOf(defender, defenderTypes, state),
-    extraOffenseMultiplier: ownTypeBoost * electroBoost * burnMultiplier * overlordMultiplier * avalancheMultiplier * analyticMultiplier,
+    extraOffenseMultiplier: ownTypeBoost * electroBoost * burnMultiplier * overlordMultiplier * avalancheMultiplier * echoMultiplier * analyticMultiplier,
     skipVerdict: true,
   };
   const result = evaluateSlotMatchup(attacker.slot, move, defender.slot, matchupOptions);

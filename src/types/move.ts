@@ -719,8 +719,8 @@ export interface Move {
   eatsTargetBerry?: boolean;
   /** 클리어스모그: 데미지를 줬으면(대타 제외) 상대의 능력 랭크·명중/회피 랭크를 원래대로 돌린다(자신은 그대로) */
   resetsTargetStages?: boolean;
-  /** 돌림노래: 직전 턴에도 이 기술을 썼으면 위력이 2배씩 올라간다(상한 200). 상대와의 연쇄는 세지 않고 자신의 연속 사용만 센다 */
-  doublesPowerPerConsecutiveUse?: boolean;
+  /** 돌림노래(8.3 A2): 같은 턴에 앞서 쓰인 돌림노래가 있으면(상대 포함) 위력이 2배(누적 없음). 연속 턴 사용은 세지 않는다. 호출 기술(잠꼬대 등)로 나온 쪽은 2배 아님 */
+  doublesPowerAfterEchoThisTurn?: boolean;
   /** 자기장조작(트랙 M6): 자신이 플러스·마이너스면 방어·특방 +1, 아니면 실패 */
   boostsDefensesIfPlusMinus?: boolean;
   /**

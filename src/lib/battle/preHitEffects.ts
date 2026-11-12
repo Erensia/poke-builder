@@ -900,12 +900,14 @@ function applyConditionalPower(c: PreHitCtx) {
   if (c.effectiveMove.targetItemPowerMultiplier && c.effectiveMove.power !== null && isItemRemovable(c.defender, c.defenderAbility)) {
     c.effectiveMove = { ...c.effectiveMove, power: Math.floor(c.effectiveMove.power * c.effectiveMove.targetItemPowerMultiplier) };
   }
-  // 돌림노래: 직전 턴에도 썼으면 2배씩(상한 200). 이번 사용을 기록해 다음 턴에 이어지게 한다
-  if (c.effectiveMove.doublesPowerPerConsecutiveUse && c.effectiveMove.power !== null) {
-    const prev = c.attacker.echoStreak;
-    const count = prev && prev.turn === c.state.turnNumber - 1 ? prev.count + 1 : 1;
-    c.attacker.echoStreak = { turn: c.state.turnNumber, count };
-    c.effectiveMove = { ...c.effectiveMove, power: Math.min(200, c.effectiveMove.power * 2 ** (count - 1)) };
+  // 돌림노래(8.3 A2, Showdown round): 같은 턴에 앞서 쓰인 돌림노래가 있으면 2배(60→120, 누적 없음). 연속 턴 사용은 세지 않는다.
+  // 마커는 포켓몬이 아니라 배틀 상태 — 앞선 포켓몬이 레드카드로 교체돼도 뒤에 대기 중인 행동은 2배다. 호출 기술(잠꼬대·흉내쟁이)로 나온 쪽은
+  // 이번 턴 "선택한 행동"이 돌림노래가 아니라 2배가 아니고, 앞쪽이 호출로 썼어도 기록은 남는다. 판정(echoed)을 읽은 뒤 기록한다.
+  if (c.effectiveMove.doublesPowerAfterEchoThisTurn && c.effectiveMove.power !== null) {
+    const called = !!(c.sleepTalkCalledMoveName || c.copycatCalledMoveName);
+    const echoed = c.state.echoTurn === c.state.turnNumber;
+    c.state.echoTurn = c.state.turnNumber;
+    if (echoed && !called) c.effectiveMove = { ...c.effectiveMove, power: c.effectiveMove.power * 2 };
   }
 
   // 솔라빔(§1-10): chargeSkipWeather(쾌청)가 아닌 날씨에서는 위력 절반. 메가솔라(치지직 등)로
