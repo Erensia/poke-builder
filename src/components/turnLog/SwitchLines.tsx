@@ -8,7 +8,7 @@ export function PreMoveSwitchLines({ switches }: { switches: TurnResult["switche
   return (
     <>
       {switches
-        .filter((sw) => !sw.afterMove)
+        .filter((sw) => !sw.afterMove && !sw.endOfTurn)
         .map((sw, i) => {
           const outName = getPokemon(sw.outPokemonId)?.name ?? "포켓몬";
           const inName = getPokemon(sw.inPokemonId)?.name ?? "포켓몬";
@@ -45,6 +45,37 @@ export function MergedSwitchLines({ switches, team }: { switches: TurnResult["sw
           ))}
         </div>
       ))}
+    </>
+  );
+}
+
+/** 미래예지 적중으로 대상의 레드카드가 발동해 턴 종료 효과가 끝난 뒤 사용자가 끌려나온 교체(8.3 A4-b) — 턴 종료 줄 맨 끝에 놓는다. holderName: 카드를 지닌 쪽(= 사용자의 상대) 포켓몬 이름 */
+export function EndOfTurnSwitchLines({ switches, holderName }: { switches: TurnResult["switches"]; holderName: (userSide: FighterKey) => string }) {
+  return (
+    <>
+      {switches
+        .filter((sw) => sw.endOfTurn)
+        .map((sw, j) => {
+          const outN = getPokemon(sw.outPokemonId)?.name ?? "포켓몬";
+          const inN = getPokemon(sw.inPokemonId)?.name ?? "포켓몬";
+          return (
+            <div key={`swet-${j}`}>
+              <div className="battle-turn-line">
+                {holderName(sw.side)}의 {sw.redCardItemName}! {outN}
+                {eunNeun(outN)} 강제로 교체되었다!
+              </div>
+              <div className="battle-turn-line">
+                {inN}
+                {eunNeun(inN)} 배틀에 끌려나왔다!
+              </div>
+              {sw.entryMessages.map((m, k) => (
+                <div key={`swetm-${j}-${k}`} className="battle-turn-line is-muted">
+                  {m}
+                </div>
+              ))}
+            </div>
+          );
+        })}
     </>
   );
 }
@@ -86,7 +117,7 @@ export function SelfSwitchAfterMoveLines({
   );
 }
 
-/** 드래곤테일·울부짖기류 — 이 기술로 상대가 강제로 끌려나온 교체 */
+/** 드래곤테일·울부짖기류 — 이 기술로 상대가 강제로 끌려나온 교체. 레드카드 교체(redCardItemName)는 RedCardSwitchLines가 그리므로 제외한다(홀더가 행동할 때 같은 기록이 두 줄로 나오던 중복, 8.3 A7②) */
 export function ForcedOpponentSwitchLines({
   switches,
   actor,
@@ -97,7 +128,7 @@ export function ForcedOpponentSwitchLines({
   return (
     <>
       {switches
-        .filter((sw) => sw.afterMove && sw.forced && sw.side === opponentKey(actor))
+        .filter((sw) => sw.afterMove && sw.forced && !sw.redCardItemName && sw.side === opponentKey(actor))
         .map((sw, j) => {
           const outN = getPokemon(sw.outPokemonId)?.name ?? "포켓몬";
           const inN = getPokemon(sw.inPokemonId)?.name ?? "포켓몬";

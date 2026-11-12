@@ -71,6 +71,8 @@ export const SETTLE = 350;
 /** 교체 한 번이 차지하는 시간(ms) — 나가는 카드가 뒤로 물러나고(OUT_MS) 새 카드가 앞으로 나온다. 그만큼 뒤 행동 일정이 밀린다(7.4 E3) */
 export const SWITCH_MS = 700;
 export const OUT_MS = 300;
+/** 턴 종료 시점의 교체(미래예지 적중 레드카드, 8.3 A4-b)가 턴 종료 줄이 나온 뒤 시작하기까지의 간격(ms) — 일정을 밀지 않고 그 시각에 겹쳐 시작한다 */
+export const END_SWAP_MS = 450;
 const SWITCH_PX = 26;
 /** 메가진화 연출(7.4 E8) — 빛이 모여드는 MEGA_PEAK(ms)에 폼이 바뀌고, 터져 나가며 MEGA_MS가 끝난다. 그만큼 그 턴 일정이 밀린다 */
 export const MEGA_MS = 1000;

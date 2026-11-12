@@ -280,6 +280,7 @@ export function useBattleLogSession(mode: BattleMode) {
   /** 강제 교체 확정 — 기절한 활성 자리에 toIndex 슬롯을 세운다(턴은 소비 안 함) */
   function resolveForcedSwitch(side: Side, toIndex: number) {
     if (!battleState) return;
+    const outgoingAlive = battleState[side].currentHp > 0; // 위기회피로 살아 있는 채 물러나는 교체(8.3 A4-b)
     const { nextState, entryMessages, outPokemonId, inPokemonId } = applySwitch(battleState, side, toIndex);
     setBattleState(nextState);
     // 스텔스록·압정 등장 데미지로(§6) 새로 나온 포켓몬이 그 자리에서 또 쓰러졌는지.
@@ -287,7 +288,7 @@ export function useBattleLogSession(mode: BattleMode) {
     const inFainted = nextState[side].currentHp <= 0;
     const hasReserve = inSide.party.some((f, i) => i !== inSide.activeIndex && f.currentHp > 0);
     // 강제 교체는 턴 밖 조작이라 별도 로그 카드로 남긴다(등장 파이프라인 문구까지 함께).
-    const synthetic = forcedSwitchLogEntry(nextState, side, toIndex, { outPokemonId, inPokemonId, entryMessages }, inFainted, hasReserve);
+    const synthetic = forcedSwitchLogEntry(nextState, side, toIndex, { outPokemonId, inPokemonId, entryMessages }, { inFainted, hasReserve, outgoingAlive });
     setLog((prev) => [...prev, synthetic]);
     // 새로 나온 포켓몬이 또 쓰러졌고 남은 슬롯이 있으면 강제 교체를 계속 요구한다.
     setPendingForcedSwitch((prev) => {

@@ -7,7 +7,7 @@ import { ActionEffectLines } from "./turnLog/ActionEffectLines";
 import { HpFormatContext } from "./turnLog/hpFormat";
 import { ActionMainLine } from "./turnLog/ActionMainLine";
 import { EndOfTurnLine, TurnFooterLines } from "./turnLog/EndOfTurnLines";
-import { ForcedOpponentSwitchLines, MergedSwitchLines, PreMoveSwitchLines, RedCardSwitchLines, SelfSwitchAfterMoveLines } from "./turnLog/SwitchLines";
+import { EndOfTurnSwitchLines, ForcedOpponentSwitchLines, MergedSwitchLines, PreMoveSwitchLines, RedCardSwitchLines, SelfSwitchAfterMoveLines } from "./turnLog/SwitchLines";
 
 /**
  * 턴별 배틀 로그(실시간 배틀판·HP게이지·조작 UI에서 분리된, 텍스트 중심 히스토리) — 실시간
@@ -156,6 +156,8 @@ export function BattleTurnLog({
                       turnName={turnName}
                     />
                   ))}
+                  {/* 미래예지 적중 레드카드로 턴 종료 효과가 끝난 뒤 사용자가 끌려나온 교체(8.3 A4-b) */}
+                  <EndOfTurnSwitchLines switches={turn.switches} holderName={(userSide) => turnName(opponentKey(userSide))} />
                   <TurnFooterLines turn={turn} turnName={turnName} />
                 </div>
                 {sorted.length > 0 && <div className={`battle-turn-switch-sep ${extraCls(sorted[0]) ?? ""}`} />}

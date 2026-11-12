@@ -609,6 +609,10 @@ export interface EndOfTurnLogEntry {
   futureSightCritical?: true;
   futureSightSubstitute?: "hit" | "broke";
   futureSightImmune?: true;
+  /** 미래예지 적중으로 대상의 위기회피가 발동했다(8.3 A4-b) — 그 특성 이름. 교체 요구는 턴 종료 뒤 `forcedSwitch`로 전달된다 */
+  futureSightExitAbilityName?: string;
+  /** 미래예지 적중으로 대상의 레드카드가 발동해 카드가 소모됐다(8.3 A4-b) — 그 도구 이름. 사용자 교체는 턴 종료 뒤 `SwitchLogEntry.endOfTurn` */
+  futureSightRedCardItemName?: string;
   /** 사용자가 필드에 있을 때 생명의구슬 같은 도구 때문에 입은 반동(damage·remainingHp는 사용자 쪽 값) — actor는 사용자 쪽 */
   itemRecoilItemName?: string;
   damage: number;
@@ -788,6 +792,13 @@ export interface SwitchLogEntry {
    * 시전자 자신이라는 게 다르다. UI가 이 필드 유무로 두 케이스를 가른다.
    */
   redCardItemName?: string;
+  /**
+   * 미래예지 적중으로 대상의 레드카드가 발동해 턴 종료 효과가 끝난 뒤 사용자(`side`)가 끌려나온 교체면 true(8.3 A4-b).
+   * `forced`와 `redCardItemName`도 함께 서지만 `afterMove`는 세우지 않는다 — 행동 기준 렌더러(행동 줄 밑)·연출에 걸리지 않게.
+   */
+  endOfTurn?: true;
+  /** 물러나는 포켓몬이 살아 있다(위기회피 교체 요구로 만든 합성 카드, 8.3 A4-b) — 연출이 나가는 모션을 보인다. 기절한 채 물러나는 교체엔 없다 */
+  outgoingAlive?: true;
 }
 
 /** 한 편이 이번 턴에 하는 행동. 교체는 항상 기술보다 먼저 처리된다(Phase 8 §3). */

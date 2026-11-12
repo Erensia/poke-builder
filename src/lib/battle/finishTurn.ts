@@ -13,11 +13,12 @@ import { rankStageMultiplier, rivalryDamageMultiplier } from "@/lib/battlePower"
 import { resolveMoveContext } from "@/lib/moveContext";
 import { computeFieldEndOfTurnHeal, isStatusBlockedByField } from "@/lib/fieldEffects";
 import { getDrainHealMultiplier, getHpThresholdBerryHeal } from "@/lib/itemEffects";
-import { SANDSTORM_IMMUNE_ABILITY_NAMES, abilityOf, activeWeather, applyForecastForm, consumeItem, contraryDelta, hasLivingReserve, isFainted, opponentKey, sideOf, statDropBlockStatsOf, statusImmunitiesOf, type BattleFighterState, type BattleState } from "./state";
+import { SANDSTORM_IMMUNE_ABILITY_NAMES, abilityOf, activeWeather, applyForecastForm, consumeItem, contraryDelta, hasLivingReserve, isFainted, isForcedSwitchBlocked, opponentKey, sideOf, statDropBlockStatsOf, statusImmunitiesOf, type BattleFighterState, type BattleState } from "./state";
 import { type RunTurnContext, type RunTurnOutcome } from "./runTurn";
 import { actionFailed } from "./moveFailure";
 import { computeBattleHitChance } from "./hitChance";
 import { resolveHitAndApplyDamage } from "./hitResolution";
+import { forceRandomSwitch } from "./switching";
 import { type ActionLogEntry, type SwitchLogEntry } from "@/types/battle";
 
 interface EndOfTurnFighterContext {
@@ -31,6 +32,14 @@ interface EndOfTurnFighterContext {
   endOfTurn: EndOfTurnLogEntry[];
   /** 이번 턴에 상대 활성이 쓰러져 자리가 비었는지 — 상대에게 매인 효과(씨뿌리기 흡수·조이기·문어굳히기)는 발동하지 않는다 */
   opponentFainted: boolean;
+  /** 미래예지 적중 반응(위기회피·레드카드) 기록 — 교체는 턴 종료 효과가 끝난 뒤 settleFutureSightReactions가 한다 */
+  pending: PendingReactions;
+}
+
+/** 미래예지 적중으로 발동한 방어측(대상) 반응. 키 = 대상 쪽. exit: 위기회피가 발동했다 / redCard: 소모한 레드카드 이름(사용자 = 상대 편을 끌어낸다) */
+interface PendingReactions {
+  exit: Partial<Record<FighterKey, true>>;
+  redCard: Partial<Record<FighterKey, string>>;
 }
 
 /**
@@ -243,6 +252,8 @@ function applyFutureSight(ctx: EndOfTurnFighterContext): void {
   const defenderAbility = abilityOf(fighter); // 틀깨기 미적용: useMove를 거치지 않아 ModifyMove가 돌지 않는다
   const defenderItem = effectiveHeldItem(fighter, state);
   const hpBefore = fighter.currentHp;
+  let landedOnBody = false; // 적중이 본체에 닿았는가(빗나감·무효·대타 적중 제외) — 레드카드 판정
+  let draggedOut = false; // 레드카드가 사용자를 끌어낼 예정이면 생명의구슬 반동이 없다(Showdown lifeorb `!source.forceSwitchFlag`)
   // ponytail: 에스퍼 전용이라 흡수 특성(마중물류) 판정은 생략 — 타입이 다른 지연 공격기가 생기면 preHitEffects의 흡수 판정을 뽑아 재사용
   // ponytail: 노멀스킨은 보유 종이 없어 생략(미래예지 26종 중 0종) — 생기면 onEnd처럼 type만 노말로 바꾼다(×1.2 없음)
   const mc = resolveMoveContext(attackerAbility, move, fighter.types, defenderAbility, {
@@ -289,6 +300,13 @@ function applyFutureSight(ctx: EndOfTurnFighterContext): void {
     entry.fainted = isFainted(fighter);
     if (res.isCritical) entry.futureSightCritical = true;
     if (res.hitSubstitute) entry.futureSightSubstitute = res.substituteBroke ? "broke" : "hit";
+    landedOnBody = !res.hitSubstitute;
+    // 위기회피(8.3 A4-b): 정상 공격(resolveAction)과 같은 조건 — HP가 절반 초과 → 이하(0 초과). 대타가 맞으면 본체 HP가 안 변해 미발동.
+    // 교체 요구는 턴 종료 효과가 끝난 뒤 settleFutureSightReactions가 확정한다(도망봉인·뿌리박기여도 발동, HP는 다시 보지 않는다).
+    if (defenderAbility?.exitsFieldAtHalfHp && hasLivingReserve(sideOf(state, key)) && fighter.currentHp > 0 && hpBefore * 2 > fighter.maxHp && fighter.currentHp * 2 <= fighter.maxHp) {
+      ctx.pending.exit[key] = true;
+      entry.futureSightExitAbilityName = defenderAbility.name;
+    }
     // 쓰러뜨린 뒤 발동하는 특성(onSourceAfterFaint)은 필드에 있을 때 유지된다 — resolveAction.applyKnockoutAbilities와 같은 규칙
     if (onField && res.damage > 0 && entry.fainted) {
       if (attackerAbility?.boostsStatOnKo) src.stages = applyStageDelta(src.stages, attackerAbility.boostsStatOnKo.stat, contraryDelta(src, attackerAbility.boostsStatOnKo.delta));
@@ -298,8 +316,17 @@ function applyFutureSight(ctx: EndOfTurnFighterContext): void {
       }
     }
   }
-  // 생명의구슬 반동: onEnd가 결과를 보지 않고 부르므로 빗나감·무효·대타 적중에도 생긴다(대상이 적중 전에 기절했으면 위에서 이미 반환)
-  if (onField && attackerItem?.selfRecoilFractionOfMaxHp && !attackerAbility?.negatesIndirectDamage) {
+  // 레드카드(8.3 A4-b): 사용자가 필드에 있고 적중이 본체에 닿았으면(빗나감·무효·대타 적중 제외 — 위 분기를 지난 경우만, 탈이 벗겨지는 적중 포함)
+  // 맞는 순간 카드를 소모한다. 사용자 편에 살아 있는 예비가 없으면 소모하지 않는다. 교체는 settleFutureSightReactions에서(뿌리박기·흡반이면 카드만 소모).
+  if (onField && landedOnBody && !isFainted(fighter) && defenderItem?.forcesAttackerSwitchOnHit && hasLivingReserve(srcSide)) {
+    ctx.pending.redCard[key] = defenderItem.name;
+    entry.futureSightRedCardItemName = defenderItem.name;
+    consumeItem(fighter);
+    draggedOut = !isForcedSwitchBlocked(src);
+  }
+  // 생명의구슬 반동: onEnd가 결과를 보지 않고 부르므로 빗나감·무효·대타 적중에도 생긴다(대상이 적중 전에 기절했으면 위에서 이미 반환).
+  // 단 레드카드로 끌려 나갈 예정이면 없다 — 뿌리박기·흡반으로 교체가 막히면 카드는 소모되고 반동은 받는다.
+  if (onField && !draggedOut && attackerItem?.selfRecoilFractionOfMaxHp && !attackerAbility?.negatesIndirectDamage) {
     const recoil = Math.min(src.currentHp, Math.floor(src.maxHp * attackerItem.selfRecoilFractionOfMaxHp));
     src.currentHp -= recoil;
     endOfTurn.push({ actor: srcKey, damage: recoil, remainingHp: src.currentHp, fainted: isFainted(src), itemRecoilItemName: attackerItem.name });
@@ -803,6 +830,9 @@ interface FinishCtx {
   endOfTurn: EndOfTurnLogEntry[];
   perishFaintedKeys: Set<FighterKey>;
   forcedSwitch: { a?: boolean; b?: boolean } | undefined;
+  /** 미래예지 적중 반응 기록과, 턴 종료 뒤 확정된 위기회피 교체 요구(8.3 A4-b) */
+  pending: PendingReactions;
+  exitSwitch: Partial<Record<FighterKey, true>>;
   fieldExpired: boolean;
   trickRoomExpired: boolean;
   expiredFieldEffects: ("wonderRoom" | "magicRoom" | "gravity")[];
@@ -842,6 +872,7 @@ function makeEotCtx(c: FinishCtx, key: FighterKey): EndOfTurnFighterContext {
     random: c.random,
     endOfTurn: c.endOfTurn,
     opponentFainted,
+    pending: c.pending,
   };
 }
 
@@ -858,6 +889,8 @@ function eachFighter(c: FinishCtx, step: (ctx: EndOfTurnFighterContext) => void)
  */
 function resolveEndOfTurnAndPerish(c: FinishCtx) {
   c.endOfTurn = [];
+  c.pending = { exit: {}, redCard: {} };
+  c.exitSwitch = {};
   // 멸망의노래로 이번 턴 종료에 쓰러진 쪽(F-4) — 양쪽 다면 스피드 느린 쪽이 승리한다.
   c.perishFaintedKeys = new Set<FighterKey>();
   if (c.winner) return;
@@ -911,6 +944,25 @@ function resolveEndOfTurnAndPerish(c: FinishCtx) {
   }
 }
 
+/**
+ * 미래예지 적중 반응 정산(8.3 A4-b, Showdown: 교체는 잔류 처리 전체가 끝난 뒤·기절 처리 앞) — 필드·스크린 만료까지 끝난 뒤에 부른다.
+ * 레드카드: 대상(홀더)이 맞는 순간 카드를 소모했고(applyFutureSight), 여기서 사용자(상대 편)가 살아 있고 끌려 나올 수 있으면(뿌리박기·흡반이 아니면) 무작위 예비로 끌어낸다.
+ * 위기회피: 대상이 살아 있고 살아 있는 예비가 있으면 교체 요구를 확정한다 — 도망봉인·뿌리박기·흡반은 보지 않고 HP도 다시 보지 않는다(Showdown canSwitch만).
+ * 레드카드가 먼저다(같은 포켓몬이 둘 다 지니면 사용자가 먼저 끌려 나오고 그다음 대상에게 교체 요구). 끌려 들어온 포켓몬이 쓰러지면 decideWinnerAndForcedSwitch가 처리한다.
+ */
+function settleFutureSightReactions(c: FinishCtx) {
+  for (const holder of ["a", "b"] as const) {
+    const cardName = c.pending.redCard[holder];
+    const user = opponentKey(holder);
+    if (cardName && !isFainted(c.state[user]) && !isForcedSwitchBlocked(c.state[user]) && hasLivingReserve(sideOf(c.state, user))) {
+      forceRandomSwitch(c.state, c.random, c.switches, user, { redCardItemName: cardName, endOfTurn: true });
+    }
+  }
+  for (const key of ["a", "b"] as const) {
+    if (c.pending.exit[key] && !isFainted(c.state[key]) && hasLivingReserve(sideOf(c.state, key))) c.exitSwitch[key] = true;
+  }
+}
+
 /** 활성 슬롯이 기절했을 때의 승패·무승부·강제 교체 대상 결정 */
 function decideWinnerAndForcedSwitch(c: FinishCtx) {
 
@@ -957,12 +1009,10 @@ function decideWinnerAndForcedSwitch(c: FinishCtx) {
   }
 
   // 배틀이 안 끝났는데 활성이 기절해 있으면(=교대할 슬롯이 남음) 다음 턴 전에 강제 교체를 요구한다.
-  c.forcedSwitch = !c.winner && ((isFainted(c.state.a) && aHasReserve) || (isFainted(c.state.b) && bHasReserve))
-      ? {
-          a: isFainted(c.state.a) && aHasReserve ? true : undefined,
-          b: isFainted(c.state.b) && bHasReserve ? true : undefined,
-        }
-      : undefined;
+  // 활성이 기절했거나, 미래예지 적중 위기회피로 살아 있는 활성이 물러나야 하는 편(8.3 A4-b — 이미 기절했으면 기절 교체가 대신하므로 한 번만 요구된다)
+  const needA = aHasReserve && (isFainted(c.state.a) || !!c.exitSwitch.a);
+  const needB = bHasReserve && (isFainted(c.state.b) || !!c.exitSwitch.b);
+  c.forcedSwitch = !c.winner && (needA || needB) ? { a: needA ? true : undefined, b: needB ? true : undefined } : undefined;
 }
 
 /** 필드·트릭룸·원더룸·매직룸·중력·페어리록·전자부유의 지속 턴 카운트다운(날씨는 턴 종료 효과 앞의 expireWeather) */
@@ -1147,8 +1197,10 @@ export function finishTurn(ctx: RunTurnContext): RunTurnOutcome {
   }
   expireWeather(c);
   resolveEndOfTurnAndPerish(c);
-  decideWinnerAndForcedSwitch(c);
   expireFieldAndWeather(c);
   expireSideEffects(c);
+  settleFutureSightReactions(c);
+  // 8.3 A4-b: 승패·강제 교체 판정은 필드·스크린 만료 뒤(Showdown은 교체 요청이 잔류 전체 뒤) — 만료 함수는 winner·forcedSwitch를 읽지 않는다
+  decideWinnerAndForcedSwitch(c);
   return collectResult(c);
 }

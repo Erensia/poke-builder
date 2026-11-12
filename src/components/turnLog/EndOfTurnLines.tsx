@@ -94,6 +94,8 @@ export function EndOfTurnLine({
             </>
           )}
           {e.fainted && " · 기절!"}
+          {e.futureSightRedCardItemName && <> {turnName(e.actor)}의 {e.futureSightRedCardItemName}{iGa(e.futureSightRedCardItemName)} 발동했다!</>}
+          {e.futureSightExitAbilityName && <> {turnName(e.actor)}의 {e.futureSightExitAbilityName}{iGa(e.futureSightExitAbilityName)} 발동했다!</>}
         </>
       ) : e.wishHeal ? (
         <>
