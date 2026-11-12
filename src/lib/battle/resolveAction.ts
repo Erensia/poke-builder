@@ -25,6 +25,7 @@ import { type eatBerryNow } from "@/lib/battle/fling";
 
 /** resolveAction의 단계 사이에서 공유되는 값 — 한 단계 안에서만 쓰는 변수는 각 단계 함수의 지역 변수다 */
 interface ActionCtx {
+  destinyBondWasArmed: boolean;
   state: BattleState;
   actorKey: FighterKey;
   move: Move;
@@ -274,7 +275,7 @@ interface ActionCtx {
 function resolveMirroredPhase(c: ActionCtx) {
 
   const mirrorResult = resolveMirroredMoveEffects({
-    bouncedByMagicMirror: c.bouncedByMagicMirror, move: c.move, effectiveMove: c.effectiveMove, opponentEffectsBlocked: c.opponentEffectsBlocked, random: c.random, state: c.state, hit: c.hit, movesSecond: c.movesSecond, defenderKey: c.defenderKey, damage: c.damage, hitSubstitute: c.hitSubstitute, defenderMove: c.defenderMove, actorKey: c.actorKey, defenderBerriesBlocked: c.defenderBerriesBlocked, attackerBerriesBlocked: c.attackerBerriesBlocked, blockedByProtect: c.blockedByProtect, sheerForceAbilityName: c.sheerForceAbilityName, isDamaging: c.isDamaging, selfCuredStatus: c.selfCuredStatus, terrainSeedMessages: c.terrainSeedMessages, defenderAbility: c.defenderAbility, attacker: c.attacker, defender: c.defender, attackerAbility: c.attackerAbility, attackerItem: c.attackerItem, defenderItem: c.defenderItem, abilityInflictedStatusOnAttacker: c.abilityInflictedStatusOnAttacker, abilityInflictedStatusAbilityName: c.abilityInflictedStatusAbilityName, statusCureBerryItemName: c.statusCureBerryItemName, mentalMoveBlockedByAbilityName: c.mentalMoveBlockedByAbilityName,
+    bouncedByMagicMirror: c.bouncedByMagicMirror, destinyBondWasArmed: c.destinyBondWasArmed, move: c.move, effectiveMove: c.effectiveMove, opponentEffectsBlocked: c.opponentEffectsBlocked, random: c.random, state: c.state, hit: c.hit, movesSecond: c.movesSecond, defenderKey: c.defenderKey, damage: c.damage, hitSubstitute: c.hitSubstitute, defenderMove: c.defenderMove, actorKey: c.actorKey, defenderBerriesBlocked: c.defenderBerriesBlocked, attackerBerriesBlocked: c.attackerBerriesBlocked, blockedByProtect: c.blockedByProtect, sheerForceAbilityName: c.sheerForceAbilityName, isDamaging: c.isDamaging, selfCuredStatus: c.selfCuredStatus, terrainSeedMessages: c.terrainSeedMessages, defenderAbility: c.defenderAbility, attacker: c.attacker, defender: c.defender, attackerAbility: c.attackerAbility, attackerItem: c.attackerItem, defenderItem: c.defenderItem, abilityInflictedStatusOnAttacker: c.abilityInflictedStatusOnAttacker, abilityInflictedStatusAbilityName: c.abilityInflictedStatusAbilityName, statusCureBerryItemName: c.statusCureBerryItemName, mentalMoveBlockedByAbilityName: c.mentalMoveBlockedByAbilityName,
   });
   c.bouncedMoveName = mirrorResult.bouncedMoveName;
   c.bouncedByAbilityName = mirrorResult.bouncedByAbilityName;
@@ -958,8 +959,15 @@ export function resolveAction(
   c.movesSecond = movesSecond;
   c.defenderMove = defenderMove;
 
+  // 길동무(8.3 A5): preHit이 행동 시작 때 예약을 지우므로 그 전에 읽는다. 잠꼬대 등 호출 기술이 아니라 길동무를 직접 골랐을 때만 연속 실패 대상이다.
+  c.destinyBondWasArmed = move.protectEffect === "destinyBond" && state[actorKey].destinyBondArmed === true;
+
   const pre = resolvePreHitEffects(c.state, c.actorKey, c.move, c.random, c.movesSecond, c.defenderMove);
-  if (!("defenderKey" in pre)) return pre;
+  if (!("defenderKey" in pre)) {
+    // 행동하지 못한 턴(마비·수면·풀죽음·사용 불가 등)은 방어류를 성공하지 못한 턴이다 — Showdown은 stall이 만료돼 다음 방어가 확정 성공(8.3 A5, Q22).
+    c.state[c.actorKey].protectStreak = 0;
+    return pre;
+  }
   c.pre = pre;
   c.move = c.pre.move;
   c.defenderKey = c.pre.defenderKey;

@@ -1,5 +1,5 @@
 // 7.3 B2 방어/판별/킹실드류: 내가 이번 턴 마지막에 행동하면(상대가 교체했거나, 방어끼리 겹쳐 우선도 +4 속도 순서에서 늦을 때) 사용 이펙트 없이 실패하고
-// 연속 횟수가 0으로 돌아가 다음 턴 방어는 확정 성공한다. 버티기·길동무·패스트가드는 그대로.
+// 연속 횟수가 0으로 돌아가 다음 턴 방어는 확정 성공한다. (8.3 A5: 버티기·패스트가드도 같은 조건으로 실패 — `22-ver83-a5.mjs`. 길동무만 그대로.)
 export default async function ({ server, data, ev, opt, mon, battle, pts, check }) {
   const rt = await server.ssrLoadModule("/src/lib/battle/runTurn.ts");
   const move = (id) => ({ kind: "move", move: data.getMove(id) });
@@ -31,9 +31,9 @@ export default async function ({ server, data, ev, opt, mon, battle, pts, check 
     check(`7.3 B2 ${id}: 내가 먼저 움직이면 상대 공격을 막아 성공`, aFast.protectSucceeded === true && !aFast.protectFailed, `succeeded=${aFast.protectSucceeded}`);
   }
 
-  // 대상 밖: 버티기·길동무는 늦게 움직여도 그대로 발동
+  // 8.3 A5(R7 재확정): 버티기도 마지막 행동이면 실패한다(Showdown endure.onPrepareHit). 길동무는 늦게 움직여도 그대로 발동
   const slowEndure = rt.runTurn(battle(slowGuard(), foe()), move("버티기"), move("방어"), rng);
-  check("7.3 B2 버티기는 상대 방어보다 늦게 움직여도 그대로 발동", slowEndure.nextState.a.activeProtect?.effect === "endure" && slowEndure.nextState.a.protectStreak === 1, `${slowEndure.nextState.a.activeProtect?.effect} streak=${slowEndure.nextState.a.protectStreak}`);
+  check("7.3 B2 → 8.3 A5: 버티기는 상대 방어보다 늦게 움직이면 실패(연속 횟수 0)", !slowEndure.nextState.a.activeProtect && slowEndure.nextState.a.protectStreak === 0, `${slowEndure.nextState.a.activeProtect?.effect} streak=${slowEndure.nextState.a.protectStreak}`);
   const slowBond = rt.runTurn(battle(slowGuard(), foe()), move("길동무"), move("지진"), rng);
   check("7.3 B2 길동무는 늦게 움직여도 그대로 발동", slowBond.result.actions.find(mine).protectSucceeded === true,`succeeded=${slowBond.result.actions.find(mine)?.protectSucceeded}`);
   // 7.3 B3 풀피 멀티스케일은 다단히트의 첫 타만 반감한다(둘째 타부터는 HP가 깎여 풀 데미지)

@@ -514,7 +514,7 @@ function evaluateProtectMove(ctx: ProtectContext): ProtectEvaluation {
   const group = protectGroupOf(move)!;
   const oppKey = opponentKey(key);
   const base = currentRace(ctx.moveState, key, ctx.raceMoves);
-  const successChance = protectSuccessChance(state[key].protectStreak);
+  const successChance = protectSuccessChance(state[key], group);
   const mix = opponentActionMix(ctx.threat.moveWeights);
   if (mix.length === 0 || (group === "priorityGuard" && !hasPriorityThreat(mix))) {
     return { group, successChance, outcomes: [], base, pointless: true };

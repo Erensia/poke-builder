@@ -22,6 +22,8 @@ import { SWITCH_PASS_MOVE_ID, activeWeather, applyTransform, consumeItem, contra
 import { triggerTerrainSeeds } from "./switching";
 
 interface MirroredMoveEffectsInput {
+  /** 길동무를 직접 골랐고 행동 시작 전에 직전 성공 예약이 남아 있었는가(8.3 A5) — preHit이 행동 시작 때 예약을 지우기 전 값 */
+  destinyBondWasArmed: boolean;
   bouncedByMagicMirror: boolean;
   move: Move;
   effectiveMove: Move;
@@ -55,6 +57,7 @@ interface MirroredMoveEffectsInput {
 }
 /** resolveMirroredMoveEffects의 단계 사이에서 공유되는 값 — 한 단계 안에서만 쓰는 변수는 각 단계 함수의 지역 변수다 */
 interface MirroredCtx {
+  destinyBondWasArmed: boolean;
   move: Move;
   effectiveMove: Move;
   opponentEffectsBlocked: boolean;
@@ -1657,8 +1660,9 @@ function abilitySwapAndSubstitute(c: MirroredCtx) {
 /** 방어류 연속 사용, 필드·설치물 설치, 매직미러 구간 끝(바인딩 원위치) */
 function protectAndFieldSetup(c: MirroredCtx) {
 
-  // 방어류(방어/판별/버티기/킹실드): 연속 사용 횟수(protectStreak)에 따라 이번 턴 실제로 발동할
-  // 확률이 (1/3)^streak로 줄어든다. 직전에 실패했거나 이력이 없으면(streak 0) 확률 1 = 무조건 발동.
+  // 방어류(방어/판별/버티기/킹실드/패스트가드): 연속 사용 횟수(protectStreak)에 따라 이번 턴 실제로 발동할
+  // 확률이 (1/3)^streak로 줄어든다(패스트가드는 굴림 없음, 길동무는 별도 갈래 — 8.3 A5). 직전에 실패했거나
+  // 이력이 없으면(streak 0) 확률 1 = 무조건 발동. 이번 턴 마지막에 행동하면 길동무 외 전부 실패한다.
   //
   // §1 G (2차 지시 반영): 굴림에 성공하면 무조건 "방어태세에 들어갔다!"(protectStanceEntered)를 낸다.
   // 그 뒤 상대가 이번 턴 낸 기술이 "이 포켓몬을 겨냥"했으면 실제로 막은 것 → "몸을 지켜냈다!"
@@ -1671,22 +1675,35 @@ function protectAndFieldSetup(c: MirroredCtx) {
   // 매직미러 반사 중이면(bounceActive) attacker/defender가 맞바뀐 상태라 이 방어류 블록을 통째로
   // 건너뛴다 — 되돌린 기술은 반사한 쪽(현재 attacker)의 방어 행동이 아니므로 protectStreak도
   // 건드리면 안 된다.
-  if (c.effectiveMove.protectEffect && !c.bounceActive) {
+  if (c.effectiveMove.protectEffect === "destinyBond") {
+    if (!c.bounceActive) {
+      // 길동무(8.3 A5, R7): 방어류 연속 사용 카운터를 읽지도 올리지도 않는 독립 규칙이다(쓰면 방어류가 아닌 턴이라 카운터는 0).
+      // 직접 골랐고 직전 성공 예약이 남아 있었으면 100% 실패(예약은 행동 시작 때 이미 지워졌다). 마지막 행동이어도 실패하지 않는다.
+      c.attacker.protectStreak = 0;
+      if (c.destinyBondWasArmed) {
+        c.protectFailed = true;
+      } else {
+        // 길동무는 activeProtect(매 턴 시작 시 초기화)가 아니라 destinyBondArmed(자신의 다음
+        // 행동 전까지 유지)로 별도 추적한다 — 이번 턴 상대 공격을 막는 게 아니기 때문.
+        c.attacker.destinyBondArmed = true;
+        c.protectSucceeded = true;
+      }
+    }
+  } else if (c.effectiveMove.protectEffect && !c.bounceActive) {
     const streak = c.attacker.protectStreak ?? 0;
-    const successChance = Math.pow(1 / 3, streak);
-    // 방어/판별/킹실드류(block): 이번 턴 내 뒤에 행동할 기술이 없으면(내가 마지막 = 더 늦게 움직이거나 상대가 교체)
+    // 연속 횟수 상한 6: Showdown stall counterMax 729 = 3^6 — 6연속 이후 확률은 1/729에서 멈춘다(8.3 A5).
+    const successChance = Math.pow(1 / 3, Math.min(streak, 6));
+    // 방어/판별/킹실드/버티기/패스트가드: 이번 턴 내 뒤에 행동할 기술이 없으면(내가 마지막 = 더 늦게 움직이거나 상대가 교체)
     // 사용 이펙트 없이 실패하고 연속 횟수는 0으로 돌아간다(다음 턴 방어는 확정 성공). 굴림 전에 판정해 난수를 쓰지 않는다.
-    const lastToAct =
-      c.effectiveMove.protectEffect === "block" && (c.movesSecond || c.defenderMove.id === SWITCH_PASS_MOVE_ID);
-    const rollPassed = !lastToAct && c.random() < successChance;
+    // 패스트가드는 연속 사용 굴림이 없다 — 마지막 행동만 아니면 성공하고 연속 횟수만 올려 다음 방어류를 깎는다(8.3 A5, R7).
+    const lastToAct = c.movesSecond || c.defenderMove.id === SWITCH_PASS_MOVE_ID;
+    const rollPassed = !lastToAct && (c.effectiveMove.protectEffect === "blockPriority" || c.random() < successChance);
     // 패스트가드는 상대 기술이 자신을 겨냥했어도 priority가 0 이하면 애초에 막을 게 없다 —
     // "몸을 지켜냈다!"를 잘못 띄우지 않게 targetedSelf 판정에도 그 조건을 같이 건다.
     const targetedSelf =
-      c.effectiveMove.protectEffect === "destinyBond"
-        ? true
-        : c.effectiveMove.protectEffect === "blockPriority"
-          ? isOpponentTargetingMove(c.defenderMove) && c.defenderMove.priority > 0
-          : isOpponentTargetingMove(c.defenderMove);
+      c.effectiveMove.protectEffect === "blockPriority"
+        ? isOpponentTargetingMove(c.defenderMove) && c.defenderMove.priority > 0
+        : isOpponentTargetingMove(c.defenderMove);
     if (!rollPassed) {
       // 연속 사용 굴림 실패 — 태세 진입도 없이 그대로 실패.
       c.attacker.protectStreak = 0;
@@ -1695,23 +1712,16 @@ function protectAndFieldSetup(c: MirroredCtx) {
       c.attacker.protectStreak = streak + 1;
       c.protectStanceEntered =
         c.effectiveMove.protectEffect === "block" || c.effectiveMove.protectEffect === "blockPriority";
-      // 길동무는 activeProtect(매 턴 시작 시 초기화)가 아니라 destinyBondArmed(자신의 다음
-      // 행동 전까지 유지)로 별도 추적한다 — 이번 턴 상대 공격을 막는 게 아니기 때문.
-      if (c.effectiveMove.protectEffect === "destinyBond") {
-        c.attacker.destinyBondArmed = true;
-        c.protectSucceeded = true;
-      } else {
-        c.attacker.activeProtect = {
-          effect: c.effectiveMove.protectEffect,
-          moveName: c.effectiveMove.name,
-          contactPenalty: c.effectiveMove.protectContactPenalty,
-          contactDamageFraction: c.effectiveMove.protectContactDamageFraction,
-          contactStatus: c.effectiveMove.protectContactStatus,
-        };
-        // 태세엔 들어갔지만 상대가 자기 대상 기술만 냈으면 "막을 게 없어" 실패로 표기.
-        if (targetedSelf) c.protectSucceeded = true;
-        else c.protectFailed = true;
-      }
+      c.attacker.activeProtect = {
+        effect: c.effectiveMove.protectEffect,
+        moveName: c.effectiveMove.name,
+        contactPenalty: c.effectiveMove.protectContactPenalty,
+        contactDamageFraction: c.effectiveMove.protectContactDamageFraction,
+        contactStatus: c.effectiveMove.protectContactStatus,
+      };
+      // 태세엔 들어갔지만 상대가 자기 대상 기술만 냈으면 "막을 게 없어" 실패로 표기.
+      if (targetedSelf) c.protectSucceeded = true;
+      else c.protectFailed = true;
     }
   } else if (!c.bounceActive) {
     c.attacker.protectStreak = 0;
@@ -1782,6 +1792,7 @@ function collectResult(c: MirroredCtx) {
 export function resolveMirroredMoveEffects(input: MirroredMoveEffectsInput) {
   const c = {} as MirroredCtx;
 
+  c.destinyBondWasArmed = input.destinyBondWasArmed;
   c.move = input.move;
   c.effectiveMove = input.effectiveMove;
   c.opponentEffectsBlocked = input.opponentEffectsBlocked;
