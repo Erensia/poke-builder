@@ -617,8 +617,8 @@ function checkDefenderImmunities(c: PreHitCtx) {
   const activeProtectBlocks =
     c.defender.activeProtect?.effect === "block" ||
     (c.defender.activeProtect?.effect === "blockPriority" && c.move.priority > 0);
-  // 보이지않는주먹: 접촉기가 방어류를 뚫고 명중한다(데미지는 아래 resolveHit에서 1/4로 줄고, 방어류의
-  // 접촉 성공 부가효과는 그대로 발동). 뚫는 경우엔 blockedByProtect를 false로 둬서 기술이 정상 진행된다.
+  // 보이지않는주먹·관통드릴: 접촉기가 방어류를 뚫고 명중한다(데미지는 resolveHit에서 ×0.25 — 4096 반올림·최소 1, 방어류의
+  // 접촉 성공 부가효과는 applyProtectReactions에서 그대로 발동). 뚫는 경우엔 blockedByProtect를 false로 둬서 기술이 정상 진행된다.
   c.unseenFistPiercing = !!(
     c.attackerAbility?.contactBypassesProtectAtQuarterDamage &&
     (c.move.makesContact ?? false) &&
@@ -1228,7 +1228,8 @@ function applyProtectReactions(c: PreHitCtx) {
 
   c.protectContactDamage = 0;
 
-  // 보이지않는주먹으로 뚫고 들어간 경우(unseenFistPiercing)도 방어류의 접촉 성공 부가효과는 발동한다.
+  // 보이지않는주먹·관통드릴로 뚫고 들어간 경우(unseenFistPiercing)도 방어류의 접촉 성공 부가효과는 발동한다 — Showdown은 반응이 없지만
+  // 공식 정보를 따른 사용자 결정(2026-11-13, 8.3 B9). 연속기는 행동당 1회(이 함수는 타수 루프 밖).
   if ((c.blockedByProtect || c.unseenFistPiercing) && c.defender.activeProtect && (c.effectiveMove.makesContact ?? false)) {
     const ap = c.defender.activeProtect;
     if (ap.contactPenalty) {

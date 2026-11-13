@@ -15,7 +15,7 @@ import { critChance } from "@/lib/accuracyCrit";
 import { defenseChangeWhenHpNotFull } from "@/lib/abilityModifiers";
 import { burnDamageMultiplier, ignoresBurnAttackPenalty, statusedAttackBoost, inflictStatus, isImmuneToStatus } from "@/lib/statusConditions";
 import { hasVolatile, inflictVolatile } from "@/lib/volatileConditions";
-import { DAMAGE_ROLL_MIN_PERCENT, DAMAGE_ROLL_STEP_COUNT } from "@/lib/damageFormula";
+import { DAMAGE_ROLL_MIN_PERCENT, DAMAGE_ROLL_STEP_COUNT, roundHalfDown } from "@/lib/damageFormula";
 import { computeDamage, hustleDamageMultiplier, screenMultiplierFromFlags, supremeOverlordMultiplier } from "@/lib/battlePower";
 import { getWeatherDamageMultiplier, getWeatherDefenseMultiplier } from "@/lib/weatherEffects";
 import { FIELD_DURATION, getFieldDamageMultiplier } from "@/lib/fieldEffects";
@@ -241,25 +241,16 @@ function defineResolveHit(c: HitCtx) {
     const auroraVeilActive = !screenBypassed && defenderScreens.auroraVeil !== undefined;
     const screenMultiplier = screenMultiplierFromFlags(categoryScreenActive, auroraVeilActive);
 
-    // 관통드릴: 접촉기일 때만 상대 방어/특방 랭크의 "상승분"을 무시한다(날카로운눈의 회피율
-    // 처리와 같은 패턴 — 마이너스 랭크는 그대로 페널티로 받는다). 천진(전부 무시)과 겹치면
-    // 천진 쪽이 이미 NEUTRAL_STAGES라 이 클램프는 자연히 아무 효과가 없다.
     // 사이코쇼크류(hitsDefensiveStat)는 실제 데미지에 쓰는 방어 스탯이 분류 기본값과 다르므로
-    // 그 축(=computeDamage가 실제로 읽는 축)에 클램프를 맞춘다.
-    const contactDefenseStat: BattleStatKey =
+    // 날씨 방어 배율(모래바람 바위 특방·눈 얼음 방어)도 그 축(=computeDamage가 실제로 읽는 축)에 맞춘다.
+    // (8.3 B9: 이 변수는 옛 관통드릴 구현 "방어 랭크 상승분 무시"와 같이 쓰이던 것 — 그 구현은 지웠고 이름만 정리했다.)
+    const defenseStat: BattleStatKey =
       c.effectiveMove.hitsDefensiveStat ?? (c.effectiveMove.category === "physical" ? "def" : "spd");
-    const contactIgnoresDefenseBoost =
-      (c.effectiveMove.makesContact ?? false) &&
-      c.attackerAbility?.contactIgnoresDefenseBoostAndGuaranteesMinDamageFraction !== undefined;
     // 성스러운칼: 천진(특성)과 정확히 같은 축이지만 기술 단위 효과라 여기서 같이 확인한다.
-    const baseDefenderStages =
+    const defenderStagesForDamage =
       c.attackerAbility?.ignoresOpponentStatStagesInDamage || c.effectiveMove.ignoresDefenderStatStagesInDamage
         ? NEUTRAL_STAGES
         : c.defender.stages;
-    const defenderStagesForDamage =
-      contactIgnoresDefenseBoost && baseDefenderStages[contactDefenseStat] > 0
-        ? { ...baseDefenderStages, [contactDefenseStat]: 0 }
-        : baseDefenderStages;
 
     // 원더룸(트랙 M4): 방어·특방 실능을 맞바꿔 받는다(랭크는 그대로)
     const defenderStatsForDamage =
@@ -290,7 +281,7 @@ function defineResolveHit(c: HitCtx) {
       bulkMultiplier:
         (abilityDefenseMultiplier / finalDefenseMultiplier) *
         // 모래바람 바위 특방·눈 얼음 방어 1.5배(날씨 무효 특성이면 activeWeather가 없음)
-        getWeatherDefenseMultiplier(activeWeather(c.state), c.defender.types, contactDefenseStat),
+        getWeatherDefenseMultiplier(activeWeather(c.state), c.defender.types, defenseStat),
       // 최종 보정 단계(상성 뒤): 도구(생명의구슬·달인의띠)·화상 ×데미지, 하드록·반감 열매·벽·대검돌격(방어측 약점 상태면 받는 데미지 2배)은
       // 내구력 배율 형태라 역수로 곱한다.
       finalMultiplier:
@@ -303,16 +294,9 @@ function defineResolveHit(c: HitCtx) {
       randomRoll: (DAMAGE_ROLL_MIN_PERCENT + Math.floor(c.random() * DAMAGE_ROLL_STEP_COUNT)) / 100,
     });
     let hitDamage = result?.damage ?? 0;
-    // 관통드릴: 접촉기가 명중(면역 제외)했는데 데미지가 상대 최대 HP의 지정 비율보다 낮으면
-    // 그 비율만큼으로 끌어올린다(최소 데미지 보장).
-    if (contactIgnoresDefenseBoost && c.typeEffectiveness !== 0) {
-      const minDamage = Math.floor(
-        c.defender.maxHp * c.attackerAbility!.contactIgnoresDefenseBoostAndGuaranteesMinDamageFraction!,
-      );
-      if (hitDamage < minDamage) hitDamage = minDamage;
-    }
-    // 보이지않는주먹: 방어류를 뚫고 들어간 접촉기는 데미지가 1/4로 줄어든다.
-    if (c.unseenFistPiercing) hitDamage = Math.floor(hitDamage * 0.25);
+    // 보이지않는주먹·관통드릴: 방어류를 뚫고 들어간 접촉기는 데미지가 1/4로 줄어든다. 최종 배율(생명의구슬 등)·최소 1을 끝낸 뒤
+    // 4096 반올림(0.5는 버림)으로 곱하고 최소 1을 보장한다(Showdown modify(x, 0.25), 8.3 B9). 일격기·고정 데미지는 이 클로저를 거치지 않는다.
+    if (c.unseenFistPiercing && hitDamage > 0) hitDamage = Math.max(1, roundHalfDown(hitDamage * 0.25));
     return { damage: hitDamage, isCritical: critical };
   };
 }

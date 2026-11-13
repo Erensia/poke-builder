@@ -22,8 +22,8 @@ function fl(x: number): number {
   return Math.floor(x + 1e-9);
 }
 
-/** 0.5는 내림 쪽으로 반올림(본가 pokeRound). 1e-9는 부동소수점 경계 보정 */
-function roundHalfDown(x: number): number {
+/** 0.5는 내림 쪽으로 반올림(본가 pokeRound). 1e-9는 부동소수점 경계 보정. 방어류를 뚫은 공격의 ×0.25(8.3 B9)도 이 함수를 쓴다 */
+export function roundHalfDown(x: number): number {
   return Math.ceil(x - 0.5 - 1e-9);
 }
 
