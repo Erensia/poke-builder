@@ -331,7 +331,7 @@ def rivalry_multiplier(attacker, defender):
 
 | 특성 | 필드 | 값 |
 |---|---|---|
-| 관통드릴 | `contactIgnoresDefenseBoostAndGuaranteesMinDamageFraction` | 0.25 |
+| ~~관통드릴~~ | ~~`contactIgnoresDefenseBoostAndGuaranteesMinDamageFraction`~~ | **8.3 B9로 폐기** — 관통드릴은 보이지않는주먹과 같은 `contactBypassesProtectAtQuarterDamage`(접촉기가 방어류를 뚫고 데미지 ×0.25)를 쓴다 |
 | 부자유친 | `followUpHitPowerMultiplier` | 0.25 |
 | 스나이퍼 | `critDamageMultiplier` | 2.25 |
 | 적응력 | `stabOverride` | 2.0 (자속 1.5→2.0 대체) |

@@ -470,12 +470,6 @@ export interface Ability {
    * 적용하지 않고 그 다음 턴부터 매 턴 종료 시 적용한다.
    */
   boostsSpeedEachTurnEnd?: boolean;
-  /**
-   * 관통드릴: 접촉기를 쓸 때 상대의 방어/특방 랭크 "상승분"을 무시하고(마이너스는 그대로 페널티로
-   * 적용 — 날카로운눈의 회피율 처리와 같은 패턴), 최종 데미지가 상대 최대 HP의 이 비율보다
-   * 낮으면 그 비율만큼으로 끌어올린다(최소 데미지 보장).
-   */
-  contactIgnoresDefenseBoostAndGuaranteesMinDamageFraction?: number;
   /** 프레셔: 상대가 이 포켓몬을 대상으로 기술을 쓸 때마다 PP를 이 값만큼 추가로 더 소모시킨다. */
   extraPpCostWhenTargeted?: number;
   /**
@@ -791,10 +785,12 @@ export interface Ability {
    */
   boostsHighestStatOnKo?: boolean;
   /**
-   * 보이지않는주먹(Unseen Fist, 골루그-메가): 자신이 쓰는 접촉기가 상대의 방어류(방어/판별/킹실드/
-   * 니들가드/토치카 — protectEffect:"block")를 뚫고 명중한다. 단, 그렇게 뚫고 들어간 타는 데미지가
-   * 1/4로 줄고, 상대 방어류의 접촉 성공 시 부가효과(킹실드 공격 -1·니들가드 1/8 데미지·토치카 독)는
-   * 그대로 발동한다(본가와 달리 데미지 페널티가 있는 포챔스판 — 사용자 확정).
+   * 보이지않는주먹(Unseen Fist, 골루그-메가)·관통드릴(Piercing Drill, 몰드류-메가) 공용: 자신이 쓰는 접촉기가 상대의
+   * "방어 효과"를 무시하고 명중한다. **"방어 효과"는 방어 능력치가 아니라 방어류 기술이다** — 방어·판별·킹실드·니들가드·토치카
+   * (protectEffect:"block")와 패스트가드(protectEffect:"blockPriority", 우선도 > 0 기술만 막는 것을 뚫음). 옛 구현이 이 말을 방어
+   * 랭크로 오해했었다(8.3 B9로 정정). 뚫고 들어간 타는 데미지가 ×0.25(4096 반올림·최소 1 — Showdown modify(x, 0.25))로 줄고,
+   * 일격기·고정 데미지는 줄지 않는다(그 경로를 안 거친다). 상대 방어류의 접촉 성공 시 부가효과(킹실드 시전자 공격 -1·니들가드
+   * 시전자 최대 HP 1/8 데미지·토치카 시전자 독)는 **그대로 발동한다** — Showdown은 반응이 없지만 공식 정보를 따른 사용자 결정(2026-11-13).
    */
   contactBypassesProtectAtQuarterDamage?: boolean;
   /** 그림자밟기(ver.1.9 A5): 맞은편 포켓몬은 교체할 수 없다(고스트·아름다운허물·같은 특성은 예외 — isTrappedFromSwitching) */
