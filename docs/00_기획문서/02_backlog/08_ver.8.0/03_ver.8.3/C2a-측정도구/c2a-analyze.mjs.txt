@@ -1,0 +1,172 @@
+// 8.3 C2-a M0 오프라인 재계산(일회용). 입력: /tmp/c2a-<kind>.json (zz-c2a.mjs가 기록). 실행: node scripts/zz-c2a-analyze.mjs [kind ...]
+import { createServer } from "vite";
+import { fileURLToPath } from "node:url";
+import { readFileSync, existsSync } from "node:fs";
+const root = fileURLToPath(new URL("..", import.meta.url));
+const server = await createServer({ root, server: { middlewareMode: true, hmr: false }, appType: "custom", logLevel: "error" });
+try {
+  const om = await server.ssrLoadModule("/src/lib/battle/ai/opponentMemory.ts");
+  const CLIP = 1e-4, MAXSW = 0.9;
+  const kinds = process.argv.slice(2).length ? process.argv.slice(2) : ["switcher", "setup", "noisy", "random"];
+  const CUR = { sw: 10, st: 10, mv: 2 };
+  const clip = (p) => Math.min(1 - CLIP, Math.max(CLIP, p));
+  const bin = (p, y) => -Math.log(y ? clip(p) : clip(1 - p));
+  const TMP = process.env.TMPDIR_C2A ?? "/tmp";
+
+  const distOf = (o) => ({ moveWeights: new Map(o.mw), switchProb: o.sw, switches: Array.from({ length: o.ns }, (_, i) => ({ toIndex: i, weight: 1 / o.ns })), megaOf: new Map() });
+  // 매개변수화한 보정(현행 상수에서 실제 calibrateDistribution과 같아야 한다 — 자체 점검)
+  function calib(o, mem, S, strength = 1, tau = 1) {
+    const stIds = new Set(o.stIds);
+    const swF = ((mem.switchActual + 0.15 * S.sw) / (mem.switchPred + S.sw)) ** strength;
+    const stF = ((mem.statusActual + S.st) / (mem.statusPred + S.st)) ** strength;
+    const sp = mem.species[o.sp];
+    const w = new Map();
+    let total = 0;
+    for (const [id, x] of o.mw) {
+      const m = sp?.moves[id];
+      const mvF = m ? ((m.actual + S.mv) / (m.pred + S.mv)) ** strength : 1;
+      const v = x * (stIds.has(id) ? stF : 1) * mvF;
+      w.set(id, v);
+      total += v;
+    }
+    if (total > 0) for (const [id, v] of w) w.set(id, v / total);
+    else for (const [id, x] of o.mw) w.set(id, x);
+    let sw = o.ns > 0 ? Math.min(MAXSW, o.sw * swF) : 0;
+    if (tau !== 1) {
+      let t = 0;
+      for (const [id, v] of w) { const u = Math.pow(Math.max(v, 1e-12), 1 / tau); w.set(id, u); t += u; }
+      for (const [id, v] of w) w.set(id, v / t);
+      if (o.ns > 0) { const p = Math.min(1 - 1e-6, Math.max(1e-6, sw)); sw = 1 / (1 + Math.exp(-Math.log(p / (1 - p)) / tau)); }
+    }
+    return { w, sw };
+  }
+  const legal = (o) => { const st = new Set(o.stIds); let ns = 0; for (const [id] of o.mw) if (st.has(id)) ns++; return { nMoves: o.mw.length, nStatus: ns, nAttack: o.mw.length - ns, hasSw: o.ns > 0 }; };
+  // 필터 관측(H0): 분기마다 선택지가 2개 이상일 때만 센다. F=false는 실제 observeOpponent와 같아야 한다(자체 점검)
+  function observeF(mem, o, F) {
+    const L = legal(o), stay = 1 - o.sw, stIds = new Set(o.stIds), isMove = o.a[0] === "m";
+    mem.decisions += 1;
+    if (!F || (L.hasSw && L.nMoves >= 1)) { mem.switchPred += o.sw; if (!isMove) mem.switchActual += 1; }
+    if (!F || (L.nStatus >= 1 && L.nAttack >= 1)) {
+      let p = 0;
+      for (const [id, w] of o.mw) if (stIds.has(id)) p += stay * w;
+      mem.statusPred += p;
+      if (isMove && o.a[2]) mem.statusActual += 1;
+    }
+    if (!isMove) return;
+    if (F && L.nMoves < 2) return;
+    const sp = (mem.species[o.sp] ??= { seen: 0, lastBattle: mem.battles, moves: {} });
+    sp.seen += 1;
+    sp.lastBattle = mem.battles;
+    for (const [id, w] of o.mw) (sp.moves[id] ??= { actual: 0, pred: 0 }).pred += w;
+    (sp.moves[o.a[1]] ??= { actual: 0, pred: 0 }).actual += 1;
+  }
+  // 한 팔을 재생해 판별·분기별 합 손실을 낸다. arm = {raw?, F, S, strength, tau}
+  function replay(data, arm) {
+    const nB = data.battles;
+    const out = { sw: new Float64Array(nB), swN: new Int32Array(nB), st: new Float64Array(nB), stN: new Int32Array(nB), mv: new Float64Array(nB), mvN: new Int32Array(nB) };
+    let saved = om.emptyOpponentMemory(), session = om.emptyOpponentMemory(), curB = 0;
+    for (const o of data.obs) {
+      while (curB < o.b) { saved = om.commitBattle(saved, session); session = om.emptyOpponentMemory(); curB++; }
+      const L = legal(o), isMove = o.a[0] === "m";
+      const mem = om.combinedMemory(saved, session);
+      let w, sw;
+      if (arm.raw) {
+        w = new Map(o.mw);
+        let t = 0;
+        for (const v of w.values()) t += v;
+        for (const [id, v] of w) w.set(id, t > 0 ? v / t : v);
+        sw = o.sw;
+      } else ({ w, sw } = calib(o, mem, arm.S, arm.strength ?? 1, arm.tau ?? 1));
+      if (arm.verify) {
+        const real = om.calibrateDistribution(distOf(o), mem, o.sp, new Set(o.stIds), 1);
+        let d = Math.abs(real.switchProb - sw);
+        for (const [id, v] of real.moveWeights) d = Math.max(d, Math.abs(v - (w.get(id) ?? 0)));
+        arm.verify.max = Math.max(arm.verify.max, d);
+      }
+      const b = o.b;
+      if (L.hasSw && L.nMoves >= 1) { out.sw[b] += bin(sw, !isMove); out.swN[b]++; }
+      if (isMove && L.nStatus >= 1 && L.nAttack >= 1) {
+        const st = new Set(o.stIds);
+        let p = 0, t = 0;
+        for (const [id, v] of w) { t += v; if (st.has(id)) p += v; }
+        out.st[b] += bin(t > 0 ? p / t : 0, !!o.a[2]);
+        out.stN[b]++;
+      }
+      if (isMove && L.nMoves >= 2) {
+        let t = 0;
+        for (const v of w.values()) t += v;
+        const p = (w.get(o.a[1]) ?? 0) / (t || 1);
+        out.mv[b] += -Math.log(clip(p));
+        out.mvN[b]++;
+      }
+      if (arm.F === "real") om.observeOpponent(session, { dist: distOf(o), speciesId: o.sp, statusMoveIds: new Set(o.stIds), action: isMove ? { kind: "move", moveId: o.a[1], isStatus: !!o.a[2] } : { kind: "switch" } });
+      else observeF(session, o, !!arm.F);
+    }
+    return out;
+  }
+  const rng = (() => { let a = 12345; return () => { a = (a + 0x6d2b79f5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; })();
+  const sum = (a, lo, hi) => { let s = 0; for (let i = lo; i < hi; i++) s += a[i]; return s; };
+  // 상대 개선율 = (현행 − 후보)/현행, 판 단위 부트스트랩 95% CI
+  function rel(curA, candA, lo, hi) {
+    const n = hi - lo, c0 = sum(curA, lo, hi), x0 = sum(candA, lo, hi);
+    const pt = c0 > 0 ? (c0 - x0) / c0 : 0, rs = [];
+    for (let r = 0; r < 1000; r++) {
+      let c = 0, x = 0;
+      for (let i = 0; i < n; i++) { const j = lo + Math.floor(rng() * n); c += curA[j]; x += candA[j]; }
+      rs.push(c > 0 ? (c - x) / c : 0);
+    }
+    rs.sort((p, q) => p - q);
+    return { pt, lo: rs[25], hi: rs[974] };
+  }
+  const fmt = (r) => `${(100 * r.pt).toFixed(1)}% [${(100 * r.lo).toFixed(1)}, ${(100 * r.hi).toFixed(1)}]`;
+  const mean = (A, N, lo, hi) => { const s = sum(A, lo, hi), n = sum(N, lo, hi); return n ? s / n : NaN; };
+
+  for (const kind of kinds) {
+    const f = `${TMP}/c2a-${kind}.json`;
+    if (!existsSync(f)) { console.log("없음", f); continue; }
+    const data = JSON.parse(readFileSync(f, "utf8"));
+    console.log(`\n===== ${kind}: ${data.battles}판, 관측 ${data.obs.length}, 결정 민감도 ${data.sens.differ}/${data.sens.sampled} (${(100 * data.sens.differ / Math.max(1, data.sens.sampled)).toFixed(1)}%)`);
+    const cur = replay(data, { F: "real", S: CUR }), rf = replay(data, { F: false, S: CUR });
+    let diff = 0;
+    for (const k of ["sw", "st", "mv"]) for (let i = 0; i < data.battles; i++) diff = Math.max(diff, Math.abs(cur[k][i] - rf[k][i]));
+    console.log(`자체 점검(observeF(false) = observeOpponent): 최대 손실 차 ${diff.toExponential(2)}`);
+    const ver = { max: 0 };
+    replay(data, { F: "real", S: CUR, verify: ver });
+    console.log(`자체 점검(calib = 실제 calibrateDistribution): 최대 분포 차 ${ver.max.toExponential(2)}`);
+    const raw = replay(data, { raw: true, F: false, S: CUR });
+    const h0 = replay(data, { F: true, S: CUR });
+    const nB = data.battles;
+    const ivs = [[0, 25], [25, 100], [100, 300], [300, nB]].filter(([a]) => a < nB).map(([a, b]) => [a, Math.min(b, nB)]);
+    for (const [br, nm] of [["sw", "교체"], ["st", "변화기"], ["mv", "기술(공개, 참고 — 종별 습관 신호 없음)"]]) {
+      const N = cur[br + "N"];
+      console.log(`\n[${nm}] 적격 관측 ${sum(N, 0, nB)}`);
+      console.log("  구간       | 보정 전 | 현행   | H0     | 현행 대 보정 전 개선율(95% CI)    | H0 대 현행");
+      for (const [a, b] of [[0, nB], ...ivs]) console.log(`  ${String(a).padStart(3)}~${String(b).padEnd(4)} | ${mean(raw[br], N, a, b).toFixed(4)} | ${mean(cur[br], N, a, b).toFixed(4)} | ${mean(h0[br], h0[br + "N"], a, b).toFixed(4)} | ${fmt(rel(raw[br], cur[br], a, b))} | ${fmt(rel(cur[br], h0[br], a, b))}`);
+    }
+    for (const [F, tag] of [[false, "필터 없음"], [true, "H0 필터"]]) {
+      const baseArm = F ? h0 : cur;
+      console.log(`\n[H1 사전 강도 스윕 — ${tag}, 전체 구간 개선율(현행 대비, 95% CI)]`);
+      for (const [key, grid] of [["sw", [2, 5, 10, 20, 40]], ["st", [2, 5, 10, 20, 40]], ["mv", [0.5, 1, 2, 5, 10]]]) {
+        const line = [];
+        for (const v of grid) { const a = replay(data, { F, S: { ...CUR, [key]: v } }); line.push(`${v}:${fmt(rel(baseArm[key], a[key], 0, nB))}`); }
+        console.log(`  ${key}: ${line.join(" | ")}`);
+      }
+      console.log(`[H3 전역 온도 τ — ${tag}, 전체 구간]`);
+      for (const tau of [0.5, 0.7, 1.4, 2]) {
+        const a = replay(data, { F, S: CUR, tau });
+        console.log(`  τ=${tau}: 교체 ${fmt(rel(baseArm.sw, a.sw, 0, nB))} | 변화기 ${fmt(rel(baseArm.st, a.st, 0, nB))} | 기술 ${fmt(rel(baseArm.mv, a.mv, 0, nB))}`);
+      }
+    }
+    const ent = (br) => {
+      let y = 0, n = 0;
+      for (const o of data.obs) {
+        const L = legal(o), isMove = o.a[0] === "m";
+        if (br === "sw" && L.hasSw && L.nMoves >= 1) { n++; if (!isMove) y++; }
+        if (br === "st" && isMove && L.nStatus >= 1 && L.nAttack >= 1) { n++; if (o.a[2]) y++; }
+      }
+      const p = y / n;
+      return n ? `${(-(p * Math.log(p || 1) + (1 - p) * Math.log(1 - p || 1))).toFixed(4)} (기저율 ${(100 * p).toFixed(1)}%, n=${n})` : "n/a";
+    };
+    console.log(`\n기준 엔트로피(무조건 빈도): 교체 ${ent("sw")} | 변화기 ${ent("st")}`);
+  }
+} finally { await server.close(); }

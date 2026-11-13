@@ -1,0 +1,67 @@
+  } else if (mode === "c2a") {
+    // 8.3 C2-a M0(일회용): 상대 OPP = switcher|setup|noisy|random 를 N판 연속으로 두며 관측 원자료를 OUT(JSON)에 기록한다.
+    const { writeFileSync } = await import("node:fs");
+    const om = await server.ssrLoadModule("/src/lib/battle/ai/opponentMemory.ts");
+    const kind = process.env.OPP, outFile = process.env.OUT;
+    if (!["switcher", "setup", "noisy", "random"].includes(kind) || !outFile) throw new Error("OPP, OUT 필요");
+    const botPolicy = (risk, rng) => (st, key) => {
+      const d = ai.chooseAiAction(st, key, risk, {});
+      const finite = d.scored.filter((x) => Number.isFinite(x.score)).sort((x, y) => y.score - x.score);
+      if (finite.length < 2) return d.action;
+      const best = finite[0].score;
+      const toAction = (o) => (o.optionType === "switch" ? { kind: "switch", toIndex: o.toIndex } : { kind: "move", move: o.move, mega: o.mega });
+      if (kind === "switcher") { const x = finite.find((y) => y.option.optionType === "switch"); if (x && x.score >= best - 0.3) return toAction(x.option); }
+      else if (kind === "setup") { const x = finite.find((y) => y.option.optionType === "move" && y.option.move.category === "status"); if (x && x.score >= best - 0.5) return toAction(x.option); }
+      else if (rng() < 0.25) return toAction(finite[1].option);
+      return d.action;
+    };
+    const sig = (o) => (o.optionType === "switch" ? `s${o.toIndex}` : `m${o.move.id}${o.mega ? "+" : ""}`);
+    const obsLog = [];
+    let saved = om.emptyOpponentMemory(), session = om.emptyOpponentMemory(), battleIdx = 0, turnCounter = 0;
+    const sens = { sampled: 0, differ: 0 };
+    for (let s = seedFrom; s <= seedTo; s++) {
+      const risk = mulberry32(s)();
+      for (const aiSide of ["a", "b"]) {
+        const botSide = aiSide === "a" ? "b" : "a";
+        const botRng = mulberry32(s * 31 + (aiSide === "a" ? 1 : 2));
+        const bot = kind === "random" ? randomPolicy(botRng) : botPolicy(1 - risk, botRng);
+        const botForced = kind === "random" ? forcedSwitchRandom(botRng) : (st, key) => ai.chooseAiForcedSwitch(st, key, 1 - risk) ?? living(st, key)[0];
+        let pending = null;
+        runBattle(
+          s,
+          { [aiSide]: (st, key) => {
+              const mem = om.combinedMemory(saved, session);
+              const d = ai.chooseAiAction(st, key, risk, { decisionParams, opponentMemory: mem });
+              pending = null;
+              if (d.opponentDistribution) {
+                const dist = d.opponentDistribution;
+                pending = { sp: st[botSide].slot.pokemonId, mw: [...dist.moveWeights], sw: dist.switchProb, ns: dist.switches.length, stIds: [...ai.statusMoveIdsOf(dist)], dist };
+                if (turnCounter++ % 10 === 0) { // 결정 민감도: 보정 없이 한 번 더 결정해 선택이 갈라지는지
+                  const d0 = ai.chooseAiAction(st, key, risk, { decisionParams });
+                  sens.sampled++;
+                  const diff = sig(d.chosen) !== sig(d0.chosen);
+                  if (diff) sens.differ++;
+                  pending.differ = diff ? 1 : 0;
+                }
+              }
+              return d.action;
+            }, [botSide]: bot },
+          { [aiSide]: aiForced(risk), [botSide]: botForced },
+          undefined,
+          (a, b) => {
+            const act = aiSide === "a" ? b : a;
+            if (!pending || !act) return;
+            const action = act.kind === "switch" ? { kind: "switch" } : { kind: "move", moveId: act.move.id, isStatus: act.move.category === "status" };
+            om.observeOpponent(session, { dist: pending.dist, speciesId: pending.sp, statusMoveIds: new Set(pending.stIds), action });
+            const { dist, ...rec } = pending;
+            obsLog.push({ ...rec, b: battleIdx, a: action.kind === "switch" ? ["s"] : ["m", action.moveId, action.isStatus ? 1 : 0] });
+            pending = null;
+          },
+        );
+        saved = om.commitBattle(saved, session);
+        session = om.emptyOpponentMemory();
+        battleIdx++;
+      }
+    }
+    writeFileSync(outFile, JSON.stringify({ kind, battles: battleIdx, sens, obs: obsLog }));
+    console.log(JSON.stringify({ kind, battles: battleIdx, obs: obsLog.length, sens }));
