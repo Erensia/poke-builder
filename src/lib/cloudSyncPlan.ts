@@ -2,7 +2,7 @@ import { cleanPartyPresets, cleanSlotPresets } from "./backup";
 import { applyRankResult, rankOf, type RankResult, type RankState } from "./battleRank";
 import { EMPTY_RANK_SAVE, HISTORY_LIMIT, isRankSave, type RankHistoryEntry, type RankSave } from "./battleRankSave";
 import { EMPTY_FRONTIER, FRONTIER_GAMES_LIMIT, isFrontierSave, type FrontierGame, type FrontierSave } from "./battleSeries";
-import { emptyOpponentMemory, isOpponentMemory } from "./battle/ai/opponentMemory";
+import { emptyOpponentMemory, isOpponentMemory, MAX_SPECIES, MEMORY_DECAY_PER_BATTLE, RANK_MEMORY_DECAY_PER_BATTLE, type OpponentMemory } from "./battle/ai/opponentMemory";
 import { cleanMySamples } from "./mySamples";
 import type { PresetListName, SyncBase } from "./storage";
 
@@ -102,6 +102,91 @@ export function mergeRank(baseJson: string | null, localJson: string, remoteJson
     lastParty: (newest(gr) > newest(gl) ? R : L).lastParty,
   };
   return canonical("battleRank", merged).json;
+}
+
+/** AI 학습 기억 문서의 모드별 감쇠(`commitBattle` 기본값과 같다) — 합치기가 쓰는 감쇠는 이 함수로만 고른다(8.3 C2-b) */
+export const decayFor = (name: PresetListName) => (name === "aiMemoryRank" ? RANK_MEMORY_DECAY_PER_BATTLE : MEMORY_DECAY_PER_BATTLE);
+
+/** AI 기억 기준 저장본의 상한(문자) — 넘으면 저장하지 않아 합치기가 꺼지고 사용자가 고른다(localStorage 한도 보호) */
+export const AI_BASE_MAX_CHARS = 200_000;
+export type AiBases = Record<string, { remoteUpdatedAt: number; json: string }>;
+
+/** key의 기준 저장본을 새로 쓴 사본 — 예전 항목은 먼저 지우고, 상한을 넘으면 새 항목도 쓰지 않는다(낡은 기준이 남아 이중 합산되지 않게) */
+export function nextAiBases(all: AiBases, key: string, json: string, remoteUpdatedAt: number): AiBases {
+  const { [key]: _old, ...rest } = all;
+  return json.length > AI_BASE_MAX_CHARS ? rest : { ...rest, [key]: { remoteUpdatedAt, json } };
+}
+
+/** 지금 기준(hash)과 같은 저장본만 돌려준다 — 저장이 실패해 예전 항목이 남았어도 해시가 달라 쓰이지 않는다 */
+export function aiBaseOf(all: AiBases, key: string, baseHash: string): string | null {
+  const e = all[key];
+  return e && hashOf(e.json) === baseHash ? e.json : null;
+}
+
+interface StoredAi {
+  version: 1;
+  learningEnabled: boolean;
+  memory: OpponentMemory;
+}
+const asStoredAi = (json: string): StoredAi | null => {
+  try {
+    const v = JSON.parse(json) as StoredAi;
+    return v && v.version === 1 && typeof v.learningEnabled === "boolean" && isOpponentMemory(v.memory) ? v : null;
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * 두 기기에서 따로 쌓은 AI 학습 기억을 합친다(8.3 C2-b). 기억은 `commitBattle`로 k판 쌓이면 `d^k × 기준 + 증분`이라
+ * 증분 = 현재 − d^k × 기준 으로 각 기기의 몫을 복원한다(선형 필드마다). 두 기기 판의 순서는 알 수 없어 "L 다음 R"·"R 다음 L" 두 순서의
+ * 평균을 쓴다 — 정답은 항상 두 순서 사이에 있다(한쪽이 변하지 않았으면 정확히 그쪽과 같다):
+ *   M = d^(kL+kR)·B + ½[(1 + d^kR)·ΔL + (1 + d^kL)·ΔR]
+ * 합칠 수 없으면 null이고 그때는 사용자가 고른다: 기준이 없거나 / 한쪽이 기준보다 적은 판(초기화) / 형식이 틀렸을 때.
+ * shortcut: 100종 상한으로 한쪽이 밀어낸 종은 증분 0으로 자르고(다시 들어온 종의 증분은 작게 잡힌다), 종별 lastBattle은 증분이 있는 쪽 값 중 큰 것이다 — 드문 경계.
+ */
+export function mergeAiMemory(baseJson: string | null, localJson: string, remoteJson: string, decay: number): string | null {
+  if (!baseJson) return null;
+  const B = asStoredAi(baseJson);
+  const L = asStoredAi(localJson);
+  const R = asStoredAi(remoteJson);
+  if (!B || !L || !R) return null;
+  const kL = L.memory.battles - B.memory.battles;
+  const kR = R.memory.battles - B.memory.battles;
+  if (!(kL >= 0 && kR >= 0)) return null;
+  const dL = decay ** kL;
+  const dR = decay ** kR;
+  const comb = (b = 0, l = 0, r = 0) => dL * dR * b + 0.5 * ((1 + dR) * Math.max(0, l - dL * b) + (1 + dL) * Math.max(0, r - dR * b));
+  const [bm, lm, rm] = [B.memory, L.memory, R.memory];
+  const battles = bm.battles + kL + kR;
+  const species: OpponentMemory["species"] = {};
+  for (const id of new Set([...Object.keys(bm.species), ...Object.keys(lm.species), ...Object.keys(rm.species)])) {
+    const [sb, sl, sr] = [bm.species[id], lm.species[id], rm.species[id]];
+    const moves: Record<string, { actual: number; pred: number }> = {};
+    for (const mid of new Set([...Object.keys(sb?.moves ?? {}), ...Object.keys(sl?.moves ?? {}), ...Object.keys(sr?.moves ?? {})])) {
+      moves[mid] = {
+        actual: comb(sb?.moves[mid]?.actual, sl?.moves[mid]?.actual, sr?.moves[mid]?.actual),
+        pred: comb(sb?.moves[mid]?.pred, sl?.moves[mid]?.pred, sr?.moves[mid]?.pred),
+      };
+    }
+    const grewL = (sl?.seen ?? 0) - dL * (sb?.seen ?? 0) > 1e-9;
+    const grewR = (sr?.seen ?? 0) - dR * (sb?.seen ?? 0) > 1e-9;
+    const lastBattle = Math.min(battles, Math.max(sb?.lastBattle ?? 0, grewL ? sl!.lastBattle : 0, grewR ? sr!.lastBattle : 0));
+    species[id] = { seen: comb(sb?.seen, sl?.seen, sr?.seen), lastBattle, moves };
+  }
+  const entries = Object.entries(species);
+  const kept = entries.length > MAX_SPECIES ? Object.fromEntries(entries.sort((p, q) => q[1].lastBattle - p[1].lastBattle).slice(0, MAX_SPECIES)) : species;
+  const memory: OpponentMemory = {
+    version: 1,
+    battles,
+    decisions: comb(bm.decisions, lm.decisions, rm.decisions),
+    switchActual: comb(bm.switchActual, lm.switchActual, rm.switchActual),
+    switchPred: comb(bm.switchPred, lm.switchPred, rm.switchPred),
+    statusActual: comb(bm.statusActual, lm.statusActual, rm.statusActual),
+    statusPred: comb(bm.statusPred, lm.statusPred, rm.statusPred),
+    species: kept,
+  };
+  return canonical("aiMemory", { version: 1, learningEnabled: L.learningEnabled !== B.learningEnabled ? L.learningEnabled : R.learningEnabled, memory }).json;
 }
 
 /** q가 base의 뒷부분인지 — 대기열은 앞에서만 빠지며 줄어든다(다 비면 새로 섞어 채우므로 그때는 뒷부분이 아니다) */
