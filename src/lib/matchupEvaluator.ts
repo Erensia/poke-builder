@@ -34,6 +34,7 @@ import {
   WEIGHT_MOVE_FALLBACK_POWER,
   rivalryDamageMultiplier,
   hustleDamageMultiplier,
+  shellSideArmCategory,
   screenMultiplierFromFlags,
   type MatchupChance,
   type MatchupVerdict,
@@ -351,16 +352,13 @@ function resolveVariablePowerMove(c: SlotMatchupCtx) {
   const speciesTypedType = c.move.typeByUserSpecies?.[c.attackerSlot.pokemonId];
   if (speciesTypedType) variablePowerMove = { ...variablePowerMove, type: speciesTypedType };
 
-  // 셸암즈(dynamicCategoryByHigherDamage): 물리·특수 결정력을 둘 다 내보고 큰 쪽 판정으로 고정한다.
-  // 매치업 페이지는 1턴 스냅샷이라 "동점 시 무작위"를 표현할 수 없어 동점이면 물리로 확정(결정적).
+  // 셸암즈(dynamicCategoryByHigherDamage): 물리·특수 정수 데미지를 비교해 큰 쪽 판정으로 고정한다.
+  // 매치업 페이지는 1턴 스냅샷이라 "동점 시 무작위"를 표현할 수 없어 동점이면 물리로 확정(결정적). 비교는 방어측을 보는 엔진 규칙(8.3 B4).
   c.resolvedCategory = c.move.category as "physical" | "special"; // 상태 기술·null은 앞에서 이미 걸렀다
   if (c.move.dynamicCategoryByHigherDamage) {
-    const dmgOpts = { attackerStages: c.attackerStages, defenderRealStats: c.defenderRealStats, defenderStages: c.defenderStages, stabMultiplier: 1.5 };
-    const phys =
-      computeOffensePower(c.attackerRealStats, c.attackerForm.types, { ...variablePowerMove, category: "physical" }, dmgOpts) ?? 0;
-    const spec =
-      computeOffensePower(c.attackerRealStats, c.attackerForm.types, { ...variablePowerMove, category: "special" }, dmgOpts) ?? 0;
-    c.resolvedCategory = phys >= spec ? "physical" : "special";
+    // 엔진과 같은 규칙(battlePower.shellSideArmCategory — 정수 데미지 비교, 랭크만 반영). 랭크는 호출자가 넘긴 값 그대로(천진 반영 전).
+    const picked = shellSideArmCategory(c.attackerRealStats, c.defenderRealStats, c.attackerForm.types, variablePowerMove, { attackerStages: c.attackerStages, defenderStages: c.defenderStages });
+    c.resolvedCategory = picked === "special" ? "special" : "physical";
     variablePowerMove = {
       ...variablePowerMove,
       category: c.resolvedCategory,

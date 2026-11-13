@@ -15,7 +15,7 @@ import { getAbilityPriorityBoost, resolveEffectiveDefenderAbility } from "@/lib/
 import { checkStatusActionBlock, inflictStatus, isImmuneToStatus } from "@/lib/statusConditions";
 import { ATTRACT_ACTION_BLOCK_CHANCE, CONFUSION_SELF_HIT_CHANCE, consumeVolatileTurn, hasVolatile } from "@/lib/volatileConditions";
 import { resolveMoveContext } from "@/lib/moveContext";
-import { WEIGHT_MOVE_FALLBACK_POWER, absoluteWeightPowerValue, computeDamage, positiveStagesPowerValue, reversalPowerFromHp, targetHpRatioPowerValue, userHpScaledPowerValue, faintedAllyPowerValue, rivalryDamageMultiplier, weightRatioPowerValue } from "@/lib/battlePower";
+import { WEIGHT_MOVE_FALLBACK_POWER, absoluteWeightPowerValue, computeDamage, shellSideArmCategory, positiveStagesPowerValue, reversalPowerFromHp, targetHpRatioPowerValue, userHpScaledPowerValue, faintedAllyPowerValue, rivalryDamageMultiplier, weightRatioPowerValue } from "@/lib/battlePower";
 import { applyWeatherBall } from "@/lib/weatherEffects";
 import { applyFieldPulse, getFieldPowerMultiplier, isOpponentTargetingMove, isPriorityMoveBlockedByField, isStatusBlockedByField, needsLivingTarget } from "@/lib/fieldEffects";
 import { computeBattleHitChance } from "./hitChance";
@@ -676,12 +676,8 @@ function resolveDynamicMoveType(c: PreHitCtx) {
 
   let categoryResolvedMove: Move = speciesTypedMove;
   if (speciesTypedMove.dynamicCategoryByHigherDamage) {
-    const dmgOpts = { attackerStages: c.attacker.stages, defenderStages: c.defender.stages };
-    const physDmg =
-      computeDamage(c.attacker.realStats, c.defender.realStats, c.attacker.types, { ...speciesTypedMove, category: "physical" }, dmgOpts)?.damage ?? 0;
-    const specDmg =
-      computeDamage(c.attacker.realStats, c.defender.realStats, c.attacker.types, { ...speciesTypedMove, category: "special" }, dmgOpts)?.damage ?? 0;
-    c.shellSideArmCategory = physDmg > specDmg ? "physical" : specDmg > physDmg ? "special" : c.random() < 0.5 ? "physical" : "special";
+    const picked = shellSideArmCategory(c.attacker.realStats, c.defender.realStats, c.attacker.types, speciesTypedMove, { attackerStages: c.attacker.stages, defenderStages: c.defender.stages });
+    c.shellSideArmCategory = picked === "tie" ? (c.random() < 0.5 ? "physical" : "special") : picked;
     categoryResolvedMove = {
       ...speciesTypedMove,
       category: c.shellSideArmCategory,

@@ -463,3 +463,23 @@ export function computeDamage(
     damagePercent: damage / defenderRealStats.hp,
   };
 }
+
+/**
+ * 셸암즈 분류 — 물리(공격 vs 방어)·특수(특공 vs 특방) 정수 데미지(최대 난수)를 비교해 큰 쪽을 고른다. 같으면 "tie".
+ * 랭크만 반영하고 도구·특성·날씨 배율은 넣지 않는다(본가와 같음, 8.3 B5). 랭크는 천진 반영 전 원래 값을, 실능은
+ * 원더룸 맞바꿈 전 값을 넘긴다(엔진과 같음). 엔진과 평가기가 같은 규칙을 쓰도록 이 함수 한 곳에 둔다(8.3 B4).
+ * 동점은 엔진이 반반 난수로, 평가기(결정적 화면)는 물리로 정한다. 역산의 `categoryOf`는 성능 경로라 별도 구현이다.
+ */
+export function shellSideArmCategory(
+  attackerRealStats: BaseStats,
+  defenderRealStats: BaseStats,
+  attackerTypes: PokemonType[],
+  move: Move,
+  options: Pick<DamageOptions, "attackerStages" | "defenderStages"> = {},
+): "physical" | "special" | "tie" {
+  const dmg = (category: MoveCategory) =>
+    computeDamage(attackerRealStats, defenderRealStats, attackerTypes, { ...move, category }, options)?.damage ?? 0;
+  const physical = dmg("physical");
+  const special = dmg("special");
+  return physical > special ? "physical" : special > physical ? "special" : "tie";
+}
