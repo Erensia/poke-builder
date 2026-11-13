@@ -1,5 +1,5 @@
 import { getMove, getPokemon } from "../../lib/data";
-import { applySwitch } from "../../lib/battle/switching";
+import { applySwitch, hazardField } from "../../lib/battle/switching";
 import { createBattleState, STRUGGLE_MOVE, type BattleState } from "../../lib/battle/state";
 import { forcedLockedAction } from "../../lib/battle/lockedAction";
 import type { FighterKey, TurnAction, TurnResult } from "../../types/battle";
@@ -98,7 +98,7 @@ export function forcedSwitchLogEntry(
   nextState: BattleState,
   side: Side,
   toIndex: number,
-  applied: Pick<ReturnType<typeof applySwitch>, "entryMessages" | "outPokemonId" | "inPokemonId">,
+  applied: Pick<ReturnType<typeof applySwitch>, "entryMessages" | "hazardTriggers" | "outPokemonId" | "inPokemonId">,
   { inFainted, hasReserve, outgoingAlive = false }: {
     inFainted: boolean;
     hasReserve: boolean;
@@ -124,6 +124,7 @@ export function forcedSwitchLogEntry(
         outPokemonId: applied.outPokemonId,
         inPokemonId: applied.inPokemonId,
         entryMessages: applied.entryMessages,
+        ...hazardField(applied.hazardTriggers),
         ...(outgoingAlive ? { outgoingAlive: true as const } : {}),
       },
     ],

@@ -765,6 +765,9 @@ export interface TurnResult {
   switches: SwitchLogEntry[];
 }
 
+/** 교체로 등장한 포켓몬에게 발동한 설치물(8.3 B2) — 문구(entryMessages)와 별개로 화면 연출이 읽는 구조화 정보. 문구가 나오는 때와 1:1이고 순서도 문구 순서다 */
+export type EntryHazardTrigger = "stealthRock" | "spikes" | "toxicSpikes" | "stickyWeb" | "toxicSpikesAbsorbed";
+
 /** 이번 턴 한 편에서 일어난 교체(플레이어 선택) — 로그 문구용 */
 export interface SwitchLogEntry {
   side: FighterKey;
@@ -774,8 +777,10 @@ export interface SwitchLogEntry {
   outPokemonId: string;
   /** 새로 나온 포켓몬 종 id */
   inPokemonId: string;
-  /** 이 교체로 발생한 등장/퇴장 안내(재생력·자연회복·위협·날씨 등, Phase 8 §4). 없으면 빈 배열 */
+  /** 이 교체로 발생한 등장/퇴장 안내(재생력·자연회복·위협·날씨 등, Phase 8 §4). 없으면 빈 배열. 설치물 발동 문구는 `hazardTriggers`에도 구조화돼 있다 */
   entryMessages: string[];
+  /** 이 교체로 등장하며 발동한 설치물(8.3 B2). 발동이 없으면 키 자체가 없다(저장 로그·해시가 그대로) */
+  hazardTriggers?: EntryHazardTrigger[];
   /**
    * 유턴·볼트체인지·배턴터치로 "사용측 기술 뒤"에 일어난 자체 교체면 true(§7-2). 로그에서 이
    * 교체는 그 편의 기술 줄 다음에 놓는다(선처리 교체는 actions 앞).

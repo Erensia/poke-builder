@@ -271,7 +271,7 @@ try {
           uiLog.push({
             turnNumber: st.turnNumber, order: ["a", "b"], activePokemonIds: { a: st.a.slot.pokemonId, b: st.b.slot.pokemonId },
             actions: [], endOfTurn: [], expiredScreens: [], expiredSafeguard: [], turnStartAnnouncements: [],
-            switches: [{ side: key, fromIndex: -1, toIndex, outPokemonId: applied.outPokemonId, inPokemonId: applied.inPokemonId, entryMessages: applied.entryMessages }],
+            switches: [{ side: key, fromIndex: -1, toIndex, outPokemonId: applied.outPokemonId, inPokemonId: applied.inPokemonId, entryMessages: applied.entryMessages, ...sw.hazardField(applied.hazardTriggers) }],
           });
           actualEnd.push({ a: st.sideA.activeIndex, b: st.sideB.activeIndex });
           hpEnd.push({ a: st.a.currentHp, b: st.b.currentHp });

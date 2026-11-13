@@ -1,6 +1,6 @@
 import { typeColorRgba, TYPE_COLORS } from "../../lib/typeColors";
 import type { StatusCondition } from "../../types/status";
-import type { ActionLogEntry, FighterKey } from "../../types/battle";
+import type { ActionLogEntry, EntryHazardTrigger, FighterKey } from "../../types/battle";
 
 /** 행동 하나가 차지하는 시간(ms) — 돌진(0.26s) → 충돌 순간(IMPACT)에 맞은 쪽 흔들림(0.32s) */
 export const STEP = 700;
@@ -44,14 +44,8 @@ export const HAZARD = {
   web: { label: "끈적끈적네트", hex: "#7d8597" },
 } as const;
 export type HazardKind = keyof typeof HAZARD;
-/** 설치물이 발동하면 엔진이 교체 기록(entryMessages)에 남기는 문구의 일부 — 발동 정보가 필드가 아니라 문구뿐이다 */
-const HAZARD_TRIGGERS: [HazardKind, string][] = [
-  ["stealth", "뾰족한 바위"],
-  ["spikes", "압정에 상처"],
-  ["toxic", "몸에 독이 퍼졌다"],
-  ["toxic", "몸에 맹독이 퍼졌다"],
-  ["web", "끈적끈적네트에 걸려"],
-];
+/** 엔진이 교체 기록(hazardTriggers)에 남기는 설치물 발동 → 연출 종류(8.3 B2 — 문구 검색을 대체). 독압정 흡수는 종류가 아니라 별도 팝업이라 뺀다 */
+const HAZARD_KIND: Record<Exclude<EntryHazardTrigger, "toxicSpikesAbsorbed">, HazardKind> = { stealthRock: "stealth", spikes: "spikes", toxicSpikes: "toxic", stickyWeb: "web" };
 /** 기술 고유 연출 입자(7.4 E9c) — n개가 카드 위에서 오르거나(기본) 내린다. 모양은 CSS(.battle-fx-float.is-종류) */
 const FLOAT = { stars: { n: 5 } } as const;
 type FloatKind = keyof typeof FLOAT;
@@ -200,15 +194,16 @@ export function createFx(nodes: Record<FighterKey, HTMLElement>, board: HTMLElem
       ).onfinish = () => el.remove();
     });
   };
-  // 등장하는 편에 설치물이 발동했을 때(엔진이 입장 문구로만 남긴다) — 설치물 색 번쩍임·흔들림과 이름 팝업
-  const hazardHit = (who: FighterKey, messages: string[], delay: number) => {
-    const hits = new Set(HAZARD_TRIGGERS.filter(([, text]) => messages.some((m) => m.includes(text))).map(([kind]) => kind));
-    hits.forEach((kind) => {
+  // 등장하는 편에 설치물이 발동했을 때(엔진이 교체 기록의 hazardTriggers로 남긴다) — 설치물 색 번쩍임·흔들림과 이름 팝업. 독압정 흡수 팝업은 4종 뒤에 낸다(쌓이는 순서 보존)
+  const hazardHit = (who: FighterKey, triggers: EntryHazardTrigger[], delay: number) => {
+    triggers.forEach((t) => {
+      if (t === "toxicSpikesAbsorbed") return;
+      const kind = HAZARD_KIND[t];
       flash(who, 0.6, delay, HAZARD[kind].hex);
       shake(who, 4, delay, 260);
       pop(who, `${HAZARD[kind].label}!`, "", delay, undefined, HAZARD[kind].hex);
     });
-    if (messages.some((m) => m.includes("독압정을 흡수"))) pop(who, "독압정 제거!", "", delay, undefined, HAZARD.toxic.hex);
+    if (triggers.includes("toxicSpikesAbsorbed")) pop(who, "독압정 제거!", "", delay, undefined, HAZARD.toxic.hex);
   };
   // 기술 고유 연출 입자 — 카드 위에서 흩어지며 오르거나(reverse면 내리며) 사라진다
   const drift = (who: FighterKey, kind: FloatKind, delay: number, reverse = false) => {

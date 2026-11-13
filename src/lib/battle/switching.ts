@@ -1,6 +1,6 @@
 import { effectiveHeldItem, itemsSuppressedByRoom } from "./turnOrderInputs";
 import { isGrounded } from "./grounding";
-import { type FighterKey, type SwitchLogEntry } from "@/types/battle";
+import { type EntryHazardTrigger, type FighterKey, type SwitchLogEntry } from "@/types/battle";
 import { isUncopyableAbility } from "./abilityChange";
 import { NEUTRAL_ACCURACY_STAGES, NEUTRAL_CRIT_STAGE, NEUTRAL_STAGES, type BattleStatKey } from "@/types/battleStats";
 import { NO_STATUS_CONDITION, type StatusCondition, type VolatileCondition, type VolatileConditionState } from "@/types/status";
@@ -143,10 +143,12 @@ export function computeIllusionTarget(party: BattleFighterState[], selfIndex: nu
  *  1. 독타입이면 독압정을 흡수해 제거
  *  2. 스텔스록 등장 데미지(바위 상성 배율, 매직가드가 막음)
  *  3. 접지 상태면: 압정뿌리기 데미지(매직가드가 막음) → 독압정 중독 → 끈적끈적네트 스피드 -1
+ * 문구를 push하는 자리마다 같은 이름의 이벤트도 기록해 돌려준다(8.3 B2) — 화면 연출이 문구 대신 이 목록을 읽는다. 문구가 나온 때와 1:1이고 순서도 같다.
  */
-function applyEntryHazardsOnSwitchIn(state: BattleState, key: FighterKey, log: string[]): void {
+function applyEntryHazardsOnSwitchIn(state: BattleState, key: FighterKey, log: string[]): EntryHazardTrigger[] {
+  const hits: EntryHazardTrigger[] = [];
   const self = state[key];
-  if (isFainted(self)) return;
+  if (isFainted(self)) return hits;
   const hz = sideOf(state, key).hazards;
   const selfName = getPokemon(self.slot.pokemonId)?.name ?? "포켓몬";
   const selfAbility = abilityOf(self);
@@ -155,6 +157,7 @@ function applyEntryHazardsOnSwitchIn(state: BattleState, key: FighterKey, log: s
   if (hz.toxicSpikesLayers > 0 && self.types.includes("독")) {
     hz.toxicSpikesLayers = 0;
     log.push(`${selfName}${eunNeun(selfName)} 독압정을 흡수했다!`);
+    hits.push("toxicSpikesAbsorbed");
   }
 
   // 2. 스텔스록 (접지 무관, 바위 상성)
@@ -162,8 +165,9 @@ function applyEntryHazardsOnSwitchIn(state: BattleState, key: FighterKey, log: s
   if (stealthRockDamage > 0) {
     self.currentHp = Math.max(0, self.currentHp - stealthRockDamage);
     log.push(`뾰족한 바위가 ${selfName}${eulReul(selfName)} 덮쳤다! (${stealthRockDamage} 데미지)`);
+    hits.push("stealthRock");
   }
-  if (isFainted(self)) return;
+  if (isFainted(self)) return hits;
 
   // 3. 접지 대상만: 압정뿌리기 · 독압정 · 끈적끈적네트
   // 트랙 M4: 중력·전자부유·풍선·떨어뜨리기까지 반영한 접지 판정
@@ -173,8 +177,9 @@ function applyEntryHazardsOnSwitchIn(state: BattleState, key: FighterKey, log: s
     if (spikesDamage > 0) {
       self.currentHp = Math.max(0, self.currentHp - spikesDamage);
       log.push(`${selfName}${eunNeun(selfName)} 압정에 상처를 입었다! (${spikesDamage} 데미지)`);
+      hits.push("spikes");
     }
-    if (isFainted(self)) return;
+    if (isFainted(self)) return hits;
 
     if (
       hz.toxicSpikesLayers > 0 &&
@@ -190,6 +195,7 @@ function applyEntryHazardsOnSwitchIn(state: BattleState, key: FighterKey, log: s
           ? `${selfName}의 몸에 맹독이 퍼졌다!`
           : `${selfName}의 몸에 독이 퍼졌다!`,
       );
+      hits.push("toxicSpikes");
     }
 
     if (hz.stickyWeb) {
@@ -197,10 +203,15 @@ function applyEntryHazardsOnSwitchIn(state: BattleState, key: FighterKey, log: s
       self.stages = applyStageDelta(self.stages, "spe", contraryDelta(self, -1));
       if (self.stages.spe !== before) {
         log.push(`${selfName}${eunNeun(selfName)} 끈적끈적네트에 걸려 스피드가 떨어졌다!`);
+        hits.push("stickyWeb");
       }
     }
   }
+  return hits;
 }
+
+/** 설치물 발동 목록 → 교체 기록에 펼칠 필드. 발동이 없으면 키를 두지 않는다(저장 로그·`regress` 해시가 발동 없는 교체에서는 그대로) */
+export const hazardField = (hits: EntryHazardTrigger[]) => (hits.length ? { hazardTriggers: hits } : {});
 
 /** 틀깨기류 등장 안내(ver.2.0) — 배틀 시작 리드(state.ts)와 교체·메가진화 등장이 같은 문구를 쓴다 */
 function moldBreakerAnnouncement(pokemonName: string, abilityName: string): string {
@@ -379,10 +390,10 @@ export function performSwitch(
   toIndex: number,
   log: string[] = [],
   options: PerformSwitchOptions = {},
-): void {
+): EntryHazardTrigger[] {
   const { voluntary = true, passBaton = false, passSubstituteOnly = false, deferEntry = false } = options;
   const side = sideOf(state, key);
-  if (toIndex === side.activeIndex || toIndex < 0 || toIndex >= side.party.length) return;
+  if (toIndex === side.activeIndex || toIndex < 0 || toIndex >= side.party.length) return [];
   const outgoing = side.party[side.activeIndex];
 
   // 꼬리자르기: 리셋으로 outgoing.substituteHp가 지워지기 전에 인계값을 잡아둔다(배턴터치는 아래 baton 스냅샷에서 별도 처리).
@@ -528,22 +539,24 @@ export function performSwitch(
   applyMimicryForm(incoming, state.field);
 
   // ── 등장 파이프라인 (Phase 8 §4·§6) ── deferEntry면 호출자가 모든 교체를 끝낸 뒤 runEntryEffects로 따로 돌린다(8.3 A7 동시 교체)
-  if (!deferEntry) runEntryEffects(state, key, log);
+  // 반환: 등장하며 발동한 설치물(8.3 B2). deferEntry면 아직 등장 효과를 안 돌렸으니 빈 목록 — 호출자가 runEntryEffects 반환값을 쓴다
+  const hits = deferEntry ? [] : runEntryEffects(state, key, log);
 
   // TODO(§8): 추격(Pursuit)은 로스터에 없어 미구현 — 교체 대상을 위력 2배로 선타하는 예외.
+  return hits;
 }
 
 /**
  * 교체로 나온 포켓몬의 등장 효과 — 설치물 → 등장 특성 → 시드 → 풍선 → 치유소원 순서(Phase 8 §4·§6). performSwitch가 보통 바로 부르고,
  * 한 행동 뒤 양쪽이 동시에 교체할 때(8.3 A7)는 deferEntry로 교체만 먼저 끝낸 다음 들어온 포켓몬의 스피드순으로 이 함수를 따로 부른다.
  */
-export function runEntryEffects(state: BattleState, key: FighterKey, log: string[] = []): void {
+export function runEntryEffects(state: BattleState, key: FighterKey, log: string[] = []): EntryHazardTrigger[] {
   const side = sideOf(state, key);
   const incoming = side.party[side.activeIndex];
   // 1. 설치물 발동 — 스텔스록 등장 데미지, 압정뿌리기 스택, 독압정 중독, 끈적끈적네트 스피드 다운,
   //    독타입이면 독압정 흡수. 스텔스록·압정 데미지는 매직가드가 막는다(ability.ts:307 주석 참조 —
   //    인분은 "기술의 추가효과"만 막아 설치물엔 무관).
-  applyEntryHazardsOnSwitchIn(state, key, log);
+  const hits = applyEntryHazardsOnSwitchIn(state, key, log);
   // 2. 등장 특성 — 위협·가뭄류·필드·트레이스. 설치물로 이미 기절했으면 스킵된다(내부에서 isFainted 가드).
   applyEntryAbilityOnSwitchIn(state, key, log);
   // 3. 시드류 — 이미 필드가 있으면(방금 등장 특성으로 깔린 경우 포함) 발동.
@@ -559,12 +572,15 @@ export function runEntryEffects(state: BattleState, key: FighterKey, log: string
     const inName = getPokemon(incoming.illusionAs ?? incoming.slot.pokemonId)?.name ?? "포켓몬";
     log.push(`치유소원이 ${inName}${eulReul(inName)} 감쌌다! 체력과 상태이상이 모두 회복되었다!`);
   }
+  return hits;
 }
 
 interface ApplySwitchOutcome {
   nextState: BattleState;
   /** 이 교체로 처리된 등장/퇴장 안내(재생력·자연회복·위협·날씨 등). 없으면 빈 배열 */
   entryMessages: string[];
+  /** 이 교체로 등장하며 발동한 설치물(8.3 B2). 없으면 빈 배열 */
+  hazardTriggers: EntryHazardTrigger[];
   /** 물러난/새로 나온 포켓몬 종 id. 강제 교체 로그 문구용 */
   outPokemonId: string;
   inPokemonId: string;
@@ -588,7 +604,7 @@ export function forceRandomSwitch(
   const toIndex = reserveIdxs[Math.floor(random() * reserveIdxs.length)];
   const outgoing = side.party[fromIndex];
   const entryMessages: string[] = [];
-  performSwitch(state, key, toIndex, entryMessages, { voluntary: false });
+  const hits = performSwitch(state, key, toIndex, entryMessages, { voluntary: false });
   const inFighter = side.party[toIndex];
   switches.push({
     side: key,
@@ -597,6 +613,7 @@ export function forceRandomSwitch(
     outPokemonId: outgoing.illusionAs ?? outgoing.slot.pokemonId,
     inPokemonId: inFighter.illusionAs ?? inFighter.slot.pokemonId,
     entryMessages,
+    ...hazardField(hits),
     ...(extra.endOfTurn ? {} : { afterMove: true }),
     forced: true,
     ...extra,
@@ -641,11 +658,11 @@ export function applySwitch(
   const targetSide = sideOf(state, key);
   const outPokemonId = targetSide.party[targetSide.activeIndex].slot.pokemonId;
   const entryMessages: string[] = [];
-  performSwitch(state, key, toIndex, entryMessages, { voluntary: opts.voluntary ?? false, passBaton: opts.passBaton ?? false });
+  const hazardTriggers = performSwitch(state, key, toIndex, entryMessages, { voluntary: opts.voluntary ?? false, passBaton: opts.passBaton ?? false });
   const inFighter = sideOf(state, key).party[sideOf(state, key).activeIndex];
   // 일루전(§6-1): 위장 중이면 로그에도 위장 대상 이름이 나가야 상대가 안 눈치챈다.
   const inPokemonId = inFighter.illusionAs ?? inFighter.slot.pokemonId;
-  return { nextState: state, entryMessages, outPokemonId, inPokemonId };
+  return { nextState: state, entryMessages, hazardTriggers, outPokemonId, inPokemonId };
 }
 
 /**
