@@ -639,11 +639,16 @@ export interface Move {
    */
   typeByUserSpecies?: Partial<Record<string, PokemonType>>;
   /**
-   * 레이징불·깨트리기: 명중하면(데미지 유무 무관) 상대 쪽에 걸린 스크린(리플렉터/빛의장막/
+   * 레이징불·깨트리기·사이코팽: 맞으면(상성 무효·방어·빗나감이면 안 깸, 대타 적중은 깸) 상대 쪽에 걸린 스크린(리플렉터/빛의장막/
    * 오로라베일)을 전부 제거한다. 데미지 계산은 스크린이 살아있는 상태로 하고(본가 규칙 — 그 턴엔
    * 아직 경감됨), 계산 이후에 제거한다.
    */
   breaksScreensOnHit?: boolean;
+  /**
+   * 전기자석파처럼 변화기인데도 상성 무효를 존중하는 기술(Showdown `ignoreImmunity: false`) — 전기자석파 vs 땅은 효과가 막힌다.
+   * 변화기는 보통 타입 면역을 무시하므로(독가루 vs 강철 등) 이 필드가 있는 기술만 상성 배율 0일 때 효과를 못 낸다. 8.3 B8.
+   */
+  respectsTypeImmunity?: boolean;
   /**
    * 힘흡수(Strength Sap): 명중 시 상대의 공격 실능(랭크 반영)만큼 자신의 HP를 회복한다. 회복 후
    * statChanges로 상대 공격 -1이 별도로 적용된다(데이터에 함께 기재). 상대가 이미 최대 HP면

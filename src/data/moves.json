@@ -4215,6 +4215,7 @@
       "마비"
     ],
     "makesContact": false,
+    "respectsTypeImmunity": true,
     "inflictsStatus": [
       {
         "status": "paralysis"

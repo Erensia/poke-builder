@@ -254,7 +254,7 @@ function eatBerriesAndPayHp(c: MirroredCtx) {
  * 상성 무효(데미지 0)·빗나감·방어는 false. c.damage는 실제로 깎인 HP가 아니라 계산된 데미지라(hitResolution의 resolveHit 결과) 탈(Disguise)이
  * HP 감소만 막아도 > 0이어서 "맞음"으로 센다(본가와 같다). 자기 랭크 변화(applyStatChanges)와 고속스핀·킬러스핀의 설치물 정리(8.3 B7)가 같이 쓴다.
  */
-function damagingMoveLanded(c: MirroredCtx): boolean {
+export function damagingMoveLanded(c: Pick<MirroredCtx, "effectiveMove" | "hit" | "blockedByProtect" | "damage" | "hitSubstitute">): boolean {
   return c.effectiveMove.category === "status" || (c.hit && !c.blockedByProtect && (c.damage > 0 || !!c.hitSubstitute));
 }
 
@@ -449,16 +449,17 @@ function opportunistAndAccuracyChanges(c: MirroredCtx) {
     }
   }
 
+  const landed = damagingMoveLanded(c);
   const attackerAccuracyStagesBeforeChange = c.attacker.accuracyStages;
   const defenderAccuracyStagesBeforeChange = c.defender.accuracyStages;
-  c.attacker.accuracyStages = applyMoveAccuracyEvasionChanges(
-    c.attacker.accuracyStages,
-    contraryMoveFor(c.effectiveMove, c.attacker),
-    "self",
-    { userTypes: c.attacker.types },
-  );
+  // 8.3 B8: 명중률·회피율·급소율 랭크 변화도 데미지 기술이 실제로 맞았을 때만(`landed`) — 진흙뿌리기 vs 비행 같은 상성 무효에서 상대 명중률이 떨어지던 결함.
+  c.attacker.accuracyStages = !landed
+    ? c.attacker.accuracyStages
+    : applyMoveAccuracyEvasionChanges(c.attacker.accuracyStages, contraryMoveFor(c.effectiveMove, c.attacker), "self", {
+        userTypes: c.attacker.types,
+      });
   const defenderAccuracyBeforeChange = c.defender.accuracyStages.accuracy;
-  c.defender.accuracyStages = c.opponentEffectsBlocked
+  c.defender.accuracyStages = c.opponentEffectsBlocked || !landed
     ? c.defender.accuracyStages
     : applyMoveAccuracyEvasionChanges(c.defender.accuracyStages, contraryMoveFor(c.effectiveMove, c.defender), "opponent", {
         userTypes: c.attacker.types,
@@ -484,10 +485,12 @@ function opportunistAndAccuracyChanges(c: MirroredCtx) {
       if (oppAfter < oppBefore) c.opponentStatDrops.push({ stat: key, delta: oppBefore - oppAfter });
     }
   }
-  c.attacker.critStage = applyMoveCritStageChanges(c.attacker.critStage, c.effectiveMove, "self", {
-    userTypes: c.attacker.types,
-  });
-  c.defender.critStage = c.opponentEffectsBlocked
+  c.attacker.critStage = !landed
+    ? c.attacker.critStage
+    : applyMoveCritStageChanges(c.attacker.critStage, c.effectiveMove, "self", {
+        userTypes: c.attacker.types,
+      });
+  c.defender.critStage = c.opponentEffectsBlocked || !landed
     ? c.defender.critStage
     : applyMoveCritStageChanges(c.defender.critStage, c.effectiveMove, "opponent", {
         userTypes: c.attacker.types,
@@ -567,17 +570,17 @@ function resetAndTypeChanges(c: MirroredCtx) {
 
 /** 부가 상태이상 부여: 통상·페이탈클로·질투의불꽃·독수·부리캐논·싱크로 */
 function inflictStatuses(c: MirroredCtx) {
-
-
+  // 8.3 B8: 데미지 기술은 실제로 맞아야(명중 + 방어 안 됨 + 데미지 > 0 또는 대타 적중) 부가 상태이상이 걸린다 — 상성 무효 상대엔 기술 전체가 실패한다.
+  const landed = damagingMoveLanded(c);
   // 이미 걸린 상태이상 때문에 상태이상 전용 변화기(맹독·도깨비불 등)가 아무 변화도 못 냈으면 true.
   // C-8: "블래키의 맹독 - 그러나 실패했다!". 데미지 기술의 부가 상태이상은 그냥 안 걸린 것뿐이라 대상 아님.
   c.statusInflictFailed = false;
-  if (c.secondaryEffectsBlockedByAbility && c.effectiveMove.inflictsStatus && !c.opponentEffectsBlocked) {
+  if (landed && c.secondaryEffectsBlockedByAbility && c.effectiveMove.inflictsStatus && !c.opponentEffectsBlocked) {
     // 인분: 데미지 기술이 거는 상태이상(화염방사 화상·연옥 100% 화상·볼부비부비 마비 등)은
     // 전부 추가효과라 무산된다. 변화기(도깨비불 등)의 상태이상은 secondaryEffectsBlockedByAbility가
     // false라 이 분기에 오지 않는다.
     c.secondaryBlockedByAbilityName = c.defenderAbility!.name;
-  } else if (!c.opponentEffectsBlocked && c.effectiveMove.inflictsStatus) {
+  } else if (landed && !c.opponentEffectsBlocked && c.effectiveMove.inflictsStatus) {
     for (const effect of c.effectiveMove.inflictsStatus) {
       if (
         isImmuneToStatus(
@@ -752,7 +755,8 @@ function statusCureAndVolatile(c: MirroredCtx) {
 
 
 
-  if (c.effectiveMove.inflictsVolatile) {
+  // 8.3 B8: 상성 무효·방어·빗나감이면 기술 전체가 실패하므로 부가 휘발(풀죽음·혼란 등)도 자기 대상 효과(재충전 등)도 없다(대타 적중·탈은 맞은 것으로 센다).
+  if (c.effectiveMove.inflictsVolatile && damagingMoveLanded(c)) {
     for (const effect of c.effectiveMove.inflictsVolatile) {
       if (
         effect.volatile === "confusion" &&

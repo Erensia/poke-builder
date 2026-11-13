@@ -737,6 +737,8 @@ function resolveDynamicMoveType(c: PreHitCtx) {
   c.stabMultiplier = _d0.stabMultiplier;
   c.typeEffectiveness = _d0.typeEffectiveness;
   c.absorbedByDefenderAbility = _d0.absorbedByDefenderAbility;
+  // 8.3 B8: 타입 면역을 존중하는 변화기(전기자석파)는 상성 무효이면 효과가 막힌다(변화기는 보통 면역을 무시). opponentEffectsBlocked는 상성 배율 확정 전에 계산돼 여기서 보탠다.
+  if (c.move.respectsTypeImmunity && c.typeEffectiveness === 0) c.opponentEffectsBlocked = true;
 }
 
 /** 우격다짐·기사회생·분화·자이로볼·내던지기·성묘·집단구타·일격기 등 가변 위력 */
