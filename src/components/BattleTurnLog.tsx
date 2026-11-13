@@ -3,9 +3,8 @@ import { opponentKey } from "../lib/battle/state";
 import type { FighterKey, TurnResult } from "../types/battle";
 import { eunNeun } from "../lib/josa";
 import { activeIndexTrace, faintOrder, hpAsPercent, isForcedSwitchEntry, STATUS_CURE_TEXT } from "../lib/battleLogText";
-import { ActionEffectLines } from "./turnLog/ActionEffectLines";
 import { HpFormatContext } from "./turnLog/hpFormat";
-import { ActionMainLine } from "./turnLog/ActionMainLine";
+import { ActionLines } from "./turnLog/ActionMainLine";
 import { EndOfTurnLine, TurnFooterLines } from "./turnLog/EndOfTurnLines";
 import { EndOfTurnSwitchLines, ForcedOpponentSwitchLines, MergedSwitchLines, PreMoveSwitchLines, RedCardSwitchLines, SelfSwitchAfterMoveLines } from "./turnLog/SwitchLines";
 
@@ -129,7 +128,8 @@ export function BattleTurnLog({
                       {/* 메인 라인: 누가 무슨 기술을 써서 어떻게 됐는지("빗나감"/데미지 수치)까지만.
                           기절 같은 "상태"는 아래에서 별도 줄로 분리한다. */}
                       <HpFormatContext.Provider value={fmtHp(aiParty?.[trace?.actions[i] ?? -1]?.maxHp)}>
-                        <ActionMainLine
+                        {/* 메인 라인 + 타입변화·방어·상태·스탯변화·도구·특성반응 계열(§15-5). 매직미러로 반사된 행동은 3줄로 나눠 그린다(8.3 B6) */}
+                        <ActionLines
                           action={action}
                           actorName={actorName}
                           defenderName={defenderName}
@@ -137,8 +137,6 @@ export function BattleTurnLog({
                           headDamagePercent={headDamagePercent}
                           percentOnly={percentOnly}
                         />
-                        {/* 타입변화·방어·상태·스탯변화·도구·특성반응 계열(§15-5) */}
-                        <ActionEffectLines action={action} actorName={actorName} defenderName={defenderName} percentOnly={percentOnly} />
                       </HpFormatContext.Provider>
                       {/* 유턴류 자체 교체: 이 행동 직후에(§7-2) 시간 순서대로 렌더 */}
                       <SelfSwitchAfterMoveLines switches={turn.switches} actor={action.actor} />

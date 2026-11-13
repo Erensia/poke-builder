@@ -1,4 +1,6 @@
-import { ActionMainLineHead, ActionMainLineField, ActionMainLineTail, type ActionMainLineProps } from "./actionMainLineParts";
+import { ActionEffectLines } from "./ActionEffectLines";
+import { ActionMainLineHead, ActionMainLineField, ActionMainLineTail, MoveUseLabel, type ActionMainLineProps } from "./actionMainLineParts";
+import { reflectedView } from "./reflectedView";
 
 
 /**
@@ -14,5 +16,34 @@ export function ActionMainLine(props: ActionMainLineProps) {
       <ActionMainLineField {...props} />
       <ActionMainLineTail {...props} />
     </div>
+  );
+}
+
+/**
+ * 행동 한 건의 로그 줄 — 메인 줄 + 효과 줄. 매직미러로 반사된 행동이면 3줄로 나눈다: ① 원래 시전자의 기술 줄 ② 방어측의 특성 안내 ③ 방어측이 되받아친 줄(+ 효과).
+ * ③과 효과 줄은 방어측이 사용자·시전자가 대상인 사본(reflectedView)으로 그려 대상 이름·"상대 편 필드"가 엔진 처리와 맞는다.
+ */
+export function ActionLines(props: ActionMainLineProps) {
+  const { action, actorName, defenderName, percentOnly } = props;
+  if (!action.bouncedMoveName) {
+    return (
+      <>
+        <ActionMainLine {...props} />
+        <ActionEffectLines action={action} actorName={actorName} defenderName={defenderName} percentOnly={percentOnly} />
+      </>
+    );
+  }
+  const r = reflectedView(props);
+  return (
+    <>
+      <div className="battle-turn-line">
+        <MoveUseLabel action={action} actorName={actorName} />
+      </div>
+      <div className="battle-turn-line is-muted">
+        {defenderName}의 {action.bouncedByAbilityName}!
+      </div>
+      <ActionMainLine {...r} headVariant="bounced" />
+      <ActionEffectLines action={r.action} actorName={r.actorName} defenderName={r.defenderName} percentOnly={percentOnly} />
+    </>
   );
 }

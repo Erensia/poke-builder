@@ -36,11 +36,21 @@ export interface ActionMainLineProps {
   headDamagePercent: number;
   /** true면 실수치 없이 줄어든 체력 %만 표기(AI 상대에게 입힌 데미지) */
   percentOnly?: boolean;
+  /** "bounced"면 머리를 "○○은(는) ○○을(를) 되받아쳤다!"로 그린다 — 매직미러 반사의 셋째 줄(8.3 B6, ActionLines만 넘긴다). 없으면 평소 "○○의 기술" */
+  headVariant?: "bounced";
 }
 
-/** 기술 이름·막힘 사유·데미지·상태 변화·설치기·특성 교환 */
-export function ActionMainLineHead({ action, actorName, defenderName, headDamage, headDamagePercent, percentOnly }: ActionMainLineProps) {
-  const { actorHp } = useActionHp(action);
+/** 기술을 쓴 줄 머리 — 흉내쟁이 줄·"○○의 기술"·잠꼬대 표기. 반사된 줄(variant "bounced")은 반사한 쪽이 되받아쳤다는 문구(8.3 B6) */
+export function MoveUseLabel({ action, actorName, variant }: { action: ActionLogEntry; actorName: string; variant?: "bounced" }) {
+  if (variant === "bounced") {
+    return (
+      <>
+        <strong>{actorName}</strong>
+        {eunNeun(actorName)} {action.move.name}
+        {eulReul(action.move.name)} 되받아쳤다!
+      </>
+    );
+  }
   return (
     <>
       {/* 흉내쟁이(트랙 M2): "OO의 흉내쟁이!" 다음 줄에 따라 쓴 기술 — action.move는 따라 쓴 기술이다 */}
@@ -52,9 +62,16 @@ export function ActionMainLineHead({ action, actorName, defenderName, headDamage
       )}
       <strong>{actorName}</strong>의 {action.move.name}
       {action.sleepTalkCalledMoveName && " (잠꼬대로 냈다!)"}
-      {action.bouncedMoveName && (
-        <> — {defenderName}의 {action.bouncedByAbilityName}! 기술이 되돌아왔다!</>
-      )}
+    </>
+  );
+}
+
+/** 기술 이름·막힘 사유·데미지·상태 변화·설치기·특성 교환 */
+export function ActionMainLineHead({ action, actorName, defenderName, headDamage, headDamagePercent, percentOnly, headVariant }: ActionMainLineProps) {
+  const { actorHp } = useActionHp(action);
+  return (
+    <>
+      <MoveUseLabel action={action} actorName={actorName} variant={headVariant} />
       {action.blockedReason === "usageCondition" && "!"}
       {action.blockedReason === "moveRestricted" && "!"}
       {action.blockedReason === "status" && action.blockedByStatus === undefined && " — 상태이상으로 행동 불가"}
@@ -111,9 +128,7 @@ export function ActionMainLineHead({ action, actorName, defenderName, headDamage
         <>
           {" "}
           ·{" "}
-          {action.bouncedMoveName
-            ? "뾰족한 바위가 되돌아와 시전자 쪽 필드에 깔렸다!"
-            : "상대 편 필드에 뾰족한 바위가 깔렸다!"}
+          상대 편 필드에 뾰족한 바위가 깔렸다!
         </>
       )}
       {!action.blockedReason && action.hit && action.spikesSetForSide && (
