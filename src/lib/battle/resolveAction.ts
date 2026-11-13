@@ -13,7 +13,7 @@ import { hasVolatile } from "@/lib/volatileConditions";
 import { isTrappedFromSwitching } from "./switching";
 import { resolvePreHitEffects } from "./preHitEffects";
 import { resolveHitAndApplyDamage } from "./hitResolution";
-import { resolveMirroredMoveEffects } from "./mirroredEffects";
+import { damagingMoveLanded, resolveMirroredMoveEffects } from "./mirroredEffects";
 import { type Ability } from "@/types/ability";
 import { type AccuracyEvasionKey, type BattleStatKey } from "@/types/battleStats";
 import { type BattleFighterState } from "@/lib/battle/state";
@@ -642,10 +642,11 @@ function applyKnockoutAbilities(c: ActionCtx) {
     c.attacker.stages = applyStageDelta(c.attacker.stages, boost.stat, contraryDelta(c.attacker, boost.delta));
   }
 
-  // 레이징불·깨트리기(breaksScreensOnHit): 명중하면 상대 편(side) 스크린을 전부 제거한다. 위
+  // 레이징불·깨트리기(breaksScreensOnHit): 맞으면 상대 편(side) 스크린을 전부 제거한다. 위
   // 데미지 계산은 스크린이 살아있는 상태로 이미 끝났으니(그 턴엔 아직 경감), 여기서 제거만 한다.
+  // 8.3 B8: 상성 무효·방어·빗나감이면 기술 전체가 실패해 벽이 남는다(Showdown은 기술 자신의 onTryHit가 상성 무효 판정 뒤라 무효 상대엔 안 깬다). 대타 적중·탈은 깬다.
 
-  if (c.effectiveMove.breaksScreensOnHit) {
+  if (c.effectiveMove.breaksScreensOnHit && damagingMoveLanded(c)) {
     const defenderScreens = sideOf(c.state, c.defenderKey).screens;
     const present = (Object.keys(defenderScreens) as ("reflect" | "lightScreen" | "auroraVeil")[]).filter(
       (s) => defenderScreens[s] !== undefined,

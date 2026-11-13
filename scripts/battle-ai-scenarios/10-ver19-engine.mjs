@@ -82,7 +82,8 @@ export default async function ({ server, data, ev, dec, pts, mon, battle, opt, c
     }
     // 그림자꿰매기: 명중하면 상대 교체 봉쇄(고스트 면제, 실패 문구 없음) / 배수의진: 5스탯 +1 + 자신 교체 봉쇄, 이미 걸려 있으면 실패
     {
-      const st = battle([mon("팬텀", ["그림자꿰매기"])], [mon("잠만보", ["칼춤"], null, null, pts({ hp: 32, def: 32 })), mon("한카리아스", ["지진"])]);
+      // 8.3 B8: 고스트 기술은 노말 타입에게 무효라 가두지 못한다 — 방어측을 노말이 아닌 포켓몬으로
+      const st = battle([mon("팬텀", ["그림자꿰매기"])], [mon("킬라플로르", ["칼춤"], null, null, pts({ hp: 32, def: 32 })), mon("한카리아스", ["지진"])]);
       const s1 = run(st, "그림자꿰매기", "칼춤").nextState;
       const ghostOut = run(battle([mon("팬텀", ["그림자꿰매기"])], [mon("팬텀", ["칼춤"], null, null, pts({ hp: 32, def: 32 }))]), "그림자꿰매기", "칼춤");
       const nr = battle([mon("잠만보", ["배수의진"]), mon("팬텀", ["칼춤"])], [mon("메타그로스", ["칼춤"])]);
