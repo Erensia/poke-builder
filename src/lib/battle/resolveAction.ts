@@ -1,6 +1,6 @@
 import { type Move } from "@/types/move";
 import { type FieldKind } from "@/types/field";
-import { type ActionLogEntry, type FighterKey, type ItemEffectLog } from "@/types/battle";
+import { type ActionLogEntry, type FighterKey, type ItemEffectLog, type SpinCleared } from "@/types/battle";
 import { BATTLE_STAT_KEYS } from "@/types/battleStats";
 import { getAbility, getItem, getMove } from "@/lib/data";
 import { effectiveHeldItem } from "./turnOrderInputs";
@@ -172,6 +172,7 @@ interface ActionCtx {
   curedStatusTarget: "self" | "opponent" | undefined;
   inflictedVolatile: VolatileCondition | undefined;
   tidyUpDone: boolean;
+  spinCleared: SpinCleared | undefined;
   courtChangeDone: boolean;
   defogFieldCleared: boolean;
   revivedPartyName: string | undefined;
@@ -307,6 +308,7 @@ function resolveMirroredPhase(c: ActionCtx) {
   c.curedStatusTarget = mirrorResult.curedStatusTarget;
   c.inflictedVolatile = mirrorResult.inflictedVolatile;
   c.tidyUpDone = mirrorResult.tidyUpDone;
+  c.spinCleared = mirrorResult.spinCleared;
   c.courtChangeDone = mirrorResult.courtChangeDone;
   c.defogFieldCleared = mirrorResult.defogFieldCleared;
   c.revivedPartyName = mirrorResult.revivedPartyName;
@@ -931,6 +933,7 @@ function collectResult(c: ActionCtx) {
     electromorphosisEmpoweredAbilityName: c.electromorphosisEmpoweredAbilityName,
     fickleBeamEmpowered: c.fickleBeamEmpowered || undefined,
     tidyUpDone: c.tidyUpDone || undefined,
+    ...(c.spinCleared ? { spinCleared: c.spinCleared } : {}), // 지운 것이 없으면 키 자체가 없다(8.3 B7)
     saltCureApplied: c.saltCureApplied || undefined,
     lostTypeAfterUse: c.lostTypeAfterUse,
     glaiveRushArmed: c.effectiveMove.glaiveRush || undefined,

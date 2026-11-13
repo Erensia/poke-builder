@@ -6158,14 +6158,15 @@
       "랭크",
       "접촉"
     ],
-    "makesContact": false,
+    "makesContact": true,
     "statChanges": [
       {
         "target": "self",
         "stat": "spe",
         "delta": 1
       }
-    ]
+    ],
+    "hazardClear": "spin"
   },
   {
     "id": "껍질깨기",
@@ -8186,7 +8187,8 @@
         "status": "poison"
       }
     ],
-    "makesContact": true
+    "makesContact": true,
+    "hazardClear": "spin"
   },
   {
     "id": "니들가드",
