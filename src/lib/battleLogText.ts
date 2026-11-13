@@ -37,6 +37,11 @@ export const WEATHER_MOVE_LINES: Record<string, { set: string; fail: string }> =
   썰렁개그: { set: "눈이 내리기 시작했다!", fail: "그러나 실패하고 말았다!" },
 };
 
+/** 고속스핀·킬러스핀이 지운 설치물 이름(8.3 B7) — 줄은 "{시전자} 편 필드의 {이름}이(가) 사라졌다!". 포챔스 한국어판 실제 문구와 다르면 여기와 SPIN_CLEARED_LINES만 고친다 */
+export const SPIN_CLEARED_HAZARD_NAMES = { spikes: "압정", toxicSpikes: "독압정", stealthRock: "뾰족한 바위", stickyWeb: "끈적끈적네트" } as const;
+/** 고속스핀·킬러스핀이 지운 씨뿌리기·속박 안내 꼬리말 — "{시전자}은(는) {꼬리말}" */
+export const SPIN_CLEARED_LINES = { leechSeed: "씨뿌리기에서 벗어났다!", bound: "속박에서 벗어났다!" } as const;
+
 /** 차징 기술 1턴째(준비 턴) 전용 문구 — 공통 "준비 중!" 대신 기술별로 쓴다(§1 D-1). key는 move.id */
 export const CHARGE_TURN_MESSAGE: Record<string, string> = {
   구멍파기: " 땅을 파기 시작했다!",

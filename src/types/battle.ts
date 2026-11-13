@@ -15,6 +15,16 @@ import type { StatusConditionState, VolatileCondition } from "./status";
  * 독압정 층수)는 §6에서 채운다 — S1 시점엔 스텔스록·압정뿌리기만 기존 불리언과 1:1 대응
  * (`spikesLayers`는 0 또는 1).
  */
+/** 고속스핀·킬러스핀이 지운 설치물 종류(8.3 B7) */
+export type SpinClearedHazard = "spikes" | "toxicSpikes" | "stealthRock" | "stickyWeb";
+/** 고속스핀·킬러스핀(`hazardClear: "spin"`)이 명중해서 실제로 지운 것 — 지운 것만 담는다. 키 순서 = Showdown 처리 순서(씨뿌리기 → 설치물 → 속박) */
+export interface SpinCleared {
+  leechSeed?: true;
+  /** 압정뿌리기 → 독압정 → 스텔스록 → 끈적끈적네트 순(Showdown 고정 목록) */
+  hazards?: SpinClearedHazard[];
+  bound?: true;
+}
+
 export interface HazardState {
   /** 스텔스록(1장 고정). 등장 시 바위 상성 배율로 데미지(§6). */
   stealthRock: boolean;
@@ -597,6 +607,8 @@ export interface ActionLogEntry {
   fickleBeamEmpowered?: boolean;
   /** 정리정돈 — 명중해서 설치물·대타를 정리했으면 true ("정리정돈 끝!" 문구용) */
   tidyUpDone?: boolean;
+  /** 고속스핀·킬러스핀 — 명중해서 사용자 편 설치물·사용자의 씨뿌리기·속박을 지웠으면 그 목록(8.3 B7). 지운 것이 없으면 키가 없다(저장 로그·해시 불변) */
+  spinCleared?: SpinCleared;
   /** 소금절이 — 명중해서 상대를 소금절이 상태로 만들었으면 true */
   saltCureApplied?: boolean;
 }

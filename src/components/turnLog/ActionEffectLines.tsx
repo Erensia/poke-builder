@@ -5,7 +5,7 @@ import { STAT_LABELS, statOrAccuracyLabel } from "../../lib/statLabels";
 import { typeLabel } from "../../types/pokemon-type";
 import { eunNeun, iGa, eulReul, roEuro } from "../../lib/josa";
 import { VOLATILE_LABELS } from "../../lib/battleLogLabels";
-import { stageRiseAdverb, STATUS_ONSET_TEXT, STATUS_TRIGGER_TEXT, STATUS_CURE_TEXT } from "../../lib/battleLogText";
+import { stageRiseAdverb, SPIN_CLEARED_HAZARD_NAMES, SPIN_CLEARED_LINES, STATUS_ONSET_TEXT, STATUS_TRIGGER_TEXT, STATUS_CURE_TEXT } from "../../lib/battleLogText";
 import { useActionHp } from "./hpFormat";
 import { MultiHitLines } from "./MultiHitLines";
 import { abilityDamageLine, abilityDefenderStatsLines, abilityDisabledMoveLine, abilityLoweredAttackerStatsLine, abilityPickpocketLine, abilityStatusLine, abilityVolatileLine, sandSpitWeatherLine, setFieldOnHitLine, wanderingSpiritLine } from "./abilityLines";
@@ -645,6 +645,29 @@ export function ActionEffectLines({
       {/* 정리정돈 — 설치물·대타 정리 완료 */}
       {!action.blockedReason && action.tidyUpDone && (
         <div className="battle-turn-line is-muted">정리정돈 끝!</div>
+      )}
+      {/* 고속스핀·킬러스핀 — 명중해서 지운 것(8.3 B7). 줄 순서는 Showdown 고정 목록: 씨뿌리기 → 압정 → 독압정 → 스텔스록 → 네트 → 속박 */}
+      {!action.blockedReason && action.spinCleared && (
+        <>
+          {action.spinCleared.leechSeed && (
+            <div className="battle-turn-line is-muted">
+              {actorName}
+              {eunNeun(actorName)} {SPIN_CLEARED_LINES.leechSeed}
+            </div>
+          )}
+          {action.spinCleared.hazards?.map((h) => (
+            <div key={h} className="battle-turn-line is-muted">
+              {actorName} 편 필드의 {SPIN_CLEARED_HAZARD_NAMES[h]}
+              {iGa(SPIN_CLEARED_HAZARD_NAMES[h])} 사라졌다!
+            </div>
+          ))}
+          {action.spinCleared.bound && (
+            <div className="battle-turn-line is-muted">
+              {actorName}
+              {eunNeun(actorName)} {SPIN_CLEARED_LINES.bound}
+            </div>
+          )}
+        </>
       )}
       {/* 소금절이 — 상대를 소금절이 상태로 */}
       {!action.blockedReason && action.saltCureApplied && (
