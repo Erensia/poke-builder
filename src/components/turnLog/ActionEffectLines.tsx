@@ -160,14 +160,9 @@ export function ActionEffectLines({
             `${actorName}${eunNeun(actorName)} 중력 때문에 ${action.move.name}${eulReul(action.move.name)} 사용하지 못한다!`}
         </div>
       )}
-      {/* 상태이상에 새로 걸렸을 때(onset) — 보통 상대가 대상이지만, 매직미러로 되돌아온
-          경우(bouncedMoveName)엔 시전자(actor) 자신에게 걸린 것이다 */}
+      {/* 상태이상에 새로 걸렸을 때(onset) — 대상은 defenderName. 매직미러 반사는 호출부(ActionLines)가 이름을 맞바꾼 사본으로 넘긴다(8.3 B6) */}
       {!action.blockedReason && action.hit && action.inflictedStatus && (
-        <div className="battle-turn-line is-muted">
-          {STATUS_ONSET_TEXT[action.inflictedStatus](
-            action.bouncedMoveName ? actorName : defenderName,
-          )}
-        </div>
+        <div className="battle-turn-line is-muted">{STATUS_ONSET_TEXT[action.inflictedStatus](defenderName)}</div>
       )}
       {/* 난동(ver.1.9): 소란으로 깨움 / 끝까지 써서 혼란(역린류) / 소란 종료 */}
       {action.uproarWokeIds?.map((id) => {
@@ -294,28 +289,14 @@ export function ActionEffectLines({
       )}
       {!action.blockedReason && action.hit && action.inflictedVolatile === "encore" && (
         <div className="battle-turn-line is-muted">
-          {action.bouncedMoveName ? (
-            <>
-              {actorName}의 앙코르!<br />
-              {actorName}
-              {eunNeun(actorName)} 앙코르를 받았다!
-            </>
-          ) : (
-            <>
-              {actorName}의 앙코르!<br />
-              {defenderName}
-              {eunNeun(defenderName)} 앙코르를 받았다!
-            </>
-          )}
+          {actorName}의 앙코르!<br />
+          {defenderName}
+          {eunNeun(defenderName)} 앙코르를 받았다!
         </div>
       )}
       {/* 하품(졸음) 유도 — 실제로 잠드는 건 2턴 뒤라 onset 문구와 다르게 "유도했다"로 표현 */}
       {!action.blockedReason && action.hit && action.inflictedVolatile === "drowsy" && (
-        <div className="battle-turn-line is-muted">
-          {action.bouncedMoveName
-            ? `${actorName}의 졸음을 유도했다!`
-            : `상대 ${defenderName}의 졸음을 유도했다!`}
-        </div>
+        <div className="battle-turn-line is-muted">상대 {defenderName}의 졸음을 유도했다!</div>
       )}
       {/* 상태이상이 나았을 때(cure) — curedStatusTarget으로 자신/상대 구분 */}
       {!action.blockedReason && action.hit && action.curedStatus && (
@@ -906,12 +887,12 @@ export function ActionEffectLines({
         </div>
       )}
       {/* C-6 랭크다운 기술 결과 — "OO의 X가 (크게) 떨어졌다!". selfStatRises와 대칭.
-          매직미러 반사면 시전자(actor) 자신에게 적용된 것 */}
+          대상은 defenderName(매직미러 반사는 호출부가 이름을 맞바꾼 사본으로 넘긴다, 8.3 B6) */}
       {!action.blockedReason &&
         action.opponentStatDrops &&
         action.opponentStatDrops.length > 0 &&
         (() => {
-          const subject = action.bouncedMoveName ? actorName : defenderName;
+          const subject = defenderName;
           const byDelta = new Map<number, string[]>();
           for (const d of action.opponentStatDrops) {
             const labels = byDelta.get(d.delta) ?? [];
