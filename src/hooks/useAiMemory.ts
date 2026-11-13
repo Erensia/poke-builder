@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { clearAiMemory, loadAiMemory, onPresetListReplaced, saveAiMemory, type StoredAiMemory } from "../lib/storage";
-import { commitBattle, emptyOpponentMemory, MEMORY_DECAY_PER_BATTLE, RANK_MEMORY_DECAY_PER_BATTLE, type OpponentMemory } from "../lib/battle/ai/opponentMemory";
+import { clearAiMemory, commitAiSession, loadAiMemory, onPresetListReplaced, saveAiMemory, type StoredAiMemory } from "../lib/storage";
+import { emptyOpponentMemory, MEMORY_DECAY_PER_BATTLE, RANK_MEMORY_DECAY_PER_BATTLE, type OpponentMemory } from "../lib/battle/ai/opponentMemory";
 
 /**
  * AI의 사용자 패턴 학습(ver.2.0 1-C) 저장본 관리. 배틀타워(free)와 랭크배틀(rank)은 각자 저장본을 따로 쌓고, 감쇠도 다르다(0.99 / 0.995).
@@ -19,8 +19,10 @@ export function useAiMemory(mode: "free" | "rank") {
 
   /** 대전 한 판의 세션 기록을 누적본에 합친다. 합쳤으면 true(결과 배너 문구용) */
   function commit(session: OpponentMemory): boolean {
-    if (!stored.learningEnabled || session.decisions <= 0) return false;
-    update({ ...stored, memory: commitBattle(stored.memory, session, decay) });
+    // 상태(stored)가 아니라 저장소의 최신값 위에 쌓는다 — 배틀 중 클라우드 동기화가 합쳐 들어온 학습을 덮지 않게(8.3 C2-b)
+    const next = commitAiSession(mode, session, decay);
+    if (!next) return false;
+    setStored(next);
     return true;
   }
 

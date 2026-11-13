@@ -33,7 +33,7 @@ const SWITCH_PRIOR_STRENGTH = 10;
 const STATUS_PRIOR_STRENGTH = 10;
 const MOVE_PRIOR_STRENGTH = 2;
 /** 포켓몬별 기록 상한(가장 오래 안 쓴 종부터 버림) — 저장 크기 상한 */
-const MAX_SPECIES = 100;
+export const MAX_SPECIES = 100;
 /** 교체 확률 상한 — 보정 배율이 커져도 "무조건 교체"로 보지는 않는다 */
 const MAX_SWITCH_PROB = 0.9;
 

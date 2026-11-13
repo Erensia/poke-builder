@@ -2,7 +2,7 @@ import type { Party, PartySlots, SamplePartyPreset, SlotPreset } from "../types/
 import type { BattleVideo } from "../types/battleVideo";
 import { EMPTY_FRONTIER, isFrontierSave, type FrontierSave } from "./battleSeries";
 import { EMPTY_RANK_SAVE, isRankSave, type RankSave } from "./battleRankSave";
-import { emptyOpponentMemory, isOpponentMemory, type OpponentMemory } from "./battle/ai/opponentMemory";
+import { commitBattle, emptyOpponentMemory, isOpponentMemory, type OpponentMemory } from "./battle/ai/opponentMemory";
 
 const STORAGE_KEY = "champions-party-sim.party.v1";
 /** 이름 붙인 파티 프리셋 목록(Phase 6 §1-2) — 위 STORAGE_KEY(현재 작업 중인 파티 자동저장)와 별개 */
@@ -217,6 +217,29 @@ export function loadAiMemory(mode: "free" | "rank"): StoredAiMemory {
 export function saveAiMemory(mode: "free" | "rank", value: StoredAiMemory): void {
   aiMemoryStores[mode].save(value);
   presetSavedListeners.forEach((fn) => fn(mode === "rank" ? "aiMemoryRank" : "aiMemory"));
+}
+
+/**
+ * AI 학습 기억 클라우드 동기화의 기준 저장본(8.3 C2-b) — 크기가 커서 `cloud-sync.v1`(랭크·프런티어 기준과 한 키)에 넣지 않고 따로 둔다.
+ * 저장이 실패해도 다른 문서의 기준 갱신에 번지지 않고, 낡은 항목은 해시가 달라 쓰이지 않는다(`cloudSyncPlan.aiBaseOf`).
+ */
+const AI_BASES_STORAGE_KEY = "champions-party-sim.cloud-sync-ai-base.v1";
+const isAiBases = (value: unknown): value is Record<string, { remoteUpdatedAt: number; json: string }> =>
+  !!value && typeof value === "object" && Object.values(value).every((e) => typeof (e as { json?: unknown })?.json === "string" && typeof (e as { remoteUpdatedAt?: unknown })?.remoteUpdatedAt === "number");
+const aiBaseStore = createLocalStorageStore<Record<string, { remoteUpdatedAt: number; json: string }>>(AI_BASES_STORAGE_KEY, isAiBases, {});
+export const loadAiBases = () => aiBaseStore.load();
+export const saveAiBases = (value: Record<string, { remoteUpdatedAt: number; json: string }>) => aiBaseStore.save(value);
+
+/**
+ * 대전 한 판의 세션 기록을 **저장소의 최신 기억** 위에 감쇠하며 쌓아 저장한다(8.3 C2-b). 화면이 들고 있던 상태가 아니라 방금 저장소를 읽으므로,
+ * 배틀 중 클라우드 동기화가 합쳐 들어온 학습을 덮어쓰지 않는다. 학습이 꺼져 있거나 관측이 없으면 null(저장 안 함).
+ */
+export function commitAiSession(mode: "free" | "rank", session: OpponentMemory, decay: number): StoredAiMemory | null {
+  const stored = loadAiMemory(mode);
+  if (!stored.learningEnabled || session.decisions <= 0) return null;
+  const next: StoredAiMemory = { ...stored, memory: commitBattle(stored.memory, session, decay) };
+  saveAiMemory(mode, next);
+  return next;
 }
 
 /** 학습 초기화 — 그 모드의 키만 지운다(파티 자동저장·다른 모드 학습은 건드리지 않는다) */

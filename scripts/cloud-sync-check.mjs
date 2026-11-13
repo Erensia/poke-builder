@@ -329,6 +329,107 @@ try {
     check("AI 기록 최대 크기(100종×기술 40개)는 문서 상한 안이다", bigJson.length < 400_000, String(bigJson.length));
   }
 
+  // ── 8.3 C2-b AI 학습 기억 합치기 ── (설계 `8.3-C2b-학습기억합치기설계.md` §3 M-a~M-k)
+  {
+    const om = await server.ssrLoadModule("/src/lib/battle/ai/opponentMemory.ts");
+    const plan = await server.ssrLoadModule("/src/lib/cloudSyncPlan.ts");
+    // 시험 한 건이 던져도(구현 전에는 함수가 없다) 다른 시험이 계속 돌게 한다
+    const chk = (name, fn) => { let ok = false, detail = ""; try { ok = fn(); } catch (e) { detail = String(e?.message ?? e).slice(0, 80); } check(name, ok === true, detail); };
+    const D = 0.99, DR = 0.995;
+    const dist = (sw) => ({ moveWeights: new Map([["지진", 0.5], ["칼춤", 0.3], ["방어", 0.2]]), switchProb: sw, switches: sw > 0 ? [{ toIndex: 1, weight: 1 }] : [], megaOf: new Map() });
+    const observe = (mem, species, moveId, isStatus, sw = 0.2) => om.observeOpponent(mem, { dist: dist(sw), speciesId: species, statusMoveIds: new Set(["칼춤", "방어"]), action: moveId ? { kind: "move", moveId, isStatus } : { kind: "switch" } });
+    // 판 한 번 = 세션 기록(spec: [종, 기술|null, 변화기?]들)을 누적본에 감쇠하며 합친 것
+    const play = (mem, spec, d = D) => { const ses = om.emptyOpponentMemory(); for (const [sp, mv, st] of spec) observe(ses, sp, mv, !!st); return om.commitBattle(mem, ses, d); };
+    const playAll = (mem, games, d = D) => games.reduce((m, g) => play(m, g, d), mem);
+    const wrap = (memory, le = true) => plan.canonical("aiMemory", { version: 1, learningEnabled: le, memory }).json;
+    const G = {
+      a1: [["한카리아스", "지진", 0], ["한카리아스", "칼춤", 1], ["망나뇽", "지진", 0], ["망나뇽", null]],
+      a2: [["한카리아스", "지진", 0], ["한카리아스", "지진", 0], ["메타그로스", "방어", 1]],
+      c1: [["망나뇽", "칼춤", 1], ["망나뇽", null], ["잠만보", "지진", 0], ["잠만보", "방어", 1]],
+      c2: [["잠만보", null], ["한카리아스", "방어", 1], ["메타그로스", "지진", 0]],
+      c3: [["메타그로스", "칼춤", 1], ["망나뇽", "지진", 0]],
+    };
+    const B0 = playAll(om.emptyOpponentMemory(), [G.a2, G.c1, G.a1]); // 기준: 3판
+    const LINEAR = (m) => ({ decisions: m.decisions, switchActual: m.switchActual, switchPred: m.switchPred, statusActual: m.statusActual, statusPred: m.statusPred, species: Object.fromEntries(Object.entries(m.species).map(([id, sp]) => [id, { seen: sp.seen, moves: sp.moves }])) });
+    const near = (a, b) => (typeof a === "number" && typeof b === "number" ? Math.abs(a - b) <= 1e-9 : a && b && typeof a === "object" ? [...new Set([...Object.keys(a), ...Object.keys(b)])].every((k) => near(a[k] ?? 0, b[k] ?? 0)) : a === b);
+    // 두 선형 구조의 평균(없는 쪽은 0)
+    const mix = (x, y) => (typeof x === "number" || typeof y === "number" ? ((x ?? 0) + (y ?? 0)) / 2 : Object.fromEntries([...new Set([...Object.keys(x ?? {}), ...Object.keys(y ?? {})])].map((k) => [k, mix(x?.[k], y?.[k])])));
+    const parse = (json) => JSON.parse(json).memory;
+    const merge = (B, L, R, d = D) => plan.mergeAiMemory(B === null ? null : wrap(B), wrap(L), wrap(R), d);
+
+    chk("M-a 한쪽이 변하지 않았으면 합친 결과가 변한 쪽과 정확히 같다(전 필드)", () => { const L = playAll(B0, [G.a1, G.a2]); const m = parse(merge(B0, L, B0)); return near(LINEAR(m), LINEAR(L)) && m.battles === L.battles && near(LINEAR(parse(merge(B0, B0, L))), LINEAR(L)); });
+    chk("M-b 양쪽이 변했으면 두 순서(L 다음 R, R 다음 L)의 평균과 같다", () => {
+      const Ls = [G.a1, G.a2], Rs = [G.c1, G.c2, G.c3];
+      const L = playAll(B0, Ls), R = playAll(B0, Rs), m = parse(merge(B0, L, R));
+      const lr = playAll(B0, [...Ls, ...Rs]), rl = playAll(B0, [...Rs, ...Ls]);
+      return near(LINEAR(m), mix(LINEAR(lr), LINEAR(rl))) && m.battles === B0.battles + Ls.length + Rs.length;
+    });
+    chk("M-c 선형 보존: 합친 decisions = d^(kL+kR)·B + ½[(1+d^kR)ΔL + (1+d^kL)ΔR]", () => {
+      const L = playAll(B0, [G.a1, G.a2]), R = playAll(B0, [G.c1, G.c2, G.c3]), m = parse(merge(B0, L, R));
+      const dL = L.decisions - D ** 2 * B0.decisions, dR = R.decisions - D ** 3 * B0.decisions;
+      return Math.abs(m.decisions - (D ** 5 * B0.decisions + 0.5 * ((1 + D ** 3) * dL + (1 + D ** 2) * dR))) <= 1e-9;
+    });
+    chk("M-d 기준이 없거나 한쪽이 기억을 초기화(battles가 기준보다 작음)했거나 JSON이 깨졌으면 null이다", () => {
+      const L = playAll(B0, [G.a1]), reset = om.emptyOpponentMemory();
+      return merge(null, L, B0) === null && merge(B0, reset, L) === null && merge(B0, L, reset) === null && plan.mergeAiMemory("not json", wrap(L), wrap(B0), D) === null;
+    });
+    chk("M-e 100종 상한: 한쪽이 종을 밀어내도 증분은 음수가 되지 않고 합친 종은 100개 이하다", () => {
+      const ses = om.emptyOpponentMemory();
+      for (let i = 0; i < 100; i++) observe(ses, "종" + i, "지진", false);
+      const B = om.commitBattle(om.emptyOpponentMemory(), ses, D), L = play(B, [["새종", "지진", 0]]), R = play(B, [["종5", "칼춤", 1]]);
+      const m = parse(merge(B, L, R)), vals = Object.values(m.species).flatMap((sp) => [sp.seen, ...Object.values(sp.moves).flatMap((x) => [x.actual, x.pred])]);
+      return Object.keys(m.species).length <= 100 && vals.every((v) => v >= 0) && m.species["새종"] !== undefined;
+    });
+    chk("M-f learningEnabled: 로컬이 바뀌었으면 로컬, 아니면 클라우드 값", () => {
+      const L = playAll(B0, [G.a1]), R = playAll(B0, [G.c1]);
+      const e = (b, l, r) => JSON.parse(plan.mergeAiMemory(wrap(B0, b), wrap(L, l), wrap(R, r), D)).learningEnabled;
+      return e(true, false, true) === false && e(true, true, false) === false && e(true, false, false) === false && e(true, true, true) === true && e(false, true, false) === true;
+    });
+    chk("M-g 결과가 정규형이고 isOpponentMemory를 통과하며 battles = B + kL + kR", () => { const L = playAll(B0, [G.a1, G.a2]), R = playAll(B0, [G.c1]); const j = merge(B0, L, R); return plan.canonical("aiMemory", JSON.parse(j)).json === j && om.isOpponentMemory(parse(j)) && parse(j).battles === B0.battles + 3; });
+    chk("M-h 같은 (B, L, R)을 두 번 합치면 같은 결과다(순수 함수)", () => { const L = playAll(B0, [G.a1]), R = playAll(B0, [G.c1, G.c2]); return merge(B0, L, R) === merge(B0, L, R); });
+    chk("M-h2 경합: 올리기 성공 뒤 로컬이 한 판 더 쌓인 경우, 기준을 합치기 전 로컬로 옮기면 ΔL이 두 번 더해지지 않는다", () => {
+      const L = play(B0, G.a1), R = play(B0, G.c1), M = parse(merge(B0, L, R));
+      const L2 = play(L, G.a2); // 올리는 사이 로컬이 한 판 더
+      const shifted = parse(plan.mergeAiMemory(wrap(L), wrap(L2), wrap(M), D)).decisions;
+      const naive = parse(plan.mergeAiMemory(wrap(B0), wrap(L2), wrap(M), D)).decisions;
+      const orders = [[G.a1, G.a2, G.c1], [G.a1, G.c1, G.a2], [G.a2, G.a1, G.c1], [G.a2, G.c1, G.a1], [G.c1, G.a1, G.a2], [G.c1, G.a2, G.a1]].map((o) => playAll(B0, o).decisions);
+      const ideal = orders.reduce((x, y) => x + y, 0) / orders.length;
+      return Math.abs(shifted - ideal) <= 0.12 * ideal && Math.abs(naive - ideal) > Math.abs(shifted - ideal);
+    });
+    chk("M-i 모드별 감쇠: decayFor('aiMemory') = 0.99, decayFor('aiMemoryRank') = 0.995", () => plan.decayFor("aiMemory") === 0.99 && plan.decayFor("aiMemoryRank") === 0.995 && om.MEMORY_DECAY_PER_BATTLE === 0.99 && om.RANK_MEMORY_DECAY_PER_BATTLE === 0.995);
+    chk("M-i2 랭크 모드(0.995)로 쌓은 기억은 0.995로 합쳐야 맞는다(0.99로 합치면 어긋난다)", () => {
+      const Br = playAll(om.emptyOpponentMemory(), [G.a2, G.c1], DR), L = playAll(Br, [G.a1], DR), R = playAll(Br, [G.c2], DR);
+      const ok = parse(plan.mergeAiMemory(wrap(Br), wrap(L), wrap(R), DR)), bad = parse(plan.mergeAiMemory(wrap(Br), wrap(L), wrap(R), D));
+      const ideal = (playAll(Br, [G.a1, G.c2], DR).decisions + playAll(Br, [G.c2, G.a1], DR).decisions) / 2;
+      return Math.abs(ok.decisions - ideal) <= 1e-9 && Math.abs(bad.decisions - ideal) > 1e-9;
+    });
+    chk("M-j 기준 저장본: 20만 자 초과면 저장하지 않고 같은 이름의 예전 항목도 지운다, 해시가 다르면 쓰지 않는다, 다른 이름은 그대로", () => {
+      const small = wrap(B0), big = "x".repeat(plan.AI_BASE_MAX_CHARS + 1);
+      const a = plan.nextAiBases({ "u|aiMemoryRank": { remoteUpdatedAt: 1, json: "other" } }, "u|aiMemory", small, 7);
+      const b = plan.nextAiBases(a, "u|aiMemory", big, 8);
+      return plan.AI_BASE_MAX_CHARS === 200_000 && a["u|aiMemory"].json === small && a["u|aiMemory"].remoteUpdatedAt === 7 && b["u|aiMemory"] === undefined && b["u|aiMemoryRank"].json === "other"
+        && plan.aiBaseOf(a, "u|aiMemory", plan.hashOf(small)) === small && plan.aiBaseOf(a, "u|aiMemory", plan.hashOf("다른 내용")) === null && plan.aiBaseOf(b, "u|aiMemory", plan.hashOf(small)) === null;
+    });
+    // M-k는 localStorage를 흉내 내서 storage.ts의 commitAiSession을 직접 부른다
+    {
+      const mem = new Map();
+      globalThis.localStorage = { getItem: (k) => mem.get(k) ?? null, setItem: (k, v) => mem.set(k, String(v)), removeItem: (k) => mem.delete(k) };
+      let ok = false, detail = "";
+      try {
+        const st = await server.ssrLoadModule("/src/lib/storage.ts");
+        const stale = st.loadAiMemory("rank"); // 배틀 시작 때 화면이 들고 있던 상태(비어 있음)
+        const synced = { version: 1, learningEnabled: true, memory: playAll(om.emptyOpponentMemory(), [G.a1, G.c1], DR) };
+        st.saveAiMemory("rank", synced); // 동기화가 합쳐 들어온 기억
+        const ses = om.emptyOpponentMemory();
+        observe(ses, "한카리아스", "지진", false);
+        const next = st.commitAiSession("rank", ses, DR);
+        ok = !!next && next.memory.battles === synced.memory.battles + 1 && st.loadAiMemory("rank").memory.battles === synced.memory.battles + 1 && stale.memory.battles === 0 && st.commitAiSession("rank", om.emptyOpponentMemory(), DR) === null;
+      } catch (e) { detail = String(e?.message ?? e).slice(0, 80); }
+      delete globalThis.localStorage;
+      check("M-k 커밋은 상태가 아니라 저장소의 최신값 위에 쌓인다(배틀 중 동기화로 합쳐 들어온 학습이 살아남는다), 빈 세션은 null", ok, detail);
+    }
+  }
+
   console.log(failed ? `\n${failed}/${total}개 실패` : `\n${total}개 통과`);
 } finally {
   await server.close();

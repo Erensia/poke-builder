@@ -2,7 +2,7 @@ import type { Party, SamplePartyPreset, SlotPreset } from "../types/party";
 import { rankLabel, rankOf } from "./battleRank";
 import type { RankSave } from "./battleRankSave";
 import type { FrontierSave } from "./battleSeries";
-import { canonical, emptyJson, hashOf, isObjectDoc, itemHashes, mergeFrontier, mergeLists, mergeRank, planSync, type RemoteDoc } from "./cloudSyncPlan";
+import { aiBaseOf, canonical, decayFor, emptyJson, hashOf, isObjectDoc, itemHashes, mergeAiMemory, mergeFrontier, mergeLists, mergeRank, nextAiBases, planSync, type RemoteDoc } from "./cloudSyncPlan";
 import { firebaseConfigured, loadAuth, loadFirestore } from "./firebase";
 import {
   loadAiMemory,
@@ -23,6 +23,8 @@ import {
   saveSlotPresets,
   type PresetListName,
   type SyncBase,
+  loadAiBases,
+  saveAiBases,
   type StoredAiMemory,
 } from "./storage";
 
@@ -128,6 +130,9 @@ const RETURN_SYNC_GAP_MS = 30_000;
 
 /** 두 기기의 기록을 기준 저장본에서 이어 합치는 문서(랭크 6.2 C6, 프런티어 6.4 F1) — 마지막으로 맞춘 저장본을 같이 들고 있어야 한다 */
 const hasSnapshot = (name: PresetListName) => name === "battleRank" || name === "battleFrontier";
+/** AI 학습 기억(8.3 C2-b) — 기준 저장본이 커서 별도 키에 둔다(storage.ts loadAiBases). 해시가 맞을 때만 쓴다 */
+const isAiMemory = (name: PresetListName) => name === "aiMemory" || name === "aiMemoryRank";
+const aiSnapshot = (name: PresetListName) => aiBaseOf(loadAiBases(), `${uid ?? ""}|${name}`, baseOf(name)?.hash ?? "");
 
 function baseOf(name: PresetListName): SyncBase | null {
   return loadCloudSyncMeta().bases[uid ?? ""]?.[name] ?? null;
@@ -143,6 +148,7 @@ function setBase(name: PresetListName, json: string, remoteUpdatedAt: number) {
     ...(hasSnapshot(name) && { snapshot: json }),
   };
   saveCloudSyncMeta({ ...meta, bases: { ...meta.bases, [key]: { ...meta.bases[key], [name]: base } } });
+  if (isAiMemory(name)) saveAiBases(nextAiBases(loadAiBases(), `${key}|${name}`, json, remoteUpdatedAt));
 }
 function stamp() {
   const t = Date.now();
@@ -243,7 +249,9 @@ async function syncList(name: PresetListName): Promise<Conflict | null> {
           ? mergeRank(baseOf(name)?.snapshot ?? null, local, r.json)
           : name === "battleFrontier"
             ? mergeFrontier(baseOf(name)?.snapshot ?? null, local, r.json)
-            : null;
+            : isAiMemory(name)
+              ? mergeAiMemory(aiSnapshot(name), local, r.json, decayFor(name))
+              : null;
       // 합칠 수 없는 경우(기준이 없거나 시즌이 끼는 등 랭크·프런티어 기록의 폴백, AI 학습 기록)는 사용자가 고를 때까지 멈춘다
       if (merged === null) return { name, label: LABELS[name] ?? name, local: summarize(name, local), remote: summarize(name, r.json), remoteJson: r.json, remoteUpdatedAt: r.updatedAt };
       assertSize(merged);
@@ -252,7 +260,7 @@ async function syncList(name: PresetListName): Promise<Conflict | null> {
       if (at === null || localJson(name) !== local) {
         // 프런티어의 병합은 "기준 대비 증가분"을 더해서 같은 변경을 두 번 합치면 두 번 더해진다. 올리는 데 성공했는데 그 사이 사용자가 한 판을 더 마쳤다면,
         // 다음 판정의 기준을 "방금 합친 이 기기의 저장본"으로 옮겨 이 기기의 새 변경과 클라우드(방금 올린 결과)의 차이만 다시 합치게 한다(기준의 remoteUpdatedAt은 올리기 전 값이라 충돌로 판정된다)
-        if (at !== null && name === "battleFrontier") setBase(name, local, r.updatedAt);
+        if (at !== null && (name === "battleFrontier" || isAiMemory(name))) setBase(name, local, r.updatedAt);
         rerun = true;
         return null;
       }
@@ -264,7 +272,7 @@ async function syncList(name: PresetListName): Promise<Conflict | null> {
     case "none": {
       // 이전 기록에는 병합 기준(목록의 항목 해시, 랭크·프런티어의 저장본)이 없다 — 양쪽이 같은 상태일 때 채워 둬야 다음 병합에서 쓸 수 있다
       const b = baseOf(name);
-      if (b && (hasSnapshot(name) ? !b.snapshot : !isObjectDoc(name) && !b.items)) setBase(name, local, b.remoteUpdatedAt);
+      if (b && (hasSnapshot(name) ? !b.snapshot : isAiMemory(name) ? !aiSnapshot(name) : !isObjectDoc(name) && !b.items)) setBase(name, local, b.remoteUpdatedAt);
       return null;
     }
     default:
