@@ -6,7 +6,7 @@ import { hasVolatile } from "@/lib/volatileConditions";
 import { compareTurnOrder } from "@/lib/turnOrder";
 import { buildTurnOrderActor, computeTurnOrderSpeed, itemsSuppressedByRoom, quickFirstChances } from "./turnOrderInputs";
 import { STRUGGLE_MOVE, SWITCH_PASS_MOVE_ID, activeWeather, applyForecastForm, applyMimicryForm, cloneSide, consumeItem, hasLivingReserve, isFainted, isForcedSwitchBlocked, opponentKey, sideOf, type BattleState } from "./state";
-import { applyMegaEvolution, forceRandomSwitch, isTrappedFromSwitching, performSwitch, runEntryEffects } from "./switching";
+import { applyMegaEvolution, forceRandomSwitch, hazardField, isTrappedFromSwitching, performSwitch, runEntryEffects } from "./switching";
 import { resolveAction } from "./resolveAction";
 import { finishTurn } from "./finishTurn";
 import { refreshUproar, updateRampage } from "./rampage";
@@ -147,7 +147,7 @@ export function runTurn(
     // 문어굳히기/물고버티기에 걸린 채로 자발적 교체가 넘어오면(UI가 막지만 방어적으로) 무시한다.
     if (isTrappedFromSwitching(outgoing, state)) continue;
     const entryMessages: string[] = [];
-    performSwitch(state, key, action.toIndex, entryMessages);
+    const hazards = performSwitch(state, key, action.toIndex, entryMessages);
     if (side.activeIndex !== fromIndex) {
       didSwitch[key] = true;
       const inFighter = side.party[action.toIndex];
@@ -158,6 +158,7 @@ export function runTurn(
         outPokemonId: outgoing.slot.pokemonId,
         inPokemonId: inFighter.illusionAs ?? inFighter.slot.pokemonId, // 일루전 위장 반영(§6-1)
         entryMessages,
+        ...hazardField(hazards),
       });
     }
   }
@@ -591,14 +592,14 @@ function runActionPhase(ctx: RunTurnContext): RunTurnOutcome | RunTurnPaused {
   return finishTurn(ctx);
 }
 
-/** 선택 한 건을 실제 교체로 옮긴다 — 유효하지 않은 슬롯이면 아무것도 안 하고 undefined. entryMessages 배열을 돌려준다(deferEntry면 등장 효과가 나중에 이 배열을 채운다) */
-function performChoice(ctx: RunTurnContext, pivot: PendingChoice, toIndex: number, deferEntry: boolean): string[] | undefined {
+/** 선택 한 건을 실제 교체로 옮긴다 — 유효하지 않은 슬롯이면 아무것도 안 하고 undefined. 만든 교체 기록을 돌려준다(deferEntry면 등장 효과가 나중에 그 기록의 entryMessages·hazardTriggers를 채운다) */
+function performChoice(ctx: RunTurnContext, pivot: PendingChoice, toIndex: number, deferEntry: boolean): SwitchLogEntry | undefined {
   const side = sideOf(ctx.state, pivot.side);
   if (!(toIndex >= 0 && toIndex < side.party.length && toIndex !== side.activeIndex && !isFainted(side.party[toIndex]))) return undefined;
   const fromIndex = side.activeIndex;
   const outgoing = side.party[fromIndex];
   const entryMessages: string[] = [];
-  performSwitch(ctx.state, pivot.side, toIndex, entryMessages, {
+  const hazards = performSwitch(ctx.state, pivot.side, toIndex, entryMessages, {
     // 기절 후 대체는 강제 교체와 같은 취급 — 가속 발동(억제 플래그 안 세움)
     voluntary: !pivot.faintReplacement,
     passBaton: pivot.passBaton,
@@ -606,20 +607,22 @@ function performChoice(ctx: RunTurnContext, pivot: PendingChoice, toIndex: numbe
     deferEntry,
   });
   const inFighter = side.party[toIndex];
-  ctx.switches.push({
+  const entry: SwitchLogEntry = {
     side: pivot.side,
     // 기절 대체: 물러나는 줄("돌아와!") 없이 "가라!"만 — 강제 교체 합성 카드와 같은 표기(fromIndex -1)
     fromIndex: pivot.faintReplacement ? -1 : fromIndex,
     toIndex,
     outPokemonId: outgoing.slot.pokemonId,
     inPokemonId: inFighter.illusionAs ?? inFighter.slot.pokemonId, // §6-1
-    entryMessages,
+    entryMessages, // 같은 배열 참조 — 동시 교체 2단계의 runEntryEffects가 여기에 push한다(복사하면 문구가 사라진다)
+    ...hazardField(hazards),
     afterMove: pivot.faintReplacement ? undefined : true,
     shedTail: pivot.passSubstitute || undefined,
     returnsToTrainer: pivot.returnsToTrainer || undefined,
     defenderExit: pivot.emergencyExit || pivot.ejectItemName ? true : undefined,
-  });
-  return entryMessages;
+  };
+  ctx.switches.push(entry);
+  return entry;
 }
 
 /** 두 편의 교체 순서 — 스피드가 빠른 쪽이 먼저, 트릭룸이면 뒤집힘, 완전 동속은 난수(Showdown 실측, 8.3 A7). 기술 우선도·선공 도구는 쓰지 않는다 */
@@ -641,18 +644,17 @@ function executeChoices(ctx: RunTurnContext): void {
   }
   // ① 교체 실행 — 나가는 포켓몬의 스피드순
   const outOrder = fasterFirst(ctx, made.map((m) => m.pivot.side));
-  const entered: FighterKey[] = [];
-  const msgs = new Map<FighterKey, string[]>();
+  const entries = new Map<FighterKey, SwitchLogEntry>();
   for (const key of outOrder) {
     const m = made.find((c) => c.pivot.side === key)!;
-    const entryMessages = performChoice(ctx, m.pivot, m.toIndex, true);
-    if (entryMessages) {
-      entered.push(key);
-      msgs.set(key, entryMessages);
-    }
+    const entry = performChoice(ctx, m.pivot, m.toIndex, true);
+    if (entry) entries.set(key, entry);
   }
   // ② 등장 효과 — 양쪽 교체가 끝난 뒤 들어온 포켓몬의 스피드순(나가는 순서와 별개)
-  for (const key of fasterFirst(ctx, entered)) runEntryEffects(ctx.state, key, msgs.get(key)!);
+  for (const key of fasterFirst(ctx, [...entries.keys()])) {
+    const entry = entries.get(key)!;
+    Object.assign(entry, hazardField(runEntryEffects(ctx.state, key, entry.entryMessages)));
+  }
 }
 
 /**

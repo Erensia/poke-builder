@@ -62,7 +62,7 @@ export function planTurnFx({ last, doneActions, doneSwitches, endDone, prevSnap,
   const swaps = last.switches.slice(doneSwitches).map((sw) => {
     const idx = sw.afterMove ? last.actions.findIndex((a) => a.actor === ((sw.forced && !sw.redCardItemName) || sw.defenderExit ? other(sw.side) : sw.side)) : -1; // 위기회피·탈출버튼(defenderExit, 8.3 A7)은 교체를 일으킨 공격자의 행동 뒤. 레드카드 교체는 side가 끌려나온 공격자 자신이라 그 편의 행동 뒤(드래곤테일류만 상대 행동 뒤)
     // atEnd: 턴 종료 효과가 끝난 뒤의 교체(8.3 A4-b) — 행동 번호가 아니라 턴 종료 줄 시각 뒤에 놓는다. outgoingAlive: 살아 있는 채 물러나는 합성 카드도 나가는 모션을 보인다
-    return { side: sw.side, enter: sw.fromIndex >= 0 || !!sw.outgoingAlive, afterMove: !!sw.afterMove, atEnd: !!sw.endOfTurn, after: Math.max(idx - doneActions, -1), messages: sw.entryMessages };
+    return { side: sw.side, enter: sw.fromIndex >= 0 || !!sw.outgoingAlive, afterMove: !!sw.afterMove, atEnd: !!sw.endOfTurn, after: Math.max(idx - doneActions, -1), hazards: sw.hazardTriggers ?? [] };
   });
   // 메가진화(E8) — 로그의 구조화 필드(megaEvolutions)에서 읽는다. 이어지는 결과에 이미 재생한 메가진화가 다시 들어 있을 수 있어 직전 상태가 이미 메가인 편은 뺀다. 행동 전에 일어난다
   const nowState = liveSnap;

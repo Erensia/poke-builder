@@ -110,7 +110,7 @@ export function useTurnFx(log: TurnResult[], battleState: BattleState) {
       const t = swapTime(sw);
       if (sw.enter) swapOut(sw.side, t);
       swapIn(sw.side, t + (sw.enter ? OUT_MS : 0));
-      hazardHit(sw.side, sw.messages, t + (sw.enter ? OUT_MS : 0) + 150);
+      hazardHit(sw.side, sw.hazards, t + (sw.enter ? OUT_MS : 0) + 150);
     });
     megas.forEach((k) => megaFx(k, 0));
     plan.stances.forEach((s) => pop(s.side, s.to === "blade" ? "블레이드폼!" : "실드폼!", "", startOf(s.k) + IMPACT));
