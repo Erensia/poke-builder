@@ -776,7 +776,8 @@ export interface Move {
    * (특공 vs 상대 특방)로 낸 데미지를 둘 다 계산해, 큰 쪽 판정으로 공격한다 — 물리면 접촉기,
    * 특수면 비접촉기. 두 값이 같으면 무작위(랭크업 부가효과 포함). 도구·특성·상태이상 등 배율은
    * 물리/특수 여부를 먼저 확정한 뒤 적용한다. move.category는 "physical"로 두되 엔진이 이 플래그를
-   * 보고 매 사용마다 다시 판정한다.
+   * 보고 매 사용마다 다시 판정한다. 판정 규칙은 battlePower.shellSideArmCategory 한 곳(엔진·매치업 평가기 공용).
+   * 동점은 엔진이 반반 난수, 매치업 평가기(결정적 화면)는 물리로 표시한다.
    */
   dynamicCategoryByHigherDamage?: boolean;
   /**
