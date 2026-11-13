@@ -2,9 +2,15 @@
   "_readme": [
     "validate-data.mjs 의 스프라이트 역방향 체크에서 '없어도 되는' 항목. 에셋이 아직 없거나(§ 백로그 대기)",
     "의도적으로 이니셜 폴백을 쓰는 경우 여기에 id 를 등록하면 경고에서 빠진다.",
-    "에셋을 실제로 추가하면 여기서도 지운다."
+    "에셋을 실제로 추가하면 여기서도 지운다.",
+    "moveEffectAudit(기술명 → 사유): 효과 문구와 필드 값이 달라도 의도된 기술(8.3 B3, scripts/move-effect-audit.mjs). 사유 필수, 더 이상 안 걸리면 stale 경고 — 지울 것."
   ],
   "spriteMissingPokemon": [],
   "spriteMissingMegaForm": [],
-  "spriteMissingItem": []
+  "spriteMissingItem": [],
+  "moveEffectAudit": {
+    "킹실드": "K4 — 접촉한 상대의 공격 -1은 protectContactPenalty 필드로 구현, statChanges가 아님",
+    "끈적끈적네트": "K4 — 교체로 나온 상대의 스피드 -1은 설치물(setsHazard) 발동으로 구현, statChanges가 아님",
+    "데코레이션": "K4 — 더블 전용이라 1v1 의도적 미배선(6.3 D, 문구에도 스텁 표기)"
+  }
 }

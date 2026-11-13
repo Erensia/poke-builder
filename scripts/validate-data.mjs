@@ -2,11 +2,13 @@
 //   1) 참조 무결성 — learnset·특성·메가스톤·성격 등이 실제 존재하는 id 를 가리키는지
 //   2) 스키마·상식 — 필수 필드, 타입 값, 종족값 범위, id 중복, standard 폼 개수
 //   3) 스프라이트 역방향 체크 — 각 포켓몬/폼/메가·각 도구에 대응하는 매니페스트 키가 있는지
-// 1·2 위반은 ERROR(exit 1), 3 위반은 WARNING(이니셜 폴백이 있으므로). `--strict` 면 WARNING 도 exit 1.
+//   4) 기술 효과 문구 ↔ 필드 값 대조 — 문구의 확률·분수·타수·랭크가 필드와 다른 기술(8.3 B3, scripts/move-effect-audit.mjs). 허용 목록: data-allowlist.json의 moveEffectAudit
+// 1·2 위반은 ERROR(exit 1), 3·4 위반은 WARNING(3은 이니셜 폴백이 있으므로, 4는 휴리스틱이라). 4의 허용 항목에 사유가 없으면 ERROR. `--strict` 면 WARNING 도 exit 1.
 // 실행: `npm run validate:data` (또는 `node scripts/validate-data.mjs [--strict]`)
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { auditMoves } from "./move-effect-audit.mjs";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const dataDir = join(root, "src", "data");
@@ -163,7 +165,7 @@ const norm = (s) => String(s).replace(/\s+/g, "");
 const manifestHas = (key) => Object.prototype.hasOwnProperty.call(MANIFEST, norm(key));
 
 // 알려진 예외(아직 에셋이 없거나, 의도적으로 이니셜 폴백을 쓰는 것)는 여기 등록해 소음을 줄인다.
-let allow = { spriteMissingPokemon: [], spriteMissingMegaForm: [], spriteMissingItem: [] };
+let allow = { spriteMissingPokemon: [], spriteMissingMegaForm: [], spriteMissingItem: [], moveEffectAudit: {} };
 try {
   allow = { ...allow, ...JSON.parse(readFileSync(join(root, "scripts", "data-allowlist.json"), "utf8")) };
 } catch {
@@ -309,6 +311,14 @@ for (const [key, url] of Object.entries(MANIFEST))
       for (const id of fp) if (!names.has(id)) err(`${at}: fixedPicks "${id}" 는 이 파티 슬롯의 종이 아님`);
     }
   }
+}
+
+// ── 기술 효과 문구 ↔ 필드 값 대조(8.3 B3) ─────────────────────────────
+// 문구의 확률·분수·타수·랭크가 필드와 다른 기술. 의도된 차이는 data-allowlist.json의 moveEffectAudit(기술명 → 사유)에 등록한다.
+{
+  const audit = auditMoves(MOVES, allow.moveEffectAudit);
+  audit.warnings.forEach(warn);
+  audit.errors.forEach(err);
 }
 
 // ── 결과 ─────────────────────────────────────────────────────────────────────

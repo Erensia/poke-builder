@@ -1119,7 +1119,7 @@
       {
         "volatile": "flinch",
         "target": "opponent",
-        "chance": 30
+        "chance": 20
       }
     ],
     "makesContact": true
@@ -3512,12 +3512,6 @@
       "비접촉"
     ],
     "makesContact": false,
-    "inflictsStatus": [
-      {
-        "status": "burn",
-        "chance": 30
-      }
-    ],
     "statChanges": [
       {
         "target": "opponent",
@@ -6834,7 +6828,7 @@
       "반동",
       "접촉"
     ],
-    "recoilFraction": 0.3333333333333333,
+    "recoilFraction": 0.5,
     "makesContact": true
   },
   {
