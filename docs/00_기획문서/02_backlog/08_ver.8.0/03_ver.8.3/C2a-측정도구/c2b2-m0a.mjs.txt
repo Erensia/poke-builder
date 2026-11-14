@@ -1,0 +1,140 @@
+// 8.3 C2-b2 M0a(일회용): 온라인 추정기(τ 격자별 감쇠 손실 누적 → 개선이 충분할 때만 τ≠1 채택)를 C2-a 원자료로 재생한다.
+// 입력 /tmp/c2a-<kind>.json (환경변수 TMPDIR_C2A). 판마다 직전 판까지 커밋된 기억·격자로만 τ를 고르고, 판이 끝날 때 감쇠·커밋한다(사후 최적 τ 없음).
+import { createServer } from "vite";
+import { fileURLToPath } from "node:url";
+import { readFileSync, existsSync } from "node:fs";
+const root = fileURLToPath(new URL("..", import.meta.url));
+const server = await createServer({ root, server: { middlewareMode: true, hmr: false }, appType: "custom", logLevel: "error" });
+try {
+  const om = await server.ssrLoadModule("/src/lib/battle/ai/opponentMemory.ts");
+  const TMP = process.env.TMPDIR_C2A ?? "/tmp";
+  const GRID = (process.env.GRID ?? "0.5,0.7,1,1.4,2").split(",").map(Number);
+  const MARGIN = Number(process.env.MARGIN ?? 0.03), MIN_N = Number(process.env.MIN_N ?? 30);
+  const ONE = GRID.indexOf(1), K = GRID.length;
+  const DECAY = 0.99, CLIP = 1e-4, MAXSW = 0.9, CUR = { sw: 10, st: 10, mv: 2 };
+  const kinds = process.argv.slice(2).length ? process.argv.slice(2) : ["switcher", "setup", "noisy", "random"];
+  const clip = (p) => Math.min(1 - CLIP, Math.max(CLIP, p));
+  const bin = (p, y) => -Math.log(y ? clip(p) : clip(1 - p));
+  const sig = (x) => 1 / (1 + Math.exp(-x));
+  const logit = (p) => Math.log(p / (1 - p));
+  const distOf = (o) => ({ moveWeights: new Map(o.mw), switchProb: o.sw, switches: Array.from({ length: o.ns }, (_, i) => ({ toIndex: i, weight: 1 / o.ns })), megaOf: new Map() });
+
+  // 기존 보정(현행 상수) — 온도 전 분포: 정규화한 기술 가중치와 상한 전 교체 확률
+  function calibParts(o, mem) {
+    const stIds = new Set(o.stIds);
+    const swF = (mem.switchActual + 0.15 * CUR.sw) / (mem.switchPred + CUR.sw);
+    const stF = (mem.statusActual + CUR.st) / (mem.statusPred + CUR.st);
+    const sp = mem.species[o.sp];
+    const w = new Map();
+    let total = 0;
+    for (const [id, x] of o.mw) {
+      const m = sp?.moves[id];
+      const mvF = m ? (m.actual + CUR.mv) / (m.pred + CUR.mv) : 1;
+      const v = x * (stIds.has(id) ? stF : 1) * mvF;
+      w.set(id, v);
+      total += v;
+    }
+    if (total > 0) for (const [id, v] of w) w.set(id, v / total);
+    else for (const [id, x] of o.mw) w.set(id, x);
+    return { w, swRaw: o.ns > 0 ? o.sw * swF : 0 };
+  }
+  // 온도 적용: 기존 보정 → 온도 → 상한 0.9 (τ=1이면 현행과 같다)
+  function applyTemp({ w, swRaw }, ns, tauSw, tauMv) {
+    let w2 = w;
+    if (tauMv !== 1) {
+      w2 = new Map();
+      let t = 0;
+      for (const [id, v] of w) { const u = Math.pow(Math.max(v, 1e-12), 1 / tauMv); w2.set(id, u); t += u; }
+      for (const [id, v] of w2) w2.set(id, v / t);
+    }
+    let sw = 0;
+    if (ns > 0) sw = tauSw === 1 ? Math.min(MAXSW, swRaw) : Math.min(MAXSW, sig(logit(Math.min(1 - 1e-6, Math.max(1e-6, swRaw))) / tauSw));
+    return { w: w2, sw };
+  }
+  const legal = (o) => { const st = new Set(o.stIds); let ns = 0; for (const [id] of o.mw) if (st.has(id)) ns++; return { nMoves: o.mw.length, nStatus: ns, nAttack: o.mw.length - ns, hasSw: o.ns > 0 }; };
+  const emptyT = () => ({ sw: new Float64Array(K), mv: new Float64Array(K), nSw: 0, nMv: 0 });
+  const pick = (arr, n) => { if (n < MIN_N) return ONE; let best = 0; for (let k = 1; k < K; k++) if (arr[k] < arr[best]) best = k; return arr[ONE] - arr[best] >= MARGIN * n ? best : ONE; };
+
+  function replay(data, adaptive, verify) {
+    const nB = data.battles;
+    const out = { sw: new Float64Array(nB), swN: new Int32Array(nB), st: new Float64Array(nB), stN: new Int32Array(nB), mv: new Float64Array(nB), mvN: new Int32Array(nB) };
+    const stat = { obs: 0, swAdopt: 0, mvAdopt: 0, swEl: 0, mvEl: 0, byTauSw: {}, byTauMv: {}, firstMvAdoptAt: null, firstSwAdoptAt: null, mvSeen: 0, swSeen: 0 };
+    let saved = om.emptyOpponentMemory(), session = om.emptyOpponentMemory(), curB = 0;
+    let savedT = emptyT(), sessT = emptyT();
+    for (const o of data.obs) {
+      while (curB < o.b) {
+        saved = om.commitBattle(saved, session); session = om.emptyOpponentMemory();
+        for (let k = 0; k < K; k++) { savedT.sw[k] = savedT.sw[k] * DECAY + sessT.sw[k]; savedT.mv[k] = savedT.mv[k] * DECAY + sessT.mv[k]; }
+        savedT.nSw = savedT.nSw * DECAY + sessT.nSw; savedT.nMv = savedT.nMv * DECAY + sessT.nMv; sessT = emptyT();
+        curB++;
+      }
+      const L = legal(o), isMove = o.a[0] === "m";
+      const mem = om.combinedMemory(saved, session);
+      const parts = calibParts(o, mem);
+      if (verify) { // 자체 점검: τ=1 결과 = 실제 calibrateDistribution
+        const real = om.calibrateDistribution(distOf(o), mem, o.sp, new Set(o.stIds), 1), mine = applyTemp(parts, o.ns, 1, 1);
+        let d = Math.abs(real.switchProb - mine.sw);
+        for (const [id, v] of real.moveWeights) d = Math.max(d, Math.abs(v - (mine.w.get(id) ?? 0)));
+        verify.max = Math.max(verify.max, d);
+      }
+      const swEl = L.hasSw && L.nMoves >= 1;
+      const inDist = isMove && o.mw.some(([id]) => id === o.a[1]);
+      const mvEl = isMove && L.nMoves >= 2 && inDist;
+      const stEl = isMove && L.nStatus >= 1 && L.nAttack >= 1 && inDist;
+      // 온도 선택(직전 판까지의 커밋 + 이번 판 세션 누적 — 현행 combinedMemory와 같은 방식)
+      let kSw = ONE, kMv = ONE;
+      if (adaptive) {
+        const cSw = new Float64Array(K), cMv = new Float64Array(K);
+        for (let k = 0; k < K; k++) { cSw[k] = savedT.sw[k] + sessT.sw[k]; cMv[k] = savedT.mv[k] + sessT.mv[k]; }
+        kSw = pick(cSw, savedT.nSw + sessT.nSw); kMv = pick(cMv, savedT.nMv + sessT.nMv);
+      }
+      const dist = applyTemp(parts, o.ns, GRID[kSw], GRID[kMv]);
+      const b = o.b;
+      if (swEl) { out.sw[b] += bin(dist.sw, !isMove); out.swN[b]++; }
+      if (stEl) { const st = new Set(o.stIds); let p = 0, t = 0; for (const [id, v] of dist.w) { t += v; if (st.has(id)) p += v; } out.st[b] += bin(t > 0 ? p / t : 0, !!o.a[2]); out.stN[b]++; }
+      if (mvEl) { let t = 0; for (const v of dist.w.values()) t += v; out.mv[b] += -Math.log(clip((dist.w.get(o.a[1]) ?? 0) / (t || 1))); out.mvN[b]++; }
+      stat.obs++;
+      if (swEl) { stat.swEl++; stat.swSeen++; if (kSw !== ONE) { stat.swAdopt++; stat.byTauSw[GRID[kSw]] = (stat.byTauSw[GRID[kSw]] ?? 0) + 1; stat.firstSwAdoptAt ??= stat.swSeen; } }
+      if (mvEl) { stat.mvEl++; stat.mvSeen++; if (kMv !== ONE) { stat.mvAdopt++; stat.byTauMv[GRID[kMv]] = (stat.byTauMv[GRID[kMv]] ?? 0) + 1; stat.firstMvAdoptAt ??= stat.mvSeen; } }
+      // 격자 갱신: 그 관측이 격자의 각 τ였다면 받았을 손실(같은 순서: 보정 → 온도 → 상한)
+      if (swEl) { for (let k = 0; k < K; k++) sessT.sw[k] += bin(applyTemp(parts, o.ns, GRID[k], 1).sw, !isMove); sessT.nSw++; }
+      if (mvEl) { for (let k = 0; k < K; k++) { const w = applyTemp(parts, o.ns, 1, GRID[k]).w; let t = 0; for (const v of w.values()) t += v; sessT.mv[k] += -Math.log(clip((w.get(o.a[1]) ?? 0) / (t || 1))); } sessT.nMv++; }
+      om.observeOpponent(session, { dist: distOf(o), speciesId: o.sp, statusMoveIds: new Set(o.stIds), action: isMove ? { kind: "move", moveId: o.a[1], isStatus: !!o.a[2] } : { kind: "switch" } });
+    }
+    return { out, stat };
+  }
+  const rng = (() => { let a = 777; return () => { a = (a + 0x6d2b79f5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; })();
+  const sum = (a, lo, hi) => { let s = 0; for (let i = lo; i < hi; i++) s += a[i]; return s; };
+  function rel(curA, candA, lo, hi) {
+    const n = hi - lo, c0 = sum(curA, lo, hi), x0 = sum(candA, lo, hi), pt = c0 > 0 ? (c0 - x0) / c0 : 0, rs = [];
+    for (let r = 0; r < 1000; r++) { let c = 0, x = 0; for (let i = 0; i < n; i++) { const j = lo + Math.floor(rng() * n); c += curA[j]; x += candA[j]; } rs.push(c > 0 ? (c - x) / c : 0); }
+    rs.sort((p, q) => p - q);
+    return { pt, lo: rs[25], hi: rs[974] };
+  }
+  const fmt = (r) => `${(100 * r.pt).toFixed(1)}% [${(100 * r.lo).toFixed(1)}, ${(100 * r.hi).toFixed(1)}]`;
+  const mean = (A, N, lo, hi) => { const s = sum(A, lo, hi), n = sum(N, lo, hi); return n ? s / n : NaN; };
+  const verdict = {};
+  console.log(`설정: GRID=${GRID.join(",")} MARGIN=${MARGIN} MIN_N=${MIN_N}`);
+  for (const kind of kinds) {
+    const f = `${TMP}/c2a-${kind}.json`;
+    if (!existsSync(f)) { console.log("없음", f); continue; }
+    const data = JSON.parse(readFileSync(f, "utf8")), nB = data.battles;
+    const ver = { max: 0 };
+    const cur = replay(data, false, ver), tmp = replay(data, true);
+    console.log(`\n===== ${kind}: ${nB}판, 관측 ${data.obs.length} | 자체 점검(τ=1 = 실제 calibrateDistribution) 최대 분포 차 ${ver.max.toExponential(2)}`);
+    const ivs = [[0, nB], [0, 25], [25, 100], [100, 300], [300, nB]].filter(([a]) => a < nB);
+    for (const [br, nm] of [["sw", "교체"], ["st", "변화기"], ["mv", "기술(공개)"]]) {
+      console.log(`[${nm}] 적격 ${sum(cur.out[br + "N"], 0, nB)} | 구간: 현행 → 온도(개선율, 95% CI)`);
+      for (const [a, b] of ivs) console.log(`   ${String(a).padStart(3)}~${String(b).padEnd(4)} ${mean(cur.out[br], cur.out[br + "N"], a, b).toFixed(4)} → ${mean(tmp.out[br], tmp.out[br + "N"], a, b).toFixed(4)}  ${fmt(rel(cur.out[br], tmp.out[br], a, b))}`);
+      verdict[`${kind}:${br}`] = rel(cur.out[br], tmp.out[br], 0, nB);
+    }
+    const s = tmp.stat, pct = (x, n) => (n ? `${(100 * x / n).toFixed(1)}%` : "n/a");
+    const end = (m) => Object.entries(m).filter(([t]) => Number(t) === GRID[0] || Number(t) === GRID[K - 1]).reduce((x, [, c]) => x + c, 0);
+    console.log(`채택: 교체 τ≠1 ${pct(s.swAdopt, s.swEl)} (${JSON.stringify(s.byTauSw)}, 처음 채택까지 교체 적격 관측 ${s.firstSwAdoptAt ?? "없음"}) | 기술 τ≠1 ${pct(s.mvAdopt, s.mvEl)} (${JSON.stringify(s.byTauMv)}, 처음 채택까지 기술 적격 관측 ${s.firstMvAdoptAt ?? "없음"}) | 끝 격자 채택률: 교체 ${pct(end(s.byTauSw), s.swEl)} 기술 ${pct(end(s.byTauMv), s.mvEl)}`);
+  }
+  // 판정(설계서 §1): 습관 봇 2종 기술·변화기 ≥5% & CI 하한 > 0, noisy·random은 어느 분기도 −1% 미만으로 나빠지지 않음
+  console.log("\n===== 판정 (M0a 통과 기준)");
+  const g = (k) => verdict[k];
+  for (const kind of ["setup", "switcher"]) for (const br of ["mv", "st"]) { const r = g(`${kind}:${br}`); if (r) console.log(`(a) ${kind} ${br}: ${fmt(r)} → ${r.pt >= 0.05 && r.lo > 0 ? "PASS" : "FAIL"}`); }
+  for (const kind of ["noisy", "random"]) for (const br of ["sw", "st", "mv"]) { const r = g(`${kind}:${br}`); if (r) console.log(`(b) ${kind} ${br}: ${fmt(r)} → ${r.pt >= -0.01 ? "PASS" : "FAIL"}`); }
+} finally { await server.close(); }
