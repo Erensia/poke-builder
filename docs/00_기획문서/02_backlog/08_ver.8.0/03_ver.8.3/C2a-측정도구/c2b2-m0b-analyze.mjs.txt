@@ -1,0 +1,37 @@
+// 8.3 C2-b2 M0b 분석(일회용): 같은 시드의 끔/켬 팔을 판 단위로 짝지어 승률 차와 판 단위 부트스트랩 95% CI를 낸다.
+import { readFileSync, existsSync } from "node:fs";
+const TMP = process.env.TMPDIR_C2A ?? "/tmp";
+const kinds = ["setup", "switcher", "noisy", "random"];
+let seed = 4242;
+const rnd = () => { seed = (seed + 0x6d2b79f5) >>> 0; let t = seed; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+const boot = (diffs, N) => { // diffs: 전체 판의 짝 차이(on − off), 갈라지지 않은 판은 0
+  const mean = diffs.reduce((a, b) => a + b, 0) / diffs.length;
+  const rs = [];
+  for (let r = 0; r < 2000; r++) { let s = 0; for (let i = 0; i < diffs.length; i++) s += diffs[Math.floor(rnd() * diffs.length)]; rs.push(s / diffs.length); }
+  rs.sort((a, b) => a - b);
+  return { mean, lo: rs[49], hi: rs[1949] };
+};
+const pct = (x) => `${(100 * x).toFixed(2)}%p`;
+const verdict = [];
+for (const kind of kinds) {
+  const fo = `${TMP}/m0b-${kind}-off.json`, fn = `${TMP}/m0b-${kind}-on.json`;
+  if (!existsSync(fo) || !existsSync(fn)) { console.log("없음", kind); continue; }
+  const off = JSON.parse(readFileSync(fo, "utf8")), on = JSON.parse(readFileSync(fn, "utf8"));
+  const n = Math.min(off.records.length, on.records.length);
+  const diffs = [], diverged = [];
+  for (let i = 0; i < n; i++) { const a = off.records[i], b = on.records[i]; if (a.s !== b.s || a.side !== b.side) throw new Error("짝이 안 맞음"); const d = b.win - a.win; diffs.push(d); if (a.h !== b.h) diverged.push(d); }
+  const all = boot(diffs, n);
+  const dv = diverged.length ? boot(diverged, diverged.length) : { mean: 0, lo: 0, hi: 0 };
+  const winOff = off.records.reduce((s, r) => s + r.win, 0) / n, winOn = on.records.reduce((s, r) => s + r.win, 0) / n;
+  const wins = diverged.filter((d) => d > 0).length, losses = diverged.filter((d) => d < 0).length;
+  console.log(`\n===== ${kind}: ${n}판 짝 | 승률 끔 ${(100 * winOff).toFixed(1)}% → 켬 ${(100 * winOn).toFixed(1)}% | 판단 시간 ${off.avgDecisionMs.toFixed(1)}ms → ${on.avgDecisionMs.toFixed(1)}ms (${(100 * (on.avgDecisionMs / off.avgDecisionMs - 1)).toFixed(1)}%)`);
+  console.log(`갈라진 판 ${diverged.length}/${n} (${(100 * diverged.length / n).toFixed(1)}%) | 갈라진 판 안: 켬이 이김 ${wins} · 짐 ${losses} · 평균 차 ${pct(dv.mean)} [${pct(dv.lo)}, ${pct(dv.hi)}]`);
+  console.log(`전체 판 대비 순이득 ${pct(all.mean)} 95% CI [${pct(all.lo)}, ${pct(all.hi)}] | 마지막 τ: 끔 ${JSON.stringify(off.tau)} 켬 ${JSON.stringify(on.tau)}`);
+  verdict.push({ kind, all, time: on.avgDecisionMs / off.avgDecisionMs - 1 });
+}
+console.log("\n===== 판정 (M0b)");
+for (const v of verdict) {
+  const habit = v.kind === "setup" || v.kind === "switcher";
+  const pass = habit ? v.all.mean >= 0.01 && v.all.lo > 0 : v.all.mean >= -0.01;
+  console.log(`${habit ? "(습관 봇)" : "(해 없음)"} ${v.kind}: 순이득 ${pct(v.all.mean)} [${pct(v.all.lo)}, ${pct(v.all.hi)}] 시간 ${(100 * v.time).toFixed(1)}% → ${pass && v.time < 0.2 ? "PASS" : "FAIL"}`);
+}

@@ -1,0 +1,544 @@
+diff --git a/scripts/battle-ai-scenarios/32-ver83-c2b2.mjs b/scripts/battle-ai-scenarios/32-ver83-c2b2.mjs
+new file mode 100644
+index 0000000..2ee910e
+--- /dev/null
++++ b/scripts/battle-ai-scenarios/32-ver83-c2b2.mjs
+@@ -0,0 +1,131 @@
++// 8.3 C2-b2 상대별 온도: 상대 행동 예측 분포의 날카로움(결정성)을 상대마다 추정해 온도 τ로 보정한다.
++// 격자 τ별 감쇠 손실을 `OpponentMemory.temp`(선택 필드)에 누적하고, 개선이 충분할 때만 τ≠1을 채택한다. 설계 `8.3-C2b2-상대별온도설계.md` §3·§4.
++// 시험 T-h는 M0a(온라인 재생) 스크립트의 계산(`C2a-측정도구/c2b2-m0a.mjs.txt`)과 구현이 같은 값을 내는지 본다.
++import { readFileSync } from "node:fs";
++export default async function ({ server, ai, dec, mon, battle, pts, check }) {
++  const om = await server.ssrLoadModule("/src/lib/battle/ai/opponentMemory.ts");
++  const client = await server.ssrLoadModule("/src/lib/battle/ai/aiClient.ts");
++  const chk = (name, fn) => { let ok = false, detail = ""; try { ok = fn(); } catch (e) { detail = String(e?.message ?? e).slice(0, 90); } check(name, ok === true, detail); };
++  const near = (a, b, eps = 1e-9) => Math.abs(a - b) <= eps;
++  const EMPTY = om.emptyOpponentMemory();
++  const mk = (pairs, sw = 0, ns = 0) => ({ moveWeights: new Map(pairs), switchProb: sw, switches: Array.from({ length: ns }, (_, i) => ({ toIndex: i, weight: 1 / ns })), megaOf: new Map() });
++  // 보정 전 분포(raw)와 그 보정 결과(p′) — 시험에서는 빈 기억으로 보정해 p′ = raw로 둔다(추정기만 따로 본다)
++  const obsOf = (raw, species, action, memForCalib = EMPTY) => {
++    const cal = om.calibrateDistribution(raw, memForCalib, species, new Set(), 1).calibrated;
++    return { dist: { ...raw, calibrated: cal }, speciesId: species, statusMoveIds: new Set(), action };
++  };
++  const moveA = { kind: "move", moveId: "A", isStatus: false }, moveB = { kind: "move", moveId: "B", isStatus: false }, moveC = { kind: "move", moveId: "C", isStatus: false };
++  const RAW = () => mk([["A", 0.7], ["B", 0.2], ["C", 0.1]]);
++  const feed = (mem, n, pick, raw = RAW) => { for (let i = 0; i < n; i++) om.observeOpponent(mem, obsOf(raw(), "종", pick(i))); return mem; };
++
++  // ── T-a 추정기 방향 ──
++  chk("T-a 늘 최빈 기술만 고르는 상대는 날카롭게(τ<1), 균등하게 고르는 상대는 평평하게(τ>1), 예측대로 고르는 상대는 τ=1", () => {
++    const sharp = om.chooseTemperature(feed(om.emptyOpponentMemory(), 300, () => moveA)).move;
++    const flat = om.chooseTemperature(feed(om.emptyOpponentMemory(), 300, (i) => [moveA, moveB, moveC][i % 3])).move;
++    const block = ["A", "A", "A", "A", "A", "A", "A", "B", "B", "C"]; // 7:2:1 = 예측
++    const match = om.chooseTemperature(feed(om.emptyOpponentMemory(), 300, (i) => ({ kind: "move", moveId: block[i % 10], isStatus: false }))).move;
++    return sharp < 1 && flat > 1 && match === 1;
++  });
++  chk("T-a2 교체 분기: 늘 안 바꾸는 상대는 τ<1, 늘 바꾸는 상대는 τ>1", () => {
++    const raw = () => mk([["A", 0.7], ["B", 0.3]], 0.3, 1);
++    const stay = om.chooseTemperature(feed(om.emptyOpponentMemory(), 200, () => moveA, raw)).switch;
++    const mem = om.emptyOpponentMemory();
++    for (let i = 0; i < 200; i++) om.observeOpponent(mem, obsOf(raw(), "종", { kind: "switch" }));
++    return stay < 1 && om.chooseTemperature(mem).switch > 1;
++  });
++
++  // ── T-b 보수성 ──
++  chk("T-b 관측이 30개 미만이거나 개선이 margin 미만이면 τ=1이다", () => {
++    const few = feed(om.emptyOpponentMemory(), 29, () => moveA);
++    const t = om.chooseTemperature(few);
++    const none = om.chooseTemperature(om.emptyOpponentMemory());
++    return t.move === 1 && t.switch === 1 && none.move === 1 && none.switch === 1 && few.temp.nMove === 29;
++  });
++
++  // ── T-c 플래그 끔 = 현행 ──
++  chk("T-c useTemp=false이면 기억에 temp가 있어도 보정 결과가 temp 없는 기억과 같고, true이면 달라진다", () => {
++    const learned = feed(om.emptyOpponentMemory(), 300, () => moveA);
++    const bare = { ...learned }; delete bare.temp;
++    const raw = RAW();
++    const off = om.calibrateDistribution(raw, learned, "종", new Set(), 1, false), ref = om.calibrateDistribution(raw, bare, "종", new Set(), 1, false), on = om.calibrateDistribution(raw, learned, "종", new Set(), 1, true);
++    const same = (x, y) => [...x.moveWeights].every(([id, w]) => near(w, y.moveWeights.get(id))) && near(x.switchProb, y.switchProb);
++    return same(off, ref) && !same(on, off) && on.moveWeights.get("A") > off.moveWeights.get("A");
++  });
++
++  // ── T-d 집계: 감쇠·합산·분기 ──
++  chk("T-d observeOpponent가 격자별 손실을 맞는 분기에 더하고, commitBattle이 감쇠해 합친다", () => {
++    const G = om.TEMP_GRID;
++    const mem = om.emptyOpponentMemory();
++    om.observeOpponent(mem, obsOf(RAW(), "종", moveB));
++    const t = mem.temp;
++    // 기술 분기: 격자 k의 손실 = −log(p′^(1/τ) 재정규화에서 B의 확률)
++    const expect = G.map((tau) => { const w = [0.7, 0.2, 0.1].map((x) => x ** (1 / tau)); return -Math.log(w[1] / (w[0] + w[1] + w[2])); });
++    const okMove = t.move.every((v, k) => near(v, expect[k])) && t.nMove === 1 && t.nSwitch === 0 && t.switch.every((v) => v === 0);
++    const saved = om.commitBattle(om.emptyOpponentMemory(), mem, 0.99);
++    const again = om.commitBattle(saved, mem, 0.99);
++    return okMove && saved.temp.move.every((v, k) => near(v, expect[k])) && again.temp.move.every((v, k) => near(v, 0.99 * expect[k] + expect[k])) && near(again.temp.nMove, 1.99);
++  });
++
++  // ── T-g 정규화·상한 ──
++  chk("T-g 온도 적용 뒤 기술 분포는 합 1이고 교체 확률은 상한 0.9를 지킨다(보정 → 온도 → 상한 순서)", () => {
++    const learned = feed(om.emptyOpponentMemory(), 300, () => moveA);
++    const raw = mk([["A", 0.7], ["B", 0.2], ["C", 0.1]], 0.95, 1);
++    const hot = { ...learned, temp: { ...learned.temp, switch: learned.temp.switch.map((_, k) => (k === om.TEMP_GRID.length - 1 ? 0 : 5)), nSwitch: 100 } }; // τ=3 채택
++    const out = om.calibrateDistribution(raw, hot, "종", new Set(), 1, true);
++    const total = [...out.moveWeights.values()].reduce((a, b) => a + b, 0);
++    return near(total, 1) && out.switchProb <= 0.9 + 1e-12 && out.switchProb > 0;
++  });
++
++  // ── T-h M0a와 일치 ──
++  chk("T-h M0a 재생 일치: 기록한 관측 3판을 구현에 넣어 얻은 temp 합계가 M0a 스크립트의 계산과 1e-9 이내다", () => {
++    const fx = JSON.parse(readFileSync(new URL("../fixtures/c2b2-obs.json", import.meta.url), "utf8"));
++    const G = om.TEMP_GRID, DECAY = 0.99;
++    const sig = (x) => 1 / (1 + Math.exp(-x)), logit = (p) => Math.log(p / (1 - p)), clip = (p) => Math.min(1 - 1e-4, Math.max(1e-4, p));
++    const tempOf = (w, tau) => { const e = new Map(), t0 = [...w.values()].reduce((a, b) => a + b, 0); let t = 0; for (const [id, v] of w) { const u = Math.pow(Math.max(v / t0, 1e-12), 1 / tau); e.set(id, u); t += u; } for (const [id, v] of e) e.set(id, v / t); return e; };
++    let saved = om.emptyOpponentMemory(), session = om.emptyOpponentMemory(), cur = 0;
++    const ref = { savedSw: Array(G.length).fill(0), savedMv: Array(G.length).fill(0), sessSw: Array(G.length).fill(0), sessMv: Array(G.length).fill(0), savedNs: 0, savedNm: 0, sessNs: 0, sessNm: 0 };
++    for (const o of fx.obs) {
++      while (cur < o.b) { saved = om.commitBattle(saved, session, DECAY); session = om.emptyOpponentMemory(); ref.savedSw = ref.savedSw.map((v, k) => v * DECAY + ref.sessSw[k]); ref.savedMv = ref.savedMv.map((v, k) => v * DECAY + ref.sessMv[k]); ref.savedNs = ref.savedNs * DECAY + ref.sessNs; ref.savedNm = ref.savedNm * DECAY + ref.sessNm; ref.sessSw = Array(G.length).fill(0); ref.sessMv = Array(G.length).fill(0); ref.sessNs = 0; ref.sessNm = 0; cur++; }
++      const isMove = o.a[0] === "m", raw = { moveWeights: new Map(o.mw), switchProb: o.sw, switches: Array.from({ length: o.ns }, (_, i) => ({ toIndex: i, weight: 1 / o.ns })), megaOf: new Map() };
++      const mem = om.combinedMemory(saved, session);
++      const cal = om.calibrateDistribution(raw, mem, o.sp, new Set(o.stIds), 1);
++      om.observeOpponent(session, { dist: { ...raw, calibrated: cal.calibrated }, speciesId: o.sp, statusMoveIds: new Set(o.stIds), action: isMove ? { kind: "move", moveId: o.a[1], isStatus: !!o.a[2] } : { kind: "switch" } });
++      // M0a 스크립트의 격자 갱신(독립 계산): 교체 = 이항, 기술 = 다항
++      const cw = cal.calibrated.moveWeights, swRaw = cal.calibrated.switchRaw;
++      if (o.ns > 0 && o.mw.length >= 1) { for (let k = 0; k < G.length; k++) { const p = G[k] === 1 ? Math.min(0.9, swRaw) : Math.min(0.9, sig(logit(Math.min(1 - 1e-6, Math.max(1e-6, swRaw))) / G[k])); ref.sessSw[k] += -Math.log(clip(isMove ? 1 - p : p)); } ref.sessNs++; }
++      if (isMove && o.mw.length >= 2 && cw.has(o.a[1])) { for (let k = 0; k < G.length; k++) ref.sessMv[k] += -Math.log(clip(tempOf(cw, G[k]).get(o.a[1]))); ref.sessNm++; }
++    }
++    const got = om.combinedMemory(saved, session).temp;
++    const exp = { sw: ref.savedSw.map((v, k) => v + ref.sessSw[k]), mv: ref.savedMv.map((v, k) => v + ref.sessMv[k]), ns: ref.savedNs + ref.sessNs, nm: ref.savedNm + ref.sessNm };
++    return !!got && got.switch.every((v, k) => near(v, exp.sw[k])) && got.move.every((v, k) => near(v, exp.mv[k])) && near(got.nSwitch, exp.ns) && near(got.nMove, exp.nm) && exp.nm > 5 && exp.ns > 5;
++  });
++
++  // ── T-i 저장 검증·분포 밖 행동 ──
++  chk("T-i cleanTemp: 길이가 다르거나 NaN·음수·비수치이면 필드 없음 취급(τ=1)이고, 정상이면 통과한다", () => {
++    const good = { switch: Array(7).fill(1), move: Array(7).fill(2), nSwitch: 3, nMove: 4 };
++    const bad = [{ ...good, switch: Array(5).fill(1) }, { ...good, move: [NaN, ...Array(6).fill(1)] }, { ...good, nMove: -1 }, { ...good, nSwitch: "3" }, null, 5, { switch: [], move: [] }];
++    const mem = { ...om.emptyOpponentMemory(), temp: { ...good, move: [NaN, ...Array(6).fill(1)], nMove: 500 } };
++    return om.cleanTemp(good) !== undefined && bad.every((b) => om.cleanTemp(b) === undefined) && om.chooseTemperature(mem).move === 1;
++  });
++  chk("T-i2 분포 밖 행동(공개되지 않은 기술)·calibrated 없는 관측·선택지 1개는 temp를 갱신하지 않는다", () => {
++    const mem = om.emptyOpponentMemory();
++    om.observeOpponent(mem, obsOf(RAW(), "종", { kind: "move", moveId: "숨김기", isStatus: false })); // p′에 없는 기술
++    om.observeOpponent(mem, { dist: RAW(), speciesId: "종", statusMoveIds: new Set(), action: moveA }); // calibrated 없음
++    om.observeOpponent(mem, obsOf(mk([["A", 1]]), "종", moveA)); // 선택지 1개
++    return (mem.temp?.nMove ?? 0) === 0 && (mem.temp?.nSwitch ?? 0) === 0;
++  });
++
++  // ── T-j 결정 결과·직렬화 ──
++  chk("T-j chooseAiAction이 기억이 있을 때 opponentDistribution.calibrated를 돌려주고, 직렬화를 왕복해도 유지된다(없으면 없다)", () => {
++    const aMon = mon("한카리아스", ["지진", "칼춤", "아이언헤드"], null, null, pts({ atk: 32, spe: 32 }));
++    const bMon = mon("메타그로스", ["아이언헤드", "지진"], null, null, pts({ hp: 32 }));
++    const st = battle([aMon], [bMon]);
++    const params = { opponentModel: dec.DEFAULT_OPPONENT_MODEL, learn: { use: 1, temp: true } };
++    const withMem = ai.chooseAiAction(st, "a", 0.5, { decisionParams: params, opponentMemory: feed(om.emptyOpponentMemory(), 50, () => moveA) });
++    const noMem = ai.chooseAiAction(st, "a", 0.5, { decisionParams: params });
++    const d = withMem.opponentDistribution;
++    const back = client.deserializeDistribution(JSON.parse(JSON.stringify(client.serializeDistribution(d))));
++    return !!d?.calibrated && d.calibrated.moveWeights instanceof Map && typeof d.calibrated.switchRaw === "number" && !noMem.opponentDistribution?.calibrated
++      && back.calibrated?.moveWeights instanceof Map && [...d.calibrated.moveWeights].every(([id, w]) => near(w, back.calibrated.moveWeights.get(id))) && near(d.calibrated.switchRaw, back.calibrated.switchRaw);
++  });
++}
+diff --git a/scripts/cloud-sync-check.mjs b/scripts/cloud-sync-check.mjs
+index a323d46..f18fec9 100644
+--- a/scripts/cloud-sync-check.mjs
++++ b/scripts/cloud-sync-check.mjs
+@@ -430,6 +430,56 @@ try {
+     }
+   }
+ 
++  // ── 8.3 C2-b2 상대별 온도(temp)의 동기화 합치기·호환 ── (설계 `8.3-C2b2-상대별온도설계.md` §3-1·§4 T-e·T-f)
++  {
++    const om = await server.ssrLoadModule("/src/lib/battle/ai/opponentMemory.ts");
++    const plan = await server.ssrLoadModule("/src/lib/cloudSyncPlan.ts");
++    const chk = (name, fn) => { let ok = false, detail = ""; try { ok = fn(); } catch (e) { detail = String(e?.message ?? e).slice(0, 80); } check(name, ok === true, detail); };
++    const D = 0.99;
++    const raw = (sw = 0.3) => ({ moveWeights: new Map([["A", 0.7], ["B", 0.2], ["C", 0.1]]), switchProb: sw, switches: [{ toIndex: 1, weight: 1 }], megaOf: new Map() });
++    // 보정 결과(calibrated)를 붙여 관측한다 — 앱이 chooseAiAction에서 받는 모양
++    const observeT = (mem, species, action) => { const r = raw(); const cal = om.calibrateDistribution(r, om.emptyOpponentMemory(), species, new Set(), 1).calibrated; om.observeOpponent(mem, { dist: { ...r, calibrated: cal }, speciesId: species, statusMoveIds: new Set(), action }); };
++    const mv = (id) => ({ kind: "move", moveId: id, isStatus: false });
++    const play = (mem, spec, withTemp = true) => { const ses = om.emptyOpponentMemory(); for (const a of spec) { if (withTemp) observeT(ses, "종", a); else om.observeOpponent(ses, { dist: raw(), speciesId: "종", statusMoveIds: new Set(), action: a }); } return om.commitBattle(mem, ses, D); };
++    const playAll = (mem, games, withTemp = true) => games.reduce((m, g) => play(m, g, withTemp), mem);
++    const wrap = (memory) => plan.canonical("aiMemory", { version: 1, learningEnabled: true, memory }).json;
++    const parse = (json) => JSON.parse(json).memory;
++    const G1 = [mv("A"), mv("A"), mv("B"), { kind: "switch" }], G2 = [mv("B"), mv("C"), mv("A"), mv("A")], G3 = [mv("C"), { kind: "switch" }, mv("A")], G4 = [mv("A"), mv("B")];
++    const B = playAll(om.emptyOpponentMemory(), [G1, G2]);
++    const fields = (t) => [...t.switch, ...t.move, t.nSwitch, t.nMove];
++    const near = (a, b) => a.length === b.length && a.every((v, i) => Math.abs(v - b[i]) <= 1e-9);
++
++    chk("T-e temp 합치기: 양쪽이 변했으면 두 순서(L 다음 R, R 다음 L)의 평균과 같다(선형 필드)", () => {
++      const Ls = [G3, G4], Rs = [G2, G3];
++      const L = playAll(B, Ls), R = playAll(B, Rs), m = parse(plan.mergeAiMemory(wrap(B), wrap(L), wrap(R), D));
++      const lr = playAll(B, [...Ls, ...Rs]), rl = playAll(B, [...Rs, ...Ls]);
++      const avg = fields(lr.temp).map((v, i) => (v + fields(rl.temp)[i]) / 2);
++      return !!m.temp && near(fields(m.temp), avg);
++    });
++    chk("T-e2 한쪽이 변하지 않았으면 합친 temp가 변한 쪽과 정확히 같다", () => { const L = playAll(B, [G3, G4]); return near(fields(parse(plan.mergeAiMemory(wrap(B), wrap(L), wrap(B), D)).temp), fields(L.temp)); });
++    chk("T-e3 옛 클라이언트(temp 없는 쪽)와도 오류 없이 합치고, 결과의 temp는 유효하다", () => {
++      const L = playAll(B, [G3], false); // 옛 클라이언트: temp 필드가 없다
++      delete L.temp;
++      const R = playAll(B, [G2, G4]);
++      const m = parse(plan.mergeAiMemory(wrap(B), wrap(L), wrap(R), D));
++      return om.cleanTemp(m.temp) !== undefined && m.temp.nMove >= 0 && m.battles === B.battles + 3;
++    });
++    chk("T-e4 temp는 한 덩어리로 0 자르기: 한쪽 배열 하나라도 기준 몫보다 작으면 그쪽의 temp 증분 전체를 버린다(손실 합과 n의 비율을 깨지 않는다)", () => {
++      const L = playAll(B, [G3, G4]), R = playAll(B, [G2]);
++      const broken = JSON.parse(JSON.stringify(L)); broken.temp.move[2] = 0; // 한 칸만 기준 몫보다 작다
++      const m = parse(plan.mergeAiMemory(wrap(B), wrap(broken), wrap(R), D));
++      const dL = D ** 2, dR = D ** 1, i = 5;
++      const exp = (arr) => dL * dR * arr(B) + 0.5 * ((1 + dL) * Math.max(0, arr(R) - dR * arr(B)));
++      return Math.abs(m.temp.move[i] - exp((x) => x.temp.move[i])) <= 1e-9 && Math.abs(m.temp.nMove - exp((x) => x.temp.nMove)) <= 1e-9;
++    });
++    chk("T-f temp가 든 기억·없는 기억 모두 정규형과 isOpponentMemory를 통과하고, 잘못된 temp는 합친 뒤에도 필드가 없다", () => {
++      const withT = playAll(B, [G3]), without = { ...withT }; delete without.temp;
++      const j1 = wrap(withT), j2 = wrap(without);
++      const badTemp = { ...withT, temp: { ...withT.temp, move: [NaN, ...withT.temp.move.slice(1)] } };
++      return plan.canonical("aiMemory", JSON.parse(j1)).json === j1 && plan.canonical("aiMemory", JSON.parse(j2)).json === j2 && om.isOpponentMemory(parse(j1)) && om.isOpponentMemory(parse(j2)) && om.cleanTemp(badTemp.temp) === undefined && parse(j1).temp !== undefined;
++    });
++  }
++
+   console.log(failed ? `\n${failed}/${total}개 실패` : `\n${total}개 통과`);
+ } finally {
+   await server.close();
+diff --git a/scripts/fixtures/c2b2-obs.json b/scripts/fixtures/c2b2-obs.json
+new file mode 100644
+index 0000000..9ef4b62
+--- /dev/null
++++ b/scripts/fixtures/c2b2-obs.json
+@@ -0,0 +1 @@
++{"battles":3,"obs":[{"sp":"에써르","mw":[["사념의박치기",0.8469992213513675],["섀도볼",0.15300077864863243]],"sw":0.09548588194781242,"ns":2,"stIds":[],"b":0,"a":["m","사념의박치기",0]},{"sp":"에써르","mw":[["사념의박치기",0.68484361876153],["섀도볼",0.31515638123847006]],"sw":0.014000241638155851,"ns":2,"stIds":[],"b":0,"a":["m","사념의박치기",0]},{"sp":"에써르","mw":[["트릭",0.06143996643707753],["사념의박치기",0.606164592492086],["섀도볼",0.3323954410708365]],"sw":0.10789667438098702,"ns":2,"stIds":["트릭"],"b":0,"a":["m","트릭",1]},{"sp":"냐오닉스","mw":[["속이기",0],["사이코키네시스",1],["신비의부적",0],["간지르기",0]],"sw":0,"ns":1,"stIds":["신비의부적","간지르기"],"b":0,"a":["m","간지르기",1]},{"sp":"냐오닉스","mw":[["사이코키네시스",1],["신비의부적",0],["간지르기",0]],"sw":0,"ns":1,"stIds":["신비의부적","간지르기"],"b":0,"a":["m","간지르기",1]},{"sp":"냐오닉스","mw":[["사이코키네시스",0.9604169105997684],["신비의부적",0.021180517376847452],["간지르기",0.018402572023384026]],"sw":0.0013032479294061267,"ns":1,"stIds":["신비의부적","간지르기"],"b":0,"a":["m","사이코키네시스",0]},{"sp":"냐오닉스","mw":[["사이코키네시스",1],["신비의부적",0],["간지르기",0]],"sw":0,"ns":1,"stIds":["신비의부적","간지르기"],"b":0,"a":["m","사이코키네시스",0]},{"sp":"냐오닉스","mw":[["사이코키네시스",0.8560185522921507],["신비의부적",0.02074289782377734],["간지르기",0.12323854988407185]],"sw":0.0197303154405002,"ns":1,"stIds":["신비의부적","간지르기"],"b":0,"a":["m","간지르기",1]},{"sp":"냐오닉스","mw":[["사이코키네시스",0.9830542143520603],["신비의부적",0.005949621725771366],["간지르기",0.010996163922168317]],"sw":0.026651421876132998,"ns":1,"stIds":["신비의부적","간지르기"],"b":0,"a":["m","사이코키네시스",0]},{"sp":"냐오닉스","mw":[["사이코키네시스",1],["신비의부적",0],["간지르기",0]],"sw":0,"ns":1,"stIds":["신비의부적","간지르기"],"b":0,"a":["m","사이코키네시스",0]},{"sp":"냐오닉스","mw":[["사이코키네시스",0.9212521511219997],["신비의부적",0.019581869275931956],["간지르기",0.059165979602068285]],"sw":0.0008576525899135933,"ns":1,"stIds":["신비의부적","간지르기"],"b":0,"a":["m","사이코키네시스",0]},{"sp":"냐오닉스","mw":[["사이코키네시스",0.989982359258289],["신비의부적",0.005008820370855465],["간지르기",0.005008820370855465]],"sw":0.002320736972061118,"ns":1,"stIds":["신비의부적","간지르기"],"b":0,"a":["m","사이코키네시스",0]},{"sp":"괴력몬","mw":[["안다리걸기",0.25],["DD래리어트",0.25],["기사회생",0.25],["로킥",0.25]],"sw":0,"ns":0,"stIds":[],"b":0,"a":["m","안다리걸기",0]},{"sp":"픽시","mw":[["매혹의보이스",0.06696082099872845],["천사의키스",0.21823045776684072],["사이코키네시스",0.00410083287142438],["이판사판태클",0.7107078883630066]],"sw":0.4396243595018698,"ns":2,"stIds":["천사의키스"],"b":1,"a":["m","천사의키스",1]},{"sp":"픽시","mw":[["매혹의보이스",0.20572290280500904],["천사의키스",0.3526354580349502],["사이코키네시스",0.02297630883876186],["이판사판태클",0.418665330321279]],"sw":0.23277213693522217,"ns":2,"stIds":["천사의키스"],"b":1,"a":["m","천사의키스",1]},{"sp":"픽시","mw":[["매혹의보이스",0.20917135101969836],["천사의키스",0.135459633230951],["사이코키네시스",0.01737486661561494],["이판사판태클",0.6379941491337358]],"sw":0.08309869545512537,"ns":2,"stIds":["천사의키스"],"b":1,"a":["m","천사의키스",1]},{"sp":"픽시","mw":[["매혹의보이스",0.29614389556903975],["사이코키네시스",0.0889926719744508],["이판사판태클",0.6148634324565094]],"sw":0.19971373497187553,"ns":2,"stIds":[],"b":1,"a":["m","이판사판태클",0]},{"sp":"픽시","mw":[["매혹의보이스",0.43485155679122345],["사이코키네시스",0.12227019889057776],["이판사판태클",0.44287824431819883]],"sw":0.27894448852316783,"ns":2,"stIds":[],"b":1,"a":["s"]},{"sp":"침바루","mw":[["오물웨이브",0.05365104748407877],["얼어붙은바람",0.010375672647396882],["겁나는얼굴",0.4679866399342622],["마지막일침",0.4679866399342622]],"sw":0.06866191498511273,"ns":2,"stIds":["겁나는얼굴"],"b":1,"a":["m","겁나는얼굴",1]},{"sp":"침바루","mw":[["오물웨이브",0],["얼어붙은바람",0],["겁나는얼굴",0],["마지막일침",1]],"sw":0,"ns":2,"stIds":["겁나는얼굴"],"b":1,"a":["m","겁나는얼굴",1]},{"sp":"침바루","mw":[["오물웨이브",0.3030509437974212],["얼어붙은바람",0.05340746538173653],["겁나는얼굴",0.05523342046583722],["마지막일침",0.5883081703550049]],"sw":0.15032135063413807,"ns":2,"stIds":["겁나는얼굴"],"b":1,"a":["m","겁나는얼굴",1]},{"sp":"침바루","mw":[["오물웨이브",0],["얼어붙은바람",0],["겁나는얼굴",0],["마지막일침",1]],"sw":0,"ns":2,"stIds":["겁나는얼굴"],"b":1,"a":["m","겁나는얼굴",1]},{"sp":"침바루","mw":[["오물웨이브",0.26059468851442136],["얼어붙은바람",0.042270016832407456],["겁나는얼굴",0.04998274511806694],["마지막일침",0.6471525495351043]],"sw":0.08951644527864537,"ns":2,"stIds":["겁나는얼굴"],"b":1,"a":["m","마지막일침",0]},{"sp":"침바루","mw":[["오물웨이브",0.03385609763767334],["얼어붙은바람",0.018887769594753082],["겁나는얼굴",0.4736280663837868],["마지막일침",0.4736280663837868]],"sw":0.019378807451383807,"ns":2,"stIds":["겁나는얼굴"],"b":1,"a":["m","겁나는얼굴",1]},{"sp":"앗차키","mw":[["더스트슈트",0.13176529370803833],["기합구슬",0.0023235713512020704],["물기",0.8659111349407596]],"sw":0.07191248435995627,"ns":1,"stIds":[],"b":1,"a":["m","물기",0]},{"sp":"앗차키","mw":[["더스트슈트",0.2433490876676226],["기합구슬",0.03306213338256311],["물기",0.7235887789498143]],"sw":0.07516726688795097,"ns":1,"stIds":[],"b":1,"a":["m","물기",0]},{"sp":"픽시","mw":[["매혹의보이스",0.28853644712456633],["천사의키스",0.34559368852938366],["사이코키네시스",0.08569219903752276],["이판사판태클",0.2801776653085272]],"sw":0,"ns":0,"stIds":["천사의키스"],"b":1,"a":["m","천사의키스",1]},{"sp":"파오리","mw":[["목숨걸기",1.6421879837060392e-07],["독찌르기",0.9995556772908951],["강철날개",0.00013721679708802529],["소란피기",0.0003069416932184884]],"sw":0.00453673090422489,"ns":2,"stIds":[],"b":2,"a":["m","독찌르기",0]},{"sp":"파오리","mw":[["목숨걸기",0.0001371498128320409],["독찌르기",0.921683851646379],["강철날개",0.06846777725632354],["소란피기",0.009711221284465424]],"sw":0.8339035549584195,"ns":2,"stIds":[],"b":2,"a":["s"]},{"sp":"피카츄","mw":[["대타출동",0.2681106931010279],["괴전파",0.2572143057237556],["돌림노래",0.47467500117521644]],"sw":0.1140855840460438,"ns":2,"stIds":["대타출동","괴전파"],"b":2,"a":["m","대타출동",1]},{"sp":"파오리","mw":[["목숨걸기",0.0005497030415059234],["독찌르기",0.8529782251140768],["강철날개",0.1205191469471812],["소란피기",0.02595292489723614]],"sw":0.45680446945669817,"ns":1,"stIds":[],"b":2,"a":["m","독찌르기",0]},{"sp":"파오리","mw":[["목숨걸기",0.01048527692210966],["독찌르기",0.5516391095669695],["강철날개",0.38751765590347087],["소란피기",0.050357957607449884]],"sw":0.12073993187370104,"ns":1,"stIds":[],"b":2,"a":["m","독찌르기",0]},{"sp":"파오리","mw":[["목숨걸기",0.30857844929567013],["독찌르기",0.27526402838507436],["강철날개",0.14728558367169872],["소란피기",0.2688719386475567]],"sw":0.9139831426242991,"ns":1,"stIds":[],"b":2,"a":["s"]},{"sp":"묘두기","mw":[["머드샷",0.00179042884385905],["이판사판태클",0.9972888998197075],["추억의선물",0.0009206713364335418]],"sw":0.006811422186907585,"ns":1,"stIds":["추억의선물"],"b":2,"a":["m","이판사판태클",0]},{"sp":"묘두기","mw":[["머드샷",0.006630597557423525],["이판사판태클",0.9906648298377281],["추억의선물",0.0027045726048483907]],"sw":0.008086149005323357,"ns":1,"stIds":["추억의선물"],"b":2,"a":["m","이판사판태클",0]},{"sp":"묘두기","mw":[["머드샷",0.01243602334810882],["이판사판태클",0.9795158319869677],["추억의선물",0.008048144664923484]],"sw":0.0026408926528745202,"ns":1,"stIds":["추억의선물"],"b":2,"a":["m","이판사판태클",0]},{"sp":"묘두기","mw":[["머드샷",0.0741520336819401],["이판사판태클",0.8818583725840531],["추억의선물",0.04398959373400677]],"sw":0.009490693803123148,"ns":1,"stIds":["추억의선물"],"b":2,"a":["m","이판사판태클",0]},{"sp":"파오리","mw":[["목숨걸기",0.002353331974815977],["독찌르기",0.628533319914523],["강철날개",0.35496392240020325],["소란피기",0.01414942571045784]],"sw":0,"ns":0,"stIds":[],"b":2,"a":["m","독찌르기",0]},{"sp":"파오리","mw":[["목숨걸기",0.00010784681412039515],["독찌르기",0.9697159627837484],["강철날개",0.006548345664587619],["소란피기",0.0236278447375437]],"sw":0,"ns":0,"stIds":[],"b":2,"a":["m","독찌르기",0]},{"sp":"파오리","mw":[["목숨걸기",0.019150446619241788],["독찌르기",0.35274564509225115],["강철날개",0.275358263196256],["소란피기",0.35274564509225115]],"sw":0,"ns":0,"stIds":[],"b":2,"a":["m","독찌르기",0]}]}
+\ No newline at end of file
+diff --git a/src/lib/battle/ai/aiClient.ts b/src/lib/battle/ai/aiClient.ts
+index 4269bf5..a03619a 100644
+--- a/src/lib/battle/ai/aiClient.ts
++++ b/src/lib/battle/ai/aiClient.ts
+@@ -42,14 +42,27 @@ interface SerializedDistribution {
+   switchProb: number;
+   switches: { toIndex: number; weight: number }[];
+   megaOf: [string, boolean | undefined][];
++  calibrated?: { moveWeights: [string, number][]; switchRaw: number };
+ }
+ 
+ export function serializeDistribution(d: LevelOneDistribution): SerializedDistribution {
+-  return { moveWeights: [...d.moveWeights], switchProb: d.switchProb, switches: d.switches, megaOf: [...d.megaOf] };
++  return {
++    moveWeights: [...d.moveWeights],
++    switchProb: d.switchProb,
++    switches: d.switches,
++    megaOf: [...d.megaOf],
++    ...(d.calibrated && { calibrated: { moveWeights: [...d.calibrated.moveWeights], switchRaw: d.calibrated.switchRaw } }),
++  };
+ }
+ 
+-function deserializeDistribution(d: SerializedDistribution): LevelOneDistribution {
+-  return { moveWeights: new Map(d.moveWeights), switchProb: d.switchProb, switches: d.switches, megaOf: new Map(d.megaOf) };
++export function deserializeDistribution(d: SerializedDistribution): LevelOneDistribution {
++  return {
++    moveWeights: new Map(d.moveWeights),
++    switchProb: d.switchProb,
++    switches: d.switches,
++    megaOf: new Map(d.megaOf),
++    ...(d.calibrated && { calibrated: { moveWeights: new Map(d.calibrated.moveWeights), switchRaw: d.calibrated.switchRaw } }),
++  };
+ }
+ 
+ /** AI 행동 + (상대 모델이 켜져 있으면) 보정 전 상대 행동 예측 — 사용자 선택과 짝지어 학습 기록에 쓴다 */
+diff --git a/src/lib/battle/ai/decision.ts b/src/lib/battle/ai/decision.ts
+index c869343..eb03d2c 100644
+--- a/src/lib/battle/ai/decision.ts
++++ b/src/lib/battle/ai/decision.ts
+@@ -132,6 +132,8 @@ interface LearnParams {
+   use: number;
+   /** 상대 모델이 꺼진 프로필도 관측용 분포만 계산해 돌려준다(판단에는 쓰지 않음) — 약한 단계에서도 습관을 쌓아 두기 위함 */
+   observe?: boolean;
++  /** 상대별 온도(8.3 C2-b2) — 기억에 쌓인 상대의 결정성으로 예측 분포를 날카롭게/평평하게 보정한다. 기본 끔 */
++  temp?: boolean;
+ }
+ 
+ export interface MistakeParams {
+diff --git a/src/lib/battle/ai/index.ts b/src/lib/battle/ai/index.ts
+index a6b0962..5626039 100644
+--- a/src/lib/battle/ai/index.ts
++++ b/src/lib/battle/ai/index.ts
+@@ -78,6 +78,11 @@ function applyMistake(chosen: AiOption, scored: ScoredOption[], mistake: Mistake
+  * 배틀 AI(완전 정보): key 편의 이번 턴 행동을 고른다.
+  * riskAversion은 sampleRiskAversion()으로 배틀 시작 시 한 번 뽑아 둔 값을 넘긴다.
+  */
++/** 관측용 분포: 기억으로 보정했으면 온도 전 분포(calibrated)를 붙여 돌려준다(8.3 C2-b2) */
++function calibratedOf(raw: LevelOneDistribution | undefined, calibrated: LevelOneDistribution | undefined): LevelOneDistribution | undefined {
++  return raw && calibrated?.calibrated ? { ...raw, calibrated: calibrated.calibrated } : raw;
++}
++
+ export function chooseAiAction(
+   state: BattleState,
+   key: FighterKey,
+@@ -90,6 +95,7 @@ export function chooseAiAction(
+   const params = paramsFor(options.decisionParams);
+   let rawDistribution: LevelOneDistribution | undefined;
+   let observed: LevelOneDistribution | undefined;
++  let calibratedDist: LevelOneDistribution | undefined;
+   // 점수 계산(파티 대면표는 이때 계산됨)도 같은 상대 기술 모델로
+   const decision: (Partial<SearchResult> & { chosen: AiOption; scored: ScoredOption[] }) | null = withThreatModel(threatModelOf(params), () => {
+     // 탐색·상대 모델을 뺀 파라미터 — 상대 쪽 추론(재귀 한 단계)과 오라클 롤아웃 안의 지금 AI가 쓴다
+@@ -108,8 +114,9 @@ export function chooseAiAction(
+     const opponent = state[opponentKey(key)];
+     const dist =
+       rawDistribution && options.opponentMemory
+-        ? calibrateDistribution(rawDistribution, options.opponentMemory, opponent.slot.pokemonId, statusMoveIdsOf(rawDistribution), params.learn?.use)
++        ? calibrateDistribution(rawDistribution, options.opponentMemory, opponent.slot.pokemonId, statusMoveIdsOf(rawDistribution), params.learn?.use, params.learn?.temp)
+         : rawDistribution;
++    calibratedDist = dist;
+     const override = dist
+       ? { opponentSlot: state[opponentKey(key)].slot, targetSlot: state[key].slot, weights: dist.moveWeights, alpha: params.opponentModel!.alpha }
+       : undefined;
+@@ -132,7 +139,7 @@ export function chooseAiAction(
+     chosen.optionType === "switch"
+       ? { kind: "switch", toIndex: chosen.toIndex! }
+       : { kind: "move", move: chosen.move!, mega: chosen.mega };
+-  const base: AiDecision = { action, chosen, scored, ...((rawDistribution ?? observed) && { opponentDistribution: rawDistribution ?? observed }) };
++  const base: AiDecision = { action, chosen, scored, ...((rawDistribution ?? observed) && { opponentDistribution: calibratedOf(rawDistribution, calibratedDist) ?? observed }) };
+   return decision.baseChosen ? { ...base, baseChosen: decision.baseChosen, searchValues: decision.values } : base;
+ }
+ 
+diff --git a/src/lib/battle/ai/levelOne.ts b/src/lib/battle/ai/levelOne.ts
+index 3456f1a..659fcc8 100644
+--- a/src/lib/battle/ai/levelOne.ts
++++ b/src/lib/battle/ai/levelOne.ts
+@@ -19,6 +19,11 @@ export interface LevelOneDistribution {
+   switches: { toIndex: number; weight: number }[];
+   /** 기술 id → 메가진화 선언 여부(오라클 상대 응수용) */
+   megaOf: Map<string, boolean | undefined>;
++  /**
++   * 학습 보정을 거친 **온도 적용 전** 분포(8.3 C2-b2) — `chooseAiAction`이 기억으로 보정했을 때만 붙는다. 관측과 짝지어 상대별 온도 격자를
++   * 갱신하는 데 쓴다(`observeOpponent`). 기술 가중치는 합 1, 교체 확률은 상한 0.9 적용 전 값.
++   */
++  calibrated?: { moveWeights: Map<string, number>; switchRaw: number };
+ }
+ 
+ /** 상대가 고정 성향으로 쓰는 위험 회피값 — 상대의 실제 값은 모르므로 중간값 */
+diff --git a/src/lib/battle/ai/opponentMemory.ts b/src/lib/battle/ai/opponentMemory.ts
+index 9011471..41ccb88 100644
+--- a/src/lib/battle/ai/opponentMemory.ts
++++ b/src/lib/battle/ai/opponentMemory.ts
+@@ -22,6 +22,25 @@ export interface OpponentMemory {
+   statusPred: number;
+   /** 종 id → 기술 id → 실제·예측 */
+   species: Record<string, { seen: number; lastBattle: number; moves: Record<string, { actual: number; pred: number }> }>;
++  /** 상대별 온도 격자(8.3 C2-b2, 선택 필드 — version 1 호환): 격자 τ별 감쇠한 누적 손실과 관측 수. 없으면 τ=1 */
++  temp?: OpponentTemp;
++}
++
++/** 온도 격자: τ<1 날카롭게(상대가 예측보다 일관됨), τ>1 평평하게(예측보다 무작위). 값은 M0a(`8.3-C2b2-상대별온도설계.md`)에서 확정 — 바꾸면 저장된 temp가 무효가 된다(길이 검증) */
++export const TEMP_GRID = [0.35, 0.5, 0.7, 1, 1.4, 2, 3] as const;
++const TEMP_ONE = TEMP_GRID.indexOf(1);
++/** τ=1 대비 관측당 손실 개선이 이 값 이상이고 관측이 TEMP_MIN_N 이상일 때만 τ≠1을 채택한다 */
++export const TEMP_MARGIN = 0.03;
++export const TEMP_MIN_N = 30;
++const LOSS_CLIP = 1e-4;
++
++export interface OpponentTemp {
++  /** 교체 분기(이항) 격자별 누적 손실 */
++  switch: number[];
++  /** 기술 분기(다항) 격자별 누적 손실 */
++  move: number[];
++  nSwitch: number;
++  nMove: number;
+ }
+ 
+ /** 배틀타워(파티 시험대) 감쇠 — 유효 창 약 100판 */
+@@ -55,6 +74,7 @@ export function observeOpponent(memory: OpponentMemory, obs: OpponentObservation
+   const { dist, action } = obs;
+   const stay = 1 - dist.switchProb;
+   memory.decisions += 1;
++  if (dist.calibrated) updateTemp(memory, dist, dist.calibrated, action);
+   memory.switchPred += dist.switchProb;
+   if (action.kind === "switch") memory.switchActual += 1;
+   let statusPred = 0;
+@@ -84,6 +104,8 @@ function addMemory(a: OpponentMemory, b: OpponentMemory, decay: number, battles:
+     statusPred: a.statusPred * decay + b.statusPred,
+     species: {},
+   };
++  const temp = addTemp(a.temp, b.temp, decay);
++  if (temp) out.temp = temp;
+   for (const id of new Set([...Object.keys(a.species), ...Object.keys(b.species)])) {
+     const x = a.species[id];
+     const y = b.species[id];
+@@ -122,17 +144,95 @@ export function memoryFactors(memory: OpponentMemory): { switchFactor: number; s
+   };
+ }
+ 
++const isNonNeg = (x: unknown): x is number => typeof x === "number" && Number.isFinite(x) && x >= 0;
++
++/** temp 저장 검증 — 격자 길이가 다르거나 NaN·음수가 있으면 "필드 없음"(격자를 바꾼 뒤 남은 옛 값을 엉뚱한 칸으로 읽지 않게) */
++export function cleanTemp(value: unknown): OpponentTemp | undefined {
++  const t = value as OpponentTemp | null | undefined;
++  if (!t || typeof t !== "object") return undefined;
++  const okArray = (a: unknown) => Array.isArray(a) && a.length === TEMP_GRID.length && a.every(isNonNeg);
++  return okArray(t.switch) && okArray(t.move) && isNonNeg(t.nSwitch) && isNonNeg(t.nMove) ? t : undefined;
++}
++
++function addTemp(a: OpponentTemp | undefined, b: OpponentTemp | undefined, decay: number): OpponentTemp | undefined {
++  const x = cleanTemp(a);
++  const y = cleanTemp(b);
++  if (!x && !y) return undefined;
++  const grid = (k: number, key: "switch" | "move") => (x?.[key][k] ?? 0) * decay + (y?.[key][k] ?? 0);
++  return {
++    switch: TEMP_GRID.map((_, k) => grid(k, "switch")),
++    move: TEMP_GRID.map((_, k) => grid(k, "move")),
++    nSwitch: (x?.nSwitch ?? 0) * decay + (y?.nSwitch ?? 0),
++    nMove: (x?.nMove ?? 0) * decay + (y?.nMove ?? 0),
++  };
++}
++
++/** 기술 가중치(합 1)에 τ를 적용: p^(1/τ) 재정규화 */
++function temperedWeights(w: ReadonlyMap<string, number>, tau: number): Map<string, number> {
++  if (tau === 1) return new Map(w);
++  const out = new Map<string, number>();
++  let total = 0;
++  for (const [id, v] of w) {
++    const u = Math.pow(Math.max(v, 1e-12), 1 / tau);
++    out.set(id, u);
++    total += u;
++  }
++  for (const [id, v] of out) out.set(id, v / total);
++  return out;
++}
++
++/** 교체 확률에 τ를 적용: σ(logit(p)/τ), 마지막에 상한 0.9(보정 → 온도 → 상한 순서) */
++function temperedSwitch(switchRaw: number, tau: number): number {
++  if (tau === 1) return Math.min(MAX_SWITCH_PROB, switchRaw);
++  const p = Math.min(1 - 1e-6, Math.max(1e-6, switchRaw));
++  return Math.min(MAX_SWITCH_PROB, 1 / (1 + Math.exp(-Math.log(p / (1 - p)) / tau)));
++}
++
++const binaryLoss = (p: number, event: boolean) => -Math.log(Math.min(1 - LOSS_CLIP, Math.max(LOSS_CLIP, event ? p : 1 - p)));
++
+ /**
+- * 추론 분포를 학습값으로 보정한다: 교체 확률 × 교체 배율(상한 0.9), 변화기 확률 × 변화기 배율, 그 종의 기술별 배율 — 기술 쪽은 다시 합 1.
++ * 관측 한 번으로 상대별 온도 격자를 갱신한다 — 그 행동이 격자의 각 τ였다면 받았을 손실을 더한다(교체 = 이항, 기술 = 다항).
++ * 관측 필터: 그 분기에서 선택지가 2개 이상일 때만, 기술은 실제 행동이 그 턴의 분포 안(공개된 기술)일 때만(분포 밖 행동의 clip 손실이
++ * τ가 클수록 줄어 추정을 τ>1로 치우치게 한다).
+  */
+-export function calibrateDistribution(
++function updateTemp(memory: OpponentMemory, dist: LevelOneDistribution, cal: NonNullable<LevelOneDistribution["calibrated"]>, action: OpponentObservation["action"]) {
++  const nMoves = cal.moveWeights.size;
++  const switchEligible = dist.switches.length > 0 && nMoves >= 1;
++  const moveEligible = action.kind === "move" && nMoves >= 2 && cal.moveWeights.has(action.moveId);
++  if (!switchEligible && !moveEligible) return;
++  const temp = (memory.temp = cleanTemp(memory.temp) ?? { switch: TEMP_GRID.map(() => 0), move: TEMP_GRID.map(() => 0), nSwitch: 0, nMove: 0 });
++  if (switchEligible) {
++    TEMP_GRID.forEach((tau, k) => (temp.switch[k] += binaryLoss(temperedSwitch(cal.switchRaw, tau), action.kind === "switch")));
++    temp.nSwitch += 1;
++  }
++  if (moveEligible) {
++    TEMP_GRID.forEach((tau, k) => (temp.move[k] += -Math.log(Math.min(1 - LOSS_CLIP, Math.max(LOSS_CLIP, temperedWeights(cal.moveWeights, tau).get(action.moveId) ?? 0)))));
++    temp.nMove += 1;
++  }
++}
++
++/** 격자 중 손실이 가장 낮은 τ를 고르되, τ=1 대비 개선이 margin 이상이고 관측이 충분할 때만 채택한다(아니면 τ=1) */
++function pickTau(losses: number[], n: number): number {
++  if (n < TEMP_MIN_N) return 1;
++  let best = 0;
++  for (let k = 1; k < TEMP_GRID.length; k++) if (losses[k] < losses[best]) best = k;
++  return losses[TEMP_ONE] - losses[best] >= TEMP_MARGIN * n ? TEMP_GRID[best] : 1;
++}
++
++/** 이 기억이 가리키는 상대의 온도(교체 분기·기술 분기). 기록이 없거나 검증에 실패하면 둘 다 1 */
++export function chooseTemperature(memory: OpponentMemory): { switch: number; move: number } {
++  const t = cleanTemp(memory.temp);
++  return t ? { switch: pickTau(t.switch, t.nSwitch), move: pickTau(t.move, t.nMove) } : { switch: 1, move: 1 };
++}
++
++/** 기억으로 보정한 온도 적용 전 분포: 기술 가중치(합 1)와 상한 전 교체 확률 */
++function calibrateBase(
+   dist: LevelOneDistribution,
+   memory: OpponentMemory,
+   speciesId: string,
+   statusMoveIds: ReadonlySet<string>,
+-  /** 학습 사용률 0~1: 각 배율에 거듭제곱(5.0 R3 — 랭크 마스터볼 구간 단계 활용). 1이면 그대로 */
+-  strength = 1,
+-): LevelOneDistribution {
++  strength: number,
++): NonNullable<LevelOneDistribution["calibrated"]> {
+   const { switchFactor: rawSwitch, statusFactor: rawStatus } = memoryFactors(memory);
+   const switchFactor = rawSwitch ** strength;
+   const statusFactor = rawStatus ** strength;
+@@ -148,8 +248,29 @@ export function calibrateDistribution(
+     total += v;
+   }
+   if (total > 0) for (const [id, v] of weights) weights.set(id, v / total);
+-  const switchProb = dist.switches.length > 0 ? Math.min(MAX_SWITCH_PROB, dist.switchProb * switchFactor) : 0;
+-  return { ...dist, moveWeights: total > 0 ? weights : dist.moveWeights, switchProb };
++  return { moveWeights: total > 0 ? weights : new Map(dist.moveWeights), switchRaw: dist.switches.length > 0 ? dist.switchProb * switchFactor : 0 };
++}
++
++/**
++ * 추론 분포를 학습값으로 보정한다: 교체 확률 × 교체 배율, 변화기 확률 × 변화기 배율, 그 종의 기술별 배율 — 기술 쪽은 다시 합 1.
++ * useTemp이면 그 뒤에 상대별 온도를 적용한다(τ_eff = τ^strength, 교체 확률은 마지막에 상한 0.9). 순서: 보정 → 온도 → 상한.
++ * 결과의 `calibrated`는 온도 전 분포로, 관측과 짝지어 온도 격자를 갱신하는 데 쓴다.
++ */
++export function calibrateDistribution(
++  dist: LevelOneDistribution,
++  memory: OpponentMemory,
++  speciesId: string,
++  statusMoveIds: ReadonlySet<string>,
++  /** 학습 사용률 0~1: 각 배율에 거듭제곱(5.0 R3 — 랭크 마스터볼 구간 단계 활용). 1이면 그대로 */
++  strength = 1,
++  /** 상대별 온도 적용(8.3 C2-b2, `learn.temp`) — 기본 끔 */
++  useTemp = false,
++): LevelOneDistribution {
++  const base = calibrateBase(dist, memory, speciesId, statusMoveIds, strength);
++  const tau = useTemp ? chooseTemperature(memory) : { switch: 1, move: 1 };
++  const moveWeights = temperedWeights(base.moveWeights, tau.move ** strength);
++  const switchProb = dist.switches.length > 0 ? temperedSwitch(base.switchRaw, tau.switch ** strength) : 0;
++  return { ...dist, moveWeights, switchProb, calibrated: base };
+ }
+ 
+ /** 저장본 형태 검증(localStorage 손상 대비) */
+diff --git a/src/lib/cloudSyncPlan.ts b/src/lib/cloudSyncPlan.ts
+index 121c59c..4c5e203 100644
+--- a/src/lib/cloudSyncPlan.ts
++++ b/src/lib/cloudSyncPlan.ts
+@@ -2,7 +2,7 @@ import { cleanPartyPresets, cleanSlotPresets } from "./backup";
+ import { applyRankResult, rankOf, type RankResult, type RankState } from "./battleRank";
+ import { EMPTY_RANK_SAVE, HISTORY_LIMIT, isRankSave, type RankHistoryEntry, type RankSave } from "./battleRankSave";
+ import { EMPTY_FRONTIER, FRONTIER_GAMES_LIMIT, isFrontierSave, type FrontierGame, type FrontierSave } from "./battleSeries";
+-import { emptyOpponentMemory, isOpponentMemory, MAX_SPECIES, MEMORY_DECAY_PER_BATTLE, RANK_MEMORY_DECAY_PER_BATTLE, type OpponentMemory } from "./battle/ai/opponentMemory";
++import { cleanTemp, emptyOpponentMemory, isOpponentMemory, MAX_SPECIES, MEMORY_DECAY_PER_BATTLE, RANK_MEMORY_DECAY_PER_BATTLE, type OpponentMemory, type OpponentTemp } from "./battle/ai/opponentMemory";
+ import { cleanMySamples } from "./mySamples";
+ import type { PresetListName, SyncBase } from "./storage";
+ 
+@@ -123,6 +123,27 @@ export function aiBaseOf(all: AiBases, key: string, baseHash: string): string |
+   return e && hashOf(e.json) === baseHash ? e.json : null;
+ }
+ 
++/**
++ * 상대별 온도(temp, 8.3 C2-b2)를 한 덩어리로 합친다 — 다른 선형 필드와 같은 식이되, 각 기기의 증분은 **모든 성분이 0 이상일 때만** 쓰고
++ * 하나라도 기준 몫보다 작으면(옛 클라이언트가 temp를 날렸거나 값이 깨짐) 그 기기의 temp 증분 전체를 버린다. 필드마다 따로 자르면 손실 합과
++ * 관측 수의 비율이 깨져 채택 판단이 틀어진다.
++ */
++function mergeTemp(tb: OpponentTemp | undefined, tl: OpponentTemp | undefined, tr: OpponentTemp | undefined, dL: number, dR: number): OpponentTemp | undefined {
++  if (!tb && !tl && !tr) return undefined;
++  const vec = (x: OpponentTemp | undefined) => (x ? [...x.switch, ...x.move, x.nSwitch, x.nMove] : null);
++  const vb = vec(tb) ?? Array.from({ length: 2 * (tl ?? tr)!.switch.length + 2 }, () => 0);
++  const inc = (v: number[] | null, d: number) => {
++    if (!v) return vb.map(() => 0);
++    const x = v.map((e, i) => e - d * vb[i]);
++    return x.every((e) => e >= -1e-9) ? x.map((e) => Math.max(0, e)) : vb.map(() => 0);
++  };
++  const iL = inc(vec(tl), dL);
++  const iR = inc(vec(tr), dR);
++  const m = vb.map((b, i) => dL * dR * b + 0.5 * ((1 + dR) * iL[i] + (1 + dL) * iR[i]));
++  const n = (m.length - 2) / 2;
++  return { switch: m.slice(0, n), move: m.slice(n, 2 * n), nSwitch: m[2 * n], nMove: m[2 * n + 1] };
++}
++
+ interface StoredAi {
+   version: 1;
+   learningEnabled: boolean;
+@@ -186,6 +207,8 @@ export function mergeAiMemory(baseJson: string | null, localJson: string, remote
+     statusPred: comb(bm.statusPred, lm.statusPred, rm.statusPred),
+     species: kept,
+   };
++  const temp = mergeTemp(cleanTemp(bm.temp), cleanTemp(lm.temp), cleanTemp(rm.temp), dL, dR);
++  if (temp) memory.temp = temp;
+   return canonical("aiMemory", { version: 1, learningEnabled: L.learningEnabled !== B.learningEnabled ? L.learningEnabled : R.learningEnabled, memory }).json;
+ }
+ 

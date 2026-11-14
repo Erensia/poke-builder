@@ -1,0 +1,57 @@
+  } else if (mode === "c2b2") {
+    // 8.3 C2-b2 M0b(일회용): 상대 OPP를 N판 연속으로 두며 판마다 승패·로그 해시·판단 시간을 OUT(JSON)에 기록한다. decisionParams(argv[4])의 learn.temp로 켬/끔 팔을 가른다.
+    const { writeFileSync } = await import("node:fs");
+    const { createHash } = await import("node:crypto");
+    const om = await server.ssrLoadModule("/src/lib/battle/ai/opponentMemory.ts");
+    const kind = process.env.OPP, outFile = process.env.OUT;
+    if (!["switcher", "setup", "noisy", "random"].includes(kind) || !outFile) throw new Error("OPP, OUT 필요");
+    const botPolicy = (risk, rng) => (st, key) => {
+      const d = ai.chooseAiAction(st, key, risk, {});
+      const finite = d.scored.filter((x) => Number.isFinite(x.score)).sort((x, y) => y.score - x.score);
+      if (finite.length < 2) return d.action;
+      const best = finite[0].score;
+      const toAction = (o) => (o.optionType === "switch" ? { kind: "switch", toIndex: o.toIndex } : { kind: "move", move: o.move, mega: o.mega });
+      if (kind === "switcher") { const x = finite.find((y) => y.option.optionType === "switch"); if (x && x.score >= best - 0.3) return toAction(x.option); }
+      else if (kind === "setup") { const x = finite.find((y) => y.option.optionType === "move" && y.option.move.category === "status"); if (x && x.score >= best - 0.5) return toAction(x.option); }
+      else if (rng() < 0.25) return toAction(finite[1].option);
+      return d.action;
+    };
+    const records = [];
+    let saved = om.emptyOpponentMemory(), session = om.emptyOpponentMemory(), decisionMs = 0, decisions = 0;
+    for (let s = seedFrom; s <= seedTo; s++) {
+      const risk = mulberry32(s)();
+      for (const aiSide of ["a", "b"]) {
+        const botSide = aiSide === "a" ? "b" : "a";
+        const botRng = mulberry32(s * 31 + (aiSide === "a" ? 1 : 2));
+        const bot = kind === "random" ? randomPolicy(botRng) : botPolicy(1 - risk, botRng);
+        const botForced = kind === "random" ? forcedSwitchRandom(botRng) : (st, key) => ai.chooseAiForcedSwitch(st, key, 1 - risk) ?? living(st, key)[0];
+        let pending = null, pendingSp = "";
+        const r = runBattle(
+          s,
+          { [aiSide]: (st, key) => {
+              const mem = om.combinedMemory(saved, session);
+              const t0 = performance.now();
+              const d = ai.chooseAiAction(st, key, risk, { decisionParams, opponentMemory: mem });
+              decisionMs += performance.now() - t0; decisions++;
+              pending = d.opponentDistribution ?? null;
+              pendingSp = st[botSide].slot.pokemonId;
+              return d.action;
+            }, [botSide]: bot },
+          { [aiSide]: aiForced(risk), [botSide]: botForced },
+          undefined,
+          (a, b) => {
+            const act = aiSide === "a" ? b : a;
+            if (!pending || !act) return;
+            const action = act.kind === "switch" ? { kind: "switch" } : { kind: "move", moveId: act.move.id, isStatus: act.move.category === "status" };
+            om.observeOpponent(session, { dist: pending, speciesId: pendingSp, statusMoveIds: ai.statusMoveIdsOf(pending), action });
+            pending = null;
+          },
+        );
+        saved = om.commitBattle(saved, session);
+        session = om.emptyOpponentMemory();
+        records.push({ s, side: aiSide, win: r.winner === aiSide ? 1 : r.winner === botSide ? 0 : 0.5, turns: r.turns, h: createHash("sha1").update(JSON.stringify(r.trace)).digest("hex").slice(0, 12) });
+      }
+    }
+    const tauNow = om.chooseTemperature(saved);
+    writeFileSync(outFile, JSON.stringify({ kind, arm: decisionParams?.learn?.temp ? "on" : "off", battles: records.length, decisions, avgDecisionMs: decisionMs / Math.max(1, decisions), tau: tauNow, records }));
+    console.log(JSON.stringify({ kind, arm: decisionParams?.learn?.temp ? "on" : "off", battles: records.length, avgDecisionMs: +(decisionMs / Math.max(1, decisions)).toFixed(2), tau: tauNow }));
