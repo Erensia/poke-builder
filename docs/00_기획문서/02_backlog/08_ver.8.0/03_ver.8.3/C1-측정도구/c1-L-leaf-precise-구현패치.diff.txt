@@ -1,0 +1,40 @@
+diff --git a/scripts/rank-ai-check.mjs b/scripts/rank-ai-check.mjs
+index 903dbf1..3b6a5b5 100644
+--- a/scripts/rank-ai-check.mjs
++++ b/scripts/rank-ai-check.mjs
+@@ -143,6 +143,14 @@ try {
+   const picks = (lv) => new Set([0.01, 0.2, 0.5, 0.9].map((r) => JSON.stringify(chooseAiAction(battle, "a", 0.5, { decisionParams: P[lv], rng: () => r }).action)));
+   check("C3: P4는 난수와 무관하게 같은 행동을 고른다(실수 없음)", picks(4).size === 1);
+ 
++  // ── 8.3 C1 챔피언: 앱 AI + 깊이 2 + 잎 평가 precise(분해 측정 L: 대 P6 54.7%·0a 대비 +4.9%p, 판단 평균 592ms) ──
++  const { PRODUCT_SEARCH_PARAMS } = await server.ssrLoadModule("/src/lib/battle/ai/search.ts");
++  const champ = RANK_AI_PROFILES[7].search;
++  check("C1: 챔피언은 깊이 2·잎 precise이고 후보 3·응수 3·예산 24는 그대로다", champ?.depth === 2 && champ?.leaf === "precise" && champ?.topK === 3 && champ?.maxOpponentMoves === 3 && champ?.budget === 24, JSON.stringify(champ));
++  check("C1: 앱 AI·마스터볼 2·1(P5·P6)의 잎 평가는 fast 그대로다", [APP_DECISION_PARAMS.search?.leaf, RANK_AI_PROFILES[5].search?.leaf, RANK_AI_PROFILES[6].search?.leaf].every((v) => v === "fast"));
++  check("C1: 공유 상수 PRODUCT_SEARCH_PARAMS는 변하지 않았고(leaf fast·depth 없음) 챔피언의 탐색 설정은 다른 객체다", PRODUCT_SEARCH_PARAMS.leaf === "fast" && PRODUCT_SEARCH_PARAMS.depth === undefined && champ !== APP_DECISION_PARAMS.search && champ !== PRODUCT_SEARCH_PARAMS);
++  check("C1: 챔피언은 깊이 2일 때만 5초 제한을 쓴다(제한 선택 기준이 깊이 2다)", RANK_AI_PROFILES.every((p, lv) => (p.search?.depth === 2) === (lv === 7)));
++
+   // 학습 메모리 감쇠(랭크 0.995 > 배틀타워 0.99): 같은 누적본·세션이면 랭크가 옛 기록을 더 많이 남긴다
+   const { commitBattle, emptyOpponentMemory, MEMORY_DECAY_PER_BATTLE, RANK_MEMORY_DECAY_PER_BATTLE } = await server.ssrLoadModule("/src/lib/battle/ai/opponentMemory.ts");
+   const saved = { ...emptyOpponentMemory(), battles: 5, decisions: 100 };
+diff --git a/src/lib/battle/ai/aiClient.ts b/src/lib/battle/ai/aiClient.ts
+index 4269bf5..662e70e 100644
+--- a/src/lib/battle/ai/aiClient.ts
++++ b/src/lib/battle/ai/aiClient.ts
+@@ -19,11 +19,12 @@ import { PRODUCT_SEARCH_PARAMS } from "./search";
+ export const APP_DECISION_PARAMS: Partial<DecisionParams> = { search: PRODUCT_SEARCH_PARAMS, opponentModel: DEFAULT_OPPONENT_MODEL };
+ 
+ /**
+- * 챔피언 AI 설정(6.3 G4 v0): 앱 AI + 탐색 깊이 2(롤아웃 뒤 양쪽이 지금 AI 정책으로 한 턴 더). 앱 AI 대비 h2h 400판 54.8%(217:179, z 1.9),
+- * 판단 평균 약 0.6~1초(앱 AI의 약 4배). 후보·응수·예산을 넓혀도 54~55%로 같고 후보를 2개로 줄이면 51%라 이 설정이 평평한 지점이다
+- * (decision-layer 설계 `6.3-G4-챔피언AI-설계.md` §9). 제한 시간은 5초(CHAMPION_TIMEOUT_MS).
++ * 챔피언 AI 설정(6.3 G4 v0 + 8.3 C1): 앱 AI + 탐색 깊이 2(롤아웃 뒤 양쪽이 지금 AI 정책으로 한 턴 더) + **잎 평가 `precise`**(롤아웃 뒤 state에서
++ * AI 쪽 최선 옵션 점수 — 대면표만 쓰는 `fast`보다 정확하다). 8.3 C1 분해 측정(선출 포함 대 마스터볼 1, 시드 1~600): 잎 precise 54.7%(652:540)로 현행
++ * 깊이 2·fast의 49.8%(0a)보다 +4.9%p, 슈퍼 챔피언(58.6%) 이득의 56%. 단독 판단 평균 592ms·p95 1.70초·최대 2.98초(5초 초과 0%).
++ * 후보·응수·예산을 넓혀도 평평하다(6.3 G4 §10). 설계 `8.3-C1-챔피언AI강화설계.md`. 제한 시간은 5초(CHAMPION_TIMEOUT_MS).
+  */
+-export const CHAMPION_DECISION_PARAMS: Partial<DecisionParams> = { ...APP_DECISION_PARAMS, search: { ...PRODUCT_SEARCH_PARAMS, depth: 2 } };
++export const CHAMPION_DECISION_PARAMS: Partial<DecisionParams> = { ...APP_DECISION_PARAMS, search: { ...PRODUCT_SEARCH_PARAMS, depth: 2, leaf: "precise" } };
+ 
+ export interface AiWorkerRequest {
+   id: number;
