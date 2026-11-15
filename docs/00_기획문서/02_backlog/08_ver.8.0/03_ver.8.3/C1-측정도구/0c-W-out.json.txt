@@ -1,0 +1,20 @@
+{
+ "seeds": 300,
+ "minutes": 103.36618333333334,
+ "results": [
+  {
+   "label": "W(폭 확대) 대 P6",
+   "a": "{\"search\":{\"depth\":2,\"leaf\":\"fast\",\"seeds\":6,\"topK\":5,\"maxOpponentMoves\":4,\"budget\":0},\"opponentModel\":{\"tau\":0.2,\"alpha\":0.7,\"readSwitch\":true,\"minSwitchProb\":0.3}}",
+   "b": "rank:6",
+   "aWins": 320,
+   "bWins": 279,
+   "other": 1,
+   "n": 599,
+   "rate": 0.5342237061769616,
+   "se": 0.020381533506403357,
+   "elo": 23.81831001852336,
+   "eloLo": -3.977685499244231,
+   "eloHi": 51.92277123717013
+  }
+ ]
+}

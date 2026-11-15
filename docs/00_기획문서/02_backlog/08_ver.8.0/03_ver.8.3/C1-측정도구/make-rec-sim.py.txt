@@ -1,0 +1,14 @@
+import re
+s = open("scripts/battle-ai-sim.mjs", encoding="utf-8").read()
+# h2h 분기(첫 번째 res 선언·첫 번째 승패 집계·첫 번째 출력)에만 판별 기록을 넣는다
+a = "    const res = { aWins: 0, bWins: 0, other: 0 };\n"
+assert a in s
+s = s.replace(a, a + "    const records = [];\n", 1)
+b = '        res[r.winner === aSide ? "aWins" : r.winner === bSide ? "bWins" : "other"]++;\n'
+assert b in s
+s = s.replace(b, b + '        records.push({ s, side: aSide, win: r.winner === aSide ? 1 : r.winner === bSide ? 0 : 0.5, turns: r.turns, h: createHash("sha1").update(JSON.stringify(r.trace)).digest("hex").slice(0, 12) });\n', 1)
+c = "res, ...(learner && { learned: learner.summary() }), ...search }));"
+assert c in s
+s = s.replace(c, "res, records, ...(learner && { learned: learner.summary() }), ...search }));", 1)
+open("scripts/zz-h2h-rec.mjs", "w", encoding="utf-8").write(s)
+print("ok")

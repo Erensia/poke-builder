@@ -1,0 +1,20 @@
+{
+ "seeds": 600,
+ "minutes": 103.7548,
+ "results": [
+  {
+   "label": "L(잎 precise) 대 P6",
+   "a": "{\"search\":{\"depth\":2,\"topK\":3,\"maxOpponentMoves\":3,\"budget\":24,\"leaf\":\"precise\"},\"opponentModel\":{\"tau\":0.2,\"alpha\":0.7,\"readSwitch\":true,\"minSwitchProb\":0.3}}",
+   "b": "rank:6",
+   "aWins": 652,
+   "bWins": 540,
+   "other": 8,
+   "n": 1192,
+   "rate": 0.5469798657718121,
+   "se": 0.014418042278025298,
+   "elo": 32.74153436358072,
+   "eloLo": 13.014421383202324,
+   "eloHi": 52.68163777599331
+  }
+ ]
+}

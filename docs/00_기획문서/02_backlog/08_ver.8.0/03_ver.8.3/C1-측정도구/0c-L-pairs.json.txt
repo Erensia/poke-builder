@@ -1,0 +1,7 @@
+[
+ {
+  "label": "L(잎 precise) 대 P6",
+  "a": "{\"search\":{\"depth\":2,\"topK\":3,\"maxOpponentMoves\":3,\"budget\":24,\"leaf\":\"precise\"},\"opponentModel\":{\"tau\":0.2,\"alpha\":0.7,\"readSwitch\":true,\"minSwitchProb\":0.3}}",
+  "b": "rank:6"
+ }
+]

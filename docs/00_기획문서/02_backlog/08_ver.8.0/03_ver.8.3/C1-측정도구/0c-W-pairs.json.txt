@@ -1,0 +1,7 @@
+[
+ {
+  "label": "W(폭 확대) 대 P6",
+  "a": "{\"search\":{\"depth\":2,\"leaf\":\"fast\",\"seeds\":6,\"topK\":5,\"maxOpponentMoves\":4,\"budget\":0},\"opponentModel\":{\"tau\":0.2,\"alpha\":0.7,\"readSwitch\":true,\"minSwitchProb\":0.3}}",
+  "b": "rank:6"
+ }
+]
