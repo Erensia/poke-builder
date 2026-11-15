@@ -1,0 +1,40 @@
+// 8.3 C3 라운드 측정 드라이버(일회용): 임의의 A/B 프로파일(JSON 또는 rank:N) 쌍을 시드 조각으로 병렬 측정해 합산한다.
+// 사용: node c3-round.mjs <pairs.json> <out.json> [--seeds 300] [--chunk 25] [--jobs 10]
+//   pairs.json = [{ "label": "P3c06 대 P2", "a": "<JSON|rank:N>", "b": "<JSON|rank:N>" }, ...]  승률은 A 기준(무승부 제외)
+import { spawn } from "node:child_process";
+import { readFileSync, writeFileSync } from "node:fs";
+const args = process.argv.slice(2);
+const opt = (name, fallback) => { const i = args.indexOf(`--${name}`); return i >= 0 ? args[i + 1] : fallback; };
+const pairs = JSON.parse(readFileSync(args[0], "utf8"));
+const outFile = args[1];
+const seeds = Number(opt("seeds", 300)), chunk = Number(opt("chunk", 25)), jobs = Number(opt("jobs", 10));
+const sim = process.env.SIM_PATH;
+const queue = [];
+for (let p = 0; p < pairs.length; p++) for (let from = 1; from <= seeds; from += chunk) queue.push({ p, from, count: Math.min(chunk, seeds - from + 1) });
+const total = queue.length, sums = pairs.map(() => ({ aWins: 0, bWins: 0, other: 0 }));
+const started = Date.now();
+let done = 0;
+const run = ({ p, from, count }) => new Promise((resolve, reject) => {
+  const env = { ...process.env, POOL: "samples", SELECT: "1", SEED_FROM: String(from) };
+  const child = spawn(process.execPath, [sim, "h2h", String(count), pairs[p].a, pairs[p].b], { env });
+  let out = "", err = "";
+  child.stdout.on("data", (d) => (out += d));
+  child.stderr.on("data", (d) => (err += d));
+  child.on("close", (code) => {
+    const line = out.trim().split("\n").filter((l) => l.startsWith("{")).pop();
+    if (code !== 0 || !line) return reject(new Error(`${pairs[p].label} 시드 ${from}: exit ${code}\n${err.slice(0, 500)}`));
+    const { res } = JSON.parse(line);
+    for (const k of Object.keys(sums[p])) sums[p][k] += res[k];
+    console.error(`[${++done}/${total}] ${pairs[p].label} 시드 ${from}~${from + count - 1} (${((Date.now() - started) / 60000).toFixed(1)}분)`);
+    resolve();
+  });
+});
+await Promise.all(Array.from({ length: Math.min(jobs, total) }, async () => { while (queue.length > 0) await run(queue.shift()); }));
+const elo = (r) => 400 * Math.log10(r / (1 - r));
+const results = pairs.map((pr, i) => {
+  const s = sums[i], n = s.aWins + s.bWins, rate = s.aWins / n, se = Math.sqrt((rate * (1 - rate)) / n);
+  return { label: pr.label, a: pr.a, b: pr.b, ...s, n, rate, se, elo: elo(rate), eloLo: elo(Math.max(0.001, rate - 1.96 * se)), eloHi: elo(Math.min(0.999, rate + 1.96 * se)) };
+});
+writeFileSync(outFile, JSON.stringify({ seeds, minutes: (Date.now() - started) / 60000, results }, null, 1));
+console.log(`시드 ${seeds}/쌍 (${seeds * 2}판) · ${((Date.now() - started) / 60000).toFixed(1)}분`);
+for (const r of results) console.log(`${r.label.padEnd(18)} ${r.aWins}:${r.bWins}${r.other ? ` (무 ${r.other})` : ""}  ${(100 * r.rate).toFixed(1)}% ±${(196 * r.se).toFixed(1)}  Elo ${r.elo.toFixed(0)} [${r.eloLo.toFixed(0)}, ${r.eloHi.toFixed(0)}]`);
