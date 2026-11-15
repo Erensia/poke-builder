@@ -1,0 +1,20 @@
+{
+ "seeds": 300,
+ "minutes": 116.31618333333333,
+ "results": [
+  {
+   "label": "슈퍼 챔피언 대 P6",
+   "a": "{\"search\":{\"depth\":2,\"seeds\":6,\"topK\":5,\"maxOpponentMoves\":4,\"budget\":0},\"opponentModel\":{\"tau\":0.2,\"alpha\":0.7,\"readSwitch\":true,\"minSwitchProb\":0.3}}",
+   "b": "rank:6",
+   "aWins": 349,
+   "bWins": 247,
+   "other": 4,
+   "n": 596,
+   "rate": 0.5855704697986577,
+   "se": 0.02017863573431189,
+   "elo": 60.05138947980563,
+   "eloLo": 32.068972955740236,
+   "eloHi": 88.82889074045717
+  }
+ ]
+}

@@ -1,0 +1,16 @@
+// 8.3 C1 Stage 0b 분석: 슈퍼 챔피언 대 P6(0b)를 현행 P7 대 P6(0a)와 비교한다. 드라이버가 판별 결과를 안 내서 독립 가정(오차 합산)으로 비교한다.
+import { readFileSync } from "node:fs";
+const W = process.argv[2];
+const a = JSON.parse(readFileSync(`${W}/0a-out.json`, "utf8")).results[0];
+const bj = JSON.parse(readFileSync(`${W}/0b-out.json`, "utf8"));
+const b = bj.results[0];
+const elo = (r) => 400 * Math.log10(r / (1 - r));
+const ci = (x) => [x.rate - 1.96 * x.se, x.rate + 1.96 * x.se];
+const diff = b.rate - a.rate, se = Math.sqrt(a.se ** 2 + b.se ** 2);
+const z = diff / se;
+const f = (x) => `${(100 * x).toFixed(1)}%`;
+console.log(`0a 현행 P7 대 P6: ${a.aWins}:${a.bWins} (무 ${a.other}) ${f(a.rate)} CI [${ci(a).map((x) => (100 * x).toFixed(1)).join(", ")}] Elo ${elo(a.rate).toFixed(0)}`);
+console.log(`0b 슈퍼 대 P6   : ${b.aWins}:${b.bWins} (무 ${b.other}) ${f(b.rate)} CI [${ci(b).map((x) => (100 * x).toFixed(1)).join(", ")}] Elo ${elo(b.rate).toFixed(0)} (소요 ${bj.minutes.toFixed(1)}분)`);
+console.log(`차이(0b − 0a): ${(100 * diff).toFixed(1)}%p, 표준오차 ${(100 * se).toFixed(1)}%p, 95% CI [${(100 * (diff - 1.96 * se)).toFixed(1)}, ${(100 * (diff + 1.96 * se)).toFixed(1)}], z = ${z.toFixed(2)}`);
+console.log(`판정 규칙(설계서 0b): 순이득 < +1.0%p면 분해·Stage 2 취소 → ${diff < 0.01 ? "취소(이득 없음)" : "계속(0c 분해로)"}`);
+console.log(`참고 G4 §9: 슈퍼 58.0%(174:126, 300판) 대 c8 54.8%(400판, 같은 앱 AI 상대)`);

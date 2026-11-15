@@ -11,3 +11,14 @@
 
 재현: c3-round.mjs.txt (쌍 JSON [{label,a:"rank:7",b:"rank:6"}]) · c1time-mode-block.mjs.txt를 battle-ai-sim.mjs 사본의 `} else if (mode === "ai") {` 앞에 넣고
   POOL=samples SELECT=1 SEED_FROM=1 node <사본> c1time 20 rank:7 rank:6
+
+
+[0b 슈퍼 챔피언 짝 비교] 슈퍼(search: depth 2, seeds 6, topK 5, maxOpponentMoves 4, budget 0, leaf 기본값 precise + opponentModel) 대 P6, 선출 포함, 시드 1~300 = 600판, --jobs 10 --chunk 10, 116.3분
+  슈퍼 대 P6       349:247 (무 4)   58.6%   95% CI [54.6, 62.5]   Elo 60
+  0a 현행 P7 대 P6 298:300 (무 2)   49.8%   95% CI [45.8, 53.8]   Elo -1
+  차이(0b − 0a)    +8.7%p   표준오차 2.9%p   95% CI [3.1, 14.4]   z = 3.04   (독립 가정 — 드라이버가 판별 결과를 안 내서 판 단위 짝 비교·갈라진 판 비율 f는 못 냈다)
+  → 설계서 판정 규칙(순이득 < +1.0%p면 분해·Stage 2 취소)에 해당하지 않는다: 시간 무제한 설정에는 실제 이득이 있다. 0c 분해로 진행.
+  참고: G4 §9(2026-10-31) 슈퍼 58.0%(174:126, 300판)와 일치.
+
+재현: analyze-0b.mjs.txt (W 디렉터리에 0a-out.json·0b-out.json) · 0b-pairs.json.txt · c3-round.mjs.txt
+  SIM_PATH=<scripts/battle-ai-sim.mjs 절대경로> node c3-round.mjs 0b-pairs.json 0b-out.json --seeds 300 --chunk 10 --jobs 10
