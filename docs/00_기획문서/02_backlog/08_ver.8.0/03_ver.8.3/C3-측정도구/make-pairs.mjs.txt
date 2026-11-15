@@ -1,0 +1,61 @@
+// 라운드별 쌍 파일을 만든다: node make-pairs.mjs <smoke|round1> <out.json>
+import { writeFileSync } from "node:fs";
+const [, , which, out] = process.argv;
+const MODEL = { tau: 0.2, alpha: 0.7, readSwitch: true, minSwitchProb: 0.3 };
+const SEARCH = { leaf: "fast", topK: 3, maxOpponentMoves: 3, budget: 24 };
+const p3 = (rate, margin = 0.5) => JSON.stringify({ opponentModel: MODEL, learn: { use: 0.25 }, ...(rate !== undefined && { mistake: { rate, margin } }) });
+const p5 = (search) => JSON.stringify({ search: { ...SEARCH, ...search }, opponentModel: MODEL, learn: { use: 0.75 } });
+let pairs;
+if (which === "smoke") {
+  pairs = [
+    { label: "P3json 대 rank3", a: p3(), b: "rank:3" },
+    { label: "P5json 대 rank5", a: p5({}), b: "rank:5" },
+    { label: "P3(r0.10) 대 P4 (동작 확인)", a: p3(0.1), b: "rank:4" },
+  ];
+} else if (which === "round2") {
+  const P5 = [
+    ["C(topK2,b12)", { topK: 2, budget: 12 }],
+    ["D(topK2,opp2,b12)", { topK: 2, maxOpponentMoves: 2, budget: 12 }],
+    ["E(topK2,b6)", { topK: 2, budget: 6 }],
+  ];
+  pairs = [
+    { label: "P3(m0.5,r0.65) 대 P2", a: p3(0.65, 0.5), b: "rank:2" },
+    { label: "P3(m1e9,r0.11) 대 P2", a: p3(0.11, 1e9), b: "rank:2" },
+    { label: "P3(m0.5,r0.65) 대 P4", a: p3(0.65, 0.5), b: "rank:4" },
+    { label: "P3(m1e9,r0.11) 대 P4", a: p3(0.11, 1e9), b: "rank:4" },
+    ...P5.flatMap(([n, s]) => [
+      { label: `P5${n} 대 P4`, a: p5(s), b: "rank:4" },
+      { label: `P5${n} 대 P6`, a: p5(s), b: "rank:6" },
+    ]),
+  ];
+} else if (which === "round3") {
+  const P5 = [
+    ["F(topK2,opp1)", { topK: 2, maxOpponentMoves: 1 }],
+    ["G(topK3,opp1)", { topK: 3, maxOpponentMoves: 1 }],
+    ["I(topK3,seeds1)", { topK: 3, seeds: 1 }],
+  ];
+  pairs = [
+    { label: "P3(m1e9,r0.13) 대 P2", a: p3(0.13, 1e9), b: "rank:2" },
+    { label: "P3(m1e9,r0.15) 대 P2", a: p3(0.15, 1e9), b: "rank:2" },
+    { label: "P3(m1e9,r0.13) 대 P4", a: p3(0.13, 1e9), b: "rank:4" },
+    { label: "P3(m1e9,r0.15) 대 P4", a: p3(0.15, 1e9), b: "rank:4" },
+    ...P5.flatMap(([n, s]) => [
+      { label: `P5${n} 대 P4`, a: p5(s), b: "rank:4" },
+      { label: `P5${n} 대 P6`, a: p5(s), b: "rank:6" },
+    ]),
+  ];
+} else {
+  pairs = [
+    { label: "P3(m0.5,r0.45) 대 P2", a: p3(0.45, 0.5), b: "rank:2" },
+    { label: "P3(m1e9,r0.07) 대 P2", a: p3(0.07, 1e9), b: "rank:2" },
+    { label: "P3(m0.5,r0.45) 대 P4", a: p3(0.45, 0.5), b: "rank:4" },
+    { label: "P3(m1e9,r0.07) 대 P4", a: p3(0.07, 1e9), b: "rank:4" },
+    { label: "P5A(topK2) 대 P4", a: p5({ topK: 2 }), b: "rank:4" },
+    { label: "P5B(topK2,opp2) 대 P4", a: p5({ topK: 2, maxOpponentMoves: 2 }), b: "rank:4" },
+    { label: "P5A(topK2) 대 P6", a: p5({ topK: 2 }), b: "rank:6" },
+    { label: "P5B(topK2,opp2) 대 P6", a: p5({ topK: 2, maxOpponentMoves: 2 }), b: "rank:6" },
+    { label: "P6 대 P2 (여유 확인)", a: "rank:6", b: "rank:2" },
+  ];
+}
+writeFileSync(out, JSON.stringify(pairs, null, 1));
+console.log(pairs.length, "쌍 →", out);
