@@ -1,0 +1,86 @@
+diff --git a/scripts/battle-ai-scenarios/33-ver83-c1.mjs b/scripts/battle-ai-scenarios/33-ver83-c1.mjs
+new file mode 100644
+index 0000000..3948405
+--- /dev/null
++++ b/scripts/battle-ai-scenarios/33-ver83-c1.mjs
+@@ -0,0 +1,29 @@
++// 8.3 C1 Stage 1 — 방향 B 강건 혼합: 탐색 값 = (1−ρ)·기대값 + ρ·최악 응수 값. 최악은 모델이 일정 확률(0.1) 이상으로 예측한 응수에만 적용한다.
++// 설계 `8.3-C1-챔피언AI강화설계.md` §3 Stage 1. ρ = 0(기본)이면 현행과 수치까지 같아야 한다.
++export default async function ({ server, ai, mon, battle, pts, check }) {
++  const sr = await server.ssrLoadModule("/src/lib/battle/ai/search.ts");
++  const client = await server.ssrLoadModule("/src/lib/battle/ai/aiClient.ts");
++  const chk = (name, fn) => { let ok = false, detail = ""; try { ok = fn(); } catch (e) { detail = String(e?.message ?? e).slice(0, 90); } check(name, ok === true, detail); };
++  const near = (a, b) => Math.abs(a - b) <= 1e-12;
++
++  // 후보 하나의 응수별 롤아웃 합(sums), 시드 수(seeds), 응수 가중치(weights)로 값을 낸다
++  const w = [0.55, 0.4, 0.05], sums = [8, 4, -6], seeds = 2; // 응수별 평균 v = [4, 2, −3], 기대값 = 0.55·4 + 0.4·2 + 0.05·(−3) = 2.85
++  const original = w.reduce((v, wt, j) => v + (wt * sums[j]) / seeds, 0);
++  chk("C1-a ρ = 0은 현행 기대값과 수치까지 같다", () => sr.robustValue(w, sums, seeds, 0) === original && near(original, 2.85));
++  chk("C1-b ρ = 1은 확률 ≥ 0.1인 응수들의 최악 값이다(확률 0.05 응수의 −3은 제외 → 2)", () => near(sr.robustValue(w, sums, seeds, 1), 2));
++  chk("C1-c ρ = 0.5는 기대값과 최악 값의 평균이다((2.85 + 2) / 2)", () => near(sr.robustValue(w, sums, seeds, 0.5), 0.5 * 2.85 + 0.5 * 2));
++  chk("C1-d 확률 ≥ 0.1인 응수가 없으면 기대값 그대로다(최악을 못 정함)", () => near(sr.robustValue([0.05, 0.05], [4, -8], 2, 0.5), (0.05 * 4 + 0.05 * -8) / 2));
++  chk("C1-e 경계 0.1은 포함한다(≥ 0.1)", () => near(sr.robustValue([0.9, 0.1], [20, -10], 2, 1), -5));
++  chk("C1-f 탐색 기본값은 robust 0이고 앱 AI·챔피언 설정은 robust를 켜지 않는다", () => sr.DEFAULT_SEARCH_PARAMS.robust === 0 && client.APP_DECISION_PARAMS.search.robust === undefined && client.CHAMPION_DECISION_PARAMS.search.robust === undefined);
++
++  // 통합: robust 0은 켜지 않은 것과 같은 행동을 고르고, 0.5는 정상 행동을 고른다
++  chk("C1-g chooseAiAction: robust 0 = 설정 없음, robust 0.5는 정상 행동", () => {
++    const aMon = mon("한카리아스", ["지진", "칼춤", "아이언헤드"], null, null, pts({ atk: 32, spe: 32 }));
++    const bMon = mon("메타그로스", ["아이언헤드", "지진"], null, null, pts({ hp: 32 }));
++    const st = battle([aMon], [bMon]);
++    const withRobust = (robust) => ({ ...client.APP_DECISION_PARAMS, search: { ...client.APP_DECISION_PARAMS.search, ...(robust === undefined ? {} : { robust }) } });
++    const pick = (robust) => JSON.stringify(ai.chooseAiAction(st, "a", 0.5, { decisionParams: withRobust(robust) }).action);
++    const half = ai.chooseAiAction(st, "a", 0.5, { decisionParams: withRobust(0.5) }).action;
++    return pick(undefined) === pick(0) && (half.kind === "move" || half.kind === "switch");
++  });
++}
+diff --git a/src/lib/battle/ai/search.ts b/src/lib/battle/ai/search.ts
+index c5efeeb..e1967ed 100644
+--- a/src/lib/battle/ai/search.ts
++++ b/src/lib/battle/ai/search.ts
+@@ -39,6 +39,28 @@ export interface SearchParams {
+    */
+   budget: number;
+   budgetMargin: number;
++  /**
++   * 강건 혼합 ρ(8.3 C1 Stage 1, 방향 B): 후보 값 = (1−ρ)·기대값 + ρ·최악 응수 값. 최악은 모델이 `ROBUST_MIN_WEIGHT`(0.1) 이상으로 예측한 응수에만
++   * 적용한다(잡음 낀 값의 최솟값이 체계적으로 낮아져 분산 벌점이 되는 것을 막는다). 0 = 끔(현행과 수치까지 같다). 기대값과 최악값의 보간이지
++   * 혼합 전략(내시 균형)이 아니다.
++   */
++  robust: number;
++}
++
++/** 강건 혼합에서 "최악 응수"로 셀 응수의 최소 예측 확률 */
++export const ROBUST_MIN_WEIGHT = 0.1;
++
++/**
++ * 후보 하나의 값(8.3 C1 Stage 1). `weights` = 응수 가중치, `sums` = 응수별 롤아웃 합, `seeds` = 시드 수. ρ ≤ 0이면 현행 기대값 식을 그대로 쓴다.
++ */
++export function robustValue(weights: number[], sums: number[], seeds: number, rho: number): number {
++  const expected = weights.reduce((v, weight, j) => v + (weight * sums[j]) / seeds, 0);
++  if (!(rho > 0)) return expected;
++  let worst = Infinity;
++  weights.forEach((weight, j) => {
++    if (weight >= ROBUST_MIN_WEIGHT) worst = Math.min(worst, sums[j] / seeds);
++  });
++  return Number.isFinite(worst) ? (1 - rho) * expected + rho * worst : expected;
+ }
+ 
+ /** 2-A 채택 설정(decision-layer §17-1) — 앱 기본값으로 켤 때(2-C) 쓴다. h2h STATUS=1 400판 219:174, 판단 평균 0.26초 */
+@@ -53,6 +75,7 @@ export const DEFAULT_SEARCH_PARAMS: SearchParams = {
+   topK: 0,
+   budget: 0,
+   budgetMargin: 0.15,
++  robust: 0,
+ };
+ 
+ /** 오라클이 부르는 지금 AI(탐색 없음) — index.ts가 넘긴다(순환 import 방지) */
+@@ -269,7 +292,8 @@ export function searchDecide(ctx: SearchContext, options: AiOption[]): SearchRes
+     theirs.forEach((_, j) => (t.sums[j] += rollout(t.option, j, t.seeds)));
+     t.seeds++;
+   };
+-  const valueOf = (t: (typeof tallies)[number]) => theirs.reduce((v, { weight }, j) => v + (weight * t.sums[j]) / t.seeds, 0);
++  const weightsOf = theirs.map(({ weight }) => weight);
++  const valueOf = (t: (typeof tallies)[number]) => robustValue(weightsOf, t.sums, t.seeds, search.robust);
+   if (search.budget <= 0) {
+     for (const t of tallies) for (let sd = 0; sd < search.seeds; sd++) addSeed(t);
+   } else {
