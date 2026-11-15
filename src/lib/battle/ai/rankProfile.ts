@@ -28,6 +28,7 @@ const watch = (params: Partial<DecisionParams>): Partial<DecisionParams> => ({ .
 
 /**
  * 인덱스 = 단계: 0~2 몬스터·슈퍼·하이퍼(관측만), 3~6 마스터볼 4·3·2·1(λ 0.25·0.5·0.75·1.0), 7 챔피언(앱 AI + 탐색 깊이 2, 6.3 G4 v0).
+ * P5·P6(마스터볼 2·1)은 학습을 끈 사다리에서 같은 AI라 간격이 없다 — 탐색 파라미터(topK·maxOpponentMoves·budget·seeds)로는 P5를 −12 Elo 이상 약화하지 못했다(8.3 C3 한계, 코드 변경은 별도 설계).
  * ponytail: 챔피언은 깊이 2 하나만 더한 v0(앱 AI 대비 약 55%) — 더 올리려면 학습된 가치 함수 등 별도 수단(`6.3-G4-챔피언AI-설계.md`)
  */
 export const RANK_AI_PROFILES: Partial<DecisionParams>[] = [
@@ -37,7 +38,9 @@ export const RANK_AI_PROFILES: Partial<DecisionParams>[] = [
   watch(noisy(0.5, true)),
   watch(noisy(0.4)),
   watch(noisy(0.12)),
-  learn(MODEL_ONLY, 0.25),
+  // 8.3 C3 — 마스터볼 4(P3)만 실수 모델로 약화해 P4와 사다리 간격을 만든다(학습을 끈 사다리 측정에서 λ만 다른 두 단계는 같은 AI라 정확히 50.0%).
+  // margin 1e9 = P0~P2와 같은 방식(어떤 차선책이든). 설계 `8.3-C3-사다리간격설계.md`, 측정 `C3-측정도구/rounds-report.txt`.
+  { ...learn(MODEL_ONLY, 0.25), mistake: { rate: 0.15, margin: 1e9 } },
   learn(MODEL_ONLY, 0.5),
   learn(APP_DECISION_PARAMS, 0.75),
   APP_DECISION_PARAMS,

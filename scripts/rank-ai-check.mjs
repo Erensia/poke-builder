@@ -129,6 +129,20 @@ try {
   const championMs = performance.now() - started;
   check("챔피언 프로필이 정상 행동을 고르고 5초 안에 끝난다", (champion.action.kind === "move" || champion.action.kind === "switch") && championMs < 5000, `${championMs.toFixed(0)}ms`);
 
+  // ── 8.3 C3 사다리 간격: P3만 실수 모델로 약화(설계 `8.3-C3-사다리간격설계.md`), 나머지 단계 정의는 변경 전과 같다 ──
+  const P = RANK_AI_PROFILES;
+  check("C3: P3은 탐색 없이 상대 모델 + λ 0.25 + 실수 모델(rate 0.15, margin 1e9)이다", !P[3].search && !!P[3].opponentModel && P[3].learn?.use === 0.25 && P[3].mistake?.rate === 0.15 && P[3].mistake?.margin === 1e9 && !P[3].mistake?.hardOverride, JSON.stringify(P[3].mistake));
+  check("C3: P4~P7은 실수 모델이 없다(P4는 변경 없음)", [4, 5, 6, 7].every((lv) => P[lv].mistake === undefined));
+  check("C3: P0~P2 실수율은 변경 전과 같다(0.5 확정 처치도 무시 · 0.4 · 0.12)", P[0].mistake.rate === 0.5 && P[0].mistake.hardOverride === true && P[1].mistake.rate === 0.4 && P[2].mistake.rate === 0.12);
+  check("C3: P4는 상대 모델 + λ 0.5 그대로", !P[4].search && !!P[4].opponentModel && P[4].learn.use === 0.5);
+  const app = { topK: 3, maxOpponentMoves: 3, budget: 24, leaf: "fast" };
+  check("C3: P5·P6은 앱 AI와 같은 탐색 설정(topK 3·maxOpponentMoves 3·budget 24·fast)이다", [5, 6].every((lv) => Object.entries(app).every(([k, v]) => P[lv].search?.[k] === v)));
+  const { APP_DECISION_PARAMS } = await server.ssrLoadModule("/src/lib/battle/ai/aiClient.ts");
+  check("C3: 앱 AI(APP_DECISION_PARAMS) 탐색 설정이 변하지 않았다", Object.entries(app).every(([k, v]) => APP_DECISION_PARAMS.search?.[k] === v) && APP_DECISION_PARAMS.mistake === undefined);
+  // 실수 모델이 실제로 판단에 걸린다: 같은 상태에서 난수를 바꾸면 P3은 고르는 행동이 달라질 수 있고 P4는 항상 같다
+  const picks = (lv) => new Set([0.01, 0.2, 0.5, 0.9].map((r) => JSON.stringify(chooseAiAction(battle, "a", 0.5, { decisionParams: P[lv], rng: () => r }).action)));
+  check("C3: P4는 난수와 무관하게 같은 행동을 고른다(실수 없음)", picks(4).size === 1);
+
   // 학습 메모리 감쇠(랭크 0.995 > 배틀타워 0.99): 같은 누적본·세션이면 랭크가 옛 기록을 더 많이 남긴다
   const { commitBattle, emptyOpponentMemory, MEMORY_DECAY_PER_BATTLE, RANK_MEMORY_DECAY_PER_BATTLE } = await server.ssrLoadModule("/src/lib/battle/ai/opponentMemory.ts");
   const saved = { ...emptyOpponentMemory(), battles: 5, decisions: 100 };
