@@ -365,6 +365,19 @@ function selfPivotChoice(ctx: RunTurnContext, key: FighterKey, action: ActionLog
     return { side: key, passBaton: false, returnsToTrainer: true };
   }
 
+  // 막말내뱉기(Move.selfSwitchIfStatLowered): 상대 랭크가 실제로 떨어졌거나(opponentStatDrops) 미러아머로 반사됐을 때만 교체.
+  // shortcut: 매직미러로 반사된 경우(bouncedMoveName)는 교체하지 않는다 — Showdown은 반사한 쪽이 교체, 엔진 B6 반사 경로와 맞추는 일은 E2/E10 후보.
+  if (
+    mv.selfSwitchIfStatLowered &&
+    !action.blockedReason &&
+    !action.bouncedMoveName &&
+    ((action.opponentStatDrops?.length ?? 0) > 0 || (action.reflectedStatDrops?.length ?? 0) > 0) &&
+    !isFainted(state[key]) &&
+    hasLivingReserve(sideOf(state, key))
+  ) {
+    return { side: key, passBaton: false };
+  }
+
   // 꼬리자르기(§4-1): 대타 세팅이 성공했으면(HP·대타·예비 조건 통과) 유턴류처럼 여기서 멈추고
   // 교체 슬롯을 받는다. 세운 대타는 새로 나온 포켓몬이 이어받는다(passSubstitute). 실패했으면
   // action.shedTailSucceeded가 false라 이 블록은 건너뛴다.

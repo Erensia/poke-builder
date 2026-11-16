@@ -151,6 +151,11 @@ export interface Move {
    */
   selfSwitchAfterUse?: boolean;
   /**
+   * 막말내뱉기 전용(8.3 D3-fix-1). 상대 랭크가 하나라도 실제로 떨어졌거나 미러아머로 사용자에게 반사됐을 때만 사용 후 교체한다
+   * (Showdown `partingshot`: 둘 다 −6·클리어바디로 안 떨어지면 교체 취소, 미러아머는 반사돼도 교체). 썰렁개그(selfSwitchAfterUse)는 효과와 무관하게 교체한다.
+   */
+  selfSwitchIfStatLowered?: boolean;
+  /**
    * 썰렁개그: 기술을 실제로 쓸 때 "○○의 썰렁개그" 줄 **앞에** "○○은(는) …" 형태로 붙는 대사(문구 뒷부분만 —
    * 예: "썰렁한 개그를 선보였다!"). 턴 시작 시 안내하는 turnStartUserAnnouncement(부리캐논)와 달리 행동 시점에
    * 나오고, 행동불능으로 못 썼으면 나오지 않는다.
