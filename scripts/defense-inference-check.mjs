@@ -66,7 +66,8 @@ try {
   };
 
   // 8.2 I1: 속임수는 공격 역산이 지원하지만 무작위 왕복 후보에서는 뺀다 — 난수열이 달라져 결합 결과 해시가 깨진다(13번 모듈이 따로 시험)
-  const attackMoves = data.MOVES.filter((m) => ai.attackInferenceUnsupportedReason(m) === null && !m.usesTargetAttackStat && !m.dynamicCategoryByHigherDamage && !inf.multiHitRange(m) && m.power !== null && m.power > 0);
+  // 바디프레스(offensiveStatOverride)는 상대 공격이 아니라 자기 방어로 계산돼 공격 포인트 역산 대상이 아니다 — 메가 혼합 시나리오에서 contradiction이 난다(8.3 D3-fix-1 중 발견, 원인 미확정 → 8.3 백로그 한계절).
+  const attackMoves = data.MOVES.filter((m) => ai.attackInferenceUnsupportedReason(m) === null && !m.usesTargetAttackStat && !m.offensiveStatOverride && !m.dynamicCategoryByHigherDamage && !inf.multiHitRange(m) && m.power !== null && m.power > 0);
   // 진짜 상대(oppTrue)가 내 포켓몬(mySlot)에게 실제로 입힐 데미지로 관측 하나를 만든다. 내 HP가 남지 않는 공격은 제외
   const makeAttackObservation = (cands, oppTrue, mySlot, maxHp, hp) => {
     for (let tries = 0; tries < 20; tries++) {

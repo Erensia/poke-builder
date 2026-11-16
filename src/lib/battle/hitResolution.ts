@@ -797,7 +797,7 @@ function resolveMainHit(c: HitCtx) {
     c.damagePercent = c.endeavorDamage / c.defender.maxHp;
   }
 
-  // 무릎차기(crashFraction, E-2): 명중은 했지만 방어류에 막혔거나 타입 면역(격투→고스트)으로
+  // 무릎차기·썬더다이브(crashFraction, E-2): 명중은 했지만 방어류에 막혔거나 타입 면역(격투→고스트)으로
   // 무효화됐으면 사용자가 최대 HP의 절반을 잃는다. 대타에 흡수된 경우는 "맞은" 것이라 제외.
   c.crashDamage = 0;
   if (
@@ -918,7 +918,8 @@ function applyRecoilAndDrain(c: HitCtx) {
   c.recoilDamage = 0;
   // 돌머리(ver.1.9 A5): 반동기의 반동을 받지 않는다
   if (c.effectiveMove.recoilFraction !== undefined && c.actualDamageDealt > 0 && !c.attackerAbility?.negatesIndirectDamage && !c.attackerAbility?.negatesRecoil) {
-    c.recoilDamage = Math.floor(c.actualDamageDealt * c.effectiveMove.recoilFraction);
+    // Showdown: clampIntRange(Math.round(피해 × 비율), 1) — 반올림·최소 1(8.3 D3-fix-1, 이전엔 내림)
+    c.recoilDamage = Math.max(1, Math.round(c.actualDamageDealt * c.effectiveMove.recoilFraction));
     c.attacker.currentHp = Math.max(0, c.attacker.currentHp - c.recoilDamage);
   }
 

@@ -44,7 +44,7 @@
       "접촉"
     ],
     "makesContact": true,
-    "recoilFraction": 0.3333333333333333
+    "recoilFraction": 0.33
   },
   {
     "id": "불대문자",
@@ -482,7 +482,7 @@
       "반동",
       "접촉"
     ],
-    "recoilFraction": 0.3333333333333333,
+    "recoilFraction": 0.33,
     "makesContact": true
   },
   {
@@ -1617,7 +1617,6 @@
     "tags": [
       "접촉"
     ],
-    "highCritRatio": true,
     "makesContact": true
   },
   {
@@ -3455,7 +3454,7 @@
       "반동",
       "접촉"
     ],
-    "recoilFraction": 0.3333333333333333,
+    "recoilFraction": 0.33,
     "makesContact": true
   },
   {
@@ -3797,7 +3796,7 @@
       "반동",
       "접촉"
     ],
-    "recoilFraction": 0.3333333333333333,
+    "recoilFraction": 0.33,
     "makesContact": true
   },
   {
@@ -5486,7 +5485,7 @@
     "type": "에스퍼",
     "category": "status",
     "power": null,
-    "accuracy": null,
+    "accuracy": 100,
     "pp": 8,
     "priority": 0,
     "effect": "상대의 빈틈을 노려 자신과 상대가 지닌 물건을 바꿔치기한다.",
@@ -5516,7 +5515,7 @@
       "화상"
     ],
     "makesContact": true,
-    "recoilFraction": 0.3333333333333333,
+    "recoilFraction": 0.33,
     "thawsUserOnUse": true
   },
   {
@@ -6837,7 +6836,7 @@
     "id": "트라이어택",
     "name": "트라이어택",
     "type": "노말",
-    "category": "physical",
+    "category": "special",
     "power": 80,
     "accuracy": 100,
     "pp": 12,
@@ -6849,20 +6848,14 @@
       "얼음"
     ],
     "makesContact": false,
-    "inflictsStatus": [
-      {
-        "status": "paralysis",
-        "chance": 6.67
-      },
-      {
-        "status": "burn",
-        "chance": 6.67
-      },
-      {
-        "status": "freeze",
-        "chance": 6.67
-      }
-    ]
+    "inflictsRandomStatus": {
+      "chance": 20,
+      "statuses": [
+        "paralysis",
+        "burn",
+        "freeze"
+      ]
+    }
   },
   {
     "id": "메탈버스트",
@@ -6937,6 +6930,7 @@
     "accuracy": 90,
     "pp": 8,
     "priority": 0,
+    "highCritRatio": true,
     "effect": "2턴째에 상대를 공격한다. 30% 확률로 풀죽게 만든다. 급소에 맞을 확률이 높다.",
     "tags": [
       "충전-제자리",
@@ -7102,7 +7096,7 @@
       "접촉",
       "마비"
     ],
-    "recoilFraction": 0.3333333333333333,
+    "recoilFraction": 0.33,
     "inflictsStatus": [
       {
         "status": "paralysis",
@@ -8261,17 +8255,20 @@
     "id": "막말내뱉기",
     "name": "막말내뱉기",
     "type": "악",
-    "category": "physical",
-    "power": 80,
-    "accuracy": null,
+    "category": "status",
+    "power": null,
+    "accuracy": 100,
     "pp": 20,
     "priority": 0,
-    "effect": "고개 숙여 사과하는 척하면서 상대를 찔러 공격한다. 공격은 반드시 명중한다.",
-    "tags": [
-      "필중",
-      "접촉"
+    "effect": "막말을 내뱉어 상대의 공격과 특수공격을 1랭크씩 떨어뜨린 뒤 물러난다. 상대의 능력이 하나도 떨어지지 않으면 물러나지 못한다.",
+    "tags": ["랭크", "소리", "도주"],
+    "classification": ["소리"],
+    "makesContact": false,
+    "statChanges": [
+      { "target": "opponent", "stat": "atk", "delta": -1 },
+      { "target": "opponent", "stat": "spa", "delta": -1 }
     ],
-    "makesContact": true
+    "selfSwitchIfStatLowered": true
   },
   {
     "id": "소울크래시",
@@ -8319,22 +8316,15 @@
     "name": "썬더다이브",
     "type": "전기",
     "category": "physical",
-    "power": 130,
-    "accuracy": 85,
+    "power": 100,
+    "accuracy": 95,
     "pp": 16,
     "priority": 0,
-    "effect": "강력한 전기를 몸에 두르고 힘차게 상대에게 부딪친다. 20% 확률로 상대를 마비 상태로 만든다.",
-    "tags": [
-      "접촉",
-      "마비"
-    ],
+    "effect": "강력한 전기를 몸에 두르고 힘차게 상대에게 부딪친다. 빗나가면 자신이 전체 HP의 ½의 대미지를 입는다. 대상이 작아지기를 사용했다면 필중하며 대미지가 2배다.",
+    "tags": ["반동", "접촉", "압박"],
     "makesContact": true,
-    "inflictsStatus": [
-      {
-        "status": "paralysis",
-        "chance": 20
-      }
-    ]
+    "crashFraction": 0.5,
+    "bonusVsMinimize": true
   },
   {
     "id": "DD래리어트",
@@ -9208,7 +9198,7 @@
     "type": "얼음",
     "category": "physical",
     "power": 120,
-    "accuracy": 95,
+    "accuracy": 85,
     "pp": 12,
     "priority": 0,
     "effect": "빙산처럼 커다란 얼음덩어리를 부딪쳐서 공격한다. 30%의 확률로 상대를 풀죽게 만든다.",
@@ -9492,7 +9482,7 @@
     "power": 40,
     "accuracy": 100,
     "pp": 20,
-    "priority": 2,
+    "priority": 1,
     "effect": "재빠른 스피드로 상대에게 부딪쳐서 공격한다. 반드시 선제공격할 수 있다.",
     "tags": [
       "선공",
@@ -9758,7 +9748,6 @@
       "베기"
     ],
     "makesContact": true,
-    "highCritRatio": true,
     "setsHazard": "stealthRock"
   },
   {
