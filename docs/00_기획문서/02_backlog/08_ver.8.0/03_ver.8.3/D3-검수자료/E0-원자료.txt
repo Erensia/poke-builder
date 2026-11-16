@@ -1,0 +1,135 @@
+# D3 E0 — 데이터 층 자동 대조 원자료
+Showdown 965a535 · gen9championsbssregmc
+
+## 1. 기술 매핑·집합 차이
+엔진 511 · Showdown 출전 가능 515 · 매핑 성공 511 · 미매핑 0
+Showdown에만 있음(5): powershift[learnable:false], shiftgear[learnable:true], softboiled[learnable:true], spore[learnable:true], struggle[learnable:false]
+엔진에만 있음(1): wingattack(날개치기)[sd없음]
+
+## 2. 기술 필드 불일치 (엔진 → Showdown)
+필드별 건수: recoil 7 · maxPP 26 · crit 3 · protect 2 · 자기 랭크변화 7 · multihit 3 · accuracy 5 · target(광역) 3 · secondary 확률 11 · contact 7 · category 3 · power 2 · flag:sound 1 · priority 1
+
+### recoil (7)
+- 이판사판태클 [doubleedge] 엔진 0.3333333333333333 ↔ SD 33,100
+- 우드해머 [woodhammer] 엔진 0.3333333333333333 ↔ SD 33,100
+- 철제광선 [steelbeam] 엔진 undefined ↔ SD mindblown
+- 웨이브태클 [wavecrash] 엔진 0.3333333333333333 ↔ SD 33,100
+- 브레이브버드 [bravebird] 엔진 0.3333333333333333 ↔ SD 33,100
+- 플레어드라이브 [flareblitz] 엔진 0.3333333333333333 ↔ SD 33,100
+- 볼트태클 [volttackle] 엔진 0.3333333333333333 ↔ SD 33,100
+
+### maxPP (26)
+- 우드해머 [woodhammer] 엔진 15 ↔ SD 16(pp 15)
+- 비축하기 [stockpile] 엔진 12 ↔ SD 20(pp 20)
+- 트릭룸 [trickroom] 엔진 12 ↔ SD 8(pp 5)
+- 트릭 [trick] 엔진 8 ↔ SD 12(pp 10)
+- 대지의파동 [terrainpulse] 엔진 10 ↔ SD 12(pp 10)
+- 메탈버스트 [metalburst] 엔진 10 ↔ SD 12(pp 10)
+- 성묘 [lastrespects] 엔진 10 ↔ SD 12(pp 10)
+- 앙갚음 [comeuppance] 엔진 10 ↔ SD 12(pp 10)
+- 천추지한 [bittermalice] 엔진 10 ↔ SD 12(pp 10)
+- 킬러스핀 [mortalspin] 엔진 15 ↔ SD 16(pp 15)
+- 니들가드 [spikyshield] 엔진 10 ↔ SD 8(pp 5)
+- DD래리어트 [darkestlariat] 엔진 10 ↔ SD 12(pp 10)
+- 가드셰어 [guardsplit] 엔진 20 ↔ SD 12(pp 10)
+- 가위자르기 [guillotine] 엔진 5 ↔ SD 8(pp 5)
+- 레이징불 [ragingbull] 엔진 10 ↔ SD 12(pp 10)
+- 마지막일침 [fellstinger] 엔진 25 ↔ SD 20(pp 20)
+- 뱀눈초리 [glare] 엔진 30 ↔ SD 20(pp 20)
+- 변신 [transform] 엔진 10 ↔ SD 12(pp 10)
+- 셸블레이드 [razorshell] 엔진 10 ↔ SD 12(pp 10)
+- 셸암즈 [shellsidearm] 엔진 10 ↔ SD 12(pp 10)
+- 스피드스왑 [speedswap] 엔진 10 ↔ SD 12(pp 10)
+- 업어후리기 [stormthrow] 엔진 10 ↔ SD 12(pp 10)
+- 작아지기 [minimize] 엔진 10 ↔ SD 12(pp 10)
+- 페어리록 [fairylock] 엔진 10 ↔ SD 12(pp 10)
+- 거대해머 [gigatonhammer] 엔진 16 ↔ SD 8(pp 5)
+- 회생의기도 [revivalblessing] 엔진 1 ↔ SD 4(pp 1)
+
+### crit (3)
+- 메가톤킥 [megakick] 엔진 high ↔ SD norm(critRatio 1)
+- 불새 [skyattack] 엔진 norm ↔ SD high(critRatio 2)
+- 암석액스 [stoneaxe] 엔진 high ↔ SD norm(critRatio 1)
+
+### protect (2)
+- 페인트 [feint] 엔진 bypassesProtect=false ↔ SD protect flag=false
+- 미래예지 [futuresight] 엔진 bypassesProtect=false ↔ SD protect flag=false
+
+### 자기 랭크변화 (7)
+- 기충전 [focusenergy] 엔진 critStage2 ↔ SD -
+- 저주 [curse] 엔진 atk1,def1,spe-1 ↔ SD -
+- 비축하기 [stockpile] 엔진 def1,spd1 ↔ SD -
+- 성장 [growth] 엔진 atk1,atk1,spa1,spa1 ↔ SD atk1,spa1
+- 배북 [bellydrum] 엔진 atkundefined ↔ SD -
+- 볼가득넣기 [stuffcheeks] 엔진 def2 ↔ SD -
+- 정리정돈 [tidyup] 엔진 atk1,spe1 ↔ SD -
+
+### multihit (3)
+- 트리플악셀 [tripleaxel] 엔진 1~3 ↔ SD 3
+- 집단구타 [beatup] 엔진 -~6 ↔ SD null
+- 찍찍베기 [populationbomb] 엔진 1~10 ↔ SD 10
+
+### accuracy (5)
+- 트릭룸 [trickroom] 엔진 100 ↔ SD true
+- 트릭 [trick] 엔진 null ↔ SD 100
+- 막말내뱉기 [partingshot] 엔진 null ↔ SD 100
+- 썬더다이브 [supercellslam] 엔진 85 ↔ SD 95
+- 빙산바람 [mountaingale] 엔진 95 ↔ SD 85
+
+### target(광역) (3)
+- 와이드포스 [expandingforce] 엔진 광역-상대 ↔ SD normal
+- 분화 [eruption] 엔진 - ↔ SD allAdjacentFoes
+- 파라볼라차지 [paraboliccharge] 엔진 - ↔ SD allAdjacent
+
+### secondary 확률 (11)
+- 물거품아리아 [sparklingaria] 엔진 - ↔ SD 100
+- 트라이어택 [triattack] 엔진 6.67,6.67,6.67 ↔ SD 20
+- 질투의불꽃 [burningjealousy] 엔진 - ↔ SD 100
+- 썬더다이브 [supercellslam] 엔진 20 ↔ SD -
+- 셸암즈 [shellsidearm] 엔진 - ↔ SD 20
+- 섬뜩한주문 [eeriespell] 엔진 - ↔ SD 100
+- 비검천중파 [ceaselessedge] 엔진 - ↔ SD 100
+- 암석액스 [stoneaxe] 엔진 - ↔ SD 100
+- 페이탈클로 [direclaw] 엔진 - ↔ SD 30
+- 소금절이 [saltcure] 엔진 - ↔ SD 100
+- 시럽봄 [syrupbomb] 엔진 - ↔ SD 100
+
+### contact (7)
+- 트림 [belch] 엔진 true ↔ SD false
+- 불새 [skyattack] 엔진 true ↔ SD false
+- 대격분 [ragingfury] 엔진 true ↔ SD false
+- 지구던지기 [seismictoss] 엔진 false ↔ SD true
+- 막말내뱉기 [partingshot] 엔진 true ↔ SD false
+- 바늘미사일 [pinmissile] 엔진 true ↔ SD false
+- 셸암즈 [shellsidearm] 엔진 true ↔ SD false
+
+### category (3)
+- 트라이어택 [triattack] 엔진 physical ↔ SD Special
+- 막말내뱉기 [partingshot] 엔진 physical ↔ SD Status
+- 셸암즈 [shellsidearm] 엔진 physical ↔ SD Special
+
+### power (2)
+- 막말내뱉기 [partingshot] 엔진 80 ↔ SD 0
+- 썬더다이브 [supercellslam] 엔진 130 ↔ SD 100
+
+### flag:sound (1)
+- 막말내뱉기 [partingshot] 엔진 false ↔ SD true
+
+### priority (1)
+- 액셀록 [accelerock] 엔진 2 ↔ SD 1
+
+## 3. 부록 A(실효 값이 다른 75개)와 교차
+부록 A 75개 중 엔진 불일치로 잡힌 것 8개 = 엔진이 Showdown 최종 값과 다르다는 뜻이다
+부록 A인데 불일치 없음(엔진이 champions 값과 일치): 67개
+부록 A인데 불일치 있음(엔진이 9세대 값 그대로이거나 별건): direclaw, growth, mountaingale, spikyshield, syrupbomb, fellstinger, focusenergy, glare
+부록 A가 아닌데 불일치 있음: 57개
+
+## 4. 특성 매핑·집합 차이
+엔진 216 · Showdown 출전 가능 216 · 매핑 216 · 엔진 미매핑 0
+Showdown에만(1): battlebond
+엔진에만(1): simple
+
+## 5. 도구 매핑·집합 차이
+엔진 166 · Showdown 출전 가능 166 · 매핑 166 · 엔진 미매핑 0
+Showdown에만(0): 
+엔진에만(0): 

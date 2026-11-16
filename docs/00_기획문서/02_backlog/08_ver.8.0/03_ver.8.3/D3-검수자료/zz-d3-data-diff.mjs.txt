@@ -1,0 +1,147 @@
+// D3 E0 일회용 — 엔진 데이터 ↔ Showdown champions 덤프 대조 (커밋 금지)
+import fs from "node:fs";
+const API = process.env.API_DIR, DUMP = process.env.DUMP;
+const dump = JSON.parse(fs.readFileSync(DUMP, "utf8"));
+const eng = (n) => JSON.parse(fs.readFileSync(`src/data/${n}.json`, "utf8"));
+const csv = (f) => fs.readFileSync(`${API}/${f}.csv`, "utf8").trim().split(/\r?\n/).slice(1).map((l) => {
+  const o = []; let cur = "", q = false;
+  for (const ch of l) { if (ch === '"') q = !q; else if (ch === "," && !q) { o.push(cur); cur = ""; } else cur += ch; }
+  o.push(cur); return o;
+});
+const ns = (s) => s.replace(/\s+/g, "");
+function nameMap(base, nameFile, idCol) {
+  const ident = new Map(csv(base).map((r) => [r[0], r[1]]));
+  const ko = new Map(); // 공백 제거 한국어 → showdown id 후보들
+  for (const r of csv(nameFile)) if (r[1] === "3") {
+    const sid = ident.get(r[0])?.replace(/-/g, ""); if (!sid) continue;
+    const k = ns(r[2]); if (!ko.has(k)) ko.set(k, []); ko.get(k).push(sid);
+  }
+  return ko;
+}
+const out = [];
+const P = (s = "") => out.push(s);
+
+const TYPE = { 노말: "Normal", 불꽃: "Fire", 물: "Water", 전기: "Electric", 풀: "Grass", 얼음: "Ice", 격투: "Fighting", 독: "Poison", 땅: "Ground", 비행: "Flying", 에스퍼: "Psychic", 벌레: "Bug", 바위: "Rock", 고스트: "Ghost", 드래곤: "Dragon", 악: "Dark", 강철: "Steel", 페어리: "Fairy" };
+const CAT = { physical: "Physical", special: "Special", status: "Status" };
+const TAGFLAG = { 소리: "sound", 펀치: "punch", 베기: "slicing", 턱: "bite", 폭탄: "bullet", 파동: "pulse", 가루: "powder", 바람: "wind", 춤: "dance" };
+
+// ───── 매핑 ─────
+function map(kind, engArr, ko, sdLegal, sdAll, manual = {}) {
+  const res = new Map(); const unmatched = []; const multi = [];
+  for (const e of engArr) {
+    const k = ns(e.name);
+    let c = manual[k] ? [manual[k]] : ko.get(k);
+    if (!c) { unmatched.push(e.name); continue; }
+    const legal = c.filter((x) => sdAll[x]);
+    const pick = legal.length ? legal : c;
+    if (pick.length > 1) multi.push(`${e.name}→${pick.join("/")}`);
+    res.set(e.id, pick[0]);
+  }
+  return { res, unmatched, multi };
+}
+
+// ───── 기술 ─────
+const moves = eng("moves"), sdM = dump.moves, legalM = new Set(dump.legal.moves);
+const koM = nameMap("moves", "move_names");
+const mm = map("moves", moves, koM, legalM, sdM, { 깨트리기: "brickbreak", 탐내기: "covet" });
+P("# D3 E0 — 데이터 층 자동 대조 원자료");
+P(`Showdown ${dump.meta.commit.slice(0, 7)} · ${dump.meta.format}`); P();
+P("## 1. 기술 매핑·집합 차이");
+P(`엔진 ${moves.length} · Showdown 출전 가능 ${legalM.size} · 매핑 성공 ${mm.res.size} · 미매핑 ${mm.unmatched.length}`);
+if (mm.unmatched.length) P("미매핑(엔진): " + mm.unmatched.join(", "));
+if (mm.multi.length) P("중복 후보: " + mm.multi.join(" ; "));
+const engSd = new Set(mm.res.values());
+const onlySd = [...legalM].filter((x) => !engSd.has(x));
+const onlyEng = [...engSd].filter((x) => !legalM.has(x));
+P("Showdown에만 있음(" + onlySd.length + "): " + onlySd.map((x) => `${x}[learnable:${sdM[x]?.learnable}]`).join(", "));
+P("엔진에만 있음(" + onlyEng.length + "): " + onlyEng.map((x) => `${x}(${moves.find((m) => mm.res.get(m.id) === x)?.name})${sdM[x] ? "[sd비출전:" + sdM[x].isNonstandard + "]" : "[sd없음]"}`).join(", "));
+const dup = {}; for (const [id, s] of mm.res) (dup[s] ||= []).push(id);
+const dups = Object.entries(dup).filter(([, v]) => v.length > 1);
+if (dups.length) P("한 Showdown id에 엔진 여러 개: " + dups.map(([s, v]) => `${s}←${v.join("/")}`).join(" ; "));
+P();
+
+// ───── 필드 대조 ─────
+const mism = []; const add = (m, f, e, s) => mism.push({ id: m.id, sd: mm.res.get(m.id), f, e, s });
+const fp = (m) => JSON.stringify(m);
+const crit = (m) => (m.alwaysCrit ? "always" : m.highCritRatio ? "high" : "norm");
+const sdCrit = (x) => (x.willCrit ? "always" : x.critRatio >= 2 ? "high" : "norm");
+function sdChances(x) {
+  const ss = x.secondaries || (x.secondary ? [x.secondary] : []);
+  return ss.filter((s) => !(s.self && !s.status && !s.volatileStatus && !s.boosts)).map((s) => String(s.chance ?? 100)).sort().join(",");
+}
+function engChances(m) {
+  const arr = [];
+  for (const k of ["inflictsStatus", "inflictsVolatile"]) for (const s of m[k] || []) if (s.target !== "self") arr.push(String(s.chance ?? 100));
+  for (const s of m.statChanges || []) if (s.target === "opponent") arr.push(String(s.chance ?? 100));
+  return arr.sort().join(",");
+}
+for (const m of moves) {
+  const sid = mm.res.get(m.id); const x = sdM[sid]; if (!x) continue;
+  if (TYPE[m.type] !== x.type) add(m, "type", m.type, x.type);
+  if (CAT[m.category] !== x.category) add(m, "category", m.category, x.category);
+  const sp = x.category === "Status" ? null : x.basePower;
+  if ((m.power ?? null) !== (sp || null) && !(m.power == null && !sp)) add(m, "power", m.power, x.basePower);
+  const sa = x.accuracy === true ? null : x.accuracy;
+  if ((m.accuracy ?? null) !== sa) add(m, "accuracy", m.accuracy, x.accuracy);
+  if (m.pp !== x.maxPP) add(m, "maxPP", m.pp, `${x.maxPP}(pp ${x.pp})`);
+  if (m.priority !== x.priority) add(m, "priority", m.priority, x.priority);
+  if (!!m.makesContact !== !!x.flags.contact) add(m, "contact", !!m.makesContact, !!x.flags.contact);
+  const tags = new Set(m.tags || []);
+  for (const [t, f] of Object.entries(TAGFLAG)) if (tags.has(t) !== !!x.flags[f]) add(m, "flag:" + f, tags.has(t), !!x.flags[f]);
+  if (!!m.bypassesProtect !== !x.flags.protect && x.category !== "Status") add(m, "protect", `bypassesProtect=${!!m.bypassesProtect}`, `protect flag=${!!x.flags.protect}`);
+  if (crit(m) !== sdCrit(x)) add(m, "crit", crit(m), `${sdCrit(x)}(critRatio ${x.critRatio}${x.willCrit ? ",willCrit" : ""})`);
+  const rc = x.recoil ? x.recoil[0] / x.recoil[1] : x.mindBlownRecoil ? "mindblown" : null;
+  if ((m.recoilFraction ?? null) !== rc && !(m.recoilFraction == null && rc == null)) add(m, "recoil", m.recoilFraction, x.recoil ? `${x.recoil}` : rc);
+  const dr = x.drain ? x.drain[0] / x.drain[1] : null;
+  if ((m.drainFraction ?? null) !== dr) add(m, "drain", m.drainFraction, x.drain);
+  const mh = x.multihit; const mn = Array.isArray(mh) ? mh[0] : mh ?? null; const mx = Array.isArray(mh) ? mh[1] : mh ?? null;
+  if ((m.minHits ?? null) !== mn || (m.maxHits ?? null) !== mx) add(m, "multihit", `${m.minHits ?? "-"}~${m.maxHits ?? "-"}`, JSON.stringify(mh ?? null));
+  if (x.category !== "Status" && engChances(m) !== sdChances(x)) add(m, "secondary 확률", engChances(m) || "-", sdChances(x) || "-");
+  const sc = (m.statChanges || []).filter((s) => s.target === "self").map((s) => `${s.stat}${s.delta}`).sort().join(",");
+  const sdSelf = Object.entries(x.self?.boosts || {}).map(([k, v]) => `${k}${v}`).sort().join(",");
+  const sdPrim = x.category === "Status" && ["self", "allySide", "adjacentAllyOrSelf", "allyTeam", "allies"].includes(x.target) ? Object.entries(x.boosts || {}).map(([k, v]) => `${k}${v}`).sort().join(",") : "";
+  const sdSelfBoost = Object.entries(x.selfBoost?.boosts || {}).map(([k, v]) => `${k}${v}`).join(",");
+  const sdSecSelf0 = (x.secondaries || []).flatMap((q) => Object.entries(q.self?.boosts || {}).map(([k, v]) => `${k}${v}`)).join(",");
+  const sdSecSelf = [sdSecSelf0, sdSelfBoost].filter(Boolean).join(",");
+  const sdSelfAll = [sdSelf, sdPrim, sdSecSelf].filter(Boolean).join(",").split(",").filter(Boolean).sort().join(",");
+  if (sc !== sdSelfAll) add(m, "자기 랭크변화", sc || "-", sdSelfAll || "-");
+  if (tags.has("광역-전원") !== (x.target === "allAdjacent") || tags.has("광역-상대") !== (x.target === "allAdjacentFoes")) add(m, "target(광역)", [...tags].filter((t) => t.startsWith("광역")).join("/") || "-", x.target);
+}
+P("## 2. 기술 필드 불일치 (엔진 → Showdown)");
+const by = {}; for (const r of mism) (by[r.f] ||= []).push(r);
+P("필드별 건수: " + Object.entries(by).map(([k, v]) => `${k} ${v.length}`).join(" · ")); P();
+for (const [f, rs] of Object.entries(by)) {
+  P(`### ${f} (${rs.length})`);
+  for (const r of rs) P(`- ${r.id} [${r.sd}] 엔진 ${typeof r.e === "object" ? JSON.stringify(r.e) : r.e} ↔ SD ${typeof r.s === "object" ? JSON.stringify(r.s) : r.s}`);
+  P();
+}
+
+// ───── 부록 A 교차 ─────
+const appA = fs.readFileSync(process.env.REVIEW, "utf8").split("## 부록 A")[1];
+const aIds = [...appA.matchAll(/^- `(\w+)\[/gm)].map((r) => r[1]);
+const sdOf = new Set(mism.map((r) => r.sd));
+P("## 3. 부록 A(실효 값이 다른 75개)와 교차");
+P(`부록 A ${aIds.length}개 중 엔진 불일치로 잡힌 것 ${aIds.filter((i) => sdOf.has(i)).length}개 = 엔진이 Showdown 최종 값과 다르다는 뜻이다`);
+P("부록 A인데 불일치 없음(엔진이 champions 값과 일치): " + aIds.filter((i) => !sdOf.has(i) && engSd.has(i)).length + "개");
+P("부록 A인데 불일치 있음(엔진이 9세대 값 그대로이거나 별건): " + aIds.filter((i) => sdOf.has(i)).join(", "));
+P("부록 A가 아닌데 불일치 있음: " + [...sdOf].filter((i) => !aIds.includes(i)).length + "개");
+P();
+
+// ───── 특성·도구 ─────
+for (const [kind, file, nf, base, legalSet, sdObj, manual] of [
+  ["특성", "abilities", "ability_names", "abilities", new Set(dump.legal.abilities), dump.abilities, { 파동의방호: "auraguard", 불꽃의갈기: "firemane", 천정부지: "eelevate" }],
+  ["도구", "items", "item_names", "items", new Set(dump.legal.items), dump.items, { 대파: "leek", 후딘나이트: "alakazite", 플라엣테나이트: "floettite" }],
+]) {
+  const arr = eng(file); const ko = nameMap(base, nf);
+  const r = map(kind, arr, ko, legalSet, sdObj, manual);
+  P(`## ${kind === "특성" ? 4 : 5}. ${kind} 매핑·집합 차이`);
+  P(`엔진 ${arr.length} · Showdown 출전 가능 ${legalSet.size} · 매핑 ${r.res.size} · 엔진 미매핑 ${r.unmatched.length}`);
+  if (r.unmatched.length) P("미매핑(엔진): " + r.unmatched.join(", "));
+  if (r.multi.length) P("중복 후보: " + r.multi.join(" ; "));
+  const es = new Set(r.res.values());
+  P("Showdown에만(" + [...legalSet].filter((x) => !es.has(x)).length + "): " + [...legalSet].filter((x) => !es.has(x)).join(", "));
+  P("엔진에만(" + [...es].filter((x) => !legalSet.has(x)).length + "): " + [...es].filter((x) => !legalSet.has(x)).join(", "));
+  P();
+}
+fs.writeFileSync(process.env.OUT, out.join("\n"), "utf8");
+console.log("written", process.env.OUT, out.length, "lines");
