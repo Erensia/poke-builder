@@ -23,6 +23,14 @@ interface BattleHitChanceInput {
 }
 
 /**
+ * 독 타입이 쓰는 맹독은 필중이고 무적 상태(구멍파기 1턴째 등)도 통과한다(Showdown hitStepAccuracy·hitStepInvulnerabilityEvent, 8.3 D3-fix-7).
+ * 사용자 타입은 현재 타입(물붓기 등으로 바뀐 값 포함). 명중 판정(computeBattleHitChance)과 무적 판정(preHitEffects)이 이 한 함수를 쓴다.
+ */
+export function toxicNeverMisses(attacker: BattleFighterState, move: Move): boolean {
+  return move.id === "맹독" && attacker.types.includes("독");
+}
+
+/**
  * 실전 명중 확률(0~1). 반드시 명중하면 null. 실전 엔진(preHitEffects)과 배틀 AI가 같은 계산을 쓴다.
  *  - 배율: 반짝가루(방어측 0.9)·광각렌즈(1.1)·포커스렌즈(후공 시 1.2)·모래숨기/눈숨기(날씨 조건부 0.8)·
  *    갈지자걸음(방어측 혼란 시 0.5)·복안(1.3)·의욕(물리 0.8)을 전부 한 배율로 곱한다.
@@ -57,7 +65,7 @@ export function computeBattleHitChance(input: BattleHitChanceInput): number | nu
       ? 0
       : defender.accuracyStages.evasion;
   const minimizeBonusActive = !!(move.bonusVsMinimize && defender.usedMoveIds?.["작아지기"]);
-  if (attackerAbility?.alwaysHits || defenderAbility?.alwaysHits || minimizeBonusActive) return null;
+  if (attackerAbility?.alwaysHits || defenderAbility?.alwaysHits || minimizeBonusActive || toxicNeverMisses(attacker, move)) return null;
   // 눈보라(눈)·번개·폭풍(비): 해당 날씨면 필중. 날씨 무효 특성이면 activeWeather가 undefined라 적용되지 않는다.
   if (move.alwaysHitsInWeather && move.alwaysHitsInWeather === activeWeather(state)) return null;
   // 록온(트랙 M6): 다음 기술은 반드시 맞는다(일격기 포함)
