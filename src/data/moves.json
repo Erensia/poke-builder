@@ -6946,7 +6946,8 @@
         "chance": 30
       }
     ],
-    "makesContact": false
+    "makesContact": false,
+    "chargeTurn": true
   },
   {
     "id": "쪼아대기",
