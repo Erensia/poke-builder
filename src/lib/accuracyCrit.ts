@@ -7,6 +7,7 @@ import {
 } from "../types/battleStats";
 import type { Move } from "../types/move";
 import type { PokemonType } from "../types/pokemon-type";
+import { modify4096 } from "./damageFormula";
 
 function clampAccuracyStage(stage: number): number {
   return Math.max(-6, Math.min(6, stage));
@@ -31,21 +32,68 @@ export function computeAccuracyMultiplier(accuracyStage: number, evasionStage: n
 }
 
 /**
- * 기술의 최종 적중 확률(0~1). 필중기(accuracy=null)는 null을 그대로 반환한다.
- * attackerAccuracyStage는 공격측의 accuracyStages.accuracy, defenderEvasionStage는
- * 방어측의 accuracyStages.evasion을 넘겨준다.
- * extraMultiplier는 반짝가루(0.9)·모래숨기(0.8) 같이 랭크와 별개로 곱하는 특성/도구 배율.
+ * 명중 보정의 4096분율 분자(Showdown 소스 상수, 8.3 D3-fix-8). 데미지 쪽 toNumerator와 값이 달라(복안 5325 ↔ tr(1.3×4096) 5324,
+ * 모래숨기·의욕 3277 ↔ 3276) 소수 → 분자 표를 따로 둔다. 중력은 5/3이 아니라 6840이다.
+ */
+export const GRAVITY_ACCURACY_NUMERATOR = 6840;
+const ACCURACY_NUMERATORS: ReadonlyArray<readonly [number, number]> = [
+  [1.1, 4505], // 광각렌즈
+  [1.2, 4915], // 포커스렌즈
+  [1.3, 5325], // 복안
+  [0.9, 3686], // 반짝가루
+  [0.8, 3277], // 모래숨기·눈숨기·의욕
+  [0.5, 2048], // 갈지자걸음
+];
+export function accuracyNumerator(multiplier: number): number {
+  const hit = ACCURACY_NUMERATORS.find(([m]) => Math.abs(m - multiplier) < 1e-9);
+  return hit ? hit[1] : Math.trunc(multiplier * 4096);
+}
+/** 4096분율 분자들을 이어 곱한 분자(`(a×b+2048)>>12`). 순서 = 중력 → 복안·의욕·모래숨기·눈숨기·갈지자걸음 → 렌즈류·반짝가루 */
+function chainNumerators(numerators: number[]): number {
+  return numerators.reduce((acc, n) => (acc * n + 2048) >> 12, 4096);
+}
+
+/**
+ * 첫 타(또는 단타)의 최종 적중 확률(0~1). 필중기(accuracy=null)는 null. Showdown hitStepAccuracy와 같다 — 보정 분자들을 체인으로
+ * 모아 명중 수치에 한 번 곱해 정수로 만들고, 랭크(명중 − 회피, ±6)는 `⌊acc×(3+s)/3`·`⌊acc×3/(3−s)` 절삭, 100을 넘으면 100%.
+ * numerators는 반짝가루·모래숨기 같은 특성/도구 보정의 4096분율 분자(순서 중요).
  */
 export function computeHitChance(
   baseAccuracy: number | null,
   attackerAccuracyStage: number,
   defenderEvasionStage: number,
-  extraMultiplier = 1,
+  numerators: number[] = [],
 ): number | null {
   if (baseAccuracy === null) return null;
-  const chance =
-    (baseAccuracy / 100) * computeAccuracyMultiplier(attackerAccuracyStage, defenderEvasionStage) * extraMultiplier;
-  return Math.max(0, Math.min(1, chance));
+  let accuracy = numerators.length > 0 ? modify4096(baseAccuracy, chainNumerators(numerators) / 4096) : baseAccuracy;
+  const stage = clampAccuracyStage(attackerAccuracyStage - defenderEvasionStage);
+  if (stage > 0) accuracy = Math.trunc((accuracy * (3 + stage)) / 3);
+  else if (stage < 0) accuracy = Math.trunc((accuracy * 3) / (3 - stage));
+  return Math.max(0, Math.min(100, accuracy)) / 100;
+}
+
+const PER_HIT_BOOST_TABLE = [1, 4 / 3, 5 / 3, 2, 7 / 3, 8 / 3, 3];
+
+/**
+ * 연속기 2타째 이후(트리플악셀·찍찍베기)의 적중 확률. Showdown champions hitStepMoveHitLoop(multiaccuracy)를 그대로 옮겼다:
+ * 명중·회피 랭크를 각각 따로 소수로 곱하고, 그 값이 **정수일 때만** 보정(렌즈·복안 등)이 적용되며(sim/battle.ts runEvent),
+ * 판정은 `random(100) < accuracy`(0~99 정수 비교)라 소수 수치는 올림(67.5 → 68%)이다. 본가와 다를 가능성이 첫 타보다 크다(설계서 §7).
+ */
+export function computePerHitChance(
+  baseAccuracy: number | null,
+  attackerAccuracyStage: number,
+  defenderEvasionStage: number,
+  numerators: number[] = [],
+): number | null {
+  if (baseAccuracy === null) return null;
+  let accuracy = baseAccuracy;
+  const acc = clampAccuracyStage(attackerAccuracyStage);
+  accuracy = acc > 0 ? accuracy * PER_HIT_BOOST_TABLE[acc] : accuracy / PER_HIT_BOOST_TABLE[-acc];
+  const eva = clampAccuracyStage(defenderEvasionStage);
+  if (eva > 0) accuracy /= PER_HIT_BOOST_TABLE[eva];
+  else if (eva < 0) accuracy *= PER_HIT_BOOST_TABLE[-eva];
+  if (Number.isInteger(accuracy) && numerators.length > 0) accuracy = modify4096(accuracy, chainNumerators(numerators) / 4096);
+  return Math.max(0, Math.min(100, Math.ceil(accuracy))) / 100;
 }
 
 /**

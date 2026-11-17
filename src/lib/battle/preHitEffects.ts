@@ -89,6 +89,8 @@ interface PreHitCtx {
   gemMultiplier: number;
   ateGemItemName: string | undefined;
   hitChance: number | null;
+  /** 연속기 2타째 이후의 적중 확률(트리플악셀·찍찍베기만 첫 타와 다르다, 8.3 D3-fix-8) */
+  perHitChance: number | null;
   defenderHideType: ChargeHideType | undefined;
   evadedByCharge: boolean;
   hit: boolean;
@@ -1088,7 +1090,7 @@ function recordUsageEffects(c: PreHitCtx) {
 function rollHit(c: PreHitCtx) {
 
   // 명중 확률(배율·회피율 예외·필중 조건)은 배틀 AI와 공유하는 computeBattleHitChance에서 계산한다.
-  c.hitChance = computeBattleHitChance({
+  const hitChanceInput = {
     state: c.state,
     attacker: c.attacker,
     defender: c.defender,
@@ -1099,7 +1101,9 @@ function rollHit(c: PreHitCtx) {
     attackerItem: c.attackerItem,
     defenderItem: c.defenderItem,
     attackerMovesSecond: c.movesSecond,
-  });
+  };
+  c.hitChance = computeBattleHitChance(hitChanceInput);
+  c.perHitChance = c.effectiveMove.multiHitPowers ? computeBattleHitChance({ ...hitChanceInput, perHit: true }) : c.hitChance;
 
   // 상대가 차지 기술 준비 턴(공중날기 등)으로 무적인 동안엔, bypassesHiding에 이 무적 종류가
   // 포함된 기술이 아닌 이상 조건 없이 빗나간다 — 명중률 굴림 자체를 건너뛴다.
@@ -1260,7 +1264,7 @@ function applyProtectReactions(c: PreHitCtx) {
 /** 결과를 모아 돌려준다 */
 function collectResult(c: PreHitCtx) {
   return {
-    move: c.move, chargeStatRises: c.chargeStatRises, defenderKey: c.defenderKey, attacker: c.attacker, defender: c.defender, defenderHpAtActionStart: c.defenderHpAtActionStart, actorPokemonId: c.actorPokemonId, defenderPokemonId: c.defenderPokemonId, attackerAbility: c.attackerAbility, defenderAbility: c.defenderAbility, attackerBerriesBlocked: c.attackerBerriesBlocked, defenderBerriesBlocked: c.defenderBerriesBlocked, attackerItemIdBeforeAction: c.attackerItemIdBeforeAction, defenderItemIdBeforeAction: c.defenderItemIdBeforeAction, leppaRestoredPpItemName: c.leppaRestoredPpItemName, stanceChange: c.stanceChange, pressureExtraPpAbilityName: c.pressureExtraPpAbilityName, selfCuredStatus: c.selfCuredStatus, sleepTalkCalledMoveName: c.sleepTalkCalledMoveName, copycatCalledMoveName: c.copycatCalledMoveName, ohkoBlockedByAbilityName: c.ohkoBlockedByAbilityName, ohkoImmune: c.ohkoImmune, flungItemId: c.flungItemId, attackerItem: c.attackerItem, defenderItem: c.defenderItem, blockedByGoodAsGold: c.blockedByGoodAsGold, blockedBySubstitute: c.blockedBySubstitute, blockedByPowderImmunity: c.blockedByPowderImmunity, unseenFistPiercing: c.unseenFistPiercing, blockedByProtect: c.blockedByProtect, blockedByProtectMoveName: c.blockedByProtectMoveName, soundproofBlockedByAbilityName: c.soundproofBlockedByAbilityName, bulletproofBlockedByAbilityName: c.bulletproofBlockedByAbilityName, opponentEffectsBlocked: c.opponentEffectsBlocked, bouncedByMagicMirror: c.bouncedByMagicMirror, shellSideArmCategory: c.shellSideArmCategory, abilityOffenseMultiplier: c.abilityOffenseMultiplier, statOffenseMultiplier: c.statOffenseMultiplier, abilityDefenseMultiplier: c.abilityDefenseMultiplier, finalDefenseMultiplier: c.finalDefenseMultiplier, stabMultiplier: c.stabMultiplier, typeEffectiveness: c.typeEffectiveness, effectiveMove: c.effectiveMove, sheerForceAbilityName: c.sheerForceAbilityName, fickleBeamEmpowered: c.fickleBeamEmpowered, electromorphosisEmpoweredAbilityName: c.electromorphosisEmpoweredAbilityName, ownMoveTypeBoostMultiplier: c.ownMoveTypeBoostMultiplier, rivalryMultiplier: c.rivalryMultiplier, changedOwnTypeTo: c.changedOwnTypeTo, changedOwnTypeAbilityName: c.changedOwnTypeAbilityName, lostTypeAfterUse: c.lostTypeAfterUse, gemMultiplier: c.gemMultiplier, ateGemItemName: c.ateGemItemName, hitChance: c.hitChance, defenderHideType: c.defenderHideType, evadedByCharge: c.evadedByCharge, hit: c.hit, selfDamageOnUse: c.selfDamageOnUse, abilityAbsorbedMoveType: c.abilityAbsorbedMoveType, abilityAbsorbAbilityName: c.abilityAbsorbAbilityName, abilityAbsorbHealAmount: c.abilityAbsorbHealAmount, protectContactPenaltyMoveName: c.protectContactPenaltyMoveName, protectContactDamage: c.protectContactDamage, protectContactInflictedStatus: c.protectContactInflictedStatus,
+    move: c.move, chargeStatRises: c.chargeStatRises, defenderKey: c.defenderKey, attacker: c.attacker, defender: c.defender, defenderHpAtActionStart: c.defenderHpAtActionStart, actorPokemonId: c.actorPokemonId, defenderPokemonId: c.defenderPokemonId, attackerAbility: c.attackerAbility, defenderAbility: c.defenderAbility, attackerBerriesBlocked: c.attackerBerriesBlocked, defenderBerriesBlocked: c.defenderBerriesBlocked, attackerItemIdBeforeAction: c.attackerItemIdBeforeAction, defenderItemIdBeforeAction: c.defenderItemIdBeforeAction, leppaRestoredPpItemName: c.leppaRestoredPpItemName, stanceChange: c.stanceChange, pressureExtraPpAbilityName: c.pressureExtraPpAbilityName, selfCuredStatus: c.selfCuredStatus, sleepTalkCalledMoveName: c.sleepTalkCalledMoveName, copycatCalledMoveName: c.copycatCalledMoveName, ohkoBlockedByAbilityName: c.ohkoBlockedByAbilityName, ohkoImmune: c.ohkoImmune, flungItemId: c.flungItemId, attackerItem: c.attackerItem, defenderItem: c.defenderItem, blockedByGoodAsGold: c.blockedByGoodAsGold, blockedBySubstitute: c.blockedBySubstitute, blockedByPowderImmunity: c.blockedByPowderImmunity, unseenFistPiercing: c.unseenFistPiercing, blockedByProtect: c.blockedByProtect, blockedByProtectMoveName: c.blockedByProtectMoveName, soundproofBlockedByAbilityName: c.soundproofBlockedByAbilityName, bulletproofBlockedByAbilityName: c.bulletproofBlockedByAbilityName, opponentEffectsBlocked: c.opponentEffectsBlocked, bouncedByMagicMirror: c.bouncedByMagicMirror, shellSideArmCategory: c.shellSideArmCategory, abilityOffenseMultiplier: c.abilityOffenseMultiplier, statOffenseMultiplier: c.statOffenseMultiplier, abilityDefenseMultiplier: c.abilityDefenseMultiplier, finalDefenseMultiplier: c.finalDefenseMultiplier, stabMultiplier: c.stabMultiplier, typeEffectiveness: c.typeEffectiveness, effectiveMove: c.effectiveMove, sheerForceAbilityName: c.sheerForceAbilityName, fickleBeamEmpowered: c.fickleBeamEmpowered, electromorphosisEmpoweredAbilityName: c.electromorphosisEmpoweredAbilityName, ownMoveTypeBoostMultiplier: c.ownMoveTypeBoostMultiplier, rivalryMultiplier: c.rivalryMultiplier, changedOwnTypeTo: c.changedOwnTypeTo, changedOwnTypeAbilityName: c.changedOwnTypeAbilityName, lostTypeAfterUse: c.lostTypeAfterUse, gemMultiplier: c.gemMultiplier, ateGemItemName: c.ateGemItemName, hitChance: c.hitChance, perHitChance: c.perHitChance, defenderHideType: c.defenderHideType, evadedByCharge: c.evadedByCharge, hit: c.hit, selfDamageOnUse: c.selfDamageOnUse, abilityAbsorbedMoveType: c.abilityAbsorbedMoveType, abilityAbsorbAbilityName: c.abilityAbsorbAbilityName, abilityAbsorbHealAmount: c.abilityAbsorbHealAmount, protectContactPenaltyMoveName: c.protectContactPenaltyMoveName, protectContactDamage: c.protectContactDamage, protectContactInflictedStatus: c.protectContactInflictedStatus,
   };
 }
 

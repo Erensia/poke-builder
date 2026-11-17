@@ -282,7 +282,7 @@ function applyFutureSight(ctx: EndOfTurnFighterContext): void {
       attackerAbility, defenderAbility, attackerItem, defenderItem, typeEffectiveness: mc.typeEffectiveness,
       blockedByProtect: false, // 방어류는 이 플래그로 무시된다(activeProtect는 비우지 않는다 — 버티기는 그대로 발동)
       blockedBySubstitute: fighter.substituteHp !== undefined && !attackerAbility?.bypassesScreensAndSubstitute,
-      unseenFistPiercing: false, hitChance, evadedByCharge: false, defenderHideType: undefined,
+      unseenFistPiercing: false, hitChance, perHitChance: hitChance, evadedByCharge: false, defenderHideType: undefined,
       gemMultiplier: 1,
       ownMoveTypeBoostMultiplier: (mc.effectiveMove.type ? src.ownMoveTypeBoosts[mc.effectiveMove.type] : undefined) ?? 1,
       rivalryMultiplier: rivalryDamageMultiplier(attackerAbility, src.gender, fighter.gender),

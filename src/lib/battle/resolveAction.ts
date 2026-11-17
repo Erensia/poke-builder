@@ -1026,10 +1026,10 @@ export function resolveAction(
   c.protectContactPenaltyMoveName = c.pre.protectContactPenaltyMoveName;
   c.protectContactDamage = c.pre.protectContactDamage;
   c.protectContactInflictedStatus = c.pre.protectContactInflictedStatus;
-  let { unseenFistPiercing, abilityOffenseMultiplier, statOffenseMultiplier, abilityDefenseMultiplier, finalDefenseMultiplier, stabMultiplier, ownMoveTypeBoostMultiplier, rivalryMultiplier, gemMultiplier, hitChance, defenderHideType, evadedByCharge } = c.pre;
+  let { unseenFistPiercing, abilityOffenseMultiplier, statOffenseMultiplier, abilityDefenseMultiplier, finalDefenseMultiplier, stabMultiplier, ownMoveTypeBoostMultiplier, rivalryMultiplier, gemMultiplier, hitChance, perHitChance, defenderHideType, evadedByCharge } = c.pre;
 
   const _d0 = resolveHitAndApplyDamage({
-    state: c.state, defenderKey: c.defenderKey, move: c.move, effectiveMove: c.effectiveMove, random: c.random, attacker: c.attacker, defender: c.defender, attackerAbility: c.attackerAbility, defenderAbility: c.defenderAbility, attackerItem: c.attackerItem, defenderItem: c.defenderItem, typeEffectiveness: c.typeEffectiveness, blockedByProtect: c.blockedByProtect, blockedBySubstitute: c.blockedBySubstitute, unseenFistPiercing, hitChance, evadedByCharge, defenderHideType, gemMultiplier, ownMoveTypeBoostMultiplier, rivalryMultiplier, sheerForceAbilityName: c.sheerForceAbilityName, defenderBerriesBlocked: c.defenderBerriesBlocked, abilityOffenseMultiplier, statOffenseMultiplier, abilityDefenseMultiplier, finalDefenseMultiplier, stabMultiplier
+    state: c.state, defenderKey: c.defenderKey, move: c.move, effectiveMove: c.effectiveMove, random: c.random, attacker: c.attacker, defender: c.defender, attackerAbility: c.attackerAbility, defenderAbility: c.defenderAbility, attackerItem: c.attackerItem, defenderItem: c.defenderItem, typeEffectiveness: c.typeEffectiveness, blockedByProtect: c.blockedByProtect, blockedBySubstitute: c.blockedBySubstitute, unseenFistPiercing, hitChance, perHitChance, evadedByCharge, defenderHideType, gemMultiplier, ownMoveTypeBoostMultiplier, rivalryMultiplier, sheerForceAbilityName: c.sheerForceAbilityName, defenderBerriesBlocked: c.defenderBerriesBlocked, abilityOffenseMultiplier, statOffenseMultiplier, abilityDefenseMultiplier, finalDefenseMultiplier, stabMultiplier
   });
   c.abilityDamageAbilityName = _d0.abilityDamageAbilityName;
   c.abilityDamageToAttacker = _d0.abilityDamageToAttacker;
