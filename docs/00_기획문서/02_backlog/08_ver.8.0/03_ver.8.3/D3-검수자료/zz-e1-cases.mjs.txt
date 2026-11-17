@@ -1,0 +1,110 @@
+/**
+ * 정수 데미지 공식(2.4 B3) 회귀 검증 — 사용자가 외부 계산기(스마트누오·포케챔스·포챔스GG)로 모은 16개 난수 값과 16/16 일치하는지 본다.
+ * 같은 입력을 ① 매치업 난수표 경로(evaluateSlotMatchup → damageParts) ② 배틀 엔진 경로(runTurn, 난수 0.5 = 93%) 두 곳에서 확인한다.
+ * 실패가 하나라도 있으면 종료 코드 1.
+ *
+ *   npm run test:damage
+ */
+import { createServer } from "vite";
+import { fileURLToPath } from "node:url";
+
+const root = fileURLToPath(new URL("..", import.meta.url));
+const server = await createServer({ root, server: { middlewareMode: true, hmr: false }, appType: "custom", logLevel: "error" });
+let failed = 0;
+try {
+  const data = await server.ssrLoadModule("/src/lib/data.ts");
+  const ev = await server.ssrLoadModule("/src/lib/matchupEvaluator.ts");
+  const fm = await server.ssrLoadModule("/src/lib/damageFormula.ts");
+  const st = await server.ssrLoadModule("/src/lib/battle/state.ts");
+  const rt = await server.ssrLoadModule("/src/lib/battle/runTurn.ts");
+
+  const pts = { hp: 0, atk: 0, def: 0, spa: 0, spd: 0, spe: 0 };
+  const slot = (pokemonId, extra = {}) => ({ pokemonId, ability: null, item: null, nature: null, points: pts, moves: [], ...extra });
+  const onePerHit = [25, 27, 27, 27, 27, 27, 28, 28, 28, 28, 28, 30, 30, 30, 30, 31];
+
+  // [이름, 공격측 슬롯, 기술, 방어측 슬롯, 평가 옵션, 기대 16개, 엔진 대조 여부, (선택) 엔진 상태 준비 함수]
+  const cases = [
+    ["① 글레이시아→패리퍼 프리즈드라이", slot("글레이시아"), "프리즈드라이", slot("패리퍼"), {},
+      [268, 268, 276, 276, 280, 280, 288, 288, 292, 292, 300, 300, 304, 304, 312, 316], true],
+    ["② +생명의구슬", slot("글레이시아", { item: "생명의구슬" }), "프리즈드라이", slot("패리퍼"), {},
+      [348, 348, 359, 359, 364, 364, 374, 374, 380, 380, 390, 390, 395, 395, 406, 411], true],
+    ["③ +빛의장막", slot("글레이시아"), "프리즈드라이", slot("패리퍼"), { screen: "lightScreen" },
+      [134, 134, 138, 138, 140, 140, 144, 144, 146, 146, 150, 150, 152, 152, 156, 158], false],
+    ["④ +급소", slot("글레이시아"), "프리즈드라이", slot("패리퍼"), { critical: true },
+      [400, 400, 408, 412, 420, 424, 424, 432, 436, 444, 448, 448, 456, 460, 468, 472], false],
+    ["⑤ 쾌청 리자몽 화염방사→패리퍼", slot("리자몽"), "화염방사", slot("패리퍼"), { weather: "쾌청" },
+      [54, 55, 56, 57, 57, 58, 59, 60, 60, 60, 61, 62, 63, 63, 64, 65], false],
+    ["⑥ +급소", slot("리자몽"), "화염방사", slot("패리퍼"), { weather: "쾌청", critical: true },
+      [82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97], false],
+    ["⑦ 글레이시아→잠만보 두꺼운지방", slot("글레이시아"), "프리즈드라이", slot("잠만보", { ability: "두꺼운지방" }), {},
+      [24, 24, 24, 24, 24, 25, 25, 25, 25, 25, 27, 27, 27, 27, 27, 28], true],
+    ["⑧ 스케일샷 2타", slot("한카리아스"), "스케일샷", slot("잠만보"), { multiHitCount: 2 }, onePerHit.map((x) => x * 2), false],
+    ["⑨ 스케일샷 5타", slot("한카리아스"), "스케일샷", slot("잠만보"), { multiHitCount: 5 }, onePerHit.map((x) => x * 5), false],
+    ["⑩ 화상 역린", slot("한카리아스"), "역린", slot("잠만보"), { attackerStatus: "burn", finalOffenseMultiplier: 0.5 },
+      [60, 60, 61, 62, 63, 63, 64, 65, 66, 66, 67, 68, 69, 69, 70, 71], false],
+    ["⑪ 용의이빨 역린", slot("한카리아스", { item: "용의이빨" }), "역린", slot("잠만보"), {},
+      [144, 145, 147, 148, 150, 151, 153, 154, 157, 159, 160, 162, 163, 165, 166, 169], true],
+    ["⑫ 하드록 아쿠아브레이크→폭타", slot("한카리아스"), "아쿠아브레이크", slot("폭타", { ability: "하드록" }), {},
+      [162, 165, 165, 168, 168, 171, 174, 174, 177, 180, 180, 183, 186, 186, 189, 192], true],
+    // ── 2.5 (사용자 검증 사례, 스마트누오·포챔스GG 16개 값) ──
+    ["2.5-1a 필드 없음 에써르→잠만보 와이드포스", slot("에써르"), "와이드포스", slot("잠만보"), {}, [43, 45, 45, 45, 46, 46, 46, 48, 48, 48, 49, 49, 49, 51, 51, 52], false],
+    ["2.5-1b 사이코필드", slot("에써르"), "와이드포스", slot("잠만보"), { field: "사이코필드" }, [85, 87, 88, 88, 90, 91, 91, 93, 94, 94, 96, 97, 97, 99, 100, 102], false],
+    ["2.5-2a 멀티스케일 없음 에써르→망나뇽", slot("에써르"), "와이드포스", slot("망나뇽"), {}, [48, 48, 49, 49, 49, 51, 51, 51, 52, 52, 54, 54, 54, 55, 55, 57], false],
+    ["2.5-2b 멀티스케일(최종 ×½)", slot("에써르"), "와이드포스", slot("망나뇽", { ability: "멀티스케일" }), {}, [24, 24, 24, 24, 24, 25, 25, 25, 26, 26, 27, 27, 27, 27, 27, 28], true],
+    ["2.5-3a 복슬복슬 없음 번치코→묘두기 번개펀치", slot("번치코"), "번개펀치", slot("묘두기"), {}, [34, 34, 34, 35, 35, 36, 36, 36, 37, 37, 38, 38, 38, 39, 39, 40], false],
+    ["2.5-3b 복슬복슬(접촉 최종 ×½)", slot("번치코"), "번개펀치", slot("묘두기", { ability: "복슬복슬" }), {}, [17, 17, 17, 17, 17, 18, 18, 18, 18, 18, 19, 19, 19, 19, 19, 20], true],
+    ["2.5-4a 펑크록 없음 누리레느→스트린더 물거품아리아", slot("누리레느"), "물거품아리아", slot("스트린더"), {}, [84, 84, 85, 87, 87, 88, 90, 90, 91, 93, 93, 94, 96, 96, 97, 99], false],
+    ["2.5-4b 펑크록(소리 최종 ×½)", slot("누리레느"), "물거품아리아", slot("스트린더", { ability: "펑크록" }), {}, [42, 42, 42, 43, 43, 44, 45, 45, 45, 46, 46, 47, 48, 48, 48, 49], true],
+    ["2.5-5a 달인의띠 없음 히스이미끄래곤→보만다 냉동빔", slot("히스이미끄래곤"), "냉동빔", slot("보만다"), {}, [180, 180, 184, 184, 188, 188, 192, 192, 196, 196, 200, 200, 204, 204, 208, 212], false],
+    ["2.5-5b 달인의띠(최종 ×1.2)", slot("히스이미끄래곤", { item: "달인의띠" }), "냉동빔", slot("보만다"), {}, [216, 216, 221, 221, 226, 226, 230, 230, 235, 235, 240, 240, 245, 245, 250, 254], true],
+    ["2.5-6a 급류 없음 누리레느→스트린더", slot("누리레느"), "물거품아리아", slot("스트린더"), {}, [84, 84, 85, 87, 87, 88, 90, 90, 91, 93, 93, 94, 96, 96, 97, 99], false],
+    ["2.5-6b 급류(공격 스탯 ×1.5)", slot("누리레느", { ability: "급류" }), "물거품아리아", slot("스트린더"), { pinchAssumed: true, abilityHpFraction: 0.3 }, [124, 126, 127, 129, 130, 132, 133, 135, 136, 138, 139, 141, 142, 144, 145, 147], true, (st) => { st.a.currentHp = Math.floor(st.a.maxHp / 3); }],
+    ["2.5-7 비+급소 리자몽→핫삼 화염방사", slot("리자몽"), "화염방사", slot("핫삼"), { weather: "비", critical: true }, [196, 196, 196, 204, 204, 208, 208, 208, 216, 216, 220, 220, 220, 228, 228, 232], false],
+    ["2.5-D3 비+급소 리자몽→보르그", slot("리자몽"), "화염방사", slot("보르그"), { weather: "비", critical: true }, [54, 54, 55, 55, 57, 57, 58, 58, 58, 60, 60, 61, 61, 63, 63, 64], false],
+    ["2.5-D3 비+급소 리자몽→펜드라", slot("리자몽"), "화염방사", slot("펜드라"), { weather: "비", critical: true }, [108, 108, 110, 110, 114, 114, 116, 116, 116, 120, 120, 122, 122, 126, 126, 128], false],
+    ["2.5-D3 비+급소 리자몽→아마루르가", slot("리자몽"), "화염방사", slot("아마루르가"), { weather: "비", critical: true }, [42, 43, 43, 43, 45, 45, 45, 46, 46, 46, 48, 48, 48, 49, 49, 51], false],
+    ["2.5-D3 비+급소 리자몽→브리무음", slot("리자몽"), "화염방사", slot("브리무음"), { weather: "비", critical: true }, [39, 39, 39, 40, 40, 40, 42, 42, 42, 43, 43, 43, 45, 45, 45, 46], false],
+    ["2.5-D3 비+급소 리자몽→모르페코", slot("리자몽"), "화염방사", slot("모르페코"), { weather: "비", critical: true }, [61, 63, 63, 64, 64, 66, 66, 67, 67, 69, 69, 70, 70, 72, 72, 73], false],
+    ["2.5-D3 비+급소 리자몽→폭슬라이", slot("리자몽"), "화염방사", slot("폭슬라이"), { weather: "비", critical: true }, [42, 43, 43, 43, 45, 45, 45, 46, 46, 46, 48, 48, 48, 49, 49, 51], false],
+    ["2.5-D2 맹화 리자몽→이어롭", slot("리자몽", { ability: "맹화" }), "화염방사", slot("이어롭"), { pinchAssumed: true, abilityHpFraction: 0.3 }, [84, 85, 87, 87, 88, 90, 90, 91, 93, 93, 94, 96, 96, 97, 99, 100], true, (st) => { st.a.currentHp = Math.floor(st.a.maxHp / 3); }],
+    ["2.5-D2 맹화 리자몽→블래키", slot("리자몽", { ability: "맹화" }), "화염방사", slot("블래키"), { pinchAssumed: true, abilityHpFraction: 0.3 }, [66, 66, 67, 67, 69, 69, 70, 70, 72, 72, 73, 73, 75, 75, 76, 78], false],
+    ["2.5-D2 맹화 리자몽→입치트", slot("리자몽", { ability: "맹화" }), "화염방사", slot("입치트"), { pinchAssumed: true, abilityHpFraction: 0.3 }, [260, 264, 266, 270, 272, 276, 278, 282, 284, 288, 290, 294, 296, 300, 302, 308], false],
+    ["2.5-D2 맹화 리자몽→님피아", slot("리자몽", { ability: "맹화" }), "화염방사", slot("님피아"), { pinchAssumed: true, abilityHpFraction: 0.3 }, [66, 66, 67, 67, 69, 69, 70, 70, 72, 72, 73, 73, 75, 75, 76, 78], false],
+    ["2.5-D2 맹화 리자몽→데덴네", slot("리자몽", { ability: "맹화" }), "화염방사", slot("데덴네"), { pinchAssumed: true, abilityHpFraction: 0.3 }, [112, 114, 115, 117, 118, 120, 120, 121, 123, 124, 126, 127, 129, 130, 132, 133], false],
+    ["2.5-D2 맹화 리자몽→크레베이스", slot("리자몽", { ability: "맹화" }), "화염방사", slot("크레베이스"), { pinchAssumed: true, abilityHpFraction: 0.3 }, [296, 300, 302, 306, 312, 314, 318, 320, 324, 326, 332, 336, 338, 342, 344, 350], false],
+    ["2.5-선파워 쾌청 리자몽→보르그", slot("리자몽", { ability: "선파워" }), "화염방사", slot("보르그"), { weather: "쾌청" }, [165, 166, 169, 171, 172, 175, 177, 178, 180, 183, 184, 186, 189, 190, 192, 195], false],
+    ["2.5-선파워 쾌청 리자몽→펜드라", slot("리자몽", { ability: "선파워" }), "화염방사", slot("펜드라"), { weather: "쾌청" }, [330, 332, 338, 342, 344, 350, 354, 356, 360, 366, 368, 372, 378, 380, 384, 390], false],
+    ["2.5-선파워 쾌청 리자몽→아마루르가", slot("리자몽", { ability: "선파워" }), "화염방사", slot("아마루르가"), { weather: "쾌청" }, [133, 135, 136, 138, 139, 141, 142, 144, 145, 147, 148, 150, 151, 153, 154, 157], false],
+  ];
+
+
+  const q=x=>Math.trunc(x*4096),tr=Math.trunc;
+  const modify=(v,m)=>tr((tr(v*q(m))+2047)/4096);
+  const fl=x=>Math.floor(x+1e-9);
+  function sd(p,power,def,roll,fm){
+    const bp=Math.max(1,modify(power,p.baseMultiplier));
+    const atk=fl(p.attackTerm);
+    const df=Math.max(1,modify(fl(def*p.defenseRankMultiplier),p.bulkMultiplier));
+    let d=tr(tr(tr(22*bp*atk/df))/50)+2;
+    if(p.weatherMultiplier!==1)d=modify(d,p.weatherMultiplier);
+    if(p.critMultiplier!==1)d=tr(d*p.critMultiplier);
+    d=tr(d*Math.round(roll*100)/100);
+    if(p.stabMultiplier!==1)d=modify(d,p.stabMultiplier);
+    d=tr(d*p.typeEffectiveness);
+    const fin=p.finalMultiplier*(p.firstHitFinalMultiplier??1);if(fin!==1)d=modify(d,fin);
+    return Math.max(1,d);
+  }
+  let bothOk=0,onlyDec=0,onlySd=0,neither=0;
+  for(const [name,atk,moveId,def,options,want] of cases){
+    const move=data.getMove(moveId);
+    const res=ev.evaluateSlotMatchup(atk,move,def,options);
+    const p=res.damageParts;
+    const dec=fm.damageRollTotals(p,res.defenseStat);
+    const sdv=Array.from({length:16},(_,k)=>p.hitPowers.reduce((s,pw,i)=>s+sd(p,pw,res.defenseStat,(85+k)/100,fm),0));
+    const same=(a,b)=>a.every((v,i)=>v===b[i]);
+    const dOk=same(dec,want),sOk=same(sdv,want);
+    if(dOk&&sOk)bothOk++;else if(dOk)onlyDec++;else if(sOk)onlySd++;else neither++;
+    if(!(dOk&&sOk)||process.env.V)console.log(dOk?"dec✓":"dec✗",sOk?"sd✓":"sd✗",name,JSON.stringify(p)+" dec="+dec+" sd="+sdv+" want="+want);
+  }
+  console.log({bothOk,onlyDec,onlySd,neither,total:cases.length});
+} finally { await server.close(); }
