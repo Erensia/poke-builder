@@ -76,6 +76,12 @@ export function auditMoveEffect(move) {
       if (stat && !(move.statChanges ?? []).some((s) => s.target === target && s.stat === stat && s.delta === delta)) add("K4", `문구 ${m[1]} ${word} ${delta > 0 ? "+" : ""}${delta} ↔ 필드 statChanges [${(move.statChanges ?? []).map((s) => `${s.target}.${s.stat}${s.delta > 0 ? "+" : ""}${s.delta}`)}]`);
     }
   }
+  // K5 접촉 표기 — tags의 "접촉/비접촉"(화면 표시)과 makesContact(엔진 판정)가 어긋나면 안 된다(8.3 D3-fix-2). 태그가 없는 기술은 검증 불가라 건너뛴다.
+  const tags = move.tags ?? [];
+  if (tags.includes("접촉") || tags.includes("비접촉")) {
+    const tagged = tags.includes("접촉") && !tags.includes("비접촉");
+    if ((move.makesContact ?? false) !== tagged) add("K5", `tags ${tagged ? "접촉" : "비접촉"} ↔ makesContact ${move.makesContact}`);
+  }
   return out;
 }
 

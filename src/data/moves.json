@@ -11,7 +11,8 @@
     "tags": [
       "접촉"
     ],
-    "priority": 0
+    "priority": 0,
+    "makesContact": true
   },
   {
     "id": "전광석화",
@@ -6785,7 +6786,7 @@
     "tags": [
       "비접촉"
     ],
-    "makesContact": true,
+    "makesContact": false,
     "excludedFromSleepTalk": true
   },
   {
@@ -6945,7 +6946,7 @@
         "chance": 30
       }
     ],
-    "makesContact": true
+    "makesContact": false
   },
   {
     "id": "쪼아대기",
@@ -7399,10 +7400,10 @@
     "effect": "2~3턴 동안 불꽃을 마구 뿜어 대며 난동을 부린다. 난동 부린 뒤에는 혼란에 빠진다.",
     "tags": [
       "난동",
-      "접촉",
+      "비접촉",
       "혼란"
     ],
-    "makesContact": true,
+    "makesContact": false,
     "rampage": "confuse"
   },
   {
@@ -7552,7 +7553,7 @@
       "접촉"
     ],
     "fixedDamage": 50,
-    "makesContact": false
+    "makesContact": true
   },
   {
     "id": "분노의앞니",
@@ -8426,9 +8427,9 @@
     "effect": "단단한 바늘을 발사하여 공격한다. 2-5회 동안 연속으로 쓴다.",
     "tags": [
       "연속",
-      "접촉"
+      "비접촉"
     ],
-    "makesContact": true,
+    "makesContact": false,
     "minHits": 2,
     "maxHits": 5
   },
