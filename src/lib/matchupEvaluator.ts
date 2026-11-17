@@ -14,7 +14,7 @@ import { computeStatusSpeedMultiplier } from "./statusConditions";
 import { getWeatherDamageMultiplier, getWeatherDefenseMultiplier, applyWeatherBall } from "./weatherEffects";
 import { applyFieldPulse, getFieldPowerMultiplier, getFieldDamageMultiplier } from "./fieldEffects";
 import { resolveMoveContext } from "./moveContext";
-import { koChanceByUses, DAMAGE_ROLL_STEP_COUNT, type DamageParts } from "./damageFormula";
+import { koChanceByUses, chain4096, DAMAGE_ROLL_STEP_COUNT, type DamageParts } from "./damageFormula";
 import { defenseChangeWhenHpNotFull, resolveEffectiveDefenderAbility } from "./abilityModifiers";
 import { NEUTRAL_STAGES, type StatStages } from "../types/battleStats";
 import {
@@ -582,7 +582,7 @@ function computeOffense(c: SlotMatchupCtx) {
   // 매번 다시 계산하는 대신 이 값에 typeEffectiveness를 곱해서 구한다.
   // 급소(ver.1.9 6-2): 공격 쪽 랭크는 음수를 0으로(속임수는 방어자 공격 랭크가 공격 랭크라 같은 쪽), 방어 랭크는 양수를 0으로
   c.criticalApplies = c.critical && !c.defenderAbility?.preventsCritsAgainstSelf;
-  c.critMultiplier = c.criticalApplies ? (c.attackerAbility?.critDamageMultiplier ?? CRITICAL_DAMAGE_MULTIPLIER) : 1;
+  c.critMultiplier = c.criticalApplies ? CRITICAL_DAMAGE_MULTIPLIER * (c.attackerAbility?.critFinalMultiplier ?? 1) : 1;
   c.attackTypesForStab = offenseTypes(c.attackerForm.types, c.attackerAbility, c.effectiveMoveFinal, c.attackerTypeToMoveType);
   const rawOffensePower = computeOffensePower(c.attackerRealStats, c.attackTypesForStab, c.effectiveMoveFinal, {
     abilityMultiplier:
@@ -676,16 +676,30 @@ function buildDamageParts(c: SlotMatchupCtx) {
           attackTerm: Math.floor(attackTerm + 1e-9) * abilityStatMultiplier,
           defenseKey: c.defenseKey,
           defenseRankMultiplier: rankStageMultiplier(c.bulkDefenderStages[c.defenseKey]),
-          baseMultiplier:
-            ((c.manualAbilityMultiplier ?? c.abilityOffenseMultiplier) / abilityStatMultiplier) * c.rivalryMultiplier * c.hustleMultiplier * c.extraOffenseMultiplier *
-            itemBaseMultiplier * (c.manualFieldMultiplier ?? c.autoFieldDamageMultiplier),
+          baseMultiplier: chain4096(
+            "power",
+            (c.manualAbilityMultiplier ?? c.abilityOffenseMultiplier) / abilityStatMultiplier,
+            c.rivalryMultiplier,
+            c.hustleMultiplier,
+            c.extraOffenseMultiplier,
+            itemBaseMultiplier,
+            c.manualFieldMultiplier ?? c.autoFieldDamageMultiplier,
+          ),
           bulkMultiplier: c.manualBulkMultiplier ?? (c.abilityDefense / c.finalDefenseMultiplier) * c.weatherDefenseMultiplier,
           weatherMultiplier: c.manualWeatherMultiplier ?? c.autoWeatherDamageMultiplier,
-          critMultiplier: c.critMultiplier,
+          critMultiplier: c.criticalApplies ? CRITICAL_DAMAGE_MULTIPLIER : 1,
           stabMultiplier: c.effectiveMoveFinal.type && c.attackTypesForStab.includes(c.effectiveMoveFinal.type) ? c.stabMultiplier : 1,
           typeEffectiveness: c.typeEffectiveness,
-          finalMultiplier:
-            (itemFinalMultiplier * c.finalOffenseMultiplier) / (c.screenMultiplier * (useAutoDefense ? c.finalDefenseMultiplier * hpLost.finalMultiplier : 1)),
+          // 화상(finalOffenseMultiplier)은 상성 직후 별도 단계, 나머지는 최종 보정 체인 한 번(8.3 D3-fix-6)
+          burnMultiplier: c.finalOffenseMultiplier,
+          finalMultiplier: chain4096(
+            "final",
+            itemFinalMultiplier,
+            c.criticalApplies ? (c.attackerAbility?.critFinalMultiplier ?? 1) : 1,
+            1 / c.screenMultiplier,
+            useAutoDefense ? 1 / c.finalDefenseMultiplier : 1,
+            useAutoDefense ? 1 / hpLost.finalMultiplier : 1,
+          ),
           firstHitFinalMultiplier: useAutoDefense ? hpLost.finalMultiplier / c.berryResult.bulkMultiplier : 1,
         }
       : undefined;
@@ -909,7 +923,7 @@ export function computeSoloOffensePower(
 
   const attackerForm = getEffectiveForm(attackerPokemon, attackerSlot);
   const attackerAbility = attackerSlot.ability ? getAbility(attackerSlot.ability) : undefined;
-  const critMultiplier = critical ? (attackerAbility?.critDamageMultiplier ?? CRITICAL_DAMAGE_MULTIPLIER) : 1;
+  const critMultiplier = critical ? CRITICAL_DAMAGE_MULTIPLIER * (attackerAbility?.critFinalMultiplier ?? 1) : 1;
 
   const effectiveWeather = attackerAbility?.negatesWeather ? undefined : weather;
 

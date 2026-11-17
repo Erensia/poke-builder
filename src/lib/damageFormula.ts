@@ -22,6 +22,38 @@ function fl(x: number): number {
   return Math.floor(x + 1e-9);
 }
 
+/**
+ * 4096분율(본가·Showdown 방식, 8.3 D3-fix-6). 배율은 분자(정수)로 다루고 value × 분자 ÷ 4096을 0.5는 내림 쪽으로 반올림한다.
+ * 한 이벤트의 배율들은 chain4096으로 4096분율을 유지한 채 곱한 뒤 modify4096 한 번으로 적용한다.
+ * 데이터의 소수 배율(1.3 등)은 Showdown이 정수 분자로 직접 적는 값과 다를 수 있어 입구(toNumerator)에서 단계별로 바꾼다:
+ * 위력 단계 1.3 = 5325(단단한발톱·필드 등), 최종 단계 1.3 = 5324(생명의구슬). 그 밖은 tr(m×4096)(1.2 → 4915, 1.1 → 4505, 0.75·0.5·1.5는 정확).
+ */
+export type ModifyStage = "power" | "final" | "other";
+
+/** 소수 배율 → 4096분율 분자. 이미 n/4096 꼴(chain4096 결과)이면 그 분자를 그대로 돌려준다 */
+export function toNumerator(m: number, stage: ModifyStage = "other"): number {
+  const exact = m * 4096;
+  const nearest = Math.round(exact);
+  if (Math.abs(exact - nearest) < 1e-6) return nearest;
+  if (Math.abs(m - 1.3) < 1e-9) return stage === "power" ? 5325 : 5324;
+  return Math.trunc(exact);
+}
+
+/** value × 배율을 4096분율로 반올림(0.5는 내림). 본가 pokeRound와 같다 */
+export function modify4096(value: number, multiplier: number, stage: ModifyStage = "other"): number {
+  return Math.trunc((Math.trunc(value * toNumerator(multiplier, stage)) + 2047) / 4096);
+}
+
+/** 한 이벤트의 배율들을 4096분율로 이어 곱한 값(분자/4096). 1인 인자는 건너뛴다. 결과는 modify4096에 그대로 넣을 수 있다 */
+export function chain4096(stage: ModifyStage, ...factors: number[]): number {
+  let acc = 4096;
+  for (const f of factors) {
+    if (f === 1) continue;
+    acc = (acc * toNumerator(f, stage) + 2048) >> 12;
+  }
+  return acc / 4096;
+}
+
 /** 0.5는 내림 쪽으로 반올림(본가 pokeRound). 1e-9는 부동소수점 경계 보정. 방어류를 뚫은 공격의 ×0.25(8.3 B9)도 이 함수를 쓴다 */
 export function roundHalfDown(x: number): number {
   return Math.ceil(x - 0.5 - 1e-9);
@@ -52,6 +84,8 @@ export interface DamageParts {
   typeEffectiveness: number;
   /** 최종 보정(데미지에 곱하는 값) — 생명의구슬·벽·화상·하드록·열매 등 */
   finalMultiplier: number;
+  /** 화상 ×0.5 — 상성 직후 별도 단계(최종 보정 체인 앞, 8.3 D3-fix-6). 생략하면 1 */
+  burnMultiplier?: number;
   /** 첫 타에만 추가로 곱하는 최종 보정(반감 열매는 첫 타에서 소모). 생략하면 1 */
   firstHitFinalMultiplier?: number;
 }
@@ -66,19 +100,20 @@ export function integerHitDamage(
   firstHitFinalMultiplier = 1,
 ): number {
   if (p.typeEffectiveness === 0) return 0;
-  const boostedPower = Math.max(1, roundHalfDown(power * p.baseMultiplier));
+  const boostedPower = Math.max(1, modify4096(power, p.baseMultiplier, "power"));
   const attack = fl(p.attackTerm);
-  const defense = Math.max(1, fl(fl(defenseRealStat * p.defenseRankMultiplier) * p.bulkMultiplier));
+  const defense = Math.max(1, modify4096(fl(defenseRealStat * p.defenseRankMultiplier), p.bulkMultiplier));
   let d = fl(fl((LEVEL_50_TERM * boostedPower * attack) / defense) / 50) + 2;
-  if (p.weatherMultiplier !== 1) d = roundHalfDown(d * p.weatherMultiplier);
+  if (p.weatherMultiplier !== 1) d = modify4096(d, p.weatherMultiplier);
   if (p.critMultiplier !== 1) d = fl(d * p.critMultiplier);
   const pct = roll * 100;
   const wholePct = Math.abs(pct - Math.round(pct)) < 1e-9 ? Math.round(pct) : pct;
   d = fl((d * wholePct) / 100);
-  if (p.stabMultiplier !== 1) d = roundHalfDown(d * p.stabMultiplier);
+  if (p.stabMultiplier !== 1) d = modify4096(d, p.stabMultiplier);
   d = fl(d * p.typeEffectiveness);
-  const finalMultiplier = p.finalMultiplier * (isFirstHit ? firstHitFinalMultiplier : 1);
-  if (finalMultiplier !== 1) d = roundHalfDown(d * finalMultiplier);
+  if (p.burnMultiplier !== undefined && p.burnMultiplier !== 1) d = modify4096(d, p.burnMultiplier);
+  const finalMultiplier = isFirstHit && firstHitFinalMultiplier !== 1 ? chain4096("final", p.finalMultiplier, firstHitFinalMultiplier) : p.finalMultiplier;
+  if (finalMultiplier !== 1) d = modify4096(d, finalMultiplier, "final");
   return Math.max(1, d);
 }
 

@@ -1,1 +1,1 @@
-{"battles":60,"results":{"aiVsRandom":{"a":54,"b":5,"draw":0,"timeout":1},"aiVsAi":{"a":3,"b":11,"draw":0,"timeout":1}},"avgTurnMs":18.42,"maxTurnMs":130.5,"nanScores":0}
+{"battles":60,"results":{"aiVsRandom":{"a":54,"b":5,"draw":0,"timeout":1},"aiVsAi":{"a":4,"b":11,"draw":0,"timeout":0}},"avgTurnMs":14.25,"maxTurnMs":93,"nanScores":0}
