@@ -68,9 +68,9 @@ export default async function ({ check }) {
     try { r = audit.auditMoveEffect(frozen(JSON.parse(json(bad)))); } catch { threw = true; }
     check("8.3 B3-j: 얼린(수정 불가) 기술 객체로도 점검이 돈다(입력을 바꾸지 않는다)", !threw && r.length > 0); }
 
-  // ── B3-m: 실제 moves.json 전수 — 허용 목록 적용 뒤 경고 0건(허용 목록에는 의도된 3건만) ──
+  // ── B3-m: 실제 moves.json 전수 — 허용 목록 적용 뒤 경고 0건(허용 목록에는 의도된 5건만(킹실드·끈적끈적네트·데코레이션 K4, 회생의기도·날개치기 K6)) ──
   { const moves = Object.values(JSON.parse(readFileSync(new URL("../../src/data/moves.json", import.meta.url), "utf8")));
     const allow = JSON.parse(readFileSync(new URL("../data-allowlist.json", import.meta.url), "utf8")).moveEffectAudit ?? {};
     const r = run(moves, allow);
-    check(`8.3 B3-m: 실제 moves.json ${moves.length}건 — 허용 목록(${Object.keys(allow).join("·") || "없음"}) 적용 뒤 경고·오류 0건`, r.warnings.length === 0 && r.errors.length === 0 && json(Object.keys(allow).sort()) === json(["끈적끈적네트", "데코레이션", "킹실드"]), json(r).slice(0, 300)); }
+    check(`8.3 B3-m: 실제 moves.json ${moves.length}건 — 허용 목록(${Object.keys(allow).join("·") || "없음"}) 적용 뒤 경고·오류 0건`, r.warnings.length === 0 && r.errors.length === 0 && json(Object.keys(allow).sort()) === json(["끈적끈적네트", "데코레이션", "킹실드", "회생의기도", "날개치기"].sort()), json(r).slice(0, 300)); }
 }

@@ -82,6 +82,9 @@ export function auditMoveEffect(move) {
     const tagged = tags.includes("접촉") && !tags.includes("비접촉");
     if ((move.makesContact ?? false) !== tagged) add("K5", `tags ${tagged ? "접촉" : "비접촉"} ↔ makesContact ${move.makesContact}`);
   }
+  // K6 PP 형식 — 엔진 pp는 실제 최대 PP(champions 공식 (기본 PP÷5+1)×4, 기본 PP 20 초과는 20)라 8·12·16·20 중 하나다(8.3 D3-fix-3). pp 필드가 없는 합성 기술은 건너뛴다.
+  // 예외(noPPBoosts 회생의기도 1·미사용 날개치기 35)는 허용 목록으로 등록한다. 값이 집합 안에 있으면서 틀린 경우는 못 잡는다 — 시나리오 34의 기술별 값 시험이 지킨다.
+  if (typeof move.pp === "number" && ![8, 12, 16, 20].includes(move.pp)) add("K6", `pp ${move.pp} — 8·12·16·20이 아니다(최대 PP 환산 누락?)`);
   return out;
 }
 

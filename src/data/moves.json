@@ -476,7 +476,7 @@
     "category": "physical",
     "power": 120,
     "accuracy": 100,
-    "pp": 15,
+    "pp": 16,
     "priority": 0,
     "effect": "단단한 몸통을 상대에게 부딪쳐서 공격한다. 자신도 대상에게 준 피해의 ⅓만큼 반동 피해를 받는다.",
     "tags": [
@@ -3807,7 +3807,7 @@
     "category": "status",
     "power": null,
     "accuracy": null,
-    "pp": 12,
+    "pp": 20,
     "priority": 0,
     "effect": "힘을 비축해서 자신의 방어와 특수방어를 1랭크 올리고 비축 스택을 1 쌓는다. 최대 3회까지 비축할 수 있다(3스택이면 실패).",
     "tags": [
@@ -4797,7 +4797,7 @@
     "category": "status",
     "power": null,
     "accuracy": 100,
-    "pp": 12,
+    "pp": 8,
     "priority": -7,
     "effect": "이상한 공간을 만든다. 5턴 동안 느린 포켓몬부터 행동할 수 있다.",
     "tags": [
@@ -5487,7 +5487,7 @@
     "category": "status",
     "power": null,
     "accuracy": 100,
-    "pp": 8,
+    "pp": 12,
     "priority": 0,
     "effect": "상대의 빈틈을 노려 자신과 상대가 지닌 물건을 바꿔치기한다.",
     "makesContact": false,
@@ -6218,7 +6218,7 @@
     "category": "special",
     "power": 50,
     "accuracy": 100,
-    "pp": 10,
+    "pp": 12,
     "priority": 0,
     "effect": "필드의 힘을 빌려서 공격한다. 사용했을 때의 필드 상태에 따라서 기술 타입과 위력이 바뀐다.",
     "tags": [
@@ -6865,7 +6865,7 @@
     "category": "physical",
     "power": null,
     "accuracy": 100,
-    "pp": 10,
+    "pp": 12,
     "priority": 0,
     "effect": "이번 턴에 받은 데미지의 1.5배를 상대에게 돌려준다(물리·특수 무관, 타입 상성 무시). 먼저 행동해서 아직 안 맞았으면 실패한다.",
     "tags": [
@@ -7748,7 +7748,7 @@
     "category": "physical",
     "power": 50,
     "accuracy": 100,
-    "pp": 10,
+    "pp": 12,
     "priority": 0,
     "effect": "동료의 한을 풀어 주기 위해 공격한다. 쓰러진 같은 편 포켓몬이 많을수록 기술의 위력이 올라간다.",
     "tags": [
@@ -8039,7 +8039,7 @@
     "category": "physical",
     "power": null,
     "accuracy": 100,
-    "pp": 10,
+    "pp": 12,
     "priority": 0,
     "effect": "이번 턴에 받은 데미지의 1.5배를 상대에게 돌려준다(물리·특수 무관, 타입 상성 무시). 먼저 행동해서 아직 안 맞았으면 실패한다.",
     "tags": [
@@ -8058,7 +8058,7 @@
     "category": "special",
     "power": 75,
     "accuracy": 100,
-    "pp": 10,
+    "pp": 12,
     "priority": 0,
     "effect": "등골이 서늘해지는 원념으로 공격해서 상대의 공격을 1랭크 떨어뜨린다.",
     "tags": [
@@ -8170,7 +8170,7 @@
     "category": "physical",
     "power": 30,
     "accuracy": 100,
-    "pp": 15,
+    "pp": 16,
     "priority": 0,
     "effect": "회전해서 상대를 공격한다. 조이기, 김밥말이, 씨뿌리기 등의 효과를 날려 버린다. 상대를 독 상태로 만든다.",
     "tags": [
@@ -8194,7 +8194,7 @@
     "category": "status",
     "power": null,
     "accuracy": null,
-    "pp": 10,
+    "pp": 8,
     "priority": 4,
     "effect": "상대의 공격을 막음과 동시에 접촉한 상대의 최대 체력의 1/8을 감소시킨다.",
     "tags": [
@@ -8334,7 +8334,7 @@
     "category": "physical",
     "power": 85,
     "accuracy": 100,
-    "pp": 10,
+    "pp": 12,
     "priority": 0,
     "effect": "상반신을 힘차게 회전시켜 양팔로 상대를 후려친다. 상대의 능력 변화에 관계없이 데미지를 준다.",
     "tags": [
@@ -8350,7 +8350,7 @@
     "category": "status",
     "power": null,
     "accuracy": null,
-    "pp": 20,
+    "pp": 12,
     "priority": 0,
     "effect": "초능력으로 자신과 상대의 방어·특수방어 실능을 더한 뒤 반씩 나눠 갖는다.",
     "tags": [],
@@ -8365,7 +8365,7 @@
     "category": "physical",
     "power": null,
     "accuracy": 30,
-    "pp": 5,
+    "pp": 8,
     "priority": 0,
     "effect": "거대한 집게발이나 낫 등으로 협공하여 상대를 일격에 쓰러뜨리려 한다. 명중하면 상대는 한 번에 쓰러진다.",
     "tags": [
@@ -8381,7 +8381,7 @@
     "category": "physical",
     "power": 90,
     "accuracy": 100,
-    "pp": 10,
+    "pp": 12,
     "priority": 0,
     "effect": "난폭하게 돌진하여 공격한다. 리플렉터·빛의장막·오로라베일 등의 방어막을 부술 수 있다. 이 기술을 쓰는 켄타로스의 모습에 따라 타입이 바뀐다.",
     "tags": [
@@ -8402,7 +8402,7 @@
     "category": "physical",
     "power": 50,
     "accuracy": 100,
-    "pp": 25,
+    "pp": 20,
     "priority": 0,
     "effect": "전력을 다해 상대에게 맞선다. 이 기술로 상대를 쓰러뜨리면 자신의 공격이 3랭크 오른다.",
     "tags": [
@@ -8440,7 +8440,7 @@
     "category": "status",
     "power": null,
     "accuracy": 100,
-    "pp": 30,
+    "pp": 20,
     "priority": 0,
     "effect": "무서운 얼굴로 위협하여 상대를 마비시켜서 움직임을 둔하게 만든다.",
     "tags": [
@@ -8461,7 +8461,7 @@
     "category": "status",
     "power": null,
     "accuracy": null,
-    "pp": 10,
+    "pp": 12,
     "priority": 0,
     "effect": "상대 포켓몬으로 변신한다. 타입·능력치·특성·기술을 상대와 똑같이 복사한다(HP와 현재 상태이상은 제외).",
     "tags": [],
@@ -8475,7 +8475,7 @@
     "category": "physical",
     "power": 75,
     "accuracy": 95,
-    "pp": 10,
+    "pp": 12,
     "priority": 0,
     "effect": "날카로운 껍질로 상대를 벤다. 50% 확률로 상대의 방어를 1랭크 떨어뜨린다.",
     "tags": [
@@ -8503,7 +8503,7 @@
     "category": "physical",
     "power": 90,
     "accuracy": 100,
-    "pp": 10,
+    "pp": 12,
     "priority": 0,
     "effect": "조개 속에 숨겨둔 무기로 상대를 노린다. 물리·특수 중 데미지가 큰 쪽 판정으로 공격하며, 물리면 접촉기, 특수면 비접촉기가 된다. 두 값이 같으면 무작위로 정해진다.",
     "tags": [
@@ -8519,7 +8519,7 @@
     "category": "status",
     "power": null,
     "accuracy": null,
-    "pp": 10,
+    "pp": 12,
     "priority": 0,
     "effect": "자신과 상대의 스피드 실능을 서로 맞바꾼다.",
     "tags": [],
@@ -8533,7 +8533,7 @@
     "category": "physical",
     "power": 60,
     "accuracy": 100,
-    "pp": 10,
+    "pp": 12,
     "priority": 0,
     "effect": "상대의 급소를 노려 메어친다. 반드시 급소에 맞는다.",
     "tags": [
@@ -8550,7 +8550,7 @@
     "category": "status",
     "power": null,
     "accuracy": null,
-    "pp": 10,
+    "pp": 12,
     "priority": 0,
     "effect": "몸을 움츠려서 작게 만든다. 자신의 회피율을 2랭크 올린다.",
     "tags": [
@@ -9344,7 +9344,7 @@
     "category": "status",
     "power": null,
     "accuracy": null,
-    "pp": 10,
+    "pp": 12,
     "priority": 0,
     "effect": "다음 턴에 서로가 교체·도주할 수 없게 만든다.",
     "tags": [
@@ -10053,7 +10053,7 @@
     "category": "physical",
     "power": 160,
     "accuracy": 100,
-    "pp": 16,
+    "pp": 8,
     "priority": 0,
     "effect": "거대한 해머를 온몸으로 휘둘러서 공격한다. 2회 연속으로 쓸 수 없다.",
     "tags": [
