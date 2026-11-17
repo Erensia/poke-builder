@@ -3,7 +3,7 @@ import type { PokemonType } from "../types/pokemon-type";
 import type { BaseStats } from "../types/stats";
 import type { Ability } from "../types/ability";
 import type { PokemonGender } from "../types/pokemon";
-import { integerHitDamage } from "./damageFormula";
+import { chain4096, integerHitDamage } from "./damageFormula";
 import { BATTLE_STAT_KEYS, NEUTRAL_STAGES, type StatStages } from "../types/battleStats";
 
 /**
@@ -373,8 +373,8 @@ interface DamageOptions {
   finalMultiplier?: number;
   /** 급소 여부. true면 급소 배율을 곱하고, 방어측 랭크 상승/공격측 랭크 하락은 무시한다(본가 규칙) */
   isCritical?: boolean;
-  /** 급소 데미지 배율 오버라이드(스나이퍼=2.25). 생략하면 기본 CRITICAL_DAMAGE_MULTIPLIER(1.5). */
-  critDamageMultiplier?: number;
+  /** 화상 배율(0.5). 상성 직후 별도 단계로 적용한다(최종 보정 체인 앞, 8.3 D3-fix-6). 생략하면 1 */
+  burnMultiplier?: number;
   /** 0.85~1.00 사이 데미지 난수. 생략하면 1.00(최고값)으로 계산 — 최저/평균을 보고 싶으면 명시적으로 넘긴다 */
   randomRoll?: number;
 }
@@ -415,7 +415,7 @@ export function computeDamage(
     bulkMultiplier = 1,
     finalMultiplier = 1,
     isCritical = false,
-    critDamageMultiplier = CRITICAL_DAMAGE_MULTIPLIER,
+    burnMultiplier = 1,
     randomRoll = MAX_DAMAGE_ROLL,
   } = options;
 
@@ -445,12 +445,13 @@ export function computeDamage(
       attackTerm: attackStat,
       defenseKey: "def",
       defenseRankMultiplier: defenseMultiplier,
-      baseMultiplier: abilityMultiplier * itemMultiplier * fieldMultiplier,
+      baseMultiplier: chain4096("power", abilityMultiplier, itemMultiplier, fieldMultiplier),
       bulkMultiplier,
       weatherMultiplier,
-      critMultiplier: isCritical ? critDamageMultiplier : 1,
+      critMultiplier: isCritical ? CRITICAL_DAMAGE_MULTIPLIER : 1,
       stabMultiplier: stab,
       typeEffectiveness,
+      burnMultiplier,
       finalMultiplier,
     },
     move.power,

@@ -871,7 +871,7 @@
     "id": "스나이퍼",
     "name": "스나이퍼",
     "description": "공격을 급소에 맞혔을 때의 데미지가 평소보다 강한 2.25배가 된다.",
-    "critDamageMultiplier": 2.25
+    "critFinalMultiplier": 1.5
   },
   {
     "id": "애널라이즈",

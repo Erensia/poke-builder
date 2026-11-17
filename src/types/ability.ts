@@ -537,10 +537,10 @@ export interface Ability {
    */
   raisesCritStageBy?: number;
   /**
-   * 스나이퍼: 자신의 공격이 급소에 맞았을 때의 데미지 배율을 기본값(1.5) 대신 이 값(스나이퍼=2.25)
-   * 으로 쓴다. computeDamage의 critDamageMultiplier로 넘어간다.
+   * 스나이퍼: 자신의 공격이 급소에 맞았을 때 최종 보정 체인(상성 뒤)에 곱하는 추가 배율(스나이퍼=1.5). 급소 자체의 ×1.5
+   * (난수 앞, 내림)와 별개 단계다(8.3 D3-fix-6, Showdown sniper.onModifyDamage). 옛 이름 critDamageMultiplier(2.25를 급소 단계에 한 번에 곱함)를 대체한다.
    */
-  critDamageMultiplier?: number;
+  critFinalMultiplier?: number;
   /**
    * 조가비갑옷·전투무장: 자신이 방어측일 때 상대의 공격이 급소에 맞지 않는다(alwaysCrit 기술도
    * 포함해 전부 막는다 — 본가 규칙). resolveHit의 급소 판정에서 이 특성이면 항상 비급소로 고정.

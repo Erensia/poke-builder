@@ -15,7 +15,7 @@ import { critChance } from "@/lib/accuracyCrit";
 import { defenseChangeWhenHpNotFull } from "@/lib/abilityModifiers";
 import { burnDamageMultiplier, ignoresBurnAttackPenalty, statusedAttackBoost, inflictStatus, isImmuneToStatus } from "@/lib/statusConditions";
 import { hasVolatile, inflictVolatile } from "@/lib/volatileConditions";
-import { DAMAGE_ROLL_MIN_PERCENT, DAMAGE_ROLL_STEP_COUNT, roundHalfDown } from "@/lib/damageFormula";
+import { DAMAGE_ROLL_MIN_PERCENT, DAMAGE_ROLL_STEP_COUNT, chain4096, roundHalfDown } from "@/lib/damageFormula";
 import { computeDamage, hustleDamageMultiplier, screenMultiplierFromFlags, supremeOverlordMultiplier } from "@/lib/battlePower";
 import { getWeatherDamageMultiplier, getWeatherDefenseMultiplier } from "@/lib/weatherEffects";
 import { FIELD_DURATION, getFieldDamageMultiplier } from "@/lib/fieldEffects";
@@ -259,18 +259,20 @@ function defineResolveHit(c: HitCtx) {
         : c.defender.realStats;
     const result = computeDamage(c.attacker.realStats, defenderStatsForDamage, c.attacker.types, hitMove, {
       typeEffectiveness: c.typeEffectiveness,
-      abilityMultiplier:
-        (c.abilityOffenseMultiplier / c.statOffenseMultiplier) *
-        statusAttackMultiplier *
-        c.hidingBypassMultiplier *
-        c.ownMoveTypeBoostMultiplier *
-        c.rivalryMultiplier *
-        hustleMultiplier *
+      abilityMultiplier: chain4096(
+        "power",
+        c.abilityOffenseMultiplier / c.statOffenseMultiplier,
+        statusAttackMultiplier,
+        c.hidingBypassMultiplier,
+        c.ownMoveTypeBoostMultiplier,
+        c.rivalryMultiplier,
+        hustleMultiplier,
         overlordMultiplier,
+      ),
       attackStatMultiplier: c.statOffenseMultiplier,
       weatherMultiplier,
       fieldMultiplier,
-      itemMultiplier: itemMultiplier * c.gemMultiplier,
+      itemMultiplier: chain4096("power", itemMultiplier, c.gemMultiplier),
       stabMultiplier: c.stabMultiplier,
       // 천진: 자신이 이 특성이면 상대 쪽 랭크(공격측이면 상대 방어/특방, 방어측이면 상대
       // 공격/특공)를 전부 무시(0랭크 취급) — computeDamage는 카테고리에 맞는 스탯 하나만
@@ -282,14 +284,20 @@ function defineResolveHit(c: HitCtx) {
         (abilityDefenseMultiplier / finalDefenseMultiplier) *
         // 모래바람 바위 특방·눈 얼음 방어 1.5배(날씨 무효 특성이면 activeWeather가 없음)
         getWeatherDefenseMultiplier(activeWeather(c.state), c.defender.types, defenseStat),
-      // 최종 보정 단계(상성 뒤): 도구(생명의구슬·달인의띠)·화상 ×데미지, 하드록·반감 열매·벽·대검돌격(방어측 약점 상태면 받는 데미지 2배)은
-      // 내구력 배율 형태라 역수로 곱한다.
-      finalMultiplier:
-        (itemFinalMultiplier * burnMultiplier) /
-        (finalDefenseMultiplier * berryResult.bulkMultiplier * screenMultiplier * (c.defender.glaiveRushVulnerable ? 0.5 : 1)),
+      // 화상(×0.5)은 상성 직후 별도 단계다(8.3 D3-fix-6, Showdown modifyDamage).
+      burnMultiplier,
+      // 최종 보정 체인(상성·화상 뒤, 4096분율 한 번): 도구(생명의구슬·달인의띠)·스나이퍼(급소일 때 ×1.5)와 방어측 하드록·반감 열매·벽·
+      // 대검돌격(방어측 약점 상태면 받는 데미지 2배). 방어측 쪽은 내구력 배율 형태라 역수로 넣는다.
+      finalMultiplier: chain4096(
+        "final",
+        itemFinalMultiplier,
+        critical ? (c.attackerAbility?.critFinalMultiplier ?? 1) : 1,
+        1 / finalDefenseMultiplier,
+        1 / berryResult.bulkMultiplier,
+        1 / screenMultiplier,
+        c.defender.glaiveRushVulnerable ? 2 : 1,
+      ),
       isCritical: critical,
-      // 스나이퍼: 급소 데미지 배율을 2.25로 올린다(기본 1.5).
-      critDamageMultiplier: c.attackerAbility?.critDamageMultiplier,
       // 난수는 본가처럼 85~100% 정수 16단계
       randomRoll: (DAMAGE_ROLL_MIN_PERCENT + Math.floor(c.random() * DAMAGE_ROLL_STEP_COUNT)) / 100,
     });
