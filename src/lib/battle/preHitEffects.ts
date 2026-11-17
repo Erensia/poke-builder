@@ -18,7 +18,7 @@ import { resolveMoveContext } from "@/lib/moveContext";
 import { WEIGHT_MOVE_FALLBACK_POWER, absoluteWeightPowerValue, computeDamage, shellSideArmCategory, positiveStagesPowerValue, reversalPowerFromHp, targetHpRatioPowerValue, userHpScaledPowerValue, faintedAllyPowerValue, rivalryDamageMultiplier, weightRatioPowerValue } from "@/lib/battlePower";
 import { applyWeatherBall } from "@/lib/weatherEffects";
 import { applyFieldPulse, getFieldPowerMultiplier, isOpponentTargetingMove, isPriorityMoveBlockedByField, isStatusBlockedByField, needsLivingTarget } from "@/lib/fieldEffects";
-import { computeBattleHitChance } from "./hitChance";
+import { computeBattleHitChance, toxicNeverMisses } from "./hitChance";
 import { CONFUSION_SELF_HIT_MOVE, MIN_DAMAGE_ROLL, STRUGGLE_MOVE, abilityOf, activeWeather, consumeItem, contraryDelta, electroBallPowerValue, gyroBallPowerValue, hasSheerForceSecondaryEffect, isFainted, isHealingMove, isItemRemovable, opponentKey, sideOf, statusImmunitiesOf, type BattleFighterState, type BattleState } from "./state";
 
 /** resolvePreHitEffects의 단계 사이에서 공유되는 값 — 한 단계 안에서만 쓰는 변수는 각 단계 함수의 지역 변수다 */
@@ -1108,6 +1108,7 @@ function rollHit(c: PreHitCtx) {
   c.defenderHideType = c.defender.chargingMoveId ? getMove(c.defender.chargingMoveId)?.chargeHideType : undefined;
   c.evadedByCharge = !!c.defenderHideType &&
     !(c.effectiveMove.bypassesHiding ?? []).includes(c.defenderHideType) &&
+    !toxicNeverMisses(c.attacker, c.effectiveMove) &&
     isOpponentTargetingMove(c.effectiveMove);
 
   // 대검돌격: 방어측이 이 상태면(직전에 대검돌격을 쓴 뒤 아직 다음 행동 전) 그를 겨냥한
