@@ -40,6 +40,8 @@ interface HitResolutionInput {
   blockedBySubstitute: boolean;
   unseenFistPiercing: boolean;
   hitChance: number | null;
+  /** 연속기 2타째 이후의 적중 확률(8.3 D3-fix-8) */
+  perHitChance: number | null;
   evadedByCharge: boolean;
   defenderHideType: ChargeHideType | undefined;
   gemMultiplier: number;
@@ -76,6 +78,7 @@ interface HitCtx {
   blockedBySubstitute: boolean;
   unseenFistPiercing: boolean;
   hitChance: number | null;
+  perHitChance: number | null;
   gemMultiplier: number;
   ownMoveTypeBoostMultiplier: number;
   rivalryMultiplier: number;
@@ -748,7 +751,7 @@ function resolveMainHit(c: HitCtx) {
     c.perHitLog = [];
     for (let i = 0; i < totalHits; i++) {
       if (i > 0 && perHitAccuracyCheck) {
-        const stillHits = c.hitChance === null ? true : c.random() < c.hitChance;
+        const stillHits = c.perHitChance === null ? true : c.random() < c.perHitChance;
         if (!stillHits) break;
       }
       const hitPower = c.effectiveMove.multiHitPowers?.[i] ?? c.effectiveMove.power;
@@ -1054,6 +1057,7 @@ export function resolveHitAndApplyDamage(input: HitResolutionInput) {
   c.blockedBySubstitute = input.blockedBySubstitute;
   c.unseenFistPiercing = input.unseenFistPiercing;
   c.hitChance = input.hitChance;
+  c.perHitChance = input.perHitChance;
   c.gemMultiplier = input.gemMultiplier;
   c.ownMoveTypeBoostMultiplier = input.ownMoveTypeBoostMultiplier;
   c.rivalryMultiplier = input.rivalryMultiplier;

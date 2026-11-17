@@ -1,8 +1,8 @@
 import { type Ability } from "@/types/ability";
 import { type Item } from "@/types/item";
 import { type Move } from "@/types/move";
-import { computeHitChance } from "@/lib/accuracyCrit";
-import { getItemAccuracyMultiplier } from "@/lib/itemEffects";
+import { accuracyNumerator, computeHitChance, computePerHitChance, GRAVITY_ACCURACY_NUMERATOR } from "@/lib/accuracyCrit";
+import { getItemAccuracyFactors } from "@/lib/itemEffects";
 import { hasVolatile } from "@/lib/volatileConditions";
 import { activeWeather, type BattleFighterState, type BattleState } from "./state";
 
@@ -20,6 +20,8 @@ interface BattleHitChanceInput {
   attackerItem: Item | undefined;
   defenderItem: Item | undefined;
   attackerMovesSecond: boolean;
+  /** true면 연속기 2타째 이후(트리플악셀·찍찍베기)의 적중 확률(소수 랭크·정수일 때만 보정·올림, 8.3 D3-fix-8) */
+  perHit?: boolean;
 }
 
 /**
@@ -50,15 +52,19 @@ export function computeBattleHitChance(input: BattleHitChanceInput): number | nu
     defenderAbility?.confusedOpponentAccuracyMultiplier !== undefined && hasVolatile(defender.volatile, "confusion")
       ? defenderAbility.confusedOpponentAccuracyMultiplier
       : 1;
-  const abilityAccuracyMultiplier =
-    (weatherAccuracyBoost && weatherAccuracyBoost.weather === activeWeather(state) ? weatherAccuracyBoost.multiplier : 1) *
-    tangledFeetMultiplier *
-    (attackerAbility?.userAccuracyMultiplier ?? 1) *
-    hustleAccuracyMultiplier;
-  // 중력(트랙 M4): 명중률 ×5/3
-  const gravityAccuracyMultiplier = state.gravityTurnsRemaining !== undefined ? 5 / 3 : 1;
-  const accuracyExtraMultiplier =
-    getItemAccuracyMultiplier(attackerItem, defenderItem, attackerMovesSecond) * abilityAccuracyMultiplier * gravityAccuracyMultiplier;
+  // 보정 순서(Showdown 우선도): 중력 → 복안·의욕·모래숨기·눈숨기·갈지자걸음 → 렌즈류·반짝가루. 값은 소스의 4096분율 분자(8.3 D3-fix-8)
+  const accuracyNumerators = [
+    ...(state.gravityTurnsRemaining !== undefined ? [GRAVITY_ACCURACY_NUMERATOR] : []), // 중력(트랙 M4) ×5/3 — 소스는 6840
+    ...[
+      attackerAbility?.userAccuracyMultiplier ?? 1, // 복안
+      hustleAccuracyMultiplier,
+      weatherAccuracyBoost && weatherAccuracyBoost.weather === activeWeather(state) ? weatherAccuracyBoost.multiplier : 1, // 모래숨기·눈숨기
+      tangledFeetMultiplier,
+    ]
+      .filter((m) => m !== 1)
+      .map(accuracyNumerator),
+    ...getItemAccuracyFactors(attackerItem, defenderItem, attackerMovesSecond).map(accuracyNumerator),
+  ];
   const effectiveDefenderEvasion = attackerAbility?.ignoresOpponentEvasionBoost
     ? Math.min(defender.accuracyStages.evasion, 0)
     : move.ignoresDefenderStatStagesInDamage
@@ -80,5 +86,6 @@ export function computeBattleHitChance(input: BattleHitChanceInput): number | nu
   // 폭풍: 쾌청이면 명중률 수치가 50이 된다(그 위에 랭크·보정이 곱해진다). 날씨 무효면 activeWeather가 undefined.
   const weatherAcc = move.accuracyInWeather;
   const baseAccuracy = weatherAcc && weatherAcc.weather === activeWeather(state) ? weatherAcc.accuracy : move.accuracy;
-  return computeHitChance(baseAccuracy, attacker.accuracyStages.accuracy, effectiveDefenderEvasion, accuracyExtraMultiplier);
+  const compute = input.perHit ? computePerHitChance : computeHitChance;
+  return compute(baseAccuracy, attacker.accuracyStages.accuracy, effectiveDefenderEvasion, accuracyNumerators);
 }
