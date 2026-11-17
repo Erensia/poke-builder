@@ -11,6 +11,8 @@
   "moveEffectAudit": {
     "킹실드": "K4 — 접촉한 상대의 공격 -1은 protectContactPenalty 필드로 구현, statChanges가 아님",
     "끈적끈적네트": "K4 — 교체로 나온 상대의 스피드 -1은 설치물(setsHazard) 발동으로 구현, statChanges가 아님",
-    "데코레이션": "K4 — 더블 전용이라 1v1 의도적 미배선(6.3 D, 문구에도 스텁 표기)"
+    "데코레이션": "K4 — 더블 전용이라 1v1 의도적 미배선(6.3 D, 문구에도 스텁 표기)",
+    "회생의기도": "K6 — noPPBoosts 기술이라 PP 업이 없어 최대 PP가 기본 PP 1 그대로(Showdown maxPP 4가 아니라 1)",
+    "날개치기": "K6 — Showdown champions 출전 불가(Past)·어떤 종 습득기에도 없는 미사용 데이터(기본 PP 35). 삭제 여부는 사용자 결정 대기(E0 개선권장)"
   }
 }
