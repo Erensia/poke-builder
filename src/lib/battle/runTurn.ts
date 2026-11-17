@@ -1,6 +1,6 @@
 import { type Move } from "@/types/move";
 import { type ActionLogEntry, type FighterKey, type MegaEvolutionLogEntry, type SwitchLogEntry, type TurnAction, type TurnResult } from "@/types/battle";
-import { getAbility, getItem, getPokemon } from "@/lib/data";
+import { getAbility, getItem, getMove, getPokemon } from "@/lib/data";
 import { eunNeun } from "@/lib/josa";
 import { hasVolatile } from "@/lib/volatileConditions";
 import { compareTurnOrder } from "@/lib/turnOrder";
@@ -542,6 +542,26 @@ function ejectButtonChoice(ctx: RunTurnContext, key: FighterKey, action: ActionL
 }
 
 /**
+ * 앙코르(8.3 D3-fix-5, Showdown champions `encore.condition.onStart`): 앙코르가 걸린 그 행동에서, 상대가 이번 턴에 이미 고른 기술이 아직 실행 전이면 앙코르 기술로 바꾼다.
+ * 상대가 이미 행동했거나(`order` 순서), 교체를 골랐거나, 충전 2턴째·난동·반동처럼 잠긴 행동이면 바꾸지 않는다(`queue.willMove`가 못 잡는 경우와 결과가 같다 — 반동은 Showdown도 교체하지만
+ * `mustrecharge`가 행동을 막는다). 멘탈허브는 걸리는 순간 앙코르를 치료·소모해 `setEncoreMoveName`이 비므로 자연히 빠지고, 매직미러로 반사돼 사용자에게 걸린 경우는 상대에게 앙코르가 없어 빠진다.
+ * 행동 순서는 원래 선택 기준을 유지한다(남은 행동이 하나라 Showdown `changeAction`의 재정렬과 결과가 같다). PP는 `resolveAction`이 `c.move` 기준으로 깎아 앙코르 기술에서 소모된다.
+ * ponytail: 앙코르 기술의 PP가 0이면 바꾸지 않는다 — Showdown은 PP 0이면 앙코르 자체가 실패하는데 엔진의 `encoreSetFailed`는 그 조건이 없어(백로그 E-영역), 0 PP 기술을 공짜로 실행하지 않으려는 안전 가드다.
+ * `ctx.actionIdx`는 루프에서 `i + 1`로 이미 증가한 값이라 현재 행동자는 `order.indexOf(opp) < actionIdx`에 걸리지 않는다.
+ */
+function overrideEncoredPending(ctx: RunTurnContext, key: FighterKey, action: ActionLogEntry): void {
+  if (!action.setEncoreMoveName) return;
+  const opp = opponentKey(key);
+  const encoredId = ctx.state[opp].volatile.active.encore?.moveId;
+  if (!encoredId || ctx.didSwitch[opp] || isFainted(ctx.state[opp])) return;
+  if (ctx.order.indexOf(opp) < ctx.actionIdx) return;
+  if (ctx.moves[opp].id === encoredId || forcedLockedAction(ctx.state[opp])) return;
+  if ((ctx.state[opp].remainingPp[encoredId] ?? 1) <= 0) return;
+  const move = getMove(encoredId);
+  if (move) ctx.moves[opp] = move;
+}
+
+/**
  * 한 편이 이번 턴에 하는 행동을 스피드 순서대로 처리하는 루프. 유턴·볼트체인지·배턴터치가
  * 명중해서 효과를 줬고 사용측에 교대 슬롯이 있으면, 그 자리에서 멈추고 RunTurnPaused를 돌려준다
  * (호출부가 교체 슬롯을 고른 뒤 resumeTurn으로 이어간다 — 그래야 상대 행동·턴 종료 처리가 새로
@@ -575,6 +595,7 @@ function runActionPhase(ctx: RunTurnContext): RunTurnOutcome | RunTurnPaused {
     const movesSecond = order[1] === key;
     const action = resolveAction(state, key, moves[key], random, movesSecond, moves[opponentKey(key)]);
     actions.push(action);
+    overrideEncoredPending(ctx, key, action);
     // 난동(ver.1.9): 시작·이어가기·끝나면 혼란 / 소란이면 잠든 포켓몬 깨움
     updateRampage(state, key, action, random);
     refreshUproar(state, action);
