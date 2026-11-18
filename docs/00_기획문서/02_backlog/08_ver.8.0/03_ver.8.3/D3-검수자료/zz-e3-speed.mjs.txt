@@ -1,0 +1,102 @@
+// E3 [계산] — Showdown(champions) 스피드 파이프라인 vs 엔진(소수 곱) 동속·순서 판정 비교
+// Showdown: getStat → floor(stat×랭크) → ModifySpe 체인(4096 고정소수, 반내림) → 마비는 체인 뒤 floor(×0.5) → 10000 상한
+const tr = Math.trunc;
+const STAGE = (s) => (s >= 0 ? (2 + s) / 2 : 2 / (2 - s));
+function sdModify(value, m) {
+  const mod = tr(m * 4096);
+  return tr((tr(value * mod) + 2048 - 1) / 4096);
+}
+function chain(mods) {
+  // chainModify: 이전×다음 + 2048 >> 12, /4096
+  let prev = 4096;
+  for (const m of mods) {
+    const next = tr(m * 4096);
+    prev = (prev * next + 2048) >> 12;
+  }
+  return prev / 4096;
+}
+function showdownSpeed(stat, stage, mods, paralysis) {
+  let s = stat;
+  s = stage >= 0 ? Math.floor(s * [1, 1.5, 2, 2.5, 3, 3.5, 4][stage]) : Math.floor(s / [1, 1.5, 2, 2.5, 3, 3.5, 4][-stage]);
+  if (mods.length) s = sdModify(s, chain(mods));
+  if (paralysis) s = Math.floor((s * 50) / 100);
+  if (s > 10000) s = 10000;
+  return s;
+}
+function engineSpeed(stat, stage, mods, paralysis) {
+  let m = 1;
+  for (const x of mods) m *= x;
+  if (paralysis) m *= 0.5;
+  // 엔진: realSpeed × 상태 × 필드 × 도구 × 날씨 × 곡예 × 순풍 한 번에 곱한 뒤 computeEffectiveSpeed가 랭크를 곱한다
+  return stat * m * STAGE(stage);
+}
+const MODSETS = [
+  { n: "없음", mods: [], para: false },
+  { n: "구애스카프", mods: [1.5], para: false },
+  { n: "검은철구", mods: [0.5], para: false },
+  { n: "순풍", mods: [2], para: false },
+  { n: "날씨특성", mods: [2], para: false },
+  { n: "마비", mods: [], para: true },
+  { n: "스카프+순풍", mods: [1.5, 2], para: false },
+  { n: "스카프+마비", mods: [1.5], para: true },
+  { n: "순풍+마비", mods: [2], para: true },
+  { n: "속보(1.5·마비 무시)", mods: [1.5], para: false },
+];
+const STAGES = [-2, -1, 0, 1, 2];
+const cmp = (a, b) => (a > b ? "A" : a < b ? "B" : "T");
+function run(label, statMin, statMax, stageSet, modSets) {
+  let total = 0, tieSD = 0, tieEng = 0, sdTieEngStrict = 0, engTieSdStrict = 0, flip = 0, same = 0;
+  const examples = [];
+  for (let sa = statMin; sa <= statMax; sa++)
+    for (let sb = statMin; sb <= statMax; sb++)
+      for (const ma of modSets) for (const mb of modSets)
+        for (const ga of stageSet) for (const gb of stageSet) {
+          const a1 = showdownSpeed(sa, ga, ma.mods, ma.para), b1 = showdownSpeed(sb, gb, mb.mods, mb.para);
+          const a2 = engineSpeed(sa, ga, ma.mods, ma.para), b2 = engineSpeed(sb, gb, mb.mods, mb.para);
+          const r1 = cmp(a1, b1), r2 = cmp(a2, b2);
+          total++;
+          if (r1 === "T") tieSD++;
+          if (r2 === "T") tieEng++;
+          if (r1 === r2) same++;
+          else if (r1 === "T") { sdTieEngStrict++; if (examples.length < 6) examples.push(`${ma.n}/${ga}/${sa}(${a1}) vs ${mb.n}/${gb}/${sb}(${b1}) 엔진 ${a2.toFixed(3)} vs ${b2.toFixed(3)}`); }
+          else if (r2 === "T") engTieSdStrict++;
+          else flip++;
+        }
+  const pct = (x) => ((x / total) * 100).toFixed(3) + "%";
+  console.log(`[${label}] 조합 ${total.toLocaleString()}개 | SD 동속 ${pct(tieSD)} | 엔진 동속 ${pct(tieEng)} | 판정 일치 ${pct(same)} | SD동속·엔진확정 ${pct(sdTieEngStrict)} | 엔진동속·SD확정 ${pct(engTieSdStrict)} | 선후 뒤집힘 ${pct(flip)}`);
+  for (const e of examples) console.log("   예) " + e);
+}
+// 1) 보정·랭크 없음 — 일치해야 한다
+run("보정 없음·랭크 0", 60, 200, [0], [MODSETS[0]]);
+// 2) 랭크만
+run("랭크 ±2만", 60, 200, STAGES, [MODSETS[0]]);
+// 3) 보정만(랭크 0)
+run("보정만(랭크 0)", 60, 200, [0], MODSETS);
+// 4) 전부
+run("전부", 60, 200, STAGES, MODSETS);
+
+// ---- 추가: 뒤집힘 예·부동소수점 가짜 비동속 확인 ----
+const FR = { 1.5: [3n, 2n], 0.5: [1n, 2n], 2: [2n, 1n] };
+function exactFrac(stat, stage, mods, para) {
+  let num = BigInt(stat), den = 1n;
+  for (const x of mods) { num *= FR[x][0]; den *= FR[x][1]; }
+  if (para) den *= 2n;
+  if (stage >= 0) { num *= BigInt(2 + stage); den *= 2n; } else { num *= 2n; den *= BigInt(2 - stage); }
+  return [num, den];
+}
+let flips = [], eng_tie_sd_strict = [], fpFake = 0, totalExactTies = 0, n = 0;
+for (let sa = 60; sa <= 200; sa++) for (let sb = sa; sb <= 200; sb++)
+  for (const ma of MODSETS) for (const mb of MODSETS) for (const ga of STAGES) for (const gb of STAGES) {
+    const a1 = showdownSpeed(sa, ga, ma.mods, ma.para), b1 = showdownSpeed(sb, gb, mb.mods, mb.para);
+    const a2 = engineSpeed(sa, ga, ma.mods, ma.para), b2 = engineSpeed(sb, gb, mb.mods, mb.para);
+    const r1 = cmp(a1, b1), r2 = cmp(a2, b2);
+    const [an, ad] = exactFrac(sa, ga, ma.mods, ma.para), [bn, bd] = exactFrac(sb, gb, mb.mods, mb.para);
+    const exactTie = an * bd === bn * ad;
+    n++;
+    if (exactTie) { totalExactTies++; if (r2 !== "T") fpFake++; }
+    if (r1 !== r2 && r1 !== "T" && r2 !== "T" && flips.length < 5) flips.push(`${ma.n}/${ga}/${sa} SD ${a1} vs ${mb.n}/${gb}/${sb} SD ${b1} | 엔진 ${a2.toFixed(3)} vs ${b2.toFixed(3)}`);
+    if (r2 === "T" && r1 !== "T" && eng_tie_sd_strict.length < 4) eng_tie_sd_strict.push(`${ma.n}/${ga}/${sa} SD ${a1} vs ${mb.n}/${gb}/${sb} SD ${b1} | 엔진 ${a2.toFixed(3)} vs ${b2.toFixed(3)}`);
+  }
+console.log(`\n[부동소수점] 정확 유리수 동속 ${totalExactTies.toLocaleString()}건 중 엔진이 동속으로 못 본 것 ${fpFake}건`);
+console.log("[뒤집힘 예]"); flips.forEach((e) => console.log("  " + e));
+console.log("[엔진 동속·SD 확정 예]"); eng_tie_sd_strict.forEach((e) => console.log("  " + e));
