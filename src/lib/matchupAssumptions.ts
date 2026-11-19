@@ -14,6 +14,9 @@ export function assumedMatchupOptions(attacker: MatchupSlot, defender: MatchupSl
     attackerStatus: status,
     defenderStatus: defender.statusAssumed ?? null,
     defenderHasStatusCondition: !!defender.statusAssumed,
+    // 자이로볼·일렉트릭볼 위력의 스피드 입력(8.3 D3-fix-12): 곡예 발동 후 가정 토글
+    attackerUnburden: !!attacker.unburdenAssumed,
+    defenderUnburden: !!defender.unburdenAssumed,
     attackerHpFraction: (attacker.hpPercent ?? 100) / 100,
     abilityHpFraction: attacker.pinchAssumed ? 1 / 3 : 1,
     attackerMovesLast: !!attacker.movesLastAssumed,
