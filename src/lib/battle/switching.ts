@@ -439,6 +439,9 @@ export function performSwitch(
   }
 
   // ── 물러나는 포켓몬: 슬롯 종속 상태 초기화 ──
+  // 맹독 카운터는 교체하면 1단계로(Showdown `tox.onSwitchIn` stage=0 — 나갈 때 되돌려도 관측 결과가 같고 AI 교체 후보도 맞는 값을 본다).
+  // 위 자연회복이 상태를 먼저 지울 수 있어 여기서 상태를 다시 읽는다.
+  if (outgoing.status.condition === "badly-poisoned") outgoing.status = { ...outgoing.status, turnsElapsed: 1 };
   outgoing.stages = { ...NEUTRAL_STAGES };
   outgoing.accuracyStages = { ...NEUTRAL_ACCURACY_STAGES };
   outgoing.critStage = NEUTRAL_CRIT_STAGE;

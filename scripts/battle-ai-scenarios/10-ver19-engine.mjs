@@ -392,7 +392,7 @@ export default async function ({ server, data, ev, dec, pts, mon, battle, opt, c
     const fixedTurns = 1 / (0.05 + Math.floor(st.b.maxHp / 16) / st.b.maxHp);
     const early = toxicTurns(1);
     const capped = toxicTurns(15);
-    const cappedFixed = 1 / (0.05 + Math.floor((st.b.maxHp * 15) / 16) / st.b.maxHp);
+    const cappedFixed = 1 / (0.05 + (Math.floor(st.b.maxHp / 16) * 15) / st.b.maxHp); // 8.3 fix-14: 맹독 피해 = floor(HP/16) × 단계
     check(
       "1.9 A3: 맹독 대상은 카운터가 늘어나는 만큼 처치 턴↓(카운터 1), 상한 15면 고정 계산과 같음",
       early < fixedTurns && early > 1 && Math.abs(capped - Math.max(1, cappedFixed)) < 1e-9,
