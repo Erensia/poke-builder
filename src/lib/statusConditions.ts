@@ -71,7 +71,7 @@ export function advanceStatusTurn(state: StatusConditionState): StatusConditionS
 
 /**
  * 턴 종료 시 상태이상으로 받는 고정 데미지. 화상 1/16, 독 1/8, 맹독은 걸린 턴수(n)에 비례해
- * n/16씩 누적 증가하되 최대 15/16에서 클램프된다 — 전부 최대 HP 기준, 소수점은 버림.
+ * floor(최대HP/16) × n(n은 걸린 턴수, 최대 15에서 클램프)씩 누적 증가한다 — 화상·독은 소수점 버림.
  * 잠듦/얼음/마비는 매턴 데미지가 없다.
  */
 export function computeStatusEndOfTurnDamage(state: StatusConditionState, maxHp: number): number {
@@ -81,7 +81,8 @@ export function computeStatusEndOfTurnDamage(state: StatusConditionState, maxHp:
     case "poison":
       return Math.floor(maxHp / 8);
     case "badly-poisoned":
-      return Math.floor((maxHp * Math.min(BADLY_POISONED_MAX_TURNS, state.turnsElapsed)) / 16);
+      // Showdown `tox`: clampIntRange(baseMaxhp / 16, 1) * stage — 나눗셈을 먼저 내림(하한 1)하고 단계를 곱한다(8.3 fix-14)
+      return Math.max(1, Math.floor(maxHp / 16)) * Math.min(BADLY_POISONED_MAX_TURNS, state.turnsElapsed);
     default:
       return 0;
   }
