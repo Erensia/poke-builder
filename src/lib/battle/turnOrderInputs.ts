@@ -3,10 +3,8 @@ import { type Move } from "@/types/move";
 import { getItem } from "@/lib/data";
 import { getAbilityPriorityBoost } from "@/lib/abilityModifiers";
 import { getFieldAdjustedPriority } from "@/lib/fieldEffects";
-import { getItemSpeedMultiplier } from "@/lib/itemEffects";
 import { type TurnOrderActor, compareTurnOrder } from "@/lib/turnOrder";
-import { computeSpeedStat } from "@/lib/battlePower";
-import { speedStatusParts } from "@/lib/statusConditions";
+import { computeSpeedWithEffects } from "@/lib/speedStat";
 import { type FighterKey } from "@/types/battle";
 import { abilityOf, activeWeather, type BattleFighterState, type BattleState } from "./state";
 import { isGrounded } from "./grounding";
@@ -31,27 +29,18 @@ export function effectiveHeldItem(fighter: BattleFighterState, state?: BattleSta
  * runTurn(실전 순서 결정)·배틀 AI(speed_order 예측)·매치업 화면(evaluateSpeedMatchup)이 같은 계산(battlePower.computeSpeedStat)을 공유한다.
  */
 export function computeTurnOrderSpeed(state: BattleState, fighter: BattleFighterState): number {
-  const ability = abilityOf(fighter);
-  const weatherBoost = ability?.weatherSpeedMultiplier;
-  const weatherMultiplier = weatherBoost && weatherBoost.weather === activeWeather(state) ? weatherBoost.multiplier : 1;
-  // 서핑테일(ver.1.9 A5): 지정 필드면 배율
-  const fieldBoost = ability?.fieldSpeedMultiplier;
-  const fieldMultiplier = fieldBoost && fieldBoost.field === state.field ? fieldBoost.multiplier : 1;
-  const status = speedStatusParts(fighter.status.condition, ability?.speedMultiplierWhenStatused);
-  return computeSpeedStat({
-    baseSpe: fighter.realStats.spe,
+  return computeSpeedWithEffects({
+    realSpe: fighter.realStats.spe,
     stage: fighter.stages.spe,
-    multipliers: [
-      status.multiplier, // 속보(상태이상이면 ×1.5)
-      fieldMultiplier,
-      getItemSpeedMultiplier(effectiveHeldItem(fighter, state)),
-      weatherMultiplier,
-      // 곡예(8.3 D3-fix-9): 상태가 켜져 있어도 "지금 도구가 없을 때만" ×2(Showdown `!pokemon.item`). 도구를 되받으면 ×1, 다시 잃으면 즉시 ×2. 매직룸·서투름은 도구를 "있는" 채로 두므로 currentItemId로 본다.
-      fighter.unburdenActive && !fighter.currentItemId ? 2 : 1,
-      // 순풍(트랙 M1): 이 포켓몬이 속한 편에 순풍이 불고 있으면 2배
-      tailwindActiveFor(state, fighter) ? 2 : 1,
-    ],
-    halvedByParalysis: status.halved,
+    ability: abilityOf(fighter),
+    item: effectiveHeldItem(fighter, state),
+    status: fighter.status.condition,
+    weather: activeWeather(state), // 날씨부정 반영
+    field: state.field,
+    // 곡예(8.3 D3-fix-9): 상태가 켜져 있어도 "지금 도구가 없을 때만" ×2(Showdown `!pokemon.item`). 도구를 되받으면 ×1, 다시 잃으면 즉시 ×2. 매직룸·서투름은 도구를 "있는" 채로 두므로 currentItemId로 본다.
+    unburdenActive: !!fighter.unburdenActive && !fighter.currentItemId,
+    // 순풍(트랙 M1): 이 포켓몬이 속한 편에 순풍이 불고 있으면 2배
+    tailwind: tailwindActiveFor(state, fighter),
   });
 }
 
@@ -99,7 +88,7 @@ export function orderBySpeed(state: BattleState, random: () => number, keys: Fig
 }
 
 /** fighter가 속한 편(sideA/sideB — 활성·대기 무관)에 순풍이 불고 있는지 */
-function tailwindActiveFor(state: BattleState, fighter: BattleFighterState): boolean {
+export function tailwindActiveFor(state: BattleState, fighter: BattleFighterState): boolean {
   // AI는 랭크를 지운 복제본으로도 부르므로 slot으로도 찾는다
   const belongs = (party: BattleFighterState[]) => party.some((m) => m === fighter || m.slot === fighter.slot);
   const side = belongs(state.sideA.party) ? state.sideA : belongs(state.sideB.party) ? state.sideB : undefined;

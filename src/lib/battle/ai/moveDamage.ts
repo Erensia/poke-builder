@@ -16,7 +16,7 @@ import { computeStatusAttackMultiplier, ignoresBurnAttackPenalty } from "@/lib/s
 import { faintedAllyPowerValue, supremeOverlordMultiplier } from "@/lib/battlePower";
 import { abilityOf, activeWeather, hasSheerForceSecondaryEffect, isFainted, type BattleFighterState, type BattleSide, type BattleState } from "../state";
 import { computeBattleHitChance } from "../hitChance";
-import { computeTurnOrderPriority, effectiveHeldItem } from "../turnOrderInputs";
+import { computeTurnOrderPriority, effectiveHeldItem, tailwindActiveFor } from "../turnOrderInputs";
 import { isGrounded } from "../grounding";
 import { estimateKills, hitCountDistribution, meanUseDamage, type KillModel } from "./hitsToKill";
 import { attackChanceOf, echoChanceOf, requiresTargetAttack } from "./opponentMoveModel";
@@ -368,6 +368,11 @@ function estimateMoveHitsCore(ctx: MoveHitContext, baseMove: Move): MoveHitEstim
     defenderHasStatusCondition: !!defender.status.condition,
     attackerStatus: attacker.status.condition,
     defenderStatus: defender.status.condition,
+    // 자이로볼·일렉트릭볼 위력의 스피드 입력(8.3 D3-fix-12): 실제 state의 순풍·곡예(상태 ∧ 도구 없음)를 넘긴다 — 기존 AI 정책(실제 state를 읽음) 그대로
+    attackerTailwind: tailwindActiveFor(state, attacker),
+    defenderTailwind: tailwindActiveFor(state, defender),
+    attackerUnburden: !!attacker.unburdenActive && !attacker.currentItemId,
+    defenderUnburden: !!defender.unburdenActive && !defender.currentItemId,
     attackerMovesLast: move.conditionalDoublePower === "moves-after-target" && attackerMovesSecond,
     // 분풀이(이번 턴 능력 하락)·승부굳히기(이번 턴 대상이 이미 데미지)는 결정 시점(턴 시작 전)엔 알 수 없어 기본 위력으로 본다
     // 누르기 등 작아지기 보너스: 대상이 이번 배틀에서 작아지기를 썼으면(엔진과 같은 기록)

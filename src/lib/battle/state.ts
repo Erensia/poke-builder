@@ -12,12 +12,9 @@ import { getAbility, getItem, getMove, getPokemon } from "@/lib/data";
 import { eulReul, eunNeun, roEuro } from "@/lib/josa";
 import { findMegaFormByStone, getEffectiveForm, getEffectiveGender } from "@/lib/pokemonForm";
 import { computeRealStats } from "@/lib/statCalculator";
-import { computeStatusSpeedMultiplier } from "@/lib/statusConditions";
 import { CONFUSION_SELF_HIT_POWER, hasVolatile } from "@/lib/volatileConditions";
 import { getEffectiveness } from "@/lib/typeEffectiveness";
-import { electroBallPowerFromSpeeds, gyroBallPowerFromSpeeds, rankStageMultiplier } from "@/lib/battlePower";
 import { FIELD_DURATION, FIELD_ENTRY_ANNOUNCEMENT } from "@/lib/fieldEffects";
-import { getItemSpeedMultiplier } from "@/lib/itemEffects";
 import { resolveEffectiveDefenderAbility } from "@/lib/abilityModifiers";
 import { type BaseStats } from "@/types/stats";
 import { type EvaluatorSlot } from "@/lib/matchupEvaluator";
@@ -639,40 +636,6 @@ export function createFighterState(slot: EvaluatorSlot, moves: Move[]): BattleFi
  */
 /** 모래바람 틱 데미지 면제 특성(모래 관련) — §1 F-3. 매직가드는 negatesIndirectDamage로 별도 처리. */
 export const SANDSTORM_IMMUNE_ABILITY_NAMES = new Set(["모래숨기", "모래의힘", "모래날림", "모래헤치기"]);
-
-/**
- * 자이로볼(Move.gyroBallPower)의 실효 스피드 산출 — 실능 × 스피드 랭크 배율 × 마비 배율 ×
- * 도구 배율(구애스카프·검은철구). 엽록소류 날씨 스피드 특성은 미반영(후속). 최종 위력 공식은
- * battlePower.gyroBallPowerFromSpeeds가 담당한다.
- */
-export function gyroBallPowerValue(
-  attacker: BattleFighterState,
-  defender: BattleFighterState,
-  attackerItem: Parameters<typeof getItemSpeedMultiplier>[0],
-  defenderItem: Parameters<typeof getItemSpeedMultiplier>[0],
-): number {
-  return gyroBallPowerFromSpeeds(powerSpeedOf(attacker, attackerItem), powerSpeedOf(defender, defenderItem));
-}
-
-/** 일렉트릭볼(트랙 M5): 자이로볼과 같은 실효 스피드로 본가 비율표 위력 */
-export function electroBallPowerValue(
-  attacker: BattleFighterState,
-  defender: BattleFighterState,
-  attackerItem: Parameters<typeof getItemSpeedMultiplier>[0],
-  defenderItem: Parameters<typeof getItemSpeedMultiplier>[0],
-): number {
-  return electroBallPowerFromSpeeds(powerSpeedOf(attacker, attackerItem), powerSpeedOf(defender, defenderItem));
-}
-
-/** 상태이상 스피드 배율 — 마비 반감, 속보(ver.1.9 A5)면 상태이상일 때 ×1.5이고 마비 반감 무시 */
-export function statusSpeedMultiplierOf(fighter: BattleFighterState): number {
-  return computeStatusSpeedMultiplier(fighter.status.condition, abilityOf(fighter)?.speedMultiplierWhenStatused);
-}
-
-/** 스피드 비교 위력 기술(자이로볼·일렉트릭볼)의 실효 스피드 — 실능 × 스피드 랭크 × 마비(속보) × 도구 */
-function powerSpeedOf(f: BattleFighterState, item: Parameters<typeof getItemSpeedMultiplier>[0]): number {
-  return f.realStats.spe * rankStageMultiplier(f.stages.spe) * statusSpeedMultiplierOf(f) * getItemSpeedMultiplier(item);
-}
 
 export function hasSheerForceSecondaryEffect(move: Move): boolean {
   if (move.power === null && move.fixedDamage === undefined) return false;

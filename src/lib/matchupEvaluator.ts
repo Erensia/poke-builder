@@ -7,10 +7,10 @@ import type { FieldKind } from "../types/field";
 import type { PokemonType } from "../types/pokemon-type";
 import type { BaseStats } from "../types/stats";
 import { getPokemon, getAbility, getItem } from "./data";
-import { getBerryDefenseResult, getItemBasePowerMultiplier, getItemFinalMultiplier, getItemOffenseMultiplier, getItemSpeedMultiplier } from "./itemEffects";
+import { getBerryDefenseResult, getItemBasePowerMultiplier, getItemFinalMultiplier, getItemOffenseMultiplier } from "./itemEffects";
 import { getEffectiveForm, getEffectiveGender, type FormSource } from "./pokemonForm";
 import { computeRealStats } from "./statCalculator";
-import { speedStatusParts } from "./statusConditions";
+import { computeSpeedWithEffects } from "./speedStat";
 import { getWeatherDamageMultiplier, getWeatherDefenseMultiplier, applyWeatherBall } from "./weatherEffects";
 import { applyFieldPulse, getFieldPowerMultiplier, getFieldDamageMultiplier } from "./fieldEffects";
 import { resolveMoveContext } from "./moveContext";
@@ -22,7 +22,6 @@ import {
   CRITICAL_DAMAGE_MULTIPLIER,
   computeBulkPower,
   computeAttackTerm,
-  computeSpeedStat,
   rankStageMultiplier,
   reversalPowerFromHp,
   gyroBallPowerFromSpeeds,
@@ -109,6 +108,14 @@ export interface SlotMatchupOptions {
    */
   attackerStatus?: StatusCondition | null;
   defenderStatus?: StatusCondition | null;
+  /**
+   * 자이로볼·일렉트릭볼 위력의 스피드 입력용 가정(8.3 D3-fix-12, 엔진 computeTurnOrderSpeed와 같은 배율) — 순풍이 불고 있다 / 곡예 발동 후(도구 없음).
+   * 매치업 화면은 곡예 토글(unburdenAssumed)을 넘기고, 배틀 AI는 실제 state의 순풍·곡예를 넘긴다. 생략하면 꺼짐(현행과 같음).
+   */
+  attackerTailwind?: boolean;
+  defenderTailwind?: boolean;
+  attackerUnburden?: boolean;
+  defenderUnburden?: boolean;
   /**
    * ver.1.9 매치업 페이지 — 특성 HP 조건(맹화류 1/3 이하)에만 쓰는 HP 비율. 생략하면 attackerHpFraction과 같다
    * (배틀 AI는 둘이 같음). 페이지는 HP 슬라이더(위력)와 "HP 1/3 이하 가정"(특성)을 따로 둔다.
@@ -337,6 +344,32 @@ function resolveFormsAndAbilities(c: SlotMatchupCtx) {
   c.defenderItem = defenderItemId ? getItem(defenderItemId) : undefined;
 }
 
+/**
+ * 자이로볼·일렉트릭볼 위력 입력용 양측 실효 스피드(공격측, 방어측) — 엔진 computeTurnOrderSpeed와 같은 공용 함수(speedStat.computeSpeedWithEffects).
+ * 특성은 틀깨기 영향을 받지 않는 원본(스피드 특성은 breakable이 아니다), 도구는 서투름이면 무효, 날씨는 날씨부정 반영(c.effectiveWeather).
+ */
+function powerSpeeds(c: SlotMatchupCtx): [number, number] {
+  const side = (who: "attacker" | "defender"): number => {
+    const att = who === "attacker";
+    const runtime = att ? c.attackerRuntime : c.defenderRuntime;
+    const abilityId = runtime ? runtime.abilityId : (att ? c.attackerSlot : c.defenderSlot).ability;
+    const ability = abilityId ? getAbility(abilityId) : undefined;
+    const item = ability?.disablesOwnItemEffects ? undefined : att ? c.attackerItem : c.defenderItem;
+    return computeSpeedWithEffects({
+      realSpe: (att ? c.attackerRealStats : c.defenderRealStats).spe,
+      stage: (att ? c.attackerStages : c.defenderStages).spe,
+      ability,
+      item,
+      status: (att ? c.attackerStatus : c.defenderStatus) ?? null,
+      weather: c.effectiveWeather,
+      field: c.field,
+      unburdenActive: !!(att ? c.options.attackerUnburden : c.options.defenderUnburden),
+      tailwind: !!(att ? c.options.attackerTailwind : c.options.defenderTailwind),
+    });
+  };
+  return [side("attacker"), side("defender")];
+}
+
 /** 가변 위력·레이징불·셸암즈·분화·누르기·솔라빔·웨더볼·필드 위력으로 이번 기술 조정 */
 function resolveVariablePowerMove(c: SlotMatchupCtx) {
 
@@ -370,32 +403,16 @@ function resolveVariablePowerMove(c: SlotMatchupCtx) {
     // 공격측 HP 비율(배틀 AI의 현재 HP·페이지의 HP 슬라이더), 생략하면 풀피(최소 위력 20)
     variablePowerMove = { ...variablePowerMove, power: reversalPowerFromHp(c.attackerHpFraction ?? 1, 1) };
   } else if (c.move.gyroBallPower) {
-    const effSpeed = (
-      spe: number,
-      stages: StatStages,
-      item: Parameters<typeof getItemSpeedMultiplier>[0],
-    ) => spe * rankStageMultiplier(stages.spe) * getItemSpeedMultiplier(item);
-    variablePowerMove = {
-      ...variablePowerMove,
-      power: gyroBallPowerFromSpeeds(
-        effSpeed(c.attackerRealStats.spe, c.attackerStages, c.attackerItem),
-        effSpeed(c.defenderRealStats.spe, c.defenderStages, c.defenderItem),
-      ),
-    };
+    // 자이로볼: 양측 실효 스피드(엔진과 같은 정수 파이프라인 — 랭크·상태이상·도구·날씨 특성·서핑테일·곡예·순풍, 8.3 D3-fix-12)로 산출
+    const [attackerSpeed, defenderSpeed] = powerSpeeds(c);
+    variablePowerMove = { ...variablePowerMove, power: gyroBallPowerFromSpeeds(attackerSpeed, defenderSpeed) };
   } else if (c.move.flingsHeldItem) {
     // 내던지기(트랙 M5): 지닌 도구의 flingPower. 던질 도구가 없으면 위력 없음(데미지 0)
     variablePowerMove = { ...variablePowerMove, power: c.attackerItem?.flingPower ?? null };
   } else if (c.move.electroBallPower) {
     // 일렉트릭볼(트랙 M5): 자이로볼과 같은 실효 스피드, 본가 비율표
-    const effSpeed = (spe: number, stages: StatStages, item: Parameters<typeof getItemSpeedMultiplier>[0]) =>
-      spe * rankStageMultiplier(stages.spe) * getItemSpeedMultiplier(item);
-    variablePowerMove = {
-      ...variablePowerMove,
-      power: electroBallPowerFromSpeeds(
-        effSpeed(c.attackerRealStats.spe, c.attackerStages, c.attackerItem),
-        effSpeed(c.defenderRealStats.spe, c.defenderStages, c.defenderItem),
-      ),
-    };
+    const [attackerSpeed, defenderSpeed] = powerSpeeds(c);
+    variablePowerMove = { ...variablePowerMove, power: electroBallPowerFromSpeeds(attackerSpeed, defenderSpeed) };
   } else if (c.move.targetHpRatioPower) {
     // 하드프레스(트랙 M5): 상대 남은 HP 비율(매치업 페이지는 풀피)
     variablePowerMove = { ...variablePowerMove, power: Math.max(1, Math.floor(c.move.targetHpRatioPower * c.defenderHpFraction)) };
@@ -1088,7 +1105,7 @@ interface SpeedMatchupOptions {
   /** 곡예(Unburden) 발동 후라고 가정 — 해당 측 스피드 2배 */
   attackerUnburden?: boolean;
   defenderUnburden?: boolean;
-  /** 상태이상이라고 가정 — 마비면 해당 측 스피드 0.5배, 속보 특성이면 어떤 상태이상이든 ×1.5(엔진 statusSpeedMultiplierOf 미러) */
+  /** 상태이상이라고 가정 — 마비면 해당 측 스피드 0.5배, 속보 특성이면 어떤 상태이상이든 ×1.5(엔진 computeTurnOrderSpeed와 같은 speedStat 공용 함수) */
   attackerStatus?: StatusCondition | null;
   defenderStatus?: StatusCondition | null;
   /** 순풍이 불고 있다고 가정 — 해당 측 스피드 2배(엔진 computeTurnOrderSpeed 미러, 3.1 C2-c 스피드 역산용) */
@@ -1152,19 +1169,8 @@ export function evaluateSpeedMatchup(
     const realStats = computeRealStats(form.baseStats, slot.points, slot.nature);
     const item = slot.item ? getItem(slot.item) : undefined;
     const ability = slot.ability ? getAbility(slot.ability) : undefined;
-    const weatherBoost = ability?.weatherSpeedMultiplier;
-    const weatherSpeedMultiplier =
-      weatherBoost && weatherBoost.weather === weatherForSpeed ? weatherBoost.multiplier : 1;
-    const fieldBoost = ability?.fieldSpeedMultiplier;
-    const fieldSpeedMultiplier = fieldBoost && fieldBoost.field === field ? fieldBoost.multiplier : 1;
-    // 엔진 computeTurnOrderSpeed와 같은 정수 파이프라인(battlePower.computeSpeedStat): 랭크 floor → 4096 체인 → 마비 체인 뒤 floor (8.3 D3-fix-11)
-    const statusParts = speedStatusParts(status, ability?.speedMultiplierWhenStatused);
-    return computeSpeedStat({
-      baseSpe: realStats.spe,
-      stage: stages.spe,
-      multipliers: [statusParts.multiplier, getItemSpeedMultiplier(item), weatherSpeedMultiplier, fieldSpeedMultiplier, unburden ? 2 : 1, tailwind ? 2 : 1],
-      halvedByParalysis: statusParts.halved,
-    });
+    // 엔진 computeTurnOrderSpeed와 같은 공용 함수(8.3 D3-fix-12): 랭크 floor → 4096 체인 → 마비 체인 뒤 floor
+    return computeSpeedWithEffects({ realSpe: realStats.spe, stage: stages.spe, ability, item, status, weather: weatherForSpeed, field, unburdenActive: unburden, tailwind });
   };
 
   const attackerSpeed = speedOf(attackerSlot, attackerPokemon, attackerStages, !!attackerUnburden, attackerStatus ?? null, !!attackerTailwind);

@@ -1,4 +1,5 @@
-import { itemsSuppressedByRoom } from "./turnOrderInputs";
+import { computeTurnOrderSpeed, itemsSuppressedByRoom } from "./turnOrderInputs";
+import { electroBallPowerFromSpeeds, gyroBallPowerFromSpeeds } from "@/lib/battlePower";
 import { isGrounded } from "./grounding";
 import { type ChargeHideType, type Move } from "@/types/move";
 import { type Ability } from "@/types/ability";
@@ -19,7 +20,7 @@ import { WEIGHT_MOVE_FALLBACK_POWER, absoluteWeightPowerValue, computeDamage, sh
 import { applyWeatherBall } from "@/lib/weatherEffects";
 import { applyFieldPulse, getFieldPowerMultiplier, isOpponentTargetingMove, isPriorityMoveBlockedByField, isStatusBlockedByField, needsLivingTarget } from "@/lib/fieldEffects";
 import { computeBattleHitChance, toxicNeverMisses } from "./hitChance";
-import { CONFUSION_SELF_HIT_MOVE, MIN_DAMAGE_ROLL, STRUGGLE_MOVE, abilityOf, activeWeather, consumeItem, contraryDelta, electroBallPowerValue, gyroBallPowerValue, hasSheerForceSecondaryEffect, isFainted, isHealingMove, isItemRemovable, opponentKey, sideOf, statusImmunitiesOf, type BattleFighterState, type BattleState } from "./state";
+import { CONFUSION_SELF_HIT_MOVE, MIN_DAMAGE_ROLL, STRUGGLE_MOVE, abilityOf, activeWeather, consumeItem, contraryDelta, hasSheerForceSecondaryEffect, isFainted, isHealingMove, isItemRemovable, opponentKey, sideOf, statusImmunitiesOf, type BattleFighterState, type BattleState } from "./state";
 
 /** resolvePreHitEffects의 단계 사이에서 공유되는 값 — 한 단계 안에서만 쓰는 변수는 각 단계 함수의 지역 변수다 */
 interface PreHitCtx {
@@ -780,7 +781,8 @@ function resolveVariablePower(c: PreHitCtx) {
   if (c.effectiveMove.gyroBallPower) {
     c.effectiveMove = {
       ...c.effectiveMove,
-      power: gyroBallPowerValue(c.attacker, c.defender, c.attackerItem, c.defenderItem),
+      // 위력 입력은 기술이 맞는 시점의 스피드(Showdown basePowerCallback의 getStat('spe')) — 턴 시작 순서용 저장값을 쓰지 않고 지금 state로 다시 계산한다(8.3 D3-fix-12)
+      power: gyroBallPowerFromSpeeds(computeTurnOrderSpeed(c.state, c.attacker), computeTurnOrderSpeed(c.state, c.defender)),
     };
   }
   // 내던지기(트랙 M5): 지닌 도구(서투름·매직룸이면 없음)를 던진다 — 위력은 도구의 flingPower, 도구는 이 시점에 소모.
@@ -811,7 +813,7 @@ function resolveVariablePower(c: PreHitCtx) {
 
   // 트랙 M5: 일렉트릭볼(스피드 비율)·하드프레스(상대 남은 HP) 위력, 분노의앞니(상대 HP 절반)·목숨걸기(내 HP) 고정 데미지
   if (c.effectiveMove.electroBallPower) {
-    c.effectiveMove = { ...c.effectiveMove, power: electroBallPowerValue(c.attacker, c.defender, c.attackerItem, c.defenderItem) };
+    c.effectiveMove = { ...c.effectiveMove, power: electroBallPowerFromSpeeds(computeTurnOrderSpeed(c.state, c.attacker), computeTurnOrderSpeed(c.state, c.defender)) };
   }
   if (c.effectiveMove.targetHpRatioPower) {
     c.effectiveMove = {
