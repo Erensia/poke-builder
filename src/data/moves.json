@@ -5390,6 +5390,10 @@
         "chance": 30
       }
     ],
+    "curesStatus": {
+      "target": "opponent",
+      "status": "freeze"
+    },
     "thawsUserOnUse": true
   },
   {
