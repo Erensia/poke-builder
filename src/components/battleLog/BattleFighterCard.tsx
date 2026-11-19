@@ -3,7 +3,7 @@ import { getPokemon, getMove } from "../../lib/data";
 import { getEffectiveForm, getEffectiveGender, megaBadgeLabel } from "../../lib/pokemonForm";
 import type { SpriteFormOptions } from "../../lib/sprites";
 import { PokemonAvatarWithItem } from "../PokemonAvatarWithItem";
-import { rankStageMultiplier } from "../../lib/battlePower";
+import { applyRankStage } from "../../lib/battlePower";
 import { VOLATILE_LABELS, SCREEN_LABELS, STATUS_LABELS } from "../../lib/battleLogLabels";
 import type { BattleSide, BattleState } from "../../lib/battle/state";
 import type { BaseStats } from "../../types/stats";
@@ -147,7 +147,7 @@ function RealStats({ fighter }: { fighter: Fighter }) {
       {REAL_STAT_LABELS.map(({ key, label }) => {
         const base = fighter.realStats[key];
         const stage = key === "hp" ? 0 : fighter.stages[key];
-        const effective = stage === 0 ? base : Math.round(base * rankStageMultiplier(stage));
+        const effective = stage === 0 ? base : applyRankStage(base, stage); // Showdown getStat: 랭크 적용은 floor(8.3 D3-fix-11)
         return (
           <div key={key} className={`battle-real-stat-item${stage > 0 ? " is-boosted" : stage < 0 ? " is-lowered" : ""}`}>
             <span className="battle-real-stat-label">{label}</span>

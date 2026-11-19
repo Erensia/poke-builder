@@ -4,7 +4,7 @@ import { getAbility, getItem, getMove, getPokemon } from "@/lib/data";
 import { eunNeun } from "@/lib/josa";
 import { hasVolatile } from "@/lib/volatileConditions";
 import { compareTurnOrder } from "@/lib/turnOrder";
-import { buildTurnOrderActor, computeTurnOrderSpeed, itemsSuppressedByRoom, quickFirstChances } from "./turnOrderInputs";
+import { buildTurnOrderActor, itemsSuppressedByRoom, orderBySpeed, quickFirstChances } from "./turnOrderInputs";
 import { STRUGGLE_MOVE, SWITCH_PASS_MOVE_ID, activeWeather, applyForecastForm, applyMimicryForm, cloneSide, consumeItem, hasLivingReserve, isFainted, isForcedSwitchBlocked, opponentKey, sideOf, type BattleState } from "./state";
 import { applyMegaEvolution, forceRandomSwitch, hazardField, isTrappedFromSwitching, performSwitch, runEntryEffects } from "./switching";
 import { resolveAction } from "./resolveAction";
@@ -136,8 +136,9 @@ export function runTurn(
   // 양쪽 다 교체면 스피드 빠른 쪽부터(순수 교체라 결과엔 영향 없지만 로그 순서 일관성).
   const switches: SwitchLogEntry[] = [];
   const didSwitch: Record<FighterKey, boolean> = { a: false, b: false };
-  const switchOrder: FighterKey[] =
-    prevState.a.realStats.spe >= prevState.b.realStats.spe ? ["a", "b"] : ["b", "a"];
+  // 8.3 D3-fix-11(E3-16): 양쪽이 모두 자발 교체할 때만 순서가 의미 있다 — 등장 효과(날씨·설치물)의 순서가 달라진다. Showdown `getActionSpeed`(랭크·보정 반영,
+  // 트릭룸이면 반전, 동속은 무작위). 한쪽만 교체하면 비교하지 않는다(난수 소비 최소화).
+  const switchOrder: FighterKey[] = actionA.kind === "switch" && actionB.kind === "switch" ? orderBySpeed(state, random, ["a", "b"]) : ["a", "b"];
   for (const key of switchOrder) {
     const action = key === "a" ? actionA : actionB;
     if (action.kind !== "switch") continue;
@@ -218,8 +219,12 @@ export function runTurn(
 
   // 메가진화 선언(§4): 턴 순서를 계산하기 전에 처리한다 — 메가폼의 스피드가 이번 턴 행동
   // 순서에 반영된다(본가 규칙). 교체한 쪽은 이번 턴 행동을 안 하므로 메가진화도 없다.
-  // 로그 순서만을 위해 프리스테이트 기본 스피드가 빠른 쪽부터 시도한다.
-  for (const key of prevState.a.realStats.spe >= prevState.b.realStats.spe ? (["a", "b"] as const) : (["b", "a"] as const)) {
+  // 8.3 D3-fix-11(E3-13): 양쪽이 모두 메가진화할 때만 순서를 정한다 — 메가진화 전 상태의 보정 반영 스피드순(트릭룸이면 먼저 행동하는 쪽부터, 동속은 난수). 한쪽만이면 비교하지 않는다.
+  const megaDeclared = (k: FighterKey) => {
+    const act = k === "a" ? actionA : actionB;
+    return act.kind === "move" && !!act.mega && !didSwitch[k];
+  };
+  for (const key of megaDeclared("a") && megaDeclared("b") ? orderBySpeed(state, random, ["a", "b"]) : (["a", "b"] as const)) {
     const action = key === "a" ? actionA : actionB;
     if (action.kind === "move" && action.mega && !didSwitch[key]) {
       if (applyMegaEvolution(state, key, turnStartAnnouncements)) {
@@ -243,8 +248,8 @@ export function runTurn(
   // 배틀 AI의 speed_order 예측과 공유하는 turnOrderInputs에서 조립한다(턴 시작 시점 기준).
   const actorA = buildTurnOrderActor(state, state.a, moveA);
   const actorB = buildTurnOrderActor(state, state.b, moveB);
-  const speedA = actorA.realSpeed;
-  const speedB = actorB.realSpeed;
+  const speedA = actorA.speed;
+  const speedB = actorB.speed;
 
   // 트릭룸 판정은 이번 턴이 시작된 시점(=아직 이번 턴 행동을 하나도 반영하지 않은 상태)의 값을
   // 쓴다 — 이번 턴에 트릭룸을 새로 걸어도 그 즉시 같은 턴의 순서 계산에는 영향을 주지 않는다
@@ -262,9 +267,13 @@ export function runTurn(
   const quickClawWinner: FighterKey | undefined =
     aQuickClaw && !bQuickClaw ? "a" : bQuickClaw && !aQuickClaw ? "b" : undefined;
 
+  // 시간벌기 + 선공 발동(8.3 D3-fix-11 E3-14): 손톱·퀵드로가 성공한 쪽은 Showdown에서 이벤트 전달값이 +0.1로 덮어써져 시간벌기 감점이 사라진다.
+  // 양쪽 성공으로 상쇄돼 스피드 비교로 넘어갈 때는 성공한 쪽의 movesLast를 지워 스피드만 비교한다.
+  const cmpA = aQuickClaw ? { ...actorA, movesLast: undefined } : actorA;
+  const cmpB = bQuickClaw ? { ...actorB, movesLast: undefined } : actorB;
   const firstIsA = quickClawWinner
     ? quickClawWinner === "a"
-    : compareTurnOrder(actorA, actorB, random, trickRoomActive) === 0;
+    : compareTurnOrder(cmpA, cmpB, random, trickRoomActive) === 0;
 
   const order: [FighterKey, FighterKey] = firstIsA ? ["a", "b"] : ["b", "a"];
   const moves: Record<FighterKey, Move> = { a: moveA, b: moveB };
@@ -661,11 +670,7 @@ function performChoice(ctx: RunTurnContext, pivot: PendingChoice, toIndex: numbe
 
 /** 두 편의 교체 순서 — 스피드가 빠른 쪽이 먼저, 트릭룸이면 뒤집힘, 완전 동속은 난수(Showdown 실측, 8.3 A7). 기술 우선도·선공 도구는 쓰지 않는다 */
 function fasterFirst(ctx: RunTurnContext, keys: FighterKey[]): FighterKey[] {
-  if (keys.length < 2) return keys;
-  const { state } = ctx;
-  const actor = (k: FighterKey) => ({ realSpeed: computeTurnOrderSpeed(state, state[k]), move: { priority: 0 } as Move, stages: state[k].stages });
-  const aFirst = compareTurnOrder(actor(keys[0]), actor(keys[1]), ctx.random, state.trickRoomTurnsRemaining !== undefined) === 0;
-  return aFirst ? keys : [keys[1], keys[0]];
+  return orderBySpeed(ctx.state, ctx.random, keys);
 }
 
 /** 받은 선택들을 실행한다. 하나뿐이면 기존 그대로 바로 처리하고, 둘이면(8.3 A7 동시 교체) 교체를 먼저 끝낸 뒤 들어온 포켓몬의 스피드순으로 등장 효과를 처리한다 */

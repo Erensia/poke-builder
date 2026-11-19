@@ -10,7 +10,7 @@ import { getPokemon, getAbility, getItem } from "./data";
 import { getBerryDefenseResult, getItemBasePowerMultiplier, getItemFinalMultiplier, getItemOffenseMultiplier, getItemSpeedMultiplier } from "./itemEffects";
 import { getEffectiveForm, getEffectiveGender, type FormSource } from "./pokemonForm";
 import { computeRealStats } from "./statCalculator";
-import { computeStatusSpeedMultiplier } from "./statusConditions";
+import { speedStatusParts } from "./statusConditions";
 import { getWeatherDamageMultiplier, getWeatherDefenseMultiplier, applyWeatherBall } from "./weatherEffects";
 import { applyFieldPulse, getFieldPowerMultiplier, getFieldDamageMultiplier } from "./fieldEffects";
 import { resolveMoveContext } from "./moveContext";
@@ -22,7 +22,7 @@ import {
   CRITICAL_DAMAGE_MULTIPLIER,
   computeBulkPower,
   computeAttackTerm,
-  computeEffectiveSpeed,
+  computeSpeedStat,
   rankStageMultiplier,
   reversalPowerFromHp,
   gyroBallPowerFromSpeeds,
@@ -1157,15 +1157,14 @@ export function evaluateSpeedMatchup(
       weatherBoost && weatherBoost.weather === weatherForSpeed ? weatherBoost.multiplier : 1;
     const fieldBoost = ability?.fieldSpeedMultiplier;
     const fieldSpeedMultiplier = fieldBoost && fieldBoost.field === field ? fieldBoost.multiplier : 1;
-    const base =
-      realStats.spe *
-      getItemSpeedMultiplier(item) *
-      weatherSpeedMultiplier *
-      fieldSpeedMultiplier *
-      computeStatusSpeedMultiplier(status, ability?.speedMultiplierWhenStatused) *
-      (unburden ? 2 : 1) *
-      (tailwind ? 2 : 1);
-    return computeEffectiveSpeed(base, stages);
+    // 엔진 computeTurnOrderSpeed와 같은 정수 파이프라인(battlePower.computeSpeedStat): 랭크 floor → 4096 체인 → 마비 체인 뒤 floor (8.3 D3-fix-11)
+    const statusParts = speedStatusParts(status, ability?.speedMultiplierWhenStatused);
+    return computeSpeedStat({
+      baseSpe: realStats.spe,
+      stage: stages.spe,
+      multipliers: [statusParts.multiplier, getItemSpeedMultiplier(item), weatherSpeedMultiplier, fieldSpeedMultiplier, unburden ? 2 : 1, tailwind ? 2 : 1],
+      halvedByParalysis: statusParts.halved,
+    });
   };
 
   const attackerSpeed = speedOf(attackerSlot, attackerPokemon, attackerStages, !!attackerUnburden, attackerStatus ?? null, !!attackerTailwind);

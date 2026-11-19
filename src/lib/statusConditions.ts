@@ -127,6 +127,15 @@ export function burnDamageMultiplier(
   return !ignorePenalty && condition === "burn" && moveCategory === "physical" ? 0.5 : 1;
 }
 
+/**
+ * 스피드 정수 파이프라인용 상태이상 분리(8.3 D3-fix-11): 속보(quickFeet)는 상태이상일 때 4096 체인에 들어가는 배율이고(마비 반감 무시),
+ * 마비는 체인이 아니라 **체인 뒤 `floor(× 50/100)`**(Showdown `par` — 체인에 0.5로 넣으면 홀수에서 값이 달라진다)다.
+ */
+export function speedStatusParts(condition: StatusCondition | null, quickFeet?: number): { multiplier: number; halved: boolean } {
+  if (quickFeet && condition) return { multiplier: quickFeet, halved: false };
+  return { multiplier: 1, halved: condition === "paralysis" };
+}
+
 /** 마비는 스피드를 0.5배로 낮춘다. 속보(quickFeet 배율)면 상태이상일 때 그 배율이고 마비 반감은 무시한다 */
 export function computeStatusSpeedMultiplier(condition: StatusCondition | null, quickFeet?: number): number {
   if (quickFeet && condition) return quickFeet;
