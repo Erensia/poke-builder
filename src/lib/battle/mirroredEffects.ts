@@ -1108,10 +1108,13 @@ function healAndThaw(c: MirroredCtx) {
   // 상태이상 치료: 물거품아리아처럼 명중 시 대상의 주 상태이상을 없앤다(inflictsStatus의 반대 방향).
   // status가 지정돼 있으면(물거품아리아=화상) 그 상태일 때만 치료 — 다른 상태이상은 안 지운다.
   c.partyStatusCuredCount = 0;
+  // 8.3 fix-15: 상대를 해동·치료하는 효과는 실제로 맞았을 때만(Showdown — 대타에 맞은 대상은 afterMoveSecondaryEvent·DamagingHit에서 빠진다; 빗나감·방어·무효는 히트 루프 밖).
+  // damagingMoveLanded는 대타 적중도 "맞음"으로 세므로 쓰지 않는다. 우격다짐 조건은 섞지 않는다(해동은 우격다짐이어도 남는다).
+  const landedOnTarget = c.hit && !c.blockedByProtect && !c.hitSubstitute && c.damage > 0;
   if (c.effectiveMove.curesStatus) {
     const { target: cureTarget, status: cureStatus } = c.effectiveMove.curesStatus;
     const target = cureTarget === "self" ? c.attacker : c.defender;
-    if (target.status.condition && (!cureStatus || target.status.condition === cureStatus)) {
+    if ((cureTarget === "self" || landedOnTarget) && target.status.condition && (!cureStatus || target.status.condition === cureStatus)) {
       c.curedStatus = target.status.condition;
       c.curedStatusTarget = cureTarget;
       target.status = { ...NO_STATUS_CONDITION };
@@ -1134,6 +1137,7 @@ function healAndThaw(c: MirroredCtx) {
   if (
     c.effectiveMove.type === "불꽃" &&
     c.effectiveMove.category !== "status" &&
+    landedOnTarget &&
     c.defender.status.condition === "freeze"
   ) {
     c.curedStatus = "freeze";
