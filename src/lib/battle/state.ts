@@ -454,6 +454,18 @@ export function abilityOf(fighter: BattleFighterState): Ability | undefined {
 }
 
 /**
+ * 특성을 바꾸는 단일 입구(8.3 D3-fix-9, 사용자 결정 "헬퍼 방식"). 곡예였던 특성이 다른 특성(또는 없음 — 위액)으로 바뀌면 곡예 상태를 지운다
+ * (Showdown 곡예 `onEnd`: 특성이 떠날 때 휘발성 상태 제거). 곡예를 새로 받아도 켜지 않는다(상태는 도구를 잃는 사건에서만 켜지고 `onStart`가 없다).
+ * 같은 특성을 다시 대입하면 유지한다 — Showdown 9세대 스킬스왑은 같은 특성끼리도 `End`를 불러 양쪽 해제하지만 곡예 보유자끼리 대면이 필요해
+ * 빈도가 사실상 0이라 알면서 둔 차이다(설계서 8.3-D3-fix9-곡예설계.md §7).
+ */
+export function setEffectiveAbility(fighter: BattleFighterState, abilityId: string | null): void {
+  const before = fighter.effectiveAbilityId;
+  fighter.effectiveAbilityId = abilityId;
+  if (before !== abilityId && before && getAbility(before)?.doublesSpeedOnItemLoss) fighter.unburdenActive = undefined;
+}
+
+/**
  * 날씨부정(에어록/날씨부정): 양쪽 중 누구든 이 특성이면 날씨의 "부가효과"는 전부 무시된다.
  * state.weather 자체와 weatherTurnsRemaining(지속 턴)은 그대로 두고, 데미지 배율·조건 특성·
  * 웨더볼·틱 데미지 등 효과를 읽는 지점에서만 이 함수를 거쳐 undefined로 만든다.
@@ -706,6 +718,9 @@ export function consumeItem(fighter: BattleFighterState): void {
   fighter.itemConsumed = true;
   fighter.currentItemId = null;
   if (consumedId) fighter.lastConsumedItemId = consumedId;
+  // 곡예(8.3 D3-fix-9): 도구를 쓰는 모든 경로가 이 함수를 지나므로(행동 중·턴 종료·등장 중) 여기서 켠다 — Showdown `onAfterUseItem`.
+  // 남의 도구를 먹는 효과(벌레먹기·쪼아대기·던지기 열매)는 이 함수를 먹는 쪽에 부르지 않는다(eatBerryNow는 효과만).
+  if (consumedId && abilityOf(fighter)?.doublesSpeedOnItemLoss) fighter.unburdenActive = true;
 
   // 공생(Ability.passesItemToConsumingAlly, Phase 8 §7): 본가라면 여기서 "같은 편 다른 활성
   // 포켓몬이 공생 보유 + 무도구면 그 포켓몬의 도구를 이 fighter에게 넘긴다"를 처리한다. 3v3
@@ -850,7 +865,7 @@ export function applyTransform(self: BattleFighterState, target: BattleFighterSt
     spd: target.realStats.spd,
     spe: target.realStats.spe,
   };
-  self.effectiveAbilityId = target.effectiveAbilityId;
+  setEffectiveAbility(self, target.effectiveAbilityId);
   self.stages = { ...target.stages };
   self.accuracyStages = { ...target.accuracyStages };
   self.critStage = target.critStage;
@@ -966,7 +981,7 @@ function resolveEntryAbilityEffects(
     }
     if (ability.copiesOpponentAbilityOnEntry && opponent.effectiveAbilityId && !isUncopyableAbility(opponent.effectiveAbilityId)) {
       const copiedAbility = getAbility(opponent.effectiveAbilityId);
-      fighter.effectiveAbilityId = opponent.effectiveAbilityId;
+      setEffectiveAbility(fighter, opponent.effectiveAbilityId);
       const opponentName = getPokemon(opponentSlot.pokemonId)?.name ?? "상대";
       const copiedName = copiedAbility?.name ?? "특성";
       announcements.push(`${pokemonName}의 ${ability.name}! ${opponentName}의 ${copiedName}${eulReul(copiedName)} 복사했다!`);

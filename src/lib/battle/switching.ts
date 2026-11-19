@@ -13,7 +13,7 @@ import { inflictStatus, isImmuneToStatus } from "@/lib/statusConditions";
 import { hasVolatile } from "@/lib/volatileConditions";
 import { calcSpikesDamage, calcStealthRockDamage } from "./entryCost";
 import { FIELD_DURATION, FIELD_ENTRY_ANNOUNCEMENT, isStatusBlockedByField } from "@/lib/fieldEffects";
-import { WEATHER_DURATION, abilityOf, activeWeather, applyForecastForm, applyMimicryForm, applyTransform, balloonEntryAnnouncement, cloneSide, consumeItem, contraryDelta, isFainted, opponentKey, sideOf, statusImmunitiesOf, weatherRockBonus, type BattleFighterState, type BattleState } from "./state";
+import { WEATHER_DURATION, setEffectiveAbility, abilityOf, activeWeather, applyForecastForm, applyMimicryForm, applyTransform, balloonEntryAnnouncement, cloneSide, consumeItem, contraryDelta, isFainted, opponentKey, sideOf, statusImmunitiesOf, weatherRockBonus, type BattleFighterState, type BattleState } from "./state";
 
 export function isTrappedFromSwitching(fighter: BattleFighterState, state?: BattleState): boolean {
   if (isFainted(fighter)) return false;
@@ -110,15 +110,14 @@ export function triggerTerrainSeeds(state: BattleState): string[] {
     const seed = item?.terrainSeedBoost;
     if (!seed || seed.field !== state.field) continue;
     fighter.stages = applyStageDelta(fighter.stages, seed.stat, contraryDelta(fighter, 1));
+    const unburdenBefore = fighter.unburdenActive === true;
     consumeItem(fighter);
     const name = getPokemon(fighter.slot.pokemonId)?.name ?? "포켓몬";
     const statText = seed.stat === "def" ? "방어가" : "특수방어가";
     lines.push(`${name}의 ${item!.name}! ${statText} 올랐다!`);
-    // 곡예: resolveAction의 행동 단위 전후비교(§attackerItemIdBeforeAction)는 "하나의 행동" 범위
-    // 밖에서 일어나는 이 시드 소모(배틀 시작/교체 등장/메가진화 시 등장 특성 처리 중)를 못 잡는다
-    // — 이 자리에서 직접 판정해야 한다(ver.1.7 §1-2에서 확인된 버그).
-    if (ability?.doublesSpeedOnItemLoss && !fighter.unburdenActive) {
-      fighter.unburdenActive = true;
+    // 곡예: 플래그는 consumeItem이 켠다(8.3 D3-fix-9). 이 시드 소모는 "하나의 행동" 범위 밖(배틀 시작/교체 등장/메가진화 시 등장 특성 처리 중)이라
+    // resolveAction의 전후비교가 못 잡으므로(ver.1.7 §1-2) 문구만 여기서 낸다.
+    if (ability?.doublesSpeedOnItemLoss && !unburdenBefore) {
       lines.push(`${name}의 ${ability.name}! 스피드가 2배로 올랐다!`);
     }
   }
@@ -310,7 +309,7 @@ function applyEntryAbilityOnSwitchIn(state: BattleState, key: FighterKey, log: s
     !isFainted(opponent)
   ) {
     const copied = getAbility(opponent.effectiveAbilityId);
-    self.effectiveAbilityId = opponent.effectiveAbilityId;
+    setEffectiveAbility(self, opponent.effectiveAbilityId);
     const opponentName = getPokemon(opponent.slot.pokemonId)?.name ?? "상대";
     const copiedName = copied?.name ?? "특성";
     log.push(`${selfName}의 ${ability.name}! ${opponentName}의 ${copiedName}${eulReul(copiedName)} 복사했다!`);
@@ -343,7 +342,7 @@ export function applyMegaEvolution(state: BattleState, key: FighterKey, log: str
   const newStats = computeRealStats(mega.baseStats, fighter.slot.points, fighter.slot.nature);
   const hpDelta = newStats.hp - fighter.maxHp; // 공식 메가폼은 HP 불변이지만 비공식 폼 대비 안전하게
   fighter.types = [...mega.types];
-  fighter.effectiveAbilityId = mega.ability;
+  setEffectiveAbility(fighter, mega.ability);
   fighter.baseTypes = [...mega.types];
   fighter.baseAbilityId = mega.ability;
   fighter.realStats = newStats;
@@ -476,7 +475,7 @@ export function performSwitch(
   // 트랙 M3: 기술·특성으로 바뀐 타입·특성은 물러나면 원래대로(변신은 원복 자체가 미도입이라 건드리지 않는다).
   if (!outgoing.transformed) {
     if (outgoing.baseTypes) outgoing.types = [...outgoing.baseTypes];
-    if (outgoing.baseAbilityId !== undefined) outgoing.effectiveAbilityId = outgoing.baseAbilityId;
+    if (outgoing.baseAbilityId !== undefined) setEffectiveAbility(outgoing, outgoing.baseAbilityId);
     outgoing.addedType = undefined;
     outgoing.abilitySuppressed = undefined;
   }
