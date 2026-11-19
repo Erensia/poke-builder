@@ -1,0 +1,48 @@
+// 일회용: 역산 도메인(실능 스피드 전 범위 × 조건)에서 옛 소수 곱 vs 새 정수 파이프라인의 선후 판정 차이 — 커밋하지 않는다
+import { createServer } from "vite";
+import { fileURLToPath } from "node:url";
+const root = fileURLToPath(new URL("..", import.meta.url));
+const server = await createServer({ root, server: { middlewareMode: true, hmr: false }, appType: "custom", logLevel: "error" });
+try {
+  const data = await server.ssrLoadModule("/src/lib/data.ts");
+  const bp = await server.ssrLoadModule("/src/lib/battlePower.ts"); const sc = await server.ssrLoadModule("/src/lib/statCalculator.ts");
+  const natures = await server.ssrLoadModule("/src/data/natures.json");
+  const NA = natures.default ?? natures;
+  const up = NA.find((n) => n.increased === "spe")?.id, down = NA.find((n) => n.decreased === "spe")?.id;
+  const P = JSON.parse((await import("node:fs")).readFileSync("src/data/pokemon.json", "utf8"));
+  const list = Array.isArray(P) ? P : Object.values(P);
+  const reals = new Set();
+  for (const p of list) for (const nat of [null, up, down]) for (let pts = 0; pts <= 32; pts++) {
+    const r = sc.computeRealStats(p.baseStats, { hp: 0, atk: 0, def: 0, spa: 0, spd: 0, spe: pts }, nat);
+    if (r) reals.add(r.spe);
+  }
+  const R = [...reals].sort((a, b) => a - b);
+  const rank = (s) => (2 + Math.max(0, s)) / (2 - Math.min(0, s));
+  const conds = [
+    { n: "보정 없음", f: (s) => s, nw: (s) => bp.computeSpeedStat({ baseSpe: s, stage: 0, multipliers: [], halvedByParalysis: false }) },
+    { n: "순풍(×2)", f: (s) => s * 2, nw: (s) => bp.computeSpeedStat({ baseSpe: s, stage: 0, multipliers: [2], halvedByParalysis: false }) },
+    { n: "마비", f: (s) => s * 0.5, nw: (s) => bp.computeSpeedStat({ baseSpe: s, stage: 0, multipliers: [], halvedByParalysis: true }) },
+    { n: "스카프(×1.5)", f: (s) => s * 1.5, nw: (s) => bp.computeSpeedStat({ baseSpe: s, stage: 0, multipliers: [1.5], halvedByParalysis: false }) },
+    { n: "철구(×0.5)", f: (s) => s * 0.5, nw: (s) => bp.computeSpeedStat({ baseSpe: s, stage: 0, multipliers: [0.5], halvedByParalysis: false }) },
+    { n: "랭크 −1", f: (s) => s * rank(-1), nw: (s) => bp.computeSpeedStat({ baseSpe: s, stage: -1, multipliers: [], halvedByParalysis: false }) },
+    { n: "랭크 +1", f: (s) => s * rank(1), nw: (s) => bp.computeSpeedStat({ baseSpe: s, stage: 1, multipliers: [], halvedByParalysis: false }) },
+    { n: "스카프+마비", f: (s) => s * 0.75, nw: (s) => bp.computeSpeedStat({ baseSpe: s, stage: 0, multipliers: [1.5], halvedByParalysis: true }) },
+    { n: "순풍+마비", f: (s) => s * 1.0, nw: (s) => bp.computeSpeedStat({ baseSpe: s, stage: 0, multipliers: [2], halvedByParalysis: true }) },
+  ];
+  console.log("실능 스피드 값 수:", R.length, `(${R[0]}~${R[R.length - 1]})`);
+  const tot = { 쌍: 0, 같음: 0, "엔진 동속→소스 확정": 0, "엔진 확정→소스 동속": 0, 뒤집힘: 0 };
+  const rows = {};
+  for (const c of conds) {
+    const row = (rows[c.n] = { 쌍: 0, "엔진 동속→소스 확정": 0, "엔진 확정→소스 동속": 0, 뒤집힘: 0 });
+    for (const a of R) { const oa = c.f(a), na = c.nw(a); for (const d of R) {  // 방어측은 보정 없는 실능 그대로(내 스피드)
+      const oldM = oa === d ? "t" : oa > d ? "a" : "d", newM = na === d ? "t" : na > d ? "a" : "d";
+      row.쌍++; tot.쌍++;
+      if (oldM === newM) tot.같음++;
+      else if (oldM === "t") { row["엔진 동속→소스 확정"]++; tot["엔진 동속→소스 확정"]++; }
+      else if (newM === "t") { row["엔진 확정→소스 동속"]++; tot["엔진 확정→소스 동속"]++; }
+      else { row.뒤집힘++; tot.뒤집힘++; }
+    } }
+  }
+  console.log(JSON.stringify(tot));
+  console.table(rows);
+} finally { await server.close(); }
