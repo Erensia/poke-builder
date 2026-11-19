@@ -45,6 +45,9 @@ interface ActionCtx {
   defenderBerriesBlocked: boolean;
   attackerItemIdBeforeAction: string | null;
   defenderItemIdBeforeAction: string | null;
+  /** 곡예(8.3 D3-fix-9): 행동 시작 때 이미 켜져 있었는가 — consumeItem이 행동 도중 먼저 켜므로 "이번 행동에서 새로 켜졌는가"(로그)는 이 값으로 가른다 */
+  attackerUnburdenBeforeAction: boolean;
+  defenderUnburdenBeforeAction: boolean;
   leppaRestoredPpItemName: string | undefined;
   stanceChange: { to: "shield" | "blade" } | undefined;
   pressureExtraPpAbilityName: string | undefined;
@@ -657,28 +660,17 @@ function applyKnockoutAbilities(c: ActionCtx) {
     }
   }
 
-  // 곡예: 이번 행동 도중 도구가 있었다가(전) 없어졌으면(후 — 나무열매 소모든 매지션에게
-  // 강탈당했든 원인 무관) 그 즉시 한 번만 발동해서 배틀 끝까지 스피드 2배를 유지한다. 이미
-  // 발동했으면(unburdenActive) 다시 판정하지 않는다.
+  // 곡예(8.3 D3-fix-9): 소모(consumeItem)는 그 안에서 이미 켜졌다. 여기서는 소모가 아닌 제거(탁쳐서떨구기·빼앗김·부식가스·트릭으로 넘김 등)를
+  // 위해 이번 행동 도중 도구가 있었다가(전) 없어졌으면(후) 켠다 — 원인 무관. 로그(unburden*AbilityName)는 "이번 행동에서 새로 켜졌을 때"만 낸다.
 
-  if (
-    c.attackerAbility?.doublesSpeedOnItemLoss &&
-    !c.attacker.unburdenActive &&
-    c.attackerItemIdBeforeAction !== null &&
-    c.attacker.currentItemId === null
-  ) {
-    c.attacker.unburdenActive = true;
-    c.unburdenSelfAbilityName = c.attackerAbility.name;
+  if (c.attackerAbility?.doublesSpeedOnItemLoss) {
+    if (c.attackerItemIdBeforeAction !== null && c.attacker.currentItemId === null) c.attacker.unburdenActive = true;
+    if (c.attacker.unburdenActive && !c.attackerUnburdenBeforeAction) c.unburdenSelfAbilityName = c.attackerAbility.name;
   }
 
-  if (
-    c.defenderAbility?.doublesSpeedOnItemLoss &&
-    !c.defender.unburdenActive &&
-    c.defenderItemIdBeforeAction !== null &&
-    c.defender.currentItemId === null
-  ) {
-    c.defender.unburdenActive = true;
-    c.unburdenOpponentAbilityName = c.defenderAbility.name;
+  if (c.defenderAbility?.doublesSpeedOnItemLoss) {
+    if (c.defenderItemIdBeforeAction !== null && c.defender.currentItemId === null) c.defender.unburdenActive = true;
+    if (c.defender.unburdenActive && !c.defenderUnburdenBeforeAction) c.unburdenOpponentAbilityName = c.defenderAbility.name;
   }
 }
 
@@ -964,6 +956,8 @@ export function resolveAction(
   c.random = random;
   c.movesSecond = movesSecond;
   c.defenderMove = defenderMove;
+  c.attackerUnburdenBeforeAction = state[actorKey].unburdenActive === true;
+  c.defenderUnburdenBeforeAction = state[actorKey === "a" ? "b" : "a"].unburdenActive === true;
 
   // 길동무(8.3 A5): preHit이 행동 시작 때 예약을 지우므로 그 전에 읽는다. 잠꼬대 등 호출 기술이 아니라 길동무를 직접 골랐을 때만 연속 실패 대상이다.
   c.destinyBondWasArmed = move.protectEffect === "destinyBond" && state[actorKey].destinyBondArmed === true;

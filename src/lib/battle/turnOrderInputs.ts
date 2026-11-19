@@ -40,7 +40,8 @@ export function computeTurnOrderSpeed(state: BattleState, fighter: BattleFighter
     fieldMultiplier *
     getItemSpeedMultiplier(effectiveHeldItem(fighter, state)) *
     weatherMultiplier *
-    (fighter.unburdenActive ? 2 : 1) *
+    // 곡예(8.3 D3-fix-9): 상태가 켜져 있어도 "지금 도구가 없을 때만" ×2(Showdown `!pokemon.item`). 도구를 되받으면 ×1, 다시 잃으면 즉시 ×2. 매직룸·서투름은 도구를 "있는" 채로 두므로 currentItemId로 본다.
+    (fighter.unburdenActive && !fighter.currentItemId ? 2 : 1) *
     // 순풍(트랙 M1): 이 포켓몬이 속한 편에 순풍이 불고 있으면 2배
     (tailwindActiveFor(state, fighter) ? 2 : 1)
   );

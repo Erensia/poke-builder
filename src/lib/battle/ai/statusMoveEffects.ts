@@ -25,6 +25,7 @@ import {
   contraryDelta,
   hasLivingReserve,
   applyTransform,
+  setEffectiveAbility,
   isForcedSwitchBlocked,
   TAILWIND_DURATION,
   WONDER_ROOM_DURATION,
@@ -831,26 +832,26 @@ export function applyEffectMove(clone: BattleState, key: FighterKey, move: Move)
     // 트랙 M3: 특성·타입을 바꾼 state로 재평가(새 특성이 면역인 상태는 엔진처럼 바로 풀린다)
     case "abilitySwap": {
       const mine = me.effectiveAbilityId;
-      me.effectiveAbilityId = target.effectiveAbilityId;
-      target.effectiveAbilityId = mine;
+      setEffectiveAbility(me, target.effectiveAbilityId);
+      setEffectiveAbility(target, mine);
       cureConditionsBlockedByAbility(me);
       cureConditionsBlockedByAbility(target);
       return true;
     }
     case "abilityGive":
-      target.effectiveAbilityId = me.effectiveAbilityId;
+      setEffectiveAbility(target, me.effectiveAbilityId);
       cureConditionsBlockedByAbility(target);
       return true;
     case "abilityCopy":
-      me.effectiveAbilityId = target.effectiveAbilityId;
+      setEffectiveAbility(me, target.effectiveAbilityId);
       cureConditionsBlockedByAbility(me);
       return true;
     case "abilitySuppress":
-      target.effectiveAbilityId = null;
+      setEffectiveAbility(target, null);
       target.abilitySuppressed = true;
       return true;
     case "abilitySet":
-      target.effectiveAbilityId = move.setsTargetAbilityId!;
+      setEffectiveAbility(target, move.setsTargetAbilityId!);
       cureConditionsBlockedByAbility(target);
       return true;
     case "typeSet":

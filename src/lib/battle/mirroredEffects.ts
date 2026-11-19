@@ -18,7 +18,7 @@ import { isGrounded } from "./grounding";
 import { eatBerryNow } from "./fling";
 import { type ItemEffectLog, type SpinCleared, type SpinClearedHazard } from "@/types/battle";
 import { cureConditionsBlockedByAbility, isFixedAbility, isUncopyableAbility } from "./abilityChange";
-import { SWITCH_PASS_MOVE_ID, activeWeather, applyTransform, consumeItem, contraryDelta, contraryMoveFor, emptyHazardState, hasLivingReserve, isFainted, isItemRemovable, sideOf, statDropBlockStatsOf, statusImmunitiesOf, type BattleFighterState, type BattleState } from "./state";
+import { SWITCH_PASS_MOVE_ID, setEffectiveAbility, activeWeather, applyTransform, consumeItem, contraryDelta, contraryMoveFor, emptyHazardState, hasLivingReserve, isFainted, isItemRemovable, sideOf, statDropBlockStatsOf, statusImmunitiesOf, type BattleFighterState, type BattleState } from "./state";
 import { triggerTerrainSeeds } from "./switching";
 
 interface MirroredMoveEffectsInput {
@@ -1505,7 +1505,7 @@ function miscMoveEffects(c: MirroredCtx) {
     if (c.defender.effectiveAbilityId === c.effectiveMove.setsTargetAbilityId || isFixedAbility(c.defender.effectiveAbilityId)) {
       c.abilitySwapFailed = true;
     } else {
-      c.defender.effectiveAbilityId = c.effectiveMove.setsTargetAbilityId;
+      setEffectiveAbility(c.defender, c.effectiveMove.setsTargetAbilityId);
       c.defender.abilitySuppressed = undefined;
       c.abilitySwappedTargetToName = getAbility(c.effectiveMove.setsTargetAbilityId)?.name ?? c.effectiveMove.setsTargetAbilityId;
       // 고민씨(불면)로 잠든 상대는 바로 깬다
@@ -1528,8 +1528,8 @@ function abilitySwapAndSubstitute(c: MirroredCtx) {
     if (isFixedAbility(mine) || isFixedAbility(theirs) || (!mine && !theirs)) {
       c.abilityChangeFailed = true;
     } else {
-      c.attacker.effectiveAbilityId = theirs;
-      c.defender.effectiveAbilityId = mine;
+      setEffectiveAbility(c.attacker, theirs);
+      setEffectiveAbility(c.defender, mine);
       c.attacker.abilitySuppressed = undefined;
       c.defender.abilitySuppressed = undefined;
       c.abilityChange = { kind: "swap" };
@@ -1542,7 +1542,7 @@ function abilitySwapAndSubstitute(c: MirroredCtx) {
     if (!mine || isUncopyableAbility(mine) || isFixedAbility(c.defender.effectiveAbilityId) || c.defender.effectiveAbilityId === mine) {
       c.abilityChangeFailed = true;
     } else {
-      c.defender.effectiveAbilityId = mine;
+      setEffectiveAbility(c.defender, mine);
       c.defender.abilitySuppressed = undefined;
       c.abilityChange = { kind: "give", abilityName: nameOf(mine) };
       c.noteCure(cureConditionsBlockedByAbility(c.defender), "opponent");
@@ -1553,7 +1553,7 @@ function abilitySwapAndSubstitute(c: MirroredCtx) {
     if (!theirs || isUncopyableAbility(theirs) || isFixedAbility(c.attacker.effectiveAbilityId) || c.attacker.effectiveAbilityId === theirs) {
       c.abilityChangeFailed = true;
     } else {
-      c.attacker.effectiveAbilityId = theirs;
+      setEffectiveAbility(c.attacker, theirs);
       c.attacker.abilitySuppressed = undefined;
       c.abilityChange = { kind: "copy", abilityName: nameOf(theirs) };
       c.noteCure(cureConditionsBlockedByAbility(c.attacker), "self");
@@ -1563,7 +1563,7 @@ function abilitySwapAndSubstitute(c: MirroredCtx) {
     if (c.defender.abilitySuppressed || !c.defender.effectiveAbilityId || isFixedAbility(c.defender.effectiveAbilityId)) {
       c.abilityChangeFailed = true;
     } else {
-      c.defender.effectiveAbilityId = null;
+      setEffectiveAbility(c.defender, null);
       c.defender.abilitySuppressed = true;
       c.abilityChange = { kind: "suppress" };
     }

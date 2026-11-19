@@ -131,7 +131,7 @@ function StatusTags({ fighter, side, aiSide, sideState }: { fighter: Fighter; si
       {fighter.substituteHp !== undefined && (
         <span className="battle-status-tag is-volatile">{side === aiSide ? "대타" : `대타 HP ${fighter.substituteHp}`}</span>
       )}
-      {fighter.unburdenActive && <span className="battle-status-tag is-volatile">곡예(스피드 2배)</span>}
+      {fighter.unburdenActive && !fighter.currentItemId && <span className="battle-status-tag is-volatile">곡예(스피드 2배)</span>}
     </div>
   );
 }

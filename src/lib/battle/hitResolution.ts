@@ -20,7 +20,7 @@ import { computeDamage, hustleDamageMultiplier, screenMultiplierFromFlags, supre
 import { getWeatherDamageMultiplier, getWeatherDefenseMultiplier } from "@/lib/weatherEffects";
 import { FIELD_DURATION, getFieldDamageMultiplier } from "@/lib/fieldEffects";
 import { getBerryDefenseResult, getDrainHealMultiplier, getEnduranceResult, getItemCritStageBonus, getItemBasePowerMultiplier, getItemFinalMultiplier, getMentalHerbCureResult } from "@/lib/itemEffects";
-import { STRUGGLE_MOVE, WEATHER_DURATION, activeWeather, applyMimicryForm, consumeItem, contraryDelta, hasLivingReserve, isFainted, isForcedSwitchBlocked, rollMultiHitCount, sideOf, statDropBlockStatsOf, statusImmunitiesOf, type BattleFighterState, type BattleState } from "./state";
+import { STRUGGLE_MOVE, WEATHER_DURATION, setEffectiveAbility, activeWeather, applyMimicryForm, consumeItem, contraryDelta, hasLivingReserve, isFainted, isForcedSwitchBlocked, rollMultiHitCount, sideOf, statDropBlockStatsOf, statusImmunitiesOf, type BattleFighterState, type BattleState } from "./state";
 import { triggerTerrainSeeds } from "./switching";
 
 interface HitResolutionInput {
@@ -657,7 +657,7 @@ function defineAbilityHitEffect(c: HitCtx) {
       c.attacker.effectiveAbilityId !== trigger.setsAttackerAbilityId &&
       !isFixedAbility(c.attacker.effectiveAbilityId)
     ) {
-      c.attacker.effectiveAbilityId = trigger.setsAttackerAbilityId;
+      setEffectiveAbility(c.attacker, trigger.setsAttackerAbilityId);
       c.mummifiedAttackerAbilityName = c.defenderAbility!.name;
       ev.mummifiedAttackerAbilityName = c.defenderAbility!.name;
       evAny = true;
@@ -669,8 +669,8 @@ function defineAbilityHitEffect(c: HitCtx) {
       !isFixedAbility(c.attacker.effectiveAbilityId)
     ) {
       const tmp = c.attacker.effectiveAbilityId;
-      c.attacker.effectiveAbilityId = c.defender.effectiveAbilityId;
-      c.defender.effectiveAbilityId = tmp;
+      setEffectiveAbility(c.attacker, c.defender.effectiveAbilityId);
+      setEffectiveAbility(c.defender, tmp);
       c.wanderingSpiritSwapped = true;
       ev.wanderingSpiritSwapped = true;
       evAny = true;
