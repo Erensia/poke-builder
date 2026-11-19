@@ -107,13 +107,14 @@ export function userHpScaledPowerValue(maxPower: number, hpFraction: number): nu
 }
 
 /**
- * 자이로볼(Gyro Ball) 위력 — 사용자 확정식: `min(150, floor(25 × (상대 실효 스피드 / 자신 실효 스피드 + 1)))`.
- * (본가의 "+1 바깥" 공식과 다르게 괄호 안에 +1.) 실효 스피드 산출(랭크·마비·도구 반영)은 호출부 몫.
- * 자신 스피드가 0 이하면(이론상) 최대 위력 150.
+ * 자이로볼(Gyro Ball) 위력 — 본가·Showdown식: `min(150, floor(25 × 상대 실효 스피드 / 자신 실효 스피드) + 1)`.
+ * 연산 순서는 소스와 같게 곱을 먼저 한다(`25 × (t/p)`로 쓰면 부동소수점 때문에 일부 쌍이 1 틀린다). 실효 스피드 산출(랭크·마비·도구 반영)은 호출부 몫.
+ * 자신 스피드가 0 이하면(이론상) Showdown처럼 위력 1.
+ * 번복 이력: 8.3 D3-fix-13(2026-11-19) 사용자 결정으로 정정. 이전 확정식 `floor(25 × (t/p + 1))`은 phase7.5-plan.md:161.
  */
 export function gyroBallPowerFromSpeeds(userEffectiveSpeed: number, targetEffectiveSpeed: number): number {
-  if (userEffectiveSpeed <= 0) return 150;
-  return Math.min(150, Math.max(1, Math.floor(25 * (targetEffectiveSpeed / userEffectiveSpeed + 1))));
+  if (userEffectiveSpeed <= 0) return 1;
+  return Math.min(150, Math.floor((25 * targetEffectiveSpeed) / userEffectiveSpeed) + 1);
 }
 
 /**
