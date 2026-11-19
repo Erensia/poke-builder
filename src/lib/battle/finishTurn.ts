@@ -12,6 +12,7 @@ import { consumeVolatileTurn, hasVolatile } from "@/lib/volatileConditions";
 import { rankStageMultiplier, rivalryDamageMultiplier } from "@/lib/battlePower";
 import { resolveMoveContext } from "@/lib/moveContext";
 import { computeFieldEndOfTurnHeal, isStatusBlockedByField } from "@/lib/fieldEffects";
+import { calmRampageIfAsleep } from "./rampage";
 import { getDrainHealMultiplier, getHpThresholdBerryHeal } from "@/lib/itemEffects";
 import { SANDSTORM_IMMUNE_ABILITY_NAMES, abilityOf, activeWeather, applyForecastForm, consumeItem, contraryDelta, hasLivingReserve, isFainted, isForcedSwitchBlocked, opponentKey, sideOf, statDropBlockStatsOf, statusImmunitiesOf, type BattleFighterState, type BattleState } from "./state";
 import { type RunTurnContext, type RunTurnOutcome } from "./runTurn";
@@ -926,6 +927,8 @@ function resolveEndOfTurnAndPerish(c: FinishCtx) {
     applyOctolockDrop(ctx);
     tickBlockVolatiles(ctx); // 회복 판정(희망사항·먹다남은음식 등)이 모두 끝난 뒤에 부른다
     applyDrowsySleepOnset(ctx);
+    // 난동(8.3 D3-fix-10): 명중한 턴 안에서 잠들었으면(느린 상대의 수면 기술·위 하품) 혼란 없이 조용히 푼다 — 반드시 수면 부여(하품) 뒤.
+    calmRampageIfAsleep(ctx.fighter);
   }
 
   // ⑤ 멸망의노래(쓰러지면 이 포켓몬의 나머지는 건너뜀) → 가속·변덕쟁이·수확·되새김질 → 꼬르륵스위치 → 열매 재확인

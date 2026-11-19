@@ -207,18 +207,18 @@ export default async function ({ server, data, ev, pts, mon, battle, opt, check 
       forced && ppUsed === 1 && lockedLeft[0] === 2 && lockedLeft[1] === 1 && confusedEnd,
       `강제 ${forced} PP −${ppUsed} 남은 턴 ${lockedLeft.join("→")} 끝 혼란 ${confusedEnd}`,
     );
-    // 난수 0.4 → 2턴. 2턴째가 방어에 막히면(마지막 턴) 혼란 없이 끝 · 마이페이스는 끝까지 써도 혼란 없음
+    // 난수 0.4 → 2턴. 2턴째가 방어에 막히면(예정 마지막 턴) 난동이 끝나고 혼란에 걸린다(8.3 D3-fix-10 — 1.9 결정 D "마지막 턴에 끊겨도 혼란 없음"은 본가와 달라 번복, 사용자 인게임 확인) · 마이페이스는 끝까지 써도 혼란 없음
     const p0 = battle([mon("한카리아스", ["역린"])], [tank(["방어", "칼춤"])]);
     const p1 = run(p0, "역린", "칼춤", 0.4).nextState;
     const p2out = run(p1, "역린", "방어", 0.4);
-    const blockedEnd = !p2out.nextState.a.volatile.active.rampage && !p2out.nextState.a.volatile.active.confusion;
+    const blockedEnd = !p2out.nextState.a.volatile.active.rampage && !!p2out.nextState.a.volatile.active.confusion;
     const ot0 = battle([mon("한카리아스", ["역린"], "마이페이스")], [tank(["칼춤"])]);
     const ot2 = run(run(ot0, "역린", "칼춤", 0.4).nextState, "역린", "칼춤", 0.4).nextState;
     const ownTempo = !ot2.a.volatile.active.rampage && !ot2.a.volatile.active.confusion;
     check(
-      "1.9 난동: 2턴(50%) · 마지막 턴이 방어에 막히면 혼란 없이 끝 · 마이페이스는 혼란 없음",
+      "1.9 난동: 2턴(50%) · 마지막 턴이 방어에 막혀도 혼란(8.3 D3-fix-10로 번복) · 마이페이스는 혼란 없음",
       p1.a.volatile.active.rampage?.turnsRemaining === 1 && blockedEnd && ownTempo,
-      `2턴 남은 ${p1.a.volatile.active.rampage?.turnsRemaining} 방어 끊김 ${blockedEnd} 마이페이스 ${ownTempo}`,
+      `2턴 남은 ${p1.a.volatile.active.rampage?.turnsRemaining} 마지막 턴 방어 끊김→혼란 ${blockedEnd} 마이페이스 ${ownTempo}`,
     );
     // 소란피기: 잠든 상대는 깨고, 소란 중엔 수면가루·잠자기 실패, 3턴 뒤 혼란 없이 끝
     const u0 = battle([mon("잠만보", ["소란피기"])], [mon("후딘", ["최면술", "잠자기"], null, null, pts({ hp: 32, spe: 32 }))]);
