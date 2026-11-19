@@ -9,7 +9,7 @@ import { getAbility, getItem, getMove } from "@/lib/data";
 import { applyStageDelta } from "@/lib/statStages";
 import { advanceStatusTurn, computeStatusEndOfTurnDamage, inflictStatus, isImmuneToStatus } from "@/lib/statusConditions";
 import { consumeVolatileTurn, hasVolatile } from "@/lib/volatileConditions";
-import { rankStageMultiplier, rivalryDamageMultiplier } from "@/lib/battlePower";
+import { rivalryDamageMultiplier } from "@/lib/battlePower";
 import { resolveMoveContext } from "@/lib/moveContext";
 import { computeFieldEndOfTurnHeal, isStatusBlockedByField } from "@/lib/fieldEffects";
 import { calmRampageIfAsleep } from "./rampage";
@@ -997,8 +997,9 @@ function decideWinnerAndForcedSwitch(c: FinishCtx) {
   // 빠른 쪽이 먼저 쓰러지는 것으로 취급. 랭크 반영 실효 스피드로 비교(트릭룸은 무관).
   // 단 어느 한쪽이라도 교대할 슬롯이 남아 있으면 배틀은 안 끝나고 강제 교체로 넘어간다(§3).
   if (!c.winner && c.perishFaintedKeys.size === 2 && !aHasReserve && !bHasReserve) {
-    const effSpeedA = c.speedA * rankStageMultiplier(c.state.a.stages.spe);
-    const effSpeedB = c.speedB * rankStageMultiplier(c.state.b.stages.spe);
+    // speedA·speedB는 이미 랭크까지 반영한 최종 정수 스피드다(8.3 D3-fix-11) — 랭크를 또 곱하지 않는다.
+    const effSpeedA = c.speedA;
+    const effSpeedB = c.speedB;
     c.winner = effSpeedA <= effSpeedB ? "a" : "b";
   }
 

@@ -3,7 +3,7 @@ import type { PokemonType } from "../types/pokemon-type";
 import type { BaseStats } from "../types/stats";
 import type { Ability } from "../types/ability";
 import type { PokemonGender } from "../types/pokemon";
-import { chain4096, integerHitDamage } from "./damageFormula";
+import { chain4096, integerHitDamage, modify4096 } from "./damageFormula";
 import { BATTLE_STAT_KEYS, NEUTRAL_STAGES, type StatStages } from "../types/battleStats";
 
 /**
@@ -17,9 +17,26 @@ export function rankStageMultiplier(stage: number, k = 2): number {
   return (k + Math.max(0, clamped)) / (k - Math.min(0, clamped));
 }
 
-/** 스피드 랭크까지 반영한 실질 스피드. 턴 순서 계산에 사용 */
-export function computeEffectiveSpeed(realSpeed: number, stages: StatStages = NEUTRAL_STAGES): number {
-  return realSpeed * rankStageMultiplier(stages.spe);
+/**
+ * 랭크 적용(Showdown `getStat`): 랭크 ≥ 0이면 `floor(스탯 × (2+b)/2)`, 아니면 `floor(스탯 × 2/(2−b))`. 정수끼리의 곱·나눗셈이라 부동소수점 보정이 필요 없다.
+ * 실능치 칩 표시와 스피드 계산이 같은 절삭을 쓴다.
+ */
+export function applyRankStage(stat: number, stage: number): number {
+  const b = Math.max(-6, Math.min(6, stage));
+  return b >= 0 ? Math.floor((stat * (2 + b)) / 2) : Math.floor((stat * 2) / (2 - b));
+}
+
+/**
+ * 실효 스피드 — Showdown `getStat('spe')`와 같은 정수 파이프라인(8.3 D3-fix-11, 사용자 결정 "따라간다"):
+ * ① 랭크 `floor` ② 보정(구애스카프·철구·순풍·날씨 특성·서핑테일·곡예·속보)을 4096 체인으로 묶어 `modify` 한 번(0.5는 내림) ③ 마비는 체인 뒤 `floor(×50/100)`.
+ * 상한 10000은 이론상 최대 ≈ 6,048이라 도달 불가라 넣지 않는다(새 보정이 생기면 한 줄). 순서 판정·AI·매치업이 이 함수 하나를 쓴다.
+ */
+export function computeSpeedStat(p: { baseSpe: number; stage: number; multipliers: readonly number[]; halvedByParalysis: boolean }): number {
+  let s = applyRankStage(p.baseSpe, p.stage);
+  const chained = chain4096("other", ...p.multipliers);
+  if (chained !== 1) s = modify4096(s, chained);
+  if (p.halvedByParalysis) s = Math.floor((s * 50) / 100);
+  return s;
 }
 
 /**

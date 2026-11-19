@@ -8,7 +8,7 @@ import type { StatusCondition } from "../types/status";
 import { getMove, getAbility, getItem, getNature } from "../lib/data";
 import { getEffectiveForm, resolveCosmeticForm, COSMETIC_FORM_CYCLE_MAX } from "../lib/pokemonForm";
 import { computeRealStats } from "../lib/statCalculator";
-import { rankStageMultiplier } from "../lib/battlePower";
+import { applyRankStage } from "../lib/battlePower";
 import { STAT_ORDER, STAT_LABELS } from "../lib/statLabels";
 import { TYPE_COLORS } from "../lib/typeColors";
 import { PillRow } from "./PillRow";
@@ -152,7 +152,7 @@ export function MatchupStatRow({ slot, realStats }: MatchupSlotCardProps & Match
         {STAT_ORDER.map((stat) => {
           const base = realStats[stat];
           const stage = stat === "hp" ? 0 : slot.stages[stat];
-          const effective = stage === 0 ? base : Math.round(base * rankStageMultiplier(stage));
+          const effective = stage === 0 ? base : applyRankStage(base, stage); // Showdown getStat: 랭크 적용은 floor(8.3 D3-fix-11)
           return (
             <div
               className={`matchup-stat-chip${
