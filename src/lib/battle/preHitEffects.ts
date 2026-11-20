@@ -434,10 +434,17 @@ function checkActionBlockers(c: PreHitCtx) {
   }
 
   // 3-1) 헤롱헤롱(매혹): ingrain/leechSeed와 같은 "배틀 끝까지 유지"형이라 턴수를 소모하지 않는다
-  // (consumeVolatileTurn 호출 없음 — 교체가 없는 1v1이라 해제될 계기가 없음). 걸려있는 동안 매
+  // (consumeVolatileTurn 호출 없음). 건 쪽이 교체·기절하면 풀린다(performSwitch·아래 가드). 걸려있는 동안 매
   // 행동 판정마다 50% 확률로 그 턴 행동을 통째로 못 한다.
-  if (hasVolatile(c.attacker.volatile, "attract") && c.random() < ATTRACT_ACTION_BLOCK_CHANCE) {
-    return { value: c.blocked("attract") };
+  if (hasVolatile(c.attacker.volatile, "attract")) {
+    // 8.3 D3-fix-19: 건 쪽이 이 턴 안에 이미 기절했으면(반동기·생명의구슬·반사 등) Showdown은 기절 즉시 isActive=false → 행동 종료 Update에서 헤롱헤롱을 푼다.
+    // 굴림(난수) 없이 풀고 이 행동을 이어 간다. 교체로 떠난 경우는 performSwitch가 푼다.
+    if (isFainted(c.defender)) {
+      const { attract: _released, ...rest } = c.attacker.volatile.active;
+      c.attacker.volatile = { active: rest };
+    } else if (c.random() < ATTRACT_ACTION_BLOCK_CHANCE) {
+      return { value: c.blocked("attract") };
+    }
   }
 
   // 3-2) 마비: 12.5% 확률로 그 턴 행동을 못 한다. Showdown BeforeMove 우선도 1이라 혼란(3)·헤롱헤롱(2) 뒤 맨 마지막이다(8.3 D3-fix-17 — 이전엔 수면·얼음과 같은
