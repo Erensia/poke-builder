@@ -1093,13 +1093,6 @@ function bindingAndFlinch(c: MirroredCtx) {
       c.inflictedVolatile = "flinch";
     }
   }
-
-  // 불굴의마음: 이번 행동에서 풀죽음이 걸렸으면(기술 자체든 왕의징표석이든, 둘 다 위에서
-  // 이미 defender.volatile에 반영됨) 그 즉시 지정된 랭크가 오른다.
-  if (c.inflictedVolatile === "flinch" && c.defenderAbility?.boostsStatOnFlinch) {
-    const boost = c.defenderAbility.boostsStatOnFlinch;
-    c.defender.stages = applyStageDelta(c.defender.stages, boost.stat, contraryDelta(c.defender, boost.delta));
-  }
 }
 
 /** 상태이상 치료·해동·잠자기·즉시 회복형 변화기·꿀꺽 */
