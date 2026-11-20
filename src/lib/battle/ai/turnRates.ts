@@ -181,7 +181,9 @@ function environmentResidual(state: BattleState, fighter: BattleFighterState, op
   if (hasVolatile(fighter.volatile, "bound") && !magicGuard) {
     const binderItem = opponent ? effectiveHeldItem(opponent, state) : undefined;
     const amount = Math.floor(maxHp / (binderItem?.bindDamageDenominator ?? 8));
-    result.timed.push({ amount, turns: fighter.volatile.active.bound!.turnsRemaining ?? Infinity });
+    // 마지막 틱(turnsRemaining 1)은 피해 없이 해제되므로 피해 턴은 turnsRemaining − 1(8.3 D3-fix-21)
+    const turns = (fighter.volatile.active.bound!.turnsRemaining ?? Infinity) - 1;
+    if (turns > 0) result.timed.push({ amount, turns });
   }
   return result;
 }

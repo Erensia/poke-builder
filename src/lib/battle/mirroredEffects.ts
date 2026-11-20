@@ -1482,7 +1482,7 @@ function miscMoveEffects(c: MirroredCtx) {
     }
   }
 
-  // 조이기·엉겨붙기·집게덫 등(bindsTarget): 데미지를 준 뒤 상대를 4~5턴 속박한다(volatile "bound").
+  // 조이기·엉겨붙기·집게덫 등(bindsTarget): 데미지를 준 뒤 상대를 지속 5~6으로 속박한다(피해·가둠 N−1번)(volatile "bound").
   // 떨어뜨리기(트랙 M4): 데미지를 주면 상대를 물러날 때까지 땅에 떨어뜨린다(전자부유도 끝남). 원래 공중에 있었을 때만 로그.
   c.smackedDownTarget = false;
   if (c.effectiveMove.groundsTarget && c.damage > 0 && !c.hitSubstitute && !isFainted(c.defender) && !c.defender.smackedDown) {
