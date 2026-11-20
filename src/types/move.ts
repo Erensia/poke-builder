@@ -277,6 +277,8 @@ export interface Move {
    * (8.3 D3-fix-22: 옛 이름 halvesPowerOutsideChargeSkipWeather는 "쾌청이 아니면 절반"이라 날씨 없음에서도 절반이었다).
    */
   halvesPowerInRainSandSnow?: boolean;
+  /** 지진·땅고르기: 그래스필드에서 땅에 있는(반무적이 아닌) 대상에게 위력 ×0.5(Showdown grassyterrain `weakenedMoves`, 8.3 D3-fix-23). 판정은 fieldEffects getFieldDamageMultiplier */
+  weakenedByGrassyTerrain?: boolean;
   /**
    * 메테오빔·일렉트로빔처럼 "1턴째(준비 선언 시점)에 자신의 능력치가 오르는" 차지 기술만 채운다.
    * chargeSkipWeather로 준비 턴 자체가 생략되는 경우(예: 일렉트로빔+비)에도 "이 기술을 쓴 턴"은

@@ -214,6 +214,8 @@ function defineResolveHit(c: HitCtx) {
       c.effectiveMove.type,
       isGrounded(c.state, c.attacker, c.attackerAbility),
       isGrounded(c.state, c.defender, c.defenderAbility),
+      c.effectiveMove.weakenedByGrassyTerrain,
+      c.hidingBypassMultiplier !== 1, // 땅속 등에 숨은 대상을 뚫고 맞힌 경우 = 반무적
     );
     const itemMultiplier = getItemBasePowerMultiplier(c.attackerItem, c.effectiveMove);
     const itemFinalMultiplier = getItemFinalMultiplier(c.attackerItem, c.typeEffectiveness, c.attacker.lastMoveStreak ?? 1);

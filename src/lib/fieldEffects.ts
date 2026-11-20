@@ -40,8 +40,13 @@ export function getFieldDamageMultiplier(
   attackerGrounded = true,
   /** 트랙 M4: 방어측이 땅에 있는지 — 미스트필드의 드래곤 반감은 땅에 있는 대상만 */
   defenderGrounded = true,
+  /** 지진·땅고르기(Move.weakenedByGrassyTerrain): 그래스필드에서 땅에 있는 대상에게 위력 ×0.5(8.3 D3-fix-23) */
+  weakenedByGrassyTerrain = false,
+  /** 방어측이 반무적(구멍파기 중 등)인지 — 그래스필드의 지진류 반감은 반무적 대상에게 적용되지 않는다 */
+  defenderSemiInvulnerable = false,
 ): number {
   if (!field || !moveType) return 1;
+  if (field === "그래스필드" && weakenedByGrassyTerrain) return defenderGrounded && !defenderSemiInvulnerable ? 0.5 : 1;
   if (field === "미스트필드") return moveType === "드래곤" && defenderGrounded ? 0.5 : 1;
   return FIELD_BOOST_TYPE[field] === moveType && attackerGrounded ? 1.3 : 1;
 }
