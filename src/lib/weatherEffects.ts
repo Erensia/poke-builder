@@ -66,6 +66,15 @@ export function applyWeatherBall(
 }
 
 /**
+ * 솔라빔·솔라블레이드(Move.halvesPowerInRainSandSnow): 위력은 비·모래바람·눈에서만 절반이다(Showdown `weakWeathers`).
+ * 날씨 없음·쾌청은 정상이고, 메가솔라 보유자는 자기 기술을 항상 쾌청 취급해 어느 날씨든 정상(8.3 D3-fix-22 — 옛 구현은 쾌청이 아니면 날씨 없음도 절반이었다).
+ * weather는 날씨부정을 반영한 유효 날씨다.
+ */
+export function solarPowerHalved(move: Move, weather: WeatherKind | undefined, treatsOwnWeatherAsSun: boolean | undefined): boolean {
+  return !!move.halvesPowerInRainSandSnow && !treatsOwnWeatherAsSun && (weather === "비" || weather === "모래바람" || weather === "눈");
+}
+
+/**
  * 광합성·달빛(Move.healsWeatherDependent) 전용 회복 비율. 본가 공식 그대로: 쾌청 2/3,
  * 날씨 없음 1/2, 그 외 날씨(비/모래바람/눈)는 1/4 — 전부 최대 HP 기준.
  */

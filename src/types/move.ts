@@ -272,11 +272,11 @@ export interface Move {
   /** 폭풍처럼 특정 날씨(쾌청)면 기술의 명중률 수치 자체가 바뀌는 기술만 채운다(폭풍 쾌청=50). 명중·회피 랭크와 보정은 그대로 받는다. */
   accuracyInWeather?: { weather: WeatherKind; accuracy: number };
   /**
-   * 솔라빔처럼 "chargeSkipWeather가 아닌 날씨에는 위력이 절반"인 기술만 채운다(§1-10). 솔라블레이드는
-   * 같은 차지-스킵 기술이지만 effect 텍스트에 이 조항이 없어 false(생략) — chargeSkipWeather와
-   * 별도 필드로 분리해 opt-in해야 한다.
+   * 솔라빔·솔라블레이드처럼 "비·모래바람·눈에서는 위력이 절반"인 기술만 채운다(Showdown `weakWeathers`).
+   * 날씨 없음·쾌청은 정상 위력이고 메가솔라 보유자는 어느 날씨든 정상이다 — 판정은 weatherEffects `solarPowerHalved`
+   * (8.3 D3-fix-22: 옛 이름 halvesPowerOutsideChargeSkipWeather는 "쾌청이 아니면 절반"이라 날씨 없음에서도 절반이었다).
    */
-  halvesPowerOutsideChargeSkipWeather?: boolean;
+  halvesPowerInRainSandSnow?: boolean;
   /**
    * 메테오빔·일렉트로빔처럼 "1턴째(준비 선언 시점)에 자신의 능력치가 오르는" 차지 기술만 채운다.
    * chargeSkipWeather로 준비 턴 자체가 생략되는 경우(예: 일렉트로빔+비)에도 "이 기술을 쓴 턴"은

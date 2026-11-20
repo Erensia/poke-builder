@@ -11,7 +11,7 @@ import { getBerryDefenseResult, getItemBasePowerMultiplier, getItemFinalMultipli
 import { getEffectiveForm, getEffectiveGender, type FormSource } from "./pokemonForm";
 import { computeRealStats } from "./statCalculator";
 import { computeSpeedWithEffects } from "./speedStat";
-import { getWeatherDamageMultiplier, getWeatherDefenseMultiplier, applyWeatherBall } from "./weatherEffects";
+import { getWeatherDamageMultiplier, getWeatherDefenseMultiplier, applyWeatherBall, solarPowerHalved } from "./weatherEffects";
 import { applyFieldPulse, getFieldPowerMultiplier, getFieldDamageMultiplier } from "./fieldEffects";
 import { resolveMoveContext } from "./moveContext";
 import { koChanceByUses, chain4096, DAMAGE_ROLL_STEP_COUNT, type DamageParts } from "./damageFormula";
@@ -468,14 +468,8 @@ function resolveVariablePowerMove(c: SlotMatchupCtx) {
     variablePowerMove = { ...variablePowerMove, power: variablePowerMove.power * 2 };
   }
 
-  // 솔라빔(§1-10): chargeSkipWeather(쾌청)가 아닌 날씨에서는 위력 절반. matchupEvaluator는
-  // 선택한 날씨를 정확히 알고 있어(§1-7 성장과 같은 근거) 항상 정확히 판정한다.
-  if (
-    variablePowerMove.halvesPowerOutsideChargeSkipWeather &&
-    variablePowerMove.power !== null &&
-    variablePowerMove.chargeSkipWeather !== undefined &&
-    c.effectiveWeather !== variablePowerMove.chargeSkipWeather
-  ) {
+  // 솔라빔·솔라블레이드: 비·모래바람·눈에서만 위력 절반(8.3 D3-fix-22). 선택한 날씨를 정확히 알고 있어(§1-7 성장과 같은 근거) 항상 정확히 판정한다.
+  if (variablePowerMove.power !== null && solarPowerHalved(variablePowerMove, c.effectiveWeather, c.attackerAbility?.treatsOwnWeatherAsSun)) {
     variablePowerMove = { ...variablePowerMove, power: Math.floor(variablePowerMove.power / 2) };
   }
 
@@ -1004,13 +998,8 @@ export function computeSoloOffensePower(
     variablePowerMove = { ...variablePowerMove, power: variablePowerMove.power * 2 };
   }
 
-  // 솔라빔(§1-10): chargeSkipWeather(쾌청)가 아닌 날씨에서는 위력 절반 — evaluateSlotMatchup과 동일.
-  if (
-    variablePowerMove.halvesPowerOutsideChargeSkipWeather &&
-    variablePowerMove.power !== null &&
-    variablePowerMove.chargeSkipWeather !== undefined &&
-    effectiveWeather !== variablePowerMove.chargeSkipWeather
-  ) {
+  // 솔라빔·솔라블레이드: 비·모래바람·눈에서만 위력 절반 — evaluateSlotMatchup과 동일(8.3 D3-fix-22).
+  if (variablePowerMove.power !== null && solarPowerHalved(variablePowerMove, effectiveWeather, attackerAbility?.treatsOwnWeatherAsSun)) {
     variablePowerMove = { ...variablePowerMove, power: Math.floor(variablePowerMove.power / 2) };
   }
 

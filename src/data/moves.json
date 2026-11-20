@@ -134,7 +134,7 @@
     ],
     "chargeTurn": true,
     "chargeSkipWeather": "쾌청",
-    "halvesPowerOutsideChargeSkipWeather": true,
+    "halvesPowerInRainSandSnow": true,
     "makesContact": false
   },
   {
@@ -5576,6 +5576,7 @@
     ],
     "chargeTurn": true,
     "chargeSkipWeather": "쾌청",
+    "halvesPowerInRainSandSnow": true,
     "makesContact": true
   },
   {
