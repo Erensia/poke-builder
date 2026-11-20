@@ -334,11 +334,15 @@ function applyFutureSight(ctx: EndOfTurnFighterContext): void {
   }
 }
 
-/** 회복봉인·지옥찌르기: 턴 종료마다 카운터가 줄어 0에서 해제된다(걸린 턴도 1턴으로 센다). 이 턴 종료 회복 판정 뒤에 부른다 */
+/**
+ * 도발·앙코르·사슬묶기·회복봉인·지옥찌르기: 턴 종료마다 카운터가 줄어 0에서 해제된다(걸린 턴·못 움직인 턴도 1턴으로 센다).
+ * 도발·앙코르·사슬묶기는 8.3 D3-fix-20부터 행동 시가 아니라 여기서 줄인다(Showdown residual 15·16·17 — 회복봉인 20·지옥찌르기 22보다 앞).
+ * 이 턴 종료 회복 판정 뒤에 부른다
+ */
 function tickBlockVolatiles(ctx: EndOfTurnFighterContext): void {
   const { key, fighter, endOfTurn } = ctx;
   const healBlockWasActive = hasVolatile(fighter.volatile, "healBlock");
-  for (const v of ["healBlock", "throatChop"] as const) {
+  for (const v of ["taunt", "encore", "disable", "healBlock", "throatChop"] as const) {
     if (hasVolatile(fighter.volatile, v)) fighter.volatile = consumeVolatileTurn(fighter.volatile, v);
   }
   // 회복봉인이 풀렸으면 줄을 남긴다(8.3 A3). 지옥찌르기는 Showdown도 시작·해제 모두 표시가 없어 남기지 않는다.

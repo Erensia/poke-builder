@@ -24,11 +24,13 @@ export const ATTRACT_ACTION_BLOCK_CHANCE = 0.5;
 const DROWSY_DURATION = 2;
 const WISH_DURATION = 2;
 
-/** 도발 지속 턴수(사용자 확인 — 효과 텍스트에 명시) */
+/**
+ * 도발·앙코르·사슬묶기 기본 지속 턴수. 셋 다 **턴 종료마다 1씩** 줄어(걸린 턴·못 움직인 턴도 센다) 0에서 해제된다(8.3 D3-fix-20, Showdown residual 15·16·17).
+ * 기본값은 "대상이 아직 안 움직인 상태에서 걸었을 때"의 값이고, 대상이 이미 움직였으면 부여 때 `durationAdjust` +1을 더한다
+ * (Showdown: 도발 3·앙코르 3은 이미 움직이면 +1, 사슬묶기는 기본 5에서 아직 안 움직이면 −1 — 엔진은 "아직 안 움직임"인 4를 기본으로 두고 이미 움직이면 5).
+ */
 const TAUNT_DURATION = 3;
-/** 사슬묶기 지속 턴수(본가 기준값 — 이 프로젝트 효과 텍스트엔 정확한 수치가 없어 그대로 사용) */
 const DISABLE_DURATION = 4;
-/** 앙코르 지속 턴수(본가 기준값 — 위와 동일한 이유) */
 const ENCORE_DURATION = 3;
 
 /**
@@ -79,9 +81,11 @@ export function inflictVolatile(
   volatile: VolatileCondition,
   random: () => number = Math.random,
   moveId?: string,
+  /** 부여 시점 보정(도발·앙코르·사슬묶기의 "대상이 이미 움직였나", 8.3 D3-fix-20) — 기본 지속에 더한다 */
+  durationAdjust = 0,
 ): VolatileConditionState {
   return {
-    active: { ...state.active, [volatile]: { turnsRemaining: defaultDuration(volatile, random), moveId } },
+    active: { ...state.active, [volatile]: { turnsRemaining: defaultDuration(volatile, random) + durationAdjust, moveId } },
   };
 }
 

@@ -376,25 +376,21 @@ function checkActionBlockers(c: PreHitCtx) {
   }
 
   // 2-0) 도발/사슬묶기/앙코르: 이번 턴 고른 기술이 제약을 어기면 실패한다. 차지 기술 2턴째
-  // (releasingCharge)는 지난 턴에 이미 확정된 선택이라 이 판정에서 제외한다. 지속 턴수는
-  // 막혔는지 여부와 무관하게 전부 이 시점에 1씩 줄어든다(자기 차례마다 한 번씩만 판정되므로
-  // 자연히 턴당 1회 소모) — 여러 제약이 동시에 걸려있어도 전부 소모시킨 뒤 첫 번째로 걸린
-  // 이유(도발 > 사슬묶기 > 앙코르 순)만 대표로 보고한다.
+  // (releasingCharge)는 지난 턴에 이미 확정된 선택이라 이 판정에서 제외한다. 지속 턴수는 여기서 줄이지 않는다 —
+  // 8.3 D3-fix-20부터 턴 종료(finishTurn tickBlockVolatiles)에 줄어 걸린 턴·못 움직인 턴(수면·마비 등)도 센다.
+  // 여러 제약이 동시에 걸려있으면 첫 번째로 걸린 이유(도발 > 사슬묶기 > 앙코르 순)만 대표로 보고한다.
   if (!c.releasingCharge) {
     let restrictionBlockedKind: "taunt" | "disable" | "encore" | "torment" | "imprison" | "gravity" | "healBlock" | "throatChop" | undefined;
     if (hasVolatile(c.attacker.volatile, "taunt")) {
       if (c.move.category === "status") restrictionBlockedKind = "taunt";
-      c.attacker.volatile = consumeVolatileTurn(c.attacker.volatile, "taunt");
     }
     const disableEntry = c.attacker.volatile.active.disable;
     if (disableEntry) {
       if (disableEntry.moveId === c.move.id) restrictionBlockedKind ??= "disable";
-      c.attacker.volatile = consumeVolatileTurn(c.attacker.volatile, "disable");
     }
     const encoreEntry = c.attacker.volatile.active.encore;
     if (encoreEntry) {
       if (encoreEntry.moveId !== c.move.id) restrictionBlockedKind ??= "encore";
-      c.attacker.volatile = consumeVolatileTurn(c.attacker.volatile, "encore");
     }
     // 트집(트랙 M2): 직전에 쓴 기술을 다시 못 쓴다. 봉인(트랙 M2): 봉인을 쓴 상대가 배운 기술은 못 쓴다.
     // 둘 다 물러나기 전까지 이어져 턴 소모가 없다.

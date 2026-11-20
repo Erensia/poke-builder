@@ -859,7 +859,8 @@ function statusCureAndVolatile(c: MirroredCtx) {
       if (effect.target === "self") {
         c.attacker.volatile = inflictVolatile(c.attacker.volatile, effect.volatile, c.random);
       } else {
-        c.defender.volatile = inflictVolatile(c.defender.volatile, effect.volatile, c.random);
+        // 도발: 대상이 이미 움직였으면 지속 +1(8.3 D3-fix-20)
+        c.defender.volatile = inflictVolatile(c.defender.volatile, effect.volatile, c.random, undefined, effect.volatile === "taunt" ? targetAlreadyActedAdjust(c) : 0);
       }
       c.inflictedVolatile = effect.volatile;
 
@@ -890,6 +891,15 @@ function statusCureAndVolatile(c: MirroredCtx) {
       }
     }
   }
+}
+
+/**
+ * 도발·앙코르·사슬묶기 부여 때의 지속 보정(8.3 D3-fix-20): 대상이 **이번 턴 이전부터 필드에 있었고 이미 움직였으면** +1.
+ * Showdown은 `queue.willMove(target)`(대상 자신의 행동이 큐에 남았나)로 판정하고 도발은 `activeTurns > 0`도 요구한다 — 공격측이 후공이면
+ * 대상은 이미 행동을 마쳤고(막혀서 못 움직였어도 포함), 이번 턴 입장한 대상(턴 시작 교체·U턴 뒤)은 행동 차례가 없고 `activeTurns = 0`이라 +1이 없다.
+ */
+function targetAlreadyActedAdjust(c: MirroredCtx): number {
+  return c.movesSecond && !c.defender.enteredThisTurn ? 1 : 0;
 }
 
 /** 정리정돈·안개제거·코트체인지·회생의기도·시럽봄·소금절이·풍선 */
@@ -1616,7 +1626,7 @@ function abilitySwapAndSubstitute(c: MirroredCtx) {
     } else if (!c.defender.lastMoveId || hasVolatile(c.defender.volatile, "disable")) {
       c.disableSetFailed = true;
     } else {
-      c.defender.volatile = inflictVolatile(c.defender.volatile, "disable", c.random, c.defender.lastMoveId);
+      c.defender.volatile = inflictVolatile(c.defender.volatile, "disable", c.random, c.defender.lastMoveId, targetAlreadyActedAdjust(c));
       c.setDisabledMoveName = getMove(c.defender.lastMoveId)?.name;
       // 멘탈허브: 사슬묶기가 걸리는 순간 치료하고 소모된다.
       if (getMentalHerbCureResult(c.defenderItem, c.defender.itemConsumed ?? false)) {
@@ -1640,7 +1650,7 @@ function abilitySwapAndSubstitute(c: MirroredCtx) {
     } else if (!c.defender.lastMoveId || hasVolatile(c.defender.volatile, "encore")) {
       c.encoreSetFailed = true;
     } else {
-      c.defender.volatile = inflictVolatile(c.defender.volatile, "encore", c.random, c.defender.lastMoveId);
+      c.defender.volatile = inflictVolatile(c.defender.volatile, "encore", c.random, c.defender.lastMoveId, targetAlreadyActedAdjust(c));
       c.setEncoreMoveName = getMove(c.defender.lastMoveId)?.name;
       // 멘탈허브: 앙코르가 걸리는 순간 치료하고 소모된다.
       if (getMentalHerbCureResult(c.defenderItem, c.defender.itemConsumed ?? false)) {
