@@ -490,16 +490,17 @@ export function performSwitch(
   //   스크린(§6-3)·희망사항(§6-2)은 편(BattleSide.screens / .wish)에 있어 교체해도 유지된다.
   //   후속: transformed(변신 원복 — 메타몽 전용이라 미도입).
 
-  // 문어굳히기/물고버티기: 이 편이 자리를 비우면(교체·기절 후 교체 모두 이 함수를 지난다),
-  // 자리를 비운 쪽이 상대에게 걸어놨던 도망봉인이 풀린다. 물고버티기는 서로 걸어서 상대 쪽
-  // 것도 여기서 함께 풀린다(물러나는 쪽 것은 아래 volatile 초기화에서 지워진다).
+  // 문어굳히기/물고버티기/검은눈빛 + 헤롱헤롱·속박(8.3 D3-fix-19): 이 편이 자리를 비우면(교체·기절 후 교체 모두 이 함수를 지난다),
+  // 자리를 비운 쪽이 상대에게 걸어놨던 효과가 풀린다(Showdown: attract.onUpdate는 source가 !isActive면 제거, partiallytrapped는 source 이탈이면 피해 없이 종료).
+  // 싱글에서 걸린 쪽의 원천은 항상 상대 활성 포켓몬이라 원천을 따로 저장하지 않고 "상대가 떠났다"로 판정한다.
+  // 물고버티기는 서로 걸어서 상대 쪽 것도 여기서 함께 풀린다(물러나는 쪽 것은 아래 volatile 초기화에서 지워진다).
+  // shortcut: 더블 확장 시 헤롱헤롱·속박의 원천(source) 저장이 필요하다.
   {
     const opp = state[opponentKey(key)];
-    if (hasVolatile(opp.volatile, "octolock") || hasVolatile(opp.volatile, "jawLock") || hasVolatile(opp.volatile, "meanLook")) {
+    const LEFT_WITH_SOURCE = ["octolock", "jawLock", "meanLook", "attract", "bound"] as const;
+    if (LEFT_WITH_SOURCE.some((v) => hasVolatile(opp.volatile, v))) {
       const next = { ...opp.volatile.active };
-      delete next.octolock;
-      delete next.jawLock;
-      delete next.meanLook;
+      for (const v of LEFT_WITH_SOURCE) delete next[v];
       opp.volatile = { active: next };
     }
   }
