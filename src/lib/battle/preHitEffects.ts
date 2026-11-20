@@ -367,6 +367,11 @@ function checkActionBlockers(c: PreHitCtx) {
   // 2) 풀죽음: 1턴짜리 행동방해. 걸려있으면 이번 턴 소모하고 못 움직인다(반동은 위에서 먼저)
   if (hasVolatile(c.attacker.volatile, "flinch")) {
     c.attacker.volatile = consumeVolatileTurn(c.attacker.volatile, "flinch");
+    // 불굴의마음(8.3 D3-fix-18): 풀죽음으로 행동이 **막히는 순간**에만 오른다(Showdown steadfast.onFlinch ← flinch.onBeforeMove, 우선도 8).
+    // 이미 움직인 뒤 걸린 풀죽음·수면·얼음·재충전으로 먼저 막힌 턴에는 여기까지 오지 않아 오르지 않고, 혼란·마비보다는 먼저라 그 턴에도 오른다.
+    // 랭크 변화는 새 로그 줄·필드 없이 상태 스냅샷으로만 드러난다(사용자 결정 2026-11-18).
+    const boost = c.attackerAbility?.boostsStatOnFlinch;
+    if (boost) c.attacker.stages = applyStageDelta(c.attacker.stages, boost.stat, contraryDelta(c.attacker, boost.delta));
     return { value: c.blocked("flinch") };
   }
 
