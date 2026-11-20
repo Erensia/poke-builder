@@ -16,11 +16,12 @@ import { getAbilityPriorityBoost, resolveEffectiveDefenderAbility } from "@/lib/
 import { checkStatusActionBlock, inflictStatus, isImmuneToStatus } from "@/lib/statusConditions";
 import { ATTRACT_ACTION_BLOCK_CHANCE, CONFUSION_SELF_HIT_CHANCE, consumeVolatileTurn, hasVolatile } from "@/lib/volatileConditions";
 import { resolveMoveContext } from "@/lib/moveContext";
+import { DAMAGE_ROLL_MIN_PERCENT, DAMAGE_ROLL_STEP_COUNT } from "@/lib/damageFormula";
 import { WEIGHT_MOVE_FALLBACK_POWER, absoluteWeightPowerValue, computeDamage, shellSideArmCategory, positiveStagesPowerValue, reversalPowerFromHp, targetHpRatioPowerValue, userHpScaledPowerValue, faintedAllyPowerValue, rivalryDamageMultiplier, weightRatioPowerValue } from "@/lib/battlePower";
 import { applyWeatherBall } from "@/lib/weatherEffects";
 import { applyFieldPulse, getFieldPowerMultiplier, isOpponentTargetingMove, isPriorityMoveBlockedByField, isStatusBlockedByField, needsLivingTarget } from "@/lib/fieldEffects";
 import { computeBattleHitChance, toxicNeverMisses } from "./hitChance";
-import { CONFUSION_SELF_HIT_MOVE, MIN_DAMAGE_ROLL, STRUGGLE_MOVE, abilityOf, activeWeather, consumeItem, contraryDelta, hasSheerForceSecondaryEffect, isFainted, isHealingMove, isItemRemovable, opponentKey, sideOf, statusImmunitiesOf, type BattleFighterState, type BattleState } from "./state";
+import { CONFUSION_SELF_HIT_MOVE, STRUGGLE_MOVE, abilityOf, activeWeather, consumeItem, contraryDelta, hasSheerForceSecondaryEffect, isFainted, isHealingMove, isItemRemovable, opponentKey, sideOf, statusImmunitiesOf, type BattleFighterState, type BattleState } from "./state";
 
 /** resolvePreHitEffects의 단계 사이에서 공유되는 값 — 한 단계 안에서만 쓰는 변수는 각 단계 함수의 지역 변수다 */
 interface PreHitCtx {
@@ -433,8 +434,12 @@ function checkActionBlockers(c: PreHitCtx) {
   if (hasVolatile(c.attacker.volatile, "confusion")) {
     c.attacker.volatile = consumeVolatileTurn(c.attacker.volatile, "confusion");
     if (c.random() < CONFUSION_SELF_HIT_CHANCE) {
+      // 8.3 D3-fix-16: Showdown getConfusionDamage — 공격·방어 모두 자기 랭크를 반영하고 난수는 85~100% 정수 16단계(본 피해 경로와 같은 굴림식).
+      // 특성·도구·화상·자속은 넘기지 않는다(Showdown calculateStat은 ModifyAtk/Def·천진을 부르지 않는다).
       const selfHit = computeDamage(c.attacker.realStats, c.attacker.realStats, c.attacker.types, CONFUSION_SELF_HIT_MOVE, {
-        randomRoll: MIN_DAMAGE_ROLL + c.random() * (1 - MIN_DAMAGE_ROLL),
+        attackerStages: c.attacker.stages,
+        defenderStages: c.attacker.stages,
+        randomRoll: (DAMAGE_ROLL_MIN_PERCENT + Math.floor(c.random() * DAMAGE_ROLL_STEP_COUNT)) / 100,
       });
       const selfDamage = selfHit?.damage ?? 0;
       c.attacker.currentHp = Math.max(0, c.attacker.currentHp - selfDamage);

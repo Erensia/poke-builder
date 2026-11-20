@@ -8,8 +8,8 @@ export function rollConfusionDuration(random: () => number = Math.random): numbe
   return 1 + Math.floor(random() * 4);
 }
 
-/** 혼란: 매 행동 판정마다 이 확률로 자멸(물리 40위력 자가타격) */
-export const CONFUSION_SELF_HIT_CHANCE = 1 / 3;
+/** 혼란: 매 행동 판정마다 이 확률로 자멸(물리 40위력 자가타격). Showdown `randomChance(33, 100)`(8.3 D3-fix-16 — 이전 1/3) */
+export const CONFUSION_SELF_HIT_CHANCE = 0.33;
 
 /** 혼란 자멸 데미지 계산에 쓰는 위력. 타입 상성·자속 없이 물리 공식 그대로 자기 자신에게 적용한다 */
 export const CONFUSION_SELF_HIT_POWER = 40;
