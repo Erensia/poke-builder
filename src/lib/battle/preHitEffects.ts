@@ -13,7 +13,7 @@ import { getEffectiveForm } from "@/lib/pokemonForm";
 import { computeRealStats } from "@/lib/statCalculator";
 import { applyMoveStatChanges, applyStageDelta } from "@/lib/statStages";
 import { getAbilityPriorityBoost, resolveEffectiveDefenderAbility } from "@/lib/abilityModifiers";
-import { checkStatusActionBlock, inflictStatus, isImmuneToStatus } from "@/lib/statusConditions";
+import { PARALYSIS_ACTION_FAIL_CHANCE, checkStatusActionBlock, inflictStatus, isImmuneToStatus } from "@/lib/statusConditions";
 import { ATTRACT_ACTION_BLOCK_CHANCE, CONFUSION_SELF_HIT_CHANCE, consumeVolatileTurn, hasVolatile } from "@/lib/volatileConditions";
 import { resolveMoveContext } from "@/lib/moveContext";
 import { DAMAGE_ROLL_MIN_PERCENT, DAMAGE_ROLL_STEP_COUNT } from "@/lib/damageFormula";
@@ -332,10 +332,10 @@ function checkUsageGates(c: PreHitCtx) {
   }
 }
 
-/** 상태이상·풀죽음·도발/사슬묶기/앙코르·사이코필드·여왕의위엄·혼란·헤롱헤롱으로 행동이 막히는지 */
+/** 수면·얼음·풀죽음·도발/사슬묶기/앙코르·혼란·헤롱헤롱·마비·여왕의위엄·사이코필드 순(Showdown BeforeMove → TryMove → TryHit)으로 행동이 막히는지 */
 function checkActionBlockers(c: PreHitCtx) {
 
-  // 1) 주 상태이상(잠듦/얼음/마비)으로 행동 자체가 막히는지. 잠듦/얼음은 이 판정 안에서
+  // 1) 주 상태이상(잠듦/얼음)으로 행동 자체가 막히는지(마비는 혼란·헤롱헤롱 뒤 3-2). 잠듦/얼음은 이 판정 안에서
   // 자체 해제 카운터가 갱신되므로 결과를 attacker.status에 반드시 반영해야 한다.
   // 코골기처럼 "잠든 상태에서만" 쓸 수 있는 기술은 본가에서 잠듦이 행동을 막는 예외라,
   // 일반 잠듦 차단을 건너뛰고 별도로 처리한다 — 해제 판정/카운터 자체는 그대로 진행시킨다.
@@ -410,25 +410,6 @@ function checkActionBlockers(c: PreHitCtx) {
     }
   }
 
-  // 2-1) 사이코필드: 우선도 +1 이상인 기술이 "상대를 겨냥"하면 그 기술 자체가 실패한다.
-  // 짓궂은마음으로 변화기 우선도가 올라간 경우도 반영해야 해서 원본 우선도가 아니라 특성
-  // 보정을 더한 실제 우선도로 판정한다 — 단, 순풍·리플렉터·빛의장막처럼 상대를 겨냥하지 않는
-  // 변화기는 우선도가 올라가 있어도 막히지 않는다(isOpponentTargetingMove가 그 축을 가른다).
-  const effectivePriorityForBlock =
-    c.move.priority + getAbilityPriorityBoost(c.move, c.attackerAbility, c.attacker.currentHp === c.attacker.maxHp);
-  if (isPriorityMoveBlockedByField(c.state.field, effectivePriorityForBlock, c.move, isGrounded(c.state, c.defender, c.defenderAbility))) {
-    return { value: c.blocked("psychicFieldPriority") };
-  }
-  // 여왕의위엄: 방어측이 이 특성이면 상대의 우선도 +1↑ 공격 기술이 자신을 겨냥할 때 실패한다.
-  // 사이코필드 차단과 같은 축(isOpponentTargetingMove) — 순풍·방어 같은 자기/필드 기술은 제외.
-  if (
-    c.defenderAbility?.blocksOpponentPriorityMoves &&
-    effectivePriorityForBlock >= 1 &&
-    isOpponentTargetingMove(c.move)
-  ) {
-    return { value: c.blocked("queenlyMajesty") };
-  }
-
   // 3) 혼란: 매 행동 판정마다 지속 턴수를 소모하고, 1/3 확률로 자멸(물리 40위력 자가타격)한다.
   // 자멸하면 이번 턴은 그걸로 끝 — 원래 쓰려던 기술은 실행되지 않는다.
   if (hasVolatile(c.attacker.volatile, "confusion")) {
@@ -452,6 +433,33 @@ function checkActionBlockers(c: PreHitCtx) {
   // 행동 판정마다 50% 확률로 그 턴 행동을 통째로 못 한다.
   if (hasVolatile(c.attacker.volatile, "attract") && c.random() < ATTRACT_ACTION_BLOCK_CHANCE) {
     return { value: c.blocked("attract") };
+  }
+
+  // 3-2) 마비: 12.5% 확률로 그 턴 행동을 못 한다. Showdown BeforeMove 우선도 1이라 혼란(3)·헤롱헤롱(2) 뒤 맨 마지막이다(8.3 D3-fix-17 — 이전엔 수면·얼음과 같은
+  // 맨 앞). 속보 등은 스피드만 면제하고 행동 불능 확률에는 영향이 없다.
+  if (c.attacker.status.condition === "paralysis" && c.random() < PARALYSIS_ACTION_FAIL_CHANCE) {
+    return { value: c.blocked("status", 0, { blockedByStatus: "paralysis" }) };
+  }
+
+  // 4) 여왕의위엄·테일아머 → 사이코필드: 우선도 +1 이상인 기술이 "상대를 겨냥"하면 그 기술 자체가 실패한다.
+  // Showdown은 BeforeMove가 전부 끝난 뒤 TryMove(여왕의위엄) → TryHit(사이코필드) 순서라 혼란·헤롱헤롱·마비 뒤, 여왕의위엄이 사이코필드보다 먼저다(8.3 D3-fix-17).
+  // 짓궂은마음으로 변화기 우선도가 올라간 경우도 반영해야 해서 원본 우선도가 아니라 특성
+  // 보정을 더한 실제 우선도로 판정한다 — 단, 순풍·리플렉터·빛의장막처럼 상대를 겨냥하지 않는
+  // 변화기는 우선도가 올라가 있어도 막히지 않는다(isOpponentTargetingMove가 그 축을 가른다).
+  const effectivePriorityForBlock =
+    c.move.priority + getAbilityPriorityBoost(c.move, c.attackerAbility, c.attacker.currentHp === c.attacker.maxHp);
+  // 여왕의위엄·테일아머: 방어측이 이 특성이면 상대의 우선도 +1↑ 공격 기술이 자신을 겨냥할 때 실패한다.
+  // 사이코필드 차단과 같은 축(isOpponentTargetingMove) — 순풍·방어 같은 자기/필드 기술은 제외.
+  if (
+    c.defenderAbility?.blocksOpponentPriorityMoves &&
+    effectivePriorityForBlock >= 1 &&
+    isOpponentTargetingMove(c.move)
+  ) {
+    return { value: c.blocked("queenlyMajesty") };
+  }
+
+  if (isPriorityMoveBlockedByField(c.state.field, effectivePriorityForBlock, c.move, isGrounded(c.state, c.defender, c.defenderAbility))) {
+    return { value: c.blocked("psychicFieldPriority") };
   }
 }
 

@@ -152,7 +152,7 @@ interface StatusActionCheckResult {
 
 /**
  * 이번 턴 행동이 주 상태이상 때문에 막히는지 판정한다.
- *  - 마비: 매번 12.5% 확률로 막힘 (turnsElapsed 사용 안 함)
+ *  - 마비는 여기서 판정하지 않는다 — Showdown은 혼란·헤롱헤롱 뒤 맨 마지막(BeforeMove 우선도 1)이라 checkActionBlockers가 따로 굴린다(8.3 D3-fix-17)
  *  - 잠듦: 1턴째 0%→2턴째 33%→3턴째 100% 스케줄로 해제 판정. 안 풀리면 turnsElapsed를 늘려서 반환
  *  - 얼음: 매턴 25%, 3턴째부터 100%로 동일한 방식
  *  - 그 외(화상/독/맹독/없음): 절대 막지 않음
@@ -167,10 +167,6 @@ export function checkStatusActionBlock(
   random: () => number = Math.random,
   hasEarlyBird = false,
 ): StatusActionCheckResult {
-  if (state.condition === "paralysis") {
-    return { blocked: random() < PARALYSIS_ACTION_FAIL_CHANCE, nextState: state };
-  }
-
   if (state.condition === "sleep" || state.condition === "freeze") {
     if (random() < statusReleaseChance(state, hasEarlyBird)) return { blocked: false, nextState: cureStatus() };
     return { blocked: true, nextState: { ...state, turnsElapsed: state.turnsElapsed + 1 } };
