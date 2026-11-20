@@ -285,11 +285,15 @@ function confusionTurns(fighter: BattleFighterState): number {
 }
 
 /**
- * 혼란 자멸 1회 데미지(최대 HP 대비) — preHitEffects와 같은 식(자기 실능끼리 위력 40 물리, 난수 중간값).
+ * 혼란 자멸 1회 데미지(최대 HP 대비) — preHitEffects와 같은 식(자기 실능·자기 랭크끼리 위력 40 물리, 난수 중간값).
  */
 function confusionSelfHitFraction(fighter: BattleFighterState): number {
   if (fighter.maxHp <= 0) return 0;
-  const hit = computeDamage(fighter.realStats, fighter.realStats, fighter.types, CONFUSION_SELF_HIT_MOVE, { randomRoll: 0.925 });
+  const hit = computeDamage(fighter.realStats, fighter.realStats, fighter.types, CONFUSION_SELF_HIT_MOVE, {
+    attackerStages: fighter.stages,
+    defenderStages: fighter.stages,
+    randomRoll: 0.925,
+  });
   return (hit?.damage ?? 0) / fighter.maxHp;
 }
 

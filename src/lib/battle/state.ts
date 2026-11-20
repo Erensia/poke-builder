@@ -20,8 +20,6 @@ import { type BaseStats } from "@/types/stats";
 import { type EvaluatorSlot } from "@/lib/matchupEvaluator";
 import { applyIntimidateWithReaction, computeIllusionTarget, triggerTerrainSeeds } from "./switching";
 
-export const MIN_DAMAGE_ROLL = 0.85;
-
 /** 트릭룸 지속 턴 수. 필드(FIELD_DURATION)와 같은 5턴 */
 export const TRICK_ROOM_DURATION = 5;
 /** 원더룸·매직룸·중력·전자부유 지속 턴(트랙 M4, 쓴 턴 포함) */
