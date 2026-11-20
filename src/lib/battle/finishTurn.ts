@@ -361,8 +361,9 @@ function applyCurseDamage(ctx: EndOfTurnFighterContext): void {
 }
 
 /**
- * 속박(bound): 조이기·엉겨붙기·집게덫류에 걸린 쪽은 매 턴 종료 시 최대 HP 1/8을 잃고,
- * 턴 종료마다 카운터가 1씩 줄어 0에서 자동 해제된다. 매직가드면 데미지 면제(카운터는 진행).
+ * 속박(bound): 조이기·엉겨붙기·집게덫류에 걸린 쪽은 매 턴 종료 시 최대 HP 1/8을 잃는다.
+ * Showdown 순서(8.3 D3-fix-21): 턴 종료마다 카운터를 먼저 1 줄이고, 0이 되면 피해 없이 해제 — 지속 N이면 피해·가둠 N−1번.
+ * 매직가드면 데미지 면제(카운터는 진행).
  */
 function applyBoundDamage(ctx: EndOfTurnFighterContext): void {
   const { state, key, fighter, fighterAbility, endOfTurn } = ctx;
@@ -373,6 +374,8 @@ function applyBoundDamage(ctx: EndOfTurnFighterContext): void {
     fighter.volatile = { ...fighter.volatile, active: rest };
     return;
   }
+  fighter.volatile = consumeVolatileTurn(fighter.volatile, "bound");
+  if (!hasVolatile(fighter.volatile, "bound")) return; // 마지막 틱: 피해 없이 해제
   if (!fighterAbility?.negatesIndirectDamage) {
     // 조임밴드: 속박을 건 쪽(상대)이 이 도구를 지녔으면 1/8 대신 1/6로 데미지가 늘어난다.
     const binder = state[opponentKey(key)];
@@ -395,7 +398,6 @@ function applyBoundDamage(ctx: EndOfTurnFighterContext): void {
       });
     }
   }
-  fighter.volatile = consumeVolatileTurn(fighter.volatile, "bound");
 }
 
 /**

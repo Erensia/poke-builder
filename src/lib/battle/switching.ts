@@ -28,6 +28,7 @@ export function isTrappedFromSwitching(fighter: BattleFighterState, state?: Batt
     if (opposing && trappedByOpposingAbility(fighter, opposing)) return true;
   }
   return (
+    hasVolatile(fighter.volatile, "bound") ||
     hasVolatile(fighter.volatile, "octolock") ||
     hasVolatile(fighter.volatile, "jawLock") ||
     hasVolatile(fighter.volatile, "meanLook") ||

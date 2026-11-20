@@ -67,7 +67,7 @@ function defaultDuration(volatile: VolatileCondition, random: () => number): num
   if (volatile === "taunt") return TAUNT_DURATION;
   if (volatile === "disable") return DISABLE_DURATION;
   if (volatile === "encore") return ENCORE_DURATION;
-  if (volatile === "bound") return 4 + Math.floor(random() * 2); // 4~5턴
+  if (volatile === "bound") return 5 + Math.floor(random() * 2); // 5~6(Showdown random(5, 7)) — 지속 N이면 피해·가둠 N−1번, N번째 턴 종료에 피해 없이 해제(8.3 D3-fix-21)
   if (volatile === "syrupCoat") return 3; // 시럽봄: 3턴 동안 매 턴 스피드 -1
   return 1;
 }
