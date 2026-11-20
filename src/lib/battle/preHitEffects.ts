@@ -18,7 +18,7 @@ import { ATTRACT_ACTION_BLOCK_CHANCE, CONFUSION_SELF_HIT_CHANCE, consumeVolatile
 import { resolveMoveContext } from "@/lib/moveContext";
 import { DAMAGE_ROLL_MIN_PERCENT, DAMAGE_ROLL_STEP_COUNT } from "@/lib/damageFormula";
 import { WEIGHT_MOVE_FALLBACK_POWER, absoluteWeightPowerValue, computeDamage, shellSideArmCategory, positiveStagesPowerValue, reversalPowerFromHp, targetHpRatioPowerValue, userHpScaledPowerValue, faintedAllyPowerValue, rivalryDamageMultiplier, weightRatioPowerValue } from "@/lib/battlePower";
-import { applyWeatherBall } from "@/lib/weatherEffects";
+import { applyWeatherBall, solarPowerHalved } from "@/lib/weatherEffects";
 import { applyFieldPulse, getFieldPowerMultiplier, isOpponentTargetingMove, isPriorityMoveBlockedByField, isStatusBlockedByField, needsLivingTarget } from "@/lib/fieldEffects";
 import { computeBattleHitChance, toxicNeverMisses } from "./hitChance";
 import { CONFUSION_SELF_HIT_MOVE, STRUGGLE_MOVE, abilityOf, activeWeather, consumeItem, contraryDelta, hasSheerForceSecondaryEffect, isFainted, isHealingMove, isItemRemovable, opponentKey, sideOf, statusImmunitiesOf, type BattleFighterState, type BattleState } from "./state";
@@ -949,19 +949,9 @@ function applyConditionalPower(c: PreHitCtx) {
     if (echoed && !called) c.effectiveMove = { ...c.effectiveMove, power: c.effectiveMove.power * 2 };
   }
 
-  // 솔라빔(§1-10): chargeSkipWeather(쾌청)가 아닌 날씨에서는 위력 절반. 메가솔라(치지직 등)로
-  // 자신의 기술을 항상 쾌청 취급하면 여기서도 그 취급을 존중한다(§1-6의 준비 턴 스킵 판정과 동일 축).
-  if (
-    c.effectiveMove.halvesPowerOutsideChargeSkipWeather &&
-    c.effectiveMove.power !== null &&
-    c.effectiveMove.chargeSkipWeather !== undefined
-  ) {
-    const weatherMatchesSkipCondition =
-      activeWeather(c.state) === c.effectiveMove.chargeSkipWeather ||
-      (c.effectiveMove.chargeSkipWeather === "쾌청" && c.attackerAbility?.treatsOwnWeatherAsSun);
-    if (!weatherMatchesSkipCondition) {
-      c.effectiveMove = { ...c.effectiveMove, power: Math.floor(c.effectiveMove.power / 2) };
-    }
+  // 솔라빔·솔라블레이드: 비·모래바람·눈에서만 위력 절반(날씨 없음·쾌청은 정상). 메가솔라 보유자는 어느 날씨든 정상(8.3 D3-fix-22).
+  if (c.effectiveMove.power !== null && solarPowerHalved(c.effectiveMove, activeWeather(c.state), c.attackerAbility?.treatsOwnWeatherAsSun)) {
+    c.effectiveMove = { ...c.effectiveMove, power: Math.floor(c.effectiveMove.power / 2) };
   }
 
   // 플라잉프레스: 상대가 이번 배틀에서 작아지기를 쓴 적이 있으면 위력 2배(필중은 아래 hitChance에서).
