@@ -13,7 +13,7 @@ import { inflictStatus, isImmuneToStatus } from "@/lib/statusConditions";
 import { hasVolatile } from "@/lib/volatileConditions";
 import { calcSpikesDamage, calcStealthRockDamage } from "./entryCost";
 import { FIELD_DURATION, FIELD_ENTRY_ANNOUNCEMENT, isStatusBlockedByField } from "@/lib/fieldEffects";
-import { WEATHER_DURATION, setEffectiveAbility, abilityOf, activeWeather, applyForecastForm, applyMimicryForm, applyTransform, balloonEntryAnnouncement, cloneSide, consumeItem, contraryDelta, isFainted, opponentKey, sideOf, statusImmunitiesOf, weatherRockBonus, type BattleFighterState, type BattleState } from "./state";
+import { WEATHER_DURATION, setEffectiveAbility, abilityOf, activeWeather, applyForecastForm, applyMimicryForm, applyTransform, balloonEntryAnnouncement, cloneSide, consumeItem, contraryDelta, isFainted, opponentKey, sideOf, statusImmunitiesOf, weatherRockBonusOfItem, type BattleFighterState, type BattleState } from "./state";
 
 export function isTrappedFromSwitching(fighter: BattleFighterState, state?: BattleState): boolean {
   if (isFainted(fighter)) return false;
@@ -284,7 +284,7 @@ function applyEntryAbilityOnSwitchIn(state: BattleState, key: FighterKey, log: s
     const weather = ability.setsWeather;
     state.weather = weather;
     state.weatherTurnsRemaining =
-      WEATHER_DURATION + weatherRockBonus(weather, state.a.slot, state.b.slot);
+      WEATHER_DURATION + weatherRockBonusOfItem(weather, effectiveHeldItem(self, state)); // 건 쪽(들어온 포켓몬)의 유효 도구만(8.3 D3-fix-26)
     log.push(`${selfName}의 ${ability.name}! 날씨가 ${weather}${roEuro(weather)} 바뀌었다!`);
     applyForecastForm(state.a, activeWeather(state));
     applyForecastForm(state.b, activeWeather(state));
@@ -296,7 +296,7 @@ function applyEntryAbilityOnSwitchIn(state: BattleState, key: FighterKey, log: s
     } else {
       state.field = ability.setsFieldOnEntry;
       // 그라운드코트: 필드를 편 쪽이 이 도구를 지녔으면 지속시간이 늘어난다(기본 5턴 + 3 = 8턴).
-      const selfItem = self.currentItemId ? getItem(self.currentItemId) : undefined;
+      const selfItem = effectiveHeldItem(self, state); // 서투름·매직룸이면 불발(8.3 D3-fix-26)
       state.fieldTurnsRemaining = FIELD_DURATION + (selfItem?.fieldDurationBonus ?? 0);
       log.push(`${selfName}의 ${ability.name}! ${FIELD_ENTRY_ANNOUNCEMENT[state.field]}`);
       applyMimicryForm(self, state.field);
