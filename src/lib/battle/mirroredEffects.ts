@@ -941,27 +941,25 @@ function hazardsAndSideEffects(c: MirroredCtx) {
     c.attacker.volatile = { active: nextActive };
   }
 
-  // 안개제거(Move.defogsField): 상대 1마리를 겨냥하는 status 기술이라 방어류에 막힌다(고속스핀과
-  // 같은 축). 명중 시 양쪽 진영의 설치물·스크린·신비의부적과 필드(terrain)를 전부 없앤다 — 날씨는
-  // 대상이 아니다(사용자 확인, 2.3 B3). 아무 효과도 없었으면 로그에 빈 문구가 안 뜨게 변경 여부를 본다.
+  // 안개제거(Move.defogsField): 상대 1마리를 겨냥하는 status 기술이라 방어류에 막힌다(고속스핀과 같은 축). 명중 시 Showdown `defog.onHit`와 같이 —
+  // **대상 편**: 벽(리플렉터·빛의장막·오로라베일)·신비의부적·설치물 제거 / **사용자 편: 설치물만** 제거(벽·신비의부적은 남는다) / 필드(terrain) 제거 / 날씨는 대상이 아니다.
+  // 매직미러로 반사되면 사용자 편이 대상 편이다(스텔스록 설치와 같은 방식 — bounceActive 중 defenderKey는 바뀌지 않으므로 actorKey를 쓴다).
+  // 8.3 D3-fix-29: 옛 엔진(2.3 B3 결정)은 양쪽 편의 벽·신비의부적까지 지웠다. 지운 것이 없으면 로그에 빈 문구가 안 뜨게 변경 여부를 본다.
   c.defogFieldCleared = false;
   if (c.effectiveMove.defogsField && c.hit && !c.blockedByProtect) {
     const hazardsEmpty = (h: typeof c.state.sideA.hazards) =>
       !h.stealthRock && h.spikesLayers === 0 && h.toxicSpikesLayers === 0 && !h.stickyWeb;
+    const targetSide = sideOf(c.state, c.bounceActive ? c.actorKey : c.defenderKey);
     const hadEffect =
       !hazardsEmpty(c.state.sideA.hazards) ||
       !hazardsEmpty(c.state.sideB.hazards) ||
-      Object.keys(c.state.sideA.screens).length > 0 ||
-      Object.keys(c.state.sideB.screens).length > 0 ||
-      c.state.sideA.safeguardTurnsRemaining !== undefined ||
-      c.state.sideB.safeguardTurnsRemaining !== undefined ||
+      Object.keys(targetSide.screens).length > 0 ||
+      targetSide.safeguardTurnsRemaining !== undefined ||
       c.state.field !== undefined;
     c.state.sideA.hazards = emptyHazardState();
     c.state.sideB.hazards = emptyHazardState();
-    c.state.sideA.screens = {};
-    c.state.sideB.screens = {};
-    c.state.sideA.safeguardTurnsRemaining = undefined;
-    c.state.sideB.safeguardTurnsRemaining = undefined;
+    targetSide.screens = {};
+    targetSide.safeguardTurnsRemaining = undefined;
     c.state.field = undefined;
     c.state.fieldTurnsRemaining = undefined;
     c.defogFieldCleared = hadEffect;
