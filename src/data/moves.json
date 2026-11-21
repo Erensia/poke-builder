@@ -927,7 +927,8 @@
       "underground"
     ],
     "hidingBypassMultiplier": 2,
-    "makesContact": false
+    "makesContact": false,
+    "weakenedByGrassyTerrain": true
   },
   {
     "id": "번개펀치",
@@ -1580,7 +1581,8 @@
         "stat": "spe",
         "delta": -1
       }
-    ]
+    ],
+    "weakenedByGrassyTerrain": true
   },
   {
     "id": "로킥",

@@ -576,7 +576,7 @@ function computeOffense(c: SlotMatchupCtx) {
 
   // 날씨/필드 데미지 배율은 (타입 변경까지 끝난) effectiveMove.type 기준으로 구한다 — 배틀 엔진과 동일.
   c.autoWeatherDamageMultiplier = getWeatherDamageMultiplier(c.effectiveWeather, c.effectiveMove.type);
-  c.autoFieldDamageMultiplier = getFieldDamageMultiplier(c.field, c.effectiveMove.type, c.attackerRuntime?.grounded, c.defenderRuntime?.grounded);
+  c.autoFieldDamageMultiplier = getFieldDamageMultiplier(c.field, c.effectiveMove.type, c.attackerRuntime?.grounded, c.defenderRuntime?.grounded, c.effectiveMove.weakenedByGrassyTerrain);
 
   // 투쟁심: 양쪽 슬롯 성별로 ×1.25(동성)/×0.75(이성)/×1.0(불명). battlePower.rivalryDamageMultiplier 공유(§5).
   c.rivalryMultiplier = rivalryDamageMultiplier(
@@ -1062,7 +1062,7 @@ export function computeSoloOffensePower(
   // (익스퍼트벨트 등)는 여기선 보너스가 안 붙는다(정확한 정보가 없으니 과대평가하지 않는 쪽).
   const autoItemMultiplier = getItemOffenseMultiplier(attackerItem, effectiveMove, 1, 1);
   const autoWeatherDamageMultiplier = getWeatherDamageMultiplier(effectiveWeather, effectiveMove.type);
-  const autoFieldDamageMultiplier = getFieldDamageMultiplier(field, effectiveMove.type);
+  const autoFieldDamageMultiplier = getFieldDamageMultiplier(field, effectiveMove.type, undefined, undefined, effectiveMove.weakenedByGrassyTerrain);
 
   const hustleMultiplier =
     effectiveMoveFinal.category === "physical" && attackerAbility?.hustleAttackMultiplier !== undefined
