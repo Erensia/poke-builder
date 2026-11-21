@@ -798,7 +798,15 @@ function statusCureAndVolatile(c: MirroredCtx) {
       }
       // 하품(졸음): 대상이 이미 다른 주 상태이상이거나 이미 졸음 상태면 실패한다(본가 규칙) —
       // 실제 잠듦 여부(타입/필드 면역)는 2턴 뒤 트리거 시점에 따로 확인한다.
+      // 일렉트릭필드는 접지된 대상에게 졸음 상태 자체를 걸지 못하게 한다(Showdown onTryAddVolatile, 8.3 D3-fix-31). 미스트필드는 상태는 걸리고 잠듦만 막는다.
       if (effect.volatile === "drowsy" && (target.status.condition || hasVolatile(target.volatile, "drowsy"))) {
+        continue;
+      }
+      if (
+        effect.volatile === "drowsy" &&
+        c.state.field === "일렉트릭필드" &&
+        isGrounded(c.state, target, effect.target === "self" ? c.attackerAbility : c.defenderAbility)
+      ) {
         continue;
       }
       // 희망사항(§6-2): fighter volatile이 아니라 편(BattleSide.wish)에 큐로 건다 — 2턴 뒤
