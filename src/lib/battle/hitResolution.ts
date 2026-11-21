@@ -20,7 +20,8 @@ import { computeDamage, hustleDamageMultiplier, screenMultiplierFromFlags, supre
 import { getWeatherDamageMultiplier, getWeatherDefenseMultiplier } from "@/lib/weatherEffects";
 import { FIELD_DURATION, getFieldDamageMultiplier } from "@/lib/fieldEffects";
 import { getBerryDefenseResult, getDrainHealMultiplier, getEnduranceResult, getItemCritStageBonus, getItemBasePowerMultiplier, getItemFinalMultiplier, getMentalHerbCureResult } from "@/lib/itemEffects";
-import { STRUGGLE_MOVE, WEATHER_DURATION, setEffectiveAbility, activeWeather, applyMimicryForm, consumeItem, contraryDelta, hasLivingReserve, isFainted, isForcedSwitchBlocked, rollMultiHitCount, sideOf, statDropBlockStatsOf, statusImmunitiesOf, type BattleFighterState, type BattleState } from "./state";
+import { effectiveHeldItem } from "./turnOrderInputs";
+import { STRUGGLE_MOVE, WEATHER_DURATION, weatherRockBonusOfItem, setEffectiveAbility, activeWeather, applyMimicryForm, consumeItem, contraryDelta, hasLivingReserve, isFainted, isForcedSwitchBlocked, rollMultiHitCount, sideOf, statDropBlockStatsOf, statusImmunitiesOf, type BattleFighterState, type BattleState } from "./state";
 import { triggerTerrainSeeds } from "./switching";
 
 interface HitResolutionInput {
@@ -598,7 +599,8 @@ function defineAbilityHitEffect(c: HitCtx) {
     // 이미 같은 필드면 아무 일도 안 하고, 다른 필드면 덮어쓴다(본가).
     if (trigger.setsFieldOnHit && c.state.field !== trigger.setsFieldOnHit) {
       c.state.field = trigger.setsFieldOnHit;
-      c.state.fieldTurnsRemaining = FIELD_DURATION;
+      // 지속은 5턴 + 피격한 보유자의 유효 그라운드코트 +3(8.3 D3-fix-26)
+      c.state.fieldTurnsRemaining = FIELD_DURATION + (effectiveHeldItem(c.defender, c.state)?.fieldDurationBonus ?? 0);
       applyMimicryForm(c.attacker, c.state.field);
       applyMimicryForm(c.defender, c.state.field);
       c.seedSowerField = trigger.setsFieldOnHit;
@@ -680,7 +682,8 @@ function defineAbilityHitEffect(c: HitCtx) {
     // 모래뿜기(Sand Spit): 데미지를 주는 기술로 피격당하면 날씨를 5턴짜리로 바꾼다(맞을 때마다).
     if (trigger.setsWeather && c.state.weather !== trigger.setsWeather) {
       c.state.weather = trigger.setsWeather;
-      c.state.weatherTurnsRemaining = WEATHER_DURATION;
+      // 지속은 5턴 + 피격한 보유자의 유효 바위 +3(8.3 D3-fix-26)
+      c.state.weatherTurnsRemaining = WEATHER_DURATION + weatherRockBonusOfItem(trigger.setsWeather, effectiveHeldItem(c.defender, c.state));
       c.sandSpitWeather = trigger.setsWeather;
       ev.sandSpitWeather = trigger.setsWeather;
       evAny = true;

@@ -710,6 +710,8 @@ export function consumeItem(fighter: BattleFighterState): void {
 /**
  * 이 날씨에 맞는 바위(뜨거운바위 등)를 지닌 쪽이 있으면 그 보너스 턴수를, 없으면 0을 반환한다.
  * 양쪽 다 지닐 일은 없지만(도구는 하나씩) 방어적으로 둘 다 확인해서 더 큰 쪽을 쓴다.
+ * **설치한 포켓몬이 없는 경우(사용자가 시작 때 직접 고른 수동 날씨)에만 쓴다.** 특성·기술로 날씨를 건 경우는 건 쪽의 유효 도구만 본다
+ * (`weatherRockBonusOfItem` — 8.3 D3-fix-26, Showdown `durationCallback(source)` → `source.hasItem`).
  */
 export function weatherRockBonus(weather: WeatherKind, aSlot: EvaluatorSlot, bSlot: EvaluatorSlot): number {
   const aItem = aSlot.item ? getItem(aSlot.item) : undefined;
@@ -717,6 +719,16 @@ export function weatherRockBonus(weather: WeatherKind, aSlot: EvaluatorSlot, bSl
   const aBonus = aItem?.weatherDurationBonus?.weather === weather ? aItem.weatherDurationBonus.bonus : 0;
   const bBonus = bItem?.weatherDurationBonus?.weather === weather ? bItem.weatherDurationBonus.bonus : 0;
   return Math.max(aBonus, bBonus);
+}
+
+/** 도구 하나가 이 날씨의 연장 바위면 보너스 턴수, 아니면 0(8.3 D3-fix-26: 날씨를 건 포켓몬의 유효 도구만 본다) */
+export function weatherRockBonusOfItem(weather: WeatherKind, item: ReturnType<typeof getItem>): number {
+  return item?.weatherDurationBonus?.weather === weather ? item.weatherDurationBonus.bonus : 0;
+}
+
+/** 배틀 시작 시점의 유효 도구 — 도구 효과를 막는 특성(서투름 등)이면 없음(매직룸은 시작 때 걸려 있을 수 없다) */
+function startItemOf(fighter: BattleFighterState): ReturnType<typeof getItem> {
+  return abilityOf(fighter)?.disablesOwnItemEffects || !fighter.currentItemId ? undefined : getItem(fighter.currentItemId);
 }
 
 /**
@@ -762,22 +774,23 @@ function resolveEntryWeather(
     // 둘 다 날씨 특성 보유: 스피드가 빠른 쪽부터 순서대로 발동하고, 나중에(느린 쪽이) 발동하는
     // 날씨가 덮어써서 최종적으로 남는다.
     const aFaster = aFighter.realStats.spe >= bFighter.realStats.spe;
-    const [firstSlot, firstAbility] = aFaster ? ([aSlot, aAbility] as const) : ([bSlot, bAbility] as const);
-    const [secondSlot, secondAbility] = aFaster ? ([bSlot, bAbility] as const) : ([aSlot, aAbility] as const);
+    const [firstSlot, firstAbility, firstFighter] = aFaster ? ([aSlot, aAbility, aFighter] as const) : ([bSlot, bAbility, bFighter] as const);
+    const [secondSlot, secondAbility, secondFighter] = aFaster ? ([bSlot, bAbility, bFighter] as const) : ([aSlot, aAbility, aFighter] as const);
     // 같은 날씨 특성끼리면 두 번째는 이미 같은 날씨라 아무 일도 없다(발동 문구·턴 재충전 없음 — 본가 규칙).
     // 지속 턴 보너스도 먼저 발동한 쪽의 바위만 본다.
     if (firstAbility.setsWeather === secondAbility.setsWeather) {
       const weather = firstAbility.setsWeather!;
       return {
         weather,
-        weatherTurnsRemaining: WEATHER_DURATION + weatherRockBonus(weather, firstSlot, firstSlot),
+        weatherTurnsRemaining: WEATHER_DURATION + weatherRockBonusOfItem(weather, startItemOf(firstFighter)),
         announcements: [announce(firstSlot, firstAbility, weather)],
       };
     }
     const weather = secondAbility.setsWeather!;
     return {
       weather,
-      weatherTurnsRemaining: WEATHER_DURATION + weatherRockBonus(weather, aSlot, bSlot),
+      // 최종 날씨는 나중에 발동한 쪽의 것 — 그쪽의 유효 도구만 본다(8.3 D3-fix-26)
+      weatherTurnsRemaining: WEATHER_DURATION + weatherRockBonusOfItem(weather, startItemOf(secondFighter)),
       announcements: [
         announce(firstSlot, firstAbility, firstAbility.setsWeather!),
         announce(secondSlot, secondAbility, weather),
@@ -787,12 +800,13 @@ function resolveEntryWeather(
 
   const aWins = !!aAbility?.setsWeather;
   const winnerSlot = aWins ? aSlot : bSlot;
+  const winnerFighter = aWins ? aFighter : bFighter;
   const winnerAbility = (aWins ? aAbility : bAbility)!;
   const weather = winnerAbility.setsWeather!;
 
   return {
     weather,
-    weatherTurnsRemaining: WEATHER_DURATION + weatherRockBonus(weather, aSlot, bSlot),
+    weatherTurnsRemaining: WEATHER_DURATION + weatherRockBonusOfItem(weather, startItemOf(winnerFighter)),
     announcements: [announce(winnerSlot, winnerAbility, weather)],
   };
 }
