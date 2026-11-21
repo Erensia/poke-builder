@@ -1,6 +1,7 @@
 import type { PokemonType } from "../types/pokemon-type";
 import type { WeatherKind } from "../types/weather";
 import type { Move } from "../types/move";
+import { modify4096 } from "./damageFormula";
 
 /**
  * UI에서 날씨를 시각적으로 표시할 때 쓰는 "이 날씨가 강화하는 타입". TYPE_COLORS와 조합해
@@ -75,11 +76,16 @@ export function solarPowerHalved(move: Move, weather: WeatherKind | undefined, t
 }
 
 /**
- * 광합성·달빛(Move.healsWeatherDependent) 전용 회복 비율. 본가 공식 그대로: 쾌청 2/3,
- * 날씨 없음 1/2, 그 외 날씨(비/모래바람/눈)는 1/4 — 전부 최대 HP 기준.
+ * 광합성·달빛·아침햇살(Move.healsWeatherDependent) 전용 회복 배율. Showdown `factor`: 쾌청 0.667(=2732/4096, 2/3이 아니다), 날씨 없음 0.5,
+ * 그 외 날씨(비/모래바람/눈) 0.25 — 전부 최대 HP 기준.
  */
 export function computeWeatherHealFraction(weather: WeatherKind | undefined): number {
-  if (weather === "쾌청") return 2 / 3;
-  if (!weather) return 1 / 2;
-  return 1 / 4;
+  if (weather === "쾌청") return 0.667;
+  if (!weather) return 0.5;
+  return 0.25;
+}
+
+/** 광합성류 회복량 = Showdown `modify(maxHp, factor)`(4096분율, 0.5는 내림) — 엔진·AI 공용(8.3 D3-fix-30. 옛 `floor(maxHp × 비율)`은 일부 최대 HP에서 1 적었다) */
+export function weatherHealAmount(maxHp: number, weather: WeatherKind | undefined): number {
+  return modify4096(maxHp, computeWeatherHealFraction(weather));
 }
