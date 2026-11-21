@@ -632,8 +632,11 @@ export function createFighterState(slot: EvaluatorSlot, moves: Move[]): BattleFi
  * 인분(Ability.blocksSecondaryEffects)은 자기 대상 효과엔 관심이 없어(상대에게 오는 것만 막음)
  * 그 부분만 범위가 다르다. 데미지가 없는 순수 변화기는 양쪽 다 적용 대상이 아니다.
  */
-/** 모래바람 틱 데미지 면제 특성(모래 관련) — §1 F-3. 매직가드는 negatesIndirectDamage로 별도 처리. */
-export const SANDSTORM_IMMUNE_ABILITY_NAMES = new Set(["모래숨기", "모래의힘", "모래날림", "모래헤치기"]);
+/**
+ * 모래바람 틱 데미지 면제 특성 — Showdown `sandstorm.onImmunity`(sandveil·sandrush·sandforce·overcoat). 매직가드는 negatesIndirectDamage로 별도 처리.
+ * 모래날림(sandstream)은 면역이 아니다(8.3 D3-fix-27 — 옛 코드가 넣었고 방진을 빠뜨렸다). 영향은 방진을 지닌 란쿨루스뿐(모래날림 보유 마기라스·하마돈은 바위·땅 타입이라 그대로 면역).
+ */
+export const SANDSTORM_IMMUNE_ABILITY_NAMES = new Set(["모래숨기", "모래의힘", "모래헤치기", "방진"]);
 
 export function hasSheerForceSecondaryEffect(move: Move): boolean {
   if (move.power === null && move.fixedDamage === undefined) return false;
