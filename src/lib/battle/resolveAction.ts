@@ -13,7 +13,7 @@ import { hasVolatile } from "@/lib/volatileConditions";
 import { isTrappedFromSwitching } from "./switching";
 import { resolvePreHitEffects } from "./preHitEffects";
 import { resolveHitAndApplyDamage } from "./hitResolution";
-import { damagingMoveLanded, resolveMirroredMoveEffects } from "./mirroredEffects";
+import { resolveMirroredMoveEffects } from "./mirroredEffects";
 import { type Ability } from "@/types/ability";
 import { type AccuracyEvasionKey, type BattleStatKey } from "@/types/battleStats";
 import { type BattleFighterState } from "@/lib/battle/state";
@@ -647,21 +647,6 @@ function applyKnockoutAbilities(c: ActionCtx) {
     c.attacker.stages = applyStageDelta(c.attacker.stages, boost.stat, contraryDelta(c.attacker, boost.delta));
   }
 
-  // 레이징불·깨트리기(breaksScreensOnHit): 맞으면 상대 편(side) 스크린을 전부 제거한다. 위
-  // 데미지 계산은 스크린이 살아있는 상태로 이미 끝났으니(그 턴엔 아직 경감), 여기서 제거만 한다.
-  // 8.3 B8: 상성 무효·방어·빗나감이면 기술 전체가 실패해 벽이 남는다(Showdown은 기술 자신의 onTryHit가 상성 무효 판정 뒤라 무효 상대엔 안 깬다). 대타 적중·탈은 깬다.
-
-  if (c.effectiveMove.breaksScreensOnHit && damagingMoveLanded(c)) {
-    const defenderScreens = sideOf(c.state, c.defenderKey).screens;
-    const present = (Object.keys(defenderScreens) as ("reflect" | "lightScreen" | "auroraVeil")[]).filter(
-      (s) => defenderScreens[s] !== undefined,
-    );
-    if (present.length > 0) {
-      sideOf(c.state, c.defenderKey).screens = {};
-      c.brokeScreens = present;
-    }
-  }
-
   // 곡예(8.3 D3-fix-9): 소모(consumeItem)는 그 안에서 이미 켜졌다. 여기서는 소모가 아닌 제거(탁쳐서떨구기·빼앗김·부식가스·트릭으로 넘김 등)를
   // 위해 이번 행동 도중 도구가 있었다가(전) 없어졌으면(후) 켠다 — 원인 무관. 로그(unburden*AbilityName)는 "이번 행동에서 새로 켜졌을 때"만 낸다.
 
@@ -1024,6 +1009,18 @@ export function resolveAction(
   c.protectContactDamage = c.pre.protectContactDamage;
   c.protectContactInflictedStatus = c.pre.protectContactInflictedStatus;
   let { unseenFistPiercing, abilityOffenseMultiplier, statOffenseMultiplier, abilityDefenseMultiplier, finalDefenseMultiplier, stabMultiplier, ownMoveTypeBoostMultiplier, rivalryMultiplier, gemMultiplier, hitChance, perHitChance, defenderHideType, evadedByCharge } = c.pre;
+
+  // 레이징불·깨트리기·사이코팽(breaksScreensOnHit): 상대 편(side) 스크린을 전부 제거한다. Showdown은 기술 자신의 onTryHit(히트 루프 안: 명중·상성·방어 통과 뒤,
+  // 대타·데미지 앞)에서 지우므로 이 기술 자신의 데미지도 벽에 줄지 않고(8.3 D3-fix-25), 대타를 때려도 벽은 깨진다. 빗나감·상성 무효·방어면 벽이 남는다(8.3 B8).
+  // 능력 흡수(물먹기류)도 기술이 막힌 것이라 유지한다. 반사(매직미러)는 변화기만 반사하므로 여기 해당 없다.
+  if (c.effectiveMove.breaksScreensOnHit && c.hit && !c.blockedByProtect && c.typeEffectiveness !== 0 && !c.abilityAbsorbedMoveType) {
+    const defenderScreens = sideOf(c.state, c.defenderKey).screens;
+    const present = (Object.keys(defenderScreens) as ("reflect" | "lightScreen" | "auroraVeil")[]).filter((s) => defenderScreens[s] !== undefined);
+    if (present.length > 0) {
+      sideOf(c.state, c.defenderKey).screens = {};
+      c.brokeScreens = present;
+    }
+  }
 
   const _d0 = resolveHitAndApplyDamage({
     state: c.state, defenderKey: c.defenderKey, move: c.move, effectiveMove: c.effectiveMove, random: c.random, attacker: c.attacker, defender: c.defender, attackerAbility: c.attackerAbility, defenderAbility: c.defenderAbility, attackerItem: c.attackerItem, defenderItem: c.defenderItem, typeEffectiveness: c.typeEffectiveness, blockedByProtect: c.blockedByProtect, blockedBySubstitute: c.blockedBySubstitute, unseenFistPiercing, hitChance, perHitChance, evadedByCharge, defenderHideType, gemMultiplier, ownMoveTypeBoostMultiplier, rivalryMultiplier, sheerForceAbilityName: c.sheerForceAbilityName, defenderBerriesBlocked: c.defenderBerriesBlocked, abilityOffenseMultiplier, statOffenseMultiplier, abilityDefenseMultiplier, finalDefenseMultiplier, stabMultiplier
