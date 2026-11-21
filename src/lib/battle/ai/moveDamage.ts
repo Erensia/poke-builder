@@ -359,7 +359,8 @@ function estimateMoveHitsCore(ctx: MoveHitContext, baseMove: Move): MoveHitEstim
     defenderStages: defender.stages,
     weather: state.weather,
     field: state.field,
-    screen: attackerAbility?.bypassesScreensAndSubstitute ? undefined : screenFor(defenderSide, move.category),
+    // 벽 깨기 기술(깨트리기·사이코팽·레이징불)은 데미지 계산 전에 벽을 지우므로 자기 피해가 벽에 줄지 않는다(8.3 D3-fix-25)
+    screen: attackerAbility?.bypassesScreensAndSubstitute || move.breaksScreensOnHit ? undefined : screenFor(defenderSide, move.category),
     multiHitCount: move.multiHitPowers ? move.multiHitPowers.length : move.minHits !== undefined && move.maxHits !== undefined ? move.maxHits : undefined,
     stockpileCount: attacker.stockpileCount ?? 0,
     attackerHpFraction: attacker.currentHp / attacker.maxHp,
