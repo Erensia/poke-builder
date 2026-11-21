@@ -177,6 +177,7 @@ interface ActionCtx {
   tidyUpDone: boolean;
   spinCleared: SpinCleared | undefined;
   courtChangeDone: boolean;
+  courtChangeFailed: boolean;
   defogFieldCleared: boolean;
   revivedPartyName: string | undefined;
   reviveFailed: boolean;
@@ -313,6 +314,7 @@ function resolveMirroredPhase(c: ActionCtx) {
   c.tidyUpDone = mirrorResult.tidyUpDone;
   c.spinCleared = mirrorResult.spinCleared;
   c.courtChangeDone = mirrorResult.courtChangeDone;
+  c.courtChangeFailed = mirrorResult.courtChangeFailed;
   c.defogFieldCleared = mirrorResult.defogFieldCleared;
   c.revivedPartyName = mirrorResult.revivedPartyName;
   c.reviveFailed = mirrorResult.reviveFailed;
@@ -931,6 +933,7 @@ function collectResult(c: ActionCtx) {
     lostTypeAfterUse: c.lostTypeAfterUse,
     glaiveRushArmed: c.effectiveMove.glaiveRush || undefined,
     courtChangeDone: c.courtChangeDone || undefined,
+    courtChangeFailed: c.courtChangeFailed || undefined,
     defogFieldCleared: c.defogFieldCleared || undefined,
     revivedPartyName: c.revivedPartyName,
     reviveFailed: c.reviveFailed || undefined,

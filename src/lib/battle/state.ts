@@ -638,6 +638,16 @@ export function createFighterState(slot: EvaluatorSlot, moves: Move[]): BattleFi
  */
 export const SANDSTORM_IMMUNE_ABILITY_NAMES = new Set(["모래숨기", "모래의힘", "모래헤치기", "방진"]);
 
+/** 코트체인지가 바꿀 편 효과(설치물·벽·순풍·신비의부적)가 하나라도 있나 — 양쪽 다 없으면 코트체인지는 실패한다(8.3 D3-fix-28, Showdown courtchange `success`). 엔진·AI 공용 */
+export function hasCourtChangeEffects(side: BattleSide): boolean {
+  const h = side.hazards;
+  return (
+    h.stealthRock || h.stickyWeb || h.spikesLayers > 0 || h.toxicSpikesLayers > 0 ||
+    Object.values(side.screens).some((v) => v !== undefined) ||
+    side.tailwindTurnsRemaining !== undefined || side.safeguardTurnsRemaining !== undefined
+  );
+}
+
 export function hasSheerForceSecondaryEffect(move: Move): boolean {
   if (move.power === null && move.fixedDamage === undefined) return false;
   if (move.inflictsStatus && move.inflictsStatus.length > 0) return true; // 이 스키마에서 대상은 항상 상대

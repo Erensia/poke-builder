@@ -568,6 +568,8 @@ export interface ActionLogEntry {
   glaiveRushArmed?: boolean;
   /** 코트체인지(Move.swapsSideEffects): 양쪽 진영의 설치물·스크린을 맞바꿨으면 true */
   courtChangeDone?: boolean;
+  /** 코트체인지를 썼지만 바꿀 편 효과가 양쪽 다 없어 실패했으면 true */
+  courtChangeFailed?: boolean;
   /**
    * 안개제거(Move.defogsField): 양쪽 진영의 설치물·스크린·신비의부적과 필드를 실제로 하나 이상
    * 없앴으면 true(이미 아무것도 없었으면 조용히 생략, 2.3 B3).

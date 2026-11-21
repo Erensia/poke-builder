@@ -48,6 +48,9 @@ export function ActionEffectLines({
       {!action.blockedReason && action.hit && action.courtChangeDone && (
         <div className="battle-turn-line is-muted">서로의 필드 효과를 뒤바꿨다!</div>
       )}
+      {!action.blockedReason && action.hit && action.courtChangeFailed && (
+        <div className="battle-turn-line is-muted">그러나 실패했다!</div>
+      )}
       {/* 2.3 B3: 안개제거 — 양쪽 진영 설치물·스크린·신비의부적·필드 제거 (날씨 제외) */}
       {!action.blockedReason && action.hit && action.defogFieldCleared && (
         <div className="battle-turn-line is-muted">강한 바람이 불어 주위의 환경 효과가 모두 사라졌다!</div>

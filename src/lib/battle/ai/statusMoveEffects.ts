@@ -23,6 +23,7 @@ import {
   statDropBlockStatsOf,
   statusImmunitiesOf,
   contraryDelta,
+  hasCourtChangeEffects,
   hasLivingReserve,
   applyTransform,
   setEffectiveAbility,
@@ -392,10 +393,7 @@ export function effectMoveFails(state: BattleState, key: FighterKey, move: Move)
   if (kind === "healBell") return !me.status.condition && !sideOf(state, key).party.some((f) => !isFainted(f) && !!f.status.condition);
   if (kind === "transform") return !!me.transformed;
   if (kind === "courtChange") {
-    const hazardsEmpty = (h: BattleSide["hazards"]) => !h.stealthRock && !h.stickyWeb && h.spikesLayers === 0 && h.toxicSpikesLayers === 0;
-    const sideEmpty = (s: BattleSide) =>
-      hazardsEmpty(s.hazards) && Object.values(s.screens).every((v) => v === undefined) && s.tailwindTurnsRemaining === undefined && s.safeguardTurnsRemaining === undefined;
-    return sideEmpty(state.sideA) && sideEmpty(state.sideB);
+    return !hasCourtChangeEffects(state.sideA) && !hasCourtChangeEffects(state.sideB);
   }
   // Tier 2-B: 멸망의노래(상대가 이미 멸망 카운트·방음이면 나만 기절) · 회생의기도(쓰러진 동료 없음) · 다과회(아무도 열매 없음)
   // · 문어굳히기(이미 걸림)
