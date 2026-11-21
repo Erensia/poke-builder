@@ -237,8 +237,8 @@ function defineResolveHit(c: HitCtx) {
     // 리플렉터(물리)/빛의장막(특수)/오로라베일(물리·특수 둘 다): 방어측 편(side)에 스크린이
     // 걸려있으면 데미지 반감(§6-3 — 편 단위라 교체해도 유지). 급소는 스크린을 무시한다(본가 규칙)
     // — bulkMultiplier는 나눗셈이라 2를 곱하면 절반이 된다. 틈새포착이면 스크린 자체를 아예
-    // 무시한다(급소 판정과 별개로 항상 1배). 오로라베일은 카테고리 전용 스크린과 별개 축이라
-    // 둘 다 걸려있으면 곱으로 중첩된다. (여기까지 매직미러 반사 스왑 전이라 defenderKey가 정확.)
+    // 무시한다(급소 판정과 별개로 항상 1배). 오로라베일은 해당 분류의 벽이 이미 있으면 추가 경감이 없다 —
+    // 하나라도 걸려 있으면 ×0.5 한 번(8.3 D3-fix-24). (여기까지 매직미러 반사 스왑 전이라 defenderKey가 정확.)
     const defenderScreens = sideOf(c.state, c.defenderKey).screens;
     const screenType = c.effectiveMove.category === "physical" ? "reflect" : "lightScreen";
     const screenBypassed = !!c.attackerAbility?.bypassesScreensAndSubstitute || critical;

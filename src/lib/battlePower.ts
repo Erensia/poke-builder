@@ -75,14 +75,14 @@ export function hustleDamageMultiplier(category: MoveCategory | null, ability: A
 }
 
 /**
- * 리플렉터/빛의장막(카테고리 전용)·오로라베일(물리·특수 공통)이 동시에 걸려있을 수 있는 축을
- * 곱셈으로 합산한다 — 급소·틈새포착 등 "스크린을 아예 무시할지"는 호출부가 각자의 상태 모양에
- * 맞춰 미리 판정해서 두 불리언으로 넘긴다(배틀 엔진은 진영 상태 그대로, matchupEvaluator는
- * 1턴 스냅샷의 단일 screen 옵션에서 도출 — 입력 모양이 달라 이 부분만은 각자 유지).
+ * 리플렉터/빛의장막(카테고리 전용)·오로라베일(물리·특수 공통)의 경감 배수. **하나라도 걸려 있으면 ×2 한 번**이고 겹치지 않는다
+ * (8.3 D3-fix-24 — Showdown `auroraveil.onAnyModifyDamage`: 해당 분류의 벽이 이미 있으면 오로라베일은 추가 경감 없음. 옛 구현은 곱으로 ×4였다).
+ * 급소·틈새포착 등 "스크린을 아예 무시할지"는 호출부가 각자의 상태 모양에 맞춰 미리 판정해서 두 불리언으로 넘긴다(배틀 엔진은 진영 상태
+ * 그대로, matchupEvaluator는 1턴 스냅샷의 단일 screen 옵션에서 도출 — 입력 모양이 달라 이 부분만은 각자 유지).
  * 배틀 엔진(실전)·matchupEvaluator(매치업 스냅샷) 양쪽이 공유한다(ver.1.5 §5).
  */
 export function screenMultiplierFromFlags(categoryScreenActive: boolean, auroraVeilActive: boolean): number {
-  return (categoryScreenActive ? 2 : 1) * (auroraVeilActive ? 2 : 1);
+  return categoryScreenActive || auroraVeilActive ? 2 : 1;
 }
 
 /**
