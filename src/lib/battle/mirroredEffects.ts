@@ -11,7 +11,7 @@ import { applyMoveAccuracyEvasionChanges, applyMoveCritStageChanges } from "@/li
 import { inflictRestSleep, inflictStatus, isImmuneToStatus } from "@/lib/statusConditions";
 import { hasVolatile, inflictVolatile } from "@/lib/volatileConditions";
 import { rankStageMultiplier } from "@/lib/battlePower";
-import { computeWeatherHealFraction } from "@/lib/weatherEffects";
+import { weatherHealAmount } from "@/lib/weatherEffects";
 import { FIELD_DURATION, isConfusionBlockedByField, isOpponentTargetingMove, isStatusBlockedByField } from "@/lib/fieldEffects";
 import { getConfusionCureBerryResult, getExtraFlinchTriggered, getMentalHerbCureResult, getStatusCureBerryResult, shouldTriggerWhiteHerb } from "@/lib/itemEffects";
 import { isGrounded } from "./grounding";
@@ -1193,13 +1193,10 @@ function healAndThaw(c: MirroredCtx) {
     // 메가솔라: 자신이 쓰는 광합성·달빛류(자기 회복)의 회복량이 항상 쾌청 기준(2/3)이 된다.
     const healWeather =
       c.healedTarget === "self" && c.attackerAbility?.treatsOwnWeatherAsSun ? "쾌청" : activeWeather(c.state);
-    const fraction = c.effectiveMove.healsWeatherDependent
-      ? computeWeatherHealFraction(healWeather)
-      : c.effectiveMove.healsFraction!;
-    c.healedAmount = Math.min(
-      healTarget.maxHp - healTarget.currentHp,
-      Math.floor(healTarget.maxHp * fraction),
-    );
+    const amount = c.effectiveMove.healsWeatherDependent
+      ? weatherHealAmount(healTarget.maxHp, healWeather)
+      : Math.floor(healTarget.maxHp * c.effectiveMove.healsFraction!);
+    c.healedAmount = Math.min(healTarget.maxHp - healTarget.currentHp, amount);
     healTarget.currentHp += c.healedAmount;
   }
 

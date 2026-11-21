@@ -8,7 +8,7 @@ import { hasVolatile, inflictVolatile } from "@/lib/volatileConditions";
 import { applyMoveAccuracyEvasionChanges } from "@/lib/accuracyCrit";
 import { resolveEffectiveDefenderAbility } from "@/lib/abilityModifiers";
 import { inflictRestSleep } from "@/lib/statusConditions";
-import { computeWeatherHealFraction } from "@/lib/weatherEffects";
+import { weatherHealAmount } from "@/lib/weatherEffects";
 import {
   abilityOf,
   activeWeather,
@@ -1154,8 +1154,8 @@ function evaluateStatusSupport(c: MoveOptionCtx) {
         };
       } else if (kind === "heal") {
         const healWeather = abilityOf(c.env.me)?.treatsOwnWeatherAsSun ? "쾌청" : activeWeather(c.env.moveState);
-        const fraction = c.move.healsWeatherDependent ? computeWeatherHealFraction(healWeather) : (c.move.healsFraction ?? 0);
-        let healedHp = Math.min(c.env.me.maxHp, c.env.me.currentHp + Math.floor(c.env.me.maxHp * fraction));
+        const healAmount = c.move.healsWeatherDependent ? weatherHealAmount(c.env.me.maxHp, healWeather) : Math.floor(c.env.me.maxHp * (c.move.healsFraction ?? 0));
+        let healedHp = Math.min(c.env.me.maxHp, c.env.me.currentHp + healAmount);
         // 희망사항(AI-A1): 회복은 다음 턴 종료 — 그 사이 한 번 더 맞은 뒤 최대 HP 절반을 받는다. 이미 예약돼 있으면
         // 실패(엔진 mirroredEffects), 받기 전에 쓰러지면(이번 턴 + 다음 턴에 쓰러짐) 회복 없음 → 순이득 ≤ 0.
         let wishFails = false;
