@@ -468,7 +468,7 @@ function forceTargetSwitch(ctx: RunTurnContext, key: FighterKey, action: ActionL
     mv.forcesTargetSwitch &&
     !action.blockedReason &&
     action.hit &&
-    action.typeEffectiveness !== 0 &&
+    (mv.category === "status" || action.typeEffectiveness !== 0) &&
     !action.fainted &&
     !action.blockedByProtectMoveName &&
     !action.blockedBySubstituteMoveName &&
