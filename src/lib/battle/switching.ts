@@ -140,7 +140,7 @@ export function computeIllusionTarget(party: BattleFighterState[], selfIndex: nu
 /**
  * 교체로 나온 포켓몬이 상대 진영 설치물을 밟을 때의 처리(Phase 8 §6). performSwitch에서
  * 등장 특성보다 먼저 호출한다. 순서:
- *  1. 독타입이면 독압정을 흡수해 제거
+ *  1. 접지한 독타입이면 독압정을 흡수해 제거(비접지면 흡수 못 함 — 설치물이 남는다)
  *  2. 스텔스록 등장 데미지(바위 상성 배율, 매직가드가 막음)
  *  3. 접지 상태면: 압정뿌리기 데미지(매직가드가 막음) → 독압정 중독 → 끈적끈적네트 스피드 -1
  * 문구를 push하는 자리마다 같은 이름의 이벤트도 기록해 돌려준다(8.3 B2) — 화면 연출이 문구 대신 이 목록을 읽는다. 문구가 나온 때와 1:1이고 순서도 같다.
@@ -152,9 +152,11 @@ function applyEntryHazardsOnSwitchIn(state: BattleState, key: FighterKey, log: s
   const hz = sideOf(state, key).hazards;
   const selfName = getPokemon(self.slot.pokemonId)?.name ?? "포켓몬";
   const selfAbility = abilityOf(self);
+  // 트랙 M4: 중력·전자부유·풍선·떨어뜨리기까지 반영한 접지 판정. 독압정은 접지가 아니면 흡수도 중독도 없다(8.3 D3-fix-35, Showdown `toxicspikes.onSwitchIn`의 첫 줄)
+  const selfGrounded = isGrounded(state, self, selfAbility);
 
-  // 1. 독타입 등장 → 독압정 흡수
-  if (hz.toxicSpikesLayers > 0 && self.types.includes("독")) {
+  // 1. 접지한 독타입 등장 → 독압정 흡수
+  if (hz.toxicSpikesLayers > 0 && selfGrounded && self.types.includes("독")) {
     hz.toxicSpikesLayers = 0;
     log.push(`${selfName}${eunNeun(selfName)} 독압정을 흡수했다!`);
     hits.push("toxicSpikesAbsorbed");
@@ -170,8 +172,6 @@ function applyEntryHazardsOnSwitchIn(state: BattleState, key: FighterKey, log: s
   if (isFainted(self)) return hits;
 
   // 3. 접지 대상만: 압정뿌리기 · 독압정 · 끈적끈적네트
-  // 트랙 M4: 중력·전자부유·풍선·떨어뜨리기까지 반영한 접지 판정
-  const selfGrounded = isGrounded(state, self, selfAbility);
   if (selfGrounded) {
     const spikesDamage = calcSpikesDamage(self.maxHp, self.types, selfAbility, hz, selfGrounded);
     if (spikesDamage > 0) {
