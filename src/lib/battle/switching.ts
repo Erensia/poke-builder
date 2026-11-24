@@ -511,12 +511,9 @@ export function performSwitch(
   outgoing.accuracyStages = { ...NEUTRAL_ACCURACY_STAGES };
   outgoing.critStage = NEUTRAL_CRIT_STAGE;
   outgoing.statStagesAtTurnStart = undefined;
-  // 행동방해류(혼란·도발·앙코르·사슬묶기·씨뿌리기·헤롱헤롱·뿌리박기·아쿠아링 등) 전부 해제.
-  // 단 소금절이(saltCure)는 교체로 풀리지 않는다(본가) — 그것만 남긴다.
-  {
-    const kept = outgoing.volatile.active.saltCure;
-    outgoing.volatile = { active: kept ? { saltCure: kept } : {} };
-  }
+  // 행동방해류(혼란·도발·앙코르·사슬묶기·씨뿌리기·헤롱헤롱·뿌리박기·아쿠아링·소금절이 등) 전부 해제 — Showdown `clearVolatile`의 `volatiles = {}`.
+  // 소금절이도 예외가 아니다(8.3 D3-fix-40, 이전 "본가는 교체로 풀리지 않는다"는 근거 없는 주석 — 사용자 결정 2026-11-25: Showdown을 따른다).
+  outgoing.volatile = { active: {} };
   outgoing.chargingMoveId = undefined;
   outgoing.cudChewBerryId = undefined;
   outgoing.cudChewTurnsLeft = undefined;
