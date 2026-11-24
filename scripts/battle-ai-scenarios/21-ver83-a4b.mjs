@@ -74,7 +74,7 @@ export default async function ({ server, data, mon, battle, pts, check }) {
     check("8.3 A4-b N-5a: 주인 뿌리박기에도 탈출버튼 발동", r1?.awaitingSelfSwitch?.side === "b" && !!r1.awaitingSelfSwitch.ejectItemName && r1.nextState.b.currentItemId === null, JSON.stringify(r1?.awaitingSelfSwitch));
     check("8.3 A4-b N-5c: 공격자 그림자밟기에도 탈출버튼 발동", r2?.awaitingSelfSwitch?.side === "b" && !!r2.awaitingSelfSwitch.ejectItemName, JSON.stringify(r2?.awaitingSelfSwitch));
   }
-  // N-6 우격다짐 — 추가효과 있는 기술이면 세 효과 모두 불발, 없는 기술이면 정상 발동
+  // N-6 우격다짐 — fix-43(E8-09): 포챔스는 우격다짐이 세 효과를 막지 않는다(추가효과 있는 기술이든 없는 기술이든 정상 발동). 옛 기대(기본 Showdown: 불발)를 뒤집었다
   {
     const sheer = (move, extra) => normal({ move, aAbility: "우격다짐", ...extra });
     const nearHalf = (st) => { st.b.currentHp = Math.floor(st.b.maxHp / 2) + 1; return st; };
@@ -82,11 +82,11 @@ export default async function ({ server, data, mon, battle, pts, check }) {
     const rcS = hit(sheer(secondary, { bItem: "레드카드" }), secondary), rcP = hit(sheer(plain, { bItem: "레드카드" }), plain);
     const ejS = hit(sheer(secondary, { bItem: "탈출버튼" }), secondary), ejP = hit(sheer(plain, { bItem: "탈출버튼" }), plain);
     const exS = hit(nearHalf(sheer(secondary, { bAbility: "위기회피" })), secondary), exP = hit(nearHalf(sheer(plain, { bAbility: "위기회피" })), plain);
-    check("8.3 A4-b N-6a: 우격다짐 + 추가효과 기술 → 레드카드 미발동·보존", !!rcS && rcS.nextState.b.currentItemId === "레드카드" && !redCardSwitch(rcS), `도구=${rcS?.nextState.b.currentItemId}`);
+    check("8.3 A4-b N-6a: 우격다짐 + 추가효과 기술 → 레드카드 정상 발동(포챔스)", !!rcS && rcS.nextState.b.currentItemId === null && !!redCardSwitch(rcS), `도구=${rcS?.nextState.b.currentItemId}`);
     check("8.3 A4-b N-6b: 우격다짐 + 추가효과 없는 기술 → 레드카드 정상 발동", !!redCardSwitch(rcP) && rcP.nextState.b.currentItemId === null, `교체=${!!redCardSwitch(rcP)}`);
-    check("8.3 A4-b N-6c: 우격다짐 + 추가효과 기술 → 탈출버튼 미발동·보존", !!ejS && !ejS.awaitingSelfSwitch && ejS.nextState.b.currentItemId === "탈출버튼", JSON.stringify(ejS?.awaitingSelfSwitch));
+    check("8.3 A4-b N-6c: 우격다짐 + 추가효과 기술 → 탈출버튼 정상 발동(포챔스)", !!ejS?.awaitingSelfSwitch?.ejectItemName && ejS.nextState.b.currentItemId === null, JSON.stringify(ejS?.awaitingSelfSwitch));
     check("8.3 A4-b N-6d: 우격다짐 + 추가효과 없는 기술 → 탈출버튼 정상 발동", !!ejP?.awaitingSelfSwitch?.ejectItemName, JSON.stringify(ejP?.awaitingSelfSwitch));
-    check("8.3 A4-b N-6e: 우격다짐 + 추가효과 기술 → 위기회피 미발동", !!exS && !exS.awaitingSelfSwitch, JSON.stringify(exS?.awaitingSelfSwitch));
+    check("8.3 A4-b N-6e: 우격다짐 + 추가효과 기술 → 위기회피 정상 발동(포챔스)", exS?.awaitingSelfSwitch?.emergencyExit === true, JSON.stringify(exS?.awaitingSelfSwitch));
     check("8.3 A4-b N-6f: 우격다짐 + 추가효과 없는 기술 → 위기회피 정상 발동", exP?.awaitingSelfSwitch?.emergencyExit === true, JSON.stringify(exP?.awaitingSelfSwitch));
   }
   // N-7 레드카드가 공격자를 끌어내면 생명의구슬 반동이 없다 / 못 끌어내면(뿌리박기) 반동은 있다
