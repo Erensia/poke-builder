@@ -3,8 +3,12 @@ import { type HazardState } from "@/types/battle";
 import { type PokemonType } from "@/types/pokemon-type";
 import { getEffectiveness } from "@/lib/typeEffectiveness";
 
-/** 압정뿌리기 층수별 등장 데미지 비율 (사용자 확정: 1→1/16 · 2→1/8 · 3→1/4) */
-const SPIKES_DAMAGE_FRACTION_BY_LAYER: Record<number, number> = { 1: 1 / 16, 2: 1 / 8, 3: 1 / 4 };
+/**
+ * 압정뿌리기 층수별 등장 데미지의 분자(분모 24) — Showdown `spikes.onSwitchIn`의 `damageAmounts = [0, 3, 4, 6]`: 1층 1/8 · 2층 1/6 · 3층 1/4.
+ * 1/6을 실수로 두면 부동소수점 오차가 나서 정수 분자로 센다(8.3 D3-fix-39. 이전 1/16·1/8·1/4는 비율을 잘못 찾은 것 — 사용자 결정 2026-11-25).
+ */
+const SPIKES_DAMAGE_NUMERATOR_BY_LAYER: Record<number, number> = { 1: 3, 2: 4, 3: 6 };
+const SPIKES_DAMAGE_DENOMINATOR = 24;
 /** 스텔스록 등장 데미지 기준 비율(바위 상성 배율을 곱한다) */
 const STEALTH_ROCK_BASE_FRACTION = 1 / 8;
 
@@ -43,8 +47,8 @@ export function calcSpikesDamage(
 ): number {
   if (hazards.spikesLayers <= 0 || ability?.negatesIndirectDamage) return 0;
   if (!grounded) return 0;
-  const frac = SPIKES_DAMAGE_FRACTION_BY_LAYER[hazards.spikesLayers] ?? 1 / 16;
-  return Math.max(1, Math.floor(maxHp * frac));
+  const numerator = SPIKES_DAMAGE_NUMERATOR_BY_LAYER[hazards.spikesLayers] ?? SPIKES_DAMAGE_NUMERATOR_BY_LAYER[1];
+  return Math.max(1, Math.floor((maxHp * numerator) / SPIKES_DAMAGE_DENOMINATOR));
 }
 
 /**

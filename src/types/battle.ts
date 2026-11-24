@@ -28,7 +28,7 @@ export interface SpinCleared {
 export interface HazardState {
   /** 스텔스록(1장 고정). 등장 시 바위 상성 배율로 데미지(§6). */
   stealthRock: boolean;
-  /** 압정뿌리기 층수 0~3. 등장 시 1→1/16 · 2→1/8 · 3→1/4 데미지(§6). 비접지는 무시. */
+  /** 압정뿌리기 층수 0~3. 등장 시 1→1/8 · 2→1/6 · 3→1/4 데미지(§6, 8.3 D3-fix-39에서 Showdown 비율로 정정). 비접지는 무시. */
   spikesLayers: number;
   /** 독압정 층수 0~2. 1→독 · 2→맹독(§6). 독타입 등장 시 해제. 비접지는 무시. */
   toxicSpikesLayers: number;
