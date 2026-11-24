@@ -9046,5 +9046,141 @@
     "activeMegaForm": "플라엣테-메가"
    }
   ]
+ },
+ {
+  "id": "real-m8-poison-cycle-mega-escavalier",
+  "name": "M-8시즌 해악 막이사이클구축",
+  "style": "사이클",
+  "group": "real",
+  "description": "가라르야도킹(특수막이)·워시로토무(물리막이 겸 스토퍼)·메가갑주무사(사이클 어태커)를 고정 선출로 해악·사이클을 굴려 상대를 붕괴시키는 파티",
+  "fixedPicks": [
+   "가라르야도킹",
+   "워시로토무",
+   "갑주무사"
+  ],
+  "slots": [
+   {
+    "pokemonId": "리자몽",
+    "moves": [
+     "플레어드라이브",
+     "드래곤클로",
+     "번개펀치",
+     "용의춤"
+    ],
+    "ability": "맹화",
+    "item": "리자몽나이트X",
+    "nature": "고집",
+    "points": {
+     "hp": 2,
+     "atk": 32,
+     "def": 0,
+     "spa": 0,
+     "spd": 0,
+     "spe": 32
+    },
+    "activeMegaForm": "리자몽-메가X"
+   },
+   {
+    "pokemonId": "가라르야도킹",
+    "moves": [
+     "화염방사",
+     "냉동빔",
+     "맹독",
+     "게으름피우기"
+    ],
+    "ability": "재생력",
+    "item": "슈캐열매",
+    "nature": "차분",
+    "points": {
+     "hp": 31,
+     "atk": 0,
+     "def": 0,
+     "spa": 3,
+     "spd": 32,
+     "spe": 0
+    }
+   },
+   {
+    "pokemonId": "워시로토무",
+    "moves": [
+     "하이드로펌프",
+     "볼트체인지",
+     "도깨비불",
+     "아픔나누기"
+    ],
+    "ability": "부유",
+    "item": "먹다남은음식",
+    "nature": "대담",
+    "points": {
+     "hp": 32,
+     "atk": 0,
+     "def": 32,
+     "spa": 0,
+     "spd": 2,
+     "spe": 0
+    }
+   },
+   {
+    "pokemonId": "갑주무사",
+    "moves": [
+     "만나자마자",
+     "유턴",
+     "드릴라이너",
+     "아이언헤드"
+    ],
+    "ability": "위기회피",
+    "item": "갑주무사나이트",
+    "nature": "고집",
+    "points": {
+     "hp": 31,
+     "atk": 32,
+     "def": 0,
+     "spa": 0,
+     "spd": 3,
+     "spe": 0
+    },
+    "activeMegaForm": "갑주무사-메가"
+   },
+   {
+    "pokemonId": "한카리아스",
+    "moves": [
+     "스케일샷",
+     "지진",
+     "암석봉인",
+     "스텔스록"
+    ],
+    "ability": "까칠한피부",
+    "item": "기합의띠",
+    "nature": "명랑",
+    "points": {
+     "hp": 2,
+     "atk": 32,
+     "def": 0,
+     "spa": 0,
+     "spd": 0,
+     "spe": 32
+    }
+   },
+   {
+    "pokemonId": "누리레느",
+    "moves": [
+     "아쿠아제트",
+     "물거품아리아",
+     "문포스",
+     "앙코르"
+    ],
+    "ability": "급류",
+    "item": "자뭉열매",
+    "nature": "조심",
+    "points": {
+     "hp": 32,
+     "atk": 0,
+     "def": 20,
+     "spa": 14,
+     "spd": 0,
+     "spe": 0
+    }
+   }
+  ]
  }
 ]
