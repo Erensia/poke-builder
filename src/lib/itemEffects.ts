@@ -1,3 +1,4 @@
+import { modify4096 } from "./damageFormula";
 import type { Item } from "../types/item";
 import type { Move } from "../types/move";
 import type { StatusCondition } from "../types/status";
@@ -83,6 +84,15 @@ export function getItemAccuracyFactors(
 /** 큰뿌리(Item.drainHealMultiplier)가 없으면 1배 그대로 */
 export function getDrainHealMultiplier(item: Item | undefined): number {
   return item?.drainHealMultiplier ?? 1;
+}
+
+/**
+ * 큰뿌리 대상 회복(흡수 기술·뿌리박기·아쿠아링·씨뿌리기)의 최종 회복량(8.3 D3-fix-32, Showdown `heal` → `bigroot.onTryHeal`):
+ * 회복량을 먼저 `trunc`하고, 큰뿌리면 ×5324/4096(0.5 내림). AI 흡수 추정은 연속 기대값이라 이 함수 대신 `getDrainHealMultiplier`를 쓴다.
+ */
+export function healWithBigRoot(amount: number, item: Item | undefined): number {
+  const base = Math.trunc(amount);
+  return item?.drainHealMultiplier ? modify4096(base, item.drainHealMultiplier, "final") : base;
 }
 
 /**

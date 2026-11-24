@@ -19,7 +19,7 @@ import { DAMAGE_ROLL_MIN_PERCENT, DAMAGE_ROLL_STEP_COUNT, chain4096, roundHalfDo
 import { computeDamage, hustleDamageMultiplier, screenMultiplierFromFlags, supremeOverlordMultiplier } from "@/lib/battlePower";
 import { getWeatherDamageMultiplier, getWeatherDefenseMultiplier } from "@/lib/weatherEffects";
 import { FIELD_DURATION, getFieldDamageMultiplier } from "@/lib/fieldEffects";
-import { getBerryDefenseResult, getDrainHealMultiplier, getEnduranceResult, getItemCritStageBonus, getItemBasePowerMultiplier, getItemFinalMultiplier, getMentalHerbCureResult } from "@/lib/itemEffects";
+import { getBerryDefenseResult, getEnduranceResult, getItemCritStageBonus, getItemBasePowerMultiplier, getItemFinalMultiplier, getMentalHerbCureResult, healWithBigRoot } from "@/lib/itemEffects";
 import { effectiveHeldItem } from "./turnOrderInputs";
 import { STRUGGLE_MOVE, WEATHER_DURATION, weatherRockBonusOfItem, setEffectiveAbility, activeWeather, applyMimicryForm, consumeItem, contraryDelta, hasLivingReserve, isFainted, isForcedSwitchBlocked, rollMultiHitCount, sideOf, statDropBlockStatsOf, statusImmunitiesOf, type BattleFighterState, type BattleState } from "./state";
 import { triggerTerrainSeeds } from "./switching";
@@ -971,9 +971,7 @@ function applyRecoilAndDrain(c: HitCtx) {
   c.liquidOozeDamage = 0;
 
   if (c.isDamaging && c.actualDamageDealt > 0 && c.effectiveMove.drainFraction !== undefined) {
-    const rawDrain = Math.floor(
-      c.actualDamageDealt * c.effectiveMove.drainFraction * getDrainHealMultiplier(c.attackerItem),
-    );
+    const rawDrain = healWithBigRoot(Math.floor(c.actualDamageDealt * c.effectiveMove.drainFraction), c.attackerItem);
     if (c.defenderAbility?.reverseDrainHealsToDamage) {
       c.liquidOozeDamage = Math.min(c.attacker.currentHp, rawDrain);
       c.attacker.currentHp -= c.liquidOozeDamage;

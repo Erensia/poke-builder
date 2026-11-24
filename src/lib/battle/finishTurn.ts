@@ -13,7 +13,7 @@ import { rivalryDamageMultiplier } from "@/lib/battlePower";
 import { resolveMoveContext } from "@/lib/moveContext";
 import { computeFieldEndOfTurnHeal, isStatusBlockedByField } from "@/lib/fieldEffects";
 import { calmRampageIfAsleep } from "./rampage";
-import { getDrainHealMultiplier, getHpThresholdBerryHeal } from "@/lib/itemEffects";
+import { getHpThresholdBerryHeal, healWithBigRoot } from "@/lib/itemEffects";
 import { SANDSTORM_IMMUNE_ABILITY_NAMES, abilityOf, activeWeather, applyForecastForm, consumeItem, contraryDelta, hasLivingReserve, isFainted, isForcedSwitchBlocked, opponentKey, sideOf, statDropBlockStatsOf, statusImmunitiesOf, type BattleFighterState, type BattleState } from "./state";
 import { type RunTurnContext, type RunTurnOutcome } from "./runTurn";
 import { actionFailed } from "./moveFailure";
@@ -153,22 +153,20 @@ function applyWeatherDamageAbility(ctx: EndOfTurnFighterContext): void {
   }
 }
 
-/** 뿌리박기/아쿠아링: 걸려있는 동안 매 턴 종료 시 최대 HP 1/16 회복(큰뿌리 소지 시 1.3배) */
+/**
+ * 아쿠아링(order 6)·뿌리박기(order 7): 걸려 있는 동안 각각 매 턴 종료 시 최대 HP 1/16 회복 — 둘 다 걸려 있으면 두 번(8.3 D3-fix-32, Showdown).
+ * 큰뿌리는 각 회복에 `healWithBigRoot`로 적용한다.
+ */
 function applyIngrainAquaRingHeal(ctx: EndOfTurnFighterContext): void {
   const { key, fighter, fighterItem, endOfTurn } = ctx;
-  const regenSource = hasVolatile(fighter.volatile, "ingrain")
-    ? "ingrain"
-    : hasVolatile(fighter.volatile, "aquaRing")
-      ? "aquaRing"
-      : undefined;
-  if (!regenSource || hasVolatile(fighter.volatile, "healBlock")) return;
-  const regenHeal = Math.min(
-    fighter.maxHp - fighter.currentHp,
-    Math.floor((fighter.maxHp / 16) * getDrainHealMultiplier(fighterItem)),
-  );
-  if (regenHeal > 0) {
-    fighter.currentHp += regenHeal;
-    endOfTurn.push({ actor: key, damage: 0, remainingHp: fighter.currentHp, fainted: false, regenHeal, regenSource });
+  if (hasVolatile(fighter.volatile, "healBlock")) return;
+  for (const regenSource of ["aquaRing", "ingrain"] as const) {
+    if (!hasVolatile(fighter.volatile, regenSource)) continue;
+    const regenHeal = Math.min(fighter.maxHp - fighter.currentHp, healWithBigRoot(fighter.maxHp / 16, fighterItem));
+    if (regenHeal > 0) {
+      fighter.currentHp += regenHeal;
+      endOfTurn.push({ actor: key, damage: 0, remainingHp: fighter.currentHp, fainted: false, regenHeal, regenSource });
+    }
   }
 }
 
@@ -212,7 +210,7 @@ function applyLeechSeedDamage(ctx: EndOfTurnFighterContext): void {
           : undefined;
       const leechSeedHealAmount = Math.min(
         healer.maxHp - healer.currentHp,
-        Math.floor(seedDamage * getDrainHealMultiplier(healerItem)),
+        healWithBigRoot(seedDamage, healerItem),
       );
       if (leechSeedHealAmount > 0) {
         healer.currentHp += leechSeedHealAmount;
@@ -518,8 +516,8 @@ function applyDrowsySleepOnset(ctx: EndOfTurnFighterContext): void {
 
 /**
  * 모래바람 틱 데미지(§1 F-3): 바위/땅/강철 타입이 아니면 매 턴 종료 시 최대 HP 1/16.
- * 매직가드·모래 관련 특성(모래숨기/모래의힘/모래날림/모래헤치기) 보유 시 면제.
- * (본가의 방진 특성·방진고글 도구는 포챔스에 없어 제외. 싸라기눈 틱도 없음.)
+ * 매직가드·모래 관련 특성(모래숨기/모래의힘/모래헤치기)·방진 보유 시 면제(`SANDSTORM_IMMUNE_ABILITY_NAMES`, 모래날림은 면역이 아니다 — 8.3 D3-fix-27).
+ * (방진고글 도구는 포챔스에 없어 제외. 싸라기눈 틱도 없음.)
  */
 function applySandstormDamage(ctx: EndOfTurnFighterContext): void {
   const { state, key, fighter, fighterAbility, endOfTurn } = ctx;
