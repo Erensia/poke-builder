@@ -4,7 +4,7 @@ import { type WeatherKind } from "@/types/weather";
 import { type FieldKind } from "@/types/field";
 import { type PokemonType } from "@/types/pokemon-type";
 import { type PokemonGender, type StanceChangeForms } from "@/types/pokemon";
-import { type FighterKey, type HazardState } from "@/types/battle";
+import { type FighterKey, type HazardKind, type HazardState } from "@/types/battle";
 import { BATTLE_STAT_KEYS, NEUTRAL_ACCURACY_STAGES, NEUTRAL_CRIT_STAGE, NEUTRAL_STAGES, type AccuracyEvasionStages, type BattleStatKey, type CritStage, type StatStages } from "@/types/battleStats";
 import { NO_STATUS_CONDITION, NO_VOLATILE_CONDITIONS, type StatusCondition, type StatusConditionState, type VolatileConditionState } from "@/types/status";
 import { type Ability } from "@/types/ability";
@@ -359,6 +359,32 @@ export interface BattleFighterState {
 /** 빈 설치물 상태 */
 export function emptyHazardState(): HazardState {
   return { stealthRock: false, spikesLayers: 0, toxicSpikesLayers: 0, stickyWeb: false };
+}
+
+/** 설치물 기본 발동 순서 — `order`가 없는 상태(직접 세운 시험·AI 투영)와 order에 빠진 종류에 쓴다 */
+const DEFAULT_HAZARD_ORDER: readonly HazardKind[] = ["stealthRock", "spikes", "toxicSpikes", "stickyWeb"];
+
+function isHazardLaid(hz: HazardState, kind: HazardKind): boolean {
+  switch (kind) {
+    case "stealthRock": return hz.stealthRock;
+    case "spikes": return hz.spikesLayers > 0;
+    case "toxicSpikes": return hz.toxicSpikesLayers > 0;
+    case "stickyWeb": return hz.stickyWeb;
+  }
+}
+
+/**
+ * 설치물을 새로 깐 순간(0 → 1 또는 false → true)에 부른다 — 같은 종류를 빼고 맨 뒤에 붙인다(8.3 D3-fix-41, Showdown `effectOrder`).
+ * 지웠다 다시 깔면 맨 뒤가 되고, 층만 늘 때(압정 1 → 2)는 부르지 않아 순서가 변하지 않는다. 배열은 제자리 변경하지 않는다(`cloneSide`가 공유해도 안전).
+ */
+export function layHazard(hazards: HazardState, kind: HazardKind): void {
+  hazards.order = [...(hazards.order ?? []).filter((k) => k !== kind), kind];
+}
+
+/** 지금 깔린 설치물을 발동할 순서로 — 기록된 설치 순서(현재 깔린 것만) 뒤에 기록이 없는 것을 기본 순서로 보충한다 */
+export function hazardEntryOrder(hz: HazardState): HazardKind[] {
+  const recorded = (hz.order ?? []).filter((k) => isHazardLaid(hz, k));
+  return [...recorded, ...DEFAULT_HAZARD_ORDER.filter((k) => isHazardLaid(hz, k) && !recorded.includes(k))];
 }
 
 /**
