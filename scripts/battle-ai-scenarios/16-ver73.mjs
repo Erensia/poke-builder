@@ -74,7 +74,8 @@ export default async function ({ server, data, ev, opt, mon, battle, pts, check 
   check("7.3 B3 AI: 멀티스케일 풀피 상대의 스케일샷 기대 횟수가 전 타 반감(약 2배)이 아니다", aiMs >= aiPlain && aiMs < aiPlain * 1.35, `멀티스케일 ${aiMs.toFixed(2)} 일반 ${aiPlain.toFixed(2)}`);
   // 7.3 B4 먼저 움직인 쪽이 자기 반동으로 쓰러져도, 뒤에 행동하는 쪽의 자기 대상·필드 기술은 실행되고 쓰러진 상대를 노리는 기술은 "실패"로 기록된다
   const faintTurn = (foeMove) => {
-    const st = battle([mon("따라큐", ["우드해머"], null, "생명의구슬", pts({ atk: 32, spe: 32 }))], [mon("갑주무사", [foeMove], null, null, pts({ hp: 32 }))]);
+    // 8.3 D3-fix-33: 예비가 없으면 전멸이라 배틀이 그 자리에서 끝난다(상대 행동 없음) — 이 시험은 교체할 예비가 있는 장면이므로 예비(팬텀)를 둔다.
+    const st = battle([mon("따라큐", ["우드해머"], null, "생명의구슬", pts({ atk: 32, spe: 32 })), mon("팬텀", ["칼춤"])], [mon("갑주무사", [foeMove], null, null, pts({ hp: 32 }))]);
     st.a.currentHp = 3; // 우드해머·생명의구슬 반동으로 쓰러진다
     const out = rt.runTurn(st, move("우드해머"), move(foeMove), () => 0.5);
     const res = out.result ?? out.partialResult;

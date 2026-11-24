@@ -98,11 +98,12 @@ export default async function ({ server, data, mon, battle, pts, check }) {
   }
   // R6-i 회귀: 상태이상 틱으로 쓰러진 뒤에도 상대의 가속은 발동
   {
-    const st = battle([mon("잠만보", ["칼춤"], null, null, hp)], [mon("메타그로스", ["칼춤"], "가속", null, hp)]);
+    // 8.3 D3-fix-33: 예비가 없으면 전멸이라 독으로 쓰러진 순간 배틀이 끝나 가속(order 28)이 처리되지 않는다 — 이 시험은 교체할 예비(팬텀)가 있는 장면이다.
+    const st = battle([mon("잠만보", ["칼춤"], null, null, hp), mon("팬텀", ["칼춤"], null, null, hp)], [mon("메타그로스", ["칼춤"], "가속", null, hp)]);
     st.a.currentHp = 1;
     st.a.status = sta.inflictStatus(st.a.status, "poison");
     const r = play(st);
-    check("8.3 A1 R6-i: 독으로 쓰러져도 상대 가속은 발동", r.nextState.a.currentHp === 0 && r.nextState.b.stages.spe === 1, `a=${r.nextState.a.currentHp} spe=${r.nextState.b.stages.spe}`);
+    check("8.3 A1 R6-i: 독으로 쓰러져도(예비 있음) 상대 가속은 발동", r.nextState.a.currentHp === 0 && r.nextState.b.stages.spe === 1, `a=${r.nextState.a.currentHp} spe=${r.nextState.b.stages.spe}`);
   }
   // R6-j 자리 효과: 그 자리의 포켓몬이 기절해도 미래예지는 소멸(교체로 들어온 쪽이 맞지 않음)하고 희망사항 카운터는 줄어든다
   {

@@ -14,7 +14,7 @@ import { resolveMoveContext } from "@/lib/moveContext";
 import { computeFieldEndOfTurnHeal, isStatusBlockedByField } from "@/lib/fieldEffects";
 import { calmRampageIfAsleep } from "./rampage";
 import { getHpThresholdBerryHeal, healWithBigRoot } from "@/lib/itemEffects";
-import { SANDSTORM_IMMUNE_ABILITY_NAMES, abilityOf, activeWeather, applyForecastForm, consumeItem, contraryDelta, hasLivingReserve, isFainted, isForcedSwitchBlocked, opponentKey, sideOf, statDropBlockStatsOf, statusImmunitiesOf, type BattleFighterState, type BattleState } from "./state";
+import { SANDSTORM_IMMUNE_ABILITY_NAMES, abilityOf, activeWeather, applyForecastForm, consumeItem, contraryDelta, hasLivingReserve, isFainted, isForcedSwitchBlocked, isSideWiped, opponentKey, sideOf, statDropBlockStatsOf, statusImmunitiesOf, type BattleFighterState, type BattleState } from "./state";
 import { type RunTurnContext, type RunTurnOutcome } from "./runTurn";
 import { actionFailed } from "./moveFailure";
 import { computeBattleHitChance } from "./hitChance";
@@ -882,10 +882,52 @@ function makeEotCtx(c: FinishCtx, key: FighterKey): EndOfTurnFighterContext {
   };
 }
 
-/** 한 효과를 포켓몬 순서대로 한 단계로 돌린다 — 쓰러진 포켓몬은 건너뛴다 */
-function eachFighter(c: FinishCtx, step: (ctx: EndOfTurnFighterContext) => void) {
-  for (const key of eotOrder()) if (!isFainted(c.state[key])) step(makeEotCtx(c, key));
+/**
+ * 전멸 판정(8.3 D3-fix-33, E6-02·03 — Showdown `resolveFaints` → `checkWin`): 활성이 쓰러졌고 살아 있는 예비가 없는 편이 있으면 배틀이 그 자리에서 끝난다.
+ * c.winner를 정하고 true를 돌려주며, 호출부는 이후 효과를 처리하지 않는다. 한 편만 전멸이면 상대 승리, 둘 다 전멸이면 무승부가 아니라
+ * **마지막에 쓰러진 포켓몬의 편**이 이긴다(gen5+ — lastFainted). lastFainted를 모르는 동시 전멸은 도달 불가지만 무승부로 안전하게 둔다.
+ */
+function endIfWiped(c: FinishCtx, lastFainted: FighterKey | undefined): boolean {
+  if (c.winner) return true;
+  const aOut = isSideWiped(c.state, "a");
+  const bOut = isSideWiped(c.state, "b");
+  if (!aOut && !bOut) return false;
+  c.winner = aOut && bOut ? (lastFainted ?? "draw") : aOut ? "b" : "a";
+  return true;
 }
+
+/**
+ * 한 효과를 포켓몬 순서대로 한 단계로 돌린다 — 쓰러진 포켓몬은 건너뛴다. 효과 하나가 끝날 때마다 전멸을 보고(endIfWiped) 전멸하면 true를 돌려주며 멈춘다.
+ * 한 효과가 `key`의 포켓몬을 쓰러뜨린 뒤 상대까지 쓰러뜨리는 경우(해감액 씨뿌리기)는 상대가 마지막에 쓰러진다.
+ */
+function eachFighter(c: FinishCtx, step: (ctx: EndOfTurnFighterContext) => void): boolean {
+  for (const key of eotOrder()) {
+    if (isFainted(c.state[key])) continue;
+    step(makeEotCtx(c, key));
+    if (endIfWiped(c, opponentKey(key))) return true;
+  }
+  return false;
+}
+
+/** ④ 개별 효과의 순서 — 특성 면역 해제는 상태이상 틱보다 앞이고, 탈피는 먹다남은음식·독보다 앞이다. 회복 판정(희망사항·먹다남은음식 등)이 모두 끝난 뒤에 tickBlockVolatiles를 부른다 */
+const EOT_INDIVIDUAL_STEPS: readonly ((ctx: EndOfTurnFighterContext) => void)[] = [
+  applyAbilityImmunityCure,
+  applyFieldEndOfTurnHeal,
+  applyShedSkinCure,
+  applyLeftoversHeal,
+  applyIngrainAquaRingHeal,
+  applyLeechSeedDamage,
+  applyStatusEndOfTurnTick,
+  applyCurseDamage,
+  applyBoundDamage,
+  applySaltCureDamage,
+  applySyrupCoatDrop,
+  applyOctolockDrop,
+  tickBlockVolatiles,
+  applyDrowsySleepOnset,
+  // 난동(8.3 D3-fix-10): 명중한 턴 안에서 잠들었으면(느린 상대의 수면 기술·위 하품) 혼란 없이 조용히 푼다 — 반드시 수면 부여(하품) 뒤.
+  (ctx) => calmRampageIfAsleep(ctx.fighter),
+];
 
 /**
  * 턴 종료 효과(endOfTurn)와 멸망의노래로 쓰러진 쪽 처리 — 8.3 A1: 단계 우선, Showdown 순서(설계 8.3-A1-턴종료순서설계.md §3).
@@ -901,38 +943,26 @@ function resolveEndOfTurnAndPerish(c: FinishCtx) {
   c.perishFaintedKeys = new Set<FighterKey>();
   if (c.winner) return;
 
-  // ② 날씨 피해·특성
-  eachFighter(c, applySandstormDamage);
-  eachFighter(c, applyWeatherHealAbility);
-  eachFighter(c, applyWeatherDamageAbility);
+  // ② 날씨 피해·특성 — 효과마다 전멸을 보고, 전멸하면 이후 효과를 처리하지 않는다(③·④도 같다, 8.3 D3-fix-33)
+  if (eachFighter(c, applySandstormDamage) || eachFighter(c, applyWeatherHealAbility) || eachFighter(c, applyWeatherDamageAbility)) return;
 
   // ③ 자리(편) 효과 — 그 자리의 포켓몬이 쓰러졌어도 카운터는 줄고 효과만 실패하므로 쓰러진 쪽도 건너뛰지 않는다(Showdown slot condition)
   for (const key of eotOrder()) {
     const ctx = makeEotCtx(c, key);
     applyFutureSight(ctx);
+    if (endIfWiped(c, opponentKey(key))) return;
     applyWishHeal(ctx);
+    if (endIfWiped(c, opponentKey(key))) return;
   }
 
-  // ④ 개별 효과 — 특성 면역 해제는 상태이상 틱보다 앞이고, 탈피는 먹다남은음식·독보다 앞이다
+  // ④ 개별 효과
   for (const key of eotOrder()) {
     if (isFainted(c.state[key])) continue;
     const ctx = makeEotCtx(c, key);
-    applyAbilityImmunityCure(ctx);
-    applyFieldEndOfTurnHeal(ctx);
-    applyShedSkinCure(ctx);
-    applyLeftoversHeal(ctx);
-    applyIngrainAquaRingHeal(ctx);
-    applyLeechSeedDamage(ctx);
-    applyStatusEndOfTurnTick(ctx);
-    applyCurseDamage(ctx);
-    applyBoundDamage(ctx);
-    applySaltCureDamage(ctx);
-    applySyrupCoatDrop(ctx);
-    applyOctolockDrop(ctx);
-    tickBlockVolatiles(ctx); // 회복 판정(희망사항·먹다남은음식 등)이 모두 끝난 뒤에 부른다
-    applyDrowsySleepOnset(ctx);
-    // 난동(8.3 D3-fix-10): 명중한 턴 안에서 잠들었으면(느린 상대의 수면 기술·위 하품) 혼란 없이 조용히 푼다 — 반드시 수면 부여(하품) 뒤.
-    calmRampageIfAsleep(ctx.fighter);
+    for (const step of EOT_INDIVIDUAL_STEPS) {
+      step(ctx);
+      if (endIfWiped(c, opponentKey(key))) return;
+    }
   }
 
   // ⑤ 멸망의노래(쓰러지면 이 포켓몬의 나머지는 건너뜀) → 가속·변덕쟁이·수확·되새김질 → 꼬르륵스위치 → 열매 재확인
@@ -979,23 +1009,7 @@ function decideWinnerAndForcedSwitch(c: FinishCtx) {
   const aHasReserve = hasLivingReserve(c.state.sideA);
   const bHasReserve = hasLivingReserve(c.state.sideB);
 
-  // 자폭 콤보로 활성끼리 동반 기절한 경우(§7-1). 아래 generic 무승부 블록은 "각자 따로
-  // 쓰러진 것이라 인과가 없다"는 전제라 여기에 흘리면 예비 슬롯이 남아도 배틀이 끝나버린다.
-  // 콤보를 실행한 쪽이 상대를 먼저 쓰러뜨렸다는 인과를 살려, 예비 슬롯을 보고 여기서 가른다.
-  if (!c.winner && c.selfDestructComboKey) {
-    const comboKey = c.selfDestructComboKey;
-    const foeKey = opponentKey(comboKey);
-    const comboHasReserve = comboKey === "a" ? aHasReserve : bHasReserve;
-    const foeHasReserve = foeKey === "a" ? aHasReserve : bHasReserve;
-    if (!comboHasReserve && !foeHasReserve) {
-      c.winner = comboKey; // 양쪽 다 예비 없음 → 상대를 먼저 쓰러뜨린 콤보 실행 쪽 승리
-    } else if (!comboHasReserve) {
-      c.winner = foeKey; // 콤보 실행 쪽만 전멸
-    } else if (!foeHasReserve) {
-      c.winner = comboKey; // 상대만 전멸
-    }
-    // 둘 다 예비 있음 → winner 미정: 아래 forcedSwitch가 양쪽 강제 교체를 요구한다
-  }
+  // 자폭 콤보(§7-1)·행동 구간·턴 종료 효과 중 전멸은 이제 endIfWiped가 그 자리에서 정한다(8.3 D3-fix-33). 콤보에서 둘 다 예비가 있으면 winner 미정이라 아래 forcedSwitch가 양쪽 교체를 요구한다.
 
   // 멸망의노래로 양쪽이 동시에 쓰러졌으면 무승부가 아니라 스피드가 느린 쪽이 승리한다(F-4) —
   // 빠른 쪽이 먼저 쓰러지는 것으로 취급. 랭크 반영 실효 스피드로 비교(트릭룸은 무관).
@@ -1206,11 +1220,23 @@ export function finishTurn(ctx: RunTurnContext): RunTurnOutcome {
     const own = c.actions.find((a) => a.actor === key && a.actorPokemonId === fighter.slot.pokemonId);
     fighter.lastTurnMoveFailed = own && actionFailed(own) ? true : undefined;
   }
-  expireWeather(c);
-  resolveEndOfTurnAndPerish(c);
-  expireFieldAndWeather(c);
-  expireSideEffects(c);
-  settleFutureSightReactions(c);
+  // 8.3 D3-fix-33: 행동 구간에서 한쪽이 전멸했으면 턴 종료 단계 전체를 건너뛴다(자폭 콤보는 콤보 실행 쪽이 마지막에 쓰러진 것). 건너뛴 단계의 결과 필드는 빈 값으로 둔다.
+  c.endOfTurn = [];
+  c.pending = { exit: {}, redCard: {} };
+  c.exitSwitch = {};
+  c.perishFaintedKeys = new Set<FighterKey>();
+  c.fieldExpired = c.trickRoomExpired = c.weatherExpired = false;
+  c.expiredFieldEffects = []; c.expiredMagnetRise = []; c.expiredScreens = []; c.expiredSafeguard = []; c.expiredTailwind = [];
+  if (!endIfWiped(c, c.selfDestructComboKey)) {
+    expireWeather(c);
+    resolveEndOfTurnAndPerish(c);
+    // 턴 종료 효과 중 전멸했으면 이후 단계(필드·방 지속·벽·미래예지 반응)는 처리하지 않는다
+    if (!c.winner) {
+      expireFieldAndWeather(c);
+      expireSideEffects(c);
+      settleFutureSightReactions(c);
+    }
+  }
   // 8.3 A4-b: 승패·강제 교체 판정은 필드·스크린 만료 뒤(Showdown은 교체 요청이 잔류 전체 뒤) — 만료 함수는 winner·forcedSwitch를 읽지 않는다
   decideWinnerAndForcedSwitch(c);
   return collectResult(c);

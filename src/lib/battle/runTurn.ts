@@ -5,7 +5,7 @@ import { eunNeun } from "@/lib/josa";
 import { hasVolatile } from "@/lib/volatileConditions";
 import { compareTurnOrder } from "@/lib/turnOrder";
 import { buildTurnOrderActor, itemsSuppressedByRoom, orderBySpeed, quickFirstChances } from "./turnOrderInputs";
-import { STRUGGLE_MOVE, SWITCH_PASS_MOVE_ID, activeWeather, applyForecastForm, applyMimicryForm, cloneSide, consumeItem, hasLivingReserve, isFainted, isForcedSwitchBlocked, opponentKey, sideOf, type BattleState } from "./state";
+import { STRUGGLE_MOVE, SWITCH_PASS_MOVE_ID, activeWeather, applyForecastForm, applyMimicryForm, cloneSide, consumeItem, hasLivingReserve, isFainted, isForcedSwitchBlocked, isSideWiped, opponentKey, sideOf, type BattleState } from "./state";
 import { applyMegaEvolution, forceRandomSwitch, hazardField, isTrappedFromSwitching, performSwitch, runEntryEffects } from "./switching";
 import { resolveAction } from "./resolveAction";
 import { finishTurn } from "./finishTurn";
@@ -631,6 +631,8 @@ function runActionPhase(ctx: RunTurnContext): RunTurnOutcome | RunTurnPaused {
       ctx.selfDestructComboKey = key;
       break;
     }
+    // 8.3 D3-fix-33: 한쪽이 전멸하면 배틀이 그 자리에서 끝나 남은 행동을 하지 않는다(Showdown resolveFaints → checkWin). 예비가 있으면 계속한다.
+    if (isSideWiped(state, "a") || isSideWiped(state, "b")) break;
   }
   return finishTurn(ctx);
 }

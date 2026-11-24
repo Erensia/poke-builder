@@ -1150,6 +1150,11 @@ export function hasLivingReserve(side: BattleSide): boolean {
   return side.party.some((f, i) => i !== side.activeIndex && !isFainted(f));
 }
 
+/** 이 편이 전멸했나 — 활성이 쓰러졌고 살아 있는 예비도 없다(8.3 D3-fix-33, Showdown `pokemonLeft` 0). 전멸하면 배틀이 그 자리에서 끝난다 */
+export function isSideWiped(state: BattleState, key: FighterKey): boolean {
+  return isFainted(state[key]) && !hasLivingReserve(sideOf(state, key));
+}
+
 /**
  * 드래곤테일·울부짖기류의 강제 교체가 이 대상에게 막히는지. 흡반(preventsForcedSwitch)은 기술·도구
  * 불문 강제 교체 저항, 뿌리박기(ingrain)는 땅에 붙어 밀려나지 않는다. 울부짖기의 방음(소리 차단)은
