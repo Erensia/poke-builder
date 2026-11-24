@@ -795,6 +795,8 @@ export interface Ability {
   contactBypassesProtectAtQuarterDamage?: boolean;
   /** 그림자밟기(ver.1.9 A5): 맞은편 포켓몬은 교체할 수 없다(고스트·아름다운허물·같은 특성은 예외 — isTrappedFromSwitching) */
   trapsOpponent?: boolean;
+  /** 도주(Run Away, 8.3 D3-fix-38): 속박·검은눈빛·페어리록·그림자밟기 등 교체 불가를 모두 무시하고 교체할 수 있다(Showdown champions `runaway.onTrapPokemon`) */
+  ignoresSwitchTrapping?: boolean;
   /** 돌머리(ver.1.9 A5): 반동기(recoilFraction)의 반동 데미지를 받지 않는다(무릎차기류·생명의구슬은 그대로) */
   negatesRecoil?: boolean;
   /** 분노의경혈(ver.1.9 A5): 급소에 맞으면(쓰러지지 않고 대타가 아닐 때) 공격이 +6이 된다 */
