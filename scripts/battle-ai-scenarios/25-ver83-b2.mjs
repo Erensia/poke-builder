@@ -12,7 +12,7 @@ export default async function ({ server, data, mon, battle, pts, check }) {
   const json = JSON.stringify;
 
   // 옛 화면의 문구 판별(HAZARD_TRIGGERS + "독압정을 흡수")을 엔진 문구 순서대로 읽은 기준 — 새 이벤트와 같아야 한다
-  const TEXTS = [["독압정을 흡수", "toxicSpikesAbsorbed"], ["뾰족한 바위", "stealthRock"], ["압정에 상처", "spikes"], ["몸에 독이 퍼졌다", "toxicSpikes"], ["몸에 맹독이 퍼졌다", "toxicSpikes"], ["끈적끈적네트에 걸려", "stickyWeb"]];
+  const TEXTS = [["독압정을 흡수", "toxicSpikesAbsorbed"], ["뾰족한 바위", "stealthRock"], ["압정에 상처", "spikes"], ["몸에 독이 퍼졌다", "toxicSpikes"], ["몸에 맹독이 퍼졌다", "toxicSpikes"], ["끈적끈적네트에 걸렸다", "stickyWeb"]];
   const fromText = (msgs) => msgs.flatMap((m) => TEXTS.filter(([t]) => m.includes(t)).map(([, k]) => k));
 
   // a: 잠만보(칼춤), b: 잠만보 + 예비 하나 — b가 예비로 교체(행동 1번)하면 b 편(sideB) 설치물이 발동한다
@@ -72,7 +72,7 @@ export default async function ({ server, data, mon, battle, pts, check }) {
 
   // ── B2-g: 끈적끈적네트 — 접지 / 스피드 랭크 이미 -6 / 비접지 ──
   { const e = enter(mk(bench(), { stickyWeb: true })); check("8.3 B2-g: 끈적끈적네트 접지 → [stickyWeb], 스피드 -1", json(e.sw.hazardTriggers) === '["stickyWeb"]' && e.ns.b.stages.spe === -1, `${json(e.sw.hazardTriggers)} spe=${e.ns.b.stages.spe}`); }
-  { const e = enter(mk(bench(), { stickyWeb: true }, (f) => { f.stages = { ...f.stages, spe: -6 }; })); check("8.3 B2-g: 스피드 랭크 이미 -6 → 키 없음(현행 엔진은 랭크가 바뀔 때만 발동 문구, 불변식 유지)", !("hazardTriggers" in e.sw) && e.msgs.every((x) => !x.includes("끈적끈적네트")), json(e.msgs)); }
+  { const e = enter(mk(bench(), { stickyWeb: true }, (f) => { f.stages = { ...f.stages, spe: -6 }; })); check("8.3 B2-g: 스피드 랭크 이미 -6 → 발동 줄·이벤트는 남는다(8.3 D3-fix-36: Showdown은 접지면 발동 줄을 항상 낸다), 하락은 없다", json(e.sw.hazardTriggers) === '["stickyWeb"]' && e.ns.b.stages.spe === -6 && matches(e), json(e.msgs)); }
   { const e = enter(mk(bench("글라이온"), { stickyWeb: true })); check("8.3 B2-g: 비행 타입 → 키 없음", !("hazardTriggers" in e.sw), json(e.msgs)); }
 
   // ── B2-h: 4종 전부(접지 비독타입) — 이벤트 순서 = 문구 순서 (리터럴 순서를 박지 않는다) ──
@@ -137,7 +137,7 @@ export default async function ({ server, data, mon, battle, pts, check }) {
       [mk(bench(), { toxicSpikesLayers: 1 }), /^잠만보의 몸에 독이 퍼졌다!$/],
       [mk(bench(), { toxicSpikesLayers: 2 }), /^잠만보의 몸에 맹독이 퍼졌다!$/],
       [mk(bench("아보크"), { toxicSpikesLayers: 1 }), /^아보크는 독압정을 흡수했다!$/],
-      [mk(bench(), { stickyWeb: true }), /^잠만보는 끈적끈적네트에 걸려 스피드가 떨어졌다!$/],
+      [mk(bench(), { stickyWeb: true }), /^잠만보는 끈적끈적네트에 걸렸다!$/],
     ];
-    check("8.3 B2-n: 설치물 6종 문구가 구조화 전과 같다", pats.every(([st, re]) => { const m = enter(st).msgs; return m.length === 1 && re.test(m[0]); }), pats.map(([st]) => enter(st).msgs[0]).join(" | ")); }
+    check("8.3 B2-n: 설치물 6종 문구가 구조화 전과 같다", pats.every(([st, re]) => { const m = enter(st).msgs; return m.length === (re.source.includes("걸렸다") ? 2 : 1) && re.test(m[0]); }), pats.map(([st]) => enter(st).msgs[0]).join(" | ")); }
 }

@@ -2,10 +2,12 @@ import { effectiveHeldItem, itemsSuppressedByRoom } from "./turnOrderInputs";
 import { isGrounded } from "./grounding";
 import { type EntryHazardTrigger, type FighterKey, type SwitchLogEntry } from "@/types/battle";
 import { isUncopyableAbility } from "./abilityChange";
+import type { Ability } from "@/types/ability";
 import { NEUTRAL_ACCURACY_STAGES, NEUTRAL_CRIT_STAGE, NEUTRAL_STAGES, type BattleStatKey } from "@/types/battleStats";
 import { NO_STATUS_CONDITION, type StatusCondition, type VolatileCondition, type VolatileConditionState } from "@/types/status";
 import { getAbility, getItem, getPokemon } from "@/lib/data";
-import { eulReul, eunNeun, roEuro } from "@/lib/josa";
+import { eulReul, eunNeun, iGa, roEuro } from "@/lib/josa";
+import { STAT_LABELS } from "@/lib/statLabels";
 import { megaFormFullName } from "@/lib/pokemonForm";
 import { computeRealStats } from "@/lib/statCalculator";
 import { applyStageDelta } from "@/lib/statStages";
@@ -13,7 +15,7 @@ import { inflictStatus, isImmuneToStatus } from "@/lib/statusConditions";
 import { hasVolatile } from "@/lib/volatileConditions";
 import { calcSpikesDamage, calcStealthRockDamage } from "./entryCost";
 import { FIELD_DURATION, FIELD_ENTRY_ANNOUNCEMENT, isStatusBlockedByField } from "@/lib/fieldEffects";
-import { WEATHER_DURATION, setEffectiveAbility, abilityOf, activeWeather, applyForecastForm, applyMimicryForm, applyTransform, balloonEntryAnnouncement, cloneSide, consumeItem, contraryDelta, isFainted, opponentKey, sideOf, statusImmunitiesOf, weatherRockBonusOfItem, type BattleFighterState, type BattleState } from "./state";
+import { WEATHER_DURATION, setEffectiveAbility, abilityOf, activeWeather, applyForecastForm, applyMimicryForm, applyTransform, balloonEntryAnnouncement, cloneSide, consumeItem, contraryDelta, isFainted, opponentKey, sideOf, statDropBlockStatsOf, statusImmunitiesOf, weatherRockBonusOfItem, type BattleFighterState, type BattleState } from "./state";
 
 export function isTrappedFromSwitching(fighter: BattleFighterState, state?: BattleState): boolean {
   if (isFainted(fighter)) return false;
@@ -45,21 +47,92 @@ export function trappedByOpposingAbility(fighter: BattleFighterState, opposing: 
   return !!abilityOf(opposing)?.trapsOpponent;
 }
 
+const fighterName = (f: BattleFighterState): string => getPokemon(f.slot.pokemonId)?.name ?? "포켓몬";
+
+/**
+ * 상대발 랭크 하락 한 건의 공통 규칙(8.3 D3-fix-36, 위협·끈적끈적네트가 쓴다 — Showdown `boost()`).
+ * 순서: 미러아머 반사(원천에게 같은 하락을 되돌림) → 하락 방지(`statDropBlockStatsOf`, 위협은 "atk"·네트는 "spe" 스탯만) →
+ * 일반 하락(심술꾸러기 `contraryDelta`) → 실제로 내려갔을 때만 오기·승기 반응. 막히거나 반사되면 반응도 없다.
+ * 기술 경로(`mirroredEffects.ts` blockAndReflectStatDrops)와 같은 순서·같은 문구를 쓴다(통합은 E8 후보).
+ * `announce`는 막힘·반사·이미 -6일 때 결과 줄 앞에 내는 발동 줄이고, `droppedText`는 정상 하락 때 낼 한 줄(없으면 기본 문구)이다.
+ * 돌려주는 값: "dropped"(내려감) · "capped"(이미 -6 등으로 변화 없음) · "rose"(심술꾸러기로 오름) · "blocked" · "reflected".
+ */
+function applyOpponentStatDrop(
+  target: BattleFighterState,
+  source: BattleFighterState | undefined,
+  stat: BattleStatKey,
+  drop: number,
+  log: string[],
+  texts: { announce?: string; droppedText?: string } = {},
+): "dropped" | "capped" | "rose" | "blocked" | "reflected" {
+  const { announce, droppedText } = texts;
+  const targetName = fighterName(target);
+  const ability = abilityOf(target);
+  const label = STAT_LABELS[stat];
+  // 미러아머: 하락을 되돌린다(하락 방지 목록과 별개 필드 — statDropBlockStatsOf는 미러아머를 막는 특성으로 돌려주지 않는다)
+  if (ability?.reflectsOpponentStatDrops && source && !isFainted(source)) {
+    if (announce) log.push(announce);
+    log.push(`${targetName}의 ${ability.name}! 능력을 떨어뜨리는 효과를 되받아쳤다!`);
+    const sourceBefore = source.stages;
+    source.stages = applyStageDelta(source.stages, stat, -drop);
+    if (source.stages[stat] < sourceBefore[stat]) {
+      log.push(`${fighterName(source)}의 ${label}${iGa(label)} 떨어졌다!`);
+      reactToOwnStatDrop(source, sourceBefore, log);
+    }
+    return "reflected";
+  }
+  if (statDropBlockStatsOf(target, ability)?.includes(stat)) {
+    if (announce) log.push(announce);
+    log.push(`${targetName}의 ${ability!.name}! ${label}${iGa(label)} 떨어지지 않는다!`);
+    return "blocked";
+  }
+  const before = target.stages;
+  target.stages = applyStageDelta(target.stages, stat, contraryDelta(target, -drop));
+  if (target.stages[stat] === before[stat]) {
+    if (announce) log.push(announce);
+    log.push(`${targetName}의 ${label}${eunNeun(label)} 더 떨어지지 않는다!`);
+    return "capped";
+  }
+  if (target.stages[stat] > before[stat]) {
+    log.push(`${targetName}의 ${label}${iGa(label)} 올라갔다!`);
+    return "rose";
+  }
+  log.push(droppedText ?? `${targetName}의 ${label}${iGa(label)} 떨어졌다!`);
+  reactToOwnStatDrop(target, before, log);
+  return "dropped";
+}
+
+/** 오기·승기(boostsStatOnOwnStatDrop): 자신의 능력치가 실제로 내려갔으면(변화 없음 제외) 지정 랭크가 오른다 — 기술 경로 applyCompetitiveBoost와 같은 판정 */
+function reactToOwnStatDrop(fighter: BattleFighterState, before: BattleFighterState["stages"], log: string[]): void {
+  const ability = abilityOf(fighter);
+  const boost = ability?.boostsStatOnOwnStatDrop;
+  if (!boost || !(Object.keys(fighter.stages) as BattleStatKey[]).some((s) => fighter.stages[s] < before[s])) return;
+  const raised = fighter.stages[boost.stat];
+  fighter.stages = applyStageDelta(fighter.stages, boost.stat, boost.delta);
+  if (fighter.stages[boost.stat] !== raised) {
+    const label = STAT_LABELS[boost.stat];
+    log.push(`${fighterName(fighter)}의 ${ability!.name}! ${label}${iGa(label)} ${boost.delta >= 2 ? "크게 " : ""}올라갔다!`);
+  }
+}
+
 /**
  * 위협(lowersOpponentStatOnEntry)을 opponent에게 적용하되, opponent의 특성 반응까지 처리한다.
+ *  - 정신력류(immuneToIntimidate): 위협을 받지 않는다.
  *  - 파수견(guardsAgainstIntimidate): 하락을 무시하고 공격이 1랭크 오른다.
- *  - 주눅(raisesStatWhenIntimidated): 공격은 정상적으로 떨어지고, 스피드도 1랭크 오른다.
- *  - 그 외: 정상 하락.
+ *  - 미러아머·클리어바디류·오기·승기: 상대발 하락 공통 규칙(applyOpponentStatDrop) — 위협의 stat("atk")만 막는다(8.3 D3-fix-36).
+ *  - 주눅(raisesStatWhenIntimidated): 하락이 들어간(막히거나 반사되지 않은) 위협에 스피드도 1랭크 오른다.
  * 로그 문구를 log 배열에 push한다(등장 안내 텍스트 전용 흐름이라 문구는 고정형).
  */
 export function applyIntimidateWithReaction(
   opponent: BattleFighterState,
-  intimidate: { stat: BattleStatKey; delta: number },
-  intimidaterName: string,
-  intimidateAbilityName: string,
-  opponentName: string,
+  intimidater: BattleFighterState,
+  intimidateAbility: Ability,
   log: string[],
 ): void {
+  const intimidate = intimidateAbility.lowersOpponentStatOnEntry!;
+  const intimidaterName = fighterName(intimidater);
+  const intimidateAbilityName = intimidateAbility.name;
+  const opponentName = fighterName(opponent);
   const oppAbility = opponent.effectiveAbilityId ? getAbility(opponent.effectiveAbilityId) : undefined;
   // 정신력·마이페이스·둔감(트랙 M3): 위협을 아예 받지 않는다
   if (oppAbility?.immuneToIntimidate) {
@@ -74,13 +147,12 @@ export function applyIntimidateWithReaction(
     }
     return;
   }
-  const before = opponent.stages[intimidate.stat];
-  opponent.stages = applyStageDelta(opponent.stages, intimidate.stat, contraryDelta(opponent, intimidate.delta));
-  if (opponent.stages[intimidate.stat] !== before) {
-    log.push(`${intimidaterName}의 ${intimidateAbilityName}! 상대의 공격이 떨어졌다!`);
-  }
-  // 주눅은 스피드만 올리므로 문구를 고정한다.
-  if (oppAbility?.raisesStatWhenIntimidated) {
+  const result = applyOpponentStatDrop(opponent, intimidater, intimidate.stat, -intimidate.delta, log, {
+    announce: `${intimidaterName}의 ${intimidateAbilityName}!`,
+    droppedText: `${intimidaterName}의 ${intimidateAbilityName}! 상대의 공격이 떨어졌다!`,
+  });
+  // 주눅은 스피드만 올리므로 문구를 고정한다. 막히거나 반사된 위협에는 반응하지 않는다.
+  if (result !== "blocked" && result !== "reflected" && oppAbility?.raisesStatWhenIntimidated) {
     const { stat, delta } = oppAbility.raisesStatWhenIntimidated;
     const b2 = opponent.stages[stat];
     opponent.stages = applyStageDelta(opponent.stages, stat, contraryDelta(opponent, delta));
@@ -198,13 +270,11 @@ function applyEntryHazardsOnSwitchIn(state: BattleState, key: FighterKey, log: s
       hits.push("toxicSpikes");
     }
 
+    // 끈적끈적네트: 접지면 발동 줄을 항상 내고(이벤트도 항상), 결과는 상대발 하락 공통 규칙(클리어바디·미러아머·오기·승기, 8.3 D3-fix-36). 원천은 상대 활성
     if (hz.stickyWeb) {
-      const before = self.stages.spe;
-      self.stages = applyStageDelta(self.stages, "spe", contraryDelta(self, -1));
-      if (self.stages.spe !== before) {
-        log.push(`${selfName}${eunNeun(selfName)} 끈적끈적네트에 걸려 스피드가 떨어졌다!`);
-        hits.push("stickyWeb");
-      }
+      log.push(`${selfName}${eunNeun(selfName)} 끈적끈적네트에 걸렸다!`);
+      hits.push("stickyWeb");
+      applyOpponentStatDrop(self, state[opponentKey(key)], "spe", 1, log);
     }
   }
   return hits;
@@ -268,15 +338,7 @@ function applyEntryAbilityOnSwitchIn(state: BattleState, key: FighterKey, log: s
 
   // 위협류 (파수견·주눅 반응 포함)
   if (ability.lowersOpponentStatOnEntry && !isFainted(opponent)) {
-    const opponentName = getPokemon(opponent.slot.pokemonId)?.name ?? "상대";
-    applyIntimidateWithReaction(
-      opponent,
-      ability.lowersOpponentStatOnEntry,
-      selfName,
-      ability.name,
-      opponentName,
-      log,
-    );
+    applyIntimidateWithReaction(opponent, self, ability, log);
   }
   // 가뭄·잔비·모래날림·눈퍼뜨리기: 다른 날씨는 덮어쓰고, 이미 같은 날씨면 아무 일도 없다 — 남은 턴도
   // 다시 채우지 않고 발동 문구도 없다(본가 6세대 이후 규칙, 기술 setsWeather의 실패와 같은 축).
