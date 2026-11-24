@@ -1,5 +1,5 @@
-// fix-34 검수 실행 대조 (Showdown 965a535). node fix34-run.js [Showdown 경로]
-// 2026-11-24 검수 채팅에서는 `node build`가 차단되어 미실행 — 집 PC(~/showdown-ref, dist 빌드 후)에서 실행한다.
+// fix-34 검수 실행 대조 (Showdown 965a535). 사용: node showdown-build.cjs ~/showdown-ref <출력 폴더> <프로젝트>/node_modules/typescript/lib/typescript.js 로 빌드한 뒤 node fix-34-run.cjs <출력 폴더>(프로젝트 package.json이 ESM이라 .cjs)
+// 2026-11-24 회사 PC에서 showdown-build.cjs(TypeScript 변환)로 실행해 확인했다. 원본 대비 수정: 로그 중복 줄 제거, 동속 파싱(slice)·Leftovers 정규식, setTerrain 소스 인자.
 const PS = process.argv[2] || require('os').homedir() + '/showdown-ref';
 const {Battle, Teams} = require(PS + '/dist/sim');
 const F = 'gen9championsbssregmc';
@@ -13,7 +13,8 @@ function start({bench = false, item = '', seed = [1, 2, 3, 4], spe = [100, 100]}
 }
 const turn = b => {
 	const n = b.log.length; b.makeChoices('move 1', 'move 1');
-	return b.log.slice(n).filter(l => /^\|(-damage|-heal|faint|win|-start\|.*perish)/.test(l));
+	// 같은 사건이 `|split|` 때문에 공개용·비공개용으로 두 번 찍히므로 연속 중복 줄은 하나로 줄인다
+	return b.log.slice(n).filter(l => /^\|(-damage|-heal|faint|win|-start\|.*perish)/.test(l)).filter((l, i, a) => l !== a[i - 1]);
 };
 const out = (k, ...a) => console.log(`[${k}]`, ...a);
 const SP = [[200, 100], [100, 200]];
@@ -50,14 +51,14 @@ for (const spe of SP) { // 자리 효과: 양쪽 희망사항 → 자리 주인 
 	for (let s = 1; s <= 200; s++) {
 		const [b, a, d] = start({item: 'Leftovers', seed: [s, 7, 7, 7]});
 		a.setStatus('psn'); d.setStatus('psn'); a.sethp(100); d.sethp(100);
-		const l = turn(b), first = re => l.find(x => re.test(x))?.slice(7, 9);
-		const k = `먹다남은=${first(/-heal.*leftovers/)}먼저 독=${first(/-damage.*psn/)}먼저`;
+		const l = turn(b), first = (re, o = 7) => l.find(x => re.test(x))?.slice(o, o + 2);
+		const k = `먹다남은=${first(/-heal.*Leftovers/)}먼저 독=${first(/-damage.*psn/, 9)}먼저`;
 		combo[k] = (combo[k] || 0) + 1;
 	}
 	out('동속', JSON.stringify(combo));
 }
 { // 동속 + 그래스필드(5/2)·먹다남은음식(5/4): 그래스필드 2줄이 먹다남은음식 2줄보다 모두 먼저인가
-	const [b, a, d] = start({item: 'Leftovers'}); a.sethp(50); d.sethp(50); b.field.setTerrain('grassyterrain');
+	const [b, a, d] = start({item: 'Leftovers'}); a.sethp(50); d.sethp(50); b.field.setTerrain('grassyterrain', a);
 	out('동속교차', turn(b).filter(l => l.startsWith('|-heal')).map(l => l.slice(7, 9) + (l.includes('Leftovers') ? '먹다남은' : '필드')).join(' > '));
 }
 for (const spe of SP) { // 모래바람 동시 기절(예비 없음): 둘 다 faint 줄, 느린 쪽 승
