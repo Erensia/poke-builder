@@ -93,6 +93,19 @@ export function isOpponentTargetingMove(move: Move): boolean {
 }
 
 /**
+ * 매직미러가 되돌릴 수 있는 변화기 — Showdown `reflectable` 플래그와 같은 집합(8.3 D3-fix-44, E8-10).
+ * 상대를 향한 효과가 있는 변화기·설치기에 더해 강제 교체(울부짖기·날려버리기)·뒤집어엎기를 포함한다. `isOpponentTargetingMove`에 이 기술들을 넣으면
+ * 사이코필드 우선도 차단·방어 판정까지 바뀌므로 반사 전용으로 따로 둔다. 엔진(preHitEffects)과 AI(statusMoveEffects·opponentMoveModel)가 같은 함수를 쓴다.
+ */
+export function isMagicBounceReflectable(move: Move): boolean {
+  return (
+    move.category === "status" &&
+    !move.notReflectable &&
+    (isOpponentTargetingMove(move) || !!move.setsHazard || !!move.forcesTargetSwitch || !!move.invertsTargetStatStages)
+  );
+}
+
+/**
  * 상대(대상)가 살아 있어야 실행되는 기술인지(7.3 B4). isOpponentTargetingMove에 더해, 대상의 능력 랭크·특성·타입·스피드를 읽거나
  * 바꾸는 변화기(변신·미러타입·역할·자기암시·가드스왑·파워스왑·파워셰어·가드셰어·스피드스왑·힘흡수·뒤집어엎기·송전)와 강제 교체(울부짖기·날려버리기)를 포함한다.
  * 이 기술들은 방어·사이코필드 판정에는 쓰이지 않아 isOpponentTargetingMove는 그대로 둔다. 먼저 움직인 상대가 쓰러진 턴에 뒤 행동을 생략할지 판단하는 데 쓴다.

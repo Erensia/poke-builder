@@ -456,6 +456,11 @@ function forceTargetSwitch(ctx: RunTurnContext, key: FighterKey, action: ActionL
   const { state } = ctx;
   const mv = action.move;
   const oppKey = opponentKey(key);
+  // 매직미러로 반사된 강제 교체는 같은 기술을 사용자에게 다시 쓴 것이라 끌려 나가는 쪽이 사용자다(Showdown `reflectable`, 8.3 D3-fix-44·E8-10).
+  const bounced = !!action.bouncedMoveName;
+  const targetKey = bounced ? key : oppKey;
+  const sourceKey = bounced ? oppKey : key;
+  const abilityOfFighter = (f: (typeof state)[FighterKey]) => (f.effectiveAbilityId ? getAbility(f.effectiveAbilityId) : undefined);
   let oppForcedOut = false;
   // 드래곤테일·배대뒤치기·울부짖기·날려버리기: 명중해서(빗나감·행동불능·방어·대타·방음·매직미러·
   // 특성 무효 제외) 상대에게 살아있는 예비가 있고 흡반·뿌리박기로 저항하지 않으면 — 상대를 무작위
@@ -474,16 +479,17 @@ function forceTargetSwitch(ctx: RunTurnContext, key: FighterKey, action: ActionL
     !action.hitNegatedByAbilityName &&
     !action.abilityAbsorbAbilityName &&
     !action.soundproofBlockedByAbilityName &&
-    !action.bouncedMoveName &&
-    !isFainted(state[oppKey]) &&
-    hasLivingReserve(sideOf(state, oppKey)) &&
-    !isForcedSwitchBlocked(state[oppKey], state[key].effectiveAbilityId ? getAbility(state[key].effectiveAbilityId) : undefined)
+    // 반사된 소리 기술(울부짖기)은 원래 사용자의 방음이 막는다(Showdown 방음 `onTryHit`의 target = 사용자, fix-44 Q1).
+    !(bounced && (mv.classification ?? []).includes("소리") && abilityOfFighter(state[targetKey])?.blocksSound) &&
+    !isFainted(state[targetKey]) &&
+    hasLivingReserve(sideOf(state, targetKey)) &&
+    !isForcedSwitchBlocked(state[targetKey], abilityOfFighter(state[sourceKey]))
   ) {
-    forceRandomSwitch(ctx.state, ctx.random, ctx.switches, oppKey);
+    forceRandomSwitch(ctx.state, ctx.random, ctx.switches, targetKey);
     // 아직 안 움직였다면 이번 턴 행동을 못 하게 막는다(끌려나온 포켓몬). 우선도 -6이라 대개
     // 상대는 이미 움직인 뒤라 이 플래그는 무해하게 무시된다.
-    ctx.didSwitch[oppKey] = true;
-    oppForcedOut = true;
+    ctx.didSwitch[targetKey] = true;
+    oppForcedOut = !bounced; // 반사되면 방어측(매직미러)은 그대로라 위기회피·탈출버튼 가드(oppForcedOut)에 걸리지 않는다
   }
   return oppForcedOut;
 }

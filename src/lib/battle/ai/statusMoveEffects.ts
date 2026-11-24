@@ -4,7 +4,7 @@ import { getItem, getMove } from "@/lib/data";
 import { NO_STATUS_CONDITION, type StatusCondition } from "@/types/status";
 import { applyMoveStatChanges, applyStageDelta } from "@/lib/statStages";
 import { resolveEffectiveDefenderAbility } from "@/lib/abilityModifiers";
-import { isConfusionBlockedByField, isOpponentTargetingMove, isStatusBlockedByField } from "@/lib/fieldEffects";
+import { isConfusionBlockedByField, isMagicBounceReflectable, isOpponentTargetingMove, isStatusBlockedByField } from "@/lib/fieldEffects";
 import { inflictStatus, isImmuneToStatus } from "@/lib/statusConditions";
 import { FIELD_DURATION } from "@/lib/fieldEffects";
 import { hasVolatile, inflictVolatile } from "@/lib/volatileConditions";
@@ -345,7 +345,7 @@ export function effectMoveFails(state: BattleState, key: FighterKey, move: Move)
   const userAbility = abilityOf(me);
   const targetAbility = resolveEffectiveDefenderAbility(userAbility, abilityOf(target));
   const targetsOpponent = isOpponentTargetingMove(move);
-  if (targetAbility?.reflectsOpponentStatusMoves && !move.notReflectable && (targetsOpponent || !!move.setsHazard)) return true;
+  if (targetAbility?.reflectsOpponentStatusMoves && isMagicBounceReflectable(move)) return true;
 
   if (move.setsHazard) {
     const hz = sideOf(state, oppKey).hazards;
