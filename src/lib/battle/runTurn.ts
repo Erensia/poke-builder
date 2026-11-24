@@ -397,7 +397,7 @@ function selfPivotChoice(ctx: RunTurnContext, key: FighterKey, action: ActionLog
 /**
  * 레드카드·탈출버튼 공통(8.3 A4-b): 이번 행동이 방어측 본체에 닿았는가 — Showdown의 AfterMoveSecondary 대상 판정.
  * 데미지량은 보지 않는다(탈이 벗겨지는 적중도 맞은 것). 빗나감·행동불능·타입 면역·방어/대타가 막음·대타가 깎임·흡수 특성 무효·상태 기술은 제외,
- * 우격다짐이 추가효과를 위력으로 바꾼 행동(sheerForceAbilityName)은 이 효과들이 발동하지 않는다. 홀더 생존·예비 등 편 상태 조건은 호출부에서 본다.
+ * 우격다짐이 추가효과를 위력으로 바꾼 행동(sheerForceAbilityName)이어도 발동한다 — 포챔스는 `AfterMoveSecondary`를 우격다짐이 억제하지 않는다(champions `scripts.ts` 424행, 8.3 D3-fix-43·E8-09). 홀더 생존·예비 등 편 상태 조건은 호출부에서 본다.
  * ponytail: 미래예지 경로(finishTurn.applyFutureSight)는 입력 형태가 달라 같은 조건을 따로 쓴다 — 세 번째 호출처가 생기면 공용 함수로 뽑는다.
  */
 function hitReachedBody(action: ActionLogEntry): boolean {
@@ -411,8 +411,7 @@ function hitReachedBody(action: ActionLogEntry): boolean {
     !action.hitSubstitute &&
     !action.abilityAbsorbAbilityName &&
     !action.soundproofBlockedByAbilityName &&
-    !action.bouncedMoveName &&
-    !action.sheerForceAbilityName
+    !action.bouncedMoveName
   );
 }
 
@@ -495,11 +494,10 @@ function emergencyExitChoice(ctx: RunTurnContext, key: FighterKey, action: Actio
   const oppKey = opponentKey(key);
   // 위기회피(Emergency Exit): 이번 공격으로 방어측 HP가 절반 이하로 떨어졌고 방어측에 살아있는
   // 예비가 있으면 — 도망봉인·뿌리박기여도(Showdown은 canSwitch만 본다, 8.3 A4-b) 유턴류와 같은 pause 흐름으로 방어측을 물러나게
-  // 한다. 우격다짐이 추가효과를 위력으로 바꾼 행동이면 발동하지 않는다(유저가 나올 포켓몬을 고른다). 드래곤테일 등으로 이번 피격에 이미 교체됐으면(oppForcedOut) 스킵.
+  // 한다. 우격다짐이 추가효과를 위력으로 바꾼 행동이어도 발동한다(포챔스 `EmergencyExit`는 우격다짐이 억제하지 않는다 — fix-43·E8-09. 유저가 나올 포켓몬을 고른다). 드래곤테일 등으로 이번 피격에 이미 교체됐으면(oppForcedOut) 스킵.
   // didSwitch[oppKey]는 턴 시작 자발 교체로도 서므로(그 턴 행동 생략용) 이 가드엔 쓰면 안 된다.
   if (
     action.triggersDefenderEmergencyExit &&
-    !action.sheerForceAbilityName &&
     !isFainted(state[oppKey]) &&
     !oppForcedOut &&
     hasLivingReserve(sideOf(state, oppKey))
