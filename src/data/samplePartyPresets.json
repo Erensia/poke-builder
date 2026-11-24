@@ -8915,5 +8915,136 @@
     }
    }
   ]
+ },
+ {
+  "id": "real-m8-mega-salamence-dd",
+  "name": "M-8시즌 용춤형 메가보만다 주축 파티",
+  "style": "사이클",
+  "group": "real",
+  "description": "기본중의 기본인 용춤형 메가보만다를 중심구축으로 사이클을 굴리는 파티",
+  "slots": [
+   {
+    "pokemonId": "보만다",
+    "moves": [
+     "이판사판태클",
+     "지진",
+     "용의춤",
+     "날개쉬기"
+    ],
+    "ability": "위협",
+    "item": "보만다나이트",
+    "nature": "고집",
+    "points": {
+     "hp": 25,
+     "atk": 9,
+     "def": 0,
+     "spa": 0,
+     "spd": 0,
+     "spe": 32
+    },
+    "activeMegaForm": "보만다-메가"
+   },
+   {
+    "pokemonId": "하마돈",
+    "moves": [
+     "하품",
+     "스텔스록",
+     "지진",
+     "날려버리기"
+    ],
+    "ability": "모래날림",
+    "item": "자뭉열매",
+    "nature": "신중",
+    "points": {
+     "hp": 32,
+     "atk": 0,
+     "def": 5,
+     "spa": 0,
+     "spd": 28,
+     "spe": 1
+    }
+   },
+   {
+    "pokemonId": "타부자고",
+    "moves": [
+     "골드러시",
+     "섀도볼",
+     "HP회복",
+     "트릭"
+    ],
+    "ability": "황금몸",
+    "item": "구애스카프",
+    "nature": "겁쟁이",
+    "points": {
+     "hp": 1,
+     "atk": 0,
+     "def": 0,
+     "spa": 32,
+     "spd": 1,
+     "spe": 32
+    }
+   },
+   {
+    "pokemonId": "히트로토무",
+    "moves": [
+     "오버히트",
+     "볼트체인지",
+     "도깨비불",
+     "아픔나누기"
+    ],
+    "ability": "부유",
+    "item": "먹다남은음식",
+    "nature": "차분",
+    "points": {
+     "hp": 32,
+     "atk": 0,
+     "def": 23,
+     "spa": 0,
+     "spd": 11,
+     "spe": 0
+    }
+   },
+   {
+    "pokemonId": "엠페르트",
+    "moves": [
+     "파도타기",
+     "냉동빔",
+     "하품",
+     "진공파"
+    ],
+    "ability": "승기",
+    "item": "풍선",
+    "nature": "조심",
+    "points": {
+     "hp": 32,
+     "atk": 0,
+     "def": 0,
+     "spa": 32,
+     "spd": 0,
+     "spe": 2
+    }
+   },
+   {
+    "pokemonId": "플라엣테영원의꽃",
+    "moves": [
+     "문포스",
+     "광합성",
+     "대타출동",
+     "명상"
+    ],
+    "ability": "플라워베일",
+    "item": "플라엣테나이트",
+    "nature": "겁쟁이",
+    "points": {
+     "hp": 26,
+     "atk": 0,
+     "def": 7,
+     "spa": 1,
+     "spd": 0,
+     "spe": 32
+    },
+    "activeMegaForm": "플라엣테-메가"
+   }
+  ]
  }
 ]
