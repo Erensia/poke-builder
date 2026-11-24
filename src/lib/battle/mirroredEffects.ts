@@ -18,7 +18,7 @@ import { isGrounded } from "./grounding";
 import { eatBerryNow } from "./fling";
 import { type ItemEffectLog, type SpinCleared, type SpinClearedHazard } from "@/types/battle";
 import { cureConditionsBlockedByAbility, isFixedAbility, isUncopyableAbility } from "./abilityChange";
-import { SWITCH_PASS_MOVE_ID, setEffectiveAbility, activeWeather, applyTransform, consumeItem, contraryDelta, contraryMoveFor, emptyHazardState, hasCourtChangeEffects, hasLivingReserve, isFainted, isItemRemovable, sideOf, statDropBlockStatsOf, statusImmunitiesOf, type BattleFighterState, type BattleState } from "./state";
+import { SWITCH_PASS_MOVE_ID, layHazard, setEffectiveAbility, activeWeather, applyTransform, consumeItem, contraryDelta, contraryMoveFor, emptyHazardState, hasCourtChangeEffects, hasLivingReserve, isFainted, isItemRemovable, sideOf, statDropBlockStatsOf, statusImmunitiesOf, type BattleFighterState, type BattleState } from "./state";
 import { triggerTerrainSeeds } from "./switching";
 
 interface MirroredMoveEffectsInput {
@@ -1797,16 +1797,16 @@ function protectAndFieldSetup(c: MirroredCtx) {
     let didSet = false;
     switch (c.effectiveMove.setsHazard) {
       case "stealthRock":
-        if (!hz.stealthRock) { hz.stealthRock = true; didSet = true; c.stealthRockSetForSide = hazardSide; }
+        if (!hz.stealthRock) { hz.stealthRock = true; layHazard(hz, "stealthRock"); didSet = true; c.stealthRockSetForSide = hazardSide; }
         break;
       case "spikes":
-        if (hz.spikesLayers < 3) { hz.spikesLayers += 1; didSet = true; c.spikesSetForSide = hazardSide; }
+        if (hz.spikesLayers < 3) { if (hz.spikesLayers === 0) layHazard(hz, "spikes"); hz.spikesLayers += 1; didSet = true; c.spikesSetForSide = hazardSide; }
         break;
       case "toxicSpikes":
-        if (hz.toxicSpikesLayers < 2) { hz.toxicSpikesLayers += 1; didSet = true; c.toxicSpikesSetForSide = hazardSide; }
+        if (hz.toxicSpikesLayers < 2) { if (hz.toxicSpikesLayers === 0) layHazard(hz, "toxicSpikes"); hz.toxicSpikesLayers += 1; didSet = true; c.toxicSpikesSetForSide = hazardSide; }
         break;
       case "stickyWeb":
-        if (!hz.stickyWeb) { hz.stickyWeb = true; didSet = true; c.stickyWebSetForSide = hazardSide; }
+        if (!hz.stickyWeb) { hz.stickyWeb = true; layHazard(hz, "stickyWeb"); didSet = true; c.stickyWebSetForSide = hazardSide; }
         break;
     }
     // 비검천중파·암석액스처럼 명중 부가효과로 까는 데미지기는 "이미 최대"여도 공격 자체는 성공이라

@@ -1,6 +1,6 @@
 import { effectiveHeldItem, itemsSuppressedByRoom } from "./turnOrderInputs";
 import { isGrounded } from "./grounding";
-import { type EntryHazardTrigger, type FighterKey, type SwitchLogEntry } from "@/types/battle";
+import { type EntryHazardTrigger, type FighterKey, type HazardKind, type SwitchLogEntry } from "@/types/battle";
 import { isUncopyableAbility } from "./abilityChange";
 import type { Ability } from "@/types/ability";
 import { NEUTRAL_ACCURACY_STAGES, NEUTRAL_CRIT_STAGE, NEUTRAL_STAGES, type BattleStatKey } from "@/types/battleStats";
@@ -15,7 +15,7 @@ import { inflictStatus, isImmuneToStatus } from "@/lib/statusConditions";
 import { hasVolatile } from "@/lib/volatileConditions";
 import { calcSpikesDamage, calcStealthRockDamage } from "./entryCost";
 import { FIELD_DURATION, FIELD_ENTRY_ANNOUNCEMENT, isStatusBlockedByField } from "@/lib/fieldEffects";
-import { WEATHER_DURATION, setEffectiveAbility, abilityOf, activeWeather, applyForecastForm, applyMimicryForm, applyTransform, balloonEntryAnnouncement, cloneSide, consumeItem, contraryDelta, isFainted, opponentKey, sideOf, statDropBlockStatsOf, statusImmunitiesOf, weatherRockBonusOfItem, type BattleFighterState, type BattleState } from "./state";
+import { WEATHER_DURATION, setEffectiveAbility, abilityOf, activeWeather, applyForecastForm, applyMimicryForm, applyTransform, balloonEntryAnnouncement, cloneSide, consumeItem, contraryDelta, hazardEntryOrder, isFainted, opponentKey, sideOf, statDropBlockStatsOf, statusImmunitiesOf, weatherRockBonusOfItem, type BattleFighterState, type BattleState } from "./state";
 
 export function isTrappedFromSwitching(fighter: BattleFighterState, state?: BattleState): boolean {
   if (isFainted(fighter)) return false;
@@ -212,11 +212,13 @@ export function computeIllusionTarget(party: BattleFighterState[], selfIndex: nu
 }
 
 /**
- * 교체로 나온 포켓몬이 상대 진영 설치물을 밟을 때의 처리(Phase 8 §6). performSwitch에서
- * 등장 특성보다 먼저 호출한다. 순서:
- *  1. 접지한 독타입이면 독압정을 흡수해 제거(비접지면 흡수 못 함 — 설치물이 남는다)
- *  2. 스텔스록 등장 데미지(바위 상성 배율, 매직가드가 막음)
- *  3. 접지 상태면: 압정뿌리기 데미지(매직가드가 막음) → 독압정 중독 → 끈적끈적네트 스피드 -1
+ * 교체로 나온 포켓몬이 상대 진영 설치물을 밟을 때의 처리(Phase 8 §6). performSwitch가 부르는 runEntryEffects의 ② 단계.
+ * 설치물은 **설치한 순서대로** 하나씩 발동한다(8.3 D3-fix-41, Showdown `effectOrder` — `hazardEntryOrder`: 기록된 순서 뒤에 기록 없는 것은 스텔스록 → 압정 → 독압정 → 네트),
+ * 핸들러 하나가 끝날 때마다 포켓몬이 기절했으면 뒤 설치물은 처리하지 않는다(Showdown `fieldEvent`가 기절한 보유자를 건너뜀).
+ *  - 스텔스록: 접지 무관, 바위 상성 배율(매직가드가 막음)
+ *  - 압정뿌리기: 접지 대상만, 층별 데미지(매직가드가 막음)
+ *  - 독압정: 접지 대상만 — 독타입이면 흡수해 제거, 아니면 독·맹독 중독(강철·세이프가드·필드 차단 등은 막음)
+ *  - 끈적끈적네트: 접지 대상만 — 발동 줄 + 스피드 하락(하락 방지·미러아머·오기 등은 applyOpponentStatDrop)
  * 문구를 push하는 자리마다 같은 이름의 이벤트도 기록해 돌려준다(8.3 B2) — 화면 연출이 문구 대신 이 목록을 읽는다. 문구가 나온 때와 1:1이고 순서도 같다.
  */
 function applyEntryHazardsOnSwitchIn(state: BattleState, key: FighterKey, log: string[]): EntryHazardTrigger[] {
@@ -226,58 +228,56 @@ function applyEntryHazardsOnSwitchIn(state: BattleState, key: FighterKey, log: s
   const hz = sideOf(state, key).hazards;
   const selfName = getPokemon(self.slot.pokemonId)?.name ?? "포켓몬";
   const selfAbility = abilityOf(self);
-  // 트랙 M4: 중력·전자부유·풍선·떨어뜨리기까지 반영한 접지 판정. 독압정은 접지가 아니면 흡수도 중독도 없다(8.3 D3-fix-35, Showdown `toxicspikes.onSwitchIn`의 첫 줄)
+  // 트랙 M4: 중력·전자부유·풍선·떨어뜨리기까지 반영한 접지 판정. 독압정·압정·네트는 접지가 아니면 아무 일도 없다(8.3 D3-fix-35)
   const selfGrounded = isGrounded(state, self, selfAbility);
 
-  // 1. 접지한 독타입 등장 → 독압정 흡수
-  if (hz.toxicSpikesLayers > 0 && selfGrounded && self.types.includes("독")) {
-    hz.toxicSpikesLayers = 0;
-    log.push(`${selfName}${eunNeun(selfName)} 독압정을 흡수했다!`);
-    hits.push("toxicSpikesAbsorbed");
-  }
-
-  // 2. 스텔스록 (접지 무관, 바위 상성)
-  const stealthRockDamage = calcStealthRockDamage(self.maxHp, self.types, selfAbility, hz);
-  if (stealthRockDamage > 0) {
-    self.currentHp = Math.max(0, self.currentHp - stealthRockDamage);
-    log.push(`뾰족한 바위가 ${selfName}${eulReul(selfName)} 덮쳤다! (${stealthRockDamage} 데미지)`);
-    hits.push("stealthRock");
-  }
-  if (isFainted(self)) return hits;
-
-  // 3. 접지 대상만: 압정뿌리기 · 독압정 · 끈적끈적네트
-  if (selfGrounded) {
-    const spikesDamage = calcSpikesDamage(self.maxHp, self.types, selfAbility, hz, selfGrounded);
-    if (spikesDamage > 0) {
-      self.currentHp = Math.max(0, self.currentHp - spikesDamage);
-      log.push(`${selfName}${eunNeun(selfName)} 압정에 상처를 입었다! (${spikesDamage} 데미지)`);
+  const handlers: Record<HazardKind, () => void> = {
+    stealthRock: () => {
+      const damage = calcStealthRockDamage(self.maxHp, self.types, selfAbility, hz);
+      if (damage <= 0) return;
+      self.currentHp = Math.max(0, self.currentHp - damage);
+      log.push(`뾰족한 바위가 ${selfName}${eulReul(selfName)} 덮쳤다! (${damage} 데미지)`);
+      hits.push("stealthRock");
+    },
+    spikes: () => {
+      if (!selfGrounded) return;
+      const damage = calcSpikesDamage(self.maxHp, self.types, selfAbility, hz, selfGrounded);
+      if (damage <= 0) return;
+      self.currentHp = Math.max(0, self.currentHp - damage);
+      log.push(`${selfName}${eunNeun(selfName)} 압정에 상처를 입었다! (${damage} 데미지)`);
       hits.push("spikes");
-    }
-    if (isFainted(self)) return hits;
-
-    if (
-      hz.toxicSpikesLayers > 0 &&
-      !self.status.condition &&
-      !isImmuneToStatus(hz.toxicSpikesLayers >= 2 ? "badly-poisoned" : "poison", self.types, statusImmunitiesOf(self, selfAbility)) &&
-      !isStatusBlockedByField(state.field, "poison", selfGrounded) &&
-      sideOf(state, key).safeguardTurnsRemaining === undefined
-    ) {
-      const cond: StatusCondition = hz.toxicSpikesLayers >= 2 ? "badly-poisoned" : "poison";
-      self.status = inflictStatus(self.status, cond);
-      log.push(
-        cond === "badly-poisoned"
-          ? `${selfName}의 몸에 맹독이 퍼졌다!`
-          : `${selfName}의 몸에 독이 퍼졌다!`,
-      );
-      hits.push("toxicSpikes");
-    }
-
+    },
+    toxicSpikes: () => {
+      if (!selfGrounded) return;
+      if (self.types.includes("독")) {
+        hz.toxicSpikesLayers = 0;
+        log.push(`${selfName}${eunNeun(selfName)} 독압정을 흡수했다!`);
+        hits.push("toxicSpikesAbsorbed");
+        return;
+      }
+      if (
+        !self.status.condition &&
+        !isImmuneToStatus(hz.toxicSpikesLayers >= 2 ? "badly-poisoned" : "poison", self.types, statusImmunitiesOf(self, selfAbility)) &&
+        !isStatusBlockedByField(state.field, "poison", selfGrounded) &&
+        sideOf(state, key).safeguardTurnsRemaining === undefined
+      ) {
+        const cond: StatusCondition = hz.toxicSpikesLayers >= 2 ? "badly-poisoned" : "poison";
+        self.status = inflictStatus(self.status, cond);
+        log.push(cond === "badly-poisoned" ? `${selfName}의 몸에 맹독이 퍼졌다!` : `${selfName}의 몸에 독이 퍼졌다!`);
+        hits.push("toxicSpikes");
+      }
+    },
     // 끈적끈적네트: 접지면 발동 줄을 항상 내고(이벤트도 항상), 결과는 상대발 하락 공통 규칙(클리어바디·미러아머·오기·승기, 8.3 D3-fix-36). 원천은 상대 활성
-    if (hz.stickyWeb) {
+    stickyWeb: () => {
+      if (!selfGrounded) return;
       log.push(`${selfName}${eunNeun(selfName)} 끈적끈적네트에 걸렸다!`);
       hits.push("stickyWeb");
       applyOpponentStatDrop(self, state[opponentKey(key)], "spe", 1, log);
-    }
+    },
+  };
+  for (const kind of hazardEntryOrder(hz)) {
+    handlers[kind]();
+    if (isFainted(self)) break;
   }
   return hits;
 }

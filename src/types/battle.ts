@@ -25,7 +25,15 @@ export interface SpinCleared {
   bound?: true;
 }
 
+/** 설치물 종류(8.3 D3-fix-41 — 설치 순서 기록·발동 핸들러의 키) */
+export type HazardKind = "stealthRock" | "spikes" | "toxicSpikes" | "stickyWeb";
+
 export interface HazardState {
+  /**
+   * 이 편에 설치물을 처음 깐 순서(마지막에 깐 것이 맨 뒤, 8.3 D3-fix-41). 선택 필드 — 없거나 일부가 빠지면 기본 순서(스텔스록 → 압정 → 독압정 → 네트)로 채운다(`hazardEntryOrder`).
+   * 제자리 변경하지 않고 `layHazard`로만 새 배열로 바꾼다(cloneSide가 배열을 공유해도 안전). 지워진 항목이 남아 있어도 읽을 때 "현재 깔린 것만" 거른다.
+   */
+  order?: HazardKind[];
   /** 스텔스록(1장 고정). 등장 시 바위 상성 배율로 데미지(§6). */
   stealthRock: boolean;
   /** 압정뿌리기 층수 0~3. 등장 시 1→1/8 · 2→1/6 · 3→1/4 데미지(§6, 8.3 D3-fix-39에서 Showdown 비율로 정정). 비접지는 무시. */

@@ -21,7 +21,7 @@ import { getWeatherDamageMultiplier, getWeatherDefenseMultiplier } from "@/lib/w
 import { FIELD_DURATION, getFieldDamageMultiplier } from "@/lib/fieldEffects";
 import { getBerryDefenseResult, getEnduranceResult, getItemCritStageBonus, getItemBasePowerMultiplier, getItemFinalMultiplier, getMentalHerbCureResult, healWithBigRoot } from "@/lib/itemEffects";
 import { effectiveHeldItem } from "./turnOrderInputs";
-import { STRUGGLE_MOVE, WEATHER_DURATION, weatherRockBonusOfItem, setEffectiveAbility, activeWeather, applyMimicryForm, consumeItem, contraryDelta, hasLivingReserve, isFainted, isForcedSwitchBlocked, rollMultiHitCount, sideOf, statDropBlockStatsOf, statusImmunitiesOf, type BattleFighterState, type BattleState } from "./state";
+import { STRUGGLE_MOVE, WEATHER_DURATION, layHazard, weatherRockBonusOfItem, setEffectiveAbility, activeWeather, applyMimicryForm, consumeItem, contraryDelta, hasLivingReserve, isFainted, isForcedSwitchBlocked, rollMultiHitCount, sideOf, statDropBlockStatsOf, statusImmunitiesOf, type BattleFighterState, type BattleState } from "./state";
 import { triggerTerrainSeeds } from "./switching";
 
 interface HitResolutionInput {
@@ -529,7 +529,9 @@ function defineAbilityHitEffect(c: HitCtx) {
     if (trigger.setsToxicSpikesOnAttackerSide) {
       const attackerSide = sideOf(c.state, c.defenderKey === "a" ? "b" : "a");
       if (attackerSide.hazards.toxicSpikesLayers < 2) {
+        const wasLaid = attackerSide.hazards.toxicSpikesLayers > 0;
         attackerSide.hazards = { ...attackerSide.hazards, toxicSpikesLayers: attackerSide.hazards.toxicSpikesLayers + 1 };
+        if (!wasLaid) layHazard(attackerSide.hazards, "toxicSpikes"); // 처음 깐 순서 기록(8.3 D3-fix-41)
         c.toxicDebrisAbilityName = c.defenderAbility!.name;
         evAny = true;
       }
