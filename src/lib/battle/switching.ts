@@ -600,9 +600,7 @@ export function performSwitch(
 
   // 킬가르도: 등장 시 항상 실드폼으로 복귀
   if (incoming.stanceChangeForms) incoming.currentStanceForm = "shield";
-  // 기분파·의태: 등장 시점의 날씨/필드에 맞춰 타입 정렬
-  applyForecastForm(incoming, activeWeather(state));
-  applyMimicryForm(incoming, state.field);
+  // 기분파·의태 폼은 여기서 맞추지 않는다 — Showdown은 설치물·등장 특성 뒤(우선도 −1·−2)에 바꾼다(8.3 D3-fix-37, runEntryEffects ⑤·⑦)
 
   // ── 등장 파이프라인 (Phase 8 §4·§6) ── deferEntry면 호출자가 모든 교체를 끝낸 뒤 runEntryEffects로 따로 돌린다(8.3 A7 동시 교체)
   // 반환: 등장하며 발동한 설치물(8.3 B2). deferEntry면 아직 등장 효과를 안 돌렸으니 빈 목록 — 호출자가 runEntryEffects 반환값을 쓴다
@@ -613,31 +611,43 @@ export function performSwitch(
 }
 
 /**
- * 교체로 나온 포켓몬의 등장 효과 — 설치물 → 등장 특성 → 시드 → 풍선 → 치유소원 순서(Phase 8 §4·§6). performSwitch가 보통 바로 부르고,
- * 한 행동 뒤 양쪽이 동시에 교체할 때(8.3 A7)는 deferEntry로 교체만 먼저 끝낸 다음 들어온 포켓몬의 스피드순으로 이 함수를 따로 부른다.
+ * 교체로 나온 포켓몬의 등장 효과 — Showdown `SwitchIn` 이벤트 순서(8.3 D3-fix-37): ① 치유소원 ② 설치물 ③ 등장 특성 ④ 풍선 안내 ⑤ 의태 ⑥ 시드 ⑦ 기분파.
+ * (우선도 0: 치유소원 sub 3 → 설치물 sub 4 → 특성 sub 7 → 도구 sub 8, 우선도 −1: 의태(특성) → 시드(도구), −2: 기분파.)
+ * performSwitch가 보통 바로 부르고, 한 행동 뒤 양쪽이 동시에 교체할 때(8.3 A7)는 deferEntry로 교체만 먼저 끝낸 다음 들어온 포켓몬의 스피드순으로 이 함수를 따로 부른다.
  */
 export function runEntryEffects(state: BattleState, key: FighterKey, log: string[] = []): EntryHazardTrigger[] {
   const side = sideOf(state, key);
   const incoming = side.party[side.activeIndex];
-  // 1. 설치물 발동 — 스텔스록 등장 데미지, 압정뿌리기 스택, 독압정 중독, 끈적끈적네트 스피드 다운,
-  //    독타입이면 독압정 흡수. 스텔스록·압정 데미지는 매직가드가 막는다(ability.ts:307 주석 참조 —
-  //    인분은 "기술의 추가효과"만 막아 설치물엔 무관).
-  const hits = applyEntryHazardsOnSwitchIn(state, key, log);
-  // 2. 등장 특성 — 위협·가뭄류·필드·트레이스. 설치물로 이미 기절했으면 스킵된다(내부에서 isFainted 가드).
-  applyEntryAbilityOnSwitchIn(state, key, log);
-  // 3. 시드류 — 이미 필드가 있으면(방금 등장 특성으로 깔린 경우 포함) 발동.
-  log.push(...triggerTerrainSeeds(state));
-  // 4. 풍선 — 지니고 등장하면 공중에 떠있다는 안내를 낸다.
-  const balloonMsg = balloonEntryAnnouncement(incoming);
-  if (balloonMsg) log.push(balloonMsg);
-  // 5. 치유소원(트랙 M6): 이 편에 걸려 있으면 새로 나온 포켓몬이 HP·상태이상을 전부 회복한다(설치물 뒤).
-  if (side.healingWishPending && !isFainted(incoming)) {
+  // 1. 치유소원(트랙 M6): 이 편에 걸려 있고 회복할 것(HP 감소·상태이상)이 있을 때만 새로 나온 포켓몬을 전부 회복하고 소모한다 — 설치물보다 먼저.
+  //    회복이 필요 없으면 소모되지 않고 남아 다음 교체 때 다시 본다(Showdown `healingwish.onSwitchIn`).
+  if (side.healingWishPending && !isFainted(incoming) && (incoming.currentHp < incoming.maxHp || incoming.status.condition)) {
     side.healingWishPending = undefined;
     incoming.currentHp = incoming.maxHp;
     incoming.status = { ...NO_STATUS_CONDITION };
     const inName = getPokemon(incoming.illusionAs ?? incoming.slot.pokemonId)?.name ?? "포켓몬";
     log.push(`치유소원이 ${inName}${eulReul(inName)} 감쌌다! 체력과 상태이상이 모두 회복되었다!`);
   }
+  // 2. 설치물 발동 — 스텔스록 등장 데미지, 압정뿌리기 스택, 독압정 중독, 끈적끈적네트 스피드 다운,
+  //    독타입이면 독압정 흡수. 스텔스록·압정 데미지는 매직가드가 막는다(ability.ts:307 주석 참조 —
+  //    인분은 "기술의 추가효과"만 막아 설치물엔 무관).
+  const hits = applyEntryHazardsOnSwitchIn(state, key, log);
+  // 3. 등장 특성 — 위협·가뭄류·필드·트레이스. 설치물로 이미 기절했으면 스킵된다(내부에서 isFainted 가드).
+  applyEntryAbilityOnSwitchIn(state, key, log);
+  // 4. 풍선 — 지니고 등장하면 공중에 떠있다는 안내를 낸다.
+  const balloonMsg = balloonEntryAnnouncement(incoming);
+  if (balloonMsg) log.push(balloonMsg);
+  // 5. 의태(메더): 필드 타입으로 바뀌면 안내한다(우선도 −1, 특성이라 시드보다 먼저). 설치물 피해는 바뀌기 전 타입으로 이미 계산됐다.
+  if (!isFainted(incoming)) {
+    const mimicked = applyMimicryForm(incoming, state.field);
+    if (mimicked) {
+      const nm = getPokemon(incoming.slot.pokemonId)?.name ?? "포켓몬";
+      log.push(`${nm}${eunNeun(nm)} ${mimicked} 타입이 되었다!`);
+    }
+  }
+  // 6. 시드류 — 이미 필드가 있으면(방금 등장 특성으로 깔린 경우 포함) 발동.
+  log.push(...triggerTerrainSeeds(state));
+  // 7. 기분파(캐스퐁): 등장 시점의 유효 날씨에 맞춰 타입을 맞춘다(우선도 −2, 설치물 뒤).
+  if (!isFainted(incoming)) applyForecastForm(incoming, activeWeather(state));
   return hits;
 }
 
