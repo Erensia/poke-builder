@@ -62,8 +62,6 @@ export interface RunTurnContext {
   order: [FighterKey, FighterKey];
   moves: Record<FighterKey, Move>;
   random: () => number;
-  speedA: number;
-  speedB: number;
   didSwitch: Record<FighterKey, boolean>;
   turnStartAnnouncements: string[];
   megaEvolutions: MegaEvolutionLogEntry[];
@@ -248,8 +246,6 @@ export function runTurn(
   // 배틀 AI의 speed_order 예측과 공유하는 turnOrderInputs에서 조립한다(턴 시작 시점 기준).
   const actorA = buildTurnOrderActor(state, state.a, moveA);
   const actorB = buildTurnOrderActor(state, state.b, moveB);
-  const speedA = actorA.speed;
-  const speedB = actorB.speed;
 
   // 트릭룸 판정은 이번 턴이 시작된 시점(=아직 이번 턴 행동을 하나도 반영하지 않은 상태)의 값을
   // 쓴다 — 이번 턴에 트릭룸을 새로 걸어도 그 즉시 같은 턴의 순서 계산에는 영향을 주지 않는다
@@ -285,8 +281,6 @@ export function runTurn(
     order,
     moves,
     random,
-    speedA,
-    speedB,
     didSwitch,
     turnStartAnnouncements,
     megaEvolutions,
