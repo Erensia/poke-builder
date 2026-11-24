@@ -1,4 +1,4 @@
-import { effectiveHeldItem, itemsSuppressedByRoom } from "./turnOrderInputs";
+import { computeTurnOrderSpeed, effectiveHeldItem, itemsSuppressedByRoom } from "./turnOrderInputs";
 import { isGrounded } from "./grounding";
 import { type EndOfTurnLogEntry, type FighterKey } from "@/types/battle";
 import { BATTLE_STAT_KEYS } from "@/types/battleStats";
@@ -45,16 +45,16 @@ interface PendingReactions {
 
 /**
  * 멸망의노래 카운트(F-4): 매 턴 종료 시 현재 카운트를 로그로 찍고 1 줄인다. 0에서 다음
- * 감소 시점에 HP가 0이 된다("3턴 후 기절" = 건 턴 포함 4번째 턴 종료). true를 돌려주면
- * 호출부가 perishFaintedKeys에 추가하고 이 편의 나머지 턴 종료 처리를 건너뛴다(continue).
+ * 감소 시점에 HP가 0이 된다("3턴 후 기절" = 건 턴 포함 4번째 턴 종료). 쓰러진 포켓몬은 나머지 효과를 건너뛰고(실행기가 처리),
+ * 전멸 판정은 order 24 그룹이 끝난 뒤 한 번이다(`deferWipe`).
  */
-function applyPerishSongCountdown(ctx: EndOfTurnFighterContext): boolean {
+function applyPerishSongCountdown(ctx: EndOfTurnFighterContext): void {
   const { key, fighter, endOfTurn } = ctx;
-  if (fighter.perishCount === undefined || isFainted(fighter)) return false;
+  if (fighter.perishCount === undefined || isFainted(fighter)) return;
   if (fighter.perishCount <= 0) {
     fighter.currentHp = 0;
     endOfTurn.push({ actor: key, damage: 0, remainingHp: 0, fainted: true, perishFainted: true });
-    return true;
+    return;
   }
   endOfTurn.push({
     actor: key,
@@ -64,7 +64,6 @@ function applyPerishSongCountdown(ctx: EndOfTurnFighterContext): boolean {
     perishCount: fighter.perishCount,
   });
   fighter.perishCount -= 1;
-  return false;
 }
 
 /** 그래스필드: 매 턴 종료 시 최대 HP 1/16 회복 */
@@ -155,20 +154,19 @@ function applyWeatherDamageAbility(ctx: EndOfTurnFighterContext): void {
 
 /**
  * 아쿠아링(order 6)·뿌리박기(order 7): 걸려 있는 동안 각각 매 턴 종료 시 최대 HP 1/16 회복 — 둘 다 걸려 있으면 두 번(8.3 D3-fix-32, Showdown).
- * 큰뿌리는 각 회복에 `healWithBigRoot`로 적용한다.
+ * 큰뿌리는 각 회복에 `healWithBigRoot`로 적용한다. order가 달라(6·7) 핸들러 둘로 나눈다(8.3 D3-fix-34).
  */
-function applyIngrainAquaRingHeal(ctx: EndOfTurnFighterContext): void {
+function applyRegenHeal(ctx: EndOfTurnFighterContext, regenSource: "aquaRing" | "ingrain"): void {
   const { key, fighter, fighterItem, endOfTurn } = ctx;
-  if (hasVolatile(fighter.volatile, "healBlock")) return;
-  for (const regenSource of ["aquaRing", "ingrain"] as const) {
-    if (!hasVolatile(fighter.volatile, regenSource)) continue;
-    const regenHeal = Math.min(fighter.maxHp - fighter.currentHp, healWithBigRoot(fighter.maxHp / 16, fighterItem));
-    if (regenHeal > 0) {
-      fighter.currentHp += regenHeal;
-      endOfTurn.push({ actor: key, damage: 0, remainingHp: fighter.currentHp, fainted: false, regenHeal, regenSource });
-    }
+  if (!hasVolatile(fighter.volatile, regenSource) || hasVolatile(fighter.volatile, "healBlock")) return;
+  const regenHeal = Math.min(fighter.maxHp - fighter.currentHp, healWithBigRoot(fighter.maxHp / 16, fighterItem));
+  if (regenHeal > 0) {
+    fighter.currentHp += regenHeal;
+    endOfTurn.push({ actor: key, damage: 0, remainingHp: fighter.currentHp, fainted: false, regenHeal, regenSource });
   }
 }
+const applyAquaRingHeal = (ctx: EndOfTurnFighterContext): void => applyRegenHeal(ctx, "aquaRing");
+const applyIngrainHeal = (ctx: EndOfTurnFighterContext): void => applyRegenHeal(ctx, "ingrain");
 
 /**
  * 씨뿌리기: 걸린 쪽은 매 턴 종료 시 최대 HP 1/8을 잃고, 상대가 그만큼(+상대의 큰뿌리 배율)
@@ -829,12 +827,9 @@ interface FinishCtx {
   turnStartAnnouncements: string[];
   megaEvolutions: MegaEvolutionLogEntry[];
   selfDestructComboKey: FighterKey | undefined;
-  speedA: number;
-  speedB: number;
   random: () => number;
   winner: FighterKey | "draw" | undefined;
   endOfTurn: EndOfTurnLogEntry[];
-  perishFaintedKeys: Set<FighterKey>;
   forcedSwitch: { a?: boolean; b?: boolean } | undefined;
   /** 미래예지 적중 반응 기록과, 턴 종료 뒤 확정된 위기회피 교체 요구(8.3 A4-b) */
   pending: PendingReactions;
@@ -849,12 +844,7 @@ interface FinishCtx {
   expiredTailwind: FighterKey[];
 }
 
-/** 턴 종료 효과를 처리하는 포켓몬 순서. ponytail: a→b 고정 — 스피드순(트릭룸이면 반대)은 8.3 A1-b, 이 함수만 바꾸면 된다 */
-function eotOrder(): readonly FighterKey[] {
-  return ["a", "b"];
-}
-
-/** 포켓몬 하나의 턴 종료 처리 컨텍스트 — 앞 단계에서 바뀐 도구·HP·상대 기절 여부를 읽도록 단계마다 새로 만든다 */
+/** 포켓몬 하나의 턴 종료 처리 컨텍스트 — 핸들러마다 새로 만들어 앞 핸들러에서 바뀐 도구·HP·상대 기절 여부를 읽는다(8.3 D3-fix-34 Q3) */
 function makeEotCtx(c: FinishCtx, key: FighterKey): EndOfTurnFighterContext {
   const fighter = c.state[key];
   const opponent = c.state[opponentKey(key)];
@@ -897,89 +887,131 @@ function endIfWiped(c: FinishCtx, lastFainted: FighterKey | undefined): boolean 
 }
 
 /**
- * 한 효과를 포켓몬 순서대로 한 단계로 돌린다 — 쓰러진 포켓몬은 건너뛴다. 효과 하나가 끝날 때마다 전멸을 보고(endIfWiped) 전멸하면 true를 돌려주며 멈춘다.
- * 한 효과가 `key`의 포켓몬을 쓰러뜨린 뒤 상대까지 쓰러뜨리는 경우(해감액 씨뿌리기)는 상대가 마지막에 쓰러진다.
+ * 턴 종료 효과 한 건 = Showdown residual 핸들러 한 건(8.3 D3-fix-34, E6-01 — 설계 8.3-D3-fix34-턴종료정렬설계.md §3).
+ * 두 포켓몬의 핸들러를 한 목록으로 모아 `order → 스피드 → sub` 순으로 처리한다.
+ *  · order/sub는 Showdown `onResidualOrder`·`onResidualSubOrder` 값(`data/*.ts`). 4.5(면역 해제)·30(열매 재확인)은 소스 값이 아니라 A1이 정한 엔진 배치를 숫자로 옮긴 것이다(Showdown은 `onUpdate`).
+ *  · `slot`: 기절한 자리 주인도 처리(미래예지·희망사항). 정렬은 일반 효과와 같다(자리 주인 스피드).
+ *  · `deferWipe`: 같은 order 그룹이 모두 끝난 뒤 한 번 전멸을 판정(날씨 1·멸망의노래 24 — Showdown은 날씨가 핸들러 1개, 멸망의노래는 `resolveFaints` 없는 지속 종료형).
+ *  · `orderOf`: 목록을 만들 때 상태로 order가 갈리는 것(독·맹독 9 / 화상 10).
  */
-function eachFighter(c: FinishCtx, step: (ctx: EndOfTurnFighterContext) => void): boolean {
-  for (const key of eotOrder()) {
-    if (isFainted(c.state[key])) continue;
-    step(makeEotCtx(c, key));
-    if (endIfWiped(c, opponentKey(key))) return true;
-  }
-  return false;
+interface EotHandler {
+  order: number;
+  sub?: number;
+  slot?: true;
+  deferWipe?: true;
+  orderOf?: (fighter: BattleFighterState) => number;
+  run: (ctx: EndOfTurnFighterContext) => void;
 }
 
-/** ④ 개별 효과의 순서 — 특성 면역 해제는 상태이상 틱보다 앞이고, 탈피는 먹다남은음식·독보다 앞이다. 회복 판정(희망사항·먹다남은음식 등)이 모두 끝난 뒤에 tickBlockVolatiles를 부른다 */
-const EOT_INDIVIDUAL_STEPS: readonly ((ctx: EndOfTurnFighterContext) => void)[] = [
-  applyAbilityImmunityCure,
-  applyFieldEndOfTurnHeal,
-  applyShedSkinCure,
-  applyLeftoversHeal,
-  applyIngrainAquaRingHeal,
-  applyLeechSeedDamage,
-  applyStatusEndOfTurnTick,
-  applyCurseDamage,
-  applyBoundDamage,
-  applySaltCureDamage,
-  applySyrupCoatDrop,
-  applyOctolockDrop,
-  tickBlockVolatiles,
-  applyDrowsySleepOnset,
-  // 난동(8.3 D3-fix-10): 명중한 턴 안에서 잠들었으면(느린 상대의 수면 기술·위 하품) 혼란 없이 조용히 푼다 — 반드시 수면 부여(하품) 뒤.
-  (ctx) => calmRampageIfAsleep(ctx.fighter),
+/** 순서는 같은 (order, sub) 안에서의 표 위치 순서이기도 하다(Q2: 같은 포켓몬의 같은 order·sub 효과는 이 순서로 고정) */
+const EOT_HANDLERS: readonly EotHandler[] = [
+  // 날씨(order 1, 필드 핸들러 1개 안에서 포켓몬별 eachEvent('Weather'): 날씨 sub 5 → 특성 sub 7)
+  { order: 1, sub: 5, deferWipe: true, run: applySandstormDamage },
+  { order: 1, sub: 7, deferWipe: true, run: applyWeatherHealAbility },
+  { order: 1, sub: 7, deferWipe: true, run: applyWeatherDamageAbility },
+  // 자리(편) 효과 — 자리 주인의 스피드로 정렬, 주인이 기절해도 처리
+  { order: 3, sub: 3, slot: true, run: applyFutureSight },
+  { order: 4, sub: 3, slot: true, run: applyWishHeal },
+  { order: 4.5, run: applyAbilityImmunityCure },
+  { order: 5, sub: 2, run: applyFieldEndOfTurnHeal },
+  { order: 5, sub: 3, run: applyShedSkinCure },
+  { order: 5, sub: 4, run: applyLeftoversHeal },
+  { order: 6, run: applyAquaRingHeal },
+  { order: 7, run: applyIngrainHeal },
+  { order: 8, run: applyLeechSeedDamage },
+  { order: 9, orderOf: (f) => (f.status.condition === "burn" ? 10 : 9), run: applyStatusEndOfTurnTick },
+  { order: 12, run: applyCurseDamage },
+  { order: 13, run: applyBoundDamage },
+  { order: 13, run: applySaltCureDamage },
+  { order: 14, run: applySyrupCoatDrop },
+  { order: 14, run: applyOctolockDrop },
+  { order: 15, run: tickBlockVolatiles }, // 도발 15·앙코르 16·사슬묶기 17·회복봉인 20·지옥찌르기 22를 한 함수가 같이 줄인다 — 15~22 사이에 HP·상태를 바꾸는 효과가 없어 일괄
+  {
+    order: 23,
+    run: (ctx) => {
+      applyDrowsySleepOnset(ctx);
+      // 난동(8.3 D3-fix-10): 명중한 턴 안에서 잠들었으면(느린 상대의 수면 기술·위 하품) 혼란 없이 조용히 푼다 — 반드시 수면 부여(하품) 뒤.
+      calmRampageIfAsleep(ctx.fighter);
+    },
+  },
+  { order: 24, deferWipe: true, run: applyPerishSongCountdown },
+  { order: 28, sub: 2, run: applySpeedBoostAbility },
+  { order: 28, sub: 2, run: applyMoodyRandomStages },
+  { order: 28, sub: 2, run: applyHarvestRestore },
+  { order: 28, sub: 2, run: applyCudChew },
+  { order: 29, run: applyHungerSwitchToggle },
+  { order: 30, run: applyBerryHpThresholdHeal },
 ];
 
+interface EotEntry {
+  h: EotHandler;
+  key: FighterKey;
+  order: number;
+  sub: number;
+  pos: number;
+  speed: number;
+}
+
 /**
- * 턴 종료 효과(endOfTurn)와 멸망의노래로 쓰러진 쪽 처리 — 8.3 A1: 단계 우선, Showdown 순서(설계 8.3-A1-턴종료순서설계.md §3).
- * ① 날씨 종료(expireWeather, 호출부) → ② 날씨 피해·특성 → ③ 미래예지 → 희망사항 → ④ 개별 효과 → ⑤ 멸망의노래·가속…·열매 재확인.
- * 이번 턴 쓰러진 쪽은 건너뛰고, 살아 있는 쪽은 상대가 쓰러졌어도 턴 종료 처리를 받는다(ver.2.0 버그 수정 — 상대에게 매인 효과는
- * opponentFainted로 각 단계가 거른다). 자폭 콤보로 양쪽 다 쓰러졌으면 둘 다 건너뛴다.
+ * 턴 종료 효과 전체를 한 목록으로 정렬해 처리한다. 스피드는 residual 직전의 값(`computeTurnOrderSpeed` — 랭크·마비·스카프·순풍·날씨 특성만 쓰는 순수 스피드,
+ * 선제공격손톱 등 행동 순서 전용 보정은 없다), 트릭룸이면 느린 쪽이 먼저. 스피드가 정확히 같으면 (order, sub) 묶음마다 동전 한 번(Q1 (가')) — 같은 포켓몬끼리는 표 위치 순서로 고정.
+ * 핸들러마다 컨텍스트를 새로 만들고 전멸을 확인한다(`deferWipe` 핸들러는 같은 order 그룹이 끝난 뒤 한 번). 전멸하면 이후 효과를 처리하지 않는다.
+ */
+function runEndOfTurnHandlers(c: FinishCtx): void {
+  const trickRoom = c.state.trickRoomTurnsRemaining !== undefined;
+  const speeds: Record<FighterKey, number> = { a: computeTurnOrderSpeed(c.state, c.state.a), b: computeTurnOrderSpeed(c.state, c.state.b) };
+  const entries: EotEntry[] = [];
+  for (const key of ["a", "b"] as const) {
+    EOT_HANDLERS.forEach((h, pos) => entries.push({ h, key, order: h.orderOf ? h.orderOf(c.state[key]) : h.order, sub: h.sub ?? 0, pos, speed: speeds[key] }));
+  }
+  // 동속 동전: 스피드가 정확히 같고 두 포켓몬이 모두 살아 있을 때만, (order, sub) 오름차순으로 한 묶음에 한 번씩 뽑는다(표 전체를 뽑아 효과 유무와 무관)
+  const coin = new Map<string, boolean>(); // 묶음 → a가 먼저인가
+  if (speeds.a === speeds.b && !isFainted(c.state.a) && !isFainted(c.state.b)) {
+    const groups = [...new Set(entries.map((e) => `${e.order}/${e.sub}`))].sort((x, y) => {
+      const [xo, xs] = x.split("/").map(Number);
+      const [yo, ys] = y.split("/").map(Number);
+      return xo - yo || xs - ys;
+    });
+    for (const g of groups) coin.set(g, c.random() < 0.5);
+  }
+  const keyRank = (e: EotEntry) => (e.key === "a" ? 0 : 1) ^ (coin.get(`${e.order}/${e.sub}`) === false ? 1 : 0);
+  const sorted = [...entries].sort((x, y) => {
+    const speedDiff = x.speed === y.speed ? 0 : trickRoom ? x.speed - y.speed : y.speed - x.speed;
+    return x.order - y.order || speedDiff || x.sub - y.sub || keyRank(x) - keyRank(y) || x.pos - y.pos;
+  });
+
+  let groupLast: FighterKey | undefined; // deferWipe 그룹에서 마지막으로 쓰러진 포켓몬
+  for (let i = 0; i < sorted.length; i++) {
+    const { h, key, order } = sorted[i];
+    // 기절한 보유자의 핸들러는 건너뛴다(Showdown fieldEvent) — 자리 효과는 예외
+    if (h.slot || !isFainted(c.state[key])) {
+      const aBefore = isFainted(c.state.a);
+      const bBefore = isFainted(c.state.b);
+      h.run(makeEotCtx(c, key));
+      // 마지막으로 쓰러진 쪽 기록 — 한 핸들러가 둘 다 쓰러뜨리면 보유자 → 상대 순(상대가 마지막)
+      const newly = (["a", "b"] as const).filter((k) => isFainted(c.state[k]) && !(k === "a" ? aBefore : bBefore));
+      if (newly.length === 2) groupLast = opponentKey(key);
+      else if (newly.length === 1) groupLast = newly[0];
+    }
+    const next = sorted[i + 1];
+    if (h.deferWipe && next?.h.deferWipe && next.order === order) continue; // 같은 order 그룹이 끝날 때까지 판정을 미룬다
+    // 동시 전멸은 마지막에 쓰러진 쪽이 이긴다 — 그룹은 groupLast, 일반 핸들러는 보유자 다음에 쓰러지는 상대
+    if (endIfWiped(c, h.deferWipe ? groupLast : opponentKey(key))) return;
+    groupLast = undefined;
+  }
+}
+
+/**
+ * 턴 종료 효과(endOfTurn)와 멸망의노래로 쓰러진 쪽 처리 — 8.3 A1(단계)·D3-fix-34(한 목록 정렬).
+ * ① 날씨 종료(expireWeather, 호출부) 뒤 `EOT_HANDLERS`를 order → 스피드 → sub 순으로 처리한다. 이번 턴 쓰러진 쪽의 핸들러는 건너뛰고(자리 효과 제외),
+ * 살아 있는 쪽은 상대가 쓰러졌어도 턴 종료 처리를 받는다(ver.2.0 버그 수정 — 상대에게 매인 효과는 opponentFainted로 각 효과가 거른다).
  */
 function resolveEndOfTurnAndPerish(c: FinishCtx) {
   c.endOfTurn = [];
   c.pending = { exit: {}, redCard: {} };
   c.exitSwitch = {};
-  // 멸망의노래로 이번 턴 종료에 쓰러진 쪽(F-4) — 양쪽 다면 스피드 느린 쪽이 승리한다.
-  c.perishFaintedKeys = new Set<FighterKey>();
   if (c.winner) return;
-
-  // ② 날씨 피해·특성 — 효과마다 전멸을 보고, 전멸하면 이후 효과를 처리하지 않는다(③·④도 같다, 8.3 D3-fix-33)
-  if (eachFighter(c, applySandstormDamage) || eachFighter(c, applyWeatherHealAbility) || eachFighter(c, applyWeatherDamageAbility)) return;
-
-  // ③ 자리(편) 효과 — 그 자리의 포켓몬이 쓰러졌어도 카운터는 줄고 효과만 실패하므로 쓰러진 쪽도 건너뛰지 않는다(Showdown slot condition)
-  for (const key of eotOrder()) {
-    const ctx = makeEotCtx(c, key);
-    applyFutureSight(ctx);
-    if (endIfWiped(c, opponentKey(key))) return;
-    applyWishHeal(ctx);
-    if (endIfWiped(c, opponentKey(key))) return;
-  }
-
-  // ④ 개별 효과
-  for (const key of eotOrder()) {
-    if (isFainted(c.state[key])) continue;
-    const ctx = makeEotCtx(c, key);
-    for (const step of EOT_INDIVIDUAL_STEPS) {
-      step(ctx);
-      if (endIfWiped(c, opponentKey(key))) return;
-    }
-  }
-
-  // ⑤ 멸망의노래(쓰러지면 이 포켓몬의 나머지는 건너뜀) → 가속·변덕쟁이·수확·되새김질 → 꼬르륵스위치 → 열매 재확인
-  for (const key of eotOrder()) {
-    if (isFainted(c.state[key])) continue;
-    const ctx = makeEotCtx(c, key);
-    if (applyPerishSongCountdown(ctx)) {
-      c.perishFaintedKeys.add(key);
-      continue;
-    }
-    applySpeedBoostAbility(ctx);
-    applyMoodyRandomStages(ctx);
-    applyHarvestRestore(ctx);
-    applyCudChew(ctx);
-    applyHungerSwitchToggle(ctx);
-    applyBerryHpThresholdHeal(makeEotCtx(c, key)); // 수확으로 돌아온 열매를 읽도록 컨텍스트를 새로 만든다
-  }
+  runEndOfTurnHandlers(c);
 }
 
 /**
@@ -1011,15 +1043,8 @@ function decideWinnerAndForcedSwitch(c: FinishCtx) {
 
   // 자폭 콤보(§7-1)·행동 구간·턴 종료 효과 중 전멸은 이제 endIfWiped가 그 자리에서 정한다(8.3 D3-fix-33). 콤보에서 둘 다 예비가 있으면 winner 미정이라 아래 forcedSwitch가 양쪽 교체를 요구한다.
 
-  // 멸망의노래로 양쪽이 동시에 쓰러졌으면 무승부가 아니라 스피드가 느린 쪽이 승리한다(F-4) —
-  // 빠른 쪽이 먼저 쓰러지는 것으로 취급. 랭크 반영 실효 스피드로 비교(트릭룸은 무관).
-  // 단 어느 한쪽이라도 교대할 슬롯이 남아 있으면 배틀은 안 끝나고 강제 교체로 넘어간다(§3).
-  if (!c.winner && c.perishFaintedKeys.size === 2 && !aHasReserve && !bHasReserve) {
-    // speedA·speedB는 이미 랭크까지 반영한 최종 정수 스피드다(8.3 D3-fix-11) — 랭크를 또 곱하지 않는다.
-    const effSpeedA = c.speedA;
-    const effSpeedB = c.speedB;
-    c.winner = effSpeedA <= effSpeedB ? "a" : "b";
-  }
+  // 멸망의노래로 양쪽이 동시에 쓰러지면 빠른 쪽이 먼저 쓰러져 느린 쪽이 이긴다(F-4) — 이제 order 24 `deferWipe` 그룹의 정렬 순서와 endIfWiped가 정한다(8.3 D3-fix-34).
+  // 어느 한쪽이라도 교대할 슬롯이 남아 있으면 배틀은 안 끝나고 강제 교체로 넘어간다(§3).
 
   // 턴 종료 시점에 활성이 기절해 있고 교대할 슬롯도 없으면 그 편이 진다. 양쪽 다면 무승부 —
   // 어느 한 쪽이 상대를 쓰러뜨린 게 아니라 각자 자기 상태이상 등으로 따로 쓰러진 것이라 인과가 없다.
@@ -1208,8 +1233,6 @@ export function finishTurn(ctx: RunTurnContext): RunTurnOutcome {
   c.turnStartAnnouncements = ctx.turnStartAnnouncements;
   c.megaEvolutions = ctx.megaEvolutions;
   c.selfDestructComboKey = ctx.selfDestructComboKey;
-  c.speedA = ctx.speedA;
-  c.speedB = ctx.speedB;
   c.random = ctx.random;
 
 
@@ -1224,7 +1247,6 @@ export function finishTurn(ctx: RunTurnContext): RunTurnOutcome {
   c.endOfTurn = [];
   c.pending = { exit: {}, redCard: {} };
   c.exitSwitch = {};
-  c.perishFaintedKeys = new Set<FighterKey>();
   c.fieldExpired = c.trickRoomExpired = c.weatherExpired = false;
   c.expiredFieldEffects = []; c.expiredMagnetRise = []; c.expiredScreens = []; c.expiredSafeguard = []; c.expiredTailwind = [];
   if (!endIfWiped(c, c.selfDestructComboKey)) {
