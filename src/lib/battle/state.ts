@@ -298,7 +298,7 @@ export interface BattleFighterState {
   electroChargedForElectric?: boolean;
   /**
    * 분노의주먹(Move.rageFistPower): 이번 배틀에서 이 포켓몬이 기술로 데미지를 받은 누적 횟수.
-   * 다단히트는 타수만큼 센다(applyDamageToDefender에서 amount>0마다 +1). 교체 초기화는 미도입.
+   * 다단히트는 타수만큼 센다(applyDamageToDefender에서 amount>0마다 +1). 교체로 물러나면 초기화한다(8.3 D3-fix-38).
    */
   timesHitByMoves?: number;
   /**

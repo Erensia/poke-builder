@@ -20,6 +20,8 @@ import { WEATHER_DURATION, setEffectiveAbility, abilityOf, activeWeather, applyF
 export function isTrappedFromSwitching(fighter: BattleFighterState, state?: BattleState): boolean {
   if (isFainted(fighter)) return false;
   if (fighter.types.includes("고스트")) return false;
+  // 도주(8.3 D3-fix-38): 모든 교체 불가를 무시한다(Showdown은 우선도 −10으로 마지막에 trapped를 푼다)
+  if (abilityOf(fighter)?.ignoresSwitchTrapping) return false;
   // 아름다운허물(트랙 M6): 교체 봉쇄를 무시한다(매직룸·서투름이면 효과 없음)
   if (effectiveHeldItem(fighter, state)?.escapesTrapping) return false;
   // 페어리록(트랙 M6): 걸린 다음 턴은 모두 교체 불가
@@ -42,7 +44,7 @@ export function isTrappedFromSwitching(fighter: BattleFighterState, state?: Batt
  * 그림자밟기(ver.1.9 A5): opposing이 이 특성이면 fighter는 교체할 수 없다 — 고스트·아름다운허물·같은 특성이면 예외. 파티 대면표(AI)는 맞은편을 직접 넘겨 쓴다.
  */
 export function trappedByOpposingAbility(fighter: BattleFighterState, opposing: BattleFighterState): boolean {
-  if (isFainted(opposing) || fighter.types.includes("고스트") || abilityOf(fighter)?.trapsOpponent) return false;
+  if (isFainted(opposing) || fighter.types.includes("고스트") || abilityOf(fighter)?.trapsOpponent || abilityOf(fighter)?.ignoresSwitchTrapping) return false;
   if (effectiveHeldItem(fighter)?.escapesTrapping) return false;
   return !!abilityOf(opposing)?.trapsOpponent;
 }
@@ -547,8 +549,10 @@ export function performSwitch(
   }
   outgoing.magnetRiseTurnsRemaining = undefined;
   outgoing.smackedDown = undefined;
+  // 분노의주먹 카운터: 교체하면 0부터 다시 센다(8.3 D3-fix-38, Showdown champions `clearVolatile`의 `timesAttacked = 0`)
+  outgoing.timesHitByMoves = undefined;
   // 유지: currentHp · status(주 상태이상) · remainingPp · itemConsumed · currentItemId ·
-  //       consumedBerryId · timesHitByMoves(교체 초기화 미도입) · ownMoveTypeBoosts ·
+  //       consumedBerryId · ownMoveTypeBoosts ·
   //       disguiseBroken · hungerMode.
   //   스크린(§6-3)·희망사항(§6-2)은 편(BattleSide.screens / .wish)에 있어 교체해도 유지된다.
   //   후속: transformed(변신 원복 — 메타몽 전용이라 미도입).
