@@ -5,6 +5,7 @@ import { isStatusBlockedByField } from "@/lib/fieldEffects";
 import { applyStageDelta } from "@/lib/statStages";
 import {
   abilityOf,
+  statDropBlockStatsOf,
   contraryDelta,
   isFainted,
   opponentKey,
@@ -138,10 +139,13 @@ function withEntryPoison(state: BattleState, fighter: BattleFighterState, side: 
 
 /**
  * 끈적끈적네트(ver.1.8 한계점 정리 — 이전엔 고정 근사 0.1): 대기 포켓몬이 이 편 끈적끈적네트 위로 등장하면 스피드 −1
- * (땅에 있을 때만, 심술꾸러기면 +1 — 엔진 applyEntryHazards와 같은 규칙).
+ * (땅에 있을 때만, 심술꾸러기면 +1, 클리어바디류·미러아머면 변화 없음 — 엔진 applyEntryHazards와 같은 규칙).
  */
 function withEntryStickyWeb(state: BattleState, fighter: BattleFighterState, side: BattleSide): BattleFighterState {
-  if (!side.hazards.stickyWeb || !isGrounded(state, fighter, abilityOf(fighter))) return fighter;
+  const ability = abilityOf(fighter);
+  if (!side.hazards.stickyWeb || !isGrounded(state, fighter, ability)) return fighter;
+  // 클리어바디류·플라워베일은 하락을 막고 미러아머는 반사한다 — 엔진 applyOpponentStatDrop과 같은 판정(8.3 D3-fix-36)
+  if (statDropBlockStatsOf(fighter, ability)?.includes("spe") || ability?.reflectsOpponentStatDrops) return fighter;
   return { ...fighter, stages: applyStageDelta(fighter.stages, "spe", contraryDelta(fighter, -1)) };
 }
 

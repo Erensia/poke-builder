@@ -932,15 +932,7 @@ function resolveEntryAbilityEffects(
     const pokemonName = getPokemon(slot.pokemonId)?.name ?? "포켓몬";
 
     if (ability.lowersOpponentStatOnEntry) {
-      const opponentName = getPokemon(opponentSlot.pokemonId)?.name ?? "상대";
-      applyIntimidateWithReaction(
-        opponent,
-        ability.lowersOpponentStatOnEntry,
-        pokemonName,
-        ability.name,
-        opponentName,
-        announcements,
-      );
+      applyIntimidateWithReaction(opponent, fighter, ability, announcements);
     }
     // 감미로운꿀(포챔스판): 등장 시 상대의 회피율을 1랭크 떨어뜨린다(위협의 회피율 버전).
     if (ability.lowersOpponentEvasionOnEntry !== undefined) {
