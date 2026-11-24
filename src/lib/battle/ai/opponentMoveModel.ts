@@ -4,7 +4,7 @@ import { type HazardState } from "@/types/battle";
 import { getMove } from "@/lib/data";
 import { rankStageMultiplier } from "@/lib/battlePower";
 import { resolveEffectiveDefenderAbility } from "@/lib/abilityModifiers";
-import { isOpponentTargetingMove } from "@/lib/fieldEffects";
+import { isMagicBounceReflectable, isOpponentTargetingMove } from "@/lib/fieldEffects";
 import { hasVolatile } from "@/lib/volatileConditions";
 import { abilityOf, choiceLockedMoveOf, type BattleFighterState, type BattleSide, type BattleState } from "../state";
 import { estimateMoveHits, type MoveHitEstimate } from "./moveDamage";
@@ -95,8 +95,8 @@ function isWastedStatusMove(
   const userAbility = abilityOf(user);
   const targetAbility = resolveEffectiveDefenderAbility(userAbility, abilityOf(target));
   if (
-    isOpponentTargetingMove(move) &&
-    (targetAbility?.blocksOpponentStatusMoveEffects || targetAbility?.reflectsOpponentStatusMoves)
+    (isOpponentTargetingMove(move) && targetAbility?.blocksOpponentStatusMoveEffects) ||
+    (targetAbility?.reflectsOpponentStatusMoves && isMagicBounceReflectable(move))
   ) {
     return true;
   }

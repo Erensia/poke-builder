@@ -19,7 +19,7 @@ import { resolveMoveContext } from "@/lib/moveContext";
 import { DAMAGE_ROLL_MIN_PERCENT, DAMAGE_ROLL_STEP_COUNT } from "@/lib/damageFormula";
 import { WEIGHT_MOVE_FALLBACK_POWER, absoluteWeightPowerValue, computeDamage, shellSideArmCategory, positiveStagesPowerValue, reversalPowerFromHp, targetHpRatioPowerValue, userHpScaledPowerValue, faintedAllyPowerValue, rivalryDamageMultiplier, weightRatioPowerValue } from "@/lib/battlePower";
 import { applyWeatherBall, solarPowerHalved } from "@/lib/weatherEffects";
-import { applyFieldPulse, getFieldPowerMultiplier, isOpponentTargetingMove, isPriorityMoveBlockedByField, isStatusBlockedByField, needsLivingTarget } from "@/lib/fieldEffects";
+import { applyFieldPulse, getFieldPowerMultiplier, isMagicBounceReflectable, isOpponentTargetingMove, isPriorityMoveBlockedByField, isStatusBlockedByField, needsLivingTarget } from "@/lib/fieldEffects";
 import { computeBattleHitChance, toxicNeverMisses } from "./hitChance";
 import { CONFUSION_SELF_HIT_MOVE, STRUGGLE_MOVE, abilityOf, activeWeather, consumeItem, contraryDelta, hasSheerForceSecondaryEffect, isFainted, isHealingMove, isItemRemovable, opponentKey, sideOf, statusImmunitiesOf, type BattleFighterState, type BattleState } from "./state";
 
@@ -675,14 +675,12 @@ function checkDefenderImmunities(c: PreHitCtx) {
   // 매직미러: 방어측이 이 특성을 지녔고(틀깨기면 위에서 defenderAbility가 이미 undefined), 이번
   // 기술이 방어측을 겨냥하는 status 변화기이며 반사 제외(notReflectable — 고스트 저주·추억의선물·
   // 멸망의노래·흔들흔들댄스)가 아니면, 이 기술을 시전자에게 되돌린다. setsHazard(스텔스록)는
-  // isOpponentTargetingMove가 잡지 않아 따로 OR로 포함한다. 되돌린 기술은 빗나가지 않고(아래 hit
+  // isMagicBounceReflectable(Showdown reflectable과 같은 집합 — 설치기·강제 교체·뒤집어엎기 포함, 8.3 fix-44)이 따로 포함한다. 되돌린 기술은 빗나가지 않고(아래 hit
   // 강제), "방어측 방향 효과" 블록 진입 직전에 공격/방어 바인딩을 통째로 맞바꿔 원래 시전자에게
   // 효과가 그대로 꽂히게 한다.
   c.bouncedByMagicMirror = !c.opponentEffectsBlocked &&
-    c.move.category === "status" &&
-    !c.move.notReflectable &&
     !!c.defenderAbility?.reflectsOpponentStatusMoves &&
-    (isOpponentTargetingMove(c.move) || !!c.move.setsHazard);
+    isMagicBounceReflectable(c.move);
 }
 
 /** 레이징불·셸암즈·웨더볼·필드 조건부 타입/위력, 변화한 타입 반영 */
