@@ -1,0 +1,95 @@
+// 일회용 프로브(커밋 금지): E8-a ④ 등장 시 효과 — 엔진 현행을 Showdown 실행 결과(e8a4-run.cjs)와 대조.
+export default async function ({ server, data, mon, battle, pts, check }) {
+  const rt = await server.ssrLoadModule("/src/lib/battle/runTurn.ts");
+  const mv = (x) => (typeof x === "string" ? { kind: "move", move: data.getMove(x) } : x);
+  const megaMv = (m) => ({ kind: "move", move: data.getMove(m), mega: true });
+  const sw = (i) => ({ kind: "switch", toIndex: i });
+  const play = (st, a, b = "칼춤", rnd = () => 0.5) => { try { return rt.runTurn(st, mv(a), mv(b), rnd); } catch (e) { return { err: String(e).slice(0, 120) }; } };
+  const bulky = pts({ hp: 32, spd: 32, def: 32 });
+  const M = (id, moves, ab = null, item = null, p = bulky) => mon(id, moves, ab, item, p);
+  const S = (mons, bench) => [...mons, ...bench];
+  const B = () => M("잠만보", ["칼춤", "방어"]);
+  const TRs = () => M("가디안", ["칼춤"], "트레이스");
+  const row = (name, got, want) => check(`TMP ${name}`, JSON.stringify(got) === JSON.stringify(want), `got=${JSON.stringify(got)} want=${JSON.stringify(want)}`);
+  const info = (name, v) => check(`TMP INFO ${name}`, true, JSON.stringify(v));
+  const W = (st) => [st.weather ?? "-", st.weatherTurnsRemaining ?? null, st.field ?? "-", st.fieldTurnsRemaining ?? null];
+  const stg = (f) => f.stages;
+
+  // ── W 날씨 ──
+  { const st = battle([M("코터스", ["칼춤"], "가뭄"), B()], [M("패리퍼", ["칼춤"], "잔비"), B()]); row("W1 가뭄(느림) vs 잔비(빠름) → 쾌청 5", W(st).slice(0, 2), ["쾌청", 5]); }
+  { const st = battle([M("패리퍼", ["칼춤"], "잔비"), B()], [M("코터스", ["칼춤"], "가뭄"), B()]); row("W1b 좌우 바꿈 → 쾌청 5", W(st).slice(0, 2), ["쾌청", 5]); }
+  { let st = battle([M("마기라스", ["칼춤"], "모래날림"), B()], [M("눈설왕", ["칼춤"], "눈퍼뜨리기"), B()]); const t0 = W(st).slice(0, 2); const seq = []; for (let t = 1; t <= 5; t++) { const o = play(st, "칼춤", "칼춤"); st = o.nextState; seq.push(st.weather ? st.weatherTurnsRemaining : "-"); } row("W1c 마기라스 vs 눈설왕 → 눈 5, 턴마다 4·3·2·1·종료", [t0, seq], [["눈", 5], [4, 3, 2, 1, "-"]]); }
+  for (const [it, ab, sp, wt] of [["보송보송바위", "모래날림", "하마돈", "모래바람"], ["뜨거운바위", "가뭄", "코터스", "쾌청"], ["축축한바위", "잔비", "패리퍼", "비"], ["차가운바위", "눈퍼뜨리기", "눈설왕", "눈"]]) {
+    const st = battle([M(sp, ["칼춤"], ab, it), B()], [B(), B()]); row(`W2 ${ab}+${it} → 8턴`, W(st).slice(0, 2), [wt, 8]); }
+  { let st = battle([M("하마돈", ["칼춤"], "모래날림"), M("마기라스", ["칼춤"], "모래날림")], [B(), B()]); let o = play(st, "칼춤", "칼춤"); const n1 = o.nextState.weatherTurnsRemaining; o = play(o.nextState, sw(1), "방어"); const n2 = o?.nextState?.weatherTurnsRemaining; row("W3 같은 날씨 특성 재등장 → 갱신 없음(4 → 3)", [n1, n2], [4, 3]); }
+  { let st = battle([M("리자몽", ["칼춤"], "단단한발톱", "리자몽나이트Y"), B()], [M("패리퍼", ["칼춤"], "잔비"), B()]); const o = play(st, megaMv("칼춤"), "방어"); row("W4 메가리자몽Y(비 → 쾌청, 메가진화 직후 4)", [o?.nextState?.weather, o?.nextState?.weatherTurnsRemaining], ["쾌청", 4]); }
+  { let st = battle([M("마기라스", ["칼춤"], "모래날림", "마기라스나이트"), B()], [B(), M("패리퍼", ["칼춤"], "잔비")]); let o = play(st, "칼춤", sw(1)); const w1 = [o.nextState.weather, o.nextState.weatherTurnsRemaining]; o = play(o.nextState, megaMv("칼춤"), "방어"); row("W5 메가마기라스: 비 덮인 뒤 메가진화 → 모래바람 재설정(4)", [w1, [o?.nextState?.weather, o?.nextState?.weatherTurnsRemaining]], [["비", 4], ["모래바람", 4]]); }
+  { const st = battle([M("마기라스", ["칼춤"], "모래날림", "마기라스나이트"), B()], [B(), B()]); const o = play(st, megaMv("칼춤"), "방어"); row("W6 메가마기라스: 이미 모래바람 → 갱신 없음(4)", [o?.nextState?.weather, o?.nextState?.weatherTurnsRemaining], ["모래바람", 4]); }
+
+  // ── T 필드 ──
+  { const st = battle([M("고릴타", ["칼춤"], "그래스메이커"), B()], [M("에써르", ["칼춤"], "사이코메이커"), B()]); row("T1 그래스(느림) vs 사이코(빠름) → 그래스필드 5", [st.field, st.fieldTurnsRemaining], ["그래스필드", 5]); }
+  { const st = battle([M("고릴타", ["칼춤"], "그래스메이커", "그라운드코트"), B()], [B(), B()]); row("T2 필드연장 → 8", [st.field, st.fieldTurnsRemaining], ["그래스필드", 8]); }
+  { let st = battle([M("고릴타", ["칼춤"], "그래스메이커"), M("고릴타", ["칼춤"], "그래스메이커")], [B(), B()]); const seq = []; let o = play(st, "칼춤", "칼춤"); seq.push(o.nextState.fieldTurnsRemaining); o = play(o.nextState, "칼춤", "칼춤"); seq.push(o.nextState.fieldTurnsRemaining); o = play(o.nextState, sw(1), "방어"); seq.push(o.nextState.fieldTurnsRemaining); row("T3 같은 필드 재등장 → 갱신 없음(4·3·2)", seq, [4, 3, 2]); }
+  { const st = battle([M("에써르", ["칼춤"], "사이코메이커"), B()], [M("잠만보", ["칼춤"], null, "사이코시드", bulky), B()]); row("T3b 사이코시드 → 특방 +1·소모", [stg(st.b).spd, st.b.currentItemId ?? null], [1, null]); }
+  { let st = battle([M("에써르", ["칼춤"], "사이코메이커"), B()], [M("포푸니라", ["전광석화"]), B()]); const o = play(st, "칼춤", "전광석화"); const a = (o?.result ?? o?.partialResult)?.actions.find((x) => x.actor === "b"); row("T4 사이코필드 vs 상대 전광석화 → 막힘(HP 불변)", o?.nextState?.a.currentHp === o?.nextState?.a.maxHp, true); info("T4 상대 행동", { blockedReason: a?.blockedReason, hit: a?.hit }); }
+  { const st = battle([M("라이츄", ["칼춤"], "정전기", "라이츄나이트X"), B()], [M("패리퍼", ["칼춤"], "잔비"), B()]); const o = play(st, megaMv("칼춤"), "방어"); row("T5 메가라이츄X → 일렉트릭필드 4(비는 별개 4)", [o?.nextState?.field, o?.nextState?.fieldTurnsRemaining, o?.nextState?.weather, o?.nextState?.weatherTurnsRemaining], ["일렉트릭필드", 4, "비", 4]); }
+
+  // ── I 위협 ──
+  const I = () => M("갸라도스", ["칼춤"], "위협");
+  for (const [lab, foe, want] of [["일반", M("잠만보", ["칼춤"]), [-1, 0, 0]], ["정신력", M("루카리오", ["칼춤"], "정신력"), [0, 0, 0]], ["오기", M("대도각참", ["칼춤"], "오기"), [1, 0, 0]], ["승기", M("밀로틱", ["칼춤"], "승기"), [-1, 2, 0]], ["클리어바디", M("메타그로스", ["칼춤"], "클리어바디"), [0, 0, 0]], ["주눅", M("잠만보", ["칼춤"], "주눅"), [-1, 0, 1]], ["파수견", M("마피티프", ["칼춤"], "파수견"), [1, 0, 0]], ["둔감", M("잠만보", ["칼춤"], "둔감"), [0, 0, 0]], ["마이페이스", M("잠만보", ["칼춤"], "마이페이스"), [0, 0, 0]], ["배짱", M("잠만보", ["칼춤"], "배짱"), [0, 0, 0]]]) {
+    const st = battle([I(), B()], [foe, B()]); row(`I1 위협 vs ${lab} → 상대(공격·특공·스피드)`, [stg(st.b).atk, stg(st.b).spa, stg(st.b).spe], want); }
+  { const st = battle([I(), B()], [M("잠만보", ["칼춤"], "미러아머"), B()]); row("I1 위협 vs 미러아머 → 위협 사용자 공격 −1, 상대 0", [stg(st.a).atk, stg(st.b).atk], [-1, 0]); }
+  { const st = battle([I(), B()], [M("윈디", ["칼춤"], "위협"), B()]); row("I1 양쪽 위협 → 서로 −1", [stg(st.a).atk, stg(st.b).atk], [-1, -1]); }
+  { const st = battle([I(), B()], [M("잠만보", ["칼춤"], null, "하양허브"), B()]); row("I1 위협 vs 하양허브 → 복구·소모(0, 도구 없음)", [stg(st.b).atk, st.b.currentItemId ?? null], [0, null]); }
+  { let st = battle([B(), I()], [M("잠만보", ["대타출동", "칼춤"]), B()]); let o = play(st, "칼춤", "대타출동"); o = play(o.nextState, sw(1), "방어"); row("I2 위협 등장 vs 대타 → 하락 없음", stg(o?.nextState?.b).atk, 0); }
+  { const st = battle([M("썬더볼트", ["칼춤"], "정전기", "썬더볼트나이트"), B()], [B(), B()]); const o = play(st, megaMv("칼춤"), "방어"); row("I3 메가썬더볼트 → 위협 발동(−1)", stg(o?.nextState?.b).atk, -1); }
+  { const st = battle([M("곤율거니", ["칼춤"], "위협", "곤율거니나이트"), B()], [B(), B()]); const t0 = stg(st.b).atk; const o = play(st, megaMv("칼춤"), "방어"); row("I4 곤율거니 등장 −1 → 메가진화 위협 재발동 −2", [t0, stg(o?.nextState?.b).atk], [-1, -2]); }
+  { const st = battle([M("갸라도스", ["칼춤"], "위협", "갸라도스나이트"), B()], [B(), B()]); const o = play(st, megaMv("칼춤"), "방어"); row("I5 메가갸라도스(위협→틀깨기) → 위협 재발동 없음(−1 유지)", stg(o?.nextState?.b).atk, -1); }
+  { const st = battle([I(), B()], [B(), B()]); st.b.stages = { ...st.b.stages, atk: -6 }; const st2 = battle([B(), I()], [B(), B()]); st2.b.stages = { ...st2.b.stages, atk: -6 }; const o = play(st2, sw(1), "방어"); row("I6 이미 −6에 위협 → −6 유지", stg(o?.nextState?.b).atk, -6); }
+
+  // ── P 프레셔 ──
+  const ppOf = (moveName, bMove, bAb = "프레셔", rnd = () => 0.5) => { const st = battle([M("잠만보", [moveName, "칼춤"]), B()], [M("앱솔", [bMove, "칼춤", "방어"], bAb), B()]); const before = st.a.remainingPp[moveName]; const o = play(st, moveName, bMove, rnd); return [before, o?.nextState?.a.remainingPp[moveName]]; };
+  for (const [lab, mvn, want] of [["데미지 기술(누르기)", "누르기", 2], ["상대 대상 변화기(독가루)", "독가루", 2], ["자기 대상 변화기(칼춤)", "칼춤", 1], ["상대 진영 설치기(압정뿌리기)", "압정뿌리기", 2], ["필드 기술(비바라기)", "비바라기", 2]]) {
+    const [b, a] = ppOf(mvn, "칼춤"); row(`P1 ${lab} → PP −${want}`, b - a, want); }
+  { const [b, a] = ppOf("최면술", "칼춤", "프레셔", () => 0.99); row("P1 빗나감(최면술) → −2", b - a, 2); }
+  { const [b, a] = ppOf("누르기", "방어"); row("P2 프레셔 쪽 방어에 막힘 → −2", b - a, 2); }
+
+  // ── R 리베로·변환자재 ──
+  const GN = (moves, item = null) => M("개굴닌자", moves, "변환자재", item);
+  const ty = (o) => o?.nextState?.a.types;
+  { let st = battle([GN(["냉동빔", "악의파동", "칼춤"]), B()], [B(), B()]); const seq = []; let o = play(st, "냉동빔"); seq.push(ty(o)); o = play(o.nextState, "악의파동"); seq.push(ty(o)); o = play(o.nextState, "칼춤"); seq.push(ty(o)); row("R1 냉동빔 → 악의파동 → 칼춤: 얼음 유지", seq, [["얼음"], ["얼음"], ["얼음"]]); }
+  { let st = battle([GN(["칼춤", "냉동빔"]), B()], [B(), B()]); let o = play(st, "칼춤"); const a = ty(o); o = play(o.nextState, "냉동빔"); row("R2 첫 기술이 변화기(칼춤) → 노말, 다음 냉동빔도 노말", [a, ty(o)], [["노말"], ["노말"]]); }
+  { let st = battle([GN(["냉동빔", "악의파동"]), B()], [B(), B()]); let o = play(st, "냉동빔"); o = play(o.nextState, sw(1), "방어"); o = play(o.nextState, sw(0), "칼춤"); const back = ty(o); o = play(o.nextState, "악의파동"); row("R3 교체 후 복귀 → 원래 타입, 다시 1회(악)", [back, ty(o)], [["물", "악"], ["악"]]); }
+  { const st = battle([GN(["냉동빔"]), B()], [M("잠만보", ["방어"]), B()]); const o = play(st, "냉동빔", "방어"); row("R4 상대 방어에 막혀도 변환(얼음)", ty(o), ["얼음"]); }
+  { let st = battle([GN(["하이드로펌프", "냉동빔"]), B()], [B(), B()]); let o = play(st, "하이드로펌프"); const a = ty(o); o = play(o.nextState, "냉동빔"); row("R6 자기 타입 기술(물/악 → 물 단일), 다음 냉동빔도 물", [a, ty(o)], [["물"], ["물"]]); }
+  { let st = battle([GN(["냉동빔", "악의파동"], "개굴닌자나이트"), B()], [B(), B()]); let o = play(st, "냉동빔"); const a = ty(o); o = play(o.nextState, { kind: "move", move: data.getMove("악의파동"), mega: true }); row("R7 변환자재 사용 후 메가개굴닌자 → 악의파동으로 다시 변환", [a, ty(o)], [["얼음"], ["악"]]); }
+  { const st = battle([M("에이스번", ["잠자기", "냉동펀치"], "리베로"), B()], [B(), B()]); st.a.status = { condition: "sleep", turnsElapsed: 0 }; const o = play(st, "잠꼬대"); info("R8 리베로 잠꼬대(참고: 엔진 기술칸에 잠꼬대 없음)", ty(o)); }
+  { const st = battle([M("에이스번", ["잠꼬대", "냉동펀치"], "리베로"), B()], [B(), B()]); st.a.status = { condition: "sleep", turnsElapsed: 0 }; const o = play(st, "잠꼬대"); row("R8 잠꼬대 → 불려 나온 기술(냉동펀치)의 타입으로", ty(o), ["얼음"]); }
+
+  // ── S 총대장 ──
+  const kingParty = (k) => { const st = battle([M("잠만보", ["칼춤"]), ...Array.from({ length: Math.min(k, 4) }, () => M("잠만보", ["칼춤"])), M("대도각참", ["깨트리기", "칼춤"], "총대장")], [B(), B()]); for (let i = 1; i <= Math.min(k, 4); i++) st.sideA.party[i].currentHp = 0; return st; };
+  for (const [k, want] of [[0, 0], [1, 1], [3, 3], [4, 4]]) {
+    const st = kingParty(k); const o = play(st, sw(st.sideA.party.length - 1), "칼춤"); row(`S1 기절 ${k}명 후 등장 → 센 값`, o?.nextState?.a.supremeOverlordCount ?? 0, want); }
+  { const st = kingParty(2); let o = play(st, sw(st.sideA.party.length - 1), "칼춤"); const c1 = o?.nextState?.a.supremeOverlordCount; o.nextState.sideA.party[1].currentHp = 0; o.nextState.sideA.party[2].currentHp = 0; o = play(o.nextState, "칼춤", "칼춤"); row("S2 등장 후 아군이 더 기절해도 값 유지", [c1, o?.nextState?.a.supremeOverlordCount], [2, 2]); }
+  { const dmg = (k) => { const st = kingParty(k); let o = play(st, sw(st.sideA.party.length - 1), "칼춤"); const hp0 = o.nextState.b.currentHp; o = play(o.nextState, "깨트리기", "칼춤"); return hp0 - o.nextState.b.currentHp; }; const d0 = dmg(0), d3 = dmg(3), d4 = dmg(4); info("S1 배율(깨트리기 피해: 0·3·4명 → Showdown 비율 1·1.3·1.4)", { d0, d3, d4, r3: +(d3 / d0).toFixed(3), r4: +(d4 / d0).toFixed(3) }); }
+
+  // ── TR 트레이스(가디안) ──
+  
+  { const st = battle([TRs(), B()], [M("갸라도스", ["칼춤"], "위협"), B()]); row("TR1 vs 위협: 트레이스 복사, 상대 위협을 받고 베낀 위협도 발동(양쪽 −1)", [st.a.effectiveAbilityId, stg(st.a).atk, stg(st.b).atk], ["위협", -1, -1]); }
+  { const st = battle([TRs(), B()], [M("하마돈", ["칼춤"], "모래날림"), B()]); row("TR1 vs 모래날림: 복사 후 모래바람", [st.a.effectiveAbilityId, st.weather ?? "-"], ["모래날림", "모래바람"]); }
+  for (const [lab, ab] of [["탈", "탈"], ["트레이스", "트레이스"], ["괴짜", "괴짜"], ["일루전", "일루전"], ["배틀스위치", "배틀스위치"]]) { const st = battle([TRs(), B()], [M("잠만보", ["칼춤"], ab), B()]); row(`TR1 vs ${lab}: 못 베끼고 트레이스 유지`, st.a.effectiveAbilityId, "트레이스"); }
+  { let st = battle([TRs(), B()], [M("잠만보", ["칼춤"], "탈"), M("갸라도스", ["칼춤"], "위협")]); let o = play(st, "칼춤", sw(1)); row("TR2 대기 중 상대가 위협 보유자로 교체 → 그때 복사하고 위협 발동", [o?.nextState?.a.effectiveAbilityId, stg(o?.nextState?.b).atk], ["위협", -1]); }
+  { const st = battle([M("후딘", ["칼춤"], "정신력", "후딘나이트"), B()], [M("갸라도스", ["칼춤"], "위협"), B()]); const o = play(st, megaMv("칼춤"), "방어"); row("TR3 메가후딘 → 위협 복사 + 위협 발동(상대 −1)", [o?.nextState?.a.effectiveAbilityId, stg(o?.nextState?.b).atk], ["위협", -1]); }
+
+  // ── MB·FW·FR ──
+  { const st = battle([M("한카리아스", ["지진"], "틀깨기"), B()], [M("로토무", ["칼춤"], "부유"), B()]); const o = play(st, "지진", "칼춤"); row("MB1 틀깨기 지진 vs 부유 → 맞음", o?.nextState?.b.currentHp < o?.nextState?.b.maxHp, true); }
+  { const st = battle([M("몽얌나", ["칼춤"], "예지몽"), B()], [M("한카리아스", ["지진", "역린", "드래곤클로"]), B()]); info("FW 예지몽 로그", st.entryAnnouncements); }
+  { const st = battle([M("몽얌나", ["칼춤"], "통찰"), B()], [M("한카리아스", ["지진"], null, "구애스카프"), B()]); info("FR 통찰 로그", st.entryAnnouncements); }
+
+  // ── 보강 ──
+  for (const [lab, mvn, want] of [["자기편 진영(리플렉터)", "리플렉터", 1], ["자기 대상(대타출동)", "대타출동", 1], ["자기 대상 방어", "방어", 1]]) { const [b, a] = ppOf(mvn, "칼춤"); row(`P1+ ${lab} → PP −${want}`, b - a, want); }
+  { let st = battle([M("잠만보", ["방어", "칼춤"], null, "하양허브"), B()], [B(), I()]); let o = play(st, "방어", sw(1)); row("I1b 상대가 위협으로 교체 등장 → 내 하양허브가 복구·소모", [stg(o?.nextState?.a).atk, o?.nextState?.a.currentItemId ?? null], [0, null]); }
+  { let st = battle([B(), TRs()], [M("갸라도스", ["칼춤"], "위협"), B()]); let o = play(st, sw(1), "방어"); row("TR1b 교체 등장 트레이스 vs 위협 → 복사 + 베낀 위협 발동(상대 −1)", [o?.nextState?.a.effectiveAbilityId, stg(o?.nextState?.b).atk], ["위협", -1]); }
+  { let st = battle([B(), TRs()], [M("하마돈", ["칼춤"], "모래날림"), B()]); let o = play(st, sw(1), "방어"); row("TR1c 교체 등장 트레이스 vs 모래날림 → 복사 + 모래바람", [o?.nextState?.a.effectiveAbilityId, o?.nextState?.weather ?? "-"], ["모래날림", "모래바람"]); }
+  { let st = battle([M("후딘", ["칼춤"], "정신력", "후딘나이트"), B()], [M("하마돈", ["칼춤"], "모래날림"), B()]); const w0 = st.weather; const o = play(st, megaMv("칼춤"), "방어"); row("TR3b 메가후딘 vs 모래날림(이미 모래) → 복사 성공", o?.nextState?.a.effectiveAbilityId, "모래날림"); info("TR3b 날씨", [w0, o?.nextState?.weather]); }
+}
