@@ -41,6 +41,7 @@ import {
   effectDuration,
   effectKindOf,
   effectMoveFails,
+  restFails,
   hazardCarry,
   hazardsAfter,
   sleepTalkCandidates,
@@ -1132,7 +1133,7 @@ function evaluateStatusSupport(c: MoveOptionCtx) {
           protect: evaluateProtectMove({ state: c.env.state, moveState: c.env.moveState, key: c.env.key, move: c.move, mega: c.option.mega, raceMoves: c.env.raceMoves, threat: c.threat }),
           extended: true,
         };
-      } else if (kind === "heal" && c.move.restSleep) {
+      } else if (kind === "heal" && c.move.restSleep && !restFails(c.env.state, c.env.key)) {
         // 잠자기: HP·상태이상 완전 회복 + 2턴 잠듦 — 잠든 상태로 대면을 다시 평가한다(잠든 턴은 turnsToKo가 더함).
         const rested = cloneBattleState(c.env.moveState);
         rested[c.env.key].currentHp = c.env.me.maxHp;

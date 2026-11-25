@@ -1,6 +1,6 @@
 import { type StatusCondition } from "@/types/status";
 import { NO_STATUS_CONDITION } from "@/types/status";
-import { abilityOf, statusImmunitiesOf, type BattleFighterState } from "./state";
+import { NO_STATUS_SELF_CURE_ABILITY_NAMES, abilityOf, statusImmunitiesOf, type BattleFighterState } from "./state";
 
 /**
  * 트랙 M3: 특성을 바꾸는 기술(스킬스왑·동료만들기·역할·위액·고민씨·심플빔)과 특성(트레이스·미라·떠도는영혼)이 공통으로
@@ -30,7 +30,7 @@ export function cureConditionsBlockedByAbility(fighter: BattleFighterState): Sta
   if (!ability) return undefined;
   let cured: StatusCondition | undefined;
   const condition = fighter.status.condition;
-  if (condition && statusImmunitiesOf(fighter, ability)?.includes(condition)) {
+  if (condition && !NO_STATUS_SELF_CURE_ABILITY_NAMES.has(ability.name) && statusImmunitiesOf(fighter, ability)?.includes(condition)) {
     fighter.status = NO_STATUS_CONDITION;
     cured = condition;
   }

@@ -953,7 +953,8 @@
   {
     "id": "리프가드",
     "name": "리프가드",
-    "description": "쾌청 상태일 때 상태이상에 걸리지 않는다."
+    "description": "쾌청 상태일 때 상태이상에 걸리지 않는다.",
+    "blocksStatusesInSun": true
   },
   {
     "id": "플러스",
@@ -1473,6 +1474,7 @@
       "freeze",
       "paralysis",
       "poison",
+      "badly-poisoned",
       "sleep"
     ]
   },

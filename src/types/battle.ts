@@ -414,6 +414,11 @@ export interface ActionLogEntry {
    * (블래키가 이미 맹독인 번치코에게 맹독 재시전 등). "그러나 실패했다!" 문구용.
    */
   statusInflictFailed?: boolean;
+  /**
+   * 상태이상 전용 변화기가 면역에 막혀 아무것도 못 했을 때의 사유(8.3 D3-fix-46 E8-24). kind "ability" = 특성(abilityName) 문구, "other" = 타입·필드·신비의부적·쾌청 얼음·소란피기
+   * ("효과가 없는 것 같다…"). self = 자기 자신에게 거는 기술(잠자기). 데미지 기술의 부가 효과는 채우지 않는다.
+   */
+  statusBlocked?: { status: StatusConditionState["condition"] & string; kind: "ability" | "other"; abilityName?: string; self?: boolean };
   /** 미러아머(reflectsOpponentStatDrops)가 이번 기술의 상대 랭크다운을 시전자에게 되받아쳤으면 그 특성 이름 */
   reflectedStatDropAbilityName?: string;
   /** reflectedStatDropAbilityName이 되돌린 랭크다운(시전자에게 적용된 것) — stat·폭(양수) */

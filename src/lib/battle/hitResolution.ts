@@ -499,7 +499,7 @@ function defineAbilityHitEffect(c: HitCtx) {
 
     if (
       trigger.inflictsStatusOnAttacker &&
-      !isImmuneToStatus(trigger.inflictsStatusOnAttacker, c.attacker.types, statusImmunitiesOf(c.attacker, c.attackerAbility))
+      !isImmuneToStatus(trigger.inflictsStatusOnAttacker, c.attacker.types, statusImmunitiesOf(c.attacker, c.attackerAbility, activeWeather(c.state)))
     ) {
       const before = c.attacker.status.condition;
       c.attacker.status = inflictStatus(c.attacker.status, trigger.inflictsStatusOnAttacker);
@@ -514,7 +514,7 @@ function defineAbilityHitEffect(c: HitCtx) {
     const randomStatuses = trigger.inflictsRandomStatusOnAttacker;
     if (randomStatuses?.length && !c.attacker.types.includes("풀")) {
       const pick = randomStatuses[Math.min(randomStatuses.length - 1, Math.floor(c.random() * randomStatuses.length))];
-      if (!isImmuneToStatus(pick, c.attacker.types, statusImmunitiesOf(c.attacker, c.attackerAbility))) {
+      if (!isImmuneToStatus(pick, c.attacker.types, statusImmunitiesOf(c.attacker, c.attackerAbility, activeWeather(c.state)))) {
         const before = c.attacker.status.condition;
         c.attacker.status = inflictStatus(c.attacker.status, pick);
         if (c.attacker.status.condition !== before) {

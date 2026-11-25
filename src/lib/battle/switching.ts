@@ -257,7 +257,7 @@ function applyEntryHazardsOnSwitchIn(state: BattleState, key: FighterKey, log: s
       }
       if (
         !self.status.condition &&
-        !isImmuneToStatus(hz.toxicSpikesLayers >= 2 ? "badly-poisoned" : "poison", self.types, statusImmunitiesOf(self, selfAbility)) &&
+        !isImmuneToStatus(hz.toxicSpikesLayers >= 2 ? "badly-poisoned" : "poison", self.types, statusImmunitiesOf(self, selfAbility, activeWeather(state))) &&
         !isStatusBlockedByField(state.field, "poison", selfGrounded) &&
         sideOf(state, key).safeguardTurnsRemaining === undefined
       ) {

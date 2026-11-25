@@ -44,7 +44,8 @@ export function actionFailed(action: ActionLogEntry): boolean {
     action.leechSeedBlockedByGrass ||
     action.curseSetFailed ||
     action.futureSightFailed ||
-    action.blockedBySubstituteMoveName
+    action.blockedBySubstituteMoveName ||
+    action.statusBlocked
   ) {
     return true;
   }

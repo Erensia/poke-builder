@@ -6,10 +6,11 @@ import { rankStageMultiplier } from "@/lib/battlePower";
 import { resolveEffectiveDefenderAbility } from "@/lib/abilityModifiers";
 import { isMagicBounceReflectable, isOpponentTargetingMove, substituteBlocksMove } from "@/lib/fieldEffects";
 import { hasVolatile } from "@/lib/volatileConditions";
-import { abilityOf, choiceLockedMoveOf, type BattleFighterState, type BattleSide, type BattleState } from "../state";
+import { abilityOf, abilityStatusImmunitiesOf, activeWeather, choiceLockedMoveOf, type BattleFighterState, type BattleSide, type BattleState } from "../state";
 import { estimateMoveHits, type MoveHitEstimate } from "./moveDamage";
 import { blockedTurns, turnsToKo } from "./turnRates";
 import { isUsageBlocked } from "./usageConditions";
+import { restFailure } from "../statusBlock";
 import { acupressureOptions, effectKindOf, imprisonedMoveIds, sleepTalkCandidates } from "./statusMoveEffects";
 import type { HitsEstimate } from "./types";
 
@@ -121,7 +122,9 @@ function isWastedStatusMove(
  */
 function isPointlessNow(state: BattleState, move: Move, user: BattleFighterState, target: BattleFighterState): boolean {
   const heals = (move.healsFraction && move.healsTarget !== "opponent") || move.healsWeatherDependent || move.restSleep;
-  if (heals && user.currentHp >= user.maxHp && !(move.restSleep && user.status.condition)) return true;
+  // 잠자기는 풀피면 상태이상이 있어도 실패한다(Showdown, 8.3 D3-fix-46) — 그 밖의 실패(수면 면역·필드·이미 수면)도 같은 판정으로 본다
+  if (heals && user.currentHp >= user.maxHp) return true;
+  if (move.restSleep && restFailure(state, user, abilityOf(user))) return true;
   const raises =
     move.statChanges?.filter((s) => s.target === "self" && ((s.delta ?? 0) > 0 || (s.setTo ?? 0) > 0) && s.stat in user.stages) ?? [];
   if (raises.length > 0 && raises.every((s) => user.stages[s.stat as keyof typeof user.stages] >= 6)) return true;
@@ -140,7 +143,12 @@ function isPointlessNow(state: BattleState, move: Move, user: BattleFighterState
     case "leechSeed":
       return hasVolatile(target.volatile, "leechSeed");
     case "yawn":
-      return !!target.status.condition || hasVolatile(target.volatile, "drowsy");
+      // 하품은 상태이상·졸음이거나 잠듦 면역 특성(리프가드의 쾌청 포함)이면 즉시 막힌다(엔진 yawnBlockedAtUse와 같은 축, 8.3 D3-fix-46)
+      return (
+        !!target.status.condition ||
+        hasVolatile(target.volatile, "drowsy") ||
+        !!abilityStatusImmunitiesOf(target, resolveEffectiveDefenderAbility(abilityOf(user), abilityOf(target)), { weather: activeWeather(state) })?.includes("sleep")
+      );
     case "regen":
       return hasVolatile(user.volatile, move.setsRegenVolatile!);
     case "haze":

@@ -18,8 +18,9 @@ import { isGrounded } from "./grounding";
 import { eatBerryNow } from "./fling";
 import { type ItemEffectLog, type SpinCleared, type SpinClearedHazard } from "@/types/battle";
 import { cureConditionsBlockedByAbility, isFixedAbility, isUncopyableAbility } from "./abilityChange";
-import { SWITCH_PASS_MOVE_ID, layHazard, setEffectiveAbility, activeWeather, applyTransform, consumeItem, contraryDelta, contraryMoveFor, emptyHazardState, hasCourtChangeEffects, hasLivingReserve, isFainted, isItemRemovable, sideOf, statDropBlockStatsOf, statusImmunitiesOf, type BattleFighterState, type BattleState } from "./state";
+import { abilityStatusImmunitiesOf, SWITCH_PASS_MOVE_ID, layHazard, setEffectiveAbility, activeWeather, applyTransform, consumeItem, contraryDelta, contraryMoveFor, emptyHazardState, hasCourtChangeEffects, hasLivingReserve, isFainted, isItemRemovable, sideOf, statDropBlockStatsOf, statusImmunitiesOf, type BattleFighterState, type BattleState } from "./state";
 import { triggerTerrainSeeds } from "./switching";
+import { restFailure, statusBlockReason } from "./statusBlock";
 
 interface MirroredMoveEffectsInput {
   /** 길동무를 직접 골랐고 행동 시작 전에 직전 성공 예약이 남아 있었는가(8.3 A5) — preHit이 행동 시작 때 예약을 지우기 전 값 */
@@ -120,6 +121,8 @@ interface MirroredCtx {
   targetMoveTypeOverride: PokemonType | undefined;
   inflictedStatus: StatusConditionState["condition"] | undefined;
   statusInflictFailed: boolean;
+  /** 상태이상 전용 변화기가 면역(특성·타입·필드·신비의부적·쾌청 얼음)에 막힌 사유 — 로그용(8.3 D3-fix-46 E8-24) */
+  statusBlocked: { status: StatusCondition; kind: "ability" | "other"; abilityName?: string; self?: boolean } | undefined;
   beakBlastBurnedAttacker: boolean;
   curedStatus: StatusConditionState["condition"] | undefined;
   curedStatusTarget: "self" | "opponent" | undefined;
@@ -572,6 +575,22 @@ function resetAndTypeChanges(c: MirroredCtx) {
   }
 }
 
+/**
+ * 하품 사용 시 즉시 막는지(8.3 D3-fix-46 R3) — 잠듦 면역 특성(리프가드의 쾌청 포함)·일렉트릭필드(접지)·신비의부적(공격측 틈새포착이면 통과).
+ * 막히면 사유를 로그에 싣는다(확정 효과만). 소란피기·미스트필드·그사이 얻은 면역은 2턴 뒤 잠듦 시도(finishTurn)에서 막는다.
+ */
+function yawnBlockedAtUse(c: MirroredCtx, confirmed: boolean, target: BattleFighterState, ability: Ability | undefined): boolean {
+  if (abilityStatusImmunitiesOf(target, ability, { weather: activeWeather(c.state) })?.includes("sleep")) {
+    if (confirmed) c.volatileBlockedByAbility = { abilityName: ability!.name, volatile: "drowsy", self: false };
+    return true;
+  }
+  const electric = c.state.field === "일렉트릭필드" && isStatusBlockedByField(c.state.field, "sleep", isGrounded(c.state, target, ability));
+  const safeguard = !c.attackerAbility?.bypassesScreensAndSubstitute && sideOf(c.state, c.bounceActive ? c.actorKey : c.defenderKey).safeguardTurnsRemaining !== undefined;
+  if (!electric && !safeguard) return false;
+  if (confirmed && !c.statusBlocked) c.statusBlocked = { status: "sleep", kind: "other" };
+  return true;
+}
+
 /** 부가 상태이상 부여: 통상·페이탈클로·질투의불꽃·독수·부리캐논·싱크로 */
 function inflictStatuses(c: MirroredCtx) {
   // 8.3 B8: 데미지 기술은 실제로 맞아야(명중 + 방어 안 됨 + 데미지 > 0 또는 대타 적중) 부가 상태이상이 걸린다 — 상성 무효 상대엔 기술 전체가 실패한다.
@@ -579,6 +598,7 @@ function inflictStatuses(c: MirroredCtx) {
   // 이미 걸린 상태이상 때문에 상태이상 전용 변화기(맹독·도깨비불 등)가 아무 변화도 못 냈으면 true.
   // C-8: "블래키의 맹독 - 그러나 실패했다!". 데미지 기술의 부가 상태이상은 그냥 안 걸린 것뿐이라 대상 아님.
   c.statusInflictFailed = false;
+  c.statusBlocked = undefined;
   if (landed && c.secondaryEffectsBlockedByAbility && c.effectiveMove.inflictsStatus && !c.opponentEffectsBlocked) {
     // 인분: 데미지 기술이 거는 상태이상(화염방사 화상·연옥 100% 화상·볼부비부비 마비 등)은
     // 전부 추가효과라 무산된다. 변화기(도깨비불 등)의 상태이상은 secondaryEffectsBlockedByAbility가
@@ -586,19 +606,18 @@ function inflictStatuses(c: MirroredCtx) {
     c.secondaryBlockedByAbilityName = c.defenderAbility!.name;
   } else if (landed && !c.opponentEffectsBlocked && c.effectiveMove.inflictsStatus) {
     for (const effect of c.effectiveMove.inflictsStatus) {
-      if (
-        isImmuneToStatus(
-          effect.status,
-          c.defender.types,
-          statusImmunitiesOf(c.defender, c.defenderAbility),
-          c.attackerAbility?.bypassesPoisonTypeImmunity,
-        )
-      )
+      // 면역 사유 판정은 statusBlockReason 한 곳이다(특성·타입 → 필드 → 신비의부적(틈새포착은 통과) → 쾌청의 얼음). 매직미러 반사 중이면 대상은 원래 시전자 편(actorKey)이다.
+      const block = statusBlockReason(c.state, c.bounceActive ? c.actorKey : c.defenderKey, c.defender, c.defenderAbility, effect.status, {
+        attackerBypassesPoisonTypeImmunity: c.attackerAbility?.bypassesPoisonTypeImmunity,
+        attackerBypassesScreens: !!c.attackerAbility?.bypassesScreensAndSubstitute,
+      });
+      if (block) {
+        // 상태이상 전용 변화기(확정 효과)만 사유를 로그로 알린다 — 데미지 기술의 부가·확률 효과는 본가처럼 조용하다.
+        if (c.effectiveMove.category === "status" && effect.chance === undefined && !c.statusBlocked) {
+          c.statusBlocked = { status: effect.status, kind: block.kind, abilityName: block.kind === "ability" ? block.abilityName : undefined };
+        }
         continue;
-      if (isStatusBlockedByField(c.state.field, effect.status, isGrounded(c.state, c.defender, c.defenderAbility))) continue;
-      if (sideOf(c.state, c.defenderKey).safeguardTurnsRemaining !== undefined) continue;
-      // 쾌청(강한 햇살) 날씨에서는 얼음 상태에 걸리지 않는다 — 타입 면역과는 다른 축이라 별도 확인
-      if (effect.status === "freeze" && activeWeather(c.state) === "쾌청") continue;
+      }
       const chance = effect.chance !== undefined ? effect.chance / 100 : 1;
       if (c.random() < chance) {
         const before = c.defender.status.condition;
@@ -627,7 +646,7 @@ function inflictStatuses(c: MirroredCtx) {
       const picked = pool[Math.floor(c.random() * pool.length)];
       if (
         picked &&
-        !isImmuneToStatus(picked, c.defender.types, statusImmunitiesOf(c.defender, c.defenderAbility)) &&
+        !isImmuneToStatus(picked, c.defender.types, statusImmunitiesOf(c.defender, c.defenderAbility, activeWeather(c.state))) &&
         !isStatusBlockedByField(c.state.field, picked, isGrounded(c.state, c.defender, c.defenderAbility)) &&
         sideOf(c.state, c.defenderKey).safeguardTurnsRemaining === undefined &&
         !(picked === "freeze" && activeWeather(c.state) === "쾌청")
@@ -656,7 +675,7 @@ function inflictStatuses(c: MirroredCtx) {
     );
     if (
       rose &&
-      !isImmuneToStatus("burn", c.defender.types, statusImmunitiesOf(c.defender, c.defenderAbility)) &&
+      !isImmuneToStatus("burn", c.defender.types, statusImmunitiesOf(c.defender, c.defenderAbility, activeWeather(c.state))) &&
       !isStatusBlockedByField(c.state.field, "burn", isGrounded(c.state, c.defender, c.defenderAbility)) &&
       sideOf(c.state, c.defenderKey).safeguardTurnsRemaining === undefined
     ) {
@@ -676,7 +695,7 @@ function inflictStatuses(c: MirroredCtx) {
     c.damage > 0 &&
     !c.hitSubstitute &&
     !c.inflictedStatus &&
-    !isImmuneToStatus("poison", c.defender.types, statusImmunitiesOf(c.defender, c.defenderAbility), c.attackerAbility?.bypassesPoisonTypeImmunity) &&
+    !isImmuneToStatus("poison", c.defender.types, statusImmunitiesOf(c.defender, c.defenderAbility, activeWeather(c.state)), c.attackerAbility?.bypassesPoisonTypeImmunity) &&
     !isStatusBlockedByField(c.state.field, "poison", isGrounded(c.state, c.defender, c.defenderAbility)) &&
     sideOf(c.state, c.defenderKey).safeguardTurnsRemaining === undefined &&
     c.random() * 100 < c.attackerAbility.poisonTouchChance
@@ -697,7 +716,7 @@ function inflictStatuses(c: MirroredCtx) {
     c.hit &&
     !c.hitSubstitute &&
     !isFainted(c.attacker) &&
-    !isImmuneToStatus("burn", c.attacker.types, statusImmunitiesOf(c.attacker, c.attackerAbility)) &&
+    !isImmuneToStatus("burn", c.attacker.types, statusImmunitiesOf(c.attacker, c.attackerAbility, activeWeather(c.state))) &&
     !isStatusBlockedByField(c.state.field, "burn", isGrounded(c.state, c.attacker, c.attackerAbility)) &&
     sideOf(c.state, c.actorKey).safeguardTurnsRemaining === undefined
   ) {
@@ -713,7 +732,7 @@ function inflictStatuses(c: MirroredCtx) {
   if (
     c.inflictedStatus &&
     c.defenderAbility?.reflectsStatusToOpponent?.includes(c.inflictedStatus) &&
-    !isImmuneToStatus(c.inflictedStatus, c.attacker.types, statusImmunitiesOf(c.attacker, c.attackerAbility)) &&
+    !isImmuneToStatus(c.inflictedStatus, c.attacker.types, statusImmunitiesOf(c.attacker, c.attackerAbility, activeWeather(c.state))) &&
     !isStatusBlockedByField(c.state.field, c.inflictedStatus, isGrounded(c.state, c.attacker, c.attackerAbility)) &&
     sideOf(c.state, c.actorKey).safeguardTurnsRemaining === undefined &&
     !(c.inflictedStatus === "freeze" && activeWeather(c.state) === "쾌청")
@@ -804,13 +823,9 @@ function statusCureAndVolatile(c: MirroredCtx) {
       if (effect.volatile === "drowsy" && (target.status.condition || hasVolatile(target.volatile, "drowsy"))) {
         continue;
       }
-      if (
-        effect.volatile === "drowsy" &&
-        c.state.field === "일렉트릭필드" &&
-        isGrounded(c.state, target, effect.target === "self" ? c.attackerAbility : c.defenderAbility)
-      ) {
-        continue;
-      }
+      // 하품 사용 시 즉시 막는 것(Showdown, 8.3 D3-fix-46 R3): 잠듦 면역 특성(불면·의기양양·스위트베일·정화의소금·풀 타입 플라워베일·쾌청의 리프가드)·일렉트릭필드(접지)·
+      // 신비의부적(공격측이 틈새포착이면 통과). 소란피기·미스트필드 등은 2턴 뒤 잠듦 시도에서 막는다(finishTurn). 막힌 사유는 로그로 알린다(확정 효과만).
+      if (effect.volatile === "drowsy" && effect.target !== "self" && yawnBlockedAtUse(c, effect.chance === undefined, target, immunityAbility)) continue;
       // 희망사항(§6-2): fighter volatile이 아니라 편(BattleSide.wish)에 큐로 건다 — 2턴 뒤
       // 그 자리(활성)의 포켓몬이 회복받으므로 교체와 무관하게 유지돼야 한다. 회복량은 시전 시점
       // 시전자 최대 HP의 절반(고정). 이미 이 편에 예약돼 있으면 재사용 실패(본가 규칙).
@@ -1170,7 +1185,12 @@ function healAndThaw(c: MirroredCtx) {
   // 무조건 재운다 — curesStatus/inflictsStatus의 일반 규칙(이미 상태이상이 있으면 못 걺)과는
   // 다른 별도 경로라 여기서 직접 덮어쓴다. curedStatus 로그는 재우기 전 상태이상이 있었을 때만 채운다.
   c.restSlept = false;
-  if (c.effectiveMove.restSleep) {
+  const restFail = c.effectiveMove.restSleep ? restFailure(c.state, c.attacker, c.attackerAbility) : undefined;
+  if (restFail) {
+    // 잠자기 실패(8.3 D3-fix-46 E8-20): 회복도 수면도 치료도 없다. 수면 면역 특성이면 그 특성 줄, 그 밖(이미 수면·풀피·필드·소란)은 "그러나 실패했다!".
+    if (restFail.kind === "ability") c.statusBlocked = { status: "sleep", kind: "ability", abilityName: restFail.abilityName, self: true };
+    else c.statusInflictFailed = true;
+  } else if (c.effectiveMove.restSleep) {
     if (c.attacker.status.condition) {
       c.curedStatus = c.attacker.status.condition;
       c.curedStatusTarget = "self";
@@ -1828,7 +1848,7 @@ function collectResult(c: MirroredCtx) {
     [c.attackerItem, c.defenderItem] = [c.defenderItem, c.attackerItem];
   }
   return {
-    defenderAbility: c.defenderAbility, attacker: c.attacker, defender: c.defender, attackerAbility: c.attackerAbility, attackerItem: c.attackerItem, defenderItem: c.defenderItem, abilityInflictedStatusOnAttacker: c.abilityInflictedStatusOnAttacker, abilityInflictedStatusAbilityName: c.abilityInflictedStatusAbilityName, statusCureBerryItemName: c.statusCureBerryItemName, mentalMoveBlockedByAbilityName: c.mentalMoveBlockedByAbilityName, bouncedMoveName: c.bouncedMoveName, bounceUserBlock: c.bounceUserBlock, bouncedByAbilityName: c.bouncedByAbilityName, secondaryBlockedByAbilityName: c.secondaryBlockedByAbilityName, berryEatFailed: c.berryEatFailed, stuffCheeksBerryHeal: c.stuffCheeksBerryHeal, stuffCheeksBerryName: c.stuffCheeksBerryName, costHpFailed: c.costHpFailed, soulBeatHpCost: c.soulBeatHpCost, selfStatRises: c.selfStatRises, selfStatsAtMax: c.selfStatsAtMax, selfStatDrops: c.selfStatDrops, reflectedStatDropAbilityName: c.reflectedStatDropAbilityName, reflectedStatDrops: c.reflectedStatDrops, restoredStatsSelfItemName: c.restoredStatsSelfItemName, restoredStatsOpponentItemName: c.restoredStatsOpponentItemName, opportunistCopiedStats: c.opportunistCopiedStats, opportunistAbilityName: c.opportunistAbilityName, opponentStatDrops: c.opponentStatDrops, invertedTargetStages: c.invertedTargetStages, addedTypeToTarget: c.addedTypeToTarget, overwroteTargetType: c.overwroteTargetType, targetMoveTypeOverride: c.targetMoveTypeOverride, inflictedStatus: c.inflictedStatus, statusInflictFailed: c.statusInflictFailed, beakBlastBurnedAttacker: c.beakBlastBurnedAttacker, curedStatus: c.curedStatus, curedStatusTarget: c.curedStatusTarget, inflictedVolatile: c.inflictedVolatile, tidyUpDone: c.tidyUpDone, spinCleared: c.spinCleared, courtChangeDone: c.courtChangeDone, courtChangeFailed: c.courtChangeFailed, defogFieldCleared: c.defogFieldCleared, revivedPartyName: c.revivedPartyName, reviveFailed: c.reviveFailed, saltCureApplied: c.saltCureApplied, balloonPoppedItemName: c.balloonPoppedItemName, octolockApplied: c.octolockApplied, jawLockApplied: c.jawLockApplied, selfWokeBeforeMove: c.selfWokeBeforeMove, restSlept: c.restSlept, healedAmount: c.healedAmount, healedTarget: c.healedTarget, averagedDefensesMoveName: c.averagedDefensesMoveName, swappedSpeedMoveName: c.swappedSpeedMoveName, transformedIntoName: c.transformedIntoName, transformFailed: c.transformFailed, regenSetFailed: c.regenSetFailed, leechSeedSetFailed: c.leechSeedSetFailed, leechSeedBlockedByGrass: c.leechSeedBlockedByGrass, curseHpCost: c.curseHpCost, curseSetFailed: c.curseSetFailed, abilitySwappedTargetToName: c.abilitySwappedTargetToName, abilitySwapFailed: c.abilitySwapFailed, substituteSetFailed: c.substituteSetFailed, shedTailFailed: c.shedTailFailed, shedTailSucceeded: c.shedTailSucceeded, setDisabledMoveName: c.setDisabledMoveName, disableSetFailed: c.disableSetFailed, setEncoreMoveName: c.setEncoreMoveName, encoreSetFailed: c.encoreSetFailed, swappedStatsMoveName: c.swappedStatsMoveName, swappedStagesMoveName: c.swappedStagesMoveName, protectSucceeded: c.protectSucceeded, protectFailed: c.protectFailed, protectStanceEntered: c.protectStanceEntered, fieldSetFailed: c.fieldSetFailed, stealthRockSetForSide: c.stealthRockSetForSide, spikesSetForSide: c.spikesSetForSide, toxicSpikesSetForSide: c.toxicSpikesSetForSide, stickyWebSetForSide: c.stickyWebSetForSide, hazardSetFailed: c.hazardSetFailed, swappedItems: c.swappedItems, itemSwapFailed: c.itemSwapFailed, painSplitHp: c.painSplitHp, stockpileHealFailed: c.stockpileHealFailed, recycledItemName: c.recycledItemName, recycleFailed: c.recycleFailed, copiedStagesFromName: c.copiedStagesFromName, averagedAttacksMoveName: c.averagedAttacksMoveName, spitePp: c.spitePp, spiteFailed: c.spiteFailed, acupressureRaised: c.acupressureRaised, acupressureFailed: c.acupressureFailed, volatileBlockedByAbility: c.volatileBlockedByAbility, abilityChange: c.abilityChange, abilityChangeFailed: c.abilityChangeFailed, copiedTypes: c.copiedTypes, smackedDownTarget: c.smackedDownTarget, meltedItemName: c.meltedItemName, meltFailed: c.meltFailed, itemEffect: c.itemEffect, targetStagesReset: c.targetStagesReset, magneticFluxFailed: c.magneticFluxFailed, partyStatusCuredCount: c.partyStatusCuredCount, teaTime: c.teaTime, teaTimeFailed: c.teaTimeFailed,
+    defenderAbility: c.defenderAbility, attacker: c.attacker, defender: c.defender, attackerAbility: c.attackerAbility, attackerItem: c.attackerItem, defenderItem: c.defenderItem, abilityInflictedStatusOnAttacker: c.abilityInflictedStatusOnAttacker, abilityInflictedStatusAbilityName: c.abilityInflictedStatusAbilityName, statusCureBerryItemName: c.statusCureBerryItemName, mentalMoveBlockedByAbilityName: c.mentalMoveBlockedByAbilityName, bouncedMoveName: c.bouncedMoveName, bounceUserBlock: c.bounceUserBlock, bouncedByAbilityName: c.bouncedByAbilityName, secondaryBlockedByAbilityName: c.secondaryBlockedByAbilityName, berryEatFailed: c.berryEatFailed, stuffCheeksBerryHeal: c.stuffCheeksBerryHeal, stuffCheeksBerryName: c.stuffCheeksBerryName, costHpFailed: c.costHpFailed, soulBeatHpCost: c.soulBeatHpCost, selfStatRises: c.selfStatRises, selfStatsAtMax: c.selfStatsAtMax, selfStatDrops: c.selfStatDrops, reflectedStatDropAbilityName: c.reflectedStatDropAbilityName, reflectedStatDrops: c.reflectedStatDrops, restoredStatsSelfItemName: c.restoredStatsSelfItemName, restoredStatsOpponentItemName: c.restoredStatsOpponentItemName, opportunistCopiedStats: c.opportunistCopiedStats, opportunistAbilityName: c.opportunistAbilityName, opponentStatDrops: c.opponentStatDrops, invertedTargetStages: c.invertedTargetStages, addedTypeToTarget: c.addedTypeToTarget, overwroteTargetType: c.overwroteTargetType, targetMoveTypeOverride: c.targetMoveTypeOverride, inflictedStatus: c.inflictedStatus, statusInflictFailed: c.statusInflictFailed, statusBlocked: c.statusBlocked, beakBlastBurnedAttacker: c.beakBlastBurnedAttacker, curedStatus: c.curedStatus, curedStatusTarget: c.curedStatusTarget, inflictedVolatile: c.inflictedVolatile, tidyUpDone: c.tidyUpDone, spinCleared: c.spinCleared, courtChangeDone: c.courtChangeDone, courtChangeFailed: c.courtChangeFailed, defogFieldCleared: c.defogFieldCleared, revivedPartyName: c.revivedPartyName, reviveFailed: c.reviveFailed, saltCureApplied: c.saltCureApplied, balloonPoppedItemName: c.balloonPoppedItemName, octolockApplied: c.octolockApplied, jawLockApplied: c.jawLockApplied, selfWokeBeforeMove: c.selfWokeBeforeMove, restSlept: c.restSlept, healedAmount: c.healedAmount, healedTarget: c.healedTarget, averagedDefensesMoveName: c.averagedDefensesMoveName, swappedSpeedMoveName: c.swappedSpeedMoveName, transformedIntoName: c.transformedIntoName, transformFailed: c.transformFailed, regenSetFailed: c.regenSetFailed, leechSeedSetFailed: c.leechSeedSetFailed, leechSeedBlockedByGrass: c.leechSeedBlockedByGrass, curseHpCost: c.curseHpCost, curseSetFailed: c.curseSetFailed, abilitySwappedTargetToName: c.abilitySwappedTargetToName, abilitySwapFailed: c.abilitySwapFailed, substituteSetFailed: c.substituteSetFailed, shedTailFailed: c.shedTailFailed, shedTailSucceeded: c.shedTailSucceeded, setDisabledMoveName: c.setDisabledMoveName, disableSetFailed: c.disableSetFailed, setEncoreMoveName: c.setEncoreMoveName, encoreSetFailed: c.encoreSetFailed, swappedStatsMoveName: c.swappedStatsMoveName, swappedStagesMoveName: c.swappedStagesMoveName, protectSucceeded: c.protectSucceeded, protectFailed: c.protectFailed, protectStanceEntered: c.protectStanceEntered, fieldSetFailed: c.fieldSetFailed, stealthRockSetForSide: c.stealthRockSetForSide, spikesSetForSide: c.spikesSetForSide, toxicSpikesSetForSide: c.toxicSpikesSetForSide, stickyWebSetForSide: c.stickyWebSetForSide, hazardSetFailed: c.hazardSetFailed, swappedItems: c.swappedItems, itemSwapFailed: c.itemSwapFailed, painSplitHp: c.painSplitHp, stockpileHealFailed: c.stockpileHealFailed, recycledItemName: c.recycledItemName, recycleFailed: c.recycleFailed, copiedStagesFromName: c.copiedStagesFromName, averagedAttacksMoveName: c.averagedAttacksMoveName, spitePp: c.spitePp, spiteFailed: c.spiteFailed, acupressureRaised: c.acupressureRaised, acupressureFailed: c.acupressureFailed, volatileBlockedByAbility: c.volatileBlockedByAbility, abilityChange: c.abilityChange, abilityChangeFailed: c.abilityChangeFailed, copiedTypes: c.copiedTypes, smackedDownTarget: c.smackedDownTarget, meltedItemName: c.meltedItemName, meltFailed: c.meltFailed, itemEffect: c.itemEffect, targetStagesReset: c.targetStagesReset, magneticFluxFailed: c.magneticFluxFailed, partyStatusCuredCount: c.partyStatusCuredCount, teaTime: c.teaTime, teaTimeFailed: c.teaTimeFailed,
   };
 }
 

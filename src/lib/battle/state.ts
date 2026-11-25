@@ -521,14 +521,35 @@ function hasFlowerVeil(fighter: BattleFighterState, ability: Ability | undefined
   return !!ability?.grassVeil && fighter.types.includes("풀");
 }
 
+/**
+ * 상태이상을 막기만 하고 **이미 걸린 상태이상은 치료하지 않는** 특성(8.3 D3-fix-46 R4) — Showdown에서 이 특성들엔 `onUpdate` 치료가 없다(스킬스왑으로 얻어도·틀깨기로 걸려도 그대로).
+ * 불면·의기양양·유연·수포·열교환·마그마의무장은 `onUpdate`가 있어 치료한다(면역은 사용자 정리로 턴 끝 치료만 뺀다 — finishTurn).
+ */
+export const NO_STATUS_SELF_CURE_ABILITY_NAMES: ReadonlySet<string> = new Set(["정화의소금", "스위트베일"]);
+
 /** 특성 기반 상태이상 면역 목록 — 유연류(immuneToStatuses) + 플라워베일(풀타입이면 전부) */
 export function statusImmunitiesOf(
   fighter: BattleFighterState,
   ability: Ability | undefined,
+  weather?: WeatherKind,
 ): StatusCondition[] | undefined {
-  if (hasFlowerVeil(fighter, ability)) return ALL_MAJOR_STATUS_CONDITIONS;
+  const byAbility = abilityStatusImmunitiesOf(fighter, ability, { weather });
   // 소란피기(ver.1.9): 소란 중에는 누구도 잠들 수 없다
-  if (fighter.sleepBlockedByUproar) return [...(ability?.immuneToStatuses ?? []), "sleep"];
+  if (fighter.sleepBlockedByUproar) return [...(byAbility ?? []), "sleep"];
+  return byAbility;
+}
+
+/**
+ * 특성만으로 막히는 상태이상(소란피기 제외) — immuneToStatuses + 풀 타입 플라워베일(자기 자신 대상이면 제외: Showdown `target !== source`) +
+ * **쾌청의 리프가드**(8.3 D3-fix-46: blocksStatusesInSun, 날씨를 넘겼을 때만). 하품·잠자기·상태이상 부여가 같은 판정을 쓴다.
+ */
+export function abilityStatusImmunitiesOf(
+  fighter: BattleFighterState,
+  ability: Ability | undefined,
+  opts?: { weather?: WeatherKind; self?: boolean },
+): StatusCondition[] | undefined {
+  if (opts?.weather === "쾌청" && ability?.blocksStatusesInSun) return ALL_MAJOR_STATUS_CONDITIONS;
+  if (!opts?.self && hasFlowerVeil(fighter, ability)) return ALL_MAJOR_STATUS_CONDITIONS;
   return ability?.immuneToStatuses;
 }
 
