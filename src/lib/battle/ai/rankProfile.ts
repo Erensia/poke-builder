@@ -39,7 +39,7 @@ export const RANK_AI_PROFILES: Partial<DecisionParams>[] = [
   watch(noisy(0.4)),
   watch(noisy(0.12)),
   // 8.3 C3 — 마스터볼 4(P3)만 실수 모델로 약화해 P4와 사다리 간격을 만든다(학습을 끈 사다리 측정에서 λ만 다른 두 단계는 같은 AI라 정확히 50.0%).
-  // margin 1e9 = P0~P2와 같은 방식(어떤 차선책이든). 설계 `8.3-C3-사다리간격설계.md`, 측정 `C3-측정도구/rounds-report.txt`.
+  // margin 1e9 = P0~P2와 같은 방식(어떤 차선책이든). 설계 `8.3-C3-사다리간격설계.md`, 측정 `04_C-AI강화/C3-측정도구/rounds-report.txt`.
   { ...learn(MODEL_ONLY, 0.25), mistake: { rate: 0.15, margin: 1e9 } },
   learn(MODEL_ONLY, 0.5),
   learn(APP_DECISION_PARAMS, 0.75),
