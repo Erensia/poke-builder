@@ -1,6 +1,6 @@
 // 8.3 D3-fix-11 스피드 정수 파이프라인(Showdown `getStat('spe')`): 랭크 floor → 보정 4096 체인(반내림) → 마비는 체인 뒤 floor(×50/100) (사용자 결정 "따라간다", 인게임 확인: 동속으로 갈린다).
 // + E3-13 메가진화 순서·E3-16 양쪽 자발 교체 순서(Showdown getActionSpeed: 보정·랭크 반영, 트릭룸이면 먼저 행동하는 쪽부터, 동속은 무작위) + E3-14 시간벌기 + 선공 발동 양쪽 성공.
-// 설계 `8.3-D3-fix11-스피드정수설계.md`(검수 `…-검수.md`). 참조 구현은 `D3-검수자료/zz-e3-speed.mjs.txt`의 showdownSpeed를 그대로 옮겼다.
+// 설계 `8.3-D3-fix11-스피드정수설계.md`(검수 `…-검수.md`). 참조 구현은 `05_D3-전수검수/자료/D3-검수자료/zz-e3-speed.mjs.txt`의 showdownSpeed를 그대로 옮겼다.
 export default async function ({ server, data, mon, battle, pts, check }) {
   const rt = await server.ssrLoadModule("/src/lib/battle/runTurn.ts");
   const toi = await server.ssrLoadModule("/src/lib/battle/turnOrderInputs.ts");
