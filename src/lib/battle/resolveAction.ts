@@ -6,7 +6,7 @@ import { getAbility, getItem, getMove } from "@/lib/data";
 import { effectiveHeldItem } from "./turnOrderInputs";
 import { applyFlingEffect } from "./fling";
 import { applyStageDelta } from "@/lib/statStages";
-import { isOpponentTargetingMove } from "@/lib/fieldEffects";
+import { isOpponentTargetingMove, type OpponentEffectBlockers } from "@/lib/fieldEffects";
 import { getHpThresholdBerryHeal } from "@/lib/itemEffects";
 import { GRAVITY_DURATION, MAGIC_ROOM_DURATION, MAGNET_RISE_DURATION, SCREEN_DURATION, TAILWIND_DURATION, TRICK_ROOM_DURATION, WONDER_ROOM_DURATION, WEATHER_DURATION, activeWeather, applyForecastForm, consumeItem, contraryDelta, hasLivingReserve, isFainted, isForcedSwitchBlocked, sideOf, type BattleState } from "./state";
 import { hasVolatile } from "@/lib/volatileConditions";
@@ -147,6 +147,8 @@ interface ActionCtx {
   wanderingSpiritSwapped: boolean;
   mentalMoveBlockedByAbilityName: string | undefined;
   bouncedMoveName: string | undefined;
+  /** 매직미러 반사 구간에서 원래 사용자가 막은 사유(8.3 D3-fix-45) */
+  bounceUserBlock: OpponentEffectBlockers | undefined;
   bouncedByAbilityName: string | undefined;
   secondaryBlockedByAbilityName: string | undefined;
   berryEatFailed: boolean;
@@ -284,6 +286,7 @@ function resolveMirroredPhase(c: ActionCtx) {
     bouncedByMagicMirror: c.bouncedByMagicMirror, destinyBondWasArmed: c.destinyBondWasArmed, move: c.move, effectiveMove: c.effectiveMove, opponentEffectsBlocked: c.opponentEffectsBlocked, random: c.random, state: c.state, hit: c.hit, movesSecond: c.movesSecond, defenderKey: c.defenderKey, damage: c.damage, hitSubstitute: c.hitSubstitute, defenderMove: c.defenderMove, actorKey: c.actorKey, defenderBerriesBlocked: c.defenderBerriesBlocked, attackerBerriesBlocked: c.attackerBerriesBlocked, blockedByProtect: c.blockedByProtect, sheerForceAbilityName: c.sheerForceAbilityName, isDamaging: c.isDamaging, selfCuredStatus: c.selfCuredStatus, terrainSeedMessages: c.terrainSeedMessages, defenderAbility: c.defenderAbility, attacker: c.attacker, defender: c.defender, attackerAbility: c.attackerAbility, attackerItem: c.attackerItem, defenderItem: c.defenderItem, abilityInflictedStatusOnAttacker: c.abilityInflictedStatusOnAttacker, abilityInflictedStatusAbilityName: c.abilityInflictedStatusAbilityName, statusCureBerryItemName: c.statusCureBerryItemName, mentalMoveBlockedByAbilityName: c.mentalMoveBlockedByAbilityName,
   });
   c.bouncedMoveName = mirrorResult.bouncedMoveName;
+  c.bounceUserBlock = mirrorResult.bounceUserBlock;
   c.bouncedByAbilityName = mirrorResult.bouncedByAbilityName;
   c.secondaryBlockedByAbilityName = mirrorResult.secondaryBlockedByAbilityName;
   c.berryEatFailed = mirrorResult.berryEatFailed;
@@ -666,8 +669,9 @@ function finalizeAction(c: ActionCtx) {
 
   // 대타에 통째로 막힘: 상대를 겨냥한 기술인데 대타를 실제로 깎지도(hitSubstitute) 못했으면
   // (= 변화기이거나 데미지 0), 본체엔 아무 일도 안 일어난 것이라 "실패" 문구를 낸다.
-  c.blockedBySubstituteMoveName = c.blockedBySubstitute && !c.hitSubstitute && isOpponentTargetingMove(c.effectiveMove) ? c.effectiveMove.name : undefined;
-  c.powderBlockedMoveName = c.blockedByPowderImmunity ? c.effectiveMove.name : undefined;
+  // 매직미러로 반사된 기술은 원래 사용자의 대타가 막은 경우(bounceBlockedBySubstitute)도 같은 문구를 쓴다(8.3 D3-fix-45).
+  c.blockedBySubstituteMoveName = (c.blockedBySubstitute || !!c.bounceUserBlock?.substitute) && !c.hitSubstitute && isOpponentTargetingMove(c.effectiveMove) ? c.effectiveMove.name : undefined;
+  c.powderBlockedMoveName = c.blockedByPowderImmunity || c.bounceUserBlock?.powder ? c.effectiveMove.name : undefined;
 
   // 볼주머니: 이번 행동 중 consumeItem이 나무열매 소비로 쌓아둔 추가 회복량을 로그로 옮기고 지운다.
   c.cheekPouchHeal += (c.attacker.pendingCheekPouchHeal ?? 0) + (c.defender.pendingCheekPouchHeal ?? 0);
@@ -869,12 +873,13 @@ function collectResult(c: ActionCtx) {
     abilityLoweredDefenderStats: c.abilityLoweredDefenderStats.length ? c.abilityLoweredDefenderStats : undefined,
     abilityAbsorbedMoveType: c.abilityAbsorbedMoveType,
     abilityAbsorbAbilityName: c.abilityAbsorbAbilityName,
-    soundproofBlockedByAbilityName: c.soundproofBlockedByAbilityName,
-    bulletproofBlockedByAbilityName: c.bulletproofBlockedByAbilityName,
+    // 매직미러 반사 중 원래 사용자의 방음·방탄·황금몸이 막았으면 그 특성 이름을 같은 필드에 싣는다(반사 줄은 방어측=사용자인 사본으로 그려진다, 8.3 D3-fix-45 Q1).
+    soundproofBlockedByAbilityName: c.soundproofBlockedByAbilityName ?? c.bounceUserBlock?.soundproofAbilityName,
+    bulletproofBlockedByAbilityName: c.bulletproofBlockedByAbilityName ?? c.bounceUserBlock?.bulletproofAbilityName,
     mentalMoveBlockedByAbilityName: c.mentalMoveBlockedByAbilityName,
     // 황금몸은 명중 굴림과 무관하게 판정되므로, 실제로 빗나간 경우(§4-5)와 구분하려면
     // 여기서 hit까지 확인해야 한다 — 그래야 "빗나갔다"와 "막혔다"가 서로 다른 로그로 나뉜다.
-    goodAsGoldBlockedByAbilityName: c.blockedByGoodAsGold && c.hit ? c.defenderAbility?.name : undefined,
+    goodAsGoldBlockedByAbilityName: (c.blockedByGoodAsGold && c.hit ? c.defenderAbility?.name : undefined) ?? c.bounceUserBlock?.goldBodyAbilityName,
     invertedTargetStages: c.invertedTargetStages || undefined,
     addedTypeToTarget: c.addedTypeToTarget,
     targetMoveTypeOverride: c.targetMoveTypeOverride,

@@ -4,7 +4,7 @@ import { getItem, getMove } from "@/lib/data";
 import { NO_STATUS_CONDITION, type StatusCondition } from "@/types/status";
 import { applyMoveStatChanges, applyStageDelta } from "@/lib/statStages";
 import { resolveEffectiveDefenderAbility } from "@/lib/abilityModifiers";
-import { isConfusionBlockedByField, isMagicBounceReflectable, isOpponentTargetingMove, isStatusBlockedByField } from "@/lib/fieldEffects";
+import { isConfusionBlockedByField, isMagicBounceReflectable, isOpponentTargetingMove, isStatusBlockedByField, substituteBlocksMove } from "@/lib/fieldEffects";
 import { inflictStatus, isImmuneToStatus } from "@/lib/statusConditions";
 import { FIELD_DURATION } from "@/lib/fieldEffects";
 import { hasVolatile, inflictVolatile } from "@/lib/volatileConditions";
@@ -439,7 +439,7 @@ export function effectMoveFails(state: BattleState, key: FighterKey, move: Move)
   if (!targetsOpponent) return false;
   const classification = move.classification ?? [];
   if (targetAbility?.blocksOpponentStatusMoveEffects) return true;
-  if (target.substituteHp !== undefined && !classification.includes("소리") && !userAbility?.bypassesScreensAndSubstitute) return true;
+  if (substituteBlocksMove(move, userAbility, target)) return true;
   if (classification.includes("가루") && target.types.includes("풀")) return true;
   if (targetAbility?.blocksSound && classification.includes("소리")) return true;
   if (move.inflictsStatus?.length && !statusToInflict(state, key, move)) return true;

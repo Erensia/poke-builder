@@ -474,6 +474,12 @@ export interface Move {
    */
   bypassesProtect?: boolean;
   /**
+   * 대타를 무시하는 소리가 아닌 기술에 표시한다(Showdown `bypasssub` — 8.3 D3-fix-45 R1). 도발·트집·사슬묶기·앙코르·헤롱헤롱·원한·안개제거·
+   * 흑안개·스왑/복사 계열·저주·날려버리기 등. 소리 기술(classification "소리")은 전부 대타를 무시하므로 따로 표시하지 않는다.
+   * `substituteBlocksMove`(fieldEffects)가 소리·이 필드·틈새포착을 한 곳에서 판정한다.
+   */
+  bypassesSubstitute?: boolean;
+  /**
    * 매직미러(Ability.reflectsOpponentStatusMoves)로 되돌릴 수 없는 변화기에 표시한다. 본가 기준
    * 반사 예외 — 고스트 타입의 저주, 추억의선물, 화면 전체 판정인 멸망의노래·흔들흔들댄스 등.
    * (바꿔치기·트릭·스킬스왑처럼 isOpponentTargetingMove가 애초에 false인 기술은 이 플래그 없이도

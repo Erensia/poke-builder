@@ -640,6 +640,7 @@
   },
   {
     "id": "길동무",
+    "bypassesSubstitute": true,
     "excludedFromCopycat": true,
     "name": "길동무",
     "type": "고스트",
@@ -1527,6 +1528,7 @@
   },
   {
     "id": "도우미",
+    "bypassesSubstitute": true,
     "excludedFromCopycat": true,
     "name": "도우미",
     "type": "노말",
@@ -2461,6 +2463,7 @@
   },
   {
     "id": "생명의물방울",
+    "bypassesSubstitute": true,
     "name": "생명의물방울",
     "type": "물",
     "category": "status",
@@ -2516,6 +2519,7 @@
   },
   {
     "id": "자기암시",
+    "bypassesSubstitute": true,
     "copiesTargetStages": true,
     "name": "자기암시",
     "type": "노말",
@@ -2549,6 +2553,7 @@
   },
   {
     "id": "코칭",
+    "bypassesSubstitute": true,
     "name": "코칭",
     "type": "격투",
     "category": "status",
@@ -3073,6 +3078,7 @@
   },
   {
     "id": "저주",
+    "bypassesSubstitute": true,
     "name": "저주",
     "type": "고스트",
     "category": "status",
@@ -3959,6 +3965,7 @@
   },
   {
     "id": "당신먼저",
+    "bypassesSubstitute": true,
     "name": "당신먼저",
     "type": "노말",
     "category": "status",
@@ -4189,6 +4196,7 @@
   },
   {
     "id": "앙코르",
+    "bypassesSubstitute": true,
     "name": "앙코르",
     "type": "노말",
     "category": "status",
@@ -4424,6 +4432,7 @@
   },
   {
     "id": "헤롱헤롱",
+    "bypassesSubstitute": true,
     "name": "헤롱헤롱",
     "type": "노말",
     "category": "status",
@@ -4539,6 +4548,7 @@
   },
   {
     "id": "도발",
+    "bypassesSubstitute": true,
     "name": "도발",
     "type": "악",
     "category": "status",
@@ -4810,6 +4820,7 @@
   },
   {
     "id": "가드스왑",
+    "bypassesSubstitute": true,
     "name": "가드스왑",
     "type": "에스퍼",
     "category": "status",
@@ -5006,6 +5017,7 @@
   },
   {
     "id": "스킬스왑",
+    "bypassesSubstitute": true,
     "notReflectable": true,
     "swapsAbilityWithTarget": true,
     "name": "스킬스왑",
@@ -5039,6 +5051,7 @@
   },
   {
     "id": "원한",
+    "bypassesSubstitute": true,
     "reducesTargetLastMovePp": 4,
     "name": "원한",
     "type": "고스트",
@@ -5111,6 +5124,7 @@
   },
   {
     "id": "트집",
+    "bypassesSubstitute": true,
     "inflictsVolatile": [{ "volatile": "torment", "target": "opponent" }],
     "name": "트집",
     "type": "악",
@@ -5258,6 +5272,7 @@
   },
   {
     "id": "사슬묶기",
+    "bypassesSubstitute": true,
     "name": "사슬묶기",
     "type": "노말",
     "category": "status",
@@ -5774,6 +5789,7 @@
   },
   {
     "id": "흑안개",
+    "bypassesSubstitute": true,
     "name": "흑안개",
     "type": "얼음",
     "category": "status",
@@ -6386,6 +6402,7 @@
   },
   {
     "id": "미러타입",
+    "bypassesSubstitute": true,
     "copiesTargetTypes": true,
     "name": "미러타입",
     "type": "노말",
@@ -6399,6 +6416,7 @@
   },
   {
     "id": "봉인",
+    "bypassesSubstitute": true,
     "inflictsVolatile": [{ "volatile": "imprison", "target": "self" }],
     "name": "봉인",
     "type": "에스퍼",
@@ -6555,6 +6573,7 @@
   },
   {
     "id": "파워스왑",
+    "bypassesSubstitute": true,
     "name": "파워스왑",
     "type": "에스퍼",
     "category": "status",
@@ -7238,6 +7257,7 @@
   },
   {
     "id": "날려버리기",
+    "bypassesSubstitute": true,
     "excludedFromCopycat": true,
     "name": "날려버리기",
     "type": "노말",
@@ -7509,6 +7529,7 @@
   },
   {
     "id": "역할",
+    "bypassesSubstitute": true,
     "copiesTargetAbility": true,
     "name": "역할",
     "type": "에스퍼",
@@ -8522,6 +8543,7 @@
   },
   {
     "id": "스피드스왑",
+    "bypassesSubstitute": true,
     "name": "스피드스왑",
     "type": "에스퍼",
     "category": "status",
@@ -8783,6 +8805,7 @@
   },
   {
     "id": "자기장조작",
+    "bypassesSubstitute": true,
     "boostsDefensesIfPlusMinus": true,
     "name": "자기장조작",
     "type": "전기",
@@ -9346,6 +9369,7 @@
   },
   {
     "id": "페어리록",
+    "bypassesSubstitute": true,
     "setsFairyLock": true,
     "name": "페어리록",
     "type": "페어리",
@@ -9362,6 +9386,7 @@
   },
   {
     "id": "아로마미스트",
+    "bypassesSubstitute": true,
     "name": "아로마미스트",
     "type": "페어리",
     "category": "status",
@@ -9589,6 +9614,7 @@
   },
   {
     "id": "지휘",
+    "bypassesSubstitute": true,
     "name": "지휘",
     "type": "에스퍼",
     "category": "status",
@@ -9785,6 +9811,7 @@
   },
   {
     "id": "다과회",
+    "bypassesSubstitute": true,
     "name": "다과회",
     "type": "노말",
     "category": "status",

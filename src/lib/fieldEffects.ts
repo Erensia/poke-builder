@@ -2,6 +2,7 @@ import type { PokemonType } from "../types/pokemon-type";
 import type { FieldKind } from "../types/field";
 import type { StatusCondition } from "../types/status";
 import type { Move } from "../types/move";
+import type { Ability } from "../types/ability";
 
 /** 필드는 기본 5턴 지속. 그라운드코트를 지닌 쪽이 펼치면 +3(총 8턴) — Item.fieldDurationBonus로 반영 */
 export const FIELD_DURATION = 5;
@@ -103,6 +104,62 @@ export function isMagicBounceReflectable(move: Move): boolean {
     !move.notReflectable &&
     (isOpponentTargetingMove(move) || !!move.setsHazard || !!move.forcesTargetSwitch || !!move.invertsTargetStatStages)
   );
+}
+
+/**
+ * 대타가 이 기술의 상대 방향 효과를 막는가(8.3 D3-fix-45). Showdown은 `bypasssub` 플래그로 정한다 — 소리 기술·`bypassesSubstitute` 기술(도발·트집 등)·
+ * 틈새포착은 대타를 무시한다. 엔진(직접 사용·매직미러 반사)과 AI가 같은 판정을 쓴다.
+ */
+export function substituteBlocksMove(
+  move: Move,
+  userAbility: Ability | undefined,
+  target: { substituteHp?: number },
+): boolean {
+  return (
+    target.substituteHp !== undefined &&
+    !(move.classification ?? []).includes("소리") &&
+    !move.bypassesSubstitute &&
+    !userAbility?.bypassesScreensAndSubstitute
+  );
+}
+
+/** `opponentEffectBlockers`의 결과 — 방어측이 이 기술의 상대 방향 효과를 막는 사유별 판정 */
+export interface OpponentEffectBlockers {
+  goldBodyAbilityName?: string;
+  substitute: boolean;
+  powder: boolean;
+  soundproofAbilityName?: string;
+  bulletproofAbilityName?: string;
+  /** 위 사유 중 하나라도 있는가 */
+  any: boolean;
+}
+
+/**
+ * 방어측(target)이 이 기술의 상대 방향 효과를 막는 사유 — 황금몸·대타·가루 면역(풀 타입)·방음·방탄(8.3 D3-fix-45).
+ * 직접 사용(preHitEffects)과 매직미러 반사 구간(mirroredEffects, 맞바뀐 방어측 = 원래 사용자)이 같은 규칙을 쓴다. 방어류·상성 면역은 호출부 몫이다.
+ * 방어측 특성은 호출부가 정한다(틀깨기가 무시했으면 undefined).
+ */
+export function opponentEffectBlockers(
+  move: Move,
+  userAbility: Ability | undefined,
+  target: { substituteHp?: number; types: PokemonType[] },
+  targetAbility: Ability | undefined,
+): OpponentEffectBlockers {
+  const classification = move.classification ?? [];
+  const goldBodyAbilityName = move.category === "status" && targetAbility?.blocksOpponentStatusMoveEffects ? targetAbility.name : undefined;
+  const substitute = substituteBlocksMove(move, userAbility, target);
+  const powder = classification.includes("가루") && target.types.includes("풀");
+  const soundproofAbilityName = targetAbility?.blocksSound && classification.includes("소리") ? targetAbility.name : undefined;
+  const bulletproofAbilityName =
+    targetAbility?.blocksBallBomb && (move.tags ?? []).some((t) => t === "구슬" || t === "폭탄") ? targetAbility.name : undefined;
+  return {
+    goldBodyAbilityName,
+    substitute,
+    powder,
+    soundproofAbilityName,
+    bulletproofAbilityName,
+    any: !!goldBodyAbilityName || substitute || powder || !!soundproofAbilityName || !!bulletproofAbilityName,
+  };
 }
 
 /**

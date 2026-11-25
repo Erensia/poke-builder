@@ -19,7 +19,7 @@ import { resolveMoveContext } from "@/lib/moveContext";
 import { DAMAGE_ROLL_MIN_PERCENT, DAMAGE_ROLL_STEP_COUNT } from "@/lib/damageFormula";
 import { WEIGHT_MOVE_FALLBACK_POWER, absoluteWeightPowerValue, computeDamage, shellSideArmCategory, positiveStagesPowerValue, reversalPowerFromHp, targetHpRatioPowerValue, userHpScaledPowerValue, faintedAllyPowerValue, rivalryDamageMultiplier, weightRatioPowerValue } from "@/lib/battlePower";
 import { applyWeatherBall, solarPowerHalved } from "@/lib/weatherEffects";
-import { applyFieldPulse, getFieldPowerMultiplier, isMagicBounceReflectable, isOpponentTargetingMove, isPriorityMoveBlockedByField, isStatusBlockedByField, needsLivingTarget } from "@/lib/fieldEffects";
+import { applyFieldPulse, getFieldPowerMultiplier, isMagicBounceReflectable, isOpponentTargetingMove, isPriorityMoveBlockedByField, isStatusBlockedByField, needsLivingTarget, opponentEffectBlockers } from "@/lib/fieldEffects";
 import { computeBattleHitChance, toxicNeverMisses } from "./hitChance";
 import { CONFUSION_SELF_HIT_MOVE, STRUGGLE_MOVE, abilityOf, activeWeather, consumeItem, contraryDelta, hasSheerForceSecondaryEffect, isFainted, isHealingMove, isItemRemovable, opponentKey, sideOf, statusImmunitiesOf, type BattleFighterState, type BattleState } from "./state";
 
@@ -614,21 +614,20 @@ function checkDefenderImmunities(c: PreHitCtx) {
   // 전역 효과(날씨·필드·트릭룸)나 공격측 자신을 향한 효과(자기 스탯 상승, 자기 스크린 설치)는
   // "이 포켓몬을 겨냥한" 게 아니라서 그대로 적용된다 — 아래 각 opponent 방향 적용 지점에서만
   // 이 플래그로 건너뛴다.
-  c.blockedByGoodAsGold = c.move.category === "status" && !!c.defenderAbility?.blocksOpponentStatusMoveEffects;
+  // 황금몸·대타·가루 면역·방음·방탄 판정은 opponentEffectBlockers 한 곳이다 — 매직미러 반사 구간(mirroredEffects)이 원래 사용자에게 같은 규칙을 다시 적용한다(8.3 D3-fix-45).
+  const blockers = opponentEffectBlockers(c.move, c.attackerAbility, c.defender, c.defenderAbility);
+  c.blockedByGoodAsGold = !!blockers.goldBodyAbilityName;
 
   // 대타출동: 방어측이 대타를 세운 상태면, 소리 계열(돌림노래 등 classification "소리") 기술을
   // 제외한 모든 기술의 "opponent 방향" 부가효과(상태이상·랭크/명중회피/급소 하락·행동방해)가
   // 카테고리 무관(데미지기든 변화기든)으로 전부 무산된다 — 황금몸과 달리 status 기술로 한정하지
   // 않는다. 데미지 자체는 무산이 아니라 대타 HP로 흡수(아래 resolveHit 계열에서 별도 처리).
   // 틈새포착: 공격측이 이 특성이면 대타출동도 소리 계열과 마찬가지로 무시하고 본체에 직접 적중한다.
-  c.blockedBySubstitute = c.defender.substituteHp !== undefined &&
-    !(c.move.classification ?? []).includes("소리") &&
-    !(c.move.setsCurse && c.attacker.types.includes("고스트")) &&
-    !c.attackerAbility?.bypassesScreensAndSubstitute;
+  c.blockedBySubstitute = blockers.substitute;
 
   // 가루/포자 기술(수면가루·저리가루·독가루·목화포자·분노가루)은 풀타입 포켓몬에게 통하지 않는다
   // (본가 규칙 — 타입 면역과 같은 축). 방진 특성·방진고글 도구도 막지만 포챔스 로스터엔 없어 생략.
-  c.blockedByPowderImmunity = (c.move.classification ?? []).includes("가루") && c.defender.types.includes("풀");
+  c.blockedByPowderImmunity = blockers.powder;
 
   // 방어/판별/킹실드(protectEffect: "block"): 이번 턴 상대의 공격을 카테고리 무관으로 완전히
   // 무효화한다 — 대타와 달리 데미지를 어디로도 흡수하지 않고 그냥 0으로 만든다(아래 canDealDamage).
@@ -655,22 +654,20 @@ function checkDefenderImmunities(c: PreHitCtx) {
   c.blockedByProtectMoveName = c.blockedByProtect && isOpponentTargetingMove(c.move) ? c.defender.activeProtect?.moveName : undefined;
   // 방음: 방어측이 이 특성이면 소리 기술(classification "소리")이 데미지기·변화기 모두 완전히
   // 무효화된다. resolveMoveContext도 같은 판정으로 typeEffectiveness를 0으로 만든다.
-  const blockedBySoundproof = !!(
-    c.defenderAbility?.blocksSound && (c.move.classification ?? []).includes("소리")
-  );
+  const blockedBySoundproof = !!blockers.soundproofAbilityName;
   // 방탄: 방어측이 이 특성이면 구슬·폭탄 기술(tags "구슬"/"폭탄")이 데미지기·변화기 모두 완전히
   // 무효화된다. 방음과 같은 처리 — resolveMoveContext도 같은 판정으로 typeEffectiveness를 0으로 만든다.
-  const blockedByBulletproof = !!(
-    c.defenderAbility?.blocksBallBomb && (c.move.tags ?? []).some((t) => t === "구슬" || t === "폭탄")
-  );
-  c.soundproofBlockedByAbilityName = blockedBySoundproof ? c.defenderAbility?.name : undefined;
-  c.bulletproofBlockedByAbilityName = blockedByBulletproof ? c.defenderAbility?.name : undefined;
-  c.opponentEffectsBlocked = c.blockedByGoodAsGold ||
-    c.blockedBySubstitute ||
+  const blockedByBulletproof = !!blockers.bulletproofAbilityName;
+  c.soundproofBlockedByAbilityName = blockers.soundproofAbilityName;
+  c.bulletproofBlockedByAbilityName = blockers.bulletproofAbilityName;
+  // 대타는 매직미러 반사보다 뒤 단계다(Showdown `spreadMoveHit` 0단계 — 방어류 3 → 매직미러 1 → 황금몸·방음 0 → 가루 면역 → 대타, 8.3 D3-fix-45 E8-14).
+  // 그래서 반사 성립 여부는 대타를 뺀 차단으로만 본다.
+  const blockedOtherThanSubstitute = c.blockedByGoodAsGold ||
     c.blockedByProtect ||
     c.blockedByPowderImmunity ||
     blockedBySoundproof ||
     blockedByBulletproof;
+  c.opponentEffectsBlocked = blockedOtherThanSubstitute || c.blockedBySubstitute;
 
   // 매직미러: 방어측이 이 특성을 지녔고(틀깨기면 위에서 defenderAbility가 이미 undefined), 이번
   // 기술이 방어측을 겨냥하는 status 변화기이며 반사 제외(notReflectable — 고스트 저주·추억의선물·
@@ -678,9 +675,14 @@ function checkDefenderImmunities(c: PreHitCtx) {
   // isMagicBounceReflectable(Showdown reflectable과 같은 집합 — 설치기·강제 교체·뒤집어엎기 포함, 8.3 fix-44)이 따로 포함한다. 되돌린 기술은 빗나가지 않고(아래 hit
   // 강제), "방어측 방향 효과" 블록 진입 직전에 공격/방어 바인딩을 통째로 맞바꿔 원래 시전자에게
   // 효과가 그대로 꽂히게 한다.
-  c.bouncedByMagicMirror = !c.opponentEffectsBlocked &&
+  c.bouncedByMagicMirror = !blockedOtherThanSubstitute &&
     !!c.defenderAbility?.reflectsOpponentStatusMoves &&
     isMagicBounceReflectable(c.move);
+  // 반사되면 반사한 쪽의 대타는 이 기술을 받지 않는다. 받는 쪽(원래 사용자)의 대타·면역은 반사 구간(mirroredEffects)이 다시 판정한다.
+  if (c.bouncedByMagicMirror) {
+    c.blockedBySubstitute = false;
+    c.opponentEffectsBlocked = false;
+  }
 }
 
 /** 레이징불·셸암즈·웨더볼·필드 조건부 타입/위력, 변화한 타입 반영 */

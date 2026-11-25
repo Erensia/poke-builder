@@ -4,7 +4,7 @@ import { type HazardState } from "@/types/battle";
 import { getMove } from "@/lib/data";
 import { rankStageMultiplier } from "@/lib/battlePower";
 import { resolveEffectiveDefenderAbility } from "@/lib/abilityModifiers";
-import { isMagicBounceReflectable, isOpponentTargetingMove } from "@/lib/fieldEffects";
+import { isMagicBounceReflectable, isOpponentTargetingMove, substituteBlocksMove } from "@/lib/fieldEffects";
 import { hasVolatile } from "@/lib/volatileConditions";
 import { abilityOf, choiceLockedMoveOf, type BattleFighterState, type BattleSide, type BattleState } from "../state";
 import { estimateMoveHits, type MoveHitEstimate } from "./moveDamage";
@@ -109,15 +109,8 @@ function isWastedStatusMove(
   // 신비의부적이 깔린 편에는 상태이상 부여·하품이 통하지 않는다(AI-A1)
   if (targetSide.safeguardTurnsRemaining !== undefined && (move.inflictsStatus?.length || effectKindOf(move) === "yawn")) return true;
   if (move.setsLeechSeed && targetTypes.includes("풀")) return true;
-  // 대타(AI-A2): 대상이 대타를 세웠으면 상대 대상 변화기는 막힌다(소리 기술·틈새포착 제외 — effectMoveFails와 같은 축)
-  if (
-    target.substituteHp !== undefined &&
-    isOpponentTargetingMove(move) &&
-    !(move.classification ?? []).includes("소리") &&
-    !userAbility?.bypassesScreensAndSubstitute
-  ) {
-    return true;
-  }
+  // 대타(AI-A2): 대상이 대타를 세웠으면 상대 대상 변화기는 막힌다(소리 기술·bypassesSubstitute 기술·틈새포착 제외 — 엔진과 같은 substituteBlocksMove, 8.3 D3-fix-45)
+  if (isOpponentTargetingMove(move) && substituteBlocksMove(move, userAbility, target)) return true;
   return false;
 }
 
