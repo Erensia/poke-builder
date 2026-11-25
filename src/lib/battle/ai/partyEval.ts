@@ -5,6 +5,7 @@ import { isStatusBlockedByField } from "@/lib/fieldEffects";
 import { applyStageDelta } from "@/lib/statStages";
 import {
   abilityOf,
+  activeWeather,
   statDropBlockStatsOf,
   contraryDelta,
   isFainted,
@@ -131,7 +132,7 @@ function withEntryPoison(state: BattleState, fighter: BattleFighterState, side: 
   const ability = abilityOf(fighter);
   if (!isGrounded(state, fighter, ability)) return fighter;
   const status = layers >= 2 ? "badly-poisoned" : "poison";
-  if (isImmuneToStatus(status, fighter.types, statusImmunitiesOf(fighter, ability)) || isStatusBlockedByField(state.field, status, true)) {
+  if (isImmuneToStatus(status, fighter.types, statusImmunitiesOf(fighter, ability, activeWeather(state))) || isStatusBlockedByField(state.field, status, true)) {
     return fighter;
   }
   return { ...fighter, status: inflictStatus(fighter.status, status) };

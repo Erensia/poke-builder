@@ -284,6 +284,8 @@ export interface Ability {
   grantsImmunityToTypes?: PokemonType[];
   /** 유연: 이 상태이상 목록에 면역이다(타입 기반 면역과 별개 축). 유연=["paralysis"] */
   immuneToStatuses?: StatusCondition[];
+  /** 리프가드: 날씨가 쾌청일 때 모든 주 상태이상·하품에 걸리지 않는다(이미 걸린 상태이상은 치료하지 않는다) — 8.3 D3-fix-46. 날씨를 넘기는 호출 지점에서만 켜진다 */
+  blocksStatusesInSun?: boolean;
   /**
    * 플라워베일(Flower Veil): 자신이 **풀타입일 때만** 상대의 기술/특성으로 인한 랭크 하락과 주
    * 상태이상을 전부 막는다(클리어바디 5스탯 + 유연 전체 상태이상을 합친 효과). 본가는 자기 편

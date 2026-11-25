@@ -5,7 +5,7 @@ import { inflictStatus, isImmuneToStatus } from "@/lib/statusConditions";
 import { hasVolatile, inflictVolatile } from "@/lib/volatileConditions";
 import { isStatusBlockedByField } from "@/lib/fieldEffects";
 import { isGrounded } from "./grounding";
-import { opponentKey, sideOf, statusImmunitiesOf, type BattleFighterState, type BattleState } from "./state";
+import { activeWeather, opponentKey, sideOf, statusImmunitiesOf, type BattleFighterState, type BattleState } from "./state";
 import { type FighterKey, type FlingEffectResult } from "@/types/battle";
 
 
@@ -25,7 +25,7 @@ export function applyFlingEffect(
     const status = item.flingStatus;
     if (
       !defender.status.condition &&
-      !isImmuneToStatus(status, defender.types, statusImmunitiesOf(defender, defenderAbility)) &&
+      !isImmuneToStatus(status, defender.types, statusImmunitiesOf(defender, defenderAbility, activeWeather(state))) &&
       !isStatusBlockedByField(state.field, status, isGrounded(state, defender, defenderAbility)) &&
       sideOf(state, opponentKey(actorKey)).safeguardTurnsRemaining === undefined
     ) {

@@ -4,7 +4,7 @@ import type { ActionLogEntry } from "../../types/battle";
 import { STAT_LABELS, statOrAccuracyLabel } from "../../lib/statLabels";
 import { typeLabel } from "../../types/pokemon-type";
 import { eunNeun, iGa, eulReul, roEuro } from "../../lib/josa";
-import { VOLATILE_LABELS } from "../../lib/battleLogLabels";
+import { STATUS_LABELS, VOLATILE_LABELS } from "../../lib/battleLogLabels";
 import { stageRiseAdverb, SPIN_CLEARED_HAZARD_NAMES, SPIN_CLEARED_LINES, STATUS_ONSET_TEXT, STATUS_TRIGGER_TEXT, STATUS_CURE_TEXT } from "../../lib/battleLogText";
 import { useActionHp } from "./hpFormat";
 import { MultiHitLines } from "./MultiHitLines";
@@ -493,6 +493,14 @@ export function ActionEffectLines({
           </div>
         );
       })()}
+      {/* 상태이상 전용 변화기가 면역에 막혔을 때(8.3 D3-fix-46 E8-24) — 특성이면 전용 줄, 그 밖(타입·필드·신비의부적·쾌청 얼음)은 "효과가 없는" 줄. 잠자기(self)는 사용자 이름 */}
+      {!action.blockedReason && action.hit && action.statusBlocked && (
+        <div className="battle-turn-line is-muted">
+          {action.statusBlocked.kind === "ability"
+            ? `${action.statusBlocked.self ? actorName : defenderName}의 ${action.statusBlocked.abilityName}! ${STATUS_LABELS[action.statusBlocked.status]}에 걸리지 않는다!`
+            : `${action.statusBlocked.self ? actorName : defenderName}에게는 효과가 없는 것 같다...`}
+        </div>
+      )}
       {!action.blockedReason && action.mentalMoveBlockedByAbilityName && (
         <div className="battle-turn-line is-muted">
           {defenderName}의 {action.mentalMoveBlockedByAbilityName}! 마음을 옭아매는 기술은 통하지 않는다!

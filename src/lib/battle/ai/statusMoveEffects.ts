@@ -37,6 +37,7 @@ import {
   type BattleSide,
   type BattleState,
 } from "../state";
+import { restFailure } from "../statusBlock";
 import { cureConditionsBlockedByAbility, isFixedAbility, isUncopyableAbility } from "../abilityChange";
 import { calcEntryHazardDamage } from "../entryCost";
 import { isGrounded } from "../grounding";
@@ -319,7 +320,7 @@ function statusToInflict(state: BattleState, key: FighterKey, move: Move): Statu
   const userAbility = abilityOf(state[key]);
   const targetAbility = resolveEffectiveDefenderAbility(userAbility, abilityOf(target));
   for (const effect of move.inflictsStatus ?? []) {
-    if (isImmuneToStatus(effect.status, target.types, statusImmunitiesOf(target, targetAbility), userAbility?.bypassesPoisonTypeImmunity)) continue;
+    if (isImmuneToStatus(effect.status, target.types, statusImmunitiesOf(target, targetAbility, activeWeather(state)), userAbility?.bypassesPoisonTypeImmunity)) continue;
     if (isStatusBlockedByField(state.field, effect.status, isGrounded(state, target, targetAbility))) continue;
     if (effect.status === "freeze" && activeWeather(state) === "쾌청") continue;
     return effect.status;
@@ -331,6 +332,11 @@ function statusToInflict(state: BattleState, key: FighterKey, move: Move): Statu
  * 이 변화기가 지금 실패하거나 아무 효과도 없는지 — 실전 엔진(preHitEffects·mirroredEffects·resolveAction)의
  * 실패 조건을 그대로 옮겼다. 같은 변화기를 매 턴 반복해서 고르지 않게 하는 핵심 장치.
  */
+/** 잠자기가 지금 실패하는가 — 엔진 restFailure와 같은 판정(이미 수면·풀피·수면 면역 특성·필드·소란), 8.3 D3-fix-46 */
+export function restFails(state: BattleState, key: FighterKey): boolean {
+  return !!restFailure(state, state[key], abilityOf(state[key]));
+}
+
 export function effectMoveFails(state: BattleState, key: FighterKey, move: Move): boolean {
   const me = state[key];
   const oppKey = opponentKey(key);
@@ -530,9 +536,9 @@ function volatileEffectFails(state: BattleState, key: FighterKey, kind: "leechSe
       return (
         !!target.status.condition ||
         hasVolatile(target.volatile, "drowsy") ||
-        isImmuneToStatus("sleep", target.types, statusImmunitiesOf(target, targetAbility)) ||
+        isImmuneToStatus("sleep", target.types, statusImmunitiesOf(target, targetAbility, activeWeather(state))) ||
         isStatusBlockedByField(state.field, "sleep", isGrounded(state, target, targetAbility)) ||
-        sideOf(state, oppKey).safeguardTurnsRemaining !== undefined
+        (sideOf(state, oppKey).safeguardTurnsRemaining !== undefined && !abilityOf(user)?.bypassesScreensAndSubstitute)
       );
   }
 }
@@ -942,7 +948,7 @@ export function hazardCarry(state: BattleState, key: FighterKey, move: Move): nu
     total += Math.min(f.currentHp, extra) / f.maxHp;
     if (move.setsHazard === "toxicSpikes" && grounded && !f.status.condition && !ability?.negatesIndirectDamage) {
       const status = after.toxicSpikesLayers >= 2 ? "badly-poisoned" : "poison";
-      if (!f.types.includes("독") && !isImmuneToStatus(status, f.types, statusImmunitiesOf(f, ability))) {
+      if (!f.types.includes("독") && !isImmuneToStatus(status, f.types, statusImmunitiesOf(f, ability, activeWeather(state)))) {
         const n = HAZARD_POISON_TURNS;
         const poisonValue = (layers: number) => (layers >= 2 ? (n * (n + 1)) / 2 / 16 : layers === 1 ? n / 8 : 0);
         total += Math.max(0, poisonValue(after.toxicSpikesLayers) - poisonValue(before.toxicSpikesLayers));

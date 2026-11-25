@@ -172,6 +172,7 @@ interface ActionCtx {
   targetMoveTypeOverride: "노말" | "불꽃" | "물" | "풀" | "전기" | "얼음" | "격투" | "독" | "땅" | "비행" | "에스퍼" | "벌레" | "바위" | "고스트" | "드래곤" | "악" | "강철" | "페어리" | undefined;
   inflictedStatus: StatusCondition | null | undefined;
   statusInflictFailed: boolean;
+  statusBlocked: ActionLogEntry["statusBlocked"];
   beakBlastBurnedAttacker: boolean;
   curedStatus: StatusCondition | null | undefined;
   curedStatusTarget: "self" | "opponent" | undefined;
@@ -310,6 +311,7 @@ function resolveMirroredPhase(c: ActionCtx) {
   c.targetMoveTypeOverride = mirrorResult.targetMoveTypeOverride;
   c.inflictedStatus = mirrorResult.inflictedStatus;
   c.statusInflictFailed = mirrorResult.statusInflictFailed;
+  c.statusBlocked = mirrorResult.statusBlocked;
   c.beakBlastBurnedAttacker = mirrorResult.beakBlastBurnedAttacker;
   c.curedStatus = mirrorResult.curedStatus;
   c.curedStatusTarget = mirrorResult.curedStatusTarget;
@@ -710,6 +712,7 @@ function collectResult(c: ActionCtx) {
     inflictedVolatile: c.inflictedVolatile,
     opponentStatDrops: c.opponentStatDrops.length > 0 ? c.opponentStatDrops : undefined,
     statusInflictFailed: c.statusInflictFailed || undefined,
+    statusBlocked: c.statusBlocked,
     protectStanceEntered: c.protectStanceEntered || undefined,
     reflectedStatDropAbilityName: c.reflectedStatDropAbilityName,
     reflectedStatDrops: c.reflectedStatDrops.length > 0 ? c.reflectedStatDrops : undefined,

@@ -7,14 +7,15 @@ import { type Ability } from "@/types/ability";
 import { type Item } from "@/types/item";
 import { getAbility, getItem, getMove } from "@/lib/data";
 import { applyStageDelta } from "@/lib/statStages";
-import { advanceStatusTurn, computeStatusEndOfTurnDamage, inflictStatus, isImmuneToStatus } from "@/lib/statusConditions";
+import { advanceStatusTurn, computeStatusEndOfTurnDamage, inflictStatus } from "@/lib/statusConditions";
 import { consumeVolatileTurn, hasVolatile } from "@/lib/volatileConditions";
 import { rivalryDamageMultiplier } from "@/lib/battlePower";
 import { resolveMoveContext } from "@/lib/moveContext";
-import { computeFieldEndOfTurnHeal, isStatusBlockedByField } from "@/lib/fieldEffects";
+import { computeFieldEndOfTurnHeal } from "@/lib/fieldEffects";
 import { calmRampageIfAsleep } from "./rampage";
 import { getHpThresholdBerryHeal, healWithBigRoot } from "@/lib/itemEffects";
-import { SANDSTORM_IMMUNE_ABILITY_NAMES, abilityOf, activeWeather, applyForecastForm, consumeItem, contraryDelta, hasLivingReserve, isFainted, isForcedSwitchBlocked, isSideWiped, opponentKey, sideOf, statDropBlockStatsOf, statusImmunitiesOf, type BattleFighterState, type BattleState } from "./state";
+import { NO_STATUS_SELF_CURE_ABILITY_NAMES, SANDSTORM_IMMUNE_ABILITY_NAMES, abilityOf, activeWeather, applyForecastForm, consumeItem, contraryDelta, hasLivingReserve, isFainted, isForcedSwitchBlocked, isSideWiped, opponentKey, sideOf, statDropBlockStatsOf, type BattleFighterState, type BattleState } from "./state";
+import { statusBlockReason } from "./statusBlock";
 import { type RunTurnContext, type RunTurnOutcome } from "./runTurn";
 import { actionFailed } from "./moveFailure";
 import { computeBattleHitChance } from "./hitChance";
@@ -494,13 +495,8 @@ function applyDrowsySleepOnset(ctx: EndOfTurnFighterContext): void {
   if (!drowsyEntry) return;
   const triggersNow = drowsyEntry.turnsRemaining <= 1;
   fighter.volatile = consumeVolatileTurn(fighter.volatile, "drowsy");
-  if (
-    triggersNow &&
-    !fighter.status.condition &&
-    !isImmuneToStatus("sleep", fighter.types, statusImmunitiesOf(fighter, fighterAbility)) &&
-    !isStatusBlockedByField(state.field, "sleep", isGrounded(state, fighter, fighterAbility)) &&
-    sideOf(state, key).safeguardTurnsRemaining === undefined
-  ) {
+  // 신비의부적은 하품 사용 시에만 막는다 — 하품을 건 뒤 설치해도 잠든다(Showdown `safeguard`가 `yawn`이면 통과, 8.3 D3-fix-46 R3). 면역·필드·소란은 여기서 조용히 무산시킨다.
+  if (triggersNow && !fighter.status.condition && !statusBlockReason(state, key, fighter, fighterAbility, "sleep", { skipSafeguard: true })) {
     fighter.status = inflictStatus(fighter.status, "sleep");
     endOfTurn.push({
       actor: key,
@@ -625,7 +621,7 @@ const NO_TURN_END_SELF_CURE_ABILITY_NAMES: ReadonlySet<string> = new Set(["면�
  */
 function applyAbilityImmunityCure(ctx: EndOfTurnFighterContext): void {
   const { key, fighter, fighterAbility, endOfTurn } = ctx;
-  if (!fighterAbility || isFainted(fighter) || NO_TURN_END_SELF_CURE_ABILITY_NAMES.has(fighterAbility.name)) return;
+  if (!fighterAbility || isFainted(fighter) || NO_TURN_END_SELF_CURE_ABILITY_NAMES.has(fighterAbility.name) || NO_STATUS_SELF_CURE_ABILITY_NAMES.has(fighterAbility.name)) return;
   const condition = fighter.status.condition;
   const curedStatus = condition && fighterAbility.immuneToStatuses?.includes(condition) ? condition : undefined;
   if (curedStatus) fighter.status = { ...NO_STATUS_CONDITION };

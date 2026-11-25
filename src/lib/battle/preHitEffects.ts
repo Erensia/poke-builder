@@ -1260,7 +1260,7 @@ function applyProtectReactions(c: PreHitCtx) {
     // 토치카: 접촉기를 막으면 공격자를 독 상태로 만든다(타입/특성 면역·필드 존중).
     if (
       ap.contactStatus &&
-      !isImmuneToStatus(ap.contactStatus, c.attacker.types, statusImmunitiesOf(c.attacker, c.attackerAbility)) &&
+      !isImmuneToStatus(ap.contactStatus, c.attacker.types, statusImmunitiesOf(c.attacker, c.attackerAbility, activeWeather(c.state))) &&
       !isStatusBlockedByField(c.state.field, ap.contactStatus, isGrounded(c.state, c.attacker, c.attackerAbility)) &&
       sideOf(c.state, c.actorKey).safeguardTurnsRemaining === undefined
     ) {
