@@ -1252,7 +1252,7 @@ function statSwapEffects(c: MirroredCtx) {
   // 힘흡수(drainsFromTargetAttackStat): 상대의 공격 실능(랭크 반영, -1 적용 전 값)만큼 자신을 회복.
   // 상대 공격 -1은 데이터의 statChanges로 위에서 이미 적용됐지만, 회복량은 랭크 변화 전 실능
   // 기준이라 defenderStagesBeforeMoveChange를 쓴다(본가 규칙).
-  if (c.effectiveMove.drainsFromTargetAttackStat) {
+  if (!c.opponentEffectsBlocked && c.effectiveMove.drainsFromTargetAttackStat) {
     const targetAtk = Math.floor(
       c.defender.realStats.atk * rankStageMultiplier(c.defenderStagesBeforeMoveChange.atk),
     );
@@ -1265,7 +1265,7 @@ function statSwapEffects(c: MirroredCtx) {
   // 가드셰어(averagesDefensesWithTarget): 자신·상대의 방어·특방 실능을 각각 더해 반씩 배정(내림).
   // 파워트릭(swapsOwnStats)처럼 realStats를 직접 고쳐 재계산이 필요 없다.
 
-  if (c.effectiveMove.averagesDefensesWithTarget) {
+  if (!c.opponentEffectsBlocked && c.effectiveMove.averagesDefensesWithTarget) {
     const avgDef = Math.floor((c.attacker.realStats.def + c.defender.realStats.def) / 2);
     const avgSpd = Math.floor((c.attacker.realStats.spd + c.defender.realStats.spd) / 2);
     c.attacker.realStats = { ...c.attacker.realStats, def: avgDef, spd: avgSpd };
@@ -1275,7 +1275,7 @@ function statSwapEffects(c: MirroredCtx) {
 
   // 스피드스왑(swapsSpeedWithTarget): 자신·상대의 스피드 실능을 서로 맞바꾼다.
 
-  if (c.effectiveMove.swapsSpeedWithTarget) {
+  if (!c.opponentEffectsBlocked && c.effectiveMove.swapsSpeedWithTarget) {
     const aSpe = c.attacker.realStats.spe;
     c.attacker.realStats = { ...c.attacker.realStats, spe: c.defender.realStats.spe };
     c.defender.realStats = { ...c.defender.realStats, spe: aSpe };
@@ -1286,7 +1286,7 @@ function statSwapEffects(c: MirroredCtx) {
   // 새 도구로 다음 기술부터 다시 잠기도록 양쪽 구애류 잠금을 푼다. 곡예는 resolveAction의 도구 전후 비교가 처리한다.
 
   c.itemSwapFailed = false;
-  if (c.effectiveMove.swapsItemsWithTarget) {
+  if (!c.opponentEffectsBlocked && c.effectiveMove.swapsItemsWithTarget) {
     const mine = c.attacker.currentItemId;
     const theirs = c.defender.currentItemId;
     const isMegaStone = (id: string | null) => !!id && getItem(id)?.category === "mega-stone";
@@ -1309,7 +1309,7 @@ function statSwapEffects(c: MirroredCtx) {
 
   // 아픔나누기(sharesHpWithTarget, 트랙 M1): 둘의 현재 HP 합을 반씩(내림) — 각자 최대 HP까지.
 
-  if (c.effectiveMove.sharesHpWithTarget) {
+  if (!c.opponentEffectsBlocked && c.effectiveMove.sharesHpWithTarget) {
     c.painSplitHp = Math.floor((c.attacker.currentHp + c.defender.currentHp) / 2);
     c.attacker.currentHp = Math.min(c.attacker.maxHp, c.painSplitHp);
     c.defender.currentHp = Math.min(c.defender.maxHp, c.painSplitHp);
@@ -1331,7 +1331,7 @@ function statSwapEffects(c: MirroredCtx) {
 
   // 자기암시(copiesTargetStages, 트랙 M2): 상대의 능력·명중·회피·급소 랭크를 그대로 복사한다(변신과 같은 복사).
 
-  if (c.effectiveMove.copiesTargetStages) {
+  if (!c.opponentEffectsBlocked && c.effectiveMove.copiesTargetStages) {
     c.attacker.stages = { ...c.defender.stages };
     c.attacker.accuracyStages = { ...c.defender.accuracyStages };
     c.attacker.critStage = c.defender.critStage;
@@ -1340,7 +1340,7 @@ function statSwapEffects(c: MirroredCtx) {
 
   // 파워셰어(averagesAttacksWithTarget, 트랙 M2): 가드셰어의 공격판 — 공격·특공 실능을 각각 더해 반씩(내림).
 
-  if (c.effectiveMove.averagesAttacksWithTarget) {
+  if (!c.opponentEffectsBlocked && c.effectiveMove.averagesAttacksWithTarget) {
     const avgAtk = Math.floor((c.attacker.realStats.atk + c.defender.realStats.atk) / 2);
     const avgSpa = Math.floor((c.attacker.realStats.spa + c.defender.realStats.spa) / 2);
     c.attacker.realStats = { ...c.attacker.realStats, atk: avgAtk, spa: avgSpa };
@@ -1465,7 +1465,7 @@ function miscMoveEffects(c: MirroredCtx) {
   // 변신(transformsIntoTarget): 상대로 변신한다. 이미 변신 상태면 실패(1v1이라 배틀 끝까지 유지).
 
   c.transformFailed = false;
-  if (c.effectiveMove.transformsIntoTarget) {
+  if (!c.opponentEffectsBlocked && c.effectiveMove.transformsIntoTarget) {
     if (c.attacker.transformed) {
       c.transformFailed = true;
     } else {
@@ -1488,7 +1488,7 @@ function miscMoveEffects(c: MirroredCtx) {
   // 상대가 이미 씨앗이 박혀있으면 실패.
   c.leechSeedSetFailed = false;
   c.leechSeedBlockedByGrass = false;
-  if (c.effectiveMove.setsLeechSeed) {
+  if (!c.opponentEffectsBlocked && c.effectiveMove.setsLeechSeed) {
     if (c.defender.types.includes("풀")) {
       c.leechSeedBlockedByGrass = true;
     } else if (hasVolatile(c.defender.volatile, "leechSeed")) {
@@ -1502,7 +1502,7 @@ function miscMoveEffects(c: MirroredCtx) {
   // 이미 걸려있으면 HP 소비 없이 실패. 고스트가 아니면 statChanges(userIsNotType)가 처리하므로 여기선 건너뛴다.
   c.curseHpCost = 0;
   c.curseSetFailed = false;
-  if (c.effectiveMove.setsCurse && c.attacker.types.includes("고스트")) {
+  if (!c.opponentEffectsBlocked && c.effectiveMove.setsCurse && c.attacker.types.includes("고스트")) {
     if (hasVolatile(c.defender.volatile, "curse")) {
       c.curseSetFailed = true;
     } else {
@@ -1585,7 +1585,7 @@ function abilitySwapAndSubstitute(c: MirroredCtx) {
       c.noteCure(cureConditionsBlockedByAbility(c.defender), "opponent");
     }
   }
-  if (c.effectiveMove.copiesTargetAbility && !isFainted(c.defender)) {
+  if (!c.opponentEffectsBlocked && c.effectiveMove.copiesTargetAbility && !isFainted(c.defender)) {
     const theirs = c.defender.effectiveAbilityId;
     if (!theirs || isUncopyableAbility(theirs) || isFixedAbility(c.attacker.effectiveAbilityId) || c.attacker.effectiveAbilityId === theirs) {
       c.abilityChangeFailed = true;
@@ -1606,7 +1606,7 @@ function abilitySwapAndSubstitute(c: MirroredCtx) {
     }
   }
 
-  if (c.effectiveMove.copiesTargetTypes && !isFainted(c.defender)) {
+  if (!c.opponentEffectsBlocked && c.effectiveMove.copiesTargetTypes && !isFainted(c.defender)) {
     c.attacker.types = [...c.defender.types];
     c.attacker.addedType = undefined;
     c.copiedTypes = c.attacker.types;
@@ -1649,7 +1649,7 @@ function abilitySwapAndSubstitute(c: MirroredCtx) {
   // 상대가 아직 아무 기술도 안 썼거나(등장 직후) 이미 disable이 걸려있으면 실패한다.
 
   c.disableSetFailed = false;
-  if (c.effectiveMove.setsDisable) {
+  if (!c.opponentEffectsBlocked && c.effectiveMove.setsDisable) {
     if (c.defenderAbility?.blocksMentalMoves) {
       c.mentalMoveBlockedByAbilityName = c.defenderAbility.name;
       c.disableSetFailed = true;
@@ -1673,7 +1673,7 @@ function abilitySwapAndSubstitute(c: MirroredCtx) {
   // 마찬가지로 상대가 아직 아무 기술도 안 썼거나 이미 encore가 걸려있으면 실패한다.
 
   c.encoreSetFailed = false;
-  if (c.effectiveMove.setsEncore) {
+  if (!c.opponentEffectsBlocked && c.effectiveMove.setsEncore) {
     if (c.defenderAbility?.blocksMentalMoves) {
       c.mentalMoveBlockedByAbilityName = c.defenderAbility.name;
       c.encoreSetFailed = true;
@@ -1707,7 +1707,7 @@ function abilitySwapAndSubstitute(c: MirroredCtx) {
   // 파워트릭(swapsOwnStats)과 달리 실수치는 그대로 두고 stages만 교환 — 이미 -6~+6 범위라
   // 교환해도 클램프가 필요 없다.
 
-  if (c.effectiveMove.swapsStagesWithTarget) {
+  if (!c.opponentEffectsBlocked && c.effectiveMove.swapsStagesWithTarget) {
     const nextAttackerStages = { ...c.attacker.stages };
     const nextDefenderStages = { ...c.defender.stages };
     for (const stat of c.effectiveMove.swapsStagesWithTarget) {
@@ -1778,6 +1778,7 @@ function protectAndFieldSetup(c: MirroredCtx) {
       c.attacker.activeProtect = {
         effect: c.effectiveMove.protectEffect,
         moveName: c.effectiveMove.name,
+        passesStatusMoves: c.effectiveMove.protectPassesStatusMoves,
         contactPenalty: c.effectiveMove.protectContactPenalty,
         contactDamageFraction: c.effectiveMove.protectContactDamageFraction,
         contactStatus: c.effectiveMove.protectContactStatus,

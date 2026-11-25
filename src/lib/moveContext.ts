@@ -6,6 +6,7 @@ import type { WeatherKind } from "../types/weather";
 import type { FieldKind } from "../types/field";
 import { resolveAbilityOffense, resolveAbilityDefense, resolveStabMultiplier } from "./abilityModifiers";
 import { getEffectiveness } from "./typeEffectiveness";
+import { needsLivingTarget } from "./fieldEffects";
 
 /**
  * 기술 하나가 공격측→방어측으로 나갈 때 항상 필요한 배율/실효 기술을 한 번에 계산한다.
@@ -97,7 +98,8 @@ export function resolveMoveContext(
   // 없던 면역을 스스로 얻는다. 상성표를 거치지 않고 무조건 0배로 덮어쓴다 — 카테고리 무관(상태이상
   // 기술도 흡수). 틀깨기류(공격측이 방어측 특성 자체를 무시)는 아직 이 로스터에 없어 충돌을
   // 고려하지 않았다(Phase 5 §1 잔여 항목, 나중에 붙이면 여기서 우선순위를 다시 봐야 함).
-  const absorbedByDefenderAbility = !!(effectiveMove.type && effectiveMove.type === defenderAbility?.absorbsType?.type);
+  // 8.3 D3-fix-47 E8-22: 흡수는 "사용자 이외의 포켓몬을 겨냥한 기술"(데미지 기술 ∪ 상대 대상 변화기)에만 반응한다 — 날씨·필드·설치물·자기 대상 기술은 제외(Showdown `onTryHit`).
+  const absorbedByDefenderAbility = !!(effectiveMove.type && effectiveMove.type === defenderAbility?.absorbsType?.type && needsLivingTarget(effectiveMove));
   // 부유: 방어측이 원래 없던 면역을 스스로 얻는다(bypassImmunity와 반대 방향). bypassImmunity가
   // 이미 참이면(배짱류·검은철구) 이 면역은 뚫린 것으로 취급 — 위 두 경로가 이 필드보다 우선한다.
   // 풍선(Item.grantsGroundImmunity)도 같은 축의 땅타입 한정 버전 — 터지면(배틀 엔진이

@@ -474,6 +474,11 @@ export interface Move {
    */
   bypassesProtect?: boolean;
   /**
+   * 킹실드(방어류 중 상대 변화기는 막지 않는 것) 표시 — 8.3 D3-fix-47 R1. 방어를 세울 때 `activeProtect.passesStatusMoves`에 실려
+   * 상대의 변화기(category "status")는 통과시킨다. 데미지 기술과 접촉 페널티는 그대로다. Showdown `checkMoveBypassesProtect(blockStatus=false)`.
+   */
+  protectPassesStatusMoves?: boolean;
+  /**
    * 대타를 무시하는 소리가 아닌 기술에 표시한다(Showdown `bypasssub` — 8.3 D3-fix-45 R1). 도발·트집·사슬묶기·앙코르·헤롱헤롱·원한·안개제거·
    * 흑안개·스왑/복사 계열·저주·날려버리기 등. 소리 기술(classification "소리")은 전부 대타를 무시하므로 따로 표시하지 않는다.
    * `substituteBlocksMove`(fieldEffects)가 소리·이 필드·틈새포착을 한 곳에서 판정한다.

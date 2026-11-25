@@ -1941,6 +1941,7 @@
   },
   {
     "id": "울부짖기",
+    "bypassesProtect": true,
     "excludedFromCopycat": true,
     "name": "울부짖기",
     "type": "노말",
@@ -2519,6 +2520,7 @@
   },
   {
     "id": "자기암시",
+    "bypassesProtect": true,
     "bypassesSubstitute": true,
     "copiesTargetStages": true,
     "name": "자기암시",
@@ -3078,6 +3080,7 @@
   },
   {
     "id": "저주",
+    "bypassesProtect": true,
     "bypassesSubstitute": true,
     "name": "저주",
     "type": "고스트",
@@ -3965,6 +3968,7 @@
   },
   {
     "id": "당신먼저",
+    "bypassesProtect": true,
     "bypassesSubstitute": true,
     "name": "당신먼저",
     "type": "노말",
@@ -4837,6 +4841,7 @@
   },
   {
     "id": "검은눈빛",
+    "bypassesProtect": true,
     "inflictsVolatile": [{ "volatile": "meanLook", "target": "opponent" }],
     "name": "검은눈빛",
     "type": "노말",
@@ -7257,6 +7262,7 @@
   },
   {
     "id": "날려버리기",
+    "bypassesProtect": true,
     "bypassesSubstitute": true,
     "excludedFromCopycat": true,
     "name": "날려버리기",
@@ -7529,6 +7535,7 @@
   },
   {
     "id": "역할",
+    "bypassesProtect": true,
     "bypassesSubstitute": true,
     "copiesTargetAbility": true,
     "name": "역할",
@@ -7923,6 +7930,7 @@
   },
   {
     "id": "블록",
+    "bypassesProtect": true,
     "inflictsVolatile": [{ "volatile": "meanLook", "target": "opponent" }],
     "name": "블록",
     "type": "노말",
@@ -7959,6 +7967,7 @@
   },
   {
     "id": "킹실드",
+    "protectPassesStatusMoves": true,
     "excludedFromCopycat": true,
     "name": "킹실드",
     "type": "강철",
@@ -8105,6 +8114,7 @@
   },
   {
     "id": "눈물그렁그렁",
+    "bypassesProtect": true,
     "name": "눈물그렁그렁",
     "type": "노말",
     "category": "status",
@@ -8484,6 +8494,7 @@
   },
   {
     "id": "변신",
+    "bypassesProtect": true,
     "excludedFromCopycat": true,
     "name": "변신",
     "type": "노말",
