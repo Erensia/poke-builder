@@ -1,0 +1,8 @@
+// fix-45 R1 — Showdown 덤프에서 champions 합법 `bypasssub` 비소리 기술을 뽑아 엔진 id로 대응(2026-11-28)
+// 실행: node 이 파일(.txt 확장자를 지우거나 `node --input-type=module < 이 파일`) — 저장소 루트에서
+// 소리(sound) 기술은 엔진이 소리 분류로 이미 처리하므로 제외한다. 엔진 id(한국어) 대응은 아래 표(손으로 확인, 28종 전부 엔진에 존재).
+import fs from "node:fs";
+const dump = JSON.parse(fs.readFileSync("docs/00_기획문서/02_backlog/08_ver.8.0/03_ver.8.3/05_D3-전수검수/자료/D3-덤프파일/showdown-champions-dump.json", "utf8"));
+const ID2KO = { afteryou: "당신먼저", aromaticmist: "아로마미스트", attract: "헤롱헤롱", coaching: "코칭", curse: "저주", defog: "안개제거", destinybond: "길동무", disable: "사슬묶기", encore: "앙코르", fairylock: "페어리록", guardswap: "가드스왑", haze: "흑안개", helpinghand: "도우미", imprison: "봉인", instruct: "지휘", lifedew: "생명의물방울", magneticflux: "자기장조작", powerswap: "파워스왑", psychup: "자기암시", reflecttype: "미러타입", roleplay: "역할", skillswap: "스킬스왑", speedswap: "스피드스왑", spite: "원한", taunt: "도발", teatime: "다과회", torment: "트집", whirlwind: "날려버리기" };
+const ids = Object.values(dump.moves).filter((m) => m.flags?.bypasssub && !m.flags.sound && dump.legal.moves.includes(m.id)).map((m) => m.id);
+console.log(ids.length, ids.map((i) => ID2KO[i] ?? `??${i}`).join(","));
