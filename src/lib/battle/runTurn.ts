@@ -478,6 +478,7 @@ function forceTargetSwitch(ctx: RunTurnContext, key: FighterKey, action: ActionL
     !action.blockedBySubstituteMoveName &&
     !action.hitNegatedByAbilityName &&
     !action.abilityAbsorbAbilityName &&
+    !action.goodAsGoldBlockedByAbilityName && // 황금몸은 울부짖기·날려버리기도 막는다(Showdown `-immune`, 8.3 D3-fix-47 시험 15)
     !action.soundproofBlockedByAbilityName &&
     // 반사된 소리 기술(울부짖기)은 원래 사용자의 방음이 막는다(Showdown 방음 `onTryHit`의 target = 사용자, fix-44 Q1).
     !(bounced && (mv.classification ?? []).includes("소리") && abilityOfFighter(state[targetKey])?.blocksSound) &&

@@ -46,9 +46,9 @@ export default async function ({ server, data, mon, battle, pts, check }) {
   // ── 변화기를 골랐다: 앙코르 기술로 교체 ──
   { const r = turn(setup({ bMoves: ["무릎차기", "플레어드라이브", "칼춤", IDLE] }), "앙코르", "칼춤");
     check("D3-fix5 변화기 선택(우선도 0): 칼춤이 앙코르 기술(무릎차기)로 바뀐다", r.b?.move.name === "무릎차기", json({ mv: r.b?.move.name })); }
-  // 방어(우선도 +4)는 앙코르(짓궂은마음 +1)보다 먼저 움직여 이미 행동한 뒤라 바뀌지 않는다 — 앙코르는 그 방어에 걸린다
+  // 방어(우선도 +4)는 앙코르(짓궂은마음 +1)보다 먼저 움직여 이미 행동한 뒤라 바뀌지 않는다 — 앙코르는 그 방어에 막힌다(8.3 D3-fix-47: Showdown 앙코르는 `protect` 플래그, 방어 중이면 `-activate Protect`)
   { const r = turn(setup({ last: "방어" }), "앙코르", "방어");
-    check("D3-fix5 방어 선택(우선도 +4로 앙코르보다 먼저 행동): 바뀌지 않고 방어가 실행된다", r.b?.move.name === "방어" && r.n.b.volatile.active.encore?.moveId === "방어", json({ mv: r.b?.move.name, enc: r.n.b.volatile.active.encore?.moveId })); }
+    check("D3-fix5 방어 선택(우선도 +4로 앙코르보다 먼저 행동): 바뀌지 않고 방어가 실행되고 앙코르는 방어에 막힌다", r.b?.move.name === "방어" && r.n.b.volatile.active.encore === undefined, json({ mv: r.b?.move.name, enc: r.n.b.volatile.active.encore?.moveId })); }
   // ── 방어 앙코르: 직전 기술이 방어이고 공격을 골랐다 → 방어로 바뀌어 실행되지만 그 턴 마지막 행동이라 방어가 실패한다(Showdown onPrepareHit: 뒤에 행동할 기술이 없으면 실패) ──
   { const st = setup({ last: "방어" }); const r = turn(st, "앙코르", "무릎차기");
     check("D3-fix5 방어 앙코르: 방어로 바뀌어 실행(방어 PP −1·무릎차기 PP 그대로), 마지막 행동이라 방어는 실패", r.b?.move.name === "방어" && r.b.protectFailed === true && r.b.protectSucceeded !== true && r.n.b.remainingPp["방어"] === st.b.remainingPp["방어"] - 1 && r.n.b.remainingPp["무릎차기"] === st.b.remainingPp["무릎차기"], json({ mv: r.b?.move.name, failed: r.b?.protectFailed, pp: r.n.b.remainingPp["방어"] })); }

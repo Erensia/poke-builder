@@ -239,6 +239,8 @@ export interface BattleFighterState {
     effect: "block" | "endure" | "blockPriority";
     /** 로그 문구용 — 실제로 성공시킨 기술 이름(방어/판별/버티기/킹실드 중 하나) */
     moveName: string;
+    /** 킹실드: 상대 변화기는 막지 않는다(Move.protectPassesStatusMoves, 8.3 D3-fix-47 R1) */
+    passesStatusMoves?: boolean;
     /** 킹실드가 접촉기를 막았을 때만 채워서 아래에서 상대에게 적용한다 */
     contactPenalty?: { stat: BattleStatKey; delta: number };
     /** 니들가드가 접촉기를 막았을 때 공격자에게 줄 최대 HP 비율 데미지(니들가드=1/8) */

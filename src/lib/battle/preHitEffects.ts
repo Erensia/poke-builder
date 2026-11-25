@@ -637,9 +637,11 @@ function checkDefenderImmunities(c: PreHitCtx) {
   // 방어 실수치와는 무관해서 여기서 판정 자체를 건너뛴다(틈새포착이 스크린/대타를 뚫는 것과 같은 결).
   // 패스트가드(protectEffect: "blockPriority"): "block"과 같지만 상대 기술의 priority가 0보다
   // 클 때만 막는다 — 일반 기술은 그냥 통과.
+  // 킹실드는 상대 변화기를 막지 않는다(passesStatusMoves, Showdown `blockStatus=false` — 8.3 D3-fix-47 R1). 방어·판별·니들가드·토치카는 변화기도 막는다.
   const activeProtectBlocks =
-    c.defender.activeProtect?.effect === "block" ||
-    (c.defender.activeProtect?.effect === "blockPriority" && c.move.priority > 0);
+    !(c.move.category === "status" && c.defender.activeProtect?.passesStatusMoves) &&
+    (c.defender.activeProtect?.effect === "block" ||
+      (c.defender.activeProtect?.effect === "blockPriority" && c.move.priority > 0));
   // 보이지않는주먹·관통드릴: 접촉기가 방어류를 뚫고 명중한다(데미지는 resolveHit에서 ×0.25 — 4096 반올림·최소 1, 방어류의
   // 접촉 성공 부가효과는 applyProtectReactions에서 그대로 발동). 뚫는 경우엔 blockedByProtect를 false로 둬서 기술이 정상 진행된다.
   c.unseenFistPiercing = !!(
@@ -756,7 +758,9 @@ function resolveDynamicMoveType(c: PreHitCtx) {
   c.finalDefenseMultiplier = _d0.finalDefenseMultiplier;
   c.stabMultiplier = _d0.stabMultiplier;
   c.typeEffectiveness = _d0.typeEffectiveness;
-  c.absorbedByDefenderAbility = _d0.absorbedByDefenderAbility;
+  // 흡수는 방어에 막히면 일어나지 않고(Showdown Protect `onTryHit` 우선도 3 > 특성 0), 일어나면 기술 전체가 끝난다 — 씨앗 등 상대 방향 효과도 막힌다(8.3 D3-fix-47 E8-22).
+  c.absorbedByDefenderAbility = _d0.absorbedByDefenderAbility && !c.blockedByProtect;
+  if (c.absorbedByDefenderAbility) c.opponentEffectsBlocked = true;
   // 8.3 B8: 타입 면역을 존중하는 변화기(전기자석파)는 상성 무효이면 효과가 막힌다(변화기는 보통 면역을 무시). opponentEffectsBlocked는 상성 배율 확정 전에 계산돼 여기서 보탠다.
   if (c.move.respectsTypeImmunity && c.typeEffectiveness === 0) c.opponentEffectsBlocked = true;
 }
@@ -1132,7 +1136,8 @@ function rollHit(c: PreHitCtx) {
   // 기술의 명중 굴림을 건너뛴다(반드시 명중). 무적(evadedByCharge)은 그대로 존중한다.
   const glaiveRushGuaranteesHit = c.defender.glaiveRushVulnerable && isOpponentTargetingMove(c.effectiveMove);
   // 매직미러로 되돌릴 기술은 명중 굴림을 건너뛴다(반사는 빗나가지 않는다).
-  c.hit = c.bouncedByMagicMirror
+  // 흡수는 명중 판정보다 먼저다(Showdown TryHit 단계 → accuracy 단계) — 빗나갈 기술도 흡수된다(8.3 D3-fix-47 시험 18).
+  c.hit = c.bouncedByMagicMirror || c.absorbedByDefenderAbility
     ? true
     : c.evadedByCharge
       ? false
