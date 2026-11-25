@@ -1,0 +1,15 @@
+// 정화의소금(고스트 반감): 엔진(방어 ×2) vs Showdown(공격 스탯 modify 0.5, 반올림 0.5는 내림)
+const tr = Math.trunc, fl = Math.floor;
+const modify = (v, num) => tr((tr(v * num) + 2047) / 4096); // Showdown modify(value, n/4096)
+const sd = (L, bp, A, D, roll) => { const a = modify(A, 2048); const base = fl(fl(fl(fl(2 * L / 5 + 2) * bp * a / D) / 50)) + 2; return fl(base * roll / 100); };
+const en = (L, bp, A, D, roll) => { const d = Math.max(1, modify(D, 8192)); const base = fl(fl(fl(2 * L / 5 + 2) * bp * A / d) / 50) + 2; return fl(base * roll / 100); };
+let n = 0, diff = 0, maxd = 0; const ex = [];
+for (const bp of [60, 80, 90, 100, 120]) for (let A = 60; A <= 300; A++) for (let D = 60; D <= 300; D += 7) for (const roll of [85, 92, 100]) {
+  n++; const s = sd(50, bp, A, D, roll), e = en(50, bp, A, D, roll);
+  if (s !== e) { diff++; maxd = Math.max(maxd, Math.abs(s - e)); if (ex.length < 3) ex.push({ bp, A, D, roll, showdown: s, engine: e }); }
+}
+console.log(JSON.stringify({ cases: n, diff, rate: (diff / n * 100).toFixed(2) + "%", maxAbsDiff: maxd, ex }));
+// 짝수/홀수 분리
+let odd = 0, oddDiff = 0, even = 0, evenDiff = 0;
+for (let A = 60; A <= 300; A++) for (let D = 60; D <= 300; D += 7) { const s = sd(50, 90, A, D, 100), e = en(50, 90, A, D, 100); if (A % 2) { odd++; if (s !== e) oddDiff++; } else { even++; if (s !== e) evenDiff++; } }
+console.log(JSON.stringify({ odd, oddDiff, even, evenDiff }));
