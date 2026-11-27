@@ -1,0 +1,24 @@
+// fix-55 검수 엔진 프로브 2: 자기 교체기·자폭기 (b 쪽 예비 1마리). 인자: poke-builder 경로
+const { createServer } = await import(process.argv[2] + "/node_modules/vite/dist/node/index.js");
+const server = await createServer({ root: process.argv[2], server: { middlewareMode: true, hmr: false }, appType: "custom", logLevel: "error" });
+try {
+  const data = await server.ssrLoadModule("/src/lib/data.ts");
+  const S = await server.ssrLoadModule("/src/lib/battle/state.ts");
+  const rt = await server.ssrLoadModule("/src/lib/battle/runTurn.ts");
+  const pts = { hp: 2, atk: 32, def: 0, spa: 0, spd: 0, spe: 32 };
+  const mon = (id, moves, ability = "두꺼운지방", item = null) => ({ slot: { pokemonId: id, moves: [...moves, null, null, null, null].slice(0, 4), ability, item, nature: null, points: pts }, moves: moves.map((m) => data.getMove(m)) });
+  const battle = (A, B) => S.createBattleState({ a: { slots: A.map((m) => m.slot), movesList: A.map((m) => m.moves) }, b: { slots: B.map((m) => m.slot), movesList: B.map((m) => m.moves) } });
+  const mv = (x) => ({ kind: "move", move: data.getMove(x) });
+  for (const move of ["배턴터치", "썰렁개그", "유턴", "대폭발", "추억의선물", "길동무"]) {
+    try {
+      let st = battle([mon("잠만보", ["잠꼬대"]), mon("잠만보", ["잠꼬대"]), mon("잠만보", ["잠꼬대"])], [mon("잠만보", [move]), mon("잠만보", ["잠꼬대"])]);
+      st.sideA.hazards = { ...st.sideA.hazards, stealthRock: true };
+      st.sideA.party[1].currentHp = 1;
+      let o = rt.runTurn(st, { kind: "switch", toIndex: 1 }, mv(move), () => 0.5);
+      const pause = "awaitingSelfSwitch" in o ? JSON.stringify(o.awaitingSelfSwitch) : "없음";
+      for (let g = 0; "awaitingSelfSwitch" in o && g < 5; g++) o = rt.resumeTurn(o._ctx, o.awaitingSelfSwitch.side === "b" ? 1 : 2);
+      const n = o.nextState, act = o.result.actions.find((x) => x.actor === "b");
+      console.log(`${move}: 멈춤=${pause} forced=${JSON.stringify(o.forcedSwitch ?? null)} | b활성=${n.sideB.activeIndex} ${n.b.currentHp}/${n.b.maxHp} b0=${n.sideB.party[0].currentHp} blocked=${act?.blockedReason ?? "-"} hit=${act?.hit} selfFainted=${act?.selfFainted ?? "-"} destinyBond=${n.sideB.party[0].destinyBondArmed ?? "-"} weather=${n.weather ?? n.field?.weather ?? JSON.stringify(n.weatherState ?? null)}`);
+    } catch (e) { console.log(move, "예외", e.message); }
+  }
+} finally { await server.close(); }
