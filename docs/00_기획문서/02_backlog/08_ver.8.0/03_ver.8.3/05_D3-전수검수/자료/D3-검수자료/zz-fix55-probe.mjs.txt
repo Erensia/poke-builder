@@ -1,0 +1,74 @@
+// E8-a ⑤ 엔진 프로브 — e8a5-run.cjs(Showdown)와 같은 장면. 일회용, 커밋 금지.
+// 실행: cd <repo> && node <이 파일>
+import { createServer } from "vite";
+const root = process.cwd();
+const server = await createServer({ root, server: { middlewareMode: true, hmr: false }, appType: "custom", logLevel: "error" });
+try {
+  const data = await server.ssrLoadModule("/src/lib/data.ts");
+  const state = await server.ssrLoadModule("/src/lib/battle/state.ts");
+  const rt = await server.ssrLoadModule("/src/lib/battle/runTurn.ts");
+  const sw = await server.ssrLoadModule("/src/lib/battle/switching.ts");
+  const pts = (o = {}) => ({ hp: 0, atk: 0, def: 0, spa: 0, spd: 0, spe: 0, ...o });
+  const mon = (id, moves, ability = null, item = null, points = pts({ atk: 32, spe: 32, hp: 2 })) => ({
+    slot: { pokemonId: id, moves: [...moves, null, null, null, null].slice(0, 4), ability, item, nature: null, points },
+    moves: moves.map((m) => data.getMove(m)),
+  });
+  const battle = (A, B) => state.createBattleState({
+    a: { slots: A.map((m) => m.slot), movesList: A.map((m) => m.moves) },
+    b: { slots: B.map((m) => m.slot), movesList: B.map((m) => m.moves) },
+  });
+  const mv = (x) => ({ kind: "move", move: data.getMove(x) });
+  const SW = (i) => ({ kind: "switch", toIndex: i });
+  const rnd0 = () => 0;
+  const NOP = "잠꼬대";
+  const SN = (ab, moves = [NOP], item = null) => mon("잠만보", moves, ab, item);
+  const BENCH = () => SN("두꺼운지방");
+  const stg = (f) => JSON.stringify(f.stages).replace(/"|:0,?/g, "").replace(/,}/g, "}");
+  const line = (st) => `p1 ${st.a.slot.pokemonId} hp=${st.a.currentHp}/${st.a.maxHp} st=${st.a.status?.condition ?? "-"} b=${stg(st.a)} | p2 ${st.b.slot.pokemonId} hp=${st.b.currentHp}/${st.b.maxHp} st=${st.b.status?.condition ?? "-"} b=${stg(st.b)}`;
+  // 한 턴. 일시정지(유턴 등 자체 교체·위기회피)는 pick(side)로 슬롯을 골라 이어간다.
+  function turn(st, ca, cb, rnd = rnd0, pick = () => 1) {
+    let o = rt.runTurn(st, ca, cb, rnd);
+    let guard = 0;
+    while (o.awaitingSelfSwitch && guard++ < 5) o = rt.resumeTurn(o._ctx, pick(o.awaitingSelfSwitch.side));
+    return o.nextState;
+  }
+  const q = (st) => st.a.slot.pokemonId + `(${st.a.currentHp}/${st.a.maxHp}${st.a.status?.condition && st.a.status.condition !== "none" ? " " + st.a.status.condition : ""})`;
+  const aInfo = (a) => `${a.actor}:${a.moveName ?? a.move?.name ?? "?"}${a.blockedReason ? "[" + a.blockedReason + "]" : ""}${a.failed || a.failReason ? "{실패 " + (a.failReason ?? "") + "}" : ""}${a.missed ? "{빗나감}" : ""}`;
+  function scen(title, x, { item = null, bHp = null, pick = 2 } = {}) {
+    console.log(`--- ${title}`);
+    let st = battle([SN("두꺼운지방", [NOP]), SN("두꺼운지방"), SN("두꺼운지방")], [mon("잠만보", ["스텔스록", x], "두꺼운지방", item), SN("두꺼운지방")]);
+    st = turn(st, mv(NOP), mv("스텔스록"));
+    st.sideA.party[1].currentHp = 1;
+    if (bHp) st.b.currentHp = bHp;
+    let o = rt.runTurn(st, SW(1), mv(x), rnd0);
+    const pauses = [];
+    let guard = 0;
+    while (o.awaitingSelfSwitch && guard++ < 4) { pauses.push(JSON.stringify(o.awaitingSelfSwitch).slice(0, 60)); o = rt.resumeTurn(o._ctx, pick); }
+    const r = o.result ?? o.partialResult;
+    const ns = o.nextState;
+    console.log(`   [일시정지] ${pauses.join(" → ") || "없음"}`);
+    console.log(`   [액션] ${r.actions.map(aInfo).join(" / ")}`);
+    console.log(`   [교체 기록] ${r.switches.map((s) => `${s.side}:${s.fromIndex}->${s.toIndex}${s.afterMove ? "(afterMove)" : ""}`).join(" ")}`);
+    console.log(`   => ${q(ns)} | p2 ${ns.b.currentHp}/${ns.b.maxHp} b=${stg(ns.b)} weather=${ns.weather ?? "-"}`);
+    return o;
+  }
+  scen("S1 공격기(아이언헤드)", "아이언헤드");
+  scen("S2 칼춤", "칼춤");
+  scen("S3 자기 회복(달빛, p2 HP 절반)", "달빛", { bHp: 100 });
+  scen("S4 맹독", "맹독");
+  scen("S5 비바라기", "비바라기");
+  scen("S6 방어", "방어");
+  scen("S7 먹다남은음식 + 아이언헤드", "아이언헤드", { item: "먹다남은음식", bHp: 100 });
+  scen("S8 전광석화", "전광석화");
+  console.log("--- T1 양쪽 교체 → 양쪽 설치물 기절");
+  {
+    let st = battle([SN("두꺼운지방", ["스텔스록"]), SN("두꺼운지방"), SN("두꺼운지방")], [SN("두꺼운지방", ["스텔스록"]), SN("두꺼운지방"), SN("두꺼운지방")]);
+    st = turn(st, mv("스텔스록"), mv("스텔스록"));
+    st.sideA.party[1].currentHp = 1; st.sideB.party[1].currentHp = 1;
+    let o = rt.runTurn(st, SW(1), SW(1), rnd0); const pauses = []; let g = 0;
+    while (o.awaitingSelfSwitch && g++ < 4) { pauses.push(JSON.stringify(o.awaitingSelfSwitch).slice(0, 70)); o = rt.resumeTurn(o._ctx, 2); }
+    console.log(`   [일시정지] ${pauses.join(" → ") || "없음"}\n   => ${q(o.nextState)} | p2 ${o.nextState.b.slot.pokemonId}(${o.nextState.b.currentHp})`);
+  }
+} finally {
+  await server.close();
+}
