@@ -64,10 +64,23 @@ export type ActionBlockReason =
  * 저주받은바디=기술 봉인 / 나쁜손버릇·미라·떠도는영혼·모래뿜기). 랭크류·반격뎀은 타마다,
  * 나머지는 실제 발동한 그 타에 한 번만 담긴다. 단타 기술은 이 구조를 안 쓰고 기존 집계 필드 사용.
  */
+/** 8.3 D3-fix-53 싱크로(공격측 보유자) — 방어측 효과로 걸린 상태이상을 그 효과의 주인(방어측)에게 되돌린 기록 */
+export interface SynchronizeReflectLog {
+  status: NonNullable<StatusConditionState["condition"]>;
+  /** 싱크로 특성 이름(공격측 보유자) */
+  abilityName: string;
+  /** 원래 상태이상을 건 출처 — 로그 줄을 그 출처 줄 바로 뒤에 놓는 데 쓴다 */
+  source: "hitTrigger" | "beakBlast" | "protect";
+  /** 복사된 상태이상을 즉시 치료한 회복 열매 이름 */
+  curedItemName?: string;
+}
+
 export interface HitAbilityEvent {
   /** 이 이벤트를 일으킨 방어측 특성 이름 */
   abilityName: string;
   statusOnAttacker?: StatusConditionState["condition"];
+  /** statusOnAttacker를 공격측 싱크로가 방어측에게 되돌렸으면 그 기록(8.3 D3-fix-53) */
+  sync?: SynchronizeReflectLog;
   volatileOnAttacker?: VolatileCondition;
   /** 까칠한피부·철가시·유폭·내용물분출 등으로 공격자가 이 타에 입은 데미지 합 */
   damageToAttacker?: number;
@@ -463,6 +476,10 @@ export interface ActionLogEntry {
   defenderBerryHealItemName?: string;
   /** 정전기/불꽃몸처럼 방어측 특성이 발동해 공격자에게 주 상태이상을 걸었으면 그 상태이상 */
   abilityInflictedStatusOnAttacker?: StatusConditionState["condition"];
+  /** 공격측 싱크로가 방어측 효과(접촉 반응·부리캐논·토치카)로 걸린 상태이상을 방어측에게 되돌렸으면 그 기록(8.3 D3-fix-53) */
+  synchronizedOnDefender?: SynchronizeReflectLog;
+  /** 방어측 싱크로(또는 내던지기)로 공격측에 복사된 상태이상을 공격측 회복 열매가 즉시 치료했으면 그 열매 이름(8.3 D3-fix-53) */
+  synchronizedAttackerCuredItemName?: string;
   /** abilityInflictedStatusOnAttacker를 건 특성 이름 */
   abilityInflictedStatusAbilityName?: string;
   /** 헤롱헤롱바디처럼 방어측 특성이 발동해 공격자에게 행동방해(volatile)를 걸었으면 그 종류 */

@@ -8,7 +8,7 @@ import { STATUS_LABELS, VOLATILE_LABELS } from "../../lib/battleLogLabels";
 import { stageRiseAdverb, SPIN_CLEARED_HAZARD_NAMES, SPIN_CLEARED_LINES, STATUS_ONSET_TEXT, STATUS_TRIGGER_TEXT, STATUS_CURE_TEXT } from "../../lib/battleLogText";
 import { useActionHp } from "./hpFormat";
 import { MultiHitLines } from "./MultiHitLines";
-import { abilityDamageLine, abilityDefenderStatsLines, abilityDisabledMoveLine, abilityLoweredAttackerStatsLine, abilityPickpocketLine, abilityStatusLine, abilityVolatileLine, sandSpitWeatherLine, setFieldOnHitLine, wanderingSpiritLine } from "./abilityLines";
+import { abilityDamageLine, abilityDefenderStatsLines, abilityDisabledMoveLine, abilityLoweredAttackerStatsLine, abilityPickpocketLine, abilityStatusLine, abilityVolatileLine, sandSpitWeatherLine, setFieldOnHitLine, syncCureLine, synchronizeLines, wanderingSpiritLine } from "./abilityLines";
 
 /**
  * 행동 한 건의 타입변화·방어·상태·스탯변화·도구·특성반응 계열 — ActionMainLine(메인 라인)
@@ -322,6 +322,17 @@ export function ActionEffectLines({
           )}
         </div>
       )}
+      {!action.blockedReason && !action.hits && action.synchronizedOnDefender?.source === "hitTrigger" &&
+        synchronizeLines(action.synchronizedOnDefender, actorName, defenderName).map((line, i) => (
+          <div key={`sync-hitTrigger-${i}`} className="battle-turn-line is-muted">
+            {line}
+          </div>
+        ))}
+      {!action.blockedReason && !action.hits && action.synchronizedAttackerCuredItemName && action.abilityInflictedStatusOnAttacker && (
+        <div className="battle-turn-line is-muted">
+          {syncCureLine(action.synchronizedAttackerCuredItemName, action.abilityInflictedStatusOnAttacker, actorName)}
+        </div>
+      )}
       {/* 헤롱헤롱바디 — 접촉해 온 공격자가 이성이면 방어측 특성이 발동해 공격자에게 걸린다 */}
       {!action.blockedReason && !action.hits && action.abilityInflictedVolatileOnAttacker && (
         <div className="battle-turn-line is-muted">
@@ -564,6 +575,12 @@ export function ActionEffectLines({
           {eunNeun(actorName)} 화상을 입었다!
         </div>
       )}
+      {!action.blockedReason && action.synchronizedOnDefender?.source === "beakBlast" &&
+        synchronizeLines(action.synchronizedOnDefender, actorName, defenderName).map((line, i) => (
+          <div key={`sync-beakBlast-${i}`} className="battle-turn-line is-muted">
+            {line}
+          </div>
+        ))}
       {/* 토치카 — 접촉기를 막고 공격자를 독으로 */}
       {!action.blockedReason && action.protectContactInflictedStatus === "poison" && (
         <div className="battle-turn-line is-muted">
@@ -571,6 +588,12 @@ export function ActionEffectLines({
           {eunNeun(actorName)} 토치카의 독에 당했다!
         </div>
       )}
+      {!action.blockedReason && action.synchronizedOnDefender?.source === "protect" &&
+        synchronizeLines(action.synchronizedOnDefender, actorName, defenderName).map((line, i) => (
+          <div key={`sync-protect-${i}`} className="battle-turn-line is-muted">
+            {line}
+          </div>
+        ))}
       {/* 발끈 — HP 절반 이하가 되어 방어측 특수공격 상승 */}
       {!action.blockedReason && action.angerPointRaisedSpa && (
         <div className="battle-turn-line is-muted">
