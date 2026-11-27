@@ -1,0 +1,60 @@
+// E8-a ⑤ 엔진 프로브 — e8a5-run.cjs(Showdown)와 같은 장면. 일회용, 커밋 금지.
+// 실행: cd <repo> && node <이 파일>
+import { createServer } from "vite";
+const root = process.cwd();
+const server = await createServer({ root, server: { middlewareMode: true, hmr: false }, appType: "custom", logLevel: "error" });
+try {
+  const data = await server.ssrLoadModule("/src/lib/data.ts");
+  const state = await server.ssrLoadModule("/src/lib/battle/state.ts");
+  const rt = await server.ssrLoadModule("/src/lib/battle/runTurn.ts");
+  const sw = await server.ssrLoadModule("/src/lib/battle/switching.ts");
+  const pts = (o = {}) => ({ hp: 0, atk: 0, def: 0, spa: 0, spd: 0, spe: 0, ...o });
+  const mon = (id, moves, ability = null, item = null, points = pts({ atk: 32, spe: 32, hp: 2 })) => ({
+    slot: { pokemonId: id, moves: [...moves, null, null, null, null].slice(0, 4), ability, item, nature: null, points },
+    moves: moves.map((m) => data.getMove(m)),
+  });
+  const battle = (A, B) => state.createBattleState({
+    a: { slots: A.map((m) => m.slot), movesList: A.map((m) => m.moves) },
+    b: { slots: B.map((m) => m.slot), movesList: B.map((m) => m.moves) },
+  });
+  const mv = (x) => ({ kind: "move", move: data.getMove(x) });
+  const SW = (i) => ({ kind: "switch", toIndex: i });
+  const rnd0 = () => 0;
+  const NOP = "잠꼬대";
+  const SN = (ab, moves = [NOP], item = null) => mon("잠만보", moves, ab, item);
+  const BENCH = () => SN("두꺼운지방");
+  const stg = (f) => JSON.stringify(f.stages).replace(/"|:0,?/g, "").replace(/,}/g, "}");
+  const line = (st) => `p1 ${st.a.slot.pokemonId} hp=${st.a.currentHp}/${st.a.maxHp} st=${st.a.status?.condition ?? "-"} b=${stg(st.a)} | p2 ${st.b.slot.pokemonId} hp=${st.b.currentHp}/${st.b.maxHp} st=${st.b.status?.condition ?? "-"} b=${stg(st.b)}`;
+  // 한 턴. 일시정지(유턴 등 자체 교체·위기회피)는 pick(side)로 슬롯을 골라 이어간다.
+  function turn(st, ca, cb, rnd = rnd0, pick = () => 1) {
+    let o = rt.runTurn(st, ca, cb, rnd);
+    let guard = 0;
+    while (o.awaitingSelfSwitch && guard++ < 5) o = rt.resumeTurn(o._ctx, pick(o.awaitingSelfSwitch.side));
+    return o.nextState;
+  }
+  const st2 = (f) => stg(f) + (f.accuracyStages ? " acc/eva=" + JSON.stringify(f.accuracyStages).replace(/"|:0,?/g, "") : "");
+  function scen(label, A, B, turns = 1, prep) {
+    let st = battle(A, B); prep?.(st);
+    for (let t = 0; t < turns; t++) st = turn(st, mv(A[0].moves[0].name), mv(NOP), rnd0, () => 1);
+    console.log(`[${label}]\n   => p1 ${st.a.slot.pokemonId} hp=${st.a.currentHp}/${st.a.maxHp} ${st2(st.a)} | p2 ${st.b.slot.pokemonId} hp=${st.b.currentHp}/${st.b.maxHp} ${st2(st.b)}`);
+  }
+  const H = (ab) => mon("잠만보", [NOP, "대타출동"], ab);
+  const P = (m) => mon("잠만보", [m, NOP], "두꺼운지방");
+  for (const ab of ["오기", "승기"]) {
+    console.log(`===== ${ab} =====`);
+    scen(`${ab} M1 문어굳히기 2턴`, [P("문어굳히기"), BENCH()], [H(ab), BENCH()], 2);
+    scen(`${ab} M2 추억의선물`, [P("추억의선물"), BENCH()], [H(ab), BENCH()]);
+    scen(`${ab} M3 독실(독 상태)`, [P("독실"), BENCH()], [H(ab), BENCH()], 1, (s) => { s.b.status = { condition: "poison" }; });
+    scen(`${ab} M4 진흙뿌리기`, [P("진흙뿌리기"), BENCH()], [H(ab), BENCH()]);
+    scen(`${ab} M5 간지르기`, [P("간지르기"), BENCH()], [H(ab), BENCH()]);
+    scen(`${ab} M6 시럽봄 2턴`, [P("시럽봄"), BENCH()], [H(ab), BENCH()], 2);
+  }
+  console.log("===== 공격측 보유자 =====");
+  for (const ab of ["오기", "승기"]) {
+    scen(`${ab} A1 미러아머에 겁나는얼굴`, [mon("잠만보", ["겁나는얼굴", NOP], ab), BENCH()], [mon("아머까오", [NOP], "미러아머"), BENCH()]);
+    scen(`${ab} A2 껍질깨기`, [mon("잠만보", ["껍질깨기", NOP], ab), BENCH()], [BENCH(), BENCH()]);
+    scen(`${ab} A3 엄청난힘 + 미끈미끈`, [mon("잠만보", ["엄청난힘", NOP], ab), BENCH()], [SN("미끈미끈"), BENCH()]);
+  }
+} finally {
+  await server.close();
+}
