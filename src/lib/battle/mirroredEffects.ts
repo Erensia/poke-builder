@@ -1,7 +1,7 @@
 import { type Move } from "@/types/move";
 import { type PokemonType } from "@/types/pokemon-type";
 import { type FighterKey } from "@/types/battle";
-import { BATTLE_STAT_KEYS, NEUTRAL_ACCURACY_STAGES, NEUTRAL_STAGES, isBattleStatKey, type AccuracyEvasionKey, type BattleStatKey, type StatStages } from "@/types/battleStats";
+import { BATTLE_STAT_KEYS, NEUTRAL_ACCURACY_STAGES, NEUTRAL_STAGES, isBattleStatKey, type AccuracyEvasionKey, type BattleStatKey, type StatStages, type AccuracyEvasionStages } from "@/types/battleStats";
 import { NO_STATUS_CONDITION, type StatusCondition, type StatusConditionState, type VolatileCondition } from "@/types/status";
 import { type Ability } from "@/types/ability";
 import { type Item } from "@/types/item";
@@ -18,7 +18,7 @@ import { isGrounded } from "./grounding";
 import { eatBerryNow } from "./fling";
 import { type ItemEffectLog, type SpinCleared, type SpinClearedHazard } from "@/types/battle";
 import { cureConditionsBlockedByAbility, isFixedAbility, isUncopyableAbility } from "./abilityChange";
-import { abilityStatusImmunitiesOf, SWITCH_PASS_MOVE_ID, layHazard, setEffectiveAbility, activeWeather, applyTransform, consumeItem, contraryDelta, contraryMoveFor, emptyHazardState, hasCourtChangeEffects, hasLivingReserve, isFainted, isItemRemovable, sideOf, statDropBlockStatsOf, statusImmunitiesOf, type BattleFighterState, type BattleState } from "./state";
+import { abilityStatusImmunitiesOf, SWITCH_PASS_MOVE_ID, layHazard, setEffectiveAbility, activeWeather, applyTransform, consumeItem, contraryDelta, contraryMoveFor, emptyHazardState, hasCourtChangeEffects, hasLivingReserve, isFainted, isItemRemovable, sideOf, statDropBlockStatsOf, statusImmunitiesOf, type BattleFighterState, type BattleState, applyOwnStatDropReaction, countLoweredStats } from "./state";
 import { triggerTerrainSeeds } from "./switching";
 import { restFailure, statusBlockReason } from "./statusBlock";
 
@@ -55,6 +55,8 @@ interface MirroredMoveEffectsInput {
   abilityInflictedStatusAbilityName: string | undefined;
   statusCureBerryItemName: string | undefined;
   mentalMoveBlockedByAbilityName: string | undefined;
+  /** 접촉 반응으로 공격자 랭크가 내려간 횟수(hitResolution) — 오기·승기 반응용(8.3 D3-fix-52) */
+  abilityLoweredAttackerDropCount: number;
 }
 /** resolveMirroredMoveEffects의 단계 사이에서 공유되는 값 — 한 단계 안에서만 쓰는 변수는 각 단계 함수의 지역 변수다 */
 interface MirroredCtx {
@@ -104,6 +106,11 @@ interface MirroredCtx {
   soulBeatHpCost: number;
   attackerStagesBeforeMoveChange: StatStages;
   defenderStagesBeforeMoveChange: StatStages;
+  /** 기술 자기 변화(applyStatChanges)를 적용한 직후의 공격측 랭크 — 오기·승기는 이 값을 기준으로 "상대가 낸" 하락만 센다(자기 반동·껍질깨기 제외, 8.3 D3-fix-52) */
+  attackerStagesAfterOwnChange: StatStages;
+  attackerAccuracyStagesBeforeChange: AccuracyEvasionStages;
+  defenderAccuracyStagesBeforeChange: AccuracyEvasionStages;
+  abilityLoweredAttackerDropCount: number;
   rolledStatChanges: Move["statChanges"];
   selfStatRises: { stat: BattleStatKey | AccuracyEvasionKey; delta: number }[];
   selfStatsAtMax: BattleStatKey[];
@@ -327,6 +334,36 @@ function applyStatChanges(c: MirroredCtx) {
       c.selfStatDrops.push({ stat: sc.stat, delta: before - after });
     }
   }
+  // 기술 자기 변화가 끝난 시점의 공격측 랭크(오기·승기가 "상대가 낸" 하락만 세는 기준) + 명중·회피 적용(R1 — 오기·승기 반응·하양허브·편승보다 앞)
+  c.attackerStagesAfterOwnChange = c.attacker.stages;
+  applyAccuracyEvasionChanges(c);
+}
+
+/**
+ * 명중률·회피율 랭크 변화 적용(8.3 B3·B8) — 8.3 D3-fix-52(검수 R1)에서 `opportunistAndAccuracyChanges`의 맨 앞에서 여기(자기 랭크 변화 직후)로 앞당겼다.
+ * 오기·승기가 명중·회피 하락도 세야 하는데, 반응 호출은 하양허브(그 안에서 5종만 복원)·편승 복사보다 **앞**이어야 하기 때문이다. 문구용 수집 루프는 제자리(직전 값은 `c.*AccuracyStagesBeforeChange`).
+ */
+function applyAccuracyEvasionChanges(c: MirroredCtx) {
+  const landed = damagingMoveLanded(c);
+  c.attackerAccuracyStagesBeforeChange = c.attacker.accuracyStages;
+  c.defenderAccuracyStagesBeforeChange = c.defender.accuracyStages;
+  // 8.3 B8: 명중률·회피율·급소율 랭크 변화도 데미지 기술이 실제로 맞았을 때만(`landed`) — 진흙뿌리기 vs 비행 같은 상성 무효에서 상대 명중률이 떨어지던 결함.
+  c.attacker.accuracyStages = !landed
+    ? c.attacker.accuracyStages
+    : applyMoveAccuracyEvasionChanges(c.attacker.accuracyStages, contraryMoveFor(c.effectiveMove, c.attacker), "self", {
+        userTypes: c.attacker.types,
+      });
+  const defenderAccuracyBeforeChange = c.defender.accuracyStages.accuracy;
+  c.defender.accuracyStages = c.opponentEffectsBlocked || !landed
+    ? c.defender.accuracyStages
+    : applyMoveAccuracyEvasionChanges(c.defender.accuracyStages, contraryMoveFor(c.effectiveMove, c.defender), "opponent", {
+        userTypes: c.attacker.types,
+      });
+  // 날카로운눈: 상대(공격측)의 기술로 자신의 명중률이 떨어지는 걸 막는다. 회피율 변화는 이
+  // 축과 무관해서(원문이 "명중률을 떨어뜨릴 수 없다"까지만) 건드리지 않는다.
+  if (c.defenderAbility?.blocksOpponentAccuracyDrops && c.defender.accuracyStages.accuracy < defenderAccuracyBeforeChange) {
+    c.defender.accuracyStages = { ...c.defender.accuracyStages, accuracy: defenderAccuracyBeforeChange };
+  }
 }
 
 /** 클리어바디·괴력집게·미러아머 — 상대 랭크 하락 차단·반사, 승기·하양허브 */
@@ -362,21 +399,12 @@ function blockAndReflectStatDrops(c: MirroredCtx) {
     }
   }
 
-  // 승기: 자신의 능력치가 실제로 하락했으면(이미 -6으로 클램프돼 변화가 없었던 건 제외) 그
-  // 즉시 지정된 랭크가 오른다. 자기 기술로 자기 스탯을 내렸든(공격측), 상대 기술로 스탯이
-  // 내려갔든(방어측) 둘 다 같은 방식으로 판정한다 — 각자 자기 자신의 stages before/after만 비교.
-  function applyCompetitiveBoost(
-    fighter: BattleFighterState,
-    ability: Ability | undefined,
-    before: StatStages,
-  ): void {
-    const boost = ability?.boostsStatOnOwnStatDrop;
-    if (!boost) return;
-    const dropped = (Object.keys(fighter.stages) as BattleStatKey[]).some((stat) => fighter.stages[stat] < before[stat]);
-    if (dropped) fighter.stages = applyStageDelta(fighter.stages, boost.stat, boost.delta);
-  }
-  applyCompetitiveBoost(c.attacker, c.attackerAbility, c.attackerStagesBeforeMoveChange);
-  applyCompetitiveBoost(c.defender, c.defenderAbility, c.defenderStagesBeforeMoveChange);
+  // 오기·승기(8.3 D3-fix-52, Showdown `onAfterEachBoost`): **상대가 낸** 능력치 하락 하나마다 1회씩 지정 랭크가 오른다(이미 −6이라 변화 없던 것·기절한 보유자는 제외).
+  //  · 방어측: 이 기술이 낸 하락(반사·차단을 거친 뒤 값) + 명중·회피 하락 — 방어측의 자기 변화는 없다.
+  //  · 공격측: **자기 기술 변화(반동·껍질깨기)를 뺀** 하락 — applyStatChanges 직후 스냅샷 기준으로 미러아머 반사로 내려간 것 + 접촉 반응(미끈미끈) 하락 횟수(다단은 히트마다).
+  //  호출 위치는 하양허브·편승 복사보다 앞이다(Showdown: 오기가 먼저, 허브·편승이 뒤 — 검수 R1).
+  applyOwnStatDropReaction(c.defender, c.defenderAbility, countLoweredStats(c.defenderStagesBeforeMoveChange, c.defender.stages, c.defenderAccuracyStagesBeforeChange, c.defender.accuracyStages));
+  applyOwnStatDropReaction(c.attacker, c.attackerAbility, countLoweredStats(c.attackerStagesAfterOwnChange, c.attacker.stages) + (c.bounceActive ? 0 : c.abilityLoweredAttackerDropCount));
 
   // 하양허브: 방금 반영된 랭크 중 마이너스가 하나라도 있으면(자신이 스스로 내렸든, 상대 기술로
   // 내려갔든) 그 즉시 마이너스 랭크만 전부 0으로 되돌리고 소모된다. 양쪽 다 이 도구를 지녔고
@@ -457,37 +485,18 @@ function opportunistAndAccuracyChanges(c: MirroredCtx) {
   }
 
   const landed = damagingMoveLanded(c);
-  const attackerAccuracyStagesBeforeChange = c.attacker.accuracyStages;
-  const defenderAccuracyStagesBeforeChange = c.defender.accuracyStages;
-  // 8.3 B8: 명중률·회피율·급소율 랭크 변화도 데미지 기술이 실제로 맞았을 때만(`landed`) — 진흙뿌리기 vs 비행 같은 상성 무효에서 상대 명중률이 떨어지던 결함.
-  c.attacker.accuracyStages = !landed
-    ? c.attacker.accuracyStages
-    : applyMoveAccuracyEvasionChanges(c.attacker.accuracyStages, contraryMoveFor(c.effectiveMove, c.attacker), "self", {
-        userTypes: c.attacker.types,
-      });
-  const defenderAccuracyBeforeChange = c.defender.accuracyStages.accuracy;
-  c.defender.accuracyStages = c.opponentEffectsBlocked || !landed
-    ? c.defender.accuracyStages
-    : applyMoveAccuracyEvasionChanges(c.defender.accuracyStages, contraryMoveFor(c.effectiveMove, c.defender), "opponent", {
-        userTypes: c.attacker.types,
-      });
-  // 날카로운눈: 상대(공격측)의 기술로 자신의 명중률이 떨어지는 걸 막는다. 회피율 변화는 이
-  // 축과 무관해서(원문이 "명중률을 떨어뜨릴 수 없다"까지만) 건드리지 않는다.
-  if (c.defenderAbility?.blocksOpponentAccuracyDrops && c.defender.accuracyStages.accuracy < defenderAccuracyBeforeChange) {
-    c.defender.accuracyStages = { ...c.defender.accuracyStages, accuracy: defenderAccuracyBeforeChange };
-  }
   // 명중률/회피율 랭크 변화 결과 문구용(2.3 B3) — selfStatRises/selfStatDrops/opponentStatDrops와
   // 같은 포맷으로 합류시킨다. 안개제거(상대 회피율 −1)를 썼을 때 로그에 아무 문구도 안 뜨던 게
   // 이 수집이 5스탯(.stages)만 보고 .accuracyStages는 안 봐서 생긴 공백이었다. 명중률/회피율을
   // 상대 대상으로 "올리는" 기술은 없어 opponentStatDrops만 대칭시키면 충분하다.
   for (const key of ["accuracy", "evasion"] as const) {
-    const selfBefore = attackerAccuracyStagesBeforeChange[key];
+    const selfBefore = c.attackerAccuracyStagesBeforeChange[key];
     const selfAfter = c.attacker.accuracyStages[key];
     if (selfAfter > selfBefore) c.selfStatRises.push({ stat: key, delta: selfAfter - selfBefore });
     else if (selfAfter < selfBefore) c.selfStatDrops.push({ stat: key, delta: selfBefore - selfAfter });
 
     if (!c.opponentEffectsBlocked) {
-      const oppBefore = defenderAccuracyStagesBeforeChange[key];
+      const oppBefore = c.defenderAccuracyStagesBeforeChange[key];
       const oppAfter = c.defender.accuracyStages[key];
       if (oppAfter < oppBefore) c.opponentStatDrops.push({ stat: key, delta: oppBefore - oppAfter });
     }
@@ -1885,6 +1894,7 @@ export function resolveMirroredMoveEffects(input: MirroredMoveEffectsInput) {
   c.abilityInflictedStatusOnAttacker = input.abilityInflictedStatusOnAttacker;
   c.abilityInflictedStatusAbilityName = input.abilityInflictedStatusAbilityName;
   c.statusCureBerryItemName = input.statusCureBerryItemName;
+  c.abilityLoweredAttackerDropCount = input.abilityLoweredAttackerDropCount;
   c.mentalMoveBlockedByAbilityName = input.mentalMoveBlockedByAbilityName;
   let { bouncedByMagicMirror } = input;
   // ── 매직미러 반사 구간 시작 ──

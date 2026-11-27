@@ -96,6 +96,7 @@ interface ActionCtx {
   abilityInflictedVolatileOnAttacker: VolatileCondition | undefined;
   abilityLoweredAttackerStats: { stat: BattleStatKey; delta: number; }[];
   abilityLoweredAttackerStatsAbilityName: string | undefined;
+  abilityLoweredAttackerDropCount: number;
   abilityLoweredDefenderStats: { stat: BattleStatKey; delta: number; }[];
   abilityRaisedDefenderStats: { stat: BattleStatKey; delta: number; }[];
   abilityRaisedDefenderStatsAbilityName: string | undefined;
@@ -284,7 +285,7 @@ interface ActionCtx {
 function resolveMirroredPhase(c: ActionCtx) {
 
   const mirrorResult = resolveMirroredMoveEffects({
-    bouncedByMagicMirror: c.bouncedByMagicMirror, destinyBondWasArmed: c.destinyBondWasArmed, move: c.move, effectiveMove: c.effectiveMove, opponentEffectsBlocked: c.opponentEffectsBlocked, random: c.random, state: c.state, hit: c.hit, movesSecond: c.movesSecond, defenderKey: c.defenderKey, damage: c.damage, hitSubstitute: c.hitSubstitute, defenderMove: c.defenderMove, actorKey: c.actorKey, defenderBerriesBlocked: c.defenderBerriesBlocked, attackerBerriesBlocked: c.attackerBerriesBlocked, blockedByProtect: c.blockedByProtect, sheerForceAbilityName: c.sheerForceAbilityName, isDamaging: c.isDamaging, selfCuredStatus: c.selfCuredStatus, terrainSeedMessages: c.terrainSeedMessages, defenderAbility: c.defenderAbility, attacker: c.attacker, defender: c.defender, attackerAbility: c.attackerAbility, attackerItem: c.attackerItem, defenderItem: c.defenderItem, abilityInflictedStatusOnAttacker: c.abilityInflictedStatusOnAttacker, abilityInflictedStatusAbilityName: c.abilityInflictedStatusAbilityName, statusCureBerryItemName: c.statusCureBerryItemName, mentalMoveBlockedByAbilityName: c.mentalMoveBlockedByAbilityName,
+    abilityLoweredAttackerDropCount: c.abilityLoweredAttackerDropCount, bouncedByMagicMirror: c.bouncedByMagicMirror, destinyBondWasArmed: c.destinyBondWasArmed, move: c.move, effectiveMove: c.effectiveMove, opponentEffectsBlocked: c.opponentEffectsBlocked, random: c.random, state: c.state, hit: c.hit, movesSecond: c.movesSecond, defenderKey: c.defenderKey, damage: c.damage, hitSubstitute: c.hitSubstitute, defenderMove: c.defenderMove, actorKey: c.actorKey, defenderBerriesBlocked: c.defenderBerriesBlocked, attackerBerriesBlocked: c.attackerBerriesBlocked, blockedByProtect: c.blockedByProtect, sheerForceAbilityName: c.sheerForceAbilityName, isDamaging: c.isDamaging, selfCuredStatus: c.selfCuredStatus, terrainSeedMessages: c.terrainSeedMessages, defenderAbility: c.defenderAbility, attacker: c.attacker, defender: c.defender, attackerAbility: c.attackerAbility, attackerItem: c.attackerItem, defenderItem: c.defenderItem, abilityInflictedStatusOnAttacker: c.abilityInflictedStatusOnAttacker, abilityInflictedStatusAbilityName: c.abilityInflictedStatusAbilityName, statusCureBerryItemName: c.statusCureBerryItemName, mentalMoveBlockedByAbilityName: c.mentalMoveBlockedByAbilityName,
   });
   c.bouncedMoveName = mirrorResult.bouncedMoveName;
   c.bounceUserBlock = mirrorResult.bounceUserBlock;
@@ -1043,6 +1044,7 @@ export function resolveAction(
   c.abilityInflictedVolatileOnAttacker = _d0.abilityInflictedVolatileOnAttacker;
   c.abilityLoweredAttackerStats = _d0.abilityLoweredAttackerStats;
   c.abilityLoweredAttackerStatsAbilityName = _d0.abilityLoweredAttackerStatsAbilityName;
+  c.abilityLoweredAttackerDropCount = _d0.abilityLoweredAttackerDropCount;
   c.abilityLoweredDefenderStats = _d0.abilityLoweredDefenderStats;
   c.abilityRaisedDefenderStats = _d0.abilityRaisedDefenderStats;
   c.abilityRaisedDefenderStatsAbilityName = _d0.abilityRaisedDefenderStatsAbilityName;
