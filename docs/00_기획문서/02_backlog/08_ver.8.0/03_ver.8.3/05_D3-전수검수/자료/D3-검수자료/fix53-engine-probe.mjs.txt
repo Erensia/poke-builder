@@ -1,0 +1,60 @@
+// fix-53 검수 엔진 프로브(일회용). zz-fix53-probe.mjs.txt의 공통부 + 검수 추가 장면. 실행: cd <repo> && node <이 파일>
+// 실행: cd <repo> && node <이 파일>
+import { createServer } from "vite";
+const root = process.cwd();
+const server = await createServer({ root, server: { middlewareMode: true, hmr: false }, appType: "custom", logLevel: "error" });
+try {
+  const data = await server.ssrLoadModule("/src/lib/data.ts");
+  const state = await server.ssrLoadModule("/src/lib/battle/state.ts");
+  const rt = await server.ssrLoadModule("/src/lib/battle/runTurn.ts");
+  const sw = await server.ssrLoadModule("/src/lib/battle/switching.ts");
+  const pts = (o = {}) => ({ hp: 0, atk: 0, def: 0, spa: 0, spd: 0, spe: 0, ...o });
+  const mon = (id, moves, ability = null, item = null, points = pts({ atk: 32, spe: 32, hp: 2 })) => ({
+    slot: { pokemonId: id, moves: [...moves, null, null, null, null].slice(0, 4), ability, item, nature: null, points },
+    moves: moves.map((m) => data.getMove(m)),
+  });
+  const battle = (A, B) => state.createBattleState({
+    a: { slots: A.map((m) => m.slot), movesList: A.map((m) => m.moves) },
+    b: { slots: B.map((m) => m.slot), movesList: B.map((m) => m.moves) },
+  });
+  const mv = (x) => ({ kind: "move", move: data.getMove(x) });
+  const SW = (i) => ({ kind: "switch", toIndex: i });
+  const rnd0 = () => 0;
+  const NOP = "잠꼬대";
+  const SN = (ab, moves = [NOP], item = null) => mon("잠만보", moves, ab, item);
+  const BENCH = () => SN("두꺼운지방");
+  const stg = (f) => JSON.stringify(f.stages).replace(/"|:0,?/g, "").replace(/,}/g, "}");
+  const line = (st) => `p1 ${st.a.slot.pokemonId} hp=${st.a.currentHp}/${st.a.maxHp} st=${st.a.status?.condition ?? "-"} b=${stg(st.a)} | p2 ${st.b.slot.pokemonId} hp=${st.b.currentHp}/${st.b.maxHp} st=${st.b.status?.condition ?? "-"} b=${stg(st.b)}`;
+  // 한 턴. 일시정지(유턴 등 자체 교체·위기회피)는 pick(side)로 슬롯을 골라 이어간다.
+  function turn(st, ca, cb, rnd = rnd0, pick = () => 1) {
+    let o = rt.runTurn(st, ca, cb, rnd);
+    let guard = 0;
+    while (o.awaitingSelfSwitch && guard++ < 5) o = rt.resumeTurn(o._ctx, pick(o.awaitingSelfSwitch.side));
+    return o.nextState;
+  }
+  const q = (st) => `p1 ${st.a.slot.pokemonId} hp=${st.a.currentHp}/${st.a.maxHp} st=${st.a.status?.condition ?? "-"} | p2 ${st.b.slot.pokemonId} hp=${st.b.currentHp}/${st.b.maxHp} st=${st.b.status?.condition ?? "-"}`;
+  const SY = (moves = ["아이언헤드", NOP]) => mon("잠만보", moves, "싱크로");
+  const D = (ab, moves = [NOP]) => mon("잠만보", moves, ab);
+  function scen(label, A, B, plan, prep) {
+    let st = battle(A, B); prep?.(st);
+    for (const [a, b] of plan) st = turn(st, mv(a), mv(b), rnd0, () => 1);
+    console.log(`[${label}]\n   => ${q(st)}`);
+  }
+  const it = (st) => `p1 item=${st.a.itemConsumed ? "소모" : (st.a.slot.item ?? "-")} | p2 item=${st.b.itemConsumed ? "소모" : (st.b.slot.item ?? "-")} p2hp=${st.b.currentHp}`;
+  function scen2(label, A, B, plan, prep) {
+    let st = battle(A, B); prep?.(st);
+    for (const [a, b] of plan) st = turn(st, mv(a), mv(b), rnd0, () => 1);
+    console.log(`[${label}]\n   => ${q(st)} | ${it(st)}`);
+  }
+  scen2("X3 보유자 리샘열매 + 정전기(현행)", [mon("잠만보", ["아이언헤드", NOP], "싱크로", "리샘열매"), BENCH()], [D("정전기"), BENCH()], [["아이언헤드", NOP]]);
+  scen2("X3' 리샘열매 없는 잠만보 + 정전기(현행)", [mon("잠만보", ["아이언헤드", NOP], "두꺼운지방", "리샘열매"), BENCH()], [D("정전기"), BENCH()], [["아이언헤드", NOP]]);
+  scen2("X9 기존 방향: 방어측 싱크로 + 공격측 리샘열매 + 전기자석파", [mon("잠만보", ["전기자석파", NOP], "두꺼운지방", "리샘열매"), BENCH()], [mon("잠만보", [NOP], "싱크로"), BENCH()], [["전기자석파", NOP]]);
+  scen2("X8 왕큰부리 부리캐논(현행, 데미지 비교용)", [SY(), BENCH()], [mon("왕큰부리", ["부리캐논", NOP], null), BENCH()], [["아이언헤드", "부리캐논"]]);
+  scen2("X11e 내던지기(전기구슬) → 방어측 싱크로", [mon("잠만보", ["내던지기", NOP], "두꺼운지방", "전기구슬"), BENCH()], [mon("잠만보", [NOP], "싱크로"), BENCH()], [["내던지기", NOP]]);
+  scen2("X11f 내던지기(독바늘) → 방어측 싱크로", [mon("잠만보", ["내던지기", NOP], "두꺼운지방", "독바늘"), BENCH()], [mon("잠만보", [NOP], "싱크로"), BENCH()], [["내던지기", NOP]]);
+  scen2("X10e 토치카 + 접촉기", [SY(), BENCH()], [mon("잠만보", ["토치카", NOP], "두꺼운지방"), BENCH()], [["아이언헤드", "토치카"]]);
+  scen2("Y1 공격측(접지) 미스트필드 + 정전기", [SY(["아이언헤드", NOP]), BENCH()], [D("정전기", ["미스트필드", NOP]), BENCH()], [[NOP, "미스트필드"], ["아이언헤드", NOP]]);
+  scen2("Y2 공격측 편 신비의부적 + 정전기", [SY(["아이언헤드", "신비의부적"]), BENCH()], [D("정전기"), BENCH()], [["신비의부적", NOP], ["아이언헤드", NOP]]);
+} finally {
+  await server.close();
+}
