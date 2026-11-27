@@ -1,0 +1,79 @@
+// E8-a ⑤ 엔진 프로브 — e8a5-run.cjs(Showdown)와 같은 장면. 일회용, 커밋 금지.
+// 실행: cd <repo> && node <이 파일>
+import { createServer } from "vite";
+const root = process.cwd();
+const server = await createServer({ root, server: { middlewareMode: true, hmr: false }, appType: "custom", logLevel: "error" });
+try {
+  const data = await server.ssrLoadModule("/src/lib/data.ts");
+  const state = await server.ssrLoadModule("/src/lib/battle/state.ts");
+  const rt = await server.ssrLoadModule("/src/lib/battle/runTurn.ts");
+  const sw = await server.ssrLoadModule("/src/lib/battle/switching.ts");
+  const pts = (o = {}) => ({ hp: 0, atk: 0, def: 0, spa: 0, spd: 0, spe: 0, ...o });
+  const mon = (id, moves, ability = null, item = null, points = pts({ atk: 32, spe: 32, hp: 2 })) => ({
+    slot: { pokemonId: id, moves: [...moves, null, null, null, null].slice(0, 4), ability, item, nature: null, points },
+    moves: moves.map((m) => data.getMove(m)),
+  });
+  const battle = (A, B) => state.createBattleState({
+    a: { slots: A.map((m) => m.slot), movesList: A.map((m) => m.moves) },
+    b: { slots: B.map((m) => m.slot), movesList: B.map((m) => m.moves) },
+  });
+  const mv = (x) => ({ kind: "move", move: data.getMove(x) });
+  const SW = (i) => ({ kind: "switch", toIndex: i });
+  const rnd0 = () => 0;
+  const NOP = "잠꼬대";
+  const SN = (ab, moves = [NOP], item = null) => mon("잠만보", moves, ab, item);
+  const BENCH = () => SN("두꺼운지방");
+  const stg = (f) => JSON.stringify(f.stages).replace(/"|:0,?/g, "").replace(/,}/g, "}");
+  const line = (st) => `p1 ${st.a.slot.pokemonId} hp=${st.a.currentHp}/${st.a.maxHp} st=${st.a.status?.condition ?? "-"} b=${stg(st.a)} | p2 ${st.b.slot.pokemonId} hp=${st.b.currentHp}/${st.b.maxHp} st=${st.b.status?.condition ?? "-"} b=${stg(st.b)}`;
+  // 한 턴. 일시정지(유턴 등 자체 교체·위기회피)는 pick(side)로 슬롯을 골라 이어간다.
+  function turn(st, ca, cb, rnd = rnd0, pick = () => 1) {
+    let o = rt.runTurn(st, ca, cb, rnd);
+    let guard = 0;
+    while (o.awaitingSelfSwitch && guard++ < 5) o = rt.resumeTurn(o._ctx, pick(o.awaitingSelfSwitch.side));
+    return o.nextState;
+  }
+  const run = (label, st, plan, pick) => {
+    console.log(`--- ${label}`);
+    plan.forEach((p, i) => {
+      if (p.apply) { st = p.apply(st); console.log(`   (T${i + 1} ${p.tag}) ${line(st)}`); return; }
+      st = turn(st, p[0], p[1], rnd0, pick); console.log(`   T${i + 1} ${p[0].kind === "move" ? p[0].move.name : "교체" + p[0].toIndex} / ${p[1].kind === "move" ? p[1].move.name : "교체" + p[1].toIndex} => ${line(st)}`);
+    });
+  };
+  const SBm = () => SN("가속");
+  const show = (label, st) => console.log(`   => ${label} p1 ${st.a.slot.pokemonId}(${st.a.slot.ability ?? "-"}) hp=${st.a.currentHp}/${st.a.maxHp} spe=${st.a.stages.spe} entered=${!!st.a.enteredThisTurn} switchedIn=${!!st.a.switchedInThisTurn}`);
+  function scen(title, A, B, steps, pick = () => 1) {
+    console.log(`--- ${title}`);
+    let st = battle(A, B);
+    steps.forEach((s, i) => { st = turn(st, s[0], s[1], rnd0, pick); show(`T${i + 1}`, st); });
+  }
+  const M2 = (a, b) => [mv(a), mv(b)];
+  console.log("===== F =====");
+  scen("F1 드래곤테일", [BENCH(), SBm()], [SN("두꺼운지방", ["드래곤테일"]), BENCH()], [M2(NOP, "드래곤테일"), M2(NOP, "드래곤테일")]);
+  scen("F2 울부짖기", [BENCH(), SBm()], [SN("두꺼운지방", ["울부짖기"]), BENCH()], [M2(NOP, "울부짖기"), M2(NOP, "울부짖기")]);
+  scen("F2b 날려버리기", [BENCH(), SBm()], [SN("두꺼운지방", ["날려버리기"]), BENCH()], [M2(NOP, "날려버리기"), M2(NOP, "날려버리기")]);
+  scen("F3 레드카드(공격자 p1이 맞은 쪽 상대 레드카드에 쫓겨남)", [SN("두꺼운지방", ["아이언헤드"]), SBm()], [SN("두꺼운지방", [NOP], "레드카드"), BENCH()], [M2("아이언헤드", NOP), M2("아이언헤드", NOP)]);
+  scen("F4 탈출버튼", [SN("두꺼운지방", [NOP], "탈출버튼"), SBm()], [SN("두꺼운지방", ["아이언헤드"]), BENCH()], [M2(NOP, "아이언헤드"), M2(NOP, "아이언헤드")]);
+  { console.log("--- F5 위기회피(HP 170에서 맞아 절반 이하)"); let st = battle([SN("위기회피", [NOP]), SBm()], [SN("두꺼운지방", ["아이언헤드"]), BENCH()]); st.a.currentHp = 170;
+    for (let i = 0; i < 2; i++) { st = turn(st, mv(NOP), mv("아이언헤드"), rnd0, () => 1); show("T" + (i + 1), st); } }
+  scen("F6 배턴터치", [SN("두꺼운지방", ["배턴터치"]), SBm()], [BENCH(), BENCH()], [M2("배턴터치", NOP), M2(NOP, NOP)]);
+  scen("F7 꼬리자르기", [SN("두꺼운지방", ["꼬리자르기"]), SBm()], [BENCH(), BENCH()], [M2("꼬리자르기", NOP), M2(NOP, NOP)]);
+  scen("F8 유턴", [SN("두꺼운지방", ["유턴"]), SBm()], [BENCH(), BENCH()], [M2("유턴", NOP), M2(NOP, NOP)]);
+  scen("F9 자발 교체", [BENCH(), SBm()], [BENCH(), BENCH()], [[SW(1), mv(NOP)], M2(NOP, NOP)]);
+  console.log("===== G 행동 전 기절 대체 =====");
+  {
+    let st = battle([BENCH(), SN("두꺼운지방"), SBm()], [SN("두꺼운지방", ["스텔스록", "아이언헤드"]), BENCH()]);
+    st = turn(st, mv(NOP), mv("스텔스록")); show("G1 T1", st);
+    st.sideA.party[1].currentHp = 1;
+    st = turn(st, SW(1), mv("아이언헤드"), rnd0, () => 2); show("G2 T2(교체 → 설치물 기절 → 대체 2)", st);
+    st = turn(st, mv(NOP), mv("아이언헤드")); show("G3 T3", st);
+  }
+  console.log("===== H 턴 사이 기절 교체(applySwitch) =====");
+  {
+    let st = battle([SN("두꺼운지방"), SBm()], [SN("두꺼운지방", ["아이언헤드"]), BENCH()]); st.a.currentHp = 1;
+    st = turn(st, mv(NOP), mv("아이언헤드")); show("H1 T1(기절)", st);
+    st = sw.applySwitch(st, "a", 1).nextState; show("H2 교체 직후(턴 사이)", st);
+    st = turn(st, mv(NOP), mv(NOP)); show("H3 T2", st);
+  }
+} finally {
+  await server.close();
+}
