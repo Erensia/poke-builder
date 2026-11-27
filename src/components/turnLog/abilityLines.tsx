@@ -1,9 +1,9 @@
 import { type ReactNode } from "react";
-import type { HitAbilityEvent } from "../../types/battle";
+import type { HitAbilityEvent, SynchronizeReflectLog } from "../../types/battle";
 import { STAT_LABELS } from "../../lib/statLabels";
 import { eunNeun, iGa, eulReul, waGwa, roEuro } from "../../lib/josa";
 import { VOLATILE_LABELS } from "../../lib/battleLogLabels";
-import { stageRiseAdverb, STATUS_ONSET_TEXT } from "../../lib/battleLogText";
+import { stageRiseAdverb, STATUS_CURE_TEXT, STATUS_ONSET_TEXT } from "../../lib/battleLogText";
 
 /**
  * 방어측 on-hit 특성 효과 한 줄의 "내용"만 만드는 함수들(감싸는 div·key는 호출부 책임) —
@@ -19,6 +19,27 @@ export function abilityStatusLine(
   return (
     <>
       {defenderName}의 {abilityName}! {STATUS_ONSET_TEXT[status](actorName)}
+    </>
+  );
+}
+
+/** 8.3 D3-fix-53 공격측 싱크로가 방어측 효과로 걸린 상태이상을 방어측에게 되돌렸다 — "{공격측}의 싱크로! {방어측}은(는) …"(+ 방어측 회복 열매가 바로 치료했으면 이어서 한 줄) */
+export function synchronizeLines(sync: SynchronizeReflectLog, actorName: string, defenderName: string): ReactNode[] {
+  const lines: ReactNode[] = [
+    <>
+      {actorName}의 {sync.abilityName}! {STATUS_ONSET_TEXT[sync.status](defenderName)}
+    </>,
+  ];
+  if (sync.curedItemName) lines.push(syncCureLine(sync.curedItemName, sync.status, defenderName));
+  return lines;
+}
+
+/** 복사된 상태이상을 대상의 회복 열매가 바로 치료했다 */
+export function syncCureLine(itemName: string, status: NonNullable<HitAbilityEvent["statusOnAttacker"]>, targetName: string): ReactNode {
+  return (
+    <>
+      {itemName}
+      {iGa(itemName)} 발동했다! {STATUS_CURE_TEXT[status](targetName)}
     </>
   );
 }
@@ -197,6 +218,9 @@ export function hitAbilityEventLines(
 
   if (ev.statusOnAttacker) {
     push(abilityStatusLine(ev.abilityName, ev.statusOnAttacker, actorName, defenderName));
+  }
+  if (ev.sync) {
+    for (const line of synchronizeLines(ev.sync, actorName, defenderName)) push(line);
   }
   if (ev.volatileOnAttacker) {
     push(abilityVolatileLine(ev.abilityName, ev.volatileOnAttacker, actorName, defenderName));

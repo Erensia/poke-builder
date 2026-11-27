@@ -17,7 +17,8 @@ import { resolveMirroredMoveEffects } from "./mirroredEffects";
 import { type Ability } from "@/types/ability";
 import { type AccuracyEvasionKey, type BattleStatKey } from "@/types/battleStats";
 import { type BattleFighterState } from "@/lib/battle/state";
-import { type FlingEffectResult, type HitAbilityEvent } from "@/types/battle";
+import { type FlingEffectResult, type HitAbilityEvent, type SynchronizeReflectLog } from "@/types/battle";
+import { reflectSynchronize } from "./synchronize";
 import { type Item } from "@/types/item";
 import { type StatusCondition, type VolatileCondition } from "@/types/status";
 import { type WeatherKind } from "@/types/weather";
@@ -249,6 +250,12 @@ interface ActionCtx {
   teaTimeFailed: boolean;
   flungItem: Item | undefined;
   flingEffect: FlingEffectResult | undefined;
+  /** 접촉/피격 반응(hitTrigger)으로 공격측에 걸린 상태이상 — mirrored 단계가 abilityInflictedStatusOnAttacker를 덮기 전의 값(8.3 D3-fix-53) */
+  hitTriggerStatusOnAttacker: StatusCondition | null | undefined;
+  /** 공격측 싱크로가 방어측에게 되돌린 기록 */
+  syncOnDefender: SynchronizeReflectLog | undefined;
+  /** 방어측 싱크로·내던지기로 공격측에 복사된 상태이상을 공격측 회복 열매가 치료한 열매 이름 */
+  syncAttackerCuredItemName: string | undefined;
   perishSongStarted: boolean;
   perishSongFailed: boolean;
   destroyedField: FieldKind | undefined;
@@ -311,6 +318,7 @@ function resolveMirroredPhase(c: ActionCtx) {
   c.overwroteTargetType = mirrorResult.overwroteTargetType;
   c.targetMoveTypeOverride = mirrorResult.targetMoveTypeOverride;
   c.inflictedStatus = mirrorResult.inflictedStatus;
+  c.syncAttackerCuredItemName = mirrorResult.syncAttackerCuredItemName;
   c.statusInflictFailed = mirrorResult.statusInflictFailed;
   c.statusBlocked = mirrorResult.statusBlocked;
   c.beakBlastBurnedAttacker = mirrorResult.beakBlastBurnedAttacker;
@@ -393,6 +401,38 @@ function resolveMirroredPhase(c: ActionCtx) {
   c.flingEffect = c.flungItem && c.hit && c.damage > 0 && !c.hitSubstitute && !isFainted(c.defender)
       ? applyFlingEffect(c.state, c.actorKey, c.defender, c.defenderAbility, c.flungItem, !c.movesSecond)
       : undefined;
+  applySynchronizeReflections(c);
+}
+
+/**
+ * 8.3 D3-fix-53 (E8-44) 싱크로 — 상대 효과로 상태이상에 걸린 보유자가 그 효과의 주인에게 같은 상태이상을 되돌린다(reflectSynchronize).
+ * ① 공격측 보유자: 접촉/피격 반응(정전기·불꽃몸·독가시·포자·하바네로분출)·부리캐논 화상·토치카 독 → 방어측.
+ * ② 방어측 보유자: 내던지기(전기구슬·독바늘)로 걸린 상태이상 → 던진 공격측(변화기·2차효과·독수는 mirrored 단계에서 이미 처리).
+ */
+function applySynchronizeReflections(c: ActionCtx) {
+  const toDefender = (status: StatusCondition, source: SynchronizeReflectLog["source"]): SynchronizeReflectLog | undefined => {
+    const r = reflectSynchronize(c.state, c.attackerAbility, status, { fighter: c.defender, key: c.defenderKey, ability: c.defenderAbility, item: c.defenderItem, berriesBlocked: c.defenderBerriesBlocked });
+    return r && { status: r.status, abilityName: c.attackerAbility!.name, source, curedItemName: r.curedItemName };
+  };
+  if (c.hitTriggerStatusOnAttacker) {
+    const sync = toDefender(c.hitTriggerStatusOnAttacker, "hitTrigger");
+    if (sync) {
+      c.syncOnDefender = sync;
+      // 다단히트: 상태이상이 걸린 그 타의 이벤트에 붙인다
+      const ev = c.perHitLog?.find((h) => h.abilityEvent?.statusOnAttacker)?.abilityEvent;
+      if (ev) ev.sync = sync;
+    }
+  }
+  if (c.beakBlastBurnedAttacker) c.syncOnDefender ??= toDefender("burn", "beakBlast");
+  if (c.protectContactInflictedStatus) c.syncOnDefender ??= toDefender(c.protectContactInflictedStatus, "protect");
+  if (c.flingEffect?.status) {
+    const r = reflectSynchronize(c.state, c.defenderAbility, c.flingEffect.status, { fighter: c.attacker, key: c.actorKey, ability: c.attackerAbility, item: c.attackerItem, berriesBlocked: c.attackerBerriesBlocked });
+    if (r) {
+      c.abilityInflictedStatusOnAttacker = r.status;
+      c.abilityInflictedStatusAbilityName = c.defenderAbility!.name;
+      c.syncAttackerCuredItemName = r.curedItemName;
+    }
+  }
 }
 
 /** 멸망의노래·아이언롤러·트릭룸·원더룸·중력·페어리록·치유소원·전자부유 */
@@ -861,6 +901,8 @@ function collectResult(c: ActionCtx) {
     defenderBerryHealItemName: c.defenderBerryHealItemName,
     abilityInflictedStatusOnAttacker: c.abilityInflictedStatusOnAttacker,
     abilityInflictedStatusAbilityName: c.abilityInflictedStatusAbilityName,
+    synchronizedOnDefender: c.syncOnDefender,
+    synchronizedAttackerCuredItemName: c.syncAttackerCuredItemName,
     abilityInflictedVolatileOnAttacker: c.abilityInflictedVolatileOnAttacker,
     abilityInflictedVolatileAbilityName: c.abilityInflictedVolatileAbilityName,
     abilityDamageToAttacker: c.abilityDamageToAttacker || undefined,
@@ -1040,6 +1082,7 @@ export function resolveAction(
   c.abilityDisabledMoveName = _d0.abilityDisabledMoveName;
   c.abilityInflictedStatusAbilityName = _d0.abilityInflictedStatusAbilityName;
   c.abilityInflictedStatusOnAttacker = _d0.abilityInflictedStatusOnAttacker;
+  c.hitTriggerStatusOnAttacker = _d0.abilityInflictedStatusOnAttacker;
   c.abilityInflictedVolatileAbilityName = _d0.abilityInflictedVolatileAbilityName;
   c.abilityInflictedVolatileOnAttacker = _d0.abilityInflictedVolatileOnAttacker;
   c.abilityLoweredAttackerStats = _d0.abilityLoweredAttackerStats;
