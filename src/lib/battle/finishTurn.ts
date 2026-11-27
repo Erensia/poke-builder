@@ -653,14 +653,16 @@ function applyAbilityImmunityCure(ctx: EndOfTurnFighterContext): void {
 }
 
 /**
- * 가속(Speed Boost): 매 턴 종료 시 스피드 1랭크 상승. 본가 예외 — "자기 의지로 교체해서
- * 나온 턴"엔 발동하지 않는다(Phase 8 §8에서 복원). 단 기절 후 강제 교체로 나온 경우는
- * 발동한다(특성 설명 명시). switchedInThisTurn은 runTurn 교체 선처리에서 자발적 교체에만
- * 세워지고 턴 시작 시 지워진다. 이 턴 데미지로 방금 쓰러졌으면(isFainted) 발동하지 않는다.
+ * 가속(Speed Boost): 매 턴 종료 시 스피드 1랭크 상승. 이번 턴 도중에 등장한 포켓몬(자발 교체·유턴류·
+ * 강제 교체(드래곤테일·레드카드 등)·행동 전 기절 대체 포함)은 그 턴엔 발동하지 않는다 — Showdown
+ * `activeTurns`가 등장 때 0이고 턴 시작에 +1이라 `onResidual`이 0이면 건너뛰는 것과 같다(8.3 D3-fix-51 E8-41).
+ * enteredThisTurn은 performSwitch가 모든 등장에 세우고 runTurn이 턴 시작에 지운다. 턴과 턴 사이의 기절
+ * 교체(applySwitch)는 다음 턴 시작에 지워지므로 다음 턴 끝부터 발동한다. 이번 턴 데미지로 방금
+ * 쓰러졌으면(isFainted) 발동하지 않는다.
  */
 function applySpeedBoostAbility(ctx: EndOfTurnFighterContext): void {
   const { key, fighter, fighterAbility, endOfTurn } = ctx;
-  if (!fighterAbility?.boostsSpeedEachTurnEnd || isFainted(fighter) || fighter.switchedInThisTurn) return;
+  if (!fighterAbility?.boostsSpeedEachTurnEnd || isFainted(fighter) || fighter.enteredThisTurn) return;
   const speBefore = fighter.stages.spe;
   fighter.stages = applyStageDelta(fighter.stages, "spe", contraryDelta(fighter, 1));
   endOfTurn.push({
