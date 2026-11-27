@@ -161,7 +161,8 @@ export default async function ({ server, data, mon, battle, pts, check }) {
     const c = play(ctl, "사이코키네시스", "칼춤", () => 0);
     const st = queue(mk({ bAbility: "저주받은바디" }));
     const r = play(st, "칼춤", "칼춤", () => 0);
-    check("8.3 A4 R3-s1: 저주받은바디 — 정상 공격은 막지만(대조) 미래예지는 PP 불변", c?.nextState.a.remainingPp["사이코키네시스"] === 0 && r?.nextState.a.remainingPp["미래예지"] !== 0 && !!hitOf(r), `대조PP=${c?.nextState.a.remainingPp["사이코키네시스"]} 미래예지PP=${r?.nextState.a.remainingPp["미래예지"]}`);
+    // D3-fix-48(E8-27): 저주받은바디는 PP를 0으로 만드는 근사가 아니라 사슬묶기와 같은 4턴 봉인(disable) — 대조는 봉인이 걸렸는지로 읽는다.
+    check("8.3 A4 R3-s1: 저주받은바디 — 정상 공격은 그 기술을 봉인하지만(대조) 미래예지는 봉인·PP 변화 없음", c?.nextState.a.volatile.active.disable?.moveId === "사이코키네시스" && r?.nextState.a.volatile.active.disable === undefined && r?.nextState.a.remainingPp["미래예지"] !== 0 && !!hitOf(r), `대조봉인=${c?.nextState.a.volatile.active.disable?.moveId} 미래예지봉인=${r?.nextState.a.volatile.active.disable?.moveId} 미래예지PP=${r?.nextState.a.remainingPp["미래예지"]}`);
     const dst = queue(mk({ bBench: true })); frail(dst.b);
     const rd = play(dst, "칼춤", "길동무");
     check("8.3 A4 R3-s2: 길동무 상태의 대상이 미래예지로 쓰러져도 사용자는 무사", rd?.nextState.b.currentHp === 0 && rd.nextState.sideA.party[0].currentHp > 0, `a=${rd?.nextState.sideA.party[0].currentHp} b=${rd?.nextState.b.currentHp}`);

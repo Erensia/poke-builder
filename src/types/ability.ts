@@ -84,12 +84,11 @@ interface AbilityModifier {
 export interface AbilityHitTrigger {
   /**
    * 발동 조건 — 각 특성의 설명 텍스트를 그대로 축으로 나눴다:
-   *  - "physicalContact": 물리 접촉기만 (정전기·불꽃몸 = "물리 접촉을 받으면")
    *  - "contact": 카테고리 무관 접촉기 전체 (까칠한피부 = "접촉기로 공격해 온")
    *  - "physical": 물리기 전체, 접촉 여부 무관 (깨어진갑옷 = "물리 공격을 받으면")
    *  - "damaging": 데미지를 준 모든 기술 (저주받은바디 = "공격을 받으면")
    */
-  on: "physicalContact" | "contact" | "physical" | "damaging";
+  on: "contact" | "physical" | "damaging";
   /** 기술 자신의 타입이 이 목록에 있을 때만(정의의마음: 악타입) — 생략하면 타입 무관 */
   moveTypeIn?: PokemonType[];
   /** 발동 확률(%). 생략하면 100% 확정(까칠한피부·깨어진갑옷) */

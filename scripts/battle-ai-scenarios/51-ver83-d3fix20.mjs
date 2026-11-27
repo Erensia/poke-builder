@@ -1,7 +1,7 @@
 // 8.3 D3-fix-20 도발·앙코르·사슬묶기 지속은 **턴 종료**에 줄어든다(Showdown residual 15·16·17 — 걸린 턴·못 움직인 턴도 센다) + 부여 시점 보정:
 // 도발 3(+1: 대상이 이번 턴 이전부터 필드에 있었고 이미 움직임)·앙코르 3(+1: 이미 움직임)·사슬묶기 5(−1: 아직 안 움직임 — 엔진 기본값은 "아직 안 움직임"인 4, 이미 움직임이면 +1).
 // "이미 움직였나"는 `c.movesSecond`(공격측 후공)에 "대상이 이번 턴 입장한 게 아님"을 더한 것이다(U턴 뒤·턴 시작 교체로 들어온 대상은 +1 없음).
-// 설계 `8.3-D3-fix20-소모시점설계.md`(검수 `…-검수.md`). E4b-07·08. 설계 시험 11(저주받은바디 −1)은 엔진이 저주받은바디를 휘발이 아니라 PP 0으로 구현해 해당 없음(설계서 §8).
+// 설계 `8.3-D3-fix20-소모시점설계.md`(검수 `…-검수.md`). E4b-07·08. 설계 시험 11(저주받은바디 −1)은 당시 엔진이 저주받은바디를 휘발이 아니라 PP 0으로 구현해 해당 없었다(설계서 §8) — 8.3 D3-fix-48(E8-27)에서 사슬묶기 경로(disable 4턴)로 바꿨으므로 그 부여·해제 시점은 `79-ver83-d3fix48.mjs` 시험 6·7이 고정한다.
 export default async function ({ server, data, mon, battle, check }) {
   const rt = await server.ssrLoadModule("/src/lib/battle/runTurn.ts");
   const ra = await server.ssrLoadModule("/src/lib/battle/resolveAction.ts");

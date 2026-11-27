@@ -59,6 +59,8 @@ interface HitResolutionInput {
   stabMultiplier: number;
   /** 미래예지 적중(8.3 A4): 사용자 측 기술 후 효과(반동·흡수·조개껍질방울·매지션·길동무)와 저주받은바디를 끈다 — Showdown의 futuremove 예외 */
   delayedHit?: boolean;
+  /** 호출 전에 고른 기술(잠꼬대·흉내쟁이가 부른 기술 말고 부른 쪽) — 저주받은바디가 봉인하는 대상. 생략하면 `move`(8.3 D3-fix-48) */
+  selectedMove?: Move;
 }
 
 /** resolveHitAndApplyDamage의 단계 사이에서 공유되는 값 — 한 단계 안에서만 쓰는 변수는 각 단계 함수의 지역 변수다 */
@@ -91,11 +93,14 @@ interface HitCtx {
   finalDefenseMultiplier: number;
   stabMultiplier: number;
   delayedHit: boolean;
+  selectedMove: Move;
   isDamaging: boolean;
   berryReducedDamageItemName: string | undefined;
   damage: number;
   damagePercent: number;
   actualDamageDealt: number;
+  /** applyDrainHeal이 이미 회복에 반영한 actualDamageDealt 누계 — 타마다 호출돼 그 타 피해만 센다(8.3 D3-fix-48 E8-28) */
+  drainAccountedDamage: number;
   isCritical: boolean;
   hitCount: number | undefined;
   perHitLog: | { damage: number; damagePercent: number; critical: boolean; abilityEvent?: HitAbilityEvent }[]
@@ -161,6 +166,16 @@ interface HitCtx {
   liquidOozeAbilityName: string | undefined;
   shellBellHealAmount: number;
   stolenItemName: string | undefined;
+}
+
+/** 방금 공격측에 걸린 휘발 상태를 멘탈허브가 즉시 치료하고 도구를 소모한다 — 치료했으면 true(로그 필드를 비우는 건 호출한 쪽) */
+function cureAttackerWithMentalHerb(c: HitCtx, volatile: VolatileCondition): boolean {
+  if (!getMentalHerbCureResult(c.attackerItem, c.attacker.itemConsumed ?? false)) return false;
+  c.attacker.volatile = { active: { ...c.attacker.volatile.active } };
+  delete c.attacker.volatile.active[volatile];
+  consumeItem(c.attacker);
+  c.statusCureBerryItemName = c.attackerItem!.name;
+  return true;
 }
 
 /** 타 하나의 명중·급소·데미지 판정(다단히트 타마다 호출) */
@@ -554,11 +569,7 @@ function defineAbilityHitEffect(c: HitCtx) {
       ev.volatileOnAttacker = trigger.inflictsVolatileOnAttacker;
       evAny = true;
       // 멘탈허브: 헤롱헤롱바디로 걸린 헤롱헤롱도 걸리는 순간 치료하고 소모된다.
-      if (getMentalHerbCureResult(c.attackerItem, c.attacker.itemConsumed ?? false)) {
-        c.attacker.volatile = { active: { ...c.attacker.volatile.active } };
-        delete c.attacker.volatile.active[trigger.inflictsVolatileOnAttacker];
-        consumeItem(c.attacker);
-        c.statusCureBerryItemName = c.attackerItem!.name;
+      if (cureAttackerWithMentalHerb(c, trigger.inflictsVolatileOnAttacker)) {
         c.abilityInflictedVolatileOnAttacker = undefined;
         c.abilityInflictedVolatileAbilityName = undefined;
         ev.volatileOnAttacker = undefined;
@@ -631,12 +642,26 @@ function defineAbilityHitEffect(c: HitCtx) {
         }
       }
     }
-    if (trigger.disablesAttackerMove && !c.delayedHit && c.attacker.remainingPp[c.move.id] !== undefined) {
-      c.attacker.remainingPp[c.move.id] = 0;
-      c.abilityDisabledMoveName = c.move.name;
+    // 저주받은바디(8.3 D3-fix-48 E8-27): 공격측이 방금 **고른** 기술(잠꼬대·흉내쟁이면 부른 쪽)을 사슬묶기와 같은 4턴 봉인으로 막는다.
+    // 무발동: 미래예지 등 지연 타·발버둥(PP 기록 없음)·그 슬롯의 PP가 이미 0(마지막 PP 직후)·이미 봉인 중·공격측 아로마베일(Showdown cursedbody·disable.onStart).
+    // 지속 보정은 없다 — 공격측이 지금 움직이는 중이라 기본값 4가 Showdown의 "5 − 아직 안 움직임 1"과 같다.
+    if (
+      trigger.disablesAttackerMove &&
+      !c.delayedHit &&
+      (c.attacker.remainingPp[c.selectedMove.id] ?? 0) > 0 &&
+      !hasVolatile(c.attacker.volatile, "disable") &&
+      !c.attackerAbility?.blocksMentalMoves
+    ) {
+      c.attacker.volatile = inflictVolatile(c.attacker.volatile, "disable", c.random, c.selectedMove.id);
+      c.abilityDisabledMoveName = c.selectedMove.name;
       c.abilityDisableAbilityName = c.defenderAbility!.name;
-      ev.disabledMoveName = c.move.name;
+      ev.disabledMoveName = c.selectedMove.name;
       evAny = true;
+      if (cureAttackerWithMentalHerb(c, "disable")) {
+        c.abilityDisabledMoveName = undefined;
+        c.abilityDisableAbilityName = undefined;
+        ev.disabledMoveName = undefined;
+      }
     }
     // 나쁜손버릇: 피격측(defender)이 무도구이고 공격자(attacker)가 도구를 지녔으면 그 자리에서 강탈한다.
     // 매지션과 방향만 반대고 규칙은 동일 — 대타에 맞았을 때는 함수 진입부 가드(blockedBySubstitute)에서
@@ -723,6 +748,29 @@ function defineAbilityHitEffect(c: HitCtx) {
   };
 }
 
+/**
+ * 흡수기 회복(기가드레인·드레인펀치·드레인키스·원념의칼 등, 해감액이면 회복 대신 피해) — 실제로 깎인 HP(actualDamageDealt)의 drainFraction 만큼.
+ * Showdown(세대 5+)은 피해를 넣는 그 순간 회복하므로 **타마다**, 그리고 **접촉 반응·울퉁불퉁멧(DamagingHit)보다 먼저** 일어난다(8.3 D3-fix-48 E8-28).
+ * 그래서 각 타의 applyDamageToDefender·applyEndurance 직후, triggerAbilityHitEffect 직전에 부른다. 호출 사이에 새로 깎인 HP만 그 타 피해로 센다(타별 ⌊피해×비율⌋의 합).
+ * 큰뿌리·회복봉인·해감액 식은 그대로다 — 양 반올림(엔진 내림 / Showdown Math.round)은 E10 후보라 이번엔 안 바꾼다.
+ */
+function applyDrainHeal(c: HitCtx) {
+  const dealt = c.actualDamageDealt - c.drainAccountedDamage;
+  c.drainAccountedDamage = c.actualDamageDealt;
+  if (c.delayedHit || !c.isDamaging || dealt <= 0 || c.effectiveMove.drainFraction === undefined) return;
+  const rawDrain = healWithBigRoot(Math.floor(dealt * c.effectiveMove.drainFraction), c.attackerItem);
+  if (c.defenderAbility?.reverseDrainHealsToDamage) {
+    const ooze = Math.min(c.attacker.currentHp, rawDrain);
+    c.attacker.currentHp -= ooze;
+    c.liquidOozeDamage += ooze;
+    c.liquidOozeAbilityName = c.defenderAbility.name;
+  } else {
+    const heal = hasVolatile(c.attacker.volatile, "healBlock") ? 0 : rawDrain;
+    c.drainHealAmount += heal;
+    c.attacker.currentHp = Math.min(c.attacker.maxHp, c.attacker.currentHp + heal);
+  }
+}
+
 /** 방어류·대타 등으로 막히면 건너뛰고, 아니면 타를 굴려 데미지 적용. 죽기살기·무릎차기 포함 */
 function resolveMainHit(c: HitCtx) {
 
@@ -737,6 +785,7 @@ function resolveMainHit(c: HitCtx) {
       const preHp = c.defender.currentHp;
       c.applyDamageToDefender(c.damage);
       c.applyEndurance(preHp);
+      applyDrainHeal(c);
       c.triggerAbilityHitEffect(c.damage);
       c.applyContactItemRecoil(c.damage);
     }
@@ -777,10 +826,12 @@ function resolveMainHit(c: HitCtx) {
       c.applyDamageToDefender(hitResult.damage);
       c.applyEndurance(preHp);
       c.applyAngerPoint(hitResult.isCritical);
+      applyDrainHeal(c);
       // 이 타에서 방어측 on-hit 특성이 한 일을 그 타 레코드에 붙인다(로그를 타별로 찍기 위함).
       c.perHitLog[c.perHitLog.length - 1].abilityEvent = c.triggerAbilityHitEffect(hitResult.damage);
       c.applyContactItemRecoil(hitResult.damage);
-      if (isFainted(c.defender) || c.substituteBroke) break; // 상대가 쓰러지거나 대타가 깨지면 남은 타수는 진행하지 않는다
+      // 상대가 쓰러지거나 대타가 깨지거나, 1타 반응(까칠한피부·울퉁불퉁멧 등)으로 공격측이 쓰러지면 남은 타수는 진행하지 않는다(8.3 D3-fix-48)
+      if (isFainted(c.defender) || c.substituteBroke || isFainted(c.attacker)) break;
     }
     c.damagePercent = c.damage / c.defender.realStats.hp;
     c.hitCount = landed;
@@ -793,6 +844,7 @@ function resolveMainHit(c: HitCtx) {
     c.applyDamageToDefender(c.damage);
     c.applyEndurance(preHp);
     c.applyAngerPoint(c.isCritical);
+    applyDrainHeal(c);
     c.triggerAbilityHitEffect(c.damage);
     c.applyContactItemRecoil(c.damage);
   }
@@ -886,6 +938,7 @@ function resolveCountersAndFollowUp(c: HitCtx) {
     !c.blockedByProtect &&
     c.damage > 0 &&
     !isFainted(c.defender) &&
+    !isFainted(c.attacker) && // 첫 타 반응으로 공격측이 쓰러졌으면 후속 타도 없다(8.3 D3-fix-48)
     c.effectiveMove.fixedDamage === undefined &&
     c.effectiveMove.minHits === undefined &&
     c.effectiveMove.power !== null &&
@@ -900,6 +953,7 @@ function resolveCountersAndFollowUp(c: HitCtx) {
     const preHp = c.defender.currentHp;
     c.applyDamageToDefender(c.followUpHitDamage);
     c.applyEndurance(preHp);
+    applyDrainHeal(c);
     c.triggerAbilityHitEffect(c.followUpHitDamage);
     c.applyContactItemRecoil(c.followUpHitDamage);
   }
@@ -964,25 +1018,7 @@ function applyRecoilAndDrain(c: HitCtx) {
     c.itemRecoilItemName = c.attackerItem.name;
   }
 
-  // 흡수기(기가드레인·드레인펀치·드레인키스·원념의칼): 실제로 깎인 HP(actualDamageDealt)의
-  // 일정 비율만큼 회복 — recoil과 같은 이유로 이론상 데미지(damage)가 아니라 실제 HP 감소분을
-  // 기준으로 써야 오버킬 시 회복량이 부풀려지지 않는다. 큰뿌리를 지녔으면 회복량이 1.3배.
-  // recoil의 정반대 축이라 recoilDamage와 별도로 관리한다.
-  c.drainHealAmount = 0;
-  // 해감액: 방어측이 이 특성이면 흡수분만큼 공격측이 회복 대신 데미지를 입는다.
-  c.liquidOozeDamage = 0;
-
-  if (c.isDamaging && c.actualDamageDealt > 0 && c.effectiveMove.drainFraction !== undefined) {
-    const rawDrain = healWithBigRoot(Math.floor(c.actualDamageDealt * c.effectiveMove.drainFraction), c.attackerItem);
-    if (c.defenderAbility?.reverseDrainHealsToDamage) {
-      c.liquidOozeDamage = Math.min(c.attacker.currentHp, rawDrain);
-      c.attacker.currentHp -= c.liquidOozeDamage;
-      c.liquidOozeAbilityName = c.defenderAbility.name;
-    } else {
-      c.drainHealAmount = hasVolatile(c.attacker.volatile, "healBlock") ? 0 : rawDrain;
-      c.attacker.currentHp = Math.min(c.attacker.maxHp, c.attacker.currentHp + c.drainHealAmount);
-    }
-  }
+  // 흡수기 회복·해감액은 타마다 접촉 반응보다 먼저 처리한다 — applyDrainHeal(8.3 D3-fix-48 E8-28).
 
   // 조개껍질방울: 실제로 깎인 HP(actualDamageDealt)의 1/8만큼 회복(오버킬 시 부풀려지지 않게).
   // 흡수기와는 별개 축이라 같은 행동에서 동시에 발동할 수 있다.
@@ -1074,6 +1110,7 @@ export function resolveHitAndApplyDamage(input: HitResolutionInput) {
   c.finalDefenseMultiplier = input.finalDefenseMultiplier;
   c.stabMultiplier = input.stabMultiplier;
   c.delayedHit = !!input.delayedHit;
+  c.selectedMove = input.selectedMove ?? input.move;
   const { evadedByCharge, defenderHideType } = input;
   // status 기술(도깨비불·최면술 등 위력 없는 변화기)은 데미지 계산을 건너뛴다.
   // 예전엔 여기서 바로 return 해버려서 이런 기술들의 랭크변화/상태이상 부여가 전혀 발동하지 않는
@@ -1092,6 +1129,9 @@ export function resolveHitAndApplyDamage(input: HitResolutionInput) {
   // applyDamageToDefender(대타 포함)와 카운터류처럼 defender.currentHp를 직접 건드리는
   // 모든 지점에서 이 값을 같이 채운다.
   c.actualDamageDealt = 0;
+  c.drainAccountedDamage = 0;
+  c.drainHealAmount = 0;
+  c.liquidOozeDamage = 0;
   c.isCritical = false;
   // 트리플악셀처럼 여러 타로 나뉘는 기술만 채운다 — 실제로 명중해서 데미지를 낸 타수.
 
