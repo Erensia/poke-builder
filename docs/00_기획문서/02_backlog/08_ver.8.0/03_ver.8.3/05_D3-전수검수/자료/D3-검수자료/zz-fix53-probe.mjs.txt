@@ -1,0 +1,56 @@
+// E8-a ⑤ 엔진 프로브 — e8a5-run.cjs(Showdown)와 같은 장면. 일회용, 커밋 금지.
+// 실행: cd <repo> && node <이 파일>
+import { createServer } from "vite";
+const root = process.cwd();
+const server = await createServer({ root, server: { middlewareMode: true, hmr: false }, appType: "custom", logLevel: "error" });
+try {
+  const data = await server.ssrLoadModule("/src/lib/data.ts");
+  const state = await server.ssrLoadModule("/src/lib/battle/state.ts");
+  const rt = await server.ssrLoadModule("/src/lib/battle/runTurn.ts");
+  const sw = await server.ssrLoadModule("/src/lib/battle/switching.ts");
+  const pts = (o = {}) => ({ hp: 0, atk: 0, def: 0, spa: 0, spd: 0, spe: 0, ...o });
+  const mon = (id, moves, ability = null, item = null, points = pts({ atk: 32, spe: 32, hp: 2 })) => ({
+    slot: { pokemonId: id, moves: [...moves, null, null, null, null].slice(0, 4), ability, item, nature: null, points },
+    moves: moves.map((m) => data.getMove(m)),
+  });
+  const battle = (A, B) => state.createBattleState({
+    a: { slots: A.map((m) => m.slot), movesList: A.map((m) => m.moves) },
+    b: { slots: B.map((m) => m.slot), movesList: B.map((m) => m.moves) },
+  });
+  const mv = (x) => ({ kind: "move", move: data.getMove(x) });
+  const SW = (i) => ({ kind: "switch", toIndex: i });
+  const rnd0 = () => 0;
+  const NOP = "잠꼬대";
+  const SN = (ab, moves = [NOP], item = null) => mon("잠만보", moves, ab, item);
+  const BENCH = () => SN("두꺼운지방");
+  const stg = (f) => JSON.stringify(f.stages).replace(/"|:0,?/g, "").replace(/,}/g, "}");
+  const line = (st) => `p1 ${st.a.slot.pokemonId} hp=${st.a.currentHp}/${st.a.maxHp} st=${st.a.status?.condition ?? "-"} b=${stg(st.a)} | p2 ${st.b.slot.pokemonId} hp=${st.b.currentHp}/${st.b.maxHp} st=${st.b.status?.condition ?? "-"} b=${stg(st.b)}`;
+  // 한 턴. 일시정지(유턴 등 자체 교체·위기회피)는 pick(side)로 슬롯을 골라 이어간다.
+  function turn(st, ca, cb, rnd = rnd0, pick = () => 1) {
+    let o = rt.runTurn(st, ca, cb, rnd);
+    let guard = 0;
+    while (o.awaitingSelfSwitch && guard++ < 5) o = rt.resumeTurn(o._ctx, pick(o.awaitingSelfSwitch.side));
+    return o.nextState;
+  }
+  const q = (st) => `p1 ${st.a.slot.pokemonId} hp=${st.a.currentHp}/${st.a.maxHp} st=${st.a.status?.condition ?? "-"} | p2 ${st.b.slot.pokemonId} hp=${st.b.currentHp}/${st.b.maxHp} st=${st.b.status?.condition ?? "-"}`;
+  const SY = (moves = ["아이언헤드", NOP]) => mon("잠만보", moves, "싱크로");
+  const D = (ab, moves = [NOP]) => mon("잠만보", moves, ab);
+  function scen(label, A, B, plan, prep) {
+    let st = battle(A, B); prep?.(st);
+    for (const [a, b] of plan) st = turn(st, mv(a), mv(b), rnd0, () => 1);
+    console.log(`[${label}]\n   => ${q(st)}`);
+  }
+  scen("R1 정전기", [SY(), BENCH()], [D("정전기"), BENCH()], [["아이언헤드", NOP]]);
+  scen("R2 불꽃몸", [SY(), BENCH()], [D("불꽃몸"), BENCH()], [["아이언헤드", NOP]]);
+  scen("R3 독가시", [SY(), BENCH()], [D("독가시"), BENCH()], [["아이언헤드", NOP]]);
+  scen("R4 포자(난수 0 = 첫 상태 독)", [SY(), BENCH()], [D("포자"), BENCH()], [["아이언헤드", NOP]]);
+  scen("R5 하바네로분출(비접촉 물의파동)", [SY(["물의파동", NOP]), BENCH()], [D("하바네로분출"), BENCH()], [["물의파동", NOP]]);
+  scen("R6 부리캐논", [SY(), BENCH()], [mon("잠만보", ["부리캐논", NOP], "두꺼운지방"), BENCH()], [["아이언헤드", "부리캐논"]]);
+  scen("R7 방어측 HP 1 → 기절 + 정전기", [SY(), BENCH()], [D("정전기"), BENCH()], [["아이언헤드", NOP]], (s) => { s.b.currentHp = 1; });
+  scen("R8 전기 타입(라이츄 정전기)", [SY(), BENCH()], [mon("라이츄", [NOP], "정전기"), BENCH()], [["아이언헤드", NOP]]);
+  scen("R9 방어측 신비의부적 후 접촉", [SY(), BENCH()], [D("정전기", ["신비의부적", NOP]), BENCH()], [[NOP, "신비의부적"], ["아이언헤드", NOP]]);
+  scen("R10 방어측 이미 독 + 불꽃몸", [SY(), BENCH()], [D("불꽃몸"), BENCH()], [["아이언헤드", NOP]], (s) => { s.b.status = { condition: "poison" }; });
+  scen("R11 더블어택(2타) × 정전기", [SY(["더블어택", NOP]), BENCH()], [D("정전기"), BENCH()], [["더블어택", NOP]]);
+} finally {
+  await server.close();
+}
