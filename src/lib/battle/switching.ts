@@ -10,12 +10,13 @@ import { eulReul, eunNeun, iGa, roEuro } from "@/lib/josa";
 import { STAT_LABELS } from "@/lib/statLabels";
 import { megaFormFullName } from "@/lib/pokemonForm";
 import { computeRealStats } from "@/lib/statCalculator";
-import { applyStageDelta } from "@/lib/statStages";
+import { applyStageDelta, clampStagesToNonNegative } from "@/lib/statStages";
+import { shouldTriggerWhiteHerb } from "@/lib/itemEffects";
 import { inflictStatus, isImmuneToStatus } from "@/lib/statusConditions";
 import { hasVolatile } from "@/lib/volatileConditions";
 import { calcSpikesDamage, calcStealthRockDamage } from "./entryCost";
 import { FIELD_DURATION, FIELD_ENTRY_ANNOUNCEMENT, isStatusBlockedByField } from "@/lib/fieldEffects";
-import { WEATHER_DURATION, setEffectiveAbility, abilityOf, activeWeather, applyForecastForm, applyMimicryForm, applyTransform, balloonEntryAnnouncement, cloneSide, consumeItem, contraryDelta, hazardEntryOrder, isFainted, opponentKey, sideOf, statDropBlockStatsOf, statusImmunitiesOf, weatherRockBonusOfItem, type BattleFighterState, type BattleState } from "./state";
+import { applySyrupOnEntry, WEATHER_DURATION, setEffectiveAbility, abilityOf, activeWeather, applyForecastForm, applyMimicryForm, applyTransform, balloonEntryAnnouncement, cloneSide, consumeItem, contraryDelta, hazardEntryOrder, isFainted, opponentKey, sideOf, statDropBlockStatsOf, statusImmunitiesOf, weatherRockBonusOfItem, type BattleFighterState, type BattleState } from "./state";
 
 export function isTrappedFromSwitching(fighter: BattleFighterState, state?: BattleState): boolean {
   if (isFainted(fighter)) return false;
@@ -136,7 +137,12 @@ export function applyIntimidateWithReaction(
   const intimidateAbilityName = intimidateAbility.name;
   const opponentName = fighterName(opponent);
   const oppAbility = opponent.effectiveAbilityId ? getAbility(opponent.effectiveAbilityId) : undefined;
-  // 정신력·마이페이스·둔감(트랙 M3): 위협을 아예 받지 않는다
+  // 대타(8.3 D3-fix-49 E8-30): 대타를 세운 상대에게는 위협이 통하지 않는다 — 반응 특성(오기·승기·주눅·파수견)·미러아머·하양허브도 모두 미발동(Showdown `-immune`)
+  if (opponent.substituteHp !== undefined) {
+    log.push(`${intimidaterName}의 ${intimidateAbilityName}! 하지만 ${opponentName}에게는 효과가 없었다!`);
+    return;
+  }
+  // 정신력·마이페이스·둔감·배짱(트랙 M3): 위협을 아예 받지 않는다
   if (oppAbility?.immuneToIntimidate) {
     log.push(`${intimidaterName}의 ${intimidateAbilityName}! 그러나 ${opponentName}의 ${oppAbility.name} 때문에 효과가 없었다!`);
     return;
@@ -342,6 +348,10 @@ function applyEntryAbilityOnSwitchIn(state: BattleState, key: FighterKey, log: s
   if (ability.lowersOpponentStatOnEntry && !isFainted(opponent)) {
     applyIntimidateWithReaction(opponent, self, ability, log);
   }
+  // 감미로운꿀(8.3 D3-fix-49 E8-38): 등장 시 상대 회피율 −1 — 포켓몬당 배틀 1회·대타 면역(시작 경로와 같은 본문)
+  if (ability.lowersOpponentEvasionOnEntry !== undefined && !isFainted(opponent)) {
+    applySyrupOnEntry(self, opponent, ability.lowersOpponentEvasionOnEntry, selfName, getPokemon(opponent.slot.pokemonId)?.name ?? "상대", log);
+  }
   // 가뭄·잔비·모래날림·눈퍼뜨리기: 다른 날씨는 덮어쓰고, 이미 같은 날씨면 아무 일도 없다 — 남은 턴도
   // 다시 채우지 않고 발동 문구도 없다(본가 6세대 이후 규칙, 기술 setsWeather의 실패와 같은 축).
   if (ability.setsWeather && state.weather !== ability.setsWeather) {
@@ -366,19 +376,8 @@ function applyEntryAbilityOnSwitchIn(state: BattleState, key: FighterKey, log: s
       applyMimicryForm(self, state.field);
     }
   }
-  // 트레이스: 상대의 현재 특성을 복사
-  if (
-    ability.copiesOpponentAbilityOnEntry &&
-    opponent.effectiveAbilityId &&
-    !isUncopyableAbility(opponent.effectiveAbilityId) &&
-    !isFainted(opponent)
-  ) {
-    const copied = getAbility(opponent.effectiveAbilityId);
-    setEffectiveAbility(self, opponent.effectiveAbilityId);
-    const opponentName = getPokemon(opponent.slot.pokemonId)?.name ?? "상대";
-    const copiedName = copied?.name ?? "특성";
-    log.push(`${selfName}의 ${ability.name}! ${opponentName}의 ${copiedName}${eulReul(copiedName)} 복사했다!`);
-  }
+  // 트레이스: 상대의 현재 특성을 복사 — 복사한 특성의 등장 효과도 같은 처리 안에서 바로 발동한다(8.3 D3-fix-49 E8-34)
+  if (ability.copiesOpponentAbilityOnEntry) traceOpponentAbility(state, key, log);
   // 괴짜(Imposter): 등장하자마자 상대로 변신한다(변신 기술과 같은 처리, state.ts의 배틀 시작
   // 버전과 동일 — 여태 배틀 시작(리드)에만 있고 교체 등장엔 빠져 있던 처리를 여기 추가).
   if (ability.transformsIntoOpponentOnEntry && !self.transformed && !isFainted(opponent)) {
@@ -386,6 +385,27 @@ function applyEntryAbilityOnSwitchIn(state: BattleState, key: FighterKey, log: s
     const opponentName = getPokemon(opponent.slot.pokemonId)?.name ?? "상대";
     log.push(`${selfName}의 ${ability.name}! ${selfName}${eunNeun(selfName)} ${opponentName}${roEuro(opponentName)} 변신했다!`);
   }
+}
+
+/**
+ * 트레이스(copiesOpponentAbilityOnEntry) 보유자가 상대의 복사 가능한 특성을 베끼고, 베낀 특성의 등장 효과(위협·날씨·필드·감미로운꿀 등)를 바로 발동한다.
+ * 복사 대상이 없으면(상대 기절·복사 불가 특성·특성 없음) 아무것도 안 하고 false — 트레이스는 그대로 남아 대기한다(재시도는 finishEntryBundle).
+ * 베낀 특성은 트레이스가 복사 불가(UNCOPYABLE)라 재귀가 한 단계에서 끝난다. (8.3 D3-fix-49 E8-34·35)
+ */
+function traceOpponentAbility(state: BattleState, key: FighterKey, log: string[]): boolean {
+  const self = state[key];
+  const opponent = state[opponentKey(key)];
+  const ability = self.effectiveAbilityId ? getAbility(self.effectiveAbilityId) : undefined;
+  if (!ability?.copiesOpponentAbilityOnEntry || isFainted(self) || isFainted(opponent)) return false;
+  if (!opponent.effectiveAbilityId || isUncopyableAbility(opponent.effectiveAbilityId)) return false;
+  const selfName = getPokemon(self.slot.pokemonId)?.name ?? "포켓몬";
+  const copied = getAbility(opponent.effectiveAbilityId);
+  setEffectiveAbility(self, opponent.effectiveAbilityId);
+  const opponentName = getPokemon(opponent.slot.pokemonId)?.name ?? "상대";
+  const copiedName = copied?.name ?? "특성";
+  log.push(`${selfName}의 ${ability.name}! ${opponentName}의 ${copiedName}${eulReul(copiedName)} 복사했다!`);
+  applyEntryAbilityOnSwitchIn(state, key, log);
+  return true;
 }
 
 /**
@@ -414,6 +434,8 @@ export function applyMegaEvolution(state: BattleState, key: FighterKey, log: str
   fighter.maxHp = newStats.hp;
   fighter.currentHp = Math.min(newStats.hp, Math.max(1, fighter.currentHp + Math.max(0, hpDelta)));
   fighter.hasMegaEvolved = true;
+  // 변환자재·리베로(8.3 D3-fix-49 E8-33): 메가진화는 특성 상태를 새로 만든다 — 같은 특성이어도 1회가 다시 켜진다(Showdown setAbility)
+  fighter.proteanActivatedSinceSwitchIn = undefined;
   side.megaUsed = true;
 
   const nm = pokemon?.name ?? "포켓몬";
@@ -425,6 +447,7 @@ export function applyMegaEvolution(state: BattleState, key: FighterKey, log: str
   // 처리 내용은 동일하다 — 날씨/필드 덮어쓰기, 상대 랭크 하락, 상대 특성 복사 등.
   applyEntryAbilityOnSwitchIn(state, key, log);
   log.push(...triggerTerrainSeeds(state));
+  finishEntryBundle(state, log); // 하양허브(8.3 D3-fix-49 E8-36): 메가 등장 직후 위협으로 내려간 능력을 복구
   return true;
 }
 
@@ -616,7 +639,7 @@ export function performSwitch(
  * (우선도 0: 치유소원 sub 3 → 설치물 sub 4 → 특성 sub 7 → 도구 sub 8, 우선도 −1: 의태(특성) → 시드(도구), −2: 기분파.)
  * performSwitch가 보통 바로 부르고, 한 행동 뒤 양쪽이 동시에 교체할 때(8.3 A7)는 deferEntry로 교체만 먼저 끝낸 다음 들어온 포켓몬의 스피드순으로 이 함수를 따로 부른다.
  */
-export function runEntryEffects(state: BattleState, key: FighterKey, log: string[] = []): EntryHazardTrigger[] {
+export function runEntryEffects(state: BattleState, key: FighterKey, log: string[] = [], options: { endsBundle?: boolean } = {}): EntryHazardTrigger[] {
   const side = sideOf(state, key);
   const incoming = side.party[side.activeIndex];
   // 1. 치유소원(트랙 M6): 이 편에 걸려 있고 회복할 것(HP 감소·상태이상)이 있을 때만 새로 나온 포켓몬을 전부 회복하고 소모한다 — 설치물보다 먼저.
@@ -649,7 +672,34 @@ export function runEntryEffects(state: BattleState, key: FighterKey, log: string
   log.push(...triggerTerrainSeeds(state));
   // 7. 기분파(캐스퐁): 등장 시점의 유효 날씨에 맞춰 타입을 맞춘다(우선도 −2, 설치물 뒤).
   if (!isFainted(incoming)) applyForecastForm(incoming, activeWeather(state));
+  // 8. 등장 묶음의 끝 — 하양허브(우선도 −2). 유턴류 동시 교체 묶음은 호출자(executeChoices)가 모든 등장 뒤 한 번 부른다(endsBundle: false)
+  if (options.endsBundle !== false) finishEntryBundle(state, log);
   return hits;
+}
+
+/**
+ * 등장 묶음(시작 = 양쪽, 유턴류 동시 교체 = 양쪽, 그 외 = 한 마리·메가진화)의 설치물·등장 특성이 **모두 끝난 뒤** 양쪽 활성 포켓몬에 한 번 부른다
+ * (8.3 D3-fix-49 E8-36, Showdown 하양허브 `onAnySwitchIn` 우선도 −2). 랭크가 마이너스인 하양허브 보유자는 즉시 복구하고 소모한다 —
+ * 위협·끈적끈적네트로 내려간 능력을 같은 묶음 안에서 한 번에 되돌린다. 기존 행동 끝 처리(mirroredEffects)는 그대로 둔다(이미 복구했으면 겹치지 않는다).
+ */
+export function finishEntryBundle(state: BattleState, log: string[]): void {
+  // 대기 중인 트레이스(복사할 수 없는 특성 앞에서 기다리다 상대가 바뀐 경우)를 먼저 다시 시도한다 — 복사한 위협으로 내려간 상대의 하양허브가 아래에서 같은 처리 안에 복구되도록(8.3 D3-fix-49 E8-35, 검수 R3).
+  // Showdown은 매 갱신(Update)마다 재시도하지만 엔진은 등장·메가 묶음의 끝에서만 근사한다(고민씨 등 특성 변경 기술 경로는 미지원, 설계서 §4).
+  for (const key of ["a", "b"] as const) traceOpponentAbility(state, key, log);
+  for (const key of ["a", "b"] as const) {
+    const fighter = state[key];
+    if (isFainted(fighter)) continue;
+    const item = effectiveHeldItem(fighter, state); // 서투름·매직룸이면 불발
+    if (!shouldTriggerWhiteHerb(item, fighter.stages, fighter.itemConsumed ?? false)) continue;
+    const unburdenBefore = fighter.unburdenActive === true;
+    fighter.stages = clampStagesToNonNegative(fighter.stages);
+    consumeItem(fighter);
+    const name = getPokemon(fighter.slot.pokemonId)?.name ?? "포켓몬";
+    log.push(`${name}의 ${item!.name}${roEuro(item!.name)} 떨어진 능력을 원래대로 되돌렸다!`);
+    // 곡예: 플래그는 consumeItem이 켠다 — 이 소모는 한 행동 범위 밖이라 문구만 여기서 낸다(triggerTerrainSeeds와 같은 이유, 8.3 D3-fix-9)
+    const ability = fighter.effectiveAbilityId ? getAbility(fighter.effectiveAbilityId) : undefined;
+    if (ability?.doublesSpeedOnItemLoss && !unburdenBefore) log.push(`${name}의 ${ability.name}! 스피드가 2배로 올랐다!`);
+  }
 }
 
 interface ApplySwitchOutcome {

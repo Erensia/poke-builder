@@ -6,7 +6,7 @@ import { hasVolatile } from "@/lib/volatileConditions";
 import { compareTurnOrder } from "@/lib/turnOrder";
 import { buildTurnOrderActor, itemsSuppressedByRoom, orderBySpeed, quickFirstChances } from "./turnOrderInputs";
 import { STRUGGLE_MOVE, SWITCH_PASS_MOVE_ID, activeWeather, applyForecastForm, applyMimicryForm, cloneSide, consumeItem, hasLivingReserve, isFainted, isForcedSwitchBlocked, isSideWiped, opponentKey, sideOf, type BattleState } from "./state";
-import { applyMegaEvolution, forceRandomSwitch, hazardField, isTrappedFromSwitching, performSwitch, runEntryEffects } from "./switching";
+import { applyMegaEvolution, finishEntryBundle, forceRandomSwitch, hazardField, isTrappedFromSwitching, performSwitch, runEntryEffects } from "./switching";
 import { resolveAction } from "./resolveAction";
 import { finishTurn } from "./finishTurn";
 import { refreshUproar, updateRampage } from "./rampage";
@@ -691,10 +691,14 @@ function executeChoices(ctx: RunTurnContext): void {
     if (entry) entries.set(key, entry);
   }
   // ② 등장 효과 — 양쪽 교체가 끝난 뒤 들어온 포켓몬의 스피드순(나가는 순서와 별개)
+  let lastEntry: SwitchLogEntry | undefined;
   for (const key of fasterFirst(ctx, [...entries.keys()])) {
     const entry = entries.get(key)!;
-    Object.assign(entry, hazardField(runEntryEffects(ctx.state, key, entry.entryMessages)));
+    Object.assign(entry, hazardField(runEntryEffects(ctx.state, key, entry.entryMessages, { endsBundle: false })));
+    lastEntry = entry;
   }
+  // 하양허브는 묶음이 모두 끝난 뒤 한 번(8.3 D3-fix-49 E8-36, Showdown `runSwitch`가 큐의 연속 등장을 한 이벤트로 묶는다)
+  if (lastEntry) finishEntryBundle(ctx.state, lastEntry.entryMessages);
 }
 
 /**

@@ -12,13 +12,14 @@ import { getAbility, getItem, getMove, getPokemon } from "@/lib/data";
 import { eulReul, eunNeun, roEuro } from "@/lib/josa";
 import { findMegaFormByStone, getEffectiveForm, getEffectiveGender } from "@/lib/pokemonForm";
 import { computeRealStats } from "@/lib/statCalculator";
+import { computeSpeedWithEffects } from "@/lib/speedStat";
 import { CONFUSION_SELF_HIT_POWER, hasVolatile } from "@/lib/volatileConditions";
 import { getEffectiveness } from "@/lib/typeEffectiveness";
 import { FIELD_DURATION, FIELD_ENTRY_ANNOUNCEMENT } from "@/lib/fieldEffects";
 import { resolveEffectiveDefenderAbility } from "@/lib/abilityModifiers";
 import { type BaseStats } from "@/types/stats";
 import { type EvaluatorSlot } from "@/lib/matchupEvaluator";
-import { applyIntimidateWithReaction, computeIllusionTarget, triggerTerrainSeeds } from "./switching";
+import { applyIntimidateWithReaction, computeIllusionTarget, finishEntryBundle, triggerTerrainSeeds } from "./switching";
 
 /** 트릭룸 지속 턴 수. 필드(FIELD_DURATION)와 같은 5턴 */
 export const TRICK_ROOM_DURATION = 5;
@@ -349,6 +350,8 @@ export interface BattleFighterState {
    * 이미 바뀐 타입 자체는 계속 유지(재발동만 막는다). 등장 시 초기화.
    */
   proteanActivatedSinceSwitchIn?: boolean;
+  /** 감미로운꿀을 이미 발동했는가 — 포켓몬 단위 **배틀 1회**(교체로 물러나도 안 풀린다, 트레이스가 다시 복사해도 재발동 없음; 8.3 D3-fix-49 E8-38, Showdown `syrupTriggered`) */
+  syrupTriggered?: boolean;
   /**
    * 대검돌격(Move.glaiveRush): 이 포켓몬이 대검돌격을 쓴 뒤 "다음 자기 행동 개시 전까지"
    * 켜지는 자기 약점 플래그 — 이 상태의 포켓몬을 겨냥한 상대 기술은 반드시 명중하고 데미지가
@@ -789,6 +792,64 @@ export function weatherRockBonusOfItem(weather: WeatherKind, item: ReturnType<ty
 }
 
 /** 배틀 시작 시점의 유효 도구 — 도구 효과를 막는 특성(서투름 등)이면 없음(매직룸은 시작 때 걸려 있을 수 없다) */
+/**
+ * 배틀 시작 등장 시점의 실효 스피드 — 시작에는 날씨·상태·필드·순풍·랭크가 아직 없어 영향을 주는 보정은 **구애스카프(×1.5)·검은철구(×0.5)** 둘뿐이다
+ * (Showdown `getActionSpeed`, 8.3 D3-fix-49 E8-39). 턴 순서 계산과 같은 `computeSpeedWithEffects`를 쓰므로 반올림이 같다. 서투름·매직룸이면 도구 무효(startItemOf).
+ */
+function startSpeedOf(fighter: BattleFighterState): number {
+  return computeSpeedWithEffects({ realSpe: fighter.realStats.spe, stage: 0, ability: undefined, item: startItemOf(fighter), status: null, weather: undefined, field: undefined, unburdenActive: false, tailwind: false });
+}
+
+/**
+ * 배틀 시작 등장 순서 — a가 먼저면 true. 날씨(resolveEntryWeather)와 위협·필드·트레이스 등(resolveEntryAbilityEffects)이 **같은 결과**를 쓰도록
+ * 한 번만 정하고 캐시한다(Showdown은 한 큐를 한 번 정렬한다). 스피드가 같을 때만 `random`을 한 번 소비하고(`< 0.5`이면 a 먼저), **난수 인자가 없으면 a 먼저**(결정론 유지).
+ * 순서가 실제로 필요한 순간에만 호출되므로(두 함수의 조기 반환 뒤) 순서가 무관한 장면은 난수를 쓰지 않는다. (8.3 D3-fix-49 E8-37·39)
+ */
+function makeStartOrder(a: BattleFighterState, b: BattleFighterState, random?: () => number): () => boolean {
+  let cached: boolean | undefined;
+  return () => {
+    if (cached === undefined) {
+      const sa = startSpeedOf(a);
+      const sb = startSpeedOf(b);
+      cached = sa !== sb ? sa > sb : random ? random() < 0.5 : true;
+    }
+    return cached;
+  };
+}
+
+/**
+ * 감미로운꿀(lowersOpponentEvasionOnEntry) 등장 효과 — 시작·교체·메가·트레이스 복사가 같은 본문을 쓴다(8.3 D3-fix-49 E8-38).
+ * 포켓몬당 배틀 1회(`syrupTriggered`, 대타 앞에서도 소모), 상대가 대타를 세웠으면 효과 없음, 아니면 회피율 변화(심술꾸러기는 +1로 반전).
+ */
+export function applySyrupOnEntry(fighter: BattleFighterState, opponent: BattleFighterState, delta: number, pokemonName: string, opponentName: string, log: string[]): void {
+  if (fighter.syrupTriggered) return;
+  fighter.syrupTriggered = true;
+  log.push(`${pokemonName}의 꿀에서 달콤한 향기가 나고 있다!`);
+  if (opponent.substituteHp !== undefined) {
+    log.push(`${opponentName}에게는 효과가 없었다!`);
+    return;
+  }
+  const before = opponent.accuracyStages.evasion;
+  const raw = before + contraryDelta(opponent, delta);
+  opponent.accuracyStages = { ...opponent.accuracyStages, evasion: Math.max(-6, Math.min(6, raw)) };
+  if (opponent.accuracyStages.evasion < before) log.push(`${opponentName}의 회피율이 떨어졌다!`);
+  else if (opponent.accuracyStages.evasion > before) log.push(`${opponentName}의 회피율이 올라갔다!`);
+}
+
+/**
+ * 시작 날씨의 설정자 — 자기 특성이 날씨를 깔면 그것, 트레이스면 **복사할 상대의 날씨 특성**(복사를 날씨 판정보다 먼저 확정한다, 8.3 D3-fix-49 E8-34 R2).
+ * 싱글 시작에서 복사한 날씨는 상대가 까는 날씨와 같으므로, 달라지는 건 날씨의 주인(= 날씨 바위 판정 대상)뿐이고 Showdown은 먼저 처리된 쪽이 주인이다.
+ */
+function weatherSetterOf(fighter: BattleFighterState, opponent: BattleFighterState): Ability | undefined {
+  const own = fighter.effectiveAbilityId ? getAbility(fighter.effectiveAbilityId) : undefined;
+  if (own?.setsWeather) return own;
+  if (own?.copiesOpponentAbilityOnEntry && opponent.effectiveAbilityId && !isUncopyableAbility(opponent.effectiveAbilityId)) {
+    const copied = getAbility(opponent.effectiveAbilityId);
+    if (copied?.setsWeather) return copied;
+  }
+  return undefined;
+}
+
 function startItemOf(fighter: BattleFighterState): ReturnType<typeof getItem> {
   return abilityOf(fighter)?.disablesOwnItemEffects || !fighter.currentItemId ? undefined : getItem(fighter.currentItemId);
 }
@@ -812,6 +873,7 @@ function resolveEntryWeather(
   bSlot: EvaluatorSlot,
   bFighter: BattleFighterState,
   manualWeather: WeatherKind | undefined,
+  aFirst: () => boolean,
 ): { weather: WeatherKind | undefined; weatherTurnsRemaining: number | undefined; announcements: string[] } {
   if (manualWeather) {
     return {
@@ -821,8 +883,8 @@ function resolveEntryWeather(
     };
   }
 
-  const aAbility = aFighter.effectiveAbilityId ? getAbility(aFighter.effectiveAbilityId) : undefined;
-  const bAbility = bFighter.effectiveAbilityId ? getAbility(bFighter.effectiveAbilityId) : undefined;
+  const aAbility = weatherSetterOf(aFighter, bFighter);
+  const bAbility = weatherSetterOf(bFighter, aFighter);
   if (!aAbility?.setsWeather && !bAbility?.setsWeather) {
     return { weather: manualWeather, weatherTurnsRemaining: undefined, announcements: [] };
   }
@@ -835,7 +897,7 @@ function resolveEntryWeather(
   if (aAbility?.setsWeather && bAbility?.setsWeather) {
     // 둘 다 날씨 특성 보유: 스피드가 빠른 쪽부터 순서대로 발동하고, 나중에(느린 쪽이) 발동하는
     // 날씨가 덮어써서 최종적으로 남는다.
-    const aFaster = aFighter.realStats.spe >= bFighter.realStats.spe;
+    const aFaster = aFirst();
     const [firstSlot, firstAbility, firstFighter] = aFaster ? ([aSlot, aAbility, aFighter] as const) : ([bSlot, bAbility, bFighter] as const);
     const [secondSlot, secondAbility, secondFighter] = aFaster ? ([bSlot, bAbility, bFighter] as const) : ([aSlot, aAbility, aFighter] as const);
     // 같은 날씨 특성끼리면 두 번째는 이미 같은 날씨라 아무 일도 없다(발동 문구·턴 재충전 없음 — 본가 규칙).
@@ -930,6 +992,7 @@ function resolveEntryAbilityEffects(
   aFighter: BattleFighterState,
   bSlot: EvaluatorSlot,
   bFighter: BattleFighterState,
+  aFirst: () => boolean,
 ): { field: FieldKind | undefined; fieldTurnsRemaining: number | undefined; announcements: string[] } {
   const aAbility = aFighter.effectiveAbilityId ? getAbility(aFighter.effectiveAbilityId) : undefined;
   const bAbility = bFighter.effectiveAbilityId ? getAbility(bFighter.effectiveAbilityId) : undefined;
@@ -958,7 +1021,7 @@ function resolveEntryAbilityEffects(
     return { field: undefined, fieldTurnsRemaining: undefined, announcements: [] };
   }
 
-  const aFaster = aFighter.realStats.spe >= bFighter.realStats.spe;
+  const aFaster = aFirst();
   const order = aFaster
     ? [
         { slot: aSlot, fighter: aFighter, ability: aAbility, opponent: bFighter, opponentSlot: bSlot },
@@ -976,8 +1039,8 @@ function resolveEntryAbilityEffects(
   // 배리어프리(Screen Cleaner)의 스크린 제거는 배틀 시작 시점엔 스크린이 없어 무의미하다.
   // 교체로 등장할 때는 applyEntryAbilityOnSwitchIn이 편(side) 스크린을 지운다(§6-3).
 
-  for (const { slot, fighter, ability, opponent, opponentSlot } of order) {
-    if (!ability) continue;
+  // 한 특성의 등장 효과 — 트레이스가 복사한 특성도 같은 본문으로 한 번 더 돌린다(8.3 D3-fix-49 E8-34). 날씨는 resolveEntryWeather가 따로 끝냈다.
+  const runEntry = ({ slot, fighter, ability, opponent, opponentSlot }: { slot: EvaluatorSlot; fighter: BattleFighterState; ability: Ability; opponent: BattleFighterState; opponentSlot: EvaluatorSlot }) => {
     const pokemonName = getPokemon(slot.pokemonId)?.name ?? "포켓몬";
 
     if (ability.lowersOpponentStatOnEntry) {
@@ -985,17 +1048,7 @@ function resolveEntryAbilityEffects(
     }
     // 감미로운꿀(포챔스판): 등장 시 상대의 회피율을 1랭크 떨어뜨린다(위협의 회피율 버전).
     if (ability.lowersOpponentEvasionOnEntry !== undefined) {
-      const opponentName = getPokemon(opponentSlot.pokemonId)?.name ?? "상대";
-      const before = opponent.accuracyStages.evasion;
-      const raw = before + contraryDelta(opponent, ability.lowersOpponentEvasionOnEntry);
-      opponent.accuracyStages = {
-        ...opponent.accuracyStages,
-        evasion: Math.max(-6, Math.min(6, raw)),
-      };
-      announcements.push(`${pokemonName}의 꿀에서 달콤한 향기가 나고 있다!`);
-      if (opponent.accuracyStages.evasion !== before) {
-        announcements.push(`${opponentName}의 회피율이 떨어졌다!`);
-      }
+      applySyrupOnEntry(fighter, opponent, ability.lowersOpponentEvasionOnEntry, pokemonName, getPokemon(opponentSlot.pokemonId)?.name ?? "상대", announcements);
     }
     if (ability.setsFieldOnEntry) {
       if (field === ability.setsFieldOnEntry) {
@@ -1007,13 +1060,6 @@ function resolveEntryAbilityEffects(
         fieldTurnsRemaining = FIELD_DURATION + (fighterItem?.fieldDurationBonus ?? 0);
         announcements.push(`${pokemonName}의 ${ability.name}! ${FIELD_ENTRY_ANNOUNCEMENT[field]}`);
       }
-    }
-    if (ability.copiesOpponentAbilityOnEntry && opponent.effectiveAbilityId && !isUncopyableAbility(opponent.effectiveAbilityId)) {
-      const copiedAbility = getAbility(opponent.effectiveAbilityId);
-      setEffectiveAbility(fighter, opponent.effectiveAbilityId);
-      const opponentName = getPokemon(opponentSlot.pokemonId)?.name ?? "상대";
-      const copiedName = copiedAbility?.name ?? "특성";
-      announcements.push(`${pokemonName}의 ${ability.name}! ${opponentName}의 ${copiedName}${eulReul(copiedName)} 복사했다!`);
     }
     // 괴짜(Imposter): 등장하자마자 상대로 변신한다(변신 기술과 같은 처리). 메타몽 전용.
     if (ability.transformsIntoOpponentOnEntry && !fighter.transformed) {
@@ -1066,6 +1112,21 @@ function resolveEntryAbilityEffects(
         );
       }
     }
+  };
+
+  for (const entry of order) {
+    if (!entry.ability) continue;
+    runEntry({ ...entry, ability: entry.ability });
+    // 트레이스: 상대의 현재 특성을 복사하고, 복사한 특성의 등장 효과를 같은 자리에서 한 번 더 돌린다
+    if (entry.ability.copiesOpponentAbilityOnEntry && entry.opponent.effectiveAbilityId && !isUncopyableAbility(entry.opponent.effectiveAbilityId)) {
+      const copiedAbility = getAbility(entry.opponent.effectiveAbilityId);
+      setEffectiveAbility(entry.fighter, entry.opponent.effectiveAbilityId);
+      const pokemonName = getPokemon(entry.slot.pokemonId)?.name ?? "포켓몬";
+      const opponentName = getPokemon(entry.opponentSlot.pokemonId)?.name ?? "상대";
+      const copiedName = copiedAbility?.name ?? "특성";
+      announcements.push(`${pokemonName}의 ${entry.ability.name}! ${opponentName}의 ${copiedName}${eulReul(copiedName)} 복사했다!`);
+      if (copiedAbility) runEntry({ ...entry, ability: copiedAbility });
+    }
   }
 
   return { field, fieldTurnsRemaining, announcements };
@@ -1080,7 +1141,8 @@ interface SideInit {
   leadIndex?: number;
 }
 
-export function createBattleState(init: { a: SideInit; b: SideInit; weather?: WeatherKind }): BattleState {
+/** random: 시작 등장 순서의 스피드 동률을 가를 난수(8.3 D3-fix-49 E8-37). 생략하면 동률은 a 먼저 */
+export function createBattleState(init: { a: SideInit; b: SideInit; weather?: WeatherKind }, random?: () => number): BattleState {
   const leadA = init.a.leadIndex ?? 0;
   const leadB = init.b.leadIndex ?? 0;
   const partyA = init.a.slots.map((slot, i) => createFighterState(slot, init.a.movesList[i] ?? []));
@@ -1089,16 +1151,17 @@ export function createBattleState(init: { a: SideInit; b: SideInit; weather?: We
   const bSlot = init.b.slots[leadB];
   const fighterA = partyA[leadA];
   const fighterB = partyB[leadB];
+  const aFirst = makeStartOrder(fighterA, fighterB, random);
   const {
     weather: resolvedWeather,
     weatherTurnsRemaining,
     announcements: weatherAnnouncements,
-  } = resolveEntryWeather(aSlot, fighterA, bSlot, fighterB, init.weather);
+  } = resolveEntryWeather(aSlot, fighterA, bSlot, fighterB, init.weather, aFirst);
   const {
     field: entryField,
     fieldTurnsRemaining,
     announcements: abilityAnnouncements,
-  } = resolveEntryAbilityEffects(aSlot, fighterA, bSlot, fighterB);
+  } = resolveEntryAbilityEffects(aSlot, fighterA, bSlot, fighterB, aFirst);
 
   const state: BattleState = {
     a: fighterA,
@@ -1121,6 +1184,8 @@ export function createBattleState(init: { a: SideInit; b: SideInit; weather?: We
 
   // 시드류: 배틀 시작 시점에 이미 필드가 깔려 있으면(등장 특성으로 방금 깔린 경우 포함) 발동.
   state.entryAnnouncements.push(...triggerTerrainSeeds(state));
+  // 하양허브(8.3 D3-fix-49 E8-36): 시작 등장 처리가 모두 끝난 뒤 위협으로 내려간 능력을 즉시 복구
+  finishEntryBundle(state, state.entryAnnouncements);
 
   // 풍선: 지니고 등장하면 공중에 떠있다는 안내를 낸다.
   for (const msg of [balloonEntryAnnouncement(state.a), balloonEntryAnnouncement(state.b)]) {

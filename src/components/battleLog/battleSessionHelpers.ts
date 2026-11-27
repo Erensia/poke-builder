@@ -18,11 +18,11 @@ export type SlotAt = (side: Side, i: SlotIndex) => PartySlot | null;
 const movesOf = (s: PartySlot) => s.moves.filter((id): id is string => id !== null).map((id) => getMove(id)!);
 
 /** 양쪽 파티(이미 선출·압축된 슬롯 목록)로 배틀 상태를 만든다 — 대전 시작과 AI 선출 계산이 같이 쓴다 */
-export function createStateFromParties(a: PartySlot[], b: PartySlot[]): BattleState {
+export function createStateFromParties(a: PartySlot[], b: PartySlot[], random?: () => number): BattleState {
   return createBattleState({
     a: { slots: a, movesList: a.map(movesOf) },
     b: { slots: b, movesList: b.map(movesOf) },
-  });
+  }, random);
 }
 
 /** 이 편에서 포켓몬이 있고 기술이 1개 이상인 빌드 슬롯 인덱스(빌드 순서). 이게 곧 "선출 가능" 후보. */
