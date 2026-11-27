@@ -171,12 +171,23 @@ export function EndOfTurnLine({
             ? `${turnName(e.actor)}의 스피드는 더 이상 올라가지 않는다!`
             : "스피드가 올라갔다!"}
         </>
-      ) : e.moodyAbilityName && e.moodyRaisedStat && e.moodyLoweredStat ? (
+      ) : e.moodyAbilityName && (e.moodyRaisedStat || e.moodyLoweredStat) ? (
         <>
-          {turnName(e.actor)}의 {e.moodyAbilityName}! {STAT_LABELS[e.moodyRaisedStat]}
-          {iGa(STAT_LABELS[e.moodyRaisedStat])} 크게 올라가고{" "}
-          {STAT_LABELS[e.moodyLoweredStat]}
-          {iGa(STAT_LABELS[e.moodyLoweredStat])} 떨어졌다!
+          {turnName(e.actor)}의 {e.moodyAbilityName}!{/* 올릴/내릴 후보가 없으면(전부 +6/−6) 그쪽 문구는 생략(8.3 D3-fix-54) */}
+          {e.moodyRaisedStat && (
+            <>
+              {" "}
+              {STAT_LABELS[e.moodyRaisedStat]}
+              {iGa(STAT_LABELS[e.moodyRaisedStat])} 크게 올라{e.moodyLoweredStat ? "가고" : "갔다!"}
+            </>
+          )}
+          {e.moodyLoweredStat && (
+            <>
+              {" "}
+              {STAT_LABELS[e.moodyLoweredStat]}
+              {iGa(STAT_LABELS[e.moodyLoweredStat])} 떨어졌다!
+            </>
+          )}
         </>
       ) : e.poisonHealAbilityName ? (
         <>

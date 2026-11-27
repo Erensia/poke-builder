@@ -1,7 +1,7 @@
 import { computeTurnOrderSpeed, effectiveHeldItem, itemsSuppressedByRoom } from "./turnOrderInputs";
 import { isGrounded } from "./grounding";
 import { type EndOfTurnLogEntry, type FighterKey } from "@/types/battle";
-import { BATTLE_STAT_KEYS } from "@/types/battleStats";
+import { BATTLE_STAT_KEYS, type BattleStatKey } from "@/types/battleStats";
 import { NO_STATUS_CONDITION } from "@/types/status";
 import { type Ability } from "@/types/ability";
 import { type Item } from "@/types/item";
@@ -695,15 +695,19 @@ function applyHungerSwitchToggle(ctx: EndOfTurnFighterContext): void {
   });
 }
 
-/** 변덕쟁이(Moody): 매 턴 종료 시 5스탯 중 하나를 랜덤으로 +2, 그와 다른 하나를 -1. */
+/**
+ * 변덕쟁이(Moody): 매 턴 종료 시 랭크 < +6인 능력치 하나를 +2, 그와 다른 랭크 > −6인 능력치 하나를 −1(8.3 D3-fix-54 E8-45 — Showdown은 후보를 먼저 거른 뒤 뽑는다).
+ * 후보가 비면 난수를 부르지 않는다. 올릴 후보가 비면 5종이 전부 +6이라 내릴 후보는 5종이므로 "둘 다 없음"은 도달 불가(방어 코드).
+ */
 function applyMoodyRandomStages(ctx: EndOfTurnFighterContext): void {
   const { key, fighter, fighterAbility, random, endOfTurn } = ctx;
   if (!fighterAbility?.moodyRandomStages || isFainted(fighter)) return;
-  const raised = BATTLE_STAT_KEYS[Math.floor(random() * BATTLE_STAT_KEYS.length)];
-  const lowerPool = BATTLE_STAT_KEYS.filter((s) => s !== raised);
-  const lowered = lowerPool[Math.floor(random() * lowerPool.length)];
-  fighter.stages = applyStageDelta(fighter.stages, raised, contraryDelta(fighter, 2));
-  fighter.stages = applyStageDelta(fighter.stages, lowered, contraryDelta(fighter, -1));
+  const pick = (pool: BattleStatKey[]) => (pool.length ? pool[Math.floor(random() * pool.length)] : undefined);
+  const raised = pick(BATTLE_STAT_KEYS.filter((s) => fighter.stages[s] < 6));
+  const lowered = pick(BATTLE_STAT_KEYS.filter((s) => s !== raised && fighter.stages[s] > -6));
+  if (!raised && !lowered) return;
+  if (raised) fighter.stages = applyStageDelta(fighter.stages, raised, contraryDelta(fighter, 2));
+  if (lowered) fighter.stages = applyStageDelta(fighter.stages, lowered, contraryDelta(fighter, -1));
   endOfTurn.push({
     actor: key,
     damage: 0,
