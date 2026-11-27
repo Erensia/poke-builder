@@ -660,7 +660,7 @@ function applyAbilityImmunityCure(ctx: EndOfTurnFighterContext): void {
 
 /**
  * 가속(Speed Boost): 매 턴 종료 시 스피드 1랭크 상승. 이번 턴 도중에 등장한 포켓몬(자발 교체·유턴류·
- * 강제 교체(드래곤테일·레드카드 등)·행동 전 기절 대체 포함)은 그 턴엔 발동하지 않는다 — Showdown
+ * 강제 교체(드래곤테일·레드카드 등) 포함)은 그 턴엔 발동하지 않는다 — Showdown
  * `activeTurns`가 등장 때 0이고 턴 시작에 +1이라 `onResidual`이 0이면 건너뛰는 것과 같다(8.3 D3-fix-51 E8-41).
  * enteredThisTurn은 performSwitch가 모든 등장에 세우고 runTurn이 턴 시작에 지운다. 턴과 턴 사이의 기절
  * 교체(applySwitch)는 다음 턴 시작에 지워지므로 다음 턴 끝부터 발동한다. 이번 턴 데미지로 방금

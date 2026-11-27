@@ -33,7 +33,8 @@ export default async function ({ server, data, mon, battle, check }) {
     let st = battle([plain(), plain(), SB()], [plain([NOP, "스텔스록", "아이언헤드"]), plain()]);
     st = turn(st, mv(NOP), mv("스텔스록"));
     st.sideA.party[1].currentHp = 1;
-    st = turn(st, SW(1), mv("아이언헤드"), 2); // 교체 → 설치물로 기절 → 대체(가속, 슬롯 2)
+    // 교체 → 설치물로 기절 → 턴 끝 forcedSwitch(8.3 D3-fix-55: 대체는 행동 전이 아니라 턴 끝) → 호출부가 applySwitch로 대체(가속, 슬롯 2)
+    st = sw.applySwitch(turn(st, SW(1), mv("아이언헤드"), 2), "a", 2).nextState;
     const e1 = st.a.stages.spe; const who = st.a.slot.ability;
     st = turn(st, mv(NOP), mv(NOP));
     return who === "가속" && e1 === 0 && st.a.stages.spe === 1 ? true : JSON.stringify({ who, e1, e2: st.a.stages.spe });
