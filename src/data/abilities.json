@@ -521,7 +521,7 @@
   {
     "id": "승기",
     "name": "승기",
-    "description": "자신의 능력치가 하락하면 특수공격이 2랭크 상승한다.",
+    "description": "상대의 기술이나 특성으로 능력치가 떨어지면 특수공격이 2랭크 상승한다.",
     "boostsStatOnOwnStatDrop": { "stat": "spa", "delta": 2 }
   },
   {

@@ -16,7 +16,7 @@ import { inflictStatus, isImmuneToStatus } from "@/lib/statusConditions";
 import { hasVolatile } from "@/lib/volatileConditions";
 import { calcSpikesDamage, calcStealthRockDamage } from "./entryCost";
 import { FIELD_DURATION, FIELD_ENTRY_ANNOUNCEMENT, isStatusBlockedByField } from "@/lib/fieldEffects";
-import { applySyrupOnEntry, WEATHER_DURATION, setEffectiveAbility, abilityOf, activeWeather, applyForecastForm, applyMimicryForm, applyTransform, balloonEntryAnnouncement, cloneSide, consumeItem, contraryDelta, hazardEntryOrder, isFainted, opponentKey, sideOf, statDropBlockStatsOf, statusImmunitiesOf, weatherRockBonusOfItem, type BattleFighterState, type BattleState } from "./state";
+import { applySyrupOnEntry, WEATHER_DURATION, setEffectiveAbility, abilityOf, activeWeather, applyForecastForm, applyMimicryForm, applyTransform, balloonEntryAnnouncement, cloneSide, consumeItem, contraryDelta, hazardEntryOrder, isFainted, opponentKey, sideOf, statDropBlockStatsOf, statusImmunitiesOf, weatherRockBonusOfItem, type BattleFighterState, type BattleState, applyOwnStatDropReaction, countLoweredStats } from "./state";
 
 export function isTrappedFromSwitching(fighter: BattleFighterState, state?: BattleState): boolean {
   if (isFainted(fighter)) return false;
@@ -105,14 +105,13 @@ function applyOpponentStatDrop(
   return "dropped";
 }
 
-/** 오기·승기(boostsStatOnOwnStatDrop): 자신의 능력치가 실제로 내려갔으면(변화 없음 제외) 지정 랭크가 오른다 — 기술 경로 applyCompetitiveBoost와 같은 판정 */
+/** 오기·승기(boostsStatOnOwnStatDrop): 상대가 낸 하락이 실제로 있었으면(변화 없음 제외) 능력치마다 지정 랭크가 오른다 — 기술 경로(mirroredEffects)와 같은 공용 규칙(state.ts applyOwnStatDropReaction) */
 function reactToOwnStatDrop(fighter: BattleFighterState, before: BattleFighterState["stages"], log: string[]): void {
   const ability = abilityOf(fighter);
   const boost = ability?.boostsStatOnOwnStatDrop;
-  if (!boost || !(Object.keys(fighter.stages) as BattleStatKey[]).some((s) => fighter.stages[s] < before[s])) return;
-  const raised = fighter.stages[boost.stat];
-  fighter.stages = applyStageDelta(fighter.stages, boost.stat, boost.delta);
-  if (fighter.stages[boost.stat] !== raised) {
+  if (!boost) return;
+  // 공용 규칙(state.ts): 내려간 능력치 수만큼, 기절한 보유자 제외(8.3 D3-fix-52). 위협·끈적끈적네트·반사는 한 번에 한 능력치라 보통 1건이다.
+  if (applyOwnStatDropReaction(fighter, ability, countLoweredStats(before, fighter.stages))) {
     const label = STAT_LABELS[boost.stat];
     log.push(`${fighterName(fighter)}의 ${ability!.name}! ${label}${iGa(label)} ${boost.delta >= 2 ? "크게 " : ""}올라갔다!`);
   }

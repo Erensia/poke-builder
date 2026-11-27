@@ -13,6 +13,7 @@ import { eulReul, eunNeun, roEuro } from "@/lib/josa";
 import { findMegaFormByStone, getEffectiveForm, getEffectiveGender } from "@/lib/pokemonForm";
 import { computeRealStats } from "@/lib/statCalculator";
 import { computeSpeedWithEffects } from "@/lib/speedStat";
+import { applyStageDelta } from "@/lib/statStages";
 import { CONFUSION_SELF_HIT_POWER, hasVolatile } from "@/lib/volatileConditions";
 import { getEffectiveness } from "@/lib/typeEffectiveness";
 import { FIELD_DURATION, FIELD_ENTRY_ANNOUNCEMENT } from "@/lib/fieldEffects";
@@ -507,6 +508,29 @@ export function activeWeather(state: BattleState): WeatherKind | undefined {
  */
 export function contraryDelta(fighter: BattleFighterState, delta: number): number {
   return abilityOf(fighter)?.invertsStatChanges ? -delta : delta;
+}
+
+/**
+ * 오기·승기용(8.3 D3-fix-52): before → after에서 **실제로 내려간** 능력치의 수 — 5종 랭크 + (넘기면) 명중·회피. 이미 −6이라 변화가 없던 것은 세지 않는다.
+ * Showdown `onAfterEachBoost`가 능력치 하나마다 불리는 것과 같은 단위다(간지르기 = 2건).
+ */
+export function countLoweredStats(before: StatStages, after: StatStages, accBefore?: AccuracyEvasionStages, accAfter?: AccuracyEvasionStages): number {
+  let n = 0;
+  for (const k of BATTLE_STAT_KEYS) if (after[k] < before[k]) n++;
+  if (accBefore && accAfter) for (const k of ["accuracy", "evasion"] as const) if (accAfter[k] < accBefore[k]) n++;
+  return n;
+}
+
+/**
+ * 오기·승기(boostsStatOnOwnStatDrop): **상대가 낸** 능력치 하락 `lowered`건마다 지정 랭크가 오른다(Showdown `!source || target.isAlly(source)`면 무발동 — 자기 기술의 반동·껍질깨기는
+ * 세지 않고, 호출하는 쪽이 상대발 하락만 센다). 기절한 보유자는 발동하지 않는다. 돌려주는 값: 랭크가 실제로 올랐는가(문구가 필요한 호출처용).
+ */
+export function applyOwnStatDropReaction(fighter: BattleFighterState, ability: Ability | undefined, lowered: number): boolean {
+  const boost = ability?.boostsStatOnOwnStatDrop;
+  if (!boost || lowered <= 0 || isFainted(fighter)) return false;
+  const before = fighter.stages[boost.stat];
+  for (let i = 0; i < lowered; i++) fighter.stages = applyStageDelta(fighter.stages, boost.stat, boost.delta);
+  return fighter.stages[boost.stat] !== before;
 }
 
 /** 주 상태이상 6종 — 플라워베일 등 "상태이상 전부 면역"을 표현할 때 쓴다 */
