@@ -107,6 +107,11 @@ export interface Move {
   /** 접촉기 여부. 확인 안 된 기술은 생략 (단정하지 않음) */
   makesContact?: boolean;
   /**
+   * 프레셔 면제 — 자기·자기편 진영·아군 대상이라 상대의 프레셔가 PP를 더 깎지 않는 기술(Showdown `target` self/allySide/adjacentAlly/allies/adjacentAllyOrSelf/allyTeam,
+   * 상대 진영 설치기 중 `mustpressure`가 없는 끈적끈적네트). `mustpressure` 4종(압정뿌리기·스텔스록·독압정·봉인)과 저주(사용자 타입 규칙)에는 붙이지 않는다. (8.3 D3-fix-50)
+   */
+  pressureExempt?: true;
+  /**
    * 트리플악셀처럼 맞을 때마다 위력이 달라지는 다단히트 기술의 타수별 위력.
    * [1타 위력, 2타 위력, 3타 위력, ...]. power는 이 배열의 첫 값과 같다.
    */

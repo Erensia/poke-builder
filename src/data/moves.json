@@ -139,6 +139,7 @@
   },
   {
     "id": "용의춤",
+    "pressureExempt": true,
     "name": "용의춤",
     "type": "드래곤",
     "category": "status",
@@ -416,6 +417,7 @@
   },
   {
     "id": "광합성",
+    "pressureExempt": true,
     "name": "광합성",
     "type": "풀",
     "category": "status",
@@ -512,6 +514,7 @@
   },
   {
     "id": "대타출동",
+    "pressureExempt": true,
     "name": "대타출동",
     "type": "노말",
     "category": "status",
@@ -640,6 +643,7 @@
   },
   {
     "id": "길동무",
+    "pressureExempt": true,
     "bypassesSubstitute": true,
     "excludedFromCopycat": true,
     "name": "길동무",
@@ -758,6 +762,7 @@
   },
   {
     "id": "희망사항",
+    "pressureExempt": true,
     "name": "희망사항",
     "type": "노말",
     "category": "status",
@@ -825,6 +830,7 @@
   },
   {
     "id": "명상",
+    "pressureExempt": true,
     "name": "명상",
     "type": "에스퍼",
     "category": "status",
@@ -890,6 +896,7 @@
   },
   {
     "id": "고속이동",
+    "pressureExempt": true,
     "name": "고속이동",
     "type": "에스퍼",
     "category": "status",
@@ -1185,6 +1192,7 @@
   },
   {
     "id": "칼춤",
+    "pressureExempt": true,
     "name": "칼춤",
     "type": "노말",
     "category": "status",
@@ -1490,6 +1498,7 @@
   },
   {
     "id": "나쁜음모",
+    "pressureExempt": true,
     "name": "나쁜음모",
     "type": "악",
     "category": "status",
@@ -1528,6 +1537,7 @@
   },
   {
     "id": "도우미",
+    "pressureExempt": true,
     "bypassesSubstitute": true,
     "excludedFromCopycat": true,
     "name": "도우미",
@@ -1698,6 +1708,7 @@
   },
   {
     "id": "방어",
+    "pressureExempt": true,
     "excludedFromCopycat": true,
     "name": "방어",
     "type": "노말",
@@ -1734,6 +1745,7 @@
   },
   {
     "id": "버티기",
+    "pressureExempt": true,
     "excludedFromCopycat": true,
     "name": "버티기",
     "type": "노말",
@@ -1751,6 +1763,7 @@
   },
   {
     "id": "벌크업",
+    "pressureExempt": true,
     "name": "벌크업",
     "type": "격투",
     "category": "status",
@@ -1991,6 +2004,7 @@
   },
   {
     "id": "잠꼬대",
+    "pressureExempt": true,
     "excludedFromCopycat": true,
     "name": "잠꼬대",
     "type": "노말",
@@ -2006,6 +2020,7 @@
   },
   {
     "id": "잠자기",
+    "pressureExempt": true,
     "name": "잠자기",
     "type": "에스퍼",
     "category": "status",
@@ -2059,6 +2074,7 @@
   },
   {
     "id": "철벽",
+    "pressureExempt": true,
     "name": "철벽",
     "type": "강철",
     "category": "status",
@@ -2253,6 +2269,7 @@
   },
   {
     "id": "판별",
+    "pressureExempt": true,
     "excludedFromCopycat": true,
     "name": "판별",
     "type": "격투",
@@ -2270,6 +2287,7 @@
   },
   {
     "id": "패스트가드",
+    "pressureExempt": true,
     "excludedFromCopycat": true,
     "name": "패스트가드",
     "type": "격투",
@@ -2304,6 +2322,7 @@
   },
   {
     "id": "흉내쟁이",
+    "pressureExempt": true,
     "callsLastMoveInBattle": true,
     "excludedFromCopycat": true,
     "name": "흉내쟁이",
@@ -2373,6 +2392,7 @@
   },
   {
     "id": "기충전",
+    "pressureExempt": true,
     "name": "기충전",
     "type": "노말",
     "category": "status",
@@ -2419,6 +2439,7 @@
   },
   {
     "id": "멀리짖기",
+    "pressureExempt": true,
     "name": "멀리짖기",
     "type": "노말",
     "category": "status",
@@ -2464,6 +2485,7 @@
   },
   {
     "id": "생명의물방울",
+    "pressureExempt": true,
     "bypassesSubstitute": true,
     "name": "생명의물방울",
     "type": "물",
@@ -2555,6 +2577,7 @@
   },
   {
     "id": "코칭",
+    "pressureExempt": true,
     "bypassesSubstitute": true,
     "name": "코칭",
     "type": "격투",
@@ -2595,6 +2618,7 @@
   },
   {
     "id": "그림자분신",
+    "pressureExempt": true,
     "name": "그림자분신",
     "type": "노말",
     "category": "status",
@@ -2638,6 +2662,7 @@
   },
   {
     "id": "날개쉬기",
+    "pressureExempt": true,
     "name": "날개쉬기",
     "type": "비행",
     "category": "status",
@@ -2774,6 +2799,7 @@
   },
   {
     "id": "배턴터치",
+    "pressureExempt": true,
     "name": "배턴터치",
     "type": "노말",
     "category": "status",
@@ -2858,6 +2884,7 @@
   },
   {
     "id": "빛의장막",
+    "pressureExempt": true,
     "name": "빛의장막",
     "type": "에스퍼",
     "category": "status",
@@ -2911,6 +2938,7 @@
   },
   {
     "id": "순풍",
+    "pressureExempt": true,
     "name": "순풍",
     "type": "비행",
     "category": "status",
@@ -3179,6 +3207,7 @@
   },
   {
     "id": "망각술",
+    "pressureExempt": true,
     "name": "망각술",
     "type": "에스퍼",
     "category": "status",
@@ -3329,6 +3358,7 @@
   },
   {
     "id": "아쿠아링",
+    "pressureExempt": true,
     "name": "아쿠아링",
     "type": "물",
     "category": "status",
@@ -3420,6 +3450,7 @@
   },
   {
     "id": "와이드가드",
+    "pressureExempt": true,
     "name": "와이드가드",
     "type": "바위",
     "category": "status",
@@ -3742,6 +3773,7 @@
   },
   {
     "id": "꿀꺽",
+    "pressureExempt": true,
     "name": "꿀꺽",
     "type": "노말",
     "category": "status",
@@ -3813,6 +3845,7 @@
   },
   {
     "id": "비축하기",
+    "pressureExempt": true,
     "name": "비축하기",
     "type": "노말",
     "category": "status",
@@ -4306,6 +4339,7 @@
   },
   {
     "id": "치유소원",
+    "pressureExempt": true,
     "setsHealingWish": true,
     "name": "치유소원",
     "type": "에스퍼",
@@ -4322,6 +4356,7 @@
   },
   {
     "id": "코스믹파워",
+    "pressureExempt": true,
     "name": "코스믹파워",
     "type": "에스퍼",
     "category": "status",
@@ -4349,6 +4384,7 @@
   },
   {
     "id": "코튼가드",
+    "pressureExempt": true,
     "name": "코튼가드",
     "type": "풀",
     "category": "status",
@@ -4641,6 +4677,7 @@
   },
   {
     "id": "성장",
+    "pressureExempt": true,
     "name": "성장",
     "type": "풀",
     "category": "status",
@@ -4680,6 +4717,7 @@
   },
   {
     "id": "신비의부적",
+    "pressureExempt": true,
     "name": "신비의부적",
     "type": "노말",
     "category": "status",
@@ -4858,6 +4896,7 @@
   },
   {
     "id": "달빛",
+    "pressureExempt": true,
     "name": "달빛",
     "type": "페어리",
     "category": "status",
@@ -4874,6 +4913,7 @@
   },
   {
     "id": "리플렉터",
+    "pressureExempt": true,
     "name": "리플렉터",
     "type": "에스퍼",
     "category": "status",
@@ -5294,6 +5334,7 @@
   },
   {
     "id": "사이드체인지",
+    "pressureExempt": true,
     "name": "사이드체인지",
     "type": "에스퍼",
     "category": "status",
@@ -5999,6 +6040,7 @@
   },
   {
     "id": "드래곤옐",
+    "pressureExempt": true,
     "name": "드래곤옐",
     "type": "드래곤",
     "category": "status",
@@ -6018,6 +6060,7 @@
   },
   {
     "id": "배북",
+    "pressureExempt": true,
     "name": "배북",
     "type": "노말",
     "category": "status",
@@ -6199,6 +6242,7 @@
   },
   {
     "id": "껍질깨기",
+    "pressureExempt": true,
     "name": "껍질깨기",
     "type": "노말",
     "category": "status",
@@ -6351,6 +6395,7 @@
   },
   {
     "id": "뿌리박기",
+    "pressureExempt": true,
     "name": "뿌리박기",
     "type": "풀",
     "category": "status",
@@ -6650,6 +6695,7 @@
   },
   {
     "id": "전자부유",
+    "pressureExempt": true,
     "blockedByGravity": true,
     "setsMagnetRise": true,
     "name": "전자부유",
@@ -6789,6 +6835,7 @@
   },
   {
     "id": "게으름피우기",
+    "pressureExempt": true,
     "name": "게으름피우기",
     "type": "노말",
     "category": "status",
@@ -7223,6 +7270,7 @@
   },
   {
     "id": "충전",
+    "pressureExempt": true,
     "name": "충전",
     "type": "전기",
     "category": "status",
@@ -7285,6 +7333,7 @@
   },
   {
     "id": "나비춤",
+    "pressureExempt": true,
     "name": "나비춤",
     "type": "벌레",
     "category": "status",
@@ -7321,6 +7370,7 @@
   },
   {
     "id": "분노가루",
+    "pressureExempt": true,
     "excludedFromCopycat": true,
     "name": "분노가루",
     "type": "벌레",
@@ -7391,6 +7441,7 @@
   },
   {
     "id": "아침햇살",
+    "pressureExempt": true,
     "name": "아침햇살",
     "type": "노말",
     "category": "status",
@@ -7460,6 +7511,7 @@
   },
   {
     "id": "HP회복",
+    "pressureExempt": true,
     "name": "HP회복",
     "type": "노말",
     "category": "status",
@@ -7476,6 +7528,7 @@
   },
   {
     "id": "똬리틀기",
+    "pressureExempt": true,
     "name": "똬리틀기",
     "type": "독",
     "category": "status",
@@ -7716,6 +7769,7 @@
   },
   {
     "id": "꼬리자르기",
+    "pressureExempt": true,
     "name": "꼬리자르기",
     "type": "노말",
     "category": "status",
@@ -7869,6 +7923,7 @@
   },
   {
     "id": "오로라베일",
+    "pressureExempt": true,
     "name": "오로라베일",
     "type": "얼음",
     "category": "status",
@@ -7967,6 +8022,7 @@
   },
   {
     "id": "킹실드",
+    "pressureExempt": true,
     "protectPassesStatusMoves": true,
     "excludedFromCopycat": true,
     "name": "킹실드",
@@ -7990,6 +8046,7 @@
   },
   {
     "id": "파워트릭",
+    "pressureExempt": true,
     "name": "파워트릭",
     "type": "에스퍼",
     "category": "status",
@@ -8025,6 +8082,7 @@
   },
   {
     "id": "끈적끈적네트",
+    "pressureExempt": true,
     "name": "끈적끈적네트",
     "type": "벌레",
     "category": "status",
@@ -8160,6 +8218,7 @@
   },
   {
     "id": "녹기",
+    "pressureExempt": true,
     "name": "녹기",
     "type": "독",
     "category": "status",
@@ -8182,6 +8241,7 @@
   },
   {
     "id": "록커트",
+    "pressureExempt": true,
     "name": "록커트",
     "type": "바위",
     "category": "status",
@@ -8227,6 +8287,7 @@
   },
   {
     "id": "니들가드",
+    "pressureExempt": true,
     "excludedFromCopycat": true,
     "name": "니들가드",
     "type": "풀",
@@ -8245,6 +8306,7 @@
   },
   {
     "id": "리사이클",
+    "pressureExempt": true,
     "name": "리사이클",
     "type": "노말",
     "category": "status",
@@ -8586,6 +8648,7 @@
   },
   {
     "id": "작아지기",
+    "pressureExempt": true,
     "name": "작아지기",
     "type": "노말",
     "category": "status",
@@ -8648,6 +8711,7 @@
   },
   {
     "id": "경혈찌르기",
+    "pressureExempt": true,
     "raisesRandomStat": 2,
     "name": "경혈찌르기",
     "type": "노말",
@@ -8816,6 +8880,7 @@
   },
   {
     "id": "자기장조작",
+    "pressureExempt": true,
     "bypassesSubstitute": true,
     "boostsDefensesIfPlusMinus": true,
     "name": "자기장조작",
@@ -8962,6 +9027,7 @@
   },
   {
     "id": "치료방울",
+    "pressureExempt": true,
     "curesParty": true,
     "name": "치료방울",
     "type": "노말",
@@ -9181,6 +9247,7 @@
   },
   {
     "id": "볼가득넣기",
+    "pressureExempt": true,
     "name": "볼가득넣기",
     "type": "노말",
     "category": "status",
@@ -9312,6 +9379,7 @@
   },
   {
     "id": "농성",
+    "pressureExempt": true,
     "name": "농성",
     "type": "강철",
     "category": "status",
@@ -9397,6 +9465,7 @@
   },
   {
     "id": "아로마미스트",
+    "pressureExempt": true,
     "bypassesSubstitute": true,
     "name": "아로마미스트",
     "type": "페어리",
@@ -9576,6 +9645,7 @@
   },
   {
     "id": "소울비트",
+    "pressureExempt": true,
     "name": "소울비트",
     "type": "드래곤",
     "category": "status",
@@ -9639,6 +9709,7 @@
   },
   {
     "id": "토치카",
+    "pressureExempt": true,
     "excludedFromCopycat": true,
     "name": "토치카",
     "type": "독",
@@ -9704,6 +9775,7 @@
   },
   {
     "id": "배수의진",
+    "pressureExempt": true,
     "inflictsVolatile": [{ "volatile": "noRetreat", "target": "self" }],
     "usageCondition": "not-no-retreat",
     "name": "배수의진",
@@ -9949,6 +10021,7 @@
   },
   {
     "id": "날따름",
+    "pressureExempt": true,
     "excludedFromCopycat": true,
     "name": "날따름",
     "type": "노말",
@@ -9966,6 +10039,7 @@
   },
   {
     "id": "정리정돈",
+    "pressureExempt": true,
     "name": "정리정돈",
     "type": "노말",
     "category": "status",
@@ -10348,6 +10422,7 @@
   },
   {
     "id": "회생의기도",
+    "pressureExempt": true,
     "name": "회생의기도",
     "type": "노말",
     "category": "status",
@@ -10405,6 +10480,7 @@
   },
   {
     "id": "우유마시기",
+    "pressureExempt": true,
     "name": "우유마시기",
     "type": "노말",
     "category": "status",
