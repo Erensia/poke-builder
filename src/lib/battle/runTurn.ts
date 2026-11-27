@@ -35,8 +35,6 @@ export interface RunTurnPaused {
     side: FighterKey;
     passBaton: boolean;
     emergencyExit?: boolean;
-    /** 교체로 나온 포켓몬이 등장 설치물로 그 자리에서 쓰러져 행동 전에 대체 슬롯을 고르는 경우 */
-    faintReplacement?: boolean;
     /** 탈출버튼처럼 도구가 강제 교체를 일으켰으면 그 도구 이름(UI 패널 문구용) */
     ejectItemName?: string;
   };
@@ -45,13 +43,12 @@ export interface RunTurnPaused {
   _ctx: RunTurnContext;
 }
 
-/** 교체 슬롯을 고르기를 기다리는 한 건 — 유턴류 자체 교체·위기회피·탈출버튼·행동 전 기절 대체 */
+/** 교체 슬롯을 고르기를 기다리는 한 건 — 유턴류 자체 교체·위기회피·탈출버튼 */
 interface PendingChoice {
   side: FighterKey;
   passBaton: boolean;
   passSubstitute?: boolean;
   returnsToTrainer?: boolean;
-  faintReplacement?: boolean;
   emergencyExit?: boolean;
   ejectItemName?: string;
 }
@@ -76,8 +73,6 @@ export interface RunTurnContext {
   pivotQueue: PendingChoice[];
   /** 받은 선택들 — 대기열이 비면 한꺼번에 실행한다(동시 교체는 스피드순) */
   choicesMade: { pivot: PendingChoice; toIndex: number }[];
-  /** 행동 전 기절 대체(faintReplacement)를 이미 처리한(또는 슬롯이 없어 건너뛴) 편 — 같은 편을 다시 멈추지 않는다 */
-  faintReplacementHandled: Record<FighterKey, boolean>;
 }
 
 /**
@@ -291,7 +286,6 @@ export function runTurn(
     pendingPivot: undefined,
     pivotQueue: [],
     choicesMade: [],
-    faintReplacementHandled: { a: false, b: false },
   };
   return runActionPhase(ctx);
 }
@@ -326,7 +320,6 @@ function pauseForChoice(ctx: RunTurnContext, choice: PendingChoice): RunTurnPaus
     side: choice.side,
     passBaton: choice.passBaton,
     emergencyExit: choice.emergencyExit,
-    faintReplacement: choice.faintReplacement,
     ejectItemName: choice.ejectItemName,
   });
 }
@@ -578,27 +571,13 @@ function overrideEncoredPending(ctx: RunTurnContext, key: FighterKey, action: Ac
 function runActionPhase(ctx: RunTurnContext): RunTurnOutcome | RunTurnPaused {
   const { state, order, moves, random, actions } = ctx;
 
-  // 교체로 나온 포켓몬이 등장 설치물(스텔스록 등)로 그 자리에서 쓰러졌으면, 본가처럼 행동이 시작되기
-  // 전에 대체 포켓몬을 먼저 내보낸다 — 안 그러면 상대(살아 있는 쪽)의 이번 턴 행동이 "쓰러진 상대"
-  // 때문에 통째로 건너뛰어진다(HP회복 등 자기 대상 기술도 못 씀). 행동 도중 기절은 종전대로 턴 종료 후 교체.
-  if (ctx.actionIdx === 0 && actions.length === 0) {
-    for (const key of ["a", "b"] as const) {
-      if (ctx.faintReplacementHandled[key] || !isFainted(state[key])) continue;
-      ctx.faintReplacementHandled[key] = true;
-      if (!hasLivingReserve(sideOf(state, key))) continue; // 남은 슬롯이 없으면 finishTurn에서 패배 처리
-      ctx.pendingPivot = { side: key, passBaton: false, faintReplacement: true };
-      return pauseForSwitch(ctx, { side: key, passBaton: false, faintReplacement: true }); // actions가 비어 있어 [...actions]와 같다
-    }
-  }
-
   for (let i = ctx.actionIdx; i < order.length; i++) {
     const key = order[i];
     ctx.actionIdx = i + 1;
     if (ctx.didSwitch[key]) continue; // 이번 턴 교체한 쪽은 행동하지 않는다(교체가 곧 그 턴 행동)
     if (isFainted(state[key])) continue; // 이미 쓰러진 쪽은 행동 못 함
-    // 턴 시작 전부터 상대가 쓰러져 있었으면 더 진행하지 않는다. 먼저 움직인 상대가 이번 턴에 자기 반동 등으로 쓰러진 경우는 계속 진행한다
-    // — 자기 대상·필드 기술(칼춤·스텔스록 등)은 실행되고, 쓰러진 상대를 노리는 기술은 resolveAction이 "실패"로 처리한다(교체는 턴 끝).
-    if (isFainted(state[opponentKey(key)]) && actions.length === 0) break;
+    // 상대가 이미 쓰러져 있어도(이번 턴 반동·교체 직후 설치물 등) 계속 진행한다 — 자기 대상·필드 기술(칼춤·스텔스록 등)은 실행되고,
+    // 쓰러진 상대를 노리는 기술은 resolveAction이 "실패"로 처리한다. 대체는 턴 끝(Showdown gen 9 checkFainted, 8.3 D3-fix-55).
     // 포커스렌즈 판정용 — 이번 턴 order 기준으로 상대보다 늦게 움직이는 쪽인지
     const movesSecond = order[1] === key;
     const action = resolveAction(state, key, moves[key], random, movesSecond, moves[opponentKey(key)]);
@@ -644,8 +623,6 @@ function performChoice(ctx: RunTurnContext, pivot: PendingChoice, toIndex: numbe
   const outgoing = side.party[fromIndex];
   const entryMessages: string[] = [];
   const hazards = performSwitch(ctx.state, pivot.side, toIndex, entryMessages, {
-    // 기절 후 대체는 강제 교체와 같은 취급 — AI 맞교체 표지는 안 세운다(가속은 이 턴 끝에 enteredThisTurn으로 억제됨)
-    voluntary: !pivot.faintReplacement,
     passBaton: pivot.passBaton,
     passSubstituteOnly: pivot.passSubstitute,
     deferEntry,
@@ -653,14 +630,13 @@ function performChoice(ctx: RunTurnContext, pivot: PendingChoice, toIndex: numbe
   const inFighter = side.party[toIndex];
   const entry: SwitchLogEntry = {
     side: pivot.side,
-    // 기절 대체: 물러나는 줄("돌아와!") 없이 "가라!"만 — 강제 교체 합성 카드와 같은 표기(fromIndex -1)
-    fromIndex: pivot.faintReplacement ? -1 : fromIndex,
+    fromIndex,
     toIndex,
     outPokemonId: outgoing.slot.pokemonId,
     inPokemonId: inFighter.illusionAs ?? inFighter.slot.pokemonId, // §6-1
     entryMessages, // 같은 배열 참조 — 동시 교체 2단계의 runEntryEffects가 여기에 push한다(복사하면 문구가 사라진다)
     ...hazardField(hazards),
-    afterMove: pivot.faintReplacement ? undefined : true,
+    afterMove: true,
     shedTail: pivot.passSubstitute || undefined,
     returnsToTrainer: pivot.returnsToTrainer || undefined,
     defenderExit: pivot.emergencyExit || pivot.ejectItemName ? true : undefined,

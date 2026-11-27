@@ -257,7 +257,6 @@ export function useBattleLogSession(mode: BattleMode) {
         side: outcome.awaitingSelfSwitch.side,
         passBaton: outcome.awaitingSelfSwitch.passBaton,
         emergencyExit: outcome.awaitingSelfSwitch.emergencyExit,
-        faintReplacement: outcome.awaitingSelfSwitch.faintReplacement,
         ejectItemName: outcome.awaitingSelfSwitch.ejectItemName,
       });
       return;

@@ -44,8 +44,6 @@ export type PendingPivotState = {
   passBaton: boolean;
   /** 위기회피로 인한 강제 퇴장이면 true (유턴류와 안내 문구가 다르다) */
   emergencyExit?: boolean;
-  /** 교체로 나온 포켓몬이 등장 설치물에 쓰러져 행동 전에 대체를 고르는 경우 */
-  faintReplacement?: boolean;
   /** 탈출버튼처럼 도구로 인한 강제 퇴장이면 그 도구 이름 */
   ejectItemName?: string;
 } | null;

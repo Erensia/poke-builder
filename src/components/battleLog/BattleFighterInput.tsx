@@ -99,12 +99,7 @@ export function BattleFighterInput(props: BattleBoardProps & { side: Side; pokem
     return (
       <SwitchPanel
         title={
-          pendingPivot.faintReplacement ? (
-            <>
-              {pokemon.name}
-              {eunNeun(pokemon.name)} 쓰러졌다!
-            </>
-          ) : pendingPivot.emergencyExit ? (
+          pendingPivot.emergencyExit ? (
             <>
               {pokemon.name}의 위기회피! 위험을 피해 물러난다!
             </>

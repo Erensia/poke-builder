@@ -672,8 +672,8 @@ function triggerBerryHeals(c: ActionCtx) {
 /** 자기과신·천정부지·마지막일침·스크린 부수기·곡예 — 쓰러뜨린 뒤/도구를 잃은 뒤의 발동 */
 function applyKnockoutAbilities(c: ActionCtx) {
 
-  // 자기과신: 자신의 데미지로 상대를 실제로 쓰러뜨렸을 때만 발동. resolveAction은 상대가 이미
-  // 쓰러진 상태로는 호출되지 않으므로(runTurn의 break), 여기서 isFainted(defender)가 true라면
+  // 자기과신: 자신의 데미지로 상대를 실제로 쓰러뜨렸을 때만 발동. 쓰러진 상대를 노리는 기술은
+  // preHitEffects에서 실패해 데미지가 0이므로, 여기서 데미지가 있으면서 isFainted(defender)이면
   // 이번 행동 중에 쓰러진 것이다 — 데미지를 준 경우로 한정해 상태이상/씨뿌리기 등 무관한 원인은 제외.
   if (c.isDamaging && c.damage > 0 && isFainted(c.defender) && c.attackerAbility?.boostsStatOnKo) {
     const boost = c.attackerAbility.boostsStatOnKo;
