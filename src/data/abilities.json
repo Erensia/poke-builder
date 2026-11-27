@@ -323,8 +323,9 @@
   {
     "id": "배짱",
     "name": "배짱",
-    "description": "고스트타입 포켓몬에게도 노말·격투타입 기술이 명중한다.",
-    "bypassesImmunityForTypes": ["노말", "격투"]
+    "description": "상대의 위협에 영향을 받지 않는다. 고스트타입 포켓몬에게도 노말·격투타입 기술이 명중한다.",
+    "bypassesImmunityForTypes": ["노말", "격투"],
+    "immuneToIntimidate": true
   },
   {
     "id": "벌레의알림",

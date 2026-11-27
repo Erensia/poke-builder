@@ -167,7 +167,7 @@ export function useBattleLogSession(mode: BattleMode) {
     }
     // 랭크배틀: 이탈 정산용 표시와 시즌 기록용 내 빌드(6슬롯)를 남긴다. 선출은 판마다 새로 고른다
     if (rank.active) rank.begin(SLOT_INDICES.map((i) => slotCtl("a", i).slot) as PartySlots);
-    const state = createStateFromParties(aParty, bParty);
+    const state = createStateFromParties(aParty, bParty, Math.random); // 실제 대전 시작만 — 시작 등장 순서의 스피드 동률은 무작위(8.3 D3-fix-49 E8-37)
     setPartySlots({ a: aParty, b: bParty });
     setBattleState(state);
     setLog([]);

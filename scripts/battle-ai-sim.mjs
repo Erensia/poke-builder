@@ -234,7 +234,7 @@ try {
   function runBattle(seed, policies, forced, initial, onActions) {
     const rng = mulberry32(seed);
     const partyRng = mulberry32(seed ^ 0x9e3779b9);
-    let st = initial ?? state.createBattleState({ a: makeSide(partyRng), b: makeSide(partyRng) });
+    let st = initial ?? state.createBattleState({ a: makeSide(partyRng), b: makeSide(partyRng) }, rng);
     const trace = [];
     // logidx용: 화면 로그와 같게 강제 교체 합성 카드(BattleLogPage.resolveForcedSwitch)를 끼운 로그와, 각 항목 직후의 실제 활성 인덱스
     const uiLog = [];
