@@ -449,9 +449,9 @@
   {
     "id": "정전기",
     "name": "정전기",
-    "description": "물리 접촉을 받으면 30%의 확률로 상대를 마비 상태로 만든다.",
+    "description": "접촉을 받으면 30%의 확률로 상대를 마비 상태로 만든다.",
     "hitTrigger": {
-      "on": "physicalContact",
+      "on": "contact",
       "chance": 30,
       "inflictsStatusOnAttacker": "paralysis"
     }
@@ -495,9 +495,9 @@
   {
     "id": "불꽃몸",
     "name": "불꽃몸",
-    "description": "물리 접촉을 받으면 30%의 확률로 상대를 화상 상태로 만든다.",
+    "description": "접촉을 받으면 30%의 확률로 상대를 화상 상태로 만든다.",
     "hitTrigger": {
-      "on": "physicalContact",
+      "on": "contact",
       "chance": 30,
       "inflictsStatusOnAttacker": "burn"
     }
@@ -943,9 +943,9 @@
   {
     "id": "독가시",
     "name": "독가시",
-    "description": "물리 접촉을 받으면 30%의 확률로 상대를 독 상태로 만든다.",
+    "description": "접촉을 받으면 30%의 확률로 상대를 독 상태로 만든다.",
     "hitTrigger": {
-      "on": "physicalContact",
+      "on": "contact",
       "chance": 30,
       "inflictsStatusOnAttacker": "poison"
     }

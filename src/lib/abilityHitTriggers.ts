@@ -9,8 +9,6 @@ export function hitTriggerMatchesMove(trigger: AbilityHitTrigger, move: Move): b
   if (trigger.moveTypeIn && (!move.type || !trigger.moveTypeIn.includes(move.type))) return false;
   const makesContact = move.makesContact ?? false;
   switch (trigger.on) {
-    case "physicalContact":
-      return move.category === "physical" && makesContact;
     case "contact":
       return makesContact;
     case "physical":
