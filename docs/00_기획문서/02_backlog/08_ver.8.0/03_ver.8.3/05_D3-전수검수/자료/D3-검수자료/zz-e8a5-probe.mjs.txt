@@ -1,0 +1,124 @@
+// E8-a ⑤ 엔진 프로브 — e8a5-run.cjs(Showdown)와 같은 장면. 일회용, 커밋 금지.
+// 실행: cd <repo> && node <이 파일>
+import { createServer } from "vite";
+const root = process.cwd();
+const server = await createServer({ root, server: { middlewareMode: true, hmr: false }, appType: "custom", logLevel: "error" });
+try {
+  const data = await server.ssrLoadModule("/src/lib/data.ts");
+  const state = await server.ssrLoadModule("/src/lib/battle/state.ts");
+  const rt = await server.ssrLoadModule("/src/lib/battle/runTurn.ts");
+  const sw = await server.ssrLoadModule("/src/lib/battle/switching.ts");
+  const pts = (o = {}) => ({ hp: 0, atk: 0, def: 0, spa: 0, spd: 0, spe: 0, ...o });
+  const mon = (id, moves, ability = null, item = null, points = pts({ atk: 32, spe: 32, hp: 2 })) => ({
+    slot: { pokemonId: id, moves: [...moves, null, null, null, null].slice(0, 4), ability, item, nature: null, points },
+    moves: moves.map((m) => data.getMove(m)),
+  });
+  const battle = (A, B) => state.createBattleState({
+    a: { slots: A.map((m) => m.slot), movesList: A.map((m) => m.moves) },
+    b: { slots: B.map((m) => m.slot), movesList: B.map((m) => m.moves) },
+  });
+  const mv = (x) => ({ kind: "move", move: data.getMove(x) });
+  const SW = (i) => ({ kind: "switch", toIndex: i });
+  const rnd0 = () => 0;
+  const NOP = "잠꼬대"; // Splash 대용(깨어 있으면 실패 — 능력치·방어 효과 없음)
+  const SN = (ab, moves = [NOP], item = null) => mon("잠만보", moves, ab, item);
+  const BENCH = () => SN("두꺼운지방");
+  const stg = (f) => JSON.stringify(f.stages).replace(/"|:0,?/g, "").replace(/,}/g, "}");
+  const line = (st) => `p1 ${st.a.slot.pokemonId} hp=${st.a.currentHp}/${st.a.maxHp} st=${st.a.status?.condition ?? "-"} b=${stg(st.a)} | p2 ${st.b.slot.pokemonId} hp=${st.b.currentHp}/${st.b.maxHp} st=${st.b.status?.condition ?? "-"} b=${stg(st.b)}`;
+  // 한 턴. 일시정지(유턴 등 자체 교체·위기회피)는 pick(side)로 슬롯을 골라 이어간다.
+  function turn(st, ca, cb, rnd = rnd0, pick = () => 1) {
+    let o = rt.runTurn(st, ca, cb, rnd);
+    let guard = 0;
+    while (o.awaitingSelfSwitch && guard++ < 5) o = rt.resumeTurn(o._ctx, pick(o.awaitingSelfSwitch.side));
+    return o.nextState;
+  }
+  const run = (label, st, plan, pick) => {
+    console.log(`--- ${label}`);
+    plan.forEach((p, i) => {
+      if (p.apply) { st = p.apply(st); console.log(`   (T${i + 1} ${p.tag}) ${line(st)}`); return; }
+      st = turn(st, p[0], p[1], rnd0, pick); console.log(`   T${i + 1} ${p[0].kind === "move" ? p[0].move.name : "교체" + p[0].toIndex} / ${p[1].kind === "move" ? p[1].move.name : "교체" + p[1].toIndex} => ${line(st)}`);
+    });
+    return st;
+  };
+  const M = (a, b) => [mv(a), mv(b)];
+  const w = (st, a, b) => [a, b];
+
+  console.log("===== A. 가속 =====");
+  run("A1 일반 2턴", battle([SN("가속"), BENCH()], [SN("두꺼운지방"), BENCH()]), [M(NOP, NOP), M(NOP, NOP)]);
+  run("A2 자발적 교체로 나온 턴", battle([SN("두꺼운지방"), SN("가속")], [SN("두꺼운지방"), BENCH()]), [[SW(1), mv(NOP)], M(NOP, NOP)]);
+  run("A3 상대 드래곤테일로 끌려 나온 턴(강제 교체)", battle([SN("두꺼운지방"), SN("가속")], [SN("두꺼운지방", ["드래곤테일"]), BENCH()]), [M(NOP, "드래곤테일"), M(NOP, "드래곤테일")]);
+  run("A4 유턴으로 중간 교체(교체돼 들어온 쪽이 가속)", battle([SN("두꺼운지방", ["유턴"]), SN("가속")], [SN("두꺼운지방"), BENCH()]), [M("유턴", NOP), M(NOP, NOP)]);
+  {
+    let st = battle([SN("두꺼운지방"), SN("가속")], [SN("두꺼운지방", ["아이언헤드"]), BENCH()]); st.a.currentHp = 1;
+    run("A5 기절 후 교체 — 나온 턴 / 다음 턴", st, [M(NOP, "아이언헤드"), { tag: "기절 교체", apply: (s) => sw.applySwitch(s, "a", 1).nextState }, M(NOP, "아이언헤드")]);
+  }
+  run("A7 +6에서 한 턴 더", (() => { const s = battle([SN("가속"), BENCH()], [SN("두꺼운지방"), BENCH()]); s.a.stages = { ...s.a.stages, spe: 6 }; return s; })(), [M(NOP, NOP)]);
+
+  console.log("===== B. 변덕쟁이 =====");
+  function mulberry(seed) { let t = seed >>> 0; return () => { t += 0x6D2B79F5; let r = Math.imul(t ^ (t >>> 15), 1 | t); r ^= r + Math.imul(r ^ (r >>> 7), 61 | r); return ((r ^ (r >>> 14)) >>> 0) / 4294967296; }; }
+  function moodyDist(label, prep, seeds = 120) {
+    const tally = {};
+    for (let s = 1; s <= seeds; s++) {
+      const st = battle([SN("변덕쟁이"), BENCH()], [SN("두꺼운지방"), BENCH()]); prep?.(st.a);
+      const n = turn(st, mv(NOP), mv(NOP), mulberry(s * 7919));
+      const k = stg(n.a); tally[k] = (tally[k] || 0) + 1;
+    }
+    const top = Object.entries(tally).sort((x, y) => y[1] - x[1]);
+    console.log(`[${label}] 서로 다른 결과 ${top.length}가지 — ` + top.slice(0, 8).map(([k, v]) => `${k}×${v}`).join(" ") + (top.length > 8 ? " …" : ""));
+  }
+  moodyDist("B1 기본(전부 0)");
+  moodyDist("B2 atk·def·spa·spd = +6, spe = 0", (f) => { f.stages = { ...f.stages, atk: 6, def: 6, spa: 6, spd: 6 }; });
+  moodyDist("B3 전부 -6", (f) => { f.stages = { ...f.stages, atk: -6, def: -6, spa: -6, spd: -6, spe: -6 }; });
+  moodyDist("B4 spe = +6", (f) => { f.stages = { ...f.stages, spe: 6 }; });
+  moodyDist("B5 atk = -6", (f) => { f.stages = { ...f.stages, atk: -6 }; });
+  run("B6 자발적 교체로 나온 턴", battle([SN("두꺼운지방"), SN("변덕쟁이")], [SN("두꺼운지방"), BENCH()]), [[SW(1), mv(NOP)]]);
+
+  console.log("===== C. 오기·승기 =====");
+  const DEF = (ab) => SN(ab, [NOP, "대타출동"]);
+  for (const [ab, tag] of [["오기", "오기"], ["승기", "승기"]]) {
+    console.log(`--- ${tag}`);
+    run(`C1 ${tag}: 위협 — 배틀 시작`, battle([SN("위협"), BENCH()], [DEF(ab), BENCH()]), [M(NOP, NOP)]);
+    run(`C2 ${tag}: 위협 — 교체로 등장`, battle([SN("두꺼운지방"), SN("위협")], [DEF(ab), BENCH()]), [[SW(1), mv(NOP)]]);
+    for (const [id, m] of [["C3", "애교부리기"], ["C4", "겁나는얼굴"], ["C5", "얼어붙은바람"], ["C6", "간지르기"], ["C11", "달콤한향기"]]) {
+      run(`${id} ${tag}: ${m}`, battle([SN("두꺼운지방", [m]), BENCH()], [DEF(ab), BENCH()]), [M(m, NOP)]);
+    }
+    run(`C7 ${tag}: 보유자가 엄청난힘 사용(자기 하락)`, battle([SN("두꺼운지방"), BENCH()], [SN(ab, ["엄청난힘"]), BENCH()]), [M(NOP, "엄청난힘")]);
+    { const s = battle([SN("두꺼운지방", ["애교부리기"]), BENCH()], [DEF(ab), BENCH()]); s.b.stages = { ...s.b.stages, atk: -6 }; run(`C8 ${tag}: atk가 이미 -6에서 애교부리기`, s, [M("애교부리기", NOP)]); }
+    run(`C9 ${tag}: 대타 + 거짓울음(2턴)`, battle([SN("두꺼운지방", ["거짓울음"]), BENCH()], [DEF(ab), BENCH()]), [M("거짓울음", "대타출동"), M("거짓울음", NOP)]);
+    run(`C14 ${tag}: 보유자(공격자)가 아이언헤드로 미끈미끈 방어측을 때림(난수 0)`, battle([SN(ab, ["아이언헤드", NOP]), BENCH()], [SN("미끈미끈"), BENCH()]), [M("아이언헤드", NOP)]);
+    run(`C10 ${tag}: 끈적끈적네트 설치 후 교체 등장`, battle([SN("두꺼운지방", ["끈적끈적네트"]), BENCH()], [SN("두꺼운지방"), DEF(ab)]), [M("끈적끈적네트", NOP), [mv("끈적끈적네트"), SW(1)]]);
+    { const s = battle([SN("위협"), BENCH()], [DEF(ab), BENCH()]); const k = ab === "오기" ? "atk" : "spa"; s.b.stages = { ...s.b.stages, [k]: 6 }; run(`C12 ${tag}: 위협 + ${k} 이미 +6`, s, [M(NOP, NOP)]); }
+    { const s = battle([SN("두꺼운지방", ["얼어붙은바람"]), BENCH()], [DEF(ab), BENCH()]); s.b.currentHp = 1; run(`C13 ${tag}: HP 1 + 얼어붙은바람(기절)`, s, [M("얼어붙은바람", NOP)]); }
+  }
+
+  console.log("===== D. 싱크로 =====");
+  const SY = () => SN("싱크로", [NOP, "도깨비불", "맹독", "전기자석파"]);
+  const AT = (m, ab = "두꺼운지방") => SN(ab, [m, NOP]);
+  for (const [id, m] of [["D1", "도깨비불"], ["D2", "맹독"], ["D3", "독가루"], ["D4", "저리가루"]]) run(`${id} ${m}`, battle([AT(m), BENCH()], [SY(), BENCH()]), [M(m, NOP)]);
+  run("D5 수면가루 — 수면은 복사 안 함", battle([AT("수면가루"), BENCH()], [SN("싱크로", [NOP]), BENCH()]), [M("수면가루", NOP)]);
+  run("D6 불꽃 타입 공격자(리자몽) — 화상 면역", battle([mon("리자몽", ["도깨비불", NOP], "맹화"), BENCH()], [SY(), BENCH()]), [M("도깨비불", NOP)]);
+  run("D7 강철 타입 공격자(메타그로스) — 독 면역", battle([mon("메타그로스", ["맹독", NOP], "클리어바디"), BENCH()], [SY(), BENCH()]), [M("맹독", NOP)]);
+  run("D8 전기 타입 공격자(라이츄) — 마비 면역", battle([mon("라이츄", ["전기자석파", NOP], "정전기"), BENCH()], [SY(), BENCH()]), [M("전기자석파", NOP)]);
+  { const s = battle([AT("도깨비불"), BENCH()], [SY(), BENCH()]); s.a.status = { condition: "paralysis" }; console.log("--- D9 공격자 이미 마비 — 화상 복사 실패(난수 0.5)"); const n9 = turn(s, mv("도깨비불"), mv(NOP), () => 0.5); console.log("   => " + line(n9)); }
+  run("D10 둘 다 싱크로 — 도깨비불", battle([mon("잠만보", ["도깨비불", NOP], "싱크로"), BENCH()], [SY(), BENCH()]), [M("도깨비불", NOP)]);
+  run("D11 독압정 후 싱크로 보유자 교체 등장", battle([SN("두꺼운지방", ["독압정", NOP]), BENCH()], [SN("두꺼운지방"), SY()]), [M("독압정", NOP), [mv("독압정"), SW(1)]]);
+  for (const [id, ab] of [["D13", "정전기"], ["D14", "불꽃몸"], ["D15", "독가시"]]) run(`${id} 공격자 싱크로 vs 방어측 ${ab} (아이언헤드, 난수 0)`, battle([mon("잠만보", ["아이언헤드", NOP], "싱크로"), BENCH()], [SN(ab), BENCH()]), [M("아이언헤드", NOP)]);
+  run("D16 보유자가 도깨비불을 거는 쪽", battle([SN("두꺼운지방"), BENCH()], [mon("잠만보", ["도깨비불", NOP], "싱크로"), BENCH()]), [M(NOP, "도깨비불")]);
+  run("D17 공격자 편 신비의부적(Safeguard) — 화상 복사 차단", battle([SN("두꺼운지방", ["신비의부적", "도깨비불"]), BENCH()], [SY(), BENCH()]), [M("신비의부적", NOP), M("도깨비불", NOP)]);
+  run("D18 방어측 싱크로가 번개 2차효과 마비(난수 0) → 공격자도 마비?", battle([AT("번개"), BENCH()], [SN("싱크로", [NOP]), BENCH()]), [M("번개", NOP)]);
+  run("D19 공격자 독수 접촉(난수 0) → 방어측 싱크로 중독 → 공격자도 중독?", battle([mon("잠만보", ["아이언헤드", NOP], "독수"), BENCH()], [SN("싱크로", [NOP]), BENCH()]), [M("아이언헤드", NOP)]);
+
+  console.log("===== E. 젖은접시 =====");
+  function weather(label, A, B, prep, turns) {
+    const st0 = battle(A, B); prep?.(st0); let st = st0; const seq = [];
+    for (let t = 1; t <= turns; t++) { st = turn(st, mv(A[0].moves[0].name), mv(B[0].moves[0].name)); seq.push(`T${t}:${st.a.currentHp}${st.weather ? "(" + st.weather + ")" : ""}`); }
+    console.log(`--- ${label} (maxHp ${st0.a.maxHp})\n   ` + seq.join(" "));
+  }
+  const half = (s) => { s.a.currentHp = Math.floor(s.a.maxHp / 2); };
+  weather("E1 비바라기 5턴 사이클", [SN("젖은접시", [NOP])], [SN("두꺼운지방", ["비바라기"])], half, 7);
+  weather("E2 구름(날씨부정) 상대", [SN("젖은접시", [NOP])], [SN("날씨부정", ["비바라기"])], half, 3);
+  weather("E3 쾌청", [SN("젖은접시", [NOP])], [SN("두꺼운지방", ["쾌청"])], half, 3);
+  weather("E4 회복봉인", [SN("젖은접시", [NOP])], [SN("두꺼운지방", ["비바라기"])], (s) => { half(s); s.a.volatile = { active: { healBlock: { turnsRemaining: 5 } } }; }, 3);
+} finally {
+  await server.close();
+}
