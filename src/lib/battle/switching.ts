@@ -598,7 +598,7 @@ export function performSwitch(
   else state.b = side.party[toIndex];
   const incoming = side.party[toIndex];
 
-  // 가속 억제(§8): 자발적 교체로 나온 턴엔 가속이 발동하지 않는다. 강제 교체(voluntary=false)면 세우지 않음.
+  // switchedInThisTurn: "이번 턴 자발적 교체로 나왔다"는 AI 맞교체 판정용 표지(ai/levelOne.ts). 가속 억제는 모든 등장에 서는 enteredThisTurn이 맡는다(8.3 D3-fix-51).
   incoming.switchedInThisTurn = voluntary || undefined;
   incoming.enteredThisTurn = true;
   // 등장당 1회 판정(속이기·변환자재)은 새로 나온 포켓몬 기준으로 리셋한다.
@@ -715,7 +715,7 @@ interface ApplySwitchOutcome {
 
 /**
  * 무작위 예비 포켓몬으로 즉시 강제 교체한다(유저 선택 없음) — 레드카드(공격자·미래예지 사용자)·드래곤테일류(상대) 공통.
- * voluntary=false — 기절 후 강제 교체와 같은 취급(가속 발동, 등장 파이프라인은 그대로 탐).
+ * voluntary=false — 강제 교체라 AI 맞교체 표지(switchedInThisTurn)는 세우지 않는다. 가속은 enteredThisTurn으로 이 턴 끝에 억제된다.
  * 호출자가 살아 있는 예비가 있음을 보장한다. extra.endOfTurn=true면 턴 종료 시점의 교체(afterMove를 세우지 않는다 — 행동 기준 렌더러가 줄을 두 번 그리거나 턴 맨 앞에 놓지 않게).
  */
 export function forceRandomSwitch(
@@ -751,8 +751,8 @@ export function forceRandomSwitch(
  * 강제 교체(기절 후) 또는 UI 교체 확정을 적용한 새 상태를 돌려준다. runTurn 밖에서 호출하며
  * prevState는 변형하지 않는다. turnNumber는 그대로 둔다(교체는 턴을 소비하지 않는 별도 조작).
  *
- * opts.voluntary: 유턴·볼트체인지·배턴터치 같은 자체 교체면 true(가속 억제). 기절 후 강제 교체면
- *   생략(false) — 새로 나온 포켓몬의 가속이 정상 발동한다.
+ * opts.voluntary: 유턴·볼트체인지·배턴터치 같은 자체 교체면 true(AI 맞교체 표지를 세운다). 기절 후 강제
+ *   교체면 생략(false). 턴 사이 교체라 다음 `runTurn` 시작에 enteredThisTurn이 지워져 가속이 다음 턴 끝부터 발동한다.
  * opts.passBaton: 배턴터치면 true — 물러나는 포켓몬의 랭크·대타·일부 volatile을 인계한다.
  */
 export function applySwitch(

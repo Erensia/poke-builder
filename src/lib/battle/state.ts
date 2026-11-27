@@ -318,12 +318,12 @@ export interface BattleFighterState {
   choiceLockedMoveId?: string;
   consecutiveLockUntilTurn?: number;
   /**
-   * 이번 턴에 "자기 의지로" 교체해서 나왔으면 true(Phase 8 §8). 가속(Speed Boost)이 이 턴
-   * 종료에 발동하지 않게 막는 데 쓴다. runTurn이 매 턴 시작 시 지우고, 교체 선처리에서 자발적
-   * 교체에만 세운다 — 기절 후 강제 교체(applySwitch)로 나온 경우엔 세우지 않는다(가속 발동).
+   * 이번 턴에 "자기 의지로" 교체해서 나왔으면 true(Phase 8 §8). AI의 맞교체 판정(ai/levelOne.ts)용
+   * 표지다. runTurn이 매 턴 시작 시 지우고, 교체 선처리·유턴류에서 자발적 교체에만 세운다 —
+   * 강제 교체·기절 후 교체에는 세우지 않는다. 가속 억제는 이 표지가 아니라 enteredThisTurn이 맡는다(8.3 D3-fix-51).
    */
   switchedInThisTurn?: boolean;
-  /** 이번 턴 교체(자발·강제 무관)로 나왔는가 — 잠복(ver.1.9 A5) 판정. 턴 시작에 지운다 */
+  /** 이번 턴 도중 등장했는가(자발·강제·기절 대체 무관) — Showdown `activeTurns === 0`과 같은 뜻. 소비처: 잠복(ver.1.9 A5, preHitEffects)·도발 지속 보정(mirroredEffects)·가속 억제(finishTurn). 턴 시작에 지운다 */
   enteredThisTurn?: boolean;
   /** 되새김질(ver.1.9 A5): 다시 먹을 나무열매와 남은 턴 끝 수(먹은 턴 끝 1 → 다음 턴 끝 0에 먹음) */
   cudChewBerryId?: string;

@@ -121,8 +121,8 @@ export function runTurn(
   actionB = forcedLockedAction(state.b) ?? actionB;
   refreshUproar(state);
 
-  // 가속 억제 플래그(§8)는 "이번 턴에 자발적 교체로 나왔나"라 매 턴 시작 시 전 슬롯에서 지운다.
-  // 아래 교체 선처리에서 자발적 교체한 슬롯에만 다시 세워지고, 그 턴 EOT 가속 판정이 이걸 읽는다.
+  // 등장 표지는 매 턴 시작 시 전 슬롯에서 지운다. enteredThisTurn(모든 등장 — 그 턴 EOT 가속·잠복·도발 보정이 읽는다)과
+  // switchedInThisTurn(자발 교체 — AI 맞교체 판정용)은 아래 교체 선처리·performSwitch가 다시 세운다.
   for (const s of [state.sideA, state.sideB]) {
     for (const f of s.party) {
       f.switchedInThisTurn = undefined;
@@ -644,7 +644,7 @@ function performChoice(ctx: RunTurnContext, pivot: PendingChoice, toIndex: numbe
   const outgoing = side.party[fromIndex];
   const entryMessages: string[] = [];
   const hazards = performSwitch(ctx.state, pivot.side, toIndex, entryMessages, {
-    // 기절 후 대체는 강제 교체와 같은 취급 — 가속 발동(억제 플래그 안 세움)
+    // 기절 후 대체는 강제 교체와 같은 취급 — AI 맞교체 표지는 안 세운다(가속은 이 턴 끝에 enteredThisTurn으로 억제됨)
     voluntary: !pivot.faintReplacement,
     passBaton: pivot.passBaton,
     passSubstituteOnly: pivot.passSubstitute,
