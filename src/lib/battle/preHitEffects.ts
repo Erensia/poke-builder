@@ -154,6 +154,27 @@ function setupAbilityBindings(c: PreHitCtx) {
   c.defenderItemIdBeforeAction = c.defender.currentItemId;
 }
 
+/**
+ * 프레셔 추가 차감량 — 상대 편 프레셔가 이 기술을 겨냥하면 `extraPpCostWhenTargeted`, 아니면 0(8.3 D3-fix-50 E8-32).
+ * 면제: `pressureExempt`(자기·자기편 진영·아군 대상 76종). 저주는 사용자 타입에 따라 대상이 바뀐다 — 비고스트면 자기 대상이라 면제(Showdown `curse.onModifyMove`,
+ * 판정은 mirroredEffects 저주 분기와 같은 `types.includes("고스트")`, 변환자재보다 앞이라 ModifyMove 시점과 같다). 틀깨기는 프레셔를 무시하지 못한다(무시 목록에 없음).
+ */
+function pressureExtraPp(c: PreHitCtx, targetMove: Move): number {
+  const cost = c.defenderAbility?.extraPpCostWhenTargeted;
+  if (!cost || targetMove.pressureExempt) return 0;
+  if (targetMove.setsCurse && !c.attacker.types.includes("고스트")) return 0;
+  return cost;
+}
+
+/** 프레셔 추가분을 `slotMoveId`(실제로 PP를 쓰는 슬롯)에서 뺀다. 판정 대상 기술(targetMove)과 슬롯이 다를 수 있다(잠꼬대·흉내쟁이 = 호출된 기술 기준, 호출한 슬롯에서 차감). */
+function payPressure(c: PreHitCtx, slotMoveId: string, targetMove: Move) {
+  const extra = pressureExtraPp(c, targetMove);
+  const before = c.attacker.remainingPp[slotMoveId];
+  if (!extra || before === undefined) return;
+  c.attacker.remainingPp[slotMoveId] = Math.max(0, before - extra);
+  if (c.attacker.remainingPp[slotMoveId] !== before) c.pressureExtraPpAbilityName = c.defenderAbility!.name;
+}
+
 /** PP 소모(난동·반동 턴 예외)와 프레셔 */
 function payMovePp(c: PreHitCtx) {
 
@@ -185,15 +206,9 @@ function payMovePp(c: PreHitCtx) {
     }
   }
 
-  // 프레셔: 상대(defender)가 이 특성이면, 자신을 향한 기술이든 자기 자신에게 쓰는 변화기든
-  // 가리지 않고(본가 규칙 — 프레셔는 "이 포켓몬이 필드에 있는 동안 상대가 쓰는 모든 기술"에
-  // 적용된다) PP를 추가로 더 소모시킨다. 과사열매 재판정 없이 단순 차감만 한다.
-
-  if (c.defenderAbility?.extraPpCostWhenTargeted && !c.releasingCharge && !continuingRampage && !c.recharging && c.attacker.remainingPp[c.move.id] !== undefined) {
-    const before = c.attacker.remainingPp[c.move.id];
-    c.attacker.remainingPp[c.move.id] = Math.max(0, before - c.defenderAbility.extraPpCostWhenTargeted);
-    if (c.attacker.remainingPp[c.move.id] !== before) c.pressureExtraPpAbilityName = c.defenderAbility.name;
-  }
+  // 프레셔: 상대(defender)가 이 특성이면 이 기술이 상대를 겨냥할 때 PP를 1 더 깎는다(Showdown `pressureTargets` — 자기·자기편 진영·아군 대상은 0).
+  // 판정은 pressureExtraPp(면제 표시·저주 규칙). 과사열매 재판정 없이 단순 차감만 한다. 호출 계열(잠꼬대·흉내쟁이)은 호출된 기술 기준이라 아래에서 따로 차감한다.
+  if (!c.releasingCharge && !continuingRampage && !c.recharging) payPressure(c, c.move.id, c.move);
 
   c.blocked = (
     reason: ActionBlockReason,
@@ -577,6 +592,7 @@ function handleChargeAndCopyMoves(c: PreHitCtx) {
     }
     const chosen = candidates[Math.floor(c.random() * candidates.length)];
     c.sleepTalkCalledMoveName = chosen.name;
+    payPressure(c, c.move.id, chosen); // 프레셔는 호출된 기술의 대상으로 판정하고 잠꼬대 슬롯에서 뺀다(8.3 D3-fix-50)
     c.move = chosen;
   }
 
@@ -588,6 +604,7 @@ function handleChargeAndCopyMoves(c: PreHitCtx) {
     const copied = c.state.lastMoveUsedId ? getMove(c.state.lastMoveUsedId) : undefined;
     if (!copied || !isCopyableMove(copied)) return { value: c.blocked("usageCondition") };
     c.copycatCalledMoveName = copied.name;
+    payPressure(c, c.move.id, copied); // 프레셔는 호출된 기술의 대상으로 판정하고 흉내쟁이 슬롯에서 뺀다(8.3 D3-fix-50)
     c.move = copied;
   }
 
