@@ -4,7 +4,7 @@ import { type WeatherKind } from "@/types/weather";
 import { type FieldKind } from "@/types/field";
 import { type PokemonType } from "@/types/pokemon-type";
 import { type PokemonGender, type StanceChangeForms } from "@/types/pokemon";
-import { type FighterKey, type HazardKind, type HazardState } from "@/types/battle";
+import { type DropReactionRise, type FighterKey, type HazardKind, type HazardState } from "@/types/battle";
 import { BATTLE_STAT_KEYS, NEUTRAL_ACCURACY_STAGES, NEUTRAL_CRIT_STAGE, NEUTRAL_STAGES, type AccuracyEvasionStages, type BattleStatKey, type CritStage, type StatStages } from "@/types/battleStats";
 import { NO_STATUS_CONDITION, NO_VOLATILE_CONDITIONS, type StatusCondition, type StatusConditionState, type VolatileConditionState } from "@/types/status";
 import { type Ability } from "@/types/ability";
@@ -13,7 +13,7 @@ import { eulReul, eunNeun, roEuro } from "@/lib/josa";
 import { findMegaFormByStone, getEffectiveForm, getEffectiveGender } from "@/lib/pokemonForm";
 import { computeRealStats } from "@/lib/statCalculator";
 import { computeSpeedWithEffects } from "@/lib/speedStat";
-import { applyStageDelta } from "@/lib/statStages";
+import { applyStageDelta, clampStagesToNonNegative } from "@/lib/statStages";
 import { CONFUSION_SELF_HIT_POWER, hasVolatile } from "@/lib/volatileConditions";
 import { getEffectiveness } from "@/lib/typeEffectiveness";
 import { FIELD_DURATION, FIELD_ENTRY_ANNOUNCEMENT } from "@/lib/fieldEffects";
@@ -523,14 +523,31 @@ export function countLoweredStats(before: StatStages, after: StatStages, accBefo
 
 /**
  * 오기·승기(boostsStatOnOwnStatDrop): **상대가 낸** 능력치 하락 `lowered`건마다 지정 랭크가 오른다(Showdown `!source || target.isAlly(source)`면 무발동 — 자기 기술의 반동·껍질깨기는
- * 세지 않고, 호출하는 쪽이 상대발 하락만 센다). 기절한 보유자는 발동하지 않는다. 돌려주는 값: 랭크가 실제로 올랐는가(문구가 필요한 호출처용).
+ * 세지 않고, 호출하는 쪽이 상대발 하락만 센다). 기절한 보유자는 발동하지 않는다. 돌려주는 값: 발동마다 실제로 오른 랭크(이미 상한이면 0 — 문구용, 8.3 D3-fix-57 R2·R3).
  */
-export function applyOwnStatDropReaction(fighter: BattleFighterState, ability: Ability | undefined, lowered: number): boolean {
+export function applyOwnStatDropReaction(fighter: BattleFighterState, ability: Ability | undefined, lowered: number): number[] {
   const boost = ability?.boostsStatOnOwnStatDrop;
-  if (!boost || lowered <= 0 || isFainted(fighter)) return false;
-  const before = fighter.stages[boost.stat];
-  for (let i = 0; i < lowered; i++) fighter.stages = applyStageDelta(fighter.stages, boost.stat, boost.delta);
-  return fighter.stages[boost.stat] !== before;
+  const rises: number[] = [];
+  if (!boost || lowered <= 0 || isFainted(fighter)) return rises;
+  for (let i = 0; i < lowered; i++) {
+    const before = fighter.stages[boost.stat];
+    fighter.stages = applyStageDelta(fighter.stages, boost.stat, boost.delta);
+    rises.push(fighter.stages[boost.stat] - before);
+  }
+  return rises;
+}
+
+/** applyOwnStatDropReaction + 로그용 기록(쪽·능력치 포함). 발동이 없으면 빈 배열 */
+export function ownStatDropRises(state: BattleState, fighter: BattleFighterState, ability: Ability | undefined, lowered: number): DropReactionRise[] {
+  const stat = ability?.boostsStatOnOwnStatDrop?.stat;
+  const side: FighterKey = state.a === fighter ? "a" : "b";
+  return stat ? applyOwnStatDropReaction(fighter, ability, lowered).map((delta) => ({ side, stat, delta })) : [];
+}
+
+/** 하양허브·내던지기용: 마이너스 랭크(5종 + 명중·회피)만 0으로 되돌린다 — Showdown은 boosts 7종을 돈다(8.3 D3-fix-57 E8-47) */
+export function clearNegativeStages(fighter: BattleFighterState): void {
+  fighter.stages = clampStagesToNonNegative(fighter.stages);
+  fighter.accuracyStages = { accuracy: Math.max(0, fighter.accuracyStages.accuracy), evasion: Math.max(0, fighter.accuracyStages.evasion) };
 }
 
 /** 주 상태이상 6종 — 플라워베일 등 "상태이상 전부 면역"을 표현할 때 쓴다 */

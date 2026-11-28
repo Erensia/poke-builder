@@ -13,8 +13,8 @@ import { rivalryDamageMultiplier } from "@/lib/battlePower";
 import { resolveMoveContext } from "@/lib/moveContext";
 import { computeFieldEndOfTurnHeal } from "@/lib/fieldEffects";
 import { calmRampageIfAsleep } from "./rampage";
-import { getHpThresholdBerryHeal, healWithBigRoot } from "@/lib/itemEffects";
-import { NO_STATUS_SELF_CURE_ABILITY_NAMES, SANDSTORM_IMMUNE_ABILITY_NAMES, abilityOf, activeWeather, applyForecastForm, consumeItem, contraryDelta, hasLivingReserve, isFainted, isForcedSwitchBlocked, isSideWiped, opponentKey, sideOf, statDropBlockStatsOf, type BattleFighterState, type BattleState, applyOwnStatDropReaction, countLoweredStats } from "./state";
+import { getHpThresholdBerryHeal, healWithBigRoot, shouldTriggerWhiteHerb } from "@/lib/itemEffects";
+import { NO_STATUS_SELF_CURE_ABILITY_NAMES, SANDSTORM_IMMUNE_ABILITY_NAMES, abilityOf, activeWeather, applyForecastForm, consumeItem, contraryDelta, hasLivingReserve, isFainted, isForcedSwitchBlocked, isSideWiped, opponentKey, sideOf, statDropBlockStatsOf, type BattleFighterState, type BattleState, clearNegativeStages, countLoweredStats, ownStatDropRises } from "./state";
 import { statusBlockReason } from "./statusBlock";
 import { type RunTurnContext, type RunTurnOutcome } from "./runTurn";
 import { actionFailed } from "./moveFailure";
@@ -424,7 +424,7 @@ function applySaltCureDamage(ctx: EndOfTurnFighterContext): void {
  * 존중). 3턴 카운터로 소모되고 0에서 자동 해제된다.
  */
 function applySyrupCoatDrop(ctx: EndOfTurnFighterContext): void {
-  const { key, fighter, fighterAbility, endOfTurn } = ctx;
+  const { state, key, fighter, fighterAbility, endOfTurn } = ctx;
   if (!hasVolatile(fighter.volatile, "syrupCoat") || isFainted(fighter)) return;
   const before = fighter.stages.spe;
   const stagesBefore = fighter.stages;
@@ -432,10 +432,10 @@ function applySyrupCoatDrop(ctx: EndOfTurnFighterContext): void {
   if (!statDropBlockStatsOf(fighter, fighterAbility)?.includes("spe")) {
     fighter.stages = applyStageDelta(fighter.stages, "spe", contraryDelta(fighter, -1));
   }
-  // 오기·승기(8.3 D3-fix-52): 턴 끝 지속 하락도 상대가 낸 하락이다(Showdown `boost(…, source)`) — 랭크만 올리고 문구는 내지 않는다(기술 경로도 문구가 없어 일관, E8-48 별도).
-  applyOwnStatDropReaction(fighter, fighterAbility, countLoweredStats(stagesBefore, fighter.stages));
+  // 오기·승기(8.3 D3-fix-52): 턴 끝 지속 하락도 상대가 낸 하락이다(Showdown `boost(…, source)`) — 문구는 항목의 dropReactionRises로(8.3 D3-fix-57 E8-48).
+  const rises = ownStatDropRises(state, fighter, fighterAbility, countLoweredStats(stagesBefore, fighter.stages));
   if (fighter.stages.spe !== before) {
-    endOfTurn.push({ actor: key, damage: 0, remainingHp: fighter.currentHp, fainted: false, syrupCoatDrop: true });
+    endOfTurn.push({ actor: key, damage: 0, remainingHp: fighter.currentHp, fainted: false, syrupCoatDrop: true, dropReactionRises: rises.length ? rises : undefined });
   }
   fighter.volatile = consumeVolatileTurn(fighter.volatile, "syrupCoat");
 }
@@ -446,7 +446,7 @@ function applySyrupCoatDrop(ctx: EndOfTurnFighterContext): void {
  * (performSwitch). syrupCoat와 달리 소모 호출 없음.
  */
 function applyOctolockDrop(ctx: EndOfTurnFighterContext): void {
-  const { key, fighter, fighterAbility, endOfTurn } = ctx;
+  const { state, key, fighter, fighterAbility, endOfTurn } = ctx;
   // 문어굳히기를 건 쪽이 쓰러졌으면 발동하지 않는다(교대 시 풀림 — switching.ts)
   if (!hasVolatile(fighter.volatile, "octolock") || isFainted(fighter) || ctx.opponentFainted) return;
   const blockedStats = statDropBlockStatsOf(fighter, fighterAbility);
@@ -458,10 +458,10 @@ function applyOctolockDrop(ctx: EndOfTurnFighterContext): void {
     fighter.stages = applyStageDelta(fighter.stages, stat, contraryDelta(fighter, -1));
     if (fighter.stages[stat] !== before) octolockDropped = true;
   }
-  // 오기·승기(8.3 D3-fix-52): 능력치마다 1회 — 방어·특수방어가 둘 다 내려가면 2회(문구는 내지 않음, 위 시럽봄과 같다)
-  applyOwnStatDropReaction(fighter, fighterAbility, countLoweredStats(stagesBefore, fighter.stages));
+  // 오기·승기(8.3 D3-fix-52): 능력치마다 1회 — 방어·특수방어가 둘 다 내려가면 2회(문구는 항목의 dropReactionRises)
+  const rises = ownStatDropRises(state, fighter, fighterAbility, countLoweredStats(stagesBefore, fighter.stages));
   if (octolockDropped) {
-    endOfTurn.push({ actor: key, damage: 0, remainingHp: fighter.currentHp, fainted: false, octolockDrop: true });
+    endOfTurn.push({ actor: key, damage: 0, remainingHp: fighter.currentHp, fainted: false, octolockDrop: true, dropReactionRises: rises.length ? rises : undefined });
   }
 }
 
@@ -679,6 +679,15 @@ function applySpeedBoostAbility(ctx: EndOfTurnFighterContext): void {
     speedBoostAbilityName: fighterAbility.name,
     speedBoostAtCap: fighter.stages.spe === speBefore || undefined,
   });
+}
+
+/** 하양허브(Showdown onResidual order 29): 턴 끝 지속 하락(시럽봄·문어굳히기, order 14)도 같은 턴 끝에 복원한다(8.3 D3-fix-57 R1) */
+function applyWhiteHerbRestore(ctx: EndOfTurnFighterContext): void {
+  const { key, fighter, fighterItem, endOfTurn } = ctx;
+  if (isFainted(fighter) || !shouldTriggerWhiteHerb(fighterItem, fighter.stages, fighter.accuracyStages, fighter.itemConsumed ?? false)) return;
+  clearNegativeStages(fighter);
+  consumeItem(fighter);
+  endOfTurn.push({ actor: key, damage: 0, remainingHp: fighter.currentHp, fainted: false, whiteHerbItemName: fighterItem!.name });
 }
 
 /** 꼬르륵스위치(모르페코): 매 턴 종료 시 배부른모양↔배고픈모양 토글(오라휠 타입에만 영향). */
@@ -948,6 +957,7 @@ const EOT_HANDLERS: readonly EotHandler[] = [
   { order: 28, sub: 2, run: applyHarvestRestore },
   { order: 28, sub: 2, run: applyCudChew },
   { order: 29, run: applyHungerSwitchToggle },
+  { order: 29, sub: 1, run: applyWhiteHerbRestore },
   { order: 30, run: applyBerryHpThresholdHeal },
 ];
 

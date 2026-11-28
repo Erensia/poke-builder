@@ -1,9 +1,9 @@
 import type { FighterKey, TurnResult } from "../../types/battle";
 import type { EndOfTurnLogEntry } from "../../types/battle";
 import { STAT_LABELS } from "../../lib/statLabels";
-import { eunNeun, iGa, eulReul } from "../../lib/josa";
+import { eunNeun, iGa, eulReul, roEuro } from "../../lib/josa";
 import { VOLATILE_LABELS, SCREEN_LABELS } from "../../lib/battleLogLabels";
-import { SIDE_NAME, STATUS_ONSET_TEXT, STATUS_TRIGGER_TEXT, STATUS_CURE_TEXT } from "../../lib/battleLogText";
+import { SIDE_NAME, dropReactionText, STATUS_ONSET_TEXT, STATUS_TRIGGER_TEXT, STATUS_CURE_TEXT } from "../../lib/battleLogText";
 
 /** 마이페이스·둔감이 턴 끝에 푼 행동방해(ver.2.0 틀깨기 목록 수정) */
 const ABILITY_CURED_VOLATILE_TEXT: Record<"confusion" | "attract" | "taunt", string> = {
@@ -25,6 +25,8 @@ export function EndOfTurnLine({
   entry: EndOfTurnLogEntry;
   turnName: (key: FighterKey) => string;
 }) {
+  // 오기·승기: 턴 끝 지속 하락에 반응해 오른 랭크(8.3 D3-fix-57 E8-48)
+  const dropReactionLine = (x: EndOfTurnLogEntry) => x.dropReactionRises?.map((r) => " " + dropReactionText(turnName(r.side), r.stat, r.delta)).join("") ?? "";
   return (
     <div className="battle-turn-line is-muted">
       {e.cudChewBerryName ? (
@@ -133,13 +135,13 @@ export function EndOfTurnLine({
         <>
           {turnName(e.actor)}
           {eunNeun(turnName(e.actor))} 물엿범벅이 되어 스피드가 떨어졌다! (남은 HP{" "}
-          {e.remainingHp})
+          {e.remainingHp}){dropReactionLine(e)}
         </>
       ) : e.octolockDrop ? (
         <>
           {turnName(e.actor)}
           {eunNeun(turnName(e.actor))} 문어굳히기 때문에 방어와 특수방어가 떨어졌다! (남은 HP{" "}
-          {e.remainingHp})
+          {e.remainingHp}){dropReactionLine(e)}
         </>
       ) : e.perishFainted ? (
         <>
@@ -163,6 +165,11 @@ export function EndOfTurnLine({
           {STATUS_TRIGGER_TEXT[e.statusCondition](turnName(e.actor))} (남은 HP{" "}
           {e.remainingHp})
           {e.fainted && " · 기절!"}
+        </>
+      ) : e.whiteHerbItemName ? (
+        <>
+          {turnName(e.actor)}의 {e.whiteHerbItemName}
+          {roEuro(e.whiteHerbItemName)} 능력치를 원래대로 되돌렸다!
         </>
       ) : e.speedBoostAbilityName ? (
         <>

@@ -1,6 +1,6 @@
 import { type Move } from "@/types/move";
 import { type FieldKind } from "@/types/field";
-import { type ActionLogEntry, type FighterKey, type ItemEffectLog, type SpinCleared } from "@/types/battle";
+import { type ActionLogEntry, type DropReactionRise, type FighterKey, type ItemEffectLog, type SpinCleared } from "@/types/battle";
 import { BATTLE_STAT_KEYS } from "@/types/battleStats";
 import { getAbility, getItem, getMove } from "@/lib/data";
 import { effectiveHeldItem } from "./turnOrderInputs";
@@ -163,6 +163,7 @@ interface ActionCtx {
   selfStatDrops: { stat: BattleStatKey | AccuracyEvasionKey; delta: number; }[];
   reflectedStatDropAbilityName: string | undefined;
   reflectedStatDrops: { stat: BattleStatKey; delta: number; }[];
+  dropReactionRises: DropReactionRise[];
   restoredStatsSelfItemName: string | undefined;
   restoredStatsOpponentItemName: string | undefined;
   opportunistCopiedStats: { stat: BattleStatKey; delta: number; }[] | undefined;
@@ -308,6 +309,7 @@ function resolveMirroredPhase(c: ActionCtx) {
   c.selfStatDrops = mirrorResult.selfStatDrops;
   c.reflectedStatDropAbilityName = mirrorResult.reflectedStatDropAbilityName;
   c.reflectedStatDrops = mirrorResult.reflectedStatDrops;
+  c.dropReactionRises = mirrorResult.dropReactionRises;
   c.restoredStatsSelfItemName = mirrorResult.restoredStatsSelfItemName;
   c.restoredStatsOpponentItemName = mirrorResult.restoredStatsOpponentItemName;
   c.opportunistCopiedStats = mirrorResult.opportunistCopiedStats;
@@ -809,6 +811,7 @@ function collectResult(c: ActionCtx) {
     recoilDamage: c.recoilDamage,
     enduredItemName: c.enduredItemName,
     enduredAbilityName: c.enduredAbilityName,
+    dropReactionRises: c.dropReactionRises.length > 0 ? c.dropReactionRises : undefined,
     restoredStatsSelfItemName: c.restoredStatsSelfItemName,
     restoredStatsOpponentItemName: c.restoredStatsOpponentItemName,
     hitCount: c.hitCount,
