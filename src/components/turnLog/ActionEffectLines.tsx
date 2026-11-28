@@ -914,7 +914,7 @@ export function ActionEffectLines({
       )}
       {/* 랭크업 기술 결과 — "OO의 공격이 크게 올라갔다!". 같은 폭으로 오른 스탯은 쉼표로
           묶어 한 줄로 낸다(Phase 6.5 §6-2 ⑥⑦, §6-3). */}
-      {!action.blockedReason &&
+      {(!action.blockedReason || action.blockedReason === "usageCondition") &&
         action.selfStatRises &&
         action.selfStatRises.length > 0 &&
         (() => {
