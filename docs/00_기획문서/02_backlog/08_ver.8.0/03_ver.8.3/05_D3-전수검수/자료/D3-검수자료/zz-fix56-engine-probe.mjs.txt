@@ -1,0 +1,40 @@
+// fix-56 검수 엔진 프로브: 교체 직후 스텔스록으로 a 활성이 쓰러진 턴에 b가 기술 사용. 인자: poke-builder 경로
+const { createServer } = await import(process.argv[2] + "/node_modules/vite/dist/node/index.js");
+const server = await createServer({ root: process.argv[2], server: { middlewareMode: true, hmr: false }, appType: "custom", logLevel: "error" });
+try {
+  const data = await server.ssrLoadModule("/src/lib/data.ts");
+  const S = await server.ssrLoadModule("/src/lib/battle/state.ts");
+  const rt = await server.ssrLoadModule("/src/lib/battle/runTurn.ts");
+  const sw = await server.ssrLoadModule("/src/lib/battle/switching.ts");
+  const pts = { hp: 2, atk: 32, def: 0, spa: 0, spd: 0, spe: 32 };
+  const mon = (id, moves, ability = "두꺼운지방", item = null) => ({ slot: { pokemonId: id, moves: [...moves, null, null, null, null].slice(0, 4), ability, item, nature: null, points: pts }, moves: moves.map((m) => data.getMove(m)) });
+  const battle = (A, B) => S.createBattleState({ a: { slots: A.map((m) => m.slot), movesList: A.map((m) => m.moves) }, b: { slots: B.map((m) => m.slot), movesList: B.map((m) => m.moves) } });
+  const mv = (x) => ({ kind: "move", move: data.getMove(x) });
+  const vol = (f) => JSON.stringify(Object.keys(f.volatile?.active ?? {}));
+  const cases = [
+    ["a1 고스트 저주", "팬텀", "저주"], ["a2 비고스트 저주", "잠만보", "저주"], ["b 록온", "잠만보", "록온"], ["c 문어굳히기", "잠만보", "문어굳히기"],
+    ["d 미래예지", "잠만보", "미래예지"], ["e 대폭발", "잠만보", "대폭발"], ["e 자폭", "잠만보", "자폭"], ["e 미스트버스트", "잠만보", "미스트버스트"],
+    ["g 솔라빔", "잠만보", "솔라빔"], ["g 메테오빔", "잠만보", "메테오빔"], ["g 일렉트로빔", "잠만보", "일렉트로빔"], ["g 공중날기", "잠만보", "공중날기"], ["g 고스트다이브", "잠만보", "고스트다이브"],
+    ["s 잠꼬대→누르기", "잠만보", "잠꼬대", "누르기"], ["s 잠꼬대→대폭발", "잠만보", "잠꼬대", "대폭발"], ["h 습기 사용자 대폭발", "잠만보", "대폭발", "방어", "습기"], ["h 습기 쓰러진 대상", "잠만보", "대폭발", "방어", "두꺼운지방", "습기"],
+    ["r 칼춤", "잠만보", "칼춤"], ["r 압정뿌리기", "잠만보", "압정뿌리기"], ["r 누르기", "잠만보", "누르기"], ["r 철제광선", "잠만보", "철제광선"],
+  ];
+  for (const last of [false, true]) for (const [title, sp, move, second = "방어", abl = "두꺼운지방", spareAbl = "두꺼운지방"] of cases) {
+    if (last && !title.startsWith("e")) continue;
+    try {
+      const B = last ? [mon(sp, [move, second], abl)] : [mon(sp, [move, second], abl), mon("잠만보", ["누르기"])];
+      let st = battle([mon("잠만보", ["누르기"]), mon("잠만보", ["누르기"], spareAbl), mon("잠만보", ["누르기"])], B);
+      if (title.startsWith("s")) st.sideB.party[0].status = { condition: "sleep", turnsElapsed: 0, sleepTurns: 3 };
+      st.sideA.hazards = { ...st.sideA.hazards, stealthRock: true };
+      st.sideA.party[1].currentHp = 1;
+      const hp0 = st.sideB.party[0].currentHp;
+      let o = rt.runTurn(st, { kind: "switch", toIndex: 1 }, mv(move), () => 0.5);
+      const n = o.nextState, act = o.result.actions.find((x) => x.actor === "b"), b0 = n.sideB.party[0];
+      console.log(`${title}${last ? " (b 마지막)" : ""}: blocked=${act?.blockedReason ?? "-"}${act?.sleepTalkCalledMoveName ? " called=" + act.sleepTalkCalledMoveName : ""} dmg=${act?.damage} hit=${act?.hit} selfFainted=${act?.selfFainted} | b0 HP ${hp0}→${b0.currentHp} vol=${vol(b0)} charging=${b0.chargingMoveId ?? "-"} stages=${JSON.stringify(b0.statStages ?? b0.stages ?? {})} | futureSight=${JSON.stringify(n.sideA.futureSight ? { t: n.sideA.futureSight.turnsRemaining, src: n.sideA.futureSight.sourceIndex } : null)} | forced=${JSON.stringify(o.forcedSwitch ?? null)} winner=${o.result.winner ?? "-"}`);
+      if (title.startsWith("d") && !act?.blockedReason) {
+        // 2턴 진행해서 대체(party[2])가 맞는지
+        let s2 = o.forcedSwitch?.a ? sw.applySwitch(n, "a", 2).nextState : n;
+        for (let t = 0; t < 2; t++) { const o2 = rt.runTurn(s2, mv("누르기"), mv("방어"), () => 0.5); s2 = o2.nextState; const e = (o2.result.endOfTurn ?? []).find((x) => x.futureSightMoveName); console.log(`   +${t + 1}턴: a활성=${s2.sideA.activeIndex} HP ${s2.a.currentHp}/${s2.a.maxHp} futureSight=${JSON.stringify(s2.sideA.futureSight ? s2.sideA.futureSight.turnsRemaining : null)} 착탄로그=${e ? e.damage : "-"}`); }
+      }
+    } catch (e) { console.log(title, "예외", e.message); }
+  }
+} finally { await server.close(); }

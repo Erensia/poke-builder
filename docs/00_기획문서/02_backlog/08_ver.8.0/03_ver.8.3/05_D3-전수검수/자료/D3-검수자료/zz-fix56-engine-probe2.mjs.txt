@@ -1,0 +1,23 @@
+// fix-56 검수 엔진 프로브 2: 잠꼬대·흉내쟁이로 호출된 공격이 쓰러진 대상에 닿는가(자신과잉 오발동 확인). 인자: poke-builder 경로
+const { createServer } = await import(process.argv[2] + "/node_modules/vite/dist/node/index.js");
+const server = await createServer({ root: process.argv[2], server: { middlewareMode: true, hmr: false }, appType: "custom", logLevel: "error" });
+try {
+  const data = await server.ssrLoadModule("/src/lib/data.ts");
+  const S = await server.ssrLoadModule("/src/lib/battle/state.ts");
+  const rt = await server.ssrLoadModule("/src/lib/battle/runTurn.ts");
+  const pts = { hp: 2, atk: 32, def: 0, spa: 0, spd: 0, spe: 32 };
+  const mon = (id, moves, ability = "두꺼운지방", item = null) => ({ slot: { pokemonId: id, moves: [...moves, null, null, null, null].slice(0, 4), ability, item, nature: null, points: pts }, moves: moves.map((m) => data.getMove(m)) });
+  const battle = (A, B) => S.createBattleState({ a: { slots: A.map((m) => m.slot), movesList: A.map((m) => m.moves) }, b: { slots: B.map((m) => m.slot), movesList: B.map((m) => m.moves) } });
+  const mv = (x) => ({ kind: "move", move: data.getMove(x) });
+  for (const [called, abl, item] of [["누르기", "자신과잉", null], ["기가드레인", "두꺼운지방", null], ["이판사판태클", "두꺼운지방", null], ["누르기", "두꺼운지방", "생명의구슬"]]) {
+    let st = battle([mon("잠만보", ["누르기"]), mon("잠만보", ["누르기"], "까칠한피부"), mon("잠만보", ["누르기"])], [mon("잠만보", ["잠꼬대", called], abl, item), mon("잠만보", ["누르기"])]);
+    st.sideA.hazards = { ...st.sideA.hazards, stealthRock: true };
+    st.sideA.party[1].currentHp = 1;
+    st.sideB.party[0].status = { condition: "sleep", turnsElapsed: 0, sleepTurns: 3 };
+    st.sideB.party[0].currentHp = 150;
+    const o = rt.runTurn(st, { kind: "switch", toIndex: 1 }, mv("잠꼬대"), () => 0.5);
+    const act = o.result.actions.find((x) => x.actor === "b"), b0 = o.nextState.sideB.party[0];
+    const { move, defenderPokemonId, actorPokemonId, ...rest } = act;
+    console.log(`잠꼬대→${called} [${abl}/${item ?? "-"}]: b0 HP 150→${b0.currentHp} atk=${b0.stages.atk} | ${JSON.stringify(Object.fromEntries(Object.entries(rest).filter(([, v]) => v !== undefined && v !== false && v !== 0)))}`);
+  }
+} finally { await server.close(); }
