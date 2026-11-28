@@ -255,6 +255,21 @@ function applyStanceChange(c: PreHitCtx, move: Move) {
   c.stanceChange = { to: nextForm };
 }
 
+/**
+ * "대상 없음"(먼저 움직인 상대가 이번 턴 반동·교체 직후 설치물로 이미 쓰러짐) 판정 — 8.3 D3-fix-56(E8-51 a~e·R-i·R-g).
+ * 살아 있는 대상이 필요한 기술에 더해 고스트 저주·록온·문어굳히기도 실패한다. 미래예지(쓰러진 자리에 예약)는 예외, 차지 기술의 준비 턴도 성공한다
+ * (`final`이면 준비를 생략하고 곧장 발사하는 경우·호출 기술 확정 뒤라 예외 없음). 자폭류는 실패해도 사용자가 기절한다(습기 사용자 제외 — Showdown `TryMove`).
+ * `needsLivingTarget`은 타입 흡수 판정(moveContext)도 써서 함수 안이 아니라 여기서 조건을 덧붙인다.
+ */
+function noTargetGate(c: PreHitCtx, final: boolean, extra?: Partial<ActionLogEntry>) {
+  if (!isFainted(c.defender) || c.move.delayedAttackTurns) return undefined;
+  if (!final && c.move.chargeTurn && !c.releasingCharge) return undefined;
+  if (!(needsLivingTarget(c.move) || (c.move.setsCurse && c.attacker.types.includes("고스트")) ||
+    c.move.inflictsVolatile?.some((v) => v.volatile === "lockOn") || c.move.octolock)) return undefined;
+  if (c.move.selfFaints && !c.attackerAbility?.preventsSelfFaintMoves) c.attacker.currentHp = 0;
+  return { value: c.blocked("usageCondition", 0, extra) };
+}
+
 /** 반동 턴·사용 조건·필드/날씨/중복 사용 제약 — 걸리면 실패로 끝난다 */
 function checkUsageGates(c: PreHitCtx) {
 
@@ -276,8 +291,8 @@ function checkUsageGates(c: PreHitCtx) {
   // 이후 usageCondition 실패로 막히거나 마비·풀죽음으로 못 움직여도 속이기 창은 소진된 것.
   c.attacker.hasActedSinceSwitchIn = true;
   // 먼저 움직인 상대가 이번 턴 자기 반동 등으로, 또는 교체 직후 설치물로 쓰러졌으면, 살아 있는 대상이 필요한 기술은 "그러나 실패했다!"로 처리한다(7.3 B4).
-  // 자기 대상·필드 기술(칼춤·스텔스록 등)은 그대로 실행된다.
-  if (isFainted(c.defender) && needsLivingTarget(c.move)) return { value: c.blocked("usageCondition") };
+  // 자기 대상·필드 기술(칼춤·스텔스록 등)은 그대로 실행된다. 세부 판정은 noTargetGate(8.3 D3-fix-56).
+  { const r = noTargetGate(c, false); if (r) return r; }
   // 아이언롤러: 활성화된 필드가 하나도 없으면 실패한다(본가 규칙)
   if (c.move.usageCondition === "field-required" && !c.state.field) {
     return { value: c.blocked("usageCondition") };
@@ -517,7 +532,11 @@ function handleChargeAndCopyMoves(c: PreHitCtx) {
       c.move.chargeSkipWeather !== undefined &&
       (activeWeather(c.state) === c.move.chargeSkipWeather ||
         (c.move.chargeSkipWeather === "쾌청" && c.attackerAbility?.treatsOwnWeatherAsSun));
-    if (!skipsCharge) {
+    if (skipsCharge) {
+      // 준비 없이 곧장 발사하는 경우 — 능력치 상승(위)을 적용한 뒤 대상 없음을 판정한다(Showdown: 일렉트로빔 비는 특공 +1 후 실패)
+      const r = noTargetGate(c, true, { selfStatRises: c.chargeStatRises.length ? c.chargeStatRises : undefined });
+      if (r) return r;
+    } else {
       c.attacker.chargingMoveId = c.move.id;
       return { value: {
         actor: c.actorKey,
@@ -606,6 +625,12 @@ function handleChargeAndCopyMoves(c: PreHitCtx) {
     c.copycatCalledMoveName = copied.name;
     payPressure(c, c.move.id, copied); // 프레셔는 호출된 기술의 대상으로 판정하고 흉내쟁이 슬롯에서 뺀다(8.3 D3-fix-50)
     c.move = copied;
+  }
+
+  // 잠꼬대·흉내쟁이가 부른 기술은 위 게이트를 거치지 않았으므로 쓰러진 대상에 대해 한 번 더 판정한다(8.3 D3-fix-56 R-i). 부른 기술 이름은 로그에 남긴다.
+  if (c.sleepTalkCalledMoveName || c.copycatCalledMoveName) {
+    const r = noTargetGate(c, true, { sleepTalkCalledMoveName: c.sleepTalkCalledMoveName, copycatCalledMoveName: c.copycatCalledMoveName });
+    if (r) return r;
   }
 
   // 서투름: 자기 자신의 도구 전투 효과가 무효화된다 — 실제로 지녔는지와 무관하게 이 시점부터는
