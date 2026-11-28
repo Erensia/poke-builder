@@ -1,1 +1,2 @@
-{"battles":60,"results":{"aiVsRandom":{"a":54,"b":6,"draw":0,"timeout":0},"aiVsAi":{"a":5,"b":10,"draw":0,"timeout":0}},"avgTurnMs":14.4,"maxTurnMs":95.6,"nanScores":0}
+[31mWebSocket server error: Port 24678 is already in use[39m
+{"battles":60,"results":{"aiVsRandom":{"a":53,"b":7,"draw":0,"timeout":0},"aiVsAi":{"a":5,"b":10,"draw":0,"timeout":0}},"avgTurnMs":21.68,"maxTurnMs":156.2,"nanScores":0}

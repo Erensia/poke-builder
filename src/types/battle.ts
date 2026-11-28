@@ -46,6 +46,13 @@ export interface HazardState {
 
 export type FighterKey = "a" | "b";
 
+/** 오기·승기 발동 1건 — 상대가 낸 하락 하나마다 하나. delta는 실제로 오른 랭크(이미 상한이면 0 → "더 이상 올라가지 않는다!") */
+export interface DropReactionRise {
+  side: FighterKey;
+  stat: BattleStatKey;
+  delta: number;
+}
+
 /** 이번 턴 행동이 왜 못 나갔는지. 있으면 hit/damage 등은 의미 없다 */
 export type ActionBlockReason =
   | "status"
@@ -259,6 +266,8 @@ export interface ActionLogEntry {
   enduredItemName?: string;
   /** 옹골참 덕분에 기절할 데미지를 버티고 HP 1로 남았으면 그 특성 이름 */
   enduredAbilityName?: string;
+  /** 오기·승기(8.3 D3-fix-57 E8-48) — 상대가 낸 하락 하나마다 오른 랭크(상한이면 delta 0). side = 특성 보유자 쪽 */
+  dropReactionRises?: DropReactionRise[];
   /** 하양허브 — 이번 행동의 주체(자신) 쪽에서 발동했으면 그 도구 이름 */
   restoredStatsSelfItemName?: string;
   /** 하양허브 — 상대 쪽에서 발동했으면 그 도구 이름 */
@@ -731,6 +740,10 @@ export interface EndOfTurnLogEntry {
   saltCureHeavy?: boolean;
   /** 물엿범벅(시럽봄): 턴 종료 시 스피드가 1랭크 떨어졌으면 true */
   syrupCoatDrop?: boolean;
+  /** 오기·승기: 턴 끝 지속 하락(물엿범벅·문어굳히기)에 반응해 오른 랭크(8.3 D3-fix-57 E8-48) */
+  dropReactionRises?: DropReactionRise[];
+  /** 하양허브: 턴 끝에 떨어진 랭크(명중·회피 포함)를 원래대로 되돌렸으면 그 도구 이름(8.3 D3-fix-57 R1) */
+  whiteHerbItemName?: string;
   /** 문어굳히기(octolock): 턴 종료 시 방어·특수방어가 1랭크씩 떨어졌으면 true */
   octolockDrop?: boolean;
   /** 멸망의노래 카운트 안내(F-4) — 이번 턴 종료 시점의 남은 카운트(3→2→1) */

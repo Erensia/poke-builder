@@ -2,7 +2,7 @@ import { modify4096 } from "./damageFormula";
 import type { Item } from "../types/item";
 import type { Move } from "../types/move";
 import type { StatusCondition } from "../types/status";
-import type { StatStages } from "../types/battleStats";
+import type { AccuracyEvasionStages, StatStages } from "../types/battleStats";
 
 /** 메트로놈: 연속 같은 기술 스트릭에 따른 위력 배율. streak=1(첫 사용)이면 아직 보너스 없음(1배) */
 function consecutiveSameMoveMultiplier(item: Item | undefined, streak: number): number {
@@ -157,14 +157,15 @@ export function getBerryDefenseResult(
   return { bulkMultiplier: ripen ? 4 : 2, consumed: true };
 }
 
-/** 하양허브: 지닌 쪽의 랭크가 하나라도 마이너스면(자신이 내렸든 상대가 내렸든) 발동 후보가 된다 */
+/** 하양허브: 지닌 쪽의 랭크(명중·회피 포함 7종)가 하나라도 마이너스면(자신이 내렸든 상대가 내렸든) 발동 후보가 된다 */
 export function shouldTriggerWhiteHerb(
   item: Item | undefined,
   stages: StatStages,
+  accuracyStages: AccuracyEvasionStages,
   alreadyConsumed: boolean,
 ): boolean {
   if (alreadyConsumed || !item?.restoresLoweredStatsOnce) return false;
-  return Object.values(stages).some((v) => v < 0);
+  return Object.values(stages).some((v) => v < 0) || accuracyStages.accuracy < 0 || accuracyStages.evasion < 0;
 }
 
 /**

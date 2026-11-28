@@ -10,13 +10,14 @@ import { eulReul, eunNeun, iGa, roEuro } from "@/lib/josa";
 import { STAT_LABELS } from "@/lib/statLabels";
 import { megaFormFullName } from "@/lib/pokemonForm";
 import { computeRealStats } from "@/lib/statCalculator";
-import { applyStageDelta, clampStagesToNonNegative } from "@/lib/statStages";
+import { applyStageDelta } from "@/lib/statStages";
+import { dropReactionText } from "@/lib/battleLogText";
 import { shouldTriggerWhiteHerb } from "@/lib/itemEffects";
 import { inflictStatus, isImmuneToStatus } from "@/lib/statusConditions";
 import { hasVolatile } from "@/lib/volatileConditions";
 import { calcSpikesDamage, calcStealthRockDamage } from "./entryCost";
 import { FIELD_DURATION, FIELD_ENTRY_ANNOUNCEMENT, isStatusBlockedByField } from "@/lib/fieldEffects";
-import { applySyrupOnEntry, WEATHER_DURATION, setEffectiveAbility, abilityOf, activeWeather, applyForecastForm, applyMimicryForm, applyTransform, balloonEntryAnnouncement, cloneSide, consumeItem, contraryDelta, hazardEntryOrder, isFainted, opponentKey, sideOf, statDropBlockStatsOf, statusImmunitiesOf, weatherRockBonusOfItem, type BattleFighterState, type BattleState, applyOwnStatDropReaction, countLoweredStats } from "./state";
+import { clearNegativeStages, applySyrupOnEntry, WEATHER_DURATION, setEffectiveAbility, abilityOf, activeWeather, applyForecastForm, applyMimicryForm, applyTransform, balloonEntryAnnouncement, cloneSide, consumeItem, contraryDelta, hazardEntryOrder, isFainted, opponentKey, sideOf, statDropBlockStatsOf, statusImmunitiesOf, weatherRockBonusOfItem, type BattleFighterState, type BattleState, applyOwnStatDropReaction, countLoweredStats } from "./state";
 
 export function isTrappedFromSwitching(fighter: BattleFighterState, state?: BattleState): boolean {
   if (isFainted(fighter)) return false;
@@ -111,9 +112,9 @@ function reactToOwnStatDrop(fighter: BattleFighterState, before: BattleFighterSt
   const boost = ability?.boostsStatOnOwnStatDrop;
   if (!boost) return;
   // 공용 규칙(state.ts): 내려간 능력치 수만큼, 기절한 보유자 제외(8.3 D3-fix-52). 위협·끈적끈적네트·반사는 한 번에 한 능력치라 보통 1건이다.
-  if (applyOwnStatDropReaction(fighter, ability, countLoweredStats(before, fighter.stages))) {
-    const label = STAT_LABELS[boost.stat];
-    log.push(`${fighterName(fighter)}의 ${ability!.name}! ${label}${iGa(label)} ${boost.delta >= 2 ? "크게 " : ""}올라갔다!`);
+  // 문구는 특성 이름 없는 일반 상승 문구, 발동 횟수만큼·상한이면 "더 이상 올라가지 않는다!"(8.3 D3-fix-57 R2·R3)
+  for (const delta of applyOwnStatDropReaction(fighter, ability, countLoweredStats(before, fighter.stages))) {
+    log.push(dropReactionText(fighterName(fighter), boost.stat, delta));
   }
 }
 
@@ -689,12 +690,12 @@ export function finishEntryBundle(state: BattleState, log: string[]): void {
     const fighter = state[key];
     if (isFainted(fighter)) continue;
     const item = effectiveHeldItem(fighter, state); // 서투름·매직룸이면 불발
-    if (!shouldTriggerWhiteHerb(item, fighter.stages, fighter.itemConsumed ?? false)) continue;
+    if (!shouldTriggerWhiteHerb(item, fighter.stages, fighter.accuracyStages, fighter.itemConsumed ?? false)) continue;
     const unburdenBefore = fighter.unburdenActive === true;
-    fighter.stages = clampStagesToNonNegative(fighter.stages);
+    clearNegativeStages(fighter);
     consumeItem(fighter);
     const name = getPokemon(fighter.slot.pokemonId)?.name ?? "포켓몬";
-    log.push(`${name}의 ${item!.name}${roEuro(item!.name)} 떨어진 능력을 원래대로 되돌렸다!`);
+    log.push(`${name}의 ${item!.name}${roEuro(item!.name)} 능력치를 원래대로 되돌렸다!`);
     // 곡예: 플래그는 consumeItem이 켠다 — 이 소모는 한 행동 범위 밖이라 문구만 여기서 낸다(triggerTerrainSeeds와 같은 이유, 8.3 D3-fix-9)
     const ability = fighter.effectiveAbilityId ? getAbility(fighter.effectiveAbilityId) : undefined;
     if (ability?.doublesSpeedOnItemLoss && !unburdenBefore) log.push(`${name}의 ${ability.name}! 스피드가 2배로 올랐다!`);

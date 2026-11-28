@@ -5,7 +5,8 @@ import { inflictStatus, isImmuneToStatus } from "@/lib/statusConditions";
 import { hasVolatile, inflictVolatile } from "@/lib/volatileConditions";
 import { isStatusBlockedByField } from "@/lib/fieldEffects";
 import { isGrounded } from "./grounding";
-import { activeWeather, opponentKey, sideOf, statusImmunitiesOf, type BattleFighterState, type BattleState } from "./state";
+import { shouldTriggerWhiteHerb } from "@/lib/itemEffects";
+import { activeWeather, clearNegativeStages, opponentKey, sideOf, statusImmunitiesOf, type BattleFighterState, type BattleState } from "./state";
 import { type FighterKey, type FlingEffectResult } from "@/types/battle";
 
 
@@ -41,16 +42,9 @@ export function applyFlingEffect(
     return { flinched: true };
   }
   if (item.restoresLoweredStatsOnce) {
-    const stages = { ...defender.stages };
-    let changed = false;
-    for (const key of Object.keys(stages) as (keyof typeof stages)[]) {
-      if (stages[key] < 0) {
-        stages[key] = 0;
-        changed = true;
-      }
-    }
-    defender.stages = stages;
-    return changed ? { herb: { name: item.name } } : undefined;
+    const lowered = shouldTriggerWhiteHerb(item, defender.stages, defender.accuracyStages, false);
+    clearNegativeStages(defender);
+    return lowered ? { herb: { name: item.name } } : undefined;
   }
   if (item.curesMentalVolatilesOnInflict) {
     const active = { ...defender.volatile.active };

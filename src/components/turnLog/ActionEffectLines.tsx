@@ -5,7 +5,7 @@ import { STAT_LABELS, statOrAccuracyLabel } from "../../lib/statLabels";
 import { typeLabel } from "../../types/pokemon-type";
 import { eunNeun, iGa, eulReul, roEuro } from "../../lib/josa";
 import { STATUS_LABELS, VOLATILE_LABELS } from "../../lib/battleLogLabels";
-import { stageRiseAdverb, SPIN_CLEARED_HAZARD_NAMES, SPIN_CLEARED_LINES, STATUS_ONSET_TEXT, STATUS_TRIGGER_TEXT, STATUS_CURE_TEXT } from "../../lib/battleLogText";
+import { dropReactionText, stageRiseAdverb, SPIN_CLEARED_HAZARD_NAMES, SPIN_CLEARED_LINES, STATUS_ONSET_TEXT, STATUS_TRIGGER_TEXT, STATUS_CURE_TEXT } from "../../lib/battleLogText";
 import { useActionHp } from "./hpFormat";
 import { MultiHitLines } from "./MultiHitLines";
 import { abilityDamageLine, abilityDefenderStatsLines, abilityDisabledMoveLine, abilityLoweredAttackerStatsLine, abilityPickpocketLine, abilityStatusLine, abilityVolatileLine, sandSpitWeatherLine, setFieldOnHitLine, syncCureLine, synchronizeLines, wanderingSpiritLine } from "./abilityLines";
@@ -943,6 +943,12 @@ export function ActionEffectLines({
           않는다!
         </div>
       )}
+      {/* 오기·승기 — 상대가 낸 하락마다 한 줄(8.3 D3-fix-57 E8-48). 특성 이름 없는 일반 상승 문구, 이미 상한이면 "더 이상 올라가지 않는다!" */}
+      {action.dropReactionRises?.map((r, i) => (
+        <div key={`drop-reaction-${i}`} className="battle-turn-line is-muted">
+          {dropReactionText(r.side === action.actor ? actorName : defenderName, r.stat, r.delta)}
+        </div>
+      ))}
       {/* C-6 랭크다운 기술 결과 — "OO의 X가 (크게) 떨어졌다!". selfStatRises와 대칭.
           대상은 defenderName(매직미러 반사는 호출부가 이름을 맞바꾼 사본으로 넘긴다, 8.3 B6) */}
       {!action.blockedReason &&
@@ -1052,13 +1058,13 @@ export function ActionEffectLines({
       {!action.blockedReason && action.restoredStatsSelfItemName && (
         <div className="battle-turn-line is-muted">
           {actorName}의 {action.restoredStatsSelfItemName}
-          {roEuro(action.restoredStatsSelfItemName)} 떨어진 능력을 원래대로 되돌렸다!
+          {roEuro(action.restoredStatsSelfItemName)} 능력치를 원래대로 되돌렸다!
         </div>
       )}
       {!action.blockedReason && action.restoredStatsOpponentItemName && (
         <div className="battle-turn-line is-muted">
           {defenderName}의 {action.restoredStatsOpponentItemName}
-          {roEuro(action.restoredStatsOpponentItemName)} 떨어진 능력을 원래대로 되돌렸다!
+          {roEuro(action.restoredStatsOpponentItemName)} 능력치를 원래대로 되돌렸다!
         </div>
       )}
       {/* 상대가 쓰러졌는지 여부 — 데미지 수치와 분리된 별도 상태 줄 */}

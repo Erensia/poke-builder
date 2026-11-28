@@ -41,8 +41,8 @@ export default async function ({ server, data, mon, battle, check }) {
   { const e = web(mon("잠만보", ["칼춤"], null, "풍선"));
     check("D3-fix36 4: 비접지(풍선) + 네트 → 발동 없음(회귀)", e.t.stages.spe === 0 && !has(e.msgs, "끈적끈적네트") && !("hazardTriggers" in e.sw), json(e.msgs)); }
   { const e = web(mon("대도각참", ["칼춤"], "오기"));
-    check("D3-fix36 5: 오기 + 네트 → 스피드 −1 뒤 공격 +2 (오기 문구 줄)",
-      e.t.stages.spe === -1 && e.t.stages.atk === 2 && has(e.msgs.join("|"), "오기"), json({ spe: e.t.stages.spe, atk: e.t.stages.atk, msgs: e.msgs })); }
+    check("D3-fix36 5: 오기 + 네트 → 스피드 −1 뒤 공격 +2 (일반 상승 문구 줄 — 8.3 D3-fix-57: 특성 이름 없음)",
+      e.t.stages.spe === -1 && e.t.stages.atk === 2 && has(e.msgs.join("|"), "공격이 크게 올라갔다") && !has(e.msgs.join("|"), "오기!"), json({ spe: e.t.stages.spe, atk: e.t.stages.atk, msgs: e.msgs })); }
   { const e = web(mon("잠만보", ["칼춤"], "승기"));
     check("D3-fix36 6: 승기 + 네트 → 스피드 −1 뒤 특공 +2", e.t.stages.spe === -1 && e.t.stages.spa === 2, json({ spe: e.t.stages.spe, spa: e.t.stages.spa })); }
   { const e = web(mon("대도각참", ["칼춤"], "오기"), (st) => { st.sideB.party[1].stages = { ...st.sideB.party[1].stages, spe: -6 }; });

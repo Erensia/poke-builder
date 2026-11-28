@@ -6,7 +6,9 @@
 
 import type { EndOfTurnLogEntry, FighterKey, TurnResult } from "../types/battle";
 import type { StatusCondition } from "../types/status";
-import { eunNeun } from "./josa";
+import { eunNeun, iGa } from "./josa";
+import { STAT_LABELS } from "./statLabels";
+import type { BattleStatKey } from "../types/battleStats";
 import { opponentKey } from "./battle/state";
 
 /**
@@ -57,6 +59,12 @@ export function stageRiseAdverb(delta: number): string {
   if (delta >= 3) return "아주 크게 ";
   if (delta === 2) return "크게 ";
   return "";
+}
+
+/** 오기·승기 발동 문구(특성 이름 없는 일반 상승 문구, 8.3 D3-fix-57). delta 0 = 이미 상한 */
+export function dropReactionText(name: string, stat: BattleStatKey, delta: number): string {
+  const label = STAT_LABELS[stat];
+  return delta > 0 ? `${name}의 ${label}${iGa(label)} ${stageRiseAdverb(delta)}올라갔다!` : `${name}의 ${label}${eunNeun(label)} 더 이상 올라가지 않는다!`;
 }
 
 /**
